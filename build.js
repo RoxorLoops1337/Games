@@ -27,6 +27,7 @@ const STATIC_PATHS = [
   'beatborne',
   'README.md',
   '_redirects',
+  '_headers',
   'beatbox_story',
   'decktest',
   'pitchdeck',
@@ -112,12 +113,22 @@ const wipeDist = () => {
   fs.mkdirSync(DIST, { recursive: true });
 };
 
+// Files kept in the repo but left out of a game's deploy (relative to the game
+// folder). Clawspire: the old pre-rendered intro (js/intro.js draws it live, no
+// code requests these) and the design docs.
+const SKIP_IN_DIST = {
+  clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
+};
+
 const copyStatic = () => {
   for (const rel of STATIC_PATHS) {
     const src = path.join(REPO, rel);
     if (!fs.existsSync(src)) continue;
     const dst = path.join(DIST, rel);
-    fs.cpSync(src, dst, { recursive: true });
+    const skip = SKIP_IN_DIST[rel];
+    const opts = { recursive: true };
+    if (skip) opts.filter = (p) => !skip.has(path.relative(src, p).split(path.sep).join('/'));
+    fs.cpSync(src, dst, opts);
   }
   console.log(`copied ${STATIC_PATHS.length} static paths → dist/`);
 };
@@ -143,6 +154,82 @@ const writeArtManifest = () => {
   console.log(`clawspire art manifest: ${out.length} file(s)`);
 };
 
+// Clawspire (round 18): minify and version the deployed copy only. The source
+// in clawspire/ stays readable and the tests keep loading it.
+// - Each js/*.js is minified on its own. They are classic scripts sharing
+//   globals (const GAME, RENDER, U...): a transform without a format never
+//   renames top-level names, and target es2020 matches the source's syntax, so
+//   nothing is lowered (no helper temporaries added at the top level).
+// - The lazy Dutch tables are hash-stamped inside i18n.js, then every script
+//   src in the HTML pages gets ?v=<content hash>, so the root _headers file can
+//   cache /clawspire/js/* for a year while index.html stays revalidated.
+// - index.html: every <style> is minified as CSS, the loader's inline script as
+//   ES5 (it runs before anything else), and the loader's byte weights (WT) are
+//   rewritten from the built files' gzip sizes.
+// Reads and writes dist/clawspire only; no other game is touched.
+const minifyClawspire = () => {
+  const root = path.join(DIST, 'clawspire');
+  const jsDir = path.join(root, 'js');
+  if (!fs.existsSync(jsDir)) return;
+  const zlib = require('zlib');
+  const hashOf = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
+  let rawIn = 0, rawOut = 0;
+  const files = fs.readdirSync(jsDir).filter((f) => /\.js$/.test(f)).sort();
+  for (const f of files) {
+    const p = path.join(jsDir, f);
+    const src = fs.readFileSync(p, 'utf8');
+    const out = esbuild.transformSync(src, {
+      minify: true, target: 'es2020', legalComments: 'none', charset: 'utf8', sourcefile: 'clawspire/js/' + f,
+    }).code;
+    fs.writeFileSync(p, out);
+    rawIn += Buffer.byteLength(src); rawOut += Buffer.byteLength(out);
+  }
+  // i18n.js names the Dutch tables it loads lazily; stamp them before i18n.js is hashed
+  const i18nPath = path.join(jsDir, 'i18n.js');
+  if (fs.existsSync(i18nPath)) {
+    let code = fs.readFileSync(i18nPath, 'utf8');
+    for (const f of files.filter((n) => /^lang_\w+\.js$/.test(n))) {
+      const re = new RegExp(`(["'\`])js/${f.replace('.', '\\.')}\\1`, 'g');
+      const v = hashOf(fs.readFileSync(path.join(jsDir, f)));
+      let n = 0;
+      code = code.replace(re, (m, q) => { n++; return `${q}js/${f}?v=${v}${q}`; });
+      if (!n) throw new Error(`clawspire: js/i18n.js no longer names js/${f}; update minifyClawspire in build.js`);
+    }
+    fs.writeFileSync(i18nPath, code);
+  }
+  const hash = {}, gzKB = {};
+  for (const f of files) {
+    const buf = fs.readFileSync(path.join(jsDir, f));
+    hash[f] = hashOf(buf);
+    gzKB[f.replace(/\.js$/, '')] = Math.max(1, Math.round(zlib.gzipSync(buf, { level: 9 }).length / 1024));
+  }
+  for (const page of fs.readdirSync(root).filter((n) => /\.html$/.test(n))) {
+    const htmlPath = path.join(root, page);
+    let html = fs.readFileSync(htmlPath, 'utf8');
+    const before = html.length;
+    html = html.replace(/(<script\b[^>]*\bsrc=")js\/([\w.-]+\.js)(")/g, (m, a, f, b) => {
+      if (!hash[f]) throw new Error(`clawspire/${page}: js/${f} is not in clawspire/js`);
+      return `${a}js/${f}?v=${hash[f]}${b}`;
+    });
+    if (page === 'index.html') {
+      // the loader's weights: one per script tag, its gzip KB as built
+      const wt = [...html.matchAll(/<script\b[^>]*\bsrc="js\/(\w+)\.js\?v=/g)].map((m) => `${m[1]}: ${gzKB[m[1]]}`);
+      let nWt = 0;
+      html = html.replace(/var WT = \{[^}]*\};/, () => { nWt++; return `var WT = { ${wt.join(', ')} };`; });
+      if (!nWt) console.warn('clawspire: the loader weights (var WT) were not found in index.html; the bar keeps the source numbers');
+      html = html.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) =>
+        a + esbuild.transformSync(css, { loader: 'css', minify: true, sourcefile: 'clawspire/index.html <style>' }).code.trim() + b);
+      // inline scripts (no src); the loader (csBootJs) is plain ES5 on purpose and stays ES5
+      html = html.replace(/(<script\b(?![^>]*\bsrc=)[^>]*>)([\s\S]*?)(<\/script>)/g, (m, a, js, b) => !js.trim() ? m : a + esbuild.transformSync(js, {
+        minify: true, target: /id="csBootJs"/.test(a) ? 'es5' : 'es2020', legalComments: 'none', charset: 'utf8', sourcefile: 'clawspire/index.html <script>',
+      }).code.trim() + b);
+    }
+    fs.writeFileSync(htmlPath, html);
+    rawIn += before; rawOut += html.length;
+  }
+  console.log(`clawspire minified: ${(rawIn / 1024).toFixed(0)} KB -> ${(rawOut / 1024).toFixed(0)} KB (js + html), scripts hash-stamped`);
+};
+
 (async () => {
   if (watch) {
     // In watch mode we just rebuild bundles in place (no dist copy) so the
@@ -162,6 +249,7 @@ const writeArtManifest = () => {
   wipeDist();
   copyStatic();
   writeArtManifest();
+  minifyClawspire();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));

@@ -877,7 +877,13 @@ if (HAS_DATA) {
   h.ok(g1.n - g0.n <= 45, `597 radii share ${g1.n - g0.n} sprites`);
   const big = R.glowSprite('#123457', 600);
   h.ok(big && big.width <= 2 * 128 + 2, 'no glow sprite is built past radius 128 (it is drawn larger)');
-  h.eq(R.glowSprite('#123457', 12), R.glowSprite('#123457', 12.2), 'small radii keep their own sprite per pixel');
+  h.eq(R.glowSprite('#123457', 12), R.glowSprite('#123457', 12.2), 'small radii round to their sprite');
+  h.eq(R.glowSprite('#123457', 7), R.glowSprite('#123457', 8), 'PERF (round 19): radii up to 24 share a sprite per 2 px');
+  h.ok(R.glowSprite('#123457', 8) !== R.glowSprite('#123457', 10), '...and the next step has its own');
+  // PERF (round 19): past the budget the least recently drawn sprites go, not the whole cache
+  const hot = R.glowSprite('#abcdef', 20);
+  for (let c = 0; c < 120; c++) { R.glowSprite('#' + (0x200000 + c * 977).toString(16), 128); R.glowSprite('#abcdef', 20); }
+  h.eq(R.glowSprite('#abcdef', 20), hot, 'a sprite drawn every frame survives a flood of colours (never rebuilt mid-fight)');
   for (let c = 0; c < 120; c++) for (const r of [60, 90, 128]) R.glowSprite('#' + (0x100000 + c * 977).toString(16), r);
   h.ok(R.q9.glowStats().mb <= 8, `a flood of colours stays under the budget (${R.q9.glowStats().mb} MB)`);
 }
@@ -2946,6 +2952,240 @@ h.test('TRD: Rocco, his cart, the counter and the haggle at every beat; the map 
   drawCheck('pet ceremony before', c => R.evo.ceremony(c, Object.assign({}, cer, { t: 0.8 })));
   drawCheck('pet ceremony after', c => R.evo.ceremony(c, cer));
   h.eq(drew, 2, 'the ceremony drew the pet both times');
+});
+
+/* ------------------------------------------------- DEP (round 15): the Neon Depths */
+if (HAS_DATA) h.test('DEP: the Depths\' tiles, map, arena, cabinet water, the six monsters, their tricks and intents', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, X = R.dep;
+  h.ok(X && ['terrain', 'prop', 'mapBg', 'mapFx', 'arena', 'cabBack', 'caustics', 'water', 'lure', 'pincer', 'jellyGlow', 'chestTell', 'intentIcon', 'fish', 'loreAct'].every(k => typeof X[k] === 'function'), 'RENDER.dep has every piece');
+  h.ok(R.BIOME_PAL.depths && R.SIG_COL.tide, 'the Depths\' palette and the High Tide sign colour');
+  // the tiles: every ground, both orientations, animated, and not the vault's
+  const tiles = new Map();
+  for (const g of ['grass', 'forest', 'dirt', 'sand', 'mountain', 'sea', 'shallow', 'ford']) for (const orient of ['v', 'h']) {
+    const terrain = g === 'sea' || g === 'shallow' ? 'sea' : 'land';
+    const tile = { q: 1, r: 2, terrain, ground: g, biome: 'depths', elev: g === 'mountain' ? 0.9 : 0.3, ford: g === 'ford' };
+    tiles.set(g + orient, fingerprint(drawCheck(`depths ${g} ${orient}`, c => R.terrainHex(c, 100, 100, 40, tile, { t: 1.2, orient, seed: 5, biome: 'depths' }))));
+  }
+  const grounds = new Set(['grass', 'forest', 'dirt', 'sand', 'mountain', 'sea'].map(g => tiles.get(g + 'v')));
+  h.ok(grounds.size >= 5, `the grounds read apart (${grounds.size} of 6)`);
+  const vault = fingerprint(drawCheck('vault grass', c => R.terrainHex(c, 100, 100, 40, { terrain: 'land', ground: 'grass', biome: 'vault' }, { t: 1.2, orient: 'v', seed: 5, biome: 'vault' })));
+  h.ok(vault !== tiles.get('grassv'), 'the Depths draw their own tiles');
+  const seas = new Set([0, 1, 2, 3, 5, 8].map(seed => fingerprint(drawCheck('depths sea seed ' + seed, c => X.terrain(c, 100, 100, 40, { terrain: 'sea', ground: 'sea' }, { t: 1 + seed * 0.3, orient: 'v', seed })))));
+  h.ok(seas.size >= 3, `the deep water varies (ripples, rising bubbles) with its seed (${seas.size})`);
+  h.ok(X.dark('depths') !== X.dark('vault'), 'the fog is tinted teal');
+  drawCheck('depths map bg', c => X.mapBg(c, 540, 960, 2));
+  drawCheck('depths map fx', c => X.mapFx(c, 0, 0, 540, 960, 2, false));
+  drawCheck('depths map fx reduced', c => X.mapFx(c, 0, 0, 540, 960, 2, true));
+  // the arena: animated, the tide and the live water read
+  const arena = new Map();
+  for (const st of [{}, { tide: 1 }, { live: 1 }]) arena.set(JSON.stringify(st), fingerprint(drawCheck(`arena ${JSON.stringify(st)}`, c => X.arena(c, 540, 340, 1, st))));
+  h.eq(uniqueRatio(arena).ratio, 1, 'the arena floods and sparks');
+  for (const t of [0, 2.5, 9.7]) drawCheck('arena t' + t, c => X.arena(c, 540, 340, t, {}));
+  drawCheck('arena reduced', c => X.arena(c, 540, 340, 1, { reduced: true }));
+  drawCheck('arena tall', c => X.arena(c, 540, 960, 1, {}));
+  // the cabinet: back, caustics, the water at every level and state
+  drawCheck('cab back', c => X.cabBack(c, 30, 410, 480, 390, 1));
+  const water = new Map();
+  for (const st of [{}, { tide: 1 }, { live: 1 }]) water.set(JSON.stringify(st), fingerprint(drawCheck(`water ${JSON.stringify(st)}`, c => { X.caustics(c, 30, 410, 480, 390, 1.3, 700); X.water(c, 30, 510, 700, 800, 1.3, st); })));
+  h.eq(uniqueRatio(water).ratio, 1, 'the water, at high tide, live');
+  for (const y of [420, 520, 790]) drawCheck('water at ' + y, c => { X.caustics(c, 30, 410, 480, 390, 1.3, y); X.water(c, 30, 510, y, 800, 1.3, {}); });
+  drawCheck('water empty', c => { c.fillRect(0, 0, 1, 1); X.water(c, 30, 510, 800, 800, 1, {}); });
+  // the tricks in the cabinet
+  const lu = [0.2, 1].map(k => fingerprint(drawCheck('lure ' + k, c => X.lure(c, 200, 420, 600, 1, k))));
+  h.ok(lu[0] !== lu[1], 'the lure fades in');
+  drawCheck('pincer', c => X.pincer(c, 200, 700, 14, 1, 1));
+  const jg = [false, true].map(tc => fingerprint(drawCheck('jelly glow ' + tc, c => X.jellyGlow(c, 200, 700, 16, 1, tc))));
+  h.ok(jg[0] !== jg[1], 'a touched jelly flares');
+  const tell = [true, false].map(real => fingerprint(drawCheck('chest tell ' + real, c => { c.fillRect(0, 0, 1, 1); X.chestTell(c, 200, 700, 15, 1.7, real, 1); })));
+  h.ok(tell[0] !== tell[1], 'the real chest glints');
+  // the six monsters: their own looks, every state
+  const looks = new Map();
+  for (const id of X.KEYS) {
+    const def = D.ENEMIES[id];
+    h.ok(def && def.look === id, id + ' has its look');
+    looks.set(id, fingerprint(drawCheck('monster ' + id, c => R.enemy(c, def, 200, 280, 1, 1.3, {}))));
+    for (const s of [{ hurt: 1 }, { attack: 0.6 }, { dead: 0.5 }, { frozen: true }, { windup: 1 }, { hpk: 0.1 }, { enraged: true, rage: 0.5 }]) drawCheck(id + ' ' + JSON.stringify(s), c => R.enemy(c, def, 200, 280, 1, 2.2, s));
+    const base = fingerprint(drawCheck('base ' + def.art, c => R.enemy(c, Object.assign({}, def, { look: null }), 200, 280, 1, 1.3, {})));
+    h.ok(base !== looks.get(id), id + ' differs from its fallback art (' + def.art + ')');
+    const box = R.enemyBox(def, 1);
+    h.ok(box.w > 20 && box.h > 20, id + ' has a body box');
+  }
+  h.eq(uniqueRatio(looks).ratio, 1, 'all six look different ' + uniqueRatio(looks).dupes.join(' '));
+  h.ok(R.enemyBox(D.ENEMIES.dep_jukebox, 1).h > R.enemyBox(D.ENEMIES.dep_jelly, 1).h, 'the boss stands taller than a jelly');
+  // the junk items draw their own silhouettes
+  for (const id of ['dep_boot', 'dep_jellyling', 'dep_chest']) h.ok(typeof X.SIL[id] === 'function' || X.SIL[id], id + ' has a silhouette');
+  // the intent icons, one for each trick
+  const icons = new Map();
+  for (const k of D.DEP_KINDS) {
+    let ok = false;
+    icons.set(k, fingerprint(drawCheck('intent ' + k, c => { ok = X.intentIcon(c, k, { n: 2 }, 0, 1, 0); })));
+    h.ok(ok, k + ': an icon');
+  }
+  h.eq(uniqueRatio(icons).ratio, 1, 'each trick has its own icon');
+  h.ok(!X.intentIcon(seqCtx().ctx, 'attack', {}, 0, 1, 0), 'other kinds are not the Depths\'');
+  // the Codex pictures
+  for (const e of D.loreBook().entries.filter(e => e.art && e.art.dep)) drawCheck('codex ' + e.id, c => R.lore.scene(c, e.art, 300, 200, {}, 1));
+});
+
+// CAB (round 16): the cabinet is alive (DESIGN.md "The cabinet is alive (round 16)")
+h.test('CAB: the event sign at every beat, the Jackpot Lamp and its fever, coins, the surge, every face, the strain, the gritted claw', () => {
+  const { RENDER: R, PHYS: P } = boot({ only: ['util', 'i18n', 'physics', 'data', 'render'] });
+  const RC = R.cab;
+  h.ok(RC && ['sign', 'lamp', 'coin', 'icon', 'surge', 'face', 'strain', 'bolt'].every((k) => typeof RC[k] === 'function'), 'RENDER.cab has its pieces');
+  const ids = ['surge', 'coins', 'capsule'], names = ['POWER SURGE!', 'COIN SHOWER!', 'CAPSULE DROP!'];
+  const signs = new Map();
+  for (const [i, id] of ids.entries()) {
+    for (const [lab, st] of [['swing in', { k: 0.4, roll: 0.1, spin: 1 }], ['spinning', { k: 1, roll: 0.5, spin: 4 }], ['landed', { k: 1, roll: 1, land: 0.3 }], ['held', { k: 1, roll: 1, land: 1 }], ['leaving', { k: 0.3, roll: 1, land: 1 }], ['reduced', { k: 1, roll: 1, land: 0.5, reduced: true }]]) {
+      const s = drawCheck(`sign ${id} ${lab}`, (c) => RC.sign(c, 238, 560, Object.assign({ id, idx: i, ids, names, name: names[i], text: 'A line of words that has to wrap onto a second line here.', col: '#2ee6d6', t: 1.3, top: 410 }, st)));
+      if (lab === 'held') signs.set(id, fingerprint(s));
+    }
+  }
+  h.eq(uniqueRatio(signs).ratio, 1, 'each event\'s sign looks different');
+  const { ctx: c0, stat: s0 } = seqCtx();
+  RC.sign(c0, 238, 560, { k: 0 });
+  h.eq(s0.paints, 0, 'a sign at k 0 draws nothing');
+  const lamps = new Map();
+  for (const [lab, st] of [['empty', { n: 0 }], ['half', { n: 6, pop: 0.5 }], ['almost', { n: 10 }], ['full', { n: 12 }], ['fever', { n: 12, fever: 0.8 }], ['burst', { n: 0, fever: 1, burst: 0.5 }], ['reduced fever', { n: 12, fever: 1, reduced: true }]]) {
+    lamps.set(lab, fingerprint(drawCheck('lamp ' + lab, (c) => RC.lamp(c, 104, 395, 206, Object.assign({ max: 12, t: 2.1 }, st)))));
+  }
+  h.eq(uniqueRatio(lamps).ratio, 1, 'every lamp state looks different');
+  drawCheck('lamp junk state', (c) => RC.lamp(c, 104, 395, 206, { n: NaN, max: 0, fever: null }));
+  for (const a of [0, 0.7, 1.57, 3]) drawCheck('coin ' + a, (c) => RC.coin(c, 100, 700, 7.5, a, 1));
+  for (const id of ids) drawCheck('icon ' + id, (c) => RC.icon(c, id, 100, 500, 60, 1));
+  drawCheck('surge', (c) => RC.surge(c, 30, 436, 416, 1.7, false));
+  drawCheck('surge reduced', (c) => RC.surge(c, 30, 436, 416, 1.7, true));
+  const faces = new Map();
+  for (const mood of ['', 'scared', 'gasp', 'ride', 'dizzy']) for (const legend of (mood === 'ride' || mood === 'dizzy' ? [false] : [false, true])) {   // (closed or spinning eyes have no pupils to glint)
+    faces.set(mood + legend, fingerprint(drawCheck(`face ${mood || 'idle'}${legend ? ' legendary' : ''}`, (c) => RC.face(c, 200, 700, 14, { mood, lx: 0.5, ly: -0.4, blink: 0, t: 1.2, legend }))));
+  }
+  h.eq(uniqueRatio(faces).ratio, 1, 'every face looks different');
+  const { ctx: cb, stat: sb } = seqCtx(); RC.face(cb, 200, 700, 14, { mood: '', blink: 1, t: 1 });
+  h.ok(fingerprint(sb) !== faces.get('false'), 'a blink shuts the eyes');
+  for (const k of [0.2, 0.6, 1]) drawCheck('strain ' + k, (c) => RC.strain(c, 238, 500, 13, k, 1.1, false, 238, 436));
+  const { ctx: cz, stat: sz } = seqCtx(); RC.strain(cz, 238, 500, 13, 0, 1, false);
+  h.eq(sz.paints, 0, 'no strain, nothing drawn');
+  // the claw's gritted eyes
+  const pose = P.clawPose('classic', {});
+  const strained = fingerprint(drawCheck('claw strain mood', (c) => R.claw(c, pose, 0, 0, { juice: { mood: 'strain', t: 3 } })));
+  const plain = fingerprint(drawCheck('claw no mood', (c) => R.claw(c, pose, 0, 0, { juice: { mood: '', t: 3 } })));
+  h.ok(strained !== plain, 'a straining claw grits its eyes');
+});
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+h.test('gacha: every Capsule Mini draws (found and as a silhouette), all distinct; the chips, the leak, the legend moment and the turntable draw clean', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, G = api.DATA.GACHA, RG = R.gacha;
+  h.ok(RG && typeof RG.mini === 'function' && typeof RG.chips === 'function' && typeof RG.leak === 'function' && typeof RG.legend === 'function' && typeof RG.turntable === 'function', 'RENDER.gacha is there');
+  const fps = new Map();
+  for (const id of G.MINI_IDS) {
+    h.ok(typeof RG.BODY[G.MINIS[id].look.body] === 'function', `${id}: its body (${G.MINIS[id].look.body}) has a drawing`);
+    const st = drawCheck('mini ' + id, (c) => RG.mini(c, id, 60, 60, 90, 1.3));
+    fps.set(id, fingerprint(st));
+    drawCheck('mini ' + id + ' (silhouette, turning)', (c) => RG.mini(c, id, 60, 60, 90, 2.1, { sil: true, spin: 0.3 }));
+  }
+  const u = uniqueRatio(fps);
+  h.eq(u.ratio, 1, 'every mini draws differently: ' + u.dupes.map((d) => d.join('=')).join(' '));
+  drawCheck('an unknown mini (just the stand)', (c) => RG.mini(c, 'nope', 60, 60, 90, 0));
+  const chips = [0, 1, 2, 3].map((i) => ({ x: 100 + i * 10, y: 200, a: i, s: 8, col: '#ff2e88', life: 0.5, max: 1 }));
+  drawCheck('shell chips', (c) => RG.chips(c, chips, chips.length));
+  for (const k of [0.2, 0.7, 1]) drawCheck('the leak ' + k, (c) => RG.leak(c, 270, 440, 80, '#ffc94d', k, 2, 7));
+  for (const red of [false, true]) drawCheck('the legend moment' + (red ? ' (calm)' : ''), (c) => RG.legend(c, 270, 440, 80, 0.8, 1.5, 540, 960, red));
+  drawCheck('the turntable', (c) => RG.turntable(c, 150, 300, 190, 1, '#2ee6d6'));
+  const { ctx, stat } = seqCtx();
+  RG.leak(ctx, 270, 440, 80, '#fff', 0, 1, 1); RG.legend(ctx, 270, 440, 80, 0, 1, 540, 960, false); RG.chips(ctx, [], 0);
+  h.eq(stat.paints, 0, 'nothing at zero');
+  // without DATA the stand still draws and nothing throws
+  const bare = boot({ only: ['util', 'render'] });
+  drawCheck('a mini with no DATA', (c) => bare.RENDER.gacha.mini(c, 'neon_cat', 60, 60, 90, 0));
+});
+
+// ---------------- TECH (round 17): Joy Stick's face, outfits and items, the Cabinet Tech glyphs, the laser
+h.test('TECH: Joy Stick, her outfits and arcade parts, a drawn glyph per Cabinet Tech relic, the Laser Sight', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  h.ok(R.tech && ['portrait', 'hat', 'visor', 'glyph', 'laser'].every(k => typeof R.tech[k] === 'function'), 'RENDER.tech');
+  const pfp = new Map();
+  for (const id of Object.keys(D.CHARACTERS)) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
+  h.eq(uniqueRatio(pfp).ratio, 1, 'Joy Stick has a face of her own');
+  // idle: the LED blinks and the eyes blink with t
+  const a = fingerprint(drawCheck('joy t0', c => R.portrait(c, 'techie', 40, 40, 64, 0.1))), b = fingerprint(drawCheck('joy blink', c => R.portrait(c, 'techie', 40, 40, 64, 3.3)));
+  h.ok(a !== b, 'she blinks');
+  const bare = pfp.get('techie'), fits = new Map();
+  for (const fit of ['fit_joy_headset', 'fit_joy_visor', 'fit_joy_witch', 'fit_joy_scarf']) {
+    R.vault.equip({ outfit: { techie: fit } });
+    fits.set(fit, fingerprint(drawCheck('portrait techie ' + fit, c => R.portrait(c, 'techie', 40, 40, 64, 1.3))));
+    drawCheck('thumb ' + fit, c => R.vault.thumb(c, fit, 50, 50, 100, 0.5));
+  }
+  R.vault.equip({ outfit: {} });
+  h.ok([...fits.values()].every(fp => fp !== bare), 'every outfit shows on her');
+  h.eq(uniqueRatio(fits).ratio, 1, 'and they differ');
+  const its = new Map();
+  for (const id of D.TECH.ITEMS) {
+    h.ok(R.pol.SIL[id], id + ': a silhouette of its own');
+    its.set(id, fingerprint(drawCheck('item ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}))));
+  }
+  h.ok(its.size === 8 && uniqueRatio(its).ratio === 1, `her ${its.size} arcade parts all look different`);
+  // every Cabinet Tech relic draws its own glyph in its medallion (no emoji), still or animated
+  const gl = new Map();
+  for (const id of D.TECH.RELICS.concat(['service_remote'])) {
+    h.ok(typeof R.tech.GLYPH[id] === 'function', id + ': a glyph');
+    gl.set(id, fingerprint(drawCheck('relic ' + id, c => R.relicIcon(c, D.RELICS[id], 40, 40, 64, 1.7))));
+    drawCheck('relic still ' + id, c => R.relicIcon(c, D.RELICS[id], 40, 40, 32));
+  }
+  h.eq(uniqueRatio(gl).ratio, 1, 'eleven distinct medallions');
+  h.ok(!R.tech.glyph({ getTransform() {}, save() {}, restore() {} }, D.RELICS.grip_tape, 10, 0), 'any other relic keeps its emoji');
+  const la = new Map();
+  for (const [k, st] of [['aim', { t: 1 }], ['lock', { t: 1, lock: true }], ['still', { t: 1, lock: true, reduced: true }]]) la.set(k, fingerprint(drawCheck('laser ' + k, c => R.tech.laser(c, 200, 450, 700, st))));
+  h.eq(uniqueRatio(la).ratio, 1, 'the laser aims and locks');
+  drawCheck('laser too short', c => { R.tech.laser(c, 200, 450, 452, null); c.fillRect(0, 0, 1, 1); });
+});
+
+/* ------------------------------------------------- QA17 (round 17): QA pass 6 */
+h.test('qa17: the claw-off board\'s round stars sit inside the lit frame, beside the score', () => {
+  const { RENDER } = boot();
+  const pts = [];
+  const ctx = new Proxy({}, { get(t, p) {
+    if (p === 'moveTo' || p === 'lineTo') return (x, y) => pts.push([x, y]);
+    if (p === 'measureText') return (s) => ({ width: String(s).length * 8 });
+    if (p === 'createLinearGradient' || p === 'createRadialGradient' || p === 'createPattern') return () => ({ addColorStop() {} });
+    if (p in t) return t[p];
+    return () => {};
+  }, set(t, p, v) { t[p] = v; return true; } });
+  const x = 270, y = 150, w = 500;
+  for (const who of [0, 1]) {
+    pts.length = 0;
+    RENDER.duo.board(ctx, { x, y, w, t: 1, who, names: ['WWWWWWWWWW', 'Maximiliaa'], sc: [15, 0], wins: [1, 2], drops: 3, used: [1, 0], round: 2 });
+    const band = pts.filter((p) => p[1] > y - 6 && p[1] < y + 14);   // the stars' points (the frame's sides end above and below)
+    h.ok(band.length >= 40, 'four stars drawn (' + band.length + ' points)');
+    const off = band.filter((p) => { const cx = x + (p[0] > x ? 1 : -1) * w * 0.28; return Math.abs(p[0] - cx) > w * 0.2 - 2; });
+    h.eq(off.length, 0, 'every star inside its player\'s frame (who ' + who + ')');
+    h.ok(band.every((p) => Math.abs(p[0] - (x + (p[0] > x ? 1 : -1) * w * 0.28)) > 40), 'and clear of the score in the middle');
+  }
+});
+
+// ---- PERF (round 19): no scene under a solid page; the DOM scenes draw() feeds keep drawing; the backing store caps at 2x
+h.test('perf (round 19): a .ds-opaque page skips the canvas scene, the shopkeeper still draws, the buffer caps at 2x', () => {
+  const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const G = T.GAME;
+  G.newRun('knight', 777); if (G.screen === 'boon') G.choose(0); G.toMap();
+  G.showShop(G.rollShop({ q: 4, r: 5 }));
+  h.eq(G.screen, 'shop', 'the shop is up');
+  const total = () => Object.values(T._counts).reduce((a, b) => a + b, 0);
+  T._resetCounts(); G.draw(); const open = total();
+  const scr = T._nodes['scr-shop'], cls = new Set(['ds-opaque', 'show']);
+  const keep = scr.classList;
+  scr.classList = { add() {}, remove() {}, toggle() {}, contains: (c) => cls.has(c) };
+  T._resetCounts(); G.draw(); const covered = total();
+  h.ok(open > 300, `the map under the shop paints when the page is see-through (${open} calls)`);
+  h.ok(covered > 0 && covered < open * 0.5, `under the solid shop only the keeper's own canvas paints (${covered} of ${open} calls)`);
+  cls.delete('show');
+  T._resetCounts(); G.draw();
+  h.ok(total() >= open * 0.9, 'a page that is not shown never hides the scene');
+  scr.classList = keep;
+  const W = T._window, dpr0 = W.devicePixelRatio;
+  for (const [d, want] of [[1, 1], [2, 2], [3, 2]]) { W.devicePixelRatio = d; G.resize(); h.eq(G.S.px, want, `devicePixelRatio ${d}: ${want} buffer px per stage px`); }
+  W.devicePixelRatio = dpr0; G.resize();
 });
 
 h.done();

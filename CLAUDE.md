@@ -68,6 +68,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Positions/sizes/layers/lights ALL come from `rooms/layout.json` (made with align.html). Don't hand-tune draw positions in code — fix the layout or the align tool.
 - Lights: `LAYOUT.lights` {attach, fx, fy, r, a} — candle flicker / flame heat / venom vapor, additive glows.
 - Champion death anim: `sprites/champion/death/champion_death_*.png`, plays once, holds last frame.
+- Per-frame monster guards (orc, harpy, sentinel, mimic, minion): `sprites/<key>/<key>_<clip>_01.png` (or `_0`), configured in `MON_SPRITES` with `frames:true` (`s`, `ax`, `ay`, `fps`, `pp`, `once`), regenerated from the owner uploads with `tools/art/monster_frames.py`. The mimic draws `disguise:'chest'` until `g.ambushDone`, then plays `transform` once. Corrupted guards wear the Edrik/Vesna LPC skins (`corruptLookKey`), the painted demon once the room has 3 kills (`CORRUPT_DEMON_KILLS`).
 
 # Balance dials (single-constant tweaks, safe for small sessions)
 
@@ -76,7 +77,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Campaign difficulty: the `0.034` term in `difficulty()`
 - Trap strike timing: `TRAP_RISE=110`, `TRAP_FALL=480`; flame cascade `70`ms; candle loop `110`ms
 - Music volume under SFX: `MUSIC_SCALE=0.55`
-- Rooms (slot model): `cap` slots (1→`MAX_SLOTS=5`, +1 per gold `upgradeRoomGold`), `room.units[]` = mix of traps (≤`MAX_TRAPS=2`; stack the same trap to raise its `lvl`≤`MAX_LEVEL=5`) + monsters (stack as independent guards in `cell.guards[]`; veteran from `room.kills`). Synergies/named fusions and room-merge-on-drag are REMOVED.
+- Rooms (slot model): `cap` slots (1→`MAX_SLOTS=5`, +1 per gold `upgradeRoomGold`), `room.units[]` = mix of traps (≤`MAX_TRAPS=2`; stack the same trap to raise its `lvl`≤`MAX_LEVEL=5`) + monsters (stack as independent guards in `cell.guards[]`; veteran from `room.kills`). Named fusions and room-merge-on-drag are REMOVED; curated trap-PAIR synergies (`SYNERGIES`, 102 pairs, 7 types, each with an overlay in `rooms/synergies/`) are live.
 - Stacked traps: `TRAP_STACK_MUL=[1,0.8,0.6]` (2nd trap hits ×0.8 — only ≤2 traps per room now, so the ×0.6 slot is unused)
 - Den goblins: `GOBLIN_HP_FRAC=0.55`, hero retaliation `*0.4` in `goblinStep`, `GOBLIN_SPD=50`, cap `GOBLIN_DEN_CAP=20`
 - Hero CC resistance (tames the freeze+oil/Inferno lock): `statusResist(h)` = level ramp `(lvl-1)*0.010` cap `0.45`, +`0.25` champion/+`0.10` elite, +`0.28` Wizard ward (`wardT`); scales freeze/oil/chill/shock duration via `ccDur`. `FREEZE_IMMUNE=3`s post-thaw no-refreeze window; `BURN_CAP=22` caps stacked burn (`addBurn`). Cleric cleanse + Mage `wardT` in `heroSpellTick`. Covered by `tests/no_room_for_heroes_balance.test.mjs`.

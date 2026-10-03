@@ -161,7 +161,9 @@ function deckFor(char, act, seed, picks) {
       acts++;
       let up = 0;
       for (const inst of bin) { if (up >= 2) break; if (!inst.plus && DATA.ITEMS[inst.id].starter) { inst.plus = true; up++; } }
-      for (const rar of ['c', 'u']) { const pool = DATA.relicPool(rar, relics); if (pool.length) relics.push(rng.pick(pool)); }
+      // (round 17) the Cabinet Tech relics answer the cabinet (events, the lamp, PERFECT grabs), which this
+      // COMBAT-only model does not have: they would be dead picks here, so the model draws from the rest
+      for (const rar of ['c', 'u']) { const pool = DATA.relicPool(rar, relics).filter((id) => !(DATA.TECH && DATA.TECH.RELICS.includes(id))); if (pool.length) relics.push(rng.pick(pool)); }
     }
   }
   const claw = Object.assign({}, c.claw);
@@ -386,6 +388,49 @@ h.test('spare heart heals exactly its max hp gain', () => {
   const g = DATA.ITEMS.spare_heart.fx.find(f => f.k === 'maxhp').v;
   h.eq(F.player.maxHp, 70 + g, 'max hp grew');
   h.eq(F.player.hp, 40 + g, 'healed by the same amount, once');
+});
+
+// Round 16 (DESIGN.md "Balance touch-up (round 16)"): a claw type's own start, DATA.CLAWS[id].bal
+// {hp, grabs}, read once by GAME newRun. The skilled bot measured the scoop far ahead and the twins far
+// behind; the dials are small (some Max HP, one grab at most) and land on a real run.
+h.test('claw type balance dials: small, and a new run gets them', () => {
+  const CL = DATA.CLAWS;
+  for (const id in CL) {
+    const b = CL[id].bal;
+    if (b == null) continue;
+    h.ok(Number.isInteger(b.hp || 0) && Math.abs(b.hp || 0) <= 15, `${id}: bal.hp ${b.hp} is a small whole number`);
+    h.ok(Number.isInteger(b.grabs || 0) && Math.abs(b.grabs || 0) <= 1, `${id}: bal.grabs ${b.grabs} is at most one grab`);
+  }
+  h.ok((CL.twin.bal && CL.twin.bal.grabs) === 1, 'the twins bring one more grab a turn');
+  h.ok((CL.scoop.bal && CL.scoop.bal.grabs) === -1, 'the scoop takes one grab a turn fewer');
+  for (const ch in DATA.CHARACTERS) h.ok(DATA.CHARACTERS[ch].claw.grabs + CL.scoop.bal.grabs >= 2, `${ch} with the scoop keeps 2+ grabs a turn`);
+  const T = boot();
+  const G = T.GAME, D = T.DATA;
+  for (const ct of ['classic', 'scoop', 'twin']) for (const ch of ['knight', 'alchemist', 'engineer']) {
+    h.ok(G.claws.pick(ct), `${ct} picked`);
+    const run = G.newRun(ch, 40 + ch.length);
+    const b = D.CLAWS[ct].bal || {}, c = D.CHARACTERS[ch];
+    h.eq(run.clawType, ct, `${ch} runs with the ${ct}`);
+    h.eq(run.maxHp, c.hp + (b.hp || 0), `${ch} + ${ct}: Max HP ${c.hp} ${b.hp || 0 ? 'with ' + b.hp : 'as is'}`);
+    h.eq(run.hp, run.maxHp, `${ch} + ${ct}: starts full`);
+    h.eq(run.claw.grabs, c.claw.grabs + (b.grabs || 0), `${ch} + ${ct}: grabs a turn`);
+  }
+  G.claws.pick('classic');
+});
+
+// TECH (round 17, DESIGN.md "Cabinet Tech and the new crawler (round 17)"): the dials the skilled bot tuned.
+h.test('tech: Joy Stick and the Cabinet Tech dials stay where the bot left them', () => {
+  const c = DATA.CHARACTERS.techie, K = DATA.TECH.K;
+  h.ok(c && c.hp === 70 && c.claw.grabs === 3 && c.gold === 100, 'Joy Stick: 70 hp, 3 grabs, 100 gold');
+  h.ok(K.giftEvP > 0 && K.giftEvP <= 0.3 && K.giftPerfLamp === 1, 'her gift: a few more events, one more cell a PERFECT');
+  h.ok(K.remoteDmg <= 4 && K.remoteBlock <= 4, 'the remote is a nudge, not a nuke');
+  h.ok(K.metroDmg * 4 >= K.metroMax && K.metroMax <= 16, 'the Metronome caps at 16');
+  h.ok(K.feverDmg <= 10 && K.mbDmg <= 20, 'a fever hits, but the lamp fills fast');
+  // the relic damage that runs off the cabinet never comes from an enemy's turn: every Tech hook is onCab or a turn-start ring
+  for (const id of DATA.TECH.RELICS.concat(['service_remote'])) {
+    const hk = Object.keys(DATA.RELICS[id].hooks || {});
+    h.ok(hk.every((k) => k === 'onCab' || k === 'onTurnStart'), id + ': only onCab (and the quiet turn start)');
+  }
 });
 
 console.log(`  balance suite: ${((Date.now() - T0) / 1000).toFixed(1)} s`);

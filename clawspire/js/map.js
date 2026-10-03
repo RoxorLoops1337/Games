@@ -540,7 +540,7 @@ const MAP = (() => {
   function rollContent(M, t, crng, used) {
     const act = M.act;
     const content = { seed: Math.floor(crng() * 1e9) };
-    const enc = (typeof DATA !== 'undefined' && DATA && DATA.ENCOUNTERS) ? DATA.ENCOUNTERS[act] : null;
+    const enc = depEncOf(M, act);   // (DEP round 15: the Depths' own pools, else the act's)
     const pickEnc = (list) => (list && list.length ? crng.pick(list).slice() : null);
     switch (t.type) {
       case 'fight': case 'elite': case 'tower': {
@@ -1204,7 +1204,7 @@ const MAP = (() => {
     // minimums and a third of water.
     const water = cols * rows < 60 ? 0 : (opts.water != null ? opts.water : WATER);
     const M = {
-      act, biome: biomeOf(act), cols, rows, seed, tiles: {}, start, boss, pos: { q: start.q, r: start.r },
+      act, biome: depBiome(opts) || biomeOf(act), cols, rows, seed, tiles: {}, start, boss, pos: { q: start.q, r: start.r },   // (DEP round 15: an Endless dive's flooded biome)
       ink: opts.ink != null ? opts.ink : START_INK,
       brushes: (opts.brushes || []).map(normalizeTool), revealedCount: 0, islands: 0, water: 0, road: [],
     };
@@ -1387,7 +1387,7 @@ const MAP = (() => {
   // on DATA being loaded.
   function roamEnc(M, t, rng) {
     const u = rng();
-    const enc = (typeof DATA !== 'undefined' && DATA && DATA.ENCOUNTERS) ? DATA.ENCOUNTERS[M.act] : null;
+    const enc = depEncOf(M, M.act);   // (DEP round 15: a Depths monster prowls a dive's map)
     const list = enc && enc.normal;
     if (!list || !list.length) return null;
     const i = U.clamp(Math.floor((diffOf(M, t.q, t.r) * 0.7 + u * 0.5) * list.length), 0, list.length - 1);
@@ -1920,6 +1920,21 @@ const MAP = (() => {
     return M;
   }
 
+  // ---------------------------------------------------------------- DEP (round 15): the Neon Depths
+  // generate({biome: 'depths'}) is an Endless dive's map: the flooded
+  // basement. The geometry, every rng stream and every rule are the act's
+  // (a dive plays act 3); only the look (M.biome, tile.biome) and the monster
+  // pools (DATA.DEP_ENC: fights, elites, towers, the boss, roaming monsters)
+  // change, so every map invariant holds on it. A save keeps its biome.
+  const DEP_BIOME = 'depths';
+  const depBiome = (opts) => (opts && opts.biome === DEP_BIOME ? DEP_BIOME : null);
+  // The encounter pools for a map: the Depths' own, else the act's (null without DATA).
+  function depEncOf(M, act) {
+    if (typeof DATA === 'undefined' || !DATA) return null;
+    if (M && M.biome === DEP_BIOME && DATA.DEP_ENC) return DATA.DEP_ENC;
+    return DATA.ENCOUNTERS ? DATA.ENCOUNTERS[act] : null;
+  }
+
   return {
     TYPES, TERRAINS, GROUNDS, BIOMES, DIRS, DIST, MINS, MAXS, LANDMARKS, TOWER_BONUS, TOWER_INK, TOWER_GOLD, START_INK, INK_PER_ACT_HINT,
     DEFAULT_COLS, DEFAULT_ROWS, HEX, WATER, SHALLOW_COST, FIT_MARGIN, ROAD_MEANDER, ROAD_TOLL,
@@ -1945,5 +1960,7 @@ const MAP = (() => {
     LORE_KINDS, LORE_GAP, lorePlace, loreAt,
     // TRD (round 14): the Trading Post
     TRD_TILE, TRD_ROAD_GAP, TRD_ROAD_FAR, TRD_GAP, trdPlace,
+    // DEP (round 15): the Neon Depths (an Endless dive's biome and pools)
+    DEP_BIOME, depEncOf,
   };
 })();

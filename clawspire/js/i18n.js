@@ -64,10 +64,58 @@ const I18N = (() => {
     if (next !== lang) { lang = next; comp = null; cache.clear(); }
     try { if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = lang; } catch (e) { /* headless */ }
     watch();
+    if (!TAB[lang]) need(lang);   // (round 15) a language whose table has not landed yet: fetch it
     return lang;
   }
   const get = () => lang;
   const table = (code) => TAB[code || lang] || null;
+
+  // ---------------------------------------------------------------- (round 15) the tables load lazily
+  // An English player never downloads the Dutch tables (about 116 KB gzipped). A Dutch player gets
+  // them written in right after this file while the page still parses (lazyBoot, below), so the game
+  // boots in Dutch as before; a switch in Settings fetches them (need) and the game redoes the
+  // screen when they land (the onLand callback, game.js's i18nRefresh).
+  const FILES = { nl: ['js/lang_nl.js', 'js/lang_nl2.js'] };
+  const loading = {};
+  let landFn = null;
+  const onLand = (fn) => { landFn = typeof fn === 'function' ? fn : null; };
+  // Fetch a language's files in order (cb(ok) when done). -> true while a fetch is on its way
+  function need(code, cb) {
+    const files = FILES[code];
+    if (!files || TAB[code] || typeof document === 'undefined' || !document || typeof document.createElement !== 'function') { if (cb) cb(!!TAB[code] || code === 'en'); return false; }
+    if (loading[code]) { if (cb) loading[code].push(cb); return true; }
+    const cbs = loading[code] = cb ? [cb] : [];
+    const done = (ok) => {
+      delete loading[code];
+      if (code === lang) { comp = null; cache.clear(); watch(); }
+      for (const f of cbs) { try { f(ok); } catch (e) { /* a caller's problem */ } }
+      if (ok && code === lang && landFn) { try { landFn(code); } catch (e) { /* the screen keeps its words */ } }
+    };
+    let i = 0;
+    const next = () => {
+      if (i >= files.length) { done(true); return; }
+      const s = document.createElement('script');
+      s.src = files[i++]; s.async = false;
+      try { s.fetchPriority = 'high'; } catch (e) { /* an older browser */ }   // ahead of the art the boot is still fetching
+      s.onload = next; s.onerror = () => done(false);
+      try { (document.head || document.body).appendChild(s); } catch (e) { done(false); }
+    };
+    next();
+    return true;
+  }
+  // At boot, while the page still parses: the saved language (else the browser's) gets its tables
+  // written in right here, so they run before the game's scripts, as the old script tags did.
+  function lazyBoot() {
+    try {
+      if (typeof document === 'undefined' || document.readyState !== 'loading' || typeof document.write !== 'function') return '';
+      let sv = null;
+      try { sv = JSON.parse(localStorage.getItem('clawspire_meta') || 'null'); } catch (e) { sv = null; }
+      const code = pick(sv && sv.settings);
+      if (!FILES[code] || TAB[code]) return '';
+      document.write(FILES[code].map((f) => '<script src="' + f + '"></scr' + 'ipt>').join(''));
+      return code;
+    } catch (e) { return ''; }
+  }
 
   // ---------------------------------------------------------------- filling
   // {name} from vars; {n|one|many} picks by the number in vars.n (any var).
@@ -133,8 +181,19 @@ const I18N = (() => {
   // (fn), so the numbers stay the game's own; the English appended
   // " Exhaust." becomes the table's word. No translation: the English
   // through tr.
+  // (round 15) every rules text handed out, in either language, remembers how it was made, so a
+  // language switch redoes a card's rules in place (tr looks here first, in English too): the
+  // rules are built from DATA's numbers, which no {var} pattern can read back.
+  const itemMemo = new Map();
+  let memoBusy = false;
   function itemText(def, plus, fn) {
-    const t = lang !== 'en' ? TAB[lang] : null;
+    const out = itemText0(def, plus, fn);
+    if (typeof out === 'string' && out.length > 1 && def && typeof fn === 'function') { if (itemMemo.size > 3000) itemMemo.clear(); itemMemo.set(out, [def, plus, fn]); }
+    return out;
+  }
+  function itemText0(def, plus, fn) {
+    if (lang === 'en') return fn(def, plus);
+    const t = TAB[lang];
     const c = t && def && t.content.item && t.content.item[def.id];
     if (!c || !has(c, 'text')) return tr(fn(def, plus));
     let s = String(fn(Object.assign({}, def, { text: c.text }), plus));
@@ -150,8 +209,13 @@ const I18N = (() => {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   function compile() {
     const t = TAB[lang];
-    const out = { exact: new Map(), buckets: new Map(), loose: [], names: new Map() };
+    const out = { exact: new Map(), buckets: new Map(), loose: [], names: new Map(), moves: new Map() };
     if (!t) return out;
+    // (round 15) a pattern's {mv} is an enemy move: its content.move name first (English -> the table's), in capitals too
+    for (const id in (t.content.move || {})) {
+      const en = dataField('move', id, 'name'), v = t.content.move[id].name;
+      if (typeof en === 'string' && en && typeof v === 'string' && !out.moves.has(en)) { out.moves.set(en, v); out.moves.set(en.toUpperCase(), v.toUpperCase()); }
+    }
     for (const key in t.ui) {
       if (key.indexOf('{') < 0) { out.exact.set(key, t.ui[key]); continue; }
       const vars = [];
@@ -197,7 +261,8 @@ const I18N = (() => {
     const vars = {};
     for (let i = 0; i < p.vars.length; i++) {
       const v = m[i + 1];
-      vars[p.vars[i]] = /^n\d*$/.test(p.vars[i]) ? v : core(v, depth + 1);
+      const mv = p.vars[i] === 'mv' ? comp.moves.get(v) : undefined;   // (round 15) a move name, never its word's other sense
+      vars[p.vars[i]] = /^n\d*$/.test(p.vars[i]) ? v : mv !== undefined ? mv : core(v, depth + 1);
     }
     return fill(p.val, vars);
   }
@@ -219,6 +284,18 @@ const I18N = (() => {
       if (cp !== undefined) return cp;
     }
     if (depth > 3) return s;
+    // (round 15) sentences glued together that are each known: each on its own, before a "{s}" pattern
+    // swallows the rest ("Relic: {s}" took "Tuning Fork. +50 gold. Two Rocks in the bin." whole and lost all three)
+    const gl = s.split(/(?<=[.!?])\s+(?=[A-Z+\d])/);
+    if (gl.length > 1) {
+      const out = [];
+      for (const p of gl) { const r = core(p, depth + 1); if (r === p && /[A-Za-z]/.test(p)) break; out.push(r); }
+      if (out.length === gl.length) return out.join(' ');
+    }
+    // (round 15) an icon in front ("🔥 Let's gooo!"): the words after it first, before a loose "{s}!" pattern
+    // takes the whole string and hands it back unchanged (the icon kept the rest English)
+    const ic = /^([^A-Za-z0-9"'(<\s+\-−.][^A-Za-z0-9"'(<]*)(.+)$/su.exec(s);
+    if (ic) { const r = core(ic[2], depth + 1); if (r !== ic[2]) return ic[1] + r; }
     const b = c.buckets.get(s[0]);
     if (b) for (const p of b) { if (s.startsWith(p.pre)) { const r = tryPat(p, s, depth); if (r != null) return r; } }
     for (const p of c.loose) { const r = tryPat(p, s, depth); if (r != null) return r; }
@@ -258,7 +335,12 @@ const I18N = (() => {
   }
   // An English string the game built -> the current language (as is when unknown).
   function tr(s) {
-    if (lang === 'en' || typeof s !== 'string' || s.length < 2) return s;
+    if (typeof s !== 'string' || s.length < 2) return s;
+    if (!memoBusy && itemMemo.size) {   // (round 15) an item's rules text, from either language
+      const m = itemMemo.get(s);
+      if (m) { memoBusy = true; try { return itemText0(m[0], m[1], m[2]); } catch (e) { return s; } finally { memoBusy = false; } }
+    }
+    if (lang === 'en') return s;
     const hit = cache.get(s);
     if (hit !== undefined) return hit;
     let r = s;
@@ -266,6 +348,22 @@ const I18N = (() => {
     if (cache.size >= CACHE_MAX) cache.clear();
     cache.set(s, r);
     return r;
+  }
+  // (round 15) An enemy move's name, by its enemy: the table's content.move['enemy.move'] first, so a
+  // move never takes another sense of its English word ("March" the month, "Claw" the grijper); else
+  // the name through tr. eid: the enemy's id; name: the move's English name (the saves keep it).
+  function move(eid, name) {
+    if (lang === 'en' || typeof name !== 'string' || !name) return name;
+    const t = TAB[lang], mv = t && t.content.move;
+    if (mv && eid) {
+      try {
+        const e = typeof DATA !== 'undefined' && DATA && DATA.ENEMIES ? DATA.ENEMIES[eid] : null;
+        const m = e && Array.isArray(e.moves) ? e.moves.find((x) => x && x.name === name) : null;
+        const c = m ? mv[eid + '.' + m.id] : null;
+        if (c && has(c, 'name')) return c.name;
+      } catch (e) { /* a stub DATA */ }
+    }
+    return tr(name);
   }
   // Is there a translation for this English string (exact, a name or a pattern)?
   function known(s) {
@@ -383,7 +481,9 @@ const I18N = (() => {
     return bad;
   }
 
-  return { LANGS, NAMES, TAB, add, detect, pick, set, get, table, T, TP, TC, fill, tr, known, dom, el, watch, lint, itemText, DATA_KIND };
+  const lazyCode = lazyBoot();   // (round 15) a Dutch player's tables, written in while the page parses
+  return { LANGS, NAMES, TAB, add, detect, pick, set, get, table, T, TP, TC, fill, tr, known, dom, el, watch, lint, itemText, DATA_KIND, move,
+    FILES, need, onLand, lazyBoot, get lazy() { return lazyCode; }, loading: (code) => !!loading[code || lang] };
 })();
 // The short names the rest of the game calls (English in, current language out).
 const T = I18N.T;

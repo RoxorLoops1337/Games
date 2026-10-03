@@ -5819,6 +5819,13 @@ saves) and only what is shown changes.
 
 - Load order: `util`, `art`, **`i18n`, `lang_nl`, `lang_nl2`** (round 14),
   `physics` ... (`art` must stay right after `util`, the art suite pins it).
+  Round 15: the two tables are no longer script tags. `I18N.lazyBoot` writes
+  them in right after `i18n.js` while the page parses, only when the saved
+  choice (else the browser) is Dutch; a switch in Settings fetches them
+  (`I18N.need`, `I18N.FILES`) and `I18N.onLand` (game.js `i18nRefresh`)
+  redoes the screen when they land. An English player never downloads them.
+  The suites' `scriptFiles()` still puts them after `i18n` (`boot({noLang})`
+  leaves them out).
   `tests/clawspire_lib.mjs` lists `i18n` (namespace `I18N`, `lang_nl` and
   `lang_nl2` ride along with it) and passes
   `opts.language` to the stub navigator. `window.CS.I18N` for the console.
@@ -6082,6 +6089,1470 @@ item, a relic or gold to the run; the service and the bundle shrink the bin, the
   goods, the map icon and its silhouette, every final form, the ceremony through `st.art`), i18n (every new
   line and pattern in Dutch, the screens in Dutch with none of the new English left). Screenshots: scratchpad
   `r14_trd_shots.mjs` (`r14_trd_*.png`).
+
+## HUD and title menu polish (round 15)
+
+Owner request: the HUD (the health bar and the rest) looked crowded, and the title had too many
+buttons. Both are reorganized; no feature went away, no id changed.
+
+**The top bar** (index.html `#top`, CSS in `<style id="ui15-css">`, still 70 px tall so the arena,
+the labels, the toasts and every canvas layout under it keep their places):
+- the portrait (56 px, tap: the crawler card) | the vitals column (268 px) | the relic strip.
+- the vitals column, row 1: a real hp bar (`#hpStat`, 28 px) with "HP 36/80" inside it. The fill
+  (`#hpFill`) drains over the ghost chunk (`#hpGhost`); the incoming-damage stripes (`.qaIn`) ride in
+  it. Block is a cyan shield chip (`#blockTxt`, just the number) at the bar's right end: the bar steps
+  aside for it (`#hpStat.shielded .hpbar{right:58px}`), so nothing of the bar is ever hidden under it.
+  Hit shake, the red flash on the bar, the low-hp pulse, the shield shimmer (now inside the bar),
+  the heal / shield glows all still play.
+- the vitals column, row 2: compact chips, an icon and a number: gold (a CSS coin), bulbs (a cyan
+  bulb, `#inkTxt`), tickets (a pink ticket, `#tixStat`), and the act chip at the row's end ("ACT 1/3";
+  Endless "Loop 3" in its gold frame; the rush "BOSS 3/7"). The words stay in the markup (screen
+  readers, the i18n table, the round 1 markup test) and a tap on a chip shows its name and what it is
+  for. A Tilt / DAILY / WEEKLY / RUSH badge takes the word's place in the act chip. The rush clock
+  sits in the row in place of bulbs and tickets. The counters still roll, bump and float "+n".
+- the relic strip: 40 px medallions; what does not fit folds into a dashed "+N" chip
+  (`uiRelicFit`, a browser only) that opens the whole list (`uiRelicList`: every mutator and relic
+  with its name and rules, closes on its X, the chip or a tap elsewhere). A folded relic hands its
+  proc flash and ring to the chip (`S.relicEls[id]` points at it).
+- the player row: the status chips and the GRABS pill share one height (36 / 38 px) and centre line.
+- the control bar: the round Settings and Photo buttons (48 px), the hint (two lines at most), END
+  TURN (156 px, 164 in Dutch), evenly spaced.
+
+**The title menu** (`uiTitleTidy`, called at the end of `showTitle`). Every older builder still
+makes its own button, so `S.ui.buttons`, their labels, handlers and `GAME.choose` indices are
+exactly as before (Continue / New run first, History after Codex and Boss Rush, Duo last); the pass
+only moves the elements:
+- the big action: CONTINUE when a run is saved (NEW RUN under it, smaller), else NEW RUN (62 px,
+  breathing).
+- "New here? Try Claw School" under it (a fresh profile only, as before).
+- the play row: the Daily run card (today's date, crawler, mutators) and MODES, which opens the
+  **Play modes** sheet: Weekly challenge, Boss Rush, Duo.
+- five tiles (an icon over a short word): Vault (the Prize Vault, its "new" dot kept), Collection
+  (a sheet: Prizedex, Stickers, Codex, History; a badge counts fresh Codex pages and new stickers),
+  School (Claw School, its stars badge kept), Options (the Settings panel: sound, music, language,
+  text size, colour modes, hands, reduced flashing...), More (a sheet: Help, Tips, Intro, Sound
+  on/off, Music on/off).
+- the stats line: runs, wins, best Tilt, stickers, Prizedex, as small numbers without boxes.
+- the season ribbon, the hidden Event preview (five taps on the logo) and the attract mode are
+  untouched.
+A sheet is a panel rising from the bottom over a dimmed title (`.uiSheet`, inside `#scr-title`); it
+closes on its X, a tap on the dim or Escape. A sheet you left through (Back from the Prizedex, the
+Sound toggle, the Intro) opens again, without the rise, when the title comes back; a run coming back
+to the title finds it clean. The group buttons are plain taps, not `GAME.choose` entries; a sheet
+opened from the keyboard moves the focus into it and back to its button when it closes.
+
+Where every moved button went: Prizedex, Stickers, Codex, History: Collection sheet. Weekly
+challenge, Boss Rush, Duo: Play modes sheet. Help, Tips, Intro, Sound, Music: More sheet. Settings:
+the Options tile (sound and music are in its panel too). Prize Vault, Claw School: tiles. Daily run:
+the play row.
+
+Words: every new line has its Dutch (`js/lang_nl2.js`, the "(round 15) HUD and title menu polish"
+block): Modes / Modi, Play modes / Speelmodi, Vault / Kluis, Collection / Collectie, Options /
+Opties, More / Meer, and the chip cards. "Instellingen" does not fit a tile, hence the tile's own
+word. Minimum text size 12 px logical everywhere in the new chrome.
+
+Tests (`tests/clawspire_game.test.mjs`, "ui15:"): every older title button still registered in its
+order, where each one lives (menu or which sheet), the group tiles are plain taps, the sheets open and
+close, the Collection badge, Back reopens the sheet you left through (a run does not), CONTINUE and
+NEW RUN in the big action, DUO still works from its sheet; the HUD markup keeps every id and the
+vitals / resource / relic structure, the act chip reads "1/3", the shield chip shows the Block and
+empties without it, the relic fold and list stay off headless. Three older structure checks moved with
+the layout (the rush card, DUO and Claw School now asserted in their sheet / tile). Screenshots:
+scratchpad `r15ui/shots.mjs` (before_* and after_*, 390 x 844 and 540 x 960, English and Dutch),
+`shots2.mjs` (360 px, a fresh profile, extra large text, the rush HUD), `shots3.mjs` (the daily and
+Endless act chips).
+
+## Online co-op (round 15)
+
+The owner asked for Duo's CO-OP BOSS to work online. Duo, Co-op Boss now asks
+**Same phone** (the round 11 pass and play, unchanged) or **Online**: each
+player on their own phone, anywhere, sharing a four letter room code. Versus
+stays pass and play this round; the link (`NET`) is generic, so a versus claw-off
+(or anything else) can ride it later with message types of its own (round 16 did:
+"Online versus (round 16)" below).
+
+### Transport: the shared relay
+
+- No server of our own: Clawspire uses the relay the owner already runs for
+  Ironbridge (`ironbridge-relay/worker.js`, a Cloudflare Worker with a Durable
+  Object per room, live at `wss://ironbridge-relay.danhieux-senjka.workers.dev`).
+  It knows nothing about either game: `POST /new` mints a code, `GET /room/<CODE>`
+  is a WebSocket, it gives each side `{k:'hello', side, seed}`, then
+  `{k:'peers', n}` and `{k:'start', seed, side}` once both are in, `{k:'peerGone'}`
+  when one drops, `{k:'rejoin', role}` when one comes back (`?side=` claims its
+  own seat back, `?have=1&tick=N` says it still holds the match), answers
+  `"ping"` with `{k:'pong'}` and copies everything else verbatim to the other side.
+  Plain WebSockets through Cloudflare: no NAT, STUN or TURN, so it works on the
+  strict mobile networks where direct peer links fail. Nothing in
+  `ironbridge-relay/` or `ironbridge/` was changed.
+- **The namespace.** Codes are shared with Ironbridge, so the first thing each
+  side says is `{t:'hi', game:'clawspire', v:1, b, p, ready, g, n}`. A partner
+  whose first word is anything else (an Ironbridge command batch) is another
+  game: "That code belongs to a different game." Another `v` (the message format,
+  `DUO.NET.PROTO`) or another `b` (this build's fingerprint: the bosses' moves, the
+  difficulty dials, the item count, `SAVE_VER`) is "Your partner has a different
+  game version, both reload."
+- **The heartbeat.** `"ping"` every 3 s while the socket is open (the relay copies
+  it to the partner and pongs back), in the lobby and through long turns alike:
+  the relay lets a newcomer claim a seat that has been silent for 10 s. A partner
+  silent 10 s is lost; a relay silent 13 s means our own socket is dead and it is
+  reopened. A partner who only went quiet (a phone in a pocket throttles timers)
+  is back on its next word, no rejoin needed.
+- **Reconnect.** A dropped socket reopens every 2.5 s with `?side=` (our seat) and
+  `?have=1&tick=N`; after the relay's `rejoin` both sides say hello again and
+  each resends its last turn (a repeat is ignored). After 30 s the game offers
+  **Keep fighting alone** or **Quit to title**, and the retries go on quietly (every
+  6 s) until one is picked. The seat is also kept in `sessionStorage`
+  (`clawspire_net`, this tab only) so a reload claims the same seat.
+- **The dev override.** The relay's host is `NET.HOST`; `?relay=host` (plus
+  `&relayws=ws` for plain `ws://` and `http://`) or `localStorage.clawspire_relay`
+  (`host` or `ws://host:port`, a dev key read in try/catch) point it elsewhere.
+- **Load.** `js/net.js` is about 17 KB with its comments and loads after `game.js` (no library):
+  nothing opens until the player taps Online.
+
+### The flow
+
+1. **Host a game**: the relay mints a code; the lobby shows it big in four letter
+   boxes with **Copy code** and **Share invite** (`navigator.share` with
+   `https://games-71g.pages.dev/clawspire/?join=CODE`, else the link to the
+   clipboard). **Join a game**: four big letter boxes (typing moves on, a paste
+   spreads out, the fourth letter joins). A page opened with `?join=CODE` goes
+   straight to joining (read once as the scripts load; the address loses it when
+   the online game is left).
+2. **The lobby**: both players side by side, each editing only their own look on
+   their own phone (name, colour, crawler, claw, paint, from that profile; the
+   last one is remembered in `meta.duo.online.me`). The host is seat 0 (the
+   relay's side 0) and owns the setup: it picks the boss (beaten ones or Random)
+   and keeps the colours apart (the guest's moves when both want the same). Each
+   taps **Ready!**; when both are, the host sends `go` (the seed stirred from the
+   relay's, the boss, both looks) and the coin goes up on both phones.
+3. **Turns**, strictly alternating, so nothing ever conflicts. **YOUR TURN**
+   (`RENDER.duo.turn`, the hand-off card face up in your colour, a ring that starts
+   it by itself after 5 s) and **Grab!**; the fight is the local co-op seat fight
+   (`duoCoopEnter`). The boss answers on your seat (COMBAT's enemy phase), then
+   the turn goes over the line at once (`duoTurnPass`) with a "NAME'S TURN" beat
+   here, and this phone watches.
+4. **Watching** (`duoNetDraw`, `RENDER.duo.watch`): both players up top (hp,
+   DOWN), the shared boss with its hp and next move, NAME'S TURN then "NAME is
+   grabbing", and **their cabinet** from the stream: their claw (built with
+   `PHYS.clawPose` in their claw type and paint), their bin's bodies moving,
+   each prize they land flying from the chute to their corner, their combos in
+   their colours, hp numbers popping, their colour round the glass. A cheer bar
+   (Let's go, Sing, Boots, Hug) sends cheers that play on both phones in the
+   sender's bubble (over the fight on the other phone, `duoNetOver`).
+5. **Results**: the TEAM WIN / KNOCKED OUT podium on both phones, booked on both
+   like local co-op (`meta.duo`, the names' team games and wins) plus
+   `meta.duo.online {games, wins}`. **Play again** takes both back to the lobby on
+   the same code; **Title** leaves.
+
+### Messages (all JSON, `t` the type, `v` the format; everything checked on arrival)
+
+| t | from | carries |
+|---|---|---|
+| `hi` | both | game, v, b (build), p (look), ready, g (in a game), n (turns seen) |
+| `me` | guest | p, ready (lobby) |
+| `lobby` | host | p [both, colours fixed], ready [both], boss |
+| `go` | host | seed, boss, pick, p [both] |
+| `turn` | active | n (a counter both sides keep), seat, next, res (''/win/ko), turns, foes (the shared enemies), pub (the seat's hp, max, block, statuses), down |
+| `cl` | active | the claw (x, y, cable top, open, phase, type, width), hp, the enemies' hp; `b` the bin's bodies [uid, item id, x, y, angle] every 0.25 s; sent 10 times a second only when something moved |
+| `fx` | active | k: prize (id, plus) or combo (id) |
+| `cheer` | either | id (a DUO.CHEERS id) |
+| `away` | either | on (the page is hidden) |
+| `bye` | either | leaving |
+| `again` | either | back to the lobby |
+| `need` / `sync` | returning / staying | a phone that lost the game (a reload) asks; the other sends the table: seed, boss, both looks, whose turn, down, the foes, both seats' public state |
+
+- **Never trust the partner.** `duoNetPlayer` (data.js) repairs a look against
+  this game's tables; `duoNetFoesIn` refuses a list unless every entry names a
+  real enemy (all or nothing), clamps every number, keeps only plain status
+  names, checks belly items and move indexes, and takes this game's own move
+  object as the intent (a checked copy only when it names none); a slot whose
+  enemy changed (a summon) is made fresh with COMBAT's own maker. A turn for this
+  phone's own seat, an old one, or one outside the watch phase changes nothing.
+- **The active phone's word stands.** The claw's physics may differ between
+  phones, so nothing is simulated twice: the enemies and the seat come over as
+  they ended. Each phone owns its own DOWN flag.
+
+### Failures (the game never hangs and always gets back to the title)
+
+- The relay unreachable: "Can't reach the online lobby, check your connection."
+  A code nobody hosts (alone in the room 7 s): "No game with that code. Check the
+  letters with your friend." A full room: "That game is already full." A code
+  that is no code: "A code is four letters (no I or O)."
+- The partner leaves the lobby: the host waits for a friend again on the same
+  code; a guest whose host left is told and goes back.
+- Mid game: "Partner connection lost, reconnecting..." (a card over the watch
+  screen with a spinner and the seconds, a toast and an amber `#duoBar` dot on the
+  fight screen), then Keep fighting alone (the partner's seat counts as DOWN, the
+  local rule: this seat simply goes again) or Quit to title. A partner who left
+  (`bye`) or whose page is hidden for 45 s (`away`, "NAME stepped away", with Wait)
+  gets the same choice at once. Nothing freezes the other phone for good.
+- Leave (with a "Leave the game?" check) sends `bye`. An online duel is never
+  saved (`duoSaveState` skips it), never touches the local duel save
+  (`clawspire_duo`) or the run save, and never changes the local setup memory.
+
+### Code map, API, tests
+
+- `js/net.js` (`NET`): the transport. `data.js` DUO block: `DUO.NET`,
+  `duoNetCode`, `duoNetJoinParam`, `duoNetPlayer`, `duoNetOnline` (`duoFix` keeps
+  `online`). `game.js` DUO block, the DUO NET part (`duoNet*`), reached through
+  one-line hooks in the round 11 code (the co-op button, `duoBegin` {net},
+  `duoAfterToss`, `duoHand`, `duoTurnPass`, `duoCoopBook`, `duoFightTick`,
+  `duoOver`, `duoTick`, `duoDraw`, `duoEndDom`, `duoKey`, `duoHud`'s dot) and one in
+  `deliver()`. `render.js` DUO block: `RENDER.duo.watch`, `turn`, `lost`, `wfx`.
+  `audio.js`: `duoLink` (opts.k: join, turn, lost, back). `index.html`: the
+  `duo-css` rules for the code boxes, the lobby and the dot. Dutch in
+  `lang_nl2.js` (the DUO NET block).
+- `GAME.duo.net = {choose, menu, host, joinDom, join, set, boss, ready, start,
+  go, alone, quit, again, cheer, live, send, onTurn, boot, foesOut, foesIn,
+  pubOut, pubIn, build, sheet, draw, state, log, bootCode}`.
+- `tests/clawspire_net.test.mjs` runs two whole games against the REAL relay
+  worker in memory (the stand-ins of `tests/ironbridge_relay.test.mjs`, a queue
+  pumped by hand): the codes and `?join=`, a look repaired, the enemies' round
+  trip and junk, the lobby, turn alternation with the stream, combos, a prize and
+  a cheer, a dropped line and its rejoin, a quiet partner, a hidden page, a seat
+  down, the team win on both, play again, 30 s then alone, a reload that syncs
+  back in, and every failure message.
+- End to end (scratchpad `r15net/`): `relay.mjs` hosts the real worker behind
+  `ws` on :8787 and the site on :8080; `e2e.mjs` drives two Chromium pages
+  (390x844, one English, one Dutch) through host, join by typing the code, the
+  lobby, four real turns with the watch screen, a cut line and its rejoin, a
+  team win, play again, a reload through the invite link, a closed page, 30 s,
+  Keep fighting alone. Screenshots `r15_net_*.png`.
+
+### Known limits
+
+- A turn cut short by a drop is not replayed: the turn is sent when it ends, so
+  if the active phone's page dies mid turn, that turn starts over when it comes
+  back (or the other goes on alone).
+- The stream is a picture, not a simulation: the watcher's bodies glide between
+  samples 4 times a second, so a fast tumble looks smoother than it was.
+- The relay's free plan has a daily message budget shared with Ironbridge; a
+  co-op match is a few thousand messages (the stream only while someone grabs,
+  only when something moved).
+
+## Online versus (round 16)
+
+The owner loves the duo modes, so the VERSUS CLAW-OFF went online too, on the
+same link, lobby and code as co-op (round 15 above). Duo, Versus Claw-off now
+asks **Same phone** (round 11's pass and play, unchanged) or **Online**, then
+Host a game / Join a game exactly like co-op: the four letter boxes, Copy code,
+Share invite ("Take me on in a Clawspire claw-off! Room code:"), `?join=CODE`.
+
+### The mode, the lobby, the setup
+
+- **The guest follows the host's mode.** Every hello now carries `m` (`coop` or
+  `vs`), and so do the host's `lobby` and `go`: a guest takes whatever the room
+  plays, whichever menu it came through (or none: an invite link from the
+  title). So a versus guest in a co-op room (or the other way round) never
+  gets an error, it simply plays the host's game; the lobby's title says which
+  ("Online versus" / "Online co-op").
+- The host owns the setup: the seed (the relay's, stirred with the code and
+  the game count) and **the drops each per round** (3, 4 or 5, chips in place of
+  the boss; the guest sees the number). Each player edits only their own look,
+  as in co-op; the colours are kept apart the same way.
+- **The protocol went to v2** (`NET.PROTO`, `DUO.NET.PROTO`): the hello's mode
+  and the claw-off's messages are new, so a round 15 phone (co-op only) is told
+  "Your partner has a different game version, both reload." instead of
+  misreading them. The build fingerprint (`duoNetBuild`) also hashes the
+  claw-off's rules (`VAL, PILE, PILE_MORE, BONUS, DROPS, CARD_IDS, COPIES, HAND,
+  WIN_ROUNDS, MAX_ROUNDS`, the combo count, the cabinet's size): two phones that
+  would roll a different pile or score a drop differently are told to reload.
+
+### One pile, two phones
+
+- `go` carries the seed; each phone runs round 11's own `duoBegin('vs')`, the
+  toss (`duoToss`), `duoRoundStart` (the deck `duoDeck`, the dealt hands, the
+  starter `duoStarter`) and `duoPile`, so both build the identical pile, deck,
+  hands and toss from the seed. Turns alternate exactly as on one phone.
+- **YOUR TURN** (the co-op card in your colour, "Round 1 · drop 1 of 6" and the
+  score, Grab! or 5 s): your drop is the round 11 claw-off on your own phone
+  (`duoVsPlay`, `duoVsTick`, `duoVsDropEnd`), your finger on your glass. **The
+  active phone's drop stands**: nothing is simulated twice.
+- **The table.** Every change of hands goes over as one `vt` message with the
+  WHOLE claw-off table (round, drops made, drops each, the scores, the pile
+  indexes won, both hands, the deck, a pending card, the finished rounds, the
+  last drop's prizes and points) plus a snapshot of the bin's bodies by stable
+  pile index `[i, x, y, angle x100]`. Three events:
+  - `drop` (after `duoVsDropEnd`; `end: 1` when the round is over): the watcher
+    takes the table and the bin, shows "NAME +7" with the score lines (worked
+    out HERE from the pile with `duoDropScore`, never taken from the wire) and
+    "NAME is picking a sabotage card...", the points pop over their side of the
+    board, a JACKPOT and their combos play. With `end` each phone runs its own
+    `duoRoundEnd`: the round sheet, or the podium, booked on its own profile.
+  - `pass` (the dropper played a card, or kept its hand): the table carries the
+    pending card; it is the rival's turn on their phone.
+  - `next` (Next round, on either phone): the other phone starts the same round
+    from the seed; a phone already there takes nothing (a repeat is a no-op).
+  Because each table is complete, a lost message is healed by the next one; a
+  bin missing a prize the table says is still there is rebuilt (`duoVsBuild`)
+  and then set to the snapshot, so both phones always continue from one pile.
+- **Sabotage cards** are round 11's, unchanged (Shake Up, Butter Fingers, Fog
+  Machine, Tilt!, Mirror Mirror, Tiny Claw, Too Much Coffee): played on your
+  sabotage sheet after your drop, the card rides the `pass` table (`pend {id, on,
+  by}`) and bites on the rival's phone when their drop starts (`duoVsPlay`
+  applies it there: the shake, the grease, the fog, the lean, the mirrored
+  steering, the small claw, the fast claw). The card slams onto BOTH glasses:
+  the rival's `vgo` ("my drop starts", round and drop count) makes the card
+  player's phone slam it, show its tag and the fog or the lean too.
+- **Watching the rival** (`duoVsDraw` with the stream): the board, both
+  crawlers, the rival's claw in their type and paint (`PHYS.clawPose`, 10 times
+  a second, `vc`), the bin's bodies gliding to the samples (4 times a second,
+  by pile index; no physics on the watching phone), each prize they land flying
+  from the chute to their side of the board (`fx {k: 'vprize', i}`, a straggler
+  after the drop too), "NAME'S DROP" then "NAME PICKS A CARD". Under the glass
+  one row: the six taunts as icons (Nyah, Spoon, Wah wah, Air horn, Boots and
+  cats, Mic drop; their words in the bubble) and Leave. Taunts ride co-op's
+  `cheer` with the claw-off's list and play with their own voices on both
+  phones, in the sender's bubble (over the dropper's glass too); on the round
+  sheet and the podium as well.
+
+### Messages (v2: new, or new fields; everything checked on arrival)
+
+| t | from | carries |
+|---|---|---|
+| `hi` | both | + `m` (the room's mode, the host's word counts) |
+| `lobby` | host | + `mode`, `drops` |
+| `go` | host | + `mode: 'vs'`, `drops` (no boss) |
+| `vt` | active | `n` (the counter co-op uses), `ev` (drop, pass, next), `end`, `tb` (the table), `sn` (the bin: `[i, x, y, a]`) |
+| `vgo` | active | `r`, `k`: my drop starts (the card slams on the watcher) |
+| `vc` | active | the claw (as co-op's `cl`) and every 0.25 s `b`, the bin by pile index |
+| `fx` | active | + `k: 'vprize'`, `i` (a pile index) |
+| `cheer` | either | the claw-off's taunt ids in versus |
+| `sync` | staying | + `mode: 'vs'`, `drops`, `first`, `ph` (where the returning phone comes in), `vw`, `tb`, `sn` |
+
+- **Never trust the partner.** `duoVsNetTableIn` is all or nothing: the round
+  and the drop count in range, the drops each within the round's and adding up
+  to the count, the pile indexes real (for that round's pile, rolled here) and
+  unique, the hands and the deck real cards within their sizes, a pending card
+  on one player by the other, the finished rounds' scores as number pairs (the
+  winners worked out here), the last drop's prizes among the ones won. A bin
+  row needs a real pile index (once), a position clamped to the glass. A table
+  from an older round, a repeat, one this phone should not take (it is not
+  watching), or a `drop` claiming to be this phone's is ignored.
+
+### Reconnect, reload, forfeit, the record
+
+- A dropped line is co-op's: the heartbeat, 30 s of retries, the seat claimed
+  back, the last message sent again on `@back` (the table: a repeat is
+  ignored). The dropper plays on through it (a "Reconnecting" pill over its
+  board, never a card over its glass); the watcher gets the "Partner connection
+  lost" card and then the table that heals it.
+- A reload (the invite link again) asks for the game (`need`) and gets `sync`:
+  the whole table, the bin and where to come in (its own drop starting over, its
+  card choice, watching the other's drop or card choice, or the round sheet).
+- **Forfeit instead of alone.** After the 30 s (or at once when the rival left,
+  `bye`, or was hidden for 45 s) the sheet offers **Win by forfeit** (instead of
+  co-op's Keep fighting alone), Wait (hidden only) and Quit to title. A forfeit
+  books the match once for this phone's seat (`duoVsBook`, the podium says
+  "NAME wins by forfeit!" and "rounds won, then a forfeit", the points include
+  the round cut short) and closes the link. Leave asks first ("Your rival wins
+  by forfeit."); the one who leaves books nothing.
+- **Booking**: both phones book the result on their own profile the local way
+  (`duoRecord`: `meta.duo.vs`, the names' wins and losses) plus
+  `meta.duo.online.vsGames` / `vsWins` (`duoNetOnline` repairs them, wins never
+  above games; no key renamed). The online menu shows "Online versus: N games,
+  N wins"; the podium "Online versus wins: N of N". **Play again** takes both
+  back to the versus lobby on the same code (a fresh seed). An online duel is
+  never saved (`clawspire_duo` and the run save untouched).
+
+### Code map, API, tests
+
+- `game.js` DUO block: the DUO NET VS part (`duoVsNet*`, after `duoNetClawDraw`),
+  reached through one-line hooks in round 11's code (the menu's Versus button,
+  `duoVsCredit`, `duoVsDropEnd`, `duoSaboDom`, `duoRoundDom`, `duoVsBook`,
+  `duoNextRound`, `duoVsDraw`, the podium's label) and round 15's (`duoNetChoose(mode)`,
+  the lobby, `go`, `duoNetBegin` {mode, drops}, `duoNetAfterToss`, `duoNetGo`,
+  `duoNetPass`, `duoNetOnFx`, the cheers, `need` / `sync`, `duoNetAlone`, the
+  sheets `duoNetSheetEl`, `duoNetTick`, `duoNetDraw`, `duoNetEndDom`). Shared
+  helpers: `duoNetClawIn` / `duoNetClawOut` (the stream's claw), `duoNetClawDraw`.
+  `data.js` DUO block: `DUO.NET.PROTO` 2, `MODES`, `VS_BODIES`, `duoNetOnline`'s
+  `vsGames`, `vsWins`. `net.js`: `PROTO` 2. `index.html` `duo-css`: the watch
+  bar (`.duoVsNetBar`). Dutch in `lang_nl2.js` (the DUO NET VS block).
+- `GAME.duo.net.vs = {go, drops, forfeit, out, onTable, tableOut, tableIn,
+  snapOut, snapIn, onClaw, onGo}`.
+- `tests/clawspire_net.test.mjs` (two whole games against the REAL relay worker
+  in memory): the online record's repair, the menus (same phone is round 11's
+  setup), a versus room hosted, a guest from co-op's menu following it, the
+  drops the host's only, the Dutch guest's lobby, one seed, pile, deck and toss;
+  a drop streaming (the claw, the bin, a prize flying), the table and the bin
+  agreeing after it, a taunt, a sabotage card biting on the rival's phone and
+  slamming on both; junk tables, rows and starts refused (nothing changes); the
+  line cut mid drop, the drop and the card choice made offline, the table
+  healing the watcher on the rejoin; a whole match to the podium on both, booked
+  on both once, Play again to the same room; the rival gone 30 s, Win by forfeit
+  booked once; a reload mid claw-off syncing back in and playing on. (The
+  suite resets the relay's per real second flood cap on every pump: it plays
+  minutes of game in one real second.)
+- End to end (scratchpad `r16vs/e2e_vs.mjs`, round 15's `r15net/relay.mjs` with
+  the real worker): two Chromium pages at 390x844, one English, one Dutch: host
+  versus, join through the invite link, the lobby, the toss, real finger drops,
+  cards played and slamming on both, a line cut mid drop and healed, a whole
+  match to both podiums, Play again, a reload through the invite link synced
+  back in, the page closed, 30 s, Win by forfeit. Screenshots `r16_vs_ennl_*.png`.
+
+### Known limits
+
+- A drop cut short by a reload starts over (the table is sent when a drop
+  ends), like co-op's turn; the prizes its stream showed falling are back in the
+  bin.
+- The watcher's bin is a picture of the dropper's: the bodies glide between
+  samples, and the end-of-drop snapshot sets them exactly (0.1 px, 0.01 rad), so
+  the next dropper starts from a copy, not the same floats.
+- The one who leaves (or whose page dies for good) books nothing; only the one
+  still there books the forfeit.
+
+## The Neon Depths (round 15)
+
+A fourth biome, for Endless only: the flooded basement under the Clawspire.
+
+- **When**: every third loop from Loop 3 dives (`DATA.depLoop`: 3, 6, 9, ...). The classic
+  cycle carries on between dives (`DATA.depAct`: 1 cellar, 2 foundry, D, 3 vault, 1, D, 2,
+  3, D, ...), so every act still comes round; `DATA.endlessAct` itself is unchanged. A dive
+  plays act 3 underneath (its scaling, its rewards). `run.endless.dep` marks the dive and
+  `run.endless.dp` counts them, so an old save at Loop 3 (no flag, a vault map) stays the
+  vault. The Drowned Jukebox keeps its own trick (a dive's `E.mix` is null; the rng was
+  still drawn, so later streams hold) and no loop boss ever borrows High Tide.
+- **The map** (`MAP.generate({biome: 'depths'})`): the vault's own layout for the seed,
+  only the biome differs, so every map rule holds. Tiles: flooded floor tiles, glowing
+  kelp (forest), a checkerboard through the silt (dirt), sand with starfish, drowned
+  arcade cabinets (mountains), pipes (hills), sunken arcade stools (fords), deep water
+  with ripples and rising bubbles. Teal fog, bubbles for motes, the Depths' own pools
+  on every fight, elite, boss and roamer.
+- **The fight**: an underwater arcade (light rays, a row of drowned cabinets, kelp, a
+  sunken ARCADE marquee, fish, a jellyfish, a sand floor), pink on High Tide, crackling
+  on live water. The cabinet stands in water (`DEP_K.water`, 16 percent of the bin) with
+  caustics; it is PHYS.rosFlood's buoyancy, so heavy prizes sink and light ones float.
+  There is one water: a Rising Water mutator folds in (the higher mark wins).
+- **The monsters** (act 3 pools' strength, then x1.1 hp and hits, `DEP_K.hpK / dmgK`):
+  Angler Token (`lure`: an Old Boot and a light over it; the aim creeps toward it and a
+  falling claw is pulled; grab the boot and the lure snaps off), Jellyfish Coin
+  (`jellies`: floating junk that stings the claw that touches it, once a grab; delivered,
+  it stings an enemy), Crab Changer (`pinch`: your best prizes are dragged to the far
+  wall; lift one clear to free it; still pinched a turn later, it goes into the shell),
+  Volt Eel (`shock`: next turn a prize lifted from under the waterline zaps you on
+  delivery), Sunken Mimic, the elite (`decoy`: look-alike chests, one pays gold and Block,
+  the rest bite). The boss, **The Drowned Jukebox**, High Tide: for your next turn the
+  water swells from 14 to 62 percent of the bin and back with its music (74 and 1.5x
+  faster on the B-side). Every trick lands on the player's turn or after the enemy phase,
+  so COMBAT.qaIntent / qaThreat stay exact.
+- **Music**: act 4 to AUDIO, a muffled dub (72 bpm minor, a walking sub, a one-drop kit,
+  a low-passed lead with a tape echo, bubbles). Seven sounds in their MIX tiers.
+- **Records**: the reboot card floods (DRAIN PUMP FAILED, THE NEON DEPTHS over rising
+  water), `meta.dep` {dives, jukebox, best}, a score line (1500 a Jukebox), the history
+  card's NEON DEPTHS tag, the Deep Diver sticker (the board's cap 60 -> 63), seven Codex
+  pages. Dutch for every line (the DEP block at the end of `lang_nl2.js`).
+
+## QA pass 5 and polish (round 15)
+
+Owner of this section: the QA and polish pass. Scratchpad `r15/` (`qa15.mjs` the tours and bot runs, `bot_fn.js`,
+`scan_fn.js` the text audit, `toast*.mjs`, `trd*.mjs`, `rival.mjs`, `dw.mjs`, `load15.mjs`, `bal15.mjs` / `cal15.sh` /
+`agg15.mjs`), screenshots `r15_qa_*.png`, `r15_toast_*.png`, `r15_trd_*.png`. Tests: `q15:` in the game and i18n suites.
+
+### The backlog
+
+- **"March" read "maart".** The Wind-Up Soldier's move and the month shared the ui key. A move now resolves by its
+  enemy: `content.move['clockwork.march']` (Opmars) and `['wraith.claw']` (Klauw, not the grijper) in `lang_nl2.js`,
+  `I18N.move(enemyId, name)`, and a pattern slot named `{mv}` reads the move table first (the death recap "Killed by
+  {s} with {mv} for {n}", the cabinet sign "{mv} NEXT TURN: {n}" and "{mv}: {n} INCOMING"). The date keeps its month
+  with its own line, "On until {n} March." Every move of every enemy is checked against the twelve months.
+- **The corner toast on DANSDUEL.** An event's title weighed as a heading and the vignette as text, so with the plain
+  toast in the bottom strip the least covered spot was the title. The title and a story's STORY / PART tags are
+  `.qaKeep`, the vignette's neon word is `QA_SIGNS.event` (measured off the scene canvas, `Q15_EV_SIGN`), and
+  `POL13_SPOTS.event` offers spots under the page's last button (`pol13Cands` now passes the measured keys). Measured
+  at 390 and 360 in both languages on the dance-off, the vending machine and an event: under the choices every time.
+- **The Trading Post in Dutch.** Shorter Dutch rules and "gets" (Rommel weg, Voorwerp weg; every line no longer than
+  its English) and a tighter card under `html[lang="nl"]` (`trd-css`). Over 40 rolled visits at 390 x 844 the three
+  trades now always fit: they needed up to 554 px of a 515 px panel before (26 of 40 visits scrolled), a Dutch card
+  is now shorter than the English one (292 against 321 px for the same three).
+
+### QA pass 5, both languages
+
+Scripted tours in English and in Dutch (Duo versus to the podium with a reload, Duo co-op through its hand-offs, all
+26 Claw School challenges, the practice cabinet, the Boss Rush with reloads, the daily ghost race, legendary relics
+and the new evolutions in a fight and the Prizedex, the three animated cabinets, the Trading Post: every trade kind
+dealt and refused a second time, a reload mid haggle, pet evolution by rest, gold and relic, the pet shop, both
+seasons' doors and stands) and bot runs in both languages with 8 live language switches each (in fights, on the map,
+in shops, rests, rewards and the post) and 4 reloads. Every step audits the page: page and console errors, stalls,
+NaN, raw `{placeholders}` and ids, English words left on a Dutch screen and Dutch on an English one (the DOM and every
+word drawn on the canvas), buttons overlapping or off stage, a corner item over a button.
+
+Found and fixed (tests `q15:`):
+1. **A Duo claw-off crashed** when a prize rolled into the chute after a drop was booked (`V.cur` gone). It now
+   scores for the one who knocked it loose (`duoVsCredit`).
+2. **A Gary claw-off could wait for ever**: his aim retried every 0.2 s on a claw still busy from the last drop (the
+   bot saw it hold a prize at the top for good). An aim on a busy claw now forces the prongs open after 6 s
+   (`Q15_AIM_STUCK`) and skips that drop after 10 s.
+3. **An item's rules text kept its old language after a switch** (both ways: the rules are built from DATA's numbers,
+   so no pattern reads them back). Every rules text now remembers how it was made (`I18N.itemText` memo) and `tr`
+   remakes it in the new language.
+4. **An icon in front kept the words English** ("🔥 Let's gooo!": a loose "{s}!" pattern took the whole string). The
+   words after an icon are tried first: 552 icon-led lines were English before, none now.
+5. **Glued toast lines lost their Dutch** ("Relic: Tuning Fork. +50 gold. Two Rocks in the bin." matched "Relic: {s}"
+   whole): sentences that are each known are now translated one by one first.
+6. **Canvas words in English**: a pet's quip bubble in fights, the pet shop's labels, a challenge's DROPS / TIME line,
+   the GOLD / SLOT chips of the legendaries, and a chalkboard goal (wrapped before it was translated, so its pieces had
+   no Dutch); `loreFit` measured the English. Plus the capsule prize cards (gold, bulbs, heart, tickets, capsule).
+7. **A switch right after boot waited 3 to 6 s** for the Dutch tables behind the art still loading (locally, HTTP/1):
+   the fetch now asks `fetchPriority = 'high'` (about 0.25 s).
+
+By design, noted: Duo's setup keeps its Toss button sticky over the scrolling list (in both languages); a floating
+word or a toast already on screen keeps its words for its last second after a switch; the Trading Post's haggle has
+no button (a tap hurries it). The language switch never touched the run or its save in the 24 switches checked in one beat (8 runs, 64 switches
+in all; the 40 of the first round were read across running frames and are not counted), and every reload came back where
+it was (20 mid run in the bot runs, plus the rush, the ghost race and a haggle in each language).
+
+### Balance check (round 15)
+
+The round 12 skilled bot (`PRO=2`, `r11/bal.mjs`) on the round 14 build, plus what a skilled player would do with the
+round 14 systems (`r15/bal15.mjs`: a detour to the Trading Post, swaps that the bot's item value rates higher, bundles
+of two weak items in a fat bin, removals with gold to spare, one relic swap in three; a pet evolved for gold at the
+post or at a rest). Six crawlers x classic / tri / scoop / twins, 8 seeds, Tilt 0: 190 runs (2 hit the 15 minute cap).
+
+| skilled bot, Tilt 0 | round 12 after (48 runs) | round 15 (190 runs) |
+| --- | --- | --- |
+| win | 31% | 32% |
+| deaths act 1 / 2 / 3 (share of losses) | 12 / 16 / 5 (36 / 48 / 15%) | 34 / 65 / 30 (26 / 50 / 23%) |
+| win: Knight / Alchemist / Rogue / Lucky Lou / Mama Mech / Ms. Bubbles | 38 / 38 / 38 / 13 / 25 / 38% | 34 / 44 / 55 / 25 / 13 / 19% |
+| win: classic / tri / scoop / twins | 42 / 25 / 50 / 8% | 27 / 27 / 61 / 13% |
+| gold on arrival, act 1 / 2 / 3 | 103 / 419 / 720 | 104 / 420 / 639 |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.0 / 16.9 | 1.6 / 8.4 / 16.2 |
+| a won run ends with | 23.9 relics, 81 items, 1128 gold | 23.6 relics, 80 items, 796 gold |
+| capsules a run | 21.7 | 22.5 |
+| the killers | the Plushie Queen 6, Ironjaw 4, the Prize Mimic 3, the Dozer 3 | Ironjaw 18, the Plushie Queen 17, the Collector 13, the Golem 11, the Dozer 9, Tin Knight 8 |
+
+The round 14 systems in these runs: 2.0 trades a run (66% of runs trade: 112 swaps, 120 bundles, 92 removals, 55
+relic swaps), a pet evolved in 21% of runs, a legendary relic held at the end in 23% (0.6 in a won run). Runs that
+traded win 42% and runs that did not 11%, but that is who reaches the post (a run that dies early in act 1 never
+does), not what the trades are worth: the loot per act is flat against round 12 and the only real change is where
+the gold goes (a won run ends with 330 gold less, spent at the post). **The legendaries, the evolutions, the Trading
+Post and pet evolution did not push the game back toward easy**: the skilled bot wins 32% (the owner's target is a
+skilled player losing about 70%), and the deaths now spread wider over the acts (act 3 went from 15 to 23% of the
+losses). Left for the owner: the scoop still leads (61%) and the twins trail (13%); Mama Mech (13%) dies in act 2
+and 3 (Ironjaw and the Collector); Ironjaw and the Plushie Queen are the top killers again.
+
+### Load (round 15)
+
+The round 11 method (`r15/load15.mjs`: Chromium, 4x CPU throttle, slow 4G, served gzipped, the median of 3 cold and
+3 warm loads), on round 12, round 14 (HEAD) and round 14 with the lazy tables:
+
+| | round 12 | round 14 | round 15, English | round 15, Dutch |
+| --- | --- | --- | --- | --- |
+| bytes on the wire (cold) | 1036 KB | 1183 KB | 1070 KB | 1184 KB |
+| cold first frame (ms) | 7148 | 7994 | 7380 | 8030 |
+| warm first frame (ms) | 2403 | 3006 | 2023 | 3177 |
+
+The two Dutch tables are 116 KB gzipped (`lang_nl.js` 80, `lang_nl2.js` 36; 323 KB raw, `i18n.js` another 6): most of
+the round 14 growth (+147 KB, +846 ms to the first frame). They now load only for a Dutch player (written in while
+the page parses, so a Dutch boot is exactly as before) or on a switch (fetched, the screen redone when they land). An
+English player saves 113 KB and about 0.6 s cold, 1 s warm.
+
+## The cabinet is alive (round 16)
+
+The owner asked for more that can happen with the claw machine itself: more juice, more cool stuff per grab, addictive
+loot. This round makes the Rig a character with moods of its own. Five things, each readable on a phone, none of
+them touching a number the incoming-damage preview reads (coins and capsules pay gold and loot, never damage).
+Code: game.js (the CAB block before `state()`, reached through one-line hooks in `startFight`, `buildRig`,
+`endTurn`, `finishEnemyTurn`, `onRigEvent`, `deliver`, `soClose`, `grabFinished`, `endFight`, `lootReward`,
+`loadMeta`, `update`, `drawFight` and `holdHint`), render.js (the CAB block: `RENDER.cab`, plus the claw head's
+`strain` mood), audio.js (the CAB block: nine voices in their MIX tiers), the Dutch in the CAB block at the end of
+`lang_nl2.js`. Dials: `GAME.cab.K` (`CABK`).
+
+**Cabinet events.** From turn 2 (`evFirst`) a player turn opens with an event `evP` (38%) of the time. After the
+turn banner a sign swings down on two chains into the glass (CABINET EVENT on its tag), its icon window spins like a
+slot reel with ticking (`cabRoll`), and it slams down (`cabLand`, rays, a ring, the marquee) on one of:
+
+| event | weight | what happens |
+| --- | --- | --- |
+| POWER SURGE! | 0.36 | the claw grips +0.3 and the carriage runs x1.35 for the turn; lightning crawls along the rail, a SURGE plate on the glass, a zap (`cabSurge`) |
+| COIN SHOWER! | 0.40 | 6 coins rain into the bin (never into the open claw: a coin dropped in its column moves aside); a coin in the chute pays 1 gold (`COMBAT.gainGold`, so Money Bags and Golden Touch fire on your own turn), flying to the gold counter; the coins left sink away at the end of the turn |
+| CAPSULE DROP! | 0.24 | a prize capsule (tier rolled c 55 / u 30 / r 12 / l 3%) with a face drops into the pile; deliver it and it waits on the reward screen as a real capsule (`makeCapsule('cabinet', {tier})`, "Cabinet prize", it can still upgrade as it cracks); at most 2 cabinet capsules a fight, never in a Boss Rush or The Machine's fight (no reward screen there: coins instead) |
+
+The roll uses its own stream (the fight's seed and the turn number, never `FS.rng`), so the pile's physics are
+untouched on a quiet turn and a reload (a fight restarts from its bell) replays the same events on the same turns. A
+turn that ends puts the sign away and the surge out.
+
+**The Jackpot Lamp.** A dome and a 12-cell tube on the cabinet's top frame, right of the marquee (the pet's name tag
+sits on the left, Mama Mech's turret in the corner). Every delivered prize throws a gold star from the chute into the
+lamp (+1; the second prize of a grab +1 more, the third +2, a rare or legendary prize +1, a PERFECT grab +1), and SO
+CLOSE now has a consolation: LAMP +1. Each spark lights its cell with a bell blip that climbs with the level
+(`cabLamp`); the last cells glow. Full: LAMP FEVER! (`cabFever`, a siren into a fanfare): the dome's beacon sweeps
+two light cones across the arena, the dome bursts (its cap flies off, confetti, coins, a gold ring, a flash) and 5
+coins and a capsule rain into the bin. One fever at a time; an overflow carries. The level is the run's
+(`run.cabLamp`, 0..12), written back only when a fight ends, so a reload mid fight starts from the level the fight
+began with (no double fill); a lamp left full goes off after the next fight's bell. The first spark on a profile
+shows a toast explaining it (`meta.cab.tip`).
+
+**PERFECT grab.** When the drop comes down dead centre (within 5 px, x the claw's width; the scoop 1.4x) on the
+prize the palm meets first (the topmost one under the hub), and the claw comes up with it: slow motion (0.3 for 0.4
+s), a white flash, gold and white rings, a star burst, PERFECT! over the claw (PERFECT x2! on a streak), a glassy
+chime that climbs with the streak (`cabPerfect`), the marquee, a lamp spark, and the grip holds +0.25 harder for
+that lift only. Measured over 30 seeded drops: aimed dead on 70% PERFECT, 3 px off 63%, 6 px off or more about 15%
+(only when another prize happened to sit dead centre). Claws: classic, tri, scoop, hand, magnet (the harpoon's barb
+and the twin and vacuum claws aim differently).
+
+**The straining lift.** The claw feels its load: the cargo's mass maps to a strain 0..1 (`strainM` 12..40, a Tower
+Shield alone is most of it). The claw shakes (up to 1.8 px), white tension arcs quiver beside the hub, the cable
+glints taut, steam puffs off the head, it sweats drops, glows hot red past 0.65, its eyes grit (the head's `strain`
+mood: > <) and it creaks (`cabCreak`, louder with the load). A load past `heavyK` (0.6) gets HEAVY!, a small shake
+and a kick, once a grab. Presentation only: the physics never sees it.
+
+**Prize faces.** Rare and legendary prizes, the Golden Prize and the cabinet's capsules have eyes (legendary pupils
+are gold stars). They watch the claw when it is near and glance around when it is not, blink, look scared as it comes
+down over them (wide eyes, a wavy mouth, a sweat drop), gasp with an EEK! and a squeak when the claw closes on them
+(`cabSqueak`), grin and blush on the ride, go dizzy (spiral eyes) when they slip out, and yell WHEE! when delivered.
+A prize frozen in ice keeps a straight face.
+
+**Juice rules.** Shake off (reduced motion): no claw shake, no sign swing or reel scroll, no fever beacon, the
+flashes capped, slow motion gentler (the game's `slowmo`), fewer sweat drops. Every canvas word goes through the
+language (`i18nTr`), the sign sizes its tag and name to the words shown, text is 12 px or more.
+
+**Where it is off.** The physical parts (the events, the lamp, the rain, the PERFECT grip) are off in Duo and in the
+headless suites unless `GAME.cab.force` is set, so every older test's physics are bit for bit what they were; the
+faces and the strain are looks only and always on.
+
+**State.** Fight-only in `FS.cab` (the sign, the surge, the cabinet's bodies, the lamp as shown, the fever, the
+strain), never saved (a reload replays the seeded fight). Run: `cabLamp` (optional, 0..12; a run from before has
+none and starts empty). Meta: `cab` {tip, fevers, perfects, events} (`cabMetaFix` keeps it through `loadMeta`). No
+key was renamed.
+
+`GAME.cab` = `{K, EV, IDS, WORDS, PATTERNS, LAMP, COL, force, on, fs, turn, turnEnd, event(id, now), land, lampAdd,
+spawn, collect, perfect, face, strainK, gripAdd, speedK, tick, draw, rewardCaps, fightEnd}`; `RENDER.cab` =
+`{sign, lamp, coin, icon, surge, face, strain, bolt}`; sounds `cabRoll` (tick), `cabLamp` (ui), `cabCreak`,
+`cabSqueak` (soft), `cabLand`, `cabSurge`, `cabRain` (mid), `cabPerfect`, `cabFever` (big).
+
+Tests (`cab:`): physics (a coin and a capsule body are grabbed and carried, skipped by the default aim, the pile
+deterministic), game (off headless and in Duo with the old numbers; the events by seed and turn, never turn 1, the
+same after a reload, the rate and all three kinds; a reload mid fight keeps the lamp the fight started with; the
+surge's grip and speed and their end; the coin shower around the claw, a paid coin, the rest sinking; a delivered
+capsule on the reward screen, the cap per fight, none in a rush; the lamp's fills, SO CLOSE, the fever's rain, the
+carry, the run's level, a full lamp at the next bell; PERFECT on dead-centre drops with its grip for the lift only;
+the strain, HEAVY!, the faces' moods; determinism with everything on; drawing in reduced motion), render (the sign
+at every beat for every event, every lamp state, coins, icons, the surge, every face mood, the strain, the gritted
+claw), audio (every voice plays after init and no-ops before, the throttles, the tiers as rendered, the load and the
+streak scaling), i18n (every word and pattern in Dutch, the reward slot and the hint, the drawn words in a Dutch
+fight). Screenshots: scratchpad `r16cab/r16_cab_*_{en,nl}.png`.
+
+## Balance touch-up (round 16)
+
+Owner of this section: the balance pass. The request: the round 15 check (above) found outliers (the scoop won 61%,
+the twins 13%, Mama Mech 13%, Ironjaw and the Plushie Queen the top killers); pull them toward the middle and keep
+the skilled bot at about 30% overall (the owner's target: a skilled player loses about 70% of runs).
+
+**Method.** The round 15 bot unchanged (`r15/bal15.mjs`: the round 12 skilled bot, `PRO=2`, plus the Trading Post
+and pet evolution), copied to scratchpad `r16bal/` and pointed at a snapshot of the build (`r16bal/base`, the round
+15 commit; `r16bal/mk.mjs` builds a dial set on top of it, `r16bal/cal15.sh` runs the batch, `r16bal/perclaw.mjs`
+and `r16bal/deep.mjs` make the tables). Six crawlers x classic / tri / scoop / twins, 6 seeds, Tilt 0. The bot is
+deterministic per seed, so before and after play the same seeds. Before: 143 runs; after: 126 runs (the batch was
+stopped at 126 of 144 to close the round).
+
+**Why a new dial.** The claw types had no combat dial in `data.js`: `CLAWS[id].stats` are the picker's pips, and
+all the difference is the physics (`PHYS.CLAW_TYPES`, not touched here). The skilled bot's scoop brings up 4.4 prizes
+a drop, the classic 3.2, the tri 2.9 and the twins 2.5. So `CLAWS[id].bal = { hp, grabs }` is new: the claw type's
+own start on top of the crawler's, read once by `GAME` `newRun` (`clawBalRun`: Max HP and grabs a turn, the grabs
+kept 1 to 9). Daily, weekly and Boss Rush runs get it too (they are made by `newRun`); the co-op seats, whose
+runs are built by the DUO block, do not.
+
+### Before and after
+
+| skilled bot, Tilt 0 | before (143 runs) | after (126 runs) |
+| --- | --- | --- |
+| win | 30% | 30% |
+| deaths act 1 / 2 / 3 | 24 / 47 / 27 | 16 / 51 / 20 |
+
+| claw type | before: win, prizes a drop, turns a fight | after |
+| --- | --- | --- |
+| classic | 25%, 3.2, 2.0 | 29%, 3.2, 2.1 |
+| tri | 31%, 2.9, 2.2 | 35%, 2.9, 2.2 |
+| scoop | 51%, 4.4, 1.6 | 34%, 4.4, 2.0 |
+| twins | 14%, 2.6, 2.5 | 22%, 2.5, 2.3 |
+
+| crawler | before | after |
+| --- | --- | --- |
+| Knight | 29% | 30% |
+| Alchemist | 46% | 41% |
+| Rogue | 57% | 62% |
+| Lucky Lou | 17% | 10% |
+| Mama Mech | 13% | 15% (21% in the first after batch, 18% over both: 44 runs) |
+| Ms. Bubbles | 21% | 20% |
+
+| the killers | before | after |
+| --- | --- | --- |
+| a fight lost to (elites and bosses) | the Claw Collector 32%, Ironjaw 22%, the Plushie Queen 19%, the Conveyor King 13%, the Dozer 12% | the Claw Collector 29%, the Conveyor King 24%, Ironjaw 21%, the Plushie Queen 17%, the Dozer 17% |
+| hp lost a fight: Ironjaw / the Plushie Queen | 50 / 38% | 45 / 34% |
+| deaths | the Plushie Queen 14, the Collector 12, Ironjaw 11, the Dozer 6 (+18 to thorns and poison, mostly Tin Knight and the Golem) | the Plushie Queen 11, Ironjaw 10, the Collector 10, the Conveyor King 8, the Dozer 8 (+11) |
+
+The first after batch (142 runs) tried the twins at +1 grab alone and the scoop at -8 Max HP: the twins stayed at 11%
+(their act 1 got easier, they died in act 2 instead) and the scoop at 51% (it rarely loses hp, so Max HP does not
+touch it). The final set gives the twins 10 Max HP as well and takes a grab off the scoop.
+
+### The dials (old -> new)
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| the scoop's start (new) | `data.js` `CLAWS.scoop.bal` | none | grabs -1 (2 a turn, the Alchemist 3) |
+| the twins' start (new) | `CLAWS.twin.bal` | none | grabs +1, Max HP +10 |
+| Mama Mech's Max HP | `CHARACTERS.engineer.hp` | 75 | 84 |
+| Ironjaw's hp | `ENEMIES` ironjaw `hp` | 88-98 | 80-90 |
+| the Plushie Queen's hp | `ENEMIES` plushqueen `hp` | 100 | 92 |
+
+The enemies' moves were left alone (their numbers are in the move text and its Dutch line).
+
+### What is left for the owner
+
+- **The claw picker does not show the new dial.** A twins run starts with 4 grabs and 10 more Max HP, a scoop run
+  with 2 grabs, but the picker still shows only the pips and the matchups; a line for it (and its Dutch words) is
+  left for the picker's owner. The real fix for the twins is their physics (their small heads catch least a drop).
+- **The twins still trail (22%)** and die in act 2 (19 of 25 losses; the Conveyor King and Ironjaw 4 each).
+- **Lucky Lou (10%) and the Rogue (62%)** are now the widest crawler gap; the Rogue was 55 to 57% in every batch.
+- **Ironjaw and the Plushie Queen barely moved** per fight (21 and 17% of fights lost); the Claw Collector (29%) and
+  the Conveyor King (24%) are as dangerous. Their Bite, Gape and Nap are the next dials.
+- Tests: `tests/clawspire_balance.test.mjs` checks the `bal` dials (small, the twins +1 grab, the scoop -1 grab, every
+  crawler keeps 2+ grabs with the scoop) and that a new run gets them; the data and game suites pin Mama Mech's 84 hp.
+
+## Capsule fever (round 17)
+
+The owner loves the capsules and asked for more fun, more visual animation and more addictive loot,
+while loot must stay rare and never make a run easier (a run should still kill you about 70% of the
+time). So this round is feel and collection only: nothing here touches `LOOT.WEIGHTS`, `LOOT.UP`,
+`LOOT.PITY`, `LOOT.PRIZES`, `VAULT.CAP_W` or any prize. Code: `data.js` (`DATA.GACHA`, appended after
+the DATA module), `game.js` (the GACHA block before `state()`, reached through one-line hooks),
+`render.js` (`RENDER.gacha`, appended after the RENDER module), `audio.js` (the GACHA block after
+CAB), `index.html` (`<style id="gacha-css">`), `lang_nl2.js` (the GACHA block). `GAME.gacha` is the
+test surface.
+
+**The build-up** (both rituals: the run capsule and the Vault Capsule).
+- Every crack throws shell chips in the capsule's colour (canvas, `RENDER.gacha.chips`, 80 at most,
+  halved in calm mode) and plays `gachaTap`, a glassy note that climbs a scale with each tap.
+- One tap left, the capsule is PRIMED: it trembles (`gachaJit`), light leaks out of the cracks as
+  beams in its colour (`RENDER.gacha.leak`), sparks drift off it, a hum (`gachaPrime`, buzz
+  `g17Prime`).
+- The rare tease: a common or uncommon capsule whose look-seed says so (`DATA.GACHA.tease`, 20%,
+  stable per capsule, never a rare or legendary) flickers gold 0.35 s after it is primed: gold
+  beams, a gold ring, the shell flashing gold for a moment, a shimmer that fizzles (`gachaTease`),
+  then it settles back. Looks only: its tier, prize and payout never change.
+- The last tap pays at once, as before (a reload from here lands on the card), but the pop waits
+  a charge (`GK.pre`: 0.22 / 0.32 / 0.6 / 1.25 s by tier; x0.6 for a veteran, x0.4 calm): the
+  capsule shakes harder, the beams grow, a riser (`gachaCharge`, longer and brighter by tier),
+  buzz `g17Charge`. A tap during the charge pops it and shows the card; Skip pops at once (no
+  charge, no linger).
+- The pop: chips burst, the rarity chime ladder (`gachaChime`: two notes for common up to a long
+  run for legendary), confetti by tier (uncommon adds streams from both sides, rare a star ring,
+  legendary a coin rain), the tier label slams in (`.g17slam`, rare and up).
+- A legendary gets its own moment: through the charge the room goes dark around the capsule, gold
+  god rays sweep the whole screen and sparks rush in (`RENDER.gacha.legend`); the pop adds the
+  `gachaLegend` jingle, buzz `g17Legend`, a bigger shake and the old slow motion; the moment
+  lingers 0.9 s before the card (`GK.hold`, rare 0.25 s) and the gold rays stay behind the card.
+- Hold to crack: a press that is not on a button auto-taps after 0.3 s, then every 0.19 s, and
+  stops at the burst (`gachaBind`, `G17.hold`).
+
+**Open all.** Two or more unopened capsules on the reward screen show an Open all (N) button under
+the slots (a DOM tap, never a `GAME.choose` entry, so the cards stay 0..2 and Skip 3); the banked
+capsule's ritual shows Open all (N) beside Skip. The capsules drop onto little pedestals (rows of
+up to three), then pop one after another (0.32 s apart, 0.2 for a veteran; a tap hurries, Skip pops
+the rest): each is paid at its pop (`gachaPayCap`: the prize, its mini, highlights, `meta.loot.caps`,
+saved at once), its prize appears in its place (the item or relic art, a coin stack, tickets, its
+icon) with its mini beside it, then a label under each and Collect all. The screen saves as
+`sd.capsule = {all, caps, rwIdx | bank, then}`: a reload resumes the fan with the paid ones popped,
+never paying twice; banked capsules leave `run.caps` when the fan starts and live in the screen's
+save until paid.
+
+**Capsule Minis** (`DATA.GACHA`). Twenty four collectible figurines in four series of six (two
+common, two uncommon, a rare, a legendary each): Arcade Pals, Spire Snacks, Neon Beasts, Lucky
+Charms. Each has its own drawing (`RENDER.gacha.BODY`, a face that blinks, a stand in its rarity).
+- A run capsule carries one `CHANCE` of the time by its tier (c 30%, u 45%, r 70%, l 100%); a Vault
+  or daily capsule always does. The mini's rarity follows `W` by the capsule's tier (a common
+  capsule: c 62, u 28, r 8, l 2). Rolled at the burst from its own stream (meta counters), so the
+  capsule's tiers and prizes and the run's rng are untouched (a test runs 14 capsules with the minis
+  on and off: the same tiers and prizes). Saved on the capsule (`cap.mini`) and the reward slot.
+- The prize card shows it (a figure, Capsule Mini, its name, its series n/6, NEW! with a toy pop
+  sound, or a dupe's vault tickets); the reward slot of an opened capsule names it.
+- Dupes pay vault tickets (`DUPE` c 3, u 6, r 12, l 30). A finished series pays its rainbow Prize
+  Vault cosmetic, capsule-only until now (Arcade Pals the JACKPOT marquee, Spire Snacks Rainbow Road,
+  Neon Beasts Rainbow Riot, Lucky Charms Rainbow Chrome), or 150 vault tickets when you own it:
+  SERIES COMPLETE! on the card, a march (`gachaSeries`), confetti.
+- The Prize Vault has a Minis tab: the four series with their progress bars and prizes, a slot per
+  mini (a dark silhouette and ??? until found, x2 for dupes, NEW until picked), the detail strip, and
+  the window shows the picked mini turning on a lit turntable beside its series' shelf.
+
+**The daily capsule.** Once a real day (the local date, `DATA.dailyKey`) the Prize Vault's capsule
+button becomes FREE DAILY CAPSULE: a free Vault Capsule (the same `vaultRoll` odds and pity, saved
+as `vault.pend` with `daily`, so a reload reopens the same one and a second claim is refused) plus a
+streak bonus of 5 vault tickets a day in a row (up to 35 at 7 days; a missed day starts over). The
+title's Vault tile glows gold with its badge counting it (`vaultTitleBtn`, no new title element);
+once claimed a small fire chip with the streak sits on the capsule button. Headless there is no
+clock (no daily capsule) unless a test sets `GAME.gacha.now`.
+
+**Reward screen slots.** Rarity lighting on each capsule slot (a shine sweeps it, faster on rare and
+legendary, a rainbow rim on legendary), the mini an opened one held, Open all.
+
+**Calm.** Shake off (reduced motion): the charge x0.4, no linger, no tremble, half the chips, slow
+rays, no slow motion pulse beyond the old rule, CSS loops off (`.calm`, `prefers-reduced-motion`);
+Reduced flashing drops the slam.
+
+**Save.** Meta `gacha {minis {id: n}, news, series, rolls, opened, dupeTix, day, streak, best, days,
+bonus}` (`gachaMetaFix` repairs junk; a new key, nothing renamed); `vault.pend.daily`; `cap.mini`;
+`sd.capsule.all`.
+
+Tests: data (the table, the mini and chance rates over 20,000 rolls, determinism, the tease rate
+and never on rare or legendary, the LOOT and Vault odds unchanged), game (the build-up and its
+timings, the legendary moment, a tap in the charge, Skip, calm, the tease never changing the
+prize, hold to crack, minis across reloads before and after the burst, capsule rolls the same with
+minis on or off, dupes and series prizes, junk saves, Open all from the bank with a reload mid-fan
+and from the reward screen with its indices kept, the daily capsule with a stubbed clock: once a
+day, a reload mid-open, the streak and its reset, the Minis tab), render (every mini found and as a
+silhouette, all distinct, chips, leak, legend, turntable, balanced and NaN free), audio (the nine
+voices in their tiers, no clipping at the loud ends), i18n (every word, pattern, mini and series in
+Dutch, the screens drawn in Dutch).
+
+## Cabinet Tech and the new crawler (round 17)
+
+The owner asked for cooler combos and many builds, and for more that can happen with the claw machine. Round 16 made
+the cabinet a character (events, the Jackpot Lamp and LAMP FEVER, PERFECT grabs, coins); nothing in the relic pool
+played with it. This round adds a relic family that builds around those systems, a keyword so the existing synergy
+systems see it, three combos, and a seventh crawler whose kit is the cabinet itself.
+
+**Where it lives.** `TECH` blocks: data (`data.js`: her items after Ms. Bubbles', the starter after the Bubble Wand,
+the family after the ROS relics, `TECH_K` with the relic helpers, the archetype, the combos, the character, her
+outfits and Codex page, and the TECH block after `/ROS` with The Motherboard, two stickers, `techMods`, exported as
+`DATA.TECH = {K, RELICS, ITEMS, COMBOS, mods, TIP}`), the rules (`combat.js` TECH block: `techFight`,
+`COMBAT.techOn / techCab / techOf`; one line in `newFight`, the grab's `perfect` in the combo ctx and its clearing in
+`grabDone`), the cabinet (`game.js` TECH block after `/CAB`, `GAME.tech`), the art (`render.js` TECH block,
+`RENDER.tech`), two sounds (`audio.js` TECH block), the Dutch (`lang_nl2.js`, the TECH block at the end). Ids are
+new, nothing was renamed, no save field was added (fight state in `FS.tech` and `F.tech`, rebuilt from the seed).
+
+### How the cabinet reaches the relics
+
+- **A new hook, `onCab(F, kind, v, id)`** (`DATA.RELIC_HOOKS`): `kind` is `'event'` (`id`: surge, coins, capsule),
+  `'perfect'` (`v`: the PERFECT streak, 1, 2, 3...), `'fever'` (`v`: fevers this fight) or `'double'` (Double
+  Feature's second reel, `id`). The game calls `COMBAT.techCab(F, kind, v, id)`, which only acts on the player's own
+  turn: everything a Cabinet Tech relic does (damage, Block, healing, a grab) happens on your turn, never on the
+  enemy's, so the incoming-damage preview never has to guess. A LAMP FEVER that goes off after END TURN waits in
+  `FS.tech.pend` and pays at the start of your next turn (`techTurn` in `finishEnemyTurn`).
+- **Cabinet numbers** (`relic.tech`, added up by `DATA.techMods(run.relics, run.char)` once at the bell): `evP` (more
+  event chance a turn, capped at 1), `first` (events from turn 1), `perfX` (px more room for a PERFECT), `laser`,
+  `lampStart`, `coins` (more a Coin Shower and a fever), `coinGold`, `double`, `perfLamp`, `drain`. The CAB block reads
+  them through `techMods()` (all zeros without a live cabinet).
+- **CAB hooks (one line each, in the CAB block):** `cabTurn` (the `evFirst` and `evP` lines), `cabEvLand`
+  (`techEvLand(E)` at the end), `cabCollect` (a coin's gold `+ techMods().coinGold`), `cabFeverTick` (`techFever(n)`
+  at the fever's start, `+ techMods().coins` on the rain), `cabPerfect` (`techPerfect(n, x, y)` after the lamp spark),
+  `cabUnderPalm` (the look radius and the PERFECT window `+ techMods().perfX`). **Outside it:** `startFight`
+  (`techFightStart`), `deliver` (`techDeliver`), `grabFinished` (`techGrabDone`), `finishEnemyTurn` (`techTurn`),
+  `update` (`techTick`), `drawFight` (`techDrawIn`, inside the cabinet's clip), `unlocked` / `unlockRule` (the
+  `fever` rule).
+- **Quiet cabinet.** The cabinet's physical parts are off in Duo (and headless unless `GAME.cab.force`); there
+  `F.tech.on` is false, `techMods()` is zeros and the event relics (the Service Remote, the Service Key) ring every
+  2nd turn instead, so Joy Stick's kit still works in a Duo seat.
+- **The cabinet's own event** (`{t: 'tech', k, n, id}`) is read at once by the sticker check and never queued, so a
+  turn where no relic answers keeps its pace.
+
+### The relics (the Tech chip, 🕹 Tech, `#ff7ad9`)
+
+| relic | rarity | the build | what it does |
+| --- | --- | --- | --- |
+| 📟 Service Remote | Joy Stick's starter | events | every event that lands: 3 to ALL and 3 Block; a quiet cabinet: every 2nd turn |
+| 🔦 Laser Sight | c | PERFECT | a red laser shows the drop (gold with LOCK when it would be PERFECT); the PERFECT window x2 (+5 px); every PERFECT: 3 Block |
+| 🔑 Service Key | c | events (fortress) | events +15% a turn and from turn 1; every event: 5 Block (quiet: every 2nd turn) |
+| 🪔 Lamp Oil | c | lamp (feast) | the lamp starts every fight 4 cells fuller; every LAMP FEVER heals 3 |
+| 🪙 Coin Hopper | c | coins (greed) | Coin Showers and fevers drop 3 more coins; a coin pays 2 gold (Money Bags, Golden Touch and every gold relic hear it) |
+| ⏱ Metronome | u | PERFECT | a PERFECT hits a random enemy for 4 per PERFECT in the streak (4, 8, 12, 16 at most) |
+| 🌀 Fever Dream | u | lamp | LAMP FEVER: 8 to ALL and 4 Block |
+| ⚡ Circuit Breaker | u | events (metal) | a POWER SURGE zaps ALL for 6, a COIN SHOWER gives 6 Block, a CAPSULE DROP heals 5 |
+| 🎯 Trick Shot | r | PERFECT (jackpot) | a PERFECT x2 or better gives the grab back, once a turn |
+| 🎞 Double Feature | r | events | every event lands twice: the reel spins again for a second, different event (+8% events) |
+| 💾 The Motherboard | l | all of it | an event every turn from turn 1, a PERFECT lights 2 more cells, LAMP FEVER deals 15 to ALL; the catch: a grab that brings up nothing drains 3 cells |
+
+The legendary follows the round 12 rule (`leg`, rarity `l`): only the boss relic, a legendary capsule and the Back
+Room hand it out. Every relic draws its own glyph inside its rarity medallion (`RENDER.tech.GLYPH`: the remote with a
+blinking LED, a scope, a key ring, an oil can dripping into the lamp's dome, a coin funnel, a swinging metronome, a
+turning spiral, a breaker box, a bullseye, two film frames, a glowing board), and every answer flashes where the
+cabinet did it (a pink ring and a circuit spark at the sign, the claw or the lamp, `techZap`) with a service beep
+(`techBeep`, pitched by kind); Double Feature's reel spins up with `techDouble` and DOUBLE FEATURE!.
+
+### The archetypes
+
+- **PERFECT streak** (Laser Sight, Metronome, Trick Shot, Bullseye): aim dead centre and chain it. The laser makes the
+  aim readable, the Metronome climbs with the streak, Trick Shot turns a streak into more grabs. Bridges: Jackpot.
+- **The lamp** (Lamp Oil, Fever Dream, The Motherboard, Joy Stick's arcade parts): every arcade part lights more
+  cells; Lamp Oil starts fights near FEVER (two fevers a fight come easily), Fever Dream turns each into damage and
+  Block. Bridges: Feast (Lamp Oil's healing).
+- **Events** (Service Remote, Service Key, Circuit Breaker, Double Feature): more events, earlier, twice, each one
+  paying in its own way. Bridges: Fortress (the key), Magnet (the breaker).
+- **Coins** (Coin Hopper, Coin Mech, Coin-Op): Coin Showers and fevers pour gold, and every gold relic that already
+  existed (Money Bags hits ALL for every gain, Golden Touch, Piggy Bank) fires off it. Bridges: Greed.
+
+### Combos (3 new, `DATA.TECH.COMBOS`)
+
+| tier | combo | recipe | effect |
+| --- | --- | --- | --- |
+| 1 | Coin-Op | a Tech item and a coin (Lucky Penny, Arcade Token, the Coin Mech...) | 5 damage, 3 gold |
+| 2 | Short Circuit | a Tech item and two metal items | 6 and 1 Weak to ALL |
+| 2 | Bullseye | a PERFECT grab of 2+ items (`ctx.perfect`, COMBAT passes the grab's streak) | 8 damage, 4 Block |
+
+### Joy Stick, The Technician (`CHARACTERS.techie`)
+
+- **The kit.** 70 hp, 100 gold, 3 grabs, width 1, grip 1, quick rails (1.15). Starter relic the Service Remote.
+  Unlock `fever`: set off LAMP FEVER with any crawler (`checkUnlocks('fever')` in `techFever`; a profile that has
+  already seen a fever, `meta.cab.fevers`, has her at once). The picker says "Set off LAMP FEVER to unlock".
+- **Her gift** (`tech: true`): the cabinet works for her. Events come +22% a turn and can land on her first turn
+  (the sign waits for the bell's banner), and a PERFECT lights one more lamp cell. Her first fight of a run shows a
+  toast saying so (`DATA.TECH.TIP`).
+- **Her bin (19):** 5 Arcade Sticks (4, a lamp cell), 5 Arcade Buttons (5 Block, a lamp cell), a Coin Mech, a Neon
+  Tube, an apple, 3 Lucky Pennies (Coin-Op with her parts) and 3 bouncy balls. Her pool: Coin Mech, Neon Tube (c),
+  Circuit Board, Extension Cord (u), CRT Monitor (r), Golden Joystick (l). An item's `lamp` (1 to 4) lights that many
+  more cells when it is delivered (for anyone who holds it) and gives it the Tech chip.
+- **Looks.** Her portrait (`RENDER.tech.portrait`): a backwards pink cap with a service LED that blinks pink and cyan,
+  a dark bob with a pink streak, a screwdriver behind her ear, a hoodie with a lanyard card, eyes that blink. Outfits:
+  Service Headset (u, with a boom mic whose tip blinks), Scanline Visor (r, a scanline that scrolls), plus her
+  Claw-o-ween Witch Hat and her winter Scarf & Earmuffs. Crawlers have no hurt or win poses of their own (the
+  portrait is one drawing everywhere, animated by `t`); hers idles like the others' outfits do. Versus line: "Hold
+  on, rebooting you." Codex page `cr_techie`, history initials JOY / TEK / LMP.
+- **Everywhere else.** The daily and weekly rotations, Tilt, pets, sets and every claw type read `CHARACTERS`. Boss
+  Rush kit (`RUSH.KIT.techie`): CRT Monitor, Circuit Board, Extension Cord, Neon Tube, Protein Bar and Fever Dream.
+  A Duo seat gets her starter and that kit (`duoSeatRun`), in a quiet cabinet.
+- **Stickers** (the board at 63 of 63): Perfect Game (five PERFECT grabs in a row) and Tech Support (win as her).
+
+### Balance (the skilled bot)
+
+The round 16 bot (`r16bal/bal15.mjs`, `PRO=2`, Tilt 0, the Trading Post on), copied to scratchpad `r17new/`
+and pointed at a snapshot of this round (`r17new/base`). New: the bot sets `GAME.cab.force`, so the cabinet is alive
+as in a real game (round 16's balance runs had it off), and it records PERFECTs, events, fevers and the Tech relics
+held. It plays Tech relics passively (they need no choices); it does not aim at the cabinet's coins.
+
+| skilled bot, Tilt 0, cabinet on | runs | win |
+| --- | --- | --- |
+| Joy Stick (4 claws) | 40 | 35% (classic 33%, scoop 78%, tri 22%, twins 22% in her 36 run batch) |
+| the six others (4 claws, one seed each) | 22 | 36% |
+| all | 62 | 35% |
+
+She dies mostly in acts 2 and 3 (3 / 13 / 10), to the Frost Knight, the Claw Collector, the Tin Knight and Ironjaw,
+like the others. Nothing was tuned: she landed in the 20 to 45% band at once. Tech relics the bot ended holding (runs,
+win): Trick Shot 13 (54%), Service Key 12 (33%), Double Feature 11 (36%), Metronome, Lamp Oil, Fever Dream 8 each
+(50%), Laser Sight 7 (43%), Circuit Breaker 6 (83%), Coin Hopper 5 (60%).
+
+**For the owner.** The bot's "perfect hands" deliver about 3 prizes a drop, so with the cabinet on it lands PERFECT
+on 53% of its drops and sets off LAMP FEVER about 200 times a run (5 a fight): the lamp is tuned for a human's 1.5 to 2
+prizes a grab, so the bot overrates the lamp's payoffs (Fever Dream, Lamp Oil) and the capsules the fevers rain (about
+60 a run). A real player sees a fever about every one or two turns. The balance suite's COMBAT-only model has no
+cabinet, so its relic draw leaves the Tech relics out (`deckFor`).
+
+### Tests
+
+data (her kit, pools, rotations, items' lamp counts and chips, the ten relics' rarities and pools, `techMods`, every
+hook through a recording COMBAT, the quiet cabinet, the combos' examples, the stickers, the outfits), combat (`F.tech`,
+`techCab` on your own turn only, the remote's numbers, Bullseye and the Metronome on a PERFECT and its clearing, the
+quiet remote and key, a 20 fight fuzz with every Tech relic), game (the unlock by a knight's fever and for an old
+profile, her run and gift, turn 1 events for her and never for the knight, the same cabinet for the same seed, quiet
+headless and in Duo, the remote, the breaker and Double Feature in a real fight, PERFECT with her extra cell, the
+Metronome and the laser's window, the Coin Hopper's coins and gold, Lamp Oil, an arcade part's cells, Fever Dream and a
+fever held over END TURN, The Motherboard's events and drain, real grabs with every Tech relic deterministic and a
+reload, a Duo seat's kit and the quiet remote), render (her face, blink, every outfit, eight distinct parts, eleven
+distinct medallions, the laser's states), audio (the two voices in their tiers), i18n (every word, pattern, relic,
+item, combo, sticker and outfit in Dutch; her fight draws DUBBELE VOORSTELLING! and RAAK). Screenshots: scratchpad
+`r17new/shots/r17_tech_*_{en,nl}.png`.
+
+## QA pass 6 (round 17)
+
+Owner of this section: the QA pass. The round 15 and 16 features (the HUD and title sheets, online co-op and versus,
+the Neon Depths, the cabinet events / Jackpot Lamp / PERFECT / heavy lift / faces, the claw dials) played like a player
+on phones (390 x 844 and 360 x 780), in English and in Dutch, in Chromium with real taps. Scratchpad `r17qa/`: `lib.mjs`
+(the page helpers and a layout audit: text spilling out of its box, buttons covered or overlapping, English on a Dutch
+screen), `title.mjs` (every title button by a tap, every sheet and back, Escape, the Duo path to both online menus),
+`hud.mjs` (the top bar in a fight, Endless with Blackout and Rising Water, a Depths dive and the Jukebox, Boss Rush,
+daily, weekly, Duo co-op and versus; gold 99999, Block 999, tickets 9999, 30 relics and the relic list, every chip's
+popover, 4 hp with eight statuses), `cab.mjs` (every event mid roll and landed, coins delivered for gold, a delivered
+capsule on the reward screen, a fever from a real grab, PERFECT and HEAVY on real drops, calm mode, a save and reload
+mid turn with each of surge / coins / capsule / fever / a half lamp, Blackout + Rising Water + the Depths water, the
+incoming preview against what the enemy phase really took on every one), `net17.mjs` (online: a code nobody hosts, a
+bad code, a full room, the host leaving the lobby, the guest leaving and coming back on the same code, a 24 letter
+name, both phones pressing Ready and Play again at once, the watching phone frozen 20 s (a phone in a pocket), the
+active phone hidden 20 s, Play again twice, English against Dutch), round 16's `r16vs/e2e_vs.mjs` (Dutch host, English
+guest, a whole claw-off with cards, a cut line, a reload, a forfeit), `dep.mjs` (a whole dive by the in-page bot, the
+Jukebox, out to Loop 4, both languages). Screenshots `r17qa/r17_*.png` and `r17qa/vs/`.
+
+### Found and fixed (tests `qa17:`)
+
+1. **Escape back from a page opened out of a title sheet closed that sheet again.** The page's Escape (the weekly, the
+   Boss Rush menu, the Codex, the History) went to the title, which reopened the sheet, and then the title's own Escape
+   listener, running after `onKey` in the same key press, closed it. The listener now acts only on a key press that
+   began on the title (`qa17Key` notes the screen first thing in `onKey`; `qa17TitleEsc`). Game suite.
+2. **Escape did nothing on the Prizedex, Stickers, Help and Tips pages** (every other page has it): it now presses the
+   page's Back (Help from the map goes back to the map); a popover or the Settings panel closes first. Game suite.
+3. **In season the title's ribbon landed inside the More sheet.** The round 15 tidy moves any title button it does not
+   know into More; the Claw-o-ween / Winter ribbon is one, and inside the sheet it kept its absolute place over the
+   sheet's X (the X could not be tapped) and ran off the right edge. It was out of season when round 15 was measured.
+   The ribbon now stays where SEASON hangs it, over the sky (`qa17TitleKeep`). Game suite.
+4. **The HUD's resource row ran under the relic strip** with big numbers (gold 99999 and 9999 tickets: 24 px) and even
+   with normal ones in a weekly run (the WEEKLY badge in the act chip: gold 250, 45 tickets overlapped the first relic).
+   The row now squeezes when it outgrows its column: tighter chips (`qa17Tight`), then the act chip without its word and
+   a size smaller (`qa17Tight2`); measured only when a number's length, the act text, the badge or the language changes
+   (`qa17HudFit`, a browser only; `qa17Fit` is tested with a stand-in row). Game suite.
+5. **The Dutch map head said "A..." / "R..."**: "AKTE 1" and "RONDE 12" got 41 px beside the longer Dutch buttons (BAK,
+   STOPPEN, "40 lampjes"), on every Dutch map at every width. Under `html[lang="nl"]` the row's gaps, the buttons' side
+   padding and the bulb pill are a little tighter: "RONDE 12" fits whole (measured at 360 and 390). Game suite (the rules).
+6. **The Jackpot Lamp after a FEVER lit more cells than its level**: sparks still flying when the dome burst were already
+   in the carried level and lit again on landing (a fever from a double grab showed 4 cells over a level of 2, so the lamp
+   could look full without a fever). The burst now shows the carry less what is still flying (`qa17LampShown`). Game.
+7. **Online versus: the two phones' tables disagreed after a late prize** (the net suite's flaky "the table is the same on
+   both phones" and "a drop after the reload agrees too", about 1 relay seed in 8, already in round 16's build). A prize
+   that rolls into the chute after the drop was booked scores on the dropper's phone (round 15's straggler rule), but the
+   table had already gone over and the watcher never heard of it until the card choice. The dropper now sends the table
+   again with `ev: 'late'` (`qa17VsLate`); the watcher takes it only while watching that rival's drop, quietly (the
+   result card's points, a flash, no second fanfare: `qa17VsLateIn`); a late table from the wrong side is refused. Net
+   suite: 52 relay seeds green (seeded `crypto.getRandomValues`, `r17qa/netseed.mjs`), plus the new test, which fails on
+   round 16's code.
+8. **The co-op watch screen's corner card covered the partner's hp**: a Prizedex discovery or a sticker sat right over the
+   second player's card (both cards are canvas, so the corner lane did not know about them). `QA_SIGNS.duo` now hands it
+   both cards on the online watch screen; it settles under them. Game suite.
+9. **"DOOR ELKAAR" ran out of its pill** on the claw-off (the Shake Up card's tag, and every Duo pill in Dutch):
+   `RENDER.duo.tag` measured the English and drew the Dutch. It measures the words it shows. i18n suite.
+10. **The claw-off board's round stars poked through the lit frame** (the outer star crossed the frame of the player
+   whose drop it is, and a long name ran into them): the stars sit beside the score, inside the frame. Render suite.
+
+Checked and fine: every title button reachable by a tap in both languages and sizes (the sticky Ready! / Toss over a
+scrolling list is by design), the sheets' X, the dim and Escape; the online messages (nobody, bad code, full, the host
+gone, the guest back on the same code); a frozen or hidden partner for 20 s comes back without a stuck sheet; Play
+again twice books three games on both; the Dutch phone stays Dutch against an English host; a whole versus match, its
+reload and forfeit; every cabinet event, the coin pay, the capsule on the reward screen (Cabinet prize), the fever's
+rain, PERFECT and HEAVY, calm mode (no beacon, no reel scroll, no flash); a reload mid turn with each active starts the
+fight from its bell with the lamp the fight began with and the gold unchanged; the incoming preview equalled the hp
+the enemy phase took in all 14 checks (coins, a fever, five reloads, Blackout + Rising Water, the Depths, three Jukebox
+turns, and coins and a fever again in Dutch); a whole dive in both languages (the in-page bot in god mode, its fights
+shortened) reached the Jukebox and Loop 4. No page error or console error in any of it.
+
+Found, not fixed (not this pass's code, or by design):
+- **Deaths with no killer.** In the bot's runs 23 of 74 losses (31%) read "Killed by the Clawspire": a run that dies on
+  its own turn to thorns (Tin Knight and the Brass Golem against the Rogue's many-hit daggers, 71 hp to 0 in one turn).
+  The death recap and the history card should name the thorns' owner; that is COMBAT's and the recap's (`FS.killer` is
+  only set by an enemy's hit). For the owner.
+- The cabinet event sign passes through a boss plate (HIGH TIDE) for the 0.35 s it takes to swing in or out; it never
+  rests on it.
+- The new Cabinet Tech relics' rules were English on a Dutch relic list while their Dutch was still being written by
+  that pass (Service Remote, seen mid round).
+
+### Balance nudge (round 17)
+
+The round 16 report had the Rogue at 55 to 62% and Lucky Lou at 10% (about 21 runs each). Re-measured with the same
+bot (`r16bal/bal15.mjs`, `PRO=2`, Tilt 0, copied to `r17qa/bal/`, `cal17.sh` with a shared queue) on a snapshot of the
+round 16 build: the Rogue and Lucky Lou x classic / tri / scoop / twins x 12 seeds (17000 on), 96 runs. The bot is
+deterministic per seed; a seed the round 16 build lost replays the same on its own snapshot (checked), so the
+difference is the seeds: on 48 runs each the Rogue wins **27%** and Lucky Lou **19%**. The Rogue is not an outlier,
+so its dial is left alone; Lou trails, so his Max HP goes up.
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| Lucky Lou's Max HP | `data.js` `CHARACTERS.gambler.hp` | 70 | 78 |
+
+| skilled bot, Tilt 0 | before | after |
+| --- | --- | --- |
+| Lucky Lou (48 runs, the same seeds) | 19% (9 won; deaths act 1 / 2 / 3: 7 / 25 / 7) | 25% (12 won; 5 / 21 / 8) |
+| the Rogue (48 runs) | 27% | 27% (unchanged) |
+| all six crawlers (95 runs, 4 seeds each from 18000, Lou at 78) | | 28% overall (Knight 25, Alchemist 31, Rogue 44, Lou 27, Mama Mech 25, Ms. Bubbles 19%; 16 runs each, so a crawler's figure is rough) |
+
+The data suite pins Lou's 78. The balance suite's "every normal is beatable" holds for every crawler (the Rogue's
+weakest act 2 normal at 1% in that COMBAT-only model, unchanged here).
+
+## Build and delivery (round 18)
+
+The deployed copy is built, the source is not. `build.js` (`minifyClawspire`, after the copy) works on
+`dist/clawspire` only; `clawspire/` stays readable and the tests keep loading it.
+
+- **Minified per file.** Each `js/*.js` goes through esbuild's transform on its own (`minify`, target es2020,
+  no legal comments, UTF-8 kept so emoji and Dutch stay readable). They are classic scripts sharing globals; a
+  transform without a format never renames top-level names (`const GAME`, `RENDER`, `U` survive), and es2020
+  matches the source's syntax, so nothing is lowered and no helper temporaries land in the shared scope. Every
+  `<style>` in index.html is minified as CSS (ids kept), the loader's inline script as ES5 (it runs before
+  anything else and stays plain ES5).
+- **Versioned URLs.** Every `<script src="js/x.js">` in clawspire's pages becomes `js/x.js?v=<sha256, 10 hex>`
+  of the built file. The lazy Dutch tables are named inside i18n.js, so the build stamps those strings first
+  (`js/lang_nl.js?v=...`), then hashes i18n.js; the build fails loudly if i18n.js stops naming a `lang_*.js`
+  file, rather than ship an unversioned table under a year-long cache. The root `_headers` gives
+  `/clawspire/js/*` `Cache-Control: public, max-age=31536000, immutable`; index.html keeps the Pages default
+  (revalidated each visit), which is what carries the new hashes after a deploy. A warm visit now asks the
+  server for index.html and art/manifest.json only.
+- **Left out of the deploy** (kept in the repo): intro.mp4, intro.webm, intro_poster.jpg (the intro is drawn
+  live by js/intro.js; nothing requests them), DESIGN.md and ART_PROMPTS.md. About 17 MB less per deploy.
+- **Loader weights.** The bulbs fill by each script's share of the bytes; the build rewrites `var WT` in the
+  dist index.html from the minified files' gzip sizes (one weight per script tag), and the source line carries
+  the same numbers for the dev page.
+
+Measured (round 18, local server with gzip, 390x844 mobile emulation; slow 4G = 1.44 Mbps and 150 ms, plus
+4x CPU):
+
+| | before | after |
+| --- | --- | --- |
+| English download (js + index.html, gzip) | 1211 KB | 795 KB |
+| everything (with the Dutch tables), raw | 4.38 MB | 2.57 MB |
+| dist/clawspire on disk | 21.9 MB | 2.7 MB |
+| cold first frame, slow 4G | 7.7 s | 5.4 s |
+| cold first frame, Dutch, slow 4G | 8.6 s | 6.1 s |
+| warm first frame, slow 4G | 0.90 s (14 revalidations) | 0.73 s (2) |
+
+## Design system and home screens (round 18)
+
+The look is "Arcade after hours": the neon cabinet, calmer. One `<style id="ds-css">` block, directly after the
+main `<style>`, holds the tokens and the shared components; every later block styles its screens on them.
+
+**Tokens** (names are final; the older names are aliases so earlier rules and the colour-blind modes keep working):
+
+| Group | Tokens |
+|---|---|
+| Palette | `--bg #12091f`, `--surface #1c1233`, `--surface-2 #261a44`, `--line #3a2a5e`, `--line-strong #5a3f8f`, `--text #f4eeff`, `--text-2 #b7a9d9`, `--text-3 #8576ab`, `--accent #ff4f9a` (THE primary action), `--info #35e0d2` (selection, progress), `--reward #ffcc55` (money, prizes), `--good #a6ff5e`, `--bad #ff5a4a`, `--rar-c/u/r/l` |
+| Type | `--font` (Trebuchet MS, then the system UI faces), `--fs-xs 13` (labels, tags, captions), `--fs-s 15` (body), `--fs-m 19` (card titles, the primary button, section heads), `--fs-l 30` (screen title) |
+| Space | `--s1 4`, `--s2 8`, `--s3 12`, `--s4 16`, `--s5 24`; radii `--r-chip 8`, `--r-card 12`, `--r-sheet 18` |
+| Aliases | `--ink --panel --panel2 --line2 --dim --dimmer --pink --cyan --gold --lime --blood` point at the tokens |
+| Colour-blind | under `html.cb-*` the state and rarity tokens follow the mode's safe set: `--good` = `--acc-heal`, `--bad` = `--acc-dmg`, `--rar-u/r/l` = `--acc-cyan/gold/pink` |
+
+**Rules.** One glowing element per screen (the primary button, or the hero art); everything else flat. Coloured
+borders only for state (selected, a rarity stripe, a free capsule waiting); an identity colour (a mode, a tip) is a
+slim 4 px left edge at most. No dashed borders except an empty drop slot. Nothing loops on a menu except the
+title's attract scene; `.calm` and `prefers-reduced-motion` stop the sheet rise too. Text is 13 px or more.
+
+**Components** (ds-css):
+- Buttons: `.btn` is the secondary (surface-2, 1.5 px line-strong, `--fs-s` 900); `.btn.pri` the one primary (filled
+  accent, white, `--fs-m`, the screen's one glow); `.btn.go` / `.btn.gold` only tint the border and the words;
+  `.btn.ghost` for Back, Leave, Skip, Not now, Cancel (no border at rest, a faint fill, `--text-2`). All 48 px tall,
+  44 for `.sm`. A toggle is a secondary with a dot (`.dsTog`, `.accTog`, the title sheet's toggles): lime when on.
+- `.card`: surface, 1.5 px line, radius 12, padding 12; rarity is a 3 px top stripe (an inset shadow from `--rar`,
+  set by `.rr-c/u/r/l`, so `::before` / `::after` stay free for badges and the holo sheen); `.sel` is an info border;
+  `.locked` turns its canvas into a silhouette and its words `--text-3`. `.price` / `.dsPrice` is a gold pill.
+- `.sheetWrap` (the dim layer, `.show` opens it) + `.sheet` (bottom anchored, radius 18 on top, a 36 x 4 handle,
+  max 78 %) + `.sheetHead` (an `h3` or `.shT` and a ghost x) + `.sheetBody` (scrolls). `dsSheet(parent, title,
+  onClose)` in game.js builds one ({wrap, body, open(), close()}); its controls are plain taps, never GAME.choose entries.
+- The page frame: `.pageHead` (sticky grid: `.phBack` left, `.phTitle` / `h1` centred, `.phEnd` right),
+  `.pageBody` (16 px between sections), `.pageDock` (sticky bottom, one primary and at most one ghost). They pull out
+  of the `.screen`'s 16 px padding (a sticky box stops at the scroller's padding, so `top` / `bottom` are -16 px), and
+  divide that pull by `--accK` under a text size, because the bodies zoom. Give the `#xBody` `.dsPage` so the dock
+  sits at the bottom of a short page. Back is ALWAYS top left; Leave on a run stop is the dock's ghost.
+- `.tag` (+ `.gold .cyan .pink .lime`), `.dsPill` (a currency pill for `.phEnd`), `.dsSec` (an xs section label),
+  `.choice` (a full-width secondary row: `.c1` in `--fs-m`, `.c2` in `--fs-s`).
+- Solid backdrops are opt-in per screen (an id selector in the screen's own block: the tests read the
+  `class="screen"` markup, so no class is added there).
+
+**The toast lane.** On every menu page (a screen with a `.pageHead` or a `.pageDock`, or a solid `.ds-opaque` one,
+plus the Prize Vault: the home pages, the run stops, the albums, the lobbies, win, game over, loop) the toast and the
+corner item (a sticker, a discovery) share one lane at the bottom, just above what the dock shows (its note or its
+buttons; the vault's capsule bar). One at a time: while a plain toast floats (2.5 s at most) the corner item waits
+hidden with its clock paused; in the shop the toast is the keeper's line, so nothing floats and the card keeps the
+lane. The lane climbs a row (20 px) at a time only past buttons, and on such a page a heading, the run score
+(`.scoreBox`), the page head and the keeper's speech bubble (`.keepBub`) weigh as buttons, so nothing lands on them.
+The prize counter's old top toast lane (over its title) gives way to the bottom lane. The title, the map, the fight
+and the intro keep their own placement, and headless the tests' measured rects decide as before (`dsLaneY` is 0).
+The sticky `.pageHead` offset (-16 px, the scroller's padding) lives in ds-css for every page; `.m3Head` no longer
+repeats it (the Duo page keeps its -14 px).
+
+**What changed per screen (the Arcade front).**
+- Title: the round 15 structure stays (the big action, the play row, five tiles, the stats line, the sheets). The big
+  action is the filled primary (NEW RUN, or CONTINUE with NEW RUN under it as a secondary) and the screen's one glow;
+  the breathing loop is gone. Daily and Modes are two calm cards on one surface (only their words carry gold and
+  cyan); the five tiles are one look (no per-tile borders, no vault pulse; a free capsule is a gold rim); the badges
+  are small accent dots. The stats line is one quiet line with lower-case words, so it fits in Dutch at 360 px.
+- The season ribbon over the sky: a slim strip with no pulse and no glow (the event's logo art is the hero).
+- The title sheets are `.sheet`s: full width at the bottom, the handle, a ghost x. The Modes rows are choice rows on
+  one surface with the mode's colour as a slim left edge (Weekly cyan, Boss Rush red, Duo pink).
+- Settings is a `.sheet` (the handle, SETTINGS, a ghost x; Done stays at the end). Sections are quiet groups under
+  a hairline. The Sound on / Music on rows repeated the sliders and the More sheet: they show only while that sound
+  is off (still registered, so GAME.choose and the tests keep their labels). The sample strip is plain and sits in
+  Vision beside the controls it shows: the three numbers and the status chips, the four rarities by name (sized to
+  fit Dutch at extra large), one prize with its rim and the outline.
+- Character select: three short steps on one page instead of 3.2 screens: (1) a row of seven portraits, the picked
+  crawler's card under it; (2) a row of eight claws, the picked claw's demo cabinet, numbers and matchup tags (the
+  joke line is gone from view); (3) one Run options row (Tilt, the mutators, the score multiplier) that opens a sheet
+  with the Tilt stepper and the mutator grid; START RUN in the dock. The portraits are still the GAME.choose entries in
+  DATA order and a choice still starts that crawler's run; a tap on a portrait only picks it, START starts the
+  picked one (a locked crawler's card says how to unlock it and START is off). Back is registered last, shown top left.
+- Help: the page frame; five short section cards (the rig, fights, statuses, the map, keys), the statuses as a
+  two-column list (the icon and the name never wrap; "Gif", "Brand" stay on one line in Dutch).
+- Tips: the page frame; the tips met in full (their colour a slim left edge), the rest folded into one
+  "N more to find" row; Reset tips is a ghost under the list.
+- Fight HUD: tokens only (the aliases), no layout change.
+- Dead CSS removed: `.menu .btn{width:280px}`, `.menu .row*`, `#titleMenu .row*` (and their text-size rules),
+  `#titleMenu .dwRow* / .vrRow* / .duoRow*`, `#titleMenu .hisTitleBtn / .loreTitleBtn[data-n]::after`, `.tt-sub`,
+  `.footer`, `.shopSec`, `.spacer`, `.statusList .kv`, the old `.uiSheet` frame and its keyframes, `accUp`.
+
+## Run stop screens restyled (round 18)
+
+The climb's stops (reward, spare parts, treasure, capsule, shop, prize counter, arcade and pet shop frame, trading
+post, boon, Compactor, bin, event, rest, forge, season door, rival, the back room) sit on the ds-css tokens in one
+frame with four family looks. The CSS is one block, `<style id="stops-css">` (after qa17-css); the hooks are in
+game.js's M2 block (after HOLO): `m2Stop(name, body)`, `m2Dock(body, els)`, `m2Move`, `m2ShopTidy`, `m2Leave`.
+
+- **The frame.** `m2Stop` puts `.m2Stop` and one family class on the screen and makes the body a full-height page
+  (`.dsPage`), so the dock sits at the bottom. The title is one size (`--fs-l`), centred, with a short rule in the
+  family colour under it. The way out (Leave, Skip, Cancel, Back to the shop, Continue) or the one action (Take it)
+  is moved into a `.pageDock` at the bottom of the body by `m2Dock`. Elements move; their `GAME.choose` entries stay
+  exactly where they were registered (order and labels unchanged). The rest stop has no way out by design (pick
+  one of the choices); the canvas stops (capsule, arcade, boon, sea, rival, secret, Compactor, trade) already
+  keep their buttons in a bottom bar.
+- **One card.** Reward, shop, forge, bin, Compactor and trade results share `.card` from ds-css: `--surface`, a
+  1.5 px border, the rarity as a 3 px top stripe (the old "common / rare" corner word is hidden, the stripe
+  follows the colour-blind modes), art at 64 px, the name at 16 and the text at 13 in a grid, the price as a gold
+  pill at the bottom. The rare gold pulse and the legendary sheen are gone (they looped on every grid, the Prizedex
+  too); the holo foil stays on rare and legendary cards. Evolved cards keep a still glow.
+- **Market stall** (`.m2-market`: shop, prize counter, trading post, arcade and pet shop frame): warm, a 2 px gold
+  rule under the scene, gold price pills. The shop (`m2ShopTidy`): the gold pill and one line, ITEMS, the five
+  items with the relic as the sixth card of the same grid, the reroll lever as one slim row (REROLL THE SHELF and
+  its price pill), then SERVICES: the prize counter and the Compactor as two small tiles with Remove and Sell
+  under them, and Leave in the dock. The trade offers are one card style (the kind's colour is its label and the
+  top stripe); the in-card Trade buttons are gold secondaries, not three glowing primaries. The pet shop's Adopt
+  buttons the same.
+- **Cozy corner** (`.m2-cozy`: rest, treasure, spare parts, capsule): an amber wash at the top of the backdrop,
+  big amber-tinted choice rows (76 px), the primary in amber. The treasure's relic card sits in the middle of the
+  page, its rays and the floating icon still (no loops), Take it in the dock. The capsule keeps its round 17
+  behaviour, odds and timings; only the prize card goes to the one card look in its tier (the one glow).
+- **Workshop** (`.m2-work`: forge, bin, Compactor): steel cards (a cooler gradient and border), ember orange
+  (#ff8a3d) as the only accent: the rule under the forge, the press panel's edge, a picked slot, a card under the
+  finger, the CRUSH primary. A disabled CRUSH is a plain grey secondary, not muddy pink.
+- **Story card** (`.m2-story`: event, boon, season door, rival, secret): the scene on top, the text on one quiet
+  panel, the choice rows; the outcome chips are one line of small text with the numbers in their colour (no
+  pills). The event title is a calm plaque. The deal cards of the boon draft use the card look (stripe in the
+  boon's colour, no wobble on the back). The season door, Gary and the back room keep their own scene colours;
+  their result cards go flat with a stripe.
+- **A3.4 (Dutch boon).** The canvas marquee ("LATEN WE DEALEN") and the side words shrink to fit their sign
+  (render.js boonBack `fitSz`); "TO WIN" reads "EN WIN" in Dutch (DRUK ... EN WIN), which fits beside the chute;
+  "Voorjaarsschoonmaak" carries a soft hyphen so the card title wraps as Voorjaars-schoonmaak; the head is 21 px
+  in Dutch.
+- **Calm.** No looping animation on the stops: the reward capsule slots keep a still glow in their tier (no pulse,
+  no shine sweep), the arcade's ready pulse, the trade's haggling pulse, the IT CAME BACK tag and the back room
+  title's big entrance scale are toned down or still.
+- **Holo cards at rest.** `holoTick` only touches a card while a finger or the pointer is on it (it is drawn once
+  in its rest pose), and never a card on a screen that is not shown (`m2HoloShown`, the card's `.screen` is
+  cached). Measured (local, 390x844, mutation observer, 2 s windows): shop 600 card style writes a second before,
+  0 after; Prizedex 570 to 0; a fight after the shop and the Prizedex 586 to 0 (6 writes a second left, the HUD).
+- **Hidden stops let go.** `m2Leave` (called from setScreen) empties the bodies of the solid stops (reward, parts,
+  treasure, rest, shop, counter, forge, bin, event) when the player goes back to the map, a fight or the title;
+  every builder rebuilds its body when it shows. Shop, bin, forge and rest, then a fight: 664 DOM nodes and 34
+  canvases before, 414 and 10 after; the holo live list 20 to 0.
+- **ds-opaque.** The solid stops (the same nine) carry `.ds-opaque` on the screen element (set from JS, the static
+  markup stays `class="screen"`): nothing of the main canvas shows under them. Note for the canvas skip: the
+  shopkeeper, the campfire and the forge (feelDraw) and the event vignette (arcDraw) paint their own DOM canvases
+  from inside draw(), so a skip under `.ds-opaque` must keep those two calls running.
+
+## Albums, lobbies and run end restyled (round 18)
+
+The meta pages sit on the ds-css tokens in three family looks. The CSS is one block, `<style id="m3-css">` (the last
+block in the head); the hooks are in game.js's M3 block (after VAULT): `m3Page(name, body, opaque)`,
+`m3Head(body, back, title, end)`, `m3Dock(body, els, note)`, `m3Fold(label, open, onToggle, cls)`,
+`m3Score(name, body, cta, note)`, `m3Leave(from, to)`. Elements move; every `GAME.choose` entry stays exactly where it
+was registered (order and labels unchanged), the ids and the `.screen` + `#xBody` markup too.
+
+- **The page head.** Back is top-left on every page (it was a full-width pink bar at the bottom of the Prizedex and
+  the sticker board): `m3Head` moves the registered Back into a sticky `.pageHead`, the title sits left beside it
+  (`--fs-l`; a title over 13 characters, every Dutch title and every title under a text size goes to 22 to 24 px and
+  may wrap to two lines rather than cut), an extra on the right (the Prizedex's Codex). A sticky head sticks at the
+  scroller's padding edge, so `.m3Head` carries `top:-16px` (`-14px` on the duo page) to sit on the glass.
+- **The dock.** `m3Dock` moves the one primary (and a ghost at most) into a `.pageDock` at the end of the body, with
+  an optional caption over it: Play the weekly, Start the rush, Toss the coin, Back to title, Keep playing (with
+  Cash out as the ghost and the Endless note as the caption). The dock fades to `--bg` within 14 px so nothing reads
+  through it.
+- **Album** (`.m3-album`: Prizedex, stickers, Codex, history, the Prize Vault): paper dark (`--paper` #201538) cards
+  in uniform grids, a 1.5 px `--line` border, the rarity as a 3 px top stripe (it follows the colour-blind modes),
+  no dashed borders anywhere. Locked is a silhouette: the Prizedex cell shows only the dark shape (the "???" name is
+  hidden), a locked sticker shows its own icon darkened on blank paper (it was a "?" in a dashed disc), a locked
+  Codex chapter or page is the plain surface in `--text-3`, a vault prize you cannot buy is a dim grey thumb. Tabs
+  and filters are one segmented row that scrolls sideways (`.m3Seg`, the crawler filter `.m3Scroll`): the Prizedex
+  tabs no longer wrap to two rows, the history's three rows of chips are three slim rows, the vault's seven tabs
+  (with the season's and the Minis) fit the width with two-line labels (A3.2: "Minis" was cut off; the daily
+  capsule now lives in the bottom button, nowhere near the title). The Prizedex cards lost the holo shine (it stays
+  on reward and shop cards). NEW badges are one small pink tag, still.
+- **Lobby** (`.m3-lobby`: weekly, Boss Rush, Claw School, Duo and the online pages): a hero banner in the mode's
+  colour (`--hero`: weekly ice cyan, rush red, school chalk green, duo pink and teal), one list, the primary in the
+  dock. The weekly and rush banners are drawn once (they used to repaint 24 times a second). The duo and online
+  modes are one list of choice rows (icon left, name, one line, a colour stripe per mode) under a pink and teal
+  hero strip. **Duo setup (A3.5)**: 47 buttons on one page are now one row per player (portrait, Player N, the
+  name field) with a summary line (crawler, claw, paint) that opens the colours, crawlers, claws and paint
+  (`m3Fold`, closed by default, remembered in `S.m3Duo` across the rebuild a pick does, the scroll position kept),
+  the mode's options, and Toss the coin in the dock (it floated over the claw chips). Claw School keeps its
+  classroom canvas; its locked lessons are solid, dimmed cards.
+- **Scoreboard** (`.m3-score`: game over, win, the loop): the title and its one line, the score as the one big
+  number (64 px gold, the screen's one glow; NEW BEST slaps once, no pulse), its tags (best, Tilt, Hall of Fame #n),
+  then the news only: the Tilt unlock as a slim strip, the daily, weekly and ghost cards, a crawler unlocked. The
+  score's breakdown, the stickers of the run, the highlights, the stats table and Share run card fold into one
+  **Run details** row (closed). **A3.3**: a sticker that unlocks a vault prize during the run end no longer toasts
+  "Unlocked in the Prize Vault" over the Tilt card (`vaultOnSticker` collects it in `S.m3Vlt` while the win or game
+  over is up; it is a line in Run details). The loop's CRT is unchanged.
+- **Calm.** Nothing loops on these pages: the vault's capsule glow, the daily pill pulse, the rainbow legendary
+  border, the NEW pulses, the endless button pulse, the NEW BEST glow and the hero banners are still. The fold's
+  chevron turn is off under `.calm` and reduced motion.
+- **Hidden pages let go (B3.11).** `m3Leave` (setScreen, next to `m2Leave`) empties the body of the page left
+  behind: Prizedex, stickers, Codex, history, vault, weekly, rush menu, game over, win. Every builder rebuilds its
+  body when it shows.
+- **ds-opaque.** Solid pages carry `.ds-opaque` on the screen element (set from JS): the Prizedex, stickers, Codex,
+  history, weekly, rush menu, game over, win, the loop, and the duo page in its menu, setup and online phases (not
+  in its canvas phases). The vault, Claw School and the rush screen paint the canvas under their DOM and stay
+  see-through. Note for the canvas skip: the Codex page picture (`loreLive`) and the rush gallery (`rushLive`)
+  repaint their own DOM canvases from the update loop, not from draw().
+- **Dutch.** One new string, "Run details" (Rundetails), in lang_nl2.js's M3 block. Shot at 390 and 360 px.
+
+## Runtime performance (round 19)
+
+The frame, not the download: what a phone pays per frame on the map, in a fight and under the menus. game.js's draw
+dispatcher, the toast lane and the HUD; render.js's glow and badge caches. Nothing in the game's logic, timers, audio
+or physics changed (update() runs exactly as before; the headless suites stay deterministic).
+
+- **No scene under a solid page.** `drawCovered()` (just above `draw()`) is the one check: the shown screen
+  (`#scr-<S.screen>`) carries `.ds-opaque` and `.show`. m2Stop and m3Page own the class (the nine solid run stops,
+  the albums, the weekly and rush menus, game over, win, the loop, the duo page in its menu phases); the vault,
+  Claw School, the rush screen and every canvas stop never carry it, so they paint as before. Under a solid page
+  draw() paints only the DOM canvases it feeds: the event vignette (`arcDraw`) and the shopkeeper, campfire, forge
+  and tip card art (`feelDraw`). The Codex picture (`loreLive`) and the rush gallery (`rushLive`) repaint from the
+  update loop and are untouched. The main canvas keeps its last frame, unseen; the first frame back on the map or
+  the fight is a full paint. Photo mode (painting its frozen scene into a buffer) never skips.
+- **Backing store at 2x at most.** `PX_DPR_MAX = 2` (it was 2.5): the canvas buffer follows the device up to 2
+  device px per CSS px. A 3x phone (390 px wide) fills 780 x 1387 instead of 975 x 1733 (-36% pixels). The CSS
+  size and `stagePoint` (CSS px / `S.scale`) are untouched: a press and drag in the cabinet set the claw's target
+  to exactly the stage x at DPR 1, 2 and 3 (driven in Chromium). At DPR 2 and below nothing changes.
+- **Glow sprites.** Radii up to 24 share a sprite per 2 px (the claw's strain glow walked 7 to 16 a frame and built a
+  canvas for each); past the 1.6 MP budget the least recently drawn sprites go (`glowTrim`, to 75% of it) instead of
+  the whole cache, so a fight's working set is never rebuilt mid-fight. Every caller draws a sprite at its own size,
+  so a sprite one step larger is the same soft glow.
+- **Gradients.** The relic badge (`polBadge`, redrawn while its shine sweeps) builds its ring and disc gradients
+  once per tier and size (`polGrad`, a 48-entry cap; a gradient lives in the coordinates it is filled in, so one
+  object serves every relic canvas). The season map's vignette (`SEA_VIG`) is rebuilt only when the map area moves.
+  The map and the fight now create no gradient per frame.
+- **DOM writes on change only.** `feelCorner` (every tick) re-set the corner item's `hi` / `tight` classes: 55 class
+  writes a second on the map, 34 in the shop. `rushHud` re-set `#top.rushOn` and the act text on every HUD refresh
+  (6 a second in every fight). Both compare first.
+- **Dead code.** `coinsTo` (never called). A scan of every `function` name in clawspire/js against clawspire/ and
+  tests/ finds no other name referenced once, and the "export-only" list of round 18's audit is in use (aliases:
+  `acc.shape`, `sch.steer`, `NET.host` and the like are called by the suites or by game.js). The one-line local
+  `clamp` / `lerp` copies in combat, physics, intro, map and render stay: same body, no shared scope to gain.
+- **Left alone: the map's ground layer (B3.6).** The water hexes shimmer with time (`terrainHex` reads `st.t`), so
+  a cached ground would freeze them; it would also sit on the camera and zoom path. Not worth the risk.
+
+Measured (local, Chromium without a GPU, 390 x 844 mobile emulation at DPR 3 unless noted; `draw()` timed alone,
+"raster" forces the pixels with a 1 px read; frames from a 4 to 10 s rAF probe; this box rasters in software, so
+absolute frame times are pessimistic, the ratios hold):
+
+| | before | after |
+| --- | --- | --- |
+| canvas buffer at DPR 3 | 975 x 1733 | 780 x 1387 |
+| map: draw() JS / with raster | 2.7 / 44.6 ms | 2.7 / 32.4 ms |
+| fight, 3 enemies: draw() with raster | 23.3 ms | 17.3 ms |
+| boss fight (hoard): draw() with raster | 24.5 ms | 17.1 ms |
+| shop: draw() JS / with raster | 2.6 / 32.1 ms | 0.2 / 0.2 ms (the keeper only) |
+| rest / event: with raster | 31.9 / 31.1 ms | 0.3 / 0.1 ms |
+| Prizedex / game over: with raster | 27.2 / 2.5 ms | 0 / 0 ms |
+| frames, map idle | 19.9 fps (91 of 103 over 33 ms) | 28.2 fps (31 of 144) |
+| frames, shop / Prizedex | 23.5 / 27.1 fps, 4.1 s busy in 4 s | 60 / 60 fps, 1.7 / 0.2 s busy in 4 s |
+| frames, fight with drops / boss fight | 26.7 / 28.8 fps | 39.6 / 37.8 fps |
+| DOM writes a second: map / shop / fight | 61 / 35 / 7 | 1 / 2 / 1 (toasts sliding) |
+| canvases built, first claw drop (30 frames) | 15 to 19 | 9 to 10 (0 on later drops) |
+| gradients created per frame, map / fight | 1.5 / 0.7 | 0 / 0 |
+| heap after 10 fights / after an 80 s fight | 9.8 / 10.6 MB | 9.7 / 10.2 MB |
+| DOM nodes, listeners, canvases across 10 fights | flat (about 415, 1097, 7 to 10) | flat (the same) |
+
+Screens: all 47 screenshots (English and Dutch, DPR 2) match the round 18 set: the solid pages pixel for pixel,
+the canvas scenes up to their animation phase and the toasts' timing (a second run of the old build differs from
+the first by as much). Tests: `perf (round 19)` in the render suite (a solid shop paints only the keeper's canvas,
+a page that is not shown never hides the scene, the buffer at DPR 1, 2 and 3) and the glow cache checks (2 px
+buckets, a hot sprite survives a flood of colours).
+
+## Lamp economy check (round 19)
+
+Owner of this section: the balance pass. The worry from round 17: the skilled bot's perfect hands land PERFECT on
+about half its drops and set off LAMP FEVER over a hundred times a run, and every fever rained a capsule. Does a
+human-like player also get far more loot than round 12 meant (about 22 capsules a run, gold on arrival 103 / 419 /
+720, "a couple of fights and an elite" for a good relic)?
+
+**Method.** The round 17 bot (`r17new/bal15.mjs`) copied to scratchpad `r19lamp/bal19.mjs`, pointed at a snapshot of
+the committed build (`r19lamp/base`; `base_b` is the same with the dial below), the cabinet on (`GAME.cab.force`),
+Tilt 0, the Trading Post on. Batches by `r19lamp/cal19.sh`, tables by `r19lamp/agg19.mjs`, raw lines
+`r19lamp/cal_{h0,h1,hoff,s0,s1}_w*.jsonl`. Seven crawlers x classic / tri / scoop / twins, seeds from 19000: 112 runs
+for each human-like batch, 28 for the skilled bot and for the cabinet-off control. New in the bot: the cabinet's
+capsules counted by source (CAPSULE DROP event or FEVER rain, spawned and delivered), every fever (also the ones that
+burst on the enemy's turn), PERFECTs a drop.
+
+**The human-like bot (`HUMAN=1`).** The skilled bot's decisions (which prize to go for, the map, the shop, rests), with
+four changes:
+- No perfect hands: the claw's own physics decides what comes up and what slips (the skilled bot drops its aimed
+  prizes into the chute at the release).
+- A finger's aim. The stage is 540 px wide; on a 390 CSS px phone (6.1 inch, about 65 mm across) one stage px is about
+  0.12 mm, so the PERFECT window (5 px) is about +/-0.6 mm. A drag-then-lift on a phone misses its mark by about 1.5 mm
+  (judging the middle of an odd-shaped prize through the claw, the finger rolling as it lifts), so the drop lands at
+  the aimed x + a normal error of SD 13 px (`AIMSD`), plus a release overshoot along the drag (the finger still
+  sliding when it lifts: a reaction delay of about 60 +/- 30 ms at 80 px/s, about 5 px), and 10% of drops are gross
+  misses, 20 to 45 px off (`PMISS`: a misread pile, a hurried or slipped finger). Measured: 13.3 px mean error.
+- It goes for a cabinet capsule lying in the pile when the capsule beats the best prize (`CAPV` 10); the skilled bot
+  never aimed at one.
+- It takes an act's first elite after two normal fights (the owner's "a couple of fights and an elite"); the skilled
+  bot takes one at once when healthy.
+
+**PERFECT is mostly the pile, not the aim.** With that aim the bot lands PERFECT on 34% of its drops, not the 10 to 20%
+a decent player would earn by aim alone (P(error within 5 px) at SD 13 is about 30%, times the 70% the claw comes up
+with a dead-centre prize: about 21%). The window takes the topmost prize under the hub, whichever it is, and in a full
+pile one usually sits within 5 px: a probe run with no aim error landed 53%, one with SD 40 px still 36%. The twins
+never PERFECT (not in `perfTypes`), so on the classic, tri and scoop a human gets about 40%. It hardly matters for
+the lamp: a PERFECT is one star, a delivery one to three.
+
+### Before and after (the dial: a FEVER rains coins, no capsule)
+
+| human-like bot, cabinet on, Tilt 0 | before (112 runs) | after (112 runs) | cabinet off (28 runs) |
+| --- | --- | --- | --- |
+| win | 2% | 3% | 0% |
+| deaths act 1 / 2 / 3 | 92 / 15 / 3 | 97 / 11 / 1 | 26 / 2 / 0 |
+| fights a run | 9.5 | 8.3 | 7.0 |
+| prizes a drop / PERFECT of drops | 1.67 / 34% | 1.67 / 34% | 1.52 / - |
+| LAMP FEVER a fight / a run | 3.7 / 35.4 | 3.7 / 30.7 | - |
+| capsules opened a run (a fight) | 18.9 (1.99) | 7.7 (0.93) | 4.5 (0.63) |
+| from rewards and the map | 7.0 (0.74) | 6.2 (0.75) | 4.5 (0.63) |
+| from CAPSULE DROP events | 0.6 | 1.5 | - |
+| from the FEVER rain (spawned / delivered) | 11.3 (17.6 / 12.6) | 0 | - |
+| capsules opened by the start of act 2 / 3 | 28.9 / 62.8 | 14.0 / 29.0 | 12.0 / - |
+| gold on arrival, act 1 / 2 / 3 (runs that got there) | 105 / 494 (20) / 960 (5) | 105 / 530 (15) / 1121 (4) | 105 / 427 (2) / - |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.2 / 19.6 | 1.6 / 9.3 / 16.5 | 1.5 / 8.0 / - |
+| capsule tiers c / u / r / l | 43 / 35 / 18 / 4% | 41 / 37 / 19 / 3% | 34 / 42 / 18 / 6% |
+| relics from capsules a run (rare or better) | 2.71 (0.49) | 1.90 (0.29) | 1.46 (0.14) |
+
+| skilled bot (`PRO=2`), cabinet on, Tilt 0 | round 12 target | round 16, cabinet off (126 runs) | before (28 runs) | after (28 runs) |
+| --- | --- | --- | --- | --- |
+| win | 31% | 30% | 32% | 32% |
+| deaths act 1 / 2 / 3 | 12 / 16 / 5 (of 48) | 16 / 51 / 20 | 1 / 8 / 10 | 3 / 10 / 6 |
+| prizes a drop / PERFECT of drops | 3.4 / - | 3.1 / - | 3.15 / 52% | 3.20 / 54% |
+| LAMP FEVER a fight / a run | - | - | 4.3 / 129 | 4.6 / 138 |
+| capsules opened a run (a fight) | 21.7 | 22.7 (0.83) | 48.5 (1.61) | 26.3 (0.88) |
+| from rewards and the map / events / the FEVER rain | 21.7 / - / - | 22.7 / - / - | 24.7 / 0.7 / 23.1 | 25.1 / 1.2 / 0 |
+| capsules opened by the start of act 2 / 3 | | 11.7 / 24.2 | 20.5 / 42.6 | 12.3 / 25.2 |
+| gold on arrival, act 1 / 2 / 3 | 103 / 419 / 720 | 103 / 423 / 596 | 105 / 500 / 834 | 105 / 476 / 769 |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.0 / 16.9 | 1.6 / 8.3 / 16.6 | 1.5 / 8.7 / 16.0 | 1.5 / 8.8 / 16.9 |
+| capsule tiers c / u / r / l | 40 / 33 / 21 / 6% | 39 / 35 / 21 / 5% | 43 / 35 / 20 / 3% | 42 / 33 / 20 / 5% |
+| a won run ends with | 23.9 relics, 1128 gold | 24.6 relics, 718 gold | 24.0 relics, 69 capsules, 1412 gold | 23.4 relics, 38 capsules, 1396 gold |
+
+(Round 17's skilled numbers on its own build: 56.5 capsules a run, 1.82 a fight, gold 105 / 563 / 1019.)
+
+**What it showed.** Every player sets off FEVER three to five times a fight: a weaker hand brings up fewer prizes a
+drop but takes more drops a fight, so the lamp fills about as fast. The fight's cabinet capsule cap (`capMax` 2) was
+the only limit, and the FEVER rain filled it almost every fight, for the human-like bot as much as for the skilled
+one: 1.25 cabinet capsules a fight on top of 0.74 from the rewards, 2.4 times the round 12 rate, and 29 capsules by
+act 2 instead of 12. The win rate was never the problem: the human-like bot wins 2 to 3% and dies in act 1 (the
+Prize Mimic, the Plushie Queen, the Carnival Barker), with or without the dial.
+
+**Why this dial.** `capMax` 2 -> 1 would still pay a capsule nearly every fight (fevers come 3 to 5 a fight); fewer
+stars per prize or more cells would need about 100 cells to make fevers rare enough, and the tube draws 12. Turning
+the rain's capsule off leaves the FEVER show whole (the beacon, the burst, the fanfare, 5 coins, Lamp Oil, Fever
+Dream, The Motherboard) and the CAPSULE DROP event as the cabinet's capsule (0.1 to 0.2 a fight, a prize you must
+deliver). After it, both bots open about the round 12 count a fight (0.93 and 0.88 against 0.83), the skilled bot 26
+a run and 12 by act 2, and its win rate does not move (32%).
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| capsules in a LAMP FEVER's rain | `game.js` `CABK.rainCaps` (`GAME.cab.K`) | 1 | 0 |
+
+### What is left for the owner
+
+- **Gold is still a little above round 12** (skilled: 476 / 769 on arrival at acts 2 / 3 against 419 / 720), the
+  cabinet's coins (Coin Showers and 5 a fever, about 15 a fight on offer). The next dial is `rainCoins` (5) or
+  `coinN` (6); it was left alone so a single change could be measured.
+- **The PERFECT window is loose in a full pile** (34% for a human, 36% even with a 40 px aim error). If PERFECT should
+  reward aim, `cabUnderPalm` could ask for the prize the player aimed at, or `perfX` could shrink; both are feel, not
+  economy.
+- **A human-like hand loses almost every run in act 1** (2 to 3%; the round 12 weaker bot won 8%). The round 12 target
+  (a skilled player loses about 70%) holds for the skilled bot (32% wins); how far below that a real phone player
+  lands is worth a playtest, since the bot picks its drop spot more crudely than a person does.
+- **The cabinet keeps a weaker player alive a little longer** (7.0 fights a run with it off, 8.3 with it on after the
+  dial): the coins and the surge help without the capsules.
+- Tests: the game suite's lamp test now pins the rain to `rainCaps` (0 capsules) and checks the rain's capsule path
+  with the dial at 1 in a fresh fight (one capsule, counted against the fight's cap).
 
 ## Quality bar (Game of the Year, mobile)
 

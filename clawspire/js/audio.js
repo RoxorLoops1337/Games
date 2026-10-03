@@ -2069,6 +2069,7 @@ const AUDIO = (() => {
       // bells: the chord tones a twelfth up, sparse and ringing
       for (const s of [0, 6, 10]) if (s === 0 || rng.chance(0.5)) push(steps, base + s, { v: 'bell', n: tone(rng.pick([0, 2, 4, 7]), 36), g: s === 0 ? 1 : 0.7 });
     }
+    if (c.bub) depFlavor(c, steps, base, b, tone, rng);   // DEP: the Neon Depths' bubbles
   }
   /* Tells the music which act biome the player is in (1..3; 0 = none).
      A live map or fight tune of another act crossfades into this act's
@@ -2420,9 +2421,16 @@ const AUDIO = (() => {
       const v = DUO_V[o && o.v] || DUO_V.kazoo;
       return v(out, t, p);
     },
+    // DUO NET (round 15): online co-op's link chimes (opts.k): join (a friend is in: two notes up),
+    // turn (your turn: a bright three-note call), lost (the line drops: two notes down), back (it is up again).
+    duoLink(out, t, o, p) {
+      const k = o && o.k, seq = k === 'lost' ? [79, 72] : k === 'turn' ? [72, 79, 84] : k === 'back' ? [72, 76, 79] : [76, 83];
+      seq.forEach((n, i) => blip(out, t, { at: i * 0.09, w: k === 'lost' ? 'triangle' : 'square', f: mtof(n) * p, dur: 0.14, v: 0.06, lp: 4200 }));
+      return 0.2 + seq.length * 0.09;
+    },
   });
-  Object.assign(GAP, { duoFlip: 0.2, duoCoin: 0.1, duoCount: 0.08, duoReady: 0.2, duoSabo: 0.3, duoCrowd: 1.0, duoTaunt: 0.4 });
-  NAMES.push('duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt');
+  Object.assign(GAP, { duoFlip: 0.2, duoCoin: 0.1, duoCount: 0.08, duoReady: 0.2, duoSabo: 0.3, duoCrowd: 1.0, duoTaunt: 0.4, duoLink: 0.3 });
+  NAMES.push('duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt', 'duoLink');
   /* ---------------------------------------------------------------- /DUO */
 
   /* ---------------------------------------------------------------- FAMILY + REROLL (round 9)
@@ -2594,6 +2602,7 @@ const AUDIO = (() => {
         blip(dest, t, { w: c.bassWave, f: mtof(ev.n), dur: ev.d * sd, v: 0.3 * g, a: 0.006, lp: c.bassWave === 'triangle' ? 3000 : 700, q: 3 });
         break;
       case 'lead':
+        if (c.dub && depLead(dest, t, ev, g, sd, c)) break;   // DEP: the muffled dub lead with its tape echo
         if (c.box && inst.mode === 'map') {
           // the vault's music box: a struck tine that rings out, a quiet octave overtone
           blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: Math.max(0.5, ev.d * sd * 1.6), v: 0.17 * g, a: 0.003 });
@@ -2634,7 +2643,7 @@ const AUDIO = (() => {
         blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: 0.9, v: 0.05 * g, a: 0.002 });
         blip(dest, t, { w: 'triangle', f: mtof(ev.n) * 3.01, dur: 0.25, v: 0.012 * g, a: 0.001 });
         break;
-      default: seaVoice(dest, t, ev, g, sd); break;   // SEASON: the organ and the sleigh bells
+      default: if (!depVoice(dest, t, ev, g, sd)) seaVoice(dest, t, ev, g, sd); break;   // SEASON: the organ and the sleigh bells; DEP: the bubbles
     }
   }
 
@@ -3291,6 +3300,297 @@ const AUDIO = (() => {
     'title:sea:halloween': 2, 'map:sea:halloween': 2, 'title:sea:winter': -2, 'map:sea:winter': -1.5,
   };
   function mixMusK(mode, act) { const d = MIX_MUS[accSongKey(mode, act)]; return d ? Math.pow(10, d / 20) : 1; }
+
+  /* ---------------------------------------------------------------- DEP (round 15): the Neon Depths
+     DESIGN.md "The Neon Depths (round 15)". The flooded basement is act 4 to
+     the music (the game's accMusicAct says 4 on a dive's map and in its
+     fights): its map theme is a muffled dub (72 bpm minor, a sub bass that
+     walks, a one-drop half-time kit, offbeat chord skanks, a dreamy lead
+     through a low pass with a tape echo), and every mode of the act (the
+     fight, elite and boss variants keep their own tempo, key and layers)
+     borrows the echo and the bubbles (blips that sweep up like a bubble
+     leaving a regulator). Only a config with dub / bub draws from the rng
+     for them, so every other tune stays bit for bit. Sounds, calibrated
+     into their MIX tiers: the angler's lure pings like sonar, jellies bloop,
+     a sting crackles, a pincer snips, live water zaps, a chest creaks (or
+     chomps), the High Tide rolls in. */
+  ACT_CFG[4] = {
+    all: { dub: 1, bub: 1 },
+    map: { bpm: 72, root: 38, scale: 'minor', bass: 'walk', lead: 'dreamy', hat: 'off', drums: 'half', wave: 'triangle', bassWave: 'sine',
+      stab: 0.55, swing: 0.14, vol: 0.85, leadUp: 12, prog: [[0, 5, 3, 4], [0, 3, 5, 6], [5, 3, 0, 4], [0, 6, 5, 4]] },
+    fight: { scale: 'dorian', wave: 'triangle' },
+    elite: { wave: 'triangle' },
+  };
+  ACT_NAMES[4] = 'flooded dub';
+  Object.assign(MIX_MUS, { 'map:act4': 0, 'fight:act4': -2.5, 'elite:act4': -1, 'boss:act4': -1.5 });
+  // accFlavor: bubbles rise off the beat, two or three a bar (only a dub config draws for them).
+  function depFlavor(c, steps, base, b, tone, rng) {
+    for (const s of [3, 7, 11, 15]) if (rng.chance(s === 7 ? 0.7 : 0.35)) push(steps, base + s, { v: 'bub', n: tone(rng.pick([0, 2, 4]), 36), g: 0.8 });
+  }
+  // playEvent's lead in a dub config: muffled under a low pass, with a tape echo a dotted eighth later, and another.
+  function depLead(dest, t, ev, g, sd, c) {
+    const f = mtof(ev.n), dur = Math.max(0.12, ev.d * sd * 0.95), w = c.wave === 'sawtooth' ? 'triangle' : c.wave;
+    blip(dest, t, { w, f, dur, v: 0.14 * g, a: 0.02, lp: 900, q: 2 });
+    blip(dest, t + sd * 3, { w: 'sine', f, dur: dur * 0.8, v: 0.06 * g, a: 0.02, lp: 700 });
+    blip(dest, t + sd * 6, { w: 'sine', f, dur: dur * 0.7, v: 0.025 * g, a: 0.02, lp: 520 });
+    return true;
+  }
+  // playEvent's default: the bubble voice (a sine that sweeps up fast); false for any other voice.
+  function depVoice(dest, t, ev, g, sd) {
+    if (ev.v !== 'bub') return false;
+    const f = mtof(ev.n);
+    blip(dest, t, { w: 'sine', f: f * 0.5, to: f * 1.4, dur: 0.07, v: 0.05 * g, a: 0.004 });
+    blip(dest, t + 0.05, { w: 'sine', f: f * 0.7, to: f * 1.8, dur: 0.05, v: 0.025 * g, a: 0.003 });
+    return true;
+  }
+  Object.assign(BANK, {
+    // The angler's lure: a sonar ping and its echo.
+    depLure(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1180 * p, to: 1120 * p, dur: 0.5, v: 0.14, a: 0.005 });
+      blip(out, t, { at: 0.28, w: 'sine', f: 1180 * p, to: 1120 * p, dur: 0.4, v: 0.05, a: 0.005 });
+      blip(out, t, { w: 'triangle', f: 590 * p, dur: 0.2, v: 0.04 });
+      return 0.72;
+    },
+    // Jellies drifting in: two bloops.
+    depBubble(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 240 * p, to: 700 * p, dur: 0.1, v: 0.16, a: 0.01 });
+      blip(out, t, { at: 0.09, w: 'sine', f: 330 * p, to: 900 * p, dur: 0.08, v: 0.1, a: 0.01 });
+      return 0.2;
+    },
+    // A jelly stings the claw: a nettle crackle over a high buzz.
+    depSting(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 2200 * p, to: 1600 * p, dur: 0.12, v: 0.05, lp: 5000, vib: [40, 200] });
+      hiss(out, t, { type: 'highpass', f: 4000, dur: 0.1, v: 0.14, crunch: true });
+      blip(out, t, { at: 0.05, w: 'sine', f: 880 * p, to: 440 * p, dur: 0.12, v: 0.08 });
+      return 0.2;
+    },
+    // A pincer snips shut (a clack and a scrape).
+    depPinch(out, t, o, p) {
+      for (const at of [0, 0.08]) hiss(out, t, { at, type: 'bandpass', f: 3600 * p, q: 5, dur: 0.03, v: 0.22, crunch: true });
+      blip(out, t, { at: 0.08, w: 'triangle', f: 700 * p, to: 420 * p, dur: 0.06, v: 0.08 });
+      hiss(out, t, { at: 0.12, type: 'bandpass', f: 1400 * p, q: 1.5, dur: 0.18, v: 0.06 });
+      return 0.32;
+    },
+    // Live water: a mains hum that bites, and a crack.
+    depZap(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, dur: 0.28, v: 0.1, lp: 2400, vib: [30, 20] });
+      blip(out, t, { w: 'square', f: 1760 * p, to: 900 * p, dur: 0.1, v: 0.04, lp: 4000 });
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.16, v: 0.16, crunch: true });
+      return 0.32;
+    },
+    // A sunken chest: a wet creak; opts.bite adds a chomp.
+    depChest(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 600 * p, to: 1100 * p, q: 3, dur: 0.3, v: 0.5 });
+      blip(out, t, { w: 'sawtooth', f: 180 * p, to: 140 * p, dur: 0.25, v: 0.12, lp: 900 });
+      if (o && o.bite) { blip(out, t, { at: 0.26, w: 'square', f: 140 * p, to: 70, dur: 0.1, v: 0.12, lp: 1200 }); hiss(out, t, { at: 0.26, type: 'lowpass', f: 1500, dur: 0.08, v: 0.2, crunch: true }); }
+      return 0.42;
+    },
+    // High Tide: the water rolls in over a bass drop.
+    depTide(out, t, o, p) {
+      hiss(out, t, { type: 'lowpass', f: 300 * p, to: 1800 * p, q: 0.8, dur: 0.9, v: 0.2, a: 0.25 });
+      blip(out, t, { w: 'sine', f: 90 * p, to: 42, dur: 0.9, v: 0.3, a: 0.02 });
+      [50, 57, 62].forEach((n, i) => blip(out, t, { at: 0.1 + i * 0.12, w: 'triangle', f: mtof(n) * p, dur: 0.5, v: 0.05, lp: 1100 }));
+      return 1.0;
+    },
+  });
+  Object.assign(GAP, { depLure: 0.3, depBubble: 0.08, depSting: 0.08, depPinch: 0.1, depZap: 0.12, depChest: 0.15, depTide: 0.8 });
+  NAMES.push('depLure', 'depBubble', 'depSting', 'depPinch', 'depZap', 'depChest', 'depTide');
+  Object.assign(MIX_TIER, { depBubble: 'soft', depPinch: 'soft', depLure: 'mid', depSting: 'mid', depZap: 'mid', depChest: 'mid', depTide: 'big' });
+  Object.assign(MIX_TRIM, { depLure: -0.5, depBubble: 1, depSting: 4, depPinch: 5.5, depZap: 1.5, depChest: 5.5, depTide: -1.5 });
+  /* ---------------------------------------------------------------- /DEP */
+
+  /* ---------------------------------------------------------------- CAB (round 16): the cabinet is alive
+     DESIGN.md "The cabinet is alive (round 16)". The machine's own voices:
+     the event sign's reel ticking round and slamming down, the surge's
+     power-up, a shower of coins, the PERFECT chime (opts.n, a streak, climbs),
+     a claw straining under a heavy load (opts.vel), a prize's squeak, a spark
+     landing in the Jackpot Lamp (pitch climbs with the level) and the
+     lamp's FEVER siren. Calibrated into their MIX tiers. */
+  Object.assign(BANK, {
+    // The event reel: a dry slot tick.
+    cabRoll(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 3400 * p, q: 6, dur: 0.025, v: 0.3 });
+      blip(out, t, { w: 'square', f: 1250 * p, dur: 0.03, v: 0.08, lp: 3000 });
+      return 0.05;
+    },
+    // The sign lands: a clack, a thump and a bright two-note ding.
+    cabLand(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1800 * p, q: 2, dur: 0.05, v: 0.3, crunch: true });
+      blip(out, t, { w: 'sine', f: 150 * p, to: 70, dur: 0.14, v: 0.35 });
+      blip(out, t, { at: 0.05, w: 'triangle', f: mtof(84) * p, dur: 0.18, v: 0.12 });
+      blip(out, t, { at: 0.12, w: 'triangle', f: mtof(91) * p, dur: 0.26, v: 0.1 });
+      return 0.4;
+    },
+    // POWER SURGE: a rising electric whine over a crackle, then a zap.
+    cabSurge(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, to: 880 * p, dur: 0.45, v: 0.08, lp: 3200, q: 4, vib: [30, 25] });
+      blip(out, t, { w: 'square', f: 55 * p, to: 440 * p, dur: 0.45, v: 0.04, lp: 1400 });
+      hiss(out, t, { type: 'highpass', f: 3500, dur: 0.4, v: 0.08, crunch: true, a: 0.1 });
+      blip(out, t, { at: 0.42, w: 'square', f: 1760 * p, to: 440 * p, dur: 0.12, v: 0.08, lp: 5000 });
+      hiss(out, t, { at: 0.42, type: 'highpass', f: 2500, dur: 0.12, v: 0.2, crunch: true });
+      return 0.6;
+    },
+    // COIN SHOWER: a patter of little clinks falling in.
+    cabRain(out, t, o, p) {
+      const notes = [96, 91, 98, 93, 100, 95, 101, 94];
+      notes.forEach((n, i) => {
+        blip(out, t, { at: i * 0.055, w: 'triangle', f: mtof(n) * p, to: mtof(n) * p * 0.94, dur: 0.09, v: 0.07 });
+        hiss(out, t, { at: i * 0.055, type: 'bandpass', f: 6000, q: 5, dur: 0.02, v: 0.06 });
+      });
+      return 0.55;
+    },
+    // PERFECT: a glassy chime with a sparkle on top; a streak (opts.n) climbs.
+    cabPerfect(out, t, o, p) {
+      const up = Math.min(4, Math.max(1, (o && o.n) | 0 || 1)) - 1, k = p * Math.pow(2, up * 2 / 12);
+      [79, 86, 91].forEach((n, i) => blip(out, t, { at: i * 0.045, w: 'sine', f: mtof(n) * k, dur: 0.5 - i * 0.08, v: 0.16 - i * 0.03, a: 0.003 }));
+      blip(out, t, { w: 'triangle', f: mtof(98) * k, dur: 0.35, v: 0.05, vib: [12, 18] });
+      hiss(out, t, { type: 'highpass', f: 7000, to: 11000, dur: 0.3, v: 0.05 });
+      return 0.55;
+    },
+    // A claw straining: a low metal groan with a creak (opts.vel, the load).
+    cabCreak(out, t, o, p) {
+      const v = U.clamp(o && o.vel != null ? +o.vel : 0.6, 0.1, 1.2);
+      blip(out, t, { w: 'sawtooth', f: 95 * p, to: 70 * p, dur: 0.35, v: 0.07 * (0.5 + v), lp: 700, q: 6, vib: [22, 6] });
+      for (let i = 0; i < 4; i++) hiss(out, t, { at: i * 0.07, type: 'bandpass', f: (900 + i * 170) * p, q: 12, dur: 0.035, v: 0.12 * (0.5 + v) });
+      return 0.4;
+    },
+    // A prize's squeak (a rubber-duck chirp up).
+    cabSqueak(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 900 * p, to: 1700 * p, dur: 0.09, v: 0.06, lp: 3500, q: 3 });
+      blip(out, t, { at: 0.08, w: 'sine', f: 1500 * p, to: 1150 * p, dur: 0.08, v: 0.08 });
+      return 0.18;
+    },
+    // A spark lands in the Jackpot Lamp: a soft bell blip (pitch climbs with the level).
+    cabLamp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1320 * p, dur: 0.16, v: 0.12, a: 0.003 });
+      blip(out, t, { w: 'triangle', f: 2640 * p, dur: 0.08, v: 0.03 });
+      return 0.18;
+    },
+    // LAMP FEVER: a siren sweep into a fanfare run.
+    cabFever(out, t, o, p) {
+      for (let i = 0; i < 2; i++) blip(out, t, { at: i * 0.3, w: 'square', f: 620 * p, to: 1240 * p, dur: 0.28, v: 0.06, lp: 3000, lin: true });
+      [72, 76, 79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.6 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.06, lp: 4200 }));
+      blip(out, t, { at: 0.95, w: 'triangle', f: mtof(96) * p, dur: 0.5, v: 0.08, vib: [6, 10] });
+      hiss(out, t, { at: 0.6, type: 'highpass', f: 5000, dur: 0.6, v: 0.05 });
+      return 1.45;
+    },
+  });
+  Object.assign(GAP, { cabRoll: 0.04, cabLand: 0.2, cabSurge: 0.5, cabRain: 0.3, cabPerfect: 0.2, cabCreak: 0.25, cabSqueak: 0.12, cabLamp: 0.05, cabFever: 1 });
+  NAMES.push('cabRoll', 'cabLand', 'cabSurge', 'cabRain', 'cabPerfect', 'cabCreak', 'cabSqueak', 'cabLamp', 'cabFever');
+  Object.assign(MIX_TIER, { cabRoll: 'tick', cabLamp: 'ui', cabCreak: 'soft', cabSqueak: 'soft', cabLand: 'mid', cabSurge: 'mid', cabRain: 'mid', cabPerfect: 'big', cabFever: 'big' });
+  Object.assign(MIX_TRIM, { cabRoll: -3.6, cabLamp: -3.1, cabCreak: 5.1, cabSqueak: 3.1, cabLand: -2.4, cabSurge: 0.1, cabRain: 8.5, cabPerfect: 1.1, cabFever: 7.5 });
+  /* ---------------------------------------------------------------- /CAB */
+
+  /* ---------------------------------------------------------------- TECH (round 17): Cabinet Tech
+     DESIGN.md "Cabinet Tech and the new crawler (round 17)". A Cabinet Tech
+     relic answering the machine: a two-tone circuit beep (opts.kind: a
+     PERFECT answers higher, a FEVER lower), and Double Feature's reel
+     spinning up again (a rising arpeggio over a ratchet). Calibrated into
+     their MIX tiers. */
+  Object.assign(BANK, {
+    // A relic answers the cabinet: a quick service-remote beep-beep.
+    techBeep(out, t, o, p) {
+      const k = o && o.kind === 'perfect' ? 1.19 : o && o.kind === 'fever' ? 0.84 : 1;
+      blip(out, t, { w: 'square', f: 1480 * p * k, dur: 0.05, v: 0.06, lp: 4200 });
+      blip(out, t, { at: 0.07, w: 'square', f: 1975 * p * k, dur: 0.07, v: 0.06, lp: 4200 });
+      hiss(out, t, { type: 'bandpass', f: 5200, q: 4, dur: 0.03, v: 0.05, crunch: true });
+      return 0.18;
+    },
+    // Double Feature: the reel spins up again (a ratchet under a rising arpeggio).
+    techDouble(out, t, o, p) {
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: (2600 + i * 250) * p, q: 7, dur: 0.02, v: 0.22 });
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.05 + i * 0.07, w: 'triangle', f: mtof(n) * p, dur: 0.16, v: 0.1 }));
+      blip(out, t, { at: 0.34, w: 'sine', f: mtof(91) * p, dur: 0.3, v: 0.08, vib: [8, 10] });
+      return 0.66;
+    },
+  });
+  Object.assign(GAP, { techBeep: 0.08, techDouble: 0.5 });
+  NAMES.push('techBeep', 'techDouble');
+  Object.assign(MIX_TIER, { techBeep: 'soft', techDouble: 'mid' });
+  Object.assign(MIX_TRIM, { techBeep: 3, techDouble: 5.1 });
+  /* ---------------------------------------------------------------- /TECH */
+
+  /* ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+     DESIGN.md "Capsule fever (round 17)". The capsule's build-up and the
+     Capsule Minis: a ladder note per crack (opts.n climbs), the primed hum
+     when one tap is left, the rare tease (a gold shimmer that fizzles), the
+     charge before the pop (opts.tier), the rarity chime ladder (opts.tier:
+     longer and brighter per tier), the legendary jingle, a NEW! mini, a
+     finished series and the daily capsule. Calibrated into their MIX tiers. */
+  Object.assign(BANK, {
+    // One crack: a glassy ladder note that climbs with opts.n.
+    gachaTap(out, t, o, p) {
+      const n = U.clamp((o && o.n) | 0, 0, 7), f = mtof(76 + [0, 2, 4, 7, 9, 12, 14, 16][n]) * p;
+      blip(out, t, { w: 'triangle', f, dur: 0.14, v: 0.1, a: 0.002 });
+      blip(out, t, { at: 0.02, w: 'sine', f: f * 2, dur: 0.1, v: 0.04 });
+      return 0.18;
+    },
+    // Primed (one tap left): a low hum swelling under a shimmer.
+    gachaPrime(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, to: 220 * p, dur: 0.6, v: 0.05, lp: 900, a: 0.25, vib: [9, 6] });
+      hiss(out, t, { type: 'bandpass', f: 3000, to: 7000, q: 3, dur: 0.6, v: 0.05, a: 0.4 });
+      return 0.65;
+    },
+    // The rare tease: a golden shimmer climbs... then fizzles back down.
+    gachaTease(out, t, o, p) {
+      [79, 83, 86, 91].forEach((n, i) => blip(out, t, { at: i * 0.05, w: 'sine', f: mtof(n) * p, dur: 0.12, v: 0.07 }));
+      blip(out, t, { at: 0.25, w: 'square', f: mtof(79) * p, to: mtof(67) * p, dur: 0.35, v: 0.035, lp: 2200, vib: [7, 8] });
+      hiss(out, t, { at: 0.25, type: 'highpass', f: 5000, to: 2000, dur: 0.3, v: 0.04 });
+      return 0.62;
+    },
+    // The charge before the pop: a riser, longer and brighter with opts.tier.
+    gachaCharge(out, t, o, p) {
+      const tier = U.clamp((o && o.tier) | 0, 0, 3), d = [0.22, 0.32, 0.6, 1.2][tier];
+      blip(out, t, { w: 'sawtooth', f: mtof(48 + tier * 3) * p, to: mtof(72 + tier * 4) * p, dur: d, v: 0.05, lp: 2600 + tier * 600, lin: true });
+      hiss(out, t, { type: 'bandpass', f: 500, to: 5000 + tier * 1500, q: 1.4, dur: d, v: 0.08, a: d * 0.8 });
+      if (tier >= 2) for (let i = 0; i < 4 + tier * 2; i++) blip(out, t, { at: d * (i / (4 + tier * 2)), w: 'sine', f: mtof(84 + (i % 4) * 3) * p, dur: 0.05, v: 0.03 });
+      return d + 0.05;
+    },
+    // The rarity chime ladder: common a two-note ding, up to legendary's long bright run.
+    gachaChime(out, t, o, p) {
+      const tier = U.clamp((o && o.tier) | 0, 0, 3);
+      const notes = [[84, 88], [84, 88, 91], [84, 88, 91, 96], [84, 88, 91, 96, 100, 103]][tier];
+      notes.forEach((n, i) => blip(out, t, { at: i * 0.06, w: 'sine', f: mtof(n) * p, dur: 0.3 + tier * 0.1, v: 0.09, a: 0.003 }));
+      notes.forEach((n, i) => blip(out, t, { at: i * 0.06 + 0.01, w: 'triangle', f: mtof(n + 12) * p, dur: 0.12, v: 0.025 }));
+      return 0.4 + notes.length * 0.06 + tier * 0.1;
+    },
+    // The legendary jingle: a gold fanfare over a sub drop and a twinkling tail.
+    gachaLegend(out, t, o, p) {
+      duck(1.8);
+      blip(out, t, { w: 'sine', f: 90, to: 38, dur: 0.6, v: 0.4 });
+      [60, 64, 67, 72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.05 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.18, v: 0.05, lp: 4200 }));
+      [72, 76, 79, 84, 88].forEach((n) => blip(out, t, { at: 0.6, w: 'triangle', f: mtof(n) * p, dur: 1.1, v: 0.05, vib: [6, 6] }));
+      for (let i = 0; i < 10; i++) blip(out, t, { at: 0.7 + i * 0.08, w: 'sine', f: mtof(96 + (i % 5) * 2) * p, dur: 0.1, v: 0.035 });
+      return 1.8;
+    },
+    // A NEW! mini: a toy squeak and a sparkly three-note pop.
+    gachaNew(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 700 * p, to: 1400 * p, dur: 0.08, v: 0.05, lp: 3000 });
+      [88, 91, 96].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.06, w: 'triangle', f: mtof(n) * p, dur: 0.22, v: 0.09 }));
+      hiss(out, t, { at: 0.08, type: 'highpass', f: 6000, dur: 0.25, v: 0.05 });
+      return 0.5;
+    },
+    // A series is complete: a little march up to a held chord.
+    gachaSeries(out, t, o, p) {
+      duck(1.2);
+      [67, 72, 76, 79, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.05, lp: 4000 }));
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.66, w: 'triangle', f: mtof(n) * p, dur: 0.8, v: 0.06, vib: [5, 5] }));
+      blip(out, t, { at: 0.66, w: 'sine', f: 130, to: 60, dur: 0.3, v: 0.3 });
+      return 1.5;
+    },
+    // The daily capsule: a coin rolls down a chute into a music box ding.
+    gachaDaily(out, t, o, p) {
+      for (let i = 0; i < 5; i++) blip(out, t, { at: i * 0.05, w: 'triangle', f: (1800 - i * 120) * p, dur: 0.04, v: 0.05 });
+      [79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.3 + i * 0.1, w: 'sine', f: mtof(n) * p, dur: 0.4, v: 0.08 }));
+      return 0.75;
+    },
+  });
+  Object.assign(GAP, { gachaTap: 0.04, gachaPrime: 0.5, gachaTease: 0.5, gachaCharge: 0.2, gachaChime: 0.08, gachaLegend: 1.2, gachaNew: 0.3, gachaSeries: 1, gachaDaily: 0.5 });
+  NAMES.push('gachaTap', 'gachaPrime', 'gachaTease', 'gachaCharge', 'gachaChime', 'gachaLegend', 'gachaNew', 'gachaSeries', 'gachaDaily');
+  Object.assign(MIX_TIER, { gachaTap: 'ui', gachaPrime: 'soft', gachaTease: 'mid', gachaCharge: 'mid', gachaDaily: 'mid', gachaChime: 'big', gachaNew: 'big', gachaSeries: 'big', gachaLegend: 'huge' });
+  Object.assign(MIX_TRIM, { gachaTap: 1.2, gachaPrime: 4.1, gachaTease: 7, gachaCharge: 11.3, gachaDaily: 4.6, gachaChime: 6.9, gachaNew: 8, gachaSeries: 0.6, gachaLegend: 1.6 });
+  /* ---------------------------------------------------------------- /GACHA */
+
   const mixApi = {
     TIERS: MIX_TIERS, TARGET: MIX_TARGET, WIN: MIX_WIN, CAP: MIX_CAP, TIER: MIX_TIER, TRIM: MIX_TRIM, VARY: MIX_VARY,
     DUCK: MIX_DUCK, LIM: MIX_LIM, MUS: MIX_MUS, MINOR: MIX_MINOR, STING: MIX_STING,

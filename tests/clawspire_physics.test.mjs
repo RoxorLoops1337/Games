@@ -1138,4 +1138,29 @@ h.test('ROS: Rising Water floats light prizes and sinks heavy ones, all inside t
   h.ok([light, heavy].every(b => b.x > 0 && b.x < 480 && b.y < 390 && Number.isFinite(b.y)), 'nothing leaves the glass');
 });
 
+// CAB (round 16): the cabinet's own coins and capsules are plain bodies of their own group ('prize'):
+// the claw grabs them like anything else, the default aim skips them, and a pile with them is deterministic.
+h.test('cab: a coin or capsule body (group prize) is grabbed and carried, skipped by the default aim, deterministic', () => {
+  const run = () => {
+    const { W, C } = mkWorld();
+    const R = PHYS.clawRig(W, { cabinet: C, homeX: 200, chuteX: 448, railY: 26, rand: U.rng(9) });
+    const cap = PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 12 }, x: 200, y: 330, density: 0.7, friction: 0.45, restitution: 0.38, group: 'prize', data: { cab: 'cap' } });
+    W.add(cap);
+    for (let i = 0; i < 6; i++) { const coin = PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 7.5 }, x: 60 + i * 40, y: 40 + (i % 3) * 10, density: 1.5, friction: 0.35, restitution: 0.25, group: 'prize', data: { cab: 'coin' } }); W.add(coin); }
+    for (let i = 0; i < 120; i++) { R.update(DT); W.step(DT); }
+    const aim = R.aimAt();
+    R.setTarget(cap.x);
+    for (let i = 0; i < 90; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let lifted = false;
+    for (let i = 0; i < 600; i++) { R.update(DT); W.step(DT); if ((R.phase === 'lifting' || R.phase === 'carrying') && R.held().indexOf(cap) >= 0) lifted = true; }
+    const sig = W.bodies.filter((b) => b.type === 'dynamic').map((b) => b.x.toFixed(3) + ',' + b.y.toFixed(3)).join(';');
+    return { aim, lifted, sig };
+  };
+  const a = run(), b = run();
+  h.eq(a.aim, null, 'the default aim is for items only');
+  h.ok(a.lifted, 'the claw lifts a capsule dead centre under it');
+  h.eq(a.sig, b.sig, 'the same bodies and inputs, the same pile');
+});
+
 h.done();

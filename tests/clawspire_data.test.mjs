@@ -19,16 +19,19 @@ const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
 const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
-const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change'.split(' ');
+const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change lure jellies pinch shock decoy'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
-const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet onBubble'.split(' ');
+const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet onBubble onCab'.split(' ');
 // Round 6 (sets): The Hungry Pack's three pet relics, left out of the build pass's counts.
 const R6_RELICS = 'chew_toy treat_jar dog_whistle'.split(' ');
 const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp turret bubbles'.split(' ');
-const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck'.split(' ');
+const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck tech'.split(' ');
 const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak luck'.split(' ');
-const CHARS = 'knight alchemist rogue gambler engineer bubbler'.split(' ');
+const CHARS = 'knight alchemist rogue gambler engineer bubbler techie'.split(' ');
+// Round 17 (TECH, Cabinet Tech and Joy Stick): checked in its own block below, left out of the build pass's counts.
+const R17_ITEMS = 'arcade_stick arcade_button coin_mech neon_tube circuit_board extension_cord crt_monitor golden_stick'.split(' ');
+const R17_RELICS = 'service_remote laser_sight service_key lamp_oil coin_hopper metronome fever_dream circuit_breaker trick_shot double_feature leg_motherboard'.split(' ');
 // Round 10 (ROS, Ms. Bubbles): checked in its own block below, left out of the build pass's counts.
 const R10_ITEMS = 'rubber_duck soap_bar bubble_pipe sponge scrub_brush bath_bomb foam_cannon loofah bubble_bath golden_duck'.split(' ');
 const R10_RELICS = 'bubble_wand foam_machine soap_dish squeaky_toy'.split(' ');
@@ -472,6 +475,7 @@ function runHooks(r, F) {
   if (h.onMaterial) for (const k of ['crack', 'shatter', 'fuse', 'blast']) h.onMaterial(F, k, { uid: 'q', id: 'firecracker' }, ITEMS.firecracker);
   if (h.onPet) h.onPet(F, 'cat');
   if (h.onBubble) { h.onBubble(F, 'chute', 2); h.onBubble(F, 'bin', 1); }   // (round 12)
+  if (h.onCab) { for (const id of ['surge', 'coins', 'capsule']) h.onCab(F, 'event', 0, id); h.onCab(F, 'perfect', 2); h.onCab(F, 'fever', 1); h.onCab(F, 'double', 0, 'coins'); }   // (round 17)
   if (h.onTurnEnd) h.onTurnEnd(F);
 }
 
@@ -664,8 +668,8 @@ t.test('tools, terms and the light copy', () => {
 
 // ------------------------------------------------------------- characters
 t.test('characters', () => {
-  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,bubbler,engineer,gambler,knight,rogue', 'six characters');
-  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70, engineer: 75, bubbler: 68 };
+  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,bubbler,engineer,gambler,knight,rogue,techie', 'seven characters (round 17: Joy Stick)');
+  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 78, engineer: 84, bubbler: 68, techie: 70 };   // (round 16: Mama Mech 75 -> 84) (round 17 QA: Lucky Lou 70 -> 78)
   for (const id in CHARACTERS) {
     const c = CHARACTERS[id], W = `char ${id}`;
     t.eq(c.id, id, `${W}: key`);
@@ -681,7 +685,7 @@ t.test('characters', () => {
     t.ok(big.filter(i => ITEMS[i].char === id).length >= 10, `${W}: big items are mostly its own`);
     t.ok(c.bin.every(i => !ITEMS[i].char || ITEMS[i].char === id), `${W}: no other character's items`);
     t.ok(!!RELICS[c.relic], `${W}: starting relic exists`);
-    t.ok(['start', 'act2', 'win'].includes(c.unlock), `${W}: unlock rule`);
+    t.ok(['start', 'act2', 'win', 'fever'].includes(c.unlock), `${W}: unlock rule`);
     t.ok(isHex(c.color), `${W}: color`);
     const cl = c.claw;
     for (const k of ['grabs', 'width', 'grip', 'speed', 'prongs', 'rubber', 'magnet']) t.ok(isNum(cl[k]), `${W}: claw.${k}`);
@@ -807,7 +811,7 @@ const kwOf = (d) => DATA.kwIds(d);
 
 t.test('archetypes and keywords', () => {
   const A = DATA.ARCHETYPES;
-  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '14 archetypes');
+  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '15 archetypes (round 17: Tech)');
   for (const k of ARCHS) {
     const a = A[k];
     t.ok(a && typeof a.label === 'string' && a.label.length >= 3 && a.label.length <= 10, `${k}: label`);
@@ -850,7 +854,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id));
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -858,7 +862,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id) && !R17_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -1108,8 +1112,9 @@ t.test('meta: Tilt levels 0..10, named, each one adds its own twist', () => {
 t.test('meta: achievements are well formed and checked safely', () => {
   const ids = DATA.ACH_IDS;
   // The board is a 3-column grid on a phone: room for the seasonal and evolution
-  // stickers of round 7, but a runaway list still fails here (round 7 QA: 50 -> 60).
-  t.ok(ids.length >= 25 && ids.length <= 60, `25 to 60 stickers (${ids.length})`);
+  // stickers of round 7, but a runaway list still fails here (round 7 QA: 50 -> 60;
+  // round 15, the Neon Depths' Deep Diver: 60 -> 63, the grid's next full row of three).
+  t.ok(ids.length >= 25 && ids.length <= 63, `25 to 63 stickers (${ids.length})`);
   t.eq(new Set(ids).size, ids.length, 'unique ids');
   t.eq(new Set(ids.map(id => DATA.ACHIEVEMENTS[id] && DATA.ACHIEVEMENTS[id].name)).size, ids.length, 'unique sticker names (the board and the slap tell them apart)');
   for (const id of ids) {
@@ -2058,7 +2063,7 @@ t.test('season: the Claw-o-ween content stays out of every year-round table and 
 });
 t.test('season: the event cosmetics, the wallet, the currency, the doors, the sticker', () => {
   const ids = DATA.SEA_COSMETIC_IDS, C = DATA.COSMETICS;
-  t.ok(ids.length === 21, 'twenty-one event cosmetics (nine Claw-o-ween with Mama Mech\'s and Ms. Bubbles\' witch hats, twelve winter)');
+  t.ok(ids.length === 23, 'twenty-three event cosmetics (ten Claw-o-ween with Mama Mech\'s, Ms. Bubbles\' and Joy Stick\'s witch hats, thirteen winter)');
   for (const id of ids) {
     const c = C[id], W = 'event cosmetic ' + id;
     t.ok(!!c && c.id === id && DATA.SEASONS[c.season] && c.price > 0, W + ': a season and a price');
@@ -2070,7 +2075,7 @@ t.test('season: the event cosmetics, the wallet, the currency, the doors, the st
   }
   for (const ch of CHARS) t.eq(DATA.seaCosmetics('halloween', 'outfit', ch).length, 1, `a witch hat for ${ch}`);
   t.ok(['skin', 'paint', 'trail'].every(cat => DATA.seaCosmetics('halloween', cat).length === 1), 'a Haunted Mansion cabinet, a pumpkin paint, a bat trail');
-  t.eq(DATA.seaCosmetics('winter').length, 12, 'winter: twelve cosmetics (WIN, round 12)');
+  t.eq(DATA.seaCosmetics('winter').length, 13, 'winter: thirteen cosmetics (WIN, round 12; round 17: Joy Stick\'s scarf)');
   t.eq(C.skin_sea_mansion.look.fp, 'sea_pumpkins', 'the mansion frame has its own pattern');
   // the wallet
   const f = DATA.seaFix(null);
@@ -2492,7 +2497,7 @@ t.test('round 8: Mama Mech, the Engineer', () => {
   t.ok(c.bin.filter(id => ITEMS[id].char === 'engineer').length >= 10 && c.bin.every(id => R8_ITEMS.includes(id) || !ITEMS[id].char), 'the bin is mostly her new kit');
   t.ok(c.bin.filter(id => (ITEMS[id].tags || []).includes('metal')).length >= 12, 'and mostly metal (turret parts)');
   t.ok(c.turret === true && c.relic === 'socket_set' && RELICS.socket_set.starter && RELICS.socket_set.rarity === 'event', 'her gift: the turret; her starter: the Socket Set');
-  t.ok(c.hp === 75 && c.gold > 0 && c.claw.grabs === 3, 'hp, gold, grabs');
+  t.ok(c.hp === 84 && c.gold > 0 && c.claw.grabs === 3, 'hp, gold, grabs');   // (round 16: hp 75 -> 84)
   t.eq(c.unlock, 'act2', 'unlocked by reaching act 2');
   t.eq(c.vsLine, 'Hold still. Measuring you.', 'her versus line');
   const seen = new Set();
@@ -2522,7 +2527,7 @@ t.test('round 8: her relics, outfits, stickers and evolutions', () => {
   for (const id of ['fit_mama_welder', 'fit_mama_hardhat']) t.ok(fits.includes(id) && DATA.COSMETICS[id].look.style, `${id}: an outfit of hers`);
   t.ok(DATA.vaultPrice('fit_mama_welder') > 0 && DATA.vaultPrice('fit_mama_hardhat') > 0, 'both for sale');
   for (const id of ['fully_armed', 'clean_sweep']) t.ok(DATA.ACHIEVEMENTS[id] && DATA.ACH_IDS.includes(id), `sticker ${id}`);
-  t.ok(DATA.ACH_IDS.length <= 60, `the sticker board holds 60 at most (${DATA.ACH_IDS.length})`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the sticker board holds 63 at most (${DATA.ACH_IDS.length})`);
   const tick = (n, clawType) => DATA.achCheck({ kind: 'tick', run: { clawType }, f: { grab: n } }, {});
   t.ok(tick(3, 'vacuum').includes('clean_sweep'), 'Clean Sweep: three up the hose in one grab');
   t.ok(!tick(2, 'vacuum').includes('clean_sweep') && !tick(3, 'classic').includes('clean_sweep'), 'not two, not another claw');
@@ -2816,7 +2821,7 @@ t.test('weekly: medals, the cabinet and the repaired record', () => {
 t.test('lore: the two stickers (a gold weekly medal, 25 Codex pages), inside the board\'s cap', () => {
   const A = DATA.ACHIEVEMENTS;
   t.ok(A.podium && A.lorekeeper, 'Podium Finish and Lorekeeper');
-  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the board holds ${DATA.ACH_IDS.length} of 63`);
   t.ok(!DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'silver' } } } }, {}).includes('podium'), 'silver is not the podium');
   t.ok(DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'gold' } } } }, {}).includes('podium'), 'gold is');
   t.ok(DATA.achCheck({ kind: 'end', meta: { wk: { medal: { '2026-W40': 'platinum' } } } }, {}).includes('podium'), 'platinum too');
@@ -2981,7 +2986,7 @@ t.test('ghost: compact checkpoints, a record repaired, the delta at the same ste
 t.test('rush: two stickers (a cleared rush, an overtaken ghost), inside the cap', () => {
   const A = DATA.ACHIEVEMENTS;
   t.ok(A.rush_clear && A.photo_finish, 'Rush Hour and Photo Finish');
-  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the board holds ${DATA.ACH_IDS.length} of 63`);
   t.ok(new Set(DATA.ACH_IDS.map(id => A[id].name)).size === DATA.ACH_IDS.length, 'the names stay unique');
   t.ok(!DATA.achCheck({ kind: 'end', run: { rush: { won: false } } }, {}).includes('rush_clear'), 'a fall is not a clear');
   t.ok(!DATA.achCheck({ kind: 'tick', run: { rush: { won: true } } }, {}).includes('rush_clear'), 'only at the rush\'s end');
@@ -3555,6 +3560,250 @@ t.test('trd: pet evolution: gated by level, once, the fee by act, a final form f
   t.eq(top.evo, 1, 'an evolved pet stays evolved');
   t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 100 })), 'an old save has no flag');
   t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 20, evo: 1 })), 'a flag below the top level is dropped');
+});
+
+/* ------------------------------------------------- DEP (round 15): the Neon Depths */
+t.test('dep: every third loop from 3 dives into the Neon Depths; the classic cycle carries on between', () => {
+  const K = DATA.DEP_K;
+  t.eq(K.from, 3, 'the first dive is Loop 3');
+  t.eq(K.every, 3, 'then every third loop');
+  const seq = [];
+  for (let l = 1; l <= 12; l++) seq.push(DATA.depLoop(l) ? 'D' + DATA.depAct(l) : String(DATA.depAct(l)));
+  t.eq(seq.join(' '), '1 2 D3 3 1 D3 2 3 D3 1 2 D3', 'the loops: cellar, foundry, a dive, vault, ...');
+  t.eq([1, 2, 3, 4, 5, 6, 7].map(DATA.endlessAct).join(), '1,2,3,1,2,3,1', 'endlessAct itself is unchanged');
+  t.eq([0, 1, 2, 3, 4, 5, 6, 9, 12].map(DATA.depDives).join(), '0,0,0,1,1,1,2,3,4', 'the dives counted up to a loop');
+  t.ok(!DATA.depLoop(0) && !DATA.depLoop(-3) && !DATA.depLoop('junk') && !DATA.depLoop(null), 'junk is never a dive');
+  // every classic act still comes round between dives
+  const acts = new Set(); for (let l = 1; l <= 12; l++) if (!DATA.depLoop(l)) acts.add(DATA.depAct(l));
+  t.eq([...acts].sort().join(), '1,2,3', 'all three classic acts come round');
+});
+
+t.test('dep: five monsters, an elite and a boss, each with its trick; pools, junk, Codex and a sticker', () => {
+  const E = DATA.ENEMIES, K = DATA.DEP_K;
+  const ids = DATA.DEP_ENEMIES.map((e) => e.id);
+  t.eq(ids.join(), 'dep_angler,dep_jelly,dep_crab,dep_eel,dep_mimic,dep_jukebox', 'the six Depths monsters');
+  const kinds = new Set();
+  for (const id of ids) {
+    const d = E[id];
+    t.ok(d && d.dep && d.act === 3 && d.look === id && d.name && d.desc, id + ': a Depths monster with its own look');
+    t.ok(d.hp[0] > 0 && d.hp[1] >= d.hp[0] && d.pattern.every((i) => d.moves[i]), id + ': hp and a pattern that points at its moves');
+    for (const m of d.moves) { if (DATA.DEP_KINDS.includes(m.k)) kinds.add(m.k); t.ok(m.name && m.txt && m.txt.indexOf(String.fromCharCode(0x2014)) < 0, id + '.' + m.id + ': named, no em dash'); }
+  }
+  t.eq([...kinds].sort().join(), 'decoy,jellies,lure,pinch,shock', 'every Depths trick is used by a move');
+  t.eq(E.dep_mimic.tier, 'elite', 'the Sunken Mimic is the elite');
+  t.ok(E.dep_mimic.enrage && E.dep_mimic.taunt, 'with an enrage and a taunt');
+  const J = E.dep_jukebox;
+  t.ok(J.tier === 'boss' && J.sig && J.sig.id === 'tide' && J.sig.sign && J.sig.shout && J.sig.text && J.taunt && J.enrage, 'The Drowned Jukebox: High Tide, a taunt, a B-side');
+  t.eq(K.boss, 'dep_jukebox', 'the Depths boss');
+  t.ok(K.tide.lo > 0 && K.tide.lo < K.tide.hi && K.tide.hi < K.tide.hiRage && K.tide.hiRage < 0.9, 'the tide stays inside the bin');
+  t.ok(K.hpK >= 1 && K.dmgK >= 1, 'the Depths are never softer than the act 3 pools');
+  // the pools: only Depths monsters, the right tiers
+  const P = DATA.DEP_ENC;
+  for (const tier of ['normal', 'elite', 'boss']) {
+    t.ok(P[tier].length > 0, tier + ': a pool');
+    for (const g of P[tier]) for (const id of g) t.ok(E[id] && E[id].dep, `${tier} ${g}: a Depths monster`);
+  }
+  t.ok(P.normal.every((g) => g.every((id) => E[id].tier === 'normal')), 'normals are normals');
+  t.ok(P.elite.every((g) => E[g[0]].tier === 'elite'), 'each elite pool leads with the elite');
+  t.eq(P.boss[0][0], 'dep_jukebox', 'the boss pool');
+  t.eq(DATA.depEnc(), P, 'depEnc hands them out');
+  // the classic pools never see them; an Endless mix never borrows High Tide
+  for (const a of [1, 2, 3]) for (const tier of ['normal', 'elite', 'boss']) for (const g of DATA.ENCOUNTERS[a][tier] || []) t.ok(g.every((id) => !E[id].dep), `act ${a} ${tier} has no Depths monster`);
+  for (let s = 1; s <= 200; s++) { const r = U.rng(s); for (const a of [1, 2, 3]) { const m = DATA.endlessMix(r, a); t.ok(!m || !E[m].dep, 'the mix never borrows the Jukebox'); } }
+  // the junk: reachable, never listed
+  for (const id of ['dep_boot', 'dep_jellyling', 'dep_chest']) {
+    t.ok(DATA.ITEMS[id] && DATA.ITEMS[id].rarity === 'junk' && DATA.ITEMS[id].name && DATA.ITEMS[id].text, id + ': a junk item');
+    t.ok(Object.keys(DATA.ITEMS).indexOf(id) < 0, id + ': never in a pool or the Prizedex');
+  }
+  t.ok(DATA.ITEMS.dep_jellyling.density < 1 && DATA.ITEMS.dep_boot.density > 1 && DATA.ITEMS.dep_chest.density > 1, 'jellies float, boots and chests sink');
+  // the Codex: the floor, the boss and the five monsters
+  const book = DATA.loreBook();
+  for (const id of ['fl_depths', 'bo_jukebox', 'be_dep_angler', 'be_dep_jelly', 'be_dep_crab', 'be_dep_eel', 'be_dep_mimic']) {
+    const p = book.byId[id];
+    t.ok(p && p.name && p.text && p.text.length > 200 && p.text.indexOf(String.fromCharCode(0x2014)) < 0, id + ': a Codex page');
+  }
+  // meta.dep repairs; the sticker
+  t.eq(JSON.stringify(DATA.depFix()), '{"dives":0,"jukebox":0,"best":0}', 'an old profile: no dives');
+  t.eq(JSON.stringify(DATA.depFix({ dives: '3', jukebox: -2, best: 1e99 })), '{"dives":3,"jukebox":0,"best":1000000000}', 'junk is repaired');
+  t.ok(DATA.ACHIEVEMENTS.deep_diver && DATA.ACH_IDS.includes('deep_diver'), 'the Deep Diver sticker');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { dep: { jukebox: 1 } } }, {}).includes('deep_diver'), 'unplugging a Jukebox earns it');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { dep: { dives: 4 } } }, {}).includes('deep_diver'), 'diving alone does not');
+  // the score line and the history record
+  const sc = DATA.runScore({ endless: { loop: 3 }, sc: { dep: 1 } }, true);
+  t.ok(sc.lines.some((l) => l.k === 'dep' && l.v === K.dive), 'a Jukebox unplugged scores');
+  t.ok(!DATA.runScore({ endless: { loop: 3 }, sc: {} }, true).lines.some((l) => l.k === 'dep'), 'no line without one');
+  const rec = DATA.hisRecFix({ id: 'x1', c: 'knight', dp: 2 }), rec0 = DATA.hisRecFix({ id: 'x2', c: 'knight', dp: 'junk' });
+  t.eq(rec.dp, 2, 'a history record keeps its dives');
+  t.ok(!('dp' in rec0), 'junk dives are dropped');
+});
+
+// ------------------------------------------------ round 17 (TECH): Cabinet Tech and Joy Stick
+// DESIGN.md "Cabinet Tech and the new crawler (round 17)".
+const TECH_DASH = new RegExp(String.fromCharCode(0x2014));
+t.test('tech: Joy Stick, the Technician', () => {
+  const c = CHARACTERS.techie;
+  t.ok(c && c.name === 'Joy Stick' && c.title === 'The Technician', 'Joy Stick, The Technician');
+  t.eq(c.bin.length, 19, 'a 19 item starting bin');
+  t.ok(c.bin.filter(id => ITEMS[id].char === 'techie').length >= 12 && c.bin.every(id => R17_ITEMS.includes(id) || !ITEMS[id].char), 'the bin is mostly her new kit');
+  t.ok(c.tech === true && c.relic === 'service_remote' && RELICS.service_remote.starter && RELICS.service_remote.rarity === 'event', 'her gift: the cabinet; her starter: the Service Remote');
+  t.ok(c.hp === 70 && c.claw.grabs === 3 && c.claw.speed > 1, 'hp, grabs, quick rails');
+  t.eq(c.unlock, 'fever', 'unlocked by LAMP FEVER');
+  t.eq(c.vsLine, 'Hold on, rebooting you.', 'her versus line');
+  const seen = new Set();
+  for (let d = 0; d < 200; d++) seen.add(DATA.dailyChar('2026-12-' + d));
+  t.ok(seen.has('techie'), 'the daily rotation deals her in');
+  const wk = new Set();
+  for (let w = 1; w <= 52; w++) wk.add(DATA.wkDef('2027-W' + String(w).padStart(2, '0')).char);
+  t.ok(wk.has('techie'), 'so does the weekly challenge');
+  for (const r of ['c', 'u', 'r', 'l']) t.ok(DATA.pool(r, 'techie').length >= 1, `pool ${r}/techie has choices`);
+  for (let seed = 1; seed <= 200; seed++) {
+    const r = DATA.rewardItems(U.rng(seed), 1 + (seed % 3), 'techie');
+    if (r.length !== 3 || !r.every(id => ITEMS[id] && !ITEMS[id].starter && (!ITEMS[id].char || ITEMS[id].char === 'techie'))) { t.ok(false, `techie rewards seed ${seed} [${r}]`); break; }
+  }
+  t.ok(true, 'her reward screens only offer shared and Joy Stick items');
+  let lamps = 0;
+  for (const id of R17_ITEMS) {
+    const d = ITEMS[id];
+    t.ok(d && d.char === 'techie' && !TECH_DASH.test(d.name + d.text), `${id}: hers, no em dash`);
+    t.ok(d.lamp == null || (Number.isInteger(d.lamp) && d.lamp >= 1 && d.lamp <= 4), `${id}: a sane lamp count`);
+    t.ok(DATA.kwIds(d).includes('tech'), `${id}: wears the Tech chip`);
+    if (d.lamp) lamps++;
+  }
+  t.ok(lamps >= 6, `arcade parts light the lamp (${lamps})`);
+  t.ok(R17_ITEMS.some(id => ITEMS[id].rarity === 'l'), 'a legendary of her own');
+  t.ok(DATA.loreHint && /Joy Stick/.test(DATA.loreHint('cr_techie', {})), 'a Codex page for her');
+  const kit = DATA.rushKit('techie');
+  t.ok(kit.items.some(id => ITEMS[id].char === 'techie') && kit.relics.includes('fever_dream'), 'a Boss Rush kit of her own (Duo seats use it too)');
+});
+t.test('tech: the Cabinet Tech relics, their numbers and hooks', () => {
+  const A = DATA.ARCHETYPES.tech;
+  t.ok(A && A.label === 'Tech' && isHex(A.color), 'the Tech archetype');
+  t.eq(DATA.TECH.RELICS.length, 10, 'ten relics in the family');
+  const rar = {};
+  for (const id of DATA.TECH.RELICS) {
+    const r = RELICS[id];
+    t.ok(r && r.kw[0] === 'tech' && !TECH_DASH.test(r.name + r.text) && r.proc && r.proc.length <= 16, `${id}: a Tech relic, no em dash`);
+    rar[r.rarity] = (rar[r.rarity] || 0) + 1;
+    if (r.rarity !== 'l') t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
+  }
+  t.ok(rar.c >= 3 && rar.u >= 2 && rar.r >= 2 && rar.l === 1, 'a mix of rarities, one legendary: ' + JSON.stringify(rar));
+  t.ok(!DATA.relicPool().includes('leg_motherboard') && RELICS.leg_motherboard.leg, 'the legendary stays out of the common pools');
+  // the cabinet numbers
+  const z = DATA.techMods([], 'knight');
+  t.ok(Object.values(z).every(v => v === 0), 'nothing for a knight without them');
+  const g = DATA.techMods([], 'techie'), K = DATA.TECH.K;
+  t.ok(g.evP === K.giftEvP && g.first === 1 && g.perfLamp === 1, 'her gift: more events, from turn 1, a PERFECT lights one more');
+  const m = DATA.techMods(['laser_sight', 'coin_hopper', 'lamp_oil', 'double_feature', 'service_key'], 'knight');
+  t.ok(m.perfX === K.laserX && m.laser === 1 && m.coins === 3 && m.coinGold === 1 && m.lampStart === 4 && m.double === 1 && m.first === 1, 'the relics add up');
+  t.eq(DATA.techMods(['leg_motherboard', 'service_key'], 'techie').evP, 1, 'the chance is capped at every turn');
+  // the hooks through a recording COMBAT
+  const calls = [];
+  globalThis.COMBAT = {
+    damage: (F, src, e, v) => { calls.push(['damage', v]); return v; }, status: (F, who, s, v) => { calls.push([s, v]); return v; },
+    heal: (F, who, v) => { calls.push(['heal', v]); return v; }, emit: (F, ev) => { calls.push(['emit', ev.t, ev.text]); return ev; },
+  };
+  const H = (id) => RELICS[id].hooks;
+  const live = () => Object.assign(mockF(), { tech: { on: true } });
+  try {
+    let F = live(); calls.length = 0;
+    H('service_remote').onCab(F, 'event', 0, 'surge');
+    t.ok(calls.some(c => c[0] === 'damage' && c[1] === 3) && calls.some(c => c[0] === 'block' && c[1] === 3), 'the remote: 3 to ALL and 3 Block per event');
+    calls.length = 0; F.turn = 2; H('service_remote').onTurnStart(F);
+    t.eq(calls.length, 0, 'a live cabinet never rings it on its own');
+    F = mockF(); F.turn = 2; calls.length = 0; H('service_remote').onTurnStart(F);
+    t.ok(calls.some(c => c[0] === 'damage'), 'a quiet cabinet (Duo) rings it every 2nd turn');
+    F.turn = 3; calls.length = 0; H('service_remote').onTurnStart(F);
+    t.ok(!calls.some(c => c[0] === 'damage'), 'and not on the odd ones');
+    F = live(); calls.length = 0;
+    H('metronome').onCab(F, 'perfect', 1); H('metronome').onCab(F, 'perfect', 3); H('metronome').onCab(F, 'perfect', 9);
+    t.eq(calls.filter(c => c[0] === 'damage').map(c => c[1]).join(), '4,12,16', 'the Metronome: 4 per PERFECT in the streak, 16 at most');
+    F = live(); const g0 = F.player.grabs;
+    H('trick_shot').onCab(F, 'perfect', 1); t.eq(F.player.grabs, g0, 'Trick Shot: not on a first PERFECT');
+    H('trick_shot').onCab(F, 'perfect', 2); H('trick_shot').onCab(F, 'perfect', 3);
+    t.eq(F.player.grabs, g0 + 1, 'x2 gives the grab back, once a turn');
+    F = live(); calls.length = 0;
+    H('circuit_breaker').onCab(F, 'event', 0, 'surge'); H('circuit_breaker').onCab(F, 'event', 0, 'coins'); H('circuit_breaker').onCab(F, 'event', 0, 'capsule');
+    t.ok(calls.some(c => c[0] === 'damage' && c[1] === 6) && calls.some(c => c[0] === 'block' && c[1] === 6) && calls.some(c => c[0] === 'heal' && c[1] === 5), 'the Circuit Breaker answers each event its own way');
+    F = live(); calls.length = 0; H('fever_dream').onCab(F, 'fever', 1); H('leg_motherboard').onCab(F, 'fever', 1);
+    t.ok(calls.some(c => c[0] === 'damage' && c[1] === 8) && calls.some(c => c[0] === 'damage' && c[1] === 15), 'LAMP FEVER: 8 (Fever Dream), 15 (the Motherboard)');
+    F = live(); calls.length = 0; H('fever_dream').onCab(F, 'perfect', 1); H('laser_sight').onCab(F, 'event', 0, 'coins');
+    t.eq(calls.length, 0, 'each answers only its own kind');
+  } finally { delete globalThis.COMBAT; }
+});
+t.test('tech: combos, stickers, outfits', () => {
+  for (const id of DATA.TECH.COMBOS) {
+    const c = DATA.COMBOS[id];
+    t.ok(c && !TECH_DASH.test(c.name + c.text), `${id}: a recipe`);
+    t.ok(DATA.combosFor(c.example.map(i => ITEMS[i]), c.ctx || null).some(x => x.id === id), `${id}: its example fires`);
+    t.ok(!DATA.combosFor(c.miss.map(i => ITEMS[i]), c.ctx || null).some(x => x.id === id), `${id}: its miss does not`);
+  }
+  t.ok(!DATA.combosFor([ITEMS.rusty_sword, ITEMS.crisp_apple], { perfect: 0 }).some(x => x.id === 'bullseye'), 'Bullseye wants a PERFECT grab');
+  t.ok(DATA.combosFor([ITEMS.coin_mech, ITEMS.lucky_penny], null).some(x => x.id === 'coin_op'), 'Coin-Op: her Coin Mech and a penny');
+  const ev = (n) => DATA.achCheck({ kind: 'ev', ev: { t: 'tech', k: 'perfect', n } }, {});
+  t.ok(ev(5).includes('perfect_game') && !ev(4).includes('perfect_game'), 'Perfect Game: five PERFECT grabs in a row');
+  t.ok(DATA.achCheck({ kind: 'win', run: { char: 'techie' } }, {}).includes('tech_support') && !DATA.achCheck({ kind: 'win', run: { char: 'knight' } }, {}).includes('tech_support'), 'Tech Support: a win as her');
+  t.ok(DATA.ACH_IDS.length <= 63, `the board holds ${DATA.ACH_IDS.length} of 63`);
+  const fits = DATA.vaultList('outfit', 'techie');
+  t.eq(fits.join(), 'fit_joy_headset,fit_joy_visor', 'two outfits of hers');
+  t.ok(fits.every(id => DATA.vaultPrice(id) > 0), 'both for sale');
+});
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+t.test('gacha: the Capsule Minis table: four series of six (c c u u r l), a rainbow Vault prize per series, no em dash', () => {
+  const G = DATA.GACHA;
+  t.ok(G && G.SERIES && G.MINIS, 'DATA.GACHA is there');
+  t.eq(G.SERIES.length, 4, 'four series');
+  t.eq(G.MINI_IDS.length, 24, 'twenty four minis');
+  for (const s of G.SERIES) {
+    const ids = G.seriesIds(s.id);
+    t.eq(ids.map((id) => G.MINIS[id].rarity).sort().join(''), ['c', 'c', 'u', 'u', 'r', 'l'].sort().join(''), `${s.id}: two common, two uncommon, a rare, a legendary`);
+    const cos = DATA.COSMETICS[s.reward];
+    t.ok(cos && cos.rarity === 'l' && DATA.vaultHow(s.reward) === 'capsule', `${s.id}: the prize ${s.reward} is a capsule-only legendary`);
+    t.ok(/^#[0-9a-f]{6}$/i.test(s.col) && s.icon && s.name, `${s.id}: a name, an icon, a colour`);
+  }
+  for (const id of G.MINI_IDS) {
+    const m = G.MINIS[id];
+    t.ok(m.name && m.text && m.look && m.look.body && m.look.c1 && m.look.c2, `${id}: a name, a line and a look`);
+    t.ok(G.seriesOf(id) && G.seriesOf(id).id === m.series, `${id}: its series`);
+  }
+  t.eq(new Set(G.MINI_IDS.map((id) => G.MINIS[id].look.body)).size, 24, 'every mini has a body of its own');
+  const EM = String.fromCharCode(0x2014);
+  t.eq(JSON.stringify(G).indexOf(EM), -1, 'no em dash');
+  t.ok(G.DUPE.c < G.DUPE.u && G.DUPE.u < G.DUPE.r && G.DUPE.r < G.DUPE.l, 'rarer dupes pay more vault tickets');
+});
+
+t.test('gacha: the mini rolls match their weights, deterministic by seed; the tease is a stable fifth of common and uncommon capsules only', () => {
+  const G = DATA.GACHA, N = 20000;
+  for (const tier of ['c', 'u', 'r', 'l']) {
+    const rng = U.rng(4242 + tier.charCodeAt(0)), n = { c: 0, u: 0, r: 0, l: 0 };
+    let has = 0;
+    for (let i = 0; i < N; i++) { n[G.MINIS[G.rollMini(rng, tier)].rarity]++; if (G.hasMini(rng, tier)) has++; }
+    const W = G.W[tier], tot = W.c + W.u + W.r + W.l;
+    for (const k of ['c', 'u', 'r', 'l']) t.near(n[k] / N, W[k] / tot, 0.015, `a ${tier} capsule's mini is ${k} ${W[k]}/${tot}`);
+    t.near(has / N, G.CHANCE[tier], 0.015, `a ${tier} run capsule carries a mini ${G.CHANCE[tier]} of the time`);
+  }
+  const a = U.rng(99), b = U.rng(99);
+  t.eq([0, 1, 2, 3, 4, 5].map(() => G.rollMini(a, 'r')).join(), [0, 1, 2, 3, 4, 5].map(() => G.rollMini(b, 'r')).join(), 'same seed, same minis');
+  let tc = 0;
+  for (let i = 0; i < 4000; i++) if (G.tease('cap' + i, i % 2 ? 'c' : 'u')) tc++;
+  t.near(tc / 4000, G.TEASE, 0.03, 'about a fifth of common and uncommon capsules tease');
+  t.eq(G.tease('x', 'c'), G.tease('x', 'c'), 'the same capsule always teases the same way');
+  let rl = 0;
+  for (let i = 0; i < 500; i++) if (G.tease('cap' + i, 'r') || G.tease('cap' + i, 'l')) rl++;
+  t.eq(rl, 0, 'a rare or legendary capsule never teases (it has the real thing)');
+});
+
+t.test('gacha: capsule odds are untouched (the LOOT tables, rollCapsule, the Vault Capsule)', () => {
+  const W = DATA.LOOT.WEIGHTS, N = 20000;
+  for (const src of ['normal', 'elite', 'boss']) {
+    const rng = U.rng(777), n = { c: 0, u: 0, r: 0, l: 0 };
+    for (let i = 0; i < N; i++) n[DATA.rollCapsule(rng, src, { pity: 0 }).tier0]++;
+    const w = W[src], tot = w.c + w.u + w.r + w.l;
+    for (const k of ['c', 'u', 'r', 'l']) t.near(n[k] / N, w[k] / tot, 0.015, `${src}: the ${k} drop rate is still ${w[k]}/${tot}`);
+  }
+  t.eq(JSON.stringify(W.normal) + JSON.stringify(W.elite) + JSON.stringify(W.boss), JSON.stringify({ c: 72, u: 22, r: 5.5, l: 0.5 }) + JSON.stringify({ c: 36, u: 44, r: 17, l: 3 }) + JSON.stringify({ c: 0, u: 34, r: 56, l: 10 }), 'the round 12 weights stand');
+  t.eq(DATA.LOOT.PITY, 8, 'the pity is still 8');
+  t.eq(JSON.stringify(DATA.VAULT.CAP_W), JSON.stringify({ c: 58, u: 30, r: 10, l: 2 }), 'the Vault Capsule odds are unchanged');
 });
 
 t.done();

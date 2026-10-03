@@ -289,6 +289,12 @@
   .btnico{height:18px;width:auto;vertical-align:-4px;margin-right:2px;}
   .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
   .cardghost .ic .cardimg{width:90px;height:90px;object-fit:contain;display:block;margin:0 auto;}
+  .forgeic .cardimg{width:40px;height:40px;object-fit:contain;display:block;margin:0 auto;}
+  /* painted Combo Codex icons: inline in prose (~1.3em), big on the Codex reaction cards */
+  .cxic{width:1.3em;height:1.3em;object-fit:contain;display:inline-block;vertical-align:-.32em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+  .cxbig{width:40px;height:40px;object-fit:contain;display:block;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));}
+  #overlay h1 .cxic{width:1.15em;height:1.15em;vertical-align:-.2em;}
+  .btnbig{width:28px;height:28px;object-fit:contain;vertical-align:-7px;margin-right:2px;}
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
@@ -734,7 +740,7 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
-const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop','dragon']);
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop','dragon','web','horn','censer','harpy','mimic','minion','orc','sentinel']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
@@ -754,9 +760,9 @@ const EDICT_ICON={ ironHorde:'iron', bloodPact:'blood', swiftRaiders:'swift', wa
 function edictFace(id){ return EDICT_ICON[id] ? '<img class="cardimg" src="modifiers/'+EDICT_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted relic icons (icons/relic_<word>.png) per relic key; emoji fallback.
 const RELIC_ICON={ cFang:'cracked', cEmber:'wildfire', sTooth:'serpent', sCharm:'charm', sPouch:'greedy', sMana:'mana', sCollar:'collar',
-  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', sWard:'wardingstone', eMidas:'alchemist', rBanner:'banner', eHorn:'horn',
+  cShackle:'shackle', cCoin:'worncoin', cIdol:'idol', cScrap:'ironscrap', sWard:'wardingstone', eMidas:'midas', rFlask:'alchemist', rBanner:'banner', eHorn:'horn',
   rScale:'dragonscale', rBlood:'bloodstone', rTome:'tome', rEye:'hoarder', rFrost:'frost', rDeed:'deed',
-  eCore:'infernal', eStaff:'archmage', lPhyl:'phylactery', mRuin:'avatar', mEtern:'eternity' };
+  eCore:'infernal', eStaff:'archmage', eForge:'soulforge', eThrone:'thronebone', lPhyl:'phylactery', lCrown:'avarice', mRuin:'avatar', mEtern:'eternity' };
 function relicFace(id,cls){ return RELIC_ICON[id] ? '<img class="'+(cls||'relicimg')+'" src="icons/relic_'+RELIC_ICON[id]+'.png" alt="" draggable="false">' : null; }
 // Painted mandate ("decree") icons (icons/decree_<word>.png) per mandate key; emoji fallback.
 const MANDATE_ICON={ pierceHalls:'piercing', undyingLegion:'legion', quicksand:'quicksand', bloodthrone:'bloodthrone',
@@ -770,6 +776,15 @@ function townActFace(id,cls){ return TOWNACT_ICON[id] ? '<img class="'+(cls||'re
 // Painted shop-item icons (items/<key>.png); emoji fallback.
 const ITEM_ICON=new Set(['sword','armor','potion','great']);
 function itemFace(key,cls){ return ITEM_ICON.has(key) ? '<img class="'+(cls||'itemimg')+'" src="items/'+key+'.png" alt="" draggable="false">' : null; }
+// Painted Combo Codex icons (icons/codex_<key>.png): reactions, elements, statuses. A missing or
+// corrupt file swaps back to its emoji (codexIconFail), so a re-upload under the same name just works.
+const CODEX_ICON=new Set(['combust','conduct','detonate','encase','fire','ice','ignite','marked','oiled','overload','phys','poisoned','shatter','shock','thermalshock']);
+const ELEM_CX={fire:'fire', ice:'ice', shock:'shock', phys:'phys', oil:'oiled'};   // def.elem -> codex icon key
+function codexTag(src,cls,fb){ return '<img class="'+(cls||'cxic')+'" src="'+src+'" alt="'+(fb||'')+'" data-fb="'+(fb||'')+'" draggable="false" onerror="codexIconFail(this)">'; }
+function codexIconFail(img){ img.replaceWith(document.createTextNode(img.dataset.fb||'')); }
+function codexFace(key,cls,fb){ return CODEX_ICON.has(key) ? codexTag('icons/codex_'+key+'.png',cls,fb) : null; }
+function cx(key,fb){ return codexFace(key,'cxic',fb)||fb||''; }   // inline icon token for prose (emoji fallback)
+function codexBookFace(cls){ return codexTag('icons/codex.png',cls,'⚛️'); }   // the Codex's own book icon
 const MAX_LEVEL = 5;   // a TRAP can be stacked-upgraded this many levels
 const MAX_SLOTS = 5;   // a room can hold this many units (grown +1 per gold upgrade)
 const MAX_TRAPS = 2;   // …of which at most this many may be traps
@@ -788,44 +803,112 @@ function salePrice(room, key){ return Math.round(ITEMS[key].price * shopMarkup(s
 /* ===================== TRAP SYNERGIES =================================
    A room holding a specific PAIR of damage traps becomes a themed "synergy"
    room: a full-room backdrop (rooms/synergies/*) PLUS a type advantage — a
-   room-wide trap-damage amp and a signature on-hit rider. 35 curated pairs
-   across 7 types. Runestones (amp-only) don't count toward the pair. */
+   room-wide trap-damage amp and a signature on-hit rider. 102 curated pairs
+   across 7 types (every damage trap is in 12). Runestones (amp-only) don't
+   count toward the pair. */
 const SYNERGIES={
+  'arrow+corrode':{type:'poison',img:'synergy_poison_acidsprayer_dartwall'},
   'arrow+flame':{type:'fire',img:'synergy_fire_flamejet_dartwall'},
   'arrow+frost':{type:'frost',img:'synergy_frost_frosttrap_dartwall'},
+  'arrow+gallows':{type:'physical',img:'synergy_physical_dartwall_gallows'},
+  'arrow+hexbrand':{type:'arcane',img:'synergy_arcane_hexbrand_dartwall'},
+  'arrow+hexward':{type:'arcane',img:'synergy_arcane_hexward_dartwall'},
   'arrow+maul':{type:'physical',img:'synergy_physical_armorcrusher_dartwall'},
+  'arrow+oil':{type:'physical',img:'synergy_physical_oilslick_dartwall'},
   'arrow+spike':{type:'physical',img:'synergy_physical_spikepit_dartwall'},
+  'arrow+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_dartwall'},
   'arrow+venom':{type:'poison',img:'synergy_poison_venomvent_dartwall'},
+  'arrow+web':{type:'physical',img:'synergy_physical_dartwall_websnare'},
+  'bombard+censer':{type:'physical',img:'synergy_physical_bombard_confusioncenser'},
+  'bombard+corrode':{type:'poison',img:'synergy_poison_acidsprayer_bombard'},
   'bombard+flame':{type:'fire',img:'synergy_fire_flamejet_bombard'},
   'bombard+frost':{type:'frost',img:'synergy_frost_frosttrap_bombard'},
+  'bombard+hexbrand':{type:'arcane',img:'synergy_arcane_hexbrand_bombard'},
+  'bombard+hexward':{type:'fire',img:'synergy_fire_bombard_hexward'},
+  'bombard+horn':{type:'physical',img:'synergy_physical_bombard_wailinghorn'},
+  'bombard+magebane':{type:'arcane',img:'synergy_arcane_magebane_bombard'},
   'bombard+maul':{type:'physical',img:'synergy_physical_bombard_armorcrusher'},
   'bombard+oil':{type:'physical',img:'synergy_physical_bombard_oilslick'},
   'bombard+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_bombard'},
+  'bombard+venom':{type:'poison',img:'synergy_poison_venomvent_bombard'},
+  'censer+corrode':{type:'poison',img:'synergy_poison_acidsprayer_confusioncenser'},
+  'censer+flame':{type:'fire',img:'synergy_fire_flamejet_confusioncenser'},
+  'censer+frost':{type:'frost',img:'synergy_frost_frosttrap_confusioncenser'},
+  'censer+gallows':{type:'execution',img:'synergy_execution_gallows_confusioncenser'},
+  'censer+hexbrand':{type:'arcane',img:'synergy_arcane_hexbrand_confusioncenser'},
+  'censer+magebane':{type:'arcane',img:'synergy_arcane_magebane_confusioncenser'},
+  'censer+maul':{type:'physical',img:'synergy_physical_armorcrusher_confusioncenser'},
+  'censer+oil':{type:'execution',img:'synergy_execution_oilslick_confusioncenser'},
+  'censer+spike':{type:'execution',img:'synergy_execution_spikepit_confusioncenser'},
+  'censer+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_confusioncenser'},
+  'censer+venom':{type:'poison',img:'synergy_poison_venomvent_confusioncenser'},
   'corrode+frost':{type:'frost',img:'synergy_frost_frosttrap_acidsprayer'},
   'corrode+hexbrand':{type:'poison',img:'synergy_poison_acidsprayer_hexbrand'},
+  'corrode+horn':{type:'poison',img:'synergy_poison_acidsprayer_wailinghorn'},
+  'corrode+magebane':{type:'arcane',img:'synergy_arcane_magebane_acidsprayer'},
   'corrode+maul':{type:'poison',img:'synergy_poison_acidsprayer_armorcrusher'},
+  'corrode+spike':{type:'execution',img:'synergy_execution_spikepit_acidsprayer'},
   'corrode+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_acidsprayer'},
   'corrode+venom':{type:'poison',img:'synergy_poison_acidsprayer_venomvent'},
+  'corrode+web':{type:'poison',img:'synergy_poison_acidsprayer_websnare'},
+  'flame+gallows':{type:'fire',img:'synergy_fire_flamejet_gallows'},
+  'flame+hexbrand':{type:'fire',img:'synergy_fire_flamejet_hexbrand'},
   'flame+hexward':{type:'fire',img:'synergy_fire_flamejet_hexward'},
+  'flame+horn':{type:'fire',img:'synergy_fire_flamejet_wailinghorn'},
   'flame+magebane':{type:'fire',img:'synergy_fire_flamejet_magebane'},
   'flame+oil':{type:'fire',img:'synergy_fire_flamejet_oilslick'},
+  'flame+tesla':{type:'fire',img:'synergy_fire_flamejet_teslacoil'},
+  'flame+venom':{type:'fire',img:'synergy_fire_flamejet_venomvent'},
+  'flame+web':{type:'fire',img:'synergy_fire_flamejet_websnare'},
+  'frost+gallows':{type:'frost',img:'synergy_frost_frosttrap_gallows'},
   'frost+hexward':{type:'frost',img:'synergy_frost_frosttrap_hexward'},
+  'frost+horn':{type:'frost',img:'synergy_frost_frosttrap_wailinghorn'},
+  'frost+magebane':{type:'frost',img:'synergy_frost_frosttrap_magebane'},
+  'frost+maul':{type:'frost',img:'synergy_frost_frosttrap_armorcrusher'},
+  'frost+oil':{type:'frost',img:'synergy_frost_frosttrap_oilslick'},
   'frost+venom':{type:'frost',img:'synergy_frost_frosttrap_venomvent'},
+  'frost+web':{type:'frost',img:'synergy_frost_frosttrap_websnare'},
   'gallows+hexbrand':{type:'execution',img:'synergy_execution_gallows_hexbrand'},
   'gallows+hexward':{type:'arcane',img:'synergy_arcane_hexward_gallows'},
+  'gallows+horn':{type:'execution',img:'synergy_execution_wailinghorn_gallows'},
   'gallows+magebane':{type:'execution',img:'synergy_execution_gallows_magebane'},
+  'gallows+maul':{type:'execution',img:'synergy_execution_armorcrusher_gallows'},
   'gallows+spike':{type:'execution',img:'synergy_execution_gallows_spikepit'},
   'gallows+venom':{type:'execution',img:'synergy_execution_gallows_venomvent'},
+  'gallows+web':{type:'execution',img:'synergy_execution_websnare_gallows'},
+  'hexbrand+hexward':{type:'arcane',img:'synergy_arcane_hexward_hexbrand'},
   'hexbrand+magebane':{type:'arcane',img:'synergy_arcane_magebane_hexbrand'},
+  'hexbrand+oil':{type:'execution',img:'synergy_execution_hexbrand_oilslick'},
+  'hexbrand+spike':{type:'execution',img:'synergy_execution_hexbrand_spikepit'},
   'hexbrand+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_hexbrand'},
   'hexbrand+venom':{type:'poison',img:'synergy_poison_venomvent_hexbrand'},
+  'hexward+horn':{type:'arcane',img:'synergy_arcane_hexward_wailinghorn'},
   'hexward+magebane':{type:'arcane',img:'synergy_arcane_magebane_hexward'},
+  'hexward+oil':{type:'lightning',img:'synergy_lightning_hexward_oilslick'},
   'hexward+spike':{type:'arcane',img:'synergy_arcane_hexward_spikepit'},
+  'hexward+venom':{type:'poison',img:'synergy_poison_venomvent_hexward'},
+  'hexward+web':{type:'lightning',img:'synergy_lightning_hexward_websnare'},
+  'horn+magebane':{type:'arcane',img:'synergy_arcane_magebane_wailinghorn'},
+  'horn+maul':{type:'physical',img:'synergy_physical_armorcrusher_wailinghorn'},
+  'horn+oil':{type:'physical',img:'synergy_physical_oilslick_wailinghorn'},
+  'horn+spike':{type:'execution',img:'synergy_execution_spikepit_wailinghorn'},
+  'horn+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_wailinghorn'},
+  'horn+web':{type:'physical',img:'synergy_physical_wailinghorn_websnare'},
+  'magebane+maul':{type:'arcane',img:'synergy_arcane_magebane_armorcrusher'},
   'magebane+spike':{type:'arcane',img:'synergy_arcane_magebane_spikepit'},
+  'magebane+web':{type:'arcane',img:'synergy_arcane_magebane_websnare'},
   'maul+oil':{type:'physical',img:'synergy_physical_armorcrusher_oilslick'},
+  'maul+spike':{type:'physical',img:'synergy_physical_armorcrusher_spikepit'},
   'maul+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_armorcrusher'},
+  'maul+venom':{type:'poison',img:'synergy_poison_venomvent_armorcrusher'},
   'oil+spike':{type:'physical',img:'synergy_physical_spikepit_oilslick'},
   'oil+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_oilslick'},
+  'oil+web':{type:'physical',img:'synergy_physical_websnare_oilslick'},
+  'spike+tesla':{type:'lightning',img:'synergy_lightning_teslacoil_spikepit'},
+  'spike+web':{type:'physical',img:'synergy_physical_spikepit_websnare'},
+  'tesla+venom':{type:'lightning',img:'synergy_lightning_teslacoil_venomvent'},
+  'tesla+web':{type:'lightning',img:'synergy_lightning_teslacoil_websnare'},
+  'venom+web':{type:'poison',img:'synergy_poison_venomvent_websnare'},
 };
 // Per-type advantage: a room-wide trap-damage amp (folds into cell.syn) + a
 // signature rider (see synergyOnHit / the physical-pierce & execution branches).
@@ -3250,7 +3333,7 @@ function openLibrary(){
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `<h1>📖 Library</h1>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
-      <button class="go" style="min-width:270px" onclick="openCodex()">⚛️ Combo Codex${sub('reactions, rooms & keywords')}</button>
+      <button class="go" style="min-width:270px" onclick="openCodex()">${codexBookFace('btnbig')} Combo Codex${sub('reactions, rooms & keywords')}</button>
       <button style="min-width:270px" onclick="showHelp()">❓ How to play${sub('the loop in five lines')}</button>
     </div>
     <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
@@ -3518,15 +3601,16 @@ const KEYWORDS={
   Scaling:   {col:'#5fae54', txt:'Grows permanently with every hero that dies in its room.'},
   Counter:   {col:'#b163ff', txt:'Bonus damage to a specific kind of hero (class / elite / wounded).'},
 };
+// `key` picks the painted icons/codex_<key>.png header; `ic` stays as the emoji fallback.
 const REACTIONS=[
-  {ic:'🔥', name:'Ignite',        how:'🔥 fire on an 🛢️ oiled hero',          pay:'heavy burst + big burn'},
-  {ic:'☠️', name:'Combust',       how:'🔥 fire on a ☠️ poisoned hero',         pay:'burst scaling with poison stacks'},
-  {ic:'💥', name:'Thermal Shock', how:'fire on a chilled hero, or ice on a burning one', pay:'sudden-swing burst'},
-  {ic:'🧊', name:'Encase',        how:'❄ ice on an 🛢️ oiled hero',            pay:'freezes them solid (a sitting duck)'},
-  {ic:'❄', name:'Shatter',        how:'💥 phys or ⚡ shock on a chilled/frozen hero', pay:'burst, cracks the ice'},
-  {ic:'⚡', name:'Conduct',        how:'⚡ shock on an 🛢️ oiled hero',          pay:'arcs to the WHOLE party'},
-  {ic:'⚡', name:'Overload',       how:'⚡ shock on a ❄ chilled hero',          pay:'stuns them solid'},
-  {ic:'🎯', name:'Detonate',      how:'any hit on a 🎯 marked hero',           pay:'+120% damage (consumes the mark)'},
+  {key:'ignite',  ic:'🔥', name:'Ignite',        how:`${cx('fire','🔥')} fire on an ${cx('oiled','🛢️')} oiled hero`,          pay:'heavy burst + big burn'},
+  {key:'combust', ic:'☠️', name:'Combust',       how:`${cx('fire','🔥')} fire on a ${cx('poisoned','☠️')} poisoned hero`,     pay:'burst scaling with poison stacks'},
+  {key:'thermalshock', ic:'💥', name:'Thermal Shock', how:`${cx('fire','🔥')} fire on a chilled hero, or ${cx('ice','❄')} ice on a burning one`, pay:'sudden-swing burst'},
+  {key:'encase',  ic:'🧊', name:'Encase',        how:`${cx('ice','❄')} ice on an ${cx('oiled','🛢️')} oiled hero`,            pay:'freezes them solid (a sitting duck)'},
+  {key:'shatter', ic:'❄', name:'Shatter',        how:`${cx('phys','💥')} phys or ${cx('shock','⚡')} shock on a chilled/frozen hero`, pay:'burst, cracks the ice'},
+  {key:'conduct', ic:'⚡', name:'Conduct',        how:`${cx('shock','⚡')} shock on an ${cx('oiled','🛢️')} oiled hero`,        pay:'arcs to the WHOLE party'},
+  {key:'overload', ic:'⚡', name:'Overload',       how:`${cx('shock','⚡')} shock on a ${cx('ice','❄')} chilled hero`,        pay:'stuns them solid'},
+  {key:'detonate', ic:'🎯', name:'Detonate',      how:`any hit on a ${cx('marked','🎯')} marked hero`,                       pay:'+120% damage (consumes the mark)'},
 ];
 // Derive a card's keyword tags from its properties.
 function cardTags(def){
@@ -3557,15 +3641,20 @@ function cardTags(def){
 function openCodex(){
   overlay.classList.add('show');
   const react=REACTIONS.map(r=>`<div class="ucard" style="width:auto;min-width:150px;text-align:left;padding:8px 10px">
-    <div style="font-weight:bold">${r.ic} ${r.name}</div>
+    <div style="font-weight:bold;display:flex;align-items:center;gap:8px">${codexFace(r.key,'cxbig',r.ic)||r.ic}<span>${r.name}</span></div>
     <div class="small" style="opacity:.85">${r.how}</div>
     <div class="small" style="color:#7bdc6b">→ ${r.pay}</div></div>`).join('');
+  // elements + statuses strip: the icons the reaction recipes above are written in
+  const chips=[['fire','🔥','Fire'],['ice','❄','Ice'],['shock','⚡','Shock'],['phys','💥','Phys'],['oiled','🛢️','Oiled'],['poisoned','☠️','Poisoned'],['marked','🎯','Marked']]
+    .map(([k,fb,lb])=>`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:52px">${codexFace(k,'cxbig',fb)||fb}<div class="small">${lb}</div></div>`).join('');
   const keys=Object.keys(KEYWORDS).map(k=>`<div class="small" style="margin:3px 0;line-height:1.3">
     <b style="color:${KEYWORDS[k].col}">${k}</b> — ${KEYWORDS[k].txt}</div>`).join('');
-  overlay.innerHTML=`<h1>⚛️ Combo Codex</h1>
+  overlay.innerHTML=`<h1>${codexBookFace()} Combo Codex</h1>
     <p>Traps & monsters apply <b>statuses</b> that linger as heroes walk. The right <b>order</b> sets off a reaction — and each reaction <b>escalates</b> the next (a chain).</p>
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
+    <h2 style="margin:12px 0 4px">Elements &amp; statuses</h2>
+    <div class="row" style="justify-content:center;gap:10px">${chips}</div>
     <h2 style="margin:12px 0 4px">Rooms</h2>
     <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${maxLevel()}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Pair the right two traps and the room becomes a 🔗 <b>synergy room</b> — bonus damage plus a signature effect — and elemental reactions stack on top.</p>
     <h2 style="margin:12px 0 4px">Keywords</h2>
@@ -4868,6 +4957,7 @@ function startWave(){
   if(!tutAllow('start')){ tutNudge(); return; }   // tutorial: only when prompted
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
+  abilFx.length=0; abilFxProbe();   // 🎆 clear old VFX, preload only this boss's equipped ability art
   G._waveStartBreaches=(G.stats&&G.stats.breaches)||0;   // baseline for the "flawless wave" feat
   spawnGroup(G.guildLvl+1);
   spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 12) marches out this wave
@@ -4924,7 +5014,7 @@ function buildCells(){
           guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
                        breath:def.breath||null, haste:ge.haste, ambush:!!def.ambush,
                        dr:Math.max(ge.dr||0, def.dr||0), leech:ge.leech, proc:ge.proc, crush:ge.crush, poison:ge.poison, thorns:ge.thorns,
-                       gear:(u.gear||[]).slice()});
+                       gear:(u.gear||[]).slice(), label:u.label});   // label: draw-only (a thrall's name picks its look)
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -5501,12 +5591,13 @@ const PRIME_OIL=12, PRIME_ICE=7, PRIME_SHOCK=9;    // long enough to cross a roo
 const MARK_AMP=1.2;                                // 🎯 Hex Brand: the next hit deals +120%
 const POISON_CAP=10;                               // ☠️ poison stacks cap (keeps Combust from snowballing)
 // Teach the ordering combos in tooltips. Element → how to chain it across rooms.
+// HTML only (card + room tooltips): the emoji ride along as fallbacks for the painted codex icons.
 const ELEM_COMBO={
-  oil:  'Coats heroes (slows them) and primes them. Put it <b>before</b> a 🔥flame (Ignite), ⚡tesla (Conduct) or ❄frost (Encase) room.',
-  fire: '🔥 Ignites <b>oiled</b> heroes, ☠️ <b>Combusts</b> poisoned ones, and 💥 thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil, venom or frost room.',
-  ice:  '❄ Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.',
-  shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
-  phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
+  oil:  `Coats heroes (slows them) and primes them. Put it <b>before</b> a ${cx('fire','🔥')}flame (Ignite), ${cx('shock','⚡')}tesla (Conduct) or ${cx('ice','❄')}frost (Encase) room.`,
+  fire: `${cx('ignite','🔥')} Ignites <b>oiled</b> heroes, ${cx('poisoned','☠️')} <b>Combusts</b> poisoned ones, and ${cx('thermalshock','💥')} thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil, venom or frost room.`,
+  ice:  `${cx('ice','❄')} Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.`,
+  shock:`${cx('conduct','⚡')} Conducts through <b>oiled</b> heroes to the party, and ${cx('overload','⚡')} <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.`,
+  phys: `${cx('shatter','💥')} Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.`,
 };
 function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +30%
 const REACT_FILL={IGNITE:'fire', COMBUST:'venom', OVERLOAD:'volt', CONDUCT:'volt', ENCASE:'ice', SHATTER:'ice', 'THERMAL SHOCK':'blood'};
@@ -5633,6 +5724,83 @@ function bossBolt(tx,ty,col,ic){
     x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.12, col:c, ic:ic||'' });   // fast streak — lands ~with the hit, not after it
   burst(bossX(), FLOOR-90, c, 9); sparks(bossX(), FLOOR-92, c, 6); flash(c, 0.09, 0.15);   // cast pop at the throne
 }
+// 🎆 Boss ability VFX: painted frame sequences in abilities/fx/ability_<name>_01.png …
+// (any naming artProbe accepts). Pure cosmetic and graceful: no art (or not yet
+// loaded) means nothing extra is drawn; the bolt/burst/flash juice always plays.
+// dh = draw height of the WHOLE canvas in world px for a 46px-tall hero (scaled by
+// heroFxScale); ax/ay = anchor fraction inside the canvas; at: 'feet' (ay sits on
+// the floor under the hero) or 'chest' (the anchor sits on the hero's mid-body).
+// Abilities without an entry (bolt, freeze, dread, mend, siphon, raise) keep just
+// the bolt/burst; a new entry here is all a future painted sequence needs.
+const FX_FADE=0.15;
+const ABIL_FX={
+  slam:    {art:'ability_slam',       at:'feet',  dh:110, ax:.50, ay:.843, fps:14, mode:'once', layer:'front'},
+  quake:   {art:'ability_slam',       at:'feet',  dh:88,  ax:.50, ay:.843, fps:14, mode:'once', layer:'front', stagger:.05},   // no own art: the slam blast on every hero
+  devour:  {art:'ability_devour',     at:'feet',  dh:96,  ax:.50, ay:1.0,  fps:12, mode:'once', layer:'front'},
+  drain:   {art:'ability_drain',      at:'chest', dh:60,  ax:.50, ay:.50,  fps:12, mode:'once', layer:'front'},
+  curse:   {art:'ability_curse',      at:'chest', dh:70,  ax:.50, ay:.50,  fps:10, mode:'loop', dur:1.1, layer:'back',  follow:true, pop:true, alpha:.9},   // behind the hero
+  breath:  {art:'ability_firebreath', at:'feet',  dh:88,  ax:.52, ay:.989, fps:12, mode:'loop', dur:0.9, layer:'front', follow:true, rise:true},
+  hellfire:{art:'ability_hellfire',   at:'feet',  dh:104, ax:.50, ay:1.0,  fps:10, mode:'loop', dur:1.1, layer:'front', follow:true, rise:true, stagger:.06},
+  entangle:{art:'ability_entangle',   at:'feet',  dh:66,  ax:.50, ay:.99,  fps:10, mode:'hold', holdFrom:1, holdFps:6, max:4, layer:'front', follow:true, alpha:.92},
+};
+const abilFx=[];                       // live effects (mutated in place, never reassigned)
+function heroFxScale(h){
+  const hh=(h && h._figTop!=null) ? (FLOOR+(h.yOff||0)-h._figTop) : (h&&h.king?123:h&&h.champion?88:46);
+  return clamp(hh/46, 0.85, 2.2);
+}
+function fxFrames(art){ const r=ART[art]; return r ? (r.frames.length || (r.static?1:0)) : 0; }
+function abilFxProbe(){ if(!G||!G.boss) return;          // preload only the equipped abilities' art
+  for(const a of (G.boss.abil||[])){ const f=a&&ABIL_FX[a.id]; if(f) artProbe(f.art); } }
+function spawnAbilFx(id, targets){
+  const f=ABIL_FX[id]; if(!f || !targets) return;
+  artProbe(f.art);                     // idempotent; normally already probed at startWave
+  let i=0;
+  for(const h of targets){ if(!h) continue;
+    abilFx.push({ f, h, x:h.x, s:heroFxScale(h), t:-(f.stagger||0)*(i++), end:null }); }
+  if(abilFx.length>48) abilFx.splice(0, abilFx.length-48);   // hard cap (huge AoE parties)
+}
+function abilFxTick(dt){
+  if(!abilFx.length) return;
+  for(const e of abilFx){
+    e.t+=dt; const f=e.f;
+    if(f.follow && e.h && e.h.state!=='dead') e.x=e.h.x;
+    if(e.end!=null || e.t<0) continue;
+    const N=fxFrames(f.art);
+    if(!N){ if(e.t>0.05) e.end=e.t-FX_FADE; continue; }          // no art: drop silently
+    if(f.mode==='once'){ if(e.t>=N/f.fps) e.end=e.t; }
+    else if(f.mode==='loop'){ if(e.t>=f.dur) e.end=e.t; }
+    else if(e.t>=N/f.fps && (!e.h || e.h.state==='dead' || !(e.h.freeze>0) || e.t>=f.max)) e.end=e.t;  // 'hold': until the root thaws
+  }
+  compact(abilFx, e=>e.end==null || e.t<e.end+FX_FADE);
+}
+function drawAbilFx(tx, layer){
+  if(!abilFx.length) return;
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;   // crisp pixel art
+  for(const e of abilFx){
+    const f=e.f; if(f.layer!==layer || e.t<0) continue;
+    const r=ART[f.art]; if(!r) continue;
+    const fr=r.frames, N=fr.length; let im;
+    if(!N) im=r.static;
+    else { let k=Math.floor(e.t*f.fps);
+      if(f.mode==='loop') k%=N;
+      else if(f.mode==='hold' && k>=N){ const a=Math.min(f.holdFrom||0,N-1);   // cycle the stirring vines
+        k=a+Math.floor((e.t-N/f.fps)*(f.holdFps||f.fps))%Math.max(1,N-a); }
+      else k=Math.min(N-1,k);
+      im=fr[k]||fr[0]; }
+    if(!(im && im.width)) continue;
+    let a=f.alpha||1; if(e.end!=null) a*=clamp(1-(e.t-e.end)/FX_FADE,0,1);
+    if(a<=0) continue;
+    const sc=f.pop ? 0.4+0.6*clamp(e.t/0.15,0,1) : 1;        // curse vortex pops open
+    const sy=f.rise ? clamp(e.t/0.12,0.25,1) : 1;            // flames climb from the floor
+    const dh=f.dh*e.s*sc, dw=dh*im.width/im.height, h2=dh*sy;
+    const foot=FLOOR+((e.h&&e.h.yOff)||0);
+    const top=(e.h&&e.h._figTop!=null)?e.h._figTop:foot-46;
+    const ay=f.at==='chest' ? (foot+top)/2 : foot;
+    X.globalAlpha=a;
+    X.drawImage(im, Math.round(tx(e.x)-dw*f.ax), Math.round(ay-h2*f.ay), Math.round(dw), Math.round(h2));
+  }
+  X.globalAlpha=1; X.imageSmoothingEnabled=sm;
+}
 
 // 🎯 Smart ability targeting: single-target casts pick the tactically RIGHT hero
 // via the ability's optional `pick` scorer (highest score wins — Devour hunts the
@@ -5668,7 +5836,11 @@ function castAbility(slot){
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   G.boss.castAt=performance.now();             // play the boss's attack animation
+  const pre=(G.heroes||[]).filter(h=>h&&h.state!=='dead');   // captured before run: AoE/execute kills still get their VFX
   def.run(target);
+  spawnAbilFx(a.id, def.aoe ? pre                              // 🎆 painted ability VFX on exactly the heroes run() hit
+    : a.id==='entangle' ? pre.filter(o=>o===target || o.cellIndex===target.cellIndex)
+    : [target]);
   bumpStat('abil');                            // feat: abilities cast
   tutEvent('ability');
   // bolt(s) from the boss to the target(s) so you see where the power comes from
@@ -6746,7 +6918,7 @@ function renderTown(){
             ${G.hand.map((c,i)=>{ const d=ROOMS[c.type]; const price=forgePrice(c.type); const can=G.gold>=price;
               return `<button ${can?'':'disabled'} onclick="forgeCard(${i})" title="Duplicate ${c.label||d.name} (${cardRarity(c.type)}) for ${price}g"
                 style="display:flex;flex-direction:column;align-items:center;min-width:96px;gap:1px;height:auto;padding:7px;border-color:#e0743a">
-                <span style="font-size:20px">${cardFace(c.type)||d.ic}</span><span style="font-size:11px">${c.label||d.name}</span>
+                <span class="forgeic" style="font-size:20px">${cardFace(c.type)||d.ic}</span><span style="font-size:11px">${c.label||d.name}</span>
                 <span style="color:#ffd34d">${price} 💰</span></button>`;}).join('')}
           </div>`}
     </div>`;
@@ -6844,6 +7016,7 @@ function renderTown(){
 
 /* ============================ UPDATE / SIM ============================== */
 function update(dt){
+  abilFxTick(dt);                    // cosmetic; ticks even while paused so the tutorial's paused ability beats still animate
   if(G && G.tutorial && G.phase==='run' && tutRunTick()) return;   // auto-pause beat just triggered
   if(paused) return;                 // pause menu freezes the whole simulation
   // animate floaters/particles always (compacted in place — no per-frame arrays)
@@ -7389,7 +7562,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         if(!t || t.state==='dead') continue;
         const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
         let dmg=Math.round((g.atk+bite)*amp);
-        if(g.ambush && !g.ambushDone){ g.ambushDone=true; dmg*=3; floater(cell.x0+ROOM_W*0.6, FLOOR-90, '👄 AMBUSH!', '#9a5cff'); }
+        if(g.ambush && !g.ambushDone){ g.ambushDone=true; g.ambushAt=performance.now(); dmg*=3; floater(cell.x0+ROOM_W*0.6, FLOOR-90, '👄 AMBUSH!', '#9a5cff'); }
         _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
         if(g.leech){ const heal=Math.round(dmg*g.leech);   // 💍 Charm: the monster drinks the wound
@@ -7638,6 +7811,7 @@ function draw(){
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
   drawDungeon(tx, 1, isBuild);
+  if(G.phase==='run') drawAbilFx(tx,'front');   // 🎆 ability VFX over heroes/traps, under particles + damage numbers
 
   // floaters & particles (world space)
   for(const p of particles){ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
@@ -7841,6 +8015,7 @@ function drawDungeon(tx, scale, isBuild){
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
   for(const h of party) if(h.state==='dead' && !h.escaped) drawHeroDead(tx(h.x), h);   // an ESCAPED thief is gone, not a corpse
+  if(G.phase==='run') drawAbilFx(tx,'back');     // 🎆 back-layer VFX (curse vortex) behind the living heroes
   for(const h of party) if(h.state!=='dead') drawHero(tx(h.x), h);
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
   // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
@@ -7965,7 +8140,7 @@ function drawTrapPart(x0,w,type,p,pi,cell){
   for(let c=0;c<n;c++){
     let img, inten=1;
     if(N>1){
-      const idx=(mode==='loop') ? Math.floor(performance.now()/110+seed+c*3)%N
+      const idx=(mode==='loop') ? Math.floor(performance.now()/(p.ms||TRAP_LOOP_MS[type]||110)+seed+c*3)%N
                                 : strikeIdx(N, firedAt!=null?firedAt+c*70:null, type);
       img=rec.frames[idx]||rec.frames[0]; inten=idx/(N-1);
     } else img=rec.frames[0]||rec.static;
@@ -7975,9 +8150,13 @@ function drawTrapPart(x0,w,type,p,pi,cell){
     const fx=(p.fx!=null?p.fx:.5)+(c-(n-1)/2)*gap;
     const px0=x0+w*fx-dw/2, py=FLOOR-(p.fy||0)-dh;
     if(partAlpha<1){ X.save(); X.globalAlpha*=partAlpha; }
-    if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
-      X.drawImage(img, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
-    else X.drawImage(img, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
+    const put=im=>{ if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
+        X.drawImage(im, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
+      else X.drawImage(im, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh)); };
+    put(img);
+    const ghostA=(N>1 && mode!=='loop') ? strikeFade(firedAt!=null?firedAt+c*70:null, type) : 0;
+    const ghost=ghostA>0 && rec.frames[N-1];
+    if(ghost && (ghost._ok||ghost.complete) && ghost.width){ X.save(); X.globalAlpha*=ghostA; put(ghost); X.restore(); }
     if(partAlpha<1) X.restore();
     // light: heat per flame column (follows the strike), vapor per poison part
     if(type==='flame'){ const l=lightCfg('flame');
@@ -7997,6 +8176,8 @@ function drawTrapPart(x0,w,type,p,pi,cell){
       trapAccentGlow('corrode',x0,w,fx,p,LIGHT_COL.corrode, (0.18+0.30*inten)*bub); }
     else if(type==='magebane'){ const pu=0.74+0.26*Math.sin(performance.now()/380+seed); // arcane pulse
       trapAccentGlow('magebane',x0,w,fx,p,LIGHT_COL.magebane, (0.16+0.30*inten)*pu); }
+    else if(type==='censer'){ const pu=0.8+0.2*Math.sin(performance.now()/300+seed); // violet incense swell, flares with the puff
+      trapAccentGlow('censer',x0,w,fx,p,LIGHT_COL.censer, (0.14+0.30*inten)*pu); }
   }
   X.imageSmoothingEnabled=sm;
   return drew;
@@ -8050,6 +8231,18 @@ function drawTrapProp(x0,w,cx,type,cell){
     X.fillStyle='#4dc3ff'; X.beginPath(); X.ellipse(cx,FLOOR-48,13,9,0,0,7); X.fill();   // eye white
     X.fillStyle='#0a1a2a'; X.beginPath(); X.arc(cx,FLOOR-48,4.5,0,7); X.fill();          // pupil
     X.fillStyle='#fff'; X.beginPath(); X.arc(cx-1.5,FLOOR-49,1.5,0,7); X.fill();         // glint
+  } else if(type==='web'){
+    X.globalAlpha=0.55;                                                     // pale strands on the back wall
+    for(let s=0;s<5;s++) px(cx-30+s*15,FLOOR-96,1,56,'#d8d2c2');
+    for(let r=0;r<3;r++) px(cx-30,FLOOR-86+r*16,61,1,'#d8d2c2');
+    X.globalAlpha=1;
+  } else if(type==='horn'){
+    px(cx+14,FLOOR-88,6,26,'#5a4326');                                      // wall bracket
+    px(cx-12,FLOOR-80,28,8,'#caa15e');                                      // brass tube
+    px(cx-22,FLOOR-86,10,20,'#e0b85e');                                     // bell, facing the raiders
+  } else if(type==='censer'){
+    px(cx-1,FLOOR-176,2,82,'#6a6a7a');                                      // chain from the vault
+    px(cx-9,FLOOR-94,18,22,'#c9a14d'); px(cx-5,FLOOR-88,10,10,'#b86bff');   // gilded box, violet ember
   }
 }
 // Shop interior art: a wall shelf, the keeper behind a counter. Sizes/positions
@@ -8156,7 +8349,7 @@ const ART_DIR={poison1:'rooms/traps/',poison2:'rooms/traps/',candle:'rooms/fx/'}
 function artProbe(id){
   if(ART[id] || typeof Image==='undefined') return;
   const rec={frames:[],static:null}; ART[id]=rec;
-  const dir=ART_DIR[id]||'rooms/traps/';
+  const dir=ART_DIR[id]||(id.startsWith('ability_')?'abilities/fx/':'rooms/traps/');   // boss ability VFX live in abilities/fx/
   const st=new Image(); st.onload=()=>{ st._ok=true; rec.static=st; }; st.onerror=()=>{}; st.src=dir+id+'.png';
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
   const tryNamer=ni=>{
@@ -8198,12 +8391,15 @@ let LAYOUT={
     bombard:[{art:'bombard', fx:.50, fy:0, h:122, layer:7}],   // mortar lobbing shells
     hexbrand:[{art:'hexbrand', fx:.50, fy:30, h:104, layer:5}],// branding sigil
     runestone:[{art:'runestone', fx:.50, fy:0, h:126, layer:5}],// standing rune (passive glow)
+    web:[{art:'web', fx:.50, fy:32, h:108, layer:0}],          // back-wall web (loops)
+    horn:[{art:'horn', fx:.50, fy:40, h:82, layer:3}],         // wall-mounted horn, bell faces LEFT at raiders
+    censer:[{art:'censer', fx:.518, fy:64, h:112, layer:5}],   // hangs from the ceiling bracket
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
-const TRAP_LAYER={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
+const TRAP_LAYER={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9, web:0, horn:3, censer:5};
 // Heroes draw at this z within the trap stack: any trap PART whose layer is
 // ABOVE it renders in FRONT of the party (e.g. translucent flames licking over
 // a hero). Overridable via LAYOUT.heroLayer (tuned in align.html). The high
@@ -8212,7 +8408,10 @@ let HERO_LAYER=999;
 let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the party renders
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
-const TRAP_ANIM={venom:'loop', oil:'loop', runestone:'loop'};   // oil keeps flowing; the Runestone is a passive always-glowing rune (no strike)
+const TRAP_ANIM={venom:'loop', oil:'loop', runestone:'loop', web:'loop'};   // oil keeps flowing; the Runestone is a passive always-glowing rune (no strike); the web shimmers
+// Loop speed in ms per frame (default 110). The 6-frame web wobble jitters at
+// 110ms, so it gets a slower 0.9s shimmer cycle. A layout part's `ms` overrides.
+const TRAP_LOOP_MS={web:150};
 // Per-trap strike profile {rise,fall} in ms so they don't all move identically.
 // rise = time to slam to the last frame, fall = time to ease back to rest.
 // e.g. the maul SLAMS down fast then grinds back up slow.
@@ -8224,13 +8423,15 @@ const TRAP_TIMING={
   hexward: {rise:240, fall:520},
   tesla:   {rise:45,  fall:240},
   spike:   {rise:70,  fall:430},
+  horn:    {rise:120, fall:620},   // snaps up to the wail, the sound-wave rings recede slowly
+  censer:  {rise:560, fwd:true, fade:260},   // …and the last puff dissolves (fade) instead of vanishing   // one smoke puff per fire, never sucked back into the censer
 };
 // Build-phase idle preview fires each trap on its own offset within the 2.4s
 // loop so a multi-trap room doesn't pulse all at once.
-const TRAP_PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
+const TRAP_PHASE={spike:0, flame:300, horn:500, gallows:650, frost:1000, arrow:1350, censer:1500, hexward:1700, maul:2000, tesla:2250};
 // Additive light glows (cached radial gradients): candle flicker, flame heat,
 // poison vapor, plus per-trap accents (frost chill, tesla spark, hex sigil).
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff', censer:'#b86bff'};
 let _glowG={};
 // Each (colour, radius-bucket) glow is rendered ONCE into a small offscreen
 // canvas and blitted with drawImage. Filling with a live radial gradient every
@@ -8277,6 +8478,10 @@ function trapAccentGlow(attach,x0,w,fx,p,col,a){
   const r=(l&&l.r)?l.r:(p.h||100)*0.55;
   drawGlow(cx,cy,r,col,a*((l&&l.a)||1));
 }
+// Forward-only traps with a `fade` let their LAST frame (e.g. the censer's smoke
+// cloud) dissolve over the rest frame for `fade` ms after the rise: 0..1 ghost alpha.
+function strikeFade(firedAt,type){ const t=TRAP_TIMING[type]; if(!(t&&t.fwd&&t.fade)||firedAt==null) return 0;
+  const e=performance.now()-firedAt-t.rise; return (e>=0&&e<t.fade) ? 1-e/t.fade : 0; }
 function strikeIdx(N,firedAt,type){
   if(firedAt==null) return 0;
   const e=performance.now()-firedAt;
@@ -8439,6 +8644,13 @@ function drawSprite(sx, footY, h, key, scaleMul=1){
   return true;
 }
 // ---- animated monster sprites (guard a room; face LEFT toward the raiders) ----
+// A per-frame clip (<path>_01.png, _02 ...; the 0-based <path>_0.png naming also
+// works). A missing or corrupt frame never gets _ok and the draw just skips it.
+function loadFrameSeq(path,n){ const a=[];
+  for(let k=0;k<n;k++){ const im=new Image(); im.onload=()=>{ im._ok=true; };
+    im.onerror=()=>{ if(im._alt) return; im._alt=1; im.src=path+'_'+k+'.png'; };
+    im.src=path+'_'+String(k+1).padStart(2,'0')+'.png'; a.push(im); }
+  return a; }
 const MON_SPRITES={
   goblin:{ base:'sprites/goblin/goblin_', scale:0.8, dirRow:1, idle:'idle', atk:'slash', clips:{
     idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:25, ay:61},
@@ -8486,11 +8698,42 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:298,fh:210,n:6,fps:7,  ax:174, ay:210},
     slash:{sheet:'slash',fw:346,fh:210,n:7,fps:13, ax:172, ay:210},
   }},
-  // 🪓 Orc Marauder: a static 2-frame idle bob (cropped from the orc-warrior art),
-  // mirrored to face LEFT toward incoming heroes. Anchor = frame centre / feet in
-  // source px; no walk/attack clips → always draws idle. Graceful emoji fallback.
-  orc:{ base:'sprites/orc/orc_', scale:1.7, dirRow:0, idle:'idle', atk:'idle', clips:{
+  // Per-frame guards (frames:true): one PNG per frame at native pixel-art size, made
+  // from the owner's uploads by tools/art/monster_frames.py. Per clip: s = world px
+  // per native px, ax/ay = foot anchor in native px, pp = ping-pong, once = play once.
+  // All of this art already faces LEFT (a `flip` flag mirrors future art that doesn't).
+  // 🪓 Orc Marauder: idle / walk / mace swing. Falls back to the old 2-frame sheet.
+  orc:{ frames:true, dir:'sprites/orc/', fallback:'orcSheet', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'orc_idle',  n:4,fps:5, pp:true, s:0.566, ax:126, ay:114},
+    walk:  {seq:'orc_walk',  n:5,fps:9,  s:0.566, ax:114, ay:136},
+    attack:{seq:'orc_attack',n:6,fps:11, s:0.566, ax:213, ay:201} }},
+  // Legacy orc: a static 2-frame idle bob (cropped from the orc-warrior art),
+  // mirrored to face LEFT. Only drawn when the per-frame orc art is missing.
+  orcSheet:{ base:'sprites/orc/orc_', scale:1.7, dirRow:0, idle:'idle', atk:'idle', clips:{
     idle:{sheet:'idle', fw:192,fh:192,n:2,fps:3, ax:96, ay:125} }},
+  // 🦅 Harpy Roost: hovers `hover` px off the floor and bobs; no walk clip, so it
+  // glides with the pack on its idle wingbeat.
+  harpy:{ frames:true, dir:'sprites/harpy/', hover:14, idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'harpy_idle',  n:6,fps:8,  s:0.386, ax:86, ay:185},
+    attack:{seq:'harpy_attack',n:5,fps:10, s:0.386, ax:89, ay:145} }},
+  // 🪨 Stone Sentinel: the biggest walker (~70 px).
+  sentinel:{ frames:true, dir:'sprites/sentinel/', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'sentinel_idle',  n:3,fps:4, pp:true, s:0.714, ax:48, ay:99},
+    walk:  {seq:'sentinel_walk',  n:5,fps:8,  s:0.714, ax:71, ay:103},
+    attack:{seq:'sentinel_attack',n:4,fps:8,  s:0.714, ax:77, ay:94} }},
+  // 👄 Mimic: sits as a closed chest (disguise) until its ambush strike, bursts open
+  // once (reveal), then walks. idle and walk share the walk frames (one load per seq).
+  mimic:{ frames:true, dir:'sprites/mimic/', disguise:'chest', reveal:'transform', idle:'idle', atk:'attack', clips:{
+    chest:    {seq:'mimic_chest',    n:1,fps:1,  s:0.256, ax:74, ay:134},
+    transform:{seq:'mimic_transform',n:3,fps:10, once:true, s:0.343, ax:90, ay:135},
+    idle:     {seq:'mimic_walk',     n:6,fps:4,  s:0.343, ax:99, ay:135},
+    walk:     {seq:'mimic_walk',     n:6,fps:10, s:0.343, ax:99, ay:135},
+    attack:   {seq:'mimic_attack',   n:4,fps:10, s:0.343, ax:94, ay:155} }},
+  // 🧟 Corrupted, veteran look: the painted horned demon (see corruptLookKey).
+  minion:{ frames:true, dir:'sprites/minion/', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'minion_idle',  n:3,fps:4, pp:true, s:0.47, ax:60, ay:130},     // ~60 world px: a veteran reads bigger than the thrall
+    walk:  {seq:'minion_walk',  n:4,fps:8,  s:0.47, ax:67, ay:131},
+    attack:{seq:'minion_attack',n:4,fps:10, s:0.47, ax:131, ay:124} }},
   // Veteran-tier appearances: a guard's room upgrades its look as it racks up
   // kills (see monVariantKey). Same LPC pipeline as the base sprites; the 192px
   // attack sheets carry their swing arc, the 64px idle/walk are the body.
@@ -8506,6 +8749,16 @@ const MON_SPRITES={
     idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
   goblin3:{ base:'sprites/goblin3/goblin3_', scale:0.8, dirRow:1, idle:'idle', atk:'smash', clips:{
     idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, smash:{sheet:'smash',fw:192,fh:192,n:4,fps:11,ax:96,ay:126} }},
+  // Corrupted (turned hero) skins: LPC zombie sheets, row 1 faces LEFT. Picked per
+  // thrall by corruptSkinKey().
+  corrupt_edrik:{ base:'sprites/edrik/edrik_', scale:0.9, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:31, ay:61},
+    walk: {sheet:'walk', fw:64,fh:64,n:8,fps:10, ax:31, ay:61},
+    slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:31, ay:61} }},
+  corrupt_vesna:{ base:'sprites/vesna/vesna_', scale:0.9, dirRow:1, idle:'idle', atk:'thrust', clips:{
+    idle:  {sheet:'idle',  fw:192,fh:192,n:2,fps:4,  ax:99, ay:126},
+    walk:  {sheet:'walk',  fw:192,fh:192,n:8,fps:10, ax:99, ay:126},
+    thrust:{sheet:'thrust',fw:192,fh:192,n:7,fps:14, ax:99, ay:126} }},
 };
 // A guard's room shows a fancier sprite as it becomes a veteran (kills → vetRank):
 // base → tier-2 (rank ≥1) → tier-3 (rank ≥3). Only skeleton/ogre/goblin have variants.
@@ -8519,13 +8772,87 @@ function monVariantKey(key, room){
 const MON_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in MON_SPRITES){ const cfg=MON_SPRITES[key]; MON_IMG[key]={};
-    for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!MON_IMG[key][sh]){ MON_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } } }
+    for(const c in cfg.clips){
+      const cl=cfg.clips[c];
+      if(cfg.frames){                            // per-frame art: images keyed by seq (clips may share one)
+        if(!MON_IMG[key][cl.seq]) MON_IMG[key][cl.seq] = cl.n>1 ? loadFrameSeq(cfg.dir+cl.seq, cl.n) : [loadImg(cfg.dir+cl.seq+'.png')];
+        continue;
+      }
+      const sh=cl.sheet; if(!MON_IMG[key][sh]){ MON_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } } }
 }
-function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
+function monSpriteReady(key){
+  const cfg=MON_SPRITES[key], s=MON_IMG[key]; if(!cfg||!s) return false;
+  // per-frame guards are ready once ANY frame landed (or their fallback sheet did)
+  if(cfg.frames) return Object.values(s).some(a=>a.some(im=>im&&im._ok)) || (!!cfg.fallback && monSpriteReady(cfg.fallback));
+  return !!(s.idle && s.idle._ok);
+}
+// 🧟 Corrupted guards wear a turned hero's LPC look: a thrall literally named Edrik
+// or Vesna wears its own, any other name gets a fixed one from a hash of the name
+// (so the same thrall always looks the same). Draw-time only, nothing is saved.
+const CORRUPT_SKINS=['edrik','vesna'];
+function corruptSkinKey(label){
+  const n=String(label||'').trim().toLowerCase();
+  let k=CORRUPT_SKINS.includes(n)?n:null;
+  if(!k){ let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))|0; k=CORRUPT_SKINS[Math.abs(h)%CORRUPT_SKINS.length]; }
+  if(monSpriteReady('corrupt_'+k)) return 'corrupt_'+k;
+  for(const s of CORRUPT_SKINS) if(monSpriteReady('corrupt_'+s)) return 'corrupt_'+s;   // one skin missing: wear the other
+  return null;
+}
+// Which MON_SPRITES key a Corrupted guard draws with. A thrall room that has claimed
+// CORRUPT_DEMON_KILLS heroes grows into the painted demon; before that, the LPC skin.
+// Each missing look falls down the chain:
+// skin -> other skin -> demon -> 'minion' with no art = the procedural wraith.
+const CORRUPT_DEMON_KILLS=3;
+function corruptLookKey(label, room){
+  if(((room&&room.kills)||0)>=CORRUPT_DEMON_KILLS && monSpriteReady('minion')) return 'minion';
+  return corruptSkinKey(label) || 'minion';
+}
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
-function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul){
+// Per-frame guards: which clip plays right now. `g` is the live guard (null in the
+// build preview). The mimic is a chest until its ambush lands, then bursts open once.
+function monClipName(cfg, g, moving, attacking, now){
+  if(cfg.disguise && !(g && g.ambushDone)) return cfg.disguise;
+  const rv=cfg.reveal && cfg.clips[cfg.reveal];
+  if(rv && g && g.ambushAt && now-g.ambushAt < rv.n/rv.fps*1000) return cfg.reveal;
+  if(moving && cfg.clips.walk) return 'walk';
+  return attacking ? cfg.atk : cfg.idle;
+}
+function drawMonsterFrames(cx, footY, room, cell, key, cfg, alive, moving, phase, scaleMul, g){
+  const now=performance.now();
+  let name=monClipName(cfg, g, moving, alive && monsterAttacking(cell), now), clip=cfg.clips[name];
+  const imgs=MON_IMG[key]||{};
+  let fr=(imgs[clip.seq]||[]).filter(im=>im&&im._ok);           // holes (a corrupt frame) are skipped
+  if(!fr.length){ name=cfg.idle; clip=cfg.clips[name]; fr=(imgs[clip.seq]||[]).filter(im=>im&&im._ok); }
+  if(!fr.length) return false;
+  // same per-key timer as the sheet path, but on the live guard when there is one:
+  // two mimics in a room can sit in different clips (one still a chest)
+  const H=g||room, KC='_mc_'+key, KT='_mt_'+key, KL='_ml_'+key;
+  if(H[KC]!==name){ H[KC]=name; H[KT]=0; }
+  const dt=Math.min(0.1,(now-(H[KL]||now))/1000); H[KL]=now;
+  H[KT]=(H[KT]||0)+dt;
+  const len=fr.length; let fi;
+  if(clip.once) fi=Math.min(len-1, Math.floor((now-((g&&g.ambushAt)||now))/1000*clip.fps));
+  else if(clip.pp){ if(!clip._pp||clip._pp.n!==len){ clip._pp=pingpong(len); clip._pp.n=len; }
+    fi=clip._pp[Math.floor((H[KT]+(phase||0))*clip.fps)%clip._pp.length]; }
+  else fi=Math.floor((H[KT]+(phase||0))*clip.fps)%len;
+  const im=fr[fi], S=clip.s*(scaleMul||1);
+  const dw=Math.round(im.width*S), dh=Math.round(im.height*S), dy=Math.round(footY-clip.ay*S);
+  // crisp while magnified, but smooth once a zoomed-out camera shrinks the art below
+  // ~1 device px per art px (nearest-neighbour would drop whole pixel rows)
+  const T=X.getTransform&&X.getTransform(), sm=X.imageSmoothingEnabled;
+  X.imageSmoothingEnabled = S*((T&&T.a)||1) < 1.25;
+  if(cfg.flip){ X.save(); X.translate(cx,0); X.scale(-1,1); X.drawImage(im, Math.round(-clip.ax*S), dy, dw, dh); X.restore(); }
+  else X.drawImage(im, Math.round(cx-clip.ax*S), dy, dw, dh);
+  X.imageSmoothingEnabled=sm;
+  return true;
+}
+function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul, g){
   key=monVariantKey(key, room);                  // 💀 veteran rooms wear a fancier sprite
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
+  if(cfg.frames){
+    if(drawMonsterFrames(cx, footY, room, cell, key, cfg, alive, moving, phase, scaleMul, g||null)) return true;
+    return !!cfg.fallback && drawMonsterSprite(cx, footY, room, cell, cfg.fallback, alive, moving, phase, scaleMul, g);
+  }
   const name = moving && cfg.clips.walk ? 'walk'
              : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
   const clip=cfg.clips[name], img=MON_IMG[key][clip.sheet];
@@ -8641,8 +8968,10 @@ function roomDrawInfo(room){
         layer:(pp.layer!=null?pp.layer:(TRAP_LAYER[tp]!=null?TRAP_LAYER[tp]:1))}));
     }
     items.sort((a,b)=>a.layer-b.layer);
+    // the guard UNITS in guardParts order, so the build preview can read each thrall's name
+    const guardUnits=(units||[]).filter(u=>u && ROOMS[u.type] && ROOMS[u.type].kind==='monster' && u.type!=='goblin');
     c=room._rdi={units, len:(units?units.length:-1), rev:_layoutRev, type:room.type,
-      parts, monParts, guardParts, trapTypes, items, hasGob:monParts.includes('goblin')};
+      parts, monParts, guardParts, guardUnits, trapTypes, items, hasGob:monParts.includes('goblin')};
   }
   return c;
 }
@@ -8730,7 +9059,10 @@ function drawRoomContents(x0,w,room,i){
     // stand a touch to the hero's right (facing him); clamp inside the room so a
     // hero who slips deep in doesn't drag the guard out the far wall. (frontHx is a
     // WORLD x — convert to a cell fraction with the cell's world bounds, not x0/w.)
-    const targetF = engaged
+    // a disguised mimic (unsprung ambusher) never walks out to meet anyone: it lies
+    // at rest as clutter, so the hero walks up to the chest and the reveal is in melee
+    const lurk = !!(cell && cell.mon && cell.mon.ambush && !cell.mon.ambushDone);
+    const targetF = (engaged && !lurk)
       ? Math.max(0.20, Math.min(0.74, (frontHx - cellX(cell.index))/ROOM_W + 0.10))
       : 0.74;
     // build phase: stand at rest (right side) — don't inherit a stale run position
@@ -8744,30 +9076,50 @@ function drawRoomContents(x0,w,room,i){
     const mbx = x0 + w*room._monF;                     // animated monster base x
     // Run phase draws the LIVE guards (a Gel Cube SPLIT can grow this beyond the
     // placed-unit count); build phase previews the placed units. Each entry is
-    // {type, small}. Gel Cubes (split) PAINT FIRST so they sit behind the rest.
+    // {type, small, g (the live guard, null in build), label (a thrall's name)}.
+    // Gel Cubes (split) PAINT FIRST so they sit behind the rest.
     const drawList = (G.phase==='run' && cell && cell.guards)
-      ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small}))
-      : guardParts.map(mp=>({type:mp, small:false}));
+      ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small, g, label:g.label}))
+      : guardParts.map((mp,gi)=>({type:mp, small:false, g:null, label:((info.guardUnits||[])[gi]||{}).label}));
     const n=drawList.length, sp=n>3?20:(n>2?28:44);
     const order=[...drawList.keys()].sort((a,b)=>((ROOMS[drawList[a].type]||{}).split?0:1)-((ROOMS[drawList[b].type]||{}).split?0:1));
     for(const li of order){
       const g=drawList[li], mp=g.type, def=ROOMS[mp], sprite=mp==='minion'?'minion':mp;
+      const mc=MON_SPRITES[mp];
       const ox=(li-(n-1)/2)*sp;                                // stand them side by side
       const oy=(n>1)?[0,3,1,4,2][li%5]:0;                      // distinct heights so a stack reads as a crowd
       const ph=li*0.31, sc=g.small?0.7:1;                      // de-sync cycles; split cubes draw smaller
       // 🐲 Drakeling is a flyer: hover high on the room's RIGHT and don't wade in (no walk)
       const fly=mp==='dragon';
-      const dgx=fly ? x0+w*0.82 : mbx+ox;
-      const dgy=fly ? FLOOR-DRAKE_HOVER+Math.sin(performance.now()/450+li)*7 : FLOOR-LIFT-oy;
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(dgx, dgy, room, cell, mp, alive, fly?false:moving, ph, sc);
+      let gx=mbx+ox, gMove=moving;
+      if(mc && mc.disguise){
+        const gg=g.g;
+        if(!gg || !gg.ambushDone){ gx=x0+w*0.74+ox; gMove=false; }   // 👄 a chest doesn't walk with the pack
+        else {                                                    // sprung: burst open in place, then scuttle over
+          const rv=mc.clips[mc.reveal], revMs=rv ? rv.n/rv.fps*1000 : 0;
+          if(gg._pinF===undefined) gg._pinF=0.74;
+          if(!(gg.ambushAt && now-gg.ambushAt<revMs)){ const d=room._monF-gg._pinF, st=rate*mdt;
+            gg._pinF = Math.abs(d)<=st ? room._monF : gg._pinF+Math.sign(d)*st; }
+          gx=x0+w*gg._pinF+ox; gMove=moving || (alive && Math.abs(gg._pinF-room._monF)>0.004);
+        }
+      }
+      const hov=mc && mc.hover;                                // 🦅 the harpy hovers and bobs over the floor
+      const dgx=fly ? x0+w*0.82 : gx;
+      const dgy=fly ? FLOOR-DRAKE_HOVER+Math.sin(performance.now()/450+li)*7
+                    : FLOOR-LIFT-oy-(hov ? hov+Math.sin(performance.now()/380+li)*4 : 0);
+      // 🧟 a Corrupted guard wears its thrall's look (LPC skin, or the demon once a veteran)
+      const mk = mp==='minion' ? corruptLookKey(g.label||room.label, room) : mp;
+      const drew = MON_SPRITES[mk] && monSpriteReady(mk) && drawMonsterSprite(dgx, dgy, room, cell, mk, alive, fly?false:gMove, ph, sc, g.g);
       if(!drew) drawMonster(dgx, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
         if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
           X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(dgx, dgy-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
     }
-    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run'){
+    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run' && !(cell.mon.ambush && !cell.mon.ambushDone)){   // 👄 no bar gives an unsprung mimic away
       const mb=cell.mon.type==='dragon';                       // put the bar by the hovering drakeling
-      bar((mb?x0+w*0.82:mbx)-26, (mb?FLOOR-DRAKE_HOVER-26:FLOOR-78), 52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
+      const hv=(MON_SPRITES[cell.mon.type]||{}).hover||0;       // …and above a hovering harpy
+      const bx=mb ? x0+w*0.82 : (cell.mon._pinF!==undefined ? x0+w*cell.mon._pinF : mbx);   // a sprung mimic scuttles on its own
+      bar(bx-26, (mb?FLOOR-DRAKE_HOVER-26:FLOOR-78-hv), 52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
     }
     // 💎 equipped-gear badge (build phase) — show what this room's monsters loot-out with
     if(G.phase==='build'){
@@ -9043,6 +9395,7 @@ function drawHero(sx,h){
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   if(h.oil>0){ X.globalAlpha=.3; px(sx-10,yy-46,20,46,'#0a0a06'); X.globalAlpha=1; }
   if(h.shock>0){ X.globalAlpha=.3+0.2*Math.sin(performance.now()/70); px(sx-10,yy-48,20,48,'#fff34d'); X.globalAlpha=1; }
+  if(h.root>0) drawWebRoot(sx,y,h,figTop);          // 🕸️ Web Snare: webbed to the floor (feet line, the body still bobs)
   // 🩸 damage hit-flash — a quick red pop the instant this hero is struck
   { const fa=performance.now()-(h.flashAt||0); if(fa<120){ X.globalAlpha=(1-fa/120)*0.55; px(sx-11,yy-50,22,50,'#ff5a72'); X.globalAlpha=1; } }
   // champion shield bubble
@@ -9112,6 +9465,20 @@ function drawHeroDead(sx,h){
   px(sx-16,y-8,32,8,h.col); px(sx-20,y-12,12,8,h.tint); // fallen
   X.globalAlpha=1;
   X.font='16px Trebuchet MS'; X.textAlign='center'; X.fillText('💀',sx,y-14); X.textAlign='left';
+}
+
+// 🕸️ Web Snare root effect (rooms/fx/web_root.png): a web cocoon over a rooted
+// hero's legs, sized to the figure and anchored at the feet. Symmetric, so no
+// facing flip. Missing art falls back to a pale veil.
+const WEB_ROOT_IMG=(typeof Image!=='undefined')?loadImg('rooms/fx/web_root.png'):null;
+function drawWebRoot(sx,y,h,figTop){
+  const a=Math.min(1,h.root/0.25);                 // fades out over the last 0.25s
+  const im=WEB_ROOT_IMG;
+  if(im&&im._ok&&im.width){
+    const tall=Math.max(40,y-figTop), dh=Math.round(Math.min(64,Math.max(26,tall*0.55))), dw=Math.round(dh*im.width/im.height);
+    X.save(); X.globalAlpha*=a; X.imageSmoothingEnabled=false;
+    X.drawImage(im, Math.round(sx-dw/2), Math.round(y-dh+1), dw, dh); X.restore();
+  } else { X.globalAlpha=.35*a; px(sx-10,y-22,20,22,'#d8d2c2'); X.globalAlpha=1; }   // graceful fallback
 }
 
 // Real boss artwork (small quantized PNGs in bosses/). Preloaded; drawBoss
@@ -9482,7 +9849,7 @@ function describeCard(card){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
     lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠poison':''}${def.acid?' +🧪acid':''}${def.mark?' +🎯mark':''}${def.aoe?' · 💥 AoE':''}`);
     if(def.aoe) lines.push(`<span class="small" style="color:#e0a060">💥 Blasts every hero within ${def.aoe} room${def.aoe>1?'s':''} of this one</span>`);
-    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">${cx(ELEM_CX[def.elem],'⚛️')} ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
     const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
     const bas=bastionMul();
@@ -9605,7 +9972,7 @@ function describeRoom(room, detail){
     const _sm=TRAP_STACK_MUL[Math.min(_trapDi++,2)];
     const dmg=Math.round(def.dmg*(1+(lv-1)*0.4)*vm*(1+(RB.trapDmg||0))*_sm);
     lines.push(`${def.ic} ${def.name} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
-    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">${cx(ELEM_CX[def.elem],'⚛️')} ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   // monsters
   const gobUnits = monUnits.filter(u=>u.type==='goblin');       // 👺 the den (spawns & marches out)
   const guardUnits = monUnits.filter(u=>u.type!=='goblin');     // stationary guards (shown beside a mixed den)
@@ -9702,8 +10069,10 @@ function describeHero(h){
     `🏃 speed ${Math.round(h.spd)} · 💰 ${h.gold}${h.dodge?' · 35% dodge':''}`];
   if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name+(TRAITS[t].beh?' — '+TRAITS[t].desc:'')).join(', '));
-  const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.chill>0?'❄️ chilled':'',
-    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
+  const fx=[h.burn>0?cx('fire','🔥')+' burning':'',h.freeze>0?cx('encase','❄️')+' frozen':'',h.chill>0?cx('ice','❄️')+' chilled':'',
+    h.oil>0?cx('oiled','🛢️')+' oiled':'',h.shock>0?cx('shock','⚡')+' shocked':'',
+    h.poison>0?cx('poisoned','☠️')+' poisoned ×'+Math.ceil(h.poison):'',h.mark>0?cx('marked','🎯')+' marked':'',
+    h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
     h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
   if(h.loot) lines.push(`💎 Carrying ${gearTag(h.loot)} <span class="small" style="opacity:.85">— drops on the floor when slain</span>`);

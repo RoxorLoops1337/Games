@@ -851,3 +851,554 @@ I18N.add('nl', {
 },
 "content": {}
 });
+
+// ---------------------------------------------------------------- (round 15) moves whose English word means something else
+// content.move['enemy.move'] wins over the ui table (I18N.move, and the names index for tr): the
+// Wind-Up Soldier's "March" is its opmars, never the month (the date line keeps "On until {n} March.").
+I18N.add('nl', {
+"ui": {
+"TIME {n}:{n2}": "TIJD {n}:{n2}",
+"A pile of prize gold, still warm.": "Een stapel prijsgoud, nog warm.",
+"Spare marquee bulbs. Light more of the dark.": "Reservelampjes voor de lichtbak. Verlicht meer van het donker.",
+"A heart-shaped prize. Raises your max HP by {n} and heals as much.": "Een hartvormige prijs. Je max HP gaat {n} omhoog en je geneest net zoveel.",
+"A fat roll of arcade tickets for the prize counter.": "Een dikke rol arcadetickets voor de prijzenbalie.",
+"Crack it open at the counter.": "Kraak hem open bij de balie.",
+"{n} ticket": "{n} ticket",
+"+{n} gold.": "+{n} goud.",
+"Two Rocks in the bin.": "Twee Stenen in de bak."
+},
+"content": { "move": {
+"clockwork.march": { "name": "Opmars" },
+"wraith.claw": { "name": "Klauw" }
+} }
+});
+
+// ---------------------------------------------------------------- (round 15) HUD and title menu polish
+// The top bar's chip cards, the relic list, the title's play row, tiles and group sheets.
+I18N.add('nl', {
+"ui": {
+"Spend it at the shop.": "Geef het uit in de winkel.",
+"Light dark tiles on the map with them.": "Verlicht er donkere vakjes op de kaart mee.",
+"Tickets": "Tickets",
+"Win them in fights. Spend them at the prize counter.": "Win ze in gevechten. Geef ze uit aan de prijzenbalie.",
+"Where you are on the climb.": "Hoe ver je de toren al beklommen hebt.",
+"Modes": "Modi",
+"Weekly, Boss Rush, Duo": "Week, Boss Rush, Duo",
+"Play modes": "Speelmodi",
+"Vault": "Kluis",
+"Collection": "Collectie",
+"School": "School",
+"Options": "Opties",
+"More": "Meer"
+},
+"content": {}
+});
+
+// ---------------------------------------------------------------- DEP (round 15) the Neon Depths
+// The fourth biome (Endless dives): its monsters, their moves and tricks, the boss, the reboot card, the Codex.
+I18N.add('nl', {
+"ui": {
+"LURED CLAW! It drifts toward the light": "GELOKTE GRIJPER! Hij drijft naar het licht",
+"LURE LOST: the bait is gone": "LOKAAS WEG: het aas is verdwenen",
+"JELLIES! They sting the claw that touches them": "KWALLEN! Ze prikken de grijper die ze aanraakt",
+"PINCHED! Grab them back before your turn ends": "GEKNEPEN! Grijp ze terug voor je beurt eindigt",
+"SNIP! FREE": "KNIP! LOS",
+"INTO THE SHELL": "HET HUISJE IN",
+"LIVE WATER! A wet prize shocks you": "WATER ONDER STROOM! Een natte prijs geeft je een schok",
+"WET PRIZE!": "NATTE PRIJS!",
+"SUNKEN CHESTS! One holds treasure": "GEZONKEN KISTEN! In één zit een schat",
+"HIGH TIDE! The water rises and falls with the music": "SPRINGTIJ! Het water stijgt en daalt op de muziek",
+"THE TIDE GOES OUT": "HET WATER ZAKT",
+"LURED CLAW": "GELOKTE GRIJPER",
+"LIVE WATER": "WATER ONDER STROOM",
+"PINCHED PRIZES": "GEKNEPEN PRIJZEN",
+"STINGING JELLIES": "PRIKKENDE KWALLEN",
+"ONE CHEST IS REAL": "ÉÉN KIST IS ECHT",
+"HIGH TIDE": "SPRINGTIJ",
+"HIGH TIDE!": "SPRINGTIJ!",
+"LURE NEXT TURN": "LOKAAS VOLGENDE BEURT",
+"JELLIES NEXT TURN": "KWALLEN VOLGENDE BEURT",
+"PINCH NEXT TURN": "KNIJPEN VOLGENDE BEURT",
+"LIVE WIRE NEXT TURN": "STROOMDRAAD VOLGENDE BEURT",
+"CHESTS NEXT TURN": "KISTEN VOLGENDE BEURT",
+"HIGH TIDE NEXT TURN": "SPRINGTIJ VOLGENDE BEURT",
+"OOH, A LIGHT": "OOH, EEN LAMPJE",
+"BLOOP": "BLOEP",
+"SNIP SNIP": "KNIP KNIP",
+"BZZZT": "BZZZT",
+"PICK ONE": "KIES ER EEN",
+"LURE LOST": "LOKAAS WEG",
+"TREASURE!": "SCHAT!",
+"STUNG!": "GEPRIKT!",
+"ZAP!": "KNETTER!",
+"MINE NOW": "NU VAN MIJ",
+"DROP THE BASS!": "BAS ERIN!",
+"Lures your claw toward junk": "Lokt je grijper naar rommel",
+"Pinches your best item": "Knijpt je beste voorwerp",
+"THE NEON DEPTHS": "DE NEONDIEPTE",
+"The Neon Depths": "De Neondiepte",
+"The flooded basement under the Clawspire": "De ondergelopen kelder onder de Clawspire",
+"DRAIN PUMP ...... FAILED": "AFVOERPOMP ...... KAPOT",
+"WARNING: WATER IN THE CABINET": "WAARSCHUWING: WATER IN DE KAST",
+"The machine forgot to drain.": "De machine vergat het water af te voeren.",
+"Mind the water. Things live in it now.": "Pas op voor het water. Er woont nu iets in.",
+"NEON DEPTHS": "NEONDIEPTE",
+"Drowned Jukeboxes unplugged": "Verdronken Jukeboxen uitgezet",
+"Deep Diver": "Diepzeeduiker",
+"Unplug The Drowned Jukebox in the Neon Depths.": "Trek de stekker uit De Verdronken Jukebox in de Neondiepte.",
+"DIVE": "DUIK",
+"Drifts {n} stinging jellies into your bin": "Laat {n} prikkende kwallen je bak in drijven",
+"Pinches your {n} best items": "Knijpt je {n} beste voorwerpen",
+"Electrifies the water ({n} per wet prize)": "Zet het water onder stroom ({n} per natte prijs)",
+"Scatters {n} chests (one holds treasure)": "Strooit {n} kisten (in één zit een schat)",
+"LOADING LOOP {n}: THE NEON DEPTHS": "RONDE {n} LADEN: DE NEONDIEPTE",
+"The Neon Depths, flooded. Act {n} of forever.": "De Neondiepte, overstroomd. Akte {n} van eeuwig.",
+"Loop {n}: The Neon Depths": "Ronde {n}: De Neondiepte",
+"Angler Token": "Hengelfiche",
+"Jellyfish Coin": "Kwallenmunt",
+"Crab Changer": "Wisselkrab",
+"Volt Eel": "Voltaal",
+"Sunken Mimic": "Gezonken Prijsnaaper",
+"The Drowned Jukebox": "De Verdronken Jukebox",
+"Dangle the Lure": "Lokaas Laten Bungelen",
+"Hangs its lure over an Old Boot: next turn your claw drifts toward the light": "Hangt zijn lokaas boven een Oude Laars: volgende beurt drijft je grijper naar het licht",
+"Lantern Chomp": "Lantaarnhap",
+"Chomps for 17": "Hapt voor 17",
+"Deep Glare": "Diepe Blik",
+"Glares from the deep (Weak 2)": "Staart vanuit de diepte (Zwak 2)",
+"Snap Bite": "Klapbeet",
+"Snap bites: 7 x2": "Klapbeten: 7 x2",
+"Drift Jellies": "Kwallen Laten Drijven",
+"Drifts 2 jellies into your bin: each stings your claw when it touches it": "Laat 2 kwallen je bak in drijven: elk prikt je grijper als hij hem aanraakt",
+"Sting": "Prik",
+"Stings: 6 x3": "Prikt: 6 x3",
+"Venom Bell": "Gifklok",
+"Rings its venom bell (5 Poison)": "Luidt zijn gifklok (5 Gif)",
+"Pulse": "Puls",
+"Pulses into a ball (Block 14)": "Pulseert zich tot een bal (Blok 14)",
+"Pinches your 2 best items and drags them away: grab them back before your turn ends": "Knijpt je 2 beste voorwerpen en sleept ze weg: grijp ze terug voor je beurt eindigt",
+"Claw Clack": "Scharengeklak",
+"Clacks: 8 x2": "Klakt: 8 x2",
+"Into the Shell": "Het Huisje In",
+"Hides in its shell (Block 16)": "Verstopt zich in zijn huisje (Blok 16)",
+"Crusher Claw": "Kraakschaar",
+"Crusher claw for 19": "Kraakschaar voor 19",
+"Electrifies the water: next turn every wet prize you deliver shocks you": "Zet het water onder stroom: volgende beurt geeft elke natte prijs die je aflevert je een schok",
+"Zap Lash": "Stroomzweep",
+"Zap lash: 9 x2": "Stroomzweep: 9 x2",
+"Static Cling": "Statische Kleef",
+"Static cling (Vulnerable 2)": "Statische kleef (Kwetsbaar 2)",
+"Power Surge": "Stroomstoot",
+"Powering up (38 next turn)": "Laadt op (38 volgende beurt)",
+"Sunken Treasure": "Gezonken Schat",
+"Scatters 3 chests into your bin: one holds treasure, the others bite the hand that delivers them": "Strooit 3 kisten in je bak: in één zit een schat, de andere bijten de hand die ze aflevert",
+"Lid Slam": "Dekselklap",
+"Lid slam for 26": "Dekselklap voor 26",
+"Swallows your rarest item": "Slikt je zeldzaamste voorwerp in",
+"Barnacle Barrage": "Zeepokkenregen",
+"Barnacle barrage: 8 x3": "Zeepokkenregen: 8 x3",
+"Taking a deep breath (54 next turn)": "Haalt diep adem (54 volgende beurt)",
+"Clamp Shut": "Dichtklemmen",
+"Clamps shut (Block 22)": "Klemt zich dicht (Blok 22)",
+"Bass Drop": "Basdrop",
+"Bass drop: 11 x3": "Basdrop: 11 x3",
+"Jelly Jam": "Kwallenjam",
+"Calls a Jellyfish Coin": "Roept een Kwallenmunt",
+"Feedback": "Rondzingen",
+"Feedback squeal (Weak 2)": "Gierend rondzingen (Zwak 2)",
+"Waterproof Case": "Waterdichte Kast",
+"Seals its case (Block 26)": "Sluit zijn kast af (Blok 26)",
+"Splash Down": "Plons",
+"Splashes the cabinet. Your bin rattles.": "Plenst tegen de kast. Je bak rammelt.",
+"Crank It Up": "Volume Omhoog",
+"Cranking the volume (38 next turn)": "Draait het volume open (38 volgende beurt)",
+"Needle Scratch": "Naaldkras",
+"Needle scratch for 24": "Naaldkras voor 24",
+"Pour Jellies": "Kwallen Gieten",
+"Pours 2 jellies into your bin: each stings your claw when it touches it": "Giet 2 kwallen in je bak: elk prikt je grijper als hij hem aanraakt",
+"High Tide": "Springtij",
+"floods your cabinet: the water rises and falls with the music": "zet je kast onder water: het water stijgt en daalt op de muziek"
+},
+"content": {
+"enemy": {
+"dep_angler": { "name": "Hengelfiche", "desc": "Een gezonken speelhalfiche met een lantaarn aan een hengel. Hij laat het licht boven de rommel in je bak bungelen, en je grijper volgt het als een mot." },
+"dep_jelly": { "name": "Kwallenmunt", "desc": "Een gouden munt die een kwal werd. Hij laat zijn kleintjes je bak in drijven, en elk ervan prikt de grijper die hem aanraakt." },
+"dep_crab": { "name": "Wisselkrab", "desc": "Een heremietkreeft die in een muntwisselaar woont. Hij knijpt je beste prijzen en sleept ze over de bodem weg. Wat aan het eind van je beurt nog geknepen is, gaat zijn huisje in." },
+"dep_eel": { "name": "Voltaal", "desc": "Een neonbuis die leerde zwemmen. Hij zet het water onder stroom: elke natte prijs die je eruit trekt, geeft je een schok." },
+"dep_mimic": { "name": "Gezonken Prijsnaaper", "desc": "Een schatkist die met de speelhal zonk en zeepokken en een wrok kreeg. Hij strooit kisten die op hem lijken in je bak: in één zit een schat, de andere bijten.", "taunt": "Toe maar. Maak er een open. Maak ze allemaal open." },
+"dep_jukebox": { "name": "De Verdronken Jukebox", "desc": "De jukebox uit de kelder, tot aan de muntgleuf onder water en nog steeds aan het spelen. Het water in je kast stijgt en daalt op zijn muziek: zware prijzen zinken, lichte drijven weg.", "taunt": "Nu te horen: jouw laatste liedje." }
+},
+"item": {
+"dep_boot": { "name": "Oude Laars", "text": "Een doorweekte laars, het aas van de Hengelfiche. Zijn lokaas hangt erboven; grijp de laars eruit en het lokaas heeft niets meer om boven te hangen." },
+"dep_jellyling": { "name": "Kwalletje", "text": "Een klein kwalletje. Het prikt de grijper die het aanraakt. Afgeleverd prikt het in plaats daarvan een willekeurige vijand voor {v}." },
+"dep_chest": { "name": "Gezonken Kist", "text": "Een van de kisten van de Gezonken Prijsnaaper. In één ervan zit een schat. De andere bijten de hand die ze aflevert." }
+},
+"lore": {
+"fl_depths": { "name": "De Neondiepte", "hint": "Blijf doorspelen na de Prijzenmeester, tot de machine vergeet het water af te voeren.",
+"text": "Onder de Clawspire is een kelder waar niemand het over heeft, en onder de kelder staat water. De leidingen gaven het jaren geleden op. De speelhal daar beneden hield zijn stroom en verloor zijn vloer: kasten staan tot hun knieën in groen licht, hun schermen spelen nog voor de vissen. Er groeide kelp uit het tapijt. De prijzen die zonken, leerden zwemmen. Elke derde keer dat de machine opnieuw opstart, vergeet hij het water af te voeren, en duikt de ronde in plaats daarvan de Diepte in." },
+"bo_jukebox": { "name": "De Verdronken Jukebox",
+"text": "De jukebox in de kelder speelde toen de leidingen sprongen, en hij is nooit gestopt. Hij staat in het diepe met water tot aan zijn muntgleuf, draait platen die niemand koos, en de hele ondergelopen verdieping beweegt op zijn muziek. Als de bas valt, komt het tij op: zware prijzen zinken naar de bodem, lichte drijven af naar de verre wand. Hij wil niemand pijn doen. Hij wil alleen nog één muntje, en nog één liedje, voor altijd." },
+"be_dep_angler": { "name": "Hengelfiche",
+"text": "Een speelhalfiche die naar de bodem zonk en een lantaarn aan een stokje kreeg. De Hengelfiche laat zijn lampje boven de rommel in je bak bungelen, en je grijper, die nog nooit iets gloeiends kon weerstaan, drijft erachteraan. Stuur tegen de trek in of vis het aas eruit. Hengelfiches zijn niet echt slim. Ze hebben alleen gemerkt dat Crawlers en motten hetzelfde gezicht trekken als ze een lampje zien." },
+"be_dep_jelly": { "name": "Kwallenmunt",
+"text": "Een gouden munt die de Diepte in dreef en een rokje van gloeiende tentakels kreeg. Kwallenmunten broeden in de muntbakjes en sturen hun kleintjes je bak in, waar ze onschuldig ronddobberen en elke grijper prikken die ze raakt. Grijp er een uit en hij prikt in plaats daarvan de overkant. Ze zijn niet boos. Ze zijn vijfennegentig procent water en vijf procent statische elektriciteit, en die statische elektriciteit voert het woord." },
+"be_dep_crab": { "name": "Wisselkrab",
+"text": "Een heremietkreeft die in een kapotte muntwisselaar trok en de akoestiek wel prettig vond. Hij knijpt je beste prijzen en sleept ze over de bodem naar zijn hoekje, de hele weg vrolijk klakkend. Wat aan het eind van je beurt nog geknepen is, gaat zijn huisje in, tenminste tot je het er weer uit slaat. Hij geeft wisselgeld voor niks. Hij heeft nog nooit wisselgeld gegeven. Hij houdt gewoon van het geluid van munten." },
+"be_dep_eel": { "name": "Voltaal",
+"text": "Een neonbuis die de Diepte in viel, aanging, en besloot dat hij het wel leuk vond om een vis te zijn. De Voltaal kronkelt zoemend op netspanning door de ondergelopen kasten. Als hij het water onder stroom zet, geeft elke natte prijs die je eruit trekt je een schok op weg door de goot. Grijp van boven op de stapel, waar het droog is. Oude Crawlers zeggen dat de aal vroeger OPEN spelde. Nu spelt hij vooral AUW." },
+"be_dep_mimic": { "name": "Gezonken Prijsnaaper",
+"text": "Een schatkist die met de speelhal zonk en zeepokken en een wrok kreeg. De Gezonken Prijsnaaper strooit kisten die op hem lijken in je bak. In één ervan zit echt een schat; de andere hebben tanden. De echte glinstert als hij denkt dat niemand kijkt. Lever een bijter af en hij bijt de hand die hem won. Hij heeft heel lang op de bodem gewacht, en hij heeft geleerd geduldig te zijn, en een beetje gemeen." }
+},
+"path": {
+"ENEMIES.dep_mimic.enrage": { "name": "DAVY JONES", "text": "Elke kist in de diepte klapt tegelijk open" },
+"ENEMIES.dep_jukebox.enrage": { "name": "B-KANT", "text": "De plaat gaat om. Het tij komt sneller op." },
+"ENEMIES.dep_jukebox.sig": { "name": "Springtij", "sign": "SPRINGTIJ", "shout": "BAS ERIN!", "text": "zet je kast onder water: het water stijgt en daalt op de muziek" }
+}
+}
+});
+// ---------------------------------------------------------------- /DEP
+
+// ---------------------------------------------------------------- DUO NET (round 15): online co-op
+// DESIGN.md "Online co-op (round 15)": same phone or online, host or join, the room code, the lobby,
+// the watch screen, the link dropping and coming back, the podium's Play again. Co-op is "Samen".
+I18N.add('nl', {
+"ui": {
+"Same phone": "Zelfde telefoon",
+"Online": "Online",
+"Pass one phone back and forth. No internet needed.": "Geef één telefoon heen en weer. Geen internet nodig.",
+"Each on your own phone, anywhere. Share a four letter code.": "Ieder op je eigen telefoon, waar dan ook. Deel een code van vier letters.",
+"Two crawlers, one boss. Play on one phone, or each on your own.": "Twee Crawlers, één baas. Speel op één telefoon, of ieder op je eigen.",
+"Online co-op": "Samen online",
+"Fight a boss together, each on your own phone. One of you hosts, the other types the code.": "Versla samen een baas, ieder op je eigen telefoon. Eén van jullie maakt een spel aan, de ander typt de code.",
+"Host a game": "Spel aanmaken",
+"Get a code to share with a friend.": "Krijg een code om met een vriend te delen.",
+"Join a game": "Meedoen",
+"Type the code your friend got.": "Typ de code die je vriend kreeg.",
+"Online: {n} games, {n2} team wins": "Online: {n} {n|potje|potjes}, {n2} teamwinst",
+"Type the four letters your friend sees on their phone.": "Typ de vier letters die je vriend op zijn telefoon ziet.",
+"Join": "Meedoen",
+"Joining {s}...": "Meedoen met {s}...",
+"Can't reach the online lobby, check your connection.": "De online lobby is niet bereikbaar, check je verbinding.",
+"That game is already full.": "Dat spel zit al vol.",
+"No game with that code. Check the letters with your friend.": "Geen spel met die code. Check de letters met je vriend.",
+"That code belongs to a different game.": "Die code hoort bij een ander spel.",
+"Your partner has a different game version, both reload.": "Je partner heeft een andere versie van het spel, herlaad allebei.",
+"The host left the lobby.": "De maker van het spel is weg uit de lobby.",
+"A code is four letters (no I or O).": "Een code is vier letters (geen I of O).",
+"The online game stopped.": "Het online spel is gestopt.",
+"Room code": "Spelcode",
+"Copy code": "Code kopiëren",
+"Share invite": "Uitnodiging delen",
+"Opening a room...": "Een spel wordt geopend...",
+"Code copied!": "Code gekopieerd!",
+"Code: {s}": "Code: {s}",
+"Invite link copied!": "Uitnodigingslink gekopieerd!",
+"Fight a boss with me in Clawspire! Room code:": "Versla samen met mij een baas in Clawspire! Spelcode:",
+"You (host)": "Jij (maker)",
+"Your name": "Jouw naam",
+"Waiting for a friend to join...": "Wachten tot een vriend meedoet...",
+"Waiting for the host...": "Wachten op de maker...",
+"Your friend": "Je vriend",
+"The host": "De maker",
+"The boss (the host picks)": "De baas (de maker kiest)",
+"Partner connection lost, reconnecting...": "Verbinding met je partner kwijt, opnieuw verbinden...",
+"Share the code. Your friend taps Duo, Co-op Boss, Online, Join a game.": "Deel de code. Je vriend tikt op Duo, Samen tegen de Baas, Online, Meedoen.",
+"Tap Ready when you are set.": "Tik op Klaar als je er klaar voor bent.",
+"{s} is getting ready...": "{s} maakt zich klaar...",
+"Starting!": "We gaan beginnen!",
+"Ready!": "Klaar!",
+"Not ready": "Nog niet klaar",
+"Grab!": "Grijpen!",
+"Cheer {s} on": "Moedig {s} aan",
+"Leave the game?": "Het spel verlaten?",
+"Your partner can keep fighting alone.": "Je partner kan alleen verder vechten.",
+"Stay": "Blijven",
+"Hang on, trying for 30 seconds.": "Even geduld, we proberen het 30 seconden.",
+"Keep fighting alone": "Alleen verder vechten",
+"Wait": "Wachten",
+"Quit to title": "Naar het titelscherm",
+"Back online!": "Weer online!",
+"Your partner is still gone.": "Je partner is nog steeds weg.",
+"Your partner is still gone. Finish your turn.": "Je partner is nog steeds weg. Maak je beurt af.",
+"{s} left the game.": "{s} heeft het spel verlaten.",
+"{s} stepped away.": "{s} is even weg.",
+"Fighting on alone!": "Alleen verder vechten!",
+"Online team wins: {n} of {n2}": "Online teamwinst: {n} van {n2}",
+"Play again": "Nog een keer",
+"Reconnecting": "Opnieuw verbinden",
+"Alone": "Alleen",
+"{s} is grabbing": "{s} is aan het grijpen",
+"Partner connection lost": "Verbinding met je partner kwijt",
+"Reconnecting... {n} s": "Opnieuw verbinden... {n} s"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /DUO NET
+
+// ---------------------------------------------------------------- DUO NET VS (round 16): online versus
+// DESIGN.md "Online versus (round 16)": the claw-off on two phones: the menu, the lobby's drops, the
+// rival's drop being watched, the forfeit. Versus is "tegen elkaar", the claw-off a "grijpwedstrijd".
+I18N.add('nl', {
+"ui": {
+"One bin of prizes, two claws. Play on one phone, or each on your own.": "Eén bak vol prijzen, twee grijpers. Speel op één telefoon, of ieder op je eigen.",
+"Online versus": "Online tegen elkaar",
+"A claw-off against a friend, each on your own phone. One of you hosts, the other types the code.": "Een grijpwedstrijd tegen een vriend, ieder op je eigen telefoon. Eén van jullie maakt een spel aan, de ander typt de code.",
+"Online versus: {n} games, {n2} wins": "Online tegen elkaar: {n} {n|potje|potjes}, {n2} gewonnen",
+"Drops each per round (the host picks)": "Drops per speler per ronde (de maker kiest)",
+"Share the code. Your friend taps Duo, Versus Claw-off, Online, Join a game.": "Deel de code. Je vriend tikt op Duo, Grijpwedstrijd tegen elkaar, Online, Meedoen.",
+"Take me on in a Clawspire claw-off! Room code:": "Daag me uit voor een grijpwedstrijd in Clawspire! Spelcode:",
+"Your rival's turn": "Je rivaal is aan de beurt",
+"{s} PICKS A CARD": "{s} KIEST EEN KAART",
+"{s} is picking a sabotage card...": "{s} kiest een sabotagekaart...",
+"Taunt {s}": "Daag {s} uit",
+"Your rival wins by forfeit.": "Je rivaal wint dan door opgave.",
+"Win by forfeit": "Winnen door opgave",
+"{s} wins by forfeit!": "{s} wint door opgave!",
+"Online versus wins: {n} of {n2}": "Online gewonnen tegen elkaar: {n} van {n2}",
+"Your rival is still gone.": "Je rivaal is nog steeds weg.",
+"rounds won, then a forfeit": "rondes gewonnen, daarna opgegeven"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /DUO NET VS
+
+// ---------------------------------------------------------------- CLAW BAL (round 16): the claw picker's run-start tags
+I18N.add('nl', {
+"ui": {
+"+1 grab a turn": "+1 greep per beurt",
+"-1 grab a turn": "-1 greep per beurt",
+"+10 Max HP": "+10 Max HP"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /CLAW BAL
+
+// ---------------------------------------------------------------- CAB (round 16): the cabinet is alive
+// The cabinet events, the Jackpot Lamp, PERFECT grabs, the strain and the prizes' faces (game.js CAB block, G.cab.WORDS).
+I18N.add('nl', {
+"ui": {
+"POWER SURGE!": "STROOMSTOOT!",
+"COIN SHOWER!": "MUNTENREGEN!",
+"CAPSULE DROP!": "CAPSULE ERIN!",
+"The claw grips harder and moves faster this turn.": "De grijper knijpt harder en is sneller deze beurt.",
+"Coins rain in: 1 gold for each one you deliver.": "Het regent munten: 1 goud voor elke munt die je aflevert.",
+"Deliver the capsule to win it.": "Lever de capsule af en hij is van jou.",
+"LAMP FEVER!": "LAMPKOORTS!",
+"Prizes rain into the cabinet!": "Het regent prijzen in de kast!",
+"PERFECT!": "PRECIES RAAK!",
+"PERFECT x{n}!": "PRECIES RAAK x{n}!",
+"HEAVY!": "ZWAAR!",
+"WHEE!": "JIEHAA!",
+"EEK!": "IEK!",
+"CAPSULE WON!": "CAPSULE GEWONNEN!",
+"LAMP +1": "LAMP +1",
+"SURGE": "STROOM",
+"FEVER": "KOORTS",
+"CABINET EVENT": "KASTGEBEURTENIS",
+"Cabinet prize": "Kastprijs",
+"The coins sink away.": "De munten zakken weg.",
+"The Jackpot Lamp fills with every prize. Fill it up for a FEVER!": "De Jackpotlamp loopt vol met elke prijs. Helemaal vol? Dan krijgt hij KOORTS!",
+"holding a cabinet prize": "vast: een kastprijs"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /CAB
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+// DESIGN.md "Capsule fever (round 17)": Open all, the Capsule Minis (capsulemini's) and their four series,
+// the Minis tab in the Prijzenkluis, the free daily capsule and its streak (reeks). Vault tickets stay kluistickets.
+I18N.add('nl', {
+"ui": {
+"Capsule Mini": "Capsulemini",
+"SERIES COMPLETE!": "SERIE COMPLEET!",
+"Series prize": "Serieprijs",
+"Open all": "Alles openen",
+"Open all ({n})": "Alles openen ({n})",
+"TAP TO HURRY": "TIK VOOR SNELLER",
+"Collect all": "Alles ophalen",
+"Free daily capsule": "Gratis dagcapsule",
+"Daily capsule": "Dagcapsule",
+"Once a day, on the house": "Eén per dag, van het huis",
+"Daily capsule · free": "Dagcapsule · gratis",
+"A free Vault Capsule every day. Come back tomorrow for the next one.": "Elke dag een gratis Kluiscapsule. Kom morgen terug voor de volgende.",
+"Day {n} streak": "Reeks: dag {n}",
+"Day {n} streak! +{n2} vault tickets": "Reeks: dag {n}! +{n2} kluistickets",
+"Daily capsule! +{n} vault tickets": "Dagcapsule! +{n} kluistickets",
+"Streak bonus: +{n} vault tickets": "Reeksbonus: +{n} kluistickets",
+"Minis": "Mini's",
+"CAPSULE MINIS": "CAPSULEMINI'S",
+"COMPLETE": "COMPLEET",
+"Finish it for": "Maak hem af voor",
+"Comes out of capsules, now and then.": "Komt af en toe uit een capsule.",
+"Not found yet": "Nog niet gevonden",
+"Found: {n}": "Gevonden: {n}",
+"Arcade Pals": "Speelhalmaatjes",
+"Spire Snacks": "Torensnacks",
+"Neon Beasts": "Neonbeesten",
+"Lucky Charms": "Gelukbrengers",
+"Coin Critter": "Muntbeestje",
+"Rolls under every machine. Never comes back out.": "Rolt onder elke machine. Komt er nooit meer onder vandaan.",
+"Ticket Tot": "Kaartjeskind",
+"Worth exactly one ticket. Knows it.": "Precies één kaartje waard. En dat weet hij.",
+"Joystick Jr": "Joystick Jr",
+"Up, up, down, down. Then a nap.": "Omhoog, omhoog, omlaag, omlaag. Daarna een dutje.",
+"Pixel Ghost": "Pixelspook",
+"Haunts the high score table. Only the top spot.": "Spookt door de topscorelijst. Alleen op de eerste plek.",
+"Prize Duck": "Prijseend",
+"The rubber duck every claw is secretly after.": "De badeend waar elke grijper stiekem op aast.",
+"Golden Claw": "Gouden Grijper",
+"It never drops anything. Ever.": "Hij laat nooit iets vallen. Nooit.",
+"Gummy Bear": "Gombeer",
+"Chewy, brave, a little sticky.": "Taai, dapper, een beetje plakkerig.",
+"Popcorn Puff": "Popcornpluf",
+"Pops when surprised. Always surprised.": "Popt als hij schrikt. Hij schrikt altijd.",
+"Donut Pup": "Donutpup",
+"Good boy. Glazed boy.": "Brave hond. Geglazuurde hond.",
+"Soda Slime": "Frisdrankslijm",
+"Fizzy, bubbly, slightly flat on Mondays.": "Bruisend, bubbelend, op maandag een beetje verschaald.",
+"Cupcake King": "Cupcakekoning",
+"Rules a kingdom of crumbs.": "Heerst over een rijk van kruimels.",
+"Golden Gumball": "Gouden Kauwgombal",
+"One coin, one gumball, one legend.": "Eén muntje, één kauwgombal, één legende.",
+"Glow Frog": "Gloeikikker",
+"Ribbits in neon green.": "Kwaakt in neongroen.",
+"Neon Cat": "Neonkat",
+"Nine lives, all of them lit.": "Negen levens, allemaal verlicht.",
+"Laser Bunny": "Laserkonijn",
+"Hops at the speed of light. Mostly sideways.": "Huppelt met de snelheid van het licht. Meestal zijwaarts.",
+"Volt Bat": "Voltvleermuis",
+"Hangs upside down from power lines.": "Hangt ondersteboven aan hoogspanningskabels.",
+"Disco Crab": "Discokrab",
+"Only dances sideways. Dances all night.": "Danst alleen zijwaarts. Danst de hele nacht.",
+"Rainbow Dragon": "Regenboogdraak",
+"Breathes every colour at once.": "Spuwt alle kleuren tegelijk.",
+"Clover Sprout": "Klaverkiempje",
+"Four leaves. Counted twice.": "Vier blaadjes. Twee keer geteld.",
+"Lucky Dice": "Geluksdobbelsteen",
+"Always lands on six. Please do not check.": "Valt altijd op zes. Niet nakijken, alsjeblieft.",
+"Horseshoe Hero": "Hoefijzerheld",
+"Holds all the luck in. Upside up.": "Houdt al het geluk binnen. Met de goede kant boven.",
+"Wish Star": "Wensster",
+"Grants one wish. The wish is \"more capsules\".": "Vervult één wens. De wens is \"meer capsules\".",
+"Fortune Cat": "Gelukskat",
+"Waves in the jackpots. Paw never gets tired.": "Wuift de jackpots naar binnen. Het pootje wordt nooit moe.",
+"Jackpot Seven": "Jackpotzeven",
+"Three of him and the whole tower lights up.": "Drie van hem en de hele toren licht op."
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /GACHA
+
+// ---------------------------------------------------------------- TECH (round 17): Cabinet Tech and Joy Stick
+// DESIGN.md "Cabinet Tech and the new crawler (round 17)": the relic family, Joy Stick's kit, her
+// outfits, stickers, combos and Codex page, the words the game draws (G.tech.WORDS / PATTERNS).
+// A cell of the Jackpot Lamp is a "streepje" (a bulb stays a "lampje"), PERFECT stays PRECIES RAAK.
+I18N.add('nl', {
+"ui": {
+"DOUBLE FEATURE!": "DUBBELE VOORSTELLING!",
+"Set off LAMP FEVER to unlock": "Laat de LAMPKOORTS losgaan om vrij te spelen",
+"LOCK": "RAAK",
+"REMOTE": "BEDIENING",
+"LASER": "LASER",
+"SERVICE KEY": "SERVICESLEUTEL",
+"LAMP OIL": "LAMPOLIE",
+"HOPPER": "TRECHTER",
+"METRONOME": "METRONOOM",
+"FEVER DREAM": "KOORTSDROOM",
+"BREAKER": "ONDERBREKER",
+"TRICK SHOT": "KUNSTSCHOT",
+"DOUBLE FEATURE": "DUBBELE SHOW",
+"MOTHERBOARD": "MOEDERBORD",
+"LAMP +{n}": "LAMP +{n}",
+"LAMP -{n}": "LAMP -{n}",
+"LAMP OIL +{n}": "LAMPOLIE +{n}",
+"METRONOME x{n}": "METRONOOM x{n}",
+"The cabinet works for Joy Stick: more events, from turn 1.": "De kast werkt voor Joy Stick: meer gebeurtenissen, vanaf beurt 1.",
+"Perfect Game": "Perfecte Partij",
+"Land five PERFECT grabs in a row.": "Laat vijf grepen achter elkaar PRECIES RAAK zijn.",
+"Tech Support": "Helpdesk",
+"Win a run as Joy Stick.": "Win een run als Joy Stick.",
+"Service Headset": "Servicekoptelefoon",
+"Big padded cans and a boom mic. She hears the cabinets humming.": "Dikke oorschelpen en een microfoonarm. Ze hoort de kasten zoemen.",
+"Scanline Visor": "Scanlijnvizier",
+"A wraparound visor with a scanline that never stops scrolling.": "Een vizier rondom, met een scanlijn die nooit ophoudt met rollen.",
+"A pointy hat with a blinking service LED on the band. Spooky, but serviced.": "Een puntige hoed met een knipperend service-ledje op de band. Griezelig, maar wel onderhouden.",
+"Striped in arcade pink, earmuffs with a little antenna each.": "Gestreept in speelhalroze, met oorwarmers die elk een klein antennetje hebben."
+},
+"content": {
+"char": {
+"techie": {
+"title": "De Monteur",
+"blurb": "Joysticks, knoppen en een servicebediening. De kast werkt voor haar: gebeurtenissen komen vaker en al vanaf haar eerste beurt, en elke gebeurtenis die landt, geeft alles een schok.",
+"unlockText": "Laat de LAMPKOORTS losgaan met een willekeurige Crawler.",
+"vsLine": "Even wachten, ik herstart je."
+}
+},
+"kw": {
+"tech": {
+"label": "Techniek",
+"blurb": "De machine staat aan jouw kant: PRECIES RAAK, kastgebeurtenissen, LAMPKOORTS en de munten die het regent."
+}
+},
+"relic": {
+"service_remote": { "name": "Servicebediening", "text": "Elke kastgebeurtenis die landt, geeft ALLE vijanden een schok van 3 en jou 3 Blok. Is de kast stil (Duo), dan gaat hij elke 2e beurt af." },
+"laser_sight": { "name": "Laservizier", "text": "Een rode laser toont waar de grijper zakt, en PRECIES RAAK lukt twee keer zo makkelijk. Elke greep die PRECIES RAAK is, geeft je 3 Blok." },
+"service_key": { "name": "Servicesleutel", "text": "Kastgebeurtenissen komen vaker en kunnen al in je eerste beurt landen. Elke gebeurtenis die landt, geeft je 5 Blok." },
+"lamp_oil": { "name": "Lampolie", "text": "De Jackpotlamp begint elk gevecht 4 streepjes voller, en elke LAMPKOORTS geneest je 3 HP." },
+"coin_hopper": { "name": "Muntentrechter", "text": "Een MUNTENREGEN en de LAMPKOORTS laten 3 munten meer in de kast vallen, en elke munt die je aflevert, levert 2 goud op in plaats van 1." },
+"metronome": { "name": "Metronoom", "text": "Elke greep die PRECIES RAAK is, raakt een willekeurige vijand voor 4, plus 4 voor elke PRECIES RAAK vlak daarvoor (hoogstens 16)." },
+"fever_dream": { "name": "Koortsdroom", "text": "De LAMPKOORTS doet 8 schade aan ALLE vijanden en geeft je 4 Blok." },
+"circuit_breaker": { "name": "Stroomonderbreker", "text": "Kastgebeurtenissen slaan terug: een STROOMSTOOT geeft ALLE vijanden een schok van 6, een MUNTENREGEN geeft je 6 Blok en een CAPSULE ERIN geneest je 5 HP." },
+"trick_shot": { "name": "Kunstschot", "text": "Een greep die PRECIES RAAK is, vlak na een andere (x2 of beter), geeft je de greep terug, één keer per beurt." },
+"double_feature": { "name": "Dubbele Voorstelling", "text": "Elke kastgebeurtenis landt twee keer: de rol draait nog een keer voor een tweede, andere gebeurtenis. Gebeurtenissen komen ook iets vaker." },
+"leg_motherboard": { "name": "Het Moederbord", "text": "De kast luistert naar jou: elke beurt landt er een gebeurtenis, grepen die PRECIES RAAK zijn, laten 2 streepjes meer oplichten en de LAMPKOORTS doet 15 schade aan ALLE vijanden. De keerzijde: een greep die niets opbrengt, laat 3 streepjes leeglopen." }
+},
+"item": {
+"arcade_stick": { "name": "Arcadestick", "text": "Doe {v} schade. Afgeleverd laat hij een streepje van de Jackpotlamp oplichten." },
+"arcade_button": { "name": "Arcadeknop", "text": "Krijg {v} Blok. Druk erop: een streepje van de lamp licht op." },
+"coin_mech": { "name": "Muntmechaniek", "text": "Doe {v} schade en krijg {v2} goud. Het muntdeurtje van een oude kast: klonk, klonk." },
+"neon_tube": { "name": "Neonbuis", "text": "Doe {v} schade. Afgeleverd laat hij 2 streepjes van de lamp oplichten. Breekbaar, zoals elk goed uithangbord." },
+"circuit_board": { "name": "Printplaat", "text": "Doe {v} schade aan ALLE vijanden. Afgeleverd licht er een streepje van de lamp op." },
+"extension_cord": { "name": "Verlengsnoer", "text": "Krijg {v} extra greep en {v2} Blok. Ingeplugd licht er een streepje van de lamp op." },
+"crt_monitor": { "name": "Beeldbuismonitor", "text": "Doe {v} schade. Loodzwaar. Afgeleverd laat hij 3 streepjes van de lamp oplichten." },
+"golden_stick": { "name": "Gouden Joystick", "text": "Sla {n} keer {v} schade op willekeurige vijanden en laat 4 streepjes van de lamp oplichten. Materiaal voor de hoogste score." }
+},
+"combo": {
+"coin_op": { "name": "Muntautomaat", "text": "Een Techniek-voorwerp en een munt: munt erin, doe 5 schade en krijg 3 goud." },
+"short_circuit": { "name": "Kortsluiting", "text": "Een Techniek-voorwerp en twee metalen voorwerpen: de vonken vliegen, 6 schade en 1 Zwak aan ALLE vijanden." },
+"bullseye": { "name": "Roos", "text": "Een greep die PRECIES RAAK is en 2+ voorwerpen boven haalt: doe 8 schade en krijg 4 Blok." }
+},
+"lore": {
+"cr_techie": { "name": "Joy Stick", "text": "Joy Stick is de speelhalmonteur die niemand ooit ziet: degene die na sluitingstijd binnenkomt, de kasten openmaakt met een bos piepkleine sleuteltjes en tegen ze praat terwijl ze werkt. Ze weet welk lampje knippert als een machine blij is en welk muntdeurtje klemt als hij mokt. Toen de Clawspire zijn kasten op eigen houtje begon te laten draaien, nam ze dat persoonlijk op. Nu klimt ze met een servicebediening in haar zak, en elke machine op elke verdieping lijkt stilletjes aan haar kant te staan." }
+}
+}
+});
+// ---------------------------------------------------------------- /TECH
+// ---------------------------------------------------------------- M2 (round 18): the run stops restyled
+// DESIGN.md "Run stop screens restyled (round 18)": the shop's services row (the prize counter, the Compactor, Remove, Sell).
+I18N.add('nl', {
+"ui": {
+"Services": "Diensten"
+}
+});
+// ---------------------------------------------------------------- /M2
+
+// ---------------------------------------------------------------- M1 (round 18): the design system and the home screens
+// character select in three steps, the Tips page's dark row, the Settings sheet's sample strip
+I18N.add('nl', {
+"ui": {
+"Run options": "Run-opties",
+"Start run": "Start de run",
+"{n} more to find": "Nog {n} te vinden",
+"Preview": "Voorbeeld"
+}
+});
+// ---------------------------------------------------------------- /M1
+// ---------------------------------------------------------------- M3 (round 18): albums, lobbies and run end
+// DESIGN.md "Albums, lobbies and run end restyled (round 18)": the scoreboard's fold.
+I18N.add('nl', {
+"ui": {
+"Run details": "Rundetails"
+}
+});
+// ---------------------------------------------------------------- /M3

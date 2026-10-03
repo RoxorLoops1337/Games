@@ -110,7 +110,7 @@ const GAME = (() => {
   const actDef = (n) => (tbl('ACTS')[n]) || { name: 'Act ' + n, sub: '', palette: {} };
   const itemName = (def, plus) => (plus && def.plus && def.plus.name) ? def.plus.name : (def.name + (plus ? '+' : ''));
   const itemText = (def, plus) => {
-    if (D().itemText) { try { return i18nOn() ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language)
+    if (D().itemText) { try { return typeof I18N !== 'undefined' && I18N && I18N.itemText ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language; round 15: English too, so a switch can redo it)
     return (plus && def.plus && def.plus.text) || def.text || '';
   };
   const snd = (name, opts) => { if (X.AUDIO && X.AUDIO.sfx) { try { X.AUDIO.sfx(name, opts); } catch (e) { /* audio is optional */ } } };
@@ -361,12 +361,6 @@ const GAME = (() => {
       setTimeout(() => { try { node.remove(); } catch (e) { /* gone */ } }, (ms || 520) + (delay || 0) + 80);
     } catch (e) { /* optional */ }
   }
-  // A few DOM coins arcing into the gold stat (shop buys, sale prices).
-  function coinsTo(x0, y0, n) {
-    const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
-    for (let i = 0; i < n; i++) domFly(h('div', 'dcoin'), x0 + (i - n / 2) * 8, y0, gp.x, gp.y, 480, i * 60);
-  }
-
   /* Time: S.slowT seconds of slow motion at S.slowK (the last enemy falling,
      a tier 3 combo). update() scales the game's dt by it; toasts and banners
      keep real time. */
@@ -639,6 +633,9 @@ const GAME = (() => {
           rushMetaFix(S.meta, o); ghoMetaFix(S.meta, o);   // RUSH (round 10): the Boss Rush's bests; the ghosts of the day and the week
           schMetaFix(S.meta, o);   // SCHOOL (round 11): Claw School's stars, bests and diploma, the practice cabinet's setup
           duoMetaFix(S.meta, o);   // DUO (round 11): the duel record, wins per name
+          depMetaFix(S.meta, o);   // DEP (round 15): the Neon Depths' dives and Drowned Jukeboxes
+          cabMetaFix(S.meta, o);   // CAB (round 16): the Jackpot Lamp's tip seen, fevers and PERFECT grabs
+          gachaMetaFix(S.meta, o);   // GACHA (round 17): the Capsule Minis, the daily capsule's streak
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -666,6 +663,7 @@ const GAME = (() => {
     if (!c) return false;
     if (!c.unlock || c.unlock === 'start') return true;
     if (S.meta && S.meta.unlocks[charId]) return true;
+    if (c.unlock === 'fever' && techFeverSeen()) return true;   // TECH (round 17): a profile that has set off LAMP FEVER already
     // A crawler added later (Lucky Lou) is open to a profile that already
     // met his rule with another crawler that shares it (CONTENT block).
     const tb = tbl('CHARACTERS');
@@ -674,6 +672,7 @@ const GAME = (() => {
   function unlockRule(c) {
     if (c.unlock === 'act2') return 'Reach act 2 to unlock';
     if (c.unlock === 'win') return 'Win a run to unlock';
+    if (c.unlock === 'fever') return 'Set off LAMP FEVER to unlock';   // (TECH, round 17)
     return 'Locked';
   }
   // Returns the ids newly unlocked by the given milestone.
@@ -750,6 +749,7 @@ const GAME = (() => {
       else if (sc === 'treasure' && S.sd && S.sd.treasure) showTreasure(S.sd.treasure);
       else if (sc === 'parts' && S.sd && S.sd.parts) showSpareParts(S.sd.parts);
       else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.cap) showCapsule(S.sd.capsule);
+      else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.all) gachaAllShow(S.sd.capsule);   // GACHA (round 17): Open all resumes (each capsule paid once)
       else if (sc === 'counter' && S.sd && S.sd.counter) showCounter(S.sd.counter);
       else if (sc === 'arcade' && S.sd && S.sd.arcade) arcShow(S.sd.arcade);   // ARCADE
       else if (sc === 'loop' && S.sd && S.sd.loop) showLoop(S.sd.loop);   // ENDLESS: the reboot screen
@@ -792,6 +792,7 @@ const GAME = (() => {
     seaNewRun(run);   // the season the run starts in, kept for good (SEASON block)
     stoNewRun(run);   // stories, callbacks, Gary on or off (STORY)
     hisNewRun(run);   // the run's own id for its history record (HISTORY block)
+    clawBalRun(run);   // BALANCE (round 16): the claw type's own Max HP and grabs (DATA.CLAWS[id].bal)
     S.run = run;
     lootRun(run);
     S.tix = null; S.pay = null; S.cap = null;
@@ -808,7 +809,7 @@ const GAME = (() => {
   function newMap(run) {
     if (!X.MAP) return null;
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act + endlessMapTag(run)));   // a new map every Endless loop (ENDLESS block)
-    run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
+    run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes, biome: depMapBiome(run) });   // (DEP: an Endless dive's flooded map)
     secNewMap(run);   // this act's golden key (SECRET)
     seaNewMap(run);   // trick-or-treat doors in season (SEASON)
     stoNewMap(run);   // Grabby Gary's tile, a Card Shark on the hunt (STORY)
@@ -936,6 +937,8 @@ const GAME = (() => {
   function setScreen(name) {
     transition(S.screen, name);
     mixScreen(S.screen, name);   // MIX (round 10): the content rises in, the lists stagger, the HUD slides back, the run-end numbers count
+    m2Leave(S.screen, name);   // M2 (round 18): back home, the hidden run stops let their cards go
+    m3Leave(S.screen, name);   // M3 (round 18): an album, a lobby or a run end left behind lets its cards go
     S.screen = name;
     labelZones(name);   // float labels keep out of the marquee and the HUD (CLAW TYPES block)
     S.ui.buttons = [];
@@ -972,6 +975,7 @@ const GAME = (() => {
   // ---- title
   function showTitle() {
     S.sd = null;
+    const uiFrom = S.screen;   // TITLE (round 15): a group sheet you left through comes back open
     setScreen('title');
     const m = $('titleMenu');
     clear(m);
@@ -1002,7 +1006,194 @@ const GAME = (() => {
     schTitleTip(m); schTitleBtn(row);   // SCHOOL (round 11): "New here?" under New run, the Claw School button (before History)
     hisTitleBtn(row);   // HISTORY: registered last, shown in the first row
     duoTitleBtn(m);   // DUO (round 11): pass and play, beside New run (registered after History)
+    uiTitleTidy(m, uiFrom);   // TITLE (round 15): one big button, the daily run and the modes, a row of tiles; the rest in sheets
     q9TitleFit(-1);   // TITLE (round 9): lift the logo clear of the menu, scroll the menu if it cannot fit
+  }
+
+  /* ================= TITLE MENU (round 15): one clear action, the rest in groups =================
+     DESIGN.md "HUD and title menu polish (round 15)". Every older builder still makes its own button
+     (so S.ui.buttons, their labels, their GAME.choose indices and their handlers are exactly as
+     before: Continue / New run first, Duo last); this pass only moves the elements into place:
+       - the big action: CONTINUE with a saved run (NEW RUN under it, smaller), else NEW RUN
+       - "New here? Try Claw School" (a fresh profile only)
+       - the play row: the Daily run card and MODES (a sheet: Weekly, Boss Rush, Duo)
+       - the tiles: Vault, Collection (a sheet: Prizedex, Stickers, Codex, History), School,
+         Settings, More (a sheet: Help, Tips, Intro, Sound, Music)
+       - the stats line
+     The group buttons are plain taps (not GAME.choose entries). A sheet you left through (Back from
+     the Prizedex, the Sound toggle) opens again when the title comes back. Escape closes a sheet. */
+  const UIT = { reopen: null, keys: false, sheets: {}, open: null, opener: null };
+  // Adds a class by its name string (a stub DOM keeps className only).
+  function uiCls(el, c) {
+    if (el && c && !new RegExp('(^|\\s)' + c + '(\\s|$)').test(el.className || '')) el.className = ((el.className || '') + ' ' + c).trim();
+    return el;
+  }
+  const UIT_BACK = ['title', 'collection', 'stickers', 'codex', 'history', 'help', 'tips', 'intro', 'weekly', 'rushmenu', 'duo', 'school', 'vault'];
+  function uiTitleTidy(m, from) {
+    if (!m || !m.appendChild) return null;
+    const B = {};
+    for (const b of S.ui.buttons) if (b && b.el && b.label && !B[b.label]) B[b.label] = b.el;
+    const lab = (re) => { const b = S.ui.buttons.find((x) => re.test(x.label || '')); return b ? b.el : null; };
+    const kids = Array.prototype.slice.call(m.children || []);
+    const stats = kids.find((c) => /\bmStats\b/.test(c.className || '')) || null;
+    const tip = kids.find((c) => /\bschTip\b/.test(c.className || '')) || null;
+    const scr = $('scr-title');
+    for (const id in UIT.sheets) { const s = UIT.sheets[id]; if (s && s.parentNode && s.parentNode.removeChild) s.parentNode.removeChild(s); }
+    UIT.sheets = {}; UIT.open = null;
+    clear(m);
+    const cls = uiCls;
+    // the big action
+    const pri = h('div', 'uiPri');
+    if (B.Continue) pri.appendChild(cls(B.Continue, 'uiBig'));
+    if (B['New run']) pri.appendChild(B.Continue ? B['New run'] : cls(B['New run'], 'uiBig'));
+    m.appendChild(pri);
+    if (tip) m.appendChild(tip);
+    // the play row: today's daily run and the other modes
+    const play = h('div', 'uiPlay');
+    if (B['Daily run']) play.appendChild(B['Daily run']);
+    const modes = [B['Weekly challenge'], B['Boss Rush'], B.Duo].filter(Boolean);
+    if (modes.length) {
+      const mb = h('button', 'btn uiModes');
+      mb.appendChild(h('span', 'uiTi', '\u{1F579}️'));
+      mb.appendChild(h('span', 'm1', 'Modes'));
+      mb.appendChild(h('span', 'm2', 'Weekly, Boss Rush, Duo'));
+      mb.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen('modes', false, !!ev && ev.detail === 0); };
+      play.appendChild(mb);
+      uiSheet(scr, 'modes', 'Play modes', modes, ['uiI-wk', 'uiI-rush', 'uiI-duo']);
+    }
+    if (play.children && play.children.length) m.appendChild(play);
+    // the tiles
+    const tiles = h('div', 'uiTiles');
+    const tile = (el, icon, label, extra) => {
+      if (!el) return null;
+      const keep = [];
+      for (const c of Array.prototype.slice.call(el.children || [])) if (/\bvdot\b/.test(c.className || '')) keep.push(c);
+      clear(el);
+      el.appendChild(h('span', 'uiTi', icon));
+      el.appendChild(h('span', 'uiTl', label));
+      for (const c of keep) el.appendChild(c);
+      cls(el, 'uiTile');
+      if (extra) cls(el, extra);
+      tiles.appendChild(el);
+      return el;
+    };
+    const grp = (id, icon, label, title, els, icons) => {
+      const list = els.filter(Boolean);
+      if (!list.length) return null;
+      const g = h('button', 'btn uiTile uiGrp');
+      try { g.setAttribute('data-g', id); } catch (e) { /* stub */ }
+      g.appendChild(h('span', 'uiTi', icon));
+      g.appendChild(h('span', 'uiTl', label));
+      g.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen(id, false, !!ev && ev.detail === 0); };
+      tiles.appendChild(g);
+      uiSheet(scr, id, title, list, icons);
+      return g;
+    };
+    tile(B['Prize Vault'], '\u{1F381}', 'Vault');
+    const col = grp('collection', '\u{1F4DA}', 'Collection', 'Collection', [B.Prizedex, B.Stickers, B.Codex, B.History], ['uiI-dex', 'uiI-stk', 'uiI-codex', 'uiI-his']);
+    if (col) {
+      // something new inside: a badge on the tile (fresh Codex pages, stickers not yet looked at)
+      let n = 0;
+      try { n += parseInt((B.Codex && B.Codex.getAttribute && B.Codex.getAttribute('data-n')) || '0', 10) || 0; } catch (e) { /* stub */ }
+      n += Object.keys((S.meta && S.meta.achNew) || {}).length;
+      if (n > 0) col.appendChild(h('i', 'vdot', String(Math.min(99, n))));
+    }
+    tile(B['Claw School'], '\u{1F393}', 'School');
+    tile(lab(/Settings$/), '⚙️', 'Options');   // (the tile's short word: "Instellingen" does not fit a tile)
+    const more = [B.Help, B.Tips, B.Intro, lab(/^Sound /), lab(/^Music /)];
+    // a title button this pass does not know (a newer builder's) still has a home: the More sheet
+    const known = new Set([B.Continue, B['New run'], B['Daily run'], B['Prize Vault'], B['Claw School'], lab(/Settings$/), B.Prizedex, B.Stickers, B.Codex, B.History].concat(modes, more).filter(Boolean));
+    for (const b of S.ui.buttons) if (b && b.el && !known.has(b.el) && !qa17TitleKeep(b.el)) { known.add(b.el); more.push(b.el); }   // (QA17: the season ribbon stays a ribbon over the sky)
+    grp('more', '☰', 'More', 'More', more, ['uiI-help', 'uiI-tips', 'uiI-intro', '', '']);
+    if (tiles.children && tiles.children.length) m.appendChild(tiles);
+    // and anything else a builder put in the menu (not one of the old rows) stays, under the tiles
+    for (const c of kids) if (c && c !== stats && c !== tip && !known.has(c) && !/\b(row|dwRow|vrRow|duoRow)\b/.test(c.className || '')) m.appendChild(c);
+    if (stats) m.appendChild(stats);
+    // the keys: Escape puts a sheet away (once per page)
+    if (!UIT.keys && !S.headless) {   // (a browser only: the game's own key handler is the one listener headless)
+      UIT.keys = true;
+      try { document.addEventListener('keydown', (ev) => qa17TitleEsc(ev)); } catch (e) { /* headless */ }   // (QA17: Escape closes a sheet, but not the Escape that just came back from a page and reopened it)
+    }
+    // back from a page you opened out of a sheet: that sheet again, at once
+    const back = UIT.reopen;
+    UIT.reopen = null;
+    if (back && UIT.sheets[back] && UIT_BACK.indexOf(from) >= 0) uiSheetOpen(back, true);
+    return pri;
+  }
+  // A group sheet: a dimmed backdrop and a panel rising from the bottom with the group's buttons.
+  // (round 18: built on the design system's .sheetWrap / .sheet / .sheetHead / .sheetBody)
+  function uiSheet(scr, id, title, els, icons) {
+    if (!scr || !scr.appendChild) return null;
+    const s = h('div', 'uiSheet sheetWrap');
+    s.id = 'uiSheet-' + id;
+    const p = h('div', 'sheet uiSheetP');
+    const hd = h('div', 'uiSheetH sheetHead');
+    hd.appendChild(h('h3', null, title));
+    const x = h('button', 'btn ghost sm uiX uiSheetX', '×');
+    x.setAttribute('aria-label', i18nT('Close'));
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen(null); };
+    hd.appendChild(x);
+    p.appendChild(hd);
+    const body = h('div', 'uiSheetB sheetBody');
+    els.forEach((el, i) => { if (!el) return; if (icons && icons[i]) uiCls(el, icons[i]); body.appendChild(el); });
+    p.appendChild(body);
+    s.appendChild(p);
+    // a tap inside remembers the sheet (Back comes here again); a tap on the dim closes it
+    if (p.addEventListener) p.addEventListener('click', () => { UIT.reopen = id; }, true);
+    s.onclick = (ev) => { if (ev && ev.target === s) { snd('click'); uiSheetOpen(null); } };
+    scr.appendChild(s);
+    UIT.sheets[id] = s;
+    return s;
+  }
+  /* DESIGN SYSTEM (round 18): one bottom sheet for any page. dsSheet(parent, title, onClose) puts a dimmed
+     .sheetWrap in parent with a .sheet (the handle, a head with the title and a close x, a scrolling body);
+     returns { wrap, body, open(), close(), on }. A tap on the dim or on the x closes it. Its controls are
+     plain taps, never GAME.choose entries. */
+  function dsSheet(parent, title, onClose) {
+    const wrap = h('div', 'sheetWrap dsSheetWrap');
+    const p = h('div', 'sheet');
+    const hd = h('div', 'sheetHead');
+    hd.appendChild(h('h3', null, title));
+    const x = h('button', 'btn ghost sm uiX', '×');
+    try { x.setAttribute('aria-label', i18nT('Close')); } catch (e) { /* stub */ }
+    hd.appendChild(x);
+    const body = h('div', 'sheetBody');
+    p.appendChild(hd);
+    p.appendChild(body);
+    wrap.appendChild(p);
+    const o = {
+      wrap, body, on: false,
+      open() { o.on = true; try { wrap.classList.add('show'); } catch (e) { /* stub */ } return o; },
+      close() { if (!o.on) return o; o.on = false; try { wrap.classList.remove('show'); } catch (e) { /* stub */ } if (onClose) onClose(); return o; },
+    };
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); o.close(); };
+    wrap.onclick = (ev) => { if (ev && ev.target === wrap) { snd('click'); o.close(); } };
+    if (parent && parent.appendChild) parent.appendChild(wrap);
+    return o;
+  }
+  // Opens a sheet by id (null closes); quiet skips the rise (coming back to it); kb (opened from the
+  // keyboard, a click with no pointer) moves the focus into the sheet.
+  function uiSheetOpen(id, quiet, kb) {
+    for (const k in UIT.sheets) {
+      const s = UIT.sheets[k];
+      if (!s || !s.classList) continue;
+      s.classList.remove('quiet');
+      if (k === id) { if (quiet) s.classList.add('quiet'); s.classList.add('show'); } else s.classList.remove('show');
+    }
+    UIT.open = id && UIT.sheets[id] ? id : null;
+    if (!UIT.open) UIT.reopen = null;
+    const scr = $('scr-title');
+    if (scr && scr.classList) scr.classList[UIT.open ? 'add' : 'remove']('uiSheetOn');
+    // keyboard: into the sheet's first button; closing hands the focus back to the group button
+    if (UIT.open && kb && !S.headless) {
+      try { const f = UIT.sheets[id].querySelector('.uiSheetB .btn'); if (f && f.focus) f.focus({ preventScroll: true }); } catch (e) { /* optional */ }
+    }
+    if (UIT.open) UIT.opener = kb ? UIT.open : null;
+    else if (UIT.opener && !S.headless) {
+      try { const g = document.querySelector(UIT.opener === 'modes' ? '#titleMenu .uiModes' : '#titleMenu .uiGrp[data-g="' + UIT.opener + '"]'); if (g && g.focus) g.focus({ preventScroll: true }); } catch (e) { /* optional */ }
+      UIT.opener = null;
+    }
+    return UIT.open;
   }
 
   // ---- intro cinematic (js/intro.js). The first launch plays it once;
@@ -1019,46 +1210,133 @@ const GAME = (() => {
     });
   }
 
-  // ---- character select
+  /* ---- character select (round 18, DESIGN.md "Design system and home screens (round 18)"): three short
+     steps on one page instead of three screens of scrolling:
+       1 the crawler: a row of portraits, the picked one's card under it
+       2 the claw: a row of claws, the picked one's demo cabinet and stats (CLAW TYPES block)
+       3 the run options row (Tilt and Mutators, in a sheet), START in the dock
+     The crawler portraits are still the GAME.choose entries, in DATA order, and a choice still starts that
+     crawler's run (tests, the bot); a tap on a portrait only picks it, START starts the picked one.
+     Back is registered last, as before, and shown top left. */
   function showChars() {
     setScreen('chars');
     const b = $('charsBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Pick a crawler'));
-    b.appendChild(h('div', 'sub', 'Each carries a different bin of junk and a different claw.'));
-    metaTiltRow(b);   // the Tilt selector (META block)
-    clawPickerRow(b);   // the claw picker (CLAW TYPES block)
-    mutPickerRow(b);   // the run mutators (ENDLESS block)
+    uiCls(b, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'New run'));
+    b.appendChild(head);
+    const body = h('div', 'pageBody m1Chars');
+    b.appendChild(body);
+    const M = S.m1Chars = { tiles: {}, fn: {}, info: null, go: null, opt: null, sheet: null };
+    // step 1: the crawler
+    const s1 = h('div', 'm1Step');
+    s1.appendChild(m1StepHead(1, 'Pick a crawler'));
+    const crew = h('div', 'm1Crew');
+    M.info = h('div', 'card charcard m1CrewCard');
+    s1.appendChild(crew);
+    s1.appendChild(M.info);
+    body.appendChild(s1);
+    // step 2: the claw (CLAW TYPES block)
+    clawPickerRow(body);
+    // step 3: Tilt and the mutators, one row that opens a sheet
+    const s3 = h('div', 'm1Step');
+    s3.appendChild(m1StepHead(3, 'Run options'));
+    M.opt = h('button', 'btn m1Opt');
+    M.opt.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); if (M.sheet) M.sheet.open(); };
+    s3.appendChild(M.opt);
+    body.appendChild(s3);
+    const old = $('m1OptSheet');
+    if (old && old.parentNode && old.parentNode.removeChild) old.parentNode.removeChild(old);
+    M.sheet = dsSheet($('scr-chars'), 'Run options', () => m1OptFill());
+    M.sheet.wrap.id = 'm1OptSheet';
+    metaTiltRow(M.sheet.body);   // the Tilt selector (META block)
+    S.mutOpen = true;
+    mutPickerRow(M.sheet.body);   // the run mutators (ENDLESS block), open in the sheet
+    // the crawlers: compact portraits, registered in DATA order
     const chars = tbl('CHARACTERS');
     const ids = Object.keys(chars);
     for (const id of ids) {
       const c = chars[id];
       const ok = unlocked(id);
-      const card = h('div', 'card charcard' + (ok ? '' : ' locked'));
-      const head = h('div', 'head');
-      head.appendChild(portraitCanvas(id, 72));
-      const tx = h('div', 'col');
-      tx.appendChild(h('div', 'name', c.name));
-      tx.appendChild(h('div', 'title', c.title || ''));
-      head.appendChild(tx);
-      card.appendChild(head);
-      card.appendChild(h('div', 'text', c.blurb || ''));
-      const stats = h('div', 'stats');
-      stats.appendChild(h('span', 'tag pink', `${c.hp} hp`));
-      stats.appendChild(h('span', 'tag gold', `${c.gold} gold`));
-      stats.appendChild(h('span', 'tag cyan', `${(c.claw && c.claw.grabs) || 3} grabs`));
-      stats.appendChild(h('span', 'tag', `${(c.bin || []).length} items`));
-      if (c.relic) stats.appendChild(h('span', 'tag lime', relicDef(c.relic).name));
-      metaCharTags(stats, id);   // Tilt tag (META block)
-      card.appendChild(stats);
-      if (!ok) card.appendChild(h('div', 'lock', unlockRule(c)));
+      const tile = h('button', 'm1Tile' + (ok ? '' : ' locked'));
+      tile.appendChild(portraitCanvas(id, 64));
+      if (!ok) tile.appendChild(h('i', 'm1Lock', '\u{1F512}'));
+      // the words for a screen reader (the card under the row says them on screen): the name, and how to unlock
+      tile.appendChild(h('span', 'm1Sr', c.name));
+      if (!ok) tile.appendChild(h('span', 'm1Sr', unlockRule(c)));
       const fn = () => { if (!ok) { toast(unlockRule(c)); return; } snd('click'); newRun(id); };
-      card.onclick = fn;
-      S.ui.buttons.push({ el: card, fn, label: c.name, disabled: !ok });
-      b.appendChild(card);
+      tile.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); m1CrewFill(id); };
+      S.ui.buttons.push({ el: tile, fn, label: c.name, disabled: !ok });
+      M.tiles[id] = tile; M.fn[id] = fn;
+      crew.appendChild(tile);
     }
+    // the dock: START (a plain tap: the portraits are the choose entries)
+    const dock = h('div', 'pageDock');
+    M.go = h('button', 'btn pri m1Go', 'Start run');
+    M.go.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); const f = M.fn[M.pick]; if (f) f(); };
+    dock.appendChild(M.go);
+    b.appendChild(dock);
     if (!ids.length) b.appendChild(btn('Start as the Knight', () => newRun('knight'), 'pri'));
-    b.appendChild(btn('Back', () => showTitle(), 'ghost'));
+    head.appendChild(btn('Back', () => showTitle(), 'ghost sm phBack'));
+    const pick = ids.indexOf(S.m1Pick) >= 0 && unlocked(S.m1Pick) ? S.m1Pick : (ids.find((id) => unlocked(id)) || ids[0]);
+    if (pick) m1CrewFill(pick);
+    m1OptFill();
+  }
+  // A step's label: its number in a dot, then the words.
+  function m1StepHead(n, label) {
+    const d = h('div', 'm1StepH');
+    d.appendChild(h('b', null, String(n)));
+    d.appendChild(h('span', null, label));
+    return d;
+  }
+  // Picks a crawler on character select: the ring on its portrait, its card, START.
+  function m1CrewFill(id) {
+    const M = S.m1Chars, c = tbl('CHARACTERS')[id];
+    if (!M || !c || !M.info) return false;
+    M.pick = id; S.m1Pick = id;
+    for (const k in M.tiles) { const t = M.tiles[k]; t.className = String(t.className || '').replace(/\s*\bon\b/g, '') + (k === id ? ' on' : ''); }
+    const ok = unlocked(id), card = M.info;
+    clear(card);
+    card.className = 'card charcard m1CrewCard' + (ok ? '' : ' locked');
+    const head = h('div', 'head');
+    head.appendChild(portraitCanvas(id, 64));
+    const tx = h('div', 'col');
+    tx.appendChild(h('div', 'name', c.name));
+    tx.appendChild(h('div', 'title', c.title || ''));
+    head.appendChild(tx);
+    card.appendChild(head);
+    card.appendChild(h('div', 'text', c.blurb || ''));
+    const stats = h('div', 'stats');
+    stats.appendChild(h('span', 'tag pink', `${c.hp} hp`));
+    stats.appendChild(h('span', 'tag gold', `${c.gold} gold`));
+    stats.appendChild(h('span', 'tag cyan', `${(c.claw && c.claw.grabs) || 3} grabs`));
+    stats.appendChild(h('span', 'tag', `${(c.bin || []).length} items`));
+    if (c.relic) stats.appendChild(h('span', 'tag lime', relicDef(c.relic).name));
+    metaCharTags(stats, id);   // Tilt tag (META block)
+    card.appendChild(stats);
+    if (!ok) card.appendChild(h('div', 'lock', unlockRule(c)));
+    if (M.go) M.go.disabled = !ok;
+    return true;
+  }
+  // The run options row: the Tilt, the mutators on, the score multiplier.
+  function m1OptFill() {
+    const M = S.m1Chars, el = M && M.opt;
+    if (!el) return;
+    clear(el);
+    const lv = (S.meta && S.meta.tiltSel) | 0, pick = (S.meta && S.meta.mutPick) || [];
+    const mult = D().mutMult ? D().mutMult(pick) : 1;
+    const t = h('span', 'm1OptT');
+    t.appendChild(h('span', 'k', 'TILT'));
+    t.appendChild(h('b', null, String(lv)));
+    el.appendChild(t);
+    const mu = h('span', 'm1OptM');
+    mu.appendChild(h('span', 'k', 'MUTATORS'));
+    if (pick.length) for (const id of pick) mu.appendChild(h('i', null, mutDef(id).icon));
+    else mu.appendChild(h('span', 'off', 'OFF'));
+    el.appendChild(mu);
+    el.appendChild(h('b', 'm1OptX', 'x' + mult.toFixed(2)));
+    el.appendChild(h('span', 'm1OptAr', '›'));
   }
 
   // ================================================================ CLAW TYPES
@@ -1086,6 +1364,15 @@ const GAME = (() => {
     const ids = Object.keys(t).filter(clawTypeOk).sort((a, b) => (t[a].order || 0) - (t[b].order || 0));
     return ids.length ? ids : ['classic'];
   }
+  // BALANCE (round 16, DESIGN.md "Balance touch-up (round 16)"): a claw type's own start on top of the
+  // crawler's, from DATA.CLAWS[id].bal {hp: Max HP, grabs: grabs a turn}. Once, when the run is made.
+  function clawBalRun(run) {
+    const b = clawInfo(runClawType(run)).bal;
+    if (!b || typeof b !== 'object') return;
+    const hp = Math.round(+b.hp || 0), g = Math.round(+b.grabs || 0);
+    if (hp) { run.maxHp = Math.max(1, run.maxHp + hp); run.hp = Math.max(1, Math.min(run.maxHp, run.hp + hp)); }
+    if (g) run.claw.grabs = U.clamp((run.claw.grabs || 3) + g, 1, 9);
+  }
   // A still of a claw type for a picker chip (half open, a little cable).
   function clawCanvas(id, px) {
     return canvasEl(px, (ctx, p) => {
@@ -1104,8 +1391,8 @@ const GAME = (() => {
      the next run; tapping a crawler card starts it. Chips are plain taps,
      not GAME.choose entries (the crawler cards keep their indices). */
   function clawPickerRow(b) {
-    const box = h('div', 'clawPick panel');
-    box.appendChild(h('h2', null, 'Pick a claw'));
+    const box = h('div', 'clawPick m1Step');   // (round 18: step 2 of character select)
+    box.appendChild(m1StepHead(2, 'Pick a claw'));
     const row = h('div', 'clawRow');
     const info = h('div', 'clawInfo');
     const chips = {};
@@ -1130,6 +1417,11 @@ const GAME = (() => {
       const mt = h('div', 'stats');
       if (c.good) mt.appendChild(h('span', 'tag lime', '+ ' + c.good));
       if (c.bad) mt.appendChild(h('span', 'tag pink', '- ' + c.bad));
+      // (round 16) the claw type's run start (CLAWS[id].bal, clawBalRun) said out loud
+      const cb = c.bal || {}, bg = Math.round(+cb.grabs || 0), bh = Math.round(+cb.hp || 0);
+      if (bg > 0) mt.appendChild(h('span', 'tag lime', '+1 grab a turn'));
+      if (bg < 0) mt.appendChild(h('span', 'tag pink', '-1 grab a turn'));
+      if (bh > 0) mt.appendChild(h('span', 'tag lime', `+${bh} Max HP`));
       tx.appendChild(mt);
       tx.appendChild(h('div', 'joke', c.joke || ''));
       schPracticeBtn(tx, id);   // SCHOOL (round 11): try this claw in the Practice Cabinet
@@ -1256,35 +1548,45 @@ const GAME = (() => {
   }
 
   // ---- help / collection
+  /* (round 18) Help is a page: Back and the title in the sticky head, then short section cards
+     (the rig, fights, statuses as a two-column list, the map, keys). */
   function showHelp(back) {
     setScreen('help');
-    const b = $('helpBody');
-    clear(b);
-    b.appendChild(h('h1', null, 'How it works'));
-    b.appendChild(h('h3', null, 'The rig'));
+    const pg = $('helpBody');
+    clear(pg);
+    uiCls(pg, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'How it works'));
+    pg.appendChild(head);
+    const body = h('div', 'pageBody m1Help');
+    pg.appendChild(body);
+    let b = null;
+    const sec = (title, icon) => { b = h('section', 'm1HelpSec'); const t = h('h3', null, title); if (icon) t.setAttribute('data-ic', icon); b.appendChild(t); body.appendChild(b); return b; };
+    sec('The rig', '\u{1F3AE}');
     let p = h('p'); p.innerHTML = i18nTr('Your deck is a <b>bin of objects</b> in a glass cabinet. Drag on the glass to steer the claw, let go to drop it. The prongs close on whatever is under them, lift, swing to the chute on the right and open. <b>Whatever lands in the chute is played.</b> What slips out lands back in the pile. A turn is a handful of grabs; two items in one grab is a double, three is a <b>jackpot</b>.'); b.appendChild(p);
     p = h('p'); p.innerHTML = i18nTr('Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Fights'));
+    sec('Fights', '⚔️');
     p = h('p'); p.innerHTML = i18nTr('Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Statuses'));
-    const list = h('div', 'statusList');
+    sec('Statuses', '✨');
+    // a two-column list: the icon and the name (never wrapping under its icon), the rule beside it
+    const list = h('div', 'statusList m1StatList');
     const st = tbl('STATUS');
     const ids = Object.keys(st);
     if (!ids.length) list.appendChild(h('div', 'sub', 'Strength, weak, vulnerable, poison, burn, chill, freeze, regen, thorns, dodge, bleed, stun, grease, fog, armor.'));
     for (const id of ids) {
       const s = st[id];
-      const kv = h('div', 'kv');
-      const k = h('span'); k.innerHTML = `<b>${s.icon || ''} ${i18nTr(s.name || id)}</b>`;
-      kv.appendChild(k);
-      kv.appendChild(h('span', 'sub', s.text || ''));
-      list.appendChild(kv);
+      const k = h('div', 'm1StK');
+      k.appendChild(h('span', 'ic', s.icon || ''));
+      k.appendChild(h('b', null, s.name || id));
+      list.appendChild(k);
+      list.appendChild(h('div', 'm1StV', s.text || ''));
     }
     b.appendChild(list);
-    b.appendChild(h('h3', null, 'The map'));
+    sec('The map', '\u{1F5FA}️');
     p = h('p'); p.innerHTML = i18nTr(`The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Keys'));
+    sec('Keys', '⌨️');
     p = h('p'); p.innerHTML = i18nTr('Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'); b.appendChild(p);
-    b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri mixStick'));   // MIX: the way out stays on screen
+    head.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'ghost sm phBack'));   // (round 18: top left, in the page head)
   }
   // ================================================================ META
   /* Meta progression (DESIGN.md "Meta"): Tilt levels, the Prizedex, the
@@ -1635,7 +1937,7 @@ const GAME = (() => {
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
     if (ok && m.dexNew[tab + ':' + id]) card.appendChild(h('div', 'newb', 'NEW!'));
     card.onclick = () => popover(ok ? `<b>${def.name}</b><br>${text}` : `<b>???</b><br>${hintTxt}`, 270, 300);
-    if (ok && (tab === 'items' || tab === 'relics')) holoOn(card, def.rarity, { quiet: true });   // HOLO (round 9): found prizes shine
+    // (M3 round 18: the album is calm; the holo shine stays on the reward and shop cards)
     return card;
   }
   function showCollection(tab) {
@@ -1646,10 +1948,10 @@ const GAME = (() => {
     S.dexTab = tab;
     const b = $('collectionBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Prizedex'));
+    m3Page('collection', b);   // M3 (round 18): the album look, a solid page
     const P = dexProg();
     b.appendChild(metaBar(P.n, P.total, `${Math.floor(P.pct)}% complete · ${P.n} of ${P.total}`));
-    const row = h('div', 'dexTabs');
+    const row = h('div', 'dexTabs m3Seg');   // (M3: one scrolling segmented row)
     const E = D().dexEntries ? D().dexEntries() : { items: Object.keys(tbl('ITEMS')), relics: Object.keys(tbl('RELICS')), enemies: [], combos: [] };
     for (const t of tabs) {
       const per = P.per[t.id] || { n: 0, total: 0 };
@@ -1671,8 +1973,10 @@ const GAME = (() => {
     // the NEW! marks show once
     for (const id of ids) delete S.meta.dexNew[tab + ':' + id];
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
-    loreDexBtn(b);   // LORE: the Codex (registered last, shown under the title)
+    const back = btn('Back', () => showTitle(), 'ghost sm');
+    b.appendChild(back);
+    const cdx = loreDexBtn(b);   // LORE: the Codex (registered last, shown under the title)
+    m3Head(b, back, 'Prizedex', cdx);   // M3 (round 18): Back top-left, the Codex on the right
   }
 
   // ---- the sticker board (screen 'stickers')
@@ -1682,17 +1986,17 @@ const GAME = (() => {
     const A = D().ACHIEVEMENTS || {}, ids = D().ACH_IDS || Object.keys(A);
     const b = $('stickersBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Sticker board'));
+    m3Page('stickers', b);   // M3 (round 18): the album look, a solid page
     const n = ids.filter((id) => m.ach[id]).length;
     b.appendChild(metaBar(n, ids.length, `${n} of ${ids.length} stickers`, 'gold'));
     const grid = h('div', 'stGrid');
     const c = achCtx('meta');
     ids.forEach((id, i) => {
       const a = A[id], got = !!m.ach[id];
-      const s = h('div', 'stk' + (got ? ' got' : ''));
+      const s = h('div', 'stk' + (got ? ' got' : ' locked'));
       try { s.style.setProperty('--sc', a.color || PAL0.gold); s.style.setProperty('--rot', (((i * 37) % 9) - 4) + 'deg'); } catch (e) { /* stub */ }
       const disc = h('div', 'disc');
-      disc.appendChild(h('span', 'ic', got ? a.icon : '?'));
+      disc.appendChild(h('span', 'ic', a.icon || '?'));   // (M3 round 18: a locked sticker shows its silhouette, the CSS darkens it)
       s.appendChild(disc);
       s.appendChild(h('div', 'nm', a.name));
       s.appendChild(h('div', 'tx', a.text));
@@ -1708,7 +2012,7 @@ const GAME = (() => {
     b.appendChild(grid);
     m.achNew = {};
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
+    m3Head(b, btn('Back', () => showTitle(), 'ghost sm'), 'Sticker board', null);   // M3 (round 18): Back top-left
   }
 
   // ---- title: the stats marquee, the daily run and the attract mode
@@ -1965,7 +2269,7 @@ const GAME = (() => {
     run.muts = mutClean(run.muts);
     if (!run.sc || typeof run.sc !== 'object') run.sc = { bosses: 0, combos: 0 };
     const E = run.endless;
-    run.endless = E && typeof E === 'object' ? { loop: Math.max(0, E.loop | 0), mix: E.mix || null, since: E.since | 0, adds: Array.isArray(E.adds) ? E.adds : [], over: !!E.over } : null;
+    run.endless = E && typeof E === 'object' ? { loop: Math.max(0, E.loop | 0), mix: E.mix || null, since: E.since | 0, adds: Array.isArray(E.adds) ? E.adds : [], over: !!E.over, dep: !!E.dep, dp: Math.max(0, E.dp | 0) } : null;   // (DEP: the loop dives, the dives this run)
     return run;
   }
   // A fresh run: the picked mutators (the daily run has its own for the date).
@@ -2152,10 +2456,13 @@ const GAME = (() => {
     const st = S.actStat || (S.actStat = ($('actTxt') || {}).parentNode || null);
     if (!st || !st.classList) return;
     const on = !!(run && run.endless && run.endless.loop > 0), sec = !on && !!(run && secIn(run));
-    if (S.loopHud === on && S.secHud === sec) return;
-    S.loopHud = on; S.secHud = sec;
+    let dep = false;
+    try { dep = on && depIn(run); } catch (e) { /* DEP block not up yet */ }
+    if (S.loopHud === on && S.secHud === sec && S.depHud === dep) return;
+    S.loopHud = on; S.secHud = sec; S.depHud = dep;
     st.classList[on ? 'add' : 'remove']('endless');
     st.classList[sec ? 'add' : 'remove']('secret');   // the Back Room: a gold key stat (round 7 QA)
+    st.classList[dep ? 'add' : 'remove']('depths');   // (DEP, round 15) a dive: the Loop chip turns teal with a wave
     const k = st.querySelector ? st.querySelector('.k') : null;
     if (k) k.textContent = on ? 'Endless' : 'Act';
   }
@@ -2252,11 +2559,14 @@ const GAME = (() => {
   const endlessOffer = () => !!(S.run && S.run.winDone && !S.run.endless);
   function endlessChoice(b) {
     const box = h('div', 'endChoice');
-    box.appendChild(btn('Cash out', () => { S.run = null; save(); showTitle(); }, 'ghost cash'));
-    const go = btn('Keep playing: Endless', () => endlessStart(), 'gold endless');
+    const cash = btn('Cash out', () => { S.run = null; save(); showTitle(); }, 'ghost cash');
+    box.appendChild(cash);
+    const go = btn('Keep playing: Endless', () => endlessStart(), 'pri endless');
     box.appendChild(go);
-    box.appendChild(h('div', 'sub', 'The win is banked either way. Endless reboots the machine meaner every loop: tougher monsters, a new map, a new mutator from Loop 2. How deep can you go?'));
+    const note = h('div', 'sub m3Keep endNote', 'The win is banked either way. Endless reboots the machine meaner every loop: tougher monsters, a new map, a new mutator from Loop 2. How deep can you go?');
+    box.appendChild(note);
     b.appendChild(box);
+    return { box, cash, go, note };   // (M3 round 18: the win's scoreboard docks the two, the note stays in view)
   }
   function endlessStart() {
     const run = S.run;
@@ -2276,13 +2586,13 @@ const GAME = (() => {
   function endlessNext() {
     const run = S.run, E = run.endless, cfg = ENDL();
     E.loop++;
-    run.act = D().endlessAct ? D().endlessAct(E.loop) : ((E.loop - 1) % 3) + 1;
+    run.act = depLoopAct(E);   // (DEP round 15: every third loop from Loop 3 dives into the Neon Depths; the classic biomes carry on between)
     let added = null;
     if (E.loop >= (cfg.mutFrom || 2) && D().mutPick) {
       added = D().mutPick(rngFor('endless:mut'), run.muts);
       if (added) { run.muts = mutClean(run.muts.concat([added])); E.adds.push(added); }
     }
-    E.mix = E.loop >= (cfg.mixFrom || 1) && D().endlessMix ? D().endlessMix(rngFor('endless:mix'), run.act) : null;
+    E.mix = depMix(E, E.loop >= (cfg.mixFrom || 1) && D().endlessMix ? D().endlessMix(rngFor('endless:mix'), run.act) : null);   // (DEP: a dive's boss keeps its own trick)
     const m = endlessMetaFix(S.meta);
     m.endless.best = Math.max(m.endless.best, E.loop);
     saveMeta();
@@ -2292,9 +2602,9 @@ const GAME = (() => {
     metaActStart(run);
     newMap(run);
     const id = legBossRelic(rollRelic(rngFor('bossrelic'), ['boss', 'r']));   // (LEG: now and then a legendary)
-    const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${actDef(run.act).name}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
+    const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${depActName(run)}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
     const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
-    showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
+    showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, dep: !!E.dep, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
     return E.loop;
   }
   // The reboot: a CRT power-on, the boot log, LOOP N slams in, then on.
@@ -2304,8 +2614,9 @@ const GAME = (() => {
     const scr = $('scr-loop');
     const b = $('loopBody');
     clear(b);
+    m3Page('loop', null);   // M3 (round 18): the CRT is black glass: a solid page (ds-opaque)
     const run = S.run, sc = D().endlessScale ? D().endlessScale(lp.loop, lp.act) : { hp: 1, dmg: 1 };
-    const crt = h('div', 'crt' + (S.loopFast ? ' fast' : ''));
+    const crt = h('div', 'crt' + (S.loopFast ? ' fast' : '') + (lp.dep ? ' dep' : ''));   // (DEP: a dive's tube floods)
     const tube = h('div', 'tube');
     const boot = h('div', 'boot');
     const lines = [
@@ -2318,6 +2629,7 @@ const GAME = (() => {
     if (lp.mix) lines.push([`BOSS PATCH: LEARNED ${String(((enemyDef(lp.mix).sig || {}).name) || 'A NEW TRICK').toUpperCase()}`, 'warn']);
     if (lp.added) lines.push([`NEW MUTATOR: ${mutDef(lp.added).name.toUpperCase()}`, 'ok']);
     lines.push(['PRESS START', 'ok']);
+    depBootLines(lp, lines);   // (DEP: the drain pump failed, the loop dives into the Neon Depths)
     lines.forEach((ln, i) => { const d = h('div', ln[1] || null, '> ' + ln[0]); d.style.animationDelay = (0.9 + i * 0.17).toFixed(2) + 's'; boot.appendChild(d); });
     tube.appendChild(boot);
     const tSlam = 1.0 + lines.length * 0.17;
@@ -2326,7 +2638,8 @@ const GAME = (() => {
     big.appendChild(document.createTextNode ? document.createTextNode('LOOP ' + lp.loop) : h('span', null, 'LOOP ' + lp.loop));
     big.style.animationDelay = tSlam.toFixed(2) + 's, ' + (tSlam + 1).toFixed(2) + 's';
     tube.appendChild(big);
-    const sub = h('div', 'lsub', `${actDef(lp.act).name}, again. Act ${3 + lp.loop} of forever.`);
+    depLoopCard(tube, lp, tSlam);   // (DEP: THE NEON DEPTHS under LOOP N, over rising water)
+    const sub = h('div', 'lsub', depLoopSub(lp));
     sub.style.animationDelay = (tSlam + 0.3).toFixed(2) + 's';
     tube.appendChild(sub);
     if (lp.added) {
@@ -2537,6 +2850,7 @@ const GAME = (() => {
     if (p && vaultDef(p.id)) {
       const tier = vaultDef(p.id).rarity;
       V.pend = { id: p.id, tier0: String(p.tier0 || tier), ups: Array.isArray(p.ups) ? p.ups.filter((x) => typeof x === 'string') : [], tier, dupe: !!p.dupe, tix: num(p.tix), lucky: !!p.lucky };
+      if (p.daily) V.pend.daily = true;   // GACHA (round 17): the free daily capsule
     }
     m.vault = V;
     if (m === S.meta) vaultApply();
@@ -2569,15 +2883,20 @@ const GAME = (() => {
     if (!D().vaultForSticker) return [];
     const V = vaultM(), got = [];
     for (const id of D().vaultForSticker(achId)) if (!V.owned[id]) { V.owned[id] = 1; V.news[id] = 1; got.push(id); }
-    if (got.length) { const d = vaultDef(got[0]); S.vaultDirty = true; toast(`Unlocked in the Prize Vault: ${d ? d.name : got[0]}!`, 2.6); }
+    if (got.length) {
+      const d = vaultDef(got[0]); S.vaultDirty = true;
+      if (S.m3Vlt && (S.screen === 'win' || S.screen === 'gameover')) S.m3Vlt.push(d ? d.name : got[0]);   // M3 (round 18): the scoreboard lists it in Run details
+      else toast(`Unlocked in the Prize Vault: ${d ? d.name : got[0]}!`, 2.6);
+    }
     return got;
   }
   const vaultNewN = () => { const V = vaultM(); return Object.keys(V.news).length + (V.pend ? 1 : 0); };
   // The title's gold-and-pink Prize Vault button with the wallet on it.
   function vaultTitleBtn(menu) {
     if (!menu || !D().COSMETICS) return null;
-    const V = vaultM(), n = vaultNewN();
-    const b = btn('Prize Vault', () => showVault(), 'vaultBtn');
+    const free = gachaDailyReady();   // GACHA (round 17): the free daily capsule glows on the Vault tile
+    const V = vaultM(), n = vaultNewN() + (free ? 1 : 0);
+    const b = btn('Prize Vault', () => showVault(), 'vaultBtn' + (free ? ' g17Free' : ''));
     b.textContent = '';
     b.appendChild(h('span', 'v1', 'Prize Vault'));
     const v2 = h('span', 'v2');
@@ -2600,9 +2919,11 @@ const GAME = (() => {
     if (!Vs.claw) Vs.claw = pickedClaw();
     S.vcap = null;
     setScreen('vault');
+    m3Page('vault', null, false);   // M3 (round 18): the album look; the canvas paints the wall and the preview, so never opaque
     vaultDemo();
     const scr = $('scr-vault');
     if (scr) scr.onpointerdown = (ev) => { if (!S.vcap) return; if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; vaultCapTap(); };
+    gachaBind(scr, () => vaultCapTap());   // GACHA (round 17): hold to crack
     if (vaultM().pend) vaultCapOpen();   // a capsule paid for before a reload opens now (the same prize)
     else vaultDom();
     snd('vaultOpen');
@@ -2677,7 +2998,7 @@ const GAME = (() => {
     };
     pw.appendChild(cl); pw.appendChild(h('div', 'grow')); pw.appendChild(cr);
     b.appendChild(pw);
-    b.appendChild(vaultDetail());
+    b.appendChild(Vs.tab === 'minis' ? gachaDetail() : vaultDetail());   // (GACHA: the Minis tab)
     // the category tabs, a dot for anything new behind them
     const tabs = h('div', 'vTabs');
     for (const c of D().VAULT_CATS || []) {
@@ -2690,11 +3011,13 @@ const GAME = (() => {
       tabs.appendChild(tb);
     }
     seaVaultTab(tabs);   // the season's counter (SEASON block)
+    gachaVaultTab(tabs);   // GACHA (round 17): the Capsule Minis
     b.appendChild(tabs);
     // the shelf: a glowing slot per prize
     const shelf = h('div', 'vShelf');
     const list = schShelf(Vs.tab, seaShelf(Vs.tab, D().vaultList ? D().vaultList(Vs.tab) : []));   // (SEASON: the counter's stock, the event cosmetics you own) (SCHOOL: the diploma's marquee once it is yours)
     for (const id of list) shelf.appendChild(vaultCard(id));
+    gachaShelf(shelf);   // GACHA (round 17): the Minis tab's four series
     b.appendChild(shelf);
     try { if (scroll) shelf.scrollTop = scroll; } catch (e) { /* stub */ }
     // the capsule counter
@@ -2710,7 +3033,7 @@ const GAME = (() => {
     else { c2.appendChild(h('i', 'tixi')); c2.appendChild(h('b', null, String(price))); c2.appendChild(h('span', null, ' tickets')); }
     cw.appendChild(c2);
     cb.appendChild(cw);
-    bot.appendChild(cb);
+    if (!gachaDailyPill(bot)) bot.appendChild(cb);   // GACHA (round 17): the free daily capsule takes the button's place (the streak sits on it)
     const W0 = VLT().CAP_W || VLT0.CAP_W, tot = Object.keys(W0).reduce((s, k) => s + W0[k], 0) || 1;
     const left = Math.max(1, (VLT().PITY || 12) - V.pity);
     bot.appendChild(h('div', 'vOdds', `Rare ${Math.round(W0.r * 100 / tot)}% · Legendary ${Math.round(W0.l * 100 / tot)}%. Dupes pay tickets back. A legendary in ${left} or sooner.`));
@@ -2878,7 +3201,7 @@ const GAME = (() => {
     const tag = h('div', null, '');
     tag.id = 'vcapTag';
     top.appendChild(tag);
-    top.appendChild(h('div', 'capSrc', 'Vault Capsule · a cosmetic prize'));
+    top.appendChild(h('div', 'capSrc', p.daily ? 'Daily capsule · free' : 'Vault Capsule · a cosmetic prize'));   // (GACHA: the daily capsule)
     if (C.phase !== 'done' && p.lucky) top.appendChild(h('div', 'capPity', 'Twelve in a row without a legendary: this one is.'));
     b.appendChild(top);
     if (C.phase === 'done' && C.res) {
@@ -2893,6 +3216,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'pn', d ? d.name : r.id));
       card.appendChild(h('div', 'pt', r.dupe ? `Already yours: +${r.tix} vault tickets back.` : (d ? d.text : '')));
       if (!r.dupe) card.appendChild(h('div', 'vNew', 'NEW!'));
+      gachaCard(card, r.mini);   // GACHA (round 17): the Capsule Mini that came with it
       const row = h('div', 'row center');
       if (!r.dupe) row.appendChild(btn('Equip it', () => { vaultEquip(r.id, true); vaultSave(); snd('vaultEquip'); vaultCapClose(r.id); }, 'go'));
       if (V.tix >= price) row.appendChild(btn(`Again · ${price}`, () => { S.vcap = null; vaultCapBuy(); }, 'gold'));
@@ -2921,7 +3245,7 @@ const GAME = (() => {
     const C = S.vcap;
     if (!C || S.screen !== 'vault') return false;
     if (C.phase === 'drop') { vaultCapLand(); return true; }
-    if (C.phase === 'burst') { vaultCapReveal(); return true; }
+    if (C.phase === 'burst') { gachaPreEnd(C); vaultCapReveal(); return true; }   // (GACHA: a tap in the charge pops it now)
     if (C.phase !== 'idle') return false;
     const i = C.taps++;
     C.idleT = 0;
@@ -2937,6 +3261,7 @@ const GAME = (() => {
     snd('capCrack', { n: i });
     haptic('capCrack');
     if (i >= 1 && C.stage < C.p.ups.length) vaultCapUp();
+    gachaCrack(C, i);   // GACHA (round 17): chips, the note ladder, PRIMED
     vaultCapHint();
     return true;
   }
@@ -2971,9 +3296,9 @@ const GAME = (() => {
   function vaultCapSkip() {
     const C = S.vcap;
     if (!C) return;
-    if (C.phase === 'burst') { vaultCapReveal(); return; }
+    if (C.phase === 'burst') { gachaPreEnd(C); vaultCapReveal(); return; }
     if (C.phase === 'drop') vaultCapLand(true);
-    if (C.phase === 'idle') { C.stage = C.p.ups.length; C.shown = C.p.tier; vaultCapBurst(); }
+    if (C.phase === 'idle') { C.stage = C.p.ups.length; C.shown = C.p.tier; gachaSkip(C); vaultCapBurst(); }
   }
   // The last tap: the prize is paid now and saved, so a reload never pays twice.
   function vaultCapPay() {
@@ -2985,7 +3310,8 @@ const GAME = (() => {
     else { V.owned[p.id] = 1; V.news[p.id] = 1; }
     V.caps++;
     V.pend = null;
-    C.res = { id: p.id, dupe, tix, tier: p.tier };
+    C.res = { id: p.id, dupe, tix, tier: p.tier, daily: !!p.daily };
+    gachaOnVault(C.res);   // GACHA (round 17): a Capsule Mini rides along (saved with this beat)
     vaultSave();
     return C.res;
   }
@@ -2993,6 +3319,13 @@ const GAME = (() => {
     const C = S.vcap;
     C.phase = 'burst'; C.bt = 0; C.flash = 1; C.shown = C.p.tier;
     const r = vaultCapPay();
+    if (gachaPre(C, r.tier, vaultCapPop)) return;   // GACHA (round 17): the charge before the pop (paid already)
+    vaultCapPop();
+  }
+  function vaultCapPop() {
+    const C = S.vcap;
+    if (!C || !C.res) return;
+    const r = C.res;
     const tier = TIER_I[r.tier] || 0, col = capCol(r.tier), reduced = !!fx().reduced;
     if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
     fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
@@ -3016,6 +3349,7 @@ const GAME = (() => {
     haptic('capBurst');
     const hEl = $('vcapHint'); if (hEl) clear(hEl);
     const tEl = $('vcapTier'); if (tEl) { tEl.textContent = vcapName(r.tier); tEl.className = 'capTier' + (r.tier === 'l' ? ' lg' : ''); }
+    gachaPop(C, tier);   // GACHA (round 17): chips, the chime ladder, confetti by tier, the legendary moment and slam
   }
   function vaultCapReveal() {
     const C = S.vcap;
@@ -3033,6 +3367,7 @@ const GAME = (() => {
     const C = S.vcap;
     if (!C) return;
     C.t += dt;
+    gachaTick(C, dt, vaultCapTap);   // GACHA (round 17): chips, hold to crack, PRIMED, the rare tease
     if (C.phase === 'drop' && C.t >= C.dropT) vaultCapLand();
     const reduced = !!fx().reduced;
     C.rotV += (-C.rot * 140 - C.rotV * 9) * dt; C.rot += C.rotV * dt;
@@ -3046,16 +3381,17 @@ const GAME = (() => {
       if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
     }
     if (C.phase === 'burst') {
+      if (gachaPreTick(C, dt)) return;   // GACHA (round 17): the charge runs first
       C.bt += dt;
       C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
-      if (C.bt >= (C.fast ? 0.3 : 0.55)) vaultCapReveal();
+      if (C.bt >= (C.fast ? 0.3 : 0.55) + gachaHoldT(C)) vaultCapReveal();
     }
   }
   // The capsule scene over the vault wall: dim, rays (a rainbow set for a legendary), the pedestal, the capsule.
   function vaultCapDraw(ctx, t) {
     const C = S.vcap, R = X.RENDER;
     if (!C || !R || !R.capsule) return;
-    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0, burst = C.phase === 'burst' || C.phase === 'done';
+    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0, burst = (C.phase === 'burst' && !(C.g17 && C.g17.pop)) || C.phase === 'done';   // (GACHA: not while it charges)
     const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
     const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
     const rg = R.rgba || ((c) => c);
@@ -3092,7 +3428,8 @@ const GAME = (() => {
     const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
     ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 11, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    R.capsule(ctx, C.x, y, C.r, { tier: gachaTierDraw(C, t), t, rot: C.rot + gachaJit(C, t), sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 11, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    gachaDraw(ctx, t, C, y);   // GACHA (round 17): the light leaking out, the legendary moment, the chips
     // the prize floats up out of the halves as it opens
     if (burst && C.res && R.vault) {
       const k = U.clamp(C.open, 0, 1);
@@ -3153,7 +3490,7 @@ const GAME = (() => {
     const R = X.RENDER;
     if (!R || !R.vault) return;
     R.vault.wall(ctx, W, H, t, { win: VLT_WIN });
-    vaultPrevDraw(ctx, t);
+    if (S.vault.tab === 'minis' && R.gacha) gachaPrevDraw(ctx, t, VLT_WIN); else vaultPrevDraw(ctx, t);   // (GACHA: the Minis turntable)
     R.vault.glass(ctx, VLT_WIN, t);
     if (S.vcap) vaultCapDraw(ctx, t);
   }
@@ -3302,6 +3639,126 @@ const GAME = (() => {
     return bt;
   }
   // ================================================================ /VAULT
+
+  // ================================================================ M3 (round 18): albums, lobbies and run end
+  /* DESIGN.md "Albums, lobbies and run end restyled (round 18)". Three family
+     looks on the ds-css tokens, a class on the screen (CSS in <style id="m3-css">):
+     m3-album (Prizedex, stickers, Codex, history, the Prize Vault: uniform
+     grids, silhouettes for locked, one segmented tab row), m3-lobby (weekly,
+     Boss Rush, Claw School, Duo and the online pages: a hero banner, one list,
+     the one primary in a bottom dock) and m3-score (game over, win, the loop:
+     one big number, a few lines, one call to action, the rest folded into Run
+     details). Back is always top-left in a .pageHead (m3Head moves the button
+     there; its GAME.choose entry stays where it was registered, as does every
+     element m3Dock moves). A page whose backdrop is solid is marked ds-opaque
+     (nothing of the canvas shows under it). Leaving one of these screens
+     empties its body (every builder rebuilds its body when it shows). */
+  const M3_FAM = { collection: 'album', stickers: 'album', codex: 'album', history: 'album', vault: 'album',
+    weekly: 'lobby', rushmenu: 'lobby', school: 'lobby', duo: 'lobby', gameover: 'score', win: 'score', loop: 'score' };
+  const M3_OPAQUE = { collection: 1, stickers: 1, codex: 1, history: 1, weekly: 1, rushmenu: 1, gameover: 1, win: 1, loop: 1 };
+  const M3_BODY = { collection: 'collectionBody', stickers: 'stickersBody', codex: 'codexBody', history: 'historyBody', vault: 'vaultBody',
+    weekly: 'weeklyBody', rushmenu: 'rushMenuBody', gameover: 'gameoverBody', win: 'winBody' };
+  function m3Detach(el) { try { if (el && el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el); } catch (e) { /* stub */ } return el; }
+  // A page is shown: its family look, its solid backdrop (or not), its body as a full-height column.
+  function m3Page(name, body, opaque) {
+    const scr = $('scr-' + name), fam = M3_FAM[name];
+    try {
+      if (scr && scr.classList) {
+        scr.classList.add('m3Page');
+        for (const f of ['album', 'lobby', 'score']) if (f !== fam) scr.classList.remove('m3-' + f);
+        if (fam) scr.classList.add('m3-' + fam);
+        scr.classList[(opaque == null ? M3_OPAQUE[name] : opaque) ? 'add' : 'remove']('ds-opaque');
+      }
+      if (body && body.classList) body.classList.add('dsPage');
+    } catch (e) { /* the look is decoration */ }
+    return scr;
+  }
+  // The page head: Back top-left, the title, an optional element on the right (a pill, the Codex).
+  function m3Head(body, back, title, end) {
+    if (!body) return null;
+    const head = h('div', 'pageHead m3Head');
+    if (back) { m3Detach(back); try { back.classList.add('phBack'); } catch (e) { /* stub */ } head.appendChild(back); }
+    const t = h('h1', 'phTitle', title);
+    if (String(t.textContent || '').length > 13) t.className = 'phTitle long';
+    head.appendChild(t);
+    if (end) { m3Detach(end); try { end.classList.add('phEnd'); } catch (e) { /* stub */ } head.appendChild(end); }
+    if (body.insertBefore && body.children && body.children.length) body.insertBefore(head, body.children[0]); else body.appendChild(head);
+    return head;
+  }
+  // The bottom dock: the one primary (and a ghost at most), an optional caption line over them.
+  function m3Dock(body, els, note) {
+    const list = (els || []).filter(Boolean);
+    if (!body || !list.length) return null;
+    const dock = h('div', 'pageDock m3Dock');
+    if (note) {
+      const n = typeof note === 'string' ? h('div', 'm3Note', note) : m3Detach(note);
+      try { n.classList.add('m3Note'); } catch (e) { /* stub */ }
+      dock.appendChild(n);
+    }
+    for (const e of list) dock.appendChild(m3Detach(e));
+    body.appendChild(dock);
+    return dock;
+  }
+  // A fold: a row that opens and closes the part under it (Run details, a duo player's looks).
+  function m3Fold(label, open, onToggle, cls) {
+    const wrap = h('div', 'm3Fold' + (cls ? ' ' + cls : '') + (open ? ' open' : ''));
+    const tg = h('button', 'm3FoldT');
+    if (label != null) tg.appendChild(h('span', 'ft', label));
+    const body = h('div', 'm3FoldB');
+    const set = (on) => { try { wrap.classList[on ? 'add' : 'remove']('open'); tg.setAttribute('aria-expanded', on ? 'true' : 'false'); } catch (e) { /* stub */ } };
+    set(!!open);
+    tg.onclick = (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      let on = true;
+      try { on = !wrap.classList.contains('open'); } catch (e) { on = true; }
+      set(on); snd('click');
+      if (onToggle) onToggle(on);
+    };
+    wrap.appendChild(tg); wrap.appendChild(body);
+    return { wrap, tg, body };
+  }
+  // The run end as a scoreboard: the title, its line, the score, the news; the rest in Run details; the way on in the dock.
+  function m3Score(name, b, cta, note) {
+    if (!b || !b.children) return null;
+    m3Page(name, b);
+    const kids = Array.from(b.children);
+    const fold = m3Fold('Run details', false, null, 'm3Details');
+    let sub = false;
+    const box = kids.find((c) => /\bscoreBox\b/.test(String(c.className || '')));
+    const into = [];
+    // the score's own lines (floors, bosses, combos) open the details; the number and its tags stay up
+    const sls = box ? Array.from(box.children || []).find((x) => /\bsls\b/.test(String(x.className || ''))) : null;
+    if (sls) into.push(sls);
+    // the stickers of the run fold away next (the news cards of the end panel stay in view)
+    for (const box2 of kids.filter((c) => /\bmEnd\b/.test(String(c.className || '')))) {
+      for (const c of Array.from(box2.children || [])) if (c.tagName === 'H3' || /\bstRow\b/.test(String(c.className || ''))) into.push(c);
+    }
+    const vl = S.m3Vlt || [];   // what the run's stickers put in the Prize Vault (said here, not in a toast over the score)
+    S.m3Vlt = null;
+    if (vl.length) into.push(h('div', 'tag cyan m3VltTag', `Unlocked in the Prize Vault: ${vl.join(', ')}!`));
+    for (const c of kids) {
+      const cls = String(c.className || '');
+      if (c.tagName === 'H1' || /\b(scoreBox|loopEnd|mEnd)\b/.test(cls)) continue;
+      if (!sub && /\bsub\b/.test(cls)) { sub = true; continue; }
+      if (/\bhisHofTag\b/.test(cls) && box) {   // the Hall of Fame place rides on the score as a tag
+        const row = Array.from(box.children || []).find((x) => /\bsm\b/.test(String(x.className || '')));
+        if (row) { m3Detach(c); c.className = 'tag gold m3Hof'; row.appendChild(c); continue; }
+      }
+      if (/\btag lime\b/.test(cls)) continue;   // a crawler unlocked: news, it stays in view
+      into.push(c);
+    }
+    for (const c of into) fold.body.appendChild(m3Detach(c));
+    if (into.length) b.appendChild(fold.wrap);
+    m3Dock(b, cta, note);
+    return fold;
+  }
+  // setScreen's hook: a page left behind lets its cards and canvases go (the next show rebuilds it).
+  function m3Leave(from, to) {
+    if (from === to) return;
+    const id = M3_BODY[from], b = id ? $(id) : null;
+    if (b && b.children && b.children.length) clear(b);
+  }
+  // ================================================================ /M3
 
   // ---------------------------------------------------------------- map
   function toMap() {
@@ -3754,7 +4211,7 @@ const GAME = (() => {
      cellar, embers in the foundry, snow in the vault) over the map area, or
      over the arena band in a fight. Seeded, never Math.random. */
   const AMB_N = 30;
-  const AMB_KIND = { cellar: 0, foundry: 1, vault: 2 };
+  const AMB_KIND = { cellar: 0, foundry: 1, vault: 2, depths: 3 };   // (DEP round 15: bubbles rise in the Neon Depths)
   function ambientTick(dt) {
     const run = S.run;
     if (!run) return;
@@ -3774,7 +4231,7 @@ const GAME = (() => {
       if (m.life <= 0) {
         m.x = area.x + r() * area.w; m.ph = r() * 6.28; m.life = 4 + r() * 6;
         if (kind === 0) { m.y = area.y + r() * area.h; m.vx = (r() - 0.5) * 14; m.vy = (r() - 0.5) * 10; }
-        else if (kind === 1) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }
+        else if (kind === 1 || kind === 3) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }   // (DEP: bubbles rise like embers)
         else { m.y = area.y + r() * area.h * 0.5; m.vx = 6 + r() * 10; m.vy = 16 + r() * 22; }
         m.max = m.life;
       }
@@ -3788,10 +4245,11 @@ const GAME = (() => {
     const A = S.amb, R = X.RENDER;
     if (!A) return;
     const kind = S.ambKind || 0;
-    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : '#ffffff';
-    const sp = R && R.glowSprite ? R.glowSprite(col, 10) : null;
+    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : kind === 3 ? '#bff8ff' : '#ffffff';
+    const sp = R && R.glowSprite && kind !== 3 ? R.glowSprite(col, 10) : null;
     ctx.save();
-    ctx.globalCompositeOperation = kind === 2 ? 'source-over' : 'lighter';
+    ctx.globalCompositeOperation = kind >= 2 ? 'source-over' : 'lighter';
+    if (kind === 3) { ctx.strokeStyle = col; ctx.lineWidth = 1.2; }   // (DEP: a bubble is a ring with a glint)
     for (const m of A) {
       if (m.life <= 0) continue;
       const u = m.life / (m.max || 1), fade = Math.min(1, u * 3, (1 - u) * 4);
@@ -3799,6 +4257,7 @@ const GAME = (() => {
       ctx.globalAlpha = fade * blink * (kind === 2 ? 0.8 : 0.9);
       if (sp && kind !== 2) { try { ctx.drawImage(sp, m.x - 10, m.y - 10, 20, 20); } catch (e) { /* stub */ } }
       ctx.fillStyle = col;
+      if (kind === 3) { const br = 1.6 + (m.max % 2.2); ctx.beginPath(); ctx.arc(m.x, m.y, br, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(m.x - br * 0.35, m.y - br * 0.35, br * 0.3, 0, Math.PI * 2); ctx.fill(); continue; }
       ctx.beginPath(); ctx.arc(m.x, m.y, kind === 2 ? 1.8 : 1.4, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -4003,7 +4462,7 @@ const GAME = (() => {
   }
   function encounterFor(kind) {
     const run = S.run;
-    const enc = tbl('ENCOUNTERS')[run.act];
+    const enc = depEncFor(run);   // (DEP: the Depths' own pools on a dive's map)
     const list = enc && enc[kind];
     if (list && list.length) return rngFor('enc').pick(list).slice();
     const ids = Object.keys(tbl('ENEMIES')).filter((id) => { const e = enemyDef(id); return e.act === run.act && (e.tier || 'normal') === (kind === 'normal' ? 'normal' : kind); });
@@ -4064,6 +4523,8 @@ const GAME = (() => {
     mutFightStart();   // Bomb Party, Wobbly Legs (ENDLESS block)
     spawnAll();
     pickGolden();
+    cabFightStart();   // CAB (round 16): the Jackpot Lamp comes in from the run
+    techFightStart();   // TECH (round 17): Cabinet Tech's numbers, the lamp's oil, an event on turn 1
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
@@ -4100,7 +4561,7 @@ const GAME = (() => {
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
       cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
-      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0), speed: c.speed * accClawK(), rubber: c.rubber,   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
+      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0) + cabGripAdd(), speed: c.speed * accClawK() * cabSpeedK(), rubber: c.rubber,   // (CAB round 16: a surge, a PERFECT lift)   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       type: runClawType(),
       rand: U.rng(FS.seed ^ 0x1234567),
     });
@@ -4572,6 +5033,7 @@ const GAME = (() => {
     snd('groan');
     setMood('sad', 1.8);
     if (F && X.COMBAT.nearMiss) enqueue(X.COMBAT.nearMiss(F), PROC_BEAT);   // Lucky Lou: a near miss is Luck (CONTENT block)
+    cabClose(x, y);   // CAB (round 16): the consolation, a spark for the Jackpot Lamp
   }
 
   // ================================================================ CONTENT (round 3)
@@ -5068,6 +5530,7 @@ const GAME = (() => {
       case 'boss': bossEvent(ev); break;
       case 'sto': stoFightEvent(ev); break;   // a friend's cameo, a sabotage (STORY)
       case 'fam': famEvent(ev); break;   // enemy families: Crescendo, SOLO, cans, change, the choir (FAMILY)
+      case 'dep': depEvent(ev); break;   // DEP (round 15): the Neon Depths' lure, jellies, pincers, live water and chests
       case 'intent': if (FS.enemyTurn && FS.actor === ev.idx) nextActor(); break;
       case 'text': {
         fx().text(pos.x, pos.y, ev.str, '#ffc94d');
@@ -5742,6 +6205,7 @@ const GAME = (() => {
       else if (gl) { lab = 'STICKY PILE'; col = BST_COL.glue; }
       else if (B.mounds.length) { lab = 'DIG UP THE MOUNDS'; col = BST_COL.bury; }
       else if (inv) { lab = 'INVISIBLE ITEMS'; col = BST_COL.vanish; }
+      else { const ds = depSignNow(); if (ds) { lab = ds[0]; col = ds[1]; } }   // the Neon Depths' tricks (DEP)
     }
     if (lab) bestSignSet(B, lab, col, real);
     else bestNextSign(B, real);
@@ -6045,6 +6509,7 @@ const GAME = (() => {
     if (secBossEvent(ev)) return;   // The Machine's cabinet events (SECRET)
     if (stoBossEvent(ev)) return;   // the alternate bosses' plushies, belt and ice block (STORY)
     if (winBossEvent(ev)) return;   // Krampus's sack of coal (WIN)
+    if (depBossEvent(ev)) return;   // The Drowned Jukebox's High Tide (DEP)
     const bs = BS(), reduced = !!fx().reduced;
     const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
     const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
@@ -6384,6 +6849,8 @@ const GAME = (() => {
     const bs = FS.bs;
     const sl = secSign();   // The Machine's cabinet events hold the sign (SECRET)
     if (sl) return sl;
+    const dp = depSign();   // High Tide while it runs (DEP)
+    if (dp) return dp;
     const so = stoSign();   // the belt, the plush shield, the ice block (STORY)
     if (so) return so;
     if (F.rigged || (bs && bs.hj)) return ['RIGGED', 'rig'];
@@ -6545,7 +7012,7 @@ const GAME = (() => {
   // "holding <item>" while lifting/carrying, or the empty-claw shrug.
   function holdHint() {
     const list = carried().filter((b) => b.data && b.data.inst);   // glass shards are not prizes
-    if (!list.length) { hint('empty claw...'); return; }
+    if (!list.length) { hint(carried().some((b) => b.data && b.data.cab) ? 'holding a cabinet prize' : 'empty claw...'); return; }   // (CAB round 16: a coin or a capsule)
     const names = list.map((b) => itemName(itemDef(b.data.inst.id), b.data.inst.plus));
     // Claw Crawl scoops: a big cargo reads as "A + B + 3 more"
     hint('holding ' + (names.length > 3 ? names.slice(0, 2).join(' + ') + ' + ' + (names.length - 2) + ' more' : names.join(' + ')));
@@ -6555,6 +7022,8 @@ const GAME = (() => {
     const cj = FS.claw;
     petRig(ev);   // the pet watches the claw; the octopus holds on (PETS block)
     rosRig(ev);   // bubbles ride the claw and pop over the chute, Sticky Fingers (ROS block)
+    depRig(ev);   // a prize lifted from the water is wet, a pinched one is let go (DEP)
+    cabRig(ev);   // CAB (round 16): a PERFECT grab, a HEAVY lift, the prizes' faces
     if (clawTypeEvent(ev)) return;   // per claw type sounds and sparks (CLAW TYPES block)
     switch (ev) {
       case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
@@ -6582,7 +7051,7 @@ const GAME = (() => {
       case 'lift': {
         snd('clawLift'); FS.wasHeld = carried().length; FS.cargo = carried().slice(); cj.sq = -0.6; cj.bendV += 40; holdHint();
         // the claw's face: beaming with a prize, glum when it came up empty
-        if (FS.cargo.some((b) => b.data && b.data.inst)) setMood('happy', 8); else setMood('sad', 1.5);
+        if (FS.cargo.some((b) => b.data && (b.data.inst || b.data.cab))) setMood('happy', 8); else setMood('sad', 1.5);   // (CAB round 16: a coin or a capsule is a prize too)
         break;
       }
       case 'carry': snd('clawMove'); holdHint(); break;
@@ -6679,6 +7148,7 @@ const GAME = (() => {
     const pos = { x: CAB.x + b.x, y: CAB.y + b.y };
     bossDeliver(b);   // a heavy prize smashes an iced rail (boss arena)
     secDeliver(b);   // a metal prize grounds the live rail (SECRET)
+    depDeliver(b);   // a wet prize on live water shocks you (DEP)
     // the claw never touched it this grab: shaken, blasted or knocked in
     const free = b.data.clawG !== FS.grabN;
     const ms = FS.mst[inst.uid];
@@ -6687,6 +7157,7 @@ const GAME = (() => {
     FS.playQ.push(inst);
     FS.delivered++;
     S.run.delivered++;
+    duoNetDeliver(inst);   // DUO NET (round 15): the watching phone sees it fly into this player's tray
     fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
     fx().trail(pos.x, pos.y, '#ffc94d');
     fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
@@ -6725,6 +7196,8 @@ const GAME = (() => {
     if (S.coachStep === 2) coachNext();
     petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
     rosDeliver(inst);   // a popped bubble's prize landed (ROS block)
+    cabDeliver(inst, pos);   // CAB (round 16): sparks for the Jackpot Lamp, a prize with a face cheers
+    techDeliver(inst, pos);   // TECH (round 17): an arcade part lights more lamp cells
   }
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
@@ -6763,6 +7236,8 @@ const GAME = (() => {
     petGrab(FS.delivered);   // the pet cheers or sulks; the goose lays on a big one (PETS block)
     luckAfterGrab();
     nearMissAfterGrab();
+    cabGrabDone();   // CAB (round 16): the PERFECT grip lets go, the surge's stays
+    techGrabDone();   // TECH (round 17): The Motherboard's catch, a whiff drains the lamp
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
     afterAction();
@@ -7054,6 +7529,7 @@ const GAME = (() => {
     if (FS.fog > 0) FS.fog--;
     bestTurnEnd();   // the tickle, the goo and the magnetic lid wear off (BESTIARY)
     rosTurnEnd();   // floating bubbles burst in the bin (ROS block)
+    cabTurnEnd();   // CAB (round 16): the surge runs out, the coins sink away
     FS.actors = F.enemies.map((e, i) => (e.alive ? i : -1)).filter((i) => i >= 0);
     FS.actor = FS.actors.length ? FS.actors[0] : -1;
     hisTurnEnd();   // HISTORY: the recap's snapshot of the telegraphs and your Block
@@ -7078,6 +7554,8 @@ const GAME = (() => {
     // lit fuses burn down (a bomb may go off), ice melts
     if (FS && !FS.done) matTurn();
     if (FS && !FS.done) mutTurn();   // Bomb Party's next bomb, Wobbly Legs' lurch (ENDLESS block)
+    if (FS && !FS.done) cabTurn();   // CAB (round 16): a cabinet event may open the turn
+    if (FS && !FS.done) techTurn();   // TECH (round 17): a LAMP FEVER that burst on the enemy's turn pays now
     save();
   }
   /* outro (the natural end of a won fight, not the public call): the
@@ -7101,6 +7579,8 @@ const GAME = (() => {
     run.history.push({ act: run.act, enemies: F.enemies.map((e) => e.id), result, turns: F.turn });
     const tier = FS.tier;
     const then = FS.then;
+    depFightEnd(result);   // DEP (round 15): a Drowned Jukebox unplugged counts (before the sticker checks)
+    cabFightEnd(result);   // CAB (round 16): the Jackpot Lamp goes back to the run
     metaFightEnd(result);   // won-fight stickers (META block)
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
@@ -7360,7 +7840,8 @@ const GAME = (() => {
     });
     b.appendChild(cards);
     const skip = btn('Skip', () => afterReward(rw), 'ghost');
-    b.appendChild(skip);
+    m2Stop('reward', b);
+    m2Dock(b, [skip]);   // M2 (round 18): the way out in the bottom dock
     // capsules sit above the cards (DOM taps, not GAME.choose entries: the
     // cards and Skip keep their indices)
     lootCapSlots(capBox, rw);
@@ -7494,9 +7975,10 @@ const GAME = (() => {
     b.appendChild(h('div', 'sub', 'The boss dropped a box of claw parts. Bolt one on.'));
     const pick = (sp.pick || []).filter((id) => openClawUpgrades().indexOf(id) >= 0);
     const next = () => { S.sd = null; if (sp.then) showTreasure(sp.then); else toMap(); };
+    m2Stop('parts', b);
     if (!pick.length) {
       b.appendChild(h('div', 'sub', 'The claw is as good as it gets.'));
-      b.appendChild(btn('Continue', next, 'pri'));
+      m2Dock(b, [btn('Continue', next, 'pri')]);
     } else b.appendChild(clawCards(pick, next));
     save();
   }
@@ -7524,13 +8006,15 @@ const GAME = (() => {
       holoOn(card, def.rarity);   // HOLO (round 9)
       b.appendChild(card);
       if (!S.headless) setTimeout(() => snd('relic'), 120);
-      b.appendChild(btn('Take it', () => {
+      m2Stop('treasure', b);
+      m2Dock(b, [btn('Take it', () => {
         if (!S.headless) { const p = hudPoint(ic, 270, 300); const c = h('div', 'flycard'); c.appendChild(relicCanvas(def, 56)); domFly(c, p.x, p.y, 440, 36, 700); }
         gainRelic(td.relic); snd('upgrade'); S.sd = null; toMap();
-      }, 'gold'));
+      }, 'pri')]);   // M2 (round 18): the one action, in the dock
     } else {
       b.appendChild(h('div', 'sub', 'The chest is empty. Someone got here first.'));
-      b.appendChild(btn('Continue', () => { S.sd = null; toMap(); }, 'pri'));
+      m2Stop('treasure', b);
+      m2Dock(b, [btn('Continue', () => { S.sd = null; toMap(); }, 'pri')]);
     }
     save();
   }
@@ -7656,9 +8140,11 @@ const GAME = (() => {
       stage: cap.opened ? cap.ups.length : 0, crack: 0, rot: 0, rotV: 0, sq: 0, sqV: 0, flash: 0, open: cap.opened ? 1 : 0, dropT: fast ? 0.35 : 0.7,
       fast, x: 270, y: 440, r: 80, bt: 0, idleT: 0, sparkT: 0 };
     setScreen('capsule');
+    m2Stop('capsule');   // M2 (round 18): the cozy corner look (the canvas stays the hero)
     capDom();
     const scr = $('scr-capsule');
     if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; capsuleTap(); };
+    gachaBind(scr, () => capsuleTap());   // GACHA (round 17): hold to crack
     if (!cap.opened) snd('whoosh', { pitch: 0.8 });
     save();
   }
@@ -7702,6 +8188,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'pt', p.fallback ? `You had that already: ${p.fallback} gold instead.` : info.text));
       if (p.k === 'item' || p.k === 'relic') { const kw = kwChips(p.k === 'item' ? itemDef(p.id) : relicDef(p.id)); if (kw) card.appendChild(kw); }
       if (p.k === 'relic' && !p.fallback) setTagOn(card, p.id);   // its set progress (SETS block)
+      gachaCard(card, cap.mini);   // GACHA (round 17): the Capsule Mini tucked inside
       card.appendChild(btn('Collect', () => collectCapsule(), 'gold'));
       holoOn(card, cap.tier);   // HOLO (round 9): the prize card in its capsule's rarity
       b.appendChild(card);
@@ -7714,6 +8201,7 @@ const GAME = (() => {
       // the whole screen is the tap target; the entry lets GAME.choose crack it
       S.ui.buttons.push({ el: $('scr-capsule'), fn: () => capsuleTap(), label: 'Crack' });
       b.appendChild(btn('Skip', () => skipCapsule(), 'sm ghost capSkip'));
+      gachaAllBtn(b, C);   // GACHA (round 17): Open all the banked capsules
     }
   }
   function capHint() {
@@ -7728,9 +8216,9 @@ const GAME = (() => {
   // One tap: crack harder, maybe turn rarer, or burst on the last one.
   function capsuleTap() {
     const C = S.cap;
-    if (!C || S.screen !== 'capsule') return false;
+    if (!C || S.screen !== 'capsule') return gachaAllTap();   // (GACHA: Open all)
     if (C.phase === 'drop') { capLand(); return true; }
-    if (C.phase === 'burst') { capReveal(); return true; }
+    if (C.phase === 'burst') { gachaPreEnd(C); capReveal(); return true; }   // (GACHA: a tap in the charge pops it now)
     if (C.phase !== 'idle') return false;
     const i = C.taps++;
     C.idleT = 0;
@@ -7747,6 +8235,7 @@ const GAME = (() => {
     snd('capCrack', { n: i });
     haptic('capCrack');
     if (i >= 1 && C.stage < C.cap.ups.length) capUpgrade();
+    gachaCrack(C, i);   // GACHA (round 17): chips, the note ladder, PRIMED
     capHint();
     return true;
   }
@@ -7782,10 +8271,11 @@ const GAME = (() => {
   function skipCapsule() {
     const C = S.cap;
     if (!C) return;
-    if (C.phase === 'burst') { capReveal(); return; }
+    if (C.phase === 'burst') { gachaPreEnd(C); capReveal(); return; }
     if (C.phase === 'drop') capLand(true);
     if (C.phase === 'idle') {
       if (C.stage < C.cap.ups.length) { C.stage = C.cap.ups.length; C.shown = C.cap.tier; const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(C.shown); tEl.className = 'capTier' + (C.shown === 'l' ? ' lg' : ''); } }
+      gachaSkip(C);   // (GACHA: a skip pops at once)
       capBurst();
     }
   }
@@ -7807,18 +8297,27 @@ const GAME = (() => {
     if (!cap.opened) {
       cap.opened = true;
       grantPrize(cap.prize);
+      gachaOnOpen(cap);   // GACHA (round 17): maybe a Capsule Mini inside (its own stream, saved with the capsule)
       run.loot.capsOpened++;
       if (!run.loot.bestCap || TIER_I[cap.tier] > TIER_I[run.loot.bestCap]) run.loot.bestCap = cap.tier;
       if (C.cd.bank && run.caps.length) run.caps.shift();
       const then = C.cd.then;
       if (then && then.k === 'reward' && then.rw && then.rw.caps && C.cd.rwIdx != null && then.rw.caps[C.cd.rwIdx]) {
         const rc = then.rw.caps[C.cd.rwIdx];
-        rc.opened = true; rc.prize = cap.prize;
+        rc.opened = true; rc.prize = cap.prize; rc.mini = cap.mini;
       }
       metaLoot().caps++;
       saveMeta();
       save();
     }
+    if (gachaPre(C, cap.tier, capPop)) return;   // GACHA (round 17): the charge before the pop (paid already)
+    capPop();
+  }
+  // The pop itself: the halves fly, light pours out, confetti, rings (after the charge).
+  function capPop() {
+    const C = S.cap;
+    if (!C) return;
+    const cap = C.cap;
     const tier = TIER_I[cap.tier] || 0, col = capCol(cap.tier), reduced = !!fx().reduced;
     if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
     fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
@@ -7835,6 +8334,7 @@ const GAME = (() => {
     haptic('capBurst');
     const hEl = $('capHint'); if (hEl) clear(hEl);
     const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(cap.tier); tEl.className = 'capTier' + (cap.tier === 'l' ? ' lg' : ''); }
+    gachaPop(C, tier);   // GACHA (round 17): chips, the chime ladder, confetti by tier, the legendary moment and slam
   }
   function capReveal() {
     const C = S.cap;
@@ -7867,8 +8367,9 @@ const GAME = (() => {
   // an idle hop that begs for a tap, the burst opening, sparkles.
   function capTick(dt) {
     const C = S.cap;
-    if (!C) return;
+    if (!C) return gachaAllTick(dt);   // (GACHA: Open all)
     C.t += dt;
+    gachaTick(C, dt, capsuleTap);   // GACHA (round 17): chips, hold to crack, PRIMED, the rare tease
     if (C.phase === 'drop' && C.t >= C.dropT) capLand();
     const reduced = !!fx().reduced;
     // wobble and squash springs
@@ -7884,18 +8385,19 @@ const GAME = (() => {
       if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
     }
     if (C.phase === 'burst') {
+      if (gachaPreTick(C, dt)) return;   // GACHA (round 17): the charge runs first
       C.bt += dt;
       C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
-      if (C.bt >= (C.fast ? 0.3 : 0.55)) capReveal();
+      if (C.bt >= (C.fast ? 0.3 : 0.55) + gachaHoldT(C)) capReveal();
     }
   }
   // The capsule scene over the dimmed map: rays, a spotlight, the pedestal,
   // the capsule itself (RENDER.capsule). Drawn under the fx layer.
   function drawCapsule(ctx, t) {
     const C = S.cap, R = X.RENDER;
-    if (!C || !R || !R.capsule) return;
+    if (!C || !R || !R.capsule) return gachaAllDraw(ctx, t);   // (GACHA: Open all)
     const col = capCol(C.shown), tier = TIER_I[C.shown] || 0;
-    const burst = C.phase === 'burst' || C.phase === 'done';
+    const burst = (C.phase === 'burst' && !(C.g17 && C.g17.pop)) || C.phase === 'done';   // (GACHA: not while it charges)
     const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
     const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
     ctx.save();
@@ -7938,7 +8440,8 @@ const GAME = (() => {
     const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
     ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 7, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    R.capsule(ctx, C.x, y, C.r, { tier: gachaTierDraw(C, t), t, rot: C.rot + gachaJit(C, t), sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 7, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    gachaDraw(ctx, t, C, y);   // GACHA (round 17): the light leaking out, the legendary moment, the chips
   }
 
   // ---- the payout tally (reward screen)
@@ -8087,6 +8590,7 @@ const GAME = (() => {
     if (rw.tier === 'elite' || rw.tier === 'boss') rw.caps.push(makeCapsule(rw.tier));
     // BALANCE (round 12): DATA.LOOT.BONUS_P is the chance such a fight drops its bonus capsule (its own rng stream)
     if ((jp > 0 || combos.some((c) => c.tier >= 3)) && rngFor('bonuscap')() < ((D().LOOT && D().LOOT.BONUS_P != null) ? D().LOOT.BONUS_P : 1)) rw.caps.push(makeCapsule('bonus'));
+    cabRewardCaps(rw);   // CAB (round 16): capsules delivered out of the cabinet
     const L = run.loot;
     L.bigHit = Math.max(L.bigHit, st.bigHit || 0);
     L.overkill = Math.max(L.overkill, st.overkill || 0);
@@ -8116,9 +8620,11 @@ const GAME = (() => {
       col.appendChild(h('div', 'c1', `${capName(done ? cap.tier : cap.tier0)} capsule`));
       col.appendChild(h('div', 'c2', done ? `Opened: ${prizeOf(cap.prize).name}` : `${CAP_SRC[cap.src] || 'Bonus'}! Tap to crack it open.`));
       el.appendChild(col);
+      gachaSlotLook(el, cap);   // GACHA (round 17): rarity lighting, the mini it held
       el.onclick = () => { if (!cap.opened) openRewardCap(rw, i); };
       box.appendChild(el);
     });
+    gachaSlots(box, rw);   // GACHA (round 17): Open all (a DOM tap, not a GAME.choose entry)
   }
   function openRewardCap(rw, i) {
     const cap = rw && rw.caps && rw.caps[i];
@@ -8315,8 +8821,11 @@ const GAME = (() => {
     });
     caseEl.appendChild(shelf);
     b.appendChild(caseEl);
-    b.appendChild(btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'ghost'));   // MIX: a way out is a ghost button
+    const back = btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'ghost');   // MIX: a way out is a ghost button
+    b.appendChild(back);
     rrCounterSlot(b, shop, caseEl);   // REROLL (round 9): the same lever for tickets (registered last)
+    m2Stop('counter', b);
+    m2Dock(b, [back]);   // M2 (round 18): the way out in the bottom dock
     save();
   }
   function counterBuy(shop, i, slot) {
@@ -8761,6 +9270,7 @@ const GAME = (() => {
     S.arc = { A, tile: t, g: A.g, phase: 'idle', t: 0, win: null, winT: 0, capT: 0, fast: arcMeta().plays >= ARC.fastAfter,
       lit: {}, flash: 0, party: 0, drag: null, lever: 0, leverV: 0, rot: A.rot || 0, flap: 0, flapV: 0, pl: null, wh: null, sl: null };
     setScreen('arcade');
+    m2Stop('arcade');   // M2 (round 18): the market stall look on the frame
     arcDom();
     if (A.pend || A.live) arcBegin();          // a reload mid-play: the same outcome plays out again (A.live: a round 5 game in progress)
     else if (A.caps.length) S.arc.capT = 0.6;  // a capsule won before the reload: crack it now
@@ -9305,7 +9815,7 @@ const GAME = (() => {
     }
     b.appendChild(box);
     const go = btn('Continue', () => { S.sd = null; S.arcEv = null; toMap(); }, 'pri');
-    b.appendChild(go);
+    m2Dock(b, [go]);   // M2 (round 18): Continue in the dock
     const E = S.arcEv;
     if (E) {
       E.lines = els; E.out = out; E.shown = 0;
@@ -9579,15 +10089,22 @@ const GAME = (() => {
   function showTips(back) {
     if (back) S.tipsBack = back;
     setScreen('tips');
-    const b = $('tipsBody');
-    clear(b);
-    b.appendChild(h('h1', null, 'Tips'));
+    // (round 18) a page: Back and the title in the head; the tips met in full, the rest one "N more to find" row
+    const pg = $('tipsBody');
+    clear(pg);
+    uiCls(pg, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'Tips'));
+    pg.appendChild(head);
+    const b = h('div', 'pageBody m1Tips');
+    pg.appendChild(b);
     const seen = FEEL_TIPS.filter((d) => feelSeen(d.id)).length;
     b.appendChild(metaBar(seen, FEEL_TIPS.length, `${seen} of ${FEEL_TIPS.length} tips met`));
     b.appendChild(h('div', 'sub', 'A card pops up the first time you meet something new. Tap it to put it away.'));
     const list = h('div', 'tipList');
     for (const d of FEEL_TIPS) {
       const got = feelSeen(d.id);
+      if (!got) continue;   // (round 18: the dark ones are one row at the end)
       const row = h('div', 'tipRow' + (got ? ' got' : ''));
       try { row.style.setProperty('--tc', d.col); } catch (e) { /* stub */ }
       row.appendChild(canvasEl(56, (ctx, p) => {
@@ -9601,11 +10118,25 @@ const GAME = (() => {
       row.appendChild(col);
       list.appendChild(row);
     }
+    const dark = FEEL_TIPS.length - seen;
+    if (dark > 0) {
+      const row = h('div', 'tipRow m1TipMore');
+      row.appendChild(canvasEl(56, (ctx, p) => {
+        if (!X.RENDER || !X.RENDER.feelTipArt) return;
+        ctx.translate(p / 2, p / 2);
+        X.RENDER.feelTipArt(ctx, '?', p * 0.9, 1.3, null);
+      }));
+      const col = h('div', 'col');
+      col.appendChild(h('div', 'n', `${dark} more to find`));
+      col.appendChild(h('div', 't', 'Not met yet. Keep climbing.'));
+      row.appendChild(col);
+      list.appendChild(row);
+    }
     b.appendChild(list);
-    const row = h('div', 'row center mixStick');   // MIX: the way out stays on screen
-    row.appendChild(btn('Reset tips', () => { feelTipsReset(); toast('Tips reset. They will pop up again.'); showTips(); }, 'sm'));
-    row.appendChild(btn('Back', () => (S.tipsBack === 'help' ? showHelp('title') : showTitle()), 'pri'));
+    const row = h('div', 'row center m1TipReset');
+    row.appendChild(btn('Reset tips', () => { feelTipsReset(); toast('Tips reset. They will pop up again.'); showTips(); }, 'sm ghost'));
     b.appendChild(row);
+    head.appendChild(btn('Back', () => (S.tipsBack === 'help' ? showHelp('title') : showTitle()), 'ghost sm phBack'));   // (round 18: top left)
   }
 
   // ---- haptics
@@ -9661,8 +10192,10 @@ const GAME = (() => {
   function feelCorner() {
     const el = S.mcur && S.mcur.el, k = FEEL_CORNER[S.screen];
     if (!el || !el.classList) return;
-    if (k) el.classList.add('tight');
-    if (k === 'hi') el.classList.add('hi'); else el.classList.remove('hi');
+    // (PERF round 19: called every tick; a class is written only when it changes, 55 writes a second on the map before)
+    const cl = el.classList, hi = k === 'hi';
+    if (k && !cl.contains('tight')) cl.add('tight');
+    if (cl.contains('hi') !== hi) cl[hi ? 'add' : 'remove']('hi');
   }
 
   // ---- the rooms: a canvas scene at the top of the shop, rest and forge
@@ -10470,6 +11003,7 @@ const GAME = (() => {
   }
   // A small speech bubble.
   function petBubble(ctx, x, y, str, a) {
+    str = i18nTr(str);   // (QA round 15) a quip in the current language (it drew its English on the canvas)
     ctx.save();
     ctx.globalAlpha = a;
     ctx.font = 'bold 12px system-ui, "Segoe UI", Helvetica, Arial, sans-serif';
@@ -10543,6 +11077,7 @@ const GAME = (() => {
       adoptI: -1, adoptT: 0, heart: 0, hop: [0, 0, 0],
     };
     setScreen('arcade');
+    m2Stop('arcade');   // M2 (round 18): the market stall look on the frame
     petShopDom();
     snd('arcIn', { pitch: 1.25 });
     save();
@@ -10676,7 +11211,7 @@ const GAME = (() => {
       ctx.beginPath();
       for (let j = 1; j < 6; j++) { const bx = x - w / 2 + (w / 6) * j; if (got && j >= 2 && j <= 4) continue; ctx.moveTo(bx, y0 + 6); ctx.lineTo(bx, y0 + hgt - 8); }
       ctx.stroke();
-      if (got) { ctx.fillStyle = PAL0.gold; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('ADOPTED', x, y0 + 16); }
+      if (got) { ctx.fillStyle = PAL0.gold; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(i18nTr('ADOPTED'), x, y0 + 16); }
     }
     // your buddy
     const p = petOf();
@@ -10690,18 +11225,18 @@ const GAME = (() => {
       R.pet(ctx, p.id, 118, py - 4, 1.9, PSV);
       const nx = D().petNext ? D().petNext(p.xp) : null;
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.fillText(p.name, 190, 604);
-      ctx.fillStyle = PET_SHOP_COL; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(`YOUR BUDDY: ${(petDefOf(p.id) || {}).name || ''}  ·  LV ${p.lv}`, 190, 628);
+      ctx.fillStyle = PET_SHOP_COL; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(i18nTr(`YOUR BUDDY: ${(petDefOf(p.id) || {}).name || ''}  ·  LV ${p.lv}`), 190, 628);
       ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(190, 644, 280, 10);
       ctx.fillStyle = PAL0.lime; ctx.fillRect(190, 644, 280 * (nx ? nx.into / nx.span : 1), 10);
-      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillText(nx ? `${nx.need} XP to Lv ${p.lv + 1}` : 'MAX LEVEL', 190, 668);
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillText(i18nTr(nx ? `${nx.need} XP to Lv ${p.lv + 1}` : 'MAX LEVEL'), 190, 668);
     } else {
-      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.fillText('No buddy yet. Pick one above!', 76, 644);
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.fillText(i18nTr('No buddy yet. Pick one above!'), 76, 644);
     }
     // the album
     const al = petMeta(), ids = D().PET_IDS || [];
     let met = 0; for (const id of ids) if (al[id]) met++;
     ctx.fillStyle = '#e8f4ff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(`PET ALBUM ${met}/${ids.length}`, 270, 734);
+    ctx.fillText(i18nTr(`PET ALBUM ${met}/${ids.length}`), 270, 734);
     ids.forEach((id, i) => {
       const x = 270 + (i - (ids.length - 1) / 2) * Math.min(54, 470 / Math.max(1, ids.length - 1)), y = 790;   // (ROS: 11 pets fit the stage)
       if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.evo = al[id].evo ? pevForm(id) : null; PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
@@ -11439,6 +11974,7 @@ const GAME = (() => {
     S.secScr = { k: o.k, t: 0, keys: 0, opened: false, ui: false, walk: 0 };
     F = null; FS = null;
     setScreen('secret');
+    m2Stop('secret');   // M2 (round 18): the story card look
     const scr = $('scr-secret'), b = $('secretBody');
     clear(b);
     S.ui.buttons = [];
@@ -11956,7 +12492,8 @@ const GAME = (() => {
       if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
     } }), 'sm'));
     b.appendChild(row);
-    b.appendChild(btn('Leave', () => toMap(), 'ghost'));   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
+    const leave = btn('Leave', () => toMap(), 'ghost');   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
+    b.appendChild(leave);
     const pc = h('button', 'capslot');
     const pcFn = () => showCounter(shop);
     pc.onclick = pcFn;
@@ -11970,7 +12507,27 @@ const GAME = (() => {
     counterRow.appendChild(pc);
     cmpShopSlot(counterRow, shop);   // the Compactor, registered after the counter (SETS block)
     rrShopSlot(b, shop, cards);   // REROLL (round 9): the lever under the shelf, the reels (registered before the counter)
+    m2ShopTidy(b, { top, cards, sec, row, counterRow, leave });   // M2 (round 18): the market stall layout
     save();
+  }
+  /* M2 (round 18): the shop as a market stall. The elements move, their
+     GAME.choose entries stay as registered: the relic joins the shelf as its
+     sixth card, the reroll lever sits under the shelf, the prize counter and
+     the Compactor fold into two small tiles beside Remove and Sell (the
+     services, under the goods), and Leave goes to the bottom dock. */
+  function m2ShopTidy(b, o) {
+    m2Stop('shop', b);
+    try {
+      if (o.top && o.top.classList) o.top.classList.add('m2Purse');
+      const kids = (el) => Array.prototype.slice.call((el && el.children) || []);
+      if (o.sec && o.cards) { for (const c of kids(o.sec)) m2Move(c, o.cards); m2Move(o.sec, null); }
+      const svc = h('div', 'm2Svc');
+      if (o.counterRow) { for (const c of kids(o.counterRow)) { if (c.classList) c.classList.add('m2Tile'); m2Move(c, svc); } m2Move(o.counterRow, null); }
+      if (o.row) { if (o.row.classList) o.row.classList.add('m2SvcRow'); m2Move(o.row, svc); }
+      b.appendChild(h('div', 'dsSec', 'Services'));
+      b.appendChild(svc);
+    } catch (e) { /* the old layout still works */ }
+    m2Dock(b, [o.leave]);
   }
   // Coins arc from the gold tag into the card being bought, then the stamp.
   function buyFx(card, price) {
@@ -12214,6 +12771,7 @@ const GAME = (() => {
     if (B.done) { boonNext(); return; }
     S.sd = { boon: 1 };
     setScreen('boon');
+    m2Stop('boon');   // M2 (round 18): the story card look
     music('elite');
     S.boon = { t: 0, up: B.offers.map(() => !!S.headless), cards: [], leave: 0, then: null };
     const b = $('boonBody');
@@ -12413,6 +12971,7 @@ const GAME = (() => {
     S.sd = { compactor: cd };
     if (!S.cmp || S.cmp.cd !== cd) S.cmp = { cd, t: 0, phase: cd.res ? 'done' : 'idle', shake: 0, fired: {} };
     setScreen('compactor');
+    m2Stop('compactor');   // M2 (round 18): the workshop look
     cmpDom();
   }
   function cmpInsts(cd) { const run = S.run; return (cd.pick || []).map((uid) => run.bin.find((i) => i.uid === uid)).filter(Boolean); }
@@ -13095,7 +13654,7 @@ const GAME = (() => {
     const rec = {
       id: hisIdOf(run), d, c: run.char, cl: runClawType(run), o: outfit || '', tl: run.tilt | 0, mu: (run.muts || []).slice(),
       se: typeof run.season === 'string' ? run.season : '', dl: typeof run.daily === 'string' ? run.daily : '',
-      m: mode, s: score, r: result, a: run.act | 0, lp: run.endless ? run.endless.loop | 0 : 0,
+      m: mode, s: score, r: result, a: run.act | 0, lp: run.endless ? run.endless.loop | 0 : 0, dp: depHisDives(run),   // (DEP: the Neon Depths dives)
       tu: run.turns | 0, kl: run.kills | 0, f: run.fights | 0, bs: (run.sc && run.sc.bosses) | 0, bh: L.bigHit | 0,
       bc: L.bestCombo ? { n: L.bestCombo.name, t: L.bestCombo.tier } : null, jp: run.jackpots | 0, ev: run.evoN | 0, st: sets, b: bin,
       rl: (run.relics || []).slice(0, hisDat().RELICS), mp: D().hisMapPack ? D().hisMapPack(run.map) : null,
@@ -13305,6 +13864,7 @@ const GAME = (() => {
     const b = $('historyBody');
     if (!b) return false;
     clear(b);
+    m3Page('history', b);   // M3 (round 18): the album look, a solid page
     try { const scr = $('scr-history'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const rec = U0.open ? hisFind(U0.open) : null;
     if (rec) hisDetail(b, rec);
@@ -13313,10 +13873,7 @@ const GAME = (() => {
   }
   function hisList(b) {
     const hh = hisM(), U0 = S.hisUi, R = X.RENDER;
-    const head = h('div', 'hisHead');
-    head.appendChild(btn('Back', () => showTitle(), 'ghost sm'));
-    head.appendChild(h('h1', null, 'Run history'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => showTitle(), 'ghost sm'), 'Run history', null);   // M3 (round 18): the page head
     const wins = hh.runs.filter((r) => D().hisWon(r)).length, best = hh.hof.length ? hh.hof[0].s : 0;
     b.appendChild(h('div', 'sub', hh.n ? `${hh.n} ${hh.n === 1 ? 'run' : 'runs'} on record, ${wins} of the last ${hh.runs.length} won. Best score ${fmtNum(best)}.` : 'Every run you finish lands here: the wins, the knockouts, the Endless dives.'));
     // the lifetime charts (the crawler filter narrows the score line)
@@ -13326,11 +13883,11 @@ const GAME = (() => {
     const ch = hisCanvas(508, 176, (ctx) => { if (R && R.his) R.his.chart(ctx, cd, 508, 176, { t: S.t, names }); });
     ch.className = 'hisChart';
     b.appendChild(ch);
-    const tabs = h('div', 'hisTabs');
+    const tabs = h('div', 'hisTabs m3Seg');   // (M3: the tabs and the result filter are segmented rows, the crawlers one scrolling row)
     for (const [k, label] of [['recent', 'Recent'], ['hof', 'Hall of Fame']]) tabs.appendChild(btn(label, () => showHistory({ tab: k }), 'sm hisTab' + (U0.tab === k ? ' on' : '')));
     b.appendChild(tabs);
     // the filters: a crawler, a result
-    const fc = h('div', 'hisFilt');
+    const fc = h('div', 'hisFilt m3Scroll');
     fc.appendChild(btn('All crawlers', () => showHistory({ c: 'all' }), 'sm hisChip' + (U0.c === 'all' ? ' on' : '')));
     for (const id in tbl('CHARACTERS')) {
       const bt = btn(hisName(id), () => showHistory({ c: id }), 'sm hisChip' + (U0.c === id ? ' on' : ''));
@@ -13341,7 +13898,7 @@ const GAME = (() => {
       fc.appendChild(bt);
     }
     b.appendChild(fc);
-    const fr = h('div', 'hisFilt');
+    const fr = h('div', 'hisFilt m3Seg');
     for (const [k, label] of HIS_UI.RES) fr.appendChild(btn(label, () => showHistory({ r: k }), 'sm hisChip r-' + k + (U0.r === k ? ' on' : '')));
     b.appendChild(fr);
     const src = U0.tab === 'hof' ? hh.hof : hh.runs.slice().reverse();
@@ -13373,6 +13930,7 @@ const GAME = (() => {
     const tags = h('div', 'hisTags');
     if (rec.m === 'daily') tags.appendChild(h('span', 'tag gold', 'DAILY'));
     if (rec.lp > 0) tags.appendChild(h('span', 'tag cyan', 'ENDLESS'));
+    if (rec.dp > 0) tags.appendChild(h('span', 'tag cyan', 'NEON DEPTHS'));   // (DEP: this run dove into the Depths)
     const MU = tbl('MUTATORS');
     for (const id of rec.mu || []) if (MU[id]) tags.appendChild(h('span', 'tag hisMu', MU[id].icon || '?'));
     if (tags.children && tags.children.length) mid.appendChild(tags);
@@ -13389,10 +13947,7 @@ const GAME = (() => {
   // One run in full: the header, the numbers, how it ended, the final bin, the relics, the map, Share.
   function hisDetail(b, rec) {
     const R = X.RENDER, won = rec.r === 'win' || rec.r === 'endless';
-    const head = h('div', 'hisHead');
-    head.appendChild(btn('Back', () => showHistory({}), 'ghost sm'));
-    head.appendChild(h('h1', null, 'The run'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => showHistory({}), 'ghost sm'), 'The run', null);   // M3 (round 18): the page head
     const cn = charDef(rec.c) || {};
     const where = hisWhere(rec) + (rec.m === 'daily' ? ' · Daily ' + (rec.dl || '') : rec.lp > 0 ? ' · Endless' : ' · Classic');
     const hero = hisCanvas(508, 160, (ctx) => { if (R && R.his) R.his.hero(ctx, { char: rec.c, outfit: rec.o || null, name: cn.name || rec.c, date: hisDate(rec.d, true), result: rec.r, score: rec.s, where, tilt: rec.tl, t: S.t }, 508, 160); });
@@ -13892,7 +14447,8 @@ const GAME = (() => {
     }
     if (!order.length) cards.appendChild(h('div', 'sub', 'Empty. That is a problem.'));
     b.appendChild(cards);
-    b.appendChild(btn(o.mode === 'view' ? 'Back' : 'Cancel', () => { if (o.back) o.back(); else toMap(); }, 'ghost'));
+    m2Stop('bin', b);
+    m2Dock(b, [btn(o.mode === 'view' ? 'Back' : 'Cancel', () => { if (o.back) o.back(); else toMap(); }, 'ghost')]);   // M2 (round 18): the way out in the dock
   }
 
   // ---------------------------------------------------------------- events
@@ -13911,7 +14467,7 @@ const GAME = (() => {
     // outcome stamping in (arcEvOutcome). Headless it resolves straight to
     // the map as before.
     S.arcEv = null;
-    b.appendChild(h('h1', 'evTitle', def.title || 'Event'));
+    b.appendChild(h('h1', 'evTitle qaKeep', def.title || 'Event'));   // (POLISH round 15: .qaKeep, the corner lane keeps off it)
     const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
     if (evPic) {
       // an illustration dropped at art/events/<id>.png replaces the vignette
@@ -13922,6 +14478,7 @@ const GAME = (() => {
       S.arcEv.ctx = null;
     } else b.appendChild(arcSceneEl(ed, def));
     b.appendChild(h('div', 'sub evText', def.text || ''));
+    m2Stop('event', b);   // M2 (round 18): the story card
     if (ed.out) { arcEvOutDom(b, ed); save(); return; }
     const list = h('div', 'list');
     (def.choices || []).forEach((ch, idx) => {
@@ -14037,6 +14594,7 @@ const GAME = (() => {
     evoRestChoice(list);   // Evolve an item, when one is ready (EVOLVE block)
     pevRestChoice(list);   // TRD (round 14): evolve the pet instead of resting, when it can
     b.appendChild(list);
+    m2Stop('rest', b);   // M2 (round 18): the cozy corner
     save();
   }
   function showForge() {
@@ -14070,7 +14628,8 @@ const GAME = (() => {
     if (!order.length) cards.appendChild(h('div', 'sub', 'Everything is already upgraded.'));
     evoForgeCards(cards);   // EVOLVE cards for items ready to evolve (EVOLVE block)
     b.appendChild(cards);
-    b.appendChild(btn('Leave', () => toMap(), 'ghost'));
+    m2Stop('forge', b);   // M2 (round 18): the workshop, Leave in the dock
+    m2Dock(b, [btn('Leave', () => toMap(), 'ghost')]);
     save();
   }
 
@@ -14099,6 +14658,7 @@ const GAME = (() => {
     saveMeta();
     F = null; FS = null;
     setScreen('gameover');
+    S.m3Vlt = [];   // M3: what the run's stickers put in the Prize Vault is said on the scoreboard, not in a toast over it
     const b = $('gameoverBody');
     clear(b);
     if (run.endless) endlessOver(b);   // Endless: the loops reached, the Endless score (ENDLESS block)
@@ -14114,8 +14674,10 @@ const GAME = (() => {
     b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
-    b.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri'));
+    const home = btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri');
+    b.appendChild(home);
     vaultShareBtn(b, run, !!run.endless);   // the Share run card button, over the highlights (VAULT block)
+    m3Score('gameover', b, [home]);   // M3 (round 18): the scoreboard: the number, the news, Run details folded, the way home docked
     try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
     music('off');
   }
@@ -14131,13 +14693,14 @@ const GAME = (() => {
     saveMeta();
     F = null; FS = null;
     setScreen('win');
+    S.m3Vlt = [];   // M3: the vault unlocks land in Run details (they used to toast over the Tilt card)
     const b = $('winBody');
     clear(b);
     b.appendChild(h('h1', null, secWinTitle() || 'The Prize Master falls'));   // (SECRET: the true ending)
     b.appendChild(h('div', 'sub', secWinSub() || 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
     const sc = endlessScore(run, true);   // the run score, recorded before the run-end stickers are listed (ENDLESS block)
     endlessScorePanel(b, sc);
-    endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
+    const ec = endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
     metaEndPanel(b, metaRunEnd(true));   // Tilt unlock, daily score, stickers this run (META block)
     hisRunEnd(run, 'win');   // HISTORY: the run's record (Endless later updates it)
     b.appendChild(h('h3', null, 'Highlights'));
@@ -14145,6 +14708,8 @@ const GAME = (() => {
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
     vaultShareBtn(b, run, true);   // the Share run card button, over the highlights (VAULT block)
+    m3Detach(ec.box);   // M3 (round 18): the choice docks (Keep playing the primary, Cash out the ghost), the note over them
+    m3Score('win', b, [ec.cash, ec.go], ec.note);
     save();   // the run stays saved while the Endless offer is open (ENDLESS block)
     snd('win');
   }
@@ -14164,10 +14729,10 @@ const GAME = (() => {
       const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
       // the numbers roll (headless snaps); the hp bar drains with a ghost chunk
       rollTo('hpTxt', hp, false, (v) => `${v}/${max}`);
-      set('blockTxt', block ? `+${block} block` : '');
+      set('blockTxt', block ? String(block) : '');   // HUD (round 15): the shield chip at the bar's end shows the number
       rollTo('goldTxt', gold, false);
       rollTo('inkTxt', run.ink, false);
-      set('actTxt', endlessHudAct(run));   // "2 of 3", or "Loop 4" in Endless (ENDLESS block)
+      set('actTxt', uiActTxt(run));   // "2/3", or "Loop 4" in Endless (ENDLESS block)
       const pct = U.clamp(hp / Math.max(1, max), 0, 1) * 100;
       const fl = $('hpFill'), gh = $('hpGhost'), hs = $('hpStat');
       if (fl && fl.style) fl.style.width = pct.toFixed(1) + '%';
@@ -14201,7 +14766,9 @@ const GAME = (() => {
         el.appendChild(r);
       }
       setBarLink(el);   // set members chained together behind their badge (SETS block)
-    }
+      uiRelicFit();   // HUD (round 15): what does not fit folds into a "+N" chip
+    } else if (UIH.need) uiRelicFit();
+    if (force) { uiHudInit(); uiRelicList(false); }
     if (F && FS) {
       const st = F.player.status;
       const sk = JSON.stringify(st) + '|' + F.target;
@@ -14235,6 +14802,134 @@ const GAME = (() => {
       const e = $('endTurn');
       if (e) e.disabled = !canEndTurn();
     }
+  }
+
+  /* ================= HUD (round 15): the top bar's chips, the relic overflow =================
+     DESIGN.md "HUD and title menu polish (round 15)". The markup (index.html #top) is the portrait,
+     the vitals column (the hp bar with the shield chip, the resource chips under it) and the relic
+     strip. The strip shows the medallions that fit; the rest fold into a "+N" chip that opens the
+     whole list (a relic folded away hands its proc flash to that chip). Headless there is no layout,
+     so the strip is left whole (the tests see every relic). */
+  const UIH = { need: false, init: false, more: null, list: null, hidden: [], closer: false };
+  // The act chip: "2/3" (Endless, the Back Room and the rush keep their own words).
+  function uiActTxt(run) {
+    const s = endlessHudAct(run);
+    return run && !run.endless && s === `${run.act} of 3` ? `${run.act}/3` : s;
+  }
+  // The resource chips answer a tap with what they count (once; the markup is static).
+  function uiHudInit() {
+    if (UIH.init) return;
+    UIH.init = true;
+    const tip = (id, name, text) => {
+      const v = $(id), st = v && v.parentNode;
+      if (!st || !st.addEventListener) return;
+      st.addEventListener('click', (ev) => {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        const p = hudPoint(st, 200, 50);
+        popover(`<b>${name}</b> ${v.textContent || ''}<br>${text}`, p.x, p.y + 6);
+        snd('click');
+      });
+    };
+    tip('goldTxt', 'Gold', 'Spend it at the shop.');
+    tip('inkTxt', 'Bulbs', 'Light dark tiles on the map with them.');
+    tip('tixTxt', 'Tickets', 'Win them in fights. Spend them at the prize counter.');
+    tip('actTxt', 'Act', 'Where you are on the climb.');
+  }
+  // Folds what does not fit in the strip into a "+N" chip (a browser only).
+  function uiRelicFit() {
+    UIH.need = false;
+    const el = $('relics');
+    if (!el || S.headless || !el.classList || !el.children) return;
+    if (UIH.more && UIH.more.parentNode === el) el.removeChild(UIH.more);
+    const kids = Array.prototype.slice.call(el.children);
+    for (const k of kids) if (k.classList) k.classList.remove('uiOver');
+    el.classList.remove('uiFit');
+    UIH.hidden = [];
+    const avail = el.clientWidth;
+    if (!(avail > 0)) { UIH.need = !!(S.run && S.run.relics.length); return; }   // hidden: again once the bar shows
+    if (el.scrollWidth <= avail + 1) return;
+    const GAP = 4, CHIP = 40;
+    let used = 0, over = false, n = 0;
+    for (const k of kids) {
+      const w = (k.offsetWidth || 44) + (used ? GAP : 0);
+      if (!over && used + w + GAP + CHIP <= avail) { used += w; continue; }
+      over = true;
+      k.classList.add('uiOver');
+      n += /\b(relic|mutBadge)\b/.test(k.className || '') ? 1 : (k.querySelectorAll ? k.querySelectorAll('.relic').length : 1);
+    }
+    if (!n) return;
+    const more = UIH.more || (UIH.more = h('button', 'relic uiRelMore'));
+    more.textContent = '+' + n;
+    more.setAttribute('aria-label', i18nT('Relics ({n})', { n: (S.run ? S.run.relics.length : n) }));
+    more.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiRelicList(); };
+    el.appendChild(more);
+    el.classList.add('uiFit');
+    // a folded relic's proc flashes the chip instead
+    for (const id in (S.relicEls || {})) {
+      const r = S.relicEls[id];
+      let p = r, off = false;
+      for (let i = 0; i < 3 && p && p !== el; i++, p = p.parentNode) if (p.classList && p.classList.contains('uiOver')) off = true;
+      if (off) { UIH.hidden.push(id); S.relicEls[id] = more; }
+    }
+  }
+  // The whole relic list (and the run's mutators) in a panel under the top bar. open: true / false / toggle.
+  function uiRelicList(open) {
+    const st = $('stage');
+    let el = UIH.list;
+    const on = !!(el && el.classList && el.classList.contains('show'));
+    if (open == null) open = !on;
+    if (!open) { if (on) el.classList.remove('show'); return false; }
+    const run = S.run;
+    if (!st || !run || !st.appendChild) return false;
+    if (!el) {
+      el = UIH.list = h('div', 'panel uiRelList');
+      el.id = 'uiRelList';
+      el.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      st.appendChild(el);
+    }
+    if (!UIH.closer && st.addEventListener && !S.headless) {
+      UIH.closer = true;
+      // a tap anywhere else puts it away (the chip toggles it itself)
+      st.addEventListener('pointerdown', (ev) => {
+        const t = ev && ev.target;
+        if (!UIH.list || !UIH.list.classList.contains('show')) return;
+        if (t && ((UIH.list.contains && UIH.list.contains(t)) || t === UIH.more)) return;
+        uiRelicList(false);
+      }, true);
+    }
+    clear(el);
+    const head = h('div', 'uiRlHead');
+    head.appendChild(h('h3', null, i18nT('Relics ({n})', { n: run.relics.length })));
+    const x = h('button', 'btn ghost sm uiX', '×');
+    x.setAttribute('aria-label', i18nT('Close'));
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiRelicList(false); };
+    head.appendChild(x);
+    el.appendChild(head);
+    const body = h('div', 'uiRlBody');
+    for (const id of run.muts || []) {
+      const d = mutDef(id), r = h('div', 'uiRl');
+      r.appendChild(h('div', 'ic', d.icon || '?'));
+      const c = h('div', 'col');
+      c.style.gap = '2px';
+      c.appendChild(h('div', 'n', d.name || id));
+      c.appendChild(h('div', 't', d.text || ''));
+      r.appendChild(c);
+      body.appendChild(r);
+    }
+    for (const id of run.relics) {
+      const def = relicDef(id), r = h('div', 'uiRl');
+      r.appendChild(relicCanvas(def, 40));
+      const c = h('div', 'col');
+      c.style.gap = '2px';
+      c.appendChild(h('div', 'n', def.name));
+      c.appendChild(h('div', 't', def.text || ''));
+      r.appendChild(c);
+      body.appendChild(r);
+    }
+    el.appendChild(body);
+    el.classList.add('show');
+    popover(null);
+    return true;
   }
 
   // ---------------------------------------------------------------- input
@@ -14322,6 +15017,7 @@ const GAME = (() => {
   }
   function onKey(ev, down) {
     const k = ev.key;
+    if (qa17Key(ev, down)) return;   // QA17 (round 17): the screen a key press began on; Escape is Back on the Prizedex, Stickers, Help and Tips
     if (accKey(ev, down)) return;   // ACCESS: the Settings panel takes the keys (Escape closes it)
     if (hisKey(ev, down)) return;   // HISTORY: photo mode, the recap, the History screen's Escape
     if (loreKey(ev, down)) return;   // LORE: skip the act card, close the board, Escape out of the Codex and the weekly screen
@@ -14344,11 +15040,25 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- drawing
+  /* PERF (round 19, DESIGN.md "Runtime performance (round 19)"): a solid menu page (.ds-opaque, put on the
+     screen by m2Stop / m3Page as it shows) hides the whole canvas, so the scene under it is not painted; the
+     canvas keeps its last frame, unseen. update() runs as always. The one flag for the skip. */
+  function drawCovered() {
+    if (S.hisPhIn) return false;   // (photo mode paints its frozen scene into its own buffer)
+    const el = $('scr-' + S.screen), cl = el && el.classList;
+    try { return !!(cl && cl.contains('ds-opaque') && cl.contains('show')); } catch (e) { return false; }
+  }
   function draw() {
     const ctx = S.ctx;
     if (!ctx) return;
     if (S.screen === 'intro') return;   // the intro paints the canvas itself
     if (hisPhotoDraw(ctx)) return;   // HISTORY: photo mode shows the frozen frame through its camera, filter and frame
+    if (drawCovered()) {
+      // only the DOM canvases draw() feeds: the event vignette, the shopkeeper / campfire / forge and the tip card art
+      arcDraw(ctx, S.t);
+      feelDraw(S.t);
+      return;
+    }
     const t = S.t;
     const R = X.RENDER;
     ctx.save();
@@ -14451,6 +15161,7 @@ const GAME = (() => {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     secMapBg(ctx, t);   // the Back Room's circuit board (SECRET)
+    depMapBg(ctx, t);   // the Neon Depths' deep water (DEP)
     if (!M || !X.MAP) return;
     const L = mapLayout(), P = mapPaint(), c = cam();
     if (!L || !P) return;
@@ -14531,7 +15242,7 @@ const GAME = (() => {
     }
     // The start-boss axis shows through the dark so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
-    if (R && R.best && !secIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
+    if (R && R.best && !secIn(run) && !depIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // (DEP: no aurora under water)   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
     drawBossPulse(ctx, t, size);
@@ -14564,6 +15275,7 @@ const GAME = (() => {
     }
     ctx.restore();
     seaMapDraw(ctx, t);   // SEASON: fog and bats (or snow) over the map, under its chrome
+    depMapDraw(ctx, t);   // DEP: the Neon Depths' shimmer, light shafts and bubbles over the map
     // The map's own chrome belongs to the map screen: under the arcade,
     // shop or event overlays the plate showed through their bottom buttons
     // (POLISH round 5 audit).
@@ -14573,7 +15285,7 @@ const GAME = (() => {
     if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
     if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
     if (R && R.mapHeader) {
-      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, secIn(run) ? 'The Back Room' : actDef(run.act).name, MC.prog, t);   // (SECRET)
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, secIn(run) ? 'The Back Room' : depActName(run), MC.prog, t);   // (SECRET) (DEP: the Neon Depths)
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
@@ -14592,7 +15304,7 @@ const GAME = (() => {
     // full width from y 380, the control bar the rest): clip it there
     // instead of filling the whole stage twice (Polish and QA perf)
     ctx.save(); ctx.beginPath(); ctx.rect(-30, -30, W + 60, CAB.y - CAB.frame + 30 + 24); ctx.clip();
-    if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    if (depBg(ctx, t)) { /* DEP: the underwater arcade */ } else if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     secBg(ctx, t);   // the Back Room: the machine's insides (SECRET)
     seaBg(ctx, t);   // SEASON: a moon and bats (or snow) over the arena
     ctx.restore();
@@ -14664,6 +15376,7 @@ const GAME = (() => {
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
     mutCabDraw(ctx, t, 'back');   // the Conveyor Belt under the pile (ENDLESS block)
     stoCabDraw(ctx, t, 'back');   // the Conveyor King's belt, running the other way (STORY)
+    depCabDraw(ctx, t, 'back');   // the Neon Depths' tint behind the pile (DEP)
     const rigPh = FS.rig ? FS.rig.phase : 'idle';
     const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
     const RC = R && R.RARITY_COL;
@@ -14710,6 +15423,7 @@ const GAME = (() => {
       if (R && R.item) R.item(ctx, d.def, x, yy, b.a, melt, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA, hc: accHc() });   // ACCESS: high-contrast outlines
       else { ctx.fillStyle = d.def.color || '#888'; ctx.beginPath(); ctx.arc(x, yy, 12, 0, Math.PI * 2); ctx.fill(); }
       if (fxOn) R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'front');
+      if (d.fc) cabFaceDraw(ctx, b, x, yy, t);   // CAB (round 16): a rare prize's face
       if (xf) ctx.restore();
       if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, yy, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
     }
@@ -14722,6 +15436,8 @@ const GAME = (() => {
     }
     // glass shards left by a shattered item
     if (R && R.shard) for (const s2 of FS.debris) R.shard(ctx, CAB.x + s2.x, CAB.y + s2.y, s2.a, (s2.parts && s2.parts[0] ? s2.parts[0].r : 4) + 1.5, s2.data.col);
+    cabDrawIn(ctx, t);   // CAB (round 16): the surge on the rail, the cabinet's coins and capsules
+    techDrawIn(ctx, t);   // TECH (round 17): the Laser Sight's aim
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
@@ -14739,12 +15455,14 @@ const GAME = (() => {
     mutCabDraw(ctx, t, 'front');   // Blackout: the dark, and the flashlight on the claw (ENDLESS block)
     rosCabDraw(ctx, t, 'front');   // bubbles, the flood, glue, the mirror and quake signs (ROS block)
     stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
+    depCabDraw(ctx, t, 'front');   // the water, caustics, the lure, pincers, jellies and chests (DEP)
     legClawCfg(cfg);   // the Golden Claw's gold paint (LEG block)
-    if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
+    if (R && R.claw && FS.rig) { const cabXf = cabClawPre(ctx, t, CLAWJ); R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg); if (cabXf) ctx.restore(); cabClawPost(ctx, t); }   // (CAB round 16: a heavy lift shakes and sweats)
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     ctx.restore();
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
+    cabDraw(ctx, t);   // CAB (round 16): the Jackpot Lamp on the frame, the event sign over the glass
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     cr8Draw(ctx, t);   // Mama Mech's turret on the frame, its shots (CR8 block)
@@ -14929,6 +15647,7 @@ const GAME = (() => {
   }
   function qaMeasure(stage, root, out) {
     const sr = stage.getBoundingClientRect(), k = S.scale || 1;
+    const lane = dsLaneScr(root);   // (round 18: on a lane page a heading weighs as a button)
     const clipOf = new Map();
     // the visible box of the nearest scroller (a card scrolled out of it is not on screen)
     const clip = (el) => {
@@ -14956,7 +15675,14 @@ const GAME = (() => {
       const x0 = Math.max(r.left, c ? c.left : -1e9), y0 = Math.max(r.top, c ? c.top : -1e9), x1 = Math.min(r.right, c ? c.right : 1e9), y1 = Math.min(r.bottom, c ? c.bottom : 1e9);
       if (x1 - x0 < 2 || y1 - y0 < 2) continue;
       const tag = el.tagName;
-      out.push({ x0: (x0 - sr.left) / k, y0: (y0 - sr.top) / k, x1: (x1 - sr.left) / k, y1: (y1 - sr.top) / k, w: tag === 'BUTTON' || keep ? QA_W.btn : /^H[123]$/.test(tag) ? QA_W.head : QA_W.text });
+      out.push({ x0: (x0 - sr.left) / k, y0: (y0 - sr.top) / k, x1: (x1 - sr.left) / k, y1: (y1 - sr.top) / k, w: tag === 'BUTTON' || keep ? QA_W.btn : /^H[123]$/.test(tag) ? (lane ? QA_W.btn : QA_W.head) : QA_W.text });
+    }
+    // TOAST LANE (round 18): a page's head (Back, the title), the run score and the keeper's speech bubble are never covered
+    for (const sel of ['.pageHead', '.scoreBox', '.keepBub']) {
+      const el = root.querySelector ? root.querySelector(sel) : null;
+      if (!el || el.offsetParent === null) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height > 1) out.push({ x0: (r.left - sr.left) / k, y0: (r.top - sr.top) / k, x1: (r.right - sr.left) / k, y1: (r.bottom - sr.top) / k, w: QA_W.btn });
     }
     // the HUD's top bar when it shows over this screen
     const top = $('top');
@@ -14996,15 +15722,20 @@ const GAME = (() => {
       if (cur.qa) { el.style.left = el.style.top = el.style.right = el.style.bottom = el.style.visibility = ''; cur.qa = null; cur.rect = null; cur.hold = false; }
       return null;
     }
+    // TOAST LANE (round 18): on a menu page one toast at a time: the corner item waits while a plain toast shows
+    const ly = dsLaneY();
+    if (ly && S.toastT > 0 && FE.lane !== 'keep') { el.style.visibility = 'hidden'; cur.hold = true; cur.qa = null; cur.rect = null; return null; }   // (the shop's toast is the keeper's line: nothing floats)
     let sz = qaSizeOf(el, cur.qaTight);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
     const keys = qaKeys(S.screen, S.toastT > 0 ? QA.tRect : null);
-    let spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys);   // (POLISH round 13: a screen's own extra spots after the eight)
+    // (round 18) the lane first: the lowest spot above the dock with no button, heading, score or speech bubble under it
+    const find = (w, hh) => (ly ? dsLaneSpot(ly, w, hh, keys, false) : null) || qaSpot(pol13Cands(w, hh, keys), w, hh, keys);   // (POLISH round 13: a screen's own extra spots after the eight; round 15: they may read the keys)
+    let spot = find(sz.w, sz.h);
     if (spot && spot.o > 0 && !cur.qaTight) {
       cur.qaTight = true;
       if (el.classList) el.classList.add('tight');
       const s2 = qaSizeOf(el, true);
-      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys); }
+      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = find(sz.w, sz.h); }
     }
     if (!spot) return null;
     el.style.left = Math.round(spot.x) + 'px'; el.style.top = Math.round(spot.y) + 'px';
@@ -15022,14 +15753,65 @@ const GAME = (() => {
     const el = $('toast');
     if (!el || !el.style) return null;
     const scr = S.screen;
-    if (FE.lane || scr === 'fight' || scr === 'map') { if (el.style.top) el.style.top = ''; return null; }
+    if ((FE.lane && !(FE.lane === 'top' && dsLaneY())) || scr === 'fight' || scr === 'map') { if (el.style.top) el.style.top = ''; return null; }   // (round 18: the prize counter's top lane sat on its title: the bottom lane there)
     const sz = qaSizeOf(el);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
+    const ly = dsLaneY();   // TOAST LANE (round 18): a menu page's toast sits in the bottom lane over the dock, 2.5 s at most
+    if (ly && S.toastT > 2.5) S.toastT = 2.5;
     const x = (W - sz.w) / 2, tops = [400, H - sz.h - 14, 10, 120, 260, 560, 700];
-    const cur = S.mcur, other = cur && cur.rect && !cur.hold && cur.el ? cur.rect : null;
-    const spot = qaSpot(tops.map((y) => [x, y]), sz.w, sz.h, qaKeys(scr, other));
+    const cur = S.mcur, other = !ly && cur && cur.rect && !cur.hold && cur.el ? cur.rect : null;   // (on a lane page the corner item steps aside instead)
+    const keys = qaKeys(scr, other);
+    const spot = (ly ? dsLaneSpot(ly, sz.w, sz.h, keys, true) : null) || qaSpot(tops.map((y) => [x, y]), sz.w, sz.h, keys);
     if (spot) { el.style.top = Math.round(spot.y) + 'px'; QA.tRect = { x0: x, y0: spot.y, x1: x + sz.w, y1: spot.y + sz.h, w: 5 }; }
+    if (ly && cur && cur.el && S.toastT > 0) qaCornerPlace();   // one at a time: it waits hidden until the toast is gone
     return spot;
+  }
+  /* TOAST LANE (round 18, DESIGN.md "Design system and home screens (round 18)"): on a menu page (a screen
+     with a .pageHead or a .pageDock, or a solid .ds-opaque one: the home pages, the run stops, the albums, the
+     lobbies, win / game over / loop) the toast and the corner item (a sticker, a discovery) share one lane at the
+     bottom, just above the dock, one at a time. The lane climbs only past buttons, and on such a page a heading,
+     the run score and the keeper's speech bubble weigh as buttons, so nothing lands on them. dsLaneY is the lane's
+     bottom edge in stage px, 0 off such a page and headless (the tests' measured rects decide there, as before). */
+  function dsLaneScr(scr) {
+    if (!scr || !scr.querySelector) return false;
+    if (S.screen === 'fight' || S.screen === 'map' || S.screen === 'intro' || S.screen === 'title') return false;
+    if (S.screen === 'vault') return true;   // (the Prize Vault: its shelf scrolls under the capsule bar, the lane sits over the bar)
+    try { return !!(scr.querySelector('.pageHead, .pageDock') || (scr.classList && scr.classList.contains('ds-opaque'))); } catch (e) { return false; }
+  }
+  function dsLaneY() {
+    if (S.headless || typeof document === 'undefined' || !document.querySelector) return 0;
+    let scr = null;
+    try { scr = document.querySelector('.screen.show'); } catch (e) { return 0; }
+    if (!dsLaneScr(scr)) return 0;
+    const st = $('stage');
+    if (!st || !st.getBoundingClientRect) return 0;
+    const k = S.scale || 1, sr = st.getBoundingClientRect();
+    let y = H - 12;
+    // the top of what the dock shows (its words or its buttons; its own top padding is a fade)
+    const dock = scr.querySelector('.pageDock') || scr.querySelector('.vBottom');
+    if (dock && dock.offsetParent !== null) {
+      for (const c of Array.from(dock.children || [])) {
+        const r = c.getBoundingClientRect ? c.getBoundingClientRect() : null;
+        if (r && r.height > 1 && r.width > 1) y = Math.min(y, (r.top - sr.top) / k - 6);
+      }
+    }
+    return y;
+  }
+  // The lane's spot for a w x h toast: the lowest row above ly with no button under it (centred, then right, then
+  // left; centred only for the plain toast), the least covered in that row. Null when buttons fill every row.
+  function dsLaneSpot(ly, w, hh, keys, centreOnly) {
+    const xs = centreOnly ? [(W - w) / 2] : [(W - w) / 2, W - w - 6, 6];
+    for (let y = ly - hh - 4; y >= 66; y -= 20) {
+      let best = null;
+      for (const x of xs) {
+        const s = qaSpot([[x, y]], w, hh, keys);
+        if (!s || s.hard > 0) continue;
+        if (!best || s.o < best.o) best = s;
+        if (s.o === 0) break;
+      }
+      if (best) return best;
+    }
+    return null;
   }
   /* ================= POLISH (round 13): the newer screens keep their titles =================
      The corner lane and the toast never saw the titles these screens draw on
@@ -15048,8 +15830,8 @@ const GAME = (() => {
     vault: (w) => [[W - w - 6, 700], [6, 700]],
     rush: (w) => [[W - w - 6, 80], [6, 80]],
   };
-  function pol13Cands(w, h) {
-    const f = POL13_SPOTS[S.screen], more = typeof f === 'function' ? f(w, h) : null;
+  function pol13Cands(w, h, keys) {
+    const f = POL13_SPOTS[S.screen], more = typeof f === 'function' ? f(w, h, keys) : null;
     return more && more.length ? qaCands(w, h).concat(more) : qaCands(w, h);
   }
   // the advent calendar (its garland and doors) and the gift's words; the haunted house's door and TREAT! (RENDER.sea.gift / door)
@@ -15073,6 +15855,37 @@ const GAME = (() => {
   // and the game's own readouts under it: the 777 sign (SLOTG), the wheel's pointer (WH), skee's TOTAL, its 100 cups and the ring values (SKEE.board)
   const POL13_ARC = { slots: [[106, 240, 390, 294]], wheel: [[248, 256, 292, 302]], skee: [[100, 164, 440, 236], [256, 236, 284, 440]] };
   QA_SIGNS.arcade = () => (S.arc ? [[60, 104, W - 60, 166]].concat(POL13_ARC[S.arc.g] || []) : []);
+  /* ================= POLISH (round 15): the event and story pages keep their titles =================
+     NIEUWE CODEXPAGINA sat on DANSDUEL: an event's title (h1.evTitle) weighed as a heading and the
+     vignette canvas as text, and with the toast at the bottom the least covered spot was the title.
+     The title and a story's tags are .qaKeep now (the pill is their box), the vignette's neon sign
+     (RENDER.arcScene draws it at 0.82 w, 0.2 h of its 508 x 190) is a sign, and the page gets spots
+     under its last button (tried after qaCands' eight). */
+  const Q15_EV_SIGN = [0.68, 0.02, 0.96, 0.38];   // the neon word and its glow, a share of the scene canvas
+  // The event scene canvas's box in stage px (tests hand it in as QA.q15Scene), else null.
+  function q15SceneRect() {
+    if (QA.q15Scene !== undefined) return QA.q15Scene;
+    const E = S.arcEv, st = $('stage');
+    if (S.headless || !E || !E.cv || !E.ctx || !st || !st.getBoundingClientRect) return null;
+    try {
+      if (E.cv.offsetParent === null) return null;
+      const sr = st.getBoundingClientRect(), r = E.cv.getBoundingClientRect(), k = S.scale || 1;
+      return r.width > 1 && r.height > 1 ? [(r.left - sr.left) / k, (r.top - sr.top) / k, (r.right - sr.left) / k, (r.bottom - sr.top) / k] : null;
+    } catch (e) { return null; }
+  }
+  QA_SIGNS.event = () => {
+    const r = q15SceneRect(), s = Q15_EV_SIGN;
+    if (!r) return [];
+    const w = r[2] - r[0], hh = r[3] - r[1];
+    return [[r[0] + w * s[0], r[1] + hh * s[1], r[0] + w * s[2], r[1] + hh * s[3]]];
+  };
+  // under the page's last button (its choices, or Continue under the outcome), while that fits above the bottom edge
+  POL13_SPOTS.event = (w, h, keys) => {
+    let y = 0;
+    for (const r of keys || []) if ((r.w || 1) >= QA_W.btn && r.y1 > y && r.y1 < H) y = r.y1;
+    y = Math.round(y + 12);
+    return y > 12 && y + h <= H - 6 ? [[W - w - 6, y], [6, y], [(W - w) / 2, y]] : [];
+  };
   /* ================= LABELS (round 9): the arena reserves its space =================
      Presentation only. Every frame of a fight the things that live in the
      arena become keep-out zones for the floating labels and the damage
@@ -15233,6 +16046,7 @@ const GAME = (() => {
     S.t += dt;
     fx().update(dt);
     rollStep(real);
+    qa17HudFit();   // QA17 (round 17): the resource row squeezes when big numbers or a badge outgrow it
     annTick(real);   // the big banners, one at a time (ANNOUNCER)
     if (S.screen === 'map' || S.screen === 'fight') ambientTick(real);
     lootTick(real);   // payout tally, capsule ritual, the ticket stream
@@ -15243,6 +16057,7 @@ const GAME = (() => {
     petTick(dt, real);   // the companion pet, its tips (PETS block)
     cr8Tick(dt);   // CR8 (round 8): Mama Mech's turret, the player row beside it
     rosTick(dt);   // ROS (round 10): bubbles, quakes, the flood, the robot vacuum's dump
+    depTick(dt, real);   // DEP (round 15): the Neon Depths' water and tide, the lure, the stings
     vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
     polTick(real);       // POLISH (round 5): relic badges shine
     secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
@@ -15268,6 +16083,8 @@ const GAME = (() => {
       if (FS) bossTick(dt, real);   // the versus card, signatures, finales (boss arena)
       if (FS) bestTick(dt, real);   // the bestiary's machine tricks (BESTIARY)
       if (FS) secTick(dt, real);   // The Machine: phases, the shutter, the cracks, the power down (SECRET)
+      if (FS) cabTick(dt, real);   // CAB (round 16): the event sign, the lamp, the cabinet's coins and capsules, the strain, the faces
+      if (FS) techTick(dt, real);   // TECH (round 17): Double Feature's second reel, the laser's blink
       if (FS && FS.outro) { FS.outro.t -= real; if (FS.outro.t <= 0) finishOutro(); }
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
@@ -15304,6 +16121,7 @@ const GAME = (() => {
     S.acc = 0;
     if (!S.headless) S.frame = requestAnimationFrame(frame);
   }
+  const PX_DPR_MAX = 2;   // PERF (round 19): the canvas backing store's cap, device px per CSS px
   function resize() {
     let vw = W, vh = H;
     try { vw = window.innerWidth || W; vh = window.innerHeight || H; } catch (e) { /* headless */ }
@@ -15318,8 +16136,11 @@ const GAME = (() => {
       stage.style.left = Math.floor((iw - W * k) / 2) + 'px';
       stage.style.top = Math.floor((ih - H * k) / 2) + 'px';
     }
+    // PERF (round 19): the backing store follows the device up to 2 px per CSS px; a 3x phone filled 2.25x
+    // the pixels of 2x for no visible gain. Only the buffer changes: the stage's CSS size and stagePoint
+    // (CSS px / S.scale) are untouched, so taps and the claw map the same at every ratio.
     let dpr = 1;
-    try { dpr = Math.min(2.5, window.devicePixelRatio || 1); } catch (e) { dpr = 1; }
+    try { dpr = Math.min(PX_DPR_MAX, window.devicePixelRatio || 1); } catch (e) { dpr = 1; }
     S.px = Math.max(1, Math.min(3, dpr * k));
     if (S.cv) { S.cv.width = Math.round(W * S.px); S.cv.height = Math.round(H * S.px); }
   }
@@ -15397,6 +16218,7 @@ const GAME = (() => {
     if (typeof I18N === 'undefined' || !I18N) return 'en';
     const s = S.meta && S.meta.settings;
     if (s && s.lang !== undefined && I18N.LANGS.indexOf(s.lang) < 0) delete s.lang;   // a junk value follows the browser again
+    if (I18N.onLand) I18N.onLand(() => i18nRefresh());   // (round 15) a table fetched on a switch lands: redo the screen in it
     const was = I18N.get();
     const now = I18N.set(I18N.pick(s, typeof navigator !== 'undefined' ? navigator : null));
     if (was !== now) i18nRefresh();
@@ -15552,7 +16374,7 @@ const GAME = (() => {
   function accMusicAct() {
     const A = X.AUDIO;
     if (!A || !A.setAct) return 0;
-    return A.setAct(S.run && S.screen !== 'title' && S.screen !== 'chars' ? (S.run.act | 0) : 0);
+    return A.setAct(S.run && S.screen !== 'title' && S.screen !== 'chars' ? depMusicAct(S.run) : 0);   // (DEP: the Neon Depths' dub is act 4)
   }
 
   // ---- the Settings panel (a modal over any screen)
@@ -15567,17 +16389,18 @@ const GAME = (() => {
       stage.appendChild(el);
     }
     clear(el);
-    const sheet = h('div', 'accSheet panel');
-    const head = h('div', 'accHead');
-    head.appendChild(h('h2', null, 'Settings'));
-    const x = h('button', 'btn go sm accDone', 'Done');
+    // (round 18) a design-system sheet: the handle, the title and a close x; the sample strip lives in Vision
+    const sheet = h('div', 'accSheet sheet');
+    const head = h('div', 'accHead sheetHead');
+    head.appendChild(h('h3', null, 'Settings'));
+    const x = h('button', 'btn ghost sm uiX accDone', '×');
+    try { x.setAttribute('aria-label', i18nT('Close')); } catch (e) { /* stub */ }
     x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); accClose(); };
     head.appendChild(x);
     sheet.appendChild(head);
     const pv = document.createElement('canvas');
-    pv.className = 'accPrev'; pv.width = 1000; pv.height = 200;
-    sheet.appendChild(pv);
-    const body = h('div', 'accBody');
+    pv.className = 'accPrev'; pv.width = 1000; pv.height = 160;
+    const body = h('div', 'accBody sheetBody');
     sheet.appendChild(body);
     el.appendChild(sheet);
     // a tap on the dimmed game around the sheet closes it
@@ -15664,8 +16487,12 @@ const GAME = (() => {
     slider(snd0, 'Music', 'volMusic');
     slider(snd0, 'Effects', 'volSfx');
     const sOn = A ? A.sfxOn : true, mOn = A ? A.musicOn : true;
-    tog(snd0, 'Sound', sOn, () => { if (A && A.toggleSfx) A.toggleSfx(); });
-    tog(snd0, 'Music', mOn, () => { if (A && A.toggleMusic) A.toggleMusic(); });
+    // (round 18) the on/off pair repeats the sliders and the More sheet: shown only while that sound is off,
+    // so there is a way back on from here (always registered: GAME.choose and the tests keep their labels)
+    const sT = tog(snd0, 'Sound', sOn, () => { if (A && A.toggleSfx) A.toggleSfx(); });
+    const mT = tog(snd0, 'Music', mOn, () => { if (A && A.toggleMusic) A.toggleMusic(); });
+    if (sOn) uiCls(sT, 'accDup');
+    if (mOn) uiCls(mT, 'accDup');
     const feel = sec('Motion and feel');
     tog(feel, 'Shake', s.shake, (v) => accSet('shake', v), 'Off also calms the camera, the zooms and the heavy animations.');
     tog(feel, 'Buzz', s.haptics !== false, (v) => { feelSetHaptics(v); accApply(); }, 'Phone vibration on hits, grabs and prizes.');
@@ -15673,6 +16500,7 @@ const GAME = (() => {
     const vis = sec('Vision');
     seg(vis, 'Colours', 'cb', ACC_CB, ACC_CB_NAME, ACC_CB_SUB[s.cb]);
     seg(vis, 'Text size', 'text', ACC_TXT, ACC_TXT_NAME, 'Menus, cards, banners and the floating numbers.');
+    if (el.accPrev) { const pw = h('div', 'accPrevBox'); pw.appendChild(h('div', 'dsSec', 'Preview')); pw.appendChild(el.accPrev); vis.appendChild(pw); }   // (round 18: the sample strip beside the colour and text size it shows)
     tog(vis, 'Item outlines', s.hc, (v) => accSet('hc', v), 'A thick dark rim round every item in the cabinet.');
     const ctl = sec('Controls');
     seg(ctl, 'One-handed', 'hand', ACC_HAND, ACC_HAND_NAME, 'END TURN and the map buttons move to the thumb on that side.');
@@ -15692,39 +16520,44 @@ const GAME = (() => {
     try { ctx = cv && cv.getContext ? cv.getContext('2d') : null; } catch (e) { ctx = null; }
     const R = X.RENDER;
     if (!ctx || !R) return false;
+    // (round 18) a plain strip: the numbers and statuses as a fight shows them, the four rarities by name, one prize
     try {
       ctx.setTransform(2, 0, 0, 2, 0, 0);
-      ctx.clearRect(0, 0, 500, 100);
-      ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, 500, 100);
+      ctx.clearRect(0, 0, 500, 80);
+      ctx.fillStyle = '#1c1233'; ctx.fillRect(0, 0, 500, 80);
       const col = (c) => (R.acc ? R.acc.col(c) : c), k = R.acc ? R.acc.textK : 1;
+      const FONT = '"Trebuchet MS",system-ui,sans-serif';
+      const wOf = (str, px) => { let w = px * 0.6 * str.length; try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ } return w; };
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       // the numbers laid out left to right at the current text size
-      let nx = 16;
+      let nx = 14;
       const num = (str, c) => {
-        ctx.font = `900 ${Math.round(22 * k)}px "Trebuchet MS",system-ui,sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.lineWidth = 4; ctx.strokeStyle = '#12091f'; ctx.strokeText(str, nx, 28); ctx.fillStyle = col(c); ctx.fillText(str, nx, 28);
-        let w = 22 * k * 0.6 * str.length;
-        try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ }
-        nx += w + 14;
+        const px = Math.round(20 * k);
+        ctx.font = `900 ${px}px ${FONT}`;
+        ctx.lineWidth = 4; ctx.strokeStyle = '#12091f'; ctx.strokeText(str, nx, 22); ctx.fillStyle = col(c); ctx.fillText(str, nx, 22);
+        nx += wOf(str, px) + 14;
       };
       num('−12', '#ff5a4a'); num('+6', '#a6ff5e'); num(i18nTr('+5 block'), '#2ee6d6');   // (I18N: the word)
-      if (R.statusPips) R.statusPips(ctx, Math.max(nx, 250), 18, { poison: 3, str: 2, weak: 1 }, 18);
+      if (R.statusPips) R.statusPips(ctx, Math.max(nx, 260), 12, { poison: 3, str: 2, weak: 1 }, 18);
+      // the rarities: a ringed dot and the word, in the current palette
       const RC = R.RARITY_COL || {};
-      ['c', 'u', 'r', 'l'].forEach((r, i) => {
-        const x = 40 + i * 50, y = 74;
-        ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fillStyle = '#22163a'; ctx.fill();
-        ctx.lineWidth = 4; ctx.strokeStyle = RC[r] || '#fff'; ctx.stroke();
-        ctx.font = '900 13px "Trebuchet MS",system-ui,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(r.toUpperCase(), x, y + 1);
-      });
-      if (R.acc && R.acc.mark) {
-        R.acc.mark(ctx, 'danger', 250, 74, 10); R.acc.mark(ctx, 'pickup', 286, 74, 10);
-        R.acc.mark(ctx, 'up', 320, 74, 8, col('#2ee6d6')); R.acc.mark(ctx, 'down', 346, 74, 8, col('#ff2e88'));
+      let rx = 14;
+      const RW = [['c', 'Common'], ['u', 'Uncommon'], ['r', 'Rare'], ['l', 'Legendary']];
+      let px = Math.round(13 * k);
+      ctx.font = `800 ${px}px ${FONT}`;
+      const need = RW.reduce((a, [, w]) => a + 33 + wOf(i18nTr(w), px), 14);
+      if (need > 492) px = Math.max(9, Math.floor((px * (492 - 14 - 33 * 4)) / (need - 14 - 33 * 4)));   // (long Dutch words at the largest text size)
+      for (const [r, word] of RW) {
+        const say = i18nTr(word);
+        ctx.beginPath(); ctx.arc(rx + 7, 60, 7, 0, Math.PI * 2); ctx.fillStyle = '#261a44'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = RC[r] || '#fff'; ctx.stroke();
+        ctx.font = `800 ${px}px ${FONT}`; ctx.fillStyle = '#f4eeff'; ctx.fillText(say, rx + 19, 61);
+        rx += 19 + wOf(say, px) + 14;
       }
-      // two prizes as the cabinet draws them (rarity rim, the outline when it is on)
+      // a prize as the cabinet draws it (its rarity rim, the outline when that is on)
       const IT = tbl('ITEMS'), ids = Object.keys(IT);
-      const pick = (r) => IT[ids.find((id) => IT[id].rarity === r && !IT[id].char)];
-      const a = pick('r'), b = pick('l'), hc = accHc();
-      if (R.item && a) R.item(ctx, a, 404, 72, -0.4, 0.8, { hc, glow: RC.r, glowA: 0.35 });
-      if (R.item && b) R.item(ctx, b, 458, 72, 0.3, 0.8, { hc, glow: RC.l, glowA: 0.45 });
+      const b = IT[ids.find((id) => IT[id].rarity === 'l' && !IT[id].char)];
+      if (R.item && b && rx <= 446) R.item(ctx, b, 470, 52, 0.3, 0.6, { hc: accHc(), glow: RC.l, glowA: 0.4 });   // (when the words leave it room)
       return true;
     } catch (e) { return false; }
   }
@@ -16258,6 +17091,7 @@ const GAME = (() => {
     D0.adv = winIsAdv(t);   // WIN: an advent present instead of a door
     S.seaDoor = D0;
     setScreen('sea');
+    m2Stop('sea');   // M2 (round 18): the story card look
     const scr = $('scr-sea');
     if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return; seaHurry(); };
     seaDom();
@@ -16871,11 +17705,11 @@ const GAME = (() => {
     const b = $('eventBody');
     clear(b);
     S.arcEv = null;
-    b.appendChild(h('h1', 'evTitle', S0.title));
+    b.appendChild(h('h1', 'evTitle qaKeep', S0.title));   // (POLISH round 15: the title and its tags are .qaKeep)
     const tags = h('div', 'stoTags');
-    tags.appendChild(h('span', 'stoTag', 'STORY'));
-    if (!ed.cb) tags.appendChild(h('span', 'stoTag part', 'PART ' + Math.max(1, ed.n | 0)));
-    if (ed.cb) tags.appendChild(h('span', 'stoTag back', 'IT CAME BACK'));
+    tags.appendChild(h('span', 'stoTag qaKeep', 'STORY'));
+    if (!ed.cb) tags.appendChild(h('span', 'stoTag part qaKeep', 'PART ' + Math.max(1, ed.n | 0)));
+    if (ed.cb) tags.appendChild(h('span', 'stoTag back qaKeep', 'IT CAME BACK'));
     b.appendChild(tags);
     // an illustration dropped at art/events/<story id>.png replaces the drawn vignette (the dice still run)
     const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
@@ -16887,6 +17721,7 @@ const GAME = (() => {
       if (S.arcEv) S.arcEv.ctx = null;
     } else b.appendChild(scene);
     b.appendChild(h('div', 'sub evText', D().stoBeatText(beat, st)));
+    m2Stop('event', b);   // M2 (round 18): the story card
     if (ed.out) { stoOutDom(b, ed); save(); return; }
     const list = h('div', 'list');
     beat.choices.forEach((ch, idx) => {
@@ -17101,6 +17936,7 @@ const GAME = (() => {
     const G = S.gary = { q: sd.q, r: sd.r, ph: c.res ? 'done' : 'intro', t: 0, lineT: 0, line: c.res ? (c.res.quip || c.said) : c.said, gear: stoGear(),
       W: null, C: null, rig: null, pile: [], sub: 'aim', who: 'p', think: 0, grabT: 0, settle: 0, cur: null, steer: false, keyDir: 0, flashP: 0, flashG: 0, party: 0, msg: '' };
     setScreen('rival');
+    m2Stop('rival');   // M2 (round 18): the story card look
     if (c.live && !c.res) stoOffStart(G, c);   // a reload mid claw-off picks up at the next drop
     stoRivalDom();
     snd('garyTaunt');
@@ -17341,6 +18177,7 @@ const GAME = (() => {
     startFight(['gary'], 'elite', { then: { gary: { q: t.q, r: t.r } } });
     return true;
   }
+  const Q15_AIM_STUCK = 6;   // (QA round 15) seconds a claw-off aim waits on a busy claw before the prongs are forced open
   function stoRivalTick(real) {
     const G = S.gary;
     G.t += real; G.lineT += real;
@@ -17349,6 +18186,15 @@ const GAME = (() => {
     const c = stoGaryC(G);
     if (!c || !c.live) return;
     const rig = G.rig, bd = G.C.bounds;
+    // (QA round 15) an aim that cannot start (the claw still busy from the last drop: a prize wedged in the prongs)
+    // never waits for good (Gary's retried every 0.2 s forever): the prongs open, then the drop is skipped
+    const q15k = c.live.drops.length;
+    if (G.q15k !== q15k) { G.q15k = q15k; G.q15wait = 0; G.q15open = false; }
+    if (G.sub === 'aim' && rig.phase !== 'idle' && rig.phase !== 'moving') {
+      G.q15wait += real;
+      if (G.q15wait > Q15_AIM_STUCK && !G.q15open && rig.open) { G.q15open = true; rig.open(); STOX.log.push({ k: 'unstick', who: G.who }); }
+      if (G.q15wait > Q15_AIM_STUCK + 4) { STOX.log.push({ k: 'skip', who: G.who }); stoDropEnd(G, c); return; }
+    }
     if (G.sub === 'aim' && G.who === 'g') {
       G.think -= real;
       if (G.think <= 0) {
@@ -17853,6 +18699,7 @@ const GAME = (() => {
     const b = $('codexBody');
     if (!b) return false;
     clear(b);
+    m3Page('codex', b);   // M3 (round 18): the album look, a solid page
     try { const scr = $('scr-codex'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const B = D().loreBook ? D().loreBook() : null;
     if (!B) { b.appendChild(btn('Back', () => loreBack(), 'pri')); return false; }
@@ -17864,10 +18711,7 @@ const GAME = (() => {
   }
   const loreBack = () => { const U0 = S.loreUi || {}; if (U0.from === 'collection') showCollection(); else showTitle(); };
   function loreHead(b, title, back) {
-    const head = h('div', 'hisHead loreHead');
-    head.appendChild(btn('Back', back, 'ghost sm'));
-    head.appendChild(h('h1', null, title));
-    b.appendChild(head);
+    return m3Head(b, btn('Back', back, 'ghost sm'), title, null);   // M3 (round 18): the page head (the Codex, the weekly, the rush menu)
   }
   // The book: every chapter, its progress, its NEW pages; The Machine's stays shut until it is met.
   function loreBookView(b) {
@@ -18097,7 +18941,7 @@ const GAME = (() => {
     return !!loreIntroStart(key);
   }
   function loreIntroStart(key) {
-    const run = S.run, def = i18nIntroDef(D().loreIntro ? D().loreIntro(key, run && run.act) : null);   // (I18N: typed in the current language)
+    const run = S.run, def = i18nIntroDef(depIntro(D().loreIntro ? D().loreIntro(key, run && run.act) : null));   // (I18N: typed in the current language) (DEP: a dive's card names the Depths)
     if (!def) return null;
     const L = loreM(), fast = (L.intros[key] | 0) > 0;
     L.intros[key] = Math.min(1e6, (L.intros[key] | 0) + 1);
@@ -18229,6 +19073,7 @@ const GAME = (() => {
     const b = $('weeklyBody');
     if (!b) return false;
     clear(b);
+    m3Page('weekly', b);   // M3 (round 18): the lobby look (ice cyan), a solid page
     try { const scr = $('scr-weekly'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const key = wkKeyNow(), def = D().wkDef ? D().wkDef(key) : null, Wk = wkM(), R = X.RENDER;
     loreHead(b, 'Weekly', () => showTitle());
@@ -18239,7 +19084,7 @@ const GAME = (() => {
     const ban = hisCanvas(508, 170, (ctx) => { if (R && R.lore) R.lore.wkBanner(ctx, st, 508, 170); });
     ban.className = 'wkBan';
     b.appendChild(ban);
-    LORE.live = { cv: ban, kind: 'wk', st, w: 508, h: 170 };
+    // (M3 round 18: the hero banner is drawn once; nothing loops on a lobby page)
     const rules = h('div', 'wkRules panel');
     rules.appendChild(h('div', 'sub', `Everyone climbs the same seed this week: ${cn.name} with the ${(ci && ci.name) || def.claw}, Tilt 0, and these mutators. Your best score earns the medal.`));
     const mt = h('div', 'wkMuts');
@@ -18261,7 +19106,8 @@ const GAME = (() => {
     }
     b.appendChild(tg);
     b.appendChild(h('div', 'wkBest', best ? `Your best this week: ${fmtNum(best)}${medal ? ' · ' + MEDAL_NAME(medal) + ' medal' : ''}.` : 'No climb yet this week. The seed is waiting.'));
-    b.appendChild(btn('Play the weekly', () => wkStart(key), 'go wkPlay'));
+    const play = btn('Play the weekly', () => wkStart(key), 'pri wkPlay');
+    b.appendChild(play);
     // the medal cabinet: every week on record, newest first
     const cab = D().wkCabinet ? D().wkCabinet(Wk) : { list: [], counts: {} };
     b.appendChild(h('h3', null, 'Medal cabinet'));
@@ -18284,6 +19130,7 @@ const GAME = (() => {
       grid.appendChild(cell);
     }
     b.appendChild(grid);
+    m3Dock(b, [play]);   // M3 (round 18): the one primary waits in the dock
     return true;
   }
   // Starts this week's climb: its seed, crawler, claw and mutators, Tilt 0.
@@ -18427,6 +19274,7 @@ const GAME = (() => {
     const b = $('rushMenuBody');
     if (!b) return false;
     clear(b);
+    m3Page('rushmenu', b);   // M3 (round 18): the lobby look (rush red), a solid page
     try { const scr = $('scr-rushmenu'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const M = rushM(), open = rushOpen(), R = X.RENDER, all = rushLineupAll(), K = RUSHD();
     loreHead(b, 'Boss Rush', () => showTitle());
@@ -18435,7 +19283,7 @@ const GAME = (() => {
     const ban = hisCanvas(508, 200, (ctx) => { if (R && R.rush) R.rush.banner(ctx, 508, 200, st); });
     ban.className = 'rushBan';
     b.appendChild(ban);
-    RSH.live = { cv: ban, kind: 'banner', st, w: 508, h: 200 };
+    RSH.live = null;   // (M3 round 18: the hero banner is drawn once; nothing loops on a lobby page)
     if (!open) b.appendChild(h('div', 'rushLock', '\u{1F512} Locked: win a run to open the Boss Rush. The whole lineup is waiting, back to back.'));
     const rules = h('div', 'rushRules panel');
     rules.appendChild(h('div', 'sub', `Every boss, back to back: the six act bosses in a random order, then the Prize Master${rushMet() ? ', then The Machine' : ''}. After each one you pick 1 of 3: an item, a relic, a heal or a claw part. The clock runs while you fight.`));
@@ -18462,6 +19310,7 @@ const GAME = (() => {
     b.appendChild(go);
     b.appendChild(h('h3', null, 'Best times'));
     b.appendChild(rushBoardEl(M, pick));
+    m3Dock(b, [go]);   // M3 (round 18): the one primary waits in the dock
     return true;
   }
   // What a crawler brings to a rush: its kit on top of its starter bin and relic.
@@ -18911,19 +19760,20 @@ const GAME = (() => {
   // The HUD in a rush: the act stat reads the boss count, the clock takes the bulbs' and the tickets' place.
   function rushHud(run) {
     const top = $('top'), R = rushOf(run), on = !!R;
-    if (top && top.classList) top.classList[on ? 'add' : 'remove']('rushOn');
+    if (top && top.classList && top.classList.contains('rushOn') !== on) top.classList[on ? 'add' : 'remove']('rushOn');   // (PERF round 19: written on a change only)
     const act = $('actTxt'), st = act && act.parentNode;
     if (on) {
-      if (act) act.textContent = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
+      const at = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
+      if (act && act.textContent !== at) act.textContent = at;
       const k = st && st.querySelector ? st.querySelector('.k') : null;
       if (k && k.textContent !== 'Boss') k.textContent = 'Boss';
-      if (top && (!RSH.clk || RSH.clk.parentNode !== top)) {
+      if (top && (!RSH.clk || !(top.contains ? top.contains(RSH.clk) : RSH.clk.parentNode === top))) {   // (HUD round 15: the clock sits in the resource row inside the bar)
         const el = h('div', 'stat rushClk');
         el.appendChild(h('span', 'k', 'Time'));
         const v = h('span', 'v mono', '0:00.0');
         el.appendChild(v);
         RSH.clk = el; RSH.clkV = v;
-        if (st && st.parentNode === top && top.insertBefore) top.insertBefore(el, st); else top.appendChild(el);
+        if (st && st.parentNode && st.parentNode.insertBefore) st.parentNode.insertBefore(el, st); else top.appendChild(el);   // (HUD round 15: the act chip lives in the resource row)
       }
       RSH.hudOn = true;
       rushClock();
@@ -19393,9 +20243,10 @@ const GAME = (() => {
      card and the Prizedex get the holo layers (holoOn: a rainbow foil under
      the words, a glare over them, a shade, sparkles on a legendary; classes
      holo holo-<rarity>), and holoTick copies RENDER.holo.look onto the live
-     cards' CSS about 30 times a second: a tilt toward the pointer (the
-     independent CSS rotate, so the deal-in animation's transform is left
-     alone) or an idle wobble, where the foil sits, the glare, the shadow.
+     cards' CSS about 30 times a second while touched: a tilt toward the
+     pointer (the independent CSS rotate, so the deal-in animation's
+     transform is left alone), where the foil sits, the glare, the shadow
+     (round 18: at rest a card holds still, see m2HoloShown).
      Quiet cards (the Prizedex, the bin, the Compactor) only move while the
      pointer is on them. Reduced motion (Shake off, prefers-reduced-motion):
      no tilt, no wobble, the foil at rest. Reduced flashing: dimmer foil and
@@ -19472,6 +20323,20 @@ const GAME = (() => {
     st.dirty = false;
     return o;
   }
+  /* Round 18 (M2): calm cards. A card at rest holds still (no idle wobble or
+     sweep on a menu: it is drawn once in its rest pose, the foil at rest) and
+     only moves while a finger or the pointer is on it; and a card on a screen
+     that is not shown is never touched (the shop's and the Prizedex's cards
+     used to get 550 to 700 style writes a second during fights). */
+  function m2HoloShown(c) {
+    let scr = c._holoScr;
+    if (scr === undefined) {
+      scr = null;
+      try { scr = c.closest ? c.closest('.screen') : null; } catch (e) { scr = null; }
+      c._holoScr = scr;
+    }
+    return !scr || !scr.classList || scr.classList.contains('show');
+  }
   function holoTick(real) {
     if (S.headless || !HOLO.live.length) return;
     HOLO.clock += real; HOLO.acc += real;
@@ -19481,11 +20346,72 @@ const GAME = (() => {
     for (let i = HOLO.live.length - 1; i >= 0; i--) {
       const c = HOLO.live[i], st = c && c._holo;
       if (!st || c.isConnected === false) { HOLO.live.splice(i, 1); continue; }
-      if ((st.quiet || reduced) && !st.on && !st.dirty) continue;
-      holoApply(c, st, HOLO.clock, reduced, noFlash);
+      if (!st.on && !st.dirty) continue;
+      if (!m2HoloShown(c)) continue;
+      holoApply(c, st, HOLO.clock, reduced || !st.on, noFlash);
     }
   }
   // ================================================================ /HOLO
+
+  // ================================================================ M2 (round 18): the run stops' frame
+  /* DESIGN.md "Run stop screens restyled (round 18)". The run stops share one
+     frame on the ds-css tokens in four family looks, a class on the screen
+     (CSS in <style id="stops-css">): m2-market (shop, prize counter, trading
+     post, the arcade and pet shop frame: warm, gold price pills), m2-cozy
+     (rest, treasure, spare parts, capsule: amber, big choices), m2-work
+     (forge, bin, Compactor: steel with an ember accent) and m2-story (event,
+     boon, season door, rival, secret: the scene, one line, a few choices);
+     the reward screen uses the plain card frame. The way out sits in a
+     bottom dock (m2Dock moves the element; its GAME.choose entry stays where
+     it was registered). A stop whose backdrop is solid is marked ds-opaque:
+     nothing of the canvas shows under it. Leaving for the map, a fight or the
+     title empties the stops' bodies (every builder rebuilds its body when it
+     shows, so nothing is lost; the hidden cards and canvases are let go). */
+  const M2_FAM = { reward: 'card', parts: 'cozy', treasure: 'cozy', capsule: 'cozy', rest: 'cozy', shop: 'market', counter: 'market', trade: 'market', arcade: 'market',
+    forge: 'work', bin: 'work', compactor: 'work', event: 'story', boon: 'story', sea: 'story', rival: 'story', secret: 'story' };
+  const M2_OPAQUE = { reward: 1, parts: 1, treasure: 1, rest: 1, shop: 1, counter: 1, forge: 1, bin: 1, event: 1 };
+  const M2_CLEAR = ['reward', 'parts', 'treasure', 'rest', 'shop', 'counter', 'forge', 'bin', 'event'];
+  const M2_HOME = { map: 1, fight: 1, title: 1 };
+  // A stop is shown: its family look, its solid backdrop, its body as a full-height page (the dock at the bottom).
+  function m2Stop(name, body) {
+    const scr = $('scr-' + name), fam = M2_FAM[name];
+    try {
+      if (scr && scr.classList) {
+        scr.classList.add('m2Stop');
+        for (const f of ['card', 'cozy', 'market', 'work', 'story']) if (f !== fam) scr.classList.remove('m2-' + f);
+        if (fam) scr.classList.add('m2-' + fam);
+        scr.classList[M2_OPAQUE[name] ? 'add' : 'remove']('ds-opaque');
+      }
+      if (body && body.classList && M2_OPAQUE[name]) body.classList.add('dsPage');
+    } catch (e) { /* the look is decoration */ }
+    return scr;
+  }
+  // The bottom dock: moves the given elements (a primary and a ghost at most) into a .pageDock at the end of body.
+  function m2Dock(body, els, cls) {
+    const list = (els || []).filter(Boolean);
+    if (!body || !list.length) return null;
+    const dock = h('div', 'pageDock m2Dock' + (cls ? ' ' + cls : ''));
+    for (const e of list) m2Move(e, dock);
+    body.appendChild(dock);
+    return dock;
+  }
+  // Moves an element out of its parent (into to, or nowhere).
+  function m2Move(el, to) {
+    if (!el) return el;
+    try { if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el); } catch (e) { /* stub */ }
+    if (to) to.appendChild(el);
+    return el;
+  }
+  // setScreen's hook: back on the map, in a fight or at the title, the hidden stops let their cards go.
+  function m2Leave(from, to) {
+    if (!M2_HOME[to] || from === to) return;
+    for (const n of M2_CLEAR) {
+      if (n === to) continue;
+      const b = $(n + 'Body');
+      if (b && b.children && b.children.length) clear(b);
+    }
+  }
+  // ================================================================ /M2
 
   // ================================================================ REROLL (round 9)
   /* The shop's REROLL (DESIGN.md "Shop reroll (round 9)"): a slot-machine
@@ -20128,7 +21054,7 @@ const GAME = (() => {
   }
   // Rising Water: the level for this turn, eased in; the physics hook does the floating and sinking.
   function rosFloodTick(R0, m, dt) {
-    if (!m || !(m.flood > 0) || !FS.world || !X.PHYS || !X.PHYS.rosFlood) return;
+    if (!m || !(m.flood > 0) || !FS.world || !X.PHYS || !X.PHYS.rosFlood || depOwnsWater()) return;   // (DEP: in the Depths the cabinet's water is theirs)
     if (R0.floodW !== FS.world) {
       if (R0.flood && R0.flood.remove) R0.flood.remove();
       R0.flood = X.PHYS.rosFlood(FS.world, { y: R0.level, xMax: binWidth() - 2, g: GRAVITY, rho: ROSK.rho });
@@ -20416,7 +21342,7 @@ const GAME = (() => {
     if (SCHX.view !== 'play') SCHX.G = null;
     const M = schM();
     if (!M.seen) { M.seen = 1; saveMeta(); }
-    if (!was) { setScreen('school'); music('title'); }
+    if (!was) { setScreen('school'); music('title'); m3Page('school', null, false); }   // (M3 round 18: the lobby look; the canvas paints the classroom, never opaque)
     if (SCHX.view === 'report' && SCHX.gradFx) { SCHX.gradFx = false; fx().emit('confetti', 60, 520, { n: 1.4, dir: -Math.PI / 2 + 0.5 }); fx().emit('confetti', 480, 520, { n: 1.4, dir: -Math.PI / 2 - 0.5 }); snd('fanfare'); }
     schDom();
     return SCHX.view;
@@ -21413,7 +22339,7 @@ const GAME = (() => {
   const SCH_WHY = { cracked: 'It cracked! Glass hates a hard landing.', blew: 'KABOOM. Grab the bomb out before its fuse runs out.', never: 'Oops, that one was not allowed.',
     drops: 'Out of drops.', time: 'Out of time.' };
   const schResLine = (r) => `${r.drops} drop${r.drops === 1 ? '' : 's'} · ${r.t.toFixed(1)}s · best grab ${r.items}`;
-  const schTxt = (ctx, s, x, y, size, col, align) => { ctx.font = 'bold ' + size + 'px sans-serif'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(s, x, y); };
+  const schTxt = (ctx, s, x, y, size, col, align) => { ctx.font = 'bold ' + size + 'px sans-serif'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(i18nTr(s), x, y); };   // (QA round 15: i18nTr, it drew English)
   // The challenge's board: its name, the goal, the star rules, the drops left and the clock (or the fuse), Professor Pincher.
   function schDrawBoard(ctx, t, G, RS) {
     const ch = G.ch, rules = D().schStarText ? D().schStarText(ch) : [], got = schM().stars[ch.id] | 0;
@@ -21518,6 +22444,7 @@ const GAME = (() => {
   // ---- the duel's own save (never the run's)
   function duoSaveState() {
     if (!S.duo) return false;
+    if (S.duo.net) return true;   // DUO NET (round 15): an online duel is never saved (it cannot be resumed alone), the local one stays put
     try { localStorage.setItem(DUO_KEY, JSON.stringify(S.duo)); } catch (e) { /* storage may be blocked */ }
     return true;
   }
@@ -21552,7 +22479,9 @@ const GAME = (() => {
   // ---- the title: DUO shares the NEW RUN row (registered last, so every index stays put)
   function duoTitleBtn(menu) {
     // the title is outside the duo area: a duel still in memory is parked (saved) and the run set aside comes back
+    duoNetOff();   // DUO NET (round 15): the title closes any online game
     if (S.duo || S.duoStash) { if (S.duo) duoSaveState(); S.duo = null; S.duoLive = null; S.duoV = null; duoRestore(true); }
+    duoNetBoot();   // DUO NET (round 15): a page opened with ?join=CODE goes straight to joining
     if (!menu || !D().DUO) return null;
     const saved = duoSaved();
     const b = btn('Duo', () => duoMenu(), 'duoBtn');
@@ -21576,21 +22505,20 @@ const GAME = (() => {
     popover(null);
     const scr = $('scr-duo');
     if (scr) { scr.className = 'screen duoScr show ' + (cls || ''); try { scr.scrollTop = 0; } catch (e) { /* stub */ } }
+    m3Page('duo', null, !/dp-canvas/.test(cls || ''));   // M3 (round 18): the lobby look; the menus and the setup are solid pages, the canvas phases stay see-through
     const b = $('duoBody');
     clear(b);
     return b;
   }
   function duoMenu() {
+    duoNetOff();   // DUO NET (round 15): the duo menu is outside any online game: the link closes
     duoStashRun();
     S.duoUi = { ph: 'menu' };
     if (S.duo && S.duo.ph !== 'end') duoPark();
     else if (S.duo) duoDone();
     const b = duoBody('dp-menu');
     if (!b) return false;
-    const head = h('div', 'duoHead');
-    head.appendChild(btn('Back', () => duoLeave(), 'ghost sm'));
-    head.appendChild(h('h1', null, 'Duo'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => duoLeave(), 'ghost sm'), 'Duo', null);   // M3 (round 18): the page head
     b.appendChild(h('div', 'sub duoSub', 'Two players, one phone. Take turns, pass it over, talk trash.'));
     const saved = duoSaved();
     if (saved && saved.ph !== 'end') {
@@ -21603,7 +22531,7 @@ const GAME = (() => {
     const modes = h('div', 'duoModes');
     for (const [mode, name, icon, text] of [['coop', 'Co-op Boss', '\u{1F91D}', 'Two crawlers, one boss. Take turns grabbing; the boss hits whoever just went. Win together.'],
       ['vs', 'Versus Claw-off', '\u{1F94A}', 'One bin of prizes, drops turn about, sabotage cards in between. Best of three rounds.']]) {
-      const c = btn(name, () => duoSetup(mode), 'duoMode dm-' + mode);
+      const c = btn(name, () => duoNetChoose(mode), 'duoMode dm-' + mode);   // (DUO NET round 15: co-op asks same phone or online; round 16: versus too)
       c.textContent = '';
       c.appendChild(h('span', 'mi', icon));
       c.appendChild(h('span', 'mn', name));
@@ -21664,21 +22592,27 @@ const GAME = (() => {
   function duoSetupDom() {
     const St = S.duoSet;
     if (!St) return;
+    const was = S.duoUi && S.duoUi.ph === 'setup', scr0 = $('scr-duo');
+    let keep = 0;
+    try { keep = was && scr0 ? scr0.scrollTop || 0 : 0; } catch (e) { keep = 0; }
     S.duoUi = { ph: 'setup' };
     const b = duoBody('dp-setup');
     if (!b) return;
-    const head = h('div', 'duoHead');
-    head.appendChild(btn('Back', () => duoMenu(), 'ghost sm'));
-    head.appendChild(h('h1', null, St.mode === 'coop' ? 'Co-op Boss' : 'Versus Claw-off'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => duoMenu(), 'ghost sm'), St.mode === 'coop' ? 'Co-op Boss' : 'Versus Claw-off', null);   // M3 (round 18): the page head
     b.appendChild(h('div', 'sub duoSub', St.mode === 'coop'
       ? 'Each crawler brings its own bin, HP and claw (plus its Boss Rush kit). Player 1 grabs, then Player 2; the boss strikes whoever just went.'
       : 'A shared bin of prizes: rarer is worth more, two at once is a DOUBLE, three a JACKPOT, named combos pay extra. Play a sabotage card on your rival after each drop.'));
     const COL = DK().COLORS, chars = duoChars(), claws = clawIds(), paints = duoPaints();
     St.p.forEach((p, i) => {
       const col = (COL.find((c) => c.id === p.color) || COL[0]).col;
-      const pan = h('div', 'duoP panel');
+      // M3 (round 18): a player is one row (portrait, name, a summary line); a tap on the summary opens the colours, crawlers, claws and paint
+      const M3d = S.m3Duo || (S.m3Duo = {});
+      const fold = m3Fold(null, !!M3d[i], (on) => { M3d[i] = on; }, 'duoP panel');
+      const pan = fold.wrap;
       try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+      const inf0 = clawInfo(p.claw) || {};
+      for (const s of [String((charDef(p.char) || {}).name || p.char), (inf0.icon ? inf0.icon + ' ' : '') + String(inf0.name || p.claw),
+        p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour']) fold.tg.appendChild(h('span', 'sv', s));
       const top = h('div', 'duoPTop');
       top.appendChild(portraitCanvas(p.char, 44));
       top.appendChild(h('span', 'duoPN', 'Player ' + (i + 1)));
@@ -21688,7 +22622,7 @@ const GAME = (() => {
       inp.oninput = () => { p.name = inp.value; };
       inp.onchange = () => { p.name = inp.value; };
       top.appendChild(inp);
-      pan.appendChild(top);
+      if (pan.insertBefore) pan.insertBefore(top, fold.tg); else pan.appendChild(top);
       const cr = h('div', 'duoSw');
       for (const c of COL) {
         const s = btn('P' + (i + 1) + ' ' + c.id, () => { duoSet(i, 'color', c.id); duoSetupDom(); }, 'duoCol' + (p.color === c.id ? ' on' : ''));
@@ -21696,7 +22630,7 @@ const GAME = (() => {
         try { s.style.background = c.col; s.setAttribute('aria-label', c.name || c.id); } catch (e) { /* stub */ }
         cr.appendChild(s);
       }
-      pan.appendChild(cr);
+      fold.body.appendChild(cr);
       const ch = h('div', 'duoChips');
       for (const id of chars) {
         const c = btn('P' + (i + 1) + ' ' + id, () => { duoSet(i, 'char', id); duoSetupDom(); }, 'duoChip' + (p.char === id ? ' on' : ''));
@@ -21705,7 +22639,7 @@ const GAME = (() => {
         c.appendChild(h('span', null, String((charDef(id) || {}).name || id).split(' ')[0]));
         ch.appendChild(c);
       }
-      pan.appendChild(ch);
+      fold.body.appendChild(ch);
       const cl = h('div', 'duoChips claws');
       for (const id of claws) {
         const inf = clawInfo(id);
@@ -21713,9 +22647,9 @@ const GAME = (() => {
         c.textContent = (inf.icon ? inf.icon + ' ' : '') + String(inf.name || id).replace(/ Claws?$/, '');
         cl.appendChild(c);
       }
-      pan.appendChild(cl);
+      fold.body.appendChild(cl);
       const k = paints.indexOf(p.paint), nm = p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour';
-      pan.appendChild(btn('P' + (i + 1) + ' look', () => { duoSet(i, 'paint', paints[(k + 1) % paints.length]); duoSetupDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
+      fold.body.appendChild(btn('P' + (i + 1) + ' look', () => { duoSet(i, 'paint', paints[(k + 1) % paints.length]); duoSetupDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
       b.appendChild(pan);
     });
     const opt = h('div', 'duoOpt panel');
@@ -21736,7 +22670,8 @@ const GAME = (() => {
       opt.appendChild(row);
     }
     b.appendChild(opt);
-    b.appendChild(btn('Toss the coin!', () => duoStart(), 'pri duoGo'));
+    m3Dock(b, [btn('Toss the coin!', () => duoStart(), 'pri duoGo')]);   // M3 (round 18): the dock (it used to float over the chips)
+    try { if (keep && scr0) scr0.scrollTop = keep; } catch (e) { /* stub */ }   // (M3: a pick keeps the page where it was)
   }
   // Setup done: the duel is made (players repaired, the seed), remembered on the profile, and the coin goes up.
   function duoStart() {
@@ -21751,6 +22686,7 @@ const GAME = (() => {
     duoStashRun();
     const toss = D().duoToss ? D().duoToss(seed) : { w: 0, flips: 9 };
     const Dd = { v: 1, mode, seed, p: P.map((p) => Object.assign({}, p)), first: toss.w, flips: toss.flips, ph: 'toss', turn: toss.w, from: 1 - toss.w, msg: null, res: null, paid: false };
+    if (o.net) Dd.net = o.net;   // DUO NET (round 15): {me, code}: this phone plays seat me only
     if (mode === 'vs') Object.assign(Dd, { drops: DK().DROPS.indexOf(o.drops | 0) >= 0 ? o.drops | 0 : DK().DROPS_DEF, round: 0, rounds: [], k: 0, used: [0, 0], taken: [], score: [0, 0], deck: [], hands: [[], []], pend: null, last: null });
     else {
       const all = duoBossList().map((x) => x.id);
@@ -21762,7 +22698,7 @@ const GAME = (() => {
     S.duoLive = null; S.duoV = null;
     S.duoT = { t: 0, now: 0 };
     const M = duoM();
-    M.last = { p: P.map((p) => Object.assign({}, p)), drops: Dd.drops || M.last.drops || DK().DROPS_DEF, boss: mode === 'coop' ? (o.boss || 'random') : M.last.boss, mode };
+    if (!o.net) M.last = { p: P.map((p) => Object.assign({}, p)), drops: Dd.drops || M.last.drops || DK().DROPS_DEF, boss: mode === 'coop' ? (o.boss || 'random') : M.last.boss, mode };   // (DUO NET: the online look is kept apart)
     saveMeta();
     duoLog({ k: 'begin', mode, seed, first: Dd.first });
     duoShow();
@@ -21779,11 +22715,13 @@ const GAME = (() => {
     else if (ph === 'sabo') duoSaboDom();
     else if (ph === 'round') duoRoundDom();
     else if (ph === 'end') duoEndDom();
+    else if (Dd.net && (ph === 'yours' || ph === 'watch')) duoNetDom();   // DUO NET (round 15): your turn, or watching theirs
     duoSaveState();
   }
   function duoAfterToss() {
     const Dd = S.duo;
     if (!Dd || Dd.ph !== 'toss') return false;
+    if (Dd.net) return duoNetAfterToss();   // DUO NET (round 15): your turn, or watch theirs
     if (Dd.mode === 'vs') duoRoundStart(1);
     duoHand(Dd.mode === 'vs' ? Dd.turn : Dd.first, { from: 1 - (Dd.mode === 'vs' ? Dd.turn : Dd.first) });
     return true;
@@ -21794,6 +22732,7 @@ const GAME = (() => {
   function duoHand(nx, o) {
     const Dd = S.duo;
     if (!Dd) return false;
+    if (Dd.net) return duoNetPass(nx);   // DUO NET (round 15): no phone to pass: the turn goes over the line
     o = o || {};
     Dd.turn = nx | 0;
     Dd.from = o.from != null ? o.from | 0 : 1 - Dd.turn;
@@ -21861,7 +22800,7 @@ const GAME = (() => {
   }
   // A finished duel is let go (its save too): New duo, or the menu after the podium.
   function duoDone() {
-    duoClear();
+    if (!(S.duo && S.duo.net)) duoClear();   // (DUO NET: an online duel never touched the local duel save)
     S.duo = null; S.duoLive = null; S.duoV = null;
     duoRestore(false);
   }
@@ -21985,9 +22924,12 @@ const GAME = (() => {
       startFight([Dd.boss], 'boss', { seed: Dd.fseed, duoF: L.F[seat] });
       // one Golden Prize a seat per fight: a fresh pick on every turn would upgrade the whole bin
       const g = FS.golden;
-      if (g && !g.was) { const inst = F.bin.find((x) => x.uid === g.uid); if (inst) inst.plus = false; }
-      FS.golden = L.gold[seat] && F.bin.some((x) => x.uid === L.gold[seat].uid) ? L.gold[seat] : null;
-      L.gold[seat] = FS.golden;
+      if (Dd.net && !L.n[seat]) L.gold[seat] = g;   // DUO NET (round 15): this phone's first turn keeps the fresh pick (its seat's one Golden Prize)
+      else {
+        if (g && !g.was) { const inst = F.bin.find((x) => x.uid === g.uid); if (inst) inst.plus = false; }
+        FS.golden = L.gold[seat] && F.bin.some((x) => x.uid === L.gold[seat].uid) ? L.gold[seat] : null;
+        L.gold[seat] = FS.golden;
+      }
     }
     L.n[seat]++;
     duoSeatOn(seat);
@@ -22001,7 +22943,7 @@ const GAME = (() => {
     FS.party = Math.max(FS.party || 0, 1.1); FS.marquee = duoUp(seat);
     const R = X.RENDER, V = S.meta && S.meta.vault;
     if (R && R.vault && R.vault.equip && V && V.eq) { try { R.vault.equip(Object.assign({}, V.eq, { paint: duoPaint(seat) || V.eq.paint })); } catch (e) { /* art is optional */ } }
-    banner(`${duoUp(seat)}'S TURN`, 'turn', 1.3, 'fight');
+    banner(Dd.net && Dd.net.me === seat ? 'YOUR TURN' : `${duoUp(seat)}'S TURN`, 'turn', 1.3, 'fight');   // (DUO NET: online it is always yours here)
     S.lastHud = ''; S.lastRelics = ''; S.lastStatus = ''; S.lastGrabs = '';
     duoHud(true);
     duoLog({ k: 'seat', seat, turn: F ? F.turn : 0, down: Dd.down.slice() });
@@ -22014,7 +22956,7 @@ const GAME = (() => {
     let bar = $('duoBar');
     if (bar && !bar.parentNode && top.appendChild) top.appendChild(bar);
     if (!bar || !bar.parentNode) { bar = h('div'); bar.id = 'duoBar'; const rl = $('relics'); if (rl && rl.parentNode === top && top.insertBefore) top.insertBefore(bar, rl); else top.appendChild(bar); }
-    const key = [0, 1].map((i) => { const Fi = L.F[i]; return Fi ? Fi.player.hp + '/' + Fi.player.maxHp : '-'; }).join('|') + '|' + Dd.turn + '|' + Dd.down.join('');
+    const key = [0, 1].map((i) => { const Fi = L.F[i]; return Fi ? Fi.player.hp + '/' + Fi.player.maxHp : '-'; }).join('|') + '|' + Dd.turn + '|' + Dd.down.join('') + '|' + duoNetLinkK();   // (DUO NET: the link's dot)
     if (!force && key === S.duoHudK) return;
     S.duoHudK = key;
     clear(bar);
@@ -22026,6 +22968,7 @@ const GAME = (() => {
       c.appendChild(h('span', null, down ? 'DOWN' : Fi ? `♥ ${Fi.player.hp}/${Fi.player.maxHp}` : ''));
       bar.appendChild(c);
     }
+    duoNetDot(bar);   // DUO NET (round 15): the link to the partner's phone, a dot (green, amber retrying, grey alone)
   }
   /* The boss acts once per seat turn, turn about, so a boss whose move
      cycle has an even length would show each seat only half of it (a
@@ -22055,11 +22998,12 @@ const GAME = (() => {
     if (!Dd || Dd.mode !== 'coop' || !S.duoLive || !F || !FS) return false;
     Dd.turns++;
     const cur = Dd.turn, nx = 1 - cur;
-    if (Dd.down[nx]) { duoHud(true); duoSaveState(); return false; }
+    if (Dd.down[nx]) { if (Dd.net) duoNetSendTurn({ next: cur }); duoHud(true); duoSaveState(); return false; }   // (DUO NET: the watcher still sees it)
     if (cur !== Dd.first) duoCycShift();   // a round is over (both seats went)
     FS.enemyTurn = true;   // hold the input through the beat
     const T = S.duoT || (S.duoT = { t: 0, now: 0 });
     T.passT = DUOC.pass; T.passTo = nx; T.passFrom = cur;
+    if (Dd.net) { duoNetSendTurn({ next: nx, pass: true }); banner(`${duoUp(nx)}'S TURN`, 'turn', DUOC.pass, 'turn'); duoSaveState(); return true; }   // DUO NET (round 15): sent at once, the beat plays here
     banner('PASS THE PHONE!', 'turn', DUOC.pass, 'turn');
     duoSaveState();
     return true;
@@ -22107,6 +23051,7 @@ const GAME = (() => {
     Dd.res = { won: !!won, turns: Dd.turns | 0, boss: Dd.boss };
     Dd.paid = true;
     if (D().duoRecord) D().duoRecord(duoM(), { mode: 'coop', names: Dd.p.map((p) => p.name), won: !!won });
+    if (Dd.net) duoNetBooked(!!won);   // DUO NET (round 15): the online count, and the result to the partner when it happened here
     saveMeta();
     duoLog({ k: 'book', mode: 'coop', won: !!won });
     duoSaveState();
@@ -22125,6 +23070,7 @@ const GAME = (() => {
   }
   // The fight screen in co-op: the pass beat, the duo bar's numbers.
   function duoFightTick(real) {
+    if (S.duo && S.duo.net) duoNetFightTick(real);   // DUO NET (round 15): the claw, the bin and the moments to the watching phone
     const T = S.duoT;
     if (T && T.passT > 0) {
       T.passT -= real;
@@ -22153,6 +23099,7 @@ const GAME = (() => {
       }
     } catch (e) { /* optional */ }
     ctx.restore();
+    if (Dd.net) duoNetOver(ctx, t);   // DUO NET (round 15): a cheer from the watching phone, in its bubble
   }
 
   // ---- VERSUS CLAW-OFF
@@ -22283,6 +23230,7 @@ const GAME = (() => {
     const Dd = S.duo, k = ev.key;
     if (down && k === 'Escape') { if (!Dd) duoMenu(); else if (Dd.ph === 'hand' || Dd.ph === 'end') duoMenu(); return; }
     if (!Dd) return;
+    if (Dd.net && Dd.ph === 'yours') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoNetGo(); } return; }   // (DUO NET)
     if (Dd.ph === 'toss') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoTossTap(); } return; }
     if (Dd.ph === 'hand') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoReady(); } return; }
     const V = S.duoV;
@@ -22297,6 +23245,18 @@ const GAME = (() => {
     const V = S.duoV, Dd = S.duo;
     V.W.remove(body);
     const d = body.data, v = d.v | 0;
+    if (Dd && Dd.net) duoVsNetCredit(d);   // DUO NET (round 16): the prize flies on the watching phone too
+    if (!V.cur) {   // (QA round 15) a straggler rolls in after the drop was booked (V.cur is gone: it threw): it scores for the one who knocked it loose
+      if (Dd && (Dd.ph === 'sabo' || Dd.ph === 'play' || Dd.ph === 'hand')) {
+        const who = Dd.last ? Dd.last.who : Dd.turn, pts = v * (d.gold ? 2 : 1);
+        Dd.score[who] = (Dd.score[who] | 0) + pts; Dd.taken.push(d.pile);
+        if (Dd.last) Dd.last.pts += pts;
+        V.flash[who] = 1;
+        duoLog({ k: 'late', who, i: d.pile, v: pts });
+        if (Dd.net) qa17VsLate();   // QA17: online, the rival's phone takes the late points too (the table goes over again)
+      }
+      return;
+    }
     V.cur.got.push({ i: d.pile, id: d.def.id, v, gold: d.gold ? 1 : 0 });
     V.flash[Dd.turn] = 1;
     V.party = Math.max(V.party, v >= 4 || d.gold ? 1.2 : 0.6);
@@ -22348,8 +23308,9 @@ const GAME = (() => {
     for (const ln of sc.lines) if (ln.k === 'combo') fx().text(270, 470, ln.label.toUpperCase() + ' +' + ln.v, ln.color || '#ff9ad0', { size: 20, life: 1.6, dy: -50 });
     if (D().duoDrawCards) D().duoDrawCards(Dd.deck, Dd.hands[who], 1);
     duoLog({ k: 'drop', who, pts: sc.pts, n: sc.n, round: Dd.round, k2: Dd.k });
-    const total = 2 * (Dd.drops | 0);
-    if (Dd.k >= total || duoLeft(Dd) === 0) return duoRoundEnd();
+    const total = 2 * (Dd.drops | 0), over = Dd.k >= total || duoLeft(Dd) === 0;
+    if (Dd.net) duoVsNetOut('drop', over);   // DUO NET (round 16): the drop's result, the hands and the bin to the rival's phone
+    if (over) return duoRoundEnd();
     Dd.turn = 1 - who;
     Dd.from = who;
     Dd.ph = 'sabo';
@@ -22385,8 +23346,9 @@ const GAME = (() => {
       });
       sheet.appendChild(row);
       sheet.appendChild(btn('Keep my cards', () => duoSaboKeep(), 'ghost sm'));
-    } else sheet.appendChild(btn('Pass the phone', () => duoSaboKeep(), 'go'));
+    } else sheet.appendChild(btn(Dd.net ? 'Your rival\'s turn' : 'Pass the phone', () => duoSaboKeep(), 'go'));   // (DUO NET round 16: online there is no phone to pass)
     b.appendChild(sheet);
+    if (Dd.net) duoVsNetDock(b);   // DUO NET (round 16): the link's sheet (lost, gone, leave) under it
   }
   function duoSaboPlay(i) {
     const Dd = S.duo;
@@ -22426,6 +23388,7 @@ const GAME = (() => {
     Dd.res = { w: m.w, wins: m.wins.slice(), pts: m.pts.slice() };
     Dd.paid = true;
     if (D().duoRecord) D().duoRecord(duoM(), { mode: 'vs', names: Dd.p.map((p) => p.name), w: m.w });
+    if (Dd.net) duoVsNetBooked(m.w);   // DUO NET (round 16): the online versus count on this profile
     saveMeta();
     duoLog({ k: 'book', mode: 'vs', w: m.w });
     return true;
@@ -22443,16 +23406,19 @@ const GAME = (() => {
     card.appendChild(h('div', 'sub', `Rounds: ${duoUp(0)} ${m.wins[0]}, ${duoUp(1)} ${m.wins[1]}. First to 2.`));
     card.appendChild(btn('Next round', () => duoNextRound(), 'pri'));
     b.appendChild(card);
+    if (Dd.net) duoVsNetDock(b);   // DUO NET (round 16): taunts and the link's sheet under it
   }
   function duoNextRound() {
     const Dd = S.duo;
     if (!Dd || Dd.ph !== 'round') return false;
+    if (Dd.net) return duoVsNetNext();   // DUO NET (round 16): either phone starts the next round, the other follows
     duoRoundStart((Dd.round | 0) + 1);
     duoHand(Dd.turn, { from: 1 - Dd.turn });
     return true;
   }
   // The podium: the result, the record per name, taunts for the winner, Rematch.
   function duoEndDom() {
+    if (S.duo && S.duo.net) { duoNetEndDom(); return; }   // DUO NET (round 15): play again together, or the title
     const Dd = S.duo, b = duoBody('dp-canvas dp-end');
     if (!b) return;
     const res = Dd.res || {};
@@ -22485,6 +23451,7 @@ const GAME = (() => {
 
   // ---- the frame: phase clocks, the countdown, the claw-off's world, the fight's pass
   function duoTick(real) {
+    duoNetTick(real);   // DUO NET (round 15): the link's clock, the watch screen, YOUR TURN
     const Dd = S.duo;
     if (!Dd) return;
     const T = S.duoT || (S.duoT = { t: 0, now: 0 });
@@ -22517,6 +23484,7 @@ const GAME = (() => {
     }
     const RD = R.duo;
     const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
+    if (Dd.net && (Dd.ph === 'yours' || Dd.ph === 'watch')) { duoNetDraw(ctx, t); return; }   // DUO NET (round 15)
     if (Dd.ph === 'toss' && RD) RD.coin(ctx, W, H, { t: T.t, dur: DUOC.tossDur, w: Dd.first, flips: Dd.flips, names, cols, chars, reduced: !!fx().reduced });
     else if (Dd.ph === 'hand' && RD) {
       const nx = Dd.turn, fr = Dd.from;
@@ -22528,10 +23496,10 @@ const GAME = (() => {
     } else if ((Dd.ph === 'play' || Dd.ph === 'sabo' || Dd.ph === 'round') && Dd.mode === 'vs') duoVsDraw(ctx, t);
     else if (Dd.ph === 'end' && RD) {
       const res = Dd.res || {};
-      RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : 'rounds won', reduced: !!fx().reduced });
+      RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : res.ff ? 'rounds won, then a forfeit' : 'rounds won', reduced: !!fx().reduced });   // (DUO NET round 16: a forfeit says so)
       // the last taunt, from whoever sent it (the winner's tall step, or their side of a shared one)
       const fi = Dd.msg && (Dd.msg.from === 1 ? 1 : 0), tx = Dd.mode === 'vs' && (res.w === 0 || res.w === 1) ? (fi === res.w ? W * 0.38 : W * 0.74) : (fi ? W * 0.68 : W * 0.32);
-      if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + Dd.msg.text, T.msgT || 1, tx, 380);
+      if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + i18nTr(Dd.msg.text), T.msgT || 1, tx, 380);   // (the words translated on their own, the icon kept in front)
     } else {
       if (R.title) R.title(ctx, W, H, t);
       ctx.fillStyle = 'rgba(18,9,31,0.55)'; ctx.fillRect(0, 0, W, H);
@@ -22541,13 +23509,14 @@ const GAME = (() => {
   function duoVsDraw(ctx, t) {
     const Dd = S.duo, V = S.duoV, R = X.RENDER;
     if (!V || !R) return;
-    const who = Dd.ph === 'play' ? Dd.turn : (Dd.from != null ? Dd.from : Dd.turn);
+    const watching = !!Dd.net && Dd.ph === 'watch';   // DUO NET (round 16): the rival's drop, from the stream
+    const who = Dd.ph === 'play' || watching ? Dd.turn : (Dd.from != null ? Dd.from : Dd.turn);
     if (R.bg) R.bg(ctx, W, H, U.clamp(Dd.round | 0, 1, 3), t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
     ctx.fillStyle = 'rgba(18,9,31,0.35)'; ctx.fillRect(0, 0, W, CAB.y - CAB.frame);
     const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0] };
     const B = DUO_BOARD;
     B.t = t; B.names = [duoNameOf(0), duoNameOf(1)]; B.cols = [duoCol(0), duoCol(1)]; B.sc = Dd.score; B.wins = m.wins; B.drops = Dd.drops; B.used = Dd.used; B.who = who; B.flash = V.flash; B.round = Dd.round;
-    B.label = Dd.ph === 'play' ? `${duoUp(who)}'S DROP` : '';
+    B.label = Dd.ph === 'play' || (watching && !(S.duoNet && S.duoNet.vw)) ? `${duoUp(who)}'S DROP` : watching ? `${duoUp(who)} PICKS A CARD` : '';   // (DUO NET round 16: the watcher's label)
     if (R.duo) R.duo.board(ctx, B);
     // both crawlers beside the machine: the one dropping under the spotlight
     for (let i = 0; i < 2; i++) {
@@ -22580,7 +23549,8 @@ const GAME = (() => {
         }
       }
     }
-    if (V.rig && R.claw) {
+    if (watching) duoNetClawDraw(ctx, t, who);   // DUO NET (round 16): the rival's claw as it streams in
+    else if (V.rig && R.claw) {
       const busy = V.rig.phase !== 'idle' && V.rig.phase !== 'moving';
       DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
       R.claw(ctx, V.rig, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
@@ -22600,7 +23570,1741 @@ const GAME = (() => {
       R.duo.card(ctx, 270, 600, 150, 214, cs, { rot: -0.08 + Math.sin(u * 9) * 0.02, k: fx().reduced ? 1 : k, glow: true, text: true });
       ctx.restore();
     }
+    if (Dd.net) duoVsNetOver(ctx, t, who);   // DUO NET (round 16): the rival's taunt, their prizes flying, the link's card
   }
+
+  // ---------------------------------------------------------------- DUO NET (round 15): online co-op
+  /* DESIGN.md "Online co-op (round 15)". CO-OP BOSS with each player on
+     their own phone, over the shared relay (js/net.js, NET). Each phone plays
+     its own seat only (its own crawler, claw, paint, name and colour); the
+     host (the relay's side 0) is seat 0 and owns the setup: the seed, the
+     boss, the colours. Turns alternate strictly, so nothing conflicts: the
+     active phone grabs, the boss answers on its seat (COMBAT's own enemy
+     phase), then it sends the turn: the shared enemies (duoNetFoesOut), its
+     seat's public state (duoNetPubOut) and the down flags; the other phone
+     applies them (duoNetFoesIn, duoNetPubIn) and it is their turn. The
+     active phone's result is taken as it is (the claw's physics may differ
+     from phone to phone, so nothing is simulated twice).
+     While a partner grabs, their claw and bin stream in (DUO.NET.STREAM /
+     BODIES) and play in their colour on the watch screen, with each prize
+     they land flying to their corner, their combos, and the cheers.
+     A dropped line retries for 30 s (NET), then Keep fighting alone (the
+     partner's seat counts as DOWN, the local rule) or Quit to title. A
+     phone that lost the game (a reload) and comes back to the code asks for
+     it ('need') and gets the whole table ('sync'). An online duel never
+     touches the local duel save (clawspire_duo) or the run save. */
+  const DNX = { log: [], build: '', boot: null, booted: false, mode: 'coop' };   // (round 16) mode: what the next room this phone hosts plays
+  const DNK = () => DK().NET || { PROTO: 2, STREAM: 0.1, BODIES: 0.25, YOURS: 5, AWAY: 45, FX_MAX: 24, BODIES_MAX: 40, CODE_LEN: 4, VS_BODIES: 40 };
+  const netOk = () => typeof NET !== 'undefined' && !!NET;
+  function duoNetLog(o) { DNX.log.push(o); if (DNX.log.length > 300) DNX.log.splice(0, 100); }
+  const dnInt = (v, lo, hi, d) => { const n = Math.round(+v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  const dnNum = (v, lo, hi, d) => { const n = +v; return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  const dnStr = (v, max) => (typeof v === 'string' ? v.slice(0, max || 40) : '');
+  const dnHas = (o, k) => !!o && typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+  // the page's own ?join=CODE, read once as the scripts load (the address is tidied when the online game is left)
+  try { DNX.boot = typeof window !== 'undefined' && window.location && D().duoNetJoinParam ? D().duoNetJoinParam(window.location.search) : null; } catch (e) { DNX.boot = null; }
+  /* This build's fingerprint: two phones on different builds could disagree
+     on a boss's moves, so the hello carries it and a mismatch says reload. */
+  function duoNetBuild() {
+    if (DNX.build) return DNX.build;
+    let s = String(SAVE_VER) + '|' + ((DK().NET && DK().NET.PROTO) || 1);
+    try {
+      const E = tbl('ENEMIES');
+      for (const x of (D().duoBosses ? D().duoBosses() : [])) { const e = E[x.id] || {}; s += '|' + x.id + ':' + JSON.stringify([e.hp, e.moves, e.pattern, e.enrage, e.sig]); }
+      s += '|' + Object.keys(tbl('ITEMS')).length + '|' + Object.keys(tbl('CHARACTERS')).join(',') + '|' + JSON.stringify(DK().COOP || {}) + '|' + JSON.stringify(D().DIFFICULTY || {});
+      // (round 16) the versus claw-off: both phones roll the same pile and score a drop the same way
+      const K = DK();
+      s += '|vs:' + JSON.stringify([K.VAL, K.PILE, K.PILE_MORE, K.BONUS, K.DROPS, K.CARD_IDS, K.COPIES, K.HAND, K.WIN_ROUNDS, K.MAX_ROUNDS, Object.keys(D().COMBOS || {}).length, CAB.w, CAB.h]);
+    } catch (e) { /* the version alone */ }
+    DNX.build = (U.hashStr(s) >>> 0).toString(36);
+    return DNX.build;
+  }
+  // ---- the session (S.duoNet): the lobby, then the game's link state
+  function duoNetW() { return { claw: null, cd: null, bodies: {}, fx: [], hp: null, e: null, beat: 0, t: 0, n: 0 }; }
+  function duoNetFresh(role) {
+    return { ph: 'menu', role: role || 'host', code: '', me: role === 'guest' ? 1 : 0, mine: { p: duoNetMine(role === 'guest' ? 1 : 0), ready: false }, part: null, boss: 'random',
+      inN: 0, outN: 0, lastOut: null, lost: false, gone: false, left: false, alone: false, awayAt: 0, hid: false, rx: false, ask: false, err: '',
+      w: duoNetW(), stT: 0, bdT: 0, lastCl: '', cmb: {}, cheerT: 0, lostDom: '', t: 0, games: 0, dom: null,
+      // (round 16) mode: 'coop' or 'vs' (a guest takes the host's); drops: the claw-off's drops each per round (the host's pick); vw: the rival's last drop, shown while they pick a card
+      mode: DNX.mode === 'vs' ? 'vs' : 'coop', drops: duoVsNetDrops0(), vw: null };
+  }
+  // My look online: the one used there last, else Player 1 of the last duel on this phone; only what this profile has.
+  function duoNetMine(seat) {
+    const M = duoM(), o = M.online && M.online.me, l = M.last && M.last.p && M.last.p[0];
+    const p = D().duoNetPlayer ? D().duoNetPlayer(o || l || {}, seat | 0) : { name: 'P' + ((seat | 0) + 1), color: 'pink', char: 'knight', claw: 'classic', paint: '' };
+    const chars = duoChars();
+    if (chars.indexOf(p.char) < 0) p.char = chars[0];
+    if (clawIds().indexOf(p.claw) < 0) p.claw = 'classic';
+    if (duoPaints().indexOf(p.paint) < 0) p.paint = '';
+    return p;
+  }
+  function duoNetBind() {
+    if (!netOk()) return false;
+    NET.reset();
+    NET.hello(() => { const N = S.duoNet; return N ? { b: duoNetBuild(), p: N.mine.p, ready: !!N.mine.ready, g: S.duo && S.duo.net ? 1 : 0, n: Math.max(N.inN, N.outN), m: N.mode } : {}; });   // (round 16: m, the room's mode)
+    const wrap = (t, fn) => NET.on(t, (m) => { try { fn(m); } catch (e) { duoNetLog({ k: 'err', t, e: String((e && e.message) || e) }); } });
+    wrap('@peer', duoNetOnPeer); wrap('@lost', duoNetOnLost); wrap('@back', duoNetOnBack); wrap('@gone', duoNetOnGone); wrap('@error', duoNetOnError);
+    wrap('@code', (c) => { const N = S.duoNet; if (N && !N.code) { N.code = c; if (N.ph === 'lobby' && !S.duo) duoNetLobbyDom(); } });
+    wrap('@pulse', duoNetOnPulse);
+    for (const [t, fn] of [['me', duoNetOnMe], ['lobby', duoNetOnLobby], ['go', duoNetOnGo], ['turn', duoNetOnTurn], ['cl', duoNetOnCl], ['fx', duoNetOnFx], ['cheer', duoNetOnCheer],
+      ['bye', duoNetOnBye], ['away', duoNetOnAway], ['again', duoNetOnAgain], ['need', duoNetOnNeed], ['sync', duoNetOnSync],
+      ['vt', duoVsNetOnTable], ['vc', duoVsNetOnClaw], ['vgo', duoVsNetOnGo]]) wrap(t, fn);   // (round 16: the versus claw-off's own)
+    return true;
+  }
+  const duoNetSend = (m) => (netOk() && S.duoNet && !S.duoNet.alone ? NET.send(m) : false);
+  // Out of online play: the partner is told, the link closes, the session goes, the address loses its ?join (never the local duel save).
+  function duoNetOff() {
+    const had = !!S.duoNet;
+    if (netOk() && NET.state !== 'idle' && NET.state !== 'closed') { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    S.duoNet = null;
+    if (S.duo && S.duo.net) { S.duo = null; S.duoLive = null; S.duoV = null; }
+    if (had) {
+      try {
+        const L = window.location, Hs = window.history;
+        if (L && /[?&]join=/i.test(L.search || '') && Hs && Hs.replaceState) Hs.replaceState(null, '', (L.pathname || '') + String(L.search).replace(/([?&])join=[^&#]*&?/i, '$1').replace(/[?&]$/, '') + (L.hash || ''));
+      } catch (e) { /* the address stays */ }
+    }
+  }
+  // The title: a page opened with ?join=CODE goes to joining that code, once.
+  function duoNetBoot() {
+    if (DNX.booted || !DNX.boot || !D().DUO) return false;
+    DNX.booted = true;
+    const code = DNX.boot;
+    setTimeout(() => { if (S.screen === 'title' && !S.duo && !S.duoNet) duoNetJoin(code); }, 60);
+    return true;
+  }
+  function duoNetMsg(code) {
+    return ({
+      unreachable: 'Can\'t reach the online lobby, check your connection.',
+      full: 'That game is already full.',
+      nobody: 'No game with that code. Check the letters with your friend.',
+      foreign: 'That code belongs to a different game.',
+      version: 'Your partner has a different game version, both reload.',
+      hostgone: 'The host left the lobby.',
+      badcode: 'A code is four letters (no I or O).',
+    })[code] || 'The online game stopped.';
+  }
+  // ---- the screens: co-op's choice, the online menu, joining, the lobby
+  function duoNetHead(b, title, back) {
+    m3Head(b, btn('Back', back, 'ghost sm'), title, null);   // M3 (round 18): the page head
+  }
+  function duoNetBig(parent, id, name, icon, text, fn) {
+    const c = btn(name, fn, 'duoMode dm-' + id);
+    c.textContent = '';
+    c.appendChild(h('span', 'mi', icon));
+    c.appendChild(h('span', 'mn', name));
+    c.appendChild(h('span', 'mt', text));
+    parent.appendChild(c);
+    return c;
+  }
+  // CO-OP BOSS (or, round 16, VERSUS CLAW-OFF) from the duo menu: this phone (pass and play) or online.
+  function duoNetChoose(mode) {
+    duoNetOff();
+    duoStashRun();
+    if (mode === 'coop' || mode === 'vs') DNX.mode = mode;
+    const vs = DNX.mode === 'vs';
+    S.duoUi = { ph: vs ? 'vs' : 'coop' };
+    const b = duoBody('dp-menu dp-net');
+    if (!b) return false;
+    duoNetHead(b, vs ? 'Versus Claw-off' : 'Co-op Boss', () => duoMenu());
+    b.appendChild(h('div', 'sub duoSub', vs ? 'One bin of prizes, two claws. Play on one phone, or each on your own.' : 'Two crawlers, one boss. Play on one phone, or each on your own.'));
+    const modes = h('div', 'duoModes');
+    duoNetBig(modes, 'local', 'Same phone', '\u{1F4F1}', 'Pass one phone back and forth. No internet needed.', () => duoSetup(vs ? 'vs' : 'coop'));
+    duoNetBig(modes, 'online', 'Online', '\u{1F310}', 'Each on your own phone, anywhere. Share a four letter code.', () => duoNetMenu());
+    b.appendChild(modes);
+    return true;
+  }
+  function duoNetMenu(err) {
+    duoNetOff();
+    duoStashRun();
+    const vs = DNX.mode === 'vs';
+    S.duoUi = { ph: 'net' };
+    const b = duoBody('dp-menu dp-net');
+    if (!b) return false;
+    duoNetHead(b, vs ? 'Online versus' : 'Online co-op', () => duoNetChoose());
+    b.appendChild(h('div', 'sub duoSub', vs ? 'A claw-off against a friend, each on your own phone. One of you hosts, the other types the code.' : 'Fight a boss together, each on your own phone. One of you hosts, the other types the code.'));
+    if (err) b.appendChild(h('div', 'duoNetErr panel', err));
+    const modes = h('div', 'duoModes');
+    duoNetBig(modes, 'host', 'Host a game', '\u{1F3E0}', 'Get a code to share with a friend.', () => duoNetHost());
+    duoNetBig(modes, 'join', 'Join a game', '\u{1F511}', 'Type the code your friend got.', () => duoNetJoinDom(''));
+    b.appendChild(modes);
+    const O = duoM().online || { games: 0, wins: 0 };
+    b.appendChild(h('div', 'sub duoNetRec', vs ? `Online versus: ${O.vsGames | 0} games, ${O.vsWins | 0} wins` : `Online: ${O.games | 0} games, ${O.wins | 0} team wins`));
+    return true;
+  }
+  function duoNetHost() {
+    if (!netOk() || !duoNetBind()) { duoNetMenu(duoNetMsg('unreachable')); return false; }
+    duoStashRun();
+    const N = S.duoNet = duoNetFresh('host');
+    N.ph = 'lobby';
+    duoNetLobbyDom();
+    let p = null;
+    try { p = NET.host(); } catch (e) { p = null; }
+    if (p && p.then) p.then((code) => { if (S.duoNet === N && code && !S.duo) { N.code = code; duoNetLobbyDom(); } }, () => {});
+    duoNetLog({ k: 'host' });
+    return true;
+  }
+  // The join screen: four big letter boxes (typing moves on, a paste spreads out, the fourth letter joins).
+  function duoNetJoinDom(pre, err) {
+    duoNetOff();
+    duoStashRun();
+    S.duoUi = { ph: 'join' };
+    const b = duoBody('dp-menu dp-net dp-join');
+    if (!b) return false;
+    duoNetHead(b, 'Join a game', () => duoNetMenu());
+    b.appendChild(h('div', 'sub duoSub', 'Type the four letters your friend sees on their phone.'));
+    const row = h('div', 'duoCodeIn'), boxes = [], L = DNK().CODE_LEN || 4;
+    const code = () => boxes.map((x) => String(x.value || '')).join('');
+    const go = () => { const c = code(); if (c.length === L) duoNetJoin(c); };
+    const s0 = String(pre || '').toUpperCase().replace(/[^A-Z]/g, '');
+    for (let i = 0; i < L; i++) {
+      const inp = h('input', 'duoCodeBox');
+      try { inp.type = 'text'; inp.maxLength = L; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('autocapitalize', 'characters'); inp.setAttribute('aria-label', 'Letter ' + (i + 1)); } catch (e) { /* stub */ }
+      inp.value = s0[i] || '';
+      inp.oninput = () => {
+        const s = String(inp.value || '').toUpperCase().replace(/[^A-Z]/g, '');
+        if (s.length > 1) { for (let k = 0; k < s.length && i + k < L; k++) boxes[i + k].value = s[k]; const nx = boxes[Math.min(L - 1, i + s.length)]; try { nx.focus(); } catch (e) { /* stub */ } }
+        else { inp.value = s; if (s && boxes[i + 1]) { try { boxes[i + 1].focus(); } catch (e) { /* stub */ } } }
+        if (code().length === L) go();
+      };
+      inp.onkeydown = (ev) => {
+        const k = ev && ev.key;
+        if (k === 'Backspace' && !inp.value && boxes[i - 1]) { boxes[i - 1].value = ''; try { boxes[i - 1].focus(); } catch (e) { /* stub */ } }
+        else if (k === 'Enter') go();
+      };
+      boxes.push(inp);
+      row.appendChild(inp);
+    }
+    b.appendChild(row);
+    if (err) b.appendChild(h('div', 'duoNetErr panel', err));
+    b.appendChild(btn('Join', go, 'pri duoGo'));
+    try { if (!S.headless && boxes[Math.min(L - 1, s0.length)]) boxes[Math.min(L - 1, s0.length)].focus(); } catch (e) { /* no focus */ }
+    return true;
+  }
+  function duoNetJoin(raw) {
+    const c = D().duoNetCode ? D().duoNetCode(raw) : null;
+    if (!c) { duoNetJoinDom(raw, duoNetMsg('badcode')); return false; }
+    if (!netOk() || !duoNetBind()) { duoNetJoinDom(c, duoNetMsg('unreachable')); return false; }
+    duoStashRun();
+    const N = S.duoNet = duoNetFresh('guest');
+    N.code = c; N.ph = 'joining';
+    const b = duoBody('dp-menu dp-net dp-join');
+    if (b) {
+      duoNetHead(b, 'Join a game', () => duoNetJoinDom(c));
+      b.appendChild(h('div', 'duoCodeBig', c.split('').join(' ')));
+      b.appendChild(h('div', 'sub duoNetSpin', `Joining ${c}...`));
+    }
+    NET.join(c);
+    duoNetLog({ k: 'join', code: c });
+    return true;
+  }
+  // Something went wrong before a game: back to where it started, with the reason.
+  function duoNetFail(code) {
+    const N = S.duoNet, guest = N && N.role === 'guest', c = N && N.code;
+    duoNetLog({ k: 'fail', code });
+    if (N && S.duo && S.duo.net) { N.lost = true; N.gone = true; N.err = code; if (S.screen === 'duo') duoNetDom(); return; }
+    duoNetOff();
+    if (guest && (code === 'nobody' || code === 'full' || code === 'badcode' || code === 'foreign')) duoNetJoinDom(c || '', duoNetMsg(code));
+    else duoNetMenu(duoNetMsg(code));
+  }
+  // ---- the lobby: both players (mine to edit), the boss (the host picks), ready
+  function duoNetSeatP(i) { const N = S.duoNet; if (!N) return null; return i === N.me ? N.mine.p : N.part ? N.part.p : null; }
+  // The host's view of the two, colours kept apart (the guest's moves when both want the same).
+  function duoNetPair() {
+    const N = S.duoNet, pl = D().duoNetPlayer;
+    const p0 = pl(duoNetSeatP(0) || {}, 0), p1 = duoNetSeatP(1) ? pl(duoNetSeatP(1), 1) : null;
+    if (p1 && p1.color === p0.color) p1.color = (DK().COLORS.find((c) => c.id !== p0.color) || DK().COLORS[1]).id;
+    if (N && N.role === 'host' && N.part && p1) N.part.p.color = p1.color;
+    return [p0, p1];
+  }
+  function duoNetSendMe() {
+    const N = S.duoNet;
+    if (!N) return false;
+    if (N.role === 'host') { const P = duoNetPair(); return duoNetSend({ t: 'lobby', p: P, ready: [N.mine.ready ? 1 : 0, N.part && N.part.ready ? 1 : 0], boss: N.boss, mode: N.mode, drops: N.drops }); }   // (round 16: the mode and the drops)
+    return duoNetSend({ t: 'me', p: D().duoNetPlayer(N.mine.p, 1), ready: N.mine.ready ? 1 : 0 });
+  }
+  // One field of my own look in the lobby (tests and the DOM): name, color, char, claw, paint.
+  function duoNetSet(k, v) {
+    const N = S.duoNet;
+    if (!N || S.duo) return false;
+    const p = N.mine.p;
+    if (k === 'name') p.name = String(v == null ? '' : v).slice(0, 24);
+    else if (k === 'color') { if (!DK().COLORS.some((c) => c.id === v)) return false; p.color = v; }
+    else if (k === 'char') { if (duoChars().indexOf(v) < 0) return false; p.char = v; }
+    else if (k === 'claw') { if (clawIds().indexOf(v) < 0) return false; p.claw = v; }
+    else if (k === 'paint') { if (duoPaints().indexOf(v) < 0) return false; p.paint = v; }
+    else return false;
+    duoNetSendMe();
+    return true;
+  }
+  function duoNetBoss(v) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo) return false;
+    if (!(v === 'random' || duoBossList().some((x) => x.id === v && x.beaten))) return false;
+    N.boss = v;
+    duoNetSendMe();
+    return true;
+  }
+  function duoNetReady(on) {
+    const N = S.duoNet;
+    if (!N || S.duo || N.ph !== 'lobby') return false;
+    N.mine.ready = on == null ? !N.mine.ready : !!on;
+    if (N.mine.ready) snd('duoReady');
+    duoNetSendMe();
+    if (!duoNetStart()) duoNetLobbyDom();
+    return true;
+  }
+  function duoNetLobbyDom() {
+    const N = S.duoNet;
+    if (!N || S.duo) return;
+    S.duoUi = { ph: 'lobby' };
+    const b = duoBody('dp-menu dp-net dp-lobby' + (N.mode === 'vs' ? ' dp-net-vs' : ''));
+    if (!b) return;
+    duoNetHead(b, N.mode === 'vs' ? 'Online versus' : 'Online co-op', () => duoNetMenu());
+    // the room code, big, to copy or share
+    const cc = h('div', 'duoCodeCard panel');
+    cc.appendChild(h('div', 'rkH', 'Room code'));
+    const big = h('div', 'duoCodeL');
+    for (const ch of (N.code || '....').split('')) big.appendChild(h('span', null, ch));
+    cc.appendChild(big);
+    if (N.code) {
+      const r = h('div', 'row center');
+      r.appendChild(btn('Copy code', () => duoNetCopy(N.code, 'Code copied!'), 'sm'));
+      r.appendChild(btn('Share invite', () => duoNetShare(), 'sm go'));
+      cc.appendChild(r);
+    } else cc.appendChild(h('div', 'sub duoNetSpin', 'Opening a room...'));
+    b.appendChild(cc);
+    N.dom = { status: h('div', 'duoNetStatus') };
+    b.appendChild(N.dom.status);
+    // both players in seat order: mine to edit, theirs to see
+    for (let i = 0; i < 2; i++) {
+      const slot = h('div', 'duoNetSlot');
+      if (i === N.me) duoNetMinePanel(slot); else { N.dom.part = slot; duoNetPartPanel(slot); }
+      b.appendChild(slot);
+    }
+    N.dom.boss = h('div', 'duoOpt panel');
+    b.appendChild(N.dom.boss);
+    duoNetBossPanel();
+    const rd = btn(N.mine.ready ? 'Not ready' : 'Ready!', () => duoNetReady(), (N.mine.ready ? 'ghost' : 'pri') + ' duoGo duoNetReady');
+    b.appendChild(rd);
+    duoNetStatus();
+  }
+  function duoNetMinePanel(slot) {
+    const N = S.duoNet, p = N.mine.p, COL = DK().COLORS, paints = duoPaints();
+    const col = (COL.find((c) => c.id === p.color) || COL[0]).col;
+    const pan = h('div', 'duoP panel');
+    try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+    const top = h('div', 'duoPTop');
+    top.appendChild(portraitCanvas(p.char, 44));
+    top.appendChild(h('span', 'duoPN', N.role === 'host' ? 'You (host)' : 'You'));
+    const inp = h('input', 'duoName');
+    try { inp.type = 'text'; inp.maxLength = (DK().NAME_MAX || 10); inp.placeholder = 'P' + (N.me + 1); inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Your name'); } catch (e) { /* stub */ }
+    inp.value = /^P[12]$/.test(p.name) ? '' : p.name;
+    inp.oninput = () => { p.name = inp.value; duoNetSendMe(); };
+    inp.onchange = () => { p.name = inp.value; duoNetSendMe(); };
+    top.appendChild(inp);
+    if (N.mine.ready) top.appendChild(h('span', 'duoNetRdy', '✔'));
+    pan.appendChild(top);
+    const cr = h('div', 'duoSw');
+    for (const c of COL) {
+      const s = btn('me ' + c.id, () => { duoNetSet('color', c.id); duoNetLobbyDom(); }, 'duoCol' + (p.color === c.id ? ' on' : ''));
+      s.textContent = '';
+      try { s.style.background = c.col; s.setAttribute('aria-label', c.name || c.id); } catch (e) { /* stub */ }
+      cr.appendChild(s);
+    }
+    pan.appendChild(cr);
+    const ch = h('div', 'duoChips');
+    for (const id of duoChars()) {
+      const c = btn('me ' + id, () => { duoNetSet('char', id); duoNetLobbyDom(); }, 'duoChip' + (p.char === id ? ' on' : ''));
+      c.textContent = '';
+      c.appendChild(portraitCanvas(id, 30));
+      c.appendChild(h('span', null, String((charDef(id) || {}).name || id).split(' ')[0]));
+      ch.appendChild(c);
+    }
+    pan.appendChild(ch);
+    const cl = h('div', 'duoChips claws');
+    for (const id of clawIds()) {
+      const inf = clawInfo(id);
+      const c = btn('me claw ' + id, () => { duoNetSet('claw', id); duoNetLobbyDom(); }, 'duoChip' + (p.claw === id ? ' on' : ''));
+      c.textContent = (inf.icon ? inf.icon + ' ' : '') + String(inf.name || id).replace(/ Claws?$/, '');
+      cl.appendChild(c);
+    }
+    pan.appendChild(cl);
+    const k = paints.indexOf(p.paint), nm = p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour';
+    pan.appendChild(btn('me look', () => { duoNetSet('paint', paints[(k + 1) % paints.length]); duoNetLobbyDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
+    slot.appendChild(pan);
+  }
+  function duoNetPartPanel(slot) {
+    const N = S.duoNet;
+    if (!N || !slot) return;
+    clear(slot);
+    const pan = h('div', 'duoP panel duoNetPart');
+    const P = N.part && N.part.p;
+    if (!P) {
+      pan.appendChild(h('div', 'duoNetWait', N.role === 'host' ? 'Waiting for a friend to join...' : 'Waiting for the host...'));
+      slot.appendChild(pan);
+      return;
+    }
+    const col = D().duoColor ? D().duoColor(P.color).col : '#2ee6d6';
+    try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+    const top = h('div', 'duoPTop');
+    top.appendChild(portraitCanvas(P.char, 44));
+    const col2 = h('div', 'col');
+    col2.appendChild(h('span', 'duoPN', N.role === 'host' ? 'Your friend' : 'The host'));
+    col2.appendChild(h('b', 'duoNetPName', P.name));
+    top.appendChild(col2);
+    top.appendChild(h('span', 'duoNetRdy' + (N.part.ready ? ' on' : ''), N.lost ? '\u{1F4E1}' : N.part.ready ? '✔' : '…'));
+    pan.appendChild(top);
+    const inf = clawInfo(P.claw);
+    pan.appendChild(h('div', 'sub', `${String((charDef(P.char) || {}).name || P.char)} · ${(inf.icon ? inf.icon + ' ' : '') + String(inf.name || P.claw)}`));
+    slot.appendChild(pan);
+  }
+  function duoNetBossPanel() {
+    const N = S.duoNet, el = N && N.dom && N.dom.boss;
+    if (!el) return;
+    clear(el);
+    if (N.mode === 'vs') { duoVsNetDropsPanel(el); return; }   // (round 16) the claw-off: drops each per round instead of a boss
+    if (N.role === 'host') {
+      el.appendChild(h('div', 'rkH', 'The boss (the ones you have beaten, or a surprise)'));
+      const row = h('div', 'duoChips');
+      row.appendChild(btn('boss random', () => { duoNetBoss('random'); duoNetBossPanel(); }, 'duoChip' + (N.boss === 'random' ? ' on' : ''))).textContent = '\u{1F3B2} Random';
+      for (const x of duoBossList()) {
+        const c = btn('boss ' + x.id, () => { if (x.beaten) { duoNetBoss(x.id); duoNetBossPanel(); } else toast('Beat ' + (enemyDef(x.id).name || x.id) + ' in a run first. Random can still pick it.'); }, 'duoChip' + (N.boss === x.id ? ' on' : '') + (x.beaten ? '' : ' locked'));
+        c.textContent = x.beaten ? (enemyDef(x.id).name || x.id) : '\u{1F512} ???';
+        row.appendChild(c);
+      }
+      el.appendChild(row);
+    } else {
+      el.appendChild(h('div', 'rkH', 'The boss (the host picks)'));
+      el.appendChild(h('div', 'duoNetBossName', N.boss === 'random' ? '\u{1F3B2} Random' : (enemyDef(N.boss).name || N.boss)));
+    }
+  }
+  function duoNetStatus() {
+    const N = S.duoNet, el = N && N.dom && N.dom.status;
+    if (!el) return;
+    let s = '';
+    if (!N.code) s = 'Opening a room...';
+    else if (N.lost && N.part) s = 'Partner connection lost, reconnecting...';
+    else if (!N.part) s = N.role === 'host' ? (N.mode === 'vs' ? 'Share the code. Your friend taps Duo, Versus Claw-off, Online, Join a game.' : 'Share the code. Your friend taps Duo, Co-op Boss, Online, Join a game.') : 'Waiting for the host...';
+    else if (!N.mine.ready) s = 'Tap Ready when you are set.';
+    else if (!N.part.ready) s = `${duoNetUp(N.part.p.name)} is getting ready...`;
+    else s = 'Starting!';
+    clear(el);
+    el.appendChild(h('span', null, s));
+  }
+  const duoNetUp = (s) => String(s || '').toUpperCase();
+  function duoNetCopy(text, done) {
+    let ok = false;
+    try { const c = typeof navigator !== 'undefined' && navigator.clipboard; if (c && c.writeText) { c.writeText(text).then(() => {}, () => {}); ok = true; } } catch (e) { ok = false; }
+    toast(ok ? done : 'Code: ' + text, 2.4);
+    return ok;
+  }
+  function duoNetLink(code) {
+    let base = 'https://games-71g.pages.dev/clawspire/';
+    try { const L = window.location; if (L && /^https?:$/.test(L.protocol || '') && L.host && !/games-71g\.pages\.dev$/.test(L.host)) base = L.protocol + '//' + L.host + (L.pathname || '/'); } catch (e) { /* the live address */ }
+    return base + '?join=' + code;
+  }
+  function duoNetShare() {
+    const N = S.duoNet;
+    if (!N || !N.code) return false;
+    const url = duoNetLink(N.code), text = i18nTr(N.mode === 'vs' ? 'Take me on in a Clawspire claw-off! Room code:' : 'Fight a boss with me in Clawspire! Room code:') + ' ' + N.code;
+    try {
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      if (nav && nav.share) { nav.share({ title: 'Clawspire', text, url }).then(() => {}, () => {}); return true; }
+    } catch (e) { /* fall back */ }
+    return duoNetCopy(url, 'Invite link copied!');
+  }
+  // ---- the link's events
+  function duoNetOnPeer(m) {
+    const N = S.duoNet;
+    if (!N) return;
+    if (dnStr(m.b, 24) !== duoNetBuild()) { duoNetLog({ k: 'build', them: dnStr(m.b, 24) }); if (netOk()) NET.close(); duoNetFail('version'); return; }
+    const seat = 1 - N.me, was = N.part;
+    N.part = { p: D().duoNetPlayer(m.p, seat), ready: !!m.ready, g: m.g ? 1 : 0, n: dnInt(m.n, 0, 1e6, 0) };
+    if (N.role === 'guest' && !S.duo) N.mode = m.m === 'vs' ? 'vs' : 'coop';   // (round 16) the guest plays whatever the host's room plays
+    duoNetLog({ k: 'peer', seat, g: N.part.g, m: N.mode });
+    if (S.duo && S.duo.net) {
+      // back in a game after a drop: the '@back' that follows resends the last turn; a partner that lost the game will ask ('need')
+      if (was) N.part.ready = was.ready;
+      return;
+    }
+    if (m.g) { N.ph = 'sync'; duoNetSend({ t: 'need' }); return; }   // they are in a game this phone is not: ask for it
+    N.ph = 'lobby';
+    snd('duoLink', { k: 'join' }); haptic('tap');
+    duoNetSendMe();
+    duoNetLobbyDom();
+  }
+  function duoNetOnMe(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo || !N.part) return;
+    N.part.p = D().duoNetPlayer(m.p, 1);
+    N.part.ready = !!m.ready;
+    duoNetSendMe();   // the colours kept apart, back to them
+    if (!duoNetStart()) { duoNetPartPanel(N.dom && N.dom.part); duoNetStatus(); }
+  }
+  function duoNetOnLobby(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'guest' || S.duo || !Array.isArray(m.p)) return;
+    const pl = D().duoNetPlayer, host = pl(m.p[0], 0), mine = m.p[1] ? pl(m.p[1], 1) : null;
+    N.part = Object.assign(N.part || {}, { p: host, ready: !!(Array.isArray(m.ready) && m.ready[0]) });
+    const b = dnStr(m.boss, 24);
+    N.boss = b === 'random' || duoBossList().some((x) => x.id === b) ? b : 'random';
+    // (round 16) the room's mode and the claw-off's drops are the host's
+    const mode = m.mode === 'vs' ? 'vs' : 'coop', drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : N.drops;
+    if (mode !== N.mode) { N.mode = mode; N.drops = drops; duoNetLobbyDom(); return; }
+    N.drops = drops;
+    if (mine && mine.color !== N.mine.p.color) { N.mine.p.color = mine.color; duoNetLobbyDom(); return; }   // the host moved my colour off theirs
+    if (N.dom) { duoNetPartPanel(N.dom.part); duoNetBossPanel(); duoNetStatus(); } else duoNetLobbyDom();
+  }
+  // The host starts it once both are ready: the seed (the relay's, stirred), the boss, the two looks.
+  function duoNetStart() {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || !N.part || !N.mine.ready || !N.part.ready || S.duo || N.lost || !netOk() || NET.state !== 'connected') return false;
+    const P = duoNetPair();
+    const seed = ((U.hashStr((NET.seed >>> 0) + ':' + N.code + ':' + (N.games | 0)) >>> 0) || 1);
+    if (N.mode === 'vs') {   // (round 16) the claw-off: the seed rolls the pile, the deck and the toss on both phones alike
+      duoNetSend({ t: 'go', mode: 'vs', seed, drops: N.drops, p: P });
+      duoNetBegin(P, seed, '', 'random', { mode: 'vs', drops: N.drops });
+      return true;
+    }
+    const all = duoBossList().map((x) => x.id);
+    const boss = N.boss !== 'random' && all.indexOf(N.boss) >= 0 ? N.boss : all.length ? all[U.rng((seed ^ 0xb055) >>> 0 || 1).int(0, all.length - 1)] : 'hoard';
+    duoNetSend({ t: 'go', seed, boss, pick: N.boss, p: P });
+    duoNetBegin(P, seed, boss, N.boss);
+    return true;
+  }
+  function duoNetOnGo(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'guest' || S.duo || !Array.isArray(m.p)) return;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24), vs = m.mode === 'vs';
+    const drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : 0;
+    if (!seed || (vs ? !drops : !duoBossList().some((x) => x.id === boss))) { duoNetLog({ k: 'badgo' }); return; }   // (round 16: a claw-off needs its drops, not a boss)
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    // my own look is mine (the host may only have moved my colour)
+    P[1] = Object.assign({}, pl(N.mine.p, 1), { color: P[1].color });
+    N.mode = vs ? 'vs' : 'coop';
+    duoNetBegin(P, seed, vs ? '' : boss, dnStr(m.pick, 24) || 'random', { mode: N.mode, drops });
+  }
+  // o (round 16): {mode: 'coop' | 'vs', drops} (co-op when left out)
+  function duoNetBegin(P, seed, boss, pick, o) {
+    const N = S.duoNet, vs = !!(o && o.mode === 'vs');
+    Object.assign(N, { ph: 'game', inN: 0, outN: 0, lastOut: null, rx: false, alone: false, left: false, lost: false, gone: false, ask: false, awayAt: 0, w: duoNetW(), games: (N.games | 0) + 1, dom: null, vw: null, ff: false });
+    if (vs) { N.mode = 'vs'; N.drops = (o.drops | 0) || N.drops; }
+    const M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.me = Object.assign({}, N.mine.p);
+    const Dd = vs ? duoBegin('vs', P, seed, { drops: N.drops, net: { me: N.me, code: N.code } }) : duoBegin('coop', P, seed, { boss, net: { me: N.me, code: N.code } });
+    if (Dd && !vs) Dd.pick = pick || 'random';
+    if (netOk()) NET.have(1);
+    duoNetLog({ k: 'begin', seed, boss, me: N.me, first: Dd && Dd.first, mode: vs ? 'vs' : 'coop' });
+    return Dd;
+  }
+  function duoNetAfterToss() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'toss') return false;
+    if (Dd.mode === 'vs') return duoVsNetAfterToss();   // (round 16) the claw-off: round one, then your drop or theirs
+    duoNetLive();
+    if (Dd.first === N.me) duoNetYours(); else duoNetWatch(Dd.first);
+    return true;
+  }
+  // Both seats' runs and fights for this phone (the partner's is a shell its turns fill in), one enemy list.
+  function duoNetLive() {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'coop' || !X.COMBAT) return null;
+    if (S.duoLive) return S.duoLive;
+    const runs = [duoSeatRun(0), duoSeatRun(1)];
+    const F0 = X.COMBAT.newFight(runs[0], [Dd.boss], U.rng(Dd.fseed));
+    const F1 = X.COMBAT.newFight(runs[1], [Dd.boss], U.rng((Dd.fseed ^ 0x2f00d) >>> 0 || 1));
+    duoCoopScale(F0);
+    F1.enemies = F0.enemies; F1.target = 0; F1.events.length = 0; F0.events.length = 0;
+    S.duoLive = { runs, F: [F0, F1], gold: [null, null], n: [0, 0] };
+    return S.duoLive;
+  }
+  // ---- turns
+  function duoNetYours() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    Dd.turn = N.me; Dd.from = 1 - N.me; Dd.ph = 'yours';
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.t = 0;
+    snd('duoLink', { k: 'turn' }); haptic('tap');
+    duoNetLog({ k: 'yours' });
+    duoShow();
+    music(Dd.mode === 'vs' ? 'elite' : 'boss');   // (round 16: the claw-off keeps the toss's tune)
+    return true;
+  }
+  function duoNetGo() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'yours') return false;
+    if (Dd.mode === 'vs') return duoVsNetGo();   // (round 16) your drop in the claw-off
+    snd('duoReady');
+    const ok = duoCoopEnter(N.me);
+    if (ok && F) { N.cmb = Object.assign({}, F.combos || {}); N.stT = 0; N.bdT = 0; N.lastCl = ''; }
+    return ok;
+  }
+  function duoNetWatch(who) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    Dd.turn = who === 0 || who === 1 ? who : 1 - N.me; Dd.from = N.me; Dd.ph = 'watch';
+    N.w = duoNetW(); N.w.beat = 1.4;
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.t = 0;
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    duoNetLog({ k: 'watch', who: Dd.turn });
+    duoShow();
+    music(Dd.mode === 'vs' ? 'elite' : 'boss');
+    return true;
+  }
+  // The pass (duoHand's online form): the turn was sent as it ended (duoTurnPass), or goes now (a seat went down).
+  function duoNetPass(nx) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    if (Dd.mode === 'vs') return duoVsNetPass(nx);   // (round 16) the claw-off: your card (or none) and the bin go over, then you watch
+    if (!N.passSent) duoNetSendTurn({ next: nx });
+    N.passSent = false;
+    if (N.alone || Dd.down[nx]) { if (!Dd.down[N.me]) return duoNetYours(); }
+    return duoNetWatch(nx);
+  }
+  function duoNetSendTurn(o) {
+    const Dd = S.duo, N = S.duoNet, L = S.duoLive;
+    if (!Dd || !Dd.net || !N || !L || Dd.mode !== 'coop') return null;
+    o = o || {};
+    const me = N.me;
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    const m = { t: 'turn', n: N.outN, seat: me, next: o.next === 0 || o.next === 1 ? o.next : 1 - me, res: o.res || '', turns: Dd.turns | 0,
+      foes: duoNetFoesOut(L.F[0].enemies), pub: duoNetPubOut(L.F[me].player), down: [Dd.down[0] ? 1 : 0, Dd.down[1] ? 1 : 0] };
+    N.lastOut = m;
+    if (o.pass) N.passSent = true;
+    const sent = duoNetSend(m);
+    if (netOk() && !N.alone) NET.have(N.outN + 1);
+    duoNetLog({ k: 'send', n: m.n, next: m.next, res: m.res, sent: !!sent });
+    return m;
+  }
+  function duoNetOnTurn(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'coop') return false;   // (round 16: co-op's; a claw-off speaks 'vt')
+    const n = dnInt(m.n, 0, 1e7, 0);
+    if (!(n > N.inN)) return false;   // a turn already applied (a resend after a rejoin)
+    const seat = m.seat === 0 || m.seat === 1 ? m.seat : -1;
+    if (seat !== 1 - N.me) return false;
+    if (Dd.ph !== 'watch' && Dd.ph !== 'toss') { duoNetLog({ k: 'turn?', ph: Dd.ph }); return false; }
+    const L = duoNetLive();
+    if (!L || !duoNetFoesIn(L.F[0].enemies, m.foes)) { duoNetLog({ k: 'badturn', n }); return false; }
+    duoNetPubIn(L.F[seat].player, m.pub);
+    if (Array.isArray(m.down)) Dd.down[seat] = m.down[seat] ? 1 : 0;   // only theirs: this phone knows its own
+    N.inN = n; N.outN = Math.max(N.outN, n);
+    Dd.turns = Math.max(Dd.turns | 0, dnInt(m.turns, 0, 1e6, 0));
+    if (netOk()) NET.have(n + 1);
+    duoNetLog({ k: 'recv', n, next: m.next, res: m.res });
+    if (m.res === 'win' || m.res === 'ko') return duoNetResult(m.res === 'win');
+    const next = m.next === 0 || m.next === 1 ? m.next : 1 - seat;
+    if (next === N.me && !Dd.down[N.me]) return duoNetYours();
+    return duoNetWatch(seat);
+  }
+  // The result came from the partner's phone: booked here too, then the podium.
+  function duoNetResult(won) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    N.rx = true;
+    if (!won) Dd.down = [1, 1];
+    duoCoopBook(won);
+    Dd.ph = 'end';
+    snd(won ? 'win' : 'lose');
+    if (won) fx().emit('confetti', 270, 300, { power: 1 });
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    duoShow();
+    return true;
+  }
+  // duoCoopBook's hook: the online count, and the result to the partner when it happened on this phone.
+  function duoNetBooked(won) {
+    const N = S.duoNet, M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.games++;
+    if (won) M.online.wins++;
+    if (N && !N.rx) duoNetSendTurn({ res: won ? 'win' : 'ko', next: N.me });
+  }
+  /* ---- the shared enemies over the wire. Out: the numbers COMBAT keeps on
+     an enemy that its turns change (hp, block, statuses, the move cycle, the
+     intent, phase two's pattern, the belly). In: every field checked and
+     clamped, every id checked against DATA; a slot whose enemy changed (a
+     summon) is made fresh. False (nothing applied) when the list is junk. */
+  const DN_BELLY = 8;
+  function duoNetStOut(st) { const o = {}; for (const k in st || {}) { const v = +st[k]; if (Number.isFinite(v) && v !== 0) o[k] = Math.round(v); } return o; }
+  // statuses: a plain name (the STATUS table's, or one a block keeps as a counter) and a clamped count
+  function duoNetStIn(o) {
+    const out = {};
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+    let n = 0;
+    for (const k in o) {
+      if (++n > 40) break;
+      if (!/^[a-z][a-z0-9_]{0,23}$/i.test(k) || k === 'constructor' || k === 'prototype') continue;
+      const v = dnInt(o[k], -99, 999, 0);
+      if (v) out[k] = v;
+    }
+    return out;
+  }
+  function duoNetIntentOut(it) {
+    if (!it || typeof it !== 'object') return null;
+    return { id: dnStr(String(it.id || ''), 40), k: dnStr(String(it.k || ''), 20), v: dnNum(it.v, -99999, 99999, 0), n: dnInt(it.n, 0, 99, 1), ch: it.charged ? 1 : 0, name: dnStr(String(it.name || ''), 40) };
+  }
+  function duoNetFoesOut(list) {
+    return (list || []).slice(0, 6).map((e) => (!e ? null : {
+      id: e.id, hp: e.hp, mx: e.maxHp, bk: e.block || 0, st: duoNetStOut(e.status), al: e.alive ? 1 : 0, es: e.escaped ? 1 : 0, ch: e.charged || 0,
+      cy: e.cyc || 0, mi: e.moveIdx == null ? -1 : e.moveIdx, it: duoNetIntentOut(e.intent), en: e.enraged ? 1 : 0, fi: e.final ? 1 : 0,
+      pt: Array.isArray(e.def && e.def.pattern) ? e.def.pattern.slice(0, 24) : null, sn: e.sigN || 0, sf: e.sigForce ? 1 : 0, ac: e.acts || 0, gt: e.gut || 0,
+      af: Array.isArray(e.affix) ? e.affix.slice(0, 8) : [], dm: e.dmgMul == null ? 1 : e.dmgMul, bn: e.bank || 0,
+      bl: (e.belly || []).slice(0, DN_BELLY).map((b) => ({ u: String((b.inst && b.inst.uid) || ''), id: b.inst && b.inst.id, p: b.inst && b.inst.plus ? 1 : 0, j: b.inst && b.inst.junk ? 1 : 0, tu: b.turns | 0, k: b.kind || '', s: b.str | 0, a: b.armor | 0 })),
+    }));
+  }
+  // A fresh enemy object for a slot the partner's turn filled (a summon): COMBAT's own maker, through a shell fight.
+  function duoNetFoeMake(id) {
+    try {
+      const run = S.duoLive && S.duoLive.runs ? S.duoLive.runs[0] : { hp: 1, maxHp: 1, act: 1, bin: [], relics: [] };
+      const Fx = X.COMBAT.newFight({ hp: 1, maxHp: 1, act: run.act || 1, bin: [], relics: [], claw: {}, char: null }, [id], U.rng(7));
+      return Fx && Fx.enemies[0] ? Fx.enemies[0] : null;
+    } catch (e) { return null; }
+  }
+  function duoNetFoesIn(list, arr) {
+    if (!Array.isArray(list) || !Array.isArray(arr) || !arr.length || arr.length > 6) return false;
+    const E = tbl('ENEMIES'), I = tbl('ITEMS');
+    // all or nothing: every entry must name a real enemy
+    for (const o of arr) if (o !== null && (!o || typeof o !== 'object' || !dnHas(E, o.id))) return false;
+    for (let i = 0; i < arr.length; i++) {
+      const o = arr[i];
+      if (o === null) continue;
+      let e = list[i];
+      if (!e || e.id !== o.id) { e = duoNetFoeMake(o.id); if (!e) return false; list[i] = e; }
+      const moves = (e.def && e.def.moves) || [];
+      e.maxHp = dnInt(o.mx, 1, 999999, e.maxHp || 1);
+      e.hp = dnInt(o.hp, 0, e.maxHp, e.hp);
+      e.block = dnInt(o.bk, 0, 99999, 0);
+      e.status = duoNetStIn(o.st, true);
+      e.alive = !!o.al && e.hp > 0; e.escaped = !!o.es;
+      e.charged = dnInt(o.ch, 0, 99999, 0);
+      e.cyc = dnInt(o.cy, 0, 1e6, 0);
+      e.moveIdx = dnInt(o.mi, -1, Math.max(-1, moves.length - 1), -1);
+      e.enraged = !!o.en; e.final = !!o.fi;
+      e.sigN = dnInt(o.sn, 0, 1e5, 0); e.sigForce = !!o.sf; e.acts = dnInt(o.ac, 0, 999, 0); e.gut = dnInt(o.gt, 0, 9999, 0); e.bank = dnInt(o.bn, 0, 99999, 0);
+      e.dmgMul = dnNum(o.dm, 0.05, 50, e.dmgMul || 1);
+      if (Array.isArray(o.af)) e.affix = o.af.filter((a) => typeof a === 'string' && a.length < 30).slice(0, 8);
+      if (Array.isArray(o.pt) && e.def && (e.def.ai || 'cycle') === 'cycle') {
+        const pt = o.pt.slice(0, 24).map((k) => dnInt(k, 0, Math.max(0, moves.length - 1), 0));
+        if (pt.length && JSON.stringify(pt) !== JSON.stringify(e.def.pattern || null)) e.def = Object.assign({}, e.def, { pattern: pt });
+      }
+      e.belly = Array.isArray(o.bl) ? o.bl.slice(0, DN_BELLY).filter((b) => b && dnHas(I, b.id)).map((b) => ({
+        inst: { uid: dnStr(String(b.u || ''), 24) || U.uid(), id: b.id, plus: !!b.p, frozen: false, junk: !!b.j }, turns: dnInt(b.tu, 0, 99, 1), kind: dnStr(b.k, 16), str: dnInt(b.s, 0, 99, 0), armor: dnInt(b.a, 0, 99, 0) })) : [];
+      e.intent = duoNetIntentIn(e, o.it);
+    }
+    list.length = arr.length;
+    for (let i = 0; i < list.length; i++) if (!list[i]) { const d = duoNetFoeMake(arr.find((x) => x) ? arr.find((x) => x).id : 'dummy'); if (d) { d.alive = false; d.hp = 0; } list[i] = d; }
+    return true;
+  }
+  // The intent: this game's own move object when the partner's names one of the moves, else a checked copy.
+  function duoNetIntentIn(e, it) {
+    if (!it || typeof it !== 'object' || !e.alive) return e.alive ? e.intent : null;
+    const moves = (e.def && e.def.moves) || [], id = dnStr(String(it.id || ''), 40);
+    const m = e.moveIdx >= 0 && moves[e.moveIdx] && moves[e.moveIdx].id === id ? moves[e.moveIdx] : moves.find((x) => x && x.id === id);
+    if (m && !it.ch) return m;
+    if (id === 'unleash' || it.ch) { const v = Math.max(1, e.charged || dnInt(it.v, 1, 99999, 1)); return { id: 'unleash', name: 'Unleash', k: 'attack', v, n: 1, charged: true, txt: `Unleashes a charged hit for ${v}.` }; }
+    if (id === 'idle') return { id: 'idle', name: 'Idle', k: 'none', txt: 'Waits.' };
+    const k = ['attack', 'block', 'buff', 'debuff', 'none'].indexOf(it.k) >= 0 ? it.k : 'none';
+    return { id: id || 'move', name: dnStr(String(it.name || ''), 40) || 'Move', k, v: dnInt(it.v, 0, 99999, 0), n: dnInt(it.n, 1, 20, 1), txt: '' };
+  }
+  function duoNetPubOut(p) { return p ? { hp: p.hp, mx: p.maxHp, bk: p.block || 0, st: duoNetStOut(p.status) } : null; }
+  function duoNetPubIn(p, o) {
+    if (!p || !o || typeof o !== 'object') return false;
+    p.maxHp = dnInt(o.mx, 1, 99999, p.maxHp || 1);
+    p.hp = dnInt(o.hp, 0, p.maxHp, p.hp);
+    p.block = dnInt(o.bk, 0, 99999, 0);
+    p.status = duoNetStIn(o.st, false);
+    return true;
+  }
+  // ---- the live stream while this phone grabs (the fight screen's frame)
+  function duoNetFightTick(real) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || N.alone || !F || !FS || Dd.turn !== N.me || Dd.ph !== 'fight') return;
+    // the named combos as they fire (COMBAT counts them per fight)
+    for (const id in (F.combos || {})) {
+      const c = F.combos[id] | 0, was = N.cmb[id] | 0;
+      if (c > was) { N.cmb[id] = c; duoNetSend({ t: 'fx', k: 'combo', id }); }
+    }
+    N.stT -= real; N.bdT -= real;
+    if (N.stT > 0) return;
+    N.stT = DNK().STREAM || 0.1;
+    const rig = FS.rig;
+    if (!rig) return;
+    const m = Object.assign(duoNetClawOut(rig, 'cl'), { hp: [F.player.hp, F.player.block || 0], e: F.enemies.slice(0, 6).map((e) => (e ? [e.hp, e.block || 0, e.alive ? 1 : 0] : [0, 0, 0])) });
+    const key = JSON.stringify(m);
+    let bodies = false;
+    if (N.bdT <= 0) {
+      N.bdT = DNK().BODIES || 0.25;
+      m.b = FS.items.slice(0, DNK().BODIES_MAX || 40).filter((b) => b && b.data && b.data.def).map((b) => [String((b.data.inst && b.data.inst.uid) || '').slice(0, 16), b.data.def.id, Math.round(b.x), Math.round(b.y), Math.round((b.a || 0) * 100)]);
+      const bk = JSON.stringify(m.b);
+      bodies = bk !== N.lastB;
+      N.lastB = bk;
+      if (!bodies) delete m.b;
+    }
+    if (key === N.lastCl && !bodies) return;   // nothing moved
+    N.lastCl = key;
+    duoNetSend(m);
+  }
+  // deliver()'s hook: a prize went down the chute on this phone's turn.
+  function duoNetDeliver(inst) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || !inst || Dd.turn !== N.me) return;
+    duoNetSend({ t: 'fx', k: 'prize', id: inst.id, plus: inst.plus ? 1 : 0 });
+  }
+  // ---- watching the partner's turn
+  // A streamed claw, checked (co-op's 'cl' and, round 16, the claw-off's 'vc'): where it is, the cable's top, how open, its phase, type and width.
+  function duoNetClawIn(m) {
+    const bw = CAB.w, bh = CAB.h, x = dnNum(m.x, -60, bw + 60, bw / 2);
+    return { x, y: dnNum(m.y, -60, bh + 60, 60), ct: dnNum(m.ct, -60, bw + 60, x), op: dnNum(m.op, 0, 1, 1), ph: dnStr(m.ph, 12), ty: clawIds().indexOf(m.ty) >= 0 ? m.ty : 'classic', w: dnNum(m.w, 0.3, 3, 1) };
+  }
+  // ...and out: a rig as the stream carries it (the fight's rig in co-op, the claw-off's own in versus).
+  function duoNetClawOut(rig, t) {
+    const K = rig.ctl, Tt = K && K.T;
+    let op = 1;
+    if (Tt && Number.isFinite(K.pL) && Tt.open !== Tt.closed) op = U.clamp((K.pL - Tt.closed) / (Tt.open - Tt.closed), 0, 1);
+    const r1 = (v) => Math.round((+v || 0) * 10) / 10;
+    return { t, x: r1(rig.x), y: r1(rig.y), ct: r1(rig.cableTop && rig.cableTop.x), op: Math.round(op * 100) / 100, ph: String(rig.phase || ''), ty: rig.type || 'classic', w: r1((rig.cfg && rig.cfg.width) || 1) };
+  }
+  function duoNetOnCl(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.mode !== 'coop' || Dd.turn === N.me || (Dd.ph !== 'watch' && Dd.ph !== 'toss')) return;
+    const w = N.w, bw = CAB.w, bh = CAB.h;
+    w.claw = duoNetClawIn(m);
+    if (Array.isArray(m.b)) {
+      const seen = {}, I = tbl('ITEMS');
+      for (const r of m.b.slice(0, DNK().BODIES_MAX || 40)) {
+        if (!Array.isArray(r) || !dnHas(I, r[1])) continue;
+        const uid = dnStr(String(r[0]), 16) || String(r[1]) + ':' + Object.keys(seen).length;
+        seen[uid] = 1;
+        const bx = dnNum(r[2], -60, bw + 60, bw / 2), by = dnNum(r[3], -60, bh + 60, bh / 2), ba = dnNum(r[4], -100000, 100000, 0) / 100;
+        const b = w.bodies[uid];
+        if (!b) w.bodies[uid] = { def: itemDef(r[1]), x: bx, y: by, a: ba, tx: bx, ty: by, ta: ba };
+        else { b.tx = bx; b.ty = by; b.ta = ba; }
+      }
+      for (const uid in w.bodies) if (!seen[uid]) delete w.bodies[uid];
+    }
+    const p = 1 - N.me;
+    if (Array.isArray(m.hp)) {
+      const hp = dnInt(m.hp[0], 0, 99999, 0);
+      if (w.hp && hp < w.hp[0]) duoNetNum(p ? W - 132 : 132, 96, '-' + (w.hp[0] - hp), '#ff5a4a');
+      w.hp = [hp, dnInt(m.hp[1], 0, 99999, 0)];
+    }
+    if (Array.isArray(m.e)) {
+      const e = m.e.slice(0, 6).map((r) => (Array.isArray(r) ? [dnInt(r[0], 0, 999999, 0), dnInt(r[1], 0, 99999, 0), r[2] ? 1 : 0] : [0, 0, 0]));
+      if (w.e && w.e[0] && e[0] && e[0][0] < w.e[0][0]) duoNetNum(270 + (Math.random() - 0.5) * 60, 200, '-' + (w.e[0][0] - e[0][0]), '#ffc94d');
+      w.e = e;
+    }
+    w.n++;
+  }
+  function duoNetNum(x, y, text, col) {
+    const N = S.duoNet;
+    if (!N) return;
+    N.w.fx.push({ k: 'num', x, y, text, col, t: 0, life: 1 });
+    if (N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.shift();
+  }
+  function duoNetOnFx(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.turn === N.me || Dd.ph !== 'watch') return;
+    if (Dd.mode === 'vs') { duoVsNetOnPrize(m); return; }   // (round 16) a prize down the rival's chute
+    const w = N.w;
+    if (m.k === 'prize') {
+      if (!dnHas(tbl('ITEMS'), m.id)) return;
+      w.fx.push({ k: 'prize', def: itemDef(m.id), plus: !!m.plus, t: 0, life: 1.1 });
+      snd('chute');
+    } else if (m.k === 'combo') {
+      const c = (D().COMBOS || {})[m.id];
+      if (!c || !dnHas(D().COMBOS, m.id)) return;
+      w.fx.push({ k: 'combo', name: c.name || m.id, col: c.color || '#ffc94d', t: 0, life: 1.8 });
+      snd('combo'); haptic('tap');
+    } else return;
+    if (w.fx.length > (DNK().FX_MAX || 24)) w.fx.shift();
+  }
+  // Cheers go over the line and play on both phones, in the sender's bubble.
+  function duoNetCheer(id) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    const x = D().duoTaunt ? D().duoTaunt(id, Dd.mode !== 'vs') : null;   // (round 16: a claw-off sends taunts)
+    if (!x || N.cheerT > N.t) return false;
+    N.cheerT = N.t + 0.6;
+    Dd.msg = { id: x.id, from: N.me, text: x.text, icon: x.icon };
+    if (S.duoT) S.duoT.msgT = 0;
+    snd('duoTaunt', { v: x.v }); haptic('tap');
+    duoNetSend({ t: 'cheer', id: x.id });
+    duoLog({ k: 'taunt', id: x.id, from: N.me });
+    return true;
+  }
+  function duoNetOnCheer(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return;
+    const x = D().duoTaunt ? D().duoTaunt(dnStr(m.id, 24), Dd.mode !== 'vs') : null;   // (round 16: the claw-off's taunts)
+    if (!x) return;
+    Dd.msg = { id: x.id, from: 1 - N.me, text: x.text, icon: x.icon };
+    if (S.duoT) S.duoT.msgT = 0;
+    snd('duoTaunt', { v: x.v });
+  }
+  // Over the fight on this phone's turn: the partner's cheer in its bubble.
+  function duoNetOver(ctx, t) {
+    const Dd = S.duo, T = S.duoT, R = X.RENDER;
+    if (!Dd || !Dd.msg || !T || !(T.msgT < 3) || !R || !R.sto || !R.sto.bubble || Dd.msg.from === (S.duoNet && S.duoNet.me)) return;
+    try { R.sto.bubble(ctx, 270, 120, 380, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT, 60, 150); } catch (e) { /* optional */ }
+  }
+  // ---- the link going and coming back
+  function duoNetOnLost(why) {
+    const N = S.duoNet;
+    if (!N) return;
+    N.lost = true; N.gone = false;
+    duoNetLog({ k: 'lost', why });
+    snd('duoLink', { k: 'lost' });
+    if (!S.duo) { if (N.dom) { duoNetPartPanel(N.dom.part); duoNetStatus(); } return; }
+    if (S.screen !== 'duo') toast('Partner connection lost, reconnecting...', 3);
+    duoHud(true);
+  }
+  function duoNetOnBack() {
+    const N = S.duoNet;
+    if (!N) return;
+    N.lost = false; N.gone = false; N.left = false;
+    duoNetLog({ k: 'back' });
+    snd('duoLink', { k: 'back' });
+    if (!S.duo) { duoNetSendMe(); if (N.dom) { duoNetPartPanel(N.dom.part); duoNetStatus(); } return; }
+    if (N.lastOut) duoNetSend(N.lastOut);   // the last turn again, in case it was lost on the way (a repeat is ignored)
+    if (N.hid) duoNetSend({ t: 'away', on: 1 });
+    if (S.screen !== 'duo') toast('Back online!', 1.6);
+    duoHud(true);
+  }
+  function duoNetOnGone() {
+    const N = S.duoNet;
+    if (!N) return;
+    N.gone = true;
+    duoNetLog({ k: 'gone' });
+    if (!S.duo) {
+      if (N.role === 'guest') { duoNetFail('hostgone'); return; }
+      N.part = null; N.lost = false; N.mine.ready = false;   // the host waits for a friend again, same code
+      duoNetLobbyDom();
+      return;
+    }
+    if (S.screen !== 'duo') toast('Your partner is still gone. Finish your turn.', 3);
+  }
+  function duoNetOnError(code) {
+    const N = S.duoNet;
+    if (!N) return;
+    duoNetFail(code);
+  }
+  function duoNetOnBye() {
+    const N = S.duoNet;
+    if (!N) return;
+    duoNetLog({ k: 'bye' });
+    if (!S.duo) {
+      if (N.role === 'guest') { duoNetFail('hostgone'); return; }
+      N.part = null; N.mine.ready = false;
+      duoNetLobbyDom();
+      return;
+    }
+    if (S.duo.ph === 'end') { N.left = true; N.lost = true; N.gone = true; duoShow(); return; }
+    N.left = true; N.lost = true; N.gone = true;
+    if (S.screen !== 'duo') toast(`${duoUp(1 - N.me)} left the game.`, 3);
+    duoHud(true);
+  }
+  function duoNetOnAway(m) {
+    const N = S.duoNet;
+    if (!N || !S.duo) return;
+    N.awayAt = m.on ? (N.awayAt || N.t) : 0;
+  }
+  // The link's clock (NET): this page hidden (a pocket, another app) tells the partner.
+  function duoNetOnPulse() {
+    const N = S.duoNet;
+    if (!N || !S.duo) return;
+    let hid = false;
+    try { hid = !!(typeof document !== 'undefined' && document.hidden); } catch (e) { hid = false; }
+    if (hid !== N.hid) { N.hid = hid; duoNetSend({ t: 'away', on: hid ? 1 : 0 }); }
+  }
+  // Somebody came back to the code without the game (a reload): the whole table, and on from there.
+  function duoNetOnNeed() {
+    const Dd = S.duo, N = S.duoNet, L = S.duoLive;
+    if (Dd && Dd.net && N && Dd.mode === 'vs') return duoVsNetOnNeed();   // (round 16) the claw-off's table
+    if (!Dd || !Dd.net || !N || !L || Dd.ph === 'end') return false;
+    const turn = Dd.ph === 'watch' ? Dd.turn : N.me;   // their turn was cut short: it starts again
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    duoNetSend({ t: 'sync', seed: Dd.seed, boss: Dd.boss, pick: Dd.pick || 'random', p: Dd.p, first: Dd.first, turn, turns: Dd.turns | 0, n: N.outN,
+      down: [Dd.down[0] ? 1 : 0, Dd.down[1] ? 1 : 0], foes: duoNetFoesOut(L.F[0].enemies), pubs: [duoNetPubOut(L.F[0].player), duoNetPubOut(L.F[1].player)] });
+    N.inN = N.outN;
+    if (Dd.ph === 'watch') { N.w = duoNetW(); N.w.beat = 1.4; }
+    duoNetLog({ k: 'sync-out', turn });
+    return true;
+  }
+  function duoNetOnSync(m) {
+    const N = S.duoNet;
+    if (N && !S.duo && m && m.mode === 'vs') return duoVsNetOnSync(m);   // (round 16) back into a claw-off
+    if (!N || S.duo || !Array.isArray(m.p) || !Array.isArray(m.pubs)) return false;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24);
+    if (!seed || !duoBossList().some((x) => x.id === boss)) return false;
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    if (netOk() && (NET.side === 0 || NET.side === 1)) { N.me = NET.side; N.role = N.me ? 'guest' : 'host'; }   // the seat the relay kept for this phone
+    const Dd = duoNetBegin(P, seed, boss, dnStr(m.pick, 24));
+    if (!Dd) return false;
+    const L = duoNetLive();
+    if (!L || !duoNetFoesIn(L.F[0].enemies, m.foes)) return false;
+    duoNetPubIn(L.F[0].player, m.pubs[0]); duoNetPubIn(L.F[1].player, m.pubs[1]);
+    if (Array.isArray(m.down)) Dd.down = [m.down[0] ? 1 : 0, m.down[1] ? 1 : 0];
+    Dd.turns = dnInt(m.turns, 0, 1e6, 0);
+    N.inN = N.outN = dnInt(m.n, 0, 1e7, 0);
+    if (netOk()) NET.have(N.inN + 1);
+    duoNetLog({ k: 'sync-in', turn: m.turn });
+    snd('duoLink', { k: 'back' });
+    if (m.turn === N.me && !Dd.down[N.me]) return duoNetYours();
+    return duoNetWatch(1 - N.me);
+  }
+  // ---- leaving, alone, again
+  function duoNetAlone() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph === 'end') return false;
+    if (Dd.mode === 'vs') return duoVsNetForfeit();   // (round 16) a claw-off has nobody to fight alone: the one left wins by forfeit
+    if (Dd.down[N.me]) return duoNetQuit();
+    if (netOk()) { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    const p = 1 - N.me;
+    Object.assign(N, { alone: true, lost: false, gone: false, left: false, awayAt: 0, ask: false });
+    Dd.down[p] = 1;
+    duoNetLog({ k: 'alone' });
+    duoHud(true);
+    if (Dd.ph === 'watch' || Dd.ph === 'yours') { duoNetLive(); return duoNetYours(); }
+    if (S.screen === 'fight') toast('Fighting on alone!', 1.8);
+    return true;
+  }
+  function duoNetQuit(noAsk) {
+    const N = S.duoNet, Dd = S.duo;
+    if (!noAsk && N && Dd && Dd.net && Dd.ph !== 'end' && !N.ask && !N.lost && !N.alone) { N.ask = true; duoShow(); return false; }
+    duoNetLog({ k: 'quit' });
+    duoNetOff();
+    S.duo = null; S.duoLive = null; S.duoV = null; S.duoSet = null;
+    duoRestore(true);
+    showTitle();
+    return true;
+  }
+  function duoNetAgain(fromThem) {
+    const N = S.duoNet;
+    if (!N || !S.duo || S.duo.ph !== 'end') return false;
+    if (!fromThem) duoNetSend({ t: 'again' });
+    S.duo = null; S.duoLive = null; S.duoV = null;
+    duoRestore(false);
+    Object.assign(N, { ph: 'lobby', inN: 0, outN: 0, lastOut: null, rx: false, lost: false, gone: false, left: false, ask: false, awayAt: 0, w: duoNetW(), vw: null, ff: false });
+    N.mine.ready = false;
+    if (N.part) N.part.ready = false;
+    if (netOk()) NET.have(0);
+    duoNetLobbyDom();
+    return true;
+  }
+  function duoNetOnAgain() { const N = S.duoNet; if (N && S.duo && S.duo.ph === 'end' && !N.left) duoNetAgain(true); }
+  // ---- the frame, the DOM, the canvas
+  function duoNetTick(real) {
+    const N = S.duoNet;
+    if (!N) return;
+    if (netOk()) { try { NET.pulse(); } catch (e) { /* the link is optional */ } }
+    N.t += real;
+    const Dd = S.duo;
+    if (!Dd || !Dd.net || S.screen !== 'duo') return;
+    const vs = Dd.mode === 'vs';
+    if (vs && Dd.ph === 'play' && Dd.turn === N.me) duoVsNetStream(real);   // (round 16) my drop, to the rival's phone
+    if (Dd.ph === 'watch' || Dd.ph === 'yours') {
+      duoNetWatchStep(real);
+      if (vs && Dd.ph === 'watch') duoVsNetWatchStep(real);
+      if (Dd.ph === 'yours' && S.duoT && S.duoT.t > (DNK().YOURS || 5) && !N.ask && !duoNetSheetKey()) { duoNetGo(); return; }
+    }
+    if (Dd.ph === 'watch' || Dd.ph === 'yours' || Dd.ph === 'end' || (vs && (Dd.ph === 'sabo' || Dd.ph === 'round'))) {   // (round 16: the claw-off's own sheets carry the link's too)
+      const k = duoNetSheetKey();
+      if (k !== N.lostDom) duoShow();
+    }
+  }
+  function duoNetWatchStep(real) {
+    const N = S.duoNet, w = N.w;
+    w.t += real;
+    if (w.beat > 0) w.beat = Math.max(0, w.beat - real);
+    const k = 1 - Math.pow(0.00005, real);
+    if (w.claw) {
+      if (!w.cd) w.cd = Object.assign({}, w.claw);
+      else { for (const f of ['x', 'y', 'ct', 'op']) w.cd[f] += (w.claw[f] - w.cd[f]) * k; w.cd.ph = w.claw.ph; w.cd.ty = w.claw.ty; w.cd.w = w.claw.w; }
+    }
+    for (const id in w.bodies) { const b = w.bodies[id]; b.x += (b.tx - b.x) * k; b.y += (b.ty - b.y) * k; b.a += (b.ta - b.a) * k; }
+    for (let i = w.fx.length - 1; i >= 0; i--) { const f = w.fx[i]; f.t += real; if (f.t > (f.life || 1.2)) w.fx.splice(i, 1); }
+  }
+  // Which sheet (if any) is up over the watch screen or the podium: the DOM is rebuilt when this changes.
+  function duoNetSheetKey() {
+    const N = S.duoNet, Dd = S.duo;
+    if (!N || !Dd) return '';
+    if (N.alone) return '';
+    if (Dd.ph === 'end') return N.left || N.lost ? 'off' : '';
+    if (N.ask) return 'ask';
+    if (N.left) return 'left';
+    if (N.lost) return N.gone ? 'gone' : 'lost';
+    if (N.awayAt && N.t - N.awayAt > (DNK().AWAY || 45)) return 'away';
+    return '';
+  }
+  // The #duoBar dot's state (duoHud's key).
+  function duoNetLinkK() { const N = S.duoNet; return !N ? '' : N.alone ? 'alone' : N.lost ? 'lost' : 'ok'; }
+  function duoNetDot(bar) {
+    const k = duoNetLinkK();
+    if (!k || !bar) return;
+    const d = h('span', 'duoNetDot ' + k);
+    try { d.setAttribute('aria-label', k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'); d.title = k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'; } catch (e) { /* stub */ }
+    bar.appendChild(d);
+  }
+  // The link's sheet over the watch screen (or, round 16, the claw-off's own sheets): leave?, reconnecting, or the choice when the partner is gone.
+  function duoNetSheetEl(key) {
+    const Dd = S.duo, N = S.duoNet, vs = Dd && Dd.mode === 'vs';
+    const sh = h('div', 'duoSheet panel center duoNetSheet');
+    if (key === 'ask') {
+      sh.appendChild(h('div', 'duoSc', 'Leave the game?'));
+      sh.appendChild(h('div', 'sub', vs ? 'Your rival wins by forfeit.' : 'Your partner can keep fighting alone.'));
+      const r = h('div', 'row center');
+      r.appendChild(btn('Stay', () => { N.ask = false; duoShow(); }, 'pri'));
+      r.appendChild(btn('Leave', () => duoNetQuit(true), 'ghost'));
+      sh.appendChild(r);
+    } else if (key === 'lost') {
+      sh.appendChild(h('div', 'sub', 'Hang on, trying for 30 seconds.'));   // (the card on the canvas says what happened)
+    } else {
+      const r = h('div', 'row center');
+      if (vs) r.appendChild(btn('Win by forfeit', () => duoVsNetForfeit(), 'pri'));   // (round 16) instead of fighting on alone
+      else if (!Dd.down[N.me]) r.appendChild(btn('Keep fighting alone', () => duoNetAlone(), 'pri'));
+      if (key === 'away') r.appendChild(btn('Wait', () => { N.awayAt = N.t; duoShow(); }, 'go'));
+      r.appendChild(btn('Quit to title', () => duoNetQuit(true), 'ghost'));
+      sh.appendChild(r);
+    }
+    return sh;
+  }
+  function duoNetDom() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return;
+    const b = duoBody('dp-canvas dp-net-' + Dd.ph);
+    if (!b) return;
+    const key = duoNetSheetKey();
+    N.lostDom = key;
+    const dock = h('div', 'duoDock');
+    const pn = duoUp(1 - N.me);
+    if (key) dock.appendChild(duoNetSheetEl(key));
+    if (Dd.ph === 'yours') {
+      const go = btn('Grab!', () => duoNetGo(), 'pri duoReady');
+      go.textContent = '\u{1F3AE} ' + i18nTr('Grab!');
+      dock.appendChild(go);
+    } else if (Dd.ph === 'watch' && Dd.mode === 'vs') {
+      duoVsNetWatchDock(dock);   // (round 16) the rival's drop: its result while they pick a card, and the taunts
+    } else if (Dd.ph === 'watch') {
+      dock.appendChild(h('div', 'duoTh', `Cheer ${pn} on`));
+      const row = h('div', 'duoTaunts');
+      for (const x of (DK().CHEERS || [])) { const tb = btn('cheer ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt'); tb.textContent = x.icon + ' ' + i18nTr(x.short || x.text.split(/[ ,!.?]/)[0]); row.appendChild(tb); }
+      dock.appendChild(row);
+    }
+    if (key !== 'ask' && !(Dd.ph === 'watch' && Dd.mode === 'vs')) dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));   // (round 16: the claw-off's watch bar carries its own)
+    b.appendChild(dock);
+  }
+  function duoNetEndDom() {
+    if (S.duo && S.duo.mode === 'vs') { duoVsNetEndDom(); return; }   // (round 16) the claw-off's podium
+    const Dd = S.duo, N = S.duoNet, b = duoBody('dp-canvas dp-end');
+    if (!b || !Dd) return;
+    if (N) N.lostDom = duoNetSheetKey();
+    const res = Dd.res || {}, card = h('div', 'duoSheet panel center'), O = duoM().online || { games: 0, wins: 0 };
+    card.appendChild(h('div', 'duoSc', res.won ? `${enemyDef(Dd.boss).name || Dd.boss} is down in ${res.turns | 0} turns!` : `${enemyDef(Dd.boss).name || Dd.boss} knocked you both out.`));
+    card.appendChild(h('div', 'sub', `Online team wins: ${O.wins | 0} of ${O.games | 0}`));
+    const row = h('div', 'duoTaunts');
+    for (const x of (DK().CHEERS || [])) { const tb = btn('cheer ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt'); tb.textContent = x.icon; row.appendChild(tb); }
+    card.appendChild(row);
+    const bt = h('div', 'row center');
+    const live = N && !N.alone && !N.left && !N.lost && netOk() && NET.state === 'connected';
+    if (live) bt.appendChild(btn('Play again', () => duoNetAgain(), 'pri'));
+    else if (N && !N.alone) card.appendChild(h('div', 'sub', `${duoUp(1 - N.me)} left the game.`));
+    bt.appendChild(btn('Title', () => duoNetQuit(true), live ? 'ghost' : 'pri'));
+    card.appendChild(bt);
+    b.appendChild(card);
+    if (!S.duoT || !S.duoT.crowd) { snd('duoCrowd'); fx().emit('confetti', 270, 300, { n: 1.4 }); if (S.duoT) S.duoT.crowd = 1; }
+    music('win');
+  }
+  function duoNetDraw(ctx, t) {
+    const Dd = S.duo, N = S.duoNet, R = X.RENDER, T = S.duoT || { t: 0, now: 0 };
+    if (!R || !R.duo || !N || !Dd) return;
+    if (Dd.mode === 'vs' && Dd.ph === 'watch') { duoVsDraw(ctx, t); return; }   // (round 16) the rival's drop in the claw-off's own cabinet (duoVsNetOver adds the rest)
+    const L = S.duoLive, me = N.me, p = 1 - me;
+    const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
+    const act = D().rushActOf ? D().rushActOf(Dd.boss) || 1 : 1;
+    const foe = L && L.F[0] ? (L.F[0].enemies.find((e) => e && e.alive) || L.F[0].enemies[0]) : null;
+    const fi = foe && L ? L.F[0].enemies.indexOf(foe) : 0, live = N.w.e && N.w.e[fi];
+    const bossSub = foe ? `Boss ${Math.max(0, live ? live[0] : foe.hp)}/${foe.maxHp} hp` : '';
+    if (Dd.ph === 'yours' && Dd.mode === 'vs') {   // (round 16) the claw-off's YOUR TURN: the round, the drop, the score
+      R.duo.turn(ctx, W, H, { t: T.t, now: T.now, name: names[me], col: cols[me], char: chars[me], label: `Round ${Dd.round} · drop ${Math.min(2 * Dd.drops, (Dd.k | 0) + 1)} of ${2 * Dd.drops}`, sub: `${names[0]} ${Dd.score[0] | 0} : ${Dd.score[1] | 0} ${names[1]}`, left: Math.max(0, (DNK().YOURS || 5) - T.t), total: DNK().YOURS || 5, reduced: !!fx().reduced });
+    } else if (Dd.ph === 'yours') {
+      R.duo.turn(ctx, W, H, { t: T.t, now: T.now, name: names[me], col: cols[me], char: chars[me], label: `Co-op · vs ${enemyDef(Dd.boss).name || Dd.boss}`, sub: bossSub, left: Math.max(0, (DNK().YOURS || 5) - T.t), total: DNK().YOURS || 5, reduced: !!fx().reduced });
+    } else {
+      const who = Dd.turn, w = N.w;
+      if (R.bg) R.bg(ctx, W, H, act, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+      const hp = [0, 1].map((i) => {
+        const Fi = L && L.F[i], pl = Fi ? Fi.player : { hp: 0, maxHp: 1, block: 0 }, st = i === who && w.hp ? w.hp : null;
+        return { hp: st ? st[0] : pl.hp, mx: pl.maxHp, bk: st ? st[1] : pl.block || 0, down: !!Dd.down[i] };
+      });
+      let intent = '';
+      try { intent = foe && foe.alive && X.COMBAT && X.COMBAT.intentText ? X.COMBAT.intentText(foe) : ''; } catch (e) { intent = ''; }
+      R.duo.watch(ctx, W, H, { t, now: T.now, names, cols, chars, who, me, hp, boss: foe ? { def: foe.def, hp: live ? live[0] : foe.hp, mx: foe.maxHp, bk: live ? live[1] : foe.block, intent } : null, beat: w.beat, reduced: !!fx().reduced });
+      duoNetCab(ctx, t, who, act);
+      R.duo.wfx(ctx, w.fx, { chute: { x: CAB.x + CAB.w - CAB.chuteW / 2, y: CAB.y + CAB.h - 40 }, tray: { x: who ? W - 132 : 132, y: 44 }, reduced: !!fx().reduced });
+    }
+    // a cheer, from its sender's side
+    if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble && T.msgT != null && T.msgT < 3.5) {
+      const tx = Dd.msg.from === 1 ? W - 132 : 132;
+      try { R.sto.bubble(ctx, 270, 120, 400, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT || 1, tx, 76); } catch (e) { /* optional */ }
+    }
+    const key = N.lostDom;
+    if (key && key !== 'ask') {
+      const pn = duoUp(p), secs = netOk() ? Math.max(0, Math.ceil(30 - NET.lostFor / 1000)) : 0;
+      const title = key === 'lost' ? 'Partner connection lost' : key === 'left' ? `${pn} left the game.` : key === 'away' ? `${pn} stepped away.` : 'Your partner is still gone.';
+      R.duo.lost(ctx, W, H, { t, title, sub: key === 'lost' ? `Reconnecting... ${secs} s` : '', spin: key === 'lost', col: cols[p] });
+    }
+  }
+  // The partner's cabinet from the stream: their bin, their claw in their paint, their colour round the glass.
+  function duoNetCab(ctx, t, who, act) {
+    const R = X.RENDER, N = S.duoNet, w = N.w;
+    const cst = { t, act, party: 0, marquee: duoUp(who), fog: 0, grease: 0, tilt: 0 };
+    DUO_CFG.chuteX = CAB.w - CAB.chuteW;
+    if (R.cabinetBack) R.cabinetBack(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    ctx.save(); ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    const RC = R.RARITY_COL || {};
+    for (const id in w.bodies) {
+      const b = w.bodies[id], d = b.def, rar = d && d.rarity;
+      if (R.item && d) R.item(ctx, d, CAB.x + b.x, CAB.y + b.y, b.a, 1, { glow: rar === 'u' || rar === 'r' || rar === 'l' ? RC[rar] : 0, glowA: rar === 'l' ? 0.85 : 0.4 });
+    }
+    duoNetClawDraw(ctx, t, who);
+    ctx.restore();
+    if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(t * 3) * 0.2; ctx.strokeStyle = duoCol(who); ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.rect(CAB.x - CAB.frame - 3, CAB.y - CAB.frame - 3, CAB.w + CAB.frame * 2 + 6, CAB.h + CAB.frame * 2 + 6); ctx.stroke();
+    ctx.restore();
+  }
+  // The streamed claw (the partner's in co-op, the rival's in the claw-off), built with PHYS.clawPose in their claw type and paint.
+  function duoNetClawDraw(ctx, t, who) {
+    const R = X.RENDER, N = S.duoNet, w = N && N.w;
+    if (!w || !R || !R.claw || !X.PHYS || !X.PHYS.clawPose || !S.duo) return;
+    const c = w.cd || { x: (CAB.w - CAB.chuteW) * 0.5, y: 62, ct: (CAB.w - CAB.chuteW) * 0.5, op: 1, ph: 'idle', ty: (S.duo.p[who] || {}).claw || 'classic', w: 1 };
+    try {
+      const pose = X.PHYS.clawPose(c.ty, { x: c.x, y: c.y, open: c.op, cable: Math.max(8, c.y - 26), width: c.w, phase: c.ph });
+      if (pose && pose.cableTop) pose.cableTop.x = c.ct;
+      const busy = c.ph && c.ph !== 'idle' && c.ph !== 'moving';
+      DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
+      R.claw(ctx, pose, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
+    } catch (e) { /* art is optional */ }
+  }
+
+  // ---------------------------------------------------------------- DUO NET VS (round 16): the versus claw-off online
+  /* DESIGN.md "Online versus (round 16)". VERSUS CLAW-OFF with each player
+     on their own phone, over the same link as co-op (NET, the lobby, the
+     code, the heartbeat, the 30 s retry window). The host owns the setup
+     (the seed, the drops each per round); the seed rolls the pile, the
+     sabotage deck and the coin toss identically on both phones. Drops go
+     turn about as they do on one phone: the active phone plays its drop in
+     its own world (duoVsPlay / duoVsTick) and its result stands. Every
+     change of hands goes over as one 'vt' message carrying the WHOLE
+     claw-off table (round, drop count, scores, the pile indexes won, both
+     hands, the deck, a pending sabotage card, the rounds, the last drop)
+     plus a snapshot of the bin's bodies by pile index, so a lost message is
+     healed by the next one and both phones continue from the same pile:
+       drop  a drop ended (end: the round is over; each phone books it)
+       pass  the dropper played a card on the rival (or kept its hand)
+       next  a new round started (either phone's Next round; a repeat is a no-op)
+     While a rival drops, 'vgo' says it started (the card they suffer slams
+     here too), 'vc' streams their claw 10 times a second and the bin 4 times,
+     and 'fx' {k: 'vprize', i} flies each prize they land. Taunts ride co-op's
+     'cheer'. A partner gone past the retry window (or who left) hands the
+     one still here the match by forfeit. Nothing from the wire is trusted:
+     duoVsNetTableIn checks every field (all or nothing) against this phone's
+     own pile and deck. */
+  const dvsIs = (v, lo, hi) => { const n = +v; return typeof v === 'number' && Number.isInteger(n) && n >= lo && n <= hi; };
+  // The drops each per round a host offers first: the last pick on this phone.
+  function duoVsNetDrops0() {
+    let l = {};
+    try { l = duoM().last || {}; } catch (e) { l = {}; }
+    return DK().DROPS.indexOf(l.drops | 0) >= 0 ? l.drops | 0 : (DK().DROPS_DEF || 3);
+  }
+  // The lobby's options for a claw-off: the host picks the drops, the guest sees them.
+  function duoVsNetDropsPanel(el) {
+    const N = S.duoNet;
+    if (!N || !el) return;
+    if (N.role === 'host') {
+      el.appendChild(h('div', 'rkH', 'Drops each per round'));
+      const row = h('div', 'duoChips');
+      for (const n of DK().DROPS) row.appendChild(btn(String(n), () => { duoVsNetSetDrops(n); duoNetBossPanel(); }, 'duoChip num' + (N.drops === n ? ' on' : '')));
+      el.appendChild(row);
+    } else {
+      el.appendChild(h('div', 'rkH', 'Drops each per round (the host picks)'));
+      el.appendChild(h('div', 'duoNetBossName', String(N.drops | 0)));
+    }
+  }
+  function duoVsNetSetDrops(v) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo || N.mode !== 'vs' || DK().DROPS.indexOf(v | 0) < 0) return false;
+    N.drops = v | 0;
+    duoNetSendMe();
+    return true;
+  }
+  // ---- the turns
+  function duoVsNetAfterToss() {
+    duoRoundStart(1);
+    return duoVsNetTurn();
+  }
+  // Whose drop it is now (Dd.turn): mine (YOUR TURN) or the rival's (watch).
+  function duoVsNetTurn() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    N.vw = null;
+    if (Dd.turn === N.me) return duoNetYours();
+    return duoVsNetWatch(Dd.turn);
+  }
+  function duoVsNetWatch(who) {
+    const V = S.duoV;
+    if (V) { V.card = null; V.fog = 0; V.mirror = false; V.tilt = 0; V.slam = null; }
+    for (const b of (V && V.W ? V.W.bodies : [])) b.tgt = null;
+    return duoNetWatch(who);
+  }
+  // YOUR TURN's Grab: the rival's phone is told (their card slams there too), then the drop is this phone's own.
+  function duoVsNetGo() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'yours' || Dd.turn !== N.me) return false;
+    snd('duoReady');
+    duoNetSend({ t: 'vgo', r: Dd.round | 0, k: Dd.k | 0 });
+    N.stT = 0; N.bdT = 0; N.lastCl = ''; N.lastB = '';
+    duoNetLog({ k: 'vgo-out', r: Dd.round, k2: Dd.k });
+    return duoVsPlay();
+  }
+  // The sabotage choice is made (duoHand's online form): the table goes over, and the rival drops.
+  function duoVsNetPass(nx) {
+    const Dd = S.duo, N = S.duoNet;
+    Dd.turn = nx === 0 || nx === 1 ? nx : 1 - N.me;
+    Dd.from = N.me;
+    duoVsNetOut('pass', false);
+    return duoVsNetTurn();
+  }
+  // Next round (either phone): made here from the seed like the other phone makes it, and told.
+  function duoVsNetNext() {
+    const Dd = S.duo;
+    duoRoundStart((Dd.round | 0) + 1);
+    duoVsNetOut('next', false);
+    return duoVsNetTurn();
+  }
+  // duoVsBook's hook: the online count on this profile (a forfeit win counts).
+  function duoVsNetBooked(w) {
+    const N = S.duoNet, M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.vsGames = (M.online.vsGames | 0) + 1;
+    if (N && w === N.me) M.online.vsWins = (M.online.vsWins | 0) + 1;
+  }
+  // The rival is gone for good (or left): the one still here takes the match, booked once, then the podium.
+  function duoVsNetForfeit() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || !Dd.net || Dd.mode !== 'vs' || Dd.ph === 'end') return false;
+    if (netOk()) { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    Object.assign(N, { ff: true, alone: true, left: true, lost: false, gone: false, ask: false, awayAt: 0, vw: null });
+    const V = S.duoV;
+    if (V) { V.sub = 'done'; V.cur = null; V.keyDir = 0; if (V.tilt && V.W) { V.W.setGravity(0, GRAVITY); V.tilt = 0; } }
+    const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0], pts: [0, 0] };
+    const pts = [0, 1].map((i) => (m.pts[i] | 0) + (Dd.round > Dd.rounds.length ? Dd.score[i] | 0 : 0));   // the round cut short counts in the points shown
+    duoVsBook({ w: N.me, wins: m.wins, pts });
+    if (Dd.res) Dd.res.ff = 1;
+    Dd.ph = 'end';
+    snd('win'); fx().emit('confetti', 270, 300, { power: 1 });
+    duoNetLog({ k: 'forfeit', w: N.me });
+    duoShow();
+    return true;
+  }
+  // ---- the table over the wire
+  function duoVsNetTableOut() {
+    const Dd = S.duo, L = Dd.last;
+    return {
+      r: Dd.round | 0, k: Dd.k | 0, turn: Dd.turn | 0, used: [Dd.used[0] | 0, Dd.used[1] | 0], score: [Dd.score[0] | 0, Dd.score[1] | 0], taken: (Dd.taken || []).map((i) => i | 0),
+      hands: [(Dd.hands[0] || []).slice(), (Dd.hands[1] || []).slice()], deck: (Dd.deck || []).slice(), pend: Dd.pend ? { id: Dd.pend.id, on: Dd.pend.on, by: Dd.pend.by } : null,
+      rounds: (Dd.rounds || []).map((x) => ({ s: [x.s[0] | 0, x.s[1] | 0] })), last: L ? { who: L.who | 0, got: (L.got || []).map((i) => i | 0), pts: L.pts | 0 } : null,
+    };
+  }
+  /* A table from the other phone, checked against this game's rules (all or
+     nothing, null when anything is off): the round and the drop count in
+     range, the drops each within the round's, the pile indexes real and
+     unique for that round's pile (rolled here from the seed), the hands and
+     the deck real cards within their sizes, a pending card on one player by
+     the other, the finished rounds' scores, the last drop's prizes among the
+     ones won. The round winners and the last drop's lines are worked out
+     here, never taken from the wire. */
+  function duoVsNetTableIn(o, seed, drops) {
+    const Dd = S.duo, K = DK();
+    seed = seed || (Dd && Dd.seed); drops = drops || (Dd && Dd.drops) | 0;
+    if (!seed || !drops || !o || typeof o !== 'object' || Array.isArray(o)) return null;
+    const ids = K.CARD_IDS || [], hmax = (K.HAND || {}).max || 3, maxR = K.MAX_ROUNDS || 5;
+    const pair = (a, lo, hi) => (Array.isArray(a) && a.length === 2 && dvsIs(a[0], lo, hi) && dvsIs(a[1], lo, hi) ? [a[0], a[1]] : null);
+    const cards = (a, max) => (Array.isArray(a) && a.length <= max && a.every((c) => typeof c === 'string' && ids.indexOf(c) >= 0) ? a.slice() : null);
+    if (!dvsIs(o.r, 1, maxR) || !dvsIs(o.k, 0, 2 * drops) || !dvsIs(o.turn, 0, 1)) return null;
+    const r = o.r, used = pair(o.used, 0, drops), score = pair(o.score, 0, 99999);
+    if (!used || !score || used[0] + used[1] !== o.k) return null;
+    const n = duoPileOf({ seed, round: r, drops }).length;
+    if (!n || !Array.isArray(o.taken) || o.taken.length > n) return null;
+    const taken = [], seen = {};
+    for (const i of o.taken) { if (!dvsIs(i, 0, n - 1) || seen[i]) return null; seen[i] = 1; taken.push(i); }
+    if (!Array.isArray(o.hands) || o.hands.length !== 2) return null;
+    const hands = [cards(o.hands[0], hmax), cards(o.hands[1], hmax)], deck = cards(o.deck, ids.length * (K.COPIES || 2));
+    if (!hands[0] || !hands[1] || !deck) return null;
+    let pend = null;
+    if (o.pend != null) {
+      const p = o.pend;
+      if (!p || typeof p !== 'object' || ids.indexOf(p.id) < 0 || !dvsIs(p.on, 0, 1) || !dvsIs(p.by, 0, 1) || p.on === p.by) return null;
+      pend = { id: p.id, on: p.on, by: p.by };
+    }
+    if (!Array.isArray(o.rounds) || o.rounds.length < r - 1 || o.rounds.length > r) return null;
+    const rounds = [];
+    for (const x of o.rounds) {
+      const s = x && typeof x === 'object' ? pair(x.s, 0, 99999) : null;
+      if (!s) return null;
+      rounds.push({ s, w: D().duoRoundWin ? D().duoRoundWin(s) : (s[0] > s[1] ? 0 : s[1] > s[0] ? 1 : -1) });
+    }
+    let last = null;
+    if (o.last != null) {
+      const L = o.last;
+      if (!L || typeof L !== 'object' || !dvsIs(L.who, 0, 1) || !Array.isArray(L.got) || L.got.length > n || !dvsIs(L.pts, 0, 99999)) return null;
+      if (!L.got.every((i) => dvsIs(i, 0, n - 1) && seen[i])) return null;
+      last = { who: L.who, got: L.got.slice(), pts: L.pts };
+    }
+    return { r, k: o.k, turn: o.turn, used, score, taken, hands, deck, pend, rounds, last };
+  }
+  // A checked table taken as it is (a round this phone has not started is started first, from the seed).
+  function duoVsNetAdopt(tb) {
+    const Dd = S.duo;
+    if (tb.r !== (Dd.round | 0) || !S.duoV) { Dd.rounds = tb.rounds.slice(0, tb.r - 1); duoRoundStart(tb.r); }
+    Object.assign(Dd, { k: tb.k, turn: tb.turn, used: tb.used, score: tb.score, taken: tb.taken, hands: tb.hands, deck: tb.deck, pend: tb.pend, rounds: tb.rounds });
+    if (tb.last) {
+      const pile = S.duoV && S.duoV.pile.length ? S.duoV.pile : duoPileOf(Dd);
+      const sc = D().duoDropScore ? D().duoDropScore(tb.last.got.map((i) => ({ i, id: pile[i].id, v: pile[i].v, gold: pile[i].gold }))) : { lines: [], combos: [] };
+      Dd.last = { who: tb.last.who, got: tb.last.got, pts: tb.last.pts, lines: sc.lines, combos: sc.combos };
+    } else Dd.last = null;
+  }
+  // The bin's bodies by pile index: [i, x, y, angle x100] (the stream and the end-of-drop snapshot).
+  function duoVsNetSnapOut() {
+    const V = S.duoV, out = [];
+    if (!V || !V.W) return out;
+    for (const b of V.W.bodies) {
+      if (b.type !== 'dynamic' || !b.data || b.data.pile == null) continue;
+      out.push([b.data.pile | 0, Math.round(b.x * 10) / 10, Math.round(b.y * 10) / 10, Math.round((b.a || 0) * 100)]);
+      if (out.length >= (DNK().VS_BODIES || 40)) break;
+    }
+    return out;
+  }
+  // Rows from the wire, checked: a real pile index (once each), a position in or near the glass, an angle.
+  function duoVsNetRows(sn, n) {
+    const out = [], seen = {};
+    if (!Array.isArray(sn)) return out;
+    for (const r of sn.slice(0, DNK().VS_BODIES || 40)) {
+      if (!Array.isArray(r) || !dvsIs(r[0], 0, n - 1) || seen[r[0]]) continue;
+      seen[r[0]] = 1;
+      out.push({ i: r[0], x: dnNum(r[1], -60, CAB.w + 60, CAB.w / 2), y: dnNum(r[2], -60, CAB.h + 60, CAB.h / 2), a: dnNum(r[3], -1e5, 1e5, 0) / 100 });
+    }
+    return out;
+  }
+  function duoVsNetByPile() {
+    const V = S.duoV, o = {};
+    if (V && V.W) for (const b of V.W.bodies) if (b.type === 'dynamic' && b.data && b.data.pile != null) o[b.data.pile] = b;
+    return o;
+  }
+  // The bin as the table says: what was won is gone, the rest where the other phone left it (a prize missing here: the bin is rebuilt first).
+  function duoVsNetSnapIn(sn) {
+    const Dd = S.duo;
+    let V = S.duoV;
+    if (!Dd) return false;
+    if (!V || !V.W) { V = duoVsBuild(); if (!V || !V.W) return false; }
+    const taken = {};
+    for (const i of Dd.taken || []) taken[i] = 1;
+    let by = duoVsNetByPile();
+    for (const i in by) if (taken[i]) { V.W.remove(by[i]); delete by[i]; }
+    let miss = false;
+    for (let i = 0; i < V.pile.length; i++) if (!taken[i] && !by[i]) miss = true;
+    if (miss) { V = duoVsBuild(); by = duoVsNetByPile(); }
+    for (const r of duoVsNetRows(sn, V.pile.length)) {
+      const b = by[r.i];
+      if (!b) continue;
+      b.x = r.x; b.y = r.y; b.a = r.a; b.vx = 0; b.vy = 0; b.av = 0; b.tgt = null;
+      if (V.W.sync) V.W.sync(b);
+    }
+    return true;
+  }
+  function duoVsNetOut(ev, over) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || Dd.mode !== 'vs') return null;
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    const m = { t: 'vt', n: N.outN, ev, end: over ? 1 : 0, tb: duoVsNetTableOut(), sn: duoVsNetSnapOut() };
+    N.lastOut = m;
+    const sent = duoNetSend(m);
+    if (netOk() && !N.alone) NET.have(N.outN + 1);
+    duoNetLog({ k: 'vsend', n: m.n, ev, end: m.end, sent: !!sent });
+    return m;
+  }
+  function duoVsNetOnTable(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'vs' || Dd.ph === 'end') return false;
+    const n = dnInt(m.n, 0, 1e7, 0);
+    if (!(n > N.inN)) return false;   // already applied (a resend after a rejoin)
+    const ev = m.ev === 'drop' || m.ev === 'pass' || m.ev === 'next' || m.ev === 'late' ? m.ev : '';   // (QA17: 'late', a straggler scored after the drop)
+    const tb = ev ? duoVsNetTableIn(m.tb) : null;
+    if (!tb) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    if (tb.r < (Dd.round | 0)) return false;   // an old round
+    const newer = tb.r > (Dd.round | 0);
+    if (!newer && Dd.ph !== 'watch' && Dd.ph !== 'toss') { duoNetLog({ k: 'vt?', ph: Dd.ph, ev }); return false; }   // only the one watching takes a table
+    if ((ev === 'drop' || ev === 'late') && (!tb.last || tb.last.who === N.me)) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    if (ev === 'late' && (newer || Dd.ph !== 'watch')) { duoNetLog({ k: 'vt?', ph: Dd.ph, ev }); return false; }
+    N.inN = n; N.outN = Math.max(N.outN, n);
+    if (netOk()) NET.have(n + 1);
+    duoVsNetAdopt(tb);
+    duoVsNetSnapIn(m.sn);
+    const V = S.duoV;
+    if (V) { V.card = null; V.fog = 0; V.mirror = false; V.tilt = 0; }
+    duoNetLog({ k: 'vrecv', n, ev, end: !!m.end });
+    if (ev === 'late') return qa17VsLateIn();   // (QA17) the late points on the result the watcher is looking at
+    if (ev !== 'drop') return duoVsNetTurn();   // a pass (my drop now) or a new round (whoever starts it)
+    const L = Dd.last;
+    duoVsNetDropFx(L);
+    if (m.end) { N.vw = null; return duoRoundEnd(); }   // the round is over here too: the round sheet, or the podium (booked on this profile)
+    if (Dd.ph !== 'watch') duoVsNetWatch(L.who);
+    Dd.turn = L.who; Dd.from = L.who;
+    N.vw = { who: L.who, pts: L.pts | 0, lines: L.lines || [] };
+    duoShow();
+    return true;
+  }
+  // The rival's drop scored on this phone: the points over their side of the board, a jackpot, their combos.
+  function duoVsNetDropFx(L) {
+    const V = S.duoV, N = S.duoNet;
+    if (!L) return;
+    if (L.pts > 0) { if (V) V.flash[L.who] = 1.4; fx().text(L.who ? 400 : 140, 190, '+' + L.pts, '#ffc94d', { size: 30, life: 1.4, dy: -40 }); }
+    if ((L.got || []).length >= 3) { snd('jackpot'); fx().emit('confetti', 270, 420, { n: 1.2 }); banner('JACKPOT', 'jackpot', 1.3); }
+    for (const ln of L.lines || []) {
+      if (ln.k !== 'combo' || !N) continue;
+      N.w.fx.push({ k: 'combo', name: ln.label, col: ln.color || '#ff9ad0', t: 0, life: 1.8 });
+      snd('combo');
+    }
+    if (N && N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.splice(0, N.w.fx.length - (DNK().FX_MAX || 24));
+  }
+  // ---- the rival's drop, live
+  function duoVsNetStream(real) {
+    const N = S.duoNet, V = S.duoV;
+    if (!N || N.alone || !V || !V.rig) return;
+    N.stT -= real; N.bdT -= real;
+    if (N.stT > 0) return;
+    N.stT = DNK().STREAM || 0.1;
+    const m = duoNetClawOut(V.rig, 'vc');
+    const key = JSON.stringify(m);
+    let bodies = false;
+    if (N.bdT <= 0) {
+      N.bdT = DNK().BODIES || 0.25;
+      m.b = duoVsNetSnapOut();
+      const bk = JSON.stringify(m.b);
+      bodies = bk !== N.lastB;
+      N.lastB = bk;
+      if (!bodies) delete m.b;
+    }
+    if (key === N.lastCl && !bodies) return;   // nothing moved
+    N.lastCl = key;
+    duoNetSend(m);
+  }
+  function duoVsNetOnGo(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || Dd.mode !== 'vs' || Dd.ph !== 'watch' || Dd.turn === N.me || !V) return false;
+    if (dnInt(m.r, -1, 99, -1) !== (Dd.round | 0) || dnInt(m.k, -1, 99, -1) !== (Dd.k | 0)) { duoNetLog({ k: 'vgo?', r: m.r, k2: m.k }); return false; }
+    const who = Dd.turn, card = Dd.pend && Dd.pend.on === who ? Dd.pend.id : null;
+    V.card = card; V.fog = card === 'fog' ? 1 : 0; V.mirror = card === 'mirror'; V.tilt = 0;
+    if (card === 'tilt') { const r = U.rng((U.hashStr(Dd.seed + ':sab:' + Dd.round + ':' + Dd.k) >>> 0) || 1); V.tilt = r() < 0.5 ? -1 : 1; }   // the lean duoVsPlay rolls there
+    if (card) { V.slam = { id: card, t: 0 }; snd('duoSabo'); haptic('hit'); fx().text(270, 380, 'SABOTAGE!', '#ff5a4a', { size: 26, life: 1.4, dy: -30 }); }
+    V.party = 0.8;
+    N.vw = null; N.w.claw = null; N.w.cd = null;
+    duoNetLog({ k: 'vgo', who, card });
+    duoShow();
+    return true;
+  }
+  function duoVsNetOnClaw(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || Dd.mode !== 'vs' || Dd.ph !== 'watch' || Dd.turn === N.me) return;
+    N.w.claw = duoNetClawIn(m);
+    N.w.n++;
+    if (!Array.isArray(m.b) || !V || !V.W) return;
+    const by = duoVsNetByPile(), seen = {};
+    for (const r of duoVsNetRows(m.b, V.pile.length)) { seen[r.i] = 1; const b = by[r.i]; if (b) b.tgt = { x: r.x, y: r.y, a: r.a }; }
+    for (const i in by) if (!seen[i]) V.W.remove(by[i]);   // gone from their bin (down the chute: the table books it)
+  }
+  // duoVsCredit's hook: a prize down this phone's chute on its own drop (or a straggler after it) flies on the rival's phone.
+  function duoVsNetCredit(d) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || !d || d.pile == null || (Dd.ph !== 'play' && Dd.ph !== 'sabo')) return;
+    if ((Dd.ph === 'play' ? Dd.turn : Dd.from) !== N.me) return;
+    duoNetSend({ t: 'fx', k: 'vprize', i: d.pile | 0 });
+  }
+  function duoVsNetOnPrize(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || !V || m.k !== 'vprize') return;
+    const i = dnInt(m.i, -1, V.pile.length - 1, -1);
+    if (i < 0 || (Dd.taken || []).indexOf(i) >= 0) return;
+    const p = V.pile[i], def = itemDef(p.id), who = Dd.turn, v = p.v | 0;
+    const b = duoVsNetByPile()[i];
+    if (b && V.W) V.W.remove(b);
+    V.flash[who] = 1; V.party = Math.max(V.party, v >= 4 || p.gold ? 1.2 : 0.6);
+    const x = CAB.x + CAB.w - CAB.chuteW / 2, y = CAB.y + CAB.h - 40;
+    fx().text(x - 36, y - 30, v ? (p.gold ? 'GOLDEN +' + v * 2 : '+' + v) : 'A ROCK!', p.gold || v >= 4 ? '#ffc94d' : v ? '#ffffff' : '#b3a4d6', { size: v >= 4 || p.gold ? 22 : 17 });
+    N.w.fx.push({ k: 'prize', def, plus: false, t: 0, life: 1.1 });
+    if (N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.shift();
+    snd(v >= 4 || p.gold ? 'arcWin' : v ? 'coin' : 'thud');
+  }
+  // The watcher's frame: the bodies glide to the stream, the flashes and the card's slam run down (no physics here).
+  function duoVsNetWatchStep(real) {
+    const V = S.duoV;
+    if (!V) return;
+    V.flash[0] = Math.max(0, V.flash[0] - real * 2.5); V.flash[1] = Math.max(0, V.flash[1] - real * 2.5); V.party = Math.max(0, V.party - real * 1.1);
+    if (V.slam) { V.slam.t += real; if (V.slam.t > DUOC.slam) V.slam = null; }
+    if (!V.W) return;
+    const k = 1 - Math.pow(0.00005, real);
+    for (const b of V.W.bodies) {
+      const g = b.tgt;
+      if (!g) continue;
+      b.x += (g.x - b.x) * k; b.y += (g.y - b.y) * k; b.a += (g.a - b.a) * k;
+      if (V.W.sync) V.W.sync(b);
+    }
+  }
+  // ---- the DOM: the watch dock, the sheets' dock, the podium
+  // The six taunts: words on the sheets, icons only on the watch bar (one row under the glass, the bin stays in sight).
+  function duoVsNetTauntRow(parent, icons) {
+    const row = h('div', 'duoTaunts' + (icons ? ' duoVsNetIcons' : ''));
+    for (const x of (DK().TAUNTS || [])) {
+      const tb = btn('taunt ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt');
+      tb.textContent = icons ? x.icon : x.icon + ' ' + i18nTr(x.short || x.text.split(/[ ,!.?]/)[0]);
+      try { tb.setAttribute('aria-label', i18nTr(x.text)); tb.title = i18nTr(x.text); } catch (e) { /* stub */ }
+      row.appendChild(tb);
+    }
+    parent.appendChild(row);
+    return row;
+  }
+  function duoVsNetWatchDock(dock) {
+    const N = S.duoNet, vw = N && N.vw;
+    if (!N) return;
+    if (vw) {
+      const sheet = h('div', 'duoSheet panel duoVsNetRes');
+      try { if (sheet.style && sheet.style.setProperty) sheet.style.setProperty('--dc', duoCol(vw.who)); } catch (e) { /* stub */ }
+      sheet.appendChild(h('div', 'duoSc', `${duoUp(vw.who)} +${vw.pts | 0}`));
+      const ls = h('div', 'duoLines');
+      if (!vw.lines.length) ls.appendChild(h('span', 'ln k-none', 'Nothing in the chute. Ouch.'));
+      for (const ln of vw.lines) ls.appendChild(h('span', 'ln k-' + ln.k, `${ln.label} +${ln.v}`));
+      sheet.appendChild(ls);
+      sheet.appendChild(h('div', 'duoTh duoNetSpin', `${duoUp(vw.who)} is picking a sabotage card...`));
+      dock.appendChild(sheet);
+    }
+    // one row under the glass: the taunts (icons, their words on the bubble) and Leave
+    const bar = h('div', 'duoVsNetBar');
+    try { bar.setAttribute('aria-label', i18nTr(`Taunt ${duoUp(1 - N.me)}`)); } catch (e) { /* stub */ }
+    duoVsNetTauntRow(bar, true);
+    if (duoNetSheetKey() !== 'ask') bar.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    dock.appendChild(bar);
+  }
+  // Under the claw-off's own sheets (your card choice, a round's result): the link's sheet, the taunts, Leave.
+  function duoVsNetDock(b) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!N || !b || !Dd) return;
+    const key = duoNetSheetKey();
+    N.lostDom = key;
+    const dock = h('div', 'duoDock duoVsNetDock');
+    if (key) dock.appendChild(duoNetSheetEl(key));
+    if (Dd.ph === 'round' && !key) duoVsNetTauntRow(dock, true);
+    if (key !== 'ask') dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    b.appendChild(dock);
+  }
+  function duoVsNetEndDom() {
+    const Dd = S.duo, N = S.duoNet, b = duoBody('dp-canvas dp-end');
+    if (!b || !Dd) return;
+    if (N) N.lostDom = duoNetSheetKey();
+    const res = Dd.res || {}, O = duoM().online || {};
+    const card = h('div', 'duoSheet panel center');
+    card.appendChild(h('div', 'duoSc', res.ff && (res.w === 0 || res.w === 1) ? `${duoUp(res.w)} wins by forfeit!` : res.w === 0 || res.w === 1 ? `${duoUp(res.w)} wins the claw-off!` : 'A draw!'));
+    card.appendChild(h('div', 'sub', `Rounds ${(res.wins || [0, 0]).join(' : ')} · points ${(res.pts || [0, 0]).join(' : ')}`));
+    card.appendChild(h('div', 'sub', `Online versus wins: ${O.vsWins | 0} of ${O.vsGames | 0}`));
+    duoVsNetTauntRow(card, true);
+    const bt = h('div', 'row center');
+    const live = N && !N.alone && !N.left && !N.lost && netOk() && NET.state === 'connected';
+    if (live) bt.appendChild(btn('Play again', () => duoNetAgain(), 'pri'));
+    else if (N && !res.ff) card.appendChild(h('div', 'sub', `${duoUp(1 - N.me)} left the game.`));
+    bt.appendChild(btn('Title', () => duoNetQuit(true), live ? 'ghost' : 'pri'));
+    card.appendChild(bt);
+    b.appendChild(card);
+    if (!S.duoT || !S.duoT.crowd) { snd('duoCrowd'); fx().emit('confetti', 270, 300, { n: 1.4 }); if (S.duoT) S.duoT.crowd = 1; }
+    music('win');
+  }
+  // ---- the canvas over the claw-off (duoVsDraw's hook): the rival's prizes flying, a taunt's bubble, the link
+  function duoVsNetOver(ctx, t, who) {
+    const Dd = S.duo, N = S.duoNet, R = X.RENDER, T = S.duoT;
+    if (!Dd || !N || !R || !R.duo) return;
+    try { R.duo.wfx(ctx, N.w.fx, { chute: { x: CAB.x + CAB.w - CAB.chuteW / 2, y: CAB.y + CAB.h - 40 }, tray: { x: who ? 400 : 140, y: 150 }, reduced: !!fx().reduced }); } catch (e) { /* optional */ }
+    if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble && T && T.msgT != null && T.msgT < 3.5) {
+      const tx = Dd.msg.from === 1 ? 400 : 140;
+      try { R.sto.bubble(ctx, 270, 246, 400, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT || 1, tx, 200); } catch (e) { /* optional */ }
+    }
+    const key = duoNetSheetKey();
+    if (!key || key === 'ask') return;
+    const pn = duoUp(1 - N.me), col = duoCol(1 - N.me);
+    if (Dd.ph === 'play') {   // your own drop goes on: a pill, never a card over the glass
+      R.duo.tag(ctx, 270, 40, '\u{1F4E1} ' + i18nTr(key === 'lost' ? 'Reconnecting' : 'Your rival is still gone.'), col, true, 13);
+      return;
+    }
+    const secs = netOk() ? Math.max(0, Math.ceil(30 - NET.lostFor / 1000)) : 0;
+    const title = key === 'lost' ? 'Partner connection lost' : key === 'left' ? `${pn} left the game.` : key === 'away' ? `${pn} stepped away.` : 'Your rival is still gone.';
+    R.duo.lost(ctx, W, H, { t, title, sub: key === 'lost' ? `Reconnecting... ${secs} s` : '', spin: key === 'lost', col });
+  }
+  // ---- a phone back without the game (a reload): the whole claw-off
+  function duoVsNetOnNeed() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph === 'end') return false;
+    if (Dd.ph === 'toss') duoAfterToss();
+    // where the returning phone comes in: my drop or my card choice goes on (they watch), their cut drop starts over, their card choice waits
+    const ph = Dd.ph === 'round' ? 'round' : Dd.ph === 'watch' ? (N.vw ? 'sabo' : 'yours') : 'watch';
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    duoNetSend({ t: 'sync', mode: 'vs', seed: Dd.seed, p: Dd.p, drops: Dd.drops, first: Dd.first, n: N.outN, ph, vw: Dd.ph === 'sabo' ? 1 : 0, tb: duoVsNetTableOut(), sn: duoVsNetSnapOut() });
+    N.inN = N.outN;
+    if (ph === 'yours') duoVsNetWatch(Dd.turn);   // their drop starts over: a fresh watch here
+    duoNetLog({ k: 'vsync-out', ph });
+    return true;
+  }
+  function duoVsNetOnSync(m) {
+    const N = S.duoNet;
+    if (!N || S.duo || !Array.isArray(m.p)) return false;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : 0;
+    const ph = ['yours', 'watch', 'sabo', 'round'].indexOf(m.ph) >= 0 ? m.ph : '';
+    const tb = seed && drops ? duoVsNetTableIn(m.tb, seed, drops) : null;
+    if (!tb || !ph || (ph === 'round') !== (tb.rounds.length === tb.r)) { duoNetLog({ k: 'badsync' }); return false; }
+    if (netOk() && (NET.side === 0 || NET.side === 1)) { N.me = NET.side; N.role = N.me ? 'guest' : 'host'; }   // the seat the relay kept for this phone
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    const Dd = duoNetBegin(P, seed, '', 'random', { mode: 'vs', drops });
+    if (!Dd) return false;
+    duoVsNetAdopt(tb);
+    duoVsNetSnapIn(m.sn);
+    N.inN = N.outN = dnInt(m.n, 0, 1e7, 0);
+    if (netOk()) NET.have(N.inN + 1);
+    duoNetLog({ k: 'vsync-in', ph });
+    snd('duoLink', { k: 'back' });
+    const me = N.me;
+    if (ph === 'yours') { Dd.turn = me; return duoNetYours(); }
+    if (ph === 'sabo') { Dd.turn = 1 - me; Dd.from = me; Dd.ph = 'sabo'; duoShow(); return true; }
+    if (ph === 'round') { Dd.ph = 'round'; duoShow(); return true; }
+    duoVsNetWatch(1 - me);
+    if (m.vw && Dd.last) { N.vw = { who: Dd.last.who, pts: Dd.last.pts | 0, lines: Dd.last.lines || [] }; duoShow(); }
+    return true;
+  }
+  const DUOVS_API = () => ({
+    go: duoVsNetGo, drops: duoVsNetSetDrops, forfeit: duoVsNetForfeit, out: duoVsNetOut, onTable: duoVsNetOnTable, tableOut: duoVsNetTableOut, tableIn: duoVsNetTableIn,
+    snapOut: duoVsNetSnapOut, snapIn: duoVsNetSnapIn, onClaw: duoVsNetOnClaw, onGo: duoVsNetOnGo,
+  });
+
+  const DUON_API = () => ({
+    vs: DUOVS_API(),   // (round 16) the versus claw-off online (DESIGN.md "Online versus (round 16)")
+    choose: duoNetChoose, menu: duoNetMenu, host: duoNetHost, joinDom: duoNetJoinDom, join: duoNetJoin, set: duoNetSet, boss: duoNetBoss, ready: duoNetReady, start: duoNetStart,
+    go: duoNetGo, alone: duoNetAlone, quit: duoNetQuit, again: duoNetAgain, cheer: duoNetCheer, live: duoNetLive, send: duoNetSendTurn, onTurn: duoNetOnTurn, boot: duoNetBoot,
+    foesOut: duoNetFoesOut, foesIn: duoNetFoesIn, pubOut: duoNetPubOut, pubIn: duoNetPubIn, build: duoNetBuild, sheet: duoNetSheetKey, draw: duoNetDraw,
+    get state() { return S.duoNet || null; }, get log() { return DNX.log; }, get bootCode() { return DNX.boot; }, set bootCode(v) { DNX.boot = v || null; DNX.booted = false; },
+  });
   // ================================================================ /DUO
 
   // ================================================================ LEG (round 12: legends)
@@ -22689,6 +25393,7 @@ const GAME = (() => {
   function legChip(ctx, x, y, label, col, pips, of) {
     ctx.save();
     ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    label = i18nTr(label);   // (QA round 15) the chip's word in the current language (GOLD, SLOT DRY...)
     const m = ctx.measureText ? ctx.measureText(label) : null, tw = m && m.width > 0 ? m.width : label.length * 7.2;
     const w = 16 + tw + (of ? of * 8 + 6 : 0);
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y - 10, w, 20, 6); else ctx.rect(x, y - 10, w, 20);
@@ -22815,6 +25520,7 @@ const GAME = (() => {
     if (!S.trd || S.trd.tile !== t) S.trd = { tile: t, st, t: 0, phase: 'idle', k: 0, fired: {}, res: null, pick: null, stamp: 0, wave: 0 };
     S.trd.st = st;
     setScreen('trade');
+    m2Stop('trade');   // M2 (round 18): the market stall look
     trdDom();
   }
   // A relic leaves the run: its lasting Max HP goes with it (gold and bulbs it paid stay paid).
@@ -23292,6 +25998,2003 @@ const GAME = (() => {
   }
   // ================================================================ /TRD
 
+  // ================================================================ DEP (round 15): the Neon Depths
+  /* DESIGN.md "The Neon Depths (round 15)". Endless's fourth biome, the
+     flooded basement under the Clawspire: every third loop from Loop 3 dives
+     into it (DATA.depLoop / depAct; run.endless.dep for the loop, .dp the
+     dives this run). The flow: endlessNext asks depLoopAct for the loop's act
+     and the dive, newMap passes the 'depths' biome to MAP.generate (its pools
+     come from DATA.DEP_ENC), the reboot card (showLoop) floods, the map intro
+     names the Depths, the music plays the Depths' dub (AUDIO act 4), the map
+     and the arena draw underwater (RENDER.dep). In a fight the cabinet holds
+     standing water (PHYS.rosFlood, DATA.DEP_K.water of the bin; one water in
+     the cabinet: the Rising Water mutator's level is folded in and its own
+     flood is switched off), and the monsters' tricks are staged here (COMBAT
+     decides, DEP block there): the Angler Token's lure pulls the aim and a
+     falling claw toward its light, a jelly the claw touches stings once a
+     grab (COMBAT.depSting), a Crab Changer drags pinched prizes along the
+     floor (a lift frees one: COMBAT.depUnpinch), a Volt Eel's live water
+     shocks a prize lifted from under the waterline (COMBAT.depZap at the
+     delivery), the Sunken Mimic's real chest glints, and The Drowned
+     Jukebox's High Tide moves the water with its music (depTideAt) while a
+     surface current carries the floaters away and back. Fight-only state in
+     FS.dep (never saved; a reload replays the seeded fight). Meta: dep
+     {dives, jukebox, best} (DATA.depFix). Run: endless.dep, endless.dp,
+     sc.dep. Reached through one-line hooks in endlessNext, showLoop,
+     endlessRunFix, newMap, encounterFor, accMusicAct, loreIntroStart,
+     loadMeta, endFight, applyEvent, bossEvent, signLabel, bestTick, deliver,
+     onRigEvent, update, drawMap, drawFight, ambientTick, rosFloodTick and the
+     history record. */
+  const DEPK = {
+    rise: 220,                    // the level eases toward its mark at this many px/s
+    lurePull: 60, lureDrop: 55, lureDead: 6,   // the lure's pull on the aim and on a falling claw (px/s), and its dead zone (px)
+    pinchV: 50, pinchX: 34, pinchFloor: 70,    // a pinched prize rides the floor toward the far wall at pinchV, within pinchFloor px of the floor
+    undertow: 60, undertowK: 3,   // High Tide's surface current (px/s) and how fast floaters take it up
+    wet: 0.2,                     // lifted with its middle this far (x its radius) under the surface: wet
+    glint: 2.6, glintOn: 0.45,    // the real chest glints for glintOn s every glint s
+  };
+  const DEP_SIGN = { lure: 'LURE', jellies: 'JELLIES', pinch: 'PINCH', shock: 'LIVE WIRE', decoy: 'CHESTS' };
+  const DEP_COL = { lure: '#ffe066', jellies: '#ff6bd6', pinch: '#ff6b4a', shock: '#2ee6d6', decoy: '#ffc94d', tide: '#ff6bd6' };
+  Object.assign(BST_SIGN, DEP_SIGN); Object.assign(BST_COL, DEP_COL);
+  for (const k in DEP_SIGN) BST_NEXT[k] = DEP_SIGN[k] + ' NEXT TURN';
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const DEP_WORDS = ['LURED CLAW! It drifts toward the light', 'LURE LOST: the bait is gone', 'JELLIES! They sting the claw that touches them',
+    'PINCHED! Grab them back before your turn ends', 'SNIP! FREE', 'INTO THE SHELL', 'LIVE WATER! A wet prize shocks you', 'WET PRIZE!',
+    'SUNKEN CHESTS! One holds treasure', 'HIGH TIDE! The water rises and falls with the music', 'THE TIDE GOES OUT',
+    'LURED CLAW', 'LIVE WATER', 'PINCHED PRIZES', 'STINGING JELLIES', 'ONE CHEST IS REAL', 'HIGH TIDE',
+    'LURE NEXT TURN', 'JELLIES NEXT TURN', 'PINCH NEXT TURN', 'LIVE WIRE NEXT TURN', 'CHESTS NEXT TURN', 'HIGH TIDE NEXT TURN',
+    'OOH, A LIGHT', 'BLOOP', 'SNIP SNIP', 'BZZZT', 'PICK ONE', 'LURE LOST', 'TREASURE!', 'CHOMP!', 'STUNG!', 'ZAP!', 'MINE NOW', 'DROP THE BASS!',
+    'Lures your claw toward junk', 'Pinches your best item', 'THE NEON DEPTHS', 'The Neon Depths', 'DRAIN PUMP ...... FAILED', 'WARNING: WATER IN THE CABINET',
+    'The machine forgot to drain.', 'Mind the water. Things live in it now.', 'NEON DEPTHS', 'Drowned Jukeboxes unplugged', 'Deep Diver',
+    'Unplug The Drowned Jukebox in the Neon Depths.', 'DIVE', 'HIGH TIDE!'];
+  const DEP_PATTERNS = { 'Drifts {n} stinging jellies into your bin': 'Drifts 2 stinging jellies into your bin', 'Pinches your {n} best items': 'Pinches your 2 best items',
+    'Electrifies the water ({n} per wet prize)': 'Electrifies the water (7 per wet prize)', 'Scatters {n} chests (one holds treasure)': 'Scatters 3 chests (one holds treasure)',
+    'LOADING LOOP {n}: THE NEON DEPTHS': 'LOADING LOOP 3: THE NEON DEPTHS', 'The Neon Depths, flooded. Act {n} of forever.': 'The Neon Depths, flooded. Act 6 of forever.',
+    'Loop {n}: The Neon Depths': 'Loop 6: The Neon Depths' };
+  const depK = () => tbl('DEP_K');
+  const depM = () => { const m = S.meta; if (!m.dep || typeof m.dep !== 'object') m.dep = D().depFix ? D().depFix() : { dives: 0, jukebox: 0, best: 0 }; return m.dep; };
+  function depMetaFix(m, o) { if (m) m.dep = D().depFix ? D().depFix((o && o.dep) || m.dep) : { dives: 0, jukebox: 0, best: 0 }; }
+  // In the Depths: the map is a dive's (never the Back Room).
+  const depIn = (run) => { run = run || S.run; return !!(run && run.map && run.map.biome === 'depths' && !run.map.room); };
+  const depName = () => depK().name || 'The Neon Depths';
+  const depActName = (run) => (depIn(run) ? depName() : actDef((run || S.run).act).name);
+  // endlessNext: the loop's act (3 for a dive, else the classic cycle carries on) and whether it dives.
+  function depLoopAct(E) {
+    const dive = !!(D().depLoop && D().depLoop(E.loop));
+    E.dep = dive;
+    if (dive) { E.dp = Math.max(0, E.dp | 0) + 1; const m = depM(); m.dives++; m.best = Math.max(m.best, E.loop | 0); }
+    return D().depAct ? D().depAct(E.loop) : D().endlessAct ? D().endlessAct(E.loop) : ((E.loop - 1) % 3) + 1;
+  }
+  // The Drowned Jukebox keeps its own trick: a dive's boss borrows none (the rng was still drawn, so every later stream holds).
+  const depMix = (E, mix) => (E && E.dep ? null : mix);
+  // newMap: a dive's map is the Depths' (MAP.generate reads it).
+  const depMapBiome = (run) => (run && run.endless && run.endless.dep && !(run.sec && run.sec.room) ? 'depths' : undefined);
+  // accMusicAct: the Depths play their own dub (AUDIO act 4).
+  const depMusicAct = (run) => (depIn(run) ? 4 : (run.act | 0));
+  // encounterFor: the Depths' pools on a dive's map.
+  const depEncFor = (run) => (depIn(run) && tbl('DEP_ENC').normal ? tbl('DEP_ENC') : tbl('ENCOUNTERS')[run.act]);
+  // The reboot card: a dive's boot log floods.
+  function depBootLines(lp, lines) {
+    if (!lp || !lp.dep) return;
+    lines[2] = [`LOADING LOOP ${lp.loop}: THE NEON DEPTHS`, 'warn'];
+    lines.splice(2, 0, ['DRAIN PUMP ...... FAILED', 'warn']);
+    lines.splice(lines.length - 1, 0, ['WARNING: WATER IN THE CABINET', 'warn']);
+  }
+  const depLoopSub = (lp) => (lp && lp.dep ? `${depName()}, flooded. Act ${3 + lp.loop} of forever.` : `${actDef(lp.act).name}, again. Act ${3 + lp.loop} of forever.`);
+  // Under LOOP N: THE NEON DEPTHS slams in over rising water (the CSS in index.html, #dep-css).
+  function depLoopCard(tube, lp, tSlam) {
+    if (!lp || !lp.dep || !tube) return;
+    const nm = h('div', 'depName', 'THE NEON DEPTHS');
+    try { nm.style.animationDelay = (tSlam + 0.15).toFixed(2) + 's'; } catch (e) { /* stub */ }
+    tube.appendChild(nm);
+    const wv = h('div', 'depWave');
+    for (let i = 0; i < 7; i++) { const b = h('i', null); try { b.style.left = (8 + i * 13) + '%'; b.style.animationDelay = (tSlam + i * 0.23).toFixed(2) + 's'; } catch (e) { /* stub */ } wv.appendChild(b); }
+    tube.appendChild(wv);
+  }
+  // The act intro card on a dive's map: the Depths' name and lines.
+  function depIntro(def) {
+    if (!def || !depIn()) return def;
+    return Object.assign({}, def, { name: depName(), biome: 'depths', lines: ['The machine forgot to drain.', 'Mind the water. Things live in it now.'] });
+  }
+  // endFight: a Depths boss beaten counts for the score and the sticker.
+  function depFightEnd(result) {
+    if (result !== 'win' || !F || !S.run) return;
+    const n = (F.killed || []).filter((id) => { const d = enemyDef(id); return d.dep && d.tier === 'boss'; }).length;
+    if (!n) return;
+    const run = S.run;
+    run.sc = run.sc || {};
+    run.sc.dep = (run.sc.dep | 0) + n;
+    depM().jukebox += n;
+    saveMeta();
+  }
+  // The history record: the dives this run.
+  const depHisDives = (run) => (run && run.endless ? Math.max(0, run.endless.dp | 0) : 0);
+
+  // ---- the fight: the water, the tide, the tricks
+  function depFS() {
+    if (!FS) return null;
+    if (!FS.dep) {
+      const f = depWaterFrac();
+      FS.dep = { flood: null, floodW: null, level: f > 0 ? CAB.h * (1 - f) : CAB.h + 40, levelTo: CAB.h + 40, tideT: 0, tideRef: null, tideDir: 0, tideV: 0,
+        hookW: null, hookRig: null, lureX: null, lureK: 0, shockK: 0, tideK: 0, pinchN: 0, glintT: 0, stings: 0, zaps: 0, log: [] };
+    }
+    return FS.dep;
+  }
+  // High Tide at secs into the player's turn: lo..hi of the bin, a full swell every tide.beats beats of its music.
+  function depTideAt(T, secs) {
+    if (!T) return 0;
+    const per = Math.max(0.5, Math.max(2, T.beats || 8) * 60 / Math.max(30, T.bpm || 88));
+    const u = (Math.max(0, +secs || 0) % per) / per;
+    return (T.lo || 0) + ((T.hi || 0) - (T.lo || 0)) * (0.5 - 0.5 * Math.cos(u * Math.PI * 2));
+  }
+  // The water's mark (a share of the bin's height): the Depths' standing water, the Rising Water mutator's, the tide.
+  function depWaterFrac() {
+    if (!F || !FS) return 0;
+    let f = depIn() ? Math.max(0, +depK().water || 0) : 0;
+    const m = mutF();
+    if (m && m.flood > 0 && (f > 0 || F.tide)) f = Math.max(f, Math.min(ROSK.floodMax, ROSK.flood0 + ROSK.floodStep * Math.max(0, (F.turn | 0) - 1) * m.flood));
+    if (F.tide) f = Math.max(f, depTideAt(F.tide, FS.dep ? FS.dep.tideT : 0));
+    return f;
+  }
+  // rosFloodTick: the cabinet has one water; in the Depths (or under a tide) it is ours.
+  const depOwnsWater = () => !!(FS && ((FS.dep && FS.dep.flood) || depWaterFrac() > 0));
+  function depWaterTick(Q, want, dt) {
+    const R0 = FS.ros;
+    if (want > 0 && R0 && R0.flood) { if (R0.flood.remove) R0.flood.remove(); R0.flood = null; R0.floodW = null; }
+    if (!(want > 0) && !Q.flood) return;
+    if (Q.floodW !== FS.world) {
+      if (Q.flood && Q.flood.remove) Q.flood.remove();
+      Q.flood = X.PHYS && X.PHYS.rosFlood ? X.PHYS.rosFlood(FS.world, { y: Q.level, xMax: binWidth() - 2, g: GRAVITY, rho: ROSK.rho }) : null;
+      Q.floodW = FS.world;
+    }
+    const to = want > 0 ? CAB.h * (1 - want) : CAB.h + 40, k = DEPK.rise * dt, was = Q.level;
+    Q.level = Q.level < to ? Math.min(to, Q.level + k) : Math.max(to, Q.level - k);
+    Q.levelTo = to;
+    Q.tideV = dt > 0 ? (was - Q.level) / dt : 0;   // + rising
+    if (Q.flood) Q.flood.set(Q.level);
+  }
+  // Where the lure hangs: over its Old Boot, else the junk farthest from the chute, else the far wall.
+  function depLureX() {
+    const L = F.depLure;
+    let b = L && L.inst ? bodyOf(L.inst) : null;
+    if (!b) for (const x of FS.items) if ((x.data.inst.junk || x.data.def.rarity === 'junk') && (!b || x.x < b.x)) b = x;
+    return b ? U.clamp(b.x, 30, binWidth() - 30) : 60;
+  }
+  function depLureBody() { const L = F && F.depLure; return L && L.inst ? bodyOf(L.inst) : null; }
+  // Per physics substep: the lure on a falling claw, the crab's drag, the tide's current.
+  function depHook(h, Wd) {
+    if (!FS || !F || Wd !== FS.world) return;
+    const Q = FS.dep;
+    if (!Q) return;
+    const K = FS.rig && FS.rig.ctl;
+    if (F.depLure && K && K.st === 'drop' && Q.lureX != null) {
+      const dx = Q.lureX - K.x;
+      if (Math.abs(dx) > DEPK.lureDead) K.vx += U.clamp(dx * 3, -DEPK.lureDrop, DEPK.lureDrop);
+    }
+    if (Q.pinchN > 0) {
+      for (const b of FS.items) {
+        if (!b.data.inst.depPinch || b.held > 0 || b.x <= DEPK.pinchX) continue;
+        if (b.y + (b.br || 12) < CAB.h - DEPK.pinchFloor) continue;   // it rides the floor
+        b.sl = false; b.slT = 0;
+        b.vx += (-DEPK.pinchV - b.vx) * Math.min(1, 8 * h);
+      }
+    }
+    if (F.tide && Q.flood && Q.tideDir) {
+      for (const b of FS.items) {
+        if (b.held > 0 || (b.density || 1) >= ROSK.rho) continue;
+        const r = b.br || 10;
+        if (b.y + r < Q.level - 4 || b.y - r > Q.level + 30) continue;
+        b.sl = false; b.slT = 0;
+        b.vx += (Q.tideDir * DEPK.undertow - b.vx) * Math.min(1, DEPK.undertowK * h);
+      }
+    }
+  }
+  // Is anything Depths-like going on in this fight?
+  function depLive() {
+    if (FS.dep || depIn() || F.depLure || F.depShock || F.tide) return true;
+    for (const i of F.bin) if (i.depPinch || i.depSting || i.depBite) return true;
+    return false;
+  }
+  function depTick(dt, real) {
+    if (S.screen !== 'fight' || !F || !FS || FS.done || !FS.world || !depLive()) return;
+    const Q = depFS();
+    if (FS.evo) return;
+    if (Q.hookW !== FS.world || Q.hookRig !== FS.rig) { if (Q.hookW) Q.hookW.removeHook(depHook); FS.world.addHook(depHook); Q.hookW = FS.world; Q.hookRig = FS.rig; }
+    if (F.tide !== Q.tideRef) { Q.tideRef = F.tide; Q.tideT = 0; }
+    const mine = F.phase === 'player' && !FS.enemyTurn && !FS.vs && !FS.outro;
+    if (F.tide && mine) Q.tideT += dt;
+    depWaterTick(Q, depWaterFrac(), dt);
+    Q.tideDir = F.tide ? (Q.tideV > 4 ? -1 : Q.tideV < -4 ? 1 : 0) : 0;   // the flood runs toward the far wall, the ebb back to the chute
+    // the lure: its light hangs over the bait and the aim creeps toward it
+    Q.lureX = F.depLure ? depLureX() : null;
+    const rig = FS.rig;
+    if (F.depLure && mine && rig && !rig.auto && !FS.pendingDrop && (rig.phase === 'idle' || rig.phase === 'moving')) {
+      const dx = Q.lureX - rig.targetX;
+      if (Math.abs(dx) > DEPK.lureDead) rig.setTarget(rig.targetX + U.clamp(dx, -DEPK.lurePull * dt, DEPK.lurePull * dt));
+    }
+    // jellies sting the claw that touches them, once a grab each
+    if (FS.grabInFlight && F.phase === 'player') {
+      for (const b of FS.items) {
+        const d = b.data;
+        if (d.def.dep !== 'jelly' || !(b.held > 0) || d.depStungG === FS.grabN) continue;
+        d.depStungG = FS.grabN;
+        Q.stings++;
+        fx().emit('shock', CAB.x + b.x, CAB.y + b.y, { n: 0.8, col: '#ff6bd6' });
+        fx().ring(CAB.x + b.x, CAB.y + b.y, '#ff6bd6', { r0: 6, r1: 44, w: 4, life: 0.3 });
+        FS.claw.bendV += 120; setMood('sad', 0.8);
+        haptic('hurt');
+        snd('depSting');
+        enqueue(X.COMBAT.depSting ? X.COMBAT.depSting(F, d.inst) : [], 0.05);
+        if (!FS) return;
+      }
+    }
+    let pn = 0;
+    for (const i of F.bin) if (i.depPinch) pn++;
+    Q.pinchN = pn;
+    Q.glintT += real;
+    const ease = (v, to, k) => v + (to - v) * Math.min(1, real * k);
+    Q.lureK = ease(Q.lureK, F.depLure ? 1 : 0, 4);
+    Q.shockK = ease(Q.shockK, F.depShock ? 1 : 0, 4);
+    Q.tideK = ease(Q.tideK, F.tide ? 1 : 0, 3);
+  }
+  // onRigEvent 'lift': the cargo lifted from under the waterline is wet; a pinched prize lifted clear is let go.
+  function depRig(ev) {
+    if (ev !== 'lift' || !F || !FS || !FS.rig) return;
+    const Q = FS.dep, cargo = carried();
+    let freed = false;
+    for (const b of cargo) {
+      const d = b.data;
+      if (!d || !d.inst) continue;
+      if (Q && Q.flood && Q.level < CAB.h - 2 && b.y + (b.br || 10) * DEPK.wet > Q.level) d.depWetG = FS.grabN;
+      if (d.inst.depPinch && X.COMBAT.depUnpinch && X.COMBAT.depUnpinch(F, d.inst)) freed = true;
+    }
+    if (freed) enqueue([], 0.05);
+  }
+  // deliver: a wet prize on live water shocks the hand that delivered it.
+  function depDeliver(b) {
+    if (!F || !FS || !b || !b.data || !F.depShock || b.data.depWetG !== FS.grabN) return;
+    const x = CAB.x + b.x, y = CAB.y + b.y;
+    FS.dep && FS.dep.zaps++;
+    fx().emit('shock', x, y, { n: 1.2, col: '#2ee6d6' });
+    fx().text(x - 30, y - 40, 'WET PRIZE!', '#2ee6d6', { size: 14, life: 0.9 });
+    haptic('hurt');
+    enqueue(X.COMBAT.depZap ? X.COMBAT.depZap(F, b.data.inst) : [], 0.05);
+  }
+  // applyEvent 'dep': the tricks arrive in the cabinet.
+  function depEvent(ev) {
+    if (!F || !FS || !ev) return;
+    const Q = depFS();
+    BST();   // the cabinet sign lives on the bestiary's
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    switch (ev.k) {
+      case 'lure':
+        stoArcIn(ev.items || [], m, 'thud');
+        fx().text(270, 430, 'LURED CLAW! It drifts toward the light', '#ffe066');
+        fx().ring(m.x, m.y, '#ffe066', { r0: 8, r1: 90, w: 5, life: 0.45 });
+        snd('depLure');
+        break;
+      case 'lureOff': if (ev.why === 'bait') { fx().text(270, 470, 'LURE LOST: the bait is gone', '#ffe066'); snd('depLure', { pitch: 0.7 }); } break;
+      case 'jellies':
+        stoArcIn(ev.items || [], m, 'depBubble');
+        fx().text(270, 430, 'JELLIES! They sting the claw that touches them', '#ff6bd6');
+        fx().emit('bubble', m.x, m.y, { n: 1, col: '#ff9ad0' });
+        snd('depBubble');
+        break;
+      case 'pinch':
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) fx().ring(CAB.x + b.x, CAB.y + b.y, '#ff6b4a', { r0: 6, r1: 40, w: 4, life: 0.35 }); }
+        fx().text(270, 430, 'PINCHED! Grab them back before your turn ends', '#ff6b4a');
+        fx().shake(3);
+        snd('depPinch');
+        break;
+      case 'unpinch':
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) fx().text(CAB.x + b.x, CAB.y + b.y - 30, 'SNIP! FREE', '#a6ff5e', { size: 13 }); }
+        snd('depPinch', { pitch: 1.4 });
+        break;
+      case 'take': fx().text(m.x, m.y - 34, 'INTO THE SHELL', '#ff6b4a'); snd('depPinch', { pitch: 0.8 }); break;
+      case 'shock':
+        fx().text(270, 430, 'LIVE WATER! A wet prize shocks you', '#2ee6d6');
+        fx().emit('shock', 270, CAB.y + (Q ? Math.min(CAB.h - 10, Q.level) : CAB.h - 40), { n: 1.4, col: '#2ee6d6' });
+        if (!fx().reduced) fx().flash('#2ee6d6', 0.12);
+        snd('depZap');
+        break;
+      case 'zap': snd('depZap', { pitch: 1.2 }); break;
+      case 'sting': break;   // (staged at the touch, the number comes with the hit)
+      case 'decoy':
+        stoArcIn(ev.items || [], m, 'thud');
+        fx().text(270, 430, 'SUNKEN CHESTS! One holds treasure', '#ffc94d');
+        snd('depChest');
+        break;
+      case 'chest':
+        if (ev.real) { fx().emit('coins', PLAYER_FX.x, PLAYER_FX.y, { n: 1 }); snd('coin', { pitch: 1.2 }); }
+        else { fx().emit('blood', PLAYER_FX.x, PLAYER_FX.y, { n: 0.6 }); snd('depChest', { bite: 1 }); haptic('hurt'); }
+        break;
+      default: break;
+    }
+    if (Q) { Q.log.push(ev.k); if (Q.log.length > 60) Q.log.splice(0, Q.log.length - 60); }
+  }
+  // bossEvent 'tide' / 'ebb': the Drowned Jukebox floods the cabinet, then the tide goes out.
+  function depBossEvent(ev) {
+    if (!ev || (ev.k !== 'tide' && ev.k !== 'ebb') || !F || !FS) return false;
+    const Q = depFS();
+    if (ev.k === 'tide') {
+      fx().text(270, 430, 'HIGH TIDE! The water rises and falls with the music', '#ff6bd6', { big: true });
+      fx().shake(6);
+      FS.party = Math.max(FS.party || 0, 0.6); FS.marquee = 'HIGH TIDE!';
+      if (ev.idx != null && ev.idx >= 0 && F.enemies[ev.idx]) anim(ev.idx).spitT = S.t;
+      snd('depTide');
+    } else { fx().text(270, 470, 'THE TIDE GOES OUT', '#8dfff5'); snd('depTide', { pitch: 0.7 }); }
+    if (Q) Q.log.push(ev.k);
+    return true;
+  }
+  // signLabel: High Tide holds the boss sign while it runs.
+  function depSign() { return F && F.tide && F.phase === 'player' ? ['HIGH TIDE', 'tide'] : null; }
+  // bestTick: the trick that is on now, for the cabinet sign.
+  function depSignNow() {
+    if (!F) return null;
+    if (F.depLure) return ['LURED CLAW', DEP_COL.lure];
+    if (F.depShock) return ['LIVE WATER', DEP_COL.shock];
+    let pin = false, jel = false, box = false;
+    for (const i of F.bin) { if (i.depPinch) pin = true; else if (i.id === 'dep_jellyling') jel = true; else if (i.id === 'dep_chest') box = true; }
+    if (pin) return ['PINCHED PRIZES', DEP_COL.pinch];
+    if (box) return ['ONE CHEST IS REAL', DEP_COL.decoy];
+    if (jel) return ['STINGING JELLIES', DEP_COL.jellies];
+    return null;
+  }
+  // ---- the drawing
+  const DEP_CST = { t: 0, live: 0, tide: 0, notes: 0, rise: 0, level: 0, reduced: false };
+  // drawFight: the underwater arcade instead of the act's backdrop (true when it drew).
+  function depBg(ctx, t) {
+    const R = X.RENDER;
+    if (!depIn() || !R || !R.dep || !R.dep.arena) return false;
+    const Q = FS && FS.dep;
+    R.dep.arena(ctx, W, H, t, { reduced: !!fx().reduced, tide: Q ? Q.tideK : 0, live: Q ? Q.shockK : 0 });
+    return true;
+  }
+  // Inside the cabinet's clip: the tint behind the pile ('back'); the water, the caustics and every trick's look over it ('front').
+  function depCabDraw(ctx, t, layer) {
+    const R = X.RENDER, RD = R && R.dep;
+    if (!RD || !F || !FS) return;
+    const Q = FS.dep, bw = binWidth(), deep = depIn();
+    if (layer === 'back') { if (deep && RD.cabBack) RD.cabBack(ctx, CAB.x, CAB.y, bw, CAB.h, t); return; }
+    if (Q && Q.flood && Q.level < CAB.h - 1 && RD.water) {
+      DEP_CST.t = t; DEP_CST.live = Q.shockK; DEP_CST.tide = Q.tideK; DEP_CST.rise = U.clamp(Q.tideV / 90, -1, 1); DEP_CST.level = Q.level; DEP_CST.reduced = !!fx().reduced;
+      RD.water(ctx, CAB.x, CAB.x + bw, CAB.y + Q.level, CAB.y + CAB.h, t, DEP_CST);
+    }
+    if (deep && RD.caustics) RD.caustics(ctx, CAB.x, CAB.y, bw, CAB.h, t, Q ? Q.level : CAB.h);
+    for (const b of FS.items) {
+      const inst = b.data.inst, x = CAB.x + b.x, y = CAB.y + b.y, r = b.br || 14;
+      if (inst.depPinch && RD.pincer) RD.pincer(ctx, x, y, r, t, b.held > 0 ? 0.4 : 1);
+      else if (inst.id === 'dep_jellyling' && RD.jellyGlow) RD.jellyGlow(ctx, x, y, r, t, b.held > 0 ? 1 : 0);
+      else if (inst.id === 'dep_chest' && RD.chestTell) {
+        const ph = ((hashOf(inst) % 100) / 100) * DEPK.glint, u = (Q ? Q.glintT : t) + ph, k = (u % DEPK.glint) < DEPK.glintOn ? 1 : 0;
+        RD.chestTell(ctx, x, y, r, t + ph, !!inst.depReal, k);
+      }
+    }
+    if (Q && Q.lureK > 0.02 && Q.lureX != null && RD.lure) {
+      const lb = depLureBody(), by = lb ? lb.y - (lb.br || 14) - 34 : CAB.h - 90;
+      RD.lure(ctx, CAB.x + Q.lureX, CAB.y + 4, CAB.y + Math.max(70, by), t, Q.lureK);
+    }
+  }
+  // drawMap: the Depths' deep water under the hexes, then the shimmer, the light and the bubbles over them.
+  function depMapBg(ctx, t) {
+    const R = X.RENDER;
+    if (depIn() && R && R.dep && R.dep.mapBg) R.dep.mapBg(ctx, W, H, t);
+  }
+  function depMapDraw(ctx, t) {
+    const R = X.RENDER;
+    if (!depIn() || !R || !R.dep || !R.dep.mapFx || S.screen !== 'map') return;
+    ctx.save();
+    try { ctx.beginPath(); ctx.rect(MAP_AREA.x, MAP_AREA.y, MAP_AREA.w, MAP_AREA.h); ctx.clip(); R.dep.mapFx(ctx, MAP_AREA.x, MAP_AREA.y, MAP_AREA.w, MAP_AREA.h, t, !!fx().reduced); } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  function DEP_API() {
+    return {
+      K: DEPK, SIGN: DEP_SIGN, COL: DEP_COL, WORDS: DEP_WORDS, PATTERNS: DEP_PATTERNS,
+      in: (run) => depIn(run), name: depName, actName: (run) => depActName(run), meta: depM, metaFix: depMetaFix, loopAct: depLoopAct, mapBiome: depMapBiome,
+      bootLines: depBootLines, loopSub: depLoopSub, intro: depIntro, musicAct: (run) => depMusicAct(run || S.run), encFor: (run) => depEncFor(run || S.run),
+      tideAt: depTideAt, water: () => (F && FS ? depWaterFrac() : 0), level: () => (FS && FS.dep ? FS.dep.level : null), owns: () => depOwnsWater(),
+      lureX: () => (F && FS && F.depLure ? depLureX() : null), fs: () => (FS ? FS.dep || null : null), hook: depHook, tick: (dt) => depTick(dt || 1 / 60, dt || 1 / 60),
+      event: (ev) => { if (FS && ev) depEvent(ev); }, sign: () => depSignNow(), rig: depRig, deliver: depDeliver, hisDives: depHisDives,
+    };
+  }
+  // ================================================================ /DEP
+
+  // ================================================================ CAB (round 16): the cabinet is alive
+  /* DESIGN.md "The cabinet is alive (round 16)". Five things that happen in
+     and around the claw machine itself, so a single grab is more varied:
+     - Cabinet events: from turn CABK.evFirst some player turns open with a
+       sign that drops into the glass, spins like a slot reel and lands on
+       POWER SURGE (the claw grips harder and runs faster this turn), COIN
+       SHOWER (coins rain into the bin: 1 gold for each one delivered, the
+       rest sink away when the turn ends) or CAPSULE DROP (a prize capsule in
+       the pile: deliver it and it waits on the reward screen). Rolled from
+       the fight's seed and the turn (never FS.rng), so a reload replays them.
+     - The Jackpot Lamp: a dome and a tube on the cabinet's top frame. Every
+       delivered prize sends a spark into it (a double, a jackpot, a rare
+       prize, a PERFECT grab and a SO CLOSE add more); full, it goes FEVER:
+       the beacon spins, the dome bursts and coins and a capsule rain into
+       the bin. The level is the run's (run.cabLamp), written back when a
+       fight ends, so a reload mid fight starts it where the fight did.
+     - PERFECT grab: the claw lifts with its palm right over a prize's middle:
+       a slow motion beat, a flash, a chime, and the grip holds harder for
+       that lift.
+     - The straining lift: the heavier the catch, the more the claw shakes,
+       creaks, sweats and grits its eyes (HEAVY! over a big load).
+     - Prize faces: rare and legendary prizes (the Golden Prize and the
+       cabinet's capsules too) have eyes: they watch the claw, look nervous as
+       it comes down, gasp and squeak when caught, grin on the ride, go dizzy
+       when dropped and cheer when delivered.
+     Nothing here touches a number the incoming-damage preview reads (coins
+     and capsules pay gold and loot, never damage). The physical parts (the
+     events, the lamp, the rain and the PERFECT grip) are off in Duo and
+     headless unless CABK.force; the faces and the strain are looks only.
+     Fight-only state lives in FS.cab. Reached through one-line hooks in
+     startFight, buildRig, endTurn, finishEnemyTurn, onRigEvent, deliver,
+     soClose, grabFinished, endFight, lootReward, update and drawFight. */
+  const CABK = {
+    force: false,                 // the suites switch the physical parts on by hand
+    evFirst: 2, evP: 0.38,        // from this turn, the chance a player turn opens with an event
+    evW: { surge: 0.36, coins: 0.4, capsule: 0.24 },
+    delay: 0.45, roll: 0.95, hold: 1.7, out: 0.35,   // the sign: after the turn banner, spins, holds, leaves (real s)
+    surgeGrip: 0.3, surgeSpeed: 1.35,
+    coinN: 6, coinR: 9, coinGold: 1, coinGap: 0.07,
+    capR: 12, capMax: 2, capTier: { c: 0.55, u: 0.3, r: 0.12, l: 0.03 },
+    lampMax: 12, lamp: { deliver: 1, double: 1, jackpot: 2, rare: 1, close: 1, perfect: 1 }, lampFly: 0.5,
+    rainCoins: 5, rainCaps: 0, feverBurst: 0.75, feverEnd: 2.2,   // (round 19 lamp economy: a fever rains coins, no capsule; DESIGN.md "Lamp economy check (round 19)")
+    perfX: 5, perfGrip: 0.25, perfTypes: { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1 },
+    strainM: [12, 40], heavyK: 0.6,
+    faceRar: { r: 1, l: 1 }, faceLook: 170,
+  };
+  const CAB_LAMP = { x: 454, y: 395, x1: 352 };   // the dome and the tube on the top frame, right of the marquee (stage px; the pet's tag sits on the left, the turret in the corner)
+  const CAB_COL = { surge: '#2ee6d6', coins: '#ffc94d', capsule: '#ff2e88', fever: '#ffe066' };
+  const CAB_EV = {
+    surge: { name: 'POWER SURGE!', text: 'The claw grips harder and moves faster this turn.', marquee: 'POWER SURGE!' },
+    coins: { name: 'COIN SHOWER!', text: 'Coins rain in: 1 gold for each one you deliver.', marquee: 'COIN SHOWER!' },
+    capsule: { name: 'CAPSULE DROP!', text: 'Deliver the capsule to win it.', marquee: 'CAPSULE DROP!' },
+  };
+  const CAB_IDS = ['surge', 'coins', 'capsule'];
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const CAB_WORDS = ['POWER SURGE!', 'COIN SHOWER!', 'CAPSULE DROP!', 'The claw grips harder and moves faster this turn.',
+    'Coins rain in: 1 gold for each one you deliver.', 'Deliver the capsule to win it.', 'LAMP FEVER!', 'Prizes rain into the cabinet!',
+    'PERFECT!', 'HEAVY!', 'WHEE!', 'EEK!', 'CAPSULE WON!', 'LAMP +1', 'SURGE', 'FEVER', 'CABINET EVENT', 'Cabinet prize',
+    'The coins sink away.', 'The Jackpot Lamp fills with every prize. Fill it up for a FEVER!', 'holding a cabinet prize'];
+  const CAB_PATTERNS = { 'PERFECT x{n}!': 'PERFECT x3!' };
+  CAP_SRC.cabinet = 'Cabinet prize';   // the reward screen's capsule slot says where it came from
+  const cabOn = () => !!(F && FS && !S.duo && (!S.headless || CABK.force));
+  // The profile's record (meta.cab): {tip: the lamp's tip was shown, fevers, perfects, events}. Junk is repaired.
+  function cabM() {
+    const m = S.meta;
+    if (!m.cab || typeof m.cab !== 'object') m.cab = {};
+    for (const k of ['tip', 'fevers', 'perfects', 'events']) m.cab[k] = Math.max(0, Math.floor(+m.cab[k] || 0));
+    return m.cab;
+  }
+  function cabMetaFix(m, o) { if (m && o && o.cab && typeof o.cab === 'object') m.cab = Object.assign({}, o.cab); }
+  const cabLampOf = () => U.clamp(Math.floor(+((S.run && S.run.cabLamp) || 0)) || 0, 0, CABK.lampMax);
+  function cabFS() {
+    if (!FS) return null;
+    if (!FS.cab) {
+      const lamp = cabLampOf();
+      FS.cab = {
+        ev: null, evTurn: -9, surge: false, perf: false, perfN: 0, perfG: -9, gripOn: false,
+        bodies: [], spawnQ: [], spawnT: 0, won: [], caps: 0, rng: U.rng((((FS.seed >>> 0) ^ 0xcab160) >>> 0) || 7),
+        lamp, lampShow: lamp, lampQ: [], lampPop: 0, lampUsed: false, fever: null, feverN: 0,
+        strain: 0, heavyG: -9, creakT: 0, sweatT: 0, squeakT: -9, coinSnd: 0, coinSnd2: -9,
+      };
+    }
+    return FS.cab;
+  }
+  // startFight: the lamp comes in from the run; a lamp left full goes FEVER after the bell.
+  function cabFightStart() {
+    const C = cabFS();
+    if (!C || !cabOn()) return;
+    if (C.lamp >= CABK.lampMax) { C.fever = { t: -1.6, burst: false }; }
+  }
+  // A player turn starts (finishEnemyTurn): maybe a cabinet event.
+  function cabTurn() {
+    const C = cabFS();
+    if (!C || !cabOn() || FS.done || F.phase !== 'player') return;
+    const turn = (FS.turnsTaken | 0) + 1;
+    if (turn < (techMods().first ? 1 : CABK.evFirst) || C.evTurn === turn) return;   // (TECH round 17: from turn 1)
+    C.evTurn = turn;
+    const r = U.rng((((FS.seed >>> 0) ^ 0xcab16e ^ Math.imul(turn, 0x9e3779b1)) >>> 0) || 1);
+    if (r() >= CABK.evP + techMods().evP) return;   // (TECH round 17: Joy Stick, the Service Key, Double Feature, the Motherboard)
+    let u = r() * (CABK.evW.surge + CABK.evW.coins + CABK.evW.capsule), id = 'capsule';
+    for (const k of CAB_IDS) { if (u < CABK.evW[k]) { id = k; break; } u -= CABK.evW[k]; }
+    if (id === 'capsule' && !cabCapOk()) id = 'coins';
+    cabEvStart(id, r);
+  }
+  function cabEvStart(id, r) {
+    const C = cabFS();
+    if (!C || !CAB_EV[id]) return null;
+    r = r || C.rng;
+    C.ev = { id, t: -CABK.delay, landed: false, tickT: 0, tick: 0, seed: r(), tier: cabTier(r()), xs: [] };
+    for (let i = 0; i < CABK.coinN + 1; i++) C.ev.xs.push(r());
+    return C.ev;
+  }
+  function cabTier(u) {
+    const T = CABK.capTier;
+    for (const k of ['l', 'r', 'u']) { if (u < T[k]) return k; u -= T[k]; }
+    return 'c';
+  }
+  // A cabinet capsule may drop: at most CABK.capMax a fight, never where the reward screen would not show it.
+  const cabCapOk = () => !!(FS && FS.cab && FS.cab.caps < CABK.capMax && !(S.run && rushOf(S.run)) && !(F && F.enemies.some((e) => e && e.def && e.def.secret)));
+  // The sign lands: the event happens.
+  function cabEvLand() {
+    const C = cabFS(), E = C && C.ev;
+    if (!E || E.landed) return;
+    if (E.id === 'capsule' && !cabCapOk()) E.id = 'coins';   // the fight's capsules ran out while it spun: the reel lands on coins
+    E.landed = true;
+    cabM().events++;
+    const bw = binW(), sx = CAB.x + bw / 2, sy = CAB.y + 150;
+    snd('cabLand'); haptic('tap');
+    fx().ring(sx, sy, CAB_COL[E.id], { r0: 20, r1: 170, w: 6, life: 0.4 });
+    fx().shake(3);
+    FS.party = Math.max(FS.party, 0.9); FS.marquee = CAB_EV[E.id].marquee;
+    if (E.id === 'surge') {
+      C.surge = true;
+      cabGripSync(); cabSpeedSync();
+      for (let i = 0; i < 6; i++) fx().emit('shock', CAB.x + 30 + i * (bw - 60) / 5, CAB.y + 26, { n: 0.35 });
+      if (!fx().reduced) fx().flash('#2ee6d6', 0.16);
+      snd('cabSurge');
+      setMood('wow', 1.2);
+    } else if (E.id === 'coins') {
+      for (let i = 0; i < CABK.coinN; i++) C.spawnQ.push({ kind: 'coin', x: 30 + E.xs[i] * Math.max(20, bw - 60), y: 14 + (i % 3) * 10 });
+      C.spawnT = 0;
+      snd('cabRain');
+    } else if (E.id === 'capsule') {
+      if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: E.tier, x: 50 + E.xs[CABK.coinN] * Math.max(20, bw - 100), y: 16 }); C.spawnT = 0; }
+      snd('capDrop');
+    }
+    techEvLand(E);   // TECH (round 17): the relics hear it, the Coin Hopper's coins, Double Feature's second reel
+    FS.dirty = true;
+  }
+  // endTurn: the surge runs out, the coins left in the bin sink away, a sign still spinning is put away.
+  function cabTurnEnd() {
+    const C = FS && FS.cab;
+    if (!C) return;
+    C.ev = null;   // the sign goes with the turn (a spinning one never lands)
+    if (C.surge) { C.surge = false; cabGripSync(); cabSpeedSync(); }
+    let n = 0;
+    for (let i = C.bodies.length - 1; i >= 0; i--) {
+      const b = C.bodies[i];
+      if (b.data.cab !== 'coin') continue;
+      fx().emit('glint', CAB.x + b.x, CAB.y + b.y, { col: '#ffe066' });
+      cabRemove(b); n++;
+    }
+    C.spawnQ = C.spawnQ.filter((q) => q.kind !== 'coin');
+    if (n) { fx().text(CAB.x + binW() / 2, CAB.y + CAB.h - 60, 'The coins sink away.', '#ffe066', { size: 14, life: 1 }); snd('tinkle', { vel: 0.5, pitch: 1.4 }); }
+  }
+  // The claw's grip and speed with the cabinet's bonuses (the surge, a PERFECT lift) on top.
+  function cabGripAdd() {
+    const C = FS && FS.cab;
+    if (!C || !cabOn()) return 0;
+    return (C.surge ? CABK.surgeGrip : 0) + (C.perf ? CABK.perfGrip : 0);
+  }
+  const cabSpeedK = () => (FS && FS.cab && FS.cab.surge && cabOn() ? CABK.surgeSpeed : 1);
+  function cabGripSync() {
+    const C = FS && FS.cab, rig = FS && FS.rig;
+    if (!C || !rig || !rig.setConfig) return;
+    const add = cabGripAdd();
+    if (!add && !C.gripOn) return;
+    C.gripOn = add > 0;
+    rig.setConfig({ grip: clawFor().grip + (FS.luckyOn ? MAT.luckyGrip : 0) + (FS.legGold ? LEGG.grip : 0) + add });
+  }
+  function cabSpeedSync() {
+    const rig = FS && FS.rig;
+    if (!rig || !rig.setConfig || !rig.cfg || (F.ice && F.ice.part === 'rail')) return;
+    const want = clawFor().speed * accClawK() * cabSpeedK();
+    if (Math.abs((rig.cfg.speed || 0) - want) > 1e-6) rig.setConfig({ speed: want });
+  }
+
+  // ---- the cabinet's own prizes: coins and capsules (physical, never in F.bin)
+  function cabSpawn(q) {
+    const C = cabFS();
+    if (!C || !FS.world || !X.PHYS) return null;
+    const cap = q.kind === 'cap', r = cap ? CABK.capR : CABK.coinR;
+    // never into the open claw: a prize dropped in its column moves over to the roomier side
+    let x = U.clamp(q.x, r + 8, binW() - r - 8);
+    const rig = FS.rig, reach = 40 * (clawFor().width || 1) + 24 + r;
+    if (rig && Math.abs(x - rig.x) < reach) {
+      const lo = rig.x - reach, hi = rig.x + reach, bw = binW() - r - 8;
+      x = lo > r + 8 && (x < rig.x || hi > bw) ? lo - (reach - (rig.x - x)) * 0.4 : hi + (reach - (x - rig.x)) * 0.4;
+    }
+    x = U.clamp(x, r + 8, binW() - r - 8);
+    const b = X.PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r }, x, y: q.y, angle: 0,
+      density: cap ? 0.7 : 1.5, friction: cap ? 0.45 : 0.35, restitution: cap ? 0.38 : 0.25, group: 'prize',
+      data: { cab: cap ? 'cap' : 'coin', tier: q.tier || 'c', seed: (C.bodies.length * 1.37 + q.x * 0.013) % 7, born: S.t, pvy: 0 } });
+    const r2 = C.rng;
+    b.vx = (r2() - 0.5) * 80; b.vy = 60 + r2() * 60; b.av = (r2() - 0.5) * 8;
+    FS.world.add(b);
+    C.bodies.push(b);
+    const sx = CAB.x + b.x, sy = CAB.y + b.y;
+    if (cap) {
+      fx().ring(sx, sy, (X.RENDER && X.RENDER.CAP_COL && X.RENDER.CAP_COL[q.tier]) || '#ff2e88', { r0: 6, r1: 60, w: 5 });
+      fx().emit('confetti', sx, sy, { n: 0.35, power: 0.6 });
+      fx().text(sx, sy + 40, 'CAPSULE DROP!', '#ff9ad0', { size: 16, life: 1 });
+    } else fx().emit('glint', sx, sy, { col: '#ffe066' });
+    return b;
+  }
+  function cabRemove(b) {
+    const C = FS && FS.cab;
+    if (!C || !b) return;
+    const i = C.bodies.indexOf(b);
+    if (i >= 0) C.bodies.splice(i, 1);
+    if (FS.world && b.world === FS.world) FS.world.remove(b);
+  }
+  // A coin or capsule falls into the chute: it pays.
+  function cabCollect(b) {
+    const C = cabFS(), d = b.data, x = CAB.x + b.x, y = CAB.y + Math.min(b.y, CAB.h - 30);
+    cabRemove(b);
+    if (d.cab === 'coin') {
+      if (F.phase !== 'player' || FS.done || !X.COMBAT.gainGold) return;
+      X.COMBAT.gainGold(F, CABK.coinGold + techMods().coinGold);   // (TECH round 17: the Coin Hopper)
+      enqueue([], PLAY_BEAT);
+      const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+      fx().fly(x, y, gp.x, gp.y, { kind: 'coin', dur: 0.55, arc: 140, size: 7, cb: () => { const g = $('goldTxt'); replay(g && g.parentNode, 'bump'); } });
+      fx().emit('coins', x - 10, y - 10, { n: 0.3, power: 0.7, dir: -Math.PI / 2 - 0.3 });
+      snd('coin', { pitch: 1.1 + (C.coinSnd++ % 5) * 0.06 });
+      return;
+    }
+    C.won.push(d.tier || 'c');
+    const col = (X.RENDER && X.RENDER.CAP_COL && X.RENDER.CAP_COL[d.tier]) || '#ff2e88';
+    fx().text(CAB.x + CAB.w * 0.45, CAB.y + CAB.h * 0.36, 'CAPSULE WON!', col, { size: 24, life: 1.5, dy: -60 });
+    fx().emit('confetti', x - 20, y - 20, { n: 0.8, power: 0.9, dir: -Math.PI / 2 - 0.4 });
+    fx().ring(x, y, col, { r0: 10, r1: 100, w: 7, life: 0.5 });
+    if (!fx().reduced) fx().flash(col, 0.18);
+    snd('capDrop'); snd('fanfare', { pitch: 1.12 });
+    FS.party = Math.max(FS.party, 1.2); FS.marquee = 'CAPSULE WON!';
+    setMood('wow', 1.4);
+    haptic('capBurst');
+  }
+  // lootReward: the capsules won out of the cabinet wait on the reward screen with the fight's own.
+  function cabRewardCaps(rw) {
+    const C = FS && FS.cab;
+    if (!C || !C.won.length || !rw || !Array.isArray(rw.caps)) return;
+    for (const tier of C.won) rw.caps.push(makeCapsule('cabinet', { tier }));
+    C.won = [];
+  }
+  // endFight: the lamp goes back to the run.
+  function cabFightEnd(result) {
+    const C = FS && FS.cab;
+    if (!C || !C.lampUsed || !S.run) return;
+    S.run.cabLamp = U.clamp(C.lamp | 0, 0, CABK.lampMax);
+  }
+
+  // ---- the Jackpot Lamp
+  // n points into the lamp; a spark flies from (x, y) (stage) and lights it when it lands.
+  function cabLampAdd(n, x, y) {
+    const C = cabFS();
+    if (!C || !cabOn() || !(n > 0) || FS.done) return 0;
+    C.lampUsed = true;
+    C.lamp += n;
+    const sx = x == null ? CAB.x + CAB.w - 40 : x, sy = y == null ? CAB.y + CAB.h - 40 : y;
+    C.lampQ.push({ at: S.t + CABK.lampFly, n });
+    fx().fly(sx, sy, CAB_LAMP.x, CAB_LAMP.y, { kind: 'star', col: '#ffe066', dur: CABK.lampFly, arc: 90, size: 6 });
+    if (!cabM().tip) { cabM().tip = 1; saveMeta(); toast('The Jackpot Lamp fills with every prize. Fill it up for a FEVER!', 3); }
+    if (C.lamp >= CABK.lampMax && !C.fever) { C.fever = { t: -CABK.lampFly - 0.1, burst: false }; }
+    return n;
+  }
+  // The lamp goes FEVER: the beacon spins, the dome bursts, prizes rain in.
+  function cabFeverTick(real) {
+    const C = FS.cab, Fv = C.fever;
+    if (!Fv) return;
+    const t0 = Fv.t;
+    Fv.t += real;
+    if (t0 < 0 && Fv.t >= 0) {
+      snd('cabFever');
+      fx().text(W / 2, CAB.y + 120, 'LAMP FEVER!', '#ffe066', { size: 30, life: 1.8, dy: -40 });
+      FS.party = 2.2; FS.marquee = 'LAMP FEVER!';
+      C.feverN++; cabM().fevers++;
+      techFever(C.feverN);   // TECH (round 17): the relics hear it (held for your turn), Joy Stick's unlock
+    }
+    if (!Fv.burst && Fv.t >= CABK.feverBurst) {
+      Fv.burst = true;
+      C.lamp = U.clamp(C.lamp - CABK.lampMax, 0, CABK.lampMax - 1); C.lampShow = qa17LampShown(C); C.lampPop = 1; C.lampUsed = true;   // one fever at a time: an overflow carries, never a second burst (QA17: the sparks still flying light their own cells)
+      fx().emit('confetti', CAB_LAMP.x, CAB_LAMP.y, { n: 1.2, power: 1.1 });
+      fx().emit('coins', CAB_LAMP.x, CAB_LAMP.y, { n: 1, power: 1, dir: -Math.PI / 2 - 0.4 });
+      fx().ring(CAB_LAMP.x, CAB_LAMP.y, '#ffe066', { r0: 10, r1: 220, w: 9, life: 0.6 });
+      if (!fx().reduced) fx().flash('#ffe066', 0.3);
+      fx().shake(8);
+      fx().text(W / 2, CAB.y + 160, 'Prizes rain into the cabinet!', '#fff6c0', { size: 16, life: 1.6 });
+      haptic('jackpot');
+      const bw = binW(), r = C.rng;
+      let coins = CABK.rainCoins + techMods().coins;   // (TECH round 17: the Coin Hopper)
+      for (let i = 0; i < CABK.rainCaps; i++) {
+        if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: cabTier(r()), x: 40 + r() * Math.max(20, bw - 80), y: 14 }); } else coins += 2;
+      }
+      for (let i = 0; i < coins; i++) C.spawnQ.splice(Math.min(C.spawnQ.length, i + 1), 0, { kind: 'coin', x: 30 + r() * Math.max(20, bw - 60), y: 12 + (i % 3) * 10 });
+      C.spawnT = 0;
+    }
+    if (Fv.t >= CABK.feverEnd) C.fever = null;
+  }
+
+  // ---- PERFECT, the strain and the faces (onRigEvent)
+  function cabRig(ev) {
+    const C = cabFS(), rig = FS && FS.rig;
+    if (!C || !rig) return;
+    if (ev === 'drop') { C.perf = false; C.aimB = cabUnderPalm(rig.x); cabGripSync(); return; }
+    if (ev === 'lift') {
+      const cargo = carried();
+      if (!cargo.length) return;
+      let mass = 0;
+      for (const b of cargo) {
+        mass += b.m || 0;
+        const fc = cabFace(b);
+        if (fc) { fc.mood = 'gasp'; fc.mt = 0.55; }
+      }
+      if (cargo.some((b) => cabFace(b))) cabSqueak(CAB.x + rig.x, CAB.y + rig.y + 40);
+      const k = cabStrainK(mass);
+      if (k >= CABK.heavyK && C.heavyG !== FS.grabN) {
+        C.heavyG = FS.grabN;
+        fx().text(CAB.x + rig.x + 58, CAB.y + rig.y - 10, 'HEAVY!', '#ff8a2b', { size: 18, life: 1, dy: -30 });
+        snd('cabCreak', { vel: 1 }); fx().shake(2 + k * 3); fx().kick(0, 3);
+      }
+      // PERFECT: the drop came down dead centre on the prize under the palm, and the claw came up with it
+      const A = C.aimB;
+      C.aimB = null;
+      if (cabOn() && A && cargo.indexOf(A.b) >= 0 && CABK.perfTypes[rig.type || 'classic']) cabPerfect(A.b);
+      return;
+    }
+    if (ev === 'slip') {
+      const now = carried();
+      for (const b of FS.cargo || []) if (now.indexOf(b) < 0) { const fc = cabFace(b); if (fc) { fc.mood = 'dizzy'; fc.mt = 1.3; } }
+    }
+  }
+  function cabPerfect(b) {
+    const C = FS.cab, rig = FS.rig;
+    C.perf = true;
+    C.perfN = C.perfG === FS.grabN - 1 ? C.perfN + 1 : 1;
+    C.perfG = FS.grabN;
+    cabM().perfects++;
+    cabGripSync();
+    const x = CAB.x + rig.x, y = CAB.y + b.y;
+    slowmo(0.3, 0.4);
+    if (!fx().reduced) fx().flash('#ffffff', 0.22);
+    fx().ring(x, y, '#ffe066', { r0: 6, r1: 70, w: 6, life: 0.35 });
+    fx().ring(x, y, '#ffffff', { r0: 4, r1: 40, w: 3, life: 0.25, delay: 0.06 });
+    fx().burst(x, y, '#ffe066', fx().reduced ? 4 : 14, { kind: 'star', speed: 200, size: 4.5, life: 0.55, gravity: 120 });
+    fx().text(x, y - 46, C.perfN > 1 ? `PERFECT x${C.perfN}!` : 'PERFECT!', '#ffe066', { size: 22 + Math.min(3, C.perfN) * 2, life: 1.1, dy: -40 });
+    snd('cabPerfect', { n: C.perfN });
+    haptic('clamp');
+    FS.party = Math.max(FS.party, 0.5); FS.marquee = 'PERFECT!';
+    cabLampAdd(CABK.lamp.perfect, x, y);
+    techPerfect(C.perfN, x, y);   // TECH (round 17): the relics hear it, Joy Stick's extra lamp cell
+  }
+  /* The prize the palm comes down on (the topmost one under the hub at the
+     drop), when the aim is dead centre on it (within CABK.perfX x the claw's
+     width): {b, dx}, else null. */
+  function cabUnderPalm(x) {
+    let top = null;
+    const look = (b) => { if (b.held > 0 || b.x > binW()) return; const dx = Math.abs(b.x - x); if (dx < Math.max(6 + techMods().perfX, (b.br || 12) * 0.8) && (!top || b.y - (b.br || 12) < top.y - (top.br || 12))) top = b; };
+    for (const b of FS.items) look(b);
+    if (FS.cab) for (const b of FS.cab.bodies) look(b);
+    if (!top) return null;
+    const dx = Math.abs(top.x - x), k = (clawFor().width || 1) * (FS.rig && FS.rig.type === 'scoop' ? 1.4 : 1);
+    return dx <= (CABK.perfX + techMods().perfX) * k ? { b: top, dx } : null;   // (TECH round 17: the Laser Sight)
+  }
+  // The strain of a load of this mass, 0..1.
+  const cabStrainK = (m) => U.clamp(((+m || 0) - CABK.strainM[0]) / (CABK.strainM[1] - CABK.strainM[0]), 0, 1);
+  // A body with a face (a rare or legendary prize, the Golden Prize, a cabinet capsule): its face state, else null.
+  function cabFace(b) {
+    const d = b && b.data;
+    if (!d) return null;
+    if (d.fc) return d.fc;
+    const faced = d.cab === 'cap' || (d.inst && d.def && (CABK.faceRar[d.def.rarity] || (FS && FS.golden && FS.golden.uid === d.inst.uid)) && !d.inst.frozen);
+    if (!faced) return null;
+    d.fc = { mood: '', mt: 0, lx: 0, ly: -0.3, blink: 0, bt: 1.5 + ((d.seed || 0) % 1.7) };
+    return d.fc;
+  }
+  function cabSqueak(x, y) {
+    const C = FS.cab;
+    if (S.t - C.squeakT < 0.4) return;
+    C.squeakT = S.t;
+    snd('cabSqueak', { pitch: 0.9 + (FS.grabN % 4) * 0.08 });
+    fx().text(x + 40, y, 'EEK!', '#ff9ad0', { size: 14, life: 0.7, dy: -24 });
+  }
+  // deliver: the lamp's sparks (and a cheer from a prize with a face).
+  function cabDeliver(inst, pos) {
+    if (!FS || !inst) return;
+    const def = itemDef(inst.id), L = CABK.lamp;
+    const faced = CABK.faceRar[def.rarity] && !inst.frozen;
+    if (faced) fx().text(pos.x - 40, pos.y - 30, 'WHEE!', '#ff9ad0', { size: 15, life: 0.8, dy: -30 });
+    let n = L.deliver + (FS.delivered === 2 ? L.double : 0) + (FS.delivered === 3 ? L.jackpot : 0) + (CABK.faceRar[def.rarity] ? L.rare : 0);
+    cabLampAdd(n, pos.x, pos.y);
+  }
+  // soClose: the consolation is a spark for the lamp.
+  function cabClose(x, y) {
+    if (cabLampAdd(CABK.lamp.close, x, y)) fx().text(x, y + 2, 'LAMP +1', '#ffe066', { size: 13, life: 1, dy: -26 });
+  }
+  // grabFinished: the PERFECT grip lets go (the Lucky Claw set the grip just before, the surge stays on).
+  function cabGrabDone() {
+    const C = FS && FS.cab;
+    if (!C) return;
+    C.perf = false;
+    cabGripSync();
+    if (C.surge) cabSpeedSync();
+  }
+
+  // ---- per frame (update: real time for the sign, the fever and the looks; the physics dt for spawns)
+  function cabTick(dt, real) {
+    const C = FS && FS.cab;
+    if (!C || S.screen !== 'fight') return;
+    const E = C.ev;
+    if (E) {
+      const t0 = E.t;
+      E.t += real;
+      if (E.t >= 0 && !E.landed) {
+        if (t0 < 0) snd('cabRoll', { pitch: 1 });
+        E.tickT -= real;
+        if (E.tickT <= 0) { E.tick++; E.tickT = 0.06 + 0.16 * U.clamp(E.t / CABK.roll, 0, 1); snd('cabRoll', { pitch: 0.9 + E.tick * 0.05 }); }
+        if (E.t >= CABK.roll) cabEvLand();
+      }
+      if (E.t >= CABK.roll + CABK.hold + CABK.out) C.ev = null;
+    }
+    if (C.fever && !FS.done) cabFeverTick(real);
+    // the lamp lights as its sparks land
+    for (let i = C.lampQ.length - 1; i >= 0; i--) {
+      const q = C.lampQ[i];
+      if (S.t < q.at) continue;
+      C.lampQ.splice(i, 1);
+      if (!C.fever || C.fever.burst) { C.lampShow = Math.min(CABK.lampMax, C.lampShow + q.n); C.lampPop = 1; snd('cabLamp', { pitch: 0.8 + C.lampShow * 0.06 }); }
+    }
+    if (C.lampPop > 0) C.lampPop = Math.max(0, C.lampPop - real * 3);
+    // spawns ride the physics clock
+    if (C.spawnQ.length) {
+      C.spawnT -= dt;
+      while (C.spawnQ.length && C.spawnT <= 0) { cabSpawn(C.spawnQ.shift()); C.spawnT += CABK.coinGap; }
+    }
+    // the cabinet's prizes: a clink on landing, paid in the chute, gone with a rebuilt world
+    const bnd = FS.cabinet && FS.cabinet.bounds;
+    for (let i = C.bodies.length - 1; i >= 0; i--) {
+      const b = C.bodies[i];
+      if (!FS.world || b.world !== FS.world) { C.bodies.splice(i, 1); continue; }
+      const pv = b.data.pvy || 0;
+      if (pv > 240 && b.vy < pv * 0.35 && S.t - C.coinSnd2 > 0.06) { C.coinSnd2 = S.t; snd(b.data.cab === 'coin' ? 'tinkle' : 'boing', { vel: U.clamp(pv / 900, 0.2, 0.8), pitch: b.data.cab === 'coin' ? 1.8 : 1.3 }); }
+      b.data.pvy = b.vy;
+      if (bnd && FS.cabinet.inChute(b) && b.y > bnd.dividerTop + 10) cabCollect(b);
+    }
+    cabStrainTick(real);
+    cabFaceTick(real);
+  }
+  function cabStrainTick(real) {
+    const C = FS.cab, rig = FS.rig;
+    const ph = rig ? rig.phase : 'idle', up = ph === 'lifting' || ph === 'carrying';
+    let k = 0;
+    if (up) { let m = 0; for (const b of carried()) m += b.m || 0; k = cabStrainK(m); }
+    C.strain += (k - C.strain) * Math.min(1, real * (k > C.strain ? 8 : 4));
+    if (C.strain < 0.01) { C.strain = 0; return; }
+    C.creakT -= real;
+    if (up && C.strain > 0.3 && C.creakT <= 0) { C.creakT = 0.9 - C.strain * 0.4; snd('cabCreak', { vel: C.strain }); }
+    C.sweatT -= real;
+    if (up && C.strain > 0.5 && C.sweatT <= 0 && rig) {
+      C.sweatT = fx().reduced ? 0.6 : 0.22;
+      const hx = CAB.x + rig.x, hy = CAB.y + rig.y - 14;
+      fx().burst(hx + (FS.frameN % 2 ? 10 : -10), hy, '#9fd8ff', 1, { kind: 'bubble', speed: 90, size: 2.6, life: 0.45, gravity: 500, dir: FS.frameN % 2 ? -0.6 : -2.5, spread: 0.5 });
+    }
+  }
+  // The faces: where they look, their moods wearing off, blinks.
+  function cabFaceTick(real) {
+    const rig = FS.rig;
+    const hx = rig ? rig.x : 0, hy = rig ? rig.y + 30 : 0, ph = rig ? rig.phase : 'idle';
+    const each = (b) => {
+      const fc = cabFace(b);
+      if (!fc) return;
+      if (fc.mt > 0) { fc.mt -= real; if (fc.mt <= 0) { fc.mt = 0; fc.mood = ''; } }
+      fc.bt -= real;
+      if (fc.bt < -0.12) fc.bt = 2.2 + ((b.data.seed || 0) * 1.3) % 2;
+      fc.blink = fc.bt < 0 ? 1 : 0;
+      const dx = hx - b.x, dy = hy - b.y, L = Math.hypot(dx, dy) || 1;
+      const near = L < CABK.faceLook;
+      fc.lx += ((near ? dx / L : Math.sin(S.t * 0.7 + (b.data.seed || 0)) * 0.4) - fc.lx) * Math.min(1, real * 6);
+      fc.ly += ((near ? dy / L : -0.2) - fc.ly) * Math.min(1, real * 6);
+      if (!fc.mt) {
+        if (b.held > 0) fc.mood = 'ride';
+        else if ((ph === 'dropping' || ph === 'closing') && Math.abs(dx) < 70 && dy < 0) fc.mood = 'scared';
+        else fc.mood = '';
+      }
+    };
+    for (const b of FS.items) if (b.data && b.data.def && (CABK.faceRar[b.data.def.rarity] || b.data.fc || (FS.golden && b.data.inst && FS.golden.uid === b.data.inst.uid))) each(b);
+    for (const b of FS.cab.bodies) if (b.data.cab === 'cap') each(b);
+  }
+
+  // ---- drawing
+  const CAB_SIGN = { id: '', k: 0, roll: 0, land: 0, t: 0, reduced: false, name: '', text: '', col: '', names: null, ids: CAB_IDS, idx: 0, spin: 0, top: 0 };
+  const CAB_LST = { n: 0, max: 12, pop: 0, fever: 0, burst: 0, t: 0, reduced: false, surge: 0 };
+  const CAB_FST = { mood: '', lx: 0, ly: 0, blink: 0, t: 0, legend: false };
+  const CAB_CST = { tier: 'c', t: 0, rot: 0, sq: 0, glow: 0.5, seed: 1 };
+  const CAB_NAMES = CAB_IDS.map((k) => CAB_EV[k].name);
+  // Inside the cabinet's clip, after the pile: the surge on the rail, the coins and capsules.
+  function cabDrawIn(ctx, t) {
+    const C = FS && FS.cab, R = X.RENDER, RC = R && R.cab;
+    if (!C || !RC) return;
+    if (C.surge && RC.surge) RC.surge(ctx, CAB.x, CAB.y + 26, binW(), t, !!fx().reduced);
+    for (const b of C.bodies) {
+      const x = CAB.x + b.x, y = CAB.y + b.y;
+      if (b.data.cab === 'coin') { if (RC.coin) RC.coin(ctx, x, y, CABK.coinR, b.a, t); continue; }
+      if (R.capsule) {
+        CAB_CST.tier = b.data.tier; CAB_CST.t = t; CAB_CST.rot = b.a; CAB_CST.seed = 1 + (b.data.seed || 0); CAB_CST.glow = 0.55;
+        R.capsule(ctx, x, y, CABK.capR, CAB_CST);
+      }
+      cabFaceDraw(ctx, b, x, y, t);
+    }
+  }
+  // One item's (or capsule's) face, drawn over its art.
+  function cabFaceDraw(ctx, b, x, y, t) {
+    const fc = b && b.data && b.data.fc, RC = X.RENDER && X.RENDER.cab;
+    if (!fc || !RC || !RC.face || (b.data.inst && b.data.inst.frozen)) return;   // (a prize frozen in ice keeps a straight face)
+    CAB_FST.mood = fc.mood; CAB_FST.lx = fc.lx; CAB_FST.ly = fc.ly; CAB_FST.blink = fc.blink; CAB_FST.t = t;
+    CAB_FST.legend = !!(b.data.def && b.data.def.rarity === 'l') || b.data.tier === 'l';
+    const r = b.data.cab === 'cap' ? CABK.capR * 0.95 : U.clamp((b.br || 14) * 0.75, 10, 20);
+    RC.face(ctx, x, y + (b.data.cab === 'cap' ? r * 0.25 : 0), r, CAB_FST);
+  }
+  // Before the claw draws: its strain (a shake, gritted eyes). Returns true when it pushed a transform.
+  function cabClawPre(ctx, t, J) {
+    const C = FS && FS.cab;
+    J.strain = C ? C.strain : 0;
+    if (J.strain > 0.45 && (!J.mood || J.mood === 'happy')) J.mood = 'strain';
+    if (!C || C.strain < 0.05 || fx().reduced) return false;
+    const a = C.strain * 1.8;
+    ctx.save(); ctx.translate(Math.sin(t * 71) * a, Math.cos(t * 53) * a * 0.5);
+    return true;
+  }
+  // After the claw: sweat, steam and the tension marks of a heavy lift.
+  function cabClawPost(ctx, t) {
+    const C = FS && FS.cab, RC = X.RENDER && X.RENDER.cab, rig = FS && FS.rig;
+    if (!C || !RC || !RC.strain || !rig || C.strain < 0.05) return;
+    const hub = rig.bodies && rig.bodies.hub;
+    if (!hub) return;
+    RC.strain(ctx, CAB.x + hub.x, CAB.y + hub.y, Math.max(8, hub.r || 12), C.strain, t, !!fx().reduced, CAB.x + rig.cableTop.x, CAB.y + rig.cableTop.y);
+  }
+  // Over the cabinet (after its front): the lamp, the event sign, the surge chip.
+  function cabDraw(ctx, t) {
+    const C = FS && FS.cab, RC = X.RENDER && X.RENDER.cab;
+    if (!C || !RC) return;
+    if (C.lampUsed || C.lampShow > 0 || C.fever || cabOn()) {
+      CAB_LST.n = C.lampShow; CAB_LST.max = CABK.lampMax; CAB_LST.pop = C.lampPop; CAB_LST.t = t; CAB_LST.reduced = !!fx().reduced;
+      CAB_LST.fever = C.fever ? U.clamp(C.fever.t + 0.3, 0, 1) * (C.fever.t < CABK.feverEnd - 0.4 ? 1 : U.clamp((CABK.feverEnd - C.fever.t) / 0.4, 0, 1)) : 0;
+      CAB_LST.burst = C.fever && C.fever.burst ? U.clamp(C.fever.t - CABK.feverBurst, 0, 1) : 0;
+      CAB_LST.surge = C.surge ? 1 : 0;
+      if (RC.lamp) RC.lamp(ctx, CAB_LAMP.x, CAB_LAMP.y, CAB_LAMP.x1, CAB_LST);
+    }
+    const E = C.ev;
+    if (E && E.t > -0.2 && RC.sign) {
+      const S0 = CAB_SIGN, ev = CAB_EV[E.id];
+      S0.id = E.id; S0.t = t; S0.reduced = !!fx().reduced; S0.name = ev.name; S0.text = ev.text; S0.col = CAB_COL[E.id]; S0.names = CAB_NAMES;
+      const end = CABK.roll + CABK.hold;
+      S0.k = E.t < 0 ? U.clamp((E.t + 0.2) / 0.2, 0, 1) * 0.3 : E.t < 0.25 ? 0.3 + 0.7 * U.ease.outBack(U.clamp(E.t / 0.25, 0, 1)) : E.t < end ? 1 : U.clamp(1 - (E.t - end) / CABK.out, 0, 1);
+      S0.roll = E.landed ? 1 : U.clamp(E.t / CABK.roll, 0, 1);
+      S0.land = E.landed ? U.clamp((E.t - CABK.roll) / 0.35, 0, 1) : 0;
+      S0.spin = E.tick; S0.idx = CAB_IDS.indexOf(E.id); S0.top = CAB.y;
+      RC.sign(ctx, CAB.x + binW() / 2, CAB.y + 150, S0);
+    }
+  }
+
+  function CAB_API() {
+    return {
+      K: CABK, EV: CAB_EV, IDS: CAB_IDS, WORDS: CAB_WORDS, PATTERNS: CAB_PATTERNS, LAMP: CAB_LAMP, COL: CAB_COL,
+      get force() { return CABK.force; }, set force(v) { CABK.force = !!v; },
+      on: () => cabOn(), fs: () => (FS ? cabFS() : null), turn: () => { if (FS) cabTurn(); }, turnEnd: () => { if (FS) cabTurnEnd(); },
+      // start an event now (it lands after its roll), or land it at once
+      event: (id, now) => { if (!FS || !cabFS()) return null; const E = cabEvStart(id); if (E && now) { E.t = CABK.roll; cabEvLand(); } return E; },
+      land: () => { if (FS && FS.cab) cabEvLand(); }, lampAdd: (n, x, y) => (FS ? cabLampAdd(n, x, y) : 0), spawn: (q) => (FS ? cabSpawn(q) : null),
+      collect: (b) => { if (FS && b) cabCollect(b); }, perfect: (b) => { if (FS && FS.rig && b) { cabFS(); cabPerfect(b); } }, face: (b) => (FS ? cabFace(b) : null),
+      strainK: cabStrainK, gripAdd: () => (FS ? cabGripAdd() : 0), speedK: () => cabSpeedK(), tick: (dt, real) => { if (FS) cabTick(dt || 1 / 60, real == null ? dt || 1 / 60 : real); },
+      draw: (ctx, t) => { if (FS && FS.cab) { cabDrawIn(ctx, t); cabDraw(ctx, t); } }, rewardCaps: cabRewardCaps, fightEnd: cabFightEnd,
+    };
+  }
+  // ================================================================ /CAB
+
+  // ================================================================ TECH (round 17): Cabinet Tech and Joy Stick
+  /* DESIGN.md "Cabinet Tech and the new crawler (round 17)". The relics of the Cabinet Tech
+     family (and Joy Stick's gift) bend the round 16 cabinet: DATA.techMods(run.relics, run.char)
+     adds up their numbers once at the bell (FS.tech.m) and the CAB block reads them through
+     techMods() in six one-line hooks (cabTurn: events from turn 1 and more often; cabEvLand:
+     techEvLand; cabCollect: a coin's gold; cabFeverTick: techFever and the rain's coins;
+     cabPerfect: techPerfect; cabUnderPalm: the PERFECT window). Whatever the relics do in the
+     fight goes through COMBAT.techCab -> the relics' onCab hook, on the player's own turn only:
+     a LAMP FEVER that goes off after END TURN waits in FS.tech.pend for the next one (techTurn).
+     A quiet cabinet (Duo, a headless suite without CABK.force) has no events: techMods() is all
+     zeros there and COMBAT's F.tech.on stays false, so the event relics ring every 2nd turn.
+     Fight-only state in FS.tech, never saved (a reload replays the seeded fight). */
+  const TECHK = { first1: 1.3, dblWait: 1.1, dblGap: 0.35 };
+  const TECH0 = Object.freeze({ evP: 0, first: 0, perfX: 0, laser: 0, lampStart: 0, coins: 0, coinGold: 0, double: 0, perfLamp: 0, drain: 0 });
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const TECH_WORDS = ['DOUBLE FEATURE!', 'Set off LAMP FEVER to unlock', 'LOCK', 'REMOTE', 'LASER', 'SERVICE KEY', 'LAMP OIL', 'HOPPER', 'METRONOME',
+    'FEVER DREAM', 'BREAKER', 'TRICK SHOT', 'DOUBLE FEATURE', 'MOTHERBOARD'];
+  const TECH_PATTERNS = { 'LAMP +{n}': 'LAMP +2', 'LAMP -{n}': 'LAMP -3', 'LAMP OIL +{n}': 'LAMP OIL +4', 'METRONOME x{n}': 'METRONOME x3' };
+  ACH_EV.tech = 1;   // Perfect Game reads the cabinet's PERFECT events (META block)
+  function techCalc() {
+    const run = S.run;
+    if (!run || !D().techMods) return TECH0;
+    try { return D().techMods(run.relics || [], run.char) || TECH0; } catch (e) { return TECH0; }
+  }
+  function techFS() {
+    if (!FS) return null;
+    if (!FS.tech) FS.tech = { m: techCalc(), pend: [], dbl: null, dblTurn: -9, oil: 0, laserT: 0 };
+    return FS.tech;
+  }
+  // The cabinet numbers of this fight (all zeros without a fight or with a quiet cabinet).
+  function techMods() {
+    if (!FS || !F || !cabOn()) return TECH0;
+    const T = techFS();
+    return T ? T.m : TECH0;
+  }
+  // A profile that has seen LAMP FEVER (Joy Stick's unlock, for a profile from round 16).
+  const techFeverSeen = () => !!(S.meta && S.meta.cab && (+S.meta.cab.fevers || 0) > 0);
+  // The cabinet did something on the player's turn: the relics answer through COMBAT.
+  function techCab(kind, v, id) {
+    if (!F || !X.COMBAT || !X.COMBAT.techCab) return [];
+    const all = X.COMBAT.techCab(F, kind, v, id) || [];
+    // the cabinet's own event is read at once (Perfect Game) and never queued: a turn with no relic answering keeps its pace
+    const evs = all.filter((e) => { if (e && e.t === 'tech') { metaEvent(e); return false; } return true; });
+    for (let i = F.events.length - 1; i >= 0; i--) if (F.events[i] && F.events[i].t === 'tech') F.events.splice(i, 1);
+    if (evs.some((e) => e && e.t === 'proc' && e.src === 'relic')) techZap(kind);
+    if (evs.length) enqueue(evs, PROC_BEAT);
+    return all;
+  }
+  // A Cabinet Tech relic answered: a pink spark where the cabinet did it (the sign, the claw, the lamp), a circuit beep.
+  function techZap(kind) {
+    const rig = FS && FS.rig;
+    const p = kind === 'fever' ? CAB_LAMP : kind === 'perfect' && rig ? { x: CAB.x + rig.x, y: CAB.y + rig.y + 40 } : { x: CAB.x + binW() / 2, y: CAB.y + 150 };
+    fx().ring(p.x, p.y, '#ff7ad9', { r0: 8, r1: 64, w: 4, life: 0.35 });
+    fx().emit('shock', p.x, p.y, { n: fx().reduced ? 0.2 : 0.5, col: '#ff7ad9' });
+    snd('techBeep', { kind });
+  }
+  // startFight: the numbers, COMBAT told, the Lamp Oil, an event on turn 1.
+  function techFightStart() {
+    if (!FS || !F) return;
+    FS.tech = null;
+    const T = techFS(), on = cabOn();
+    if (X.COMBAT && X.COMBAT.techOn) X.COMBAT.techOn(F, on);
+    if (!on || !T) return;
+    const m = T.m, C = cabFS();
+    if (!C) return;
+    if (m.lampStart > 0) {
+      const was = C.lamp;
+      C.lamp = Math.min(CABK.lampMax, C.lamp + m.lampStart); C.lampShow = C.lamp; C.lampUsed = true;
+      T.oil = C.lamp - was;
+      if (T.oil > 0) fx().text(CAB_LAMP.x - 40, CAB_LAMP.y + 30, 'LAMP OIL +' + T.oil, '#ffe066', { size: 14, life: 1.4, dy: 24 });
+      if (C.lamp >= CABK.lampMax && !C.fever) C.fever = { t: -1.6, burst: false };
+    }
+    if (m.first && !C.ev) { cabTurn(); if (C.ev) C.ev.t -= TECHK.first1; }   // the sign waits for the bell's banner
+    if (F.tech && F.tech.gift && S.run && !(S.run.fights | 0) && FS.tier === 'normal' && D().TECH) toast(D().TECH.TIP, 3);   // (never over a versus card)
+  }
+  // cabEvLand: the relics hear the event, the Coin Hopper pours more coins, Double Feature queues its second reel.
+  function techEvLand(E) {
+    const T = techFS(), C = FS && FS.cab;
+    if (!T || !C || !E || !cabOn()) return;
+    const m = T.m, turn = (FS.turnsTaken | 0) + 1;
+    techCab('event', 0, E.id);
+    if (E.id === 'coins' && m.coins > 0) {
+      const bw = binW();
+      for (let i = 0; i < m.coins; i++) C.spawnQ.push({ kind: 'coin', x: 30 + C.rng() * Math.max(20, bw - 60), y: 14 + (i % 3) * 10 });
+      C.spawnT = 0;
+    }
+    if (m.double > 0 && !E.dbl && !T.dbl) {   // the second reel never doubles again
+      T.dblTurn = turn;
+      const ids = CAB_IDS.filter((k) => k !== E.id && (k !== 'capsule' || cabCapOk()));
+      T.dbl = { id: ids[Math.floor(C.rng() * ids.length)] || 'coins', at: S.t + TECHK.dblWait, turn };
+    }
+  }
+  // cabFeverTick: LAMP FEVER went off. Joy Stick unlocks; the relics answer on your turn.
+  function techFever(n) {
+    const u = S.meta ? checkUnlocks('fever') : [];
+    if (u.length) { saveMeta(); toast('Unlocked: ' + u.map((id) => (charDef(id) || {}).name || id).join(', '), 3); }
+    const T = techFS();
+    if (!T || !F) return;
+    if (F.phase === 'player' && !FS.done) techCab('fever', n);
+    else T.pend.push(['fever', n]);
+  }
+  // finishEnemyTurn: a fever held over from the enemy's turn pays now.
+  function techTurn() {
+    const T = FS && FS.tech;
+    if (!T || !T.pend.length || !F || F.phase !== 'player') return;
+    for (const [k, n] of T.pend.splice(0)) techCab(k, n);
+  }
+  // cabPerfect: the relics hear the streak; Joy Stick (and the Motherboard) light more lamp cells.
+  function techPerfect(n, x, y) {
+    const T = techFS();
+    if (!T || !cabOn()) return;
+    if (T.m.perfLamp > 0) {
+      cabLampAdd(T.m.perfLamp, x, y);
+      fx().text(x + 44, y - 18, 'LAMP +' + T.m.perfLamp, '#ff7ad9', { size: 13, life: 1, dy: -26 });
+    }
+    techCab('perfect', n);
+  }
+  // deliver: an arcade part (an item's `lamp`) lights more cells, for anyone who holds it.
+  function techDeliver(inst, pos) {
+    if (!FS || !inst || !pos || !cabOn()) return;
+    const def = itemDef(inst.id), n = def ? def.lamp | 0 : 0;
+    if (n > 0 && !inst.frozen) cabLampAdd(n, pos.x, pos.y);
+  }
+  // grabFinished: the Motherboard's catch, a grab that brought nothing up drains the lamp.
+  function techGrabDone() {
+    const T = FS && FS.tech, C = FS && FS.cab;
+    if (!T || !C || !T.m.drain || !cabOn() || (FS.delivered | 0) > 0 || C.lamp <= 0) return;
+    const d = Math.min(C.lamp, T.m.drain);
+    C.lamp -= d; C.lampShow = Math.min(C.lampShow, C.lamp); C.lampUsed = true; C.lampPop = 1;
+    fx().text(CAB_LAMP.x - 30, CAB_LAMP.y + 28, 'LAMP -' + d, '#ff5a4a', { size: 14, life: 1, dy: 22 });
+    snd('cabCreak', { vel: 0.6 });
+  }
+  // update: Double Feature's second reel starts once the first sign has landed and held a moment.
+  function techTick(dt, real) {
+    const T = FS && FS.tech;
+    if (!T || !F || S.screen !== 'fight') return;
+    T.laserT += real || 0;
+    const Q = T.dbl, C = FS.cab;
+    if (!Q) return;
+    if (!C || FS.done || F.phase !== 'player' || Q.turn !== (FS.turnsTaken | 0) + 1) { T.dbl = null; return; }
+    if (S.t < Q.at || (C.ev && !C.ev.landed)) return;
+    T.dbl = null;
+    const E2 = cabEvStart(Q.id, C.rng);
+    if (!E2) return;
+    E2.dbl = true; E2.t = -TECHK.dblGap;
+    fx().text(CAB.x + binW() / 2, CAB.y + 92, 'DOUBLE FEATURE!', '#ff7ad9', { size: 20, life: 1.3, dy: -30 });
+    snd('techDouble');
+    techCab('double', 0, Q.id);
+  }
+  // drawFight (in the cabinet's clip): the Laser Sight's beam from the claw down to the pile, gold when a drop would be PERFECT.
+  const TECH_LST = { lock: false, t: 0, reduced: false };
+  function techDrawIn(ctx, t) {
+    const T = FS && FS.tech, rig = FS && FS.rig, R = X.RENDER;
+    if (!T || !T.m.laser || !rig || !R || !R.tech || !R.tech.laser || !cabOn()) return;
+    if (rig.phase !== 'idle' && rig.phase !== 'moving') return;
+    let y1 = CAB.h - 10;
+    for (const b of FS.items) { const r = b.br || 12; if (Math.abs(b.x - rig.x) < r * 0.8 && b.y - r < y1) y1 = b.y - r; }
+    TECH_LST.lock = !!cabUnderPalm(rig.x); TECH_LST.t = t; TECH_LST.reduced = !!fx().reduced;
+    R.tech.laser(ctx, CAB.x + rig.x, CAB.y + rig.y + 22, CAB.y + y1, TECH_LST);
+  }
+  function TECH_API() {
+    return {
+      K: TECHK, WORDS: TECH_WORDS, PATTERNS: TECH_PATTERNS, ZERO: TECH0,
+      mods: () => techMods(), fs: () => (FS ? techFS() : null), feverSeen: techFeverSeen, fightStart: techFightStart, evLand: techEvLand,
+      fever: techFever, turn: techTurn, perfect: techPerfect, deliver: techDeliver, grabDone: techGrabDone, tick: techTick, draw: techDrawIn,
+      recalc: () => { if (FS) { FS.tech = null; techFS(); } },
+      // the prize a drop at x would land PERFECT on ({b, dx} or null: the Laser Sight's LOCK)
+      palm: (x) => (FS && FS.items ? cabUnderPalm(x) : null),
+    };
+  }
+  // ================================================================ /TECH
+
+  // ================================================================ GACHA (round 17): Capsule fever
+  /* DESIGN.md "Capsule fever (round 17)". Feel and collection, never power:
+     nothing here changes a capsule's odds, tiers or prize.
+       - the build-up: each crack throws shell chips and climbs a note; one tap
+         left the capsule is PRIMED (it trembles, light leaks from the cracks
+         in its colour, a hum); a common or uncommon one sometimes flickers
+         gold and fizzles (the rare tease: looks only, DATA.GACHA.tease); the
+         last tap pays at once (as before) but the pop waits a charge
+         (0.22 / 0.32 / 0.6 / 1.25 s by tier); a legendary gets the room
+         going dark, gold god rays over the whole screen, sparks rushing in,
+         its jingle, slow motion and a LEGENDARY slam; confetti by tier
+       - hold to crack (auto taps), Skip pops at once, Open all: every
+         capsule on the reward screen (or in the bank) fans out and pops in a
+         row, each paid once, a reload resumes it
+       - Capsule Minis: a figurine tucked into a capsule (DATA.GACHA), NEW! or
+         a dupe's vault tickets, four series; a finished series pays a
+         rainbow Prize Vault cosmetic; a Minis tab in the Prize Vault
+       - the daily capsule: a free Vault Capsule once a real day, a streak
+         bonus in vault tickets (a badge on the title's Vault tile, a pill in
+         the vault's top bar)
+     Hooks (one line each): loadMeta (gachaMetaFix), showCapsule / showVault
+     (gachaBind), capsuleTap / vaultCapTap (gachaCrack, gachaPreEnd,
+     gachaAllTap), skipCapsule / vaultCapSkip (gachaSkip), capBurst /
+     vaultCapBurst (gachaOnOpen / gachaOnVault, gachaPre), capPop /
+     vaultCapPop (gachaPop), capTick / vaultCapTick (gachaTick,
+     gachaPreTick, gachaHoldT, gachaAllTick), drawCapsule / vaultCapDraw
+     (gachaJit, gachaTierDraw, gachaDraw, gachaAllDraw), capDom /
+     vaultCapDom (gachaCard, gachaAllBtn), lootCapSlots (gachaSlotLook,
+     gachaSlots), load (gachaAllShow), vaultTitleBtn (gachaDailyReady),
+     vaultDom (gachaDailyPill, gachaVaultTab, gachaDetail, gachaShelf),
+     vaultDraw (gachaPrevDraw). Meta: gacha {minis {id: n}, news {id: 1},
+     series {id: 1}, rolls, opened, dupeTix, day, streak, best, days, bonus}. */
+  const GK = {
+    pre: { c: 0.22, u: 0.32, r: 0.6, l: 1.25 },   // the charge before the pop
+    hold: { c: 0, u: 0, r: 0.25, l: 0.9 },          // the pop lingers before the card
+    holdWait: 0.3, holdEvery: 0.19,                 // hold to crack: the first auto tap, then one every
+    chipMax: 80, teaseAt: 0.35, teaseLen: 0.7,
+    allGap: 0.32, allGapFast: 0.2, allWait: 0.6,
+  };
+  const G17 = { now: null, hold: null, chips: [], chipN: 0, all: null, cel: null };
+  const GD = () => D().GACHA || null;
+  Object.assign(FEEL_BUZZ, { g17Prime: [8, 30, 8, 30, 8], g17Charge: [12, 20, 16, 20, 22, 20, 30], g17Legend: [40, 60, 40, 60, 60, 40, 220], g17New: [18, 40, 28] });
+
+  // ---- meta
+  function gachaMetaFix(m, o) {
+    if (!m) return m;
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+    const src = obj(o && typeof o === 'object' ? o.gacha : null) || obj(m.gacha) || {};
+    const num = (v) => Math.max(0, Math.floor(+v || 0));
+    const Gd = GD(), ids = Gd ? Gd.MINIS : {};
+    const g = { minis: {}, news: {}, series: {}, rolls: num(src.rolls), opened: num(src.opened), dupeTix: num(src.dupeTix),
+      day: typeof src.day === 'string' ? src.day.slice(0, 10) : '', streak: num(src.streak), best: num(src.best), days: num(src.days), bonus: num(src.bonus) };
+    const mm = obj(src.minis) || {};
+    for (const id in mm) if (ids[id] && num(mm[id]) > 0) g.minis[id] = num(mm[id]);
+    const nw = obj(src.news) || {};
+    for (const id in nw) if (nw[id] && g.minis[id]) g.news[id] = 1;
+    const se = obj(src.series) || {};
+    for (const s of (Gd ? Gd.SERIES : [])) if (se[s.id] && Gd.seriesIds(s.id).every((id) => g.minis[id])) g.series[s.id] = 1;
+    g.best = Math.max(g.best, g.streak);
+    m.gacha = g;
+    return m;
+  }
+  function gachaM() {
+    if (!S.meta) S.meta = freshMeta();
+    const g = S.meta.gacha;
+    if (!g || !g.minis || !g.news || !g.series) gachaMetaFix(S.meta);
+    return S.meta.gacha;
+  }
+  const gachaMini = (id) => (GD() && GD().MINIS[id]) || null;
+  const gachaSer = (sid) => (GD() ? GD().SERIES.find((s) => s.id === sid) : null) || null;
+  const gachaSerHave = (sid) => { const g = gachaM(); return GD() ? GD().seriesIds(sid).filter((id) => g.minis[id] > 0).length : 0; };
+
+  // ---- the minis: one tucked into a capsule, a dupe's tickets, a finished series' cosmetic
+  function gachaGrant(id) {
+    const Gd = GD(), g = gachaM(), d = gachaMini(id);
+    if (!d) return null;
+    const n = (g.minis[id] | 0) + 1;
+    g.minis[id] = n;
+    const res = { id, n, fresh: n === 1, tix: 0, series: d.series, done: false, cos: null, stix: 0 };
+    const V = vaultM();
+    if (!res.fresh) { res.tix = Gd.DUPE[d.rarity] || 0; g.dupeTix += res.tix; V.tix += res.tix; }
+    else {
+      g.news[id] = 1;
+      if (!g.series[d.series] && Gd.seriesIds(d.series).every((x) => g.minis[x] > 0)) {
+        g.series[d.series] = 1; res.done = true;
+        const s = gachaSer(d.series);
+        if (s && s.reward && vaultDef(s.reward) && !V.owned[s.reward]) { V.owned[s.reward] = 1; V.news[s.reward] = 1; res.cos = s.reward; }
+        else { res.stix = Gd.SERIES_TIX || 0; V.tix += res.stix; }
+      }
+    }
+    return res;
+  }
+  // A run capsule bursts: maybe a mini inside (its own stream: the capsule's rolls are untouched).
+  function gachaOnOpen(cap) {
+    if (!cap || cap.mini !== undefined || !GD()) return cap ? cap.mini || null : null;
+    const g = gachaM(), Gd = GD();
+    const rng = U.rng(U.hashStr('gacha:' + g.rolls + ':' + ((S.run && S.run.seed) || 0) + ':' + cap.src + ':' + cap.tier));
+    g.rolls++; g.opened++;
+    cap.mini = Gd.hasMini(rng, cap.tier) ? gachaGrant(Gd.rollMini(rng, cap.tier)) : null;
+    return cap.mini;
+  }
+  // A Vault (or daily) capsule always has one.
+  function gachaOnVault(res) {
+    if (!res || res.mini !== undefined || !GD()) return res ? res.mini || null : null;
+    const g = gachaM(), Gd = GD();
+    const rng = U.rng(U.hashStr('gacha-v:' + g.rolls + ':' + vaultM().caps + ':' + res.id));
+    g.rolls++; g.opened++;
+    res.mini = gachaGrant(Gd.rollMini(rng, res.tier));
+    return res.mini;
+  }
+
+  // ---- the build-up on a capsule ritual (C: S.cap or S.vcap)
+  function gachaC(C) {
+    if (!C.g17) {
+      const cap = C.cap || C.p || {};
+      const key = C.cap ? cap.src + ':' + cap.tier0 + ':' + cap.tier + ':' + JSON.stringify(cap.prize || null) : 'v:' + cap.id + ':' + cap.tier0 + ':' + cap.tier;
+      C.g17 = { prime: 0, primed: false, tease: !!(GD() && GD().tease(key, cap.tier)), teaseT: -1, teaseK: 0, teaseOn: false, pre: 0, preMax: 0, pop: null,
+        legend: 0, seed: (U.hashStr(key) % 997) + 1, tier: cap.tier };
+    }
+    return C.g17;
+  }
+  const gachaLeft = (C) => Math.max(0, C.burstTap + 1 - C.taps);
+  // Shell chips off the capsule (x, y, r) in col.
+  function gachaChips(x, y, r, col, n, pw) {
+    const reduced = !!fx().reduced;
+    n = Math.round(n * (reduced ? 0.5 : 1));
+    for (let i = 0; i < n; i++) {
+      if (G17.chipN >= GK.chipMax) break;
+      const c = G17.chips[G17.chipN] || (G17.chips[G17.chipN] = {});
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (220 + Math.random() * 260) * (pw || 1);
+      c.x = x + Math.cos(a) * r * 0.8; c.y = y + Math.sin(a) * r * 0.6;
+      c.vx = Math.cos(a) * sp; c.vy = Math.sin(a) * sp - 80; c.a = Math.random() * 6; c.va = (Math.random() - 0.5) * 18;
+      c.s = r * (0.07 + Math.random() * 0.08); c.col = Math.random() < 0.3 ? '#ffffff' : col; c.max = c.life = 0.7 + Math.random() * 0.5;
+      G17.chipN++;
+    }
+  }
+  function gachaChipTick(dt) {
+    for (let i = G17.chipN - 1; i >= 0; i--) {
+      const c = G17.chips[i];
+      c.life -= dt; c.vy += 1100 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.a += c.va * dt; c.vx *= 1 - dt * 0.6;
+      if (c.life <= 0 || c.y > H + 40) { G17.chips[i] = G17.chips[G17.chipN - 1]; G17.chips[G17.chipN - 1] = c; G17.chipN--; }
+    }
+  }
+  // A crack that did not burst it: chips, the climbing note, a harder buzz; one tap left primes it.
+  function gachaCrack(C, i) {
+    const g = gachaC(C);
+    gachaChips(C.x, C.y, C.r, capCol(C.shown), 4 + i * 3, 1 + i * 0.15);
+    snd('gachaTap', { n: i });
+    if (gachaLeft(C) === 1 && !g.primed) {
+      g.primed = true;
+      snd('gachaPrime');
+      haptic('g17Prime');
+      if (g.tease && !fx().reduced) g.teaseT = 0;
+    }
+  }
+  function gachaSkip(C) { if (C) C.skip17 = true; }
+  // The last tap: the charge before the pop (fn). false: pop now (a skip).
+  function gachaPre(C, tier, fn) {
+    const g = gachaC(C), ti = TIER_I[tier] || 0;
+    g.tier = tier; g.teaseT = -1; g.teaseK = 0;
+    if (C.skip17) return false;
+    let d = GK.pre[tier] || GK.pre.c;
+    if (C.fast) d *= 0.6;
+    if (fx().reduced) d *= 0.4;
+    g.pre = d; g.preMax = d; g.pop = fn;
+    snd('gachaCharge', { tier: ti });
+    haptic(ti >= 3 ? 'g17Legend' : 'g17Charge');
+    if (ti >= 3) g.legend = 0.01;
+    const hEl = $(C.cap ? 'capHint' : 'vcapHint');
+    if (hEl) clear(hEl);
+    return true;
+  }
+  // The charge runs (true while it does): the capsule shakes harder, the light pours out, then the pop.
+  function gachaPreTick(C, dt) {
+    const g = C.g17;
+    if (!g || !g.pop) return false;
+    g.pre -= dt;
+    const k = U.clamp(1 - g.pre / (g.preMax || 1), 0, 1), reduced = !!fx().reduced;
+    if (!reduced) { C.rotV += Math.sin(C.t * 83) * (6 + k * 16) * dt * 3; C.sqV += Math.sin(C.t * 61) * k * 0.3; }
+    if (g.tier === 'l') g.legend = Math.max(g.legend, U.clamp(k * 1.4, 0, 1));
+    if (Math.random() < dt * (6 + k * 20)) fx().emit('glint', C.x + (Math.random() - 0.5) * C.r * 1.6, C.y + (Math.random() - 0.5) * C.r * 1.4, { col: capCol(g.tier) });
+    if (g.pre <= 0) gachaPreEnd(C);
+    return true;
+  }
+  function gachaPreEnd(C) {
+    const g = C && C.g17;
+    if (!g || !g.pop) return false;
+    const fn = g.pop;
+    g.pop = null; g.pre = 0;
+    fn();
+    return true;
+  }
+  // After the pop: how long the moment lingers before the card (legendary longest).
+  function gachaHoldT(C) {
+    const g = C && C.g17;
+    if (!g || C.skip17 || fx().reduced) return 0;
+    return (GK.hold[g.tier] || 0) * (C.fast ? 0.55 : 1);
+  }
+  // The pop's extras: chips, the chime ladder, confetti by tier, the legendary jingle and slam.
+  function gachaPop(C, tier) {
+    const g = gachaC(C), col = capCol(g.tier), reduced = !!fx().reduced;
+    gachaChips(C.x, C.y, C.r, col, 16 + tier * 6, 1.3 + tier * 0.15);
+    snd('gachaChime', { tier });
+    if (tier >= 1) { fx().emit('confetti', 60, 220, { power: 0.9, dir: -0.6, spread: 0.9 }); fx().emit('confetti', W - 60, 220, { power: 0.9, dir: Math.PI + 0.6, spread: 0.9 }); }
+    if (tier >= 2) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; fx().emit('glint', C.x + Math.cos(a) * C.r * 1.9, C.y + Math.sin(a) * C.r * 1.9, { col, n: 2 }); }
+    if (tier >= 3) {
+      snd('gachaLegend');
+      haptic('g17Legend');
+      for (let i = 0; i < 6; i++) fx().emit('coins', 50 + i * 88, -10, { n: 1, power: 0.6, dir: Math.PI / 2, spread: 0.5 });
+      g.legend = 1;
+      if (!reduced) fx().shake(14);
+    }
+    const tEl = $(C.cap ? 'capTier' : 'vcapTier');
+    if (tEl && tier >= 2) replay(tEl, 'g17slam');
+  }
+  // Per frame on a ritual: chips, hold to crack, the primed glow and the rare tease, the legend's fade.
+  function gachaTick(C, dt, tapFn) {
+    gachaChipTick(dt);
+    if (!C) return;
+    const g = gachaC(C), reduced = !!fx().reduced;
+    const H0 = G17.hold;
+    if (H0 && C.phase === 'idle' && tapFn) {
+      H0.t += dt;
+      if (H0.t >= GK.holdWait) { H0.e = (H0.e || 0) - dt; if (H0.e <= 0) { H0.e = GK.holdEvery; tapFn(); } }
+    }
+    if (C.phase === 'idle' && g.primed) {
+      g.prime = Math.min(1, g.prime + dt * 2.5);
+      if (!reduced && Math.random() < dt * 5) fx().emit('glint', C.x + (Math.random() - 0.5) * C.r * 1.4, C.y + (Math.random() - 0.5) * C.r, { col: capCol(C.shown) });
+      if (g.teaseT >= 0) {
+        g.teaseT += dt;
+        const u = (g.teaseT - GK.teaseAt) / GK.teaseLen;
+        const on = u >= 0 && u < 1;
+        if (on && !g.teaseOn) { g.teaseOn = true; snd('gachaTease'); fx().ring(C.x, C.y, '#ffc94d', { r0: C.r * 0.9, r1: C.r * 2.2, w: 6, life: 0.5 }); }
+        g.teaseK = on ? (u < 0.45 ? 0.9 : 0.9 * (1 - (u - 0.45) / 0.55)) : 0;
+        if (u >= 1) { g.teaseT = -1; g.teaseK = 0; }
+      }
+    } else if (!g.pop) g.prime = Math.max(0, g.prime - dt * 3);
+    if (g.legend > 0 && !g.pop) {
+      const floor = (C.phase === 'done' || C.phase === 'burst') && g.tier === 'l' ? (reduced ? 0.3 : 0.45) : 0;
+      g.legend = Math.max(floor, g.legend - dt * 0.5);
+    }
+  }
+  // The capsule's extra tremble (primed, charging).
+  function gachaJit(C, t) {
+    const g = C && C.g17;
+    if (!g || fx().reduced) return 0;
+    const k = g.pop ? 0.05 + 0.1 * U.clamp(1 - g.pre / (g.preMax || 1), 0, 1) : C.phase === 'idle' ? 0.025 * g.prime : 0;
+    return k ? Math.sin(t * 67) * k : 0;
+  }
+  // The tier the capsule is drawn in: the rare tease flickers it gold for a moment (looks only).
+  function gachaTierDraw(C, t) {
+    const g = C && C.g17;
+    if (g && g.teaseK > 0.4 && Math.floor(t * 14) % 2 === 0) return 'l';
+    return C.shown;
+  }
+  // Over the capsule: the light leaking out, the legendary moment, the flying chips.
+  function gachaDraw(ctx, t, C, y) {
+    const R = X.RENDER && X.RENDER.gacha;
+    if (!R) return;
+    const g = C && C.g17;
+    if (g) {
+      let k = 0, col = capCol(C.shown);
+      if (C.phase === 'idle') k = g.prime * 0.55;
+      if (g.pop) k = 0.55 + 0.45 * U.clamp(1 - g.pre / (g.preMax || 1), 0, 1);
+      if (g.teaseK > 0) { col = '#ffc94d'; k = Math.max(k, g.teaseK); }
+      if (k > 0 && R.leak) R.leak(ctx, C.x, y, C.r, col, k, t, g.seed);
+      if (g.legend > 0 && R.legend) R.legend(ctx, C.x, y, C.r, g.legend, t, W, H, !!fx().reduced);
+    }
+    if (G17.chipN && R.chips) R.chips(ctx, G17.chips, G17.chipN);
+  }
+  // Pointer: hold to crack (a press that is not on a button starts auto taps; letting go stops them).
+  function gachaBind(scr, fn) {
+    if (!scr) return;
+    const down = scr.onpointerdown;
+    scr.onpointerdown = (ev) => {
+      if (down) down(ev);
+      if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return;
+      G17.hold = { t: 0, e: 0, fn };
+    };
+    const up = () => { G17.hold = null; };
+    scr.onpointerup = up; scr.onpointercancel = up; scr.onpointerleave = up;
+  }
+
+  // ---- the prize card: the mini that came with it
+  function gachaCard(card, m) {
+    if (!card || !m || !gachaMini(m.id)) return null;
+    const d = gachaMini(m.id), s = gachaSer(d.series), col = (LT().COLOR || {})[d.rarity] || '#b9b0cc';
+    const row = h('div', 'g17Mini' + (m.fresh ? ' fresh' : '') + (m.done ? ' done' : ''));
+    try { row.style.setProperty('--mc', col); row.style.setProperty('--sc', s ? s.col : col); } catch (e) { /* stub */ }
+    row.appendChild(canvasEl(52, (ctx, px) => { if (X.RENDER && X.RENDER.gacha) X.RENDER.gacha.mini(ctx, m.id, px / 2, px / 2, px, 0.6); }));
+    const tx = h('div', 'mt');
+    tx.appendChild(h('div', 'm1', 'Capsule Mini'));
+    tx.appendChild(h('div', 'm2', d.name));
+    const m3 = h('div', 'm3');
+    if (s) { m3.appendChild(h('span', 'ms', s.name)); m3.appendChild(h('b', null, ' ' + gachaSerHave(s.id) + '/' + GD().seriesIds(s.id).length)); }
+    if (!m.fresh && m.tix) m3.appendChild(h('span', 'md', `+${m.tix} vault tickets`));
+    tx.appendChild(m3);
+    row.appendChild(tx);
+    if (m.fresh) row.appendChild(h('i', 'mNew', 'NEW!'));
+    card.appendChild(row);
+    if (m.done) {
+      const sc = h('div', 'g17SerDone');
+      sc.appendChild(h('div', 's1', 'SERIES COMPLETE!'));
+      const s2 = h('div', 's2');
+      if (m.cos && vaultDef(m.cos)) { s2.appendChild(h('span', null, 'Series prize')); s2.appendChild(h('b', null, ' ' + i18nTr(vaultDef(m.cos).name))); }
+      else if (m.stix) s2.appendChild(h('span', null, `+${m.stix} vault tickets`));
+      sc.appendChild(s2);
+      card.appendChild(sc);
+    }
+    // the celebration, once per mini shown
+    if (G17.cel !== m) {
+      G17.cel = m;
+      if (m.done) { snd('gachaSeries'); haptic('g17New'); fx().emit('confetti', 270, 560, { power: 1.3, dir: -Math.PI / 2, spread: 2.2 }); }
+      else if (m.fresh) { snd('gachaNew'); haptic('g17New'); fx().emit('confetti', 150, 640, { power: 0.7, dir: -Math.PI / 2, spread: 1.2 }); }
+      else if (m.tix) snd('vaultDupe');
+    }
+    return row;
+  }
+
+  // ---- Open all: every capsule on the reward screen (or in the bank) fans out and pops in a row
+  function gachaAllBtn(b, C) {
+    const run = S.run;
+    if (!b || !C || !C.cd || !C.cd.bank || !run || !Array.isArray(run.caps) || run.caps.length < 2) return null;
+    const bt = btn(`Open all (${run.caps.length})`, () => gachaOpenAll('bank'), 'sm gold g17AllBtn');
+    b.appendChild(bt);
+    return bt;
+  }
+  function gachaSlotLook(el, cap) {
+    if (!el || !cap) return;
+    el.className += ' g17r-' + (cap.opened ? cap.tier : cap.tier0);
+    if (cap.opened && cap.mini && gachaMini(cap.mini.id)) {
+      const c2 = el.children && el.children[el.children.length - 1];
+      if (c2 && c2.appendChild) c2.appendChild(h('div', 'c3', '+ ' + i18nTr(gachaMini(cap.mini.id).name) + (cap.mini.fresh ? ' · ' + i18nTr('NEW!') : '')));
+    }
+  }
+  function gachaSlots(box, rw) {
+    const n = rw && rw.caps ? rw.caps.filter((c) => !c.opened).length : 0;
+    if (!box || n < 2) return null;
+    const el = h('button', 'btn sm gold g17AllBtn g17AllRw', `Open all (${n})`);
+    el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gachaOpenAll('reward', rw); };
+    box.appendChild(el);
+    return el;
+  }
+  function gachaOpenAll(src, rw) {
+    const run = lootRun();
+    if (!run) return false;
+    let cd;
+    if (src === 'reward') {
+      const idx = [];
+      ((rw && rw.caps) || []).forEach((c, i) => { if (!c.opened) idx.push(i); });
+      if (idx.length < 2) return false;
+      cd = { all: true, caps: idx.map((i) => rw.caps[i]), rwIdx: idx, then: { k: 'reward', rw } };
+    } else {
+      if (run.caps.length < 2) return false;
+      cd = { all: true, caps: run.caps.splice(0), bank: true, then: { k: 'map' } };   // (held in the screen's save until each is paid)
+    }
+    S.cap = null;
+    gachaAllShow(cd);
+    return true;
+  }
+  function gachaAllShow(cd) {
+    if (!cd || !Array.isArray(cd.caps) || !cd.caps.length) { S.sd = null; toMap(); return false; }
+    S.sd = { capsule: cd };
+    S.cap = null;
+    const n = cd.caps.length, fast = metaLoot().caps >= (LT().FAST_AFTER || 12);
+    const cols = n <= 3 ? n : n === 4 ? 2 : n <= 9 ? 3 : 4, rows = Math.ceil(n / cols);
+    const r = rows <= 1 ? 60 : rows === 2 ? 50 : cols >= 4 ? 32 : 40;
+    const dx = Math.min(170, (W - 40) / cols), dy = 2 * r + 76, y0 = 430 - (rows - 1) * dy / 2;
+    const items = cd.caps.map((cap, i) => {
+      const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols), col = i - row * cols;
+      return { cap, x: W / 2 + (col - (inRow - 1) / 2) * dx, y: y0 + row * dy, r, d: i * 0.06, popped: !!cap.opened, pt: cap.opened ? 1 : 0, flash: 0 };
+    });
+    const done = items.every((it) => it.popped);
+    G17.all = { cd, items, t: 0, phase: done ? 'done' : 'drop', pt: 0, st: 0, gap: fast ? GK.allGapFast : GK.allGap, fast };
+    setScreen('capsule');
+    gachaAllDom();
+    const scr = $('scr-capsule');
+    if (scr) { scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return; gachaAllTap(); }; scr.onpointerup = scr.onpointercancel = scr.onpointerleave = null; }
+    if (!done) snd('whoosh', { pitch: 0.7 });
+    save();
+    return true;
+  }
+  function gachaAllDom() {
+    const A = G17.all, b = $('capsuleBody');
+    if (!A || !b) return;
+    clear(b);
+    S.ui.buttons = [];
+    const top = h('div', 'capTop');
+    const best = A.items.reduce((m, it) => Math.max(m, it.popped ? TIER_I[it.cap.tier] || 0 : 0), 0);
+    try { top.style.setProperty('--cc', capCol(['c', 'u', 'r', 'l'][best])); } catch (e) { /* stub */ }
+    top.appendChild(h('div', 'capTier g17AllT' + (best >= 3 ? ' lg' : ''), 'Open all'));
+    const sub = h('div', 'capSrc');
+    sub.appendChild(h('span', null, 'Capsules'));
+    sub.appendChild(h('b', null, ' ' + A.items.filter((it) => it.popped).length + '/' + A.items.length));
+    top.appendChild(sub);
+    b.appendChild(top);
+    if (A.phase === 'done') {
+      // a label under each capsule: what it held, its mini
+      for (const it of A.items) {
+        const p = it.cap.prize || {}, info = prizeOf(p);
+        const lb = h('div', 'g17AllLb');
+        try { lb.style.left = Math.round(it.x) + 'px'; lb.style.top = Math.round(it.y + it.r + 16) + 'px'; lb.style.setProperty('--cc', capCol(it.cap.tier)); } catch (e) { /* stub */ }
+        lb.appendChild(h('div', 'a1', p.fallback ? `${p.fallback} gold` : info.name));
+        if (it.cap.mini && gachaMini(it.cap.mini.id)) lb.appendChild(h('div', 'a2', '+ ' + i18nTr(gachaMini(it.cap.mini.id).name) + (it.cap.mini.fresh ? ' · ' + i18nTr('NEW!') : '')));
+        b.appendChild(lb);
+      }
+      const bar = h('div', 'g17AllBar');
+      bar.appendChild(btn('Collect all', () => gachaAllCollect(), 'gold'));
+      b.appendChild(bar);
+      const fresh = A.items.filter((it) => it.cap.mini && it.cap.mini.fresh);
+      if (fresh.length && G17.cel !== A) { G17.cel = A; snd(fresh.some((it) => it.cap.mini.done) ? 'gachaSeries' : 'gachaNew'); haptic('g17New'); }
+    } else {
+      const hint = h('div', 'capHint');
+      hint.appendChild(h('span', null, A.phase === 'drop' ? '' : 'TAP TO HURRY'));
+      b.appendChild(hint);
+      S.ui.buttons.push({ el: $('scr-capsule'), fn: () => gachaAllTap(), label: 'Crack' });
+      b.appendChild(btn('Skip', () => gachaAllSkip(), 'sm ghost capSkip'));
+    }
+  }
+  function gachaAllTap() {
+    const A = G17.all;
+    if (!A || S.screen !== 'capsule') return false;
+    if (A.phase === 'drop') { A.phase = 'pop'; A.pt = A.gap; gachaAllDom(); return true; }
+    if (A.phase === 'pop') { A.gap = Math.min(A.gap, 0.1); A.pt = A.gap; return true; }
+    if (A.phase === 'show') { gachaAllDone(); return true; }
+    return false;
+  }
+  function gachaAllSkip() {
+    const A = G17.all;
+    if (!A) return false;
+    gachaAllDone();
+    return true;
+  }
+  // Pays one capsule of the fan (once: its opened flag is saved with the screen).
+  function gachaPayCap(cap, cd, k) {
+    const run = lootRun();
+    if (!cap || cap.opened || !run) return false;
+    cap.opened = true;
+    grantPrize(cap.prize);
+    gachaOnOpen(cap);
+    run.loot.capsOpened++;
+    if (!run.loot.bestCap || TIER_I[cap.tier] > TIER_I[run.loot.bestCap]) run.loot.bestCap = cap.tier;
+    const rw = cd && cd.then && cd.then.rw;
+    const rc = rw && cd.rwIdx && rw.caps ? rw.caps[cd.rwIdx[k]] : null;
+    if (rc && rc !== cap) { rc.opened = true; rc.prize = cap.prize; rc.mini = cap.mini; }
+    metaLoot().caps++;
+    saveMeta();
+    save();
+    return true;
+  }
+  function gachaAllPop(it, k, quiet) {
+    const A = G17.all;
+    if (!A || it.popped) return;
+    it.popped = true; it.pt = 0; it.flash = 1;
+    gachaPayCap(it.cap, A.cd, k);
+    const tier = TIER_I[it.cap.tier] || 0, col = capCol(it.cap.tier);
+    gachaChips(it.x, it.y, it.r, col, quiet ? 4 : 10 + tier * 4, 1 + tier * 0.1);
+    if (quiet) return;
+    fx().ring(it.x, it.y, col, { r0: it.r * 0.8, r1: it.r * 3 + tier * 30, w: 8 + tier * 2, life: 0.55 });
+    fx().emit('confetti', it.x, it.y, { power: 0.6 + tier * 0.2, n: 0.5 + tier * 0.2, dir: -Math.PI / 2, spread: 1.6 });
+    if (tier >= 2) fx().ring(it.x, it.y, '#ffffff', { r0: 10, r1: it.r * 3.4, w: 6, life: 0.6, delay: 0.06 });
+    if (tier >= 3) { snd('gachaLegend'); haptic('g17Legend'); slowmo(0.4, 0.35); if (!fx().reduced) fx().flash('#ffc94d', 0.35); }
+    else haptic('capCrack');
+    fx().shake(4 + tier * 3);
+    snd('capBurst', { tier });
+    snd('gachaChime', { tier, pitch: 1 + k * 0.05 });
+    gachaAllDom();
+  }
+  function gachaAllDone() {
+    const A = G17.all;
+    if (!A || A.phase === 'done') return;
+    A.items.forEach((it, k) => { if (!it.popped) gachaAllPop(it, k, true); });
+    A.phase = 'done';
+    gachaAllDom();
+    snd('relic');
+  }
+  function gachaAllCollect() {
+    const A = G17.all;
+    if (!A || A.phase !== 'done') return false;
+    const then = A.cd.then;
+    G17.all = null; S.sd = null;
+    snd('upgrade');
+    if (then && then.k === 'reward' && then.rw) { showReward(then.rw); return true; }
+    toMap();
+    return true;
+  }
+  function gachaAllTick(dt) {
+    gachaChipTick(dt);
+    const A = G17.all;
+    if (!A || S.screen !== 'capsule') return;
+    A.t += dt;
+    for (const it of A.items) { it.flash = Math.max(0, it.flash - dt * 2.5); if (it.popped) it.pt = Math.min(1, it.pt + dt * 3); }
+    if (A.phase === 'drop' && A.t >= 0.6 + A.items.length * 0.06) { A.phase = 'pop'; A.pt = A.gap * 0.5; snd('capDrop'); gachaAllDom(); }
+    if (A.phase === 'pop') {
+      A.pt += dt;
+      if (A.pt >= A.gap) {
+        A.pt = 0;
+        const k = A.items.findIndex((it) => !it.popped);
+        if (k >= 0) gachaAllPop(A.items[k], k);
+        else { A.phase = 'show'; A.st = 0; }
+      }
+    }
+    if (A.phase === 'show') { A.st += dt; if (A.st >= GK.allWait) gachaAllDone(); }
+  }
+  function gachaAllDraw(ctx, t) {
+    const A = G17.all, R = X.RENDER;
+    if (!A || !R || !R.capsule || S.screen !== 'capsule') return;
+    const rg = R.rgba || ((c) => c);
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,5,20,0.88)';
+    ctx.fillRect(-40, -40, W + 80, H + 80);
+    ctx.restore();
+    const nextK = A.phase === 'pop' ? A.items.findIndex((it) => !it.popped) : -1;
+    A.items.forEach((it, k) => {
+      const tier = it.popped ? it.cap.tier : it.cap.tier0, col = capCol(tier);
+      const u = A.phase === 'drop' ? U.clamp((A.t - it.d) / 0.5, 0, 1) : 1;
+      const y = it.y - (1 - U.ease.outBounce(u)) * 520;
+      ctx.save();
+      ctx.fillStyle = '#231640'; ctx.beginPath(); ctx.ellipse(it.x, it.y + it.r + 12, it.r * 1.2, it.r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = rg(col, 0.8); ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+      if (!it.popped || it.pt < 1) {
+        const kk = k === nextK ? U.clamp(A.pt / A.gap, 0, 1) : 0;
+        const shake = kk && !fx().reduced ? Math.sin(t * 70) * 0.08 * kk : 0;
+        R.capsule(ctx, it.x, y, it.r, { tier, t, rot: shake, crack: kk * 0.8, open: it.popped ? it.pt : 0, flash: it.flash, seed: 5 + k, glow: it.popped ? 0 : 0.5 });
+      }
+      if (it.popped) gachaPrizeDraw(ctx, it, t);
+    });
+    if (G17.chipN && R.gacha && R.gacha.chips) R.gacha.chips(ctx, G17.chips, G17.chipN);
+  }
+  // A popped capsule's prize on the canvas: its art (item, relic) or its icon, in a glow of the tier; the mini beside it.
+  function gachaPrizeDraw(ctx, it, t) {
+    const R = X.RENDER, p = it.cap.prize || {}, k = U.clamp(it.pt, 0, 1), col = capCol(it.cap.tier), rg = R.rgba || ((c) => c);
+    const s = it.r * (0.6 + 0.5 * U.ease.outBack(k));
+    ctx.save();
+    try {
+      const g = ctx.createRadialGradient(it.x, it.y, 2, it.x, it.y, it.r * 1.6);
+      g.addColorStop(0, rg(col, 0.55)); g.addColorStop(1, rg(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(it.x, it.y, it.r * 1.6, 0, Math.PI * 2); ctx.fill();
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+    try {
+      if (p.k === 'item' && tbl('ITEMS')[p.id] && R.item) { const def = itemDef(p.id); R.item(ctx, def, it.x, it.y, 0, Math.min(1.4, (s * 1.5) / shapeLong(def.shape)), { plus: !!p.plus }); }
+      else if (p.k === 'relic' && tbl('RELICS')[p.id] && !p.fallback && R.relicIcon) R.relicIcon(ctx, relicDef(p.id), it.x, it.y, s * 1.5);
+      else if (p.k === 'gold' || p.fallback) {
+        // a little stack of prize coins
+        ctx.save();
+        for (let i = 2; i >= 0; i--) {
+          const cx = it.x + (i - 1) * s * 0.42, cy = it.y + (i === 1 ? -s * 0.18 : s * 0.08);
+          ctx.fillStyle = '#b8860b'; ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.08, s * 0.4, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, s * 0.27, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+      } else if (p.k === 'tickets' && R.ticket) { R.ticket(ctx, it.x - s * 0.15, it.y + s * 0.12, s * 1.3, s * 0.6, -0.25, '#ff9ec7'); R.ticket(ctx, it.x + s * 0.1, it.y - s * 0.12, s * 1.3, s * 0.6, 0.15, '#ffc94d'); }
+      else {
+        const info = prizeOf(p);
+        ctx.save(); ctx.fillStyle = info.col || '#ffffff'; ctx.font = `900 ${Math.round(s * 1.1)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(info.icon || '?', it.x, it.y); ctx.restore();
+      }
+    } catch (e) { /* art is optional */ }
+    if (it.cap.mini && R.gacha && R.gacha.mini) R.gacha.mini(ctx, it.cap.mini.id, it.x + it.r * 0.85, it.y + it.r * 0.45, it.r * 0.95, t);
+  }
+
+  // ---- the daily capsule: a free Vault Capsule once a real day, a streak
+  function gachaDate() {
+    const d = G17.now != null ? G17.now : (S.headless ? null : new Date());
+    if (d == null) return null;
+    const x = d instanceof Date ? d : new Date(d);
+    return isNaN(x.getTime()) ? null : x;
+  }
+  const gachaKey = (d) => (D().dailyKey ? D().dailyKey(d) : d.toISOString().slice(0, 10));
+  function gachaDailyReady() {
+    const d = gachaDate();
+    if (!d || !D().vaultRoll || !D().COSMETICS) return false;
+    return gachaM().day !== gachaKey(d) && !vaultM().pend;
+  }
+  function gachaDailyClaim() {
+    if (!gachaDailyReady()) return false;
+    const d = gachaDate(), key = gachaKey(d), g = gachaM(), V = vaultM(), Gd = GD();
+    const prev = gachaKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
+    g.streak = g.day === prev ? g.streak + 1 : 1;
+    g.best = Math.max(g.best, g.streak); g.days++; g.day = key;
+    const rng = U.rng(U.hashStr('gacha-daily:' + key + ':' + V.caps + ':' + Object.keys(V.owned).length));
+    const r = D().vaultRoll(rng, V.owned, V.pity);
+    V.pity = r.pity | 0;
+    V.pend = { id: r.id, tier0: r.tier0, ups: r.ups.slice(), tier: r.tier, dupe: !!r.dupe, tix: r.tix | 0, lucky: !!r.lucky, daily: true };
+    g.bonus = (Gd ? Gd.DAILY_TIX : 5) * Math.min(g.streak, Gd ? Gd.DAILY_MAX : 7);
+    V.tix += g.bonus;
+    vaultSave();   // (the claim, the roll and the streak land in one meta save: a reload reopens the same capsule)
+    snd('gachaDaily');
+    haptic('g17New');
+    toast(g.streak > 1 ? `Day ${g.streak} streak! +${g.bonus} vault tickets` : `Daily capsule! +${g.bonus} vault tickets`, 2.2);
+    if (S.screen === 'vault') vaultCapOpen();
+    return true;
+  }
+  /* The vault's capsule counter: on a new day the free daily capsule takes the Vault Capsule
+     button's place (returned, so the paid one waits until it is opened); once claimed, a small
+     streak chip sits on the button's corner (a tap explains it) and null comes back. */
+  function gachaDailyPill(bot) {
+    if (!bot || !D().vaultRoll) return null;
+    const g = gachaM();
+    if (gachaDailyReady()) {
+      const b = btn('Free daily capsule', () => gachaDailyClaim(), 'gold vCapBtn g17DayBtn');
+      b.textContent = '';
+      b.appendChild(capCanvas('l', 44));
+      const cw = h('span', 'cw');
+      cw.appendChild(h('span', 'c1', 'Free daily capsule'));
+      cw.appendChild(h('span', 'c2', g.day ? `Day ${g.day === gachaKey(new Date(gachaDate().getFullYear(), gachaDate().getMonth(), gachaDate().getDate() - 1)) ? g.streak + 1 : 1} streak` : 'Once a day, on the house'));
+      b.appendChild(cw);
+      bot.appendChild(b);
+      return b;
+    }
+    if (!g.day || !gachaDate()) return null;
+    const el = h('div', 'g17Streak', `\u{1F525} ${g.streak}`);
+    try { el.title = i18nTr(`Day ${g.streak} streak`); } catch (e) { /* stub */ }
+    el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); popover(`<b>${i18nTr(`Day ${g.streak} streak`)}</b><br>${i18nTr('A free Vault Capsule every day. Come back tomorrow for the next one.')}<br>${i18nTr(`Streak bonus: +${g.bonus} vault tickets`)}`, 400, 760); };
+    bot.appendChild(el);
+    return null;
+  }
+
+  // ---- the Prize Vault's Minis tab: the four series, a turntable in the window
+  function gachaVaultTab(tabs) {
+    if (!tabs || !GD()) return null;
+    const Vs = S.vault, g = gachaM();
+    const tb = h('button', 'vTab g17Tab' + (Vs && Vs.tab === 'minis' ? ' on' : ''));
+    tb.appendChild(h('span', 'ic', '\u{1F9F8}'));
+    tb.appendChild(h('span', 'lb', 'Minis'));
+    const nn = Object.keys(g.news).length;
+    if (nn) tb.appendChild(h('i', 'nd', String(nn)));
+    tb.onclick = () => { if (Vs) { Vs.tab = 'minis'; Vs.sel = null; if (!gachaMini(Vs.msel)) Vs.msel = GD().MINI_IDS.find((id) => g.minis[id]) || GD().MINI_IDS[0]; } snd('cardFlip'); vaultDom(); };
+    tabs.appendChild(tb);
+    return tb;
+  }
+  function gachaSelect(id) {
+    const Vs = S.vault, g = gachaM();
+    if (!Vs || !gachaMini(id)) return false;
+    Vs.msel = id;
+    if (g.news[id]) { delete g.news[id]; S.vaultDirty = true; }
+    snd(g.minis[id] ? 'cardFlip' : 'click');
+    if (S.screen === 'vault') vaultDom();
+    return true;
+  }
+  function gachaShelf(shelf) {
+    const Vs = S.vault, Gd = GD();
+    if (!shelf || !Vs || Vs.tab !== 'minis' || !Gd) return null;
+    const g = gachaM();
+    shelf.className += ' g17Shelf';
+    const vb = $('vaultBody');
+    if (vb) vb.className += ' g17On';   // (the claw and crawler switches have nothing to switch here)
+    for (const s of Gd.SERIES) {
+      const ids = Gd.seriesIds(s.id), have = ids.filter((id) => g.minis[id]).length, done = !!g.series[s.id];
+      const hd = h('div', 'g17Ser' + (done ? ' done' : ''));
+      try { hd.style.setProperty('--sc', s.col); } catch (e) { /* stub */ }
+      hd.appendChild(h('span', 'si', s.icon));
+      const nm = h('span', 'sn');
+      nm.appendChild(h('b', null, s.name));
+      const cos = vaultDef(s.reward);
+      nm.appendChild(h('small', null, done ? 'COMPLETE' : cos ? i18nTr('Finish it for') + ' ' + i18nTr(cos.name) : ''));
+      hd.appendChild(nm);
+      hd.appendChild(h('span', 'sc', have + '/' + ids.length));
+      const bar = h('i', 'sb');
+      const fill = h('i', null);
+      try { fill.style.width = Math.round(have * 100 / ids.length) + '%'; } catch (e) { /* stub */ }
+      bar.appendChild(fill);
+      hd.appendChild(bar);
+      shelf.appendChild(hd);
+      for (const id of ids) {
+        const d = gachaMini(id), own = g.minis[id] | 0;
+        const el = h('div', 'vCard g17Card r-' + d.rarity + (own ? ' own' : ' lock') + (Vs.msel === id ? ' sel' : ''));
+        try { el.style.setProperty('--vc', (LT().COLOR || {})[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+        el.appendChild(canvasEl(62, (ctx, px) => { if (X.RENDER && X.RENDER.gacha) X.RENDER.gacha.mini(ctx, id, px / 2, px / 2, px, 0.4, { sil: !own }); }));
+        el.appendChild(h('div', 'nm', own ? d.name : '???'));
+        el.appendChild(h('div', 'tg', own > 1 ? 'x' + own : capName(d.rarity)));
+        if (g.news[id]) el.appendChild(h('i', 'nb', 'NEW'));
+        const fn = () => gachaSelect(id);
+        el.onclick = fn;
+        S.ui.buttons.push({ el, fn, label: own ? d.name : '???' });
+        shelf.appendChild(el);
+      }
+    }
+    return shelf;
+  }
+  function gachaDetail() {
+    const box = h('div', 'vDetail g17Detail');
+    const Vs = S.vault, d = gachaMini(Vs && Vs.msel), g = gachaM();
+    if (!d) return box;
+    const own = g.minis[d.id] | 0, s = gachaSer(d.series);
+    try { box.style.setProperty('--vc', (LT().COLOR || {})[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+    const tx = h('div', 'vdTx');
+    tx.appendChild(h('div', 'vdK', `${i18nTr(capName(d.rarity))} · ${s ? i18nTr(s.name) : ''}`));
+    tx.appendChild(h('div', 'vdN' + (d.rarity === 'l' && own ? ' lg' : ''), own ? d.name : '???'));
+    tx.appendChild(h('div', 'vdT', own ? d.text : 'Comes out of capsules, now and then.'));
+    box.appendChild(tx);
+    box.appendChild(h('div', 'vdOn', own ? `Found: ${own}` : 'Not found yet'));
+    return box;
+  }
+  // The preview window on the Minis tab: the picked mini turning on a lit turntable, its series beside it.
+  function gachaPrevDraw(ctx, t, win) {
+    const R = X.RENDER && X.RENDER.gacha, Vs = S.vault, Gd = GD();
+    if (!R || !Vs || !Gd || !win) return;
+    const d = gachaMini(Vs.msel) || gachaMini(Gd.MINI_IDS[0]), g = gachaM(), s = gachaSer(d.series);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(win.x, win.y, win.w, win.h); ctx.clip();
+    ctx.fillStyle = '#0d0719'; ctx.fillRect(win.x, win.y, win.w, win.h);
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(141,255,245,0.75)'; ctx.fillText(i18nTr('CAPSULE MINIS'), win.x + 12, win.y + 14);
+    const cx = win.x + 140, cy = win.y + win.h - 36;
+    R.turntable(ctx, cx, cy, 190, t, s ? s.col : '#2ee6d6');
+    R.mini(ctx, d.id, cx, cy - 76, 150, t, { sil: !g.minis[d.id], spin: fx().reduced ? 0 : (t * 0.18) % 1 });
+    // the series on a little shelf
+    const ids = Gd.seriesIds(d.series), x0 = win.x + 290;
+    ctx.fillStyle = s ? s.col : '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(i18nTr(s ? s.name : ''), x0 + 100, win.y + 30);
+    ids.forEach((id, i) => {
+      const x = x0 + 34 + (i % 3) * 66, y = win.y + 92 + Math.floor(i / 3) * 90;
+      ctx.fillStyle = id === d.id ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x - 30, y - 38, 60, 76);
+      R.mini(ctx, id, x, y, 60, t, { sil: !g.minis[id], bob: i });
+    });
+    ctx.restore();
+  }
+
+  function GACHA_API() {
+    return {
+      K: GK, get now() { return G17.now; }, set now(v) { G17.now = v; },
+      meta: () => gachaM(), fix: gachaMetaFix, grant: gachaGrant, onOpen: gachaOnOpen, onVault: gachaOnVault,
+      dailyReady: () => gachaDailyReady(), daily: () => gachaDailyClaim(), openAll: (src, rw) => gachaOpenAll(src, rw), get all() { return G17.all; },
+      allTap: () => gachaAllTap(), allSkip: () => gachaAllSkip(), allCollect: () => gachaAllCollect(), allTick: (dt) => gachaAllTick(dt),
+      state: (C) => (C && C.g17) || null, chips: () => G17.chipN, get hold() { return G17.hold; }, set hold(v) { G17.hold = v; },
+      select: (id) => gachaSelect(id), have: gachaSerHave, WORDS: GACHA_WORDS, PATTERNS: GACHA_PATTERNS,
+    };
+  }
+  // Every English line this block shows (the i18n suite checks each has its Dutch), and its patterns with an example.
+  const GACHA_WORDS = ['Capsule Mini', 'NEW!', 'SERIES COMPLETE!', 'Series prize', 'Open all', 'Capsules', 'TAP TO HURRY', 'Collect all', 'Free daily capsule', 'Once a day, on the house',
+    'Daily capsule', 'A free Vault Capsule every day. Come back tomorrow for the next one.', 'Minis', 'COMPLETE', 'Finish it for',
+    'Comes out of capsules, now and then.', 'Not found yet', 'CAPSULE MINIS', 'Daily capsule · free'];
+  const GACHA_PATTERNS = { 'Open all ({n})': 'Open all (3)', '+{n} vault tickets': '+12 vault tickets', 'Day {n} streak': 'Day 4 streak', 'Found: {n}': 'Found: 2',
+    'Streak bonus: +{n} vault tickets': 'Streak bonus: +15 vault tickets', 'Day {n} streak! +{n2} vault tickets': 'Day 3 streak! +15 vault tickets',
+    'Daily capsule! +{n} vault tickets': 'Daily capsule! +5 vault tickets' };
+  // ================================================================ /GACHA
+
+  // ================================================================ QA17 (round 17): QA pass 6
+  /* DESIGN.md "QA pass 6 (round 17)". Small fixes found playing the round 15 and 16 features on phones:
+     - Escape on a page opened out of a title sheet (the weekly, the Boss Rush menu, the Codex, the
+       History) went back to the title and reopened the sheet, and then the title's own Escape listener
+       (it runs after onKey) closed it again in the same key press: the listener now acts only on a key
+       press that began on the title (QA17K.scr, set first thing in onKey).
+     - Escape did nothing on the Prizedex, Stickers, Help and Tips pages (every other page has it): it
+       presses the page's Back (not while the Settings panel or a popover is up: those close first).
+     - The HUD's resource row (gold, bulbs, tickets, the act chip) ran under the relic strip when the
+       numbers grew (99999 gold) or a DAILY / WEEKLY badge sat in the act chip: the row squeezes its
+       chips (qa17Tight), then drops the act chip's word and a size step (qa17Tight2). Measured only when
+       a number's length, the act text or the language changes (a browser only).
+     - The Jackpot Lamp after a FEVER showed more cells than its level: sparks still flying when the dome
+       burst were already counted in the carried level and lit again when they landed.
+     - In season the title's ribbon was moved into the More sheet (it covered the sheet's X): it stays put.
+     - The online co-op watch screen: the corner lane is told where both players' cards are (QA_SIGNS.duo).
+     - Online versus: a straggler scored after the drop was booked goes over as a 'late' table. */
+  const QA17K = { scr: '', esc: ['collection', 'stickers', 'help', 'tips'] };
+  function qa17Key(ev, down) {
+    if (down) QA17K.scr = S.screen;   // the screen this key press began on
+    if (!down || !ev || ev.key !== 'Escape' || S.accOpen || S.popover || ev.repeat) return false;
+    if (QA17K.esc.indexOf(S.screen) < 0) return false;
+    const i = S.ui.buttons.findIndex((b) => b && b.label === 'Back' && !b.disabled && !(b.el && b.el.disabled));
+    if (i < 0) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    choose(i);
+    return true;
+  }
+  // A title button the round 15 tidy must leave where its builder put it: the season ribbon (SEASON's seaTitle hangs it over
+  // the sky; moved into the More sheet it kept its absolute place and covered the sheet's X, half off the screen).
+  function qa17TitleKeep(el) { return !!el && /\bseaBan\b/.test(el.className || ''); }
+  // The title's Escape listener (runs after onKey): closes an open sheet, unless this key press began on another page.
+  function qa17TitleEsc(ev) {
+    if (!ev || ev.key !== 'Escape' || !UIT.open || S.screen !== 'title') return false;
+    if (QA17K.scr && QA17K.scr !== 'title') return false;
+    uiSheetOpen(null);
+    return true;
+  }
+  const QA17H = { key: '', level: 0 };
+  // Squeezes a resource row until it fits (0: as designed, 1: tighter chips, 2: no act word, a size smaller). row: an element.
+  function qa17Fit(row) {
+    if (!row || !row.classList) return 0;
+    row.classList.remove('qa17Tight', 'qa17Tight2');
+    const over = () => +row.scrollWidth > +row.clientWidth + 1;
+    if (!(+row.clientWidth > 0) || !over()) return 0;
+    row.classList.add('qa17Tight');
+    if (!over()) return 1;
+    row.classList.add('qa17Tight2');
+    return 2;
+  }
+  function qa17HudFit() {
+    if (S.headless || (S.screen !== 'fight' && S.screen !== 'map')) return;
+    const g = $('goldTxt'), row = g && g.parentNode && g.parentNode.parentNode;
+    if (!row || !row.classList) return;
+    const len = (id) => { const e = $(id); return e ? String(e.textContent || '').length : 0; };
+    const top = $('top'), a = $('actTxt'), bd = S.tiltEl;
+    const key = [len('goldTxt'), len('inkTxt'), len('tixTxt'), a ? a.textContent : '', bd ? bd.textContent : '', top ? top.className : '', i18nLang()].join('|');
+    if (key === QA17H.key) return;
+    QA17H.key = key;
+    if (!(+row.clientWidth > 0)) { QA17H.key = ''; return; }   // hidden: again once it shows
+    QA17H.level = qa17Fit(row);
+  }
+  // The lamp as shown right after the burst: the carried level less what is still flying in (it lights as it lands).
+  function qa17LampShown(C) {
+    let fly = 0;
+    for (const q of (C && C.lampQ) || []) if (q) fly += Math.max(0, +q.n || 0);   // (every spark left in the queue lights its cells after the burst)
+    return U.clamp((C ? C.lamp | 0 : 0) - fly, 0, CABK.lampMax);
+  }
+  // The online co-op watch screen: both players' cards up top are drawn on the canvas, so the corner lane (a Prizedex
+  // discovery, a sticker) is told where they are and sits elsewhere instead of over the partner's hp.
+  function qa17DuoSigns() {
+    const Dd = S.duo;
+    if (!Dd || !S.duoNet || Dd.mode === 'vs' || Dd.ph === 'yours' || Dd.ph === 'end' || Dd.ph === 'toss') return [];
+    return [[12, 12, 252, 76], [W - 252, 12, W - 12, 76]];
+  }
+  if (!QA_SIGNS.duo) QA_SIGNS.duo = qa17DuoSigns;
+  /* Online versus: a prize that rolls into the chute after a drop was booked scores on the dropper's phone (round 15's
+     duoVsCredit), but the table had already gone over, so the two phones disagreed on the score and the pile until the
+     next table (the card choice). The dropper now sends the table again ('late'); the watcher takes it quietly. */
+  function qa17VsLate() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'vs' || Dd.ph !== 'sabo' || !Dd.last || Dd.last.who !== N.me) return false;
+    return !!duoVsNetOut('late');
+  }
+  function qa17VsLateIn() {
+    const Dd = S.duo, N = S.duoNet, L = Dd && Dd.last;
+    if (!L || !N) return false;
+    if (N.vw && N.vw.who === L.who) N.vw.pts = L.pts | 0;
+    if (S.duoV) S.duoV.flash[L.who] = 1;
+    duoShow();
+    return true;
+  }
+  function QA17_API() {
+    return { K: QA17K, H: QA17H, key: qa17Key, titleEsc: qa17TitleEsc, fit: qa17Fit, hudFit: qa17HudFit, lampShown: qa17LampShown, duoSigns: qa17DuoSigns };
+  }
+  // ================================================================ /QA17
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -23304,6 +28007,8 @@ const GAME = (() => {
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     // meta progression (DESIGN.md "Meta"): Tilt, the Prizedex, stickers, the daily run, the attract mode
     showStickers,
+    // HUD AND TITLE MENU (round 15): the title's group sheets, the HUD's act chip, the relic overflow
+    ui15: { T: UIT, H: UIH, sheet: uiSheetOpen, actTxt: uiActTxt, relicFit: uiRelicFit, relicList: uiRelicList },
     // I18N (round 13): the language (setLang saves it; lang() reads it; i18n.apply re-picks from the save / browser)
     setLang: i18nSetLang, lang: i18nLang, i18n: { apply: i18nApply, refresh: i18nRefresh, itemText: i18nItemText },
     // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
@@ -23516,6 +28221,7 @@ const GAME = (() => {
       aim: () => { const V = S.duoV; if (!V || !V.W) return null; let best = null, bs = -1e9; const cx = (V.C && V.C.bounds.chuteX) || CAB.w - CAB.chuteW; for (const b of V.W.bodies) { if (b.type !== 'dynamic' || !b.data || b.data.pile == null || b.x > cx - 10) continue; const s = (b.data.v | 0) * 10 + (CAB.h - b.y) * 0.15; if (s > bs) { bs = s; best = b; } } return best ? U.clamp(best.x, 24, cx - 24) : cx * 0.5; },
       get state() { return S.duo || null; }, get v() { return S.duoV || null; }, get live() { return S.duoLive || null; }, get t() { return S.duoT || null; },
       get setupState() { return S.duoSet || null; }, get log() { return DUOX.log; }, get seed() { return DUOX.seed; }, set seed(v) { DUOX.seed = v == null ? null : v >>> 0; },
+      net: DUON_API(),   // DUO NET (round 15): online co-op (DESIGN.md "Online co-op (round 15)")
     },
     // SCHOOL (round 11, DESIGN.md "Claw School and the Practice Cabinet (round 11)"): the practice cabinet, the lessons, the report card
     sch: SCH_API(),
@@ -23523,6 +28229,16 @@ const GAME = (() => {
     leg: LEG_API(),
     // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
     trd: TRD_API(), pev: PEV_API(),
+    // DEP (round 15): the Neon Depths, Endless's fourth biome (DESIGN.md "The Neon Depths (round 15)")
+    dep: DEP_API(),
+    // CAB (round 16): the cabinet is alive (events, the Jackpot Lamp, PERFECT grabs, the strain, prize faces) (DESIGN.md "The cabinet is alive (round 16)")
+    cab: CAB_API(),
+    // GACHA (round 17): Capsule fever (the build-up, Open all, Capsule Minis, the daily capsule) (DESIGN.md "Capsule fever (round 17)")
+    gacha: GACHA_API(),
+    // TECH (round 17): Cabinet Tech and Joy Stick (DESIGN.md "Cabinet Tech and the new crawler (round 17)")
+    tech: TECH_API(),
+    // QA17 (round 17): QA pass 6's fixes (DESIGN.md "QA pass 6 (round 17)")
+    qa17: QA17_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },
