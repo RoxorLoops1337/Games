@@ -3143,6 +3143,10 @@ html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
 /* a banner (JACKPOT, TURN OVER) rises over the arena instead of covering the shelf */
 #playerRow.rrOn #banner{top:-122px}
 .ctrlRow .rrSpd{font-size:var(--fs-s);font-weight:900;letter-spacing:.02em;text-transform:none;color:var(--info);font-variant-numeric:tabular-nums}
+/* round 22: the pill reads "» 1x" and lights up gold while the row resolves (the panel has the same button) */
+.ctrlRow .rrSpd.rrLive{color:#12091f;background:#ffc94d;border-color:#fff3c4;box-shadow:0 0 14px rgba(255,201,77,.55);animation:rrSpdPulse 1s ease-in-out infinite}
+@keyframes rrSpdPulse{50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){.ctrlRow .rrSpd.rrLive{animation:none}}
 /* ================= /RROW ================= */
 </style>
 </head>

@@ -17863,16 +17863,252 @@ const RENDER = (() => {
   // A prize flying from the chute onto its slot (an arc, shrinking into place).
   function rrRowIn(ctx, s, st) {
     const def = s.def || {}, u0 = Math.max(0, Math.min(1, s.u || 0)), u = 1 - (1 - u0) * (1 - u0), v = 1 - u;
-    const wide = s.w >= 84, x1 = s.cx - s.w / 2 + (wide ? 19 : 15), y1 = s.cy, x0 = s.fx, y0 = s.fy;
+    const big = st.ph > 0 && s.h > 0, wide = s.w >= 84;   // (round 22: onto the big card's art)
+    const x1 = big ? s.cx : s.cx - s.w / 2 + (wide ? 19 : 15), y1 = big ? s.cy - s.h / 2 + s.h * (s.w < 66 ? 0.32 : 0.28) : s.cy, x0 = s.fx, y0 = s.fy;
     const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - (st.reduced ? 30 : 80);
     const px = v * v * x0 + 2 * v * u * mx + u * u * x1, py = v * v * y0 + 2 * v * u * my + u * u * y1;
-    const d = shapeDims(def.shape), sc = (wide ? 30 : 24) / Math.max(8, d.w, d.h);
+    const d = shapeDims(def.shape), sc = (big ? Math.min(s.w * 0.6, s.h * 0.4) : wide ? 30 : 24) / Math.max(8, d.w, d.h);
     ctx.globalAlpha = st.a == null ? 1 : st.a;
     item(ctx, def, px, py, st.reduced ? 0 : v * 6, sc * (1 + v * 0.7), { plus: s.plus, glow: accC(RARITY_COL[def.rarity] || PAL.gold), glowA: 0.7 * v });
     ctx.globalAlpha = 1;
   }
+  /* ---- ROUND 22 (DESIGN.md "The resolve row, round 22"): the big panel. st also carries {op (0: the band
+     while the claw is out, 1: open over the glass), ph (the panel's height), tot {d, b, h} (the header's running
+     totals), tp (their pulse), spd, live (resolving), go (the GO! beat, 1 to 0), stamp {txt, col, t}, hint (its
+     alpha), btn {x, y, w, h} (the speed button), aim [{x, y, r}]}; a slot also {h (its card height), tag,
+     tagCol}. rrRowPaint takes this path when st.ph is set (the old thin shelf otherwise). Never throws. */
+  const RR2_C = { panel: 'rgba(15,8,29,0.95)', edge: '#6a4bb0', card: '#271a46', cardDone: '#1b1231', cardUp: '#3e2a70', name: '#c7b9ec', dim: '#8576ab' };
+  // The width of s in bold at size z (0 without a canvas).
+  function rr2W(ctx, s, z) {
+    ctx.font = 'bold ' + z + 'px ' + FONT;
+    try { return ctx.measureText(String(s)).width || 0; } catch (e) { return 0; }
+  }
+  // A label's size so it fits maxW (from size down to min).
+  function rr2Fs(ctx, s, size, min, maxW) {
+    const w = rr2W(ctx, s, size);
+    return w > maxW && w > 0 ? Math.max(min, Math.floor(size * maxW / w)) : size;
+  }
+  // What a card's numbers say, centred on cx: the first one big (sword 5, shield +4), a second one smaller when it fits.
+  function rr2Nums(ctx, n, cx, y, sz, maxW) {
+    if (!n) return;
+    const list = [];
+    if (n.ice) list.push(['ice', i18nTr('THAW')]);
+    if (n.d > 0) list.push(['d', String(n.d) + (n.all ? ' ' + i18nTr('ALL') : '')]);
+    if (n.b > 0) list.push(['b', '+' + n.b]);
+    if (n.h > 0) list.push(['h', '+' + n.h]);
+    if (n.s && n.sv > 0) list.push(['s', '']);
+    if (n.gr > 0) list.push(['gr', '+' + n.gr + ' ' + i18nTr('GRAB')]);
+    if (!list.length) return;
+    const part = (it, z) => (it[0] === 's' ? z * 2.1 : (it[0] === 'gr' ? 0 : z + 2) + rr2W(ctx, it[1], z));
+    let a = list[0], z1 = sz;
+    if (a[0] === 'd' && n.all && part(a, z1) > maxW) a = ['d', String(n.d)];   // a narrow card drops the ALL
+    while (z1 > 12 && part(a, z1) > maxW) z1 -= 2;
+    const b = list[1], z2 = Math.max(11, Math.round(sz * 0.62));
+    const w1 = part(a, z1), w2 = b ? part(b, z2) + 8 : 0, two = b && w1 + w2 <= maxW;
+    let x = cx - (w1 + (two ? w2 : 0)) / 2;
+    const one = (it, z, yy) => {
+      if (it[0] === 's') { statusPips(ctx, x, yy - z / 2, { [n.s]: n.sv }, z); x += z * 2.1; return; }
+      const ic = it[0] === 'gr' ? 0 : z;
+      if (ic) rrRowIcon(ctx, it[0], x + ic * 0.45, yy, z);
+      txt(ctx, it[1], x + ic + (ic ? 2 : 0), yy + 0.5, z, RRW_NUM[it[0]] || '#ffffff', true, 'left', INK);
+      x += part(it, z);
+    };
+    one(a, z1, y);
+    if (two) { x += 8; one(b, z2, y + (z1 - z2) * 0.18); }
+  }
+  // One prize card: its art, what it will do (then what it did) in big numbers, its name (or the relic that joined in).
+  function rr2Card(ctx, s, st) {
+    if (s.st === 'new') return;
+    const w = s.w, h = s.h || 82, a = st.a == null ? 1 : st.a, t = st.t || 0, red = !!st.reduced;
+    const def = s.def || {}, rc = accC(RARITY_COL[def.rarity] || RARITY_COL.c);
+    const done = s.st === 'hit' || s.st === 'void', away = s.st === 'toss' || s.st === 'quick', lift = Math.max(s.lift || 0, away ? 1 : 0);
+    const pk = done && s.pop > 0 && !red ? Math.sin(s.pop * Math.PI) * 0.12 : 0;
+    const k = 1 + (red ? 0.05 : 0.13) * lift + pk;
+    ctx.save();
+    ctx.translate(s.cx, s.cy - lift * (red ? 2 : 7));
+    ctx.scale(k, k);
+    const x = -w / 2, y = -h / 2;
+    ctx.globalAlpha = a * (s.st === 'void' ? 0.35 : s.st === 'in' ? 0.5 : 1);
+    if (lift > 0 && !red) glow(ctx, 0, 0, Math.max(w, h) * 0.75, PAL.gold, 0.6 * lift);
+    ctx.globalAlpha = a * (s.st === 'void' ? 0.35 : s.st === 'in' ? 0.5 : 1);
+    ctx.beginPath(); rrect(ctx, x, y, w, h, 11);
+    F(ctx, lift > 0 ? RR2_C.cardUp : done ? RR2_C.cardDone : RR2_C.card); ctx.fill();
+    S(ctx, lift > 0 ? PAL.gold : rc, lift > 0 ? 3 : done ? 1.5 : 2); ctx.stroke();
+    const narrow = w < 66, artS = Math.min(w * 0.6, h * (narrow ? 0.46 : 0.4)), ay = y + h * (narrow ? 0.32 : 0.28);
+    if (!away && s.st !== 'in') {
+      const d = shapeDims(def.shape), sc = artS / Math.max(8, d.w, d.h);
+      ctx.globalAlpha = a * (done ? 0.55 : 1) * (s.st === 'void' ? 0.4 : 1);
+      item(ctx, def, 0, ay, done || red ? 0 : Math.sin(t * 2 + s.cx) * 0.05, sc * (done ? 0.85 : 1), { plus: s.plus });
+    }
+    ctx.globalAlpha = a * (s.st === 'void' ? 0.4 : s.st === 'in' ? 0.6 : 1);
+    if (s.tag && w >= 54) {   // FREE, GOLDEN: a little ribbon on the top edge
+      const tz = 10, tl = rrRowFit(ctx, s.tag, tz, w - 22), tw = Math.min(w - 10, rr2W(ctx, tl, tz) + 14);
+      ctx.beginPath(); rrect(ctx, -tw / 2, y - 7, tw, 14, 7); F(ctx, accC(s.tagCol || PAL.gold)); ctx.fill();
+      txt(ctx, tl, 0, y + 0.5, tz, INK, true, 'center');
+    }
+    const n = done ? s.res : s.pre, ny = y + h * (narrow ? 0.74 : 0.64), nz = Math.round(Math.max(16, Math.min(30, h * 0.26)));
+    if (n && n.any && s.st !== 'void') {
+      ctx.save();
+      if (lift > 0 && !done && !red) { const g = 1 + 0.18 * lift; ctx.translate(0, ny); ctx.scale(g, g); ctx.translate(0, -ny); }   // the number grows as the card lifts
+      if (done && s.pop > 0 && !red) { const g = 1 + Math.sin(s.pop * Math.PI) * 0.4; ctx.translate(0, ny); ctx.scale(g, g); ctx.translate(0, -ny); }
+      rr2Nums(ctx, n, 0, ny, nz, w - 10);
+      ctx.restore();
+    } else if (s.st === 'hit' && s.pre && s.pre.any) txt(ctx, '0', 0, ny + 0.5, nz, RR2_C.dim, true, 'center', INK);   // it did nothing (a heal at full hp)
+    if (!narrow) {
+      const P = done && s.procs && s.procs.length ? s.procs[0] : null;
+      if (P) {
+        const pn = P.n || {}, num = pn.d ? ' ' + pn.d : pn.b ? ' +' + pn.b : pn.h ? ' +' + pn.h : '';
+        const str = (P.icon ? P.icon + ' ' : '') + i18nTr(P.name) + num + (s.procs.length > 1 ? ' +' + (s.procs.length - 1) : '');
+        txt(ctx, rrRowFit(ctx, str, 12, w - 8), 0, y + h - 11, 12, accC(P.col || PAL.gold), true, 'center', INK);
+      } else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 12, w - 8), 0, y + h - 11, 12, done ? RR2_C.dim : RR2_C.name, true, 'center', INK);
+    }
+    if (done && s.st === 'hit' && !narrow) {   // a small tick: this one has hit
+      F(ctx, '#3ddc84'); ctx.beginPath(); ctx.arc(x + w - 11, y + 11, 7, 0, Math.PI * 2); ctx.fill();
+      S(ctx, INK, 2); ctx.beginPath(); ctx.moveTo(x + w - 14.5, y + 11); ctx.lineTo(x + w - 11.5, y + 14); ctx.lineTo(x + w - 7, y + 8); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+  // A grab chip (a relic, a combo, Luck, a pet): its source's name large, then its number.
+  function rr2Chip(ctx, s, st) {
+    const w = s.w, h = s.h || 82, a = st.a == null ? 1 : st.a, red = !!st.reduced;
+    const col = accC(s.col || PAL.gold), act = s.st === 'act', wait = s.st === 'wait';
+    const k = 1 + (act && !red ? 0.1 : 0) + (s.pop > 0 && !red ? Math.sin(s.pop * Math.PI) * 0.08 : 0);
+    ctx.save();
+    ctx.translate(s.cx, s.cy - (act && !red ? 6 : 0));
+    ctx.scale(k, k);
+    const x = -w / 2, y = -h / 2;
+    ctx.globalAlpha = a * (wait ? 0.6 : 1);
+    if ((act || s.pop > 0) && !red) glow(ctx, 0, 0, Math.max(w, h) * 0.7, col, 0.55 * Math.max(s.pop || 0, act ? 0.7 : 0));
+    ctx.globalAlpha = a * (wait ? 0.6 : 1);
+    ctx.beginPath(); rrect(ctx, x, y, w, h, 11);
+    F(ctx, act ? RR2_C.cardUp : RR2_C.cardDone); ctx.fill();
+    S(ctx, col, act ? 3 : 2); ctx.stroke();
+    const name = s.label ? i18nTr(s.label) : '', head = s.tag === 'COMBO' && name ? i18nTr('Combo') + ': ' + name : name || i18nTr(s.tag || '');
+    const iz = Math.round(Math.min(26, h * 0.24)), iy = y + h * 0.22;
+    if (s.icon) txt(ctx, String(s.icon), 0, iy, iz, col, false, 'center');
+    else { F(ctx, col); ctx.beginPath(); star(ctx, 0, iy, iz * 0.45, 5, 0.45); ctx.fill(); }
+    // the source's name, as big as fits: one line, else two (a long relic or a Dutch name), cut only past that
+    const sp = head.indexOf(' ', Math.floor(head.length / 2) - 3);
+    let fz = rr2Fs(ctx, head, 15, sp > 0 ? 12 : 10, w - 10);
+    if (rr2W(ctx, head, fz) > w - 10 && sp > 0) {
+      const l1 = head.slice(0, sp), l2 = head.slice(sp + 1);
+      fz = Math.min(rr2Fs(ctx, l1, 14, 10, w - 10), rr2Fs(ctx, l2, 14, 10, w - 10));
+      txt(ctx, rrRowFit(ctx, l1, fz, w - 8), 0, y + h * 0.46 - fz * 0.55, fz, col, true, 'center', INK);
+      txt(ctx, rrRowFit(ctx, l2, fz, w - 8), 0, y + h * 0.46 + fz * 0.55, fz, col, true, 'center', INK);
+    } else txt(ctx, rrRowFit(ctx, head, fz, w - 8), 0, y + h * 0.46, fz, col, true, 'center', INK);
+    const nz = Math.round(Math.max(15, Math.min(26, h * 0.22))), ny = y + h * 0.76;
+    if (s.res && s.res.any) {
+      ctx.save();
+      if (s.pop > 0 && !red) { const g = 1 + Math.sin(s.pop * Math.PI) * 0.35; ctx.translate(0, ny); ctx.scale(g, g); ctx.translate(0, -ny); }
+      rr2Nums(ctx, s.res, 0, ny, nz, w - 10);
+      ctx.restore();
+    } else if (s.txt) txt(ctx, rrRowFit(ctx, s.txt, 12, w - 8), 0, ny, 12, '#f4eeff', true, 'center', INK);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+  // The header (open): YOUR HITS, the running totals, the speed button.
+  function rr2Head(ctx, st) {
+    const x0 = st.x0, y = st.y, T = st.tot || { d: 0, b: 0, h: 0 }, cy = y + 15;
+    const lab = i18nTr('YOUR HITS');
+    txt(ctx, lab, x0 + 14, cy, 15, PAL.gold, true, 'left', INK);
+    let x = x0 + 14 + (rr2W(ctx, lab, 15) || 90) + 16;
+    const pk = st.tp > 0 && !st.reduced ? 1 + st.tp * 0.12 : 1;
+    const one = (kind, v, col) => {
+      const z = 19;
+      ctx.save(); ctx.translate(x, cy); ctx.scale(pk, pk);
+      rrRowIcon(ctx, kind, z * 0.45, 0, z);
+      txt(ctx, String(Math.round(v)), z + 3, 0.5, z, col, true, 'left', INK);
+      ctx.restore();
+      x += z + 3 + (rr2W(ctx, String(Math.round(v)), z) || 20) + 16;
+    };
+    one('d', T.d || 0, RRW_NUM.d);
+    one('b', T.b || 0, RRW_NUM.b);
+    if (T.h > 0) one('h', T.h, RRW_NUM.h);
+    const b = st.btn;
+    if (b) {
+      const live = !!st.live, p = live && !st.reduced ? 0.5 + 0.5 * Math.sin((st.t || 0) * 6) : 0;
+      if (live && !st.reduced) glow(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w * 0.6, PAL.gold, 0.25 + 0.25 * p);
+      ctx.beginPath(); rrect(ctx, b.x, b.y, b.w, b.h, b.h / 2);
+      F(ctx, live ? PAL.gold : '#2a1d48'); ctx.fill(); S(ctx, live ? '#fff3c4' : PAL.gold, 2); ctx.stroke();
+      txt(ctx, '» ' + (st.spd || 1) + 'x', b.x + b.w / 2, b.y + b.h / 2 + 0.5, 15, live ? INK : PAL.gold, true, 'center');
+    }
+  }
+  // The band's label (the claw is out): YOUR HITS on the left, stacked.
+  function rr2Label(ctx, st) {
+    const x = st.x0 + 6, w = 56, cy = st.y + (st.ph || 92) / 2;
+    const ws = String(i18nTr('YOUR HITS')).split(' '), l1 = ws.slice(0, Math.ceil(ws.length / 2)).join(' '), l2 = ws.slice(Math.ceil(ws.length / 2)).join(' ');
+    const z = Math.min(rr2Fs(ctx, l1, 14, 8, w), rr2Fs(ctx, l2 || l1, 14, 8, w));
+    txt(ctx, l1, x + w / 2, cy - (l2 ? z * 0.65 : 0) - 6, z, PAL.gold, true, 'center', INK);
+    if (l2) txt(ctx, l2, x + w / 2, cy + z * 0.65 - 6, z, PAL.gold, true, 'center', INK);
+    // a little arrow: the prizes line up to the right
+    const ay = cy + z + 8, ax = x + w / 2, bob = st.reduced ? 0 : Math.sin((st.t || 0) * 5) * 3;
+    F(ctx, PAL.gold); ctx.beginPath(); ctx.moveTo(ax - 6 + bob, ay - 6); ctx.lineTo(ax + 6 + bob, ay); ctx.lineTo(ax - 6 + bob, ay + 6); ctx.closePath(); ctx.fill();
+  }
+  // The first time ever: a one-line hint under the panel, pointing at it.
+  function rr2Hint(ctx, st) {
+    const s = i18nTr('Your prizes hit one by one. Tap » to speed up.');
+    const y = st.y + (st.ph || 92) + 16, x0 = st.x0 + 10, x1 = st.x1 - 10;
+    const fz = rr2Fs(ctx, s, 16, 11, x1 - x0 - 24);
+    const w = Math.min(x1 - x0, (rr2W(ctx, s, fz) || 300) + 28), bx = (st.x0 + st.x1) / 2 - w / 2, hgt = fz + 18;
+    ctx.beginPath(); rrect(ctx, bx, y, w, hgt, 10); F(ctx, '#fff6dc'); ctx.fill(); S(ctx, PAL.gold, 2.5); ctx.stroke();
+    F(ctx, '#fff6dc'); ctx.beginPath(); ctx.moveTo((st.x0 + st.x1) / 2 - 10, y + 1); ctx.lineTo((st.x0 + st.x1) / 2, y - 11); ctx.lineTo((st.x0 + st.x1) / 2 + 10, y + 1); ctx.closePath(); ctx.fill();
+    txt(ctx, s, (st.x0 + st.x1) / 2, y + hgt / 2 + 0.5, fz, INK, true, 'center');
+  }
+  function rr2Paint(ctx, st) {
+    const a = st.a == null ? 1 : st.a, op = Math.max(0, Math.min(1, +st.op || 0)), x0 = st.x0, x1 = st.x1, y = st.y, ph = st.ph, t = st.t || 0;
+    const go = Math.max(0, +st.go || 0);
+    // the aim: a ring on whatever the lifted card is about to hit
+    if (st.aim && st.aim.length) {
+      for (const m of st.aim) {
+        ctx.globalAlpha = a * (st.reduced ? 0.6 : 0.45 + 0.3 * Math.sin(t * 10));
+        ctx.save(); ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t * 40;
+        S(ctx, PAL.gold, 3); ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      }
+    }
+    ctx.globalAlpha = a;
+    ctx.save();
+    try { ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5; } catch (e) { /* stub */ }
+    ctx.beginPath(); rrect(ctx, x0, y, x1 - x0, ph, 16); F(ctx, RR2_C.panel); ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = a;
+    const pulse = go > 0 ? go : st.live && !st.reduced ? 0.35 + 0.25 * Math.sin(t * 4) : 0;
+    ctx.beginPath(); rrect(ctx, x0, y, x1 - x0, ph, 16); S(ctx, pulse > 0 ? PAL.gold : RR2_C.edge, 2 + pulse * 2.5); ctx.stroke();
+    if (op < 1) { ctx.globalAlpha = a * (1 - op); rr2Label(ctx, st); }
+    if (op > 0) {
+      ctx.globalAlpha = a * op; rr2Head(ctx, st);
+      S(ctx, 'rgba(106,75,176,0.6)', 1); ctx.beginPath(); ctx.moveTo(x0 + 10, y + 28.5); ctx.lineTo(x1 - 10, y + 28.5); ctx.stroke();
+    }
+    ctx.globalAlpha = a;
+    for (const s of st.slots) if (s && s.cx != null) { if (s.k === 'grab') rr2Chip(ctx, s, st); else rr2Card(ctx, s, st); }
+    for (const s of st.slots) if (s && s.k === 'item' && s.st === 'in' && s.cx != null) rrRowIn(ctx, s, st);
+    if (st.flash > 0) {
+      ctx.globalAlpha = Math.min(1, st.flash) * 0.35 * a;
+      ctx.beginPath(); rrect(ctx, x0, y, x1 - x0, ph, 16); F(ctx, '#ffffff'); ctx.fill();
+    }
+    if (st.stamp && st.stamp.txt) {   // DOUBLE, JACKPOT!: a stamp on the panel's top right
+      const sp = st.stamp, age = 2.2 - (+sp.t || 0), sc = st.reduced ? 1 : age < 0.18 ? 1.6 - age / 0.18 * 0.6 : 1;
+      ctx.globalAlpha = a * Math.min(1, (+sp.t || 0) / 0.4);
+      const bx = st.btn ? st.btn.x - 62 : x1 - 150;   // open: in the header, left of the speed button; the band: on its top edge
+      ctx.save(); ctx.translate(op > 0.5 ? bx : x1 - 70, op > 0.5 ? y + 14 : y - 2); ctx.rotate(op > 0.5 ? -0.05 : -0.12); ctx.scale(sc, sc);
+      const fz = 17, sl = rrRowFit(ctx, sp.txt, fz, 118), w = Math.min(130, rr2W(ctx, sl, fz) + 22);
+      ctx.beginPath(); rrect(ctx, -w / 2, -14, w, 28, 8); F(ctx, INK); ctx.fill(); S(ctx, accC(sp.col || PAL.gold), 3); ctx.stroke();
+      txt(ctx, sl, 0, 0.5, fz, accC(sp.col || PAL.gold), true, 'center');
+      ctx.restore();
+    }
+    if (go > 0) {   // the claw is home: GO!
+      const u = 1 - go, sc = st.reduced ? 1 : u < 0.2 ? 0.6 + u / 0.2 * 0.6 : 1.2 - Math.min(0.2, (u - 0.2) * 0.4);
+      ctx.globalAlpha = a * Math.min(1, go / 0.35);
+      ctx.save(); ctx.translate((x0 + x1) / 2, y + ph / 2 + 6); ctx.scale(sc, sc);
+      chrome(ctx, i18nTr('GO!'), 0, 0, 44, PAL.gold, PAL.gold);
+      ctx.restore();
+    }
+    if (st.hint > 0) { ctx.globalAlpha = a * Math.min(1, st.hint); rr2Hint(ctx, st); }
+    ctx.globalAlpha = 1;
+  }
   function rrRowPaint(ctx, st) {
     if (!ctx || !st || !st.slots || !st.slots.length) return;
+    if (st.ph > 0) { ctx.save(); try { rr2Paint(ctx, st); } catch (e) { /* never throws */ } ctx.restore(); return; }   // ROUND 22: the big panel
     ctx.save();
     try {
       const a = st.a == null ? 1 : st.a;

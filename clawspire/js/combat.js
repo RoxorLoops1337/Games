@@ -393,13 +393,15 @@ const COMBAT = (() => {
   // ================= /ENDLESS =================
 
   // ---------- fight setup ----------
-  // (round 21, DESIGN.md "Combo relics and a gentler, clearer start") DATA.DIFFICULTY.act1 {hp, dmg, first}:
-  // act 1 normals fought in act 1 (never a minion, an elite or a boss, never after the Endless reboot) take a
-  // hit more and hit a bit harder; the run's very first fight (F.fights 0) reads the gentler `first`.
+  // (round 21, DESIGN.md "Combo relics and a gentler, clearer start") DATA.DIFFICULTY.act1 {hp, dmg, elite?, boss?}:
+  // act 1 enemies fought in act 1 (never a minion, never after the Endless reboot): a normal reads {hp, dmg}, the
+  // run's first fight included (round 22: no gentler first fight any more), an elite or a boss its own sub-dial
+  // (none: untouched). An act 1 enemy pulled into a later act reads nothing.
   function crAct1Mul(F, def, tier, diff) {
     const A = diff && diff.act1;
-    if (!A || tier !== 'normal' || def.minion || F.act !== 1 || num(F.loop, 0) > 0 || clamp(num(def.act, 1) | 0, 1, 3) !== 1) return [1, 1];
-    const k = num(F.fights, 0) === 0 && A.first ? A.first : A;
+    if (!A || def.minion || F.act !== 1 || num(F.loop, 0) > 0 || clamp(num(def.act, 1) | 0, 1, 3) !== 1) return [1, 1];
+    const k = tier === 'normal' ? A : (A[tier] && typeof A[tier] === 'object' ? A[tier] : null);
+    if (!k) return [1, 1];
     return [Math.max(0.1, num(k.hp, 1)), Math.max(0.1, num(k.dmg, 1))];
   }
   function makeEnemy(F, id) {
@@ -424,7 +426,7 @@ const COMBAT = (() => {
     }
     // BALANCE (round 12): elites and bosses hit harder than the normals' dial (DATA.DIFFICULTY.tierDmg, 1 = off)
     if (diff.tierDmg && diff.tierDmg[tier] != null) dmgMul *= num(diff.tierDmg[tier], 1);
-    { const a1 = crAct1Mul(F, def, tier, diff); hpMul *= a1[0]; dmgMul *= a1[1]; }   // (round 21) act 1 normals are a threat
+    { const a1 = crAct1Mul(F, def, tier, diff); hpMul *= a1[0]; dmgMul *= a1[1]; }   // (round 21/22) the act 1 dial: normals a threat, elites a step up, not a wall
     { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
     { const esc = endlessMul(F); hpMul *= esc[0]; dmgMul *= esc[1]; }   // the Endless loop's lift (ENDLESS block)
     { const dm = depMul(def); hpMul *= dm[0]; dmgMul *= dm[1]; }   // DEP (round 15): the Neon Depths' danger dial

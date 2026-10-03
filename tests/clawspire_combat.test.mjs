@@ -2008,7 +2008,7 @@ if (hasData) {
     h.ok(F0.loop === 0 && F0.mut === null && F0.mix === null, 'a plain run: no loop, no mutators');
     for (const loop of [1, 2, 3, 4]) {
       const act = D5.endlessAct(loop), s = D5.endlessScale(loop, act);
-      // (round 21) the plain side without DIFFICULTY.act1 (the first fight's dial): a loop never reads it, so the
+      // (round 21) the plain side without DIFFICULTY.act1 (the act 1 dial): a loop never reads it, so the
       // ratio below stays the endless lift alone
       const a1 = D5.DIFFICULTY.act1; D5.DIFFICULTY.act1 = null;
       const Fa = C5.newFight(run5({ act }), ['rat'], U5.rng(11));

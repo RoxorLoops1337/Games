@@ -90,11 +90,12 @@ const DATA = (() => {
   // deaths spread over the three acts instead of piling up in act 2. tierDmg: elites and bosses hit 50% harder
   // on top (normals stay where a starting bin can still beat every one of them; the balance suite guards that).
   const DIFFICULTY = { hp: 3.1, dmg: 2.6, ramp: { every: 4, hp: 0.1, dmg: 0.1, max: 10 }, tierDmg: { elite: 1.5, boss: 1.5 } };   // the owner tunes by hand
-  // (round 21, owner request: the first fights are a threat) act 1 normals (in act 1 only, never elites or bosses)
-  // get x hp / x dmg on top of the dial; the run's very first fight takes `first` instead, so it stays gentle-ish:
-  // with no combos and weaker starters it already lasts a few grabs, and it is the one fight a bare starting bin
-  // meets (the balance suite's "beatable" guard plays it).
-  DIFFICULTY.act1 = { hp: 1.15, dmg: 1.1, first: { hp: 0.85, dmg: 0.85 } };
+  // (round 21, owner request: the first fights are a threat) act 1 normals (in act 1 only, never minions) get x hp /
+  // x dmg on top of the dial. (round 22, DESIGN.md "First fights are a threat (round 22)") the run's first fight
+  // reads the same dial (round 21 gave it x0.85 / x0.85, and the owner killed it before it could hit back), and
+  // act 1's elites read `elite` on top of tierDmg: with combos a relic power, the first elite is fought with a
+  // nearly bare bin and was the wall of most runs (the skilled bot lost 1 in 4 of them). Bosses read `boss` if set.
+  DIFFICULTY.act1 = { hp: 1.15, dmg: 1.05, elite: { hp: 0.85, dmg: 0.85 } };
 
   const ECONOMY = {
     startInk: 10,          // bulbs at the start of every act (was 5)
@@ -1088,9 +1089,9 @@ const DATA = (() => {
       desc: 'Grew on a spilled soda. Now it has opinions.', ai: 'cycle', pattern: [0, 1, 2, 1],
       moves: [debuff('puff', 'Puff', 'poison', 2, 'Puffs spores (2 Poison)'), atk('bonk', 'Bonk', 6, 1, 'Bonks for 6'),
         mheal('sprout', 'Sprout', 5, 'Regrows 5 HP')] },
-    { id: 'crab', name: 'Claw Crab', act: 1, tier: 'normal', hp: [26, 30], art: 'crab', size: 1, color: '#ff8a5a',
+    { id: 'crab', name: 'Claw Crab', act: 1, tier: 'normal', hp: [24, 28], art: 'crab', size: 1, color: '#ff8a5a',
       desc: 'Thinks your claw is a rival. Wants a rematch.', ai: 'cycle', pattern: [0, 1, 2, 1],
-      status: { thorns: 2 },
+      status: { thorns: 1 },
       moves: [blk('shell', 'Shell Up', 8, 'Shells up (Block 8)'), atk('pinch', 'Pinch', 4, 2, 'Pinches 4 x2'),
         buff('harden', 'Harden', 'armor', 1, 'Hardens its shell (+1 Armor)')] },
     // act 1 elites
