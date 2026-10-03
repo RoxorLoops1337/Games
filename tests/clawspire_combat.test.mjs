@@ -116,6 +116,9 @@ const RELICS = {
   r_amp2: { id: 'r_amp2', name: 'Amp2', rules: { amp: { small: 1 } } },
   r_encore: { id: 'r_encore', name: 'Encore', rules: { comboTwice: 1 } },
   r_echo: { id: 'r_echo', name: 'Echo', rules: { echo: 3 } },
+  // (round 21) combo relics: every family, and one family ('steel', the stub Clang's)
+  r_combos: { id: 'r_combos', name: 'Combos', icon: 'C', proc: 'ALL COMBOS', combo: 'all' },
+  r_steel: { id: 'r_steel', name: 'Steel', icon: 'S', proc: 'STEEL COMBO', combo: 'steel' },
 };
 const STATUS = {};
 for (const [s, kind] of Object.entries({ str: 'buff', weak: 'debuff', vuln: 'debuff', poison: 'debuff', burn: 'debuff', chill: 'debuff', freeze: 'debuff', regen: 'buff', thorns: 'buff', dodge: 'buff', bleed: 'debuff', stun: 'debuff', grease: 'debuff', fog: 'debuff', shield_up: 'buff', enrage: 'buff', armor: 'buff' })) {
@@ -482,8 +485,10 @@ h.test('events mirror onto F.events; determinism', () => {
 const procs = (evs, id) => evs.filter(e => e.t === 'proc' && (!id || e.id === id));
 // A stub recipe book: two metal items fire 'clang' (3 to the target), three
 // items fire 'bonus' (+1 grab, once a turn).
-const CLANG = { id: 'clang', name: 'Clang', text: 'Two metal.', color: '#aab3bd', tier: 1, family: 'm', target: 'enemy', fx: [{ k: 'dmg', v: 3 }] };
-const BONUS = { id: 'bonus', name: 'Bonus', text: 'Three items.', color: '#ffc94d', tier: 2, family: 'b', target: 'none', once: 'turn', fx: [{ k: 'grab', v: 1 }] };
+// (round 21) combos are a relic power: Clang is a Steel recipe, Bonus a Jackpot one; the fights below that fire
+// them carry r_combos (every family) unless a test is about the gate itself.
+const CLANG = { id: 'clang', name: 'Clang', text: 'Two metal.', color: '#aab3bd', tier: 1, family: 'm', cr: 'steel', target: 'enemy', fx: [{ k: 'dmg', v: 3 }] };
+const BONUS = { id: 'bonus', name: 'Bonus', text: 'Three items.', color: '#ffc94d', tier: 2, family: 'b', cr: 'jackpot', target: 'none', once: 'turn', fx: [{ k: 'grab', v: 1 }] };
 function withCombos(fn) {
   STUB.combosFor = (defs) => {
     const out = [];
@@ -520,7 +525,7 @@ h.test('new relic hooks fire with their arguments and a proc event leads their e
   ev = COMBAT.grabDone(F, 3); h.ok(log.includes('jackpot:3') && procs(ev, 'hooky').length >= 1, 'onJackpot(F, n) on a 3-item grab');
   log.length = 0;
   withCombos(() => {
-    const G = fight(['dummy'], { relics: ['hooky'], bin: ['sword', 'shield', 'potion', 'sword'] });
+    const G = fight(['dummy'], { relics: ['hooky', 'r_combos'], bin: ['sword', 'shield', 'potion', 'sword'] });
     const e2 = grabOf(G, ['sword', 'shield']);
     h.ok(log.includes('combo:clang:2'), 'onCombo(F, combo, defs)');
     h.ok(procs(e2, 'hooky').length >= 1, 'with its proc');
@@ -585,7 +590,7 @@ h.test('relic rules: glassBreak, amp, echo', () => {
 
 h.test('grab buffer, streak and combos', () => {
   withCombos(() => {
-    let F = fight(['dummy'], { bin: ['sword', 'shield', 'potion', 'sword', 'rock'], claw: { grabs: 6 } });
+    let F = fight(['dummy'], { relics: ['r_combos'], bin: ['sword', 'shield', 'potion', 'sword', 'rock'], claw: { grabs: 6 } });
     COMBAT.useGrab(F); playId(F, 'sword'); playId(F, 'shield');
     h.eq(F.grab.defs.map(d => d.id).join(), 'sword,shield', 'play fills the grab buffer');
     let ev = COMBAT.grabDone(F, 2);
@@ -601,26 +606,42 @@ h.test('grab buffer, streak and combos', () => {
     COMBAT.useGrab(F); ev = COMBAT.grabDone(F, 0);
     h.eq(find(ev, 'combo').length, 0, 'an empty grab after a single one fires nothing (no carry-over)');
     // str applies to combo hits, like an item
-    F = fight(['dummy'], { bin: ['sword', 'shield', 'sword'] }); F.player.status.str = 2;
+    F = fight(['dummy'], { relics: ['r_combos'], bin: ['sword', 'shield', 'sword'] }); F.player.status.str = 2;
     grabOf(F, ['sword', 'shield']); h.eq(E0(F).hp, 100 - 8 - 5, 'Strength adds to combo hits');
     // once a turn
-    F = fight(['dummy'], { bin: ['potion', 'potion', 'potion', 'potion', 'potion', 'potion', 'rock'], claw: { grabs: 5 }, hp: 40 });
+    F = fight(['dummy'], { relics: ['r_combos'], bin: ['potion', 'potion', 'potion', 'potion', 'potion', 'potion', 'rock'], claw: { grabs: 5 }, hp: 40 });
     ev = grabOf(F, ['potion', 'potion', 'potion']);
     h.ok(find(ev, 'combo').some(c => c.id === 'bonus') && F.player.grabs === 5, 'bonus +1 grab');
     ev = grabOf(F, ['potion', 'potion', 'potion']);
     h.ok(!find(ev, 'combo').some(c => c.id === 'bonus') && F.player.grabs === 4, 'a once-a-turn combo stays quiet the second time');
     COMBAT.endTurn(F);
     // encore
-    F = fight(['dummy'], { relics: ['r_encore'], bin: ['sword', 'shield', 'sword'] });
+    F = fight(['dummy'], { relics: ['r_encore', 'r_combos'], bin: ['sword', 'shield', 'sword'] });
     ev = grabOf(F, ['sword', 'shield']);
     h.eq(E0(F).hp, 100 - 6 - 3 - 3, 'Encore: the combo resolves twice');
     h.ok(procs(ev, 'r_encore').some(p => p.text === 'ENCORE'), 'ENCORE proc');
+    // (round 21) the gate: no combo relic, no combo (Encore alone does nothing)
+    F = fight(['dummy'], { relics: ['r_encore'], bin: ['sword', 'shield', 'potion', 'sword'], claw: { grabs: 5 } });
+    ev = grabOf(F, ['sword', 'shield', 'potion']);
+    h.eq(find(ev, 'combo').length, 0, 'no combo relic: the grab fires no combo at all');
+    h.ok(E0(F).hp === 100 - 6 && F.player.grabs === 4 && F.stats.combos === 0 && !procs(ev, 'r_encore').length, 'only the items resolved (no Clang, no Bonus grab, no Encore)');
+    // a family relic switches on exactly its family: Steel's Clang, never Jackpot's Bonus
+    F = fight(['dummy'], { relics: ['r_steel'], bin: ['sword', 'shield', 'potion', 'sword'], claw: { grabs: 5 } });
+    ev = grabOf(F, ['sword', 'shield', 'potion']);
+    h.eq(find(ev, 'combo').map(c => c.id).join(), 'clang', 'the Steel relic: Clang fires, Bonus does not');
+    h.ok(procs(ev, 'r_steel').some(p => p.text === 'STEEL COMBO'), 'and the relic that switched it on flashes (its proc)');
+    h.eq(F.cr.fam.steel, 'r_steel', 'F.cr names the relic per family');
+    // 'all' switches on every family, and recipes with no family too
+    F = fight(['dummy'], { relics: ['r_combos'], bin: ['sword', 'shield', 'potion', 'sword'], claw: { grabs: 5 } });
+    ev = grabOf(F, ['sword', 'shield', 'potion']);
+    h.eq(find(ev, 'combo').map(c => c.id).sort().join(), 'bonus,clang', 'every family with the all-combos relic');
+    h.ok(COMBAT.crOn(F, 'party') && COMBAT.crOn(F, { id: 'x' }) && !COMBAT.crOn(fight(['dummy'], { relics: ['r_steel'] }), { id: 'x' }), 'crOn: all covers a recipe with no family; a family relic does not');
     // no combos once the fight is over
     F = fight(['rat'], { bin: ['sword', 'shield', 'sword'] });
     COMBAT.useGrab(F); playId(F, 'sword'); playId(F, 'sword');
     h.eq(F.phase, 'over', 'the grab killed the rat'); h.eq(COMBAT.grabDone(F, 2).length, 0, 'grabDone after the win does nothing');
     // a thawed item does not count
-    F = fight(['dummy'], { bin: ['sword', 'shield', 'sword'] });
+    F = fight(['dummy'], { relics: ['r_combos'], bin: ['sword', 'shield', 'sword'] });
     F.bin[0].frozen = true;
     COMBAT.useGrab(F); COMBAT.play(F, F.bin[0]); playId(F, 'shield');
     h.eq(F.grab.defs.length, 1, 'an item that only thawed is not part of the grab');
@@ -848,7 +869,8 @@ else {
     h.eq(F.enemies[1].hp, 294, 'Cold Snap: the freeze hits ALL enemies for 6');
     const before = F.enemies[0].hp;
     const ev = pid(F, 'rusty_sword', 0);
-    h.eq(before - F.enemies[0].hp, 10, 'the sword SHATTERS a frozen rat (7 -> 10)');
+    const sw = DATA.ITEMS.rusty_sword.fx[0].v;   // (round 21: the starter sword is 5, was 7)
+    h.eq(before - F.enemies[0].hp, Math.floor(sw * 1.5), `the sword SHATTERS a frozen rat (${sw} -> ${Math.floor(sw * 1.5)})`);
     h.ok(P(ev, 'permafrost_core').some(e => e.text === 'SHATTER' && e.who === 'enemy'), 'SHATTER proc on the enemy');
     saw(F);
   });
@@ -867,7 +889,7 @@ else {
   });
 
   h.test('build: scrap (Dumpster Lid + Junkyard King + Recycling Bin + Junk Cannon)', () => {
-    const F = mk(['junk_cannon', 'femur', 'femur'], ['dumpster_lid', 'junkyard_king', 'recycling_bin'], ['rat', 'rat']);
+    const F = mk(['junk_cannon', 'femur', 'femur'], ['dumpster_lid', 'junkyard_king', 'recycling_bin', 'cr_steel'], ['rat', 'rat']);   // (round 21: Scrap Shot needs the Steel combo relic)
     C.addJunk(F, 'rock', 2);
     h.eq(F.player.block, 6, 'junk thrown in: 3 Block each');
     const rock = F.bin.find(i => i.junk);
@@ -889,7 +911,8 @@ else {
   h.test('build: glass (Glass Cannon + Sharp Shards + Bottle Deposit)', () => {
     const F = mk(['toxic_vial', 'rusty_sword'], ['glass_cannon', 'sharp_shards', 'bottle_deposit'], ['rat', 'rat']);
     pid(F, 'toxic_vial', 0);
-    h.eq(F.enemies[0].status.poison, 4, 'glass doubles: 2 -> 4 Poison');
+    const vp = DATA.ITEMS.toxic_vial.fx.find((f) => f.s === 'poison').v;   // (round 21: the starter vial applies 1, was 2)
+    h.eq(F.enemies[0].status.poison, vp * 2, `glass doubles: ${vp} -> ${vp * 2} Poison`);
     h.eq(F.enemies[0].hp, 300 - 2 - 4, 'glass doubles the hit (1 -> 2), then the shards cut ALL for 4');
     h.eq(F.enemies[1].hp, 296, 'the shards hit everyone');
     h.ok(F.exhausted.some(i => i.id === 'toxic_vial'), 'the vial shattered');
@@ -898,19 +921,20 @@ else {
   });
 
   h.test('build: grab combos with Encore Machine, Tuning Fork and Horseshoe', () => {
-    const F = mk(['rusty_sword', 'longsword', 'crisp_apple'], ['encore_machine', 'tuning_fork', 'horseshoe']);
+    const F = mk(['rusty_sword', 'longsword', 'crisp_apple'], ['encore_machine', 'tuning_fork', 'horseshoe', 'cr_steel']);   // (round 21: the Steel combo relic switches Crossed Blades on)
     C.useGrab(F); pid(F, 'rusty_sword'); pid(F, 'longsword');
     const ev = C.grabDone(F, 2);
     const cb = ev.filter(e => e.t === 'combo');
     h.ok(cb.length === 1 && cb[0].id === 'crossed_blades' && cb[0].tier === 1 && cb[0].n === 2, 'Crossed Blades');
-    h.eq(F.enemies[0].hp, 300 - 7 - 11 - 4 - 4 - 4, 'blades twice (Encore, 4 each) and the Fork clang');
+    h.eq(F.enemies[0].hp, 300 - DATA.ITEMS.rusty_sword.fx[0].v - 11 - 4 - 4 - 4, 'blades twice (Encore, 4 each) and the Fork clang');
+    h.ok(P(ev, 'cr_steel').some(e => e.text === 'STEEL COMBO'), 'the Weapon Rack flashes as its combo fires');
     h.eq(F.player.block, 4, 'Horseshoe: 2 metal in one grab, 4 Block');
     for (const id of ['encore_machine', 'tuning_fork', 'horseshoe']) h.ok(P(ev, id).length >= 1, `${id} procs in the grabDone events`);
     saw(F);
   });
 
   h.test('build: swarm (Pocket Dimension + Marble Pouch + Beehive)', () => {
-    const F = mk(['glass_bead', 'rusty_sword'], ['pocket_dimension', 'marble_pouch', 'beehive'], ['rat'], { grabs: 3 });
+    const F = mk(['glass_bead', 'rusty_sword'], ['pocket_dimension', 'marble_pouch', 'beehive', 'cr_jackpot'], ['rat'], { grabs: 3 });   // (round 21: Handful is a Jackpot combo)
     h.eq(F.bin.filter(i => i.id === 'prize_marble' && i.temp).length, 3, 'three marbles in the bin for this fight');
     pid(F, 'prize_marble');
     h.eq(F.enemies[0].hp, 300 - 4 - 2, 'a marble hits for 4 (2 + 2) and the bees for 2');
@@ -973,7 +997,7 @@ else {
   });
 
   h.test('build: jackpot (Winning Streak + Prize Counter)', () => {
-    const F = mk(Array.from({ length: 12 }, () => 'femur'), ['winning_streak', 'prize_counter'], ['rat']);
+    const F = mk(Array.from({ length: 12 }, () => 'femur'), ['winning_streak', 'prize_counter', 'cr_all'], ['rat']);   // (round 21: The Strategy Guide, every family)
     for (let i = 0; i < 3; i++) { C.useGrab(F); pid(F, 'femur'); C.grabDone(F, 1); }
     h.eq(F.streak, 3, 'a streak of 3'); h.eq(F.player.grabs, 1, 'Winning Streak: +1 grab');
     C.useGrab(F); pid(F, 'femur'); pid(F, 'femur'); pid(F, 'femur');
@@ -1013,10 +1037,34 @@ else {
     h.ok(F.rules && Object.keys(F.rules).length === 0, 'old relics bend no rules');
   });
 
+  // (round 21) combos are a relic power: without a combo relic no recipe fires; its family's relic (or The
+  // Strategy Guide) switches it on, another family's does not
+  h.test('combo relics: the gate on every real recipe', () => {
+    const fire = (id, relics) => {
+      const c = DATA.COMBOS[id];
+      const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), relics, 1), firstEnc, U.rng(U.hashStr(id)));
+      if (c.ctx && c.ctx.luck) F.player.status.luck = c.ctx.luck;
+      if (c.ctx && c.ctx.pet) F.petId = c.ctx.pet;
+      C.useGrab(F);
+      if (c.ctx && c.ctx.perfect) { C.techOn(F, true); C.techCab(F, 'perfect', c.ctx.perfect); }
+      for (const x of c.example) { const i = F.bin.find(b => b.id === x && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
+      if (F.phase !== 'player') return null;
+      return C.grabDone(F, c.example.length).filter(e => e.t === 'combo').map(e => e.id);
+    };
+    const fams = DATA.CR.IDS;
+    for (const id of Object.keys(DATA.COMBOS)) {
+      const c = DATA.COMBOS[id], own = DATA.CR.FAM[c.cr].relic, other = DATA.CR.FAM[fams[(fams.indexOf(c.cr) + 1) % fams.length]].relic;
+      const none = fire(id, []), mine = fire(id, [own]), theirs = fire(id, [other]);
+      if (none) h.eq(none.length, 0, `${id}: no combo relic, no combo at all`);
+      if (mine) h.ok(mine.includes(id) && mine.every(x => DATA.COMBOS[x].cr === c.cr), `${id}: ${own} fires it, and only its own family`);
+      if (theirs) h.ok(!theirs.includes(id), `${id}: ${other} leaves it off`);
+    }
+  });
+
   h.test('data: every combo resolves on a real fight', () => {
     for (const id of Object.keys(DATA.COMBOS || {})) {
       const c = DATA.COMBOS[id];
-      const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), [], 1), firstEnc, U.rng(U.hashStr(id)));
+      const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), ['cr_all'], 1), firstEnc, U.rng(U.hashStr(id)));   // (round 21: The Strategy Guide switches every family on)
       if (c.ctx && c.ctx.luck) F.player.status.luck = c.ctx.luck;   // a recipe that reads the grab state (Lucky Seven)
       if (c.ctx && c.ctx.pet) F.petId = c.ctx.pet;   // a pet combo needs its pet along (round 7, EVOLVE)
       C.useGrab(F);
@@ -1864,7 +1912,7 @@ if (hasData) {
     C.material(F, 'shatter', { uid: 'z', id: 'crystal_dice' });
     h.eq(F.stats.shattered, s0 + 1, 'a shatter in the bin counts as a shatter');
     h.ok(F.enemies[0].hp < hp0 && luck(F) === 2, 'onShatter relics fire (Sharp Shards, the Mirror)');
-    const T = lfight(['femur', 'rusty_sword', 'crisp_apple'], ['ticket_roll']);
+    const T = lfight(['femur', 'rusty_sword', 'crisp_apple'], ['ticket_roll', 'cr_steel']);   // (round 21: a combo booster needs a combo relic to feed it)
     grabOf(T, ['femur', 'rusty_sword']);   // Crossed Blades
     h.ok(T.stats.tix >= 2, `Ticket Roll prints tickets on a combo (${T.stats.tix})`);
     const M = lfight(['rusty_sword', 'femur'], ['lodestone'], { clawType: 'magnet' });
@@ -1874,12 +1922,12 @@ if (hasData) {
   });
 
   h.test('round 3: Lucky Seven and a secret combo fire in a real fight', () => {
-    const F = lfight(['bone_dice', 'femur', 'crisp_apple']);
+    const F = lfight(['bone_dice', 'femur', 'crisp_apple'], ['cr_casino']);   // (round 21: Lou's Dealer's Visor switches the Casino family on)
     F.player.status.luck = 7;
     const ev = grabOf(F, ['bone_dice', 'femur']);
     h.ok(ev.some(e => e.t === 'combo' && e.id === 'lucky_seven' && e.tier === 3), 'Lucky Seven on exactly 7 Luck');
     h.ok(ev.some(e => e.t === 'luck' && e.k === 'cash' && e.v === 7), 'and the 7 Luck cash out after it');
-    const G = lfight(['lucky_coin', 'lucky_penny', 'arcade_token', 'femur']);
+    const G = lfight(['lucky_coin', 'lucky_penny', 'arcade_token', 'femur'], ['cr_casino']);
     const ev2 = grabOf(G, ['lucky_coin', 'lucky_penny', 'arcade_token']);
     h.ok(ev2.some(e => e.t === 'combo' && e.id === 'midas_touch'), 'Midas Touch');
   });
@@ -1960,7 +2008,11 @@ if (hasData) {
     h.ok(F0.loop === 0 && F0.mut === null && F0.mix === null, 'a plain run: no loop, no mutators');
     for (const loop of [1, 2, 3, 4]) {
       const act = D5.endlessAct(loop), s = D5.endlessScale(loop, act);
+      // (round 21) the plain side without DIFFICULTY.act1 (the first fight's dial): a loop never reads it, so the
+      // ratio below stays the endless lift alone
+      const a1 = D5.DIFFICULTY.act1; D5.DIFFICULTY.act1 = null;
       const Fa = C5.newFight(run5({ act }), ['rat'], U5.rng(11));
+      D5.DIFFICULTY.act1 = a1;
       const Fb = C5.newFight(run5({ act, endless: { loop } }), ['rat'], U5.rng(11));
       h.eq(Fb.loop, loop, `loop ${loop}: F.loop`);
       const a = Fa.enemies[0], b = Fb.enemies[0];
@@ -2794,15 +2846,18 @@ if (hasData) {
 
   h.test('evolve: the new combos fire in a fight', () => {
     const grab = (F, ids) => { C.useGrab(F); for (const id of ids) { const i = F.bin.find(b => b.id === id && F.grab.insts.indexOf(b) < 0); if (i) C.play(F, i); } return C.grabDone(F, ids.length); };
-    let F = efight(['excalibur_claw', 'femur', 'crisp_apple'], []);
+    // (round 21) the Party Popper switches the evolved and pet combos on
+    let F = efight(['excalibur_claw', 'femur', 'crisp_apple'], ['cr_party']);
     h.ok(grab(F, ['excalibur_claw', 'femur', 'crisp_apple']).some(e => e.t === 'combo' && e.id === 'legend_rising'), 'Legend Rising');
-    F = efight(['excalibur_claw', 'plague_needle'], []);
+    F = efight(['excalibur_claw', 'plague_needle'], ['cr_party']);
     h.ok(grab(F, ['excalibur_claw', 'plague_needle']).some(e => e.t === 'combo' && e.id === 'twin_legends'), 'Twin Legends');
-    F = efight(['femur', 'bouncy_ball'], [], { pet: { id: 'cat' } });
+    F = efight(['femur', 'bouncy_ball'], ['cr_party'], { pet: { id: 'cat' } });
     h.ok(grab(F, ['femur', 'bouncy_ball']).some(e => e.t === 'combo' && e.id === 'fetch'), 'Fetch! with a pet');
-    F = efight(['femur', 'bouncy_ball'], []);
+    F = efight(['femur', 'bouncy_ball'], ['cr_party']);
     h.ok(!grab(F, ['femur', 'bouncy_ball']).some(e => e.t === 'combo' && e.id === 'fetch'), 'no Fetch! without one');
-    F = efight(['quail_egg', 'lucky_penny'], [], { pet: { id: 'goose' } });
+    F = efight(['femur', 'bouncy_ball'], [], { pet: { id: 'cat' } });
+    h.ok(!grab(F, ['femur', 'bouncy_ball']).some(e => e.t === 'combo'), 'no Fetch! without the Party Popper, pet or not');
+    F = efight(['quail_egg', 'lucky_penny'], ['cr_party'], { pet: { id: 'goose' } });
     h.ok(grab(F, ['quail_egg', 'lucky_penny']).some(e => e.t === 'combo' && e.id === 'nest_egg'), 'Nest Egg with the goose');
   });
 
@@ -3074,7 +3129,7 @@ if (hasData) {
       const K = mfight({ char: 'knight', relics: ['armor_piercing'] }, ['hex_bolt', 'tin_plate', 'crisp_apple', 'spring_coil']);
       const k0 = K.enemies[0].hp;
       grabOf(K, ['hex_bolt', 'spring_coil']);
-      h.eq(k0 - K.enemies[0].hp, 4 + 6 + 3, 'no turret: 2 metal in a grab zaps for 3 more');
+      h.eq(k0 - K.enemies[0].hp, D.ITEMS.hex_bolt.fx[0].v + 6 + 3, 'no turret: 2 metal in a grab zaps for 3 more');   // (round 21: the starter bolt is 3, was 4)
       const G = mfight({ relics: ['socket_set', 'grease_gun'] });
       G.player.block = 0;
       D.RELICS.grease_gun.hooks.onTurnEnd(G);
@@ -3359,7 +3414,8 @@ if (hasData) {
   const C = LB.COMBAT, D = LB.DATA, UB = LB.U;
   if (D && D.CHARACTERS && D.CHARACTERS.bubbler) {
     const BBIN = D.CHARACTERS.bubbler.bin;
-    const brun = (extra, bin) => Object.assign({ hp: 400, maxHp: 400, act: 1, char: 'bubbler', relics: ['bubble_wand'], claw: { grabs: 3, width: 1 }, gold: 40,
+    // (round 21) she starts with the Party Popper too: her Bubble Combo is a Party combo
+    const brun = (extra, bin) => Object.assign({ hp: 400, maxHp: 400, act: 1, char: 'bubbler', relics: ['bubble_wand', 'cr_party'], claw: { grabs: 3, width: 1 }, gold: 40,
       bin: (bin || BBIN).map((id, i) => ({ uid: 'b' + i, id, plus: false })) }, extra || {});
     const bfight = (extra, bin, seed) => {
       const F = C.newFight(brun(extra, bin), ['rat', 'slime'], UB.rng(seed || 7));
@@ -3408,6 +3464,12 @@ if (hasData) {
       C.rosPop(Dk, 2, 'chute');
       h.eq(Dk.enemies[0].hp, 300 - 3 * 2 - 2 * C.ROS.combo, 'Duck Patrol: 3 a pop to a random enemy, then the combo');
       h.eq(C.rosPop(bfight({ char: 'knight', relics: [] }), 2, 'chute').length, 0, 'no bubbles: pops do nothing');
+      // (round 21) the Bubble Combo is a Party combo: bubbles without the Party Popper pop for Block, never a combo
+      const NP = bfight({ relics: ['bubble_wand'] }), np0 = NP.enemies.map(e => e.hp), nb0 = NP.player.block;
+      const npe = C.rosPop(NP, 3, 'chute');
+      h.ok(!npe.some(e => e.k === 'combo') && NP.enemies.every((e, i) => e.hp === np0[i]) && NP.player.block === nb0 + 6, 'no Party Popper: three pops pay their Block, no Bubble Combo');
+      const PP = bfight();
+      h.ok(C.rosPop(PP, 2, 'chute').some(e => e.t === 'proc' && e.id === 'cr_party' && e.text === 'PARTY COMBO'), 'with it the Popper flashes as the Bubble Combo goes off');
     });
     h.test('round 10: soap blows bubbles when played (for anyone), a turn of her kit never NaNs', () => {
       const F = bfight();
@@ -3497,7 +3559,7 @@ if (hasData) {
       const ev = C.grabDone(F, 3);
       h.ok(ev.some(e => e.t === 'proc' && e.id === 'leg_golden_claw' && /GOLDEN x3/.test(e.text)), 'GOLDEN x3');
       h.ok(F.enemies.every((e, i) => hp[i] - e.hp >= K.goldDmg * 3), '4 a prize to ALL');
-      h.ok(F.player.block >= b0 + 3 * 5 + K.goldBlock * 3, '2 Block a prize on top of the shields');
+      h.ok(F.player.block >= b0 + 3 * D.ITEMS.dented_shield.fx[0].v + K.goldBlock * 3, '2 Block a prize on top of the shields');   // (round 21: the starter shield is 4, was 5)
       grab(F, ['rusty_sword']);
       h.ok(!C.legGolden(F, true), 'the 6th is not');
     });
@@ -3580,7 +3642,7 @@ if (hasData) {
       h.eq(F.leg.bounced, 2, 'two bounces booked');
     });
     h.test('round 12: The Crowd: combos build Hype, Hype multiplies your hits, a dull turn halves it, none left boos', () => {
-      const F = lfight(['leg_crowd']);
+      const F = lfight(['leg_crowd', 'cr_steel']);   // (round 21: The Crowd feeds on combos, so it comes with a combo relic)
       const e = F.enemies[0];
       grab(F, ['rusty_sword', 'iron_chain']);
       h.ok(F.leg.hype >= 1, 'a combo: +1 Hype (' + F.leg.hype + ')');
@@ -3710,7 +3772,7 @@ if (hasData) {
       const Bm = C.newFight(lrun({ relics: ['leg_perpetual'] }, ['boomerang_blades', 'rusty_sword', 'crisp_apple']), ['slime'], UB.rng(4));
       Bm.enemies[0].hp = Bm.enemies[0].maxHp = 500;
       C.play(Bm, Bm.bin.find(i => i.id === 'rusty_sword'));
-      h.ok(Bm.enemies[0].hp <= 500 - 7 - 3, 'Return Flight: the bouncing sword hits again for 3');
+      h.ok(Bm.enemies[0].hp <= 500 - D.ITEMS.rusty_sword.fx[0].v - 3, 'Return Flight: the bouncing sword hits again for 3');   // (round 21: the starter sword is 5, was 7)
     });
     h.test('round 12: a 30 turn fuzz holding every legendary and every new evolved item never NaNs', () => {
       const bin = D.LEG.EVOS.concat(KBIN.slice(0, 8), ['rock', 'glass_bead']);
@@ -4008,7 +4070,7 @@ if (hasData) {
   });
 
   h.test('tech: a PERFECT grab feeds Bullseye and the Metronome, then clears with the grab', () => {
-    const F = tfight(['metronome']);
+    const F = tfight(['metronome', 'cr_tech']);   // (round 21: the Cheat Code switches Bullseye on)
     C.useGrab(F);
     const h0 = hp(F);
     C.techCab(F, 'perfect', 2);

@@ -953,4 +953,63 @@ h.test('qa17: a Duo pill (the sabotage card\'s tag, a name, "is grabbing") is me
   T.I18N.set('en');
 });
 
+h.test('rrow (round 21): the resolve row speaks Dutch: its chips, the skip hint, the speed pill; names come through the content', () => {
+  const T = boot();
+  T.I18N.set('nl');
+  for (const [en, nl] of [['tap the row to skip', 'tik op de rij om door te spoelen'], ['Resolve speed', 'Tempo van de rij'], ['THAW', 'ONTDOOI'], ['ALL', 'ALLE'], ['GRAB', 'GREEP'], ['CASH OUT', 'UITBETALING'], ['RELIC', 'RELIKWIE']]) h.eq(T.I18N.tr(en), nl, en);
+  // what the canvas writes on a slot and a chip, in Dutch
+  const said = [];
+  const ctx = new Proxy({}, { get(t, p) {
+    if (p === 'measureText') return (s) => ({ width: String(s).length * 7 });
+    if (p === 'fillText') return (s) => said.push(String(s));
+    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+    if (p in t) return t[p];
+    return () => {};
+  }, set(t, p, v) { t[p] = v; return true; } });
+  const D = T.DATA, sword = D.ITEMS.rusty_sword;
+  T.RENDER.rrRow(ctx, { x0: 8, x1: 532, y: 339, h: 46, a: 1, t: 0, slots: [
+    { k: 'item', st: 'wait', cx: 90, cy: 362, w: 150, def: sword, plus: false, name: 'Rusty Sword', pre: { d: 6, all: true, any: true } },
+    { k: 'item', st: 'wait', cx: 250, cy: 362, w: 150, def: sword, plus: false, name: 'Rusty Sword', pre: { ice: true, any: true } },
+    { k: 'grab', st: 'act', cx: 420, cy: 362, w: 180, tag: 'RELIC', label: 'Jackpot Bell', col: '#ffc94d', icon: '', res: { d: 5, all: true, any: true } },
+  ] });
+  h.ok(said.some((s) => /Roestig Zwaard/.test(s)), 'the item name in Dutch: ' + said.join(' | '));
+  h.ok(said.includes('6 ALLE') && said.includes('5 ALLE'), 'damage to all enemies reads ALLE');
+  h.ok(said.includes('ONTDOOI'), 'a frozen prize only thaws: ONTDOOI');
+  h.ok(said.some((s) => s === T.I18N.tr('Jackpot Bell')) && T.I18N.tr('Jackpot Bell') !== 'Jackpot Bell', 'the relic chip names the relic in Dutch (' + T.I18N.tr('Jackpot Bell') + ')');
+  T.I18N.set('en');
+});
+
+// ---------------------------------------------------------------- CR (round 21): combo relics, plus 2
+h.test('cr: the combo relics, the elite\'s pick, the help and the Compactor\'s ++ in Dutch', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N, DATA } = T;
+  const nl = I18N.table('nl'), ui = nl.ui, C = nl.content;
+  for (const id of DATA.CR.RELICS) {
+    const r = DATA.RELICS[id];
+    h.ok(C.relic[id] && C.relic[id].name && C.relic[id].text && C.relic[id].name !== r.name, 'relic ' + id + ' in Dutch');
+    h.ok(ui[r.proc] && ui[r.proc] !== r.proc, 'its proc label: ' + r.proc);
+  }
+  for (const [en, want] of [['Rusty Sword++', 'Roestig Zwaard++'], ['Weapon Rack: its combos are live.', 'Wapenrek: zijn combo\'s werken nu.'], ['Steel · 9 combos', 'Staal · 9 combo\'s'],
+    ['Combo relic: Weapon Rack.', 'Combo-relikwie: Wapenrek.'], ['Three upgraded: out comes Rusty Sword++, stronger again.', 'Drie verbeterde: er komt Roestig Zwaard++ uit, nog sterker.'], ['1/3 for ++', '1/3 voor ++'], ['PLUS 2', 'PLUS 2']]) {
+    const nm = I18N.TC('item', 'rusty_sword', 'name');
+    const exp = want.replace('Roestig Zwaard', nm);
+    h.eq(I18N.tr(en), exp, `"${en}" in Dutch`);
+  }
+  // the elite's pick on screen: no English left in its words
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.newRun('knight', 2121);
+    G.startFight(DATA.ENCOUNTERS[1].elite[0], 'elite'); stepFor(G, 0.2); G.endFight('win');
+    G.choose(3); G.draw();
+    G.showHelp('map'); G.showCollection('combos');
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'the pick, the help and the Prizedex render in Dutch');
+  const left = [...seen].filter((x) => { const [a, b] = x.split('=>'); return a === b && /combo|relic|elite/i.test(a); });
+  h.eq(left.length, 0, 'no combo words left in English: ' + left.slice(0, 4).join(' | '));
+  I18N.set('en');
+});
+
 h.done();

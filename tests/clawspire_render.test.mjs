@@ -3216,4 +3216,24 @@ h.test('title art (round 20): the logo sits high and clear, the claw clears the 
   R.fx.reduced = false;
 });
 
+// ---- CR (round 21): the combo relics draw their own glyphs; a +2 item wears its own marks
+{
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  h.test('cr: every combo relic has its glyph, and it differs from the emoji badge', () => {
+    for (const id of D.CR.RELICS) {
+      h.ok(typeof R.cr.GLYPH[id] === 'function', 'a glyph for ' + id);
+      const g = fingerprint(drawCheck('combo relic ' + id, (c) => R.relicIcon(c, D.RELICS[id], 0, 0, 48, 1)));
+      const e = fingerprint(drawCheck('emoji badge for ' + id, (c) => R.relicIcon(c, Object.assign({}, D.RELICS[id], { id: 'x_' + id }), 0, 0, 48, 1)));
+      h.ok(g !== e, id + ': the glyph is drawn, not the emoji');
+    }
+  });
+  h.test('cmp2: a +2 item draws differently from a +1 and a plain one', () => {
+    const def = D.ITEMS.rusty_sword;
+    const p0 = fingerprint(drawCheck('plain sword', (c) => R.pol.art(c, def, {}))), p1 = fingerprint(drawCheck('sword+', (c) => R.pol.art(c, def, { plus: true }))), p2 = fingerprint(drawCheck('sword++', (c) => R.pol.art(c, def, { plus: 2 })));
+    h.ok(p0 !== p1 && p1 !== p2 && p0 !== p2, 'three looks: plain, +1 (gold star), +2 (and a pink star and rim)');
+    drawCheck('sword++ through RENDER.item', (c) => R.item(c, def, 50, 50, 0.3, 1, { plus: 2 }));
+  });
+}
+
 h.done();

@@ -90,6 +90,11 @@ const DATA = (() => {
   // deaths spread over the three acts instead of piling up in act 2. tierDmg: elites and bosses hit 50% harder
   // on top (normals stay where a starting bin can still beat every one of them; the balance suite guards that).
   const DIFFICULTY = { hp: 3.1, dmg: 2.6, ramp: { every: 4, hp: 0.1, dmg: 0.1, max: 10 }, tierDmg: { elite: 1.5, boss: 1.5 } };   // the owner tunes by hand
+  // (round 21, owner request: the first fights are a threat) act 1 normals (in act 1 only, never elites or bosses)
+  // get x hp / x dmg on top of the dial; the run's very first fight takes `first` instead, so it stays gentle-ish:
+  // with no combos and weaker starters it already lasts a few grabs, and it is the one fight a bare starting bin
+  // meets (the balance suite's "beatable" guard plays it).
+  DIFFICULTY.act1 = { hp: 1.15, dmg: 1.1, first: { hp: 0.85, dmg: 0.85 } };
 
   const ECONOMY = {
     startInk: 10,          // bulbs at the start of every act (was 5)
@@ -222,11 +227,11 @@ const DATA = (() => {
     { id: 'rusty_sword', name: 'Rusty Sword', rarity: 'c', cost: 40, char: 'knight', starter: true,
       tags: ['metal', 'weapon'], shape: box(48, 10), density: 1.3, friction: 0.45,
       color: '#b7a58c', color2: '#6b4a2b', art: 'sword',
-      fx: [dmg(7)], plus: { fx: [dmg(10)] }, text: 'Deal {v} damage. It has seen better centuries.' },
+      fx: [dmg(5)], plus: { fx: [dmg(10)] }, text: 'Deal {v} damage. It has seen better centuries.' },   // (round 21: was 7; the plus keeps its 10, a bigger step)
     { id: 'dented_shield', name: 'Dented Shield', rarity: 'c', cost: 40, char: 'knight', starter: true,
       tags: ['metal'], shape: SHAPES.kite, density: 1.2, friction: 0.35,
       color: '#8fa3b8', color2: '#3d4f66', art: 'shield', target: 'self',
-      fx: [block(5)], plus: { fx: [block(8)] }, text: 'Gain {v} Block. The dent is load-bearing.' },
+      fx: [block(4)], plus: { fx: [block(8)] }, text: 'Gain {v} Block. The dent is load-bearing.' },   // (round 21: was 5; the plus keeps its 8)
     { id: 'spiked_buckler', name: 'Spiked Buckler', rarity: 'c', cost: 45, char: 'knight',
       tags: ['metal', 'weapon'], shape: circle(15), density: 1.6, friction: 0.35, restitution: 0.2,
       color: '#c9cfd6', color2: '#ff5a4a', art: 'buckler',
@@ -291,12 +296,12 @@ const DATA = (() => {
     { id: 'toxic_vial', name: 'Toxic Vial', rarity: 'c', cost: 40, char: 'alchemist', starter: true,
       tags: ['glass', 'potion'], shape: SHAPES.flask, density: 0.8, friction: 0.4,
       color: '#a6ff5e', color2: '#2d5a1a', art: 'flask',
-      fx: [dmg(1), status('poison', 2)], plus: { fx: [dmg(2), status('poison', 4)] },
+      fx: [dmg(1), status('poison', 1)], plus: { fx: [dmg(2), status('poison', 4)] },   // (round 21: was 1 + 2 Poison; the plus keeps its 2 + 4)
       text: 'Deal {v} damage and apply {v2} Poison. Do not drink.' },
-    { id: 'bubble_flask', name: 'Bubble Flask', rarity: 'c', cost: 40, char: 'alchemist', starter: true,
+    { id: 'bubble_flask', name: 'Bubble Flask', rarity: 'c', cost: 40, char: 'alchemist', starter: true, kw: ['fortress'],   // (round 21: 3 Block keeps its chip)
       tags: ['glass', 'potion'], shape: SHAPES.potion, density: 0.8, friction: 0.4,
       color: '#7fd6ff', color2: '#1b4f73', art: 'potion', target: 'self',
-      fx: [block(4)], plus: { fx: [block(7)] }, text: 'Gain {v} Block. The bubbles do the blocking.' },
+      fx: [block(3)], plus: { fx: [block(7)] }, text: 'Gain {v} Block. The bubbles do the blocking.' },   // (round 21: was 4; the plus keeps its 7)
     { id: 'cherry_bomb', name: 'Cherry Bomb', rarity: 'c', cost: 45, char: 'alchemist',
       tags: ['weapon'], shape: circle(13), density: 1.1, friction: 0.5, restitution: 0.25,
       color: '#ff5a4a', color2: '#2a1a1a', art: 'bomb', target: 'all',
@@ -361,11 +366,11 @@ const DATA = (() => {
     { id: 'shiv', name: 'Shiv', rarity: 'c', cost: 40, char: 'rogue', starter: true,
       tags: ['metal', 'weapon', 'light'], shape: box(30, 9), density: 1.2, friction: 0.45,
       color: '#d0d6de', color2: '#3a2a4a', art: 'dagger',
-      fx: [dmg(5)], plus: { fx: [dmg(8)] }, text: 'Deal {v} damage. Small, pointy, deniable.' },
+      fx: [dmg(5)], plus: { fx: [dmg(8)] }, text: 'Deal {v} damage. Small, pointy, deniable.' },   // (round 21: kept; at 4 the balance suite's bare-bin Pip cannot beat the crab, the boot carries his cut)
     { id: 'old_boot', name: 'Old Boot', rarity: 'c', cost: 40, char: 'rogue', starter: true,
       tags: [], shape: SHAPES.boot, density: 0.9, friction: 0.7,
       color: '#7a5236', color2: '#3a2616', art: 'boot', target: 'self',
-      fx: [block(4)], plus: { fx: [block(7)] }, text: 'Gain {v} Block. Smells like a plan.' },
+      fx: [block(4)], plus: { fx: [block(7)] }, text: 'Gain {v} Block. Smells like a plan.' },   // (round 21: Pip's starters stay; see the shiv)
     { id: 'lucky_coin', name: 'Lucky Coin', rarity: 'c', cost: 45, char: 'rogue',
       tags: ['metal'], shape: circle(11), density: 2.4, friction: 0.3, restitution: 0.3,
       color: '#ffc94d', color2: '#b8862b', art: 'coin',
@@ -637,12 +642,12 @@ const DATA = (() => {
     { id: 'bone_dice', name: 'Bone Dice', rarity: 'c', cost: 40, char: 'gambler', starter: true,
       tags: [], shape: box(22, 22), density: 1.2, friction: 0.4, restitution: 0.3,
       color: '#f1e9d6', color2: '#8a1a2a', art: 'dice',
-      fx: [random(2, 8)], plus: { fx: [random(4, 10)] },
+      fx: [random(1, 6)], plus: { fx: [random(4, 10)] },   // (round 21: was 2-8; the plus keeps its 4-10)
       text: 'Deal {min} to {max} damage. Carved from something that lost a bet.' },
-    { id: 'poker_chip', name: 'Poker Chip', rarity: 'c', cost: 40, char: 'gambler', starter: true,
+    { id: 'poker_chip', name: 'Poker Chip', rarity: 'c', cost: 40, char: 'gambler', starter: true, kw: ['fortress'],   // (round 21: 3 Block keeps its chip)
       tags: [], shape: circle(13), density: 1.3, friction: 0.3, restitution: 0.15,
       color: '#ff2e4a', color2: '#ffffff', art: 'chip', target: 'self',
-      fx: [block(4)], plus: { fx: [block(6)] },
+      fx: [block(3)], plus: { fx: [block(6)] },   // (round 21: was 4; the plus keeps its 6)
       text: 'Gain {v} Block. Stack them high, hide behind them.' },
     { id: 'scratch_card', name: 'Scratch Card', rarity: 'c', cost: 45, char: 'gambler',
       tags: ['light'], shape: box(24, 34), density: 0.5, friction: 0.6,
@@ -725,12 +730,12 @@ const DATA = (() => {
     { id: 'hex_bolt', name: 'Hex Bolt', rarity: 'c', cost: 40, char: 'engineer', starter: true,
       tags: ['metal', 'weapon'], shape: box(28, 12), density: 1.6, friction: 0.45, restitution: 0.12,
       color: '#aab3bd', color2: '#5a6068', art: 'key',
-      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      fx: [dmg(3)], plus: { fx: [dmg(6)] },   // (round 21: was 4; the plus keeps its 6)
       text: 'Deal {v} damage. A turret part: it goes up on the cabinet after it hits.' },
     { id: 'tin_plate', name: 'Tin Plate', rarity: 'c', cost: 40, char: 'engineer', starter: true,
       tags: ['metal'], shape: box(32, 10), density: 1.4, friction: 0.35, restitution: 0.1,
       color: '#c9d3e0', color2: '#ff8a2e', art: 'buckler', target: 'self',
-      fx: [block(5)], plus: { fx: [block(7)] },
+      fx: [block(4)], plus: { fx: [block(7)] },   // (round 21: was 5; the plus keeps its 7)
       text: 'Gain {v} Block. A turret part. Flat, so it slides out of a lazy grip.' },
     { id: 'pipe_wrench', name: 'Pipe Wrench', rarity: 'c', cost: 50, char: 'engineer', part: 2,
       tags: ['metal', 'weapon', 'tool', 'heavy'], shape: box(44, 14), density: 1.8, friction: 0.5,
@@ -779,12 +784,12 @@ const DATA = (() => {
     { id: 'rubber_duck', name: 'Rubber Duck', rarity: 'c', cost: 40, char: 'bubbler', starter: true,
       tags: ['light'], shape: circle(13), density: 0.5, friction: 0.5, restitution: 0.32,
       color: '#ffd23f', color2: '#ff8a2e', art: 'horn',
-      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      fx: [dmg(3)], plus: { fx: [dmg(6)] },   // (round 21: was 4; the plus keeps its 6)
       text: 'Deal {v} damage. Squeak. Light enough to float on anything.' },
     { id: 'soap_bar', name: 'Soap Bar', rarity: 'c', cost: 40, char: 'bubbler', starter: true,
       tags: [], shape: box(30, 16), density: 0.9, friction: 0.12, restitution: 0.1,
       color: '#ffb3de', color2: '#ffffff', art: 'bread', target: 'self',
-      fx: [block(5)], plus: { fx: [block(7)] },
+      fx: [block(4)], plus: { fx: [block(7)] },   // (round 21: was 5; the plus keeps its 7)
       text: 'Gain {v} Block. It squirts out of a lazy grip. In a bubble it cannot.' },
     { id: 'bubble_pipe', name: 'Bubble Pipe', rarity: 'c', cost: 45, char: 'bubbler', soap: 1,
       tags: ['light'], shape: box(36, 12), density: 0.7, friction: 0.5,
@@ -832,12 +837,12 @@ const DATA = (() => {
     { id: 'arcade_stick', name: 'Arcade Stick', rarity: 'c', cost: 40, char: 'techie', starter: true, lamp: 1,
       tags: ['weapon'], shape: box(20, 34), density: 0.9, friction: 0.5, restitution: 0.15,
       color: '#ff2e88', color2: '#1a1030', art: 'wand',
-      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      fx: [dmg(3)], plus: { fx: [dmg(6)] },   // (round 21: was 4; the plus keeps its 6)
       text: 'Deal {v} damage. Delivered, it lights a cell of the Jackpot Lamp.' },
     { id: 'arcade_button', name: 'Arcade Button', rarity: 'c', cost: 40, char: 'techie', starter: true, lamp: 1,
       tags: [], shape: box(26, 18), density: 1, friction: 0.45, restitution: 0.1,
       color: '#ff4a4a', color2: '#1a1030', art: 'orb', target: 'self',
-      fx: [block(5)], plus: { fx: [block(7)] },
+      fx: [block(4)], plus: { fx: [block(7)] },   // (round 21: was 5; the plus keeps its 7)
       text: 'Gain {v} Block. Press it: a lamp cell lights up.' },
     { id: 'coin_mech', name: 'Coin Mech', rarity: 'c', cost: 45, char: 'techie', kw: ['tech'],
       tags: ['metal'], shape: box(24, 30), density: 1.6, friction: 0.45, restitution: 0.1,
@@ -1157,7 +1162,7 @@ const DATA = (() => {
         atk('nip', 'Nip', 8, 1, 'Nips for 8'), debuff('flake', 'Rust Flake', 'vuln', 1, 'Flakes rust in your eyes (Vulnerable)')] },
     { id: 'golem', name: 'Brass Golem', act: 2, tier: 'normal', hp: [68, 75], art: 'golem', size: 1.1, color: '#c8a040',
       desc: 'Built to guard a prize. Forgot which one.', ai: 'cycle', pattern: [0, 1, 3, 2],
-      status: { armor: 1, thorns: 2 },
+      status: { armor: 1, thorns: 1 },   // (round 21: was 2 Thorns; with the lighter starter swords it was the one wall the balance suite found for a Knight deck)
       moves: [blk('brace', 'Brace', 12, 'Braces (Block 12)'), mv('windup', 'Wind Up', 'charge', 'Winding up (27 next turn)', { v: 27 }),
         atk('punch', 'Punch', 14, 1, 'Punches for 14'), mv('stomp', 'Stomp', 'shake', 'Stomps. Your bin rattles.')] },
     { id: 'tinknight', name: 'Tin Knight', act: 2, tier: 'normal', hp: [55, 64], art: 'knight', size: 1, color: '#aab3bd',
@@ -2647,7 +2652,9 @@ const DATA = (() => {
   function combosFor(defs, ctx) {
     const list = (defs || []).filter(Boolean);
     if (list.length < 2) return [];
-    const hit = COMBO_LIST.filter(c => { try { return !!c.match(list, ctx || null); } catch (e) { return false; } });
+    // (round 21) ctx.on(combo): the run's combo relics; a recipe that is off never takes a family's or a slot's place
+    const on = ctx && typeof ctx.on === 'function' ? ctx.on : null;
+    const hit = COMBO_LIST.filter(c => { try { return (!on || !!on(c)) && !!c.match(list, ctx || null); } catch (e) { return false; } });
     const best = {};
     for (const c of hit) if (!best[c.family] || c.tier > best[c.family].tier) best[c.family] = c;
     let out = hit.filter(c => best[c.family] === c);
@@ -2692,7 +2699,7 @@ const DATA = (() => {
   // roll range, {copies} = how many copy effects. Exhaust is appended.
   function itemText(def, plus) {
     if (!def) return '';
-    const fx = (plus && def.plus && Array.isArray(def.plus.fx)) ? def.plus.fx : (def.fx || []);
+    const fx = cmp2FxAt(def, plus);   // (round 21: plus 2, the Compactor's second merge)
     const withV = fx.filter(f => typeof f.v === 'number');
     const withN = fx.find(f => typeof f.n === 'number');
     const rnd = fx.find(f => f.k === 'random');
@@ -3995,12 +4002,13 @@ const DATA = (() => {
   }
 
   /* The Compactor: three items go in, one comes out. Three of the same item
-     (not all upgraded already) make its plus copy; anything else makes an
+     (not all upgraded already) make its plus copy; three upgraded ones (round
+     21) its plus 2 copy (cmp2: inst.plus === 2); anything else makes an
      item one rarity above the middle one of the three (junk < common <
      uncommon < rare < legendary) that shares a keyword with the inputs,
      leaning to the keywords most of them share. */
   const CMP = { n: 3, price: 30, RANK: { junk: 0, c: 1, u: 2, r: 3, l: 4 }, RAR: ['junk', 'c', 'u', 'r', 'l'] };
-  // insts [{id, plus}] -> {ok, why?, kind: 'plus' | 'rarity', id?, rar?, kw: [ids by count]}
+  // insts [{id, plus}] -> {ok, why?, kind: 'plus' | 'plus2' | 'rarity', id?, rar?, kw: [ids by count]}
   function cmpRule(insts) {
     const list = (insts || []).filter(i => i && ITEMS[i.id]);
     if (list.length !== CMP.n) return { ok: false, why: `Feed it ${CMP.n} items.`, kw: [] };
@@ -4009,7 +4017,13 @@ const DATA = (() => {
     for (const d of defs) for (const k of kwIds(d)) cnt[k] = (cnt[k] || 0) + 1;
     const kw = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || ARCH_ORDER.indexOf(a) - ARCH_ORDER.indexOf(b));
     const same = list.every(i => i.id === list[0].id);
-    if (same && defs[0].rarity !== 'junk' && defs[0].plus && !list.every(i => i.plus)) return { ok: true, kind: 'plus', id: list[0].id, kw };
+    // (round 21) three of a kind come out one level above the lowest of them: three plain ones a plus copy, three
+    // upgraded ones (+1 or +2, not all +2 already) a plus 2 copy, when the item has one (cmp2Ok); else the rarity climb
+    if (same && defs[0].rarity !== 'junk' && defs[0].plus && !defs[0].evolved) {
+      const lo = Math.min(...list.map(cmp2Lv));
+      if (lo === 0) return { ok: true, kind: 'plus', id: list[0].id, kw };
+      if (lo === 1 && cmp2Ok(defs[0])) return { ok: true, kind: 'plus2', id: list[0].id, kw };
+    }
     const ranks = defs.map(d => CMP.RANK[d.rarity] || 0).sort((a, b) => a - b);
     const rar = CMP.RAR[Math.min(4, ranks[1] + 1)];
     return { ok: true, kind: 'rarity', rar, kw, cnt };
@@ -4019,6 +4033,7 @@ const DATA = (() => {
     const R = cmpRule(insts);
     if (!R.ok) return null;
     if (R.kind === 'plus') return { id: R.id, plus: true };
+    if (R.kind === 'plus2') return { id: R.id, plus: 2 };   // (round 21)
     const ins = insts.map(i => i.id);
     let rar = R.rar, cand = [];
     // a crawler's own pool may run dry at a rarity: step down until it does not
@@ -4035,6 +4050,66 @@ const DATA = (() => {
     for (let i = 0; i < cand.length; i++) { x -= w[i]; if (x < 0) return { id: cand[i], plus: false }; }
     return { id: cand[cand.length - 1], plus: false };
   }
+  /* (round 21) Plus 2: the Compactor's second merge. An instance's `plus` is false, true (+1) or 2 (+2); every
+     older reader that tests it for truth still sees an upgraded item. The +2 numbers are derived from the item's
+     own upgrade, never typed: each number that moved from the base to the plus moves on by 3/4 of that step
+     (at least 1, a cost or a drawback keeps its sign), random rolls move both ends; an item whose upgrade moved
+     nothing gets +1 on its first helpful number. Cached per def; null when there is no +2 (no plus, nothing to grow). */
+  const CMP2_K = 0.75;
+  const CMP2_BUMP = { dmg: 1, block: 1, heal: 1, status: 1, gold: 1, maxhp: 1, dmgPer: 1, blockPer: 1, lifesteal: 1 };
+  const CMP2_BAD = { burn: 1, poison: 1, weak: 1, vuln: 1, chill: 1, freeze: 1, stun: 1, bleed: 1, grease: 1, fog: 1 };
+  // An instance's level: 0, 1 or 2.
+  function cmp2Lv(inst) { const p = inst && inst.plus; return p === 2 ? 2 : p ? 1 : 0; }
+  function cmp2Fx(def) {
+    if (!def || !def.plus || !Array.isArray(def.plus.fx) || def.evolved || def.rarity === 'junk') return null;
+    const C = cmp2Fx.cache || (cmp2Fx.cache = new WeakMap());
+    if (C.has(def)) return C.get(def);
+    const base = Array.isArray(def.fx) ? def.fx : [], up = def.plus.fx;
+    let grew = false;
+    const out = up.map((p, i) => {
+      if (!p || typeof p !== 'object') return p;
+      const b = base[i] && base[i].k === p.k ? base[i] : null;
+      const q = Object.assign({}, p);
+      if (b && p.k !== 'junk') {
+        for (const f of ['v', 'min', 'max', 'n']) {
+          if (typeof p[f] !== 'number' || typeof b[f] !== 'number' || p[f] === b[f] || (f === 'v' && p.k === 'random')) continue;
+          const d = p[f] - b[f];
+          let x = p[f] + (d > 0 ? Math.max(1, Math.round(d * CMP2_K)) : Math.min(-1, Math.round(d * CMP2_K)));
+          if (b[f] >= 0 && p[f] >= 0) x = Math.max(0, x); else if (b[f] <= 0 && p[f] <= 0) x = Math.min(0, x);
+          if (x !== q[f]) { q[f] = x; grew = true; }
+        }
+      }
+      return q;
+    });
+    if (!grew) {
+      const i = out.findIndex(f => f && ((CMP2_BUMP[f.k] && typeof f.v === 'number' && f.v > 0 && !(f.k === 'status' && f.to === 'self' && CMP2_BAD[f.s])) || (f.k === 'random' && typeof f.max === 'number')));
+      if (i >= 0) {
+        const f = out[i];
+        out[i] = f.k === 'random' ? Object.assign({}, f, { min: (f.min | 0) + 1, max: f.max + 1 }) : Object.assign({}, f, { v: f.v + 1 });
+        grew = true;
+      }
+    }
+    for (const f of out) if (f && f.k === 'random' && typeof f.min === 'number' && typeof f.max === 'number') { if (f.max < f.min) f.max = f.min; f.v = Math.round((f.min + f.max) / 2); }
+    const r = grew ? out : null;
+    C.set(def, r);
+    return r;
+  }
+  // Can this item be merged to +2?
+  function cmp2Ok(def) { return !!cmp2Fx(def); }
+  // The effect list at a level (0, true / 1, 2): what COMBAT plays and itemText fills in.
+  function cmp2FxAt(def, plus) {
+    if (!def) return [];
+    if (plus === 2) { const f2 = cmp2Fx(def); if (f2) return f2; }
+    if (plus && def.plus && Array.isArray(def.plus.fx)) return def.plus.fx;
+    return Array.isArray(def.fx) ? def.fx : [];
+  }
+  // An item's name at a level: "Rusty Sword", "Rusty Sword+", "Rusty Sword++".
+  function cmp2Name(def, plus) {
+    if (!def) return '';
+    const p1 = (def.plus && def.plus.name) || (def.name + '+');
+    return plus === 2 ? p1 + '+' : plus ? p1 : def.name;
+  }
+  const CMP2 = { K: CMP2_K, lv: cmp2Lv, fx: cmp2Fx, ok: cmp2Ok, fxAt: cmp2FxAt, name: cmp2Name };
   // ================================================================ /SETS
 
   // ================================================================ EVOLVE (round 7: item evolutions and pet synergies)
@@ -7321,6 +7396,114 @@ const DATA = (() => {
   const DEP = { K: DEP_K, KINDS: DEP_KINDS, ENEMIES: DEP_ENEMIES, ENC: DEP_ENC, loop: depLoop, dives: depDives, act: depAct, enc: depEnc, fix: depFix, lore: depLorePages };
   // ================================================================ /DEP
 
+  // ================================================================ CR (round 21: combo relics)
+  /* DESIGN.md "Combo relics and a gentler, clearer start (round 21)". The owner: no combo damage in the early
+     game, combos are a relic power. A grab fires no named combo (and no Bubble Combo) unless the run holds a
+     combo relic: one per family below switches that family's recipes on, The Strategy Guide all of them.
+     A relic says which with `combo` ('steel' ... or 'all'); COMBAT reads it on its own (crFam / crOn in
+     combat.js), DATA.combosFor takes ctx.on so a recipe that is off never takes a slot. Relics that only feed
+     combos (crBoosts: an onCombo hook, the Encore rule, a Bubble Combo bonus) stay out of the pools until the
+     run owns a combo relic (crPoolOk); combo relics themselves stay out of act 1's pools until the first elite
+     has offered its pick of three (crOffer, run.crPick). Lucky Lou and Ms. Bubbles start with their family's. */
+  const CR_FAM = {
+    steel: { label: 'Steel', icon: '⚔', color: '#ff5a4a', relic: 'cr_steel', arch: ['metal', 'fortress', 'brawler', 'junk'] },
+    brew: { label: 'Brew', icon: '⚗', color: '#a6ff5e', relic: 'cr_brew', arch: ['poison', 'burn', 'frost', 'glass', 'echo'] },
+    feast: { label: 'Feast', icon: '🍗', color: '#ff2e88', relic: 'cr_feast', arch: ['feast'] },
+    jackpot: { label: 'Jackpot', icon: '🎰', color: '#ffc94d', relic: 'cr_jackpot', arch: ['jackpot', 'swarm', 'greed'] },
+    casino: { label: 'Casino', icon: '🃏', color: '#ff2e4a', relic: 'cr_casino', arch: ['luck'] },
+    tech: { label: 'Tech', icon: '\u{1F579}', color: '#ff7ad9', relic: 'cr_tech', arch: ['tech'] },
+    party: { label: 'Party', icon: '🎉', color: '#8dfff5', relic: 'cr_party', arch: [] },
+  };
+  const CR_IDS = Object.keys(CR_FAM);
+  // Every recipe's family (a test pins that none is left out).
+  const CR_OF = {
+    crossed_blades: 'steel', shield_wall: 'steel', heavy_hitters: 'steel', sharp_edges: 'steel', scrap_shot: 'steel',
+    magnetized: 'steel', landslide: 'steel', armory: 'steel', iron_curtain: 'steel',
+    steam_burst: 'brew', toxic_fumes: 'brew', frostbite: 'brew', molotov: 'brew', resonance: 'brew', chandelier: 'brew',
+    elemental_storm: 'brew', bad_medicine: 'brew',
+    picnic: 'feast', banquet: 'feast', hot_lunch: 'feast',
+    pocket_change: 'jackpot', pay_day: 'jackpot', handful: 'jackpot', hat_trick: 'jackpot', three_of_a_kind: 'jackpot', mega_jackpot: 'jackpot',
+    double_dice: 'casino', poker_night: 'casino', two_pair: 'casino', full_house: 'casino', royal_flush: 'casino',
+    dead_mans_hand: 'casino', midas_touch: 'casino', lucky_seven: 'casino',
+    coin_op: 'tech', short_circuit: 'tech', bullseye: 'tech',
+    legend_rising: 'party', twin_legends: 'party', fetch: 'party', nest_egg: 'party',
+  };
+  for (const id in COMBOS) COMBOS[id].cr = CR_OF[id] || null;
+  const CR_BUBBLE = 'party';   // the Bubble Combo (COMBAT's ROS block) belongs to the Party family
+  const CR_ALL = 'cr_all';
+  const CR_RELICS = [
+    { id: 'cr_steel', name: 'Weapon Rack', icon: '\u{1F5E1}', rarity: 'u', kw: ['metal'], combo: 'steel', proc: 'STEEL COMBO',
+      text: 'Switches on the Steel combos: a grab that brings up two different weapons, two different Block items, three metal items or junk with a weapon fires a bonus move.' },
+    { id: 'cr_brew', name: 'Mixing Spoon', icon: '\u{1F944}', rarity: 'u', kw: ['poison', 'burn'], combo: 'brew', proc: 'BREW COMBO',
+      text: 'Switches on the Brew combos: a grab that mixes fire, frost and poison, glass with fire, a Poison Pill with a potion, three glass or two magic items fires a bonus move.' },
+    { id: 'cr_feast', name: 'Picnic Basket', icon: '\u{1F9FA}', rarity: 'u', kw: ['feast'], combo: 'feast', proc: 'FEAST COMBO',
+      text: 'Switches on the Feast combos: a grab that brings up two or three foods, or food with fire, heals you as a bonus move.' },
+    { id: 'cr_jackpot', name: "Magician's Hat", icon: '\u{1F3A9}', rarity: 'u', kw: ['jackpot', 'swarm'], combo: 'jackpot', proc: 'JACKPOT COMBO',
+      text: 'Switches on the Jackpot combos: a grab of three or four items, three of the same item, two small items or two Greed items fires a bonus move.' },
+    { id: 'cr_casino', name: "Dealer's Visor", icon: '\u{1F0CF}', rarity: 'u', kw: ['luck'], combo: 'casino', proc: 'CASINO COMBO',
+      text: 'Switches on the Casino combos: two dice, a card and a chip, two pairs and the secret hands fire a bonus move with Luck and gold.' },
+    { id: 'cr_tech', name: 'Cheat Code', icon: '\u{1F579}', rarity: 'u', kw: ['tech'], combo: 'tech', proc: 'TECH COMBO',
+      text: 'Switches on the Tech combos: a Tech item with a coin or two metal items, or a PERFECT grab of two or more, fires a bonus move.' },
+    { id: 'cr_party', name: 'Party Popper', icon: '\u{1F389}', rarity: 'u', kw: [], combo: 'party', proc: 'PARTY COMBO',
+      text: "Switches on the Party combos: your pet's tricks (Fetch!, Nest Egg), the evolved items' combos and the Bubble Combo (two or more bubbles popped in one grab)." },
+    { id: CR_ALL, name: 'The Strategy Guide', icon: '\u{1F4D5}', rarity: 'r', kw: ['jackpot'], combo: 'all', proc: 'ALL COMBOS',
+      text: 'Switches on every combo family at once: Steel, Brew, Feast, Jackpot, Casino, Tech and Party. Every recipe in the Prizedex is live.' },
+  ];
+  for (const r of CR_RELICS) if (!RELICS[r.id]) { RELIC_LIST.push(r); RELICS[r.id] = r; }
+  const CR_RELIC_IDS = CR_RELICS.map(r => r.id);
+  // The crawlers whose kit is built on a family start with its relic (GAME newRun adds it after the starter).
+  const CR_START = { gambler: 'cr_casino', bubbler: 'cr_party' };
+  // relic ids -> {all: relic id or null, fam: {family: relic id}} (the first relic that switches each on)
+  function crFamOf(relics) {
+    const on = { all: null, fam: {} };
+    for (const id of relics || []) {
+      const c = RELICS[id] && RELICS[id].combo;
+      if (c === 'all') { if (!on.all) on.all = id; } else if (CR_FAM[c] && !on.fam[c]) on.fam[c] = id;
+    }
+    return on;
+  }
+  // Is a combo (a recipe, or a family name) switched on by crFamOf's result?
+  function crOn(on, c) {
+    if (!on) return false;
+    const f = typeof c === 'string' ? c : c && c.cr;
+    return !!(on.all || (f && on.fam[f]));
+  }
+  const crOwns = (run) => !!run && (run.relics || []).some(id => RELICS[id] && RELICS[id].combo);
+  // A relic that only feeds combos: an onCombo hook, the Encore rule, a Bubble Combo bonus.
+  function crBoosts(def) {
+    if (!def || def.combo) return false;
+    return !!((def.hooks && def.hooks.onCombo) || (def.rules && def.rules.comboTwice) || (def.bub && def.bub.combo > 0));
+  }
+  // May this relic show up in a random pool for this run? (GAME relicPool)
+  function crPoolOk(id, run) {
+    const r = RELICS[id];
+    if (!r) return true;
+    if (crBoosts(r)) return crOwns(run);
+    if (r.combo && run && (run.act | 0) <= 1 && !run.crPick && !crOwns(run)) return false;
+    return true;
+  }
+  // The first elite's pick: n family relics the run does not own, leaning to the families its build invests in.
+  function crOffer(rng, run, n) {
+    n = n == null ? 3 : n;
+    const own = (run && run.relics) || [];
+    const sc = investment(run);
+    const cand = CR_IDS.filter(f => own.indexOf(CR_FAM[f].relic) < 0);
+    const w = cand.map(f => 1 + CR_FAM[f].arch.reduce((s, k) => s + Math.min(6, sc[k] || 0), 0) / 3 + (f === 'party' && run && run.pet ? 1 : 0));
+    const out = [];
+    while (out.length < n && cand.length) {
+      let x = rng() * w.reduce((a, b) => a + b, 0), i = 0;
+      for (; i < cand.length - 1; i++) { x -= w[i]; if (x < 0) break; }
+      out.push(CR_FAM[cand[i]].relic);
+      cand.splice(i, 1); w.splice(i, 1);
+    }
+    return out;
+  }
+  // The relic that switches a recipe's family on (the Prizedex line), or null.
+  const crRelicFor = (c) => { const f = typeof c === 'string' ? c : c && c.cr; return f && CR_FAM[f] ? CR_FAM[f].relic : null; };
+  const CR = { FAM: CR_FAM, IDS: CR_IDS, OF: CR_OF, RELICS: CR_RELIC_IDS, ALL: CR_ALL, BUBBLE: CR_BUBBLE, START: CR_START,
+    famOf: crFamOf, on: crOn, owns: crOwns, boosts: crBoosts, poolOk: crPoolOk, offer: crOffer, relicFor: crRelicFor };
+  // ================================================================ /CR
+
   return {
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
     SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
@@ -7362,6 +7545,8 @@ const DATA = (() => {
     SECRET, secKinds, secFix, secKeyN, secShopStock,
     // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
     SETS, SET_IDS, SET_FX, SET_PULL, setOf, setCount, setProgress, setFxIds, setWant, setTagOf, BOONS, BOON_IDS, BOON_SLOTS, boonOffer, CMP, cmpRule, cmpRoll,
+    // CR (round 21): combo relics, plus 2 (DESIGN.md "Combo relics and a gentler, clearer start (round 21)")
+    CR, crFamOf, crOn, crBoosts, crPoolOk, crOffer, CMP2, cmp2Lv, cmp2Ok, cmp2FxAt, cmp2Name,
     // companion pets (DESIGN.md "Pets")
     PETS, PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP, petLevel, petNext, petPow, petUses, petLook, petEgg, petGlow, petName, petNew, petFix, petOffer, petText,
     // the Prize Vault (DESIGN.md "Prize Vault"): cosmetics, prices, the Vault Capsule
