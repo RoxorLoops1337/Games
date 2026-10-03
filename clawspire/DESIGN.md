@@ -7152,6 +7152,238 @@ so its dial is left alone; Lou trails, so his Max HP goes up.
 The data suite pins Lou's 78. The balance suite's "every normal is beatable" holds for every crawler (the Rogue's
 weakest act 2 normal at 1% in that COMBAT-only model, unchanged here).
 
+## Build and delivery (round 18)
+
+The deployed copy is built, the source is not. `build.js` (`minifyClawspire`, after the copy) works on
+`dist/clawspire` only; `clawspire/` stays readable and the tests keep loading it.
+
+- **Minified per file.** Each `js/*.js` goes through esbuild's transform on its own (`minify`, target es2020,
+  no legal comments, UTF-8 kept so emoji and Dutch stay readable). They are classic scripts sharing globals; a
+  transform without a format never renames top-level names (`const GAME`, `RENDER`, `U` survive), and es2020
+  matches the source's syntax, so nothing is lowered and no helper temporaries land in the shared scope. Every
+  `<style>` in index.html is minified as CSS (ids kept), the loader's inline script as ES5 (it runs before
+  anything else and stays plain ES5).
+- **Versioned URLs.** Every `<script src="js/x.js">` in clawspire's pages becomes `js/x.js?v=<sha256, 10 hex>`
+  of the built file. The lazy Dutch tables are named inside i18n.js, so the build stamps those strings first
+  (`js/lang_nl.js?v=...`), then hashes i18n.js; the build fails loudly if i18n.js stops naming a `lang_*.js`
+  file, rather than ship an unversioned table under a year-long cache. The root `_headers` gives
+  `/clawspire/js/*` `Cache-Control: public, max-age=31536000, immutable`; index.html keeps the Pages default
+  (revalidated each visit), which is what carries the new hashes after a deploy. A warm visit now asks the
+  server for index.html and art/manifest.json only.
+- **Left out of the deploy** (kept in the repo): intro.mp4, intro.webm, intro_poster.jpg (the intro is drawn
+  live by js/intro.js; nothing requests them), DESIGN.md and ART_PROMPTS.md. About 17 MB less per deploy.
+- **Loader weights.** The bulbs fill by each script's share of the bytes; the build rewrites `var WT` in the
+  dist index.html from the minified files' gzip sizes (one weight per script tag), and the source line carries
+  the same numbers for the dev page.
+
+Measured (round 18, local server with gzip, 390x844 mobile emulation; slow 4G = 1.44 Mbps and 150 ms, plus
+4x CPU):
+
+| | before | after |
+| --- | --- | --- |
+| English download (js + index.html, gzip) | 1211 KB | 795 KB |
+| everything (with the Dutch tables), raw | 4.38 MB | 2.57 MB |
+| dist/clawspire on disk | 21.9 MB | 2.7 MB |
+| cold first frame, slow 4G | 7.7 s | 5.4 s |
+| cold first frame, Dutch, slow 4G | 8.6 s | 6.1 s |
+| warm first frame, slow 4G | 0.90 s (14 revalidations) | 0.73 s (2) |
+
+## Design system and home screens (round 18)
+
+The look is "Arcade after hours": the neon cabinet, calmer. One `<style id="ds-css">` block, directly after the
+main `<style>`, holds the tokens and the shared components; every later block styles its screens on them.
+
+**Tokens** (names are final; the older names are aliases so earlier rules and the colour-blind modes keep working):
+
+| Group | Tokens |
+|---|---|
+| Palette | `--bg #12091f`, `--surface #1c1233`, `--surface-2 #261a44`, `--line #3a2a5e`, `--line-strong #5a3f8f`, `--text #f4eeff`, `--text-2 #b7a9d9`, `--text-3 #8576ab`, `--accent #ff4f9a` (THE primary action), `--info #35e0d2` (selection, progress), `--reward #ffcc55` (money, prizes), `--good #a6ff5e`, `--bad #ff5a4a`, `--rar-c/u/r/l` |
+| Type | `--font` (Trebuchet MS, then the system UI faces), `--fs-xs 13` (labels, tags, captions), `--fs-s 15` (body), `--fs-m 19` (card titles, the primary button, section heads), `--fs-l 30` (screen title) |
+| Space | `--s1 4`, `--s2 8`, `--s3 12`, `--s4 16`, `--s5 24`; radii `--r-chip 8`, `--r-card 12`, `--r-sheet 18` |
+| Aliases | `--ink --panel --panel2 --line2 --dim --dimmer --pink --cyan --gold --lime --blood` point at the tokens |
+| Colour-blind | under `html.cb-*` the state and rarity tokens follow the mode's safe set: `--good` = `--acc-heal`, `--bad` = `--acc-dmg`, `--rar-u/r/l` = `--acc-cyan/gold/pink` |
+
+**Rules.** One glowing element per screen (the primary button, or the hero art); everything else flat. Coloured
+borders only for state (selected, a rarity stripe, a free capsule waiting); an identity colour (a mode, a tip) is a
+slim 4 px left edge at most. No dashed borders except an empty drop slot. Nothing loops on a menu except the
+title's attract scene; `.calm` and `prefers-reduced-motion` stop the sheet rise too. Text is 13 px or more.
+
+**Components** (ds-css):
+- Buttons: `.btn` is the secondary (surface-2, 1.5 px line-strong, `--fs-s` 900); `.btn.pri` the one primary (filled
+  accent, white, `--fs-m`, the screen's one glow); `.btn.go` / `.btn.gold` only tint the border and the words;
+  `.btn.ghost` for Back, Leave, Skip, Not now, Cancel (no border at rest, a faint fill, `--text-2`). All 48 px tall,
+  44 for `.sm`. A toggle is a secondary with a dot (`.dsTog`, `.accTog`, the title sheet's toggles): lime when on.
+- `.card`: surface, 1.5 px line, radius 12, padding 12; rarity is a 3 px top stripe (an inset shadow from `--rar`,
+  set by `.rr-c/u/r/l`, so `::before` / `::after` stay free for badges and the holo sheen); `.sel` is an info border;
+  `.locked` turns its canvas into a silhouette and its words `--text-3`. `.price` / `.dsPrice` is a gold pill.
+- `.sheetWrap` (the dim layer, `.show` opens it) + `.sheet` (bottom anchored, radius 18 on top, a 36 x 4 handle,
+  max 78 %) + `.sheetHead` (an `h3` or `.shT` and a ghost x) + `.sheetBody` (scrolls). `dsSheet(parent, title,
+  onClose)` in game.js builds one ({wrap, body, open(), close()}); its controls are plain taps, never GAME.choose entries.
+- The page frame: `.pageHead` (sticky grid: `.phBack` left, `.phTitle` / `h1` centred, `.phEnd` right),
+  `.pageBody` (16 px between sections), `.pageDock` (sticky bottom, one primary and at most one ghost). They pull out
+  of the `.screen`'s 16 px padding (a sticky box stops at the scroller's padding, so `top` / `bottom` are -16 px), and
+  divide that pull by `--accK` under a text size, because the bodies zoom. Give the `#xBody` `.dsPage` so the dock
+  sits at the bottom of a short page. Back is ALWAYS top left; Leave on a run stop is the dock's ghost.
+- `.tag` (+ `.gold .cyan .pink .lime`), `.dsPill` (a currency pill for `.phEnd`), `.dsSec` (an xs section label),
+  `.choice` (a full-width secondary row: `.c1` in `--fs-m`, `.c2` in `--fs-s`).
+- Solid backdrops are opt-in per screen (an id selector in the screen's own block: the tests read the
+  `class="screen"` markup, so no class is added there).
+
+**The toast lane.** On every menu page (a screen with a `.pageHead` or a `.pageDock`, or a solid `.ds-opaque` one,
+plus the Prize Vault: the home pages, the run stops, the albums, the lobbies, win, game over, loop) the toast and the
+corner item (a sticker, a discovery) share one lane at the bottom, just above what the dock shows (its note or its
+buttons; the vault's capsule bar). One at a time: while a plain toast floats (2.5 s at most) the corner item waits
+hidden with its clock paused; in the shop the toast is the keeper's line, so nothing floats and the card keeps the
+lane. The lane climbs a row (20 px) at a time only past buttons, and on such a page a heading, the run score
+(`.scoreBox`), the page head and the keeper's speech bubble (`.keepBub`) weigh as buttons, so nothing lands on them.
+The prize counter's old top toast lane (over its title) gives way to the bottom lane. The title, the map, the fight
+and the intro keep their own placement, and headless the tests' measured rects decide as before (`dsLaneY` is 0).
+The sticky `.pageHead` offset (-16 px, the scroller's padding) lives in ds-css for every page; `.m3Head` no longer
+repeats it (the Duo page keeps its -14 px).
+
+**What changed per screen (the Arcade front).**
+- Title: the round 15 structure stays (the big action, the play row, five tiles, the stats line, the sheets). The big
+  action is the filled primary (NEW RUN, or CONTINUE with NEW RUN under it as a secondary) and the screen's one glow;
+  the breathing loop is gone. Daily and Modes are two calm cards on one surface (only their words carry gold and
+  cyan); the five tiles are one look (no per-tile borders, no vault pulse; a free capsule is a gold rim); the badges
+  are small accent dots. The stats line is one quiet line with lower-case words, so it fits in Dutch at 360 px.
+- The season ribbon over the sky: a slim strip with no pulse and no glow (the event's logo art is the hero).
+- The title sheets are `.sheet`s: full width at the bottom, the handle, a ghost x. The Modes rows are choice rows on
+  one surface with the mode's colour as a slim left edge (Weekly cyan, Boss Rush red, Duo pink).
+- Settings is a `.sheet` (the handle, SETTINGS, a ghost x; Done stays at the end). Sections are quiet groups under
+  a hairline. The Sound on / Music on rows repeated the sliders and the More sheet: they show only while that sound
+  is off (still registered, so GAME.choose and the tests keep their labels). The sample strip is plain and sits in
+  Vision beside the controls it shows: the three numbers and the status chips, the four rarities by name (sized to
+  fit Dutch at extra large), one prize with its rim and the outline.
+- Character select: three short steps on one page instead of 3.2 screens: (1) a row of seven portraits, the picked
+  crawler's card under it; (2) a row of eight claws, the picked claw's demo cabinet, numbers and matchup tags (the
+  joke line is gone from view); (3) one Run options row (Tilt, the mutators, the score multiplier) that opens a sheet
+  with the Tilt stepper and the mutator grid; START RUN in the dock. The portraits are still the GAME.choose entries in
+  DATA order and a choice still starts that crawler's run; a tap on a portrait only picks it, START starts the
+  picked one (a locked crawler's card says how to unlock it and START is off). Back is registered last, shown top left.
+- Help: the page frame; five short section cards (the rig, fights, statuses, the map, keys), the statuses as a
+  two-column list (the icon and the name never wrap; "Gif", "Brand" stay on one line in Dutch).
+- Tips: the page frame; the tips met in full (their colour a slim left edge), the rest folded into one
+  "N more to find" row; Reset tips is a ghost under the list.
+- Fight HUD: tokens only (the aliases), no layout change.
+- Dead CSS removed: `.menu .btn{width:280px}`, `.menu .row*`, `#titleMenu .row*` (and their text-size rules),
+  `#titleMenu .dwRow* / .vrRow* / .duoRow*`, `#titleMenu .hisTitleBtn / .loreTitleBtn[data-n]::after`, `.tt-sub`,
+  `.footer`, `.shopSec`, `.spacer`, `.statusList .kv`, the old `.uiSheet` frame and its keyframes, `accUp`.
+
+## Run stop screens restyled (round 18)
+
+The climb's stops (reward, spare parts, treasure, capsule, shop, prize counter, arcade and pet shop frame, trading
+post, boon, Compactor, bin, event, rest, forge, season door, rival, the back room) sit on the ds-css tokens in one
+frame with four family looks. The CSS is one block, `<style id="stops-css">` (after qa17-css); the hooks are in
+game.js's M2 block (after HOLO): `m2Stop(name, body)`, `m2Dock(body, els)`, `m2Move`, `m2ShopTidy`, `m2Leave`.
+
+- **The frame.** `m2Stop` puts `.m2Stop` and one family class on the screen and makes the body a full-height page
+  (`.dsPage`), so the dock sits at the bottom. The title is one size (`--fs-l`), centred, with a short rule in the
+  family colour under it. The way out (Leave, Skip, Cancel, Back to the shop, Continue) or the one action (Take it)
+  is moved into a `.pageDock` at the bottom of the body by `m2Dock`. Elements move; their `GAME.choose` entries stay
+  exactly where they were registered (order and labels unchanged). The rest stop has no way out by design (pick
+  one of the choices); the canvas stops (capsule, arcade, boon, sea, rival, secret, Compactor, trade) already
+  keep their buttons in a bottom bar.
+- **One card.** Reward, shop, forge, bin, Compactor and trade results share `.card` from ds-css: `--surface`, a
+  1.5 px border, the rarity as a 3 px top stripe (the old "common / rare" corner word is hidden, the stripe
+  follows the colour-blind modes), art at 64 px, the name at 16 and the text at 13 in a grid, the price as a gold
+  pill at the bottom. The rare gold pulse and the legendary sheen are gone (they looped on every grid, the Prizedex
+  too); the holo foil stays on rare and legendary cards. Evolved cards keep a still glow.
+- **Market stall** (`.m2-market`: shop, prize counter, trading post, arcade and pet shop frame): warm, a 2 px gold
+  rule under the scene, gold price pills. The shop (`m2ShopTidy`): the gold pill and one line, ITEMS, the five
+  items with the relic as the sixth card of the same grid, the reroll lever as one slim row (REROLL THE SHELF and
+  its price pill), then SERVICES: the prize counter and the Compactor as two small tiles with Remove and Sell
+  under them, and Leave in the dock. The trade offers are one card style (the kind's colour is its label and the
+  top stripe); the in-card Trade buttons are gold secondaries, not three glowing primaries. The pet shop's Adopt
+  buttons the same.
+- **Cozy corner** (`.m2-cozy`: rest, treasure, spare parts, capsule): an amber wash at the top of the backdrop,
+  big amber-tinted choice rows (76 px), the primary in amber. The treasure's relic card sits in the middle of the
+  page, its rays and the floating icon still (no loops), Take it in the dock. The capsule keeps its round 17
+  behaviour, odds and timings; only the prize card goes to the one card look in its tier (the one glow).
+- **Workshop** (`.m2-work`: forge, bin, Compactor): steel cards (a cooler gradient and border), ember orange
+  (#ff8a3d) as the only accent: the rule under the forge, the press panel's edge, a picked slot, a card under the
+  finger, the CRUSH primary. A disabled CRUSH is a plain grey secondary, not muddy pink.
+- **Story card** (`.m2-story`: event, boon, season door, rival, secret): the scene on top, the text on one quiet
+  panel, the choice rows; the outcome chips are one line of small text with the numbers in their colour (no
+  pills). The event title is a calm plaque. The deal cards of the boon draft use the card look (stripe in the
+  boon's colour, no wobble on the back). The season door, Gary and the back room keep their own scene colours;
+  their result cards go flat with a stripe.
+- **A3.4 (Dutch boon).** The canvas marquee ("LATEN WE DEALEN") and the side words shrink to fit their sign
+  (render.js boonBack `fitSz`); "TO WIN" reads "EN WIN" in Dutch (DRUK ... EN WIN), which fits beside the chute;
+  "Voorjaarsschoonmaak" carries a soft hyphen so the card title wraps as Voorjaars-schoonmaak; the head is 21 px
+  in Dutch.
+- **Calm.** No looping animation on the stops: the reward capsule slots keep a still glow in their tier (no pulse,
+  no shine sweep), the arcade's ready pulse, the trade's haggling pulse, the IT CAME BACK tag and the back room
+  title's big entrance scale are toned down or still.
+- **Holo cards at rest.** `holoTick` only touches a card while a finger or the pointer is on it (it is drawn once
+  in its rest pose), and never a card on a screen that is not shown (`m2HoloShown`, the card's `.screen` is
+  cached). Measured (local, 390x844, mutation observer, 2 s windows): shop 600 card style writes a second before,
+  0 after; Prizedex 570 to 0; a fight after the shop and the Prizedex 586 to 0 (6 writes a second left, the HUD).
+- **Hidden stops let go.** `m2Leave` (called from setScreen) empties the bodies of the solid stops (reward, parts,
+  treasure, rest, shop, counter, forge, bin, event) when the player goes back to the map, a fight or the title;
+  every builder rebuilds its body when it shows. Shop, bin, forge and rest, then a fight: 664 DOM nodes and 34
+  canvases before, 414 and 10 after; the holo live list 20 to 0.
+- **ds-opaque.** The solid stops (the same nine) carry `.ds-opaque` on the screen element (set from JS, the static
+  markup stays `class="screen"`): nothing of the main canvas shows under them. Note for the canvas skip: the
+  shopkeeper, the campfire and the forge (feelDraw) and the event vignette (arcDraw) paint their own DOM canvases
+  from inside draw(), so a skip under `.ds-opaque` must keep those two calls running.
+
+## Albums, lobbies and run end restyled (round 18)
+
+The meta pages sit on the ds-css tokens in three family looks. The CSS is one block, `<style id="m3-css">` (the last
+block in the head); the hooks are in game.js's M3 block (after VAULT): `m3Page(name, body, opaque)`,
+`m3Head(body, back, title, end)`, `m3Dock(body, els, note)`, `m3Fold(label, open, onToggle, cls)`,
+`m3Score(name, body, cta, note)`, `m3Leave(from, to)`. Elements move; every `GAME.choose` entry stays exactly where it
+was registered (order and labels unchanged), the ids and the `.screen` + `#xBody` markup too.
+
+- **The page head.** Back is top-left on every page (it was a full-width pink bar at the bottom of the Prizedex and
+  the sticker board): `m3Head` moves the registered Back into a sticky `.pageHead`, the title sits left beside it
+  (`--fs-l`; a title over 13 characters, every Dutch title and every title under a text size goes to 22 to 24 px and
+  may wrap to two lines rather than cut), an extra on the right (the Prizedex's Codex). A sticky head sticks at the
+  scroller's padding edge, so `.m3Head` carries `top:-16px` (`-14px` on the duo page) to sit on the glass.
+- **The dock.** `m3Dock` moves the one primary (and a ghost at most) into a `.pageDock` at the end of the body, with
+  an optional caption over it: Play the weekly, Start the rush, Toss the coin, Back to title, Keep playing (with
+  Cash out as the ghost and the Endless note as the caption). The dock fades to `--bg` within 14 px so nothing reads
+  through it.
+- **Album** (`.m3-album`: Prizedex, stickers, Codex, history, the Prize Vault): paper dark (`--paper` #201538) cards
+  in uniform grids, a 1.5 px `--line` border, the rarity as a 3 px top stripe (it follows the colour-blind modes),
+  no dashed borders anywhere. Locked is a silhouette: the Prizedex cell shows only the dark shape (the "???" name is
+  hidden), a locked sticker shows its own icon darkened on blank paper (it was a "?" in a dashed disc), a locked
+  Codex chapter or page is the plain surface in `--text-3`, a vault prize you cannot buy is a dim grey thumb. Tabs
+  and filters are one segmented row that scrolls sideways (`.m3Seg`, the crawler filter `.m3Scroll`): the Prizedex
+  tabs no longer wrap to two rows, the history's three rows of chips are three slim rows, the vault's seven tabs
+  (with the season's and the Minis) fit the width with two-line labels (A3.2: "Minis" was cut off; the daily
+  capsule now lives in the bottom button, nowhere near the title). The Prizedex cards lost the holo shine (it stays
+  on reward and shop cards). NEW badges are one small pink tag, still.
+- **Lobby** (`.m3-lobby`: weekly, Boss Rush, Claw School, Duo and the online pages): a hero banner in the mode's
+  colour (`--hero`: weekly ice cyan, rush red, school chalk green, duo pink and teal), one list, the primary in the
+  dock. The weekly and rush banners are drawn once (they used to repaint 24 times a second). The duo and online
+  modes are one list of choice rows (icon left, name, one line, a colour stripe per mode) under a pink and teal
+  hero strip. **Duo setup (A3.5)**: 47 buttons on one page are now one row per player (portrait, Player N, the
+  name field) with a summary line (crawler, claw, paint) that opens the colours, crawlers, claws and paint
+  (`m3Fold`, closed by default, remembered in `S.m3Duo` across the rebuild a pick does, the scroll position kept),
+  the mode's options, and Toss the coin in the dock (it floated over the claw chips). Claw School keeps its
+  classroom canvas; its locked lessons are solid, dimmed cards.
+- **Scoreboard** (`.m3-score`: game over, win, the loop): the title and its one line, the score as the one big
+  number (64 px gold, the screen's one glow; NEW BEST slaps once, no pulse), its tags (best, Tilt, Hall of Fame #n),
+  then the news only: the Tilt unlock as a slim strip, the daily, weekly and ghost cards, a crawler unlocked. The
+  score's breakdown, the stickers of the run, the highlights, the stats table and Share run card fold into one
+  **Run details** row (closed). **A3.3**: a sticker that unlocks a vault prize during the run end no longer toasts
+  "Unlocked in the Prize Vault" over the Tilt card (`vaultOnSticker` collects it in `S.m3Vlt` while the win or game
+  over is up; it is a line in Run details). The loop's CRT is unchanged.
+- **Calm.** Nothing loops on these pages: the vault's capsule glow, the daily pill pulse, the rainbow legendary
+  border, the NEW pulses, the endless button pulse, the NEW BEST glow and the hero banners are still. The fold's
+  chevron turn is off under `.calm` and reduced motion.
+- **Hidden pages let go (B3.11).** `m3Leave` (setScreen, next to `m2Leave`) empties the body of the page left
+  behind: Prizedex, stickers, Codex, history, vault, weekly, rush menu, game over, win. Every builder rebuilds its
+  body when it shows.
+- **ds-opaque.** Solid pages carry `.ds-opaque` on the screen element (set from JS): the Prizedex, stickers, Codex,
+  history, weekly, rush menu, game over, win, the loop, and the duo page in its menu, setup and online phases (not
+  in its canvas phases). The vault, Claw School and the rush screen paint the canvas under their DOM and stay
+  see-through. Note for the canvas skip: the Codex page picture (`loreLive`) and the rush gallery (`rushLive`)
+  repaint their own DOM canvases from the update loop, not from draw().
+- **Dutch.** One new string, "Run details" (Rundetails), in lang_nl2.js's M3 block. Shot at 390 and 360 px.
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the

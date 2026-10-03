@@ -161,7 +161,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 #pop.show{display:block}
 #pop b{color:var(--gold)}
 #toast{position:absolute;left:50%;top:400px;transform:translateX(-50%);padding:10px 16px;border-radius:12px;
-  background:rgba(18,9,31,.95);border:2px solid var(--cyan);color:#fff;font-size:15px;font-weight:900;
+  background:var(--surface-2);border:1.5px solid var(--line-strong);box-shadow:0 8px 24px rgba(0,0,0,.5);color:#fff;font-size:15px;font-weight:900;
   letter-spacing:.04em;opacity:0;transition:opacity .25s;pointer-events:none;z-index:45;max-width:500px;text-align:center;line-height:1.35}
 #toast.show{opacity:1}
 #coach{position:absolute;display:none;left:40px;right:40px;top:540px;padding:14px;z-index:42;gap:10px;
@@ -195,11 +195,6 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .brush.sel{border-color:var(--lime);color:var(--lime);box-shadow:0 0 12px rgba(166,255,94,.4)}
 .menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:60px 0 24px;
   background:linear-gradient(180deg,rgba(18,9,31,0),rgba(18,9,31,.88) 26%,rgba(18,9,31,.96))}
-.menu .btn{width:280px}
-.menu .row{justify-content:center}
-.menu .row .btn{width:auto;min-width:88px}
-.tt-sub{color:var(--cyan2);font-size:13px;letter-spacing:.3em;text-transform:uppercase;text-align:center;font-weight:900}
-.footer{color:var(--dimmer);font-size:12px;text-align:center}
 
 /* cards */
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -260,7 +255,6 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .help b{color:#fff}
 .help h3{margin-top:8px}
 .statusList{display:flex;flex-direction:column;gap:4px}
-.statusList .kv{font-size:13px}
 .eventArt{height:110px;border-radius:12px;border:2px solid var(--line);background:#0d0718;display:block;width:100%}
 .eventPic{height:auto;aspect-ratio:3/2;max-height:220px;object-fit:cover}
 /* optional PNG icons: js/art.js adds .art-ui-<key> to <html> once art/ui/<key>.png has loaded */
@@ -269,13 +263,11 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .art-ui-coin .stat.gold .k::before{background-image:url(art/ui/coin.png)}
 .art-ui-ink .stat.ink .k::before{background-image:url(art/ui/ink.png)}
 .art-ui-brush .brush::before{width:20px;height:20px;margin-right:0;background-image:url(art/ui/brush.png)}
-.shopSec{display:flex;flex-direction:column;gap:8px}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .grid4 .card canvas{width:56px;height:56px}
 .grid4 .card .name{font-size:12px}
 .grid4 .card .text{display:none}
 .center{text-align:center}
-.spacer{flex:1}
 
 /* ---------- juice ---------- */
 .btn{transition:transform .08s cubic-bezier(.3,1.6,.5,1),filter .12s,box-shadow .12s}
@@ -288,20 +280,10 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 }
 .card{transition:transform .14s ease,box-shadow .14s}
 .card:active{transform:scale(.96)}
-/* rarity: uncommon cyan rim, rare gold pulse, legendary rainbow sheen */
-.card.rr-u{border-color:#1f8f88}
-.card.rr-r{border-color:var(--gold);animation:rarePulse 1.8s ease-in-out infinite}
-.card.rr-l{border-color:var(--pink);overflow:hidden;animation:rarePulse 1.4s ease-in-out infinite}
-.card.rr-l::after{content:'';position:absolute;inset:-40%;pointer-events:none;mix-blend-mode:screen;
-  background:linear-gradient(115deg,transparent 40%,rgba(255,46,136,.35) 45%,rgba(255,201,77,.35) 50%,rgba(46,230,214,.35) 55%,transparent 60%);
-  animation:sheen 2.4s linear infinite}
-@keyframes rarePulse{0%,100%{box-shadow:0 4px 0 #120a22,0 0 6px rgba(255,201,77,.25)}50%{box-shadow:0 4px 0 #120a22,0 0 22px rgba(255,201,77,.6)}}
-.card.rr-l{--glow:rgba(255,46,136,.6)}
-@keyframes sheen{0%{transform:translateX(-60%)}100%{transform:translateX(60%)}}
+/* rarity (round 18): a thin top stripe from ds-css (.rr-*), never a pulse or a sheen; a legendary keeps its holo foil */
+.card.rr-l{overflow:hidden}
 /* cards deal in with a flip (the delay is set per card) */
 .card.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both}
-.card.rr-r.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both,rarePulse 1.8s ease-in-out .6s infinite}
-.card.rr-l.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both,rarePulse 1.4s ease-in-out .6s infinite}
 @keyframes dealIn{0%{opacity:0;transform:perspective(600px) translateY(-60px) rotateY(180deg) scale(.6)}
   60%{opacity:1}100%{opacity:1;transform:perspective(600px) translateY(0) rotateY(0) scale(1)}}
 .card.nope{animation:nope .3s}
@@ -568,10 +550,143 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 
 @media (max-width:400px){ .cards{gap:6px} }
 </style>
+<style id="ds-css">
+/* ================= DESIGN SYSTEM (round 18): "Arcade after hours", the neon cabinet, calmer =================
+   DESIGN.md "Design system and home screens (round 18)". Tokens first, then the shared components:
+   .btn (pri / secondary / ghost), .card, .sheet, .pageHead / .pageBody / .pageDock, .tag.
+   Every later block uses these tokens. The old names (--ink --panel --line --text --dim --pink --cyan --gold --lime --blood)
+   are aliases, so older rules and the colour-blind modes (html.cb-*, --acc-*) keep working.
+   Rules: ONE glowing element per screen (the primary button or the hero art); coloured borders only for state
+   (selected, rarity stripe); no dashed borders except an empty drop slot; sizes from the 4-step type scale. */
+:root{
+  /* palette */
+  --bg:#12091f; --surface:#1c1233; --surface-2:#261a44;
+  --line:#3a2a5e; --line-strong:#5a3f8f;
+  --text:#f4eeff; --text-2:#b7a9d9; --text-3:#8576ab;
+  --accent:#ff4f9a; --info:#35e0d2; --reward:#ffcc55; --good:#a6ff5e; --bad:#ff5a4a;
+  --rar-c:#9d93bd; --rar-u:#35e0d2; --rar-r:#ffcc55; --rar-l:#ff4f9a;
+  /* type: four sizes, one family for DOM and canvas UI text */
+  --font:"Trebuchet MS",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --fs-xs:13px; --fs-s:15px; --fs-m:19px; --fs-l:30px;
+  /* spacing and radii */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+  --r-chip:8px; --r-card:12px; --r-sheet:18px;
+  /* the old names, aliased (rules written before round 18 read these) */
+  --ink:var(--bg); --panel:var(--surface); --panel2:var(--surface-2); --line2:var(--line-strong);
+  --dim:var(--text-2); --dimmer:var(--text-3);
+  --pink:var(--accent); --cyan:var(--info); --gold:var(--reward); --lime:var(--good); --blood:var(--bad);
+}
+/* colour-blind modes: the state colours and the rarity follow the mode's safe set */
+html[class*="cb-"]{--good:var(--acc-heal);--bad:var(--acc-dmg);--rar-u:var(--acc-cyan);--rar-r:var(--acc-gold);--rar-l:var(--acc-pink)}
+html,body,button,input,select{font-family:var(--font)}
+
+/* ---- buttons: .btn.pri (one per screen), .btn (secondary), .btn.ghost (Back, Leave, Skip, Not now, Cancel) ---- */
+.btn{min-height:48px;padding:8px 18px;gap:var(--s2);border-radius:var(--r-card);border:1.5px solid var(--line-strong);
+  background:var(--surface-2);color:var(--text);font-size:var(--fs-s);font-weight:900;letter-spacing:.06em;line-height:1.15;
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);text-shadow:none}
+.btn.sm{min-height:44px;padding:6px 12px;font-size:var(--fs-xs);letter-spacing:.08em}
+.btn:active{transform:translateY(1px) scale(.97);box-shadow:inset 0 -1px 0 rgba(0,0,0,.22)}
+.btn.pri{border-color:var(--accent);background:var(--accent);color:#fff;font-size:var(--fs-m);
+  text-shadow:0 1px 0 rgba(90,0,40,.45);box-shadow:inset 0 -4px 0 rgba(120,10,60,.35),0 0 18px rgba(255,79,154,.35)}
+.btn.pri.sm{font-size:var(--fs-s)}
+.btn.pri:active{box-shadow:inset 0 -1px 0 rgba(120,10,60,.35),0 0 12px rgba(255,79,154,.3)}
+/* .go / .gold only tint the border and the words */
+.btn.go{border-color:var(--info);background:var(--surface-2);color:#c9fff9;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.btn.gold{border-color:var(--reward);background:var(--surface-2);color:#ffe7a8;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.btn.ghost{border-color:transparent;background:rgba(255,255,255,.04);color:var(--text-2);box-shadow:none}
+.btn.ghost:focus-visible{border-color:var(--line-strong)}
+.btn:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.btn:disabled,.btn.off{opacity:.4;box-shadow:none;filter:saturate(.5)}
+/* a toggle is a secondary button with a lime dot when on */
+.btn.toggle.on{border-color:var(--line-strong);color:var(--text)}
+.btn.dsTog::before{content:'';width:12px;height:12px;flex:0 0 auto;border-radius:50%;background:var(--text-3)}
+.btn.dsTog.on::before{background:var(--good);box-shadow:0 0 6px var(--good)}
+@media (hover:hover){
+  .btn:not(:disabled):hover{filter:brightness(1.12);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+  .btn.pri:not(:disabled):hover{box-shadow:inset 0 -4px 0 rgba(120,10,60,.35),0 0 22px rgba(255,79,154,.45)}
+  .btn.ghost:not(:disabled):hover{box-shadow:none;color:var(--text)}
+}
+/* a choice row (rest, event, sheet entries): icon left, a title and one line of text */
+.choice{min-height:60px;padding:10px 14px;gap:2px;border-radius:var(--r-card)}
+.choice .c1{font-size:var(--fs-m);line-height:1.2}
+.choice .c2{font-size:var(--fs-s);font-weight:600;color:var(--text-2);line-height:1.3}
+
+/* ---- one card ---- */
+/* rarity is a 3 px top stripe (an inset shadow, so ::before / ::after stay free for badges and the holo sheen) */
+.card{border-radius:var(--r-card);border:1.5px solid var(--line);background:var(--surface);padding:var(--s3);gap:6px;
+  box-shadow:inset 0 3px 0 var(--rar,transparent)}
+.card.rr-c{--rar:var(--rar-c)} .card.rr-u{--rar:var(--rar-u)} .card.rr-r{--rar:var(--rar-r)} .card.rr-l{--rar:var(--rar-l)}
+.card .name{font-size:var(--fs-m);line-height:1.15}
+.card .text{font-size:var(--fs-s);line-height:1.3;color:var(--text-2)}
+.card .price,.dsPrice{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;background:rgba(255,204,85,.12);
+  color:var(--reward);font-size:var(--fs-s);font-weight:900}
+.card.sel{border-color:var(--info);box-shadow:inset 0 3px 0 var(--rar,transparent)}
+.card.locked{opacity:1;border-style:solid;border-color:var(--line)}
+.card.locked .name,.card.locked .text{color:var(--text-3)}
+.card.locked canvas{filter:brightness(0) opacity(.45)}
+
+/* ---- one sheet: bottom anchored, a handle, a head (title + close), a scrolling body ----
+   .sheetWrap is the dimming layer (optional); .sheet is the panel. */
+.sheetWrap{position:absolute;inset:0;z-index:50;display:none;flex-direction:column;justify-content:flex-end;align-items:center;
+  background:rgba(8,4,16,.62);pointer-events:auto}
+.sheetWrap.show{display:flex}
+.sheet{position:relative;width:100%;max-width:540px;max-height:78%;display:flex;flex-direction:column;
+  padding:var(--s2) var(--s4) calc(var(--s4) + var(--safe-b));border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+  background:var(--surface);border:1.5px solid var(--line);border-bottom:0;box-shadow:0 -10px 30px rgba(0,0,0,.45);
+  animation:dsSheetIn .26s cubic-bezier(.2,1,.4,1) both}
+.sheet::before{content:'';align-self:center;flex:0 0 auto;width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:0 0 var(--s2)}
+.sheetHead{display:flex;align-items:center;gap:var(--s2);padding:0 0 var(--s2);margin-bottom:var(--s2);border-bottom:1.5px solid var(--line)}
+.sheetHead h3,.sheetHead .shT{flex:1;min-width:0;margin:0;font-size:var(--fs-m);font-weight:900;letter-spacing:.08em;color:var(--text);text-transform:uppercase}
+.sheetBody{display:flex;flex-direction:column;gap:var(--s2);overflow-y:auto;min-height:0;padding:2px 0 var(--s1);overscroll-behavior:contain}
+@keyframes dsSheetIn{0%{transform:translateY(40px);opacity:0}100%{transform:none;opacity:1}}
+
+/* ---- the page frame: a sticky head (Back | title | pill), a body, a sticky dock (one primary + at most one ghost) ----
+   The frame sits in a .screen (16 px padding): the head and the dock pull out to its edges (a sticky box stops at the
+   scroller's padding, hence top / bottom -16px). In a body the text size zooms, the pull is divided by the zoom. */
+.pageHead{position:sticky;top:-16px;z-index:4;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:var(--s2);
+  min-height:56px;margin:-16px -16px 0;padding:6px 12px;background:var(--bg);border-bottom:1.5px solid var(--line)}
+html[class*="txt-"] .pageHead{top:calc(-16px / var(--accK));margin:calc(-16px / var(--accK)) calc(-16px / var(--accK)) 0}
+.pageHead > *{grid-row:1}
+.pageHead .phBack{grid-column:1;justify-self:start}
+.pageHead .phBack::before{content:'\2039';font-size:24px;line-height:.8;margin-top:-3px}
+.pageHead .phTitle,.pageHead h1{grid-column:2;min-width:0;margin:0;font-size:var(--fs-l);font-weight:900;letter-spacing:.1em;line-height:1.1;
+  color:var(--text);text-transform:uppercase;text-align:center;text-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pageHead .phEnd{grid-column:3;justify-self:end}
+.pageBody{display:flex;flex-direction:column;gap:var(--s4);padding-top:var(--s4)}
+.pageDock{position:sticky;bottom:-16px;z-index:4;display:flex;align-items:center;justify-content:center;gap:var(--s3);
+  margin:auto -16px -16px;padding:var(--s5) 16px calc(var(--s4) + var(--safe-b));
+  background:linear-gradient(180deg,rgba(18,9,31,0),var(--bg) 42%)}
+html[class*="txt-"] .pageDock{bottom:calc(-16px / var(--accK));margin:auto calc(-16px / var(--accK)) calc(-16px / var(--accK))}
+.pageDock .btn{flex:0 1 auto}
+.pageDock .btn.pri{flex:1 1 auto;max-width:360px}
+.dsPage{flex:1 0 auto;display:flex;flex-direction:column}
+.dsPill{display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:2px 12px;border-radius:999px;background:var(--surface-2);
+  border:1.5px solid var(--line);color:var(--reward);font-size:var(--fs-s);font-weight:900;white-space:nowrap}
+.dsSec{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);margin:0}
+
+/* ---- tags (labels, chips): one shape, a colour modifier ---- */
+.tag{gap:4px;padding:3px 8px;border-radius:var(--r-chip);background:var(--surface-2);border:1px solid var(--line);
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:.04em;color:var(--text-2);line-height:1.3}
+.tag.gold{color:var(--reward);border-color:rgba(255,204,85,.35)}
+.tag.cyan{color:var(--info);border-color:rgba(53,224,210,.35)}
+.tag.pink{color:#ff8dbd;border-color:rgba(255,79,154,.4)}
+.tag.lime{color:var(--good);border-color:rgba(166,255,94,.35)}
+
+/* ---- shared chrome on the tokens ---- */
+.panel{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-card);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+h1{font-size:var(--fs-l);letter-spacing:.1em;text-shadow:none}
+h2{font-size:var(--fs-s);letter-spacing:.1em;color:var(--info)}
+h3{font-size:var(--fs-s);letter-spacing:.08em;color:var(--reward)}
+.sub{font-size:var(--fs-s);color:var(--text-2);line-height:1.45}
+.kv{font-size:var(--fs-s);border-radius:var(--r-chip);background:var(--surface)}
+/* a menu page that shows no canvas art under it gets a solid backdrop (each family block opts its screens in) */
+.screen.dsSolid{background:var(--bg)}
+.calm .sheet{animation:none}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+</style>
 <style id="meta-css">
 /* ================= META: Tilt, Prizedex, stickers, daily run, attract mode (DESIGN.md "Meta") ================= */
 /* title */
-#titleMenu .row .btn{padding:8px 12px;font-size:13px;min-width:0}
 #titleMenu.enter{animation:menuIn .55s cubic-bezier(.2,1.3,.4,1) both}
 @keyframes menuIn{0%{transform:translateY(120px);opacity:0}100%{transform:none;opacity:1}}
 #scr-title.attracting .menu{visibility:hidden}
@@ -952,14 +1067,15 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 @keyframes tipOut{to{transform:translateX(-120%);opacity:0}}
 /* the Tips page */
 .tipList{display:flex;flex-direction:column;gap:8px}
-.tipRow{--tc:var(--line2);display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#150d26;border:2px dashed var(--line)}
+/* (round 18) one card look: the surface, a hairline; the tip's own colour only as a slim left edge; the dark ones are one quiet row */
+.tipRow{--tc:var(--line-strong);display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line)}
 .tipRow canvas{width:56px;height:56px;flex:0 0 auto}
 .tipRow .col{gap:2px;min-width:0}
-.tipRow .n{font-size:15px;font-weight:900;color:var(--dimmer)}
-.tipRow .t{font-size:13px;color:var(--dimmer);line-height:1.35}
-.tipRow.got{border:2px solid var(--tc);background:linear-gradient(180deg,#261842,#170e2a)}
-.tipRow.got .n{color:#fff}
-.tipRow.got .t{color:var(--dim)}
+.tipRow .n{font-size:var(--fs-s);font-weight:900;color:var(--text-2)}
+.tipRow .t{font-size:var(--fs-s);color:var(--text-3);line-height:1.35}
+.tipRow.got{box-shadow:inset 4px 0 0 var(--tc)}
+.tipRow.got .n{color:var(--text)}
+.tipRow.got .t{color:var(--text-2)}
 /* the room scenes: a canvas strip at the top of the shop, the rest stop and the forge */
 .feelScene{position:relative;width:100%;flex:0 0 auto;border-radius:14px;overflow:hidden;border:2px solid var(--line2);box-shadow:0 6px 0 #0a0514}
 .feelScene canvas{display:block;width:100%;height:auto}
@@ -1169,31 +1285,34 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 </style>
 <style id="acc-css">
 /* ================= ACCESS (round 6): the Settings panel, colour-blind signals, text size, reduced flashing, one-handed, the zoom iris ================= */
-#accSet{position:absolute;inset:0;z-index:70;display:none;background:rgba(12,6,22,.5);pointer-events:auto}
-#accSet.show{display:flex;flex-direction:column;justify-content:flex-end}
-.accSheet{margin:0 8px 8px;max-height:calc(100% - 84px);display:flex;flex-direction:column;border-color:var(--cyan);overflow:hidden;
-  animation:accUp .28s cubic-bezier(.2,1.2,.4,1) both}
-@keyframes accUp{0%{transform:translateY(60px);opacity:0}100%{transform:none;opacity:1}}
-.calm .accSheet{animation:none}
-.accHead{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
-.accHead h2{flex:1;font-size:20px}
-.accPrev{display:block;width:500px;max-width:calc(100% - 20px);height:auto;aspect-ratio:5/1;margin:0 auto 4px;border-radius:10px;border:1px solid var(--line)}
-.accBody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 12px 14px;display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain;scrollbar-width:thin}
-.accSec{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.22);border:1px solid var(--line)}
+/* (round 18) the panel is a design-system .sheet (bottom anchored, a handle, the title and a close x); the sections are
+   quiet groups under a hairline, the sample strip sits in Vision, the Sound / Music on-off rows show only while off */
+#accSet{position:absolute;inset:0;z-index:70;display:none;background:rgba(8,4,16,.62);pointer-events:auto}
+#accSet.show{display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.accSheet{max-height:calc(100% - 84px);overflow:hidden}
+.accPrevBox{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.accPrev{display:block;width:100%;height:auto;aspect-ratio:25/4;border-radius:var(--r-chip);border:1.5px solid var(--line)}
+.accBody{flex:1 1 auto;padding:0 0 var(--s2);gap:0;scrollbar-width:thin}
+.accSec{display:flex;flex-direction:column;gap:6px;padding:var(--s3) 0;border-top:1.5px solid var(--line)}
+.accSec:first-child{border-top:0;padding-top:var(--s1)}
+.accSec > h3{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;color:var(--text-2)}
 .accRow{display:flex;align-items:center;gap:10px;min-height:44px;flex-wrap:wrap}
+.accRow.accDup{display:none}
 .accRow .accL{flex:1;min-width:140px}
 .accRow.wide .accL{flex-basis:100%}
 .accRow.slide{flex-wrap:nowrap}
 .accRow.slide .accL{flex:0 0 auto;min-width:76px}
-.accN{font-size:15px;font-weight:900;color:#fff;letter-spacing:.03em}
-.accSub{font-size:12px;color:var(--dim);line-height:1.35}
+.accN{font-size:var(--fs-s);font-weight:900;color:var(--text);letter-spacing:.02em}
+.accSub{font-size:var(--fs-xs);color:var(--text-2);line-height:1.35}
 .accSeg{display:flex;gap:6px;flex-wrap:wrap;width:100%}
 .accSeg .btn{flex:1 1 0;min-width:84px;padding:6px 8px}
-.btn.accOpt.sel{border-color:var(--lime);color:var(--lime);box-shadow:0 0 12px rgba(166,255,94,.35)}
-.btn.accTog{min-width:132px}
-.accRange{flex:1;min-width:150px;height:44px;margin:0;accent-color:var(--cyan)}
-.accVal{min-width:48px;text-align:right;font-weight:900;color:var(--cyan2)}
-.btn.accBottom{align-self:center;min-width:200px;margin-top:4px}
+.btn.accOpt.sel{border-color:var(--info);color:var(--text);background:#1d2f4a}
+.btn.accTog{min-width:104px;gap:8px}
+.btn.accTog::before{content:'';width:12px;height:12px;flex:0 0 auto;border-radius:50%;background:var(--text-3)}
+.btn.accTog.on::before{background:var(--good);box-shadow:0 0 6px var(--good)}
+.accRange{flex:1;min-width:150px;height:44px;margin:0;accent-color:var(--info)}
+.accVal{min-width:48px;text-align:right;font-weight:900;color:var(--text)}
+.btn.accBottom{align-self:stretch;margin-top:var(--s2)}
 /* the fight's pause button and the one-handed thumb buttons on the map */
 .btn.accPauseBtn{min-width:48px;padding:6px 10px;font-size:22px;flex:0 0 auto}
 html.hand-left .ctrlRow{flex-direction:row-reverse}
@@ -1229,8 +1348,6 @@ html[class*="txt-"] :is(#charsBody,#rewardBody,#shopBody,#eventBody,#restBody,#f
 html[class*="txt-"] .accSheet{max-height:calc((100% - 84px) / var(--accK))}
 /* the title menu grows half as much and gives up its top fade, so the logo stays clear */
 html[class*="txt-"] #titleMenu{zoom:calc(1 + (var(--accK) - 1) * .5);padding-top:24px;gap:7px}
-html[class*="txt-"] #titleMenu .row{gap:7px}
-html[class*="txt-"] #titleMenu .row .btn{min-width:0;padding:6px 11px}
 /* the HUD's stats keep their 54 px boxes: they grow half as much */
 html[class*="txt-"] .stat .k{font-size:calc(12px * (1 + (var(--accK) - 1) * .5))}
 html[class*="txt-"] .stat .v{font-size:calc(17px * (1 + (var(--accK) - 1) * .5))}
@@ -1590,8 +1707,7 @@ html[class*="cb-"] .qaThreat.hurt b{color:var(--acc-dmg)}
 </style>
 <style id="evo-css">
 /* ================= EVOLVE (round 7): evolved item cards, the recipe hints, the Evolutions tab, the ceremony overlay ================= */
-.card.evo{border-color:#ffe27a;background:linear-gradient(180deg,#3d2a14,#1c1030);box-shadow:0 4px 0 #120a22,0 0 16px rgba(255,226,122,.45);animation:evoCard 2.4s ease-in-out infinite}
-@keyframes evoCard{50%{box-shadow:0 4px 0 #120a22,0 0 26px rgba(255,226,122,.8)}}
+.card.evo{border-color:#ffe27a;background:linear-gradient(180deg,#3d2a14,#1c1030);box-shadow:inset 0 3px 0 #ffe27a,0 0 14px rgba(255,226,122,.35)}/* (round 18: a still glow, no loop) */
 .card .evoBadge{position:absolute;top:6px;left:50%;transform:translateX(-50%);padding:1px 7px;border-radius:8px;background:linear-gradient(180deg,#fff2a8,#ffc94d);color:#2a1d04;
   font-size:12px;font-weight:900;letter-spacing:.1em;box-shadow:0 0 10px rgba(255,201,77,.7);white-space:nowrap}
 .card.evo .rar{display:none}
@@ -1711,8 +1827,6 @@ html[class*="cb-"] .qaThreat.hurt b{color:var(--acc-dmg)}
 .hisHofTag{align-self:center;padding:6px 16px;border-radius:12px;font-size:15px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#2a1d04;
   background:linear-gradient(180deg,#ffe08a,#ffc94d);box-shadow:0 4px 0 #4d3608,0 0 22px rgba(255,201,77,.55);animation:hisHof .6s cubic-bezier(.2,1.5,.4,1) both}
 @keyframes hisHof{0%{transform:scale(.3) rotate(-10deg);opacity:0}100%{transform:rotate(-2deg);opacity:1}}
-#titleMenu .hisTitleBtn[data-n]::after{content:attr(data-n);margin-left:2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--line2);
-  color:var(--text);font-size:12px;line-height:20px;letter-spacing:0}
 /* the death recap: over the game over, a tap goes on */
 .hisRecap{position:absolute;inset:0;z-index:38;display:flex;align-items:center;justify-content:center;padding:16px;
   background:radial-gradient(ellipse at 50% 40%,rgba(58,10,24,.9),rgba(10,4,18,.96));animation:hisIn .35s ease both;cursor:pointer}
@@ -1774,8 +1888,8 @@ html[class*="txt-"] :is(#historyBody,.hisRcCard){zoom:var(--accK)}
   background:repeating-linear-gradient(45deg,rgba(255,255,255,.12) 0 2px,transparent 2px 7px)}
 .holo>.holoGlare{inset:0;border-radius:inherit;z-index:3;opacity:var(--glare,0);mix-blend-mode:screen;
   background:radial-gradient(circle at calc(var(--hx,50) * 1%) calc(var(--hy,50) * 1%),rgba(255,255,255,.5),rgba(255,255,255,.12) 30%,rgba(255,255,255,0) 60%)}
-/* the shadow falls away from the tilt (a rare or legendary card keeps its pulsing glow instead) */
-.card.holo:not(.rr-r):not(.rr-l):not(.sel){box-shadow:0 4px 0 #120a22,var(--sx,0px) calc(var(--sy,6px) + 4px) 14px rgba(0,0,0,.5)}
+/* the shadow falls away from the tilt; the rarity stays a thin top stripe (round 18) */
+.card.holo:not(.sel){box-shadow:inset 0 3px 0 var(--rar,transparent),var(--sx,0px) calc(var(--sy,6px) - 2px) 12px rgba(0,0,0,.4)}
 .holo.holo-c>.holoFoil{display:none}
 .holo.holo-u>.holoFoil::before{background:linear-gradient(115deg,transparent 34%,rgba(46,230,214,.55) 44%,rgba(191,232,255,.6) 50%,rgba(46,230,214,.55) 56%,transparent 66%)}
 .holo.holo-l>.holoFoil::before{background:linear-gradient(115deg,transparent 34%,rgba(255,46,136,.85) 39%,rgba(255,201,77,.85) 43%,rgba(255,246,192,.9) 46%,rgba(166,255,94,.8) 49%,rgba(46,230,214,.85) 53%,rgba(122,92,255,.85) 57%,rgba(255,46,136,.8) 61%,transparent 66%),
@@ -1786,7 +1900,7 @@ html[class*="txt-"] :is(#historyBody,.hisRcCard){zoom:var(--accK)}
   clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);animation:holoTw 1.8s ease-in-out infinite}
 @keyframes holoTw{0%,100%{opacity:0;transform:scale(.3) rotate(0)}45%{opacity:1;transform:scale(1.15) rotate(35deg)}70%{opacity:.2;transform:scale(.6) rotate(60deg)}}
 @media (hover:hover){
-  .card.holo:not(.locked):not(.sold):hover{transform:translateY(-4px);scale:1.05;box-shadow:0 12px 24px rgba(0,0,0,.5),0 0 20px rgba(255,255,255,.14)}
+  .card.holo:not(.locked):not(.sold):hover{transform:translateY(-3px);scale:1.03;box-shadow:inset 0 3px 0 var(--rar,transparent),0 10px 20px rgba(0,0,0,.45)}
   .prize.holo:hover{scale:1.03}
 }
 .card.holo:not(.locked):not(.sold):active{scale:.95}
@@ -1861,8 +1975,6 @@ canvas.loreVig{width:508px;max-width:100%;border-radius:14px;margin:0 auto;anima
 .lpT{margin:0;font-size:15px;line-height:1.6;color:#efe6d6;text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .loreNav{gap:12px}
 .lpNum{font-size:12px;color:var(--dim);font-weight:900;letter-spacing:.1em;text-transform:uppercase}
-#titleMenu .loreTitleBtn[data-n]::after{content:attr(data-n);margin-left:2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--pink);
-  color:#fff;font-size:12px;line-height:20px;letter-spacing:0}
 .btn.loreDexBtn{align-self:flex-end;margin-top:-50px;min-width:0}
 /* a new page in the corner lane: a gold discovery toast with the page's picture */
 .mDex.mLore{background:linear-gradient(180deg,#3a2a12,#1e1408);border-color:var(--gold);box-shadow:0 0 18px rgba(255,201,77,.55),0 5px 0 rgba(0,0,0,.4)}
@@ -1871,11 +1983,7 @@ canvas.loreVig{width:508px;max-width:100%;border-radius:14px;margin:0 auto;anima
 .mDex.mLore.tight canvas.mLoreVig{width:45px;height:30px}
 /* the act intro card owns the stage: the map's chrome steps aside */
 #stage.loreIntroOn #scr-map,#stage.loreIntroOn #top,#stage.loreIntroOn #tipCard,#stage.loreIntroOn #toast,#stage.loreIntroOn>.mSticker,#stage.loreIntroOn>.mDex{visibility:hidden}
-/* the weekly card on the title, side by side with the daily run (the menu stays as tall as it was) */
-#titleMenu .dwRow{display:flex;gap:8px;width:430px;max-width:100%}
-#titleMenu .dwRow .btn{flex:1 1 0;width:auto;min-width:0}
-#titleMenu .dwRow .btn.daily{padding:6px 8px}
-#titleMenu .dwRow .btn.daily .d2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* the weekly card (round 18: it lives in the title's Modes sheet; the old title row rules are gone) */
 .btn.wkCard{flex-direction:row;gap:6px;padding:6px 8px;line-height:1.1;text-transform:none;letter-spacing:.02em;border-color:var(--cyan);
   background:linear-gradient(180deg,#155061,#0b2a38);box-shadow:0 4px 0 #062224,0 0 18px rgba(46,230,214,.3)}
 .btn.wkCard canvas.wkMed{width:34px;height:34px;flex:0 0 auto}
@@ -1924,10 +2032,7 @@ html[class*="txt-"] :is(#codexBody,#weeklyBody){zoom:var(--accK)}
 </style>
 <style id="rush-css">
 /* ================= RUSH (round 10): the Boss Rush and the ghost race ================= */
-/* the title: the Boss Rush card beside the Prize Vault (the menu stays as tall as it was) */
-#titleMenu .vrRow{display:flex;gap:8px;width:430px;max-width:100%}
-#titleMenu .vrRow .btn{flex:1 1 0;width:auto;min-width:0}
-#titleMenu .vrRow .btn.vaultBtn{padding:6px 8px}
+/* the Boss Rush card (round 18: it lives in the title's Modes sheet; the old title row rules are gone) */
 .btn.rushCard{flex-direction:column;gap:0;line-height:1.1;padding:6px 8px;border-color:var(--blood);
   background:linear-gradient(180deg,#6a1a14,#38080e);box-shadow:0 4px 0 #22040a,0 0 18px rgba(255,90,74,.3)}
 .btn.rushCard .r1{font-size:15px;white-space:nowrap}
@@ -2044,10 +2149,7 @@ html[class*="txt-"] :is(#rushMenuBody,#rushBody){zoom:var(--accK)}
 </style>
 <style id="duo-css">
 /* ================= DUO (round 11): pass and play for two ================= */
-/* the title: DUO shares the NEW RUN row */
-#titleMenu .duoRow{display:flex;gap:8px;width:430px;max-width:100%}
-#titleMenu .duoRow .btn{width:auto;min-width:0}
-#titleMenu .duoRow>.btn:first-child{flex:1.7 1 0}
+/* the DUO button (round 18: it lives in the title's Modes sheet; the old title row rules are gone) */
 .btn.duoBtn{flex:1 1 0;flex-direction:column;gap:0;line-height:1.1;padding:4px 8px;border-color:var(--cyan);
   background:linear-gradient(180deg,#1a4a6a,#0c2238);box-shadow:0 4px 0 #061420,0 0 18px rgba(46,230,214,.3)}
 .btn.duoBtn .d1{font-size:15px;white-space:nowrap}
@@ -2464,50 +2566,54 @@ html[lang="nl"]:not([class*="hand-"]) #endTurn{min-width:164px;letter-spacing:.0
 #titleMenu{gap:10px;padding:64px 0 22px}
 #titleMenu .uiPri,#titleMenu .uiPlay,#titleMenu .uiTiles{width:440px;max-width:calc(100% - 24px)}
 #titleMenu .uiPri{display:flex;flex-direction:column;gap:10px}
-#titleMenu .uiPri .btn{width:100%;min-height:50px;font-size:17px;letter-spacing:.12em;border-radius:14px}
-#titleMenu .uiPri .btn.uiBig{min-height:62px;font-size:22px;letter-spacing:.16em;border-radius:16px}
-#titleMenu .uiPri > .btn:first-child{animation:mixBreath 2.8s ease-in-out 1.2s infinite}
-.calm #titleMenu .uiPri > .btn:first-child{animation:none}
-@media (prefers-reduced-motion:reduce){#titleMenu .uiPri > .btn:first-child{animation:none}}
+#titleMenu .uiPri .btn{width:100%;min-height:50px;font-size:var(--fs-s);letter-spacing:.12em;border-radius:var(--r-card)}
+/* (round 18) the big action is THE primary (filled pink, the screen's one glow, no loop); NEW RUN under CONTINUE is secondary */
+#titleMenu .uiPri .btn.uiBig{min-height:62px;font-size:22px;letter-spacing:.16em;border-radius:14px;border-color:var(--accent);background:var(--accent);color:#fff;
+  text-shadow:0 1px 0 rgba(90,0,40,.45);box-shadow:inset 0 -4px 0 rgba(120,10,60,.35),0 0 18px rgba(255,79,154,.35)}
+#titleMenu .uiPri .btn.pri:not(.uiBig){background:var(--surface-2);border-color:var(--line-strong);color:var(--text);text-shadow:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
 #titleMenu .schTip{width:440px;max-width:calc(100% - 24px);margin-top:-2px}
 /* the play row: the daily run (today's crawler and mutators) beside MODES */
 #titleMenu .uiPlay{display:flex;gap:10px}
-#titleMenu .uiPlay .btn{flex:1 1 0;width:auto;min-width:0;min-height:66px;border-radius:14px;padding:6px 10px}
-#titleMenu .uiPlay .btn.daily .d2,#titleMenu .uiPlay .btn.daily .d3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.btn.uiModes{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:6px;row-gap:2px;align-content:center;justify-content:center;align-items:center;
-  line-height:1.1;border-color:var(--cyan);background:linear-gradient(180deg,#153f60,#0c2038);box-shadow:0 4px 0 #061426,0 0 18px rgba(46,230,214,.22)}
+/* (round 18) the play row: two calm cards on the same surface; only the words carry the colour (daily gold, modes cyan) */
+#titleMenu .uiPlay .btn{flex:1 1 0;width:auto;min-width:0;min-height:66px;border-radius:var(--r-card);padding:6px 10px;
+  background:var(--surface-2);border-color:var(--line-strong);color:var(--text);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+#titleMenu .uiPlay .btn.daily .d1{color:var(--reward)}
+#titleMenu .uiPlay .btn.daily .d2,#titleMenu .uiPlay .btn.daily .d3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:var(--fs-xs);color:var(--text-2)}
+.btn.uiModes{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:6px;row-gap:2px;align-content:center;justify-content:center;align-items:center;line-height:1.1}
 .btn.uiModes .uiTi{font-size:17px;line-height:1;justify-self:end}
-.btn.uiModes .m1{font-size:15px;justify-self:start}
-.btn.uiModes .m2{grid-column:1 / span 2;justify-self:center;font-size:12px;letter-spacing:.02em;text-transform:none;color:#bff4ff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.btn.uiModes .m1{font-size:var(--fs-s);justify-self:start;color:var(--info)}
+.btn.uiModes .m2{grid-column:1 / span 2;justify-self:center;font-size:var(--fs-xs);letter-spacing:.02em;text-transform:none;color:var(--text-2);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 /* the tiles: an icon over a short word, all one size */
 #titleMenu .uiTiles{display:flex;gap:8px}
+/* (round 18) the tiles: one look for all five (no per-tile colours, no glow); a badge is the only accent */
 #titleMenu .uiTiles .btn{position:relative;flex:1 1 0;width:auto;min-width:0;height:66px;min-height:66px;flex-direction:column;gap:4px;padding:6px 2px 5px;
-  border-radius:14px;text-transform:none;letter-spacing:.01em;font-size:12px}
+  border-radius:var(--r-card);text-transform:none;letter-spacing:.01em;font-size:var(--fs-xs);
+  background:var(--surface-2);border-color:var(--line-strong);color:var(--text);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);animation:none}
 #titleMenu .uiTiles .uiTi{font-size:24px;line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
-#titleMenu .uiTiles .uiTl{font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;color:var(--text)}
-#titleMenu .uiTiles .btn.vaultBtn{border-color:#ff9ec7}
-#titleMenu .uiTiles .btn.schTitleBtn .uiTl{color:#c8ffd8}
-#titleMenu .uiTiles .vdot,#titleMenu .uiTiles .schTitleBtn[data-n]::after{position:absolute;top:-8px;right:-6px;margin:0;min-width:22px;height:22px;padding:0 6px;border-radius:11px;
-  display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-style:normal;font-weight:900;line-height:1;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-#titleMenu .uiTiles .vdot{background:var(--pink);color:#fff}
-#titleMenu .uiTiles .schTitleBtn[data-n]::after{background:#1f4a3a;color:var(--gold)}
+#titleMenu .uiTiles .uiTl{font-size:var(--fs-xs);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;color:var(--text)}
+#titleMenu .uiTiles .btn.schTitleBtn,#titleMenu .uiTiles .btn.schTitleBtn.grad{border-color:var(--line-strong);color:var(--text);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+/* a free capsule waiting in the vault: a gold rim (state), still no pulse */
+#titleMenu .uiTiles .btn.vaultBtn.g17Free{border-color:var(--reward);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);animation:none}
+#titleMenu .uiTiles .vdot,#titleMenu .uiTiles .schTitleBtn[data-n]::after{position:absolute;top:-7px;right:-5px;margin:0;min-width:22px;height:22px;padding:0 6px;border-radius:11px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-style:normal;font-weight:900;line-height:1;z-index:1;box-shadow:0 0 0 2px var(--bg)}
+#titleMenu .uiTiles .vdot{background:var(--accent);color:#fff}
+#titleMenu .uiTiles .schTitleBtn[data-n]::after{background:var(--reward);color:#2a1d04}
 html[class*="txt-"] #titleMenu .uiTiles .btn{height:auto}
-/* the stats line: small numbers, no boxes */
-#titleMenu .mStats{gap:2px 12px;margin-top:2px;width:460px;max-width:calc(100% - 16px)}
+/* the stats line: one quiet line, the numbers in the text colour, the words small and lower case (fits in Dutch) */
+#titleMenu .mStats{gap:2px 10px;margin-top:4px;width:470px;max-width:calc(100% - 12px)}
 #titleMenu .mStats .ms{flex-direction:row;align-items:baseline;gap:4px;min-width:0;padding:0;background:none;border:0}
-#titleMenu .mStats .ms b{font-size:15px}
-#titleMenu .mStats .ms span{font-size:12px;letter-spacing:.04em}
-/* a group sheet: the menu dims, a panel rises from the bottom with the group's buttons */
-.uiSheet{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;justify-content:flex-end;align-items:center;padding:0 12px 16px;
-  background:rgba(8,4,16,.62);pointer-events:auto}
-.uiSheet.show{display:flex}
-.uiSheetP{width:444px;max-width:100%;max-height:78%;display:flex;flex-direction:column;padding:10px 12px 14px;animation:uiSheetIn .3s cubic-bezier(.2,1.2,.4,1) both}
+#titleMenu .mStats .ms b,#titleMenu .mStats .ms.gold b,#titleMenu .mStats .ms.pink b,#titleMenu .mStats .ms.lime b,#titleMenu .mStats .ms.cyan b{font-size:var(--fs-s);color:var(--text)}
+#titleMenu .mStats .ms span{font-size:var(--fs-xs);letter-spacing:0;text-transform:lowercase;font-weight:700;color:var(--text-3)}
+/* the season ribbon over the sky: a slim calm strip (no pulse, no glow; the logo art is the hero) */
+#scr-title .btn.seaBan{animation:none;min-height:48px;padding:4px 12px;border-width:1.5px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+#scr-title .btn.seaBan .sb0{font-size:22px}
+#scr-title .btn.seaBan .sb1{font-size:var(--fs-s)}
+#scr-title .btn.seaBan .sb2{font-size:var(--fs-xs);letter-spacing:.06em;color:var(--text-2)}
+/* a group sheet: the menu dims, a panel rises from the bottom with the group's buttons
+   (round 18: the frame is the design system's .sheetWrap / .sheet; only the title's own parts are here) */
+.uiSheet{z-index:5}
 .uiSheet.quiet .uiSheetP{animation:none}
-@keyframes uiSheetIn{0%{transform:translateY(60px);opacity:0}100%{transform:none;opacity:1}}
-.uiSheetH{display:flex;align-items:center;gap:8px;padding:0 2px 8px;margin-bottom:8px;border-bottom:2px solid var(--line)}
-.uiSheetH h3{flex:1;font-size:15px;letter-spacing:.14em}
-.uiSheetB{display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0;padding:2px 2px 4px}
-.uiSheetB .btn{width:100%;min-height:54px;justify-content:flex-start;gap:12px;padding:6px 14px;border-radius:14px;font-size:15px;text-align:left}
+.uiSheetB .btn{width:100%;min-height:56px;justify-content:flex-start;gap:12px;padding:6px 14px;border-radius:var(--r-card);font-size:var(--fs-s);text-align:left}
 .uiSheetB .btn::before{font-size:22px;line-height:1;width:30px;text-align:center;flex:0 0 auto;letter-spacing:0}
 .uiSheetB .btn.uiI-dex::before{content:'\1F4E6'}
 .uiSheetB .btn.uiI-stk::before{content:'\2B50'}
@@ -2516,18 +2622,94 @@ html[class*="txt-"] #titleMenu .uiTiles .btn{height:auto}
 .uiSheetB .btn.uiI-help::before{content:'\2753'}
 .uiSheetB .btn.uiI-tips::before{content:'\1F4A1'}
 .uiSheetB .btn.uiI-intro::before{content:'\1F3AC'}
-.uiSheetB .btn.toggle::before{content:'';width:14px;height:14px;margin:0 8px;border-radius:50%;background:var(--dimmer)}
-.uiSheetB .btn.toggle.on::before{background:var(--lime);box-shadow:0 0 8px rgba(166,255,94,.8)}
-.uiSheetB .btn.wkCard,.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{min-height:62px;align-items:center;text-transform:none}
-.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;padding-left:16px}
+.uiSheetB .btn.toggle::before{content:'';width:14px;height:14px;margin:0 8px;border-radius:50%;background:var(--text-3)}
+.uiSheetB .btn.toggle.on::before{background:var(--good);box-shadow:0 0 6px var(--good)}
+/* (round 18) the modes are choice rows like the others: one surface, the mode's own colour only as a slim left edge */
+.uiSheetB .btn.wkCard,.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{min-height:64px;align-items:center;text-transform:none;
+  background:var(--surface-2);border-color:var(--line-strong);color:var(--text);box-shadow:inset 4px 0 0 var(--mc,var(--info)),inset 0 -3px 0 rgba(0,0,0,.22)}
+.uiSheetB .btn.wkCard{--mc:var(--info)} .uiSheetB .btn.rushCard{--mc:var(--bad)} .uiSheetB .btn.duoBtn{--mc:var(--accent)}
+.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding-left:18px}
 .uiSheetB .btn.wkCard .wkTx .d2{max-width:300px}
-.uiSheetB .btn.rushCard .r1,.uiSheetB .btn.duoBtn .d1{text-transform:uppercase;letter-spacing:.06em}
+.uiSheetB .btn.rushCard .r1,.uiSheetB .btn.duoBtn .d1{text-transform:uppercase;letter-spacing:.06em;font-size:var(--fs-s);color:var(--text)}
+.uiSheetB .btn.wkCard :is(.d1,.d2,.d3),.uiSheetB .btn.rushCard :is(.r2,.r3),.uiSheetB .btn.duoBtn :is(.d2,.d3){font-size:var(--fs-xs);color:var(--text-2);text-shadow:none}
+.uiSheetB .btn.wkCard .wkTx .d1{font-size:var(--fs-s);color:var(--text)}
 .uiSheetB .hisTitleBtn[data-n]::after,.uiSheetB .loreTitleBtn[data-n]::after{content:attr(data-n);margin-left:auto;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
-  display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:var(--line2)}
-.uiSheetB .loreTitleBtn[data-n]::after{background:var(--pink)}
-.calm .uiSheetP{animation:none}
-@media (prefers-reduced-motion:reduce){.uiSheetP{animation:none}}
+  display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);color:#fff;background:var(--line-strong)}
+.uiSheetB .loreTitleBtn[data-n]::after{background:var(--accent)}
 #scr-title.attracting .uiSheet{display:none}
+
+/* ================= ARCADE FRONT (round 18): character select, Help, Tips (DESIGN.md "Design system and home screens (round 18)") =================
+   Pages on the ds-css frame (.pageHead / .pageBody / .pageDock), solid backdrops (no canvas art under them). */
+#scr-chars,#scr-help,#scr-tips{background:var(--bg)}
+.m1Sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+/* character select: three steps on one page */
+.m1Chars{gap:var(--s4)}
+.m1Step{display:flex;flex-direction:column;gap:var(--s2)}
+.m1StepH{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2)}
+.m1StepH b{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--surface-2);border:1.5px solid var(--line-strong);color:var(--text);font-size:var(--fs-xs);letter-spacing:0}
+.m1Crew{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.m1Tile{position:relative;aspect-ratio:1;min-width:0;min-height:44px;padding:2px;border-radius:var(--r-card);border:1.5px solid var(--line);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);transition:transform .08s,border-color .12s}
+.m1Tile canvas{width:100%;height:100%;display:block}
+.m1Tile.on{border-color:var(--info);background:var(--surface-2)}
+.m1Tile:active{transform:scale(.94)}
+.m1Tile.locked canvas{filter:brightness(0) opacity(.5)}
+.m1Lock{position:absolute;right:3px;bottom:2px;font-style:normal;font-size:13px;line-height:1}
+.card.m1CrewCard{cursor:default;align-items:stretch;text-align:left;gap:var(--s2)}
+.card.m1CrewCard:active{transform:none}
+.m1CrewCard .head canvas{width:64px;height:64px}
+.m1CrewCard .name{font-size:var(--fs-m)}
+.m1CrewCard .title{font-size:var(--fs-xs);letter-spacing:.08em;color:var(--text-2)}
+.m1CrewCard .text{font-size:var(--fs-s);color:var(--text-2)}
+.m1CrewCard .lock{font-size:var(--fs-s);font-weight:800;color:var(--reward)}
+/* step 2: the claws in one row, the picked one's demo and numbers under it */
+.m1Chars .clawPick{padding:0;gap:var(--s2)}
+.m1Chars .clawRow{grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.m1Chars .clawChip{position:relative;aspect-ratio:1;min-width:0;padding:2px;justify-content:center;border-radius:var(--r-card);border:1.5px solid var(--line);background:var(--surface)}
+.m1Chars .clawChip canvas{width:100%;height:auto}
+.m1Chars .clawChip .n{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.m1Chars .clawChip.on{border-color:var(--info);background:var(--surface-2);box-shadow:none}
+.m1Chars .clawInfo{gap:var(--s3);padding:var(--s3);border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line)}
+.m1Chars .clawInfo canvas.clawDemo{width:150px;height:106px;border:1.5px solid var(--line);border-radius:var(--r-chip)}
+.m1Chars .clawInfo .name{font-size:var(--fs-m)}
+.m1Chars .clawInfo .text{font-size:var(--fs-s);color:var(--text-2)}
+.m1Chars .clawInfo .cpip{font-size:var(--fs-xs)}
+.m1Chars .clawInfo .stats .tag{font-size:var(--fs-xs);padding:2px 7px}
+.m1Chars .clawInfo .joke{display:none}
+html[lang="nl"] .m1Chars .clawInfo .cpip .k{width:64px}
+/* step 3: one row for Tilt and the mutators (a sheet), START in the dock */
+.btn.m1Opt{width:100%;justify-content:flex-start;gap:var(--s3);padding:8px 14px;text-transform:none;letter-spacing:0}
+.m1Opt .k{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;color:var(--text-2);margin-right:6px}
+.m1OptT b{font-size:var(--fs-m);color:var(--text)}
+.m1OptM{flex:1;min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden}
+.m1OptM i{font-style:normal;font-size:18px;line-height:1}
+.m1OptM .off{font-size:var(--fs-xs);font-weight:800;color:var(--text-3)}
+.m1OptX{font-size:var(--fs-s);color:var(--reward);font-variant-numeric:tabular-nums}
+.m1OptAr{font-size:22px;line-height:1;color:var(--text-2)}
+#scr-chars > .sheetWrap{position:fixed;z-index:30}
+#m1OptSheet .sheetBody{gap:var(--s3)}
+#m1OptSheet .tiltBox,#m1OptSheet .tiltBox.hot{background:var(--surface-2);border:1.5px solid var(--line);box-shadow:none}
+#m1OptSheet .tb-mid .sub,#m1OptSheet .tb-li{font-size:var(--fs-xs)}
+#m1OptSheet .mutBox,#m1OptSheet .mutBox.on{padding:0;border:0;background:none;box-shadow:none}
+#m1OptSheet .mb-info{font-size:var(--fs-xs)}
+#m1OptSheet .mb-head .k{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;color:var(--text-2)}
+#m1OptSheet .mutChip .nm,#m1OptSheet .mutChip .ml{font-size:var(--fs-xs)}
+html[class*="txt-"] #m1OptSheet .sheet{zoom:var(--accK);max-height:calc(78% / var(--accK))}
+/* Help: short section cards; the statuses as a two-column list (the name never wraps under its icon) */
+.m1Help{gap:var(--s3)}
+.m1HelpSec{display:flex;flex-direction:column;gap:6px;padding:var(--s3) var(--s4);border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line)}
+.help .m1HelpSec h3{display:flex;align-items:center;gap:var(--s2);margin:0 0 2px;font-size:var(--fs-s);letter-spacing:.08em;color:var(--text)}
+.m1HelpSec h3::before{content:attr(data-ic);font-size:18px;letter-spacing:0}
+.help .m1HelpSec p{margin:0;font-size:var(--fs-s);line-height:1.5;color:var(--text-2)}
+.help .m1HelpSec p b{color:var(--text)}
+.statusList.m1StatList{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 12px;align-items:baseline}
+.m1StK{display:flex;align-items:baseline;gap:6px;white-space:nowrap;font-size:var(--fs-s);color:var(--text)}
+.m1StK .ic{display:inline-block;width:20px;text-align:center}
+.m1StV{font-size:var(--fs-s);line-height:1.35;color:var(--text-2)}
+/* Tips: the met ones, then one quiet row for the rest */
+.m1Tips{gap:var(--s3)}
+.m1TipReset{margin-top:var(--s1)}
 </style>
 <style id="qa17-css">
 /* ================= QA17 (round 17): QA pass 6 ================= */
@@ -2542,6 +2724,403 @@ html[lang="nl"] .mh .l1{gap:3px}
 html[lang="nl"] .mh .l1 .btn.sm{padding-left:7px;padding-right:7px}
 html[lang="nl"] .mh .l1 .mhInk{font-size:17px;padding:3px 5px}
 /* ================= /QA17 ================= */
+</style>
+<style id="stops-css">
+/* ================= RUN STOPS (round 18, M2): the climb's stops on the ds-css tokens, four family looks =================
+   DESIGN.md "Run stop screens restyled (round 18)". game.js m2Stop puts .m2Stop and one family class on the screen:
+   .m2-card (reward), .m2-cozy (rest, treasure, spare parts, capsule), .m2-market (shop, prize counter, trading post,
+   the arcade and pet shop frame), .m2-work (forge, bin, Compactor), .m2-story (event, boon, season door, rival, secret);
+   .ds-opaque on the ones with a solid backdrop (no canvas art shows under them). One card, one dock, calm:
+   rarity as a thin stripe, at most one glow, no idle loops. */
+.m2Stop{--fam:var(--accent);--fam-ink:var(--text);--fam-tint:var(--surface)}
+.m2-card{--fam:var(--info)}
+.m2-cozy{--fam:#ffb36b;--fam-ink:#ffd9b0;--fam-tint:color-mix(in srgb,#ffb36b 8%,var(--surface))}
+.m2-market{--fam:var(--reward);--fam-ink:#ffe7a8;--fam-tint:color-mix(in srgb,#ffcc55 5%,var(--surface))}
+.m2-work{--fam:#ff8a3d;--fam-ink:#ffd2b0;--fam-tint:#211d33}
+.m2-story{--fam:#f0d9a8;--fam-ink:#fff1d6;--fam-tint:var(--surface)}
+.screen.m2Stop.ds-opaque{background:var(--bg)}
+.screen.m2-cozy.ds-opaque{background:radial-gradient(ellipse 90% 45% at 50% 0,rgba(255,179,107,.12),transparent 70%),var(--bg)}
+.screen.m2-market.ds-opaque{background:radial-gradient(ellipse 90% 40% at 50% 0,rgba(255,204,85,.07),transparent 70%),var(--bg)}
+.screen.m2-work.ds-opaque{background:linear-gradient(180deg,#17142a,var(--bg) 60%)}
+.m2Stop>.col{gap:var(--s3)}
+/* the page title: one size, centred, a short rule in the family colour under it */
+.m2Stop>.col>h1,.m2Stop .counterHead h1{font-size:var(--fs-l);letter-spacing:.1em;line-height:1.1;text-align:center;color:var(--text);text-shadow:none;animation:none}
+.m2Stop>.col>h1::after{content:'';display:block;width:44px;height:3px;margin:8px auto 0;border-radius:2px;background:var(--fam)}
+.m2Stop>.col>.sub{text-align:center;color:var(--text-2)}
+.m2Stop>.col>h3{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;color:var(--text-2);margin:2px 0 -4px}
+.m2Stop .row.pops{justify-content:center}
+/* the dock: the way out (or the one action) at the bottom */
+.m2Dock .btn.ghost{min-width:200px;background:var(--surface);border-color:var(--line)}
+.m2Dock .btn.pri,.m2Dock .btn.gold{min-width:240px}
+
+/* ---- one card (reward, shop, forge, bin, Compactor, trade) ---- */
+.m2Stop .cards{gap:var(--s2)}
+.m2Stop .card{justify-content:flex-start;padding:12px 8px 10px;gap:4px}
+.m2Stop .card canvas{width:64px;height:64px}
+.m2Stop .card canvas.rrReel{width:64px;height:64px}
+.m2Stop .cards .card .name{font-size:16px}
+.m2Stop .cards .card .text{font-size:13px;font-weight:600}
+.m2Stop .card .rar{display:none}
+.m2Stop .card .cnt{top:6px;left:6px;height:22px;background:var(--surface-2);color:var(--reward);border:1px solid rgba(255,204,85,.4)}
+.m2Stop .card .price{margin-top:auto}
+.m2Stop .card .kws{margin-top:2px}
+.m2Stop .card .kw{font-size:12px;padding:2px 6px;border-width:1px;border-color:var(--line);background:var(--surface-2)}
+.m2Stop .card.sold{opacity:.42}
+.m2Stop .card .stamp{border-width:2px;font-size:19px;background:rgba(18,9,31,.8)}
+.m2Stop .card .plus{color:var(--good)}
+
+/* ---- Reward: the receipt, the capsule slots, three cards ---- */
+#scr-reward .payout{border:1.5px solid var(--line);background:var(--surface);box-shadow:none}
+#scr-reward .ptot .g,#scr-reward .ptot .x{text-shadow:none}
+.m2Stop .capslot{animation:none;border-width:1.5px;background:var(--surface);min-height:60px}
+.m2Stop .capslot::after{display:none}
+.m2Stop .capslot:not(.done){box-shadow:0 0 14px color-mix(in srgb,var(--cc,#b9b0cc) 35%,transparent)}
+.m2Stop .capslot.g17r-l{animation:none}
+.m2Stop .btn.g17AllRw{animation:none}
+
+/* ---- Cozy corner: amber, big choices, little else ---- */
+.m2-cozy .feelScene{border:1.5px solid rgba(255,179,107,.3);box-shadow:none;border-radius:var(--r-card)}
+.m2-cozy .list{gap:var(--s3)}
+.m2-cozy .choice{min-height:76px;padding:12px 16px;background:var(--fam-tint);border-color:rgba(255,179,107,.25)}
+.m2-cozy .choice .c1{color:var(--fam-ink)}
+.m2-cozy .choice.go{border-color:#ffb36b;background:color-mix(in srgb,#ffb36b 14%,var(--surface))}
+.m2-cozy .choice.go .c1{color:#ffe0bd}
+.m2-cozy .card.relicReveal{align-self:center;width:100%;max-width:420px;padding:26px 18px 22px;gap:8px;background:var(--fam-tint);border-color:rgba(255,179,107,.3)}
+.m2-cozy .relicReveal .rays{animation:none;opacity:.7}
+.m2-cozy .relicReveal canvas.relicIcon{width:120px;height:120px;animation:none}
+.m2-cozy .card.relicReveal .name{font-size:var(--fs-m)}
+.m2-cozy .card.relicReveal .text{font-size:var(--fs-s)}
+#scr-treasure #treasureBody>.tag{align-self:center}
+#scr-treasure .card.relicReveal{margin-top:auto}
+.m2-cozy .btn.pri{border-color:#ffb36b;background:#ffb36b;color:#2a1204;text-shadow:none;box-shadow:inset 0 -4px 0 rgba(120,50,0,.3),0 0 18px rgba(255,179,107,.35)}
+#scr-parts .card .big{font-size:40px;line-height:1.2}
+#scr-parts .cards{margin-top:var(--s2)}
+/* the capsule: the canvas is the hero; the prize card is the one card, in its tier */
+.m2-cozy .prize{border-width:2px;background:var(--surface);box-shadow:inset 0 3px 0 var(--cc,#ffc94d),0 0 26px color-mix(in srgb,var(--cc,#ffc94d) 45%,transparent),0 10px 30px rgba(0,0,0,.55)}
+.m2-cozy .prize .pic{box-shadow:none}
+
+/* ---- Market stall: warm, a gold rule under the scene, gold price pills ---- */
+#scr-shop .feelScene{border:0;border-bottom:2px solid var(--reward);border-radius:var(--r-card) var(--r-card) 0 0;box-shadow:none}
+.m2Purse{flex-wrap:nowrap;gap:var(--s3)}
+.m2Purse .tag.gold.big{flex:0 0 auto;font-size:var(--fs-m);font-weight:900;padding:4px 14px;border-radius:999px;background:rgba(255,204,85,.12);border:1.5px solid rgba(255,204,85,.4);color:var(--reward)}
+.m2Purse .sub{flex:1;min-width:0;font-size:13px;line-height:1.3;color:var(--text-3)}
+.m2-market .card .price{background:rgba(255,204,85,.14);border:1px solid rgba(255,204,85,.35)}
+.m2-market .stoNote{border-width:1.5px;box-shadow:none}
+.m2-market .secNote{border-style:solid;border-width:1.5px}
+/* the reroll lever: one slim row under the shelf (and under the prize case) */
+.m2Stop .rrBtn{min-height:48px;margin:0;padding:6px 14px;gap:12px;border:1.5px solid rgba(255,204,85,.45);border-radius:var(--r-card);
+  background:var(--surface-2);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.m2Stop .rrBtn.tix{border-color:rgba(255,158,199,.5)}
+.m2Stop .rrBtn:active{transform:translateY(1px) scale(.98);box-shadow:none}
+.m2Stop .rrLever{width:10px;height:26px}
+.m2Stop .rrLever::before{left:-5px;top:-8px;width:20px;height:20px;box-shadow:none}
+.m2Stop .rrCol{flex:1;flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
+.m2Stop .rrCol .r1{font-size:var(--fs-s);color:var(--reward)}
+.m2Stop .rrCol .r2{font-size:var(--fs-s);padding:2px 10px;border-radius:999px;background:rgba(255,204,85,.12);color:var(--reward)}
+.m2Stop .rrBtn.tix .r1{color:#ffc3dc}
+.m2Stop .rrBtn.tix .r2{background:rgba(255,158,199,.12);color:#ff9ec7}
+/* services: the prize counter and the Compactor as two small tiles, Remove and Sell under them */
+.m2Svc{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.m2Svc .capslot.m2Tile{min-height:64px;padding:8px 10px;gap:8px;align-items:center;border-radius:var(--r-card);border:1.5px solid var(--line);
+  background:var(--surface);box-shadow:none}
+.m2Svc .capslot.m2Tile canvas{width:36px;height:36px}
+.m2Svc .capslot.m2Tile .cmpIc{font-size:26px;width:36px}
+.m2Svc .capslot.m2Tile .col{gap:2px;min-width:0}
+.m2Svc .capslot.m2Tile .c1{font-size:var(--fs-xs);letter-spacing:.06em;color:var(--fam-ink);line-height:1.2}
+.m2Svc .capslot.m2Tile .c2{font-size:12px;line-height:1.25;color:var(--text-3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.m2Svc .capslot.m2Tile.done{opacity:.5}
+.m2Svc .m2SvcRow{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.m2Svc .m2SvcRow .btn{width:100%;min-width:0;padding-left:8px;padding-right:8px}
+/* the prize counter: the glass case, ticket price pills */
+.m2Stop .counterHead{gap:var(--s3)}
+.m2Stop .counterHead h1{flex:1;text-align:left}
+.m2Stop .tixbal{font-size:var(--fs-m);padding:4px 14px;border-radius:999px;border:1.5px solid rgba(255,158,199,.45);background:rgba(255,158,199,.1)}
+.m2Stop .case{border:1.5px solid var(--line);border-radius:var(--r-card);background:var(--surface);box-shadow:inset 0 2px 0 rgba(255,255,255,.04)}
+.m2Stop .slot{border-bottom:3px solid var(--line-strong);background:rgba(255,255,255,.03);gap:4px}
+.m2Stop .slot .sn{font-size:13px}
+.m2Stop .slot .ptag{transform:none;border:1px solid rgba(255,158,199,.45);background:rgba(255,158,199,.1);border-radius:999px;padding:2px 10px}
+/* the trading post: one offer card style (the deal's colour is its label and a thin stripe) */
+.m2-market .cmpPanel{border-top:2px solid var(--reward);background:var(--bg)}
+.m2-market .trdOffer{border:1.5px solid var(--line);background:var(--surface);box-shadow:inset 0 3px 0 var(--tc,#ffc94d)}
+.m2-market .trdArrow{text-shadow:none}
+.m2-market .trdOffer .btn.pri{background:var(--surface-2);border-color:var(--reward);color:#ffe7a8;text-shadow:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.m2-market .trdWait{animation:none}
+.m2Stop .cmpDock{background:var(--bg);border-top:1.5px solid var(--line);box-shadow:none}
+.m2Stop .cmpTop{text-align:center}
+.m2Stop .cmpTop h1{letter-spacing:.1em;text-shadow:none}
+/* the arcade and pet shop frame over the canvas machine */
+.m2-market .arcHow{font-size:13px;color:var(--text-2)}
+.m2-market .arcInfo{border:1.5px solid rgba(255,204,85,.4);border-radius:999px;background:rgba(18,9,31,.88)}
+.m2-market .btn.arcGo.ready{animation:none}
+.m2-market .petPen .t{border:1px solid var(--line);background:rgba(28,18,51,.92)}
+.m2-market .petPen .btn.pri{background:var(--surface-2);border-color:var(--reward);color:#ffe7a8;font-size:var(--fs-xs);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);text-shadow:none}
+
+/* ---- Workshop: steel, ember orange the only accent (upgrade) ---- */
+.m2-work .feelScene{border:0;border-bottom:2px solid #ff8a3d;border-radius:var(--r-card) var(--r-card) 0 0;box-shadow:none}
+.m2-work .card{background:linear-gradient(180deg,#25213b,#1b1830);border-color:#363052}
+.m2-work .card:not(.sold):active{border-color:#ff8a3d}
+@media (hover:hover){.m2-work .card:not(.sold):hover{border-color:#ff8a3d}}
+.m2-work .btn.pri{border-color:#ff8a3d;background:#ff8a3d;color:#2a1204;text-shadow:none;box-shadow:inset 0 -4px 0 rgba(120,40,0,.35),0 0 18px rgba(255,138,61,.35)}
+.m2-work .btn.pri:disabled{background:var(--surface-2);border-color:var(--line-strong);color:var(--text-3);box-shadow:none;filter:none;opacity:1}
+.m2-work .cmpTop{background:linear-gradient(180deg,rgba(18,9,31,.97),rgba(18,9,31,.7))}
+.m2-work .cmpTop h1{font-size:24px;letter-spacing:.1em;text-shadow:none}
+.m2-work .cmpPanel{border-top:2px solid #ff8a3d;background:linear-gradient(180deg,#1a1630,var(--bg) 40px)}
+.m2-work .cmpHead{font-size:var(--fs-xs);color:var(--text-2)}
+.m2-work .cmpSlotBox{border-width:1.5px;border-radius:var(--r-card);background:var(--surface)}
+.m2-work .cmpSlotBox.on{border:1.5px solid #ff8a3d;box-shadow:none}
+.m2-work .cmpRule{color:var(--text-2);font-size:var(--fs-xs)}
+.m2-work .cmpRecipe{border-width:1.5px;background:var(--surface)}
+.m2-work .cmpArrow{color:#ff8a3d}
+.m2-work .cmpGrid .card .name{font-size:13px}
+.m2-work .cmpGrid .card canvas{width:52px;height:52px}
+.m2-work .card.evoReady{border-color:#ffe27a;box-shadow:inset 0 3px 0 #ffe27a}
+
+/* ---- Story card: the scene, one line, a few choices ---- */
+#scr-event h1.evTitle{font-size:24px;color:var(--fam-ink);text-shadow:none;padding:6px 16px;border:1.5px solid rgba(240,217,168,.45);border-radius:var(--r-card);
+  background:var(--surface-2);box-shadow:none}
+#scr-event h1.evTitle::after{display:none}
+.m2-story .evScene,.m2-story .eventArt{border:1.5px solid var(--line);box-shadow:none;border-radius:var(--r-card)}
+.m2-story .evText{font-size:var(--fs-s);line-height:1.45;color:var(--text);background:var(--surface);border-left:3px solid var(--fam);border-radius:var(--r-chip) var(--r-card) var(--r-card) var(--r-chip)}
+.m2-story .stoTag.back{animation:none}
+.m2-story .choice{min-height:64px}
+/* outcome chips: one quiet line of small text, the numbers in their colour */
+.m2-story .evChips{gap:2px 10px;margin-top:4px}
+.m2-story .evChip,.m2-story .evChip.dice{border:0;background:none;padding:0;border-radius:0;font-size:13px;font-weight:800;letter-spacing:.03em;line-height:1.3}
+.m2-story .evChip.neutral{color:var(--text-3)}
+.m2-story .evChip.dice{color:var(--reward)}
+.m2-story .evChip.stoMem{color:#ffb8d6}
+.m2-story .evLine{border-width:1.5px;background:var(--surface);box-shadow:none}
+/* the boon draft: deal cards on the one card look (A3.4: the Dutch title wraps, the sign fits) */
+.m2-story .bnHead{font-size:24px;text-shadow:0 3px 0 #12091f}
+.m2-story .bnBack{border:1.5px solid var(--line-strong);box-shadow:none}
+.m2-story .bnBack .bnLogo{animation:none;border-width:3px;text-shadow:none}
+.m2-story .bnFront{border:1.5px solid var(--line);background:var(--surface);box-shadow:inset 0 3px 0 var(--bc)}
+.bnFront .name{overflow-wrap:anywhere;hyphens:auto;-webkit-hyphens:auto}
+html[lang="nl"] .bnHead{font-size:21px;letter-spacing:.04em}
+html[lang="nl"] .bnFront .name{font-size:14px}
+html[lang="nl"] .bnFront .text{font-size:12px}
+.m2-story .bnCard.chosen .bnFront{box-shadow:inset 0 3px 0 var(--bc),0 0 26px var(--bc)}
+/* the season door, Gary, the back room: the scene stays the hero; the cards under it go flat */
+.m2-story .seaCard,.m2-story .stoCard{border:1.5px solid var(--line);background:rgba(28,18,51,.95);box-shadow:inset 0 3px 0 var(--fam)}
+.m2-story .seaCard{--fam:#ff8a1f}.m2-story .seaCard.trick{--fam:#9b4dff}.m2-story .seaBot.win .seaCard{--fam:#8dfff5;border-color:var(--line);box-shadow:inset 0 3px 0 #8dfff5}
+.m2-story .stoCard{--fam:#3ddc84}.m2-story .stoCard.win{--fam:var(--reward);border-color:var(--line);box-shadow:inset 0 3px 0 var(--reward)}
+.m2-story .stoHow,.m2-story .stoHint{border-width:1.5px;background:rgba(18,9,31,.9)}
+.m2-story .secTitle{transform:scale(1.1)}
+.m2-story .secTitle .n{font-size:46px}
+.m2-story .secNote{border-style:solid}
+.calm .m2-story .secTitle{transform:none}
+/* ================= /RUN STOPS ================= */
+</style>
+<style id="m3-css">
+/* ================= M3 (round 18): albums, lobbies and run end (DESIGN.md "Albums, lobbies and run end restyled (round 18)") =================
+   Three family looks on the ds-css tokens, a class on the screen (game.js m3Page):
+   .m3-album  Prizedex, stickers, Codex, history, the Prize Vault: paper dark, uniform grids, silhouettes for locked, one segmented row
+   .m3-lobby  weekly, Boss Rush, Claw School, Duo and the online pages: a hero banner in the mode's colour, one list, the primary docked
+   .m3-score  game over, win, the loop: one big number, a few lines, the rest folded into Run details, the way on docked
+   No dashed borders, no glow but the one primary (or the score), nothing that loops on these pages. */
+.m3Page{--paper:#201538;--hero:var(--info)}
+.m3Page.ds-opaque{background:var(--bg)}
+/* the page head: Back | the title (left, next to Back) | an extra on the right */
+.m3Head{grid-template-columns:auto minmax(0,1fr) auto}   /* (the -16 px sticky offset is in ds-css .pageHead for every page, round 18 M1) */
+.m3Head .phTitle{text-align:left;letter-spacing:.08em}
+.m3Head .phTitle.long,html[lang="nl"] .m3Head .phTitle{font-size:24px;letter-spacing:.04em}
+.m3Head .phTitle.long{white-space:normal;overflow:visible;line-height:1.05;font-size:22px}
+html[class*="txt-"] .m3Head .phTitle{font-size:22px;letter-spacing:.03em;white-space:normal;line-height:1.05}
+.m3Head .phBack{min-width:76px}
+.m3Head .btn.loreDexBtn{margin:0;align-self:center}
+.screen.duoScr .m3Head{margin-top:-14px;top:-14px}
+/* the dock: the primary (and a ghost), an optional caption over them */
+.m3Dock{flex-wrap:wrap;row-gap:var(--s2);padding-top:var(--s4);margin-top:auto;background:linear-gradient(180deg,rgba(18,9,31,0),var(--bg) 14px)}
+.m3Dock .m3Note{flex:1 0 100%;margin:0;text-align:center;font-size:var(--fs-xs);font-weight:600;line-height:1.35;color:var(--text-2);letter-spacing:0;text-transform:none}
+.m3Dock .btn.pri{min-width:0;min-height:52px;margin:0;position:static;align-self:auto;animation:none}
+.m3Dock .btn.rushGo{border-color:var(--accent);background:var(--accent);color:#fff;box-shadow:inset 0 -4px 0 rgba(120,10,60,.35),0 0 18px rgba(255,79,154,.35)}
+.m3Dock .btn.rushGo:disabled{box-shadow:none}
+.m3Dock .btn.ghost{flex:0 0 auto;min-width:112px}
+/* a fold: a row that opens the part under it */
+.m3Fold{display:flex;flex-direction:column;gap:var(--s2)}
+.m3FoldT{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);width:100%;min-height:48px;padding:8px 40px 8px 14px;position:relative;border-radius:var(--r-card);
+  border:1.5px solid var(--line);background:var(--surface);color:var(--text);font:inherit;font-size:var(--fs-s);font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;text-align:left;cursor:pointer;transition:scale .1s}
+.m3FoldT::after{content:'';position:absolute;right:18px;top:50%;width:9px;height:9px;margin-top:-7px;border-right:2.5px solid var(--text-2);border-bottom:2.5px solid var(--text-2);
+  transform:rotate(45deg);transition:transform .18s}
+.m3Fold.open > .m3FoldT::after{transform:rotate(-135deg);margin-top:-2px}
+.m3FoldT:active{scale:.98}
+.m3FoldT:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.m3FoldB{display:none;flex-direction:column;gap:var(--s3)}
+.m3Fold.open > .m3FoldB{display:flex}
+/* segmented rows (tabs, filters): one row that scrolls sideways; the picked one raised with a cyan underline */
+.m3Seg,.m3Scroll{display:flex;flex-wrap:nowrap;gap:4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:4px;
+  border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line)}
+.m3Seg::-webkit-scrollbar,.m3Scroll::-webkit-scrollbar{display:none}
+.m3Page .m3Seg > .btn,.m3Page .m3Scroll > .btn{flex:1 0 auto;min-width:0;min-height:44px;padding:4px 10px;border:1.5px solid transparent;background:transparent;
+  box-shadow:none;color:var(--text-2);font-size:var(--fs-xs);letter-spacing:.06em}
+.m3Page .m3Scroll > .btn{flex:0 0 auto}
+.m3Page .m3Seg > .btn.on,.m3Page .m3Scroll > .btn.on{background:var(--surface-2);border-color:var(--line-strong);color:var(--text);box-shadow:inset 0 -3px 0 var(--info)}
+.m3Page .m3Seg .dot,.m3Page .vTab .nd{background:var(--accent);box-shadow:none;animation:none;font-size:12px}
+/* shared flat parts: the progress bar, the NEW badge, section heads, empty states */
+.m3Page .mBar{border:1.5px solid var(--line);background:var(--surface)}
+.m3Page .mBar i{box-shadow:none}
+.m3Page .newb{left:auto;right:6px;top:6px;padding:1px 6px;border-radius:6px;background:var(--accent);color:#fff;font-size:12px;letter-spacing:.04em;
+  box-shadow:none;transform:none;animation:none}
+.m3Page h3{margin:var(--s2) 0 0;font-size:var(--fs-xs);font-weight:800;letter-spacing:.1em;color:var(--text-2);text-shadow:none}
+.m3Page .hisEmpty{border:1.5px solid var(--line);background:var(--surface);color:var(--text-2)}
+.m3Page .panel{box-shadow:none}
+
+/* ---------- ALBUM ---------- */
+.m3-album .grid4.dex{gap:8px}
+.m3-album .grid4.dex .card{min-height:112px;padding:10px 4px 8px;justify-content:center;border:1.5px solid var(--line);background:var(--paper);opacity:1;
+  box-shadow:inset 0 3px 0 var(--rx,transparent)}
+.m3-album .grid4.dex .card.rx-c{--rx:var(--rar-c)} .m3-album .grid4.dex .card.rx-u{--rx:var(--rar-u)}
+.m3-album .grid4.dex .card.rx-r{--rx:var(--rar-r)} .m3-album .grid4.dex .card.rx-l{--rx:var(--rar-l)} .m3-album .grid4.dex .card.rx-junk{--rx:var(--bad)}
+.m3-album .grid4.dex .card.locked{--rx:transparent;background:var(--surface)}
+.m3-album .grid4.dex .card.locked .name{display:none}
+.m3-album .grid4.dex .card .name{font-size:var(--fs-xs);color:var(--text)}
+.m3-album .grid4.dex .card .rar{background:transparent;color:var(--text-3);font-size:12px}
+/* the sets and evolve tabs (their own grids): no dashes, no glow */
+.m3-album .setGrid > *,.m3-album .evoGrid > *{border-style:solid;box-shadow:none}
+/* the sticker board: blank paper for the locked ones (the icon as a silhouette), real stickers for the rest */
+.m3-album .stGrid{gap:8px}
+.m3-album .stk{border:1.5px solid var(--line);border-radius:var(--r-card);background:var(--surface);padding:10px 6px}
+.m3-album .stk .disc{border:1.5px solid var(--line);background:var(--paper)}
+.m3-album .stk.locked .ic{font-size:30px;filter:grayscale(1) brightness(.22) contrast(1.4);opacity:.85}
+.m3-album .stk.locked .nm{color:var(--text-2)}
+.m3-album .stk.locked .tx{color:var(--text-3)}
+.m3-album .stk.got{border:2px solid var(--sc);box-shadow:none}
+.m3-album .stk.got .disc{box-shadow:none}
+/* the Codex */
+.m3-album .loreCh{border:1.5px solid var(--line);border-left:4px solid var(--lc);background:var(--paper);box-shadow:none}
+.m3-album .loreCh.full{box-shadow:none}
+.m3-album .loreCh.shut{opacity:1;border-style:solid;border-color:var(--line);background:var(--surface)}
+.m3-album .loreCh.shut .lcIc{color:var(--text-3);border-color:var(--line)}
+.m3-album .loreCh.shut b,.m3-album .loreCh.shut .lcB{color:var(--text-3)}
+.m3-album .lcIc{box-shadow:none;background:var(--surface)}
+.m3-album .lcM b{font-size:17px}
+.m3-album .lcB{font-size:var(--fs-xs);color:var(--text-2)}
+.m3-album .loreRow{border:1.5px solid var(--line);background:var(--paper);box-shadow:none}
+.m3-album .loreRow.got{border-color:var(--line);box-shadow:inset 3px 0 0 var(--lc)}
+.m3-album .loreRow.locked{border-style:solid;background:var(--surface)}
+.m3-album .lrT,.m3-album .lrH{font-size:var(--fs-xs)}
+.m3-album .lorePage{border:1.5px solid var(--line);box-shadow:inset 0 3px 0 var(--lc)}
+/* the run history */
+.m3-album .hisChart{border:1.5px solid var(--line)}
+.m3-album .hisCard{border:1.5px solid var(--line);background:var(--paper);box-shadow:none}
+.m3-album .hisCard.r-win{box-shadow:inset 4px 0 0 var(--reward)}
+.m3-album .hisCard.r-endless{box-shadow:inset 4px 0 0 var(--info)}
+.m3-album .hisCard.r-loss{box-shadow:inset 4px 0 0 var(--bad)}
+.m3-album .hisCard.r-quit{border-style:solid;opacity:.8}
+.m3-album .hisRank{box-shadow:none}
+.m3Page .btn.hisChip canvas{width:24px;height:24px}
+/* the Prize Vault: the canvas paints the wall and the window; the DOM is one segmented row, a flat shelf, quiet badges */
+.m3-album .vWallet{border:1.5px solid var(--line-strong);background:var(--surface);box-shadow:none}
+.m3-album .vWallet b{color:var(--reward)}
+.m3-album .vDetail{border:1.5px solid var(--line);background:var(--surface);box-shadow:inset 0 3px 0 var(--vc,var(--rar-c))}
+.m3-album .vdN.lg{animation:none;background-size:100% 100%}
+.m3-album .vTabs{top:446px;gap:3px;padding:3px;overflow-x:auto;scrollbar-width:none;border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line)}
+.m3-album .vTabs::-webkit-scrollbar{display:none}
+.m3-album .vTab,.m3-album .vTab.g17Tab{flex:1 1 auto;min-width:44px;min-height:46px;padding:3px 3px;border-radius:9px;border:1.5px solid transparent;background:transparent;color:var(--text-2);box-shadow:none}
+.m3-album .vTab .lb{white-space:normal;line-height:1.05;text-align:center;letter-spacing:0;overflow-wrap:anywhere;hyphens:manual}
+.m3-album .vTab.on,.m3-album .vTab.g17Tab.on{border-color:var(--line-strong);background:var(--surface-2);color:var(--text);box-shadow:inset 0 -3px 0 var(--info)}
+.m3-album .vTab .nd{top:1px;right:1px;min-width:18px;height:18px}
+.m3-album .vShelf{top:510px;border:1.5px solid var(--line);border-radius:var(--r-card);background:var(--paper);box-shadow:none}
+.m3-album .vCard{border:1.5px solid var(--line);background:var(--surface);box-shadow:inset 0 3px 0 var(--vc,transparent)}
+.m3-album .vCard.r-l{border-color:var(--line);background:var(--surface);animation:none}
+.m3-album .vCard canvas{filter:none}
+.m3-album .vCard.eq{border-color:var(--reward);box-shadow:inset 0 3px 0 var(--vc,transparent)}
+.m3-album .vCard.sel{border-color:var(--info);transform:none;box-shadow:inset 0 3px 0 var(--vc,transparent),0 0 0 1.5px var(--info)}
+.m3-album .vCard.lock canvas{filter:grayscale(1) brightness(.35)}
+.m3-album .vCard .nb{top:4px;right:4px;border-radius:6px;box-shadow:none;animation:none}
+.m3-album .vCard .nm{font-size:var(--fs-xs)}
+.m3-album .g17Ser{box-shadow:none;background:var(--surface)}
+.m3-album .g17Ser.done{box-shadow:none}
+.m3-album .g17Ser .sb i{box-shadow:none}
+.m3-album .btn.vCapBtn,.m3-album .btn.vCapBtn.g17DayBtn{animation:none}
+.m3-album .btn.vCapBtn{box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.m3-album .btn.vCapBtn.g17DayBtn{box-shadow:inset 0 -4px 0 rgba(106,64,8,.45),0 0 18px rgba(255,204,85,.4)}
+.m3-album .vBottom .g17Streak{box-shadow:none}
+.m3-album .vOdds{font-size:12px;color:var(--text-3)}
+
+/* ---------- LOBBY ---------- */
+#scr-weekly{--hero:#35e0d2} #scr-rushmenu{--hero:#ff5a4a} #scr-school{--hero:#5fd38a} #scr-duo{--hero:#ff4f9a}
+.m3-lobby canvas.wkBan,.m3-lobby canvas.rushBan{border-radius:var(--r-card)}
+.m3-lobby .wkRules,.m3-lobby .rushRules,.m3-lobby .rushKit,.m3-lobby .duoRec,.m3-lobby .duoOpt{background:var(--surface);border:1.5px solid var(--line);box-shadow:none}
+.m3-lobby .wkTargets{grid-template-columns:repeat(2,minmax(0,1fr))}
+html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
+.m3-lobby .wkT{min-width:0;gap:6px;background:var(--surface);border:1.5px solid var(--line)}
+.m3-lobby .wkT b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m3-lobby .wkT.got{border-color:var(--reward);box-shadow:none}
+.m3-lobby .wkBest{color:var(--text-2);font-size:var(--fs-s)}
+.m3-lobby .wkCnt,.m3-lobby .wkCell{background:var(--surface);border:1.5px solid var(--line)}
+.m3-lobby .wkCell.now{border-color:var(--hero);box-shadow:none}
+.m3-lobby .rushLock{border:1.5px solid var(--line);background:var(--surface)}
+.m3-lobby .btn.rushChar{background:var(--surface-2);box-shadow:none}
+.m3-lobby .btn.rushChar.on{border-color:var(--hero);background:var(--surface-2);box-shadow:inset 0 -3px 0 var(--hero)}
+.m3-lobby .rkIt{background:var(--paper)}
+.m3-lobby .rbRow{background:var(--surface);border:1.5px solid var(--line)}
+.m3-lobby .rbRow.me{border-color:var(--hero);box-shadow:none}
+.m3-lobby .rkH{color:var(--text-2)}
+/* Claw School keeps its classroom; its lessons are solid cards, the locked ones dimmed */
+.m3-lobby .btn.schLes.locked{border-style:solid}
+.m3-lobby .btn.schLes.full,.m3-lobby .btn.schPrac{box-shadow:inset 0 -3px 0 rgba(0,0,0,.25)}
+/* Duo: a hero strip in pink and teal, the modes as one list of rows */
+#scr-duo.m3-lobby .duoSub{padding:12px 14px;border-radius:var(--r-card);border:1.5px solid var(--line);
+  background:linear-gradient(115deg,rgba(255,79,154,.2),rgba(53,224,210,.16));color:var(--text);font-size:var(--fs-s);font-weight:600;line-height:1.4}
+.m3-lobby .duoModes{grid-template-columns:1fr;gap:var(--s2)}
+.m3-lobby .btn.duoMode{display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;column-gap:12px;row-gap:2px;align-items:center;
+  justify-items:start;min-height:76px;padding:10px 14px;text-align:left;border:1.5px solid var(--line-strong);border-left:4px solid var(--mc,var(--info));
+  background:var(--surface-2);box-shadow:none}
+.m3-lobby .btn.duoMode .mi{grid-row:1 / 3;justify-self:center;font-size:30px}
+.m3-lobby .btn.duoMode .mn{font-size:var(--fs-m);letter-spacing:.06em}
+.m3-lobby .btn.duoMode .mt{font-size:var(--fs-xs);font-weight:600;line-height:1.35;color:var(--text-2)}
+.m3-lobby .btn.dm-coop,.m3-lobby .btn.dm-local{--mc:var(--good)} .m3-lobby .btn.dm-vs{--mc:var(--accent)}
+.m3-lobby .btn.dm-online,.m3-lobby .btn.dm-join{--mc:var(--info)} .m3-lobby .btn.dm-host{--mc:var(--reward)}
+.m3-lobby .btn.duoResume{box-shadow:none}
+.m3-lobby .duoNetRec{font-size:var(--fs-xs)}
+/* the duo setup: a player is one row, a tap opens the looks */
+.m3-lobby .duoP{gap:var(--s2);border:1.5px solid var(--line);border-left:4px solid var(--dc);background:var(--surface);box-shadow:none}
+.m3-lobby input.duoName{border:1.5px solid var(--line-strong);background:var(--bg)}
+.m3-lobby input.duoName:focus{border-color:var(--dc);box-shadow:none}
+.m3-lobby .duoP .m3FoldT{min-height:44px;column-gap:0;row-gap:2px;font-size:var(--fs-xs);font-weight:800;letter-spacing:.02em;text-transform:none;
+  color:var(--text-2);background:var(--surface-2);border-color:var(--line)}
+.m3-lobby .duoP .m3FoldT .sv{white-space:nowrap}
+.m3-lobby .duoP .m3FoldT .sv:first-child{color:var(--text)}
+.m3-lobby .duoP .m3FoldT .sv + .sv::before{content:'\00B7';margin:0 7px;color:var(--text-3)}
+.m3-lobby .duoP .m3FoldB{gap:var(--s2)}
+.m3-lobby .btn.duoCol.on{box-shadow:0 0 0 3px var(--dc)}
+.m3-lobby .btn.duoChip{box-shadow:none}
+.m3-lobby .btn.duoChip.on{border-color:var(--dc,var(--accent));background:var(--surface-2);box-shadow:inset 0 -3px 0 var(--dc,var(--accent))}
+.m3-lobby .duoOpt .btn.duoChip.on{--dc:var(--accent)}
+.m3-lobby .btn.duoChip.locked{border-style:solid}
+.m3-lobby .duoCodeCard,.m3-lobby .duoNetErr{box-shadow:none}
+
+/* ---------- SCOREBOARD ---------- */
+.m3-score h1{text-align:center}
+.m3-score h1 + .sub{text-align:center}
+.m3-score .scoreBox{align-items:center;gap:4px;padding:16px 14px 14px;border:1.5px solid var(--line);background:var(--surface);
+  box-shadow:inset 0 3px 0 var(--reward)}
+.m3-score .scoreBox.endless{box-shadow:inset 0 3px 0 var(--accent)}
+.m3-score .scoreBox .sk{font-size:var(--fs-xs);letter-spacing:.24em;color:var(--text-2)}
+.m3-score .scoreBox .sv{font-size:64px;text-shadow:0 0 22px rgba(255,204,85,.4)}
+.m3-score .scoreBox .sm{justify-content:center}
+.m3-score .scoreBox .nb{top:10px;right:10px;font-size:13px;box-shadow:none}
+.m3-score .scoreBox .nb.on{animation:nbSlap .5s cubic-bezier(.3,1.7,.5,1) forwards}
+.m3-score .tiltUp{gap:2px;padding:10px 12px;border:1.5px solid var(--line);background:var(--surface);box-shadow:inset 0 3px 0 var(--tc);animation:none}
+.m3-score .tiltUp .num{display:none}
+.m3-score .tiltUp .k{font-size:var(--fs-xs);letter-spacing:.16em;color:var(--tc)}
+.m3-score .tiltUp .nm{font-size:var(--fs-m)}
+.m3-score .tiltUp .t{font-size:var(--fs-xs);color:var(--text-2)}
+.m3-score .dailyEnd,.m3-score .loopEnd,.m3-score .wkEnd,.m3-score .ghoEnd{border:1.5px solid var(--line);background:var(--surface);box-shadow:none;animation:none}
+.m3-score .loopEnd b{text-shadow:none}
+.m3-score .dailyEnd.best .s,.m3-score .loopEnd.best .s{animation:none}
+.m3-score .mEnd .sub{text-align:center}
+.m3-score .tag.lime{align-self:center}
+.m3Details .sls{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;padding:4px 6px}
+.m3Details .sl{display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-xs);color:var(--text-2);line-height:1.4}
+.m3Details .sl b{color:var(--text)}
+.m3Details .btn.vShareBtn{align-self:center}
+.m3Details .m3VltTag,.m3Details .m3Hof{align-self:flex-start}
+.calm .m3FoldT::after,.calm .m3FoldT{transition:none}
+@media (prefers-reduced-motion:reduce){.m3FoldT::after,.m3FoldT{transition:none}.m3-score .scoreBox .nb.on{animation:none;opacity:1;transform:rotate(8deg)}}
+/* ================= /M3 ================= */
 </style>
 </head>
 <body>
@@ -2572,7 +3151,8 @@ html[lang="nl"] .mh .l1 .mhInk{font-size:17px;padding:3px 5px}
     el.setAttribute('aria-label', i18n14W(el.getAttribute('aria-label')));
   }
   var N = 12, bulbs = [], lit = -1, seen = 0, t0 = Date.now(), shown = 0, i, k, TOT = 0;
-  var WT = { util: 1, art: 4, physics: 26, data: 110, combat: 42, map: 26, audio: 37, render: 210, intro: 17, game: 293 };
+  /* gzip KB per script; build.js rewrites this line in dist from the minified files (round 18) */
+  var WT = { util: 1, art: 2, i18n: 4, physics: 15, data: 131, combat: 27, map: 14, audio: 30, render: 207, intro: 11, game: 306, net: 3 };
   for (k in WT) TOT += WT[k];
   for (i = 0; i < N; i++) bulbs.push(bar.appendChild(document.createElement('i')));
   function landed() {
