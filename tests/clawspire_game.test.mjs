@@ -5368,15 +5368,11 @@ h.test('cmp2: three upgraded copies merge to +2, it plays stronger, shows everyw
   h.eq(hp0 - e.hp, v2, 'and it hits for its +2 number');
   h.eq(D.cmp2Name(sw, 2), 'Rusty Sword++', 'its name');
   h.ok(/Deal \d+ damage/.test(D.itemText(sw, 2)) && D.itemText(sw, 2).indexOf(String(v2)) >= 0, 'its text reads the +2 number');
-  // the shop sells a +2 for double
+  // round 23: the shop no longer buys items back (selling thinned the bin for gold)
   G2.run.gold = 0;
   const shop = G2.rollShop({ q: 3, r: 3 });
   G2.showShop(shop);
-  G2.choose(G2.S.ui.buttons.findIndex(b => b.label === 'Sell an item'));
-  const k = G2.S.ui.buttons.findIndex(b => /Rusty Sword\+\+/.test(b.label));
-  h.ok(k >= 0, 'the sell picker lists it');
-  G2.choose(k);
-  h.eq(G2.run.gold, Math.max(5, Math.round(sw.cost / 3)) * 2, 'a +2 sells for double');
+  h.ok(G2.S.ui.buttons.findIndex(b => b.label === 'Sell an item') < 0, 'the shop has no Sell an item button');
   // the history record keys it as id++
   h.ok(T2.GAME.cmp2.unkey('rusty_sword++').plus === 2 && T2.GAME.cmp2.unkey('rusty_sword+').plus === true && T2.GAME.cmp2.unkey('rusty_sword').plus === false, 'history keys: id, id+, id++');
 });
