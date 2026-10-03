@@ -877,7 +877,13 @@ if (HAS_DATA) {
   h.ok(g1.n - g0.n <= 45, `597 radii share ${g1.n - g0.n} sprites`);
   const big = R.glowSprite('#123457', 600);
   h.ok(big && big.width <= 2 * 128 + 2, 'no glow sprite is built past radius 128 (it is drawn larger)');
-  h.eq(R.glowSprite('#123457', 12), R.glowSprite('#123457', 12.2), 'small radii keep their own sprite per pixel');
+  h.eq(R.glowSprite('#123457', 12), R.glowSprite('#123457', 12.2), 'small radii round to their sprite');
+  h.eq(R.glowSprite('#123457', 7), R.glowSprite('#123457', 8), 'PERF (round 19): radii up to 24 share a sprite per 2 px');
+  h.ok(R.glowSprite('#123457', 8) !== R.glowSprite('#123457', 10), '...and the next step has its own');
+  // PERF (round 19): past the budget the least recently drawn sprites go, not the whole cache
+  const hot = R.glowSprite('#abcdef', 20);
+  for (let c = 0; c < 120; c++) { R.glowSprite('#' + (0x200000 + c * 977).toString(16), 128); R.glowSprite('#abcdef', 20); }
+  h.eq(R.glowSprite('#abcdef', 20), hot, 'a sprite drawn every frame survives a flood of colours (never rebuilt mid-fight)');
   for (let c = 0; c < 120; c++) for (const r of [60, 90, 128]) R.glowSprite('#' + (0x100000 + c * 977).toString(16), r);
   h.ok(R.q9.glowStats().mb <= 8, `a flood of colours stays under the budget (${R.q9.glowStats().mb} MB)`);
 }
@@ -3156,6 +3162,30 @@ h.test('qa17: the claw-off board\'s round stars sit inside the lit frame, beside
     h.eq(off.length, 0, 'every star inside its player\'s frame (who ' + who + ')');
     h.ok(band.every((p) => Math.abs(p[0] - (x + (p[0] > x ? 1 : -1) * w * 0.28)) > 40), 'and clear of the score in the middle');
   }
+});
+
+// ---- PERF (round 19): no scene under a solid page; the DOM scenes draw() feeds keep drawing; the backing store caps at 2x
+h.test('perf (round 19): a .ds-opaque page skips the canvas scene, the shopkeeper still draws, the buffer caps at 2x', () => {
+  const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const G = T.GAME;
+  G.newRun('knight', 777); if (G.screen === 'boon') G.choose(0); G.toMap();
+  G.showShop(G.rollShop({ q: 4, r: 5 }));
+  h.eq(G.screen, 'shop', 'the shop is up');
+  const total = () => Object.values(T._counts).reduce((a, b) => a + b, 0);
+  T._resetCounts(); G.draw(); const open = total();
+  const scr = T._nodes['scr-shop'], cls = new Set(['ds-opaque', 'show']);
+  const keep = scr.classList;
+  scr.classList = { add() {}, remove() {}, toggle() {}, contains: (c) => cls.has(c) };
+  T._resetCounts(); G.draw(); const covered = total();
+  h.ok(open > 300, `the map under the shop paints when the page is see-through (${open} calls)`);
+  h.ok(covered > 0 && covered < open * 0.5, `under the solid shop only the keeper's own canvas paints (${covered} of ${open} calls)`);
+  cls.delete('show');
+  T._resetCounts(); G.draw();
+  h.ok(total() >= open * 0.9, 'a page that is not shown never hides the scene');
+  scr.classList = keep;
+  const W = T._window, dpr0 = W.devicePixelRatio;
+  for (const [d, want] of [[1, 1], [2, 2], [3, 2]]) { W.devicePixelRatio = d; G.resize(); h.eq(G.S.px, want, `devicePixelRatio ${d}: ${want} buffer px per stage px`); }
+  W.devicePixelRatio = dpr0; G.resize();
 });
 
 h.done();

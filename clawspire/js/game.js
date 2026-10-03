@@ -361,12 +361,6 @@ const GAME = (() => {
       setTimeout(() => { try { node.remove(); } catch (e) { /* gone */ } }, (ms || 520) + (delay || 0) + 80);
     } catch (e) { /* optional */ }
   }
-  // A few DOM coins arcing into the gold stat (shop buys, sale prices).
-  function coinsTo(x0, y0, n) {
-    const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
-    for (let i = 0; i < n; i++) domFly(h('div', 'dcoin'), x0 + (i - n / 2) * 8, y0, gp.x, gp.y, 480, i * 60);
-  }
-
   /* Time: S.slowT seconds of slow motion at S.slowK (the last enemy falling,
      a tier 3 combo). update() scales the game's dt by it; toasts and banners
      keep real time. */
@@ -10198,8 +10192,10 @@ const GAME = (() => {
   function feelCorner() {
     const el = S.mcur && S.mcur.el, k = FEEL_CORNER[S.screen];
     if (!el || !el.classList) return;
-    if (k) el.classList.add('tight');
-    if (k === 'hi') el.classList.add('hi'); else el.classList.remove('hi');
+    // (PERF round 19: called every tick; a class is written only when it changes, 55 writes a second on the map before)
+    const cl = el.classList, hi = k === 'hi';
+    if (k && !cl.contains('tight')) cl.add('tight');
+    if (cl.contains('hi') !== hi) cl[hi ? 'add' : 'remove']('hi');
   }
 
   // ---- the rooms: a canvas scene at the top of the shop, rest and forge
@@ -15044,11 +15040,25 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- drawing
+  /* PERF (round 19, DESIGN.md "Runtime performance (round 19)"): a solid menu page (.ds-opaque, put on the
+     screen by m2Stop / m3Page as it shows) hides the whole canvas, so the scene under it is not painted; the
+     canvas keeps its last frame, unseen. update() runs as always. The one flag for the skip. */
+  function drawCovered() {
+    if (S.hisPhIn) return false;   // (photo mode paints its frozen scene into its own buffer)
+    const el = $('scr-' + S.screen), cl = el && el.classList;
+    try { return !!(cl && cl.contains('ds-opaque') && cl.contains('show')); } catch (e) { return false; }
+  }
   function draw() {
     const ctx = S.ctx;
     if (!ctx) return;
     if (S.screen === 'intro') return;   // the intro paints the canvas itself
     if (hisPhotoDraw(ctx)) return;   // HISTORY: photo mode shows the frozen frame through its camera, filter and frame
+    if (drawCovered()) {
+      // only the DOM canvases draw() feeds: the event vignette, the shopkeeper / campfire / forge and the tip card art
+      arcDraw(ctx, S.t);
+      feelDraw(S.t);
+      return;
+    }
     const t = S.t;
     const R = X.RENDER;
     ctx.save();
@@ -16111,6 +16121,7 @@ const GAME = (() => {
     S.acc = 0;
     if (!S.headless) S.frame = requestAnimationFrame(frame);
   }
+  const PX_DPR_MAX = 2;   // PERF (round 19): the canvas backing store's cap, device px per CSS px
   function resize() {
     let vw = W, vh = H;
     try { vw = window.innerWidth || W; vh = window.innerHeight || H; } catch (e) { /* headless */ }
@@ -16125,8 +16136,11 @@ const GAME = (() => {
       stage.style.left = Math.floor((iw - W * k) / 2) + 'px';
       stage.style.top = Math.floor((ih - H * k) / 2) + 'px';
     }
+    // PERF (round 19): the backing store follows the device up to 2 px per CSS px; a 3x phone filled 2.25x
+    // the pixels of 2x for no visible gain. Only the buffer changes: the stage's CSS size and stagePoint
+    // (CSS px / S.scale) are untouched, so taps and the claw map the same at every ratio.
     let dpr = 1;
-    try { dpr = Math.min(2.5, window.devicePixelRatio || 1); } catch (e) { dpr = 1; }
+    try { dpr = Math.min(PX_DPR_MAX, window.devicePixelRatio || 1); } catch (e) { dpr = 1; }
     S.px = Math.max(1, Math.min(3, dpr * k));
     if (S.cv) { S.cv.width = Math.round(W * S.px); S.cv.height = Math.round(H * S.px); }
   }
@@ -19746,10 +19760,11 @@ const GAME = (() => {
   // The HUD in a rush: the act stat reads the boss count, the clock takes the bulbs' and the tickets' place.
   function rushHud(run) {
     const top = $('top'), R = rushOf(run), on = !!R;
-    if (top && top.classList) top.classList[on ? 'add' : 'remove']('rushOn');
+    if (top && top.classList && top.classList.contains('rushOn') !== on) top.classList[on ? 'add' : 'remove']('rushOn');   // (PERF round 19: written on a change only)
     const act = $('actTxt'), st = act && act.parentNode;
     if (on) {
-      if (act) act.textContent = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
+      const at = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
+      if (act && act.textContent !== at) act.textContent = at;
       const k = st && st.querySelector ? st.querySelector('.k') : null;
       if (k && k.textContent !== 'Boss') k.textContent = 'Boss';
       if (top && (!RSH.clk || !(top.contains ? top.contains(RSH.clk) : RSH.clk.parentNode === top))) {   // (HUD round 15: the clock sits in the resource row inside the bar)
@@ -26426,7 +26441,7 @@ const GAME = (() => {
     coinN: 6, coinR: 9, coinGold: 1, coinGap: 0.07,
     capR: 12, capMax: 2, capTier: { c: 0.55, u: 0.3, r: 0.12, l: 0.03 },
     lampMax: 12, lamp: { deliver: 1, double: 1, jackpot: 2, rare: 1, close: 1, perfect: 1 }, lampFly: 0.5,
-    rainCoins: 5, rainCaps: 1, feverBurst: 0.75, feverEnd: 2.2,
+    rainCoins: 5, rainCaps: 0, feverBurst: 0.75, feverEnd: 2.2,   // (round 19 lamp economy: a fever rains coins, no capsule; DESIGN.md "Lamp economy check (round 19)")
     perfX: 5, perfGrip: 0.25, perfTypes: { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1 },
     strainM: [12, 40], heavyK: 0.6,
     faceRar: { r: 1, l: 1 }, faceLook: 170,

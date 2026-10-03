@@ -179,25 +179,36 @@ const RENDER = (() => {
      soft radial gradient scales without a visible change, so radii past 24
      share a sprite per 10% step and none is built past GLOW_MAXR (drawn
      larger). The cache used to keep one canvas per colour and whole-pixel
-     radius: 295 of them and 17 MB after 16 fights, still growing. A total
-     past GLOW_BUDGET pixels starts it over (they rebuild on demand). */
+     radius: 295 of them and 17 MB after 16 fights, still growing. The total
+     stays under GLOW_BUDGET pixels (round 19: by dropping the least used). */
   const GLOW_MAXR = 128, GLOW_BUDGET = 1600000;
-  let glowPx = 0;
+  let glowPx = 0, glowUse = 0;
+  /* PERF (round 19): radii up to 24 share a sprite per 2 px (the claw's strain glow walked 7 to 16 a frame and
+     built a canvas for each), and past the budget the least recently drawn sprites go, not the whole cache, so
+     a fight's working set is never rebuilt mid-fight. Each sprite is drawn at its caller's own size. */
   function glowKey(r) {
     r = Math.max(4, Math.round(r));
-    if (r <= 24) return r;
+    if (r <= 24) return r + (r & 1);
     return Math.min(GLOW_MAXR, Math.round(24 * Math.pow(1.1, Math.round(Math.log(r / 24) / Math.log(1.1)))));
+  }
+  const glowArea = (r) => (r * 2 + 2) * (r * 2 + 2);
+  // Past the budget: drop the least recently drawn sprites until three quarters of it is left (a rare pass).
+  function glowTrim() {
+    const all = [];
+    for (const [col, m] of glowCache) for (const r in m) all.push({ col, m, r: +r, use: m[r].use });
+    all.sort((a, b) => a.use - b.use);
+    for (const e of all) {
+      if (glowPx <= GLOW_BUDGET * 0.75) break;
+      delete e.m[e.r]; glowPx -= glowArea(e.r);
+      if (!Object.keys(e.m).length) glowCache.delete(e.col);
+    }
   }
   function glowSprite(col, r) {
     r = glowKey(r);
     let m = glowCache.get(col);
-    if (!m) {
-      if (glowPx > GLOW_BUDGET) { glowCache.clear(); glowPx = 0; }
-      m = {}; glowCache.set(col, m);
-    }
-    if (m[r] !== undefined) return m[r];
-    if (glowPx > GLOW_BUDGET) { glowCache.clear(); glowPx = 0; m = {}; glowCache.set(col, m); }
-    glowPx += (r * 2 + 2) * (r * 2 + 2);
+    const hit = m && m[r];
+    if (hit) { hit.use = ++glowUse; return hit.cv; }
+    if (!m) { m = {}; glowCache.set(col, m); }
     let cv = null;
     try {
       if (typeof document !== 'undefined' && document && document.createElement) {
@@ -214,7 +225,9 @@ const RENDER = (() => {
         }
       }
     } catch (e) { cv = null; }
-    m[r] = cv;
+    m[r] = { cv, use: ++glowUse };
+    glowPx += glowArea(r);
+    if (glowPx > GLOW_BUDGET) glowTrim();
     return cv;
   }
   function glow(ctx, x, y, r, col, a) {
@@ -1426,6 +1439,18 @@ const RENDER = (() => {
   /* Does a relic badge drawn at time t look different from a still one?
      (the game redraws its DOM relic canvases only then) */
   function relicLive(def, t) { return !artImg('relic', def && def.id) && (polTier(def) === 'l' || polShine(def, t) >= 0); }
+  /* PERF (round 19): the badge's ring and inner disc gradients, built once per tier and size (the shine redraws a
+     relic canvas many times a second). A gradient lives in the coordinates it is filled in, so one object serves
+     every canvas. A small cap; null when it cannot be built (the flat colour then). */
+  const POL_GRAD = new Map();
+  function polGrad(key, make) {
+    let g = POL_GRAD.get(key);
+    if (g !== undefined) return g;
+    try { g = make(); } catch (e) { g = null; }
+    if (POL_GRAD.size >= 48) POL_GRAD.delete(POL_GRAD.keys().next().value);
+    POL_GRAD.set(key, g);
+    return g;
+  }
   function polBadge(ctx, def, r, t) {
     const tier = polTier(def), B = POL_BADGE[tier], tt = t >= 0 ? t : 0;
     ctx.lineJoin = 'round';
@@ -1446,8 +1471,7 @@ const RENDER = (() => {
         S(ctx, 'hsl(' + Math.round((i * 360 / n + tt * 90) % 360) + ',95%,62%)', w); ctx.stroke();
       }
     } else {
-      let g = B.b;
-      try { const lg = ctx.createLinearGradient(-R0, -R0, R0, R0); lg.addColorStop(0, B.a); lg.addColorStop(0.45, B.b); lg.addColorStop(1, B.c); g = lg; } catch (e) { g = B.b; }
+      const g = polGrad(tier + '|l|' + R0, () => { const lg = ctx.createLinearGradient(-R0, -R0, R0, R0); lg.addColorStop(0, B.a); lg.addColorStop(0.45, B.b); lg.addColorStop(1, B.c); return lg; }) || B.b;
       ctx.fillStyle = FLAT || g; ctx.fill();
     }
     ctx.beginPath(); circ(ctx, 0, 0, R0); S(ctx, INK, Math.max(1.6, r * 0.09)); ctx.stroke();
@@ -1458,8 +1482,7 @@ const RENDER = (() => {
     // the dark inner disc the emoji sits on
     const ri = R0 * 0.74;
     ctx.beginPath(); circ(ctx, 0, 0, ri);
-    let g2 = '#1d1236';
-    try { const rg = ctx.createRadialGradient(-ri * 0.3, -ri * 0.4, ri * 0.1, 0, 0, ri); rg.addColorStop(0, '#3a2660'); rg.addColorStop(1, '#130a24'); g2 = rg; } catch (e) { g2 = '#1d1236'; }
+    const g2 = polGrad('r|' + ri, () => { const rg = ctx.createRadialGradient(-ri * 0.3, -ri * 0.4, ri * 0.1, 0, 0, ri); rg.addColorStop(0, '#3a2660'); rg.addColorStop(1, '#130a24'); return rg; }) || '#1d1236';
     ctx.fillStyle = FLAT || g2; ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
     ctx.beginPath(); circ(ctx, 0, 0, ri - 1.6); S(ctx, rgba(B.rainbow ? '#ffe066' : B.b, 0.7), Math.max(1, r * 0.04)); ctx.stroke();
     // a fixed specular on the ring (the metal reads even in a still)
@@ -10218,6 +10241,7 @@ const RENDER = (() => {
     ctx.restore();
   }
   // ---- the map: fog drifting over the hexes, bats, a violet edge (or snow and frost)
+  const SEA_VIG = { g: null, x: 0, y: 0, w: 0, h: 0 };
   function seaMap(ctx, x0, y0, w, h, t, id) {
     if (id !== 'halloween' && id !== 'winter') return;
     ctx.save();
@@ -10231,8 +10255,13 @@ const RENDER = (() => {
           seaBat(ctx, bx, by, bs, t, i, '#140a1c');
         }
         try {
-          const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.35, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
-          g.addColorStop(0, rgba(SEA_PU, 0)); g.addColorStop(1, rgba('#3a1260', 0.5)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
+          const V = SEA_VIG;   // (PERF round 19: the vignette's gradient is built again only when the map area moves)
+          if (!V.g || V.x !== x0 || V.y !== y0 || V.w !== w || V.h !== h) {
+            const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.35, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
+            g.addColorStop(0, rgba(SEA_PU, 0)); g.addColorStop(1, rgba('#3a1260', 0.5));
+            V.g = g; V.x = x0; V.y = y0; V.w = w; V.h = h;
+          }
+          ctx.fillStyle = V.g; ctx.fillRect(x0, y0, w, h);
         } catch (e) { /* stub */ }
       } else winMap(ctx, x0, y0, w, h, t);   // WIN (round 12): snow, the frosty rim, ferns in the corners
     } catch (e) { /* never throws */ }
@@ -17211,7 +17240,7 @@ const RENDER = (() => {
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
     q9: { arena: Q9A, titleSprites: Q9_TSPR, logo: Q9_LOGO, title: Q9_TL,   // LABELS / PERF / TITLE (round 9): the arena's word rects, the title's caches and layout
-      glowStats: () => { let n = 0, px = 0; for (const m of glowCache.values()) for (const r in m) if (m[r]) { n++; px += (r * 2 + 2) * (r * 2 + 2); } return { cols: glowCache.size, n, mb: +(px * 4 / 1048576).toFixed(2) }; } },   // MEMORY (round 9)
+      glowStats: () => { let n = 0, px = 0; for (const m of glowCache.values()) for (const r in m) if (m[r].cv) { n++; px += glowArea(+r); } return { cols: glowCache.size, n, mb: +(px * 4 / 1048576).toFixed(2) }; } },   // MEMORY (round 9)
     terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames, glint, enemyAura, RARITY_COL,
     belly, affixAura, affixBadges, binMark, wrench, rageCrown,

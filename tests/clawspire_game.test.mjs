@@ -11089,8 +11089,20 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     stepFor(G, 3);
     h.eq(C.feverN, 1, 'one fever');
     h.ok(C.bodies.length >= before + G.cab.K.rainCoins, 'coins rained in: ' + (C.bodies.length - before));
-    h.ok(C.bodies.some((b) => b.data.cab === 'cap'), 'and a capsule');
+    h.eq(G.cab.K.rainCaps, 0, 'round 19 lamp economy: a fever rains coins only');
+    h.eq(C.bodies.filter((b) => b.data.cab === 'cap').length, G.cab.K.rainCaps, 'and ' + G.cab.K.rainCaps + ' capsules');
     h.eq(C.lamp, 2, 'the overflow carries');
+    {
+      // the rain's capsule path still works when the dial is up (a fresh fight; the dial put back)
+      const o = cabBoot(true), C2 = cabFight(o.G), k0 = o.G.cab.K.rainCaps;
+      o.G.cab.K.rainCaps = 1;
+      try {
+        o.G.cab.lampAdd(o.G.cab.K.lampMax);
+        stepFor(o.G, 3);
+        h.eq(C2.bodies.filter((b) => b.data.cab === 'cap').length, 1, 'rainCaps 1: one capsule in the rain');
+        h.eq(C2.caps, 1, 'it counts against the fight\'s cabinet capsules');
+      } finally { o.G.cab.K.rainCaps = k0; }
+    }
     h.eq(G.meta.cab.fevers, 1, 'the profile counts it');
     G.draw();
     G.fight.enemies.forEach((e) => { e.hp = 0; e.alive = false; });
