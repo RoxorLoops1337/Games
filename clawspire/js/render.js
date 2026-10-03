@@ -4388,7 +4388,6 @@ const RENDER = (() => {
   }
 
   /* ============================================================ TITLE */
-  let titlePrizes = null;
   /* PERF (round 9): the title is the first thing a page draws, and it drew
      36 falling prizes (a slot machine's emoji among them) and a five pass
      92 px logo with clips from scratch every frame. Both are static art, so
@@ -4419,43 +4418,613 @@ const RENDER = (() => {
     Q9_TSPR.set(key, sp);
     return sp;
   }
-  // The drawn CLAWSPIRE word (five passes), centred on (cx, ly) at fs px.
-  function q9LogoArt(ctx, w, cx, ly, fs) {
-    ctx.font = '900 ' + fs + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = rgba(PAL.pink, 0.35); ctx.lineWidth = fs * 0.3; ctx.strokeText('CLAWSPIRE', cx, ly);
-    ctx.strokeStyle = INK; ctx.lineWidth = fs * 0.16; ctx.strokeText('CLAWSPIRE', cx, ly);
-    ctx.fillStyle = CHROME; ctx.fillText('CLAWSPIRE', cx, ly);
-    ctx.save(); ctx.beginPath(); ctx.rect(0, ly - fs * 0.5, w, fs * 0.42); ctx.clip();
-    ctx.fillStyle = '#ffffff'; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
-    ctx.save(); ctx.beginPath(); ctx.rect(0, ly + fs * 0.05, w, fs * 0.5); ctx.clip();
-    ctx.fillStyle = PAL.pink; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
-    ctx.strokeStyle = rgba('#ffffff', 0.6); ctx.lineWidth = 1.5; ctx.strokeText('CLAWSPIRE', cx, ly);
-  }
-  const Q9_LOGO = { key: '', cv: null, y0: 0, lw: 0, lh: 0 };
-  const Q9_TL = { ly: 0 };   // TITLE (round 9): the logo's centre y when the game sets one (0: the stage's middle)
+  /* TITLE ART (round 20): the attract scene is one calm, illustrated picture (DESIGN.md "Title screen art
+     (round 20)"). A tower of claw machine cabinets (three, two, one) tapers into a chrome spire with the
+     star prize on top; a friendly chrome claw hangs over it, sways a little and now and then dips to grip
+     the star. Behind: a violet dusk over an arcade city, soft light rays, a few bokeh lights and floating
+     prizes; under it a glossy floor with the tower's reflection, which is what shows under the menu. The
+     logo is glossy candy lettering (an extruded body, a teal rim, a hard gloss band) high in the sky, with
+     a sheen that sweeps it every few seconds and the subtitle in a capsule under it.
+     PERF: everything that holds still (the sky, the city, the rays, the floor, the tower and its
+     reflection, a season's tint and still decor, the vignette) is painted once into one opaque layer at the
+     exact device scale and blitted 1:1 (a pixel-aligned blit costs about a tenth of a scaled one in a
+     software raster); the logo and its subtitle are one more such layer; the claw, the star, the prizes and
+     the bokeh are small cached sprites. No shadowBlur, filter or gradient is set up per frame, only while a
+     layer is built. Headless (no real canvas, the tests' stub ctx) the same painters draw live, simpler.
+     Calm (Shake off, prefers-reduced-motion): the scene holds still; only the star's glow breathes. */
+  const Q9_LOGO = { key: '', cv: null, y0: 0, lw: 0, lh: 0, mask: null, band: null, scratch: null, bw: 0, q: 0 };
+  // TITLE (round 9): the lowest the logo may sit (the game lifts it clear of the menu; 0: the stage's middle).
+  // (round 20) sea: the season whose decor draws over this frame (the game sets it on the title), baked: the one the cached layer holds.
+  const Q9_TL = { ly: 0, sea: '', baked: '', logoY: null };
   const Q9_FIT = new WeakMap();   // ctx -> the logo's fitted size for a stage width
-  // Blit the cached logo; false when there is no real canvas (draw it live).
-  function q9Logo(ctx, w, cx, ly, fs) {
-    if (FLAT || typeof document === 'undefined' || !document || !document.createElement) return false;
-    const ds = devScale(ctx);
-    if (!(ds > 0) || ds > 5) return false;
-    const q = Math.ceil(ds * 4) / 4, key = w + ':' + cx + ':' + fs + ':' + q;
-    if (Q9_LOGO.key !== key) {
-      Q9_LOGO.key = key; Q9_LOGO.cv = null;
-      const lh = fs * 1.7, y0 = ly - lh / 2;
-      try {
-        const cv = document.createElement('canvas'); cv.width = Math.ceil(w * q) + 2; cv.height = Math.ceil(lh * q) + 2;
-        const g = cv.getContext && cv.getContext('2d');
-        if (g && typeof g.getTransform === 'function') {
-          g.scale(q, q); g.translate(0, -y0);
-          q9LogoArt(g, w, cx, ly, fs);
-          Q9_LOGO.cv = cv; Q9_LOGO.y0 = y0 - ly; Q9_LOGO.lw = cv.width / q; Q9_LOGO.lh = cv.height / q;   // y0 relative to the logo's centre (it may move)
-        }
-      } catch (e) { Q9_LOGO.cv = null; }
+  const TT = { mq: undefined, geo: null, back: null, spr: new Map(), claw: { x: 270, y: 260, a: 0, s: 1 } };
+  const TT_LY = { bare: 150, sea: 178 };   // the logo's centre under a bare sky / under a season's ribbon and banner
+  const TT_PAL = [
+    { b: '#d9447f', d: '#7a1c4d', l: '#ff9cc6', m: '#ffe0ee', g: '#ff4f9a' },   // pink
+    { b: '#23a99f', d: '#0d5a5c', l: '#8ff5ec', m: '#dcfffb', g: '#35e0d2' },   // teal
+    { b: '#7257e2', d: '#31207a', l: '#c2b2ff', m: '#eee8ff', g: '#9b7bff' },   // violet
+    { b: '#e69c34', d: '#874c10', l: '#ffe0a0', m: '#fff4d6', g: '#ffcc55' },   // gold
+  ];
+  const ttH = (i, k) => { const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+  // The logo's centre y: high in the sky, and never lower than the game's layout allows.
+  function ttLogoY(h, sea) {
+    const lim = Q9_TL.ly > 0 ? Q9_TL.ly : (h || 960) * 0.5;
+    return Math.min(lim, (sea == null ? !!Q9_TL.sea : !!sea) ? TT_LY.sea : TT_LY.bare);
+  }
+  Q9_TL.logoY = ttLogoY;
+  // Calm: the settings' Shake off (fx.reduced) or the system's reduced motion.
+  function ttCalm() {
+    if (fx && fx.reduced) return true;
+    if (TT.mq === undefined) { try { TT.mq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null; } catch (e) { TT.mq = null; } }
+    return !!(TT.mq && TT.mq.matches);
+  }
+  // The exact device scale of ctx (0: no real canvas, draw live).
+  function ttScale(ctx) { const ds = devScale(ctx); return ds > 0 && ds <= 4 ? ds : 0; }
+  // An offscreen canvas of w x h stage px at device scale q, or null (headless, a stub).
+  function ttCanvas(w, h, q) {
+    try {
+      if (!(q > 0) || typeof document === 'undefined' || !document || !document.createElement) return null;
+      const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * q)); cv.height = Math.max(1, Math.round(h * q));
+      const g = cv.getContext && cv.getContext('2d');
+      if (!g || typeof g.getTransform !== 'function') return null;
+      g.scale(q, q); g.lineJoin = 'round'; g.lineCap = 'round';
+      return { cv, g };
+    } catch (e) { return null; }
+  }
+  // A layer built at scale q, its top-left at stage (x, y) snapped to a whole device px: a 1:1 copy.
+  function ttBlit(ctx, L, x, y, q) { ctx.drawImage(L.cv, Math.round(x * q) / q, Math.round(y * q) / q, L.cv.width / q, L.cv.height / q); }
+  // A small sprite painted around its origin (ox, oy into a bw x bh box); null without a canvas.
+  function ttSpr(key, q, bw, bh, ox, oy, paint) {
+    q = q > 0 ? Math.ceil(q * 4) / 4 : 0;
+    const kk = key + ':' + q;
+    let sp = TT.spr.get(kk);
+    if (sp !== undefined) return sp;
+    sp = null;
+    if (TT.spr.size > 48) TT.spr.clear();
+    const c = ttCanvas(bw, bh, q);
+    if (c) { try { c.g.translate(ox, oy); paint(c.g, q); sp = { cv: c.cv, ox, oy, w: c.cv.width / q, h: c.cv.height / q }; } catch (e) { sp = null; } }
+    TT.spr.set(kk, sp);
+    return sp;
+  }
+  // Draw sprite sp at (x, y), or paint it live there.
+  function ttSprAt(ctx, sp, x, y, paint) {
+    if (sp) { ctx.drawImage(sp.cv, x - sp.ox, y - sp.oy, sp.w, sp.h); return; }
+    ctx.save(); ctx.translate(x, y); paint(ctx, 0); ctx.restore();
+  }
+  /* The scene's layout for a stage (w, h) and a logo at (ly, fs). The tower's size k shrinks (to 0.75) so
+     the claw always clears the subtitle; the floor sits just above the menu's first button. */
+  function ttGeo(w, h, ly, fs) {
+    const key = w + ':' + h + ':' + ly + ':' + fs;
+    if (TT.geo && TT.geo.key === key) return TT.geo;
+    const cx = w / 2, floor = Math.round(h * 0.675), sz = Math.max(13, Math.round(fs * 0.19)), subB = ly + fs * 0.72 + sz * 0.8;
+    const k = Math.max(0.75, Math.min(1, (floor - subB - 10) / 415)), cs = k * 1.15;   // cs: the claw's own scale
+    const mw = Math.round(72 * k), gap = Math.max(2, Math.round(3 * k)), hs = [100, 94, 88], pals = [[1, 0, 2], [3, 1], [0]];
+    const mach = [], rows = [];
+    let y = floor;
+    for (let i = 0; i < 3; i++) {
+      const n = 3 - i, mh = Math.round(hs[i] * k), tw = n * mw + (n - 1) * gap, x0 = Math.round(cx - tw / 2);
+      y -= mh;
+      rows.push({ x0, tw, y, mh });
+      for (let j = 0; j < n; j++) mach.push({ x: x0 + j * (mw + gap), y, w: mw, h: mh, tier: i, pal: pals[i][j], seed: i * 3 + j });
     }
-    if (!Q9_LOGO.cv) return false;
-    ctx.drawImage(Q9_LOGO.cv, 0, ly + Q9_LOGO.y0, Q9_LOGO.lw, Q9_LOGO.lh);
+    const top = y, plinth = Math.round(14 * k), pole = Math.round(30 * k), pw = Math.round(mw * 0.84);
+    const starR = 17 * k, starY = top - plinth - pole - starR + 3 * k, grabY = starY - 44 * cs, restY = grabY - 14 * k;
+    // the ledges a season's decor sits on: each row's roof where the row above leaves it bare
+    const ledges = [];
+    for (let i = 0; i < 3; i++) {
+      const R0 = rows[i], side = (R0.tw - (rows[i + 1] ? rows[i + 1].tw : pw)) / 2;
+      ledges.push({ x: R0.x0, y: R0.y, w: side }, { x: R0.x0 + R0.tw - side, y: R0.y, w: side });
+    }
+    TT.geo = { key, w, h, ly, fs, cx, floor, k, cs, mw, gap, mach, rows, top, plinth, pole, pw, starR, starY, grabY, restY, subB, ledges };
+    return TT.geo;
+  }
+  // The layout the last title frame used (a season's decor reads it), or one for a bare call.
+  function ttGeoAt(w, h, sea) {
+    const G = TT.geo;
+    if (G && G.w === w && G.h === h) return G;
+    return ttGeo(w, h, ttLogoY(h, sea), Math.min(w * 0.16, 92));
+  }
+
+  // ---- the painters (a built layer's, or live on a ctx without a canvas behind it)
+  // A soft radial blob; sy squashes it into an ellipse.
+  function ttBlob(g, x, y, r, col, a, sy) {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, rgba(col, a)); gr.addColorStop(0.5, rgba(col, a * 0.42)); gr.addColorStop(1, rgba(col, 0));
+    g.save();
+    if (sy && sy !== 1) { g.translate(0, y); g.scale(1, sy); g.translate(0, -y); }
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+    g.restore();
+  }
+  // Light rays from above the logo, fanning down over the tower.
+  function ttRays(g, G) {
+    const ox = G.cx, oy = -90, fl = G.floor;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const B = [[-0.36, 0.05, '#ff7ab8', 0.06], [-0.17, 0.065, '#b59cff', 0.075], [0.0, 0.045, '#ffd6ea', 0.06], [0.16, 0.06, '#b59cff', 0.065], [0.34, 0.045, '#8ff5ec', 0.045]];
+    for (let i = 0; i < B.length; i++) {
+      const a = B[i][0], wd = B[i][1], len = fl - oy;
+      const gr = g.createLinearGradient(0, oy, 0, fl);
+      gr.addColorStop(0, rgba(B[i][2], B[i][3])); gr.addColorStop(0.65, rgba(B[i][2], B[i][3] * 0.55)); gr.addColorStop(1, rgba(B[i][2], 0));
+      g.fillStyle = gr; g.beginPath();
+      g.moveTo(ox - 5, oy); g.lineTo(ox + 5, oy); g.lineTo(ox + Math.tan(a + wd) * len, fl); g.lineTo(ox + Math.tan(a - wd) * len, fl); g.closePath(); g.fill();
+    }
+    g.restore();
+  }
+  // A row of city blocks on the horizon: far (0, hazy, low) or near (1, darker, tall at the edges, a few neon signs).
+  function ttCity(g, w, G, near, q) {
+    const fl = G.floor, cx = G.cx;
+    const body = near ? '#150b29' : '#24163f', roof = near ? '#2a1a4a' : '#33225a';
+    const WIN = ['#ffcc55', '#ff9ccc', '#8ff5ec', '#ffe9b0'];
+    let x = near ? -14 : -8;
+    for (let i = 0; x < w + 10 && i < 60; i++) {
+      const bw = Math.round((near ? 30 : 20) + ttH(i, 11 + near) * (near ? 44 : 30));
+      const dc = Math.min(1, Math.abs(x + bw / 2 - cx) / (w / 2));
+      const hh = Math.round((near ? 26 + dc * dc * 250 : 48 + dc * 64) * (0.62 + ttH(i, 13 + near) * 0.55));
+      const y = fl - hh;
+      g.fillStyle = body; g.fillRect(x, y, bw - 2, hh + 1);
+      g.fillStyle = roof; g.fillRect(x, y, bw - 2, 2);
+      if (ttH(i, 19) < 0.45 && hh > 70) {   // a stepped top
+        const sw = Math.round(bw * 0.55), sh = Math.round(10 + ttH(i, 21) * 22), sx = x + Math.round((bw - 2 - sw) * ttH(i, 23));
+        g.fillStyle = body; g.fillRect(sx, y - sh, sw, sh + 1); g.fillStyle = roof; g.fillRect(sx, y - sh, sw, 2);
+        if (near && ttH(i, 17) < 0.6) { g.fillStyle = body; g.fillRect(sx + sw * 0.5, y - sh - 12, 2, 12); }   // an antenna
+      }
+      // windows: a sparse grid, mostly dark
+      const cw = near ? 8 : 6, ch = near ? 10 : 8;
+      for (let yy = y + 7; yy < fl - 6; yy += ch) for (let xx = x + 4; xx < x + bw - 6; xx += cw) {
+        const r = ttH(xx * 0.37 + i, yy * 0.21);
+        if (r > (near ? 0.12 : 0.1)) continue;
+        g.fillStyle = rgba(WIN[(r * 40 | 0) % 4], near ? 0.55 : 0.32); g.fillRect(xx, yy, near ? 3 : 2, near ? 4 : 3);
+      }
+      x += bw;
+    }
+    if (!near) return;
+    // two neon signs on the tall blocks at the edges: a heart (pink) and a claw (teal)
+    const sign = (sx, sy, col, kind) => {
+      g.save();
+      if (q) { g.shadowColor = col; g.shadowBlur = 10 * q; }
+      g.strokeStyle = rgba(col, 0.85); g.lineWidth = 2;
+      g.beginPath(); rrect(g, sx - 22, sy - 14, 44, 28, 6); g.stroke();
+      g.beginPath();
+      if (kind === 'heart') { g.moveTo(sx, sy + 7); g.bezierCurveTo(sx - 14, sy - 2, sx - 7, sy - 12, sx, sy - 5); g.bezierCurveTo(sx + 7, sy - 12, sx + 14, sy - 2, sx, sy + 7); }
+      else { g.moveTo(sx, sy - 9); g.lineTo(sx, sy - 3); g.moveTo(sx - 8, sy - 3); g.lineTo(sx + 8, sy - 3); g.moveTo(sx - 6, sy - 3); g.quadraticCurveTo(sx - 11, sy + 4, sx - 4, sy + 8); g.moveTo(sx + 6, sy - 3); g.quadraticCurveTo(sx + 11, sy + 4, sx + 4, sy + 8); }
+      g.stroke();
+      g.restore();
+    };
+    sign(46, fl - 196, '#ff4f9a', 'heart');
+    sign(G.w - 50, fl - 214, '#35e0d2', 'claw');
+  }
+  // One claw machine cabinet: a bevelled body, a lit marquee with bulbs, a glass box with glowing plush
+  // prizes and a little claw inside, chrome trim, the control ledge (stick, button) and a coin door.
+  function ttMachine(g, M) {
+    const P = TT_PAL[M.pal], x = M.x, y = M.y, w = M.w, h = M.h, s = w / 72;
+    // the body, lit from the upper left
+    let gr = g.createLinearGradient(x, 0, x + w, 0);
+    gr.addColorStop(0, P.l); gr.addColorStop(0.1, P.b); gr.addColorStop(0.78, P.b); gr.addColorStop(1, P.d);
+    g.beginPath(); rrect(g, x, y, w, h, 7 * s); g.fillStyle = gr; g.fill();
+    gr = g.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, 'rgba(255,255,255,0.12)'); gr.addColorStop(0.5, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(12,4,26,0.5)');
+    g.fillStyle = gr; g.fill();
+    g.lineWidth = 2.2 * s; g.strokeStyle = INK; g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1.2 * s;
+    g.beginPath(); g.moveTo(x + 3 * s, y + 9 * s); g.lineTo(x + 3 * s, y + h - 9 * s); g.moveTo(x + 8 * s, y + 2 * s); g.lineTo(x + w - 8 * s, y + 2 * s); g.stroke();
+    // the marquee and its bulbs
+    const mx = x + 5 * s, my = y + 5 * s, mW = w - 10 * s, mH = Math.round(h * 0.15);
+    ttBlob(g, x + w / 2, my + mH / 2, w * 0.62, P.g, 0.28, 0.6);
+    gr = g.createLinearGradient(0, my, 0, my + mH);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.4, P.m); gr.addColorStop(1, P.g);
+    g.beginPath(); rrect(g, mx, my, mW, mH, 4 * s); g.fillStyle = gr; g.fill(); g.lineWidth = 1.5 * s; g.strokeStyle = INK; g.stroke();
+    // the marquee's emblem: a heart, a star or a little claw
+    g.fillStyle = P.d; g.strokeStyle = P.d; g.lineWidth = 1.6 * s; g.beginPath();
+    const ex = x + w / 2, ey = my + mH / 2 + 0.5 * s, kind = M.seed % 3;
+    if (kind === 0) { g.moveTo(ex, ey + 3.5 * s); g.bezierCurveTo(ex - 7 * s, ey - 1 * s, ex - 3.5 * s, ey - 6 * s, ex, ey - 2.5 * s); g.bezierCurveTo(ex + 3.5 * s, ey - 6 * s, ex + 7 * s, ey - 1 * s, ex, ey + 3.5 * s); g.fill(); }
+    else if (kind === 1) { star(g, ex, ey, 4.6 * s, 5, 0.45); g.fill(); }
+    else { g.moveTo(ex - 4 * s, ey - 3 * s); g.lineTo(ex + 4 * s, ey - 3 * s); g.moveTo(ex - 3 * s, ey - 3 * s); g.quadraticCurveTo(ex - 6 * s, ey + 1 * s, ex - 2 * s, ey + 4 * s); g.moveTo(ex + 3 * s, ey - 3 * s); g.quadraticCurveTo(ex + 6 * s, ey + 1 * s, ex + 2 * s, ey + 4 * s); g.stroke(); }
+    for (let i = 0; i < 5; i++) {
+      const bx = mx + (i + 0.5) * mW / 5, by = my + mH + 3 * s;
+      g.fillStyle = rgba('#fff6d8', 0.35); g.beginPath(); g.arc(bx, by, 3 * s, 0, TAU); g.fill();
+      g.fillStyle = i % 2 ? '#fff6d8' : P.m; g.beginPath(); g.arc(bx, by, 1.4 * s, 0, TAU); g.fill();
+    }
+    // the glass box
+    const gx = x + 7 * s, gy = y + h * 0.27, gw = w - 14 * s, gh = h * 0.45;
+    g.save();
+    g.beginPath(); rrect(g, gx, gy, gw, gh, 4 * s); g.clip();
+    gr = g.createLinearGradient(0, gy, 0, gy + gh);
+    gr.addColorStop(0, '#180c33'); gr.addColorStop(1, shade(P.g, -0.62));
+    g.fillStyle = gr; g.fillRect(gx, gy, gw, gh);
+    ttBlob(g, gx + gw / 2, gy, gw * 0.75, P.m, 0.3, 0.8);   // the lamp inside
+    // the little claw on its cable
+    g.strokeStyle = '#c9d3e0'; g.lineWidth = 1 * s;
+    const kx = gx + gw * (0.3 + (M.seed % 4) * 0.13), ky = gy + gh * 0.3;
+    g.beginPath(); g.moveTo(kx, gy); g.lineTo(kx, ky); g.moveTo(kx - 3 * s, ky + 4 * s); g.quadraticCurveTo(kx - 4 * s, ky, kx, ky); g.quadraticCurveTo(kx + 4 * s, ky, kx + 3 * s, ky + 4 * s); g.stroke();
+    // a pile of plush prizes, each in its own glow
+    const PL = ['#ffd6e8', '#fff1c4', '#c8fff8', '#e6dcff', '#ffc0b0'];
+    for (let i = 0; i < 4; i++) {
+      const px = gx + gw * (0.16 + i * 0.23) + (ttH(M.seed, i) - 0.5) * 3 * s, py = gy + gh - 6 * s - (i % 2) * 4 * s, pr = (4.6 + ttH(M.seed, i + 5) * 1.6) * s, col = PL[(M.seed + i) % 5];
+      ttBlob(g, px, py, pr * 2.4, col, 0.3);
+      g.fillStyle = col; g.beginPath(); g.arc(px - pr * 0.6, py - pr * 0.75, pr * 0.38, 0, TAU); g.arc(px + pr * 0.6, py - pr * 0.75, pr * 0.38, 0, TAU); g.fill();
+      g.beginPath(); g.arc(px, py, pr, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.arc(px - pr * 0.35, py - pr * 0.4, pr * 0.28, 0, TAU); g.fill();
+      g.fillStyle = INK; g.beginPath(); g.arc(px - pr * 0.32, py + pr * 0.05, pr * 0.13, 0, TAU); g.arc(px + pr * 0.32, py + pr * 0.05, pr * 0.13, 0, TAU); g.fill();
+    }
+    // the glass: a diagonal reflection and a streak
+    g.fillStyle = 'rgba(255,255,255,0.10)'; g.beginPath(); g.moveTo(gx + gw * 0.2, gy); g.lineTo(gx + gw * 0.55, gy); g.lineTo(gx + gw * 0.15, gy + gh); g.lineTo(gx - gw * 0.2, gy + gh); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.32)'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(gx + gw * 0.72, gy + 3 * s); g.lineTo(gx + gw * 0.52, gy + gh * 0.45); g.stroke();
+    g.restore();
+    // chrome trim round the glass
+    g.beginPath(); rrect(g, gx, gy, gw, gh, 4 * s); g.lineWidth = 3 * s; g.strokeStyle = '#dfe6f2'; g.stroke(); g.lineWidth = 1 * s; g.strokeStyle = INK; g.stroke();
+    // the control ledge: a stick and a button
+    const cy = gy + gh + 3 * s;
+    gr = g.createLinearGradient(0, cy, 0, cy + 8 * s); gr.addColorStop(0, P.l); gr.addColorStop(1, P.b);
+    g.beginPath(); g.moveTo(x + 4 * s, cy + 8 * s); g.lineTo(x + 7 * s, cy); g.lineTo(x + w - 7 * s, cy); g.lineTo(x + w - 4 * s, cy + 8 * s); g.closePath();
+    g.fillStyle = gr; g.fill(); g.lineWidth = 1.4 * s; g.strokeStyle = INK; g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 1.6 * s; g.beginPath(); g.moveTo(x + w * 0.3, cy + 4 * s); g.lineTo(x + w * 0.27, cy - 3 * s); g.stroke();
+    g.fillStyle = '#ff5a4a'; g.beginPath(); g.arc(x + w * 0.27, cy - 3.5 * s, 2.6 * s, 0, TAU); g.fill(); g.lineWidth = 1 * s; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.arc(x + w * 0.27 - 0.8 * s, cy - 4.3 * s, 0.8 * s, 0, TAU); g.fill();
+    g.fillStyle = P.g; g.beginPath(); g.arc(x + w * 0.68, cy + 3.5 * s, 3 * s, 0, TAU); g.fill(); g.strokeStyle = INK; g.stroke();
+    // the coin door with its lit slot
+    const dy = cy + 12 * s, dh = y + h - 6 * s - dy;
+    if (dh > 4 * s) {
+      g.beginPath(); rrect(g, x + w * 0.33, dy, w * 0.34, dh, 2 * s); g.fillStyle = shade(P.b, -0.45); g.fill(); g.lineWidth = 1.2 * s; g.strokeStyle = INK; g.stroke();
+      g.strokeStyle = '#ffcc55'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(x + w * 0.5, dy + 2.5 * s); g.lineTo(x + w * 0.5, dy + Math.min(dh - 2.5 * s, 7 * s)); g.stroke();
+    }
+  }
+  // The tower: a contact shadow, the three rows (each casting a soft shadow on the roof below), the spire.
+  function ttTower(g, G) {
+    const cx = G.cx, k = G.k;
+    g.save();
+    g.fillStyle = 'rgba(4,1,10,0.5)'; g.beginPath(); g.ellipse(cx, G.floor + 1, G.rows[0].tw * 0.6, 8 * k, 0, 0, TAU); g.fill();
+    for (const M of G.mach) {
+      if (M.tier > 0 && M.x === G.rows[M.tier].x0) { const R0 = G.rows[M.tier]; g.fillStyle = 'rgba(4,1,10,0.45)'; g.beginPath(); g.ellipse(cx, R0.y + R0.mh, R0.tw * 0.56, 5 * k, 0, 0, TAU); g.fill(); }
+      ttMachine(g, M);
+    }
+    // the plinth: a little gold marquee with bulbs
+    const top = G.top, pl = G.plinth, pw = G.pw;
+    let gr = g.createLinearGradient(0, top - pl, 0, top);
+    gr.addColorStop(0, '#fff4d6'); gr.addColorStop(0.5, '#ffcc55'); gr.addColorStop(1, '#b8761c');
+    g.beginPath(); rrect(g, cx - pw / 2, top - pl, pw, pl + 3 * k, 4 * k); g.fillStyle = gr; g.fill(); g.lineWidth = 2 * k; g.strokeStyle = INK; g.stroke();
+    for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#ff4f9a'; g.beginPath(); g.arc(cx - pw / 2 + (i + 0.5) * pw / 6, top - pl / 2 + 1 * k, 1.7 * k, 0, TAU); g.fill(); }
+    // the spire: a chrome pole tapering up to the cup the star sits in, with two pink rings
+    const y0 = top - pl, y1 = G.starY + G.starR * 0.62, b0 = 7 * k, b1 = 3 * k;
+    gr = g.createLinearGradient(cx - b0, 0, cx + b0, 0);
+    gr.addColorStop(0, '#6e7892'); gr.addColorStop(0.35, '#ffffff'); gr.addColorStop(0.6, '#c9d3e0'); gr.addColorStop(1, '#4f5873');
+    g.beginPath(); g.moveTo(cx - b0, y0); g.lineTo(cx - b1, y1); g.lineTo(cx + b1, y1); g.lineTo(cx + b0, y0); g.closePath();
+    g.fillStyle = gr; g.fill(); g.lineWidth = 1.8 * k; g.strokeStyle = INK; g.stroke();
+    for (const u of [0.28, 0.66]) {
+      const yy = y0 + (y1 - y0) * u, hw = b0 + (b1 - b0) * u + 2 * k;
+      g.beginPath(); rrect(g, cx - hw, yy - 2 * k, hw * 2, 4 * k, 2 * k); g.fillStyle = '#ff4f9a'; g.fill(); g.lineWidth = 1.2 * k; g.stroke();
+    }
+    g.beginPath(); g.ellipse(cx, y1, 8 * k, 3.4 * k, 0, 0, TAU); g.fillStyle = '#dfe6f2'; g.fill(); g.lineWidth = 1.5 * k; g.strokeStyle = INK; g.stroke();
+    g.restore();
+  }
+  // The star prize on the spire's tip, faceted gold (drawn round its centre).
+  function ttStar(g, r) {
+    const gr = g.createRadialGradient(-r * 0.3, -r * 0.4, 0, 0, 0, r * 1.1);
+    gr.addColorStop(0, '#fffbe6'); gr.addColorStop(0.45, '#ffd66a'); gr.addColorStop(1, '#e6901c');
+    g.beginPath(); star(g, 0, 0, r, 5, 0.5); g.fillStyle = gr; g.fill();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * TAU / 5, b = a + Math.PI / 5;
+      g.fillStyle = i % 2 ? 'rgba(160,80,0,0.16)' : 'rgba(255,255,255,0.22)';
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * r, Math.sin(a) * r); g.lineTo(Math.cos(b) * r * 0.5, Math.sin(b) * r * 0.5); g.closePath(); g.fill();
+    }
+    g.beginPath(); star(g, 0, 0, r, 5, 0.5); g.lineWidth = Math.max(1.4, r * 0.13); g.strokeStyle = INK; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-r * 0.22, -r * 0.38, r * 0.16, r * 0.09, -0.6, 0, TAU); g.fill();
+  }
+  // The claw's head round its centre: the cable clamp, a chrome body, a visor with two eyes (shut: blink), brow LEDs, the hub.
+  function ttClawHead(g, s, blink, q) {
+    let gr = g.createLinearGradient(0, -27 * s, 0, -14 * s);
+    gr.addColorStop(0, '#9aa6bd'); gr.addColorStop(0.5, '#eef2f8'); gr.addColorStop(1, '#7c869e');
+    g.beginPath(); rrect(g, -6 * s, -27 * s, 12 * s, 13 * s, 3 * s); g.fillStyle = gr; g.fill(); g.lineWidth = 1.8 * s; g.strokeStyle = INK; g.stroke();
+    gr = g.createLinearGradient(0, -16 * s, 0, 16 * s);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.3, '#e3e9f3'); gr.addColorStop(0.75, '#a3aec4'); gr.addColorStop(1, '#68728c');
+    g.save();
+    if (q) { g.shadowColor = 'rgba(6,2,16,0.5)'; g.shadowBlur = 7 * q; g.shadowOffsetX = 3 * q; g.shadowOffsetY = 6 * q; }
+    g.beginPath(); rrect(g, -28 * s, -16 * s, 56 * s, 32 * s, 14 * s); g.fillStyle = gr; g.fill();
+    g.restore();
+    g.lineWidth = 2.4 * s; g.strokeStyle = INK; g.stroke();
+    g.beginPath(); g.moveTo(-17 * s, -13.4 * s); g.quadraticCurveTo(0, -15.6 * s, 17 * s, -13.4 * s); g.lineWidth = 1.6 * s; g.strokeStyle = 'rgba(255,255,255,0.95)'; g.stroke();
+    gr = g.createLinearGradient(0, -8 * s, 0, 9 * s); gr.addColorStop(0, '#22163f'); gr.addColorStop(1, '#0a0516');
+    g.beginPath(); rrect(g, -20 * s, -8 * s, 40 * s, 17 * s, 8 * s); g.fillStyle = gr; g.fill(); g.lineWidth = 1.4 * s; g.strokeStyle = INK; g.stroke();
+    for (const sd of [-1, 1]) {
+      const ex = sd * 8.5 * s, ey = 0.5 * s;
+      ttBlob(g, ex, ey, 9 * s, '#35e0d2', 0.45);
+      if (blink) { g.beginPath(); g.moveTo(ex - 3.6 * s, ey + 0.5 * s); g.quadraticCurveTo(ex, ey - 2.6 * s, ex + 3.6 * s, ey + 0.5 * s); g.lineWidth = 1.8 * s; g.strokeStyle = '#7ff3e8'; g.stroke(); }
+      else {
+        g.fillStyle = '#5ff0e4'; g.beginPath(); g.ellipse(ex, ey, 3.5 * s, 4.5 * s, 0, 0, TAU); g.fill();
+        g.fillStyle = '#ffffff'; g.beginPath(); g.arc(ex - 1.2 * s, ey - 1.6 * s, 1.15 * s, 0, TAU); g.fill();
+      }
+    }
+    for (let i = 0; i < 5; i++) { g.fillStyle = i % 2 ? '#ffcc55' : '#ff4f9a'; g.beginPath(); g.arc((-12 + i * 6) * s, -11.6 * s, 1.15 * s, 0, TAU); g.fill(); }
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.ellipse(-19 * s, -7 * s, 3.4 * s, 1.8 * s, -0.7, 0, TAU); g.fill();
+    gr = g.createLinearGradient(-6 * s, 0, 6 * s, 0); gr.addColorStop(0, '#7c869e'); gr.addColorStop(0.45, '#ffffff'); gr.addColorStop(1, '#68728c');
+    g.beginPath(); g.arc(0, 17 * s, 6 * s, 0, TAU); g.fillStyle = gr; g.fill(); g.lineWidth = 1.8 * s; g.strokeStyle = INK; g.stroke();
+  }
+  // A prong round its pivot, pointing down: the left one (mirror it for the right). A tapered chrome hook with a pink rubber tip.
+  function ttProng(g, s, q) {
+    g.save();
+    if (q) { g.shadowColor = 'rgba(6,2,16,0.45)'; g.shadowBlur = 6 * q; g.shadowOffsetX = 3 * q; g.shadowOffsetY = 5 * q; }
+    g.beginPath();
+    g.moveTo(5 * s, -4 * s); g.quadraticCurveTo(-14 * s, 4 * s, -17 * s, 26 * s); g.quadraticCurveTo(-18 * s, 41 * s, -5 * s, 48 * s);
+    g.lineTo(-1 * s, 42 * s); g.quadraticCurveTo(-7 * s, 36 * s, -6 * s, 26 * s); g.quadraticCurveTo(-5 * s, 12 * s, 7 * s, 5 * s);
+    g.closePath();
+    const gr = g.createLinearGradient(-17 * s, 0, 6 * s, 0);
+    gr.addColorStop(0, '#6e7892'); gr.addColorStop(0.38, '#e3e9f3'); gr.addColorStop(0.55, '#ffffff'); gr.addColorStop(1, '#8d98b0');
+    g.fillStyle = gr; g.fill();
+    g.restore();
+    g.lineWidth = 2.2 * s; g.strokeStyle = INK; g.stroke();
+    g.beginPath(); g.moveTo(-1 * s, 3 * s); g.quadraticCurveTo(-11 * s, 10 * s, -12 * s, 27 * s); g.lineWidth = 1.3 * s; g.strokeStyle = 'rgba(255,255,255,0.8)'; g.stroke();
+    g.beginPath(); g.arc(-3.5 * s, 45.5 * s, 3.2 * s, 0, TAU); g.fillStyle = '#ff4f9a'; g.fill(); g.lineWidth = 1.4 * s; g.strokeStyle = INK; g.stroke();
+  }
+  // A season's still decor, baked into the cached layer (or drawn live by its title overlay).
+  function ttSeaTint(g, w, h, id) {
+    let gr = null;
+    if (id === 'halloween') { gr = g.createLinearGradient(0, 0, 0, h * 0.7); gr.addColorStop(0, rgba('#3a1260', 0.45)); gr.addColorStop(0.8, rgba('#ff8a1f', 0.12)); gr.addColorStop(1, rgba('#ff8a1f', 0)); g.fillStyle = gr; g.fillRect(0, 0, w, h * 0.7); }   // (round 20: fades out at its foot, no hard edge over the city)
+    else if (id === 'winter') { gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, rgba('#1a3a7a', 0.3)); gr.addColorStop(0.55, rgba('#8dd8ff', 0.08)); gr.addColorStop(1, rgba('#ffffff', 0.06)); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
+  }
+  function ttSeaStill(g, w, h, G, id, t, under) {
+    if (id === 'halloween') {
+      if (under) { seaMoon(g, w * 0.82, G.starY - 2, 38, t); return; }
+      seaWeb(g, 0, 0, 96, 0, 0.45); seaWeb(g, w, 0, 70, 1, 0.35);
+    } else if (id === 'winter') {
+      if (under) { winAurora(g, 0, G.starY - 60, w, 230, t); return; }
+      for (const L of G.ledges) seaSnowCap(g, L.x - 2, L.y, L.w + 4, 6 * G.k);
+      seaSnowCap(g, -4, G.floor - 5, w + 8, 12);
+      for (const [fx0, fy0, k] of [[0, 0, 0], [w, 0, 1], [w, h, 2], [0, h, 3]]) { seaPuff(g, fx0, fy0, 120, '#e8fbff', 0.28); winFerns(g, fx0, fy0, k, 90, 0.4); }
+    }
+  }
+  /* The still scene: sky, nebulae, stars, rays, the city, the floor (grid, the tower's reflection, a pool of
+     light), the tower, a season's tint and still decor, the vignette. q > 0: a layer being built. */
+  function ttPaintScene(g, w, h, G, q, sea) {
+    const cx = G.cx, fl = G.floor;
+    g.save();
+    let gr = g.createLinearGradient(0, 0, 0, fl);
+    gr.addColorStop(0, '#0a0518'); gr.addColorStop(0.45, '#160a2c'); gr.addColorStop(0.8, '#2a1145'); gr.addColorStop(1, '#47195b');
+    g.fillStyle = gr; g.fillRect(0, 0, w, fl + 1);
+    ttBlob(g, w * 0.14, h * 0.2, 250, '#ff4f9a', 0.10);
+    ttBlob(g, w * 0.9, h * 0.33, 230, '#35e0d2', 0.07);
+    ttBlob(g, cx, h * 0.08, 320, '#7a5cff', 0.12);
+    g.fillStyle = '#ffffff';
+    for (let i = 0; i < 64; i++) {
+      g.globalAlpha = 0.16 + ttH(i, 4) * 0.5;
+      g.beginPath(); g.arc(ttH(i, 1) * w, ttH(i, 2) * (fl - 150), 0.5 + ttH(i, 3) * 1.05, 0, TAU); g.fill();
+    }
+    g.globalAlpha = 1;
+    if (sea) ttSeaStill(g, w, h, G, sea, 0, true);   // the moon, the aurora: behind the city and the tower
+    ttRays(g, G);
+    ttCity(g, w, G, 0, q);
+    ttBlob(g, cx, fl, 300, '#ff4f9a', 0.22, 0.35);   // the horizon's haze
+    ttBlob(g, cx, G.top + 70, 210, '#ff4f9a', 0.13);   // a soft halo behind the tower
+    ttCity(g, w, G, 1, q);
+    // the floor: a glossy dark with a faint grid running toward the tower
+    gr = g.createLinearGradient(0, fl, 0, h);
+    gr.addColorStop(0, '#2b1342'); gr.addColorStop(0.2, '#190b2d'); gr.addColorStop(1, '#0a0515');
+    g.fillStyle = gr; g.fillRect(0, fl, w, h - fl);
+    g.save();
+    g.beginPath(); g.rect(0, fl, w, h - fl); g.clip();
+    const vy = fl - 110, d = (fl - vy) / (h - vy);
+    g.strokeStyle = rgba('#b59cff', 0.09); g.lineWidth = 1; g.beginPath();
+    for (let i = -10; i <= 10; i++) { const bx = cx + i * 64; g.moveTo(cx + (bx - cx) * d, fl); g.lineTo(bx, h); }
+    for (let i = 1; i <= 8; i++) { const u = i / 8, yy = fl + (h - fl) * u * u; g.moveTo(0, yy); g.lineTo(w, yy); }
+    g.stroke();
+    // the tower mirrored in the floor, fading out (a layer being built only)
+    if (q) {
+      const c = ttCanvas(w, h, q);
+      if (c) {
+        ttTower(c.g, G);
+        c.g.globalCompositeOperation = 'destination-in';
+        const fg = c.g.createLinearGradient(0, fl - 170, 0, fl);
+        fg.addColorStop(0, 'rgba(0,0,0,0)'); fg.addColorStop(1, 'rgba(0,0,0,1)');
+        c.g.fillStyle = fg; c.g.fillRect(0, 0, w, h);
+        g.save(); g.globalAlpha = 0.3; g.translate(0, fl * 2); g.scale(1, -1); g.drawImage(c.cv, 0, 0, w, h); g.restore();
+      }
+    }
+    ttBlob(g, cx, fl + 6, 250, '#ff4f9a', 0.34, 0.2);   // the pool of light the tower stands in
+    ttBlob(g, cx, fl + 4, 130, '#ffcc55', 0.14, 0.26);
+    gr = g.createLinearGradient(0, fl, 0, h);   // the floor melts into the dark under the menu
+    gr.addColorStop(0, 'rgba(10,5,21,0)'); gr.addColorStop(0.45, 'rgba(10,5,21,0.35)'); gr.addColorStop(1, 'rgba(10,5,21,0.85)');
+    g.fillStyle = gr; g.fillRect(0, fl, w, h - fl);
+    g.restore();
+    g.fillStyle = rgba('#ff7ab8', 0.35); g.fillRect(0, fl, w, 1.2);   // the horizon's edge
+    ttTower(g, G);
+    if (sea) { ttSeaTint(g, w, h, sea); ttSeaStill(g, w, h, G, sea, 0, false); }
+    // the vignette
+    g.save(); g.translate(cx, h * 0.45); g.scale(1, h / w);
+    gr = g.createRadialGradient(0, 0, w * 0.32, 0, 0, w * 0.78);
+    gr.addColorStop(0, 'rgba(6,2,14,0)'); gr.addColorStop(1, 'rgba(6,2,14,0.6)');
+    g.fillStyle = gr; g.fillRect(-w, -w, w * 2, w * 2);
+    g.restore();
+    g.restore();
+  }
+  // The cached still scene for this layout, device scale and season (null: draw it live).
+  function ttBack(w, h, G, q, sea) {
+    const key = G.key + ':' + q + ':' + sea, B = TT.back;
+    if (B && B.key === key) return B.L;
+    let L = ttCanvas(w, h, q);
+    if (L) { try { ttPaintScene(L.g, w, h, G, q, sea); } catch (e) { L = null; } }
+    TT.back = { key, L };
+    return L;
+  }
+  // The few things that move: bokeh, the marquees' glow, the star, the floating prizes, the claw.
+  const TT_BOKEH = [[58, 128, 22, 0], [478, 96, 15, 1], [96, 286, 11, 2], [506, 250, 24, 0], [30, 452, 17, 1], [470, 500, 13, 2], [180, 70, 9, 1], [372, 58, 12, 0]];
+  const TT_BOKC = ['#ff6fae', '#b59cff', '#ffd27a'];
+  const TT_PRIZE = [['heart', 74, 330, 0.95, -0.22], ['potion', 134, 476, 0.72, 0.18], ['gem', 470, 545, 0.88, 0.24], ['coin', 424, 466, 0.64, -0.12], ['clover', 54, 588, 0.58, 0.3]];
+  function ttLive(ctx, w, h, G, t, calm, q) {
+    const cx = G.cx, k = G.k, tt = calm ? 0 : t;
+    // bokeh: soft discs drifting slowly (added light)
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < TT_BOKEH.length; i++) {
+      const b = TT_BOKEH[i], col = TT_BOKC[b[3]];
+      const sp = ttSpr('bok' + b[3], q, 64, 64, 32, 32, (g) => {
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, 31);
+        gr.addColorStop(0, rgba(col, 0.2)); gr.addColorStop(0.72, rgba(col, 0.34)); gr.addColorStop(0.88, rgba(col, 0.3)); gr.addColorStop(1, rgba(col, 0));
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 31, 0, TAU); g.fill();
+      });
+      if (!sp) continue;
+      const bx = b[0] + Math.sin(tt * 0.09 + i * 1.7) * 14, by = b[1] + Math.cos(tt * 0.07 + i * 2.3) * 10, r = b[2];
+      ctx.globalAlpha = 0.45 + 0.25 * Math.sin(tt * 0.5 + i * 1.3);
+      ctx.drawImage(sp.cv, bx - r, by - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    // the marquees glow in a slow wave up the tower
+    for (const M of G.mach) glow(ctx, M.x + M.w / 2, M.y + 5 * k + M.h * 0.075, M.w * 0.6, TT_PAL[M.pal].g, calm ? 0.16 : 0.08 + 0.2 * Math.max(0, Math.sin(t * 0.9 - M.seed * 0.7)));
+    // the claw's pose: rests and sways; every 11 s it dips, grips the star, tugs and lets go
+    let dy = 0, open = 0.34;
+    if (!calm) {
+      const u = (t + 4) % 11, ease = (x) => x * x * (3 - 2 * x);
+      if (u < 1.5) { const e = ease(u / 1.5); dy = e; open = 0.34 + 0.14 * e; }
+      else if (u < 2.3) { dy = 1; open = 0.48 - 0.42 * ease((u - 1.5) / 0.8); }
+      else if (u < 2.8) { dy = 1 - 0.3 * Math.sin(Math.PI * (u - 2.3) / 0.5); open = 0.06; }
+      else if (u < 4.3) { const e = ease((u - 2.8) / 1.5); dy = 1 - e; open = 0.06 + 0.28 * e; }
+    }
+    const grip = !calm && dy > 0.9 && open < 0.2;
+    // the star: its glow (the scene's one focal light) and a gentle bob
+    const sy = G.starY + (calm ? 0 : Math.sin(t * 1.3) * 1.2 * (1 - dy));
+    glow(ctx, cx, sy, 120 * k, '#ff4f9a', 0.16 + 0.05 * Math.sin(t * 1.1));
+    glow(ctx, cx, sy, 56 * k, '#ffcc55', 0.42 + 0.12 * Math.sin(t * 1.1) + (grip ? 0.2 : 0));
+    const sr = G.starR, ssp = ttSpr('star' + sr, q, sr * 2 + 8, sr * 2 + 8, sr + 4, sr + 4, (g) => ttStar(g, sr));
+    ttSprAt(ctx, ssp, cx, sy, (g) => ttStar(g, sr));
+    if (!calm) glint(ctx, cx + sr * 0.4, sy - sr * 0.45, 16 * k, t * 0.5, 3);   // a glint now and then
+    // the floating prizes
+    for (let i = 0; i < TT_PRIZE.length; i++) {
+      const p = TT_PRIZE[i];
+      if (!IA[p[0]] || !ITEM_DEFAULT[p[0]]) continue;
+      const px = p[1] + Math.sin(tt * 0.37 + i * 2.1) * 4, py = p[2] + Math.sin(tt * 0.6 + i * 1.3) * 7, rot = p[4] + Math.sin(tt * 0.45 + i) * 0.16;
+      ctx.save(); ctx.translate(px, py); ctx.rotate(rot); ctx.scale(p[3], p[3]);
+      if (p[3] < 0.75) ctx.globalAlpha = 0.8;
+      const sp = q9TitleSpr(ctx, p[0]);   // PERF (round 9): the prize's cached sprite
+      if (sp) ctx.drawImage(sp.cv, -sp.s / 2, -sp.s / 2, sp.s, sp.s);
+      else IA[p[0]](ctx, 30, 30, ITEM_DEFAULT[p[0]][0], ITEM_DEFAULT[p[0]][1]);
+      ctx.restore();
+    }
+    // the claw on its cable (it hangs from above the logo and passes behind it)
+    const hy0 = G.restY + (G.grabY - G.restY) * dy + (calm ? 0 : Math.sin(t * 0.9) * 1.5 * (1 - dy));
+    const a = calm ? 0 : Math.sin(t * 0.55) * 0.03 * (1 - dy), L = hy0 + 30;
+    const hx = cx + Math.sin(a) * L, hy = -30 + Math.cos(a) * L;
+    const c = G.cs, mx = hx - Math.sin(a) * 26 * c, my = hy - Math.cos(a) * 26 * c;
+    ctx.beginPath(); ctx.moveTo(cx, -30); ctx.lineTo(mx, my);
+    S(ctx, INK, 5 * c); ctx.stroke(); S(ctx, '#9aa6bd', 2.8 * c); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 0.7 * c, -30); ctx.lineTo(mx - 0.7 * c, my); S(ctx, 'rgba(255,255,255,0.55)', 1 * c); ctx.stroke();
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(a);
+    const pp = ttSpr('prong' + c, q, 46 * c, 66 * c, 32 * c, 8 * c, (g, qq) => ttProng(g, c, qq));
+    for (const sd of [-1, 1]) {
+      ctx.save(); ctx.translate(sd * 10 * c, 17 * c); if (sd > 0) ctx.scale(-1, 1); ctx.rotate(open);
+      ttSprAt(ctx, pp, 0, 0, (g) => ttProng(g, c, 0));
+      ctx.restore();
+    }
+    const blink = !calm && (t % 4.7) < 0.14;
+    const hd = ttSpr((blink ? 'headB' : 'head') + c, q, 74 * c, 66 * c, 34 * c, 30 * c, (g, qq) => ttClawHead(g, c, blink, qq));
+    ttSprAt(ctx, hd, 0, 0, (g) => ttClawHead(g, c, blink, 0));
+    if (Q9_TL.baked === 'winter') ttHat(ctx, c, t);   // WIN: a Santa hat, under the logo's subtitle (winTitle draws it when nothing is cached)
+    ctx.restore();
+    TT.claw.x = hx; TT.claw.y = hy; TT.claw.a = a; TT.claw.s = c;
+  }
+  // The claw's Santa hat, cocked to one side (in the claw's own frame).
+  function ttHat(ctx, c, t) { ctx.save(); ctx.translate(16 * c, -11 * c); ctx.rotate(0.95); seaHatDraw(ctx, 'santa', 0, 0, 17 * c, t); ctx.restore(); }
+  /* The logo: glossy candy lettering, centred on (cx, ly) at fs px, and the subtitle capsule under it.
+     q > 0: a layer being built (a drop shadow, a soft rim light, the gloss band on a scratch canvas). */
+  function ttLogoArt(g, w, cx, ly, fs, q, sub, y0, lh) {
+    const W9 = 'CLAWSPIRE', d = Math.max(3, Math.round(fs * 0.095));
+    g.font = '900 ' + fs + 'px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    // a soft pink rim halo with a dark drop shadow under it
+    g.save();
+    if (q) { g.shadowColor = 'rgba(4,1,12,0.85)'; g.shadowBlur = fs * 0.2 * q; g.shadowOffsetY = fs * 0.12 * q; }
+    g.strokeStyle = rgba('#ff4f9a', 0.3); g.lineWidth = fs * 0.3; g.strokeText(W9, cx, ly + d * 0.5);
+    g.restore();
+    // the ink outline round the whole extruded body
+    g.strokeStyle = INK; g.lineWidth = fs * 0.16;
+    for (let i = 0; i <= d; i += Math.max(1, Math.ceil(d / 3))) g.strokeText(W9, cx, ly + i);
+    g.strokeText(W9, cx, ly + d);
+    // the extrusion, darker toward the back
+    for (let i = d; i >= 1; i--) { g.fillStyle = i > d * 0.6 ? '#5e0e3d' : '#a3236b'; g.fillText(W9, cx, ly + i); }
+    // a teal rim light along the letters' lower edge
+    g.fillStyle = '#6ff3e8'; g.fillText(W9, cx, ly + Math.max(1.5, fs * 0.022));
+    // the candy face
+    const top = ly - fs * 0.38, bot = ly + fs * 0.36;
+    const face = (f) => {
+      const gr = f.createLinearGradient(0, top, 0, bot);
+      gr.addColorStop(0, '#ffe6f2'); gr.addColorStop(0.42, '#ff9cc8'); gr.addColorStop(0.55, '#ff5fa6'); gr.addColorStop(1, '#df2f7c');
+      f.fillStyle = gr; f.fillText(W9, cx, ly);
+    };
+    const gl = q ? ttCanvas(w, lh, q) : null;
+    if (gl) {
+      const f = gl.g; f.translate(0, -y0);
+      f.font = g.font; f.textAlign = 'center'; f.textBaseline = 'middle';
+      face(f);
+      // the hard gloss band over the upper half, and a shine on each letter
+      f.globalCompositeOperation = 'source-atop';
+      const gg = f.createLinearGradient(0, top - 4, 0, ly - fs * 0.04);
+      gg.addColorStop(0, 'rgba(255,255,255,0.78)'); gg.addColorStop(1, 'rgba(255,255,255,0.22)');
+      f.fillStyle = gg; f.fillRect(0, top - fs * 0.2, w, ly - fs * 0.04 - (top - fs * 0.2));
+      let tw = 0;
+      try { tw = f.measureText(W9).width || 0; } catch (e) { tw = 0; }
+      f.fillStyle = 'rgba(255,255,255,0.95)';
+      for (let i = 0; i < W9.length && tw > 0; i++) {
+        const x0 = cx - tw / 2 + f.measureText(W9.slice(0, i)).width, lw = f.measureText(W9[i]).width;
+        f.beginPath(); f.ellipse(x0 + lw * 0.3, top + fs * 0.1, Math.max(1.5, fs * 0.05), Math.max(1, fs * 0.028), -0.5, 0, TAU); f.fill();
+      }
+      f.globalCompositeOperation = 'source-over';
+      g.drawImage(gl.cv, 0, y0, gl.cv.width / q, gl.cv.height / q);
+    } else {
+      face(g);
+      g.save(); g.beginPath(); g.rect(0, top - fs * 0.2, w, ly - fs * 0.04 - (top - fs * 0.2)); g.clip();
+      g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillText(W9, cx, ly);
+      g.restore();
+    }
+    // two sparkles
+    if (q) { g.save(); g.shadowColor = '#ffffff'; g.shadowBlur = 6 * q; }
+    g.fillStyle = '#ffffff';
+    g.beginPath(); star(g, cx - fs * 2.05, top + fs * 0.02, fs * 0.09, 4, 0.28); star(g, cx + fs * 1.62, top - fs * 0.04, fs * 0.065, 4, 0.28); g.fill();
+    if (q) g.restore();
+    // the subtitle in a capsule
+    const sz = Math.max(13, Math.round(fs * 0.19)), sy = ly + fs * 0.72;
+    g.font = '800 ' + sz + 'px ' + FONT;
+    const ls = 'letterSpacing' in g;
+    if (ls) g.letterSpacing = Math.round(sz * 0.06) + 'px';
+    let sw = 0;
+    try { sw = g.measureText(sub).width || 0; } catch (e) { sw = 0; }
+    if (!(sw > 0)) sw = sub.length * sz * 0.55;
+    const cw = Math.min(w - 24, sw + sz * 1.9), chh = sz * 1.6;
+    g.beginPath(); rrect(g, cx - cw / 2, sy - chh / 2, cw, chh, chh / 2);
+    g.fillStyle = 'rgba(14,7,30,0.82)'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = rgba('#35e0d2', 0.5); g.stroke();
+    g.fillStyle = '#ffcc55'; g.beginPath(); star(g, cx - cw / 2 + sz * 0.55, sy, sz * 0.2, 4, 0.4); star(g, cx + cw / 2 - sz * 0.55, sy, sz * 0.2, 4, 0.4); g.fill();
+    g.fillStyle = '#b4fbf4'; g.fillText(sub, cx, sy + 0.5);
+    if (ls) g.letterSpacing = '0px';
+  }
+  // Blit the cached logo layer (built on a change of size, place, scale or language) plus its sheen; false: draw it live.
+  function ttLogo(ctx, w, cx, ly, fs, q, t, calm) {
+    if (!q) return false;
+    const sub = i18nTr('a claw machine roguelike'), sz = Math.max(13, Math.round(fs * 0.19));
+    const y0 = Math.floor(ly - fs * 0.82), lh = Math.ceil(ly + fs * 0.72 + sz * 0.8 + 10 - y0);
+    const key = w + ':' + cx + ':' + ly + ':' + fs + ':' + q + ':' + sub, L = Q9_LOGO;
+    if (L.key !== key) {
+      L.key = key; L.cv = null; L.mask = null; L.band = null; L.scratch = null;
+      const c = ttCanvas(w, lh, q);
+      if (c) {
+        try {
+          c.g.translate(0, -y0); ttLogoArt(c.g, w, cx, ly, fs, q, sub, y0, lh);
+          L.cv = c.cv; L.y0 = y0 - ly; L.lw = w; L.lh = lh; L.q = q;
+          // the sheen: a mask of the letters' faces, a slanted band, a scratch canvas to cut one by the other
+          const m = ttCanvas(w, lh, q), b = ttCanvas(fs * 1.6, lh, q), s = ttCanvas(w, lh, q);
+          if (m && b && s) {
+            m.g.translate(0, -y0); m.g.font = '900 ' + fs + 'px ' + FONT; m.g.textAlign = 'center'; m.g.textBaseline = 'middle'; m.g.fillStyle = '#ffffff'; m.g.fillText('CLAWSPIRE', cx, ly);
+            const bw = fs * 1.6, gr = b.g.createLinearGradient(0, 0, bw, 0);
+            gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.75)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+            b.g.fillStyle = gr; b.g.beginPath(); b.g.moveTo(bw * 0.35, 0); b.g.lineTo(bw, 0); b.g.lineTo(bw * 0.65, lh); b.g.lineTo(0, lh); b.g.closePath(); b.g.fill();
+            L.mask = m; L.band = b; L.scratch = s; L.bw = bw;
+          }
+        } catch (e) { L.cv = null; }
+      }
+    }
+    if (!L.cv) return false;
+    ttBlit(ctx, L, 0, ly + L.y0, q);
+    // the sheen sweeps the letters every 7.5 s (never in calm)
+    const u = ((t + 2.5) % 7.5) / 1.4;
+    if (!calm && u < 1 && L.scratch) {
+      const e = u * u * (3 - 2 * u), bx = -L.bw + e * (L.lw + L.bw * 2), sg = L.scratch.g;
+      sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, L.scratch.cv.width, L.scratch.cv.height);
+      sg.drawImage(L.band.cv, Math.round(bx * q), 0);
+      sg.globalCompositeOperation = 'destination-in'; sg.drawImage(L.mask.cv, 0, 0);
+      sg.globalCompositeOperation = 'source-over';
+      ctx.save(); ctx.globalAlpha = 0.9 * Math.sin(Math.PI * u); ttBlit(ctx, L.scratch, 0, ly + L.y0, q); ctx.restore();
+    }
     return true;
   }
   function title(ctx, w, h, t) {
@@ -4464,66 +5033,11 @@ const RENDER = (() => {
       w = w || 540; h = h || 960; t = t || 0;
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       const cx = w / 2, timg = artImg('title', 'title'), limg = artImg('logo', 'logo');
-      // art/title.png replaces the drawn scene, art/logo.png the drawn logo
-      if (timg) blitCover(ctx, timg, 0, 0, w, h);
-      else {
-        F(ctx, '#0b0616'); ctx.fillRect(0, 0, w, h);
-        F(ctx, rgba(PAL.pink, 0.08)); ctx.fillRect(0, h * 0.5, w, h * 0.5);
-        // stars
-        F(ctx, rgba('#ffffff', 0.5)); ctx.beginPath(); for (let i = 0; i < 40; i++) circ(ctx, (i * 131 + 17) % w, (i * 89 + 11) % (h * 0.6), 1 + (i % 3) * 0.4); ctx.fill();
-        // the tower: stacked cabinets narrowing upward
-        const base = h * 0.86;
-        for (let i = 0; i < 7; i++) {
-          const tw = w * (0.62 - i * 0.06), th = h * 0.075, ty = base - (i + 1) * th, neon = [PAL.pink, PAL.cyan, PAL.gold, PAL.lime][i % 4];
-          tone(ctx, c => rrect(c, cx - tw / 2, ty, tw, th, 6), '#1d1233', cx, ty + th / 2, tw / 2, { dark: -0.35, spec: false });
-          const n = Math.max(1, Math.floor(tw / 44));
-          for (let j = 0; j < n; j++) {
-            const wx = cx - tw / 2 + 10 + j * (tw - 20) / n, on = Math.floor(t * 3 + i + j) % 3 !== 0;
-            ctx.beginPath(); rrect(ctx, wx, ty + 8, (tw - 20) / n - 8, th - 16, 3);
-            F(ctx, on ? rgba(neon, 0.55) : '#0a0614'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
-          }
-          ctx.beginPath(); rrect(ctx, cx - tw / 2, ty, tw, th, 6); S(ctx, rgba(neon, 0.5), 2); ctx.stroke();
-        }
-        glow(ctx, cx, base - h * 0.55, w * 0.35, PAL.pink, 0.35);
-        // ground
-        F(ctx, '#05030a'); ctx.fillRect(0, base, w, h - base);
-        ctx.beginPath(); ctx.moveTo(0, base); ctx.lineTo(w, base); S(ctx, PAL.pink, 2); ctx.stroke();
-        // rain of tiny prizes
-        if (!titlePrizes) {
-          const r = U.rng(99); titlePrizes = [];
-          for (let i = 0; i < 36; i++) titlePrizes.push({ k: ITEM_KEYS[r.int(0, ITEM_KEYS.length - 1)], x: r(), sp: 0.04 + r() * 0.08, ph: r() * 10, s: 0.35 + r() * 0.35, rot: r() * 3 });
-        }
-        for (const p of titlePrizes) {
-          const py = ((p.ph + t * p.sp) % 1) * h * 1.1 - h * 0.05;
-          ctx.save(); ctx.translate(p.x * w, py); ctx.rotate(p.rot + t * 0.8); ctx.scale(p.s, p.s); ctx.globalAlpha = 0.75;
-          const sp = q9TitleSpr(ctx, p.k);   // PERF (round 9): the prize's cached sprite
-          if (sp) ctx.drawImage(sp.cv, -sp.s / 2, -sp.s / 2, sp.s, sp.s);
-          else IA[p.k](ctx, 30, 30, ITEM_DEFAULT[p.k][0], ITEM_DEFAULT[p.k][1]);
-          ctx.restore();
-        }
-        // giant claw descending
-        const cy = h * 0.06 + Math.sin(t * 0.8) * 10, sw = Math.sin(t * 0.8) * 0.05;
-        ctx.beginPath(); ctx.moveTo(cx, -10); ctx.lineTo(cx + Math.sin(sw) * 60, cy + 60); S(ctx, INK, 12); ctx.stroke(); S(ctx, '#8e98a8', 6); ctx.stroke();
-        ctx.save(); ctx.translate(cx + Math.sin(sw) * 60, cy + 60); ctx.rotate(sw); ctx.scale(2.6, 2.6);
-        tone(ctx, c => rrect(c, -18, -8, 36, 20, 6), CHROME, 0, 2, 18, { dark: -0.45 });
-        const op = 0.4 + Math.sin(t * 0.8) * 0.12;
-        for (const d of [-1, 1]) {
-          ctx.save(); ctx.translate(d * 14, 10); ctx.rotate(d * op);
-          tone(ctx, c => { c.moveTo(-6, 0); c.lineTo(6, 0); c.quadraticCurveTo(d * 10, 26, d * 5, 44); c.lineTo(d * 2, 43); c.quadraticCurveTo(d * 3, 22, -6, 8); c.closePath(); }, CHROME, d * 3, 20, 18, { dark: -0.45, spec: false });
-          ctx.restore();
-        }
-        tone(ctx, c => circ(c, 0, 2, 5), '#8e98a8', 0, 2, 5, { dark: -0.4, ol: 2 });
-        ctx.restore();
-      }
-      // logo (TITLE, round 9: the game lifts it clear of a tall menu through Q9_TL.ly)
-      const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5;
+      const calm = ttCalm(), q = FLAT ? 0 : ttScale(ctx), sea = Q9_TL.sea || '';
+      // the logo's place (round 9: the game lifts it clear of a tall menu; round 20: high in the sky) and size
+      const ly = ttLogoY(h);
       let fs = Math.min(w * 0.16, 92);
-      let subY = ly + fs * 0.72;
-      if (limg) {
-        const lw = Math.min(w * 0.9, 486), lh = lw * imH(limg) / imW(limg);
-        blit(ctx, limg, cx - lw / 2, ly - lh / 2, lw, lh);
-        subY = ly + lh / 2 + 12;
-      } else {
+      if (!limg) {
         // fit the word, its outer glow stroke (fs x 0.3) included, inside the stage with a
         // margin: at 92 px bold it ran past both edges, cutting the C and the E (QA round 7)
         const LOGO_M = 14;
@@ -4537,10 +5051,23 @@ const RENDER = (() => {
           fit = { w: tw0 > 0 ? w : -1, fs0: fs, fs: tw0 > 0 && tw0 + fs * 0.3 > w - LOGO_M * 2 ? Math.max(24, Math.floor(fs * (w - LOGO_M * 2) / (tw0 + fs * 0.3))) : fs };
           try { Q9_FIT.set(ctx, fit); } catch (e) { /* a ctx that cannot be a key: measure every time */ }
         }
-        if (fit.fs !== fs) { fs = fit.fs; subY = ly + fs * 0.72; }
-        if (!q9Logo(ctx, w, cx, ly, fs)) q9LogoArt(ctx, w, cx, ly, fs);   // PERF (round 9): a cached sprite when there is a real canvas
+        fs = fit.fs;
       }
-      txt(ctx, 'a claw machine roguelike', cx, subY, Math.max(12, fs * 0.2), PAL.cyan, true, 'center', INK);
+      const G = ttGeo(w, h, ly, fs);
+      Q9_TL.baked = '';
+      // art/title.png replaces the drawn scene, art/logo.png the drawn logo
+      if (timg) blitCover(ctx, timg, 0, 0, w, h);
+      else {
+        const B = q ? ttBack(w, h, G, q, sea) : null;   // TITLE ART (round 20): the still scene, cached
+        if (B) { ttBlit(ctx, B, 0, 0, q); Q9_TL.baked = sea; }
+        else ttPaintScene(ctx, w, h, G, 0, '');
+        ttLive(ctx, w, h, G, t, calm, q);
+      }
+      if (limg) {
+        const lw = Math.min(w * 0.9, 486), lh = lw * imH(limg) / imW(limg);
+        blit(ctx, limg, cx - lw / 2, ly - lh / 2, lw, lh);
+        txt(ctx, 'a claw machine roguelike', cx, ly + lh / 2 + 12, Math.max(12, fs * 0.2), PAL.cyan, true, 'center', INK);
+      } else if (!ttLogo(ctx, w, cx, ly, fs, q, t, calm)) ttLogoArt(ctx, w, cx, ly, fs, 0, i18nTr('a claw machine roguelike'), 0, 0);
     } catch (e) { /* */ }
     ctx.restore();
   }
@@ -10206,26 +10733,24 @@ const RENDER = (() => {
   }
 
   // ---- the title: a spooky dusk (or a snowfall) over the tower, a banner over the logo
-  const SEA_TIERS = [0, 1, 2, 6];   // the tower's tiers clear of the logo and its banner (3 to 5 sit behind the words)
+  // (TITLE ART round 20: placed on the new scene's layout; the still parts are baked into its cached layer when Q9_TL.baked says so)
   function seaTitle(ctx, w, h, t, id) {
     if (id !== 'halloween' && id !== 'winter') return;
     ctx.save();
     try {
       w = w || 540; h = h || 960; t = t || 0;
-      const base = h * 0.86, th = h * 0.075, cx = w / 2;
+      const G = ttGeoAt(w, h, true), cx = w / 2, k = G.k, baked = Q9_TL.baked === id;
       if (id === 'halloween') {
-        try { const g = ctx.createLinearGradient(0, 0, 0, h * 0.6); g.addColorStop(0, rgba('#3a1260', 0.45)); g.addColorStop(1, rgba('#ff8a1f', 0.12)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h * 0.6); } catch (e) { /* stub */ }
-        seaMoon(ctx, w * 0.8, h * 0.17, 46, t);
-        for (let i = 0; i < 7; i++) {
-          const a = t * (0.35 + seaH(i, 1) * 0.3) + i * 0.9, rx = w * (0.18 + seaH(i, 2) * 0.28), ry = h * (0.05 + seaH(i, 3) * 0.06);
-          seaBat(ctx, w * 0.62 + Math.cos(a) * rx, h * 0.2 + Math.sin(a * 1.3) * ry, 7 + seaH(i, 4) * 6, t, i);
+        if (!baked) { try { ttSeaTint(ctx, w, h, id); } catch (e) { /* stub */ } ttSeaStill(ctx, w, h, G, id, t, true); ttSeaStill(ctx, w, h, G, id, t, false); }
+        for (let i = 0; i < 6; i++) {
+          const a = t * (0.3 + seaH(i, 1) * 0.25) + i * 1.05, rx = w * (0.2 + seaH(i, 2) * 0.2), ry = 22 + seaH(i, 3) * 36;
+          seaBat(ctx, cx + 16 + Math.cos(a) * rx, G.starY + 24 + Math.sin(a * 1.3) * ry, 6 + seaH(i, 4) * 5, t, i);
         }
-        seaWeb(ctx, 0, 0, 96, 0, 0.45); seaWeb(ctx, w, 0, 70, 1, 0.35);
         seaSpider(ctx, 58, 0, 60, t, 4);
-        // the tower's windows glow orange, a pumpkin on every other tier
-        for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaPumpkin(ctx, cx + tw / 2 - 4, ty - 7, 9 - i * 0.6, t, true, i); }
+        // a jack-o'-lantern on three of the tower's bare ledges
+        for (const i of [0, 3, 4]) { const L = G.ledges[i]; seaPumpkin(ctx, L.x + L.w * 0.5, L.y - 7 * k, 8 * k, t, true, i); }
         // a banner over the logo (which the game may lift: Q9_TL, round 9)
-        const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
+        const ly = ttLogoY(h, true), by = ly - Math.min(w * 0.16, 92) * 0.86, base = G.floor;
         glow(ctx, cx, by, 120, SEA_OR, 0.25 + 0.08 * Math.sin(t * 3));
         const wob = Math.sin(t * 2) * 2;
         txt(ctx, 'CLAW-O-WEEN', cx, by + wob, 30, SEA_OR, true, 'center', '#2a0a3a');
@@ -10233,9 +10758,9 @@ const RENDER = (() => {
         for (let i = 0; i < 9; i++) { const dx = cx - 92 + i * 23, dl = 5 + seaH(i, 6) * 10 + ((t * 0.7 + i * 0.3) % 1) * 5; ctx.moveTo(dx - 2.5, by + 10 + wob); ctx.lineTo(dx + 2.5, by + 10 + wob); ctx.lineTo(dx, by + 10 + wob + dl); ctx.closePath(); }
         ctx.fill();
         // pumpkins on the ground, fog rolling over it
-        const P = [[w * 0.1, 18, 0], [w * 0.22, 12, 1], [w * 0.8, 20, 2], [w * 0.91, 13, 3], [w * 0.68, 10, 4]];
-        for (const [px, pr, s] of P) seaPumpkin(ctx, px, base - pr * 0.9, pr, t, true, s);
-        seaFog(ctx, 0, base - 60, w, 150, t, 7, 0.22, '#c8b8e8');
+        const P = [[w * 0.1, 17, 0], [w * 0.2, 11, 1], [w * 0.82, 18, 2], [w * 0.92, 12, 3]];
+        for (const [px, pr, s] of P) seaPumpkin(ctx, px, base - pr * 0.85, pr, t, true, s);
+        seaFog(ctx, 0, base - 46, w, 120, t, 7, 0.2, '#c8b8e8');
       } else winTitle(ctx, w, h, t);   // WIN (round 12): the aurora, the garland, the hatted claw, the snowman, the frost
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -10879,29 +11404,22 @@ const RENDER = (() => {
 
   // ---- the title: snow on the tower, the aurora, a garland, a hatted claw, a snowman on the logo, frost
   function winTitle(ctx, w, h, t) {
-    const base = h * 0.86, th = h * 0.075, cx = w / 2;
-    try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, rgba('#1a3a7a', 0.3)); g.addColorStop(0.55, rgba('#8dd8ff', 0.08)); g.addColorStop(1, rgba('#ffffff', 0.06)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
-    winAurora(ctx, 0, 60, w, 230, t);
-    for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaSnowCap(ctx, cx - tw / 2 - 2, ty, tw + 4, 8); }
-    seaSnowCap(ctx, 0, base - 6, w, 14);
-    // the title claw (the base art's own sway) wears a Santa hat
-    const cy = h * 0.06 + Math.sin(t * 0.8) * 10, sw = Math.sin(t * 0.8) * 0.05;
-    winGarland(ctx, -10, w + 10, 80, 24, 3, 22, t, 4);
-    ctx.save(); ctx.translate(cx + Math.sin(sw) * 60, cy + 60); ctx.rotate(sw); ctx.scale(2.6, 2.6);
-    seaHatDraw(ctx, 'santa', -3, -7, 13, t);
-    ctx.restore();
+    const G = ttGeoAt(w, h, true), cx = w / 2, C = TT.claw;
+    // (TITLE ART round 20) the tint, the aurora, the snow caps on the tower's ledges and the floor and the frosty corners are baked into the title's cached layer
+    if (Q9_TL.baked !== 'winter') { try { ttSeaTint(ctx, w, h, 'winter'); } catch (e) { /* stub */ } ttSeaStill(ctx, w, h, G, 'winter', t, true); ttSeaStill(ctx, w, h, G, 'winter', t, false); }
+    winGarland(ctx, -10, w + 10, 64, 12, 3, 22, t, 4);
+    // the title claw wears a Santa hat (it follows the claw's own sway and dip: TT.claw; the cached title draws it under the logo)
+    if (Q9_TL.baked !== 'winter') { ctx.save(); ctx.translate(C.x, C.y); ctx.rotate(C.a); ttHat(ctx, C.s, t); ctx.restore(); }
     seaSnow(ctx, 0, 0, w, h, t, 90, 0.8);
     winBigFlakes(ctx, 0, 0, w, h, t, 7);
     // the banner over the logo, icicles under it, holly at both ends, a snowman on the logo's shoulder
-    const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, fs = Math.min(w * 0.16, 92), by = ly - fs * 0.86;
+    const ly = ttLogoY(h, true), fs = Math.min(w * 0.16, 92), by = ly - fs * 0.86;
     glow(ctx, cx, by, 120, '#8dfff5', 0.25);
     txt(ctx, 'WINTER WONDERCLAW', cx, by, 24, '#e8fbff', true, 'center', '#1a3a5a');
     seaIcicles(ctx, cx - 150, by + 14, 300, 16, t);
     winHolly(ctx, cx - 176, by, 12, 0); winHolly(ctx, cx + 176, by, 12, 1);
     winSnowman(ctx, 56, ly - fs * 0.36, 28, t, true);
     winPine(ctx, w - 50, ly - fs * 0.36, 26, t, 4);
-    // frost creeping in from the corners
-    for (const [fx0, fy0, k] of [[0, 0, 0], [w, 0, 1], [w, h, 2], [0, h, 3]]) { seaPuff(ctx, fx0, fy0, 120, '#e8fbff', 0.28); winFerns(ctx, fx0, fy0, k, 90, 0.4); }
   }
   // ---- the map: snowfall, a frosty rim with ferns in the corners
   function winMap(ctx, x0, y0, w, h, t) {
@@ -17239,7 +17757,7 @@ const RENDER = (() => {
     boonBack, cmpScene, sets: SETS_R,
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
-    q9: { arena: Q9A, titleSprites: Q9_TSPR, logo: Q9_LOGO, title: Q9_TL,   // LABELS / PERF / TITLE (round 9): the arena's word rects, the title's caches and layout
+    q9: { arena: Q9A, titleSprites: Q9_TSPR, logo: Q9_LOGO, title: Q9_TL, tt: TT, ttGeo,   // LABELS / PERF / TITLE (round 9): the arena's word rects, the title's caches and layout (round 20: the scene's caches and layout)
       glowStats: () => { let n = 0, px = 0; for (const m of glowCache.values()) for (const r in m) if (m[r].cv) { n++; px += glowArea(+r); } return { cols: glowCache.size, n, mb: +(px * 4 / 1048576).toFixed(2) }; } },   // MEMORY (round 9)
     terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames, glint, enemyAura, RARITY_COL,

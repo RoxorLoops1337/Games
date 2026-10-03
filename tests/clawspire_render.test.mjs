@@ -3188,4 +3188,32 @@ h.test('perf (round 19): a .ds-opaque page skips the canvas scene, the shopkeepe
   W.devicePixelRatio = dpr0; G.resize();
 });
 
+h.test('title art (round 20): the logo sits high and clear, the claw clears the subtitle, the tower stands on the floor, calm holds still', () => {
+  const T = boot(), R = T.RENDER, Q = R.q9, TL = Q.title;
+  // the logo: high in the sky, never lower than the game's layout allows, lower under a season's ribbon
+  TL.ly = 0; TL.sea = '';
+  h.eq(TL.logoY(960), 150, 'a bare sky: the logo at 150');
+  h.eq(TL.logoY(960, true), 178, 'under a season ribbon and banner: 178 (the layout\'s floor for a season)');
+  TL.ly = 120; h.eq(TL.logoY(960), 120, 'a tall menu lifts it higher still');
+  TL.ly = 0;
+  for (const [ly, fs] of [[150, 92], [178, 92], [150, 75], [67, 92]]) {
+    const G = Q.ttGeo(540, 960, ly, fs);
+    h.ok(G.restY - 16 * G.cs > G.subB, `logo at ${ly} (${fs} px): the claw's head (${Math.round(G.restY - 16 * G.cs)}) hangs under the subtitle (${Math.round(G.subB)})`);
+    h.ok(G.grabY > G.restY && G.starY > G.grabY && G.top > G.starY + G.starR, 'rest, grip, the star and the tower\'s roof run downward');
+    h.ok(G.k >= 0.75 && G.k <= 1, `the tower's scale stays in range (${G.k.toFixed(2)})`);
+    h.eq(G.mach.length, 6, 'six cabinets: three, two, one');
+    h.ok(G.mach.filter((m) => m.tier === 0).every((m) => m.y + m.h === G.floor), 'the bottom row stands on the floor');
+    h.ok(G.floor < 677, 'the floor shows above the menu\'s first button (677 at 390 x 844)');
+    h.ok(G.ledges.length === 6 && G.ledges.every((l) => l.w > 0), 'six bare ledges for a season\'s decor');
+  }
+  // headless it draws live (no canvas), deterministic, and the claw's pose is published for the Santa hat
+  const fp = (t) => { const s = []; const ctx = new Proxy({}, { get(o, p) { if (p === 'measureText') return () => ({ width: 300 }); if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} }); if (typeof p !== 'string' || p in o) return o[p]; return (...a) => s.push(p + a.map((v) => typeof v === 'number' ? Math.round(v) : '').join(',')); }, set(o, p, v) { o[p] = v; return true; } }); R.title(ctx, 540, 960, t); return s.join('|'); };
+  h.eq(fp(3.3), fp(3.3), 'the same frame twice draws the same');
+  h.ok(fp(1) !== fp(6), 'the scene moves (the claw, the prizes, the bokeh)');
+  h.ok(Number.isFinite(Q.tt.claw.x) && Number.isFinite(Q.tt.claw.y) && Q.tt.claw.y > 200, 'the claw\'s pose is published (TT.claw)');
+  R.fx.reduced = true;
+  h.eq(fp(1), fp(6), 'calm (Shake off): the scene holds still');
+  R.fx.reduced = false;
+});
+
 h.done();

@@ -15078,8 +15078,11 @@ const GAME = (() => {
     else if (S.screen === 'rush') rushDraw(ctx, t);   // RUSH (round 10): NEXT CHALLENGER, the stage behind the draft and the result
     else if (S.screen === 'school') schDraw(ctx, t);   // SCHOOL (round 11): the classroom, the practice cabinet, a challenge, the report card
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
+      const TL = R && R.q9 ? R.q9.title : null;
+      if (TL) TL.sea = seaNow() || '';   // TITLE ART (round 20): the season's still decor is baked into the scene's cached layer
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
       seaTitleDraw(ctx, t);   // SEASON: the spooky dusk or the snowfall over the title
+      if (TL) TL.sea = '';
     } else if (S.screen === 'map' || (run && S.screen !== 'fight' && S.screen !== 'gameover' && S.screen !== 'win')) {
       drawMap(ctx, t);
     } else if (S.screen === 'fight' && F && FS) {
@@ -15963,7 +15966,8 @@ const GAME = (() => {
     Q9T.ly = L.ly;
     if (T) T.ly = L.ly;
     const z = $('seaLogo');
-    if (z && z.style) z.style.top = Math.round(L.ly - 60) + 'px';   // the hidden event preview zone rides on the logo
+    const dly = T && T.logoY ? T.logoY(H, !!seaNow()) : L.ly;   // (round 20: where the logo is drawn, high in the sky)
+    if (z && z.style) z.style.top = Math.round(dly - 60) + 'px';   // the hidden event preview zone rides on the logo
     Q9T.last = L;
     return L;
   }
