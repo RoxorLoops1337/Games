@@ -588,7 +588,7 @@
   define('storm_drone', {
     size: 'm', lw: 3.1,
     col: { rim: '#9ffbff' },
-    bounds: { w: 190, h: 172, head: { x: -26, y: -166 }, body: { x: 0, y: -98 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 190, h: 177, head: { x: -26, y: -166 }, body: { x: 0, y: -98 }, feet: { x: 0, y: 0 } },
     die: { box: [-96, -174, 84, -26], nx: 10, ny: 10, from: 'out', order: 0.6, shape: 'diamond', kinds: ['spark', 'shard', 'spark', 'ember'], cols: ['#bffcff', '#d9a441', '#ffe45e', '#5ff5ff'], wind: [0, -6], size: 8 },
     parts: {
       cloud: {
@@ -797,7 +797,7 @@
   define('komainu_guardian', {
     size: 'l', lw: 3.6,
     col: { rim: '#c7d0ff', shT: 0.5 },
-    bounds: { w: 290, h: 258, head: { x: -96, y: -246 }, body: { x: -4, y: -118 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 290, h: 276, head: { x: -96, y: -246 }, body: { x: -4, y: -118 }, feet: { x: 0, y: 0 } },
     die: { box: [-160, -270, 130, 4], nx: 12, ny: 14, from: 'top', order: 0.55, shape: 'diamond', kinds: ['stone', 'stone', 'ember', 'puff'], cols: ['#8d94b8', '#646b92', '#ffb040', '#b9bfdc'], wind: [6, 10], size: 11, life: 0.55 },
     parts: {
       plinth: {
@@ -987,7 +987,7 @@
   define('redaction_knight', {
     size: 'm', lw: 3.1,
     col: { rim: '#ffffff', shT: 0.38 },
-    bounds: { w: 190, h: 176, head: { x: -6, y: -170 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 190, h: 195, head: { x: -6, y: -170 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
     die: { box: [-74, -196, 62, 4], ny: 16, shape: 'strips', from: 'top', kinds: ['bar', 'scrap', 'bar', 'scrap'], cols: ['#0b0916', '#efe3c8', '#0b0916', '#c9bdd8'], wind: [4, 10], size: 9, thin: 0.5 },
     parts: {
       legF: {
@@ -1190,7 +1190,7 @@
   define('void_scribe', {
     size: 'm', lw: 3.1,
     col: { rim: '#c9c0ff', shT: 0.42 },
-    bounds: { w: 200, h: 178, head: { x: -8, y: -172 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 200, h: 200, head: { x: -8, y: -172 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
     die: { box: [-150, -196, 78, -14], nx: 10, ny: 12, from: 'bottom', order: 0.6, shape: 'ink', kinds: ['ink', 'letter', 'scrap', 'ink'], cols: ['#ffffff', '#cfc0ff', '#f3e6c8', '#2b2050'], wind: [-10, -22], size: 8 },
     parts: {
       tip: {
@@ -1353,7 +1353,7 @@
   define('blank_soldier', {
     size: 'm', lw: 3,
     col: { rim: '#ffffff', shT: 0.38 },
-    bounds: { w: 180, h: 178, head: { x: -6, y: -170 }, body: { x: -2, y: -98 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 180, h: 214, head: { x: -6, y: -170 }, body: { x: -2, y: -98 }, feet: { x: 0, y: 0 } },
     die: { box: [-80, -186, 70, 4], nx: 10, ny: 14, from: 'top', order: 0.5, shape: 'paper', kinds: ['scrap', 'scrap', 'scrap', 'ink'], cols: ['#fbf3e0', '#efe2c4', '#ffffff', '#7ff4ff'], wind: [-20, -30], size: 9, thin: 0.3, life: 0.6 },
     parts: {
       legF: {
@@ -1509,7 +1509,7 @@
   define('sky_serpent', {
     size: 'l', lw: 3.4,
     col: { rim: '#ffffff', shT: 0.42 },
-    bounds: { w: 330, h: 262, head: { x: -80, y: -250 }, body: { x: 6, y: -70 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 330, h: 296, head: { x: -80, y: -250 }, body: { x: 6, y: -70 }, feet: { x: 0, y: 0 } },
     die: { box: [-190, -270, 150, 6], nx: 13, ny: 14, from: 'out', order: 0.4, shape: 'ink', kinds: ['wind', 'puff', 'spark', 'wind'], cols: ['#ffffff', '#cfeaff', '#5ff5ff', '#e4f3ff'], wind: [-24, -14], size: 11, life: 0.6 },
     parts: {
       coil: {
@@ -1672,7 +1672,7 @@
   define('eraser_wraith', {
     size: 'm', lw: 2.8,
     col: { rim: '#ffffff', shT: 0.38, lineColor: EW.line },
-    bounds: { w: 200, h: 172, head: { x: -8, y: -166 }, body: { x: 0, y: -92 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 200, h: 185, head: { x: -8, y: -166 }, body: { x: 0, y: -92 }, feet: { x: 0, y: 0 } },
     die: { box: [-130, -176, 140, -20], shape: 'wipe', kinds: ['crumb', 'crumb', 'puff', 'crumb'], cols: ['#f4a3b8', '#ffd0dc', '#aaa7c8', '#d4708a'], wind: [-8, 10], size: 6, thin: 0.3, nx: 12, ny: 8 },
     parts: {
       cloak: {
@@ -1812,7 +1812,7 @@
   define('thunder_crow', {
     size: 'm', lw: 3,
     col: { rim: '#ffe98a', shT: 0.4 },
-    bounds: { w: 200, h: 176, head: { x: -44, y: -166 }, body: { x: 0, y: -90 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 200, h: 188, head: { x: -44, y: -166 }, body: { x: 0, y: -90 }, feet: { x: 0, y: 0 } },
     die: { box: [-110, -180, 110, 4], nx: 11, ny: 12, from: 'out', order: 0.5, shape: 'diamond', kinds: ['feather', 'spark', 'feather', 'feather'], cols: ['#3b418c', '#ffe45e', '#22265a', '#6068a8'], wind: [8, -12], size: 10, life: 0.6 },
     parts: {
       legF: { box: [-4, -60, 34, 4], pivot: [14, -46], draw(S) { S.cel(cap(14, -46, 16, -10, 8, 6), TC.beakD, { depth: 2, line: 2.4, hi: false, rim: null, tension: 0.5 }); [[-8, 4], [0, -2], [10, 6]].forEach((t3) => S.line([[16, -8], [16 + t3[0] - 6, t3[1]]], { w: 3.4, color: TC.beakD, taper: 0.2, wobble: 0 })); } },
@@ -2073,7 +2073,7 @@
   define('margin_imp', {
     size: 'm', lw: 3.4,
     col: { rim: '#ffffff', shT: 0.3, wobble: 0.34 },
-    bounds: { w: 190, h: 176, head: { x: -6, y: -170 }, body: { x: 0, y: -88 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 190, h: 231, head: { x: -6, y: -170 }, body: { x: 0, y: -88 }, feet: { x: 0, y: 0 } },
     die: { box: [-100, -186, 90, 4], nx: 11, ny: 14, from: 'top', order: 0.6, shape: 'ink', kinds: ['ink', 'letter', 'ink', 'scrap'], cols: ['#241a3a', '#ff3a8a', '#f6edd2', '#ff8cc0'], wind: [4, 10], size: 8, thin: 0.3 },
     parts: {
       legF: { box: [-2, -50, 40, 4], pivot: [14, -44], draw(S) { S.line([[14, -44], [16, -12]], { w: 5, color: MI.hatch, taper: 0.05, pressure: 'flat', wobble: 0.2 }); S.cel([[2, -12], [28, -14], [34, -4], [26, 2], [4, 2]], MI.magD, { depth: 3, line: 2.8, hi: false, rim: null }); } },
@@ -2218,7 +2218,7 @@
   define('censor_golem', {
     size: 'l', lw: 3.5,
     col: { rim: '#ff9aa4', shT: 0.42 },
-    bounds: { w: 260, h: 264, head: { x: -6, y: -256 }, body: { x: 0, y: -130 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 260, h: 275, head: { x: -6, y: -256 }, body: { x: 0, y: -130 }, feet: { x: 0, y: 0 } },
     die: { box: [-170, -276, 130, 4], nx: 12, ny: 15, from: 'top', order: 0.5, shape: 'paper', kinds: ['scrap', 'shard', 'scrap', 'ember'], cols: ['#fff8f0', '#4d5273', '#efe0bc', '#ff3a4a'], wind: [-10, -6], size: 12, thin: 0.25, life: 0.6 },
     parts: {
       legF: { box: [-2, -76, 88, 4], pivot: [36, -70], draw(S) { S.cel({ poly: [[8, -72], [64, -72], [66, -20], [6, -20]] }, CG.ironD, { depth: 8, hi: false, rim: null, halftone: { d: 5, alpha: 0.3 } }); S.cel({ poly: [[-2, -22], [76, -22], [82, -6], [76, 0], [-2, 0]] }, CG.brassD, { depth: 4, hi: false, rim: null }); rivet(S, 20, -52); rivet(S, 52, -52); } },
@@ -2397,7 +2397,7 @@
   define('storm_whelp', {
     size: 'l', lw: 3.5,
     col: { rim: '#a8f4ff', shT: 0.42 },
-    bounds: { w: 290, h: 262, head: { x: -72, y: -250 }, body: { x: 10, y: -90 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 290, h: 276, head: { x: -72, y: -250 }, body: { x: 10, y: -90 }, feet: { x: 0, y: 0 }, right: 160 },
     die: { box: [-170, -280, 160, 6], nx: 13, ny: 15, from: 'out', order: 0.45, shape: 'diamond', kinds: ['spark', 'puff', 'spark', 'shard'], cols: ['#ffe45e', '#dcdcf4', '#5ff5ff', '#3f5fb0'], wind: [0, -12], size: 12, life: 0.6 },
     parts: {
       wingF: { box: [-20, -260, 130, -80], pivot: [22, -130], draw(S) { S.g.save(); S.g.translate(22, -130); wingDraw(S, true); S.g.restore(); } },
@@ -2563,7 +2563,7 @@
   define('black_bar_inquisitor', {
     size: 'l', lw: 3.4,
     col: { rim: '#c9b8ff', shT: 0.42 },
-    bounds: { w: 240, h: 266, head: { x: -10, y: -262 }, body: { x: 0, y: -126 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 240, h: 287, head: { x: -10, y: -262 }, body: { x: 0, y: -126 }, feet: { x: 0, y: 0 } },
     die: { box: [-90, -292, 90, 4], nx: 9, ny: 18, from: 'top', order: 0.6, shape: 'strips', kinds: ['bar', 'scrap', 'letter', 'bar'], cols: ['#0b0916', '#fff8f0', '#ffd24a', '#241c4c'], wind: [-8, -12], size: 12, thin: 0.3, life: 0.5 },
     parts: {
       scroll: {
@@ -2950,7 +2950,7 @@
   define('typo_sprite', {
     size: 's', lw: 2.8,
     col: { rim: '#ffd0e8', shT: 0.34 },
-    bounds: { w: 96, h: 110, head: { x: -4, y: -104 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 96, h: 123, head: { x: -4, y: -104 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
     die: { box: [-52, -112, 52, 0], nx: 8, ny: 10, from: 'top', order: 0.6, shape: 'paper', kinds: ['letter', 'scrap', 'spark', 'letter'], cols: ['#ff3a8a', '#f3e6c8', '#5ff5ff', '#ffffff'], wind: [-10, 6], size: 8, thin: 0.25 },
     parts: {
       legN: { box: [-24, -34, 4, 4], pivot: [-8, -32], draw(S) { S.line([[-8, -32], [-10, -10]], { w: 4.6, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.cel([[-24, -8], [-4, -10], [2, -2], [-20, 2]], TS.ringD, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: S.c.rim }); S.ell(-8, -4, 2.6, 2, TS.mag, { line: 0, shadow: false, hi: false, rim: null }); } },
@@ -3683,7 +3683,7 @@
   define('boss_editor', {
     size: 'xl', lw: 3.8,
     col: { rim: '#c9b8ff', shT: 0.42 },
-    bounds: { w: 340, h: 352, head: { x: -6, y: -330 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 340, h: 352, head: { x: -6, y: -330 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 }, right: 159 },
     die: (st) => BE_DIE[clamp(st.phase, 0, 2)],
     parts: BE_P,
     chains: BE_C,

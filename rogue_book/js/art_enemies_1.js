@@ -863,7 +863,7 @@
     id: 'kodama', size: 's', acc: '#a5ff8a', lunge: 26, alertColor: '#d8ff7a',
     col: { rim: '#d8ffd0', wood: cs('#e9f2dc'), moss: cs('#6fae4a'), bark: cs('#8a6a4a') },
     hitAt: [0, -70], alertAt: [0, -70], hitBone: 'head', alertBone: 'head', buffBone: 'body', guardBone: 'body',
-    bounds: { w: 100, h: 118, head: { x: 0, y: -80 }, body: { x: 0, y: -50 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 100, h: 123, head: { x: 0, y: -80 }, body: { x: 0, y: -50 }, feet: { x: 0, y: 0 } },
     die: { kind: 'leaf', colors: ['#a5ff8a', '#e9f2dc', '#6fae4a'], orb: '#d8ffd0', gravity: 0.35, size: 4 },
     dieBox: [-40, -112, 40, 0], strips: 6,
     tweak(K, pose, t) { if (pose === 'idle') K.by = -1.5 * Math.abs(sin(t * 2.2)); },
@@ -938,7 +938,7 @@
     col: { rim: '#ffe0a0', paper: cs('#d8452e'), cream: '#f4dfb2', rib: '#5a2a1a', bamboo: cs('#c8a860'), skin: cs('#dcb27c'), tongue: cs('#ff7fa0') },
     hitAt: [-6, -136], alertAt: [-4, -138], hitBone: 'canopy', alertBone: 'canopy', buffBone: 'shaft', guardBone: 'shaft',
     arc: { bone: 'shaft', x: -4, y: -92, r: 62, a0: -1.2, a1: -4.4, w: 12, color: '#ffe9a8' },
-    bounds: { w: 170, h: 186, head: { x: -4, y: -140 }, body: { x: 4, y: -100 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 170, h: 203, head: { x: -4, y: -140 }, body: { x: 4, y: -100 }, feet: { x: 0, y: 0 } },
     die: { kind: 'paper', colors: ['#d8452e', '#f4dfb2', '#c8a860'], orb: '#ffe0a0', gravity: 0.6, size: 6 },
     dieBox: [-80, -186, 80, 0], strips: 7,
     tweak(K, pose, t) {
@@ -1215,7 +1215,7 @@
     col: { rim: '#a89cff', crow: CROW, robe: cs('#efe4c4'), beak: cs('#f5b83a'), sash: cs('#c8302f'), leg: cs('#c89a3a') },
     hitAt: [-8, -100], alertAt: [-8, -130], hitBone: 'body', alertBone: 'head', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'body', x: -10, y: -108, r: 66, a0: -0.8, a1: -3.8, w: 12, color: '#c8c0ff' },
-    bounds: { w: 200, h: 184, head: { x: -12, y: -136 }, body: { x: 6, y: -88 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 200, h: 209, head: { x: -12, y: -136 }, body: { x: 6, y: -88 }, feet: { x: 0, y: 0 } },
     die: { kind: 'feather', colors: ['#2d2b4e', '#5a5a9a', '#efe4c4'], orb: '#ffe45e', gravity: 0.9, size: 5.5 },
     dieBox: [-70, -184, 100, 0],
     tweak(K, pose, t) { K.by += -7 - 3 * sin(t * 2.6) * tk.motion(); K.bx += -0.0; },
@@ -1316,7 +1316,7 @@
     col: { rim: '#e8ffb0', bam: cs('#7fc04a'), ring: '#b8e06a', leaf: cs('#3f9a3a'), leaf2: cs('#68b840') },
     hitAt: [0, -66], alertAt: [0, -70], hitBone: 'body', alertBone: 'body', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'body', x: -20, y: -66, r: 48, a0: -1.3, a1: -4.2, w: 10, color: '#e8ff9a' },
-    bounds: { w: 110, h: 122, head: { x: 0, y: -74 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 110, h: 130, head: { x: 0, y: -74 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
     die: { kind: 'leaf', colors: ['#7fc04a', '#c8ff5a', '#3f9a3a'], orb: '#e8ffb0', gravity: 0.45, size: 4.5 },
     dieBox: [-46, -118, 46, 0], strips: 6,
     tweak(K, pose, t) { if (pose === 'idle') K.by = -3.5 * Math.abs(sin(t * 4.1)); },
@@ -1388,7 +1388,7 @@
     col: { rim: '#ffe6b0', cap: cs('#e2592f'), stalk: cs('#efe0bc'), gill: '#d8b878', spot: '#fff3d8', root: cs('#a98a62') },
     hitAt: [0, -100], alertAt: [4, -150], hitBone: 'body', alertBone: 'cap', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'body', x: 4, y: -140, r: 70, a0: -0.9, a1: -4.0, w: 14, color: '#ffe6b0' },
-    bounds: { w: 160, h: 184, head: { x: 4, y: -150 }, body: { x: 0, y: -84 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 160, h: 189, head: { x: 4, y: -150 }, body: { x: 0, y: -84 }, feet: { x: 0, y: 0 } },
     die: { kind: 'spore', colors: ['#b8ff5a', '#e2592f', '#fff3d8'], orb: '#d8ff9a', gravity: 0.3, size: 5 },
     dieBox: [-72, -184, 72, 0],
     parts: [
@@ -1499,7 +1499,7 @@
     hitAt: [-90, -112], alertAt: [-100, -110], hitBone: 'head', alertBone: 'head', buffBone: 'body', guardBone: 'body',
     tweak(K) { K.bsy *= 1 - 0.07 * K.wind; K.brot -= 0.05 * K.wind; K.bsx *= 1 + 0.04 * K.wind; },
     arc: { bone: 'head', x: -150, y: -96, r: 44, a0: 1.7, a1: 4.4, w: 14, color: '#ffd6a0' },
-    bounds: { w: 310, h: 262, head: { x: -100, y: -110 }, body: { x: 26, y: -108 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 310, h: 290, head: { x: -100, y: -110 }, body: { x: 26, y: -108 }, feet: { x: 0, y: 0 } },
     die: { kind: 'leaf', colors: ['#5faa4a', '#a8dc70', '#7c5b4a'], orb: '#ffd6a0', gravity: 0.8, size: 7 },
     dieBox: [-140, -262, 160, 0], strips: 8,
     parts: [
@@ -1739,7 +1739,7 @@
     col: { rim: '#c8e4ff', crow: cs('#2d2b4e'), face: cs('#d8503a'), haori: cs('#26306a'), hak: cs('#232a68'), lining: cs('#c8302f'), white: cs('#f4f0e8'), gold: '#e8b040', steel: '#e8f2ff' },
     hitAt: [-8, -150], alertAt: [-100, -166], hitBone: 'body', alertBone: 'body', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'body', x: -24, y: -166, r: 150, a0: 2.75, a1: 3.65, w: 12, color: '#bfeaff' },
-    bounds: { w: 320, h: 262, head: { x: -14, y: -222 }, body: { x: 10, y: -140 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 320, h: 299, head: { x: -14, y: -222 }, body: { x: 10, y: -140 }, feet: { x: 0, y: 0 }, right: 202 },
     die: { kind: 'feather', colors: ['#2d2b4e', '#f4f0e8', '#9fe8ff'], orb: '#bfeaff', gravity: 0.7, size: 7 },
     dieBox: [-190, -270, 150, 0], strips: 8,
     tweak(K, pose, t) { K.brot += -0.04; },
@@ -1904,7 +1904,7 @@
     col: { rim: '#cfe0ff' },
     hitAt: [0, -150], alertAt: [0, -230], hitBone: 'body', alertBone: 'head', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'body', x: -64, y: -172, r: 100, a0: -1.2, a1: -3.6, w: 22, color: '#c8ffd0' },
-    bounds: { w: 250, h: 284, head: { x: -4, y: -232 }, body: { x: 0, y: -130 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 250, h: 319, head: { x: -4, y: -232 }, body: { x: 0, y: -130 }, feet: { x: 0, y: 0 } },
     die: { kind: 'leaf', colors: ['#8a92a8', '#5fa040', '#9dffb0'], orb: '#c8ffd0', gravity: 1.0, size: 7 },
     dieBox: [-140, -290, 140, 0], strips: 8, dir: 1,
     parts: [
@@ -2238,7 +2238,7 @@
     col: { rim: '#d8c0ff' },
     hitAt: [-30, -170], alertAt: [40, -250], hitBone: 'body', alertBone: 'body', buffBone: 'body', guardBone: 'body',
     arc: { bone: 'tail4', x: 0, y: 0, r: 210, a0: -1.5, a1: -3.95, w: 40, color: '#b088ff' },
-    bounds: { w: 430, h: 372, head: { x: -100, y: -280 }, body: { x: 0, y: -160 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 430, h: 391, head: { x: -100, y: -280 }, body: { x: 0, y: -160 }, feet: { x: 0, y: 0 }, right: 272 },
     die: { kind: 'petal', colors: ['#ffc2dc', '#c8a0ff', '#ffffff', '#3a2278'], orb: '#d8b8ff', gravity: -0.2, size: 8, stagger: 0.05 },
     dieBox: [-250, -390, 200, 0], strips: 10, dir: 1,
     tweak(K, pose, t) { K.by += -1.2 * sin(t * 1.4) * tk.motion(); },
@@ -2517,12 +2517,14 @@
     ctx.save(); ctx.scale(k, k);
     grove(ctx, 1280, 720, t, 520);
     const poses = String(params.pose || 'idle').split(','), n = Math.min(5, ids.length);
+    // SCENE's stage fit (scene.js lineFit): the whole line slides left by the worst overhang past the right edge (bounds.right) plus 10 px
+    const fit = Math.min(240, Math.max(0, ...ids.slice(0, 5).map((id, i) => (ART.enemy.bounds(id).right ? lanes[5 - n + i] + ART.enemy.bounds(id).right + 10 - 1280 : 0))));
     ART.hero.draw(ctx, 'hanae', { x: 330, y: 520, s: 1, pose: 'idle', t });
     ART.hero.draw(ctx, 'kuro', { x: 170, y: 508, s: 0.94, pose: 'idle', t: t + 0.7 });
     ids.slice(0, 5).forEach((id, i) => {
       const pose = poses[i % poses.length], sp = SPECS[id];
       if (!sp) return;
-      ART.enemy.draw(ctx, id, { x: lanes[5 - n + i], y: 520, s: 1, pose, t: t + i * 0.4, pt: params.pt !== undefined ? num(params.pt, 0) : KEYPT[pose] || 0, phase: params.phase | 0, hpPct: params.hp === undefined ? 1 : params.hp });
+      ART.enemy.draw(ctx, id, { x: lanes[5 - n + i] - fit, y: 520, s: 1, pose, t: t + i * 0.4, pt: params.pt !== undefined ? num(params.pt, 0) : KEYPT[pose] || 0, phase: params.phase | 0, hpPct: params.hp === undefined ? 1 : params.hp });
     });
     ctx.restore();
   }

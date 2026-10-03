@@ -9,8 +9,9 @@
 //
 // INTERACTIONS (pointer events only, mouse, touch and pen share one path)
 //   pan       drag (more than 9 px) with inertia; wheel zooms around the pointer; two fingers pinch and pan; keyboard arrows pan (Shift x3),
-//             + and - zoom, F fits the whole page (again: back to following the party). The camera clamps to the page (zoom aware) and
-//             follows the party token while it walks. The buttons on the right do the same for touch: Deck, Legend, Fit, Zoom in, Zoom out.
+//             + and - zoom, F fits the whole page (again: back to following the party). The camera clamps to the page (zoom aware, and it knows
+//             where the HUD is, see THE HUD AND THE CAMERA) and follows the party token while it walks. The buttons on the right do the same for
+//             touch: Deck, Legend, Fit, Zoom in, Zoom out.
 //   fog       tap a fogged hex next to the painted page: RUN.paint for 1 Ink (bloom, ink sound, content pop). Tap a far fogged hex: the cheapest
 //             chain is previewed (RUN.paintPreview) with its Ink cost pill, a second tap on the same hex paints the whole chain in sequence.
 //             Not enough Ink: the meter shakes, a toast says how much is missing and nothing changes. The Void and blank edges say so.
@@ -26,8 +27,26 @@
 //
 // HUD (DOM over the canvas): hero badges with HP (top left), the Ink meter of drops (below them), the chapter banner and a progress meter
 // (MAP.progress) at the top, gold and the menu button (top right), the tool column (Deck, Legend, Fit, Zoom), the treasure strip (bottom left,
-// opens the `relics` overlay), the brush tray, and a hex info chip (bottom right) that names what the pointer or cursor is on and what a
-// tap would cost. The chapter intro flourish (title, brush stroke, a swoop from the whole page down to the party) plays once per chapter.
+// opens the `relics` overlay), the brush tray, a hex info chip (bottom right) that names what the pointer or cursor is on and what a
+// tap would cost, and, while a brush is armed, the brush mode bar (top centre, in the chapter banner's slot: the brush, a line of help, Paint and Cancel). The chapter intro flourish (title, brush stroke, a swoop from the whole page down to the party) plays once per chapter.
+//
+// THE HUD AND THE CAMERA. The HUD lies over the page, so the camera never works with the whole window but with what the HUD leaves free. It measures the
+//           real rectangle of every piece (party, Ink, banner, gold, menu button, the five tools, tray, info chip, treasure strip, and the brush mode bar while a
+//           brush is armed) in stage px, so the compact phone layout, the text size and the number of brushes and treasures are all accounted for, re-measures
+//           when any of them moves (a rectangle is taken at rest: the slide-in of the entrance and a hover lift are measured out, ancestors included), and falls
+//           back to a fixed table (FALLBACK_HUD) for a piece it cannot measure (headless pages). From the rectangles it derives
+//             free  the biggest box clear of every piece: the party, a cursor or a fresh tile is centred on its middle (not the window's), the zoom buttons
+//                   turn about it;
+//             fit   the largest zoom, and the placement, at which no hex (boss ring included) touches a piece (6 px of air) or leaves the window: a search
+//                   over zoom and offset (solveFit), about a millisecond, run when the HUD changes and never per frame. zMin IS this zoom, so Fit, the opening
+//                   swoop and the minimum zoom (wheel, pinch, Zoom out) all show the whole page with nothing under the HUD, and at the minimum the camera
+//                   sits on the fit;
+//             box   where the edges of the padded page may travel (the clamp): the free box, so at every zoom above the minimum any tile can be dragged into
+//                   ground the HUD leaves free and the page cannot be lost. The page edge may rest inside the box by the gap the fit itself has at its sides
+//                   (s.slack, fading out between 1.6 and 2 x zMin, so the default zoom has none), which keeps a wheel zoom about a pointer over the page anchored when it starts on the fit.
+//           The info chip and the mode bar have a fixed size (clamped text) so their footprint does not change with the hex under the pointer or what the bar
+//           says. The bar hangs from the top in the chapter banner's slot (the banner fades while it is up); arming or putting away a brush measures the HUD
+//           again, and a camera on the fit glides to the new fit (it glides to any fit that moved: it is never clamped onto it first).
 //
 // OVERLAYS  relics {relics?: [ids]}: every treasure of the run sorted by rarity, with art, text, rarity and where it came from (the chapter of
 //           RUN's "Found X" log line, or its source by rarity). legend: tabs Map (every tile), Brushes (each shape drawn on hexes), Controls,
@@ -42,8 +61,9 @@
 // every walk, bloom and beat completes at once, so suites read final states. reduceMotion: no intro swoop, no petals, no particles, walks
 // at 140 ms a step, flights are plain fades. quality low: no petals and no fog edge shimmer is asked of ART.
 //
-// PUBLIC API beyond DESIGN: UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y)}, a read-only window onto the live visit for suites and the
-// screenshot tool (the camera, where a hex is on the stage, which hex is under a stage point). Everything else is reached through the DOM, RUN and the bus
+// PUBLIC API beyond DESIGN: UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y), hud(measure?), clamp(x, y, z)}, a read-only window onto the live
+// visit for suites and the screenshot tool (the camera, where a hex is on the stage, which hex is under a stage point, the HUD footprint {rects, free, box, fit},
+// and where the camera may really be). Everything else is reached through the DOM, RUN and the bus
 // (tests/rogue_book_screen_map.test.mjs). CSS classes: mp-* the screen, mr-* the relics overlay, lg-* the legend (rl-* belongs to node.css).
 //
 // CLOSED LIST IDS USED. Sounds: ui_click ui_back ui_error ui_open ui_hover paint ink_splash ink_gain brush_use step reveal_landmark boss_intro page_turn.
@@ -83,7 +103,16 @@
   const DEF_WIN = { x: 44, y: 36, w: 1192, h: 648 };                    // the page window inside the book frame (ART.map.frameInner)
   const CX = 640, CY = 360;                                              // the window is centred on the stage
   const PAD = 80;                                                        // world padding around the page the camera may show
+  const SLACK_FULL = 1.6, SLACK_END = 2;                                 // the fit's side gaps stay allowed up to 1.6 x zMin and are gone by 2 x zMin (about the default zoom)
   const ZMAX = 2.4;
+  const HUD_MARGIN = 6;                                                  // stage px kept clear around every HUD rectangle at the fit
+  const FIT_WIN_MARGIN = 10;                                             // and inside the page window
+  const HEX_PAD = 1.03, BOSS_PAD = 1.2;                                  // the hex outline, and the boss ring, as a multiple of HEX
+  const Z_LO = 0.2;                                                      // the smallest fit zoom the search tries
+  const FIT_STEP = 0.97;                                                 // the search walks down from the largest zoom in 3 percent steps, then bisects
+  const FIT_GLIDE_S = 0.4;                                               // seconds a camera on the fit takes to move to a fit that moved
+  const HUD_POLL = 0.25;                                                 // seconds between looks at the HUD rectangles
+  const HUD_EPS = 2.5;                                                   // an edge that moved by more than this many stage px re-fits the camera
   const DRAG_PX = 9;
   const TAP_MS = 700;
   const STEP_S = 0.23;                                                   // seconds per hex of a walk
@@ -94,6 +123,18 @@
   const DIR_NAMES = ['east', 'north east', 'north west', 'west', 'south west', 'south east'];
   const RARITY_ORDER = ['boss', 'rare', 'shop', 'uncommon', 'common'];
   const MEMO = { id: '', runId: '', chapter: 0, mercy: 0 };                         // what the last visit already showed
+  // Where each HUD piece sits when its rectangle cannot be measured (a headless page, a piece not built yet): [x0, y0, x1, y1] in stage px, taken from the
+  // real layout at 1280x720 and at the compact phone layout. The measured rectangle always wins; this only keeps the fit and the clamp sensible.
+  // `mode` is the brush mode bar: transient, it only counts while a brush is armed (it hangs from the top, in the slot of the chapter banner, which fades while it is up)
+  const HUD_KEYS = ['party', 'ink', 'banner', 'gold', 'menu', 'deck', 'legend', 'fit', 'zin', 'zout', 'tray', 'info', 'relics', 'mode'];
+  const FALLBACK_HUD = {
+    wide: { party: [14, 9, 312, 75], ink: [14, 84, 374, 138], banner: [419, 2, 861, 86], gold: [1134, 14, 1196, 48], menu: [1211, 0, 1269, 57],
+      deck: [1208, 74, 1268, 134], legend: [1205, 143, 1268, 203], fit: [1208, 212, 1268, 272], zin: [1202, 281, 1268, 341], zout: [1191, 350, 1268, 410],
+      tray: [477, 596, 803, 712], info: [946, 589, 1268, 708], relics: [14, 640, 400, 708], mode: [340, 2, 940, 82] },
+    compact: { party: [14, 9, 312, 75], ink: [14, 82, 374, 136], banner: [460, 2, 820, 90], gold: [1113, 14, 1175, 48], menu: [1185, 0, 1269, 83],
+      deck: [1187, 89, 1268, 170], legend: [1187, 178, 1268, 260], fit: [1187, 268, 1268, 349], zin: [1187, 357, 1268, 438], zout: [1187, 446, 1268, 527],
+      tray: [520, 590, 760, 712], info: [988, 625, 1268, 708], relics: [14, 611, 280, 708], mode: [447, 2, 833, 90] },
+  };
 
   let S = null;                                                          // the live visit, null between visits
 
@@ -124,7 +165,8 @@
     return {
       R, M, root, params: params || {}, live: UI.live(), empty: !M,
       t: 0, frame: 0,
-      win: DEF_WIN, world: { x0: 0, y0: 0, x1: 1, y1: 1 }, fitZ: 0.6, zMin: 0.5,
+      win: DEF_WIN, world: { x0: 0, y0: 0, x1: 1, y1: 1 }, rows: [], fitZ: 0.6, zMin: 0.5,
+      hudRects: null, free: { x0: DEF_WIN.x, y0: DEF_WIN.y, x1: DEF_WIN.x + DEF_WIN.w, y1: DEF_WIN.y + DEF_WIN.h }, box: null, slack: { x: 0, y: 0 }, fit: { x: 0, y: 0, z: 0.5 }, fg: null, hudT: 0, hudDirty: false, hudSig: {}, hudVer: 0,
       cam: { x: 0, y: 0, z: 1 }, goal: null, tz: 1, zp: { x: CX, y: CY }, follow: true, fitted: false, vel: { x: 0, y: 0 }, inertia: false, panRate: 7, zoomRate: 12,
       ptrs: new Map(), pinch: null, mode: 'mouse', hover: null, hoverPt: null, cursor: null,
       chain: null, brush: null, walk: null, busy: false, beat: null,
@@ -138,30 +180,254 @@
 
   // ==================================================================================================================
   // geometry and camera. World px at HEX 46 (MAP.toPixel); screen = centre + (world - cam) * zoom
+  //
+  // The lacquer HUD lies over the page, so the camera works with the part of the stage the HUD leaves free, not with the whole window:
+  //   * relayout measures the REAL rectangle of every HUD piece (stage px, so the compact phone layout, the text size and the number of brushes or
+  //     treasures are all accounted for) and keeps them in s.hudRects; a piece that cannot be measured (a headless page) falls back to FALLBACK_HUD.
+  //   * s.free is the biggest box the window keeps clear of every piece (each piece counted against the window side it hangs from): the middle of it is
+  //     where the camera centres the party, a keyboard cursor or a tile that just popped, and it is the pivot of the zoom buttons.
+  //   * s.fit is the fit view: solveFit finds the largest zoom, and the place for the page, at which no hex (boss ring included) touches any piece.
+  //     zMin is that zoom, so the page can never be zoomed out into the HUD, and the Fit button, the opening swoop and the minimum zoom all show it.
+  //   * s.box is where the edges of the padded page may travel (the camera clamp): the free box, widened by s.slack (the gap the fit has at its sides) so a zoom
+  //     about a pointer that starts on the fit stays anchored. Any tile can be dragged into it, so any tile can be brought clear of the HUD at every zoom level
+  //     above the minimum; at the minimum zoom the camera is pinned on the fit.
   // ==================================================================================================================
   const wx2sx = (c, wx) => CX + (wx - c.x) * c.z;
   const wy2sy = (c, wy) => CY + (wy - c.y) * c.z;
   const worldOf = (q, r) => MAP.toPixel(q, r, HEX);
+  const isCompact = () => { const st = document.getElementById('stage'); return !!(st && st.classList.contains('compact')); };
 
   function frameWin() {
     const f = typeof ART !== 'undefined' && ART && ART.map && isFn(ART.map.frameInner) ? safe(() => ART.map.frameInner(1280, 720), null) : null;
     return f && f.w > 0 && f.h > 0 ? f : DEF_WIN;
   }
 
+  // ---- the footprint of the HUD: measured rectangles, in stage px
+  function hudEls(s) {
+    const H = s.hud;
+    return { party: H.party, ink: H.inkMeter && H.inkMeter.root, banner: H.banner, gold: H.gold, menu: H.menu, deck: H.deckBtn, legend: H.legendBtn, fit: H.fitBtn, zin: H.zoomIn, zout: H.zoomOut, tray: H.tray, info: H.info, relics: H.relics, mode: H.mode };
+  }
+
+  // the rectangle of one piece where it rests: the entrance animation and a hover lift move it with a `translate`, which is taken out, and so is the translate of every
+  // ancestor up to the screen root (the five tools sit in a column that slides in as one, so they are measured at rest too). null: hidden or not measurable
+  const translateOf = (el) => {
+    const m = /^(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?/.exec(String(safe(() => getComputedStyle(el).translate, '')));
+    return m ? { x: parseFloat(m[1]) || 0, y: m[2] ? parseFloat(m[2]) || 0 : 0 } : { x: 0, y: 0 };
+  };
+  function restRect(el, stop) {
+    if (!el || !isFn(el.getBoundingClientRect)) return null;
+    const b = safe(() => stageRect(el), null);
+    if (!b || !Number.isFinite(b.x + b.y + b.w + b.h)) return null;
+    if (b.w > UI.W * 0.9 && b.h > UI.H * 0.9) return null;           // a headless element is as big as the page: nothing was measured
+    let tx = 0, ty = 0;
+    for (let p = el, n = 0; p && p !== stop && n < 8; p = p.parentElement, n++) { const t = translateOf(p); tx += t.x; ty += t.y; }
+    return { x0: b.x - tx, y0: b.y - ty, x1: b.x + b.w - tx, y1: b.y + b.h - ty };
+  }
+
+  function measureHud(s) {
+    const els = hudEls(s), fb = isCompact() ? FALLBACK_HUD.compact : FALLBACK_HUD.wide, out = [];
+    HUD_KEYS.forEach((k) => {
+      if (k === 'mode' && !(els.mode && !els.mode.hidden)) return;       // the brush mode bar covers something only while a brush is armed
+      const el = els[k], r = restRect(el, s.root);
+      if (r) { if (r.x1 - r.x0 > 0.5 && r.y1 - r.y0 > 0.5) out.push({ k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, live: true }); }   // a zero box (display none) covers nothing
+      else out.push({ k, x0: fb[k][0], y0: fb[k][1], x1: fb[k][2], y1: fb[k][3], live: false });
+    });
+    return out;
+  }
+
+  function sameHud(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].k !== b[i].k || Math.abs(a[i].x0 - b[i].x0) > HUD_EPS || Math.abs(a[i].y0 - b[i].y0) > HUD_EPS || Math.abs(a[i].x1 - b[i].x1) > HUD_EPS || Math.abs(a[i].y1 - b[i].y1) > HUD_EPS) return false;
+    }
+    return true;
+  }
+
+  // the box the window keeps clear: every piece counts against the window side it is nearest to (the Ink plate hangs from the top, the tool column from the right)
+  function freeBoxOf(win, rects) {
+    const ins = { t: 0, b: 0, l: 0, r: 0 };
+    rects.forEach((q) => {
+      const d = { t: q.y1 - win.y, b: win.y + win.h - q.y0, l: q.x1 - win.x, r: win.x + win.w - q.x0 };
+      let side = 't';
+      ['b', 'l', 'r'].forEach((k) => { if (d[k] < d[side]) side = k; });
+      if (d[side] > 0) ins[side] = Math.max(ins[side], d[side] + HUD_MARGIN);
+    });
+    const f = { x0: win.x + ins.l, y0: win.y + ins.t, x1: win.x + win.w - ins.r, y1: win.y + win.h - ins.b };
+    return f.x1 - f.x0 < 160 || f.y1 - f.y0 < 120 ? { x0: win.x, y0: win.y, x1: win.x + win.w, y1: win.y + win.h } : f;
+  }
+
+  const freeMid = (s) => ({ x: (s.free.x0 + s.free.x1) / 2, y: (s.free.y0 + s.free.y1) / 2 });
+
+  // the camera that puts a world point on the middle of the free box at zoom z
+  function camFor(s, wx, wy, z) {
+    const m = freeMid(s);
+    return { x: wx - (m.x - CX) / z, y: wy - (m.y - CY) / z, z };
+  }
+
+  // The fit: the largest zoom at which no hex touches a HUD rectangle (each grown by HUD_MARGIN) or leaves the window, and where the page goes.
+  // With the screen position of a world point (x, y) at zoom z being O + (x, y) * z, a hex at world (x, y) is in the way of a rectangle exactly when O lies in
+  // the rectangle grown by the hex and moved by -(x, y) * z. The hexes of one world row give copies of the same rectangle that overlap each other, so a row
+  // merges into one; what is left (about 13 rows x 13 pieces) is a short list of forbidden boxes, and a free O, when there is one, has its x on the right edge
+  // of a forbidden box (or the left edge of the allowed range) and a free gap in y at that x. So each zoom costs one sweep over a few hundred boxes, the zoom
+  // is found by stepping down from the largest one and bisecting the last step, and the search runs when the HUD changes, never per frame.
+  function solveFit(s, rects) {
+    const win = s.win, G = s.rows, W = s.world, wm = FIT_WIN_MARGIN;
+    if (!G.length) return null;
+    const wx0 = win.x + wm, wy0 = win.y + wm, wx1 = win.x + win.w - wm, wy1 = win.y + win.h - wm;
+    const R = rects.map((r) => ({ x0: r.x0 - HUD_MARGIN, y0: r.y0 - HUD_MARGIN, x1: r.x1 + HUD_MARGIN, y1: r.y1 + HUD_MARGIN }));
+    const mid = freeMid(s), wcx = (W.x0 + W.x1) / 2, wcy = (W.y0 + W.y1) / 2;
+    // place(z): O for the page at zoom z (null: none). ideal: pick the free spot nearest to the page centred in the free box instead of any
+    const place = (z, ideal) => {
+      let bx0 = -Infinity, bx1 = Infinity, by0 = -Infinity, by1 = Infinity;
+      for (let i = 0; i < G.length; i++) {                         // O keeping every hex inside the window
+        const g = G[i], hw = SQ3 / 2 * HEX * z * g.rad, hh = HEX * z * g.rad;
+        bx0 = Math.max(bx0, wx0 + hw - g.xs[0] * z); bx1 = Math.min(bx1, wx1 - hw - g.xs[g.xs.length - 1] * z);
+        by0 = Math.max(by0, wy0 + hh - g.y * z); by1 = Math.min(by1, wy1 - hh - g.y * z);
+      }
+      if (bx0 > bx1 || by0 > by1) return null;
+      const F = [];                                                // the forbidden boxes (open) that reach into that range
+      for (let i = 0; i < G.length; i++) {
+        const g = G[i], hw = SQ3 / 2 * HEX * z * g.rad, hh = HEX * z * g.rad, n = g.xs.length;
+        for (let j = 0; j < R.length; j++) {
+          const r = R[j], y0 = r.y0 - hh - g.y * z, y1 = r.y1 + hh - g.y * z;
+          if (y1 <= by0 || y0 >= by1) continue;
+          let a = r.x0 - hw - g.xs[0] * z, b = r.x1 + hw - g.xs[0] * z;
+          for (let k = 1; k < n; k++) {                            // hexes go right, their boxes go left: merge the ones that overlap
+            const na = r.x0 - hw - g.xs[k] * z, nb = r.x1 + hw - g.xs[k] * z;
+            if (nb >= a) a = na; else { if (b > bx0 && a < bx1) F.push({ x0: a, x1: b, y0, y1 }); a = na; b = nb; }
+          }
+          if (b > bx0 && a < bx1) F.push({ x0: a, x1: b, y0, y1 });
+        }
+      }
+      F.sort((p, q) => p.y0 - q.y0);
+      const runs = (x) => {                                        // the free runs of y at this x
+        const out = [];
+        let cur = by0;
+        for (let i = 0; i < F.length; i++) {
+          const f = F[i];
+          if (!(f.x0 < x && x < f.x1)) continue;
+          if (f.y0 > cur) { out.push([cur, Math.min(f.y0, by1)]); if (f.y0 >= by1) return out; }
+          if (f.y1 > cur) cur = f.y1;
+          if (cur > by1) return out;
+        }
+        out.push([cur, by1]);
+        return out;
+      };
+      const xs = [bx0];
+      for (let i = 0; i < F.length; i++) if (F[i].x1 > bx0 && F[i].x1 <= bx1) xs.push(F[i].x1);
+      const want = { x: mid.x - wcx * z, y: mid.y - wcy * z };
+      let best = null;
+      for (let i = 0; i < xs.length; i++) {
+        const rs = runs(xs[i]);
+        if (!rs.length) continue;
+        if (!ideal) return { x: xs[i], y: rs[0][0] };
+        rs.forEach((q) => {
+          const y = clamp(want.y, q[0], q[1]), d = Math.hypot(xs[i] - want.x, y - want.y);
+          if (!best || d < best.d) best = { x: xs[i], y, d };
+        });
+      }
+      if (!best || !ideal) return best;
+      // slide along the free gaps toward the centred spot: first in x at this y, then in y at the new x
+      let a = bx0, b = bx1;
+      for (let i = 0; i < F.length; i++) { const f = F[i]; if (!(f.y0 < best.y && best.y < f.y1)) continue; if (f.x1 <= best.x) a = Math.max(a, f.x1); else if (f.x0 >= best.x) b = Math.min(b, f.x0); }
+      best.x = clamp(want.x, Math.min(a, best.x), Math.max(b, best.x));
+      let c = by0, d = by1;
+      for (let i = 0; i < F.length; i++) { const f = F[i]; if (!(f.x0 < best.x && best.x < f.x1)) continue; if (f.y1 <= best.y) c = Math.max(c, f.y1); else if (f.y0 >= best.y) d = Math.min(d, f.y0); }
+      best.y = clamp(want.y, Math.min(c, best.y), Math.max(d, best.y));
+      return best;
+    };
+    const top = clamp(Math.min((wx1 - wx0) / (W.x1 - W.x0), (wy1 - wy0) / (W.y1 - W.y0)), Z_LO, 1);
+    let z = top, above = 0, hit = -1;
+    for (; z >= Z_LO; z *= FIT_STEP) { if (place(z, false)) { hit = z; break; } above = z; }
+    if (hit < 0) return null;
+    let lo = hit, hi = above || hit;
+    for (let i = 0; i < 7 && hi > lo; i++) { const m = (lo + hi) / 2; if (place(m, false)) lo = m; else hi = m; }
+    const o = place(lo, true);
+    return o ? { z: lo, x: (CX - o.x) / lo, y: (CY - o.y) / lo } : null;
+  }
+
+  // when no zoom clears the HUD (a HUD bigger than any page could fit beside): the page centred in the free box at the zoom that fits it
+  function fallbackFit(s) {
+    const f = s.free, w = s.world, m = freeMid(s);
+    const z = clamp(Math.min((f.x1 - f.x0) / (w.x1 - w.x0), (f.y1 - f.y0) / (w.y1 - w.y0)), Z_LO, 1);
+    return { z, x: (w.x0 + w.x1) / 2 - (m.x - CX) / z, y: (w.y0 + w.y1) / 2 - (m.y - CY) / z };
+  }
+
+  // measure the HUD and, when it moved, redo the free box, the fit and the clamp box. true when anything changed.
+  function relayout(s, force) {
+    const rects = measureHud(s);
+    if (!force && sameHud(s.hudRects, rects)) return false;
+    s.hudRects = rects;
+    s.free = freeBoxOf(s.win, rects);
+    s.fit = solveFit(s, rects) || fallbackFit(s);
+    s.fitZ = s.zMin = s.fit.z;
+    const f = s.free, w = s.world, c = s.fit;
+    s.box = { x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1 };
+    // slack: how far the padded page edge sits INSIDE the free box on the fit (a page narrower than the free box has gaps at its sides). The camera may keep the page
+    // edge that far in at every zoom, which is exactly what keeps a zoom about the pointer anchored when it starts on the fit (see clampAxis). It only ever widens the range.
+    const gap = (l0, l1, b0, b1) => Math.max(0, l0 - b0, b1 - l1) + 0.5;
+    const px0 = CX + (w.x0 - PAD - c.x) * c.z, px1 = CX + (w.x1 + PAD - c.x) * c.z, py0 = CY + (w.y0 - PAD - c.y) * c.z, py1 = CY + (w.y1 + PAD - c.y) * c.z;
+    s.slack = { x: gap(px0, px1, f.x0, f.x1), y: gap(py0, py1, f.y0, f.y1) };
+    s.hudVer++;
+    return true;
+  }
+
   function setupCamera(s) {
     s.win = frameWin();
     const b = MAP.bounds(s.M, HEX);
     s.world = { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 };
-    const bw = s.world.x1 - s.world.x0 + 2 * PAD, bh = s.world.y1 - s.world.y0 + 2 * PAD;
-    s.fitZ = clamp(Math.min(s.win.w / bw, s.win.h / bh), 0.25, 1);
-    s.zMin = s.fitZ;
+    relayout(s, true);                                             // the fallback rectangles until the HUD exists
   }
 
+  // the HUD moved (a resize, a new text size, a brush or a treasure gained, a brush armed or put away, gold with another digit): keep the camera valid and, on the fit,
+  // on the new fit. A camera on the fit glides to it whichever way the fit moved: the camera is not clamped first, so a fit that grew (the HUD shrank) does not pop.
+  function applyLayout(s) {
+    const c = s.cam, f = s.fit;
+    if (s.fitted) {
+      s.goal = null; s.vel.x = s.vel.y = 0; s.inertia = false;
+      if (headless() || (Math.abs(Math.log(f.z / c.z)) < 1e-4 && Math.hypot(f.x - c.x, f.y - c.y) < 0.4)) { s.fg = null; c.z = s.tz = f.z; c.x = f.x; c.y = f.y; return; }
+      s.fg = { z0: c.z, x0: c.x, y0: c.y, t: 0 };
+      s.tz = f.z;
+      return;
+    }
+    if (c.z < s.zMin) c.z = s.zMin;
+    if (s.tz < s.zMin) s.tz = s.zMin;
+    clampCam(s, c);
+  }
+
+  // look at the HUD a few times a second (and at once when something known to move it changed)
+  function watchHud(s, dt) {
+    const g = s.hudSig, ts = UI.opt && UI.opt.textScale;
+    if (g.scale !== UI.scale || g.ox !== UI.ox || g.oy !== UI.oy || g.ts !== ts) {                  // the window or the text size changed (the chip's copy follows the text size)
+      if (g.ts !== ts) { s.infoKey = ''; s.infoDirty = true; }
+      g.scale = UI.scale; g.ox = UI.ox; g.oy = UI.oy; g.ts = ts; s.hudDirty = true;
+    }
+    s.hudT -= dt;
+    if (!s.hudDirty && s.hudT > 0) return;
+    s.hudDirty = false; s.hudT = HUD_POLL;
+    if (relayout(s, false)) applyLayout(s);
+  }
+
+  // The clamp on one axis, in terms of the padded page [lo, hi] (world) and the free box [b0, b1] (screen). The page edges may sit up to v inside the box:
+  //   a page bigger than the box covers it (v 0), a smaller one roams inside it (v = box - page), and slack widens both (the gap the fit itself has, see relayout).
+  // v is a floor, so the range only ever grows with slack: every tile can always be brought into the box (the page edge may rest on its edge), and a zoom about a
+  // pointer over the page that starts on the fit stays inside the range (the page grows about the pointer, so its edges only move away from it), which is what keeps
+  // the point under the pointer fixed.
+  function clampAxis(v, lo, hi, b0, b1, mid, z, slack) {
+    const vv = Math.max(0, (b1 - b0) - (hi - lo) * z, slack);
+    const a = lo + (mid - b0 - vv) / z, b = hi + (mid - b1 + vv) / z;
+    return clamp(v, Math.min(a, b), Math.max(a, b));
+  }
+
+  // the slack fades out as the page grows well past the fit (it is for the first notches of a zoom from the fit, not for a page that is already big)
+  const slackAt = (s, z) => clamp((SLACK_END - z / s.zMin) / (SLACK_END - SLACK_FULL), 0, 1);
+
   function clampCam(s, c) {
-    const w = s.world, hw = s.win.w / 2 / c.z, hh = s.win.h / 2 / c.z;
-    const x0 = w.x0 - PAD + hw, x1 = w.x1 + PAD - hw, y0 = w.y0 - PAD + hh, y1 = w.y1 + PAD - hh;
-    c.x = x0 > x1 ? (w.x0 + w.x1) / 2 : clamp(c.x, x0, x1);
-    c.y = y0 > y1 ? (w.y0 + w.y1) / 2 : clamp(c.y, y0, y1);
+    if (!s.box) return c;
+    if (c.z <= s.zMin + 1e-9) { c.x = s.fit.x; c.y = s.fit.y; return c; }       // fully zoomed out: the page sits on the fit
+    const w = s.world, b = s.box, k = slackAt(s, c.z);
+    c.x = clampAxis(c.x, w.x0 - PAD, w.x1 + PAD, b.x0, b.x1, CX, c.z, s.slack.x * k);
+    c.y = clampAxis(c.y, w.y0 - PAD, w.y1 + PAD, b.y0, b.y1, CY, c.z, s.slack.y * k);
     return c;
   }
 
@@ -177,13 +443,13 @@
     return nz;
   }
 
-  const defaultZoom = () => (document.getElementById('stage') && document.getElementById('stage').classList.contains('compact') ? 1.2 : 1);
+  const defaultZoom = () => (isCompact() ? 1.2 : 1);
 
   function tokenWorld(s) { return { x: s.tok.x, y: s.tok.y }; }
 
-  function userMoved(s) { s.follow = false; s.goal = null; s.fitted = false; }
+  function userMoved(s) { s.follow = false; s.goal = null; s.fitted = false; s.fg = null; }
 
-  // glide the camera: {x, y} world centre (optional), z zoom (optional)
+  // glide the camera: {x, y} camera centre (optional), z zoom (optional)
   function glideTo(s, g, rates) {
     if (headless()) {
       if (g.z !== undefined) { s.cam.z = clamp(g.z, s.zMin, ZMAX); s.tz = s.cam.z; }
@@ -193,38 +459,43 @@
       return;
     }
     s.goal = g.x === undefined ? null : { x: g.x, y: g.y };
-    if (g.z !== undefined) { s.tz = clamp(g.z, s.zMin, ZMAX); s.zp = { x: CX, y: CY }; }
+    if (g.z !== undefined) { s.tz = clamp(g.z, s.zMin, ZMAX); s.zp = freeMid(s); }
     if (rates) { s.panRate = rates[0]; s.zoomRate = rates[1]; } else { s.panRate = 7; s.zoomRate = 12; }
   }
 
   function followParty(s, on) {
     s.follow = !!on;
-    if (on) { s.goal = null; s.fitted = false; }
+    if (on) { s.goal = null; s.fitted = false; s.fg = null; }
   }
+
+  // the camera is on the fit view: asked to be (Fit), or zoomed all the way out by any means (wheel, pinch, the buttons, the keys), where it sits on the fit
+  const onFit = (s) => s.fitted || (s.cam.z <= s.zMin + 1e-9 && s.tz <= s.zMin + 1e-9);
 
   function toggleFit(s) {
     if (s.empty) return;
-    if (s.fitted) {
+    s.fg = null;
+    if (onFit(s)) {
       s.fitted = false;
       followParty(s, true);
       glideTo(s, { z: defaultZoom() });
-      if (headless()) { const p = tokenWorld(s); s.cam.x = p.x; s.cam.y = p.y; clampCam(s, s.cam); }
+      if (headless()) { const p = tokenWorld(s), c = camFor(s, p.x, p.y, s.cam.z); s.cam.x = c.x; s.cam.y = c.y; clampCam(s, s.cam); }
     } else {
       s.fitted = true; s.follow = false;
-      glideTo(s, { x: (s.world.x0 + s.world.x1) / 2, y: (s.world.y0 + s.world.y1) / 2, z: s.fitZ });
+      glideTo(s, { x: s.fit.x, y: s.fit.y, z: s.fit.z });
     }
     snd('ui_click');
   }
 
   function zoomStep(s, f) {
     if (s.empty) return;
-    s.fitted = false;
-    const z = clamp(s.tz * f, s.zMin, ZMAX);
-    if (headless()) { zoomAt(s, z, CX, CY); s.tz = s.cam.z; return; }
-    s.tz = z; s.zp = { x: CX, y: CY }; s.zoomRate = 12;
+    s.fitted = false; s.fg = null;
+    const z = clamp(s.tz * f, s.zMin, ZMAX), m = freeMid(s);
+    if (headless()) { zoomAt(s, z, m.x, m.y); s.tz = s.cam.z; s.fitted = s.cam.z <= s.zMin + 1e-9; if (s.fitted) { s.follow = false; s.goal = null; } return; }
+    s.tz = z; s.zp = m; s.zoomRate = 12;
   }
 
   function panBy(s, dx, dy) {                                   // screen px
+    if (s.cam.z <= s.zMin + 1e-9) return;                       // fully zoomed out the camera is pinned on the fit: nothing to pan
     userMoved(s);
     s.cam.x += dx / s.cam.z; s.cam.y += dy / s.cam.z;
     clampCam(s, s.cam);
@@ -232,6 +503,15 @@
 
   function frameCamera(s, dt) {
     const c = s.cam;
+    if (s.fg) {                                                   // gliding to a fit that moved: straight from where the camera is to where the fit now is (the fit may move again)
+      const g = s.fg, f = s.fit;
+      g.t += dt;
+      const k = clamp(g.t / FIT_GLIDE_S, 0, 1), e = U.ease.inOutQuad(k);
+      c.z = g.z0 * Math.pow(f.z / g.z0, e); c.x = g.x0 + (f.x - g.x0) * e; c.y = g.y0 + (f.y - g.y0) * e;
+      s.tz = c.z;
+      if (k >= 1) { c.z = s.tz = f.z; c.x = f.x; c.y = f.y; s.fg = null; }
+      return;
+    }
     // zoom first (pivot kept), then pan, so a glide to a point lands where it says
     if (Math.abs(c.z - s.tz) > 1e-4) {
       const k = 1 - Math.exp(-s.zoomRate * dt);
@@ -239,7 +519,7 @@
       if (Math.abs(c.z - s.tz) < 1e-3) { zoomAt(s, s.tz, s.zp.x, s.zp.y); }
     }
     let tx = null, ty = null;
-    if (s.follow) { const p = tokenWorld(s); tx = p.x; ty = p.y; }
+    if (s.follow) { const p = tokenWorld(s), g = camFor(s, p.x, p.y, c.z); tx = g.x; ty = g.y; }
     else if (s.goal) { tx = s.goal.x; ty = s.goal.y; }
     if (tx !== null) {
       const g = clampCam(s, { x: tx, y: ty, z: c.z });
@@ -253,6 +533,7 @@
       if (Math.hypot(s.vel.x, s.vel.y) < 6) s.inertia = false;
     }
     clampCam(s, c);
+    if (c.z <= s.zMin + 1e-9 && s.tz <= s.zMin + 1e-9 && !s.goal) { s.fitted = true; s.follow = false; }      // zoomed all the way out (a button, the keys, a glide) is the fit view, whether the camera was following or not
   }
 
   // which hex is under a stage point, or null when the point is on the frame or off the page
@@ -265,12 +546,15 @@
     return T ? { q: T.q, r: T.r } : null;
   }
 
-  // keep a world point on screen (keyboard cursor, a tile that just popped): glide only when it is outside the middle part of the window
+  // keep a world point where the HUD leaves it visible (keyboard cursor, a tile that just popped): glide, to the middle of the free box, only when it
+  // is outside the middle part of that box
   function revealOnScreen(s, wx, wy) {
-    const c = s.cam, sx = wx2sx(c, wx), sy = wy2sy(c, wy), m = 110 + c.z * 30;
-    if (sx > s.win.x + m && sx < s.win.x + s.win.w - m && sy > s.win.y + m && sy < s.win.y + s.win.h - m) return;
+    const c = s.cam, f = s.free, sx = wx2sx(c, wx), sy = wy2sy(c, wy), m = Math.min(110 + c.z * 30, (f.y1 - f.y0) * 0.22);
+    if (c.z <= s.zMin + 1e-9) return;                           // on the fit the whole page is already on free ground
+    if (sx > f.x0 + m && sx < f.x1 - m && sy > f.y0 + m && sy < f.y1 - m) return;
     userMoved(s);
-    glideTo(s, { x: wx, y: wy });
+    const g = camFor(s, wx, wy, c.z);
+    glideTo(s, { x: g.x, y: g.y });
   }
 
   // ==================================================================================================================
@@ -286,6 +570,16 @@
     list.sort((a, b) => a.T.r - b.T.r || a.T.q - b.T.q);
     s.tiles = list;
     s.byKey = new Map(list.map((e) => [e.k, e]));
+    // the hexes of one world row (the boss on its own, its ring is wider): what the fit search works on
+    const rows = new Map();
+    list.forEach((e) => {
+      const rad = e.T.type === 'boss' ? BOSS_PAD : HEX_PAD, k = e.y.toFixed(2) + ':' + rad;
+      let g = rows.get(k);
+      if (!g) { g = { y: e.y, rad, xs: [] }; rows.set(k, g); }
+      g.xs.push(e.x);
+    });
+    s.rows = Array.from(rows.values());
+    s.rows.forEach((g) => g.xs.sort((a, b) => a - b));
   }
 
   const hasMasks = () => typeof ART !== 'undefined' && ART && ART.map && isFn(ART.map.edgeMasks);
@@ -644,7 +938,7 @@
     };
     m.set = (n, max, animate) => {
       max = Math.max(1, max | 0); n = clamp(n | 0, 0, max);
-      if (max !== m.max) m.build(max);
+      if (max !== m.max) { m.build(max); if (m.onbuild) m.onbuild(); }
       const old = m.shown < 0 ? n : m.shown;
       const anim = animate && !headless() && !reduced() && old !== n;
       m.drops.forEach((d, i) => {
@@ -689,6 +983,7 @@
     if (!bc.order.length) H.chips.appendChild(mk('span', { class: 'mp-tray-empty', text: 'No brushes. Brush racks and champions hold them.' }));
     H.tray.classList.toggle('empty', !bc.order.length);
     s.last.brushes = R.brushes.join(',');
+    s.hudDirty = true;
   }
 
   // ---- the treasure strip
@@ -713,6 +1008,7 @@
     if (!R.relics.length) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-none', 'aria-label': 'Treasures: none yet', onclick: open }, UI.icon('relic', 'lantern', 24, { dim: true }, 'mp-relic-none-ico'), mk('span', { text: 'Treasures' })));
     H.relics.classList.toggle('empty', !R.relics.length);
     s.last.relics = relicKey(R);
+    s.hudDirty = true;
   }
 
   function tool(label, glyph, onclick, tip, key) {
@@ -729,6 +1025,7 @@
     H.badges = R.heroes.map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp, class: 'mp-hero' }));
     H.party = mk('div', { class: 'mp-party' }, ...H.badges);
     H.inkMeter = makeInk(s);
+    H.inkMeter.onbuild = () => { s.hudDirty = true; };
     // banner: chapter, title written with a brush, and how much of the page is painted
     H.chapterN = mk('span', { class: 'mp-ch', text: 'Chapter ' + U.roman(R.chapter || 1) });
     H.title = mk('h1', { class: 'mp-title', text: chapterTitle(R.chapter || 1) });
@@ -762,17 +1059,18 @@
     H.info = mk('div', { class: 'mp-info', 'aria-hidden': 'true' }, H.infoIco, mk('div', { class: 'mp-info-txt' }, H.infoName, H.infoText, H.infoAct));
     // brush mode bar
     H.modeName = mk('b', { class: 'mp-mode-name' });
-    H.modeText = mk('p', { class: 'mp-mode-text' });
+    H.modeText = mk('span', { class: 'mp-mode-text' });
     H.modeIco = mk('span', { class: 'mp-mode-ico', 'aria-hidden': 'true' });
     H.apply = UI.btn('Paint', { kind: 'primary', size: 'sm', onclick: () => applyBrushNow(s), sfx: 'ui_click' });
     H.cancel = UI.btn('Cancel', { kind: 'ghost', size: 'sm', onclick: () => exitBrush(s, true), sfx: 'ui_back' });
-    H.mode = mk('div', { class: 'mp-mode', hidden: true, role: 'group', 'aria-label': 'Brush mode' }, H.modeIco, mk('div', { class: 'mp-mode-txt' }, H.modeName, H.modeText), H.apply, H.cancel);
+    H.mode = mk('div', { class: 'mp-mode', hidden: true, role: 'group', 'aria-label': 'Brush mode' }, H.modeIco, mk('p', { class: 'mp-mode-txt' }, H.modeName, ' ', H.modeText), H.apply, H.cancel);
     // the box the tutorial points at, and the layer the flying drops live in
     H.hexAnchor = tut(mk('div', { class: 'mp-hexanchor', 'aria-hidden': 'true' }), 'hex');
     H.fly = mk('div', { class: 'mp-fly-layer', 'aria-hidden': 'true' });
     hud.append(H.party, H.inkMeter.root, H.banner, H.gold, H.tools, H.relics, H.tray, H.info, H.mode, H.hexAnchor, H.fly);
     root.appendChild(hud);
-    root.appendChild(UI.menuButton());
+    H.menu = UI.menuButton();
+    root.appendChild(H.menu);
     H.root = hud;
     renderTray(s); renderRelics(s);
     s.last.deck = R.deck.length;
@@ -798,7 +1096,7 @@
     const R = s.R, H = s.hud, L = s.last;
     if (!H.inkMeter) return;
     if (L.ink !== R.ink || L.inkMax !== R.inkMax) { H.inkMeter.set(R.ink, R.inkMax, animate !== false); L.ink = R.ink; L.inkMax = R.inkMax; }
-    if (L.gold !== R.gold) { H.gold.rbSet(R.gold, { animate: true }); L.gold = R.gold; }
+    if (L.gold !== R.gold) { H.gold.rbSet(R.gold, { animate: true }); L.gold = R.gold; s.hudDirty = true; }
     R.heroes.forEach((h, i) => {
       const k = h.hp + '/' + h.maxHp;
       if (L['hp' + i] !== k) { H.badges[i].rbSet({ hp: h.hp, maxHp: h.maxHp }); L['hp' + i] = k; }
@@ -814,6 +1112,11 @@
   }
 
   // ---- the hex info chip
+  // The chip and the mode bar are a fixed size (two clamped lines of text, two of action), so a sentence that has to stay readable comes in shorter versions for the
+  // places that have less room: tier 0 the normal layout, 1 a larger text size, 2 a phone (its chip is narrower, at any text size). say(full, short, shortest) picks one.
+  const copyTier = () => (isCompact() ? 2 : (UI.opt && UI.opt.textScale > 1.01) ? 1 : 0);
+  const say = (...v) => v[Math.min(copyTier(), v.length - 1)];
+
   function foesOf(T) {
     const g = T.content && T.content.enc ? safe(() => DATA.groupById(T.content.enc), null) : null;
     if (!g || !g.enemies) return '';
@@ -850,19 +1153,19 @@
       else {
         const path = MAP.walkPath(M, q, r);
         if (!path) { o.action = 'No painted path leads there.'; o.tone = 'bad'; }
-        else if (path.length && (path[path.length - 1][0] !== q || path[path.length - 1][1] !== r)) { o.action = 'Walk toward it: ' + U.plural(path.length, 'step') + ', stopping at the first thing in the way.'; o.tone = 'go'; }
+        else if (path.length && (path[path.length - 1][0] !== q || path[path.length - 1][1] !== r)) { const n = U.plural(path.length, 'step'); o.action = say('Walk toward it: ' + n + ', stopping at the first thing in the way.', 'Walk: ' + n + ', stops at the first thing in the way.', 'Walk ' + n + ', stops early.'); o.tone = 'go'; }
         else o.action = (T.type === 'empty' || T.type === 'start' || T.done ? 'Walk there: ' : 'Walk there and begin: ') + U.plural(path.length, 'step') + '.', o.tone = 'go';
       }
       return o;
     }
-    if (T.known) { const ti = tileInfo(T.type); o.tile = T.type; o.name = ti.name + ', glimpsed'; o.text = ti.text; }
+    if (T.known) { const ti = tileInfo(T.type); o.tile = T.type; o.name = ti.name + (copyTier() === 2 && UI.opt && UI.opt.textScale > 1.01 ? ', seen' : ', glimpsed'); o.text = ti.text; }   // a phone at the Larger size has no room for the longer word
     else { o.name = 'Unwritten page'; o.text = 'Blank paper. Paint it to see what the tale holds.'; }
     if (MAP.canPaint(M, q, r).ok) {
       o.action = (R.ink >= cost ? 'Tap to paint: ' : 'Not enough Ink to paint: ') + cost + ' Ink.';
       o.tone = R.ink >= cost ? 'paint' : 'bad';
     } else {
       const pre = RUN.paintPreview(R, q, r);
-      if (pre.ok) { o.action = (pre.affordable ? 'Tap twice to paint a chain of ' : 'Too far for your Ink: a chain of ') + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
+      if (pre.ok) { o.action = (pre.affordable ? say('Tap twice to paint a chain of ', 'Tap twice: a chain of ') : say('Too far for your Ink: a chain of ', 'Too far: a chain of ')) + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
       else { o.action = 'No way to reach it.'; o.tone = 'bad'; }
     }
     return o;
@@ -883,9 +1186,12 @@
 
   // the line that stands in for the info chip while nothing is pointed at
   function restingInfo(s) {
-    const p = MAP.progress(s.M), R = s.R;
-    const txt = R.ink >= DATA.ECONOMY.paintCost ? 'Tap the fog beside the painted page to paint it for ' + DATA.ECONOMY.paintCost + ' Ink, or tap painted ground to walk.' : 'No Ink left to paint. Walk to a well, fight, or use a brush.';
-    return { q: -1, r: -1, tile: null, name: p.painted + ' of ' + p.total + ' hexes painted', text: txt, action: R.brushes.length ? 'Brushes: ' + R.brushes.length + ' ready.' : '', tone: 'rest' };
+    const p = MAP.progress(s.M), R = s.R, c = DATA.ECONOMY.paintCost, can = R.ink >= c;
+    const txt = can ? say('Paint fog beside the page for ' + c + ' Ink, or tap painted ground to walk.', 'Tap fog to paint it (' + c + ' Ink), tap painted ground to walk.')
+      : say('No Ink left to paint. Walk to a well, fight, or use a brush.', 'No Ink to paint. Walk to a well, or use a brush.');
+    // a phone has no room for the description line, so the primary hint goes in the action line there
+    const act = isCompact() ? (can ? 'Tap fog to paint, ground to walk.' : 'No Ink: walk, or use a brush.') : R.brushes.length ? 'Brushes: ' + R.brushes.length + ' ready.' : '';
+    return { q: -1, r: -1, tile: null, name: p.painted + ' of ' + p.total + ' hexes painted', text: txt, action: act, tone: 'rest' };
   }
 
   function refreshInfo(s, announce) {
@@ -1071,7 +1377,8 @@
   // ==================================================================================================================
   // brushes
   // ==================================================================================================================
-  const ORIGIN_HINT = { painted: 'Start from a painted hex.', 'hidden-adjacent': 'Start from a blank hex beside the painted page.', 'hidden-near': 'Start from a blank hex within 4 hexes of the party.' };
+  const ORIGIN_HINT = { painted: () => 'Start from a painted hex.', 'hidden-adjacent': () => say('Start from a blank hex beside the painted page.', 'Start beside the painted page.'), 'hidden-near': () => say('Start from a blank hex within 4 hexes of the party.', 'Start within 4 hexes of the party.') };
+  const originHint = (can) => (can && can.need && ORIGIN_HINT[can.need] ? ORIGIN_HINT[can.need]() : '');
 
   function bestDir(s, a) {
     const M = s.M, b = s.brush;
@@ -1100,6 +1407,8 @@
     paintBrushBar(s);
     updateBrushPreview(s);
     markChips(s);
+    s.hud.root.classList.add('brushing');                       // the mode bar takes the chapter banner's slot at the top
+    s.hudDirty = true;                                          // and it is part of the HUD footprint while it is up: the fit is solved again (the camera on the fit glides to it)
     refreshInfo(s, true);
     UI.announce(def.name + ' ready. ' + def.text);
     return true;
@@ -1109,6 +1418,8 @@
     if (!s.brush) return;
     s.brush = null;
     s.hud.mode.hidden = true;
+    s.hud.root.classList.remove('brushing');
+    s.hudDirty = true;                                          // the bar is gone from the footprint: back to the normal fit
     markChips(s);
     s.infoKey = ''; s.infoDirty = true;
     if (announce) { snd('ui_back'); UI.announce('Brush put away.'); }
@@ -1135,11 +1446,12 @@
     let txt, ok = false;
     if (b.anchor) {
       ok = b.valid;
-      txt = b.dirKind ? (b.valid ? 'Aim with the pointer or tap an arrow hex, then tap it again to paint ' + U.plural(b.preview.length, 'hex', 'hexes') + '.' : 'Nothing would paint that way. Aim elsewhere.') : 'Tap the hex again or press Paint to fill ' + U.plural(b.preview.length, 'hex', 'hexes') + '.';
+      const n = U.plural(b.preview.length, 'hex', 'hexes');
+      txt = b.dirKind ? (b.valid ? say('Aim, then tap the arrow hex again to paint ' + n + '.', 'Tap the arrow again to paint ' + n + '.') : say('Nothing would paint that way. Aim elsewhere.', 'Nothing paints that way. Aim elsewhere.')) : say('Tap the hex again or press Paint to fill ' + n + '.', 'Tap again to fill ' + n + '.');
     } else {
       const fh = focusHex(s), a = fh ? b.anchors.get(keyOf(fh.q, fh.r)) : null;
       ok = !!a && b.preview.length > 0 && !b.dirKind;
-      txt = b.dirKind ? 'Glowing hexes are places to start. Pick one, then aim.' : 'Glowing hexes are places to start. Hover to see the shape, tap to paint.';
+      txt = b.dirKind ? say('Glowing hexes are places to start. Pick one, then aim.', 'Pick a glowing hex, then aim.') : say('Glowing hexes are places to start. Hover for the shape, tap to paint.', 'Tap a glowing hex to paint.');
     }
     H.modeText.textContent = txt;
     H.apply.rbSet({ disabled: !ok, reason: b.anchor ? 'Aim the brush at hexes it can paint' : 'Pick a glowing hex first' });
@@ -1178,11 +1490,11 @@
   function brushInfo(s, fh) {
     const b = s.brush, d = b.def;
     const o = { q: -1, r: -1, tile: null, name: d.name, text: d.text, action: '', tone: 'paint' };
-    if (b.anchor) { o.action = b.dirKind ? (b.valid ? 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + '. Tap the aimed direction to apply.' : 'Nothing to paint that way.') : 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + '. Tap again to apply.'; if (!b.valid) o.tone = 'bad'; return o; }
+    if (b.anchor) { o.action = b.dirKind ? (b.valid ? 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + say('. Tap the aimed direction to apply.', '. Tap the arrow again.') : 'Nothing to paint that way.') : 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + '. Tap again to apply.'; if (!b.valid) o.tone = 'bad'; return o; }
     if (!fh) { o.action = 'Glowing hexes are places to start.'; return o; }
     if (b.anchors.has(keyOf(fh.q, fh.r))) { o.action = (b.dirKind ? 'Tap to start here, then aim.' : s.mode === 'touch' ? 'Tap to see the shape.' : 'Tap to paint ' + U.plural(b.preview.length, 'hex', 'hexes') + '.'); return o; }
     const can = MAP.canBrush(s.M, b.id, fh.q, fh.r, 0);
-    o.action = (can && can.need && ORIGIN_HINT[can.need]) || reasonText(can && can.reason);
+    o.action = originHint(can) || reasonText(can && can.reason);
     o.tone = 'bad';
     return o;
   }
@@ -1192,7 +1504,7 @@
     if (b.dirKind) {
       if (!b.anchor) {
         const a = b.anchors.get(key);
-        if (!a) { const can = MAP.canBrush(s.M, b.id, q, r, 0); refuse(s, (can && can.need && ORIGIN_HINT[can.need]) || reasonText(can && can.reason)); return; }
+        if (!a) { const can = MAP.canBrush(s.M, b.id, q, r, 0); refuse(s, originHint(can) || reasonText(can && can.reason)); return; }
         b.anchor = { q, r }; b.dir = bestDir(s, a);
         snd('ui_click');
         updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true;
@@ -1211,7 +1523,7 @@
     }
     // the shapes that need no aim: a mouse has already seen the preview on hover, a finger confirms with a second tap
     const a = b.anchors.get(key);
-    if (!a) { const can = MAP.canBrush(s.M, b.id, q, r, 0); refuse(s, (can && can.need && ORIGIN_HINT[can.need]) || reasonText(can && can.reason)); return; }
+    if (!a) { const can = MAP.canBrush(s.M, b.id, q, r, 0); refuse(s, originHint(can) || reasonText(can && can.reason)); return; }
     if (touch && !(b.anchor && b.anchor.q === q && b.anchor.r === r)) {
       b.anchor = { q, r }; snd('ui_click'); updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true;
       UI.announce(U.plural(b.preview.length, 'hex', 'hexes') + ' would paint. Tap again to apply.');
@@ -1409,6 +1721,7 @@
     s.cam.x = P.wx - (mid.x - CX) / z;
     s.cam.y = P.wy - (mid.y - CY) / z;
     clampCam(s, s.cam);
+    s.fitted = z <= s.zMin + 1e-9;
   }
 
   function onDown(e, p) {
@@ -1484,6 +1797,7 @@
     s.inertia = false;
     zoomAt(s, s.cam.z * Math.exp(-dy * 0.0016), p.x, p.y);
     s.tz = s.cam.z;
+    s.fitted = s.cam.z <= s.zMin + 1e-9;                          // zoomed all the way out is the fit view
     if (s.mode === 'mouse') { setHover(s, hexAt(s, p.x, p.y)); flushInfo(s); }
   }
 
@@ -1644,6 +1958,7 @@
       else s.busy = false;
     }
     if (!(s.inkHold && s.t < s.inkHold)) { s.inkHold = 0; syncHud(s, true); }
+    watchHud(s, dt);                                              // after syncHud: a tray or a strip it just rebuilt is measured in the same frame
     flushInfo(s);
     if ((s.frame & 3) === 0) placeHexAnchor(s);
   }
@@ -1687,18 +2002,20 @@
     const p0 = worldOf(M.pos.q, M.pos.r);
     s.tok = { x: p0.x, y: p0.y, dir: 1, moving: false };
     buildHud(s, root);
+    s.infoDirty = true; flushInfo(s);                              // the info chip has its text before it is measured (an empty chip is a line shorter)
+    relayout(s, true);                                             // the HUD is in the page now: its real rectangles decide the fit
     rebuildVisual(s);
     initPetals(s);
     // the camera: a swoop from the whole page down to the party on the first visit to a chapter, else straight to the party
     const first = MEMO.id !== R.id || MEMO.chapter !== R.chapter;
     MEMO.id = R.id; MEMO.chapter = R.chapter;
     s.cam.z = clamp(defaultZoom(), s.zMin, ZMAX); s.tz = s.cam.z;
-    s.cam.x = p0.x; s.cam.y = p0.y;
+    { const c0 = camFor(s, p0.x, p0.y, s.cam.z); s.cam.x = c0.x; s.cam.y = c0.y; }
     clampCam(s, s.cam);
     if (first && !headless()) {
       startIntro(s, root);
       if (!reduced()) {
-        s.cam.z = s.zMin; s.cam.x = (s.world.x0 + s.world.x1) / 2; s.cam.y = (s.world.y0 + s.world.y1) / 2; clampCam(s, s.cam);
+        s.cam.z = s.zMin; s.cam.x = s.fit.x; s.cam.y = s.fit.y; clampCam(s, s.cam);
         s.follow = true; s.panRate = 1.6; s.zoomRate = 1.7;
         s.tz = clamp(defaultZoom(), s.zMin, ZMAX);
       }
@@ -1734,8 +2051,17 @@
   const mapDebug = {
     state: () => S,
     cam: () => (S && !S.empty ? { x: S.cam.x, y: S.cam.y, z: S.cam.z, follow: S.follow, fitted: S.fitted, zMin: S.zMin, zMax: ZMAX } : null),
+    // the HUD footprint the camera works with: its rectangles (live: measured, else the fallback), the free box, the clamp box and its slack, and the fit camera.
+    // hud(true) measures the HUD again first, and when it moved that re-fits (so it can move the camera, as the next frame would have)
+    hud: (measure) => {
+      if (!S || S.empty) return null;
+      if (measure && relayout(S, false)) applyLayout(S);
+      const cp = (o) => Object.assign({}, o);
+      return { rects: S.hudRects.map(cp), free: cp(S.free), box: cp(S.box), slack: cp(S.slack), fit: cp(S.fit), margin: HUD_MARGIN, ver: S.hudVer };
+    },
     screenOf: (q, r) => { if (!S || S.empty) return null; const p = screenOf(S, q, r); return { x: p.x, y: p.y }; },
     hexAt: (x, y) => (S && !S.empty ? hexAt(S, x, y) : null),
+    clamp: (x, y, z) => (S && !S.empty ? clampCam(S, { x, y, z: clamp(z, S.zMin, ZMAX) }) : null),         // where the camera may really be
   };
 
   UI.screens.map = {

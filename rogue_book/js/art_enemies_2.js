@@ -528,7 +528,7 @@
   define('drowned_general', {
     size: 'l', lw: 3.4, k: 0.95,
     col: { rim: GC.glow },
-    bounds: { w: 200, h: 290, head: { x: 0, y: -284 }, body: { x: 0, y: -150 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 200, h: 326, head: { x: 0, y: -284 }, body: { x: 0, y: -150 }, feet: { x: 0, y: 0 } },
     die: { box: [-100, -290, 110, 4], nx: 12, ny: 16, from: 'top', order: 0.5, shape: 'ink', kinds: ['bubble', 'ink', 'bubble', 'coin'], cols: ['#a8ecff', '#1c3d78', '#d8f6ff', '#e8bc4a'], wind: [4, 12], size: 7.5 },
     parts: {
       legN: { box: [-56, -108, -2, 4], pivot: [-26, -100], draw(S) { generalLeg(S, false); } },
@@ -733,7 +733,7 @@
   define('chochin', {
     size: 'm', lw: 3,
     col: { rim: '#ffd98a' },
-    bounds: { w: 118, h: 196, head: { x: 0, y: -176 }, body: { x: 0, y: -104 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 118, h: 201, head: { x: 0, y: -176 }, body: { x: 0, y: -104 }, feet: { x: 0, y: 0 } },
     die: { box: [-62, -196, 62, -20], nx: 10, ny: 13, from: 'bottom', order: 0.86, shape: 'paper', kinds: ['ember', 'scrap', 'ember'], cols: ['#ffb040', '#f6e4bd', '#ff6a2a'], wind: [8, -34], size: 6 },
     parts: {
       body: {
@@ -1298,7 +1298,7 @@
   define('paper_puppet', {
     size: 's', lw: 2.6, k: 1.2,
     col: { rim: '#ffc0d0' },
-    bounds: { w: 80, h: 112, head: { x: 0, y: -108 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 80, h: 153, head: { x: 0, y: -108 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
     die: { box: [-42, -122, 42, 2], nx: 6, ny: 9, from: 'top', order: 0.5, shape: 'paper', kinds: ['scrap', 'thread', 'scrap'], cols: ['#f3e6c8', '#d8402e', '#ffd0d8'], wind: [-8, 8], size: 6 },
     parts: {
       body: {
@@ -1401,7 +1401,7 @@
   define('lantern_wisp', {
     size: 's', lw: 2.6, k: 1.15,
     col: { rim: '#cfeaff' },
-    bounds: { w: 70, h: 104, head: { x: 0, y: -100 }, body: { x: 0, y: -50 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 70, h: 127, head: { x: 0, y: -100 }, body: { x: 0, y: -50 }, feet: { x: 0, y: 0 } },
     die: { box: [-40, -100, 40, 0], nx: 6, ny: 7, from: 'top', clip: false, kinds: ['ember', 'ember', 'petal'], cols: ['#a8f0ff', '#ffffff', '#7fe8ff'], wind: [0, -34], size: 5 },
     parts: {},
     chains: {
@@ -1483,7 +1483,7 @@
   define('boss_jorogumo', {
     size: 'xl', lw: 3.6, k: 1.1,
     col: { rim: '#ffb8d8' },
-    bounds: { w: 560, h: 384, head: { x: -6, y: -372 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 560, h: 398, head: { x: -6, y: -372 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 }, right: 328 },
     die: { box: [-250, -350, 250, 6], nx: 16, ny: 16, from: 'out', order: 0.5, shape: 'ink', kinds: ['petal', 'thread', 'scrap', 'thread', 'ember'], cols: ['#ff7eb6', '#f4ecff', '#b01c40', '#e8dcff', '#f0c860'], wind: [-6, -30], size: 9 },
     parts: {
       // ------------------------------------------------ phase 0: the Courtesan
@@ -2088,7 +2088,7 @@
   define('nopperabo', {
     size: 'm', lw: 3, k: 0.9,
     col: { rim: NW.mint },
-    bounds: { w: 122, h: 184, head: { x: 0, y: -180 }, body: { x: 0, y: -92 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 122, h: 194, head: { x: 0, y: -180 }, body: { x: 0, y: -92 }, feet: { x: 0, y: 0 } },
     die: { box: [-70, -190, 70, -6], nx: 10, ny: 13, from: 'top', order: 0.6, shape: 'ink', kinds: ['ink', 'petal', 'ink'], cols: ['#241a3a', '#b8fff0', '#c9c5f2'], wind: [-6, -34], size: 6 },
     parts: {
       body: {
@@ -2246,7 +2246,7 @@
   define('drowned_samurai', {
     size: 'l', lw: 3.4, k: 1,
     col: { rim: SW.blue },
-    bounds: { w: 170, h: 268, head: { x: 0, y: -262 }, body: { x: 0, y: -140 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 170, h: 315, head: { x: 0, y: -262 }, body: { x: 0, y: -140 }, feet: { x: 0, y: 0 } },
     die: { box: [-90, -270, 90, 4], nx: 11, ny: 14, from: 'top', order: 0.55, shape: 'ink', kinds: ['bubble', 'ink', 'bubble'], cols: ['#8fc8ff', '#2a3f7c', '#b8e0ff'], wind: [0, 10], size: 7 },
     parts: {
       legN: { box: [-52, -104, -4, 4], pivot: [-24, -96], draw(S) { samuraiLeg(S, false); } },
@@ -2471,7 +2471,7 @@
   define('koi_spirit', {
     size: 'm', lw: 3, k: 1,
     col: { rim: '#ffe6a0' },
-    bounds: { w: 132, h: 176, head: { x: -30, y: -164 }, body: { x: 0, y: -100 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 132, h: 187, head: { x: -30, y: -164 }, body: { x: 0, y: -100 }, feet: { x: 0, y: 0 } },
     die: { box: [-70, -180, 60, 12], nx: 10, ny: 12, from: 'bottom', order: 0.7, shape: 'ink', kinds: ['coin', 'bubble', 'coin', 'petal'], cols: ['#f5c96a', '#ffffff', '#ffe08a', '#ff9a7a'], wind: [-6, -30], size: 7 },
     parts: {
       body: {
@@ -3114,7 +3114,7 @@
   define('rokurokubi', {
     size: 'm', lw: 3, k: 0.82,
     col: { rim: '#ffb0b8' },
-    bounds: { w: 128, h: 190, head: { x: 0, y: -186 }, body: { x: 0, y: -80 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 128, h: 222, head: { x: 0, y: -186 }, body: { x: 0, y: -80 }, feet: { x: 0, y: 0 } },
     die: { box: [-70, -230, 70, 4], nx: 9, ny: 15, from: 'top', order: 0.5, shape: 'ink', kinds: ['petal', 'ink', 'petal'], cols: ['#ff7eb6', '#1c1638', '#b8283a'], wind: [-6, -30], size: 6.5 },
     parts: {
       body: {
@@ -3253,7 +3253,7 @@
   define('ittan_momen', {
     size: 'm', lw: 3, k: 0.96,
     col: { rim: '#cfeaff' },
-    bounds: { w: 118, h: 186, head: { x: -6, y: -184 }, body: { x: 0, y: -96 }, feet: { x: 0, y: 0 } },
+    bounds: { w: 118, h: 198, head: { x: -6, y: -184 }, body: { x: 0, y: -96 }, feet: { x: 0, y: 0 } },
     die: { box: [-72, -190, 56, -4], nx: 9, ny: 14, from: 'top', order: 0.55, shape: 'paper', kinds: ['thread', 'scrap', 'petal', 'thread'], cols: ['#f7f5ff', '#3b4fa8', '#cfeaff', '#b9b4e8'], wind: [-12, -34], size: 6 },
     rig(ctx, st) {
       const E0 = st.E, t = st.t, m = st.m, sw = E0.swing, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, reach = Math.max(0, sw);

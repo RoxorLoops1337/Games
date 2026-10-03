@@ -513,6 +513,23 @@ Rest), `onPaint` (after each hex painted, by Ink, a brush or a chain), `onFightW
 - **Hex geometry** (`MAP.toPixel`, `MAP.corners`, `MAP.fromPixel`, `MAP.bounds`, `ART.map.*`, screen_map): `size` is the centre-to-corner radius (46 at zoom 1), width
   `sqrt(3) * size`, row pitch `1.5 * size`, odd rows shifted right by half a width, `toPixel` returns the hex CENTRE and `toPixel(0,0) = (0,0)`. The world is bigger than the screen so the
   map has a camera (pan by drag, zoom by wheel and pinch, follow the party).
+- **Camera and HUD.** The lacquer HUD (party, Ink, chapter banner, gold, menu button, the Deck, Legend, Fit, Zoom in and Zoom out buttons, the brush tray, the hex info chip, the treasure strip and, while a
+  brush is armed, the brush mode bar) lies over the page, so the camera works with the stage the HUD leaves free. The map screen measures the real rectangle of each piece in stage px at rest (the
+  slide-in of the entrance and a hover lift are measured out, a piece's ancestors included, so the first fit is the settled one), so the compact phone layout, the text size and the number of
+  brushes and treasures are accounted for; it measures again whenever one moves (a resize, a text size, a brush or a treasure gained, a brush armed or put away, a few times a second at most), and stands a
+  fixed fallback table in for a piece it cannot measure (a headless page). From the rectangles, each grown by 6 px: the **free box** is the largest box of the page window that no piece intrudes on (each
+  piece counts against the window side it hangs from); the **fit** is the largest zoom at which no hex of the page (the Void, the fog and the boss ring included) touches a piece or leaves the window, with
+  its placement, found by a search over zoom and offset that runs when the HUD changes and never per frame. The fit is the camera of the Fit button and of the opening swoop, and its zoom is `zMin`, the
+  minimum zoom: wheel, pinch and Zoom out stop there and the camera then sits on the fit (and counts as the fit view whether it was following the party or not: one press of Fit returns to the party), so
+  the whole page is always shown with nothing under the HUD (on a 1280x720 stage about 82 percent of the zoom the page used to fit at, 0.49 against 0.60). A camera on the fit glides to a fit that moved,
+  whichever way it moved. The **pan range** is the box the edges of the padded page (80 world px of margin) may travel to: the free box, so at every zoom above `zMin` any tile can be dragged onto ground the
+  HUD leaves free and the page cannot be lost off screen (a page smaller than the box roams inside it). The page edge may also rest inside the box by the gap the fit itself has at its sides (a page narrower
+  than the free box has one); that slack fades out between 1.6 and 2 times `zMin` (the default zoom has none) and only ever widens the range, and it is what keeps a wheel zoom about a pointer over the
+  page anchored (the point under the pointer stays fixed) when it starts on the fit. Follow, the keyboard cursor, a fresh tile and the zoom buttons all use the middle of the free box, not the middle of the window, so
+  the party and its neighbours are never under a piece. The info chip and the brush mode bar have a fixed size (the chip: a name line, two lines of text, two of action; the bar: two lines of text; longer text
+  is cut) so the footprint does not change with the hex under the pointer or what the bar says, and the primary hints come in shorter versions for the Larger text size and for a phone so they always fit. The
+  bar hangs from the top in the slot of the chapter banner (which fades while it is up), clear of the tray, the chip and the page's start hexes; arming or putting away a brush solves the fit again, and it
+  costs the page next to nothing because the bar sits where the banner already was.
 - **Painting.** Every tile starts hidden. `start` and every tile within `ECONOMY.map.startRing` (2) of it are painted (all `empty`, start itself `start`). Tiles of `LISTS.landmarks` are
   `known` from the start: fog shows a dim silhouette of their icon. Painting an unpainted, non-block hex adjacent to a painted hex costs `ECONOMY.paintCost` (1) Ink and reveals it and its content.
   Painting a far hex previews the cheapest chain (`MAP.pathToPaint`) with its total cost, and `RUN.paint` on it paints the whole chain, all or nothing.
@@ -1057,8 +1074,10 @@ URL params handled by `GAME.boot` (they work without `?debug=1`): `?goto=combat&
 
 ### 5.11 Screens
 
-Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Beyond this document the map screen exposes `UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y)}`,
-a read-only window onto the live visit (camera, where a hex is on the stage, which hex is under a stage point) for suites and the screenshot and autoplay tools; the menu screens expose
+**Geometry rule (alignment).** Wherever painted art and the DOM laid over it must agree (the gem cache plinths, the reward stage axis, the shop posts and planks, the hero select row, the combat docks), ONE constant table feeds both the painter and the CSS (the page writes it into custom properties), so the overlay cannot drift off the scenery. The tables are documented in the headers of `js/screen_node.js` (CACHE, RW, SHOP), `js/screen_menu.js` (HC, PARTY_CX, SLOT_DX, STAGE_BOX) and `js/screen_combat.js`. A change to a painted position is a change to its table, and the screen suites assert that the DOM centres equal the painted ones.
+
+Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Beyond this document the map screen exposes `UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y), hud(measure?), clamp(x, y, z)}`,
+a window onto the live visit (camera, where a hex is on the stage, which hex is under a stage point, the HUD footprint `{rects, free, box, slack, fit}` of 4.8 and where the clamp lets the camera be) for suites and the screenshot and autoplay tools. It only reads, with one exception: `hud(true)` measures the HUD again first, and when the HUD moved that re-fits, which can move the camera exactly as the next frame would have; the menu screens expose
 `state()` (title, heroSelect, library, settings, howto) and return null once left. Screens build DOM inside `root` on `enter`. They never route on their own: they call `GAME.nodeDone()` or `UI.go(...)` for menu navigation.
 Screen names and params (closed, `LISTS.screens`): `title`, `heroSelect`, `library {tab?}` (tabs `LISTS.libraryTabs`: Unlocks, Achievements, Story, Bestiary, History), `settings`, `howto`, `story {id, then?:{name, params}}`, `map`, `combat {node}`,
 `reward {rewards, source}`, `shop {node}`, `event {node}`, `camp {node}`, `forge {node}`, `chest {node}`, `gemcache {node}`, `chapterClear {chapter}` (chapters 1 and 2 only), `gameOver {summary}`, `victory {summary}`.

@@ -4,6 +4,7 @@
 //
 // Sections run against three stages: a recording FAKE SCENE (so the calls the screen makes are asserted exactly), NO SCENE at all (the
 // built-in fallback stage keeps the fight playable), and the REAL scene.js when it exists. COMBAT, RUN, META, UI and GAME are always real.
+import fs from 'node:fs';
 import { boot, harness } from './rogue_book_lib.mjs';
 
 const t = harness('rogue_book screen_combat');
@@ -304,7 +305,8 @@ await t.test('mount: the whole HUD exists, the intro drains, intents appear and 
   t.eq($$(g, '.cm-hand .hc').length, 5, 'five cards in the opening hand'); t.eq(st.C.hand.length, 5, 'the engine agrees');
   t.eq($$(g, '.cm-int:not([hidden])').length, 3, 'every enemy shows an intent bubble');
   ['hand', 'energy', 'endturn', 'swap', 'intent', 'enemy', 'relics', 'deck'].forEach((a) => t.ok(!!$(g, '[data-tut="' + a + '"]'), 'tutorial anchor ' + a));
-  t.ok(g.UI.anchorEl('hand') === $(g, '.cm-hand'), 'UI.anchorEl finds the hand');
+  // finding 38: the `hand` anchor is a box round the fan at rest, NOT the full-stage .cm-hand container the cards live in (a ring and a tail aimed at that pointed at empty sky)
+  t.ok(g.UI.anchorEl('hand') === $(g, '.cm-handbox'), 'UI.anchorEl finds the hand box'); t.ok(!$(g, '.cm-hand').getAttribute('data-tut'), 'and the full-stage .cm-hand container is not an anchor');
   t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-row')), 'FRONT', 'Hanae is in front'); t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-row')), 'BACK', 'Kuro is in back');
   t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-bonus')), '+2 dmg', 'the row bonus text is on the tag');
   t.eq(txt($(g, '.cm-swap .sw-cost')), 'FREE', 'the swap seal says FREE'); t.eq(txt($(g, '.cm-turn .ct-n')), 'Turn 1', 'the turn label');
@@ -753,11 +755,13 @@ await t.test('piles: draw and discard open the deck viewer with their contents (
   t.eq(errs(g), 0, 'no console errors');
 });
 
-await t.test('relic strip: treasures with tooltips, a +N chip past seven, and a flash when a relic hook runs', async () => {
+await t.test('relic strip: treasures with tooltips, a +N chip past seven places, and a flash when a relic hook runs', async () => {
   const g = fresh();
   const many = Object.keys(g.DATA.relics).slice(0, 11);
   const { st } = await enter(g, { enemies: ['kappa'], relics: many });
-  t.eq($$(g, '.cm-relics .relic').length, 7, 'seven relics show'); t.eq(txt($(g, '.cm-relic-more')), '+4', 'and a +4 chip');
+  // finding 18: the strip has seven PLACES and the +N chip takes the last one, so it ends at x 334 and never reaches the gold counter at x 360
+  t.eq(g.UI.screens.combat._t.RELIC_SLOTS, 7, 'the strip has seven places');
+  t.eq($$(g, '.cm-relics .relic').length, 6, 'six relics show'); t.eq(txt($(g, '.cm-relic-more')), '+5', 'and a +5 chip in the seventh place');
   t.ok($$(g, '.cm-relics .relic').every((r) => typeof r.rbTip === 'function'), 'each relic has a tooltip');
   g._click($(g, '.cm-relic-more'));
   t.ok(g.UI.overlay.has('relics'), 'the chip opens the Treasures overlay'); g.UI.overlay.closeAll();
@@ -1053,7 +1057,7 @@ await t.test('the frame loop: update() drives SCENE, draw() paints it, overlays 
   t.ok(sc(g).updates >= u0 + 4 && sc(g).draws >= d0 + 4, 'SCENE.update and SCENE.draw ran every frame');
   const id = S(g).C.enemies[0].id, a = JSON.parse(g._run('JSON.stringify(SCENE.anchor("enemy", ' + JSON.stringify(id) + '))'));
   const bar = $(g, '.cm-en[data-enemy="' + id + '"] .cm-ebarwrap'), hit = enemyBtn(g, id);
-  t.eq(bar.style.left, a.feet.x + 'px', 'the HP bar is centred on the feet'); t.eq(bar.style.top, (a.feet.y + 14) + 'px', '14 px under the feet');
+  t.eq(bar.style.left, a.feet.x + 'px', 'the HP bar is centred on the feet'); t.eq(bar.style.top, (a.feet.y + g.UI.screens.combat._t.UNDER.desk.bar) + 'px', 'UNDER.desk.bar px under the feet (the status row and the resting hand are sized from it)');
   const bub = $(g, '.cm-en[data-enemy="' + id + '"] .cm-int');
   t.eq(bub.style.left, a.top.x + 'px', 'the intent bubble is centred on the top'); t.ok(parseFloat(bub.style.top) <= a.top.y - 6, 'with its bottom 6 px above the head'); t.ok(parseFloat(bub.style.top) >= 62, 'and never above y 62');
   t.ok(parseFloat(hit.style.width) >= 96 && parseFloat(hit.style.height) >= 96, 'the hit area is at least 96 x 96');
@@ -1390,6 +1394,238 @@ await t.test('swap seal: a drain in progress dims it (busy) without disabling it
   t.ok(!swap.classList.contains('busy'), 'and it wakes when the drain ends');
   scr(g).debug().setStatus('hanae', 'bind', 1); await idle(g);
   t.ok(swap.getAttribute('aria-disabled') === 'true', 'Bind is a refusal: disabled');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+// ==================================================================================================== 11. alignment: the overlay must line up with the art and with itself
+// The CSS file is read as text: headless there is no layout, so the rules that place the HUD are checked at the source, against the same numbers the screen uses.
+const CSS = fs.readFileSync(new URL('../rogue_book/css/combat.css', import.meta.url), 'utf8');
+const cssRule = (sel) => { const m = new RegExp('(?:^|\\n|\\})\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}').exec(CSS); return m ? m[1] : ''; };
+const cssPx = (rule, prop) => { const m = new RegExp('(?:^|[;\\s])' + prop + ':\\s*(-?[\\d.]+)px').exec(rule); return m ? +m[1] : NaN; };
+
+await t.test('finding 38: the tutorial anchor for the hand is a box round the fan at rest and follows the hand', async () => {
+  const g = fresh();
+  const { slotFor, HAND, handBounds } = scr(g)._t;
+  const { st } = await enter(g, { enemies: ['kappa'] });
+  const box = $(g, '.cm-handbox');
+  t.ok(!!box && box.getAttribute('data-tut') === 'hand', 'the box carries data-tut=hand');
+  t.ok(!$$(g, '.cm-hand > .cm-handbox').length, 'and it sits beside .cm-hand, not inside it (syncHand indexes that container\'s children)');
+  const n = st.C.hand.length, b = handBounds(n, false);
+  t.eq(parseFloat(box.style.left), b.x0, 'it starts at the left edge of the first card (less the swing of the turned outer card)');
+  t.eq(parseFloat(box.style.left) + parseFloat(box.style.width), b.x1, 'and ends at the right edge of the last');
+  t.eq(parseFloat(box.style.top), HAND.restY, 'from the top of the resting fan'); t.eq(parseFloat(box.style.top) + parseFloat(box.style.height), 720, 'to the stage floor');
+  t.ok(parseFloat(box.style.width) < 1280 * 0.6 && parseFloat(box.style.height) < 720 * 0.3, 'a fraction of the stage: a ring round it frames the hand, not the screen');
+  t.ok(Math.abs((b.x0 + b.x1) / 2 - (HAND.x0 + HAND.x1) / 2) < 1, 'its centre is the fan axis (the middle of the strip between the docks)');
+  t.eq(b.x0, slotFor(0, n).x - HAND.swing, 'derived from slotFor, not typed in'); t.ok(b.x0 >= HAND.x0 - HAND.swing - 1 && b.x1 <= HAND.x1 + HAND.swing + 1, 'and inside the fan box plus the swing of the turned cards');
+  // the hand shrinks: the box follows
+  const before = parseFloat(box.style.width);
+  g._click(cardEl(g, st.C.hand[0].uid)); g._click(cardEl(g, st.C.hand[0].uid));
+  await idle(g, 6);
+  const n2 = st.C.hand.length;
+  t.ok(n2 < n, 'a card was played'); const b2 = handBounds(n2, false);
+  t.eq(parseFloat(box.style.left), b2.x0, 'the box was re-fitted to the smaller fan'); t.ok(parseFloat(box.style.width) <= before, 'and is no wider than before');
+  t.eq(handBounds(0, false).x0, HAND.x0, 'an empty hand falls back to the whole fan box');
+  t.eq(handBounds(5, true).y0, HAND.restYCompact, 'on the compact stage the fan, and so its box, rests lower');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('finding 20: the status rows end above the resting hand on both stages', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { UNDER, ROW_CHIP, HAND } = g.UI.screens.combat._t;
+  const GROUND = 520, BAR_H = { desk: 18, compact: 22 };        // the tallest bar (boss) on a desktop stage, every bar on a phone (combat.css)
+  [['desk', HAND.restY], ['compact', HAND.restYCompact]].forEach(([k, rest]) => {
+    const row = GROUND + UNDER[k].row, chips = row + ROW_CHIP[k].d, digits = chips + ROW_CHIP[k].dig;
+    t.ok(digits <= rest, k + ': the count digits end at y ' + digits + ', above the resting hand at ' + rest);
+    t.ok(row >= GROUND + UNDER[k].bar + BAR_H[k] / 2 + 1, k + ': the row starts below the tallest HP bar (bar bottom ' + (GROUND + UNDER[k].bar + BAR_H[k] / 2) + ', row top ' + row + ')');
+    t.ok(UNDER[k].bar - BAR_H[k] / 2 >= 0, k + ': the HP bar starts at or below the ground line, so it never covers the feet');
+  });
+  t.ok(HAND.restYCompact - HAND.restY <= 12, 'the compact hand is lowered by a few px only (the cards stay readable at rest)');
+});
+
+await t.test('finding 20 (DOM): on a phone the hand rests 10 px lower, rows and bars use the compact numbers, and a resize across the line re-lays everything', async () => {
+  const g = fresh({ viewport: { w: 844, h: 390 }, touch: true });
+  const { HAND, UNDER, slotFor, handBounds } = scr(g)._t;
+  const { st } = await enter(g, { enemies: ['kappa', 'kodama'] });
+  g._frames(3);
+  const en = st.C.enemies[0], a = JSON.parse(g._run('JSON.stringify(SCENE.anchor("enemy", ' + JSON.stringify(en.id) + '))'));
+  const wrap = $(g, '.cm-en[data-enemy="' + en.id + '"] .cm-ebarwrap'), row = $(g, '.cm-en[data-enemy="' + en.id + '"] .en-st');
+  t.ok(g.UI.scale < 0.75, 'the stage is compact');
+  const n = st.C.hand.length, mid = st.vm.hand[(n - 1) >> 1];
+  t.eq(st.cards.get(mid.uid).slot.y, slotFor((n - 1) >> 1, n, true).y, 'the middle card rests at the compact y'); t.eq(slotFor(0, 1, true).y, HAND.restYCompact, 'which is HAND.restYCompact');
+  t.eq(wrap.style.top, (a.feet.y + UNDER.compact.bar) + 'px', 'the HP bar is UNDER.compact.bar under the feet'); t.eq(row.style.top, (a.feet.y + UNDER.compact.row) + 'px', 'and the status row UNDER.compact.row');
+  t.eq(parseFloat($(g, '.cm-handbox').style.top), HAND.restYCompact, 'the tutorial box follows the lower fan');
+  t.eq(parseFloat(wrap.style.width), Math.round(scr(g)._t.barWidths(st.vm.enemies, true)[en.id] * 100) / 100, 'the bar uses the compact width from barWidths (a medium and a small in lanes 3 and 4 share the shortfall: ' + wrap.style.width + ')');
+  g._resize(1280, 720); g._frames(3); await idle(g);
+  t.ok(g.UI.scale >= 0.75, 'back to a desktop stage');
+  t.eq(st.cards.get(mid.uid).slot.y, slotFor((n - 1) >> 1, n, false).y, 'the fan went back up to HAND.restY'); t.eq(parseFloat($(g, '.cm-handbox').style.top), HAND.restY, 'and so did its box');
+  t.eq(wrap.style.top, (a.feet.y + UNDER.desk.bar) + 'px', 'the bar and the row use the desktop numbers again'); t.eq(row.style.top, (a.feet.y + UNDER.desk.row) + 'px', 'row');
+  void handBounds;
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('findings 19, 21, 24: HP bars of living neighbours never touch, the wider one gives way first', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { barWidths, BAR_W, BAR_W_COMPACT, BAR_CLEAR, LANE_X } = g.UI.screens.combat._t;
+  const sizes = ['s', 'm', 'l', 'xl'];
+  [[false, BAR_W], [true, BAR_W_COMPACT]].forEach(([compact, base]) => {
+    let pairs = 0;
+    for (let lane = 0; lane < 4; lane++) sizes.forEach((sa) => sizes.forEach((sb) => {
+      const a = { id: 'a', lane, size: sa }, b = { id: 'b', lane: lane + 1, size: sb };
+      const w = barWidths([b, a], compact);
+      const gap = LANE_X[lane + 1] - LANE_X[lane], air = gap - (w.a + w.b) / 2, airFull = gap - (base[sa] + base[sb]) / 2;
+      pairs++;
+      t.ok(air >= BAR_CLEAR - 1e-9, (compact ? 'compact' : 'desktop') + ' lanes ' + lane + '/' + (lane + 1) + ' sizes ' + sa + '+' + sb + ': ' + w.a + ' and ' + w.b + ' wide leave ' + air.toFixed(1) + ' px between the bars');
+      t.ok(w.a <= base[sa] && w.b <= base[sb], 'a bar never grows past its size');
+      if (airFull >= BAR_CLEAR) t.ok(w.a === base[sa] && w.b === base[sb], 'a pair that fits keeps both full widths');
+    }));
+    t.eq(pairs, 64, 'every size pair in every neighbouring lane pair was checked');
+  });
+  // the case of the report: a boss (212) and a summoned minion in lane 3 (104), 125 px apart
+  let w = barWidths([{ id: 'boss', lane: 4, size: 'xl' }, { id: 'imp', lane: 3, size: 's' }], false);
+  t.eq(w.imp, 104, 'the small minion keeps its 104 px bar'); t.eq(w.boss, 138, 'and the boss bar gives way to 138 px (it was 212 and ran 33 px into the minion\'s)');
+  t.ok(LANE_X[4] - w.boss / 2 - (LANE_X[3] + w.imp / 2) >= BAR_CLEAR, 'which leaves the bars 4 px apart');
+  w = barWidths([{ id: 'a', lane: 3, size: 'l' }, { id: 'b', lane: 4, size: 'l' }], false);
+  t.eq(w.a, 121, 'two large foes in lanes 3 and 4 (140 wide, 125 apart) share the shortfall: 121 each'); t.eq(w.b, 121, 'equally');
+  w = barWidths([{ id: 'a', lane: 3, size: 'm' }, { id: 'b', lane: 4, size: 'l' }], false);
+  t.eq(w.a, 120, 'a medium beside a large: the medium keeps its width'); t.eq(w.b, 122, 'and the large one gives way');
+  w = barWidths([{ id: 'boss', lane: 4, size: 'xl' }, { id: 'imp', lane: 3, size: 's', down: true }], false);
+  t.eq(w.boss, 212, 'a dead neighbour does not shrink the boss bar back'); t.ok(!('imp' in w), 'and a dead unit has no bar width');
+  t.eq(barWidths([{ id: 'x', lane: 0, size: 'm' }, { id: 'y', lane: 2, size: 'm' }], false).x, 120, 'a gap in the line leaves both bars alone');
+  // finding 21: with Block the chip takes 49 px of the bar; the HP text (about 58 px at the compact 18 px) must fit in the rest
+  const CHIP = 58.1, OVER = 9, TEXT = 58.4, PAD = 9;
+  ['s', 'm'].forEach((k) => t.ok(BAR_W_COMPACT[k] - (CHIP - OVER) - PAD >= TEXT, 'compact ' + k + ' bar: the text fits beside the Block chip (' + (BAR_W_COMPACT[k] - (CHIP - OVER) - PAD).toFixed(1) + ' px free for ' + TEXT + ')'));
+  // ... and that is what the neighbour pass leaves them even in the two right lanes
+  w = barWidths([{ id: 'a', lane: 3, size: 's' }, { id: 'b', lane: 4, size: 'm' }], true);
+  t.ok(w.a - (CHIP - OVER) - PAD >= TEXT - 2.5 && w.b - (CHIP - OVER) - PAD >= TEXT - 2.5, 'even squeezed into lanes 3 and 4 the compact bars stay within 2.5 px of the text width (' + w.a.toFixed(1) + ', ' + w.b.toFixed(1) + ')');
+  t.ok(/\.cm-ebarwrap\.has-blk \.cm-bar \.txt \{[^}]*padding-left: var\(--blk-over\)/.test(CSS) && /margin-right: calc\(-1 \* var\(--blk-over\)\)/.test(CSS), 'the chip overlap and the text offset are one variable (--blk-over)');
+});
+
+await t.test('findings 19, 21: the boss bar eases back to full width when its neighbour falls, and has-blk marks a unit with Block', async () => {
+  const g = fresh();
+  const { st } = await enter(g, { enemies: ['lantern_wisp', 'boss_jorogumo'], tier: 'boss', chapter: 2 });
+  const imp = st.C.enemies[0], boss = st.C.enemies[1], wrap = (id) => $(g, '.cm-en[data-enemy="' + id + '"] .cm-ebarwrap');
+  t.eq(boss.size, 'xl', 'the boss is an xl'); t.deep([imp.lane, boss.lane], [3, 4], 'with the minion in lane 3 beside it');
+  g._frames(2);
+  t.eq(parseFloat(wrap(imp.id).style.width), 104, 'the minion keeps its 104 px bar'); t.eq(parseFloat(wrap(boss.id).style.width), 138, 'and the boss bar is 138 px, clear of it (212 ran 33 px into the minion\'s)');
+  scr(g).debug().setHp(imp.id, 0); await idle(g); g._frames(2);
+  t.eq(parseFloat(wrap(boss.id).style.width), 212, 'when the minion falls the boss bar is 212 px again');
+  boss.block = 8; scr(g).debug().setHp(boss.id, boss.hp); await idle(g);
+  t.ok(wrap(boss.id).classList.contains('has-blk'), 'a unit with Block is marked has-blk'); boss.block = 0; scr(g).debug().setHp(boss.id, boss.hp); await idle(g);
+  t.ok(!wrap(boss.id).classList.contains('has-blk'), 'and loses the mark with it');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('finding 22: on a phone an intent bubble that reaches the speed or menu buttons sits below them', async () => {
+  const g = fresh({ viewport: { w: 844, h: 390 }, touch: true });
+  const { st } = await enter(g, { enemies: ['boss_jorogumo'], tier: 'boss', chapter: 2 });
+  const boss = st.C.enemies[0], en = st.en[boss.id];
+  t.ok(g.UI.scale < 0.75, 'the stage is compact (scale ' + g.UI.scale.toFixed(2) + ')');
+  const hit = 44 / g.UI.scale;
+  // headless has no layout: give the bubble the width and height a real boss bubble has (131 x 75 at 1280, 140 x 75 on a phone)
+  Object.defineProperty(en.bubble, 'offsetWidth', { value: 140, configurable: true }); Object.defineProperty(en.bubble, 'offsetHeight', { value: 75, configurable: true });
+  en.bh = 0; g._frames(2);
+  t.ok(parseFloat(en.bubble.style.top) - 75 >= hit - 0.01, 'the bubble top (' + (parseFloat(en.bubble.style.top) - 75).toFixed(1) + ') is below the buttons, which end at ' + hit.toFixed(1));
+  // a bubble that does not reach them keeps the usual y 62 clamp
+  Object.defineProperty(en.bubble, 'offsetWidth', { value: 60, configurable: true }); en.bh = 0; g._frames(2);
+  const a = JSON.parse(g._run('JSON.stringify(SCENE.anchor("enemy", ' + JSON.stringify(boss.id) + '))'));
+  t.ok(parseFloat(en.bubble.style.top) - 75 >= 62 - 0.01 && parseFloat(en.bubble.style.top) <= Math.max(62 + 75, a.top.y - 6) + 0.01, 'a narrow bubble keeps the old y 62 clamp');
+  const g2 = fresh();
+  const r2 = await enter(g2, { enemies: ['boss_jorogumo'], tier: 'boss', chapter: 2 });
+  const en2 = r2.st.en[r2.st.C.enemies[0].id];
+  Object.defineProperty(en2.bubble, 'offsetWidth', { value: 140, configurable: true }); Object.defineProperty(en2.bubble, 'offsetHeight', { value: 75, configurable: true });
+  en2.bh = 0; g2._frames(2);
+  t.ok(parseFloat(en2.bubble.style.top) - 75 >= 62 - 0.01, 'on a desktop stage the buttons end at y 56, so the clamp stays 62');
+  t.eq(errs(g) + errs(g2), 0, 'no console errors');
+});
+
+await t.test('finding 18: with exactly seven treasures all seven show, with eight there are six and a +2 chip, and the chip ends clear of the counters', async () => {
+  const g = fresh();
+  const all = Object.keys(g.DATA.relics);
+  await enter(g, { enemies: ['kappa'], relics: all.slice(0, 7) });
+  t.eq($$(g, '.cm-relics .relic').length, 7, 'seven treasures fill the seven places'); t.ok(!$(g, '.cm-relic-more'), 'and need no chip');
+  const g2 = fresh();
+  await enter(g2, { enemies: ['kappa'], relics: all.slice(0, 8) });
+  t.eq($$(g2, '.cm-relics .relic').length, 6, 'eight treasures: six'); t.eq(txt($(g2, '.cm-relic-more')), '+2', 'and a +2 chip');
+  const rel = cssRule('.cm-relics'), stats = cssRule('.cm-stats'), more = cssRule('.cm-relic-more');
+  const icon = 40, gap = cssPx(rel, 'gap'), left = cssPx(rel, 'left'), slots = scr(g)._t.RELIC_SLOTS;
+  const end = left + slots * icon + (slots - 1) * gap;
+  t.ok(end <= cssPx(stats, 'left') - 20, 'the seven places end at x ' + end + ', at least 20 px before the gold counter at x ' + cssPx(stats, 'left'));
+  t.ok(cssPx(rel, 'max-width') >= end - left, 'and the strip box (max-width ' + cssPx(rel, 'max-width') + ') holds them');
+  t.eq(cssPx(more, 'height'), icon, 'the +N chip is as tall as the relic icons'); t.ok(/min-height:\s*0/.test(more), 'and its min-height is not --hit (it was 81 px tall on a phone); a ::after pads the touch area');
+  t.eq(cssPx(stats, 'top'), cssPx(rel, 'top'), 'the gold and ink chips use the relic strip\'s box (top)'); t.eq(cssPx(stats, 'height'), cssPx(rel, 'height'), 'and its height, so they ride on the same centre line');
+  t.eq(errs(g) + errs(g2), 0, 'no console errors');
+});
+
+await t.test('finding 29: the three bottom docks share one centre line, set from DOCK_CY', async () => {
+  const g = fresh();
+  const { DOCK_CY, PILE } = scr(g)._t;
+  const { R } = await enter(g, { enemies: ['kappa'] });
+  void R;
+  t.eq(S(g).ui.root.style.getPropertyValue('--dock-cy'), DOCK_CY + 'px', 'build() sets --dock-cy on the screen root from the constant');
+  t.eq(parseFloat(CSS.match(/\.cm \{[^}]*--dock-cy:\s*([\d.]+)px/)[1]), DOCK_CY, 'and the CSS default is the same number');
+  ['.cm-orb', '.cm-pile', '.cm-end'].forEach((sel) => {
+    const r = cssRule(sel), h = cssPx(r, 'height'), m = /top:\s*calc\(var\(--dock-cy\)\s*-\s*([\d.]+)px\)/.exec(r);
+    t.ok(!!m, sel + ' is placed from the dock line');
+    if (m) t.eq(+m[1] * 2, h, sel + ': its top is the dock line less half its ' + h + ' px height');
+  });
+  t.ok(!$(g, '.cm-orb').style.top && !$(g, '.cm-pile.draw').style.top && !$(g, '.cm-pile.discard').style.top, 'no dock has an inline top that could drift from it');
+  t.eq(PILE.orb.y, DOCK_CY, 'card flights start at the orb centre'); t.ok(Math.abs(PILE.draw.y - DOCK_CY) <= 6 && Math.abs(PILE.discard.y - DOCK_CY) <= 6, 'and at the pile stacks, which sit within 6 px of the line');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('findings 25, 26, 27, 28: top bar centre line, End Turn glyph centring, hero panel tags and the medal margin', () => {
+  const plaque = cssRule('.cm-end b'), key = cssRule('.cm-end .btn-key');
+  t.eq(/letter-spacing:\s*\.2em/.test(plaque), true, 'the END and TURN glyphs are letter-spaced .2em');
+  t.ok(/padding-left:\s*\.2em/.test(plaque), 'and padded the same on the left, so the trailing space of the last letter does not push the word off the plaque centre');
+  t.ok(/top:\s*6px/.test(key) && !/bottom:/.test(key), 'the E key chip sits in the top right corner, clear of a TURN that grows with the text size');
+  const hero = cssRule('.cm-hero'), medal = cssRule('.ch-medal'), root = /\.cm \{([^}]*)\}/.exec(CSS)[1];
+  const hx = cssPx(root, '--hx'), hw = cssPx(root, '--hw');
+  t.ok(/left:\s*var\(--hx\)/.test(hero) && /width:\s*var\(--hw\)/.test(hero), 'the hero panels are placed from --hx and --hw');
+  t.ok(hx + cssPx(medal, 'left') - 6.5 >= 12, 'the medal\'s gold ring (6.5 px) keeps a 12 px margin to the screen edge (ring at x ' + (hx + cssPx(medal, 'left') - 6.5) + ')');
+  t.ok(new RegExp('left:\\s*calc\\(var\\(--hx\\) \\+ var\\(--hw\\) \\+ var\\(--sx\\) - var\\(--sw\\) / 2\\)').test(cssRule('.cm-swap')), 'the swap seal hangs on the panels\' right edge: its centre is --sx past it, from the same two variables (it was 4 px inside: its ring ran over the +2 dmg of the lower panel at Larger text)');
+  t.ok(/min-width:\s*3em/.test(cssRule('.ch-name')), 'the row tag starts at the same x in both panels (a minimum name width of 3em: Hanae, the widest name, is 2.98em)');
+  const tag = cssRule('.ct-row');
+  t.ok(/min-width:\s*5\.6em/.test(tag) && /text-align:\s*center/.test(tag), 'and FRONT (5.59em at the normal size) and BACK are the same width, so the +N dmg texts line up too');
+  t.ok(/#stage\.compact \.cm-speed \{ top: 0; \}/.test(CSS), 'on a phone the speed button has the same top as the menu button (both are --hit tall)');
+});
+
+await t.test('swap seal: its dashed ring stays clear of both panels\' text columns at any text size, on both stages', () => {
+  const root = /\.cm \{([^}]*)\}/.exec(CSS)[1], compact = /#stage\.compact \.cm \{([^}]*)\}/.exec(CSS)[1];
+  const hx = cssPx(root, '--hx'), hw = cssPx(root, '--hw'), sx = cssPx(root, '--sx');
+  const ringInset = +(/\.cm-swap \.sw-ring \{[^}]*inset:\s*-(\d+)px/.exec(CSS) || [0, NaN])[1];
+  const padR = +(/\.cm-hero \{[^}]*padding:\s*(\d+)px (\d+)px/.exec(CSS) || [0, 0, NaN])[2], padT = +(/\.cm-hero \{[^}]*padding:\s*(\d+)px/.exec(CSS) || [0, NaN])[1];
+  t.ok(sx > 0 && ringInset === 8 && padR === 12 && padT === 6, 'the numbers read from the sheet: --sx ' + sx + ', ring inset ' + ringInset + ', panel padding ' + padT + ' / ' + padR);
+  const textRight = hx + hw - padR;                                   // where a panel's text column ends: x 294
+  // the lower panel's first text row starts padT under its top, which is 2 px under the seal's centre line less the half gap: dy = 1 + padT; the ring is a circle of radius sw / 2 + 8
+  const ringLeft = (sw, dy) => hx + hw + sx - Math.sqrt((sw / 2 + ringInset) ** 2 - dy * dy);
+  const sw = cssPx(root, '--sw'), dy = 1 + padT;
+  t.ok(ringLeft(sw, dy) >= textRight, 'desktop: the ring starts at x ' + ringLeft(sw, dy).toFixed(1) + ' on the lower panel\'s first text row, beyond the text column end at x ' + textRight + ' (it started at x 268 and covered the g of +2 dmg)');
+  t.ok(ringLeft(sw, 0) >= textRight - 2, 'and at its widest (on the seal\'s own centre line) it is within 2 px of that edge, so no panel row can reach it: the bonus wraps or clips at the column end');
+  // the phone: the bonus line is hidden and the name and tag end at x 240 (measured, 17 px tag), so the 66 px seal's ring (radius 41) has 50 px to spare
+  const swC = cssPx(compact, '--sw'), hhC = cssPx(compact, '--hh');
+  t.ok(/#stage\.compact \.ct-bonus \{ display: none; \}/.test(CSS), 'on a phone the row bonus is not drawn');
+  t.ok(ringLeft(swC, 1 + padT) >= 240 + 40, 'phone: the ring (radius ' + (swC / 2 + ringInset) + ') starts at x ' + ringLeft(swC, 1 + padT).toFixed(1) + ', 40 px or more beyond the tag that ends at x 240');
+  t.eq(hhC, 100, 'the phone panels are 100 px tall and the seal still rides their join (top: 64 + --hh + 1 - --sw / 2)');
+  t.ok(/top:\s*calc\(64px \+ var\(--hh\) \+ 1px - var\(--sw\) \/ 2\)/.test(cssRule('.cm-swap')), 'the seal stays between the two panels (centred on the 2 px join)');
+  t.ok(!/--sx/.test(compact), 'and the phone keeps the same --sx (one number for both stages)');
+});
+
+await t.test('finding 38 (tutorial): findAnchor skips an anchor that covers most of the stage', async () => {
+  const g = fresh();
+  await enter(g, { enemies: ['kappa'] });
+  const full = $(g, '.cm-hand');
+  t.ok(!!full, 'the full-stage container still exists');
+  full.setAttribute('data-tut', 'hand'); $(g, '.cm-handbox').removeAttribute('data-tut');
+  let rect = { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };
+  Object.defineProperty(full, 'getBoundingClientRect', { value: () => rect, configurable: true });
+  g.UI.tutorial.show('hand');
+  const cur = g.UI.tutorial.current();
+  t.ok(cur && cur.id === 'hand', 'the hand hint is up'); t.ok(!cur.anchored, 'a whole-stage anchor is not used: the hint falls back to its `at` point');
+  t.ok(cur.ring.hidden === true, 'and no spotlight ring is drawn round the screen');
+  g.UI.tutorial.dismiss('ok');
+  rect = { left: 252, top: 566, right: 970, bottom: 720, width: 718, height: 154 };
+  g.UI.tutorial.show('hand');
+  t.ok(g.UI.tutorial.current().anchored, 'a box the size of the hand is an anchor');
   t.eq(errs(g), 0, 'no console errors');
 });
 await t.done();

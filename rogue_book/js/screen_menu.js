@@ -465,6 +465,7 @@
     if (o.onclick) b.addEventListener('click', (e) => o.onclick(e, b));
     return b;
   }
+  const TITLE_MEDAL = 26;                                      // hero faces on the Continue and Daily plaques: sized for the 268 px column right of the painted book (menu.css .s-title .mn-menu)
   const medalStrip = (ids, size) => mk('span', { class: 'mn-p-meds', 'aria-hidden': 'true' }, (ids || []).map((id) => UI.medallion(id, size || 34)));
 
   let TS = null;                                              // the live title state (one screen at a time)
@@ -486,14 +487,14 @@
       const items = S.items;
       if (hasRun) {
         const sub = info ? info.text : 'Return to your saved tale';
-        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('T' + info.trial, { size: 'sm', label: 'Ink Trial ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Tale' }) : null, medalStrip(info && info.heroes, 34));
+        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('T' + info.trial, { size: 'sm', label: 'Ink Trial ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Tale' }) : null, medalStrip(info && info.heroes, TITLE_MEDAL));
         items.push(plaque('primary', 'Continue', sub, { big: true, breathe: true, act: 'continue', sfx: 'page_turn', extra, onclick: () => { const G = game(); if (G) G.continueRun(); } }));
       }
       items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Tale', 'Choose two heroes and an Ink Trial', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
       // the Daily plaque is built from S so it can be rebuilt when the date turns over while the title stays open (L26)
       const dailyPlaque = () => {
         const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new tale every day');
-        return plaque('secondary', 'Daily Tale', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, 34)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
+        return plaque('secondary', 'Daily Tale', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, TITLE_MEDAL)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
       };
       S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new tale and nothing starts
         const nowSeed = dailySeed();
@@ -533,6 +534,7 @@
       const tag = mk('p', { class: 'mn-tag', text: 'a rogue storybook' });
       const gate = gateOn ? mk('button', { type: 'button', class: 'mn-gate', 'aria-label': 'Tap to begin', 'data-autofocus': '' }, mk('span', { class: 'mn-gate-text', text: 'Tap to begin' }), mk('span', { class: 'mn-gate-sub', text: 'sound on' })) : null;
       S.gate = gate;
+      root.classList.toggle('ts-big', bigText());
       add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Inkwoven, a rogue storybook' }), tag, menu, foot, fs, gate));
       S.wrap = root.firstChild;
       if (gateOn) menu.setAttribute('inert', '');                // Tab must not reach the plaques hidden under the gate
@@ -605,10 +607,20 @@
   // ================================================================================================================
   // HERO SELECT
   // ================================================================================================================
-  const HC = { x0: 30, y: 84, w: 168, h: 262, gap: 12, artH: 222 };              // hero cards (stage px), mirrored in menu.css
-  const SLOT = { front: { x: 300, y: 655, s: 0.92 }, back: { x: 150, y: 649, s: 0.86 } };
+  // Hero cards (stage px). The DOM card, the painted portrait and the detail sheet's top (menu.css --hc-y) all read cardTop(), so they cannot drift apart.
+  // yCompact: on a phone landscape the Back button is a --hit square that reaches y 81 to 88, so the row sits just under it and a chosen card does not lift into it.
+  const HC = { x0: 30, y: 84, yCompact: 92, w: 168, h: 262, gap: 12, artH: 222 };
+  const cardTop = (compact) => (compact ? HC.yCompact : HC.y);
   const STAGE_BOX = { x: 30, y: 356, w: 400, h: 350 };
+  // The pair stands on the middle of the party frame (the frame, the floor glow and both slot labels share this one centre).
+  const PARTY_CX = STAGE_BOX.x + STAGE_BOX.w / 2;
+  const SLOT_DX = 75;
+  const SLOT = { front: { x: PARTY_CX + SLOT_DX, y: 655, s: 0.92 }, back: { x: PARTY_CX - SLOT_DX, y: 649, s: 0.86 } };
+  // The Begin button's two labels. The button is 264 to 273 stage px wide on a desktop (the launch panel is 296 px) and the Larger text size
+  // makes the label 27 px: 'Begin the Daily Tale' was 285 px wide and clipped the gold border, so the Daily label is the short one.
+  const BEGIN_TALE = 'Begin the Tale', BEGIN_DAILY = 'Begin Daily Tale';
   const heroUnlocked = (id) => safe(() => META.isUnlocked('hero', id), true) !== false;
+  const isCompact = (root) => !!(root && root.closest && root.closest('.compact'));    // phone landscape: UI puts class compact on #stage
   const heroArtId = (id) => (DATA.heroes[id] && DATA.heroes[id].unlock && DATA.heroes[id].unlock.ach) || null;
 
   // "12 Sep 2026" from a stored timestamp (an argument to Date is fine: only Date() with no argument reads the clock)
@@ -647,11 +659,14 @@
   }
 
   let HS = null;                                                // the live hero select state
+  // The Daily Tale hands out every hero, so a hero locked in the profile stops looking locked while Daily is on. ONE rule for the painted portrait,
+  // the card's class (padlock, greyed plate), the detail sheet and the aria label: the canvas and the DOM cannot disagree about it.
+  const heroLocked = (id) => !heroUnlocked(id) && !(HS && HS.daily);
   const BANTER = ['start', 'kill', 'swap', 'win', 'hurt', 'down'];
 
   function buildDetail(id) {
     const h = DATA.heroes[id];
-    const locked = !heroUnlocked(id) && !(HS && HS.daily);
+    const locked = heroLocked(id);
     const box = mk('div', { class: 'mn-d h-' + id + (locked ? ' locked' : '') });
     UI.vars(box, { '--hc': h.color, '--hc2': h.dark });
     const medal = locked ? mk('span', { class: 'mn-d-medal lock', 'aria-hidden': 'true' }) : mk('span', { class: 'mn-d-medal', 'aria-hidden': 'true' }, UI.medallion(id, 64));
@@ -696,7 +711,7 @@
       const S = HS = {
         root, off, chosen: (mem.party || []).filter((id) => DATA.heroes[id]).slice(0, 2), trial: 0, daily: !!mem.daily && !!seedToday, seedText: mem.seedText || '', pinned: null, hover: null,
         lift: {}, expr: {}, exprUntil: {}, pose: {}, slotFrom: {}, cache: {}, bark: [null, null], barkN: 0, banterT: 2.2, banterN: 0, atmos: makeAtmos('hero', 3), t: 0,
-        saved: null, cards: {}, seedToday, sil: {},
+        saved: null, cards: {}, seedToday, sil: {}, compact: isCompact(root),
       };
       root.classList.toggle('ts-big', bigText());
       const trialMax = safe(() => META.trialMax(), 0) || 0;
@@ -709,18 +724,18 @@
       // ---- header
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
-      const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'md' });
+      const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });        // the same size as the Library's pill, so it does not jump when you navigate
       const top = mk('header', { class: 'mn-hs-top' }, back, banner('Choose Two Heroes'), mk('div', { class: 'mn-stones', 'aria-label': 'Inkstones' }, stones));
 
       // ---- hero cards
       const cardsWrap = mk('div', { class: 'mn-cards', role: 'group', 'aria-label': 'Heroes' });
       HEROES.forEach((id, i) => {
         const h = DATA.heroes[id];
-        const locked = !heroUnlocked(id);
-        const b = mk('button', { type: 'button', class: 'mn-hcard h-' + id + (locked ? ' locked' : ''), dataset: { hero: id }, 'aria-pressed': 'false', style: { left: (HC.x0 + i * (HC.w + HC.gap)) + 'px', top: HC.y + 'px' } },
+        const locked = heroLocked(id);
+        const b = mk('button', { type: 'button', class: 'mn-hcard h-' + id + (locked ? ' locked' : ''), dataset: { hero: id }, 'aria-pressed': 'false', style: { left: (HC.x0 + i * (HC.w + HC.gap)) + 'px', top: cardTop(S.compact) + 'px' } },
           mk('span', { class: 'mn-hc-window', 'aria-hidden': 'true' }),
           mk('span', { class: 'mn-hc-badge hanko', 'aria-hidden': 'true' }),
-          locked ? mk('span', { class: 'mn-hc-lock', 'aria-hidden': 'true' }) : null,
+          heroUnlocked(id) ? null : mk('span', { class: 'mn-hc-lock', 'aria-hidden': 'true' }),     // the padlock is shown only while the card wears the class locked (menu.css)
           mk('span', { class: 'mn-hc-plate' }, mk('b', { class: 'mn-hc-name', text: h.name }), mk('i', { class: 'mn-hc-title', text: h.title }), UI.icon('row', h.prefer, 20, {}, 'mn-hc-row')));
         UI.vars(b, { '--hc': h.color, '--hc2': h.dark });
         b.addEventListener('click', () => onCard(id, b));
@@ -744,6 +759,7 @@
       const barkEls = [mk('div', { class: 'mn-bark', 'aria-hidden': 'true' }), mk('div', { class: 'mn-bark', 'aria-hidden': 'true' })];      // banter is decoration: hidden from screen readers
       add(stageEl, empty, labels.back, labels.front, swapBtn, barkEls);
       S.labels = labels; S.swapBtn = swapBtn; S.empty = empty; S.barkEls = barkEls;
+      ['front', 'back'].forEach((row) => { labels[row].style.left = (SLOT[row].x - STAGE_BOX.x) + 'px'; });       // under the sprite: the frame has no border, so its inner x is the stage x minus the box origin
 
       // ---- detail sheet
       const detail = UI.panel({ kind: 'paper', torn: true, class: 'mn-detail-panel' }, mk('div', { class: 'mn-detail-body' }));
@@ -766,7 +782,7 @@
       seed.addEventListener('input', () => { S.seedText = seed.value; mem.seedText = seed.value; });
       const dice = mk('button', { type: 'button', class: 'mn-dice', 'aria-label': 'Roll a random seed', title: 'Roll a seed' }, mk('i', { class: 'mn-dice-ico' }));
       dice.addEventListener('click', () => { if (S.daily) return; S.diceN = (S.diceN | 0) + 1; const v = U.rng(U.hash('menu-dice', Math.floor(nowS() * 1000), S.diceN))().toString().slice(2, 8); seed.value = v; S.seedText = v; mem.seedText = v; UI.pulse(seed); });
-      const begin = btn('Begin the Tale', { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => doBegin() });
+      const begin = btn(BEGIN_TALE, { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => doBegin() });
       begin.classList.add('mn-begin');
       const launch = UI.panel({ kind: 'dark', class: 'mn-launch-panel' }, trialBox, rules,
         mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Tale' }), mk('i', { text: 'the same tale for everyone today' }))),
@@ -776,6 +792,15 @@
 
       add(root, mk('div', { class: 'mn-hs' }, top, cardsWrap, stageEl, detail, launch));
       S.stageEl = stageEl;
+      // the card row follows the stage class: a phone drops it under the --hit square of Back; the detail sheet's top (menu.css) reads --hc-y
+      S.layoutRow = () => {
+        const c = isCompact(S.root);
+        if (S.rowSet && c === S.compact) return;
+        S.rowSet = true; S.compact = c;
+        HEROES.forEach((id) => { S.cards[id].style.top = cardTop(c) + 'px'; });
+        UI.vars(S.root, { '--hc-y': cardTop(c) + 'px' });
+      };
+      S.layoutRow();
 
       // ---- behaviour
       function setHover(id) { S.hover = id; showDetail(id || S.pinned); }
@@ -885,7 +910,8 @@
           const badge = b.querySelector('.mn-hc-badge');
           badge.textContent = i === 0 ? 'FRONT' : i === 1 ? 'BACK' : '';
           badge.classList.toggle('show', i >= 0);
-          const h = DATA.heroes[id], locked = !heroUnlocked(id) && !S.daily;
+          const h = DATA.heroes[id], locked = heroLocked(id);
+          b.classList.toggle('locked', locked);
           b.setAttribute('aria-label', h.name + ', ' + h.title + (locked ? '. Locked.' : i === 0 ? '. Chosen, front row hero.' : i === 1 ? '. Chosen, back row hero.' : '. Tap to choose.'));
         });
         ['front', 'back'].forEach((row, k) => {
@@ -927,7 +953,7 @@
         const ready = S.daily || n === 2;
         S.begin.rbSet({ disabled: !ready, reason: 'Choose two heroes first' });
         S.begin.classList.toggle('breathe', ready);
-        S.begin.rbSet({ label: S.daily ? 'Begin the Daily Tale' : 'Begin the Tale' });
+        S.begin.rbSet({ label: S.daily ? BEGIN_DAILY : BEGIN_TALE });
         S.root.classList.toggle('is-daily', S.daily);
       }
       S.refresh = refresh; S.showDetail = showDetail; S.toggleHero = toggleHero; S.swapOrder = swapOrder; S.setTrial = setTrial; S.setDaily = setDaily; S.doBegin = doBegin;
@@ -946,9 +972,10 @@
       if (t - (S.dayT || 0) >= 1 || t < (S.dayT || 0)) { S.dayT = t; if (S.refreshDay) S.refreshDay(); }
       S.atmos.update(dt, t);
       const rm = reduce();
+      S.layoutRow();
       HEROES.forEach((id) => {
         const on = S.chosen.indexOf(id) >= 0, hov = S.hover === id;
-        const target = rm ? 0 : on ? 12 : hov || S.pinned === id ? 5 : 0;
+        const target = rm || S.compact ? 0 : on ? 12 : hov || S.pinned === id ? 5 : 0;      // no lift on a phone: the row sits right under the Back square
         S.lift[id] += (target - S.lift[id]) * Math.min(1, dt * 12);
         if (Math.abs(target - S.lift[id]) < 0.05) S.lift[id] = target;
         S.cards[id].style.transform = S.lift[id] ? 'translateY(' + (-S.lift[id]).toFixed(2) + 'px)' : '';
@@ -997,8 +1024,8 @@
       const tk = T();
       // portraits
       HEROES.forEach((id, i) => {
-        const x = HC.x0 + i * (HC.w + HC.gap), y = HC.y - S.lift[id];
-        const locked = !heroUnlocked(id) && !S.daily;
+        const x = HC.x0 + i * (HC.w + HC.gap), y = cardTop(S.compact) - S.lift[id];
+        const locked = heroLocked(id);
         const on = S.chosen.indexOf(id) >= 0, hov = S.hover === id;
         let expr = 'neutral';
         if (S.exprUntil[id] > t) expr = S.expr[id] || 'neutral';
@@ -1022,9 +1049,9 @@
       ctx.beginPath(); ctx.rect(B.x, B.y, B.w, B.h); ctx.clip();
       if (tk) {
         const g2 = S.chosen.length ? DATA.heroes[S.chosen[S.chosen.length - 1]].color : '#5b3fa8';
-        tk.glow(ctx, 230, 560, 260, g2, 0.16);
+        tk.glow(ctx, PARTY_CX, 560, 260, g2, 0.16);
       }
-      ctx.save(); ctx.translate(226, 660); ctx.scale(1, 0.12);
+      ctx.save(); ctx.translate(PARTY_CX, 660); ctx.scale(1, 0.12);
       const fg = ctx.createRadialGradient(0, 0, 10, 0, 0, 200);
       fg.addColorStop(0, 'rgba(243,230,200,0.38)'); fg.addColorStop(0.55, 'rgba(122,107,255,0.18)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(0, 0, 200, 0, TAU); ctx.fill();

@@ -285,17 +285,78 @@ await t.test('anchors for 1 to 5 enemies sit in their fixed lanes and match ART 
   t.eq(g.SCENE.anchor('enemy', 'nobody#1'), null, 'an unknown unit has no anchor');
   t.eq(g.SCENE.anchor('hero', 'kappa#1'), null, 'wrong kind, no anchor');
 });
-await t.test('an xl boss stands alone in lane 4 and spans about 970 to 1270', () => {
+await t.test('an xl boss stands alone in lane 4 and the stage fit keeps all of its art on the screen', () => {
   const g = fresh();
   ['boss_kuzunoha', 'boss_jorogumo', 'boss_editor'].forEach((def) => {
     mountSynthetic(g, [def], { boss: true, chapter: g.DATA.enemies[def].chapter });
-    const id = def + '#1', a = g.SCENE.anchor('enemy', id), b = g.ART.enemy.bounds(def);
+    const id = def + '#1', a = g.SCENE.anchor('enemy', id), b = g.ART.enemy.bounds(def), fit = stats(g).fit;
     t.eq(info(g, 'enemy', id).lane, 4, def + ' is in lane 4');
-    t.near(a.feet.x, 1120, 0.01, def + ' feet x');
+    t.ok(b.right > 150, def + ' reaches ' + b.right + ' px right of its feet: more than the 150 px that lane 4 leaves');
+    t.near(fit, Math.min(240, b.right + 10 - 160), 0.01, def + ': the line slides left by the overhang plus the 10 px edge pad');
+    t.near(a.feet.x, 1120 - fit, 0.01, def + ' feet x is lane 4 less the fit');
+    t.ok(a.feet.x + b.right <= 1270.01, def + ' art right edge ' + Math.round(a.feet.x + b.right) + ' is on the screen (was ' + Math.round(1120 + b.right) + ')');
     t.near(a.w, b.w, 0.01, def + ' width from ART');
-    t.ok(a.x <= 975 && a.x + a.w >= 1265, def + ' spans the right edge of the stage: ' + Math.round(a.x) + '..' + Math.round(a.x + a.w));
-    t.ok(a.h >= 300, def + ' is tall');
+    t.ok(a.x + a.w / 2 > 600 && a.h >= 300, def + ' is tall and still stands on the right of the stage: ' + Math.round(a.x) + '..' + Math.round(a.x + a.w));
     t.eq(stats(g).sceneId, 'boss' + g.DATA.enemies[def].chapter, 'boss backdrop id');
+  });
+});
+await t.test('the stage fit slides the WHOLE line: gaps between lanes stay what screen_combat assumes, ordinary groups do not move', () => {
+  const g = fresh();
+  const lanes = [560, 705, 850, 995, 1120];
+  mountSynthetic(g, kappas(5));
+  t.eq(stats(g).fit, 0, 'five kappas need no fit');
+  [['kappa', 'kappa', 'kappa', 'kappa', 'tengu_duelist'], ['spiderling', 'spiderling', 'boss_jorogumo'], ['kappa', 'boss_kuzunoha']].forEach((defs) => {
+    mountSynthetic(g, defs, { boss: defs.some((d) => d.indexOf('boss_') === 0) });
+    const fit = stats(g).fit, n = defs.length, seen = {};
+    t.ok(fit > 0, defs.join(',') + ' needs a fit (' + fit + ')');
+    defs.forEach((def, i) => {
+      seen[def] = (seen[def] || 0) + 1;
+      const a = g.SCENE.anchor('enemy', def + '#' + seen[def]);
+      t.near(a.feet.x, lanes[5 - n + i] - fit, 0.01, defs.join(',') + ': ' + def + ' keeps its lane gap (every enemy moves by the same ' + fit + ')');
+    });
+  });
+  mountSynthetic(g, ['kappa']);
+  t.eq(stats(g).fit, 0, 'a new mount starts without the previous fit');
+  t.near(g.SCENE.anchor('enemy', 'kappa#1').feet.x, 1120, 0.01, 'and lane 4 is back at 1120');
+  g.SCENE.unmount();
+  t.eq(stats(g).fit, 0, 'unmounted: no fit');
+});
+await t.test('the stage fit is fixed at mount: a death or a summon never makes the line jump', async () => {
+  const g = fresh();
+  mountSynthetic(g, ['boss_jorogumo'], { boss: true, chapter: 2 });
+  const fit = stats(g).fit, x0 = g.SCENE.anchor('enemy', 'boss_jorogumo#1').feet.x;
+  await g.SCENE.play({ type: 'summon', enemy: { id: 'spiderling#1', def: 'spiderling', name: 'Spiderling', hp: 8, maxHp: 8, tier: 'minion', size: 's', lane: 3, st: {}, phase: 0 } });
+  t.near(g.SCENE.anchor('enemy', 'spiderling#1').feet.x, 995 - fit, 0.01, 'the summoned minion stands in lane 3 of the shifted line');
+  t.near(g.SCENE.anchor('enemy', 'boss_jorogumo#1').feet.x, x0, 0.01, 'and the boss did not move');
+  t.eq(stats(g).fit, fit, 'same fit');
+});
+// Measured with an alpha scan of the real sprites in Chromium (aura and shadow left out, 1280 x 720 at s = 1): `reach` is the farthest the picture extends right of the
+// feet in the idle or the held telegraph pose, `top` how high the idle body stands at its first row 16 px wide (thin tips, strings and ornaments excluded). Re-measure
+// both when an enemy's art changes: ART.enemy.bounds must keep covering them (DESIGN 5.9: the stage fit and the intent bubble at top.y - 6 are built on them).
+// (paper_puppet scans 165 and crow_tengu 222, but the art suites cap a minion at 1.4 x 110 = 153 and a medium enemy below 210, so 153 and 209 stand for them.)
+const SCAN_REACH = { bamboo_boar: 159, oni_brute: 155, tengu_duelist: 218, boss_kuzunoha: 272, nure_onna: 156, umibozu: 158, boss_jorogumo: 328, komainu_guardian: 159, sky_serpent: 157, censor_golem: 157, storm_whelp: 172, black_bar_inquisitor: 159, boss_editor: 159 };
+const SCAN_TOP = { kappa: 173, tanuki_bandit: 180, kodama: 123, karakasa: 203, hitodama: 118, oni_cub: 176, crow_tengu: 209, bamboo_sprite: 130, mushroom_folk: 189, bamboo_boar: 290, oni_brute: 307, tengu_duelist: 322, moss_guardian: 344, ember_wisp: 79, leaf_imp: 85, paper_kodama: 109, boss_kuzunoha: 391, chochin: 201, karakuri_puppet: 192, nopperabo: 194, drowned_samurai: 315, koi_spirit: 187, tsukumogami: 197, silk_weaver: 174, nure_onna: 243, rokurokubi: 222, ittan_momen: 198, drowned_general: 352, puppet_master: 293, umibozu: 282, spiderling: 95, paper_puppet: 153, lantern_wisp: 127, boss_jorogumo: 398, storm_drone: 177, komainu_guardian: 276, redaction_knight: 195, void_scribe: 200, blank_soldier: 214, sky_serpent: 296, eraser_wraith: 185, thunder_crow: 188, paper_golem: 251, margin_imp: 231, censor_golem: 297, storm_whelp: 298, black_bar_inquisitor: 309, blank_page: 111, spark_mote: 95, typo_sprite: 123, boss_editor: 349 };
+await t.test('every enemy that stands in lane 4 keeps its whole drawn reach on the screen (art scan fixture)', () => {
+  const g = fresh();
+  Object.keys(SCAN_REACH).forEach((def) => {
+    mountSynthetic(g, [def], { boss: g.DATA.enemies[def].tier === 'boss', chapter: g.DATA.enemies[def].chapter });
+    const a = g.SCENE.anchor('enemy', def + '#1'), b = g.ART.enemy.bounds(def);
+    t.ok(a.feet.x + SCAN_REACH[def] <= 1280, def + ': scanned art reaches ' + Math.round(a.feet.x + SCAN_REACH[def]) + ' (screen edge 1280)');
+    if (SCAN_REACH[def] > 160) t.ok((b.right || 0) >= SCAN_REACH[def] - 0.5, def + ' declares the reach (' + (b.right || 0).toFixed(1) + ' >= ' + SCAN_REACH[def] + ') so the fit can see it');
+  });
+  ['boss_kuzunoha', 'boss_jorogumo', 'tengu_duelist', 'storm_whelp'].forEach((def) => t.ok(g.ART.enemy.bounds(def).right > 160, def + ' reaches past what lane 4 leaves'));
+  t.ok(Object.keys(g.DATA.enemies).every((def) => g.ART.enemy.bounds(def).right === undefined || g.ART.enemy.bounds(def).right > 0), 'right is only ever reported when positive');
+});
+await t.test('intent bubbles clear the drawn body: bounds.h reaches the idle top of every enemy (art scan fixture)', () => {
+  const g = fresh();
+  const ids = Object.keys(g.DATA.enemies);
+  t.eq(Object.keys(SCAN_TOP).sort().join(), ids.slice().sort().join(), 'the fixture lists all 51 enemies');
+  ids.forEach((def) => {
+    const b = g.ART.enemy.bounds(def);
+    t.ok(b.h >= SCAN_TOP[def] - 3, def + ': bounds.h ' + Math.round(b.h) + ' reaches the scanned idle top ' + SCAN_TOP[def] + ', so the bubble (top.y - 6) is above the body');
+    mountSynthetic(g, [def], { boss: g.DATA.enemies[def].tier === 'boss', chapter: g.DATA.enemies[def].chapter });
+    const a = g.SCENE.anchor('enemy', def + '#1');
+    t.near(a.top.y, 520 - b.h, 0.01, def + ': the anchor top (the bubble sits 6 px above it) is the bounds top');
   });
 });
 await t.test('a real combat mounts by lane: a boss alone in lane 4, a trio in lanes 2 to 4', () => {

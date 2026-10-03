@@ -46,7 +46,12 @@
 .en-num { font: 900 calc(25px * var(--ts)) / 1.05 var(--font-num); color: var(--gold2); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; text-shadow: 0 2px 0 rgba(20, 15, 46, .6); }
 
 /* ------------------------------------------------------------------------------------------------ STORY */
-.st-page { position: absolute; left: 540px; top: 54px; width: 700px; height: 612px; pointer-events: auto; animation: enSlideR .6s var(--ease-out) both; cursor: pointer;
+/* --pg-x is where the page starts: the page and its hanko seal both read it, so the stamp stays on the page's left edge, and it is anchored by its CENTRE (translate -50%)
+   so a long word (ONCE, BLANK) grows both ways instead of drifting right. A seal is rotated 12 degrees and scaled 1.7 (and grows with the text size): its top is
+   36 px so the whole stamp stays on the stage, even the END of the epilogue at Larger text (its page starts at y 16, the stamp still sits on the page's corner). */
+.s-story { --pg-x: 540px; }
+.s-victory { --pg-x: 250px; --vc-col: 588px; }          /* --vc-col: the showcase is two equal columns with 36 px margins, so the gap between them sits on the stage axis (x 640) */
+.st-page { position: absolute; left: var(--pg-x); top: 54px; width: 700px; height: 612px; pointer-events: auto; animation: enSlideR .6s var(--ease-out) both; cursor: pointer;
   box-shadow: 0 18px 44px rgba(5, 3, 18, .7), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 0 46px rgba(150, 110, 50, .24); }
 .st-page::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 46px; pointer-events: none; border-radius: 10px 0 0 10px;
   background: linear-gradient(90deg, rgba(90, 60, 20, .34), rgba(90, 60, 20, 0)); }
@@ -54,7 +59,7 @@
   background: linear-gradient(135deg, transparent 50%, rgba(120, 90, 40, .28) 50%, rgba(255, 246, 220, .65) 78%, rgba(120, 90, 40, .22) 100%); }
 .st-page > .p-body { display: flex; flex-direction: column; height: 100%; padding: 26px 42px 20px 50px;
   background: radial-gradient(circle at 82% 78%, transparent 0 74px, rgba(168, 116, 32, .13) 75px 78px, transparent 79px), radial-gradient(circle at 82% 78%, rgba(232, 56, 61, .05) 0 70px, transparent 71px); }
-.st-head { flex: none; text-align: center; }
+.st-head { flex: none; text-align: center; margin: 0 4px 0 -4px; }   /* the page pads 50 left (the spine) and 42 right: -4 and +4 centre the head on the page itself */
 .st-kicker { position: relative; display: inline-block; margin: 0; padding: 0 1.3em; font: 800 calc(13px * var(--ts)) / 1 var(--font-ui); letter-spacing: .42em; color: var(--verm-d); animation: enRise .6s var(--ease-out) .1s both; }
 .st-kicker::before, .st-kicker::after { content: ""; position: absolute; top: 50%; width: 44px; height: 2px; background: linear-gradient(90deg, transparent, var(--verm-d)); }
 .st-kicker::before { right: 100%; } .st-kicker::after { left: 100%; transform: scaleX(-1); }
@@ -83,7 +88,7 @@
 .st-turn { display: none; }                          /* not merely hidden: an invisible Continue still took half the footer and squeezed the hint to one word per line */
 .st-done .st-turn { display: inline-flex; animation: enPop .5s var(--ease-back) both, breathe 2.4s ease-in-out .6s infinite; }
 .st-done .st-hint { display: none; }
-.st-seal { position: absolute; left: 488px; top: 24px; z-index: 6; pointer-events: none; opacity: 0; transform-origin: 50% 50%; transform: rotate(-12deg) scale(1.7); filter: drop-shadow(0 6px 5px rgba(5, 3, 18, .55)); }
+.st-seal { position: absolute; left: calc(var(--pg-x) - 20px); top: 36px; translate: -50% 0; z-index: 6; pointer-events: none; opacity: 0; transform-origin: 50% 50%; transform: rotate(-12deg) scale(1.7); filter: drop-shadow(0 6px 5px rgba(5, 3, 18, .55)); }
 .st-seal .hanko { font-size: calc(21px * var(--ts)); }
 .st-seal.stamped { animation: enStamp .55s cubic-bezier(.2, 1.7, .4, 1) both; }
 .en-settled .st-seal { opacity: 1; transform: rotate(-12deg) scale(1.7); }
@@ -122,6 +127,12 @@
 .go-stone-sub { margin: 2px 0 0; font: italic 500 calc(12px * var(--ts)) var(--font-display); color: var(--paper2); opacity: .8; }
 
 /* ------------------------------------------------------------------------------------------------ CHAPTER CLEAR */
+/* The three panels end 12 px above the Continue button. The button is 56 px tall, or --hit (44 screen px) on a phone, or its own size at Larger text (a .btn-lg is 21 px x --ts
+   at 1.15 line height and .62em padding top and bottom, plus its 2 px borders: 50.2 x --ts + 4, which is 69.2 px at 1.3 and was 13 px more than the 56 the panels left it), and sits --foot-b above the stage floor, so the
+   panels end --foot-b + --foot-h + 12 up from it (80 px on a desktop stage). On a phone the extra height is taken from the TOP of the panels (--cc-lift), not
+   from their content: they keep their 244 px, and 302 px at Larger text (ts-big: six tiles and the heal chips need all of it, even on a phone). */
+.s-chapterClear { --foot-b: 12px; --foot-h: max(56px, var(--hit), calc(50.2px * var(--ts) + 4px)); --cc-top: 396px; --cc-lift: calc(var(--foot-h) - 56px); }
+.s-chapterClear.ts-big { --cc-top: 338px; }
 .cc-banner { position: absolute; left: 0; right: 0; top: 14px; z-index: 4; text-align: center; pointer-events: none; }
 .cc-kicker { margin: 0; font: 800 calc(14px * var(--ts)) / 1 var(--font-ui); letter-spacing: .5em; color: var(--gold2); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(13, 11, 30, .95); animation: enRise .6s var(--ease-out) .1s both; }
 .cc-title { margin: 8px 0 0; font: 800 calc(50px * var(--ts)) / 1.05 var(--font-display); letter-spacing: .03em; color: var(--white); -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill;
@@ -136,13 +147,14 @@
   background: var(--lacquer-bg); box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .9), 0 0 30px rgba(245, 201, 106, .55), 0 10px 20px rgba(0, 0, 0, .55); opacity: 0; transform: translateX(-50%) scale(.7); transition: opacity .4s, transform .5s var(--ease-back); }
 .cc-newhero.show { opacity: 1; transform: translateX(-50%); animation: enGlow 2.4s ease-in-out infinite; }
 .cc-nh-text { display: flex; flex-direction: column; } .cc-nh-text b { font: 800 calc(17px * var(--ts)) var(--font-display); color: var(--gold2); letter-spacing: .05em; } .cc-nh-text i { font: italic 500 calc(12px * var(--ts)) var(--font-display); color: var(--paper); opacity: .85; }
-.cc-cols { position: absolute; left: 24px; right: 24px; top: 396px; bottom: 80px; z-index: 3; display: grid; grid-template-columns: 1.4fr .8fr 1.1fr; gap: 22px; pointer-events: none; }
+.cc-cols { position: absolute; left: 24px; right: 24px; top: calc(var(--cc-top) - var(--cc-lift)); bottom: calc(var(--foot-b) + var(--foot-h) + 12px); z-index: 3; display: grid; grid-template-columns: 1.4fr .8fr 1.1fr; gap: 22px; pointer-events: none; }
 .cc-cols > .panel { height: 100%; min-width: 0; animation: enRise .6s var(--ease-out) both; }
 .cc-cols > .panel:nth-child(2) { animation-delay: .12s; } .cc-cols > .panel:nth-child(3) { animation-delay: .24s; }
 .cc-lore { margin: 0; font: 500 calc(14.5px * var(--ts)) / 1.46 var(--font-display); color: #231a3a; }
 .cc-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .cc-tiles .en-tile { min-width: 0; }
-.cc-stats .en-tile { padding: 6px 9px; }
+.cc-stats .en-tile { padding: 6px 8px; column-gap: 7px; }
+.cc-stats .en-tile-lab { letter-spacing: .06em; }                  /* DAMAGE was 3 px wider than the room its tile left it */
 .cc-stats .en-num { font-size: calc(22px * var(--ts)); }
 .cc-heroes { display: flex; flex-direction: column; gap: 10px; }
 .cc-hero { display: flex; align-items: center; gap: 12px; animation: enRise .5s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 120ms + 300ms); }
@@ -154,7 +166,7 @@
 .cc-rel-lab { font: 700 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--paper2); }
 .cc-relics { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cc-more, .cc-none { font: italic 500 calc(12px * var(--ts)) var(--font-display); opacity: .8; }
-.cc-foot { position: absolute; left: 24px; right: 24px; bottom: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 20px; pointer-events: none; }
+.cc-foot { position: absolute; left: 24px; right: 24px; bottom: var(--foot-b); z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 20px; pointer-events: none; }
 .cc-tip { display: flex; align-items: center; gap: 10px; margin: 0; max-width: 780px; font: italic 500 calc(15px * var(--ts)) / 1.35 var(--font-display); color: var(--paper); text-shadow: 0 2px 0 var(--ink), 0 0 12px rgba(13, 11, 30, .9); }
 .cc-go { flex: none; }
 .s-chapterClear .menu-btn { z-index: 6; }
@@ -168,15 +180,18 @@
 .go-fallen { display: flex; justify-content: space-between; gap: 12px; animation: enRise .6s var(--ease-out) 1.2s both; }
 .go-fallen .badge { filter: drop-shadow(0 4px 6px rgba(20, 15, 46, .5)); }
 .go-recap { height: auto; flex: none; }
-.go-recap > .p-body { padding: 14px 16px 12px; gap: 8px; }
-.go-recap-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; }
-.go-fan { display: flex; align-items: flex-end; padding: 6px 4px 2px 6px; }
-.go-fan .card { margin-left: -42px; transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 3deg)); transform-origin: 50% 120%; transition: transform .2s var(--ease-back); }
+/* The recap is a two column grid: what was kept (the fan, the treasures) and, in the narrow column, the two buttons that open them. The column is as wide as the wider
+   button and both stretch to it, so the two buttons share their left and right edges, and the fan gives way (min-width 0, a tighter overlap) instead of pushing a
+   button out of the panel. The buttons stop growing past text size 1.12, like the ledger rows, so the narrow column never takes the fan's room. */
+.go-recap > .p-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; padding: 14px 16px 12px; }
+.go-recap > .p-body > .en-h { grid-column: 1 / -1; }
+.go-recap-row { display: contents; }
+.go-fan { --ov: 46px; display: flex; align-items: flex-end; min-width: 0; min-height: 48px; padding: 6px 4px 2px 6px; }
+.go-fan .card { margin-left: calc(-1 * var(--ov)); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 3deg)); transform-origin: 50% 120%; transition: transform .2s var(--ease-back); }
 .go-fan .card:first-child { margin-left: 0; }
 .go-fan .card:hover { z-index: 3; transform: rotate(0deg) translateY(-12px); }
-.go-deckbtn { flex: none; }
-.go-relics { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
-.go-relbtn { flex: none; }
+.go-deckbtn, .go-relbtn { justify-self: stretch; font-size: calc(14px * min(var(--ts), 1.12)); }
+.go-relics { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; min-height: 48px; }
 .go-none, .go-more { font: italic 500 calc(13px * var(--ts)) var(--font-display); color: rgba(36, 26, 58, .7); }
 .go-mid { position: absolute; left: 436px; top: 150px; bottom: 16px; width: 404px; z-index: 3; display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
 .go-lore { flex: 1; min-height: 0; animation: enRise .8s var(--ease-out) 1.1s both; }
@@ -192,9 +207,8 @@
 .go-stonescard .en-unlocks, .vc-newcard .en-unlocks { --ud: 3.4s; }
 
 /* ------------------------------------------------------------------------------------------------ VICTORY */
-.vc-page { left: 250px; top: 16px; width: 780px; height: 486px; }
+.vc-page { top: 16px; width: 780px; height: 486px; }
 .vc-page .st-text { font-size: calc(17px * var(--ts)); }
-.vc-seal { left: 206px; top: 0; }
 .vc-cast-head { position: absolute; top: 22px; left: 0; right: 0; z-index: 4; text-align: center; pointer-events: none; }
 .vc-cast-kicker { margin: 0; font: 800 calc(14px * var(--ts)) / 1 var(--font-ui); letter-spacing: .5em; color: var(--gold2); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(13, 11, 30, .9); animation: enRise .6s var(--ease-out) both; }
 .vc-cast-title { margin: 8px 0 0; font: 800 calc(40px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .03em; color: var(--white); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 rgba(20, 15, 46, .55), 0 0 30px rgba(255, 201, 106, .7); animation: enPop .7s var(--ease-back) .15s both; }
@@ -208,23 +222,24 @@
 .vc-cap-line { margin: 0; font: 500 calc(12.5px * var(--ts)) / 1.35 var(--font-display); color: var(--paper); }
 .vc-cap.party .vc-cap-name::after { content: " *"; color: var(--gold2); }
 .vc-cast-go { position: absolute; right: 28px; top: 28px; z-index: 5; visibility: hidden; }
+.vc-cast-go, .vc-cast-skip { height: max(56px, var(--hit)); }          /* Skip (a small ghost) and Continue (a large primary) had different heights and so different centres */
 .vc-cast-done .vc-cast-go { visibility: visible; animation: enPop .5s var(--ease-back) both, breathe 2.4s ease-in-out .6s infinite; }
 .vc-cast-skip { position: absolute; left: 28px; top: 28px; z-index: 5; }
 .vc-head { position: absolute; left: 36px; top: 14px; z-index: 4; display: flex; align-items: center; gap: 14px; pointer-events: none; }
 .vc-kicker { margin: 0; font: 800 calc(12px * var(--ts)) / 1 var(--font-ui); letter-spacing: .5em; color: var(--gold2); text-shadow: 0 2px 0 var(--ink); }
 .vc-title { margin: 4px 0 0; font: 800 calc(34px * var(--ts)) / 1.05 var(--font-display); color: var(--white); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; text-shadow: 0 4px 0 rgba(20, 15, 46, .55), 0 0 24px rgba(255, 201, 106, .6); }
-.vc-left { position: absolute; left: 36px; top: 100px; bottom: 14px; width: 604px; z-index: 3; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.vc-left { position: absolute; left: 36px; top: 100px; bottom: 14px; width: var(--vc-col); z-index: 3; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .vc-cardwrap { flex: none; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.vc-card { display: block; border-radius: 6px; transform: rotate(-.8deg); box-shadow: 0 0 0 5px var(--paper), 0 0 0 8px var(--gold-d), 0 14px 30px rgba(0, 0, 0, .65); animation: enPop .7s var(--ease-back) .3s both; pointer-events: auto; }
+.vc-card { display: block; width: 100%; height: auto; border-radius: 6px; transform: rotate(-.8deg); box-shadow: 0 0 0 5px var(--paper), 0 0 0 8px var(--gold-d), 0 14px 30px rgba(0, 0, 0, .65); animation: enPop .7s var(--ease-back) .3s both; pointer-events: auto; }
 .vc-cardbtns { display: flex; gap: 12px; margin-top: 4px; pointer-events: auto; }
 .vc-newcard { flex: 1; min-height: 0; margin-top: 8px; animation: enRise .6s var(--ease-out) 1s both; }
-.vc-right { position: absolute; right: 36px; top: 100px; bottom: 14px; width: 572px; z-index: 3; display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
+.vc-right { position: absolute; right: 36px; top: 100px; bottom: 14px; width: var(--vc-col); z-index: 3; display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
 .vc-score { flex: 1; min-height: 0; animation: enRise .6s var(--ease-out) .4s both; }
 .vc-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; pointer-events: none; }
 .vc-tiles .en-tile { grid-template-columns: auto; grid-template-rows: auto auto auto; justify-items: center; padding: 6px 4px; text-align: center; background: rgba(13, 11, 30, .72); }
 .vc-tiles .en-tile-ico { grid-row: auto; }
 .vc-tiles .en-num { font-size: calc(20px * var(--ts)); }
-.vc-go { flex: none; }
+.vc-go { flex: none; margin-left: auto; }          /* on the right of the column even when the Inkstones chip beside it is empty (a run that was not recorded) */
 .vc-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: none; }
 .vc-stone { display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 10px; border-radius: 99px; background: rgba(13, 11, 30, .78); box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .6); min-height: 56px; }
 .vc-stone:empty { display: none; }
@@ -239,7 +254,7 @@
 .ts-big .st-page { top: 34px; height: 650px; }
 .ts-big .st-page > .p-body { padding-top: 22px; }
 .ts-big .cc-tiles { grid-template-columns: minmax(0, 1fr); }
-.ts-big .cc-cols { top: 338px; }                         /* the three panels grow upward over the heroes' feet: at 1.15 and 1.3 the tiles, the heal chips and the Treasures line used to sit below the fold of a 244 px box */
+/* (ts-big: --cc-top 338px above, so the three panels grow upward over the heroes' feet: at 1.15 and 1.3 the tiles, the heal chips and the Treasures line used to sit below the fold of a 244 px box) */
 .ts-big .cc-tiles { gap: 3px; }
 .ts-big .cc-tiles .en-tile { grid-template-columns: auto 1fr auto; grid-template-rows: auto; padding: 2px 10px; }     /* six tiles in the 231 px of the box with room to spare at 1.3 (they were 5 px over and the last lost its border) */
 .ts-big .cc-tiles .en-tile-ico { grid-row: auto; }
@@ -249,6 +264,7 @@
 .ts-big .go-title { font-size: calc(40px * var(--ts)); }
 .ts-big .en-row { grid-template-columns: 26px 1fr auto 62px; }
 .ts-big .vc-cap-line { font-size: calc(11.5px * var(--ts)); }
+.ts-big .go-fan { --ov: 50px; }
 /* the ledger holds nine rows: at 1.3 the last two (Curses carried, Turns taken) sat below the fold of the score box, so its type stops growing past 1.12 */
 .ts-big .vc-score .en-row { padding: 1px 8px; font-size: calc(15.5px * min(var(--ts), 1.12)); }
 .ts-big .vc-score .en-row-pts { font-size: calc(18px * min(var(--ts), 1.12)); }

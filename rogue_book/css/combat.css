@@ -1,10 +1,10 @@
 /* Inkwoven -- combat screen (owner: combat screen engineer). Everything here is namespaced .cm / .cm-* so no other sheet is touched.
-   Layout is absolute in stage px (the 1280 x 720 stage of DESIGN 5.8): top bar y 0..56, hero panels x 12..300 y 64..250, enemy overlays
-   placed per frame from SCENE.anchor, hand x 290..990 y 566..720 (a raised card's top is y 420), docks bottom left and right.
+   Layout is absolute in stage px (the 1280 x 720 stage of DESIGN 5.8): top bar y 0..56, hero panels x 18..306 y 64..250 (the swap seal hangs on their right edge, x 304..360), enemy overlays
+   placed per frame from SCENE.anchor, hand x 252..970 y 566..720 (a raised card's top is y 420), docks bottom left and right on one centre line (--dock-cy).
    Look: lacquered indigo panels with gold hairlines, washi paper speech bubbles for intents, vermilion hanko seals for counts, brush-stroke
    banners, an ink-drop energy orb. Text sizes follow --ts but the fixed boxes cap the growth (min(var(--ts), 1.2)) so nothing clips at 1.3. */
 
-.cm { --ts2: min(var(--ts), 1.15); --hh: 92px; --sw: 56px; position: absolute; inset: 0; overflow: hidden; overflow: clip; color: var(--paper); font-family: var(--font-ui); }
+.cm { --ts2: min(var(--ts), 1.15); --hh: 92px; --sw: 56px; --hx: 18px; --hw: 288px; --sx: 26px; --dock-cy: 654px; --blk-over: 9px; position: absolute; inset: 0; overflow: hidden; overflow: clip; color: var(--paper); font-family: var(--font-ui); }
 .cm * { box-sizing: border-box; }
 .cm > * { pointer-events: none; }
 .cm button, .cm [role=button], .cm .card, .cm .cm-int, .cm .cm-prompt { pointer-events: auto; }
@@ -19,10 +19,11 @@
 .cm-top::after { content: ""; position: absolute; left: 12px; right: 12px; top: 50px; height: 2px; background: linear-gradient(90deg, transparent, rgba(245, 201, 106, .55) 14%, rgba(245, 201, 106, .55) 86%, transparent); pointer-events: none; }
 .cm-relics { position: absolute; left: 12px; top: 6px; display: flex; align-items: center; gap: 7px; height: 42px; max-width: 336px; }
 .cm-relics .relic { flex: none; }
-.cm-relic-more { flex: none; min-width: 40px; height: 40px; padding: 0 8px; border: 0; border-radius: 22%; cursor: pointer; font: 900 15px var(--font-num); color: var(--gold2); background: radial-gradient(circle at 30% 25%, #3a2f7a, #160f36 76%); box-shadow: 0 0 0 2px var(--gold-d), 0 0 0 4px var(--ink); }
+.cm-relic-more { position: relative; flex: none; min-width: 40px; min-height: 0; width: auto; height: 40px; padding: 0 8px; border: 0; border-radius: 22%; cursor: pointer; font: 900 15px var(--font-num); color: var(--gold2); background: radial-gradient(circle at 30% 25%, #3a2f7a, #160f36 76%); box-shadow: 0 0 0 2px var(--gold-d), 0 0 0 4px var(--ink); }
+.cm-relic-more::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--hit)); height: max(100%, var(--hit)); transform: translate(-50%, -50%); }   /* the chip stays 40 px like the icons beside it, the touch area reaches --hit */
 .relic.flash { animation: cmFlash .8s ease-out; }
 @keyframes cmFlash { 0% { filter: brightness(2.4) drop-shadow(0 0 10px #ffe9a8); transform: scale(1.25); } 100% { filter: none; transform: none; } }
-.cm-stats { position: absolute; left: 360px; top: 11px; display: flex; align-items: center; gap: 18px; }
+.cm-stats { position: absolute; left: 360px; top: 6px; height: 42px; display: flex; align-items: center; gap: 18px; }   /* the same box as the relic strip, so the chips ride on the bar's centre line */
 .cm-stats .stat { pointer-events: auto; }
 
 .cm-turn { position: absolute; left: 545px; top: 3px; width: 190px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
@@ -39,22 +40,23 @@
 .cm-speed.fast { color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold)); } .cm-speed.fast .sp-g { color: var(--verm-d); }
 .cm-speed .btn-key { display: none; }
 .cm-top .menu-btn { top: 0; }
+#stage.compact .cm-speed { top: 0; }                        /* both buttons are --hit tall on a phone: the same top gives them the same centre */
 
-/* ------------------------------------------------------------------------------------------------ hero panels (x 12..300, y 64..250) */
+/* ------------------------------------------------------------------------------------------------ hero panels (x 18..306, y 64..250: the medal and its 6.5 px gold ring hang 4 px left of the panel, so they keep a 12 px margin to the screen edge) */
 .cm-hero {
-  position: absolute; left: 12px; top: calc(64px + var(--i, 0) * (var(--hh) + 2px)); width: 288px; height: var(--hh); padding: 6px 12px 14px 76px; border-radius: 10px; color: var(--paper); pointer-events: auto; outline-offset: 2px;
+  position: absolute; left: var(--hx); top: calc(64px + var(--i, 0) * (var(--hh) + 2px)); width: var(--hw); height: var(--hh); padding: 6px 12px 14px 76px; border-radius: 10px; color: var(--paper); pointer-events: auto; outline-offset: 2px;
   background: var(--lacquer-bg); box-shadow: 0 8px 18px rgba(0, 0, 0, .55), inset 0 0 0 1.5px rgba(245, 201, 106, .55), inset 0 0 0 4px rgba(20, 15, 46, .9), inset 6px 0 0 4px var(--hc, #ff7eb6);
   transition: transform .3s var(--ease-back), filter .3s, box-shadow .3s;
 }
 .cm-hero.front { box-shadow: 0 8px 18px rgba(0, 0, 0, .55), 0 0 22px -2px rgba(245, 201, 106, .55), inset 0 0 0 1.5px var(--gold), inset 0 0 0 4px rgba(20, 15, 46, .9), inset 6px 0 0 4px var(--hc, #ff7eb6); }
-.ch-medal { position: absolute; left: -4px; top: calc((var(--hh) - 66px) / 2); width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; background: var(--hc2); box-shadow: 0 0 0 3px var(--hc), 0 0 0 5px var(--ink), 0 0 0 6.5px var(--gold), 0 5px 8px rgba(0, 0, 0, .55); }
+.ch-medal { position: absolute; left: 2px; top: calc((var(--hh) - 66px) / 2); width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; background: var(--hc2); box-shadow: 0 0 0 3px var(--hc), 0 0 0 5px var(--ink), 0 0 0 6.5px var(--gold), 0 5px 8px rgba(0, 0, 0, .55); }
 .ch-medal .ico { display: block; border-radius: 50%; }
 .ch-main { display: flex; flex-direction: column; gap: 3px; height: 100%; min-width: 0; }
 .ch-l1 { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.ch-name { flex: none; font: 800 calc(17px * var(--ts2)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
+.ch-name { flex: none; min-width: 3em; font: 800 calc(17px * var(--ts2)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
 .ch-tag { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; }
 .ch-tag .ct-bonus { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; line-height: 1.08; }
-.ct-row { flex: none; padding: 2px 6px 2px; font: 900 calc(9.5px * var(--ts2)) / 1.25 var(--font-ui); font-style: normal; letter-spacing: .1em; color: var(--white); background: var(--verm-d); clip-path: polygon(0 12%, 4% 0, 96% 8%, 100% 0, 98% 100%, 3% 90%); text-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
+.ct-row { flex: none; min-width: 5.6em; text-align: center; padding: 2px 6px 2px; font: 900 calc(9.5px * var(--ts2)) / 1.25 var(--font-ui); font-style: normal; letter-spacing: .1em; color: var(--white); background: var(--verm-d); clip-path: polygon(0 12%, 4% 0, 96% 8%, 100% 0, 98% 100%, 3% 90%); text-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
 .cm-hero.back .ct-row { background: #4a3d9a; color: #e2dcff; }
 .ct-bonus { min-width: 0; font: 600 calc(10px * var(--ts2)) var(--font-ui); font-style: normal; color: var(--paper2); }
 .ch-l2 { display: flex; align-items: center; gap: 6px; }
@@ -93,7 +95,7 @@
 .cm-blk.gain { animation: cmBlkGain .46s var(--ease-back); } .cm-blk.lose { animation: cmBlkLose .46s ease-out; }
 @keyframes cmBlkGain { 0% { transform: scale(.4); filter: brightness(2); } 60% { transform: scale(1.25); } 100% { transform: none; filter: none; } }
 @keyframes cmBlkLose { 0% { transform: scale(1.2); filter: brightness(2.2) hue-rotate(-30deg); } 100% { transform: scale(.7); opacity: .3; } }
-.cm-en .cm-ebarwrap .cm-blk { order: -1; margin-right: -9px; height: 22px; }
+.cm-en .cm-ebarwrap .cm-blk { order: -1; margin-right: calc(-1 * var(--blk-over)); height: 22px; }
 
 /* status chips: UI.status discs, a little tighter and with bigger counts than the base rule */
 .cm-st { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 0; }
@@ -103,8 +105,10 @@
 .cm-more { flex: none; display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 5px; border-radius: 12px; font: 900 12px var(--font-num); color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold)); box-shadow: 0 0 0 1.5px var(--ink); cursor: help; pointer-events: auto; }
 @keyframes cmPop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.25); opacity: 1; } 100% { transform: none; } }
 
-/* the swap seal: a vermilion hanko straddling the two hero panels */
-.cm-swap { position: absolute; left: calc(296px - var(--sw) / 2); top: calc(64px + var(--hh) + 1px - var(--sw) / 2); width: var(--sw); height: var(--sw); min-width: var(--sw); min-height: var(--sw); padding: 0; border: 0; border-radius: 50%; cursor: pointer; color: var(--white); z-index: 4; display: grid; place-items: center; align-content: center; gap: 0;
+/* the swap seal: a vermilion hanko hung on the right edge of the two hero panels, at the join between them. Its centre is --sx past the panel edge (x 306 + 26 = 332): the dashed ring
+   (radius sw / 2 + 8) then starts at x 296.7 on the first text row of the lower panel (7 px under the seal centre), beyond the 294 px where a panel's text column ends (12 px padding),
+   so no text, bonus line or status chip of either panel is ever under the seal or its ring, at any text size and on both stages. */
+.cm-swap { position: absolute; left: calc(var(--hx) + var(--hw) + var(--sx) - var(--sw) / 2); top: calc(64px + var(--hh) + 1px - var(--sw) / 2); width: var(--sw); height: var(--sw); min-width: var(--sw); min-height: var(--sw); padding: 0; border: 0; border-radius: 50%; cursor: pointer; color: var(--white); z-index: 4; display: grid; place-items: center; align-content: center; gap: 0;
   background: radial-gradient(circle at 32% 26%, #ff7268 0, var(--vermilion) 42%, #a91d2c 100%); box-shadow: inset 0 0 0 2px rgba(255, 248, 240, .9), inset 0 0 0 4px rgba(169, 29, 44, .95), 0 0 0 2.5px var(--ink), 0 5px 10px rgba(0, 0, 0, .55); transition: transform .14s var(--ease-out), filter .14s; }
 .cm-swap::after { content: ""; position: absolute; inset: calc((var(--sw) - max(var(--sw), var(--hit))) / 2); border-radius: 50%; }   /* the disc stays --sw, the hit area reaches --hit on a phone */
 .cm-swap:hover { transform: rotate(-8deg) scale(1.06); } .cm-swap:active { transform: scale(.94); }
@@ -124,7 +128,8 @@
 .cm-en > * { position: absolute; }
 .en-st, .cm-int, .cm-say, .cm-pv { width: max-content; }          /* .cm-en has no size, so shrink-to-fit would otherwise wrap everything to its narrowest */
 .cm-en.dead > *:not(.cm-say) { opacity: 0; pointer-events: none; transition: opacity .45s; }
-.cm-ebarwrap { display: flex; align-items: center; transform: translate(-50%, -50%); pointer-events: none; }
+.cm-ebarwrap { display: flex; align-items: center; transform: translate(-50%, -50%); pointer-events: none; transition: width .25s var(--ease-out); }   /* the width is set per frame (screen_combat barWidths): a neighbour dying or a summon eases it */
+.cm-ebarwrap.has-blk .cm-bar .txt { padding-left: var(--blk-over); }          /* centred on what the Block chip leaves of the bar */
 .en-st { transform: translateX(-50%); max-width: 156px; justify-content: center; pointer-events: none; }
 .en-st .status { pointer-events: auto; --d: 21px; }
 .en-st .status .n { right: -.3em; bottom: -.32em; font-size: 11px; }
@@ -187,6 +192,7 @@
 
 /* ------------------------------------------------------------------------------------------------ the hand */
 .cm-hand { position: absolute; inset: 0; }
+.cm-handbox { position: absolute; left: 0; top: 0; pointer-events: none; }   /* the tutorial anchor: a box round the fan at rest, sized and placed by screen_combat placeHandBox from HAND and slotFor */
 .hc { position: absolute; left: 0; top: 0; width: 190px; height: 266px; transform-origin: 50% 118%; pointer-events: none; transition: transform .3s cubic-bezier(.2, .9, .25, 1.12), opacity .25s; }
 .hc > .card { pointer-events: auto; }
 .hc.fresh { opacity: 0; }
@@ -204,7 +210,7 @@
 .cm-playzone.show { opacity: .85; } .cm-playzone.hot { opacity: 1; border-top-color: var(--gold2); filter: drop-shadow(0 0 8px rgba(245, 201, 106, .9)); }
 
 /* ------------------------------------------------------------------------------------------------ docks: orb, piles, End Turn */
-.cm-orb { position: absolute; width: 88px; height: 100px; display: grid; place-items: center; pointer-events: auto; cursor: help; background: var(--drop) center / 100% 100% no-repeat; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .55)) drop-shadow(0 0 12px rgba(95, 245, 255, .5)); transition: filter .3s; }
+.cm-orb { position: absolute; top: calc(var(--dock-cy) - 50px); width: 88px; height: 100px; display: grid; place-items: center; pointer-events: auto; cursor: help; background: var(--drop) center / 100% 100% no-repeat; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .55)) drop-shadow(0 0 12px rgba(95, 245, 255, .5)); transition: filter .3s; }
 .cm-orb .o-glow { position: absolute; inset: 14% 12% 6%; border-radius: 50%; background: radial-gradient(circle at 50% 66%, rgba(95, 245, 255, .4), transparent 66%); animation: orbGlow 3s ease-in-out infinite; }
 .cm-orb .o-ring { position: absolute; inset: 0; pointer-events: none; }
 .o-n { position: relative; margin-top: 16px; font: 900 44px / 1 var(--font-num); color: var(--white); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 0 14px rgba(95, 245, 255, .8); }
@@ -214,7 +220,7 @@
 @keyframes cmOrbGain { 0% { transform: scale(.8); filter: brightness(2.2) drop-shadow(0 0 22px #5ff5ff); } 55% { transform: scale(1.22); } 100% { transform: none; } }
 @keyframes cmOrbSpend { 0% { transform: scale(1.14); filter: brightness(1.7); } 45% { transform: scale(.88); } 100% { transform: none; } }
 
-.cm-pile { position: absolute; width: 92px; height: 114px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--paper); transition: transform .14s var(--ease-out), filter .2s; }
+.cm-pile { position: absolute; top: calc(var(--dock-cy) - 57px); width: 92px; height: 114px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--paper); transition: transform .14s var(--ease-out), filter .2s; }
 .cm-pile:hover { transform: translateY(-3px); } .cm-pile:active { transform: translateY(2px); }
 .p-stack { position: absolute; left: 10px; top: 2px; width: 72px; height: 100px; }
 .p-stack .card { position: absolute; left: 0; top: 0; pointer-events: none; }
@@ -236,14 +242,14 @@
 .cc-n { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; font: 900 13px var(--font-num); color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold)); border-radius: 12px; }
 .cm-chip.bump { animation: cmBump .32s var(--ease-back); }
 
-.cm-end { position: absolute; left: 1100px; top: 610px; width: 168px; height: 94px; padding: 0; overflow: hidden; border: 4px solid transparent; border-radius: 14px 8px 14px 8px; cursor: pointer; color: var(--white); text-align: center;
+.cm-end { position: absolute; left: 1100px; top: calc(var(--dock-cy) - 47px); width: 168px; height: 94px; padding: 0; overflow: hidden; border: 4px solid transparent; border-radius: 14px 8px 14px 8px; cursor: pointer; color: var(--white); text-align: center;
   background: linear-gradient(180deg, #ff6b5e 0%, var(--vermilion) 46%, #a91d2c 100%) padding-box, var(--gold-leaf) border-box;
   box-shadow: 0 0 0 2px var(--ink), 0 6px 0 2px var(--verm-dd), 0 14px 18px rgba(0, 0, 0, .55), inset 0 2px 0 rgba(255, 255, 255, .55), inset 0 -4px 0 rgba(0, 0, 0, .2); transition: transform .12s var(--ease-out), filter .2s; }
 .cm-end::before { content: ""; position: absolute; inset: 5px; border: 1.5px solid rgba(255, 233, 168, .55); border-radius: 9px 5px 9px 5px; pointer-events: none; }
 .cm-end .ce-ink { position: absolute; left: -6%; right: -6%; top: 50%; height: 46%; transform: translateY(-50%) rotate(-3deg); background: rgba(93, 15, 28, .55); -webkit-mask: var(--brush) center / 100% 100% no-repeat; mask: var(--brush) center / 100% 100% no-repeat; }
-.cm-end b { position: relative; display: block; font-family: var(--font-display); letter-spacing: .2em; text-shadow: 0 2px 0 rgba(93, 15, 28, .9); }
+.cm-end b { position: relative; display: block; padding-left: .2em; font-family: var(--font-display); letter-spacing: .2em; text-shadow: 0 2px 0 rgba(93, 15, 28, .9); }
 .ce-l1 { margin-top: 2px; font-size: calc(15px * var(--ts2)); line-height: 1.1; color: var(--gold2); } .ce-l2 { font-size: calc(30px * var(--ts2)); line-height: 1; }
-.cm-end .btn-key { position: absolute; right: 8px; bottom: 6px; padding: 0 .5em; font-size: 11px; }
+.cm-end .btn-key { position: absolute; right: 8px; top: 6px; padding: 0 .5em; font-size: 11px; }
 .cm-end .btn-shine { z-index: 2; }
 .cm-end:hover { transform: translateY(-3px); } .cm-end:hover .btn-shine { transform: translateX(125%); transition: transform .65s ease-out; }
 .cm-end:active { transform: translateY(4px); box-shadow: 0 0 0 2px var(--ink), 0 2px 0 2px var(--verm-dd), 0 6px 10px rgba(0, 0, 0, .55), inset 0 2px 0 rgba(255, 255, 255, .4); }
@@ -304,9 +310,9 @@
 #stage.compact .cm-hero { padding-bottom: 8px; }
 #stage.compact .ch-l1 { min-height: 22px; } #stage.compact .ch-main { gap: 2px; } #stage.compact .ch-name { font-size: 18px; }
 #stage.compact .cm-hero .cm-st { margin-top: 0; } #stage.compact .cm-hero .cm-st .status { --d: 28px; }
-#stage.compact .ct-bonus { display: none; } #stage.compact .cm-hero .ct-row { font-size: 17px; padding: 1px 7px; letter-spacing: .06em; }
+#stage.compact .ct-bonus { display: none; } #stage.compact .cm-hero .ct-row { font-size: 17px; padding: 1px 7px; letter-spacing: .06em; min-width: 0; }
 #stage.compact .cm-hpv { font-size: 17px; } #stage.compact .ch-fallen { font-size: 16px; letter-spacing: .1em; top: auto; right: auto; left: 84px; bottom: 12px; transform: rotate(-2deg); }   /* the empty status row, clear of the BACK tag and the swap seal */
-#stage.compact .en-st { margin-top: 3px; } #stage.compact .en-st .status { --d: 24px; } #stage.compact .en-st .status .n { font-size: 17px; }
+#stage.compact .en-st .status { --d: 24px; } #stage.compact .en-st .status .n { font-size: 17px; }
 #stage.compact .cm-turn .ct-n { font-size: 24px; } #stage.compact .cm-turn .ct-p { font-size: 17px; letter-spacing: .1em; white-space: nowrap; margin-top: 0; }
 #stage.compact .cm-stats .stat.sz-sm { --ico: 26px; --fs: 17px; } #stage.compact .cm-speed .sp-l { font-size: 18px; } #stage.compact .cm-relic-more { font-size: 17px; }
 #stage.compact .cm-swap .sw-cost { font-size: 17px; letter-spacing: .04em; margin-top: -1px; } #stage.compact .cm-swap .sw-glyph { margin-top: -4px; }

@@ -1574,4 +1574,216 @@ await t.test('tutorial: the "Front row, back row" hint is not raised over a disa
   }
 });
 
+// ==================================================================================================== ALIGNMENT (overlay versus painted art)
+// The menu screens are DOM laid over a painted canvas. These tests pin the shared coordinates so the two cannot drift apart again: what the
+// headless DOM cannot measure (real layout) is covered by reading the stylesheet rules and the numbers the screen writes into the DOM.
+const cssRules = () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim().replace(/\s+/g, ' '), body: m[2] }));
+};
+const rule = (rules, sel) => rules.find((r) => r.sel === sel);
+const decl = (r, prop) => { const m = r && new RegExp('(?:^|[;\\s])' + prop + '\\s*:\\s*([^;]+)').exec(r.body); return m ? m[1].trim() : null; };
+const px = (v) => (v === null ? NaN : parseFloat(v));
+const press = (g, el) => { g._click(el); };
+
+await t.test('heroSelect (Daily Tale): a hero the profile still locks stops wearing the padlock, the greyed plate and the Locked label while Daily is on, and gets them back when it is off', async () => {
+  const g = fresh();
+  await go(g, 'heroSelect');
+  t.deep($$(g, '.mn-hcard').map((b) => b.classList.contains('locked')), [false, false, true, true], 'normally Suzu and Raiga are locked');
+  const toggle = () => $(g, '.mn-daily .toggle');
+  press(g, toggle()); await settle(g);
+  t.ok(g.UI.screens.heroSelect.state().daily, 'Daily is on');
+  t.eq($$(g, '.mn-hcard.locked').length, 0, 'no card keeps the class locked: the canvas paints the daily heroes unlocked and the DOM agrees');
+  t.ok($$(g, '.mn-hcard').every((b) => !/Locked/.test(b.getAttribute('aria-label'))), 'and no card says Locked to a screen reader');
+  t.eq($$(g, '.mn-hc-lock').length, 2, 'the padlock spans stay in the DOM (they are shown by the class)');
+  const rules = cssRules();
+  t.ok(rules.some((r) => r.sel === '.mn-hcard:not(.locked) .mn-hc-lock' && /display\s*:\s*none/.test(r.body)), 'css: the padlock is only displayed while the card is locked');
+  t.ok(rules.some((r) => r.sel === '.mn-hcard.locked .mn-hc-plate' && /grayscale/.test(r.body)), 'css: the greyed plate is tied to the same class');
+  press(g, card(g, 'suzu')); await settle(g);
+  t.ok(!$(g, '.mn-d.locked'), 'the sheet of a daily hero is the real sheet, not the locked one');
+  press(g, toggle()); await settle(g);
+  t.deep($$(g, '.mn-hcard').map((b) => b.classList.contains('locked')), [false, false, true, true], 'Daily off: Suzu and Raiga are locked again');
+  t.ok(/Locked/.test(card(g, 'suzu').getAttribute('aria-label')), 'and say so again');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('heroSelect: the card row, the detail sheet and the party stage share their coordinates (row top, margins, slot centres)', async () => {
+  const g = fresh();
+  await go(g, 'heroSelect');
+  const rules = cssRules();
+  const cards = $$(g, '.mn-hcard');
+  const lefts = cards.map((c) => px(c.style.left)), top = px(cards[0].style.top);
+  t.deep(lefts, [30, 210, 390, 570], 'the row starts at x 30 and steps 180');
+  t.eq(top, 84, 'the row top on a desktop stage is 84');
+  t.eq(px($(g, '.s-heroSelect').style.getPropertyValue('--hc-y')), top, 'the screen publishes the row top as --hc-y (the detail sheet follows it)');
+  const sheet = rule(rules, '.mn-detail.panel-wrap');
+  t.ok(/var\(--hc-y,\s*84px\)/.test(decl(sheet, 'top')), 'css: the sheet top is the row top');
+  t.eq(px(decl(sheet, 'left')) + px(decl(sheet, 'width')), 1280 - lefts[0], 'css: the sheet leaves the same margin on the right as the row leaves on the left (30)');
+  t.ok(/calc\(706px - var\(--hc-y,\s*84px\)\)/.test(decl(sheet, 'height')), 'css: the sheet ends at y 706, flush with the party stage and the launch panel');
+  const party = rule(rules, '.mn-party'), launch = rule(rules, '.mn-launch');
+  t.eq(px(decl(party, 'top')) + px(decl(party, 'height')), 706, 'the party stage ends at y 706'); t.eq(px(decl(launch, 'top')) + px(decl(launch, 'height')), 706, 'and so does the launch panel');
+  t.ok(!/border\s*:/.test(party.body) && /inset 0 0 0 2px/.test(decl(party, 'box-shadow')), 'css: the party frame ring is an inset shadow, not a border, so its children share the canvas coordinates');
+  // the two slots stand centred on the frame, and each label is exactly under its sprite (label left = sprite x - frame x)
+  const front = px($(g, '.mn-slot.front').style.left), back = px($(g, '.mn-slot.back').style.left);
+  t.eq((front + back) / 2, px(decl(party, 'width')) / 2, 'the pair is centred on the party frame (labels at ' + back + ' and ' + front + ' of 400)');
+  t.eq(front - back, 150, 'the slots keep their 150 px spacing');
+  t.ok(!rules.some((r) => /\.mn-slot\.(front|back)$/.test(r.sel) && /left\s*:/.test(r.body)), 'css: the label x comes from SLOT in screen_menu.js, not from a second copy in the stylesheet');
+  // the Inkstone pill is the same size on hero select and in the library
+  const hsPill = $(g, '.mn-stones .stat').className;
+  await go(g, 'library'); const libPill = $(g, '.mn-stones .stat').className;
+  t.ok(/sz-lg/.test(hsPill) && hsPill === libPill, 'the Inkstone pill is the same size on both screens (' + hsPill + ' / ' + libPill + ')');
+  t.ok(!/margin-right/.test(rule(rules, '.mn-stones').body), 'css: the pill sits on the same 20 px margin as Back (no margin-right)');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('heroSelect on a phone (stage.compact): the row drops under the Back square, nothing lifts into it, the sheet follows, and desktop restores it', async () => {
+  const g = fresh();
+  const stage = g._doc.getElementById('stage');
+  stage.classList.add('compact');
+  await go(g, 'heroSelect');
+  const cards = $$(g, '.mn-hcard');
+  t.deep(cards.map((c) => px(c.style.top)), [92, 92, 92, 92], 'the whole row sits at y 92 (Back is a 81 to 88 px square at 844x390 and 740x360)');
+  t.eq(px($(g, '.s-heroSelect').style.getPropertyValue('--hc-y')), 92, 'and --hc-y moves the sheet with it');
+  g._click(card(g, 'hanae')); g._click(card(g, 'kuro')); await settle(g, 20);
+  t.deep(g.UI.screens.heroSelect.state().chosen, ['hanae', 'kuro'], 'two heroes chosen');
+  t.ok(cards.every((c) => !c.style.transform), 'no card lifts on a phone (a chosen card would rise into the Back square)');
+  const rules = cssRules();
+  t.ok(!rules.some((r) => /\.compact \.mn-hc-badge/.test(r.sel)), 'css: the FRONT and BACK badge sits inside the card on every viewport (no separate phone rule, no collision with the ribbon)');
+  t.ok(px(decl(rule(rules, '.mn-hc-badge'), 'left')) >= 0 && px(decl(rule(rules, '.mn-hc-badge'), 'top')) >= 0, 'css: the badge is inside the card (left and top are not negative)');
+  stage.classList.remove('compact'); g._frames(3, 16); await settle(g, 4);
+  t.deep(cards.map((c) => px(c.style.top)), [84, 84, 84, 84], 'back on a desktop stage the row returns to y 84');
+  t.ok(cards.some((c) => c.style.transform), 'and chosen cards lift again');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('css: heroSelect, library, settings and howto share ONE header (Back, ribbon and pill on one centre line, one --hit tall bar on a phone)', () => {
+  const rules = cssRules();
+  const bar = rules.find((r) => r.sel === '.mn-hs-top, .mn-lib-top, .mn-set-top');
+  t.ok(bar && /var\(--bar-top\)/.test(decl(bar, 'top')) && /var\(--bar-h\)/.test(decl(bar, 'height')) && decl(bar, 'align-items') === 'center', 'one rule places the bars of all four screens (top, height, centring)');
+  const root = rule(rules, '.s-heroSelect, .s-library, .s-settings, .s-howto');
+  t.eq(decl(root, '--bar-top'), '10px', 'desktop bar top'); t.eq(decl(root, '--bar-h'), '60px', 'desktop bar height'); t.ok(/calc\(var\(--bar-top\) \+ var\(--bar-h\) \/ 2\)/.test(decl(root, '--bar-cy')), '--bar-cy is the middle of the bar');
+  const phone = rule(rules, '.compact .s-heroSelect, .compact .s-library, .compact .s-settings, .compact .s-howto');
+  t.eq(decl(phone, '--bar-top'), '0px', 'phone bar is flush with the top'); t.eq(decl(phone, '--bar-h'), 'var(--hit)', 'and exactly one --hit tall, as tall as Back');
+  const rib = rule(rules, '.mn-hs-top .mn-banner, .mn-lib-top .mn-banner');
+  t.ok(decl(rib, 'top') === '50%' && /translate\(-50%,\s*-50%\)/.test(decl(rib, 'transform')), 'the ribbon of hero select and library is centred on the bar');
+  const how = rule(rules, '.mn-ht-banner');
+  t.ok(decl(how, 'top') === 'var(--bar-cy)' && /translate\(-50%,\s*-50%\)/.test(decl(how, 'transform')), 'the How to Play ribbon is centred on the same line');
+  t.ok(!rules.some((r) => /\.compact \.mn-(hs|lib)-top \.mn-back/.test(r.sel) && /align-self/.test(r.body)), 'phone: Back is no longer pinned to the top edge while the ribbon and pill centre elsewhere');
+  t.ok(rules.some((r) => /min\(var\(--ts\),\s*1\.12\)/.test(decl(r, 'font-size') || '') && /\.mn-hs-top \.mn-banner span/.test(r.sel)), 'the ribbon grows with the text size only up to 1.12x, so Larger text cannot reach the tabs and lifted cards');
+  t.ok(decl(rule(rules, '.compact .mn-tabs'), 'top').indexOf('var(--bar-cy)') >= 0, 'phone library tabs sit under the ribbon (they follow --bar-cy)');
+});
+
+await t.test('howto (screen and overlay): the dots sit on the page axis, the diagram frame is centred on its page, and a phone gives Back, the book and the buttons a --hit row each', async () => {
+  const rules = cssRules();
+  const nav = rule(rules, '.mn-ht-nav');
+  t.ok(decl(nav, 'display') === 'grid' && /^1fr auto 1fr$/.test(decl(nav, 'grid-template-columns')), 'css: the nav is a 1fr auto 1fr grid, so the dots are centred whatever Previous and Next weigh');
+  t.ok(/justify-self\s*:\s*start/.test(rule(rules, '.mn-ht-nav > .btn:first-child').body) && /justify-self\s*:\s*end/.test(rule(rules, '.mn-ht-nav > .btn:last-child').body), 'css: Previous hugs the left, Next the right');
+  const left = rule(rules, '.mn-pg.left'), illus = rule(rules, '.mn-illus');
+  t.eq(1160 / 2 - px(decl(left, 'padding-left')) - px(decl(left, 'padding-right')), px(decl(illus, 'width')), 'css: the left page content width equals the 528 px diagram frame (520 canvas + 2 x 4 border), so the frame is centred');
+  // phone geometry for every plausible --hit (a 44 screen px square at scale 0.75 down to 0.33): header row, book, buttons never overlap
+  const bookTop = decl(rule(rules, '.compact .mn-book'), 'top'), bookH = decl(rule(rules, '.compact .mn-book'), 'height'), navBottom = px(decl(rule(rules, '.compact .mn-ht-nav'), 'bottom'));
+  const mT = /^calc\(var\(--hit\) \+ (\d+)px\)$/.exec(bookTop), mH = /^calc\((\d+)px - 2 \* var\(--hit\)\)$/.exec(bookH);
+  t.ok(mT && mH, 'css: phone book top and height are written in --hit');
+  [58.7, 66.7, 81.2, 88, 99].forEach((hit) => {
+    const top = hit + Number(mT[1]), bottom = top + (Number(mH[1]) - 2 * hit), navTop = 720 - navBottom - hit;
+    t.ok(top >= hit + 4, 'hit ' + hit + ': the book starts at y ' + top.toFixed(1) + ', under Back (bottom ' + hit + ')');
+    t.ok(bottom <= navTop, 'hit ' + hit + ': the book ends at y ' + bottom.toFixed(1) + ', above the buttons (top ' + navTop.toFixed(1) + ')');
+    t.ok(navTop + hit + navBottom <= 720 + 1e-6, 'hit ' + hit + ': the buttons stay on the stage');
+    t.ok(navTop - bottom >= 8, 'hit ' + hit + ': at least 8 stage px (the 5 px book ring and 3 clear) between the book and the buttons: ' + (navTop - bottom).toFixed(1));
+  });
+  const iBig = rules.findIndex((r) => r.sel === '.ts-big .mn-ht-nav'), iPhone = rules.findIndex((r) => r.sel === '.compact .mn-ht-nav');
+  t.ok(iBig >= 0 && iPhone > iBig, 'css: the phone nav rule comes AFTER the Larger text one (same specificity), so Larger text on a phone keeps bottom 8 instead of lifting the buttons 6 px into the book (R11)');
+  const oTop = decl(rule(rules, '.compact .mn-ht-wrap .mn-howto.overlay'), 'top'), oBook = decl(rule(rules, '.compact .mn-howto.overlay .mn-book'), 'height');
+  const wrapH = px(decl(rule(rules, '.compact .mn-ht-wrap'), 'height'));
+  const oT = /^calc\(var\(--hit\) \+ (\d+)px\)$/.exec(oTop), oH = /^calc\((\d+)px - 2 \* var\(--hit\)\)$/.exec(oBook), oOverH = /^calc\((\d+)px - var\(--hit\)\)$/.exec(decl(rule(rules, '.compact .mn-ht-wrap .mn-howto.overlay'), 'height'));
+  t.ok(oT && oH && oOverH, 'css: the phone overlay is written in --hit too');
+  [58.7, 66.7, 81.2, 88, 99].forEach((hit) => {
+    const overTop = hit + Number(oT[1]), overH = Number(oOverH[1]) - hit, bookH2 = Number(oH[1]) - 2 * hit;
+    t.ok(overTop >= hit + 4, 'overlay hit ' + hit + ': the book starts under the Back button');
+    t.ok(bookH2 + hit <= overH, 'overlay hit ' + hit + ': book and buttons fit the overlay (' + (bookH2 + hit).toFixed(1) + ' of ' + overH.toFixed(1) + ')');
+    t.ok(overTop + overH <= wrapH + 1e-6 && wrapH <= 720, 'overlay hit ' + hit + ': the whole wrap fits the 720 px stage');
+    t.ok(overH - (bookH2 + hit) >= 8, 'overlay hit ' + hit + ': at least 8 stage px between the book and the buttons: ' + (overH - (bookH2 + hit)).toFixed(1));
+  });
+  const hb = rule(rules, '.mn-ht-banner-o');
+  t.ok(decl(hb, 'top') === 'calc(var(--hit) / 2)' && /translate\(-50%,\s*-50%\)/.test(decl(hb, 'transform')), 'css: the overlay ribbon shares Back\'s centre line (--hit / 2)');
+});
+
+await t.test('title: the menu column starts clear of the painted book (cover, gold corner fittings, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
+  const rules = cssRules();
+  const menu = rule(rules, '.s-title .mn-menu');
+  const left = px(decl(menu, 'left')), width = px(decl(menu, 'width'));
+  // the painted book is read from the art source (art_scenes.js titleBook and the title scene), so repainting it shows up here
+  const art = fs.readFileSync(path.join(DIR, 'js', 'art_scenes.js'), 'utf8'), src = fs.readFileSync(path.join(DIR, 'js', 'screen_menu.js'), 'utf8');
+  const cover = /const cover = \[((?:\[\d+, \d+\](?:, )?)+)\];\s*tk\.celFill\(g, cover, '[^']+', \{ line: ([\d.]+)/.exec(art);
+  const layerK = /layer\('book', \{[^}]*\}, ([\d.]+),/.exec(art), camK = /parallaxX: reduce\(\) \? 0 : S\.px \* (\d+)/.exec(src);
+  t.ok(cover && layerK && camK, 'the cover polygon, the book layer factor and the title camera offset are readable');
+  const BOOK_PAGES_RIGHT = 958, BOOK_COVER_RIGHT = Math.max(...[...cover[1].matchAll(/\[(\d+), \d+\]/g)].map((m) => Number(m[1])));   // the cream pages end at x 958 (mirror of 322); the leather cover with its gold corner fittings at 988
+  const clear = BOOK_COVER_RIGHT + Number(cover[2]) / 2 + Number(layerK[1]) * Number(camK[1]);   // + half the ink line + the parallax (layer factor x camera offset: the pointer far left moves the book 7 px right)
+  t.eq(BOOK_COVER_RIGHT, 988, 'the painted cover ends at x 988');
+  t.ok(left >= BOOK_PAGES_RIGHT, 'the column (x ' + left + ') starts right of the last page of the painted book (' + BOOK_PAGES_RIGHT + ')');
+  t.ok(left >= clear, 'and covers NONE of the cover or its gold corner fitting, even with the pointer parallax: x ' + left + ' >= ' + clear.toFixed(1) + ' (was 972, which hid 16 px of the fitting)');
+  t.ok(left + width <= 1280 - 14, 'right edge ' + (left + width) + ': inside the 14 px margin of the full screen button');
+  const gap = px(decl(rule(rules, '.mn-slims'), 'gap'));
+  t.ok((width - 2 * gap) / 3 >= 84, 'phone: the three slim plaques stay 84 px or wider (' + ((width - 2 * gap) / 3).toFixed(1) + '), 42 css px on the narrowest phone');
+  const halo = rule(rules, '.s-title .mn-menu::before'), insetLeft = px(/inset:\s*(-?\d+)px\s+(-?\d+)px\s+(-?\d+)px\s+(-?\d+)px/.exec(decl(halo, 'inset') ? 'inset: ' + decl(halo, 'inset') : '')[4]);
+  t.ok(left + insetLeft >= BOOK_COVER_RIGHT, 'the dark halo behind the plaques does not start over the painted book (starts at x ' + (left + insetLeft) + ')');
+  const tag = rule(rules, '.s-title .mn-tag'); t.eq(decl(tag, 'text-indent'), decl(tag, 'letter-spacing'), 'the tagline cancels its trailing letter-spacing: its glyphs are centred on the logo axis');
+  const sub = rule(rules, '.mn-gate-sub'); t.eq(decl(sub, 'text-indent'), decl(sub, 'letter-spacing'), 'and so does the gate hint');
+  t.ok(/display\s*:\s*none/.test(rule(rules, '.s-title.ts-big .mn-p-meds, .compact .s-title .mn-p-meds').body), 'Larger text and phones drop the decorative hero faces so the Continue summary and the Daily seed are never clipped');
+  t.ok(rules.some((r) => /\.compact \.s-title \.mn-slims \.mn-plaque::before/.test(r.sel) && /display\s*:\s*none/.test(r.body)), 'phone: the three slim plaques give up the diamond so "Settings" stays one word in a 92 px button');
+});
+
+await t.test('title: the Larger text size marks the title root so the narrow column can adapt', async () => {
+  const g = fresh({}); g.UI.setSetting('textScale', 1.3);
+  await settle(g);
+  await go(g, 'title'); await settle(g);
+  t.ok($(g, '.s-title').classList.contains('ts-big'), 'the title root carries ts-big at Larger');
+  g.UI.setSetting('textScale', 1); await go(g, 'howto'); await go(g, 'title');
+  t.ok(!$(g, '.s-title').classList.contains('ts-big'), 'and not at Normal');
+});
+
+await t.test('library and pause: tiles of one row are one width, the unlock footers are as wide as their cards, and the run card shares one left edge', () => {
+  const rules = cssRules();
+  const sum = rule(rules, '.mn-hist-sum');
+  t.ok(decl(sum, 'display') === 'grid' && decl(sum, 'grid-auto-columns') === '1fr' && decl(sum, 'width') === 'max-content', 'css: the four history tiles share one column width (the widest sets it)');
+  const item = rule(rules, '.mn-item.k-card'), foot = rule(rules, '.mn-item.k-card .mn-item-foot');
+  const lc = px(/--lc-w:\s*(\d+)px/.exec(item.body)[1]);
+  t.eq(lc, 168, 'css: --lc-w is the deck card width (LISTS.cardSizes.deck)');
+  t.eq(decl(foot, 'width'), 'var(--lc-w)', 'css: the price pill and Unlock button row is exactly the card width');
+  t.ok(decl(item, 'width') === 'calc(var(--lc-w) + 8px)', 'css: the tile keeps its 8 px of slack for the stamp and padlock overhang');
+  t.ok(!/padding(-left)?\s*:\s*[1-9]/.test(rule(rules, '.mn-p-stats').body), 'css: the stat pills of the run card have no left padding');
+  const base = fs.readFileSync(path.join(DIR, 'css', 'base.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const ico = px(/\.stat\.sz-sm \{ --ico: (\d+)px/.exec(base)[1]), hang = ico * Number(/\.stat \{[^}]*margin-left: calc\(var\(--ico\) \* ([\d.]+)\)/.exec(base)[1]);
+  t.ok(Math.abs(px(decl(rule(rules, '.mn-p-stats'), 'margin-left')) + hang) < 0.05, 'css: the stats row is pulled left by the pill\'s own margin (' + hang.toFixed(1) + ' px), so the FIRST PILL starts on the heading edge like the chips and hero rows and its icon hangs left like the hero medals (R6)');
+  const relics = rule(rules, '.mn-p-relics'); t.ok(/padding\s*:\s*8px 0 4px/.test(relics.body), 'css: the treasure strip has no side padding either');
+});
+
+await t.test('library history: the four summary tiles render (the grid keeps them in one row)', async () => {
+  const g = fresh(); seedProfile(g);
+  await go(g, 'library', { tab: 'history' });
+  t.eq($$(g, '.mn-hist-sum span').length, 4, 'four tiles');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('heroSelect: the Begin labels are short enough for their button at the Larger text size (R1: "Begin the Daily Tale" was 285 px wide in a 276 px button and clipped the gold border)', async () => {
+  const g = fresh(); await go(g, 'heroSelect');
+  const label = () => $(g, '.mn-begin .btn-label').textContent;
+  const plain = label();
+  press(g, $(g, '.mn-daily .toggle')); await settle(g);
+  const daily = label();
+  t.eq(plain, 'Begin the Tale', 'the normal label is unchanged'); t.ok(/^Begin Daily Tale$/.test(daily), 'the Daily label is "Begin Daily Tale" (the word Daily still says what starts): ' + daily);
+  press(g, $(g, '.mn-daily .toggle')); await settle(g);
+  t.eq(label(), 'Begin the Tale', 'and switching Daily off restores it');
+  // width model, measured in the widest stack font available to headless Chromium (DejaVu Serif Bold): 0.46 em per glyph plus the letter-spacing
+  const rules = cssRules();
+  const em = (v) => parseFloat(v), ls = em(decl(rule(rules, '.ts-big .mn-begin'), 'letter-spacing')), font = 21 * 1.3;
+  const body = /padding\s*:\s*\d+px (\d+)px/.exec(rule(rules, '.mn-launch .p-body').body), avail = px(decl(rule(rules, '.mn-launch'), 'width')) - 2 * Number(body[1]) - 9;   // the button is 264 px with a scrollbar, 273 without
+  [plain, daily].forEach((txt) => {
+    const w = txt.length * (0.46 + ls) * font;
+    t.ok(w + 2 * 16 <= avail, '"' + txt + '" at 27.3 px is about ' + w.toFixed(0) + ' px wide: 16 px or more of margin each side inside the ' + avail + ' px button');
+  });
+  t.ok(ls <= 0.05, 'the Larger text button tightens its letter-spacing to ' + ls + ' em (was .07)');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
 t.done();

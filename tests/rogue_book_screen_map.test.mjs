@@ -59,11 +59,12 @@ async function open(g, R) {
   return $(g, '.s-map');
 }
 
-// the whole page in view, so every hex has a stage position inside the window (the real default camera follows the party)
+// the whole page in view (the fit view: the largest zoom at which no hex is under the HUD, placed where it is clear), so every hex has a stage
+// position inside the window (the real default camera follows the party)
 function fitCam(g) {
   const s = st(g);
-  s.cam.z = s.zMin; s.tz = s.cam.z;
-  s.cam.x = (s.world.x0 + s.world.x1) / 2; s.cam.y = (s.world.y0 + s.world.y1) / 2;
+  s.cam.z = s.fit.z; s.tz = s.cam.z;
+  s.cam.x = s.fit.x; s.cam.y = s.fit.y;
   s.follow = false; s.fitted = true; s.goal = null;
 }
 const key = (g, q, r) => g.MAP.key(q, r);
@@ -601,6 +602,8 @@ await t.test('with the real GAME: a fight leaves for the combat screen and a fin
 
 // ==================================================================================================== camera
 const wheel = (g, x, y, dy) => g._run(`UI.layers.view.dispatchEvent(new WheelEvent('wheel', { clientX: ${x}, clientY: ${y}, deltaY: ${dy}, bubbles: true, cancelable: true }))`);
+// the same at a stage point, whatever the scale of the window (a phone viewport scales the stage)
+const wheelAtStage = (g, x, y, dy) => wheel(g, g.UI.ox + x * g.UI.scale, g.UI.oy + y * g.UI.scale, dy);
 const camOf = (g) => md(g).cam();
 const worldAt = (c, x, y) => ({ x: c.x + (x - 640) / c.z, y: c.y + (y - 360) / c.z });
 
@@ -632,19 +635,20 @@ await t.test('camera: starts on the party, drag pans with the page under the fin
   for (let i = 0; i < 10; i++) g._raf(16);
   t.near(camOf(g).x, rest, 1e-6, 'and comes to rest');
   // clamp: shove the page far in every direction and look at the limits
-  const s = st(g), hw = s.win.w / 2 / camOf(g).z, hh = s.win.h / 2 / camOf(g).z;
+  // (the limits are where the padded page edge reaches the edge of the clamp box: the HUD free box plus the fit, DESIGN 4.8; they used to be the window)
+  const s = st(g), z = camOf(g).z, B = s.box;
   for (let i = 0; i < 25; i++) g._drag(view(g), [100, 360], [1200, 360], 4);
   for (let i = 0; i < 400; i++) g._raf(16);
-  t.near(camOf(g).x, s.world.x0 - 80 + hw, 1e-6, 'the left limit is the page edge plus padding');
+  t.near(camOf(g).x, s.world.x0 - 80 + (640 - B.x0) / z, 1e-6, 'the left limit is the page edge plus padding, at the edge of the box the HUD leaves free');
   for (let i = 0; i < 25; i++) g._drag(view(g), [1200, 360], [100, 360], 4);
   for (let i = 0; i < 400; i++) g._raf(16);
-  t.near(camOf(g).x, s.world.x1 + 80 - hw, 1e-6, 'the right limit');
+  t.near(camOf(g).x, s.world.x1 + 80 + (640 - B.x1) / z, 1e-6, 'the right limit');
   for (let i = 0; i < 25; i++) g._drag(view(g), [640, 650], [640, 60], 4);
   for (let i = 0; i < 400; i++) g._raf(16);
-  t.near(camOf(g).y, s.world.y1 + 80 - hh, 1e-6, 'the bottom limit');
+  t.near(camOf(g).y, s.world.y1 + 80 + (360 - B.y1) / z, 1e-6, 'the bottom limit');
   for (let i = 0; i < 25; i++) g._drag(view(g), [640, 60], [640, 650], 4);
   for (let i = 0; i < 400; i++) g._raf(16);
-  t.near(camOf(g).y, s.world.y0 - 80 + hh, 1e-6, 'the top limit');
+  t.near(camOf(g).y, s.world.y0 - 80 + (360 - B.y0) / z, 1e-6, 'the top limit');
   t.eq(errs(g), 0, 'clean');
 });
 
@@ -665,8 +669,9 @@ await t.test('camera: the wheel zooms about the pointer inside the limits, two f
   for (let i = 0; i < 60; i++) wheel(g, 640, 360, 600);
   t.near(camOf(g).z, camOf(g).zMin, 1e-9, 'and at the minimum, where the whole page fits');
   const z = camOf(g);
-  t.near(z.x, (s.world.x0 + s.world.x1) / 2, 1e-6, 'fully zoomed out the page is centred');
-  t.ok(z.zMin < 1 && z.zMin > 0.25, 'the minimum zoom shows the whole page (' + z.zMin.toFixed(3) + ')');
+  t.near(z.x, s.fit.x, 1e-6, 'fully zoomed out the camera sits on the fit (the page placed clear of the HUD), whatever the pointer was on');
+  t.near(z.y, s.fit.y, 1e-6, 'in y too');
+  t.ok(z.zMin < 1 && z.zMin > 0.25 && camOf(g).fitted, 'the minimum zoom shows the whole page (' + z.zMin.toFixed(3) + ') and counts as the fit view');
   // pinch
   const R0 = JSON.stringify(R.map.pos), ink0 = R.ink;
   const zBefore = camOf(g).z;
@@ -696,7 +701,7 @@ await t.test('camera: the wheel zooms about the pointer inside the limits, two f
   g._click($(g, '.mp-t-fit')); await settle(g);
   let c = camOf(g);
   t.ok(c.fitted && !c.follow && Math.abs(c.z - c.zMin) < 1e-9, 'Fit shows the whole page');
-  t.near(c.x, (s.world.x0 + s.world.x1) / 2, 1e-6, 'centred');
+  t.near(c.x, s.fit.x, 1e-6, 'placed on the fit camera (clear of the HUD)');
   await press(g, 'f');
   c = camOf(g);
   t.ok(!c.fitted && c.follow && Math.abs(c.z - 1) < 1e-9, 'Fit again (or F) goes back to following the party at the default zoom');
@@ -717,6 +722,583 @@ await t.test('camera: a small screen starts closer; hexAt maps the stage to the 
   t.eq(md(g).hexAt(640, 710), null, 'neither is the bottom margin');
   t.ok($$(g, '.mp-tool').length === 5 && $$(g, '.mp-chip').length === 1, 'the HUD is still complete');
   t.eq(errs(g), 0, 'clean');
+});
+
+// ==================================================================================================== the camera and the HUD footprint
+// The HUD lies over the page. The camera measures its REAL rectangles (stage px) and keeps the page clear of them: the fit view, the minimum zoom, the pan
+// range and the follow all work with what the HUD leaves free (DESIGN 4.8). The headless DOM has no layout, so the suite gives each piece the rectangle
+// it has in real Chromium (one brush, two treasures) through `_rect`, or measures nothing at all to see the fixed fallback.
+const HUD_SEL = { party: '.mp-party', ink: '.mp-ink', banner: '.mp-banner', gold: '.mp-gold', menu: '.menu-btn', deck: '.mp-t-deck', legend: '.mp-t-legend', fit: '.mp-t-fit', zin: '.mp-t-zin', zout: '.mp-t-zout', tray: '.mp-tray', info: '.mp-info', relics: '.mp-relics', mode: '.mp-mode' };
+const HUD_WIDE = { party: [14, 9, 312, 75], ink: [14, 84, 374, 138], banner: [419, 2, 861, 86], gold: [1134, 14, 1196, 48], menu: [1211, -1, 1269, 57], deck: [1208, 74, 1268, 134], legend: [1205, 143, 1268, 203],
+  fit: [1208, 212, 1268, 272], zin: [1202, 281, 1268, 341], zout: [1191, 350, 1268, 410], tray: [567, 605, 714, 710], info: [946, 589, 1268, 708], relics: [14, 642, 139, 708] };
+const HUD_COMPACT = { party: [14, 9, 312, 75], ink: [14, 82, 374, 136], banner: [460, 2, 820, 90], gold: [1113, 14, 1175, 48], menu: [1185, -1, 1269, 83], deck: [1187, 89, 1268, 170], legend: [1187, 178, 1268, 260],
+  fit: [1187, 268, 1268, 349], zin: [1187, 357, 1268, 438], zout: [1187, 446, 1268, 527], tray: [577, 590, 703, 710], info: [988, 625, 1268, 708], relics: [14, 611, 207, 708] };
+// give every piece its rectangle (stage px in the table, client px on the element); a null entry is a piece that is not shown
+function layOut(g, table) {
+  const sc = g.UI.scale, ox = g.UI.ox, oy = g.UI.oy;
+  Object.keys(HUD_SEL).forEach((k) => {
+    const el = $(g, HUD_SEL[k]), r = table[k];
+    if (!el) return;
+    el._rect = r ? { left: ox + r[0] * sc, top: oy + r[1] * sc, width: (r[2] - r[0]) * sc, height: (r[3] - r[1]) * sc } : { left: 0, top: 0, width: 0, height: 0 };
+  });
+}
+const rectOf = (r) => ({ x0: r[0], y0: r[1], x1: r[2], y1: r[3] });
+// an exact test of a pointy-top hex (centre, radius) against a rectangle: separating axes
+function hexHits(cx, cy, r, R) {
+  const h = Math.sqrt(3) / 2 * r;
+  if (cx + h <= R.x0 || cx - h >= R.x1 || cy + r <= R.y0 || cy - r >= R.y1) return false;
+  const rc = [[R.x0, R.y0], [R.x1, R.y0], [R.x1, R.y1], [R.x0, R.y1]];
+  for (const a of [0, 60, 120]) {
+    const nx = Math.cos(a * Math.PI / 180), ny = Math.sin(a * Math.PI / 180), c = cx * nx + cy * ny;
+    let mn = Infinity, mx = -Infinity;
+    rc.forEach((p) => { const v = p[0] * nx + p[1] * ny; mn = Math.min(mn, v); mx = Math.max(mx, v); });
+    if (c + h <= mn || c - h >= mx) return false;
+  }
+  return true;
+}
+// the hexes of the page that touch any rectangle (the camera as it stands), and those outside the page window
+function underHud(g, rects, hexes) {
+  const s = st(g), z = s.cam.z, out = [];
+  (hexes || Object.values(s.M.tiles)).forEach((T) => {
+    const p = md(g).screenOf(T.q, T.r), rad = 46 * z * (T.type === 'boss' ? 1.2 : 1);
+    const r = rects.find((q) => hexHits(p.x, p.y, rad, q));
+    if (r) out.push({ q: T.q, r: T.r, x: Math.round(p.x), y: Math.round(p.y), hud: r.k || '' });
+  });
+  return out;
+}
+function outsideWindow(g) {
+  const s = st(g), z = s.cam.z, w = s.win;
+  return Object.values(s.M.tiles).filter((T) => {
+    const p = md(g).screenOf(T.q, T.r), h = Math.sqrt(3) / 2 * 46 * z, r = 46 * z;
+    return p.x - h < w.x || p.x + h > w.x + w.w || p.y - r < w.y || p.y + r > w.y + w.h;
+  });
+}
+const oldFitZ = (s) => Math.max(0.25, Math.min(1, Math.min(s.win.w / (s.world.x1 - s.world.x0 + 160), s.win.h / (s.world.y1 - s.world.y0 + 160))));   // what Fit used to be: the page plus padding in the window, HUD ignored
+const hudRects = (g, measure) => md(g).hud(measure).rects.map((r) => ({ k: r.k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }));
+async function pressFit(g) { g._doc.activeElement && g._doc.activeElement.blur && g._doc.activeElement.blur(); await press(g, 'f'); }
+
+for (const lay of [{ name: 'desktop 1280x720', tab: HUD_WIDE, vp: null }, { name: 'phone 844x390', tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
+  await t.test('fit: on the ' + lay.name + ' the whole page is clear of every HUD piece, in all three chapters and on several seeds, and the zoom stays near what it was', async () => {
+    const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
+    if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
+    let bad = 0, checked = 0, worstRatio = 9;
+    for (const ch of [1, 2, 3]) {
+      for (const seed of [1, 5, 13, 34]) {
+        const R = mkRun(g, { seed, chapter: ch, relics: ['brass_lantern', 'fox_mask'] });
+        await open(g, R); layOut(g, lay.tab); await g._tick(400);
+        const hud = md(g).hud();
+        t.ok(hud.rects.length === 13 && hud.rects.every((r) => r.live), ch + '/' + seed + ': all 13 pieces are measured, none from the fallback table');
+        await pressFit(g);
+        const s = st(g), c = camOf(g);
+        t.ok(c.fitted && !c.follow && Math.abs(c.z - c.zMin) < 1e-9 && Math.abs(c.z - hud.fit.z) < 1e-9, ch + '/' + seed + ': Fit shows the fit view at the minimum zoom');
+        const rects = hudRects(g);
+        const under = underHud(g, rects), out = outsideWindow(g);
+        bad += under.length + out.length; checked += Object.keys(s.M.tiles).length;
+        t.eq(under.length, 0, ch + '/' + seed + ': no hex (boss and Void included) touches a HUD piece' + (under.length ? ' ' + JSON.stringify(under.slice(0, 3)) : ''));
+        t.eq(out.length, 0, ch + '/' + seed + ': and none leaves the page window');
+        worstRatio = Math.min(worstRatio, c.z / oldFitZ(s));
+      }
+    }
+    t.ok(checked > 3000 && bad === 0, 'every hex of twelve pages was checked against every piece (' + checked + ')');
+    t.ok(worstRatio >= 0.75, 'the fit zoom is at least 75 percent of the old one (' + (worstRatio * 100).toFixed(1) + '%)');
+    t.ok(worstRatio < 1, 'and the HUD does cost something, so the numbers are real');
+    t.eq(errs(g), 0, 'clean');
+  });
+}
+
+await t.test('fit: Fit, F, wheel and pinch all the way out, and the opening view land on the same placement; the minimum zoom is the fit zoom', async () => {
+  const g = fresh(); const R = mkRun(g);
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const hud = md(g).hud(), s = st(g);
+  t.near(s.zMin, hud.fit.z, 1e-12, 'zMin is the fit zoom'); t.near(s.fitZ, hud.fit.z, 1e-12, 'and so is fitZ');
+  await pressFit(g);
+  const a = camOf(g);
+  t.near(a.x, hud.fit.x, 1e-6, 'F: the fit camera'); await press(g, 'f');
+  t.ok(camOf(g).follow, 'F again follows the party');
+  for (let i = 0; i < 40; i++) wheel(g, 400, 300, 500);
+  await settle(g);
+  const b = camOf(g);
+  t.ok(b.z === b.zMin && Math.abs(b.x - a.x) < 1e-6 && Math.abs(b.y - a.y) < 1e-6, 'the wheel all the way out ends on the fit placement, wherever the pointer was');
+  t.ok(b.fitted, 'and counts as the fit view (F then goes back to the party)');
+  t.eq(underHud(g, hudRects(g)).length, 0, 'with no hex under a piece');
+  // two fingers closing all the way
+  s.cam.z = 1; s.tz = 1; s.fitted = false;
+  g._pointer('pointerdown', view(g), { x: 300, y: 360, id: 1, pointerType: 'touch' }); g._pointer('pointerdown', view(g), { x: 980, y: 360, id: 2, pointerType: 'touch' });
+  g._pointer('pointermove', view(g), { x: 630, y: 360, id: 1, pointerType: 'touch' }); g._pointer('pointermove', view(g), { x: 650, y: 360, id: 2, pointerType: 'touch' });
+  g._pointer('pointerup', view(g), { x: 630, y: 360, id: 1, pointerType: 'touch' }); g._pointer('pointerup', view(g), { x: 650, y: 360, id: 2, pointerType: 'touch' });
+  await settle(g);
+  t.ok(camOf(g).z === camOf(g).zMin && Math.abs(camOf(g).x - a.x) < 1e-6, 'a pinch all the way in ends on the fit too');
+  // zooming out stops at the fit zoom and never goes into the HUD
+  await press(g, 'f'); s.cam.z = 1; s.tz = 1; s.follow = false;
+  for (let i = 0; i < 12; i++) { g._click($(g, '.mp-t-zout')); await settle(g); }
+  t.ok(camOf(g).z === camOf(g).zMin, 'Zoom out stops at the minimum');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('fit: nothing can be measured (the headless page): the fixed fallback rectangles stand in, the fit is still clear of them, and the compact table differs', async () => {
+  const g = fresh(); const R = mkRun(g);
+  await open(g, R); await g._tick(400);
+  const hud = md(g).hud(), s = st(g);
+  t.eq(hud.rects.length, 13, 'every piece has a rectangle'); t.ok(hud.rects.every((r) => !r.live), 'none of them measured');
+  await pressFit(g);
+  t.eq(underHud(g, hudRects(g)).length, 0, 'the fit is clear of the fallback rectangles'); t.eq(outsideWindow(g).length, 0, 'and inside the window');
+  t.ok(camOf(g).z > 0.4 && camOf(g).z < 0.6 && camOf(g).z / oldFitZ(s) >= 0.75, 'at a sensible zoom (' + camOf(g).z.toFixed(3) + ')');
+  t.ok(hud.free.x1 - hud.free.x0 > 900 && hud.free.y1 - hud.free.y0 > 380, 'and the free box is the stage minus the HUD bands');
+  const gc = fresh({ viewport: { w: 844, h: 390 }, touch: true }); gc._resize(844, 390);
+  await open(gc, mkRun(gc)); await gc._tick(400);
+  const hc = md(gc).hud();
+  t.ok(hc.rects.every((r) => !r.live) && JSON.stringify(hc.rects.map((r) => r.x0)) !== JSON.stringify(hud.rects.map((r) => r.x0)), 'the phone layout has its own table');
+  await pressFit(gc);
+  t.eq(underHud(gc, hudRects(gc)).length, 0, 'the phone fit is clear of its fallback rectangles');
+  // one measured piece and twelve fallbacks: the measured one wins
+  const g3 = fresh(); await open(g3, mkRun(g3));
+  $(g3, '.mp-tray')._rect = { left: 100, top: 400, width: 200, height: 100 };
+  await g3._tick(400);
+  const tray = md(g3).hud().rects.find((r) => r.k === 'tray');
+  t.ok(tray.live && tray.x0 === 100 && tray.y1 === 500, 'a piece that can be measured is measured while the others fall back');
+  t.eq(errs(g) + errs(gc) + errs(g3), 0, 'clean');
+});
+
+await t.test('fit: a hidden piece covers nothing, and the translate of the entrance animation or a hover lift is taken out of a rectangle', async () => {
+  const g = fresh(); const R = mkRun(g);
+  await open(g, R);
+  const tab = Object.assign({}, HUD_WIDE, { tray: null });
+  layOut(g, tab); await g._tick(400);
+  const hud = md(g).hud();
+  t.eq(hud.rects.length, 12, 'the hidden tray is not in the footprint');
+  t.ok(!hud.rects.some((r) => r.k === 'tray'), 'by name');
+  const g2 = fresh(); await open(g2, mkRun(g2));
+  layOut(g2, HUD_WIDE); await g2._tick(400);
+  const z0 = md(g2).hud().fit.z;
+  const lifted = $(g2, '.mp-t-fit'); lifted._rect = { left: 1208, top: 212 - 14, width: 60, height: 60 };
+  g2._run("document.querySelector('.mp-t-fit').style.setProperty('translate', '0px -14px')");
+  await g2._tick(400);
+  const r = md(g2).hud().rects.find((q) => q.k === 'fit');
+  t.near(r.y0, 212, 0.5, 'a piece lifted by 14 px is measured where it rests'); t.near(md(g2).hud().fit.z, z0, 1e-9, 'and the fit does not move');
+  t.eq(errs(g) + errs(g2), 0, 'clean');
+});
+
+await t.test('pan: at every zoom each corner tile can be dragged clear of the HUD, and the page cannot be lost off screen', async () => {
+  for (const lay of [{ tab: HUD_WIDE, vp: null }, { tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
+    const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
+    if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
+    const R = mkRun(g, { seed: 21, chapter: 2 });
+    await open(g, R); layOut(g, lay.tab); await g._tick(400);
+    const s = st(g), hud = md(g).hud(), rects = hudRects(g).map((r) => ({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }));
+    const tiles = Object.values(s.M.tiles).map((T) => Object.assign({ T }, g.MAP.toPixel(T.q, T.r, 46)));
+    const corner = (fx, fy) => tiles.reduce((b, e) => ((e.x * fx + e.y * fy) > (b.x * fx + b.y * fy) ? e : b), tiles[0]);
+    const corners = { topLeft: corner(-1, -1), topRight: corner(1, -1), bottomLeft: corner(-1, 1), bottomRight: corner(1, 1), left: corner(-1, 0), right: corner(1, 0), top: corner(0, -1), bottom: corner(0, 1) };
+    const zs = [hud.fit.z, hud.fit.z * 1.02, hud.fit.z * 1.1, hud.fit.z * 1.3, 0.8, 1, 1.5, 2.4];
+    const where = lay.vp ? 'phone' : 'desktop';
+    for (const z of zs) {
+      const zz = Math.max(z, hud.fit.z), rad = 46 * zz, w = s.win;
+      for (const [name, e] of Object.entries(corners)) {
+        // every place on the window the tile could be asked to go to (a 16 px grid), through the real clamp: is one of them clear of the HUD?
+        let clear = 0, tried = 0;
+        for (let ty = w.y + rad; ty <= w.y + w.h - rad; ty += 16) {
+          for (let tx = w.x + rad; tx <= w.x + w.w - rad; tx += 16) {
+            const c = md(g).clamp(e.x - (tx - 640) / zz, e.y - (ty - 360) / zz, zz);
+            const px = 640 + (e.x - c.x) * c.z, py = 360 + (e.y - c.y) * c.z;
+            tried++;
+            if (px - Math.sqrt(3) / 2 * rad < w.x || px + Math.sqrt(3) / 2 * rad > w.x + w.w || py - rad < w.y || py + rad > w.y + w.h) continue;
+            if (!rects.some((q) => hexHits(px, py, rad, q))) clear++;
+          }
+        }
+        t.ok(clear > 0, where + ' z ' + zz.toFixed(3) + ' ' + name + ': the tile can be dragged clear of the HUD (' + clear + ' of ' + tried + ' places are reachable and free)');
+      }
+      // lost off screen: shove the camera to the extremes, the page must stay in the window
+      [[-1e6, -1e6], [1e6, -1e6], [-1e6, 1e6], [1e6, 1e6]].forEach(([dx, dy]) => {
+        const c = md(g).clamp(dx, dy, zz);
+        const inWin = tiles.filter((e) => { const px = 640 + (e.x - c.x) * c.z, py = 360 + (e.y - c.y) * c.z; return px > w.x && px < w.x + w.w && py > w.y && py < w.y + w.h; });
+        t.ok(inWin.length > 0, where + ' z ' + zz.toFixed(3) + ' shoved to (' + Math.sign(dx) + ',' + Math.sign(dy) + '): the page is still on screen (' + inWin.length + ' hexes)');
+      });
+    }
+    // and the extremes put the page edge on the free box, not on the window: the edge tiles can be taken clear of the pieces at the window sides
+    const c = md(g).clamp(-1e6, 0, 1), z1 = 1;
+    t.ok(640 + (corners.left.x - c.x) * z1 - 46 >= hud.free.x0 - 1e-6 || hud.free.x0 === s.win.x, where + ': dragging the page far right, its left edge stops at the free box');
+    t.eq(errs(g), 0, 'clean');
+  }
+});
+
+await t.test('pan: drag, wheel about the pointer and the keyboard cursor still work with the HUD measured; zoomAt keeps the point under the pointer fixed', async () => {
+  const g = fresh(); const R = mkRun(g, { seed: 8 });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const s = st(g);
+  s.follow = false; s.goal = null; s.cam.z = 1; s.tz = 1; s.cam.x = (s.world.x0 + s.world.x1) / 2; s.cam.y = (s.world.y0 + s.world.y1) / 2;
+  const c0 = camOf(g);
+  g._drag(view(g), [700, 400], [600, 330], 8); await settle(g);
+  t.near(camOf(g).x - c0.x, 100, 1e-6, 'a drag moves the page with the finger (x)'); t.near(camOf(g).y - c0.y, 70, 1e-6, 'and y');
+  const w0 = worldAt(camOf(g), 820, 250);
+  wheel(g, 820, 250, -240); await settle(g);
+  t.near(worldAt(camOf(g), 820, 250).x, w0.x, 1e-6, 'the wheel keeps the world point under the pointer (x)'); t.near(worldAt(camOf(g), 820, 250).y, w0.y, 1e-6, 'and y');
+  // the zoom buttons turn about the middle of the free box
+  s.cam.z = 1; s.tz = 1; s.cam.x = (s.world.x0 + s.world.x1) / 2; s.cam.y = (s.world.y0 + s.world.y1) / 2;
+  const F = md(g).hud().free, mid = { x: (F.x0 + F.x1) / 2, y: (F.y0 + F.y1) / 2 };
+  const wm0 = worldAt(camOf(g), mid.x, mid.y);
+  g._click($(g, '.mp-t-zin')); await settle(g);
+  t.near(camOf(g).z, 1.3, 1e-9, 'Zoom in multiplies by 1.3');
+  t.near(worldAt(camOf(g), mid.x, mid.y).x, wm0.x, 1e-6, 'about the middle of the free box (x)'); t.near(worldAt(camOf(g), mid.x, mid.y).y, wm0.y, 1e-6, 'and y');
+  // the keyboard cursor: Q E A D Z C walk it and the page comes along when it nears the HUD free edge
+  s.cam.z = 1; s.tz = 1; s.follow = false;
+  await press(g, 'Enter');
+  for (let i = 0; i < 24; i++) await press(g, 'd');
+  const cur = s.cursor, p = md(g).screenOf(cur.q, cur.r);
+  t.ok(p.x > F.x0 && p.x < F.x1 && p.y > F.y0 && p.y < F.y1, 'the cursor 24 hexes east is on free ground (' + Math.round(p.x) + ', ' + Math.round(p.y) + ')');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('follow: the party and its neighbours are never under a HUD piece at the default zoom, from the first hex to the last', async () => {
+  for (const lay of [{ tab: HUD_WIDE, vp: null }, { tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
+    const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
+    if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
+    const R = mkRun(g, { seed: 13 });
+    await open(g, R); layOut(g, lay.tab); await g._tick(400);
+    const s = st(g), rects = hudRects(g), M = R.map;
+    const tiles = Object.values(M.tiles).filter((T) => T.type !== 'block');
+    const ends = [tiles.reduce((a, b) => (b.r + b.q * 0.01 < a.r + a.q * 0.01 ? b : a)), tiles.reduce((a, b) => (b.r > a.r || (b.r === a.r && b.q > a.q) ? b : a)), M.tiles[g.MAP.key(M.start.q, M.start.r)], M.tiles[g.MAP.key(M.boss.q, M.boss.r)]];
+    const sample = ends.concat(tiles.filter((_, i) => i % 17 === 0));
+    let checked = 0;
+    for (const T of sample) {
+      M.pos = { q: T.q, r: T.r };
+      s.follow = true; s.goal = null; s.fitted = false; s.cam.z = s.tz = g.UI.screens.map.mapDebug.cam().z;
+      await g._tick(2500);
+      t.ok(camOf(g).follow, 'following');
+      const nb = g.MAP.neighbors(M, T.q, T.r).map((c) => M.tiles[g.MAP.key(c[0], c[1])]);
+      const hit = underHud(g, rects, [T].concat(nb));
+      checked += 1 + nb.length;
+      t.eq(hit.length, 0, (lay.vp ? 'phone' : 'desktop') + ' party at ' + T.q + ',' + T.r + ': it and its neighbours are clear' + (hit.length ? ' ' + JSON.stringify(hit) : ''));
+    }
+    t.ok(checked > 100, 'many hexes were checked (' + checked + ')');
+    // the party starts in the middle of the free box when the page lets it
+    const mid = { x: (s.free.x0 + s.free.x1) / 2, y: (s.free.y0 + s.free.y1) / 2 };
+    const centre = tiles.reduce((a, b) => (Math.hypot(b.q - 9, b.r - 6) < Math.hypot(a.q - 9, a.r - 6) ? b : a));
+    M.pos = { q: centre.q, r: centre.r }; s.follow = true; await g._tick(2500);
+    const pc = md(g).screenOf(centre.q, centre.r);
+    t.ok(Math.hypot(pc.x - mid.x, pc.y - mid.y) < 1, 'in the middle of the page the party sits on the middle of the free box, not the window (' + Math.round(pc.x) + ',' + Math.round(pc.y) + ' vs ' + Math.round(mid.x) + ',' + Math.round(mid.y) + ')');
+    t.eq(errs(g), 0, 'clean');
+  }
+});
+
+await t.test('layout changes: a bigger tray, a new brush and a new window size re-fit the camera (and a camera on the fit follows the new fit)', async () => {
+  const g = fresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke'] });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const v0 = md(g).hud().ver, z0 = md(g).hud().fit.z;
+  await pressFit(g);
+  // a tray twice as tall: the fit gets smaller and the fitted camera moves onto it
+  const tall = Object.assign({}, HUD_WIDE, { tray: [477, 540, 810, 710], info: [946, 540, 1268, 708] });
+  layOut(g, tall); await g._tick(400);
+  const h1 = md(g).hud();
+  t.ok(h1.ver > v0 && h1.fit.z < z0 - 0.01, 'a taller tray and info chip shrink the fit (' + z0.toFixed(3) + ' to ' + h1.fit.z.toFixed(3) + ')');
+  t.ok(camOf(g).fitted && Math.abs(camOf(g).z - h1.fit.z) < 1e-9 && Math.abs(camOf(g).x - h1.fit.x) < 1e-6, 'the camera that was on the fit is on the new one');
+  t.eq(underHud(g, hudRects(g)).length, 0, 'and clear of the new rectangles');
+  // gone again
+  layOut(g, HUD_WIDE); await g._tick(400);
+  t.near(md(g).hud().fit.z, z0, 1e-9, 'back to the old rectangles, back to the old fit');
+  // a camera that is zoomed in is only re-clamped, never yanked
+  await press(g, 'f'); const s = st(g);
+  s.follow = false; s.cam.z = 1.4; s.tz = 1.4; s.cam.x = 900; s.cam.y = 400;
+  layOut(g, tall); await g._tick(400);
+  t.near(camOf(g).z, 1.4, 1e-9, 'a zoomed-in camera keeps its zoom'); t.ok(!camOf(g).fitted, 'and stays off the fit');
+  // a brush gained: the tray is rebuilt and the footprint measured again at once (the next frame, not the next poll)
+  layOut(g, HUD_WIDE); await g._tick(400);
+  const ver = md(g).hud().ver;
+  $(g, '.mp-tray')._rect = { left: 477, top: 605, width: 340, height: 105 };
+  R.brushes.push('wave'); g._raf(16);
+  t.ok(md(g).hud().ver > ver, 'gaining a brush re-measures the HUD on the very next frame');
+  // the window changes shape: the stage rescales and the compact layout appears
+  g._resize(844, 390); await g._tick(400);
+  t.ok(g._doc.getElementById('stage').classList.contains('compact'), 'now compact');
+  layOut(g, HUD_COMPACT); await g._tick(400);
+  const hc = md(g).hud();
+  t.ok(hc.rects.every((r) => r.live) && Math.abs(hc.rects.find((r) => r.k === 'tray').x0 - 577) < 1e-6, 'the compact rectangles are measured in stage px, whatever the window scale (' + g.UI.scale.toFixed(3) + ')');
+  await pressFit(g);
+  t.ok(camOf(g).fitted && Math.abs(camOf(g).z - hc.fit.z) < 1e-9, 'Fit is the compact fit');
+  t.eq(underHud(g, hudRects(g)).length, 0, 'and clear of the compact pieces');
+  t.eq(errs(g), 0, 'clean');
+});
+
+// the real rectangles of the layouts the follow-up audits found failing (measured in Chromium): no brush (a slim tray strip), and the Larger text size (a wider, taller info chip)
+const HUD_WIDE_0 = Object.assign({}, HUD_WIDE, { tray: [475, 651, 805, 710], relics: [14, 642, 158, 708] });
+const HUD_WIDE_13 = Object.assign({}, HUD_WIDE, { banner: [405, 2, 875, 97], tray: [433, 646, 847, 710], info: [893, 564, 1268, 708], relics: [14, 642, 176, 708] });
+const BAR_WIDE = [340, 2, 940, 74], BAR_COMPACT = [447, 2, 833, 99];     // the brush mode bar where it hangs (the chapter banner's slot at the top)
+
+// Can the page be panned, inside the real clamp range, so that this tile's hex (its bounding box, 0.75 px of overlap forgiven) is clear of every piece? Exact: the
+// reachable screen positions of a tile are a rectangle, and a free position, when there is one, has its x and y on the edge of a piece grown by the hex.
+function tileReachable(e, rng, z, rects) {
+  const SQ = Math.sqrt(3), r = 46 * z * (e.T.type === 'boss' ? 1.2 : 1), hw = SQ / 2 * r, PEN = 0.75;
+  const sxLo = 640 + (e.x - rng.xhi) * z, sxHi = 640 + (e.x - rng.xlo) * z, syLo = 360 + (e.y - rng.yhi) * z, syHi = 360 + (e.y - rng.ylo) * z;
+  const xs = [sxLo, sxHi], ys = [syLo, syHi];
+  rects.forEach((R) => { xs.push(R.x0 - hw, R.x1 + hw); ys.push(R.y0 - r, R.y1 + r); });
+  for (const x0 of xs) for (const x of [x0 - 0.01, x0, x0 + 0.01]) {
+    if (x < sxLo - 1e-6 || x > sxHi + 1e-6) continue;
+    for (const y0 of ys) for (const y of [y0 - 0.01, y0, y0 + 0.01]) {
+      if (y < syLo - 1e-6 || y > syHi + 1e-6) continue;
+      if (!rects.some((R) => x + hw > R.x0 + PEN && x - hw < R.x1 - PEN && y + r > R.y0 + PEN && y - r < R.y1 - PEN)) return true;
+    }
+  }
+  return false;
+}
+// the clamp as it was before this fix (the free box united with the fit placement, the padding fading in just above the minimum): the sweep must catch it
+function oldClampRange(s, z) {
+  const w = s.world, f = s.free, c = s.fit;
+  const b = { x0: Math.min(f.x0, 640 + (w.x0 - c.x) * c.z), y0: Math.min(f.y0, 360 + (w.y0 - c.y) * c.z), x1: Math.max(f.x1, 640 + (w.x1 - c.x) * c.z), y1: Math.max(f.y1, 360 + (w.y1 - c.y) * c.z) };
+  const pad = 80 * Math.max(0, Math.min(1, (z - s.zMin) / (s.zMin * 0.4)));
+  const ax = (v, lo, hi, b0, b1, mid) => { const a = lo + (mid - b0) / z, bb = hi + (mid - b1) / z; return Math.max(Math.min(a, bb), Math.min(Math.max(a, bb), v)); };
+  const at = (v) => ({ x: ax(v, w.x0 - pad, w.x1 + pad, b.x0, b.x1, 640), y: ax(v, w.y0 - pad, w.y1 + pad, b.y0, b.y1, 360) });
+  const lo = at(-1e7), hi = at(1e7);
+  return { xlo: lo.x, xhi: hi.x, ylo: lo.y, yhi: hi.y };
+}
+const sweepZ = (zMin) => { const out = []; for (let m = 1.005; zMin * m <= 2.4 + 1e-9; m += m < 1.4 ? 0.01 : m < 2.6 ? 0.05 : 0.25) out.push(zMin * m); out.push(2.4); return out; };     // from just above the minimum to the maximum zoom
+
+await t.test('pan: at EVERY zoom above the minimum (1.005 x zMin to the maximum zoom, in small steps) every one of the 273 tiles can be dragged clear of every HUD piece; the old clamp left corner tiles under the info chip for 1.04 to 1.27 x', async () => {
+  const cases = [{ name: 'desktop, no brush', tab: HUD_WIDE_0, vp: null }, { name: 'desktop, one brush', tab: HUD_WIDE, vp: null }, { name: 'desktop, Larger text, no brush', tab: HUD_WIDE_13, vp: null },
+    { name: 'desktop, brush armed (the bar counts)', tab: Object.assign({}, HUD_WIDE, { mode: BAR_WIDE }), vp: null, arm: true }, { name: 'phone, one brush', tab: HUD_COMPACT, vp: { w: 844, h: 390 } },
+    { name: 'phone, brush armed', tab: Object.assign({}, HUD_COMPACT, { mode: BAR_COMPACT }), vp: { w: 844, h: 390 }, arm: true }];
+  let oldBad = 0;
+  for (const cs of cases) {
+    const g = cs.vp ? fresh({ viewport: cs.vp, touch: true }) : fresh();
+    if (cs.vp) g._resize(cs.vp.w, cs.vp.h);
+    const R = mkRun(g, { seed: 11, chapter: 1, brushes: ['stroke', 'fan'] });
+    await open(g, R);
+    if (cs.arm) { g._click(chip(g)); await settle(g); }
+    layOut(g, cs.tab); await g._tick(400);
+    const s = st(g), hud = md(g).hud(), rects = hudRects(g);
+    t.eq(hud.rects.length, cs.arm ? 14 : 13, cs.name + ': the footprint has ' + (cs.arm ? 'the bar too' : 'its thirteen pieces'));
+    const tiles = Object.values(s.M.tiles).map((T) => Object.assign({ T }, g.MAP.toPixel(T.q, T.r, 46)));
+    let bad = 0, n = 0; const names = new Set();
+    for (const z of sweepZ(s.zMin)) {
+      const lo = md(g).clamp(-1e7, -1e7, z), hi = md(g).clamp(1e7, 1e7, z), rng = { xlo: lo.x, xhi: hi.x, ylo: lo.y, yhi: hi.y };
+      const old = oldClampRange(s, z);
+      tiles.forEach((e) => {
+        n++;
+        if (!tileReachable(e, rng, z, rects)) { bad++; names.add(e.T.q + ',' + e.T.r); }
+        if (!tileReachable(e, old, z, rects)) oldBad++;
+      });
+    }
+    t.eq(bad, 0, cs.name + ': every tile is reachable at every zoom (' + n + ' checks' + (bad ? ', unreachable ' + Array.from(names).slice(0, 5).join(' ') : '') + ')');
+    t.eq(errs(g), 0, 'clean');
+  }
+  t.ok(oldBad > 0, 'and the sweep has teeth: the old rule fails it (' + oldBad + ' tile and zoom pairs)');
+});
+
+await t.test('pan: a wheel zoom in from Fit keeps the point under the pointer fixed, near the right of the page too (the old clamp pulled the page 118 px on the first notch)', async () => {
+  for (const lay of [{ tab: HUD_WIDE_0, vp: null }, { tab: HUD_WIDE_13, vp: null }, { tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
+    for (const chapter of [1, 2, 3]) {
+      const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
+      if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
+      await open(g, mkRun(g, { seed: 7, chapter, brushes: ['stroke'] })); layOut(g, lay.tab); await g._tick(400);
+      const hud = md(g).hud(), s = st(g);
+      // a pointer on the page (its screen box at the fit) at the right, the left, the top, the bottom and the middle
+      const px = (wx) => 640 + (wx - hud.fit.x) * hud.fit.z, py = (wy) => 360 + (wy - hud.fit.y) * hud.fit.z;
+      const W = s.world, pts = [[px(W.x1 - 40), py((W.y0 + W.y1) / 2)], [px(W.x0 + 40), py((W.y0 + W.y1) / 2)], [px((W.x0 + W.x1) / 2), py(W.y0 + 40)], [px((W.x0 + W.x1) / 2), py(W.y1 - 40)], [px((W.x0 + W.x1) / 2), py((W.y0 + W.y1) / 2)], [px(W.x1 - 40), py(W.y1 - 40)]];
+      for (const [x, y] of pts) {
+        await pressFit(g); if (!camOf(g).fitted) await pressFit(g);
+        t.ok(camOf(g).fitted, 'on the fit');
+        const w0 = worldAt(camOf(g), x, y);
+        for (let n = 1; n <= 3; n++) {
+          wheelAtStage(g, x, y, -100); await settle(g);
+          const w1 = worldAt(camOf(g), x, y);
+          t.ok(Math.hypot(w1.x - w0.x, w1.y - w0.y) * camOf(g).z < 0.01, (lay.vp ? 'phone' : 'desktop') + ' ch' + chapter + ' pointer (' + Math.round(x) + ',' + Math.round(y) + ') notch ' + n + ': the point under it has not moved (' + (Math.hypot(w1.x - w0.x, w1.y - w0.y) * camOf(g).z).toFixed(3) + ' px)');
+        }
+        t.ok(camOf(g).z > camOf(g).zMin * 1.5, 'three notches zoomed in');
+      }
+      t.eq(errs(g), 0, 'clean');
+    }
+  }
+});
+
+await t.test('brush mode bar: it is part of the HUD footprint only while a brush is armed, the fit is solved again when it comes and goes and returns to the same fit, and a camera on the fit follows', async () => {
+  const g = fresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke', 'fan'] });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const h0 = md(g).hud(); t.eq(h0.rects.length, 13, 'unarmed: the bar covers nothing'); t.ok(!h0.rects.some((r) => r.k === 'mode'), 'it is not in the footprint');
+  layOut(g, Object.assign({}, HUD_WIDE, { mode: BAR_WIDE })); await g._tick(400);
+  t.eq(md(g).hud().rects.length, 13, 'a hidden bar is not measured even when it has a box');
+  await pressFit(g); t.ok(camOf(g).fitted, 'on the fit');
+  g._click(chip(g)); await settle(g);
+  t.ok(!modeBar(g).hidden && $(g, '.mp-hud').classList.contains('brushing'), 'a brush is armed: the bar shows and the banner gives way (class brushing)');
+  t.eq(md(g).hud().rects.length, 13, 'before the next frame nothing has re-measured');
+  const v0 = md(g).hud().ver;
+  await g._tick(400);
+  const h1 = md(g).hud(), bar = h1.rects.find((r) => r.k === 'mode');
+  t.ok(h1.ver > v0 && h1.rects.length === 14 && bar && bar.live && bar.x0 === 340 && bar.y1 === 74, 'armed: the next frame measures the bar into the footprint (version ' + v0 + ' to ' + h1.ver + ')');
+  t.ok(h1.fit.z >= h0.fit.z * 0.97, 'a bar in the banner\'s slot costs the page next to nothing (' + h0.fit.z.toFixed(4) + ' to ' + h1.fit.z.toFixed(4) + ')');
+  t.eq(underHud(g, hudRects(g)).length, 0, 'and the fit is clear of every piece, the bar included');
+  // a bar that grew (a long line of text at some size) pushes the fit, the camera on the fit moves with it, and putting the brush away restores the old fit exactly
+  layOut(g, Object.assign({}, HUD_WIDE, { mode: [300, 2, 980, 300] })); await g._tick(400);
+  const h2 = md(g).hud();
+  t.ok(h2.fit.z < h0.fit.z - 0.01, 'a tall bar shrinks the fit (' + h0.fit.z.toFixed(3) + ' to ' + h2.fit.z.toFixed(3) + ')');
+  t.ok(camOf(g).fitted && Math.abs(camOf(g).z - h2.fit.z) < 1e-9 && Math.abs(camOf(g).x - h2.fit.x) < 1e-6, 'the camera that was on the fit is on the new one');
+  t.eq(underHud(g, hudRects(g)).length, 0, 'clear of the tall bar');
+  const v2 = md(g).hud().ver;
+  await press(g, 'Escape'); t.ok(modeBar(g).hidden && !$(g, '.mp-hud').classList.contains('brushing'), 'Esc puts the brush away');
+  await g._tick(400);
+  const h3 = md(g).hud();
+  t.ok(h3.ver > v2 && h3.rects.length === 13, 'put away: the next frame measures the bar out of the footprint');
+  t.near(h3.fit.z, h0.fit.z, 1e-12, 'back to the same fit zoom'); t.near(h3.fit.x, h0.fit.x, 1e-9, 'and placement'); t.near(h3.fit.y, h0.fit.y, 1e-9, 'exactly');
+  t.ok(camOf(g).fitted && Math.abs(camOf(g).z - h0.fit.z) < 1e-9, 'the camera is on the normal fit again');
+  // zoomed in, the camera is only clamped, never yanked, when a brush comes and goes
+  {
+    const s = st(g); s.follow = false; s.fitted = false; s.cam.z = 1.2; s.tz = 1.2; s.cam.x = 900; s.cam.y = 400;
+    layOut(g, Object.assign({}, HUD_WIDE, { mode: [300, 2, 980, 300] })); g._click($$(g, '.mp-chip')[1]); await settle(g); await g._tick(400);
+    t.near(camOf(g).z, 1.2, 1e-9, 'a zoomed in camera keeps its zoom when the brush is armed'); t.ok(!camOf(g).fitted, 'and stays off the fit');
+  }
+  // switching from one brush to another keeps the bar up and the footprint as it is
+  const v4 = md(g).hud().ver; await press(g, 'b'); await g._tick(400);
+  t.ok(!modeBar(g).hidden && md(g).hud().rects.length === 14 && md(g).hud().ver >= v4, 'B switches brush: the bar stays in the footprint');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('css: the brush mode bar hangs from the top in the banner slot, clear of the party plate, the tray and the info chip, with a fixed size; the info chip stops short of the full brush tray at every text size', () => {
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = (sel) => Array.from(css.matchAll(new RegExp('(?:^|\\})\\s*' + sel.replace(/[.#]/g, '\\$&') + '\\s*\\{([^}]*)\\}', 'g'))).map((m) => m[1]).join(' ');     // every rule of exactly this selector
+  const bar = rule('.mp-mode');
+  t.ok(/top:\s*2px/.test(bar) && !/bottom:/.test(bar), 'the bar hangs from the top edge, not above the tray');
+  t.ok(/width:\s*calc\(600px \+ \(var\(--ts\) - 1\) \* 120px\)/.test(bar), 'its width is fixed for a text size');
+  t.ok(/\.mp-hud\.brushing \.mp-banner\s*\{[^}]*opacity:\s*0/.test(css), 'the banner fades while it is up');
+  t.ok(/\.mp-mode-txt\s*\{[^}]*-webkit-line-clamp:\s*2[^}]*min-height:\s*2\.6em/.test(css), 'the bar text is two clamped lines');
+  // x positions in stage px: the bar is centred on 640, and must clear the party plate (right edge 312) and the gold plate (left edge 1127 at the Larger size)
+  const barW = (ts) => 600 + (ts - 1) * 120;
+  [1, 1.15, 1.3].forEach((ts) => t.ok(640 - barW(ts) / 2 >= 312 + 8 && 640 + barW(ts) / 2 <= 1127 - 8, 'text size ' + ts + ': the bar (' + Math.round(640 - barW(ts) / 2) + ' to ' + Math.round(640 + barW(ts) / 2) + ') clears the party and the gold plates'));
+  // the info chip is right aligned (12 px from the edge); the full tray is six chips, centred, max-width 540 (compact 580)
+  const infoW = /width:\s*calc\((\d+)px \+ \(var\(--ts\) - 1\) \* (\d+)px\)/.exec(rule('.mp-info')), trayMax = /max-width:\s*(\d+)px/.exec(rule('.mp-tray')), trayMaxC = /max-width:\s*(\d+)px/.exec(rule('#stage.compact .mp-tray'));
+  const infoWC = /width:\s*calc\((\d+)px \+ \(var\(--ts\) - 1\) \* (\d+)px\)/.exec(rule('#stage.compact .mp-info'));
+  t.ok(infoW && trayMax && trayMaxC && infoWC, 'the chip widths are a base plus a step per text size, and the tray has a maximum');
+  [1, 1.15, 1.3].forEach((ts) => {
+    t.ok(1268 - (+infoW[1] + (ts - 1) * +infoW[2]) - (640 + +trayMax[1] / 2) >= 4, 'text size ' + ts + ': the chip starts right of the full tray');
+    t.ok(1268 - (+infoWC[1] + (ts - 1) * +infoWC[2]) - (640 + +trayMaxC[1] / 2) >= 4, 'text size ' + ts + ', phone: the same');
+  });
+  t.ok(/\.mp-info-name\s*\{[^}]*min-height:\s*1\.15em/.test(css), 'an empty chip keeps its name line (the first fit is measured before the chip has text)');
+});
+
+// the primary hints of the info chip always fit their clamped lines: shorter sentences for a larger text size and for a phone (checked in real pixels in the browser audit)
+await t.test('info chip copy: the walk hint and the resting hint come in shorter versions for Larger text and for a phone, and every action line stays within its two lines of budget', async () => {
+  const tiers = [{ name: 'normal', ts: 1, vp: null, max: 66 }, { name: 'Larger text', ts: 1.3, vp: null, max: 52 }, { name: 'phone', ts: 1, vp: { w: 844, h: 390 }, max: 40 }, { name: 'phone, Larger text', ts: 1.3, vp: { w: 844, h: 390 }, max: 40 }];
+  for (const tier of tiers) {
+    const g = tier.vp ? fresh({ viewport: tier.vp, touch: true }) : fresh();
+    if (tier.vp) g._resize(tier.vp.w, tier.vp.h);
+    g.UI.opt.textScale = tier.ts;
+    const R = mkRun(g, { seed: 5, brushes: ['stroke', 'fan', 'splash'] });
+    await open(g, R);
+    // resting: the primary hint is in the description (or, on a phone that has no room for it, in the action line)
+    await g._tick(100);
+    const rest = txt($(g, '.mp-info'));
+    t.ok(/walk/.test(rest) && /paint/i.test(rest), tier.name + ': the resting chip says to paint fog and walk on painted ground (' + rest.slice(0, 80) + ')');
+    t.ok(tier.vp ? /ground to walk\./.test(txt($(g, '.mp-info-act'))) : /tap painted ground to walk\./.test(txt($(g, '.mp-info-text'))), tier.name + ': and the whole sentence is there');
+    // every hex of a fully painted page, then of the unpainted one with the party's Ink low: the longest action line of each kind
+    fullyPainted(g, R); st(g).infoKey = ''; fitCam(g);
+    let longest = 0, longestTxt = '', walks = new Set();
+    for (const T of Object.values(R.map.tiles).filter((x) => x.type !== 'block')) {
+      await hoverHex(g, T.q, T.r);
+      const a = txt($(g, '.mp-info-act'));
+      if (a.length > longest) { longest = a.length; longestTxt = a; }
+      if (/^Walk/.test(a) && /stop/.test(a)) walks.add(a.replace(/\d+/, 'N'));
+    }
+    t.ok(longest <= tier.max, tier.name + ': the longest action line is ' + longest + ' characters (budget ' + tier.max + '): ' + longestTxt);
+    const w = Array.from(walks);
+    t.ok(w.length > 0, tier.name + ': a walk that stops short was seen');
+    t.ok(w.every((x) => (tier.ts === 1 && !tier.vp ? /^Walk toward it: N steps?, stopping at the first thing in the way\.$/ : tier.vp ? /^Walk N steps?, stops early\.$/ : /^Walk: N steps?, stops at the first thing in the way\.$/).test(x)), tier.name + ': with the version for this size (' + w.join(' | ') + ')');
+    t.eq(errs(g), 0, 'clean');
+  }
+});
+
+const rtFresh = async () => { const g = fresh({ realtime: true }); await g._tick(1200); return g; };     // (the title's fade plays out on the frame clock first)
+
+await t.test('realtime: the camera on the fit glides to a fit that moved, whichever way it moved (the HUD shrinking used to pop it onto the new fit first)', async () => {
+  const g = await rtFresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke'] });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(4500);
+  await pressFit(g); await g._tick(2500);
+  t.ok(camOf(g).fitted, 'on the fit');
+  const small = Object.assign({}, HUD_WIDE, { tray: [475, 651, 805, 710], relics: [14, 642, 158, 708] });         // the last brush used: the tray is a slim strip, the fit grows
+  const frames = (n) => { const out = []; for (let i = 0; i < n; i++) { g._raf(16); out.push(camOf(g)); } return out; };
+  const c0 = camOf(g);
+  layOut(g, small);
+  const rows = frames(60);
+  const fit1 = md(g).hud().fit;
+  t.ok(fit1.z > c0.z + 0.01, 'the fit grew (' + c0.z.toFixed(4) + ' to ' + fit1.z.toFixed(4) + ')');
+  let maxDz = 0, maxDx = 0, prev = c0;
+  rows.forEach((c) => { maxDz = Math.max(maxDz, Math.abs(c.z / prev.z - 1)); maxDx = Math.max(maxDx, Math.abs(c.x - prev.x)); prev = c; });
+  t.ok(maxDz < 0.015 && maxDx < 25, 'no frame jumps: the biggest step is ' + (maxDz * 100).toFixed(2) + ' percent of the zoom and ' + maxDx.toFixed(1) + ' world px');
+  t.ok(Math.abs(rows[rows.length - 1].z - fit1.z) < 1e-9 && Math.abs(rows[rows.length - 1].x - fit1.x) < 1e-6 && rows[rows.length - 1].fitted, 'and it lands exactly on the new fit');
+  t.ok(rows.some((c) => c.z > c0.z + 1e-4 && c.z < fit1.z - 1e-4), 'through in between zooms (a glide, not a pop)');
+  // the other way (the HUD grows) glides too, and a user input in the middle of a glide takes over
+  layOut(g, HUD_WIDE); frames(4);
+  const mid = camOf(g);
+  t.ok(mid.z < fit1.z && mid.z > md(g).hud().fit.z - 1e-9 || mid.fitted, 'the HUD grew: gliding down');
+  {
+    layOut(g, small); frames(2);
+    wheel(g, 640, 360, -100); frames(1);
+    t.ok(!camOf(g).fitted && !st(g).fg, 'a wheel notch in the middle of a glide takes over (off the fit, glide gone)');
+  }
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('realtime: Fit after zooming all the way out with the Zoom out button or the minus key (while following the party) returns to the party at the first press, as after the wheel', async () => {
+  const g = await rtFresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke'] });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(4500);
+  t.ok(camOf(g).follow && !camOf(g).fitted, 'following the party');
+  for (let i = 0; i < 10; i++) { g._click($(g, '.mp-t-zout')); await g._tick(250); }
+  await g._tick(800);
+  let c = camOf(g);
+  t.ok(c.z === c.zMin && c.fitted && !c.follow, 'all the way out by the button: that is the fit view (' + c.z.toFixed(3) + ', fitted ' + c.fitted + ', follow ' + c.follow + ')');
+  await pressFit(g); await g._tick(2500);
+  c = camOf(g); t.ok(c.follow && !c.fitted && c.z > c.zMin + 0.1, 'one press of Fit goes back to the party');
+  for (let i = 0; i < 12; i++) { await press(g, '-'); await g._tick(150); }
+  await g._tick(800);
+  c = camOf(g); t.ok(c.z === c.zMin && c.fitted && !c.follow, 'the minus key does the same');
+  await pressFit(g); await g._tick(2500);
+  t.ok(camOf(g).follow && !camOf(g).fitted, 'and one press of F follows again');
+  // a half way zoom out is not the fit: Fit goes to the fit
+  for (let i = 0; i < 2; i++) { g._click($(g, '.mp-t-zout')); await g._tick(250); }
+  await g._tick(600); await pressFit(g); await g._tick(2500);
+  t.ok(camOf(g).fitted && camOf(g).z === camOf(g).zMin, 'from a half way zoom, Fit shows the whole page');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('first fit: the slide-in of the HUD is measured out of every piece, ancestors included (the tool buttons ride in on their column), so the fit at entry is the settled one', async () => {
+  const g = fresh(); const R = mkRun(g);
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const z0 = md(g).hud().fit, d0 = md(g).hud().rects.find((r) => r.k === 'deck');
+  // the whole column is mid slide (translate 14 px down) and its buttons are measured 14 px low
+  g._run("document.querySelector('.mp-tools').style.setProperty('translate', '0px 14px')");
+  const shifted = Object.assign({}, HUD_WIDE); ['deck', 'legend', 'fit', 'zin', 'zout'].forEach((k) => { const r = HUD_WIDE[k]; shifted[k] = [r[0], r[1] + 14, r[2], r[3] + 14]; });
+  layOut(g, shifted); await g._tick(400);
+  const d1 = md(g).hud().rects.find((r) => r.k === 'deck'), z1 = md(g).hud().fit;
+  t.near(d1.y0, d0.y0, 0.5, 'the Deck button is measured where it rests, not where its sliding column puts it'); t.near(z1.z, z0.z, 1e-9, 'so the fit does not move'); t.near(z1.x, z0.x, 1e-6, 'in x'); t.near(z1.y, z0.y, 1e-6, 'and y');
+  // the chip is filled before it is measured, in the source and in the page
+  const enter = /function enter\(params, root\) \{[\s\S]*?\n  \}\n/.exec(SRC)[0];
+  t.ok(enter.indexOf('flushInfo(s)') > 0 && enter.indexOf('flushInfo(s)') < enter.indexOf('relayout(s, true)'), 'enter fills the info chip before the first fit is solved');
+  t.ok(/\S/.test(txt($(g, '.mp-info-name'))), 'the chip has its text');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('performance: measuring the HUD and searching for the fit takes a few milliseconds, and never runs per frame', async () => {
+  const g = fresh(); const R = mkRun(g, { seed: 2 });
+  await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
+  const times = [];
+  for (let i = 0; i < 12; i++) {
+    const tab = Object.assign({}, HUD_WIDE, { tray: [567 - i * 6, 605 - i, 714 + i * 6, 710] });
+    layOut(g, tab);
+    const t0 = process.hrtime.bigint();
+    md(g).hud(true);
+    times.push(Number(process.hrtime.bigint() - t0) / 1e6);
+  }
+  times.sort((a, b) => a - b);
+  t.ok(times[6] < 16 * PERF_SLACK, 'the median re-fit is ' + times[6].toFixed(2) + ' ms (budget 16 ms, slack x' + PERF_SLACK + ')');
+  t.ok(times[11] < 40 * PERF_SLACK, 'and the slowest ' + times[11].toFixed(2) + ' ms');
+  // while nothing moves the HUD, frames never search
+  const ver = md(g).hud().ver;
+  for (let i = 0; i < 300; i++) g._raf(16);
+  t.eq(md(g).hud().ver, ver, 'three hundred quiet frames re-fit nothing');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('css: the hex info chip has a fixed size (clamped text, a name on one line) so the HUD footprint the fit relies on does not change with the hex under the pointer', () => {
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  t.ok(/\.mp-info-text,\s*\.mp-info-act\s*\{[^}]*-webkit-line-clamp:\s*2[^}]*min-height:\s*2\.6em/.test(css), 'text and action are two clamped lines with a minimum of two lines');
+  t.ok(/\.mp-info-name\s*\{[^}]*white-space:\s*nowrap[^}]*text-overflow:\s*ellipsis/.test(css), 'the name is one line');
+  t.ok(!/\.mp-info-act:empty\s*\{\s*display:\s*none/.test(css), 'an empty action line keeps its room');
+  t.ok(/\.mp-tray-empty\s*\{[^}]*white-space:\s*nowrap/.test(css), 'the empty tray is a one line strip');
+  t.ok(/getBoundingClientRect/.test(SRC) && /FALLBACK_HUD/.test(SRC) && /solveFit/.test(SRC), 'the module measures the DOM and keeps a fallback table');
 });
 
 await t.test('a phone shows fewer treasure icons so the strip never slides under the brush tray; the +N chip carries the rest', async () => {
