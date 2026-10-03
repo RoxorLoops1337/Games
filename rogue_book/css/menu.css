@@ -73,7 +73,10 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
 .compact .s-title .mn-slims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .compact .s-title .mn-slims .mn-plaque { min-width: 0; padding: .2em .4em .2em 1.5em; justify-content: center; }
 .compact .s-title .mn-slims .mn-plaque::before { left: 7px; width: 8px; height: 8px; margin-top: -4px; }
-.compact .s-title .mn-slims .mn-p-main { font-size: calc(14px * var(--ts)); letter-spacing: .03em; white-space: normal; text-align: center; }
+.compact .s-title .mn-slims .mn-p-main { font-size: max(calc(14px * var(--ts)), var(--fs9)); letter-spacing: 0; white-space: normal; text-align: center; overflow-wrap: anywhere; }
+/* the stage is drawn at about half size on a phone: sublines, credits and the gate hint keep 8 screen px, labels 9 (--fs8, --fs9 in base.css) */
+.compact .mn-p-sub, .compact .s-title .mn-foot, .compact .mn-gate-sub { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-p-main { font-size: max(calc(22px * var(--ts)), var(--fs9)); }
 
 /* ------------------------------------------------------------------------------------------------ hero select
    Stage coordinates mirror screen_menu.js (HC, SLOT, STAGE_BOX): cards at x 30 + i * 180, y 84, 168 x 262; party stage 30,356 400 x 350; launch panel 442,356 296 x 350;
@@ -160,6 +163,8 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .mn-d-line span { color: var(--ink-soft); }
 .mn-d-sec { margin-top: 12px; }
 .mn-d-sec h4 { display: inline-block; margin: 0 0 6px; padding-bottom: 2px; font: 800 calc(12px * var(--ts)) var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: var(--verm-d); background: var(--brush-ul) no-repeat 0 100% / 100% .5em; }
+.mn-d-tapnote { display: none; margin: 0; font: italic 600 calc(12px * var(--ts)) var(--font-display); color: var(--ink-soft); }   /* the small cards of a phone are pictures: a tap opens the big card */
+.compact .mn-d-tapnote { display: block; font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 .mn-d-deck { display: flex; gap: 14px; padding: 8px 6px 8px; }
 .mn-dc { position: relative; flex: none; }
 .mn-cs { --cw: 104px; }
@@ -192,7 +197,8 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .mn-pip.open { border-color: rgba(245, 201, 106, .8); }
 .mn-pip.on { background: radial-gradient(circle at 35% 30%, #ff8a80, var(--vermilion)); border-color: var(--gold2); box-shadow: 0 0 8px rgba(232, 56, 61, .8); transform: scale(1.2); }
 .mn-trial.locked .mn-tr-name { opacity: .75; }
-.mn-rules { list-style: none; margin: 0; padding: 7px 10px; border-radius: 8px; background: rgba(7, 5, 26, .42); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .28); min-height: 0; font-size: calc(12px * var(--ts)); line-height: 1.32; }
+.mn-rules { list-style: none; margin: 0; padding: 7px 10px; border-radius: 8px; background: rgba(7, 5, 26, .42); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .28); min-height: 0; font-size: calc(12px * var(--ts)); line-height: 1.32;
+  -webkit-mask: linear-gradient(transparent, #000 9px); mask: linear-gradient(transparent, #000 9px); }   /* a line that scrolls out of the top fades away instead of being cut through the middle */
 .mn-rule { margin: 0 0 5px; padding-left: 8px; border-left: 3px solid rgba(245, 201, 106, .35); color: var(--paper2); }
 .mn-rule b { color: var(--gold2); font-family: var(--font-display); }
 .mn-rule.new { border-left-color: var(--vermilion); color: var(--white); background: linear-gradient(90deg, rgba(232, 56, 61, .22), transparent); }
@@ -219,16 +225,34 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .compact .mn-hs-top .mn-back, .compact .mn-lib-top .mn-back { align-self: flex-start; }   /* --hit makes Back taller than the 60px bar: pin its top edge to the stage instead of centring it half off the top */
 .compact .mn-hc-badge { left: 4px; top: 4px; }
 .compact .mn-pips, .compact .mn-daily-txt i, .ts-big .mn-pips { display: none; }
-.compact .mn-launch .p-body { gap: 6px; padding-top: 8px; }
-/* a phone has no room for the rules list (it would be a 20px sliver): the trial name takes its own line, the arrows flank the newest rule written out in words */
+/* Larger text on a desktop: the newest rule is what the rules list is for, so the generic sub-line goes, the gaps and the Begin plaque tighten, and the list gets about 20 px more (C1) */
+.ts-big .mn-trial.has-rule .mn-tr-text { display: none; }
+.ts-big .mn-launch .p-body { gap: 6px; }
+.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; }
+.compact .mn-launch .p-body { gap: 5px; padding: 6px 14px 8px; }
+/* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the trial name sits between the arrows
+   and the newest rule is written out in full under them, never clipped: the trailing words are the penalty (C1). The panel body scrolls, and Begin stays pinned. */
+.compact .mn-launch { width: 376px; }
+.compact .mn-detail.panel-wrap { left: 836px; width: 424px; }
 .compact .mn-launch .p-body > .mn-rules { display: none; }
-.compact .mn-tr-head { display: grid; grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); grid-template-areas: "name name name" "minus text plus"; gap: 2px 6px; align-items: center; }
+.compact .mn-tr-head { display: grid; grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); grid-template-areas: "minus name plus" "text text text"; gap: 2px 6px; align-items: center; }
 .compact .mn-tr-mid { display: contents; }
 .compact .mn-tr-head > button:first-of-type { grid-area: minus; } .compact .mn-tr-head > button:last-of-type { grid-area: plus; }
-.compact .mn-tr-name { grid-area: name; text-align: center; font-size: calc(13px * var(--ts)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compact .mn-tr-rule, .compact .mn-tr-text { grid-area: text; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; text-align: center; font-size: calc(10.5px * var(--ts)); }
+.compact .mn-tr-name { grid-area: name; text-align: center; font-size: max(calc(15px * var(--ts)), var(--fs9)); line-height: 1.12; }
+.compact .mn-tr-rule, .compact .mn-tr-text { grid-area: text; display: block; text-align: center; font-size: max(calc(11px * var(--ts)), var(--fs8)); line-height: 1.2; opacity: 1; }
+.compact .mn-tr-text { opacity: .85; }
 .compact .mn-tr-rule:not(:empty) ~ .mn-tr-text { display: none; }
-.compact .mn-swap { padding-top: 0; padding-bottom: 0; }
+.compact .mn-begin { position: sticky; bottom: 0; z-index: 2; }
+.compact .mn-seed-label, .compact .mn-daily-txt b { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-daily-txt b { font-size: max(calc(14px * var(--ts)), var(--fs8)); }
+.compact .mn-swap { padding-top: 0; padding-bottom: 0; font-size: max(calc(14px * var(--ts)), var(--fs9)); }
+.compact .mn-hc-title, .compact .mn-slot-note { font-size: max(calc(11px * var(--ts)), var(--fs8)); }
+.compact .mn-slot-name { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-d-title, .compact .mn-d-blurb { font-size: max(calc(14px * var(--ts)), var(--fs8)); }
+.compact .mn-d-row, .compact .mn-d-line, .compact .mn-d-bio p { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-d-row b, .compact .mn-d-line b { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
+.compact .mn-d-sec h4 { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-dc-n { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 
 /* ------------------------------------------------------------------------------------------------ library */
 .s-library .mn-lib { position: absolute; inset: 0; }
@@ -403,6 +427,9 @@ body.reduce-motion .mn-hist { animation: none; }
   border: 3px solid var(--ink); border-radius: 6px 12px 12px 6px; box-shadow: 0 8px 0 var(--verm-d), 0 12px 16px rgba(0, 0, 0, .5); animation: mnFloat 3.4s ease-in-out infinite; }
 body.reduce-motion .mn-emptybook { animation: none; }
 
+/* the Library and Settings copy a phone player reads: counts, hints and tile text keep 8 screen px (the lists scroll, so a bigger line costs nothing) */
+.compact .mn-set-hint, .compact .mn-sec-n, .compact .mn-tile-txt em, .compact .mn-ach-num, .compact .mn-filter-label { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
+.compact .mn-count, .compact .mn-tile-txt p, .compact .mn-ach-text { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
 .compact .mn-tabs { left: 104px; top: 66px; }
 .compact .mn-tabs .tab { height: var(--hit); padding: 0 .8em; gap: 6px; }
 .compact .mn-tabs .tab.on { height: calc(var(--hit) + 4px); }

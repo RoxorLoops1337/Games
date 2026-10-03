@@ -490,8 +490,30 @@
         items.push(plaque('primary', 'Continue', sub, { big: true, breathe: true, act: 'continue', sfx: 'page_turn', extra, onclick: () => { const G = game(); if (G) G.continueRun(); } }));
       }
       items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Tale', 'Choose two heroes and an Ink Trial', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
-      const dSub = (seed ? 'Seed ' + seed + ' · ' : '') + (best !== null ? 'Best ' + fmt(best) : played ? 'Played today' : 'A new tale every day');
-      items.push(plaque('secondary', 'Daily Tale', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(dHeroes, 34)), onclick: () => { beginRun({ daily: true }); } }));
+      // the Daily plaque is built from S so it can be rebuilt when the date turns over while the title stays open (L26)
+      const dailyPlaque = () => {
+        const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new tale every day');
+        return plaque('secondary', 'Daily Tale', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, 34)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
+      };
+      S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new tale and nothing starts
+        const nowSeed = dailySeed();
+        if (nowSeed === S.seed) return false;
+        S.seed = nowSeed;
+        S.dHeroes = nowSeed ? (safe(() => RUN.dailyHeroes(nowSeed), []) || []) : [];
+        S.best = nowSeed ? dailyBest(nowSeed) : null;
+        S.played = nowSeed ? !!safe(() => META.dailyPlayed(today()), false) : false;
+        const old = items.find((b) => b.dataset.act === 'daily');
+        if (old) {
+          const fresh = dailyPlaque(), had = document.activeElement === old;
+          fresh.style.setProperty('--i', old.style.getPropertyValue('--i'));
+          old.replaceWith(fresh);
+          items[items.indexOf(old)] = fresh;
+          if (had) safe(() => fresh.focus());
+        }
+        if (nowSeed) UI.toast('A new Daily Tale has begun', 'info');
+        return true;
+      };
+      items.push(dailyPlaque());
       items.push(plaque('secondary', 'Library', null, { slim: true, act: 'library', sfx: 'page_turn', onclick: () => UI.go('library', { tab: mem.libTab }, { transition: 'page' }) }));
       items.push(plaque('secondary', 'Settings', null, { slim: true, act: 'settings', onclick: () => UI.go('settings') }));
       items.push(plaque('secondary', 'How to Play', null, { slim: true, act: 'howto', onclick: () => UI.go('howto') }));
@@ -541,6 +563,7 @@
     update(dt, t) {
       const S = TS;
       if (!S) return;
+      if (t - (S.dayT || 0) >= 1 || t < (S.dayT || 0)) { S.dayT = t; S.refreshDaily(); }          // a title left open across midnight must not keep selling yesterday's tale
       const k = reduce() ? 0 : Math.min(1, dt * 3.2);
       S.px += (S.tpx - S.px) * k; S.py += (S.tpy - S.py) * k;
       if (reduce()) { S.px = 0; S.py = 0; }
@@ -563,7 +586,11 @@
     onKey(e) {
       const S = TS;
       if (!S || e.ctrlKey || e.metaKey || e.altKey) return false;
-      if (S.gate && !S.gateDone) { if (e.key === 'Tab' || e.key === 'Shift') return false; S.dismiss(); return true; }
+      if (S.gate && !S.gateDone) {
+        if (e.key === 'Tab' || e.key === 'Shift') return false;
+        if (e.preventDefault) e.preventDefault();               // dismiss() focuses the first plaque inside this keydown: without this the browser's default Enter or Space then clicks it (L3)
+        S.dismiss(); return true;
+      }
       const map = { c: 'continue', n: 'new', d: 'daily', l: 'library', s: 'settings', h: 'howto' };
       const act = map[String(e.key).toLowerCase()];
       if (!act) return false;
@@ -655,7 +682,7 @@
       withCardPreview(card, c.id);
       deck.appendChild(mk('div', { class: 'mn-dc' }, card, c.n > 1 ? mk('b', { class: 'mn-dc-n', text: 'x' + c.n }) : null));
     });
-    add(box, mk('div', { class: 'mn-d-sec' }, mk('h4', { text: 'Starting deck (' + ((h.starter || []).length) + ' cards)' }), deck));
+    add(box, mk('div', { class: 'mn-d-sec' }, mk('h4', { text: 'Starting deck (' + ((h.starter || []).length) + ' cards)' }), mk('p', { class: 'mn-d-tapnote', text: 'Tap a card to read it.' }), deck));
     const lore = DATA.lore && DATA.lore['hero_' + id];
     if (lore) add(box, mk('div', { class: 'mn-d-sec mn-d-bio' }, mk('h4', { text: 'Her story'.replace('Her', id === 'kuro' || id === 'raiga' ? 'His' : 'Her') }), mk('p', { text: lore.text })));
     return box;
@@ -803,8 +830,23 @@
         refresh();
         showDetail(S.hover || S.pinned || S.chosen[0]);
       }
+      // a hero select left open across midnight: the Daily plaque, seed and heroes follow the date, and a start that crossed the line shows the new tale first (L26)
+      function refreshDay() {
+        const nowSeed = dailySeed();
+        if (nowSeed === S.seedToday) return false;
+        S.seedToday = nowSeed;
+        if (S.daily && nowSeed) {
+          S.chosen = (safe(() => RUN.dailyHeroes(nowSeed), S.chosen) || S.chosen).slice(0, 2);
+          S.chosen.forEach((id) => { S.pose[id] = { name: 'cheer', t0: S.t }; });
+          S.slotFrom = {};
+        }
+        refresh();
+        if (S.daily) UI.toast('A new Daily Tale has begun', 'info');
+        return true;
+      }
+      S.refreshDay = refreshDay;
       function doBegin() {
-        if (S.daily) { beginRun({ daily: true }); return; }
+        if (S.daily) { if (!refreshDay()) beginRun({ daily: true }); return; }
         if (S.chosen.length !== 2) { UI.shake(S.begin); return; }
         const opts = { heroes: S.chosen.slice(), trial: S.trial };
         const sd = parseSeed(S.seedText);
@@ -864,6 +906,7 @@
         const tr = DATA.trials['trial_' + S.trial];
         S.trialName.textContent = S.trial === 0 ? 'Trial 0' : 'Trial ' + roman(S.trial) + ': ' + (tr ? tr.name : '');
         S.trialRule.textContent = tr && S.trial > 0 && !S.daily ? tr.text : '';
+        S.trialBox.classList.toggle('has-rule', !!S.trialRule.textContent);
         S.trialText.textContent = S.daily ? 'The Daily Tale is always Trial 0.' : maxT === 0 ? 'Win a tale to unlock Ink Trials.' : S.trial === 0 ? 'The tale as the Author wrote it.' : 'Every level below is added on top.';
         S.minus.classList.toggle('dim', S.daily || S.trial <= 0);
         S.plus.classList.toggle('dim', S.daily || S.trial >= maxT);
@@ -900,6 +943,7 @@
       const S = HS;
       if (!S) return;
       S.t = t;
+      if (t - (S.dayT || 0) >= 1 || t < (S.dayT || 0)) { S.dayT = t; if (S.refreshDay) S.refreshDay(); }
       S.atmos.update(dt, t);
       const rm = reduce();
       HEROES.forEach((id) => {
@@ -933,6 +977,11 @@
           el.style.top = ''; el.style.bottom = Math.round(STAGE_BOX.h - (hy - 54 * slot.s)) + 'px';
           el.classList.remove('show'); void el.offsetWidth;
           if (el.offsetTop < 4 && el.offsetHeight > 0) { el.style.bottom = ''; el.style.top = '6px'; }        // a tall bubble (large text) that would leave the box
+          // the Swap pill sits in the top right corner of the same box: a bubble that would sit on it slides left until it ends before the pill (L13)
+          const sw = S.swapBtn;
+          if (sw && el.offsetWidth > 0 && el.offsetTop < sw.offsetTop + sw.offsetHeight && el.offsetTop + el.offsetHeight > sw.offsetTop && el.offsetLeft + el.offsetWidth > sw.offsetLeft - 6) {
+            el.style.left = Math.max(6, sw.offsetLeft - 6 - el.offsetWidth) + 'px';
+          }
         }
         el.classList.add('show');
       });
@@ -1016,7 +1065,7 @@
       if (e.key === 'Enter' && document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('mn-seed')) return false;
       return false;
     },
-    state() { const S = HS; return S ? { chosen: S.chosen.slice(), trial: S.trial, daily: S.daily, focus: S.shown, seed: parseSeed(S.seedText), seedText: S.seedText, trialMax: S.trialMax } : null; },
+    state() { const S = HS; return S ? { chosen: S.chosen.slice(), trial: S.trial, daily: S.daily, focus: S.shown, seed: parseSeed(S.seedText), seedText: S.seedText, trialMax: S.trialMax, seedToday: S.seedToday } : null; },
   };
 
   // ================================================================================================================

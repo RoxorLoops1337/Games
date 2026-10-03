@@ -24,7 +24,7 @@
 .mp-party .badge { gap: 9px; }
 .mp-party .badge .medal { box-shadow: 0 0 0 2px var(--hc), 0 0 0 4px var(--ink), 0 0 0 5px var(--gold), 0 3px 6px rgba(0, 0, 0, .55); }
 .mp-party .b-info { min-width: 84px; }
-.mp-party .hp-txt { font-size: 10px; }
+.mp-party .badge { --hpf: 10px; }
 
 .mp-ink { left: 14px; top: 84px; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; pointer-events: auto; cursor: help; }
 .mp-ink-ico { flex: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(95, 245, 255, .45)); }
@@ -218,7 +218,6 @@ body.colorblind .mr-boss { background-image: repeating-linear-gradient(0deg, rgb
 #stage.compact .mp-info-text { display: none; }
 #stage.compact .mp-chip { width: 66px; padding: 4px 2px; }
 #stage.compact .mp-tray { max-width: 580px; }   /* six 44 px chips (the --hit floor beats the 66px width) need about 556 */
-#stage.compact .mp-chip-n { font-size: calc(10px * var(--ts)); }
 #stage.compact .mp-banner { max-width: 360px; padding: 5px 24px 10px; }
 #stage.compact .mp-title { font-size: calc(21px * var(--ts)); }
 #stage.compact .mp-prog { width: 180px; }
@@ -229,6 +228,15 @@ body.colorblind .mr-boss { background-image: repeating-linear-gradient(0deg, rgb
 #stage.compact .mp-mode-txt { max-width: 250px; }
 #stage.compact .mp-mode-text { display: none; }
 #stage.compact .mp-ink { top: 82px; }
+/* the stage is drawn at about half size on a phone: the text a player reads while playing keeps 8 to 9 screen px (--fs8, --fs9 in base.css). The hero HP numbers do the same through the shared badge rules. */
+#stage.compact .mp-ch { font-size: max(calc(11px * var(--ts)), var(--fs8)); }
+#stage.compact .mp-prog { height: max(14px, calc(var(--fs8) * 1.45)); }
+#stage.compact .mp-prog-t { font-size: max(calc(10px * var(--ts)), var(--fs8)); -webkit-text-stroke-width: 3px; }
+#stage.compact .mp-chip-n { font-size: max(calc(10px * var(--ts)), var(--fs8)); line-height: 1.02; }
+#stage.compact .mp-chip-c { font-size: max(calc(11px * var(--ts)), var(--fs8)); }
+#stage.compact .mp-info-act { font-size: max(calc(12.5px * var(--ts)), var(--fs8)); }
+#stage.compact .mp-relic-more { font-size: max(calc(14px * var(--ts)), var(--fs9)); }
+#stage.compact .mp-t-deck .mp-deck-n { font-size: max(11px, var(--fs8)); }
 
 /* ------------------------------------------------------------------------------------------------ motion and quality switches */
 body.reduce-motion .mp-hud > *, body.reduce-motion .mp-mode, body.reduce-motion .mr-row { animation-name: fadeIn; animation-duration: .15s; animation-delay: 0ms; }

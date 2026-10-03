@@ -349,17 +349,24 @@
       mk('p', { class: 'en-none-text', text: what || 'There is no tale open for this page.' }),
       mk('div', { class: 'row center' }, UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => { const g = game(); if (g) g.toTitle(); else UI.toTitle(); } })))));
   }
+  // a body that scrolls says so: while there is more below the fold its bottom edge fades (class `more`), instead of cutting a line in half
+  function fadeWhileMore(body) {
+    const sync = () => { body.classList.toggle('more', body.scrollHeight - body.clientHeight > 10 && body.scrollTop + body.clientHeight < body.scrollHeight - 4); };
+    body.addEventListener('scroll', sync, { passive: true });
+    [60, 700, 2000].forEach((ms) => UI.after(ms, sync));      // after layout, and after the panels have risen and the tiles have counted up
+    return body;
+  }
   // a paper "scroll" panel with a heading and a body that scrolls when text is large
   function scroll(cls, title, ...kids) {
     const head = title ? mk('h2', { class: 'en-h' }, mk('span', { text: title })) : null;
-    const body = mk('div', { class: 'en-scroll-body' }, ...kids);
+    const body = fadeWhileMore(mk('div', { class: 'en-scroll-body' }, ...kids));
     const p = UI.panel({ kind: 'paper', gold: true, class: 'en-card ' + cls }, head, body);
     p.bodyEl = body;
     return p;
   }
   function lacquer(cls, title, ...kids) {
     const head = title ? mk('h2', { class: 'en-h dark' }, mk('span', { text: title })) : null;
-    const body = mk('div', { class: 'en-scroll-body' }, ...kids);
+    const body = fadeWhileMore(mk('div', { class: 'en-scroll-body' }, ...kids));
     const p = UI.panel({ kind: 'dark', gold: true, class: 'en-card ' + cls }, head, body);
     p.bodyEl = body;
     return p;
@@ -367,7 +374,7 @@
   // like lacquer(), but the foot sits outside the scrolling body so a total never scrolls away
   function lacquerSplit(cls, title, bodyKids, foot) {
     const head = title ? mk('h2', { class: 'en-h dark' }, mk('span', { text: title })) : null;
-    const body = mk('div', { class: 'en-scroll-body' }, ...bodyKids);
+    const body = fadeWhileMore(mk('div', { class: 'en-scroll-body' }, ...bodyKids));
     const p = UI.panel({ kind: 'dark', gold: true, class: 'en-card ' + cls }, head, body, foot);
     p.bodyEl = body;
     return p;

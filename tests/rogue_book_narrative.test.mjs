@@ -583,6 +583,15 @@ function richRun(e, seed) {
   R.flags.fox_spared = 1; R.flags.fox_bond = 1;
   return R;
 }
+// RUN locks a choice whose every outcome can only do nothing (a fixed treasure already owned, a curse to remove with none in the deck): these loops want the
+// choice open, so they make it meaningful first. The locks themselves are tested in their own test below.
+function liveFor(R, c) {
+  c.out.forEach((o) => A(o.ops).forEach((x) => {
+    if (x.op === 'addRelic' && x.id && !(c.req && c.req.relic === x.id)) R.relics = R.relics.filter((r) => r !== x.id);
+    if (x.op === 'removeCard' && x.filter && x.filter.type === 'curse' && DATA.cards.curse_regret && !R.deck.some((k) => k.id === 'curse_regret')) RUN.addCard(R, 'curse_regret');
+  }));
+  return R;
+}
 function answerPending(R, res) {
   const log = [];
   A(res.pending).slice().forEach((p) => {
@@ -667,7 +676,40 @@ t.test('integration: relic outcomes hand over a real relic on a fresh run, so th
   t.ok(checked >= 10, `checked ${checked} relic outcomes`);
   const owned = baseRun(['hanae', 'kuro'], 2); owned.relics = ['fox_mask'];
   const again = RUN.applyOps(owned, [{ op: 'addRelic', id: 'fox_mask' }], { rng: U.rng(1) });
-  t.ok(again.log.some((x) => /already owned/i.test(x.text)) && owned.relics.length === 1, 'granting a relic you already own is a harmless no-op (RUN says so)');
+  const standIn = owned.relics.filter((r) => r !== 'fox_mask');
+  t.ok(owned.relics.length === 2 && standIn.length === 1 && DATA.relics[standIn[0]].rarity === DATA.relics.fox_mask.rarity, 'granting a relic you already own gives a stand-in of the same rarity, never nothing (' + owned.relics.join(',') + ')');
+  t.ok(again.log.length === 1 && again.log[0].id === standIn[0] && /^Found /.test(again.log[0].text), 'and the log names the relic that really arrived');
+});
+
+t.test('integration: a choice that can only do nothing is locked with a reason (the fixed treasure owned, no curse to remove, nothing to sharpen), and a fable never locks itself', () => {
+  if (!haveRun) { t.ok(true, 'RUN or MAP not available, skipped'); return; }
+  const dead = (e, over) => { const R = richRun(e, 7); R.gold = 400; R.flags = { fox_spared: 1, fox_bond: 1 }; R.deck = R.deck.filter((c) => !(DATA.cards[c.id] && DATA.cards[c.id].hero === 'curse')); R.deck.forEach((c) => { if (DATA.cards[c.id] && DATA.cards[c.id].up) c.up = 1; }); Object.assign(R, over || {}); return R; };
+  const row = (id, ci, R) => RUN.eventChoices(R, DATA.events[id])[ci];
+  let r = row('peddler_silver_bell', 1, dead(DATA.events.peddler_silver_bell));
+  t.ok(!r.ok && /Brass Lantern/.test(r.reason), 'the brass lamp is locked while the Brass Lantern is owned (' + r.reason + ')');
+  const free = dead(DATA.events.peddler_silver_bell); free.relics = ['silver_bell']; t.eq(row('peddler_silver_bell', 1, free).ok, true, 'and open without it');
+  r = row('fox_returns', 0, dead(DATA.events.fox_returns)); t.ok(!r.ok && /Fox Mask/.test(r.reason), 'the fox mask is locked while owned (' + r.reason + ')');
+  r = row('void_tear', 1, dead(DATA.events.void_tear)); t.ok(!r.ok && /no curse/i.test(r.reason), 'feeding the tear a regret needs a curse (' + r.reason + ')');
+  r = row('blank_patch', 2, dead(DATA.events.blank_patch)); t.ok(!r.ok && /no curse/i.test(r.reason), 'so does the cursed page (' + r.reason + ')');
+  const cursed = dead(DATA.events.void_tear); RUN.addCard(cursed, 'curse_regret'); t.eq(row('void_tear', 1, cursed).ok, true, 'open with a curse in the deck');
+  r = row('wandering_storyteller', 0, dead(DATA.events.wandering_storyteller)); t.ok(!r.ok && /sharpen/i.test(r.reason), 'paying to sharpen with every card sharp is locked (' + r.reason + ')');
+  const sharp = dead(DATA.events.wandering_storyteller); sharp.deck[0].up = 0; t.eq(row('wandering_storyteller', 0, sharp).ok, true, 'open with a card to sharpen');
+  const sample = dead(DATA.events.void_tear); const chosen = Object.assign(sample, { node: { kind: 'event', tile: { q: sample.map.start.q, r: sample.map.start.r }, event: 'void_tear', chosen: null } });
+  const refused = RUN.eventChoose(chosen, DATA.events.void_tear, 1); t.ok(!refused.ok && /no curse/i.test(refused.reason) && chosen.node.chosen === null, 'eventChoose refuses a locked choice and changes nothing');
+  // a gamble with one live outcome stays open (the koi might give a gem)
+  const koi = dead(DATA.events.koi_wishing_pond); koi.chapter = 2; t.eq(row('koi_wishing_pond', 0, koi).ok, true, 'a wish with another outcome that can happen is not locked');
+  // the worst hand for every fable: broke, every fixed treasure owned, no curse, every card sharp. Something is still open, and every lock says why.
+  let worst = 0;
+  evs.forEach((e) => {
+    const R = dead(e); R.gold = 0; R.heroes.forEach((h) => { h.hp = h.maxHp; });
+    const rows = RUN.eventChoices(R, e);
+    t.ok(rows.some((x) => x.ok), `${e.id}: even in the worst hand a choice is open`);
+    rows.forEach((x) => { if (!x.ok && !x.hidden) { worst++; t.ok(typeof x.reason === 'string' && x.reason.length > 4, `${e.id}[${x.index}]: the lock says why (${x.reason})`); } });
+  });
+  t.ok(worst > 10, 'many choices lock in the worst hand (' + worst + ')');
+  // hand-made fable: every choice dead is lifted
+  const all = { id: 'allDead', title: 'x', choices: [{ label: 'a', out: [{ w: 1, text: 't', ops: [{ op: 'removeCard', filter: { type: 'curse' } }] }] }, { label: 'b', out: [{ w: 1, text: 'u', ops: [{ op: 'upgradeCard' }] }] }] };
+  const D = dead(DATA.events.void_tear); D.deck.forEach((c) => { c.up = 1; }); t.deep(RUN.eventChoices(D, all).map((x) => x.ok), [true, true], 'a fable whose every choice is dead locks none of them');
 });
 
 t.test('integration: RUN.eventChoose runs each choice end to end with seeded, declared outcomes, and reqs gate correctly', () => {
@@ -678,6 +720,7 @@ t.test('integration: RUN.eventChoose runs each choice end to end with seeded, de
       const R = clone(R0);
       R.relics = R0.relics.slice();                                              // deserialize drops relic ids nobody has defined yet
       if (c.req && c.req.chapter) R.chapter = c.req.chapter;                     // a chapter-gated choice is only offered in that chapter
+      liveFor(R, c);
       R.node = { kind: 'event', tile: { q: R.map.start.q, r: R.map.start.r }, event: e.id, chosen: null };
       const st = RUN.eventChoices(R, e);
       t.eq(st[ci].ok, true, `${e.id}[${ci}]: available to a rich party that meets every requirement`);

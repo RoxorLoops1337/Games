@@ -31,6 +31,10 @@
 //   UI.announce(text) writes the aria-live region        UI.anchorEl(selector | anchor name) -> el|null        UI.menuButton() -> the 56 px pause button
 // TOOLTIPS    UI.tip.attach(el, () => html|Node|null, {side, follow, wide, delay}) -> off (mouse hover after 70 ms, touch long press 400 ms, closes on pointerup)
 //   UI.tip.show(content, {x0,y0,x1,y1}, opts)   UI.tip.showFor(el, content, opts)   UI.tip.hide()   UI.tip.open   UI.tip.card(inst, {x, y, size, scale}) big preview + glossary
+//   UI.tip.swallowClick(el, ms) -> off: a long press that opened a tip must not also act, but a touch browser still sends the click when the finger lifts. attach arms this
+//   itself after a long press showed its tip; a screen with its own press preview (the shop shelf) arms it on pointerup. One-shot, capture phase, only for a click inside el
+//   within ms (default 600) of arming, and cancelled by the next pointerdown anywhere, so a later mouse or keyboard click is never lost.
+//   A tip whose anchor leaves the page (a screen rebuilt under the pointer) is hidden at once and never opens for a detached anchor.
 //   UI.tip.kw(word, n) -> Node|null   UI.tip.status(id, n)   UI.tip.info(word, n) -> {key, name, text, kind, status} | null (DATA.keywords and DATA.statuses, by key or name)
 //   `.kw[data-kw]` spans inside card text open glossary bubbles on hover or long press by themselves.
 // COMPONENTS  UI.card(inst | id, {size:'mini'|'deck'|'hand'|'reward'|'big', unit, C, selected, disabled, playable, showGems, onclick, class, tip}) -> el
@@ -396,6 +400,7 @@ const UI = (() => {
     trackQuality(raw);
     runTimers();
     runTweens(dt);
+    if (tipS.owner && tipS.el && tipS.owner.isConnected === false) tipHide();       // the anchor was removed with no pointerleave (a screen or card rebuilt under the pointer): never leave its bubble stuck
     const rec = S.cur;
     if (rec && !rec.dead.update && typeof rec.def.update === 'function') {
       try { rec.def.update(dt, c.t); } catch (e) { rec.dead.update = true; fail(rec.name + '.update', e); }
@@ -1219,11 +1224,38 @@ const UI = (() => {
     return node;
   }
 
+  // A long press that opened a tip must not also act: touch browsers still send the click when the finger lifts. This arms ONE capture-phase click suppressor
+  // for a click inside `el`; it expires after `ms` (the click follows pointerup within a few ms) and the next pointerdown anywhere cancels it, so a stale arm can never
+  // swallow a later mouse click or a keyboard Enter on the same element.
+  let swallowOff = null;
+  function swallowClick(el, ms) {
+    if (swallowOff) swallowOff();
+    let timer = 0;
+    const off = () => {
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('pointerdown', off, true);
+      if (timer) { clearTimeout(timer); timer = 0; }
+      if (swallowOff === off) swallowOff = null;
+    };
+    const onClick = (e) => {
+      if (!(el && e.target && el.contains(e.target))) return;
+      off();
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('pointerdown', off, true);
+    timer = setTimeout(off, ms === undefined ? 600 : ms);
+    swallowOff = off;
+    return off;
+  }
+
   function attach(el, fn, opts) {
     opts = opts || {};
-    let pressTimer = 0, byTouch = false;
+    let pressTimer = 0, byTouch = false, pressShown = false;
     const content = () => { let c; try { c = fn(); } catch (e) { warnOnce('tip', 'tooltip content threw', e); c = null; } return c; };
     const showFor = (e) => {
+      if (el.isConnected === false) return;                       // the anchor left the page while a timer ran: its rect is 0,0 and the tip would stick top left
       const c = content();
       if (!c) return;
       tipS.owner = el;
@@ -1238,13 +1270,15 @@ const UI = (() => {
     const leave = () => { if (tipS.owner === el || tipS.timer) tipHide(); };
     const down = (e) => {
       if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-      byTouch = true;
+      byTouch = true; pressShown = false;
       if (pressTimer) clearTimeout(pressTimer);
-      pressTimer = setTimeout(() => { pressTimer = 0; showFor(e); }, 400);       // a 400 ms long press; a tap still clicks
+      pressTimer = setTimeout(() => { pressTimer = 0; showFor(e); pressShown = tipS.owner === el && !!tipS.el; }, 400);       // a 400 ms long press; a tap still clicks
     };
-    const up = () => {
+    const up = (e) => {
       if (pressTimer) { clearTimeout(pressTimer); pressTimer = 0; }
       if (byTouch && tipS.owner === el) tipHide();
+      if (pressShown && e && e.type === 'pointerup') swallowClick(el);       // the finger that read the tip must not also press the button (a cancel sends no click)
+      pressShown = false;
       byTouch = false;
     };
     el.addEventListener('pointerenter', enter);
@@ -1288,7 +1322,7 @@ const UI = (() => {
   }
 
   const tip = {
-    attach, show: tipShow, hide: tipHide, card: tipCard, info: kwInfo,
+    attach, show: tipShow, hide: tipHide, card: tipCard, info: kwInfo, swallowClick,
     kw(word, n) { return kwNode(word, n); },
     status(id, n) { return kwNode(id, n); },
     showFor(el, content, opts) { return tipShow(content, elRect(el), opts); },

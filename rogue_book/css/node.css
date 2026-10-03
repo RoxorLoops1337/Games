@@ -42,6 +42,7 @@
 .nk-row-lab { flex: 1; font: 700 calc(17px * var(--ts) * var(--nkc, 1)) / 1.1 var(--font-display); letter-spacing: .07em; color: var(--paper); }
 .nk-row-val { font: 900 calc(27px * var(--ts) * var(--nkc, 1)) / 1 var(--font-num); letter-spacing: .02em; color: var(--gold2); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 rgba(20, 15, 46, .6); }
 .nk-row.k-ink .nk-row-val { color: #d9d3ff; } .nk-row.k-hp .nk-row-val { color: #ffc0c0; }
+.nk-row.k-loss .nk-row-val { color: #ff9aa6; } .nk-row.k-loss .nk-row-lab { color: #ffd0d6; }
 .nk-row.bonus .nk-row-val { font-size: calc(15px * var(--ts) * var(--nkc, 1)); letter-spacing: .1em; text-transform: uppercase; color: var(--jade); }
 .nk-row.taken .nk-row-val { color: var(--paper); }
 .nk-row.taken .nk-row-val::after { content: " added"; font-size: .6em; color: var(--jade); }
@@ -88,6 +89,9 @@
 .rw-relicbox { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 14px 12px 14px; border-radius: 16px; background: var(--lacquer-bg);
   box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .85), inset 0 0 0 5px rgba(20, 15, 46, .92), 0 12px 20px rgba(0, 0, 0, .55); transition: opacity .35s, transform .4s var(--ease-back); }
 .rw-relicbox.gone { opacity: 0; transform: translateY(20px) scale(.94); pointer-events: none; }
+.rw-relicbox.taken .rw-acts, .rw-relicbox.taken .rw-h3 { visibility: hidden; }
+/* .rise (base.css) fills forwards, so its last keyframe (opacity 1) would beat every .gone rule on an element that rose in: a treasure that was left or taken, a boss treasure that was passed over */
+.rise.gone { animation: none; }
 .rw-relic { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px; border: 0; border-radius: 12px; background: radial-gradient(circle at 50% 30%, rgba(245, 201, 106, .18), transparent 70%); cursor: pointer; color: inherit; font: inherit; }
 .rw-relic:hover { filter: brightness(1.12); } .rw-relic.pick { animation: nkPick .6s var(--ease-back) both; }
 .rw-stage { position: absolute; left: 336px; top: 158px; width: 920px; height: 470px; z-index: 2; }
@@ -151,7 +155,7 @@
 .sh-item .card.dis > .c-in { filter: none; }
 .sh-item.sold .card > .c-in, .sh-plaque.sold .sh-ico, .sh-plaque.sold .sh-name { filter: grayscale(1) brightness(.5); }
 .sh-item.buying .card { animation: nkPick .55s var(--ease-back); }
-.sh-sale { position: absolute; right: -18px; top: 231px; z-index: 4; display: grid; place-items: center; width: 56px; height: 56px; font: 900 calc(13px * var(--ts) * var(--nkc, 1)) / 1 var(--font-display); letter-spacing: .08em; color: var(--white); text-shadow: 0 1px 0 rgba(93, 15, 28, .9); pointer-events: none;
+.sh-sale { position: absolute; right: -24px; top: 222px; z-index: 4; display: grid; place-items: center; width: 48px; height: 48px; font: 900 calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)) / 1 var(--font-display); letter-spacing: .08em; color: var(--white); text-shadow: 0 1px 0 rgba(93, 15, 28, .9); pointer-events: none;
   background: radial-gradient(circle at 34% 28%, #ff7268, var(--vermilion) 50%, #a91d2c); clip-path: polygon(50% 0, 60% 14%, 76% 6%, 80% 22%, 96% 24%, 90% 40%, 100% 52%, 88% 62%, 92% 80%, 76% 80%, 68% 96%, 54% 86%, 40% 98%, 32% 82%, 14% 86%, 16% 68%, 0 58%, 12% 46%, 4% 30%, 20% 26%, 22% 10%, 38% 16%); transform: rotate(12deg); animation: nkSale 1.8s ease-in-out infinite; }
 .sh-stamp { position: absolute; left: 50%; top: 40%; z-index: 5; display: none; padding: .1em .5em; margin-left: -46px; font: 900 calc(24px * var(--ts) * var(--nkc, 1)) / 1.3 var(--font-display); letter-spacing: .14em; color: var(--vermilion); border: 4px solid var(--vermilion); border-radius: 6px; background: rgba(243, 230, 200, .9); pointer-events: none; transform: rotate(-14deg); }
 .sh-item.sold .sh-stamp, .sh-plaque.sold .sh-stamp { display: block; animation: nkStamp .5s var(--ease-back) both; }
@@ -192,7 +196,7 @@
 .ev-text, .ev-result { margin: 12px 0 14px; font: 500 calc(18px * var(--ts) * var(--nkc, 1)) / 1.5 var(--font-display); color: #2a2040; outline: none; }
 .ev-text::first-letter, .ev-result::first-letter { font-size: 2.5em; float: left; line-height: .82; margin: .06em .1em 0 0; color: var(--vermilion); font-weight: 900; text-shadow: 0 2px 0 rgba(93, 15, 28, .25); }
 .ev-choices { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
-.ev-choices:not(.in):not(.done) .ev-choice { opacity: 0; transform: translateX(22px); pointer-events: none; }
+.ev-choices:not(.in):not(.done) .ev-choice { opacity: 0; transform: translateX(22px); pointer-events: none; visibility: hidden; }     /* hidden, not just transparent: not focusable and not read out before the fable is told */
 .ev-choice { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 58px; padding: 8px 18px 8px 10px; text-align: left; border: 0; border-radius: 10px; cursor: pointer; color: var(--ink); font: inherit;
   background: linear-gradient(90deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, .18)); box-shadow: inset 0 0 0 1.5px rgba(90, 60, 20, .5), 0 2px 0 rgba(90, 60, 20, .35); transition: transform .2s var(--ease-out), background .2s, box-shadow .2s, opacity .4s; }
 .ev-choice::after { content: ""; position: absolute; left: 62px; right: 18px; bottom: -3px; height: 7px; background: var(--vermilion); opacity: 0; transform: scaleX(0); transform-origin: left; transition: opacity .2s, transform .35s var(--ease-out); -webkit-mask: var(--brush) left / 100% 100% no-repeat; mask: var(--brush) left / 100% 100% no-repeat; }
@@ -348,8 +352,12 @@
 .o-deck .dk-card.card { --cw: 150px; }
 .dk-card { position: relative; }
 .dk-none { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 20px; }
-.dk-pane { flex: 1; min-width: 0; padding: 4px 4px 4px 8px; overflow-y: auto; overflow-x: hidden; }
-.dk-hint { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; text-align: center; color: var(--paper); font: italic 600 calc(19px * var(--ts) * var(--nkc, 1)) / 1.4 var(--font-display); padding: 0 22px; }
+/* the pane is a column: the detail scrolls when it must (it only shrinks once the card, note and button together outgrow the pane), the confirm row never does */
+.dk-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 4px 4px 4px 8px; overflow: hidden; }
+.dk-pane > .dk-detail { flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.dk-confirm { flex: none; display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+.dk-confirm .dk-actions { margin-top: 0; }
+.dk-hint { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; text-align: center; color: var(--paper); font: italic 600 calc(19px * var(--ts) * var(--nkc, 1)) / 1.4 var(--font-display); padding: 0 22px; }
 .dk-hint p { margin: 0; text-shadow: 0 2px 0 var(--ink); }
 .dk-hint-mark { width: 70px; height: 78px; background: var(--drop) center / 100% 100% no-repeat; filter: drop-shadow(0 0 14px rgba(95, 245, 255, .6)); animation: nkBob 3.2s ease-in-out infinite; }
 .dk-facts { display: flex; gap: 20px; margin: 4px 0 0; padding: 0; list-style: none; font: 600 calc(14px * var(--ts) * var(--nkc, 1)) / 1.2 var(--font-ui); font-style: normal; }
@@ -357,8 +365,9 @@
 .dk-detail { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .dk-cardrow { display: flex; gap: 14px; align-items: flex-start; }
 .o-deck .dk-big.card { --cw: 236px; }
-.o-deck .dk-half.card { --cw: 196px; }
+.o-deck .dk-half.card { --cw: 188px; }
 .dk-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.dk-side .dk-note { text-align: left; }
 .dk-gloss { display: flex; flex-direction: column; gap: 8px; }
 .dk-gloss .tip { max-width: 100%; padding: 7px 10px 8px; font-size: calc(12.5px * var(--ts) * var(--nkc, 1)); box-shadow: 0 3px 0 var(--ink), 0 8px 12px rgba(0, 0, 0, .4); }
 .dk-gloss .tk-name { font-size: calc(14px * var(--ts) * var(--nkc, 1)); }
@@ -472,8 +481,13 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 .rw-ledger.snug .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
 .rw-ledger.snug .rw-relic .ico { width: 52px; height: 52px; }
 .rw-ledger.snug .rl-text { font-size: calc(15px * min(var(--ts), 1.15) * var(--nkc, 1)); }
-#stage.compact .rw-ledger.dense { top: 114px; max-height: 600px; }
+#stage.compact .rw-ledger.dense { top: 74px; max-height: 640px; }
 #stage.compact .rw-ledger.dense .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
+/* the dense ledger holds up to four rows AND the treasure box: at text 1.3 every label wrapped to two lines and the box ran off the stage, so labels and values do not grow with --ts here */
+#stage.compact .rw-ledger.dense .nk-row-lab { font-size: calc(17px * min(var(--ts), 1) * var(--nkc, 1)); }
+#stage.compact .rw-ledger.dense .nk-row.bonus .nk-row-val { font-size: calc(15px * min(var(--ts), 1) * var(--nkc, 1)); }
+#stage.compact .rw-ledger.dense .rl-name { font-size: calc(21px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+#stage.compact .rw-ledger.dense .rl-text { font-size: calc(15px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense .rw-relic .ico { width: 46px; height: 46px; }
 #stage.compact .rw-ledger.dense .rw-relicbox { padding: 6px 8px 8px; gap: 2px; margin-top: 2px; }
 #stage.compact .cp-grid { top: 140px; max-height: 470px; gap: 12px 16px; }
@@ -481,3 +495,38 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 #stage.compact .cp-illus { height: 56px; }
 #stage.compact .cp-art { margin-top: -24px; }
 #stage.compact .cp-lines { margin-top: 2px; }
+/* the deck pickers on a phone: the pane is 394 stage px tall at scale .54 and a button alone is --hit (about 82) tall, so the big card shrinks and the note sits BESIDE the confirm button
+   instead of above it; the confirm row stays pinned under the card (see .dk-confirm) */
+#stage.compact .o-deck .dk-big.card:not(.dk-sockcard) { --cw: calc(200px - (var(--ts) - 1) * 70px); }
+#stage.compact .o-deck .dk-half.card { --cw: calc(164px - (var(--ts) - 1) * 50px); }
+#stage.compact .dk-confirm { flex-flow: row wrap; justify-content: center; align-items: center; gap: 4px 12px; padding-top: 6px; }
+#stage.compact .dk-confirm .dk-note { flex: 1 1 9em; min-width: 0; text-align: left; }
+#stage.compact .dk-confirm .dk-actions { flex: none; }
+#stage.compact .dk-label { margin-bottom: 2px; }
+/* shop wares on a phone, and at the larger text sizes (the plaques are 109 stage px wide there): the name is capped at its text 1.0 size and may take three lines, the kicker is one line
+   small enough for UNCOMMON and TIER 2 GOLD (it ellipsizes rather than overflowing into its neighbour), the price figures stop growing with --ts (the SALE stamp, base rule above, sits clear of the price tag at every size) */
+#stage.compact .sh-plaque { gap: 4px; padding-top: 6px; }
+#stage.compact .sh-ico { height: 58px; }
+#stage.compact .sh-ico .ico { width: 56px !important; height: 56px !important; }
+#stage.compact .sh-name { font-size: calc(14px * min(var(--ts), 1) * var(--nkc, 1)); line-height: 1.08; max-width: 100%; padding: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow-wrap: break-word; }
+#stage.compact .sh-kind { max-width: 100%; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; letter-spacing: 0; font-size: calc(9.6px * min(var(--ts), 1) * var(--nkc, 1)); }
+#stage.compact .sh-tag { gap: 5px; padding: 0 10px 0 6px; max-width: 100%; }
+#stage.compact .sh-tag b { font-size: calc(19px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+#stage.compact .sh-tag s { font-size: calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+#stage.compact .sh-tag.free b { letter-spacing: .04em; }
+#stage.compact .sh-name.sh-long { font-size: calc(14px * min(var(--ts), 1) * var(--nkc, 1) * .88); }
+/* the fable page on a phone: choices are real touch targets (at least 40 css px, a wider gap between them) and the page gives back padding to pay for it; what still does not fit scrolls, and says so */
+#stage.compact .ev-page.right { padding-top: 20px; padding-bottom: 14px; }
+#stage.compact .ev-title { margin-bottom: 4px; }
+#stage.compact .ev-text, #stage.compact .ev-result { margin: 8px 0 10px; }
+#stage.compact .ev-choices { gap: 11px; }
+#stage.compact .ev-choice { min-height: calc(var(--hit) * .92); }
+.ev-more { display: none; position: absolute; right: 26px; bottom: 14px; z-index: 4; padding: .15em .9em .2em; border-radius: 99px; pointer-events: none; font: 900 calc(13px * min(var(--ts), 1.15) * var(--nkc, 1)) / 1.3 var(--font-ui); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--white);
+  background: var(--vermilion); box-shadow: inset 0 0 0 2px rgba(255, 248, 240, .8), 0 3px 6px rgba(0, 0, 0, .45); animation: nkBob 1.6s ease-in-out infinite; }
+.ev-more::after { content: " \25BE"; }
+.ev-book.more .ev-more { display: block; }
+body.reduce-motion .ev-more { animation: none; }
+/* camp tiles on a phone at text 1.3: the copy grew past its tile (Cut Gems: "Chests, caches and peddlers carry them."), so the tile copy stops growing a little above its text 1.0 size */
+#stage.compact .cp-line { font-size: calc(14px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+#stage.compact .cp-verb { font-size: calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+#stage.compact .cp-name { font-size: calc(22px * min(var(--ts), 1.1) * var(--nkc, 1)); }

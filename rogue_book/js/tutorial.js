@@ -91,6 +91,13 @@
   const hasRelics = () => { const R = run(); return !!(R && Array.isArray(R.relics) && R.relics.length); };
   const hasGems = () => { const R = run(); return !!(R && Array.isArray(R.gems) && R.gems.length); };
   const isBoss = (e) => !!(e && e.params && e.params.node && e.params.node.tier === 'boss');
+  // the swap hint only teaches a move the player can make: not while a hero is down (only one is standing), the heroes are bound, or the fight is already decided (L9)
+  const swapUsable = () => {
+    if (S.over) return false;
+    const el = UI.anchorEl('swap');
+    if (!el) return true;                                    // no button to judge (a suite, or a screen without one): do not hide the hint
+    return safe(() => !el.hidden && !el.classList.contains('is-disabled') && el.getAttribute('aria-disabled') !== 'true', true);
+  };
   const RULES = [
     { on: 'screen', hint: 'paint', when: (e) => e.name === 'map', delay: 900 },
     { on: 'screen', hint: 'brush', when: (e) => e.name === 'map' && hasBrushes(), delay: 1600 },
@@ -106,7 +113,7 @@
     { on: 'combat:play', hint: 'intent', delay: 700 },
     { on: 'combat:play', hint: 'endturn', delay: 700 },
     { on: 'combat:turn', hint: 'block', when: (e) => e && e.turn >= 2 && e.phase === 'player', delay: 900 },
-    { on: 'combat:turn', hint: 'swap', when: (e) => e && e.turn >= 2 && e.phase === 'player', delay: 900 },
+    { on: 'combat:turn', hint: 'swap', when: (e) => e && e.turn >= 2 && e.phase === 'player' && swapUsable(), delay: 900 },
     { on: 'combat:turn', hint: 'status', when: () => !!UI.anchorEl('.status'), delay: 700 },
     { on: 'combat:pick', hint: 'pick', delay: 300 },
     { on: 'screen', hint: 'reward', when: (e) => e.name === 'reward', delay: 1200 },
@@ -119,7 +126,7 @@
   // ==================================================================================================================
   // state
   // ==================================================================================================================
-  const S = { cur: null, queue: [], shown: [], gapOn: false, counts: { paints: 0, walks: 0 }, pumpTimer: 0, overlays: 0, wired: false, off: null, urlOff: null };
+  const S = { cur: null, queue: [], shown: [], gapOn: false, counts: { paints: 0, walks: 0 }, pumpTimer: 0, overlays: 0, wired: false, off: null, urlOff: null, over: false };
 
   function urlOff() {
     if (S.urlOff === null) S.urlOff = safe(() => new URLSearchParams(window.location.search || '').get('notutorial') === '1', false);
@@ -280,7 +287,7 @@
   Object.keys(HINTS).forEach((id, i) => { PRIO[id] = i; });
   function pump() {
     if (S.cur || S.gapOn) return;
-    S.queue = S.queue.filter((q) => { const d = HINTS[q.id]; return d && (q.force || (!seen(q.id) && enabled() && scopeOk(d))); });
+    S.queue = S.queue.filter((q) => { const d = HINTS[q.id]; return d && (q.force || (!seen(q.id) && enabled() && scopeOk(d) && !(S.over && d.scope && d.scope.indexOf('combat') >= 0))); });
     if (!S.queue.length) return;
     S.queue.sort((a, b) => PRIO[a.id] - PRIO[b.id]);
     let pick = S.queue[0], guard = 0;
@@ -336,10 +343,18 @@
       completeIf(evt);
     };
   }
+  // the fight is decided (win or lose): no combat hint may start over the victory or defeat beat, and one that is up closes (L9)
+  function onCombatEnd() {
+    S.over = true;
+    const h = S.cur;
+    if (h && !h.closing && h.def.scope && h.def.scope.indexOf('combat') >= 0) dismiss('end');
+    S.queue = S.queue.filter((q) => q.force || !(HINTS[q.id].scope && HINTS[q.id].scope.indexOf('combat') >= 0));
+  }
   function onScreen(e) {
     // a screen change clears a bubble that belongs to another screen (or one that was mid-farewell: its timer died with the old screen), and
     // drops queue entries that no longer fit
     S.gapOn = false;
+    S.over = false;
     const h = S.cur;
     if (h && (h.closing || !scopeOk(h.def))) { h.closing = true; safe(() => h.el.remove()); safe(() => h.ring.remove()); S.cur = null; }
     S.queue = S.queue.filter((q) => q.force || scopeOk(HINTS[q.id]));
@@ -356,6 +371,7 @@
     S.wired = true;
     UI.bus.on('screen', onScreen);
     UI.bus.on('overlay', onOverlay);
+    UI.bus.on('combat:end', onCombatEnd);
     ['map:paint', 'map:brush', 'map:walk', 'combat:turn', 'combat:play', 'combat:endturn', 'combat:swap', 'combat:pick'].forEach((evt) => UI.bus.on(evt, onEvent(evt)));
   }
 

@@ -614,6 +614,68 @@ await t.test('tip.attach: mouse hover after a short delay, hide on leave, touch 
   t.eq($$(g, '#tips .tip').length, 0, 'a throwing content function is swallowed');
 });
 
+await t.test('tip.attach: the click that ends a long press is swallowed once (never a later mouse or keyboard click), a cancelled press arms nothing', async () => {
+  const g = fresh();
+  g.UI.init();
+  const el = g._doc.createElement('button');
+  $(g, '#screens').appendChild(el);
+  let clicks = 0;
+  el.addEventListener('click', () => { clicks++; });
+  g.UI.tip.attach(el, () => 'Tip');
+  const longPress = (ms, up) => { g._pointer('pointerdown', el, { pointerType: 'touch' }); g._flush(ms); g._pointer(up || 'pointerup', el, { pointerType: 'touch' }); };
+  // a long press that showed the tip, then the click a touch browser still sends
+  longPress(450);
+  el.click();
+  t.eq(clicks, 0, 'the click that ends a long press is swallowed');
+  el.click();
+  t.eq(clicks, 1, 'and only that one: it was one-shot');
+  // a short tap never showed a tip, so nothing is swallowed
+  g._pointer('pointerdown', el, { pointerType: 'touch' }); g._flush(100); g._pointer('pointerup', el, { pointerType: 'touch' });
+  el.click();
+  t.eq(clicks, 2, 'a short tap clicks');
+  // a stale arm: the click never came; a keyboard Enter 1 s later must work
+  longPress(450);
+  g._flush(1000);
+  el.click();
+  t.eq(clicks, 3, 'the swallow wears off by itself (a click long after is a keyboard or assistive click)');
+  // the next pointerdown (a mouse click) cancels it at once
+  longPress(450);
+  g._click(el, { pointerType: 'mouse' });
+  t.eq(clicks, 4, 'a mouse click right after a long press is a new gesture and clicks');
+  // a cancelled press (the browser took the gesture) sends no click, so nothing is armed
+  longPress(450, 'pointercancel');
+  el.click();
+  t.eq(clicks, 5, 'pointercancel arms nothing');
+  // a click inside another element is not swallowed, and swallowClick can be armed by a screen with its own peek
+  const other = g._doc.createElement('button'); $(g, '#screens').appendChild(other);
+  let oc = 0; other.addEventListener('click', () => { oc++; });
+  g.UI.tip.swallowClick(el);
+  other.click(); t.eq(oc, 1, 'a click elsewhere passes');
+  el.click(); t.eq(clicks, 5, 'a click inside the element is eaten');
+  el.click(); t.eq(clicks, 6, 'one-shot');
+  const off2 = g.UI.tip.swallowClick(el); off2(); el.click(); t.eq(clicks, 7, 'off() disarms it');
+});
+
+await t.test('tip.attach: a tip never opens for an anchor that left the page, and one whose anchor is removed is hidden on the next frame (no stuck bubble at the top left)', async () => {
+  const g = fresh();
+  g.UI.init();
+  const mkEl = () => { const e = g._doc.createElement('button'); $(g, '#screens').appendChild(e); return e; };
+  const a = mkEl();
+  g.UI.tip.attach(a, () => 'Tip A');
+  g._pointer('pointerenter', a, { pointerType: 'mouse' });
+  a.remove();                                  // the hover timer is still running (a screen rebuilt under the pointer)
+  g._flush(120);
+  t.eq($$(g, '#tips .tip').length, 0, 'a detached anchor opens no bubble');
+  const b = mkEl();
+  g.UI.tip.attach(b, () => 'Tip B');
+  g._pointer('pointerenter', b, { pointerType: 'mouse' }); g._flush(120);
+  t.eq($$(g, '#tips .tip').length, 1, 'shown while attached');
+  b.remove();
+  g.UI.frame(g._now() + 16);
+  t.eq($$(g, '#tips .tip').length, 0, 'removing the anchor hides the bubble at the next frame');
+  t.ok(!g.UI.tip.open, 'tip.open follows');
+});
+
 await t.test('keyword spans inside card text open glossary bubbles (hover and long press)', async () => {
   const g = fresh();
   g.UI.init();

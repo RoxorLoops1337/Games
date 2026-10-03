@@ -361,6 +361,173 @@ if (want('daily')) {
   });
 }
 
+// ---------------------------------------------------------------------------------------------------- the bestiary, several tabs, Continue and Begin anew
+// Two pages share one localStorage in a browser; the loader gives each page its own backing object, so `share` copies it across.
+const share = (from, to) => { Object.keys(to._store).forEach((k) => { delete to._store[k]; }); Object.assign(to._store, from._store); };
+// a real combat node on the first free neighbour of the party, made by RUN.step like the map does
+function foeNode(g, kind) {
+  const { MAP, RUN, DATA, GAME } = g;
+  const R = GAME.state.R;
+  const pos = R.map.pos;
+  const tile = MAP.neighbors(R.map, pos.q, pos.r).map((c) => R.map.tiles[MAP.key(c[0], c[1])]).find((x) => x && x.type !== 'block' && !x.done);
+  tile.type = kind || 'enemy'; tile.painted = true; tile.known = true; tile.done = false;
+  tile.content = { enc: DATA.encounters[R.chapter][kind === 'elite' ? 'elite' : 'normal'][0].id };
+  return RUN.step(R, tile.q, tile.r);
+}
+const foeIds = (node) => node.enemies.map((e) => e.id || e).filter((x, i, a) => a.indexOf(x) === i);
+const metOf = (g, ids) => ids.map((id) => g.META.bestiary().find((b) => b.id === id).seen);
+const begin = async (g, opts) => { g.GAME.newRun(opts); await tick(g, 1500); };
+
+if (want('tabs')) {
+  await t.test('bestiary: entering a fight meets its creatures once; Continue does not count the fight again; a lost fight leaves them met', async () => {
+    const g = page({ seed: 61 });
+    const { GAME, META, UI } = g;
+    await tick(g, 800);
+    await begin(g, { heroes: ['hanae', 'kuro'], seed: 61 });
+    const node = foeNode(g, 'enemy');
+    const ids = foeIds(node);
+    t.deep(metOf(g, ids), ids.map(() => 0), 'bestiary: nobody is met before the fight');
+    await GAME.enterNode(node); await tick(g, 1200);
+    t.eq(UI.currentName, 'combat', 'bestiary: the fight screen is up');
+    t.deep(metOf(g, ids), ids.map(() => 1), 'bestiary: each creature in the fight is met (' + ids.join(', ') + ')');
+    t.eq(JSON.parse(g._store.rb_profile_v1).seen[ids[0]], 1, 'bestiary: and written to the profile at once');
+    t.eq(GAME.state.R.node.met, true, 'bestiary: the node remembers that its foes were met');
+    GAME.toTitle(); await tick(g, 1200);
+    GAME.state.R = null;
+    await tap(g, $(g, '[data-act=continue]'), 2500); await tick(g, 1500);
+    t.eq(UI.currentName, 'combat', 'bestiary: Continue re-enters the same fight');
+    t.deep(metOf(g, ids), ids.map(() => 1), 'bestiary: re-entering a saved fight does not meet them again');
+    await GAME.debug.lose(); await tick(g, 2500);
+    t.eq(UI.currentName, 'gameOver', 'bestiary: the party fell');
+    t.deep(metOf(g, ids), ids.map(() => 1), 'bestiary: a creature that beat the party is still met');
+    GAME.toTitle(); await tick(g, 1500);
+    GAME.debug.open('library', { tab: 'bestiary' }); await tick(g, 1500);
+    const tile = $(g, '.mn-beast[data-id="' + ids[0] + '"]');
+    t.ok(tile && /\bseen\b/.test(tile.className), 'bestiary: the Library shows that creature as met [' + (tile && tile.className) + ']');
+    clean(g, 'bestiary');
+  });
+  await t.test('bestiary: a Daily Tale meets and records its creatures too', async () => {
+    const g = page({ seed: 62 });
+    const { GAME, META } = g;
+    await tick(g, 800);
+    await begin(g, { daily: true });
+    const R = GAME.state.R;
+    t.eq(R.daily, true, 'daily bestiary: a daily run');
+    const node = foeNode(g, 'enemy');
+    const ids = foeIds(node);
+    await GAME.enterNode(node); await tick(g, 1200);
+    t.deep(metOf(g, ids), ids.map(() => 1), 'daily bestiary: met on entering the fight');
+    R.foes = { [ids[0]]: 2 };
+    const ask = GAME.abandon(); await tick(g, 400);
+    await tap(g, byText(g, /^Abandon$/), 1500); await ask;
+    t.eq(META.bestiary().find((b) => b.id === ids[0]).kills, 2, 'daily bestiary: its kills are written when it ends');
+    t.eq(META.stat('kills'), 0, 'daily bestiary: but the achievement kill counter is not touched');
+    t.eq(META.stat('dailyRuns'), 1, 'daily bestiary: one daily run');
+    clean(g, 'daily bestiary');
+  });
+  await t.test('continue: a save taken between the boss reward and chapterEnd goes through the chapter flow (chapter 1 to 2, chapter 3 to the victory)', async () => {
+    const g = page({ seed: 63 });
+    const { GAME, META, UI, RUN } = g;
+    await tick(g, 800);
+    await begin(g, { heroes: ['hanae', 'kuro'], seed: 63 });
+    const R = GAME.state.R;
+    R.chapterCleared = true; R.node = null; R.stats.bossKills = 1; R.stats.boss1Kills = 1;
+    GAME.save();
+    const g2 = page({ seed: 64, store: Object.assign({}, g._store) });
+    await tick(g2, 1500);
+    const gate = $(g2, '.mn-gate'); if (gate) await tap(g2, gate, 300);
+    await tap(g2, $(g2, '[data-act=continue]'), 2500); await tick(g2, 1500);
+    t.eq(g2.UI.currentName, 'chapterClear', 'continue: the chapter clear page, not the old map (' + g2.UI.currentName + ')');
+    const R2 = g2.GAME.state.R;
+    t.eq(R2.chapter, 2, 'continue: chapter 2 is open');
+    t.eq(R2.chapterCleared, false, 'continue: the flag is spent');
+    t.ok(R2.heroes.every((h) => h.maxHp > g2.DATA.heroes[h.id].maxHp), 'continue: chapterEnd ran (max HP grew)');
+    clean(g2, 'continue chapter 1');
+    const R3 = RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 65, unlocked: META.unlockedSet() });
+    R3.chapter = 3; R3.chapterCleared = true; R3.node = null; R3.stats.bossKills = 3;
+    const g3 = page({ seed: 66, store: { rb_profile_v1: g._store.rb_profile_v1 } });
+    g3.META.load();
+    g3._store.rb_run_v1 = JSON.stringify(g3.RUN.serialize(g3.RUN.deserialize(JSON.parse(JSON.stringify(RUN.serialize(R3))))));
+    await tick(g3, 1500);
+    const gate3 = $(g3, '.mn-gate'); if (gate3) await tap(g3, gate3, 300);
+    await tap(g3, $(g3, '[data-act=continue]'), 2500); await tick(g3, 3000);
+    t.eq(g3.UI.currentName, 'victory', 'continue: after the chapter 3 boss the save goes to the victory (' + g3.UI.currentName + ')');
+    t.eq(g3.META.history[0] && g3.META.history[0].outcome, 'win', 'continue: and the win is recorded');
+    t.eq(g3.META.hasRun(), false, 'continue: with nothing left in the save slot');
+  });
+  await t.test('new tale over a saved tale ends it like Abandon: half the Inkstones, a history row, the ledger; the new tale has its own run id', async () => {
+    const g = page({ seed: 67 });
+    const { GAME, META } = g;
+    await tick(g, 800);
+    await begin(g, { heroes: ['hanae', 'kuro'], seed: 67 });
+    const first = GAME.state.R;
+    first.stats.bossKills = 1; first.stats.boss1Kills = 1; first.foes = { kappa: 1 }; GAME.save();
+    const stones = META.inkstones;
+    await begin(g, { heroes: ['hanae', 'kuro'], seed: 67 });          // the very same seed and party: the id must still differ
+    const second = GAME.state.R;
+    t.ok(second !== first && second.id !== first.id, 'begin anew: a new tale with its own id even for the same seed and party (' + first.id + ' vs ' + second.id + ')');
+    t.ok(META.inkstones > stones, 'begin anew: the replaced tale paid its share (' + stones + ' -> ' + META.inkstones + ')');
+    t.eq(META.history.length, 1, 'begin anew: one history row');
+    t.eq(META.history[0].outcome, 'abandon', 'begin anew: marked abandoned');
+    t.eq(META.history[0].id, first.id, 'begin anew: for the replaced run');
+    t.eq(META.stat('runs'), 1, 'begin anew: its stats were merged');
+    t.eq(META.bestiary().find((b) => b.id === 'kappa').kills, 1, 'begin anew: and its kills');
+    t.ok(META.hasRun() && META.runInfo(), 'begin anew: the new tale is in the save slot');
+    t.eq(JSON.parse(g._store.rb_run_v1).id, second.id, 'begin anew: the slot holds the new run, not the old');
+    await begin(g, { heroes: ['kuro', 'suzu'], seed: 67 });           // and nothing is paid when the slot is empty / the same run is not paid twice
+    t.eq(META.history.length, 2, 'begin anew: the second replacement is one more row');
+    clean(g, 'begin anew');
+  });
+  await t.test('tabs: a stale tab that only changes a setting does not erase what the other tab won (C10, scenario 1)', async () => {
+    const A = page({ seed: 71 }), B = page({ seed: 72 });
+    await tick(A, 800); await tick(B, 800);
+    await begin(A, { heroes: ['hanae', 'kuro'], seed: 71 });
+    const R = A.GAME.state.R; R.stats.bossKills = 3; R.stats.boss1Kills = 1; R.stats.boss2Kills = 1; R.stats.boss3Kills = 1; R.stats.kills = 30;
+    A.GAME.victory(); await tick(A, 2500);
+    t.eq(A.UI.currentName, 'victory', 'tabs: tab A won');
+    const won = A.META.inkstones, wins = A.META.stat('wins');
+    t.ok(won > 0 && wins === 1, 'tabs: tab A earned Inkstones (' + won + ') and a win');
+    share(A, B);                                                 // the same localStorage
+    B.META.set('musicVol', 0.2);                                 // the stale tab B: just the music volume
+    const P = JSON.parse(B._store.rb_profile_v1);
+    t.eq(P.inkstones, won, 'tabs: the Inkstones survive the stale tab\'s write'); t.eq(P.stats.wins, 1, 'tabs: the win'); t.eq(P.history.length, 1, 'tabs: the history row'); t.ok(Object.keys(P.ach).length >= 3, 'tabs: the achievements'); t.eq(P.settings.musicVol, 0.2, 'tabs: and the setting the stale tab changed');
+    const C = page({ seed: 73, store: Object.assign({}, B._store) });
+    t.eq(C.META.trialMax(), 1, 'tabs: a reload shows the Ink Trial the win opened');
+    clean(A, 'tabs A');
+  });
+  await t.test('tabs: the storage event folds in what another tab saved, and the stale tab\'s Continue never brings back a paid tale (C10, scenario 2)', async () => {
+    const A = page({ seed: 81 });
+    await tick(A, 800);
+    await begin(A, { heroes: ['hanae', 'kuro'], seed: 81 });
+    const RA = A.GAME.state.R; RA.stats.bossKills = 1; RA.stats.boss1Kills = 1; A.GAME.save();
+    const B = page({ seed: 82, store: Object.assign({}, A._store) });
+    await tick(B, 1500);
+    const gate = $(B, '.mn-gate'); if (gate) await tap(B, gate, 300);
+    await tap(B, $(B, '[data-act=continue]'), 2500); await tick(B, 1500);
+    const RB = B.GAME.state.R;
+    t.eq(RB.id, RA.id, 'tabs: tab B continued the same tale');
+    // tab A abandons it through the real pause menu confirm and is paid once
+    const ask = A.GAME.abandon(); await tick(A, 400); await tap(A, byText(A, /^Abandon$/), 1500); await ask;
+    const paid = A.META.inkstones;
+    t.ok(paid > 0 && !A._store.rb_run_v1, 'tabs: tab A abandoned: paid, run key gone');
+    share(A, B);
+    B._win.dispatchEvent(new B._win.Event('storage'));            // what the browser fires in tab B
+    t.eq(B.META.inkstones, paid, 'tabs: the storage event brought tab B\'s profile up to date');
+    t.ok(B.META.runPaid(RB.id), 'tabs: and it knows the tale is over');
+    B.GAME.save();                                                // tab B keeps playing and saves
+    t.eq(B._store.rb_run_v1, undefined, 'tabs: the dead tale is not written back');
+    t.ok(/another window/.test(B._doc.body.textContent), 'tabs: tab B says the tale ended elsewhere');
+    const C = page({ seed: 83, store: Object.assign({}, B._store) });
+    await tick(C, 1500);
+    t.ok(!$(C, '[data-act=continue]'), 'tabs: a reload offers no Continue');
+    B.GAME.state.R.stats.bossKills = 1;
+    B.GAME.defeat(); await tick(B, 2500);
+    t.eq(B.META.inkstones, paid, 'tabs: finishing the stale copy pays nothing more');
+    t.eq(B.META.history.filter((h) => h.id === RA.id).length, 1, 'tabs: one history row for the tale');
+    clean(A, 'tabs A2');
+  });
+}
+
 if (want('menus')) {
   await t.test('menus: Library tabs, Settings and How to Play work with real taps', async () => {
     const g = page({ seed: 19 });

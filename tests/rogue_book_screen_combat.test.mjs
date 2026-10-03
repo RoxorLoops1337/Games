@@ -272,11 +272,14 @@ await t.test('slotFor: the fan stays inside the hand zone and never reorders', (
   for (let n = 1; n <= 10; n++) {
     const xs = [];
     for (let i = 0; i < n; i++) xs.push(slotFor(i, n));
-    t.ok(xs[0].x >= HAND.x0 - 1 && xs[n - 1].x + HAND.cw <= HAND.x1 + 1, 'n=' + n + ': the fan fits x 290..990');
+    t.ok(xs[0].x >= HAND.x0 - 1 && xs[n - 1].x + HAND.cw <= HAND.x1 + 1, 'n=' + n + ': the fan fits its box x ' + HAND.x0 + '..' + HAND.x1);
+    // L12: the box is the strip between the docks minus the swing of the turned outer cards (24 px at pile height), so no card reaches a pile
+    t.ok(xs[0].x - 24 > 222 + 2 && xs[n - 1].x + HAND.cw + 24 < 998, 'n=' + n + ': even turned, the outer cards stay clear of the draw pile (ends x 222) and the discard pile (starts x 998)');
     t.ok(xs.every((s, i) => i === 0 || s.x > xs[i - 1].x), 'n=' + n + ': left to right in hand order');
     if (n > 1) t.ok(Math.abs(xs[0].rot + xs[n - 1].rot) < 1e-9 && xs[0].y === xs[n - 1].y, 'n=' + n + ': symmetric');
   }
-  t.ok(Math.abs(slotFor(0, 1).x + HAND.cw / 2 - 640) < 1, 'a single card is centred');
+  t.ok(Math.abs(slotFor(0, 1).x + HAND.cw / 2 - (HAND.x0 + HAND.x1) / 2) < 1, 'a single card is centred in the fan box');
+  t.ok(slotFor(1, 10).x - slotFor(0, 10).x >= 58, 'ten cards: every card shows a slice at least 58 px wide (it was 56.7 in the old box)');
 });
 
 await t.test('rowBrief and reasonText', () => {
@@ -664,9 +667,41 @@ await t.test('status chips: up to six with counts, a +N chip beyond that, and th
   t.eq(en.querySelectorAll('.status').length, 1, 'enemy status row'); t.ok(en.querySelector('.status.s-vulnerable'), 'shows Vulnerable');
   ids.forEach((s, i) => scr(g).debug().setStatus(st.C.enemies[0].id, s, i + 1));
   await idle(g);
-  t.eq($(g, '.cm-en .cm-st').querySelectorAll('.status').length, 4, 'a crowded enemy row shows four chips');
-  t.eq(txt($(g, '.cm-en .cm-st .cm-more')), '+5', 'and a +5 chip, so two neighbouring rows (145 px lanes) can never overlap');
-  t.eq(errs(g), 0, 'no console errors');
+  t.eq(st.C.enemies[0].lane, 4, 'the lone kappa stands in the last lane');
+  t.eq($(g, '.cm-en .cm-st').querySelectorAll('.status').length, 3, 'a crowded row in the last lane shows three chips');
+  t.eq(txt($(g, '.cm-en .cm-st .cm-more')), '+6', 'and a +6 chip: the last two lanes are 125 px apart, so their rows are capped at four chips');
+  const g2 = fresh();
+  const r2 = await enter(g2, { enemies: ['kappa', 'kodama', 'tanuki_bandit'] });
+  r2.st.C.enemies.forEach((e) => ids.concat(['vulnerable']).forEach((s, i) => scr(g2).debug().setStatus(e.id, s, i + 1)));
+  await idle(g2);
+  r2.st.C.enemies.forEach((e) => {
+    const row = $(g2, '.cm-en[data-enemy="' + e.id + '"] .cm-st');
+    const cap = scr(g2)._t.enemyChips(e, false);
+    t.eq(row.querySelectorAll('.status').length, cap - 1, 'lane ' + e.lane + ': a crowded row shows ' + (cap - 1) + ' chips');
+    t.eq(txt(row.querySelector('.cm-more')), '+' + (9 - (cap - 1)), 'lane ' + e.lane + ': and the +N chip counts the rest');
+  });
+  t.eq(errs(g) + errs(g2), 0, 'no console errors');
+});
+
+// L1 of the final verification: the old claim "four chips and a +N can never overlap" was wrong for the two right lanes (125 px apart, the row was 130 px)
+await t.test('status rows: the chip cap follows the lane, and the widest row of each lane leaves a gap to its neighbours', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { enemyChips, widestRow, LANE_GAP } = g.UI.screens.combat._t;
+  const LANE_X = [560, 705, 850, 995, 1120];
+  t.eq(LANE_GAP.length, 4, 'one gap per pair of neighbouring lanes');
+  LANE_GAP.forEach((gap, k) => t.eq(gap, LANE_X[k + 1] - LANE_X[k], 'LANE_GAP[' + k + '] is the distance between lanes ' + k + ' and ' + (k + 1) + ' (SCENE.LAYOUT)'));
+  [false, true].forEach((compact) => {
+    const widest = [0, 1, 2, 3, 4].map((lane) => widestRow(enemyChips({ lane }, compact), compact));
+    LANE_GAP.forEach((gap, k) => {
+      const clear = gap - (widest[k] + widest[k + 1]) / 2;
+      t.ok(clear >= 4, (compact ? 'compact' : 'desktop') + ': lanes ' + k + ' and ' + (k + 1) + ' keep a clear gap of ' + clear + ' px between two full rows (need 4)');
+    });
+  });
+  t.eq(enemyChips({ lane: 4 }, false), 4, 'the last lane never shows five chips'); t.eq(enemyChips({ lane: 0 }, false), 5, 'a left lane on a desktop stage still does');
+  t.eq(enemyChips({ lane: 3 }, false), 5, 'lane 3 may (its row meets lane 4 only half way)');
+  t.eq(enemyChips({ lane: 0 }, true), 4, 'on the compact stage (bigger chips) lanes 0 to 3 show four'); t.eq(enemyChips({ lane: 4 }, true), 3, 'and the last lane three');
+  t.ok(widestRow(5, false) > LANE_GAP[3], 'the old rule (a cap of five everywhere) built a 126 px row in a lane 125 px from its neighbour: it is gone');
+  t.eq(widestRow(4, false), 106, 'a four-chip cap makes the widest desktop row 106 px');
 });
 
 await t.test('hero panel: low HP flags, the danger vignette, the block chip and the tooltip', async () => {
@@ -1091,6 +1126,62 @@ await t.test('touch: taps select and play, hover-only paths stay quiet, tooltips
   t.eq(errs(g), 0, 'no console errors');
 });
 
+// C7 of the final verification: on a phone the first tap on an Attack played it at once whenever one enemy was alive, so a player could never read it
+await t.test('touch and pen: with exactly one legal target the first tap only lifts the card; a second tap, a tap on the foe or a drag upward plays it; a mouse still plays on the first click', async () => {
+  const hand = ['hanae_slash', 'kuro_ink_bolt', 'hanae_parry', 'kuro_ink_ward', 'hanae_petal_step'];
+  for (const type of ['touch', 'pen']) {
+    const g = fresh({ touch: true });
+    const { st } = await enter(g, { enemies: ['kodama'], hand });
+    const slash = st.C.hand[0].uid, bolt = st.C.hand[1].uid, hp0 = st.C.enemies[0].hp;
+    t.eq(st.C.legalTargets(slash).length, 1, type + ': one legal target (the case that used to play at once)');
+    g._click(cardEl(g, slash), { pointerType: type });
+    await idle(g);
+    t.eq(st.C.energy, 3, type + ': the first tap spent nothing'); t.eq(st.C.enemies[0].hp, hp0, type + ': and hurt nobody');
+    t.ok(cardEl(g, slash).classList.contains('sel') && g.UI.tip.open, type + ': the card is lifted and its big preview is open');
+    t.eq($$(g, '.cm-pv:not([hidden])').length, 1, type + ': the foe shows the damage it would take');
+    g._click(cardEl(g, slash), { pointerType: type });
+    await idle(g);
+    t.eq(st.C.energy, 2, type + ': the second tap on the card plays it'); t.ok(st.C.enemies[0].hp < hp0, type + ': and the foe took the hit');
+    assertPicture(g, type + ' second tap');
+    // lift, then tap the foe
+    g._click(cardEl(g, bolt), { pointerType: type });
+    t.eq(st.C.energy, 2, type + ': another card, lifted only');
+    g._click(enemyBtn(g, st.C.enemies[0].id), { pointerType: type });
+    await idle(g);
+    t.eq(st.C.energy, 1, type + ': a tap on the foe plays the lifted card');
+    // a lifted card put back by a tap on empty ground
+    const parry = st.C.hand.find((c) => c.id === 'hanae_parry').uid;
+    g._click(cardEl(g, parry), { pointerType: type }); g._pointer('pointerup', '#view', { x: 620, y: 200, pointerType: type });
+    t.ok(!$(g, '.card.sel'), type + ': a tap on empty stage still puts it back');
+    t.eq(errs(g), 0, type + ': no console errors');
+  }
+  // the drag: released above the play line a finger plays the lone-target card, low it returns, and a mouse needs the foe under the pointer as before
+  const g2 = fresh({ touch: true });
+  const r2 = await enter(g2, { enemies: ['kodama'], hand });
+  const s2 = r2.st, slash2 = s2.C.hand[0].uid, hp2 = s2.C.enemies[0].hp;
+  g2._drag(cardEl(g2, slash2), [400, 640], [420, 620], 8, { pointerType: 'touch' }); await idle(g2);
+  t.eq(s2.C.energy, 3, 'a low touch drag plays nothing'); t.ok(!$(g2, '.card.sel'), 'and puts the card back');
+  g2._drag(cardEl(g2, slash2), [400, 640], [300, 300], 8, { pointerType: 'touch' }); await idle(g2);
+  t.eq(s2.C.energy, 2, 'a touch drag released above the play line plays the lone-target card'); t.ok(s2.C.enemies[0].hp < hp2, 'on the one foe');
+  const g3 = fresh();
+  const r3 = await enter(g3, { enemies: ['kodama'], hand });
+  g3._drag(cardEl(g3, r3.st.C.hand[0].uid), [400, 640], [300, 300], 8); await idle(g3);
+  t.eq(r3.st.C.energy, 3, 'a mouse drag released on empty ground still returns the card (aim needs the foe)');
+  const g5 = fresh();
+  const r5 = await enter(g5, { enemies: ['kodama'], hand });
+  g5._click(cardEl(g5, r5.st.C.hand[0].uid)); await idle(g5);
+  t.eq(r5.st.C.energy, 2, 'and a mouse click on a lone-target card still plays it at once');
+  // two foes: a finger lifts, a second tap on the card puts it back (the player has to choose a foe)
+  const g4 = fresh({ touch: true });
+  const r4 = await enter(g4, { enemies: ['kappa', 'kodama'], hand });
+  const s4 = r4.st, slash4 = s4.C.hand[0].uid;
+  g4._click(cardEl(g4, slash4), { pointerType: 'touch' }); g4._click(cardEl(g4, slash4), { pointerType: 'touch' }); await idle(g4);
+  t.eq(s4.C.energy, 3, 'with two foes a second tap on the card plays nothing'); t.ok(!$(g4, '.card.sel'), 'it puts the card back');
+  g4._drag(cardEl(g4, slash4), [400, 640], [300, 300], 8, { pointerType: 'touch' }); await idle(g4);
+  t.eq(s4.C.energy, 3, 'with two foes a drag released over empty ground returns the card');
+  t.eq(errs(g2) + errs(g3) + errs(g4) + errs(g5), 0, 'no console errors');
+});
+
 await t.test('accessibility: labelled controls, a live region, focusable enemies in line order, visible focus targets', async () => {
   const g = fresh();
   const { st } = await enter(g, { enemies: ['kappa', 'kodama', 'tanuki_bandit'] });
@@ -1267,6 +1358,38 @@ await t.test('intent targets: a back-row attack shows the back hero medallion; a
   if (Array.isArray(it.tgt) && it.tgt.length) t.eq(bub.querySelectorAll('.ib-tgt .ico').length, it.tgt.length, 'one medallion per targeted hero');
   else t.ok(true, 'this move has no fixed target');
   t.ok(/Crow Tengu intends/.test(bub.getAttribute('aria-label')), 'the bubble is labelled for screen readers');
+  t.eq(errs(g), 0, 'no console errors');
+});
+// L22 of the final verification: '[ui] tooltip content threw: Cannot read properties of null (reading vm)' when a tip was asked for after the screen was left
+await t.test('tooltips outlive the screen safely: after leave the hero, intent and swap tips return nothing and warn nothing', async () => {
+  const g = fresh({ touch: true });
+  const { st } = await enter(g, { enemies: ['kappa', 'kodama'] });
+  const hero = heroPanel(g, 'hanae'), bub = $(g, '.cm-en .cm-int'), swap = $(g, '.cm-swap');
+  t.ok(hero.rbTip() && bub.rbTip() && swap.rbTip(), 'while the fight runs all three tips have content');
+  g._pointer('pointerdown', hero, { pointerType: 'touch' });                 // a long press that is still counting down when the fight ends
+  scr(g).leave();
+  t.eq(S(g), null, 'the screen state is gone');
+  t.eq(hero.rbTip(), null, 'the hero tip returns nothing instead of reading S.vm'); t.eq(bub.rbTip(), null, 'so does the intent bubble tip'); t.ok(swap.rbTip() !== undefined, 'and the swap tip does not throw');
+  g._flush(700);
+  g._pointer('pointerup', hero, { pointerType: 'touch', buttons: 0 });
+  await idle(g);
+  t.eq(g._console.warn.map(warnText).filter((w) => /tooltip content threw/.test(w)).length, 0, 'no "tooltip content threw" warning');
+  void st;
+});
+// the tutorial reads the Swap seal's disabled state to decide whether a swap hint teaches a real move: an animating beat must not look like a refusal
+await t.test('swap seal: a drain in progress dims it (busy) without disabling it; a real refusal still does', async () => {
+  const g = fresh();
+  const { st } = await enter(g, { enemies: ['kappa', 'kodama'], hand: ['hanae_parry', 'kuro_ink_ward', 'hanae_petal_step', 'hanae_slash', 'kuro_ink_bolt'] });
+  const swap = $(g, '.cm-swap');
+  t.ok(!swap.classList.contains('busy') && swap.getAttribute('aria-disabled') !== 'true', 'at rest the seal is live');
+  g._run('__sc.hold = true');
+  g._click(cardEl(g, st.C.hand[0].uid)); g._click(cardEl(g, st.C.hand[0].uid));
+  t.ok(st.draining, 'a play is being presented');
+  t.ok(swap.classList.contains('busy'), 'the seal is dimmed while it runs'); t.ok(swap.getAttribute('aria-disabled') !== 'true' && !swap.classList.contains('is-disabled'), 'but it is not marked disabled');
+  g._run('__sc.hold = false'); g._run('SCENE.flush()'); await idle(g);
+  t.ok(!swap.classList.contains('busy'), 'and it wakes when the drain ends');
+  scr(g).debug().setStatus('hanae', 'bind', 1); await idle(g);
+  t.ok(swap.getAttribute('aria-disabled') === 'true', 'Bind is a refusal: disabled');
   t.eq(errs(g), 0, 'no console errors');
 });
 await t.done();

@@ -4,7 +4,9 @@
 // files, so main.js supplies its placeholder map, story and node screens. Every scenario builds realistic state with the real META and RUN,
 // drives the screens with the loader's _click, _key, _input and virtual clock, and asserts DOM structure, calls into GAME, META and AUDIO,
 // persisted settings, cleanup on leave (no leaked listeners, timers or DOM), empty states and error paths.
-import { boot, harness } from './rogue_book_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { boot, harness, DIR } from './rogue_book_lib.mjs';
 
 const t = harness('rogue_book screen_menu');
 const SKIP = ['screen_combat', 'screen_node', 'screen_map', 'screen_end', 'tutorial'];
@@ -1407,6 +1409,169 @@ await t.test('no state leaks between visits: the layers hold exactly what should
   await go(a, 'library', { tab: 'bestiary' }); await go(b, 'library', { tab: 'bestiary' });
   t.eq(html(a), html(b), 'and so does the bestiary');
   t.eq(errors(g), 0, 'no console errors');
+});
+
+// ==================================================================================================== phone, pinch and midnight fixes
+await t.test('title: Enter on the "Tap to begin" gate is swallowed, so the browser cannot also click the plaque that just took focus', async () => {
+  const g = fresh();
+  await settle(g);
+  t.ok(g.UI.screens.title.state().gated, 'the gate is up');
+  const passed = g._key('Enter');
+  await settle(g);
+  t.eq(passed, false, 'the Enter keydown is default-prevented (dismiss() focuses the first plaque inside it)');
+  t.eq(g.UI.currentName, 'title', 'and the title stays: the gate lifts and nothing else happens');
+  t.ok(!g.UI.screens.title.state().gated, 'the gate is gone');
+  t.ok(g._doc.activeElement && g._doc.activeElement.classList.contains('mn-plaque'), 'the first plaque has focus for the next press');
+  const again = g._key('Tab');
+  t.ok(again !== undefined, 'Tab on the gate is left alone');
+});
+
+await t.test('title and hero select follow the date when left open across midnight, and a click that crosses it shows the new tale first (L26)', async () => {
+  const epoch = new Date(2026, 8, 29, 23, 59, 50).getTime();         // 10 s before local midnight
+  const key0 = 20260929, key1 = 20260930;
+  const g = fresh({ epoch });
+  await go(g, 'title'); g._click('.mn-gate'); await settle(g);
+  t.eq(g.UI.screens.title.state().seed, key0, 'the title opens on the 29th');
+  t.ok(/Seed 20260929/.test($(g, '[data-act=daily] .mn-p-sub').textContent), 'the plaque says so');
+  const before = g.RUN.dailyHeroes(key0).join(), after = g.RUN.dailyHeroes(key1).join();
+  g._frames(900, 16);                                                // 14.4 s of frames: past midnight
+  const st = g.UI.screens.title.state();
+  t.eq(st.seed, key1, 'a title left open past midnight shows the new seed: ' + st.seed);
+  t.ok(/Seed 20260930/.test($(g, '[data-act=daily] .mn-p-sub').textContent), 'the plaque text follows');
+  t.eq($$(g, '[data-act=daily] .mn-p-meds .ico').length, 2, 'with the two heroes of the new day');
+  t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'the menu keeps its order after the plaque was rebuilt');
+  const calls = [];
+  g.GAME.newRun = (o) => { calls.push(o); return { id: 'fake' }; };
+  g._click('[data-act=daily]'); await settle(g);
+  t.deep(calls, [{ daily: true }], 'a click on the refreshed plaque starts the run');
+  // a click that lands before the next poll sees the day change itself: it refreshes and starts nothing
+  const g2 = fresh({ epoch });
+  await go(g2, 'title'); g2._click('.mn-gate'); await settle(g2);
+  const calls2 = [];
+  g2.GAME.newRun = (o) => { calls2.push(o); return { id: 'fake' }; };
+  g2.META.dailySeed = () => key1;                                    // the date turned over between two polls
+  g2._click('[data-act=daily]'); await settle(g2);
+  t.eq(calls2.length, 0, 'the click that crossed midnight does not start yesterday\'s tale');
+  t.ok(toasts(g2).some((x) => /new Daily Tale/i.test(x)), 'a toast says a new tale has begun');
+  t.eq(g2.UI.screens.title.state().seed, key1, 'the plaque now shows the new tale');
+  g2._flush(1000);
+  g2._click('[data-act=daily]'); await settle(g2);
+  t.eq(calls2.length, 1, 'the next click starts it');
+  // hero select in Daily mode follows the date too
+  const g3 = fresh({ epoch });
+  await go(g3, 'heroSelect');
+  g3._click('.mn-daily .toggle'); await settle(g3);
+  t.eq(g3.UI.screens.heroSelect.state().seedToday, key0, 'hero select starts on the 29th');
+  t.deep(g3.UI.screens.heroSelect.state().chosen, g3.RUN.dailyHeroes(key0), 'with that day\'s heroes: ' + before);
+  g3._frames(900, 16);
+  const hs = g3.UI.screens.heroSelect.state();
+  t.eq(hs.seedToday, key1, 'past midnight it holds the new seed');
+  t.deep(hs.chosen, g3.RUN.dailyHeroes(key1), 'and the new day\'s heroes: ' + after);
+  t.eq($(g3, '.mn-seed').value, String(key1), 'the locked seed field shows it');
+  t.eq(errors(g) + errors(g2) + errors(g3), 0, 'no console errors');
+});
+
+await t.test('hero select: a speech bubble never covers the Swap pill (it slides left to end before it)', async () => {
+  const g = fresh();
+  await go(g, 'heroSelect');
+  g._click(card(g, 'hanae')); g._click(card(g, 'kuro')); await settle(g);
+  const sw = $(g, '.mn-swap'), barks = $$(g, '.mn-bark');
+  // the headless DOM has no layout: give the pill and the bubbles the geometry of the real page (pill at x 278, y 10, 44 high; bubbles 200 x 60 near the top)
+  const def = (el, o) => Object.keys(o).forEach((k) => Object.defineProperty(el, k, { configurable: true, get: () => o[k] }));
+  def(sw, { offsetLeft: 278, offsetTop: 10, offsetWidth: 110, offsetHeight: 44 });
+  barks.forEach((b) => Object.defineProperty(b, 'offsetLeft', { configurable: true, get: () => parseFloat(b.style.left) || 0 }));
+  barks.forEach((b) => def(b, { offsetWidth: 200, offsetHeight: 60, offsetTop: 14 }));
+  let placed = 0;
+  for (let i = 0; i < 400; i++) {                                    // long enough for the heroes to speak
+    g._frames(1, 16);
+    barks.filter((b) => b.classList.contains('show')).forEach((b) => { placed++; const left = parseFloat(b.style.left); t.ok(left + 200 <= 278 - 6 + 0.5, 'the bubble ends before the pill: left ' + left); });
+  }
+  t.ok(placed >= 10, 'bubbles were shown and checked (' + placed + ' frames)');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('css: a trial rule is never clipped, the phone launch panel is wider, and phone text keeps 8 to 9 screen px (C1, C8)', () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const clip = rules.filter((r) => /\.mn-tr-(rule|text)\b/.test(r.sel) && /line-clamp|text-overflow\s*:\s*ellipsis|overflow\s*:\s*hidden/.test(r.body));
+  t.deep(clip.map((r) => r.sel), [], 'no rule of .mn-tr-rule or .mn-tr-text clips with a line clamp, an ellipsis or overflow hidden: the trailing words of a trial are its penalty');
+  t.ok(rules.some((r) => r.sel === '.compact .mn-launch' && /width\s*:\s*376px/.test(r.body)), 'the launch panel is widened on a phone');
+  t.ok(rules.some((r) => /\.compact \.mn-detail\.panel-wrap/.test(r.sel) && /left\s*:\s*836px/.test(r.body)), 'and the detail sheet gives up the width');
+  t.ok(rules.some((r) => /\.mn-tr-head/.test(r.sel) && /grid-template-areas\s*:\s*"minus name plus" "text text text"/.test(r.body)), 'the rule runs the full width under the arrows');
+  t.ok(rules.some((r) => /\.compact \.mn-begin/.test(r.sel) && /position\s*:\s*sticky/.test(r.body)), 'Begin stays pinned when a long rule makes the panel scroll');
+  ['mn-p-sub', 'mn-credits', 'mn-tr-name', 'mn-slot-note', 'mn-hc-title', 'mn-d-blurb'].forEach((c) => t.ok(rules.some((r) => new RegExp('\\.compact [^,]*\\.' + c.replace('mn-credits', 'mn-foot')).test(r.sel) && /var\(--fs[89]\)/.test(r.body)) || rules.some((r) => r.sel.indexOf(c) >= 0 && /\.compact/.test(r.sel) && /var\(--fs[89]\)/.test(r.body)), 'compact .' + c + ' keeps a screen px floor'));
+  t.ok(rules.some((r) => /\.ts-big \.mn-trial\.has-rule \.mn-tr-text/.test(r.sel) && /display\s*:\s*none/.test(r.body)), 'larger text on a desktop drops the generic sub-line when a rule is showing');
+  t.ok(rules.some((r) => r.sel === '.mn-d-tapnote' && /display\s*:\s*none/.test(r.body)) && rules.some((r) => r.sel === '.compact .mn-d-tapnote' && /display\s*:\s*block/.test(r.body)), 'the "Tap a card to read it" note is for phones');
+});
+
+await t.test('hero select: the starting deck tells a phone player the small cards open the big card, and a tap does', async () => {
+  const g = fresh();
+  await go(g, 'heroSelect');
+  t.ok($(g, '.mn-d-tapnote') && /tap a card/i.test($(g, '.mn-d-tapnote').textContent), 'the note is in the sheet');
+  const first = $$(g, '.mn-dc .card')[0];
+  first.click(); await settle(g, 2);                                  // a touch tap is a click with no hover and no keyboard focus ring before it
+  t.ok(g.UI.tip.open, 'a tap on a starting card opens the big card');
+  first.click(); await settle(g, 2);
+  t.ok(!g.UI.tip.open, 'and a second tap closes it');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('the Ink Trial rule is written out in full for every trial, and the trial box says when it has one', async () => {
+  const g = fresh();
+  seedProfile(g, { trialBest: 10 });
+  await go(g, 'heroSelect');
+  const plus = $$(g, '.mn-step')[1];
+  for (let k = 1; k <= 10; k++) {
+    g._click(plus); await settle(g, 1);
+    t.eq($(g, '.mn-tr-rule').textContent, g.DATA.trials['trial_' + k].text, 'trial ' + k + ': the whole rule text, untruncated');
+    t.ok($(g, '.mn-trial').classList.contains('has-rule'), 'trial ' + k + ': the box is marked');
+  }
+  g._click($$(g, '.mn-step')[0]); await settle(g, 1);
+  for (let k = 9; k >= 0; k--) { if (k < 9) { g._click($$(g, '.mn-step')[0]); await settle(g, 1); } }
+  t.ok(!$(g, '.mn-trial').classList.contains('has-rule'), 'trial 0 has no rule and no mark');
+});
+
+await t.test('tutorial: the "Front row, back row" hint is not raised over a disabled Swap button (a hero is down) or once the fight is decided (L9)', async () => {
+  const mk = async () => {
+    const g = boot({ only: ['screen_menu', 'main', 'tutorial'], skip: SKIP.filter((x) => x !== 'tutorial'), epoch: EPOCH });
+    if (g._errors.length) throw new Error('boot errors: ' + JSON.stringify(g._errors.map((e) => e.message)));
+    g.GAME.boot();
+    Object.keys(g.UI.tutorial.HINTS).filter((id) => id !== 'swap').forEach((id) => g.META.setTutorial('tut_' + id, true));   // only the swap hint is in play
+    await go(g, 'combat', {});
+    const btn = g._doc.createElement('button');
+    btn.setAttribute('data-tut', 'swap'); btn.textContent = 'Swap';
+    g._doc.getElementById('screens').appendChild(btn);
+    return { g, btn };
+  };
+  const turn = async (g) => { g.UI.bus.emit('combat:turn', { turn: 3, phase: 'player' }); await settle(g, 3); };
+  { // an enabled Swap button: the hint teaches it
+    const { g } = await mk();
+    await turn(g);
+    t.eq(g.UI.tutorial.current() && g.UI.tutorial.current().id, 'swap', 'with a usable Swap button the hint shows');
+    g.UI.bus.emit('combat:end', { result: 'win' }); await settle(g, 2);
+    t.eq(g.UI.tutorial.current(), null, 'and closes the moment the fight is decided');
+  }
+  { // a hero is down: the engine disables the button (UI.setDisabled), so there is nothing to teach
+    const { g, btn } = await mk();
+    g.UI.setDisabled(btn, true, 'Only one hero is standing');
+    await turn(g);
+    t.eq(g.UI.tutorial.current(), null, 'a disabled Swap button gets no hint');
+    t.deep(g.UI.tutorial.queue(), [], 'and nothing waits in the queue');
+    t.ok(!g.UI.tutorial.seen('swap'), 'the hint is not used up: it can still show on a later turn');
+    g.UI.setDisabled(btn, false);
+    await turn(g);
+    t.eq(g.UI.tutorial.current() && g.UI.tutorial.current().id, 'swap', 'once Swap works again the hint shows');
+  }
+  { // the fight is already decided when the next turn event arrives
+    const { g } = await mk();
+    g.UI.bus.emit('combat:end', { result: 'lose' }); await settle(g, 2);
+    await turn(g);
+    t.eq(g.UI.tutorial.current(), null, 'no combat hint starts over the defeat beat');
+    await go(g, 'combat', {});                                       // the next fight clears the flag
+    const b2 = g._doc.createElement('button'); b2.setAttribute('data-tut', 'swap'); g._doc.getElementById('screens').appendChild(b2);
+    await turn(g);
+    t.eq(g.UI.tutorial.current() && g.UI.tutorial.current().id, 'swap', 'a new fight teaches again');
+  }
 });
 
 t.done();

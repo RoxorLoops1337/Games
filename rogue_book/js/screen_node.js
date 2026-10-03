@@ -14,8 +14,9 @@
 //             stickers, SOLD stamps) and plaques for gems, relics and a brush, card removal (deck overlay, remove mode, rising price)
 //             and free gem cutting. Buys go through RUN.shopBuy and RUN.shopRemove. Keys 1..5 buy the n-th card.
 //   event     A storybook page: plate (ART.scene.draw of the event's scene), typewriter text (tap or Enter completes it), the choices
-//             revealed after the text with locks and reasons, then the outcome text with a chip per change, and Continue. A gamble that
-//             ends in a fight hands the real combat node to GAME.enterNode. Keys 1..4 choose. A missing fable shows a blank page with a way on.
+//             revealed after the text with locks and reasons, then the outcome text with a chip per change (a tap or Enter finishes that text too), and
+//             Continue (it takes the focus; Enter or Space press it). A gamble that ends in a fight hands the real combat node to GAME.enterNode.
+//             Keys 1..9 choose the n-th VISIBLE choice, and only once the choices are up. A missing fable shows a blank page with a way on.
 //   camp      A bonfire scene, four tiles (Rest with the exact heal previewed, Sharpen, Cut Gems, Meditate), a fire meter for the actions
 //             left (min(3, mods.campActions + flags.extraCampActions)), DONE/OPEN/EMBERS badges, hero poses. Keys 1..4. "Break camp"
 //             asks a second time when nothing was used. Cut Gems stays open all visit.
@@ -66,6 +67,13 @@
 //     back to plain canvas when the toolkit is missing. Icons come from UI.icon, so real icon art appears without a change here.
 //   * Boss rewards use a relic page first (RUN offers three), then the card page: the claim happens after both decisions.
 //   * A gem cache that was already taken reopens WITHOUT its tiles (RUN does not remember which gem was taken).
+//   * A long press never also acts. The shop shelf cards use UI.tip.swallowClick on pointerup after their 420 ms peek, the plaques get the same
+//     from UI.tip.attach; the peek thresholds (220 ms hover, 420 ms hold) are FIXED, never wait(), which shrinks to 120 ms under Reduce motion.
+//   * The deck overlay keeps its confirm row (.dk-confirm) outside the scrolling .dk-detail so a mandatory picker's button is always on screen
+//     (css/node.css, compact rules shrink the big card); the pick and remove notes ride beside the card.
+//   * The elite treasure box answers once: Take it and Leave it are disabled at once and the frame leaves (.taken, .gone). A card offer a fable
+//     raises is not dismissible (Skip is the way out). A net gold loss on the reward ledger reads "Gold lost -6".
+
 (() => {
   'use strict';
   const mk = UI.el;
@@ -376,7 +384,8 @@
     const R = S.R;
     if (p.op === 'cardReward') {
       const offers = (p.offers || []).map((id, i) => instOf(id, 0, 1 + i));
-      const pick = await UI.overlay.open('cardPick', { title: 'Choose a card', cards: offers, n: 1, optional: true, confirm: 'Take this card' });
+      // dismiss:false: a stray tap on the dim backdrop (or Esc) must not forfeit a card the player paid HP, gold or a curse risk for; the Skip button is the one way out
+      const pick = await UI.overlay.open('cardPick', { title: 'Choose a card', cards: offers, n: 1, optional: true, dismiss: false, confirm: 'Take this card' });
       const chosen = pick && pick[0] ? offers.find((c) => c.uid === pick[0]) : null;
       const res = RUN.resolvePending(R, p.id, chosen ? chosen.id : null);
       if (res.ok && chosen) snd('card_pick');
@@ -630,7 +639,8 @@
       const shown = st.up && canPrev ? Object.assign({}, inst, { up: 1 }) : inst;
       const card = UI.card(shown, { size: 'big', showGems: true });
       card.classList.add('dk-big');
-      const side = mk('div', { class: 'dk-side' }, glossaryOf(card), socketList(shown));
+      const note = mode === 'remove' ? mk('p', { class: 'dk-note warn', text: p.note || 'It is torn out of your deck for good.' }) : (p.note && mode === 'pick' ? mk('p', { class: 'dk-note', text: p.note }) : null);
+      const side = mk('div', { class: 'dk-side' }, note, glossaryOf(card), socketList(shown));   // the note rides beside the card (never between the card and the button)
       const btns = mk('div', { class: 'dk-actions' });
       if (canPrev) btns.appendChild(UI.btn(st.up ? 'Show plain' : 'Preview upgrade', { kind: 'ghost', size: 'sm', onclick: () => { st.up = !st.up; renderPane(); } }));
       if (mode === 'pick') btns.appendChild(actionBtn(p.confirm || 'Choose this card', 'dk-go', () => close(inst.uid), { breathe: true }));
@@ -641,8 +651,15 @@
         }, { danger: true });
         btns.appendChild(go);
       }
-      const note = mode === 'remove' ? mk('p', { class: 'dk-note warn', text: p.note || 'It is torn out of your deck for good.' }) : (p.note && mode === 'pick' ? mk('p', { class: 'dk-note', text: p.note }) : null);
-      pane.appendChild(mk('div', { class: 'dk-detail' }, mk('div', { class: 'dk-cardrow' }, card, side), note, btns));
+      pane.appendChild(mk('div', { class: 'dk-detail' }, mk('div', { class: 'dk-cardrow' }, card, side)));
+      paneConfirm(null, btns);
+    }
+
+    // the note and the confirm button live OUTSIDE the scrolling detail, pinned to the bottom of the pane: on a phone (the stage at 0.54) the big card alone fills the pane,
+    // and a mandatory picker (Transform, Copy, Remove, Sharpen) cannot be dismissed, so a confirm button that scrolled out of sight was the only way out
+    function paneConfirm(note, btns) {
+      if (!note && !(btns && btns.childNodes.length)) return;
+      pane.appendChild(mk('div', { class: 'dk-confirm' }, note, btns && btns.childNodes.length ? btns : null));
     }
 
     function paneUpgrade(inst) {
@@ -654,9 +671,8 @@
         mk('div', { class: 'dk-ba' },
           mk('div', { class: 'dk-bacol' }, mk('span', { class: 'dk-label', text: 'Before' }), before),
           mk('i', { class: 'dk-arrow', 'aria-hidden': 'true' }),
-          mk('div', { class: 'dk-bacol after' }, mk('span', { class: 'dk-label', text: 'After' }), after)),
-        mk('p', { class: 'dk-note', text: p.note || 'One upgrade per card. Gems already set stay where they are.' }),
-        mk('div', { class: 'dk-actions' }, go)));
+          mk('div', { class: 'dk-bacol after' }, mk('span', { class: 'dk-label', text: 'After' }), after))));
+      paneConfirm(mk('p', { class: 'dk-note', text: p.note || 'One upgrade per card. Gems already set stay where they are.' }), mk('div', { class: 'dk-actions' }, go));
     }
 
     // -- socket pane
@@ -746,6 +762,17 @@
       const inst = selInst();
       if (!inst) { pane.appendChild(paneEmpty()); return; }
       if (mode === 'upgrade') paneUpgrade(inst); else if (mode === 'socket') paneSocket(inst); else paneCard(inst);
+      revealGo();
+    }
+    // a button that sits inside the scrolling detail (the socket pane's Set the gem) is brought into view after every redraw. Only the detail scrolls, never an ancestor:
+    // scrollIntoView would also move the overflow-hidden stage
+    function revealGo() {
+      safe(() => {
+        const go = pane.querySelector('.dk-detail .dk-go'), box = pane.querySelector('.dk-detail');
+        if (!go || !box) return;
+        const g = go.getBoundingClientRect(), b = box.getBoundingClientRect();
+        if (g.bottom > b.bottom + 1) box.scrollTop += (g.bottom - b.bottom) / (UI.scale || 1);
+      });
     }
 
     // ---- assemble
@@ -929,7 +956,9 @@
     // ---- the ledger (left): what was simply earned
     const ledger = mk('div', { class: 'rw-ledger' });
     const rows = [];
-    if (rw.gold) rows.push({ row: ledgerRow(UI.icon('stat', 'gold', 38), 'Gold', '+0', { kind: 'gold' }), to: rw.gold, tick: 'gold' });
+    // thieves can take more than the fight paid: a net loss reads "Gold lost -6" in a warning tone, never "+-6"
+    const signed = (n) => (n < 0 ? '-' + Math.abs(n) : '+' + n);
+    if (rw.gold) rows.push({ row: ledgerRow(UI.icon('stat', 'gold', 38), rw.gold < 0 ? 'Gold lost' : 'Gold', rw.gold < 0 ? '-0' : '+0', { kind: rw.gold < 0 ? 'loss' : 'gold' }), to: rw.gold, tick: 'gold', fmt: signed });
     if (rw.ink) rows.push({ row: ledgerRow(UI.icon('stat', 'ink', 38), 'Ink', '+0', { kind: 'ink' }), to: rw.ink, tick: 'ink_gain' });
     if (rw.maxHp) rows.push({ row: ledgerRow(UI.icon('stat', 'hp', 38), 'Max HP', '+0', { kind: 'hp' }), to: rw.maxHp, tick: 'level_up' });
     const gemId = (rw.gems || [])[0] || null;
@@ -941,7 +970,7 @@
     stagger(S, rows.map((r) => r.row), { delay: 250, step: 160 });
     rows.forEach((r, i) => {
       if (!r.to) return;
-      const run = () => { countUp(S, r.row.rbVal, r.to, { fmt: (n) => '+' + n, tick: r.tick, ms: 640 }); if (r.tick === 'gold' && S.chrome) S.chrome.gold.rbSet(R.gold, { animate: !reduced() }); };
+      const run = () => { countUp(S, r.row.rbVal, r.to, { fmt: r.fmt || ((n) => '+' + n), tick: r.tick, ms: 640 }); if (r.tick === 'gold' && S.chrome) S.chrome.gold.rbSet(R.gold, { animate: !reduced() }); };
       if (reduced()) run(); else UI.after(wait(420 + i * 160), run);
     });
     if ((headless() || reduced()) && S.chrome) S.chrome.gold.rbSet(R.gold, { animate: false });
@@ -1081,12 +1110,18 @@
         el.classList.add('pick');
       }
       (all || []).forEach((o) => { if (o !== el) o.classList.add('gone'); });
+      // the elite's Take it and Leave it are answered: dead buttons under an empty frame must not linger until Continue (the frame itself leaves once the treasure has flown)
+      const box = wrap.querySelector('.rw-relicbox');
+      if (box) { box.classList.add('taken'); box.querySelectorAll('.rw-acts button').forEach((b) => { b.disabled = true; b.tabIndex = -1; }); }
       UI.after(wait(620), () => {
         if (!S.alive()) return;
         flyTo(S, el, S.chrome && S.chrome.el.querySelector('.nk-relbtn'), () => {
           if (!S.alive()) return;
           if (el) el.classList.add('spent');
-          UI.pulse(S.chrome.el.querySelector('.nk-relbtn'));
+          if (box) box.classList.add('gone');
+          const relBtn = S.chrome.el.querySelector('.nk-relbtn');
+          UI.pulse(relBtn);
+          if (relBtn && relBtn.rbSet && R.relics.indexOf(id) < 0) relBtn.rbSet({ label: '' + (R.relics.length + 1) });     // the claim comes after the card pick: show the treasure counted now
           if (isBoss && need.card && dec.card === undefined) showCardsPage(); else maybeClaim();
         });
       });
@@ -1095,7 +1130,7 @@
       if (dec.relic !== undefined) return;
       dec.relic = null;
       const box = wrap.querySelector('.rw-relicbox');
-      if (box) box.classList.add('gone');
+      if (box) { box.classList.add('gone', 'taken'); box.querySelectorAll('.rw-acts button').forEach((b) => { b.disabled = true; b.tabIndex = -1; }); }
       snd('ui_back');
       maybeClaim();
     }
@@ -1105,12 +1140,14 @@
       const take = mk('button', { type: 'button', class: 'rw-relic', 'aria-label': 'Take ' + relicName(id) }, ...relicBody(id, 84));
       take.addEventListener('click', () => relicChoice(id, take, []));
       const leave = UI.btn('Leave it', { kind: 'ghost', size: 'sm', onclick: relicLeave });
-      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A treasure guarded here' }), take, mk('div', { class: 'row center gap-s' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
+      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A treasure guarded here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
       if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a brush above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
       if (rows.length >= 4) ledger.classList.add('tall');      // gold, ink, a gem AND a brush: even the desktop stage needs the slim box
-      if (rows.length >= 3 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
+      if (rows.length >= 2 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
       ledger.appendChild(box);
       box.classList.add('rise'); box.style.setProperty('--i', '4');
+      // the last resort when a long treasure text still outgrows the ledger (the css above is tuned for phones and text 1.3): scroll the ledger to the box so Take it and Leave it are on screen
+      UI.after(wait(300), () => { if (S.alive()) safe(() => { if (ledger.scrollHeight > ledger.clientHeight + 1) ledger.scrollTop = ledger.scrollHeight; }); });
     }
     function buildRelicPage() {           // boss: choose one of three, grandly
       const page = mk('div', { class: 'rw-relics', role: 'group', 'aria-label': 'Treasure choices' });
@@ -1228,28 +1265,41 @@
     const stampEl = () => mk('i', { class: 'sh-stamp', 'aria-hidden': 'true', text: 'SOLD' });
 
     // a shelf card is 168 px wide (about 90 px on a phone), too small to read the rules, and one tap buys it: hover (mouse) or a 0.4 s press (touch) shows it BIG
-    // on the left, over the peddler; the tap that ends a long press never buys. Nothing here changes the plain click.
-    let peekTok = 0, peekHeld = false;
+    // on the left, over the peddler; the tap that ends a long press never buys (UI.tip.swallowClick, the same rule UI.tip.attach applies to the plaques).
+    // The thresholds are FIXED: they must not go through wait(), which shrinks to 120 ms under Reduce motion and made ordinary 130 ms taps count as long presses.
+    // Nothing here changes the plain click.
+    const PEEK_HOVER_MS = 220, PEEK_HOLD_MS = 420;
+    let peekTok = 0;
     const peekHide = () => { peekTok += 1; if (S.peekShown) { S.peekShown = false; UI.tip.hide(); } };
     const peekShow = (inst) => {
-      if (!S.alive() || UI.overlay.count()) return;
+      if (!S.alive() || UI.overlay.count()) return false;
       const w = safe(() => UI.tip.card(inst, { x: 22, y: 122, size: 'big' }), null);
       if (w) { S.peekShown = true; const col = w.querySelector('.tip-kwcol'); if (col) col.remove(); }
+      return !!w;
     };
     const bindPeek = (card, inst) => {
-      card.addEventListener('pointerenter', (e) => { if (e.pointerType && e.pointerType !== 'mouse') return; const my = ++peekTok; UI.after(wait(220), () => { if (peekTok === my) peekShow(inst); }); });
+      let held = false;                                                           // this press already showed the big card: its click must not buy
+      card.addEventListener('pointerenter', (e) => { if (e.pointerType && e.pointerType !== 'mouse') return; const my = ++peekTok; UI.after(PEEK_HOVER_MS, () => { if (peekTok === my) peekShow(inst); }); });
       card.addEventListener('pointerleave', () => peekHide());
       card.addEventListener('pointerdown', (e) => {
+        held = false;
         if (e.pointerType === 'mouse') return;
-        peekHeld = false;
         const my = ++peekTok;
-        UI.after(wait(420), () => { if (peekTok === my) { peekHeld = true; peekShow(inst); } });
+        UI.after(PEEK_HOLD_MS, () => { if (peekTok === my) held = peekShow(inst); });
       });
-      ['pointerup', 'pointercancel'].forEach((ev) => card.addEventListener(ev, (e) => { if (e.pointerType !== 'mouse') peekHide(); }));
+      card.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'mouse') return;
+        if (held) safe(() => UI.tip.swallowClick(card));
+        held = false;
+        peekHide();
+      });
+      card.addEventListener('pointercancel', (e) => { held = false; if (e.pointerType !== 'mouse') peekHide(); });     // a cancel sends no click, so nothing is armed
+      card.addEventListener('focusin', () => { if (safe(() => card.matches(':focus-visible'), false)) peekShow(inst); });
+      card.addEventListener('focusout', () => peekHide());
     };
     by.card.forEach((it, i) => {
       const inst = instOf(it.id, 0, 200 + i);
-      const card = UI.card(inst, { size: 'deck', showGems: true, onclick: () => { if (peekHeld) { peekHeld = false; return; } buy(it); } });
+      const card = UI.card(inst, { size: 'deck', showGems: true, onclick: () => buy(it) });
       bindPeek(card, inst);
       const tag = tagEl(it.price, it.sale ? it.was : 0);
       const slot = mk('div', { class: 'sh-item kind-card', dataset: { key: it.key } }, card, it.sale ? mk('i', { class: 'sh-sale', text: 'SALE' }) : null, tag, stampEl());
@@ -1262,7 +1312,7 @@
     });
     const plaque = (it, iconNode, name, kindLabel, tipFn) => {
       const b = mk('button', { type: 'button', class: 'sh-plaque kind-' + it.kind, dataset: { key: it.key }, 'aria-label': name + ', ' + kindLabel + ', ' + it.price + ' gold' },
-        mk('span', { class: 'sh-kind', text: kindLabel }), mk('span', { class: 'sh-ico' }, iconNode), mk('b', { class: 'sh-name', text: name }), tagEl(it.price, 0), stampEl());
+        mk('span', { class: 'sh-kind', text: kindLabel }), mk('span', { class: 'sh-ico' }, iconNode), mk('b', { class: 'sh-name' + (name.split(/\s+/).some((w) => w.length >= 11) ? ' sh-long' : ''), text: name }), tagEl(it.price, 0), stampEl());     // sh-long: a word of 11 letters (Quickthought) must fit a phone plaque on one line
       b.addEventListener('click', () => buy(it));
       UI.tip.attach(b, tipFn, { side: 'top' });
       els[it.key] = { it, slot: b };
@@ -1345,6 +1395,7 @@
         return;
       }
       snd('buy'); snd('gold');
+      peekHide();                                  // the big card of a ware that is now SOLD must not stay over the peddler until the pointer leaves
       const r = stageRect(entry.slot);
       flyCoins(S.chrome.gold, entry.slot, 6);
       burst(S, r.cx, r.cy, { kind: 'gold', n: 18, spread: 110 });
@@ -1415,9 +1466,15 @@
     const chips = [];
     const chip = (kind, icon, text, cls) => mk('span', { class: 'ev-chip k-' + kind + (cls ? ' ' + cls : '') }, mk('span', { class: 'ev-chip-ico' }, icon), mk('span', { class: 'ev-chip-txt', text }));
     const sign = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + Math.abs(n);
-    (log || []).forEach((l) => {
+    (log || []).forEach((l, at) => {
       if (!l || !l.op) return;
       const has = (id) => !!DATA.cards[id];
+      // a fixed treasure the party already carries is NOT gained: no treasure chip (the gold it turns into has its own chip right behind it; with none, say so plainly)
+      if (l.op === 'addRelic' && /already owned/i.test(l.text || '')) {
+        const next = log[at + 1];
+        if (!(next && next.op === 'gold' && next.n)) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text));
+        return;
+      }
       switch (l.op) {
         case 'gold': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'gold', 30), sign(l.n) + ' gold')); break;
         case 'ink': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'ink', 30), sign(l.n) + ' Ink')); break;
@@ -1490,7 +1547,14 @@
     const outEl = mk('div', { class: 'ev-outcome', hidden: true });
     const left = mk('div', { class: 'ev-page left' }, mk('div', { class: 'ev-plate' }, plate, mk('i', { class: 'ev-frame', 'aria-hidden': 'true' }), mk('i', { class: 'ev-seal', 'aria-hidden': 'true', text: 'Fable' })));
     const right = mk('div', { class: 'ev-page right' }, title, textEl, choicesEl, outEl);
-    wrap.appendChild(mk('div', { class: 'ev-book' }, left, mk('i', { class: 'ev-gutter', 'aria-hidden': 'true' }), right, mk('i', { class: 'ev-ribbon', 'aria-hidden': 'true' })));
+    const more = mk('i', { class: 'ev-more', 'aria-hidden': 'true', text: 'More' });
+    const book = mk('div', { class: 'ev-book' }, left, mk('i', { class: 'ev-gutter', 'aria-hidden': 'true' }), right, mk('i', { class: 'ev-ribbon', 'aria-hidden': 'true' }), more);
+    wrap.appendChild(book);
+    // a long fable (four choices, or big text on a phone) scrolls inside its page: a small "More" tab says so while there is page below the fold
+    let moreAcc = 0;
+    const updateMore = () => safe(() => { book.classList.toggle('more', right.scrollHeight - right.clientHeight - right.scrollTop > 6); });
+    right.addEventListener('scroll', updateMore);
+    tickerAdd(S, (dt) => { moreAcc += dt; if (moreAcc > 0.25) { moreAcc = 0; updateMore(); } return false; });
     stagger(S, [left, right], { delay: 120, step: 140 });
 
     const showLeave = (label, fn) => {
@@ -1498,6 +1562,8 @@
       b.classList.add('ev-go');
       outEl.appendChild(b);
       b.classList.add('rise');
+      // keyboard and screen readers land on the way on (Enter or Space then press it); preventScroll so the page does not jump
+      safe(() => { if (b.focus) b.focus({ preventScroll: true }); });
       // a long fable with a title on two lines, a card chip and a big font fills the page: bring the button into view instead of leaving it under the page edge
       UI.after(wait(80), () => { if (!S.dead) safe(() => { if (right.scrollHeight > right.clientHeight + 1) { if (isFn(right.scrollTo)) right.scrollTo({ top: right.scrollHeight, behavior: reduced() ? 'auto' : 'smooth' }); else right.scrollTop = right.scrollHeight; } }); });
       return b;
@@ -1523,13 +1589,17 @@
     function showOutcome(i, res) {
       const c = ev.choices[i];
       choicesEl.classList.add('done');
-      choicesEl.querySelectorAll('.ev-choice').forEach((b) => { if (Number(b.dataset.i) === i) b.classList.add('picked'); else b.classList.add('gone'); });
+      // the choices are answered: none of them stays in the Tab order, and the ones that collapsed are hidden from screen readers too (the way on is the only control left)
+      choicesEl.querySelectorAll('.ev-choice').forEach((b) => { b.tabIndex = -1; if (Number(b.dataset.i) === i) b.classList.add('picked'); else { b.classList.add('gone'); b.setAttribute('aria-hidden', 'true'); } });
       outEl.hidden = false;
       outEl.appendChild(mk('p', { class: 'ev-said', text: 'You chose: ' + (c ? c.label : '...') }));
       const outText = mk('p', { class: 'ev-result', tabindex: '-1' });
       outEl.appendChild(outText);
       outEl.appendChild(gains);
       const tw = typewriter(S, outText, res && res.text ? res.text : 'The tale has already moved on.', { cps: 70 });
+      S.tw = tw; S.outTw = tw;                                                  // Enter or Space completes it, like the fable
+      // a tap anywhere on the page (not on a button) finishes the outcome text at once, and the way on follows after a short beat instead of 2 to 4 seconds
+      right.addEventListener('click', (e) => { if (!tw.done && !(e.target.closest && e.target.closest('button'))) { tw.skipped = true; tw.complete(); } });
       if (res && res.applied) addChips(res.applied);
       const finish = () => {
         if (S.dead) return;
@@ -1543,7 +1613,7 @@
         S.busy = true;
         resolvePending(S).then(() => { S.busy = false; go(); });
       };
-      tw.then(() => UI.after(wait(450), finish));
+      tw.then(() => UI.after(wait(tw.skipped ? 140 : 450), finish));
     }
 
     function choose(i) {
@@ -1567,12 +1637,14 @@
 
     // ---- the fable, then its choices
     const list = safe(() => RUN.eventChoices(R, ev), []) || [];
+    let shownN = 0;       // the number on a choice (and its key) follows the VISIBLE order: a hero-only choice that is hidden leaves no gap (1 and 2, never 1 and 4)
     list.forEach((ch) => {
       if (ch.hidden) return;
+      shownN += 1;
       const src = ev.choices[ch.index] || {};
       const hero = src.req && src.req.hero;
-      const b = mk('button', { type: 'button', class: 'ev-choice' + (ch.ok ? '' : ' locked') + (hero ? ' hero' : ''), dataset: { i: ch.index }, 'aria-label': (ch.index + 1) + '. ' + ch.label + (ch.cost ? '. Cost: ' + ch.cost : '') + (ch.ok ? '' : '. Locked: ' + ch.reason) },
-        mk('span', { class: 'ev-num' }, mk('b', { text: String(ch.index + 1) })),
+      const b = mk('button', { type: 'button', class: 'ev-choice' + (ch.ok ? '' : ' locked') + (hero ? ' hero' : ''), dataset: { i: ch.index }, 'aria-label': shownN + '. ' + ch.label + (ch.cost ? '. Cost: ' + ch.cost : '') + (ch.ok ? '' : '. Locked: ' + ch.reason) },
+        mk('span', { class: 'ev-num' }, mk('b', { text: String(shownN) })),
         mk('span', { class: 'ev-body' },
           mk('b', { class: 'ev-label' }, hero ? UI.medallion(hero, 24) : null, mk('span', { text: ch.label })),
           ch.cost ? mk('em', { class: 'ev-cost', text: ch.cost }) : null,
@@ -1600,8 +1672,15 @@
     }
     S.keys = (e) => {
       if (S.dead || UI.overlay.count()) return false;
-      if (S.tw && !S.tw.done && (e.key === 'Enter' || e.key === ' ')) { S.tw.complete(); return true; }
-      if (/^[1-4]$/.test(e.key) && !S.chose) { const b = choicesEl.querySelector('.ev-choice[data-i="' + (Number(e.key) - 1) + '"]'); if (b) { choose(Number(e.key) - 1); return true; } }
+      const onBtn = !!(e.target && e.target.closest && e.target.closest('button'));
+      if (S.tw && !S.tw.done && (e.key === 'Enter' || e.key === ' ')) { if (S.tw === S.outTw) S.tw.skipped = true; S.tw.complete(); return true; }
+      // the way on (Continue, Fight!) by keyboard when focus is not already on a button (a focused button activates itself)
+      if ((e.key === 'Enter' || e.key === ' ') && !onBtn) { const go = outEl.querySelector('.ev-go'); if (go) { e.preventDefault(); go.click(); return true; } }
+      // digits pick the n-th VISIBLE choice, and only once the choices have appeared: before that they are invisible and must not be committed blind
+      if (/^[1-9]$/.test(e.key) && !S.chose && choicesEl.classList.contains('in')) {
+        const b = choicesEl.querySelectorAll('.ev-choice')[Number(e.key) - 1];
+        if (b) { choose(Number(b.dataset.i)); return true; }
+      }
       return false;
     };
   }

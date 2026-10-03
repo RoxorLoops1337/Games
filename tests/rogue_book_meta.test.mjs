@@ -91,9 +91,9 @@ t.test('nothing touches storage until load; load never writes; save writes the v
 });
 t.test('a fresh profile has every documented field and the DATA.SETTINGS defaults', () => {
   const A = fresh(); const P = A.META.load();
-  t.deep(Object.keys(P).sort(), ['ach', 'daily', 'history', 'inkstones', 'kills', 'seen', 'settings', 'stats', 'story', 'tutorial', 'unlocked', 'v'], 'top-level fields');
+  t.deep(Object.keys(P).sort(), ['ach', 'daily', 'history', 'inkstones', 'kills', 'paid', 'seen', 'settings', 'stats', 'story', 'tutorial', 'unlocked', 'v'], 'top-level fields');
   t.eq(P.inkstones, 0, 'no Inkstones'); t.deep(Object.keys(P.stats).sort(), L.statKeys.slice().sort(), 'every stat key'); L.statKeys.forEach((k) => t.eq(P.stats[k], 0, 'stat ' + k));
-  t.deep(P.unlocked, { card: [], relic: [], gem: [], hero: [] }, 'nothing unlocked'); t.deep(P.ach, {}, 'no achievements'); t.deep(P.seen, {}, 'seen'); t.deep(P.kills, {}, 'kills'); t.deep(P.story, {}, 'story'); t.deep(P.history, [], 'history'); t.deep(P.tutorial, {}, 'tutorial'); t.deep(P.daily, { last: 0 }, 'daily');
+  t.deep(P.unlocked, { card: [], relic: [], gem: [], hero: [] }, 'nothing unlocked'); t.deep(P.ach, {}, 'no achievements'); t.deep(P.seen, {}, 'seen'); t.deep(P.kills, {}, 'kills'); t.deep(P.story, {}, 'story'); t.deep(P.history, [], 'history'); t.deep(P.tutorial, {}, 'tutorial'); t.deep(P.daily, { last: 0 }, 'daily'); t.deep(P.paid, [], 'no run has been paid out');
   t.deep(Object.keys(P.settings).sort(), Object.keys(DATA.SETTINGS).sort(), 'every setting'); Object.keys(DATA.SETTINGS).forEach((k) => t.eq(P.settings[k], DATA.SETTINGS[k].def, 'default ' + k));
   t.eq(A.META.get('musicVol'), 0.7, 'music volume'); t.eq(A.META.get('sfxVol'), 0.8, 'sfx volume'); t.eq(A.META.get('shake'), 1, 'shake'); t.eq(A.META.get('reduceMotion'), null, 'reduceMotion follows the system'); t.eq(A.META.get('textScale'), 1, 'text scale'); t.eq(A.META.get('fastAnim'), 0, 'fastAnim'); t.eq(A.META.get('damageNumbers'), true, 'damage numbers'); t.eq(A.META.get('colorblind'), false, 'colorblind'); t.eq(A.META.get('quality'), 'auto', 'quality'); t.eq(A.META.get('hints'), true, 'hints');
   t.eq(A.META.profile, P, 'META.profile is the live object'); t.eq(A.META.inkstones, 0, 'META.inkstones'); t.eq(A.META.history, P.history, 'META.history');
@@ -301,13 +301,13 @@ t.test('recordRun reports new achievements, hero unlocks, the new trial and bonu
   const R3 = mkRun(A, { victory: true, seed: 3, trialSet: 1, stats: {} }); t.eq(A.META.recordRun(R3, 'win', 99).newTrial, 2, 'a win at trial 1 opens trial 2'); t.ok(A.META.profile.ach.trial1 !== undefined, 'the trial achievement (trialBest gte 1) fired');
   const mid = fresh(); mid.META.load(); const midRun = mkRun(mid, { stats: { boss1Kills: 1, bossKills: 1 } }); mid.META.check(midRun, 5); const after = mid.META.recordRun(midRun, 'lose', 6); t.ok(after.newAchievements.indexOf('ch1_clear') < 0, 'an achievement unlocked mid-run is not announced again at the end'); t.deep(after.heroesUnlocked, [], 'nor a hero');
 });
-t.test('daily runs write only dailyRuns, half-rate Inkstones, daily.last and their history row', () => {
+t.test('daily runs write only dailyRuns, half-rate Inkstones, daily.last, their history row and the bestiary', () => {
   const A = fresh(); A.META.load(); A.META.track('kills', 3);
   const R = mkRun(A, { daily: true, seed: 20260317, victory: true, foes: { kappa: 2 }, deckSize: 9, curses: 1, stats: { kills: 20, bossKills: 1, boss1Kills: 1, hexesPainted: 50, maxHit: 40 } });
   const before = canon(A.META.profile.stats);
   const res = A.META.recordRun(R, 'win', 9);
   const s = A.META.profile.stats;
-  t.eq(s.dailyRuns, 1, 'dailyRuns'); t.eq(s.kills, 3, 'no kills'); t.eq(s.runs, 0, 'not a run'); t.eq(s.wins, 0, 'not a win'); t.eq(s.hexesPainted, 0, 'no hexes'); t.eq(s.maxHit, 0, 'no max stats'); t.eq(s.maxDeck, 0, 'no deck'); t.eq(s.curseCards, 0, 'no curses'); t.eq(s.smallDeckWins, 0, 'no small deck win'); t.eq(s.winsHanae, 0, 'no hero win'); t.eq(s.trialBest, 0, 'no trial'); t.deep(A.META.profile.kills, {}, 'no bestiary kills'); t.eq(A.META.trialMax(), 0, 'a daily win does not open trials');
+  t.eq(s.dailyRuns, 1, 'dailyRuns'); t.eq(s.kills, 3, 'no kills'); t.eq(s.runs, 0, 'not a run'); t.eq(s.wins, 0, 'not a win'); t.eq(s.hexesPainted, 0, 'no hexes'); t.eq(s.maxHit, 0, 'no max stats'); t.eq(s.maxDeck, 0, 'no deck'); t.eq(s.curseCards, 0, 'no curses'); t.eq(s.smallDeckWins, 0, 'no small deck win'); t.eq(s.winsHanae, 0, 'no hero win'); t.eq(s.trialBest, 0, 'no trial'); t.deep(A.META.profile.kills, { kappa: 2 }, 'the bestiary records a daily run too'); t.deep(A.META.profile.seen, { kappa: 1 }, 'and has met what it killed'); t.eq(A.META.trialMax(), 0, 'a daily win does not open trials');
   const changed = Object.keys(s).filter((k) => JSON.parse(before)[k] !== s[k]); t.deep(changed, ['dailyRuns'], 'exactly one stat moved');
   t.eq(A.META.profile.daily.last, 20260317, 'daily.last'); t.eq(A.META.history[0].daily, true, 'the history row is flagged'); t.eq(A.META.history[0].outcome, 'win', 'outcome'); t.ok(res.inkstones > 0, 'Inkstones at half rate');
   t.ok(res.newAchievements.indexOf('daily1') >= 0, 'dailyRuns can unlock its own achievement'); t.ok(res.newAchievements.indexOf('ch1_clear') < 0 && res.newAchievements.indexOf('kills10') < 0, 'but nothing from the run stats');
@@ -350,7 +350,7 @@ t.test('settings and profile survive alongside a run save (independent keys)', (
 // ================================================================================================ bestiary, story, tutorial, daily, reset
 t.test('bestiary and seen', () => {
   const A = fresh(); A.META.load();
-  t.eq(A.META.seen('kappa'), 1, 'first sighting'); t.eq(A.META.seen('kappa'), 2, 'counts'); t.eq(A.META.seen(5), 0, 'junk id ignored'); t.eq(JSON.parse(A._store.rb_profile_v1).seen.kappa, 1, 'the first sighting is saved at once');
+  t.eq(A.META.seen('kappa'), 1, 'first sighting'); t.eq(A.META.seen('kappa'), 2, 'counts'); t.eq(A.META.seen(5), 0, 'junk id ignored'); t.eq(JSON.parse(A._store.rb_profile_v1).seen.kappa, 2, 'every sighting is saved at once');
   A.META.profile.kills.kappa = 4;
   const list = A.META.bestiary(); const all = [].concat(DATA.ROSTER[1], DATA.ROSTER[2], DATA.ROSTER[3]);
   t.deep(list.map((x) => x.id), all.map((x) => x.id), 'every enemy of the fixed roster in roster order, seen or not'); t.deep(Object.keys(list[0]).sort(), ['chapter', 'id', 'kills', 'seen', 'tier'], 'fields');
@@ -390,9 +390,129 @@ t.test('a career: play, record, unlock, buy, replay', () => {
   const B = fresh({ store: Object.assign({}, A._store) }); B.META.load(); t.eq(canon(B.META.profile), canon(A.META.profile), 'the whole career survives a reload');
 });
 
+// ================================================================================================ several tabs, one localStorage (C10)
+// Two pages share one localStorage in a browser; the loader gives each page its own backing object, so `sync` copies it across.
+const sync = (from, to) => { Object.keys(to._store).forEach((k) => { delete to._store[k]; }); Object.assign(to._store, from._store); };
+const tabs = (seedStore) => { const A = fresh({ store: seedStore || {} }); const B = fresh({ store: Object.assign({}, A._store) }); A.META.load(); B.META.load(); return [A, B]; };
+t.test('tabs: a stale tab that only changes a setting no longer erases the other tab\'s progress (the t15 scenario)', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 100, tutorial: { intro: true } }) });
+  const R = mkRun(A, { seed: 9, victory: true, stats: { bossKills: 2, boss1Kills: 1, kills: 12 } });
+  const rec = A.META.recordRun(R, 'win', 5);
+  t.ok(rec.inkstones > 0 && rec.newAchievements.length > 0, 'tab A won a run, earned Inkstones and achievements');
+  const earned = A.META.inkstones;
+  sync(A, B);
+  B.META.set('musicVol', 0.2);                                   // stale tab B: only a routine setting write
+  const stored = JSON.parse(B._store.rb_profile_v1);
+  t.eq(stored.inkstones, earned, 'the Inkstones A earned are still there'); t.eq(stored.stats.wins, 1, 'the win'); t.eq(stored.stats.runs, 1, 'the run'); t.eq(stored.history.length, 1, 'the history row'); t.ok(Object.keys(stored.ach).length >= 2, 'the achievements'); t.eq(stored.settings.musicVol, 0.2, 'and B\'s own change is kept');
+  t.eq(stored.stats.trialBest, 0, 'trialBest'); const C = fresh({ store: Object.assign({}, B._store) }); C.META.load(); t.eq(C.META.trialMax(), 1, 'a fresh reload still has the trial A unlocked');
+  t.eq(B.META.inkstones, earned, 'and the stale tab itself caught up in place'); t.eq(B.META.stat('wins'), 1, 'B sees the win');
+});
+t.test('tabs: counters add up, bests take the larger, lists and flags union, settings merge key by key', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 10, stats: { kills: 5, maxHit: 12 } }) });
+  A.META.track('kills', 2); A.META.track('maxHit', 30); A.META.set('sfxVol', 0.1); A.META.markLore('intro'); A.META.seen('kappa'); A.META.save(); sync(A, B);
+  B.META.track('kills', 3); B.META.track('maxHit', 20); B.META.set('musicVol', 0.2); B.META.markLore('ch1_intro'); B.META.seen('kappa'); B.META.seen('oni'); B.META.save();
+  const P = JSON.parse(B._store.rb_profile_v1);
+  t.eq(P.stats.kills, 10, 'kills 5 + 2 + 3'); t.eq(P.stats.maxHit, 30, 'the larger best'); t.eq(P.settings.sfxVol, 0.1, 'A\'s setting'); t.eq(P.settings.musicVol, 0.2, 'B\'s setting'); t.deep(Object.keys(P.story).sort(), ['ch1_intro', 'intro'], 'story flags union'); t.eq(P.seen.kappa, 2, 'sightings add'); t.eq(P.seen.oni, 1, 'a creature only B met');
+  sync(B, A); A.META.set('sfxVol', 0.3); sync(A, B); B.META.refresh(); B.META.set('sfxVol', 0.5);
+  t.eq(JSON.parse(B._store.rb_profile_v1).settings.sfxVol, 0.5, 'the same key changed in both: the writer wins'); t.eq(JSON.parse(B._store.rb_profile_v1).settings.musicVol, 0.2, 'and nothing else moves');
+  B.META.setTutorial('map'); sync(B, A); A.META.refresh(); A.META.setTutorial('map', false); sync(A, B); B.META.save(); t.eq(JSON.parse(B._store.rb_profile_v1).tutorial.map, undefined, 'a removed flag stays removed');
+  const x = fresh({ store: { rb_profile_v1: J({ v: 1, futureThing: { a: 1 }, other: 2 }) } }); x.META.load(); const y = fresh({ store: Object.assign({}, x._store) }); y.META.load(); x.META.set('hints', false); y.META.profile.other = 3; sync(x, y); y.META.set('musicVol', 0.4);
+  const f = JSON.parse(y._store.rb_profile_v1); t.deep(f.futureThing, { a: 1 }, 'fields of a newer build ride along'); t.eq(f.other, 3, 'a field this tab changed wins'); t.eq(f.settings.hints, false, 'and the other tab\'s setting too');
+});
+t.test('tabs: Inkstone spending is never undone, and a stale tab cannot spend what is gone', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 500 }) });
+  const list = A.META.libraryList(); const first = list[0], second = list.find((x) => x.id !== first.id && x.kind === first.kind) || list[1];
+  t.eq(A.META.buy(first.kind, first.id).ok, true, 'A buys ' + first.id);
+  sync(A, B);
+  B.META.set('hints', false);                                    // a stale write must not refund A's purchase
+  t.eq(JSON.parse(B._store.rb_profile_v1).inkstones, 500 - first.cost, 'the Inkstones stay spent'); t.ok(JSON.parse(B._store.rb_profile_v1).unlocked[first.kind].indexOf(first.id) >= 0, 'the unlock stays');
+  const [C, D] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 500 }) });
+  C.META.buy(first.kind, first.id); sync(C, D);
+  t.eq(D.META.buy(first.kind, first.id).reason, 'owned', 'the other tab sees the purchase before it pays again'); t.eq(D.META.inkstones, 500 - first.cost, 'one charge only');
+  const [E, F] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 500 }) });
+  E.META.buy(first.kind, first.id); F.META.profile.inkstones = 500;                      // F never heard of it but is about to buy another entry
+  sync(E, F); F.META.buy(second.kind, second.id); const e = JSON.parse(F._store.rb_profile_v1);
+  t.eq(e.inkstones, 500 - first.cost - second.cost, 'both purchases are charged once'); t.ok(e.unlocked[first.kind].indexOf(first.id) >= 0 && e.unlocked[second.kind].indexOf(second.id) >= 0, 'and both unlocks are kept');
+});
+t.test('tabs: an Erase still erases, from either tab, and a stale tab cannot bring the old profile back', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 100, stats: { wins: 2, kills: 40 }, ach: { ch1_clear: 5 }, story: { intro: true }, unlocked: { card: [], relic: [], gem: [], hero: ['suzu'] }, history: [{ id: 'old', outcome: 'win', score: 9 }] }) });
+  A.META.reset({ keepSettings: true });
+  t.eq(JSON.parse(A._store.rb_profile_v1).inkstones, 0, 'A erased');
+  sync(A, B);
+  B.META.set('musicVol', 0.1); B.META.markLore('hero_hanae');          // B still holds the old profile in memory
+  const P = JSON.parse(B._store.rb_profile_v1);
+  t.eq(P.inkstones, 0, 'the old Inkstones stay gone'); t.eq(P.stats.wins, 0, 'the old wins'); t.eq(P.stats.kills, 0, 'the old kills'); t.deep(P.ach, {}, 'the old achievements'); t.deep(Object.keys(P.story), ['hero_hanae'], 'only what B did after the Erase'); t.deep(P.unlocked.hero, [], 'the old unlocks'); t.deep(P.history, [], 'the old history'); t.eq(P.settings.musicVol, 0.1, 'B\'s later setting');
+  const [C, D] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 40 }) });
+  C.META.track('kills', 4); C.META.save(); sync(C, D); D.META.reset();
+  t.eq(JSON.parse(D._store.rb_profile_v1).inkstones, 0, 'an Erase in the stale tab writes straight through'); t.eq(JSON.parse(D._store.rb_profile_v1).stats.kills, 0, 'whatever the other tab had added');
+  const E = fresh({ store: Object.assign({}, D._store) }); t.eq(E.META.load().inkstones, 0, 'and a reload agrees');
+});
+t.test('tabs: a run that another tab paid out cannot be saved, loaded, continued or paid again (the t15 scenario 2)', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 100 }) });
+  const R = mkRun(A, { seed: 21, stats: { bossKills: 1, boss1Kills: 1 } });
+  t.eq(A.META.saveRun(R), true, 'A saves the run');
+  sync(A, B);
+  const RB = B.META.loadRun(); t.ok(RB && RB.id === R.id, 'B continues the same run');
+  const rec = A.META.recordRun(R, 'abandon', 7); A.META.clearRun(R.id);
+  t.ok(rec.inkstones > 0 && !A._store.rb_run_v1, 'A abandoned it, was paid once and the run key is gone'); t.ok(A.META.profile.paid.indexOf(R.id) === 0, 'the run id is on the paid ledger');
+  sync(A, B);
+  t.eq(B.META.saveRun(RB), true, 'B keeps playing and saves'); t.eq(B._store.rb_run_v1, undefined, 'but the dead run is not written back'); t.eq(B.META.hasRun(), false, 'no Continue is offered');
+  const C = fresh({ store: Object.assign({}, B._store) }); C.META.load(); t.eq(C.META.hasRun(), false, 'a fresh reload offers nothing'); t.eq(C.META.runInfo(), null, 'no run info'); t.eq(C.META.loadRun(), null, 'and loads nothing');
+  const before = B.META.inkstones; const again = B.META.recordRun(RB, 'abandon', 8);
+  t.eq(again.inkstones, 0, 'finishing the stale copy pays nothing'); t.eq(RB.recorded, true, 'it is marked recorded'); t.eq(B.META.inkstones, before, 'the balance did not move'); t.eq(B.META.history.filter((h) => h.id === R.id).length, 1, 'one history row, not two'); t.eq(B.META.stat('runs'), 1, 'one run counted');
+});
+t.test('tabs: the staleness is caught even when the stale tab never reloaded the profile (stored paid ledger beats memory)', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1 }) });
+  const R = mkRun(A, { seed: 31 }); A.META.saveRun(R); sync(A, B);
+  A.META.recordRun(R, 'lose', 1); A.META.clearRun(R.id); sync(A, B);                      // B's memory knows nothing: no refresh, no event
+  t.eq(B.META.profile.paid.length, 0, 'B\'s memory is stale'); const RB = mkRun(B, { seed: 31 }); t.eq(B.META.runPaid(RB.id), false, 'runPaid answers from memory until a read'); t.eq(B.META.hasRun(), false, 'hasRun looks at storage'); t.eq(B.META.recordRun(RB, 'lose', 2).inkstones, 0, 'recordRun reads storage first and pays nothing'); t.eq(B.META.runPaid(RB.id), true, 'now it knows');
+});
+t.test('tabs: a run already in history but not on a ledger (an older save) is dropped too, and saves of other runs are left alone', () => {
+  const A = fresh(); A.META.load(); const R = mkRun(A, { seed: 41 }); A.META.saveRun(R);
+  A.META.profile.history.unshift({ id: R.id, outcome: 'lose', score: 3 }); A.META.save(); t.eq(A.META.hasRun(), false, 'hasRun'); t.eq(A.META.loadRun(), null, 'loadRun drops it'); t.eq(A._store.rb_run_v1, undefined, 'and removes the key');
+  const live = mkRun(A, { seed: 42 }), other = mkRun(A, { seed: 43 }); A.META.saveRun(live);
+  A.META.clearRun(other.id); t.ok(A._store.rb_run_v1, 'clearRun(id) leaves another run\'s save alone'); other.done = true; t.eq(A.META.saveRun(other), true, 'a finished run saves as nothing'); t.ok(A._store.rb_run_v1, 'and does not delete the other tab\'s new run'); A.META.clearRun(live.id); t.eq(A._store.rb_run_v1, undefined, 'clearRun(own id) removes it'); A.META.saveRun(live); A.META.clearRun(); t.eq(A._store.rb_run_v1, undefined, 'clearRun() with no id still removes whatever is stored');
+});
+t.test('tabs: history merges by run id, newest first, capped at 20', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1 }) });
+  A.META.recordRun(mkRun(A, { seed: 51 }), 'lose', 1); sync(A, B); B.META.recordRun(mkRun(B, { seed: 52 }), 'lose', 2); sync(B, A); A.META.recordRun(mkRun(A, { seed: 53 }), 'lose', 3);
+  const P = JSON.parse(A._store.rb_profile_v1); t.eq(P.history.length, 3, 'A\'s last write merged all three rows'); t.eq(new Set(P.history.map((h) => h.id)).size, 3, 'distinct ids'); t.eq(P.paid.length, 3, 'all three on the ledger');
+  const [C, D] = tabs({ rb_profile_v1: J({ v: 1, history: Array.from({ length: 20 }, (_, i) => ({ id: 'h' + i, outcome: 'win', score: i })) }) });
+  C.META.recordRun(mkRun(C, { seed: 61 }), 'lose', 1); sync(C, D); D.META.recordRun(mkRun(D, { seed: 62 }), 'lose', 2);
+  t.eq(JSON.parse(D._store.rb_profile_v1).history.length, 20, 'never more than 20');
+});
+t.test('tabs: refresh updates the live profile in place, and costs nothing when nothing changed', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 5 }) });
+  const P = A.META.profile, hist = A.META.history, stats = P.stats;
+  B.META.profile.inkstones = 77; B.META.recordRun(mkRun(B, { seed: 71 }), 'lose', 3); sync(B, A);
+  const got = A.META.refresh();
+  t.ok(got === P && A.META.profile === P, 'the same object'); t.ok(A.META.history === hist && P.stats === stats, 'and the same history array and stats map'); t.ok(P.inkstones >= 77, 'Inkstones arrived'); t.eq(hist.length, 1, 'the history row arrived');
+  const before = JSON.stringify(P); A.META.refresh(); A.META.refresh(); t.eq(JSON.stringify(P), before, 'nothing changes without news');
+  A.META.profile.inkstones += 10; A.META.refresh(); t.eq(A.META.profile.inkstones, P.inkstones, 'an unsaved local change survives a refresh');
+  const w = JSON.parse(J(JSON.parse(A._store.rb_profile_v1))); A.META.save(); t.ok(JSON.parse(A._store.rb_profile_v1).inkstones >= w.inkstones + 10, 'and is written at the next save');
+});
+t.test('tabs: junk written by another tab is kept aside and this tab\'s profile wins the next write; storage that cannot be read is not mistaken for an erase', () => {
+  const [A, B] = tabs({ rb_profile_v1: J({ v: 1, inkstones: 9 }) });
+  B._store.rb_profile_v1 = '{broken'; sync(B, A); A.META.set('hints', false);
+  t.eq(A._store.rb_profile_v1_bad, '{broken', 'the junk is kept'); t.eq(JSON.parse(A._store.rb_profile_v1).inkstones, 9, 'A\'s own copy was written back');
+  const R = fresh({ store: { rb_profile_v1: J({ v: 1, inkstones: 9 }) }, failStorage: 'get' }); R.META.load(); R.META.set('hints', false); R.META.set('musicVol', 0.1); t.eq(R.META.get('hints'), false, 'unreadable storage: memory carries on'); t.eq(R.META.profile.inkstones, 0, 'with a fresh profile, as before');
+  const gone = fresh({ store: { rb_profile_v1: J({ v: 1, inkstones: 9 }) } }); gone.META.load(); delete gone._store.rb_profile_v1; gone.META.set('hints', false); t.eq(JSON.parse(gone._store.rb_profile_v1).inkstones, 9, 'a vanished key is not an Erase: this tab\'s copy is written back');
+});
+
+// ================================================================================================ the memory fallback is what Continue reads (L28)
+t.test('after a refused write the fresher memory copy is what loadRun and load read, not the old stored one', () => {
+  const A0 = fresh(); A0.META.load(); const R0 = mkRun(A0, { seed: 81 }); R0.gold = 60; A0.META.saveRun(R0); const old = A0._store.rb_run_v1;
+  const A = fresh({ store: { rb_run_v1: old, rb_profile_v1: J({ v: 1, inkstones: 3 }) }, failStorage: true }); A.META.load();
+  const R = A.META.loadRun(); t.eq(R.gold, 60, 'the saved run loads'); R.gold = 777; R.heroes[0].hp = 11;
+  t.eq(A.META.saveRun(R), false, 'the write is refused (quota)'); t.eq(A._store.rb_run_v1, old, 'storage still holds the old save');
+  const again = A.META.loadRun(); t.eq(again.gold, 777, 'Continue in the same session reads the newer copy'); t.eq(again.heroes[0].hp, 11, 'hp too'); t.eq(A.META.hasRun(), true, 'hasRun'); t.eq(A.META.runInfo().chapter, R.chapter, 'runInfo');
+  A.META.set('musicVol', 0.2); t.eq(A.META.save(), false, 'the profile write is refused too'); t.eq(A.META.load().settings.musicVol, 0.2, 'and load reads the memory copy back');
+  A.META.clearRun(); t.eq(A.META.hasRun(), false, 'clearing removes the memory copy as well'); t.eq(A.META.loadRun(), null, 'nothing comes back');
+});
+
 // ================================================================================================ contract odds and ends
 t.test('the public API is complete', () => {
-  ['load', 'save', 'reset', 'get', 'set', 'saveRun', 'loadRun', 'clearRun', 'hasRun', 'track', 'stat', 'check', 'isUnlocked', 'unlockedSet', 'libraryList', 'buy', 'recordRun', 'seen', 'bestiary', 'loreSeen', 'markLore', 'storyList', 'trialMax', 'dailySeed', 'tutorial', 'setTutorial'].forEach((f) => t.eq(typeof G.META[f], 'function', 'META.' + f));
+  ['load', 'save', 'refresh', 'reset', 'get', 'set', 'saveRun', 'loadRun', 'clearRun', 'hasRun', 'runPaid', 'track', 'stat', 'check', 'isUnlocked', 'unlockedSet', 'libraryList', 'buy', 'recordRun', 'seen', 'bestiary', 'loreSeen', 'markLore', 'storyList', 'trialMax', 'dailySeed', 'tutorial', 'setTutorial'].forEach((f) => t.eq(typeof G.META[f], 'function', 'META.' + f));
   ['runInfo', 'achievements', 'mergeStats', 'dailyPlayed'].forEach((f) => t.eq(typeof G.META[f], 'function', 'META.' + f + ' (extra)'));
   t.eq(typeof G.META.bus.on, 'function', 'META.bus'); t.ok('profile' in G.META && 'inkstones' in G.META && 'history' in G.META, 'getters');
 });
