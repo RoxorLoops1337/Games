@@ -2770,6 +2770,17 @@ html[lang="nl"] .mh .l1 .mhInk{font-size:17px;padding:3px 5px}
 .m2Stop .card.sold{opacity:.42}
 .m2Stop .card .stamp{border-width:2px;font-size:19px;background:rgba(18,9,31,.8)}
 .m2Stop .card .plus{color:var(--good)}
+/* CR (round 21): plus 2, the Compactor's merge marks, the elite's pick of combo relics, the Prizedex's combo line */
+.card .plus.plus2,.m2Stop .card .plus.plus2{color:var(--pink2)}
+.card .cmp2Tag{position:absolute;top:6px;right:6px;font-size:12px;font-weight:900;line-height:18px;padding:0 6px;border-radius:9px;
+  background:var(--surface-2,#24163a);color:var(--gold);border:1px solid rgba(255,204,85,.45);white-space:nowrap}
+#scr-treasure .cards.crPick{grid-template-columns:1fr;width:100%;max-width:440px;align-self:center;margin-top:var(--s2,8px)}
+#scr-treasure .card.crCard{display:grid;grid-template-columns:64px 1fr;column-gap:12px;row-gap:2px;align-items:center;text-align:left;padding:12px 14px}
+#scr-treasure .card.crCard canvas{grid-row:1/4;width:64px;height:64px}
+#scr-treasure .card.crCard .name{font-size:17px}
+#scr-treasure .card.crCard .crFam{font-size:12px;font-weight:800;color:var(--gold)}
+#scr-treasure .card.crCard .text{font-size:13px;font-weight:600}
+.crDexSub{margin:4px 0 8px;text-align:center}
 
 /* ---- Reward: the receipt, the capsule slots, three cards ---- */
 #scr-reward .payout{border:1.5px solid var(--line);background:var(--surface);box-shadow:none}
@@ -3123,6 +3134,16 @@ html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
 .calm .m3FoldT::after,.calm .m3FoldT{transition:none}
 @media (prefers-reduced-motion:reduce){.m3FoldT::after,.m3FoldT{transition:none}.m3-score .scoreBox .nb.on{animation:none;opacity:1;transform:rotate(8deg)}}
 /* ================= /M3 ================= */
+</style>
+<style id="rrow-css">
+/* ================= RROW (round 21): the resolve row (DESIGN.md "The resolve row (round 21)") =================
+   The shelf is drawn on the canvas over the player row: the statuses and the GRABS pill step aside while it is up.
+   The speed pill sits in the fight's control row next to the camera (1x, 2x, 4x). */
+#playerRow.rrOn #pstatus,#playerRow.rrOn #grabs{opacity:0;pointer-events:none}
+/* a banner (JACKPOT, TURN OVER) rises over the arena instead of covering the shelf */
+#playerRow.rrOn #banner{top:-122px}
+.ctrlRow .rrSpd{font-size:var(--fs-s);font-weight:900;letter-spacing:.02em;text-transform:none;color:var(--info);font-variant-numeric:tabular-nums}
+/* ================= /RROW ================= */
 </style>
 </head>
 <body>

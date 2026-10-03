@@ -1402,3 +1402,71 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /M3
+// ---------------------------------------------------------------- CR (round 21): combo relics, a gentler start, plus 2
+// DESIGN.md "Combo relics and a gentler, clearer start (round 21)": the combo relics (names, texts, proc labels), the
+// elite's pick, the families on the cards, the Prizedex line, the help section, the new tip, the Compactor's ++.
+I18N.add('nl', {
+"ui": {
+"Combo relic": "Combo-relikwie",
+"The elite dropped a combo relic. Pick one: it switches on a family of combos, bonus moves a grab fires when it delivers the right items together.": "Het elite-monster liet een combo-relikwie vallen. Kies er een: hij zet een familie combo's aan, bonuszetten die een greep doet als hij de juiste voorwerpen samen aflevert.",
+"{s}: its combos are live.": "{s}: zijn combo's werken nu.",
+"{s} · {n} combos": "{s} · {n} combo's",
+"{s} · {n} combos + Bubble Combo": "{s} · {n} combo's + Bellencombo",
+"{n} families · {n2} combos": "{n} families · {n2} combo's",
+"Steel": "Staal",
+"Brew": "Brouwsel",
+"Party": "Feest",
+"Casino": "Casino",
+"Combo relic: {s}.": "Combo-relikwie: {s}.",
+"Combos are a relic power: each combo relic switches on one family. The first elite of a run offers a pick of three.": "Combo's zijn een relikwiekracht: elk combo-relikwie zet één familie aan. Het eerste elite-monster van een run biedt er drie aan om uit te kiezen.",
+"Every item does what its card says, nothing more. <b>Combos</b> are a relic power: a <b>combo relic</b> switches on one family of bonus moves (Steel, Brew, Feast, Jackpot, Casino, Tech, Party), and a grab that delivers the right items together fires one. The first elite you beat in a run offers a pick of three; more turn up later. The Prizedex lists every recipe and its relic.": "Elk voorwerp doet wat er op zijn kaart staat, niets meer. <b>Combo's</b> zijn een relikwiekracht: een <b>combo-relikwie</b> zet één familie bonuszetten aan (Staal, Brouwsel, Feestmaal, Jackpot, Casino, Techniek, Feest), en een greep die de juiste voorwerpen samen aflevert, doet er een. Het eerste elite-monster dat je in een run verslaat, biedt er drie aan om uit te kiezen; later komen er meer. De Prijzendex toont elk recept en zijn relikwie.",
+"<b>The Compactor</b> crushes three items into one: three of a kind come out upgraded (+), three upgraded ones come out <b>++</b>, stronger again.": "<b>De Pers</b> perst drie voorwerpen tot één: drie dezelfde komen er verbeterd uit (+), drie verbeterde komen er als <b>++</b> uit, nog sterker.",
+"Your combo relic at work: when one grab delivers the right items together (two weapons, fire with ice, three of a kind), its family fires a bonus move.": "Je combo-relikwie aan het werk: als één greep de juiste voorwerpen samen aflevert (twee wapens, vuur met ijs, drie dezelfde), doet zijn familie een bonuszet.",
+"Feed it 3 items, get 1 better one. Three of a kind comes out upgraded, three upgraded ones come out ++.": "Voer hem 3 voorwerpen en krijg er 1 betere terug. Drie dezelfde komen er verbeterd uit, drie verbeterde als ++.",
+"Crush 3 items into 1 better one (a plus copy for three of a kind, ++ for three upgraded ones).": "Pers 3 voorwerpen tot 1 betere (een plusversie bij drie dezelfde, ++ bij drie verbeterde).",
+"Three upgraded: out comes {s}, stronger again.": "Drie verbeterde: er komt {s} uit, nog sterker.",
+"{n}/3 for ++": "{n}/3 voor ++",
+"PLUS 2": "PLUS 2",
+"Plus 2: {s}": "Plus 2: {s}",
+"STEEL COMBO": "STAALCOMBO",
+"BREW COMBO": "BROUWSELCOMBO",
+"FEAST COMBO": "FEESTMAALCOMBO",
+"JACKPOT COMBO": "JACKPOTCOMBO",
+"CASINO COMBO": "CASINOCOMBO",
+"TECH COMBO": "TECHNIEKCOMBO",
+"PARTY COMBO": "FEESTCOMBO",
+"ALL COMBOS": "ALLE COMBO'S"
+},
+"content": {
+"relic": {
+"cr_steel": { "name": "Wapenrek", "text": "Zet de Staal-combo's aan: een greep die twee verschillende wapens, twee verschillende Blok-voorwerpen, drie metalen voorwerpen of rommel met een wapen boven haalt, doet een bonuszet." },
+"cr_brew": { "name": "Roerlepel", "text": "Zet de Brouwsel-combo's aan: een greep die vuur, vorst en gif mengt, glas met vuur, een Gifpil met een drankje, drie glazen of twee magische voorwerpen, doet een bonuszet." },
+"cr_feast": { "name": "Picknickmand", "text": "Zet de Feestmaal-combo's aan: een greep die twee of drie soorten eten, of eten met vuur, boven haalt, geneest je als bonuszet." },
+"cr_jackpot": { "name": "Goochelhoed", "text": "Zet de Jackpot-combo's aan: een greep van drie of vier voorwerpen, drie keer hetzelfde voorwerp, twee kleine voorwerpen of twee Hebzucht-voorwerpen doet een bonuszet." },
+"cr_casino": { "name": "Croupierspet", "text": "Zet de Casino-combo's aan: twee dobbelstenen, een kaart en een fiche, twee paren en de geheime handen doen een bonuszet met Geluk en goud." },
+"cr_tech": { "name": "Cheatcode", "text": "Zet de Techniek-combo's aan: een Techniek-voorwerp met een munt of twee metalen voorwerpen, of een greep die PRECIES RAAK is en twee of meer boven haalt, doet een bonuszet." },
+"cr_party": { "name": "Feestknaller", "text": "Zet de Feest-combo's aan: de kunstjes van je huisdier (Apport!, Spaarpotje), de combo's van geëvolueerde voorwerpen en de Bellencombo (twee of meer bellen die in één greep knappen)." },
+"cr_all": { "name": "De Strategiegids", "text": "Zet alle combofamilies tegelijk aan: Staal, Brouwsel, Feestmaal, Jackpot, Casino, Techniek en Feest. Elk recept in de Prijzendex werkt." }
+}
+}
+});
+// ---------------------------------------------------------------- /CR
+// ---------------------------------------------------------------- RROW (round 21): the resolve row
+// DESIGN.md "The resolve row (round 21)": the row's chips, the skip hint and the speed pill.
+I18N.add('nl', {
+"ui": {
+"tap the row to skip": "tik op de rij om door te spoelen",
+"Resolve speed": "Tempo van de rij",
+"Resolve speed: tap to change": "Tempo van de rij: tik om te wisselen",
+"THAW": "ONTDOOI",
+"ALL": "ALLE",
+"GRAB": "GREEP",
+"BONUS": "BONUS",
+"PET": "HUISDIER",
+"ITEM": "VOORWERP",
+"CASH OUT": "UITBETALING",
+"JACKPOT PAYOUT": "JACKPOTUITBETALING",
+"Combo": "Combo"
+}
+});
+// ---------------------------------------------------------------- /RROW

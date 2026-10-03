@@ -502,6 +502,12 @@ h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
   Gt.endFight('win');
   h.eq(Gt.screen, 'reward', 'reward screen after the win');
   Gt.choose(3);
+  // (round 21) the run's first elite (a tower keeper counts) offers its pick of combo relics first
+  h.eq(Gt.screen, 'treasure', 'the combo relic pick');
+  h.ok(Gt.S.sd && Gt.S.sd.treasure && Gt.S.sd.treasure.crRw && Gt.S.sd.treasure.crRw.cr.pick.length === 3, 'three combo relics on offer');
+  const crId = Gt.S.sd.treasure.crRw.cr.pick[0];
+  Gt.choose(0);
+  h.ok(Gt.run.relics.includes(crId), 'the picked combo relic is the run\'s');
   h.eq(Gt.screen, 'treasure', 'then the treasure screen');
   h.ok(Gt.S.sd && Gt.S.sd.treasure && Gt.S.sd.treasure.relic, 'a relic is offered');
   const eliteInk = (DATA.ECONOMY && DATA.ECONOMY.eliteInk) || 1;
@@ -509,12 +515,13 @@ h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
   h.ok(Object.values(M.tiles).every(t => MAP.hexDist(t.q, t.r, tower.q, tower.r) > MAP.TOWER_VIEW || t.revealed), 'the view from the tower lights everything within radius ' + MAP.TOWER_VIEW);
   h.ok(/view lights \d+ hexes/.test(Gt.S.sd.treasure.sub), 'the treasure screen says how much the view lit');
   Gt.choose(0);
-  h.eq(Gt.run.relics.length, relics + 1, 'relic taken');
+  h.eq(Gt.run.relics.length, relics + 2, 'relic taken (and the combo relic before it)');
   h.eq(Gt.screen, 'map', 'back on the map');
   h.ok(tower.done, 'tower cleared');
   // The other bonus kinds apply without throwing.
   for (const bonus of [{ k: 'gold', n: 60 }, { k: 'brush', id: 'splash' }, { k: 'brush', id: 'kite' }, { k: 'claw', u: 'width' }]) {
     const T2 = boot(); const G2 = T2.GAME; G2.newRun('knight', 77);
+    G2.run.crPick = 1;   // (round 21) not the run's first elite: no combo relic pick in front
     const tw = Object.values(G2.run.map.tiles).find(t => t.type === 'tower');
     tw.content.tower.bonus = bonus;
     const gold = G2.run.gold, brushes = G2.run.brushes.length, width = G2.run.claw.width;
@@ -1123,6 +1130,7 @@ h.test('every event choice resolves without throwing', () => {
         Gt.choose(c);
         for (let k = 0; k < 4 && Gt.screen === 'bin'; k++) chooseFirst(Gt);
         if (Gt.screen === 'fight') { stepFor(Gt, 0.2); Gt.endFight('win'); h.eq(Gt.screen, 'reward', `${id}/${c}: fight then reward`); Gt.choose(3); }
+        if (Gt.screen === 'treasure' && Gt.S.sd && Gt.S.sd.treasure && Gt.S.sd.treasure.crRw) Gt.choose(0);   // (round 21) an elite: the combo relic pick
         for (let k = 0; k < 4 && Gt.screen === 'bin'; k++) chooseFirst(Gt);
         h.ok(['map', 'gameover', 'fight', 'reward'].indexOf(Gt.screen) >= 0, `${id}/${c}: ends on a known screen (${Gt.screen})`);
       } catch (e) { h.ok(false, `${id}/${c} threw: ${e.message}`); }
@@ -1270,15 +1278,16 @@ h.test('juice: proc, combo, keywords, unknown events, throws, crits, the outro, 
   // back to a fresh fight for the throw / crit / outro checks
   Gt.startFight(['rat', 'rat'], 'normal');
   h.ok(settle(Gt, 10), 'fight ready again');
-  // delivered items fly to their target and land before they resolve
+  // delivered items land on the resolve row (RROW round 21), then fly to their target one at a time and land before they resolve
   const bodies = itemBodies(Gt).slice(0, 2);
   const played0 = Gt.run.played;
   Gt.playDelivered(bodies);
-  h.eq(Gt.fs.throws.length, 2, 'two items in flight');
-  h.eq(Gt.state().queue >= 2, true, 'items in flight count as pending (state().queue)');
+  h.eq(Gt.row.state.slots.filter(s => s.k === 'item').length, 2, 'two items on the row');
+  h.eq(Gt.state().queue >= 2, true, 'items on the row count as pending (state().queue)');
   stepFor(Gt, 0.05);
+  h.eq(Gt.fs.throws.length, 1, 'one in flight at a time');
   h.eq(Gt.run.played, played0, 'nothing resolves mid-flight');
-  stepFor(Gt, 1.2);
+  stepFor(Gt, 1.6);
   h.eq(Gt.run.played, played0 + 2, 'both resolved after landing');
   h.eq(Gt.fs.throws.length, 0, 'the throws are cleared');
   // a crushing hit (a fifth of max hp): hit stop, knockback, a ghost chunk on the bar
@@ -1435,6 +1444,9 @@ h.test('loot: an elite win pays a tallied payout, tickets and a capsule; the car
   h.ok(Gt.loot.pay.done, 'no second tally');
   h.eq(Gt.run.tickets, rw.tix + (cap.prize.k === 'tickets' ? cap.prize.n : 0), 'the tickets were not paid twice');
   Gt.choose(3);
+  // (round 21) the first elite: its combo relic pick, after the reward (the cards and Skip kept their indices)
+  h.eq(Gt.screen, 'treasure', 'skip -> the combo relic pick');
+  Gt.choose(Gt.S.ui.buttons.findIndex(b => b.label === 'Skip'));
   h.eq(Gt.screen, 'map', 'skip -> map');
   h.eq(Gt.run.caps.length, 0, 'nothing banked (it was opened)');
   h.eq(Gt.run.loot.capsOpened, 1, 'highlights count the capsule');
@@ -1448,6 +1460,9 @@ h.test('loot: an unopened capsule banks on the map and opens from its chip', () 
   stepFor(Gt, 0.2);
   Gt.endFight('win');
   Gt.choose(3);
+  // (round 21) the first elite's combo relic pick, skipped: the reward carries on its own way after it
+  h.eq(Gt.screen, 'treasure', 'the combo relic pick comes first');
+  Gt.choose(Gt.S.ui.buttons.findIndex(b => b.label === 'Skip'));
   h.eq(Gt.screen, 'map', 'skipped to the map');
   h.eq(Gt.run.caps.length, 1, 'the capsule waits in the bank');
   const i = Gt.S.ui.buttons.findIndex(b => b.label === 'Capsule');
@@ -5240,6 +5255,132 @@ h.test('compactor: the press plays the crush (feed, slam, grind, lift, pop) and 
   h.ok(G.cmp.hurry() && G.cmp.state.phase === 'done' && G.cmp.state.fired.slam, 'a tap: straight to the result (the slam still lands)');
 });
 
+// ---- round 21 (DESIGN.md "Combo relics and a gentler, clearer start (round 21)")
+h.test('cr: who starts with a combo relic, and the first elite\'s pick of three (a reload keeps it)', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  const isCr = (id) => !!(D.RELICS[id] && D.RELICS[id].combo);
+  for (const ch of ['knight', 'alchemist', 'rogue', 'engineer', 'techie']) { G.newRun(ch, 2101); h.ok(!G.run.relics.some(isCr), `${ch} starts with no combo relic`); }
+  G.newRun('gambler', 2101); h.ok(G.run.relics.includes('cr_casino') && G.run.relics.length === 2, 'Lucky Lou starts with the Dealer\'s Visor (his dice and chips are Casino recipes)');
+  G.newRun('bubbler', 2101); h.ok(G.run.relics.includes('cr_party'), 'Ms. Bubbles starts with the Party Popper (her Bubble Combo)');
+  G.newRun('knight', 2102);
+  h.ok(!G.run.crPick, 'no pick offered yet');
+  // a normal fight offers nothing
+  G.startFight(['rat'], 'normal'); stepFor(G, 0.2); G.endFight('win');
+  h.ok(!G.S.sd.reward.cr && !G.run.crPick, 'a normal fight: no combo relic pick');
+  G.choose(3);
+  h.eq(G.screen, 'map', 'straight back to the map');
+  // the first elite
+  G.startFight(D.ENCOUNTERS[1].elite[0], 'elite'); stepFor(G, 0.2); G.endFight('win');
+  const rw = G.S.sd.reward;
+  h.ok(rw.cr && rw.cr.pick.length === 3 && new Set(rw.cr.pick).size === 3 && rw.cr.pick.every(isCr) && G.run.crPick === 1, 'the first elite: three different combo relics');
+  h.ok(rw.cr.pick.every(id => D.RELICS[id].combo !== 'all'), 'the pick is three families (The Strategy Guide waits in the pools)');
+  G.choose(3);   // Skip the item cards
+  h.eq(G.screen, 'treasure', 'the combo relic pick comes after the reward');
+  const cards = s6Find(T._nodes.treasureBody, 'crCard');
+  h.eq(cards.length, 3, 'three relic cards');
+  h.ok(cards.every(c => /combos/.test(s6Text(c))), 'each card says its family and how many combos (' + s6Text(cards[0]).slice(0, 60) + ')');
+  G.save();
+  const T2 = s6Boot(Object.assign({}, T._store)), G2 = T2.GAME;
+  G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.ok(G2.screen === 'treasure' && G2.S.sd.treasure.crRw && G2.S.sd.treasure.crRw.cr.pick.join() === rw.cr.pick.join(), 'a reload resumes the same pick');
+  const pick = rw.cr.pick[1];
+  G2.choose(1);
+  h.ok(G2.run.relics.includes(pick) && G2.run.relics.filter(isCr).length === 1, 'the picked relic joins the run, only that one');
+  h.eq(G2.screen, 'map', 'then on to the map');
+  // a second elite: no second pick
+  G2.startFight(D.ENCOUNTERS[1].elite[1], 'elite'); stepFor(G2, 0.2); G2.endFight('win');
+  h.ok(!G2.S.sd.reward.cr, 'a second elite: no second pick');
+  // an old save mid act (no crPick): its next elite offers the pick, combos stay off until then
+  G.newRun('knight', 2103);
+  delete G.run.crPick;
+  G.startFight(D.ENCOUNTERS[1].elite[2], 'elite'); stepFor(G, 0.2); G.endFight('win');
+  h.ok(G.S.sd.reward.cr && G.S.sd.reward.cr.pick.length === 3, 'a run from before round 21 gets its pick at its next elite');
+  G.choose(3); G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));
+  h.ok(G.screen === 'map' && !G.run.relics.some(isCr), 'Skip leaves it be');
+});
+
+h.test('cr: combo boosters wait for a combo relic; combo relics wait for the first elite in act 1', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 2104);
+  const boosters = Object.keys(D.RELICS).filter(id => D.crBoosts(D.RELICS[id]));
+  h.ok(['encore_machine', 'tuning_fork', 'ticket_roll', 'leg_crowd', 'squeaky_toy'].every(id => boosters.includes(id)), 'Encore, the Fork, the Ticket Roll, The Crowd, the Squeaky Toy feed combos: ' + boosters.join(','));
+  const all = () => G.cr.relicPool(['c', 'u', 'r', 'boss', 'l']);
+  h.ok(!all().some(id => boosters.includes(id)), 'no combo relic: no booster in any pool');
+  h.ok(!all().some(id => D.RELICS[id].combo), 'act 1, before the first elite: no combo relic in the pools');
+  G.run.crPick = 1;
+  h.ok(D.CR.RELICS.every(id => all().includes(id)) && !all().some(id => boosters.includes(id)), 'after the pick was offered: combo relics at their own rarity, boosters still out');
+  G.gainRelic('cr_steel');
+  h.ok(boosters.every(id => all().includes(id) || G.run.relics.includes(id)), 'a combo relic in hand: the boosters come back');
+  h.ok(!all().includes('cr_steel') && all().includes('cr_all'), 'never one already owned');
+  G.newRun('knight', 2105); G.run.act = 2;
+  h.ok(D.CR.RELICS.every(id => all().includes(id)), 'act 2 and up: combo relics are in the pools anyway');
+});
+
+h.test('cr: the Prizedex and How it works explain combos as a relic power', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 2106);
+  for (const id in D.COMBOS) h.ok(D.CR.relicFor(D.COMBOS[id]) && D.RELICS[D.CR.relicFor(D.COMBOS[id])], `${id}: names its combo relic`);
+  h.ok(/Combo relic: Weapon Rack\./.test(G.cr.dexLine(D.COMBOS.crossed_blades)), 'the Prizedex line under a recipe');
+  G.showCollection('combos');
+  h.ok(/relic power/.test(s6Text(T._nodes.collectionBody)), 'the combos tab says combos come from relics');
+  G.showHelp('map');
+  const html = (el) => (el ? (el.textContent || '') + ' ' + (el.innerHTML || '') + ' ' + (el.children || []).map(html).join(' ') : '');
+  const help = html(T._nodes.helpBody);
+  h.ok(/combo relic/.test(help) && /first elite/.test(help) && /\+\+/.test(help), 'How it works: combos are a relic power, the first elite offers one, the Compactor makes ++');
+  h.ok(/\u{1F5E1}|Steel/u.test(G.cr.famLine(D.RELICS.cr_steel)) && /9 combos/.test(G.cr.famLine(D.RELICS.cr_steel)), 'a combo relic card names its family: ' + G.cr.famLine(D.RELICS.cr_steel));
+});
+
+h.test('cmp2: three upgraded copies merge to +2, it plays stronger, shows everywhere and survives a reload', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 2107);
+  const sw = D.ITEMS.rusty_sword, v0 = sw.fx[0].v, v1 = sw.plus.fx[0].v, v2 = D.cmp2FxAt(sw, 2)[0].v;
+  h.ok(v2 > v1 && v1 > v0, `the +2 sword hits harder again (${v0} / ${v1} / ${v2})`);
+  G.run.bin.push({ uid: 'p1', id: 'rusty_sword', plus: true }, { uid: 'p2', id: 'rusty_sword', plus: true }, { uid: 'p3', id: 'rusty_sword', plus: true });
+  G.showRest();
+  G.choose(G.S.ui.buttons.findIndex(b => b.el && /Compact/.test(s6Text(b.el))));
+  h.eq(G.screen, 'compactor', 'the Compactor');
+  // the grid marks the +1 group: three of them make ++
+  const tags = s6Find(T._nodes.cmpBody, 'cmp2Tag').map(s6Text);
+  h.ok(tags.includes('x3 = ++'), 'the grid marks what can merge to ++ (' + tags.join(' | ') + ')');
+  for (const u of ['p1', 'p2', 'p3']) G.cmp.pick(u);
+  h.ok(/Three upgraded: out comes Rusty Sword\+\+, stronger again\./.test(G.cmp.rule(['p1', 'p2', 'p3'].map(u => G.run.bin.find(i => i.uid === u)))), 'the rule line names the ++');
+  const n0 = G.run.bin.length;
+  const res = G.cmp.crush();
+  h.ok(res && res.id === 'rusty_sword' && res.plus === 2, 'out comes Rusty Sword++');
+  const inst = G.run.bin.find(i => i.uid === res.uid);
+  h.ok(inst && inst.plus === 2 && G.run.bin.length === n0 - 2, 'in the bin as plus 2');
+  h.ok(s6Find(T._nodes.cmpBody, 'plus2').length >= 1 && /PLUS 2/.test(s6Text(T._nodes.cmpBody)) && /Rusty Sword\+\+/.test(s6Text(T._nodes.cmpBody)), 'the result card says PLUS 2 and Rusty Sword++');
+  G.cmp.leave();
+  // the bin groups it apart and its popover has the +2 numbers
+  G.openBin({ mode: 'view' });
+  h.ok(/Rusty Sword\+\+/.test(s6Text(T._nodes.binBody)), 'the bin shows Rusty Sword++ on its own card');
+  // save and reload: still +2, and a fight plays it at +2
+  G.toMap(); G.save();
+  const T2 = s6Boot(Object.assign({}, T._store)), G2 = T2.GAME;
+  G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  const i2 = G2.run.bin.find(i => i.uid === res.uid);
+  h.ok(i2 && i2.plus === 2, 'a reload keeps the +2');
+  const F = T2.COMBAT.newFight({ hp: 80, maxHp: 80, act: 1, bin: [i2, { uid: 'z', id: 'rock' }], relics: [], claw: {}, fights: 1 }, ['dummy'], T2.U.rng(3));
+  const fi = F.bin.find(i => i.uid === res.uid);
+  h.eq(fi.plus, 2, 'the fight keeps it +2');
+  const e = F.enemies[0], hp0 = e.hp;
+  T2.COMBAT.play(F, fi, 0);
+  h.eq(hp0 - e.hp, v2, 'and it hits for its +2 number');
+  h.eq(D.cmp2Name(sw, 2), 'Rusty Sword++', 'its name');
+  h.ok(/Deal \d+ damage/.test(D.itemText(sw, 2)) && D.itemText(sw, 2).indexOf(String(v2)) >= 0, 'its text reads the +2 number');
+  // the shop sells a +2 for double
+  G2.run.gold = 0;
+  const shop = G2.rollShop({ q: 3, r: 3 });
+  G2.showShop(shop);
+  G2.choose(G2.S.ui.buttons.findIndex(b => b.label === 'Sell an item'));
+  const k = G2.S.ui.buttons.findIndex(b => /Rusty Sword\+\+/.test(b.label));
+  h.ok(k >= 0, 'the sell picker lists it');
+  G2.choose(k);
+  h.eq(G2.run.gold, Math.max(5, Math.round(sw.cost / 3)) * 2, 'a +2 sells for double');
+  // the history record keys it as id++
+  h.ok(T2.GAME.cmp2.unkey('rusty_sword++').plus === 2 && T2.GAME.cmp2.unkey('rusty_sword+').plus === true && T2.GAME.cmp2.unkey('rusty_sword').plus === false, 'history keys: id, id+, id++');
+});
+
 h.test('sets: pets hear the Hungry Pack (extra tricks, stronger tricks, Chew Toy xp)', () => {
   const T = s6Boot(), G = T.GAME;
   G.newRun('knight', 6608);
@@ -5804,6 +5945,7 @@ h.test('secret: the Back Room: elites with the strongest affixes, the service co
   secVs(G); G.draw();
   G.endFight('win');
   G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));
+  if (G.screen === 'treasure' && G.S.sd.treasure.crRw) G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));   // (round 21) a first elite's combo relic pick
   h.eq(G.screen, 'map', 'back on the Back Room map');
   const sh = land.find(t => t.type === 'shop');
   sh.revealed = true;
@@ -6019,6 +6161,9 @@ h.test('evolve: a delivered Rusty Sword+ with the Trophy Rack evolves, with the 
   for (let i = 0; i < 25; i++) { G.update(DT); G.draw(); }
   G.tap(270, 600);
   h.eq(G.evo.fs, null, 'the next tap ends it');
+  // (RROW round 21) it lands on the resolve row first, in its evolved form, then flies to its target
+  h.ok(G.row.state && G.row.state.slots.some(s => s.inst && s.inst.uid === sw.uid && s.st === 'wait'), 'the evolved item lands on the resolve row');
+  G.update(DT);
   h.ok(G.fs.throws.some(t => t.inst === G.fight.bin.concat(G.fight.used).find(x => x.uid === sw.uid) || t.def.id === 'excalibur_claw'), 'the evolved item flies to its target');
   settle(G, 6);
   h.ok(hp0 - G.fight.enemies[0].hp >= 18, `Excalibur Claw hit for 18+ (${hp0 - G.fight.enemies[0].hp})`);
@@ -6039,6 +6184,7 @@ h.test('evolve: only the right item, plus and relic; a golden prize plus does no
   G.playDelivered([evoBody(G, sw.uid)]);
   h.eq(G.evo.fs, null, 'the wrong relic: no ceremony');
   h.eq(sw.id, 'rusty_sword', 'and no evolution');
+  G.update(DT);   // (RROW round 21) from the resolve row
   h.ok(G.fs.throws.length === 1, 'the item is thrown as ever');
   T = evoBoot(); G = T.GAME;
   ({ sw } = evoFight(G, 7074, { plus: false }));
@@ -11946,6 +12092,223 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     G.choose(L0.indexOf('P1 claw scoop'));
     h.eq(G.duo.setupState.p[0].claw, 'scoop', 'a pick inside a fold still goes through GAME.choose');
     h.eq(JSON.stringify(G.S.ui.buttons.map((b) => b.label)), JSON.stringify(L0), 'the rebuilt page registers the same buttons in the same order');
+  });
+}
+
+/* ------------------------------------------------- RROW (round 21): the resolve row (DESIGN.md "The resolve row (round 21)") */
+{
+  // A knight's fight on a fixed seed; off: the old immediate path (the yardstick).
+  const rrBoot = (off, relics, foes, store) => {
+    const T = boot(store ? { store } : undefined);
+    const G = T.GAME;
+    G.row.off = !!off;
+    G.newRun('knight', 4242);
+    if (G.screen === 'boon') G.choose(0);
+    for (const r of relics || []) if (G.run.relics.indexOf(r) < 0) G.run.relics.push(r);
+    G.startFight(foes || ['rat', 'rat'], 'normal');
+    settle(G, 10);
+    return { T, G, C: T.COMBAT };
+  };
+  // A grab that delivers exactly these prizes, in this order: the claw stays home, the bodies go down the chute.
+  const fakeGrab = (G, C, bodies) => {
+    C.useGrab(G.fight);
+    const fs = G.fs;
+    fs.grabInFlight = true; fs.grabN++; fs.dropAt = G.S.t; fs.releaseAt = -1; fs.delivered = 0; fs.watch = false; fs.pendingDrop = false;
+    G.playDelivered(bodies);
+  };
+  const byId = (a, b) => (a.data.inst.id < b.data.inst.id ? -1 : a.data.inst.id > b.data.inst.id ? 1 : String(a.data.inst.uid) < String(b.data.inst.uid) ? -1 : 1);
+  const pick = (G, n, test) => itemBodies(G).filter((b) => !test || test(b.data.def || {})).sort(byId).slice(0, n);
+
+  h.test('rrow: a real grab fills the row while the claw is out, and nothing resolves until it is home', () => {
+    const { G } = rrBoot(false);
+    let saw = 0, early = 0, pre = false, tries = 0;
+    while (!saw && tries++ < 8 && G.screen === 'fight') {
+      settle(G, 15);
+      if (G.fight.player.grabs <= 0) { G.endTurn(); settle(G, 30); continue; }
+      const b = itemBodies(G)[0];
+      if (!b) break;
+      G.steer(b.x); stepFor(G, 0.6);
+      if (!G.dropClaw()) break;
+      const p0 = G.run.played;
+      for (let i = 0; i < 60 * 20 && G.state().grabInFlight; i++) {
+        G.update(DT);
+        const R = G.row.state;
+        if (R && !R.go && G.fs.delivered > 0) {
+          saw++;
+          if (G.run.played !== p0) early++;
+          const s = R.slots.find((x) => x.k === 'item');
+          if (s && s.pre && s.pre.any) pre = true;
+        }
+      }
+      settle(G, 15);
+    }
+    h.ok(saw > 0, 'a delivery waited on the row while the claw was still out (' + saw + ' frames)');
+    h.eq(early, 0, 'nothing was played before the claw was home');
+    h.ok(pre, 'the waiting slot shows what it will do (its chip, this fight\'s numbers)');
+  });
+
+  h.test('rrow: plays keep delivery order, grabDone follows them, and every number matches the old immediate path', () => {
+    const run = (off) => {
+      const { G, C } = rrBoot(off, ['jackpot_bell', 'prize_counter', 'venom_gland']);
+      const order = [], play0 = C.play, gd0 = C.grabDone, F = G.fight, sig = [];
+      C.play = function (F1, inst) { order.push(inst.id + '#' + inst.uid); return play0.apply(this, arguments); };
+      C.grabDone = function (F1, n) { order.push('grabDone:' + n); return gd0.apply(this, arguments); };
+      try {
+        for (let g = 0; g < 5 && G.screen === 'fight' && F.phase !== 'over'; g++) {
+          settle(G, 15);
+          if (G.screen !== 'fight' || F.phase === 'over') break;
+          if (F.player.grabs <= 0) { G.endTurn(); settle(G, 30); continue; }
+          const bodies = pick(G, 3);
+          sig.push(bodies.map((b) => b.data.inst.id + '#' + b.data.inst.uid));
+          fakeGrab(G, C, bodies);
+          settle(G, 20);
+        }
+      } finally { C.play = play0; C.grabDone = gd0; }
+      return { order, sig, hp: F.player.hp, block: F.player.block, foes: F.enemies.map((e) => e.hp + '/' + e.block + '/' + JSON.stringify(e.status)), log: JSON.stringify([F.stats, F.used.map((i) => i.id), F.exhausted.map((i) => i.id), F.bin.length, F.turn, F.player.status]) };
+    };
+    const a = run(false), b = run(true);
+    h.ok(a.sig.length >= 3, 'a few grabs of three prizes (' + a.sig.length + ')');
+    h.eq(JSON.stringify(a.sig), JSON.stringify(b.sig), 'the same deliveries on both paths');
+    h.eq(JSON.stringify(a.order), JSON.stringify(b.order), 'the same plays in the same order, grabDone at the same places');
+    // each grab: its prizes in delivery order, then grabDone
+    let at = 0, ok = true;
+    for (const s of a.sig) { for (const id of s) if (a.order[at++] !== id) ok = false; if (!/^grabDone:/.test(a.order[at++] || '')) ok = false; }
+    h.ok(ok, 'per grab: the deliveries in order, then grabDone (' + a.order.slice(0, 8).join(' ') + ')');
+    h.eq(a.hp + '/' + a.block, b.hp + '/' + b.block, 'your hp and Block match the old path');
+    h.eq(JSON.stringify(a.foes), JSON.stringify(b.foes), 'every enemy\'s hp, Block and statuses match');
+    h.eq(a.log, b.log, 'the fight\'s stats, piles, turn and your statuses match');
+  });
+
+  h.test('rrow: a relic that joins an item\'s play rides on its slot; grab-level effects are labelled chips at the end, played one by one', () => {
+    const { G, C } = rrBoot(false, ['jackpot_bell', 'prize_counter', 'venom_gland']);
+    const weapon = pick(G, 1, (d) => (d.tags || []).indexOf('weapon') >= 0);
+    const rest = pick(G, 6).filter((b) => weapon.indexOf(b) < 0).slice(0, 2);
+    h.ok(weapon.length === 1 && rest.length === 2, 'a weapon and two more prizes');
+    fakeGrab(G, C, weapon.concat(rest));
+    const R0 = G.row.state;
+    h.eq(R0.slots.filter((s) => s.k === 'item').length, 3, 'three slots, side by side');
+    h.eq(R0.slots.map((s) => s.inst && s.inst.uid).join(), weapon.concat(rest).map((b) => b.data.inst.uid).join(), 'in delivery order');
+    let first = null, chipsAt = null, order = [], twoAct = false;
+    for (let i = 0; i < 60 * 12 && !ready(G); i++) {
+      G.update(DT);
+      const R = G.row.state;
+      const chips = R.slots.filter((s) => s.k === 'grab');
+      if (chips.length && !chipsAt) chipsAt = { items: R.slots.filter((s) => s.k === 'item').map((s) => s.st), chips: chips.map((c) => c.st) };
+      for (const c of chips) if (c.st !== 'wait' && order.indexOf(c) < 0) order.push(c);
+      if (chips.filter((c) => c.st === 'act').length > 1) twoAct = true;
+      if (!first && R.slots[0].st === 'hit') first = R.slots[0];
+    }
+    h.ok(first && first.procs && first.procs.some((p) => p.name === 'Venom Gland' && p.n.s === 'poison'), 'the weapon\'s slot names the relic that joined in (Venom Gland, Poison)');
+    h.ok(first && first.res && first.res.d > 0, 'and shows the hit it made (' + (first && first.res && first.res.d) + ')');
+    h.ok(chipsAt && chipsAt.items.every((s) => s === 'hit'), 'the grab chips come after every item resolved');
+    h.ok(chipsAt && chipsAt.chips.every((s) => s === 'wait'), 'they arrive waiting');
+    const chips = G.row.state.slots.filter((s) => s.k === 'grab');
+    const pc = chips.find((c) => c.label === 'Prize Counter'), bell = chips.find((c) => c.label === 'Jackpot Bell');
+    h.ok(pc && pc.tag === 'RELIC' && pc.res.b === 6, 'Prize Counter: a RELIC chip, +6 Block');
+    h.ok(bell && bell.res.d > 0, 'Jackpot Bell: its damage (' + (bell && bell.res.d) + ')');
+    h.ok(chips.indexOf(pc) < chips.indexOf(bell), 'in grabDone\'s order (onJackpot, then onGrab)');
+    h.eq(order.map((c) => c.label).join(), chips.map((c) => c.label).join(), 'played one by one, left to right');
+    h.ok(!twoAct, 'never two chips at once');
+    h.ok(chips.every((c) => c.st === 'hit'), 'all played');
+    G.draw();
+  });
+
+  h.test('rrow: the speed pill (1x, 2x, 4x) lives in clawspire_meta; a new profile starts at 1x', () => {
+    const { T, G } = rrBoot(false);
+    h.eq(G.row.speed(), 1, 'a new profile: 1x');
+    stepFor(G, 0.05);
+    h.ok(G.row.K.pill && G.row.K.pill.id === 'rrSpeed' && G.row.K.pill.textContent === '1x', 'the pill sits in the fight\'s control row');
+    h.eq(G.row.cycle(), 2, 'a tap: 2x');
+    stepFor(G, 0.05);
+    h.eq(G.row.K.pill.textContent, '2x', 'the pill says so');
+    const m = JSON.parse(T._store.clawspire_meta);
+    h.eq(m.settings.rowSpd, 2, 'saved inside the meta object (settings.rowSpd)');
+    h.ok(Object.keys(T._store).every((k) => /^clawspire_/.test(k)) && !Object.keys(T._store).some((k) => /row|speed/i.test(k)), 'no new localStorage key: ' + Object.keys(T._store).join());
+    const B = rrBoot(false, null, null, T._store);
+    h.eq(B.G.row.speed(), 2, 'a reload keeps it');
+    G.S.headless = false; B.G.S.headless = false;
+    try {
+      h.ok(G.row.dur('lift') > 0 && Math.abs(G.row.dur('lift') - B.G.row.dur('lift')) < 1e-9, 'same speed, same lift');
+      G.row.cycle();
+      h.eq(G.row.speed(), 4, 'then 4x');
+      h.near(G.row.dur('toss') * 2, B.G.row.dur('toss'), 1e-9, '4x tosses twice as fast as 2x');
+    } finally { G.S.headless = true; B.G.S.headless = true; }
+    h.eq(G.row.cycle(), 1, 'and round to 1x');
+  });
+
+  h.test('rrow: a tap on the resolving row plays the rest at once, with the same result', () => {
+    const run = (skip) => {
+      const { G, C } = rrBoot(false);
+      G.S.headless = false;   // the visual path's pace
+      let frames = 0, tapped = false, left = -1;
+      try {
+        fakeGrab(G, C, pick(G, 4));
+        stepFor(G, 0.05);
+        if (skip) {
+          h.ok(G.row.state.go, 'the claw is home: the row resolves');
+          h.ok(!G.row.tap(270, 200), 'a tap on the arena does not skip');
+          tapped = G.row.tap(270, G.row.K.y + 20);
+          left = G.fs.playQ.length;
+        }
+        while ((G.fs.playQ.length || G.row.pending()) && frames++ < 60 * 10) G.update(DT);
+      } finally { G.S.headless = true; }
+      settle(G, 10);
+      return { frames, tapped, left, hp: G.fight.enemies.map((e) => e.hp).join(), p: G.fight.player.hp + '/' + G.fight.player.block, flash: G.row.state.flash };
+    };
+    const slow = run(false), fast = run(true);
+    h.ok(fast.tapped && fast.left >= 2, 'a tap on the row skips (' + fast.left + ' left)');
+    h.ok(fast.frames <= 12, 'the rest resolved in ' + fast.frames + ' frames (' + slow.frames + ' at 1x)');
+    h.ok(slow.frames >= 90 && slow.frames <= 150, 'at 1x four prizes take about 0.45 s each (' + slow.frames + ' frames, the first one\'s landing on the row included)');
+    h.eq(fast.hp + '|' + fast.p, slow.hp + '|' + slow.p, 'the same hp and Block either way');
+  });
+
+  h.test('rrow: the enemy turn waits for the whole row; END TURN is off meanwhile', () => {
+    const { G, C } = rrBoot(false, ['jackpot_bell', 'prize_counter']);
+    G.fight.player.grabs = 1;
+    fakeGrab(G, C, pick(G, 3));
+    h.ok(!G.endTurn(), 'END TURN does nothing while prizes wait');
+    let bad = 0, sawChips = false, n = 0;
+    for (; n < 60 * 30 && !G.fs.enemyTurn; n++) {
+      G.update(DT);
+      if (!G.state().grabInFlight && G.row.pending()) { sawChips = true; if (G.endTurn()) bad++; }
+    }
+    h.ok(sawChips, 'the grab chips were still playing after the grab');
+    h.eq(bad, 0, 'END TURN never went through then');
+    h.ok(G.fs.enemyTurn && !G.row.pending() && !G.fs.playQ.length, 'the turn ended by itself once the row was done');
+  });
+
+  h.test('rrow: the last enemy dies mid row: the rest goes quickly and the outcome is the old one', () => {
+    const run = (off) => {
+      const { G, C } = rrBoot(off, null, ['rat']);
+      const F = G.fight;
+      F.enemies[0].hp = 1; F.enemies[0].block = 0;
+      const p0 = G.run.played, s0 = F.stats.played;
+      fakeGrab(G, C, pick(G, 4, (d) => (d.fx || []).some((f) => f && f.k === 'dmg' && f.v > 0)).concat(pick(G, 4)).slice(0, 4));
+      let n = 0;
+      while (G.screen === 'fight' && !(G.fs && G.fs.outro) && n++ < 60 * 10) G.update(DT);
+      return { n, result: F.result, phase: F.phase, played: G.run.played - p0, stats: F.stats.played - s0, used: F.used.length, bin: F.bin.length, outro: !!(G.fs && G.fs.outro) || G.screen !== 'fight' };
+    };
+    const a = run(false), b = run(true);
+    h.eq(a.result, 'win', 'the fight is won');
+    h.eq(JSON.stringify([a.result, a.played, a.stats, a.used, a.bin]), JSON.stringify([b.result, b.played, b.stats, b.used, b.bin]), 'the same plays, piles and result as the old path');
+    h.ok(a.outro && a.n < 60 * 4, 'the outro follows quickly (' + a.n + ' frames)');
+  });
+
+  h.test('rrow: a fight drawn with the row up (every state, calm too) never throws; the player row steps aside', () => {
+    const { T, G, C } = rrBoot(false, ['jackpot_bell', 'prize_counter', 'venom_gland']);
+    G.S.headless = false;
+    let threw = null;
+    try {
+      fakeGrab(G, C, pick(G, 3));
+      for (let i = 0; i < 60 * 6 && !ready(G); i++) { G.update(DT); if (i % 3 === 0) { try { G.draw(); } catch (e) { threw = e; break; } } }
+      T.RENDER.fx.reduced = true;
+      fakeGrab(G, C, pick(G, 2));
+      for (let i = 0; i < 60 * 6 && !ready(G); i++) { G.update(DT); if (i % 3 === 0) { try { G.draw(); } catch (e) { threw = e; break; } } }
+    } finally { G.S.headless = true; T.RENDER.fx.reduced = false; }
+    h.ok(!threw, 'draw never throws: ' + (threw && threw.stack));
+    let threw2 = null;
+    try { T.RENDER.rrRow(T._ctx, { slots: [{ k: 'item', st: 'wait', cx: 50, cy: 360, w: 40 }, { k: 'grab', st: 'act', cx: 100, cy: 360, w: 90, res: { d: 3, any: true } }, null], y: 339, h: 46, x0: 8, x1: 532 }); T.RENDER.rrRow(T._ctx, null); T.RENDER.rrRow(T._ctx, { slots: 'x' }); } catch (e) { threw2 = e; }
+    h.ok(!threw2, 'junk input never throws: ' + (threw2 && threw2.stack));
   });
 }
 

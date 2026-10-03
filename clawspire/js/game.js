@@ -108,7 +108,7 @@ const GAME = (() => {
   const enemyDef = (id) => tbl('ENEMIES')[id] || { id, name: String(id), tier: 'normal', act: 1, size: 1 };
   const charDef = (id) => tbl('CHARACTERS')[id] || null;
   const actDef = (n) => (tbl('ACTS')[n]) || { name: 'Act ' + n, sub: '', palette: {} };
-  const itemName = (def, plus) => (plus && def.plus && def.plus.name) ? def.plus.name : (def.name + (plus ? '+' : ''));
+  const itemName = (def, plus) => (plus === 2 && D().cmp2Name) ? D().cmp2Name(def, 2) : (plus && def.plus && def.plus.name) ? def.plus.name : (def.name + (plus ? '+' : ''));   // (round 21: "Rusty Sword++" at plus 2)
   const itemText = (def, plus) => {
     if (D().itemText) { try { return typeof I18N !== 'undefined' && I18N && I18N.itemText ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language; round 15: English too, so a switch can redo it)
     return (plus && def.plus && def.plus.text) || def.text || '';
@@ -800,6 +800,7 @@ const GAME = (() => {
     S.sd = null; S.after = null; S.pendingFight = null;
     F = null; FS = null;
     if (c.relic) gainRelic(c.relic);
+    crNewRun(run, charId);   // CR (round 21): Lucky Lou and Ms. Bubbles start with their combo family's relic
     newMap(run);
     S.meta.stats.runs++;
     saveMeta();
@@ -882,7 +883,7 @@ const GAME = (() => {
       seeItem(id);
       return last;
     }
-    const inst = { uid: U.uid(), id, plus: !!plus }; S.run.bin.push(inst); seeItem(id); return inst;
+    const inst = { uid: U.uid(), id, plus: plus === 2 ? 2 : !!plus }; S.run.bin.push(inst); seeItem(id); return inst;   // (round 21: plus 2 from the Compactor)
   }
   // Relic ids not yet owned, filtered by rarity list.
   function relicPool(rarities) {
@@ -892,6 +893,7 @@ const GAME = (() => {
       const r = tbl('RELICS')[id];
       if (own.indexOf(id) >= 0) continue;
       if (r.starter) continue;
+      if (D().crPoolOk && !D().crPoolOk(id, S.run)) continue;   // (CR round 21: combo boosters wait for a combo relic; combo relics for the first elite)
       if (!rarities && r.rarity === 'l') continue;   // (LEG: a legendary only when asked for by name)
       if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
       out.push(id);
@@ -1567,6 +1569,9 @@ const GAME = (() => {
     p = h('p'); p.innerHTML = i18nTr('Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'); b.appendChild(p);
     sec('Fights', '⚔️');
     p = h('p'); p.innerHTML = i18nTr('Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'); b.appendChild(p);
+    sec('Combos', '✨');   // CR (round 21): combos are a relic power
+    p = h('p'); p.innerHTML = i18nTr('Every item does what its card says, nothing more. <b>Combos</b> are a relic power: a <b>combo relic</b> switches on one family of bonus moves (Steel, Brew, Feast, Jackpot, Casino, Tech, Party), and a grab that delivers the right items together fires one. The first elite you beat in a run offers a pick of three; more turn up later. The Prizedex lists every recipe and its relic.'); b.appendChild(p);
+    p = h('p'); p.innerHTML = i18nTr('<b>The Compactor</b> crushes three items into one: three of a kind come out upgraded (+), three upgraded ones come out <b>++</b>, stronger again.'); b.appendChild(p);
     sec('Statuses', '✨');
     // a two-column list: the icon and the name (never wrapping under its icon), the rule beside it
     const list = h('div', 'statusList m1StatList');
@@ -1932,7 +1937,7 @@ const GAME = (() => {
     if (tab === 'items') { text = `<i>${rar}</i><br>` + itemText(def, false); hintTxt = `A ${rar} prize still in the machine.`; }
     else if (tab === 'relics') { text = `<i>${rar} relic</i><br>` + (def.text || ''); hintTxt = `A ${rar} relic nobody has handed you yet.`; }
     else if (tab === 'enemies') { tag = def.tier === 'boss' ? 'BOSS' : def.tier === 'elite' ? 'ELITE' : ''; text = `<i>act ${def.act || '?'} ${TIER_NAME[def.tier] || ''}</i>` + (def.desc ? '<br>' + def.desc : ''); hintTxt = `Something lurks in act ${def.act || '?'}.`; if (def.secret) { tag = 'SECRET BOSS'; hintTxt = 'Nobody has seen it. Three golden keys, they say, and a door behind the Prize Master.'; } }
-    else { tag = '★'.repeat(U.clamp(def.tier | 0, 1, 3)) + (def.secret ? ' SECRET' : ''); text = def.text || ''; hintTxt = def.secret ? 'Recipe: ???. A secret combo: fire it once to learn it.' : `Recipe: ${String(def.text || '').split(':')[0] || '???'}.`; }
+    else { tag = '★'.repeat(U.clamp(def.tier | 0, 1, 3)) + (def.secret ? ' SECRET' : ''); text = def.text || ''; hintTxt = def.secret ? 'Recipe: ???. A secret combo: fire it once to learn it.' : `Recipe: ${String(def.text || '').split(':')[0] || '???'}.`; const cr = crDexLine(def); if (cr) { text += '<br><i>' + cr + '</i>'; hintTxt += ' ' + cr; } }   // (CR round 21: the relic that switches it on)
     if (tag) card.appendChild(h('div', 'rar ' + (tab === 'enemies' ? (def.tier === 'boss' ? 'r' : 'l') : 'l'), tag));
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
     if (ok && m.dexNew[tab + ':' + id]) card.appendChild(h('div', 'newb', 'NEW!'));
@@ -1966,6 +1971,7 @@ const GAME = (() => {
     b.appendChild(row);
     if (tab === 'sets') setDexGrid(b);
     if (tab === 'evo') evoDexGrid(b);
+    if (tab === 'combos') b.appendChild(h('div', 'sub crDexSub', 'Combos are a relic power: each combo relic switches on one family. The first elite of a run offers a pick of three.'));   // (CR round 21)
     const grid = h('div', 'grid4 dex');
     const ids = E[tab] || [];
     for (const id of ids) grid.appendChild(dexCard(tab, id));
@@ -5000,7 +5006,7 @@ const GAME = (() => {
     if (!pool.length) return;
     const inst = pool[Math.floor(r() * pool.length)];
     FS.golden = { uid: inst.uid, was: !!inst.plus };
-    inst.plus = true;
+    if (!inst.plus) inst.plus = true;   // (round 21: a +2 stays +2)
   }
   function goldenPrize(pos) {
     const g = FS.golden;
@@ -6950,7 +6956,7 @@ const GAME = (() => {
   function inCabinet(x, y) { return x >= CAB.x - CAB.frame && x <= CAB.x + CAB.w + CAB.frame && y >= CAB.y - CAB.frame && y <= CAB.y + CAB.h + CAB.frame; }
   function canSteer() {
     return !!(F && FS && FS.rig && F.phase === 'player' && F.player.grabs > 0 && !FS.grabInFlight && !FS.enemyTurn && !FS.done && !FS.vs &&
-      (FS.rig.phase === 'idle' || FS.rig.phase === 'moving') && !FS.queue.length);
+      (FS.rig.phase === 'idle' || FS.rig.phase === 'moving') && !FS.queue.length && !FS.playQ.length);   // (RROW round 21: and nothing left on the row)
   }
   function canDrop() { return canSteer(); }
   function canEndTurn() {
@@ -7099,6 +7105,7 @@ const GAME = (() => {
   const THROW_T = 0.3;
   function throwItem(inst, from) {
     if (!F || !FS) return;
+    if (rrRowFly(inst, from)) return;   // RROW (round 21): it flies onto the resolve row first, and from there to its target later
     const def = itemDef(inst.id);
     const tgt = def.target || 'enemy';
     let to;
@@ -7155,6 +7162,7 @@ const GAME = (() => {
     if (ms) { ms.lit = 0; ms.melt = 1; }   // a delivered bomb is out of the bin, ice refreezes in the used pile
     removeBody(b);
     FS.playQ.push(inst);
+    rrRowPush(inst, pos);   // RROW (round 21): its slot on the resolve row, in delivery order
     FS.delivered++;
     S.run.delivered++;
     duoNetDeliver(inst);   // DUO NET (round 15): the watching phone sees it fly into this player's tray
@@ -7208,8 +7216,10 @@ const GAME = (() => {
     if (ms && ms.crack > 0) crackBonus(inst, def);
     S.run.played++; S.meta.stats.played++;
     showTrayChip(def, inst);
+    const q0 = FS.queue.length;
     enqueue(evs, PLAY_BEAT);
-    fx().text(CAB.x + CAB.w - CAB.chuteW - 70, CAB.y + CAB.h * 0.3, itemName(def, inst.plus), '#ffc94d');
+    rrRowPlayed(inst, q0);   // RROW (round 21): its slot shows what it did (and which relics joined in)
+    if (!rrRowOn()) fx().text(CAB.x + CAB.w - CAB.chuteW - 70, CAB.y + CAB.h * 0.3, itemName(def, inst.plus), '#ffc94d');   // (the row names it instead)
   }
   function showTrayChip(def, inst) {
     const tray = $('tray');
@@ -7229,6 +7239,8 @@ const GAME = (() => {
     setTimeout(() => { if (chip.remove) chip.remove(); if (tray.removeChild) try { tray.removeChild(chip); } catch (e) { /* gone */ } }, 3200);
   }
   function grabFinished() {
+    rrRowFlush();   // RROW (round 21): a reset rig never lets grabDone jump ahead of a prize still on the row
+    const q0 = FS.queue.length;
     FS.grabInFlight = false;
     legGrabEnd();   // the golden grip lets go (LEG block)
     FS.watch = false;
@@ -7240,6 +7252,7 @@ const GAME = (() => {
     techGrabDone();   // TECH (round 17): The Motherboard's catch, a whiff drains the lamp
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
+    rrRowGrab(q0);   // RROW (round 21): what the grab itself set off joins the row as labelled chips, played last
     afterAction();
   }
   // After a grab (or any player-side queue) settles: win/lose, hints, auto end.
@@ -7436,7 +7449,7 @@ const GAME = (() => {
      COMBAT's own damage / heal / status), then it breaks for the fight. */
   function crackBonus(inst, def) {
     const p = F.player, half = (v) => Math.ceil(Math.abs(+v || 0) * 0.5);
-    const list = (inst.plus && def.plus && Array.isArray(def.plus.fx)) ? def.plus.fx : (Array.isArray(def.fx) ? def.fx : []);
+    const list = D().cmp2FxAt ? D().cmp2FxAt(def, inst.plus) : ((inst.plus && def.plus && Array.isArray(def.plus.fx)) ? def.plus.fx : (Array.isArray(def.fx) ? def.fx : []));   // (round 21: a +2 reads its own numbers)
     const mode = def.target || 'enemy';
     const aim = () => { const e = F.enemies[F.target]; return e && e.alive ? e : F.enemies.find((x) => x.alive); };
     const foes = (all) => (all ? F.enemies.filter((e) => e.alive) : [aim()].filter(Boolean));
@@ -7611,6 +7624,7 @@ const GAME = (() => {
     // A beaten elite (a tower keeper too) sometimes hands over a tool.
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
     const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
+    crEliteOffer(reward);   // CR (round 21): the run's first elite hands over a pick of three combo relics
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
     secFightWin(reward, then);   // ...and maybe the golden key it swallowed (SECRET)
@@ -7709,6 +7723,7 @@ const GAME = (() => {
         else b.data.chuteT = 0;
       }
     }
+    rrRowTick(dt);   // RROW (round 21): the resolve row fills, waits for the claw, then lifts and tosses its head
     // Thrown items fly to their target; each lands before it resolves.
     for (const th of FS.throws) {
       if (th.landed) continue;
@@ -7718,14 +7733,14 @@ const GAME = (() => {
       if (th.t >= 1) { th.t = 1; th.landed = true; landThrow(th); }
     }
     // Played items resolve on a short beat so the numbers can be read.
-    if (FS.playQ.length && !FS.queue.length) {
+    if (FS.playQ.length && !FS.queue.length && rrRowGate()) {   // (RROW round 21: a grab's prizes wait on the row until the claw is home)
       FS.playT -= dt;
       const head = FS.playQ[0];
       let th = null;
       for (const x of FS.throws) if (x.inst === head) { th = x; break; }
-      if (FS.playT <= 0 && (!th || th.landed)) {
+      if (FS.playT <= 0 && (!th || th.landed) && !rrRowHeld(head, th)) {
         playInst(FS.playQ.shift());
-        FS.playT = PLAY_BEAT;
+        FS.playT = rrRowPlayT(PLAY_BEAT);
         if (th) FS.throws.splice(FS.throws.indexOf(th), 1);
       }
     }
@@ -7735,8 +7750,9 @@ const GAME = (() => {
       while (FS.queue.length && FS.beatT <= 0) {
         const q = FS.queue.shift();
         applyEvent(q.ev);
+        rrRowEv(q);   // RROW (round 21): a grab chip lights up, a proc mid grab gets its labelled chip
         // a proc is a flourish, not a beat: a relic-heavy grab can emit dozens
-        FS.beatT = q.ev && q.ev.t === 'proc' ? Math.min(q.beat, PROC_BEAT) : (famBeatOf(q) != null ? famBeatOf(q) : cr8Beat(q));   // (CR8: the turret's shots are quick; FAMILY: the meter ticks are too)
+        FS.beatT = rrRowBeat(q, q.ev && q.ev.t === 'proc' ? Math.min(q.beat, PROC_BEAT) : (famBeatOf(q) != null ? famBeatOf(q) : cr8Beat(q)));   // (CR8: the turret's shots are quick; FAMILY: the meter ticks are too) (RROW: the row's pace and speed)
       }
       // The next beat is a hit on the player: the actor winds up during this one.
       if (FS.enemyTurn && FS.actor >= 0 && FS.queue.length) {
@@ -7862,7 +7878,8 @@ const GAME = (() => {
     evoCardTag(card, def, plus);   // EVOLVE: the EVOLVED badge, or "Evolves with" once the recipe is known
     if (o.price != null) card.appendChild(h('div', 'price', o.sold ? 'SOLD' : o.price + ' gold'));
     if (o.sold && o.price != null) card.appendChild(h('div', 'stamp' + (o.justSold ? ' slam' : ''), 'SOLD'));
-    if (plus) card.appendChild(h('div', 'plus', 'PLUS'));
+    if (plus) card.appendChild(h('div', 'plus' + (plus === 2 ? ' plus2' : ''), plus === 2 ? 'PLUS 2' : 'PLUS'));   // (round 21: the Compactor's second merge)
+    if (o.cmp2) card.appendChild(h('div', 'cmp2Tag', o.cmp2));   // (round 21: the Compactor marks what three of can merge)
     const fn = () => { if (o.sold) return; if (o.onPick) o.onPick(); };
     card.onclick = (ev) => { fn(); };
     S.ui.buttons.push({ el: card, fn, label: itemName(def, plus), disabled: !!o.sold || !!o.disabled });
@@ -7883,6 +7900,7 @@ const GAME = (() => {
     domFly(c, p.x, p.y, 336, 96, 620);
   }
   function afterReward(rw) {
+    if (crAfterReward(rw)) return;   // CR (round 21): the elite's combo relic pick comes first (it calls back here)
     S.sd = null;
     lootBank(rw);   // unopened capsules wait on the map
     if (S.pay) { const scr = $('scr-reward'); if (scr) scr.onpointerdown = null; S.pay = null; }
@@ -7987,6 +8005,7 @@ const GAME = (() => {
     setScreen('treasure');
     const b = $('treasureBody');
     clear(b);
+    if (crTreasure(b, td)) { save(); return; }   // CR (round 21): a pick of combo relics (the first elite's prize)
     b.appendChild(h('h1', null, td.title || 'Treasure'));
     if (td.sub) b.appendChild(h('div', 'sub', td.sub));
     if (td.gold) b.appendChild(h('span', 'tag gold', `+${td.gold} gold`));
@@ -9906,7 +9925,7 @@ const GAME = (() => {
      a reload in the beat goes to the map and never pays twice. */
   const FEEL_TIPS = [
     { id: 'map', title: 'Light the way', col: '#2ee6d6', text: 'Tap a dark hex beside the light to light it for a bulb. The lit road always reaches the boss for free.' },
-    { id: 'combo', title: 'Grab combo', col: '#ffc94d', text: 'Some items click when one grab delivers them together: two different weapons, fire with ice, three of a kind.' },
+    { id: 'combo', title: 'Grab combo', col: '#ffc94d', text: 'Your combo relic at work: when one grab delivers the right items together (two weapons, fire with ice, three of a kind), its family fires a bonus move.' },   // (round 21: combos are a relic power)
     { id: 'hungry', title: 'Hungry monster', col: '#a6ff5e', text: 'It eats items out of your bin. Hit it hard in one turn and it hiccups one back; beat it and it coughs up the lot.' },
     { id: 'bomb', title: 'Lit bomb', col: '#ff5a4a', text: 'It blows up in your bin when the fuse runs out. Grab it out and it flies back at whoever threw it.' },
     { id: 'fuse', title: 'Your bomb is lit', col: '#ff8a2b', text: 'A hard landing lit its fuse. When it runs out it blasts every enemy, and your pile. Grab it to play it instead.' },
@@ -12487,7 +12506,7 @@ const GAME = (() => {
     if (shop.removeUsed) rm.disabled = true;
     row.appendChild(rm);
     row.appendChild(btn('Sell an item', () => run.bin.length <= BIN_FLOOR ? toast('The bin is as light as it gets.') : openBin({ mode: 'sell', title: 'Sell which item?', back: () => showShop(shop), onPick: (inst) => {
-      const p = Math.max(5, Math.round((itemDef(inst.id).cost || 30) / 3));
+      const p = Math.max(5, Math.round((itemDef(inst.id).cost || 30) / 3)) * (inst.plus === 2 ? 2 : 1);   // (round 21: a +2 ate three upgraded copies; it sells for double)
       removeInst(inst); addGold(p); snd('coin'); toast(`Sold for ${p} gold.`); feelKeeperSay('sell'); showShop(shop);
       if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
     } }), 'sm'));
@@ -12946,7 +12965,7 @@ const GAME = (() => {
     el.appendChild(h('span', 'cmpIc', '🗜'));
     const col = h('div', 'col');
     col.appendChild(h('div', 'c1', used ? 'The Compactor (used)' : `The Compactor · ${cmpPrice()} gold`));
-    col.appendChild(h('div', 'c2', 'Feed it 3 items, get 1 better one. Three of a kind comes out upgraded.'));
+    col.appendChild(h('div', 'c2', 'Feed it 3 items, get 1 better one. Three of a kind comes out upgraded, three upgraded ones come out ++.'));   // (round 21: plus 2)
     el.appendChild(col);
     const fn = () => { if (shop.cmpUsed) { toast('It is still cooling down.'); return; } cmpShow({ from: 'shop', shop, pick: [], res: null }); };
     el.onclick = fn;
@@ -12961,7 +12980,7 @@ const GAME = (() => {
     const c = btn('', () => { if (FE.beat) return; cmpShow({ from: 'rest', pick: [], res: null }); }, 'choice');
     c.textContent = '';
     c.appendChild(h('div', 'c1', 'Compact'));
-    c.appendChild(h('div', 'c2', 'Crush 3 items into 1 better one (a plus copy for three of a kind).'));
+    c.appendChild(h('div', 'c2', 'Crush 3 items into 1 better one (a plus copy for three of a kind, ++ for three upgraded ones).'));   // (round 21: plus 2)
     list.appendChild(c);
   }
   function cmpShow(cd) {
@@ -12980,6 +12999,7 @@ const GAME = (() => {
     const R = D().cmpRule(insts);
     if (!R.ok) return `Pick ${3 - insts.length} more.`;
     if (R.kind === 'plus') return `Three of a kind: out comes ${itemName(itemDef(R.id), true)}.`;
+    if (R.kind === 'plus2') return `Three upgraded: out comes ${itemName(itemDef(R.id), 2)}, stronger again.`;   // (round 21)
     const A = D().ARCHETYPES || {};
     const kws = R.kw.slice(0, 3).map((k) => A[k] ? `${A[k].icon} ${A[k].label}` : k).join(', ');
     return `Out comes ${/^[aeiou]/i.test(RARITY_NAME[R.rar] || '') ? 'an' : 'a'} ${RARITY_NAME[R.rar] || R.rar} item` + (kws ? ` sharing ${kws}.` : '.');
@@ -13007,11 +13027,11 @@ const GAME = (() => {
       res.appendChild(h('div', 'cmpStamp', 'COMPACTED!'));
       // what went in and what came out, in one line
       const rec = h('div', 'cmpRecipe');
-      for (const i of cd.res.ins || []) rec.appendChild(itemCanvas(itemDef(i.id), !!i.plus, 40));
+      for (const i of cd.res.ins || []) rec.appendChild(itemCanvas(itemDef(i.id), cmp2P(i.plus), 40));
       rec.appendChild(h('span', 'cmpArrow', '→'));
-      rec.appendChild(itemCanvas(def, !!cd.res.plus, 48));
+      rec.appendChild(itemCanvas(def, cmp2P(cd.res.plus), 48));
       res.appendChild(rec);
-      res.appendChild(itemCard(def, !!cd.res.plus, { cls: 'cmpCard' }));
+      res.appendChild(itemCard(def, cmp2P(cd.res.plus), { cls: 'cmpCard' }));
       panel.appendChild(res);
       if (C.phase === 'done') dock.appendChild(btn('Continue', () => cmpLeave(), 'pri cmpGo'));
       else dock.appendChild(h('div', 'cmpRule cmpWait', 'CRUNCH... tap the press to hurry it.'));
@@ -13038,14 +13058,14 @@ const GAME = (() => {
     panel.appendChild(h('div', 'cmpHead', `Your bin: tap an item to feed it (${insts.length}/3)`));
     const groups = {}, order = [];
     for (const inst of run.bin) {
-      const k = inst.id + (inst.plus ? '+' : '');
+      const k = inst.id + cmp2Key(inst.plus);   // (round 21: +1 and +2 are their own groups)
       if (!groups[k]) { groups[k] = { inst, left: [] }; order.push(k); }
       if (cd.pick.indexOf(inst.uid) < 0) groups[k].left.push(inst);
     }
     const grid = h('div', 'cards cmpGrid');
     for (const k of order) {
       const g = groups[k], def = itemDef(g.inst.id);
-      grid.appendChild(itemCard(def, g.inst.plus, { count: g.left.length, cls: g.left.length ? '' : 'sold', disabled: !g.left.length, onPick: () => { if (g.left.length) cmpPick(g.left[0].uid); } }));
+      grid.appendChild(itemCard(def, cmp2P(g.inst.plus), { count: g.left.length, cls: g.left.length ? '' : 'sold', disabled: !g.left.length, cmp2: cmp2Hint(g.inst, run.bin), onPick: () => { if (g.left.length) cmpPick(g.left[0].uid); } }));
     }
     panel.appendChild(grid);
     b.appendChild(panel); b.appendChild(dock);
@@ -13084,8 +13104,8 @@ const GAME = (() => {
     if (price) addGold(-price);
     if (cd.shop) cd.shop.cmpUsed = true;
     for (const i of insts) removeInst(i);
-    const inst = addItem(res.id, !!res.plus);
-    cd.res = { id: res.id, plus: !!res.plus, ins: insts.map((i) => ({ id: i.id, plus: !!i.plus })), uid: inst && inst.uid };
+    const inst = addItem(res.id, cmp2P(res.plus));
+    cd.res = { id: res.id, plus: cmp2P(res.plus), ins: insts.map((i) => ({ id: i.id, plus: cmp2P(i.plus) })), uid: inst && inst.uid };   // (round 21: a +2 stays +2)
     cd.pick = [];
     run.cmpN = (run.cmpN | 0) + 1;
     C.phase = S.headless ? 'done' : 'feed'; C.t = 0; C.fired = {};
@@ -13156,8 +13176,8 @@ const GAME = (() => {
       R.boonBack(ctx, { t, w: W, h: H, up: Bs ? Bs.up : [], pick: B ? B.pick : -1, done: !!(B && B.done), tilt: S.run ? S.run.tilt | 0 : 0 });
     } else if (S.screen === 'compactor' && R.cmpScene && S.cmp) {
       const C = S.cmp, cd = C.cd;
-      const ins = (cd.res ? cd.res.ins : cmpInsts(cd)).map((i) => ({ def: itemDef(i.id), plus: !!i.plus }));
-      const res = cd.res ? { def: itemDef(cd.res.id), plus: !!cd.res.plus } : null;
+      const ins = (cd.res ? cd.res.ins : cmpInsts(cd)).map((i) => ({ def: itemDef(i.id), plus: cmp2P(i.plus) }));
+      const res = cd.res ? { def: itemDef(cd.res.id), plus: cmp2P(cd.res.plus) } : null;
       // the press eases from its picking size to full size for the crush (QA round 7 layout)
       const want = cmpPressK(C), dt = U.clamp(t - (C.sT == null ? t : C.sT), 0, 0.1);
       C.sT = t; C.s = C.s == null || fx().reduced ? want : C.s + (want - C.s) * Math.min(1, dt * 7);
@@ -13165,6 +13185,112 @@ const GAME = (() => {
     }
   }
   // ================================================================ /SETS
+
+  // ================================================================ CR (round 21: combo relics, plus 2)
+  /* DESIGN.md "Combo relics and a gentler, clearer start (round 21)". Combos are a relic power (DATA.CR,
+     COMBAT's CR block): the run's first elite leaves a pick of three combo relics (reward.cr = {pick, got},
+     run.crPick marks the offer, once a run), shown on the treasure screen after the reward (td.crRw: the
+     reward, so a reload resumes the pick and then the reward's own way on); Lucky Lou and Ms. Bubbles start
+     with their family's. Plus 2 (the Compactor's second merge): an instance's plus is false, true or 2;
+     these helpers keep the 2 where older code wrote !!plus, and key the bin's groups and the history. */
+  const cmp2P = (p) => (p === 2 ? 2 : !!p);
+  const cmp2Key = (p) => (p === 2 ? '++' : p ? '+' : '');
+  // "id", "id+", "id++" -> {id, plus}
+  function cmp2Unkey(k) {
+    const m = /^(.*?)(\+{0,2})$/.exec(String(k || ''));
+    const n = m ? m[2].length : 0;
+    return { id: m ? m[1] : String(k || ''), plus: n === 2 ? 2 : n === 1 };
+  }
+  // The Compactor's grid: what three copies of this group make ('x3 = +' / 'x3 = ++', or how many more it takes).
+  function cmp2Hint(inst, bin) {
+    const def = itemDef(inst.id);
+    if (!def || !def.plus || def.rarity === 'junk' || def.evolved || !D().cmp2Lv) return '';
+    const lv = D().cmp2Lv(inst), same = (bin || []).filter((i) => i.id === inst.id);
+    if (lv === 0) return same.filter((i) => !i.plus).length >= 3 ? 'x3 = +' : '';
+    if (lv === 2 || !D().cmp2Ok(def)) return '';
+    const n = same.filter((i) => i.plus).length;
+    return n >= 3 ? 'x3 = ++' : `${n}/3 for ++`;
+  }
+  function crNewRun(run, charId) {
+    const id = D().CR && D().CR.START ? D().CR.START[charId] : null;
+    if (id && tbl('RELICS')[id] && run.relics.indexOf(id) < 0) gainRelic(id);
+  }
+  // endFight: the run's first elite (a tower keeper counts) offers the pick; a Boss Rush drafts instead.
+  function crEliteOffer(rw) {
+    const run = S.run;
+    if (!run || !rw || rw.tier !== 'elite' || run.crPick || !D().crOffer || rushOf(run)) return;
+    run.crPick = 1;   // offered once a run (a save from before round 21 gets its offer at its next elite)
+    let ids = [];
+    try { ids = (D().crOffer(rngFor('crpick'), run, 3) || []).filter((id) => tbl('RELICS')[id]); } catch (e) { ids = []; }
+    if (ids.length) rw.cr = { pick: ids, got: null };
+  }
+  // afterReward: the pick comes first; taking (or skipping) it calls afterReward again.
+  function crAfterReward(rw) {
+    if (!rw || !rw.cr || rw.cr.got || !Array.isArray(rw.cr.pick) || !rw.cr.pick.length || !S.run) return false;
+    showTreasure({ crRw: rw, title: 'Combo relic' });
+    return true;
+  }
+  // The family a combo relic switches on, for its card: "⚔ Steel · 9 combos" (or every family).
+  function crFamLine(def) {
+    const CR = D().CR, c = def && def.combo;
+    if (!CR || !c) return '';
+    if (c === 'all') return `✨ ${Object.keys(CR.FAM).length} families · ${Object.keys(tbl('COMBOS')).length} combos`;
+    const f = CR.FAM[c];
+    if (!f) return '';
+    const n = Object.keys(tbl('COMBOS')).filter((id) => tbl('COMBOS')[id].cr === c).length;
+    return `${f.icon} ${f.label} · ${n} combos` + (c === CR.BUBBLE ? ' + Bubble Combo' : '');
+  }
+  // showTreasure's pick of combo relics (td.crRw). True when it drew the screen.
+  function crTreasure(b, td) {
+    const rw = td && td.crRw;
+    if (!rw || !rw.cr || !Array.isArray(rw.cr.pick)) return false;
+    b.appendChild(h('h1', null, 'Combo relic'));
+    b.appendChild(h('div', 'sub', 'The elite dropped a combo relic. Pick one: it switches on a family of combos, bonus moves a grab fires when it delivers the right items together.'));
+    const cards = h('div', 'cards crPick');
+    rw.cr.pick.forEach((id, i) => {
+      const def = relicDef(id);
+      const card = h('div', 'card crCard rr-' + (def.rarity === 'boss' ? 'l' : def.rarity || 'u'));
+      dealIn(card, i);
+      const ic = relicCanvas(def, 64);
+      ic.className = 'relicIcon';
+      card.appendChild(ic);
+      card.appendChild(h('div', 'name', def.name));
+      const fam = crFamLine(def);
+      if (fam) card.appendChild(h('div', 'crFam', fam));
+      card.appendChild(h('div', 'text', def.text || ''));
+      const fn = () => crTake(td, id, ic);
+      card.onclick = () => fn();
+      S.ui.buttons.push({ el: card, fn, label: def.name });
+      holoOn(card, def.rarity);
+      cards.appendChild(card);
+    });
+    b.appendChild(cards);
+    m2Stop('treasure', b);
+    m2Dock(b, [btn('Skip', () => crTake(td, null), 'ghost')]);
+    if (!S.headless) setTimeout(() => snd('relic'), 120);
+    return true;
+  }
+  function crTake(td, id, ic) {
+    const rw = td && td.crRw;
+    if (!rw || !rw.cr || rw.cr.got) return false;
+    if (id && !tbl('RELICS')[id]) return false;
+    rw.cr.got = id || 'skip';
+    if (id) {
+      const def = relicDef(id);
+      if (!S.headless && ic) { const p = hudPoint(ic, 270, 300); const c = h('div', 'flycard'); c.appendChild(relicCanvas(def, 56)); domFly(c, p.x, p.y, 440, 36, 700); }
+      gainRelic(id); snd('upgrade');
+      toast(`${def.name}: its combos are live.`);
+    }
+    afterReward(rw);
+    return true;
+  }
+  // The Prizedex line under a combo: the relic that switches it on.
+  function crDexLine(def) {
+    const CR = D().CR;
+    const id = CR && CR.relicFor ? CR.relicFor(def) : null;
+    return id && tbl('RELICS')[id] ? `Combo relic: ${relicDef(id).name}.` : '';
+  }
+  // ================================================================ /CR
 
   // ================================================================ EVOLVE (round 7)
   /* Item evolutions and pet synergies (DESIGN.md "Evolutions and pet
@@ -13641,7 +13767,7 @@ const GAME = (() => {
     const sorted = (run.bin || []).filter((i) => i && tbl('ITEMS')[i.id]).map((i, k) => ({ i, k }))
       .sort((a, b) => ((RK[itemDef(b.i.id).rarity] || 0) - (RK[itemDef(a.i.id).rarity] || 0)) || ((b.i.plus ? 1 : 0) - (a.i.plus ? 1 : 0)) || a.k - b.k);
     for (const { i } of sorted) {
-      const key = i.id + (i.plus ? '+' : '');
+      const key = i.id + cmp2Key(i.plus);   // (round 21: "id++" for a +2)
       if (seen[key]) continue;
       seen[key] = 1; bin.push(key);
       if (bin.length >= hisDat().BIN) break;
@@ -13990,7 +14116,7 @@ const GAME = (() => {
     }
     // the final bin
     b.appendChild(h('h3', null, 'The final bin'));
-    const defs = (rec.b || []).map((k) => { const plus = /\+$/.test(k), id = plus ? k.slice(0, -1) : k; return tbl('ITEMS')[id] ? { def: itemDef(id), plus } : null; }).filter(Boolean);
+    const defs = (rec.b || []).map((k) => { const u = cmp2Unkey(k), id = u.id, plus = u.plus; return tbl('ITEMS')[id] ? { def: itemDef(id), plus } : null; }).filter(Boolean);   // (round 21: "id++" is a +2)
     const bc = hisCanvas(508, 176, (ctx) => { if (R && R.his) R.his.bin(ctx, defs, 508, 176, { t: S.t }); });
     bc.className = 'hisBin';
     b.appendChild(bc);
@@ -14043,7 +14169,7 @@ const GAME = (() => {
     if (!rec) return false;
     const pr = {
       char: rec.c, seed: 0, act: rec.a, tilt: rec.tl, muts: (rec.mu || []).slice(), kills: rec.kl, jackpots: rec.jp,
-      bin: (rec.b || []).map((k) => ({ id: /\+$/.test(k) ? k.slice(0, -1) : k, plus: /\+$/.test(k) })),
+      bin: (rec.b || []).map((k) => cmp2Unkey(k)),   // (round 21: "id++" is a +2)
       endless: rec.lp > 0 ? { loop: rec.lp } : null, sc: { bosses: rec.bs, combos: 0 }, scoreTop: rec.s, daily: rec.dl || null, clawType: rec.cl,
       loot: { bigHit: rec.bh, bestCombo: rec.bc ? { name: rec.bc.n, tier: rec.bc.t } : null },
     };
@@ -14430,7 +14556,7 @@ const GAME = (() => {
     const groups = {};
     const order = [];
     for (const inst of run.bin) {
-      const k = inst.id + (inst.plus ? '+' : '');
+      const k = inst.id + cmp2Key(inst.plus);   // (round 21: +1 and +2 are their own groups)
       if (!groups[k]) { groups[k] = { inst, count: 0, insts: [] }; order.push(k); }
       groups[k].count++; groups[k].insts.push(inst);
     }
@@ -14440,7 +14566,7 @@ const GAME = (() => {
       const def = itemDef(g.inst.id);
       const eligible = o.can ? !!o.can(g.inst) : (o.mode !== 'upgrade' || (!g.inst.plus && !def.evolved));   // o.can: a picker's own rule; an evolved item has no plus (EVOLVE)
       cards.appendChild(itemCard(def, g.inst.plus, { count: g.count, cls: eligible ? '' : 'sold', disabled: !eligible, onPick: () => {
-        if (o.mode === 'view') { popover(`<b>${itemName(def, g.inst.plus)}</b><br>${itemText(def, g.inst.plus)}` + (def.plus ? `<br><i>Plus: ${itemText(def, true)}</i>` : ''), 270, 330); return; }
+        if (o.mode === 'view') { popover(`<b>${itemName(def, g.inst.plus)}</b><br>${itemText(def, g.inst.plus)}` + (def.plus && g.inst.plus !== 2 ? `<br><i>Plus: ${itemText(def, true)}</i>` : '') + (D().cmp2Ok && D().cmp2Ok(def) ? `<br><i>Plus 2: ${itemText(def, 2)}</i>` : ''), 270, 330); return; }   // (round 21: the Compactor's ++)
         if (!eligible) { toast(o.mode === 'evolve' ? 'Not ready to evolve.' : 'Already upgraded.'); return; }
         if (o.onPick) o.onPick(g.insts[0]);
       } }));
@@ -14948,6 +15074,7 @@ const GAME = (() => {
     if (FS.outro) { if (type === 'down') finishOutro(); return; }
     if (FS.vs) { if (type === 'down') vsSkip(); return; }
     if (FS.evo) { if (type === 'down') evoSkip(); return; }   // a tap hurries the evolution (EVOLVE)
+    if (type === 'down' && rrRowTap(x, y)) return;   // RROW (round 21): a tap on the resolving row plays the rest at once
     if (type === 'down') annTap();   // a tap cuts the live banner short (ANNOUNCER)
     // One finger steers. A second finger is ignored until the first lifts.
     const pid = ev && ev.pointerId != null ? ev.pointerId : null;
@@ -15479,6 +15606,7 @@ const GAME = (() => {
     legDraw(ctx, t);   // the black hole, the golden claw, the Hype plate, the Monocle's peek (LEG block)
     drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
+    rrRowDraw(ctx, t);   // RROW (round 21): the resolve row, over the arena's floor and the cabinet's top frame
     // Items in flight from the chute to their target, over everything.
     for (const th of FS.throws) {
       if (th.landed) continue;
@@ -15534,7 +15662,7 @@ const GAME = (() => {
       if (q.k === 'charge' && e.uid != null) QA.names[e.uid] = String(e.intent.name || 'Big hit');
       QA.by[i] = q;
     });
-    if (F.phase === 'player' && !FS.enemyTurn && !FS.queue.length && !FS.vs && !FS.outro && C.qaThreat) QA.threat = C.qaThreat(F);
+    if (F.phase === 'player' && !FS.enemyTurn && !FS.queue.length && !FS.playQ.length && !FS.vs && !FS.outro && C.qaThreat) QA.threat = C.qaThreat(F);   // (RROW round 21: never a number that leaves out a prize still waiting on the row)
   }
   // The cabinet sign for the first big charge: a turn ahead, then as it lands.
   function qaSignOf() {
@@ -24261,7 +24389,7 @@ const GAME = (() => {
       cy: e.cyc || 0, mi: e.moveIdx == null ? -1 : e.moveIdx, it: duoNetIntentOut(e.intent), en: e.enraged ? 1 : 0, fi: e.final ? 1 : 0,
       pt: Array.isArray(e.def && e.def.pattern) ? e.def.pattern.slice(0, 24) : null, sn: e.sigN || 0, sf: e.sigForce ? 1 : 0, ac: e.acts || 0, gt: e.gut || 0,
       af: Array.isArray(e.affix) ? e.affix.slice(0, 8) : [], dm: e.dmgMul == null ? 1 : e.dmgMul, bn: e.bank || 0,
-      bl: (e.belly || []).slice(0, DN_BELLY).map((b) => ({ u: String((b.inst && b.inst.uid) || ''), id: b.inst && b.inst.id, p: b.inst && b.inst.plus ? 1 : 0, j: b.inst && b.inst.junk ? 1 : 0, tu: b.turns | 0, k: b.kind || '', s: b.str | 0, a: b.armor | 0 })),
+      bl: (e.belly || []).slice(0, DN_BELLY).map((b) => ({ u: String((b.inst && b.inst.uid) || ''), id: b.inst && b.inst.id, p: b.inst && b.inst.plus ? (b.inst.plus === 2 ? 2 : 1) : 0, j: b.inst && b.inst.junk ? 1 : 0, tu: b.turns | 0, k: b.kind || '', s: b.str | 0, a: b.armor | 0 })),
     }));
   }
   // A fresh enemy object for a slot the partner's turn filled (a summon): COMBAT's own maker, through a shell fight.
@@ -24300,7 +24428,7 @@ const GAME = (() => {
         if (pt.length && JSON.stringify(pt) !== JSON.stringify(e.def.pattern || null)) e.def = Object.assign({}, e.def, { pattern: pt });
       }
       e.belly = Array.isArray(o.bl) ? o.bl.slice(0, DN_BELLY).filter((b) => b && dnHas(I, b.id)).map((b) => ({
-        inst: { uid: dnStr(String(b.u || ''), 24) || U.uid(), id: b.id, plus: !!b.p, frozen: false, junk: !!b.j }, turns: dnInt(b.tu, 0, 99, 1), kind: dnStr(b.k, 16), str: dnInt(b.s, 0, 99, 0), armor: dnInt(b.a, 0, 99, 0) })) : [];
+        inst: { uid: dnStr(String(b.u || ''), 24) || U.uid(), id: b.id, plus: b.p === 2 ? 2 : !!b.p, frozen: false, junk: !!b.j }, turns: dnInt(b.tu, 0, 99, 1), kind: dnStr(b.k, 16), str: dnInt(b.s, 0, 99, 0), armor: dnInt(b.a, 0, 99, 0) })) : [];
       e.intent = duoNetIntentIn(e, o.it);
     }
     list.length = arr.length;
@@ -27999,6 +28127,405 @@ const GAME = (() => {
   }
   // ================================================================ /QA17
 
+  /* ================================================================ RROW (round 21): the resolve row
+     DESIGN.md "The resolve row (round 21)". A grab's prizes no longer resolve
+     the moment they drop down the chute. Each one flies onto a shelf between
+     the arena and the cabinet (FS.rrw.slots, in delivery order) with its art,
+     its name and a chip of what it will do in this fight. Once the claw is
+     home and has let go of everything (the row's `go` latch, the grab's own
+     completion test minus the row), the shelf resolves left to right: the
+     head lifts, flies to its target, COMBAT.play runs on the landing (the old
+     playQ and throw, one at a time), its numbers pop on the slot, then the
+     next. Then grabFinished runs as ever and what it queued (combos, relic
+     procs, Luck's cash out, pets) is grouped into labelled chips at the end of
+     the row, played one chip at a time. Only WHEN things show changes: the
+     plays keep delivery order and grabDone still follows them.
+     Physics stays at delivery (the body leaves the cabinet, the chute's fx,
+     DOUBLE / JACKPOT, the Jackpot Lamp, the golden prize, the pet, an
+     evolution's ceremony, the bubbles, the live rail); only COMBAT.play waits.
+     Hooks (one line each): deliver (rrRowPush), throwItem (rrRowFly), playInst
+     (rrRowPlayed), grabFinished (rrRowFlush, rrRowGrab), updateFight
+     (rrRowTick; the playQ gate rrRowGate / rrRowHeld / rrRowPlayT; the queue's
+     rrRowEv / rrRowBeat), canSteer and qaThreatTick (wait for the row),
+     pointer (rrRowTap), drawFight (rrRowDraw). The speed is
+     meta.settings.rowSpd (1, 2 or 4; a new profile has none: 1x). */
+  const RRW = {
+    x0: 8, x1: 532, y: 339, h: 46, gap: 5, wMax: 150, wCap: 200, wMin: 46, wHit: 40,   // the shelf (stage px): over the player row, under the enemies' feet and hp bars; slot widths
+    lift: 0.08, toss: 0.2, beat: 0.12, rest: 0.1, inT: 0.32, chip: 0.4, hold: 0.9, fade: 0.3,   // seconds at 1x (about 0.45 s an item, a frame or three included)
+    calm: { lift: 0.05, toss: 0.14, inT: 0.18 },   // Shake off / reduced motion: shorter travel
+    SPEEDS: [1, 2, 4],
+    off: false,   // true: the old immediate path (the tests' yardstick)
+    shown: false, pill: null, pillTx: '', pfxY: 128,
+  };
+  const rrRowOn = () => !!(F && FS && !RRW.off);
+  function rrRowSt() {
+    return FS.rrw || (FS.rrw = { slots: [], go: false, skip: false, grabN: FS.grabN, prog: 0, out: 0, live: null, flash: 0, hinted: false });
+  }
+  // The speed from the profile (1x for a new one).
+  function rrRowSpd() {
+    const v = S.meta && S.meta.settings ? +S.meta.settings.rowSpd : 1;
+    return RRW.SPEEDS.indexOf(v) >= 0 ? v : 1;
+  }
+  const rrRowK = () => (FS && FS.rrw && FS.rrw.skip ? 0 : 1 / rrRowSpd());
+  // A step's length now (headless: no lift or fly-in, the old throw).
+  function rrRowDur(k) {
+    if (S.headless) return k === 'toss' ? THROW_T : 0;
+    const v = fx().reduced && RRW.calm[k] != null ? RRW.calm[k] : RRW[k];
+    return v * rrRowK();
+  }
+  // The slot of a delivered instance that has not resolved yet (a prize bounced back and delivered again gets a new one).
+  function rrRowSlotOf(inst) {
+    const R = FS && FS.rrw;
+    if (!R || !inst) return null;
+    for (const s of R.slots) if (s.k === 'item' && s.inst === inst && s.st !== 'hit' && s.st !== 'void') return s;
+    return null;
+  }
+  // Anything on the shelf still to resolve (an item to play, a chip to show).
+  function rrRowPending() {
+    const R = FS && FS.rrw;
+    if (!R) return false;
+    for (const s of R.slots) if (s.st !== 'hit' && s.st !== 'void') return true;
+    return false;
+  }
+  // The numbers in a list of events: hits on enemies (before their Block), your Block, healing, the first status, grabs.
+  function rrRowNums(evs) {
+    const o = { d: 0, b: 0, h: 0, s: '', sv: 0, gr: 0, all: false, ice: false, any: false };
+    let hit = -1, same = true;
+    const foes = {};
+    for (const ev of evs || []) {
+      if (!ev) continue;
+      if (ev.t === 'dmg' && ev.who === 'e') {
+        const v = (ev.amt | 0) + (ev.blocked | 0);
+        if (foes[ev.idx]) same = false;   // one enemy hit twice: a total, not "each"
+        foes[ev.idx] = 1;
+        if (hit >= 0 && v !== hit) same = false;
+        hit = v; o.d += v;
+      } else if (ev.t === 'block' && ev.who === 'p') o.b += ev.amt | 0;
+      else if (ev.t === 'heal' && ev.who === 'p') o.h += ev.amt | 0;
+      else if (ev.t === 'status' && ev.v > 0 && !o.s && ev.s !== 'streak') { o.s = ev.s; o.sv = ev.v | 0; }
+      else if (ev.t === 'grab' && ev.v > 0) o.gr += ev.v | 0;
+    }
+    if (same && hit > 0 && Object.keys(foes).length > 1) { o.d = hit; o.all = true; }   // the same hit on every enemy reads "5 ALL"
+    o.any = !!(o.d || o.b || o.h || o.s || o.gr);
+    return o;
+  }
+  // What an item on the row will do, with this fight's numbers (Strength, Weak, Vulnerable, Armor, the relic rules).
+  function rrRowPre(s) {
+    const o = rrRowNums(null), inst = s.inst, C = X.COMBAT;
+    if (!F || !inst) return o;
+    if (inst.frozen) { o.ice = true; o.any = true; return o; }
+    const def = itemDef(inst.id), plus = !!inst.plus;
+    try {
+      for (const f of (C && C.fxNow ? C.fxNow(F, def, plus) : def.fx || [])) {
+        if (!f) continue;
+        const v = Math.round(+f.v || 0);
+        if (f.k === 'block' && v > 0) o.b += v;
+        else if (f.k === 'heal' && v > 0) o.h += v;
+        else if (f.k === 'status' && !o.s && (f.v == null || v > 0)) { o.s = f.s; o.sv = f.v == null ? 1 : v; }
+        else if (f.k === 'grab' && v > 0) o.gr += v;
+      }
+      if (C && C.previewDamage) o.d = C.previewDamage(F, def, plus) | 0;
+    } catch (e) { /* a preview never breaks the row */ }
+    o.all = def.target === 'all';
+    o.any = !!(o.d || o.b || o.h || o.s || o.gr);
+    return o;
+  }
+  // deliver: the prize's slot, at the end of the row (it shows once throwItem sends it flying in).
+  function rrRowPush(inst, pos) {
+    if (!rrRowOn() || !inst) return;
+    const R = rrRowSt();
+    if (R.slots.length && !rrRowPending() && (!FS.grabInFlight || R.out > 0)) { R.slots.length = 0; R.skip = false; }   // a stray prize after a finished row starts a new one
+    R.out = 0;
+    R.slots.push({ k: 'item', inst, st: 'new', u: 0, nt: 0, fx: pos ? pos.x : 470, fy: pos ? pos.y : 780, cx: null, cy: RRW.y + RRW.h / 2, w: RRW.wMax,
+      def: itemDef(inst.id), plus: !!inst.plus, name: '', pre: null, preT: 0, res: null, procs: null, pop: 0, lift: 0, lt: 0 });
+  }
+  // throwItem: a delivered prize (or an evolved one, after its ceremony) flies to its slot instead of its target.
+  function rrRowFly(inst, from) {
+    if (!rrRowOn()) return false;
+    const s = rrRowSlotOf(inst);
+    if (!s || s.st !== 'new') return false;
+    if (from) { s.fx = from.x; s.fy = from.y; }
+    s.u = 0;
+    s.st = rrRowDur('inT') > 0 ? 'in' : 'wait';
+    s.pre = rrRowPre(s); s.preT = 0.1;
+    return true;
+  }
+  // The head of the row lifts off: the old throw, from its slot, to its target (Block and healing fly to your HP).
+  function rrRowToss(s) {
+    s.st = 'toss'; s.lift = 1;
+    const n0 = FS.throws.length;
+    throwItem(s.inst, { x: s.cx == null ? 270 : s.cx - s.w / 2 + 20, y: s.cy - 8 });
+    const th = FS.throws[n0];
+    if (!th) return;
+    const tg = (th.def && th.def.target) || 'enemy';
+    if (tg === 'self' || tg === 'none' || th.self) { const p = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y); th.x1 = p.x; th.y1 = p.y; }
+    th.cx = (th.x0 + th.x1) / 2 + 20; th.cy = Math.min(th.y0, th.y1) - 46;
+    th.dur = Math.max(0.02, rrRowDur('toss'));
+  }
+  // playInst: what the play did lands on its slot; a relic that joined in (COMBAT stamps its id on what it did) rides along.
+  function rrRowPlayed(inst, q0) {
+    if (!rrRowOn()) return;
+    const R = FS.rrw, s = rrRowSlotOf(inst), qs = FS.queue.slice(q0 | 0);
+    for (const q of qs) q.rr = s || true;
+    if (!R || !s) return;
+    const own = [], procs = [];
+    for (const q of qs) {
+      const ev = q.ev;
+      if (!ev) continue;
+      if (ev.t === 'proc') {
+        if ((ev.src === 'relic' || ev.src === 'pet') && !procs.some((p) => p.id === ev.id)) procs.push({ id: ev.id, name: ev.name || '', icon: ev.icon || '', col: ev.color || '#ffc94d', txt: ev.text || '', evs: [] });
+        continue;
+      }
+      const p = ev.src != null ? procs.find((x) => x.id === ev.src) : null;
+      (p ? p.evs : own).push(ev);
+    }
+    s.res = rrRowNums(own);
+    s.procs = procs.map((p) => ({ id: p.id, name: p.name, icon: p.icon, col: p.col, txt: p.txt, n: rrRowNums(p.evs) }));
+    s.st = 'hit'; s.pop = 1; s.lift = 0;
+    R.prog = S.t;
+  }
+  // The playQ waits for the claw: a grab's prizes resolve once it is home (a stray prize at once).
+  function rrRowGate() {
+    if (!rrRowOn() || !FS.grabInFlight) return true;
+    return !!(FS.rrw && FS.rrw.go);
+  }
+  // The head is still flying in, waiting or lifting: its play waits for the toss to land.
+  function rrRowHeld(head, th) {
+    if (!rrRowOn() || th) return false;
+    const s = rrRowSlotOf(head);
+    return !!(s && (s.st === 'new' || s.st === 'in' || s.st === 'wait' || s.st === 'lift'));
+  }
+  function rrRowPlayT(b) {
+    if (!rrRowOn()) return b;
+    if ((FS.rrw && FS.rrw.skip) || F.phase !== 'player') return 0.02;   // skipped, or the fight is won: the rest goes quickly
+    return S.headless ? b : RRW.rest * rrRowK();
+  }
+  // grabFinished on a reset rig (the watchdog): what is still on the row plays first, in order.
+  function rrRowFlush() {
+    if (!rrRowOn() || !FS.playQ.length) return;
+    while (FS && F && FS.playQ.length) {
+      const inst = FS.playQ.shift();
+      for (let i = FS.throws.length - 1; i >= 0; i--) if (FS.throws[i].inst === inst) FS.throws.splice(i, 1);
+      const s = rrRowSlotOf(inst);
+      if (s && F.phase !== 'player') s.st = 'void';
+      playInst(inst);
+    }
+  }
+  const rrRowHead = (ev) => !!ev && (ev.t === 'combo' || ev.t === 'proc' || (ev.t === 'luck' && ev.k === 'cash'));
+  // A chip's words: a small tag (COMBO, RELIC, PET, LUCK...) and the source's name.
+  function rrRowLabel(ev) {
+    if (!ev) return { tag: 'BONUS', label: '', col: '#ffc94d', icon: '', txt: '' };
+    if (ev.t === 'combo') return { tag: 'COMBO', label: ev.name || '', col: ev.color || '#ffc94d', icon: '★', txt: '' };
+    if (ev.t === 'luck') return { tag: 'LUCK', label: ev.jackpot ? 'JACKPOT PAYOUT' : 'CASH OUT', col: '#3ddc84', icon: '\u{1F340}', txt: '' };
+    const tag = ev.src === 'pet' ? 'PET' : ev.src === 'item' ? 'ITEM' : ev.src === 'combo' ? 'COMBO' : 'RELIC';
+    const icon = ev.icon || (ev.src === 'relic' && ev.id ? relicDef(ev.id).icon || '' : '');
+    return { tag, label: ev.name || '', col: ev.color || '#ffc94d', icon, txt: ev.text || '' };
+  }
+  function rrRowChip(ev, st) {
+    return Object.assign({ k: 'grab', st, cx: null, cy: RRW.y + RRW.h / 2, w: RRW.wMax, pop: 0, res: rrRowNums(null), live: false }, rrRowLabel(ev));
+  }
+  // grabFinished: what it queued (ros, the pet, luck, grabDone's combos and procs) becomes chips at the end of the row,
+  // one per source; each chip's events play together, a chip's beat apart.
+  function rrRowGrab(q0) {
+    if (!rrRowOn()) return;
+    const list = FS.queue.slice(q0 | 0);
+    if (!list.length) return;
+    const R = rrRowSt(), groups = [];
+    let cur = null;
+    for (const q of list) {
+      if (!cur || rrRowHead(q.ev)) { cur = { head: rrRowHead(q.ev) ? q.ev : null, qs: [] }; groups.push(cur); }
+      cur.qs.push(q);
+    }
+    // a group with no source and nothing to show (the Luck meter emptying just before its cash out) rides with the next
+    for (let i = groups.length - 2; i >= 0; i--) {
+      const g = groups[i];
+      if (!g.head && !rrRowNums(g.qs.map((q) => q.ev)).any) { groups[i + 1].qs = g.qs.concat(groups[i + 1].qs); groups.splice(i, 1); }
+    }
+    for (const g of groups) {
+      const n = rrRowNums(g.qs.map((q) => q.ev));
+      for (const q of g.qs) q.rr = true;
+      if (!g.head && !n.any) continue;
+      const c = rrRowChip(g.head, 'wait');
+      c.res = n;
+      R.slots.push(c);
+      for (const q of g.qs) q.rr = c;
+      g.qs[0].rrC = c;
+      const last = g.qs[g.qs.length - 1];
+      last.rrE = c; last.rrB = RRW.chip;
+    }
+    R.out = 0;
+  }
+  // The queue applied q: a grab chip lights up and settles; before the row resolves, a proc the grab set off
+  // right now (a PERFECT, LAMP FEVER, a pet) gets a labelled chip of its own, already played.
+  function rrRowEv(q) {
+    if (!q || !FS || !F || RRW.off) return;
+    let R = FS.rrw;
+    if (q.rr && R) R.prog = S.t;
+    if (q.rrC) { q.rrC.st = 'act'; q.rrC.pop = 1; snd('tick', { pitch: 1.5 }); }
+    if (q.rrE) q.rrE.st = 'hit';
+    if (q.rr || !FS.grabInFlight || (R && R.go) || !q.ev) return;
+    if (rrRowHead(q.ev)) {
+      R = rrRowSt();
+      const c = rrRowChip(q.ev, 'hit');
+      c.live = true; c.pop = 1;
+      R.slots.push(c); R.live = { c, evs: [] }; R.out = 0;
+    } else if (R && R.live) { R.live.evs.push(q.ev); R.live.c.res = rrRowNums(R.live.evs); }
+  }
+  // The queue's beat for q: the row's own pace and speed, nothing once skipped (headless keeps the old beats).
+  function rrRowBeat(q, b) {
+    if (!q || !q.rr || RRW.off) return b;
+    if (FS && FS.rrw && FS.rrw.skip) return 0;
+    if (S.headless) return b;
+    if (q.rrB != null) return q.rrB * rrRowK();
+    return (q.ev && q.ev.t === 'play' ? 0.02 : Math.min(b, RRW.beat)) * rrRowK();
+  }
+  // Slot widths by weight: a played item 0.62, one to come 1, a grab chip 1.5 (1.15 once played); past the shelf the gaps
+  // shrink, then the slots overlap.
+  const rrRowKw = (s) => (s.k === 'grab' ? (s.st === 'hit' ? 1.15 : 1.5) : s.st === 'hit' || s.st === 'void' ? 0.62 : 1);
+  function rrRowWs(slots, W0) {
+    const n = slots.length, out = { w: [], gap: RRW.gap };
+    if (!n) return out;
+    let tot = 0, sum = 0;
+    for (const s of slots) tot += rrRowKw(s);
+    const unit = Math.min(RRW.wMax, (W0 - RRW.gap * (n - 1)) / tot);
+    for (const s of slots) { const k = rrRowKw(s), w = Math.min(RRW.wCap, Math.max(k < 1 ? RRW.wHit : RRW.wMin, unit * k)); out.w.push(w); sum += w; }
+    if (n > 1 && sum + RRW.gap * (n - 1) > W0) out.gap = (W0 - sum) / (n - 1);
+    return out;
+  }
+  // updateFight, before the throws and the playQ: the go latch, the layout, the fly-ins, the head's lift and toss, the fade.
+  function rrRowTick(dt) {
+    if (!rrRowOn()) return;
+    rrRowDom();
+    const R = FS.rrw;
+    if (!R) { rrRowShow(false); return; }
+    const rig = FS.rig;
+    // a new drop: the last row is done by now (canSteer waits for it) and goes
+    if (FS.grabInFlight && R.grabN !== FS.grabN) {
+      R.grabN = FS.grabN; R.go = false; R.skip = false; R.out = 0; R.live = null; R.hinted = false;
+      R.slots = R.slots.filter((s) => s.st !== 'hit' && s.st !== 'void');
+    }
+    // the claw is home and holds nothing: the row resolves (the grab completion test, less the row itself)
+    if (FS.grabInFlight && !R.go && !FS.pendingDrop && rig && rig.phase === 'idle' && (FS.releaseAt < 0 || S.t - FS.releaseAt >= DELIVER_HOLD + 0.05) && rig.held().length === 0) {
+      R.go = true; R.prog = S.t;
+      if (FS.playQ.length && !R.hinted && rrRowSpd() < 4) { R.hinted = true; hint('tap the row to skip'); }
+    }
+    // the watchdog counts from the row's last step, not from the drop
+    if (FS.grabInFlight && R.go && FS.dropAt < R.prog - WATCHDOG + 5) FS.dropAt = R.prog - WATCHDOG + 5;
+    // the layout: what is still to come gets the room (a played item shrinks, a grab chip is wider for its name)
+    const n = R.slots.length, W0 = RRW.x1 - RRW.x0 - 8, ws = rrRowWs(R.slots, W0);
+    const ease = Math.min(1, dt * 14), inT = rrRowDur('inT');
+    for (let i = 0, ax = RRW.x0 + 4; i < n; i++) {
+      const s = R.slots[i], tw = ws.w[i], tx = ax + tw / 2;
+      ax += tw + ws.gap;
+      s.cx = s.cx == null || S.headless ? tx : s.cx + (tx - s.cx) * ease;
+      s.w = s.w > 0 && !S.headless ? s.w + (tw - s.w) * ease : tw;
+      s.cy = RRW.y + RRW.h / 2;
+      if (s.pop > 0) s.pop = Math.max(0, s.pop - dt * 2.5);
+      if (s.k !== 'item') continue;
+      s.def = itemDef(s.inst.id); s.plus = !!s.inst.plus; s.name = itemName(s.def, s.plus);
+      if (s.st === 'new' && !FS.evo && (s.nt += dt) > 0.5) s.st = 'wait';   // never stuck unseen
+      if (s.st === 'in') { s.u = inT > 0 ? Math.min(1, s.u + dt / inT) : 1; if (s.u >= 1) { s.st = 'wait'; s.pop = 0.5; } }
+      if ((s.st === 'in' || s.st === 'wait') && (s.preT -= dt) <= 0) { s.pre = rrRowPre(s); s.preT = 0.1; }
+    }
+    // the head: lift, then the toss (the fight is won: the rest goes at once, as their plays do nothing)
+    if (FS.playQ.length && !FS.queue.length && rrRowGate()) {
+      const s = rrRowSlotOf(FS.playQ[0]);
+      if (s) {
+        if (F.phase !== 'player' || FS.done) { s.st = 'void'; s.lift = 0; }
+        else if (R.skip) { if (s.st !== 'toss') { s.st = 'quick'; s.u = 1; } }
+        else if (s.st === 'wait' && FS.playT <= 0) { s.st = 'lift'; s.lt = 0; snd('tick', { pitch: 1.1 + Math.min(8, R.slots.indexOf(s)) * 0.09 }); }
+        if (s.st === 'lift') {
+          const L = rrRowDur('lift');
+          s.lt += dt; s.lift = L > 0 ? Math.min(1, s.lt / L) : 1;
+          if (s.lt >= L) rrRowToss(s);
+        }
+      }
+    }
+    if (!FS.queue.length) { R.live = null; for (const s of R.slots) if (s.k === 'grab' && (s.st === 'wait' || s.st === 'act')) s.st = 'hit'; }
+    if (!FS.grabInFlight && !FS.playQ.length && !FS.queue.length && !rrRowPending() && n) {
+      R.out += dt;
+      if (FS.enemyTurn) R.out = Math.max(R.out, RRW.hold);
+      if (R.out >= RRW.hold + RRW.fade) { R.slots.length = 0; R.out = 0; R.skip = false; R.go = false; R.live = null; }
+    } else R.out = 0;
+    if (R.flash > 0) R.flash = Math.max(0, R.flash - dt * 3);
+    rrRowShow(R.slots.length > 0);
+  }
+  // A tap on the row (or the glass) while it resolves: the rest plays at once, with a flash.
+  function rrRowTap(x, y) {
+    const R = FS && FS.rrw;
+    if (!rrRowOn() || !R || R.skip || !R.slots.length) return false;
+    if (FS.grabInFlight && !R.go) return false;   // still filling: the claw is at work
+    if (!FS.playQ.length && !rrRowPending()) return false;
+    if (!(y >= RRW.y - 14 && y <= RRW.y + RRW.h + 14) && !inCabinet(x, y)) return false;
+    return rrRowSkip();
+  }
+  function rrRowSkip() {
+    const R = FS && FS.rrw;
+    if (!R || R.skip) return false;
+    R.skip = true; R.flash = 1;
+    for (const th of FS.throws) if (!th.landed) th.dur = Math.min(th.dur, 0.04);
+    if (FS.beatT > 0) FS.beatT = 0;
+    if (FS.playT > 0) FS.playT = 0;
+    snd('whoosh', { pitch: 1.6 });
+    return true;
+  }
+  // The player row's statuses and the GRABS pill step aside while the shelf is up (a class, written on change);
+  // your own numbers and relic badges (PLAYER_FX) pop under the HP stat meanwhile, not on the shelf.
+  function rrRowShow(on) {
+    on = !!on;
+    if (RRW.shown === on) return;
+    RRW.shown = on;
+    PLAYER_FX.y = on ? RRW.pfxY : 386;
+    const el = $('playerRow');
+    if (el && el.classList) el.classList[on ? 'add' : 'remove']('rrOn');
+  }
+  // The speed pill in the fight's control row, after the camera (a plain tap, never a GAME.choose entry).
+  function rrRowDom() {
+    if (RRW.pill) {
+      const tx = rrRowSpd() + 'x';
+      if (RRW.pillTx !== tx) { RRW.pillTx = tx; RRW.pill.textContent = tx; }
+      return;
+    }
+    const row = document.querySelector ? document.querySelector('#ctrl .ctrlRow') : null;
+    if (!row || !row.insertBefore) return;
+    const b = h('button', 'btn ghost sm accPauseBtn rrSpd', '1x');
+    b.id = 'rrSpeed';
+    b.title = i18nTr('Resolve speed: tap to change');
+    b.setAttribute('aria-label', i18nTr('Resolve speed'));
+    b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); rrRowCycle(); };
+    const hn = $('hint');
+    row.insertBefore(b, hn && hn.parentNode === row ? hn : null);
+    RRW.pill = b; RRW.pillTx = '';
+    rrRowDom();
+  }
+  // 1x, 2x, 4x, 1x... remembered in the profile (meta.settings.rowSpd).
+  function rrRowCycle() {
+    const L = RRW.SPEEDS, v = L[(L.indexOf(rrRowSpd()) + 1) % L.length];
+    if (S.meta) { if (!S.meta.settings || typeof S.meta.settings !== 'object') S.meta.settings = { shake: true }; S.meta.settings.rowSpd = v; }
+    saveMeta();
+    snd('click');
+    if (RRW.pill) { RRW.pillTx = ''; rrRowDom(); replay(RRW.pill, 'bump'); }
+    return v;
+  }
+  const RRW_ST = { x0: 0, x1: 0, y: 0, h: 0, a: 1, t: 0, reduced: false, flash: 0, slots: null };
+  // drawFight: the shelf and its slots (RENDER.rrRow), before the throws so a toss flies over it.
+  function rrRowDraw(ctx, t) {
+    const R = FS && FS.rrw, Rd = X.RENDER;
+    if (!R || !R.slots.length || RRW.off || !Rd || !Rd.rrRow) return;
+    RRW_ST.x0 = RRW.x0; RRW_ST.x1 = RRW.x1; RRW_ST.y = RRW.y; RRW_ST.h = RRW.h; RRW_ST.t = t;
+    RRW_ST.a = R.out > RRW.hold ? Math.max(0, 1 - (R.out - RRW.hold) / RRW.fade) : 1;
+    RRW_ST.reduced = !!fx().reduced; RRW_ST.flash = R.flash; RRW_ST.slots = R.slots;
+    Rd.rrRow(ctx, RRW_ST);
+  }
+  function RROW_API() {
+    return {
+      K: RRW, on: () => rrRowOn(), speed: () => rrRowSpd(), cycle: rrRowCycle, skip: () => (FS ? rrRowSkip() : false), tap: (x, y) => (FS ? rrRowTap(x, y) : false),
+      pending: () => (FS ? rrRowPending() : false), nums: rrRowNums, dur: (k) => rrRowDur(k), draw: (ctx, t) => { if (FS) rrRowDraw(ctx, t || 0); },
+      get state() { return FS ? FS.rrw || null : null; }, get off() { return RRW.off; }, set off(v) { RRW.off = !!v; },
+    };
+  }
+  // ================================================================ /RROW
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -28022,11 +28549,16 @@ const GAME = (() => {
       get force() { return BOON.force; }, set force(v) { BOON.force = !!v; }, get state() { return S.boon; } },
     cmp: { K: CMPK, show: cmpShow, pick: cmpPick, unpick: cmpUnpick, crush: cmpCrush, hurry: cmpHurry, leave: cmpLeave, rule: cmpRuleText, price: cmpPrice,
       get state() { return S.cmp; } },
+    // CR (round 21): combo relics and plus 2 (DESIGN.md "Combo relics and a gentler, clearer start (round 21)")
+    cr: { eliteOffer: crEliteOffer, afterReward: crAfterReward, take: crTake, famLine: crFamLine, dexLine: crDexLine, newRun: crNewRun, relicPool: (r) => relicPool(r) },
+    cmp2: { P: cmp2P, key: cmp2Key, unkey: cmp2Unkey, hint: cmp2Hint },
     // ROUND 9: enemy families in a fight, holo cards, the shop's reroll (DESIGN.md "Enemy families", "Holo cards", "Shop reroll")
     fam: { BEAT: FAM_BEAT, PLATE: FAM_PLATE, STAFF: FAM_STAFF, title: famTitle, start: famStart, event: famEvent, tick: famTick, staffBox: famStaffBox, beatOf: famBeatOf,
       back: famArenaBack, front: famArenaFront, shakeX: famShakeX, get fs() { return famFS(); } },
     holo: { HOLO, on: holoOn, tick: holoTick, apply: holoApply, rar: holoRar, get live() { return HOLO.live; } },
     rr: { RR, cost: rrCost, shelf: rrShelf, pull: rrPull, hurry: rrHurry, tick: rrTick, busy: rrBusy, pool: rrPool, land: rrLand, get state() { return S.rr; } },
+    // RROW (round 21, DESIGN.md "The resolve row"): a grab's prizes wait on a row, then resolve one by one
+    row: RROW_API(),
     // item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")
     evo: { EVO, meta: evoMeta, metaFix: evoMetaFix, seen: evoSeen, deliver: (inst, pos) => evoDeliver(inst, pos || { x: 470, y: 780 }), now: evoNow, skip: evoSkip, end: () => (FS ? evoEnd() : false),
       ready: evoReadyInsts, cardTag: evoCardTag, syn: () => evoSyn(), fire: (k, o) => { const P = FS ? petFS() : null; return P ? evoPetFire(P, k, o) : false; }, tapLine: evoPetTapLine,

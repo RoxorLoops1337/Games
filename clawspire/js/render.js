@@ -788,7 +788,7 @@ const RENDER = (() => {
     if (!m || !(Math.abs(m.a) + Math.abs(m.b) > 0)) return null;
     const q = Math.ceil(Math.hypot(m.a, m.b) * s * 4) / 4;
     if (!(q > 0) || q > 5) return null;
-    const vk = (opts.plus ? 1 : 0) + (opts.frozen ? 2 : 0) + (img ? 4 : 0) + q * 32 + (opts.hc && !img ? 1000 : 0);   // ACCESS: the high-contrast rim is its own sprite
+    const vk = (opts.plus ? 1 : 0) + (opts.frozen ? 2 : 0) + (img ? 4 : 0) + q * 32 + (opts.hc && !img ? 1000 : 0) + (opts.plus === 2 ? 2000 : 0);   // ACCESS: the high-contrast rim is its own sprite (round 21: a +2 too)
     let V = ITEM_SPR.get(def);
     if (!V) { V = {}; ITEM_SPR.set(def, V); }
     let sp = V[vk];
@@ -821,7 +821,8 @@ const RENDER = (() => {
     {
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       if (opts.plus) {
-        // gold rim behind the ink outline
+        // gold rim behind the ink outline (round 21: a +2 adds a pink rim outside it)
+        if (opts.plus === 2) { ctx.beginPath(); rrect(ctx, -w / 2 - 4.5, -h / 2 - 4.5, w + 9, h + 9, Math.min(w, h) * 0.4); S(ctx, rgba(PAL.pink, 0.8), 2.5); ctx.stroke(); }
         ctx.beginPath(); rrect(ctx, -w / 2 - 2, -h / 2 - 2, w + 4, h + 4, Math.min(w, h) * 0.35);
         S(ctx, rgba(PAL.gold, 0.85), 3); ctx.stroke();
       }
@@ -843,6 +844,12 @@ const RENDER = (() => {
       if (pi && pi.decals.length) polDecals(ctx, def, pi, w, h, c1, c2);
       if (opts.plus) {
         const br = Math.max(5, Math.min(9, R * 0.4));
+        // (round 21) a +2 wears a second, pink star tucked in front of the gold one
+        if (opts.plus === 2) {
+          const x2 = w / 2 - br * 1.7, y2 = -h / 2 + br * 0.15;
+          tone(ctx, c => star(c, x2, y2, br * 0.9, 5, 0.5), PAL.pink, x2, y2, br * 0.9, { ol: 1.5, dark: -0.3 });
+          txt(ctx, '+', x2, y2 + br * 0.1, br * 1.15, INK, true);
+        }
         tone(ctx, c => star(c, w / 2 - br * 0.3, -h / 2 + br * 0.3, br, 5, 0.5), PAL.gold, w / 2, -h / 2, br, { ol: 1.5, dark: -0.3 });
         txt(ctx, '+', w / 2 - br * 0.3, -h / 2 + br * 0.4, br * 1.3, INK, true);
       }
@@ -1488,7 +1495,7 @@ const RENDER = (() => {
     // a fixed specular on the ring (the metal reads even in a still)
     ctx.beginPath(); ctx.arc(0, 0, R0 * 0.9, Math.PI * 1.08, Math.PI * 1.42); S(ctx, rgba('#ffffff', 0.55), Math.max(1.2, r * 0.07)); ctx.stroke();
     // the glyph (TECH round 17: a Cabinet Tech relic draws its own)
-    if (!techGlyph(ctx, def, ri, tt)) txt(ctx, String((def && def.icon) || '?'), 0, r * 0.06, Math.max(8, Math.round(ri * 1.3)), '#ffffff', true, 'center');
+    if (!techGlyph(ctx, def, ri, tt) && !crGlyph(ctx, def, ri, tt)) txt(ctx, String((def && def.icon) || '?'), 0, r * 0.06, Math.max(8, Math.round(ri * 1.3)), '#ffffff', true, 'center');   // (CR round 21: the combo relics draw theirs)
     if (B.rainbow) {
       for (let i = 0; i < 3; i++) {
         const a = tt * 0.9 + i * 2.1, k = 0.5 + 0.5 * Math.sin(tt * 4 + i * 2), x = Math.cos(a) * r * 0.62, y = Math.sin(a) * r * 0.62;
@@ -17722,9 +17729,273 @@ const RENDER = (() => {
   const TECH_R = { portrait: techPortrait, hat: techHat, visor: techVisor, SIL: TECH_SIL, GLYPH: TECH_GLYPH, glyph: techGlyph, laser: techLaser, PINK: TECH_PINK };
   /* ============================================================ /TECH */
 
+  /* ============================================================ RROW (round 21): the resolve row
+     RENDER.rrRow(ctx, st): the shelf between the arena and the cabinet where a grab's prizes wait in
+     delivery order, then resolve one by one (DESIGN.md "The resolve row (round 21)"). st {x0, x1, y, h,
+     a (the fade), t, reduced, flash, slots}; game.js rrRowTick lays the slots out: {k: 'item' | 'grab',
+     st, cx, cy, w, pop, lift}, an item also {def, plus, name, u, fx, fy, pre, res, procs}, a chip {tag,
+     label, col, icon, txt, res}. Numbers {d, b, h, s, sv, gr, all, ice}. Never throws. */
+  const RRW_NUM = { d: '#ffffff', b: '#7fe8ff', h: '#a6ff5e', gr: '#ffc94d', ice: '#9fe4ff' };
+  // s in the current language, cut to maxW px at this size with an ellipsis.
+  const RRW_FIT = new Map();
+  function rrRowFit(ctx, s, size, maxW) {
+    s = i18nTr(String(s || ''));
+    if (!(maxW > 8)) return '';
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    const key = size + '|' + Math.round(maxW) + '|' + s, hit = RRW_FIT.get(key);   // a slot's words are cut once, not every frame
+    if (hit !== undefined) return hit;
+    if (RRW_FIT.size > 300) RRW_FIT.clear();
+    const out = rrRowCut(ctx, s, maxW);
+    RRW_FIT.set(key, out);
+    return out;
+  }
+  function rrRowCut(ctx, s, maxW) {
+    const mw = (x) => { try { return ctx.measureText(x).width || 0; } catch (e) { return 0; } };
+    if (mw(s) <= maxW) return s;
+    let lo = 0, hi = s.length;
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; if (mw(s.slice(0, m) + '…') <= maxW) lo = m; else hi = m - 1; }
+    return lo > 0 ? s.slice(0, lo).trimEnd() + '…' : '';
+  }
+  // The little icon in front of a number: a sword (damage), a shield (Block), a cross (healing), a snowflake (it only thaws).
+  function rrRowIcon(ctx, k, x, y, sz) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (k === 'd') { ctx.rotate(-0.8); IA.sword(ctx, sz * 1.25, sz * 0.36, '#c9d3e0', '#8a5a2b'); }
+    else if (k === 'b') IA.shield(ctx, sz * 0.78, sz * 0.9, '#3b6fd6', PAL.gold);
+    else if (k === 'h') { const r = sz * 0.42, q = r * 0.36; tone(ctx, c => poly(c, [-q, -r, q, -r, q, -q, r, -q, r, q, q, q, q, r, -q, r, -q, q, -r, q, -r, -q, -q, -q]), accC(PAL.lime), 0, 0, r, { ol: 1.5, dark: -0.3 }); }
+    else if (k === 'ice') { F(ctx, '#9fe4ff'); ctx.beginPath(); star(ctx, 0, 0, sz * 0.45, 6, 0.45); ctx.fill(); }
+    ctx.restore();
+  }
+  // Up to two number chips from x (centred on y), within maxW; returns the width used.
+  function rrRowChips(ctx, n, x, y, sz, maxW) {
+    if (!n) return 0;
+    const list = [];
+    if (n.ice) list.push(['ice', i18nTr('THAW')]);
+    if (n.d > 0) list.push(['d', String(n.d) + (n.all ? ' ' + i18nTr('ALL') : '')]);
+    if (n.b > 0) list.push(['b', '+' + n.b]);
+    if (n.h > 0) list.push(['h', '+' + n.h]);
+    if (n.s && n.sv > 0) list.push(['s', '']);
+    if (n.gr > 0) list.push(['gr', '+' + n.gr + ' ' + i18nTr('GRAB')]);
+    let dx = 0, k = 0;
+    for (const [kind, str] of list) {
+      if (k >= 2) break;
+      if (kind === 's') {
+        const pw = sz * 2.1;
+        if (k > 0 && dx + pw > maxW) break;
+        statusPips(ctx, x + dx, y - sz / 2, { [n.s]: n.sv }, sz);
+        dx += pw + 6; k++;
+        continue;
+      }
+      const ic = kind === 'gr' ? 0 : sz;
+      ctx.font = 'bold ' + sz + 'px ' + FONT;
+      let tw = 0, s1 = str;
+      const mw = (x) => { try { return ctx.measureText(x).width || 0; } catch (e) { return 0; } };
+      tw = mw(s1);
+      if (kind === 'd' && n.all && dx + ic + tw > maxW) { s1 = String(n.d); tw = mw(s1); }   // a narrow slot drops the ALL
+      if (k > 0 && dx + ic + tw > maxW) break;
+      if (ic) rrRowIcon(ctx, kind, x + dx + ic * 0.45, y, sz);
+      txt(ctx, s1, x + dx + ic + (ic ? 1 : 0), y + 0.5, sz, RRW_NUM[kind] || '#ffffff', true, 'left', INK);
+      dx += ic + tw + 8; k++;
+    }
+    return dx;
+  }
+  // One slot: an item (its art, what it will do, its name; once played what it did and a relic that joined in)
+  // or a grab chip (its source, its numbers).
+  function rrRowSlot(ctx, s, st) {
+    const w = s.w, h = st.h - 6, x = s.cx - w / 2, y = st.y + 3, cy = s.cy, a = st.a == null ? 1 : st.a, t = st.t || 0;
+    const wide = w >= 84;
+    if (s.k === 'item') {
+      if (s.st === 'new') return;
+      const def = s.def || {}, rc = accC(RARITY_COL[def.rarity] || RARITY_COL.c);
+      const done = s.st === 'hit' || s.st === 'void', away = s.st === 'toss' || s.st === 'quick', lift = s.lift || 0;
+      ctx.globalAlpha = a * (s.st === 'void' ? 0.35 : s.st === 'in' ? 0.55 : done ? 0.85 : 1);
+      if (lift > 0 && !st.reduced) glow(ctx, s.cx, cy, w * 0.62, PAL.gold, 0.55 * lift);
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 9);
+      F(ctx, lift > 0 ? '#3a2766' : done ? '#1c1233' : '#261a44'); ctx.fill();
+      S(ctx, lift > 0 ? PAL.gold : rc, lift > 0 ? 2.5 : 1.5); ctx.stroke();
+      const art = wide ? 30 : 24, ax = x + (wide ? 19 : 15);
+      if (!away && s.st !== 'in') {
+        const d = shapeDims(def.shape), sc = art / Math.max(8, d.w, d.h);
+        ctx.globalAlpha = a * (done ? 0.6 : 1);
+        item(ctx, def, ax, cy - lift * (st.reduced ? 3 : 7), done || st.reduced ? 0 : Math.sin(t * 2 + s.cx) * 0.05, sc * (1 + lift * 0.18) * (done ? 0.85 : 1), { plus: s.plus });
+      }
+      ctx.globalAlpha = a * (s.st === 'void' ? 0.4 : s.st === 'in' ? 0.6 : 1);
+      const tx = x + (wide ? 38 : 30), tw = x + w - 5 - tx, ny = wide ? cy - 8 : cy;
+      const n = done ? s.res : s.pre, pk = done && s.pop > 0 ? s.pop : 0;
+      if (n && n.any && s.st !== 'void') {
+        ctx.save();
+        if (pk && !st.reduced) { const sc = 1 + Math.sin(pk * Math.PI) * 0.45; ctx.translate(tx, ny); ctx.scale(sc, sc); ctx.translate(-tx, -ny); }
+        rrRowChips(ctx, n, tx, ny, wide ? 15 : 13, tw);
+        ctx.restore();
+      } else if (s.st === 'hit' && s.pre && s.pre.any) txt(ctx, '0', tx, ny + 0.5, wide ? 15 : 13, '#8576ab', true, 'left', INK);   // it did nothing (a heal at full hp)
+      if (wide) {
+        const P = done && s.procs && s.procs.length ? s.procs[0] : null;
+        if (P) {
+          const pn = P.n || {}, num = pn.d ? ' ' + pn.d : pn.b ? ' +' + pn.b : pn.h ? ' +' + pn.h : '';
+          const str = (P.icon ? P.icon + ' ' : '') + i18nTr(P.name) + num + (s.procs.length > 1 ? ' +' + (s.procs.length - 1) : '');
+          txt(ctx, rrRowFit(ctx, str, 13, tw), tx, cy + 11, 13, accC(P.col || PAL.gold), true, 'left', INK);
+        } else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 13, tw), tx, cy + 11, 13, '#b7a9d9', true, 'left', INK);
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const col = accC(s.col || PAL.gold), act = s.st === 'act', wait = s.st === 'wait';
+    ctx.globalAlpha = a * (wait ? 0.6 : 1);
+    if ((act || s.pop > 0) && !st.reduced) glow(ctx, s.cx, cy, w * 0.6, col, 0.5 * Math.max(s.pop || 0, act ? 0.6 : 0));
+    ctx.beginPath(); rrect(ctx, x, y, w, h, 9);
+    F(ctx, act ? '#3a2766' : '#1c1233'); ctx.fill();
+    S(ctx, col, act ? 2.5 : 1.5); ctx.stroke();
+    const ix = x + (wide ? 15 : 12);
+    if (s.icon) txt(ctx, String(s.icon), ix, cy, wide ? 17 : 14, col, false, 'center');
+    else { F(ctx, col); ctx.beginPath(); star(ctx, ix, cy, 7, 5, 0.45); ctx.fill(); }
+    const tx = x + (wide ? 28 : 23), tw = x + w - 5 - tx;
+    const name = s.label ? i18nTr(s.label) : '', head = s.tag === 'COMBO' && name ? i18nTr('Combo') + ': ' + name : name || i18nTr(s.tag || '');
+    txt(ctx, rrRowFit(ctx, head, 13, tw), tx, cy - 9, 13, col, true, 'left', INK);
+    if (s.res && s.res.any) {
+      ctx.save();
+      const pk = s.pop || 0;
+      if (pk && !st.reduced) { const sc = 1 + Math.sin(pk * Math.PI) * 0.4; ctx.translate(tx, cy + 10); ctx.scale(sc, sc); ctx.translate(-tx, -cy - 10); }
+      rrRowChips(ctx, s.res, tx, cy + 10, 13, tw);
+      ctx.restore();
+    } else if (s.txt) txt(ctx, rrRowFit(ctx, s.txt, 13, tw), tx, cy + 10, 13, '#f4eeff', true, 'left', INK);
+    ctx.globalAlpha = 1;
+  }
+  // A prize flying from the chute onto its slot (an arc, shrinking into place).
+  function rrRowIn(ctx, s, st) {
+    const def = s.def || {}, u0 = Math.max(0, Math.min(1, s.u || 0)), u = 1 - (1 - u0) * (1 - u0), v = 1 - u;
+    const wide = s.w >= 84, x1 = s.cx - s.w / 2 + (wide ? 19 : 15), y1 = s.cy, x0 = s.fx, y0 = s.fy;
+    const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - (st.reduced ? 30 : 80);
+    const px = v * v * x0 + 2 * v * u * mx + u * u * x1, py = v * v * y0 + 2 * v * u * my + u * u * y1;
+    const d = shapeDims(def.shape), sc = (wide ? 30 : 24) / Math.max(8, d.w, d.h);
+    ctx.globalAlpha = st.a == null ? 1 : st.a;
+    item(ctx, def, px, py, st.reduced ? 0 : v * 6, sc * (1 + v * 0.7), { plus: s.plus, glow: accC(RARITY_COL[def.rarity] || PAL.gold), glowA: 0.7 * v });
+    ctx.globalAlpha = 1;
+  }
+  function rrRowPaint(ctx, st) {
+    if (!ctx || !st || !st.slots || !st.slots.length) return;
+    ctx.save();
+    try {
+      const a = st.a == null ? 1 : st.a;
+      ctx.globalAlpha = a;
+      ctx.beginPath(); rrect(ctx, st.x0, st.y - 2, st.x1 - st.x0, st.h + 4, 14);
+      F(ctx, 'rgba(18,9,31,0.9)'); ctx.fill(); S(ctx, '#5a3f8f', 1.5); ctx.stroke();
+      for (const s of st.slots) if (s && s.cx != null) rrRowSlot(ctx, s, st);
+      for (const s of st.slots) if (s && s.k === 'item' && s.st === 'in' && s.cx != null) rrRowIn(ctx, s, st);
+      if (st.flash > 0) {
+        ctx.globalAlpha = Math.min(1, st.flash) * 0.35 * a;
+        ctx.beginPath(); rrect(ctx, st.x0, st.y - 2, st.x1 - st.x0, st.h + 4, 14); F(ctx, '#ffffff'); ctx.fill();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* ============================================================ /RROW */
+
+  /* ============================================================ CR (round 21): combo relic glyphs */
+  /* DESIGN.md "Combo relics and a gentler, clearer start (round 21)". The combo relics draw their own glyph on
+     the medallion, like the Cabinet Tech ones: toned shapes with an ink outline, sized to the inner disc (r). */
+  const CR_GLYPH = {};
+  const crOl = (r) => ({ ol: Math.max(0.8, r * 0.06), spec: false });
+  // Weapon Rack: two crossed swords over a wooden peg rail.
+  CR_GLYPH.cr_steel = (ctx, r) => {
+    tone(ctx, c => rrect(c, -r * 0.75, r * 0.38, r * 1.5, r * 0.22, r * 0.06), '#9a6234', 0, r * 0.48, r * 0.6, crOl(r));
+    for (const s of [-1, 1]) {
+      ctx.save(); ctx.rotate(s * 0.72);
+      tone(ctx, c => poly(c, [-r * 0.09, -r * 0.82, 0, -r * 0.98, r * 0.09, -r * 0.82, r * 0.09, r * 0.3, -r * 0.09, r * 0.3]), '#dfe6ee', 0, -r * 0.3, r * 0.5, crOl(r));
+      tone(ctx, c => rrect(c, -r * 0.26, r * 0.28, r * 0.52, r * 0.11, r * 0.04), '#ffc94d', 0, r * 0.33, r * 0.26, crOl(r));
+      tone(ctx, c => rrect(c, -r * 0.06, r * 0.39, r * 0.12, r * 0.3, r * 0.04), '#6b3a16', 0, r * 0.54, r * 0.15, crOl(r));
+      ctx.restore();
+    }
+  };
+  // Mixing Spoon: a bubbling green cauldron with a wooden spoon in it.
+  CR_GLYPH.cr_brew = (ctx, r, t) => {
+    line(ctx, r * 0.05, r * 0.05, r * 0.6, -r * 0.75, INK, Math.max(2, r * 0.2));
+    line(ctx, r * 0.05, r * 0.05, r * 0.6, -r * 0.75, '#c8904a', Math.max(1.2, r * 0.12));
+    tone(ctx, c => { c.moveTo(-r * 0.72, -r * 0.05); c.quadraticCurveTo(-r * 0.78, r * 0.78, 0, r * 0.78); c.quadraticCurveTo(r * 0.78, r * 0.78, r * 0.72, -r * 0.05); c.closePath(); }, '#3a3f4a', 0, r * 0.35, r * 0.7, crOl(r));
+    tone(ctx, c => { c.ellipse(0, -r * 0.05, r * 0.72, r * 0.2, 0, 0, TAU); }, '#a6ff5e', 0, -r * 0.05, r * 0.6, crOl(r));
+    const k = (t || 0) * 2;
+    F(ctx, '#e8ffd0');
+    for (let i = 0; i < 3; i++) { const u = (k + i / 3) % 1; ctx.beginPath(); circ(ctx, -r * 0.35 + i * r * 0.32, -r * 0.2 - u * r * 0.55, r * (0.1 - u * 0.05)); ctx.fill(); }
+  };
+  // Picnic Basket: a wicker basket under a red check cloth.
+  CR_GLYPH.cr_feast = (ctx, r) => {
+    ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.55, Math.PI, 0); S(ctx, INK, Math.max(2, r * 0.18)); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.55, Math.PI, 0); S(ctx, '#c8904a', Math.max(1.2, r * 0.1)); ctx.stroke();
+    tone(ctx, c => poly(c, [-r * 0.8, -r * 0.02, r * 0.8, -r * 0.02, r * 0.6, r * 0.72, -r * 0.6, r * 0.72]), '#d79a4f', 0, r * 0.35, r * 0.7, crOl(r));
+    S(ctx, rgba('#6b3a16', 0.7), Math.max(0.8, r * 0.05));
+    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-r * 0.8 + i * r * 0.05, -r * 0.02 + i * r * 0.18); ctx.lineTo(r * 0.8 - i * r * 0.05, -r * 0.02 + i * r * 0.18); ctx.stroke(); }
+    tone(ctx, c => poly(c, [-r * 0.86, -r * 0.12, r * 0.86, -r * 0.12, r * 0.6, r * 0.18, -r * 0.6, r * 0.18]), '#ff4a4a', 0, 0, r * 0.6, crOl(r));
+    F(ctx, '#ffffff');
+    for (let i = 0; i < 4; i++) ctx.fillRect(-r * 0.62 + i * r * 0.36, -r * 0.1, r * 0.16, r * 0.12);
+  };
+  // Magician's Hat: a black top hat with a red band, stars popping out of it.
+  CR_GLYPH.cr_jackpot = (ctx, r, t) => {
+    tone(ctx, c => { c.ellipse(0, r * 0.55, r * 0.82, r * 0.2, 0, 0, TAU); }, '#2a2238', 0, r * 0.55, r * 0.6, crOl(r));
+    tone(ctx, c => rrect(c, -r * 0.48, -r * 0.2, r * 0.96, r * 0.78, r * 0.06), '#2a2238', 0, r * 0.2, r * 0.6, crOl(r));
+    F(ctx, '#ff2e4a'); ctx.fillRect(-r * 0.47, r * 0.3, r * 0.94, r * 0.16);
+    const k = Math.sin((t || 0) * 3) * 0.08;
+    for (const [x, y, s, col] of [[0, -r * 0.55, 0.26, '#ffe066'], [-r * 0.45, -r * 0.42, 0.17, '#ffc94d'], [r * 0.45, -r * 0.45, 0.19, '#fff6c0']]) {
+      tone(ctx, c => star(c, x, y + k * r, r * s, 5, 0.5), col, x, y, r * s, crOl(r));
+    }
+  };
+  // Dealer's Visor: a fan of three cards under a green dealer's visor.
+  CR_GLYPH.cr_casino = (ctx, r) => {
+    for (const [a, pip] of [[-0.42, '#ff2e4a'], [0, '#1a1030'], [0.42, '#ff2e4a']]) {
+      ctx.save(); ctx.translate(0, r * 0.62); ctx.rotate(a);
+      tone(ctx, c => rrect(c, -r * 0.24, -r * 0.92, r * 0.48, r * 0.66, r * 0.06), '#f7f1e3', 0, -r * 0.6, r * 0.3, crOl(r));
+      F(ctx, pip); ctx.beginPath(); star(ctx, 0, -r * 0.6, r * 0.1, 4, 0.45); ctx.fill();
+      ctx.restore();
+    }
+    tone(ctx, c => { c.moveTo(-r * 0.85, -r * 0.35); c.quadraticCurveTo(0, -r * 0.95, r * 0.85, -r * 0.35); c.quadraticCurveTo(0, -r * 0.62, -r * 0.85, -r * 0.35); c.closePath(); }, '#2ec27e', 0, -r * 0.55, r * 0.6, crOl(r));
+  };
+  // Cheat Code: a game cartridge with up, up, down, down on its label.
+  CR_GLYPH.cr_tech = (ctx, r) => {
+    tone(ctx, c => poly(c, [-r * 0.6, -r * 0.8, r * 0.6, -r * 0.8, r * 0.6, r * 0.5, r * 0.45, r * 0.75, -r * 0.45, r * 0.75, -r * 0.6, r * 0.5]), '#5a6068', 0, 0, r * 0.65, crOl(r));
+    tone(ctx, c => rrect(c, -r * 0.45, -r * 0.62, r * 0.9, r * 0.8, r * 0.06), '#ff7ad9', 0, -r * 0.22, r * 0.45, crOl(r));
+    F(ctx, '#1a1030');
+    for (let i = 0; i < 4; i++) {
+      const x = -r * 0.3 + i * r * 0.2, up = i < 2, y = -r * 0.22;
+      ctx.beginPath(); poly(ctx, up ? [x - r * 0.08, y + r * 0.06, x, y - r * 0.07, x + r * 0.08, y + r * 0.06] : [x - r * 0.08, y - r * 0.06, x, y + r * 0.07, x + r * 0.08, y - r * 0.06]); ctx.fill();
+    }
+    F(ctx, '#ffd23f'); for (let i = 0; i < 5; i++) ctx.fillRect(-r * 0.4 + i * r * 0.18, r * 0.52, r * 0.1, r * 0.16);
+  };
+  // Party Popper: a striped cone bursting confetti and streamers.
+  CR_GLYPH.cr_party = (ctx, r, t) => {
+    tone(ctx, c => poly(c, [-r * 0.7, r * 0.75, r * 0.05, -r * 0.05, -r * 0.2, -r * 0.3]), '#ffc94d', -r * 0.3, r * 0.15, r * 0.5, crOl(r));
+    S(ctx, '#ff2e88', Math.max(1, r * 0.09));
+    for (const k of [0.35, 0.6]) { ctx.beginPath(); ctx.moveTo(-r * 0.7 + (r * 0.75) * k, r * 0.75 - r * 0.8 * k); ctx.lineTo(-r * 0.7 + r * 0.5 * k, r * 0.75 - r * 1.05 * k); ctx.stroke(); }
+    const k = (t || 0) * 1.5;
+    const bits = [['#2ee6d6', 0.25, -0.55], ['#ff2e88', 0.55, -0.25], ['#a6ff5e', 0.05, -0.8], ['#ffe066', 0.7, -0.6], ['#9b7bff', 0.45, -0.85]];
+    bits.forEach(([col, x, y], i) => { const w = Math.sin(k + i) * 0.05; F(ctx, col); ctx.save(); ctx.translate(r * (x + w), r * y); ctx.rotate(i + k); ctx.fillRect(-r * 0.07, -r * 0.04, r * 0.14, r * 0.08); ctx.restore(); });
+    ctx.beginPath(); ctx.moveTo(-r * 0.05, -r * 0.1); ctx.bezierCurveTo(r * 0.2, -r * 0.4, r * 0.4, 0, r * 0.75, -r * 0.2); S(ctx, '#8dfff5', Math.max(1, r * 0.08)); ctx.stroke();
+  };
+  // The Strategy Guide: a red book with a gold star on the cover and a bookmark.
+  CR_GLYPH.cr_all = (ctx, r, t) => {
+    tone(ctx, c => rrect(c, -r * 0.55, -r * 0.75, r * 1.1, r * 1.45, r * 0.08), '#d6283f', 0, 0, r * 0.7, crOl(r));
+    F(ctx, '#f7f1e3'); ctx.fillRect(r * 0.42, -r * 0.68, r * 0.1, r * 1.3);
+    tone(ctx, c => star(c, -r * 0.04, -r * 0.18, r * 0.32, 5, 0.48), '#ffe066', -r * 0.04, -r * 0.18, r * 0.32, crOl(r));
+    for (let i = 0; i < 2; i++) line(ctx, -r * 0.35, r * 0.3 + i * r * 0.17, r * 0.25, r * 0.3 + i * r * 0.17, '#ffc94d', Math.max(1, r * 0.07));
+    tone(ctx, c => poly(c, [r * 0.1, r * 0.7, r * 0.26, r * 0.7, r * 0.26, r * 0.95, r * 0.18, r * 0.86, r * 0.1, r * 0.95]), '#2ee6d6', r * 0.18, r * 0.8, r * 0.15, crOl(r));
+    glow(ctx, -r * 0.04, -r * 0.18, r * 0.5, '#ffe066', 0.25 + 0.15 * Math.sin((t || 0) * 3));
+  };
+  // polBadge: a combo relic draws its glyph instead of the emoji (true when it did).
+  function crGlyph(ctx, def, ri, t) {
+    const g = def && CR_GLYPH[def.id];
+    if (!g) return false;
+    ctx.save();
+    try { ctx.lineJoin = 'round'; g(ctx, ri * 0.92, t >= 0 ? t : 0); } catch (e) { /* never throws */ }
+    ctx.restore();
+    return true;
+  }
+  const CR_R = { GLYPH: CR_GLYPH, glyph: crGlyph };
+  /* ============================================================ /CR */
+
   return {
+    // CR (round 21): the combo relics' glyphs
+    cr: CR_R,
     // TECH (round 17): Joy Stick's portrait, outfits and arcade parts, the Cabinet Tech glyphs, the Laser Sight's beam
     tech: TECH_R,
+    // RROW (round 21): the resolve row's shelf, its slots and chips
+    rrRow: rrRowPaint,
     // CAB (round 16): the cabinet is alive: the event sign, the Jackpot Lamp, coins, the surge, prize faces, the strain
     cab: CAB_R,
     // DEP (round 15): the Neon Depths' tileset, map, arena, cabinet water and caustics, the monsters and their tricks

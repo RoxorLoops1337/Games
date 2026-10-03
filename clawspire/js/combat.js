@@ -89,11 +89,14 @@ const COMBAT = (() => {
     const d = tbl('ITEMS')[inst.id];
     return !!(d && d.rarity === 'junk');
   }
-  // Effect list for an instance: plus.fx when upgraded and present.
+  // Effect list for an instance: plus.fx when upgraded and present; (round 21) plus 2 reads DATA's derived list.
   function fxOf(def, plus) {
+    if (plus === 2 && D().cmp2FxAt) { const f2 = D().cmp2FxAt(def, 2); if (Array.isArray(f2)) return f2; }
     if (plus && def.plus && Array.isArray(def.plus.fx)) return def.plus.fx;
     return Array.isArray(def.fx) ? def.fx : [];
   }
+  // (round 21) an instance's plus as COMBAT keeps it: false, true (+1) or 2 (+2, the Compactor's second merge).
+  const cmp2Plus = (i) => (i && i.plus === 2 ? 2 : !!(i && i.plus));
   function exhausts(def, plus) {
     if (plus && def.plus && def.plus.exhaust != null) return !!def.plus.exhaust;
     return !!def.exhaust;
@@ -230,6 +233,7 @@ const COMBAT = (() => {
         try { fn(F, ...args); } catch (err) {
           F.hookErrors.push(`${id}.${name}: ${err && err.message || err}`);
         }
+        for (let i = mark; i < F.events.length; i++) { const e = F.events[i]; if (e && e.t !== 'proc' && e.src == null) e.src = id; }   // (RROW round 21) what a relic did carries its id: the resolve row credits it
         if (F.events.length > mark) autoProc(F, id, mark, cols);
       }
     } finally { act.delete(name); }
@@ -389,6 +393,15 @@ const COMBAT = (() => {
   // ================= /ENDLESS =================
 
   // ---------- fight setup ----------
+  // (round 21, DESIGN.md "Combo relics and a gentler, clearer start") DATA.DIFFICULTY.act1 {hp, dmg, first}:
+  // act 1 normals fought in act 1 (never a minion, an elite or a boss, never after the Endless reboot) take a
+  // hit more and hit a bit harder; the run's very first fight (F.fights 0) reads the gentler `first`.
+  function crAct1Mul(F, def, tier, diff) {
+    const A = diff && diff.act1;
+    if (!A || tier !== 'normal' || def.minion || F.act !== 1 || num(F.loop, 0) > 0 || clamp(num(def.act, 1) | 0, 1, 3) !== 1) return [1, 1];
+    const k = num(F.fights, 0) === 0 && A.first ? A.first : A;
+    return [Math.max(0.1, num(k.hp, 1)), Math.max(0.1, num(k.dmg, 1))];
+  }
   function makeEnemy(F, id) {
     const def = enemyDef(id);
     const hr = Array.isArray(def.hp) ? def.hp : [num(def.hp, 10), num(def.hp, 10)];
@@ -411,6 +424,7 @@ const COMBAT = (() => {
     }
     // BALANCE (round 12): elites and bosses hit harder than the normals' dial (DATA.DIFFICULTY.tierDmg, 1 = off)
     if (diff.tierDmg && diff.tierDmg[tier] != null) dmgMul *= num(diff.tierDmg[tier], 1);
+    { const a1 = crAct1Mul(F, def, tier, diff); hpMul *= a1[0]; dmgMul *= a1[1]; }   // (round 21) act 1 normals are a threat
     { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
     { const esc = endlessMul(F); hpMul *= esc[0]; dmgMul *= esc[1]; }   // the Endless loop's lift (ENDLESS block)
     { const dm = depMul(def); hpMul *= dm[0]; dmgMul *= dm[1]; }   // DEP (round 15): the Neon Depths' danger dial
@@ -461,7 +475,7 @@ const COMBAT = (() => {
         grabs: claw.grabs, grabsMax: claw.grabs, grabsUsed: 0,
       },
       enemies: [],
-      bin: (run.bin || []).map(i => ({ uid: i.uid || newUid(), id: i.id, plus: !!i.plus, frozen: false, junk: !!i.junk })),
+      bin: (run.bin || []).map(i => ({ uid: i.uid || newUid(), id: i.id, plus: cmp2Plus(i), frozen: false, junk: !!i.junk })),   // (round 21: a +2 stays +2)
       used: [], exhausted: [], stolen: [], purged: [],
       target: 0, events: [], relics: (run.relics || []).slice(), claw, log: [],
       gain: { gold: 0, ink: 0, maxhp: 0 },      // run-level effects the game applies after the fight
@@ -475,6 +489,7 @@ const COMBAT = (() => {
       echoN: 0, lastPlay: null, comboTurn: {}, combos: {},
     };
     F.sets = setIds;
+    F.cr = crFam(F.relics);   // (round 21) the combo families the run's combo relics switch on (CR block)
     evoFight(F, run);   // the evolved items' auras and the pet along (EVOLVE block)
     const rs = api.rulesOf(F.relics.concat(setIds, F.evos));
     F.rules = rs.rules; F.ruleSrc = rs.src;
@@ -1033,7 +1048,7 @@ const COMBAT = (() => {
     const at = F.bin.indexOf(inst);
     if (at < 0) return;
     F.bin.splice(at, 1);
-    const def = itemDef(inst.id), plus = !!inst.plus;
+    const def = itemDef(inst.id), plus = cmp2Plus(inst);
     const kind = mealKind(def), idx = F.enemies.indexOf(e);
     emit(F, { t: 'binEat', inst, idx, kind });
     text(F, e, TAUNTS[Math.floor(F.rng() * TAUNTS.length)]);
@@ -1732,13 +1747,39 @@ const COMBAT = (() => {
     sanitize(F);
     checkOver(F);
   }
+  /* ---- CR (round 21): combo relics (DESIGN.md "Combo relics and a gentler, clearer start (round 21)").
+     A grab fires a named combo (and a Bubble Combo) only when a combo relic switches its family on: a relic's
+     `combo` is a family ('steel', 'brew', ... the recipe's `cr`) or 'all'. A recipe without a family needs 'all'.
+     F.cr = {all: relic id or null, fam: {family: relic id}}, read from F.relics at newFight. */
+  function crFam(relics) {
+    const on = { all: null, fam: {} };
+    for (const id of relics || []) {
+      const c = relicDef(id) && relicDef(id).combo;
+      if (c === 'all') { if (!on.all) on.all = id; } else if (typeof c === 'string' && c && !on.fam[c]) on.fam[c] = id;
+    }
+    return on;
+  }
+  // The relic that switches this combo (a recipe or a family name) on, or null when it is off.
+  function crSrc(F, c) {
+    const on = F && (F.cr || (Array.isArray(F.relics) ? (F.cr = crFam(F.relics)) : null));
+    if (!on) return null;
+    const f = typeof c === 'string' ? c : c && c.cr;
+    return (f && on.fam[f]) || on.all || null;
+  }
+  const crOn = (F, c) => !!crSrc(F, c);
+  api.crOn = crOn;
+  // The combo's relic flashes as the combo fires, so the player sees where the power comes from.
+  function crProc(F, c) { const id = crSrc(F, c); if (id) emit(F, relicProc(F, id)); }
+
   function fireCombo(F, combo, defs) {
+    if (!crOn(F, combo)) return false;   // (CR) no combo relic for its family: it never fires
     if (combo.once === 'turn') {
       if (F.comboTurn[combo.id] === F.turn) return false;
       F.comboTurn[combo.id] = F.turn;
     }
     emit(F, { t: 'combo', id: combo.id, name: combo.name, text: combo.text, color: combo.color || '#ffc94d',
       n: defs.length, tier: clamp(num(combo.tier, 1) | 0, 1, 3) });
+    crProc(F, combo);
     F.stats.combos++;
     F.combos[combo.id] = (F.combos[combo.id] || 0) + 1;
     log(F, `Combo: ${combo.name}.`);
@@ -1761,7 +1802,10 @@ const COMBAT = (() => {
       setStreak(F);
       const defs = g.defs.slice();
       // the grab's state for recipes that read it (Lucky Seven)
-      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak, pet: F.petId || null, perfect: F.tech ? F.tech.perf | 0 : 0 }) || []) : [];   // pet: the pet combos (EVOLVE); perfect: this grab's PERFECT streak (TECH)
+      // (CR round 21) on: the run's combo relics; a recipe that is off never takes a slot
+      if (!F.cr) F.cr = crFam(F.relics);   // a fight from before round 21 (a co-op seat's, a test's)
+      const on = (cb) => crOn(F, cb);
+      const fire = D().combosFor && (F.cr.all || Object.keys(F.cr.fam).length) ?(D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak, pet: F.petId || null, perfect: F.tech ? F.tech.perf | 0 : 0, on }) || []).filter(on) : [];   // pet: the pet combos (EVOLVE); perfect: this grab's PERFECT streak (TECH)
       for (const combo of fire) { if (F.phase !== 'player') break; if (combo && combo.id) fireCombo(F, combo, defs); }
       const got = Math.max(n, defs.length);
       if (F.phase === 'player') luckAfterGrab(F, got);
@@ -2127,7 +2171,7 @@ const COMBAT = (() => {
     if (!pool.length) pool = F.used.filter(ok);
     if (!pool.length || F.bin.length + F.used.length >= MAX_ITEMS) { text(F, F.player, 'NOTHING'); return null; }
     const src = pool[Math.floor(F.rng() * pool.length)];
-    const inst = { uid: newUid(), id: src.id, plus: !!src.plus, frozen: false, junk: false, temp: true };
+    const inst = { uid: newUid(), id: src.id, plus: cmp2Plus(src), frozen: false, junk: false, temp: true };
     F.bin.push(inst);
     emit(F, { t: 'binCopy', inst });
     return inst;
@@ -2159,7 +2203,7 @@ const COMBAT = (() => {
       text(F, F.player, 'THAWED');
       F.used.push(inst);
     } else {
-      const plus = !!inst.plus;
+      const plus = cmp2Plus(inst);
       const ctx = { inst, def, mode, idx };
       // Rules that change this item's numbers credit their relic.
       const real = !isJunk(inst) && fxOf(def, plus).length > 0;
@@ -2341,6 +2385,8 @@ const COMBAT = (() => {
   };
 
   // ---------- previews ----------
+  // (RROW round 21) An item's effects as this fight's relic rules scale them (the resolve row's Block and heal chips).
+  api.fxNow = function (F, def, plus) { return F && def ? fxOf(def, plus).map(f => scaled(F, def, f)) : []; };
   // Damage the item would deal to the current target (before its block),
   // walking fx in order so an earlier vuln/str in the same item counts.
   api.previewDamage = function (F, def, plus) {
@@ -2984,8 +3030,9 @@ const COMBAT = (() => {
       emit(F, { t: 'ros', k: 'pop', n, block: B.block * n });
       if (B.block > 0) gainBlock(F, p, B.block * n);
       for (let i = 0; i < n && B.dmg > 0 && F.phase !== 'over'; i++) { const e = hitTargets(F, 'random')[0]; if (e) api.damage(F, null, e, B.dmg); }
-      if (n >= 2 && F.phase !== 'over') {
+      if (n >= 2 && F.phase !== 'over' && crOn(F, (D().CR && D().CR.BUBBLE) || 'party')) {   // (CR round 21: the Party family's)
         const dmg = n * B.combo;
+        crProc(F, (D().CR && D().CR.BUBBLE) || 'party');
         B.combos++; B.best = Math.max(B.best, n);
         emit(F, { t: 'ros', k: 'combo', n, dmg });
         log(F, `Bubble Combo x${n}.`);

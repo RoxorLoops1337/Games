@@ -279,6 +279,7 @@ await atest('the watch screen: the partner\'s claw, bin, combos and cheers', asy
   h.ok(Object.keys(w.bodies).length > 0, 'the bin streams in (' + Object.keys(w.bodies).length + ' bodies)');
   h.ok(w.fx.some((f) => f.k === 'combo'), 'a named combo shows');
   // a prize down the chute (the deliver hook)
+  const Fa = act.GAME.fight, pl0 = Fa.stats.played;
   const b = act.GAME.fs.items[0];
   if (b) { b.x = act.GAME.cabinet.bounds.chuteX + 20; b.y = act.GAME.CAB.h - 30; }
   for (let i = 0; i < 90; i++) act.GAME.update(DT);
@@ -297,6 +298,11 @@ await atest('the watch screen: the partner\'s claw, bin, combos and cheers', asy
   for (let i = 0; i < 60 * 20 && act.GAME.screen === 'fight'; i++) act.GAME.update(DT);
   await settle([A, B], 1);
   h.ok(watcher.GAME.duo.state.ph === 'yours' && act.GAME.duo.state.ph === 'watch', 'strictly turn about');
+  // (RROW round 21) the prize went over the active phone's resolve row before the turn passed: both phones agree on it
+  h.ok(Fa.stats.played > pl0, 'the prize was played (from the resolve row) before the turn went over');
+  const La = act.GAME.duo.live, Lw = watcher.GAME.duo.live;
+  h.ok(La.F[0].enemies[0].hp === Lw.F[0].enemies[0].hp && La.F[first].player.hp === Lw.F[first].player.hp && La.F[1 - first].player.hp === Lw.F[1 - first].player.hp,
+    'the boss and both seats agree on both phones (boss hp ' + Lw.F[0].enemies[0].hp + ')');
   h.ok(A._store.clawspire_duo === 'LOCAL-DUEL' && A._store.clawspire_run === 'SOLO', 'the local duel save and the run save are untouched');
 });
 

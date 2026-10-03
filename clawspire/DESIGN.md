@@ -7626,6 +7626,129 @@ Tests: `title art (round 20)` in the render suite (the logo's place and bounds, 
 logo place and size, the tower stands on the floor above the menu, six ledges, the same frame draws the same, the
 scene moves, calm holds still). The round 7 logo fit test and the round 9 layout tests pass unchanged.
 
+## The resolve row (round 21)
+
+The owner, after a playtest: "I cannot clearly see the damage that is going... you can grab some shields and stuff
+and then suddenly there's like a lot of damage happening and you have no clue where it comes from." He asked for the
+prizes to stack up side by side first, then go "da da da da" one by one, with a speed up button. This round does
+exactly that. Only WHEN things show changes; what happens (and in which order) is the same as before.
+
+**What the player sees.**
+- A shelf (the resolve row) between the arena and the cabinet: stage x 8..532, y 339..385, over the player row and
+  the cabinet's top edge, under the enemies' feet, hp bars and intents. While it is up, the player row's statuses and
+  the GRABS pill fade out (`#playerRow.rrOn`), a banner (JACKPOT, TURN OVER) rises over the arena instead of covering
+  it, and your own numbers and relic badges (`PLAYER_FX`) pop under the HP stat instead of on the shelf.
+- Every prize the chute takes flies (an arc) onto the next slot, left to right in delivery order. A slot shows the
+  item's art, a chip of what it will do in this fight (`COMBAT.previewDamage` for the hit, so Strength, Weak,
+  Vulnerable, Armor and the relic rules count; Block and healing through the relic rules with `COMBAT.fxNow`; the
+  first status as a status pip; `ALL` for an all-enemies item; THAW for a frozen one) and its name. The chip refreshes
+  every 0.1 s while it waits (tapping another enemy retargets the rest, as before).
+- When the claw is home and holds nothing, the row resolves left to right: the head lifts and glows gold (a rising
+  tick), flies to its target (an enemy, the pack for all / random, the HP stat for Block and healing), COMBAT.play
+  runs on the landing, the enemy's bar and your Block move with that hit, and the slot pops what it really did (the
+  hit before the enemy's Block, the Block, the healing, the status; a grey 0 when it did nothing, like a heal at full
+  hp). A relic that joined in on that play rides on the slot ("🐍 Venom Gland", with its number). Then the next one.
+  About 0.45 s an item at 1x; played slots shrink so what is still to come keeps the room.
+- Then the grab-level effects arrive as labelled chips at the end of the row, one per source, each played on its
+  own beat (0.4 s at 1x): named combos ("Combo: Scrap Storm" and its hit), relic procs from onJackpot / onGrab ("🔔
+  Jackpot Bell 5 ALL", "🎫 Prize Counter +6"), Luck's cash out (LUCK, CASH OUT or JACKPOT PAYOUT), pet procs, the
+  bubbles' pop, a near miss's Luck. A proc the cabinet sets off while the claw is still out (a PERFECT relic, LAMP
+  FEVER, a cabinet event) gets its own chip in the row at that moment, already played: every number on screen has a
+  source on the shelf.
+- The shelf holds 0.9 s after the last chip, then fades (at once when the enemy turn starts).
+- **Speed**: a pill in the fight's control row next to the camera, `1x` / `2x` / `4x` (a plain tap, never a
+  GAME.choose entry; `#rrSpeed`). It scales the lift, the toss, the fly-in, the beats and the chip beat. Saved as
+  `meta.settings.rowSpd` inside `clawspire_meta` (no new key; a new profile has none and plays at 1x).
+- **Skip**: a tap on the shelf (or the glass) while it resolves plays the rest at once (a white flash; no toss, no
+  beat), the grab chips too. The hint says "tap the row to skip" while a row resolves (not at 4x).
+- **Calm** (Shake off, reduced motion): a shorter lift (0.05 s), toss (0.14 s) and fly-in (0.18 s), a lower arc, no
+  sway, no pop scale; the row adds no shake anywhere.
+
+**How it works** (game.js RROW block after `/QA17`, `rrRow*`; render.js RROW block after `/TECH`, `RENDER.rrRow`).
+- The old pipe is kept: `deliver` still pushes the instance on `FS.playQ`, `throwItem` still makes the throw,
+  `playInst` still calls `COMBAT.play` on its landing and queues its events, `grabFinished` still runs the grab hooks
+  and `COMBAT.grabDone`. The row adds a gate and a slot: `rrRowPush` (deliver) makes the slot, `rrRowFly`
+  (top of throwItem) sends a delivered prize to its slot instead of its target, `rrRowGate` keeps the playQ waiting
+  while the grab is in flight until the row's `go` latch (the grab completion test without the playQ / queue part:
+  rig idle and home, the release hold over, nothing held), `rrRowHeld` keeps the head waiting until it lifted and was
+  tossed (`rrRowToss` calls the old throwItem from the slot, then sets the arc, the target and the duration),
+  `rrRowPlayed` (playInst, after enqueue) marks the play's queue entries and fills the slot's numbers and its relics.
+  Grab completion still needs an empty playQ and queue, so `grabFinished` (and `grabDone`) can only come after the
+  last prize played; `rrRowGrab(q0)` (grabFinished) groups what it queued into chips (a `combo`, a `proc` or a Luck
+  `cash` event opens a group; a group with no source and no number rides with the next) and marks each group's first
+  and last entry. The queue loop calls `rrRowEv` (a chip lights up, settles; a mid-grab proc's live chip) and
+  `rrRowBeat` (the row's beat, scaled by the speed, 0 after a skip; entries without a row mark keep their beat).
+- **COMBAT** (two lines): `hook()` stamps `src` (the relic or set id) on every event a relic hook emits (not on the
+  proc events, whose `src` stays the kind), so a play's relic numbers are credited to the relic, not the item; and
+  `COMBAT.fxNow(F, def, plus)` is the item's effect list as this fight's relic rules scale it.
+- **The enemy turn waits**: END TURN needs an empty playQ and queue (as before) and the grab is in flight until the
+  last item played; the chips are queue entries. `canSteer` now also waits for an empty playQ, so a stray prize (one
+  a shake dropped down the chute outside a grab) resolves before the next drop can start.
+- **The watchdog** counts from the row's last step while it resolves (`FS.dropAt` follows `R.prog`), and if a reset
+  rig still ends a grab early, `rrRowFlush` plays what is left on the row first, so grabDone never jumps ahead.
+- **The fight ends mid row**: as today, the plays after the last kill do nothing (`playInst` returns when the fight
+  is over; the unplayed prizes stay in `F.bin` without a body, as before); their slots go grey at once (`void`, 0.02 s each) and
+  the grab completes, `grabDone` and `afterAction` run as before and the outro follows.
+- **The incoming-damage preview** never shows a number that leaves out a prize still waiting: it is computed only
+  with an empty playQ (as it already was only with an empty queue), so it is off while the row waits or resolves and
+  comes back exact (it read 21 blocked after a row of shields in the shots).
+- **Headless** (the suites): the same code and order; no lift, no fly-in, the old throw time (0.3 s) and the old
+  beats, so the old timings hold. `GAME.row.off = true` is the old immediate path (the tests' yardstick).
+
+**What stays at delivery, what waits, and why.** The physics cannot wait: the body leaves the cabinet when it
+delivers, so everything the cabinet and the claw do stays at delivery. Only the combat resolution (`COMBAT.play`
+and what follows from it) waits.
+- At delivery (unchanged): the body removed; `FS.delivered` and the run's count; DOUBLE and JACKPOT (the party
+  lights, the marquee, the banner, the sticker counts; their only rules are onJackpot / onGrab, which were always at
+  grabDone); the golden prize's fanfare (and its gold); the free prize; the Jackpot Lamp's cells (cabDeliver,
+  techDeliver, so LAMP FEVER and its capsule fall when they did); the pet (hearts, XP, the firefly's spotlight gold and
+  Frost Light's mark, which must be on the instance before it plays); a popped bubble's prize marked for the bubble
+  payout; the boss arena's iced rail, the live rail's ground, a wet prize's zap; a lit bomb's fuse put out, ice
+  frozen in the used pile; the online stream's prize fx (`duoNetDeliver`, so the watching phone sees it at once);
+  the tutorial's coach step; an **evolution** (COMBAT.evolve changes the instance in place at delivery, the ceremony
+  holds the fight, and evoEnd's throw now flies to the row: its slot is made at delivery, so the order holds).
+- Waiting on the row: `COMBAT.play` and everything it does (damage, Block, healing, statuses, extra grabs from an
+  item, bin events such as junk, copies, purges, a bounce back into the cabinet or the Black Hole, the bodies they
+  spawn), the tray chip, the item's sounds and numbers. Bin events from a play spawn their bodies when the play
+  happens, after the claw is home, so they can no longer fall into the same grab's chute mid carry (a body the row's
+  plays put in the chute while the row resolves is still delivered and joins the end of the row, as the chute is
+  watched until the grab completes).
+- Mid-grab cabinet procs (PERFECT, LAMP FEVER, a cabinet event, a material's relic, a bomb going off in the bin,
+  the live rail, a jelly's sting) keep their physical moment: COMBAT acted then, so they are shown then (with a live
+  chip when a relic or a combo did it).
+
+**Same results.** For the same seed and the same deliveries the plays happen in delivery order, then grabDone,
+exactly as before (the bin each play sees is the same: the prizes after it are still in it in both paths, and
+F.rng is drawn in the same order). The test drives two fights on the same seed, one through the row and one with
+`GAME.row.off`, through four grabs of three prizes (with Jackpot Bell, Prize Counter and Venom Gland) and an enemy
+turn: the same plays in the same order with grabDone in the same places, the same hp, Block, statuses, piles and stats.
+What can differ is the physics around them: a play's bin events now land after the carry instead of during it, and a
+cabinet proc that used to land between two plays now lands before both; neither was fixed timing before (a prize's
+throw took 0.3 s, so the interleaving always depended on the frame).
+
+**Duo.** Co-op (local and online) and the seat fights use this flow unchanged: the active phone's row resolves
+before its END TURN, so the turn it sends (foes, seats) is the one it showed; the watching phone keeps its simple
+picture (the prize flying to the partner's corner at delivery). The claw-off (versus) never uses `deliver`.
+
+**Code, API, tests.** game.js RROW block (`RRW` dials, `rrRow*`, `RROW_API` as `GAME.row = {K, on, speed, cycle,
+skip, tap, pending, nums, dur, draw, state, off}`) and one-line hooks in `throwItem`, `deliver`, `playInst`,
+`grabFinished`, `canSteer`, `updateFight` (the tick, the playQ gate, the queue's beat), `qaThreatTick`, `pointer`,
+`drawFight`. render.js RROW block (`rrRowPaint` as `RENDER.rrRow`, `rrRowSlot`, `rrRowIn`, `rrRowChips`,
+`rrRowIcon`, `rrRowFit`). combat.js: the `src` stamp in `hook()`, `api.fxNow`. index.html `<style id="rrow-css">`.
+Dutch in lang_nl2.js (the RROW block). Tests (game suite, `rrow:`): a real grab fills the row and nothing plays
+until the claw is home; delivery order then grabDone with every number equal to the old path; a relic on an item's
+slot, the grab chips labelled at the end and played one by one in grabDone's order; the speed pill and its save (no
+new key, a reload keeps it, 2x and 4x durations); a tap skips (7 frames instead of 130 for four prizes, the same
+result); the enemy turn waits for the whole row; the last enemy dying mid row ends as the old path does; the row
+drawn in every state and calm, junk input. The juice and evolution tests now expect the row (one throw at a time,
+the evolved item lands on the row first). Net suite: a prize played from the row before the online turn passes, both
+phones agree on the boss and both seats. Screenshots (390x844, English and Dutch): scratchpad `r21row/`
+(`r21_1_row_filling` to `r21_7_speed_2x`, `shots.mjs`).
+
+**Known limits.** A very big scoop (past about ten prizes) squeezes the slots until they overlap; the names hide
+first (under 84 px a slot shows its art and number only). The tray chips in the control bar still show the last two
+plays.
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the
@@ -7635,3 +7758,131 @@ scene moves, calm holds still). The round 7 logo fit test and the round 9 layout
 - Text is readable at 360px wide: minimum 12px logical at scale 1, real sentences, no walls.
 - 60 fps on a mid phone: physics ≤ 40 bodies, no per-frame allocations in hot loops, canvas
   cleared once, no shadowBlur in loops (draw glows as radial gradients cached once).
+
+## Combo relics and a gentler, clearer start (round 21)
+
+The owner playtested: the first fight was a blur of combo damage he never chose, the enemy died at once, nothing
+hurt, and he could not tell what his items did. He wants combos to be an exclusive relic power earned later (an
+elite), the starting sword and shield weaker, the first fights a real threat, and the Compactor's merge to work a
+second time. He tunes by playing, not by bot runs; the numbers below are sensible starting points.
+
+### Audit: automatic extra damage and Block a new player gets in act 1
+
+| source | what it did | round 21 |
+| --- | --- | --- |
+| named grab combos (`DATA.combosFor`, `COMBAT.grabDone` / `fireCombo`) | up to three bonus moves a grab (a Knight's three swords: Armory 16, Three of a Kind 10 to ALL, Magnetized 5 to ALL) | **relic only** (below) |
+| Bubble Combo (`COMBAT.rosPop`, 2+ bubbles popped in one grab) | n x 4 to ALL | **relic only**: a Party combo; Ms. Bubbles starts with the Party Popper |
+| combo boosters (Encore Machine `comboTwice`, Tuning Fork, Ticket Roll, The Crowd `onCombo`, Squeaky Toy `bub.combo`) | fed the combos | out of every random pool until the run owns a combo relic (`DATA.crPoolOk`) |
+| Jackpot Fever mutator, Frequent Player set bonus, evolved auras with `onCombo` | combos twice / per combo | kept: opt-in content; with no combo relic they simply have nothing to feed |
+| DOUBLE / JACKPOT (2 / 3+ items a grab) | tickets, lamp cells, the payout; damage only through relics (`onJackpot`) | kept: no damage of their own |
+| Luck and its cash out | Lucky Lou's gift (whiffs fill it, a 2+ grab cashes it) and the Rabbit's Foot | kept: his visible kit (the meter shows) |
+| grab streak | read only by `dmgPer streak` items and relics | kept: nothing automatic |
+| materials (a lit bomb's blast, cracked glass +50%) | a bomb in the bin blows (3 to ALL in act 1); cracked glass plays +50% then breaks | kept: both are shown on the item as it happens (FUSE LIT, the crack) |
+| Golden Prize (40% of fights, one item upgraded for the fight) | +1 level on one item | kept: it shimmers gold and says GOLDEN PRIZE; a +2 item is never lowered by it |
+| pet procs, crawler gifts (turret, bubbles, luck, tech), starter relics | per crawler | kept: each is its crawler's or its pet's named, explained kit (the Squire's Gauntlet's 5 Block at the bell included) |
+| Cabinet Tech / cabinet events (surge, coin shower, capsule drop, LAMP FEVER, PERFECT) | grip, gold, loot | kept: no damage without a Tech relic the player picked |
+| evolutions | an evolved item's aura | kept: earned (a +1 item and its relic) |
+
+### Combos are a relic power (`DATA.CR`, combat.js `crFam` / `crOn`, game.js CR block)
+
+A grab fires no named combo, and no Bubble Combo, unless the run holds a combo relic. Every recipe has a family
+(`COMBOS[id].cr`, a test pins that none is left out); a relic's `combo` field names the family it switches on, or
+`'all'`. `COMBAT.newFight` reads the families into `F.cr = {all, fam: {family: relic id}}` (a fight without it,
+from before round 21, builds it on first use); `grabDone` passes `ctx.on` to `DATA.combosFor`, which drops the
+recipes that are off before it picks the best per family and fills the three slots, and `fireCombo` refuses one
+that is off. A combo that fires flashes the relic that switched it on (its proc), so the player sees where the power
+comes from.
+
+| family | relic (rarity) | recipes |
+| --- | --- | --- |
+| Steel ⚔ | Weapon Rack (u) | Crossed Blades, Shield Wall, Heavy Hitters, Sharp Edges, Scrap Shot, Magnetized, Landslide, Armory, Iron Curtain |
+| Brew ⚗ | Mixing Spoon (u) | Steam Burst, Toxic Fumes, Frostbite, Molotov, Resonance, Chandelier Crash, Elemental Storm, Bad Medicine |
+| Feast 🍗 | Picnic Basket (u) | Picnic, Banquet, Hot Lunch |
+| Jackpot 🎰 | Magician's Hat (u) | Pocket Change, Pay Day, Handful, Hat Trick, Three of a Kind, Mega Jackpot |
+| Casino 🃏 | Dealer's Visor (u) | Double Dice, Poker Night, Two Pair, Full House, Royal Flush, Dead Man's Hand, Midas Touch, Lucky Seven |
+| Tech 🕹 | Cheat Code (u) | Coin-Op, Short Circuit, Bullseye |
+| Party 🎉 | Party Popper (u) | Fetch!, Nest Egg, Legend Rising, Twin Legends, and the Bubble Combo |
+| all | The Strategy Guide (r) | every family |
+
+**Where they come from.** The run's first elite (a tower keeper counts) leaves a pick of three family relics
+(`DATA.crOffer`, leaning to the families the bin and relics invest in, never one owned; its own rng stream
+`crpick`, so every other reward roll stays put). It shows after the reward (`afterReward` hands over to the
+treasure screen with `td.crRw`, the reward, so a reload resumes the pick and then the reward's own way on: a tower's
+prize, an event's next step, the map); Skip is allowed. `run.crPick` marks the offer, once a run. After that,
+combo relics sit in the random pools at their rarity (in act 2 and up anyway); combo boosters join the pools once a
+combo relic is held. Lucky Lou starts with the Dealer's Visor (his dice, chips and cards are the Casino table) and
+Ms. Bubbles with the Party Popper (her Bubble Combo); Joy Stick's kit is the cabinet, not Coin-Op, so she starts
+with none.
+
+**Old saves.** A run saved mid act with combos firing loads as it was; its combos stop until it holds a combo
+relic, and since it has no `crPick` its next elite offers the pick. A fight from before round 21 builds `F.cr` on
+first use. No key was renamed.
+
+**Text.** How it works has a Combos section (and the Compactor's ++), the Prizedex's combos tab says combos are a
+relic power and every recipe card names its relic ("Combo relic: Weapon Rack."), the combo tip card says "Your combo
+relic at work", and the Compactor's shop slot and rest choice mention ++. Relic art: each combo relic draws its own
+glyph on the medallion (render.js CR block: crossed swords on a rack, a bubbling cauldron, a picnic basket, a top hat
+with stars, a fan of cards under a visor, a cartridge with up up down down, a party popper, a red strategy guide).
+
+### Weaker starters, threatening first fights
+
+The starting items lose about a quarter to a third of their number; their plus copy keeps its old number, so the
+first upgrade is a bigger step than before. Pip's shiv and boot stay (his bare bin was already at 1 to 2% against the
+crab and the band in the balance suite; a cut made those walls; he unlocks after a win, never a first run's crawler).
+
+| item | was | now (plus) |
+| --- | --- | --- |
+| Rusty Sword | 7 | 5 (10) |
+| Dented Shield | 5 Block | 4 (8) |
+| Toxic Vial | 1 + 2 Poison | 1 + 1 Poison (2 + 4) |
+| Bubble Flask | 4 Block | 3 (7) |
+| Bone Dice | 2 to 8 | 1 to 6 (4 to 10) |
+| Poker Chip | 4 Block | 3 (6) |
+| Hex Bolt | 4 | 3 (6) |
+| Tin Plate | 5 Block | 4 (7) |
+| Rubber Duck | 4 | 3 (6) |
+| Soap Bar | 5 Block | 4 (7) |
+| Arcade Stick | 4 | 3 (6) |
+| Arcade Button | 5 Block | 4 (7) |
+
+The Bubble Flask, Old Boot and Poker Chip keep their Fortress chip by name (`kw`), since 3 Block no longer reads as a
+Block item by the numbers.
+
+`DATA.DIFFICULTY.act1 = {hp: 1.15, dmg: 1.1, first: {hp: 0.85, dmg: 0.85}}` (combat.js `crAct1Mul`): act 1 normals
+fought in act 1 take x1.15 hp and hit x1.1 on top of the dial; never a minion, an elite or a boss, never after the
+Endless reboot, and an act 1 normal pulled into a later act reads nothing. The run's very first fight (`F.fights`
+0) reads `first`: with no combos and a weaker bin it already lasts several grabs, so its enemies are a little
+lighter, and it is the one fight a bare starting bin meets. The Brass Golem (act 2) bites back for 1 Thorn, not 2:
+with the lighter starter swords it was the one wall the balance suite found for a Knight deck.
+
+### The Compactor's second merge: plus 2 (`DATA.CMP2`, `cmpRule`)
+
+An instance's `plus` is `false`, `true` (+1) or `2` (+2). Three of the same item come out one level above the
+lowest of them: three plain ones the plus copy (as before), three upgraded ones (+1 or +2, not all +2) the plus 2
+copy; three +2 copies, or an item with no +2, climb a rarity as before. The +2 numbers are derived, never typed
+(`DATA.CMP2.fx`, cached per def): every number that moved from the base to the plus moves on by 3/4 of that step
+(at least 1; a cost or a drawback keeps falling but never changes sign), random rolls move both ends, and an item
+whose upgrade moved no number gets +1 on its first helpful one (the Philosopher's Stone has none). A Rusty Sword is 5,
+10, 14.
+
+Where it shows: `COMBAT` keeps the 2 (`cmp2Plus`: the bin copy, eat, copy, play) and plays `cmp2FxAt`; `itemText`,
+`itemName` ("Rusty Sword++", the Dutch "Roestig Zwaard++" through the usual "+" peel), the card's PLUS 2 badge (pink),
+the item art (a pink star in front of the gold one and a pink rim; its own sprite cache key), the bin (+1 and +2 are
+their own groups; the popover lists the Plus 2 text), the Compactor (its grid tags what three copies make: "x3 = +",
+"x3 = ++", or "1/3 for ++"; the rule line "Three upgraded: out comes Rusty Sword++, stronger again."), the shop's
+sell price (a +2 sells for double), the run history ("id++"), co-op's belly sync, the cracked glass bonus and the
+Golden Prize (which never lowers a +2). The forge and the rests still upgrade plain items only; trading values a +2
+like a +1. Saves keep the number as it is.
+
+**Tests.** data (families cover every recipe, one relic each plus The Strategy Guide, `crOn` and `ctx.on`, boosters
+and `crPoolOk`, `crOffer` (three, distinct, not owned, leaning to the deck), the starter cuts and their plus numbers,
+the act 1 dial, the Golem; plus 2 for every upgradable item with signs kept, the compactor rules), combat (no relic
+no combo, a family relic fires exactly its family, The Strategy Guide everything, the relic's proc, the gate on every
+real recipe, the Bubble Combo needs the Party Popper; the build tests now carry the relic their combos need; the
+Endless loop pins compare against a plain run without the act 1 dial), balance (act 1 normals take x1.15 / x1.1,
+the first fight lighter, elites, minions and act 2 untouched; act 1 fights take 2+ turns and deal damage; the model
+plays the bare bin at the first fight and holds the first elite's combo relic past mid act 1), game (who starts with
+a combo relic, the first elite's pick and its reload, a second elite offers none, an old save's next elite does,
+the pools, the Prizedex and help text, a +2 crush, its name, card, bin group, reload, fight number and sell price;
+the older elite and tower flows walk through the pick), render (every combo glyph, the +2 marks), i18n (the relics,
+procs, patterns and the pick in Dutch). Screenshots: scratchpad `r21rules/r21_{pick,relics,cmp_grid,cmp_pick,cmp_result}_{en,nl}.png`.

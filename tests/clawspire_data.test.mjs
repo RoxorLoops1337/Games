@@ -32,6 +32,7 @@ const CHARS = 'knight alchemist rogue gambler engineer bubbler techie'.split(' '
 // Round 17 (TECH, Cabinet Tech and Joy Stick): checked in its own block below, left out of the build pass's counts.
 const R17_ITEMS = 'arcade_stick arcade_button coin_mech neon_tube circuit_board extension_cord crt_monitor golden_stick'.split(' ');
 const R17_RELICS = 'service_remote laser_sight service_key lamp_oil coin_hopper metronome fever_dream circuit_breaker trick_shot double_feature leg_motherboard'.split(' ');
+const R21_RELICS = 'cr_steel cr_brew cr_feast cr_jackpot cr_casino cr_tech cr_party cr_all'.split(' ');   // (round 21: the combo relics)
 // Round 10 (ROS, Ms. Bubbles): checked in its own block below, left out of the build pass's counts.
 const R10_ITEMS = 'rubber_duck soap_bar bubble_pipe sponge scrub_brush bath_bomb foam_cannon loofah bubble_bath golden_duck'.split(' ');
 const R10_RELICS = 'bubble_wand foam_machine soap_dish squeaky_toy'.split(' ');
@@ -489,7 +490,8 @@ t.test('relics', () => {
     t.ok(typeof r.icon === 'string' && Array.from(r.icon).length >= 1 && Array.from(r.icon).length <= 2, `${W}: icon`);
     t.ok(['c', 'u', 'r', 'boss', 'event', 'l'].includes(r.rarity), `${W}: rarity`);   // (round 12: legendaries)
     t.ok(typeof r.text === 'string' && r.text.length > 8, `${W}: text`);
-    t.ok(!!(r.mods || r.hooks || r.rules), `${W}: has mods, hooks or rules`);
+    t.ok(!!(r.mods || r.hooks || r.rules || r.combo), `${W}: has mods, hooks, rules or a combo family`);   // (round 21: a combo relic's power is its family)
+    if (r.combo != null) t.ok(r.combo === 'all' || !!DATA.CR.FAM[r.combo], `${W}: combo is a family or 'all' [${r.combo}]`);
     t.ok(Array.isArray(r.kw) && r.kw.every(k => ARCHS.includes(k)), `${W}: kw lists archetypes`);
     if (r.proc != null) t.ok(typeof r.proc === 'string' && r.proc.length >= 2 && r.proc.length <= 16 && r.proc === r.proc.toUpperCase(), `${W}: proc label short and loud [${r.proc}]`);
     if (r.rules) for (const k in r.rules) {
@@ -854,7 +856,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id) && !R21_RELICS.includes(id));
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -1803,7 +1805,16 @@ t.test('compactor: the recipe rules', () => {
   const same = DATA.cmpRule([I('rusty_sword'), I('rusty_sword'), I('rusty_sword', true)]);
   t.ok(same.ok && same.kind === 'plus' && same.id === 'rusty_sword', 'three of a kind: its plus copy');
   t.eq(DATA.cmpRoll(U.rng(1), [I('rusty_sword'), I('rusty_sword'), I('rusty_sword')], 'knight').plus, true, 'rolled as the upgraded copy');
-  t.eq(DATA.cmpRule([I('rusty_sword', true), I('rusty_sword', true), I('rusty_sword', true)]).kind, 'rarity', 'three plus copies: the rarity rule instead');
+  // (round 21) three upgraded copies make the plus 2 copy; three +2 copies (or an item with no +2) climb a rarity instead
+  const I2 = (id, plus) => ({ id, plus });
+  const two = DATA.cmpRule([I('rusty_sword', true), I('rusty_sword', true), I('rusty_sword', true)]);
+  t.ok(two.ok && two.kind === 'plus2' && two.id === 'rusty_sword', 'three plus copies: the plus 2 copy');
+  t.eq(DATA.cmpRoll(U.rng(1), [I('rusty_sword', true), I('rusty_sword', true), I('rusty_sword', true)], 'knight').plus, 2, 'rolled as the +2 copy');
+  t.eq(DATA.cmpRule([I2('rusty_sword', 2), I2('rusty_sword', true), I2('rusty_sword', true)]).kind, 'plus2', 'a +2 with two +1: still +2 (one above the lowest)');
+  t.eq(DATA.cmpRule([I2('rusty_sword', 2), I2('rusty_sword', 2), I2('rusty_sword', false)]).kind, 'plus', 'a plain one among them: one above the lowest, the plus copy');
+  t.eq(DATA.cmpRule([I2('rusty_sword', 2), I2('rusty_sword', 2), I2('rusty_sword', 2)]).kind, 'rarity', 'three +2 copies: the rarity rule instead');
+  const noTwo = Object.keys(ITEMS).find((id) => ITEMS[id].plus && !DATA.cmp2Ok(ITEMS[id]) && ITEMS[id].rarity !== 'junk');
+  if (noTwo) t.eq(DATA.cmpRule([I(noTwo, true), I(noTwo, true), I(noTwo, true)]).kind, 'rarity', `${noTwo} has no +2: three plus copies climb a rarity`);
   const rr = (ids) => DATA.cmpRule(ids.map(x => I(x))).rar;
   t.eq(rr([com[0], com[1], com[2]]), 'u', 'c c c -> uncommon');
   t.eq(rr([com[0], com[1], unc[0]]), 'u', 'c c u -> uncommon (the middle one, one step up)');
@@ -3804,6 +3815,103 @@ t.test('gacha: capsule odds are untouched (the LOOT tables, rollCapsule, the Vau
   t.eq(JSON.stringify(W.normal) + JSON.stringify(W.elite) + JSON.stringify(W.boss), JSON.stringify({ c: 72, u: 22, r: 5.5, l: 0.5 }) + JSON.stringify({ c: 36, u: 44, r: 17, l: 3 }) + JSON.stringify({ c: 0, u: 34, r: 56, l: 10 }), 'the round 12 weights stand');
   t.eq(DATA.LOOT.PITY, 8, 'the pity is still 8');
   t.eq(JSON.stringify(DATA.VAULT.CAP_W), JSON.stringify({ c: 58, u: 30, r: 10, l: 2 }), 'the Vault Capsule odds are unchanged');
+});
+
+// ---- round 21 (DESIGN.md "Combo relics and a gentler, clearer start (round 21)")
+t.test('cr: every recipe sits in one combo family, every family has its relic, one relic has them all', () => {
+  const CR = DATA.CR;
+  t.ok(CR && CR.IDS.length >= 4 && CR.IDS.length <= 7, `4..7 families [${CR.IDS.join(', ')}]`);
+  for (const id in DATA.COMBOS) t.ok(CR.FAM[DATA.COMBOS[id].cr], `${id}: in a family [${DATA.COMBOS[id].cr}]`);
+  for (const f of CR.IDS) {
+    const r = DATA.RELICS[CR.FAM[f].relic];
+    t.ok(r && r.combo === f && ['c', 'u', 'r'].includes(r.rarity) && !r.starter, `${f}: its relic ${CR.FAM[f].relic} switches it on, a pool rarity`);
+    t.ok(Object.values(DATA.COMBOS).some(c => c.cr === f), `${f}: has recipes`);
+    t.ok(typeof r.proc === 'string' && /COMBO/.test(r.proc), `${f}: its proc says COMBO [${r.proc}]`);
+  }
+  t.ok(DATA.RELICS[CR.ALL] && DATA.RELICS[CR.ALL].combo === 'all' && DATA.RELICS[CR.ALL].rarity === 'r', 'The Strategy Guide: every family, rare');
+  t.eq(CR.BUBBLE, 'party', 'the Bubble Combo is a Party combo');
+  // crFamOf / crOn
+  const on = DATA.crFamOf(['squire_gauntlet', 'cr_steel']);
+  t.ok(DATA.crOn(on, DATA.COMBOS.armory) && !DATA.crOn(on, DATA.COMBOS.picnic) && !DATA.crOn(DATA.crFamOf([]), DATA.COMBOS.armory), 'a family relic: its own recipes only; none without one');
+  t.ok(Object.values(DATA.COMBOS).every(c => DATA.crOn(DATA.crFamOf(['cr_all']), c)), 'the Strategy Guide: every recipe');
+  // combosFor honours ctx.on before it fills the slots
+  const defs = ['femur', 'femur', 'femur'].map(id => DATA.ITEMS[id]);
+  const all = DATA.combosFor(defs).map(c => c.id), steel = DATA.combosFor(defs, { on: (c) => c.cr === 'steel' }).map(c => c.id);
+  t.ok(all.some(id => DATA.COMBOS[id].cr === 'jackpot') && steel.length >= 1 && steel.every(id => DATA.COMBOS[id].cr === 'steel'), `ctx.on keeps the off recipes out (${all.join(',')} -> ${steel.join(',')})`);
+  t.eq(DATA.combosFor(defs, { on: () => false }).length, 0, 'everything off: nothing fires');
+  // starting crawlers built on a family
+  t.ok(CR.START.gambler === 'cr_casino' && CR.START.bubbler === 'cr_party' && !CR.START.knight && !CR.START.techie, 'Lucky Lou: Casino, Ms. Bubbles: Party; the rest start with none');
+});
+
+t.test('cr: boosters and the pools, the first elite\'s offer', () => {
+  const boosters = Object.keys(DATA.RELICS).filter(id => DATA.crBoosts(DATA.RELICS[id]));
+  for (const id of ['encore_machine', 'tuning_fork', 'ticket_roll', 'leg_crowd', 'squeaky_toy']) t.ok(boosters.includes(id), `${id} feeds combos`);
+  t.ok(!boosters.some(id => DATA.RELICS[id].combo), 'a combo relic is not a booster');
+  const r0 = { act: 1, relics: ['squire_gauntlet'], bin: [] };
+  t.ok(boosters.every(id => !DATA.crPoolOk(id, r0)) && DATA.CR.RELICS.every(id => !DATA.crPoolOk(id, r0)), 'act 1, nothing yet: no boosters, no combo relics');
+  t.ok(DATA.CR.RELICS.every(id => DATA.crPoolOk(id, Object.assign({}, r0, { crPick: 1 }))), 'after the first elite\'s offer: combo relics in the pools');
+  t.ok(boosters.every(id => DATA.crPoolOk(id, Object.assign({}, r0, { relics: ['cr_feast'] }))), 'a combo relic in hand: boosters too');
+  t.ok(DATA.crPoolOk('grip_tape', r0) && DATA.crPoolOk('kettle_helm', r0), 'every other relic as before');
+  const seen = {};
+  for (let s = 1; s <= 200; s++) {
+    const o = DATA.crOffer(U.rng(s), { relics: ['snake_eyes', 'cr_casino'], bin: [] }, 3);
+    t.ok(o.length === 3 && new Set(o).size === 3 && o.every(id => DATA.RELICS[id].combo && DATA.RELICS[id].combo !== 'all') && !o.includes('cr_casino'), `seed ${s}: three different family relics, never one owned`);
+    for (const id of o) seen[id] = 1;
+  }
+  t.eq(Object.keys(seen).length, DATA.CR.IDS.length - 1, 'every other family turns up');
+  // it leans to the deck: a metal deck sees the Weapon Rack more often than a deck with none
+  const metal = { relics: [], bin: Array.from({ length: 12 }, (_, i) => ({ id: ['rusty_sword', 'iron_chain', 'longsword'][i % 3] })) };
+  let a = 0, b = 0;
+  for (let s = 1; s <= 400; s++) { if (DATA.crOffer(U.rng(s), metal, 3).includes('cr_steel')) a++; if (DATA.crOffer(U.rng(s), { relics: [], bin: [] }, 3).includes('cr_steel')) b++; }
+  t.ok(a > b, `a metal deck is offered the Weapon Rack more (${a} vs ${b} of 400)`);
+});
+
+t.test('round 21: the starting items hit and block for less; their upgrade keeps its old number', () => {
+  // [base number before round 21, the plus number] per starter (Pip's shiv and boot stay: see DESIGN.md)
+  const OLD = { rusty_sword: [7, 10], dented_shield: [5, 8], bubble_flask: [4, 7], poker_chip: [4, 6], hex_bolt: [4, 6], tin_plate: [5, 7],
+    rubber_duck: [4, 6], soap_bar: [5, 7], arcade_stick: [4, 6], arcade_button: [5, 7] };
+  for (const id in OLD) {
+    const d = ITEMS[id], v = d.fx[0].v, p = d.plus.fx[0].v, cut = 1 - v / OLD[id][0];
+    t.ok(d.starter && cut >= 0.19 && cut <= 0.41, `${id}: ${OLD[id][0]} -> ${v} (${Math.round(cut * 100)}% less)`);
+    t.eq(p, OLD[id][1], `${id}: the plus keeps ${OLD[id][1]}`);
+  }
+  const vial = ITEMS.toxic_vial.fx.find(f => f.s === 'poison').v, dice = ITEMS.bone_dice.fx[0];
+  t.ok(vial === 1 && (dice.min + dice.max) / 2 < 5 && dice.max < 8, `Toxic Vial 2 -> ${vial} Poison, Bone Dice 2-8 -> ${dice.min}-${dice.max}`);
+  t.ok(ITEMS.shiv.fx[0].v === 5 && ITEMS.old_boot.fx[0].v === 4, 'Pip\'s shiv and boot stay');
+  // every starter of every crawler: its first number is at most its old one
+  for (const ch in DATA.CHARACTERS) for (const id of new Set(DATA.CHARACTERS[ch].bin)) if (OLD[id]) t.ok(ITEMS[id].fx[0].v < OLD[id][0], `${ch}: ${id} is weaker`);
+  // the act 1 dial (combat applies it; the balance suite pins the numbers)
+  const A = DATA.DIFFICULTY.act1;
+  t.ok(A && A.hp > 1 && A.dmg > 1 && A.first && A.first.hp < A.hp, `DIFFICULTY.act1 ${JSON.stringify(A)}`);
+  t.eq(DATA.ENEMIES.golem.status.thorns, 1, 'the Brass Golem bites back for 1 (was 2)');
+});
+
+t.test('cmp2: plus 2 numbers, names and text', () => {
+  let n = 0;
+  for (const id in ITEMS) {
+    const d = ITEMS[id];
+    if (!d.plus || d.rarity === 'junk') continue;
+    const f2 = DATA.CMP2.fx(d);
+    if (!f2) continue;
+    n++;
+    const f1 = d.plus.fx;
+    t.eq(f2.length, f1.length, `${id}: same effects as its plus`);
+    t.ok(f2.some((f, i) => JSON.stringify(f) !== JSON.stringify(f1[i])), `${id}: something grew`);
+    for (let i = 0; i < f2.length; i++) {
+      const a = f1[i], b = f2[i];
+      t.eq(b.k, a.k, `${id}: effect ${i} keeps its kind`);
+      for (const k of ['v', 'min', 'max', 'n']) if (typeof a[k] === 'number') t.ok(Number.isFinite(b[k]) && Math.sign(b[k]) * Math.sign(a[k]) >= 0, `${id}: ${k} keeps its sign (${a[k]} -> ${b[k]})`);
+      if (b.k === 'random') t.ok(b.min <= b.max && b.v === Math.round((b.min + b.max) / 2), `${id}: a sane roll`);
+    }
+    t.ok(/\+\+$/.test(DATA.cmp2Name(d, 2)) && DATA.itemText(d, 2) !== DATA.itemText(d, true), `${id}: "${DATA.cmp2Name(d, 2)}" reads its own numbers`);
+  }
+  const plusN = Object.keys(ITEMS).filter(id => ITEMS[id].plus && ITEMS[id].rarity !== 'junk').length;
+  t.ok(n >= plusN - 2, `every upgradable item but a couple has a +2 [${n} of ${plusN}]`);
+  const sw = ITEMS.rusty_sword;
+  t.ok(DATA.cmp2FxAt(sw, 2)[0].v > DATA.cmp2FxAt(sw, true)[0].v && DATA.cmp2FxAt(sw, true)[0].v > DATA.cmp2FxAt(sw, false)[0].v, 'base < plus < plus 2');
+  t.ok(DATA.cmp2Lv({ plus: 2 }) === 2 && DATA.cmp2Lv({ plus: true }) === 1 && DATA.cmp2Lv({}) === 0, 'levels 0, 1, 2');
+  const bribe = DATA.CMP2.fx(ITEMS.bribe);
+  t.ok(bribe && bribe[0].v >= 0 && bribe[0].v < ITEMS.bribe.plus.fx[0].v, 'a cost keeps falling, never below 0');
 });
 
 t.done();
