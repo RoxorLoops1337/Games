@@ -943,6 +943,8 @@ const GAME = (() => {
   function setScreen(name) {
     transition(S.screen, name);
     mixScreen(S.screen, name);   // MIX (round 10): the content rises in, the lists stagger, the HUD slides back, the run-end numbers count
+    m2Leave(S.screen, name);   // M2 (round 18): back home, the hidden run stops let their cards go
+    m3Leave(S.screen, name);   // M3 (round 18): an album, a lobby or a run end left behind lets its cards go
     S.screen = name;
     labelZones(name);   // float labels keep out of the marquee and the HUD (CLAW TYPES block)
     S.ui.buttons = [];
@@ -1125,19 +1127,20 @@ const GAME = (() => {
     return pri;
   }
   // A group sheet: a dimmed backdrop and a panel rising from the bottom with the group's buttons.
+  // (round 18: built on the design system's .sheetWrap / .sheet / .sheetHead / .sheetBody)
   function uiSheet(scr, id, title, els, icons) {
     if (!scr || !scr.appendChild) return null;
-    const s = h('div', 'uiSheet');
+    const s = h('div', 'uiSheet sheetWrap');
     s.id = 'uiSheet-' + id;
-    const p = h('div', 'panel uiSheetP');
-    const hd = h('div', 'uiSheetH');
+    const p = h('div', 'sheet uiSheetP');
+    const hd = h('div', 'uiSheetH sheetHead');
     hd.appendChild(h('h3', null, title));
     const x = h('button', 'btn ghost sm uiX uiSheetX', '×');
     x.setAttribute('aria-label', i18nT('Close'));
     x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen(null); };
     hd.appendChild(x);
     p.appendChild(hd);
-    const body = h('div', 'uiSheetB');
+    const body = h('div', 'uiSheetB sheetBody');
     els.forEach((el, i) => { if (!el) return; if (icons && icons[i]) uiCls(el, icons[i]); body.appendChild(el); });
     p.appendChild(body);
     s.appendChild(p);
@@ -1147,6 +1150,32 @@ const GAME = (() => {
     scr.appendChild(s);
     UIT.sheets[id] = s;
     return s;
+  }
+  /* DESIGN SYSTEM (round 18): one bottom sheet for any page. dsSheet(parent, title, onClose) puts a dimmed
+     .sheetWrap in parent with a .sheet (the handle, a head with the title and a close x, a scrolling body);
+     returns { wrap, body, open(), close(), on }. A tap on the dim or on the x closes it. Its controls are
+     plain taps, never GAME.choose entries. */
+  function dsSheet(parent, title, onClose) {
+    const wrap = h('div', 'sheetWrap dsSheetWrap');
+    const p = h('div', 'sheet');
+    const hd = h('div', 'sheetHead');
+    hd.appendChild(h('h3', null, title));
+    const x = h('button', 'btn ghost sm uiX', '×');
+    try { x.setAttribute('aria-label', i18nT('Close')); } catch (e) { /* stub */ }
+    hd.appendChild(x);
+    const body = h('div', 'sheetBody');
+    p.appendChild(hd);
+    p.appendChild(body);
+    wrap.appendChild(p);
+    const o = {
+      wrap, body, on: false,
+      open() { o.on = true; try { wrap.classList.add('show'); } catch (e) { /* stub */ } return o; },
+      close() { if (!o.on) return o; o.on = false; try { wrap.classList.remove('show'); } catch (e) { /* stub */ } if (onClose) onClose(); return o; },
+    };
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); o.close(); };
+    wrap.onclick = (ev) => { if (ev && ev.target === wrap) { snd('click'); o.close(); } };
+    if (parent && parent.appendChild) parent.appendChild(wrap);
+    return o;
   }
   // Opens a sheet by id (null closes); quiet skips the rise (coming back to it); kb (opened from the
   // keyboard, a click with no pointer) moves the focus into the sheet.
@@ -1187,46 +1216,133 @@ const GAME = (() => {
     });
   }
 
-  // ---- character select
+  /* ---- character select (round 18, DESIGN.md "Design system and home screens (round 18)"): three short
+     steps on one page instead of three screens of scrolling:
+       1 the crawler: a row of portraits, the picked one's card under it
+       2 the claw: a row of claws, the picked one's demo cabinet and stats (CLAW TYPES block)
+       3 the run options row (Tilt and Mutators, in a sheet), START in the dock
+     The crawler portraits are still the GAME.choose entries, in DATA order, and a choice still starts that
+     crawler's run (tests, the bot); a tap on a portrait only picks it, START starts the picked one.
+     Back is registered last, as before, and shown top left. */
   function showChars() {
     setScreen('chars');
     const b = $('charsBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Pick a crawler'));
-    b.appendChild(h('div', 'sub', 'Each carries a different bin of junk and a different claw.'));
-    metaTiltRow(b);   // the Tilt selector (META block)
-    clawPickerRow(b);   // the claw picker (CLAW TYPES block)
-    mutPickerRow(b);   // the run mutators (ENDLESS block)
+    uiCls(b, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'New run'));
+    b.appendChild(head);
+    const body = h('div', 'pageBody m1Chars');
+    b.appendChild(body);
+    const M = S.m1Chars = { tiles: {}, fn: {}, info: null, go: null, opt: null, sheet: null };
+    // step 1: the crawler
+    const s1 = h('div', 'm1Step');
+    s1.appendChild(m1StepHead(1, 'Pick a crawler'));
+    const crew = h('div', 'm1Crew');
+    M.info = h('div', 'card charcard m1CrewCard');
+    s1.appendChild(crew);
+    s1.appendChild(M.info);
+    body.appendChild(s1);
+    // step 2: the claw (CLAW TYPES block)
+    clawPickerRow(body);
+    // step 3: Tilt and the mutators, one row that opens a sheet
+    const s3 = h('div', 'm1Step');
+    s3.appendChild(m1StepHead(3, 'Run options'));
+    M.opt = h('button', 'btn m1Opt');
+    M.opt.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); if (M.sheet) M.sheet.open(); };
+    s3.appendChild(M.opt);
+    body.appendChild(s3);
+    const old = $('m1OptSheet');
+    if (old && old.parentNode && old.parentNode.removeChild) old.parentNode.removeChild(old);
+    M.sheet = dsSheet($('scr-chars'), 'Run options', () => m1OptFill());
+    M.sheet.wrap.id = 'm1OptSheet';
+    metaTiltRow(M.sheet.body);   // the Tilt selector (META block)
+    S.mutOpen = true;
+    mutPickerRow(M.sheet.body);   // the run mutators (ENDLESS block), open in the sheet
+    // the crawlers: compact portraits, registered in DATA order
     const chars = tbl('CHARACTERS');
     const ids = Object.keys(chars);
     for (const id of ids) {
       const c = chars[id];
       const ok = unlocked(id);
-      const card = h('div', 'card charcard' + (ok ? '' : ' locked'));
-      const head = h('div', 'head');
-      head.appendChild(portraitCanvas(id, 72));
-      const tx = h('div', 'col');
-      tx.appendChild(h('div', 'name', c.name));
-      tx.appendChild(h('div', 'title', c.title || ''));
-      head.appendChild(tx);
-      card.appendChild(head);
-      card.appendChild(h('div', 'text', c.blurb || ''));
-      const stats = h('div', 'stats');
-      stats.appendChild(h('span', 'tag pink', `${c.hp} hp`));
-      stats.appendChild(h('span', 'tag gold', `${c.gold} gold`));
-      stats.appendChild(h('span', 'tag cyan', `${(c.claw && c.claw.grabs) || 3} grabs`));
-      stats.appendChild(h('span', 'tag', `${(c.bin || []).length} items`));
-      if (c.relic) stats.appendChild(h('span', 'tag lime', relicDef(c.relic).name));
-      metaCharTags(stats, id);   // Tilt tag (META block)
-      card.appendChild(stats);
-      if (!ok) card.appendChild(h('div', 'lock', unlockRule(c)));
+      const tile = h('button', 'm1Tile' + (ok ? '' : ' locked'));
+      tile.appendChild(portraitCanvas(id, 64));
+      if (!ok) tile.appendChild(h('i', 'm1Lock', '\u{1F512}'));
+      // the words for a screen reader (the card under the row says them on screen): the name, and how to unlock
+      tile.appendChild(h('span', 'm1Sr', c.name));
+      if (!ok) tile.appendChild(h('span', 'm1Sr', unlockRule(c)));
       const fn = () => { if (!ok) { toast(unlockRule(c)); return; } snd('click'); newRun(id); };
-      card.onclick = fn;
-      S.ui.buttons.push({ el: card, fn, label: c.name, disabled: !ok });
-      b.appendChild(card);
+      tile.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); m1CrewFill(id); };
+      S.ui.buttons.push({ el: tile, fn, label: c.name, disabled: !ok });
+      M.tiles[id] = tile; M.fn[id] = fn;
+      crew.appendChild(tile);
     }
+    // the dock: START (a plain tap: the portraits are the choose entries)
+    const dock = h('div', 'pageDock');
+    M.go = h('button', 'btn pri m1Go', 'Start run');
+    M.go.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); const f = M.fn[M.pick]; if (f) f(); };
+    dock.appendChild(M.go);
+    b.appendChild(dock);
     if (!ids.length) b.appendChild(btn('Start as the Knight', () => newRun('knight'), 'pri'));
-    b.appendChild(btn('Back', () => showTitle(), 'ghost'));
+    head.appendChild(btn('Back', () => showTitle(), 'ghost sm phBack'));
+    const pick = ids.indexOf(S.m1Pick) >= 0 && unlocked(S.m1Pick) ? S.m1Pick : (ids.find((id) => unlocked(id)) || ids[0]);
+    if (pick) m1CrewFill(pick);
+    m1OptFill();
+  }
+  // A step's label: its number in a dot, then the words.
+  function m1StepHead(n, label) {
+    const d = h('div', 'm1StepH');
+    d.appendChild(h('b', null, String(n)));
+    d.appendChild(h('span', null, label));
+    return d;
+  }
+  // Picks a crawler on character select: the ring on its portrait, its card, START.
+  function m1CrewFill(id) {
+    const M = S.m1Chars, c = tbl('CHARACTERS')[id];
+    if (!M || !c || !M.info) return false;
+    M.pick = id; S.m1Pick = id;
+    for (const k in M.tiles) { const t = M.tiles[k]; t.className = String(t.className || '').replace(/\s*\bon\b/g, '') + (k === id ? ' on' : ''); }
+    const ok = unlocked(id), card = M.info;
+    clear(card);
+    card.className = 'card charcard m1CrewCard' + (ok ? '' : ' locked');
+    const head = h('div', 'head');
+    head.appendChild(portraitCanvas(id, 64));
+    const tx = h('div', 'col');
+    tx.appendChild(h('div', 'name', c.name));
+    tx.appendChild(h('div', 'title', c.title || ''));
+    head.appendChild(tx);
+    card.appendChild(head);
+    card.appendChild(h('div', 'text', c.blurb || ''));
+    const stats = h('div', 'stats');
+    stats.appendChild(h('span', 'tag pink', `${c.hp} hp`));
+    stats.appendChild(h('span', 'tag gold', `${c.gold} gold`));
+    stats.appendChild(h('span', 'tag cyan', `${(c.claw && c.claw.grabs) || 3} grabs`));
+    stats.appendChild(h('span', 'tag', `${(c.bin || []).length} items`));
+    if (c.relic) stats.appendChild(h('span', 'tag lime', relicDef(c.relic).name));
+    metaCharTags(stats, id);   // Tilt tag (META block)
+    card.appendChild(stats);
+    if (!ok) card.appendChild(h('div', 'lock', unlockRule(c)));
+    if (M.go) M.go.disabled = !ok;
+    return true;
+  }
+  // The run options row: the Tilt, the mutators on, the score multiplier.
+  function m1OptFill() {
+    const M = S.m1Chars, el = M && M.opt;
+    if (!el) return;
+    clear(el);
+    const lv = (S.meta && S.meta.tiltSel) | 0, pick = (S.meta && S.meta.mutPick) || [];
+    const mult = D().mutMult ? D().mutMult(pick) : 1;
+    const t = h('span', 'm1OptT');
+    t.appendChild(h('span', 'k', 'TILT'));
+    t.appendChild(h('b', null, String(lv)));
+    el.appendChild(t);
+    const mu = h('span', 'm1OptM');
+    mu.appendChild(h('span', 'k', 'MUTATORS'));
+    if (pick.length) for (const id of pick) mu.appendChild(h('i', null, mutDef(id).icon));
+    else mu.appendChild(h('span', 'off', 'OFF'));
+    el.appendChild(mu);
+    el.appendChild(h('b', 'm1OptX', 'x' + mult.toFixed(2)));
+    el.appendChild(h('span', 'm1OptAr', '›'));
   }
 
   // ================================================================ CLAW TYPES
@@ -1281,8 +1397,8 @@ const GAME = (() => {
      the next run; tapping a crawler card starts it. Chips are plain taps,
      not GAME.choose entries (the crawler cards keep their indices). */
   function clawPickerRow(b) {
-    const box = h('div', 'clawPick panel');
-    box.appendChild(h('h2', null, 'Pick a claw'));
+    const box = h('div', 'clawPick m1Step');   // (round 18: step 2 of character select)
+    box.appendChild(m1StepHead(2, 'Pick a claw'));
     const row = h('div', 'clawRow');
     const info = h('div', 'clawInfo');
     const chips = {};
@@ -1438,35 +1554,45 @@ const GAME = (() => {
   }
 
   // ---- help / collection
+  /* (round 18) Help is a page: Back and the title in the sticky head, then short section cards
+     (the rig, fights, statuses as a two-column list, the map, keys). */
   function showHelp(back) {
     setScreen('help');
-    const b = $('helpBody');
-    clear(b);
-    b.appendChild(h('h1', null, 'How it works'));
-    b.appendChild(h('h3', null, 'The rig'));
+    const pg = $('helpBody');
+    clear(pg);
+    uiCls(pg, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'How it works'));
+    pg.appendChild(head);
+    const body = h('div', 'pageBody m1Help');
+    pg.appendChild(body);
+    let b = null;
+    const sec = (title, icon) => { b = h('section', 'm1HelpSec'); const t = h('h3', null, title); if (icon) t.setAttribute('data-ic', icon); b.appendChild(t); body.appendChild(b); return b; };
+    sec('The rig', '\u{1F3AE}');
     let p = h('p'); p.innerHTML = i18nTr('Your deck is a <b>bin of objects</b> in a glass cabinet. Drag on the glass to steer the claw, let go to drop it. The prongs close on whatever is under them, lift, swing to the chute on the right and open. <b>Whatever lands in the chute is played.</b> What slips out lands back in the pile. A turn is a handful of grabs; two items in one grab is a double, three is a <b>jackpot</b>.'); b.appendChild(p);
     p = h('p'); p.innerHTML = i18nTr('Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Fights'));
+    sec('Fights', '⚔️');
     p = h('p'); p.innerHTML = i18nTr('Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Statuses'));
-    const list = h('div', 'statusList');
+    sec('Statuses', '✨');
+    // a two-column list: the icon and the name (never wrapping under its icon), the rule beside it
+    const list = h('div', 'statusList m1StatList');
     const st = tbl('STATUS');
     const ids = Object.keys(st);
     if (!ids.length) list.appendChild(h('div', 'sub', 'Strength, weak, vulnerable, poison, burn, chill, freeze, regen, thorns, dodge, bleed, stun, grease, fog, armor.'));
     for (const id of ids) {
       const s = st[id];
-      const kv = h('div', 'kv');
-      const k = h('span'); k.innerHTML = `<b>${s.icon || ''} ${i18nTr(s.name || id)}</b>`;
-      kv.appendChild(k);
-      kv.appendChild(h('span', 'sub', s.text || ''));
-      list.appendChild(kv);
+      const k = h('div', 'm1StK');
+      k.appendChild(h('span', 'ic', s.icon || ''));
+      k.appendChild(h('b', null, s.name || id));
+      list.appendChild(k);
+      list.appendChild(h('div', 'm1StV', s.text || ''));
     }
     b.appendChild(list);
-    b.appendChild(h('h3', null, 'The map'));
+    sec('The map', '\u{1F5FA}️');
     p = h('p'); p.innerHTML = i18nTr(`The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`); b.appendChild(p);
-    b.appendChild(h('h3', null, 'Keys'));
+    sec('Keys', '⌨️');
     p = h('p'); p.innerHTML = i18nTr('Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'); b.appendChild(p);
-    b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri mixStick'));   // MIX: the way out stays on screen
+    head.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'ghost sm phBack'));   // (round 18: top left, in the page head)
   }
   // ================================================================ META
   /* Meta progression (DESIGN.md "Meta"): Tilt levels, the Prizedex, the
@@ -1817,7 +1943,7 @@ const GAME = (() => {
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
     if (ok && m.dexNew[tab + ':' + id]) card.appendChild(h('div', 'newb', 'NEW!'));
     card.onclick = () => popover(ok ? `<b>${def.name}</b><br>${text}` : `<b>???</b><br>${hintTxt}`, 270, 300);
-    if (ok && (tab === 'items' || tab === 'relics')) holoOn(card, def.rarity, { quiet: true });   // HOLO (round 9): found prizes shine
+    // (M3 round 18: the album is calm; the holo shine stays on the reward and shop cards)
     return card;
   }
   function showCollection(tab) {
@@ -1828,10 +1954,10 @@ const GAME = (() => {
     S.dexTab = tab;
     const b = $('collectionBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Prizedex'));
+    m3Page('collection', b);   // M3 (round 18): the album look, a solid page
     const P = dexProg();
     b.appendChild(metaBar(P.n, P.total, `${Math.floor(P.pct)}% complete · ${P.n} of ${P.total}`));
-    const row = h('div', 'dexTabs');
+    const row = h('div', 'dexTabs m3Seg');   // (M3: one scrolling segmented row)
     const E = D().dexEntries ? D().dexEntries() : { items: Object.keys(tbl('ITEMS')), relics: Object.keys(tbl('RELICS')), enemies: [], combos: [] };
     for (const t of tabs) {
       const per = P.per[t.id] || { n: 0, total: 0 };
@@ -1853,8 +1979,10 @@ const GAME = (() => {
     // the NEW! marks show once
     for (const id of ids) delete S.meta.dexNew[tab + ':' + id];
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
-    loreDexBtn(b);   // LORE: the Codex (registered last, shown under the title)
+    const back = btn('Back', () => showTitle(), 'ghost sm');
+    b.appendChild(back);
+    const cdx = loreDexBtn(b);   // LORE: the Codex (registered last, shown under the title)
+    m3Head(b, back, 'Prizedex', cdx);   // M3 (round 18): Back top-left, the Codex on the right
   }
 
   // ---- the sticker board (screen 'stickers')
@@ -1864,17 +1992,17 @@ const GAME = (() => {
     const A = D().ACHIEVEMENTS || {}, ids = D().ACH_IDS || Object.keys(A);
     const b = $('stickersBody');
     clear(b);
-    b.appendChild(h('h1', null, 'Sticker board'));
+    m3Page('stickers', b);   // M3 (round 18): the album look, a solid page
     const n = ids.filter((id) => m.ach[id]).length;
     b.appendChild(metaBar(n, ids.length, `${n} of ${ids.length} stickers`, 'gold'));
     const grid = h('div', 'stGrid');
     const c = achCtx('meta');
     ids.forEach((id, i) => {
       const a = A[id], got = !!m.ach[id];
-      const s = h('div', 'stk' + (got ? ' got' : ''));
+      const s = h('div', 'stk' + (got ? ' got' : ' locked'));
       try { s.style.setProperty('--sc', a.color || PAL0.gold); s.style.setProperty('--rot', (((i * 37) % 9) - 4) + 'deg'); } catch (e) { /* stub */ }
       const disc = h('div', 'disc');
-      disc.appendChild(h('span', 'ic', got ? a.icon : '?'));
+      disc.appendChild(h('span', 'ic', a.icon || '?'));   // (M3 round 18: a locked sticker shows its silhouette, the CSS darkens it)
       s.appendChild(disc);
       s.appendChild(h('div', 'nm', a.name));
       s.appendChild(h('div', 'tx', a.text));
@@ -1890,7 +2018,7 @@ const GAME = (() => {
     b.appendChild(grid);
     m.achNew = {};
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
+    m3Head(b, btn('Back', () => showTitle(), 'ghost sm'), 'Sticker board', null);   // M3 (round 18): Back top-left
   }
 
   // ---- title: the stats marquee, the daily run and the attract mode
@@ -2437,11 +2565,14 @@ const GAME = (() => {
   const endlessOffer = () => !!(S.run && S.run.winDone && !S.run.endless);
   function endlessChoice(b) {
     const box = h('div', 'endChoice');
-    box.appendChild(btn('Cash out', () => { S.run = null; save(); showTitle(); }, 'ghost cash'));
-    const go = btn('Keep playing: Endless', () => endlessStart(), 'gold endless');
+    const cash = btn('Cash out', () => { S.run = null; save(); showTitle(); }, 'ghost cash');
+    box.appendChild(cash);
+    const go = btn('Keep playing: Endless', () => endlessStart(), 'pri endless');
     box.appendChild(go);
-    box.appendChild(h('div', 'sub', 'The win is banked either way. Endless reboots the machine meaner every loop: tougher monsters, a new map, a new mutator from Loop 2. How deep can you go?'));
+    const note = h('div', 'sub m3Keep endNote', 'The win is banked either way. Endless reboots the machine meaner every loop: tougher monsters, a new map, a new mutator from Loop 2. How deep can you go?');
+    box.appendChild(note);
     b.appendChild(box);
+    return { box, cash, go, note };   // (M3 round 18: the win's scoreboard docks the two, the note stays in view)
   }
   function endlessStart() {
     const run = S.run;
@@ -2489,6 +2620,7 @@ const GAME = (() => {
     const scr = $('scr-loop');
     const b = $('loopBody');
     clear(b);
+    m3Page('loop', null);   // M3 (round 18): the CRT is black glass: a solid page (ds-opaque)
     const run = S.run, sc = D().endlessScale ? D().endlessScale(lp.loop, lp.act) : { hp: 1, dmg: 1 };
     const crt = h('div', 'crt' + (S.loopFast ? ' fast' : '') + (lp.dep ? ' dep' : ''));   // (DEP: a dive's tube floods)
     const tube = h('div', 'tube');
@@ -2757,7 +2889,11 @@ const GAME = (() => {
     if (!D().vaultForSticker) return [];
     const V = vaultM(), got = [];
     for (const id of D().vaultForSticker(achId)) if (!V.owned[id]) { V.owned[id] = 1; V.news[id] = 1; got.push(id); }
-    if (got.length) { const d = vaultDef(got[0]); S.vaultDirty = true; toast(`Unlocked in the Prize Vault: ${d ? d.name : got[0]}!`, 2.6); }
+    if (got.length) {
+      const d = vaultDef(got[0]); S.vaultDirty = true;
+      if (S.m3Vlt && (S.screen === 'win' || S.screen === 'gameover')) S.m3Vlt.push(d ? d.name : got[0]);   // M3 (round 18): the scoreboard lists it in Run details
+      else toast(`Unlocked in the Prize Vault: ${d ? d.name : got[0]}!`, 2.6);
+    }
     return got;
   }
   const vaultNewN = () => { const V = vaultM(); return Object.keys(V.news).length + (V.pend ? 1 : 0); };
@@ -2789,6 +2925,7 @@ const GAME = (() => {
     if (!Vs.claw) Vs.claw = pickedClaw();
     S.vcap = null;
     setScreen('vault');
+    m3Page('vault', null, false);   // M3 (round 18): the album look; the canvas paints the wall and the preview, so never opaque
     vaultDemo();
     const scr = $('scr-vault');
     if (scr) scr.onpointerdown = (ev) => { if (!S.vcap) return; if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; vaultCapTap(); };
@@ -3508,6 +3645,126 @@ const GAME = (() => {
     return bt;
   }
   // ================================================================ /VAULT
+
+  // ================================================================ M3 (round 18): albums, lobbies and run end
+  /* DESIGN.md "Albums, lobbies and run end restyled (round 18)". Three family
+     looks on the ds-css tokens, a class on the screen (CSS in <style id="m3-css">):
+     m3-album (Prizedex, stickers, Codex, history, the Prize Vault: uniform
+     grids, silhouettes for locked, one segmented tab row), m3-lobby (weekly,
+     Boss Rush, Claw School, Duo and the online pages: a hero banner, one list,
+     the one primary in a bottom dock) and m3-score (game over, win, the loop:
+     one big number, a few lines, one call to action, the rest folded into Run
+     details). Back is always top-left in a .pageHead (m3Head moves the button
+     there; its GAME.choose entry stays where it was registered, as does every
+     element m3Dock moves). A page whose backdrop is solid is marked ds-opaque
+     (nothing of the canvas shows under it). Leaving one of these screens
+     empties its body (every builder rebuilds its body when it shows). */
+  const M3_FAM = { collection: 'album', stickers: 'album', codex: 'album', history: 'album', vault: 'album',
+    weekly: 'lobby', rushmenu: 'lobby', school: 'lobby', duo: 'lobby', gameover: 'score', win: 'score', loop: 'score' };
+  const M3_OPAQUE = { collection: 1, stickers: 1, codex: 1, history: 1, weekly: 1, rushmenu: 1, gameover: 1, win: 1, loop: 1 };
+  const M3_BODY = { collection: 'collectionBody', stickers: 'stickersBody', codex: 'codexBody', history: 'historyBody', vault: 'vaultBody',
+    weekly: 'weeklyBody', rushmenu: 'rushMenuBody', gameover: 'gameoverBody', win: 'winBody' };
+  function m3Detach(el) { try { if (el && el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el); } catch (e) { /* stub */ } return el; }
+  // A page is shown: its family look, its solid backdrop (or not), its body as a full-height column.
+  function m3Page(name, body, opaque) {
+    const scr = $('scr-' + name), fam = M3_FAM[name];
+    try {
+      if (scr && scr.classList) {
+        scr.classList.add('m3Page');
+        for (const f of ['album', 'lobby', 'score']) if (f !== fam) scr.classList.remove('m3-' + f);
+        if (fam) scr.classList.add('m3-' + fam);
+        scr.classList[(opaque == null ? M3_OPAQUE[name] : opaque) ? 'add' : 'remove']('ds-opaque');
+      }
+      if (body && body.classList) body.classList.add('dsPage');
+    } catch (e) { /* the look is decoration */ }
+    return scr;
+  }
+  // The page head: Back top-left, the title, an optional element on the right (a pill, the Codex).
+  function m3Head(body, back, title, end) {
+    if (!body) return null;
+    const head = h('div', 'pageHead m3Head');
+    if (back) { m3Detach(back); try { back.classList.add('phBack'); } catch (e) { /* stub */ } head.appendChild(back); }
+    const t = h('h1', 'phTitle', title);
+    if (String(t.textContent || '').length > 13) t.className = 'phTitle long';
+    head.appendChild(t);
+    if (end) { m3Detach(end); try { end.classList.add('phEnd'); } catch (e) { /* stub */ } head.appendChild(end); }
+    if (body.insertBefore && body.children && body.children.length) body.insertBefore(head, body.children[0]); else body.appendChild(head);
+    return head;
+  }
+  // The bottom dock: the one primary (and a ghost at most), an optional caption line over them.
+  function m3Dock(body, els, note) {
+    const list = (els || []).filter(Boolean);
+    if (!body || !list.length) return null;
+    const dock = h('div', 'pageDock m3Dock');
+    if (note) {
+      const n = typeof note === 'string' ? h('div', 'm3Note', note) : m3Detach(note);
+      try { n.classList.add('m3Note'); } catch (e) { /* stub */ }
+      dock.appendChild(n);
+    }
+    for (const e of list) dock.appendChild(m3Detach(e));
+    body.appendChild(dock);
+    return dock;
+  }
+  // A fold: a row that opens and closes the part under it (Run details, a duo player's looks).
+  function m3Fold(label, open, onToggle, cls) {
+    const wrap = h('div', 'm3Fold' + (cls ? ' ' + cls : '') + (open ? ' open' : ''));
+    const tg = h('button', 'm3FoldT');
+    if (label != null) tg.appendChild(h('span', 'ft', label));
+    const body = h('div', 'm3FoldB');
+    const set = (on) => { try { wrap.classList[on ? 'add' : 'remove']('open'); tg.setAttribute('aria-expanded', on ? 'true' : 'false'); } catch (e) { /* stub */ } };
+    set(!!open);
+    tg.onclick = (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      let on = true;
+      try { on = !wrap.classList.contains('open'); } catch (e) { on = true; }
+      set(on); snd('click');
+      if (onToggle) onToggle(on);
+    };
+    wrap.appendChild(tg); wrap.appendChild(body);
+    return { wrap, tg, body };
+  }
+  // The run end as a scoreboard: the title, its line, the score, the news; the rest in Run details; the way on in the dock.
+  function m3Score(name, b, cta, note) {
+    if (!b || !b.children) return null;
+    m3Page(name, b);
+    const kids = Array.from(b.children);
+    const fold = m3Fold('Run details', false, null, 'm3Details');
+    let sub = false;
+    const box = kids.find((c) => /\bscoreBox\b/.test(String(c.className || '')));
+    const into = [];
+    // the score's own lines (floors, bosses, combos) open the details; the number and its tags stay up
+    const sls = box ? Array.from(box.children || []).find((x) => /\bsls\b/.test(String(x.className || ''))) : null;
+    if (sls) into.push(sls);
+    // the stickers of the run fold away next (the news cards of the end panel stay in view)
+    for (const box2 of kids.filter((c) => /\bmEnd\b/.test(String(c.className || '')))) {
+      for (const c of Array.from(box2.children || [])) if (c.tagName === 'H3' || /\bstRow\b/.test(String(c.className || ''))) into.push(c);
+    }
+    const vl = S.m3Vlt || [];   // what the run's stickers put in the Prize Vault (said here, not in a toast over the score)
+    S.m3Vlt = null;
+    if (vl.length) into.push(h('div', 'tag cyan m3VltTag', `Unlocked in the Prize Vault: ${vl.join(', ')}!`));
+    for (const c of kids) {
+      const cls = String(c.className || '');
+      if (c.tagName === 'H1' || /\b(scoreBox|loopEnd|mEnd)\b/.test(cls)) continue;
+      if (!sub && /\bsub\b/.test(cls)) { sub = true; continue; }
+      if (/\bhisHofTag\b/.test(cls) && box) {   // the Hall of Fame place rides on the score as a tag
+        const row = Array.from(box.children || []).find((x) => /\bsm\b/.test(String(x.className || '')));
+        if (row) { m3Detach(c); c.className = 'tag gold m3Hof'; row.appendChild(c); continue; }
+      }
+      if (/\btag lime\b/.test(cls)) continue;   // a crawler unlocked: news, it stays in view
+      into.push(c);
+    }
+    for (const c of into) fold.body.appendChild(m3Detach(c));
+    if (into.length) b.appendChild(fold.wrap);
+    m3Dock(b, cta, note);
+    return fold;
+  }
+  // setScreen's hook: a page left behind lets its cards and canvases go (the next show rebuilds it).
+  function m3Leave(from, to) {
+    if (from === to) return;
+    const id = M3_BODY[from], b = id ? $(id) : null;
+    if (b && b.children && b.children.length) clear(b);
+  }
+  // ================================================================ /M3
 
   // ---------------------------------------------------------------- map
   function toMap() {
@@ -7589,7 +7846,8 @@ const GAME = (() => {
     });
     b.appendChild(cards);
     const skip = btn('Skip', () => afterReward(rw), 'ghost');
-    b.appendChild(skip);
+    m2Stop('reward', b);
+    m2Dock(b, [skip]);   // M2 (round 18): the way out in the bottom dock
     // capsules sit above the cards (DOM taps, not GAME.choose entries: the
     // cards and Skip keep their indices)
     lootCapSlots(capBox, rw);
@@ -7723,9 +7981,10 @@ const GAME = (() => {
     b.appendChild(h('div', 'sub', 'The boss dropped a box of claw parts. Bolt one on.'));
     const pick = (sp.pick || []).filter((id) => openClawUpgrades().indexOf(id) >= 0);
     const next = () => { S.sd = null; if (sp.then) showTreasure(sp.then); else toMap(); };
+    m2Stop('parts', b);
     if (!pick.length) {
       b.appendChild(h('div', 'sub', 'The claw is as good as it gets.'));
-      b.appendChild(btn('Continue', next, 'pri'));
+      m2Dock(b, [btn('Continue', next, 'pri')]);
     } else b.appendChild(clawCards(pick, next));
     save();
   }
@@ -7753,13 +8012,15 @@ const GAME = (() => {
       holoOn(card, def.rarity);   // HOLO (round 9)
       b.appendChild(card);
       if (!S.headless) setTimeout(() => snd('relic'), 120);
-      b.appendChild(btn('Take it', () => {
+      m2Stop('treasure', b);
+      m2Dock(b, [btn('Take it', () => {
         if (!S.headless) { const p = hudPoint(ic, 270, 300); const c = h('div', 'flycard'); c.appendChild(relicCanvas(def, 56)); domFly(c, p.x, p.y, 440, 36, 700); }
         gainRelic(td.relic); snd('upgrade'); S.sd = null; toMap();
-      }, 'gold'));
+      }, 'pri')]);   // M2 (round 18): the one action, in the dock
     } else {
       b.appendChild(h('div', 'sub', 'The chest is empty. Someone got here first.'));
-      b.appendChild(btn('Continue', () => { S.sd = null; toMap(); }, 'pri'));
+      m2Stop('treasure', b);
+      m2Dock(b, [btn('Continue', () => { S.sd = null; toMap(); }, 'pri')]);
     }
     save();
   }
@@ -7885,6 +8146,7 @@ const GAME = (() => {
       stage: cap.opened ? cap.ups.length : 0, crack: 0, rot: 0, rotV: 0, sq: 0, sqV: 0, flash: 0, open: cap.opened ? 1 : 0, dropT: fast ? 0.35 : 0.7,
       fast, x: 270, y: 440, r: 80, bt: 0, idleT: 0, sparkT: 0 };
     setScreen('capsule');
+    m2Stop('capsule');   // M2 (round 18): the cozy corner look (the canvas stays the hero)
     capDom();
     const scr = $('scr-capsule');
     if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; capsuleTap(); };
@@ -8565,8 +8827,11 @@ const GAME = (() => {
     });
     caseEl.appendChild(shelf);
     b.appendChild(caseEl);
-    b.appendChild(btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'ghost'));   // MIX: a way out is a ghost button
+    const back = btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'ghost');   // MIX: a way out is a ghost button
+    b.appendChild(back);
     rrCounterSlot(b, shop, caseEl);   // REROLL (round 9): the same lever for tickets (registered last)
+    m2Stop('counter', b);
+    m2Dock(b, [back]);   // M2 (round 18): the way out in the bottom dock
     save();
   }
   function counterBuy(shop, i, slot) {
@@ -9011,6 +9276,7 @@ const GAME = (() => {
     S.arc = { A, tile: t, g: A.g, phase: 'idle', t: 0, win: null, winT: 0, capT: 0, fast: arcMeta().plays >= ARC.fastAfter,
       lit: {}, flash: 0, party: 0, drag: null, lever: 0, leverV: 0, rot: A.rot || 0, flap: 0, flapV: 0, pl: null, wh: null, sl: null };
     setScreen('arcade');
+    m2Stop('arcade');   // M2 (round 18): the market stall look on the frame
     arcDom();
     if (A.pend || A.live) arcBegin();          // a reload mid-play: the same outcome plays out again (A.live: a round 5 game in progress)
     else if (A.caps.length) S.arc.capT = 0.6;  // a capsule won before the reload: crack it now
@@ -9555,7 +9821,7 @@ const GAME = (() => {
     }
     b.appendChild(box);
     const go = btn('Continue', () => { S.sd = null; S.arcEv = null; toMap(); }, 'pri');
-    b.appendChild(go);
+    m2Dock(b, [go]);   // M2 (round 18): Continue in the dock
     const E = S.arcEv;
     if (E) {
       E.lines = els; E.out = out; E.shown = 0;
@@ -9829,15 +10095,22 @@ const GAME = (() => {
   function showTips(back) {
     if (back) S.tipsBack = back;
     setScreen('tips');
-    const b = $('tipsBody');
-    clear(b);
-    b.appendChild(h('h1', null, 'Tips'));
+    // (round 18) a page: Back and the title in the head; the tips met in full, the rest one "N more to find" row
+    const pg = $('tipsBody');
+    clear(pg);
+    uiCls(pg, 'dsPage');
+    const head = h('div', 'pageHead');
+    head.appendChild(h('h1', 'phTitle', 'Tips'));
+    pg.appendChild(head);
+    const b = h('div', 'pageBody m1Tips');
+    pg.appendChild(b);
     const seen = FEEL_TIPS.filter((d) => feelSeen(d.id)).length;
     b.appendChild(metaBar(seen, FEEL_TIPS.length, `${seen} of ${FEEL_TIPS.length} tips met`));
     b.appendChild(h('div', 'sub', 'A card pops up the first time you meet something new. Tap it to put it away.'));
     const list = h('div', 'tipList');
     for (const d of FEEL_TIPS) {
       const got = feelSeen(d.id);
+      if (!got) continue;   // (round 18: the dark ones are one row at the end)
       const row = h('div', 'tipRow' + (got ? ' got' : ''));
       try { row.style.setProperty('--tc', d.col); } catch (e) { /* stub */ }
       row.appendChild(canvasEl(56, (ctx, p) => {
@@ -9851,11 +10124,25 @@ const GAME = (() => {
       row.appendChild(col);
       list.appendChild(row);
     }
+    const dark = FEEL_TIPS.length - seen;
+    if (dark > 0) {
+      const row = h('div', 'tipRow m1TipMore');
+      row.appendChild(canvasEl(56, (ctx, p) => {
+        if (!X.RENDER || !X.RENDER.feelTipArt) return;
+        ctx.translate(p / 2, p / 2);
+        X.RENDER.feelTipArt(ctx, '?', p * 0.9, 1.3, null);
+      }));
+      const col = h('div', 'col');
+      col.appendChild(h('div', 'n', `${dark} more to find`));
+      col.appendChild(h('div', 't', 'Not met yet. Keep climbing.'));
+      row.appendChild(col);
+      list.appendChild(row);
+    }
     b.appendChild(list);
-    const row = h('div', 'row center mixStick');   // MIX: the way out stays on screen
-    row.appendChild(btn('Reset tips', () => { feelTipsReset(); toast('Tips reset. They will pop up again.'); showTips(); }, 'sm'));
-    row.appendChild(btn('Back', () => (S.tipsBack === 'help' ? showHelp('title') : showTitle()), 'pri'));
+    const row = h('div', 'row center m1TipReset');
+    row.appendChild(btn('Reset tips', () => { feelTipsReset(); toast('Tips reset. They will pop up again.'); showTips(); }, 'sm ghost'));
     b.appendChild(row);
+    head.appendChild(btn('Back', () => (S.tipsBack === 'help' ? showHelp('title') : showTitle()), 'ghost sm phBack'));   // (round 18: top left)
   }
 
   // ---- haptics
@@ -10794,6 +11081,7 @@ const GAME = (() => {
       adoptI: -1, adoptT: 0, heart: 0, hop: [0, 0, 0],
     };
     setScreen('arcade');
+    m2Stop('arcade');   // M2 (round 18): the market stall look on the frame
     petShopDom();
     snd('arcIn', { pitch: 1.25 });
     save();
@@ -11690,6 +11978,7 @@ const GAME = (() => {
     S.secScr = { k: o.k, t: 0, keys: 0, opened: false, ui: false, walk: 0 };
     F = null; FS = null;
     setScreen('secret');
+    m2Stop('secret');   // M2 (round 18): the story card look
     const scr = $('scr-secret'), b = $('secretBody');
     clear(b);
     S.ui.buttons = [];
@@ -12207,7 +12496,8 @@ const GAME = (() => {
       if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
     } }), 'sm'));
     b.appendChild(row);
-    b.appendChild(btn('Leave', () => toMap(), 'ghost'));   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
+    const leave = btn('Leave', () => toMap(), 'ghost');   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
+    b.appendChild(leave);
     const pc = h('button', 'capslot');
     const pcFn = () => showCounter(shop);
     pc.onclick = pcFn;
@@ -12221,7 +12511,27 @@ const GAME = (() => {
     counterRow.appendChild(pc);
     cmpShopSlot(counterRow, shop);   // the Compactor, registered after the counter (SETS block)
     rrShopSlot(b, shop, cards);   // REROLL (round 9): the lever under the shelf, the reels (registered before the counter)
+    m2ShopTidy(b, { top, cards, sec, row, counterRow, leave });   // M2 (round 18): the market stall layout
     save();
+  }
+  /* M2 (round 18): the shop as a market stall. The elements move, their
+     GAME.choose entries stay as registered: the relic joins the shelf as its
+     sixth card, the reroll lever sits under the shelf, the prize counter and
+     the Compactor fold into two small tiles beside Remove and Sell (the
+     services, under the goods), and Leave goes to the bottom dock. */
+  function m2ShopTidy(b, o) {
+    m2Stop('shop', b);
+    try {
+      if (o.top && o.top.classList) o.top.classList.add('m2Purse');
+      const kids = (el) => Array.prototype.slice.call((el && el.children) || []);
+      if (o.sec && o.cards) { for (const c of kids(o.sec)) m2Move(c, o.cards); m2Move(o.sec, null); }
+      const svc = h('div', 'm2Svc');
+      if (o.counterRow) { for (const c of kids(o.counterRow)) { if (c.classList) c.classList.add('m2Tile'); m2Move(c, svc); } m2Move(o.counterRow, null); }
+      if (o.row) { if (o.row.classList) o.row.classList.add('m2SvcRow'); m2Move(o.row, svc); }
+      b.appendChild(h('div', 'dsSec', 'Services'));
+      b.appendChild(svc);
+    } catch (e) { /* the old layout still works */ }
+    m2Dock(b, [o.leave]);
   }
   // Coins arc from the gold tag into the card being bought, then the stamp.
   function buyFx(card, price) {
@@ -12465,6 +12775,7 @@ const GAME = (() => {
     if (B.done) { boonNext(); return; }
     S.sd = { boon: 1 };
     setScreen('boon');
+    m2Stop('boon');   // M2 (round 18): the story card look
     music('elite');
     S.boon = { t: 0, up: B.offers.map(() => !!S.headless), cards: [], leave: 0, then: null };
     const b = $('boonBody');
@@ -12664,6 +12975,7 @@ const GAME = (() => {
     S.sd = { compactor: cd };
     if (!S.cmp || S.cmp.cd !== cd) S.cmp = { cd, t: 0, phase: cd.res ? 'done' : 'idle', shake: 0, fired: {} };
     setScreen('compactor');
+    m2Stop('compactor');   // M2 (round 18): the workshop look
     cmpDom();
   }
   function cmpInsts(cd) { const run = S.run; return (cd.pick || []).map((uid) => run.bin.find((i) => i.uid === uid)).filter(Boolean); }
@@ -13556,6 +13868,7 @@ const GAME = (() => {
     const b = $('historyBody');
     if (!b) return false;
     clear(b);
+    m3Page('history', b);   // M3 (round 18): the album look, a solid page
     try { const scr = $('scr-history'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const rec = U0.open ? hisFind(U0.open) : null;
     if (rec) hisDetail(b, rec);
@@ -13564,10 +13877,7 @@ const GAME = (() => {
   }
   function hisList(b) {
     const hh = hisM(), U0 = S.hisUi, R = X.RENDER;
-    const head = h('div', 'hisHead');
-    head.appendChild(btn('Back', () => showTitle(), 'ghost sm'));
-    head.appendChild(h('h1', null, 'Run history'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => showTitle(), 'ghost sm'), 'Run history', null);   // M3 (round 18): the page head
     const wins = hh.runs.filter((r) => D().hisWon(r)).length, best = hh.hof.length ? hh.hof[0].s : 0;
     b.appendChild(h('div', 'sub', hh.n ? `${hh.n} ${hh.n === 1 ? 'run' : 'runs'} on record, ${wins} of the last ${hh.runs.length} won. Best score ${fmtNum(best)}.` : 'Every run you finish lands here: the wins, the knockouts, the Endless dives.'));
     // the lifetime charts (the crawler filter narrows the score line)
@@ -13577,11 +13887,11 @@ const GAME = (() => {
     const ch = hisCanvas(508, 176, (ctx) => { if (R && R.his) R.his.chart(ctx, cd, 508, 176, { t: S.t, names }); });
     ch.className = 'hisChart';
     b.appendChild(ch);
-    const tabs = h('div', 'hisTabs');
+    const tabs = h('div', 'hisTabs m3Seg');   // (M3: the tabs and the result filter are segmented rows, the crawlers one scrolling row)
     for (const [k, label] of [['recent', 'Recent'], ['hof', 'Hall of Fame']]) tabs.appendChild(btn(label, () => showHistory({ tab: k }), 'sm hisTab' + (U0.tab === k ? ' on' : '')));
     b.appendChild(tabs);
     // the filters: a crawler, a result
-    const fc = h('div', 'hisFilt');
+    const fc = h('div', 'hisFilt m3Scroll');
     fc.appendChild(btn('All crawlers', () => showHistory({ c: 'all' }), 'sm hisChip' + (U0.c === 'all' ? ' on' : '')));
     for (const id in tbl('CHARACTERS')) {
       const bt = btn(hisName(id), () => showHistory({ c: id }), 'sm hisChip' + (U0.c === id ? ' on' : ''));
@@ -13592,7 +13902,7 @@ const GAME = (() => {
       fc.appendChild(bt);
     }
     b.appendChild(fc);
-    const fr = h('div', 'hisFilt');
+    const fr = h('div', 'hisFilt m3Seg');
     for (const [k, label] of HIS_UI.RES) fr.appendChild(btn(label, () => showHistory({ r: k }), 'sm hisChip r-' + k + (U0.r === k ? ' on' : '')));
     b.appendChild(fr);
     const src = U0.tab === 'hof' ? hh.hof : hh.runs.slice().reverse();
@@ -13641,10 +13951,7 @@ const GAME = (() => {
   // One run in full: the header, the numbers, how it ended, the final bin, the relics, the map, Share.
   function hisDetail(b, rec) {
     const R = X.RENDER, won = rec.r === 'win' || rec.r === 'endless';
-    const head = h('div', 'hisHead');
-    head.appendChild(btn('Back', () => showHistory({}), 'ghost sm'));
-    head.appendChild(h('h1', null, 'The run'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => showHistory({}), 'ghost sm'), 'The run', null);   // M3 (round 18): the page head
     const cn = charDef(rec.c) || {};
     const where = hisWhere(rec) + (rec.m === 'daily' ? ' · Daily ' + (rec.dl || '') : rec.lp > 0 ? ' · Endless' : ' · Classic');
     const hero = hisCanvas(508, 160, (ctx) => { if (R && R.his) R.his.hero(ctx, { char: rec.c, outfit: rec.o || null, name: cn.name || rec.c, date: hisDate(rec.d, true), result: rec.r, score: rec.s, where, tilt: rec.tl, t: S.t }, 508, 160); });
@@ -14144,7 +14451,8 @@ const GAME = (() => {
     }
     if (!order.length) cards.appendChild(h('div', 'sub', 'Empty. That is a problem.'));
     b.appendChild(cards);
-    b.appendChild(btn(o.mode === 'view' ? 'Back' : 'Cancel', () => { if (o.back) o.back(); else toMap(); }, 'ghost'));
+    m2Stop('bin', b);
+    m2Dock(b, [btn(o.mode === 'view' ? 'Back' : 'Cancel', () => { if (o.back) o.back(); else toMap(); }, 'ghost')]);   // M2 (round 18): the way out in the dock
   }
 
   // ---------------------------------------------------------------- events
@@ -14174,6 +14482,7 @@ const GAME = (() => {
       S.arcEv.ctx = null;
     } else b.appendChild(arcSceneEl(ed, def));
     b.appendChild(h('div', 'sub evText', def.text || ''));
+    m2Stop('event', b);   // M2 (round 18): the story card
     if (ed.out) { arcEvOutDom(b, ed); save(); return; }
     const list = h('div', 'list');
     (def.choices || []).forEach((ch, idx) => {
@@ -14289,6 +14598,7 @@ const GAME = (() => {
     evoRestChoice(list);   // Evolve an item, when one is ready (EVOLVE block)
     pevRestChoice(list);   // TRD (round 14): evolve the pet instead of resting, when it can
     b.appendChild(list);
+    m2Stop('rest', b);   // M2 (round 18): the cozy corner
     save();
   }
   function showForge() {
@@ -14322,7 +14632,8 @@ const GAME = (() => {
     if (!order.length) cards.appendChild(h('div', 'sub', 'Everything is already upgraded.'));
     evoForgeCards(cards);   // EVOLVE cards for items ready to evolve (EVOLVE block)
     b.appendChild(cards);
-    b.appendChild(btn('Leave', () => toMap(), 'ghost'));
+    m2Stop('forge', b);   // M2 (round 18): the workshop, Leave in the dock
+    m2Dock(b, [btn('Leave', () => toMap(), 'ghost')]);
     save();
   }
 
@@ -14351,6 +14662,7 @@ const GAME = (() => {
     saveMeta();
     F = null; FS = null;
     setScreen('gameover');
+    S.m3Vlt = [];   // M3: what the run's stickers put in the Prize Vault is said on the scoreboard, not in a toast over it
     const b = $('gameoverBody');
     clear(b);
     if (run.endless) endlessOver(b);   // Endless: the loops reached, the Endless score (ENDLESS block)
@@ -14366,8 +14678,10 @@ const GAME = (() => {
     b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
-    b.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri'));
+    const home = btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri');
+    b.appendChild(home);
     vaultShareBtn(b, run, !!run.endless);   // the Share run card button, over the highlights (VAULT block)
+    m3Score('gameover', b, [home]);   // M3 (round 18): the scoreboard: the number, the news, Run details folded, the way home docked
     try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
     music('off');
   }
@@ -14383,13 +14697,14 @@ const GAME = (() => {
     saveMeta();
     F = null; FS = null;
     setScreen('win');
+    S.m3Vlt = [];   // M3: the vault unlocks land in Run details (they used to toast over the Tilt card)
     const b = $('winBody');
     clear(b);
     b.appendChild(h('h1', null, secWinTitle() || 'The Prize Master falls'));   // (SECRET: the true ending)
     b.appendChild(h('div', 'sub', secWinSub() || 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
     const sc = endlessScore(run, true);   // the run score, recorded before the run-end stickers are listed (ENDLESS block)
     endlessScorePanel(b, sc);
-    endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
+    const ec = endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
     metaEndPanel(b, metaRunEnd(true));   // Tilt unlock, daily score, stickers this run (META block)
     hisRunEnd(run, 'win');   // HISTORY: the run's record (Endless later updates it)
     b.appendChild(h('h3', null, 'Highlights'));
@@ -14397,6 +14712,8 @@ const GAME = (() => {
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
     vaultShareBtn(b, run, true);   // the Share run card button, over the highlights (VAULT block)
+    m3Detach(ec.box);   // M3 (round 18): the choice docks (Keep playing the primary, Cash out the ghost), the note over them
+    m3Score('win', b, [ec.cash, ec.go], ec.note);
     save();   // the run stays saved while the Endless offer is open (ENDLESS block)
     snd('win');
   }
@@ -15320,6 +15637,7 @@ const GAME = (() => {
   }
   function qaMeasure(stage, root, out) {
     const sr = stage.getBoundingClientRect(), k = S.scale || 1;
+    const lane = dsLaneScr(root);   // (round 18: on a lane page a heading weighs as a button)
     const clipOf = new Map();
     // the visible box of the nearest scroller (a card scrolled out of it is not on screen)
     const clip = (el) => {
@@ -15347,7 +15665,14 @@ const GAME = (() => {
       const x0 = Math.max(r.left, c ? c.left : -1e9), y0 = Math.max(r.top, c ? c.top : -1e9), x1 = Math.min(r.right, c ? c.right : 1e9), y1 = Math.min(r.bottom, c ? c.bottom : 1e9);
       if (x1 - x0 < 2 || y1 - y0 < 2) continue;
       const tag = el.tagName;
-      out.push({ x0: (x0 - sr.left) / k, y0: (y0 - sr.top) / k, x1: (x1 - sr.left) / k, y1: (y1 - sr.top) / k, w: tag === 'BUTTON' || keep ? QA_W.btn : /^H[123]$/.test(tag) ? QA_W.head : QA_W.text });
+      out.push({ x0: (x0 - sr.left) / k, y0: (y0 - sr.top) / k, x1: (x1 - sr.left) / k, y1: (y1 - sr.top) / k, w: tag === 'BUTTON' || keep ? QA_W.btn : /^H[123]$/.test(tag) ? (lane ? QA_W.btn : QA_W.head) : QA_W.text });
+    }
+    // TOAST LANE (round 18): a page's head (Back, the title), the run score and the keeper's speech bubble are never covered
+    for (const sel of ['.pageHead', '.scoreBox', '.keepBub']) {
+      const el = root.querySelector ? root.querySelector(sel) : null;
+      if (!el || el.offsetParent === null) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height > 1) out.push({ x0: (r.left - sr.left) / k, y0: (r.top - sr.top) / k, x1: (r.right - sr.left) / k, y1: (r.bottom - sr.top) / k, w: QA_W.btn });
     }
     // the HUD's top bar when it shows over this screen
     const top = $('top');
@@ -15387,15 +15712,20 @@ const GAME = (() => {
       if (cur.qa) { el.style.left = el.style.top = el.style.right = el.style.bottom = el.style.visibility = ''; cur.qa = null; cur.rect = null; cur.hold = false; }
       return null;
     }
+    // TOAST LANE (round 18): on a menu page one toast at a time: the corner item waits while a plain toast shows
+    const ly = dsLaneY();
+    if (ly && S.toastT > 0 && FE.lane !== 'keep') { el.style.visibility = 'hidden'; cur.hold = true; cur.qa = null; cur.rect = null; return null; }   // (the shop's toast is the keeper's line: nothing floats)
     let sz = qaSizeOf(el, cur.qaTight);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
     const keys = qaKeys(S.screen, S.toastT > 0 ? QA.tRect : null);
-    let spot = qaSpot(pol13Cands(sz.w, sz.h, keys), sz.w, sz.h, keys);   // (POLISH round 13: a screen's own extra spots after the eight; round 15: they may read the keys)
+    // (round 18) the lane first: the lowest spot above the dock with no button, heading, score or speech bubble under it
+    const find = (w, hh) => (ly ? dsLaneSpot(ly, w, hh, keys, false) : null) || qaSpot(pol13Cands(w, hh, keys), w, hh, keys);   // (POLISH round 13: a screen's own extra spots after the eight; round 15: they may read the keys)
+    let spot = find(sz.w, sz.h);
     if (spot && spot.o > 0 && !cur.qaTight) {
       cur.qaTight = true;
       if (el.classList) el.classList.add('tight');
       const s2 = qaSizeOf(el, true);
-      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(pol13Cands(sz.w, sz.h, keys), sz.w, sz.h, keys); }
+      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = find(sz.w, sz.h); }
     }
     if (!spot) return null;
     el.style.left = Math.round(spot.x) + 'px'; el.style.top = Math.round(spot.y) + 'px';
@@ -15413,14 +15743,65 @@ const GAME = (() => {
     const el = $('toast');
     if (!el || !el.style) return null;
     const scr = S.screen;
-    if (FE.lane || scr === 'fight' || scr === 'map') { if (el.style.top) el.style.top = ''; return null; }
+    if ((FE.lane && !(FE.lane === 'top' && dsLaneY())) || scr === 'fight' || scr === 'map') { if (el.style.top) el.style.top = ''; return null; }   // (round 18: the prize counter's top lane sat on its title: the bottom lane there)
     const sz = qaSizeOf(el);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
+    const ly = dsLaneY();   // TOAST LANE (round 18): a menu page's toast sits in the bottom lane over the dock, 2.5 s at most
+    if (ly && S.toastT > 2.5) S.toastT = 2.5;
     const x = (W - sz.w) / 2, tops = [400, H - sz.h - 14, 10, 120, 260, 560, 700];
-    const cur = S.mcur, other = cur && cur.rect && !cur.hold && cur.el ? cur.rect : null;
-    const spot = qaSpot(tops.map((y) => [x, y]), sz.w, sz.h, qaKeys(scr, other));
+    const cur = S.mcur, other = !ly && cur && cur.rect && !cur.hold && cur.el ? cur.rect : null;   // (on a lane page the corner item steps aside instead)
+    const keys = qaKeys(scr, other);
+    const spot = (ly ? dsLaneSpot(ly, sz.w, sz.h, keys, true) : null) || qaSpot(tops.map((y) => [x, y]), sz.w, sz.h, keys);
     if (spot) { el.style.top = Math.round(spot.y) + 'px'; QA.tRect = { x0: x, y0: spot.y, x1: x + sz.w, y1: spot.y + sz.h, w: 5 }; }
+    if (ly && cur && cur.el && S.toastT > 0) qaCornerPlace();   // one at a time: it waits hidden until the toast is gone
     return spot;
+  }
+  /* TOAST LANE (round 18, DESIGN.md "Design system and home screens (round 18)"): on a menu page (a screen
+     with a .pageHead or a .pageDock, or a solid .ds-opaque one: the home pages, the run stops, the albums, the
+     lobbies, win / game over / loop) the toast and the corner item (a sticker, a discovery) share one lane at the
+     bottom, just above the dock, one at a time. The lane climbs only past buttons, and on such a page a heading,
+     the run score and the keeper's speech bubble weigh as buttons, so nothing lands on them. dsLaneY is the lane's
+     bottom edge in stage px, 0 off such a page and headless (the tests' measured rects decide there, as before). */
+  function dsLaneScr(scr) {
+    if (!scr || !scr.querySelector) return false;
+    if (S.screen === 'fight' || S.screen === 'map' || S.screen === 'intro' || S.screen === 'title') return false;
+    if (S.screen === 'vault') return true;   // (the Prize Vault: its shelf scrolls under the capsule bar, the lane sits over the bar)
+    try { return !!(scr.querySelector('.pageHead, .pageDock') || (scr.classList && scr.classList.contains('ds-opaque'))); } catch (e) { return false; }
+  }
+  function dsLaneY() {
+    if (S.headless || typeof document === 'undefined' || !document.querySelector) return 0;
+    let scr = null;
+    try { scr = document.querySelector('.screen.show'); } catch (e) { return 0; }
+    if (!dsLaneScr(scr)) return 0;
+    const st = $('stage');
+    if (!st || !st.getBoundingClientRect) return 0;
+    const k = S.scale || 1, sr = st.getBoundingClientRect();
+    let y = H - 12;
+    // the top of what the dock shows (its words or its buttons; its own top padding is a fade)
+    const dock = scr.querySelector('.pageDock') || scr.querySelector('.vBottom');
+    if (dock && dock.offsetParent !== null) {
+      for (const c of Array.from(dock.children || [])) {
+        const r = c.getBoundingClientRect ? c.getBoundingClientRect() : null;
+        if (r && r.height > 1 && r.width > 1) y = Math.min(y, (r.top - sr.top) / k - 6);
+      }
+    }
+    return y;
+  }
+  // The lane's spot for a w x h toast: the lowest row above ly with no button under it (centred, then right, then
+  // left; centred only for the plain toast), the least covered in that row. Null when buttons fill every row.
+  function dsLaneSpot(ly, w, hh, keys, centreOnly) {
+    const xs = centreOnly ? [(W - w) / 2] : [(W - w) / 2, W - w - 6, 6];
+    for (let y = ly - hh - 4; y >= 66; y -= 20) {
+      let best = null;
+      for (const x of xs) {
+        const s = qaSpot([[x, y]], w, hh, keys);
+        if (!s || s.hard > 0) continue;
+        if (!best || s.o < best.o) best = s;
+        if (s.o === 0) break;
+      }
+      if (best) return best;
+    }
+    return null;
   }
   /* ================= POLISH (round 13): the newer screens keep their titles =================
      The corner lane and the toast never saw the titles these screens draw on
@@ -15994,17 +16375,18 @@ const GAME = (() => {
       stage.appendChild(el);
     }
     clear(el);
-    const sheet = h('div', 'accSheet panel');
-    const head = h('div', 'accHead');
-    head.appendChild(h('h2', null, 'Settings'));
-    const x = h('button', 'btn go sm accDone', 'Done');
+    // (round 18) a design-system sheet: the handle, the title and a close x; the sample strip lives in Vision
+    const sheet = h('div', 'accSheet sheet');
+    const head = h('div', 'accHead sheetHead');
+    head.appendChild(h('h3', null, 'Settings'));
+    const x = h('button', 'btn ghost sm uiX accDone', '×');
+    try { x.setAttribute('aria-label', i18nT('Close')); } catch (e) { /* stub */ }
     x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); accClose(); };
     head.appendChild(x);
     sheet.appendChild(head);
     const pv = document.createElement('canvas');
-    pv.className = 'accPrev'; pv.width = 1000; pv.height = 200;
-    sheet.appendChild(pv);
-    const body = h('div', 'accBody');
+    pv.className = 'accPrev'; pv.width = 1000; pv.height = 160;
+    const body = h('div', 'accBody sheetBody');
     sheet.appendChild(body);
     el.appendChild(sheet);
     // a tap on the dimmed game around the sheet closes it
@@ -16091,8 +16473,12 @@ const GAME = (() => {
     slider(snd0, 'Music', 'volMusic');
     slider(snd0, 'Effects', 'volSfx');
     const sOn = A ? A.sfxOn : true, mOn = A ? A.musicOn : true;
-    tog(snd0, 'Sound', sOn, () => { if (A && A.toggleSfx) A.toggleSfx(); });
-    tog(snd0, 'Music', mOn, () => { if (A && A.toggleMusic) A.toggleMusic(); });
+    // (round 18) the on/off pair repeats the sliders and the More sheet: shown only while that sound is off,
+    // so there is a way back on from here (always registered: GAME.choose and the tests keep their labels)
+    const sT = tog(snd0, 'Sound', sOn, () => { if (A && A.toggleSfx) A.toggleSfx(); });
+    const mT = tog(snd0, 'Music', mOn, () => { if (A && A.toggleMusic) A.toggleMusic(); });
+    if (sOn) uiCls(sT, 'accDup');
+    if (mOn) uiCls(mT, 'accDup');
     const feel = sec('Motion and feel');
     tog(feel, 'Shake', s.shake, (v) => accSet('shake', v), 'Off also calms the camera, the zooms and the heavy animations.');
     tog(feel, 'Buzz', s.haptics !== false, (v) => { feelSetHaptics(v); accApply(); }, 'Phone vibration on hits, grabs and prizes.');
@@ -16100,6 +16486,7 @@ const GAME = (() => {
     const vis = sec('Vision');
     seg(vis, 'Colours', 'cb', ACC_CB, ACC_CB_NAME, ACC_CB_SUB[s.cb]);
     seg(vis, 'Text size', 'text', ACC_TXT, ACC_TXT_NAME, 'Menus, cards, banners and the floating numbers.');
+    if (el.accPrev) { const pw = h('div', 'accPrevBox'); pw.appendChild(h('div', 'dsSec', 'Preview')); pw.appendChild(el.accPrev); vis.appendChild(pw); }   // (round 18: the sample strip beside the colour and text size it shows)
     tog(vis, 'Item outlines', s.hc, (v) => accSet('hc', v), 'A thick dark rim round every item in the cabinet.');
     const ctl = sec('Controls');
     seg(ctl, 'One-handed', 'hand', ACC_HAND, ACC_HAND_NAME, 'END TURN and the map buttons move to the thumb on that side.');
@@ -16119,39 +16506,44 @@ const GAME = (() => {
     try { ctx = cv && cv.getContext ? cv.getContext('2d') : null; } catch (e) { ctx = null; }
     const R = X.RENDER;
     if (!ctx || !R) return false;
+    // (round 18) a plain strip: the numbers and statuses as a fight shows them, the four rarities by name, one prize
     try {
       ctx.setTransform(2, 0, 0, 2, 0, 0);
-      ctx.clearRect(0, 0, 500, 100);
-      ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, 500, 100);
+      ctx.clearRect(0, 0, 500, 80);
+      ctx.fillStyle = '#1c1233'; ctx.fillRect(0, 0, 500, 80);
       const col = (c) => (R.acc ? R.acc.col(c) : c), k = R.acc ? R.acc.textK : 1;
+      const FONT = '"Trebuchet MS",system-ui,sans-serif';
+      const wOf = (str, px) => { let w = px * 0.6 * str.length; try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ } return w; };
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       // the numbers laid out left to right at the current text size
-      let nx = 16;
+      let nx = 14;
       const num = (str, c) => {
-        ctx.font = `900 ${Math.round(22 * k)}px "Trebuchet MS",system-ui,sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.lineWidth = 4; ctx.strokeStyle = '#12091f'; ctx.strokeText(str, nx, 28); ctx.fillStyle = col(c); ctx.fillText(str, nx, 28);
-        let w = 22 * k * 0.6 * str.length;
-        try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ }
-        nx += w + 14;
+        const px = Math.round(20 * k);
+        ctx.font = `900 ${px}px ${FONT}`;
+        ctx.lineWidth = 4; ctx.strokeStyle = '#12091f'; ctx.strokeText(str, nx, 22); ctx.fillStyle = col(c); ctx.fillText(str, nx, 22);
+        nx += wOf(str, px) + 14;
       };
       num('−12', '#ff5a4a'); num('+6', '#a6ff5e'); num(i18nTr('+5 block'), '#2ee6d6');   // (I18N: the word)
-      if (R.statusPips) R.statusPips(ctx, Math.max(nx, 250), 18, { poison: 3, str: 2, weak: 1 }, 18);
+      if (R.statusPips) R.statusPips(ctx, Math.max(nx, 260), 12, { poison: 3, str: 2, weak: 1 }, 18);
+      // the rarities: a ringed dot and the word, in the current palette
       const RC = R.RARITY_COL || {};
-      ['c', 'u', 'r', 'l'].forEach((r, i) => {
-        const x = 40 + i * 50, y = 74;
-        ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fillStyle = '#22163a'; ctx.fill();
-        ctx.lineWidth = 4; ctx.strokeStyle = RC[r] || '#fff'; ctx.stroke();
-        ctx.font = '900 13px "Trebuchet MS",system-ui,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(r.toUpperCase(), x, y + 1);
-      });
-      if (R.acc && R.acc.mark) {
-        R.acc.mark(ctx, 'danger', 250, 74, 10); R.acc.mark(ctx, 'pickup', 286, 74, 10);
-        R.acc.mark(ctx, 'up', 320, 74, 8, col('#2ee6d6')); R.acc.mark(ctx, 'down', 346, 74, 8, col('#ff2e88'));
+      let rx = 14;
+      const RW = [['c', 'Common'], ['u', 'Uncommon'], ['r', 'Rare'], ['l', 'Legendary']];
+      let px = Math.round(13 * k);
+      ctx.font = `800 ${px}px ${FONT}`;
+      const need = RW.reduce((a, [, w]) => a + 33 + wOf(i18nTr(w), px), 14);
+      if (need > 492) px = Math.max(9, Math.floor((px * (492 - 14 - 33 * 4)) / (need - 14 - 33 * 4)));   // (long Dutch words at the largest text size)
+      for (const [r, word] of RW) {
+        const say = i18nTr(word);
+        ctx.beginPath(); ctx.arc(rx + 7, 60, 7, 0, Math.PI * 2); ctx.fillStyle = '#261a44'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = RC[r] || '#fff'; ctx.stroke();
+        ctx.font = `800 ${px}px ${FONT}`; ctx.fillStyle = '#f4eeff'; ctx.fillText(say, rx + 19, 61);
+        rx += 19 + wOf(say, px) + 14;
       }
-      // two prizes as the cabinet draws them (rarity rim, the outline when it is on)
+      // a prize as the cabinet draws it (its rarity rim, the outline when that is on)
       const IT = tbl('ITEMS'), ids = Object.keys(IT);
-      const pick = (r) => IT[ids.find((id) => IT[id].rarity === r && !IT[id].char)];
-      const a = pick('r'), b = pick('l'), hc = accHc();
-      if (R.item && a) R.item(ctx, a, 404, 72, -0.4, 0.8, { hc, glow: RC.r, glowA: 0.35 });
-      if (R.item && b) R.item(ctx, b, 458, 72, 0.3, 0.8, { hc, glow: RC.l, glowA: 0.45 });
+      const b = IT[ids.find((id) => IT[id].rarity === 'l' && !IT[id].char)];
+      if (R.item && b && rx <= 446) R.item(ctx, b, 470, 52, 0.3, 0.6, { hc: accHc(), glow: RC.l, glowA: 0.4 });   // (when the words leave it room)
       return true;
     } catch (e) { return false; }
   }
@@ -16685,6 +17077,7 @@ const GAME = (() => {
     D0.adv = winIsAdv(t);   // WIN: an advent present instead of a door
     S.seaDoor = D0;
     setScreen('sea');
+    m2Stop('sea');   // M2 (round 18): the story card look
     const scr = $('scr-sea');
     if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return; seaHurry(); };
     seaDom();
@@ -17314,6 +17707,7 @@ const GAME = (() => {
       if (S.arcEv) S.arcEv.ctx = null;
     } else b.appendChild(scene);
     b.appendChild(h('div', 'sub evText', D().stoBeatText(beat, st)));
+    m2Stop('event', b);   // M2 (round 18): the story card
     if (ed.out) { stoOutDom(b, ed); save(); return; }
     const list = h('div', 'list');
     beat.choices.forEach((ch, idx) => {
@@ -17528,6 +17922,7 @@ const GAME = (() => {
     const G = S.gary = { q: sd.q, r: sd.r, ph: c.res ? 'done' : 'intro', t: 0, lineT: 0, line: c.res ? (c.res.quip || c.said) : c.said, gear: stoGear(),
       W: null, C: null, rig: null, pile: [], sub: 'aim', who: 'p', think: 0, grabT: 0, settle: 0, cur: null, steer: false, keyDir: 0, flashP: 0, flashG: 0, party: 0, msg: '' };
     setScreen('rival');
+    m2Stop('rival');   // M2 (round 18): the story card look
     if (c.live && !c.res) stoOffStart(G, c);   // a reload mid claw-off picks up at the next drop
     stoRivalDom();
     snd('garyTaunt');
@@ -18290,6 +18685,7 @@ const GAME = (() => {
     const b = $('codexBody');
     if (!b) return false;
     clear(b);
+    m3Page('codex', b);   // M3 (round 18): the album look, a solid page
     try { const scr = $('scr-codex'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const B = D().loreBook ? D().loreBook() : null;
     if (!B) { b.appendChild(btn('Back', () => loreBack(), 'pri')); return false; }
@@ -18301,10 +18697,7 @@ const GAME = (() => {
   }
   const loreBack = () => { const U0 = S.loreUi || {}; if (U0.from === 'collection') showCollection(); else showTitle(); };
   function loreHead(b, title, back) {
-    const head = h('div', 'hisHead loreHead');
-    head.appendChild(btn('Back', back, 'ghost sm'));
-    head.appendChild(h('h1', null, title));
-    b.appendChild(head);
+    return m3Head(b, btn('Back', back, 'ghost sm'), title, null);   // M3 (round 18): the page head (the Codex, the weekly, the rush menu)
   }
   // The book: every chapter, its progress, its NEW pages; The Machine's stays shut until it is met.
   function loreBookView(b) {
@@ -18666,6 +19059,7 @@ const GAME = (() => {
     const b = $('weeklyBody');
     if (!b) return false;
     clear(b);
+    m3Page('weekly', b);   // M3 (round 18): the lobby look (ice cyan), a solid page
     try { const scr = $('scr-weekly'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const key = wkKeyNow(), def = D().wkDef ? D().wkDef(key) : null, Wk = wkM(), R = X.RENDER;
     loreHead(b, 'Weekly', () => showTitle());
@@ -18676,7 +19070,7 @@ const GAME = (() => {
     const ban = hisCanvas(508, 170, (ctx) => { if (R && R.lore) R.lore.wkBanner(ctx, st, 508, 170); });
     ban.className = 'wkBan';
     b.appendChild(ban);
-    LORE.live = { cv: ban, kind: 'wk', st, w: 508, h: 170 };
+    // (M3 round 18: the hero banner is drawn once; nothing loops on a lobby page)
     const rules = h('div', 'wkRules panel');
     rules.appendChild(h('div', 'sub', `Everyone climbs the same seed this week: ${cn.name} with the ${(ci && ci.name) || def.claw}, Tilt 0, and these mutators. Your best score earns the medal.`));
     const mt = h('div', 'wkMuts');
@@ -18698,7 +19092,8 @@ const GAME = (() => {
     }
     b.appendChild(tg);
     b.appendChild(h('div', 'wkBest', best ? `Your best this week: ${fmtNum(best)}${medal ? ' · ' + MEDAL_NAME(medal) + ' medal' : ''}.` : 'No climb yet this week. The seed is waiting.'));
-    b.appendChild(btn('Play the weekly', () => wkStart(key), 'go wkPlay'));
+    const play = btn('Play the weekly', () => wkStart(key), 'pri wkPlay');
+    b.appendChild(play);
     // the medal cabinet: every week on record, newest first
     const cab = D().wkCabinet ? D().wkCabinet(Wk) : { list: [], counts: {} };
     b.appendChild(h('h3', null, 'Medal cabinet'));
@@ -18721,6 +19116,7 @@ const GAME = (() => {
       grid.appendChild(cell);
     }
     b.appendChild(grid);
+    m3Dock(b, [play]);   // M3 (round 18): the one primary waits in the dock
     return true;
   }
   // Starts this week's climb: its seed, crawler, claw and mutators, Tilt 0.
@@ -18864,6 +19260,7 @@ const GAME = (() => {
     const b = $('rushMenuBody');
     if (!b) return false;
     clear(b);
+    m3Page('rushmenu', b);   // M3 (round 18): the lobby look (rush red), a solid page
     try { const scr = $('scr-rushmenu'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
     const M = rushM(), open = rushOpen(), R = X.RENDER, all = rushLineupAll(), K = RUSHD();
     loreHead(b, 'Boss Rush', () => showTitle());
@@ -18872,7 +19269,7 @@ const GAME = (() => {
     const ban = hisCanvas(508, 200, (ctx) => { if (R && R.rush) R.rush.banner(ctx, 508, 200, st); });
     ban.className = 'rushBan';
     b.appendChild(ban);
-    RSH.live = { cv: ban, kind: 'banner', st, w: 508, h: 200 };
+    RSH.live = null;   // (M3 round 18: the hero banner is drawn once; nothing loops on a lobby page)
     if (!open) b.appendChild(h('div', 'rushLock', '\u{1F512} Locked: win a run to open the Boss Rush. The whole lineup is waiting, back to back.'));
     const rules = h('div', 'rushRules panel');
     rules.appendChild(h('div', 'sub', `Every boss, back to back: the six act bosses in a random order, then the Prize Master${rushMet() ? ', then The Machine' : ''}. After each one you pick 1 of 3: an item, a relic, a heal or a claw part. The clock runs while you fight.`));
@@ -18899,6 +19296,7 @@ const GAME = (() => {
     b.appendChild(go);
     b.appendChild(h('h3', null, 'Best times'));
     b.appendChild(rushBoardEl(M, pick));
+    m3Dock(b, [go]);   // M3 (round 18): the one primary waits in the dock
     return true;
   }
   // What a crawler brings to a rush: its kit on top of its starter bin and relic.
@@ -19830,9 +20228,10 @@ const GAME = (() => {
      card and the Prizedex get the holo layers (holoOn: a rainbow foil under
      the words, a glare over them, a shade, sparkles on a legendary; classes
      holo holo-<rarity>), and holoTick copies RENDER.holo.look onto the live
-     cards' CSS about 30 times a second: a tilt toward the pointer (the
-     independent CSS rotate, so the deal-in animation's transform is left
-     alone) or an idle wobble, where the foil sits, the glare, the shadow.
+     cards' CSS about 30 times a second while touched: a tilt toward the
+     pointer (the independent CSS rotate, so the deal-in animation's
+     transform is left alone), where the foil sits, the glare, the shadow
+     (round 18: at rest a card holds still, see m2HoloShown).
      Quiet cards (the Prizedex, the bin, the Compactor) only move while the
      pointer is on them. Reduced motion (Shake off, prefers-reduced-motion):
      no tilt, no wobble, the foil at rest. Reduced flashing: dimmer foil and
@@ -19909,6 +20308,20 @@ const GAME = (() => {
     st.dirty = false;
     return o;
   }
+  /* Round 18 (M2): calm cards. A card at rest holds still (no idle wobble or
+     sweep on a menu: it is drawn once in its rest pose, the foil at rest) and
+     only moves while a finger or the pointer is on it; and a card on a screen
+     that is not shown is never touched (the shop's and the Prizedex's cards
+     used to get 550 to 700 style writes a second during fights). */
+  function m2HoloShown(c) {
+    let scr = c._holoScr;
+    if (scr === undefined) {
+      scr = null;
+      try { scr = c.closest ? c.closest('.screen') : null; } catch (e) { scr = null; }
+      c._holoScr = scr;
+    }
+    return !scr || !scr.classList || scr.classList.contains('show');
+  }
   function holoTick(real) {
     if (S.headless || !HOLO.live.length) return;
     HOLO.clock += real; HOLO.acc += real;
@@ -19918,11 +20331,72 @@ const GAME = (() => {
     for (let i = HOLO.live.length - 1; i >= 0; i--) {
       const c = HOLO.live[i], st = c && c._holo;
       if (!st || c.isConnected === false) { HOLO.live.splice(i, 1); continue; }
-      if ((st.quiet || reduced) && !st.on && !st.dirty) continue;
-      holoApply(c, st, HOLO.clock, reduced, noFlash);
+      if (!st.on && !st.dirty) continue;
+      if (!m2HoloShown(c)) continue;
+      holoApply(c, st, HOLO.clock, reduced || !st.on, noFlash);
     }
   }
   // ================================================================ /HOLO
+
+  // ================================================================ M2 (round 18): the run stops' frame
+  /* DESIGN.md "Run stop screens restyled (round 18)". The run stops share one
+     frame on the ds-css tokens in four family looks, a class on the screen
+     (CSS in <style id="stops-css">): m2-market (shop, prize counter, trading
+     post, the arcade and pet shop frame: warm, gold price pills), m2-cozy
+     (rest, treasure, spare parts, capsule: amber, big choices), m2-work
+     (forge, bin, Compactor: steel with an ember accent) and m2-story (event,
+     boon, season door, rival, secret: the scene, one line, a few choices);
+     the reward screen uses the plain card frame. The way out sits in a
+     bottom dock (m2Dock moves the element; its GAME.choose entry stays where
+     it was registered). A stop whose backdrop is solid is marked ds-opaque:
+     nothing of the canvas shows under it. Leaving for the map, a fight or the
+     title empties the stops' bodies (every builder rebuilds its body when it
+     shows, so nothing is lost; the hidden cards and canvases are let go). */
+  const M2_FAM = { reward: 'card', parts: 'cozy', treasure: 'cozy', capsule: 'cozy', rest: 'cozy', shop: 'market', counter: 'market', trade: 'market', arcade: 'market',
+    forge: 'work', bin: 'work', compactor: 'work', event: 'story', boon: 'story', sea: 'story', rival: 'story', secret: 'story' };
+  const M2_OPAQUE = { reward: 1, parts: 1, treasure: 1, rest: 1, shop: 1, counter: 1, forge: 1, bin: 1, event: 1 };
+  const M2_CLEAR = ['reward', 'parts', 'treasure', 'rest', 'shop', 'counter', 'forge', 'bin', 'event'];
+  const M2_HOME = { map: 1, fight: 1, title: 1 };
+  // A stop is shown: its family look, its solid backdrop, its body as a full-height page (the dock at the bottom).
+  function m2Stop(name, body) {
+    const scr = $('scr-' + name), fam = M2_FAM[name];
+    try {
+      if (scr && scr.classList) {
+        scr.classList.add('m2Stop');
+        for (const f of ['card', 'cozy', 'market', 'work', 'story']) if (f !== fam) scr.classList.remove('m2-' + f);
+        if (fam) scr.classList.add('m2-' + fam);
+        scr.classList[M2_OPAQUE[name] ? 'add' : 'remove']('ds-opaque');
+      }
+      if (body && body.classList && M2_OPAQUE[name]) body.classList.add('dsPage');
+    } catch (e) { /* the look is decoration */ }
+    return scr;
+  }
+  // The bottom dock: moves the given elements (a primary and a ghost at most) into a .pageDock at the end of body.
+  function m2Dock(body, els, cls) {
+    const list = (els || []).filter(Boolean);
+    if (!body || !list.length) return null;
+    const dock = h('div', 'pageDock m2Dock' + (cls ? ' ' + cls : ''));
+    for (const e of list) m2Move(e, dock);
+    body.appendChild(dock);
+    return dock;
+  }
+  // Moves an element out of its parent (into to, or nowhere).
+  function m2Move(el, to) {
+    if (!el) return el;
+    try { if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el); } catch (e) { /* stub */ }
+    if (to) to.appendChild(el);
+    return el;
+  }
+  // setScreen's hook: back on the map, in a fight or at the title, the hidden stops let their cards go.
+  function m2Leave(from, to) {
+    if (!M2_HOME[to] || from === to) return;
+    for (const n of M2_CLEAR) {
+      if (n === to) continue;
+      const b = $(n + 'Body');
+      if (b && b.children && b.children.length) clear(b);
+    }
+  }
+  // ================================================================ /M2
 
   // ================================================================ REROLL (round 9)
   /* The shop's REROLL (DESIGN.md "Shop reroll (round 9)"): a slot-machine
@@ -20853,7 +21327,7 @@ const GAME = (() => {
     if (SCHX.view !== 'play') SCHX.G = null;
     const M = schM();
     if (!M.seen) { M.seen = 1; saveMeta(); }
-    if (!was) { setScreen('school'); music('title'); }
+    if (!was) { setScreen('school'); music('title'); m3Page('school', null, false); }   // (M3 round 18: the lobby look; the canvas paints the classroom, never opaque)
     if (SCHX.view === 'report' && SCHX.gradFx) { SCHX.gradFx = false; fx().emit('confetti', 60, 520, { n: 1.4, dir: -Math.PI / 2 + 0.5 }); fx().emit('confetti', 480, 520, { n: 1.4, dir: -Math.PI / 2 - 0.5 }); snd('fanfare'); }
     schDom();
     return SCHX.view;
@@ -22016,6 +22490,7 @@ const GAME = (() => {
     popover(null);
     const scr = $('scr-duo');
     if (scr) { scr.className = 'screen duoScr show ' + (cls || ''); try { scr.scrollTop = 0; } catch (e) { /* stub */ } }
+    m3Page('duo', null, !/dp-canvas/.test(cls || ''));   // M3 (round 18): the lobby look; the menus and the setup are solid pages, the canvas phases stay see-through
     const b = $('duoBody');
     clear(b);
     return b;
@@ -22028,10 +22503,7 @@ const GAME = (() => {
     else if (S.duo) duoDone();
     const b = duoBody('dp-menu');
     if (!b) return false;
-    const head = h('div', 'duoHead');
-    head.appendChild(btn('Back', () => duoLeave(), 'ghost sm'));
-    head.appendChild(h('h1', null, 'Duo'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => duoLeave(), 'ghost sm'), 'Duo', null);   // M3 (round 18): the page head
     b.appendChild(h('div', 'sub duoSub', 'Two players, one phone. Take turns, pass it over, talk trash.'));
     const saved = duoSaved();
     if (saved && saved.ph !== 'end') {
@@ -22105,21 +22577,27 @@ const GAME = (() => {
   function duoSetupDom() {
     const St = S.duoSet;
     if (!St) return;
+    const was = S.duoUi && S.duoUi.ph === 'setup', scr0 = $('scr-duo');
+    let keep = 0;
+    try { keep = was && scr0 ? scr0.scrollTop || 0 : 0; } catch (e) { keep = 0; }
     S.duoUi = { ph: 'setup' };
     const b = duoBody('dp-setup');
     if (!b) return;
-    const head = h('div', 'duoHead');
-    head.appendChild(btn('Back', () => duoMenu(), 'ghost sm'));
-    head.appendChild(h('h1', null, St.mode === 'coop' ? 'Co-op Boss' : 'Versus Claw-off'));
-    b.appendChild(head);
+    m3Head(b, btn('Back', () => duoMenu(), 'ghost sm'), St.mode === 'coop' ? 'Co-op Boss' : 'Versus Claw-off', null);   // M3 (round 18): the page head
     b.appendChild(h('div', 'sub duoSub', St.mode === 'coop'
       ? 'Each crawler brings its own bin, HP and claw (plus its Boss Rush kit). Player 1 grabs, then Player 2; the boss strikes whoever just went.'
       : 'A shared bin of prizes: rarer is worth more, two at once is a DOUBLE, three a JACKPOT, named combos pay extra. Play a sabotage card on your rival after each drop.'));
     const COL = DK().COLORS, chars = duoChars(), claws = clawIds(), paints = duoPaints();
     St.p.forEach((p, i) => {
       const col = (COL.find((c) => c.id === p.color) || COL[0]).col;
-      const pan = h('div', 'duoP panel');
+      // M3 (round 18): a player is one row (portrait, name, a summary line); a tap on the summary opens the colours, crawlers, claws and paint
+      const M3d = S.m3Duo || (S.m3Duo = {});
+      const fold = m3Fold(null, !!M3d[i], (on) => { M3d[i] = on; }, 'duoP panel');
+      const pan = fold.wrap;
       try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+      const inf0 = clawInfo(p.claw) || {};
+      for (const s of [String((charDef(p.char) || {}).name || p.char), (inf0.icon ? inf0.icon + ' ' : '') + String(inf0.name || p.claw),
+        p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour']) fold.tg.appendChild(h('span', 'sv', s));
       const top = h('div', 'duoPTop');
       top.appendChild(portraitCanvas(p.char, 44));
       top.appendChild(h('span', 'duoPN', 'Player ' + (i + 1)));
@@ -22129,7 +22607,7 @@ const GAME = (() => {
       inp.oninput = () => { p.name = inp.value; };
       inp.onchange = () => { p.name = inp.value; };
       top.appendChild(inp);
-      pan.appendChild(top);
+      if (pan.insertBefore) pan.insertBefore(top, fold.tg); else pan.appendChild(top);
       const cr = h('div', 'duoSw');
       for (const c of COL) {
         const s = btn('P' + (i + 1) + ' ' + c.id, () => { duoSet(i, 'color', c.id); duoSetupDom(); }, 'duoCol' + (p.color === c.id ? ' on' : ''));
@@ -22137,7 +22615,7 @@ const GAME = (() => {
         try { s.style.background = c.col; s.setAttribute('aria-label', c.name || c.id); } catch (e) { /* stub */ }
         cr.appendChild(s);
       }
-      pan.appendChild(cr);
+      fold.body.appendChild(cr);
       const ch = h('div', 'duoChips');
       for (const id of chars) {
         const c = btn('P' + (i + 1) + ' ' + id, () => { duoSet(i, 'char', id); duoSetupDom(); }, 'duoChip' + (p.char === id ? ' on' : ''));
@@ -22146,7 +22624,7 @@ const GAME = (() => {
         c.appendChild(h('span', null, String((charDef(id) || {}).name || id).split(' ')[0]));
         ch.appendChild(c);
       }
-      pan.appendChild(ch);
+      fold.body.appendChild(ch);
       const cl = h('div', 'duoChips claws');
       for (const id of claws) {
         const inf = clawInfo(id);
@@ -22154,9 +22632,9 @@ const GAME = (() => {
         c.textContent = (inf.icon ? inf.icon + ' ' : '') + String(inf.name || id).replace(/ Claws?$/, '');
         cl.appendChild(c);
       }
-      pan.appendChild(cl);
+      fold.body.appendChild(cl);
       const k = paints.indexOf(p.paint), nm = p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour';
-      pan.appendChild(btn('P' + (i + 1) + ' look', () => { duoSet(i, 'paint', paints[(k + 1) % paints.length]); duoSetupDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
+      fold.body.appendChild(btn('P' + (i + 1) + ' look', () => { duoSet(i, 'paint', paints[(k + 1) % paints.length]); duoSetupDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
       b.appendChild(pan);
     });
     const opt = h('div', 'duoOpt panel');
@@ -22177,7 +22655,8 @@ const GAME = (() => {
       opt.appendChild(row);
     }
     b.appendChild(opt);
-    b.appendChild(btn('Toss the coin!', () => duoStart(), 'pri duoGo'));
+    m3Dock(b, [btn('Toss the coin!', () => duoStart(), 'pri duoGo')]);   // M3 (round 18): the dock (it used to float over the chips)
+    try { if (keep && scr0) scr0.scrollTop = keep; } catch (e) { /* stub */ }   // (M3: a pick keeps the page where it was)
   }
   // Setup done: the duel is made (players repaired, the seed), remembered on the profile, and the coin goes up.
   function duoStart() {
@@ -23192,10 +23671,7 @@ const GAME = (() => {
   }
   // ---- the screens: co-op's choice, the online menu, joining, the lobby
   function duoNetHead(b, title, back) {
-    const head = h('div', 'duoHead');
-    head.appendChild(btn('Back', back, 'ghost sm'));
-    head.appendChild(h('h1', null, title));
-    b.appendChild(head);
+    m3Head(b, btn('Back', back, 'ghost sm'), title, null);   // M3 (round 18): the page head
   }
   function duoNetBig(parent, id, name, icon, text, fn) {
     const c = btn(name, fn, 'duoMode dm-' + id);
@@ -25029,6 +25505,7 @@ const GAME = (() => {
     if (!S.trd || S.trd.tile !== t) S.trd = { tile: t, st, t: 0, phase: 'idle', k: 0, fired: {}, res: null, pick: null, stamp: 0, wave: 0 };
     S.trd.st = st;
     setScreen('trade');
+    m2Stop('trade');   // M2 (round 18): the market stall look
     trdDom();
   }
   // A relic leaves the run: its lasting Max HP goes with it (gold and bulbs it paid stay paid).

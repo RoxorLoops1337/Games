@@ -3684,12 +3684,16 @@ h.test('feel: the Tips page, old profiles and veterans', () => {
   h.ok(labels.includes('Tips'), 'the title has Tips');
   Gt.choose(labels.indexOf('Tips'));
   h.eq(Gt.screen, 'tips', 'the Tips page');
-  const list = T._nodes.tipsBody.children.find(c => c.className === 'tipList');
-  h.eq(list.children.length, Gt.feel.TIPS.length, 'one row per tip');
+  // (round 18) the page body under its head: the tips met in full, the dark ones folded into one "N more to find" row
+  const tipsPage = T._nodes.tipsBody.children.find(c => /pageBody/.test(c.className));
+  h.ok(T._nodes.tipsBody.children.some(c => /pageHead/.test(c.className)), 'a page head (Back, the title)');
+  const list = tipsPage.children.find(c => c.className === 'tipList');
+  h.eq(list.children.length, 2 + 1, 'one row per tip met, one row for the rest');
   const got = list.children.filter(r => /got/.test(r.className));
   h.eq(got.length, 2, 'the two met ones in full');
   h.ok(got.some(r => r.children[1].children[0].textContent === 'Grab combo'), 'with their title');
-  h.ok(list.children.filter(r => !/got/.test(r.className)).every(r => r.children[1].children[0].textContent === '???'), 'the rest dark');
+  const more = list.children.filter(r => !/got/.test(r.className));
+  h.ok(more.length === 1 && more[0].children[1].children[0].textContent === `${Gt.feel.TIPS.length - 2} more to find`, 'the rest dark, in one row: ' + (more[0] && more[0].children[1].children[0].textContent));
   Gt.draw();
   labels = Gt.S.ui.buttons.map(b => b.label);
   Gt.choose(labels.indexOf('Reset tips'));
@@ -5412,9 +5416,10 @@ h.test('access: text sizes scale every full-screen body and hold the 540 stage (
   h.ok(/html\[class\*="txt-"\] #titleMenu\{zoom:calc\(1 \+ \(var\(--accK\) - 1\) \* \.5\)/.test(html), 'the title menu half as much (the logo stays clear)');
   const ks = [...html.matchAll(/html\.txt-(l|xl)\{--accK:([\d.]+)\}/g)].map(m => +m[2]);
   h.eq(JSON.stringify(ks), JSON.stringify([1.15, 1.3]), 'large 1.15, extra large 1.3');
-  // the widest fixed box inside a scaled body (the title's buttons, 280 px) still fits the stage at x1.3
-  const menuW = +(/\.menu \.btn\{width:(\d+)px\}/.exec(html) || [0, 999])[1];
-  h.ok(menuW * 1.3 <= 540 - 32, 'the title buttons fit at extra large (' + menuW * 1.3 + ' px of 508)');
+  // the widest fixed box on the title (round 18: the big action, the play row and the tiles, 440 px; the menu grows
+  // half as much as the bodies) still fits the stage at extra large
+  const menuW = +(/#titleMenu \.uiPri,#titleMenu \.uiPlay,#titleMenu \.uiTiles\{width:(\d+)px/.exec(html) || [0, 999])[1];
+  h.ok(menuW * 1.15 <= 540 - 24, 'the title rows fit at extra large (' + menuW * 1.15 + ' px of 516)');
   h.ok(/\.accSheet\{max-height:calc\(\(100% - 84px\) \/ var\(--accK\)\)\}/.test(html.replace(/html\[class\*="txt-"\] /g, '')), 'the scaled Settings sheet still fits the stage height');
   const { G: Gs } = metaBoot({});
   for (const t of ['n', 'l', 'xl']) { Gs.acc.set('text', t); h.eq(Gs.acc.cls.filter(c => /^txt-/.test(c)).join(), t === 'n' ? '' : 'txt-' + t, 'text ' + t + ' class'); }
@@ -11860,6 +11865,75 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     stepFor(G, 1.5);
     h.eq(C.lampShow, C.lamp, `the lamp shows its level once the sparks land (${C.lampShow} cells, level ${C.lamp})`);
     G.cab.force = false;
+  });
+}
+
+// ---------------- round 18 (M3): albums, lobbies and run end (DESIGN.md "Albums, lobbies and run end restyled (round 18)")
+{
+  const inCls = (root, el, re) => { const path = []; const find = (n, acc) => { if (n === el) { path.push(...acc); return true; } for (const c of n.children || []) if (find(c, acc.concat([n]))) return true; return false; }; find(root, []); return path.some((n) => re.test(n.className || '')); };
+  h.test('m3: Back sits top-left in a page head on the album pages; the registrations keep their order', () => {
+    const { T, G } = metaBoot({});
+    G.showCollection('items');
+    const L = G.S.ui.buttons.map((b) => b.label);
+    h.ok(L.indexOf('Back') >= 0 && L.indexOf('Codex') === L.length - 1 && L.indexOf('Back') === L.length - 2, 'Prizedex: Back then the Codex, registered last as always');
+    const back = G.S.ui.buttons[L.indexOf('Back')].el, cdx = G.S.ui.buttons[L.length - 1].el;
+    h.ok(inCls(T._nodes.collectionBody, back, /\bpageHead\b/) && inCls(T._nodes.collectionBody, cdx, /\bpageHead\b/), 'both in the page head');
+    h.ok(!/pri|mixStick/.test(back.className), 'Back is a ghost now, not a bottom bar');
+    G.showStickers();
+    const sb = G.S.ui.buttons.find((b) => b.label === 'Back');
+    h.ok(sb && inCls(T._nodes.stickersBody, sb.el, /\bpageHead\b/), 'the sticker board too');
+    G.his.show();
+    const hb = G.S.ui.buttons.find((b) => b.label === 'Back');
+    h.ok(hb && inCls(T._nodes.historyBody, hb.el, /\bpageHead\b/), 'the run history too');
+    h.eq(T._nodes.stickersBody.children.length, 0, 'a page left behind lets its cards go (B3.11)');
+    G.showTitle();
+    h.eq(T._nodes.historyBody.children.length, 0, 'the history too');
+  });
+  h.test('m3: the scoreboard: the way on docked, the rest folded into Run details, the vault unlock never toasts over it', () => {
+    const { T, G } = metaBoot({});
+    G.newRun('knight', 1801);
+    G.toMap();
+    G.showWin();
+    h.eq(G.S.ui.buttons[0].label, 'Cash out', 'Cash out is still the first choice');
+    h.eq(G.S.ui.buttons[1].label, 'Keep playing: Endless', 'Keep playing the second');
+    const wb = T._nodes.winBody;
+    h.ok(inCls(wb, G.S.ui.buttons[0].el, /\bpageDock\b/) && inCls(wb, G.S.ui.buttons[1].el, /\bpageDock\b/), 'both in the dock');
+    const fold = wb.children.find((c) => /\bm3Details\b/.test(c.className || ''));
+    h.ok(fold, 'a Run details fold');
+    const texts = []; const walk = (n) => { if (n.textContent) texts.push(n.textContent); (n.children || []).forEach(walk); };
+    walk(fold);
+    h.ok(texts.includes('Highlights') && texts.includes('Run details'), 'the highlights fold away under Run details');
+    h.ok(!/Unlocked in the Prize Vault/.test(String(G.S.lastToast || '')), 'no vault toast over the score');
+    G.S.lastToast = '';
+    G.newRun('knight', 1802);
+    G.toMap();
+    G.showGameOver();
+    const home = G.S.ui.buttons.find((b) => b.label === 'Back to title');
+    h.ok(home && inCls(T._nodes.gameoverBody, home.el, /\bpageDock\b/), 'game over: Back to title in the dock');
+    h.ok(T._nodes.gameoverBody.children.some((c) => /\bscoreBox\b/.test(c.className || '')), 'the score stays in view');
+    G.choose(G.S.ui.buttons.indexOf(home));
+    h.eq(G.screen, 'title', 'and home it goes');
+    h.eq(T._nodes.gameoverBody.children.length, 0, 'the run end lets its cards go');
+  });
+  h.test('m3: the duo setup groups each player into a fold and docks the coin; the indices stay put', () => {
+    const { T, G } = metaBoot({});
+    G.duo.setup('vs');
+    const L0 = G.S.ui.buttons.map((b) => b.label);
+    h.eq(L0[0], 'Back', 'Back first');
+    h.eq(L0[L0.length - 1], 'Toss the coin!', 'the coin last');
+    const db = T._nodes.duoBody;
+    const toss = G.S.ui.buttons[L0.length - 1].el;
+    h.ok(inCls(db, toss, /\bpageDock\b/), 'the coin is docked (it used to float over the chips)');
+    const col = G.S.ui.buttons.find((b) => b.label === 'P1 pink' || /^P1 /.test(b.label));
+    h.ok(col && inCls(db, col.el, /\bm3FoldB\b/), 'a player\'s colours, crawlers and claws sit in their fold');
+    const folds = []; const walk = (n) => { if (/\bm3FoldT\b/.test(n.className || '')) folds.push(n); (n.children || []).forEach(walk); };
+    walk(db);
+    h.eq(folds.length, 2, 'one fold per player');
+    folds[0].click();
+    h.eq(G.S.ui.buttons.length, L0.length, 'opening a fold registers nothing');
+    G.choose(L0.indexOf('P1 claw scoop'));
+    h.eq(G.duo.setupState.p[0].claw, 'scoop', 'a pick inside a fold still goes through GAME.choose');
+    h.eq(JSON.stringify(G.S.ui.buttons.map((b) => b.label)), JSON.stringify(L0), 'the rebuilt page registers the same buttons in the same order');
   });
 }
 

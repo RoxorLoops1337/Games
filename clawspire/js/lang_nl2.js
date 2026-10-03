@@ -1374,3 +1374,31 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /TECH
+// ---------------------------------------------------------------- M2 (round 18): the run stops restyled
+// DESIGN.md "Run stop screens restyled (round 18)": the shop's services row (the prize counter, the Compactor, Remove, Sell).
+I18N.add('nl', {
+"ui": {
+"Services": "Diensten"
+}
+});
+// ---------------------------------------------------------------- /M2
+
+// ---------------------------------------------------------------- M1 (round 18): the design system and the home screens
+// character select in three steps, the Tips page's dark row, the Settings sheet's sample strip
+I18N.add('nl', {
+"ui": {
+"Run options": "Run-opties",
+"Start run": "Start de run",
+"{n} more to find": "Nog {n} te vinden",
+"Preview": "Voorbeeld"
+}
+});
+// ---------------------------------------------------------------- /M1
+// ---------------------------------------------------------------- M3 (round 18): albums, lobbies and run end
+// DESIGN.md "Albums, lobbies and run end restyled (round 18)": the scoreboard's fold.
+I18N.add('nl', {
+"ui": {
+"Run details": "Rundetails"
+}
+});
+// ---------------------------------------------------------------- /M3

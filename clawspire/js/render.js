@@ -9541,8 +9541,12 @@ const RENDER = (() => {
       // the marquee and its chasing bulbs
       ctx.beginPath(); rrect(ctx, mx + 24, my + 20, mw - 48, 54, 12); F(ctx, '#12091f'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
       const word = spicy ? 'NO REFUNDS' : "LET'S DEAL";
+      // round 18 (A3.4): a word that runs wider than its sign (the Dutch "LATEN WE DEALEN") shrinks to fit
+      const fitSz = (s, size, maxW) => {
+        try { ctx.font = 'bold ' + size + 'px ' + FONT; const w = ctx.measureText(i18nTr(s)).width; return w > maxW && w > 0 ? Math.max(9, Math.floor(size * maxW / w)) : size; } catch (e) { return size; }
+      };
       glow(ctx, cx, my + 47, 90, spicy ? '#ff2e30' : PAL.gold, 0.35 + 0.1 * Math.sin(t * 6));
-      txt(ctx, word, cx, my + 48, 30, spicy ? '#ff8a7a' : '#ffe9a8', true, 'center', INK);
+      txt(ctx, word, cx, my + 48, fitSz(word, 30, mw - 72), spicy ? '#ff8a7a' : '#ffe9a8', true, 'center', INK);
       for (let i = 0; i < 18; i++) {
         const u = i / 17, bx = mx + 30 + u * (mw - 60), on = ((i + Math.floor(t * 8)) % 3) === 0;
         ctx.beginPath(); circ(ctx, bx, my + 84, 4); F(ctx, on ? PAL.gold : '#4a3310'); ctx.fill();
@@ -9585,8 +9589,10 @@ const RENDER = (() => {
       const cy0 = my + mh - 58;
       ctx.beginPath(); rrect(ctx, cx - 90, cy0, 180, 34, 10); F(ctx, '#07030d'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
       glow(ctx, cx, cy0 + 17, 110, PAL.pink, 0.3 + 0.15 * Math.sin(t * 3));
-      txt(ctx, 'PUSH', mx + 44, cy0 + 17, 12, '#8d7fb3', true, 'center');
-      txt(ctx, 'TO WIN', mx + mw - 46, cy0 + 17, 12, '#8d7fb3', true, 'center');
+      // (round 18: the side words fit between the cabinet's rim and the chute)
+      const side = mw / 2 - 90 - 24;
+      txt(ctx, 'PUSH', mx + 12 + side / 2, cy0 + 17, fitSz('PUSH', 12, side), '#8d7fb3', true, 'center');
+      txt(ctx, 'TO WIN', mx + mw - 12 - side / 2, cy0 + 17, fitSz('TO WIN', 12, side), '#8d7fb3', true, 'center');
       // drifting dust in the light
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 26; i++) {
