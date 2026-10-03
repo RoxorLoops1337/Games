@@ -2564,6 +2564,8 @@ html[lang="nl"]:not([class*="hand-"]) #endTurn{min-width:164px;letter-spacing:.0
 
 /* ---- the title menu: one big action, the play row, a row of tiles, the stats line; the rest in sheets ---- */
 #titleMenu{gap:10px;padding:64px 0 22px}
+/* (round 20) no dark box behind the title menu: the canvas floor darkens under it and melts into the scene */
+#titleMenu{background:none}
 #titleMenu .uiPri,#titleMenu .uiPlay,#titleMenu .uiTiles{width:440px;max-width:calc(100% - 24px)}
 #titleMenu .uiPri{display:flex;flex-direction:column;gap:10px}
 #titleMenu .uiPri .btn{width:100%;min-height:50px;font-size:var(--fs-s);letter-spacing:.12em;border-radius:var(--r-card)}

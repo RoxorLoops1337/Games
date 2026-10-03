@@ -7554,6 +7554,78 @@ a run and 12 by act 2, and its win rate does not move (32%).
 - Tests: the game suite's lamp test now pins the rain to `rainCaps` (0 capsules) and checks the rain's capsule path
   with the dial at 1 in a fresh fight (one capsule, counted against the fight's cap).
 
+## Title screen art (round 20)
+
+The attract scene behind the title menu was a stack of flat boxes with coloured slots, a big flat claw, a plain
+gradient and 36 tiny falling prizes, with the logo sitting across the tower. It is now one calm, illustrated picture
+in the round 18 palette (calmer neon, pink accent, gold reward, teal info). Only the canvas art and the logo changed;
+the DOM menu, its buttons, labels, ids and order are untouched (`render.js` TITLE block, `title()`).
+
+**Composition (stage 540 x 960, the same at 390 x 844, 360 x 780 and 540 x 960: the stage always fits by width).**
+- The logo sits high in the sky: its centre at 150 (178 under a season's ribbon and banner), never lower than the
+  round 9 layout allows (`Q9_TL.ly` is still the lowest it may go; a tall menu lifts it higher). `RENDER.q9.title.logoY(h,
+  sea)` gives the drawn place; the hidden event preview zone (`#seaLogo`) follows it.
+- The hero: the Clawspire, a pyramid of claw machine cabinets (three, two, one) on a glossy floor at y 648, just
+  above the menu's first button (677). Each cabinet has a bevelled body lit from the upper left, a lit marquee with an
+  emblem (heart, star, little claw) and five bulbs, a glass box with a lamp, a little claw and a pile of glowing plush
+  prizes, chrome trim, a diagonal reflection, the control ledge (a stick and a button) and a coin door with a lit
+  slot. Each row casts a soft shadow on the roof below. On top: a gold marquee plinth, a chrome spire with two pink
+  rings and the star prize, whose glow is the scene's one focal light.
+- The claw: chrome, with a friendly visor face (two teal eyes that blink every 4.7 s, brow LEDs) and two chunky hooked
+  prongs with pink rubber tips, on a cable from above the logo (it passes behind the logo and the subtitle). It sways a
+  little and every 11 s dips, closes on the star, tugs and lets go. `ttGeo` scales the tower and the claw (0.75 to 1)
+  so the claw's head always hangs under the subtitle capsule.
+- Atmosphere: a violet dusk sky with faint nebulae and stars, five soft light rays fanning down over the tower, a far
+  hazy city and a nearer, darker one (stepped roofs, antennas, sparse lit windows, a pink heart and a teal claw neon
+  sign at the edges), a horizon haze, a halo behind the tower, a faint perspective grid on the floor, the tower's
+  reflection fading into the floor, a pink and gold pool of light under it, and a vignette. Eight soft bokeh lights and
+  five floating prizes (heart, potion, gem, coin, clover) drift slowly at the sides. The floor darkens toward the
+  bottom, so the menu needs no box: `#titleMenu{background:none}` (it had a dark gradient panel with visible edges).
+- The logo: chunky candy lettering: a dark drop shadow and a soft pink halo, an ink outline round an extruded body
+  (two magentas), a teal rim light along the lower edge, a pink candy face with a hard white gloss band over the upper
+  half and a shine on every letter, two sparkles. A sheen sweeps the letters every 7.5 s (1.4 s long). The subtitle
+  ("a claw machine roguelike", translated) sits in a dark capsule with a teal edge and two gold pips. The word still
+  fits the stage the round 7 way (`Q9_FIT`), the outer stroke at most `fs * 0.3`.
+
+**Calm.** Shake off (`fx.reduced`, which also sets `html.calm`) or `prefers-reduced-motion`: the claw hangs still at
+rest, the prizes and bokeh hold, no sheen, no blink, no glint, the marquees keep a steady glow; only the star's glow
+breathes. Colour-blind modes: the scene is decoration (no signal colours); the logo reads by its ink outline and the
+white gloss in every mode.
+
+**Seasons.** The season decor follows the new layout (`ttGeoAt`): Claw-o-ween's moon sits in the sky right of the
+tower (behind the city), bats circle the spire, jack-o'-lanterns stand on three bare ledges of the tower and on the
+floor at both sides, fog rolls along the floor, cobwebs and the spider in the top corners, the dripping banner over the
+logo; the dusk tint now fades out at its foot (it ended in a hard line over the city). Winter: the aurora sits behind
+the tower, snow caps on the tower's ledges and the floor line, the frost corners, the garland just under the ribbon,
+the Santa hat cocked on the claw's head (it follows the sway and the dip, drawn under the subtitle), the banner with
+icicles, holly, the snowman and the pine.
+
+**Performance.** Everything still (sky, nebulae, stars, rays, city, floor, grid, reflection, tower, a season's tint
+and still decor, vignette) is painted once into one opaque layer at the exact device scale and blitted 1:1
+(`ttBack`, `ttBlit`: a pixel-aligned copy costs about a tenth of a scaled one in a software raster, 0.4 against 3.7 ms
+for the full screen here); it is rebuilt only on a new layout, device scale or season. The logo and subtitle are a
+second such layer (`Q9_LOGO`, keyed by size, place, scale and language); the sheen cuts a slanted band by a mask of
+the letters on a scratch canvas, three blits while it runs. The claw head (open and blinking), the prong, the star and
+the bokeh are small cached sprites (`ttSpr`, at most 48); the prizes keep the round 9 sprites. The season's still
+parts are baked into the layer (`Q9_TL.baked`; the game sets `Q9_TL.sea` around the title draw), so the season
+overlays no longer fill a full-screen gradient every frame. No shadowBlur, filter or gradient per frame. Headless (no
+real canvas, the tests' stub) the same painters draw live.
+
+Measured (local Chromium, no GPU, 390 x 844 at DPR 3, buffer 780 x 1387; `draw()` with a 1 px readback to force the
+raster, median; 4 s rAF probe; `scratchpad/r20title/bench.mjs`):
+
+| title | before | after |
+| --- | --- | --- |
+| plain: draw() JS / with raster | 0.4 / 6.2 ms | 0.8 / 3.0 ms |
+| Claw-o-ween: with raster, frames over 33 ms in 4 s | 14.3 ms, 24 | 7.4 ms, 0 |
+| Winter: with raster, frames over 33 ms in 4 s | 15.8 ms, 24 | 7.0 ms, 0 |
+| calm: with raster | 6.1 ms | 2.7 ms |
+| canvas calls a frame (plain): fill / stroke / drawImage | 59 / 55 / 38 | 1 / 3 / 28 |
+
+Tests: `title art (round 20)` in the render suite (the logo's place and bounds, the claw clears the subtitle for every
+logo place and size, the tower stands on the floor above the menu, six ledges, the same frame draws the same, the
+scene moves, calm holds still). The round 7 logo fit test and the round 9 layout tests pass unchanged.
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the
