@@ -330,7 +330,7 @@ const DATA = (() => {
   const heroes = {
     hanae: {
       id: 'hanae', name: 'Hanae', title: 'The Blossom Blade', prefer: 'front', res: 'bloom',
-      color: '#ff7eb6', accent: '#fff4f8', dark: '#b0245c', maxHp: 76,
+      color: '#ff7eb6', accent: '#fff4f8', dark: '#b0245c', maxHp: 84,
       blurb: 'A duelist who never loses her composure. She cuts fast and cuts often, and blooms brighter with every strike.',
       rows: { front: { dmgAdd: 2 }, back: { blockAdd: 1 } },
       passives: [{ id: 'blade_flow', name: 'Blade Flow', on: 'onPlay', filter: { type: 'attack' }, limit: 1, fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
@@ -339,7 +339,7 @@ const DATA = (() => {
     },
     kuro: {
       id: 'kuro', name: 'Kuro', title: 'The Inkweaver', prefer: 'back', res: 'sumi',
-      color: '#7a6bff', accent: '#5ff5ff', dark: '#1a1740', maxHp: 60,
+      color: '#7a6bff', accent: '#5ff5ff', dark: '#1a1740', maxHp: 68,
       blurb: 'A calligrapher who writes spells into the air. Fragile up close, devastating when the page is his to fill.',
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
       passives: [{ id: 'steady_hand', name: 'Steady Hand', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],

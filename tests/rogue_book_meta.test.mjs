@@ -251,7 +251,7 @@ t.test('recordRun pays Inkstones by the documented formula: win, loss, abandon',
   const A = fresh(); A.META.load();
   const R = mkRun(A, { trialSet: 3, stats: { bossKills: 2, boss1Kills: 1, boss2Kills: 1 }, chapter: 3 });
   const score = A.RUN.score(R);
-  t.eq(score, 100 * 2 + 60 * 2 + Math.floor(60 / 10) + 2 * 136, 'a known score: ' + score);
+  t.eq(score, 100 * 2 + 60 * 2 + Math.floor(60 / 10) + 2 * (A.DATA.heroes.hanae.maxHp + A.DATA.heroes.kuro.maxHp), 'a known score: ' + score);
   const raw = (win) => S.perChapter * 2 + (win ? S.win : 0) + S.perTrial * 3 + Math.floor(score / S.scoreDiv);
   const win = A.META.recordRun(R, 'win', 100);
   t.eq(win.inkstones, raw(true), 'win: 4 per chapter + 15 + 3 per trial + score / 60'); t.eq(win.inkstones, 4 * 2 + 15 + 3 * 3 + Math.floor(score / 60), 'spelled out'); t.eq(A.META.inkstones, win.inkstones + win.bonus, 'the profile got it, plus achievement rewards'); t.eq(win.total, A.META.inkstones, 'total reported');

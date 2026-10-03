@@ -74,7 +74,7 @@ t.test('hero facts the numbers were written against still hold (if these change,
   t.eq(h.res, 'sumi', 'Kuro spends Sumi');
   t.eq(h.rows.back.dmgAdd, 2, 'back row: +2 damage per hit');
   t.ok(!h.rows.front.dmgAdd && !h.rows.front.blockAdd, 'front row gives Kuro nothing');
-  t.eq(h.maxHp, 60, 'a fragile mage');
+  t.eq(h.maxHp, 68, 'a frail mage (68, level with Suzu; it was 60 before the balance pass)');
   const p = h.passives[0];
   t.ok(p && p.id === 'steady_hand' && p.on === 'onPlay' && p.filter.type === 'skill' && p.limit === 1 && p.fx[0].s === 'sumi' && p.fx[0].n === 1, 'Steady Hand: first Skill each turn grants 1 Sumi');
   t.deep(h.starter, ['kuro_ink_bolt', 'kuro_ink_bolt', 'kuro_ink_ward', 'kuro_ink_ward', 'kuro_first_stroke'], 'the starter deck ids');
@@ -367,7 +367,7 @@ t.test('Scribe: cycling, a tutor, copying, exhaust fuel, retain, the Energy tric
   t.ok(cards.some((c) => c.cost === 2) && cards.some((c) => c.cost === 1), 'costs 1 and 2 exist');
   const exhaustFuel = cards.filter((c) => anyOp(c, (o) => o.op === 'pick' && o.then === 'exhaust') && anyOp(c, (o) => o.n && o.n.per === 'picked'));
   t.ok(exhaustFuel.length >= 1, 'exhaust pays out per card exhausted');
-  t.ok(cards.some((c) => anyOp(c, (o) => o.op === 'pick' && o.then === 'copy' && o.n >= 3)) && DATA.cards.kuro_second_edition.rarity === 'rare', 'a rare that copies several cards, powers included (nothing filters the pick)');
+  t.ok(cards.some((c) => anyOp(c, (o) => o.op === 'pick' && o.then === 'copy' && o.n >= 2)) && DATA.cards.kuro_second_edition.rarity === 'rare', 'a rare that copies several cards, powers included (nothing filters the pick)');
   cards.filter((c) => anyOp(c, (o) => o.op === 'pick' && o.then === 'copy')).forEach((c) => t.ok(!anyOp(c, (o) => o.op === 'pick' && o.filter), `${c.id}: the copy pick has no type filter, so powers can be copied`));
 });
 
@@ -381,7 +381,7 @@ t.test('progression: commons are the plain building blocks, uncommons carry the 
   t.ok(commons.filter((c) => c.type === 'attack').length >= 5 && commons.filter((c) => c.type === 'skill').length >= 7, 'a healthy common attack/skill split');
   t.ok(unc.filter((c) => c.type === 'power').length === 2, 'two uncommon powers');
   t.ok(rares.filter((c) => c.type === 'power').length >= 3 && rares.filter((c) => c.type !== 'power').length >= 3, 'rares are a mix of engines and actives');
-  t.ok(rares.every((c) => c.cost === 2 || c.cost === 'X'), 'rares cost 2 or X (they are the turn)');
+  t.ok(rares.every((c) => c.cost === 1 || c.cost === 2 || c.cost === 'X') && rares.filter((c) => c.cost === 1).length <= 1, 'rares cost 2 or X (they are the turn), bar Second Edition at 1 (at 2 it left one Energy to play its own copies)');
   t.ok(rares.every((c) => (c.slots || []).length === 2), 'rares have 2 slots');
   const rareShapes = new Set(rares.map((c) => (c.type === 'power' ? 'power:' + flatOps(c.fx).find((o) => o.op === 'hook').on : c.type + ':' + (c.cost === 'X' ? 'X' : flatOps(c.fx)[0].op))));
   t.eq(rareShapes.size, rares.length, 'no two rares share a shape: ' + [...rareShapes].join(', '));
@@ -423,16 +423,16 @@ t.test('numbers: Sumi sinks scale as written (First Stroke, Ink Flood, Shelter S
   const hitsOp = (o) => o.op === 'dmg' && o.hits !== undefined;
   t.deep(table('kuro_rain_of_strokes', hitsOp, 'hits', sumiStates([0, 1, 2, 3, 4, 5, 6])), [0, 1, 2, 3, 4, 4, 4], 'Rain of Strokes: one hit, plus one per Sumi spent, four at most');
   t.deep(table('kuro_rain_of_strokes', hitsOp, 'hits', sumiStates([0, 2, 4, 5]), true), [0, 2, 4, 4], 'Rain of Strokes+: the same hits');
-  t.deep([opOf('kuro_rain_of_strokes', dmg).n, opOf('kuro_rain_of_strokes', hitsOp).n, opOf('kuro_rain_of_strokes', dmg, true).n, opOf('kuro_rain_of_strokes', hitsOp, true).n], [3, 3, 4, 4], 'each Rain hit is 3 (4 upgraded), 5 (6) in the back row');
+  t.deep([opOf('kuro_rain_of_strokes', dmg).n, opOf('kuro_rain_of_strokes', hitsOp).n, opOf('kuro_rain_of_strokes', dmg, true).n, opOf('kuro_rain_of_strokes', hitsOp, true).n], [4, 4, 5, 5], 'each Rain hit is 4 (5 upgraded), 6 (7) in the back row');
   t.eq(opOf('kuro_rain_of_strokes', hitsOp).tgt, 'random', 'Rain of Strokes rolls a target per hit');
   t.eq(opOf('kuro_rain_of_strokes', hitsOp).consume.upTo, 4, 'and spends what it counted');
   t.deep(table('kuro_running_script', dmg, 'n', [0, 1, 2, 3, 4].map((n) => ({ skills: n }))), [2, 5, 8, 11, 11], 'Running Script: 2, +3 per Skill played this turn, three at most');
   t.deep(table('kuro_running_script', dmg, 'n', [0, 1, 2, 3, 4].map((n) => ({ skills: n })), true), [2, 6, 10, 14, 14], 'Running Script+: +4 per Skill');
-  t.deep(table('kuro_grand_flourish', dmg, 'n', sumiStates([0, 1, 4, 8])), [0, 5, 20, 40], 'Grand Flourish: 5 per Sumi, no cap');
-  t.deep(table('kuro_grand_flourish', dmg, 'n', sumiStates([0, 1, 4, 8]), true), [0, 6, 24, 48], 'Grand Flourish+: 6 per Sumi');
+  t.deep(table('kuro_grand_flourish', dmg, 'n', sumiStates([0, 1, 4, 8])), [3, 8, 23, 43], 'Grand Flourish: 3 plus 5 per Sumi, no cap');
+  t.deep(table('kuro_grand_flourish', dmg, 'n', sumiStates([0, 1, 4, 8]), true), [3, 9, 27, 51], 'Grand Flourish+: 3 plus 6 per Sumi');
   t.eq(opOf('kuro_grand_flourish', dmg).consume, 'sumi', 'Grand Flourish spends all Sumi');
-  t.deep(table('kuro_inkwash_sanctum', blk, 'n', sumiStates([0, 2, 5])), [0, 6, 15], 'Sanctum: 3 Block per Sumi to both');
-  t.deep(table('kuro_inkwash_sanctum', blk, 'n', sumiStates([0, 2, 5]), true), [0, 8, 20], 'Sanctum+: 4 per Sumi');
+  t.deep(table('kuro_inkwash_sanctum', blk, 'n', sumiStates([0, 2, 5])), [3, 9, 18], 'Sanctum: 3 Block and 3 per Sumi to both');
+  t.deep(table('kuro_inkwash_sanctum', blk, 'n', sumiStates([0, 2, 5]), true), [3, 11, 23], 'Sanctum+: 3 and 4 per Sumi');
   t.eq(opOf('kuro_inkwash_sanctum', blk).tgt, 'both', 'Sanctum covers both heroes');
   t.deep(cards.filter((c) => anyOp(c, (o) => o.op === 'dmg' && o.n === 0)).map((c) => c.id), [], 'no card deals a flat zero');
 });
@@ -457,7 +457,7 @@ t.test('numbers: Blight multipliers and cash-ins (Rot Script, Nightshade, Inkblo
   const rep = (up) => flatOps(fxOf(inf, up)).find((o) => o.op === 'repeat');
   t.deep([0, 1, 2, 3].map((x) => evalV(rep(false).n, { X: x })), [0, 1, 2, 3], 'Inkfall Inferno repeats X times');
   t.deep([0, 1, 2, 3].map((x) => evalV(rep(true).n, { X: x })), [0, 1, 2, 3], 'and so does the upgrade (it hits harder instead: the text cannot show a hidden extra round)');
-  t.deep([rep(false).do[0].n, rep(true).do[0].n, rep(false).do[1].n, rep(true).do[1].n], [3, 4, 1, 1], 'Inferno: 3 damage (4 upgraded) and 1 Burn per Energy to every enemy');
+  t.deep([rep(false).do[0].n, rep(true).do[0].n, rep(false).do[1].n, rep(true).do[1].n], [4, 5, 1, 1], 'Inferno: 4 damage (5 upgraded) and 1 Burn per Energy to every enemy');
   t.ok(rep(false).do.every((o) => o.tgt === 'all'), 'every Inferno op hits all enemies');
 });
 
@@ -523,7 +523,9 @@ const TYPICAL_STATUS = { sumi: 2.5, poison: 4, burn: 3, might: 2, thorns: 2, bul
 const TGT_MUL = { all: 1.8, both: 1.6 };
 const ENEMY_TGT = ['enemy', 'all', 'random', 'lowest', 'others'];
 const RATE = { poison: 1.8, burn: 1.5, mark: 3, stun: 6 };
-const SELF_RATE = { sumi: 2.5, might: 3, dodge: 3, thorns: 1.5, bulwark: 4, regen: 2, taunt: 2 };
+// A stack of Dodge is 6 points (it was 3): it cancels a whole hit of any size and stacks across turns. The balance bot measured Ghost Ink (2 Dodge for
+// 1 Energy) as the strongest common in the game, which the old price of 3 a stack had put in the bottom half of its band.
+const SELF_RATE = { sumi: 2.5, might: 3, dodge: 6, thorns: 1.5, bulwark: 4, regen: 2, taunt: 2 };
 const HOOK_T = { turnStart: 3.5, turnEnd: 3.5, onPlay: 4, onDamaged: 3, onKill: 2.5, onSwap: 2.5, onExhaust: 3, onShuffle: 1.5, combatStart: 1, onHeroDown: 0.3 };
 function vCount(v, ctx, finisher) {
   if (v.per === 'status') return v.who === 'ally' ? 2 : (v.s === 'sumi' && finisher ? 4 : (TYPICAL_STATUS[v.s] || 2));
@@ -636,6 +638,7 @@ t.test('budget: every card and every upgrade sits in its cost band (see the mode
     });
   });
   t.ok(report.length === cards.length * 2, 'every card was valued');
+  if (process.env.RB_TABLE) { console.log('card value per Energy (or per play for cost 0), base then upgrade:'); cards.forEach((c) => { const a = pointsOf(c, false), b = pointsOf(c, true); const va = c.type === 'power' || costOf(c, false) !== 0 ? a.perEnergy : a.value, vb = c.type === 'power' || costOf(c, true) !== 0 ? b.perEnergy : b.value; const [lo, hi] = bandOf(c, false), [ulo, uhi] = bandOf(c, true); console.log(c.id.padEnd(26) + c.rarity[0] + ' ' + String(c.cost).padEnd(2) + ' ' + va.toFixed(1).padStart(5) + ' [' + lo + ',' + hi.toFixed(1) + ']  up ' + vb.toFixed(1).padStart(5) + ' [' + ulo + ',' + uhi.toFixed(1) + ']'); }); }
 });
 
 t.test('budget: an upgrade is never worth less than its base, and never a runaway', () => {
@@ -847,7 +850,7 @@ function engineSuite(g) {
     t.eq(kuroOf(C).block, 6, 'Ink Cloak in the back row: 6');
     C = play('kuro_grand_flourish', 0, false, (X) => { kuroOf(X).st.sumi = 4; });
     t.eq(kuroOf(C).st.sumi || 0, 0, 'Grand Flourish spends every Sumi');
-    t.eq(C.enemies[0].maxHp - C.enemies[0].hp, 20 + 2, 'and deals 5 per Sumi plus the back row bonus');
+    t.eq(C.enemies[0].maxHp - C.enemies[0].hp, 3 + 20 + 2, 'and deals 3 plus 5 per Sumi plus the back row bonus');
     C = play('kuro_plague_garden', 0, false);
     t.eq(C.powers.length, 1, 'a power goes to the powers zone');
     C.endTurn();
@@ -902,7 +905,7 @@ function engineSuite(g) {
     ({ C, cards: cs } = scenario(['kuro_rain_of_strokes'], { sumi: 4, enemies: 1 }));
     let ev = kuroPlay(C, cs[0]);
     t.eq(hitsOn(ev).length, 5, 'Rain of Strokes at 4 Sumi lands 5 hits');
-    t.eq(lost(C.enemies[0]), 5 * (3 + 2), 'each is 3 plus the +2 back row bonus (25 in all)');
+    t.eq(lost(C.enemies[0]), 5 * (4 + 2), 'each is 4 plus the +2 back row bonus (30 in all)');
     t.eq(kuroOf(C).st.sumi || 0, 0, 'and spends the Sumi');
     ({ C, cards: cs } = scenario(['kuro_rain_of_strokes'], { sumi: 9, enemies: 1 }));
     ev = kuroPlay(C, cs[0]);
@@ -921,11 +924,11 @@ function engineSuite(g) {
     t.eq(kuroOf(C).st.sumi, 1, 'the two Sumi are spent and Steady Hand pays 1 back for playing a Skill');
     ({ C, cards: cs } = scenario(['kuro_inkwash_sanctum'], { sumi: 4, energy: 3 }));
     kuroPlay(C, cs[0]);
-    t.deep(C.heroes.map((h) => h.block), [12, 12], 'Inkwash Sanctum: 3 Block per Sumi to both heroes');
+    t.deep(C.heroes.map((h) => h.block), [15, 15], 'Inkwash Sanctum: 3 Block plus 3 per Sumi to both heroes');
     t.eq(kuroOf(C).st.sumi, 1, 'all Sumi spent, then Steady Hand');
     ({ C, cards: cs } = scenario(['kuro_grand_flourish'], { sumi: 6, energy: 3, enemies: 1 }));
     kuroPlay(C, cs[0]);
-    t.eq(lost(C.enemies[0]), 30 + 2, 'Grand Flourish at 6 Sumi: 30 plus the row bonus');
+    t.eq(lost(C.enemies[0]), 3 + 30 + 2, 'Grand Flourish at 6 Sumi: 3 plus 30 plus the row bonus');
     t.eq(kuroOf(C).st.sumi || 0, 0, 'and every Sumi is spent');
     ({ C, cards: cs } = scenario(['kuro_first_stroke'], { sumi: 1 }));
     kuroPlay(C, cs[0]);
@@ -984,11 +987,11 @@ function engineSuite(g) {
     t.eq(C.enemies[0].st.burn, 6, 'Slow Match on turn 3: Burn 6 (twice the turn)');
     ({ C, cards: cs } = scenario(['kuro_inkfall_inferno'], { energy: 3 }));
     kuroPlay(C, cs[0]);
-    t.ok(C.enemies.every((e) => lost(e) === 3 * (3 + 2) && e.st.burn === 3), 'Inkfall Inferno at X = 3: three rounds of (3 + 2) to every enemy and Burn 3');
+    t.ok(C.enemies.every((e) => lost(e) === 3 * (4 + 2) && e.st.burn === 3), 'Inkfall Inferno at X = 3: three rounds of (4 + 2) to every enemy and Burn 3');
     t.eq(C.energy, 0, 'it spends every Energy');
     ({ C, cards: cs } = scenario(['kuro_inkfall_inferno'], { energy: 1, up: true }));
     kuroPlay(C, cs[0]);
-    t.ok(C.enemies.every((e) => lost(e) === 4 + 2 && e.st.burn === 1), 'Inkfall Inferno+ at X = 1: (4 + 2) and Burn 1');
+    t.ok(C.enemies.every((e) => lost(e) === 5 + 2 && e.st.burn === 1), 'Inkfall Inferno+ at X = 1: (5 + 2) and Burn 1');
   });
 
   t.test('engine: powers and hooks (Creeping Ink, Plague Garden, Epilogue Flame, Scene Change, Well of Ink, Ink Reservoir, Second Edition)', () => {
@@ -1024,7 +1027,7 @@ function engineSuite(g) {
     C.enemies[0].hp = 1;
     kuroPlay(C, cs[0]); kuroPlay(C, cs[1], 0);
     t.ok(C.enemies[0].down, 'the first enemy fell');
-    t.eq(C.enemies[1].st.burn, 3, 'Epilogue Flame: the survivor burns for 3');
+    t.eq(C.enemies[1].st.burn, 2 + 3, 'Epilogue Flame: the survivor burns for 2 when it is played and 3 more when the first falls');
     ({ C, cards: cs } = scenario(['kuro_epilogue_flame'], { enemies: 2, energy: 3 }));
     kuroPlay(C, cs[0]);
     C.enemies[0].hp = 1; C.enemies[0].st.poison = 5;
@@ -1041,9 +1044,9 @@ function engineSuite(g) {
     ({ C, cards: cs } = scenario(['kuro_ink_reservoir', 'kuro_ink_ward', 'kuro_redraft'], { energy: 5 }));
     kuroPlay(C, cs[0]);
     kuroPlay(C, cs[1]);
-    t.eq(kuroOf(C).st.sumi, 2, 'Ink Reservoir: a Skill gives 1 on its own plus 1 from Steady Hand');
+    t.eq(kuroOf(C).st.sumi, 2 + 1 + 1, 'Ink Reservoir: 2 Sumi when it is played, then a Skill gives 1 on its own plus 1 from Steady Hand');
     kuroPlay(C, cs[2]); if (C.pending) chooseAll(C, 0);
-    t.eq(kuroOf(C).st.sumi, 3, 'a second Skill gives 1 more (Steady Hand only counts the first)');
+    t.eq(kuroOf(C).st.sumi, 2 + 1 + 1 + 1, 'a second Skill gives 1 more (Steady Hand only counts the first)');
     for (let seed = 1; seed <= 6; seed++) {
       const well = inst('kuro_well_of_ink', 0);
       const K = create([well].concat(FILLERS.map((id) => inst(id, 0))), false, seed);
@@ -1143,11 +1146,11 @@ function engineSuite(g) {
     t.deep(C.heroes.map((h) => h.block), [4, 4], 'Shared Umbrella: 4 Block for both heroes');
     ({ C, cards: cs } = scenario(['kuro_ghost_ink']));
     kuroPlay(C, cs[0]);
-    t.eq(C.heroes.find((h) => h.id === 'hanae').st.dodge, 2, 'Ghost Ink: the ally gains 2 Dodge');
+    t.eq(C.heroes.find((h) => h.id === 'hanae').st.dodge, 1, 'Ghost Ink: the ally gains 1 Dodge');
     t.ok(!kuroOf(C).st.dodge, 'Kuro gains none at base');
     ({ C, cards: cs } = scenario(['kuro_ghost_ink'], { up: true }));
     kuroPlay(C, cs[0]);
-    t.deep([C.heroes.find((h) => h.id === 'hanae').st.dodge, kuroOf(C).st.dodge], [2, 1], 'Ghost Ink+: the ally 2 Dodge and Kuro 1');
+    t.deep([C.heroes.find((h) => h.id === 'hanae').st.dodge, kuroOf(C).st.dodge || 0, kuroOf(C).block], [1, 0, 3], 'Ghost Ink+: the ally 1 Dodge and Kuro 3 Block');
     ({ C, cards: cs } = scenario(['kuro_ink_cloak'], { kuroFront: true, up: true }));
     kuroPlay(C, cs[0]);
     t.eq(kuroOf(C).block, 14, 'Ink Cloak+ in front: 8 plus 6');

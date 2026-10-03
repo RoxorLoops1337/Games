@@ -22,7 +22,7 @@
 //   SCRIBE  Card manipulation, and it works on the WHOLE shared deck, the partner's cards and the curses enemies add included.
 //           Skim the Scroll (tutor from the top), Redraft (cycle), Strikethrough (exhaust junk into Block and Sumi), Midnight Oil (the
 //           only Energy, paid in HP), Flip the Page (a swap that draws), Slow Match (retain, grows with the turn), Second Edition
-//           (copy up to three cards, powers and the partner's cards included), Scene Change (a swap engine).
+//           (copy up to two cards, three upgraded, powers and the partner's cards included), Scene Change (a swap engine).
 //
 // TWO ROWS. Kuro wants the back row but is not helpless in front (the partner may be a back row hero, or fall): Ink Cloak doubles its
 // Block there, Cinder Note burns hotter, Ink Flick cantrips, Flip the Page and Scene Change turn the swap itself into value.
@@ -155,8 +155,8 @@
     },
     kuro_ghost_ink: {
       name: 'Ghost Ink', hero: 'kuro', type: 'skill', rarity: 'common', cost: 1,
-      fx: [{ op: 'status', s: 'dodge', n: 2, tgt: 'ally' }],
-      up: { fx: [{ op: 'status', s: 'dodge', n: 2, tgt: 'ally' }, { op: 'status', s: 'dodge', n: 1, tgt: 'self' }] },
+      fx: [{ op: 'status', s: 'dodge', n: 1, tgt: 'ally' }],
+      up: { fx: [{ op: 'status', s: 'dodge', n: 1, tgt: 'ally' }, { op: 'block', n: 3, tgt: 'self' }] },
       kw: [], slots: ['blue'], art: { m: 'spirit_orb', c: 'moon' },
     },
 
@@ -191,12 +191,12 @@
     kuro_rain_of_strokes: {
       name: 'Rain of Strokes', hero: 'kuro', type: 'attack', rarity: 'uncommon', cost: 2,
       fx: [
-        { op: 'dmg', n: 3, tgt: 'random' },
-        { op: 'dmg', n: 3, hits: { per: 'status', s: 'sumi', upTo: 4 }, tgt: 'random', consume: { s: 'sumi', upTo: 4 } },
-      ],
-      up: { fx: [
         { op: 'dmg', n: 4, tgt: 'random' },
         { op: 'dmg', n: 4, hits: { per: 'status', s: 'sumi', upTo: 4 }, tgt: 'random', consume: { s: 'sumi', upTo: 4 } },
+      ],
+      up: { fx: [
+        { op: 'dmg', n: 5, tgt: 'random' },
+        { op: 'dmg', n: 5, hits: { per: 'status', s: 'sumi', upTo: 4 }, tgt: 'random', consume: { s: 'sumi', upTo: 4 } },
       ] },
       kw: [], slots: ['red', 'green'], art: { m: 'sword_rain', c: 'azure', hero: true },
     },
@@ -270,15 +270,16 @@
     // ------------------------------------------------------------------ rares (8)
     kuro_grand_flourish: {
       name: 'Grand Flourish', hero: 'kuro', type: 'attack', rarity: 'rare', cost: 2,
-      fx: [{ op: 'dmg', n: { per: 'status', s: 'sumi', mul: 5 }, tgt: 'enemy', consume: 'sumi' }],
-      up: { fx: [{ op: 'dmg', n: { per: 'status', s: 'sumi', mul: 6 }, tgt: 'enemy', consume: 'sumi' }] },
+      // a floor of 3, so a Flourish with the Sumi spent elsewhere is still a hit (at 2 Sumi it was a 2 Energy card for 10)
+      fx: [{ op: 'dmg', n: { base: 3, per: 'status', s: 'sumi', mul: 5 }, tgt: 'enemy', consume: 'sumi' }],
+      up: { fx: [{ op: 'dmg', n: { base: 3, per: 'status', s: 'sumi', mul: 6 }, tgt: 'enemy', consume: 'sumi' }] },
       kw: ['retain'], slots: ['red', 'gold'], art: { m: 'calligraphy', c: 'gold', hero: true },
       flavor: 'The signature at the bottom is always the sharpest part.',
     },
     kuro_inkfall_inferno: {
       name: 'Inkfall Inferno', hero: 'kuro', type: 'attack', rarity: 'rare', cost: 'X',
-      fx: [{ op: 'repeat', n: { per: 'X' }, do: [{ op: 'dmg', n: 3, tgt: 'all' }, { op: 'status', s: 'burn', n: 1, tgt: 'all' }] }],
-      up: { fx: [{ op: 'repeat', n: { per: 'X' }, do: [{ op: 'dmg', n: 4, tgt: 'all' }, { op: 'status', s: 'burn', n: 1, tgt: 'all' }] }] },
+      fx: [{ op: 'repeat', n: { per: 'X' }, do: [{ op: 'dmg', n: 4, tgt: 'all' }, { op: 'status', s: 'burn', n: 1, tgt: 'all' }] }],
+      up: { fx: [{ op: 'repeat', n: { per: 'X' }, do: [{ op: 'dmg', n: 5, tgt: 'all' }, { op: 'status', s: 'burn', n: 1, tgt: 'all' }] }] },
       kw: [], slots: ['red', 'green'], art: { m: 'meteor', c: 'crimson' },
       flavor: 'Some pages you do not turn. You set them alight.',
     },
@@ -291,22 +292,25 @@
     },
     kuro_epilogue_flame: {
       name: 'Epilogue Flame', hero: 'kuro', type: 'power', rarity: 'rare', cost: 2,
-      fx: [{ op: 'hook', on: 'onKill', filter: { hero: 'any' }, fx: [{ op: 'status', s: 'burn', n: 3, tgt: 'all' }] }],
-      up: { fx: [{ op: 'hook', on: 'onKill', filter: { hero: 'any' }, fx: [{ op: 'status', s: 'burn', n: 4, tgt: 'all' }] }] },
+      // a power that does nothing until the first kill lost to every cheap card in short fights, so it lights the line at once
+      fx: [{ op: 'status', s: 'burn', n: 2, tgt: 'all' }, { op: 'hook', on: 'onKill', filter: { hero: 'any' }, fx: [{ op: 'status', s: 'burn', n: 3, tgt: 'all' }] }],
+      up: { fx: [{ op: 'status', s: 'burn', n: 3, tgt: 'all' }, { op: 'hook', on: 'onKill', filter: { hero: 'any' }, fx: [{ op: 'status', s: 'burn', n: 4, tgt: 'all' }] }] },
       kw: [], slots: ['gold', 'green'], art: { m: 'fire', c: 'ink' }, locked: true,
       flavor: 'Every story earns a bonfire at the end.',
     },
     kuro_ink_reservoir: {
       name: 'Ink Reservoir', hero: 'kuro', type: 'power', rarity: 'rare', cost: 2,
-      fx: [{ op: 'hook', on: 'onPlay', filter: { type: 'skill' }, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
+      // two Sumi on the spot (it cost 2 and paid nothing until the next Skill, 4.5 a Energy against a band of 4 to 12)
+      fx: [{ op: 'status', s: 'sumi', n: 2, tgt: 'self' }, { op: 'hook', on: 'onPlay', filter: { type: 'skill' }, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
       up: { cost: 1 },
       kw: [], slots: ['gold', 'any'], art: { m: 'koi', c: 'indigo' },
       flavor: 'A deep well. Do not ask what writes back.',
     },
     kuro_second_edition: {
-      name: 'Second Edition', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 2,
-      fx: [{ op: 'pick', from: 'hand', n: 3, optional: true, then: 'copy' }],
-      up: { fx: [{ op: 'pick', from: 'hand', n: 4, optional: true, then: 'copy' }] },
+      name: 'Second Edition', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 1,
+      // it cost 2, which left one Energy to play the copies it made (the worst Kuro rare in simulation); at 1 it is a real engine
+      fx: [{ op: 'pick', from: 'hand', n: 2, optional: true, then: 'copy' }],
+      up: { fx: [{ op: 'pick', from: 'hand', n: 3, optional: true, then: 'copy' }] },
       kw: ['exhaust'], slots: ['any', 'green'], art: { m: 'book', c: 'moon' }, locked: true,
       flavor: 'Revised, expanded, and suspiciously familiar.',
     },
@@ -319,8 +323,9 @@
     },
     kuro_inkwash_sanctum: {
       name: 'Inkwash Sanctum', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 2,
-      fx: [{ op: 'block', n: { per: 'status', s: 'sumi', mul: 3 }, tgt: 'both', consume: 'sumi' }],
-      up: { fx: [{ op: 'block', n: { per: 'status', s: 'sumi', mul: 4 }, tgt: 'both', consume: 'sumi' }] },
+      // a floor of 3 Block, so it is a wall even with the Sumi spent on something else (it was empty at 0 and weak at 2)
+      fx: [{ op: 'block', n: { base: 3, per: 'status', s: 'sumi', mul: 3 }, tgt: 'both', consume: 'sumi' }],
+      up: { fx: [{ op: 'block', n: { base: 3, per: 'status', s: 'sumi', mul: 4 }, tgt: 'both', consume: 'sumi' }] },
       kw: [], slots: ['blue', 'any'], art: { m: 'lotus', c: 'azure' },
       flavor: 'The safest place in any story is the one nobody can read.',
     },

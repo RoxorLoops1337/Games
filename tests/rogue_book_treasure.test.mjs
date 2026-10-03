@@ -23,7 +23,7 @@
 //   flat damage 1.3 per point (a card averages a bit more than one hit), Block 1, healing 1.4 per HP (HP lasts across fights; a gem with both
 //   flat Block and flat heal counts the better of the two), an extra
 //   hit 6, one Energy 8 (cost -1 is worth 6.5: it is ignored on 0 cost and X cards), a card drawn 3.5, Might 4, Thorns 2.5, Dodge 3.5,
-//   Ritual 10, gold 0.7, Ink 3, a pick from the discard pile 5, a resource point 3 (a list of conditions counts as its best branch), Retain 2.5, losing Exhaust 3, Poison 1.8; a splash
+//   Ritual 7, gold 0.7, Ink 3, a pick from the discard pile 5, a resource point 3 (a list of conditions counts as its best branch), Retain 2.5, losing Exhaust 3, Poison 1.8; a splash
 //   op counts x1.8 (two victims), Block for both heroes x2, life steal adds 0.7 per point; a row gated gem is worth 75 percent of its raw value.
 //   BANDS: tier 1 in [2, 5.5], tier 2 in [5, 10.5], tier 3 in [6.5, 16]; per colour the tier means must climb by at least 1.4 a tier.
 //   The model is deliberately crude: it exists to catch a typo that makes a gem twice as strong or a tier that is not an upgrade.
@@ -159,7 +159,7 @@ t.test('coverage: every mod key, every combat hook (combatEnd included), every r
   t.ok(count(relics, (r) => r.mods && r.mods.freeSwaps) >= 1, 'a free swap relic');
   t.ok(count(relics, (r) => hooksOf(r).some((h) => flatOps(h.fx).some((o) => o.op === 'cond' && o.if && o.if.row))) >= 1, 'a relic that reads the row with a cond');
   t.ok(count(relics, (r) => hooksOf(r).some((h) => L.runHooks.indexOf(h.on) >= 0 && h.fx.some((o) => o.op === 'paint' || o.op === 'ink' || o.op === 'addBrush'))) >= 5, 'at least 5 map relics (paint, Ink or Brush hooks)');
-  t.ok(count(relics, (r) => r.mods && (r.mods.inkMax || r.mods.startInk || r.mods.wellInk)) >= 4, 'at least 4 Ink stock relics');
+  t.ok(count(relics, (r) => r.mods && (r.mods.inkMax || r.mods.startInk || r.mods.wellInk)) >= 3, 'at least 3 Ink stock relics (inkstone_weight, ink_jar, well_kasa: the Gourd is a Might trade now)');
   t.ok(count(relics, (r) => hooksOf(r).some((h) => h.on === 'onRest')) >= 1 && count(relics, (r) => r.mods && r.mods.campActions) >= 1, 'camp relics');
   t.ok(count(relics, (r) => hooksOf(r).some((h) => h.on === 'onShopEnter')) >= 1 && count(relics, (r) => r.mods && r.mods.priceMul) >= 1, 'shop relics');
   ['bloom', 'sumi', 'ward', 'charge'].forEach((s) => t.ok(count(relics, (r) => JSON.stringify(hooksOf(r)).indexOf('"' + s + '"') >= 0) >= 2, `at least 2 relics use ${s}`));
@@ -174,10 +174,11 @@ t.test('economy guards: Energy and hand size only on boss relics, always with a 
   byRarity('boss').forEach((r) => {
     const m = r.mods || {};
     const drawback = m.healMul < 0 || m.goldMul < 0 || m.hand < 0 || m.startInk < 0 || m.inkMax < 0 || m.energy < 0 || m.priceMul > 0
-      || hooksOf(r).some((h) => flatOps(h.fx).some((o) => o.op === 'addCurse' || o.op === 'hurt' || (o.op === 'add' && /^curse_/.test(o.card))));
+      || hooksOf(r).some((h) => flatOps(h.fx).some((o) => o.op === 'addCurse' || o.op === 'hurt' || (o.op === 'add' && /^curse_/.test(o.card)) || (o.op === 'status' && DATA.isDebuff(o.s) && ['self', 'ally', 'both', 'front', 'back'].indexOf(o.tgt) >= 0)));
     t.ok(drawback, `${r.id} has a drawback in its data`);
     t.ok(/\bbut\b/i.test(r.text), `${r.id}: the text says "but"`);
-    t.ok(Object.keys(m).length + hooksOf(r).length >= 1 && (Object.keys(m).length + hooksOf(r).length >= 2 || Object.keys(m).length === 2), `${r.id} pairs a boon with its price`);
+    const parts = Object.keys(m).length + hooksOf(r).reduce((n, h) => n + flatOps(h.fx).length, 0);
+    t.ok(parts >= 2, `${r.id} pairs a boon with its price (${parts} parts)`);
   });
   const stack = DATA.modsFor(relics.filter((r) => r.rarity !== 'boss').map((r) => r.id), 0);
   t.eq(stack.energy, 3, 'no non-boss relic touches Energy');
@@ -224,7 +225,7 @@ const ROWWORD = { dmgAdd: /damage/i, blockAdd: /block/i, startBlock: /block/i, r
 const TRIG = {
   combatStart: /start(s)? (of )?(each )?(combat|fight)/i, combatEnd: /end of (each|the) (combat|fight)/i,
   turnStart: /start of (your|each|every) turn|turn start|first turn|\d(st|nd|rd|th) turn|each turn|every turn|\ba turn\b/i, turnEnd: /end of (your|each) turn/i,
-  onPlay: /\bplay(s)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /falls?\b/i, onShuffle: /reshuffle/i, onExhaust: /exhaust/i,
+  onPlay: /\bplay(s|ed)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /falls?\b/i, onShuffle: /reshuffle/i, onExhaust: /exhaust/i,
   onPickup: /when you take this|taking this/i, onChapterStart: /chapter/i, onRest: /rest/i, onPaint: /paint/i, onFightWon: /fight|winning/i, onShopEnter: /shop/i,
 };
 const TGTWORD = { all: /\ball\b/i, both: /both|heroes|each/i, ally: /ally/i, front: /front/i };
@@ -263,7 +264,7 @@ function summary(r) {
       if (o.op === 'addBrush') needWord(/random/i, 'random brush');
       if (o.op === 'upgradeCard' && o.random) needWord(/random/i, 'random upgrade');
       if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onDamaged') needWord(/attacker/i, 'attacker');
-      if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onPlay') needWord(/target/i, 'same target');
+      if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onPlay') needWord(/target|more damage/i, 'same target');
       if (o.tgt && TGTWORD[o.tgt]) needWord(TGTWORD[o.tgt], `target ${o.tgt}`);
       if (o.op === 'cond' && o.if) {
         needWord(/if|at \d|with|when|first turn/i, 'condition');
@@ -304,10 +305,10 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   }));
   // a sample checked against exact machine phrases (eyeballed once, now pinned)
   const say = (id, i) => DATA.hookText(DATA.relics[id].hooks[i || 0]);
-  t.eq(say('rice_ball'), 'Whenever you win a fight, heal both heroes for 2 HP.', 'rice_ball');
+  t.eq(say('rice_ball'), 'Whenever you win a fight, heal both heroes for 2 HP and heal the weakest hero for 2 HP.', 'rice_ball');
   t.eq(say('pilgrim_compass'), 'Every 5th time you paint a hex, gain 1 Ink.', 'pilgrim_compass');
   t.eq(say('silver_bell'), 'The next time you are hit, both heroes gain 6 Block.', 'silver_bell reads as a once per fight hook');
-  t.eq(say('fox_mask'), 'Once per turn, whenever you swap rows, gain 1 Dodge.', 'fox_mask (the actor is the new front hero)');
+  t.eq(say('fox_mask'), 'Once per turn, every 2nd time you swap rows, gain 1 Dodge.', 'fox_mask (the actor is the new front hero)');
   t.eq(say('mirror_of_two_faces'), 'Once per turn, whenever you swap rows, gain 1 Energy.', 'mirror_of_two_faces');
   t.eq(say('prism_crown'), 'Once per turn, whenever you play a card with 2 or more gems, gain 1 Energy.', 'prism_crown');
   t.eq(say('phoenix_feather'), 'The next time a hero falls, revive that hero with 25% HP.', 'phoenix_feather');
@@ -315,8 +316,8 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   t.eq(say('sands_of_patience'), 'At the start of every 3rd turn, gain 1 Energy and draw 1 card.', 'sands_of_patience');
   t.eq(say('thunder_wheel'), 'Every 3rd time you play an Attack, gain 2 Charge and deal 4 damage to all enemies.', 'thunder_wheel');
   t.eq(say('nightlong_inkwell'), 'At the end of your turn, apply 2 Poison to all enemies.', 'nightlong_inkwell');
-  t.eq(say('tyrants_crown'), 'When you take this, add 2 curses to your deck.', 'tyrants_crown pays its price on pickup');
-  t.eq(say('blood_moon_vow'), 'At the start of your turn, both heroes lose 1 HP.', 'blood_moon_vow');
+  t.eq(say('tyrants_crown'), 'When you take this, add 3 curses to your deck.', 'tyrants_crown pays its price on pickup');
+  t.eq(say('blood_moon_vow'), 'At the start of your turn, both heroes lose 2 HP.', 'blood_moon_vow');
   t.eq(say('apothecary_jar'), 'At the end of combat, heal both heroes for 3 HP.', 'apothecary_jar is a combatEnd hook');
   t.eq(say('longbow_of_reach'), 'Up to 2 times per turn, whenever you play an Attack, Back: deal 3 damage to the same target.', 'longbow_of_reach reads the row');
   t.eq(JSON.stringify(DATA.relics.formation_scroll.rows), '{"front":{"startBlock":3},"back":{"blockAdd":1}}', 'formation_scroll rows');
@@ -389,7 +390,7 @@ function valueOfOps(ops) {
     else if (o.op === 'gold') v += 0.7 * n;
     else if (o.op === 'ink') v += 3 * n;
     else if (o.op === 'pick') v += 5;
-    else if (o.op === 'status') v += n * ({ might: 4, thorns: 2.5, dodge: 3.5, ritual: 10, bulwark: 3, bloom: 3, sumi: 3, ward: 3, charge: 3 }[o.s] || 2);
+    else if (o.op === 'status') v += n * ({ might: 4, thorns: 2.5, dodge: 3.5, ritual: 7, bulwark: 3, bloom: 3, sumi: 3, ward: 3, charge: 3 }[o.s] || 2);
     else if (o.op === 'cond') condBest = Math.max(condBest, valueOfOps(o.then), valueOfOps(o.else));
   });
   return v + condBest;
@@ -438,7 +439,7 @@ t.test('gem text: generated text is readable for every gem, and a hand written t
   t.eq(say('ember_ruby'), '+2 damage', 'ember_ruby'); t.eq(say('vanguard_garnet'), 'Front row: +3 damage', 'vanguard_garnet'); t.eq(say('twinfang_spinel'), '+1 hit', 'twinfang_spinel');
   t.eq(say('kirin_jasper'), 'Front row: +3 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block, +2 healing', 'tidewatch_sapphire'); t.eq(say('sanctum_iolite'), 'Both heroes gain 6 Block', 'sanctum_iolite'); t.eq(say('ironbark_sapphire'), '+3 Block, gain 4 Thorns', 'ironbark_sapphire');
   t.eq(say('featherlight_emerald'), 'Costs 1 less', 'featherlight_emerald'); t.eq(say('wellspring_tourmaline'), 'Gain 1 Energy', 'wellspring_tourmaline');
-  t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
+  t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('thornwake_lapis'), 'Gain 2 Thorns', 'thornwake_lapis'); t.eq(say('inkwell_amber'), 'Gain 1 Ink, 2 gold and 3 Regen', 'inkwell_amber'); t.eq(say('solstice_citrine'), 'Gain 1 Ritual, gain 2 Might', 'solstice_citrine'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
 });
 
 // ================================================================================================ 5 gems on cards
@@ -643,7 +644,7 @@ if (E) {
     const blockOf = (ev) => of(ev, 'block', (e) => e.dst.id === 'hanae').reduce((s, e) => s + e.amount, 0);
     t.eq(blockOf(base('skill', 'tidewatch_sapphire').ev) - blockOf(base('skill', null).ev), 3, 'tidewatch_sapphire: +3 Block');
     { const wounded = { hp: [40, 40] }; const a = base('heal', 'tidewatch_sapphire', wounded), b = base('heal', null, wounded); const amt = (r) => of(r.ev, 'heal').reduce((x, e) => x + e.amount, 0); t.eq(amt(a) - amt(b), 2, 'tidewatch_sapphire: +2 healing on a healing card'); }
-    { const r = base('skill', 'thornwake_lapis'); t.ok(of(r.ev, 'status', (e) => e.s === 'thorns' && e.dst.id === 'hanae' && e.delta === 1).length === 1, 'thornwake_lapis: +1 Thorns'); }
+    { const r = base('skill', 'thornwake_lapis'); t.ok(of(r.ev, 'status', (e) => e.s === 'thorns' && e.dst.id === 'hanae' && e.delta === 2).length === 1, 'thornwake_lapis: +2 Thorns'); }
     { const r = base('skill', 'mirrorlake_aquamarine'); t.eq(blockOf(r.ev), 7, 'mirrorlake_aquamarine: 5 + 2 Block'); t.ok(r.C.unit('hanae').st.dodge === 1, 'and a Dodge'); }
     { const r = base('skill', 'springwell_tanzanite'); t.eq(of(r.ev, 'heal').map((e) => e.dst.id).sort().join(), 'hanae,kuro', 'springwell_tanzanite: heals both heroes'); t.ok(of(r.ev, 'heal').every((e) => e.amount === 2), 'for 2 each'); }
     { const r = base('skill', 'ironbark_sapphire'); t.eq(blockOf(r.ev), 8, 'ironbark_sapphire: +3 Block'); t.eq(r.C.unit('hanae').st.thorns >= 4, true, 'and 4 Thorns'); }
@@ -666,12 +667,12 @@ if (E) {
     // gold
     { const r = base('attack', 'sunwake_topaz'); t.eq(r.C.unit('hanae').st.might, 1, 'sunwake_topaz: 1 Might'); }
     { const r = base('attack', 'coinluck_citrine'); t.eq(of(r.ev, 'gold').reduce((s, e) => s + e.n, 0), 4, 'coinluck_citrine: 4 gold'); }
-    { const r = base('attack', 'inkwell_amber'); t.eq(of(r.ev, 'ink').reduce((s, e) => s + e.n, 0), 1, 'inkwell_amber: 1 Ink'); t.eq(of(r.ev, 'gold').reduce((s, e) => s + e.n, 0), 3, 'inkwell_amber: 3 gold'); }
+    { const r = base('attack', 'inkwell_amber'); t.eq(of(r.ev, 'ink').reduce((s, e) => s + e.n, 0), 1, 'inkwell_amber: 1 Ink'); t.eq(of(r.ev, 'gold').reduce((s, e) => s + e.n, 0), 2, 'inkwell_amber: 2 gold'); t.eq(r.C.unit('hanae').st.regen, 3, 'inkwell_amber: and 3 Regen for the hero who played the card'); }
     { const has = (h, res) => { const C = mk({ heroes: [h, h === 'hanae' ? 'kuro' : 'hanae'], deck: [{ id: `zz_${h}_attack`, gems: ['heartflame_topaz'] }, ...Array.from({ length: 8 }, () => `zz_${h}_plain`)], seed: 2 }); C.unit(h).st[res] = 1; playAll(C, `zz_${h}_attack`); return C.unit(h).st[res] || 0; };
       t.eq(has('hanae', 'bloom'), 3 + 1, 'heartflame_topaz: Bloom 1 becomes 3 (plus 1 from her own passive after the play)'); t.eq(has('kuro', 'sumi'), 3, 'heartflame_topaz: Sumi 1 becomes 3');
       t.eq(has('suzu', 'ward'), 3, 'heartflame_topaz: Ward 1 becomes 3'); t.eq(has('raiga', 'charge'), 3, 'heartflame_topaz: Charge 1 becomes 3');
       const C = mk({ deck: [{ id: 'zz_hanae_attack', gems: ['heartflame_topaz'] }, ...Array.from({ length: 8 }, () => 'zz_hanae_plain')], seed: 2 }); playAll(C, 'zz_hanae_attack'); t.ok(!C.unit('hanae').st.sumi && !C.unit('hanae').st.ward && !C.unit('hanae').st.charge, 'heartflame_topaz: never adds a resource the hero does not use'); t.ok(!C.unit('hanae').st.bloom || C.unit('hanae').st.bloom === 1, 'heartflame_topaz: does nothing without a Bloom to build on (only the passive gives 1)'); }
-    { const r = base('attack', 'solstice_citrine'); t.eq(r.C.unit('hanae').st.ritual, 1, 'solstice_citrine: Ritual 1'); const mightBefore = r.C.unit('hanae').st.might || 0; r.C.endTurn(); t.eq(r.C.unit('hanae').st.might - mightBefore, 1, 'solstice_citrine: the Ritual pays 1 Might at the next turn start'); }
+    { const r = base('attack', 'solstice_citrine'); t.eq(r.C.unit('hanae').st.ritual, 1, 'solstice_citrine: Ritual 1'); t.eq(r.C.unit('hanae').st.might, 2, 'solstice_citrine: and 2 Might at once'); const mightBefore = r.C.unit('hanae').st.might || 0; r.C.endTurn(); t.eq(r.C.unit('hanae').st.might - mightBefore, 1, 'solstice_citrine: the Ritual pays 1 Might at the next turn start'); }
     { const back = base('attack', 'dusklight_amber', { front: 1 }); t.eq(of(back.ev, 'draw').reduce((s, e) => s + e.cards.length, 0), 2, 'dusklight_amber: draws 2 in the back row'); t.eq(back.C.unit('hanae').st.dodge, 1, 'dusklight_amber: and a Dodge in the back row');
       const front = base('attack', 'dusklight_amber'); t.eq(of(front.ev, 'draw').length, 0, 'dusklight_amber: nothing in the front row'); }
   });
@@ -796,9 +797,10 @@ if (E) {
     t.eq(W(null).maxEnergy, 3, '(control) 3 Energy'); t.eq(W(null).hand.length, 5, '(control) 5 cards'); t.deep(W(null).heroes.map((h) => h.block), [0, 0], '(control) no starting Block');
     t.eq(W('tyrants_crown').maxEnergy, 4, 'tyrants_crown: 4 Energy'); t.eq(W(['tyrants_crown', 'blood_moon_vow']).maxEnergy, 5, 'two Energy relics: 5');
     t.eq(W('book_of_falling_leaves').hand.length, 6, 'book_of_falling_leaves: 6 cards');
-    t.eq(W('ironclad_tsuba').hand.length, 4, 'ironclad_tsuba: 4 cards'); t.deep(W('ironclad_tsuba').heroes.map((h) => h.block), [4, 4], 'ironclad_tsuba: 4 Block each at the start of the turn');
+    t.eq(W('ironclad_tsuba').hand.length, 4, 'ironclad_tsuba: 4 cards'); t.deep(W('ironclad_tsuba').heroes.map((h) => h.block), [2, 2], 'ironclad_tsuba: 2 Block each at the start of the turn'); t.deep(W('ironclad_tsuba').heroes.map((h) => h.st.thorns), [3, 3], 'ironclad_tsuba: and 3 Thorns each from the first turn');
+    t.deep(W('bottomless_gourd').heroes.map((h) => [h.st.might, h.st.vulnerable]), [[3, 2], [3, 2]], 'bottomless_gourd: 3 Might and 2 Vulnerable on both heroes from the first turn'); t.eq(W('bottomless_gourd').hand.length, 5, 'bottomless_gourd: no change to the hand');
     t.deep(W('paper_umbrella').heroes.map((h) => h.block), [1, 1], 'paper_umbrella: 1 Block each');
-    t.deep(W(['paper_umbrella', 'ironclad_tsuba']).heroes.map((h) => h.block), [5, 5], 'startBlock relics add');
+    t.deep(W(['paper_umbrella', 'ironclad_tsuba']).heroes.map((h) => h.block), [3, 3], 'startBlock relics add');
     { const C = W('formation_scroll'); t.deep(C.heroes.map((h) => h.block), [3, 0], 'formation_scroll: the front hero starts with 3 Block, the back hero with none'); t.eq(C.hand.length, 5, 'formation_scroll: and it does not touch the hand size (only boss relics do)'); const D2 = W('formation_scroll', { front: 1 }); t.deep(D2.heroes.map((h) => h.block), [0, 3], 'formation_scroll follows the ROW, not the hero');
       const blockPlayed = (X, id) => { const c = X.hand.find((x) => x.id === id); return X.play(c.uid).filter((e) => e.type === 'block').reduce((a, e) => a + e.amount, 0); };
       t.eq(blockPlayed(W('formation_scroll'), 'zz_kuro_skill') - blockPlayed(W(null), 'zz_kuro_skill'), 1, 'formation_scroll: the back hero (Kuro) gains 1 more Block from a card'); t.eq(blockPlayed(W('formation_scroll'), 'zz_hanae_skill') - blockPlayed(W(null), 'zz_hanae_skill'), 0, 'formation_scroll: the front hero (Hanae) does not'); }
@@ -822,10 +824,10 @@ if (E) {
     const attackFirst = (C, id) => { const c = C.hand.find((x) => x.id === id); return C.play(c.uid, C.needsTarget(c.uid) ? C.legalTargets(c.uid)[0] : undefined); };
 
     // swap relics
-    { const C = R('fox_mask', { deck: D(P('hanae') + 'plain', P('kuro') + 'plain') }); C.swap(); t.eq(C.front().id, 'kuro', '(sanity) Kuro leads'); t.eq(C.front().st.dodge, 1, 'fox_mask: the new front hero has 1 Dodge'); t.ok(!C.back().st.dodge, 'and the hero who stepped back has none'); C.swap(); t.eq(C.front().st.dodge || 0, 0, 'fox_mask: once per turn (the paid swap grants nothing)'); }
+    { const C = R('fox_mask', { deck: D(P('hanae') + 'plain', P('kuro') + 'plain') }); C.swap(); t.eq(C.front().id, 'kuro', '(sanity) Kuro leads'); t.ok(!C.front().st.dodge && !C.back().st.dodge, 'fox_mask: the 1st swap of the fight grants nothing (every 2nd swap)'); C.swap(); t.eq(C.front().id, 'hanae', '(sanity) Hanae leads again'); t.eq(C.front().st.dodge, 1, 'fox_mask: the 2nd swap gives the new front hero 1 Dodge'); t.ok(!C.back().st.dodge, 'and the hero who stepped back has none'); C.swap(); C.swap(); t.eq(C.unit('hanae').st.dodge, 1, 'fox_mask: once per turn (the 4th swap is an even one too, but grants nothing more)'); t.ok(!C.unit('kuro').st.dodge, 'and Kuro never got one'); C.endTurn(); C.swap(); t.eq(C.unit('kuro').st.dodge || 0, 0, 'fox_mask: the 5th swap (next turn) is an odd one'); C.swap(); t.eq(C.unit('hanae').st.dodge, 1, 'fox_mask: the 6th swap pays again (the first Dodge was spent on the enemy phase)'); }
     { const C = R('mirror_of_two_faces', { deck: D(P('hanae') + 'plain') }); C.swap(); t.eq(C.energy, 4, 'mirror_of_two_faces: the free swap pays 1 Energy (3 + 1)'); C.swap(); t.eq(C.energy, 3, 'mirror_of_two_faces: the paid swap costs 1 and pays nothing (once per turn)'); C.endTurn(); C.swap(); t.eq(C.energy, 4, 'mirror_of_two_faces: it works again next turn'); }
     { const C = R('flute_of_changing_tunes', { deck: D(...Array.from({ length: 12 }, () => P('hanae') + 'plain')) }); const n = C.hand.length; C.swap(); t.eq(C.hand.length, n + 1, 'flute_of_changing_tunes: a swap draws 1'); C.swap(); t.eq(C.hand.length, n + 1, 'flute_of_changing_tunes: once per turn'); }
-    { const C = mk({ relics: ['fox_mask', 'flute_of_changing_tunes'], deck: D(P('hanae') + 'plain', P('kuro') + 'plain'), enemies: ['kappa'] }); t.ok(C.hand.length > 0, 'two swap relics stack without error'); C.swap(); t.ok(relicCount(C, 'fox_mask') === 1 && relicCount(C, 'flute_of_changing_tunes') === 1, 'both swap hooks fire on one swap'); }
+    { const C = mk({ relics: ['fox_mask', 'flute_of_changing_tunes'], deck: D(P('hanae') + 'plain', P('kuro') + 'plain'), enemies: ['kappa'] }); t.ok(C.hand.length > 0, 'two swap relics stack without error'); C.swap(); t.ok(relicCount(C, 'fox_mask') === 0 && relicCount(C, 'flute_of_changing_tunes') === 1, 'the flute fires on the 1st swap, the mask waits for the 2nd'); C.swap(); t.ok(relicCount(C, 'fox_mask') === 1 && relicCount(C, 'flute_of_changing_tunes') === 1, 'and the mask fires on the 2nd (the flute is once per turn)'); }
     // the card swap op counts as a swap
     { ED.add('cards', { zz_swapper: { hero: 'hanae', name: 'Probe Swapper', type: 'skill', rarity: 'common', cost: 0, fx: [{ op: 'swap' }], kw: ['innate'], slots: ['any'], art: { m: 'wind', c: 'azure' }, up: { cost: 0 } } }); const C = R('mirror_of_two_faces', { deck: D('zz_swapper', P('kuro') + 'plain') }); const c = C.hand.find((x) => x.id === 'zz_swapper'); C.play(c.uid); t.eq(C.energy, 4, 'a swap op on a card also pays out (and leaves the free swap alone)'); t.eq(C.canSwap().cost, 0, 'the free swap is still there'); }
     // hits and kills
@@ -845,6 +847,12 @@ if (E) {
     // playing cards
     { const C = R('longbow_of_reach', { deck: D(P('hanae') + 'plain', P('kuro') + 'plain'), front: 0, seed: 4 }); const k = C.hand.find((x) => x.id === P('kuro') + 'plain'); const before = evs(C, 'hit').length; C.play(k.uid, C.legalTargets(k.uid)[0]); const hits = evs(C, 'hit').slice(before); t.eq(hits.length, 2, 'longbow_of_reach: a back row Attack hits twice'); t.ok(hits[1].src === null && hits[1].raw === 3, 'longbow_of_reach: the extra hit is 3 unattributed damage to the same enemy'); t.eq(hits[1].dst.id, hits[0].dst.id, 'the same target');
       const F = R('longbow_of_reach', { deck: D(P('hanae') + 'plain', P('kuro') + 'plain'), front: 0, seed: 4 }); const h = F.hand.find((x) => x.id === P('hanae') + 'plain'); const b2 = evs(F, 'hit').length; F.play(h.uid, F.legalTargets(h.uid)[0]); t.eq(evs(F, 'hit').length - b2, 1, 'longbow_of_reach: nothing for the front row hero'); }
+    { // the text says "your first 2 Attacks each turn ... when played from the back row": the limit counts every Attack (whoever plays it), only a back row play gets the bonus
+      const mkL = () => R('longbow_of_reach', { deck: D(P('hanae') + 'attack', P('hanae') + 'attack', P('kuro') + 'attack'), front: 0, seed: 4 });
+      const hitsOf = (C, c) => { const n = evs(C, 'hit').length; C.play(c.uid, C.legalTargets(c.uid)[0]); return evs(C, 'hit').length - n; };
+      const L1 = mkL(); t.eq(hitsOf(L1, L1.hand.find((x) => x.id === P('kuro') + 'attack')), 2, 'longbow_of_reach: a back row Attack that is one of the first 2 Attacks of the turn gets the bonus');
+      const L2 = mkL(); L2.hand.filter((x) => x.id === P('hanae') + 'attack').forEach((h) => L2.play(h.uid, L2.legalTargets(h.uid)[0])); t.eq(hitsOf(L2, L2.hand.find((x) => x.id === P('kuro') + 'attack')), 1, 'longbow_of_reach: after two Attacks from the front row the back row Attack is the 3rd, so it gets nothing (the limit counts every Attack)');
+      L2.endTurn(); const k3 = L2.hand.find((x) => x.id === P('kuro') + 'attack'); if (k3) t.eq(hitsOf(L2, k3), 2, 'longbow_of_reach: and the count starts again next turn'); }
     { const C = R('battle_drum', { deck: D(P('hanae') + 'iheavy', P('hanae') + 'iheavy', P('hanae') + 'cheap', ...Array.from({ length: 8 }, () => P('hanae') + 'plain')), seed: 7 }); const heavies = C.hand.filter((x) => x.id === P('hanae') + 'iheavy'); t.eq(heavies.length, 2, '(sanity) both innate heavies are in hand'); const cheap = C.hand.find((x) => x.id === P('hanae') + 'plain');
       const n0 = C.hand.length; C.play(heavies[0].uid); t.eq(C.hand.length, n0 - 1 + 1, 'battle_drum: a 2 cost card draws 1'); C.energy = 5; C.play(heavies[1].uid); t.eq(relicCount(C, 'battle_drum'), 1, 'battle_drum: once per turn'); if (cheap) { const c1 = relicCount(C, 'battle_drum'); C.play(cheap.uid, C.legalTargets(cheap.uid)[0]); t.eq(relicCount(C, 'battle_drum'), c1, 'battle_drum: a 1 cost card does nothing'); } }
     { const C = R('hundred_petal_fan', { deck: D(P('hanae') + 'zero', P('hanae') + 'zero', P('hanae') + 'zero', ...Array.from({ length: 8 }, () => P('hanae') + 'plain')), seed: 2 }); const zs = C.hand.filter((x) => x.id === P('hanae') + 'zero'); zs.forEach((z) => C.play(z.uid, C.legalTargets(z.uid)[0])); t.eq(relicCount(C, 'hundred_petal_fan'), Math.min(2, zs.length), 'hundred_petal_fan: twice per turn at most'); t.ok(C.unit('hanae').st.bloom >= 2, 'hundred_petal_fan: Bloom for Hanae'); }
@@ -860,7 +868,7 @@ if (E) {
     { const C = R('pressed_petal', { deck: D(P('hanae') + 'plain') }); t.eq(C.unit('hanae').st.bloom, 1, 'pressed_petal: 1 Bloom at the first turn start'); C.endTurn(); t.eq(C.unit('hanae').st.bloom, 2, 'pressed_petal: and 1 more each turn'); }
     { const C = R('vial_of_spare_ink', { heroes: ['kuro', 'hanae'], deck: D(P('kuro') + 'plain') }); t.eq(C.unit('kuro').st.sumi, 3, 'vial_of_spare_ink: 3 Sumi at the start of combat'); const N = R('vial_of_spare_ink', { heroes: ['hanae', 'suzu'], deck: D(P('hanae') + 'plain') }); t.ok(!N.unit('hanae').st.sumi, 'vial_of_spare_ink: nothing without Kuro'); }
     // gem and exhaust and shuffle relics
-    { const C = R('facet_lens', { deck: D({ id: P('hanae') + 'attack', gems: ['ember_ruby'] }, { id: P('hanae') + 'attack', gems: ['ember_ruby'] }, P('kuro') + 'skill'), seed: 1 }); const gs = C.hand.filter((x) => x.gems[0]); const n = C.hand.find((x) => !x.gems[0]); t.ok(gs.length === 2 && !!n, '(sanity) two gemmed and one plain innate card'); C.play(n.uid); t.eq(evs(C, 'gold').length, 0, 'facet_lens: no gold for a plain card'); C.play(gs[0].uid, C.legalTargets(gs[0].uid)[0]); t.deep(evs(C, 'gold').map((e) => e.n), [3], 'facet_lens: 3 gold for the first gemmed card'); C.play(gs[1].uid, C.legalTargets(gs[1].uid)[0]); t.deep(evs(C, 'gold').map((e) => e.n), [3], 'facet_lens: once per turn'); C.endTurn(); const g3 = C.hand.find((x) => x.gems[0]); if (g3) { C.play(g3.uid, C.legalTargets(g3.uid)[0]); t.eq(evs(C, 'gold').length, 2, 'facet_lens: and again next turn'); } }
+    { const C = R('facet_lens', { deck: D({ id: P('hanae') + 'attack', gems: ['ember_ruby'] }, { id: P('hanae') + 'attack', gems: ['ember_ruby'] }, P('kuro') + 'skill'), seed: 1 }); const gs = C.hand.filter((x) => x.gems[0]); const n = C.hand.find((x) => !x.gems[0]); t.ok(gs.length === 2 && !!n, '(sanity) two gemmed and one plain innate card'); C.play(n.uid); t.eq(evs(C, 'gold').length, 0, 'facet_lens: no gold for a plain card'); C.play(gs[0].uid, C.legalTargets(gs[0].uid)[0]); t.deep(evs(C, 'gold').map((e) => e.n), [3], 'facet_lens: 3 gold for the first gemmed card'); t.eq(evs(C, 'block').filter((e) => e.amount === 3 && e.dst.id === 'hanae').length, 1, 'facet_lens: and 3 Block for the hero who played it'); C.play(gs[1].uid, C.legalTargets(gs[1].uid)[0]); t.deep(evs(C, 'gold').map((e) => e.n), [3], 'facet_lens: once per turn'); t.eq(evs(C, 'block').filter((e) => e.amount === 3).length, 1, 'facet_lens: the Block is once per turn too'); C.endTurn(); const g3 = C.hand.find((x) => x.gems[0]); if (g3) { C.play(g3.uid, C.legalTargets(g3.uid)[0]); t.eq(evs(C, 'gold').length, 2, 'facet_lens: and again next turn'); } }
     { const deck = [{ id: P('hanae') + 'attack', gems: ['ember_ruby'] }, { id: P('hanae') + 'attack', gems: ['ember_ruby'] }, ...Array.from({ length: 8 }, () => P('hanae') + 'plain')]; const C = R('jewelers_loupe', { deck, seed: 1 }); const gs = C.hand.filter((x) => x.gems[0]); t.eq(gs.length, 2, '(sanity) both innate gemmed cards are in hand'); const n0 = C.hand.length, mark = C.events.length; C.play(gs[0].uid, C.legalTargets(gs[0].uid)[0]); t.eq(C.hand.length, n0, 'jewelers_loupe: a gemmed card draws 1 (hand size unchanged after playing it)'); C.play(gs[1].uid, C.legalTargets(gs[1].uid)[0]); t.eq(relicCount(C, 'jewelers_loupe'), 1, 'jewelers_loupe: the hook fires once, for the first gemmed card of the turn'); t.eq(C.events.slice(mark).filter((e) => e.type === 'draw').length, 1, 'jewelers_loupe: and only that one drew'); }
     { const C = R('prism_crown', { deck: D({ id: P('hanae') + 'itwo', gems: ['ember_ruby', 'sunwake_topaz'] }, { id: P('hanae') + 'itwo', gems: ['ember_ruby', 'sunwake_topaz'] }, { id: P('hanae') + 'attack', gems: ['ember_ruby'] }, P('kuro') + 'plain'), seed: 1 }); const one = C.hand.find((x) => x.id === P('hanae') + 'attack'); const twos = C.hand.filter((x) => x.id === P('hanae') + 'itwo'); t.ok(!!one && twos.length === 2, '(sanity) the innate cards are in hand');
       C.play(one.uid, C.legalTargets(one.uid)[0]); t.eq(C.energy, 2, 'prism_crown: a one gem card pays nothing (3 - 1)'); C.play(twos[0].uid, C.legalTargets(twos[0].uid)[0]); t.eq(C.energy, 2, 'prism_crown: the two gem card pays 1 Energy back (2 - 1 + 1)'); C.play(twos[1].uid, C.legalTargets(twos[1].uid)[0]); t.eq(C.energy, 1, 'prism_crown: once per turn (the second two gem card costs 1)'); }
@@ -872,10 +880,17 @@ if (E) {
     { const C = R('wintry_bell', { enemies: ['kappa', 'kappa'] }); t.ok(C.enemies.every((e) => e.st.vulnerable === 1), 'wintry_bell: 1 Vulnerable on every enemy'); const base = mk({ enemies: ['kappa'], deck: D(P('hanae') + 'plain') }); const w = R('wintry_bell', { enemies: ['kappa'], deck: D(P('hanae') + 'plain') }); const u = w.hand[0].uid; t.ok(w.preview(u, w.legalTargets(u)[0]).dmg > base.preview(base.hand[0].uid, base.legalTargets(base.hand[0].uid)[0]).dmg, 'wintry_bell: +50% on the first turn'); }
     // turn cadence
     { const C = R('sands_of_patience', { enemies: ['moss_guardian'], tier: 'elite', deck: D(...Array.from({ length: 30 }, () => P('hanae') + 'plain')) }); const seen = [C.energy]; for (let i = 0; i < 6; i++) { C.endTurn(); seen.push(C.energy); } t.deep(seen, [3, 3, 4, 3, 3, 4, 3], 'sands_of_patience: +1 Energy on turns 3 and 6 only'); }
-    { const C = R('blood_moon_vow', { enemies: ['paper_kodama'], deck: D(P('hanae') + 'plain'), hp: [30, 20] }); t.eq(C.maxEnergy, 4, 'blood_moon_vow: 4 Energy'); t.deep(C.heroes.map((h) => h.hp), [29, 19], 'blood_moon_vow: both heroes lose 1 HP at the start of the turn'); const L2 = R('blood_moon_vow', { enemies: ['paper_kodama'], deck: D(P('hanae') + 'plain'), hp: [1, 1] }); t.deep(L2.heroes.map((h) => h.hp), [1, 1], 'blood_moon_vow: it never kills a hero'); }
+    { const C = R('blood_moon_vow', { enemies: ['paper_kodama'], deck: D(P('hanae') + 'plain'), hp: [30, 20] }); t.eq(C.maxEnergy, 4, 'blood_moon_vow: 4 Energy'); t.deep(C.heroes.map((h) => h.hp), [28, 18], 'blood_moon_vow: both heroes lose 2 HP at the start of the turn'); const L2 = R('blood_moon_vow', { enemies: ['paper_kodama'], deck: D(P('hanae') + 'plain'), hp: [1, 1] }); t.deep(L2.heroes.map((h) => h.hp), [1, 1], 'blood_moon_vow: it never kills a hero'); }
     { const C = R('apothecary_jar', { enemies: ['leaf_imp'], deck: D(P('hanae') + 'plain'), hp: [30, 40] }); C.enemies[0].hp = 1; attackFirst(C, P('hanae') + 'plain'); t.eq(C.result, 'win', '(sanity) won'); t.deep(evs(C, 'heal').map((e) => e.dst.id + ':' + e.amount).sort(), ['hanae:3', 'kuro:3'], 'apothecary_jar: 3 HP for both heroes when the fight is won'); const L2 = R('apothecary_jar', { enemies: ['leaf_imp'], deck: D(P('hanae') + 'plain') }); t.ok(L2.result === null, '(sanity)'); }
     // the boss relic hooks
     { const C = R('tyrants_crown', { deck: D(P('hanae') + 'plain') }); t.eq(C.maxEnergy, 4, 'tyrants_crown: 4 Energy in combat (its curses are a run hook)'); t.eq(evs(C, 'relic').length, 0, 'tyrants_crown: no combat hook to fire'); }
+    { const C = R('ironclad_tsuba', { enemies: ['bamboo_sprite'], deck: D(P('hanae') + 'plain'), hp: [60, 60], seed: 3 }); C.endTurn(); const th = evs(C, 'thorns'); t.ok(th.length >= 1 && th[0].amount === 3 && th[0].dst.kind === 'enemy', 'ironclad_tsuba: the 3 Thorns bite the attacker'); t.eq(evs(C, 'relic').length, 1, 'ironclad_tsuba: its one hook fires once, at the start of the fight'); }
+    { const strike = (C) => { const a = C.hand.find((x) => x.id === P('hanae') + 'attack'); const n0 = evs(C, 'hit').length; C.play(a.uid, C.legalTargets(a.uid)[0]); return evs(C, 'hit').slice(n0).filter((e) => e.dst.kind === 'enemy')[0].raw; };
+      const deck = D(P('hanae') + 'attack', P('hanae') + 'plain');
+      t.eq(strike(R('bottomless_gourd', { deck, seed: 2 })) - strike(mk({ deck: D(P('hanae') + 'attack', P('hanae') + 'plain'), enemies: ['kappa'], seed: 2 })), 3, 'bottomless_gourd: every hit lands 3 harder (Might 3)');
+      const taken = (C) => { C.endTurn(); return evs(C, 'hit').filter((e) => e.dst.kind === 'hero' && e.src).map((e) => e.raw)[0]; };
+      const withG = taken(R('bottomless_gourd', { deck: D(P('hanae') + 'plain'), seed: 2 })), plain = taken(mk({ deck: D(P('hanae') + 'plain'), enemies: ['kappa'], seed: 2 }));
+      t.eq(withG, Math.floor(plain * 1.5), 'bottomless_gourd: and the first enemy hit lands 50% harder (Vulnerable 2)'); }
   });
 }
 
@@ -896,9 +911,11 @@ if (RB) {
 
   t.test('run hooks: onPickup relics act once, when taken, and never twice', () => {
     { const R = NEW(); const hp0 = R.heroes.map((h) => h.maxHp); const r = RUN.addRelic(R, 'heart_charm'); t.ok(r.ok, 'taken'); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), hp0.map((m) => [m + 5, m + 5]), 'heart_charm: +5 max HP and current HP for both heroes'); t.eq(RUN.addRelic(R, 'heart_charm').ok, false, 'a relic cannot be taken twice'); t.deep(R.heroes.map((h) => h.maxHp), hp0.map((m) => m + 5), '(so it does not pay twice)'); }
-    { const R = NEW(); const b = upgraded(R); RUN.addRelic(R, 'whetstone'); t.eq(upgraded(R), b + 2, 'whetstone: 2 cards upgraded'); }
+    { const R = NEW(); const b = upgraded(R); RUN.addRelic(R, 'whetstone'); t.eq(upgraded(R), b + 3, 'whetstone (Honing Stone): 3 cards upgraded'); }
     { const R = NEW(); RUN.addRelic(R, 'koi_pouch'); t.eq(R.gems.length, 1, 'koi_pouch: one gem'); t.eq(RD.gems[R.gems[0]].tier, 2, 'koi_pouch: of tier 2'); }
-    { const R = NEW(); const n = R.deck.length; RUN.addRelic(R, 'tyrants_crown'); t.eq(curses(R), 2, 'tyrants_crown: 2 curses in the deck'); t.eq(R.deck.length, n + 2, 'and nothing else'); t.eq(RUN.mods(R).energy, 4, 'tyrants_crown: 4 Energy in the run mods'); }
+    { const R = NEW(); const n = R.deck.length; RUN.addRelic(R, 'tyrants_crown'); t.eq(curses(R), 3, 'tyrants_crown: 3 curses in the deck'); t.eq(R.deck.length, n + 3, 'and nothing else'); t.eq(RUN.mods(R).energy, 4, 'tyrants_crown: 4 Energy in the run mods'); }
+    { const R = NEW(); const r = RUN.addRelic(R, 'toll_bridge'); t.eq(r.pending.length, 0, 'toll_bridge: no choice waits on pickup (a boss relic is claimed on the reward page)'); t.eq(R.gems.length, 1, 'toll_bridge: a gem on pickup'); t.eq(RD.gems[R.gems[0]].tier, 3, 'toll_bridge: of tier 3'); t.eq(RUN.mods(R).cardChoices, 5, 'toll_bridge: 5 cards in every later reward'); t.eq(RUN.addRelic(R, 'toll_bridge').ok, false, 'and it pays once'); t.eq(R.gems.length, 1, '(so one gem only)'); }
+    { const R = NEW(); const hp0 = R.heroes.map((h) => h.maxHp); RUN.addRelic(R, 'inkstone_weight'); t.deep(R.heroes.map((h) => h.maxHp), hp0.map((m) => m + 3), 'inkstone_weight (Heavy Inkstone): +3 max HP for both heroes on pickup'); t.eq(R.pending.length, 0, 'and nothing waits'); }
     { const R = NEW(); RUN.addRelic(R, 'paper_umbrella'); t.eq(R.deck.length, 10, 'a mod relic changes nothing on pickup'); t.eq(RUN.mods(R).startBlock, 1, 'paper_umbrella is in the run mods'); }
   });
 
@@ -920,23 +937,24 @@ if (RB) {
 
   t.test('run hooks: onRest, onShopEnter and onFightWon relics', () => {
     { const R = NEW(); R.ink = 4; RUN.addRelic(R, 'shrine_box'); const h = RUN.hook(R, 'onRest', {}); t.eq(R.ink, 6, 'shrine_box: +2 Ink at a camp'); t.ok(h.log.some((x) => x.id === 'shrine_box'), 'and it is logged'); t.eq(RUN.hook(R, 'onFightWon', { tier: 'normal' }).log.length, 0, 'shrine_box: silent on other hooks'); R.ink = 13; RUN.hook(R, 'onRest', {}); t.eq(R.ink, 14, 'shrine_box: Ink never goes over the pool'); }
+    { const R = NEW(); R.heroes[0].hp = 10; R.heroes[1].hp = 12; RUN.addRelic(R, 'jade_key'); RUN.hook(R, 'onRest', {}); t.deep(R.heroes.map((h) => h.hp), [14, 16], 'jade_key: a rest also heals both heroes 4 HP'); t.eq(RUN.hook(R, 'onFightWon', { tier: 'normal' }).log.length, 0, 'jade_key: silent on other hooks'); }
     { const R = NEW(); RUN.addRelic(R, 'pearl_satchel'); RUN.hook(R, 'onShopEnter', {}); t.eq(R.gems.length, 1, 'pearl_satchel: a gem on entering a shop'); t.eq(RD.gems[R.gems[0]].tier, 1, 'of tier 1'); RUN.hook(R, 'onShopEnter', {}); t.eq(R.gems.length, 2, 'every shop'); }
     { const R = NEW(); RUN.addRelic(R, 'bounty_scroll'); const g0 = R.gold; RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.eq(R.gold, g0, 'bounty_scroll: nothing for a normal fight'); RUN.hook(R, 'onFightWon', { tier: 'boss' }); t.eq(R.gold, g0, 'bounty_scroll: nothing for a boss'); RUN.hook(R, 'onFightWon', { tier: 'elite' }); t.eq(R.gold, g0 + 20, 'bounty_scroll: 20 gold for an Elite'); }
     { const R = NEW(); RUN.addRelic(R, 'merchants_seal'); const g0 = R.gold; ['normal', 'elite', 'boss'].forEach((tier, i) => { RUN.hook(R, 'onFightWon', { tier }); t.eq(R.gold, g0 + 8 * (i + 1), `merchants_seal: 8 gold after a ${tier} fight`); }); }
-    { const R = NEW(); R.heroes[0].hp = 10; R.heroes[1].hp = 10; RUN.addRelic(R, 'rice_ball'); RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.deep(R.heroes.map((h) => h.hp), [12, 12], 'rice_ball: 2 HP for both heroes'); R.heroes[0].hp = R.heroes[0].maxHp; RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.eq(R.heroes[0].hp, R.heroes[0].maxHp, 'rice_ball never overheals'); }
+    { const R = NEW(); R.heroes[0].hp = 10; R.heroes[1].hp = 8; RUN.addRelic(R, 'rice_ball'); RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.deep(R.heroes.map((h) => h.hp), [12, 12], 'rice_ball: 2 HP for both heroes, and 2 more for the one with less HP'); R.heroes[0].hp = R.heroes[0].maxHp; RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.eq(R.heroes[0].hp, R.heroes[0].maxHp, 'rice_ball never overheals'); }
   });
 
   t.test('run: mods from relics fold the way the texts say, in the run and in the deck of relics a boss run could hold', () => {
     const M = (...ids) => { const R = NEW(); ids.forEach((id) => RUN.addRelic(R, id)); return { R, m: RUN.mods(R) }; };
     t.eq(M('inkstone_weight').m.inkMax, 16, 'inkstone_weight: 16 Ink'); t.eq(M('inkstone_weight').R.inkMax, 16, 'and R.inkMax follows at once');
     t.eq(M('ink_jar').m.startInk, 12, 'ink_jar: 12 start Ink'); t.eq(M('well_kasa').m.wellInk, 5, 'well_kasa: wells give 5');
-    t.eq(M('bottomless_gourd').m.wellInk, 7, 'bottomless_gourd: wells give 7'); t.eq(M('bottomless_gourd').m.startInk, 6, 'bottomless_gourd: 6 start Ink'); t.near(M('bottomless_gourd').m.healMul, 0.75, 1e-9, 'bottomless_gourd: healing x0.75');
-    t.near(M('fortune_coin').m.goldMul, 1.25, 1e-9, 'fortune_coin: x1.25'); t.near(M('fortune_coin', 'toll_bridge').m.goldMul, 0.75, 1e-9, 'gold fractions add (1 + 0.25 - 0.5)');
+    t.deep(M('bottomless_gourd').m, M().m, 'bottomless_gourd: a combat trade only, no mod at all');
+    t.near(M('fortune_coin').m.goldMul, 1.25, 1e-9, 'fortune_coin: x1.25'); t.near(M('toll_bridge').m.priceMul, 1.25, 1e-9, 'toll_bridge: shops x1.25'); t.near(M('fox_haggler_token', 'toll_bridge').m.priceMul, 1.05, 1e-9, 'price fractions add (1 - 0.2 + 0.25)');
     t.eq(M('toll_bridge').m.cardChoices, 5, 'toll_bridge: 5 cards'); t.eq(M('toll_bridge', 'branching_bookmark').m.cardChoices, 6, 'with the bookmark: 6 (the cap)');
     t.near(M('fox_haggler_token').m.priceMul, 0.8, 1e-9, 'fox_haggler_token: prices x0.8'); t.eq(M('loaded_dice').m.rareBoost, 8, 'loaded_dice: +8 rare points');
     t.eq(M('jade_key').m.campActions, 2, 'jade_key: 2 camp actions'); t.eq(M('dancer_geta').m.freeSwaps, 2, 'dancer_geta: 2 free swaps');
     t.near(M('steaming_teacup').m.healMul, 1.25, 1e-9, 'steaming_teacup: x1.25'); t.near(M('steaming_teacup', 'book_of_falling_leaves').m.healMul, 0.85, 1e-9, 'healMul adds across relics (1 + 0.25 - 0.4)');
-    t.eq(M('book_of_falling_leaves').m.hand, 6, 'book_of_falling_leaves: 6 cards'); t.eq(M('ironclad_tsuba').m.hand, 4, 'ironclad_tsuba: 4 cards'); t.eq(M('book_of_falling_leaves', 'ironclad_tsuba').m.hand, 5, 'the two cancel to 5');
+    t.eq(M('book_of_falling_leaves').m.hand, 6, 'book_of_falling_leaves: 6 cards'); t.eq(M('ironclad_tsuba').m.hand, 4, 'ironclad_tsuba: 4 cards'); t.eq(M('ironclad_tsuba').m.startBlock, 2, 'ironclad_tsuba: 2 Block each turn'); t.eq(M('book_of_falling_leaves', 'ironclad_tsuba').m.hand, 5, 'the two cancel to 5');
     t.eq(M('blood_moon_vow').m.energy, 4, 'blood_moon_vow: 4 Energy');
     t.eq(RD.rowFor('hanae', 'front', ['war_banner']).dmgAdd, 3, 'war_banner: Hanae\'s +2 front row damage becomes +3'); t.eq(RD.rowFor('hanae', 'back', ['war_banner']).dmgAdd, undefined, 'war_banner: nothing in the back row');
     t.deep(RD.rowFor('kuro', 'back', ['formation_scroll']), { dmgAdd: 2, blockAdd: 1 }, 'formation_scroll: Kuro in the back gains 1 more Block from cards'); t.deep(RD.rowFor('raiga', 'front', ['formation_scroll']), { thorns: 2, startBlock: 6 }, 'formation_scroll: Raiga\'s front Block doubles');
@@ -949,7 +967,7 @@ if (RB) {
     const m = RUN.mods(R);
     t.ok(Object.keys(m).every((k) => Number.isFinite(m[k])), 'every folded mod is a finite number');
     t.ok(m.energy >= 1 && m.hand >= 1 && m.inkMax >= 6 && m.startInk <= m.inkMax, 'and inside its clamp');
-    t.eq(curses(R), 2, 'the boss curses are in the deck');
+    t.eq(curses(R), 3, 'the boss curses are in the deck');
     t.ok(R.heroes.every((h) => h.hp <= h.maxHp && h.hp >= 1), 'heroes are consistent');
     const back = RUN.deserialize(JSON.parse(JSON.stringify(RUN.serialize(R))));
     t.ok(back && back.relics.length === 66 && back.deck.length === R.deck.length, 'the run round-trips through a save');

@@ -27,6 +27,12 @@
 // starts a Ritual. Measured with the greedy bot (a gem in every matching slot of an 18 card deck, Chapter 1 and 2 elites): damage
 // taken falls by about 9 for a tier 1 gem, 16 to 20 for tier 2 and 22 to 25 for tier 3, the ladder the value model in the test predicts.
 //
+// BALANCE PASS 1 (relic lab: recorded greedy fights refought at full HP with the gem socketed in four matching slots, party HP lost per
+// fight as a share of max HP, against no gem). Three gems measured below the tier 1 average and were raised: Thornwake Lapis (Thorns
+// 1 to 2: -1.5 to -2.7), Inkwell Amber (Regen 3 beside the Ink and gold: -0.1 to -2.7) and Solstice Citrine (Might 2 beside the Ritual:
+// -1.3 to -2.3). For reference Tidewatch Sapphire -2.8, Springwell Tanzanite -3.2, Ironbark Sapphire -6.3, Mirrorlake Aquamarine -6.0.
+// The value model in the test now prices Ritual at 7 a point (it was 10): the lab says a Ritual 1 saves about what Might 2 does.
+//
 // TARGETING. Appended ops with `tgt:'enemy'` make an area card ask for a target, and `tgt:'all'` never does; the one enemy op that
 // could be either (Bloodmoon Carnelian's life steal) is written `enemy` on purpose: it is a single bite and it should land on the
 // enemy you chose. Sunfall Ruby hits `all`, so it is safe on an area card.
@@ -70,7 +76,7 @@
     },
     thornwake_lapis: {
       name: 'Thornwake Lapis', color: 'blue', tier: 1, art: { cut: 'oval' },
-      mod: { status: { s: 'thorns', n: 1, tgt: 'self' } },
+      mod: { status: { s: 'thorns', n: 2, tgt: 'self' } },
     },
     mirrorlake_aquamarine: {
       name: 'Mirrorlake Aquamarine', color: 'blue', tier: 2, art: { cut: 'square' },
@@ -126,7 +132,7 @@
     },
     inkwell_amber: {
       name: 'Inkwell Amber', color: 'gold', tier: 2, art: { cut: 'square' },
-      mod: { fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }] },
+      mod: { fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 2 }, { op: 'status', s: 'regen', n: 3, tgt: 'self' }] },
     },
     heartflame_topaz: {
       // Four conditions read badly, so this one carries its own text. A hero only ever holds the resource of their own
@@ -144,7 +150,7 @@
     },
     solstice_citrine: {
       name: 'Solstice Citrine', color: 'gold', tier: 3, art: { cut: 'star' },
-      mod: { status: { s: 'ritual', n: 1, tgt: 'self' } },
+      mod: { status: { s: 'ritual', n: 1, tgt: 'self' }, fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }] },
     },
     dusklight_amber: {
       name: 'Dusklight Amber', color: 'gold', tier: 3, art: { cut: 'drop' }, locked: true,

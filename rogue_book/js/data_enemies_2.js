@@ -59,6 +59,20 @@
 // group, HP lost, the win rate, how often each signature move lands, and that the counter-play above really pays. RB_ENEMIES2_REPORT=1 prints
 // the tables; RB_ENEMIES2_TRACE=boss_jorogumo prints one fight turn by turn. Numbers are a first tuning for the balance wave, not gospel.
 //
+// BALANCE PASS 1 (balance bot report 1, about 22,000 runs, greedy party). Chapter 2 was the soft chapter: its elites cost 8 percent of party HP
+// per fight (chapter 1: 14, chapter 3: 12) and its boss 14 percent (chapter 1 boss: 22), and the greedy party cleared 82 percent of
+// chapters 1 to 2 where the spec asks for 60 to 80. The pass is shaped, not flat: normals about x1.2 in threat (HP and hits about x1.1
+// each), elites about x1.55 (HP to the top of the band, hits about x1.25 to x1.3), the boss HP 240 to 246 up to 258 to 264 with its big
+// hits (embrace, kiss, web) about x1.1. The boss is the one knob that moves the chapter clear rate: with its HP at the band top (274 to
+// 280) and the same hits it cost the greedy party 22 percent of attempts (7 before the pass) and chapter 2 sat at 65 percent clear; the
+// setting here (HP 258 to 264, same hits) is estimated at about 18 percent of attempts and about 67 percent
+// clear (refights at the recorded entry HP; not run end to end). The knob: one point of boss loss rate is about 0.8 points of chapter 2 clear.
+// Inside the normals the spread was evened out by measurement, enemy by enemy and group by group: the soft ones were raised (ittan_momen,
+// tsukumogami, silk_weaver, karakuri_puppet, nopperabo, chochin) and the hard ones trimmed (drowned_samurai HP 46 to 54 down to 40 to 46,
+// nure_onna HP 50 to 58 down to 46 to 54 and Coil 15 to 14, Lash 7 to 6; rokurokubi only +1 on the Lunge). The enemies that never stand
+// alone in a group (silk_weaver, tsukumogami, koi_spirit, ittan_momen, rokurokubi) are judged by what they add to their groups, not by a
+// solo fight: their openers (snare, din, brood) are slow burns that a lone fight ends before they land. flooded_bridge (the two trimmed
+// hard enemies) moved from min 0.6 to 0.5 so the late page keeps its level.
 // ART NOTES for art_enemies_2.js (the lore lines carry the look too). chochin: one-eyed paper lantern, warm candle glow, ribbon tassel.
 // karakuri_puppet: painted wooden doll with a wind-up key and visible gears. nopperabo: smooth blank face under a hood, pale. drowned_samurai:
 // sodden armour hung with seaweed, dripping. koi_spirit: pale carp glowing like a coin. tsukumogami: an old shamisen grown legs, strings
@@ -74,11 +88,11 @@
     // ==================================================================================================================
     chochin: {
       id: 'chochin', name: 'Chochin Lantern', chapter: 2, tier: 'normal', size: 'm',
-      hp: [30, 36],
+      hp: [33, 39],
       moves: {
         kindle: { name: 'Light the Wicks', kind: 'buff', say: 'Burn bright, little ones.', fx: [{ op: 'status', s: 'ritual', n: 1, tgt: 'allEnemies' }] },
-        scorch: { name: 'Scorching Gaze', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
-        cinders: { name: 'Falling Cinders', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'both', el: 'fire' }, { op: 'status', s: 'burn', n: 2, tgt: 'both' }] },
+        scorch: { name: 'Scorching Gaze', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
+        cinders: { name: 'Falling Cinders', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'both', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'both' }] },
       },
       ai: { seq: ['scorch', 'kindle', 'cinders'] },
       hooks: [{ on: 'onDeath', fx: [{ op: 'status', s: 'burn', n: 2, tgt: 'front' }] }],
@@ -90,10 +104,10 @@
 
     karakuri_puppet: {
       id: 'karakuri_puppet', name: 'Karakuri Puppet', chapter: 2, tier: 'normal', size: 'm',
-      hp: [42, 50],
+      hp: [47, 55],
       moves: {
-        jab: { name: 'Clockwork Jab', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
-        flurry: { name: 'Gear Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 2, tgt: 'front' }] },
+        jab: { name: 'Clockwork Jab', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
+        flurry: { name: 'Gear Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
         smash: { name: 'Mainspring Smash', kind: 'heavy', say: 'CLANG.', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
         overwind: { name: 'Overwound', kind: 'buff', say: 'Ticktickticktick...', fx: [{ op: 'status', s: 'might', n: 3, tgt: 'self' }] },
       },
@@ -105,10 +119,10 @@
 
     nopperabo: {
       id: 'nopperabo', name: 'Nopperabo', chapter: 2, tier: 'normal', size: 'm',
-      hp: [38, 46],
+      hp: [43, 51],
       moves: {
         stare: { name: 'Blank Stare', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 2, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }] },
-        grasp: { name: 'Faceless Grasp', kind: 'attack', fx: [{ op: 'dmg', n: { base: 5, per: 'debuffs', who: 'target', mul: 3, cap: 14 }, tgt: 'front' }] },
+        grasp: { name: 'Faceless Grasp', kind: 'attack', fx: [{ op: 'dmg', n: { base: 6, per: 'debuffs', who: 'target', mul: 3, cap: 14 }, tgt: 'front' }] },
       },
       ai: { seq: ['stare', 'grasp', 'grasp'] },
       art: { id: 'nopperabo' },
@@ -118,12 +132,12 @@
 
     drowned_samurai: {
       id: 'drowned_samurai', name: 'Drowned Samurai', chapter: 2, tier: 'normal', size: 'l',
-      hp: [46, 54],
+      hp: [40, 46],
       start: [{ op: 'status', s: 'plating', n: 4, tgt: 'self' }],
       moves: {
-        cut: { name: 'Sodden Cut', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        cut: { name: 'Sodden Cut', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
         stance: { name: 'Iai Stance', kind: 'defend', say: '...Breathe in.', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
-        iai: { name: 'Tide-Edge Iai', kind: 'heavy', say: 'IAI!', fx: [{ op: 'dmg', n: 16, tgt: 'front' }] },
+        iai: { name: 'Tide-Edge Iai', kind: 'heavy', say: 'IAI!', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
       },
       ai: { seq: ['cut', 'stance', 'iai'], rules: [{ if: { hpLt: 0.4 }, do: 'iai', once: true }] },
       art: { id: 'drowned_samurai' },
@@ -133,10 +147,10 @@
 
     koi_spirit: {
       id: 'koi_spirit', name: 'Koi Spirit', chapter: 2, tier: 'normal', size: 'm',
-      hp: [32, 38],
+      hp: [35, 41],
       moves: {
         splash: { name: 'Tidal Splash', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }] },
-        slap: { name: 'Tail Slap', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        slap: { name: 'Tail Slap', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
         mend: { name: 'Healing Tide', kind: 'heal', say: 'Blub. (Be well.)', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
       },
       ai: { weighted: [['splash', 3], ['slap', 2]], noRepeat: 2, rules: [{ if: { allyHpLt: 0.7, turnEvery: [2, 1] }, do: 'mend' }] },
@@ -148,11 +162,11 @@
 
     tsukumogami: {
       id: 'tsukumogami', name: 'Tsukumogami', chapter: 2, tier: 'normal', size: 'm',
-      hp: [32, 40],
+      hp: [35, 42],
       moves: {
         discord: { name: 'Discordant Din', kind: 'debuff', say: 'TWANG!', fx: [{ op: 'add', card: 'status_blot', n: 2, to: 'draw' }] },
-        clatter: { name: 'Clatter', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
-        strum: { name: 'Angry Strum', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
+        clatter: { name: 'Clatter', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
+        strum: { name: 'Angry Strum', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
         crescendo: { name: 'Crescendo', kind: 'heavy', say: 'TWANG! TWANG! TWANG!', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
       },
       ai: { open: ['discord'], seq: ['clatter', 'strum'], rules: [{ if: { turnEvery: [3, 2] }, do: 'crescendo' }] },
@@ -163,7 +177,7 @@
 
     silk_weaver: {
       id: 'silk_weaver', name: 'Silk Weaver', chapter: 2, tier: 'normal', size: 'm',
-      hp: [30, 38],
+      hp: [33, 40],
       moves: {
         snare: { name: 'Silk Snare', kind: 'debuff', say: 'Stay put, dear.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'front' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
         fang: { name: 'Venom Fang', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'poison' }] },
@@ -177,11 +191,11 @@
 
     nure_onna: {
       id: 'nure_onna', name: 'Nure-onna', chapter: 2, tier: 'normal', size: 'l',
-      hp: [50, 58],
+      hp: [46, 54],
       moves: {
         fang: { name: 'Venom Bite', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 2, tgt: 'back' }] },
-        lash: { name: 'Tail Lash', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'back' }] },
-        coil: { name: 'Drowning Coil', kind: 'heavy', say: 'Come closer, dear.', fx: [{ op: 'dmg', n: 15, tgt: 'front' }] },
+        lash: { name: 'Tail Lash', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'back' }] },
+        coil: { name: 'Drowning Coil', kind: 'heavy', say: 'Come closer, dear.', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
       },
       ai: { seq: ['fang', 'coil', 'lash'] },
       art: { id: 'nure_onna' },
@@ -191,10 +205,10 @@
 
     rokurokubi: {
       id: 'rokurokubi', name: 'Rokurokubi', chapter: 2, tier: 'normal', size: 'm',
-      hp: [32, 40],
+      hp: [34, 41],
       moves: {
         reach: { name: 'Reaching Neck', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 2, tgt: 'back' }] },
-        lunge: { name: 'Neck Lunge', kind: 'heavy', fx: [{ op: 'dmg', n: 11, tgt: 'back' }] },
+        lunge: { name: 'Neck Lunge', kind: 'heavy', fx: [{ op: 'dmg', n: 12, tgt: 'back' }] },
         coil: { name: 'Coil Up', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
       },
       ai: { seq: ['reach', 'lunge', 'reach', 'coil'] },
@@ -205,10 +219,10 @@
 
     ittan_momen: {
       id: 'ittan_momen', name: 'Ittan-momen', chapter: 2, tier: 'normal', size: 'm',
-      hp: [28, 34],
+      hp: [34, 41],
       moves: {
-        wrap: { name: 'Wrap Tight', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }, { op: 'status', s: 'bind', n: 1, tgt: 'front' }] },
-        squeeze: { name: 'Smothering Squeeze', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'front' }] },
+        wrap: { name: 'Wrap Tight', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'status', s: 'bind', n: 1, tgt: 'front' }] },
+        squeeze: { name: 'Smothering Squeeze', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
         billow: { name: 'Billow', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }, { op: 'status', s: 'dodge', n: 1, tgt: 'self' }] },
       },
       ai: { weighted: [['wrap', 2], ['squeeze', 2], ['billow', 1]], noRepeat: 1 },
@@ -222,13 +236,13 @@
     // ==================================================================================================================
     drowned_general: {
       id: 'drowned_general', name: 'Drowned General', chapter: 2, tier: 'elite', size: 'l',
-      hp: [86, 98],
+      hp: [102, 114],
       moves: {
         muster: { name: 'Muster the Drowned', kind: 'summon', say: 'The flood remembers. Rise.', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }] },
-        saber: { name: 'Waterlogged Saber', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'front' }] },
-        sweep: { name: 'Undertow Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'both' }] },
+        saber: { name: 'Waterlogged Saber', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
+        sweep: { name: 'Undertow Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'both' }] },
         call: { name: 'Call the Lanterns', kind: 'summon', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }] },
-        crest: { name: 'Flood Crest', kind: 'heavy', say: 'DROWN.', fx: [{ op: 'dmg', n: 17, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }] },
+        crest: { name: 'Flood Crest', kind: 'heavy', say: 'DROWN.', fx: [{ op: 'dmg', n: 21, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }] },
       },
       ai: {
         open: ['muster'],
@@ -252,13 +266,13 @@
 
     puppet_master: {
       id: 'puppet_master', name: 'Puppet Master', chapter: 2, tier: 'elite', size: 'l',
-      hp: [85, 94],
+      hp: [110, 120],
       moves: {
         strings: { name: 'Pull the Strings', kind: 'summon', say: 'Dance, my darlings. Dance.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 2 }] },
         restock: { name: 'Fresh Strings', kind: 'summon', say: 'One more for the chorus.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 1 }] },
-        lash: { name: 'Thread Lash', kind: 'multi', fx: [{ op: 'dmg', n: 7, hits: 3, tgt: 'random' }] },
-        tighten: { name: 'Tighten the Strings', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'might', n: 2, tgt: 'otherEnemy' }] },
-        marionette: { name: 'Marionette Strike', kind: 'heavy', say: 'Not you. YOU.', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
+        lash: { name: 'Thread Lash', kind: 'multi', fx: [{ op: 'dmg', n: 10, hits: 3, tgt: 'random' }] },
+        tighten: { name: 'Tighten the Strings', kind: 'attack', fx: [{ op: 'dmg', n: 14, tgt: 'front' }, { op: 'status', s: 'might', n: 2, tgt: 'otherEnemy' }] },
+        marionette: { name: 'Marionette Strike', kind: 'heavy', say: 'Not you. YOU.', fx: [{ op: 'dmg', n: 16, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
         mend: { name: 'Mend the Seams', kind: 'heal', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
       },
       ai: {
@@ -276,12 +290,12 @@
 
     umibozu: {
       id: 'umibozu', name: 'Umibozu', chapter: 2, tier: 'elite', size: 'l',
-      hp: [100, 116],
+      hp: [112, 124],
       moves: {
-        slam: { name: 'Tidal Slam', kind: 'attack', fx: [{ op: 'dmg', n: { base: 6, per: 'turn', mul: 1, cap: 12 }, tgt: 'both' }] },
+        slam: { name: 'Tidal Slam', kind: 'attack', fx: [{ op: 'dmg', n: { base: 8, per: 'turn', mul: 1, cap: 14 }, tgt: 'both' }] },
         brine: { name: 'Brine Spray', kind: 'debuff', say: 'Hush.', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }] },
-        toll: { name: 'Drowning Bell', kind: 'heavy', say: 'BOOOONG.', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
-        maelstrom: { name: 'Maelstrom', kind: 'heavy', say: 'The sea takes everything.', fx: [{ op: 'dmg', n: 12, tgt: 'both' }] },
+        toll: { name: 'Drowning Bell', kind: 'heavy', say: 'BOOOONG.', fx: [{ op: 'dmg', n: 15, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
+        maelstrom: { name: 'Maelstrom', kind: 'heavy', say: 'The sea takes everything.', fx: [{ op: 'dmg', n: 16, tgt: 'both' }] },
       },
       ai: {
         seq: ['slam', 'brine', 'slam'],
@@ -343,20 +357,20 @@
     // ==================================================================================================================
     boss_jorogumo: {
       id: 'boss_jorogumo', name: 'Jorogumo', title: 'The Silk Courtesan', chapter: 2, tier: 'boss', size: 'xl',
-      hp: [240, 246],
+      hp: [258, 264],
       start: [{ op: 'status', s: 'plating', n: 4, tgt: 'self' }],
       moves: {
         // form 1
         brood: { name: 'Honoured Guests', kind: 'summon', say: 'Welcome, welcome. Do stay for supper.', fx: [{ op: 'summon', enemy: 'spiderling', n: 2 }] },
         hatch: { name: 'Another Guest', kind: 'summon', say: 'One more place at the table.', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
         snare: { name: 'Silk Snare', kind: 'debuff', say: 'Hold still, darling. Threads are delicate.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        embrace: { name: 'Silken Embrace', kind: 'heavy', say: 'Closer. Closer.', fx: [{ op: 'dmg', n: { base: 12, per: 'status', s: 'bind', who: 'target', mul: 8, cap: 20 }, tgt: 'front' }] },
-        kiss: { name: 'Venom Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
+        embrace: { name: 'Silken Embrace', kind: 'heavy', say: 'Closer. Closer.', fx: [{ op: 'dmg', n: { base: 13, per: 'status', s: 'bind', who: 'target', mul: 9, cap: 22 }, tgt: 'front' }] },
+        kiss: { name: 'Venom Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
         fan: { name: 'Iron Fan Dance', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'random' }] },
         // form 2
         legs: { name: 'Eight Legs', kind: 'multi', say: 'Sit. Sit. SIT.', fx: [{ op: 'dmg', n: 4, hits: 4, tgt: 'random' }] },
         spin: { name: 'Spin the Threads', kind: 'debuff', say: 'One thread. A thousand. Hold still.', fx: [{ op: 'status', s: 'bind', n: 2, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        web: { name: 'Thousand-Thread Web', kind: 'heavy', say: 'A thousand threads, one supper.', fx: [{ op: 'dmg', n: { base: 7, per: 'status', s: 'bind', who: 'target', mul: 3, cap: 12 }, tgt: 'both' }] },
+        web: { name: 'Thousand-Thread Web', kind: 'heavy', say: 'A thousand threads, one supper.', fx: [{ op: 'dmg', n: { base: 8, per: 'status', s: 'bind', who: 'target', mul: 4, cap: 14 }, tgt: 'both' }] },
         frenzy: { name: 'Eight-Legged Frenzy', kind: 'multi', say: 'I will unpick every last one of you!', fx: [{ op: 'dmg', n: 3, hits: 6, tgt: 'random' }] },
       },
       ai: {
@@ -409,7 +423,7 @@
       { id: 'ch2_bridge_guard', enemies: ['chochin', 'drowned_samurai'], w: 3, min: 0.4 },
       { id: 'ch2_faceless_choir', enemies: ['nopperabo', 'nopperabo'], w: 2, min: 0.5 },
       { id: 'ch2_night_market', enemies: ['chochin', 'koi_spirit', 'tsukumogami'], w: 3, min: 0.5 },
-      { id: 'ch2_flooded_bridge', enemies: ['nure_onna', 'drowned_samurai'], w: 2, min: 0.6 },
+      { id: 'ch2_flooded_bridge', enemies: ['nure_onna', 'drowned_samurai'], w: 2, min: 0.5 },
       { id: 'ch2_lantern_parade', enemies: ['chochin', 'rokurokubi', 'silk_weaver'], w: 2, min: 0.65 },
       { id: 'ch2_drowned_procession', enemies: ['koi_spirit', 'rokurokubi', 'drowned_samurai'], w: 2, min: 0.7 },
       { id: 'ch2_mistress_court', enemies: ['spiderling', 'spiderling', 'silk_weaver', 'nure_onna'], w: 2, min: 0.8 },

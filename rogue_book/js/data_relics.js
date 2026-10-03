@@ -25,18 +25,29 @@
 // THE SET, BY JOB (every mod key, every combat and run hook and rows on both the front and the back row appear at least once; the
 // audit and the test check it). Energy and hand size come only from boss relics and always with a drawback.
 //   MAP AND INK   brass_lantern paints 2 hexes a chapter, pilgrim_compass and plum_pendant refund Ink on paints, ink_jar and
-//                 heavy inkstone move the Ink floor and ceiling, well_kasa and bottomless_gourd feed on wells, sable_brush hands
-//                 out a Brush every chapter, shrine_box pays Ink at camps, jade_key adds a second camp action.
+//                 inkstone_weight (Heavy Inkstone) move the Ink floor and ceiling, well_kasa feeds on wells, sable_brush hands
+//                 out a Brush every chapter, shrine_box pays Ink at camps, jade_key adds a second camp action (and a rest heal).
 //   COMMONS       small, readable, always on: 1 Block a turn, 25% gold, 25% healing, 2 HP after fights, Block on a kill,
 //                 Block after a hit, a Burn or Weak opener, first turn Block, and so on.
 //   ROW SYSTEM    war_banner (front damage) and formation_scroll (front Block, back Block from cards) are `rows` relics; fox_mask,
 //                 flute_of_changing_tunes, mirror_of_two_faces and dancer_geta pay for swapping; longbow_of_reach reads the
-//                 row with a cond and remembrance_candle watches the front hero.
+//                 row with a cond and remembrance_candle watches the front hero. A hook `limit` is spent BEFORE a cond inside the hook
+//                 is read, so longbow_of_reach's limit of 2 counts every Attack of the turn, whoever plays it, and only a back row
+//                 play gets the bonus: its text says exactly that ("your first 2 Attacks each turn ... when played from the back row").
 //   GEM RELICS    facet_lens (gold), jewelers_loupe (draw) and prism_crown (Energy) key on `filter.gems`; koi_pouch and
 //                 pearl_satchel hand out gems.
 //   HEROES        three per hero, each built on that hero's resource: Hanae (Bloom), Kuro (Sumi), Suzu (Ward), Raiga (Charge).
-//   BOSS TRADES   every boss relic is a real trade: Energy or a bigger hand or Block or wells against curses, weaker healing,
-//                 a smaller hand, scarcer gold or a drained start.
+//   BOSS TRADES   every boss relic is a real trade, and each one is a different BUILD (a boss offer is three of these six):
+//                 tyrants_crown +1 Energy for 3 curses and blood_moon_vow +1 Energy for 2 HP each every turn (the tempo picks),
+//                 book_of_falling_leaves +1 card for 40% weaker healing (the engine pick), ironclad_tsuba Block and Thorns for one
+//                 card fewer (the turtle and retaliation pick), bottomless_gourd 3 Might against 2 Vulnerable at the start of every
+//                 fight (the glass cannon: neutral in trash fights, big against elites and bosses) and toll_bridge a free rare
+//                 a tier 3 gem plus two more reward cards against dearer shops (the draft pick; it gives a gem, not a card choice, because a
+//                 boss relic is claimed on the reward page and a pending card pick there would stall the page tests).
+//                 Measured in the relic lab (recorded greedy fights refought at full HP, party HP lost per fight as a share of max
+//                 HP against no boss relic, 2500 fights, plus or minus 0.2): +1 Energy alone -4.9, Tsuba -3.7, Gourd -1.7 (boss
+//                 and elite fights -3 to -14), Book -1.9, Crown with 3 unremoved curses +0.6, Vow with 2 HP +4.1. A startBlock point
+//                 is worth about 1.8, a hand point about 2.7.
 //   SHOP          four relics sold at 160 gold: cheaper shops, gold after every fight, a heal after every won fight, a free gem
 //                 for every shop visited.
 //
@@ -66,8 +77,8 @@
     },
     rice_ball: {
       name: 'Rice Ball', rarity: 'common', art: { m: 'riceball', c: 'moon' },
-      text: 'After each fight, both heroes heal 2 HP.',
-      hooks: [{ on: 'onFightWon', fx: [{ op: 'heal', n: 2, who: 'both' }] }],
+      text: 'After each fight, both heroes heal 2 HP, and the one with less HP heals 2 more.',
+      hooks: [{ on: 'onFightWon', fx: [{ op: 'heal', n: 2, who: 'both' }, { op: 'heal', n: 2, who: 'lowest' }] }],
     },
     wooden_comb: {
       name: 'Wooden Comb', rarity: 'common', art: { m: 'comb', c: 'rose' },
@@ -91,8 +102,9 @@
     },
     inkstone_weight: {
       name: 'Heavy Inkstone', rarity: 'common', art: { m: 'inkstone', c: 'ink' },
-      text: 'Your Ink pool can hold 2 more.',
+      text: 'Your Ink pool can hold 2 more, and taking this gives both heroes 3 max HP.',
       mods: { inkMax: 2 },
+      hooks: [{ on: 'onPickup', fx: [{ op: 'maxHp', n: 3, who: 'both' }] }],
     },
     heart_charm: {
       name: 'Heartwood Charm', rarity: 'common', art: { m: 'heart', c: 'crimson' },
@@ -159,8 +171,8 @@
     // ================================================================== UNCOMMON (22)
     fox_mask: {
       name: 'Fox Mask', rarity: 'uncommon', art: { m: 'mask', c: 'crimson' },
-      text: 'Whenever you swap rows, the new front hero gains 1 Dodge (once per turn).',
-      hooks: [{ on: 'onSwap', limit: 1, fx: [{ op: 'status', s: 'dodge', n: 1, tgt: 'self' }] }],
+      text: 'Every 2nd time you swap rows, the new front hero gains 1 Dodge (once per turn).',
+      hooks: [{ on: 'onSwap', limit: 1, every: 2, fx: [{ op: 'status', s: 'dodge', n: 1, tgt: 'self' }] }],
     },
     silver_bell: {
       name: 'Silver Bell', rarity: 'uncommon', art: { m: 'bell', c: 'moon' },
@@ -193,9 +205,9 @@
       hooks: [{ on: 'onRest', fx: [{ op: 'ink', n: 2 }] }],
     },
     whetstone: {
-      name: 'Whetstone', rarity: 'uncommon', art: { m: 'sword', c: 'ash' },
-      text: 'When you take this, upgrade 2 random cards in your deck.',
-      hooks: [{ on: 'onPickup', fx: [{ op: 'upgradeCard', n: 2, random: true }] }],
+      name: 'Honing Stone', rarity: 'uncommon', art: { m: 'sword', c: 'ash' },
+      text: 'When you take this, upgrade 3 random cards in your deck.',
+      hooks: [{ on: 'onPickup', fx: [{ op: 'upgradeCard', n: 3, random: true }] }],
     },
     koi_pouch: {
       name: 'Koi Pouch', rarity: 'uncommon', art: { m: 'koi', c: 'azure' }, locked: true,
@@ -204,8 +216,8 @@
     },
     facet_lens: {
       name: 'Facet Lens', rarity: 'uncommon', art: { m: 'mirror', c: 'teal' },
-      text: 'The first time each turn you play a card with a gem, gain 3 gold.',
-      hooks: [{ on: 'onPlay', filter: { gems: { gte: 1 } }, limit: 1, fx: [{ op: 'gold', n: 3 }] }],
+      text: 'The first time each turn you play a card with a gem, gain 3 gold and 3 Block.',
+      hooks: [{ on: 'onPlay', filter: { gems: { gte: 1 } }, limit: 1, fx: [{ op: 'gold', n: 3 }, { op: 'block', n: 3, tgt: 'self' }] }],
     },
     jewelers_loupe: {
       name: 'Jeweler\'s Loupe', rarity: 'uncommon', art: { m: 'star', c: 'gold' },
@@ -239,7 +251,7 @@
     },
     longbow_of_reach: {
       name: 'Longbow of Reach', rarity: 'uncommon', art: { m: 'bow', c: 'jade' }, locked: true,
-      text: 'When a back-row hero plays an Attack, deal 3 more damage to its target (twice a turn).',
+      text: 'Your first 2 Attacks each turn deal 3 more damage when played from the back row.',
       hooks: [{ on: 'onPlay', filter: { type: 'attack' }, limit: 2, fx: [{ op: 'cond', if: { row: 'back' }, then: [{ op: 'dmg', n: 3, tgt: 'enemy' }] }] }],
     },
     wintry_bell: {
@@ -272,8 +284,9 @@
     // ================================================================== RARE (12)
     jade_key: {
       name: 'Jade Key', rarity: 'rare', art: { m: 'key', c: 'jade' },
-      text: 'At each camp you may take 1 more action.',
+      text: 'At each camp you may take 1 more action, and a rest also heals both heroes 4 HP.',
       mods: { campActions: 1 },
+      hooks: [{ on: 'onRest', fx: [{ op: 'heal', n: 4, who: 'both' }] }],
     },
     branching_bookmark: {
       name: 'Branching Bookmark', rarity: 'rare', art: { m: 'ribbon', c: 'violet' },
@@ -323,7 +336,7 @@
     },
     lotus_sanctuary: {
       name: 'Lotus Sanctuary', rarity: 'rare', hero: 'suzu', art: { m: 'lotus', c: 'moon' },
-      text: 'Suzu gains 1 Ward a turn and, at 4, spends them for 1 Weak on all foes and 3 Block each.',
+      text: 'Suzu gains 1 extra Ward a turn, and at 4 spends them to Weaken all and Block both for 3.',
       hooks: [{ on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }, { op: 'cond', if: { status: { s: 'ward', gte: 4 } }, then: [{ op: 'removeStatus', s: 'ward', n: 4, tgt: 'self' }, { op: 'status', s: 'weak', n: 1, tgt: 'all' }, { op: 'block', n: 3, tgt: 'both' }] }] }],
     },
     stormtiger_sash: {
@@ -335,9 +348,9 @@
     // ================================================================== BOSS (6): each one is a trade
     tyrants_crown: {
       name: 'Tyrant\'s Crown', rarity: 'boss', art: { m: 'crown', c: 'crimson' },
-      text: 'Gain 1 Energy each turn, but taking this adds 2 Curses to your deck.',
+      text: 'Gain 1 Energy each turn, but taking this adds 3 Curses to your deck.',
       mods: { energy: 1 },
-      hooks: [{ on: 'onPickup', fx: [{ op: 'addCurse', n: 2 }] }],
+      hooks: [{ on: 'onPickup', fx: [{ op: 'addCurse', n: 3 }] }],
     },
     book_of_falling_leaves: {
       name: 'Book of Falling Leaves', rarity: 'boss', art: { m: 'maple', c: 'amber' },
@@ -346,24 +359,26 @@
     },
     blood_moon_vow: {
       name: 'Blood Moon Vow', rarity: 'boss', art: { m: 'moon', c: 'violet' },
-      text: 'Gain 1 Energy each turn, but both heroes lose 1 HP at the start of your turn.',
+      text: 'Gain 1 Energy each turn, but both heroes lose 2 HP at the start of your turn.',
       mods: { energy: 1 },
-      hooks: [{ on: 'turnStart', fx: [{ op: 'hurt', n: 1, tgt: 'both' }] }],
+      hooks: [{ on: 'turnStart', fx: [{ op: 'hurt', n: 2, tgt: 'both' }] }],
     },
     toll_bridge: {
       name: 'Toll Bridge', rarity: 'boss', art: { m: 'bridge', c: 'gold' },
-      text: 'Card rewards offer 2 more cards, but combat gold is 50% lower.',
-      mods: { cardChoices: 2, goldMul: -0.5 },
+      text: 'Taking this gives a tier 3 gem and 2 more cards per reward, but shop prices rise 25%.',
+      mods: { cardChoices: 2, priceMul: 0.25 },
+      hooks: [{ on: 'onPickup', fx: [{ op: 'addGem', tier: 3 }] }],
     },
     ironclad_tsuba: {
       name: 'Ironclad Tsuba', rarity: 'boss', art: { m: 'katana_guard', c: 'ash' },
-      text: 'Each hero gains 4 Block at the start of every turn, but you draw 1 fewer card.',
-      mods: { startBlock: 4, hand: -1 },
+      text: 'Heroes gain 2 Block each turn and start fights with 3 Thorns, but you draw 1 fewer card.',
+      mods: { startBlock: 2, hand: -1 },
+      hooks: [{ on: 'combatStart', fx: [{ op: 'status', s: 'thorns', n: 3, tgt: 'both' }] }],
     },
     bottomless_gourd: {
       name: 'Bottomless Gourd', rarity: 'boss', art: { m: 'gourd', c: 'teal' }, locked: true,
-      text: 'Wells give 3 more Ink, but chapters start with 4 less Ink and healing is 25% weaker.',
-      mods: { wellInk: 3, startInk: -4, healMul: -0.25 },
+      text: 'Both heroes start each fight with 3 Might, but also with 2 Vulnerable.',
+      hooks: [{ on: 'combatStart', fx: [{ op: 'status', s: 'might', n: 3, tgt: 'both' }, { op: 'status', s: 'vulnerable', n: 2, tgt: 'both' }] }],
     },
 
     // ================================================================== SHOP (4): sold for 160 gold, nowhere else

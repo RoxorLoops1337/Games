@@ -105,8 +105,8 @@
     raiga_hard_knock: {
       name: 'Hard Knock', hero: 'raiga', type: 'attack', rarity: 'common', cost: 0,
       // the cheap trick: free damage and a Charge, paid in HP. The HP also feeds every pain payoff
-      fx: [dmg(4), hurt(2), charge(1)],
-      up: { fx: [dmg(6), hurt(2), charge(1)] },
+      fx: [dmg(4), hurt(1), charge(1)],
+      up: { fx: [dmg(6), hurt(1), charge(1)] },
       kw: [], slots: ['red'], art: { m: 'fist', c: 'crimson', hero: true },
       flavor: 'Raiga\'s forehead has opinions, and it shares them.',
     },
@@ -114,7 +114,7 @@
       name: 'Chain Lightning', hero: 'raiga', type: 'attack', rarity: 'common', cost: 1,
       // a sink that does nothing without Charge and a lot with a bank. Random targets, one hit per Charge, so Mark, Might and the back-row
       // bonus land on every hit. It empties the bank, so it is a burst, not a habit. 3 per hit on purpose: the 0 cost builders feed it at
-      // about 1 HP per Charge, and the rare finisher (Thousand Thunders, 4 per Charge to EVERY enemy) must stay the efficient way to cash a bank
+      // about 1 HP per Charge, and the rare finisher (Thousand Thunders, 3 plus 4 per Charge to EVERY enemy) must stay the efficient way to cash a bank
       fx: [zap(3, { hits: { per: 'status', s: 'charge' }, tgt: 'random' }), spendCharge()],
       up: { fx: [zap(4, { hits: { per: 'status', s: 'charge' }, tgt: 'random' }), spendCharge()] },
       kw: [], slots: ['red'], art: { m: 'chain_lightning', c: 'azure' },
@@ -183,10 +183,11 @@
       flavor: 'It rings once. Everyone remembers they are not alone.',
     },
     raiga_static_field: {
-      name: 'Static Field', hero: 'raiga', type: 'skill', rarity: 'common', cost: 1,
-      // Mark on the whole line: every hit, from either hero, spends one Mark for +3, so multi-hit and area cards love it
-      fx: [mark(2, 'all')],
-      up: { fx: [mark(3, 'all')] },
+      name: 'Static Field', hero: 'raiga', type: 'skill', rarity: 'common', cost: 0,
+      // Mark on the whole line: every hit, from either hero, spends one Mark for +3, so multi-hit and area cards love it. It cost 1 for
+      // Mark 2 and was a dead draw for a hero without many hits to spend it on (-0.9 in simulation): free, it is a rider on any turn
+      fx: [mark(1, 'all')],
+      up: { fx: [mark(2, 'all')] },
       kw: [], slots: ['gold'], art: { m: 'eye', c: 'crimson' },
     },
     raiga_still_water: {
@@ -218,8 +219,8 @@
     raiga_sundering_blow: {
       name: 'Sundering Blow', hero: 'raiga', type: 'attack', rarity: 'uncommon', cost: 2,
       // clunky and enormous: the smash for a Stunned target. Retain lets it wait in hand until a Stun lands (Stilling Palm, Waiting Storm)
-      fx: [when({ targetStatus: { s: 'stun' } }, [dmg(26)], [dmg(8)])],
-      up: { fx: [when({ targetStatus: { s: 'stun' } }, [dmg(32)], [dmg(10)])] },
+      fx: [when({ targetStatus: { s: 'stun' } }, [dmg(26)], [dmg(10)])],
+      up: { fx: [when({ targetStatus: { s: 'stun' } }, [dmg(32)], [dmg(12)])] },
       kw: ['retain'], slots: ['red', 'green'], art: { m: 'quake', c: 'crimson' },
       flavor: 'Even mountains flinch first.',
     },
@@ -324,16 +325,17 @@
       name: 'Raijin\'s Hammer', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 3,
       // the 3 cost hammer that costs less per Charge: with the bank it refunds two of its three Energy, so it is really a 1 cost card
       // every other turn. Retain: wait in hand until the bank is ready
-      fx: [zap(20), when({ status: { s: 'charge', gte: 4 } }, [spendCharge(4), { op: 'energy', n: 2 }])],
-      up: { fx: [zap(24), when({ status: { s: 'charge', gte: 3 } }, [spendCharge(3), { op: 'energy', n: 2 }])] },
+      fx: [zap(22), when({ status: { s: 'charge', gte: 4 } }, [spendCharge(4), { op: 'energy', n: 2 }])],
+      up: { fx: [zap(26), when({ status: { s: 'charge', gte: 3 } }, [spendCharge(3), { op: 'energy', n: 2 }])] },
       kw: ['retain'], slots: ['red', 'gold'], art: { m: 'quake', c: 'gold' },
       flavor: 'The thunder god does not swing it. He lets it fall.',
     },
     raiga_thousand_thunders: {
       name: 'Thousand Thunders', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 3,
-      // the Storm finisher: bank Charge for a few turns, then every enemy takes the whole bank. Capped at 6 Charge: a bigger bank stays for the next time
-      fx: [zap(perCharge(4, { upTo: 6 }), { tgt: 'all', consume: { s: 'charge', upTo: 6 } })],
-      up: { cost: 2 },
+      // the Storm finisher: bank Charge for a few turns, then every enemy takes the whole bank. It paid 4 a Charge up to 6 Charge, a bank a four round fight
+      // never reached (-1.0 in simulation), so it pays 3 flat and 4 a Charge up to 5 (4 flat and 5 a Charge upgraded) and a bigger bank stays for the next time
+      fx: [zap(perCharge(4, { base: 3, upTo: 5 }), { tgt: 'all', consume: { s: 'charge', upTo: 5 } })],
+      up: { fx: [zap(perCharge(5, { base: 4, upTo: 5 }), { tgt: 'all', consume: { s: 'charge', upTo: 5 } })] },
       kw: ['retain'], slots: ['red', 'green'], art: { m: 'meteor', c: 'violet' },
       flavor: 'Every cloud he ever walked under, all at once.',
     },
@@ -341,8 +343,8 @@
       name: 'Heaven\'s Answer', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 2,
       // the pain converter: the HP he lost last enemy phase, plus anything he has paid since, becomes damage. Hurt cards played first count,
       // so Blood and Thunder into this is a plan. Block wins fights but starves it: let a hit through on purpose
-      fx: [zap({ base: 6, per: 'damageTaken', cap: 24 })],
-      up: { fx: [zap({ base: 8, per: 'damageTaken', cap: 28 })] },
+      fx: [zap({ base: 10, per: 'damageTaken', cap: 26 })],
+      up: { fx: [zap({ base: 12, per: 'damageTaken', cap: 30 })] },
       kw: [], slots: ['red', 'any'], art: { m: 'thunder_fist', c: 'moon', hero: true },
       flavor: 'Whatever you throw at him, the sky returns to sender.',
     },
@@ -365,16 +367,17 @@
     raiga_storms_eye: {
       name: 'Storm\'s Eye', hero: 'raiga', type: 'power', rarity: 'rare', cost: 2,
       // the Charge engine: three now, and every blow he takes pays double (Storm Born and this each give one, twice a turn)
-      fx: [charge(3), hook('onDamaged', [charge(1)], { limit: 2 })],
-      up: { cost: 1 },
+      fx: [charge(3), { op: 'draw', n: 1 }, hook('onDamaged', [charge(1)], { limit: 2 })],
+      up: { fx: [charge(4), { op: 'draw', n: 1 }, hook('onDamaged', [charge(2)], { limit: 2 })] },
       kw: [], slots: ['gold', 'green'], art: { m: 'eye', c: 'azure' },
       flavor: 'In the quiet centre of the tempest, someone is smiling.',
     },
     raiga_thornstorm: {
       name: 'Thornstorm', hero: 'raiga', type: 'power', rarity: 'rare', cost: 2,
-      // Thorns stop being a passive: every turn they fire at the whole line. Row Thorns count, so the front row starts it at 3
-      fx: [thorns(1), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })])],
-      up: { fx: [thorns(2), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 10 }, { tgt: 'all' })])] },
+      // Thorns stop being a passive: every turn they fire at the whole line. Row Thorns count, so the front row starts it at 3. It braces him at once too: a power
+      // that does nothing on the turn it is played lost to every cheap card in a three round fight
+      fx: [block(5), thorns(1), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })])],
+      up: { fx: [block(7), thorns(2), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 9 }, { tgt: 'all' })])] },
       kw: [], slots: ['gold', 'blue'], art: { m: 'thorns', c: 'violet' },
       flavor: 'The thorns were a gift. The storm was a bonus.',
     },

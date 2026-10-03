@@ -400,7 +400,7 @@ t.test('budget: the ruler prices a few known cases sensibly (guards the ruler it
   near(evalCard(resolveDef(byId('raiga_jab'), false), 'front').net, 6, 'Thunder Jab in front is 6 (Raiga has no front damage bonus)');
   near(evalCard(resolveDef(byId('raiga_jab'), false), 'back').net, 7, 'and 7 in the back');
   near(evalCard(resolveDef(byId('raiga_brace'), false), 'back').net, 5, 'Stone Brace is 5 in either row');
-  const hk = evalCard(resolveDef(byId('raiga_hard_knock'), false), 'front'); near(hk.gross, 4 + 2, 'Hard Knock: 4 damage plus a Charge worth 2'); near(hk.spent, 2, 'and 2 HP paid');
+  const hk = evalCard(resolveDef(byId('raiga_hard_knock'), false), 'front'); near(hk.gross, 4 + 2, 'Hard Knock: 4 damage plus a Charge worth 2'); near(hk.spent, 1, 'and 1 HP paid');
   const cl = evalCard({ fx: [{ op: 'dmg', n: 3, hits: { per: 'status', s: 'charge' }, tgt: 'random' }, { op: 'removeStatus', s: 'charge', tgt: 'self' }] }, 'front', { charge: 4 }); near(cl.gross, 12, 'Chain Lightning with 4 Charge is 4 hits of 3'); near(cl.spent, 8, 'and spends 4 Charge at 2 each');
   const aoe = evalCard({ fx: [{ op: 'dmg', n: 5, tgt: 'all' }] }, 'back'); near(aoe.gross, 10.8, 'AoE is worth 1.8 targets (and +1 per hit in the back)');
   const might = evalCard({ fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'hook', on: 'turnEnd', once: true, fx: [{ op: 'status', s: 'might', n: -2, tgt: 'self' }] }] }, 'front'); near(might.net, 5, 'temporary Might is 2.5 per stack');
@@ -450,7 +450,7 @@ if (!COMBAT || !DATA.cardPlain) {
   const mk = (id, up) => ({ uid: EU.uid(), id, up: up ? 1 : 0, gems: (D.cards[id].slots || []).map(() => null) });
   const fight = (deck, o) => {
     o = o || {};
-    const C = COMBAT.create({ heroes: [{ id: 'raiga', hp: o.hp === undefined ? 88 : o.hp, maxHp: 88 }, { id: o.partner || 'kuro', hp: o.allyHp === undefined ? 60 : o.allyHp, maxHp: 60 }], frontIdx: o.back ? 1 : 0,
+    const C = COMBAT.create({ heroes: [{ id: 'raiga', hp: o.hp === undefined ? 88 : o.hp, maxHp: 88 }, { id: o.partner || 'kuro', hp: o.allyHp === undefined ? D.heroes[o.partner || 'kuro'].maxHp : o.allyHp, maxHp: D.heroes[o.partner || 'kuro'].maxHp }], frontIdx: o.back ? 1 : 0,
       deck: deck.map((d) => (typeof d === 'string' ? mk(d) : mk(d.id, d.up))), enemies: o.enemies || [IDLE], tier: 'normal', chapter: 1, seed: o.seed || 11, mods: D.modsFor([], 0), relics: [], gold: 0 });
     C.start();
     return C;
@@ -560,8 +560,8 @@ if (!COMBAT || !DATA.cardPlain) {
   });
 
   // ---- commons: attacks
-  t.test('engine: Hard Knock is free damage and Charge for 2 HP (hurt never fires Storm Born and never kills)', () => {
-    const C = fight(['raiga_hard_knock'].concat(FILL)); t.eq(dealt(C, 'raiga_hard_knock'), 4, 'deals 4'); t.eq(raiga(C).hp, 86, 'costs 2 HP'); t.eq(st(raiga(C), 'charge'), 1, 'gains exactly 1 Charge (Storm Born did not fire)'); t.eq(C.energy, 3, 'and costs no Energy');
+  t.test('engine: Hard Knock is free damage and Charge for 1 HP (hurt never fires Storm Born and never kills)', () => {
+    const C = fight(['raiga_hard_knock'].concat(FILL)); t.eq(dealt(C, 'raiga_hard_knock'), 4, 'deals 4'); t.eq(raiga(C).hp, 87, 'costs 1 HP'); t.eq(st(raiga(C), 'charge'), 1, 'gains exactly 1 Charge (Storm Born did not fire)'); t.eq(C.energy, 3, 'and costs no Energy');
     const L1 = fight(['raiga_hard_knock'].concat(FILL), { hp: 1 }); play(L1, 'raiga_hard_knock'); t.eq(raiga(L1).hp, 1, 'at 1 HP it cannot kill him'); t.ok(!raiga(L1).down, 'still standing');
     t.eq(dealt(fight([{ id: 'raiga_hard_knock', up: 1 }].concat(FILL)), 'raiga_hard_knock'), 6, 'upgraded: 6');
   });
@@ -625,14 +625,14 @@ if (!COMBAT || !DATA.cardPlain) {
     t.ok(C2.hand.some((c) => c.uid === keep), 'the chosen card is still in hand next turn');
   });
   t.test('engine: Static Field Marks every enemy and every hit spends a stack for +3', () => {
-    const C = fight(['raiga_static_field'].concat(FILL), { enemies: [IDLE, IDLE] }); play(C, 'raiga_static_field'); C.enemies.forEach((e) => t.eq(st(e, 'mark'), 2, 'Mark 2'));
-    const b = C.enemies[0].hp; play(C, 'raiga_jab', C.enemies[0].id); t.eq(b - C.enemies[0].hp, 6 + 3, 'Jab + Mark 3'); t.eq(st(C.enemies[0], 'mark'), 1, 'one stack spent');
-    const V1 = fight([{ id: 'raiga_static_field', up: 1 }].concat(FILL)); play(V1, 'raiga_static_field'); t.eq(st(V1.enemies[0], 'mark'), 3, 'upgraded: Mark 3');
+    const C = fight(['raiga_static_field'].concat(FILL), { enemies: [IDLE, IDLE] }); play(C, 'raiga_static_field'); t.eq(C.energy, C.maxEnergy, 'it is free'); C.enemies.forEach((e) => t.eq(st(e, 'mark'), 1, 'Mark 1'));
+    const b = C.enemies[0].hp; play(C, 'raiga_jab', C.enemies[0].id); t.eq(b - C.enemies[0].hp, 6 + 3, 'Jab + Mark 3'); t.eq(st(C.enemies[0], 'mark'), 0, 'the one stack is spent');
+    const V1 = fight([{ id: 'raiga_static_field', up: 1 }].concat(FILL)); play(V1, 'raiga_static_field'); t.eq(st(V1.enemies[0], 'mark'), 2, 'upgraded: Mark 2'); t.eq(V1.energy, V1.maxEnergy, 'and still free');
   });
   t.test('engine: Static Field then Chain Lightning: every hit spends a Mark for +3', () => {
     const C = fight(['raiga_static_field', 'raiga_chain_lightning'].concat(FILL), { enemies: [IDLE] }); raiga(C).st.charge = 4; C.energy = 3;
     play(C, 'raiga_static_field'); const b = hpSum(C); play(C, 'raiga_chain_lightning');
-    t.eq(b - hpSum(C), 4 * 3 + 2 * 3, 'four hits of 3, the first two carry +3'); t.eq(st(C.enemies[0], 'mark'), 0, 'both Marks spent');
+    t.eq(b - hpSum(C), 4 * 3 + 1 * 3, 'four hits of 3, the first one carries +3'); t.eq(st(C.enemies[0], 'mark'), 0, 'the Mark is spent');
   });
   t.test('engine: Still Water discards what you choose and draws as many back', () => {
     const deck = ['raiga_still_water', 'raiga_jab', 'raiga_jab', 'raiga_brace', 'raiga_brace', 'raiga_jab', 'raiga_jab', 'raiga_brace'];
@@ -655,8 +655,8 @@ if (!COMBAT || !DATA.cardPlain) {
   });
 
   // ---- uncommons
-  t.test('engine: Sundering Blow is 8 damage, or 26 against a Stunned target, and it waits in hand', () => {
-    const A = fight(['raiga_sundering_blow'].concat(FILL)); t.eq(dealt(A, 'raiga_sundering_blow'), 8, 'unstunned: 8');
+  t.test('engine: Sundering Blow is 10 damage, or 26 against a Stunned target, and it waits in hand', () => {
+    const A = fight(['raiga_sundering_blow'].concat(FILL)); t.eq(dealt(A, 'raiga_sundering_blow'), 10, 'unstunned: 10');
     const B = fight(['raiga_sundering_blow'].concat(FILL)); t.eq(dealt(B, 'raiga_sundering_blow', (C) => { C.enemies[0].st.stun = 1; }), 26, 'Stunned: 26');
     const R = fight(['raiga_sundering_blow'].concat(FILL)); R.endTurn(); t.ok(!!handOf(R, 'raiga_sundering_blow') || R.discard.every((c) => c.id !== 'raiga_sundering_blow'), 'retained through the end of the turn');
     const U = fight([{ id: 'raiga_sundering_blow', up: 1 }].concat(FILL)); t.eq(dealt(U, 'raiga_sundering_blow', (C) => { C.enemies[0].st.stun = 1; }), 32, 'upgraded: 32');
@@ -670,7 +670,7 @@ if (!COMBAT || !DATA.cardPlain) {
     t.eq(dealt(fight(['raiga_cornered_tiger'].concat(FILL), { hp: 44 }), 'raiga_cornered_tiger'), 7, 'exactly half HP is not below half: 7');
     t.eq(dealt(fight(['raiga_cornered_tiger'].concat(FILL), { hp: 43 }), 'raiga_cornered_tiger'), 15, 'below half: 7 + 8');
     t.eq(dealt(fight([{ id: 'raiga_cornered_tiger', up: 1 }].concat(FILL), { hp: 20 }), 'raiga_cornered_tiger'), 18, 'upgraded: 9 + 9');
-    const H = fight(['raiga_hard_knock', 'raiga_hard_knock', 'raiga_cornered_tiger'].concat(FILL), { hp: 46 }); play(H, 'raiga_hard_knock'); t.eq(raiga(H).hp, 44, 'a Hard Knock takes him to exactly half'); play(H, 'raiga_hard_knock'); const b = hpSum(H); play(H, 'raiga_cornered_tiger'); t.eq(b - hpSum(H), 15, 'the second one tips him under half: Tiger hits for 15');
+    const H = fight(['raiga_hard_knock', 'raiga_hard_knock', 'raiga_cornered_tiger'].concat(FILL), { hp: 45 }); play(H, 'raiga_hard_knock'); t.eq(raiga(H).hp, 44, 'a Hard Knock takes him to exactly half'); play(H, 'raiga_hard_knock'); const b = hpSum(H); play(H, 'raiga_cornered_tiger'); t.eq(b - hpSum(H), 15, 'the second one tips him under half: Tiger hits for 15');
   });
   t.test('engine: Drumroll strikes and shields once per Energy', () => {
     const C = fight(['raiga_drumroll'].concat(FILL)); t.eq(dealt(C, 'raiga_drumroll'), 3 * 4, 'X = 3: three hits of 4'); t.eq(raiga(C).block, 3 + 3 * 2, 'and three walls of 2'); t.eq(C.energy, 0, 'X spends everything');
@@ -713,8 +713,8 @@ if (!COMBAT || !DATA.cardPlain) {
   t.test('engine: Bring It On pays HP for Charge, draws the ally\'s hits onto Raiga, and shields the ally', () => {
     const C = fight(['raiga_bring_it_on'].concat(FILL), { enemies: [BACKER] }); play(C, 'raiga_bring_it_on');
     t.eq(raiga(C).hp, 85, '3 HP'); t.eq(st(raiga(C), 'charge'), 3, '3 Charge'); t.eq(st(raiga(C), 'taunt'), 2, 'Taunt 2'); t.eq(ally(C).block, 3, 'the ally gets 3 Block');
-    C.endTurn(); t.eq(ally(C).hp, 60, 'the dive on the back row found Raiga instead'); t.eq(raiga(C).hp, 85 - 2, 'and Raiga took it: 5 damage into 3 starting Block'); t.eq(st(raiga(C), 'charge'), 4, 'which is one more Storm Born Charge');
-    const N = fight(['raiga_jab'].concat(FILL), { enemies: [BACKER] }); N.endTurn(); t.eq(ally(N).hp, 60 - 5, 'without Taunt the ally eats it');
+    C.endTurn(); t.eq(ally(C).hp, D.heroes.kuro.maxHp, 'the dive on the back row found Raiga instead'); t.eq(raiga(C).hp, 85 - 2, 'and Raiga took it: 5 damage into 3 starting Block'); t.eq(st(raiga(C), 'charge'), 4, 'which is one more Storm Born Charge');
+    const N = fight(['raiga_jab'].concat(FILL), { enemies: [BACKER] }); N.endTurn(); t.eq(ally(N).hp, D.heroes.kuro.maxHp - 5, 'without Taunt the ally eats it');
   });
   t.test('engine: Living Conduit pays a Charge for either hero\'s Attack, once per turn (twice upgraded), and is innate', () => {
     const C = fight(['raiga_living_conduit'].concat(FILL)); play(C, 'raiga_living_conduit'); t.eq(st(raiga(C), 'charge'), 0, 'nothing on its own play');
@@ -738,27 +738,27 @@ if (!COMBAT || !DATA.cardPlain) {
   });
 
   // ---- rares
-  t.test('engine: Raijin\'s Hammer hits for 20 and, with 4 Charge, spends them for 2 Energy back', () => {
-    const A = fight(['raiga_raijin_hammer'].concat(FILL)); t.eq(dealt(A, 'raiga_raijin_hammer', (C) => { raiga(C).st.charge = 4; }), 20, '20 damage'); t.eq(st(raiga(A), 'charge'), 0, 'Charge spent'); t.eq(A.energy, 2, '3 Energy paid, 2 refunded');
+  t.test('engine: Raijin\'s Hammer hits for 22 and, with 4 Charge, spends them for 2 Energy back', () => {
+    const A = fight(['raiga_raijin_hammer'].concat(FILL)); t.eq(dealt(A, 'raiga_raijin_hammer', (C) => { raiga(C).st.charge = 4; }), 22, '22 damage'); t.eq(st(raiga(A), 'charge'), 0, 'Charge spent'); t.eq(A.energy, 2, '3 Energy paid, 2 refunded');
     const B = fight(['raiga_raijin_hammer'].concat(FILL)); raiga(B).st.charge = 3; play(B, 'raiga_raijin_hammer'); t.eq(A.energy - B.energy, 2, 'with 3 Charge there is no refund'); t.eq(st(raiga(B), 'charge'), 3, 'and the Charge stays');
     const R = fight(['raiga_raijin_hammer'].concat(FILL)); R.endTurn(); t.ok(!!handOf(R, 'raiga_raijin_hammer') || R.discard.every((c) => c.id !== 'raiga_raijin_hammer'), 'retained');
-    const U = fight([{ id: 'raiga_raijin_hammer', up: 1 }].concat(FILL)); t.eq(dealt(U, 'raiga_raijin_hammer', (C) => { raiga(C).st.charge = 3; }), 24, 'upgraded: 24'); t.eq(U.energy, 2, 'and 3 Charge is enough');
+    const U = fight([{ id: 'raiga_raijin_hammer', up: 1 }].concat(FILL)); t.eq(dealt(U, 'raiga_raijin_hammer', (C) => { raiga(C).st.charge = 3; }), 26, 'upgraded: 26'); t.eq(U.energy, 2, 'and 3 Charge is enough');
     const K = fight(['raiga_raijin_hammer', 'raiga_draw_lightning', 'raiga_draw_lightning', 'raiga_jab'].concat(FILL)); play(K, 'raiga_draw_lightning'); play(K, 'raiga_draw_lightning'); play(K, 'raiga_raijin_hammer'); t.eq(K.energy, 2, 'two Draw Lightnings pay for it: 4 Charge, then the hammer costs 1 net'); t.eq(raiga(K).hp, 84, 'for 4 HP');
   });
-  t.test('engine: Thousand Thunders spends up to 6 Charge for 4 damage each to EVERY enemy', () => {
+  t.test('engine: Thousand Thunders spends up to 5 Charge for 3 plus 4 damage each to EVERY enemy', () => {
     const C = fight(['raiga_thousand_thunders'].concat(FILL), { enemies: [IDLE, IDLE] }); raiga(C).st.charge = 5; const b = C.enemies.map((e) => e.hp); play(C, 'raiga_thousand_thunders');
-    C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 20, 'enemy ' + i + ' takes 4 x 5')); t.eq(st(raiga(C), 'charge'), 0, 'the bank is spent'); t.eq(C.energy, 0, 'a whole turn');
-    const M = fight(['raiga_thousand_thunders'].concat(FILL)); t.eq(dealt(M, 'raiga_thousand_thunders', (X) => { raiga(X).st.charge = 8; }), 24, 'capped at 6 Charge: 24'); t.eq(st(raiga(M), 'charge'), 2, 'the rest of the bank stays');
-    const Z = fight(['raiga_thousand_thunders'].concat(FILL)); t.eq(dealt(Z, 'raiga_thousand_thunders'), 0, 'no Charge, no thunder');
-    const U = fight([{ id: 'raiga_thousand_thunders', up: 1 }].concat(FILL)); raiga(U).st.charge = 6; play(U, 'raiga_thousand_thunders'); t.eq(U.energy, 1, 'upgraded it costs 2');
+    C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 3 + 20, 'enemy ' + i + ' takes 3 + 4 x 5')); t.eq(st(raiga(C), 'charge'), 0, 'the bank is spent'); t.eq(C.energy, 0, 'a whole turn');
+    const M = fight(['raiga_thousand_thunders'].concat(FILL)); t.eq(dealt(M, 'raiga_thousand_thunders', (X) => { raiga(X).st.charge = 8; }), 23, 'capped at 5 Charge: 3 + 20'); t.eq(st(raiga(M), 'charge'), 3, 'the rest of the bank stays');
+    const Z = fight(['raiga_thousand_thunders'].concat(FILL)); t.eq(dealt(Z, 'raiga_thousand_thunders'), 3, 'no Charge: just the flat 3');
+    const U = fight([{ id: 'raiga_thousand_thunders', up: 1 }].concat(FILL)); raiga(U).st.charge = 6; const ub = hpSum(U); play(U, 'raiga_thousand_thunders'); t.eq(ub - hpSum(U), 4 + 25, 'upgraded: 4 flat and 5 a Charge (5 counted)'); t.eq(U.energy, 0, 'it still costs the whole turn');
     const R = fight(['raiga_thousand_thunders'].concat(FILL)); R.endTurn(); t.ok(!!handOf(R, 'raiga_thousand_thunders') || R.discard.every((c) => c.id !== 'raiga_thousand_thunders'), 'retained');
   });
-  t.test('engine: Heaven\'s Answer pays 6 plus the damage taken last enemy turn (max 24), and HP he spends himself counts', () => {
-    const A = fight(['raiga_heavens_answer'].concat(FILL), { enemies: [TRIPLE] }); A.endTurn(); t.eq(raiga(A).hp, 76, 'he took 12'); t.eq(dealt(A, 'raiga_heavens_answer'), 6 + 12, '6 + 12 = 18');
-    const B = fight(['raiga_heavens_answer'].concat(FILL)); t.eq(dealt(B, 'raiga_heavens_answer'), 6, 'nothing taken: 6');
-    const H = fight(['raiga_heavens_answer', 'raiga_blood_and_thunder', 'raiga_hard_knock'].concat(FILL)); H.energy = 3; play(H, 'raiga_blood_and_thunder'); play(H, 'raiga_hard_knock'); t.eq(dealt(H, 'raiga_heavens_answer'), 6 + (6 + 2) + 2, 'Blood and Thunder (6 HP) and Hard Knock (2 HP) feed it, and its Might 2 lifts the hit: 16');
-    const M = fight(['raiga_heavens_answer'].concat(FILL)); raiga(M)._dmgTaken = 50; t.eq(dealt(M, 'raiga_heavens_answer'), 24, 'capped at 24');
-    t.eq(dealt(fight([{ id: 'raiga_heavens_answer', up: 1 }].concat(FILL), { enemies: [TRIPLE] }), 'raiga_heavens_answer'), 8, 'upgraded with nothing taken: 8');
+  t.test('engine: Heaven\'s Answer pays 10 plus the damage taken last enemy turn (max 26), and HP he spends himself counts', () => {
+    const A = fight(['raiga_heavens_answer'].concat(FILL), { enemies: [TRIPLE] }); A.endTurn(); t.eq(raiga(A).hp, 76, 'he took 12'); t.eq(dealt(A, 'raiga_heavens_answer'), 10 + 12, '10 + 12 = 22');
+    const B = fight(['raiga_heavens_answer'].concat(FILL)); t.eq(dealt(B, 'raiga_heavens_answer'), 10, 'nothing taken: 10');
+    const H = fight(['raiga_heavens_answer', 'raiga_blood_and_thunder', 'raiga_hard_knock'].concat(FILL)); H.energy = 3; play(H, 'raiga_blood_and_thunder'); play(H, 'raiga_hard_knock'); t.eq(dealt(H, 'raiga_heavens_answer'), 10 + (6 + 1) + 2, 'Blood and Thunder (6 HP) and Hard Knock (1 HP) feed it, and its Might 2 lifts the hit: 19');
+    const M = fight(['raiga_heavens_answer'].concat(FILL)); raiga(M)._dmgTaken = 50; t.eq(dealt(M, 'raiga_heavens_answer'), 26, 'capped at 26');
+    t.eq(dealt(fight([{ id: 'raiga_heavens_answer', up: 1 }].concat(FILL), { enemies: [TRIPLE] }), 'raiga_heavens_answer'), 12, 'upgraded with nothing taken: 12');
   });
   t.test('engine: Mountain Vow gives 4 plus the missing HP as Block (max 18)', () => {
     const A = fight(['raiga_mountain_vow'].concat(FILL), { hp: 70 }); play(A, 'raiga_mountain_vow'); t.eq(raiga(A).block, 3 + 18, '18 missing plus 4 is 22, capped at 18, on top of the 3 starting Block');
@@ -774,11 +774,12 @@ if (!COMBAT || !DATA.cardPlain) {
   });
   t.test('engine: Storm\'s Eye gives 3 Charge now and doubles what every blow he takes pays (twice a round)', () => {
     const C = fight(['raiga_storms_eye'].concat(FILL), { enemies: [TRIPLE] }); play(C, 'raiga_storms_eye'); t.eq(st(raiga(C), 'charge'), 3, '3 now'); C.endTurn();
-    t.eq(st(raiga(C), 'charge'), 3 + 2 + 2, 'three hits: Storm Born 2 and the Eye 2'); t.eq(resolveDef(byId('raiga_storms_eye'), true).cost, 1, 'upgraded it costs 1');
+    t.eq(st(raiga(C), 'charge'), 3 + 2 + 2, 'three hits: Storm Born 2 and the Eye 2'); t.eq(resolveDef(byId('raiga_storms_eye'), true).cost, 2, 'upgraded it still costs 2');
+    const UE = fight([{ id: 'raiga_storms_eye', up: 1 }, 'raiga_jab', 'raiga_jab', 'raiga_jab', 'raiga_jab', 'raiga_jab', 'raiga_jab', 'raiga_jab'], { enemies: [TRIPLE] }); ensureInHand(UE, 'raiga_storms_eye'); const h0 = UE.hand.length; play(UE, 'raiga_storms_eye'); t.eq(st(raiga(UE), 'charge'), 4, 'upgraded: 4 now'); t.eq(UE.hand.length, h0, 'and a card is drawn (played 1, drew 1)'); UE.endTurn(); t.eq(st(raiga(UE), 'charge'), 4 + 2 + 4, 'upgraded: the Eye pays 2 a blow, twice a round');
     const B = fight(['raiga_storms_eye'].concat(FILL), { back: true, enemies: [TRIPLE] }); play(B, 'raiga_storms_eye'); B.endTurn(); t.eq(st(raiga(B), 'charge'), 3, 'in the back row nobody hits him, so only the 3 up front arrive');
   });
   t.test('engine: Thornstorm adds Thorns and fires them at every enemy at the start of each turn (max 8)', () => {
-    const C = fight(['raiga_thornstorm'].concat(FILL), { enemies: [IDLE, IDLE] }); play(C, 'raiga_thornstorm'); t.eq(st(raiga(C), 'thorns'), 3, 'Thorns 2 + 1'); const b = C.enemies.map((e) => e.hp);
+    const C = fight(['raiga_thornstorm'].concat(FILL), { enemies: [IDLE, IDLE] }); play(C, 'raiga_thornstorm'); t.eq(st(raiga(C), 'thorns'), 3, 'Thorns 2 + 1'); t.eq(raiga(C).block, 3 + 5, 'and 5 Block at once, on top of the 3 starting Block'); const b = C.enemies.map((e) => e.hp);
     C.endTurn(); C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 3, 'enemy ' + i + ' takes 3 at the start of the turn'));
     const M = fight(['raiga_thornstorm'].concat(FILL)); play(M, 'raiga_thornstorm'); raiga(M).st.thorns = 20; const h = M.enemies[0].hp; M.endTurn(); t.eq(h - M.enemies[0].hp, 8, 'capped at 8');
     const K = fight(['raiga_thornstorm'].concat(FILL), { back: true }); play(K, 'raiga_thornstorm'); const kh = K.enemies[0].hp; K.endTurn(); t.eq(kh - K.enemies[0].hp, 1, 'in the back the card\'s own Thorns still fire: 1');

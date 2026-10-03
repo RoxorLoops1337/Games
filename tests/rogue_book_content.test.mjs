@@ -54,8 +54,8 @@ t.test('DATA.validate strict has zero errors and zero warnings, every audit has 
 });
 
 // =================================================================================================== 2. names and references
-// The one known clash is reported to the card and relic owners; this list shrinks to empty when it is fixed, and any NEW clash fails.
-const KNOWN_CLASHES = ['whetstone'];
+// The one known clash (relic "Whetstone" against the card hanae_whetstone) was fixed by renaming the relic "Honing Stone", so this list is empty: any clash fails.
+const KNOWN_CLASHES = [];
 t.test('display names: unique inside each registry, and no card, relic, gem or enemy shares a name with another (known clashes listed)', () => {
   const regs = { card: DATA.cards, relic: DATA.relics, gem: DATA.gems, enemy: DATA.enemies };
   const all = {};

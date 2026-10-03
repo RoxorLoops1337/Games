@@ -92,8 +92,8 @@
     },
     suzu_barrier: {
       name: 'Barrier', hero: 'suzu', type: 'skill', rarity: 'starter', cost: 1,
-      fx: [block(4, 'both')],
-      up: { fx: [block(6, 'both')] },
+      fx: [block(3, 'both')],
+      up: { fx: [block(5, 'both')] },
       kw: [], slots: ['blue'], art: { m: 'barrier', c: 'azure' },
       flavor: 'Thin as paper. Stronger than it has any right to be.',
     },
@@ -149,16 +149,16 @@
     },
     suzu_omamori: {
       name: 'Omamori', hero: 'suzu', type: 'skill', rarity: 'common', cost: 1,
-      fx: [heal(5, 'both')],
-      up: { fx: [heal(6, 'both'), ward(1)] },
+      fx: [heal(4, 'both')],
+      up: { fx: [heal(5, 'both'), ward(1)] },
       kw: [], slots: ['blue'], art: { m: 'heal_light', c: 'jade' },
       flavor: 'A little charm, sewn with a big wish.',
     },
     suzu_prayer_wall: {
       name: 'Prayer Wall', hero: 'suzu', type: 'skill', rarity: 'common', cost: 1,
       // Ward to Block for both heroes. Retain: hold it until the bank is full
-      fx: [block(perWard(3, 2, 3), 'both', { consume: spend(3) })],
-      up: { fx: [block(perWard(4, 2, 4), 'both', { consume: spend(4) })] },
+      fx: [block(perWard(2, 2, 3), 'both', { consume: spend(3) })],
+      up: { fx: [block(perWard(3, 2, 4), 'both', { consume: spend(4) })] },
       kw: ['retain'], slots: ['blue'], art: { m: 'shield', c: 'azure' },
     },
     suzu_tolling_bell: {
@@ -249,8 +249,8 @@
     suzu_renewal_rite: {
       name: 'Renewal Rite', hero: 'suzu', type: 'skill', rarity: 'uncommon', cost: 1,
       // Ward to healing for both heroes: the big rite of the Sanctuary plan
-      fx: [heal(perWard(0, 3, 4), 'both', { consume: spend(4) })],
-      up: { fx: [heal(perWard(3, 3, 4), 'both', { consume: spend(4) })] },
+      fx: [heal(perWard(0, 2, 3), 'both', { consume: spend(3) })],
+      up: { fx: [heal(perWard(2, 2, 3), 'both', { consume: spend(3) })] },
       kw: ['retain'], slots: ['blue', 'green'], art: { m: 'lotus', c: 'jade' },
     },
     suzu_silencing_seal: {
@@ -316,9 +316,9 @@
     // ------------------------------------------------------------------ rares
     suzu_moonlit_verdict: {
       name: 'Moonlit Verdict', hero: 'suzu', type: 'attack', rarity: 'rare', cost: 2,
-      // the Talisman finisher: five per debuff (five counted), and a kill pays back Ward for the next rite
-      fx: [holy({ per: 'debuffs', mul: 5, upTo: 5 }), when({ lastKill: true }, [ward(2)])],
-      up: { fx: [holy({ per: 'debuffs', mul: 7, upTo: 5 }), when({ lastKill: true }, [ward(2)])] },
+      // the Talisman finisher: six per debuff (five counted), and a kill pays back a Ward for the next rite
+      fx: [holy({ per: 'debuffs', mul: 6, upTo: 5 }), when({ lastKill: true }, [ward(1)])],
+      up: { fx: [holy({ per: 'debuffs', mul: 8, upTo: 5 }), when({ lastKill: true }, [ward(1)])] },
       kw: [], slots: ['red', 'any'], art: { m: 'eye', c: 'moon', hero: true },
       flavor: 'Guilty, said the moon, and the moon does not lie.',
     },
@@ -334,8 +334,8 @@
     suzu_thousand_ofuda: {
       name: 'Thousand Ofuda', hero: 'suzu', type: 'attack', rarity: 'rare', cost: 3,
       // a storm of paper: damage and Mark on every enemy, so the whole party's next hits land harder
-      fx: [holy(7, { tgt: 'all' }), mark(2, 'all')],
-      up: { fx: [holy(9, { tgt: 'all' }), mark(3, 'all')] },
+      fx: [holy(9, { tgt: 'all' }), mark(2, 'all')],
+      up: { fx: [holy(12, { tgt: 'all' }), mark(3, 'all')] },
       kw: [], slots: ['red', 'any'], art: { m: 'sword_rain', c: 'moon', hero: true }, locked: true,
       flavor: 'She threw a thousand prayers. Not one landed wrong.',
     },
@@ -358,7 +358,7 @@
     suzu_guardian_kami: {
       name: 'Guardian Kami', hero: 'suzu', type: 'power', rarity: 'rare', cost: 2,
       // the net that lets you play boldly: the first hero to fall (either one) stands back up
-      fx: [hook('onHeroDown', [{ op: 'revive', pct: 0.4 }, block(8, 'both')], { filter: { hero: 'any' }, once: true })],
+      fx: [hook('onHeroDown', [{ op: 'revive', pct: 0.5 }, block(10, 'both')], { filter: { hero: 'any' }, once: true })],
       up: { cost: 1 },
       kw: [], slots: ['gold', 'green'], art: { m: 'spirit_orb', c: 'indigo' }, locked: true,
       flavor: 'Something old watches the shrine. It owes her a favour.',

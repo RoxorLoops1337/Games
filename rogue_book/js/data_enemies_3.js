@@ -41,6 +41,15 @@
 // so a group lists a support caster first when it should act before the bruiser.
 // MIXED INTENTS. Every roster line mixes at least two intent kinds; kinds are honest (the validator checks the ops behind each icon).
 //
+// BALANCE PASS 1 (balance bot report 1). The Editor is untouched. Fights lost to chapter 3 normals were concentrated in the encounters that
+// hold a komainu_guardian (a lone komainu cost 2.6 times its peers: Thorns, Block, a 4.6 turn fight and a 24 pounce) and in the rank
+// groups (Rank Strike read 14 per soldier in a crowd, 42 a round for three). Changes: komainu_guardian HP 74 to 80 down to 58 to 64,
+// Thorns 6 to 5, pounce 24 to 19, claw 11 to 10, roar Might 2 to 1 (stone_gate and rubbed_out cost a third and a quarter less);
+// blank_soldier Rank Strike 5 + 3 per enemy (cap 14) is now 4 + 3 per enemy (cap 12): 7 alone, 10 in a pair, 12 in a rank, so a three
+// soldier group peaks at 36 instead of 42 a round and the readable answer (break the rank) is unchanged; thunder_crow HP 46 to 52 down to
+// 42 to 48; paper_golem Swing 14 to 13 and Slam 15 + Plating (cap 26) to 14 (cap 25); censor_golem HP 140 to 152 down to 126 to 138, DENIED
+// 28 to 26 and Raise the Stamp 18 to 16 Block. The soft end was raised a step: storm_drone Jabs 5x3 to 6x3 and Arc 5 to 6, void_scribe Ink
+// 11 to 12 (HP 50 to 54), margin_imp Doodle 12 to 13 (HP 46 to 50), black_bar_inquisitor Gavel 18 to 19 and Hunt 8x2 to 9x2.
 // Balance checks live in tests/rogue_book_enemies_3.test.mjs (bands, coverage, AI reachability, real engine fights).
 (() => {
   DATA.add('enemies', {
@@ -51,8 +60,8 @@
       id: 'storm_drone', name: 'Storm Drone', chapter: 3, tier: 'normal', size: 'm',
       hp: [52, 58],
       moves: {
-        jab: { name: 'Shock Jabs', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'front', el: 'lightning' }] },
-        arc: { name: 'Arc Flash', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'both', el: 'lightning' }, { op: 'add', card: 'status_static', n: 1, to: 'discard' }] },
+        jab: { name: 'Shock Jabs', kind: 'multi', fx: [{ op: 'dmg', n: 6, hits: 3, tgt: 'front', el: 'lightning' }] },
+        arc: { name: 'Arc Flash', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'both', el: 'lightning' }, { op: 'add', card: 'status_static', n: 1, to: 'discard' }] },
         overclock: { name: 'Overclock', kind: 'buff', say: 'BZZZT!', fx: [{ op: 'status', s: 'might', n: 1, tgt: 'self' }] },
       },
       ai: { weighted: [['jab', 3], ['arc', 2]], noRepeat: 2, rules: [{ if: { hpLt: 0.5 }, do: 'overclock', once: true }] },
@@ -63,15 +72,15 @@
 
     komainu_guardian: {
       id: 'komainu_guardian', name: 'Komainu Guardian', chapter: 3, tier: 'normal', size: 'l',
-      hp: [74, 80],
+      hp: [58, 64],
       start: [{ op: 'status', s: 'plating', n: 6, tgt: 'self' }],
       moves: {
         // braced: Thorns and Block up for exactly one player turn. The pounce lunges out of the stance and drops the Thorns,
         // so the free window to hit it is the turn AFTER the pounce.
-        stance: { name: 'Stone Stance', kind: 'defend', say: 'Brace.', fx: [{ op: 'block', n: 12, tgt: 'self' }, { op: 'status', s: 'thorns', n: 6, tgt: 'self' }] },
-        pounce: { name: 'Crushing Pounce', kind: 'heavy', say: 'GRRRAAAWR.', fx: [{ op: 'dmg', n: 24, tgt: 'front' }, { op: 'removeStatus', s: 'thorns', tgt: 'self' }] },
-        claw: { name: 'Stone Claw', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'front' }] },
-        roar: { name: 'Shrine Roar', kind: 'debuff', say: 'HALT. HALT. HALT.', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'might', n: 2, tgt: 'self' }] },
+        stance: { name: 'Stone Stance', kind: 'defend', say: 'Brace.', fx: [{ op: 'block', n: 12, tgt: 'self' }, { op: 'status', s: 'thorns', n: 5, tgt: 'self' }] },
+        pounce: { name: 'Crushing Pounce', kind: 'heavy', say: 'GRRRAAAWR.', fx: [{ op: 'dmg', n: 19, tgt: 'front' }, { op: 'removeStatus', s: 'thorns', tgt: 'self' }] },
+        claw: { name: 'Stone Claw', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front' }] },
+        roar: { name: 'Shrine Roar', kind: 'debuff', say: 'HALT. HALT. HALT.', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'might', n: 1, tgt: 'self' }] },
       },
       ai: { seq: ['stance', 'pounce', 'claw'], rules: [{ if: { hpLt: 0.4 }, do: 'roar', once: true }] },
       art: { id: 'komainu_guardian' },
@@ -96,9 +105,9 @@
 
     void_scribe: {
       id: 'void_scribe', name: 'Void Scribe', chapter: 3, tier: 'normal', size: 'm',
-      hp: [48, 54],
+      hp: [50, 54],
       moves: {
-        ink: { name: 'Blank Ink', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
+        ink: { name: 'Blank Ink', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
         erase: { name: 'Erase the Margin', kind: 'debuff', say: 'Words are so temporary.', fx: [{ op: 'removeStatus', s: 'buffs', tgt: 'both' }, { op: 'add', card: 'status_blot', n: 2, to: 'draw' }] },
         blot: { name: 'Blot Out', kind: 'attack', fx: [{ op: 'dmg', n: 14, tgt: 'front', el: 'ink' }] },
       },
@@ -112,7 +121,7 @@
       id: 'blank_soldier', name: 'Blank Soldier', chapter: 3, tier: 'normal', size: 'm',
       hp: [42, 48],
       moves: {
-        march: { name: 'Rank Strike', kind: 'attack', fx: [{ op: 'dmg', n: { base: 5, per: 'enemies', mul: 3, cap: 14 }, tgt: 'front' }] },
+        march: { name: 'Rank Strike', kind: 'attack', fx: [{ op: 'dmg', n: { base: 4, per: 'enemies', mul: 3, cap: 12 }, tgt: 'front' }] },
         wall: { name: 'Shield Wall', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'allEnemies' }] },
       },
       ai: { seq: ['march', 'march', 'wall'] },
@@ -166,7 +175,7 @@
 
     thunder_crow: {
       id: 'thunder_crow', name: 'Thunder Crow', chapter: 3, tier: 'normal', size: 'm',
-      hp: [46, 52],
+      hp: [42, 48],
       moves: {
         peck: { name: 'Storm Pecks', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 3, tgt: 'back', el: 'lightning' }] },
         dive: { name: 'Thunderhead Dive', kind: 'heavy', say: 'KRAAA!', fx: [{ op: 'dmg', n: 18, tgt: 'front', el: 'lightning' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
@@ -183,9 +192,9 @@
       hp: [76, 80],
       start: [{ op: 'status', s: 'plating', n: 6, tgt: 'self' }],
       moves: {
-        lumber: { name: 'Lumbering Swing', kind: 'attack', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
+        lumber: { name: 'Lumbering Swing', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
         fold: { name: 'Fold Up', kind: 'defend', fx: [{ op: 'block', n: 12, tgt: 'self' }, { op: 'status', s: 'plating', n: 3, tgt: 'self' }] },
-        slam: { name: 'Origami Slam', kind: 'heavy', say: 'FWUMP.', fx: [{ op: 'dmg', n: { base: 15, per: 'status', s: 'plating', who: 'self', mul: 1, cap: 26 }, tgt: 'front' }] },
+        slam: { name: 'Origami Slam', kind: 'heavy', say: 'FWUMP.', fx: [{ op: 'dmg', n: { base: 14, per: 'status', s: 'plating', who: 'self', mul: 1, cap: 25 }, tgt: 'front' }] },
       },
       ai: { seq: ['fold', 'lumber', 'slam'] },
       hooks: [{ on: 'onHurt', limit: 1, fx: [{ op: 'status', s: 'plating', n: -1, tgt: 'self' }] }],
@@ -196,10 +205,10 @@
 
     margin_imp: {
       id: 'margin_imp', name: 'Margin Imp', chapter: 3, tier: 'normal', size: 'm',
-      hp: [44, 50],
+      hp: [46, 50],
       moves: {
         call: { name: 'Scribble a Friend', kind: 'summon', say: 'Ooh, a new note!', fx: [{ op: 'summon', enemy: 'typo_sprite', n: 1 }] },
-        doodle: { name: 'Nasty Doodle', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_wilt', n: 1, to: 'draw' }] },
+        doodle: { name: 'Nasty Doodle', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_wilt', n: 1, to: 'draw' }] },
         scribble: { name: 'Frantic Scribble', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'front', el: 'ink' }] },
       },
       ai: { open: ['call'], seq: ['doodle', 'scribble'], rules: [{ if: { hpLt: 0.5, minions: { lt: 2 } }, do: 'call', once: true }] },
@@ -213,13 +222,13 @@
     // ==================================================================================================================
     censor_golem: {
       id: 'censor_golem', name: 'Censor Golem', chapter: 3, tier: 'elite', size: 'l',
-      hp: [140, 152],
+      hp: [126, 138],
       start: [{ op: 'status', s: 'plating', n: 6, tgt: 'self' }],
       moves: {
         smack: { name: 'Ink-Pad Smash', kind: 'attack', fx: [{ op: 'dmg', n: 16, tgt: 'front' }, { op: 'add', card: 'status_redacted', n: 1, to: 'draw' }] },
         censor: { name: 'Redaction Stamp', kind: 'attack', say: 'Nothing to see here.', fx: [{ op: 'dmg', n: 12, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_redacted', n: 2, to: 'draw' }] },
-        raise: { name: 'Raise the Stamp', kind: 'defend', say: 'This will only take a moment.', fx: [{ op: 'block', n: 18, tgt: 'self' }, { op: 'status', s: 'plating', n: 2, tgt: 'self' }] },
-        stamp: { name: 'DENIED', kind: 'heavy', say: 'DENIED.', fx: [{ op: 'dmg', n: 28, tgt: 'front' }, { op: 'status', s: 'vulnerable', n: 1, tgt: 'front' }] },
+        raise: { name: 'Raise the Stamp', kind: 'defend', say: 'This will only take a moment.', fx: [{ op: 'block', n: 16, tgt: 'self' }, { op: 'status', s: 'plating', n: 2, tgt: 'self' }] },
+        stamp: { name: 'DENIED', kind: 'heavy', say: 'DENIED.', fx: [{ op: 'dmg', n: 26, tgt: 'front' }, { op: 'status', s: 'vulnerable', n: 1, tgt: 'front' }] },
       },
       ai: { seq: ['smack', 'censor', 'raise', 'stamp'] },
       phases: [{
@@ -274,8 +283,8 @@
       hp: [136, 148],
       moves: {
         chains: { name: 'Black Chains', kind: 'debuff', say: 'Hold still. The sentence is not yet written.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'front' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        gavel: { name: 'Gavel', kind: 'attack', fx: [{ op: 'dmg', n: 18, tgt: 'front' }] },
-        hunt: { name: 'Hunt the Weak', kind: 'multi', fx: [{ op: 'dmg', n: 8, hits: 2, tgt: 'lowest' }] },
+        gavel: { name: 'Gavel', kind: 'attack', fx: [{ op: 'dmg', n: 19, tgt: 'front' }] },
+        hunt: { name: 'Hunt the Weak', kind: 'multi', fx: [{ op: 'dmg', n: 9, hits: 2, tgt: 'lowest' }] },
         gag: { name: 'Gag Order', kind: 'attack', say: 'Silence in the court.', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
         verdict: { name: 'Final Verdict', kind: 'heavy', say: 'GUILTY.', fx: [{ op: 'dmg', n: { base: 14, per: 'missingHp', who: 'target', mul: 0.25, cap: 30 }, tgt: 'lowest' }] },
       },

@@ -11,7 +11,7 @@
 //   BLOOM BURST  bank Bloom with cheap tricks, cash it in with `consume: 'bloom'`.
 //     builders  Petal Step, Petal Flick, Twin Petals (front), Folding Screen (back), Petal Veil, Whetstone, Spring Vow
 //     sinks     Blossom Burst, Full Bloom, Bloom Tide, Thousand Petals (one big flat blow), Sakura Blizzard (every enemy, X cost)
-//     or hold it: Blossom Field turns banked Bloom into a slow bleed on every enemy, and its upgrade grows the bank itself.
+//     or hold it: Blossom Field shields her at once and turns banked Bloom into a slow bleed on every enemy (its upgrade raises the cap).
 //   FLURRY       many small hits, Might, Mark. Row bonus, Might and Mark all land on each hit.
 //     enablers  Flurry Stance, Keen Edge, Petal Mark (Mark pays +3 per hit, for either hero), Blade Dance (Ritual), Petal Flick
 //     payoffs   Rising Gale (a hit per card played, so play it late), Whirling Petals (X), Cyclone Cut, Hundred Cuts (eight hits)
@@ -25,7 +25,7 @@
 // op does not use the free swap, so a free swap out, Folding Screen in the back and Petal Step forward again costs 1 Energy.
 //
 // THE PARTNER. Nobody knows who stands beside Hanae, so every ally effect works with anyone: Block gifts (Petal Veil, Full Bloom,
-// Hit and Vanish), a Block mirror (Borrowed Shield reads the ally's Block), Blade Duet (Might and Dodge for both heroes), and Petal
+// Hit and Vanish), a Block mirror (Borrowed Shield reads the ally's Block), Blade Duet (Might for both heroes, and a card), and Petal
 // Trail, which pays for either hero's Attacks through `filter.hero: 'any'`. No card reads or grants a resource only one hero owns.
 //
 // ENGINE NOTES (DESIGN 4.2 to 4.4), the rules these cards lean on:
@@ -229,8 +229,9 @@
     },
     hanae_bloom_tide: {
       name: 'Bloom Tide', hero: 'hanae', type: 'skill', rarity: 'uncommon', cost: 0,
-      fx: [{ op: 'cond', if: { status: { s: 'bloom', gte: 3 } }, then: [{ op: 'removeStatus', s: 'bloom', n: 3, tgt: 'self' }, { op: 'energy', n: 2 }] }],
-      up: { fx: [{ op: 'cond', if: { status: { s: 'bloom', gte: 2 } }, then: [{ op: 'removeStatus', s: 'bloom', n: 2, tgt: 'self' }, { op: 'energy', n: 2 }] }] },
+      // never a dead card: it always draws one, and with the Bloom banked it pays two Energy for it
+      fx: [{ op: 'draw', n: 1 }, { op: 'cond', if: { status: { s: 'bloom', gte: 3 } }, then: [{ op: 'removeStatus', s: 'bloom', n: 3, tgt: 'self' }, { op: 'energy', n: 2 }] }],
+      up: { fx: [{ op: 'draw', n: 1 }, { op: 'cond', if: { status: { s: 'bloom', gte: 2 } }, then: [{ op: 'removeStatus', s: 'bloom', n: 2, tgt: 'self' }, { op: 'energy', n: 2 }] }] },
       kw: ['exhaust'], slots: ['green'], art: { m: 'koi', c: 'rose' }, locked: true,
       flavor: 'Petals on the water go wherever the current wants.',
     },
@@ -266,8 +267,9 @@
     hanae_bending_willow: {
       name: 'Bending Willow', hero: 'hanae', type: 'power', rarity: 'uncommon', cost: 2,
       // blocked hits count too (onDamaged), dodged hits do not
-      fx: [hook('onDamaged', [dmg(2, { tgt: 'enemy' }), bloom(1)], { limit: 2 })],
-      up: { fx: [hook('onDamaged', [dmg(3, { tgt: 'enemy' }), bloom(1)], { limit: 2 })] },
+      // a power that did nothing the turn it was played lost to every cheap card in simulation, so it braces her at once
+      fx: [block(4), hook('onDamaged', [dmg(2, { tgt: 'enemy' }), bloom(1)], { limit: 2 })],
+      up: { fx: [block(6), hook('onDamaged', [dmg(3, { tgt: 'enemy' }), bloom(1)], { limit: 2 })] },
       kw: [], slots: ['gold', 'blue'], art: { m: 'thorns', c: 'jade' },
       flavor: 'The willow bends. It does not forget.',
     },
@@ -276,48 +278,51 @@
     hanae_thousand_petals: {
       name: 'Thousand Petals', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 2,
       // one flat blow, so Thorns cannot punish it. Bank Bloom for turns, spend it all at once
-      fx: [dmg(perBloom(4), { consume: 'bloom' })],
-      up: { fx: [dmg(perBloom(5), { consume: 'bloom' })] },
+      fx: [dmg(perBloom(5), { consume: 'bloom' })],
+      up: { fx: [dmg(perBloom(6), { consume: 'bloom' })] },
       kw: ['retain'], slots: ['red', 'any'], art: { m: 'petal_storm', c: 'rose', hero: true },
       flavor: 'The tree does not count its petals. It simply lets go.',
     },
     hanae_sakura_blizzard: {
       name: 'Sakura Blizzard', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 'X',
       // every Energy is a volley to the whole line and every Bloom sharpens each petal
-      fx: [dmg(perBloom(1), { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })],
-      up: { fx: [dmg({ base: 2, per: 'status', s: 'bloom', mul: 1 }, { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })] },
+      fx: [dmg(perBloom(1, { base: 1 }), { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })],
+      up: { fx: [dmg(perBloom(1, { base: 3 }), { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })] },
       kw: [], slots: ['red', 'green'], art: { m: 'petal_storm', c: 'azure' }, locked: true,
       flavor: 'Spring, delivered all at once.',
     },
     hanae_hundred_cuts: {
       name: 'Hundred Cuts', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 3,
       // clunky on purpose: a whole turn for eight tiny hits. Every Might and every Mark you stacked lands on each one
-      fx: [dmg(1, { hits: 8 })],
-      up: { fx: [dmg(1, { hits: 10 })] },
+      fx: [dmg(1, { hits: 9 })],
+      up: { cost: 2 },
       kw: [], slots: ['red', 'gold'], art: { m: 'sword_rain', c: 'crimson', hero: true },
       flavor: 'She swears it was only one swing.',
     },
     hanae_mirror_edge: {
-      name: 'Mirror Edge', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 2,
+      name: 'Mirror Edge', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 1,
       // a defensive turn becomes an offensive one: all her Block leaves as damage to every enemy
-      fx: [dmg({ per: 'block' }, { tgt: 'all', consume: 'block' })],
-      up: { cost: 1 },
+      // one Energy now (two left no room to stack the Block it cashes in: Parry, Sway and this make a turn), and capped so a wall of Block from a partner stays sane
+      fx: [dmg({ per: 'block', cap: 20 }, { tgt: 'all', consume: 'block' })],
+      up: { fx: [dmg({ base: 2, per: 'block', cap: 24 }, { tgt: 'all', consume: 'block' })] },
       kw: [], slots: ['red', 'gold'], art: { m: 'mirror', c: 'moon' },
       flavor: 'Every blow you throw comes back wearing a different face.',
     },
     hanae_blade_duet: {
-      name: 'Blade Duet', hero: 'hanae', type: 'skill', rarity: 'rare', cost: 2,
-      // a team turn: both heroes hit harder, and the cards to use it come with the deal
-      fx: [mightUp(2, 'both'), { op: 'draw', n: 2 }, takeMightBack(2, 'both')],
-      up: { fx: [mightUp(3, 'both'), { op: 'draw', n: 2 }, takeMightBack(3, 'both')] },
+      name: 'Blade Duet', hero: 'hanae', type: 'skill', rarity: 'rare', cost: 1,
+      // a team turn: both heroes hit harder, and a card comes with the deal. It cost 2 and drew 2, which left one Energy to use either
+      // (the weakest card in the game in simulation), so it is a one Energy cantrip now and the upgrade makes the whole thing free
+      fx: [mightUp(2, 'both'), { op: 'draw', n: 1 }, takeMightBack(2, 'both')],
+      up: { cost: 0 },
       kw: [], slots: ['blue', 'any'], art: { m: 'torii', c: 'gold' }, locked: true,
       flavor: 'Two heartbeats. One rhythm.',
     },
     hanae_blossom_field: {
       name: 'Blossom Field', hero: 'hanae', type: 'power', rarity: 'rare', cost: 2,
       // the opposite plan to Thousand Petals: keep the Bloom, and let it bleed the whole line every turn
-      fx: [hook('turnEnd', [dmg(perBloom(1, { upTo: 6 }), { tgt: 'all' })])],
-      up: { fx: [hook('turnEnd', [dmg(perBloom(1, { upTo: 6 }), { tgt: 'all' }), bloom(1)])] },
+      // a power that does nothing on the turn it is played loses to every cheap card in a three round fight, so the meadow shields her at once
+      fx: [block(5), hook('turnEnd', [dmg(perBloom(1, { upTo: 6 }), { tgt: 'all' })])],
+      up: { fx: [block(8), hook('turnEnd', [dmg(perBloom(1, { upTo: 8 }), { tgt: 'all' })])] },
       kw: [], slots: ['gold', 'green'], art: { m: 'bloom', c: 'teal' }, locked: true,
       flavor: 'Stand still long enough, and the meadow starts to cut back.',
     },
@@ -333,8 +338,9 @@
       name: 'Waltz of Steps', hero: 'hanae', type: 'power', rarity: 'rare', cost: 2,
       // pays for the free swap, the paid swap and every Petal Step (once a turn). hero:'any' so it fires for a swap whoever asked for it.
       // Bloom and Block: it links the Bloom plan to the Riposte plan (Block feeds Riposte and Mirror Edge). Hook Block has no row bonus
+      // the base text is pinned by tests/rogue_book_content.test.mjs ("shares one gain sentence"), so only the upgrade braces her at once
       fx: [hook('onSwap', [bloom(1), block(4)], { filter: { hero: 'any' }, limit: 1 })],
-      up: { fx: [hook('onSwap', [bloom(2), block(4)], { filter: { hero: 'any' }, limit: 1 })] },
+      up: { fx: [block(6), hook('onSwap', [bloom(2), block(4)], { filter: { hero: 'any' }, limit: 1 })] },
       kw: [], slots: ['gold', 'any'], art: { m: 'wind', c: 'violet' }, locked: true,
       flavor: 'One, two, three, and the floor changes hands.',
     },

@@ -246,16 +246,21 @@ await t.test('the simulation produced a real win and a real defeat', () => {
 // ================================================================================================ chapterClear
 // a run frozen right after the chapter 1 boss, exactly what GAME.chapterFlow hands the screen
 function chapterOne(seed) {
-  const R = RUN.newRun({ heroes: ['hanae', 'kuro'], seed, trial: 0 });
-  if (!R.map) RUN.startChapter(R, 1);
-  R.heroes[0].hp = 30; R.heroes[1].hp = 22;
-  simFight(R, 'enemy', false); takeRewards(R);
-  R.heroes[0].hp = 30; R.heroes[1].hp = 22;
-  simFight(R, 'boss', false);
-  R.heroes[0].hp = Math.min(R.heroes[0].hp, 30); R.heroes[1].hp = Math.min(R.heroes[1].hp, 22);
-  const fin = takeRewards(R);
-  const ce = RUN.chapterEnd(R);
-  return { R, ce, fin };
+  // the helper bot is simple: on some seeds (and after every balance pass, different ones) it loses the boss. Try the next seed
+  // until chapter 1 is really cleared, so these screens are always shown a genuine win.
+  for (let k = 0; ; k++) {
+    const R = RUN.newRun({ heroes: ['hanae', 'kuro'], seed: seed + k, trial: 0 });
+    if (!R.map) RUN.startChapter(R, 1);
+    R.heroes[0].hp = 30; R.heroes[1].hp = 22;
+    simFight(R, 'enemy', false); takeRewards(R);
+    R.heroes[0].hp = 30; R.heroes[1].hp = 22;
+    simFight(R, 'boss', false);
+    if (R.done && k < 12) continue;
+    R.heroes[0].hp = Math.min(R.heroes[0].hp, 30); R.heroes[1].hp = Math.min(R.heroes[1].hp, 22);
+    const fin = takeRewards(R);
+    const ce = RUN.chapterEnd(R);
+    return { R, ce, fin };
+  }
 }
 await t.test('chapterClear: the headline, the stats counting from the run, the heal and max HP plan, treasures, Continue', async () => {
   const { R, ce, fin } = chapterOne(31);

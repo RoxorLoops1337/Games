@@ -213,6 +213,7 @@ const G = fresh();
 const { U, DATA, RUN, MAP } = G;
 const L = DATA.LISTS, E = DATA.ECONOMY;
 const ALL = { card: [], relic: [], gem: [] };                        // "unlocked" that owns no locked content
+const HA = DATA.heroes.hanae.maxHp, KU = DATA.heroes.kuro.maxHp;   // the starting max HP of the two heroes these suites use: tuning changes them, so never hardcode
 const NEW = (o) => RUN.newRun(Object.assign({ heroes: ['hanae', 'kuro'], seed: 7, unlocked: ALL }, o || {}));
 const J = (x) => JSON.stringify(x);
 const fmt = (x) => J(x).slice(0, 220);
@@ -220,7 +221,7 @@ const fmt = (x) => J(x).slice(0, 220);
 // a finished combat, as COMBAT.create(...).summary() would report it
 function fakeC(over) {
   over = over || {};
-  const heroes = over.heroes || [{ id: 'hanae', hp: 50, maxHp: 76, down: false }, { id: 'kuro', hp: 40, maxHp: 60, down: false }];
+  const heroes = over.heroes || [{ id: 'hanae', hp: 50, maxHp: HA, down: false }, { id: 'kuro', hp: 40, maxHp: KU, down: false }];
   const s = Object.assign({
     result: 'win', heroes, maxHpGain: {}, ink: 0, gold: 0,
     stats: Object.assign({ turns: 5, cardsPlayed: 12, attacksPlayed: 7, damageDealt: 60, damageTaken: 8, blockGained: 20, maxHit: 9, maxTurnDamage: 30, kills: [{ def: 'kappa', tier: 'normal', by: 'card' }] }, over.stats || {}),
@@ -694,24 +695,24 @@ t.test('combatInit: the options COMBAT.create needs, with copies not references'
 });
 t.test('combatDone: HP, revive, max HP gains and who leads', () => {
   const R = NEW();
-  const rw = fight(R, 'normal', 1, { heroes: [{ id: 'hanae', hp: 31, maxHp: 76, down: false }, { id: 'kuro', hp: 0, maxHp: 60, down: true }], frontId: 'kuro' });
-  t.ok(rw, 'won'); t.eq(R.heroes[0].hp, 31, 'hp from the fight'); t.eq(R.heroes[1].hp, Math.round(60 * E.reviveFrac), 'the downed hero stands up at reviveFrac of max HP');
+  const rw = fight(R, 'normal', 1, { heroes: [{ id: 'hanae', hp: 31, maxHp: HA, down: false }, { id: 'kuro', hp: 0, maxHp: KU, down: true }], frontId: 'kuro' });
+  t.ok(rw, 'won'); t.eq(R.heroes[0].hp, 31, 'hp from the fight'); t.eq(R.heroes[1].hp, Math.round(KU * E.reviveFrac), 'the downed hero stands up at reviveFrac of max HP');
   t.eq(R.frontIdx, 1, 'frontIdx follows whoever holds the front row');
   const S = NEW();
-  fight(S, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: 76, down: true }, { id: 'kuro', hp: 5, maxHp: 60, down: false }] });
-  t.eq(S.heroes[0].hp, Math.round(76 * E.reviveFrac), 'the first hero revives too');
+  fight(S, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: HA, down: true }, { id: 'kuro', hp: 5, maxHp: KU, down: false }] });
+  t.eq(S.heroes[0].hp, Math.round(HA * E.reviveFrac), 'the first hero revives too');
   const T = NEW({ trial: 6 });
-  fight(T, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: 76, down: true }, { id: 'kuro', hp: 9, maxHp: 60, down: false }] });
-  t.eq(T.heroes[0].hp, Math.round(76 * (E.reviveFrac - 0.05)), 'trial reviveFrac lowers the revive');
+  fight(T, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: HA, down: true }, { id: 'kuro', hp: 9, maxHp: KU, down: false }] });
+  t.eq(T.heroes[0].hp, Math.round(HA * (E.reviveFrac - 0.05)), 'trial reviveFrac lowers the revive');
   const G2 = NEW();
-  fight(G2, 'normal', 1, { heroes: [{ id: 'hanae', hp: 40, maxHp: 76, down: false }, { id: 'kuro', hp: 30, maxHp: 60, down: false }], maxHpGain: { hanae: 3, kuro: 2 } });
-  t.eq(G2.heroes[0].maxHp, 79, 'max HP gain'); t.eq(G2.heroes[1].maxHp, 62, 'max HP gain'); t.eq(G2.heroes[0].hp, 40, 'hp as reported (COMBAT already raised it)');
+  fight(G2, 'normal', 1, { heroes: [{ id: 'hanae', hp: 40, maxHp: HA, down: false }, { id: 'kuro', hp: 30, maxHp: KU, down: false }], maxHpGain: { hanae: 3, kuro: 2 } });
+  t.eq(G2.heroes[0].maxHp, HA + 3, 'max HP gain'); t.eq(G2.heroes[1].maxHp, KU + 2, 'max HP gain'); t.eq(G2.heroes[0].hp, 40, 'hp as reported (COMBAT already raised it)');
   const tiny = NEW(); tiny.heroes[0].maxHp = 3; tiny.heroes[0].hp = 3;
-  fight(tiny, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: 3, down: true }, { id: 'kuro', hp: 9, maxHp: 60, down: false }] });
+  fight(tiny, 'normal', 1, { heroes: [{ id: 'hanae', hp: 0, maxHp: 3, down: true }, { id: 'kuro', hp: 9, maxHp: KU, down: false }] });
   t.eq(tiny.heroes[0].hp, 1, 'a revive is at least 1 HP');
   const cap = NEW();
-  fight(cap, 'normal', 1, { heroes: [{ id: 'hanae', hp: 999, maxHp: 76, down: false }, { id: 'kuro', hp: 9, maxHp: 60, down: false }] });
-  t.eq(cap.heroes[0].hp, 76, 'hp never above max');
+  fight(cap, 'normal', 1, { heroes: [{ id: 'hanae', hp: 999, maxHp: HA, down: false }, { id: 'kuro', hp: 9, maxHp: KU, down: false }] });
+  t.eq(cap.heroes[0].hp, HA, 'hp never above max');
   t.ok(NEW().heroes.every((h) => h.hp > 0), 'sanity');
 });
 t.test('combatDone: gold by tier, goldMul, thief loot and the extra gold ops', () => {
@@ -786,7 +787,7 @@ t.test('combatDone: a lost fight ends the run and keeps the stats', () => {
 });
 t.test('combatDone accepts anything with summary(), or the summary itself', () => {
   const R = NEW(); R.node = { kind: 'combat', tile: { q: 1, r: 0 }, tier: 'normal', enc: null, enemies: [], seed: 1, rewards: true, onWin: null, source: 'combat' };
-  const s = { result: 'win', heroes: [{ id: 'hanae', hp: 20, maxHp: 76 }, { id: 'kuro', hp: 20, maxHp: 60 }], stats: { kills: [{ def: 'kappa', tier: 'normal', by: 'card' }] } };
+  const s = { result: 'win', heroes: [{ id: 'hanae', hp: 20, maxHp: HA }, { id: 'kuro', hp: 20, maxHp: KU }], stats: { kills: [{ def: 'kappa', tier: 'normal', by: 'card' }] } };
   const rw = RUN.combatDone(R, s);
   t.ok(rw && R.heroes[0].hp === 20, 'a bare summary works'); t.eq(R.frontIdx, 0, 'no front() keeps the leader');
   const Q = NEW(); Q.node = null;
@@ -1310,14 +1311,14 @@ t.test('event requirements: every req key, and a failed hero requirement hides t
   const { A, R } = eventRun({ r: ev, r2: ev2 });
   const ch = (def) => A.RUN.eventChoices(R, def);
   R.gold = 99; t.eq(ch(ev)[0].ok, false, 'gold 99 < 100'); t.ok(/100/.test(ch(ev)[0].reason), 'the reason names the price: ' + ch(ev)[0].reason); R.gold = 100; t.eq(ch(ev)[0].ok, true, 'exactly 100');
-  t.eq(ch(ev)[1].ok, true, 'everybody is at full health'); R.heroes[1].hp = 20; t.eq(ch(ev)[1].ok, false, 'kuro under half'); R.heroes[1].hp = 30; t.eq(ch(ev)[1].ok, true, 'exactly half is enough');
-  t.eq(ch(ev)[2].ok, false, 'hpBelow: nobody hurt'); R.heroes[0].hp = 30; t.eq(ch(ev)[2].ok, true, 'hanae below half'); R.heroes[0].hp = 38; t.eq(ch(ev)[2].ok, false, 'exactly half is not below');
+  t.eq(ch(ev)[1].ok, true, 'everybody is at full health'); R.heroes[1].hp = KU / 2 - 1; t.eq(ch(ev)[1].ok, false, 'kuro under half'); R.heroes[1].hp = KU / 2; t.eq(ch(ev)[1].ok, true, 'exactly half is enough');
+  t.eq(ch(ev)[2].ok, false, 'hpBelow: nobody hurt'); R.heroes[0].hp = HA / 2 - 1; t.eq(ch(ev)[2].ok, true, 'hanae below half'); R.heroes[0].hp = HA / 2; t.eq(ch(ev)[2].ok, false, 'exactly half is not below');
   t.eq(ch(ev)[3].ok, false, 'no bell'); R.relics.push('silver_bell'); t.eq(ch(ev)[3].ok, true, 'bell');
   t.eq(ch(ev2)[0].ok, false, 'no flag'); R.flags.fox_spared = 1; t.eq(ch(ev2)[0].ok, true, 'flag');
   t.eq(ch(ev2)[1].ok, false, 'suzu is not in the party'); t.eq(ch(ev2)[1].hidden, true, 'and the choice is hidden, not merely disabled');
   t.eq(ch(ev2)[2].ok, false, 'wrong chapter'); t.eq(ch(ev2)[2].hidden, false, 'shown disabled'); A.RUN.startChapter(R, 2); t.eq(ch(ev2)[2].ok, true, 'chapter 2');
   t.eq(ch(ev2)[3].ok, true, 'a choice with no req is always open'); t.eq(ch(ev2)[3].reason, null, 'no reason');
-  R.heroes[0].hp = 0; R.heroes[1].hp = 10; R.heroes[1].maxHp = 60; t.eq(ch(ev)[1].ok, false, 'hpPct looks at living heroes only: kuro is hurt'); R.heroes[1].hp = 60; t.eq(ch(ev)[1].ok, true, 'a downed hero is ignored');
+  R.heroes[0].hp = 0; R.heroes[1].hp = 10; R.heroes[1].maxHp = KU; t.eq(ch(ev)[1].ok, false, 'hpPct looks at living heroes only: kuro is hurt'); R.heroes[1].hp = KU; t.eq(ch(ev)[1].ok, true, 'a downed hero is ignored');
   t.deep(A.RUN.eventChoices(R, 'nope'), [], 'unknown event id'); t.eq(A.RUN.eventChoices(R, 'r').length, 4, 'an id works too');
   R.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'r', chosen: null }; R.gold = 0;
   const snap = J(A.RUN.serialize(R));
@@ -1405,8 +1406,8 @@ t.test('op heal: n or pct, who, healMul, no overheal', () => {
   R = mk(); ops(R, [{ op: 'heal', n: 10, who: 'hanae' }]); t.deep(R.heroes.map((h) => h.hp), [20, 5], 'a hero id');
   R = mk(); R.frontIdx = 1; ops(R, [{ op: 'heal', n: 10, who: 'front' }]); t.deep(R.heroes.map((h) => h.hp), [10, 15], 'front follows frontIdx');
   R = mk(); ops(R, [{ op: 'heal', n: 10, who: 'lowest' }]); t.deep(R.heroes.map((h) => h.hp), [10, 15], 'lowest current HP');
-  R = mk(); ops(R, [{ op: 'heal', pct: 0.25 }]); t.deep(R.heroes.map((h) => h.hp), [10 + 19, 5 + 15], 'pct of each hero max HP');
-  R = mk(); ops(R, [{ op: 'heal', n: 999 }]); t.deep(R.heroes.map((h) => h.hp), [76, 60], 'no overheal');
+  R = mk(); ops(R, [{ op: 'heal', pct: 0.25 }]); t.deep(R.heroes.map((h) => h.hp), [10 + Math.round(HA * 0.25), 5 + Math.round(KU * 0.25)], 'pct of each hero max HP');
+  R = mk(); ops(R, [{ op: 'heal', n: 999 }]); t.deep(R.heroes.map((h) => h.hp), [HA, KU], 'no overheal');
   R = mk(); R.relics.push('t_heal'); ops(R, [{ op: 'heal', n: 10 }]); t.deep(R.heroes.map((h) => h.hp), [25, 20], 'healMul +50% applies to heal ops');
   R = mk(); ops(R, [{ op: 'heal', n: 10, who: 'suzu' }]); t.deep(R.heroes.map((h) => h.hp), [10, 5], 'a hero who is not in the party is skipped');
   const seen = new Set(); for (let s = 0; s < 30; s++) { const x = NEW({ seed: s }); x.heroes[0].hp = 10; x.heroes[1].hp = 10; ops(x, [{ op: 'heal', n: 5, who: 'random' }]); seen.add(x.heroes[0].hp + ',' + x.heroes[1].hp); }
@@ -1415,18 +1416,18 @@ t.test('op heal: n or pct, who, healMul, no overheal', () => {
   const T = NEW({ trial: 10 }); T.heroes[0].hp = 10; ops(T, [{ op: 'heal', n: 10, who: 'hanae' }]); t.eq(T.heroes[0].hp, 19, 'trial healMul x0.9 rounds 9');
 });
 t.test('op hurt: never kills, who, pct, at least 1', () => {
-  let R = NEW(); ops(R, [{ op: 'hurt', n: 10 }]); t.deep(R.heroes.map((h) => h.hp), [66, 50], 'both by default');
+  let R = NEW(); ops(R, [{ op: 'hurt', n: 10 }]); t.deep(R.heroes.map((h) => h.hp), [HA - 10, KU - 10], 'both by default');
   R = NEW(); R.heroes[0].hp = 3; ops(R, [{ op: 'hurt', n: 50, who: 'hanae' }]); t.eq(R.heroes[0].hp, 1, 'never below 1'); ops(R, [{ op: 'hurt', n: 50, who: 'hanae' }]); t.eq(R.heroes[0].hp, 1, 'and stays at 1');
-  R = NEW(); ops(R, [{ op: 'hurt', pct: 0.1, who: 'kuro' }]); t.eq(R.heroes[1].hp, 54, '10% of 60 is 6'); R = NEW(); ops(R, [{ op: 'hurt', pct: 0.001 }]); t.deep(R.heroes.map((h) => h.hp), [75, 59], 'a positive pct hurts at least 1');
-  R = NEW(); R.heroes[1].hp = 4; ops(R, [{ op: 'hurt', n: 2, who: 'lowest' }]); t.deep(R.heroes.map((h) => h.hp), [76, 2], 'lowest');
-  R = NEW(); R.frontIdx = 1; ops(R, [{ op: 'hurt', n: 2, who: 'front' }]); t.deep(R.heroes.map((h) => h.hp), [76, 58], 'front');
+  R = NEW(); ops(R, [{ op: 'hurt', pct: 0.1, who: 'kuro' }]); t.eq(R.heroes[1].hp, KU - Math.round(KU * 0.1), '10% of max HP, rounded'); R = NEW(); ops(R, [{ op: 'hurt', pct: 0.001 }]); t.deep(R.heroes.map((h) => h.hp), [HA - 1, KU - 1], 'a positive pct hurts at least 1');
+  R = NEW(); R.heroes[1].hp = 4; ops(R, [{ op: 'hurt', n: 2, who: 'lowest' }]); t.deep(R.heroes.map((h) => h.hp), [HA, 2], 'lowest');
+  R = NEW(); R.frontIdx = 1; ops(R, [{ op: 'hurt', n: 2, who: 'front' }]); t.deep(R.heroes.map((h) => h.hp), [HA, KU - 2], 'front');
 });
 t.test('op maxHp: raises max and current, or lowers max, never below 1', () => {
-  let R = NEW(); R.heroes[0].hp = 40; ops(R, [{ op: 'maxHp', n: 6 }]); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[46, 82], [66, 66]], 'both raised, current follows');
-  R = NEW(); ops(R, [{ op: 'maxHp', n: -10, who: 'kuro' }]); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[76, 76], [50, 50]], 'lowering max lowers a full hero');
+  let R = NEW(); R.heroes[0].hp = 40; ops(R, [{ op: 'maxHp', n: 6 }]); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[46, HA + 6], [KU + 6, KU + 6]], 'both raised, current follows');
+  R = NEW(); ops(R, [{ op: 'maxHp', n: -10, who: 'kuro' }]); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[HA, HA], [KU - 10, KU - 10]], 'lowering max lowers a full hero');
   R = NEW(); R.heroes[1].hp = 20; ops(R, [{ op: 'maxHp', n: -10, who: 'kuro' }]); t.deep(R.heroes[1].hp, 20, 'a hurt hero below the new max keeps their HP');
   R = NEW(); ops(R, [{ op: 'maxHp', n: -1000 }]); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[1, 1], [1, 1]], 'max never below 1, HP at least 1');
-  R = NEW(); ops(R, [{ op: 'maxHp', n: 4, who: 'front' }]); t.deep(R.heroes.map((h) => h.maxHp), [80, 60], 'who front');
+  R = NEW(); ops(R, [{ op: 'maxHp', n: 4, who: 'front' }]); t.deep(R.heroes.map((h) => h.maxHp), [HA + 4, KU], 'who front');
 });
 t.test('op addCard: a card, or a random card from a pool, upgraded or not', () => {
   const R = NEW();
@@ -1637,7 +1638,7 @@ t.test('hooks: onPickup runs only the new relic, onRest and onFightWon and onSho
   const H = NEW(); H.relics.push('t_rest'); H.heroes[0].hp = 10; H.heroes[1].hp = 10;
   enter(H, 'camp'); const rest = RUN.campAction(H, 'rest');
   t.eq(rest.ok, true, 'rested'); t.ok(rest.log.some((x) => x.op === 'relic' && x.id === 't_rest'), 'onRest is in the rest log');
-  t.eq(H.heroes[0].hp, Math.min(76, 10 + Math.round(76 * E.camp.restPct) + 3), 'the relic healed 3 more after the rest');
+  t.eq(H.heroes[0].hp, Math.min(HA, 10 + Math.round(HA * E.camp.restPct) + 3), 'the relic healed 3 more after the rest');
   const P = NEW(); P.relics.push('t_pickcard');
   const q = RUN.hook(P, 'onPickup', { only: 't_pickcard' }); t.eq(q.pending.length, 1, 'a hook that needs a choice returns it');
   t.eq(RUN.hook(P, 'onPickup', { only: 'nobody' }).log.length, 0, 'ctx.only names a relic');
@@ -1663,12 +1664,12 @@ t.test('camp: rest heals both heroes by camp.restPct of max HP, healMul applies,
   const R = NEW(); R.heroes[0].hp = 10; R.heroes[1].hp = 20;
   enter(R, 'camp');
   const r = RUN.campAction(R, 'rest');
-  t.eq(r.ok, true, 'rested'); t.eq(R.heroes[0].hp, 10 + Math.round(76 * E.camp.restPct), 'hanae +35% of 76'); t.eq(R.heroes[1].hp, 20 + Math.round(60 * E.camp.restPct), 'kuro +35% of 60');
-  t.deep(r.healed.map((h) => h.id), ['hanae', 'kuro'], 'healed list'); t.eq(r.healed[0].n, Math.round(76 * E.camp.restPct), 'amounts'); t.eq(R.stats.campRests, 1, 'campRests'); t.deep(R.node.used, ['rest'], 'used');
+  t.eq(r.ok, true, 'rested'); t.eq(R.heroes[0].hp, 10 + Math.round(HA * E.camp.restPct), 'hanae gets restPct of max HP'); t.eq(R.heroes[1].hp, 20 + Math.round(KU * E.camp.restPct), 'kuro gets restPct of max HP');
+  t.deep(r.healed.map((h) => h.id), ['hanae', 'kuro'], 'healed list'); t.eq(r.healed[0].n, Math.round(HA * E.camp.restPct), 'amounts'); t.eq(R.stats.campRests, 1, 'campRests'); t.deep(R.node.used, ['rest'], 'used');
   t.eq(RUN.campAction(R, 'rest').reason, 'used', 'not twice'); t.eq(RUN.campAction(R, 'meditate').reason, 'actions', 'one action per visit by default');
-  const F = NEW(); F.heroes[0].hp = 70; enter(F, 'camp'); const rf = RUN.campAction(F, 'rest'); t.eq(F.heroes[0].hp, 76, 'no overheal'); t.eq(rf.healed[0].n, 6, 'reports what it really healed');
-  const H = NEW(); H.relics.push('t_heal'); H.heroes[0].hp = 1; enter(H, 'camp'); RUN.campAction(H, 'rest'); t.eq(H.heroes[0].hp, 1 + Math.round(76 * E.camp.restPct * 1.5), 'healMul +50%');
-  const T = NEW({ trial: 7 }); T.heroes[0].hp = 1; enter(T, 'camp'); RUN.campAction(T, 'rest'); t.eq(T.heroes[0].hp, 1 + Math.round(76 * E.camp.restPct * 0.9), 'trial healMul -10%');
+  const F = NEW(); F.heroes[0].hp = HA - 6; enter(F, 'camp'); const rf = RUN.campAction(F, 'rest'); t.eq(F.heroes[0].hp, HA, 'no overheal'); t.eq(rf.healed[0].n, 6, 'reports what it really healed');
+  const H = NEW(); H.relics.push('t_heal'); H.heroes[0].hp = 1; enter(H, 'camp'); RUN.campAction(H, 'rest'); t.eq(H.heroes[0].hp, 1 + Math.round(HA * E.camp.restPct * 1.5), 'healMul +50%');
+  const T = NEW({ trial: 7 }); T.heroes[0].hp = 1; enter(T, 'camp'); RUN.campAction(T, 'rest'); t.eq(T.heroes[0].hp, 1 + Math.round(HA * E.camp.restPct * 0.9), 'trial healMul -10%');
   const bare = NEW(); t.eq(RUN.campAction(bare, 'rest').reason, 'node', 'a camp node is required'); t.eq(RUN.campAction(R, 'dance').reason, 'action', 'unknown action');
   const wrong = NEW(); enter(wrong, 'forge'); t.eq(RUN.campAction(wrong, 'rest').reason, 'node', 'not at a forge');
 });
@@ -1763,22 +1764,22 @@ t.test('deck: addCard, removeCard, upgradeCard keep instances well formed', () =
 
 // ================================================================================================ chapter end
 t.test('chapterEnd: +8 max HP, then 30% heal (healMul), the next map, Ink top-up, hooks', () => {
-  const R = NEW({ seed: 5 }); R.heroes[0].hp = 20; R.heroes[1].hp = 60; R.ink = 2; R.chapterCleared = true;
+  const R = NEW({ seed: 5 }); R.heroes[0].hp = 20; R.heroes[1].hp = KU; R.ink = 2; R.chapterCleared = true;
   R.relics.push('t_chapter');
   const g = R.gold;
   const res = RUN.chapterEnd(R);
-  t.eq(res.next, 2, 'next chapter'); t.eq(res.maxHp, 8, 'max HP figure'); t.eq(R.heroes[0].maxHp, 84, '+8 max'); t.eq(R.heroes[1].maxHp, 68, '+8 max');
-  t.eq(R.heroes[0].hp, Math.min(84, 20 + 8 + Math.round(84 * 0.3)), 'hurt hero: +8 (max HP raise) then 30% of the new max'); t.eq(R.heroes[1].hp, 68, 'a full hero is full at the new max');
-  t.deep(res.healed.map((h) => h.id), ['hanae', 'kuro'], 'healed list'); t.eq(res.healed[0].n, Math.round(84 * 0.3), 'heal amount'); t.eq(res.healed[0].hp, R.heroes[0].hp, 'hp echoed'); t.eq(res.healed[1].n, 0, 'nothing left to heal');
+  t.eq(res.next, 2, 'next chapter'); t.eq(res.maxHp, 8, 'max HP figure'); t.eq(R.heroes[0].maxHp, HA + 8, '+8 max'); t.eq(R.heroes[1].maxHp, KU + 8, '+8 max');
+  t.eq(R.heroes[0].hp, Math.min(HA + 8, 20 + 8 + Math.round((HA + 8) * 0.3)), 'hurt hero: +8 (max HP raise) then 30% of the new max'); t.eq(R.heroes[1].hp, KU + 8, 'a full hero is full at the new max');
+  t.deep(res.healed.map((h) => h.id), ['hanae', 'kuro'], 'healed list'); t.eq(res.healed[0].n, Math.round((HA + 8) * 0.3), 'heal amount'); t.eq(res.healed[0].hp, R.heroes[0].hp, 'hp echoed'); t.eq(res.healed[1].n, 0, 'nothing left to heal');
   t.eq(R.chapter, 2, 'chapter'); t.eq(R.map.chapter, 2, 'a new map'); t.eq(R.map.seed, U.hash(5, 'ch2', 'map'), 'from the run seed'); t.eq(R.chapterCleared, false, 'flag cleared'); t.eq(R.node, null, 'no node'); t.eq(R.ink, E.startInk, 'Ink topped up to startInk'); t.eq(R.gold, g + 3, 'onChapterStart fired after the map was made');
-  const h = NEW(); h.relics.push('t_heal'); h.heroes[0].hp = 1; RUN.chapterEnd(h); t.eq(h.heroes[0].hp, Math.min(84, 1 + 8 + Math.round(84 * 0.3 * 1.5)), 'healMul applies to chapter-end healing');
+  const h = NEW(); h.relics.push('t_heal'); h.heroes[0].hp = 1; RUN.chapterEnd(h); t.eq(h.heroes[0].hp, Math.min(HA + 8, 1 + 8 + Math.round((HA + 8) * 0.3 * 1.5)), 'healMul applies to chapter-end healing');
   const hi = NEW(); hi.ink = 13; RUN.chapterEnd(hi); t.eq(hi.ink, 13, 'more Ink than startInk is kept');
-  const two = NEW({ seed: 5 }); RUN.chapterEnd(two); const three = RUN.chapterEnd(two); t.eq(three.next, 3, 'and on to chapter 3'); t.eq(two.heroes[0].maxHp, 92, 'another +8'); t.eq(two.chapter, 3, 'chapter 3');
+  const two = NEW({ seed: 5 }); RUN.chapterEnd(two); const three = RUN.chapterEnd(two); t.eq(three.next, 3, 'and on to chapter 3'); t.eq(two.heroes[0].maxHp, HA + 16, 'another +8'); t.eq(two.chapter, 3, 'chapter 3');
 });
 t.test('chapterEnd after the chapter 3 boss: victory, no heal, no max HP', () => {
   const R = NEW({ seed: 5 }); RUN.startChapter(R, 3); R.heroes[0].hp = 10; R.chapterCleared = true; R.stats.bossKills = 3;
   const res = RUN.chapterEnd(R);
-  t.eq(res.next, 'victory', 'victory'); t.deep(res.healed, [], 'no healing'); t.eq(res.maxHp, 0, 'no max HP'); t.eq(R.heroes[0].maxHp, 76, 'max HP unchanged'); t.eq(R.heroes[0].hp, 10, 'hp unchanged');
+  t.eq(res.next, 'victory', 'victory'); t.deep(res.healed, [], 'no healing'); t.eq(res.maxHp, 0, 'no max HP'); t.eq(R.heroes[0].maxHp, HA, 'max HP unchanged'); t.eq(R.heroes[0].hp, 10, 'hp unchanged');
   t.eq(R.done, true, 'the run is done'); t.eq(R.victory, true, 'and won'); t.eq(R.chapterCleared, false, 'flag cleared'); t.eq(R.chapter, 3, 'still chapter 3'); t.eq(RUN.summary(R).victory, true, 'the summary agrees');
 });
 
@@ -1795,14 +1796,14 @@ t.test('score: the documented formula, floored at 0', () => {
   t.eq(RUN.score(R), want, 'formula: ' + want); t.eq(want, 100 * 2 + 60 * 2 + 15 * 3 + 25 + 2 * 160 + 2 * 4 + 3 * 3 - 5 * 2 - 10, 'and it is the design number ' + want);
   const low = NEW(); low.heroes.forEach((h) => { h.maxHp = 1; }); for (let i = 0; i < 30; i++) RUN.addCard(low, 'curse_regret'); low.stats.turns = 900;
   t.eq(RUN.score(low), 0, 'never below zero');
-  const plain = RUN.score(NEW()); t.eq(plain, 2 * 136 + 6, 'a fresh run: 2 per max HP plus 60 gold / 10'); const up = NEW(); up.heroes[0].maxHp += 8; t.eq(RUN.score(up), plain + 16, 'max HP counts double');
+  const plain = RUN.score(NEW()); t.eq(plain, 2 * (HA + KU) + 6, 'a fresh run: 2 per max HP plus 60 gold / 10'); const up = NEW(); up.heroes[0].maxHp += 8; t.eq(RUN.score(up), plain + 16, 'max HP counts double');
 });
 t.test('summary: the fields the end screens and META read', () => {
   const R = NEW({ seed: 4, trial: 3 }); R.stats.bossKills = 1; R.relics.push('t_gold');
   const s = RUN.summary(R);
   t.deep(Object.keys(s).sort(), ['chapter', 'chaptersCleared', 'daily', 'deckSize', 'done', 'gold', 'heroes', 'id', 'relics', 'score', 'seed', 'stats', 'trial', 'victory'], 'fields');
   t.eq(s.score, RUN.score(R), 'score'); t.eq(s.victory, false, 'victory'); t.eq(s.chapter, 1, 'chapter'); t.eq(s.trial, 3, 'trial'); t.eq(s.daily, false, 'daily'); t.eq(s.seed, 4, 'seed'); t.eq(s.deckSize, R.deck.length, 'deck size'); t.deep(s.relics, ['t_gold'], 'relics'); t.eq(s.gold, R.gold, 'gold'); t.eq(s.chaptersCleared, 1, 'chapters cleared'); t.deep(s.heroes, R.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp })), 'heroes');
-  s.stats.kills = 99; s.relics.push('x'); s.heroes[0].hp = 1; t.eq(R.stats.kills, 0, 'the summary holds copies'); t.deep(R.relics, ['t_gold'], 'relics untouched'); t.eq(R.heroes[0].hp, 76, 'heroes untouched');
+  s.stats.kills = 99; s.relics.push('x'); s.heroes[0].hp = 1; t.eq(R.stats.kills, 0, 'the summary holds copies'); t.deep(R.relics, ['t_gold'], 'relics untouched'); t.eq(R.heroes[0].hp, HA, 'heroes untouched');
 });
 
 // ================================================================================================ saves

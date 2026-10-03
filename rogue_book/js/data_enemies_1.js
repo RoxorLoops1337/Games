@@ -32,6 +32,17 @@
 //   normal groups 1.9 to 4.6 turns, HP lost 2 to 26 (pooled 3.2 turns and about 11 HP with the developed deck, solos about 2.1 turns)
 //   elites 6.3 / 5.1 (guardian), 6.4 / 5.1 (brute), 7.6 / 6.1 (duelist) turns; 50 / 33, 44 / 28, 58 / 38 HP lost
 //   boss 16 / 10.8 turns, 107 / 63 HP lost, won 84 percent / 100 percent
+// BALANCE PASS 1 (balance bot report 1, about 22,000 runs; measured here with refights of the bot's own fights, solo probes and a paired
+// greedy run set). What the numbers said, enemy by enemy, for the greedy party: kodama was the one truly soft normal (a lone kodama cost
+// 0.4 percent of party HP: it dies before it acts), and the hard end was karakasa, boar, mushroom folk, hitodama and oni cub. Poison and
+// Burn are booked by the bot under their own names, not under the enemy that applied them, so hitodama and mushroom_folk are NOT soft;
+// the "per turn" tables that suggested it were reading only direct hits, and crow_tengu is not twice its peers either. Changes: kodama
+// Rattle 3 to 4 and Branch Poke 6 to 7; tanuki_bandit Club Thump 7 to 8 and Snatch 4 to 5 (the gold stays its real cost); karakasa Hop 6x2
+// to 5x2; bamboo_boar Gore 14 to 13 and Barge 7 to 6; mushroom_folk Cap Bonk 7 to 6, Poison 3 to 2, HP 28 to 34 down to 26 to 32; crow_tengu
+// Dive Bomb 8 to 7; oni_cub HP 32 to 38 down to 28 to 34; hitodama HP 20 to 24 down to 18 to 22; bamboo_sprite HP 20 to 24 up to 22 to 26.
+// Net effect on normal fights: about 8 to 10 percent less party HP lost. What each enemy adds to a group fight, relative to the chapter
+// mean, went from 0.26x to 1.54x down to 0.34x to 1.40x (the bandit leaves after three turns and sprites come in packs, so those two stay
+// low by design; hitodama stays on top because of its Burn). Elites, minions and the boss are untouched.
 // Enemy Block and Plating gained in the enemy phase last through the hero's next turn: a `defend` intent is a free window THIS turn
 // and a wall NEXT turn. A `dur` status an enemy puts on itself needs n 2 to survive the end-of-round tick (heroes get the fresh flag).
 //
@@ -64,8 +75,8 @@
     tanuki_bandit: {
       id: 'tanuki_bandit', name: 'Tanuki Bandit', chapter: 1, tier: 'normal', size: 'm', hp: [30, 34],
       moves: {
-        club_thump: { name: 'Club Thump', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
-        snatch_and_grab: { name: 'Snatch and Grab', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'stealGold', n: 20 }], say: 'Nice purse. Mine now!' },
+        club_thump: { name: 'Club Thump', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        snatch_and_grab: { name: 'Snatch and Grab', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }, { op: 'stealGold', n: 20 }], say: 'Nice purse. Mine now!' },
         dash_off: { name: 'Dash Off', kind: 'flee', fx: [{ op: 'flee' }], say: 'Catch me if you can!' },
       },
       ai: { seq: ['snatch_and_grab', 'club_thump', 'dash_off'] },
@@ -77,8 +88,8 @@
     kodama: {
       id: 'kodama', name: 'Kodama', chapter: 1, tier: 'normal', size: 's', hp: [20, 24],
       moves: {
-        rattle: { name: 'Rattle', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'both' }], say: 'Kata kata kata!' },
-        branch_poke: { name: 'Branch Poke', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
+        rattle: { name: 'Rattle', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }], say: 'Kata kata kata!' },
+        branch_poke: { name: 'Branch Poke', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
         call_leaf_imp: { name: 'Call Leaf Imp', kind: 'summon', fx: [{ op: 'summon', enemy: 'leaf_imp', n: 1 }], say: 'Come out, come out!' },
       },
       ai: { open: ['call_leaf_imp'], seq: ['rattle', 'branch_poke'], rules: [{ if: { turnGte: 4, minions: { lt: 1 } }, do: 'call_leaf_imp' }] },
@@ -91,7 +102,7 @@
       id: 'karakasa', name: 'Karakasa', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
       moves: {
         tongue_lick: { name: 'Long Lick', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }], say: 'Blegh!' },
-        hop_hop: { name: 'Hop, Hop!', kind: 'multi', fx: [{ op: 'dmg', n: 6, hits: 2, tgt: 'front' }] },
+        hop_hop: { name: 'Hop, Hop!', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
         snap_shut: { name: 'Snap Shut', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
       },
       ai: { seq: ['hop_hop', 'snap_shut', 'tongue_lick', 'hop_hop'] },
@@ -101,7 +112,7 @@
     },
 
     hitodama: {
-      id: 'hitodama', name: 'Hitodama', chapter: 1, tier: 'normal', size: 's', hp: [20, 24],
+      id: 'hitodama', name: 'Hitodama', chapter: 1, tier: 'normal', size: 's', hp: [18, 22],
       start: [{ op: 'status', s: 'dodge', n: 1, tgt: 'self' }],
       immune: ['burn'],
       moves: {
@@ -115,7 +126,7 @@
     },
 
     oni_cub: {
-      id: 'oni_cub', name: 'Oni Cub', chapter: 1, tier: 'normal', size: 'm', hp: [32, 38],
+      id: 'oni_cub', name: 'Oni Cub', chapter: 1, tier: 'normal', size: 'm', hp: [28, 34],
       start: [{ op: 'status', s: 'ritual', n: 1, tgt: 'self' }],
       moves: {
         horn_butt: { name: 'Horn Butt', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] },
@@ -131,7 +142,7 @@
       id: 'crow_tengu', name: 'Crow Tengu', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
       moves: {
         peck_flurry: { name: 'Peck Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 3, hits: 3, tgt: 'random' }] },
-        dive_bomb: { name: 'Dive Bomb', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'back' }], say: 'Behind you!' },
+        dive_bomb: { name: 'Dive Bomb', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'back' }], say: 'Behind you!' },
         switcheroo: { name: 'Switcheroo', kind: 'special', fx: [{ op: 'swap' }, { op: 'dmg', n: 4, tgt: 'front' }], say: 'Shuffle, shuffle!' },
       },
       ai: { weighted: [['peck_flurry', 3], ['dive_bomb', 2], ['switcheroo', 1]], noRepeat: 2 },
@@ -141,7 +152,7 @@
     },
 
     bamboo_sprite: {
-      id: 'bamboo_sprite', name: 'Bamboo Sprite', chapter: 1, tier: 'normal', size: 's', hp: [20, 24],
+      id: 'bamboo_sprite', name: 'Bamboo Sprite', chapter: 1, tier: 'normal', size: 's', hp: [22, 26],
       moves: {
         leaf_flurry: { name: 'Leaf Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 3, tgt: 'random' }] },
         whet_blades: { name: 'Whet Blades', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 1, tgt: 'self' }] },
@@ -153,12 +164,12 @@
     },
 
     mushroom_folk: {
-      id: 'mushroom_folk', name: 'Mushroom Folk', chapter: 1, tier: 'normal', size: 'm', hp: [28, 34],
+      id: 'mushroom_folk', name: 'Mushroom Folk', chapter: 1, tier: 'normal', size: 'm', hp: [26, 32],
       immune: ['poison'],
       moves: {
-        spore_puff: { name: 'Spore Puff', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'poison', n: 3, tgt: 'front' }] },
+        spore_puff: { name: 'Spore Puff', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'poison', n: 2, tgt: 'front' }] },
         thicken_cap: { name: 'Thicken Cap', kind: 'buff', fx: [{ op: 'status', s: 'thorns', n: 2, tgt: 'self' }] },
-        cap_bonk: { name: 'Cap Bonk', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
+        cap_bonk: { name: 'Cap Bonk', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
       },
       ai: { open: ['thicken_cap'], seq: ['spore_puff', 'cap_bonk'], rules: [{ if: { turnEvery: [4, 3] }, do: 'thicken_cap' }] },
       art: { id: 'mushroom_folk' },
@@ -170,9 +181,9 @@
       id: 'bamboo_boar', name: 'Bamboo Boar', chapter: 1, tier: 'normal', size: 'l', hp: [36, 38],
       start: [{ op: 'status', s: 'plating', n: 3, tgt: 'self' }],
       moves: {
-        shoulder_barge: { name: 'Shoulder Barge', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
+        shoulder_barge: { name: 'Shoulder Barge', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
         bristle: { name: 'Bristle Up', kind: 'buff', fx: [{ op: 'status', s: 'plating', n: 2, tgt: 'self' }], say: 'Snort.' },
-        gore: { name: 'Bamboo Gore', kind: 'heavy', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
+        gore: { name: 'Bamboo Gore', kind: 'heavy', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
       },
       ai: { seq: ['bristle', 'gore', 'shoulder_barge'] },
       art: { id: 'bamboo_boar' },
@@ -327,7 +338,8 @@
   });
 
   // ---------------------------------------------------------------------- encounters
-  // Early groups (min <= 0.1) are the tutorials: a lone kappa, a lone bandit, kodama with a kappa, a lone karakasa. `min` only gates a
+  // Early groups (min <= 0.1) are the tutorials: a lone kappa, a lone bandit, a lone kodama, a lone karakasa. (The kodama and kappa pair
+  // moved to min 0.12 when the kodama was strengthened: at min 0 a group must stay under 9 average damage.) `min` only gates a
   // group IN (nothing phases the easy ones out), so the late groups carry weight 2 and the gentle solos 1 or 2: at tile diff 1 about
   // half the pool is the second half of the list. Summoners never share a group (two kodama would both roll "call" against the same
   // minion count and overshoot the cap of 2).
@@ -335,7 +347,8 @@
     normal: [
       { id: 'ch1_kappa_solo', enemies: ['kappa'], w: 2, min: 0 },
       { id: 'ch1_bandit_solo', enemies: ['tanuki_bandit'], w: 2, min: 0 },
-      { id: 'ch1_kodama_kappa', enemies: ['kodama', 'kappa'], w: 2, min: 0 },
+      { id: 'ch1_kodama_solo', enemies: ['kodama'], w: 1, min: 0 },
+      { id: 'ch1_kodama_kappa', enemies: ['kodama', 'kappa'], w: 2, min: 0.12 },
       { id: 'ch1_karakasa_solo', enemies: ['karakasa'], w: 1, min: 0.1 },
       { id: 'ch1_sprite_pair', enemies: ['bamboo_sprite', 'bamboo_sprite'], w: 2, min: 0.15 },
       { id: 'ch1_cub_solo', enemies: ['oni_cub'], w: 1, min: 0.2 },

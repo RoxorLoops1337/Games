@@ -883,7 +883,7 @@ t.test('engine: komainu_guardian is only thorny while braced, and the pounce dro
   slash(C, k);
   t.eq(evsSince(C, from, 'thorns').length, 0, 'hitting it before the stance costs nothing');
   step(C);                                                   // stance
-  t.eq(k.st.thorns, 6, 'the stance raises Thorns 6');
+  t.eq(k.st.thorns, 5, 'the stance raises Thorns 5');
   t.ok(k.block >= 12, 'and Block');
   t.eq(k.intent.move, 'pounce', 'the pounce is telegraphed next');
   t.eq(k.intent.kind, 'heavy', 'as a heavy hit');
@@ -891,15 +891,15 @@ t.test('engine: komainu_guardian is only thorny while braced, and the pounce dro
   from = C.events.length;
   slash(C, k); slash(C, k);
   const th = evsSince(C, from, 'thorns');
-  t.ok(th.length >= 1 && th.every((e) => e.amount === 6 && e.dst.id === 'hanae'), 'hitting the braced komainu hurts the attacker for 6 each time');
+  t.ok(th.length >= 1 && th.every((e) => e.amount === 5 && e.dst.id === 'hanae'), 'hitting the braced komainu hurts the attacker for 5 each time');
   step(C);                                                   // pounce
   t.eq(k.st.thorns || 0, 0, 'the lunge sheds the Thorns');
   t.eq(k.intent.move, 'claw', 'then a plain claw');
   from = C.events.length;
   slash(C, k);
   t.eq(evsSince(C, from, 'thorns').length, 0, 'the turn after the pounce is the free window');
-  const pounceHits = C.events.filter((e) => e.type === 'hit' && e.dst.kind === 'hero' && e.raw === 24);
-  t.ok(pounceHits.length === 1, 'the pounce hit for 24');
+  const pounceHits = C.events.filter((e) => e.type === 'hit' && e.dst.kind === 'hero' && e.raw === 19);
+  t.ok(pounceHits.length === 1, 'the pounce hit for 19');
   // the roar comes at low HP and preempts the seq once
   const C2 = scenario(['komainu_guardian']);
   const k2 = C2.enemies[0];
@@ -907,7 +907,7 @@ t.test('engine: komainu_guardian is only thorny while braced, and the pounce dro
   step(C2);
   t.eq(k2.intent.move, 'roar', 'below 40 percent it roars');
   step(C2);
-  t.ok(C2.heroes.every((h) => h.st.weak >= 1) && k2.st.might === 2, 'the roar weakens both heroes and gives it Might 2');
+  t.ok(C2.heroes.every((h) => h.st.weak >= 1) && k2.st.might === 1, 'the roar weakens both heroes and gives it Might 1');
   t.ok(k2.intent.move !== 'roar', 'once only');
 });
 
@@ -981,13 +981,13 @@ t.test('engine: void_scribe erases every buff, adds blots, and reads Might', () 
 t.test('engine: blank_soldier hits harder with every living enemy, and the wall covers the whole line', () => {
   if (!HAVE_ENGINE) return skipNote();
   const dmgFor = (list) => { const C = scenario(list); const s = C.enemies.find((e) => e.def === 'blank_soldier'); s._move = 'march'; return C.intent(s).dmg; };
-  t.deep([dmgFor(['blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier', 'blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier', 'blank_soldier', 'blank_page'])], [8, 11, 14, 14], 'Rank Strike is 8 alone, 11 in a pair, 14 in a rank (capped)');
+  t.deep([dmgFor(['blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier', 'blank_soldier']), dmgFor(['blank_soldier', 'blank_soldier', 'blank_soldier', 'blank_page'])], [7, 10, 12, 12], 'Rank Strike is 7 alone, 10 in a pair, 12 in a rank (capped)');
   const C = scenario(['blank_soldier', 'blank_soldier', 'blank_soldier']);
   const s0 = C.enemies[0];
   s0._move = 'march';
-  t.eq(C.intent(s0).dmg, 14, 'a rank of three');
+  t.eq(C.intent(s0).dmg, 12, 'a rank of three');
   C.enemies[1].hp = 1; C.enemies[1].block = 0; slash(C, C.enemies[1]);
-  t.eq(C.intent(s0).dmg, 11, 'break one soldier and the rest weaken (intents update live)');
+  t.eq(C.intent(s0).dmg, 10, 'break one soldier and the rest weaken (intents update live)');
   const D = scenario(['blank_soldier', 'void_scribe', 'blank_soldier']);
   D.enemies.forEach((e) => { e._move = e.def === 'blank_soldier' ? 'wall' : e._move; });
   step(D);
@@ -1050,9 +1050,9 @@ t.test('engine: paper_golem slams with its Plating and tears when hit', () => {
   step(C);                                                   // fold: +3 Plating, Block
   t.eq(g.st.plating, 8, 'Fold Up adds Plating');
   g._move = 'slam';
-  t.eq(C.intent(g).dmg, 23, 'Origami Slam reads the Plating: 15 + 8');
+  t.eq(C.intent(g).dmg, 22, 'Origami Slam reads the Plating: 14 + 8');
   g.st.plating = 30;
-  t.eq(C.intent(g).dmg, 26, 'capped at 26');
+  t.eq(C.intent(g).dmg, 25, 'capped at 25');
   t.eq(C.intent(g).kind, 'heavy', 'shown as heavy');
 });
 
@@ -1102,7 +1102,7 @@ t.test('engine: censor_golem raises the stamp, DENIED lands hard, and a Stun on 
   t.deep(seq, ['smack', 'censor', 'raise'], 'smack, redaction stamp, the quiet raise');
   t.eq(g.intent.move, 'stamp', 'turn 4: the stamp');
   t.eq(g.intent.kind, 'heavy', 'a heavy hit');
-  t.eq(g.intent.dmg, 28, 'for 28');
+  t.eq(g.intent.dmg, 26, 'for 26');
   t.ok(g.intent.statuses.some((s) => s.s === 'vulnerable'), 'and it leaves Vulnerable');
   const redacted = [...C.draw, ...C.discard, ...C.hand].filter((c) => c.id === 'status_redacted').length;
   t.ok(redacted >= 3, `three turns of redaction put cards in the deck (${redacted})`);
@@ -1213,7 +1213,7 @@ t.test('engine: black_bar_inquisitor chains, gags and finishes: cut the chain, s
   t.deep(F.intent(F.enemies[0]).tgt, ['hanae'], 'a taunting hero draws the verdict');
   // the hunt: two hits at the weakest hero
   const info = (() => { const X = scenario(['black_bar_inquisitor']); X.heroes[1].hp = 50; const u = X.enemies[0]; u._move = 'hunt'; return X.intent(u); })();
-  t.deep([info.hits, info.dmg, info.tgt], [2, 8, ['kuro']], 'Hunt the Weak: 2 x 8 at the lowest hero');
+  t.deep([info.hits, info.dmg, info.tgt], [2, 9, ['kuro']], 'Hunt the Weak: 2 x 9 at the lowest hero');
 });
 
 t.test('engine: the minions do exactly what their lore says', () => {
@@ -1290,13 +1290,13 @@ t.test('engine: the small chapter 3 rules: knight leaves a last bar, drone overc
   t.ok(seenMoves.indexOf('overclock') < 0, 'once only');
   dr._move = 'jab';
   const it = D.intent(dr);
-  t.deep([it.hits, it.dmg], [3, 6], 'with Might 1 the jabs are 3 x 6');
+  t.deep([it.hits, it.dmg], [3, 7], 'with Might 1 the jabs are 3 x 7');
   const A = scenario(['storm_drone']);
   const ad = A.enemies[0]; ad._move = 'arc';
   t.deep(A.intent(ad).tgt, ['hanae', 'kuro'], 'Arc Flash is aimed at both heroes');
   step(A);
   t.ok([...A.draw, ...A.discard, ...A.hand].some((c) => c.id === 'status_static'), 'and adds a Static card');
-  t.ok(A.heroes[0].hp === 900 - 5 && A.heroes[1].hp === 900 - 5, 'for 5 each');
+  t.ok(A.heroes[0].hp === 900 - 6 && A.heroes[1].hp === 900 - 6, 'for 6 each');
   // storm_whelp: Storm Breath hits both heroes and adds a Scorch card
   const J = scenario(['storm_whelp']);
   const jw = J.enemies[0];

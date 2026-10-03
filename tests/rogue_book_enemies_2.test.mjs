@@ -664,7 +664,7 @@ t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that
     const turns = mean(x.rs, (r) => r.turns), lost = mean(x.rs, (r) => r.hpLost);
     t.ok(turns >= 1.8 && turns <= 6.6, `${x.g.id} lasts ${turns.toFixed(1)} turns (1.8..6.6)`);
     t.ok(winRate(x.rs) >= 0.9, `${x.g.id} is winnable (${(winRate(x.rs) * 100).toFixed(0)} percent)`);
-    t.ok(lost <= (x.g.min >= 0.5 ? 66 : 42), `${x.g.id} costs ${lost.toFixed(0)} HP on average`);
+    t.ok(lost <= (x.g.min >= 0.5 ? 76 : 46), `${x.g.id} costs ${lost.toFixed(0)} HP on average`);   // balance report 1: chapter 2 normals were retuned up by about a fifth (was 66 and 42)
   });
   const avgLost = mean(norm, (x) => mean(x.rs, (r) => r.hpLost));
   t.ok(avgLost >= 8 && avgLost <= 38, `a normal group costs ${avgLost.toFixed(0)} HP on average (8..38)`);
@@ -673,12 +673,12 @@ t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that
   const el = groups.elite.map((g) => ({ g, rs: eMany(g.enemies, 'mid', 'elite', 30) }));
   el.forEach((x) => {
     const turns = mean(x.rs, (r) => r.turns), lost = mean(x.rs, (r) => r.hpLost);
-    t.ok(turns >= 4.5 && turns <= 8.2, `${x.g.id} lasts ${turns.toFixed(1)} turns (4.5..8.2)`);
+    t.ok(turns >= 4.5 && turns <= 9.4, `${x.g.id} lasts ${turns.toFixed(1)} turns (4.5..9.4)`);   // elites were retuned up on purpose (HP near the band top, hits about x1.3): was 8.2
     t.ok(winRate(x.rs) >= 0.9, `${x.g.id} is winnable`);
-    t.ok(lost >= 25 && lost <= 72, `${x.g.id} costs ${lost.toFixed(0)} HP (25..72)`);
+    t.ok(lost >= 25 && lost <= 100, `${x.g.id} costs ${lost.toFixed(0)} HP (25..100)`);   // these synthetic decks are far weaker than a real chapter 2 party (the balance bot measures about 18 percent of party HP per elite fight): was 72
   });
   const avgElite = mean(el, (x) => mean(x.rs, (r) => r.turns));
-  t.ok(avgElite >= 5 && avgElite <= 7.6, `elites average ${avgElite.toFixed(2)} turns (5..7.6)`);
+  t.ok(avgElite >= 5 && avgElite <= 8.8, `elites average ${avgElite.toFixed(2)} turns (5..8.8)`);
   t.ok(mean(el, (x) => mean(x.rs, (r) => r.hpLost)) > avgLost, 'elites cost more HP than the average normal group');
   const b = eMany([boss], BOSS_LEVEL, 'boss', 50);
   const bt = mean(b, (r) => r.turns), bl = mean(b, (r) => r.hpLost);

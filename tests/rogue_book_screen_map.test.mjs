@@ -152,7 +152,7 @@ await t.test('enter: the HUD, the data-tut anchors, the chapter title, music, an
   t.ok(root, 'the map screen is up');
   t.eq($$(g, '.mp-party .badge', root).length, 2, 'two hero badges');
   t.deep($$(g, '.mp-party .badge', root).map((b) => b.dataset.hero), ['hanae', 'kuro'], 'the party in order');
-  t.ok(/76\/76/.test(txt($(g, '.mp-party .badge.h-hanae', root))) && /60\/60/.test(txt($(g, '.mp-party .badge.h-kuro', root))), 'HP shows on the badges');
+  { const hh = g.DATA.heroes.hanae.maxHp, kk = g.DATA.heroes.kuro.maxHp; t.ok(txt($(g, '.mp-party .badge.h-hanae', root)).indexOf(hh + '/' + hh) >= 0 && txt($(g, '.mp-party .badge.h-kuro', root)).indexOf(kk + '/' + kk) >= 0, 'HP shows on the badges'); }
   t.eq($$(g, '.mp-ink .mp-drop', root).length, R.inkMax, 'one drop per point of the Ink maximum');
   t.eq($$(g, '.mp-ink .mp-drop.full', root).length, R.ink, 'as many full drops as Ink');
   t.eq(txt($(g, '.mp-ink-n', root)), R.ink + '/' + R.inkMax, 'the number reads Ink over maximum');

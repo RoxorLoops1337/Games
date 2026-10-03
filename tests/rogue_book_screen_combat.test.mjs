@@ -669,8 +669,8 @@ await t.test('hero panel: low HP flags, the danger vignette, the block chip and 
   const g = fresh();
   const { st } = await enter(g, { enemies: ['kappa'], hp: [20, 60] });
   const p = heroPanel(g, 'hanae');
-  t.ok(p.querySelector('.cm-bar').classList.contains('low'), 'Hanae at 20/76 is flagged low'); t.ok($(g, '.cm-danger').classList.contains('on'), 'the screen edge glows red');
-  t.eq(txt(p.querySelector('.cm-bar .txt')), '20/76', 'HP text');
+  t.ok(p.querySelector('.cm-bar').classList.contains('low'), 'Hanae at 20 HP is flagged low'); t.ok($(g, '.cm-danger').classList.contains('on'), 'the screen edge glows red');
+  t.eq(txt(p.querySelector('.cm-bar .txt')), '20/' + g.DATA.heroes.hanae.maxHp, 'HP text');
   st.C.front().block = 9;
   scr(g).debug().setStatus('hanae', 'might', 0);
   await idle(g);
