@@ -76,6 +76,7 @@ const STATIC_PATHS = [
   'grudge_draft',
   'clawspire',
   'claw_crawl',
+  'rogue_book',
   'pixel_colony',
   'tools',
 ];
