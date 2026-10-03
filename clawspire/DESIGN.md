@@ -7384,6 +7384,176 @@ was registered (order and labels unchanged), the ids and the `.screen` + `#xBody
   repaint their own DOM canvases from the update loop, not from draw().
 - **Dutch.** One new string, "Run details" (Rundetails), in lang_nl2.js's M3 block. Shot at 390 and 360 px.
 
+## Runtime performance (round 19)
+
+The frame, not the download: what a phone pays per frame on the map, in a fight and under the menus. game.js's draw
+dispatcher, the toast lane and the HUD; render.js's glow and badge caches. Nothing in the game's logic, timers, audio
+or physics changed (update() runs exactly as before; the headless suites stay deterministic).
+
+- **No scene under a solid page.** `drawCovered()` (just above `draw()`) is the one check: the shown screen
+  (`#scr-<S.screen>`) carries `.ds-opaque` and `.show`. m2Stop and m3Page own the class (the nine solid run stops,
+  the albums, the weekly and rush menus, game over, win, the loop, the duo page in its menu phases); the vault,
+  Claw School, the rush screen and every canvas stop never carry it, so they paint as before. Under a solid page
+  draw() paints only the DOM canvases it feeds: the event vignette (`arcDraw`) and the shopkeeper, campfire, forge
+  and tip card art (`feelDraw`). The Codex picture (`loreLive`) and the rush gallery (`rushLive`) repaint from the
+  update loop and are untouched. The main canvas keeps its last frame, unseen; the first frame back on the map or
+  the fight is a full paint. Photo mode (painting its frozen scene into a buffer) never skips.
+- **Backing store at 2x at most.** `PX_DPR_MAX = 2` (it was 2.5): the canvas buffer follows the device up to 2
+  device px per CSS px. A 3x phone (390 px wide) fills 780 x 1387 instead of 975 x 1733 (-36% pixels). The CSS
+  size and `stagePoint` (CSS px / `S.scale`) are untouched: a press and drag in the cabinet set the claw's target
+  to exactly the stage x at DPR 1, 2 and 3 (driven in Chromium). At DPR 2 and below nothing changes.
+- **Glow sprites.** Radii up to 24 share a sprite per 2 px (the claw's strain glow walked 7 to 16 a frame and built a
+  canvas for each); past the 1.6 MP budget the least recently drawn sprites go (`glowTrim`, to 75% of it) instead of
+  the whole cache, so a fight's working set is never rebuilt mid-fight. Every caller draws a sprite at its own size,
+  so a sprite one step larger is the same soft glow.
+- **Gradients.** The relic badge (`polBadge`, redrawn while its shine sweeps) builds its ring and disc gradients
+  once per tier and size (`polGrad`, a 48-entry cap; a gradient lives in the coordinates it is filled in, so one
+  object serves every relic canvas). The season map's vignette (`SEA_VIG`) is rebuilt only when the map area moves.
+  The map and the fight now create no gradient per frame.
+- **DOM writes on change only.** `feelCorner` (every tick) re-set the corner item's `hi` / `tight` classes: 55 class
+  writes a second on the map, 34 in the shop. `rushHud` re-set `#top.rushOn` and the act text on every HUD refresh
+  (6 a second in every fight). Both compare first.
+- **Dead code.** `coinsTo` (never called). A scan of every `function` name in clawspire/js against clawspire/ and
+  tests/ finds no other name referenced once, and the "export-only" list of round 18's audit is in use (aliases:
+  `acc.shape`, `sch.steer`, `NET.host` and the like are called by the suites or by game.js). The one-line local
+  `clamp` / `lerp` copies in combat, physics, intro, map and render stay: same body, no shared scope to gain.
+- **Left alone: the map's ground layer (B3.6).** The water hexes shimmer with time (`terrainHex` reads `st.t`), so
+  a cached ground would freeze them; it would also sit on the camera and zoom path. Not worth the risk.
+
+Measured (local, Chromium without a GPU, 390 x 844 mobile emulation at DPR 3 unless noted; `draw()` timed alone,
+"raster" forces the pixels with a 1 px read; frames from a 4 to 10 s rAF probe; this box rasters in software, so
+absolute frame times are pessimistic, the ratios hold):
+
+| | before | after |
+| --- | --- | --- |
+| canvas buffer at DPR 3 | 975 x 1733 | 780 x 1387 |
+| map: draw() JS / with raster | 2.7 / 44.6 ms | 2.7 / 32.4 ms |
+| fight, 3 enemies: draw() with raster | 23.3 ms | 17.3 ms |
+| boss fight (hoard): draw() with raster | 24.5 ms | 17.1 ms |
+| shop: draw() JS / with raster | 2.6 / 32.1 ms | 0.2 / 0.2 ms (the keeper only) |
+| rest / event: with raster | 31.9 / 31.1 ms | 0.3 / 0.1 ms |
+| Prizedex / game over: with raster | 27.2 / 2.5 ms | 0 / 0 ms |
+| frames, map idle | 19.9 fps (91 of 103 over 33 ms) | 28.2 fps (31 of 144) |
+| frames, shop / Prizedex | 23.5 / 27.1 fps, 4.1 s busy in 4 s | 60 / 60 fps, 1.7 / 0.2 s busy in 4 s |
+| frames, fight with drops / boss fight | 26.7 / 28.8 fps | 39.6 / 37.8 fps |
+| DOM writes a second: map / shop / fight | 61 / 35 / 7 | 1 / 2 / 1 (toasts sliding) |
+| canvases built, first claw drop (30 frames) | 15 to 19 | 9 to 10 (0 on later drops) |
+| gradients created per frame, map / fight | 1.5 / 0.7 | 0 / 0 |
+| heap after 10 fights / after an 80 s fight | 9.8 / 10.6 MB | 9.7 / 10.2 MB |
+| DOM nodes, listeners, canvases across 10 fights | flat (about 415, 1097, 7 to 10) | flat (the same) |
+
+Screens: all 47 screenshots (English and Dutch, DPR 2) match the round 18 set: the solid pages pixel for pixel,
+the canvas scenes up to their animation phase and the toasts' timing (a second run of the old build differs from
+the first by as much). Tests: `perf (round 19)` in the render suite (a solid shop paints only the keeper's canvas,
+a page that is not shown never hides the scene, the buffer at DPR 1, 2 and 3) and the glow cache checks (2 px
+buckets, a hot sprite survives a flood of colours).
+
+## Lamp economy check (round 19)
+
+Owner of this section: the balance pass. The worry from round 17: the skilled bot's perfect hands land PERFECT on
+about half its drops and set off LAMP FEVER over a hundred times a run, and every fever rained a capsule. Does a
+human-like player also get far more loot than round 12 meant (about 22 capsules a run, gold on arrival 103 / 419 /
+720, "a couple of fights and an elite" for a good relic)?
+
+**Method.** The round 17 bot (`r17new/bal15.mjs`) copied to scratchpad `r19lamp/bal19.mjs`, pointed at a snapshot of
+the committed build (`r19lamp/base`; `base_b` is the same with the dial below), the cabinet on (`GAME.cab.force`),
+Tilt 0, the Trading Post on. Batches by `r19lamp/cal19.sh`, tables by `r19lamp/agg19.mjs`, raw lines
+`r19lamp/cal_{h0,h1,hoff,s0,s1}_w*.jsonl`. Seven crawlers x classic / tri / scoop / twins, seeds from 19000: 112 runs
+for each human-like batch, 28 for the skilled bot and for the cabinet-off control. New in the bot: the cabinet's
+capsules counted by source (CAPSULE DROP event or FEVER rain, spawned and delivered), every fever (also the ones that
+burst on the enemy's turn), PERFECTs a drop.
+
+**The human-like bot (`HUMAN=1`).** The skilled bot's decisions (which prize to go for, the map, the shop, rests), with
+four changes:
+- No perfect hands: the claw's own physics decides what comes up and what slips (the skilled bot drops its aimed
+  prizes into the chute at the release).
+- A finger's aim. The stage is 540 px wide; on a 390 CSS px phone (6.1 inch, about 65 mm across) one stage px is about
+  0.12 mm, so the PERFECT window (5 px) is about +/-0.6 mm. A drag-then-lift on a phone misses its mark by about 1.5 mm
+  (judging the middle of an odd-shaped prize through the claw, the finger rolling as it lifts), so the drop lands at
+  the aimed x + a normal error of SD 13 px (`AIMSD`), plus a release overshoot along the drag (the finger still
+  sliding when it lifts: a reaction delay of about 60 +/- 30 ms at 80 px/s, about 5 px), and 10% of drops are gross
+  misses, 20 to 45 px off (`PMISS`: a misread pile, a hurried or slipped finger). Measured: 13.3 px mean error.
+- It goes for a cabinet capsule lying in the pile when the capsule beats the best prize (`CAPV` 10); the skilled bot
+  never aimed at one.
+- It takes an act's first elite after two normal fights (the owner's "a couple of fights and an elite"); the skilled
+  bot takes one at once when healthy.
+
+**PERFECT is mostly the pile, not the aim.** With that aim the bot lands PERFECT on 34% of its drops, not the 10 to 20%
+a decent player would earn by aim alone (P(error within 5 px) at SD 13 is about 30%, times the 70% the claw comes up
+with a dead-centre prize: about 21%). The window takes the topmost prize under the hub, whichever it is, and in a full
+pile one usually sits within 5 px: a probe run with no aim error landed 53%, one with SD 40 px still 36%. The twins
+never PERFECT (not in `perfTypes`), so on the classic, tri and scoop a human gets about 40%. It hardly matters for
+the lamp: a PERFECT is one star, a delivery one to three.
+
+### Before and after (the dial: a FEVER rains coins, no capsule)
+
+| human-like bot, cabinet on, Tilt 0 | before (112 runs) | after (112 runs) | cabinet off (28 runs) |
+| --- | --- | --- | --- |
+| win | 2% | 3% | 0% |
+| deaths act 1 / 2 / 3 | 92 / 15 / 3 | 97 / 11 / 1 | 26 / 2 / 0 |
+| fights a run | 9.5 | 8.3 | 7.0 |
+| prizes a drop / PERFECT of drops | 1.67 / 34% | 1.67 / 34% | 1.52 / - |
+| LAMP FEVER a fight / a run | 3.7 / 35.4 | 3.7 / 30.7 | - |
+| capsules opened a run (a fight) | 18.9 (1.99) | 7.7 (0.93) | 4.5 (0.63) |
+| from rewards and the map | 7.0 (0.74) | 6.2 (0.75) | 4.5 (0.63) |
+| from CAPSULE DROP events | 0.6 | 1.5 | - |
+| from the FEVER rain (spawned / delivered) | 11.3 (17.6 / 12.6) | 0 | - |
+| capsules opened by the start of act 2 / 3 | 28.9 / 62.8 | 14.0 / 29.0 | 12.0 / - |
+| gold on arrival, act 1 / 2 / 3 (runs that got there) | 105 / 494 (20) / 960 (5) | 105 / 530 (15) / 1121 (4) | 105 / 427 (2) / - |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.2 / 19.6 | 1.6 / 9.3 / 16.5 | 1.5 / 8.0 / - |
+| capsule tiers c / u / r / l | 43 / 35 / 18 / 4% | 41 / 37 / 19 / 3% | 34 / 42 / 18 / 6% |
+| relics from capsules a run (rare or better) | 2.71 (0.49) | 1.90 (0.29) | 1.46 (0.14) |
+
+| skilled bot (`PRO=2`), cabinet on, Tilt 0 | round 12 target | round 16, cabinet off (126 runs) | before (28 runs) | after (28 runs) |
+| --- | --- | --- | --- | --- |
+| win | 31% | 30% | 32% | 32% |
+| deaths act 1 / 2 / 3 | 12 / 16 / 5 (of 48) | 16 / 51 / 20 | 1 / 8 / 10 | 3 / 10 / 6 |
+| prizes a drop / PERFECT of drops | 3.4 / - | 3.1 / - | 3.15 / 52% | 3.20 / 54% |
+| LAMP FEVER a fight / a run | - | - | 4.3 / 129 | 4.6 / 138 |
+| capsules opened a run (a fight) | 21.7 | 22.7 (0.83) | 48.5 (1.61) | 26.3 (0.88) |
+| from rewards and the map / events / the FEVER rain | 21.7 / - / - | 22.7 / - / - | 24.7 / 0.7 / 23.1 | 25.1 / 1.2 / 0 |
+| capsules opened by the start of act 2 / 3 | | 11.7 / 24.2 | 20.5 / 42.6 | 12.3 / 25.2 |
+| gold on arrival, act 1 / 2 / 3 | 103 / 419 / 720 | 103 / 423 / 596 | 105 / 500 / 834 | 105 / 476 / 769 |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.0 / 16.9 | 1.6 / 8.3 / 16.6 | 1.5 / 8.7 / 16.0 | 1.5 / 8.8 / 16.9 |
+| capsule tiers c / u / r / l | 40 / 33 / 21 / 6% | 39 / 35 / 21 / 5% | 43 / 35 / 20 / 3% | 42 / 33 / 20 / 5% |
+| a won run ends with | 23.9 relics, 1128 gold | 24.6 relics, 718 gold | 24.0 relics, 69 capsules, 1412 gold | 23.4 relics, 38 capsules, 1396 gold |
+
+(Round 17's skilled numbers on its own build: 56.5 capsules a run, 1.82 a fight, gold 105 / 563 / 1019.)
+
+**What it showed.** Every player sets off FEVER three to five times a fight: a weaker hand brings up fewer prizes a
+drop but takes more drops a fight, so the lamp fills about as fast. The fight's cabinet capsule cap (`capMax` 2) was
+the only limit, and the FEVER rain filled it almost every fight, for the human-like bot as much as for the skilled
+one: 1.25 cabinet capsules a fight on top of 0.74 from the rewards, 2.4 times the round 12 rate, and 29 capsules by
+act 2 instead of 12. The win rate was never the problem: the human-like bot wins 2 to 3% and dies in act 1 (the
+Prize Mimic, the Plushie Queen, the Carnival Barker), with or without the dial.
+
+**Why this dial.** `capMax` 2 -> 1 would still pay a capsule nearly every fight (fevers come 3 to 5 a fight); fewer
+stars per prize or more cells would need about 100 cells to make fevers rare enough, and the tube draws 12. Turning
+the rain's capsule off leaves the FEVER show whole (the beacon, the burst, the fanfare, 5 coins, Lamp Oil, Fever
+Dream, The Motherboard) and the CAPSULE DROP event as the cabinet's capsule (0.1 to 0.2 a fight, a prize you must
+deliver). After it, both bots open about the round 12 count a fight (0.93 and 0.88 against 0.83), the skilled bot 26
+a run and 12 by act 2, and its win rate does not move (32%).
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| capsules in a LAMP FEVER's rain | `game.js` `CABK.rainCaps` (`GAME.cab.K`) | 1 | 0 |
+
+### What is left for the owner
+
+- **Gold is still a little above round 12** (skilled: 476 / 769 on arrival at acts 2 / 3 against 419 / 720), the
+  cabinet's coins (Coin Showers and 5 a fever, about 15 a fight on offer). The next dial is `rainCoins` (5) or
+  `coinN` (6); it was left alone so a single change could be measured.
+- **The PERFECT window is loose in a full pile** (34% for a human, 36% even with a 40 px aim error). If PERFECT should
+  reward aim, `cabUnderPalm` could ask for the prize the player aimed at, or `perfX` could shrink; both are feel, not
+  economy.
+- **A human-like hand loses almost every run in act 1** (2 to 3%; the round 12 weaker bot won 8%). The round 12 target
+  (a skilled player loses about 70%) holds for the skilled bot (32% wins); how far below that a real phone player
+  lands is worth a playtest, since the bot picks its drop spot more crudely than a person does.
+- **The cabinet keeps a weaker player alive a little longer** (7.0 fights a run with it off, 8.3 with it on after the
+  dial): the coins and the surge help without the capsules.
+- Tests: the game suite's lamp test now pins the rain to `rainCaps` (0 capsules) and checks the rain's capsule path
+  with the dial at 1 in a fresh fight (one capsule, counted against the fight's cap).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the
