@@ -185,6 +185,9 @@ t.test('index.html is well formed for the game', () => {
   const bootCss = indexHtml.indexOf('id="boot-css"'), firstLink = indexHtml.search(/<link[^>]*rel=["']stylesheet["']/i);
   if (bootCss >= 0 && firstLink >= 0 && bootCss > firstLink) bad.push('<style id="boot-css"> must come BEFORE the stylesheet links so base.css can override it');
   if (!/<title>[^<]{3,}<\/title>/.test(indexHtml)) bad.push('missing <title>');
+  if (!/<link[^>]*rel=["']icon["'][^>]*href=["']data:/i.test(indexHtml)) bad.push('index.html needs an inline data: <link rel="icon"> (a missing one is a 404 on every load)');
+  const galleryHtml = exists(path.join(DIR, 'gallery.html')) ? read(path.join(DIR, 'gallery.html')) : '';
+  if (galleryHtml && !/<link[^>]*rel=["']icon["'][^>]*href=["']data:/i.test(galleryHtml)) bad.push('gallery.html needs an inline data: <link rel="icon">');
   for (const id of ['boot', 'stage', 'view', 'screens', 'overlays', 'over', 'tips', 'toasts', 'sr']) if (!new RegExp('id=["\']' + id + '["\']').test(indexHtml)) bad.push(`index.html has no #${id}`);
   t.eq(bad.length, 0, fail(bad, 'index.html'));
 });
@@ -351,6 +354,8 @@ t.test('css/base.css follows the input and layering rules of DESIGN 5.8', () => 
   if (!rules.some((r) => /\bbutton\b/.test(r.sel) && /\.card/.test(r.sel) && decl(r.body, 'pointer-events', 'auto'))) bad.push('button, .card, .hit, [role=button], input, .panel need pointer-events:auto');
   if (!rules.some((r) => /(^|[\s,>+~])#stage(?![\w-])/.test(r.sel) && decl(r.body, 'touch-action', 'none'))) bad.push('#stage needs touch-action:none');
   if (!/--hit\s*:[^;}]*44px/.test(css)) bad.push('--hit (44px minimum, divided by --scale) is not defined');
+  for (const el of ['html', 'body', '#wrap']) if (!rules.some((r) => r.sel.split(',').some((x) => x.trim() === el) && decl(r.body, 'touch-action', 'none'))) bad.push(`${el} needs touch-action:none (a pinch that starts in the letterbox bars zooms the whole page)`);
+  if (!rules.some((r) => /\.btn-key/.test(r.sel) && decl(r.body, 'display', 'none')) || !/@media[^{]*(pointer\s*:\s*coarse|hover\s*:\s*none)[^{]*\{[^{}]*\.btn-key/.test(css)) bad.push('the keyboard key chips (.btn-key) must be hidden under @media (pointer: coarse), (hover: none)');
   t.eq(bad.length, 0, fail(bad, 'css/base.css'));
 });
 t.test('no external URLs in game files', () => {

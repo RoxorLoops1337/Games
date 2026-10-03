@@ -29,8 +29,10 @@
 //   Without SCENE.mount and SCENE.play (missing or broken file) a small built-in stage keeps the fight playable (fallbackScene).
 //
 // INPUT. Tap a card: select (it rises to y 420, the preview opens, SCENE.setTargetable lights the legal targets, every target shows its C.preview number).
-//   No-target card: a second tap plays. Targeting card: tap an enemy; exactly one legal target and the first tap plays; a second tap on the card puts it
-//   back. Drag: more than 8 px starts it; no-target cards play when released above y 430, targeting cards aim (SCENE.aim) and play on the enemy they
+//   No-target card: a second tap plays. Targeting card: tap an enemy; a second tap on the card puts it back, except that with exactly one legal target
+//   a MOUSE (or keyboard click) plays on the first click (hover already showed the card), while a finger or pen only lifts it on the first tap (the rules
+//   text of a card at rest is below a phone's bottom edge) and plays on a second tap on the card, a tap on the enemy, or a drag released above y 430.
+//   Drag: more than 8 px starts it; no-target cards play when released above y 430, targeting cards aim (SCENE.aim) and play on the enemy they
 //   are released on, anything else returns. Tap empty stage or Esc deselects. Illegal plays: a toast with the reason ("Not enough Energy", "<Hero> is
 //   down", "<Hero> is stunned"...), ui_error and a shake, engine untouched. Keys: 1..9 and 0 select, Left and Right walk cards then targets, Enter plays,
 //   E ends the turn, S swaps, D and G open the piles, Z toggles animation speed, Esc puts a card back (else UI opens the pause menu). Tab walks heroes,
@@ -54,14 +56,22 @@
   // constants: the fixed HUD zones of DESIGN 5.8 (stage px) and the small dials of this screen
   // ==================================================================================================================
   const W = 1280, H = 720;
-  const HAND = { x0: 290, x1: 990, restY: 566, cw: 190, ch: 266, hoverTop: 468, raiseTop: 420, maxSpread: 150 };
+  // the fan lives in the free strip between the docks (draw pile ends x 224, discard pile starts x 998), and a card on the edge of the fan is turned 5.5
+// degrees about a point below the screen, which swings its top corner and its flank (at pile height) about 24 px outward: so the unturned box is x 252..970
+const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, raiseTop: 420, maxSpread: 150 };
   const PILE = { draw: { x: 186, y: 646 }, discard: { x: 1044, y: 650 }, exhaust: { x: 1044, y: 590 }, orb: { x: 70, y: 650 } };
-  const LANE_X = [560, 705, 850, 995, 1120];    // SCENE.LAYOUT enemy lanes (DESIGN 5.9); only the fallback stage needs them
+  const LANE_X = [560, 705, 850, 995, 1120];    // SCENE.LAYOUT enemy lanes (DESIGN 5.9); the fallback stage and the status row caps need them
   const PLAY_ZONE_Y = 430;                       // a no-target card dragged above this line is played (DESIGN 5.8)
   const DRAG_PX = 8;                             // pointer travel that turns a press into a drag
   const BAR_W = { s: 104, m: 120, l: 140, xl: 212 };
   const BARK_GAP_MS = 6000, BARK_CHANCE = 0.35;
-  const HERO_CHIPS = 6, ENEMY_CHIPS = 5, RELIC_SHOWN = 7;   // enemy rows must stay under the 145 px lane gap: five chips or four and a +N, never six
+  // A status row is centred on its enemy and a neighbouring lane is only 145 px away (lanes 3 and 4: 125 px), so the row, not the chip count, is what
+  // must fit. A desktop row may hold five chips, or four and a +N (131 px); the compact stage has bigger discs (24 px) and a bigger +N chip (38 px), so
+  // four chips or three and a +N (122 px); the last lane is only 125 px from its neighbour, so it gets one chip less (106 px and 94 px). The +N chip says
+  // how many are hidden and a tap on the foe lists them all.
+  const HERO_CHIPS = 6, RELIC_SHOWN = 7, ENEMY_CHIPS = { desk: 5, compact: 4 };
+  const ROW_CHIP = { desk: { d: 21, more: 31, gap: 4 }, compact: { d: 24, more: 38, gap: 4 } };   // mirrors combat.css (.en-st .status --d, .cm-more with a one digit count, .cm-st gap)
+  const LANE_GAP = [145, 145, 145, 125];                                                          // distance from lane k to lane k+1 (LANE_X)
   const WATCHDOG_S = 6;                          // a SCENE beat that has not resolved after this many seconds is force-finished
   const FALLBACK_GATES = { hit: 120, heal: 60, draw: 40, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 };
   const REASONS = {
@@ -626,6 +636,15 @@
     row.hidden.forEach((k) => body.appendChild(mk('p', { class: 'tk-text', text: statusLabel(k) + ' ' + row.st[k] + ': ' + DATA.statuses[k].text })));
     return body;
   }
+  const isCompact = () => !!(S && S.ui && safe(() => S.ui.root.closest('#stage.compact'), null));
+  // how many chips an enemy's row may show: all of them up to the cap, else cap - 1 and a +N chip
+  const enemyChips = (u, compact) => (compact ? ENEMY_CHIPS.compact : ENEMY_CHIPS.desk) - (u && u.lane >= 4 ? 1 : 0);
+  // the widest a row can get with that cap (k chips and a +N chip, or a full row), in css px: the suite checks it against LANE_GAP
+  function widestRow(cap, compact) {
+    const m = ROW_CHIP[compact ? 'compact' : 'desk'];
+    const full = cap * m.d + (cap - 1) * m.gap, more = (cap - 1) * m.d + m.more + (cap - 1) * m.gap;
+    return Math.max(full, more);
+  }
   function setStatuses(row, st, max, animate) {
     row.st = st;
     const all = statusList(st);
@@ -677,15 +696,15 @@
     const bar = makeBar('hero-bar'), blk = makeBlock(), st = makeStatusRow('sm', 'hero-st');
     const tagRow = mk('i', { class: 'ct-row', text: 'FRONT' }), tagBonus = mk('em', { class: 'ct-bonus' });
     const pv = mk('span', { class: 'cm-hpv', hidden: true });
-    const el = mk('div', { class: 'cm-hero h-' + u.id, tabindex: '0', role: 'group', 'data-hero': u.id, style: { top: px(64 + i * 94) } },
+    const el = mk('div', { class: 'cm-hero h-' + u.id, tabindex: '0', role: 'group', 'data-hero': u.id },
       mk('span', { class: 'ch-medal' }, UI.medallion(u.id, 62)),
       mk('div', { class: 'ch-main' },
         mk('div', { class: 'ch-l1' }, mk('b', { class: 'ch-name', text: def.name }), mk('span', { class: 'ch-tag' }, tagRow, tagBonus)),
         mk('div', { class: 'ch-l2' }, bar.el, blk.el),
         st.el),
       pv, mk('span', { class: 'ch-fallen', 'aria-hidden': 'true', text: 'FALLEN' }));
-    UI.vars(el, { '--hc': def.color, '--hc2': def.dark });
-    UI.tip.attach(el, () => heroTip(u.id), { side: 'right' });
+    UI.vars(el, { '--hc': def.color, '--hc2': def.dark, '--i': i });      // --i places the panel (css: 64 + i * (--hh + 2)), so a phone can make them taller
+    UI.tip.attach(el, () => (S ? heroTip(u.id) : null), { side: 'right' });       // S is null once the screen is left, but a long press can still land on a badge that has not been removed yet
     return { id: u.id, el, bar, blk, st, tagRow, tagBonus, pv, row: null, down: null };
   }
 
@@ -743,7 +762,11 @@
     else if (cs.reason === 'energy') reason = 'Not enough Energy to swap';
     else if (cs.reason === 'phase') reason = 'Wait for your turn';
     else if (cs.reason === 'pending') reason = 'Finish your choice first';
-    UI.setDisabled(s.el, !cs.ok || busy, reason || 'Wait a moment');
+    // "disabled" is for a reason the player can read (Bind, one hero standing, no Energy, not your turn, a pending pick): UI.setDisabled, which the
+    // tutorial also reads to decide whether a swap hint teaches a move that exists. A beat that is merely animating dims the seal (class busy) and a tap
+    // on it fast-forwards (swapClicked), but it is not a refusal, so a hint raised at the start of the turn is not dropped while the cards are still dealt.
+    UI.setDisabled(s.el, !cs.ok, reason || 'Wait a moment');
+    s.el.classList.toggle('busy', busy && cs.ok);
     s.el.setAttribute('aria-label', 'Swap rows, ' + (free ? 'free' : 'costs ' + cs.cost + ' Energy') + (cs.reason === 'bind' ? ', bound' : ''));
     s.el.hidden = C.heroes.length < 2;
   }
@@ -819,7 +842,7 @@
     hit.addEventListener('pointerleave', () => { if (S) S.enemyTipToken = (S.enemyTipToken || 0) + 1; hideTip(); });
     hit.addEventListener('focus', () => { if (S && S.sel && S.sel.targets.indexOf(u.id) >= 0) setHover(u.id); else if (safe(() => hit.matches(':focus-visible'), false)) showTip(); });
     hit.addEventListener('blur', hideTip);
-    UI.tip.attach(bubble, () => { const cur = enemyOf(S.vm, u.id); return cur && !cur.down ? intentTip(cur) : null; }, { side: 'top' });
+    UI.tip.attach(bubble, () => { const cur = S ? enemyOf(S.vm, u.id) : null; return cur && !cur.down ? intentTip(cur) : null; }, { side: 'top' });
     return en;
   }
 
@@ -871,7 +894,7 @@
     if (!en) return;
     setBar(en.bar, u.hp, u.maxHp, animate);
     setBlock(en.blk, u.block, animate);
-    setStatuses(en.st, u.st, ENEMY_CHIPS, animate);
+    setStatuses(en.st, u.st, enemyChips(u, isCompact()), animate);
     en.el.classList.toggle('dead', u.down);
     en.el.classList.toggle('stunned', (u.st.stun || 0) > 0);
     en.stars.hidden = (u.st.stun || 0) <= 0 || u.down;
@@ -885,6 +908,12 @@
   // anchors are read once per frame after SCENE.update (DESIGN 5.9); only changed values touch the DOM
   function placeEnemies() {
     const sc = S.sc;
+    const compact = isCompact();
+    if (S.compactSeen !== compact) {                  // the window crossed the 0.75 scale line: the chips changed size, so the caps change too
+      const first = S.compactSeen === undefined;
+      S.compactSeen = compact;
+      if (!first) S.vm.enemies.forEach((u) => { const en = S.en[u.id]; if (en) setStatuses(en.st, u.st, enemyChips(u, compact), false); });
+    }
     S.vm.enemies.forEach((u) => {
       const en = S.en[u.id];
       if (!en) return;
@@ -1026,10 +1055,10 @@
     w.classList.add('played');
     w.style.zIndex = '150';
     w.style.transitionDelay = '0ms';
-    w.style.transform = xf(HAND.x0 + (HAND.x1 - HAND.x0 - HAND.cw) / 2, 232, 0, 1.12);
+    w.style.transform = xf((W - HAND.cw) / 2, 232, 0, 1.12);          // the middle of the stage, not of the fan
     UI.after(520, () => {
       w.classList.add('leaving', to === 'exhaust' ? 'burn' : to === 'power' ? 'rise' : 'toss');
-      w.style.transform = to === 'exhaust' ? xf(HAND.x0 + 255, 170, 0, 1.3) : to === 'power' ? xf(40, 300, 0, 0.4) : pileXf(PILE.discard, 0.3);
+      w.style.transform = to === 'exhaust' ? xf(545, 170, 0, 1.3) : to === 'power' ? xf(40, 300, 0, 0.4) : pileXf(PILE.discard, 0.3);
     });
     UI.after(1250, () => w.remove());
   }
@@ -1244,7 +1273,12 @@
     return true;
   }
 
-  function cardTap(entry) {
+  // a finger or a pen cannot hover, and the rules text of a card at rest sits below the bottom edge of a phone: the first tap must only LIFT the
+  // card (so it can be read), and playing is a deliberate second act. A mouse has hover for reading, so with exactly one legal target its first
+  // click plays (DESIGN 5.8). `via` is the pointer type behind the tap: touch, pen, mouse, or 'key' (a keyboard click, mouse-like).
+  const fingerLike = (via) => via === 'touch' || via === 'pen';
+
+  function cardTap(entry, via) {
     if (!canAct()) return;
     const uid = entry.uid;
     const ev = evalCard(entry.inst);
@@ -1253,11 +1287,12 @@
     if (!check.ok) { illegal(entry, check.reason, true); return; }
     if (S.sel && S.sel.uid === uid) {
       if (!ev.need) { doPlay(uid); return; }
-      deselect();                                  // a second tap on a targeting card puts it back
+      if (fingerLike(via) && targets.length === 1) { doPlay(uid, targets[0]); return; }   // the lifted card, tapped again: it has only one place to go
+      deselect();                                  // a second tap on a targeting card with a choice of targets puts it back
       return;
     }
     select(entry, { need: ev.need, targets });
-    if (ev.need && targets.length === 1) doPlay(uid, targets[0]);
+    if (ev.need && targets.length === 1 && !fingerLike(via)) doPlay(uid, targets[0]);
   }
 
   function enemyClicked(id) {
@@ -1370,6 +1405,7 @@
 
   function onCardDown(e, entry) {
     if (!S) return;
+    S.ptrType = e.pointerType;                       // the click that follows the release does not always carry it (cardTap needs it)
     if (S.draining && !S.picking) { fastForward(); return; }
     if (!canAct()) return;
     S.press = { entry, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false, type: e.pointerType };
@@ -1386,8 +1422,11 @@
     hidePreview();
     const p = UI.toStage(e.clientX, e.clientY);
     const slot = entry.slot || { x: HAND.x0, y: HAND.restY };
-    S.drag = { uid: entry.uid, entry, mode: ev.need ? 'aim' : 'move', dx: p.x - slot.x, dy: p.y - slot.y, over: null };
+    // a finger dragging the only targeting card toward its lone foe may let go anywhere above the play line: "drag it upward" plays it
+    const flick = ev.need && targets.length === 1 && fingerLike(S.press && S.press.type) ? targets[0] : null;
+    S.drag = { uid: entry.uid, entry, mode: ev.need ? 'aim' : 'move', dx: p.x - slot.x, dy: p.y - slot.y, over: null, flick };
     if (S.drag.mode === 'move') { entry.wrap.classList.add('dragging'); S.ui.playzone.classList.add('show'); }
+    if (flick) S.ui.playzone.classList.add('show');
     S.ui.root.classList.add('dragging-card');
   }
 
@@ -1410,7 +1449,11 @@
       S.ui.playzone.classList.toggle('hot', p.y < PLAY_ZONE_Y);
     } else {
       const id = enemyAt(p);
-      const legal = id && S.sel && S.sel.targets.indexOf(id) >= 0 ? id : null;
+      let legal = id && S.sel && S.sel.targets.indexOf(id) >= 0 ? id : null;
+      if (d.flick) {
+        S.ui.playzone.classList.toggle('hot', p.y < PLAY_ZONE_Y);
+        if (!legal && p.y < PLAY_ZONE_Y) legal = d.flick;
+      }
       d.over = legal;
       setHover(legal);
       const s = entry.slot || { x: HAND.x0, y: HAND.raiseTop };
@@ -1441,7 +1484,9 @@
     endDragVisuals(d);
     if (d.mode === 'aim') {
       const id = enemyAt(p);
-      if (id && S.sel && S.sel.targets.indexOf(id) >= 0) doPlay(d.uid, id); else deselect();
+      if (id && S.sel && S.sel.targets.indexOf(id) >= 0) doPlay(d.uid, id);
+      else if (d.flick && p.y < PLAY_ZONE_Y) doPlay(d.uid, d.flick);
+      else deselect();
     } else if (p.y < PLAY_ZONE_Y) doPlay(d.uid);
     else deselect();
   }
@@ -1459,7 +1504,7 @@
     if (S.ended) return;
     if (S.draining && !S.picking) { fastForward(); return; }
     if (S.picking) { pickToggle(entry); return; }
-    cardTap(entry);
+    cardTap(entry, e.detail === 0 ? 'key' : (e.pointerType || S.ptrType));
   }
 
   // ==================================================================================================================
@@ -2265,7 +2310,7 @@
   };
 
   // pure pieces, exported for tests/rogue_book_screen_combat.test.mjs
-  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, state: () => S, HAND, PILE };
+  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, enemyChips, widestRow, LANE_GAP, state: () => S, HAND, PILE };
 
   UI.screens.combat = def;
 })();

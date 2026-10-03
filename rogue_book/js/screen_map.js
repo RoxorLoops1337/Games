@@ -695,10 +695,12 @@
   const RELIC_SHOWN = 6;
   // On a phone every icon is a 44 px touch target and the brush tray (centred, one chip per brush kind) leaves less room on the left: fewer icons, and the "+N" chip
   // carries the rest to the full list, so the strip never slides under the tray.
+  // On a desktop the strip is six icons wide (x 14 to 394 with its "+N") and a tray holding all six brush kinds starts at x 372: five icons then (L2).
   function relicShown(R) {
     const st = document.getElementById('stage');
-    if (!st || !st.classList.contains('compact')) return RELIC_SHOWN;
-    return brushCounts(R).order.length >= 6 ? 2 : 3;
+    const six = brushCounts(R).order.length >= 6;
+    if (!st || !st.classList.contains('compact')) return six ? RELIC_SHOWN - 1 : RELIC_SHOWN;
+    return six ? 2 : 3;
   }
   const relicKey = (R) => R.relics.join(',') + '|' + relicShown(R);
   function renderRelics(s) {

@@ -738,7 +738,23 @@ await t.test('a phone shows fewer treasure icons so the strip never slides under
   await open(g3, R3);
   t.eq($$(g3, '.mp-relics .relic').length, 6, 'a full-size screen keeps six');
   t.eq(txt($(g3, '.mp-relic-more')), '+2', 'and +2');
-  t.eq(errs(g) + errs(g2) + errs(g3), 0, 'clean');
+  // a desktop tray with all six brush kinds starts at x 372, where a six icon strip (x 14 to 394) would slide under it
+  const g4 = fresh();
+  const R4 = mkRun(g4, { relics: ids, brushes: ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot'] });
+  await open(g4, R4);
+  t.eq($$(g4, '.mp-relics .relic').length, 5, 'a full-size screen with six brush kinds shows five icons (the strip stays left of the tray)');
+  t.eq(txt($(g4, '.mp-relic-more')), '+3', 'and +3');
+  t.eq(errs(g) + errs(g2) + errs(g3) + errs(g4), 0, 'clean');
+});
+
+await t.test('css: the compact map keeps the text a player reads while playing at 8 to 9 screen px (--fs8, --fs9), and the hero HP numbers follow --ts', () => {
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  ['mp-chip-n', 'mp-prog-t', 'mp-ch', 'mp-info-act'].forEach((c) => t.ok(new RegExp('#stage\\.compact \\.' + c + '\\s*\\{[^}]*var\\(--fs[89]\\)').test(css), 'compact .' + c + ' has a floor'));
+  const base = fs.readFileSync(path.join(DIR, 'css', 'base.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  t.ok(/--fs9\s*:\s*calc\(9px \/ var\(--scale\)\)/.test(base) && /--fs8\s*:\s*calc\(8px \/ var\(--scale\)\)/.test(base), 'base.css defines the 8 and 9 screen px floors from --scale');
+  t.ok(/\.hp-txt\s*\{[^}]*calc\(var\(--hpf\) \* var\(--ts\)\)/.test(base), 'the badge HP number scales with the text size setting');
+  t.ok(/#stage\.compact \.hp-txt\s*\{[^}]*var\(--fs9\)/.test(base), 'and has a 9 screen px floor on a phone');
+  t.ok(!/\.mp-party \.hp-txt\s*\{[^}]*font-size/.test(css), 'the map no longer pins the HP number to a fixed size');
 });
 
 // ==================================================================================================== keyboard

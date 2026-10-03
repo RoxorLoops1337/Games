@@ -36,6 +36,7 @@
   background: linear-gradient(180deg, #ff6b5e 0%, var(--vermilion) 48%, var(--verm-d) 100%); clip-path: polygon(0 14%, 3% 0, 97% 8%, 100% 2%, 98.5% 100%, 2.5% 92%);
   filter: drop-shadow(0 3px 0 var(--verm-dd)); text-shadow: 0 2px 0 rgba(93, 15, 28, .8); }
 .en-scroll-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 4px 2px; }
+.en-scroll-body.more { -webkit-mask: linear-gradient(180deg, #000 calc(100% - 30px), transparent); mask: linear-gradient(180deg, #000 calc(100% - 30px), transparent); }   /* more below the fold: fade, never a half line */
 .en-card.pad-top > .p-body { padding-top: 26px; }
 
 .en-tile { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px;
@@ -239,8 +240,8 @@
 .ts-big .st-page > .p-body { padding-top: 22px; }
 .ts-big .cc-tiles { grid-template-columns: minmax(0, 1fr); }
 .ts-big .cc-cols { top: 338px; }                         /* the three panels grow upward over the heroes' feet: at 1.15 and 1.3 the tiles, the heal chips and the Treasures line used to sit below the fold of a 244 px box */
-.ts-big .cc-tiles { gap: 4px; }
-.ts-big .cc-tiles .en-tile { grid-template-columns: auto 1fr auto; grid-template-rows: auto; padding: 3px 10px; }
+.ts-big .cc-tiles { gap: 3px; }
+.ts-big .cc-tiles .en-tile { grid-template-columns: auto 1fr auto; grid-template-rows: auto; padding: 2px 10px; }     /* six tiles in the 231 px of the box with room to spare at 1.3 (they were 5 px over and the last lost its border) */
 .ts-big .cc-tiles .en-tile-ico { grid-row: auto; }
 .ts-big .cc-tiles .en-tile-lab { grid-column: 2; grid-row: 1; }
 .ts-big .cc-tiles .en-num { grid-column: 3; grid-row: 1; }

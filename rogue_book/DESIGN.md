@@ -553,6 +553,7 @@ Rest), `onPaint` (after each hex painted, by Ink, a brush or a chain), `onFightW
   `chapters` omitted means any chapter; `when:{flag?, relic?, hero?}` (all must hold or the event never rolls); `w` is the weight (default 1); `once:true` events never repeat in a run.
   `cost` is display text only: the engine never deducts it, so the outcome carries the negative op and the choice usually a matching `req`. A choice failing `req` is shown disabled with the reason,
   except a failed `req.hero`, which hides it.
+- **Dead-end choices lock.** A choice is locked, with a stated reason, when EVERY outcome holds an op that can only do nothing right now (`removeCard`, `upgradeCard`, `transformCard` or `duplicateCard` with no candidate card, or a fixed-id `addRelic` the player already owns), so a paid choice never takes the price and gives nothing. Ops after an `addCard`, `addCurse` or `cardReward` are not judged, gambles with a live outcome stay open, and if every choice would lock none does. A fixed-id `addRelic` that is still reached for an owned relic gives a same-rarity relic the player lacks, else a gold refund worth 40% of the shop price, and its log text says so (`Already owned.` only when neither is possible).
 - **Choosing an event for a Fable tile:** from the events allowed in this chapter whose `when` holds and (if `once`) not yet seen, weighted by `w`, preferring events not yet seen this run; if none
   qualifies pick any repeatable event; if there is none the tile resolves as +1 Ink with a one-line toast.
 - **Run ops** (events and run hooks, `LISTS.runOps`; the same table is in the `js/data.js` header). Unknown fields are validator errors. `who` (heal, hurt, maxHp): `both` (default), `front`,
@@ -741,7 +742,7 @@ unreachable, at least 3 wells within 3 hexes of the cheapest route), round-trip 
 
 ### 5.4 `RUN` (`run.js`)
 
-Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed, daily, unlocked}) -> R`. `unlocked` is `{card,relic,gem}` (the locked defs the player owns); RUN stores it as `R.unlocked` (saved) and every pool draw
+Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed, daily, unlocked, nonce}) -> R`. `nonce` (optional) is hashed into `R.id` only, never into any RNG stream: GAME passes a clock plus counter so every started tale has its own id (the paid-runs ledger in 5.5 depends on it), tests and the bot pass none and keep deterministic ids. `unlocked` is `{card,relic,gem}` (the locked defs the player owns); RUN stores it as `R.unlocked` (saved) and every pool draw
 (card rewards, shop, chests, events, gem caches) skips a def that is `locked` and not in it. RUN never calls META. Key shape:
 
 ```
@@ -785,12 +786,12 @@ gamble and never keeps a purchase. Combat is not resumable: Continue re-enters a
 
 Profile in `localStorage['rb_profile_v1']`, current run in `['rb_run_v1']`, settings inside the profile. Never rename these keys. Profile shape:
 `{v:1, inkstones, stats:{statKey:n}, ach:{id:timestamp}, unlocked:{card:[],relic:[],gem:[],hero:[]}, seen:{enemyId:n}, kills:{enemyId:n}, story:{loreId:true}, history:[...max 20], settings:{...}, tutorial:{flag:true}, daily:{last:YYYYMMDD}}`.
-`META.load` wraps `localStorage` in try/catch (private mode falls back to memory) and, on corrupt JSON, keeps the raw string under `'rb_profile_v1_bad'` and starts fresh. `META.save()` and `META.saveRun()` return false when storage throws.
+`META.load` wraps `localStorage` in try/catch (private mode falls back to memory) and, on corrupt JSON, keeps the raw string under `'rb_profile_v1_bad'` and starts fresh. `META.save()` and `META.saveRun()` return false when storage throws (the memory copy is then what the session reads back, so Continue never rolls back). **Several tabs**: every profile write first pulls what another tab stored since this page last looked and merges it three ways against the snapshot this page last synced (counters keep the other tab's total plus this page's own change, bests keep the larger, lists and flag maps keep both sides' additions and honour removals, settings take this page's value only for a key it changed, history merges by run id); `META.reset` (Erase) writes straight through. `profile.paid` lists run ids already paid out (newest first, max 100, survives an Erase): `saveRun` never writes a paid run back, `loadRun`, `hasRun` and `runInfo` drop it, and `recordRun` pays a run id once. GAME calls `META.refresh()` on the window `storage` event and when the tab becomes visible.
 
 ```
 META.profile (live)  META.load()  META.save()  META.reset()
 META.get(k) META.set(k,v)   // settings, domains and defaults in DATA.SETTINGS (DATA.cleanSetting): musicVol sfxVol shake reduceMotion textScale fastAnim damageNumbers colorblind quality hints
-META.saveRun(R) -> bool   META.loadRun() -> R|null   META.clearRun() META.hasRun()
+META.saveRun(R) -> bool   META.loadRun() -> R|null   META.clearRun(id?) (with an id another run's save is left alone)  META.hasRun()  META.runPaid(id) -> bool  META.refresh() -> profile
 META.track(stat, n=1) META.stat(k) -> number      // stat keys are DATA.LISTS.statKeys; DATA.LISTS.statMax keys merge with max; achievements read them
 META.check(R?) -> [newlyUnlockedAchievementIds]   // evaluates achievements against profile.stats plus R.stats (non-destructive); GAME calls it at every chapterClear so Suzu and Raiga unlock mid-run. A second argument `now` (GAME passes Date.now(); logic never reads the clock) is the timestamp stored in `ach[id]`
 META.bus (U.bus): 'achievement' {id}, 'unlock' {kind,id}
@@ -798,7 +799,7 @@ META.isUnlocked(kind, id) -> bool                 // kind: 'hero'|'card'|'relic'
 META.unlockedSet() -> {card:[],relic:[],gem:[]}   // what GAME passes to RUN.newRun
 META.libraryList() -> [{kind,id,cost,unlocked,affordable}]   META.buy(kind,id) -> {ok,reason}
 META.inkstones  META.recordRun(R, outcome:'win'|'lose'|'abandon', now) -> { inkstones, newAchievements, newTrial, heroesUnlocked }   // calls check again after merging
-META.seen(enemyId) META.bestiary() -> [{id,seen,kills}]   META.history -> last 20 runs [{score,heroes,chapter,outcome,trial,daily,ts}]
+META.seen(enemyId) (GAME calls it once per enemy id when a fight node is entered; saves at once; daily runs record kills too) META.bestiary() -> [{id,seen,kills}]   META.history -> last 20 runs [{score,heroes,chapter,outcome,trial,daily,ts}]
 META.loreSeen(id) META.markLore(id) META.storyList() -> [{id,seen}]   // every lore id EXCEPT barks_* (those are in-combat lines, not stories), seen or not, for the Library Story tab
 META.trialMax() -> highest selectable trial    META.dailySeed(date) -> YYYYMMDD int (U.dateKey; the caller passes the Date)    META.tutorial(flag) / META.setTutorial(flag)
 ```
@@ -938,13 +939,13 @@ with `--cw`; screens choose a size name and never a pixel size. Sockets, rarity 
 the big card.
 
 **Combat card interaction** (pointer events only; hand cards have `touch-action:none`, every other card `pan-y` so a swipe that starts on a card still scrolls a list of cards). Tap a card: select (it rises so its top edge is at y 420, big preview above the hand via `UI.tip.card`, `SCENE.setTargetable(C.legalTargets(uid))`). A no-target card plays on a
-second tap or when dragged above y=430. A target card plays when an enemy is tapped; if `legalTargets` has exactly one entry the first tap plays. Tap empty space or Esc deselects. Drag: `pointerdown` then more than 8 px starts a drag
+second tap or when dragged above y=430. A target card plays when an enemy is tapped; with a mouse or keyboard, if `legalTargets` has exactly one entry the first click plays. On touch or pen the first tap on a target card only lifts it (the rules text sits below the stage edge in the resting hand, so a touch player must be able to read before committing); it then plays on a second tap on the card, a tap on the foe, or a drag released above y=430 (single target only). Tap empty space or Esc deselects. Drag: `pointerdown` then more than 8 px starts a drag
 (`setPointerCapture`, the hand re-fans); targeting cards call `SCENE.aim(cardCentre, pointer, hoveredId)` and releasing on a legal target plays, elsewhere returns. Illegal (`canPlay.ok` false): `UI.shake(card)`, a toast per reason
 (energy "Not enough Energy", down "<Hero> is down", stunned, unplayable, pending, phase) and sfx `ui_error`. `SCENE.hitTest` hits `max(actor bounds, a 96x96 box at the body centre)`. `UI.tip.attach` opens on `pointerenter` for
-mouse and on a 400 ms long press for touch (never blocks click); the tip closes on `pointerup` or the next tap.
+mouse and on a 400 ms long press for touch; the tip closes on `pointerup` or the next tap. A long press that showed a tip swallows the click that ends it (`UI.tip.swallowClick(el, ms)`, one shot, capture phase, cancelled by the next `pointerdown`), so lifting a finger after reading a shop ware never buys it.
 
 **Combat HUD zones** (stage px): top bar y 0..56 (relic strip left, turn label centre, menu button x 1212..1268, 56 px like `UI.menuButton()`); hero panels x 12..300, y 64..250 (two 92 px panels: name, HP, Block, up to 6 status chips, row tag, Swap button >= 56 px);
-bottom-left dock x 12..270, y 588..712 (energy orb r44 at (70,650), draw pile x 130..250); hand x 290..990, y 566..720 at rest (a raised card's top is y 420); bottom-right dock x 1000..1268, y 588..712 (discard pile x 1000..1090,
+bottom-left dock x 12..270, y 588..712 (energy orb r44 at (70,650), draw pile x 130..250); hand x 252..970, y 566..720 at rest (a raised card's top is y 420); bottom-right dock x 1000..1268, y 588..712 (discard pile x 1000..1090,
 End Turn plaque x 1100..1268, y 610..704).
 
 **Settings.** Domains and defaults are `DATA.SETTINGS`. `UI.opt = { reduceMotion (resolved boolean: UI.init resolves null through matchMedia), shake, textScale, speed, damageNumbers, colorblind, quality }` is rebuilt by
@@ -1023,7 +1024,7 @@ GAME.nodeDone()            // called by a screen when finished: RUN.finishNode, 
 GAME.debug = { ... }       // below
 ```
 
-`GAME.defeat()` and `GAME.victory()` end the run once (META.recordRun, META.clearRun, then the gameOver or victory screen; a second call is a no-op). A lost fight records the run at once when the combat
+`GAME.continueRun()` routes a save with `R.chapterCleared` and no node to the chapter flow (chapter clear page for chapters 1 and 2, victory for chapter 3). `GAME.newRun` over a saved tale records the old one as an abandon (half Inkstones, stats, bestiary kills, a history row, a toast). `GAME.defeat()` and `GAME.victory()` end the run once (META.recordRun, META.clearRun, then the gameOver or victory screen; a second call is a no-op). A lost fight records the run at once when the combat
 screen emits `combat:end {result:'lose'}` and routes to gameOver after 1.6 s unless the screen already did. Try Again on the game over page calls `GAME.newRun` with the same heroes and trial; with `?seed=N` in the URL
 that is the same seed again (a fixed seed is a fixed tale), without it a fresh clock seed.
 

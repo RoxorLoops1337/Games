@@ -200,6 +200,66 @@ await t.test('reward (elite): the relic is take-it-or-leave-it, both decisions g
   t.ok(gotGem + gotBrush > 0, 'some elite dropped a gem or a brush across the seeds (' + gotGem + ' gems, ' + gotBrush + ' brushes)');
 });
 
+await t.test('reward (elite): once the treasure is taken or left, the empty frame and its Take it / Leave it buttons are gone (no dead buttons until Continue), and the counter shows the treasure', async () => {
+  for (const take of [true, false]) {
+    const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8 });
+    const node = await openReward(g, R, 'elite');
+    const box = $(g, '.rw-relicbox');
+    t.ok(box && $$(g, '.rw-acts button', box).length === 2 && !$$(g, '.rw-acts button', box).some((b) => b.disabled), 'the offer has two live buttons');
+    if (take) {
+      const before = R.relics.length;
+      await click(g, btnByText(g, /Take it/, box));
+      t.ok(box.classList.contains('taken'), 'taken: the box is marked answered');
+      t.ok($$(g, '.rw-acts button', box).every((b) => b.disabled), 'taken: both buttons are disabled at once');
+      g._flush(2000); await settle(g);
+      t.ok(box.classList.contains('gone'), 'taken: the frame leaves once the treasure has flown to the counter');
+      t.eq(txt($(g, '.nk-relbtn')), String(before + 1), 'the treasure counter already shows the treasure');
+    } else {
+      await click(g, btnByText(g, /Leave it/, box));
+      t.ok(box.classList.contains('gone') && box.classList.contains('taken'), 'left: the frame leaves and is marked answered');
+      t.ok($$(g, '.rw-acts button', box).every((b) => b.disabled), 'left: the buttons are disabled');
+    }
+    // a second tap on a dead button does nothing
+    const rel = R.relics.length; $$(g, '.rw-acts button', box).forEach((b) => b.click()); await settle(g);
+    t.eq(R.relics.length, rel, 'dead buttons change nothing');
+    await click(g, $$(g, '.rw-slot .rw-face.front .card')[0]);
+    g._flush(3000); await settle(g);
+    t.ok($(g, '.rw-cont') && !$(g, '.rw-cont').hidden, 'Continue appears');
+    t.ok(/\bgone\b/.test(box.className), 'the empty frame is still gone at Continue');
+    t.ok(/\.rise\.gone\s*\{[^}]*animation:\s*none/.test(CSS) && /\.rw-relicbox\.taken/.test(CSS), 'css: .rise (fills forwards) can no longer hold a gone box at opacity 1');
+    void node;
+  }
+});
+
+await t.test('reward (elite, big text): the ledger tightens for 2 rows too (snug) and 3 or more (dense, tall), and the compact css keeps Take it and Leave it on a phone stage', async () => {
+  const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8 });
+  g.META.set('textScale', 1.3); g.UI.applySettings();
+  const node = await openReward(g, R, 'elite');
+  const rows = $$(g, '.rw-ledger .nk-row').length;
+  const led = $(g, '.rw-ledger');
+  t.ok(rows >= 2, 'the elite ledger has at least gold and Ink (' + rows + ' rows)');
+  t.ok(led.classList.contains('snug'), 'text above 1.0 tightens the ledger from 2 rows on');
+  t.eq(led.classList.contains('dense'), rows >= 3, 'dense from 3 rows');
+  t.eq(led.classList.contains('tall'), rows >= 4, 'tall from 4 rows');
+  t.ok(/#stage\.compact \.rw-ledger\.dense\s*\{[^}]*top:\s*74px/.test(CSS), 'css: the dense ledger on a phone starts under the top bar (74 px) so the box fits above the stage bottom');
+  t.ok(/#stage\.compact \.rw-ledger\.dense \.nk-row-lab\s*\{[^}]*min\(var\(--ts\), 1\)/.test(CSS), 'css: labels in the dense ledger do not grow with the text size');
+  void node;
+});
+
+await t.test('reward: gold the thieves took is a net loss shown as "Gold lost -6" in its own tone, never "+-6"; a gain stays "+N"', async () => {
+  for (const [gold, label, text, cls] of [[-6, 'Gold lost', '-6', true], [-40, 'Gold lost', '-40', true], [25, 'Gold', '+25', false]]) {
+    const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5 });
+    const node = winFight(g, R, 'enemy');
+    node.rewards.gold = gold;
+    await g.UI.go('reward', { rewards: node.rewards, source: node.source, node, R }, { force: true, transition: 'none' }); await settle(g);
+    const row = $(g, '.nk-row.k-gold, .nk-row.k-loss');
+    t.eq(txt($(g, '.nk-row-lab', row)), label, 'gold ' + gold + ': the label');
+    t.eq(txt($(g, '.nk-row-val', row)), text, 'gold ' + gold + ': the value is signed once');
+    t.eq(row.classList.contains('k-loss'), cls, 'gold ' + gold + ': the loss tone is only for a loss');
+    t.ok(txt($(g, '.s-reward')).indexOf('+-') < 0, 'gold ' + gold + ': no "+-" anywhere');
+  }
+});
+
 await t.test('reward (boss): the relic page comes first with three treasures, then the card page; the claim happens after both', async () => {
   for (const seed of [1, 2, 3, 4]) {
     const g = fresh({ seed }); const R = mkRun(g, { seed });
@@ -352,6 +412,106 @@ await t.test('shop: a card can be read big (a mouse hover, a long press on touch
   t.ok(!it.sold && R.gold === gold, 'the click that ends a long press buys nothing');
   await click(g, card);
   t.ok(it.sold && R.gold === gold - it.price, 'the next plain tap buys as before');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('shop (phones, big text): long ware names get the sh-long class, and the compact css caps the name, one-lines the kicker, shrinks the figures and clears the SALE stamp', async () => {
+  let longs = 0, short = 0;
+  for (const seed of SEEDS) {
+    const g = fresh({ seed }); const R = mkRun(g, { seed, gold: 150 });
+    const node = nodeAt(g, R, 'shop', { shop: { seed: seed * 7 + 1 } });
+    await open(g, 'shop', R, node);
+    $$(g, '.sh-plaque .sh-name').forEach((n) => {
+      const isLong = txt(n).split(/\s+/).some((w) => w.length >= 11);
+      t.eq(n.classList.contains('sh-long'), isLong, 'seed ' + seed + ': "' + txt(n) + '" sh-long matches its longest word');
+      if (isLong) longs++; else short++;
+    });
+  }
+  t.ok(longs > 0 && short > 0, 'both kinds of name were seen (' + longs + ' long, ' + short + ' short)');
+  t.ok(/#stage\.compact \.sh-name\s*\{[^}]*min\(var\(--ts\), 1\)[^}]*-webkit-line-clamp:\s*3/.test(CSS), 'css: the name never grows past its text 1.0 size on a phone and keeps to three lines');
+  t.ok(/#stage\.compact \.sh-kind\s*\{[^}]*white-space:\s*nowrap[^}]*text-overflow:\s*ellipsis/.test(CSS), 'css: the kicker is one line with an ellipsis, so UNCOMMON never runs into its neighbour');
+  t.ok(/#stage\.compact \.sh-tag b\s*\{[^}]*min\(var\(--ts\), 1\.1\)/.test(CSS) && /#stage\.compact \.sh-tag\.free b\s*\{[^}]*letter-spacing/.test(CSS), 'css: the price figures and the FREE tag stop growing with the text size');
+  t.ok(/\.sh-sale\s*\{[^}]*right:\s*-24px[^}]*top:\s*222px/.test(CSS), 'css: the SALE stamp sits clear of the price tag at every size');
+});
+
+// REALTIME: the headless flag is off and the real virtual clock runs (_advance), so the thresholds are measured the way a finger would meet them.
+// A real tap is pointerdown, a hold, pointerup and then the click the browser still sends; a hold of 420 ms or more reads the ware and must never buy.
+function holdThenClick(g, el, ms, o = {}) {
+  g._pointer('pointerdown', el, { pointerType: 'touch' });
+  g._advance(ms);
+  const peeked = g.UI.tip.open;
+  g._pointer(o.cancel ? 'pointercancel' : 'pointerup', el, { pointerType: 'touch', buttons: 0 });
+  if (!o.cancel) el.click();                 // the click a touch browser sends after pointerup (a cancel sends none)
+  return peeked;
+}
+for (const reduce of [false, true]) {
+  await t.test('shop (realtime, Reduce motion ' + (reduce ? 'on' : 'off') + '): a tap held 130 or 300 ms buys, a hold of 500 ms reads the ware and never buys (cards, gems, treasures, brush, card removal)', async () => {
+    const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8, gold: 90000 });
+    if (reduce) { g.META.set('reduceMotion', true); g.UI.applySettings(); }
+    t.eq(!!g.UI.opt.reduceMotion, reduce, 'the setting took');
+    const node = nodeAt(g, R, 'shop', { shop: { seed: 99 } });
+    await open(g, 'shop', R, node);
+    g._win.__HEADLESS = false;
+    g._advance(200);
+    const byKind = (k) => node.stock.items.filter((x) => x.kind === k && !x.sold);
+    const elOf = (it) => (it.kind === 'card' ? $(g, '.card', itemEl(g, it.key)) : itemEl(g, it.key));
+    for (const kind of ['card', 'gem', 'relic', 'brush']) {
+      const wares = byKind(kind);
+      if (!wares.length) continue;
+      const [a, b] = wares;
+      const goldA = R.gold;
+      const peeked = holdThenClick(g, elOf(a), 500); g._advance(40);
+      t.ok(peeked, kind + ': a 500 ms hold shows the ware (' + (kind === 'card' ? 'the big card' : 'its tip') + ')');
+      t.ok(!a.sold && R.gold === goldA, kind + ': ... and the click that ends it buys nothing');
+      t.ok(!g.UI.tip.open, kind + ': letting go closes it');
+      holdThenClick(g, elOf(a), 130); g._advance(40);
+      t.ok(a.sold && R.gold === goldA - a.price, kind + ': a 130 ms tap buys' + (reduce ? ' (Reduce motion used to swallow it)' : ''));
+      if (b) {
+        const goldB = R.gold;
+        holdThenClick(g, elOf(b), 300); g._advance(40);
+        t.ok(b.sold && R.gold === goldB - b.price, kind + ': a 300 ms tap buys');
+      }
+    }
+    // card removal: a long press reads the tip and must not open the picker
+    const rm = $(g, '.sh-plaque.kind-remove');
+    holdThenClick(g, rm, 600); g._advance(40);
+    t.eq(g.UI.overlay.count(), 0, 'a long press on Card removal opens no picker');
+    holdThenClick(g, rm, 140); g._advance(40);
+    t.eq(g.UI.overlay.count(), 1, 'a short tap on Card removal still opens it');
+    g.UI.overlay.closeAll(); g._advance(40);
+    t.eq(errs(g), 0, 'no console errors');
+  });
+}
+
+await t.test('shop (realtime): a stale long press never swallows a later mouse or keyboard click, and a cancelled press arms nothing', async () => {
+  const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8, gold: 90000 });
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 99 } });
+  await open(g, 'shop', R, node);
+  g._win.__HEADLESS = false; g._advance(200);
+  const cards = node.stock.items.filter((x) => x.kind === 'card');
+  const gems = node.stock.items.filter((x) => x.kind === 'gem');
+  const cardEl = (it) => $(g, '.card', itemEl(g, it.key));
+  // a shelf card: the peek opens, the finger is cancelled (no click follows), a mouse click on it later must buy at once
+  holdThenClick(g, cardEl(cards[0]), 700, { cancel: true });
+  t.ok(!g.UI.tip.open, 'a cancelled press closes the peek');
+  g._click(cardEl(cards[0]), { pointerType: 'mouse' }); g._advance(40);
+  t.ok(cards[0].sold, 'a mouse click after a cancelled long press buys on the FIRST click (the stale held flag used to swallow it)');
+  // a shelf card: a real long press, then the click is swallowed once, and a keyboard Enter later buys
+  holdThenClick(g, cardEl(cards[1]), 700); g._advance(40);
+  t.ok(!cards[1].sold, 'the click right after a long press is swallowed');
+  g._advance(900);
+  cardEl(cards[1]).click(); g._advance(40);
+  t.ok(cards[1].sold, 'a keyboard or assistive click long after it buys (the swallow wears off)');
+  // a plaque: the same two rules through UI.tip.attach
+  const gemEl = itemEl(g, gems[0].key);
+  holdThenClick(g, gemEl, 700, { cancel: true }); g._advance(40);
+  gemEl.click(); g._advance(40);
+  t.ok(gems[0].sold, 'plaque: a click after a cancelled long press buys');
+  const gemEl2 = itemEl(g, gems[1].key);
+  holdThenClick(g, gemEl2, 700); g._advance(40);
+  t.ok(!gems[1].sold, 'plaque: the click that ends a long press is swallowed');
+  g._click(gemEl2, { pointerType: 'mouse' }); g._advance(40);
+  t.ok(gems[1].sold, 'plaque: the very next mouse click buys (the next pointerdown cleared the swallow)');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -591,6 +751,122 @@ await t.test('event: every fable, every choice, played on the real screen: text,
   }
   t.ok(played > 100, 'played more than a hundred choices (' + played + ')');
   t.ok(fights >= 1 && pendings > 3, 'fights (' + fights + ') and pending card choices (' + pendings + ') were both exercised; locked choices: ' + locked);
+});
+
+await t.test('event: a treasure chip is drawn only for a treasure the party really gained (an owned fixed relic is no "gain", whatever the stand-in rules do)', async () => {
+  for (const owned of ['one', 'all']) {
+    const g = fresh({ seed: 31 });
+    // RUN locks a choice whose fixed treasure is already carried, unless a card grower comes first in its ops (then the ops run), so this fable starts with a card: the 'Already owned.' log reaches the page
+    g.DATA.events.t_owned = { id: 't_owned', title: 'The Same Lamp Twice', art: { scene: 'shop' }, chapters: [1], text: 'He sells you a lamp.', choices: [
+      { label: 'Buy the lamp', cost: '60 gold', out: [{ w: 1, text: 'He hands it over.', ops: [{ op: 'gold', n: -60 }, { op: 'addCard', pool: 'party', rarity: 'common' }, { op: 'addRelic', id: 'brass_lantern' }] }] },
+      { label: 'Walk on', out: [{ w: 1, text: 'You leave.', ops: [] }] }] };
+    const R = mkRun(g, { seed: 31, gold: 300 });
+    if (owned === 'all') Object.keys(g.DATA.relics).forEach((r) => { if (R.relics.indexOf(r) < 0) g.RUN.addRelic(R, r); }); else g.RUN.addRelic(R, 'brass_lantern');
+    const node = nodeAt(g, R, 'event', { id: 't_owned' });
+    await open(g, 'event', R, node);
+    const before = R.relics.length;
+    await click(g, $$(g, '.ev-choice')[0]);
+    await answerOverlays(g, R); g._flush(4000); await settle(g);
+    const gained = R.relics.length - before;
+    const chips = $$(g, '.ev-chip.has-relic');
+    t.eq(chips.length, gained, 'owned ' + owned + ': ' + chips.length + ' treasure chip(s) for ' + gained + ' treasure(s) really gained');
+    chips.forEach((c) => t.ok(R.relics.some((r) => g.DATA.relics[r].name === txt(c)), 'the chip names a treasure the party now carries'));
+    if (owned === 'all') t.ok($$(g, '.ev-chip').some((c) => /\+\d+ gold/.test(txt(c))), 'nothing left to find: the gold it turns into is shown');
+    t.ok(!$$(g, '.ev-chip.k-good.has-relic').some((c) => txt(c) === 'Brass Lantern') || gained === 0 || R.relics.indexOf('brass_lantern') >= 0, 'never "Brass Lantern gained" when it was already carried');
+    t.eq(errs(g), 0, 'no console errors');
+  }
+});
+
+await t.test('event: the card offered by a fable is not forfeited by a stray tap on the backdrop or by Esc; Skip is the way out', async () => {
+  const g = fresh({ seed: 33 });
+  const R = mkRun(g, { seed: 33, gold: 300 });
+  g.RUN.startChapter(R, 2);
+  const node = nodeAt(g, R, 'event', { id: 'flooded_archive' });
+  await open(g, 'event', R, node);
+  const deck0 = R.deck.length;
+  await click(g, $$(g, '.ev-choice')[0]);
+  g._flush(4000); await settle(g);
+  t.ok(g.UI.overlay.has('cardPick'), 'the card offer is up');
+  t.ok(g.UI.overlay.top().params.dismiss === false, 'it is marked as not dismissible');
+  g._click($(g, '.o-cardPick')); await settle(g);
+  t.ok(g.UI.overlay.has('cardPick'), 'a tap on the dim backdrop does not close it');
+  g._key('Escape'); await settle(g);
+  t.ok(g.UI.overlay.has('cardPick'), 'Esc does not close it');
+  t.eq(R.deck.length, deck0, 'nothing was forfeited or taken');
+  t.ok(btnByText(g, /^Skip/, $(g, '.o-cardPick')), 'the Skip button is still there');
+  await click(g, btnByText(g, /^Skip/, $(g, '.o-cardPick')));
+  g._flush(4000); await settle(g);
+  t.ok(!g.UI.overlay.has('cardPick') && $(g, '.ev-go'), 'Skip closes it and the way on appears');
+  t.eq(R.deck.length, deck0, 'Skip takes no card');
+  // and a real pick still works
+  const R2 = mkRun(g, { seed: 34, gold: 300 }); g.RUN.startChapter(R2, 2);
+  await open(g, 'event', R2, nodeAt(g, R2, 'event', { id: 'flooded_archive' }));
+  await click(g, $$(g, '.ev-choice')[0]);
+  g._flush(4000); await settle(g);
+  await click(g, $$(g, '.o-cardPick .card')[0]);
+  await click(g, btnByText(g, /Take this card/, $(g, '.o-cardPick')));
+  g._flush(4000); await settle(g);
+  t.ok(R2.deck.length >= deck0 + 1 || !g.UI.overlay.has('cardPick'), 'choosing a card still takes it');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+// drive the UI frame clock (what the real rAF loop does) so the typewriter and the pauses run: 16 ms a frame, a settle between frames for promise continuations
+let evClock = 5000;
+async function frames(g, n) { for (let i = 0; i < n; i++) { evClock += 16; g.UI.frame(evClock); await settle(g); } }
+
+await t.test('event (keyboard and touch flow): digits wait for the choices, numbers follow the visible order, a tap or Enter skips the outcome text, Continue takes focus and Enter, and answered choices leave the Tab order', async () => {
+  // L33: a digit pressed while the fable is still being written must not commit a choice nobody has seen
+  const g = fresh({ seed: 41 }); const R = mkRun(g, { seed: 41, gold: 300 });
+  const node = nodeAt(g, R, 'event', { id: 'kappa_toll' });
+  await settle(g);
+  g._win.__HEADLESS = false;
+  await g.UI.go('event', { node, R }, { force: true, transition: 'none' }); await settle(g);
+  await frames(g, 30);
+  t.ok(!$(g, '.ev-choices').classList.contains('in'), 'the fable is still being written, the choices are not up');
+  g._key('2'); await settle(g);
+  t.ok(node.chosen === null || node.chosen === undefined, 'a digit pressed before the choices appear commits nothing');
+  t.ok(/visibility:\s*hidden/.test(CSS.match(/\.ev-choices:not\(\.in\):not\(\.done\) \.ev-choice\s*\{[^}]*\}/)[0]), 'css: the unrevealed choices are visibility hidden (not focusable, not read out)');
+  g._key('Enter'); await frames(g, 4);
+  t.ok($(g, '.ev-choices').classList.contains('in'), 'Enter finishes the text and lets the choices in');
+  // L36: the outcome text is a typewriter too, and a tap finishes it
+  g._key('1'); await frames(g, 2);
+  t.eq(node.chosen, 0, 'with the choices up, key 1 takes the first choice');
+  const result = $(g, '.ev-result');
+  const full = g.DATA.events.kappa_toll.choices[0].out.map((o) => o.text);
+  t.ok(!result.classList.contains('tw-done') && !$(g, '.ev-go'), 'the outcome is being written and there is no way on yet');
+  // L35: the answered choices are out of the Tab order and the screen readers' way
+  const answered = $$(g, '.ev-choice');
+  t.ok(answered.every((b) => b.tabIndex === -1), 'no answered choice stays tabbable');
+  t.ok(answered.filter((b) => b.classList.contains('gone')).every((b) => b.getAttribute('aria-hidden') === 'true'), 'collapsed choices are aria-hidden');
+  await click(g, result);
+  t.ok(result.classList.contains('tw-done') && full.indexOf(txt(result)) >= 0, 'a tap on the outcome text completes it');
+  await frames(g, 4);
+  t.ok(!$(g, '.ev-go'), 'the way on follows after a short beat, not at once');
+  await frames(g, 12);
+  const go = $(g, '.ev-go');
+  t.ok(go, 'Continue appears about 0.2 s after the tap (it used to wait out a 70 characters a second typewriter and a 450 ms hold)');
+  t.ok(g._doc.activeElement === go, 'Continue takes the focus, so Enter or Space presses it');
+  const d0 = done(g);
+  g._doc.activeElement.blur && g._doc.activeElement.blur();
+  g._key('Enter'); await settle(g);
+  t.eq(done(g), d0 + 1, 'Enter with nothing focused presses Continue');
+  g._key('Enter'); await settle(g);
+  t.eq(done(g), d0 + 1, 'and a second Enter does not leave twice');
+  // L34: the numbers follow the visible order (a hero-only choice that is hidden leaves no gap)
+  const R2 = mkRun(g, { seed: 42, heroes: ['suzu', 'raiga'], gold: 300 });
+  const node2 = nodeAt(g, R2, 'event', { id: 'tengu_dice' });
+  await g.UI.go('event', { node: node2, R: R2 }, { force: true, transition: 'none' }); await settle(g);
+  g._win.__HEADLESS = true;
+  g._key('Enter'); await settle(g);
+  const nums = $$(g, '.ev-choice .ev-num').map((n) => txt(n));
+  t.deep(nums, nums.map((_, i) => String(i + 1)), 'the labels run 1..n with no gap (' + nums.join(',') + ')');
+  const shownIdx = $$(g, '.ev-choice').map((b) => Number(b.dataset.i));
+  const hiddenOne = g.DATA.events.tengu_dice.choices.length > shownIdx.length;
+  t.ok(hiddenOne, 'this fable hides a choice for this party, so the order differs from the source order (' + shownIdx.join(',') + ')');
+  const last = shownIdx[shownIdx.length - 1];
+  g._key(String(shownIdx.length)); await settle(g); g._flush(2000); await settle(g);
+  t.eq(node2.chosen, last, 'the last digit takes the last visible choice (source index ' + last + ')');
+  t.eq(errs(g), 0, 'no console errors');
 });
 
 await t.test('event: requirements lock a choice with the reason, and the heroes only options are hidden without the hero', async () => {
@@ -1341,6 +1617,32 @@ await t.test('deck (required): no Cancel, Esc and the backdrop do nothing, only 
   g._key('Escape'); await settle(g);
   t.ok(g.UI.overlay.has('cardPick') && !ov2.done, 'the required card pick also ignores Esc');
   g.UI.overlay.closeAll(); await settle(g);
+});
+
+await t.test('deck (mandatory pickers): the confirm button is pinned in a fixed footer of the pane, never inside the scrolling detail (a phone cannot scroll to it), and the compact css shrinks the big card', async () => {
+  const g = await freshS({ seed: 9 }); const R = mkRun(g, { seed: 9 });
+  const cases = [
+    ['pick', { title: 'Transform a card', confirm: 'Transform it', note: 'It becomes a random card of the same hero and rarity.' }],
+    ['pick', { title: 'Copy a card', confirm: 'Copy it', note: 'A second copy joins the deck.' }],
+    ['remove', { title: 'Remove a card', confirm: 'Remove it', note: 'It is torn out of your deck for good.' }],
+    ['upgrade', { title: 'Sharpen a card', confirm: 'Sharpen it', note: 'It gains its upgrade.' }],
+    ['remove', { title: 'Remove a Card', price: 75, confirm: 'Pay 75 and remove', note: 'The peddler burns it for good.' }],
+  ];
+  for (const [mode, extra] of cases) {
+    const ov = ovOpen(g, 'deck', Object.assign({ mode, required: true, dismiss: false }, extra)); await settle(g);
+    const up = mode === 'upgrade' ? R.deck.find((c) => g.DATA.cards[c.id].up && !c.up) : R.deck[3];
+    await click(g, deckCard(g, up.uid));
+    const go = $(g, '.o-deck .dk-go');
+    t.ok(go, mode + ' / ' + extra.confirm + ': the confirm button is there after a card is chosen');
+    t.ok(go.closest('.dk-pane > .dk-confirm'), extra.confirm + ': it sits in the pinned footer row of the pane');
+    t.ok(!go.closest('.dk-detail'), extra.confirm + ': and not inside the part that scrolls');
+    t.ok($(g, '.o-deck .dk-pane > .dk-detail'), extra.confirm + ': the scrolling detail is a sibling of the footer');
+    t.ok(/\S/.test(txt($(g, '.o-deck .dk-note'))) && ($(g, '.o-deck .dk-note').closest('.dk-side') || $(g, '.o-deck .dk-note').closest('.dk-confirm')), extra.confirm + ': the note is still shown (beside the card, or above the button for a before-and-after)');
+    g.UI.overlay.closeAll(); await settle(g); void ov;
+  }
+  t.ok(/\.dk-pane\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*overflow:\s*hidden/.test(CSS), 'css: the pane is a column that does not scroll itself');
+  t.ok(/\.dk-pane\s*>\s*\.dk-detail\s*\{[^}]*overflow-y:\s*auto/.test(CSS) && /\.dk-confirm\s*\{[^}]*flex:\s*none/.test(CSS), 'css: the detail scrolls, the confirm row never shrinks');
+  t.ok(/#stage\.compact \.o-deck \.dk-big\.card:not\(\.dk-sockcard\)\s*\{[^}]*--cw:/.test(CSS) && /#stage\.compact \.dk-confirm/.test(CSS), 'css: on a compact stage the big card shrinks and the confirm row tightens');
 });
 
 await t.test('deck (remove): the confirm needs a second tap that says so, the ask times out, and the price shows when given', async () => {

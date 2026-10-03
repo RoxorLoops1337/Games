@@ -41,6 +41,8 @@
 
 /* ------------------------------------------------------------------------------------------------ page and stage */
 html, body { margin: 0; height: 100%; background: var(--night); overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; font-family: var(--font-ui); color: var(--paper); }
+/* the letterbox bars and the page around the stage are not a place to pinch or double-tap zoom: only the stage handles gestures (L15, L16). The viewport meta still allows zoom (DESIGN 5.8), and the stage already has touch-action none. */
+html, body, #wrap { touch-action: none; }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 #wrap { position: fixed; inset: 0; overflow: hidden; background: radial-gradient(90% 80% at 50% 30%, #23195a 0%, #0f0b26 62%, #07051a 100%); }
@@ -50,6 +52,7 @@ html, body { margin: 0; height: 100%; background: var(--night); overflow: hidden
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   font-size: calc(16px * var(--ts)); line-height: 1.3;
   --hit: max(44px, calc(44px / var(--scale)));
+  --fs9: calc(9px / var(--scale)); --fs8: calc(8px / var(--scale));   /* 9 and 8 SCREEN px written in stage px: the floors the compact (phone) rules lift gameplay text to, as max(the designed size, var(--fs9)) */
   box-shadow: 0 0 0 2px rgba(245, 201, 106, .18), 0 0 60px rgba(0, 0, 0, .7);
 }
 #stage.busy { pointer-events: none; }
@@ -145,6 +148,8 @@ body.low .panel-wrap { filter: drop-shadow(0 6px 6px rgba(5, 3, 18, .6)); }
 .btn > * { position: relative; }
 .btn .btn-ico { flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5)); }
 .btn-key { padding: 0 .45em; border-radius: 5px; font: 800 .62em/1.7 var(--font-num); background: rgba(20, 15, 46, .35); color: var(--white); border: 1px solid rgba(255, 255, 255, .3); }
+/* a finger has no keyboard: the shortcut chips next to buttons are clutter at 5 px on a phone. The How to Play key list keeps them, it is documentation (L14). */
+@media (pointer: coarse), (hover: none) { .btn-key { display: none; } .mn-pg-extra.keys .btn-key { display: inline-block; } }
 .btn-shine { position: absolute !important; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .55) 50%, transparent 62%); transform: translateX(-125%); }
 .btn:hover .btn-shine { transform: translateX(125%); transition: transform .65s ease-out; }
 .btn-primary {
@@ -164,6 +169,7 @@ body.low .panel-wrap { filter: drop-shadow(0 6px 6px rgba(5, 3, 18, .6)); }
 .btn-primary.btn-danger { background: linear-gradient(180deg, #a04bff, #6a2bc0 50%, #3d1a7a); border-color: #d9b6ff; box-shadow: 0 0 0 2px #23104a, 0 5px 0 2px #23104a, 0 11px 16px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .5); text-shadow: 0 2px 0 rgba(20, 5, 50, .8); }
 .btn-sm { padding: .3em .95em; font-size: calc(14px * var(--ts)); border-radius: 8px; }
 .btn-lg { padding: .62em 1.9em; font-size: calc(21px * var(--ts)); }
+#stage.compact .btn-sm { font-size: max(calc(14px * var(--ts)), var(--fs8)); }   /* Back, Skip and the other small buttons: a label of 7.6 screen px is the smallest thing a thumb is asked to hit */
 .btn:hover { transform: translateY(-2px); filter: brightness(1.07); }
 .btn:active { transform: translateY(3px); filter: brightness(.96); transition-duration: .04s; }
 .btn-primary:active { box-shadow: 0 0 0 2px var(--verm-dd), 0 2px 0 2px var(--verm-dd), 0 4px 8px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .4); }
@@ -336,17 +342,21 @@ body.low .panel-wrap { filter: drop-shadow(0 6px 6px rgba(5, 3, 18, .6)); }
 .gem-pips { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); display: flex; gap: 2px; }
 .gem-pips .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--gold2); box-shadow: 0 0 0 1px var(--ink); }
 
-.badge { --hc: #ff7eb6; --hc2: #b0245c; position: relative; display: inline-flex; align-items: center; gap: 12px; pointer-events: auto; color: var(--paper); }
+.badge { --hc: #ff7eb6; --hc2: #b0245c; --hpf: 11px; --hpb: 16px; --bnf: 17px; position: relative; display: inline-flex; align-items: center; gap: 12px; pointer-events: auto; color: var(--paper); }
 .badge .medal { position: relative; flex: none; border-radius: 50%; background: var(--hc2); box-shadow: 0 0 0 3px var(--hc), 0 0 0 5px var(--ink), 0 0 0 6.5px var(--gold), 0 5px 8px rgba(0, 0, 0, .55); }
 .badge .medal .ico { display: block; border-radius: 50%; }
 .b-info { display: flex; flex-direction: column; gap: 3px; min-width: 104px; }
-.b-name { font: 800 calc(17px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
+.b-name { font: 800 calc(var(--bnf) * var(--ts)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
 .b-title { font-size: calc(12px * var(--ts)); font-style: italic; color: var(--paper2); }
-.hpbar { position: relative; height: 16px; border-radius: 99px; overflow: hidden; background: rgba(20, 15, 46, .88); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .65), inset 0 2px 3px rgba(0, 0, 0, .6); }
+.hpbar { position: relative; height: calc(var(--hpb) * var(--ts)); border-radius: 99px; overflow: hidden; background: rgba(20, 15, 46, .88); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .65), inset 0 2px 3px rgba(0, 0, 0, .6); }
 .hp-fill { display: block; height: 100%; background: linear-gradient(180deg, #ff8f80, var(--vermilion) 55%, #a91d2c); transition: width .35s var(--ease-out); }
-.hp-txt { position: absolute; inset: 0; display: grid; place-items: center; font: 900 11px var(--font-num); font-style: normal; color: var(--white); text-shadow: 0 1px 1px #000, 0 0 3px #000; }
-.badge.sz-sm .b-info { min-width: 74px; } .badge.sz-sm .b-name { font-size: calc(14px * var(--ts)); } .badge.sz-sm .hpbar { height: 13px; } .badge.sz-sm .hp-txt { font-size: 9px; }
-.badge.sz-lg .b-info { min-width: 150px; gap: 5px; } .badge.sz-lg .b-name { font-size: calc(24px * var(--ts)); } .badge.sz-lg .hpbar { height: 20px; } .badge.sz-lg .hp-txt { font-size: 13px; }
+.hp-txt { position: absolute; inset: 0; display: grid; place-items: center; font: 900 calc(var(--hpf) * var(--ts)) / 1 var(--font-num); font-style: normal; color: var(--white); text-shadow: 0 1px 1px #000, 0 0 3px #000; }
+.badge.sz-sm { --hpf: 9px; --hpb: 13px; --bnf: 14px; } .badge.sz-sm .b-info { min-width: 74px; }
+.badge.sz-lg { --hpf: 13px; --hpb: 20px; --bnf: 24px; } .badge.sz-lg .b-info { min-width: 150px; gap: 5px; }
+/* phone landscape: the HP number and the name keep at least 9 and 8 screen px, and the bar grows around the number (the stage is drawn at about half size) */
+#stage.compact .hp-txt { font-size: max(calc(var(--hpf) * var(--ts)), var(--fs9)); }
+#stage.compact .hpbar { height: max(calc(var(--hpb) * var(--ts)), calc(var(--fs9) * 1.3)); }
+#stage.compact .b-name { font-size: max(calc(var(--bnf) * var(--ts)), var(--fs8)); }
 .badge.down { filter: grayscale(1) brightness(.6); }
 .badge.low .hp-fill { animation: hpLow 1s ease-in-out infinite; }
 .badge.sel .medal { box-shadow: 0 0 0 3px var(--gold2), 0 0 0 5px var(--ink), 0 0 0 6.5px var(--gold), 0 0 22px 6px rgba(245, 201, 106, .75); }

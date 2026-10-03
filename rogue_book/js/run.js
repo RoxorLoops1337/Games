@@ -21,7 +21,9 @@
 //   player (from ops, hooks or fight wins). A gem or brush appears once per copy in R.gems and R.brushes.
 //
 // PUBLIC API (every function returns plain data; a refusal is {ok:false, reason} and changes nothing)
-//   Setup    newRun({heroes:[idA,idB], trial=0, seed, daily=false, unlocked}) -> R (throws on a bad party)   dailyHeroes(seed) -> [idA,idB]
+//   Setup    newRun({heroes:[idA,idB], trial=0, seed, daily=false, unlocked, nonce}) -> R (throws on a bad party)   dailyHeroes(seed) -> [idA,idB]
+//            R.id comes from seed, trial, daily, heroes and `nonce`: GAME passes a clock-derived nonce so every tale has its own id (META pays
+//            a run id once). Without a nonce equal inputs give equal ids, which keeps tests and the balance bot deterministic.
 //            startChapter(R, n) -> {ok, chapter, log, pending}   mods(R) -> the final flat mods (DATA.modsFor(R.relics, R.mods))
 //   Map      paint(R,q,r) -> {ok, tiles, cost, log, pending, mercy} | {ok:false, tiles:[], reason: done|busy|nomap|off|void|painted|unreachable|ink}
 //            paintPreview(R,q,r) -> {ok, path:[[q,r]], cost, affordable, reason?}   useBrush(R, brushId, q, r, dir) -> {ok, tiles, log, pending, mercy}
@@ -37,7 +39,9 @@
 //            claim(R, rewards, {card, relic, gem, takeBrush}) -> {ok, log, pending} | reason claimed|card|relic|owned|gem|brush (nothing applied)
 //   Nodes    take(R, node, {relic:bool, gem:id|null}) -> {ok, gold?, relic?, gem?, log, pending} | reason taken|relic|gem|kind   (chest and gem cache)
 //            shopBuy(R, stock, key) -> {ok, pending, log} | reason nokey|sold|gold|owned      shopRemove(R, stock, uid) -> {ok, price} | reason nostock|card|gold
-//            eventChoices(R, ev|id) -> [{index,label,cost,ok,hidden,reason}] (a failed req.hero is hidden, other failed reqs are shown disabled)
+//            eventChoices(R, ev|id) -> [{index,label,cost,ok,hidden,reason}] (a failed req.hero is hidden, other failed reqs are shown disabled with what is
+//            missing; a choice whose every outcome can only do nothing right now, say a curse to remove with no curse in the deck, is locked too, unless it
+//            would leave no open choice)
 //            eventChoose(R, ev|id, i) -> {ok, text, applied[], fight?, pending?} | reason node|chosen|choice|<the req text>. A fight replaces R.node.
 //            pickEvent(R, tile) -> id|null    campAction(R, action, arg) -> {ok,...} | reason node|action|used|actions|card|<socket reason>
 //            campAction: 'rest' | 'sharpen' (arg uid or {uid}) | 'meditate' | 'gems' (no arg: may cutting start?; {uid,slot,gem}: one cut, the first
@@ -50,7 +54,8 @@
 //   Ops      applyOps(R, ops, ctx) -> {log, pending, fight}: ctx {rng, key, tile, fight:false}. log lines are {op, text, ...}; text '' means "silent".
 //            resolvePending(R, id, choice) -> {ok, log} | reason unknown|required|choice. Pending = {id, op, n, pick:'choose', filter, offers?}: deck ops
 //            (removeCard upgradeCard transformCard duplicateCard) want an array of exactly min(n, candidates) uids, cardReward a card id from offers or null.
-//            hook(R, name, ctx) -> {log, pending}   addRelic(R, id) -> {ok, id, log, pending} | reason unknown|owned (runs that relic's onPickup)
+//            hook(R, name, ctx) -> {log, pending}   addRelic(R, id) -> {ok, id, log, pending} | reason unknown|owned (runs that relic's onPickup).
+//            The addRelic OP with a fixed id the party owns gives a same-rarity relic instead, or (none left) logs 'Already owned.' and pays 40% of its shop price.
 //            Any choice raised anywhere (a shop entry hook, a chapter start hook, a fight win) waits in R.pending: screens check it after every call.
 //   Deck     addCard(R,id,{up,gems}) removeCard(R,uid) (gems return to R.gems) upgradeCard(R,uid) upgradable(R,filter) -> [uid]
 //            socket(R, uid, slot, gemId) -> {ok, replaced} | reason card|slot|gem|color|same (replacing destroys the old gem; there is no unsocket)
@@ -80,6 +85,7 @@ const RUN = (() => {
   const RARITIES = ['common', 'uncommon', 'rare'];
   const CAMP_ACTIONS = ['rest', 'sharpen', 'gems', 'meditate'];
   const LOG_MAX = 80;
+  const OWNED_RELIC_GOLD = 0.4;                                      // a fixed treasure the party already owns turns into this share of its shop price
 
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -429,8 +435,21 @@ const RUN = (() => {
         id = c.length ? ctx.rng.pick(c).id : null;
       }
       if (!id) { out.log.push({ op: 'addRelic', text: 'No treasure to find.' }); return; }
+      if (DATA.relics[id] && R.relics.indexOf(id) >= 0) {
+        // A fixed treasure the party already carries (a peddler's lamp, the fox's mask): never "paid, got nothing". A stand-in of the same
+        // rarity takes its place; with none left, the log says it is already owned and a share of its shop price comes back as gold.
+        const alt = relicCandidates(R, DATA.relics[id].rarity);
+        if (alt.length) id = ctx.rng.pick(alt).id;
+        else {
+          const n = Math.round((E().price.relic[DATA.relics[id].rarity] || E().price.relic.common) * OWNED_RELIC_GOLD);
+          out.log.push({ op: 'addRelic', id, text: 'Already owned.' });
+          OPS.gold(R, { n }, ctx, out);
+          out.log[out.log.length - 1].text = `You already carry ${relicName(id)}, so it turns into ${n} gold.`;
+          return;
+        }
+      }
       const res = gainRelic(R, id);
-      if (!res.ok) { out.log.push({ op: 'addRelic', id, text: 'Already owned.' }); return; }
+      if (!res.ok) { out.log.push({ op: 'addRelic', text: 'No treasure to find.' }); return; }
       out.log.push({ op: 'addRelic', id, text: `Found ${relicName(id)}.` });
       res.log.forEach((x) => out.log.push(x));
       res.pending.forEach((p) => out.pending.push(p));
@@ -478,7 +497,7 @@ const RUN = (() => {
         h.log.forEach((x) => out.log.push(x));
         h.pending.forEach((x) => out.pending.push(x));
       });
-      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The path opens (${tiles.length} hexes).` : 'The way ahead is already open.' });
+      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The path opens (${U.plural(tiles.length, 'hex', 'hexes')}).` : 'The way ahead is already open.' });
     },
     cardReward(R, o, ctx, out) {
       const n = o.n || 3;
@@ -603,7 +622,7 @@ const RUN = (() => {
     const trial = daily ? 0 : clampInt(opts.trial, 0, 10);
     U.resetUid(1);                                                   // equal seeds and actions give equal uids
     const R = {
-      v: VERSION, id: 'rb' + U.hash(seed, trial, daily ? 'daily' : 'run', heroes.join(',')).toString(36), seed, trial, daily,
+      v: VERSION, id: 'rb' + U.hash(seed, trial, daily ? 'daily' : 'run', heroes.join(','), ...(opts.nonce === undefined ? [] : [opts.nonce])).toString(36), seed, trial, daily,
       mods: U.deepCopy(DATA.trialDeltas(trial)), unlocked: daily ? allLocked() : cleanUnlocked(opts.unlocked),
       heroes: heroes.map((id) => ({ id, hp: DATA.heroes[id].maxHp, maxHp: DATA.heroes[id].maxHp })), frontIdx: 0,
       deck: [], gems: [], relics: [], brushes: ['stroke'], gold: 0, ink: 0, inkMax: 0, chapter: 0, map: null, node: null, pending: [],
@@ -812,17 +831,47 @@ const RUN = (() => {
   }
   const removePrice = (R) => Math.max(1, Math.round((E().price.remove + E().price.removeStep * R.removals) * mods(R).priceMul));
 
+  // What a flag-locked choice tells the player: a hint at the story beat that is missing.
+  const FLAG_HINTS = { fox_spared: 'Not yet: you never freed the fox', fox_bond: 'Not yet: the fox has not befriended you' };
+  const pct = (f) => Math.round(f * 100) + '%';
   function eventReq(R, req) {
     if (!req) return { ok: true };
     const live = R.heroes.filter((h) => h.hp > 0);
     if (req.hero !== undefined && partyIds(R).indexOf(req.hero) < 0) return { ok: false, hidden: true, reason: 'hero' };
     if (req.gold !== undefined && R.gold < req.gold) return { ok: false, reason: `Needs ${req.gold} gold` };
-    if (req.hpPct !== undefined && !live.every((h) => h.hp >= req.hpPct * h.maxHp)) return { ok: false, reason: 'Party too hurt' };
-    if (req.hpBelow !== undefined && !live.some((h) => h.hp < req.hpBelow * h.maxHp)) return { ok: false, reason: 'Nobody is hurt enough' };
-    if (req.relic !== undefined && R.relics.indexOf(req.relic) < 0) return { ok: false, reason: 'Needs a treasure' };
-    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: 'Not yet' };
-    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: 'Wrong chapter' };
+    if (req.hpPct !== undefined && !live.every((h) => h.hp >= req.hpPct * h.maxHp)) return { ok: false, reason: `Every hero needs ${pct(req.hpPct)} HP` };
+    if (req.hpBelow !== undefined && !live.some((h) => h.hp < req.hpBelow * h.maxHp)) return { ok: false, reason: `Needs a hero below ${pct(req.hpBelow)} HP` };
+    if (req.relic !== undefined && R.relics.indexOf(req.relic) < 0) return { ok: false, reason: `Needs the ${relicName(req.relic)}` };
+    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the story has not led here' };
+    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Chapter ${req.chapter} only` };
     return { ok: true };
+  }
+  // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed treasure
+  // the party already carries. A choice whose every outcome holds one is locked with the reason, rather than taking the player's gold or HP for nothing.
+  const DEAD_DECK_TEXT = { removeCard: 'No card to remove', upgradeCard: 'Nothing left to sharpen', transformCard: 'Nothing to transform', duplicateCard: 'Nothing to copy' };
+  const DECK_GROWERS = ['addCard', 'addCurse', 'cardReward'];             // ops after one of these depend on cards it adds: not judged
+  function deadOp(R, o) {
+    if (DEAD_DECK_TEXT[o.op]) {
+      if (deckCandidates(R, o.op, o.filter).length) return null;
+      return o.op === 'removeCard' && o.filter && o.filter.type === 'curse' ? 'You carry no curse' : DEAD_DECK_TEXT[o.op];
+    }
+    if (o.op === 'addRelic' && o.id && DATA.relics[o.id] && R.relics.indexOf(o.id) >= 0) return `You already carry the ${relicName(o.id)}`;
+    return null;
+  }
+  function deadReason(R, ops) {
+    for (let i = 0; i < (ops || []).length; i += 1) {
+      const o = ops[i];
+      if (!o || DECK_GROWERS.indexOf(o.op) >= 0) return null;
+      const why = deadOp(R, o);
+      if (why) return why;
+    }
+    return null;
+  }
+  function choiceDead(R, choice) {
+    const outs = Array.isArray(choice.out) ? choice.out : [];
+    if (!outs.length) return null;
+    const why = outs.map((o) => deadReason(R, o && o.ops));
+    return why.every(Boolean) ? why[0] : null;
   }
   function eventWhen(R, when) {
     if (!when) return true;
@@ -844,10 +893,13 @@ const RUN = (() => {
   function eventChoices(R, ev) {
     const def = typeof ev === 'string' ? DATA.events[ev] : ev;
     if (!def) return [];
-    return def.choices.map((c, i) => {
+    const rows = def.choices.map((c, i) => {
       const s = eventReq(R, c.req);
-      return { index: i, label: c.label, cost: c.cost || null, ok: !!s.ok, hidden: !!s.hidden, reason: s.reason || null };
+      return { index: i, label: c.label, cost: c.cost || null, ok: !!s.ok, hidden: !!s.hidden, reason: s.reason || null, dead: s.ok ? choiceDead(R, c) : null };
     });
+    // a fable never locks itself: the dead-end locks only apply while some other choice stays open
+    const lock = rows.some((r) => r.ok && !r.dead);
+    return rows.map((r) => { const dead = lock ? r.dead : null; return { index: r.index, label: r.label, cost: r.cost, ok: r.ok && !dead, hidden: r.hidden, reason: dead || r.reason }; });
   }
   function eventNode(R, tile) {
     let id = tile.content && tile.content.id && DATA.events[tile.content.id] ? tile.content.id : null;
@@ -864,7 +916,7 @@ const RUN = (() => {
     if (node.chosen !== null && node.chosen !== undefined) return { ok: false, reason: 'chosen', applied: [] };
     const choice = def.choices[i];
     if (!choice) return { ok: false, reason: 'choice', applied: [] };
-    const st = eventReq(R, choice.req);
+    const st = eventChoices(R, def)[i];
     if (!st.ok) return { ok: false, reason: st.reason || 'req', applied: [] };
     const rng = rngFor(R, 'event', node.tile.q, node.tile.r, i);
     const outcome = rng.weighted(choice.out, (o) => o.w);
