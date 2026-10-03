@@ -30,7 +30,8 @@ const PHYS = (() => {
     sleepV: 14, sleepW: 0.35, sleepT: 0.45,   // rest this long below these speeds and sleep
     wakePen: 2.5, wakeV: 70,                   // a sleeper pushed this deep, or hit this fast, wakes
     wallMu: 0.4,
-    heldDecay: 8,      // b.held counts down this fast per second (2 -> 0 in a quarter second)
+    wallTol: 3,        // a body's EXTENT may sink this far into a side wall before it is pushed back (round 23, stuck prize fix)
+    heldDecay: 8,     // b.held counts down this fast per second (2 -> 0 in a quarter second)
   };
   // Item part shapes derived from Clawspire's shape descriptors.
   const SHAPE = {
@@ -557,6 +558,30 @@ const PHYS = (() => {
       }
     }
   }
+  /* Slide a body that pokes through a side wall back inside (by its real
+     part extents, not its centre).  The wall's own surface is at xMin - 5 /
+     xMax + 5; PH.wallTol of sink is left alone so a body resting on the wall
+     is never nudged (normal physics is unchanged). */
+  const ext = { lo: 0, hi: 0 };
+  /* A body's horizontal extent from its centre right now (live pose, not the
+     last sync): ext.lo is how far left of b.x it reaches, ext.hi how far right. */
+  function extentX(b) {
+    const c = Math.cos(b.a), s = Math.sin(b.a);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < b.parts.length; i++) {
+      const p = b.parts[i], dx = p.x * c - p.y * s;
+      if (dx - p.r < lo) lo = dx - p.r;
+      if (dx + p.r > hi) hi = dx + p.r;
+    }
+    ext.lo = -lo; ext.hi = hi;
+    return ext;
+  }
+  function wallInside(b, cb) {
+    const e = extentX(b);
+    const maxR = cb.xMax + 5 + PH.wallTol, minL = cb.xMin - 5 - PH.wallTol;
+    if (b.x + e.hi > maxR) { b.x = maxR - e.hi; if (b.vx > 0) b.vx = 0; }
+    else if (b.x - e.lo < minL) { b.x = minL + e.lo; if (b.vx < 0) b.vx = 0; }
+  }
   /* One substep: gravity and damping, contacts, integration, the hard
      clamps, held decay and sleeping. */
   function physStep(W, h) {
@@ -583,6 +608,10 @@ const PHYS = (() => {
       if (b.x < cb.xMin) { b.x = cb.xMin; if (b.vx < 0) b.vx = 0; }
       else if (b.x > cb.xMax) { b.x = cb.xMax; if (b.vx > 0) b.vx = 0; }
       if (b.y < cb.yMin) { b.y = cb.yMin; if (b.vy < 0) b.vy = 0; }
+      // (round 23) the clamps above only bound the CENTRE: a long item (a sword) whose centre sits at the
+      // clamp has its far end in or beyond the wall, where the wall segment pushes those parts OUT, pins
+      // the body, and it hangs there at rail height for ever.  Bound the extent too.
+      if (b.x + b.br > cb.xMax + 5 + PH.wallTol || b.x - b.br < cb.xMin - 5 - PH.wallTol) wallInside(b, cb);
       if (b.held > 0) b.held -= h * PH.heldDecay;
       if (b.passClaw > 0) b.passClaw -= h;
       if (!W.busy && sp < PH.sleepV * PH.sleepV && Math.abs(b.av) < PH.sleepW && b.held <= 0) {
@@ -1180,7 +1209,12 @@ const PHYS = (() => {
       for (let i = K.stuck.length - 1; i >= 0; i--) {
         const sk = K.stuck[i], b = sk.b;
         if (b.world !== W) { K.stuck.splice(i, 1); continue; }
-        const tx = K.x + K.vx * h + sk.dx, ty = K.y + K.vy * h + sk.dy;
+        let tx = K.x + K.vx * h + sk.dx;
+        const ty = K.y + K.vy * h + sk.dy;
+        // (round 23) a long load carried to the chute side keeps its far end inside the glass: the weld
+        // used to drag a sword's tip through the right wall, where it jammed
+        { const cb = W.clampBox, e = extentX(b), lo = cb.xMin - 5 + PH.wallTol + e.lo, hi = cb.xMax + 5 - PH.wallTol - e.hi;
+          if (lo <= hi) tx = clamp(tx, lo, hi); }
         const ex = tx - b.x, ey = ty - b.y, e = Math.hypot(ex, ey);
         if (e > T.tear * K.s + 6) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); continue; }
         let vx = ex * T.weldK / h, vy = ey * T.weldK / h;
@@ -1602,7 +1636,51 @@ const PHYS = (() => {
     return S;
   }
 
+  // ---- stuck prize safety net (round 23) ---------------------------------
+  /* Call once per frame after W.step(dt).  Two jobs, neither touches a body
+     that is behaving:
+       1. a body that left the glass (or is not a number) goes back in over
+          the bin, still;
+       2. an awake body with nothing under it, nearly still, that has not
+          moved for o.after seconds (default 3) is nudged down and toward the
+          bin; if that does not free it, it is set back in over the bin.
+     o.skip(b) -> true exempts a body a game mode holds in the air on purpose.
+     Returns the bodies it moved.  Pure state, so it is deterministic. */
+  const strandSup = new Set();
+  function strandWatch(W, dt, o) {
+    const out = [];
+    o = o || {};
+    if (!W || !(dt > 0) || !(W.gravity.y > 0)) return out;
+    const cb = W.clampBox, after = o.after == null ? 3 : o.after;
+    const wallR = cb.xMax + 5, binR = Math.min(cb.chuteX, wallR) - 10, dropY = o.dropY == null ? 30 : o.dropY;
+    strandSup.clear();
+    for (const c of W.contacts) { if (c.ny > 0.25) strandSup.add(c.a); if (c.b && c.ny < -0.25) strandSup.add(c.b); }
+    for (const b of W.bodies) {
+      if (b.type !== 'dynamic') continue;
+      const nan = !(Number.isFinite(b.x) && Number.isFinite(b.y));
+      if (nan || b.x < -2 || b.x > wallR + 2 || b.y < cb.yMin - 30 || b.y > cb.trayY + 30) { strandBack(b, cb, binR, dropY, nan); out.push(b); continue; }
+      if (b.sl || strandSup.has(b)) { b.stT = 0; b.stN = 0; continue; }   // settled: forgiven
+      if (b.tube || b.held > 0 || Math.hypot(b.vx, b.vy) > 14 || (o.skip && o.skip(b))) { b.stT = 0; continue; }
+      if (b.stT == null || Math.hypot(b.x - b.stX, b.y - b.stY) > 3) { b.stX = b.x; b.stY = b.y; b.stT = 0; continue; }
+      b.stT += dt;
+      if (b.stT < after) continue;
+      b.stT = 0;
+      if (b.stN > 0) { b.stN = 0; strandBack(b, cb, binR, dropY, false); }
+      else { b.stN = 1; wake(b); b.vy = Math.max(b.vy, 80); b.vx += (b.x < binR * 0.5 ? 1 : -1) * 60; b.av += 1.5; }
+      out.push(b);
+    }
+    return out;
+  }
+  function strandBack(b, cb, binR, dropY, nan) {
+    const x = nan ? binR * 0.5 : b.x;
+    b.x = clamp(x, cb.xMin + b.br, Math.max(cb.xMin + b.br, binR - b.br));
+    b.y = dropY; b.vx = b.vy = b.av = 0; b.stT = 0; b.stN = 0; b.passClaw = 0; b.held = 0;
+    if (nan) b.a = 0;
+    wake(b); sync(b);
+  }
+
   return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H,
+    strandWatch,
     MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop, CLAW_TYPES, clawPose,
     rosFloat, rosBounce, rosFlood };   // ROS (round 10)
 })();

@@ -7667,6 +7667,21 @@ const GAME = (() => {
     showReward(rw);
   }
 
+  // (round 23) Stuck prize safety net: a prize that left the glass, or hangs motionless over nothing for
+  // 3 s, is nudged down (then set back in over the bin).  Items a mode holds up on purpose are exempt.
+  function strandSkip(b) {
+    const d = b.data;
+    if (b.tube || (d && d.bestHang)) return true;   // the vacuum's canister, the magnetic lid / zero g hang
+    if (rosBubOf(b) || rosGlued(b)) return true;    // ROS bubbles and glue
+    const rv = FS && FS.best && FS.best.rival;
+    return !!(rv && rv.b === b);                    // the rival claw's catch
+  }
+  function strandTick(dt) {
+    const PH = X.PHYS;
+    if (!FS || !FS.world || !PH || !PH.strandWatch) return;
+    PH.strandWatch(FS.world, dt, { skip: strandSkip });
+  }
+
   // ---- fight update (fixed dt)
   function updateFight(dt) {
     if (!F || !FS) return;
@@ -7698,6 +7713,7 @@ const GAME = (() => {
       Wd.step(dt);
       for (const ev of evs) onRigEvent(ev);
       if (!FS) return;
+      strandTick(dt);   // (round 23) the stuck prize safety net
       // Landing squash (by impact) and a trail behind carried items.
       const reduced = !!fx().reduced;
       const carrying = rig.phase === 'lifting' || rig.phase === 'carrying';

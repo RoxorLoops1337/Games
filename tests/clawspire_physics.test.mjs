@@ -1163,4 +1163,120 @@ h.test('cab: a coin or capsule body (group prize) is grabbed and carried, skippe
   h.eq(a.sig, b.sig, 'the same bodies and inputs, the same pile');
 });
 
+// ---- stuck prize fix (round 23) ------------------------------------------
+// The owner's Magnet Crane run left a sword hanging at the top right of the
+// cabinet, at rail height, for ever.  The magnet welds metal under the hub, so
+// a long sword carried to the chute at an offset had its far end dragged
+// through the right wall; the clamps only bounded its CENTRE, the wall pushed
+// the buried half outward, and the body hung there awake and motionless.
+const SWORD_M = { shape: { kind: 'cap', r: 5, len: 48 }, density: 1.3, friction: 0.45 };
+
+h.test('stuck prize: a long item with its end in the side wall slides back in and falls', () => {
+  for (const side of [-1, 1]) {
+    const { W, C } = mkWorld();
+    const x = side > 0 ? C.bounds.w - 5 : 5;
+    const b = spawn(W, ITEM.sword({}), x, 59, { angle: 0 });
+    settle(W, 0.05);
+    h.ok(b.box.x1 <= C.bounds.w + 3.5 && b.box.x0 >= -3.5, `side ${side}: the body's extent is inside the walls (${b.box.x0.toFixed(1)}..${b.box.x1.toFixed(1)})`);
+    settle(W, 3);
+    h.ok(b.y > C.bounds.h - 60, `side ${side}: it fell to the floor instead of hanging in the air (y ${b.y.toFixed(1)})`);
+    h.ok(b.sl, `side ${side}: and it went to sleep`);
+  }
+});
+
+h.test('stuck prize: a sword carried by a welding claw stays inside the walls', () => {
+  // grab a metal sword lying near the bin's right edge with each welding claw
+  for (const t of ['magnet', 'hand', 'hook']) {
+    const { W, C } = typeWorld([['sword', 395, 372, METAL], ['ball', 330, 372, METAL], ['ball', 270, 372, METAL]]);
+    const R = PHYS.clawRig(W, { cabinet: C, type: t, grip: 1.6, rand: U.rng(3) });
+    R.setTarget(374);   // the hub catches the sword 21 px off its middle: it rides to the chute with its tip out past the hub
+    for (let i = 0; i < 90; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let worst = 0;
+    for (let i = 0; i < 1600 && !(i > 30 && R.phase === 'idle'); i++) {
+      R.update(DT); W.step(DT);
+      for (const b of items(W)) worst = Math.max(worst, b.box.x1 - C.bounds.w, -b.box.x0);
+    }
+    h.ok(worst <= 4, `${t}: nothing sank into a wall (worst ${worst.toFixed(1)} px)`);
+  }
+});
+
+/* Many seeded drops with one claw type from a heap of long and round metal
+   prizes (chute prizes are removed, as the game does).  Returns what went
+   wrong: a body outside the glass, or still awake and motionless a few
+   seconds after the claw is home (a body hanging in the air). */
+function stressDrops(type, seed, grabs) {
+  const rng = U.rng(seed), bad = [];
+  const { W, C } = mkWorld();
+  const defs = [ITEM.sword({}), ITEM.shield({}), ITEM.ball({}), ITEM.axe({}), ITEM.tower({})];
+  const put = (i) => spawn(W, defs[i % defs.length], 30 + rng() * 370, 20 + rng() * 100, { angle: rng() * 6.28, data: { tags: ['metal'] } });
+  for (let i = 0; i < 20; i++) put(i);
+  settle(W, 3);
+  const R = PHYS.clawRig(W, { cabinet: C, type, grip: 1, rand: U.rng(seed + 5) });
+  const run = (n) => { for (let i = 0; i < n; i++) { R.update(DT); W.step(DT); } };
+  for (let g = 0; g < grabs; g++) {
+    R.setTarget(g % 4 === 0 ? 400 + rng() * 70 : rng() * 400);
+    run(90);
+    R.drop();
+    for (let i = 0; i < 2000 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); }
+    for (const b of items(W)) if (C.inChute(b)) { W.remove(b); put(g); }
+    run(4 * 60);
+    for (const b of items(W)) {
+      const out = b.box.x0 < -4 || b.box.x1 > C.bounds.w + 4 || b.y < -60 || b.y > C.bounds.trayY + 1;
+      const hang = !b.sl && !C.inChute(b) && Math.hypot(b.vx, b.vy) < 5 && b.box.y1 < C.bounds.h - 8 && !W.contactsOf(b).some(c => c.ny > 0.25);   // awake, still, off the floor, nothing under it
+      if (out || hang) bad.push(`${type} seed ${seed} grab ${g}: ${out ? 'outside' : 'awake in the air'} at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+    }
+  }
+  return bad;
+}
+
+h.test('stuck prize: every claw type, seeded drops, never leaves a prize outside the glass or hanging', () => {
+  for (const t of TYPES) {
+    for (const seed of [1, 2]) {
+      const bad = stressDrops(t, seed, 20);
+      h.eq(bad.length, 0, `${t} seed ${seed}: no stranded prizes ${bad.slice(0, 2).join(' | ')}`);
+    }
+  }
+});
+
+h.test('stuck prize: the Magnet Crane stress that jammed a sword in the wall is clean', () => {
+  const bad = stressDrops('magnet', 1, 45);
+  h.eq(bad.length, 0, 'magnet seed 1, 45 grabs ' + bad.slice(0, 2).join(' | '));
+});
+
+h.test('strandWatch: back in over the bin, nudged, then set back; behaving bodies are never touched', () => {
+  const { W, C } = mkWorld();
+  const calm = spawn(W, ITEM.ball({}), 150, 300);
+  settle(W, 2);
+  const y0 = calm.y;
+  // out of the glass (a bad teleport) and not a number
+  const lost = spawn(W, ITEM.ball({}), 700, -400), nan = spawn(W, ITEM.ball({}), 100, 100);
+  nan.x = NaN;
+  const moved = PHYS.strandWatch(W, DT);
+  h.ok(moved.indexOf(lost) >= 0 && moved.indexOf(nan) >= 0, 'bodies outside the glass and NaN bodies are caught at once');
+  h.ok(lost.x > 0 && lost.x < C.bounds.chuteX && lost.y < 100, 'the lost one is set back in over the bin');
+  h.ok(Number.isFinite(nan.x) && nan.x > 0 && nan.x < C.bounds.chuteX, 'the NaN one is set back in over the bin');
+  settle(W, 3);
+  h.eq(calm.y, y0, 'a resting body is never moved');
+  // a body kept in the air by something else (zero speed, nothing under it) is nudged after 3 s, then set back
+  const W2 = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 }); PHYS.cabinet(W2, { w: 480, h: 390, chuteW: 64, dividerH: 0.45 });
+  const hov = spawn(W2, ITEM.ball({}), 200, 120);
+  W2.addPost(() => { hov.x = 200; hov.y = 120; hov.vx = 0; hov.vy = 0; hov.sl = false; });   // held still, over nothing
+  let n1 = 0, n2 = 0, yBack = 999;
+  for (let i = 1; i <= 12 * 60; i++) {
+    W2.step(DT);
+    const m = PHYS.strandWatch(W2, DT);
+    if (m.length) { if (!n1) n1 = i; else if (!n2) { n2 = i; yBack = hov.y; } }
+  }
+  h.ok(n1 > 2.5 * 60 && n1 < 4 * 60, `nudged after about 3 s (frame ${n1})`);
+  h.ok(n2 > n1 + 2.5 * 60 && yBack <= 40, `still pinned: set back in over the bin (frame ${n2}, y ${yBack.toFixed(0)})`);
+  // skip() exempts a deliberate hover
+  const W3 = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 }); PHYS.cabinet(W3, { w: 480, h: 390, chuteW: 64, dividerH: 0.45 });
+  const hov3 = spawn(W3, ITEM.ball({}), 200, 120);
+  W3.addPost(() => { hov3.x = 200; hov3.y = 120; hov3.vx = 0; hov3.vy = 0; hov3.sl = false; });
+  let hit = 0;
+  for (let i = 0; i < 8 * 60; i++) { W3.step(DT); hit += PHYS.strandWatch(W3, DT, { skip: (b) => b === hov3 }).length; }
+  h.eq(hit, 0, 'a body the game holds up on purpose is left alone');
+});
+
 h.done();

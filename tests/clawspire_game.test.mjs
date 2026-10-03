@@ -12507,4 +12507,35 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
   });
 }
 
+h.test('stuck prize (round 23): a prize left hanging over nothing is freed in a fight; the magnetic lid\'s hang is left alone', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 23);
+  Gt.startFight(['rat'], 'normal');
+  stepFor(Gt, 3);
+  const items = Gt.fs.items;
+  h.ok(items.length >= 2, 'there are prizes in the cabinet');
+  const stuck = items[0], hung = items[1];
+  const W = Gt.fs.world;
+  // spy on the net: who it moved, and when
+  const real = T.PHYS.strandWatch, log = [];
+  let frame = 0;
+  T.PHYS.strandWatch = (w, dt, o) => { const m = real(w, dt, o); for (const b of m) log.push({ b, frame }); return m; };
+  // one prize pinned at rail height by the right wall (what the jammed sword looked like); another held up by the magnetic lid
+  const pin = () => { stuck.x = 470; stuck.y = 59; stuck.vx = 0; stuck.vy = 0; stuck.sl = false; };
+  W.addPost(pin);
+  hung.data.bestHang = 1;
+  const hungPin = () => { hung.x = 120; hung.y = 100; hung.vx = 0; hung.vy = 0; hung.sl = false; };
+  W.addPost(hungPin);
+  for (frame = 0; frame < 9 * 60; frame++) Gt.update(DT);
+  T.PHYS.strandWatch = real;
+  const first = log.find(e => e.b === stuck);
+  h.ok(first && first.frame > 2 * 60 && first.frame < 5 * 60, `the pinned prize is nudged loose after about 3 s (frame ${first && first.frame})`);
+  h.ok(!log.some(e => e.b === hung), 'the lid-held prize was never touched by the net');
+  W.removePost(pin); W.removePost(hungPin);
+  hung.data.bestHang = null;
+  stepFor(Gt, 4);
+  h.ok(stuck.y > 150, `and a freed prize falls back into the bin (y ${stuck.y.toFixed(0)})`);
+});
+
 h.done();
