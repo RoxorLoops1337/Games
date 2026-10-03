@@ -12483,7 +12483,7 @@ const GAME = (() => {
     goldTag.id = 'shopGold';
     if (sold) goldTag.classList.add('dip');
     top.appendChild(goldTag);
-    top.appendChild(h('span', 'sub', 'Tap to buy. Sell from your bin for a third of the price.'));
+    top.appendChild(h('span', 'sub', 'Tap to buy.'));
     b.appendChild(top);
     // the prize counter's sign sits up top; its button is registered last
     // (after Leave) so the shop's own buttons keep their indices
@@ -12537,11 +12537,7 @@ const GAME = (() => {
     }, 'sm');
     if (shop.removeUsed) rm.disabled = true;
     row.appendChild(rm);
-    row.appendChild(btn('Sell an item', () => run.bin.length <= BIN_FLOOR ? toast('The bin is as light as it gets.') : openBin({ mode: 'sell', title: 'Sell which item?', back: () => showShop(shop), onPick: (inst) => {
-      const p = Math.max(5, Math.round((itemDef(inst.id).cost || 30) / 3)) * (inst.plus === 2 ? 2 : 1);   // (round 21: a +2 ate three upgraded copies; it sells for double)
-      removeInst(inst); addGold(p); snd('coin'); toast(`Sold for ${p} gold.`); feelKeeperSay('sell'); showShop(shop);
-      if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
-    } }), 'sm'));
+    // (round 23) no 'Sell an item': selling thinned the bin for gold, which was too strong; only the paid Remove is left
     b.appendChild(row);
     const leave = btn('Leave', () => toMap(), 'ghost');   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
     b.appendChild(leave);

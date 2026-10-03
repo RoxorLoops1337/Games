@@ -1015,7 +1015,7 @@ blight) and the tinker gnome flicks burn.
   hit for 4-8. Act 2 ×1.7, act 3 ×2.6. Elites ×2.2 hp of a normal; bosses 90/170/280 hp.
 - A turn is 3 grabs; a good grab lands 1 item, a great one 2. Average item ≈ 6 dmg or 5 block.
   A typical act 1 fight lasts 4-6 turns. Whole run ≈ 25-35 minutes.
-- Gold: 10-25 per fight, items 40-120, relics 120-220, remove 60. Claw upgrade costs (50-160) are kept in data but nothing sells them: shops stock items, a relic, remove and sell; rest stops heal 30% or upgrade an item; the act transition after a boss (acts 1 and 2) shows "The Prize Master's spare parts" (1 of 3 unmaxed claw upgrades) before the boss relic; towers keep their claw bonus.
+- Gold: 10-25 per fight, items 40-120, relics 120-220, remove 60. Claw upgrade costs (50-160) are kept in data but nothing sells them: shops stock items, a relic and a paid remove (selling items back was removed in round 23: it thinned the bin for gold, too strong); rest stops heal 30% or upgrade an item; the act transition after a boss (acts 1 and 2) shows "The Prize Master's spare parts" (1 of 3 unmaxed claw upgrades) before the boss relic; towers keep their claw bonus.
 - Bulbs: 10 at run start, +2 from bulb boxes, +2 from towers, +2 from elites (fights 50%). Vision lights rings for free, towers light radius 4. ~35% of the map is revealed in a
   normal run; revealing more = more fights = more loot but more risk.
 
@@ -7326,7 +7326,7 @@ game.js's M2 block (after HOLO): `m2Stop(name, body)`, `m2Dock(body, els)`, `m2M
 - **Market stall** (`.m2-market`: shop, prize counter, trading post, arcade and pet shop frame): warm, a 2 px gold
   rule under the scene, gold price pills. The shop (`m2ShopTidy`): the gold pill and one line, ITEMS, the five
   items with the relic as the sixth card of the same grid, the reroll lever as one slim row (REROLL THE SHELF and
-  its price pill), then SERVICES: the prize counter and the Compactor as two small tiles with Remove and Sell
+  its price pill), then SERVICES: the prize counter and the Compactor as two small tiles with Remove (selling was removed in round 23)
   under them, and Leave in the dock. The trade offers are one card style (the kind's colour is its label and the
   top stripe); the in-card Trade buttons are gold secondaries, not three glowing primaries. The pet shop's Adopt
   buttons the same.
