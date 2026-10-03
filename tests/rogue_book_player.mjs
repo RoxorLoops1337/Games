@@ -306,9 +306,12 @@ export function makePlayer(g, cfg = {}) {
     if (takeIt && !state.rwRelic) { state.rwRelic = true; stats.relicsTaken = (stats.relicsTaken || 0) + 1; await click(takeIt, 500); return note('reward take relic'); }
     const peds = live('.rw-ped').filter((e) => !isOff(e));
     if (peds.length && !state.rwRelic) { state.rwRelic = true; stats.relicsTaken = (stats.relicsTaken || 0) + 1; await click(peds[state.pedIdx = ((state.pedIdx | 0) + 1) % peds.length], 500); return note('reward boss relic'); }
-    const cards = live('.c-reward:not(.back)');
+    // three or four offers are dealt as `.c-reward` cards; a reward with 5 or more (a relic that widens the choice) deals the deck-sized `.c-deck` card instead,
+    // all inside `.rw-cards`, so that container is the selector. The cards are ignored until dealt and flipped (the tick above covers that)
+    const cards = live('.rw-cards .card:not(.back)');
     if (cards.length && !state.rwCard) { state.rwCard = true; await click(cards[(state.evPick >= 0 ? 0 : cards.length - 1) % cards.length], 250); return note('reward pick card'); }
-    const cont = byLabel(/^(continue|take and continue|next|claim)/i);
+    // "Skip card" is the way out of a reward whose cards were all passed over or none could be picked
+    const cont = byLabel(/^(continue|take and continue|next|claim|skip card)/i);
     await click(cont || btns().find((b) => b.classList.contains('btn-primary')), 500);
     return note('reward continue');
   }

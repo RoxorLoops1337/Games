@@ -221,6 +221,8 @@ t.test('the report builder summarises runs with sane numbers', () => {
     t.ok(Number.isFinite(c.turnsMean) && Number.isFinite(c.fightsMedian), `${c.pair} t${c.trial}: finite turn and fight counts`);
   });
   t.ok(report.trials.length === 2 && report.trials[0].trial === 0 && report.trials[1].trial === 5, 'one row per trial');
+  t.ok(report.cells.every((c) => c.lost1 + c.lost2 + c.lost3 === c.runs - Math.round(c.win * c.runs / 100)), 'every lost run is counted in the chapter where it ended, per pair and trial');
+  t.ok(report.cells.every((c) => c.boss.length === 3 && c.boss.every((x) => x === null || (x >= 0 && x <= 100))), 'per pair and trial boss win rates are percentages');
   t.ok(report.cards.length >= 100 && report.relics.length === 66 && report.gems.length === 24, 'every card, relic and gem has a row');
   t.ok(report.cards.every((c) => Number.isFinite(c.lift) && Number.isFinite(c.pickRate)), 'card rows are finite');
   t.ok(report.enemies.length > 20 && report.enemies.every((e) => Number.isFinite(e.dmgPerTurn)), 'enemy rows are finite');
