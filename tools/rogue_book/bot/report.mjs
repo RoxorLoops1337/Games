@@ -85,7 +85,7 @@ export function buildReport(records, G, opts) {
   S.meta = {
     runs: good.length, errors: errors.length, errorSamples: errors.slice(0, 3).map((e) => e.error), timeouts: good.filter((r) => r.death && r.death.timeout).length, stalls: good.filter((r) => r.result === 'stall').length, caps: good.filter((r) => r.result === 'cap').length,
     pairs, trials, combat: Array.from(new Set(good.map((r) => r.combat))).join(','), style: Array.from(new Set(good.map((r) => r.style))).join(','),
-    effort: Array.from(new Set(good.map((r) => r.effort || 'normal'))).join(','), unlocked: Array.from(new Set(good.map((r) => r.unlocked || 'all'))).join(','), noise: Array.from(new Set(good.map((r) => r.draftNoise))).join(','), clairvoyant: good.some((r) => r.clairvoyant),
+    effort: Array.from(new Set(good.map((r) => r.effort || 'normal'))).join(','), unlocked: Array.from(new Set(good.map((r) => r.unlocked || 'all'))).join(','), noise: Array.from(new Set(good.map((r) => r.draftNoise))).join(','), pickBias: Array.from(new Set(good.map((r) => r.pickBias === undefined ? 0 : r.pickBias))).join(','), clairvoyant: good.some((r) => r.clairvoyant),
     note: 'chapter clear rates are cumulative shares of all runs unless marked conditional',
   };
 
@@ -104,6 +104,9 @@ export function buildReport(records, G, opts) {
       turnsMean: r1(mean(turns)), turnsMedian: median(turns), fightsMean: r1(mean(fights)), fightsMedian: median(fights),
       fightsWinMedian: median(winRuns.map((r) => r.fights.length)), turnsWinMedian: median(winRuns.map((r) => r.stats.turns)),
       scoreMean: r1(mean(rs.map((r) => r.score))), deckMean: r1(mean(rs.map((r) => r.deckSize))),
+      // where the lost runs ended (chapter of the fatal fight) and how each chapter's boss fared per attempt in this group of runs
+      lost1: rs.filter((r) => r.death && r.death.ch === 1).length, lost2: rs.filter((r) => r.death && r.death.ch === 2).length, lost3: rs.filter((r) => r.death && r.death.ch === 3).length,
+      boss: [1, 2, 3].map((ch) => { const bf = []; rs.forEach((r) => r.fights.forEach((f) => { if (f.tier === 'boss' && f.ch === ch) bf.push(f); })); return bf.length ? r0p(bf.filter((f) => f.result === 'win').length, bf.length) : null; }),
     };
   };
   const byCell = groupBy(good, (r) => r.pair + '|' + r.trial);
@@ -139,6 +142,19 @@ export function buildReport(records, G, opts) {
     const [ch, tier] = k.split(':');
     S.fights.push({ ch: +ch, tier, n: fs.length, turns: r1(mean(fs.map((f) => f.turns))), hpLost: r1(mean(fs.map((f) => f.hpLost))), hpLostPct: r1(mean(fs.map((f) => pct(f.hpLost, sum(f.max0))))), loseRate: r0p(fs.filter((f) => f.result !== 'win').length, fs.length), cardsPerTurn: r1(sum(fs.map((f) => f.cards)) / Math.max(1, sum(fs.map((f) => f.turns)))), swapsPerFight: r1(mean(fs.map((f) => f.swaps))), blockPerTurn: r1(sum(fs.map((f) => f.blockGained)) / Math.max(1, sum(fs.map((f) => f.turns)))), dmgPerTurn: r1(sum(fs.map((f) => f.dmgDealt)) / Math.max(1, sum(fs.map((f) => f.turns)))) });
   });
+
+  // ---------------------------------------------------------------- energy from relics (the +1 Energy boss relics stack: how often, and what it does to the bosses)
+  {
+    const eOf = (relics) => relics.reduce((a, id) => a + ((DATA.relics[id] && DATA.relics[id].mods && DATA.relics[id].mods.energy) || 0), 0);
+    S.energy = [1, 2, 3].map((ch) => {
+      const fs = fightsAll.filter((f) => f.ch === ch);
+      const cnt = new Map();
+      fs.forEach((f) => { const e = eOf(f.relics); cnt.set(e, (cnt.get(e) || 0) + 1); });
+      const bossF = fs.filter((f) => f.tier === 'boss');
+      const bossBy = Array.from(new Set(bossF.map((f) => eOf(f.relics)))).sort((a, b) => a - b).map((e) => { const x = bossF.filter((f) => eOf(f.relics) === e); return { extra: e, n: x.length, winRate: r0p(x.filter((f) => f.result === 'win').length, x.length) }; });
+      return { ch, fights: fs.length, share: Array.from(cnt.keys()).sort((a, b) => a - b).map((e) => ({ extra: e, pct: r0p(cnt.get(e), fs.length) })), bossBy };
+    });
+  }
 
   // ---------------------------------------------------------------- economy
   const sumField = (rs, f) => mean(rs.map(f));
@@ -471,9 +487,14 @@ function flagsOf(S, DATA) {
   }
   const winsTotal = S.cards.length ? 1 : 0;
   void winsTotal;
-  S.cards.filter((c) => c.winShareRatio > 2.5 && c.wonWith >= 6).forEach((c) => add('outlier', `card ${c.id} (${c.hero}, ${c.rarity}) pick-win share ${c.winShareRatio}x its rarity peers (wins with it: ${c.wonWith}, lift ${c.lift} +/- ${c.se})`));
-  S.relics.filter((c) => c.winShareRatio > 2.5 && c.runsWith >= 8).forEach((c) => add('outlier', `relic ${c.id} (${c.rarity}) pick-win share ${c.winShareRatio}x its rarity peers (runs ${c.runsWith})`));
-  S.gems.filter((c) => c.winShareRatio > 2.5 && c.runsWith >= 8).forEach((c) => add('outlier', `gem ${c.id} (${c.color} t${c.tier}) pick-win share ${c.winShareRatio}x its tier peers (runs ${c.runsWith})`));
+  // The spec metric (2.5x the average pick-win share) mostly measures how often the bot PICKS a card, so each hit also says whether the card is measurably
+  // strong (lift clearly above zero: a real power outlier) or merely popular with the bot (a value-model preference, not evidence of a broken card).
+  S.cards.filter((c) => c.winShareRatio > 2.5 && c.wonWith >= 6).forEach((c) => {
+    const strong = c.fights >= 100 && c.lift - 1.64 * c.se > 0.3;
+    add(strong ? 'outlier' : 'popular', `card ${c.id} (${c.hero}, ${c.rarity}) pick-win share ${c.winShareRatio}x its rarity peers (wins with it: ${c.wonWith}, picked ${c.pickRate}% of ${c.offered} offers, in ${c.presence}% of final decks, lift ${c.lift} +/- ${c.se} over ${c.fights} fights)${strong ? ': measurably strong' : ': popular, lift not clearly above zero'}`);
+  });
+  S.relics.filter((c) => c.winShareRatio > 2.5 && c.runsWith >= 8).forEach((c) => add(c.fights >= 100 && c.lift - 1.64 * c.se > 0.3 ? 'outlier' : 'popular', `relic ${c.id} (${c.rarity}) pick-win share ${c.winShareRatio}x its rarity peers (runs ${c.runsWith}, taken ${c.taken} of ${c.offered} offers, lift ${c.lift} +/- ${c.se})`));
+  S.gems.filter((c) => c.winShareRatio > 2.5 && c.runsWith >= 8).forEach((c) => add(c.fights >= 100 && c.lift - 1.64 * c.se > 0.3 ? 'outlier' : 'popular', `gem ${c.id} (${c.color} t${c.tier}) pick-win share ${c.winShareRatio}x its tier peers (runs ${c.runsWith}, lift ${c.lift} +/- ${c.se})`));
   S.cards.filter((c) => c.fights >= 150 && c.lift - 2.2 * c.se > 1.2).forEach((c) => add('outlier', `card ${c.id} (${c.hero}) saves ${c.lift}% party HP per fight (se ${c.se}, ${c.fights} fights): strongest tail`));
   S.cards.filter((c) => c.fights >= 150 && c.lift + 2.2 * c.se < -1.0).forEach((c) => add('weak', `card ${c.id} (${c.hero}) costs ${-c.lift}% party HP per fight when held (se ${c.se}, ${c.fights} fights)`));
   S.enemies.filter((e) => e.verdict === 'deadly').forEach((e) => add('enemy', `enemy ${e.id} (ch${e.ch} ${e.tier}) deals ${e.dptRatio}x the HP per turn of its tier peers and wipes ${e.deathPer100} per 100 appearances`));
@@ -504,11 +525,21 @@ export function sections(S, opts) {
   sec('Headline (all pairs)', ['trial', 'runs', 'ch1 clear %', 'ch2 clear %', 'full clear %', '+/- 95%', 'cond ch2', 'cond ch3', 'turns med', 'fights med', 'fights med (wins)', 'deck', 'score'],
     S.trials.map((t) => [t.trial, t.runs, t.clear1, t.clear2, t.win, t.winCi, t.cond2, t.cond3, t.turnsMedian, t.fightsMedian, t.fightsWinMedian, t.deckMean, t.scoreMean]),
     'ch1/ch2 clear are cumulative shares of all runs; cond = share of runs that reached the chapter and cleared it. Targets at trial 0: ch1 85-97, ch2 60-80, full 15-35.');
-  sec('By hero pair and trial', ['pair', 'trial', 'runs', 'ch1 clear %', 'ch2 clear %', 'ch3 clear = full %', '+/- 95%', 'reach ch2 %', 'reach ch3 %', 'cond ch2 %', 'cond ch3 %', 'turns avg', 'turns med', 'fights avg', 'fights med', 'deck'],
-    S.cells.map((c) => [c.pair, c.trial, c.runs, c.clear1, c.clear2, c.win, c.winCi, c.reach2, c.reach3, c.cond2, c.cond3, c.turnsMean, c.turnsMedian, c.fightsMean, c.fightsMedian, c.deckMean]),
+  sec('By hero pair and trial', ['pair', 'trial', 'runs', 'ch1 clear %', 'ch2 clear %', 'ch3 clear = full %', '+/- 95%', 'reach ch2 %', 'reach ch3 %', 'cond ch2 %', 'cond ch3 %', 'lost in ch1 / ch2 / ch3', 'boss win % ch1 / ch2 / ch3', 'turns avg', 'turns med', 'fights avg', 'fights med', 'deck'],
+    S.cells.map((c) => [c.pair, c.trial, c.runs, c.clear1, c.clear2, c.win, c.winCi, c.reach2, c.reach3, c.cond2, c.cond3, `${c.lost1} / ${c.lost2} / ${c.lost3}`, c.boss.map((x) => (x === null ? '-' : x)).join(' / '), c.turnsMean, c.turnsMedian, c.fightsMean, c.fightsMedian, c.deckMean]),
     'reach chN = share of all runs that got to chapter N (reach ch2 = ch1 clear); cond chN = share of the runs that reached chapter N and cleared it; reach ch1 is 100.');
   sec('By hero (runs containing the hero)', ['hero', 'runs', 'ch1 %', 'ch2 %', 'full %'], S.heroes.map((h) => [h.hero, h.runs, h.clear1, h.clear2, h.win]));
   sec('Boss fights', ['boss', 'attempts', 'win %', '+/-', 'avg turns', 'HP lost % of max'], S.bosses.map((b) => [b.id, b.attempts, b.winRate, b.ci, b.turns, b.hpLostPct]));
+  if (S.energy) {
+    const rows = [];
+    S.energy.forEach((c) => { rows.push([c.ch, c.fights, c.share.map((x) => `+${x.extra}: ${x.pct}%`).join('  '), c.bossBy.map((b) => `+${b.extra}: ${b.winRate}% of ${b.n}`).join('  ')]); });
+    sec('Energy from relics: share of fights by extra Energy, and the chapter boss win rate by extra Energy', ['ch', 'fights', 'share of fights', 'boss win rate (extra Energy: win % of n)'], rows, 'Extra Energy is the sum of the Energy mods of the relics held in the fight (base 3).');
+  }
+  {
+    const br = S.relics.filter((r) => r.rarity === 'boss');
+    if (br.length) sec('Boss relics: offers, takes and measured lift', ['relic', 'offered', 'taken', 'take rate %', 'in final decks %', 'lift', 'se', 'fights held', 'win % with'], br.map((r) => [r.id, r.offered, r.taken, r.offered ? r0p(r.taken, r.offered) : 0, r.presence, r.lift, r.se, r.fights, r.winRateWith]),
+      'A relic that is offered often and never taken is dominated by its alternatives (for the bot, at least).');
+  }
   sec('Fights by chapter and tier', ['ch', 'tier', 'n', 'avg turns', 'HP lost', 'HP lost % of max', 'lose %', 'cards/turn', 'dmg/turn', 'block/turn', 'swaps/fight'], S.fights.map((f) => [f.ch, f.tier, f.n, f.turns, f.hpLost, f.hpLostPct, f.loseRate, f.cardsPerTurn, f.dmgPerTurn, f.blockPerTurn, f.swapsPerFight]));
   sec('Deaths by enemy (the enemy that dealt the most HP damage in the losing fight)', ['enemy', 'deaths', '% of deaths'], S.deaths.byEnemy.slice(0, 15).map((d) => [d.key, d.n, d.pct]));
   sec('Deaths by chapter and tier', ['where', 'deaths', '% of deaths'], S.deaths.byTier.map((d) => [d.key, d.n, d.pct]));
@@ -555,21 +586,47 @@ export function sections(S, opts) {
 }
 const DATA_HEROES = ['hanae', 'kuro', 'suzu', 'raiga'];
 
+// Search bot (S, recsA) versus COMBAT.greedyPolicy (S2, recsB) on the same seeds: only the combat player differs. Sections in the same shape as `sections`.
+export function versusSections(S, S2, recsA, recsB) {
+  const out = [];
+  const sec = (title, headers, rows, note) => out.push({ title, headers, rows, note });
+  const d = (a, b) => (a - b > 0 ? '+' : '') + r1(a - b);
+  sec('Search bot versus COMBAT.greedyPolicy: headline by trial', ['trial', 'runs', 'full % (search)', 'full % (greedy)', 'difference', 'ch1 % s/g', 'ch2 % s/g', 'turns med s/g', 'score s/g'],
+    S.trials.map((t) => { const g = S2.trials.find((x) => x.trial === t.trial); return g ? [t.trial, t.runs + '/' + g.runs, t.win, g.win, d(t.win, g.win), t.clear1 + '/' + g.clear1, t.clear2 + '/' + g.clear2, t.turnsMedian + '/' + g.turnsMedian, t.scoreMean + '/' + g.scoreMean] : [t.trial, t.runs + '/0', t.win, '', '', '', '', '', '']; }),
+    'Same pairs, trials and seeds, same map, draft, shop and camp policies: only the combat player differs.');
+  sec('Search bot versus COMBAT.greedyPolicy: by hero pair', ['pair', 'trial', 'runs s/g', 'full % (search)', 'full % (greedy)', 'difference', 'ch2 % s/g'],
+    S.cells.map((c) => { const g = S2.cells.find((x) => x.pair === c.pair && x.trial === c.trial); return g ? [c.pair, c.trial, c.runs + '/' + g.runs, c.win, g.win, d(c.win, g.win), c.clear2 + '/' + g.clear2] : [c.pair, c.trial, c.runs + '/0', c.win, '', '', '']; }));
+  if (recsA && recsB) {
+    const key = (r) => r.pair + '|' + r.trial + '|' + r.seed;
+    const mb = new Map(recsB.filter((r) => r && r.result !== 'error').map((r) => [key(r), r]));
+    let n = 0, both = 0, onlyA = 0, onlyB = 0, neither = 0;
+    recsA.filter((r) => r && r.result !== 'error').forEach((r) => { const g = mb.get(key(r)); if (!g) return; n += 1; const a = r.result === 'win', b = g.result === 'win'; if (a && b) both += 1; else if (a) onlyA += 1; else if (b) onlyB += 1; else neither += 1; });
+    sec('Paired outcomes (the same seed played by both)', ['pairs', 'both win', 'only search wins', 'only greedy wins', 'neither wins'], [[n, both, onlyA, onlyB, neither]],
+      'Seeds share the map, the shops and the fight seeds, but the runs diverge once the fights differ, so this is a paired comparison and not a replay.');
+  }
+  const gf = new Map(S2.fights.map((f) => [f.ch + ':' + f.tier, f]));
+  sec('Search bot versus COMBAT.greedyPolicy: fights by chapter and tier', ['ch', 'tier', 'n s/g', 'HP lost % of max (search)', 'HP lost % of max (greedy)', 'change %', 'turns s/g', 'lose % s/g'],
+    S.fights.map((f) => { const g = gf.get(f.ch + ':' + f.tier); if (!g) return [f.ch, f.tier, f.n + '/0', f.hpLostPct, '', '', '', '']; return [f.ch, f.tier, f.n + '/' + g.n, f.hpLostPct, g.hpLostPct, g.hpLostPct ? Math.round(100 * (f.hpLostPct - g.hpLostPct) / g.hpLostPct) : '', f.turns + '/' + g.turns, f.loseRate + '/' + g.loseRate]; }));
+  return out;
+}
+
 export function renderText(S, opts) {
   const parts = [];
-  parts.push(`INKWOVEN balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' effort ' + S.meta.effort + (S.meta.clairvoyant ? ' clairvoyant' : ' fair')}; style ${S.meta.style}; unlocked ${S.meta.unlocked}; draft noise ${S.meta.noise})`);
+  parts.push(`INKWOVEN balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' effort ' + S.meta.effort + (S.meta.clairvoyant ? ' clairvoyant' : ' fair')}; style ${S.meta.style}; unlocked ${S.meta.unlocked}; draft noise ${S.meta.noise}; pick bias ${S.meta.pickBias})`);
   if (S.meta.errors) parts.push(`ERRORS: ${S.meta.errors}\n${S.meta.errorSamples.join('\n')}`);
   if (S.meta.stalls || S.meta.caps || S.meta.timeouts) parts.push(`stalled runs ${S.meta.stalls}, capped runs ${S.meta.caps}, fights that hit the 60 turn cap ${S.meta.timeouts}`);
-  sections(S, opts).forEach((s) => { parts.push(`\n== ${s.title}\n${s.note ? s.note + '\n' : ''}${table(s.headers, s.rows)}`); });
+  const all = sections(S, opts).concat(opts && opts.versus ? versusSections(S, opts.versus, opts.versusRecsA, opts.versusRecsB) : []);
+  all.forEach((s) => { parts.push(`\n== ${s.title}\n${s.note ? s.note + '\n' : ''}${table(s.headers, s.rows)}`); });
   parts.push('\n== Flags\n' + (S.flags.length ? S.flags.map((f) => `[${f.sev}] ${f.msg}`).join('\n') : 'none'));
   return parts.join('\n');
 }
 
 export function renderMarkdown(S, opts) {
   const parts = [];
-  parts.push(`# INKWOVEN balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' (effort ' + S.meta.effort + (S.meta.clairvoyant ? ', clairvoyant' : ', fair') + ')'}. Style: ${S.meta.style}. Unlocked: ${S.meta.unlocked}. Draft noise: ${S.meta.noise}.`);
+  parts.push(`# INKWOVEN balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' (effort ' + S.meta.effort + (S.meta.clairvoyant ? ', clairvoyant' : ', fair') + ')'}. Style: ${S.meta.style}. Unlocked: ${S.meta.unlocked}. Draft noise: ${S.meta.noise}. Pick bias: ${S.meta.pickBias}.`);
   if (S.meta.errors) parts.push(`**Errors: ${S.meta.errors}**\n\n\`\`\`\n${S.meta.errorSamples.join('\n')}\n\`\`\``);
-  sections(S, opts).forEach((s) => { parts.push(`## ${s.title}\n\n${s.note ? s.note + '\n\n' : ''}${mdTable(s.headers, s.rows)}`); });
+  const all = sections(S, opts).concat(opts && opts.versus ? versusSections(S, opts.versus, opts.versusRecsA, opts.versusRecsB) : []);
+  all.forEach((s) => { parts.push(`## ${s.title}\n\n${s.note ? s.note + '\n\n' : ''}${mdTable(s.headers, s.rows)}`); });
   parts.push('## Flags\n\n' + (S.flags.length ? S.flags.map((f) => `- [${f.sev}] ${f.msg}`).join('\n') : 'none'));
   return parts.join('\n\n');
 }

@@ -937,7 +937,7 @@ UI.toStage(clientX, clientY) -> {x,y}    UI.announce(text)    UI.applySettings()
 with `--cw`; screens choose a size name and never a pixel size. Sockets, rarity ornament and the hero medallion are DISPLAY ONLY on every size; socketing happens in overlay `deck {mode:'socket'}` through 56 px slot buttons under
 the big card.
 
-**Combat card interaction** (pointer events only; cards have `touch-action:none`). Tap a card: select (it rises so its top edge is at y 420, big preview above the hand via `UI.tip.card`, `SCENE.setTargetable(C.legalTargets(uid))`). A no-target card plays on a
+**Combat card interaction** (pointer events only; hand cards have `touch-action:none`, every other card `pan-y` so a swipe that starts on a card still scrolls a list of cards). Tap a card: select (it rises so its top edge is at y 420, big preview above the hand via `UI.tip.card`, `SCENE.setTargetable(C.legalTargets(uid))`). A no-target card plays on a
 second tap or when dragged above y=430. A target card plays when an enemy is tapped; if `legalTargets` has exactly one entry the first tap plays. Tap empty space or Esc deselects. Drag: `pointerdown` then more than 8 px starts a drag
 (`setPointerCapture`, the hand re-fans); targeting cards call `SCENE.aim(cardCentre, pointer, hoveredId)` and releasing on a legal target plays, elsewhere returns. Illegal (`canPlay.ok` false): `UI.shake(card)`, a toast per reason
 (energy "Not enough Energy", down "<Hero> is down", stunned, unplayable, pending, phase) and sfx `ui_error`. `SCENE.hitTest` hits `max(actor bounds, a 96x96 box at the body centre)`. `UI.tip.attach` opens on `pointerenter` for
@@ -1016,12 +1016,16 @@ DOM overlays are repositioned once per frame after `SCENE.update`.
 ### 5.10 `GAME` (`main.js`)
 
 ```
-GAME.boot()  GAME.state = { R:null }
-GAME.newRun({heroes, trial, seed, daily})  GAME.continueRun()  GAME.abandon()  GAME.toTitle()
-GAME.enterNode(node)       // routes a RUN node to its screen
+GAME.boot()  GAME.state = { R, pendingChapter, lastCombat, ended, ... }  GAME.params (the parsed URL params and the opts a ?goto screen receives)
+GAME.newRun({heroes, trial, seed, daily})  GAME.continueRun()  GAME.abandon()  GAME.toTitle()  GAME.save() -> bool  GAME.defeat()  GAME.victory()
+GAME.enterNode(node)       // routes a RUN node to its screen; Instants {kind:'well'|'brush'} only toast and save (a fable tile with no eligible event arrives as a well with its own `toast`)
 GAME.nodeDone()            // called by a screen when finished: RUN.finishNode, META.saveRun, chapter flow, back to the map
 GAME.debug = { ... }       // below
 ```
+
+`GAME.defeat()` and `GAME.victory()` end the run once (META.recordRun, META.clearRun, then the gameOver or victory screen; a second call is a no-op). A lost fight records the run at once when the combat
+screen emits `combat:end {result:'lose'}` and routes to gameOver after 1.6 s unless the screen already did. Try Again on the game over page calls `GAME.newRun` with the same heroes and trial; with `?seed=N` in the URL
+that is the same seed again (a fixed seed is a fixed tale), without it a fresh clock seed.
 
 **Boot order** (`GAME.boot`): 1 `META.load()`; 2 `UI.init()`; 3 `UI.applySettings()`; 4 parse URL params from `window.location.search`; 5 GAME subscribes to `META.bus` `'achievement'` and `'unlock'` -> `UI.toast(text, 'achievement')` plus
 `AUDIO.sfx` (only GAME subscribes); 6 start the single rAF loop; 7 `UI.go(goto || 'title')`; 8 `window.__booted = true`, add class `out` to `#boot` and remove it after 400 ms. `main.js` ends with `if (!window.__NO_AUTOBOOT) GAME.boot();`
@@ -1037,8 +1041,12 @@ GAME.debug.quickRun(opts) -> R  // build a run and go to the map
 GAME.debug.win() lose() setGold(n) addRelic(id) skipChapter()
 GAME.debug.freeze(on)           // stops the rAF loop
 GAME.debug.tick(ms, step=16)    // advances UI.frame (and SCENE gates) with a virtual clock in fixed steps and renders, so `GAME.debug.open('combat', {...}); GAME.debug.tick(1200)` replaces --wait and every run is identical
-GAME.debug.combat() -> {C, vm}  // plus .fire(evt) plays one synthetic engine event through SCENE, .play(handIndex, targetIndex) .endTurn() .swap() .setHp(who, hp) .setStatus(who, s, n) .pick(uids)
+GAME.debug.combat() -> {C, vm}  // plus .fire(evt) plays one synthetic engine event through SCENE, .play(handIndex, targetIndex) .endTurn() .swap() .setHp(who, hp) .setStatus(who, s, n) .setEnergy(n) .feed(events) .pick(uids) .win()
 ```
+
+`debug.win()` is a synthetic win: it marks the foes dead on the engine and feeds `death` and `end` events, but unlike a real last blow it leaves the heroes' Block and statuses on the engine, while the
+`end` event clears them in the screen's view model, so the combat screen's drift check (`[combat] the view model drifted from the engine`, a console warning) fires after it when a hero holds a status.
+That warning is a debug artefact; a fight won by playing cards must never raise it. Suites that must be warning-free leave each foe at 1 HP with `setHp` and win by hand.
 
 `open(screen, opts)` accepts (unknown keys ignored): common `heroes, seed, trial, gold, deck (card ids), relics, ink`; `combat {enemies, tier, chapter, hp:[a,b], hand:[cardIds], statuses:{unitId:{s:n}}, turn}`; `reward {source, gold, cards:[ids], relics:[ids],
 gems:[ids], brush}`; `shop|camp|forge|chest|gemcache {seed}`; `event {id}`; `map {chapter, painted:0..1, ink}`; `story {id}`; `chapterClear {chapter}`; `gameOver|victory {summary}`.
@@ -1086,6 +1094,10 @@ combat lose -> gameOver ;  every finished node -> META.saveRun ;  title shows Co
 5. UI owners: drive your screen with `GAME.debug.open(...)` and `GAME.debug.tick(...)` through `tools/rogue_book/shot.mjs` (steps support `mouse`, `tap`, `drag` in stage coordinates), look at the screenshots at 1280x720 and 844x390 (landscape phone),
    check the rotate panel at 390x844, and fix what is ugly. Screen owners also emit their `UI.bus` events, mark their `data-tut` anchors and give every interactive element a real button or `role=button` (5.8), and each screen gets one screenshot at `textScale` 1.3.
 6. Report: what you built, public API additions, deviations from this document (there should be almost none), known gaps.
+7. Integration suites (not per module): `tests/rogue_book_game.test.mjs` plays complete runs for several hero pairs, every fable and every choice, every shelf of the shop and the menus through REAL pointer, drag and key events on the
+   headless DOM (the UI-driven player in `tests/rogue_book_player.mjs`), on the virtual clock, and demands a page with no console error or warning, no `window.__errors` and no canvas issue (`RB_GAME_ONLY=pause,save` runs a part).
+   `tests/rogue_book_browser.test.mjs` is a short guided flow in REAL headless Chromium (playwright-core) with real mouse, touch and keys, plus a blank-canvas check; it is skipped with a clear message when no browser is installed
+   (`RB_BROWSER=1` turns that into a failure). A fight a suite must win without warnings is won by hand (see `GAME.debug.win` in 5.10).
 
 **Test loader contract** (`tests/rogue_book_lib.mjs`, owned by the tooling integrator; the header comment of that file is the record of every option and helper). What game code and suites may rely on: `boot({only, ...})`
 evaluates each script in ONE shared `vm` context, one file at a time, so a syntax error or top-level throw in a teammate's file never breaks a suite that did not ask for it: a broken file the suite named by exact name (or any file when

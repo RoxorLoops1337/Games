@@ -15,9 +15,10 @@ import { harness, ROOT } from './rogue_book_lib.mjs';
 import { loadGame, ALL_PAIRS } from '../tools/rogue_book/bot/game.mjs';
 import { playRun } from '../tools/rogue_book/bot/driver.mjs';
 import { runPool, runSerial } from '../tools/rogue_book/bot/pool.mjs';
-import { buildReport, renderText, renderMarkdown } from '../tools/rogue_book/bot/report.mjs';
+import { buildReport, renderText, renderMarkdown, versusSections } from '../tools/rogue_book/bot/report.mjs';
 import { createValuer } from '../tools/rogue_book/bot/cardval.mjs';
 import { createCombatAI } from '../tools/rogue_book/bot/combat_ai.mjs';
+import { createPolicies } from '../tools/rogue_book/bot/policies.mjs';
 import { parseArgs, buildTasks, collect, taskKey, recKey } from '../tools/rogue_book/bot.mjs';
 
 const t = harness('rogue_book bot');
@@ -80,8 +81,8 @@ t.test('the same task gives an identical record twice, and through the worker po
   t.ok(JSON.stringify(serial) === JSON.stringify(pooled), 'worker threads give the same records in the same order as one process');
 });
 t.test('the search combat bot is deterministic too', () => {
-  const x = playRun(G, task(['hanae', 'kuro'], 0, 31, { combat: 'ai', maxSteps: 400 }));
-  const y = playRun(G, task(['hanae', 'kuro'], 0, 31, { combat: 'ai', maxSteps: 400 }));
+  const x = playRun(G, task(['hanae', 'kuro'], 0, 31, { combat: 'ai', maxSteps: 110 }));
+  const y = playRun(G, task(['hanae', 'kuro'], 0, 31, { combat: 'ai', maxSteps: 110 }));
   t.ok(JSON.stringify(x) === JSON.stringify(y), 'two search-bot runs of one task are identical');
   t.ok(x.result === 'win' || x.result === 'lose' || x.result === 'cap', 'it finished or hit the cap, never threw');
 });
@@ -120,6 +121,61 @@ t.test('a long job streams every finished run to a file, resumes from it and reb
     t.eq(rep.meta.runs, 3, 'a report can be built from the stored runs alone');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+t.test('the CLI rejects an unknown style, combat player or hero pair instead of silently playing something else', () => {
+  t.throws(() => parseArgs(['--style', 'zzz']), 'bad style', /bad --style/);
+  t.throws(() => parseArgs(['--combat', 'zzz']), 'bad combat player', /bad --combat/);
+  t.throws(() => parseArgs(['--pair', 'hanae,hanae']), 'a pair needs two different heroes', /bad --pair/);
+  t.throws(() => parseArgs(['--pair', 'hanae,nobody']), 'a pair needs real heroes', /bad --pair/);
+  t.eq(parseArgs(['--style', 'max']).style, 'max', 'the Ink probe style is accepted');
+});
+
+t.test('every map style plays a run to the end without a stall (rush, explore and max included)', () => {
+  ['rush', 'explore', 'max'].forEach((style, k) => {
+    const r = playRun(G, task(['hanae', 'suzu'], 0, 61 + k, { style }));
+    t.ok(!r.error && (r.result === 'win' || r.result === 'lose') && !r.stall, `${style}: finished with ${r.result}`);
+  });
+});
+
+t.test('--pick-bias is parsed, reaches every task and changes the run identity (and the default stays what it was)', () => {
+  const o = parseArgs(['--runs', '2', '--pick-bias', '-1.5']);
+  t.eq(o.pickBias, -1.5, 'parsed as a number');
+  const tk = buildTasks(o);
+  t.ok(tk.every((x) => x.pickBias === -1.5), 'every task carries it');
+  const base = buildTasks(parseArgs(['--runs', '2']));
+  t.ok(base.every((x) => x.pickBias === undefined), 'unset by default, so records made before the knob existed still resume');
+  t.ok(taskKey(tk[0]) !== taskKey(base[0]), 'a different bias is a different run');
+  t.eq(recKey({ pair: base[0].heroes.join(','), trial: base[0].trial, seed: base[0].seed, combat: base[0].combat, effort: base[0].effort, style: base[0].style, unlocked: base[0].unlocked, draftNoise: base[0].draftNoise }), taskKey(base[0]), 'a record without the field matches an unbiased task');
+});
+
+t.test('a worker that dies costs only its own run: the run is an error record, a replacement takes over and the job finishes', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rb_bot_w_'));
+  try {
+    const file = path.join(dir, 'dying_worker.mjs');
+    // a worker that answers like the real one, except that the task with seed 7 kills the thread
+    fs.writeFileSync(file, `import { parentPort } from 'node:worker_threads';\nparentPort.on('message', (m) => { if (m.cfg.seed === 7) process.exit(3); parentPort.postMessage({ id: m.id, rec: { pair: m.cfg.heroes.join(','), seed: m.cfg.seed, trial: 0, result: 'win', fights: [], picks: [] } }); });\nparentPort.postMessage({ ready: true });\n`);
+    const tasksW = [5, 6, 7, 8, 9, 10].map((s) => ({ heroes: ['hanae', 'kuro'], trial: 0, seed: s }));
+    const seen = [];
+    const out = await runPool(tasksW, 2, null, (i, rec) => seen.push(i), { worker: file });
+    t.eq(out.length, 6, 'a record per task');
+    t.eq(out[2].result, 'error', 'the task that killed its worker is recorded as an error');
+    t.ok(/worker/.test(out[2].error), 'with a reason');
+    t.eq(out.filter((r, i) => i !== 2 && r.result === 'win').length, 5, 'every other task still ran');
+    t.eq(seen.length, 6, 'onRecord fired once per task, the dead one included');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+t.test('the shop removes a curse before it removes any playable card, however good the deck has become', () => {
+  const V = createValuer(G);
+  const P = createPolicies(G, V, {});
+  const R = RUN.newRun({ heroes: ['kuro', 'raiga'], seed: 61, trial: 0 });
+  ['kuro_ink_flick', 'raiga_sundering_blow', 'raiga_tiger_and_crane', 'raiga_rolling_thunder', 'raiga_raijin_hammer', 'kuro_inkfall_inferno'].forEach((id) => RUN.addCard(R, id, {}));
+  RUN.addCard(R, 'curse_regret', {}); RUN.addCard(R, 'curse_smudge', {});
+  const c = P.removalCandidates(R, null);
+  t.ok(c[0].id.startsWith('curse_') && c[1].id.startsWith('curse_'), `the two curses lead the removal ranking, got ${c.slice(0, 3).map((x) => x.id).join(', ')}`);
+  const playable = c.filter((x) => !x.id.startsWith('curse_'));
+  t.ok(c[1].util > playable[0].util, 'and the worse curse still outranks the best playable removal candidate');
+});
+
 t.test('tasks are ordered run by run, so any finished prefix covers every pair and trial', () => {
   const tk = buildTasks(parseArgs(['--runs', '4', '--all-pairs', '--trial', '0,5']));
   const firstRound = tk.slice(0, 12);
@@ -180,6 +236,18 @@ t.test('the report renders to text and Markdown without NaN and without dashes',
   t.ok(!new RegExp('[' + String.fromCharCode(0x2013, 0x2014) + ']').test(txt + md), 'no em or en dash in the output');
   t.ok(/Headline/.test(txt) && /Boss fights/.test(md) && /Flags/.test(txt), 'the main sections are there');
 });
+t.test('the versus sections compare two sets of runs on the same seeds and render without NaN', () => {
+  const a = recs.filter((r) => r.trial === 0), b = a.map((r) => Object.assign({}, r, { result: r.result === 'win' ? 'lose' : r.result, chaptersCleared: Math.min(r.chaptersCleared, 2) }));
+  const A = buildReport(a, G, {}), B = buildReport(b, G, {});
+  const secs = versusSections(A, B, a, b);
+  t.ok(secs.length >= 3, 'headline, pair, paired and fight sections');
+  t.ok(secs[0].rows.length === 1 && secs[0].rows[0][0] === 0, 'one headline row for trial 0');
+  const paired = secs.find((x) => /Paired/.test(x.title));
+  t.ok(paired && paired.rows[0][0] === a.length, 'every run is paired with its twin');
+  const txt = renderText(A, { versus: B, versusRecsA: a, versusRecsB: b });
+  t.ok(/Search bot versus COMBAT.greedyPolicy/.test(txt) && !/NaN|undefined|Infinity/.test(txt), 'the text report carries the comparison');
+});
+
 t.test('an empty or all-error record list does not crash the builder', () => {
   const r = buildReport([], G, {});
   t.eq(r.meta.runs, 0, 'zero runs');

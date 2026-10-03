@@ -14,13 +14,17 @@
 //   --jobs N            worker threads (default: number of CPUs, at most 8; 1 runs in this process)
 //   --combat ai|beam|greedy   the combat player: the rollout search bot (default), the older beam search, or COMBAT.greedyPolicy
 //   --compare           also play the same runs with COMBAT.greedyPolicy and print both headlines (how much better the bot is)
+//   --compare-from file  the same comparison from an existing --stream or --runs-out file of greedy runs (nothing is replayed): the greedy records
+//                       whose pair, trial and seed match a run of this report are used, so the two sets are paired by seed
 //   --effort fast|normal|deep   search effort of the combat bot (default normal: about 5 to 8 s of CPU a run on an idle core; fast about 3 s; greedy under 1 s)
-//   --style normal|rush|explore   map style: how much Ink is spent on extra hexes beyond the way to the boss (normal: about 12 per chapter and
-//                       about 27 fights a run, the design's 24 to 30; rush: 4, explore: 24)
+//   --style normal|rush|explore|max   map style: how much Ink is spent on extra hexes beyond the way to the boss (normal: about 12 per chapter and
+//                       about 27 fights a run, the design's 24 to 30; rush: 4, explore: 24, max: as many as Ink and HP allow, the Ink economy probe)
 //   --unlocked all|none  all content unlocked (default, measures every card) or a fresh profile (locked cards, relics and gems out of the pools)
 //   --clairvoyant       let the combat bot see the real order of its draw pile and the real random rolls (the old behaviour; default is a fair player
 //                       who plans on a re-shuffled draw pile and fresh random rolls, see bot/combat_ai.mjs)
 //   --noise X           draft exploration noise in card-net points (default 1.3; 0 is the pure scorer). It makes every card get sampled.
+//   --pick-bias X       shifts the bar a card (or a shop card) must clear to be taken, in card-net points (default 0; -1.5 takes many more cards, +1.5 keeps
+//                       the deck lean): the sensitivity knob for "does the bot leave power on the table by skipping cards"
 //   --diff old.json new.json   compare two --json outputs (headline, pairs, bosses, fights, flags) and exit: the before/after check for a tuning pass
 //   --benchmark runs.jsonl [--bench-n 40]   head to head, same decks and fights: refights the fights recorded in a --runs-out file at full HP with COMBAT.greedyPolicy and
 //                       with the search bot and prints HP lost and fights won per chapter and tier (how much better the bot plays)
@@ -54,10 +58,12 @@ export function parseArgs(argv) {
     else if (a === '--jobs') o.jobs = Math.max(1, parseInt(take(i++), 10));
     else if (a === '--combat') o.combat = take(i++);
     else if (a === '--compare') o.compare = true;
+    else if (a === '--compare-from') o.compareFrom = take(i++);
     else if (a === '--effort') o.effort = take(i++);
     else if (a === '--style') o.style = take(i++);
     else if (a === '--unlocked') o.unlocked = take(i++);
     else if (a === '--noise') o.noise = parseFloat(take(i++));
+    else if (a === '--pick-bias') o.pickBias = parseFloat(take(i++));
     else if (a === '--brief') o.brief = true;
     else if (a === '--benchmark') o.benchmark = take(i++);
     else if (a === '--bench-n') o.benchN = parseInt(take(i++), 10);
@@ -72,6 +78,9 @@ export function parseArgs(argv) {
     else throw new Error('unknown option ' + a + ' (try --help)');
   }
   if (!o.pairs.length) o.pairs = [['hanae', 'kuro']];
+  const oneOf = { style: ['normal', 'rush', 'explore', 'max'], combat: ['ai', 'beam', 'greedy'], effort: ['fast', 'normal', 'deep'], unlocked: ['all', 'none'] };
+  Object.keys(oneOf).forEach((k) => { if (oneOf[k].indexOf(o[k]) < 0) throw new Error(`bad --${k} ${o[k]} (one of ${oneOf[k].join(', ')})`); });
+  o.pairs.forEach((p) => { if (p.length !== 2 || p[0] === p[1] || p.some((h) => ALL_PAIRS.every((q) => q.indexOf(h) < 0))) throw new Error('bad --pair ' + p.join(',') + ' (two different heroes of hanae, kuro, suzu, raiga)'); });
   return o;
 }
 
@@ -81,15 +90,15 @@ export function buildTasks(o) {
   for (let i = 0; i < o.runs; i++) {
     o.pairs.forEach((pair, pi) => {
       o.trial.forEach((trial) => {
-        tasks.push({ heroes: pair, trial, seed: ((o.seed * 1000003 + i * 7919 + pi * 104729) >>> 0) || 1, unlocked: o.unlocked, style: o.style, combat: o.combat, effort: o.effort, draftNoise: o.noise, clairvoyant: !!o.clairvoyant });
+        tasks.push({ heroes: pair, trial, seed: ((o.seed * 1000003 + i * 7919 + pi * 104729) >>> 0) || 1, unlocked: o.unlocked, style: o.style, combat: o.combat, effort: o.effort, draftNoise: o.noise, pickBias: o.pickBias, clairvoyant: !!o.clairvoyant });
       });
     });
   }
   return tasks;
 }
 // identity of one run (what makes two records the same run): used by --resume and --from
-export function taskKey(t) { return [t.heroes.join(','), t.trial, t.seed, t.combat, t.effort, t.style, t.unlocked, t.draftNoise, t.clairvoyant ? 'c' : 'h'].join('|'); }
-export function recKey(r) { return [r.pair, r.trial, r.seed, r.combat, r.effort, r.style, r.unlocked, r.draftNoise, r.clairvoyant ? 'c' : 'h'].join('|'); }
+export function taskKey(t) { return [t.heroes.join(','), t.trial, t.seed, t.combat, t.effort, t.style, t.unlocked, t.draftNoise, t.pickBias, t.clairvoyant ? 'c' : 'h'].join('|'); }
+export function recKey(r) { return [r.pair, r.trial, r.seed, r.combat, r.effort, r.style, r.unlocked, r.draftNoise, r.pickBias, r.clairvoyant ? 'c' : 'h'].join('|'); }
 function readJsonl(file) {
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
@@ -114,7 +123,7 @@ export async function collect(o, log) {
       seen.add(k); recs.push(r);
     }));
     if (!recs.length) throw new Error('--from: no records found in ' + o.from.join(', '));
-    tasks = recs.map((r) => ({ heroes: r.pair.split(','), trial: r.trial, seed: r.seed, unlocked: r.unlocked, style: r.style, combat: r.combat, effort: r.effort, draftNoise: r.draftNoise, clairvoyant: !!r.clairvoyant }));
+    tasks = recs.map((r) => ({ heroes: r.pair.split(','), trial: r.trial, seed: r.seed, unlocked: r.unlocked, style: r.style, combat: r.combat, effort: r.effort, draftNoise: r.draftNoise, pickBias: r.pickBias, clairvoyant: !!r.clairvoyant }));
     return { recs, tasks };
   }
   const t0 = Date.now();
@@ -182,19 +191,20 @@ async function main() {
     const t2 = tasks.map((t) => Object.assign({}, t, { combat: 'greedy' }));
     G2 = await runPool(t2, o.jobs, progress);
     S2 = buildReport(G2, G, {});
+  } else if (o.compareFrom) {
+    const want = new Set(recs.map((r) => r.pair + '|' + r.trial + '|' + r.seed));
+    G2 = readJsonl(o.compareFrom).map((x) => x.rec || x).filter((r) => r && r.pair && r.result !== 'error' && r.combat === 'greedy' && want.has(r.pair + '|' + r.trial + '|' + r.seed));
+    if (!G2.length) throw new Error('--compare-from: no greedy run in ' + o.compareFrom + ' matches a run of this report (same pair, trial and seed)');
+    S2 = buildReport(G2, G, {});
   }
-  const text = renderText(S, { brief: o.brief });
+  const ropts = { brief: o.brief, versus: S2 || undefined, versusRecsA: S2 ? recs : undefined, versusRecsB: S2 ? G2 : undefined };
+  const text = renderText(S, ropts);
   if (o.brief) {
-    const keep = text.split('\n== ').filter((s, i) => i === 0 || /^(Headline|By hero pair|Boss|Flags)/.test(s));
+    const keep = text.split('\n== ').filter((s, i) => i === 0 || /^(Headline|By hero pair|Boss|Search bot versus|Flags)/.test(s));
     console.log(keep.join('\n== '));
   } else console.log(text);
-  if (S2) {
-    console.log('\n== Bot versus COMBAT.greedyPolicy on the same seeds (same map, draft and shop policies, only the combat player differs)');
-    const row = (name, T) => `${name.padEnd(10)} full ${String(T.win).padStart(5)}%   ch1 ${String(T.clear1).padStart(5)}%   ch2 ${String(T.clear2).padStart(5)}%   median turns ${T.turnsMedian}   avg score ${T.scoreMean}`;
-    S.trials.forEach((t) => { const g = S2.trials.find((x) => x.trial === t.trial); console.log(`trial ${t.trial}\n  ${row('search bot', t)}\n  ${row('greedy', g)}`); });
-  }
   if (o.json) fs.writeFileSync(o.json, JSON.stringify(S2 ? { options: o, summary: S, greedy: S2 } : { options: o, summary: S }, null, 1));
-  if (o.md) fs.writeFileSync(o.md, renderMarkdown(S, {}));
+  if (o.md) fs.writeFileSync(o.md, renderMarkdown(S, ropts));
   if (o.runsOut) fs.writeFileSync(o.runsOut, recs.map((r) => JSON.stringify(r)).join('\n'));
   if (S.meta.errors) process.exitCode = 1;
 }

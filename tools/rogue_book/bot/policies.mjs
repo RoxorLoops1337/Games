@@ -68,7 +68,7 @@ export function createPolicies(G, V, cfg) {
     const nets = deckNets(R, P);
     const m = mean(nets.map((x) => x.net));
     const n = nets.length;
-    const thr = m + 0.7 + 0.16 * Math.max(0, n - 15) + (opt.thrAdd || 0);
+    const thr = m + 0.7 + 0.16 * Math.max(0, n - 15) + (opt.thrAdd || 0) + (cfg.pickBias || 0);
     let best = null;
     asList(offers).forEach((id) => {
       const d = DATA.cards[id];
@@ -191,8 +191,12 @@ export function createPolicies(G, V, cfg) {
       if (filter && filter.type && (!d || d.type !== filter.type)) return;
       if (filter && filter.hero && (!d || d.hero !== filter.hero)) return;
       let util;
-      if (isJunk(c.id)) util = -(CURSE_VAL[c.id] || -12) * 1.0 + 4;
-      else {
+      if (isJunk(c.id)) {
+        // a curse is a dead card that also hurts: removing it beats removing ANY playable card. Priced as a card whose net is its (negative)
+        // curse value over the Energy scale, so it always ranks above the weakest starter however strong the rest of the deck has become.
+        const dead = -(CURSE_VAL[c.id] || -12);
+        util = 4.2 * Math.max(0, m) + dead + 1.5;
+      } else {
         const net = V.score(c, P).net;
         util = (m - net) * 4.2 - 2.5 - (c.up ? 3 : 0) - c.gems.filter(Boolean).length * 4;
         if (R.deck.length <= 12) util -= 8;
@@ -394,7 +398,7 @@ export function createPolicies(G, V, cfg) {
       const copies = R.deck.filter((c) => c.id === item.id).length;
       let net = s.net + archBonus(R, item.id) - (copies >= 2 ? 1.2 * (copies - 1) : 0) - (DATA.cards[item.id].type === 'power' && copies >= 1 ? 3 : 0);
       const n = R.deck.length;
-      const thr = m + 0.5 + 0.16 * Math.max(0, n - 15);
+      const thr = m + 0.5 + 0.16 * Math.max(0, n - 15) + (cfg.pickBias || 0);
       return Math.max(0, net - thr) * 8;
     }
     if (item.kind === 'relic') return Math.max(0, relicScore(R, item.id)) * 0.9;
@@ -438,9 +442,10 @@ export function createPolicies(G, V, cfg) {
         const ratio = u / it.price;
         if (u > 0 && ratio >= minRatio && (!best || ratio > best.ratio)) best = { kind: 'item', it, ratio, u };
       });
-      if (stock.removePrice <= R.gold && stock.removePrice <= 130 && R.deck.length > 13) {
+      if (stock.removePrice <= R.gold) {
         const c = removalCandidates(R, null)[0];
-        if (c && c.util > 0) {
+        const junkNow = !!c && isJunk(c.id);
+        if (c && c.util > 0 && (junkNow ? stock.removePrice <= 200 : stock.removePrice <= 130 && R.deck.length > 13)) {
           const ratio = c.util / stock.removePrice;
           if (ratio >= minRatio * 0.9 && (!best || ratio > best.ratio)) best = { kind: 'remove', c, ratio, u: c.util };
         }

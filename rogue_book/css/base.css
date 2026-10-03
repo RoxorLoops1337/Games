@@ -180,8 +180,9 @@ body.low .panel-wrap { filter: drop-shadow(0 6px 6px rgba(5, 3, 18, .6)); }
   --cw: 190px; --tf: 1; --nf: 1; --u: calc(var(--cw) / 100);
   --fc: var(--ink); --rim: linear-gradient(135deg, #7d6a45, #d8c79a 45%, #7d6a45); --face-bg: var(--grain), var(--fibre), linear-gradient(180deg, #fdf3da 0%, #f3e6c8 46%, #e6d3a3 100%);
   position: relative; flex: none; width: var(--cw); height: calc(var(--cw) * 1.4); font-size: calc(var(--cw) / 19); cursor: pointer; color: var(--ink);
-  font-family: var(--font-ui); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  font-family: var(--font-ui); touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;   /* pan-y: a swipe that starts ON a card still scrolls a list of cards (library, deck, picks) */
 }
+.cm-hand .card { touch-action: none; }   /* the combat hand is dragged, never scrolled (DESIGN 5.8) */
 .c-mini { --cw: 72px; } .c-deck { --cw: 168px; } .c-hand { --cw: 190px; } .c-reward { --cw: 240px; } .c-big { --cw: 300px; }
 .c-in { position: absolute; inset: 0; transition: transform .16s var(--ease-back), filter .16s; }
 .card:hover:not(.dis):not(.back):not(.in-tip) > .c-in { transform: translateY(calc(var(--u) * -3.4)); }
@@ -448,7 +449,7 @@ button.badge, .badge[role=button] { cursor: pointer; }
 .seg-b.on { color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold)); box-shadow: 0 2px 0 var(--gold-dd); }
 .p-paper .seg { background: rgba(20, 15, 46, .12); box-shadow: inset 0 0 0 1.5px rgba(20, 15, 46, .35); } .p-paper .seg-b { color: var(--ink); } .p-paper .seg-b.on { color: var(--white); background: linear-gradient(180deg, #ff6b5e, var(--vermilion)); box-shadow: 0 2px 0 var(--verm-dd); }
 .toggle { position: relative; width: 66px; height: 34px; padding: 0; min-width: 66px; min-height: 34px; border: 0; border-radius: 99px; cursor: pointer; background: rgba(20, 15, 46, .75); box-shadow: inset 0 0 0 2px rgba(20, 15, 46, .9), inset 0 2px 4px rgba(0, 0, 0, .6); transition: background .18s; }
-.toggle::before { content: ""; position: absolute; inset: -6px -4px; }
+.toggle::before { content: ""; position: absolute; inset: calc((34px - max(34px, var(--hit))) / 2) calc((66px - max(66px, var(--hit))) / 2); }   /* the invisible hit area grows to --hit on the real screen */
 .toggle .knob { position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 30% 22% 30% 22%; background: radial-gradient(circle at 32% 26%, #fff2d0, var(--paper2)); box-shadow: 0 2px 4px rgba(0, 0, 0, .55); transition: transform .2s var(--ease-back); }
 .toggle.on { background: linear-gradient(180deg, #ff6b5e, var(--vermilion)); } .toggle.on .knob { transform: translateX(32px); }
 .slider { display: flex; align-items: center; gap: 12px; min-width: 240px; pointer-events: none; }

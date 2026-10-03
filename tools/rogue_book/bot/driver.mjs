@@ -1,7 +1,7 @@
 // Inkwoven balance bot: the run driver. playRun() plays ONE complete run through the real RUN / COMBAT / MAP APIs and returns a
 // plain-JSON record of everything the report needs (fights, picks, deaths, economy, final deck). Deterministic for a seed.
 //
-//   playRun(G, { heroes:[a,b], trial:0, seed:1, unlocked:'all'|'none', style:'normal'|'rush'|'explore', combat:'ai'|'greedy', draftNoise, maxSteps })
+//   playRun(G, { heroes:[a,b], trial:0, seed:1, unlocked:'all'|'none', style:'normal'|'rush'|'explore'|'max', combat:'ai'|'greedy', draftNoise, maxSteps })
 //
 // The loop is the same one the real game runs: map step (visit, brush, paint, walk) -> node (combat, reward, shop, event, camp, forge,
 // chest, gem cache) -> finishNode -> chapterEnd. A global step cap and per-node stall guards make an infinite loop impossible; hitting
@@ -15,11 +15,13 @@ const STYLE = {
   rush: { fights: [3, 3, 3], extra: 4, eliteMin: 0.9, fightMin: 0.5, brushMin: 2.5 },
   normal: { fights: [6, 6, 6], extra: 12, eliteMin: 0.62, fightMin: 0.42, brushMin: 3.0 },
   explore: { fights: [9, 9, 9], extra: 24, eliteMin: 0.55, fightMin: 0.38, brushMin: 3.5 },
+  // max: paint and fight for as long as the Ink and the party's HP allow (the Ink economy probe: how far can one chapter's Ink go?)
+  max: { fights: [99, 99, 99], extra: 99, eliteMin: 0.5, fightMin: 0.35, brushMin: 3.5 },
 };
 
 const cache = new WeakMap();
 function toolsFor(G, cfg) {
-  const k = JSON.stringify([cfg.draftNoise, cfg.archetype, cfg.beam, cfg.depth, cfg.potential, cfg.effort, cfg.combat === 'beam', !!cfg.clairvoyant]);
+  const k = JSON.stringify([cfg.draftNoise, cfg.pickBias, cfg.archetype, cfg.beam, cfg.depth, cfg.potential, cfg.effort, cfg.combat === 'beam', !!cfg.clairvoyant]);
   let m = cache.get(G.DATA);
   if (!m) { m = new Map(); cache.set(G.DATA, m); }
   if (m.has(k)) return m.get(k);
@@ -34,7 +36,7 @@ function toolsFor(G, cfg) {
   const AI = { 1: mk(EFFORT.normal[1]), 2: mk(EFFORT.normal[2]), 3: mk(EFFORT.normal[3]) };
   const AIelite = mk(EFFORT.elite);
   const AIboss = mk(EFFORT.boss);
-  const P = createPolicies(G, V, { draftNoise: cfg.draftNoise, archetype: cfg.archetype });
+  const P = createPolicies(G, V, { draftNoise: cfg.draftNoise, archetype: cfg.archetype, pickBias: cfg.pickBias });
   const t = { V, AI, AIboss, AIelite, P };
   m.set(k, t);
   return t;
@@ -49,7 +51,7 @@ export function playRun(G, cfg) {
   const R = RUN.newRun({ heroes: cfg.heroes, trial: cfg.trial, seed: cfg.seed, unlocked });
   const rng = U.rng(U.hash(cfg.seed, 'bot', cfg.heroes.join(','), cfg.trial));
   const rec = {
-    seed: cfg.seed, pair: cfg.heroes.join(','), trial: cfg.trial, style: cfg.style, combat: cfg.combat, effort: cfg.effort || 'normal', unlocked: cfg.unlocked, draftNoise: cfg.draftNoise, clairvoyant: !!cfg.clairvoyant,
+    seed: cfg.seed, pair: cfg.heroes.join(','), trial: cfg.trial, style: cfg.style, combat: cfg.combat, effort: cfg.effort || 'normal', unlocked: cfg.unlocked, draftNoise: cfg.draftNoise, pickBias: cfg.pickBias, clairvoyant: !!cfg.clairvoyant,
     result: 'cap', chapter: 1, chaptersCleared: 0, death: null, steps: 0,
     fights: [], picks: [], buys: [], events: [], relics: [], gems: [], chapters: [], camps: [], flags: {},
     forcedFights: 0, starve: 0, replays: 0, finalDeck: [], finalRelics: [], finalGold: 0,

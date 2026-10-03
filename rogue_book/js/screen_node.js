@@ -996,8 +996,10 @@
       doClaim();
     };
 
+    // the cards are dealt face down and flipped (about 1.5 s): a tap while they are still in the air would take a card nobody has seen. Headless and reduced motion deal at once.
+    let dealt = headless() || !!(UI.opt && UI.opt.reduceMotion);
     function pickCard(inst, slot, i) {
-      if (dec.card !== undefined || S.busy) return;
+      if (dec.card !== undefined || S.busy || !dealt) return;
       dec.card = inst.id;
       disarm();
       const def = DATA.cards[inst.id] || {};
@@ -1045,7 +1047,9 @@
     function buildCards() {
       const n = cards.length;
       const size = n <= 4 ? 'reward' : 'deck';
-      const table = mk('div', { class: 'rw-cards sz-' + size + (n >= 5 ? ' many' : ''), role: 'group', 'aria-label': 'Card choices' });
+      const table = mk('div', { class: 'rw-cards sz-' + size + (n >= 5 ? ' many' : '') + (n >= 6 ? ' fit' : ''), role: 'group', 'aria-label': 'Card choices' });
+      // six or more offers (a relic widens the choice) would wrap to a second row that hides under the hint and Skip: share the 920 px stage in ONE row instead
+      if (n >= 6) UI.vars(table, { '--rwcw': Math.floor((900 - 14 * (n - 1)) / n) + 'px' });
       const w = size === 'reward' ? 240 : 168;
       cards.forEach((id, i) => {
         const inst = instOf(id, 0, 100 + i);
@@ -1062,6 +1066,7 @@
       hint.textContent = n > 1 ? 'Choose a card to add to your deck.' : 'A card is offered. Take it, or leave it.';
       S.cardsEl = table;
       skip.hidden = false;
+      if (!dealt) later(S, 850 + 600 + 120, () => { dealt = true; });   // the first flip ends at .85 s + .6 s (css nkFlip), the last card a stagger later
     }
 
     function relicChoice(id, el, all) {

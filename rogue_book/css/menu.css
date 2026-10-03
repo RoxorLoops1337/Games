@@ -408,11 +408,13 @@ body.reduce-motion .mn-emptybook { animation: none; }
 .mn-set-group { margin-bottom: 12px; }
 .mn-set-h { margin: 6px 0 4px; font: 800 calc(15px * var(--ts)) var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: var(--verm-d); }
 .mn-set-h span { display: inline-block; padding-bottom: 3px; background: var(--brush-ul) no-repeat 0 100% / 100% .55em; }
-.mn-set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: calc(var(--hit) + 4px); padding: 3px 0; border-bottom: 1px dashed rgba(20, 15, 46, .16); }
-.mn-set-label { min-width: 0; }
+/* a row wraps its control under the label when the two do not fit side by side (text size Larger, narrow overlay), so a label is never overdrawn by its control */
+.mn-set-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 16px; min-height: calc(var(--hit) + 4px); padding: 3px 0; border-bottom: 1px dashed rgba(20, 15, 46, .16); }
+.mn-set-label { flex: 1 1 90px; min-width: min-content; }
 .mn-set-label b { display: block; font: 700 calc(17px * var(--ts)) var(--font-display); }
 .mn-set-hint { display: block; font: 600 calc(12px * var(--ts)) / 1.3 var(--font-ui); opacity: .68; }
-.mn-set-ctl { flex: none; display: flex; align-items: center; justify-content: flex-end; }
+.mn-set-ctl { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; margin-left: auto; }
+.mn-set-ctl > .mn-set-hint { max-width: 340px; text-align: right; }
 .mn-set-ctl .slider { min-width: 250px; }
 .mn-set-ctl .seg, .mn-set-ctl .slider, .mn-set-ctl .toggle { pointer-events: auto; }
 .mn-set-note { margin: 2px 0 6px; padding: 5px 10px; border-radius: 8px; background: rgba(20, 15, 46, .06); }
@@ -427,8 +429,8 @@ body.reduce-motion .mn-emptybook { animation: none; }
 .mn-set-wrap .p-body { overflow-y: auto; overscroll-behavior: contain; padding: 14px 32px 22px; }
 .panel.mn-set-modal { width: 1000px; max-width: 100%; }
 .mn-set-modal .p-body { padding: 8px 30px 12px; }
-/* phone landscape: the overlay form scrolls, so Done stays pinned to the bottom edge */
-.compact .mn-set-modal .mn-set-done { position: sticky; bottom: -12px; z-index: 2; margin: 6px -30px -12px; padding: 10px 30px 12px; background: linear-gradient(180deg, rgba(233, 214, 166, 0), #e9d6a6 40%); }
+/* the overlay form scrolls when the text is large or the screen small, so Done stays pinned to the bottom edge */
+.mn-set-modal .mn-set-done { position: sticky; bottom: -12px; z-index: 2; margin: 6px -30px -12px; padding: 10px 30px 12px; background: linear-gradient(180deg, rgba(233, 214, 166, 0), #e9d6a6 40%); }
 
 /* ------------------------------------------------------------------------------------------------ how to play: an open book, a live diagram on the left page */
 .s-howto .mn-howscreen { position: absolute; inset: 0; }
