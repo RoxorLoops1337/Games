@@ -38,6 +38,7 @@
 .mn-slims { display: flex; flex-direction: column; gap: 8px; }
 .s-title.ts-big .mn-p-meds, .compact .s-title .mn-p-meds { display: none; }   /* Larger text and phones: the hero faces are decoration (15 screen px on a phone) (the names are in the text), and without them the run summary and the Daily seed keep two full lines in the narrow column instead of being clipped */
 .s-title .mn-menu [data-act=continue] .mn-p-sub { -webkit-line-clamp: 3; text-wrap: balance; }   /* the saved tour is written out in full ("Act 3, Vox 99, RoxorLoops and RawClaw", the longest it gets: three balanced lines at every size, checked at 1280x720, 844x390 and Larger text), never clipped by the narrow column */
+.s-title .mn-menu [data-act=daily] .mn-p-sub { -webkit-line-clamp: 3; text-wrap: balance; }   /* "Seed 20261004 · A new duet every day" (36 letters, one more than the old jam line) needs a third line beside the two hero faces instead of ending in an ellipsis */
 .mn-p-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .mn-p-main { font: 800 calc(22px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .1em; }
 .mn-slim .mn-p-main { font-size: calc(17px * var(--ts)); }
@@ -129,11 +130,11 @@ body.reduce-motion .mn-hc-lock { animation: none; }
 
 /* the party stage */
 .mn-party { position: absolute; left: 30px; top: 356px; width: 400px; height: 350px; border-radius: 8px; overflow: hidden; pointer-events: none; box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .38), inset 0 0 44px rgba(7, 5, 26, .55); }   /* the gold ring is an inset shadow, not a border: a border would offset the absolute labels and bubbles by 2 px from the canvas sprites */
-.mn-slot { position: absolute; bottom: 6px; width: 170px; margin-left: -85px; text-align: center; pointer-events: none; }
+.mn-slot { position: absolute; bottom: 6px; width: 150px; margin-left: -75px; text-align: center; pointer-events: none; }   /* 150 px = the 2 x 75 px the two slots stand apart: the notes ("RoxorLoops: prefers backing", 27 letters) wrap inside their own slot at Larger text instead of running into the other slot's note */
 .mn-slot-name { display: inline-block; padding: .12em 1.1em .18em; font: 800 calc(12px * var(--ts)) / 1.3 var(--font-display); letter-spacing: .3em; text-indent: .3em; color: var(--white); background: linear-gradient(180deg, #ff6b5e, var(--vermilion) 55%, var(--verm-d)); clip-path: polygon(0 12%, 3% 0, 97% 8%, 100% 0, 98% 100%, 2% 92%); filter: drop-shadow(0 2px 0 var(--verm-dd)); }
 .mn-slot.back .mn-slot-name { background: linear-gradient(180deg, #7a6bff, var(--dusk) 55%, var(--violet)); filter: drop-shadow(0 2px 0 var(--ink)); }
 .mn-slot.empty .mn-slot-name { filter: grayscale(1) brightness(.6); }
-.mn-slot-note { display: block; margin-top: 3px; font: italic 600 calc(11px * var(--ts)) / 1.2 var(--font-display); color: rgba(243, 230, 200, .75); }
+.mn-slot-note { display: block; margin-top: 3px; padding: 0 6px; font: italic 600 calc(11px * var(--ts)) / 1.2 var(--font-display); color: rgba(243, 230, 200, .75); }
 .mn-slot.fits .mn-slot-note { color: var(--gold2); text-shadow: 0 0 8px rgba(245, 201, 106, .6); }
 .mn-party-empty { position: absolute; left: 20px; right: 20px; top: 120px; margin: 0; text-align: center; font: italic 600 calc(17px * var(--ts)) var(--font-display); color: rgba(243, 230, 200, .8); text-shadow: 0 2px 0 var(--ink); animation: mnBlink 3s ease-in-out infinite; }
 .mn-swap { position: absolute; z-index: 3; right: 12px; top: 10px; display: inline-flex; align-items: center; gap: .5em; padding: .25em .9em .25em .6em; border: 2px solid rgba(245, 201, 106, .7); border-radius: 999px; cursor: pointer; pointer-events: auto; color: var(--paper); background: rgba(20, 15, 46, .78); font: 800 calc(14px * var(--ts)) var(--font-display); letter-spacing: .1em; transition: transform .12s, background .12s; }
@@ -239,7 +240,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 /* Larger text on a desktop: the newest rule is what the rules list is for, so the generic sub-line goes, the gaps and the Begin plaque tighten, and the list gets about 20 px more (C1) */
 .ts-big .mn-trial.has-rule .mn-tr-text { display: none; }
 .ts-big .mn-launch .p-body { gap: 6px; }
-.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .02em; }   /* the label is 27 px here: 'Begin the Journey' needs .02em to fit (255 px of 259); 'Begin Daily Jam' keeps 29 px each side inside the 273 px button (and 24 px in the 264 px one with a scrollbar) instead of touching the gold border */
+.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .02em; }   /* the label is 27 px here: 'Start the Tour' (14 letters, 215.5 px) and 'Start Daily Duet' (16 letters, 241.7 px) both fit the 259 px of the button at .02em, with 16 px or more each side instead of touching the gold border; 'Start the Daily Duet' (20 letters, 294 px) would not, which is why the Daily label is the short form */
 .compact .mn-launch .p-body { gap: 5px; padding: 6px 14px 8px; }
 /* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the trial name sits between the arrows
    and the newest rule is written out in full under them, never clipped: the trailing words are the penalty (C1). The panel body scrolls, and Begin stays pinned. */
@@ -339,6 +340,7 @@ body.reduce-motion .mn-item.afford.k-card::before { animation: none; }
 .mn-tile-txt b { display: block; font: 800 calc(18px * var(--ts)) / 1.15 var(--font-display); }
 .mn-tile-txt em { display: block; margin: 1px 0 4px; font: italic 600 calc(12px * var(--ts)) var(--font-display); color: var(--verm-d); }
 .mn-tile-txt p { margin: 0; font: 600 calc(13px * var(--ts)) / 1.35 var(--font-ui); color: var(--ink-soft); }
+.mn-tile-txt p.mn-tile-flavor { margin-top: 5px; font-style: italic; color: var(--verm-d); }   /* the Charm flavour line, in italics under the rules text (HV_WORLD_DATA 13) */
 .mn-item.k-relic .mn-item-foot, .mn-item.k-gem .mn-item-foot { margin-top: 2px; }
 .mn-item.k-card .mn-item-foot { width: var(--lc-w); }   /* price pill and Unlock button flush with the card edges, not 4 px outside them */
 

@@ -892,7 +892,7 @@ const SCENE = (() => {
     if (!a) a = S.actors.find((x) => x.kind === 'enemy' && x.tier === 'boss' && !x.gone) || null;
     const d = a && DATA.enemies ? DATA.enemies[a.def] : null;
     if (d) return { name: d.name || a.def, title: d.title || '' };
-    return { name: text && text !== 'BOSS' ? String(text) : 'KEEPER', title: '' };
+    return { name: text && text !== 'BOSS' ? String(text) : 'HEADLINER', title: '' };
   }
   function banner(text, kind) {
     if (!S.mounted) return;
@@ -1333,7 +1333,7 @@ const SCENE = (() => {
     if (!a) return 0;
     const b = bodyOf(a);
     recoil(a, 110, 0);
-    spawnNum(b.cx, topOf(a) - 6, 'Stunned', 'caption', { rise: 22, ms: 900 });
+    spawnNum(b.cx, topOf(a) - 6, 'Starstruck', 'caption', { rise: 22, ms: 900 });
     return 0;
   };
   H_.summon = (e) => {
@@ -2045,8 +2045,11 @@ const SCENE = (() => {
     // a vermilion hanko seal
     const ha = rm ? 1 : EASE.outBack(clamp((tms - 700) / 260, 0, 1));
     ctx.globalAlpha = env * clamp(ha, 0, 1); ctx.save(); ctx.translate(96, y0 + 44); ctx.rotate(-0.12); ctx.scale(max(0.01, ha), max(0.01, ha));
-    ctx.fillStyle = '#e8383d'; ctx.fillRect(-34, -20, 68, 40); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe1e1'; ctx.strokeRect(-30, -16, 60, 32);
-    T.inkText(ctx, 'KEEPER', 0, 1, 15, { fill: '#fff8f0', stroke: '#7d1230', skew: 0, strokeW: 3 }); ctx.restore();
+    // the plate is sized to the word: HEADLINER is longer than the old six-letter seal, so it is set at 11px on a wider plate
+    const sealWord = 'HEADLINER'; ctx.font = '900 11px ' + T.font.num;
+    const sealHalf = max(34, Math.ceil(ctx.measureText(sealWord).width / 2) + 8);
+    ctx.fillStyle = '#e8383d'; ctx.fillRect(-sealHalf, -20, sealHalf * 2, 40); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe1e1'; ctx.strokeRect(-sealHalf + 4, -16, sealHalf * 2 - 8, 32);
+    T.inkText(ctx, sealWord, 0, 1, 11, { fill: '#fff8f0', stroke: '#7d1230', skew: 0, strokeW: 2.4 }); ctx.restore();
     ctx.restore();
   }
 
@@ -2277,13 +2280,13 @@ const SCENE = (() => {
     stun: () => seq([{ type: 'status', dst: ref('enemy', eid(1)), s: 'stun', delta: 1, value: 1, group: ++demoGroup }, { type: 'skip', unit: ref('enemy', eid(1)), reason: 'stun' }]),
     dodge: () => seq([{ type: 'status', dst: ref('hero', hero1()), s: 'dodge', delta: 1, value: 1, group: ++demoGroup }, { type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Swipe', kind: 'attack' }, { type: 'dodge', dst: ref('hero', hero1()), group: ++demoGroup }]),
     thorns: () => seq([{ type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Swipe', kind: 'attack' }, evHit(ref('enemy', eid(0)), ref('hero', hero1()), { amount: 5 }), { type: 'thorns', src: ref('hero', hero1()), dst: ref('enemy', eid(0)), amount: 3, hp: 10 }]),
-    enemy_hit: () => seq([{ type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Claw Rake', kind: 'attack' }, evHit(ref('enemy', eid(0)), ref('hero', hero1()), { amount: 9 })]),
+    enemy_hit: () => seq([{ type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Wild Swipe', kind: 'attack' }, evHit(ref('enemy', eid(0)), ref('hero', hero1()), { amount: 9 })]),
     enemy_multi: () => seq([{ type: 'enemy_act', enemy: eid(1), move: 'x', name: 'Flurry', kind: 'multi' }, evHit(ref('enemy', eid(1)), ref('hero', hero1()), { amount: 4, hits: 3, index: 0 }), evHit(ref('enemy', eid(1)), ref('hero', hero1()), { amount: 4, hits: 3, index: 1 }), evHit(ref('enemy', eid(1)), ref('hero', hero1()), { amount: 4, hits: 3, index: 2 })]),
     heavy_enemy: () => seq([{ type: 'intent', enemy: eid(0), intent: { kind: 'heavy' } }]),
-    enemy_heavy_hit: () => seq([{ type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Crushing Gore', kind: 'heavy', say: 'Nowhere to run!' }, evHit(ref('enemy', eid(0)), ref('hero', hero1()), { amount: 21 })]),
+    enemy_heavy_hit: () => seq([{ type: 'enemy_act', enemy: eid(0), move: 'x', name: 'Heavy Stomp', kind: 'heavy', say: 'Nowhere to run!' }, evHit(ref('enemy', eid(0)), ref('hero', hero1()), { amount: 21 })]),
     swap: () => seq([{ type: 'swap', front: hero2(), back: hero1(), cost: 0, forced: false }]),
-    summon: () => { const free = [0, 1, 2, 3, 4].find((l) => !S.actors.some((a) => a.kind === 'enemy' && !a.gone && a.lane === l)); return seq([{ type: 'summon', enemy: { id: 'leaf_imp#9', def: 'leaf_imp', name: 'Leaf Imp', hp: 8, maxHp: 8, tier: 'minion', size: 's', lane: free === undefined ? 0 : free, st: {}, phase: 0 } }]); },
-    phase: () => seq([{ type: 'enemy_phase', enemy: eid(0), index: 1, at: 0.5, say: 'You dare break my silence?' }]),
+    summon: () => { const free = [0, 1, 2, 3, 4].find((l) => !S.actors.some((a) => a.kind === 'enemy' && !a.gone && a.lane === l)); return seq([{ type: 'summon', enemy: { id: 'leaf_imp#9', def: 'leaf_imp', name: (DATA.enemies && DATA.enemies.leaf_imp ? DATA.enemies.leaf_imp.name : 'Sidekick'), hp: 8, maxHp: 8, tier: 'minion', size: 's', lane: free === undefined ? 0 : free, st: {}, phase: 0 } }]); },
+    phase: () => seq([{ type: 'enemy_phase', enemy: eid(0), index: 1, at: 0.5, say: 'Oh no. That was a little off-key.' }]),
     death: () => seq([{ type: 'death', unit: ref('enemy', eid(1)), tier: 'normal' }]),
     bossdeath: () => seq([{ type: 'death', unit: ref('enemy', eid(0)), tier: 'boss' }]),
     hero_down: () => seq([{ type: 'hero_down', hero: hero2() }]),
@@ -2294,7 +2297,7 @@ const SCENE = (() => {
     enemy_turn: () => seq([{ type: 'turn_start', who: 'enemy', turn: 1, energy: 0, maxEnergy: 3 }]),
     boss: () => { banner('BOSS', 'boss'); return Promise.resolve(); },
     bark: () => { bark(hero1(), 'Stay behind me. This will be quick.'); return Promise.resolve(); },
-    shout: () => { shout(eid(0), 'You will be silenced!'); return Promise.resolve(); },
+    shout: () => { shout(eid(0), 'Hold still. This will look so much better.'); return Promise.resolve(); },
     aim: () => { aim({ x: 640, y: 560 }, { x: 760, y: 300 }, null); return Promise.resolve(); },
     aimgold: () => { const a = anchor('enemy', eid(1)); setTargetable(liveEnemies().map((x) => x.id)); setHover('enemy', eid(1)); aim({ x: 640, y: 560 }, a ? { x: a.feet.x, y: a.y + a.h * 0.4 } : { x: 800, y: 350 }, eid(1)); return Promise.resolve(); },
     rings: () => { setTargetable(liveEnemies().map((a) => a.id)); setHover('enemy', eid(1)); return Promise.resolve(); },

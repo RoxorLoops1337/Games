@@ -85,13 +85,13 @@
   // what a story page is: its kicker line, seal text, scene and the portrait expression
   function pageInfo(id) {
     let m;
-    if (id === 'intro') return { kicker: 'INTRO', seal: 'ONCE', scene: 'title', expr: 'determined' };
-    if ((m = /^ch(\d)_intro$/.exec(id))) return { kicker: 'VERSE ' + (numberWord[+m[1]] || m[1]), seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'determined' };
-    if ((m = /^ch(\d)_clear$/.exec(id))) return { kicker: 'VERSE ' + (numberWord[+m[1]] || m[1]) + ' COMPLETE', seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'smile' };
-    if (id === 'victory') return { kicker: 'OUTRO', seal: 'END', scene: 'victory', expr: 'smile' };
-    if (id === 'defeat') return { kicker: 'INTERLUDE', seal: 'REST', scene: 'defeat', expr: 'hurt' };
-    if ((m = /^hero_(\w+)$/.exec(id))) return { kicker: 'A VOICE OF THE SONG', seal: (heroName(m[1])[0] || '?').toUpperCase(), scene: 'camp', expr: 'determined' };
-    return { kicker: 'A BALLAD', seal: '?', scene: 'event', expr: 'neutral' };
+    if (id === 'intro') return { kicker: 'CURTAIN UP', seal: 'ONCE', scene: 'title', expr: 'determined' };
+    if ((m = /^ch(\d)_intro$/.exec(id))) return { kicker: 'ACT ' + (numberWord[+m[1]] || m[1]), seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'determined' };
+    if ((m = /^ch(\d)_clear$/.exec(id))) return { kicker: 'END OF ACT ' + (numberWord[+m[1]] || m[1]), seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'smile' };
+    if (id === 'victory') return { kicker: 'FINALE', seal: 'BRAVO', scene: 'victory', expr: 'smile' };
+    if (id === 'defeat') return { kicker: 'INTERMISSION', seal: 'PAUSE', scene: 'defeat', expr: 'hurt' };
+    if ((m = /^hero_(\w+)$/.exec(id))) return { kicker: 'MEET THE CREW', seal: (heroName(m[1])[0] || '?').toUpperCase(), scene: 'camp', expr: 'determined' };
+    return { kicker: 'A DIARY ENTRY', seal: '?', scene: 'event', expr: 'neutral' };
   }
 
   // a tip, seeded so the same page always shows the same line
@@ -345,8 +345,8 @@
     return el;
   }
   function noRunPage(S, what) {
-    S.root.appendChild(mk('div', { class: 'en-none' }, UI.panel({ kind: 'paper', torn: true, title: 'Only silence' },
-      mk('p', { class: 'en-none-text', text: what || 'There is no journey to show here.' }),
+    S.root.appendChild(mk('div', { class: 'en-none' }, UI.panel({ kind: 'paper', torn: true, title: 'Nothing here yet' },
+      mk('p', { class: 'en-none-text', text: what || 'There is no tour to show here.' }),
       mk('div', { class: 'row center' }, UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => { const g = game(); if (g) g.toTitle(); else UI.toTitle(); } })))));
   }
   // a body that scrolls says so: while there is more below the fold its bottom edge fades (class `more`), instead of cutting a line in half
@@ -439,8 +439,8 @@
       const cast = castFor(id, S.R, null);
       Object.assign(S.extra, { id, info, cast, lore });
       safe(() => { if (lore) META.markLore(id); });
-      const title = lore ? lore.title : 'A Silent Ballad';
-      const text = lore ? lore.text : 'Nothing has been sung here yet. Play on, and the journey goes on.';
+      const title = lore ? lore.title : 'A Diary Entry';
+      const text = lore ? lore.text : 'Nothing here yet. On we go, and the tour goes on.';
       const dropCap = /^[A-Za-z]/.test(text);
       const first = dropCap ? text[0] : '';
       const rest = dropCap ? text.slice(1) : text;
@@ -460,10 +460,10 @@
       const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => leaveStory(S), key: 'Esc' });
       skip.dataset.act = 'skip';
       skip.classList.add('st-skip');
-      const turn = UI.btn('Play on', { kind: 'primary', size: 'lg', breathe: true, onclick: () => advanceStory(S), key: 'Enter' });
+      const turn = UI.btn('On we go', { kind: 'primary', size: 'lg', breathe: true, onclick: () => advanceStory(S), key: 'Enter' });
       turn.dataset.act = 'turn';
       turn.classList.add('st-turn');
-      const hint = mk('span', { class: 'st-hint', text: 'Tap to listen on' });
+      const hint = mk('span', { class: 'st-hint', text: 'Tap to continue' });
       const foot = mk('footer', { class: 'st-foot' }, skip, hint, turn);
       const page = UI.panel({ kind: 'paper', gold: true, class: 'st-page' }, head, bodyEl, foot);
       page.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('button')) return; advanceStory(S); });
@@ -511,17 +511,17 @@
     const gold = sm && typeof sm.gold === 'number' ? sm.gold : (R ? R.gold | 0 : 0);
     const bk = st.bossKills | 0;
     const rows = [
-      { k: 'chapters', label: 'Verses cleared', n: bk, pts: E.chapter * bk, icon: ['motif', 'bell'] },
-      { k: 'bosses', label: 'Bosses felled', n: bk, pts: E.boss * bk, icon: ['relic', 'crown'] },
-      { k: 'elites', label: 'Elites defeated', n: st.elites | 0, pts: E.elite * (st.elites | 0), icon: ['relic', 'skull'] },
-      { k: 'gold', label: 'Gold in the purse', n: gold, pts: Math.floor(gold / E.goldDiv), icon: ['stat', 'gold'] },
+      { k: 'chapters', label: 'Acts cleared', n: bk, pts: E.chapter * bk, icon: ['motif', 'bell'] },
+      { k: 'bosses', label: 'Headliners won over', n: bk, pts: E.boss * bk, icon: ['relic', 'crown'] },
+      { k: 'elites', label: 'Rivals defeated', n: st.elites | 0, pts: E.elite * (st.elites | 0), icon: ['relic', 'skull'] },
+      { k: 'gold', label: 'Gold in your pocket', n: gold, pts: Math.floor(gold / E.goldDiv), icon: ['stat', 'gold'] },
       { k: 'maxhp', label: 'Heroes\' max HP', n: heroes.reduce((a, h) => a + (h.maxHp | 0), 0), pts: E.maxHp * heroes.reduce((a, h) => a + (h.maxHp | 0), 0), icon: ['stat', 'hp'] },
     ];
     if (deck) {
       const up = deck.filter((c) => c.up).length;
       const gems = deck.reduce((a, c) => a + (c.gems || []).filter(Boolean).length, 0);
       const curses = deck.filter((c) => DATA.cards[c.id] && DATA.cards[c.id].hero === 'curse').length;
-      rows.push({ k: 'upgrades', label: 'Cards sharpened', n: up, pts: E.upgraded * up, icon: ['type', 'attack'] });
+      rows.push({ k: 'upgrades', label: 'Cards rehearsed', n: up, pts: E.upgraded * up, icon: ['type', 'attack'] });
       rows.push({ k: 'gems', label: 'Gems set', n: gems, pts: E.gemSlot * gems, icon: ['gem', 'slot:gold'] });
       rows.push({ k: 'curses', label: 'Curses carried', n: curses, pts: E.curse * curses, icon: ['type', 'curse'] });
     }
@@ -530,7 +530,7 @@
     const score = sm && typeof sm.score === 'number' ? sm.score : Math.max(0, rows.reduce((a, r) => a + r.pts, 0));
     const known = rows.reduce((a, r) => a + r.pts, 0);
     const rest = score - known;
-    if (rest !== 0) rows.splice(rows.length - 1, 0, { k: 'rest', label: deck ? 'The land\'s mercy' : 'Deck work', n: 0, pts: rest, icon: ['type', 'skill'], noCount: true });
+    if (rest !== 0) rows.splice(rows.length - 1, 0, { k: 'rest', label: deck ? 'Kind passers-by' : 'Deck work', n: 0, pts: rest, icon: ['type', 'skill'], noCount: true });
     return { rows, score };
   }
 
@@ -553,10 +553,10 @@
   function summaryText(sm, R, win) {
     const ids = ((sm.heroes && sm.heroes.map((h) => h.id)) || DEFAULT_PARTY).filter((h) => DATA.heroes[h]);
     const names = ids.map(heroName).join(' and ');
-    const mode = sm.daily ? 'Daily Jam ' + sm.seed : (sm.trial ? 'Tempo Trial ' + sm.trial : 'Tempo Trial 0');
-    const line1 = 'ECHOWAKE: ' + (win ? 'the Hush let go' : 'a rest in Verse ' + (sm.chapter || 1));
+    const mode = sm.daily ? 'Daily Duet ' + sm.seed : (sm.trial ? 'Encore ' + sm.trial : 'Encore 0');
+    const line1 = 'HOCUS VOCUS: ' + (win ? 'still human' : 'intermission in Act ' + (sm.chapter || 1));
     const line2 = names + ' | Score ' + fmt(sm.score || 0) + ' | ' + mode;
-    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'treasure') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'verse') + ' cleared';
+    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'charm') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'act') + ' cleared';
     return [line1, line2, line3].join('\n');
   }
 
@@ -564,13 +564,13 @@
   function unlockEntries(rec, sm) {
     const out = [];
     if (!rec) return out;
-    (rec.heroesUnlocked || []).forEach((id) => out.push({ kind: 'hero', id, seal: 'NEW', title: heroName(id) + ' joins the band', text: heroTitle(id) + '. Choose ' + heroName(id) + ' when you begin a new journey.' }));
+    (rec.heroesUnlocked || []).forEach((id) => out.push({ kind: 'hero', id, seal: 'NEW', title: heroName(id) + ' joins the tour!', text: heroTitle(id) + '. Waiting on the hero select.' }));
     (rec.newAchievements || []).forEach((id) => {
       const a = DATA.achievements[id];
       if (!a) return;
       out.push({ kind: 'ach', id, seal: 'WON', title: a.name, text: a.text, reward: a.reward && a.reward.inkstones });
     });
-    if (rec.newTrial) out.push({ kind: 'trial', id: rec.newTrial, seal: 'TRIAL', title: 'Tempo Trial ' + rec.newTrial + ' unlocked', text: (trialName(rec.newTrial) ? trialName(rec.newTrial) + '. ' : '') + 'A faster tempo of the same journey is waiting on the hero select.' });
+    if (rec.newTrial) out.push({ kind: 'trial', id: rec.newTrial, seal: 'ENCORE', title: 'Encore ' + rec.newTrial + ' unlocked', text: (trialName(rec.newTrial) ? trialName(rec.newTrial) + '. ' : '') + 'A harder encore of the same tour is waiting on the hero select.' });
     return out;
   }
   function unlockRow(S, e, i) {
@@ -702,18 +702,18 @@
       snd('victory');
 
       // ---- the banner
-      const title = lore ? lore.title : 'Verse ' + U.roman(ch) + ' Complete';
+      const title = lore ? lore.title : 'End of Act ' + U.roman(ch);
       const unlockedHero = heroUnlockedBy(ch);
       const banner = mk('header', { class: 'cc-banner' },
-        mk('p', { class: 'cc-kicker', text: 'VERSE ' + (numberWord[ch] || ch) + ' COMPLETE' }),
+        mk('p', { class: 'cc-kicker', text: 'END OF ACT ' + (numberWord[ch] || ch) }),
         mk('h1', { class: 'cc-title', text: title }),
         mk('i', { class: 'cc-flourish', 'aria-hidden': 'true' }, mk('b'), mk('b'), mk('b')),
-        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + bossDef.title : '') + ', falls silent' }) : null);
+        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + bossDef.title : '') + ', sings along' }) : null);
       root.appendChild(banner);
       if (unlockedHero) {
-        const card = mk('div', { class: 'cc-newhero', role: 'status', 'aria-label': heroName(unlockedHero) + ' joins the band' },
+        const card = mk('div', { class: 'cc-newhero', role: 'status', 'aria-label': heroName(unlockedHero) + ' joins the tour!' },
           mk('span', { class: 'cc-nh-med' }, UI.medallion(unlockedHero, 52)),
-          mk('span', { class: 'cc-nh-text' }, mk('b', { text: heroName(unlockedHero) + ' joins the band' }), mk('i', { text: heroTitle(unlockedHero) + '. Waiting on the hero select.' })),
+          mk('span', { class: 'cc-nh-text' }, mk('b', { text: heroName(unlockedHero) + ' joins the tour!' }), mk('i', { text: heroTitle(unlockedHero) + '. Waiting on the hero select.' })),
           UI.hanko('NEW', { size: 'sm' }));
         root.appendChild(card);
         at(S, 2600, () => { card.classList.add('show'); snd('unlock'); });
@@ -721,8 +721,8 @@
       }
 
       // ---- left: the lore, in a scroll
-      const textEl = mk('p', { class: 'cc-lore', text: lore ? lore.text : 'The music swells. Whatever held this verse silent has let go.' });
-      const leftCard = scroll('cc-scroll', 'The Land Sings', textEl);
+      const textEl = mk('p', { class: 'cc-lore', text: lore ? lore.text : 'The music swells. The Gloss has let go of this act.' });
+      const leftCard = scroll('cc-scroll', 'The Soundlands Sing', textEl);
 
       // ---- middle: the run so far
       const st = (R && R.stats) || {};
@@ -735,7 +735,7 @@
         statTile(S, iconOf('stat', 'ink', 30), 'Hexes', st.hexesPainted | 0, { delay: 1400 }),
       ];
       tiles.forEach((el, i) => UI.vars(el, { '--i': i }));
-      const midCard = lacquer('cc-stats', 'The Journey So Far', mk('div', { class: 'cc-tiles' }, ...tiles));
+      const midCard = lacquer('cc-stats', 'The Tour So Far', mk('div', { class: 'cc-tiles' }, ...tiles));
 
       // ---- right: what the page gave back
       const plan = healPlan(R, params);
@@ -761,13 +761,13 @@
         return row;
       });
       const relics = (R && R.relics) || [];
-      const relicRow = mk('div', { class: 'cc-relics', role: 'list', 'aria-label': 'Treasures carried' });
+      const relicRow = mk('div', { class: 'cc-relics', role: 'list', 'aria-label': 'Charms carried' });
       relics.slice(0, 8).forEach((id) => { const r = UI.relic(id, { size: 'sm' }); r.setAttribute('role', 'listitem'); relicRow.appendChild(r); });
       if (relics.length > 8) relicRow.appendChild(mk('span', { class: 'cc-more', text: '+' + (relics.length - 8) }));
       if (!relics.length) relicRow.appendChild(mk('span', { class: 'cc-none', text: 'None yet' }));
       const inkStat = R ? UI.stat('ink', R.ink | 0, { max: R.inkMax | 0, size: 'sm' }) : null;
-      const rightCard = lacquer('cc-boons', 'What the Land Gives', mk('div', { class: 'cc-heroes' }, ...rows),
-        mk('div', { class: 'cc-extra' }, inkStat, mk('span', { class: 'cc-rel-lab', text: 'Treasures ' + relics.length }), relicRow));
+      const rightCard = lacquer('cc-boons', 'What the Soundlands Give', mk('div', { class: 'cc-heroes' }, ...rows),
+        mk('div', { class: 'cc-extra' }, inkStat, mk('span', { class: 'cc-rel-lab', text: 'Charms ' + relics.length }), relicRow));
 
       root.appendChild(mk('div', { class: 'cc-cols' }, leftCard, midCard, rightCard));
 
@@ -779,7 +779,7 @@
       root.appendChild(foot);
       if (hasLiveRun(R)) root.appendChild(UI.menuButton());
       petals(S, 18);
-      UI.announce('Verse ' + ch + ' complete. ' + title);
+      UI.announce('Act ' + ch + ' complete. ' + title);
       if (instant()) flush(S);
     },
     update(dt) { if (CUR && CUR.kind === 'chapterClear') step(CUR, dt); },
@@ -841,16 +841,16 @@
       UI.vars(c, { '--i': i, '--n': shown.length });
       fan.appendChild(c);
     });
-    const deckBtn = UI.btn((deck.length || sm.deckSize | 0) + ' cards', { kind: 'secondary', size: 'sm', icon: { kind: 'type', id: 'skill', size: 22 }, onclick: () => { if (deck.length) UI.overlay.open('deck', { mode: 'view', cards: deck.slice() }); else UI.toast('The deck was not kept with this journey', 'warn'); } });
+    const deckBtn = UI.btn((deck.length || sm.deckSize | 0) + ' cards', { kind: 'secondary', size: 'sm', icon: { kind: 'type', id: 'skill', size: 22 }, onclick: () => { if (deck.length) UI.overlay.open('deck', { mode: 'view', cards: deck.slice() }); else UI.toast('The deck was not kept with this tour', 'warn'); } });
     deckBtn.classList.add('go-deckbtn');
-    const rel = mk('div', { class: 'go-relics', role: 'list', 'aria-label': 'Treasures' });
+    const rel = mk('div', { class: 'go-relics', role: 'list', 'aria-label': 'Charms' });
     relics.slice(0, 7).forEach((id) => { const r = UI.relic(id, { size: 'sm' }); r.setAttribute('role', 'listitem'); rel.appendChild(r); });
     if (relics.length > 7) rel.appendChild(mk('span', { class: 'go-more', text: '+' + (relics.length - 7) }));
-    if (!relics.length) rel.appendChild(mk('span', { class: 'go-none', text: 'No treasures' }));
-    const relBtn = UI.btn('Treasures ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No treasures were found on this journey', 'info'); } });
+    if (!relics.length) rel.appendChild(mk('span', { class: 'go-none', text: 'No charms' }));
+    const relBtn = UI.btn('Charms ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No charms were found on this tour', 'info'); } });
     relBtn.classList.add('go-relbtn');
     const panel = UI.panel({ kind: 'paper', gold: true, class: 'go-recap en-card pad-top' },
-      mk('h2', { class: 'en-h' }, mk('span', { text: 'What You Carried' })),
+      mk('h2', { class: 'en-h' }, mk('span', { text: 'What Was in the Van' })),
       mk('div', { class: 'go-recap-row' }, deck.length ? fan : mk('span', { class: 'go-none', text: 'No deck to show' }), deckBtn),
       mk('div', { class: 'go-recap-row' }, rel, relBtn));
     return panel;
@@ -877,9 +877,9 @@
 
       // ---- header
       root.appendChild(mk('header', { class: 'go-head' },
-        mk('p', { class: 'go-kicker', text: 'THE SONG FADES' }),
-        mk('h1', { class: 'go-title', text: lore ? lore.title : 'The Hush Returns' }),
-        mk('p', { class: 'go-fell', text: 'Fell in Verse ' + U.roman(ch) + (chTitle ? ': ' + chTitle : '') + (sm.trial ? '  |  Tempo Trial ' + sm.trial : '') + (sm.daily ? '  |  Daily Jam' : '') })));
+        mk('p', { class: 'go-kicker', text: 'THE LIGHTS GO DOWN' }),
+        mk('h1', { class: 'go-title', text: lore ? lore.title : 'The Show Must Go On' }),
+        mk('p', { class: 'go-fell', text: 'Curtain fell in Act ' + U.roman(ch) + (chTitle ? ': ' + chTitle : '') + (sm.trial ? '  |  Encore ' + sm.trial : '') + (sm.daily ? '  |  Daily Duet' : '') })));
 
       // ---- left: the fallen, and what the tale kept
       // the party fell: RUN keeps the last HP of a lost fight, but the page shows them as they ended, at 0
@@ -887,7 +887,7 @@
       root.appendChild(mk('div', { class: 'go-left' }, fallen, tapRecap(S, sm, R)));
 
       // ---- middle: the lore, a tip, the buttons
-      const loreCard = scroll('go-lore', null, mk('p', { class: 'go-lore-text', text: lore ? lore.text : 'The echoes thinned, and the land went still. Breathe, and try again.' }));
+      const loreCard = scroll('go-lore', null, mk('p', { class: 'go-lore-text', text: lore ? lore.text : 'The lights went down, and the Soundlands went quiet. Breathe, and try again.' }));
       const tip = tipFor(R, 'over');
       const again = UI.btn('Try Again', { kind: 'primary', size: 'lg', breathe: true, key: 'Enter', onclick: () => tryAgain(S, sm) });
       again.classList.add('go-again');
@@ -904,24 +904,24 @@
       const stoneNum = mk('b', { class: 'go-stone-n' });
       if (rec) {
         const earned = rec.inkstones | 0;
-        stones.appendChild(mk('div', { class: 'go-stone-main' }, iconOf('stat', 'inkstone', 40), mk('span', { class: 'go-stone-lab', text: 'Chimes earned' }), stoneNum));
+        stones.appendChild(mk('div', { class: 'go-stone-main' }, iconOf('stat', 'inkstone', 40), mk('span', { class: 'go-stone-lab', text: 'Cheers earned' }), stoneNum));
         count(S, stoneNum, earned, { ms: 900, delay: 1000 + led.data.rows.length * 260 + 600, fmt: (n) => '+' + fmt(n) });
         if (instant()) stoneNum.textContent = '+' + fmt(earned);
         const sub = [];
-        if (rec.bonus) sub.push('Achievement bonus +' + fmt(rec.bonus));
-        if (typeof rec.total === 'number') sub.push('Chimes held ' + fmt(rec.total));
+        if (rec.bonus) sub.push('Sticker bonus +' + fmt(rec.bonus));
+        if (typeof rec.total === 'number') sub.push('Cheers held ' + fmt(rec.total));
         if (sub.length) stones.appendChild(mk('p', { class: 'go-stone-sub', text: sub.join('  |  ') }));
         const ents = unlockEntries(rec, sm);
         const list = mk('div', { class: 'en-unlocks' });
         ents.forEach((e, i) => list.appendChild(unlockRow(S, e, i)));
-        if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'Nothing new this time. The next journey might be the one.' }));
+        if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'Nothing new this time. The next tour might be the one.' }));
         stones.appendChild(list);
       } else {
-        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This journey was not recorded, so no Chimes were paid.' }));
+        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This tour was not recorded, so no Cheers were given.' }));
       }
-      const stonesCard = lacquer('go-stonescard', 'The Land Remembers', stones);
+      const stonesCard = lacquer('go-stonescard', 'The Tour Bus Remembers', stones);
       root.appendChild(mk('div', { class: 'go-right' }, scoreCard, stonesCard));
-      UI.announce('The music rests. Score ' + fmt(sm.score || 0));
+      UI.announce('The lights go down. Score ' + fmt(sm.score || 0));
       if (instant()) flush(S);
     },
     update(dt) { if (CUR && CUR.kind === 'gameOver') step(CUR, dt); },
@@ -943,7 +943,7 @@
     if (!S || S.dead || S.leaving) return;
     const g = game();
     const ids = ((sm && sm.heroes) || []).map((h) => h.id).filter((h) => DATA.heroes[h]);
-    if (!g || !isFn(g.newRun) || ids.length !== 2) { UI.toast('Choose your heroes from the title to begin again', 'warn'); return toTitle(S); }
+    if (!g || !isFn(g.newRun) || ids.length !== 2) { UI.toast('Pick your duo from the title to start again', 'warn'); return toTitle(S); }
     S.leaving = true;
     snd('page_turn');
     g.newRun({ heroes: ids, trial: sm.trial | 0, daily: !!sm.daily, seed: sm.daily ? sm.seed : undefined });
@@ -960,10 +960,10 @@
   // ==================================================================================================================
   // one closing line per hero for the curtain call (kept short: they sit under the heroes at 14 px)
   const CURTAIN = {
-    hanae: 'Hanae sheathed her blade and glanced about to see who had noticed how well that went. Everyone had. She studied the sky.',
-    kuro: 'Kuro pushed up his glasses, tucked his flute under one arm, and began humming the harmony of the next tune. He called it research.',
-    suzu: 'Suzu tied a new ribbon to the shrine bell and listened. For the first time in a very long while, nothing was out of tune.',
-    raiga: 'Raiga laughed so hard the thunder came to see what was funny, then stayed for tea. Nobody asked it to leave.',
+    hanae: 'Jasmin hummed the last line once more, very softly, and the whole crowd leaned in to hear it. Her scrunchie had not moved at all.',
+    kuro: 'RoxorLoops beatboxed the sound of the curtain coming down, the applause and the van door, then took a bow at both ends of his hair.',
+    suzu: 'RawClaw took off his headphones and listened. For the first time in a long while, nothing needed fixing. He added a little reverb anyway.',
+    raiga: 'Andy played one last low note so warm that the stage lights hummed along. \'Nice,\' he said, and that was the whole speech.',
   };
 
   // pieces of the share card, kept separate so the card is easy to read
@@ -1008,12 +1008,17 @@
     if (typeof ART !== 'undefined' && ART && ART.tk && isFn(ART.tk.paperGrain)) safe(() => { ctx.save(); plaquePath(ctx, px + 6, py + 6, pw - 12, ph - 12, 7); ctx.clip(); ART.tk.paperGrain(ctx, px, py, pw, ph, { alpha: 0.5 }); ctx.restore(); });
     const cx = px + pw / 2;
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.font = '800 31px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#140f2e';
-    spaced(ctx, 'ECHOWAKE', cx, py + 52, 5);
+    // HOCUS VOCUS is three letters longer than the old title: step the size down from 31 px until the word (letters plus 5 px gaps) clears the seal in the plaque's top right corner
+    const cardTitle = 'HOCUS VOCUS';
+    for (let tsz = 31; tsz >= 16; tsz--) {
+      ctx.font = '800 ' + tsz + 'px Georgia, "Hiragino Mincho ProN", serif';
+      if (Array.from(cardTitle).reduce((a, c) => a + ctx.measureText(c).width, 0) + 5 * (cardTitle.length - 1) <= pw - 140) break;
+    }
+    spaced(ctx, cardTitle, cx, py + 52, 5);
     ctx.font = '800 11px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = '#a91d2c';
-    spaced(ctx, d.win === false ? 'THE SONG FADED IN VERSE ' + (d.chapter || 1) : 'THE HUSH, LET GO', cx, py + 72, 3);
+    spaced(ctx, d.win === false ? 'INTERMISSION IN ACT ' + (d.chapter || 1) : 'STILL HUMAN', cx, py + 72, 3);
     const rule = ctx.createLinearGradient(px + 30, 0, px + pw - 30, 0);
     rule.addColorStop(0, 'rgba(185,138,47,0)'); rule.addColorStop(0.5, '#b98a2f'); rule.addColorStop(1, 'rgba(185,138,47,0)');
     ctx.fillStyle = rule; ctx.fillRect(px + 30, py + 82, pw - 60, 3);
@@ -1029,10 +1034,10 @@
     ctx.strokeText(sc, cx, py + 206); ctx.fillStyle = '#ffd36a'; ctx.fillText(sc, cx, py + 206);
     // the small facts, two by two
     const facts = [
-      [d.daily ? 'DAILY JAM' : 'TEMPO TRIAL', d.daily ? String(d.seed >>> 0) : String(d.trial | 0)],
+      [d.daily ? 'DAILY DUET' : 'ENCORE', d.daily ? String(d.seed >>> 0) : String(d.trial | 0)],
       ['SEED', String(d.seed >>> 0)],
       ['DECK', U.plural(d.deckSize | 0, 'card')],
-      ['TREASURES', String((d.relics || []).length)],
+      ['CHARMS', String((d.relics || []).length)],
     ];
     const fy = py + 232;
     facts.forEach((f, i) => {
@@ -1046,9 +1051,10 @@
     // the seal
     ctx.save();
     ctx.translate(px + pw - 38, py + 40); ctx.rotate(-0.14);
-    plaquePath(ctx, -22, -22, 44, 44, 9); ctx.fillStyle = '#e8383d'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,248,240,0.9)'; plaquePath(ctx, -18, -18, 36, 36, 6); ctx.stroke();
-    ctx.fillStyle = '#fff8f0'; ctx.font = '900 14px Georgia, serif'; ctx.textBaseline = 'middle'; ctx.fillText(d.win === false ? 'FIN' : 'END', 0, 1);
+    const sealWord = d.win === false ? 'FIN' : 'BRAVO', sealHalf = sealWord.length > 3 ? 28 : 22;      // BRAVO needs a wider plate than FIN
+    plaquePath(ctx, -sealHalf, -22, sealHalf * 2, 44, 9); ctx.fillStyle = '#e8383d'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,248,240,0.9)'; plaquePath(ctx, 4 - sealHalf, -18, sealHalf * 2 - 8, 36, 6); ctx.stroke();
+    ctx.fillStyle = '#fff8f0'; ctx.font = '900 ' + (sealWord.length > 3 ? 11 : 14) + 'px Georgia, serif'; ctx.textBaseline = 'middle'; ctx.fillText(sealWord, 0, 1);
     ctx.restore();
     // a thin frame around the whole card
     ctx.strokeStyle = 'rgba(245,201,106,0.9)'; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
@@ -1097,12 +1103,12 @@
   function buildEpilogue(S) {
     const x = S.extra, root = S.root;
     const lore = loreOf('victory');
-    const title = lore ? lore.title : 'The Hush Lets Go';
-    const text = lore ? lore.text : 'The last note rings out, and is left to echo on purpose. The land begins to sing on its own.';
+    const title = lore ? lore.title : 'Human';
+    const text = lore ? lore.text : 'The whole crowd sings the last line together, and the stage is left open for whoever wants to sing next.';
     const dropCap = /^[A-Za-z]/.test(text);
     const words = String(title).split(' ');
     const head = mk('header', { class: 'st-head' },
-      mk('p', { class: 'st-kicker', text: 'OUTRO' }),
+      mk('p', { class: 'st-kicker', text: 'FINALE' }),
       mk('h1', { class: 'st-title' }, ...words.map((w, i) => [i ? ' ' : null, UI.vars(mk('span', { class: 'st-w', text: w }), { '--i': i })])),
       mk('i', { class: 'st-flourish', 'aria-hidden': 'true' }, mk('b', { class: 'fl-l' }), mk('b', { class: 'fl-m' }), mk('b', { class: 'fl-r' })));
     const typed = mk('span', { class: 'st-typed' });
@@ -1111,10 +1117,10 @@
     const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => gotoPhase(S, 'show'), key: 'Esc' });
     const turn = UI.btn('Continue', { kind: 'primary', size: 'lg', breathe: true, key: 'Enter', onclick: () => tapVictory(S) });
     turn.classList.add('st-turn');
-    const foot = mk('footer', { class: 'st-foot' }, skip, mk('span', { class: 'st-hint', text: 'Tap to listen on' }), turn);
+    const foot = mk('footer', { class: 'st-foot' }, skip, mk('span', { class: 'st-hint', text: 'Tap to continue' }), turn);
     const page = UI.panel({ kind: 'paper', gold: true, class: 'st-page vc-page' }, head, bodyEl, foot);
     page.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('button')) return; tapVictory(S); });
-    const seal = mk('div', { class: 'st-seal vc-seal', 'aria-hidden': 'true' }, UI.hanko('END', { size: 'lg' }));
+    const seal = mk('div', { class: 'st-seal vc-seal', 'aria-hidden': 'true' }, UI.hanko('BRAVO', { size: 'lg' }));
     root.appendChild(page); root.appendChild(seal);
     x.nodes.push(page, seal);
     S.tw = typewriter(S, typed, dropCap ? text.slice(1) : text, { cps: 30, delay: 800, onType: () => followPen(bodyEl) });
@@ -1126,7 +1132,7 @@
   function buildCast(S) {
     const x = S.extra, root = S.root;
     root.classList.remove('st-done');
-    const head = mk('header', { class: 'vc-cast-head' }, mk('p', { class: 'vc-cast-kicker', text: 'CURTAIN CALL' }), mk('h1', { class: 'vc-cast-title', text: 'Every Voice That Ever Sang' }),
+    const head = mk('header', { class: 'vc-cast-head' }, mk('p', { class: 'vc-cast-kicker', text: 'CURTAIN CALL' }), mk('h1', { class: 'vc-cast-title', text: 'Everyone Who Sang Along' }),
       mk('i', { class: 'st-flourish', 'aria-hidden': 'true' }, mk('b', { class: 'fl-l' }), mk('b', { class: 'fl-m' }), mk('b', { class: 'fl-r' })));
     const caps = mk('div', { class: 'vc-caps' });
     x.order.forEach((id, i) => {
@@ -1150,7 +1156,7 @@
   function buildShow(S) {
     const x = S.extra, root = S.root, sm = x.sm, R = S.R, rec = x.rec;
     root.classList.remove('st-done', 'vc-cast-done');
-    const head = mk('header', { class: 'vc-head' }, UI.hanko('END', { size: 'lg' }), mk('div', {}, mk('p', { class: 'vc-kicker', text: 'THE LAST NOTE' }), mk('h1', { class: 'vc-title', text: 'The Final Chorus' })));
+    const head = mk('header', { class: 'vc-head' }, UI.hanko('BRAVO', { size: 'lg' }), mk('div', {}, mk('p', { class: 'vc-kicker', text: 'FINALE' }), mk('h1', { class: 'vc-title', text: 'Human' })));
     // the share card
     const cw = 600, ch = 338;
     const canvas = mk('canvas', { class: 'vc-card', 'aria-label': 'Summary card: ' + summaryText(sm, R, true).replace(/\n/g, '. ') });
@@ -1175,15 +1181,15 @@
       if (instant()) n.textContent = '+' + fmt(rec.inkstones | 0);
       const sub = [];
       if (rec.bonus) sub.push('bonus +' + fmt(rec.bonus));
-      if (typeof rec.total === 'number') sub.push('chimes ' + fmt(rec.total));
+      if (typeof rec.total === 'number') sub.push('cheers ' + fmt(rec.total));
       foot.appendChild(mk('div', { class: 'vc-stone' }, iconOf('stat', 'inkstone', 44),
-        mk('div', { class: 'vc-stone-t' }, mk('span', { class: 'go-stone-lab', text: 'Chimes earned' }), sub.length ? mk('span', { class: 'go-stone-sub', text: sub.join('  |  ') }) : null), n));
+        mk('div', { class: 'vc-stone-t' }, mk('span', { class: 'go-stone-lab', text: 'Cheers earned' }), sub.length ? mk('span', { class: 'go-stone-sub', text: sub.join('  |  ') }) : null), n));
       const ents = unlockEntries(rec, sm);
       ents.forEach((e, i) => list.appendChild(unlockRow(S, e, i)));
-      if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'No new unlocks this time. Spend your Chimes in the Hall of Echoes.' }));
+      if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'No new unlocks this time. Spend your Cheers on the Tour Bus.' }));
     } else {
       foot.appendChild(mk('div', { class: 'vc-stone' }));
-      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This journey was not recorded, so no Chimes were paid.' }));
+      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This tour was not recorded, so no Cheers were given.' }));
     }
     const stonesCard = lacquer('vc-newcard', 'Newly Unlocked', list);
 
@@ -1258,7 +1264,7 @@
   }
   function saveCard(S, canvas) {
     try {
-      const a = mk('a', { href: canvas.toDataURL('image/png'), download: 'echowake-' + ((S.extra.sm.seed >>> 0) || 'journey') + '.png', style: { display: 'none' } });
+      const a = mk('a', { href: canvas.toDataURL('image/png'), download: 'hocus-vocus-' + ((S.extra.sm.seed >>> 0) || 'tour') + '.png', style: { display: 'none' } });
       document.body.appendChild(a);
       a.click();
       a.remove();

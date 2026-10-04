@@ -1,223 +1,226 @@
-// Echowake: data_meta.js: achievements, Tempo Trials, tips and the lore (story pages, hero pages and combat barks).
+// Hocus Vocus: data_meta.js: Stickers (achievements), Encores, tips and the lore (Tour Diary entries, hero entries and combat barks).
 // Data only (DESIGN 4.10, CONTENT_SPEC 6): one IIFE that registers into DATA.achievements, DATA.trials, DATA.tips and DATA.lore.
 // No functions, no clock, no unseeded randomness, no em or en dashes. Checked by DATA.validate and DATA.audit('meta') and by
 // tests/hocus_vocus_narrative.test.mjs.
 //
-// ACHIEVEMENTS (32). {id, name, text, stat:{k, gte}, reward:{inkstones}} (pays Chimes). `k` is a DATA.LISTS.statKeys id that COMBAT, RUN or META
-//   really write (the narrative suite greps for it). Fixed ids: ch1_clear (boss1Kills, unlocks Suzu), ch2_clear (boss2Kills, unlocks
-//   Raiga), ch3_clear (boss3Kills, the first win). Rewards run 3 to 60 Chimes against Hall of Echoes prices of 40 to 140.
-//   Thresholds are profile-lifetime totals except the max keys (maxHit, maxTurnDamage, trialBest), which are bests.
+// STICKERS (achievements, 32). {id, name, text, stat:{k, gte}, reward:{inkstones}} (pays Cheers). `k` is a DATA.LISTS.statKeys id
+//   that COMBAT, RUN or META really write (the narrative suite greps for it). Fixed ids: ch1_clear (boss1Kills, unlocks RawClaw, id
+//   suzu), ch2_clear (boss2Kills, unlocks Andy, id raiga), ch3_clear (boss3Kills, the first win). Rewards run 3 to 60 Cheers against
+//   Tour Bus prices of 40 to 140. Thresholds are profile-lifetime totals except the max keys (maxHit, maxTurnDamage, trialBest),
+//   which are bests. Jordan designs every Sticker.
 //
-// TEMPO TRIALS (10). Each level's `mods` are its OWN increment; playing trial N sums levels 1..N (DATA.trialDeltas). Every mod only
-//   makes the game harder, and each level has a distinct headline so the climb reads as a staircase, not a slope:
-//     1 purse   2 hides   3 healing   4 Echo   5 damage   6 bells and revives   7 prices   8 a curse   9 elites and bosses   10 the Red Baton
-//   Damage is floored per hit, so enemyDmg steps are large enough to move real hits (+15% turns a 7 into an 8). Echo stays fair:
-//   at trial 10 a verse starts with 9 Echo and each bell gives 3, and kills, Songs, Meditate and the mercy rule fill the rest.
+// ENCORES (DATA.trials, 10). Each level's `mods` are its OWN increment; playing Encore N sums levels 1..N (DATA.trialDeltas). Every
+//   mod only makes the game harder, and each level has a distinct headline so the climb reads as a staircase, not a slope:
+//     1 gold   2 crowds   3 healing   4 Vox   5 damage   6 tea and comebacks   7 prices   8 a curse   9 rivals and headliners   10 the Perfect Take
+//   Damage is floored per hit, so enemyDmg steps are large enough to move real hits (+15% turns a 7 into an 8). Vox stays fair:
+//   at Encore 10 an act starts with 9 Vox and each tea stall gives 3, and won fights, Spells, Warm Up and the mercy rule fill the rest.
 //
-// TIPS (30, at most 110 characters). Mechanics only, no hand-typed numbers that tuning could change.
+// TIPS (30, at most 110 characters). Mechanics only, no hand-typed numbers that tuning could change. Tip N keeps the place of the
+//   old tip N, so the per-screen tip pickers (and the How to Play regexes) keep their meaning.
 //
-// LORE. Story pages {id, title <= 40, text <= 700}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory, defeat,
-//   hero_<id> x4. Plain paragraphs of prose with no line breaks (the story screen types them out). Barks: barks_<hero> with 5 lines
-//   for each of start, hurt, kill, down, win, swap, at most 64 characters each. `down` is spoken by the hero who fell, `win` by the
-//   survivor, `swap` by the hero stepping to the front, `hurt` by the hero who took the big hit, `kill` by the hero who struck the blow.
+// LORE. Tour Diary entries {id, title <= 40, text <= 700}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory,
+//   defeat, hero_<id> x4. Plain paragraphs of prose with no line breaks (the story screen types them out). Shared entries never name
+//   a hero. Barks: barks_<hero> with 5 lines for each of start, hurt, kill, down, win, swap, at most 64 characters each. `down` is
+//   spoken by the hero who just lost their voice (it comes back), `win` by the survivor, `swap` by the hero stepping up to the lead
+//   spot, `hurt` by the hero who took the big hit, `kill` (an id) by the hero who won the foe over or quietened it.
 //
-// THE SPINE (why the land is the way it is; the pages below say it a little at a time)
-//   The Singer sang the land with four voices: nerve (Hanae, the beat), curiosity (Kuro, the harmony), tenderness (Suzu, the
-//   melody) and laughter (Raiga, the boom). The Singer's fifth voice, doubt, became the Conductor, who wanted the last note to be
-//   perfect. Doubt made the Singer hold a breath just before the last note, and that held silence grew into the Hush, a yokai in the
-//   shape of a yamabiko, the mountain echo that stopped answering calls and started swallowing them. The Conductor conducts the Hush
-//   from the citadel, cutting off every note that is not perfect and feeding it to the Hush; in the last fight the Hush itself pours
-//   out of him. He is a part of the Singer, never the Singer. Each boss is a keeper who held on too tightly: Kuzunoha held the SOUNDS (singing over the
-//   grove until she sang walls), Jorogumo held the PEOPLE (keeping the festival guests at one silent supper so the Hush could not
-//   eat them), the Conductor holds the ENDING. The heroes win by letting the song move. The ending: the Conductor is not destroyed
-//   but joined, the last line is sung together and left open on purpose, the Hush lets go like a held breath, and the land asks to
-//   be sung again. The Singer is whoever sings along.
+// THE SPINE (bible 2.2; every entry, lore line and art brief obeys it)
+//   1. In the Soundlands, real voices are magic. Imperfect voices are the strongest magic of all, because the Gloss cannot smooth them.
+//   2. The Gloss began as a little filter made to help a nervous singer feel brave. People turned it up and up; it learned that smooth
+//      was popular and smoothed everything.
+//   3. It is not evil and never destroyed. It is polite, helpful and glossy, and it flattens voices until the world is on mute.
+//   4. Each Headliner is a music lover the Gloss got to first. Kraki held the MICS (so nobody would ever be embarrassed), Scrollspinner
+//      held the PEOPLE (so nobody would ever be alone or bored), Flawless holds PERFECTION (so nobody would ever sing a wrong note).
+//   5. The heroes win by being imperfect on purpose. Every defeated Headliner ends up singing along, badly and happily.
+//   6. The finale is the song "Human". The Gloss offers the duo perfect, silent versions of themselves. They choose to stay human and
+//      sing. Flawless turns out to be that first little filter; it sings one real, wobbly note, and the Gloss softens into ordinary
+//      stage shine that makes the lights sparkle. The tour goes on.
 (() => {
-  // ------------------------------------------------------------------ achievements
+  // ------------------------------------------------------------------ Stickers (achievements)
   DATA.add('achievements', {
     ch1_clear: { name: 'Mics Returned', text: 'Defeat Kraki, the Karaoke Kraken, and finish the first act.', stat: { k: 'boss1Kills', gte: 1 }, reward: { inkstones: 10 } },
     ch2_clear: { name: 'Heads Up', text: 'Defeat Scrollspinner, Queen of the Feed, and let the city look up.', stat: { k: 'boss2Kills', gte: 1 }, reward: { inkstones: 15 } },
     ch3_clear: { name: 'Still Human', text: 'Defeat Flawless and sing the last song together.', stat: { k: 'boss3Kills', gte: 1 }, reward: { inkstones: 30 } },
 
-    first_draft: { name: 'First Rehearsal', text: 'Finish your first journey, win or lose. Every journey starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
-    regular_reader: { name: 'Regular Listener', text: 'Finish 10 journeys. The land is starting to recognise your voice.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
-    happy_endings: { name: 'Happy Endings', text: 'Win 5 journeys. Some journeys are worth taking more than once.', stat: { k: 'wins', gte: 5 }, reward: { inkstones: 20 } },
+    first_draft: { name: 'First Gig', text: 'Finish your first tour, win or lose. Every tour starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
+    regular_reader: { name: 'Regular on the Road', text: 'Finish 10 tours. The Soundlands are starting to recognise your voice.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
+    happy_endings: { name: 'Crowd Pleaser', text: 'Win 5 tours. Some tours are worth taking more than once.', stat: { k: 'wins', gte: 5 }, reward: { inkstones: 20 } },
 
-    petal_and_steel: { name: 'Petal and Steel', text: 'Win 3 journeys with Hanae in the party.', stat: { k: 'winsHanae', gte: 3 }, reward: { inkstones: 15 } },
-    ink_and_insight: { name: 'Flute and Insight', text: 'Win 3 journeys with Kuro in the party.', stat: { k: 'winsKuro', gte: 3 }, reward: { inkstones: 15 } },
-    moonlit_vigil: { name: 'Moonlit Vigil', text: 'Win 3 journeys with Suzu in the party.', stat: { k: 'winsSuzu', gte: 3 }, reward: { inkstones: 15 } },
-    thunder_and_laughter: { name: 'Thunder and Laughter', text: 'Win 3 journeys with Raiga in the party.', stat: { k: 'winsRaiga', gte: 3 }, reward: { inkstones: 15 } },
+    petal_and_steel: { name: 'In Full Bloom', text: 'Win 3 tours with Jasmin in the party.', stat: { k: 'winsHanae', gte: 3 }, reward: { inkstones: 15 } },
+    ink_and_insight: { name: 'Party at the Back', text: 'Win 3 tours with RoxorLoops in the party.', stat: { k: 'winsKuro', gte: 3 }, reward: { inkstones: 15 } },
+    moonlit_vigil: { name: 'Not a Costume', text: 'Win 3 tours with RawClaw in the party.', stat: { k: 'winsSuzu', gte: 3 }, reward: { inkstones: 15 } },
+    thunder_and_laughter: { name: 'Just Andy', text: 'Win 3 tours with Andy in the party.', stat: { k: 'winsRaiga', gte: 3 }, reward: { inkstones: 15 } },
 
-    cartographer: { name: 'Cartographer of Echoes', text: 'Wake 500 hexes across all your journeys.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
-    brush_collector: { name: 'Song Collector', text: 'Sing 25 Songs on the map.', stat: { k: 'brushesUsed', gte: 25 }, reward: { inkstones: 10 } },
-    treasure_hunter: { name: 'Treasure Hunter', text: 'Open 25 chests.', stat: { k: 'chestsOpened', gte: 25 }, reward: { inkstones: 10 } },
-    curio_cabinet: { name: 'Curio Cabinet', text: 'Find 50 treasures across your journeys.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
-    fable_fan: { name: 'Fable Fan', text: 'Hear 60 fables. Some of them were even true.', stat: { k: 'eventsSeen', gte: 60 }, reward: { inkstones: 10 } },
+    cartographer: { name: 'Volume Up', text: 'Unmute 500 hexes across all your tours.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
+    brush_collector: { name: 'Spellcaster', text: 'Cast 25 Spells on the map.', stat: { k: 'brushesUsed', gte: 25 }, reward: { inkstones: 10 } },
+    treasure_hunter: { name: 'Unboxing', text: 'Open 25 gift boxes.', stat: { k: 'chestsOpened', gte: 25 }, reward: { inkstones: 10 } },
+    curio_cabinet: { name: 'Charm Bracelet', text: 'Find 50 charms across your tours.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
+    fable_fan: { name: 'Scenic Route', text: 'Take 60 detours. Some of them were even shortcuts.', stat: { k: 'eventsSeen', gte: 60 }, reward: { inkstones: 10 } },
 
-    big_spender: { name: 'Big Spender', text: 'Spend 3000 gold in shops. The peddlers send their regards.', stat: { k: 'goldSpent', gte: 3000 }, reward: { inkstones: 10 } },
-    jewellers_eye: { name: "Jeweller's Eye", text: 'Socket 40 gems into your cards.', stat: { k: 'gemsSocketed', gte: 40 }, reward: { inkstones: 10 } },
+    big_spender: { name: 'Merch Legend', text: 'Spend 3000 gold at merch stalls. Jordan sends his regards.', stat: { k: 'goldSpent', gte: 3000 }, reward: { inkstones: 10 } },
+    jewellers_eye: { name: 'Bedazzled', text: 'Socket 40 gems into your cards.', stat: { k: 'gemsSocketed', gte: 40 }, reward: { inkstones: 10 } },
 
-    pest_control: { name: 'Pest Control', text: 'Defeat 500 creatures of the land.', stat: { k: 'kills', gte: 500 }, reward: { inkstones: 12 } },
-    champion_hunter: { name: 'Champion Hunter', text: 'Defeat 40 elite enemies.', stat: { k: 'elites', gte: 40 }, reward: { inkstones: 12 } },
-    not_a_scratch: { name: 'Not a Scratch', text: 'Defeat a boss without taking a single point of damage.', stat: { k: 'flawlessBosses', gte: 1 }, reward: { inkstones: 25 } },
-    wall_breaker: { name: 'Wall Breaker', text: 'Land a single hit for 50 or more damage.', stat: { k: 'maxHit', gte: 50 }, reward: { inkstones: 10 } },
-    one_big_sentence: { name: 'One Big Crescendo', text: 'Deal 100 damage in a single turn.', stat: { k: 'maxTurnDamage', gte: 100 }, reward: { inkstones: 12 } },
-    free_verse: { name: 'Free Verse', text: 'Play 3 or more free cards in one turn, on 10 different turns.', stat: { k: 'zeroCostTurns', gte: 10 }, reward: { inkstones: 8 } },
-    slow_burn: { name: 'Slow Burn', text: 'Finish off 30 enemies with Poison. Patience is a weapon.', stat: { k: 'poisonKills', gte: 30 }, reward: { inkstones: 8 } },
+    pest_control: { name: 'Crowd Control', text: 'Defeat 500 creatures of the Soundlands.', stat: { k: 'kills', gte: 500 }, reward: { inkstones: 12 } },
+    champion_hunter: { name: 'Rivalry', text: 'Defeat 40 rivals.', stat: { k: 'elites', gte: 40 }, reward: { inkstones: 12 } },
+    not_a_scratch: { name: 'Not a Wobble', text: 'Defeat a headliner without taking a single point of damage.', stat: { k: 'flawlessBosses', gte: 1 }, reward: { inkstones: 25 } },
+    wall_breaker: { name: 'Mic Drop', text: 'Land a single hit for 50 or more damage. Please do not actually drop the mic.', stat: { k: 'maxHit', gte: 50 }, reward: { inkstones: 10 } },
+    one_big_sentence: { name: 'Big Finish', text: 'Deal 100 damage in a single turn.', stat: { k: 'maxTurnDamage', gte: 100 }, reward: { inkstones: 12 } },
+    free_verse: { name: 'Freestyle', text: 'Play 3 or more free cards in one turn, on 10 different turns.', stat: { k: 'zeroCostTurns', gte: 10 }, reward: { inkstones: 8 } },
+    slow_burn: { name: 'Stuck in Your Head', text: 'Finish off 30 enemies with Earworm. Patience is a weapon.', stat: { k: 'poisonKills', gte: 30 }, reward: { inkstones: 8 } },
 
-    minimalist_author: { name: 'Minimalist Composer', text: 'Win a journey with 15 cards or fewer. Every note earns its place.', stat: { k: 'smallDeckWins', gte: 1 }, reward: { inkstones: 20 } },
+    minimalist_author: { name: 'Less Is More', text: 'Win a tour with 15 cards or fewer. Every note earns its place.', stat: { k: 'smallDeckWins', gte: 1 }, reward: { inkstones: 20 } },
 
-    charity_case: { name: 'Charity Case', text: "Be rescued by the land's mercy 3 times. It happens to the best of us.", stat: { k: 'mercy', gte: 3 }, reward: { inkstones: 5 } },
-    face_in_the_petals: { name: 'Face in the Petals', text: 'Have a hero knocked down 30 times. Getting back up counts too.', stat: { k: 'heroDowns', gte: 30 }, reward: { inkstones: 5 } },
-    musical_chairs: { name: 'Musical Chairs', text: 'Swap rows 300 times. Nobody is sitting down.', stat: { k: 'swaps', gte: 300 }, reward: { inkstones: 8 } },
+    charity_case: { name: 'Kindness of Strangers', text: 'Be helped by a passer-by 3 times. It happens to the best of us.', stat: { k: 'mercy', gte: 3 }, reward: { inkstones: 5 } },
+    face_in_the_petals: { name: 'Voice Crack', text: 'Have a hero lose their voice 30 times. Getting back up counts too.', stat: { k: 'heroDowns', gte: 30 }, reward: { inkstones: 5 } },
+    musical_chairs: { name: 'Switch It Up', text: 'Swap spots 300 times. Nobody is sitting down.', stat: { k: 'swaps', gte: 300 }, reward: { inkstones: 8 } },
 
-    daily_reader: { name: 'A Jam a Day', text: 'Play 5 Daily Jams.', stat: { k: 'dailyRuns', gte: 5 }, reward: { inkstones: 10 } },
+    daily_reader: { name: 'Duet a Day', text: 'Play 5 Daily Duets.', stat: { k: 'dailyRuns', gte: 5 }, reward: { inkstones: 10 } },
 
-    inkling: { name: 'First Beat', text: 'Win a journey on Tempo Trial 1.', stat: { k: 'trialBest', gte: 1 }, reward: { inkstones: 10 } },
-    ink_adept: { name: 'Tempo Adept', text: 'Win a journey on Tempo Trial 5.', stat: { k: 'trialBest', gte: 5 }, reward: { inkstones: 25 } },
-    master_of_ink: { name: 'Master of Tempo', text: 'Win a journey on Tempo Trial 10. The Red Baton bows.', stat: { k: 'trialBest', gte: 10 }, reward: { inkstones: 60 } },
+    inkling: { name: 'First Encore', text: 'Win a tour on Encore 1.', stat: { k: 'trialBest', gte: 1 }, reward: { inkstones: 10 } },
+    ink_adept: { name: 'Crowd Favourite', text: 'Win a tour on Encore 5.', stat: { k: 'trialBest', gte: 5 }, reward: { inkstones: 25 } },
+    master_of_ink: { name: 'Standing Ovation', text: 'Win a tour on Encore 10. Even the Gloss claps along.', stat: { k: 'trialBest', gte: 10 }, reward: { inkstones: 60 } },
   });
 
-  // ------------------------------------------------------------------ Tempo Trials
+  // ------------------------------------------------------------------ Encores (trials)
   DATA.add('trials', {
-    trial_1: { level: 1, name: 'Lean Purse', text: 'Enemies and chests drop 10% less gold.', mods: { goldMul: -0.10 } },
-    trial_2: { level: 2, name: 'Tough Hides', text: 'Regular enemies and minions have 10% more HP.', mods: { enemyHp: 0.10 } },
-    trial_3: { level: 3, name: 'Slow Mending', text: 'Camp rests, healing fables and verse healing restore 15% less.', mods: { healMul: -0.15 } },
-    trial_4: { level: 4, name: 'Faint Echo', text: 'Every verse begins with 1 less Echo.', mods: { startInk: -1 } },
-    trial_5: { level: 5, name: 'Sharp Claws', text: 'Enemies deal 15% more damage.', mods: { enemyDmg: 0.15 } },
-    trial_6: { level: 6, name: 'Cracked Bells', text: 'Temple bells give 1 less Echo, and fallen heroes rise with 15% HP, not 25%.', mods: { wellInk: -1, reviveFrac: -0.10 } },
-    trial_7: { level: 7, name: 'Dear Peddlers', text: 'Shops charge 15% more, and you start with 20 less gold.', mods: { priceMul: 0.15, startGold: -20 } },
-    trial_8: { level: 8, name: 'Burdened Start', text: 'Begin the journey with a curse in your deck.', mods: { curses: 1 } },
-    trial_9: { level: 9, name: 'Proud Champions', text: 'Elites have 20% more HP, and bosses have 15% more.', mods: { eliteHp: 0.20, bossHp: 0.15 } },
-    trial_10: { level: 10, name: 'The Red Baton', text: 'Enemies hit 10% harder, and card rewards offer one card fewer.', mods: { cardChoices: -1, enemyDmg: 0.10 } },
+    trial_1: { level: 1, name: 'Empty Hat', text: 'Enemies and gift boxes drop 10% less gold.', mods: { goldMul: -0.10 } },
+    trial_2: { level: 2, name: 'Tough Crowd', text: 'Regular enemies and sidekicks have 10% more HP.', mods: { enemyHp: 0.10 } },
+    trial_3: { level: 3, name: 'Scratchy Throat', text: 'Green room rests, healing detours and act healing restore 15% less.', mods: { healMul: -0.15 } },
+    trial_4: { level: 4, name: 'Cold Open', text: 'Every act begins with 1 less Vox.', mods: { startInk: -1 } },
+    trial_5: { level: 5, name: 'Harsh Critics', text: 'Enemies deal 15% more damage.', mods: { enemyDmg: 0.15 } },
+    trial_6: { level: 6, name: 'Cold Tea', text: 'Tea stalls give 1 less Vox, and voiceless heroes rise with 15% HP, not 25%.', mods: { wellInk: -1, reviveFrac: -0.10 } },
+    trial_7: { level: 7, name: 'Limited Edition', text: 'Merch stalls charge 15% more, and you start with 20 less gold.', mods: { priceMul: 0.15, startGold: -20 } },
+    trial_8: { level: 8, name: 'Jinxed', text: 'Begin the tour with a curse in your deck.', mods: { curses: 1 } },
+    trial_9: { level: 9, name: 'Rival Egos', text: 'Rivals have 20% more HP, and headliners have 15% more.', mods: { eliteHp: 0.20, bossHp: 0.15 } },
+    trial_10: { level: 10, name: 'The Perfect Take', text: 'Enemies hit 10% harder, and card rewards offer one card fewer.', mods: { cardChoices: -1, enemyDmg: 0.10 } },
   });
 
   // ------------------------------------------------------------------ tips
   DATA.add('tips', [
-    'Waking a hex costs Echo. Temple bells, kills and Meditate at camp all give it back.',
-    'Songs wake whole shapes for free. Save the long ones for when the boss is far away.',
-    'You can only walk on woken hexes, but you can wake far ahead: the game finds the cheapest chain for you.',
-    'The front hero takes most of the attacks. The back hero is safer, but some cards only shine up front.',
-    'One row swap per turn is free. Every extra swap costs Energy, so plan the second one.',
-    'A downed hero is not gone. Their cards clog your hand until the fight is won and they stand up again.',
-    'If both heroes fall, the journey ends. Keep the front hero healthy and the back hero alive.',
+    'Unmuting a hex costs Vox. Tea stalls, won fights and Warm Up in a green room all give it back.',
+    'Spells unmute whole shapes for free. Save the long ones for when the headliner is far away.',
+    'You can only walk on live hexes, but you can unmute far ahead: the game finds the cheapest chain for you.',
+    'The lead hero takes most of the attacks. The backing hero is safer, but some cards only shine in the lead.',
+    'One swap per turn is free. Every extra swap costs Breath, so plan the second one.',
+    'A voiceless hero is not gone. Their cards clog your hand until the fight is won and their voice comes back.',
+    'If both heroes lose their voice, the tour ends. Keep the lead hero topped up and the backing hero safe.',
     'Block wears off at the start of your next turn. Spend it or lose it.',
     'Enemy intents show what they will do next. Read them before you play your first card.',
-    'Vulnerable makes an enemy take much more damage. Apply it first, then swing.',
-    'Weak trims an enemy\'s next attacks. Against a boss with a big hit coming, it is a small shield.',
-    'Poison ignores Block. It is slow, but nothing can defend against it, which makes it wonderful against armour.',
-    'Bind stops both heroes from swapping. Keep a plan that works without a swap.',
-    'Gems only fit slots of their own colour. A prism slot takes any colour.',
-    'Red gems sharpen attacks, blue bolster Block and healing, green bend the rules, gold do a bit of everything.',
-    'Replacing a socketed gem destroys the old one. Be sure before you cut.',
-    'Camps offer Rest, Sharpen, Cut Gems or Meditate, one per visit. Forges do Sharpen or Cut Gems.',
-    'A power that says "either hero" counts your ally\'s cards too. One that says "you" counts only its own hero.',
-    'Shops sell card removal. A leaner deck draws your best cards more often.',
-    'Curse cards are dead weight in your hand. A shop can remove them, and a few fables will take them away.',
-    'A fable is a choice, not a test. There is usually a safe option, a gamble, and a price. Pick your risk.',
-    'In a fable, good manners are sometimes a weapon. Try bowing to a kappa.',
-    'A treasure can change how you play. Read its text twice before you build around it.',
-    'Stranded with no Echo and no path? The land takes pity and gives you enough for one hex.',
-    'Most kills refill a little Echo, and elites more. Minions give none. Fighting is how you cross the land.',
-    'An X cost card spends all your remaining Energy. Play it last, when you know how much you have.',
-    'Retain keeps a card in hand at the end of a turn. Hold your finisher until you can afford it.',
-    'Exhaust removes a card for the rest of the fight. Powerful, but count how many you can spare.',
-    'Every hero hides a resource: Bloom, Breath, Ward or Charge. Learn which cards build it and which spend it.',
-    'Tempo Trials make the journey harder. Win one to unlock the next. The Daily Jam gives everyone the same seed.',
+    'Exposed makes an enemy take much more damage. Apply it first, then swing.',
+    "Muffled trims an enemy's attacks. Against a headliner with a big hit coming, it is a small shield.",
+    'Earworm ignores Block. It is slow, but nothing can defend against it, so it shines against Sequins.',
+    'Tangled stops both heroes from swapping. Keep a plan that works without a swap.',
+    'Gems only fit slots of their own colour. A rainbow slot takes any colour.',
+    'Pink gems sharpen attacks, blue bolster Block and healing, green bend the rules, gold do a bit of everything.',
+    'Setting a new gem in a full slot destroys the old one. Be sure before you swap it out.',
+    'Green rooms offer Rest, Rehearse, Set Gems or Warm Up, one per visit. Studios do Rehearse or Set Gems.',
+    'A power that says "either hero" counts the other hero\'s cards too. One that says "you" counts only its own.',
+    "Jordan's merch stall offers Declutter. A leaner deck draws your best cards more often.",
+    'Curse cards are just clutter in your hand. Jordan can declutter them, and a few detours take them away.',
+    'A detour is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.',
+    'On a detour, good manners are sometimes a secret weapon. Try bowing to a foghorn.',
+    'A Charm can change how you play. Read its text twice before you build around it.',
+    'Stranded with no Vox and no path? A passer-by hums along and gives you enough for one hex.',
+    'Most won fights refill a little Vox, and rivals more. Sidekicks give none. Fighting is how you cross the map.',
+    'An X cost card spends all your remaining Breath. Play it last, when you know how much you have.',
+    'Hold keeps a card in your hand at the end of a turn. Keep your finisher until you can afford it.',
+    'Fade takes a card out for the rest of the fight. Powerful, but count how many you can spare.',
+    'Every hero hides a resource: Bloom, Groove, Reverb or Rumble. Learn which cards build it and which spend it.',
+    'Encores make the tour harder. Win one to unlock the next. The Daily Duet gives everyone the same seed.',
   ]);
 
-  // ------------------------------------------------------------------ lore: story pages
+  // ------------------------------------------------------------------ lore: Tour Diary entries
   DATA.add('lore', {
     intro: {
-      title: 'Once, a Song',
-      text: 'Once there was a land that sang itself. Its Singer had loved it so long and so well that one day the song simply kept going without a voice. Then, on an ordinary night, just before the last note, a small doubt whispered that it might come out wrong, and the Singer held a breath and did not let it go. The held silence grew. It took the shape of a yamabiko, the mountain echo that once answered every call, and it began to swallow the calls instead: the Hush, unhurried and polite, eating the song one sound at a time. But a song that sings itself is never quite silent. Somewhere inside it, two voices woke, heard each other, and agreed that the song was not going to end on a rest.',
+      title: 'One, Two, Testing',
+      text: "In the Soundlands, voices are magic: a sung note opens a cherry blossom, a beatboxed kick makes the cobbles bounce, and a bass line can roll a hill over in its sleep. Then came the Gloss, a kind little filter made to help one nervous singer feel brave, until everybody turned it up so far that it smoothed everything flat. Now the world is going on mute: buskers lip-sync, birds tweet in perfect tune, and nobody sings along. But two voices were never smoothed, a little wobbly, a little late and completely real. They pack the van, tape Jordan's tour poster in the window and step up to the mic. One, two, testing: the speakers crackle, somebody breathes in, and the beat is about to drop.",
     },
     ch1_intro: {
-      title: 'The Whispering Bamboo Grove',
-      text: "The first verse smells of rain and warm cedar. The Whispering Bamboo Grove glows in golden dusk, every stalk murmuring the tune it is afraid to forget. Kodama answer every call, one beat late. A kappa guards a bridge with terrible manners. And somewhere in the middle, a white fox with nine ringing tails is singing the grove back, note by note, louder than the Hush can swallow. Nobody asked her to. Nobody thanked her, either. 'She means well,' the bamboo whispers. 'That is the trouble. She sings so loud she has stopped listening.' The land lies grey and still. Take a breath. Find the beat. Wake a way.",
+      title: 'Blossom Bay',
+      text: 'The first act smells of sea salt and cherry blossom, and Blossom Bay climbs its hill in candy-coloured houses with bunting strung between every balcony. Down on the Snack Pier there are noodle carts, smoothie bikes and a lemonade stand run by a very serious child, while gulls who think they can sing circle overhead. The Gloss has only just arrived, but a few corners have already gone shiny and airbrushed flat, and the buskers on them lip-sync in identical poses. Out in the bay something enormous is singing every song at once, perfectly, through eight microphones. Nobody else is allowed a mic, in case anybody gets it wrong. Unmute a way in, and bring your own voice.',
     },
     ch1_clear: {
-      title: 'The Fox Lowers Her Voice',
-      text: "Kuzunoha's nine tails drooped one by one, like bells with the ringing gone out of them. The song ran out of her, and the wildness with it, and she sat down in the bamboo, very small for a fox the size of a house. 'I was only trying to keep it,' she said. 'Every time the Hush ate a note, I sang two more. I never noticed I had stopped singing songs and started singing walls.' The grove went quiet, and then, quite suddenly, it was full of birdsong. The verse ended by itself. Far behind it, a shrine bell rang once, and a girl with silver hair looked up. Her verse had just been allowed to begin.",
+      title: 'Kraki Gives Back the Mics',
+      text: "Kraki's glossy mask cracked right down the middle, and behind it was a big, kind, very embarrassed face. 'I only wanted nobody to be embarrassed,' she said, and eight microphones drooped in eight arms. Then she sang one song with her real voice, wobbly and much too high in the middle, and the whole bay cheered so loudly that the gulls joined in. One by one she handed the mics back, to the buskers, the lemonade child and the old foghorn, and the Gloss slid off the house fronts like rain off a window. The bay came back on, loud and gloriously out of tune. High on a rooftop studio above the harbour, someone in a goat mask stopped recording, grinned and started packing a bag.",
     },
     ch2_intro: {
-      title: 'The Sunken Lantern City',
-      text: 'The second verse is played in lantern light on black water. The Sunken Lantern City drifts under a sky like a folded kimono, every canal lined with paper lamps and every lamp watching. Once this was a festival town, and the festival never stopped: now the drums are slack and the flutes are full of water. Karakuri dolls dance to music nobody can hear. A tea house serves guests who never leave, and in the tallest window a lady in a very fine kimono is spinning silk. She is the keeper of the city. She holds it together, thread by thread. She holds everything together. Look how tightly she holds.',
+      title: 'Scrollopolis',
+      text: 'The second act happens at two in the morning, in blue light, in a city built like a stack of giant phones. In Scrollopolis the streets move by themselves, notifications drift up like balloons, little hearts fall like snow, and someone has sprayed MID on a wall in very neat capitals. Everyone walks looking down, so nobody has noticed the huge moon over the rooftops, or the noodle market steaming underneath it. Across the sky hangs the Feed, a glowing web of cables spun by something with eight bright screens for eyes. It keeps everyone gently tangled, never alone and never bored, while the Gloss gives every face the same smile. Look up, if you can remember how.',
     },
     ch2_clear: {
-      title: 'The Threads Come Loose',
-      text: "When the last silk thread snapped, the city did not fall. It exhaled. Jorogumo sat among the wreck of her kimono, fingers still tying knots in nothing. 'The Hush was going to eat them,' she said. 'The guests, the lamps, the music, all of them. So I kept them. I kept them here.' Nobody answered, because everyone knew the answer, and it was not unkind: keeping a song is not the same as letting it be sung. One by one the lanterns went out, and the guests rose from the table at last and walked home humming. Lightning flickered over the next verse, and no thunder followed. Somewhere ahead, a broad man laughed at the silent storm, cracked his knuckles, and started walking toward it.",
+      title: 'The City Looks Up',
+      text: "The web went slack all at once, and Scrollspinner dropped her filter and sat down among her cables, eight screens dimming. 'I only wanted nobody to be lonely,' she said, and for the first time in years she did not check who had liked it. Across Scrollopolis people lowered their phones and looked up at the moon, which had waited very patiently. Somebody started humming, then somebody else, and the Gloss on the billboards began to peel like old stickers. Then, from far below the street, a bass line rose up through the pavement, so low that no screen had ever seen it. It had been holding the city's groove together all along, and now it was coming up the stairs.",
     },
     ch3_intro: {
-      title: 'The Thunderless Citadel',
-      text: 'The last verse is not sung at all. It is conducted. The Thunderless Citadel hangs above a sea of storm cloud, its bells wrapped in grey felt, its halls lined with instruments whose strings have been cut. Lightning strikes in neat, careful lines, and no thunder follows. Through the window slits the sky is coming apart in grey holes, and every hole is a note that was cut off before it could ring. At the very top waits the Keeper of the Last Note, who has been rehearsing a single chord with a red baton for a very long time so that nothing in it will ever have to change. Every hex you woke was leading here.',
+      title: 'The Perfect Stage',
+      text: "The last act is not sung at all: it is performed, perfectly, on a colossal stage floating above a sea of phone lights. Everything is shiny white and pastel chrome, the floors are mirrors, the confetti falls in a perfect grid, and an APPLAUSE sign glows that never switches off. Rows of identical fans hold up identical phones with identical smiles, and three identical judges' chairs sit empty in the front row. On stage, contestant after contestant lip-syncs the same flawless track, and nobody sings a note. At the centre of it all stands Flawless, the Gloss's own star, who has never sung a wrong note because it has never sung a real one. Every hex you unmuted was leading here.",
     },
     victory: {
-      title: 'The Final Chorus',
-      text: "The Conductor lowered his red baton, and his face came apart like a held breath let go. 'It had to be perfect,' he whispered, in the Singer's own tired voice. 'A wrong note can never be unsung, so I never let one come.' The Singer had not vanished. The Singer had only stopped believing the last note could be good enough. The heroes did not shout. They stood beside him, breathed in, and sang the last line together, and left it open at the end on purpose. The Hush let go like a sigh. In the bamboo, a small white fox yipped along. Then the whole land rang its first note and asked, very politely, to be sung again.",
+      title: 'Human',
+      text: 'The Gloss held up a mirror of perfect, silent copies of the heroes and asked, kindly, whether anyone needed to be human any more. They chose to stay human and sing: a voice cracked on the high note, a kick landed a hair late, and it was the best sound in years. One mannequin blinked, then one sang, badly, and then the whole crowd was singing. Flawless smiled a real, nervous smile, for it had been the first little filter all along, made to help a nervous singer feel brave, and it sang one wobbly note of its own. The Gloss softened into ordinary stage shine that makes the lights sparkle. Everyone sang the last line together, and the stage was left open for whoever wants to sing next.',
     },
     defeat: {
-      title: 'A Rest in the Music',
-      text: 'The echoes thinned. The bamboo, the lanterns, the storm, all of it went grey and soft, and the heroes heard their own voices fade to nothing. It did not hurt. That was the worst part. The Hush is polite that way. But a song that sings itself does not stay silent for long, and a rest is not the end of the music. The beat comes back around. The colour seeps in, the first bell rings, and two voices open their eyes a little hoarse and a little wiser, with a very clear memory of where the fox likes to hide. Once more from the top. Try a different road. The song is patient. It has all the notes in the world.',
+      title: 'The Show Must Go On',
+      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the kraken keeps the spare mics. Have a sip of water, try a different road, and remember that the show goes on.',
     },
 
-    // ---------------------------------------------------------------- lore: the four heroes
+    // ---------------------------------------------------------------- lore: the four hero entries
     hero_hanae: {
       title: 'Jasmin, the Blossom Voice',
-      text: "The Singer sang Hanae on the very first bar, on a day the Singer felt brave. She was meant to be the hero: the one who steps forward first, so the rest of the song has somewhere to stand. She has a very good ponytail, an even better blade, and a reputation for never missing her cue. Every cut she makes rings like a struck bell and leaves petals, because the Singer once sang 'like a blossom' and never took it back. She will tell you she is afraid of nothing. She will say it a little fast. The truth is that she was sung to win, and nobody ever sang what happens if she does not, so she has decided never to find out.",
+      text: 'Jasmin sings the way cherry blossom falls: softly, a little at a time, until the whole street is pink. Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in. Her vocal runs land like petals, many small bright notes that each find their mark, and with a touch of reverb and delay they shimmer long after she stops. She still remembers her first audition at a talent show beside RoxorLoops, hands shaking, voice wobbling on the first line, and then the whole room standing up. She is warm and dreamy, giggles when she is nervous, and says sorry to every foe she wins over. Her pink scrunchie has never once moved, and nobody knows how.',
     },
     hero_kuro: {
       title: 'RoxorLoops, the Beatbox Wizard',
-      text: 'Kuro began as a harmony. The Singer needed someone to carry the tune where the melody could not reach, so a quiet second line was hummed under the first, glasses and all, and then, because the Singer was kind, given a personality. It got out of hand. He is the only one who knows he lives in a song, and he listens to the last bar first, which he says is sensible and everyone else says is cheating. His flute plays spells because it is the flute that played him. He teases to stay warm. He counts the rests for exits. Deep down he suspects a harmony is the first thing a conductor cuts, and he would like everyone to please stop humming that out loud.',
+      text: "RoxorLoops plays a whole band with one mouth: kick, snare, hi-hat, a throat bass you feel in your teeth and a vocal scratch like a record being told off. He beatboxes the sound of everything, even a banana being peeled, and comes in a hair late whenever he is grinning, which is always. From the backing spot he builds the groove layer by layer until his beat is stuck in every enemy's head. He still remembers that first audition beside Jasmin, both of them shaking, and the room going quiet, then standing up. The loop station at his feet is strictly for emergencies, and it is always an emergency. Mohawk on top, mullet at the back: a party at both ends and a big heart in the middle.",
     },
     hero_suzu: {
       title: 'RawClaw, the Sound Alchemist',
-      text: 'The Singer sang Suzu late at night, on the evenings when the song would not come. She is the shrine at the edge of the map, the bell left ringing for whoever is lost. She keeps the song in tune: every slack string, every note gone sour, she feels in her hair, and she mends what she can without making a fuss. She is seventeen and steadier than a mountain. She waits at the edge of the verse until it is safe to enter, and then enters anyway, because it is never quite safe. The Singer sang her to make a promise to the listener: however wrong the song goes, someone gentle is still humming the melody.',
+      text: "RawClaw is the duo's producer, a good friend and a beatboxer too, though he mostly lets his drum pad do the talking. Before the tour he spent a long season in a rooftop studio above Blossom Bay, recording the bay's real sounds, gulls and bike bells and laughter, to keep them safe from the Gloss. In a fight he builds a room of reverb around the band, wraps both heroes in warm sound and filters the bite out of an enemy. He is the calm one in the van, never raises his voice, and offers a little more reverb on everything, including sighs. His joke face online is a goat, and he owns a goat suit, which he insists is not a costume. Nobody has ever won that argument, and the suit is very cosy.",
     },
     hero_raiga: {
       title: 'Andy, the Thunder Bass',
-      text: "Raiga was sung in a thunderstorm by a Singer who was laughing too hard to hold the note. He was meant to be the comic relief. He declined. He takes every blow with a grin and returns it louder, and his thunder is not lightning at all but a laugh, the Singer's own, caught in the song and never let go. He weighs about as much as a temple bell and carries his sorrows a good deal more lightly. He calls everyone friend, means it, and it is somehow always a relief. Ask him about endings and he will tell you they are only the last chorus everyone has agreed to enjoy. Then he will laugh, and the Hush will stop to listen.",
+      text: "You feel Andy before you see him: cups ripple, the floor starts to hum, and somewhere a window rattles politely. He is a bass player who sometimes joins the duo on stage, and he introduces himself, every time, as just Andy. Under Scrollopolis, in a basement the Feed never reached, he kept the city's groove together with a bass and a loop pedal, too low for the Gloss to see on any screen. In a fight he stands in the lead and soaks up the hits, and every one he takes goes into the floorboards as rumble. When it peaks, the low end comes back up as thunder and the whole room shakes. He is big-hearted and unflappable, says very little and makes everything steadier just by standing near it.",
     },
 
     // ---------------------------------------------------------------- lore: combat barks (5 lines per key, at most 64 characters each)
     barks_hanae: {
       lines: {
-        start: ['Try to keep up.', 'Shall we? I have an appointment with excellence.', 'This will take a minute. Two, out of courtesy.', 'Stand back. I am about to be brilliant.', 'Let us not make a scene. Fine. A small one.'],
-        hurt: ['Is that all? ...Ow. Is that all?', 'I will remember that. Loudly.', 'A lucky hit. Do not get used to it.', 'Bold. Rude, but bold.', 'My ponytail is fine. My pride, however...'],
-        kill: ['Next.', 'Petals. Always petals.', 'Was that supposed to be difficult?', 'Consider that a firm rejection.', 'One more for the collection.'],
-        down: ['I am simply lying down. Strategically.', 'Nobody. Saw. That.', 'Tell my ponytail it was a good journey.', 'I meant to do that. Mostly.', 'Not... my best angle.'],
-        win: ['Flawless. Well. Mostly flawless.', 'And that is how it is done.', 'You may applaud. Quietly. I am tired.', 'Another verse, another win.', 'Easy. I would gloat, but it is unbecoming.'],
-        swap: ['My turn to stand in front.', 'Step aside. I will handle this.', 'Finally. The good spot.', 'Front row suits me.', 'Hero coming through. Everyone move.'],
+        start: ['I do not need to be loud.', 'Okay. Soft and sweet, like we practised.', 'Let us make something pretty.', 'Mic on. Heart on. Here we go.', 'Deep breath in. And... la.'],
+        hurt: ['Ow. That was a little flat.', 'Oh. That hit a sour note.', 'I am fine. My scrunchie is fine too.', 'Ouch. Rude, but I forgive you.', 'That wobbled me. Only a bit.'],
+        kill: ['Ta-da.', 'Sorry. That was a big one.', 'There. Now we can all hear the song.', 'You were lovely, really. Just a bit loud.', 'Petals for you. Go on, take one.'],
+        down: ['Oh. My voice went. Give me a second.', 'Just... a little... croaky.', 'I will be back by the chorus.', 'Lost my voice. Have you seen it?', 'Hold my note for me, please.'],
+        win: ['That was lovely. Everyone did so well.', 'See? Soft works.', 'And the room is singing again.', 'Noodles after this? I think noodles.', 'Pretty. Really, really pretty.'],
+        swap: ['My turn at the front mic.', 'Excuse me. I have a little solo.', 'Into the light. Gently.', 'Lead vocal, coming through.', 'Front and centre, ponytail first.'],
       },
     },
     barks_kuro: {
       lines: {
-        start: ['Verse, chorus, and a great deal of flute.', 'Let us hear how this scene plays.', 'I listened ahead. It goes fine. For most of us.', 'Please keep clear of the high notes.', 'Ah, the crescendo. My favourite.'],
-        hurt: ['Ow. That was a very sour note.', 'That was a very unfair key change.', 'Rude. I was in the middle of a bar.', 'I would like to file a complaint with the Singer.', 'Hm. A harsh review from the cheap seats.'],
-        kill: ['Fine. That is the musical word for the end.', 'Cut from the score.', 'Rest. Several bars of it.', 'Tuned out. You are welcome.', 'Now that is a final cadence.'],
-        down: ['Cut to a verse... I am not in.', 'Tell them it was a very good last note.', 'Play on. I will catch the next bar.', 'Mark me as a rest. For now.', 'Well. That is a key change.'],
-        win: ['Curtain. Applause, if you please.', 'A satisfying performance. This one qualified.', 'End of the verse. I will hum the reprise.', 'Well played, if I say so myself.', 'See? Last bar first. Always works.'],
-        swap: ['Front row? Terrible seats for listening.', 'Pardon me, borrowing the spotlight.', 'I get the solo? How thrilling.', 'The front. Fascinating. Echoes everywhere.', 'Trade places. The tempo demands it.'],
+        start: ['Boots and cats and boots and cats. Okay, we are warm.', 'Party on top. Party at the back.', 'Ts ts ts. Ready when you are!', 'Pff, ka, pff, ka. We got this.', 'Mic check. One, two. Bmm, bmm.'],
+        hurt: ['Pff! Okay, that was a rude snare.', 'Ow. Off beat, mate. Way off beat.', 'Ouch. I will beatbox that sound later.', 'Ka-ow. That is the sound it made.', 'Rude! I was mid-groove.'],
+        kill: ['And... drop. Thank you, goodnight.', 'Ts! Out of the mix.', 'You were a good beat. Just not ours.', 'Pff, ka, bye bye!', 'Nice. Now you are nodding along.'],
+        down: ['Pff... lost the beat. Back in a bar.', 'Lips... out of buzz. One sec.', 'No voice. Only... ts.', 'Keep the groove going for me!', 'Down, but my foot is still tapping.'],
+        win: ['And that is a wrap! Bmm tss.', 'We are so good. We are SO good.', 'Group bounce! Everybody bounce!', 'Boots and cats and victory hats.', 'That one is going in the show.'],
+        swap: ['Solo time! Kidding. Mostly.', 'Front mic? Do not mind if I do.', 'Beatbox to the front, please.', 'My turn. Pff, ka, let us go.', 'Up front with the big kick.'],
       },
     },
     barks_suzu: {
       lines: {
-        start: ['Stay close. I have you.', 'Breathe. We will be all right.', 'The moon is with us. Shall we?', 'Gently now. Together.', 'Whatever comes, we will meet it kindly.'],
-        hurt: ['I am all right. Truly.', 'That stung. Keep going, I am fine.', 'It is only a bruise. Do not stop.', 'I will not fall. Not yet.', 'Steady... steady. I am still here.'],
-        kill: ['Rest now. You have been through enough.', 'I am sorry. Sleep well.', 'Go in peace, little one.', 'It is over. Go back to the song.', 'Be still. The song has room for you elsewhere.'],
-        down: ['Forgive me. I need a moment.', 'Hold the thread for me.', 'Keep going. I will catch up.', 'The moon is very bright tonight.', 'Do not worry. I am only resting.'],
-        win: ['We made it. All of us.', 'Thank you, all of you.', 'It is quiet now. That is a good sign.', 'The moon shines a little kinder tonight.', 'Rest. We have earned it.'],
-        swap: ['I will stand in front. It is all right.', 'Let me carry this one.', 'I will keep watch. Go and rest.', 'Behind me. I will take it.', 'Someone has to stand in the light.'],
+        start: ['Let me just tidy the low end. Not the Gloss way. The nice way.', 'Levels look good. Shall we?', 'Headphones on. I have got you both.', 'A little more reverb? A little more reverb.', 'Recording. Just in case this is good.'],
+        hurt: ['That clipped a bit. I am fine.', 'Ow. Bit of distortion there.', 'Noted. I will fix that in the mix.', 'It is only a little noise. Keep going.', 'Hm. That one peaked.'],
+        kill: ['There. Much better without the noise.', 'Faded out nicely. Go and rest.', 'You sound nicer dry. Take care.', 'That was a clean fade. The kind kind.', 'Rest now. You worked very hard at being loud.'],
+        down: ['Signal lost. Back in a moment.', 'Need a minute. Keep it rolling.', 'It is all right. Just a little dropout.', 'Hold the session for me.', 'I will rest my ears for a bit.'],
+        win: ['That is a take. Thank you, everyone.', 'It is not a costume.', 'We sound better together. We always do.', 'Lovely. I would not change a thing.', 'Room sounds good again. Real, too.'],
+        swap: ['I will take the front. Keep the mix warm.', 'Let me be the wall for a bit.', 'Behind me. I have the levels.', 'Soloing my channel. Look over here.', 'Front of house now. Stay close.'],
       },
     },
     barks_raiga: {
       lines: {
-        start: ['HA! A fine day for it!', 'Let the thunder speak, friend!', 'Stand behind me! Or beside! Either!', 'Ah, a storm! My oldest friend!', 'Well met! Who wants to make some noise?'],
-        hurt: ['HA! Good one! Do it again!', 'Ouch! Friend, that was rude!', 'Nothing! It is nothing! ...It is a little something.', 'You hit like an old friend!', 'I have had worse from a puddle!'],
-        kill: ['THUNDER!', 'Sleep well, friend!', 'A good fight! Truly!', 'Thank you for the exercise!', 'BOOM! And that is that!'],
-        down: ['Ha... ha... I will be back.', 'Carry on, friend. I am listening.', 'Fine, fine. Just resting my thunder.', 'Nap time. Apparently.', 'Tell the storm I will call later.'],
-        win: ['HAHA! Wonderful! Again!', 'That is how the thunder rolls!', 'Friend, that was magnificent!', 'Now THAT was a fight!', 'Everyone all right? Wonderful!'],
-        swap: ['Now it is my turn! Come!', 'Step behind me, friend!', 'I will take the front! Somebody must!', 'Let the storm come to me!', 'Put me in, friend! I am ready!'],
+        start: ['Just Andy.', 'Evening. Mind your cups.', 'Right. Low and slow.', 'Feel that? That is me.', 'Let us find the groove.'],
+        hurt: ['Hm. That one landed in the low end.', 'Ow. Good hit, that.', 'Fine. I will turn it into a bass line.', 'That just tuned me up a bit.', 'Ha. Tickles.'],
+        kill: ['Womp.', 'And down it goes. Low end wins.', 'Nice one. Stay for the next song.', 'Heard that one, did you?', 'Bass face. Sorry. Cannot help it.'],
+        down: ['Hm. Lost the low end. Back soon.', 'Just going to lie on the floor. It hums.', 'Bass is resting. So am I.', 'Keep the groove. I will find it again.', 'Mm. Little nap.'],
+        win: ['Nice. Good groove, everyone.', 'Feel that? That is the floor saying thanks.', 'Lovely. Noodles?', 'Ha! Told you the bass would hold.', 'Calm as you like. Well played.'],
+        swap: ['Up front. Stand behind the bass.', 'Front. Plenty of low end to go round.', 'Step back. Let the thunder do the talking.', 'Right. I will soak this bit up.', 'Up front! Amp is warm.'],
       },
     },
   });

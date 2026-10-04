@@ -101,7 +101,7 @@ const GAME = (() => {
     }
     if (ok && state.paidWarned !== R.id && safe(() => m.runPaid(R.id), false)) {      // another tab already ended this very tale
       state.paidWarned = R.id;
-      UI.toast('This journey already ended in another window. Nothing more will be kept.', 'warn', { id: 'paid' });
+      UI.toast('This tour already ended in another window. Nothing more will be kept.', 'warn', { id: 'paid' });
     }
     return ok;
   }
@@ -132,7 +132,7 @@ const GAME = (() => {
     if (!old) return;
     const rec = call('META', 'recordRun', old, 'abandon', Date.now());
     call('META', 'clearRun', old.id);
-    if (rec && rec.inkstones) UI.toast('+' + rec.inkstones + ' Chimes for the journey you set down', 'good');
+    if (rec && rec.inkstones) UI.toast('+' + rec.inkstones + ' Cheers for the tour you set down', 'good');
   }
 
   function newRun(opts) {
@@ -150,7 +150,7 @@ const GAME = (() => {
     const unlocked = daily ? undefined : (meta && typeof meta.unlockedSet === 'function' ? safe(() => meta.unlockedSet(), undefined) : undefined);
     payOffSavedRun();
     const R = call('RUN', 'newRun', { heroes, trial, seed, daily, unlocked, nonce: runNonce() });
-    if (!R) { UI.toast('The journey could not begin (RUN is not ready)', 'bad'); return null; }
+    if (!R) { UI.toast('The tour could not start (RUN is not ready)', 'bad'); return null; }
     if (!R.map) call('RUN', 'startChapter', R, 1);
     setRun(R);
     state.ended = null; state.pendingChapter = null; state.lastCombat = null;
@@ -165,7 +165,7 @@ const GAME = (() => {
     const meta = ns.META();
     let R = null;
     try { R = meta && typeof meta.loadRun === 'function' ? meta.loadRun() : null; } catch (e) { console.error('[game] META.loadRun threw: ' + e.message); }
-    if (!R) { UI.toast('There is no saved journey to continue', 'warn'); return Promise.resolve(); }
+    if (!R) { UI.toast('There is no saved tour to continue', 'warn'); return Promise.resolve(); }
     setRun(R);
     state.ended = null; state.pendingChapter = null; state.lastCombat = null;
     if (R.node) return enterNode(R.node);
@@ -174,8 +174,8 @@ const GAME = (() => {
   }
 
   function instant(node) {
-    if (node.kind === 'well') { UI.toast(node.toast || 'The temple bell rings' + (node.gained ? ' (+' + node.gained + ' Echo)' : ''), 'good'); sfx('well'); }   // node.toast: RUN's fable fallback (a well with its own words)
-    else { const b = DATA.brushes[node.id]; UI.toast('You learn a Song' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
+    if (node.kind === 'well') { UI.toast(node.toast || 'The tea is warm' + (node.gained ? ': ' + node.gained + ' Vox.' : ''), 'good'); sfx('well'); }   // node.toast: RUN's detour fallback (a tea stall with its own words)
+    else { const b = DATA.brushes[node.id]; UI.toast('You learn a Spell' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
   }
 
   // The bestiary writes a page for every creature the party stands in front of, not only the ones it kills. node.met is saved with the node, so
@@ -259,12 +259,12 @@ const GAME = (() => {
   }
 
   function abandon() {
-    return UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The journey ends here. You keep a share of the Chimes for the hexes you woke.', yes: 'Abandon', no: 'Keep playing', danger: true }).then((ok) => {
+    return UI.overlay.open('confirm', { title: 'Abandon this tour?', body: 'The tour ends here. You keep a share of the Cheers for the hexes you unmuted.', yes: 'Abandon tour', no: 'Keep touring', danger: true }).then((ok) => {
       if (!ok) return false;
       const e = finishRun('abandon');
       const stones = e && e.rec && e.rec.inkstones;
       toTitle();
-      if (stones) UI.toast('+' + stones + ' Chimes', 'good');
+      if (stones) UI.toast('+' + stones + ' Cheers', 'good');
       return true;
     });
   }
@@ -488,7 +488,7 @@ const GAME = (() => {
 
   function lose() { UI.bus.emit('combat:end', { result: 'lose' }); return defeat(); }
   function setGold(n) { if (state.R) { state.R.gold = n; UI.toast('Gold set to ' + n, 'info'); } return state.R && state.R.gold; }
-  function addRelic(id) { if (state.R && DATA.relics[id]) { addRelicTo(state.R, id); UI.toast('Treasure added: ' + DATA.relics[id].name, 'good'); } return state.R && state.R.relics; }
+  function addRelic(id) { if (state.R && DATA.relics[id]) { addRelicTo(state.R, id); UI.toast('Charm added: ' + DATA.relics[id].name, 'good'); } return state.R && state.R.relics; }
   function skipChapter() { return state.R ? chapterFlow(state.R) : Promise.resolve(); }
 
   // ---- frame loop ----
@@ -553,7 +553,7 @@ const GAME = (() => {
   function summaryLines(s) {
     if (!s) return [];
     const heroes = (s.heroes || []).map((h) => (DATA.heroes[h.id] ? DATA.heroes[h.id].name : h.id)).join(' and ');
-    return [heroes ? 'Heroes: ' + heroes : '', 'Verse ' + (s.chapter || 1), 'Score ' + (s.score || 0), s.record && s.record.inkstones !== undefined ? '+' + s.record.inkstones + ' Chimes' : ''].filter(Boolean);
+    return [heroes ? 'Heroes: ' + heroes : '', 'Act ' + (s.chapter || 1), 'Score ' + (s.score || 0), s.record && s.record.inkstones !== undefined ? '+' + s.record.inkstones + ' Cheers' : ''].filter(Boolean);
   }
 
   function synthReward(R) {
@@ -588,10 +588,10 @@ const GAME = (() => {
           const hasRun = !!safe(() => meta.hasRun(), false);
           const menu = mk('div', { class: 'col gap ph-menu' });
           if (hasRun) menu.appendChild(UI.btn('Continue', { kind: 'primary', size: 'lg', breathe: true, onclick: () => continueRun() }));
-          menu.appendChild(UI.btn('New Journey', { kind: hasRun ? 'secondary' : 'primary', size: 'lg', onclick: () => go('heroSelect', null, { transition: 'page' }) }));
-          menu.appendChild(UI.btn('Daily Jam', { kind: 'secondary', size: 'lg', onclick: () => newRun({ daily: true }) }));
-          menu.appendChild(mk('div', { class: 'row gap center' }, UI.btn('Hall', { kind: 'ghost', onclick: () => go('library', null, { transition: 'page' }) }), UI.btn('Settings', { kind: 'ghost', onclick: () => go('settings') }), UI.btn('How to play', { kind: 'ghost', onclick: () => go('howto') })));
-          shell(root, 'ph-title', mk('h1', { class: 't-title stroke ph-logo', text: 'ECHOWAKE' }), mk('p', { class: 'ph-sub', text: 'a rogue ballad' }), menu);
+          menu.appendChild(UI.btn('New Tour', { kind: hasRun ? 'secondary' : 'primary', size: 'lg', onclick: () => go('heroSelect', null, { transition: 'page' }) }));
+          menu.appendChild(UI.btn('Daily Duet', { kind: 'secondary', size: 'lg', onclick: () => newRun({ daily: true }) }));
+          menu.appendChild(mk('div', { class: 'row gap center' }, UI.btn('Tour Bus', { kind: 'ghost', onclick: () => go('library', null, { transition: 'page' }) }), UI.btn('Settings', { kind: 'ghost', onclick: () => go('settings') }), UI.btn('How to play', { kind: 'ghost', onclick: () => go('howto') })));
+          shell(root, 'ph-title', mk('h1', { class: 't-title stroke ph-logo', text: 'HOCUS VOCUS' }), mk('p', { class: 'ph-sub', text: 'beatboxing and vocal magic' }), menu);
         },
       },
       heroSelect: {
@@ -601,17 +601,17 @@ const GAME = (() => {
           const chosen = [];
           let trial = 0;
           const info = hint('Choose two heroes.');
-          const start = UI.btn('Begin the journey', { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => newRun({ heroes: chosen.slice(), trial }) });
+          const start = UI.btn('Start the Tour', { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => newRun({ heroes: chosen.slice(), trial }) });
           const row = mk('div', { class: 'row gap center ph-heroes' });
           const badges = {};
           DATA.LISTS.heroIds.forEach((id) => {
             const unlocked = safe(() => meta.isUnlocked('hero', id), true) !== false;
             const b = UI.heroBadge(id, { size: 'lg', onclick: () => {
-              if (!unlocked) { UI.toast('Locked: finish an earlier verse to wake this hero', 'warn'); return; }
+              if (!unlocked) { UI.toast('Locked: clear an earlier act to bring this hero on tour', 'warn'); return; }
               const i = chosen.indexOf(id);
               if (i >= 0) chosen.splice(i, 1); else { if (chosen.length >= 2) chosen.shift(); chosen.push(id); }
               Object.keys(badges).forEach((h) => badges[h].rbSet({ selected: chosen.indexOf(h) >= 0 }));
-              info.textContent = chosen.length === 2 ? chosen.map((h) => DATA.heroes[h].name).join(' and ') + ' step into the silence.' : 'Choose two heroes.';
+              info.textContent = chosen.length === 2 ? chosen.map((h) => DATA.heroes[h].name).join(' and ') + ' step onto the stage.' : 'Choose two heroes.';
               start.rbSet({ disabled: chosen.length !== 2, reason: 'Choose two heroes first' });
             } });
             if (!unlocked) b.classList.add('down');
@@ -619,7 +619,7 @@ const GAME = (() => {
             row.appendChild(mk('div', { class: 'col ph-hero' }, b, mk('p', { class: 'ph-blurb', text: DATA.heroes[id].blurb })));
           });
           const trialMax = safe(() => meta.trialMax(), 0) || 0;
-          const trials = trialMax > 0 ? mk('div', { class: 'row gap-s center' }, mk('span', { class: 'dim', text: 'Tempo Trial' }), UI.seg(Array.from({ length: trialMax + 1 }, (_, i) => ({ value: i, label: String(i) })), { value: 0, onchange: (v) => { trial = v; } })) : null;
+          const trials = trialMax > 0 ? mk('div', { class: 'row gap-s center' }, mk('span', { class: 'dim', text: 'Encore' }), UI.seg(Array.from({ length: trialMax + 1 }, (_, i) => ({ value: i, label: String(i) })), { value: 0, onchange: (v) => { trial = v; } })) : null;
           shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Choose your heroes' }), row, info, trials, mk('div', { class: 'row gap center' }, UI.btn('Back', { kind: 'ghost', size: 'lg', onclick: () => go('title', null, { transition: 'page' }) }), start));
         },
       },
@@ -628,15 +628,15 @@ const GAME = (() => {
         draw: phBackdrop,
         enter(params, root) {
           const R = state.R;
-          if (!R) { shell(root, '', hint('No journey is active.'), UI.btn('Title', { kind: 'primary', onclick: () => toTitle() })); return; }
+          if (!R) { shell(root, '', hint('No tour is on the road.'), UI.btn('Title', { kind: 'primary', onclick: () => toTitle() })); return; }
           const stats = mk('div', { class: 'row gap ph-stats' }, UI.stat('gold', R.gold), UI.stat('ink', R.ink, { max: R.inkMax }), ...R.heroes.map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp })));
           const buttons = mk('div', { class: 'row gap-s center wrap ph-nodes' });
-          [['Fight', 'enemy'], ['Elite', 'elite'], ['Shop', 'shop'], ['Camp', 'camp'], ['Fable', 'event'], ['Chest', 'chest'], ['Forge', 'forge'], ['Gem cache', 'gemcache'], ['Keeper', 'boss']].forEach(([label, kind]) => {
-            buttons.appendChild(UI.btn(label, { kind: 'secondary', size: 'sm', onclick: () => { const node = nodeFor(R, kind, {}); enterNode(node); } }));
+          [['Face-Off', 'enemy'], ['Rival', 'elite'], ['Merch Stall', 'shop'], ['Green Room', 'camp'], ['Detour', 'event'], ['Gift Box', 'chest'], ['Studio', 'forge'], ['Sparkle Booth', 'gemcache'], ['Headliner', 'boss']].forEach(([label, kind]) => {
+            buttons.appendChild(UI.btn(DATA.tiles && DATA.tiles[kind] ? DATA.tiles[kind].name : label, { kind: 'secondary', size: 'sm', onclick: () => { const node = nodeFor(R, kind, {}); enterNode(node); } }));
           });
           const menu = UI.menuButton();
           root.appendChild(menu);
-          shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Verse ' + (R.chapter || 1) + ': the map (placeholder)' }), stats, hint('The real map arrives in a later wave. Enter any node type to test the flow.'), buttons, UI.btn('Deck', { kind: 'ghost', onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
+          shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Act ' + (R.chapter || 1) + ': the map (placeholder)' }), stats, hint('The real map arrives in a later wave. Enter any node type to test the flow.'), buttons, UI.btn('Deck', { kind: 'ghost', onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
         },
       },
       combat: {
@@ -661,33 +661,33 @@ const GAME = (() => {
             const c = UI.card(id, { size: 'reward', onclick: () => { chosen = chosen === id ? null : id; cards.querySelectorAll('.card').forEach((el) => el.rbUpdate({ selected: el.dataset.id === chosen })); } });
             cards.appendChild(c);
           });
-          const lines = ['+' + (rw.gold || 0) + ' gold', rw.ink ? '+' + rw.ink + ' Echo' : '', (rw.relics || []).length ? 'Treasure offered' : ''].filter(Boolean).join('   ');
+          const lines = ['+' + (rw.gold || 0) + ' gold', rw.ink ? '+' + rw.ink + ' Vox' : '', (rw.relics || []).length ? 'Charm offered' : ''].filter(Boolean).join('   ');
           shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Spoils (placeholder)' }), hint(lines), cards,
             mk('div', { class: 'row gap center' }, UI.btn('Skip card', { kind: 'ghost', size: 'lg', onclick: () => { call('RUN', 'claim', R, rw, { card: null, relic: null, gem: null, takeBrush: false }); nodeDone(); } }),
               finishBtn('Take and continue', () => { call('RUN', 'claim', R, rw, { card: chosen, relic: (rw.relics || [])[0] || null, gem: (rw.gems || [])[0] || null, takeBrush: !!rw.brush }); nodeDone(); })));
         },
       },
-      shop: nodeScreen('shop', 'The peddler', (body, R, node) => { if (node && node.stock && node.stock.items) body.push(hint(node.stock.items.length + ' wares laid out')); }),
-      event: nodeScreen('event', 'A fable', (body, R, node) => { const ev = node && (node.event && node.event.title ? node.event : DATA.events[node && node.event]); if (ev) body.push(hint(ev.title)); }),
-      camp: nodeScreen('camp', 'The campfire', (body, R) => { body.push(UI.btn('Rest', { kind: 'secondary', size: 'lg', onclick: () => { call('RUN', 'campAction', R, 'rest'); UI.toast('You rest by the fire', 'good'); } })); }),
-      forge: nodeScreen('forge', 'The inkstone forge'),
-      chest: nodeScreen('chest', 'A treasure chest', (body, R, node) => { body.push(UI.btn('Open', { kind: 'secondary', size: 'lg', onclick: () => { call('RUN', 'take', R, node, { relic: true, gem: null }); UI.toast('You open the chest', 'good'); } })); }),
-      gemcache: nodeScreen('gemcache', 'A gem cache'),
+      shop: nodeScreen('shop', "Jordan's Merch Stall", (body, R, node) => { if (node && node.stock && node.stock.items) body.push(hint(node.stock.items.length + ' wares laid out')); }),
+      event: nodeScreen('event', 'A detour', (body, R, node) => { const ev = node && (node.event && node.event.title ? node.event : DATA.events[node && node.event]); if (ev) body.push(hint(ev.title)); }),
+      camp: nodeScreen('camp', 'The Green Room', (body, R) => { body.push(UI.btn('Rest', { kind: 'secondary', size: 'lg', onclick: () => { call('RUN', 'campAction', R, 'rest'); UI.toast('You put your feet up', 'good'); } })); }),
+      forge: nodeScreen('forge', 'The Studio'),
+      chest: nodeScreen('chest', 'A gift box', (body, R, node) => { body.push(UI.btn('Open', { kind: 'secondary', size: 'lg', onclick: () => { call('RUN', 'take', R, node, { relic: true, gem: null }); UI.toast('You open the gift', 'good'); } })); }),
+      gemcache: nodeScreen('gemcache', 'A sparkle booth'),
       chapterClear: {
         music: 'victory', draw: phBackdrop,
         enter(params, root) {
           const p = params || {};
           const lore = DATA.lore && DATA.lore['ch' + p.chapter + '_clear'];
-          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'Verse ' + (p.chapter || 1) + ' complete' }, mk('p', { class: 'm-text', text: lore ? lore.text : 'The verse ends.' }), finishBtn('Continue', () => nodeDone())));
+          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'Act ' + (p.chapter || 1) + ' complete' }, mk('p', { class: 'm-text', text: lore ? lore.text : 'The act ends.' }), finishBtn('Continue', () => nodeDone())));
         },
       },
       gameOver: {
         music: 'defeat', draw: phBackdrop,
-        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'The journey ends' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
+        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'The lights go down' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
       },
       victory: {
         music: 'victory', draw: phBackdrop,
-        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, gold: true, title: 'The Hush lets go' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
+        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, gold: true, title: 'Still human' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
       },
       story: {
         draw: phBackdrop,
@@ -696,7 +696,7 @@ const GAME = (() => {
           const lore = DATA.lore && DATA.lore[p.id];
           call('META', 'markLore', p.id);
           const next = () => { if (p.then) go(p.then.name, p.then.params, { transition: 'page' }); else UI.back(); };
-          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: lore ? lore.title : 'A verse' }, mk('p', { class: 'm-text story-text', text: lore ? lore.text : 'Once, the land could sing...' }), mk('div', { class: 'row gap center' }, UI.btn('Skip', { kind: 'ghost', onclick: next }), finishBtn('Play on', next))));
+          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: lore ? lore.title : 'A diary entry' }, mk('p', { class: 'm-text story-text', text: lore ? lore.text : 'Nothing here yet. On we go, and the tour goes on.' }), mk('div', { class: 'row gap center' }, UI.btn('Skip', { kind: 'ghost', onclick: next }), finishBtn('On we go', next))));
         },
       },
       settings: {
@@ -706,7 +706,7 @@ const GAME = (() => {
       howto: {
         draw: phBackdrop,
         enter(params, root) {
-          const steps = ['Wake the grey fog with Echo to reveal hexes, then walk onto them.', 'Fight with two heroes: one in front, one behind. Swap rows when it helps.', 'Play cards with Energy. Socket gems into cards to change how they play.', 'Reach the keeper of the verse and break the Hush.'];
+          const steps = ['Unmute the glossy fog with Vox to reveal hexes, then walk onto them.', 'Fight with two heroes: one in the lead, one backing. Swap spots when it helps.', 'Play cards with Breath. Socket gems into cards to change how they play.', 'Reach the headliner of each act and win them over.'];
           shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'How to play' }, ...steps.map((l, i) => mk('p', { class: 'm-text', text: (i + 1) + '. ' + l })), mk('div', { class: 'row center' }, UI.btn('Back', { kind: 'primary', size: 'lg', onclick: () => UI.back() }))));
         },
       },
@@ -724,10 +724,10 @@ const GAME = (() => {
         const items = [
           b('Resume', 'primary', () => close()),
           b('Deck', 'secondary', () => UI.overlay.open('deck', { mode: 'view' })),
-          b('Treasures', 'secondary', () => UI.overlay.open('relics', {})),
+          b('Charms', 'secondary', () => UI.overlay.open('relics', {})),
           b('Settings', 'secondary', () => UI.overlay.open('settings')),
-          b('How to play', 'secondary', () => UI.overlay.open('modal', { title: 'How to play', body: 'Wake hexes with Echo, fight with two heroes in two rows, play cards with Energy, and socket gems into card slots. Reach the keeper of each verse.' })),
-          R ? b('Abandon journey', 'ghost', () => { close(); abandon(); }) : null,
+          b('How to play', 'secondary', () => UI.overlay.open('modal', { title: 'How to play', body: 'Unmute hexes with Vox, fight with two heroes in two spots, play cards with Breath, and socket gems into card slots. Reach the headliner of each act.' })),
+          R ? b('Abandon tour', 'ghost', () => { close(); abandon(); }) : null,
           R ? b('Save and quit', 'ghost', () => { save(); close(); toTitle(); }) : null,
         ].filter(Boolean);
         root.appendChild(UI.panel({ kind: 'dark', title: 'Paused', class: 'pause-panel' }, mk('div', { class: 'col gap ph-menu' }, ...items), tip ? mk('p', { class: 'pause-tip', text: tip }) : null));
@@ -776,7 +776,7 @@ const GAME = (() => {
           mk('div', { class: 'row gap' }, UI.seg([{ value: 1, label: 'Normal' }, { value: 2, label: 'Large' }], { value: 1 }), UI.toggle({ value: true }), UI.toggle({ value: false })),
           UI.slider({ value: 0.6 })));
         const dark = UI.panel({ kind: 'dark', gold: true, title: 'Lacquer panel' }, mk('div', { class: 'col gap-s' },
-          UI.tabs([{ id: 'a', label: 'Unlocks' }, { id: 'b', label: 'Story' }, { id: 'c', label: 'Bestiary' }], { value: 'a' }),
+          UI.tabs([{ id: 'a', label: 'Unlocks' }, { id: 'b', label: 'Story' }, { id: 'c', label: "Who's Who" }], { value: 'a' }),
           UI.bar(48, 76, 'hp'), UI.bar(9, 14, 'ink'), UI.bar(120, 260, 'boss'),
           mk('div', { class: 'row gap' }, UI.stat('gold', 137), UI.stat('ink', 9, { max: 14 }), UI.stat('hp', 48, { max: 76 })),
           mk('div', { class: 'row gap' }, UI.btn('Secondary', { kind: 'secondary' }), UI.btn('Ghost', { kind: 'ghost' }))));
@@ -800,12 +800,12 @@ const GAME = (() => {
         UI.after(0, () => {
           UI.tip.card(inst(id, 0, true), { x: 80, y: 130 });
           UI.tip.showFor(anchor, UI.tip.kw('poison', 3), { side: 'bottom' });
-          ['info', 'good', 'warn', 'achievement'].forEach((k, i) => UI.toast(['A quiet toast', 'The temple bell rings (+4 Echo)', 'Not enough Energy', 'Achievement: First Echo'][i], k, { ms: 600000 }));
+          ['info', 'good', 'warn', 'achievement'].forEach((k, i) => UI.toast(['A quiet toast', 'The tea is warm: 4 Vox.', 'Not enough Breath', 'Sticker earned: First Gig'][i], k, { ms: 600000 }));
         });
       },
-      modal() { UI.after(0, () => UI.modal({ title: 'Something broke the rhythm', body: 'Something went wrong in the music, but your progress is safe. Turn back to the title and try again.', buttons: [{ label: 'Copy details', kind: 'secondary', cb: () => false }, { label: 'Back to Title', kind: 'primary' }] })); },
-      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The journey ends here. You keep a share of the Chimes.', yes: 'Abandon', no: 'Keep playing', danger: true })); },
-      pick() { UI.after(0, () => UI.overlay.open('cardPick', { title: 'Choose a card to exhaust', cards: ['hanae', 'kuro', 'suzu'].map((h) => inst(byRarity('common', h))), n: 1, confirm: 'Exhaust' })); },
+      modal() { UI.after(0, () => UI.modal({ title: 'Something went a bit off-key', body: 'Something went a bit off-key, but your tour is safe. Head back to the title and try again.', buttons: [{ label: 'Copy details', kind: 'secondary', cb: () => false }, { label: 'Back to Title', kind: 'primary' }] })); },
+      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this tour?', body: 'The tour ends here. You keep a share of the Cheers.', yes: 'Abandon tour', no: 'Keep touring', danger: true })); },
+      pick() { UI.after(0, () => UI.overlay.open('cardPick', { title: 'Choose a card to fade', cards: ['hanae', 'kuro', 'suzu'].map((h) => inst(byRarity('common', h))), n: 1, confirm: 'Fade' })); },
       legend() { UI.after(0, () => UI.overlay.open('legend', {})); },
       settings() { UI.after(0, () => UI.overlay.open('settings', {})); },
     };
@@ -814,7 +814,7 @@ const GAME = (() => {
       enter(params, root) {
         const sec = (params && params.section) || 'cards';
         const w = mk('div', { class: 'gal gal-' + sec });
-        w.appendChild(mk('h2', { class: 'gal-h serif', text: 'ECHOWAKE components: ' + sec }));
+        w.appendChild(mk('h2', { class: 'gal-h serif', text: 'HOCUS VOCUS components: ' + sec }));
         root.appendChild(w);
         if (S_[sec]) S_[sec](w); else w.appendChild(mk('p', { text: 'Unknown section. Try: ' + Object.keys(S_).join(', ') }));
       },
@@ -843,7 +843,7 @@ const GAME = (() => {
     if (!m || !m.bus) { missing('META.bus'); return; }
     m.bus.on('achievement', (e) => {
       const a = DATA.achievements[e && e.id];
-      UI.toast('Achievement: ' + (a ? a.name : e && e.id), 'achievement');
+      UI.toast('Sticker earned: ' + (a ? a.name : e && e.id), 'achievement');
       sfx('achievement');
     });
     m.bus.on('unlock', (e) => {

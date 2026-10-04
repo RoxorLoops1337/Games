@@ -101,6 +101,13 @@
   }
   const heroName = (id) => (DATA.heroes[id] ? DATA.heroes[id].name : String(id));
   const heroList = (ids) => { const n = (ids || []).map(heroName); return n.length === 2 ? n[0] + ' and ' + n[1] : n.join(', '); };
+  // display words for ids the screens print (bible 4.1): a row id is never shown through cap(), and "her" belongs to Jasmin alone
+  const ROW_WORD = { front: 'Lead', back: 'Backing' };
+  const rowWord = (row) => ROW_WORD[row] || String(row);
+  const rowProse = (row) => (row === 'front' ? 'the lead' : 'backing');
+  const poss = (id) => (id === 'hanae' ? 'her' : 'his');
+  const colourWord = (c) => (DATA.COLOUR_NAME && DATA.COLOUR_NAME[c]) || c;
+  const statusWord = (id, dflt) => (DATA.statuses && DATA.statuses[id] && DATA.statuses[id].name) || dflt;
 
   // listener bookkeeping: everything a screen adds outside the UI helpers is removed at leave
   function listeners() {
@@ -246,7 +253,7 @@
   let starting = false;
   function confirmOverwrite() {
     if (!safe(() => META.hasRun(), false)) return Promise.resolve(true);
-    return UI.confirm({ title: 'Start a new journey?', body: 'You have a journey in progress. Beginning a new one will replace it.', yes: 'Begin anew', no: 'Keep my journey', danger: true });
+    return UI.confirm({ title: 'Start a new tour?', body: 'You have a tour on the road. Starting a new one will replace it.', yes: 'Start fresh', no: 'Keep my tour', danger: true });
   }
   function beginRun(opts) {
     if (starting) return Promise.resolve(false);
@@ -254,7 +261,7 @@
     return confirmOverwrite().then((ok) => {
       if (!ok) { starting = false; return false; }
       const G = game();
-      if (!G || typeof G.newRun !== 'function') { starting = false; UI.toast('The journey cannot begin yet', 'bad'); return false; }
+      if (!G || typeof G.newRun !== 'function') { starting = false; UI.toast('The tour cannot start yet', 'bad'); return false; }
       const R = G.newRun(opts);
       UI.after(900, () => { starting = false; });
       if (!R) starting = false;
@@ -484,17 +491,17 @@
       const menu = mk('nav', { class: 'mn-menu', 'aria-label': 'Main menu' });
       const items = S.items;
       if (hasRun) {
-        const sub = info ? info.text : 'Return to your saved journey';
-        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('T' + info.trial, { size: 'sm', label: 'Tempo Trial ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Jam' }) : null, medalStrip(info && info.heroes, TITLE_MEDAL));
+        const sub = info ? info.text : 'Back to your tour';
+        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('E' + info.trial, { size: 'sm', label: 'Encore ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Duet' }) : null, medalStrip(info && info.heroes, TITLE_MEDAL));
         items.push(plaque('primary', 'Continue', sub, { big: true, breathe: true, act: 'continue', sfx: 'page_turn', extra, onclick: () => { const G = game(); if (G) G.continueRun(); } }));
       }
-      items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Journey', 'Choose two heroes and a Tempo Trial', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
+      items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Tour', 'Pick your duo and an Encore', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
       // the Daily plaque is built from S so it can be rebuilt when the date turns over while the title stays open (L26)
       const dailyPlaque = () => {
-        const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new jam every day');
-        return plaque('secondary', 'Daily Jam', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, TITLE_MEDAL)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
+        const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new duet every day');
+        return plaque('secondary', 'Daily Duet', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, TITLE_MEDAL)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
       };
-      S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new jam and nothing starts
+      S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new duet and nothing starts
         const nowSeed = dailySeed();
         if (nowSeed === S.seed) return false;
         S.seed = nowSeed;
@@ -509,18 +516,18 @@
           items[items.indexOf(old)] = fresh;
           if (had) safe(() => fresh.focus());
         }
-        if (nowSeed) UI.toast('A new Daily Jam has begun', 'info');
+        if (nowSeed) UI.toast('A new Daily Duet has begun', 'info');
         return true;
       };
       items.push(dailyPlaque());
-      items.push(plaque('secondary', 'Hall', null, { slim: true, act: 'library', sfx: 'page_turn', onclick: () => UI.go('library', { tab: mem.libTab }, { transition: 'page' }) }));
+      items.push(plaque('secondary', 'Tour Bus', null, { slim: true, act: 'library', sfx: 'page_turn', onclick: () => UI.go('library', { tab: mem.libTab }, { transition: 'page' }) }));
       items.push(plaque('secondary', 'Settings', null, { slim: true, act: 'settings', onclick: () => UI.go('settings') }));
       items.push(plaque('secondary', 'How to Play', null, { slim: true, act: 'howto', onclick: () => UI.go('howto') }));
       const slims = mk('div', { class: 'mn-slims' });
       items.forEach((b) => (b.classList.contains('mn-slim') ? slims : menu).appendChild(b));
       menu.appendChild(slims);
 
-      const foot = mk('div', { class: 'mn-foot' }, mk('span', { class: 'mn-credits', text: 'Drawn in ink, sung in code. No two journeys alike.' }), mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
+      const foot = mk('div', { class: 'mn-foot' }, mk('span', { class: 'mn-credits', text: 'Drawn in code, sung with heart. No two tours alike.' }), mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
       const fs = fsSupported() ? mk('button', { type: 'button', class: 'mn-fs', 'aria-label': 'Toggle full screen', title: 'Full screen' }, mk('i', { class: 'mn-fs-ico' })) : null;
       if (fs) {
         fs.addEventListener('click', () => { toggleFullscreen(); });
@@ -529,11 +536,11 @@
         sync();
       }
       S.fs = fs;
-      const tag = mk('p', { class: 'mn-tag', text: 'a rogue ballad' });
+      const tag = mk('p', { class: 'mn-tag', text: 'beatboxing and vocal magic' });
       const gate = gateOn ? mk('button', { type: 'button', class: 'mn-gate', 'aria-label': 'Tap to begin', 'data-autofocus': '' }, mk('span', { class: 'mn-gate-text', text: 'Tap to begin' }), mk('span', { class: 'mn-gate-sub', text: 'sound on' })) : null;
       S.gate = gate;
       root.classList.toggle('ts-big', bigText());
-      add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Echowake, a rogue ballad' }), tag, menu, foot, fs, gate));
+      add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Hocus Vocus, a vocal magic adventure' }), tag, menu, foot, fs, gate));
       S.wrap = root.firstChild;
       if (gateOn) menu.setAttribute('inert', '');                // Tab must not reach the plaques hidden under the gate
 
@@ -615,8 +622,8 @@
   const SLOT_DX = 75;
   const SLOT = { front: { x: PARTY_CX + SLOT_DX, y: 655, s: 0.92 }, back: { x: PARTY_CX - SLOT_DX, y: 649, s: 0.86 } };
   // The Begin button's two labels. The button is 264 to 273 stage px wide on a desktop (the launch panel is 296 px) and the Larger text size
-  // makes the label 27 px: 'Begin the Daily Jam' was 285 px wide and clipped the gold border, so the Daily label is the short one.
-  const BEGIN_TALE = 'Begin the Journey', BEGIN_DAILY = 'Begin Daily Jam';
+  // makes the label 27 px: 'Start the Daily Duet' would be 294 px wide and clip the gold border, so the Daily label is the short one.
+  const BEGIN_TALE = 'Start the Tour', BEGIN_DAILY = 'Start Daily Duet';
   const heroUnlocked = (id) => safe(() => META.isUnlocked('hero', id), true) !== false;
   const isCompact = (root) => !!(root && root.closest && root.closest('.compact'));    // phone landscape: UI puts class compact on #stage
   const heroArtId = (id) => (DATA.heroes[id] && DATA.heroes[id].unlock && DATA.heroes[id].unlock.ach) || null;
@@ -657,7 +664,7 @@
   }
 
   let HS = null;                                                // the live hero select state
-  // The Daily Jam hands out every hero, so a hero locked in the profile stops looking locked while Daily is on. ONE rule for the painted portrait,
+  // The Daily Duet hands out every hero, so a hero locked in the profile stops looking locked while Daily is on. ONE rule for the painted portrait,
   // the card's class (padlock, greyed plate), the detail sheet and the aria label: the canvas and the DOM cannot disagree about it.
   const heroLocked = (id) => !heroUnlocked(id) && !(HS && HS.daily);
   const BANTER = ['start', 'kill', 'swap', 'win', 'hurt', 'down'];
@@ -675,16 +682,16 @@
       const ach = DATA.achievements[heroArtId(id)] || null;
       const prog = safe(() => META.achievements().find((a) => a.id === heroArtId(id)), null);
       add(box, mk('div', { class: 'mn-d-locknote' },
-        mk('p', { class: 'mn-d-lockhead' }, UI.hanko('LOCKED', { size: 'sm' }), mk('span', { text: ' Not yet woken from the Hush' })),
+        mk('p', { class: 'mn-d-lockhead' }, UI.hanko('LOCKED', { size: 'sm' }), mk('span', { text: ' Not on the tour yet' })),
         ach ? mk('p', { class: 'mn-d-hint' }, mk('b', { text: ach.name + ': ' }), ach.text) : null,
         prog ? mk('div', { class: 'mn-d-prog' }, UI.bar(prog.value, prog.gte, 'xp', { text: true })) : null,
-        mk('p', { class: 'mn-d-quiet', text: 'Finish the verse to unlock ' + h.name + ' for every future journey.' })));
+        mk('p', { class: 'mn-d-quiet', text: 'Clear the act to bring ' + h.name + ' on every future tour.' })));
       return box;
     }
     add(box, mk('p', { class: 'mn-d-blurb', text: h.blurb }));
     const rowChip = (row) => mk('div', { class: 'mn-d-row' + (h.prefer === row ? ' best' : '') },
       UI.icon('row', row, 26, {}, 'mn-d-rowico'),
-      mk('div', {}, mk('b', { text: cap(row) + (h.prefer === row ? '  (best)' : '') }), mk('span', { text: (DATA.rowText(id, row) || '').replace(/^(Front|Back): /, '') })));
+      mk('div', {}, mk('b', { text: rowWord(row) + (h.prefer === row ? '  (best)' : '') }), mk('span', { text: (DATA.rowText(id, row) || '').replace(/^(Lead|Backing): /, '') })));
     add(box, mk('div', { class: 'mn-d-rows' }, rowChip('front'), rowChip('back')));
     const res = DATA.statuses[h.res];
     add(box, mk('div', { class: 'mn-d-line' }, UI.status(h.res, undefined, { size: 'md' }), mk('div', {}, mk('b', { text: (res ? res.name : cap(h.res)) + ' (resource)' }), mk('span', { text: res ? res.text : '' }))));
@@ -697,7 +704,7 @@
     });
     add(box, mk('div', { class: 'mn-d-sec' }, mk('h4', { text: 'Starting deck (' + ((h.starter || []).length) + ' cards)' }), mk('p', { class: 'mn-d-tapnote', text: 'Tap a card to read it.' }), deck));
     const lore = DATA.lore && DATA.lore['hero_' + id];
-    if (lore) add(box, mk('div', { class: 'mn-d-sec mn-d-bio' }, mk('h4', { text: 'Her voice'.replace('Her', id === 'kuro' || id === 'raiga' ? 'His' : 'Her') }), mk('p', { text: lore.text })));
+    if (lore) add(box, mk('div', { class: 'mn-d-sec mn-d-bio' }, mk('h4', { text: cap(poss(id)) + ' voice' }), mk('p', { text: lore.text })));
     return box;
   }
 
@@ -723,7 +730,7 @@
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
       const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });        // the same size as the Library's pill, so it does not jump when you navigate
-      const top = mk('header', { class: 'mn-hs-top' }, back, banner('Choose Two Heroes'), mk('div', { class: 'mn-stones', 'aria-label': 'Chimes' }, stones));
+      const top = mk('header', { class: 'mn-hs-top' }, back, banner('Pick your duo'), mk('div', { class: 'mn-stones', 'aria-label': 'Cheers' }, stones));
 
       // ---- hero cards
       const cardsWrap = mk('div', { class: 'mn-cards', role: 'group', 'aria-label': 'Heroes' });
@@ -748,12 +755,12 @@
       // ---- party stage
       const stageEl = mk('section', { class: 'mn-party', 'aria-label': 'Your party' });
       const labels = {
-        front: mk('div', { class: 'mn-slot front' }, mk('b', { class: 'mn-slot-name', text: 'FRONT' }), mk('i', { class: 'mn-slot-note' })),
-        back: mk('div', { class: 'mn-slot back' }, mk('b', { class: 'mn-slot-name', text: 'BACK' }), mk('i', { class: 'mn-slot-note' })),
+        front: mk('div', { class: 'mn-slot front' }, mk('b', { class: 'mn-slot-name', text: 'LEAD' }), mk('i', { class: 'mn-slot-note' })),
+        back: mk('div', { class: 'mn-slot back' }, mk('b', { class: 'mn-slot-name', text: 'BACKING' }), mk('i', { class: 'mn-slot-note' })),
       };
-      const swapBtn = mk('button', { type: 'button', class: 'mn-swap', 'aria-label': 'Swap front and back', dataset: { sfx: 'swap' } }, mk('i', { class: 'mn-swap-ico', 'aria-hidden': 'true' }), mk('span', { class: 'mn-swap-txt', text: 'Swap' }), mk('kbd', { class: 'btn-key', text: 'S', 'aria-hidden': 'true' }));
+      const swapBtn = mk('button', { type: 'button', class: 'mn-swap', 'aria-label': 'Swap lead and backing', dataset: { sfx: 'swap' } }, mk('i', { class: 'mn-swap-ico', 'aria-hidden': 'true' }), mk('span', { class: 'mn-swap-txt', text: 'Swap' }), mk('kbd', { class: 'btn-key', text: 'S', 'aria-hidden': 'true' }));
       swapBtn.addEventListener('click', () => swapOrder());
-      const empty = mk('p', { class: 'mn-party-empty', text: 'Choose two heroes to see them stand together.' });
+      const empty = mk('p', { class: 'mn-party-empty', text: 'Pick two heroes to see them on stage together.' });
       const barkEls = [mk('div', { class: 'mn-bark', 'aria-hidden': 'true' }), mk('div', { class: 'mn-bark', 'aria-hidden': 'true' })];      // banter is decoration: hidden from screen readers
       add(stageEl, empty, labels.back, labels.front, swapBtn, barkEls);
       S.labels = labels; S.swapBtn = swapBtn; S.empty = empty; S.barkEls = barkEls;
@@ -768,24 +775,24 @@
       const trialName = mk('b', { class: 'mn-tr-name' });
       const trialText = mk('span', { class: 'mn-tr-text' });
       const trialRule = mk('span', { class: 'mn-tr-rule' });                     // the newest rule in words: on a phone it replaces the rules list, which has no room
-      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Tempo Trial', dataset: { act: 'trial-down' }, text: '‹' });
-      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Tempo Trial', dataset: { act: 'trial-up' }, text: '›' });
+      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Encore', dataset: { act: 'trial-down' }, text: '‹' });
+      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Encore', dataset: { act: 'trial-up' }, text: '›' });
       minus.addEventListener('click', () => setTrial(S.trial - 1, true));
       plus.addEventListener('click', () => setTrial(S.trial + 1, true));
       const pips = mk('div', { class: 'mn-pips', 'aria-hidden': 'true' }, U.range(11).map((n) => mk('i', { class: 'mn-pip', dataset: { n } })));
-      const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Tempo Trial rules' });
-      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Tempo Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
-      const dailyToggle = UI.toggle({ label: 'Daily Jam', value: S.daily, onchange: (v) => setDaily(v) });
+      const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Encore rules' });
+      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Encore' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
+      const dailyToggle = UI.toggle({ label: 'Daily Duet', value: S.daily, onchange: (v) => setDaily(v) });
       dailyToggle.dataset.act = 'daily-toggle';
       const seed = mk('input', { type: 'text', class: 'mn-seed', 'aria-label': 'Seed (any word or number)', placeholder: 'Random seed', title: 'Any word or number. The same seed gives the same map.', maxlength: '24', autocomplete: 'off', spellcheck: 'false', value: S.seedText });
       seed.addEventListener('input', () => { S.seedText = seed.value; mem.seedText = seed.value; });
       const dice = mk('button', { type: 'button', class: 'mn-dice', 'aria-label': 'Roll a random seed', title: 'Roll a seed' }, mk('i', { class: 'mn-dice-ico' }));
       dice.addEventListener('click', () => { if (S.daily) return; S.diceN = (S.diceN | 0) + 1; const v = U.rng(U.hash('menu-dice', Math.floor(nowS() * 1000), S.diceN))().toString().slice(2, 8); seed.value = v; S.seedText = v; mem.seedText = v; UI.pulse(seed); });
-      const begin = btn(BEGIN_TALE, { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => doBegin() });
+      const begin = btn(BEGIN_TALE, { kind: 'primary', size: 'lg', disabled: true, reason: 'Pick two heroes first', onclick: () => doBegin() });
       begin.classList.add('mn-begin');
       begin.dataset.act = 'begin';
       const launch = UI.panel({ kind: 'dark', class: 'mn-launch-panel' }, trialBox, rules,
-        mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Jam' }), mk('i', { text: 'the same jam for everyone today' }))),
+        mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Duet' }), mk('i', { text: 'the same duet for everyone today' }))),
         mk('div', { class: 'mn-seedrow' }, mk('span', { class: 'mn-seed-label', text: 'Seed' }), seed, dice), begin);
       launch.classList.add('mn-launch');
       Object.assign(S, { minus, plus, trialName, trialText, trialRule, pips, rules, dailyToggle, seed, dice, begin, launch, trialBox });
@@ -807,7 +814,7 @@
       function react(id, expr, sec) { S.expr[id] = expr; S.exprUntil[id] = S.t + sec; }
       function onCard(id, el) {
         S.pinned = id;
-        if (S.daily) { showDetail(id); UI.toast('The Daily Jam chooses your heroes', 'info'); return; }
+        if (S.daily) { showDetail(id); UI.toast('The Daily Duet chooses your heroes', 'info'); return; }
         if (!heroUnlocked(id)) { showDetail(id); UI.shake(el); sfx('ui_error'); react(id, 'hurt', 1.1); return; }
         toggleHero(id);
         showDetail(id);
@@ -828,8 +835,8 @@
         refresh();
       }
       function swapOrder() {
-        if (S.daily) { UI.toast('The Daily Jam sets the order too', 'info'); return; }
-        if (S.chosen.length < 2) { UI.toast('Choose two heroes first', 'warn'); sfx('ui_error'); return; }
+        if (S.daily) { UI.toast('The Daily Duet sets the order too', 'info'); return; }
+        if (S.chosen.length < 2) { UI.toast('Pick two heroes first', 'warn'); sfx('ui_error'); return; }
         S.chosen.reverse();
         S.chosen.forEach((id, i) => { S.slotFrom[id] = { from: i === 0 ? 'back' : 'front', t0: S.t }; });
         mem.party = S.chosen.slice();
@@ -845,7 +852,7 @@
       }
       function setDaily(on) {
         if (on === S.daily) return;
-        if (on && !S.seedToday) { S.dailyToggle.rbSet(false); UI.toast('Today’s Daily Jam is not available right now', 'warn'); return; }
+        if (on && !S.seedToday) { S.dailyToggle.rbSet(false); UI.toast("Today's Daily Duet is not available right now", 'warn'); return; }
         S.daily = on; mem.daily = on;
         if (on) { S.saved = S.chosen.slice(); S.chosen = (safe(() => RUN.dailyHeroes(S.seedToday), S.chosen) || S.chosen).slice(0, 2); S.chosen.forEach((id) => { S.pose[id] = { name: 'cheer', t0: S.t }; }); S.trial = 0; }
         else { S.chosen = (S.saved || []).filter(heroUnlocked).slice(0, 2); S.trial = clamp(mem.trial | 0, 0, S.trialMax); }
@@ -855,7 +862,7 @@
         refresh();
         showDetail(S.hover || S.pinned || S.chosen[0]);
       }
-      // a hero select left open across midnight: the Daily plaque, seed and heroes follow the date, and a start that crossed the line shows the new jam first (L26)
+      // a hero select left open across midnight: the Daily plaque, seed and heroes follow the date, and a start that crossed the line shows the new duet first (L26)
       function refreshDay() {
         const nowSeed = dailySeed();
         if (nowSeed === S.seedToday) return false;
@@ -866,7 +873,7 @@
           S.slotFrom = {};
         }
         refresh();
-        if (S.daily) UI.toast('A new Daily Jam has begun', 'info');
+        if (S.daily) UI.toast('A new Daily Duet has begun', 'info');
         return true;
       }
       S.refreshDay = refreshDay;
@@ -908,11 +915,11 @@
           b.classList.toggle('fixed', S.daily);
           b.setAttribute('aria-pressed', i >= 0 ? 'true' : 'false');
           const badge = b.querySelector('.mn-hc-badge');
-          badge.textContent = i === 0 ? 'FRONT' : i === 1 ? 'BACK' : '';
+          badge.textContent = i === 0 ? 'LEAD' : i === 1 ? 'BACKING' : '';
           badge.classList.toggle('show', i >= 0);
           const h = DATA.heroes[id], locked = heroLocked(id);
           b.classList.toggle('locked', locked);
-          b.setAttribute('aria-label', h.name + ', ' + h.title + (locked ? '. Locked.' : i === 0 ? '. Chosen, front row hero.' : i === 1 ? '. Chosen, back row hero.' : '. Tap to choose.'));
+          b.setAttribute('aria-label', h.name + ', ' + h.title + (locked ? '. Locked.' : i === 0 ? '. Chosen, lead hero.' : i === 1 ? '. Chosen, backing hero.' : '. Tap to choose.'));
         });
         ['front', 'back'].forEach((row, k) => {
           const id = S.chosen[k === 0 ? 0 : 1];
@@ -923,17 +930,17 @@
           const h = DATA.heroes[id];
           const fits = h.prefer === row;
           el.classList.toggle('fits', fits);
-          note.textContent = h.name + (fits ? ': in her element'.replace('her', id === 'kuro' || id === 'raiga' ? 'his' : 'her') : ': prefers ' + h.prefer);
+          note.textContent = h.name + (fits ? ': in ' + poss(id) + ' element' : ': prefers ' + rowProse(h.prefer));
         });
         S.empty.hidden = n === 2;
         S.swapBtn.classList.toggle('dim', n < 2 || S.daily);
         // trial
         const maxT = S.trialMax;
         const tr = DATA.trials['trial_' + S.trial];
-        S.trialName.textContent = S.trial === 0 ? 'Trial 0' : 'Trial ' + roman(S.trial) + ': ' + (tr ? tr.name : '');
+        S.trialName.textContent = S.trial === 0 ? 'No encore' : 'Encore ' + roman(S.trial) + ': ' + (tr ? tr.name : '');
         S.trialRule.textContent = tr && S.trial > 0 && !S.daily ? tr.text : '';
         S.trialBox.classList.toggle('has-rule', !!S.trialRule.textContent);
-        S.trialText.textContent = S.daily ? 'The Daily Jam is always Trial 0.' : maxT === 0 ? 'Win a journey to unlock Tempo Trials.' : S.trial === 0 ? 'The tune as it was first sung.' : 'Every level below is added on top.';
+        S.trialText.textContent = S.daily ? 'The Daily Duet never has an encore.' : maxT === 0 ? 'Win a tour to unlock Encores.' : S.trial === 0 ? 'The tour, just as it comes.' : 'Every encore below is added on top.';
         S.minus.classList.toggle('dim', S.daily || S.trial <= 0);
         S.plus.classList.toggle('dim', S.daily || S.trial >= maxT);
         S.minus.setAttribute('aria-disabled', S.daily || S.trial <= 0 ? 'true' : 'false');
@@ -941,7 +948,7 @@
         S.trialBox.classList.toggle('locked', maxT === 0 || S.daily);
         S.pips.querySelectorAll('.mn-pip').forEach((p) => { const k = Number(p.dataset.n); p.classList.toggle('on', k > 0 && k <= S.trial); p.classList.toggle('open', k <= maxT); });
         clear(S.rules);
-        if (S.trial === 0) S.rules.appendChild(mk('li', { class: 'mn-rule none', text: maxT === 0 ? 'No trials yet. Break the Hush once to open the first.' : 'No extra rules. Higher trials stack their rules here.' }));
+        if (S.trial === 0) S.rules.appendChild(mk('li', { class: 'mn-rule none', text: maxT === 0 ? 'No encores yet. Beat the Gloss once to earn the first.' : 'No extra rules. Higher encores stack their rules here.' }));
         for (let k = 1; k <= S.trial; k++) { const d = DATA.trials['trial_' + k]; if (d) S.rules.appendChild(mk('li', { class: 'mn-rule' + (k === S.trial ? ' new' : '') }, mk('b', { text: roman(k) + '. ' + d.name }), mk('span', { text: ' ' + d.text }))); }
         S.rules.scrollTop = S.trial > 0 ? S.rules.scrollHeight : 0;      // the newest rule is the one at the bottom; the lone "no trials" line starts at its top
         // seed and daily
@@ -951,7 +958,7 @@
         S.dice.classList.toggle('dim', S.daily);
         // begin
         const ready = S.daily || n === 2;
-        S.begin.rbSet({ disabled: !ready, reason: 'Choose two heroes first' });
+        S.begin.rbSet({ disabled: !ready, reason: 'Pick two heroes first' });
         S.begin.classList.toggle('breathe', ready);
         S.begin.rbSet({ label: S.daily ? BEGIN_DAILY : BEGIN_TALE });
         S.root.classList.toggle('is-daily', S.daily);
@@ -1100,13 +1107,16 @@
   // ================================================================================================================
   const LIB_TABS = [
     { id: 'unlocks', label: 'Unlocks', icon: 'key' },
-    { id: 'achievements', label: 'Achievements', icon: 'star' },
-    { id: 'story', label: 'Ballads', icon: 'bell' },
-    { id: 'bestiary', label: 'Bestiary', icon: 'mask' },
-    { id: 'history', label: 'History', icon: 'lantern' },
+    { id: 'achievements', label: 'Stickers', icon: 'star' },
+    { id: 'story', label: 'Diary', icon: 'bell' },
+    { id: 'bestiary', label: "Who's Who", icon: 'mask' },
+    { id: 'history', label: 'Past Tours', icon: 'lantern' },
   ];
-  const TIER_NAME = { minion: 'Minion', normal: 'Creature', elite: 'Champion', boss: 'Keeper' };
-  const KIND_NAME = { card: 'Card', relic: 'Treasure', gem: 'Gem' };
+  const TIER_NAME = { minion: 'Sidekick', normal: 'Creature', elite: 'Rival', boss: 'Headliner' };
+  const KIND_NAME = { card: 'Card', relic: 'Charm', gem: 'Gem' };
+  const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
+  // the Who's Who chips for the enemy tag ids (HV_ENEMIES 8); the ids stay in DATA.LISTS.enemyTags
+  const TAG_LABEL = { spirit: 'Sprite', beast: 'Critter', folk: 'Showbiz', undead: 'Faded', construct: 'Gadget', insect: 'Bug', avian: 'Bird', aquatic: 'Seaside', void: 'Glossy' };
   const CHAPTER_SKY = { 1: 'golden', 2: 'night', 3: 'crimson' };
   const stoneIcon = (size) => UI.icon('stat', 'inkstone', size || 22, {}, 'mn-stone-ico');
   const hpText = (def) => (def && Array.isArray(def.hp) ? (def.hp[0] === def.hp[1] ? String(def.hp[0]) : def.hp[0] + ' to ' + def.hp[1]) : '');
@@ -1134,7 +1144,7 @@
   function buildUnlocks(S) {
     const pane = mk('div', { class: 'mn-pane mn-unlocks' });
     const filterBar = mk('div', { class: 'mn-filters' });
-    const kindSeg = UI.seg([{ value: 'all', label: 'All' }, { value: 'card', label: 'Cards' }, { value: 'relic', label: 'Treasures' }, { value: 'gem', label: 'Gems' }], { label: 'Show', value: mem.libKind, onchange: (v) => { mem.libKind = v; apply(); } });
+    const kindSeg = UI.seg([{ value: 'all', label: 'All' }, { value: 'card', label: 'Cards' }, { value: 'relic', label: 'Charms' }, { value: 'gem', label: 'Gems' }], { label: 'Show', value: mem.libKind, onchange: (v) => { mem.libKind = v; apply(); } });
     const chips = mk('div', { class: 'mn-chips', role: 'group', 'aria-label': 'Filter by hero' });
     const chipFor = (id) => {
       const b = mk('button', { type: 'button', class: 'mn-chip' + (mem.libHero === id ? ' on' : ''), 'aria-pressed': mem.libHero === id ? 'true' : 'false', dataset: { hero: id }, 'aria-label': id === 'any' ? 'Every hero' : heroName(id) },
@@ -1147,11 +1157,11 @@
     sortBtn.addEventListener('click', () => { S.affordFirst = !S.affordFirst; sortBtn.classList.toggle('on', S.affordFirst); sortBtn.setAttribute('aria-pressed', S.affordFirst ? 'true' : 'false'); order(); });
     const count = mk('span', { class: 'mn-count', role: 'status' });
     add(filterBar, kindSeg, chips, sortBtn, count);
-    const empty = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'Nothing in the Hall matches those filters.' }), btn('Show everything', { kind: 'secondary', size: 'sm', onclick: () => { mem.libKind = 'all'; mem.libHero = 'any'; kindSeg.rbSet('all'); chips.querySelectorAll('.mn-chip').forEach((c) => { const on = c.dataset.hero === 'any'; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); apply(); } }));
+    const empty = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'Nothing on the bus matches those filters.' }), btn('Show everything', { kind: 'secondary', size: 'sm', onclick: () => { mem.libKind = 'all'; mem.libHero = 'any'; kindSeg.rbSet('all'); chips.querySelectorAll('.mn-chip').forEach((c) => { const on = c.dataset.hero === 'any'; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); apply(); } }));
     const bare = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'The shelves are bare. Nothing is waiting to be unlocked yet.' }));
     const secs = {};
     ['card', 'relic', 'gem'].forEach((k) => {
-      const head = mk('h3', { class: 'mn-sec-h' }, mk('span', { text: k === 'card' ? 'Cards' : k === 'relic' ? 'Treasures' : 'Gems' }), mk('em', { class: 'mn-sec-n' }));
+      const head = mk('h3', { class: 'mn-sec-h' }, mk('span', { text: k === 'card' ? 'Cards' : k === 'relic' ? 'Charms' : 'Gems' }), mk('em', { class: 'mn-sec-n' }));
       const grid = mk('div', { class: 'mn-grid ' + (k === 'card' ? 'cards' : 'tiles') });
       secs[k] = { el: mk('section', { class: 'mn-sec', dataset: { kind: k } }, head, UI.divider(), grid), grid, n: head.querySelector('.mn-sec-n') };
     });
@@ -1174,11 +1184,12 @@
       } else if (e.kind === 'relic') {
         const d = DATA.relics[e.id] || {};
         art = mk('div', { class: 'mn-tile-body' }, mk('div', { class: 'mn-tile-ico' }, UI.relic(e.id, { size: 'lg', tip: false })),
-          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: (d.rarity === 'boss' ? 'Keeper' : cap(d.rarity || '')) + ' treasure' + (d.hero ? ' of ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' })));
+          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: (RARITY_NAME[d.rarity] || cap(d.rarity || '')) + ' charm' + (d.hero ? ' for ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' }),
+          d.flavor ? mk('p', { class: 'mn-tile-flavor', text: d.flavor }) : null));
       } else {
         const d = DATA.gems[e.id] || {};
         art = mk('div', { class: 'mn-tile-body' }, mk('div', { class: 'mn-tile-ico' }, UI.gem(e.id, { size: 'lg', tip: false })),
-          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: 'Tier ' + (d.tier || 1) + ' ' + (d.color || '') + ' gem' }), mk('p', { text: safe(() => DATA.gemText(e.id), '') || '' })));
+          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: 'Tier ' + (d.tier || 1) + ' ' + colourWord(d.color || '') + ' gem' }), mk('p', { text: safe(() => DATA.gemText(e.id), '') || '' })));
       }
       const el = mk('article', { class: 'mn-item k-' + e.kind, dataset: { kind: e.kind, id: e.id, hero: e.hero || '' } }, mk('i', { class: 'mn-padlock', 'aria-hidden': 'true' }), art, foot, stamp);
       secs[e.kind].grid.appendChild(el);
@@ -1194,9 +1205,9 @@
       it.el.classList.toggle('poor', !e.unlocked && !e.affordable);
       it.unlock.hidden = !!e.unlocked;
       const need = e.cost - (safe(() => META.inkstones, 0) || 0);
-      it.unlock.rbSet({ disabled: !e.unlocked && !e.affordable, reason: 'You need ' + need + ' more Chimes' });
+      it.unlock.rbSet({ disabled: !e.unlocked && !e.affordable, reason: 'You need ' + need + ' more Cheers' });
       it.unlock.classList.toggle('breathe', !e.unlocked && e.affordable && false);
-      it.el.setAttribute('aria-label', (e.name || e.id) + '. ' + (e.unlocked ? 'Unlocked.' : e.affordable ? 'Costs ' + e.cost + ' Chimes. You can afford it.' : 'Costs ' + e.cost + ' Chimes.'));
+      it.el.setAttribute('aria-label', (e.name || e.id) + '. ' + (e.unlocked ? 'Unlocked.' : e.affordable ? 'Costs ' + e.cost + ' Cheers. You can afford it.' : 'Costs ' + e.cost + ' Cheers.'));
     }
     function refreshAll() {
       const list = safe(() => META.libraryList(), []) || [];
@@ -1245,7 +1256,7 @@
       const r = safe(() => META.buy(e.kind, e.id), { ok: false, reason: 'unknown' });
       if (!r.ok) {
         sfx('ui_error'); UI.shake(it.el);
-        UI.toast(r.reason === 'funds' ? 'You need ' + (e.cost - before) + ' more Chimes' : r.reason === 'owned' ? 'You already own that' : 'That cannot be unlocked', 'warn');
+        UI.toast(r.reason === 'funds' ? 'You need ' + (e.cost - before) + ' more Cheers' : r.reason === 'owned' ? 'You already own that' : 'That cannot be unlocked', 'warn');
         return;
       }
       sfx(e.kind === 'card' ? 'card_pick' : e.kind === 'relic' ? 'relic_get' : 'gem_get');
@@ -1268,7 +1279,7 @@
     const rows = new Map();
     const done = list.filter((a) => a.done);
     const earned = done.reduce((n, a) => n + ((a.reward && a.reward.inkstones) || 0), 0);
-    const sum = mk('span', { class: 'mn-count', role: 'status', text: done.length + ' of ' + list.length + ' done, ' + fmt(earned) + ' Chimes earned' });
+    const sum = mk('span', { class: 'mn-count', role: 'status', text: done.length + ' of ' + list.length + ' done, ' + fmt(earned) + ' Cheers earned' });
     const sortSeg = UI.seg([{ value: 'order', label: 'In order' }, { value: 'close', label: 'Closest' }, { value: 'done', label: 'Done first' }], { label: 'Sort', value: mem.achSort, onchange: (v) => { mem.achSort = v; order(); } });
     const grid = mk('div', { class: 'mn-grid achs' });
     add(pane, mk('div', { class: 'mn-filters' }, mk('span', { class: 'mn-filter-label', text: 'Sort' }), sortSeg, sum), grid);
@@ -1277,13 +1288,13 @@
       const bar = UI.bar(0, a.gte, 'xp', { text: false });
       const num = mk('span', { class: 'mn-ach-num', text: a.done ? 'Done' + (a.ts ? ' ' + dateText(a.ts) : '') : fmt(Math.min(a.value, a.gte)) + ' / ' + fmt(a.gte) });
       const seal = mk('span', { class: 'mn-ach-seal' }, a.done ? UI.hanko('', { size: 'lg', class: 'mn-ck', label: 'Done' }) : mk('i', { class: 'mn-ach-star', 'aria-hidden': 'true' }));
-      const rew = a.reward && a.reward.inkstones ? mk('div', { class: 'mn-ach-rew', 'aria-label': 'Reward ' + a.reward.inkstones + ' Chimes' }, stoneIcon(22), mk('b', { text: '+' + a.reward.inkstones })) : mk('div', { class: 'mn-ach-rew none' });
+      const rew = a.reward && a.reward.inkstones ? mk('div', { class: 'mn-ach-rew', 'aria-label': 'Reward ' + a.reward.inkstones + ' Cheers' }, stoneIcon(22), mk('b', { text: '+' + a.reward.inkstones })) : mk('div', { class: 'mn-ach-rew none' });
       const el = mk('article', { class: 'mn-ach' + (a.done ? ' done' : ''), dataset: { id: a.id }, 'aria-label': a.name + '. ' + a.text + ' ' + (a.done ? 'Done.' : pct + ' percent.') },
         seal, mk('div', { class: 'mn-ach-body' }, mk('b', { class: 'mn-ach-name', text: a.name }), mk('p', { class: 'mn-ach-text', text: a.text }), mk('div', { class: 'mn-ach-prog' }, bar, num)), rew);
       rows.set(a.id, { a, el, bar });
       grid.appendChild(el);
     });
-    if (!list.length) grid.appendChild(mk('p', { class: 'empty', text: 'No achievements yet.' }));
+    if (!list.length) grid.appendChild(mk('p', { class: 'empty', text: 'No stickers yet.' }));
     function order() {
       const arr = list.slice();
       const idx = (a) => list.indexOf(a);
@@ -1300,15 +1311,15 @@
 
   // ---- Story
   const STORY_GROUPS = [
-    { name: 'The Verses', test: (id) => /^(intro|ch\d_intro)$/.test(id) },
+    { name: 'The Acts', test: (id) => /^(intro|ch\d_intro)$/.test(id) },
     { name: 'The Endings', test: (id) => /(_clear|^victory|^defeat)$|^victory$|^defeat$/.test(id) },
-    { name: 'The Voices', test: (id) => /^hero_/.test(id) },
+    { name: 'The Crew', test: (id) => /^hero_/.test(id) },
   ];
   function buildStory() {
     const pane = mk('div', { class: 'mn-pane mn-story' });
     const list = safe(() => META.storyList(), []) || [];
     const seen = list.filter((s) => s.seen).length;
-    const page = mk('div', { class: 'mn-storypage' }, mk('h3', { class: 'mn-st-head', text: 'Setlist' }), mk('p', { class: 'mn-st-sub', text: seen + ' of ' + list.length + ' ballads heard. Ballads you have not heard yet stay silent.' }));
+    const page = mk('div', { class: 'mn-storypage' }, mk('h3', { class: 'mn-st-head', text: 'Tour Diary' }), mk('p', { class: 'mn-st-sub', text: seen + ' of ' + list.length + ' entries read. Entries you have not reached yet stay sealed.' }));
     let no = 0;
     const used = new Set();
     const section = (name, ids) => {
@@ -1316,18 +1327,18 @@
       page.appendChild(mk('h4', { class: 'mn-st-group', text: name }));
       ids.forEach((s) => {
         used.add(s.id); no++;
-        const row = mk('button', { type: 'button', class: 'mn-st' + (s.seen ? ' seen' : ''), dataset: { id: s.id }, 'aria-label': s.seen ? 'Ballad ' + no + ': ' + s.title + '. Hear again.' : 'Ballad ' + no + ': not heard yet.' },
-          mk('span', { class: 'mn-st-no', text: String(no) }), mk('span', { class: 'mn-st-title', text: s.seen ? s.title : '???' }), mk('i', { class: 'mn-st-dots', 'aria-hidden': 'true' }), mk('span', { class: 'mn-st-state', text: s.seen ? 'Hear again' : 'Unheard' }));
+        const row = mk('button', { type: 'button', class: 'mn-st' + (s.seen ? ' seen' : ''), dataset: { id: s.id }, 'aria-label': s.seen ? 'Entry ' + no + ': ' + s.title + '. Read again.' : 'Entry ' + no + ': not reached yet.' },
+          mk('span', { class: 'mn-st-no', text: String(no) }), mk('span', { class: 'mn-st-title', text: s.seen ? s.title : '???' }), mk('i', { class: 'mn-st-dots', 'aria-hidden': 'true' }), mk('span', { class: 'mn-st-state', text: s.seen ? 'Read again' : 'Sealed' }));
         row.addEventListener('click', () => {
-          if (!s.seen) { UI.shake(row); sfx('ui_error'); UI.toast('You have not heard this ballad yet. Play on to find it.', 'info'); return; }
+          if (!s.seen) { UI.shake(row); sfx('ui_error'); UI.toast('You have not reached this entry yet. Keep touring to find it.', 'info'); return; }
           UI.go('story', { id: s.id, then: { name: 'library', params: { tab: 'story' } } }, { transition: 'page' });
         });
         page.appendChild(row);
       });
     };
     STORY_GROUPS.forEach((g) => section(g.name, list.filter((s) => !used.has(s.id) && g.test(s.id))));
-    section('Stray Ballads', list.filter((s) => !used.has(s.id)));
-    if (!list.length) page.appendChild(mk('p', { class: 'empty', text: 'No ballads yet.' }));
+    section('Loose Entries', list.filter((s) => !used.has(s.id)));
+    if (!list.length) page.appendChild(mk('p', { class: 'empty', text: 'No entries yet.' }));
     pane.appendChild(page);
     return { el: pane };
   }
@@ -1373,20 +1384,20 @@
       if (!inCh.length) return;
       const met = inCh.filter((d) => d.seen > 0).length;
       const lore = DATA.lore && DATA.lore['ch' + ch + '_intro'];
-      left.appendChild(mk('h3', { class: 'mn-sec-h' }, mk('span', { text: 'Verse ' + ch + (lore ? ': ' + lore.title : '') }), mk('em', { class: 'mn-sec-n', text: met + ' of ' + inCh.length + ' met' })));
+      left.appendChild(mk('h3', { class: 'mn-sec-h' }, mk('span', { text: 'Act ' + ch + (lore ? ': ' + lore.title : '') }), mk('em', { class: 'mn-sec-n', text: met + ' of ' + inCh.length + ' met' })));
       const grid = mk('div', { class: 'mn-grid beasts' });
       const order = { boss: 0, elite: 1, normal: 2, minion: 3 };
       inCh.slice().sort((a, b) => (order[a.tier] - order[b.tier])).forEach((d) => {
         const def = DATA.enemies[d.id] || DATA.rosterById[d.id] || {};
         const known = d.seen > 0;
-        const tile = mk('button', { type: 'button', class: 'mn-beast tier-' + d.tier + (known ? ' seen' : ' unseen'), dataset: { id: d.id }, 'aria-label': known ? (def.name || d.id) + ', ' + TIER_NAME[d.tier] + '. Defeated ' + d.kills + ' times.' : 'Unknown creature, not met yet.' },
+        const tile = mk('button', { type: 'button', class: 'mn-beast tier-' + d.tier + (known ? ' seen' : ' unseen'), dataset: { id: d.id }, 'aria-label': known ? (def.name || d.id) + ', ' + TIER_NAME[d.tier] + '. Won over ' + d.kills + ' times.' : 'Unknown creature, not met yet.' },
           beastThumb(d.id, known, 92, 96), mk('span', { class: 'mn-b-name', text: known ? (def.name || d.id) : '???' }), known && d.kills > 0 ? mk('b', { class: 'mn-b-kills', text: String(d.kills) }) : null);
         tile.addEventListener('click', () => select(d.id));
         grid.appendChild(tile); tiles.set(d.id, tile);
       });
       left.appendChild(grid);
     });
-    if (!data.length) left.appendChild(mk('p', { class: 'empty', text: 'The bestiary is blank. Meet a creature in a fight to record it here.' }));
+    if (!data.length) left.appendChild(mk('p', { class: 'empty', text: "Nobody in the Who's Who yet. Meet a creature in a fight to add it here." }));
 
     // the live portrait canvas of the selected creature
     const cv = canvasEl(340, 250, 'mn-bd-canvas');
@@ -1399,11 +1410,11 @@
       clear(detail);
       cv.c.classList.toggle('unseen', !known);
       const head = mk('div', { class: 'mn-bd-head' }, mk('h3', { text: known ? (def.name || id) : '???' }), mk('p', { class: 'mn-bd-title', text: known ? (def.title || '') : 'Not yet met' }));
-      const chips = mk('div', { class: 'mn-bd-chips' }, mk('span', { class: 'mn-tag-chip tier-' + (d ? d.tier : 'normal'), text: TIER_NAME[d ? d.tier : 'normal'] }), mk('span', { class: 'mn-tag-chip', text: 'Verse ' + (d ? d.chapter : '?') }));
-      if (known) (def.tags || []).forEach((tg) => chips.appendChild(mk('span', { class: 'mn-tag-chip soft', text: cap(tg) })));
+      const chips = mk('div', { class: 'mn-bd-chips' }, mk('span', { class: 'mn-tag-chip tier-' + (d ? d.tier : 'normal'), text: TIER_NAME[d ? d.tier : 'normal'] }), mk('span', { class: 'mn-tag-chip', text: 'Act ' + (d ? d.chapter : '?') }));
+      if (known) (def.tags || []).forEach((tg) => chips.appendChild(mk('span', { class: 'mn-tag-chip soft', text: TAG_LABEL[tg] || cap(tg) })));
       add(detail, mk('div', { class: 'mn-bd-art' }, cv.c), head, chips);
-      if (!known) { add(detail, mk('p', { class: 'mn-bd-unknown', text: 'A shape in the silence. Meet this creature in a fight and its echo will be kept here.' })); return; }
-      add(detail, mk('div', { class: 'mn-bd-stats' }, mk('span', {}, mk('b', { text: hpText(def) }), mk('i', { text: 'HP at Trial 0' })), mk('span', {}, mk('b', { text: String(d.kills) }), mk('i', { text: 'defeated' })), mk('span', {}, mk('b', { text: String(d.seen) }), mk('i', { text: 'met' }))));
+      if (!known) { add(detail, mk('p', { class: 'mn-bd-unknown', text: 'A shape behind the Gloss. Meet this creature in a fight and its photo goes on the wall.' })); return; }
+      add(detail, mk('div', { class: 'mn-bd-stats' }, mk('span', {}, mk('b', { text: hpText(def) }), mk('i', { text: 'HP with no encore' })), mk('span', {}, mk('b', { text: String(d.kills) }), mk('i', { text: 'defeated' })), mk('span', {}, mk('b', { text: String(d.seen) }), mk('i', { text: 'met' }))));
       add(detail, mk('p', { class: 'mn-bd-lore', text: def.lore || '' }));
       const moves = mk('ul', { class: 'mn-moves' });
       Object.keys(def.moves || {}).forEach((k) => {
@@ -1415,7 +1426,7 @@
     S.beastSelect = select;
     const first = (mem.beast && byId.has(mem.beast) ? mem.beast : (data.find((d) => d.seen > 0) || data[0] || {}).id);
     if (first) select(first);
-    else add(detail, mk('p', { class: 'mn-bd-unknown', text: 'Nothing recorded yet.' }));
+    else add(detail, mk('p', { class: 'mn-bd-unknown', text: 'Nothing on the wall yet.' }));
     return {
       el: pane,
       update(dt, t) {
@@ -1439,27 +1450,27 @@
     const pane = mk('div', { class: 'mn-pane mn-hist-pane' });
     const hist = safe(() => META.history, []) || [];
     if (!hist.length) {
-      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No journeys yet' }), mk('p', { text: 'Finish a journey, win or lose, and it will be remembered here: the heroes, the score, how far you got.' })));
+      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No tours yet' }), mk('p', { text: 'Finish a tour, win or lose, and it will be remembered here: the heroes, the score, how far you got.' })));
       return { el: pane };
     }
     const best = hist.reduce((m, r) => Math.max(m, r.score || 0), 0);
     const wins = hist.filter((r) => r.outcome === 'win').length;
     add(pane, mk('div', { class: 'mn-hist-sum' },
-      mk('span', {}, mk('b', { text: String(safe(() => META.stat('runs'), hist.length)) }), mk('i', { text: 'journeys begun' })),
+      mk('span', {}, mk('b', { text: String(safe(() => META.stat('runs'), hist.length)) }), mk('i', { text: 'tours started' })),
       mk('span', {}, mk('b', { text: String(safe(() => META.stat('wins'), wins)) }), mk('i', { text: 'sung to the end' })),
       mk('span', {}, mk('b', { text: fmt(best) }), mk('i', { text: 'best score' })),
       mk('span', {}, mk('b', { text: String(hist.length) }), mk('i', { text: 'in the list' }))));
     const list = mk('div', { class: 'mn-hist-list' });
     hist.forEach((r, i) => {
-      const outcome = r.outcome === 'win' ? 'Victory' : r.outcome === 'abandon' ? 'Abandoned' : 'Fallen';
-      const chapter = 'Verse ' + (r.chapter || 1);
-      const row = mk('article', { class: 'mn-hist ' + (r.outcome || 'lose') + (r.daily ? ' daily' : ''), 'aria-label': outcome + ' with ' + heroList(r.heroes) + ', score ' + r.score + ', ' + chapter + (r.trial ? ', Tempo Trial ' + r.trial : '') + (r.daily ? ', Daily Jam' : '') },
+      const outcome = r.outcome === 'win' ? 'Victory' : r.outcome === 'abandon' ? 'Abandoned' : 'Curtain fell';
+      const chapter = 'Act ' + (r.chapter || 1);
+      const row = mk('article', { class: 'mn-hist ' + (r.outcome || 'lose') + (r.daily ? ' daily' : ''), 'aria-label': outcome + ' with ' + heroList(r.heroes) + ', score ' + r.score + ', ' + chapter + (r.trial ? ', Encore ' + r.trial : '') + (r.daily ? ', Daily Duet' : '') },
         mk('span', { class: 'mn-h-date', text: dateText(r.ts) || 'Long ago' }),
         mk('span', { class: 'mn-h-heroes' }, (r.heroes || []).map((id) => UI.medallion(id, 38)), mk('i', { class: 'mn-h-names', text: heroList(r.heroes) })),
         mk('span', { class: 'mn-h-score' }, mk('b', { text: fmt(r.score || 0) }), mk('i', { text: 'score' })),
         mk('span', { class: 'mn-h-ch', text: chapter }),
-        mk('span', { class: 'mn-h-tags' }, r.trial ? UI.hanko('T' + r.trial, { size: 'sm', label: 'Tempo Trial ' + r.trial }) : null, r.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Jam' }) : null),
-        mk('span', { class: 'mn-h-out' }, mk('b', { class: 'mn-out-' + (r.outcome || 'lose'), text: outcome }), r.inkstones ? mk('i', { text: '+' + r.inkstones + ' Chimes' }) : null));
+        mk('span', { class: 'mn-h-tags' }, r.trial ? UI.hanko('E' + r.trial, { size: 'sm', label: 'Encore ' + r.trial }) : null, r.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Duet' }) : null),
+        mk('span', { class: 'mn-h-out' }, mk('b', { class: 'mn-out-' + (r.outcome || 'lose'), text: outcome }), r.inkstones ? mk('i', { text: '+' + r.inkstones + ' Cheers' }) : null));
       row.style.setProperty('--i', String(Math.min(i, 12)));
       list.appendChild(row);
     });
@@ -1475,7 +1486,7 @@
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
       S.stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });
-      const top = mk('header', { class: 'mn-lib-top' }, back, banner('The Hall of Echoes'), mk('div', { class: 'mn-stones', 'aria-label': 'Chimes' }, S.stones));
+      const top = mk('header', { class: 'mn-lib-top' }, back, banner('The Tour Bus'), mk('div', { class: 'mn-stones', 'aria-label': 'Cheers' }, S.stones));
       const tabs = UI.tabs(LIB_TABS.map((t) => ({ id: t.id, label: t.label })), { value: tab, onchange: (id) => show(id, true) });
       tabs.classList.add('mn-tabs');
       tabs.querySelectorAll('.tab').forEach((b, i) => b.insertBefore(UI.icon('motif', LIB_TABS[i].icon, 22, {}, 'mn-tab-ico'), b.firstChild));
@@ -1532,16 +1543,16 @@
   const getSet = (k) => safe(() => UI.getSetting(k), DATA.SETTINGS[k] && DATA.SETTINGS[k].def);
   const setSet = (k, v) => { UI.setSetting(k, v); };
 
-  // Erase the profile behind two confirmations. Settings survive; the saved journey goes with the rest.
+  // Erase the profile behind two confirmations. Settings survive; the saved tour goes with the rest.
   function clearAllData(done) {
-    UI.confirm({ title: 'Erase all progress?', body: 'Unlocks, achievements, history, the bestiary and your saved journey will be erased. Your settings stay.', yes: 'Continue', no: 'Keep everything', danger: true })
-      .then((ok) => (ok ? UI.confirm({ title: 'Really erase every echo?', body: 'This cannot be undone. Every Chime and every verse you have heard will be gone.', yes: 'Erase everything', no: 'Cancel', danger: true }) : false))
+    UI.confirm({ title: 'Erase all progress?', body: "Unlocks, stickers, past tours, the Who's Who and your saved tour will be erased. Your settings stay.", yes: 'Continue', no: 'Keep everything', danger: true })
+      .then((ok) => (ok ? UI.confirm({ title: 'Really clear out the whole van?', body: 'This cannot be undone. All your Cheers and every diary entry you have read will be gone.', yes: 'Erase everything', no: 'Cancel', danger: true }) : false))
       .then((ok2) => {
         if (!ok2) return;
         safe(() => META.reset({ keepSettings: true }));
         UI.applySettings();
         mem.party = []; mem.trial = 0; mem.libTab = 'unlocks'; mem.beast = null; mem.daily = false;
-        UI.toast('All is quiet again', 'info');
+        UI.toast('Back to the very first soundcheck', 'info');
         sfx('page_turn');
         if (done) done();
       });
@@ -1569,7 +1580,7 @@
     const animSeg = UI.seg([{ value: 0, label: 'Normal' }, { value: 1, label: 'Fast' }, { value: 2, label: 'Faster' }], { label: 'Animation speed', value: getSet('fastAnim'), onchange: (v) => setSet('fastAnim', v) });
     const dmg = UI.toggle({ label: 'Damage numbers', value: getSet('damageNumbers'), onchange: (v) => setSet('damageNumbers', v) });
 
-    const sample = mk('p', { class: 'mn-sample', text: 'The fox sang the grove awake, note by note.' });
+    const sample = mk('p', { class: 'mn-sample', text: 'A soft note, a late kick, and the whole street starts to sing along.' });
     const tsSeg = UI.seg([{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }], { label: 'Text size', value: getSet('textScale'), onchange: (v) => setSet('textScale', v) });
     const glyphs = mk('span', { class: 'mn-glyphs', 'aria-hidden': 'true' }, ['red', 'blue', 'green', 'gold', 'any'].map((c) => mk('span', { class: 'gem gc-' + (c === 'any' ? 'gold' : c) + ' sz-sm' }, UI.icon('gem', 'slot:' + c, 26))));
     const cb = UI.toggle({ label: 'Colour-blind aids', value: getSet('colorblind'), onchange: (v) => setSet('colorblind', v) });
@@ -1580,15 +1591,15 @@
     const defBtn = btn('Restore defaults', { kind: 'secondary', size: 'sm', onclick: () => { Object.keys(DATA.SETTINGS).forEach((k) => UI.setSetting(k, DATA.SETTINGS[k].def)); rebuild(); UI.toast('Settings restored', 'info'); } });
     const clearBtn = btn('Clear saved data', { kind: 'primary', size: 'sm', danger: true, onclick: () => clearAllData(() => rebuild()) });
     const dataRow = mode === 'overlay'
-      ? row('', 'Saved data', mk('span', { class: 'mn-set-hint', text: 'Leave the journey from the title screen to clear it' }))
-      : row('clear', 'Saved data', clearBtn, 'Erases unlocks, history and your saved journey. Asks twice.');
+      ? row('', 'Saved data', mk('span', { class: 'mn-set-hint', text: 'Leave the tour from the title screen to clear it' }))
+      : row('clear', 'Saved data', clearBtn, 'Erases unlocks, stickers, past tours and your saved tour. Asks twice.');
 
-    shakeRowEl = row('shake', 'Screen shake', shakeSl, 'Try it: the row shakes as you drag');
+    shakeRowEl = row('shake', 'Screen shake', shakeSl, 'Try it: this line shakes as you drag');
     root.appendChild(mk('div', { class: 'mn-set-cols' },
       mk('div', { class: 'mn-set-col' },
         group('Sound', row('musicVol', 'Music', music), row('sfxVol', 'Effects', sfxSl)),
         group('Motion', row('reduceMotion', 'Reduce motion', rmSeg), mk('div', { class: 'mn-set-note' }, rmNote), shakeRowEl, row('fastAnim', 'Animation speed', animSeg), row('damageNumbers', 'Damage numbers', dmg)),
-        group('Help', row('hints', 'Hints', hints, 'Short tips during your first journey'))),
+        group('Help', row('hints', 'Hints', hints, 'Short tips during your first tour'))),
       mk('div', { class: 'mn-set-col' },
         group('Display', row('textScale', 'Text size', tsSeg), mk('div', { class: 'mn-set-note' }, sample), row('colorblind', 'Colour-blind aids', cb, 'Patterns, and bigger glyphs on gems'), mk('div', { class: 'mn-set-note' }, glyphs), row('quality', 'Quality', qSeg, 'Auto lowers effects if the game slows down')),
         group('Screen and data', row('fullscreen', 'Full screen', fsBtn), row('defaults', 'Defaults', defBtn), dataRow))));
@@ -1696,7 +1707,7 @@
     g.fillStyle = hg; g.fillRect(HT_W * 0.55, 90, HT_W * 0.45, 250);
     g.restore();
     if (tk && !reduce()) tk.mist(g, HT_W * 0.4, 130, HT_W * 0.6, 200, t, { n: 3, seed: 5, color: '#a9a6bd', alpha: 0.10, speed: 14 });
-    label(g, '3 verses, 3 bosses', 260, 352, 17, '#ffe9a8');
+    label(g, '3 acts, 3 headliners', 260, 352, 17, '#ffe9a8');
     illusFg(g);
   }
 
@@ -1733,7 +1744,7 @@
     label(g, ink + ' / 14', 78, 30, 20, '#f3e6c8', 'left');
     if (started[2] && T0 < bloomAt(2) + 1.2) label(g, '+4', 150, 30 - prog(T0, bloomAt(2), bloomAt(2) + 1.2) * 8, 20, '#8dffc2', 'left');
     steps.forEach((s, k) => { if (started[k] && k !== 2 && T0 < bloomAt(k) + 0.9) label(g, '-1', 150, 30 + prog(T0, bloomAt(k), bloomAt(k) + 0.9) * 8, 18, '#ff9a9a', 'left'); });
-    label(g, 'wake, then walk', 260, 352, 17, '#ffe9a8');
+    label(g, 'unmute, then walk', 260, 352, 17, '#ffe9a8');
     illusFg(g, 0.4);
   }
 
@@ -1766,11 +1777,11 @@
     if (tk) tk.sparkle(g, BACK.x + 48, 176, 7 + 2 * Math.sin(t * 3), { color: '#a9c4ff', glow: 0.7 });
     label(g, 'safe', BACK.x + 66, 158, 14, '#cfe0ff');
     [{ id: frontHero, row: 'front', x: FRONT.x }, { id: backHero, row: 'back', x: BACK.x }].forEach((o) => {
-      label(g, o.row === 'front' ? 'FRONT' : 'BACK', o.x, 322, 15, o.row === 'front' ? '#ffb3b3' : '#c9c2ff');
+      label(g, o.row === 'front' ? 'LEAD' : 'BACKING', o.x, 322, 15, o.row === 'front' ? '#ffb3b3' : '#c9c2ff');
       g.font = '700 12px ' + fontU(); g.textAlign = 'center'; g.fillStyle = '#f3e6c8';
-      g.fillText((DATA.rowText(o.id, o.row) || '').replace(/^(Front|Back): /, ''), o.x, 344, 190);
+      g.fillText((DATA.rowText(o.id, o.row) || '').replace(/^(Lead|Backing): /, ''), o.x, 344, 190);
       g.fillStyle = 'rgba(243,230,200,0.6)'; g.font = 'italic 600 11px ' + fontU();
-      g.fillText(heroName(o.id) + (DATA.heroes[o.id].prefer === o.row ? ' likes it here' : ' prefers ' + DATA.heroes[o.id].prefer), o.x, 362, 190);
+      g.fillText(heroName(o.id) + (DATA.heroes[o.id].prefer === o.row ? ' likes it here' : ' prefers ' + rowProse(DATA.heroes[o.id].prefer)), o.x, 362, 190);
     });
     if (local < 1.6 && n > 0) label(g, 'swap!', 236, 96, 22, '#ffe9a8');
     illusFg(g);
@@ -1828,7 +1839,7 @@
     if (block > 0.4) { art(() => ART.icon.draw(g, 'stat', 'block', 160, 150, 28, {}), 'block'); label(g, String(Math.round(block)), 182, 150, 18, '#cbe6ff', 'left'); }
     // energy orbs
     for (let i = 0; i < 3; i++) { const lit = i < energy; g.save(); g.globalAlpha = lit ? 1 : 0.28; art(() => ART.icon.draw(g, 'stat', 'energy', 264 + i * 42, 52, 38, {}), 'energy'); g.restore(); }
-    label(g, 'Energy', 306, 82, 13, '#c2fbff');
+    label(g, 'Breath', 306, 82, 13, '#c2fbff');
     // the foe: HP falls, its intent shows, it lunges on its turn
     const foeHp = Math.max(0, 24 - (T0 > 1.7 ? dmg1 : 0) - (T0 > 5.3 ? (cardNums(ids[2] || 'x').dmg || 4) : 0) + (T0 >= 9 ? 0 : 0));
     const lunge = T0 > 7.2 && T0 < 8.3 ? -Math.sin(Math.PI * prog(T0, 7.2, 8.3)) * 70 : 0;
@@ -1861,8 +1872,8 @@
 
   // ---- 5. intents (a live bubble above a foe, plus a legend of every icon) and the statuses
   const INTENT_INFO = [
-    ['attack', 'Attack', 'One hit'], ['multi', 'Flurry', 'Several hits'], ['heavy', 'Heavy', 'One big hit'], ['defend', 'Defend', 'Gains Block'], ['buff', 'Power up', 'Gets stronger'],
-    ['debuff', 'Hex', 'Weakens or clogs'], ['summon', 'Summon', 'Calls friends'], ['heal', 'Heal', 'Mends itself'], ['special', 'Special', 'Something odd'], ['flee', 'Flee', 'Runs away'],
+    ['attack', 'Attack', 'One hit'], ['multi', 'Flurry', 'Several hits'], ['heavy', 'Big hit', 'One big hit'], ['defend', 'Guard', 'Gains Block'], ['buff', 'Hype up', 'Gets stronger'],
+    ['debuff', 'Jinx', 'Weakens or clogs'], ['summon', 'Summon', 'Calls friends'], ['heal', 'Heal', 'Mends itself'], ['special', 'Special', 'Something odd'], ['flee', 'Flee', 'Runs away'],
   ];
   function buildIntents() {
     const wrap = mk('div', { class: 'mn-illus-stack' });
@@ -1918,52 +1929,52 @@
     return { el: wrap };
   }
 
-  // ---- 8. after the journey
+  // ---- 8. after the tour
   function buildAfter() {
     const wrap = mk('div', { class: 'mn-after' });
     const tmax = safe(() => META.trialMax(), 0) || 0;
-    const seals = mk('div', { class: 'mn-af-seals', role: 'img', 'aria-label': 'Tempo Trials 0 to 10; you have opened up to ' + tmax }, U.range(11).map((n) => mk('span', { class: 'mn-af-seal' + (n <= tmax ? ' on' : ''), text: n === 0 ? '0' : roman(n) })));
+    const seals = mk('div', { class: 'mn-af-seals', role: 'img', 'aria-label': 'Encores 0 to 10; you have opened up to ' + tmax }, U.range(11).map((n) => mk('span', { class: 'mn-af-seal' + (n <= tmax ? ' on' : ''), text: n === 0 ? '0' : roman(n) })));
     const seed = dailySeed();
     add(wrap,
-      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Chimes' }), mk('span', { text: 'Earned after every journey. Spend them in the Hall of Echoes.' }))),
-      mk('div', { class: 'mn-af-card' }, mk('div', { class: 'mn-af-body' }, mk('b', { text: 'Tempo Trials' }), mk('span', { text: 'Win a journey to unlock the next trial. Each one stacks a new rule.' }), seals)),
-      mk('div', { class: 'mn-af-card' }, UI.hanko('D', { size: 'lg' }), mk('div', {}, mk('b', { text: 'Daily Jam' }), mk('span', { text: (seed ? 'Today’s seed is ' + seed + '. ' : '') + 'Same heroes and map for everyone, once a day.' }))));
+      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Cheers' }), mk('span', { text: 'Earned after every tour. Spend them on the Tour Bus.' }))),
+      mk('div', { class: 'mn-af-card' }, mk('div', { class: 'mn-af-body' }, mk('b', { text: 'Encores' }), mk('span', { text: 'Win a tour to unlock the next encore. Each one stacks a new rule.' }), seals)),
+      mk('div', { class: 'mn-af-card' }, UI.hanko('D', { size: 'lg' }), mk('div', {}, mk('b', { text: 'Daily Duet' }), mk('span', { text: (seed ? "Today's seed is " + seed + '. ' : '') + 'Same heroes and map for everyone, once a day.' }))));
     return { el: wrap };
   }
 
-  const KEYS = [['E', 'End turn'], ['S', 'Swap rows'], ['1 to 9', 'Pick a card'], ['Enter', 'Play it'], ['Z', 'Fast mode'], ['D / G', 'Draw / discard pile'], ['Arrows', 'Move the map'], ['B', 'Song tray']];
+  const KEYS = [['E', 'End turn'], ['S', 'Swap spots'], ['1 to 9', 'Pick a card'], ['Enter', 'Play it'], ['Z', 'Fast mode'], ['D / G', 'Draw / discard pile'], ['Arrows', 'Move the map'], ['B', 'Spell tray']];
   const HOWTO = [
-    { id: 'book', tip: /both heroes fall/, title: 'A Land Without Sound', kicker: 'Two heroes, three verses, one silence to break.', build: () => paintedCanvas(paintBook), rules: [
-      'You lead two heroes across a grey, still land. A yokai called the Hush has eaten every sound.',
-      'Cross three verses. Each ends with a boss, and the last one guards the Hush itself.',
-      'Every journey is a new one: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.'] },
-    { id: 'map', tip: /^Waking a hex costs Echo/, title: 'Wake the Land', kicker: 'The land is silent. Your Echo wakes it.', build: () => paintedCanvas(paintMapDiagram), rules: [
-      'Spend 1 Echo to wake a hex next to awake ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
-      'Tap any awake hex to walk there. Stepping onto a fight or a fable starts it.',
-      'Echo comes back from temple bells, wins and camps. One-use Songs wake whole shapes for free.'] },
-    { id: 'rows', tip: /front hero takes most/, title: 'Two Heroes, Two Rows', kicker: 'Who stands in front matters.', build: () => paintedCanvas(paintRows), rules: [
-      'The front hero takes most attacks. The back hero is safe from most of them.',
-      'Each hero has a favourite row and a bonus there. Check it on the hero card.',
-      'You get one free swap per turn, more cost 1 Energy. If one hero falls, the other steps forward.'] },
-    { id: 'cards', tip: /Block wears off/, title: 'Energy and Cards', kicker: 'Three Energy, five cards, one enemy turn.', build: () => paintedCanvas(paintCards), rules: [
-      'Every card belongs to one hero. Play cards with Energy: you have 3 each turn.',
+    { id: 'book', tip: /both heroes lose their voice/, title: 'A World on Mute', kicker: 'Two heroes, three acts, one Gloss to sing through.', build: () => paintedCanvas(paintBook), rules: [
+      'You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.',
+      "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.",
+      'Every tour is a new one: a different map, different cards, different charms. Win or lose, you earn Cheers to unlock more.'] },
+    { id: 'map', tip: /^Unmuting a hex costs Vox/, title: 'Unmute the Soundlands', kicker: 'The Soundlands are on mute. Your Vox turns them back on.', build: () => paintedCanvas(paintMapDiagram), rules: [
+      'Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.',
+      'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.',
+      'Vox comes back from tea stalls, wins and green rooms. One-use Spells unmute whole shapes for free.'] },
+    { id: 'rows', tip: /lead hero takes most/, title: 'Two Heroes, Two Spots', kicker: 'Who takes the lead matters.', build: () => paintedCanvas(paintRows), rules: [
+      'The lead hero takes most attacks. The backing hero is safe from most of them.',
+      'Each hero has a favourite spot and a bonus there. Check it on the hero card.',
+      'You get one free swap per turn, more cost 1 Breath. If one hero loses their voice, the other steps up.'] },
+    { id: 'cards', tip: /Block wears off/, title: 'Breath and Cards', kicker: 'Three Breath, five cards, one enemy turn.', build: () => paintedCanvas(paintCards), rules: [
+      'Every card belongs to one hero. Play cards with Breath: you have 3 each turn.',
       'Attacks hurt, skills defend or set things up. Block soaks damage until your next turn.',
       'End your turn and unplayed cards are discarded while the enemies act. Then you draw 5 more.'] },
-    { id: 'intents', tip: /Enemy intents show/, title: 'Read the Intents', kicker: 'The enemy always shows its hand.', build: buildIntents, extra: 'statuses', rules: [
-      'The bubble over an enemy tells you what it will do next: hit, block, weaken, summon.',
-      'Statuses stack. Vulnerable takes more damage, Weak deals less, Poison ignores Block.',
+    { id: 'intents', tip: /Enemy intents show/, title: 'Read the Intents', kicker: 'Every enemy shows what it is about to do.', build: buildIntents, extra: 'statuses', rules: [
+      'The bubble over an enemy tells you what it will do next: hit, block, jinx, summon.',
+      'Statuses stack. ' + statusWord('vulnerable', 'Exposed') + ' takes more damage, ' + statusWord('weak', 'Muffled') + ' deals less, ' + statusWord('poison', 'Earworm') + ' ignores Block.',
       'Hover or press and hold any icon or underlined word to read what it means.'] },
-    { id: 'gems', tip: /Gems only fit slots/, title: 'Gems in Slots', kicker: 'Cut a gem, change the card.', build: buildGems, rules: [
-      'Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a prism slot takes any.',
-      'Gems add damage, Block, extra hits, cards, Energy and more. The card text changes to match.',
-      'Cut gems at camps, forges and shops. Replacing a gem destroys the old one, so choose well.'] },
-    { id: 'places', tip: /A fable is a choice/, title: 'Camps, Shops and Fables', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
-      'Camps let you rest, sharpen a card, cut gems or meditate for Echo. Peddlers sell cards, gems, treasures and card removal.',
-      'Fables are choices with a safe way, a gamble and often a price. Treasures bend the rules for the whole journey.',
-      'Champions guard treasure, the forge upgrades a card, and a gem cache lets you pick one gem.'] },
-    { id: 'after', title: 'After the Journey', kicker: 'Every journey leaves something behind.', build: buildAfter, extra: 'keys', rules: [
-      'You earn Chimes after every journey. Spend them in the Hall of Echoes on new cards, treasures and gems.',
-      'Win a journey to open Tempo Trials, stackable challenges. The Daily Jam is the same seed for everyone.',
+    { id: 'gems', tip: /Gems only fit slots/, title: 'Gems in Slots', kicker: 'Set a gem, change the card.', build: buildGems, rules: [
+      'Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a rainbow slot takes any.',
+      'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.',
+      'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.'] },
+    { id: 'places', tip: /A detour is a choice/, title: 'Green Rooms, Stalls and Detours', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
+      "Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems and charms, and declutter your deck.",
+      'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.',
+      'Rivals guard charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.'] },
+    { id: 'after', title: 'After the Tour', kicker: 'Every tour leaves something behind.', build: buildAfter, extra: 'keys', rules: [
+      'You earn Cheers after every tour. Spend them on the Tour Bus on new cards, charms and gems.',
+      'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.',
       'Keys, if you play with a keyboard, are listed below. Everything also works by touch.'] },
   ];
 
@@ -2004,7 +2015,7 @@
         right.appendChild(kl);
       }
       const tip = pg.tip && pg.extra !== 'keys' && !(UI.opt && UI.opt.textScale > 1.1) ? (DATA.tips || []).find((x) => pg.tip.test(x)) : null;
-      if (tip) right.appendChild(mk('div', { class: 'mn-margin' }, mk('b', { text: 'Liner note' }), mk('p', { text: tip })));
+      if (tip) right.appendChild(mk('div', { class: 'mn-margin' }, mk('b', { text: "Jordan's tip" }), mk('p', { text: tip })));
       right.appendChild(mk('span', { class: 'mn-pg-no', text: (i + 1) + ' / ' + HOWTO.length }));
       [left, right].forEach((el) => { el.classList.remove('turn-next', 'turn-prev'); if (!first) { void el.offsetWidth; el.classList.add(H.dir > 0 ? 'turn-next' : 'turn-prev'); } });
       book.setAttribute('aria-label', 'How to play, page ' + (i + 1) + ' of ' + HOWTO.length + ': ' + pg.title);
@@ -2086,16 +2097,16 @@
       const tip = tips.length ? tips[Math.floor(U.rng(U.hash('menu-pause-tip', run ? run.seed : 0, UI.epoch))() * tips.length)] : '';
 
       function runCard() {
-        if (!run) return mk('div', { class: 'mn-p-run empty' }, mk('p', { class: 'mn-p-none', text: 'No journey is underway.' }));
+        if (!run) return mk('div', { class: 'mn-p-run empty' }, mk('p', { class: 'mn-p-none', text: 'No tour is on the road.' }));
         const trial = run.trial | 0;
         const chip = (txt) => mk('span', { class: 'mn-p-chip', text: txt });
         const heroes = mk('div', { class: 'mn-p-heroes' }, (run.heroes || []).map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp })));
         return mk('div', { class: 'mn-p-run' },
-          mk('h3', { class: 'mn-p-h', text: 'Your journey' }),
-          mk('div', { class: 'mn-p-chips' }, chip('Verse ' + (run.chapter || 1)), trial > 0 ? chip('Tempo Trial ' + roman(trial)) : null, run.daily ? chip('Daily Jam') : null),
+          mk('h3', { class: 'mn-p-h', text: 'Your tour' }),
+          mk('div', { class: 'mn-p-chips' }, chip('Act ' + (run.chapter || 1)), trial > 0 ? chip('Encore ' + roman(trial)) : null, run.daily ? chip('Daily Duet') : null),
           heroes,
           mk('div', { class: 'mn-p-stats' }, UI.stat('gold', run.gold || 0, { size: 'sm' }), UI.stat('ink', run.ink || 0, { size: 'sm', max: run.inkMax }), (run.brushes || []).length ? UI.stat('brush', run.brushes.length, { size: 'sm' }) : null),
-          mk('div', { class: 'mn-p-relics', 'aria-label': 'Treasures' }, (run.relics || []).length ? (run.relics || []).slice(0, 10).map((id) => UI.relic(id, { size: 'sm' })) : mk('span', { class: 'mn-p-none', text: 'No treasures yet' })));
+          mk('div', { class: 'mn-p-relics', 'aria-label': 'Charms' }, (run.relics || []).length ? (run.relics || []).slice(0, 10).map((id) => UI.relic(id, { size: 'sm' })) : mk('span', { class: 'mn-p-none', text: 'No charms yet' })));
       }
 
       function buildMenu() {
@@ -2104,7 +2115,7 @@
         list.push(it('primary', 'Resume', { act: 'resume', breathe: true, sfx: QUIET, extra: mk('kbd', { class: 'btn-key', text: 'Esc', 'aria-hidden': 'true' }), onclick: () => { sfx('ui_close'); close(); } }));
         if (run) {
           list.push(it('secondary', 'Deck', { act: 'deck', sfx: 'ui_open', extra: UI.hanko(String((run.deck || []).length), { size: 'sm', label: (run.deck || []).length + ' cards' }), onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
-          list.push(it('secondary', 'Treasures', { act: 'relics', sfx: 'ui_open', extra: UI.hanko(String((run.relics || []).length), { size: 'sm', label: (run.relics || []).length + ' treasures' }), onclick: () => UI.overlay.open('relics', {}) }));
+          list.push(it('secondary', 'Charms', { act: 'relics', sfx: 'ui_open', extra: UI.hanko(String((run.relics || []).length), { size: 'sm', label: (run.relics || []).length + ' charms' }), onclick: () => UI.overlay.open('relics', {}) }));
         }
         list.push(it('secondary', 'Settings', { act: 'settings', sfx: 'ui_open', onclick: () => UI.overlay.open('settings') }));
         list.push(it('secondary', 'How to play', { act: 'howto', sfx: 'page_turn', onclick: () => showHowto() }));
@@ -2112,7 +2123,7 @@
         col.appendChild(UI.divider());
         if (run) {
           col.appendChild(it('secondary', 'Save and quit', { act: 'quit', sfx: QUIET, onclick: () => saveAndQuit() }));
-          const ab = it('secondary', 'Abandon journey', { act: 'abandon', onclick: () => abandonRun() });
+          const ab = it('secondary', 'Abandon tour', { act: 'abandon', onclick: () => abandonRun() });
           ab.classList.add('mn-danger');
           col.appendChild(ab);
         } else col.appendChild(it('secondary', 'Back to title', { act: 'title', sfx: QUIET, onclick: () => { sfx('ui_back'); close(); UI.toTitle(); } }));
@@ -2124,7 +2135,7 @@
         if (S.H) S.H = null;
         clear(holder);
         const panel = UI.panel({ kind: 'dark', gold: true, title: 'Paused', class: 'mn-pause' },
-          mk('div', { class: 'mn-p-grid' }, mk('div', { class: 'mn-p-left' }, runCard(), tip ? mk('div', { class: 'mn-p-tip' }, mk('b', { text: 'A note from the road' }), mk('p', { text: tip })) : null), buildMenu()));
+          mk('div', { class: 'mn-p-grid' }, mk('div', { class: 'mn-p-left' }, runCard(), tip ? mk('div', { class: 'mn-p-tip' }, mk('b', { text: 'A tip from Jordan' }), mk('p', { text: tip })) : null), buildMenu()));
         holder.appendChild(panel);
         const rs = holder.querySelector('[data-act=resume]');
         if (rs) { rs.setAttribute('data-autofocus', ''); UI.after(0, () => safe(() => rs.focus())); }
@@ -2141,14 +2152,14 @@
       function saveAndQuit() {
         const ok = run ? !!safe(() => META.saveRun(run), false) : true;
         sfx(ok ? 'save' : 'ui_error');
-        UI.toast(ok ? 'Your journey is saved. See you at the next beat.' : 'Progress cannot be saved in this browser', ok ? 'good' : 'warn');
+        UI.toast(ok ? 'Your tour is saved. See you at the next beat.' : 'Progress cannot be saved in this browser', ok ? 'good' : 'warn');
         close();
         UI.toTitle();
       }
       function abandonRun() {
         const G = game();
         if (G && typeof G.abandon === 'function') G.abandon();
-        else UI.toast('The journey cannot be abandoned right now', 'warn');
+        else UI.toast('The tour cannot be abandoned right now', 'warn');
       }
       S.showMenu = showMenu; S.showHowto = showHowto;
 
