@@ -211,7 +211,7 @@ if (want('save')) {
     t.ok(META.hasRun(), 'save: the run is in the save slot');
     const cont = $(g, '[data-act=continue]');
     t.ok(!!cont, 'save: the title offers Continue');
-    t.ok(/Chapter 1/.test(txt(cont)) && /Hanae/.test(txt(cont)) && /Kuro/.test(txt(cont)), 'save: Continue says where the tale stands [' + txt(cont) + ']');
+    t.ok(/Verse 1/.test(txt(cont)) && /Hanae/.test(txt(cont)) && /Kuro/.test(txt(cont)), 'save: Continue says where the tale stands [' + txt(cont) + ']');
     GAME.state.R = null;
     await tap(g, cont, 1500);
     await tick(g, 1500);

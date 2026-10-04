@@ -652,7 +652,7 @@ t.test('mercy: painting the last useful hex hands back one Ink; it can repeat', 
   t.eq(res.ok, true, 'painted'); t.eq(res.mercy, true, 'paint reports the grant'); t.eq(R.ink, 1, '1 - 1 + 1'); t.eq(R.stats.mercy, 1, 'counted');
   const next = MAP.pathToPaint(R.map, R.map.boss.q, R.map.boss.r).path[0];
   t.eq(RUN.paint(R, next[0], next[1]).mercy, true, 'and again on the next hex'); t.eq(R.stats.mercy, 2, 'twice');
-  t.ok(R.log.some((l) => /Ink/.test(l.msg)), 'the log remembers');
+  t.ok(R.log.some((l) => /Echo/.test(l.msg)), 'the log remembers');
 });
 t.test('mercy: finishing a node and the brush rack also run the check', () => {
   const R = NEW({ seed: 21 });
@@ -1291,7 +1291,7 @@ t.test('a fable tile: the event node, seen list, stat, preset ids and the empty 
   while (q.length) { const c = q.shift(); empty.MAP.neighbors(E1.map, c[0], c[1]).forEach((n) => { const k = empty.MAP.key(n[0], n[1]); if (!(k in prev) && E1.map.tiles[k].painted && E1.map.tiles[k].type !== 'block') { prev[k] = c; q.push(n); } }); }
   const path = []; for (let c = [et.q, et.r]; c; c = prev[empty.MAP.key(c[0], c[1])]) path.unshift(c);
   let res = null; path.slice(1).forEach((c) => { res = empty.RUN.step(E1, c[0], c[1]); });
-  t.eq(res.kind, 'well', 'the fallback is an Instant'); t.eq(res.fallback, 'event', 'flagged as the event fallback'); t.eq(res.gained, 1, '+1 Ink'); t.eq(res.done, true, 'done'); t.ok(/Ink/.test(res.toast), 'with a one-line toast: ' + res.toast); t.eq(E1.ink, 6, 'applied'); t.eq(et.done, true, 'the tile resolves'); t.eq(E1.node, null, 'no node'); t.eq(E1.stats.eventsSeen, 0, 'nothing was seen');
+  t.eq(res.kind, 'well', 'the fallback is an Instant'); t.eq(res.fallback, 'event', 'flagged as the event fallback'); t.eq(res.gained, 1, '+1 Ink'); t.eq(res.done, true, 'done'); t.ok(/Echo/.test(res.toast), 'with a one-line toast: ' + res.toast); t.eq(E1.ink, 6, 'applied'); t.eq(et.done, true, 'the tile resolves'); t.eq(E1.node, null, 'no node'); t.eq(E1.stats.eventsSeen, 0, 'nothing was seen');
 });
 function eventRun(events, over) {
   const A = evWorld(events);
@@ -1334,7 +1334,7 @@ t.test('locked choices say what is missing (relic by name, chapter, hp, flag hin
   const { A, R } = eventRun({ rs: ev });
   R.gold = 5; R.heroes[0].hp = 1;
   const rows = A.RUN.eventChoices(R, ev), why = rows.map((x) => x.reason);
-  t.ok(why[0].indexOf(A.DATA.relics.silver_bell.name) >= 0, 'the relic is named: ' + why[0]); t.eq(why[1], 'Chapter 3 only', 'the chapter is named');
+  t.ok(why[0].indexOf(A.DATA.relics.silver_bell.name) >= 0, 'the relic is named: ' + why[0]); t.eq(why[1], 'Verse 3 only', 'the chapter is named');
   t.ok(/80%/.test(why[2]), 'the hp bar is named: ' + why[2]); t.ok(/40%/.test(why[3]) || rows[3].ok, 'so is the hurt bar: ' + why[3]);
   t.ok(/^Not yet/.test(why[4]) && /fox/.test(why[4]), 'a flag gives a story hint: ' + why[4]); t.ok(/^Not yet/.test(why[5]) && why[5].length > 8, 'an unknown flag still gets a hint: ' + why[5]); t.eq(why[6], 'Needs 70 gold', 'gold keeps its price');
   why.forEach((w, i) => { if (!rows[i].ok) t.ok(!/^(Not yet|Wrong chapter|Needs a treasure|Party too hurt|Nobody is hurt enough)$/.test(w), 'no vague reason: ' + w); });
@@ -1595,8 +1595,8 @@ t.test('ops addGem addBrush addCurse flag', () => {
 });
 t.test('op paint log: a plural that agrees with the count', () => {
   const R = NEW({ seed: 3 });
-  const one = ops(R, [{ op: 'paint', n: 1 }]); t.eq(one.log[0].text, 'The path opens (1 hex).', 'one hex'); t.eq(one.log[0].n, 1, 'n');
-  const many = ops(R, [{ op: 'paint', n: 3 }]); t.eq(many.log[0].text, 'The path opens (3 hexes).', 'three hexes');
+  const one = ops(R, [{ op: 'paint', n: 1 }]); t.eq(one.log[0].text, 'The land wakes (1 hex).', 'one hex'); t.eq(one.log[0].n, 1, 'n');
+  const many = ops(R, [{ op: 'paint', n: 3 }]); t.eq(many.log[0].text, 'The land wakes (3 hexes).', 'three hexes');
 });
 t.test('op paint: free hexes along the cheapest chain to the boss', () => {
   const R = NEW({ seed: 3 });

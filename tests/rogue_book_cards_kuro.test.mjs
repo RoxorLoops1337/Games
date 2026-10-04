@@ -802,7 +802,7 @@ function engineSuite(g) {
       t.ok(D.cardPlain(inst(c.id, false)) !== D.cardPlain(inst(c.id, true)) || a.cost !== b.cost, `${c.id}: the player can SEE the upgrade (the text or the cost changes)`);
     });
     const words2 = (id) => D.cardPlain(inst(id, 0)).toLowerCase();
-    t.ok(/sumi/.test(words2('kuro_first_stroke')), 'First Stroke text mentions Sumi');
+    t.ok(new RegExp(D.statuses.sumi.name, 'i').test(words2('kuro_first_stroke')), 'First Stroke text mentions Sumi');
     t.ok(/poison/.test(words2('kuro_venom_script')), 'Venom Script text mentions Poison');
     t.ok(/burn/.test(words2('kuro_cinder_note')), 'Cinder Note text mentions Burn');
     t.ok(/swap/.test(words2('kuro_flip_the_page')), 'Flip the Page text mentions the swap');

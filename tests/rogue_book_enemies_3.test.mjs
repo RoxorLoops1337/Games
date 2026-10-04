@@ -194,10 +194,10 @@ t.test('lore and copy: bestiary voice, length limits, tags, move names and barks
     });
     (e.phases || []).forEach((p, i) => t.ok(typeof p.say === 'string' && p.say.length >= 8 && p.say.length <= 90, `${id} phase ${i + 1} say line`));
   });
-  // a move name means one thing: it may repeat across enemies only where the mechanic is the very same (the wraith teaches the boss's Rub Through)
+  // a move name means one thing: it may repeat across enemies only where the mechanic is the very same (the wraith teaches the boss's Smother)
   const owner = {};
   ids.forEach((id) => movesOf(E(id)).forEach((m) => { (owner[m.name] = owner[m.name] || []).push(id); }));
-  Object.keys(owner).filter((n) => owner[n].length > 1).forEach((n) => t.ok(n === 'Rub Through' && owner[n].join() === 'eraser_wraith,boss_editor', `the move name "${n}" is shared by ${owner[n].join(', ')}`));
+  Object.keys(owner).filter((n) => owner[n].length > 1).forEach((n) => t.ok(n === 'Smother' && owner[n].join() === 'eraser_wraith,boss_editor', `the move name "${n}" is shared by ${owner[n].join(', ')}`));
   const lores = ids.map((id) => E(id).lore);
   t.eq(new Set(lores).size, lores.length, 'no two enemies share a lore line');
   t.ok(ids.every((id) => { const e = E(id); return e.hp[1] - e.hp[0] >= 2 && e.hp[1] - e.hp[0] <= 20; }), 'HP ranges are real ranges (a spread of 2 to 20)');

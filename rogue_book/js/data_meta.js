@@ -163,7 +163,7 @@
       text: "The Author wrote Hanae on the very first page, on a day the Author felt brave. She was meant to be the hero: the one who steps forward first, so the rest of the story has somewhere to stand. She has a very good ponytail, an even better blade, and a reputation for never being late. Every cut she makes leaves petals, because the Author once wrote 'like a blossom' and never crossed it out. She will tell you she is afraid of nothing. She will say it a little fast. The truth is that she was written to win, and nobody ever wrote what happens if she does not, so she has decided never to find out.",
     },
     hero_kuro: {
-      title: 'Kuro, the Inkweaver',
+      title: 'Kuro, the Songweaver',
       text: 'Kuro began as a footnote. The Author needed someone to explain things to the reader, so a scholar was pencilled into the margin, glasses and all, and then, because the Author was kind, given a personality. It got out of hand. He is the only one who knows he lives in a book, and he reads the last page first, which he says is sensible and everyone else says is cheating. His brush writes spells because it is the brush that wrote him. He teases to stay warm. He counts the margins for exits. Deep down he suspects a footnote is the first thing an editor cuts, and he would like everyone to please stop saying that out loud.',
     },
     hero_suzu: {

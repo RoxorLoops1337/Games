@@ -1,4 +1,4 @@
-// Inkwoven -- chapter 1 roster: the Whispering Bamboo Grove (forest spirits and folk monsters, the teaching chapter).
+// Echowake -- chapter 1 roster: the Whispering Bamboo Grove (forest spirits and folk monsters, the teaching chapter).
 // Content only: one IIFE that registers 10 normals, 3 elites, 3 minions and the boss into DATA.enemies, then the
 // chapter's encounter pools into DATA.encounters[1]. No functions in the data, no random calls, no dashes.
 //
@@ -46,13 +46,13 @@
 // Enemy Block and Plating gained in the enemy phase last through the hero's next turn: a `defend` intent is a free window THIS turn
 // and a wall NEXT turn. A `dur` status an enemy puts on itself needs n 2 to survive the end-of-round tick (heroes get the fresh flag).
 //
-// Kuzunoha, the boss. Turn 1 she folds two paper kodama out of her tails (open), then cycles Ink Strike, Bleed the Page (2 blots into
-// the draw pile), the telegraphed Great Brush Stroke (heavy 20), Brush Flurry (4 random hits) and Tail Sweep (both heroes). Rules:
-// a Mask Gaze (Weak and Frail on both) every 5th turn (every 6th in the second form), Ink Needle at the weakest hero whenever one is below 30 percent HP, a
-// re-fold if the kodama are all gone by turn 8, and Frayed Ink (Might 2 and Ritual 1) from turn 14, so stalling is punished.
+// Kuzunoha, the boss. Turn 1 she calls two hollow kodama out of her tails (open), then cycles Bell Strike, Drown the Grove (2 blots into
+// the draw pile), the telegraphed Great Bell Toll (heavy 20), Tail Flurry (4 random hits) and Tail Sweep (both heroes). Rules:
+// a Mask Gaze (Weak and Frail on both) every 5th turn (every 6th in the second form), Needle Note at the weakest hero whenever one is below 30 percent HP, a
+// re-call if the kodama are all gone by turn 8, and Frayed Voice (Might 2 and Ritual 1) from turn 14, so stalling is punished.
 // Below half HP (the one phases entry) the mask splits: debuffs wash off, +1 Might, she is Vulnerable for two rounds (n 2 so it outlasts
-// the tick) and the two halves of the mask become paper kodama (never more than 2 alive). Her second form opens with Nine Tails Rise
-// (Block 5, a breath for the party) and cycles Nine-Tail Storm, Ink Strike, Tail Sweep, Bleed the Page, Rise: the storm is nine random
+// the tick) and the two halves of the mask become hollow kodama (never more than 2 alive). Her second form opens with Nine Tails Rise
+// (Block 5, a breath for the party) and cycles Nine-Tail Storm, Bell Strike, Tail Sweep, Drown the Grove, Rise: the storm is nine random
 // hits of 2 plus Might, 27 in all, every fifth turn. It is answerable: Block on BOTH heroes, Weak on her (each 3 becomes 2, so 27
 // becomes 18), Dodge, or Taunt (random hits go to the taunter) plus Thorns to punish all nine.
 (() => {
@@ -274,33 +274,33 @@
     },
 
     paper_kodama: {
-      id: 'paper_kodama', name: 'Paper Kodama', chapter: 1, tier: 'minion', size: 's', hp: [6, 6],
+      id: 'paper_kodama', name: 'Hollow Kodama', chapter: 1, tier: 'minion', size: 's', hp: [6, 6],
       moves: {
-        ink_smudge: { name: 'Ink Smudge', kind: 'debuff', fx: [{ op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
-        paper_slap: { name: 'Paper Slap', kind: 'attack', fx: [{ op: 'dmg', n: 2, tgt: 'front' }] },
+        ink_smudge: { name: 'Hollow Hum', kind: 'debuff', fx: [{ op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
+        paper_slap: { name: 'Twig Slap', kind: 'attack', fx: [{ op: 'dmg', n: 2, tgt: 'front' }] },
       },
       ai: { seq: ['ink_smudge', 'paper_slap'] },
       art: { id: 'paper_kodama' },
-      lore: 'A hollow doll folded from a torn page and given a face by the fox\'s brush. It carries a little of the Blank inside, and it spills.',
+      lore: 'A tree spirit with its echo eaten out, given a borrowed voice by the fox. It carries a little of the Hush inside, and it spills.',
       tags: ['construct', 'void'],
     },
 
     // ------------------------------------------------------------------ boss
     boss_kuzunoha: {
-      id: 'boss_kuzunoha', name: 'Kuzunoha', title: 'The Nine-Tail Ink Fox', chapter: 1, tier: 'boss', size: 'xl', hp: [170, 178],
+      id: 'boss_kuzunoha', name: 'Kuzunoha', title: 'The Nine-Voiced Fox', chapter: 1, tier: 'boss', size: 'xl', hp: [170, 178],
       immune: ['stun'],
       moves: {
-        paper_fold: { name: 'Paper Fold', kind: 'summon', fx: [{ op: 'summon', enemy: 'paper_kodama', n: 2 }], say: 'Fold, little pages. Fold, and live.' },
-        ink_strike: { name: 'Ink Strike', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front', el: 'ink' }], say: 'Every stroke is a sentence.' },
-        brush_flurry: { name: 'Brush Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 4, tgt: 'random', el: 'ink' }], say: 'Let me write you smaller.' },
-        ink_bleed: { name: 'Bleed the Page', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 2, to: 'draw' }], say: 'Words run. So does ink.' },
-        tail_sweep: { name: 'Tail Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'both', el: 'ink' }], say: 'Turn the page!' },
-        great_stroke: { name: 'Great Brush Stroke', kind: 'heavy', fx: [{ op: 'dmg', n: 20, tgt: 'front', el: 'ink' }], say: 'One great stroke.' },
-        mask_gaze: { name: 'Mask Gaze', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }], say: 'Look at me. Look, and forget.' },
-        ink_needle: { name: 'Ink Needle', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'lowest', el: 'ink' }], say: 'Ah. There you are, little one.' },
-        tails_rise: { name: 'Nine Tails Rise', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'self' }], say: 'Nine tails... one stroke.' },
-        nine_tails: { name: 'Nine-Tail Storm', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 9, tgt: 'random', el: 'ink' }], say: 'NINE TAILS. ONE STROKE!' },
-        frayed_ink: { name: 'Frayed Ink', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }], say: 'The page is running out.' },
+        paper_fold: { name: 'Call the Kodama', kind: 'summon', fx: [{ op: 'summon', enemy: 'paper_kodama', n: 2 }], say: 'Answer me, little echoes. Answer, and live.' },
+        ink_strike: { name: 'Bell Strike', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front', el: 'ink' }], say: 'Every note is a promise.' },
+        brush_flurry: { name: 'Tail Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 4, tgt: 'random', el: 'ink' }], say: 'Let me sing you smaller.' },
+        ink_bleed: { name: 'Drown the Grove', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 2, to: 'draw' }], say: 'Hear nothing but me.' },
+        tail_sweep: { name: 'Tail Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'both', el: 'ink' }], say: 'Louder!' },
+        great_stroke: { name: 'Great Bell Toll', kind: 'heavy', fx: [{ op: 'dmg', n: 20, tgt: 'front', el: 'ink' }], say: 'One great note.' },
+        mask_gaze: { name: 'Mask Gaze', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }], say: 'Listen to me. Listen, and forget.' },
+        ink_needle: { name: 'Needle Note', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'lowest', el: 'ink' }], say: 'Ah. There you are, little one.' },
+        tails_rise: { name: 'Nine Tails Rise', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'self' }], say: 'Nine tails... one song.' },
+        nine_tails: { name: 'Nine-Tail Storm', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 9, tgt: 'random', el: 'ink' }], say: 'NINE VOICES. ONE SONG!' },
+        frayed_ink: { name: 'Frayed Voice', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }], say: 'The song is running out.' },
       },
       ai: {
         open: ['paper_fold'],
@@ -313,7 +313,7 @@
         ],
       },
       phases: [{
-        at: 0.5, say: 'You broke the mask. Very well, little storybook. Read my TRUE tails!',
+        at: 0.5, say: 'You broke the mask. Very well, little songbirds. Hear my TRUE voices!',
         fx: [
           { op: 'removeStatus', s: 'debuffs', tgt: 'self' },
           { op: 'status', s: 'might', n: 1, tgt: 'self' },
@@ -332,7 +332,7 @@
         },
       }],
       art: { id: 'boss_kuzunoha' },
-      lore: 'A white fox who learned to write and never stopped. Each of her nine tails ends in a brush, and every stroke rewrites a little more of the grove.',
+      lore: 'A white fox who learned to sing and never stopped. Each of her nine tails rings with its own voice, and every note drowns out a little more of the grove.',
       tags: ['spirit', 'beast'],
     },
   });
