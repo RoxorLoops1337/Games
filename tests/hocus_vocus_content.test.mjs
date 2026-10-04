@@ -183,13 +183,13 @@ t.test('enemy moves read from the enemy side in the bestiary (DATA.opsText of mo
       if (!s) bad.push(`${w}: no text`);
       if (/undefined|NaN|\[object|null|something|Infinity/.test(s) || DASH.test(s)) bad.push(`${w}: debris in "${s}"`);
       if (/to a random enemy|the weakest enemy|the enemy\.|your ally|to the target|equal to your /.test(s)) bad.push(`${w}: reads from the hero side: "${s}"`);
-      if (/(front|back) hero gains?|both heroes gain|The front hero|The back hero/.test(s)) bad.push(`${w}: a debuff reads like a gift: "${s}"`);
+      if (/(lead|backing) hero gains?|both heroes gain|The lead hero|The backing hero/.test(s)) bad.push(`${w}: a debuff reads like a gift: "${s}"`);
       if (/\d\.\d/.test(s)) bad.push(`${w}: a decimal number: "${s}"`);
       if (mv.kind !== 'none' && A(mv.fx).some((o) => o.op === 'dmg') && !/damage/.test(s)) bad.push(`${w}: a damage move that never says damage`);
-      walk(mv.fx, (o) => { if (o.op === 'dmg' && !o.tgt && !/to the front hero|to both heroes|to the back hero|to a random hero|to the weakest hero/.test(s)) bad.push(`${w}: damage with no hero target: "${s}"`); });
+      walk(mv.fx, (o) => { if (o.op === 'dmg' && !o.tgt && !/to the lead hero|to both heroes|to the backing hero|to a random hero|to the weakest hero/.test(s)) bad.push(`${w}: damage with no hero target: "${s}"`); });
       t.eq(DATA.moveText(mv), s, `${w}: moveText equals opsText of the move`);
     });
-    A(e.hooks).forEach((h, i) => { const s = DATA.hookText(h); if (!s || /undefined|NaN|\[object|null/.test(s) || /\b(you|your)\b/.test(s.replace(/your (draw|discard) pile|your rows/g, ''))) bad.push(`${e.id} hook ${i}: "${s}"`); });
+    A(e.hooks).forEach((h, i) => { const s = DATA.hookText(h); if (!s || /undefined|NaN|\[object|null/.test(s) || /\b(you|your)\b/.test(s.replace(/your (draw|discard) pile|your spots/g, ''))) bad.push(`${e.id} hook ${i}: "${s}"`); });
     A(e.phases).forEach((p, i) => { if (A(p.fx).length) { const s = DATA.opsText(p.fx); if (!s || /undefined|NaN|\[object|null/.test(s)) bad.push(`${e.id} phase ${i}: "${s}"`); } });
   });
   t.deep(bad, [], 'every enemy move, hook and phase reads from the enemy side');
@@ -218,7 +218,7 @@ t.test('intent text: every move of every enemy reads well in a real combat, and 
       const sides = values(e.moves[m].fx).length && JSON.stringify(e.moves[m].fx);
       if (/"tgt":"(allEnemies|otherEnemy|lowestEnemy)"/.test(sides) && !/(all enemies|another enemy|enemy with the lowest HP)/.test(s)) bad.push(`${w}: help for other enemies is not named in "${s}"`);
       if (A(e.moves[m].fx).some((o) => o.op === 'summon') && !/ummons/.test(s)) bad.push(`${w}: a summon that says nothing about summoning: "${s}"`);
-      if (/to the front hero and applies/.test(s) === false && /applies [^,]* to the front hero and applies/.test(s)) bad.push(`${w}: repeated target "${s}"`);
+      if (/to the lead hero and applies/.test(s) === false && /applies [^,]* to the lead hero and applies/.test(s)) bad.push(`${w}: repeated target "${s}"`);
     });
   });
   t.deep(bad, [], `${checked} enemy moves: every intent line is a sentence about the move`);
@@ -251,9 +251,11 @@ t.test('every reward pool is non-empty for every hero and rarity, with and witho
 
 // =================================================================================================== 6. text
 const STATUS_WORDS = values(DATA.statuses).map((s) => s.name);
-const KEYWORD_WORDS = ['block', 'exhaust', 'retain', 'innate', 'ethereal', 'unplayable'].map((k) => DATA.keywords[k].name).concat(['Energy']);
+const KEYWORD_WORDS = ['block', 'exhaust', 'retain', 'innate', 'ethereal', 'unplayable'].map((k) => DATA.keywords[k].name).concat(['Breath']);
 const wordRe = (w) => new RegExp('(^|[^A-Za-z])' + w.toLowerCase() + '([^A-Za-z]|$)');
-const lowerKeyword = (s) => STATUS_WORDS.concat(KEYWORD_WORDS).filter((w) => wordRe(w).test(s)).filter((w) => !(w === 'Weak' && /weak(est|ly)?/.test(s) && !/\bweak\b/.test(s)));
+// the keyword Hold is also a plain verb ("your Vox pool can hold 2 more", "if you hold at least 6 cards"): only the keyword must be capitalised
+const VERB_HOLD = /\b(can|you|to) hold\b/g;
+const lowerKeyword = (s) => { const v = s.replace(VERB_HOLD, ''); return STATUS_WORDS.concat(KEYWORD_WORDS).filter((w) => wordRe(w).test(v)).filter((w) => !(w === 'Weak' && /weak(est|ly)?/.test(v) && !/\bweak\b/.test(v))); };
 
 t.test('every card, base and upgraded, in both rows: clean text inside the limits, keywords spelled the one way', () => {
   const bad = [];
@@ -274,8 +276,8 @@ t.test('every card, base and upgraded, in both rows: clean text inside the limit
           if (plain && !/^[A-Z]/.test(plain)) bad.push(`${w}: not capitalised: ${plain}`);
           if (plain && !/[.)]$/.test(plain)) bad.push(`${w}: no final full stop: ${plain}`);
           if (lowerKeyword(plain).length) bad.push(`${w}: ${lowerKeyword(plain).join(', ')} spelled with a small letter in "${plain}"`);
-          if (/Now (Front|Back):/.test(plain) && !/(Swap|swap) rows/.test(plain)) bad.push(`${w}: "Now" with no swap before it: ${plain}`);
-          if (/(Swap rows|swap rows)\. (Front|Back):/.test(plain)) bad.push(`${w}: a row bonus after a swap must say Now: ${plain}`);
+          if (/Now (Lead|Backing):/.test(plain) && !/(Swap|swap) spots/.test(plain)) bad.push(`${w}: "Now" with no swap before it: ${plain}`);
+          if (/(Swap spots|swap spots)\. (Lead|Backing):/.test(plain)) bad.push(`${w}: a row bonus after a swap must say Now: ${plain}`);
           if (/(^|\. )Gain \d+ [A-Za-z]+\. Gain \d+ [A-Za-z]+(\.|$)/.test(plain)) bad.push(`${w}: two plain "Gain" sentences that read better as one: ${plain}`);
         }
         if (/undefined|NaN|\[object|null|Infinity|something/.test(plain) || DASH.test(plain)) bad.push(`${w}: debris "${plain}"`);
@@ -299,19 +301,19 @@ t.test('hero:any hooks name BOTH heroes, and an owned hook never claims more tha
     if (f.hero === 'any') {
       any++;
       if (['onPlay', 'onKill', 'onDamaged'].indexOf(o.on) >= 0 && !/either hero/.test(text)) bad.push(`${c.id}: filter.hero any on ${o.on} but the text never says "either hero": ${text}`);
-      if (o.on === 'onSwap' && !/either hero swaps rows/.test(text)) bad.push(`${c.id}: an any swap hook should read "either hero swaps rows": ${text}`);
-      if (o.on === 'onHeroDown' && !/a hero falls/.test(text)) bad.push(`${c.id}: an any hero-down hook should read "a hero falls": ${text}`);
+      if (o.on === 'onSwap' && !/either hero swaps spots/.test(text)) bad.push(`${c.id}: an any swap hook should read "either hero swaps spots": ${text}`);
+      if (o.on === 'onHeroDown' && !/a hero loses their voice/.test(text)) bad.push(`${c.id}: an any hero-down hook should read "a hero loses their voice": ${text}`);
     } else {
       if (/either hero/.test(text)) bad.push(`${c.id}: says "either hero" without hero:'any': ${text}`);
-      if (o.on === 'onSwap' && !/swap into the front row/.test(text)) bad.push(`${c.id}: an owned swap hook with no hero:'any' only fires when its owner ends up in front (the swap event names the new front hero), so the text must say so: ${text}`);
-      if (o.on === 'onHeroDown' && !/you fall/.test(text)) bad.push(`${c.id}: an owned hero-down hook with no hero:'any' only fires when its owner falls: ${text}`);
+      if (o.on === 'onSwap' && !/swap into the lead/.test(text)) bad.push(`${c.id}: an owned swap hook with no hero:'any' only fires when its owner ends up in front (the swap event names the new front hero), so the text must say so: ${text}`);
+      if (o.on === 'onHeroDown' && !/you lose your voice/.test(text)) bad.push(`${c.id}: an owned hero-down hook with no hero:'any' only fires when its owner falls: ${text}`);
     }
   })));
   t.ok(any >= 8, `${any} hero:any hooks checked`);
   t.deep(bad, [], 'hook wording matches who the hook hears');
   ['hanae_petal_trail', 'hanae_waltz_of_steps'].forEach((id) => t.ok(DATA.cards[id], `${id} exists`));
   t.eq(DATA.cardPlain('hanae_petal_trail'), 'Up to 2 times per turn, whenever either hero plays an Attack, deal 2 damage to all enemies.', 'Petal Trail says either hero');
-  t.eq(DATA.cardPlain('hanae_waltz_of_steps'), 'Once per turn, whenever either hero swaps rows, gain 1 Bloom and 4 Block.', 'Waltz of Steps says either hero and shares one gain sentence');
+  t.eq(DATA.cardPlain('hanae_waltz_of_steps'), 'Once per turn, whenever either hero swaps spots, gain 1 Bloom and 4 Block.', 'Waltz of Steps says either hero and shares one gain sentence');
 });
 
 t.test('every card with every compatible gem: no exceptions, no debris, and the gem line says what it does', () => {
@@ -378,7 +380,7 @@ t.test('relic, status, row, keyword and brush text: spelling, limits, no dashes'
   values(DATA.keywords).forEach((k) => { if (!/^[A-Z]/.test(k.text) || !/[.]$/.test(k.text) || DASH.test(k.text)) bad.push(`keyword ${k.name}: "${k.text}"`); });
   values(DATA.brushes).forEach((b) => { if (!/^[A-Z]/.test(b.text) || !/[.]$/.test(b.text) || DASH.test(b.text)) bad.push(`brush ${b.name}: "${b.text}"`); });
   values(DATA.tiles).forEach((x) => { if (!/^[A-Z]/.test(x.text) || !/[.]$/.test(x.text) || DASH.test(x.text)) bad.push(`tile ${x.name}: "${x.text}"`); });
-  HEROES.forEach((h) => ['front', 'back'].forEach((row) => { const s = DATA.rowText(h, row); if (!/^(Front|Back): /.test(s) || DASH.test(s)) bad.push(`row ${h} ${row}: "${s}"`); }));
+  HEROES.forEach((h) => ['front', 'back'].forEach((row) => { const s = DATA.rowText(h, row); if (!/^(Lead|Backing): /.test(s) || DASH.test(s)) bad.push(`row ${h} ${row}: "${s}"`); }));
   HEROES.forEach((h) => A(DATA.heroes[h].passives).forEach((p) => { const s = DATA.hookText(p); if (!s || /undefined|NaN/.test(s)) bad.push(`passive ${p.id}: "${s}"`); }));
   t.deep(bad, [], 'relics, statuses, keywords, brushes, tiles, rows and passives read cleanly');
   // every keyword a card text can highlight has a glossary entry
@@ -433,8 +435,8 @@ const playId = (C, id) => { const c = getCard(C, id); return C.play(c.uid, C.nee
 const evs = (ev, type) => ev.filter((e) => e.type === type);
 
 t.test('rules lawyer: steps, swaps and "Now Front" read exactly as the engine plays them', () => {
-  // Petal Step: "Move to the front row. Gain 1 Bloom and 3 Block."
-  t.eq(DATA.cardPlain('hanae_petal_step'), 'Move to the front row. Gain 1 Bloom and 3 Block.', 'the text');
+  // Petal Step: "Move to the lead. Gain 1 Bloom and 3 Block."
+  t.eq(DATA.cardPlain('hanae_petal_step'), 'Move to the lead. Gain 1 Bloom and 3 Block.', 'the text');
   let C = lawyer(['hanae', 'kuro'], 1, ['hanae_petal_step']);
   let ev = playId(C, 'hanae_petal_step');
   t.eq(C.front().id, 'hanae', 'from the back row she ends in front');
@@ -443,8 +445,8 @@ t.test('rules lawyer: steps, swaps and "Now Front" read exactly as the engine pl
   ev = playId(C, 'hanae_petal_step');
   t.eq(evs(ev, 'swap').length, 0, 'from the front row she never swaps');
   t.eq(C.heroes[0].st.bloom, 1, 'and the Bloom comes either way');
-  // Hit and Vanish: "Deal 6 damage. Swap rows. Now Back: both heroes gain 3 Block." (4 with her back row bonus)
-  t.eq(DATA.cardPlain('hanae_hit_and_vanish'), 'Deal 6 damage. Swap rows. Now Back: both heroes gain 3 Block.', 'the text');
+  // Hit and Vanish: "Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block." (4 with her back row bonus)
+  t.eq(DATA.cardPlain('hanae_hit_and_vanish'), 'Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block.', 'the text');
   C = lawyer(['hanae', 'kuro'], 0, ['hanae_hit_and_vanish']);
   ev = playId(C, 'hanae_hit_and_vanish');
   t.eq(C.front().id, 'kuro', 'from the front she ends in the back');
@@ -898,7 +900,9 @@ t.test('house style across all copy: no dash of any kind used as punctuation, no
     if (/<[a-z]/i.test(s)) bad.push(`${where}: markup in plain copy`);
     if (/[‘’“”]/.test(s)) bad.push(`${where}: curly quotes`);
     if (/\s$|^\s/.test(s)) bad.push(`${where}: stray space at an edge`);
-    if (/\b(\w+) \1\b/i.test(s.replace(/\b(no|bye|ha|kata|tick|twang|ow|boom|krr+a*|sit|cut|closer|hold|a thousand)\b/gi, ''))) bad.push(`${where}: a doubled word in "${s.slice(0, 70)}"`);
+    // the allowed repeats are sounds and jokes on purpose; wikka, ts and tap are beatbox sounds and "the kind kind" a pun (HV_HEROES flavours and barks);
+    // ting is a tuning fork's ring (the Tuning Forkling bark "Ting ting ting!", HV_ENEMIES 2.2)
+    if (/\b(\w+) \1\b/i.test(s.replace(/\b(no|bye|ha|kata|tick|twang|ow|boom|krr+a*|sit|cut|closer|hold|a thousand|wikka|ts|tap|kind|ting)\b/gi, ''))) bad.push(`${where}: a doubled word in "${s.slice(0, 70)}"`);
   };
   values(DATA.events).forEach((e) => { scan(e.id + ' title', e.title); scan(e.id + ' text', e.text); e.choices.forEach((c, i) => { scan(`${e.id}[${i}] label`, c.label); scan(`${e.id}[${i}] cost`, c.cost); c.out.forEach((o, j) => scan(`${e.id}[${i}].out[${j}]`, o.text)); }); });
   values(DATA.lore).forEach((l) => { scan(l.id + ' title', l.title); scan(l.id, l.text); values(l.lines || {}).forEach((arr) => arr.forEach((x) => scan(l.id, x))); });

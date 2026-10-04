@@ -120,7 +120,7 @@ await t.test('title: Continue shows the saved run summary and resumes it through
   await go(g, 'title'); g._click('.mn-gate'); await settle(g);
   t.eq($$(g, '.mn-plaque')[0].dataset.act, 'continue', 'Continue comes first');
   const info = g.META.runInfo();
-  t.ok(info && /Verse 1/.test(info.text), 'META.runInfo describes the run: ' + (info && info.text));
+  t.ok(info && /Act 1/.test(info.text), 'META.runInfo describes the run: ' + (info && info.text));
   t.eq($(g, '[data-act=continue] .mn-p-sub').textContent, info.text, 'the plaque shows the run summary ("Chapter 1, Ink 10, Hanae and Kuro")');
   t.eq($$(g, '[data-act=continue] .mn-p-meds .ico').length, 2, 'both heroes show as medallions');
   t.ok($(g, '[data-act=continue] .hanko'), 'an Ink Trial run wears a trial seal');

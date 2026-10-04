@@ -57,6 +57,10 @@ t.test('statuses are well formed', () => {
   L.heroIds.forEach((id) => t.eq(D0.statuses[D0.heroes[id].res].hero, id, `${id} resource belongs to the hero`));
   t.ok(D0.isDebuff('weak') && !D0.isDebuff('might') && D0.isBuff('might'), 'isDebuff / isBuff');
 });
+t.test('DATA.COLOUR_NAME gives every slot colour id a display word (the ids stay)', () => {
+  t.deep(D0.COLOUR_NAME, { red: 'pink', blue: 'blue', green: 'green', gold: 'gold', any: 'rainbow' }, 'the display table');
+  L.slotColors.concat(L.gemColors).forEach((c) => t.ok(typeof D0.COLOUR_NAME[c] === 'string' && D0.COLOUR_NAME[c].length > 0, `colour ${c} has a display word`));
+});
 t.test('economy invariants (Ink numbers from the lead)', () => {
   const E = D0.ECONOMY;
   t.eq(E.startInk, 10, 'startInk'); t.eq(E.inkMax, 14, 'inkMax'); t.eq(E.wellInk, 4, 'wellInk');
@@ -312,6 +316,7 @@ t.test('relic probes', () => {
   t.eq(errs({}).length, 0, 'good relic');
   t.eq(errs({ mods: undefined, hooks: [{ on: 'onPaint', every: 3, fx: [{ op: 'ink', n: 1 }] }, { on: 'onFightWon', filter: { tier: 'elite' }, fx: [{ op: 'gold', n: 20 }] }, { on: 'onPlay', filter: { gems: { gte: 1 } }, limit: 1, fx: [{ op: 'block', n: 1, tgt: 'self' }] }, { on: 'onHeroDown', once: true, fx: [{ op: 'revive', pct: 0.25 }] }, { on: 'onKill', filter: { tier: ['normal', 'elite'] }, fx: [{ op: 'gold', n: 2 }] }] }).length, 0, 'rich hooks');
   t.eq(errs({ mods: undefined, rows: { front: { dmgAdd: 1 } } }).length, 0, 'rows only relic');
+  ['It jingles when you walk.', 'Ta-da!', 'Who made this?', 'x'.repeat(79) + '.'].forEach((f) => t.eq(errs({ flavor: f }).length, 0, `optional flavor line is accepted: ${f.slice(0, 30)}`));
   t.eq(errs({ mods: { goldMul: 0.25, inkMax: -2, healMul: -0.25 } }).length, 0, 'mods with signs');
   [
     ['maxHpPct gone', { mods: { maxHpPct: 0.1 } }, 'unknown mod "maxHpPct"'],
@@ -321,6 +326,12 @@ t.test('relic probes', () => {
     ['empty mods', { mods: {} }, 'mods is empty'],
     ['nothing', { mods: undefined }, 'needs mods, hooks or rows'],
     ['text long', { text: 'x'.repeat(91) }, 'text over 90 characters'],
+    ['flavor long', { flavor: 'x'.repeat(80) + '.' }, 'flavor over 80 characters'],
+    ['flavor not a string', { flavor: 7 }, 'flavor must be a non-empty string'],
+    ['flavor empty', { flavor: '' }, 'flavor must be a non-empty string'],
+    ['flavor not ascii', { flavor: 'Ta' + String.fromCharCode(0x2026) + ' da.' }, 'flavor must be printable ASCII'],
+    ['flavor control char', { flavor: 'Ta\tda.' }, 'flavor must be printable ASCII'],
+    ['flavor no end mark', { flavor: 'It jingles when you walk' }, 'flavor must end with . ! or ?'],
     ['bad icon', { art: { m: 'nope' } }, 'not in LISTS.relicIcons'],
     ['bad hero', { hero: 'nobody' }, 'hero'],
     ['rows bad row', { mods: undefined, rows: { middle: {} } }, 'rows.middle'],
@@ -424,7 +435,7 @@ t.test('enemy probes', () => {
     if (label === 'not in roster') { const { DATA } = load(); DATA.add('enemies', { kappa2: Object.assign(enemyDef('kappa'), { id: 'kappa2', art: { id: 'kappa2' } }) }); t.ok(has(DATA.validate('enemies').errors, 'id is not in the fixed roster'), 'ids outside the roster are rejected'); return; }
     const e = enemyErrs(id, over).errors; t.ok(has(e, sub), `${label}: expected "${sub}" in [${e.join(' | ')}]`);
   });
-  t.ok(has(enemyErrs('kappa', { name: 'Kappa Deluxe' }).warnings, 'name should be "Kappa"'), 'name mismatch warns');
+  t.ok(has(enemyErrs('kappa', { name: 'Fussy Foghorn Deluxe' }).warnings, 'name should be "Fussy Foghorn"'), 'name mismatch warns');
   t.ok(has(enemyErrs('boss_kuzunoha', {}).warnings, 'a boss should have a title'), 'boss without title warns');
   t.ok(has(enemyErrs('kappa', { moves: { hit: { name: 'Hit', kind: 'debuff', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'weak', n: 1 }] }, guard: { name: 'G', kind: 'defend', fx: [{ op: 'block', n: 6 }] } } }).warnings, 'should use kind attack'), 'damage under a debuff icon warns');
   const chOnly = enemyErrs('kappa', { tier: 'elite' }, { chapter: 2 });
@@ -835,7 +846,7 @@ t.test('roster roles that call minions name a minion of their own chapter', () =
       t.ok(minions.some((m) => role.includes(m) || role.includes(m + 's') || role.includes(m.replace(/ /g, '') + 's')), `${r.id} calls a minion that exists in chapter ${ch} (${minions.join(', ')}): ${r.role}`);
     });
   });
-  t.ok(D0.ROSTER[2].find((r) => r.id === 'drowned_general').role.includes('Lantern Wisp'), 'the drowned general calls Lantern Wisps (there are no drowned minions)');
+  t.ok(D0.ROSTER[2].find((r) => r.id === 'drowned_general').role.includes('Grumble Cloud'), 'the comment troll (drowned_general) calls Grumble Clouds, the Act II minion lantern_wisp');
 });
 t.test('every idiom printed in CONTENT_SPEC 3.1 is valid in its context', () => {
   const md = read('CONTENT_SPEC.md').replace(/\s+/g, ' ');

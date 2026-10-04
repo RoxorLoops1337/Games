@@ -124,11 +124,16 @@ t.test('every archetype has an engine and a finisher (the design promise)', () =
 });
 
 // ---------------------------------------------------------------------------------------------- names, text, art, flavor, locks
-t.test('names: 1 to 3 words, unique, no dashes, no digits', () => {
+t.test('names: 1 to 3 words (one named exception), unique, no dashes, no digits', () => {
   const names = nonToken.map((c) => c.name);
   t.eq(new Set(names).size, names.length, 'duplicate names inside the file');
   t.eq(new Set(names.map((n) => n.toLowerCase())).size, names.length, 'names differ ignoring case');
-  names.forEach((n) => { t.ok(words(n) >= 1 && words(n) <= 3, n + ' has 1 to 3 words'); t.ok(/^[A-Z][A-Za-z' ]+$/.test(n), n + ' is plain words'); });
+  // The one named exception to the 1 to 3 words rule: hanae_blade_duet is the owners' song title "Calling of the Moon" (4 words,
+  // binding in bible 2.9 and HV_HEROES 4.3). Every other name in this file keeps the rule.
+  const FOUR_WORD = { hanae_blade_duet: 'Calling of the Moon' };
+  t.deep(Object.keys(FOUR_WORD).filter((id) => byId(id).name !== FOUR_WORD[id]), [], 'the named exception carries the owners\' exact title');
+  nonToken.forEach((c) => { const n = c.name; const max = FOUR_WORD[c.id] ? 4 : 3; t.ok(words(n) >= 1 && words(n) <= max, n + ' has 1 to ' + max + ' words'); t.ok(/^[A-Z][A-Za-z' ]+$/.test(n), n + ' is plain words'); });
+  t.deep(nonToken.filter((c) => words(c.name) > 3).map((c) => c.id), ['hanae_blade_duet'], 'only the named exception goes over 3 words');
   nonToken.forEach((c) => t.ok(/^hanae_[a-z][a-z0-9_]*$/.test(c.id), c.id + ' is snake_case with the hero prefix'));
   const EM = String.fromCharCode(0x2014), EN = String.fromCharCode(0x2013);
   t.ok(!JSON.stringify(cards).includes(EM) && !JSON.stringify(cards).includes(EN), 'no em or en dashes in the data');
@@ -369,13 +374,13 @@ t.test('budget: every card sits inside its value per Energy band (see the header
 });
 t.test('budget: the ruler prices a few known cases sensibly (guards the ruler itself)', () => {
   const near = (a, b, m) => t.ok(Math.abs(a - b) < 0.05, `${m}: ${a} vs ${b}`);
-  const slash = evalCard(resolveDef(byId('hanae_slash'), false), 'front'); near(slash.net, 8, 'Petal Slash in front is 6 + 2');
-  near(evalCard(resolveDef(byId('hanae_slash'), false), 'back').net, 6, 'and 6 in the back');
-  near(evalCard(resolveDef(byId('hanae_parry'), false), 'back').net, 6, 'Parry in the back is 5 + 1');
-  const tp = evalCard({ fx: [{ op: 'dmg', n: { per: 'status', s: 'bloom', mul: 4 }, consume: 'bloom' }] }, 'front'); near(tp.gross, 14, 'Thousand Petals at 3 Bloom deals 4 x 3 + 2'); near(tp.spent, 6, 'and spends 3 Bloom at 2 points each');
-  const twin = evalCard({ fx: [{ op: 'dmg', n: 2, hits: 2 }] }, 'front'); near(twin.gross, 8, 'two hits of 2 carry the front bonus twice');
+  const slash = evalCard(resolveDef(byId('hanae_slash'), false), 'front'); near(slash.net, 8, 'Petal Note in the lead is 6 + 2');
+  near(evalCard(resolveDef(byId('hanae_slash'), false), 'back').net, 6, 'and 6 in the backing spot');
+  near(evalCard(resolveDef(byId('hanae_parry'), false), 'back').net, 6, 'Soft Shield in the backing spot is 5 + 1');
+  const tp = evalCard({ fx: [{ op: 'dmg', n: { per: 'status', s: 'bloom', mul: 4 }, consume: 'bloom' }] }, 'front'); near(tp.gross, 14, 'The High Note at 3 Bloom deals 4 x 3 + 2'); near(tp.spent, 6, 'and spends 3 Bloom at 2 points each');
+  const twin = evalCard({ fx: [{ op: 'dmg', n: 2, hits: 2 }] }, 'front'); near(twin.gross, 8, 'two hits of 2 carry the lead bonus twice');
   const aoe = evalCard({ fx: [{ op: 'dmg', n: 5, tgt: 'all' }] }, 'back'); near(aoe.gross, 9, 'AoE is worth 1.8 targets');
-  const might = evalCard({ fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'hook', on: 'turnEnd', once: true, fx: [{ op: 'status', s: 'might', n: -2, tgt: 'self' }] }] }, 'front'); near(might.net, 3.2, 'temporary Might is 1.6 per stack');
+  const might = evalCard({ fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'hook', on: 'turnEnd', once: true, fx: [{ op: 'status', s: 'might', n: -2, tgt: 'self' }] }] }, 'front'); near(might.net, 3.2, 'temporary Volume is 1.6 per stack');
 });
 
 // ---------------------------------------------------------------------------------------------- text (needs data_text.js)

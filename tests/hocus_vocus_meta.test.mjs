@@ -329,8 +329,8 @@ t.test('saveRun, loadRun, hasRun, clearRun: a run round trips through storage', 
 t.test('runInfo: the line the title shows next to Continue', () => {
   const A = fresh(); A.META.load(); t.eq(A.META.runInfo(), null, 'no run, no info');
   const R = mkRun(A, { heroes: ['hanae', 'kuro'], chapter: 2 }); R.ink = 5; A.META.saveRun(R);
-  const info = A.META.runInfo(); t.eq(info.text, 'Verse 2, Echo 5, Hanae and Kuro', 'the documented line'); t.eq(info.chapter, 2, 'chapter'); t.eq(info.ink, 5, 'ink'); t.deep(info.heroes, ['hanae', 'kuro'], 'ids'); t.eq(info.trial, 0, 'trial'); t.eq(info.daily, false, 'daily');
-  const D = mkRun(A, { heroes: ['raiga', 'suzu'], daily: true, seed: 20260101 }); D.ink = 1; A.META.saveRun(D); t.eq(A.META.runInfo().text, 'Verse 1, Echo 1, Raiga and Suzu', 'other party'); t.eq(A.META.runInfo().daily, true, 'daily flag');
+  const info = A.META.runInfo(); t.eq(info.text, 'Act 2, Vox 5, Jasmin and RoxorLoops', 'the documented line'); t.eq(info.chapter, 2, 'chapter'); t.eq(info.ink, 5, 'ink'); t.deep(info.heroes, ['hanae', 'kuro'], 'ids'); t.eq(info.trial, 0, 'trial'); t.eq(info.daily, false, 'daily');
+  const D = mkRun(A, { heroes: ['raiga', 'suzu'], daily: true, seed: 20260101 }); D.ink = 1; A.META.saveRun(D); t.eq(A.META.runInfo().text, 'Act 1, Vox 1, Andy and RawClaw', 'other party'); t.eq(A.META.runInfo().daily, true, 'daily flag');
 });
 t.test('a corrupt or foreign run save is set aside and never crashes the title', () => {
   ['{oops', '', '5', 'null', '[]'].forEach((raw) => {

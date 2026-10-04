@@ -1342,7 +1342,7 @@ else {
       const has2 = (k, re) => t.ok(re.test(texts[k] || ''), `${k}: "${texts[k]}" matches ${re}`);
       const I = (src) => new RegExp(src, 'i');
       const N = (id) => I(esc((DATA.statuses[id] || DATA.keywords[id]).name));   // a status or keyword word as the page names it
-      has2('snatch_and_grab@tanuki_bandit', I('steals 20 gold')); has2('switcheroo@crow_tengu', I('swaps your rows')); has2('dive_bomb@crow_tengu', I('back hero'));
+      has2('snatch_and_grab@tanuki_bandit', I('steals 20 gold')); has2('switcheroo@crow_tengu', I('swaps your spots')); has2('dive_bomb@crow_tengu', I('backing hero'));
       has2('call_leaf_imp@kodama', I('summons')); has2('rattle@kodama', I('both heroes')); has2('ember_touch@hitodama', N('burn')); has2('scorch_scatter@hitodama', I('adds'));
       has2('mud_slap@kappa', N('vulnerable')); has2('hop_hop@karakasa', /x2/); has2('tongue_lick@karakasa', N('frail')); has2('spore_puff@mushroom_folk', N('poison'));
       has2('nine_tails@boss_kuzunoha', /x9/); has2('tail_sweep@boss_kuzunoha', I('both heroes')); has2('ink_bleed@boss_kuzunoha', I('adds 2')); has2('mask_gaze@boss_kuzunoha', N('weak'));

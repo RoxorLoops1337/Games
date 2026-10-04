@@ -530,7 +530,8 @@ t.test('lore is the spine: the Singer, the Hush, the Conductor, each keeper who 
   const hero = { hanae: /first bar|hero/, kuro: /harmony/, suzu: /shrine|bell|tune/, raiga: /thunderstorm|laugh/ };
   L.heroIds.forEach((h) => {
     const l = DATA.lore['hero_' + h];
-    t.ok(new RegExp(h[0].toUpperCase() + h.slice(1)).test(l.text) && l.title.toLowerCase().indexOf(h) === 0, `hero_${h} is about ${h}`);
+    // the title starts with the hero's DATA name, not the id (bible 2.6: "Jasmin, the Blossom Voice"); the text half is P2's (2A) to rewrite
+    t.ok(new RegExp(h[0].toUpperCase() + h.slice(1)).test(l.text) && l.title.indexOf(DATA.heroes[h].name) === 0, `hero_${h} is about ${h}`);
     t.ok(/Singer/.test(l.text), `hero_${h} says why the Singer sang them`);
     t.ok(hero[h].test(l.text), `hero_${h} carries their signature imagery`);
     t.ok(l.title.indexOf(DATA.heroes[h].title.replace(/^The /, '')) >= 0, `hero_${h} title carries the hero title from DATA.heroes`);
@@ -714,7 +715,7 @@ t.test('integration: a choice that can only do nothing is locked with a reason (
   r = row('void_tear', 1, dead(DATA.events.void_tear)); t.ok(!r.ok && /no curse/i.test(r.reason), 'feeding the tear a regret needs a curse (' + r.reason + ')');
   r = row('blank_patch', 2, dead(DATA.events.blank_patch)); t.ok(!r.ok && /no curse/i.test(r.reason), 'so does the cursed page (' + r.reason + ')');
   const cursed = dead(DATA.events.void_tear); RUN.addCard(cursed, 'curse_regret'); t.eq(row('void_tear', 1, cursed).ok, true, 'open with a curse in the deck');
-  r = row('wandering_storyteller', 0, dead(DATA.events.wandering_storyteller)); t.ok(!r.ok && /sharpen/i.test(r.reason), 'paying to sharpen with every card sharp is locked (' + r.reason + ')');
+  r = row('wandering_storyteller', 0, dead(DATA.events.wandering_storyteller)); t.ok(!r.ok && /rehearse/i.test(r.reason), 'paying to rehearse with every card sharp is locked (' + r.reason + ')');
   const sharp = dead(DATA.events.wandering_storyteller); sharp.deck[0].up = 0; t.eq(row('wandering_storyteller', 0, sharp).ok, true, 'open with a card to sharpen');
   const sample = dead(DATA.events.void_tear); const chosen = Object.assign(sample, { node: { kind: 'event', tile: { q: sample.map.start.q, r: sample.map.start.r }, event: 'void_tear', chosen: null } });
   const refused = RUN.eventChoose(chosen, DATA.events.void_tear, 1); t.ok(!refused.ok && /no curse/i.test(refused.reason) && chosen.node.chosen === null, 'eventChoose refuses a locked choice and changes nothing');

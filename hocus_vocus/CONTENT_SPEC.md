@@ -106,70 +106,70 @@ enemy's moves should show it. Encounter group ids are `ch<N>_<name>` (for exampl
 
 | id | name | tier | size | role |
 |---|---|---|---|---|
-| `kappa` | Kappa | normal | m | River imp with a water dish on its head. Steady hits, then guards; teaches Vulnerable and Block. |
-| `tanuki_bandit` | Tanuki Bandit | normal | m | Raccoon-dog thief. Hits, steals gold, then flees with it; kill it first to get the gold back. |
-| `kodama` | Kodama | normal | s | Tree spirit. Rattles both heroes lightly and calls a Leaf Imp to its side. |
-| `karakasa` | Karakasa | normal | m | One-legged umbrella yokai. Hops in for two quick hits, then snaps shut for Block. |
-| `hitodama` | Hitodama | normal | s | Drifting soul-flame. Frail and fast, burns the front hero and leaves scorch cards in the deck. |
-| `oni_cub` | Oni Cub | normal | m | Small horned brawler that gains Might every turn. Punish it early or it snowballs. |
-| `crow_tengu` | Crow Tengu | normal | m | Winged trickster. Dives on the back row and pecks in flurries. |
-| `bamboo_sprite` | Bamboo Sprite | normal | s | Leaf-blade skirmisher that arrives in packs. Three tiny hits per turn. |
-| `mushroom_folk` | Mushroom Folk | normal | m | Spore-cap wanderer. Poisons the front hero and grows Thorns on its cap. |
-| `bamboo_boar` | Bamboo Boar | normal | l | Armoured charger. Gains Plating, winds up (telegraph), then one heavy gore. |
-| `oni_brute` | Oni Brute | elite | l | Club-swinging champion. Heavy hits and Weak, and it enrages below half HP. |
-| `tengu_duelist` | Tengu Duelist | elite | l | Fencing master. Strikes the back row, gains Dodge, and ripostes. |
-| `moss_guardian` | Moss Guardian | elite | l | Stone guardian overgrown with moss. Plating and Thorns, slow slams, calls Leaf Imps. |
-| `ember_wisp` | Ember Wisp | minion | s | Tiny fire wisp. Burns a hero once, then fizzles. |
-| `leaf_imp` | Leaf Imp | minion | s | Fast leaf sprite called by kodama and guardians. One weak poke. |
-| `paper_kodama` | Hollow Kodama | minion | s | Hollow tree spirit. Clogs the deck with silence cards. |
-| `boss_kuzunoha` | Kuzunoha | boss | xl | White fox whose nine tails each ring a bell. Bell strikes and hollow kodama, then all nine voices at once. |
+| `kappa` | Fussy Foghorn | normal | m | Proud harbour foghorn. A honk that leaves the lead Exposed, a bump, then a guard; teaches Exposed and Block. |
+| `tanuki_bandit` | Coin Crab | normal | m | Coin crab. Grabs gold from your hat, thumps, then scuttles off with it; win it over first to get the gold back. |
+| `kodama` | Tuning Forkling | normal | s | Tiny tuning fork. Rings at both heroes lightly and calls a Kazoo Imp to its side. |
+| `karakasa` | Squeezebox | normal | m | Hopping accordion. Two quick polka hops, then squeezes shut for Block; its wheeze leaves a hero Wobbly. |
+| `hitodama` | Hot Chilli | normal | s | Hopping hot chilli. Hard to hit at first, Sizzles the lead and tips spicy junk cards into your deck. |
+| `oni_cub` | Jitterbug | normal | m | Small bug of pre-show nerves that gains Volume every turn. Win it over early or it only gets louder. |
+| `crow_tengu` | Pitch-Perfect Gull | normal | m | Pitch-perfect gull. Dives on the backing hero, pecks in flurries, and swaps your heroes' spots. |
+| `bamboo_sprite` | Pea Pod | normal | s | Pod of three singing peas that arrive in packs. Three tiny shots at random heroes every turn. |
+| `mushroom_folk` | Jingle Machine | normal | m | Jingle-singing vending machine. Earworms the lead and grows Feedback in bubble wrap. |
+| `bamboo_boar` | Runaway Melon | normal | l | Rolling prize melon. Gains Sequins, winds up (telegraph), then one heavy downhill roll. |
+| `oni_brute` | One-Hit Jukebox | elite | l | Washed-up jukebox. Heavy hits and Muffled, and it sulks into a rage below half HP. |
+| `tengu_duelist` | Dance-Off Heron | elite | l | Tap-dancing heron. Lunges at the backing hero, gains Shimmy, and answers hits with a quick step. |
+| `moss_guardian` | Old Bandstand | elite | l | Walking harbour bandstand. Sequins and Feedback, slow stomps, calls Kazoo Imps from its rafters. |
+| `ember_wisp` | Chilli Flake | minion | s | Tiny chilli flake. Sizzles a hero once, then fizzles out. |
+| `leaf_imp` | Kazoo Imp | minion | s | Fast little kazoo called by tuning forks and bandstands. One weak poke. |
+| `paper_kodama` | Mic Squeal | minion | s | Shrieking little mic creature. Clogs your deck with junk cards. |
+| `boss_kuzunoha` | Kraki | boss | xl | Karaoke kraken with eight stolen mics. Mic slams and mic squeals, then every voice at once. |
 
 **Verse 2, the Sunken Lantern City**
 
 | id | name | tier | size | role |
 |---|---|---|---|---|
-| `chochin` | Chochin Lantern | normal | m | One-eyed paper lantern. Scorches with Burn and lights its allies with Ritual. |
-| `karakuri_puppet` | Karakuri Puppet | normal | m | Wind-up puppet with a fixed combo; its last strike Stuns the front hero. |
-| `nopperabo` | Nopperabo | normal | m | Faceless ghost. Applies Weak and Frail, then strikes harder while they stick. |
-| `drowned_samurai` | Drowned Samurai | normal | l | Waterlogged blade-master. Heavy cuts and Plating from sodden armour. |
-| `koi_spirit` | Koi Spirit | normal | m | Spectral carp. Heals its allies and splashes both heroes. |
-| `tsukumogami` | Tsukumogami | normal | m | Haunted household object. Hits and shuffles silence cards into your draw pile. |
-| `silk_weaver` | Silk Weaver | normal | m | Spider servant. Binds a hero and calls a Spiderling. |
-| `nure_onna` | Nure-onna | normal | l | Snake-bodied river woman. Strikes the back row and poisons. |
-| `rokurokubi` | Rokurokubi | normal | m | Long-necked ghost that reaches over the front hero to hit the back row twice. |
-| `ittan_momen` | Ittan-momen | normal | m | Flying cloth. Wraps a hero in Bind and gains Block. |
-| `drowned_general` | Drowned General | elite | l | Commands the flood. Ritual Might, calls Lantern Wisps, one heavy blow below half HP. |
-| `puppet_master` | Puppet Master | elite | l | Pulls the strings. Calls Paper Puppets, heals them, and Stuns a hero. |
-| `umibozu` | Umibozu | elite | l | Sea-monk giant. Whole-party tidal slams and a Stun. |
-| `spiderling` | Spiderling | minion | s | Quick spider hatchling with a poison nip. |
-| `paper_puppet` | Paper Puppet | minion | s | Flimsy puppet. One weak strike, gone in a hit. |
-| `lantern_wisp` | Lantern Wisp | minion | s | Small ghostly flame. Burns a hero and warms its neighbours. |
-| `boss_jorogumo` | Jorogumo | boss | xl | Spider-woman in a layered kimono. Binds heroes in silk and calls spiderlings, then drops her disguise. |
+| `chochin` | Flamebait | normal | m | Flaming matchstick. Sizzles the lead, gives every enemy Crescendo, then a flame war on both heroes. |
+| `karakuri_puppet` | Clickbait Goblin | normal | m | Wind-up clickbait goblin with a fixed combo; its third trick leaves the lead Starstruck. |
+| `nopperabo` | Filter Fairy | normal | m | Faceless filter fairy. Leaves the lead Muffled and Wobbly, then pokes harder while they stick. |
+| `drowned_samurai` | Unskippable Ad | normal | l | Walking advert. Steady jabs and Sequins from its frame; holds still, then a big final offer. |
+| `koi_spirit` | Hug Emoji | normal | m | Huggy emoji. Heals its allies and splashes both heroes with hearts. |
+| `tsukumogami` | Notification Imp | normal | m | Red-dot imp. Hits and shuffles junk cards into your draw pile, then a big pile of pings. |
+| `silk_weaver` | Algo Rhythm | normal | m | Clicking algorithm on cable legs. Tangles a hero and calls a Botling. |
+| `nure_onna` | Autoplay Snake | normal | l | Endless-feed snake. Bites the backing hero with Earworm and coils the lead hard. |
+| `rokurokubi` | Selfie Stick | normal | m | Telescoping selfie stick that reaches past the lead to hit the backing hero twice. |
+| `ittan_momen` | Phone Charger | normal | m | Loose charging cable. Wraps a hero Tangled and gains Block and Shimmy. |
+| `drowned_general` | Comment Troll | elite | l | Grumbling comment cloud. Crescendo, calls Grumble Clouds, one heavy ratio below half HP. |
+| `puppet_master` | Trendsetter | elite | l | Pulls the strings of every trend. Calls Copycat Cutouts, mends them, and leaves the lead Starstruck. |
+| `umibozu` | Doomscroll Moth | elite | l | Giant sleepy moth. Slams both heroes harder every turn, Muffled and Wobbly on both, and a Starstruck glare. |
+| `spiderling` | Botling | minion | s | Tiny spider-shaped bot that likes everything. Earworms with a quick nip. |
+| `paper_puppet` | Copycat Cutout | minion | s | Flimsy cut-out dancer on strings. One weak strike, gone in a hit. |
+| `lantern_wisp` | Grumble Cloud | minion | s | Small grumbling cloud. Sizzles a hero and backs up its neighbours with Block. |
+| `boss_jorogumo` | Scrollspinner | boss | xl | Glam spider who spins the endless feed. Tangles heroes and hatches botlings, then drops her filter. |
 
 **Verse 3, the Crimson Sky Citadel**
 
 | id | name | tier | size | role |
 |---|---|---|---|---|
-| `storm_drone` | Storm Drone | normal | m | Hovering shock drone. Rapid lightning jabs in threes. |
-| `komainu_guardian` | Komainu Guardian | normal | l | Stone lion-dog. Plating and Thorns, then a crushing pounce. |
-| `redaction_knight` | Muffled Knight | normal | m | Felt-stuffed helm. Hits hard and adds muted cards. |
-| `void_scribe` | Grey Cantor | normal | m | Chants silence. Strips your buffs and adds silence cards. |
-| `blank_soldier` | Silent Soldier | normal | m | Grey soldier that marches in step. Steady hits, weak alone. |
-| `sky_serpent` | Sky Serpent | normal | l | Coiling wind serpent. Multi-hit strikes across the back row. |
-| `eraser_wraith` | Muffle Wraith | normal | m | Smothers your Block and your hero resource stacks. |
-| `thunder_crow` | Thunder Crow | normal | m | Storm crow. Dives for a Stun and pecks the back row. |
-| `paper_golem` | Felt Golem | normal | l | Padded felt giant. Slow, heavy hits and Plating. |
-| `margin_imp` | Off-Key Imp | normal | m | Off-key imp. Calls Sour Notes and adds wilt cards. |
-| `censor_golem` | Censor Golem | elite | l | Stamps things silent. Muted cards, Plating, and one huge stamp. |
-| `storm_whelp` | Storm Dragon Whelp | elite | l | Young storm dragon. Lightning across the whole party and multi-strikes. |
-| `black_bar_inquisitor` | Hush Inquisitor | elite | l | Hunts the weak. Stun, Bind, and a finisher against a low hero. |
-| `blank_page` | Hush Moth | minion | s | Drifting grey moth. Gains Block, then wraps a hero in Frail. |
-| `spark_mote` | Spark Mote | minion | s | Tiny storm spark. One zap and it bursts. |
-| `typo_sprite` | Sour Note | minion | s | Mischievous sour note. Adds a wilt card. |
-| `boss_editor` | The Conductor | boss | xl | Pale conductor with a red baton. Becomes a felt-armed giant, then a colossal hole of silence. |
+| `storm_drone` | Tuner Drone | normal | m | Hovering pitch drone. Rapid jabs in threes and a correction on both heroes. |
+| `komainu_guardian` | VIP Bouncer | normal | l | Brass rope-post bouncer. Sequins and Feedback, then a crushing bounce. |
+| `redaction_knight` | Clapperboard Knight | normal | m | Clapperboard knight. Hits hard and adds junk cards with every retake. |
+| `void_scribe` | Chrome Siren | normal | m | Chrome siren. Strips your buffs and adds junk cards. |
+| `blank_soldier` | Synchro Dancer | normal | m | Mannequin dancer in perfect step. Steady hits that grow in a crowd, weak alone. |
+| `sky_serpent` | Streamer Dragon | normal | l | Coiling streamer dragon. Multi-hit confetti blasts at the backing hero. |
+| `eraser_wraith` | Airbrush Wraith | normal | m | Smooths away your Block and your hero resource stacks. |
+| `thunder_crow` | Ring Light Sentinel | normal | m | Flying ring light. Dives to leave the lead Starstruck and flashes the backing hero. |
+| `paper_golem` | Sequin Golem | normal | l | Sequinned costume giant. Slow, heavy hits and Sequins. |
+| `margin_imp` | Glitch Gremlin | normal | m | Tuning-box gremlin. Calls Pitch Glitches and adds junk cards that cost you Breath. |
+| `censor_golem` | Big Mute Button | elite | l | Giant mute button. Junk cards, Sequins, and one huge press. |
+| `storm_whelp` | Applause Sign | elite | l | Lit-up applause sign. Roaring applause on both heroes, slow claps, calls Confetti Poppers. |
+| `black_bar_inquisitor` | Mannequin Judge | elite | l | Talent-show mannequin judge. Starstruck, Tangled, and a finisher against a low hero. |
+| `blank_page` | Lip-Sync Clone | minion | s | Lip-syncing clone. Gains Block, then leaves a hero Wobbly. |
+| `spark_mote` | Confetti Popper | minion | s | Tiny party popper. One bang and it bursts. |
+| `typo_sprite` | Pitch Glitch | minion | s | Glitchy pixel sprite. Adds a junk card that costs you Breath. |
+| `boss_editor` | Flawless | boss | xl | Perfect pop idol who never sang a real note. Becomes the Filter, then the Gloss itself. |
 
 
-Boss titles (the `title` field): Kuzunoha, The Nine-Voiced Fox; Jorogumo, The Silk Courtesan; The Conductor, Keeper of the Last Note.
+Boss titles (the `title` field): Kraki, The Karaoke Kraken; Scrollspinner, Queen of the Feed; Flawless, Star of the Perfect Stage.
 
 ### 4.2 Numbers at Tempo Trial 0 (starting guidance the balance wave tunes)
 

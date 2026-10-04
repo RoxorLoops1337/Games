@@ -37,7 +37,7 @@
 .mn-plaque:hover::before, .mn-plaque:focus-visible::before { transform: rotate(45deg) scale(1.4); box-shadow: 0 0 0 1.5px var(--ink), 0 0 14px rgba(255, 233, 168, .95); }
 .mn-slims { display: flex; flex-direction: column; gap: 8px; }
 .s-title.ts-big .mn-p-meds, .compact .s-title .mn-p-meds { display: none; }   /* Larger text and phones: the hero faces are decoration (15 screen px on a phone) (the names are in the text), and without them the run summary and the Daily seed keep two full lines in the narrow column instead of being clipped */
-.s-title .mn-menu [data-act=continue] .mn-p-sub { -webkit-line-clamp: 3; text-wrap: balance; }   /* the saved journey is written out in full ("Verse 1, Echo 10, Hanae and Kuro"), never clipped by the narrow column */
+.s-title .mn-menu [data-act=continue] .mn-p-sub { -webkit-line-clamp: 3; text-wrap: balance; }   /* the saved tour is written out in full ("Act 3, Vox 99, RoxorLoops and RawClaw", the longest it gets: three balanced lines at every size, checked at 1280x720, 844x390 and Larger text), never clipped by the narrow column */
 .mn-p-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .mn-p-main { font: 800 calc(22px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .1em; }
 .mn-slim .mn-p-main { font-size: calc(17px * var(--ts)); }
@@ -114,9 +114,11 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
   position: absolute; left: 0; right: 0; bottom: 0; min-height: 44px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 6px; padding: 5px 9px 6px 11px; border-radius: 0 0 6px 6px;
   background: linear-gradient(90deg, var(--hc2), #160f36 78%); border-top: 3px solid var(--hc); box-shadow: 0 0 0 2px var(--ink), inset 0 1px 0 rgba(255, 255, 255, .2), 0 6px 10px rgba(0, 0, 0, .5); pointer-events: none;
 }
-.mn-hc-name { grid-column: 1; font: 800 calc(19px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .05em; color: var(--white); text-shadow: 0 2px 0 var(--ink); }
-.mn-hc-title { grid-column: 1; font: italic 600 calc(11px * var(--ts)) / 1.2 var(--font-display); color: var(--paper2); }
-.mn-hc-row { grid-column: 2; grid-row: 1 / span 2; opacity: .85; }
+/* RoxorLoops (10 letters) is the widest name: 100 px at 18 px and .03em in the stock serif, in the 122 px left of the 20 px row icon (it was 110 px at 19 px and .05em). The name grows with the text size only up to 1.1x
+   (110 px at Larger text: at the full 1.3x it was 143 px and pushed the icon off the card). The title takes the whole plate width, so The Beatbox Wizard and The Sound Alchemist stay on one line at every size. */
+.mn-hc-name { grid-column: 1; font: 800 calc(18px * min(var(--ts), 1.1)) / 1.1 var(--font-display); letter-spacing: .03em; color: var(--white); text-shadow: 0 2px 0 var(--ink); }
+.mn-hc-title { grid-column: 1 / -1; font: italic 600 calc(11px * var(--ts)) / 1.2 var(--font-display); color: var(--paper2); }
+.mn-hc-row { grid-column: 2; grid-row: 1; opacity: .85; }
 .mn-hc-badge { position: absolute; z-index: 3; left: 4px; top: 4px; opacity: 0; transform: scale(2.4) rotate(-16deg); transition: opacity .16s, transform .26s var(--ease-back); pointer-events: none; font-size: calc(13px * var(--ts)); padding: 0 .6em; }
 .mn-hc-badge.show { opacity: 1; transform: rotate(-6deg) scale(1); }
 .mn-hc-lock { position: absolute; left: 50%; top: 96px; width: 52px; height: 52px; margin-left: -26px; pointer-events: none; filter: drop-shadow(0 0 10px rgba(245, 201, 106, .7)); background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3' fill='none' stroke='%23f5c96a' stroke-width='2.4'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2' fill='%23f5c96a' stroke='%23140f2e' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='16' r='1.7' fill='%23140f2e'/%3E%3C/svg%3E"); animation: mnFloat 3s ease-in-out infinite; }
@@ -159,6 +161,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .mn-d-medal.lock::after { content: ""; width: 30px; height: 30px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3' fill='none' stroke='%23f5c96a' stroke-width='2.4'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2' fill='%23f5c96a' stroke='%23140f2e' stroke-width='1.6'/%3E%3C/svg%3E"); }
 .mn-d-name { flex: 1; min-width: 0; }
 .mn-d-name h3 { margin: 0; font: 800 calc(28px * var(--ts)) / 1.05 var(--font-display); letter-spacing: .04em; color: var(--ink); background: linear-gradient(transparent 82%, color-mix(in srgb, var(--hc) 45%, transparent) 82%); display: inline-block; }
+.compact .mn-d-name h3 { font-size: calc(28px * min(var(--ts), 1.15)); letter-spacing: .02em; }   /* RoxorLoops at Larger text on a phone: 207 px of a 199 px box (it reached the hit point pill); 177 px now */
 .mn-d-title { margin: 2px 0 0; font: italic 700 calc(14px * var(--ts)) var(--font-display); color: var(--ink-soft); }
 .mn-d-hp .stat { margin-left: 14px; }
 .mn-d-blurb { margin: 10px 0 8px; font: italic 600 calc(14px * var(--ts)) / 1.42 var(--font-display); color: var(--ink-soft); }

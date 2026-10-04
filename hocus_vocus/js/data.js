@@ -13,6 +13,7 @@
 //                DATA.heroes brushes tiles statuses keywords ECONOMY SETTINGS LISTS
 //                DATA.ROSTER {1|2|3: [{id,name,title?,tier,size,role,chapter}]}, DATA.rosterById
 //                DATA.FIXED (ids other modules depend on), DATA.QUOTA, DATA.GUIDE
+//                DATA.COLOUR_NAME {colour id: display word} (red reads pink, any reads rainbow)
 //   Writing      DATA.add(kind, defs)              defs is an OBJECT KEYED BY ID (an array throws), except
 //                                                  kind 'tips' which takes a string or an array of strings
 //                DATA.addEncounters(ch, {normal, elite, boss})
@@ -194,46 +195,46 @@ const DATA = (() => {
   // resource statuses are inert: cards, passives and relics read and spend them.
   // ------------------------------------------------------------------
   const statuses = {
-    might:      { id: 'might', name: 'Might', kind: 'buff', stack: 'int', text: 'Attacks deal +N damage per hit.' },
-    bulwark:    { id: 'bulwark', name: 'Bulwark', kind: 'buff', stack: 'int', text: 'Gain +N extra Block whenever you gain Block from a card.' },
-    regen:      { id: 'regen', name: 'Regen', kind: 'buff', stack: 'int', text: 'At the start of its turn, heal N, then Regen falls by 1.' },
-    thorns:     { id: 'thorns', name: 'Thorns', kind: 'buff', stack: 'int', text: 'Whenever it is hit by an attack, the attacker takes N damage.' },
-    dodge:      { id: 'dodge', name: 'Dodge', kind: 'buff', stack: 'int', text: 'Negates the next N attack hits completely.' },
-    taunt:      { id: 'taunt', name: 'Taunt', kind: 'buff', stack: 'dur', text: 'Enemy attacks that would strike the back row, or a random or lowest hero, hit this hero instead.' },
-    ritual:     { id: 'ritual', name: 'Ritual', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Might.' },
-    plating:    { id: 'plating', name: 'Plating', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Block.' },
-    bloom:      { id: 'bloom', name: 'Bloom', kind: 'resource', stack: 'int', hero: 'hanae', text: 'Hanae\'s petals. Built by her attacks, spent by her finishers.' },
-    sumi:       { id: 'sumi', name: 'Breath', kind: 'resource', stack: 'int', hero: 'kuro', text: 'Kuro\'s breath. Built by his skills, released through his flute.' },
-    ward:       { id: 'ward', name: 'Ward', kind: 'resource', stack: 'int', hero: 'suzu', text: 'Suzu\'s talisman charges. Built by her prayers, spent by her rites.' },
-    charge:     { id: 'charge', name: 'Charge', kind: 'resource', stack: 'int', hero: 'raiga', text: 'Raiga\'s static. Built by taking hits and striking, released in storms.' },
-    vulnerable: { id: 'vulnerable', name: 'Vulnerable', kind: 'debuff', stack: 'dur', text: 'Takes 50% more attack damage.' },
-    weak:       { id: 'weak', name: 'Weak', kind: 'debuff', stack: 'dur', text: 'Deals 25% less attack damage.' },
-    frail:      { id: 'frail', name: 'Frail', kind: 'debuff', stack: 'dur', text: 'Gains 25% less Block from cards.' },
-    poison:     { id: 'poison', name: 'Poison', kind: 'debuff', stack: 'int', text: 'At the start of its turn, lose N HP (ignores Block), then Poison falls by 1.' },
-    burn:       { id: 'burn', name: 'Burn', kind: 'debuff', stack: 'int', text: 'At the end of the round, take N damage (ignores Block), then Burn halves.' },
-    stun:       { id: 'stun', name: 'Stun', kind: 'debuff', stack: 'dur', text: 'Skips its next action. A stunned hero cannot play cards on their next turn.' },
-    bind:       { id: 'bind', name: 'Bind', kind: 'debuff', stack: 'dur', text: 'While either hero has Bind, neither hero can swap rows.' },
-    mark:       { id: 'mark', name: 'Mark', kind: 'debuff', stack: 'int', text: 'The next N attack hits against it deal +3 damage each (one stack per hit).' },
+    might:      { id: 'might', name: 'Volume', kind: 'buff', stack: 'int', text: 'Attacks deal +N damage per hit.' },
+    bulwark:    { id: 'bulwark', name: 'Soundproof', kind: 'buff', stack: 'int', text: 'Gain +N extra Block whenever you gain Block from a card.' },
+    regen:      { id: 'regen', name: 'Warm Tea', kind: 'buff', stack: 'int', text: 'At the start of its turn, heal N, then Warm Tea falls by 1.' },
+    thorns:     { id: 'thorns', name: 'Feedback', kind: 'buff', stack: 'int', text: 'Whenever it is hit by an attack, the attacker takes N damage.' },
+    dodge:      { id: 'dodge', name: 'Shimmy', kind: 'buff', stack: 'int', text: 'Shimmies out of the next N attack hits completely.' },
+    taunt:      { id: 'taunt', name: 'Spotlight', kind: 'buff', stack: 'dur', text: 'Enemy attacks that would strike the backing hero, or a random or lowest hero, hit this hero instead.' },
+    ritual:     { id: 'ritual', name: 'Crescendo', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Volume.' },
+    plating:    { id: 'plating', name: 'Sequins', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Block.' },
+    bloom:      { id: 'bloom', name: 'Bloom', kind: 'resource', stack: 'int', hero: 'hanae', text: 'Jasmin\'s blossoms. Built by her sung attacks, spent by her finishers.' },
+    sumi:       { id: 'sumi', name: 'Groove', kind: 'resource', stack: 'int', hero: 'kuro', text: 'RoxorLoops\'s groove. Built layer by layer with his skills, dropped in his big beats.' },
+    ward:       { id: 'ward', name: 'Reverb', kind: 'resource', stack: 'int', hero: 'suzu', text: 'RawClaw\'s reverb. It builds every turn, and he spends it to wrap the band in sound.' },
+    charge:     { id: 'charge', name: 'Rumble', kind: 'resource', stack: 'int', hero: 'raiga', text: 'Andy\'s low end. Built by taking hits and striking, released as thunder from below.' },
+    vulnerable: { id: 'vulnerable', name: 'Exposed', kind: 'debuff', stack: 'dur', text: 'Takes 50% more attack damage.' },
+    weak:       { id: 'weak', name: 'Muffled', kind: 'debuff', stack: 'dur', text: 'Deals 25% less attack damage.' },
+    frail:      { id: 'frail', name: 'Wobbly', kind: 'debuff', stack: 'dur', text: 'Gains 25% less Block from cards.' },
+    poison:     { id: 'poison', name: 'Earworm', kind: 'debuff', stack: 'int', text: 'At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.' },
+    burn:       { id: 'burn', name: 'Sizzle', kind: 'debuff', stack: 'int', text: 'At the end of the round, take N damage (ignores Block), then Sizzle halves.' },
+    stun:       { id: 'stun', name: 'Starstruck', kind: 'debuff', stack: 'dur', text: 'Skips its next action. A starstruck hero cannot play cards on their next turn.' },
+    bind:       { id: 'bind', name: 'Tangled', kind: 'debuff', stack: 'dur', text: 'While either hero is Tangled, neither hero can swap spots.' },
+    mark:       { id: 'mark', name: 'Tag', kind: 'debuff', stack: 'int', text: 'The next N attack hits against it deal +3 damage each (one stack per hit).' },
   };
 
   // Glossary shown in tooltips. Keys are the words the UI highlights in card text.
   const keywords = {
     block: { name: 'Block', text: 'Absorbs damage this turn. Wears off at the start of the owner\'s next turn.' },
-    exhaust: { name: 'Exhaust', text: 'Removed from the fight after it is played. It returns next combat.' },
-    retain: { name: 'Retain', text: 'Stays in your hand at the end of the turn.' },
-    innate: { name: 'Innate', text: 'Always in your opening hand.' },
-    ethereal: { name: 'Ethereal', text: 'Exhausted if still in your hand at the end of the turn.' },
+    exhaust: { name: 'Fade', text: 'Fades out of the fight after it is played. It returns next combat.' },
+    retain: { name: 'Hold', text: 'Stays in your hand at the end of the turn.' },
+    innate: { name: 'Opener', text: 'Always in your opening hand.' },
+    ethereal: { name: 'One Take', text: 'Fades if it is still in your hand at the end of the turn.' },
     unplayable: { name: 'Unplayable', text: 'Cannot be played.' },
-    front: { name: 'Front row', text: 'The hero in front takes most enemy attacks. A card line starting Front: only works while its hero stands here.' },
-    back: { name: 'Back row', text: 'The hero in back is safe from most enemy attacks. A card line starting Back: only works while its hero stands here.' },
-    swap: { name: 'Swap', text: 'Trade rows. One swap per turn is free, more cost 1 Energy.' },
-    ink: { name: 'Echo', text: 'Spend Echo on the map to wake a silent hex and reveal it.' },
-    brush: { name: 'Song', text: 'A one-use Song that wakes a shape of hexes for free.' },
-    gem: { name: 'Gem', text: 'Socket gems into card slots. A slot only accepts its own colour, prism slots accept any.' },
+    front: { name: 'Lead', text: 'The lead hero takes most enemy attacks. A card line starting Lead: only works while its hero stands here.' },
+    back: { name: 'Backing', text: 'The backing hero is safe from most enemy attacks. A card line starting Backing: only works while its hero stands here.' },
+    swap: { name: 'Swap', text: 'Trade spots. One swap per turn is free, more cost 1 Breath.' },
+    ink: { name: 'Vox', text: 'Spend Vox on the map to unmute a hex and reveal it.' },
+    brush: { name: 'Spell', text: 'A one-use Spell that unmutes a shape of hexes for free.' },
+    gem: { name: 'Gem', text: 'Socket gems into card slots. A slot only accepts its own colour, rainbow slots accept any.' },
     slot: { name: 'Gem slot', text: 'Colour-matched socket. Gems change how the card plays.' },
-    prism: { name: 'Prism slot', text: 'A prism slot accepts a gem of any colour.' },
-    xcost: { name: 'X cost', text: 'Spends all your remaining Energy. The card reads X as the Energy spent.' },
-    down: { name: 'Downed', text: 'A hero at 0 HP is downed: their cards are dead and they cannot be targeted. If both fall, the journey ends.' },
+    prism: { name: 'Rainbow slot', text: 'A rainbow slot accepts a gem of any colour.' },
+    xcost: { name: 'X cost', text: 'Spends all your remaining Breath. The card reads X as the Breath spent.' },
+    down: { name: 'Voiceless', text: 'A hero at 0 HP loses their voice: their cards clog your hand and they cannot be targeted. If both heroes lose their voice, the tour ends.' },
   };
 
   // ------------------------------------------------------------------
@@ -295,30 +296,30 @@ const DATA = (() => {
   // Brushes: one-use map tools. MAP.brushCells implements the geometry (DESIGN 4.8).
   // ------------------------------------------------------------------
   const brushes = {
-    stroke: { id: 'stroke', name: 'Drum Line', kind: 'line', len: 3, text: 'Wake 3 hexes in a straight line, starting next to any woken hex.' },
-    wave:   { id: 'wave', name: 'Ripple', kind: 'line', len: 5, text: 'Wake 5 hexes in a straight line, starting next to any woken hex.' },
-    fan:    { id: 'fan', name: 'Shout', kind: 'fan', text: 'Wake a wedge of 3 hexes next to a woken hex.' },
-    splash: { id: 'splash', name: 'Beat Drop', kind: 'blob', text: 'Wake a hex next to the woken land and the 6 hexes around it.' },
-    halo:   { id: 'halo', name: 'Chorus', kind: 'ring', text: 'Wake all 6 hexes around any woken hex.' },
-    blot:   { id: 'blot', name: 'Hum', kind: 'dot', text: 'Wake any one hex within 4 of the party.' },
+    stroke: { id: 'stroke', name: 'Boots and Cats', kind: 'line', len: 3, text: 'Unmute 3 hexes in a straight line, starting next to any live hex.' },
+    wave:   { id: 'wave', name: 'Vocal Run', kind: 'line', len: 5, text: 'Unmute 5 hexes in a straight line, starting next to any live hex.' },
+    fan:    { id: 'fan', name: 'Air Horn', kind: 'fan', text: 'Unmute a wedge of 3 hexes next to a live hex.' },
+    splash: { id: 'splash', name: 'Abracadabass', kind: 'blob', text: 'Unmute a hex next to the live ground and the 6 hexes around it.' },
+    halo:   { id: 'halo', name: 'Surround Sound', kind: 'ring', text: 'Unmute all 6 hexes around any live hex.' },
+    blot:   { id: 'blot', name: 'Hocus Focus', kind: 'dot', text: 'Unmute any one hex within 4 of the party.' },
   };
 
   // Map tile presentation names (icons come from ART.icon 'tile').
   const tiles = {
-    start: { name: 'Downbeat', text: 'Where the journey begins.' },
+    start: { name: 'Soundcheck', text: 'Where the tour begins.' },
     empty: { name: 'Path', text: 'Open ground.' },
-    block: { name: 'Dead Silence', text: 'A hole in the land. Nothing can cross it.' },
-    enemy: { name: 'Ambush', text: 'A creature of the Hush blocks the way.' },
-    elite: { name: 'Champion', text: 'A dangerous foe guarding a treasure.' },
-    boss: { name: 'Keeper', text: 'The keeper of this verse.' },
-    chest: { name: 'Treasure', text: 'A chest. Relics, gold, or gems.' },
-    shop: { name: 'Peddler', text: 'A travelling merchant of odd things.' },
-    camp: { name: 'Campfire', text: 'Rest, mend, or sharpen.' },
-    event: { name: 'Fable', text: 'Something strange is happening.' },
-    well: { name: 'Temple Bell', text: 'Ring it to refill your Echo.' },
-    brush: { name: 'Songbird', text: 'Learn a one-use Song.' },
-    gemcache: { name: 'Gem Cache', text: 'Choose a gem.' },
-    forge: { name: 'Tuning Forge', text: 'Upgrade one card, or cut gems.' },
+    block: { name: 'Blur', text: 'A patch the Gloss smoothed away. Nothing can cross it.' },
+    enemy: { name: 'Face-Off', text: 'A creature of the Gloss blocks the way.' },
+    elite: { name: 'Rival', text: 'A rival act guarding a charm.' },
+    boss: { name: 'Headliner', text: 'The headliner of this act.' },
+    chest: { name: 'Gift Box', text: 'A gift from a fan. Charms, gold or gems.' },
+    shop: { name: 'Merch Stall', text: 'Jordan sells cards, charms, gems and a Spell.' },
+    camp: { name: 'Green Room', text: 'Rest, rehearse or warm up.' },
+    event: { name: 'Detour', text: 'Something unexpected is happening.' },
+    well: { name: 'Tea Stall', text: 'Sip a warm ginger tea to refill your Vox.' },
+    brush: { name: 'Busker', text: 'A street busker teaches you a one-use Spell.' },
+    gemcache: { name: 'Sparkle Booth', text: 'Choose a gem.' },
+    forge: { name: 'Studio', text: 'Rehearse one card, or set gems.' },
   };
 
   // ------------------------------------------------------------------
@@ -329,38 +330,38 @@ const DATA = (() => {
   // ------------------------------------------------------------------
   const heroes = {
     hanae: {
-      id: 'hanae', name: 'Hanae', title: 'The Blossom Blade', prefer: 'front', res: 'bloom',
+      id: 'hanae', name: 'Jasmin', title: 'The Blossom Voice', prefer: 'front', res: 'bloom',
       color: '#ff7eb6', accent: '#fff4f8', dark: '#b0245c', maxHp: 84,
-      blurb: 'A duelist who never loses her composure. She cuts fast and cuts often, and blooms brighter with every strike.',
+      blurb: 'A soft, smooth singer whose vocal runs land like falling petals. She never shouts, and every note she sings blooms a little brighter.',
       rows: { front: { dmgAdd: 2 }, back: { blockAdd: 1 } },
-      passives: [{ id: 'blade_flow', name: 'Blade Flow', on: 'onPlay', filter: { type: 'attack' }, limit: 1, fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
+      passives: [{ id: 'blade_flow', name: 'Every Note Blooms', on: 'onPlay', filter: { type: 'attack' }, limit: 1, fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
       starter: ['hanae_slash', 'hanae_slash', 'hanae_parry', 'hanae_parry', 'hanae_petal_step'],
       unlock: null,
     },
     kuro: {
-      id: 'kuro', name: 'Kuro', title: 'The Songweaver', prefer: 'back', res: 'sumi',
+      id: 'kuro', name: 'RoxorLoops', title: 'The Beatbox Wizard', prefer: 'back', res: 'sumi',
       color: '#7a6bff', accent: '#5ff5ff', dark: '#1a1740', maxHp: 68,
-      blurb: 'A flautist who plays spells into the air. Fragile up close, devastating when the melody is his to carry.',
+      blurb: 'A beatboxer who plays a whole band with one mouth. He keeps the groove from the back, and his beats get stuck in every enemy\'s head.',
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
-      passives: [{ id: 'steady_hand', name: 'Steady Breath', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
+      passives: [{ id: 'steady_hand', name: 'In the Pocket', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
       starter: ['kuro_ink_bolt', 'kuro_ink_bolt', 'kuro_ink_ward', 'kuro_ink_ward', 'kuro_first_stroke'],
       unlock: null,
     },
     suzu: {
-      id: 'suzu', name: 'Suzu', title: 'The Moon Miko', prefer: 'back', res: 'ward',
+      id: 'suzu', name: 'RawClaw', title: 'The Sound Alchemist', prefer: 'back', res: 'ward',
       color: '#a9c4ff', accent: '#e8424f', dark: '#4a5c9c', maxHp: 68,
-      blurb: 'A shrine maiden who keeps the land in tune. Her talismans turn the tide of any fight.',
+      blurb: 'The duo\'s producer, a good friend and a beatboxer too. A little reverb, a little delay, a filter here and there, and the whole fight sounds better.',
       rows: { front: { blockAdd: 1, thorns: 2 }, back: { regen: 2 } },
-      passives: [{ id: 'moonlit_rite', name: 'Moonlit Rite', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],
+      passives: [{ id: 'moonlit_rite', name: 'Always Rolling', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],
       starter: ['suzu_ofuda', 'suzu_ofuda', 'suzu_barrier', 'suzu_barrier', 'suzu_moon_prayer'],
       unlock: { ach: 'ch1_clear' },
     },
     raiga: {
-      id: 'raiga', name: 'Raiga', title: 'The Thunder Monk', prefer: 'front', res: 'charge',
+      id: 'raiga', name: 'Andy', title: 'The Thunder Bass', prefer: 'front', res: 'charge',
       color: '#ff9a2e', accent: '#ffe45e', dark: '#5a2a0a', maxHp: 88,
-      blurb: 'A wandering monk who trades blows with storms. Every hit he takes is one he gives back, louder.',
+      blurb: 'A bass player who sometimes joins the duo, and whose low end you feel before you hear it. Every hit he takes comes back as a bass line, louder.',
       rows: { front: { thorns: 2, startBlock: 3 }, back: { dmgAdd: 1 } },
-      passives: [{ id: 'storm_born', name: 'Storm Born', on: 'onDamaged', limit: 2, fx: [{ op: 'status', s: 'charge', n: 1, tgt: 'self' }] }],
+      passives: [{ id: 'storm_born', name: 'Bass Face', on: 'onDamaged', limit: 2, fx: [{ op: 'status', s: 'charge', n: 1, tgt: 'self' }] }],
       starter: ['raiga_jab', 'raiga_jab', 'raiga_brace', 'raiga_brace', 'raiga_static_fist'],
       unlock: { ach: 'ch2_clear' },
     },
@@ -374,78 +375,78 @@ const DATA = (() => {
   const ROSTER_SRC = {
     1: {
       normal: [
-        ['kappa', 'Kappa', 'm', 'River imp with a water dish on its head. Steady hits, then guards; teaches Vulnerable and Block.'],
-        ['tanuki_bandit', 'Tanuki Bandit', 'm', 'Raccoon-dog thief. Hits, steals gold, then flees with it; kill it first to get the gold back.'],
-        ['kodama', 'Kodama', 's', 'Tree spirit. Rattles both heroes lightly and calls a Leaf Imp to its side.'],
-        ['karakasa', 'Karakasa', 'm', 'One-legged umbrella yokai. Hops in for two quick hits, then snaps shut for Block.'],
-        ['hitodama', 'Hitodama', 's', 'Drifting soul-flame. Frail and fast, burns the front hero and leaves scorch cards in the deck.'],
-        ['oni_cub', 'Oni Cub', 'm', 'Small horned brawler that gains Might every turn. Punish it early or it snowballs.'],
-        ['crow_tengu', 'Crow Tengu', 'm', 'Winged trickster. Dives on the back row and pecks in flurries.'],
-        ['bamboo_sprite', 'Bamboo Sprite', 's', 'Leaf-blade skirmisher that arrives in packs. Three tiny hits per turn.'],
-        ['mushroom_folk', 'Mushroom Folk', 'm', 'Spore-cap wanderer. Poisons the front hero and grows Thorns on its cap.'],
-        ['bamboo_boar', 'Bamboo Boar', 'l', 'Armoured charger. Gains Plating, winds up (telegraph), then one heavy gore.'],
+        ['kappa', 'Fussy Foghorn', 'm', 'Proud harbour foghorn. A honk that leaves the lead Exposed, a bump, then a guard; teaches Exposed and Block.'],
+        ['tanuki_bandit', 'Coin Crab', 'm', 'Coin crab. Grabs gold from your hat, thumps, then scuttles off with it; win it over first to get the gold back.'],
+        ['kodama', 'Tuning Forkling', 's', 'Tiny tuning fork. Rings at both heroes lightly and calls a Kazoo Imp to its side.'],
+        ['karakasa', 'Squeezebox', 'm', 'Hopping accordion. Two quick polka hops, then squeezes shut for Block; its wheeze leaves a hero Wobbly.'],
+        ['hitodama', 'Hot Chilli', 's', 'Hopping hot chilli. Hard to hit at first, Sizzles the lead and tips spicy junk cards into your deck.'],
+        ['oni_cub', 'Jitterbug', 'm', 'Small bug of pre-show nerves that gains Volume every turn. Win it over early or it only gets louder.'],
+        ['crow_tengu', 'Pitch-Perfect Gull', 'm', 'Pitch-perfect gull. Dives on the backing hero, pecks in flurries, and swaps your heroes\' spots.'],
+        ['bamboo_sprite', 'Pea Pod', 's', 'Pod of three singing peas that arrive in packs. Three tiny shots at random heroes every turn.'],
+        ['mushroom_folk', 'Jingle Machine', 'm', 'Jingle-singing vending machine. Earworms the lead and grows Feedback in bubble wrap.'],
+        ['bamboo_boar', 'Runaway Melon', 'l', 'Rolling prize melon. Gains Sequins, winds up (telegraph), then one heavy downhill roll.'],
       ],
       elite: [
-        ['oni_brute', 'Oni Brute', 'l', 'Club-swinging champion. Heavy hits and Weak, and it enrages below half HP.'],
-        ['tengu_duelist', 'Tengu Duelist', 'l', 'Fencing master. Strikes the back row, gains Dodge, and ripostes.'],
-        ['moss_guardian', 'Moss Guardian', 'l', 'Stone guardian overgrown with moss. Plating and Thorns, slow slams, calls Leaf Imps.'],
+        ['oni_brute', 'One-Hit Jukebox', 'l', 'Washed-up jukebox. Heavy hits and Muffled, and it sulks into a rage below half HP.'],
+        ['tengu_duelist', 'Dance-Off Heron', 'l', 'Tap-dancing heron. Lunges at the backing hero, gains Shimmy, and answers hits with a quick step.'],
+        ['moss_guardian', 'Old Bandstand', 'l', 'Walking harbour bandstand. Sequins and Feedback, slow stomps, calls Kazoo Imps from its rafters.'],
       ],
       minion: [
-        ['ember_wisp', 'Ember Wisp', 's', 'Tiny fire wisp. Burns a hero once, then fizzles.'],
-        ['leaf_imp', 'Leaf Imp', 's', 'Fast leaf sprite called by kodama and guardians. One weak poke.'],
-        ['paper_kodama', 'Hollow Kodama', 's', 'Hollow tree spirit. Clogs the deck with silence cards.'],
+        ['ember_wisp', 'Chilli Flake', 's', 'Tiny chilli flake. Sizzles a hero once, then fizzles out.'],
+        ['leaf_imp', 'Kazoo Imp', 's', 'Fast little kazoo called by tuning forks and bandstands. One weak poke.'],
+        ['paper_kodama', 'Mic Squeal', 's', 'Shrieking little mic creature. Clogs your deck with junk cards.'],
       ],
-      boss: ['boss_kuzunoha', 'Kuzunoha', 'xl', 'White fox whose nine tails each ring a bell. Bell strikes and hollow kodama, then all nine voices at once.', 'The Nine-Voiced Fox'],
+      boss: ['boss_kuzunoha', 'Kraki', 'xl', 'Karaoke kraken with eight stolen mics. Mic slams and mic squeals, then every voice at once.', 'The Karaoke Kraken'],
     },
     2: {
       normal: [
-        ['chochin', 'Chochin Lantern', 'm', 'One-eyed paper lantern. Scorches with Burn and lights its allies with Ritual.'],
-        ['karakuri_puppet', 'Karakuri Puppet', 'm', 'Wind-up puppet with a fixed combo; its last strike Stuns the front hero.'],
-        ['nopperabo', 'Nopperabo', 'm', 'Faceless ghost. Applies Weak and Frail, then strikes harder while they stick.'],
-        ['drowned_samurai', 'Drowned Samurai', 'l', 'Waterlogged blade-master. Heavy cuts and Plating from sodden armour.'],
-        ['koi_spirit', 'Koi Spirit', 'm', 'Spectral carp. Heals its allies and splashes both heroes.'],
-        ['tsukumogami', 'Tsukumogami', 'm', 'Haunted household object. Hits and shuffles silence cards into your draw pile.'],
-        ['silk_weaver', 'Silk Weaver', 'm', 'Spider servant. Binds a hero and calls a Spiderling.'],
-        ['nure_onna', 'Nure-onna', 'l', 'Snake-bodied river woman. Strikes the back row and poisons.'],
-        ['rokurokubi', 'Rokurokubi', 'm', 'Long-necked ghost that reaches over the front hero to hit the back row twice.'],
-        ['ittan_momen', 'Ittan-momen', 'm', 'Flying cloth. Wraps a hero in Bind and gains Block.'],
+        ['chochin', 'Flamebait', 'm', 'Flaming matchstick. Sizzles the lead, gives every enemy Crescendo, then a flame war on both heroes.'],
+        ['karakuri_puppet', 'Clickbait Goblin', 'm', 'Wind-up clickbait goblin with a fixed combo; its third trick leaves the lead Starstruck.'],
+        ['nopperabo', 'Filter Fairy', 'm', 'Faceless filter fairy. Leaves the lead Muffled and Wobbly, then pokes harder while they stick.'],
+        ['drowned_samurai', 'Unskippable Ad', 'l', 'Walking advert. Steady jabs and Sequins from its frame; holds still, then a big final offer.'],
+        ['koi_spirit', 'Hug Emoji', 'm', 'Huggy emoji. Heals its allies and splashes both heroes with hearts.'],
+        ['tsukumogami', 'Notification Imp', 'm', 'Red-dot imp. Hits and shuffles junk cards into your draw pile, then a big pile of pings.'],
+        ['silk_weaver', 'Algo Rhythm', 'm', 'Clicking algorithm on cable legs. Tangles a hero and calls a Botling.'],
+        ['nure_onna', 'Autoplay Snake', 'l', 'Endless-feed snake. Bites the backing hero with Earworm and coils the lead hard.'],
+        ['rokurokubi', 'Selfie Stick', 'm', 'Telescoping selfie stick that reaches past the lead to hit the backing hero twice.'],
+        ['ittan_momen', 'Phone Charger', 'm', 'Loose charging cable. Wraps a hero Tangled and gains Block and Shimmy.'],
       ],
       elite: [
-        ['drowned_general', 'Drowned General', 'l', 'Commands the flood. Ritual Might, calls Lantern Wisps, one heavy blow below half HP.'],
-        ['puppet_master', 'Puppet Master', 'l', 'Pulls the strings. Calls Paper Puppets, heals them, and Stuns a hero.'],
-        ['umibozu', 'Umibozu', 'l', 'Sea-monk giant. Whole-party tidal slams and a Stun.'],
+        ['drowned_general', 'Comment Troll', 'l', 'Grumbling comment cloud. Crescendo, calls Grumble Clouds, one heavy ratio below half HP.'],
+        ['puppet_master', 'Trendsetter', 'l', 'Pulls the strings of every trend. Calls Copycat Cutouts, mends them, and leaves the lead Starstruck.'],
+        ['umibozu', 'Doomscroll Moth', 'l', 'Giant sleepy moth. Slams both heroes harder every turn, Muffled and Wobbly on both, and a Starstruck glare.'],
       ],
       minion: [
-        ['spiderling', 'Spiderling', 's', 'Quick spider hatchling with a poison nip.'],
-        ['paper_puppet', 'Paper Puppet', 's', 'Flimsy puppet. One weak strike, gone in a hit.'],
-        ['lantern_wisp', 'Lantern Wisp', 's', 'Small ghostly flame. Burns a hero and warms its neighbours.'],
+        ['spiderling', 'Botling', 's', 'Tiny spider-shaped bot that likes everything. Earworms with a quick nip.'],
+        ['paper_puppet', 'Copycat Cutout', 's', 'Flimsy cut-out dancer on strings. One weak strike, gone in a hit.'],
+        ['lantern_wisp', 'Grumble Cloud', 's', 'Small grumbling cloud. Sizzles a hero and backs up its neighbours with Block.'],
       ],
-      boss: ['boss_jorogumo', 'Jorogumo', 'xl', 'Spider-woman in a layered kimono. Binds heroes in silk and calls spiderlings, then drops her disguise.', 'The Silk Courtesan'],
+      boss: ['boss_jorogumo', 'Scrollspinner', 'xl', 'Glam spider who spins the endless feed. Tangles heroes and hatches botlings, then drops her filter.', 'Queen of the Feed'],
     },
     3: {
       normal: [
-        ['storm_drone', 'Storm Drone', 'm', 'Hovering shock drone. Rapid lightning jabs in threes.'],
-        ['komainu_guardian', 'Komainu Guardian', 'l', 'Stone lion-dog. Plating and Thorns, then a crushing pounce.'],
-        ['redaction_knight', 'Muffled Knight', 'm', 'Felt-stuffed helm. Hits hard and adds muted cards.'],
-        ['void_scribe', 'Grey Cantor', 'm', 'Chants silence. Strips your buffs and adds silence cards.'],
-        ['blank_soldier', 'Silent Soldier', 'm', 'Grey soldier that marches in step. Steady hits, weak alone.'],
-        ['sky_serpent', 'Sky Serpent', 'l', 'Coiling wind serpent. Multi-hit strikes across the back row.'],
-        ['eraser_wraith', 'Muffle Wraith', 'm', 'Smothers your Block and your hero resource stacks.'],
-        ['thunder_crow', 'Thunder Crow', 'm', 'Storm crow. Dives for a Stun and pecks the back row.'],
-        ['paper_golem', 'Felt Golem', 'l', 'Padded felt giant. Slow, heavy hits and Plating.'],
-        ['margin_imp', 'Off-Key Imp', 'm', 'Off-key imp. Calls Sour Notes and adds wilt cards.'],
+        ['storm_drone', 'Tuner Drone', 'm', 'Hovering pitch drone. Rapid jabs in threes and a correction on both heroes.'],
+        ['komainu_guardian', 'VIP Bouncer', 'l', 'Brass rope-post bouncer. Sequins and Feedback, then a crushing bounce.'],
+        ['redaction_knight', 'Clapperboard Knight', 'm', 'Clapperboard knight. Hits hard and adds junk cards with every retake.'],
+        ['void_scribe', 'Chrome Siren', 'm', 'Chrome siren. Strips your buffs and adds junk cards.'],
+        ['blank_soldier', 'Synchro Dancer', 'm', 'Mannequin dancer in perfect step. Steady hits that grow in a crowd, weak alone.'],
+        ['sky_serpent', 'Streamer Dragon', 'l', 'Coiling streamer dragon. Multi-hit confetti blasts at the backing hero.'],
+        ['eraser_wraith', 'Airbrush Wraith', 'm', 'Smooths away your Block and your hero resource stacks.'],
+        ['thunder_crow', 'Ring Light Sentinel', 'm', 'Flying ring light. Dives to leave the lead Starstruck and flashes the backing hero.'],
+        ['paper_golem', 'Sequin Golem', 'l', 'Sequinned costume giant. Slow, heavy hits and Sequins.'],
+        ['margin_imp', 'Glitch Gremlin', 'm', 'Tuning-box gremlin. Calls Pitch Glitches and adds junk cards that cost you Breath.'],
       ],
       elite: [
-        ['censor_golem', 'Censor Golem', 'l', 'Stamps things silent. Muted cards, Plating, and one huge stamp.'],
-        ['storm_whelp', 'Storm Dragon Whelp', 'l', 'Young storm dragon. Lightning across the whole party and multi-strikes.'],
-        ['black_bar_inquisitor', 'Hush Inquisitor', 'l', 'Hunts the weak. Stun, Bind, and a finisher against a low hero.'],
+        ['censor_golem', 'Big Mute Button', 'l', 'Giant mute button. Junk cards, Sequins, and one huge press.'],
+        ['storm_whelp', 'Applause Sign', 'l', 'Lit-up applause sign. Roaring applause on both heroes, slow claps, calls Confetti Poppers.'],
+        ['black_bar_inquisitor', 'Mannequin Judge', 'l', 'Talent-show mannequin judge. Starstruck, Tangled, and a finisher against a low hero.'],
       ],
       minion: [
-        ['blank_page', 'Hush Moth', 's', 'Drifting grey moth. Gains Block, then wraps a hero in Frail.'],
-        ['spark_mote', 'Spark Mote', 's', 'Tiny storm spark. One zap and it bursts.'],
-        ['typo_sprite', 'Sour Note', 's', 'Mischievous sour note. Adds a wilt card.'],
+        ['blank_page', 'Lip-Sync Clone', 's', 'Lip-syncing clone. Gains Block, then leaves a hero Wobbly.'],
+        ['spark_mote', 'Confetti Popper', 's', 'Tiny party popper. One bang and it bursts.'],
+        ['typo_sprite', 'Pitch Glitch', 's', 'Glitchy pixel sprite. Adds a junk card that costs you Breath.'],
       ],
-      boss: ['boss_editor', 'The Conductor', 'xl', 'Pale conductor with a red baton. Becomes a felt-armed giant, then a colossal hole of silence.', 'Keeper of the Last Note'],
+      boss: ['boss_editor', 'Flawless', 'xl', 'Perfect pop idol who never sang a real note. Becomes the Filter, then the Gloss itself.', 'Star of the Perfect Stage'],
     },
   };
 
@@ -477,7 +478,7 @@ const DATA = (() => {
   const QUOTA = {
     cards: { starter: 3, common: 14, uncommon: 12, rare: 8, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
-    relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90 },
+    relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
     events: { perChapter: 10, any: 10, onceFrac: 0.6 },
     achievements: 32, trials: 10, tips: 30,
@@ -502,6 +503,8 @@ const DATA = (() => {
   const REG = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
   const D = { LISTS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
+  // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
+  D.COLOUR_NAME = { red: 'pink', blue: 'blue', green: 'green', gold: 'gold', any: 'rainbow' };
 
   D.add = (kind, defs) => {
     if (!D[kind] || REG.indexOf(kind) < 0) throw new Error('DATA.add: unknown registry ' + kind);
@@ -693,7 +696,7 @@ const DATA = (() => {
     const FIELDS = {
       card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked'],
       gem: ['id', 'name', 'color', 'tier', 'mod', 'art', 'text', 'locked'],
-      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked'],
+      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor'],
       enemy: ['id', 'name', 'title', 'chapter', 'tier', 'size', 'hp', 'moves', 'ai', 'start', 'phases', 'hooks', 'immune', 'art', 'lore', 'tags'],
       event: ['id', 'title', 'text', 'art', 'once', 'chapters', 'when', 'w', 'choices'],
       choice: ['label', 'req', 'cost', 'out'],
@@ -1099,6 +1102,15 @@ const DATA = (() => {
         if (!ID_RE.test(r.id)) err(w, 'id must be snake_case');
         if (!isStr(r.name)) err(w, 'name');
         if (!isStr(r.text)) err(w, 'text'); else if (r.text.length > QUOTA.relics.textMax) err(w, `text over ${QUOTA.relics.textMax} characters`);
+        // optional flavour line (display only): printable ASCII, at most flavorMax characters, ends with . ! or ?
+        if (r.flavor !== undefined) {
+          if (!isStr(r.flavor)) err(w, 'flavor must be a non-empty string');
+          else {
+            if (r.flavor.length > QUOTA.relics.flavorMax) err(w, `flavor over ${QUOTA.relics.flavorMax} characters`);
+            if (!/^[\x20-\x7e]+$/.test(r.flavor)) err(w, 'flavor must be printable ASCII');
+            if (!/[.!?]$/.test(r.flavor)) err(w, 'flavor must end with . ! or ?');
+          }
+        }
         if (!has('relicRarities', r.rarity)) err(w, 'rarity');
         if (!isObj(r.art) || !has('relicIcons', r.art.m)) err(w, `art.m "${r.art && r.art.m}" not in LISTS.relicIcons`);
         else if (r.art.c && !has('palettes', r.art.c)) err(w, 'art.c not in LISTS.palettes');

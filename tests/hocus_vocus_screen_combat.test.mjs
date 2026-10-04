@@ -653,7 +653,10 @@ await t.test('status chips: up to six with counts, a +N chip beyond that, and th
   const p = heroPanel(g, 'hanae');
   t.eq(p.querySelectorAll('.cm-st .status').length, 5, 'eight statuses show five chips'); t.eq(txt(p.querySelector('.cm-more')), '+3', 'and a +3 chip');
   t.ok(p.querySelector('.cm-more').getAttribute('aria-label').indexOf('3 more') === 0, 'labelled for screen readers');
-  ['frail', 'poison', 'weak'].forEach((s) => t.ok(!p.querySelector('.status.s-' + s), s + ' (debuffs sort last) is in the overflow'));
+  // debuffs sort last and, inside their kind, by DATA name: the first debuff by name takes the fifth chip, the other three overflow
+  const debuffs = ['weak', 'frail', 'poison', 'burn'].sort((a, b) => (g.DATA.statuses[a].name < g.DATA.statuses[b].name ? -1 : 1));
+  t.ok(!!p.querySelector('.status.s-' + debuffs[0]), debuffs[0] + ' (the first debuff by DATA name) takes the fifth chip');
+  debuffs.slice(1).forEach((s) => t.ok(!p.querySelector('.status.s-' + s), s + ' (debuffs sort last) is in the overflow'));
   ['might', 'regen', 'thorns', 'bloom'].forEach((s) => t.ok(!!p.querySelector('.status.s-' + s), s + ' (buffs and resources first) is shown'));
   scr(g).debug().setStatus('hanae', 'poison', 0); scr(g).debug().setStatus('hanae', 'burn', 0); scr(g).debug().setStatus('hanae', 'frail', 0);
   await idle(g);
@@ -719,7 +722,8 @@ await t.test('hero panel: low HP flags, the danger vignette, the block chip and 
   await idle(g);
   t.ok(!p.querySelector('.cm-blk').hidden && txt(p.querySelector('.cm-blk .n')) === '9', 'Block 9 shows on the chip');
   const tip = p.rbTip();
-  t.ok(tip.textContent.indexOf(g.DATA.heroes.hanae.title) >= 0 && tip.textContent.indexOf('Front: +2 damage') >= 0 && tip.textContent.indexOf('Back: ') >= 0, 'the hover tooltip names the hero and both rows');
+  // the row lines are DATA.rowText (generated: "Lead: +2 damage on attacks"), so they are read from DATA, with the +2 damage still pinned
+  t.ok(tip.textContent.indexOf(g.DATA.heroes.hanae.title) >= 0 && tip.textContent.indexOf(g.DATA.rowText('hanae', 'front')) >= 0 && /^\w+: \+2 damage/.test(g.DATA.rowText('hanae', 'front')) && tip.textContent.indexOf(g.DATA.rowText('hanae', 'back')) >= 0, 'the hover tooltip names the hero and both rows');
   t.ok(tip.textContent.indexOf(g.DATA.heroes.hanae.passives[0].name) >= 0, 'and the passive');
   scr(g).debug().setHp('hanae', 60); scr(g).debug().setHp('kuro', 60);
   await idle(g);
@@ -1585,7 +1589,7 @@ await t.test('findings 25, 26, 27, 28: top bar centre line, End Turn glyph centr
   t.ok(/left:\s*var\(--hx\)/.test(hero) && /width:\s*var\(--hw\)/.test(hero), 'the hero panels are placed from --hx and --hw');
   t.ok(hx + cssPx(medal, 'left') - 6.5 >= 12, 'the medal\'s gold ring (6.5 px) keeps a 12 px margin to the screen edge (ring at x ' + (hx + cssPx(medal, 'left') - 6.5) + ')');
   t.ok(new RegExp('left:\\s*calc\\(var\\(--hx\\) \\+ var\\(--hw\\) \\+ var\\(--sx\\) - var\\(--sw\\) / 2\\)').test(cssRule('.cm-swap')), 'the swap seal hangs on the panels\' right edge: its centre is --sx past it, from the same two variables (it was 4 px inside: its ring ran over the +2 dmg of the lower panel at Larger text)');
-  t.ok(/min-width:\s*3em/.test(cssRule('.ch-name')), 'the row tag starts at the same x in both panels (a minimum name width of 3em: Hanae, the widest name, is 2.98em)');
+  t.ok(/min-width:\s*5\.8em/.test(cssRule('.ch-name')), 'the row tag starts at the same x in both panels (a minimum name width of 5.8em: RoxorLoops, the widest name, measures 5.47em at the 15 px name size and .02em spacing, in the stock serif at 1280x720)');
   const tag = cssRule('.ct-row');
   t.ok(/min-width:\s*5\.6em/.test(tag) && /text-align:\s*center/.test(tag), 'and FRONT (5.59em at the normal size) and BACK are the same width, so the +N dmg texts line up too');
   t.ok(/#stage\.compact \.cm-speed \{ top: 0; \}/.test(CSS), 'on a phone the speed button has the same top as the menu button (both are --hit tall)');

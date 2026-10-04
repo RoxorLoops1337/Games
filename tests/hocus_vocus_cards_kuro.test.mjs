@@ -802,12 +802,12 @@ function engineSuite(g) {
       t.ok(D.cardPlain(inst(c.id, false)) !== D.cardPlain(inst(c.id, true)) || a.cost !== b.cost, `${c.id}: the player can SEE the upgrade (the text or the cost changes)`);
     });
     const words2 = (id) => D.cardPlain(inst(id, 0)).toLowerCase();
-    t.ok(new RegExp(D.statuses.sumi.name, 'i').test(words2('kuro_first_stroke')), 'First Stroke text mentions Sumi');
-    t.ok(/poison/.test(words2('kuro_venom_script')), 'Venom Script text mentions Poison');
-    t.ok(/burn/.test(words2('kuro_cinder_note')), 'Cinder Note text mentions Burn');
-    t.ok(/swap/.test(words2('kuro_flip_the_page')), 'Flip the Page text mentions the swap');
-    t.ok(/exhaust/.test(words2('kuro_strikethrough')), 'Strikethrough text mentions exhausting');
-    t.ok(/retain/.test(words2('kuro_slow_match')), 'Slow Match text mentions Retain');
+    t.ok(new RegExp(D.statuses.sumi.name, 'i').test(words2('kuro_first_stroke')), 'Drop the Beat text mentions Groove');
+    t.ok(/earworm/.test(words2('kuro_venom_script')), 'Catchy Hook text mentions Earworm');
+    t.ok(/sizzle/.test(words2('kuro_cinder_note')), 'Spicy Snare text mentions Sizzle');
+    t.ok(/swap/.test(words2('kuro_flip_the_page')), 'Pass the Mic text mentions the swap');
+    t.ok(/fade/.test(words2('kuro_strikethrough')), 'Sample Chop text mentions fading');
+    t.ok(/hold/.test(words2('kuro_slow_match')), 'Slow Jam text mentions Hold');
     KURO.forEach((c) => t.eq(D.targetMode(inst(c.id, 0)), flatOps(c.fx).some((o) => (o.op === 'dmg' && (!o.tgt || o.tgt === 'enemy')) || (['enemy', 'others'].indexOf(o.tgt) >= 0) || vObjects([o]).some((v) => v.who === 'target')) ? 'enemy' : 'none', `${c.id}: the targeting mode follows the ops`));
   });
 
