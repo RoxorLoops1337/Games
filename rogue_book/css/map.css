@@ -1,4 +1,4 @@
-/* Inkwoven -- the map screen and its overlays (owner: map screen engineer). Everything here is namespaced: .s-map and mp-* for the screen,
+/* Echowake: the map screen and its overlays (owner: map screen engineer). Everything here is namespaced: .s-map and mp-* for the screen,
    .o-relics (mr-*) and .o-legend (lg-*) for the overlays. The page itself is painted on #view by ART.map; this file is the lacquer HUD over it:
    hero seals and HP, the Ink meter of drops, the brush-written chapter banner, the tool column, the treasure strip, the brush tray, the hex
    info chip, the brush mode bar, the flying drops and the chapter intro. Sizes follow --ts (textScale) and every control keeps --hit.

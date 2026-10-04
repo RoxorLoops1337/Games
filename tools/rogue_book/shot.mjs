@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Screenshot and QA driver for Inkwoven (headless Chromium through playwright-core).
+// Screenshot and QA driver for Echowake (headless Chromium through playwright-core).
 //
 //   node tools/rogue_book/shot.mjs --sheet fx --out /tmp/fx.png                       one gallery sheet, PNG is exactly w x h (1600x900)
 //   node tools/rogue_book/shot.mjs --url "rogue_book/gallery.html?sheet=heroes&w=1200&h=700&scale=2" --out h.png

@@ -1,4 +1,4 @@
-// Inkwoven -- combat rules engine. Pure logic: no DOM, no clock, no Math.random. Deterministic for a given seed.
+// Echowake: combat rules engine. Pure logic: no DOM, no clock, no Math.random. Deterministic for a given seed.
 //
 // COMBAT.create(opts) -> C. Everything the UI and the tests need is on C. The contract is DESIGN.md 4.1 to 4.7 and 5.2; this
 // header records every public function and the few places where the design left a choice open.

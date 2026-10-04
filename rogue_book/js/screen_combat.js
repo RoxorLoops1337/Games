@@ -1,4 +1,4 @@
-// Inkwoven -- the combat screen (owner: combat screen engineer). DESIGN 5.8 (card interaction, HUD zones), 5.9 (the presentation pipeline) and
+// Echowake: the combat screen (owner: combat screen engineer). DESIGN 5.8 (card interaction, HUD zones), 5.9 (the presentation pipeline) and
 // ART_BIBLE 8 (HUD look). This header is the contract of record for js/screen_combat.js; the look lives in css/combat.css (every rule is .cm / .cm-*).
 //
 // ENTRY   UI.screens.combat, params {node, R}. GAME passes both (R defaults to UI.run, node to R.node; `debug` is set by GAME.debug.open). enter builds

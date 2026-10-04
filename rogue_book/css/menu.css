@@ -1,4 +1,4 @@
-/* Inkwoven -- menu screens stylesheet (owner: menu screens engineer): title, hero select, library, settings, how to play, and the pause and
+/* Echowake: menu screens stylesheet (owner: menu screens engineer): title, hero select, library, settings, how to play, and the pause and
    settings overlays. Everything is namespaced: shared pieces use the `mn-` prefix, screen pieces sit under .s-title .s-heroSelect .s-library
    .s-settings .s-howto and overlay pieces under .o-pause .o-settings. It builds on the tokens and components of base.css (panels, .btn,
    hanko, brush dividers, --ts for the text size setting, --hit for touch targets) and adds no external assets: data-URI SVG only.

@@ -1,4 +1,4 @@
-// Inkwoven -- RUN: everything that lives for ONE run. DOM-free, clock-free, deterministic (DESIGN 4.7-4.10, 5.4).
+// Echowake: RUN: everything that lives for ONE run. DOM-free, clock-free, deterministic (DESIGN 4.7-4.10, 5.4).
 // This header is the contract of record for the screen and GAME engineers. Plain data in, plain data out.
 //
 // RANDOMNESS. R stores no RNG state. Every roll builds U.rng(U.hash(R.seed, kind, R.chapter, q, r, extra)) for its own

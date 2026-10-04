@@ -1,4 +1,4 @@
-// Inkwoven -- SCENE: the canvas combat stage. Actors, VFX, numbers, banners, shake, target rings, the aim arrow, barks and ALL combat SFX.
+// Echowake: SCENE: the canvas combat stage. Actors, VFX, numbers, banners, shake, target rings, the aim arrow, barks and ALL combat SFX.
 // Owner: combat scene engineer. This header is the contract of record for scene.js (DESIGN 5.9 is the design, this is what shipped).
 //
 // PUBLIC API (DESIGN 5.9)

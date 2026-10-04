@@ -1,4 +1,4 @@
-// Inkwoven -- Hanae, the Blossom Blade: her complete card set (3 starters, 14 commons, 12 uncommons, 8 rares).
+// Echowake: Hanae, the Blossom Blade: her complete card set (3 starters, 14 commons, 12 uncommons, 8 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Tokens: none. No card here uses the `add` op, so none is defined.

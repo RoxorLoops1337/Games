@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// INKWOVEN balance bot: plays complete runs through the real RUN / COMBAT / MAP APIs and measures balance.
+// Echowake balance bot: plays complete runs through the real RUN / COMBAT / MAP APIs and measures balance.
 //
 //   node tools/rogue_book/bot.mjs --runs 100 --trial 0 --pair hanae,kuro --seed 1 --json out.json
 //   node tools/rogue_book/bot.mjs --all-pairs --runs 60 --trial 0,3 --seed 7 --md report.md --json all.json

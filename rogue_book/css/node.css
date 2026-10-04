@@ -1,4 +1,4 @@
-/* Inkwoven -- node.css: the pages between fights (owner: node screens engineer). Reward, shop, event, camp, forge, chest, gem cache,
+/* Echowake: node.css: the pages between fights (owner: node screens engineer). Reward, shop, event, camp, forge, chest, gem cache,
    and the deck and card-pick overlays. Builds on the tokens and components of base.css. Every selector is namespaced: .s-NAME for a
    screen, .o-NAME for an overlay, and .nk-, .rw-, .sh-, .ev-, .cp-, .fg-, .ch-, .gc-, .dk-, .pk- for the parts inside them.
    Entrances are pure CSS animations (--i is the stagger index), so they replay identically under GAME.debug.tick and never depend

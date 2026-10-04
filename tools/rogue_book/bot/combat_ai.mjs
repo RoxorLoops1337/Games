@@ -1,4 +1,4 @@
-// Inkwoven balance bot: the combat player.
+// Echowake balance bot: the combat player.
 //
 // COMBAT has no clone, but it is exactly deterministic, so the bot "clones" a combat by replaying the action list from the
 // start (create, start, apply every action so far, then the candidate). That makes lookahead exact for everything the card DSL can

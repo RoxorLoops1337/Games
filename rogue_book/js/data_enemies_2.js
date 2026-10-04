@@ -1,4 +1,4 @@
-// Inkwoven -- chapter 2 roster: the Sunken Lantern City (a haunted canal town at night).
+// Echowake: chapter 2 roster: the Sunken Lantern City (a haunted canal town at night).
 // Owner: the chapter 2 enemy designer. Pure data: DATA.add('enemies', ...) and DATA.addEncounters(2, ...).
 // Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (Trial 0, chapter 2). No functions, no dashes,
 // no randomness of its own. Ids, names, tiers and sizes are the fixed roster (DATA.ROSTER). Nothing here reads a clock or the DOM.

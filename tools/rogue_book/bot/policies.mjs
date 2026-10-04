@@ -1,4 +1,4 @@
-// Inkwoven balance bot: run-level decision policies (draft, relics, gems, shop, camp, forge, events, pending choices).
+// Echowake balance bot: run-level decision policies (draft, relics, gems, shop, camp, forge, events, pending choices).
 //
 // Everything is priced in "HP-equivalents" so very different things can be compared: one HP is 1, one point of damage or Block
 // on a card is worth roughly 6 HP-equivalents over a run when it is a permanent upgrade of a card that is played often, one Ink is

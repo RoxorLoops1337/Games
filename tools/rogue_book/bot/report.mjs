@@ -1,4 +1,4 @@
-// Inkwoven balance bot: aggregation and report. buildReport(records, G, opts) turns the run records of driver.mjs into one plain-JSON summary;
+// Echowake balance bot: aggregation and report. buildReport(records, G, opts) turns the run records of driver.mjs into one plain-JSON summary;
 // renderText / renderMarkdown print it. Nothing here touches the game state except through G.DATA lookups (names, heroes, rarities).
 //
 // Definitions (the report repeats them, so a number is never ambiguous):
@@ -503,7 +503,7 @@ function flagsOf(S, DATA) {
   S.encounters.filter((e) => e.verdict === 'easy').forEach((e) => add('enemy', `encounter ${e.enc} (ch${e.ch} ${e.tier}) costs only ${e.hpLostPct}% of party max HP, ${e.ratio}x its tier peers (n=${e.n})`));
   S.events.filter((e) => e.n >= 15 && e.topShare >= 92).forEach((e) => add('event', `event ${e.id}: option ${e.topChoice} (${e.topLabel}) was chosen ${e.topShare}% of ${e.n} times by expected value, so its alternatives never pay`));
   S.bosses.forEach((b) => { if (b.attempts >= 15) { if (b.winRate < 55) add('target', `boss ${b.id} win rate ${b.winRate}% over ${b.attempts} attempts is low`); if (b.winRate > 97) add('target', `boss ${b.id} win rate ${b.winRate}% over ${b.attempts} attempts is trivial`); } });
-  if (S.economy.mercyRunsPct > 10) add('info', `mercy rule fired in ${S.economy.mercyRunsPct}% of runs (Ink starvation)`);
+  if (S.economy.mercyRunsPct > 10) add('info', `mercy rule fired in ${S.economy.mercyRunsPct}% of runs (Echo starvation)`);
   if (S.economy.goldFinal > 250) add('info', `runs end with ${S.economy.goldFinal} unspent gold on average (prices or shop frequency too generous?)`);
   return F;
 }
@@ -549,10 +549,10 @@ export function sections(S, opts) {
     ['gold earned', e.goldEarned], ['gold spent', e.goldSpent], ['gold unspent at the end', e.goldFinal], ['gold unspent at the end (winning runs)', e.goldFinalWins], ['shops visited', e.shopsVisited], ['purchases', e.purchases],
     ['spent on cards', e.spend.card], ['spent on gems', e.spend.gem], ['spent on relics', e.spend.relic], ['spent on brushes', e.spend.brush], ['spent on removals', e.spend.remove],
     ['hexes painted', e.hexesPainted], ['wells drunk', e.wellsDrunk], ['brushes used', e.brushesUsed], ['mercy grants', e.mercyPerRun], ['runs with a mercy grant %', e.mercyRunsPct],
-    ['Ink starvation incidents', e.starvePerRun], ['fights forced by empty Ink', e.forcedFightsPerRun], ['camp rests', e.campRests], ['upgrades', e.upgrades], ['gems socketed', e.gemsSocketed], ['chests', e.chestsOpened], ['relics found', e.relicsFound], ['events seen', e.eventsSeen],
+    ['Echo starvation incidents', e.starvePerRun], ['fights forced by empty Echo', e.forcedFightsPerRun], ['camp rests', e.campRests], ['upgrades', e.upgrades], ['gems socketed', e.gemsSocketed], ['chests', e.chestsOpened], ['relics found', e.relicsFound], ['events seen', e.eventsSeen],
     ['final deck size', S.deck.size], ['final deck upgraded', S.deck.upgraded], ['final deck gems', S.deck.gemsFilled], ['final deck curses', S.deck.curses], ['relics owned', S.deck.relics],
   ]);
-  sec('Economy per chapter (runs that finished the chapter)', ['ch', 'n', 'hexes painted', 'wells', 'brushes used', 'fights', 'Ink left', 'runs with mercy %', 'gold left', 'deck size'], e.perChapter.map((c) => [c.ch, c.n, c.painted, c.wells, c.brushes, c.fights, c.inkEnd, c.mercyRuns, c.goldEnd, c.deckEnd]));
+  sec('Economy per chapter (runs that finished the chapter)', ['ch', 'n', 'hexes painted', 'wells', 'brushes used', 'fights', 'Echo left', 'runs with mercy %', 'gold left', 'deck size'], e.perChapter.map((c) => [c.ch, c.n, c.painted, c.wells, c.brushes, c.fights, c.inkEnd, c.mercyRuns, c.goldEnd, c.deckEnd]));
   const st = S.stops;
   if (st) {
     sec('Stops: camps, forges and shops', ['metric', 'value'], [
@@ -612,7 +612,7 @@ export function versusSections(S, S2, recsA, recsB) {
 
 export function renderText(S, opts) {
   const parts = [];
-  parts.push(`INKWOVEN balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' effort ' + S.meta.effort + (S.meta.clairvoyant ? ' clairvoyant' : ' fair')}; style ${S.meta.style}; unlocked ${S.meta.unlocked}; draft noise ${S.meta.noise}; pick bias ${S.meta.pickBias})`);
+  parts.push(`Echowake balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' effort ' + S.meta.effort + (S.meta.clairvoyant ? ' clairvoyant' : ' fair')}; style ${S.meta.style}; unlocked ${S.meta.unlocked}; draft noise ${S.meta.noise}; pick bias ${S.meta.pickBias})`);
   if (S.meta.errors) parts.push(`ERRORS: ${S.meta.errors}\n${S.meta.errorSamples.join('\n')}`);
   if (S.meta.stalls || S.meta.caps || S.meta.timeouts) parts.push(`stalled runs ${S.meta.stalls}, capped runs ${S.meta.caps}, fights that hit the 60 turn cap ${S.meta.timeouts}`);
   const all = sections(S, opts).concat(opts && opts.versus ? versusSections(S, opts.versus, opts.versusRecsA, opts.versusRecsB) : []);
@@ -623,7 +623,7 @@ export function renderText(S, opts) {
 
 export function renderMarkdown(S, opts) {
   const parts = [];
-  parts.push(`# INKWOVEN balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' (effort ' + S.meta.effort + (S.meta.clairvoyant ? ', clairvoyant' : ', fair') + ')'}. Style: ${S.meta.style}. Unlocked: ${S.meta.unlocked}. Draft noise: ${S.meta.noise}. Pick bias: ${S.meta.pickBias}.`);
+  parts.push(`# Echowake balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' (effort ' + S.meta.effort + (S.meta.clairvoyant ? ', clairvoyant' : ', fair') + ')'}. Style: ${S.meta.style}. Unlocked: ${S.meta.unlocked}. Draft noise: ${S.meta.noise}. Pick bias: ${S.meta.pickBias}.`);
   if (S.meta.errors) parts.push(`**Errors: ${S.meta.errors}**\n\n\`\`\`\n${S.meta.errorSamples.join('\n')}\n\`\`\``);
   const all = sections(S, opts).concat(opts && opts.versus ? versusSections(S, opts.versus, opts.versusRecsA, opts.versusRecsB) : []);
   all.forEach((s) => { parts.push(`## ${s.title}\n\n${s.note ? s.note + '\n\n' : ''}${mdTable(s.headers, s.rows)}`); });

@@ -1,4 +1,4 @@
-// Inkwoven balance bot: the run driver. playRun() plays ONE complete run through the real RUN / COMBAT / MAP APIs and returns a
+// Echowake balance bot: the run driver. playRun() plays ONE complete run through the real RUN / COMBAT / MAP APIs and returns a
 // plain-JSON record of everything the report needs (fights, picks, deaths, economy, final deck). Deterministic for a seed.
 //
 //   playRun(G, { heroes:[a,b], trial:0, seed:1, unlocked:'all'|'none', style:'normal'|'rush'|'explore'|'max', combat:'ai'|'greedy', draftNoise, maxSteps })

@@ -1,4 +1,4 @@
-// Inkwoven -- MAP: the hex page. Generation, painting, brushes, walking, pixel helpers, saves.
+// Echowake: MAP: the hex page. Generation, painting, brushes, walking, pixel helpers, saves.
 // Pure logic: no DOM, no clock, no Math.random. Everything is a pure function of its arguments and the seed.
 // This header is the contract of record for RUN and the map screen (DESIGN.md 4.8 and 5.3 say the same thing shorter).
 //
