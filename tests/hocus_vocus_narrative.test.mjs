@@ -14,6 +14,7 @@ import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus narrative');
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const G = boot({ only: ['data_events', 'data_meta', 'run', 'meta'], continue: true });
 const { DATA, U, RUN, META } = G;
 const haveRun = !!(RUN && G.MAP && RUN.applyOps && RUN.pickEvent);
@@ -536,7 +537,7 @@ t.test('lore is the spine: the Singer, the Hush, the Conductor, each keeper who 
   });
   const all = stories.map((s) => s.text).join(' ');
   t.ok(all.split('Hush').length >= 6, 'the Hush recurs through the pages');
-  t.ok(!/Hanae|Kuro|Suzu|Raiga/.test([T('intro'), T('ch1_intro'), T('ch2_intro'), T('ch3_intro'), T('ch1_clear'), T('ch2_clear'), T('victory'), T('defeat')].join(' ')), 'the shared story pages never name a hero (the party is chosen by the player)');
+  t.ok(!new RegExp(L.heroIds.map((h) => esc(DATA.heroes[h].name)).join('|')).test([T('intro'), T('ch1_intro'), T('ch2_intro'), T('ch3_intro'), T('ch1_clear'), T('ch2_clear'), T('victory'), T('defeat')].join(' ')), 'the shared story pages never name a hero (the party is chosen by the player)');
   t.ok(all.length > 6000, 'a lot of story');
 });
 
@@ -707,9 +708,9 @@ t.test('integration: a choice that can only do nothing is locked with a reason (
   const dead = (e, over) => { const R = richRun(e, 7); R.gold = 400; R.flags = { fox_spared: 1, fox_bond: 1 }; R.deck = R.deck.filter((c) => !(DATA.cards[c.id] && DATA.cards[c.id].hero === 'curse')); R.deck.forEach((c) => { if (DATA.cards[c.id] && DATA.cards[c.id].up) c.up = 1; }); Object.assign(R, over || {}); return R; };
   const row = (id, ci, R) => RUN.eventChoices(R, DATA.events[id])[ci];
   let r = row('peddler_silver_bell', 1, dead(DATA.events.peddler_silver_bell));
-  t.ok(!r.ok && /Brass Lantern/.test(r.reason), 'the brass lamp is locked while the Brass Lantern is owned (' + r.reason + ')');
+  t.ok(!r.ok && new RegExp(esc(DATA.relics.brass_lantern.name)).test(r.reason), 'the brass lamp is locked while the Brass Lantern is owned (' + r.reason + ')');
   const free = dead(DATA.events.peddler_silver_bell); free.relics = ['silver_bell']; t.eq(row('peddler_silver_bell', 1, free).ok, true, 'and open without it');
-  r = row('fox_returns', 0, dead(DATA.events.fox_returns)); t.ok(!r.ok && /Fox Mask/.test(r.reason), 'the fox mask is locked while owned (' + r.reason + ')');
+  r = row('fox_returns', 0, dead(DATA.events.fox_returns)); t.ok(!r.ok && new RegExp(esc(DATA.relics.fox_mask.name)).test(r.reason), 'the fox mask is locked while owned (' + r.reason + ')');
   r = row('void_tear', 1, dead(DATA.events.void_tear)); t.ok(!r.ok && /no curse/i.test(r.reason), 'feeding the tear a regret needs a curse (' + r.reason + ')');
   r = row('blank_patch', 2, dead(DATA.events.blank_patch)); t.ok(!r.ok && /no curse/i.test(r.reason), 'so does the cursed page (' + r.reason + ')');
   const cursed = dead(DATA.events.void_tear); RUN.addCard(cursed, 'curse_regret'); t.eq(row('void_tear', 1, cursed).ok, true, 'open with a curse in the deck');

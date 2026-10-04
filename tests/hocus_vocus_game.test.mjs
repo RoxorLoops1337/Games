@@ -32,6 +32,7 @@ import { boot, harness } from './hocus_vocus_lib.mjs';
 import { makePlayer } from './hocus_vocus_player.mjs';
 
 const t = harness('hocus_vocus game');
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ONLY = (process.env.RB_GAME_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const want = (name) => !ONLY.length || ONLY.includes(name);
 
@@ -211,7 +212,7 @@ if (want('save')) {
     t.ok(META.hasRun(), 'save: the run is in the save slot');
     const cont = $(g, '[data-act=continue]');
     t.ok(!!cont, 'save: the title offers Continue');
-    t.ok(/Verse 1/.test(txt(cont)) && /Hanae/.test(txt(cont)) && /Kuro/.test(txt(cont)), 'save: Continue says where the tale stands [' + txt(cont) + ']');
+    t.ok(/Verse 1/.test(txt(cont)) && new RegExp(esc(g.DATA.heroes.hanae.name)).test(txt(cont)) && new RegExp(esc(g.DATA.heroes.kuro.name)).test(txt(cont)), 'save: Continue says where the tale stands [' + txt(cont) + ']');
     GAME.state.R = null;
     await tap(g, cont, 1500);
     await tick(g, 1500);
@@ -671,11 +672,11 @@ if (want('library')) {
     const paneText = () => txt($$(g, '.s-library .mn-pane').find((p) => p.getBoundingClientRect().width > 0 && !p.hidden));
     const tabs = $$(g, '.s-library [role=tab]');
     await tap(g, tabs.find((x) => x.dataset.id === 'story'), 500);
-    t.ok(new RegExp(g.DATA.lore.intro.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(paneText()) && /\?\?\?/.test(paneText()), 'library: Story lists the pages read and hides the rest as ???');
+    t.ok(new RegExp(esc(g.DATA.lore.intro.title)).test(paneText()) && /\?\?\?/.test(paneText()), 'library: Story lists the pages read and hides the rest as ???');
     await tap(g, tabs.find((x) => /Bestiary/.test(txt(x))), 500);
-    t.ok(/Kappa/.test(paneText()) && /1 of 17 met/.test(paneText()), 'library: Bestiary names the foe that was met and counts it');
+    t.ok(new RegExp(esc(g.DATA.enemies.kappa.name)).test(paneText()) && /1 of 17 met/.test(paneText()), 'library: Bestiary names the foe that was met and counts it');
     await tap(g, tabs.find((x) => /History/.test(txt(x))), 500);
-    t.ok(/Hanae and Kuro/.test(paneText()) && /Victory/.test(paneText()) && /900/.test(paneText()), 'library: History lists the won tale with its party and score');
+    t.ok(new RegExp(esc(g.DATA.heroes.hanae.name) + ' and ' + esc(g.DATA.heroes.kuro.name)).test(paneText()) && /Victory/.test(paneText()) && /900/.test(paneText()), 'library: History lists the won tale with its party and score');
     await tap(g, tabs.find((x) => /Achievements/.test(txt(x))), 500);
     t.ok($$(g, '.mn-ach').length >= 30, 'library: Achievements lists every feat (' + $$(g, '.mn-ach').length + ')');
     clean(g, 'library');

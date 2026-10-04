@@ -6,6 +6,8 @@
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus ui');
+// DATA-owned names are read from DATA of the same boot (the re-theme renames them); this escapes one for a RegExp
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const SKIP = ['data_*', 'art*', 'audio', 'combat', 'map', 'run', 'meta', 'scene', 'screen_*', 'tutorial'];
 
 // ---------------------------------------------------------------------------------------------------- fakes installed into the page
@@ -568,12 +570,12 @@ await t.test('glossary: keywords and statuses by key or name, with stacks', () =
   t.eq(b.name, 'Block', 'keyword by key'); t.eq(b.kind, 'keyword', 'kind keyword'); t.ok(/Absorbs damage/.test(b.text), 'text from DATA.keywords');
   const p = g.UI.tip.info('poison');
   t.eq(p.kind, 'debuff', 'status kind'); t.ok(p.status && p.stack === 'int', 'status flags');
-  t.eq(g.UI.tip.info('Front row').key, 'front', 'by display name');
+  t.eq(g.UI.tip.info(g.DATA.keywords.front.name).key, 'front', 'by display name');
   t.eq(g.UI.tip.info('X cost').key, 'xcost', 'punctuation is ignored');
   t.eq(g.UI.tip.info('bloom').kind, 'resource', 'resource status');
   t.eq(g.UI.tip.info('nonsense'), null, 'unknown is null'); t.eq(g.UI.tip.kw('nonsense'), null, 'kw() of unknown is null');
   const node = g.UI.tip.kw('poison', 3);
-  t.ok(node.querySelector('.tk-name') && /Poison 3/.test(node.querySelector('.tk-name').textContent), 'title carries the stack'); t.ok(node.querySelector('.tk-kind.k-debuff'), 'kind chip'); t.ok(node.querySelector('canvas'), 'status icon');
+  t.ok(node.querySelector('.tk-name') && new RegExp(esc(g.DATA.statuses.poison.name) + ' 3').test(node.querySelector('.tk-name').textContent), 'title carries the stack'); t.ok(node.querySelector('.tk-kind.k-debuff'), 'kind chip'); t.ok(node.querySelector('canvas'), 'status icon');
   g._run('DATA.statusText = (id, n) => "Poison " + n + ": lose " + n + " HP."');
   const n2 = g.UI.tip.kw('poison', 4);
   t.eq(n2.querySelector('.tk-text').textContent, 'lose 4 HP.', 'DATA.statusText is used with its duplicate "Name N:" prefix stripped');
@@ -684,7 +686,7 @@ await t.test('keyword spans inside card text open glossary bubbles (hover and lo
   const kw = c.querySelector('.kw');
   t.ok(kw && kw.dataset.kw === 'exhaust', 'the fallback text marks Exhaust with data-kw');
   g._pointer('pointerover', kw, { pointerType: 'mouse' });
-  t.eq($$(g, '#tips .tip').length, 1, 'bubble on hover'); t.ok(/Exhaust/.test($(g, '#tips .tip').textContent), 'right entry');
+  t.eq($$(g, '#tips .tip').length, 1, 'bubble on hover'); t.ok(new RegExp(esc(g.DATA.keywords.exhaust.name)).test($(g, '#tips .tip').textContent), 'right entry');
   g._pointer('pointerout', kw, { pointerType: 'mouse' });
   t.eq($$(g, '#tips .tip').length, 0, 'gone on leave');
 });
@@ -809,7 +811,7 @@ await t.test('UI.cardBack, relic, gem, status, stat, heroBadge', () => {
   const ink = g.UI.stat('ink', 9, { max: 14 });
   t.eq(ink.querySelector('.val').textContent, '9/14', 'value over max');
   const hb = g.UI.heroBadge('hanae', { size: 'lg', hp: 30, maxHp: 76 });
-  t.ok(hb.classList.contains('h-hanae') && /Hanae/.test(hb.textContent), 'hero badge'); t.eq(hb.querySelector('.hp-txt').textContent, '30/76', 'hp text'); t.ok(/39/.test(hb.querySelector('.hp-fill').style.width), 'hp fill width');
+  t.ok(hb.classList.contains('h-hanae') && new RegExp(esc(g.DATA.heroes.hanae.name)).test(hb.textContent), 'hero badge'); t.eq(hb.querySelector('.hp-txt').textContent, '30/76', 'hp text'); t.ok(/39/.test(hb.querySelector('.hp-fill').style.width), 'hp fill width');
   hb.rbSet({ hp: 0 }); t.ok(hb.classList.contains('down'), 'down at 0 hp');
   hb.rbSet({ hp: 10 }); t.ok(hb.classList.contains('low') && !hb.classList.contains('down'), 'low hp state');
   t.ok(g.log.medals.indexOf('hanae') >= 0, 'ART.hero.medallion is used');
