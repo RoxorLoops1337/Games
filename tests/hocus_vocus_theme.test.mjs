@@ -3,8 +3,9 @@
 // back into player-facing text. It is also the re-grep to run after merging origin/main (squash merges resurrect old copy).
 //
 // Checks: 1 every DATA display field passes RETIRED, 2 every prose string and template literal of the UI scripts passes RETIRED and TALE,
-// 3 index.html and gallery.html text, 4 the seven kept sfx ids (policy D8), 5 the four docs outside backticks, 6 lowercase "song" is
-// banned in UI and rules strings (lore pages, barks, events, enemies and card flavour are exempt: there "the song" is the world).
+// 3 index.html and gallery.html text, 4 the seven kept sfx ids (policy D8), 5 the four docs outside backticks, 6 "song" as a map tool
+// must never come back: the word is banned in the names and texts of tiles, Spells (DATA.brushes), keywords and statuses, and in the
+// rules-text scripts. Hocus Vocus prose may say song and chorus (bible 6.4: the duo sing real songs), so nothing else is scanned for it.
 // It never reads hocus_vocus/ECHO_PLAN.md (the plan quotes every old word on purpose).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +15,14 @@ const t = harness('hocus_vocus theme');
 
 const RETIRED = /\b(Ink|Inks|Inkstones?|Inkweaver|Inkwoven|INKWOVEN|Brush(es)?|brush(es)?|[Pp]aint(s|ed|ing)?|Blank|Daily Tale|Ink Trials?|Library|Author|Editor|Eraser|Sumi|Bookmark|Unwritten|Chapter|chapter|storybook|[Bb]ooks?|[Pp]ages?|quill|calligraph\w*|manuscript|ink)\b/;
 const TALE = /\b[Tt]ales?\b/;
-const SONG_LC = /\bsong\b/;                      // case sensitive: "Song", "Songs", "SONG" and "songs" pass
+// Check 6 (rescoped in P1, 1F). The Echowake suite banned lowercase "song" everywhere in UI and rules text, because the map tool was a
+// Song there and "the song" was the world. In Hocus Vocus the map tool is a Spell and the lowercase words are allowed survivors in prose
+// (bible 6.4), so a blanket ban would fail honest sentences. What must never come back is "Song" as a MAP TOOL, and that lives in the
+// names and texts of tiles, Spells, keywords and statuses and in the rules-text scripts, where any case of song or songs is a leak.
+const SONG_TOOL = /\bsongs?\b/i;
+const SONG_REG = new Set(['tiles', 'brushes', 'keywords', 'statuses']);
+const SONG_KEYS = new Set(['name', 'text']);
+const SONG_SCRIPTS = new Set(['data_text.js', 'run.js', 'meta.js']);         // the generated rules text and the run log lines
 
 // ------------------------------------------------------------------ the allowlist (plan 8.3): [exact string, reason]
 const ALLOW_EXACT = [
@@ -58,8 +66,6 @@ const D = g.DATA;
 // Every string whose key is a display field, anywhere inside a registry. Ids, ops, tags and art names are never display fields.
 const DISPLAY_KEYS = new Set(['name', 'title', 'flavor', 'text', 'lore', 'say', 'label', 'blurb']);
 const REGISTRIES = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'lore', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes'];
-// registries whose strings are UI and rules text (check 6 applies), as opposed to world text (lore pages, barks, events, enemies, card flavour)
-const UI_REG = new Set(['gems', 'relics', 'achievements', 'trials', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes']);
 const fields = [];          // { path, text, reg, key }
 const collect = (o, p, reg, key) => {
   if (typeof o === 'string') { fields.push({ path: p, text: o, reg, key }); return; }
@@ -99,16 +105,18 @@ t.test('check 1: no retired word in any DATA display field', () => {
   }
   t.eq(bad.length, 0, fail(bad, 'retired words in DATA'));
 });
-t.test('check 6 (data half): no lowercase "song" in UI and rules text', () => {
+t.test('check 6 (data half): no "song" in the names and texts of tiles, Spells, keywords and statuses', () => {
   const bad = [];
+  let seen = 0;
   for (const f of fields) {
-    if (!(UI_REG.has(f.reg) || f.reg === 'tips')) continue;
-    if (f.reg === 'heroes' && f.key !== 'title' && f.key !== 'blurb' && f.key !== 'name') continue;
+    if (!SONG_REG.has(f.reg) || !SONG_KEYS.has(f.key)) continue;
+    seen++;
     if (allowedData(f.text)) continue;
-    const w = hit(SONG_LC, f.text);
-    if (w) bad.push(`${f.path}: lowercase "${w}" in "${abbrev(f.text)}"`);
+    const w = hit(SONG_TOOL, f.text);
+    if (w) bad.push(`${f.path}: "${w}" in "${abbrev(f.text)}"`);
   }
-  t.eq(bad.length, 0, fail(bad, 'lowercase "song" in UI or rules text (the world is "the land" there; plan rule 0.8)'));
+  t.ok(seen >= 100, `the rescoped walk reached ${seen} names and texts of tiles, Spells, keywords and statuses, expected at least 100 (guards the scope itself)`);
+  t.eq(bad.length, 0, fail(bad, '"song" in the name or text of a tile, Spell, keyword or status (the map tool is a Spell, bible 4.5)'));
 });
 
 // ------------------------------------------------------------------ check 2: string and template literals of the UI scripts
@@ -166,14 +174,19 @@ t.test('check 2: no retired word or "tale" in any prose literal of the UI script
   }
   t.eq(bad.length, 0, fail(bad, 'retired words in UI string literals'));
 });
-t.test('check 6 (code half): no lowercase "song" in UI prose literals', () => {
+t.test('check 6 (code half): no "song" in the rules-text scripts (data_text.js, run.js, meta.js)', () => {
+  // The screen scripts may now say song or chorus in prose (bible 6.4), so only the scripts that print rules text and the run log are scanned.
   const bad = [];
+  let seen = 0;
   for (const l of proseLits) {
+    if (!SONG_SCRIPTS.has(l.file)) continue;
+    seen++;
     if (allowedExact(l.text)) continue;
-    const w = hit(SONG_LC, l.text);
-    if (w) bad.push(`js/${l.file}:${l.line}: lowercase "${w}" in "${abbrev(l.text)}"`);
+    const w = hit(SONG_TOOL, l.text);
+    if (w) bad.push(`js/${l.file}:${l.line}: "${w}" in "${abbrev(l.text)}"`);
   }
-  t.eq(bad.length, 0, fail(bad, 'lowercase "song" in UI literals (say "the land"; plan rule 0.8)'));
+  t.ok(seen >= 100, `the rescoped walk reached ${seen} prose literals of the rules-text scripts, expected at least 100 (guards the scope itself)`);
+  t.eq(bad.length, 0, fail(bad, '"song" in a rules-text literal (the map tool is a Spell, bible 4.5; say Spell)'));
 });
 t.test('check 2 (markup literals): visible text inside HTML string literals passes too', () => {
   // Literals that start with "<" are skipped by the rule above; here their tags are stripped and the remaining text is checked.
@@ -186,7 +199,7 @@ t.test('check 2 (markup literals): visible text inside HTML string literals pass
       if (l.dev || !/^</.test(l.text)) continue;
       const text = l.text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
       if (!isProse(text) || allowedExact(text)) continue;
-      const w = hit(RETIRED, text) || hit(TALE, text) || hit(SONG_LC, text);
+      const w = hit(RETIRED, text) || hit(TALE, text);          // lowercase song is allowed in prose now (bible 6.4); check 6 owns the map tool
       if (w) bad.push(`js/${f}:${lineOf(src, l.s)}: "${w}" in "${abbrev(text)}"`);
     }
   }
@@ -248,7 +261,7 @@ t.test('check 5: README, DESIGN, ART_BIBLE and CONTENT_SPEC pass RETIRED outside
   t.eq(bad.length, 0, fail(bad, 'retired words in the docs'));
 });
 
-// ------------------------------------------------------------------ check 7: CSS content strings, and the word "run" (plan 3: a run is a journey)
+// ------------------------------------------------------------------ check 7: CSS content strings, and the word "run" (a run is a tour, bible 1.3; the musical and verb senses are allowed below)
 const RUN_WORD = /\b[Rr]uns?\b/;
 // exact survivors of the word "run" in player-facing prose, each with a reason (the verb, never the noun)
 const RUN_ALLOW = [
@@ -262,6 +275,13 @@ const RUN_ALLOW_CONTAINS = [
   ['Then it runs out of breath', 'verb: to be exhausted (events.kill_your_darlings)'],
   ['Hot sound runs down your arm', 'verb: to flow (events.unfinished_sentence)'],
   ['run out of nothing', 'verb: to be exhausted (events.weeping_eraser)'],
+  // Hocus Vocus (P1, 1F): the musical sense of run (a quick run of notes) and the verb, never the noun for a tour (bible 1.3: a run is a "tour")
+  ['Vocal Run', 'music: the Spell name, a fast run of sung notes (DATA.brushes.wave, bible 4.5); a reserved name'],
+  ['vocal runs', 'music: runs of sung notes, in Jasmin\'s blurb and cards (DATA.heroes.hanae.blurb, bible 3.1)'],
+  ['Run It Again', 'verb: to run a phrase through once more, a card name (DATA.cards.hanae_whetstone.name, HV_HEROES 2.1)'],
+  ['it runs out of puff', 'verb: to be exhausted (DATA.enemies.kappa.lore, HV_ENEMIES 2)'],
+  ['has run Blossom Bay', 'verb: to operate, the open mic Kraki hosts (DATA.enemies.boss_kuzunoha.lore, bible 2.4)'],
+  ['strings run to every phone', 'verb: to extend (DATA.enemies.puppet_master.lore, HV_ENEMIES 4)'],
 ];
 const RUN_ALLOW_CLASS = [['mn-p-run empty', 'CSS class list in screen_menu.js, never player-facing; classes keep their names (plan 5.11)']];
 const runAllowed = (s) => RUN_ALLOW.concat(RUN_ALLOW_CLASS).some(([a]) => a === s);
@@ -282,7 +302,7 @@ t.test('check 7a: CSS content strings pass RETIRED, TALE and the run rule', () =
   }
   t.eq(bad.length, 0, fail(bad, 'retired words or "run" in CSS content strings'));
 });
-t.test('check 7b: the standalone word run or runs is gone from player-facing prose (a run is a journey)', () => {
+t.test('check 7b: the standalone word run or runs is gone from player-facing prose (a run is a tour; the musical and verb senses are allowlisted)', () => {
   const bad = [];
   for (const f of fields) {
     if (runAllowedData(f.text)) continue;
@@ -294,7 +314,7 @@ t.test('check 7b: the standalone word run or runs is gone from player-facing pro
     const w = hit(RUN_WORD, l.text);
     if (w) bad.push(`js/${l.file}:${l.line}: "${w}" in "${abbrev(l.text)}"`);
   }
-  t.eq(bad.length, 0, fail(bad, 'the word "run" in player-facing text (say journey)'));
+  t.eq(bad.length, 0, fail(bad, 'the word "run" in player-facing text (say tour, or allowlist a verb or musical use with its reason)'));
 });
 t.test('the run allowlist is small and every entry has a reason', () => {
   for (const [s, why] of RUN_ALLOW.concat(RUN_ALLOW_CLASS, RUN_ALLOW_CONTAINS)) { t.ok(s.length > 0, 'run allowlist string'); t.ok(why.length > 10, `reason for "${s}"`); }

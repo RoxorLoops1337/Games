@@ -327,15 +327,15 @@
   // ------------------------------------------------------------------------------------------------------------------
   // texts: card ctx, row bonus, bark choice, screen reader lines. All pure.
   // ------------------------------------------------------------------------------------------------------------------
-  // compact row bonus for the panel tag ("+2 dmg", "Thorns 2"); the tooltip carries DATA.rowText in full
+  // compact row bonus for the panel tag ("+2 dmg", "Feedback 2"); the tooltip carries DATA.rowText in full. Status words come from DATA.
   function rowBrief(heroId, row, relics) {
     const f = DATA.rowFor(heroId, row, relics);
     const out = [];
     if (f.dmgAdd) out.push((f.dmgAdd > 0 ? '+' : '') + f.dmgAdd + ' dmg');
     if (f.blockAdd) out.push((f.blockAdd > 0 ? '+' : '') + f.blockAdd + ' Block');
     if (f.startBlock) out.push(f.startBlock + ' Block/turn');
-    if (f.thorns) out.push('Thorns ' + f.thorns);
-    if (f.regen) out.push('Regen ' + f.regen);
+    if (f.thorns) out.push(statusLabel('thorns') + ' ' + f.thorns);
+    if (f.regen) out.push(statusLabel('regen') + ' ' + f.regen);
     if (f.drawAdd) out.push('+' + f.drawAdd + ' draw');
     return out.join(', ') || 'no bonus';
   }

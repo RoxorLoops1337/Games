@@ -1,4 +1,4 @@
-// Suzu's card set (hocus_vocus/js/data_cards_suzu.js): quotas, rules, budget bands, and (when the engine exists) real plays.
+// RawClaw's card set (hocus_vocus/js/data_cards_suzu.js): quotas, rules, budget bands, and (when the engine exists) real plays.
 //
 // Layers of checking, cheapest first:
 //   1. DATA.validate('cards', {hero:'suzu'}) has no errors and no warnings, and DATA.audit has no lines.
@@ -7,22 +7,22 @@
 //      art pairs, hero pose share, flavor, locks, names (1 to 3 words, unique, no dashes), upgrades that really change something.
 //   3. A LIGHT BUDGET CHECK. `evalCard` is a tiny expected-value interpreter for the effect DSL: it walks a card's ops in order
 //      against a reference state, prices what the card produces in "points" (1 point = 1 damage or 1 Block on one target) and
-//      subtracts the resources it spends (Ward, Block). It is a rough ruler, not the engine: it exists so a card cannot sneak
+//      subtracts the resources it spends (Reverb, Block). It is a rough ruler, not the engine: it exists so a card cannot sneak
 //      far outside the power guidance of CONTENT_SPEC section 3. The exchange rates (PT and PRICE) and the reference state
-//      (REF) are documented below. A card is scored in the back row (weight 0.6, Suzu's home) and the front row (weight 0.4),
+//      (REF) are documented below. A card is scored in the backing spot (weight 0.6, RawClaw's home) and the lead spot (weight 0.4),
 //      then compared with a band on the NET points (produced minus spent):
 //        cost 0        net in [2, 7.5]                 (exhaust cards [2, 11], one shot)
 //        cost 1        net in [4.5, 10.5]
-//        cost 2, 3, X  net per Energy in [4.5, 9.5]    (X is priced at X = 2)
-//        power         net per Energy in [3, 15] over a 4 turn horizon (powers pay back over a whole fight)
-//      Upgrades get +30 percent headroom on the top of the band and may never lower the net per Energy.
+//        cost 2, 3, X  net per Breath in [4.5, 9.5]    (X is priced at X = 2)
+//        power         net per Breath in [3, 15] over a 4 turn horizon (powers pay back over a whole fight)
+//      Upgrades get +30 percent headroom on the top of the band and may never lower the net per Breath.
 //      Payoff cards are priced in the state they are built for (SETUP): a finisher is clunky without its engine, by design.
 //      The numbers are deliberately loose: the Wave 3 bot does the real balancing. The bands only catch typos and outliers.
 //   4. When hocus_vocus/js/data_text.js exists: every card, base and upgraded, produces non-empty rules text through
 //      DATA.cardPlain with no undefined, NaN or [object] in it, and stays under 110 characters.
 //   5. When combat.js exists too: every card, base and upgraded, plays in a synthetic fight in both rows and with three
 //      partners without throwing, keeps the card conservation invariant through three rounds, and a set of scenarios checks the
-//      rules the cards lean on (Ward spending, Taunt, Thorns, Might that ends with the turn, revive, moon phases, picks).
+//      rules the cards lean on (Reverb spending, Spotlight, Feedback, Volume that ends with the turn, voice-back, long-mix phases, picks).
 //      Set RB_STRICT=1 to make a missing or broken engine a failure instead of a skip.
 // Set RB_TABLE=1 to print the budget table.
 import fs from 'node:fs';
@@ -91,8 +91,8 @@ t.test('starters match DATA.heroes.suzu.starter and the fixed ids', () => {
   st.forEach((id) => t.ok(byId(id) && byId(id).rarity === 'starter', id + ' is a starter'));
   t.deep(ids((c) => c.rarity === 'starter').sort(), ['suzu_barrier', 'suzu_moon_prayer', 'suzu_ofuda'], 'only those are starters');
   t.eq(byId('suzu_ofuda').type, 'attack', 'the ofuda is the strike'); t.eq(byId('suzu_barrier').type, 'skill', 'the barrier is the defence');
-  t.eq(byId('suzu_moon_prayer').type, 'skill', 'the signature is a Ward prayer');
-  t.ok(allOps(byId('suzu_moon_prayer')).some((o) => o.op === 'status' && o.s === 'ward'), 'the signature makes Ward');
+  t.eq(byId('suzu_moon_prayer').type, 'skill', 'the signature is a Reverb prayer');
+  t.ok(allOps(byId('suzu_moon_prayer')).some((o) => o.op === 'status' && o.s === 'ward'), 'the signature makes Reverb');
 });
 t.test('mix: 30 percent attacks, 30 percent skills, 4 or more powers, an X card', () => {
   const n = (ty) => nonToken.filter((c) => c.type === ty).length;
@@ -114,38 +114,38 @@ t.test('mechanic quotas: row conds, ally cards, picks, keywords', () => {
   const kw = ids((c) => (c.kw || []).length > 0);
   t.ok(kw.length >= 5, 'cards with keywords: ' + kw.join(','));
   t.ok(rowCond.length >= 4 && ally.length >= 8 && kw.length >= 6, `margin over the quotas (${rowCond.length} row conds, ${ally.length} ally cards, ${kw.length} keyword cards)`);
-  t.ok(ids((c) => allOps(c).some((o) => o.op === 'revive')).length >= 1, 'a revive card exists (the Sanctuary net)');
+  t.ok(ids((c) => allOps(c).some((o) => o.op === 'revive')).length >= 1, 'a revive card exists (The Room net)');
   t.ok(ids((c) => allOps(c).some((o) => o.op === 'swap')).length >= 1, 'a card moves between rows');
 });
 t.test('every archetype has an engine and a finisher (the design promise)', () => {
   const ex = (id) => { t.ok(!!byId(id), id + ' exists'); return byId(id); };
   const ops = (id) => bothOps(ex(id));
   const spendsWard = (o) => o.consume === 'ward' || (o.consume && o.consume.s === 'ward') || (o.op === 'removeStatus' && o.s === 'ward');
-  // Sanctuary: Block and healing for both, Ward cashed in, a revive net, a fortress finisher
+  // The Room: Block and healing for both, Reverb cashed in, a revive net, a fortress finisher
   ['suzu_barrier', 'suzu_moon_veil', 'suzu_omamori', 'suzu_waxing_moon'].forEach((id) => t.ok(ops(id).some((o) => (o.op === 'block' || o.op === 'heal') && ['both', 'front', 'ally'].includes(o.tgt)), id + ' protects the party'));
-  ['suzu_prayer_wall', 'suzu_renewal_rite'].forEach((id) => t.ok(ops(id).some(spendsWard), id + ' spends Ward'));
-  t.ok(ops('suzu_shrine_grounds').some((o) => o.op === 'hook' && o.on === 'turnStart') && ops('suzu_sacred_stream').some((o) => o.op === 'hook' && o.on === 'turnEnd'), 'Shrine Grounds and Sacred Stream are standing engines');
-  t.ok(ops('suzu_sacred_stream').some((o) => o.op === 'heal' && o.n.per === 'block'), 'Sacred Stream turns Block into healing');
-  t.ok(ops('suzu_guardian_kami').some((o) => o.op === 'revive'), 'Guardian Kami revives');
-  t.ok(ops('suzu_komainu_roar').some((o) => o.op === 'dmg' && o.tgt === 'all' && o.n.per === 'block'), 'Komainu Roar turns Block into damage to all');
-  t.ok(ops('suzu_guardians_reply').some((o) => o.op === 'dmg' && o.n.per === 'block' && o.n.who === 'ally'), "Guardian's Reply reads the ally's Block from the back row");
+  ['suzu_prayer_wall', 'suzu_renewal_rite'].forEach((id) => t.ok(ops(id).some(spendsWard), id + ' spends Reverb'));
+  t.ok(ops('suzu_shrine_grounds').some((o) => o.op === 'hook' && o.on === 'turnStart') && ops('suzu_sacred_stream').some((o) => o.op === 'hook' && o.on === 'turnEnd'), 'Acoustic Foam and Comfort Noise are standing engines');
+  t.ok(ops('suzu_sacred_stream').some((o) => o.op === 'heal' && o.n.per === 'block'), 'Comfort Noise turns Block into healing');
+  t.ok(ops('suzu_guardian_kami').some((o) => o.op === 'revive'), 'Voice Memo revives');
+  t.ok(ops('suzu_komainu_roar').some((o) => o.op === 'dmg' && o.tgt === 'all' && o.n.per === 'block'), 'Wall of Sound turns Block into damage to all');
+  t.ok(ops('suzu_guardians_reply').some((o) => o.op === 'dmg' && o.n.per === 'block' && o.n.who === 'ally'), "Bounce Back reads the ally's Block from the backing spot");
   t.ok(ops('suzu_purifying_foxfire').some((o) => o.op === 'removeStatus' && o.s === 'debuffs' && o.tgt === 'both'), 'a purge that clears debuffs from both heroes');
-  // Thorns and Taunt
-  t.ok(['suzu_tolling_bell', 'suzu_stone_lion', 'suzu_yata_mirror'].every((id) => ops(id).some((o) => o.op === 'status' && o.s === 'taunt')), 'Taunt cards exist');
-  t.ok(['suzu_tolling_bell', 'suzu_stone_lion', 'suzu_ring_of_thorns', 'suzu_yata_mirror'].every((id) => ops(id).some((o) => o.op === 'status' && o.s === 'thorns')), 'Thorns engines exist');
-  t.ok(ops('suzu_briar_lash').some((o) => o.op === 'dmg' && o.n.per === 'status' && o.n.s === 'thorns'), 'Briar Lash pays per Thorns');
-  t.ok(ops('suzu_swaying_bells').some((o) => o.op === 'hook' && o.on === 'onSwap'), 'Swaying Bells is the swap payoff');
-  t.ok(ops('suzu_yata_mirror').some((o) => o.op === 'status' && o.s === 'thorns' && o.n.per === 'status' && o.n.s === 'thorns'), 'Yata Mirror doubles Thorns');
-  // Talismans: appliers, a Ward-bought Stun, per-debuff payoffs, Mark for the partner
-  ['suzu_ofuda', 'suzu_thousand_ofuda', 'suzu_ofuda_barrage'].forEach((id) => t.ok(ops(id).some((o) => o.op === 'status' && o.s === 'mark'), id + ' applies Mark'));
-  t.ok(ops('suzu_paper_seal').some((o) => o.s === 'weak') && ops('suzu_binding_seal').some((o) => o.s === 'vulnerable'), 'Weak and Vulnerable appliers');
-  t.ok(ops('suzu_silencing_seal').some((o) => o.op === 'status' && o.s === 'stun') && ops('suzu_silencing_seal').some(spendsWard), 'a Stun that costs Ward');
+  // Feedback and Spotlight
+  t.ok(['suzu_tolling_bell', 'suzu_stone_lion', 'suzu_yata_mirror'].every((id) => ops(id).some((o) => o.op === 'status' && o.s === 'taunt')), 'Spotlight cards exist');
+  t.ok(['suzu_tolling_bell', 'suzu_stone_lion', 'suzu_ring_of_thorns', 'suzu_yata_mirror'].every((id) => ops(id).some((o) => o.op === 'status' && o.s === 'thorns')), 'Feedback engines exist');
+  t.ok(ops('suzu_briar_lash').some((o) => o.op === 'dmg' && o.n.per === 'status' && o.n.s === 'thorns'), 'Distortion pays per Feedback');
+  t.ok(ops('suzu_swaying_bells').some((o) => o.op === 'hook' && o.on === 'onSwap'), 'Ping Pong Delay is the swap payoff');
+  t.ok(ops('suzu_yata_mirror').some((o) => o.op === 'status' && o.s === 'thorns' && o.n.per === 'status' && o.n.s === 'thorns'), 'Double Tracking doubles Feedback');
+  // Effects Rack: appliers, a Reverb-bought Starstruck, per-debuff payoffs, Tag for the partner
+  ['suzu_ofuda', 'suzu_thousand_ofuda', 'suzu_ofuda_barrage'].forEach((id) => t.ok(ops(id).some((o) => o.op === 'status' && o.s === 'mark'), id + ' applies Tag'));
+  t.ok(ops('suzu_paper_seal').some((o) => o.s === 'weak') && ops('suzu_binding_seal').some((o) => o.s === 'vulnerable'), 'Muffled and Exposed appliers');
+  t.ok(ops('suzu_silencing_seal').some((o) => o.op === 'status' && o.s === 'stun') && ops('suzu_silencing_seal').some(spendsWard), 'a Starstruck that costs Reverb');
   ['suzu_banishing_seal', 'suzu_moonlit_verdict'].forEach((id) => t.ok(ops(id).some((o) => o.op === 'dmg' && o.n.per === 'debuffs'), id + ' pays per debuff'));
-  t.ok(ops('suzu_trailing_charms').some((o) => o.op === 'hook' && o.on === 'onPlay'), 'Trailing Charms hooks on play');
-  t.ok(ops('suzu_lunar_domain').some((o) => o.op === 'hook' && o.every === 2), 'Lunar Domain is the moon phase (every 2nd turn)');
-  t.ok(nonToken.some((c) => allOps(c).some((o) => o.op === 'cond' && o.if && o.if.turn)) || nonToken.some((c) => bothOps(c).some((o) => o.n && o.n.per === 'turn')), 'a card that grows with the turn number (Waxing Moon)');
-  // the partner: Might and Mark work with anyone, and the two hero:any hooks reward the partner's plays and wounds
-  t.ok(ops('suzu_blessed_blade').some((o) => o.s === 'might' && (o.tgt === 'ally' || o.tgt === 'both')), 'Might for the ally');
+  t.ok(ops('suzu_trailing_charms').some((o) => o.op === 'hook' && o.on === 'onPlay'), 'Slapback hooks on play');
+  t.ok(ops('suzu_lunar_domain').some((o) => o.op === 'hook' && o.every === 2), 'Mixing Desk is the long mix (every 2nd turn)');
+  t.ok(nonToken.some((c) => allOps(c).some((o) => o.op === 'cond' && o.if && o.if.turn)) || nonToken.some((c) => bothOps(c).some((o) => o.n && o.n.per === 'turn')), 'a card that grows with the turn number (Long Sustain)');
+  // the partner: Volume and Tag work with anyone, and the two hero:any hooks reward the partner's plays and wounds
+  t.ok(ops('suzu_blessed_blade').some((o) => o.s === 'might' && (o.tgt === 'ally' || o.tgt === 'both')), 'Volume for the ally');
   t.ok(['suzu_swaying_bells', 'suzu_trailing_charms', 'suzu_guardian_kami'].every((id) => ops(id).some((o) => o.op === 'hook' && o.filter && o.filter.hero === 'any')), 'hooks that reward the partner use filter.hero any');
 });
 
@@ -226,21 +226,21 @@ t.test('every playable card has an upgrade that changes something', () => {
 
 // ---------------------------------------------------------------------------------------------- the budget ruler
 const ENEMIES = 2, AOE = 1.8, TURNS = 4, W_BACK = 0.6, W_FRONT = 0.4;
-// points per stack. 1 point = 1 damage or 1 Block on one target. Ward is priced as what it BUYS (2), so making it earns 2 and
-// spending it costs 2, which is why every spender must pay out clearly more than 2 per Ward.
+// points per stack. 1 point = 1 damage or 1 Block on one target. Reverb is priced as what it BUYS (2), so making it earns 2 and
+// spending it costs 2, which is why every spender must pay out clearly more than 2 per Reverb.
 const PT = { ward: 2, thorns: 3.5, taunt: 2, might: 6, mightTemp: 2.5, regen: 2, bulwark: 4, dodge: 4.5, vulnerable: 4, weak: 3, frail: 1.5, mark: 2.5, stun: 10, poison: 2.5, burn: 2 };
-// Healing is priced at 1.0 an HP, up from 0.8: HP healed carries from fight to fight, and the balance bot measured Renewal Rite, Omamori and Moon Prayer among
-// Suzu's best cards at the old price. (After the Renewal Rite trim to 2 HP a Ward it sat at 2.6 under the old price, below the 4.5 floor, while still a top card.)
+// Healing is priced at 1.0 an HP, up from 0.8: HP healed carries from fight to fight, and the balance bot measured Tape Warmth, Chill Mix and Warm Pad among
+// RawClaw's best cards at the old price. (After the Tape Warmth trim to 2 HP a Reverb it sat at 2.6 under the old price, below the 4.5 floor, while still a top card.)
 const PRICE = { draw: 3.5, energy: 6.5, heal: 1.0, swap: 1.2, revive: 12, purgeSelf: 2.5, retain: 1.5, upgrade: 4, pickOther: 1 };
 const BOTH_BLOCK = 1.7, ALLY_BLOCK = 0.85, BOTH_HEAL = 1.8, ALLY_HEAL = 0.9, BOTH_STATUS = 1.7, ALLY_STATUS = 0.85;
-// the reference state a card is priced in: mid fight, a partly built turn (Suzu in front has the row's 2 Thorns)
+// the reference state a card is priced in: mid fight, a partly built turn (RawClaw in front has the row's 2 Feedback)
 const REF = { ward: 3, block: 3, allyBlock: 6, debuffs: 2, handSize: 3, drawPile: 12, discardPile: 6, exhaustPile: 1, cardsPlayed: 2, attacksPlayed: 1, skillsPlayed: 1, energy: 1, hp: 50, missingHp: 15, allyMissingHp: 15, enemies: ENEMIES, kills: 0, turn: 3, gems: 0, damageTaken: 6, hitsTaken: 1, targetBlock: 0, picked: 1, X: 2 };
 // Payoff cards are priced in the state they are built for. A finisher is clunky without its engine, by design.
 const SETUP = {
-  suzu_briar_lash: { thorns: 2 },          // the row's 2 Thorns in front, or two Thorns cards out: Thorns are permanent, so it is priced with them
+  suzu_briar_lash: { thorns: 2 },          // the row's 2 Feedback in front, or two Feedback cards out: Feedback are permanent, so it is priced with them
   suzu_yata_mirror: { thorns: 4 },         // it doubles what you have built
-  suzu_moonlit_verdict: { debuffs: 3 },    // Weak, Frail and Vulnerable from a Paper Seal and a Binding Seal, or Mark, Weak and Vulnerable
-  suzu_komainu_roar: { block: 10 },        // the fortress the finisher is for (Shrine Grounds or two Block cards)
+  suzu_moonlit_verdict: { debuffs: 3 },    // Muffled, Wobbly and Exposed from a Low Pass and a Dry Signal, or Tag, Muffled and Exposed
+  suzu_komainu_roar: { block: 10 },        // the fortress the finisher is for (Acoustic Foam or two Block cards)
   suzu_shrine_grounds: { ward: 4 },        // the bank has grown by the time the power has paid for itself
 };
 const clone = (S) => Object.assign({}, S, { st: Object.assign({}, S.st), allySt: Object.assign({}, S.allySt) });
@@ -317,7 +317,7 @@ function evalOps(ops, S, A, hookMode, revert) {
       }
       case 'block': {
         const tgt = o.tgt || 'self';
-        const n = Math.max(0, V(o.n, S) + (hookMode ? 0 : (S.row === 'front' ? 1 : 0)));    // the front row adds 1 to every Block op of her own cards
+        const n = Math.max(0, V(o.n, S) + (hookMode ? 0 : (S.row === 'front' ? 1 : 0)));    // the lead spot adds 1 to every Block op of his own cards
         A.gross += n * (tgt === 'both' ? BOTH_BLOCK : tgt === 'ally' ? ALLY_BLOCK : 1);
         if (tgt !== 'ally') S.block += n; else S.allyBlock += n;
         spend(o, S, A); break;
@@ -389,12 +389,12 @@ const scoreOf = (c, up) => { const v = valueOf(c, up), b = bandOf(c, up); return
 t.test('the ruler itself: a few known values so the table can be trusted', () => {
   const st = (id) => byId(id);
   const near = (a, b, msg) => t.near(a, b, 0.05, msg);
-  // Barrier in the back row: 3 Block to both = 3 * 1.7; in the front row the Block op gains 1 from the row: 4 * 1.7
+  // Reverb Wall in the backing spot: 3 Block to both = 3 * 1.7; in the lead spot the Block op gains 1 from the row: 4 * 1.7
   near(netOf(resolveDef(st('suzu_barrier'), false), 'back'), 3 * BOTH_BLOCK, 'barrier back');
   near(netOf(resolveDef(st('suzu_barrier'), false), 'front'), 4 * BOTH_BLOCK, 'barrier front');
-  // Ofuda: 5 damage plus one Mark
+  // Synth Zap: 5 damage plus one Tag
   near(netOf(resolveDef(st('suzu_ofuda'), false), 'back'), 5 + PT.mark, 'ofuda');
-  // Prayer Wall at 3 Ward: Block (2 + 2 * 3) for both, minus 3 Ward spent
+  // Stadium Reverb at 3 Reverb: Block (2 + 2 * 3) for both, minus 3 Reverb spent
   near(netOf(resolveDef(st('suzu_prayer_wall'), false), 'back'), 8 * BOTH_BLOCK - 3 * PT.ward, 'prayer wall');
 });
 t.test('budget: every card, base and upgraded, sits inside its value band', () => {
@@ -403,12 +403,12 @@ t.test('budget: every card, base and upgraded, sits inside its value band', () =
     [false, true].forEach((up) => {
       const b = bandOf(c, up), s = scoreOf(c, up);
       rows.push([c.id + (up ? '+' : ''), c.rarity, c.type, String(resolveDef(c, up).cost), s.toFixed(1), (b.lo).toFixed(1) + '..' + b.hi.toFixed(1) + (b.per ? ' /E' : '')]);
-      t.ok(s >= b.lo - 1e-9 && s <= b.hi + 1e-9, `${c.id}${up ? '+' : ''} scores ${s.toFixed(2)} outside ${b.lo}..${b.hi.toFixed(2)}${b.per ? ' per Energy' : ''}`);
+      t.ok(s >= b.lo - 1e-9 && s <= b.hi + 1e-9, `${c.id}${up ? '+' : ''} scores ${s.toFixed(2)} outside ${b.lo}..${b.hi.toFixed(2)}${b.per ? ' per Breath' : ''}`);
     });
   });
   if (process.env.RB_TABLE) { console.log('card | rarity | type | cost | score | band'); rows.forEach((r) => console.log(r.join(' | '))); }
 });
-t.test('budget: an upgrade never lowers the value per Energy, and never adds more than about half again', () => {
+t.test('budget: an upgrade never lowers the value per Breath, and never adds more than about half again', () => {
   nonToken.forEach((c) => {
     const a = scoreOf(c, false), b = scoreOf(c, true), ea = bandOf(c, false), eb = bandOf(c, true);
     const pa = ea.per ? a : a / Math.max(1, ea.e), pb = eb.per ? b : b / Math.max(1, eb.e);
@@ -423,15 +423,15 @@ t.test('budget: zero and one cost cards are strict, and no cheap card carries a 
       if (e > 1 || c.type === 'power') return;
       const s = scoreOf(c, up);
       t.ok(s <= (e === 0 ? 7.5 : 10.5) * (up ? 1.3 : 1) + 1e-9, `${c.id}${up ? '+' : ''} is too strong for cost ${e}: ${s.toFixed(2)}`);
-      if (e === 0) t.ok(!flat(d.fx).some((o) => o.op === 'energy'), `${c.id}: no Energy on a free card`);
+      if (e === 0) t.ok(!flat(d.fx).some((o) => o.op === 'energy'), `${c.id}: no Breath on a free card`);
     });
   });
-  t.ok(!nonToken.some((c) => bothOps(c).some((o) => o.op === 'energy')), 'Suzu has no Energy gain at all (CONTENT_SPEC: it needs a real drawback)');
-  // Ward economy: a spender must beat what the same Ward earns, and every Ward card is in the gallery
+  t.ok(!nonToken.some((c) => bothOps(c).some((o) => o.op === 'energy')), 'RawClaw has no Breath gain at all (CONTENT_SPEC: it needs a real drawback)');
+  // Reverb economy: a spender must beat what the same Reverb earns, and every Reverb card is in the gallery
   const spenders = nonToken.filter((c) => allOps(c).some((o) => o.consume === 'ward' || (o.consume && o.consume.s === 'ward') || (o.op === 'removeStatus' && o.s === 'ward')));
-  t.ok(spenders.length >= 4, 'Ward spenders: ' + spenders.map((c) => c.id).join(', '));
+  t.ok(spenders.length >= 4, 'Reverb spenders: ' + spenders.map((c) => c.id).join(', '));
   const makers = nonToken.filter((c) => bothOps(c).some((o) => (o.op === 'status' && o.s === 'ward' && (o.tgt === 'self' || o.tgt === undefined)) || (o.op === 'hook' && flat(o.fx).some((x) => x.op === 'status' && x.s === 'ward'))));
-  t.ok(makers.length >= 5, 'Ward makers besides the passive: ' + makers.map((c) => c.id).join(', '));
+  t.ok(makers.length >= 5, 'Reverb makers besides the passive: ' + makers.map((c) => c.id).join(', '));
 });
 
 // ---------------------------------------------------------------------------------------------- text (data_text.js)
@@ -458,14 +458,14 @@ if (TEXT) {
     says('suzu_blessed_blade', 0, /ally/i, /\b3\b/, S('might'), /end of/i);
     says('suzu_silencing_seal', 0, S('stun'), S('weak'), /\b2\b/, S('ward'), K('retain'));
     says('suzu_lunar_domain', 0, /2nd|second|other/i, S('weak'), S('vulnerable'), /all enemies/i);
-    says('suzu_guardian_kami', 0, /revive/i, /50/, /fall|down/i, K('block'));
-    says('suzu_ring_of_thorns', 1, K('innate')); t.ok(!K('innate').test(P('suzu_ring_of_thorns', 0)), 'the base Ring is not Innate');
+    says('suzu_guardian_kami', 0, /bring them back/i, /50/, /voice/i, K('block'));
+    says('suzu_ring_of_thorns', 1, K('innate')); t.ok(!K('innate').test(P('suzu_ring_of_thorns', 0)), 'the base Ring is not Opener');
     says('suzu_renewal_rite', 0, K('retain'), /\b3\b/, /\b2\b/, S('ward'), /heal/i);
     says('suzu_komainu_roar', 0, K('block'), /all enemies/i, /\b16\b/, K('exhaust')); t.ok(!K('exhaust').test(P('suzu_komainu_roar', 1)), 'the upgraded Roar no longer exhausts');
     says('suzu_yata_mirror', 0, S('thorns'), /\b2\b/, S('taunt'), K('exhaust'));
     says('suzu_kagura_blessing', 0, /Upgrade/, /\b2\b/, K('exhaust'));
     says('suzu_trailing_charms', 0, /Attack/, S('mark'));
-    says('suzu_kagura_step', 0, K('swap'), /Front/, /Back/);
+    says('suzu_kagura_step', 0, K('swap'), /Lead/, /Backing/);
     says('suzu_moonbeam', 0, /all enemies/i, S('mark'));
   });
   t.test('text: every gem colour on every slot resolves without throwing', () => {
@@ -485,9 +485,9 @@ if (TEXT) {
 
 // ---------------------------------------------------------------------------------------------- the engine: real plays
 if (ENGINE) {
-  // a synthetic enemy set, registered in this test's own copy of DATA. The dummy never dies and hits the front hero for a little; the
+  // a synthetic enemy set, registered in this test's own copy of DATA. The dummy never dies and hits the lead hero for a little; the
   // biter attacks random heroes in threes so hooks that need wounds have wounds; the brute and the sniper hit far above anyone's HP
-  // (the front hero and the back hero) so that heroes fall; the weakling is a minion that lets a combat run without threatening anyone
+  // (the lead hero and the backing hero) so that heroes fall; the weakling is a minion that lets a combat run without threatening anyone
   const enemyBase = { chapter: 1, tier: 'normal', size: 'm', art: { id: 'kappa' }, lore: 'A synthetic test enemy.', tags: ['spirit'] };
   DATA.add('enemies', {
     suzu_test_dummy: Object.assign({}, enemyBase, { id: 'suzu_test_dummy', name: 'Test Dummy', hp: [600, 600], moves: { poke: { name: 'Poke', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] }, sway: { name: 'Sway', kind: 'defend', fx: [{ op: 'block', n: 4 }] } }, ai: { seq: ['poke', 'sway'] } }),
@@ -545,7 +545,7 @@ if (ENGINE) {
         // give the enemy a couple of debuffs and Block so the per-debuff and per-Block cards have something to read
         const en = C.enemies[0]; en.st.weak = 1; en.st.mark = 1; en.block = 3;
         const can = C.canPlay(handCard(C, c.id).uid, C.legalTargets(handCard(C, c.id).uid)[0]);
-        t.ok(can.ok, `${label}: playable with 3 Energy (${can.reason})`);
+        t.ok(can.ok, `${label}: playable with 3 Breath (${can.reason})`);
         const ev = play(C, c.id);
         plays++;
         t.ok(ev.some((e) => e.type === 'play'), `${label}: emits a play event`);
@@ -577,79 +577,79 @@ if (ENGINE) {
   });
 
   // ---- scenarios: the rules the cards lean on
-  t.test('starters: Ofuda marks, Barrier blocks both, Moon Prayer makes Ward and heals both; Moonlit Rite gives Ward every turn', () => {
+  t.test('starters: Synth Zap marks, Reverb Wall blocks both, Warm Pad makes Reverb and heals both; Always Rolling gives Reverb every turn', () => {
     const C = make({ row: 'back', deck: ['suzu_ofuda', 'suzu_barrier', 'suzu_moon_prayer', 'suzu_ofuda', 'suzu_barrier'], hand: ['suzu_ofuda', 'suzu_barrier', 'suzu_moon_prayer'] });
-    t.eq(suzu(C).st.ward, 1, 'turn 1: the passive gave 1 Ward');
+    t.eq(suzu(C).st.ward, 1, 'turn 1: the passive gave 1 Reverb');
     const e = C.enemies[0];
     play(C, 'suzu_ofuda', e.id);
-    t.eq(e.hp, e.maxHp - 5, 'ofuda hits for 5 (no row bonus for Suzu)'); t.eq(e.st.mark, 1, 'and marks');
+    t.eq(e.hp, e.maxHp - 5, 'ofuda hits for 5 (no row bonus for RawClaw)'); t.eq(e.st.mark, 1, 'and marks');
     play(C, 'suzu_barrier');
-    t.eq(suzu(C).block, 3, 'barrier: 3 Block for Suzu in the back'); t.eq(partner(C).block, 3, 'and 3 for the partner');
+    t.eq(suzu(C).block, 3, 'barrier: 3 Block for RawClaw in the back'); t.eq(partner(C).block, 3, 'and 3 for the partner');
     suzu(C).hp = 50; partner(C).hp = 50;
     play(C, 'suzu_moon_prayer');
-    t.eq(suzu(C).st.ward, 3, 'moon prayer: 2 more Ward'); t.eq(suzu(C).hp, 52, 'heals Suzu'); t.eq(partner(C).hp, 52, 'and the partner');
+    t.eq(suzu(C).st.ward, 3, 'moon prayer: 2 more Reverb'); t.eq(suzu(C).hp, 52, 'heals RawClaw'); t.eq(partner(C).hp, 52, 'and the partner');
     C.endTurn();
-    t.eq(suzu(C).st.ward, 4, 'a new turn: Moonlit Rite adds 1');
+    t.eq(suzu(C).st.ward, 4, 'a new turn: Always Rolling adds 1');
   });
-  t.test('Suzu has no damage bonus, but her rows give +1 Block in front and Thorns 2 (front) or Regen 2 (back)', () => {
+  t.test('RawClaw has no damage bonus, but his spots give +1 Block in the lead and Feedback 2 (lead) or Warm Tea 2 (backing)', () => {
     const F = make({ row: 'front', deck: ['suzu_barrier', 'suzu_ofuda'], hand: ['suzu_barrier', 'suzu_ofuda'] });
     play(F, 'suzu_barrier');
     t.eq(suzu(F).block, 4, 'front: 3 plus the row 1'); t.eq(partner(F).block, 4, 'the row bonus reaches the partner too');
-    t.eq(suzu(F).st.thorns, 2, 'front: Thorns 2');
+    t.eq(suzu(F).st.thorns, 2, 'front: Feedback 2');
     const e = F.enemies[0]; play(F, 'suzu_ofuda', e.id);
-    t.eq(e.hp, e.maxHp - 5, 'no damage bonus in the front row either');
+    t.eq(e.hp, e.maxHp - 5, 'no damage bonus in the lead spot either');
     const B = make({ row: 'back', deck: ['suzu_barrier'], hand: ['suzu_barrier'] });
     t.eq(suzu(B).rowSt.regen, 2, 'back: the row grants Regen 2'); t.eq(suzu(B).st.regen, 1, 'and it has already ticked once this turn');
   });
-  t.test('Banishing Seal pays 3 per debuff (Mark counts) and Briar Lash pays 3 per Thorns (up to 6)', () => {
+  t.test('Sidechain Pump pays 3 per debuff (Tag counts) and Distortion pays 3 per Feedback (up to 6)', () => {
     const C = make({ row: 'back', deck: ['suzu_banishing_seal', 'suzu_banishing_seal', 'suzu_briar_lash', 'suzu_briar_lash'], hand: ['suzu_banishing_seal', 'suzu_banishing_seal', 'suzu_briar_lash', 'suzu_briar_lash'] });
     const e = C.enemies[0];
     play(C, 'suzu_banishing_seal', e.id);
     t.eq(e.hp, e.maxHp - 2, 'no debuffs: 2');
     C.energy = 9; e.hp = e.maxHp; e.st.weak = 1; e.st.vulnerable = 1; e.st.mark = 1;
     play(C, 'suzu_banishing_seal', e.id);
-    // 3 debuffs: (2 + 9) = 11, Vulnerable x1.5 = 16, Mark +3 first (raw 14, x1.5 = 21)
-    t.eq(e.maxHp - e.hp, Math.floor((11 + 3) * 1.5), 'three debuffs, Mark and Vulnerable land: ' + (e.maxHp - e.hp));
+    // 3 debuffs: (2 + 9) = 11, Exposed x1.5 = 16, Tag +3 first (raw 14, x1.5 = 21)
+    t.eq(e.maxHp - e.hp, Math.floor((11 + 3) * 1.5), 'three debuffs, Tag and Exposed land: ' + (e.maxHp - e.hp));
     e.hp = e.maxHp; e.st = {};
     play(C, 'suzu_briar_lash', e.id);
-    t.eq(e.maxHp - e.hp, 3, 'back row, no Thorns: 3');
+    t.eq(e.maxHp - e.hp, 3, 'backing spot, no Feedback: 3');
     suzu(C).st.thorns = 10; e.hp = e.maxHp;
     play(C, 'suzu_briar_lash', e.id);
-    t.eq(e.maxHp - e.hp, 3 + 3 * 6, 'Thorns counted up to 6');
+    t.eq(e.maxHp - e.hp, 3 + 3 * 6, 'Feedback counted up to 6');
   });
-  t.test('Hamaya Shot spends up to 3 Ward for +2 each, and the back row hands 1 back', () => {
+  t.test('Laser Synth spends up to 3 Reverb for +2 each, and the backing spot hands 1 back', () => {
     const C = make({ row: 'back', deck: ['suzu_hamaya_shot', 'suzu_hamaya_shot'], hand: ['suzu_hamaya_shot', 'suzu_hamaya_shot'], ward: 5 });
     const e = C.enemies[0];
     play(C, 'suzu_hamaya_shot', e.id);
-    t.eq(e.maxHp - e.hp, 10 + 6, '5 Ward, 3 counted: 16'); t.eq(suzu(C).st.ward, 5 - 3 + 1, 'spent 3, back row returns 1');
+    t.eq(e.maxHp - e.hp, 10 + 6, '5 Reverb, 3 counted: 16'); t.eq(suzu(C).st.ward, 5 - 3 + 1, 'spent 3, backing spot returns 1');
     suzu(C).st.ward = 0; C.energy = 3; e.hp = e.maxHp;
     play(C, 'suzu_hamaya_shot', e.id);
-    t.eq(e.maxHp - e.hp, 10, 'no Ward: the base'); t.eq(suzu(C).st.ward, 1, 'the back row still returns 1');
+    t.eq(e.maxHp - e.hp, 10, 'no Reverb: the base'); t.eq(suzu(C).st.ward, 1, 'the backing spot still returns 1');
     const F = make({ row: 'front', deck: ['suzu_hamaya_shot'], hand: ['suzu_hamaya_shot'], ward: 2 });
     play(F, 'suzu_hamaya_shot', F.enemies[0].id);
-    t.eq(suzu(F).st.ward || 0, 0, 'front row: no refund');
+    t.eq(suzu(F).st.ward || 0, 0, 'lead spot: no refund');
   });
-  t.test('Prayer Wall, Renewal Rite and Waxing Moon: Ward to Block, Ward to healing, Block by turn number', () => {
+  t.test('Stadium Reverb, Tape Warmth and Long Sustain: Reverb to Block, Reverb to healing, Block by turn number', () => {
     const C = make({ row: 'back', deck: ['suzu_prayer_wall', 'suzu_renewal_rite', 'suzu_waxing_moon'], hand: ['suzu_prayer_wall', 'suzu_renewal_rite', 'suzu_waxing_moon'], ward: 4 });
     play(C, 'suzu_prayer_wall');
-    t.eq(suzu(C).block, 2 + 2 * 3, 'up to 3 Ward counted: 8'); t.eq(partner(C).block, 8, 'both heroes'); t.eq(suzu(C).st.ward, 1, '3 spent');
+    t.eq(suzu(C).block, 2 + 2 * 3, 'up to 3 Reverb counted: 8'); t.eq(partner(C).block, 8, 'both heroes'); t.eq(suzu(C).st.ward, 1, '3 spent');
     suzu(C).hp = 40; partner(C).hp = 40; suzu(C).st.ward = 6; C.energy = 3;
     play(C, 'suzu_renewal_rite');
-    t.eq(suzu(C).hp, 40 + 6, 'up to 3 Ward counted, 2 healing each'); t.eq(partner(C).hp, 40 + 6, 'both heroes'); t.eq(suzu(C).st.ward, 3, '3 spent');
+    t.eq(suzu(C).hp, 40 + 6, 'up to 3 Reverb counted, 2 healing each'); t.eq(partner(C).hp, 40 + 6, 'both heroes'); t.eq(suzu(C).st.ward, 3, '3 spent');
     suzu(C).block = 0; partner(C).block = 0;
     play(C, 'suzu_waxing_moon');
-    t.eq(partner(C).block, 2, 'turn 1: 2 Block for the front hero (the partner)'); t.eq(suzu(C).block, 0, 'not for Suzu in the back');
+    t.eq(partner(C).block, 2, 'turn 1: 2 Block for the lead hero (the partner)'); t.eq(suzu(C).block, 0, 'not for RawClaw in the back');
     const late = make({ row: 'back', deck: ['suzu_waxing_moon'], hand: ['suzu_waxing_moon'] });
     late.turn = 4; play(late, 'suzu_waxing_moon');
     t.eq(partner(late).block, 8, 'turn 4: 8');
     const cap = make({ row: 'front', deck: ['suzu_waxing_moon'], hand: ['suzu_waxing_moon'] });
     cap.turn = 9; play(cap, 'suzu_waxing_moon');
-    t.eq(suzu(cap).block, 12 + 1, 'late in the fight it is capped at 12 (plus the front row 1 on Suzu\'s own Block)');
+    t.eq(suzu(cap).block, 12 + 1, 'late in the fight it is capped at 12 (plus the lead spot 1 on RawClaw\'s own Block)');
   });
-  t.test('Tolling Bell and Kagura Step: Taunt redirects back-row attacks, Kagura Step swaps without using the free swap', () => {
+  t.test('Solo Button and Crossfade: Spotlight redirects back-row attacks, Crossfade swaps without using the free swap', () => {
     const C = make({ row: 'back', deck: ['suzu_tolling_bell'], hand: ['suzu_tolling_bell'], enemies: ['suzu_test_biter'] });
     play(C, 'suzu_tolling_bell');
-    t.eq(suzu(C).block, 5, 'back row: 5 Block'); t.eq(suzu(C).st.taunt, 1, 'Taunt 1'); t.ok(!suzu(C).st.thorns, 'no Thorns from the back row');
+    t.eq(suzu(C).block, 5, 'backing spot: 5 Block'); t.eq(suzu(C).st.taunt, 1, 'Spotlight 1'); t.ok(!suzu(C).st.thorns, 'no Feedback from the backing spot');
     const it = C.intent(C.enemies[0]);
     t.deep(it.tgt, ['suzu'], 'the random-target biter is drawn to the taunting hero');
     suzu(C).block = 0; const hits0 = C.events.length;
@@ -658,29 +658,29 @@ if (ENGINE) {
     t.ok(bites.length === 3 && bites.every((e) => e.dst.id === 'suzu'), 'all three bites of the biter went to the taunting hero: ' + bites.map((e) => e.dst.id).join(','));
     const F = make({ row: 'front', deck: ['suzu_tolling_bell'], hand: ['suzu_tolling_bell'] });
     play(F, 'suzu_tolling_bell');
-    t.eq(suzu(F).st.thorns, 3, 'front row: the row gave 2 and the bell planted 1'); t.eq(suzu(F).block, 6, 'front Block 6');
-    // Kagura Step
+    t.eq(suzu(F).st.thorns, 3, 'lead spot: the row gave 2 and the bell planted 1'); t.eq(suzu(F).block, 6, 'front Block 6');
+    // Crossfade
     const K = make({ row: 'back', deck: ['suzu_kagura_step'], hand: ['suzu_kagura_step'] });
     play(K, 'suzu_kagura_step');
-    t.eq(K.front().id, 'suzu', 'from the back she steps into the front'); t.ok(suzu(K).block > 0 && suzu(K).st.taunt === 1, 'and gains Block and Taunt');
+    t.eq(K.front().id, 'suzu', 'from the backing spot he steps into the lead'); t.ok(suzu(K).block > 0 && suzu(K).st.taunt === 1, 'and gains Block and Spotlight');
     t.ok(K.canSwap().cost === 0, 'the free swap is still there');
     const K2 = make({ row: 'front', deck: ['suzu_kagura_step'], hand: ['suzu_kagura_step'] });
     suzu(K2).hp = 40; partner(K2).hp = 40;
     play(K2, 'suzu_kagura_step');
-    t.eq(K2.back().id, 'suzu', 'from the front she steps back'); t.eq(suzu(K2).hp, 44, 'and heals both'); t.eq(partner(K2).hp, 44, 'the partner too');
-    t.eq(suzu(K2).st.regen, 2, 'the back row Regen arrives at once');
+    t.eq(K2.back().id, 'suzu', 'from the lead he steps back'); t.eq(suzu(K2).hp, 44, 'and heals both'); t.eq(partner(K2).hp, 44, 'the partner too');
+    t.eq(suzu(K2).st.regen, 2, 'the backing spot Regen arrives at once');
     const KU = make({ row: 'back', deck: [{ id: 'suzu_kagura_step', up: 1 }], hand: ['suzu_kagura_step'] });
     const before = KU.energy; play(KU, 'suzu_kagura_step'); t.eq(KU.energy, before, 'upgraded it costs nothing');
   });
-  t.test('Blessed Blade: Might for the ally that ends with the turn', () => {
+  t.test('Push the Fader: Volume for the ally that ends with the turn', () => {
     const C = make({ row: 'back', deck: ['suzu_blessed_blade'], hand: ['suzu_blessed_blade'], partner: 'hanae' });
     play(C, 'suzu_blessed_blade');
-    t.eq(partner(C).st.might, 3, 'the ally has 3 Might'); t.ok(!suzu(C).st.might, 'Suzu does not');
+    t.eq(partner(C).st.might, 3, 'the ally has 3 Volume'); t.ok(!suzu(C).st.might, 'RawClaw does not');
     C.endTurn();
     t.ok(!partner(C).st.might, 'gone at the end of the turn');
     const U2 = make({ row: 'back', deck: [{ id: 'suzu_blessed_blade', up: 1 }], hand: ['suzu_blessed_blade'], partner: 'raiga' });
     play(U2, 'suzu_blessed_blade');
-    t.eq(partner(U2).st.might, 4, 'upgraded: 4 Might'); t.ok(!suzu(U2).st.might, 'still only for the ally');
+    t.eq(partner(U2).st.might, 4, 'upgraded: 4 Volume'); t.ok(!suzu(U2).st.might, 'still only for the ally');
     U2.endTurn(); t.ok(!partner(U2).st.might, 'and it is given back');
     // a partner with a hit-heavy plan really does hit harder this turn, and only this turn
     if (DATA.cards.raiga_jab) {
@@ -688,38 +688,38 @@ if (ENGINE) {
       play(J, 'suzu_blessed_blade'); const je = J.enemies[0]; const hp0 = je.hp;
       J.swap();
       const jc = J.hand.find((c) => c.id === 'raiga_jab');
-      if (jc) { J.play(jc.uid, je.id); t.ok(hp0 - je.hp >= 3 + 1, 'the ally\'s strike carries the extra Might: ' + (hp0 - je.hp)); }
+      if (jc) { J.play(jc.uid, je.id); t.ok(hp0 - je.hp >= 3 + 1, 'the ally\'s strike carries the extra Volume: ' + (hp0 - je.hp)); }
     }
   });
-  t.test('Saisen, Paper Seal, Binding Seal, Silencing Seal: cheap tricks and the Ward-bought Stun', () => {
+  t.test('Preset, Low Pass, Dry Signal, Tape Stop: cheap tricks and the Reverb-bought Starstruck', () => {
     const C = make({ row: 'back', deck: ['suzu_saisen', 'suzu_paper_seal', 'suzu_binding_seal', 'suzu_silencing_seal', 'suzu_barrier', 'suzu_barrier', 'suzu_barrier'], hand: ['suzu_saisen', 'suzu_paper_seal', 'suzu_binding_seal', 'suzu_silencing_seal'], ward: 0 });
     const e = C.enemies[0], w0 = C.hand.length;
     play(C, 'suzu_saisen');
-    t.eq(suzu(C).st.ward, 1, 'saisen: +1 Ward'); t.eq(C.hand.length, w0 - 1 + 1, 'and draws a card'); t.eq(C.energy, 3, 'for free');
+    t.eq(suzu(C).st.ward, 1, 'saisen: +1 Reverb'); t.eq(C.hand.length, w0 - 1 + 1, 'and draws a card'); t.eq(C.energy, 3, 'for free');
     play(C, 'suzu_paper_seal', e.id);
-    t.eq(e.st.weak, 1, 'paper seal: Weak'); t.eq(e.st.frail, 1, 'and Frail'); t.eq(C.energy, 3, 'for free');
+    t.eq(e.st.weak, 1, 'paper seal: Muffled'); t.eq(e.st.frail, 1, 'and Wobbly'); t.eq(C.energy, 3, 'for free');
     play(C, 'suzu_binding_seal', e.id);
-    t.eq(e.st.vulnerable, 2, 'binding seal: Vulnerable 2');
-    // Silencing Seal: 1 Ward is not enough (Weak instead), 2 Ward stuns
+    t.eq(e.st.vulnerable, 2, 'binding seal: Exposed 2');
+    // Tape Stop: 1 Reverb is not enough (Muffled instead), 2 Reverb stuns
     C.energy = 3;
     play(C, 'suzu_silencing_seal', e.id);
-    t.eq(suzu(C).st.ward, 1, 'with 1 Ward nothing is spent'); t.eq(e.st.weak, 2, 'the fallback is another Weak'); t.ok(!e.st.stun, 'and no Stun');
+    t.eq(suzu(C).st.ward, 1, 'with 1 Reverb nothing is spent'); t.eq(e.st.weak, 2, 'the fallback is another Muffled'); t.ok(!e.st.stun, 'and no Starstruck');
     const S2 = make({ row: 'back', deck: ['suzu_silencing_seal'], hand: ['suzu_silencing_seal'], ward: 3 });
     play(S2, 'suzu_silencing_seal', S2.enemies[0].id);
-    t.eq(suzu(S2).st.ward, 1, 'stun: 2 Ward spent'); t.eq(S2.enemies[0].st.stun, 1, 'the enemy is stunned');
+    t.eq(suzu(S2).st.ward, 1, 'stun: 2 Reverb spent'); t.eq(S2.enemies[0].st.stun, 1, 'the enemy is stunned');
     S2.endTurn();
     t.ok(S2.events.some((ev) => ev.type === 'skip' && ev.unit.id === S2.enemies[0].id), 'the stunned enemy skips its action');
     const S3 = make({ row: 'back', deck: [{ id: 'suzu_silencing_seal', up: 1 }], hand: ['suzu_silencing_seal'], ward: 1 });
     play(S3, 'suzu_silencing_seal', S3.enemies[0].id);
-    t.eq(suzu(S3).st.ward || 0, 0, 'upgraded: 1 Ward is enough'); t.eq(S3.enemies[0].st.stun, 1, 'and stuns');
+    t.eq(suzu(S3).st.ward || 0, 0, 'upgraded: 1 Reverb is enough'); t.eq(S3.enemies[0].st.stun, 1, 'and stuns');
     const boss = make({ row: 'back', deck: ['suzu_silencing_seal'], hand: ['suzu_silencing_seal'], ward: 3, enemies: ['boss_kuzunoha'] });
-    if (DATA.enemies.boss_kuzunoha) { play(boss, 'suzu_silencing_seal', boss.enemies[0].id); t.ok(!boss.enemies[0].st.stun, 'a boss ignores Stun'); }
+    if (DATA.enemies.boss_kuzunoha) { play(boss, 'suzu_silencing_seal', boss.enemies[0].id); t.ok(!boss.enemies[0].st.stun, 'a boss ignores Starstruck'); }
   });
-  t.test('Ofuda Barrage: X hits and X Mark; Gohei Sweep and Moonbeam hit everyone; Thousand Ofuda marks everyone', () => {
+  t.test('Finger Drumming: X hits and X Tag; Phaser and Filter Sweep hit everyone; Arpeggiator marks everyone', () => {
     const C = make({ row: 'back', deck: ['suzu_ofuda_barrage'], hand: ['suzu_ofuda_barrage'] });
     const e = C.enemies[0];
     play(C, 'suzu_ofuda_barrage', e.id);
-    t.eq(C.energy, 0, 'X spends everything'); t.eq(e.maxHp - e.hp, 15, '3 hits of 5'); t.eq(e.st.mark, 3, 'X Mark');
+    t.eq(C.energy, 0, 'X spends everything'); t.eq(e.maxHp - e.hp, 15, '3 hits of 5'); t.eq(e.st.mark, 3, 'X Tag');
     const C0 = make({ row: 'back', deck: ['suzu_ofuda_barrage'], hand: ['suzu_ofuda_barrage'] });
     C0.energy = 0; play(C0, 'suzu_ofuda_barrage', C0.enemies[0].id);
     t.eq(C0.enemies[0].hp, C0.enemies[0].maxHp, 'X = 0 does nothing and does not throw');
@@ -729,20 +729,20 @@ if (ENGINE) {
     G.enemies[1].hp -= 2;                                       // the second enemy is the weakest
     play(G, 'suzu_moonbeam', G.enemies[0].id);
     G.enemies.forEach((x, i) => t.eq(x.maxHp - x.hp, 8 + (i === 1 ? 2 : 0), 'moonbeam adds 3 to every enemy'));
-    t.ok(!G.enemies[0].st.mark && G.enemies[1].st.mark === 1, 'and Marks only the weakest enemy');
+    t.ok(!G.enemies[0].st.mark && G.enemies[1].st.mark === 1, 'and Tags only the weakest enemy');
     G.energy = 3; const hp0 = G.enemies[0].hp; play(G, 'suzu_thousand_ofuda', G.enemies[0].id);
     t.eq(hp0 - G.enemies[0].hp, 9, 'thousand ofuda hits for 9');
     G.enemies.forEach((x) => { t.eq(x.st.mark, 2, 'thousand ofuda marks every enemy'); });
   });
-  t.test("Guardian's Reply reads the front hero's Block; Komainu Roar turns Block into damage and keeps the Block", () => {
+  t.test("Bounce Back reads the lead hero's Block; Wall of Sound turns Block into damage and keeps the Block", () => {
     const B = make({ row: 'back', deck: ['suzu_guardians_reply'], hand: ['suzu_guardians_reply'] });
     partner(B).block = 9; suzu(B).block = 1;
     play(B, 'suzu_guardians_reply', B.enemies[0].id);
-    t.eq(B.enemies[0].maxHp - B.enemies[0].hp, 3 + 9, "back row: the ally's Block (the ally is in front)");
+    t.eq(B.enemies[0].maxHp - B.enemies[0].hp, 3 + 9, "backing spot: the ally's Block (the ally is in front)");
     const F = make({ row: 'front', deck: ['suzu_guardians_reply'], hand: ['suzu_guardians_reply'] });
     partner(F).block = 9; suzu(F).block = 4;
     play(F, 'suzu_guardians_reply', F.enemies[0].id);
-    t.eq(F.enemies[0].maxHp - F.enemies[0].hp, 3 + 4, 'front row: her own Block');
+    t.eq(F.enemies[0].maxHp - F.enemies[0].hp, 3 + 4, 'lead spot: his own Block');
     const R = make({ row: 'back', deck: ['suzu_komainu_roar'], hand: ['suzu_komainu_roar'] });
     suzu(R).block = 12;
     play(R, 'suzu_komainu_roar');
@@ -752,54 +752,54 @@ if (ENGINE) {
     suzu(R2).block = 40; play(R2, 'suzu_komainu_roar');
     R2.enemies.forEach((x) => t.eq(x.maxHp - x.hp, 16, 'capped at 16'));
   });
-  t.test('Moonlit Verdict pays 6 per debuff (5 counted) and a kill pays 1 Ward', () => {
+  t.test('Final Mixdown pays 6 per debuff (5 counted) and a kill pays 1 Reverb', () => {
     const C = make({ row: 'back', deck: ['suzu_moonlit_verdict', 'suzu_moonlit_verdict'], hand: ['suzu_moonlit_verdict', 'suzu_moonlit_verdict'], ward: 0, enemies: ['suzu_test_dummy', 'suzu_test_dummy'] });
     const e = C.enemies[0]; e.st.weak = 1; e.st.frail = 1; e.st.mark = 1;
     play(C, 'suzu_moonlit_verdict', e.id);
-    t.eq(e.maxHp - e.hp, 18 + 3, 'three debuffs count before the hit, and the Mark is spent on it: 18 + 3');
-    t.eq(suzu(C).st.ward || 0, 0, 'no kill, no Ward');
+    t.eq(e.maxHp - e.hp, 18 + 3, 'three debuffs count before the hit, and the Tag is spent on it: 18 + 3');
+    t.eq(suzu(C).st.ward || 0, 0, 'no kill, no Reverb');
     e.hp = 4; e.st.weak = 1; C.energy = 3;
     play(C, 'suzu_moonlit_verdict', e.id);
-    t.ok(e.down, 'the enemy dies'); t.eq(suzu(C).st.ward, 1, 'and the kill pays 1 Ward');
+    t.ok(e.down, 'the enemy dies'); t.eq(suzu(C).st.ward, 1, 'and the kill pays 1 Reverb');
     const many = make({ row: 'back', deck: ['suzu_moonlit_verdict'], hand: ['suzu_moonlit_verdict'], enemies: ['suzu_test_dummy'] });
     const me = many.enemies[0]; Object.assign(me.st, { weak: 1, frail: 1, vulnerable: 1, poison: 1, burn: 1, mark: 1, stun: 1 });
     play(many, 'suzu_moonlit_verdict', me.id);
-    t.eq(me.maxHp - me.hp, Math.floor((30 + 3) * 1.5), 'seven debuffs count as five, Mark and Vulnerable land');
+    t.eq(me.maxHp - me.hp, Math.floor((30 + 3) * 1.5), 'seven debuffs count as five, Tag and Exposed land');
   });
-  t.test('Stone Lion and Yata Mirror: Block, Taunt and Thorns; Thorns double up to the cap and hurt attackers', () => {
+  t.test('Stage Monitors and Double Tracking: Block, Spotlight and Feedback; Feedback double up to the cap and hurt attackers', () => {
     const C = make({ row: 'front', deck: ['suzu_stone_lion', 'suzu_yata_mirror'], hand: ['suzu_stone_lion', 'suzu_yata_mirror'], enemies: ['suzu_test_dummy'] });
     C.energy = 6;
     play(C, 'suzu_stone_lion');
-    t.eq(suzu(C).block, 11, 'front: 10 plus 1'); t.eq(suzu(C).st.taunt, 2, 'Taunt 2'); t.eq(suzu(C).st.thorns, 3, 'the row 2 plus the lion 1');
+    t.eq(suzu(C).block, 11, 'front: 10 plus 1'); t.eq(suzu(C).st.taunt, 2, 'Spotlight 2'); t.eq(suzu(C).st.thorns, 3, 'the row 2 plus the lion 1');
     play(C, 'suzu_yata_mirror');
-    t.eq(suzu(C).st.thorns, 6, 'doubled'); t.eq(suzu(C).st.taunt, 4, 'Taunt stacks');
+    t.eq(suzu(C).st.thorns, 6, 'doubled'); t.eq(suzu(C).st.taunt, 4, 'Spotlight stacks');
     const hp = C.enemies[0].hp;
     suzu(C).block = 0;
     C.endTurn();
-    t.ok(hp - C.enemies[0].hp >= 6, 'the dummy poked her and paid 6 Thorns: ' + (hp - C.enemies[0].hp));
+    t.ok(hp - C.enemies[0].hp >= 6, 'the dummy poked him and paid 6 Feedback: ' + (hp - C.enemies[0].hp));
     const big = make({ row: 'front', deck: ['suzu_yata_mirror'], hand: ['suzu_yata_mirror'], st: { thorns: 20 } });
     play(big, 'suzu_yata_mirror'); t.eq(suzu(big).st.thorns, 28, 'the doubling is capped at 8 more');
-    // a swap to the back row removes only the 2 the row gave, not what the card planted
+    // a swap to the backing spot removes only the 2 the row gave, not what the card planted
     const sw = make({ row: 'front', deck: ['suzu_stone_lion'], hand: ['suzu_stone_lion'] });
     play(sw, 'suzu_stone_lion'); sw.swap();
-    t.eq(suzu(sw).st.thorns, 1, 'back row: only the lion Thorn is left');
+    t.eq(suzu(sw).st.thorns, 1, 'backing spot: only the lion Feedback is left');
   });
-  t.test('Ring of Thorns: one Thorn a turn, and the upgraded Ring is Innate', () => {
+  t.test('Howlround: one Feedback a turn, and the upgraded Ring is Opener', () => {
     const C = make({ row: 'back', deck: ['suzu_ring_of_thorns'], hand: ['suzu_ring_of_thorns'], enemies: ['suzu_test_weakling'] });
     play(C, 'suzu_ring_of_thorns'); t.ok(C.powers.length === 1, 'the power sits in the power zone');
     t.ok(!suzu(C).st.thorns, 'nothing yet');
-    C.endTurn(); t.eq(suzu(C).st.thorns, 1, 'turn 2: 1 Thorn');
-    C.endTurn(); t.eq(suzu(C).st.thorns, 2, 'turn 3: 2 Thorns');
+    C.endTurn(); t.eq(suzu(C).st.thorns, 1, 'turn 2: 1 Feedback');
+    C.endTurn(); t.eq(suzu(C).st.thorns, 2, 'turn 3: 2 Feedback');
     const inn = make({ row: 'back', deck: [{ id: 'suzu_ring_of_thorns', up: 1 }].concat(fill(20)), hand: [] });
     t.ok(inn.hand.some((c) => c.id === 'suzu_ring_of_thorns'), 'the upgraded Ring starts in the opening hand');
     // 20 barriers cannot hide it: the plain Ring is drawn only by chance, so over several seeds it is sometimes missing
     const missing = [1, 2, 3, 4, 5, 6, 7, 8].filter((sd) => !make({ row: 'back', deck: [{ id: 'suzu_ring_of_thorns', up: 0 }].concat(fill(20)), hand: [], seed: sd }).hand.some((c) => c.id === 'suzu_ring_of_thorns')).length;
-    t.ok(missing >= 3, 'the plain Ring is not Innate (missing from the opening hand in ' + missing + ' of 8 seeds)');
+    t.ok(missing >= 3, 'the plain Ring is not Opener (missing from the opening hand in ' + missing + ' of 8 seeds)');
   });
-  t.test('Sacred Stream: at the end of your turn both heroes heal for your Block (max 3), before the enemy phase', () => {
+  t.test('Comfort Noise: at the end of your turn both heroes heal for your Block (max 3), before the enemy phase', () => {
     const M = make({ row: 'back', deck: ['suzu_sacred_stream', 'suzu_barrier'], hand: ['suzu_sacred_stream', 'suzu_barrier'], enemies: ['suzu_test_weakling'] });
     play(M, 'suzu_sacred_stream'); t.eq(M.powers.length, 1, 'a power');
-    play(M, 'suzu_barrier');     // 4 Block for each, Suzu has 4
+    play(M, 'suzu_barrier');     // 4 Block for each, RawClaw has 4
     suzu(M).hp = 30; partner(M).hp = 30;
     const at = M.events.length;
     M.endTurn();
@@ -815,50 +815,50 @@ if (ENGINE) {
     up.endTurn();
     t.ok(up.events.some((e) => e.type === 'heal' && e.dst.id === 'kuro' && e.amount === 5), 'upgraded: capped at 5');
   });
-  t.test('Swaying Bells: the first swap each turn pays 1 Ward and 2 Block to both, whoever steps forward', () => {
+  t.test('Ping Pong Delay: the first swap each turn pays 1 Reverb and 2 Block to both, whoever steps forward', () => {
     const C = make({ row: 'back', deck: ['suzu_swaying_bells', 'suzu_kagura_step'], hand: ['suzu_swaying_bells', 'suzu_kagura_step'], ward: 0, enemies: ['suzu_test_weakling'] });
     play(C, 'suzu_swaying_bells');
-    t.ok(!suzu(C).st.ward, 'no Ward yet');
-    C.energy = 3; C.swap();                                            // the free swap: Suzu steps forward
-    t.eq(suzu(C).st.ward, 1, 'the swap paid a Ward'); t.eq(suzu(C).block, 2, 'and 2 Block'); t.eq(partner(C).block, 2, 'for both heroes');
+    t.ok(!suzu(C).st.ward, 'no Reverb yet');
+    C.energy = 3; C.swap();                                            // the free swap: RawClaw steps forward
+    t.eq(suzu(C).st.ward, 1, 'the swap paid a Reverb'); t.eq(suzu(C).block, 2, 'and 2 Block'); t.eq(partner(C).block, 2, 'for both heroes');
     play(C, 'suzu_kagura_step');                                       // a card's swap the same turn: limit 1 per turn
-    t.eq(suzu(C).st.ward, 1, 'a second swap in the same turn pays nothing'); t.eq(C.back().id, 'suzu', 'though Kagura Step really did swap her back');
+    t.eq(suzu(C).st.ward, 1, 'a second swap in the same turn pays nothing'); t.eq(C.back().id, 'suzu', 'though Crossfade really did swap him back');
     C.endTurn();
-    const back = C.swap();                                             // next turn: the partner or Suzu, either direction counts
+    const back = C.swap();                                             // next turn: the partner or RawClaw, either direction counts
     t.ok(back.some((e) => e.type === 'swap'), 'swapped again');
     t.eq(suzu(C).st.ward, 1 + 1 + 1, 'the new turn gave 1 and the swap 1 more');
     // stepping BACK counts too (the engine reports the hero who moved forward, so this needs filter.hero any)
     const F = make({ row: 'front', deck: ['suzu_swaying_bells'], hand: ['suzu_swaying_bells'], ward: 0, enemies: ['suzu_test_weakling'] });
     play(F, 'suzu_swaying_bells'); F.swap();
-    t.eq(suzu(F).st.ward, 1, 'Suzu stepping back pays as well');
+    t.eq(suzu(F).st.ward, 1, 'RawClaw stepping back pays as well');
     // a forced swap (a hero falls) is not a swap the player made
     const H = make({ row: 'back', deck: ['suzu_swaying_bells'], hand: ['suzu_swaying_bells'], ward: 0, enemies: ['suzu_test_brute'], partnerHp: 1 });
     play(H, 'suzu_swaying_bells'); H.endTurn();
-    t.ok(H.events.some((e) => e.type === 'swap' && e.forced), 'the partner fell and Suzu was forced forward');
-    t.eq(suzu(H).st.ward, 1, 'only the new turn gave Ward: a forced swap pays nothing');
+    t.ok(H.events.some((e) => e.type === 'swap' && e.forced), 'the partner fell and RawClaw was forced forward');
+    t.eq(suzu(H).st.ward, 1, 'only the new turn gave Reverb: a forced swap pays nothing');
     const U2 = make({ row: 'back', deck: [{ id: 'suzu_swaying_bells', up: 1 }], hand: ['suzu_swaying_bells'], ward: 0, enemies: ['suzu_test_weakling'] });
     play(U2, 'suzu_swaying_bells'); U2.swap();
-    t.eq(suzu(U2).st.ward, 2, 'upgraded: 2 Ward');
+    t.eq(suzu(U2).st.ward, 2, 'upgraded: 2 Reverb');
   });
-  t.test('Trailing Charms: an Attack from either hero leaves a Mark on its target', () => {
+  t.test('Slapback: an Attack from either hero leaves a Tag on its target', () => {
     const C = make({ row: 'back', deck: ['suzu_trailing_charms', 'suzu_banishing_seal'], hand: ['suzu_trailing_charms', 'suzu_banishing_seal'], enemies: ['suzu_test_dummy'] });
     play(C, 'suzu_trailing_charms');
     const e = C.enemies[0];
     C.endTurn();
     C.energy = 3;
     play(C, 'suzu_banishing_seal', e.id);
-    t.eq(e.st.mark, 1, 'the strike left a Mark');
+    t.eq(e.st.mark, 1, 'the strike left a Tag');
     if (DATA.cards.hanae_slash) {
       const H = make({ row: 'back', partner: 'hanae', deck: ['suzu_trailing_charms', 'hanae_slash'], hand: ['suzu_trailing_charms', 'hanae_slash'], enemies: ['suzu_test_dummy'] });
       play(H, 'suzu_trailing_charms');
       const he = H.enemies[0];
       const hc = H.hand.find((c) => c.id === 'hanae_slash');
       t.ok(!!hc, 'the partner card is in hand');
-      if (hc) { H.swap(); H.play(hc.uid, he.id); t.eq(he.st.mark, 1, "the partner's Slash left a Mark too"); }
+      if (hc) { H.swap(); H.play(hc.uid, he.id); t.eq(he.st.mark, 1, "the partner's Slash left a Tag too"); }
     }
   });
-  t.test('Guardian Kami revives the first hero to fall, either hero, and both heroes gain Block; only once', () => {
-    // the sniper hits the BACK hero for far more than anyone has, so the back hero falls every round
+  t.test('Voice Memo revives the first hero to fall, either hero, and both heroes gain Block; only once', () => {
+    // the sniper hits the BACK hero for far more than anyone has, so the backing hero falls every round
     const back = make({ row: 'front', deck: ['suzu_guardian_kami'], hand: ['suzu_guardian_kami'], enemies: ['suzu_test_sniper'], partnerHp: 5 });
     play(back, 'suzu_guardian_kami');
     back.endTurn();
@@ -870,12 +870,12 @@ if (ENGINE) {
     partner(back).hp = 3; back.endTurn();
     t.eq(back.events.filter((e) => e.type === 'hero_revive').length, 1, 'no second revive: the power fired once');
     t.eq(partner(back).down, true, 'the partner stays down');
-    // Suzu herself falls: her own hook fires for its owner (the Phoenix rule) and she returns in the back row
+    // RawClaw himself loses his voice: his own hook fires for its owner (the Phoenix rule) and he returns in the backing spot
     const self = make({ row: 'front', deck: ['suzu_guardian_kami'], hand: ['suzu_guardian_kami'], enemies: ['suzu_test_brute'], hp: 3 });
     play(self, 'suzu_guardian_kami');
     self.endTurn();
-    t.ok(self.events.some((e) => e.type === 'hero_down' && e.hero === 'suzu'), 'Suzu fell'); t.ok(self.events.some((e) => e.type === 'hero_revive' && e.hero === 'suzu'), 'and stood up again');
-    t.eq(suzu(self).down, false, 'she is alive'); t.eq(self.result, null, 'the fight goes on');
+    t.ok(self.events.some((e) => e.type === 'hero_down' && e.hero === 'suzu'), 'RawClaw fell'); t.ok(self.events.some((e) => e.type === 'hero_revive' && e.hero === 'suzu'), 'and stood up again');
+    t.eq(suzu(self).down, false, 'he is on his feet'); t.eq(self.result, null, 'the fight goes on');
     // with the net in place a fight that would have been lost is not
     const both = make({ row: 'front', deck: ['suzu_guardian_kami'], hand: ['suzu_guardian_kami'], enemies: ['suzu_test_brute'], hp: 1, partnerHp: 0 });
     play(both, 'suzu_guardian_kami');
@@ -883,17 +883,17 @@ if (ENGINE) {
     t.ok(both.events.some((e) => e.type === 'hero_down' && e.hero === 'suzu') && both.events.some((e) => e.type === 'hero_revive' && e.hero === 'suzu'), 'the last hero fell and was revived');
     t.ok(both.result !== 'lose', 'and the fight was not lost: the hook runs before the lose check');
   });
-  t.test('Shrine Grounds: Block for both equal to Ward (up to 5) at the start of every turn', () => {
+  t.test('Acoustic Foam: Block for both equal to Reverb (up to 5) at the start of every turn', () => {
     const C = make({ row: 'back', deck: ['suzu_shrine_grounds'], hand: ['suzu_shrine_grounds'], enemies: ['suzu_test_weakling'] });
     play(C, 'suzu_shrine_grounds');
     suzu(C).st.ward = 8; C.energy = 0; C.endTurn();
-    t.eq(suzu(C).st.ward, 9, 'the Ward was not spent');
+    t.eq(suzu(C).st.ward, 9, 'the Reverb was not spent');
     t.eq(suzu(C).block, 5, 'Block capped at 5'); t.eq(partner(C).block, 5, 'for both heroes');
     const U3 = make({ row: 'back', deck: [{ id: 'suzu_shrine_grounds', up: 1 }], hand: ['suzu_shrine_grounds'], enemies: ['suzu_test_weakling'] });
     play(U3, 'suzu_shrine_grounds'); suzu(U3).st.ward = 8; U3.energy = 0; U3.endTurn();
     t.eq(suzu(U3).block, 7, 'upgraded: capped at 7');
   });
-  t.test('Lunar Domain: every 2nd turn Weak 2 and Vulnerable 1 on every enemy, so Weak never lapses', () => {
+  t.test('Mixing Desk: every 2nd turn Muffled 2 and Exposed 1 on every enemy, so Muffled never lapses', () => {
     const C = make({ row: 'back', deck: ['suzu_lunar_domain'], hand: ['suzu_lunar_domain'], enemies: ['suzu_test_dummy', 'suzu_test_dummy'] });
     C.energy = 3; play(C, 'suzu_lunar_domain');
     const seen = [];
@@ -901,11 +901,11 @@ if (ENGINE) {
       C.endTurn();
       seen.push(C.enemies.map((e) => `${e.st.weak || 0}/${e.st.vulnerable || 0}`).join(','));
     }
-    // the hook counts triggers from the play: turn 2 is the 1st (nothing), turn 3 the 2nd (fires), then 5, 7. Weak 2 lasts two rounds
-    t.deep(seen, ['0/0,0/0', '2/1,2/1', '1/0,1/0', '2/1,2/1', '1/0,1/0', '2/1,2/1'], 'the moon phases: ' + seen.join(' | '));
-    t.ok(seen.slice(1).every((x) => !/^0\//.test(x)), 'from the first full moon on, every enemy is Weak at the start of every turn');
+    // the hook counts triggers from the play: turn 2 is the 1st (nothing), turn 3 the 2nd (fires), then 5, 7. Muffled 2 lasts two rounds
+    t.deep(seen, ['0/0,0/0', '2/1,2/1', '1/0,1/0', '2/1,2/1', '1/0,1/0', '2/1,2/1'], 'the long-mix phases: ' + seen.join(' | '));
+    t.ok(seen.slice(1).every((x) => !/^0\//.test(x)), 'from the first firing on, every enemy is Muffled at the start of every turn');
   });
-  t.test('Kagura Blessing upgrades cards in hand for this combat; Prayer Vigil retains what you choose', () => {
+  t.test('Mastering upgrades cards in hand for this combat; Save the Session retains what you choose', () => {
     const C = make({ row: 'back', deck: ['suzu_kagura_blessing', 'suzu_barrier', 'suzu_barrier', 'suzu_ofuda', 'suzu_moonbeam'], hand: ['suzu_kagura_blessing', 'suzu_barrier', 'suzu_barrier', 'suzu_ofuda', 'suzu_moonbeam'], partner: 'hanae' });
     play(C, 'suzu_kagura_blessing');
     t.eq(C.hand.filter((c) => c.up).length, 2, 'two cards upgraded'); t.eq(C.exhaust.length, 1, 'Blessing exhausts');
@@ -918,50 +918,50 @@ if (ENGINE) {
     V.play(vc.uid);
     t.ok(V.pending && V.pending.then === 'retain' && V.pending.optional, 'a hand pick that may choose any number up to 2');
     V.resolvePick(keep);
-    t.eq(suzu(V).st.ward, 1, 'and 1 Ward');
+    t.eq(suzu(V).st.ward, 1, 'and 1 Reverb');
     V.endTurn();
     t.ok(V.hand.some((c) => c.id === 'suzu_ofuda') && V.hand.some((c) => c.id === 'suzu_omamori'), 'the chosen cards were kept for the next turn');
   });
-  t.test('retained Ward spenders stay in hand across turns', () => {
+  t.test('retained Reverb spenders stay in hand across turns', () => {
     const C = make({ row: 'back', deck: ['suzu_prayer_wall', 'suzu_renewal_rite', 'suzu_silencing_seal', 'suzu_barrier', 'suzu_barrier'], hand: ['suzu_prayer_wall', 'suzu_renewal_rite', 'suzu_silencing_seal'], enemies: ['suzu_test_weakling'] });
     C.endTurn();
     ['suzu_prayer_wall', 'suzu_renewal_rite', 'suzu_silencing_seal'].forEach((id) => t.ok(C.hand.some((c) => c.id === id), id + ' was retained'));
   });
-  t.test('Purifying Foxfire clears debuffs from both heroes; Omamori heals without overhealing; Moon Veil blocks the front hero', () => {
+  t.test('Undo clears debuffs from both heroes; Chill Mix heals without overhealing; Noise Gate blocks the lead hero', () => {
     const C = make({ row: 'back', deck: ['suzu_purifying_foxfire', 'suzu_omamori', 'suzu_moon_veil'], hand: ['suzu_purifying_foxfire', 'suzu_omamori', 'suzu_moon_veil'], st: { weak: 2, poison: 3 }, allySt: { frail: 2, burn: 4 } });
     play(C, 'suzu_purifying_foxfire', C.enemies[0].id);
-    t.eq(C.enemies[0].maxHp - C.enemies[0].hp, 6, 'the foxfire burns for 8, less the Weak Suzu still carries when she throws it');
+    t.eq(C.enemies[0].maxHp - C.enemies[0].hp, 6, 'Undo hits for 8, less the Muffled RawClaw still carries when he throws it');
     t.ok(!suzu(C).st.weak && !suzu(C).st.poison && !partner(C).st.frail && !partner(C).st.burn, 'every debuff on both heroes is gone');
     C.energy = 3; suzu(C).hp = 66; partner(C).hp = 20;
     play(C, 'suzu_omamori');
     t.eq(suzu(C).hp, 68, 'no overheal'); t.eq(partner(C).hp, 24, 'the partner heals 4');
     play(C, 'suzu_moon_veil');
-    t.eq(partner(C).block, 7, 'the front hero (the partner) gets 7'); t.eq(suzu(C).block, 0, 'Suzu in the back does not');
+    t.eq(partner(C).block, 7, 'the lead hero (the partner) gets 7'); t.eq(suzu(C).block, 0, 'RawClaw in the back does not');
     const F = make({ row: 'front', deck: ['suzu_moon_veil'], hand: ['suzu_moon_veil'] });
     play(F, 'suzu_moon_veil'); t.eq(suzu(F).block, 8, 'in front it is her, with the row bonus'); t.eq(partner(F).block, 0, 'and not the partner');
   });
-  t.test('the three plans work end to end: Talismans, Thorns and Taunt, Sanctuary', () => {
-    // TALISMANS: two free-ish seals, then the payoff. Vulnerable 2, Weak, Frail, and the Ofuda's Mark set up Banishing Seal and Ofuda
+  t.test('the three plans work end to end: Effects Rack, Feedback and Spotlight, The Room', () => {
+    // EFFECTS RACK: two free-ish effects, then the payoff. Exposed 2, Muffled, Wobbly, and the Synth Zap's Tag set up Sidechain Pump and Synth Zap
     const T = make({ row: 'back', deck: ['suzu_paper_seal', 'suzu_binding_seal', 'suzu_banishing_seal', 'suzu_ofuda'], hand: ['suzu_paper_seal', 'suzu_binding_seal', 'suzu_banishing_seal', 'suzu_ofuda'], enemies: ['suzu_test_dummy'] });
     const te = T.enemies[0];
     play(T, 'suzu_paper_seal', te.id); play(T, 'suzu_binding_seal', te.id); play(T, 'suzu_banishing_seal', te.id); play(T, 'suzu_ofuda', te.id);
-    t.eq(T.energy, 0, 'the whole line costs exactly the 3 Energy of a turn');
-    t.ok(te.maxHp - te.hp >= 20, 'a 3 Energy talisman turn deals at least 20 to one enemy: ' + (te.maxHp - te.hp));
-    t.ok(te.st.vulnerable === 2 && te.st.weak === 1 && te.st.frail === 1 && te.st.mark === 1, 'and leaves Weak, Frail, Vulnerable and a Mark on it for the partner');
-    // THORNS AND TAUNT: front row, Stone Lion draws the biter's random hits and every one costs it Thorns
+    t.eq(T.energy, 0, 'the whole line costs exactly the 3 Breath of a turn');
+    t.ok(te.maxHp - te.hp >= 20, 'a 3 Breath effects-rack turn deals at least 20 to one enemy: ' + (te.maxHp - te.hp));
+    t.ok(te.st.vulnerable === 2 && te.st.weak === 1 && te.st.frail === 1 && te.st.mark === 1, 'and leaves Muffled, Wobbly, Exposed and a Tag on it for the partner');
+    // SQUEAL BACK: lead spot, Stage Monitors draws the biter's random hits and every one costs it Feedback
     const H = make({ row: 'front', deck: ['suzu_stone_lion'], hand: ['suzu_stone_lion'], enemies: ['suzu_test_biter'] });
     play(H, 'suzu_stone_lion'); const be = H.enemies[0], hp = be.hp;
     H.endTurn();
-    t.ok(hp - be.hp >= 3 * 3, 'three bites into 3 Thorns cost the biter at least 9 HP: ' + (hp - be.hp));
+    t.ok(hp - be.hp >= 3 * 3, 'three bites into 3 Feedback cost the biter at least 9 HP: ' + (hp - be.hp));
     t.ok(H.events.filter((e) => e.type === 'thorns').length >= 3, 'a thorns event per bite, even though the Block soaked the blows');
-    // SANCTUARY: bank Ward, wall both heroes, then the Roar turns the wall into damage and the wall stays
+    // THE ROOM: bank Reverb, wall both heroes, then the Roar turns the wall into damage and the wall stays
     const S = make({ row: 'back', deck: ['suzu_prayer_wall', 'suzu_barrier', 'suzu_komainu_roar'], hand: ['suzu_prayer_wall', 'suzu_barrier', 'suzu_komainu_roar'], ward: 3, enemies: ['suzu_test_dummy', 'suzu_test_dummy'] });
     S.energy = 4; play(S, 'suzu_prayer_wall'); play(S, 'suzu_barrier'); play(S, 'suzu_komainu_roar');
     t.eq(suzu(S).block, 8 + 3, 'an 11 Block wall');
     S.enemies.forEach((e) => t.eq(e.maxHp - e.hp, 11, 'the Roar hits every enemy for the whole wall'));
     t.eq(suzu(S).block, 11, 'and the wall is still standing');
   });
-  t.test('a downed ally: Suzu still plays, ally-only ops are skipped, and nothing throws', () => {
+  t.test('a downed ally: RawClaw still plays, ally-only ops are skipped, and nothing throws', () => {
     const C = make({ row: 'front', deck: nonToken.map((c) => c.id), enemies: ['suzu_test_dummy'], ward: 4 });
     partner(C).hp = 0; partner(C).down = true;
     for (let r = 0; r < 3 && C.result === null; r++) {
@@ -983,7 +983,7 @@ if (ENGINE) {
     };
     t.eq(run(31), run(31), 'same seed, same fight'); t.ok(run(31) !== run(32), 'a different seed differs');
   });
-  t.test('a greedy simulated fight with a Suzu deck ends without an engine error', () => {
+  t.test('a greedy simulated fight with a RawClaw deck ends without an engine error', () => {
     const deck = DATA.heroes.suzu.starter.map((id) => D(id, 0));
     const partnerDeck = DATA.cards.hanae_slash ? ['hanae_slash', 'hanae_slash', 'hanae_parry', 'hanae_parry', 'hanae_petal_step'].map((id) => D(id, 0)) : [];
     const sum = COMBAT.simulate({ heroes: [{ id: 'suzu', hp: 68, maxHp: 68 }, { id: 'hanae', hp: 76, maxHp: 76 }], frontIdx: 1, deck: deck.concat(partnerDeck), enemies: ['suzu_test_dummy'], seed: 5, tier: 'normal', chapter: 1, maxTurns: 12 });

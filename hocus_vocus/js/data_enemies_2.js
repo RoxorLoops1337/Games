@@ -1,248 +1,258 @@
-// Echowake: chapter 2 roster: the Sunken Lantern City (a haunted canal town at night).
-// Owner: the chapter 2 enemy designer. Pure data: DATA.add('enemies', ...) and DATA.addEncounters(2, ...).
-// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (Trial 0, chapter 2). No functions, no dashes,
+// Hocus Vocus: Act II roster (chapter 2): Scrollopolis, the neon city of screens where it is always 2 am and nobody looks up.
+// Owner: the Act II enemy designer. Pure data: DATA.add('enemies', ...) and DATA.addEncounters(2, ...).
+// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (no encore, chapter 2). No functions, no dashes,
 // no randomness of its own. Ids, names, tiers and sizes are the fixed roster (DATA.ROSTER). Nothing here reads a clock or the DOM.
+// Every name, title, move name, bark, phase line, lore line and tag is copied from hocus_vocus/plan/HV_ENEMIES.md section 3; ids, numbers,
+// ops and AI never change for the re-theme. Tags are display only (the Who's Who chips).
 //
-// THEME. The city's answer to "the front hero eats everything" is silk and water. Bind pins the party in its rows, Stun takes a hero's
-// whole turn, and half the cast reaches past the front hero to the back row or hits both heroes at once. Every answer is a ROW decision:
-// swap the debuffed hero out of the front (Nopperabo), put the hero you can afford to lose in front before a Stun lands (Karakuri,
-// Puppet Master, Umibozu), aim your block at the back hero (Nure-onna, Rokurokubi), or cut the silk with status_tangle before the
-// finisher arrives (Jorogumo). Intent numbers are live: the Grasp, the Embrace, the Web and the Slam re-read the board, so the answer
-// is visible on the intent bubble the moment you play it.
+// THEME. The city's answer to "the lead hero takes everything" is the Feed: Tangled pins the party in its spots, Starstruck takes a
+// hero's whole turn, and half the cast reaches past the lead hero to the backing spot or hits both heroes at once. Every answer is a
+// SPOT decision: swap the debuffed hero out of the lead (Filter Fairy), put the hero you can afford to lose in the lead before a
+// Starstruck lands (Clickbait Goblin, Trendsetter, Doomscroll Moth), aim your Block at the backing hero (Autoplay Snake, Selfie Stick),
+// or untangle with status_tangle before the finisher arrives (Scrollspinner). Intent numbers are live: Touch Up, Big Squeeze, World
+// Wide Web and Scroll Wave re-read the board, so the answer is visible on the intent bubble the moment you play it.
 //
 // THE ROSTER (pattern the player learns, and the answer). "Beat" = one intent; turn counts are the enemy's own turns.
-//   chochin          scorch (Burn), Light the Wicks (Ritual to EVERY enemy) on its second beat, cinders on both heroes. Two turns to kill it
-//                    before anyone is lit. Burn proof; spills Burn 2 when it dies.
-//   karakuri_puppet  fixed combo jab, flurry, SMASH (heavy, Stun the front hero). Kill it in two turns or choose who is stunned.
-//                    Overwinds once (Might 3) when cracked below half HP, which delays the smash a turn.
-//   nopperabo        Blank Stare (Weak 2, Frail 1 on the front hero) then two Faceless Grasps that hit harder per debuff on the FRONT hero.
-//                    Swap the debuffed hero out and the Grasp falls back to its base. A binder beside it takes that answer away.
-//   drowned_samurai  Plating 4 every turn, Sodden Cut, Iai Stance (Block: do not pour damage into it), then a telegraphed Iai. Draws early once
-//                    if cornered below 40 percent.
-//   koi_spirit       weighted: Tidal Splash on BOTH heroes, Tail Slap. Every other turn it heals the weakest enemy if an ally is hurt, and it heals
-//                    its friends once more when it dies. The priority target of any group it stands in.
-//   tsukumogami      Discordant Din first (2 blot cards into the draw pile), clatter, Angry Strum (a blot on TOP of the draw pile), and a heavy
-//                    Crescendo on turns 3, 6, 9. Clogs the hand, then crushes.
-//   silk_weaver      Silk Snare first (Bind 1 and a tangle card on top of the draw pile), Hatch Spiderling on turns 2, 5, 8 while fewer than
-//                    2 minions live, Venom Fang. Kill it before the brood grows.
-//   nure_onna        Venom Bite (BACK row, Poison), Drowning Coil (heavy on the FRONT hero), Tail Lash (back). Block the back hero or Taunt.
-//   rokurokubi       Reaching Neck (two hits on the BACK row), Neck Lunge (heavy, back), Reaching Neck, Coil Up. Never touches the front hero.
-//                    Pairs cruelly with any binder.
-//   ittan_momen      weighted: Wrap Tight (a hit and Bind 1), Smothering Squeeze, Billow (Block and Dodge 1: open with a cheap poke).
-//   drowned_general  Muster (a Lantern Wisp and Ritual 1), then saber, sweep (both heroes), saber; one more wisp on turns 3, 6, 9 when none is
-//                    left. The moment he drops below half HP the phase gives Might and Block and re-rolls his intent to the Flood Crest (heavy,
-//                    Weak on both). The build-around threat: Ritual snowballs, so kill him fast.
-//   puppet_master    Pull the Strings (2 Paper Puppets), Thread Lash (3 random hits), Tighten (Might to a puppet), Marionette (heavy, STUN the
-//                    front hero). Mends a puppet below half HP (pokes are wasted: kill them outright) and restocks one on turns 3, 6, 9.
-//   umibozu          Tidal Slam on BOTH heroes that grows with its own turn count (6 + turn, cap 12): stalling is punished. Brine Spray (Weak and
-//                    Frail on both), the Drowning Bell (heavy, STUN) on turns 3 and 7, and one Maelstrom below 40 percent HP.
-//   spiderling       Poison Nip twice, then skitter (Dodge). Weak alone, poisonous in a swarm.
-//   paper_puppet     Paper Flail, Paper Clap on the back row. Ten HP: gone in a hit.
-//   lantern_wisp     Singe (Burn 2), then Warm Glow (Block for an ally). A lone wisp just singes. Burn proof.
-//   boss_jorogumo    Form 1, the Courtesan (Plating 4, kimono): Honoured Guests (2 spiderlings), Silk Snare (Bind 1 on both heroes and a tangle
-//                    card on top of the draw pile), then Silken Embrace (heavy, front) which reads the Bind on its victim: 12 unbound, 20 bound.
-//                    Fan and Kiss (back row Poison) between, the snare again on turns 6 and 10, one more spiderling when the brood is dead.
-//                    Below half HP she drops the kimono (Plating gone, Might 2, say line) and re-rolls at once to Form 2, the Spider: Spin the
-//                    Threads (Bind 2 on both, another tangle card), the Thousand-Thread Web (heavy on BOTH heroes, 7 unbound, 12 with Bind 2),
-//                    Eight Legs, Kiss, and a once-only Eight-Legged Frenzy below 20 percent.
-//                    The lesson never changes: silk is the setup, the finisher scales with it, and status_tangle (1 Energy) cuts it.
+//   chochin          Flamebait. Spicy Opinion (Sizzle), Pile On (Crescendo to EVERY enemy) on its second beat, Flame War on both heroes.
+//                    Two turns to win it over before anyone is lit. Sizzle proof; leaves Sizzle 2 behind when it is won over.
+//   karakuri_puppet  Clickbait Goblin. Fixed combo Teaser Jab, Thumbnail Flurry, SHOCK REVEAL (heavy, Starstruck on the lead hero).
+//                    Win it over in two turns or choose who is starstruck. All Caps once (Volume 3) when cracked below half HP,
+//                    which delays the reveal a turn.
+//   nopperabo        Filter Fairy. Beauty Filter (Muffled 2, Wobbly 1 on the lead hero) then two Touch Ups that hit harder per debuff
+//                    on the LEAD hero. Swap the debuffed hero out and Touch Up falls back to its base. A tangler beside it takes that
+//                    answer away.
+//   drowned_samurai  Unskippable Ad. Sequins 4 every turn, Jingle Jab, Skip in Five (Block: do not pour damage into it), then a
+//                    telegraphed Final Offer. Offers early once if cornered below 40 percent.
+//   koi_spirit       Hug Emoji. Weighted: Heart Splash on BOTH heroes, Thumbs Down. Every other turn a Big Hug heals the weakest enemy
+//                    if an ally is hurt, and it heals its friends once more when it is won over. The priority target of any group it
+//                    stands in.
+//   tsukumogami      Notification Imp. Ping Storm first (2 status_blot cards into the draw pile), Pocket Buzz, Push Alert (a junk card
+//                    on TOP of the draw pile), and a heavy Ninety-Nine Plus on turns 3, 6, 9. Clogs the hand, then crushes.
+//   silk_weaver      Algo Rhythm. Keep Watching first (Tangled 1 and a status_tangle card on top of the draw pile), Spawn a Bot on
+//                    turns 2, 5, 8 while fewer than 2 Sidekicks live, Suggested Post. Win it over before the bots pile up.
+//   nure_onna        Autoplay Snake. Autoplay Bite (BACKING spot, Earworm), Endless Coil (heavy on the LEAD hero), Swipe Lash
+//                    (backing). Block the backing hero or use the Spotlight.
+//   rokurokubi       Selfie Stick. Over the Shoulder (two hits on the BACKING spot), Photobomb (heavy, backing), Over the Shoulder,
+//                    Fold Away. Never touches the lead hero. Pairs cruelly with any tangler.
+//   ittan_momen      Phone Charger. Weighted: Cord Wrap (a hit and Tangled 1), Full Battery, Flap About (Block and Shimmy 1: open with
+//                    a cheap poke).
+//   drowned_general  Comment Troll. Start a Thread (a Grumble Cloud and Crescendo 1), then Who Asked?, Reply All (both heroes), Who
+//                    Asked?; one more cloud on turns 3, 6, 9 when none is left. The moment it drops below half HP the phase gives Volume
+//                    and Block and re-rolls its intent to the Ratio (heavy, Muffled on both). The build-around threat: Crescendo
+//                    snowballs, so win it over fast.
+//   puppet_master    Trendsetter. Start a Trend (2 Copycat Cutouts), Hashtag Lash (3 random hits), Boost Post (Volume to a cutout),
+//                    Trending Now (heavy, STARSTRUCK on the lead hero). Reposts a cutout below half HP (pokes are wasted: win them over
+//                    outright) and starts a New Challenge with one more on turns 3, 6, 9.
+//   umibozu          Doomscroll Moth. Scroll Wave on BOTH heroes that grows with its own turn count (6 + turn, cap 12): stalling is
+//                    punished. Blue Light (Muffled and Wobbly on both), Screen Glare (heavy, STARSTRUCK) on turns 3 and 7, and one
+//                    Infinite Scroll below 40 percent HP.
+//   spiderling       Botling. Auto Like twice (Earworm), then Skitter (Shimmy). Harmless alone, an earworm in a swarm.
+//   paper_puppet     Copycat Cutout. Copy Dance, Copy Clap on the backing spot. Ten HP: gone in a hit.
+//   lantern_wisp     Grumble Cloud. Snarky Reply (Sizzle 2), then Agree Loudly (Block for an ally). A lone cloud only snarks.
+//                    Sizzle proof.
+//   boss_jorogumo    Scrollspinner, Queen of the Feed. Form 1, the Avatar (Sequins 4, the perfect filter): Hatch Botlings (2
+//                    Botlings), Keep Scrolling (Tangled 1 on both heroes and a status_tangle card on top of the draw pile), then Big
+//                    Squeeze (heavy, lead) which reads the Tangled on its victim: 12 untangled, 20 tangled. Selfie Flurry and Air Kiss
+//                    (backing spot Earworm) between, Keep Scrolling again on turns 6 and 10, One More Bot when the brood is gone.
+//                    Below half HP she drops the filter (Sequins gone, Volume 2, say line) and re-rolls at once to Form 2, the Spinner:
+//                    Spin the Feed (Tangled 2 on both, another status_tangle card), World Wide Web (heavy on BOTH heroes, 7
+//                    untangled, 12 with Tangled 2), Eight-Leg Swipe, Air Kiss, and a once-only Refresh Frenzy below 20 percent.
+//                    The lesson never changes: the Feed is the setup, the finisher scales with it, and status_tangle (Untangle, 1
+//                    Breath) cuts it.
 //
-// GROUPS. Smallest enemy first and tallest last, so tall sprites stand in the back lanes. Pairs are built on purpose: chochin lights a samurai,
-// Bind pins a back-row target (momen and roku), Bind takes away the swap that answers the Grasp (nopperabo and momen), the koi heals behind a
-// back-row poisoner. Big groups are gated to the late page; the four-enemy group is a spider den (2 seeded spiderlings and a weaver).
+// GROUPS. Smallest enemy first and tallest last, so tall sprites stand in the back lanes. Pairs are built on purpose: Flamebait lights
+// up an Unskippable Ad, Tangled pins a backing-spot target (charger and selfie stick), Tangled takes away the swap that answers Touch Up
+// (filter fairy and charger), the Hug Emoji heals behind a backing-spot earworm. Big groups are gated to the late map; the four-enemy
+// group is a bot farm (2 seeded Botlings and an Algo Rhythm).
 //
-// SUMMON CAP. A summoner never has more than 2 living minions: every summon that is not an opener is gated by minions:{lt:3-n}, and a group
-// never holds two summoners or seeds a minion next to an opener that would pass 2.
+// SUMMON CAP. A summoner never has more than 2 living Sidekicks: every summon that is not an opener is gated by minions:{lt:3-n}, and a
+// group never holds two summoners or seeds a Sidekick next to an opener that would pass 2.
 //
-// BALANCE. HP sits in the upper half of each CONTENT_SPEC band so an enemy usually acts three times before it dies, which is what lets a
-// signature show. tests/hocus_vocus_enemies_2.test.mjs measures the rest with REAL combats (COMBAT.simulate, synthetic hero decks): turns per
-// group, HP lost, the win rate, how often each signature move lands, and that the counter-play above really pays. RB_ENEMIES2_REPORT=1 prints
-// the tables; RB_ENEMIES2_TRACE=boss_jorogumo prints one fight turn by turn. Numbers are a first tuning for the balance wave, not gospel.
+// BALANCE. HP sits in the upper half of each CONTENT_SPEC band so an enemy usually acts three times before it is won over, which is what
+// lets a signature show. tests/hocus_vocus_enemies_2.test.mjs measures the rest with REAL combats (COMBAT.simulate, synthetic hero
+// decks): turns per group, HP lost, the win rate, how often each signature move lands, and that the counter-play above really pays.
+// RB_ENEMIES2_REPORT=1 prints the tables; RB_ENEMIES2_TRACE=boss_jorogumo prints one fight turn by turn. Numbers are a first tuning
+// for the balance wave, not gospel.
 //
-// BALANCE PASS 1 (balance bot report 1, about 22,000 runs, greedy party). Chapter 2 was the soft chapter: its elites cost 8 percent of party HP
-// per fight (chapter 1: 14, chapter 3: 12) and its boss 14 percent (chapter 1 boss: 22), and the greedy party cleared 82 percent of
+// BALANCE PASS 1 (balance bot report 1, about 22,000 runs, greedy party). Chapter 2 was the soft act: its Rivals cost 8 percent of party
+// HP per fight (Act I: 14, Act III: 12) and its Headliner 14 percent (Act I Headliner: 22), and the greedy party cleared 82 percent of
 // chapters 1 to 2 where the spec asks for 60 to 80. The pass is shaped, not flat: normals about x1.2 in threat (HP and hits about x1.1
-// each), elites about x1.55 (HP to the top of the band, hits about x1.25 to x1.3), the boss HP 240 to 246 up to 258 to 264 with its big
-// hits (embrace, kiss, web) about x1.1. The boss is the one knob that moves the chapter clear rate: with its HP at the band top (274 to
-// 280) and the same hits it cost the greedy party 22 percent of attempts (7 before the pass) and chapter 2 sat at 65 percent clear; the
-// setting here (HP 258 to 264, same hits) is estimated at about 18 percent of attempts and about 67 percent
-// clear (refights at the recorded entry HP; not run end to end). The knob: one point of boss loss rate is about 0.8 points of chapter 2 clear.
-// Inside the normals the spread was evened out by measurement, enemy by enemy and group by group: the soft ones were raised (ittan_momen,
-// tsukumogami, silk_weaver, karakuri_puppet, nopperabo, chochin) and the hard ones trimmed (drowned_samurai HP 46 to 54 down to 40 to 46,
-// nure_onna HP 50 to 58 down to 46 to 54 and Coil 15 to 14, Lash 7 to 6; rokurokubi only +1 on the Lunge). The enemies that never stand
-// alone in a group (silk_weaver, tsukumogami, koi_spirit, ittan_momen, rokurokubi) are judged by what they add to their groups, not by a
-// solo fight: their openers (snare, din, brood) are slow burns that a lone fight ends before they land. flooded_bridge (the two trimmed
-// hard enemies) moved from min 0.6 to 0.5 so the late page keeps its level.
-// ART NOTES for art_enemies_2.js (the lore lines carry the look too). chochin: one-eyed paper lantern, warm candle glow, ribbon tassel.
-// karakuri_puppet: painted wooden doll with a wind-up key and visible gears. nopperabo: smooth blank face under a hood, pale. drowned_samurai:
-// sodden armour hung with seaweed, dripping. koi_spirit: pale carp glowing like a coin. tsukumogami: an old shamisen grown legs, strings
-// buzzing. silk_weaver: spider-bodied woman in an apron, many hands. nure_onna: snake-tailed woman with long wet hair. rokurokubi: a long neck
-// coiled over the shoulder. ittan_momen: a flying bolt of white cotton. drowned_general: armoured admiral trailing lanterns and water.
-// puppet_master: a gaunt figure on a stool, strings from every finger. umibozu: a monk-shaped black giant rising out of calm water.
-// spiderling: coin-sized spider. paper_puppet: folded paper doll. lantern_wisp: small pale flame. boss_jorogumo: phase 0 a spider-woman in a
-// layered kimono, phase 1 the kimono torn open on a spider's body.
+// each), Rivals about x1.55 (HP to the top of the band, hits about x1.25 to x1.3), the Headliner HP 240 to 246 up to 258 to 264 with
+// its big hits (embrace, kiss, web) about x1.1. The Headliner is the one knob that moves the chapter clear rate: with its HP at the band
+// top (274 to 280) and the same hits it cost the greedy party 22 percent of attempts (7 before the pass) and chapter 2 sat at 65 percent
+// clear; the setting here (HP 258 to 264, same hits) is estimated at about 18 percent of attempts and about 67 percent clear (refights
+// at the recorded entry HP; not run end to end). The knob: one point of Headliner loss rate is about 0.8 points of chapter 2 clear.
+// Inside the normals the spread was evened out by measurement, enemy by enemy and group by group: the soft ones were raised
+// (ittan_momen, tsukumogami, silk_weaver, karakuri_puppet, nopperabo, chochin) and the hard ones trimmed (drowned_samurai HP 46 to 54
+// down to 40 to 46, nure_onna HP 50 to 58 down to 46 to 54 and Coil 15 to 14, Lash 7 to 6; rokurokubi only +1 on the Lunge). The
+// enemies that never stand alone in a group (silk_weaver, tsukumogami, koi_spirit, ittan_momen, rokurokubi) are judged by what they add
+// to their groups, not by a solo fight: their openers (snare, discord, brood) are slow burns that a lone fight ends before they land.
+// The ch2_flooded_bridge group (the two trimmed hard enemies) moved from min 0.6 to 0.5 so the late map keeps its level.
+// ART NOTES for art_enemies_2.js: the look of each creature is in HV_ENEMIES.md 3.1 and 3.4 (the lore lines carry it too). Every
+// creature has a screen and looks down; won over, it looks up at the moon. Scrollspinner: phase 0 the Avatar, a filtered influencer in
+// a ring-light halo; phase 1 the Spinner, the gown torn open on a spider's body with eight phone-screen eyes.
 (() => {
   DATA.add('enemies', {
     // ==================================================================================================================
-    // NORMALS
+    // CREATURES (normal)
     // ==================================================================================================================
     chochin: {
-      id: 'chochin', name: 'Chochin Lantern', chapter: 2, tier: 'normal', size: 'm',
+      id: 'chochin', name: 'Flamebait', chapter: 2, tier: 'normal', size: 'm',
       hp: [33, 39],
       moves: {
-        kindle: { name: 'Light the Wicks', kind: 'buff', say: 'Burn bright, little ones.', fx: [{ op: 'status', s: 'ritual', n: 1, tgt: 'allEnemies' }] },
-        scorch: { name: 'Scorching Gaze', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
-        cinders: { name: 'Falling Cinders', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'both', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'both' }] },
+        kindle: { name: 'Pile On', kind: 'buff', say: 'Everybody pile on! Louder!', fx: [{ op: 'status', s: 'ritual', n: 1, tgt: 'allEnemies' }] },
+        scorch: { name: 'Spicy Opinion', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
+        cinders: { name: 'Flame War', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'both', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'both' }] },
       },
       ai: { seq: ['scorch', 'kindle', 'cinders'] },
       hooks: [{ on: 'onDeath', fx: [{ op: 'status', s: 'burn', n: 2, tgt: 'front' }] }],
       immune: ['burn'],
       art: { id: 'chochin' },
-      lore: 'A paper lantern that woke up curious and never learned to stop staring. It carries a flame for everyone it likes, and likes everyone the way a fire likes a curtain.',
-      tags: ['spirit'],
+      lore: 'A matchstick with a flaming head and an opinion about everything, served piping hot. It lights up every thread it touches, and leaves one last spark on its way out.',
+      tags: ['construct', 'spirit'],
     },
 
     karakuri_puppet: {
-      id: 'karakuri_puppet', name: 'Karakuri Puppet', chapter: 2, tier: 'normal', size: 'm',
+      id: 'karakuri_puppet', name: 'Clickbait Goblin', chapter: 2, tier: 'normal', size: 'm',
       hp: [47, 55],
       moves: {
-        jab: { name: 'Clockwork Jab', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
-        flurry: { name: 'Gear Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
-        smash: { name: 'Mainspring Smash', kind: 'heavy', say: 'CLANG.', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
-        overwind: { name: 'Overwound', kind: 'buff', say: 'Ticktickticktick...', fx: [{ op: 'status', s: 'might', n: 3, tgt: 'self' }] },
+        jab: { name: 'Teaser Jab', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
+        flurry: { name: 'Thumbnail Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
+        smash: { name: 'Shock Reveal', kind: 'heavy', say: 'YOU WILL NOT BELIEVE THIS.', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
+        overwind: { name: 'All Caps', kind: 'buff', say: 'MUST. CLICK. NOW.', fx: [{ op: 'status', s: 'might', n: 3, tgt: 'self' }] },
       },
       ai: { seq: ['jab', 'flurry', 'smash'], rules: [{ if: { hpLt: 0.5 }, do: 'overwind', once: true }] },
       art: { id: 'karakuri_puppet' },
-      lore: 'A wind-up puppet from a long-shuttered theatre. Its act has three beats and it has never once missed the last.',
-      tags: ['construct'],
+      lore: 'A wind-up goblin made of thumbnails and big red arrows, with exactly three tricks. The first two are fine, it swears the third will shock you, and it always does.',
+      tags: ['construct', 'spirit'],
     },
 
     nopperabo: {
-      id: 'nopperabo', name: 'Nopperabo', chapter: 2, tier: 'normal', size: 'm',
+      id: 'nopperabo', name: 'Filter Fairy', chapter: 2, tier: 'normal', size: 'm',
       hp: [43, 51],
       moves: {
-        stare: { name: 'Blank Stare', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 2, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }] },
-        grasp: { name: 'Faceless Grasp', kind: 'attack', fx: [{ op: 'dmg', n: { base: 6, per: 'debuffs', who: 'target', mul: 3, cap: 14 }, tgt: 'front' }] },
+        stare: { name: 'Beauty Filter', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 2, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }] },
+        grasp: { name: 'Touch Up', kind: 'attack', fx: [{ op: 'dmg', n: { base: 6, per: 'debuffs', who: 'target', mul: 3, cap: 14 }, tgt: 'front' }] },
       },
       ai: { seq: ['stare', 'grasp', 'grasp'] },
       art: { id: 'nopperabo' },
-      lore: 'It wears no face at all, which is how it learned that everyone else\'s are borrowed. The more you flinch, the harder it stares.',
-      tags: ['spirit', 'undead'],
+      lore: 'A tiny fairy with a ring-light halo and no face of its own, which is why it keeps fixing everyone else\'s. The more filters it puts on you, the harder it pokes.',
+      tags: ['spirit', 'void'],
     },
 
     drowned_samurai: {
-      id: 'drowned_samurai', name: 'Drowned Samurai', chapter: 2, tier: 'normal', size: 'l',
+      id: 'drowned_samurai', name: 'Unskippable Ad', chapter: 2, tier: 'normal', size: 'l',
       hp: [40, 46],
       start: [{ op: 'status', s: 'plating', n: 4, tgt: 'self' }],
       moves: {
-        cut: { name: 'Sodden Cut', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
-        stance: { name: 'Iai Stance', kind: 'defend', say: '...Breathe in.', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
-        iai: { name: 'Tide-Edge Iai', kind: 'heavy', say: 'IAI!', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
+        cut: { name: 'Jingle Jab', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
+        stance: { name: 'Skip in Five', kind: 'defend', say: 'Skip in five... four...', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
+        iai: { name: 'Final Offer', kind: 'heavy', say: 'BUY NOW!', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
       },
       ai: { seq: ['cut', 'stance', 'iai'], rules: [{ if: { hpLt: 0.4 }, do: 'iai', once: true }] },
       art: { id: 'drowned_samurai' },
-      lore: 'He was told to hold the bridge until the water rose. The water rose. He is still holding the bridge, and the river is still politely asking him to let go.',
-      tags: ['undead', 'folk', 'aquatic'],
+      lore: 'An advert that was told to keep playing until somebody watched it to the end. Nobody ever has, so it is still playing, very politely, in the middle of the street.',
+      tags: ['construct'],
     },
 
     koi_spirit: {
-      id: 'koi_spirit', name: 'Koi Spirit', chapter: 2, tier: 'normal', size: 'm',
+      id: 'koi_spirit', name: 'Hug Emoji', chapter: 2, tier: 'normal', size: 'm',
       hp: [35, 41],
       moves: {
-        splash: { name: 'Tidal Splash', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }] },
-        slap: { name: 'Tail Slap', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
-        mend: { name: 'Healing Tide', kind: 'heal', say: 'Blub. (Be well.)', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
+        splash: { name: 'Heart Splash', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }] },
+        slap: { name: 'Thumbs Down', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
+        mend: { name: 'Big Hug', kind: 'heal', say: 'Aww. Sending hugs.', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
       },
       ai: { weighted: [['splash', 3], ['slap', 2]], noRepeat: 2, rules: [{ if: { allyHpLt: 0.7, turnEvery: [2, 1] }, do: 'mend' }] },
       hooks: [{ on: 'onDeath', fx: [{ op: 'heal', n: 6, tgt: 'allEnemies' }] }],
       art: { id: 'koi_spirit' },
-      lore: 'The canal\'s oldest carp, glowing like a coin at the bottom of a wishing well. It heals the ones it likes and splashes the ones it does not.',
-      tags: ['spirit', 'aquatic'],
+      lore: 'A round yellow emoji with its arms out, sent to cheer up anyone in the thread who is losing. It hugs its friends better and splashes everyone else with tiny hearts.',
+      tags: ['spirit'],
     },
 
     tsukumogami: {
-      id: 'tsukumogami', name: 'Tsukumogami', chapter: 2, tier: 'normal', size: 'm',
+      id: 'tsukumogami', name: 'Notification Imp', chapter: 2, tier: 'normal', size: 'm',
       hp: [35, 42],
       moves: {
-        discord: { name: 'Discordant Din', kind: 'debuff', say: 'TWANG!', fx: [{ op: 'add', card: 'status_blot', n: 2, to: 'draw' }] },
-        clatter: { name: 'Clatter', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
-        strum: { name: 'Angry Strum', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
-        crescendo: { name: 'Crescendo', kind: 'heavy', say: 'TWANG! TWANG! TWANG!', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
+        discord: { name: 'Ping Storm', kind: 'debuff', say: 'DING! DING!', fx: [{ op: 'add', card: 'status_blot', n: 2, to: 'draw' }] },
+        clatter: { name: 'Pocket Buzz', kind: 'attack', fx: [{ op: 'dmg', n: 9, tgt: 'front' }] },
+        strum: { name: 'Push Alert', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
+        crescendo: { name: 'Ninety-Nine Plus', kind: 'heavy', say: 'DING! DING! DING!', fx: [{ op: 'dmg', n: 12, tgt: 'front' }, { op: 'add', card: 'status_blot', n: 1, to: 'draw', top: true }] },
       },
       ai: { open: ['discord'], seq: ['clatter', 'strum'], rules: [{ if: { turnEvery: [3, 2] }, do: 'crescendo' }] },
       art: { id: 'tsukumogami' },
-      lore: 'A shamisen that turned a hundred and started keeping score. Every wrong note ever played in the house lives in its strings now.',
+      lore: 'A red-dot imp that lives in the corner of every screen in the city and taps you on the shoulder about nothing. It piles up pings until you cannot see your own hand.',
       tags: ['spirit', 'construct'],
     },
 
     silk_weaver: {
-      id: 'silk_weaver', name: 'Silk Weaver', chapter: 2, tier: 'normal', size: 'm',
+      id: 'silk_weaver', name: 'Algo Rhythm', chapter: 2, tier: 'normal', size: 'm',
       hp: [33, 40],
       moves: {
-        snare: { name: 'Silk Snare', kind: 'debuff', say: 'Stay put, dear.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'front' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        fang: { name: 'Venom Fang', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'poison' }] },
-        hatch: { name: 'Hatch Spiderling', kind: 'summon', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
+        snare: { name: 'Keep Watching', kind: 'debuff', say: 'Stay put, dear. One more.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'front' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
+        fang: { name: 'Suggested Post', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'poison' }] },
+        hatch: { name: 'Spawn a Bot', kind: 'summon', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
       },
       ai: { open: ['snare'], seq: ['fang', 'fang', 'snare'], rules: [{ if: { minions: { lt: 2 }, turnEvery: [3, 1] }, do: 'hatch' }] },
       art: { id: 'silk_weaver' },
-      lore: 'The mistress of the house keeps servants who never sleep. This one spins bindings by the yard and hatches her children on request.',
-      tags: ['insect', 'folk'],
+      lore: 'A clicking little machine that learns what you like and serves you more of it until you cannot move. It means well, and it has never once let anybody go to bed.',
+      tags: ['construct', 'insect'],
     },
 
     nure_onna: {
-      id: 'nure_onna', name: 'Nure-onna', chapter: 2, tier: 'normal', size: 'l',
+      id: 'nure_onna', name: 'Autoplay Snake', chapter: 2, tier: 'normal', size: 'l',
       hp: [46, 54],
       moves: {
-        fang: { name: 'Venom Bite', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 2, tgt: 'back' }] },
-        lash: { name: 'Tail Lash', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'back' }] },
-        coil: { name: 'Drowning Coil', kind: 'heavy', say: 'Come closer, dear.', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
+        fang: { name: 'Autoplay Bite', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 2, tgt: 'back' }] },
+        lash: { name: 'Swipe Lash', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'back' }] },
+        coil: { name: 'Endless Coil', kind: 'heavy', say: 'Just one more, dear.', fx: [{ op: 'dmg', n: 14, tgt: 'front' }] },
       },
       ai: { seq: ['fang', 'coil', 'lash'] },
       art: { id: 'nure_onna' },
-      lore: 'A woman above the waist and a river snake below it, combing her hair on the canal bank. She waves, and that is not a greeting. It is the first strike.',
-      tags: ['beast', 'aquatic', 'folk'],
+      lore: 'A long snake whose body is an endless feed: the more you look, the longer it gets. It nips whoever stands at the back, and wraps the rest in just one more.',
+      tags: ['beast'],
     },
 
     rokurokubi: {
-      id: 'rokurokubi', name: 'Rokurokubi', chapter: 2, tier: 'normal', size: 'm',
+      id: 'rokurokubi', name: 'Selfie Stick', chapter: 2, tier: 'normal', size: 'm',
       hp: [34, 41],
       moves: {
-        reach: { name: 'Reaching Neck', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 2, tgt: 'back' }] },
-        lunge: { name: 'Neck Lunge', kind: 'heavy', fx: [{ op: 'dmg', n: 12, tgt: 'back' }] },
-        coil: { name: 'Coil Up', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
+        reach: { name: 'Over the Shoulder', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 2, tgt: 'back' }] },
+        lunge: { name: 'Photobomb', kind: 'heavy', fx: [{ op: 'dmg', n: 12, tgt: 'back' }] },
+        coil: { name: 'Fold Away', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
       },
       ai: { seq: ['reach', 'lunge', 'reach', 'coil'] },
       art: { id: 'rokurokubi' },
-      lore: 'By day, a quiet lady at the tea house. By night, a very long neck. She never leaves her seat; the neck simply goes over your shoulder.',
-      tags: ['spirit', 'folk'],
+      lore: 'By day, a quiet phone on a cafe table. By night, a very long selfie stick that reaches right over your shoulder to get the backing hero in the shot.',
+      tags: ['construct'],
     },
 
     ittan_momen: {
-      id: 'ittan_momen', name: 'Ittan-momen', chapter: 2, tier: 'normal', size: 'm',
+      id: 'ittan_momen', name: 'Phone Charger', chapter: 2, tier: 'normal', size: 'm',
       hp: [34, 41],
       moves: {
-        wrap: { name: 'Wrap Tight', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'status', s: 'bind', n: 1, tgt: 'front' }] },
-        squeeze: { name: 'Smothering Squeeze', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
-        billow: { name: 'Billow', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }, { op: 'status', s: 'dodge', n: 1, tgt: 'self' }] },
+        wrap: { name: 'Cord Wrap', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }, { op: 'status', s: 'bind', n: 1, tgt: 'front' }] },
+        squeeze: { name: 'Full Battery', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
+        billow: { name: 'Flap About', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }, { op: 'status', s: 'dodge', n: 1, tgt: 'self' }] },
       },
       ai: { weighted: [['wrap', 2], ['squeeze', 2], ['billow', 1]], noRepeat: 1 },
       art: { id: 'ittan_momen' },
-      lore: 'A bolt of white cotton loose in the night wind. It wraps around whatever is warm, and it only stops when the warmth does.',
-      tags: ['spirit'],
+      lore: 'A charging cable that went looking for a phone at 2 am and now wraps around anything warm. It only lets go at one hundred percent.',
+      tags: ['construct'],
     },
 
     // ==================================================================================================================
-    // ELITES
+    // RIVALS (elite)
     // ==================================================================================================================
     drowned_general: {
-      id: 'drowned_general', name: 'Drowned General', chapter: 2, tier: 'elite', size: 'l',
+      id: 'drowned_general', name: 'Comment Troll', chapter: 2, tier: 'elite', size: 'l',
       hp: [102, 114],
       moves: {
-        muster: { name: 'Muster the Drowned', kind: 'summon', say: 'The flood remembers. Rise.', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }] },
-        saber: { name: 'Waterlogged Saber', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
-        sweep: { name: 'Undertow Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'both' }] },
-        call: { name: 'Call the Lanterns', kind: 'summon', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }] },
-        crest: { name: 'Flood Crest', kind: 'heavy', say: 'DROWN.', fx: [{ op: 'dmg', n: 21, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }] },
+        muster: { name: 'Start a Thread', kind: 'summon', say: 'First! Everybody, pile on.', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }] },
+        saber: { name: 'Who Asked?', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
+        sweep: { name: 'Reply All', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'both' }] },
+        call: { name: 'More Replies', kind: 'summon', fx: [{ op: 'summon', enemy: 'lantern_wisp', n: 1 }] },
+        crest: { name: 'Ratio', kind: 'heavy', say: 'RATIO.', fx: [{ op: 'dmg', n: 21, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }] },
       },
       ai: {
         open: ['muster'],
@@ -251,7 +261,7 @@
       },
       phases: [{
         at: 0.5,
-        say: 'The tide will not be turned!',
+        say: 'I will NOT be scrolled past!',
         fx: [{ op: 'status', s: 'might', n: 1, tgt: 'self' }, { op: 'block', n: 8, tgt: 'self' }],
         ai: {
           open: ['crest'],
@@ -260,20 +270,20 @@
         },
       }],
       art: { id: 'drowned_general' },
-      lore: 'Commander of a fleet that sank with all hands, and who refuses to believe it. He calls the lanterns his lookouts and the flood his reserves.',
-      tags: ['undead', 'folk', 'aquatic'],
+      lore: 'It has never finished a song in its life, but it has a lot to say about yours. Deep down, it just wants a reply.',
+      tags: ['spirit'],
     },
 
     puppet_master: {
-      id: 'puppet_master', name: 'Puppet Master', chapter: 2, tier: 'elite', size: 'l',
+      id: 'puppet_master', name: 'Trendsetter', chapter: 2, tier: 'elite', size: 'l',
       hp: [110, 120],
       moves: {
-        strings: { name: 'Pull the Strings', kind: 'summon', say: 'Dance, my darlings. Dance.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 2 }] },
-        restock: { name: 'Fresh Strings', kind: 'summon', say: 'One more for the chorus.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 1 }] },
-        lash: { name: 'Thread Lash', kind: 'multi', fx: [{ op: 'dmg', n: 10, hits: 3, tgt: 'random' }] },
-        tighten: { name: 'Tighten the Strings', kind: 'attack', fx: [{ op: 'dmg', n: 14, tgt: 'front' }, { op: 'status', s: 'might', n: 2, tgt: 'otherEnemy' }] },
-        marionette: { name: 'Marionette Strike', kind: 'heavy', say: 'Not you. YOU.', fx: [{ op: 'dmg', n: 16, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
-        mend: { name: 'Mend the Seams', kind: 'heal', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
+        strings: { name: 'Start a Trend', kind: 'summon', say: 'Everyone, do the dance. Now.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 2 }] },
+        restock: { name: 'New Challenge', kind: 'summon', say: 'One more for the challenge.', fx: [{ op: 'summon', enemy: 'paper_puppet', n: 1 }] },
+        lash: { name: 'Hashtag Lash', kind: 'multi', fx: [{ op: 'dmg', n: 10, hits: 3, tgt: 'random' }] },
+        tighten: { name: 'Boost Post', kind: 'attack', fx: [{ op: 'dmg', n: 14, tgt: 'front' }, { op: 'status', s: 'might', n: 2, tgt: 'otherEnemy' }] },
+        marionette: { name: 'Trending Now', kind: 'heavy', say: 'Not you. YOU.', fx: [{ op: 'dmg', n: 16, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
+        mend: { name: 'Repost', kind: 'heal', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }] },
       },
       ai: {
         open: ['strings'],
@@ -284,18 +294,18 @@
         ],
       },
       art: { id: 'puppet_master' },
-      lore: 'The theatre\'s last puppeteer, who never got up from his stool. His hands are long gone. The strings work fine without them.',
-      tags: ['folk', 'construct'],
+      lore: 'A glittering puppeteer who decides what the whole city dances to this week, and next week, and the week after. Its strings run to every phone in town, and it has not had a new idea in years.',
+      tags: ['folk', 'void'],
     },
 
     umibozu: {
-      id: 'umibozu', name: 'Umibozu', chapter: 2, tier: 'elite', size: 'l',
+      id: 'umibozu', name: 'Doomscroll Moth', chapter: 2, tier: 'elite', size: 'l',
       hp: [112, 124],
       moves: {
-        slam: { name: 'Tidal Slam', kind: 'attack', fx: [{ op: 'dmg', n: { base: 8, per: 'turn', mul: 1, cap: 14 }, tgt: 'both' }] },
-        brine: { name: 'Brine Spray', kind: 'debuff', say: 'Hush.', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }] },
-        toll: { name: 'Drowning Bell', kind: 'heavy', say: 'BOOOONG.', fx: [{ op: 'dmg', n: 15, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
-        maelstrom: { name: 'Maelstrom', kind: 'heavy', say: 'The sea takes everything.', fx: [{ op: 'dmg', n: 16, tgt: 'both' }] },
+        slam: { name: 'Scroll Wave', kind: 'attack', fx: [{ op: 'dmg', n: { base: 8, per: 'turn', mul: 1, cap: 14 }, tgt: 'both' }] },
+        brine: { name: 'Blue Light', kind: 'debuff', say: 'Shhh. Just one more.', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }] },
+        toll: { name: 'Screen Glare', kind: 'heavy', say: 'LOOK AT THIS ONE.', fx: [{ op: 'dmg', n: 15, tgt: 'front' }, { op: 'status', s: 'stun', n: 1, tgt: 'front' }] },
+        maelstrom: { name: 'Infinite Scroll', kind: 'heavy', say: 'The scroll never ends.', fx: [{ op: 'dmg', n: 16, tgt: 'both' }] },
       },
       ai: {
         seq: ['slam', 'brine', 'slam'],
@@ -305,73 +315,73 @@
         ],
       },
       art: { id: 'umibozu' },
-      lore: 'A monk-shaped shadow taller than the bridge, rising out of calm water. It wants nothing but silence, and the tide brings the silence with it.',
-      tags: ['spirit', 'aquatic'],
+      lore: 'A giant sleepy moth drawn to the glow of every screen in the city, its wings scrolling and scrolling. It wants nothing but one more swipe, and the quiet comes with it.',
+      tags: ['insect'],
     },
 
     // ==================================================================================================================
-    // MINIONS (size s, simple, one accent each)
+    // SIDEKICKS (minion: size s, simple, one accent each)
     // ==================================================================================================================
     spiderling: {
-      id: 'spiderling', name: 'Spiderling', chapter: 2, tier: 'minion', size: 's',
+      id: 'spiderling', name: 'Botling', chapter: 2, tier: 'minion', size: 's',
       hp: [10, 12],
       moves: {
-        nip: { name: 'Poison Nip', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'poison' }, { op: 'status', s: 'poison', n: 1, tgt: 'front' }] },
+        nip: { name: 'Auto Like', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'poison' }, { op: 'status', s: 'poison', n: 1, tgt: 'front' }] },
         skitter: { name: 'Skitter', kind: 'buff', fx: [{ op: 'status', s: 'dodge', n: 1, tgt: 'self' }] },
       },
       ai: { seq: ['nip', 'nip', 'skitter'] },
       art: { id: 'spiderling' },
-      lore: 'A hatchling no bigger than a coin, quick as a stray thought. It nips first and apologises never.',
-      tags: ['insect'],
+      lore: 'A tiny spider-shaped bot no bigger than a coin, which likes everything instantly and without looking. It nips first and never reads the post.',
+      tags: ['insect', 'construct'],
     },
 
     paper_puppet: {
-      id: 'paper_puppet', name: 'Paper Puppet', chapter: 2, tier: 'minion', size: 's',
+      id: 'paper_puppet', name: 'Copycat Cutout', chapter: 2, tier: 'minion', size: 's',
       hp: [10, 12],
       moves: {
-        flail: { name: 'Paper Flail', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] },
-        clap: { name: 'Paper Clap', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'back' }] },
+        flail: { name: 'Copy Dance', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] },
+        clap: { name: 'Copy Clap', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'back' }] },
       },
       ai: { seq: ['flail', 'clap'] },
       art: { id: 'paper_puppet' },
-      lore: 'Folded from last season\'s playbills and hung on someone else\'s strings. It has one move, and the strings do the moving.',
-      tags: ['construct'],
+      lore: 'Cut out of last week\'s trend and hung on someone else\'s strings. It knows exactly one dance, and the strings do the dancing.',
+      tags: ['construct', 'folk'],
     },
 
     lantern_wisp: {
-      id: 'lantern_wisp', name: 'Lantern Wisp', chapter: 2, tier: 'minion', size: 's',
+      id: 'lantern_wisp', name: 'Grumble Cloud', chapter: 2, tier: 'minion', size: 's',
       hp: [10, 13],
       moves: {
-        singe: { name: 'Singe', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 2, tgt: 'front' }] },
-        warm: { name: 'Warm Glow', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'otherEnemy' }] },
+        singe: { name: 'Snarky Reply', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 2, tgt: 'front' }] },
+        warm: { name: 'Agree Loudly', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'otherEnemy' }] },
       },
       ai: { seq: ['singe', 'warm'], rules: [{ if: { alone: true }, do: 'singe' }] },
       immune: ['burn'],
       art: { id: 'lantern_wisp' },
-      lore: 'A stray flame that slipped out of a lantern and never went back. It warms whatever is nearby, and burns whatever is closer.',
+      lore: 'A small grey cloud that drifted off a comment thread, muttering at everyone. Sing to it kindly and it rains a tiny rainbow, but until then it agrees with every grump nearby.',
       tags: ['spirit'],
     },
 
     // ==================================================================================================================
-    // BOSS: Jorogumo, the Silk Courtesan. Form 1 = the Courtesan (control, Plating). Form 2 = the Spider (offence, no Plating).
+    // HEADLINER (boss): Scrollspinner, Queen of the Feed. Form 1 = the Avatar (control, Sequins). Form 2 = the Spinner (offence, no Sequins).
     // ==================================================================================================================
     boss_jorogumo: {
-      id: 'boss_jorogumo', name: 'Jorogumo', title: 'The Silk Courtesan', chapter: 2, tier: 'boss', size: 'xl',
+      id: 'boss_jorogumo', name: 'Scrollspinner', title: 'Queen of the Feed', chapter: 2, tier: 'boss', size: 'xl',
       hp: [258, 264],
       start: [{ op: 'status', s: 'plating', n: 4, tgt: 'self' }],
       moves: {
-        // form 1
-        brood: { name: 'Honoured Guests', kind: 'summon', say: 'Welcome, welcome. Do stay for supper.', fx: [{ op: 'summon', enemy: 'spiderling', n: 2 }] },
-        hatch: { name: 'Another Guest', kind: 'summon', say: 'One more place at the table.', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
-        snare: { name: 'Silk Snare', kind: 'debuff', say: 'Hold still, darling. Threads are delicate.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        embrace: { name: 'Silken Embrace', kind: 'heavy', say: 'Closer. Closer.', fx: [{ op: 'dmg', n: { base: 13, per: 'status', s: 'bind', who: 'target', mul: 9, cap: 22 }, tgt: 'front' }] },
-        kiss: { name: 'Venom Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
-        fan: { name: 'Iron Fan Dance', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'random' }] },
-        // form 2
-        legs: { name: 'Eight Legs', kind: 'multi', say: 'Sit. Sit. SIT.', fx: [{ op: 'dmg', n: 4, hits: 4, tgt: 'random' }] },
-        spin: { name: 'Spin the Threads', kind: 'debuff', say: 'One thread. A thousand. Hold still.', fx: [{ op: 'status', s: 'bind', n: 2, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
-        web: { name: 'Thousand-Thread Web', kind: 'heavy', say: 'A thousand threads, one supper.', fx: [{ op: 'dmg', n: { base: 8, per: 'status', s: 'bind', who: 'target', mul: 4, cap: 14 }, tgt: 'both' }] },
-        frenzy: { name: 'Eight-Legged Frenzy', kind: 'multi', say: 'I will unpick every last one of you!', fx: [{ op: 'dmg', n: 3, hits: 6, tgt: 'random' }] },
+        // form 1: the Avatar
+        brood: { name: 'Hatch Botlings', kind: 'summon', say: 'Welcome, little ones. Like everything!', fx: [{ op: 'summon', enemy: 'spiderling', n: 2 }] },
+        hatch: { name: 'One More Bot', kind: 'summon', say: 'One more for the feed, little one.', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
+        snare: { name: 'Keep Scrolling', kind: 'debuff', say: 'Stay, sweetie. Nobody leaves the feed.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
+        embrace: { name: 'Big Squeeze', kind: 'heavy', say: 'Group hug! Nobody scrolls alone.', fx: [{ op: 'dmg', n: { base: 13, per: 'status', s: 'bind', who: 'target', mul: 9, cap: 22 }, tgt: 'front' }] },
+        kiss: { name: 'Air Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
+        fan: { name: 'Selfie Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'random' }] },
+        // form 2: the Spinner
+        legs: { name: 'Eight-Leg Swipe', kind: 'multi', say: 'Swipe. Swipe. SWIPE.', fx: [{ op: 'dmg', n: 4, hits: 4, tgt: 'random' }] },
+        spin: { name: 'Spin the Feed', kind: 'debuff', say: 'One post. A thousand. Hold still.', fx: [{ op: 'status', s: 'bind', n: 2, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
+        web: { name: 'World Wide Web', kind: 'heavy', say: 'Everyone, all at once, forever.', fx: [{ op: 'dmg', n: { base: 8, per: 'status', s: 'bind', who: 'target', mul: 4, cap: 14 }, tgt: 'both' }] },
+        frenzy: { name: 'Refresh Frenzy', kind: 'multi', say: 'Refresh! Refresh! Do not look away!', fx: [{ op: 'dmg', n: 3, hits: 6, tgt: 'random' }] },
       },
       ai: {
         open: ['brood', 'snare'],
@@ -384,7 +394,7 @@
       },
       phases: [{
         at: 0.5,
-        say: 'Enough of this costume. Look at me properly!',
+        say: 'Enough of this filter. Look at me properly!',
         fx: [{ op: 'removeStatus', s: 'plating', tgt: 'self' }, { op: 'status', s: 'might', n: 2, tgt: 'self' }],
         ai: {
           open: ['spin'],
@@ -397,14 +407,14 @@
       }],
       immune: ['stun'],
       art: { id: 'boss_jorogumo' },
-      lore: 'The mistress of the Sunken Lantern City receives every guest in her finest kimono, and every guest stays for supper. Beneath the silk she is all legs, and her patience is thinner than her thread.',
-      tags: ['insect', 'folk'],
+      lore: 'A glamorous giant spider who spins the endless feed over Scrollopolis, so that nobody in the city is ever lonely or bored. Under her perfect filter she has eight bright screens for eyes, and she has not looked up in years.',
+      tags: ['insect', 'folk', 'void'],
     },
   });
 
   // ====================================================================================================================
   // ENCOUNTERS. id, enemies (smallest first, tallest last: lanes fill from the right), w = weight, min = lowest tile.diff.
-  // Pairs are built on purpose: chochin lights a samurai, Bind pins a back-row target, nopperabo punishes a stuck front hero.
+  // Pairs are built on purpose: Flamebait lights up an Unskippable Ad, Tangled pins a backing-spot target, Filter Fairy punishes a stuck lead hero.
   // ====================================================================================================================
   DATA.addEncounters(2, {
     normal: [

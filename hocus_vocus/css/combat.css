@@ -53,7 +53,9 @@
 .ch-medal .ico { display: block; border-radius: 50%; }
 .ch-main { display: flex; flex-direction: column; gap: 3px; height: 100%; min-width: 0; }
 .ch-l1 { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.ch-name { flex: none; min-width: 3em; font: 800 calc(17px * var(--ts2)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
+/* The name plate is sized for RoxorLoops, the widest name the game has (10 letters: 5.47em at this size and spacing, measured at 1280x720 in the stock serif, 5.8em with room for a wider one).
+   Every panel reserves that width, so the row tag starts at the same x in both panels whoever stands in them. 15 px (it was 17) and .02em keep the bonus text 47 px of the 200 px line at the normal size. */
+.ch-name { flex: none; min-width: 5.8em; font: 800 calc(15px * var(--ts2)) / 1.1 var(--font-display); letter-spacing: .02em; color: var(--white); text-shadow: 0 2px 0 var(--ink), 0 0 10px var(--hc); }
 .ch-tag { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; }
 .ch-tag .ct-bonus { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; line-height: 1.08; }
 .ct-row { flex: none; min-width: 5.6em; text-align: center; padding: 2px 6px 2px; font: 900 calc(9.5px * var(--ts2)) / 1.25 var(--font-ui); font-style: normal; letter-spacing: .1em; color: var(--white); background: var(--verm-d); clip-path: polygon(0 12%, 4% 0, 96% 8%, 100% 0, 98% 100%, 3% 90%); text-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
@@ -308,7 +310,7 @@
 #stage.compact .cm-st .status .n { font-size: 17px; }
 #stage.compact .cm-more { min-width: 34px; height: 26px; padding: 0 4px; font-size: 17px; }
 #stage.compact .cm-hero { padding-bottom: 8px; }
-#stage.compact .ch-l1 { min-height: 22px; } #stage.compact .ch-main { gap: 2px; } #stage.compact .ch-name { font-size: 18px; }
+#stage.compact .ch-l1 { min-height: 22px; } #stage.compact .ch-main { gap: 2px; } #stage.compact .ch-name { font-size: 16px; }              /* 93 px with the 5.8em minimum: RoxorLoops and the row tag share the 200 px line (the bonus is hidden here) */
 #stage.compact .cm-hero .cm-st { margin-top: 0; } #stage.compact .cm-hero .cm-st .status { --d: 28px; }
 #stage.compact .ct-bonus { display: none; } #stage.compact .cm-hero .ct-row { font-size: 17px; padding: 1px 7px; letter-spacing: .06em; min-width: 0; }
 #stage.compact .cm-hpv { font-size: 17px; } #stage.compact .ch-fallen { font-size: 16px; letter-spacing: .1em; top: auto; right: auto; left: 84px; bottom: 12px; transform: rotate(-2deg); }   /* the empty status row, clear of the BACK tag and the swap seal */

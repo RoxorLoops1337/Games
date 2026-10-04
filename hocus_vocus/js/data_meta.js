@@ -35,9 +35,9 @@
 (() => {
   // ------------------------------------------------------------------ achievements
   DATA.add('achievements', {
-    ch1_clear: { name: 'Out of the Grove', text: 'Defeat Kuzunoha, the Nine-Voiced Fox, and end the first verse.', stat: { k: 'boss1Kills', gte: 1 }, reward: { inkstones: 10 } },
-    ch2_clear: { name: 'Lanterns Out', text: 'Defeat Jorogumo, the Silk Courtesan, and let the guests go home.', stat: { k: 'boss2Kills', gte: 1 }, reward: { inkstones: 15 } },
-    ch3_clear: { name: 'The Last Note', text: 'Defeat the Conductor and sing the ending.', stat: { k: 'boss3Kills', gte: 1 }, reward: { inkstones: 30 } },
+    ch1_clear: { name: 'Mics Returned', text: 'Defeat Kraki, the Karaoke Kraken, and finish the first act.', stat: { k: 'boss1Kills', gte: 1 }, reward: { inkstones: 10 } },
+    ch2_clear: { name: 'Heads Up', text: 'Defeat Scrollspinner, Queen of the Feed, and let the city look up.', stat: { k: 'boss2Kills', gte: 1 }, reward: { inkstones: 15 } },
+    ch3_clear: { name: 'Still Human', text: 'Defeat Flawless and sing the last song together.', stat: { k: 'boss3Kills', gte: 1 }, reward: { inkstones: 30 } },
 
     first_draft: { name: 'First Rehearsal', text: 'Finish your first journey, win or lose. Every journey starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
     regular_reader: { name: 'Regular Listener', text: 'Finish 10 journeys. The land is starting to recognise your voice.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
@@ -163,19 +163,19 @@
 
     // ---------------------------------------------------------------- lore: the four heroes
     hero_hanae: {
-      title: 'Hanae, the Blossom Blade',
+      title: 'Jasmin, the Blossom Voice',
       text: "The Singer sang Hanae on the very first bar, on a day the Singer felt brave. She was meant to be the hero: the one who steps forward first, so the rest of the song has somewhere to stand. She has a very good ponytail, an even better blade, and a reputation for never missing her cue. Every cut she makes rings like a struck bell and leaves petals, because the Singer once sang 'like a blossom' and never took it back. She will tell you she is afraid of nothing. She will say it a little fast. The truth is that she was sung to win, and nobody ever sang what happens if she does not, so she has decided never to find out.",
     },
     hero_kuro: {
-      title: 'Kuro, the Songweaver',
+      title: 'RoxorLoops, the Beatbox Wizard',
       text: 'Kuro began as a harmony. The Singer needed someone to carry the tune where the melody could not reach, so a quiet second line was hummed under the first, glasses and all, and then, because the Singer was kind, given a personality. It got out of hand. He is the only one who knows he lives in a song, and he listens to the last bar first, which he says is sensible and everyone else says is cheating. His flute plays spells because it is the flute that played him. He teases to stay warm. He counts the rests for exits. Deep down he suspects a harmony is the first thing a conductor cuts, and he would like everyone to please stop humming that out loud.',
     },
     hero_suzu: {
-      title: 'Suzu, the Moon Miko',
+      title: 'RawClaw, the Sound Alchemist',
       text: 'The Singer sang Suzu late at night, on the evenings when the song would not come. She is the shrine at the edge of the map, the bell left ringing for whoever is lost. She keeps the song in tune: every slack string, every note gone sour, she feels in her hair, and she mends what she can without making a fuss. She is seventeen and steadier than a mountain. She waits at the edge of the verse until it is safe to enter, and then enters anyway, because it is never quite safe. The Singer sang her to make a promise to the listener: however wrong the song goes, someone gentle is still humming the melody.',
     },
     hero_raiga: {
-      title: 'Raiga, the Thunder Monk',
+      title: 'Andy, the Thunder Bass',
       text: "Raiga was sung in a thunderstorm by a Singer who was laughing too hard to hold the note. He was meant to be the comic relief. He declined. He takes every blow with a grin and returns it louder, and his thunder is not lightning at all but a laugh, the Singer's own, caught in the song and never let go. He weighs about as much as a temple bell and carries his sorrows a good deal more lightly. He calls everyone friend, means it, and it is somehow always a relief. Ask him about endings and he will tell you they are only the last chorus everyone has agreed to enjoy. Then he will laugh, and the Hush will stop to listen.",
     },
 

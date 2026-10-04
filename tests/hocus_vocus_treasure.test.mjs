@@ -214,22 +214,24 @@ t.test('text: one plain sentence of at most 90 characters, capitalised, ending i
 const NUMWORDS = { 0: ['zero', 'no', 'free'], 1: ['one', 'a', 'an', 'once', 'first', 'next', 'single', 'another', 'extra', 'more', 'less', 'fewer'], 2: ['two', 'twice', 'second', 'both'], 3: ['three', 'third'], 4: ['four', 'fourth'], 5: ['five', 'fifth'], 6: ['six'], 8: ['eight'], 10: ['ten'], 20: ['twenty'] };
 const mentions = (text, n) => new RegExp('(^|[^0-9.])' + n + '(?![0-9])').test(text) || (NUMWORDS[n] || []).some((w) => new RegExp('\\b' + w + '\\b', 'i').test(text));
 const OPWORD = {
-  dmg: /damage/i, block: /block/i, heal: /heal/i, draw: /draw/i, energy: /energy/i, gold: /gold/i, ink: /\becho\b/i, maxHp: /max HP/i, revive: /revive/i,
-  hurt: /lose|hurt/i, removeStatus: /cleanse|remove|spend/i, paint: /wake/i, addBrush: /song/i, addGem: /gem/i, addCurse: /curse/i, upgradeCard: /upgrade/i,
+  dmg: /damage/i, block: /block/i, heal: /heal/i, draw: /draw/i, energy: /breath/i, gold: /gold/i, ink: /\bvox\b/i, maxHp: /max HP/i, revive: /bring (them|that hero) back|revive/i,
+  hurt: /lose|hurt/i, removeStatus: /cleanse|remove|spend/i, paint: /unmute/i, addBrush: /spell/i, addGem: /gem/i, addCurse: /curse/i, upgradeCard: /upgrade/i,
 };
 const MODWORD = {
-  energy: [/energy/i], hand: [/card/i, /draw/i], startBlock: [/block/i], inkMax: [/echo/i], startInk: [/echo/i], wellInk: [/bell/i, /echo/i], cardChoices: [/card/i],
-  freeSwaps: [/swap/i], campActions: [/camp/i], rareBoost: [/rare/i], goldMul: [/gold/i], priceMul: [/price/i], healMul: [/heal/i],
+  energy: [/breath/i], hand: [/card/i, /draw/i], startBlock: [/block/i], inkMax: [/vox/i], startInk: [/vox/i], wellInk: [/tea stall/i, /vox/i], cardChoices: [/card/i],
+  freeSwaps: [/swap/i], campActions: [/green room/i], rareBoost: [/rare/i], goldMul: [/gold/i], priceMul: [/price/i], healMul: [/heal/i],
 };
-const ROWWORD = { dmgAdd: /damage/i, blockAdd: /block/i, startBlock: /block/i, regen: /regen/i, thorns: /thorns/i, drawAdd: /draw/i };
+const ROWWORD = { dmgAdd: /damage/i, blockAdd: /block/i, startBlock: /block/i, regen: /warm tea/i, thorns: /feedback/i, drawAdd: /draw/i };
+// the internal row ids front and back read as the lead and the backing spot in player text (bible 4.1)
+const ROWNAME = { front: /\blead\b/i, back: /backing/i };
 const TRIG = {
   combatStart: /start(s)? (of )?(each )?(combat|fight)/i, combatEnd: /end of (each|the) (combat|fight)/i,
   turnStart: /start of (your|each|every) turn|turn start|first turn|\d(st|nd|rd|th) turn|each turn|every turn|\ba turn\b/i, turnEnd: /end of (your|each) turn/i,
-  onPlay: /\bplay(s|ed)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /falls?\b/i, onShuffle: /reshuffle/i, onExhaust: /exhaust/i,
-  onPickup: /when you take this|taking this/i, onChapterStart: /verse/i, onRest: /rest/i, onPaint: /wake/i, onFightWon: /fight|winning/i, onShopEnter: /shop/i,
+  onPlay: /\bplay(s|ed)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /loses? (their|a) voice/i, onShuffle: /reshuffle/i, onExhaust: /fade/i,
+  onPickup: /when you take this|taking this/i, onChapterStart: /\bact\b/i, onRest: /rest/i, onPaint: /unmute/i, onFightWon: /fight|winning/i, onShopEnter: /stall/i,
 };
-const TGTWORD = { all: /\ball\b/i, both: /both|heroes|each/i, ally: /ally/i, front: /front/i };
-const TIERWORD = { elite: /elite/i, boss: /boss/i, normal: /normal/i, minion: /minion/i };
+const TGTWORD = { all: /\ball\b/i, both: /both|heroes|each/i, ally: /ally/i, front: /\blead\b/i };
+const TIERWORD = { elite: /rival/i, boss: /headliner/i, normal: /creature/i, minion: /sidekick/i };
 
 function summary(r) {
   const nums = [], words = [], notes = [];
@@ -241,7 +243,7 @@ function summary(r) {
     notes.push(`${k} ${r.mods[k] > 0 ? '+' : ''}${r.mods[k]}`);
   });
   ['front', 'back'].forEach((row) => Object.keys((r.rows || {})[row] || {}).forEach((k) => {
-    needNum(r.rows[row][k], `${row} ${k}`); needWord(ROWWORD[k], `${row} ${k}`); needWord(new RegExp(row, 'i'), `row ${row}`);
+    needNum(r.rows[row][k], `${row} ${k}`); needWord(ROWWORD[k], `${row} ${k}`); needWord(ROWNAME[row], `row ${row}`);
     notes.push(`${row} ${k} ${r.rows[row][k]}`);
   }));
   hooksOf(r).forEach((h) => {
@@ -261,14 +263,14 @@ function summary(r) {
       if (o.tier) needNum(o.tier, `${o.op} tier`);
       if (o.op === 'status' || (o.op === 'removeStatus' && DATA.statuses[o.s])) needWord(new RegExp(DATA.statuses[o.s].name, 'i'), `status ${o.s}`);
       if (o.op === 'removeStatus' && o.s === 'debuffs') needWord(/cleanse|debuff/i, 'debuffs');
-      if (o.op === 'addBrush') needWord(/random/i, 'random song');
+      if (o.op === 'addBrush') needWord(/random/i, 'random spell');
       if (o.op === 'upgradeCard' && o.random) needWord(/random/i, 'random upgrade');
       if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onDamaged') needWord(/attacker/i, 'attacker');
       if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onPlay') needWord(/target|more damage/i, 'same target');
       if (o.tgt && TGTWORD[o.tgt]) needWord(TGTWORD[o.tgt], `target ${o.tgt}`);
       if (o.op === 'cond' && o.if) {
         needWord(/if|at \d|with|when|first turn/i, 'condition');
-        if (o.if.row) needWord(new RegExp(o.if.row, 'i'), 'cond row');
+        if (o.if.row) needWord(ROWNAME[o.if.row], 'cond row');
         numbersDeep(o.if, []).forEach((n) => needNum(n, 'cond'));
         if (o.if.status) needWord(new RegExp(DATA.statuses[o.if.status.s].name, 'i'), `cond status ${o.if.status.s}`);
         if (o.if.block) needWord(/block/i, 'cond block');
@@ -306,20 +308,20 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   // a sample checked against exact machine phrases (eyeballed once, now pinned)
   const say = (id, i) => DATA.hookText(DATA.relics[id].hooks[i || 0]);
   t.eq(say('rice_ball'), 'Whenever you win a fight, heal both heroes for 2 HP and heal the weakest hero for 2 HP.', 'rice_ball');
-  t.eq(say('pilgrim_compass'), 'Every 5th time you wake a hex, gain 1 Echo.', 'pilgrim_compass');
+  t.eq(say('pilgrim_compass'), 'Every 5th time you unmute a hex, gain 1 Vox.', 'pilgrim_compass');
   t.eq(say('silver_bell'), 'The next time you are hit, both heroes gain 6 Block.', 'silver_bell reads as a once per fight hook');
-  t.eq(say('fox_mask'), 'Once per turn, every 2nd time you swap rows, gain 1 Dodge.', 'fox_mask (the actor is the new front hero)');
-  t.eq(say('mirror_of_two_faces'), 'Once per turn, whenever you swap rows, gain 1 Energy.', 'mirror_of_two_faces');
-  t.eq(say('prism_crown'), 'Once per turn, whenever you play a card with 2 or more gems, gain 1 Energy.', 'prism_crown');
-  t.eq(say('phoenix_feather'), 'The next time a hero falls, revive that hero with 25% HP.', 'phoenix_feather');
-  t.eq(say('dragon_pearl'), 'Whenever you defeat an Elite, both heroes gain 2 max HP.', 'dragon_pearl');
-  t.eq(say('sands_of_patience'), 'At the start of every 3rd turn, gain 1 Energy and draw 1 card.', 'sands_of_patience');
-  t.eq(say('thunder_wheel'), 'Every 3rd time you play an Attack, gain 2 Charge and deal 4 damage to all enemies.', 'thunder_wheel');
-  t.eq(say('nightlong_inkwell'), 'At the end of your turn, apply 2 Poison to all enemies.', 'nightlong_inkwell');
+  t.eq(say('fox_mask'), 'Once per turn, every 2nd time you swap spots, gain 1 Shimmy.', 'fox_mask (the actor is the new front hero)');
+  t.eq(say('mirror_of_two_faces'), 'Once per turn, whenever you swap spots, gain 1 Breath.', 'mirror_of_two_faces');
+  t.eq(say('prism_crown'), 'Once per turn, whenever you play a card with 2 or more gems, gain 1 Breath.', 'prism_crown');
+  t.eq(say('phoenix_feather'), 'The next time a hero loses their voice, bring them back with 25% HP.', 'phoenix_feather');
+  t.eq(say('dragon_pearl'), 'Whenever you defeat a Rival, both heroes gain 2 max HP.', 'dragon_pearl');
+  t.eq(say('sands_of_patience'), 'At the start of every 3rd turn, gain 1 Breath and draw 1 card.', 'sands_of_patience');
+  t.eq(say('thunder_wheel'), 'Every 3rd time you play an Attack, gain 2 Rumble and deal 4 damage to all enemies.', 'thunder_wheel');
+  t.eq(say('nightlong_inkwell'), 'At the end of your turn, apply 2 Earworm to all enemies.', 'nightlong_inkwell');
   t.eq(say('tyrants_crown'), 'When you take this, add 3 curses to your deck.', 'tyrants_crown pays its price on pickup');
   t.eq(say('blood_moon_vow'), 'At the start of your turn, both heroes lose 2 HP.', 'blood_moon_vow');
   t.eq(say('apothecary_jar'), 'At the end of combat, heal both heroes for 3 HP.', 'apothecary_jar is a combatEnd hook');
-  t.eq(say('longbow_of_reach'), 'Up to 2 times per turn, whenever you play an Attack, Back: deal 3 damage to the same target.', 'longbow_of_reach reads the row');
+  t.eq(say('longbow_of_reach'), 'Up to 2 times per turn, whenever you play an Attack, Backing: deal 3 damage to the same target.', 'longbow_of_reach reads the row');
   t.eq(JSON.stringify(DATA.relics.formation_scroll.rows), '{"front":{"startBlock":3},"back":{"blockAdd":1}}', 'formation_scroll rows');
   t.eq(JSON.stringify(DATA.relics.war_banner.rows), '{"front":{"dmgAdd":1}}', 'war_banner rows');
 });
@@ -436,10 +438,10 @@ t.test('gem text: generated text is readable for every gem, and a hand written t
   });
   t.deep(gems.filter((g) => g.text).map((g) => g.id), ['heartflame_topaz'], 'only the four way resource gem has hand written text');
   const say = (id) => DATA.gemText(id);
-  t.eq(say('ember_ruby'), '+2 damage', 'ember_ruby'); t.eq(say('vanguard_garnet'), 'Front row: +3 damage', 'vanguard_garnet'); t.eq(say('twinfang_spinel'), '+1 hit', 'twinfang_spinel');
-  t.eq(say('kirin_jasper'), 'Front row: +3 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block, +2 healing', 'tidewatch_sapphire'); t.eq(say('sanctum_iolite'), 'Both heroes gain 6 Block', 'sanctum_iolite'); t.eq(say('ironbark_sapphire'), '+3 Block, gain 4 Thorns', 'ironbark_sapphire');
-  t.eq(say('featherlight_emerald'), 'Costs 1 less', 'featherlight_emerald'); t.eq(say('wellspring_tourmaline'), 'Gain 1 Energy', 'wellspring_tourmaline');
-  t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('thornwake_lapis'), 'Gain 2 Thorns', 'thornwake_lapis'); t.eq(say('inkwell_amber'), 'Gain 1 Echo, 2 gold and 3 Regen', 'inkwell_amber'); t.eq(say('solstice_citrine'), 'Gain 1 Ritual, gain 2 Might', 'solstice_citrine'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
+  t.eq(say('ember_ruby'), '+2 damage', 'ember_ruby'); t.eq(say('vanguard_garnet'), 'Lead: +3 damage', 'vanguard_garnet'); t.eq(say('twinfang_spinel'), '+1 hit', 'twinfang_spinel');
+  t.eq(say('kirin_jasper'), 'Lead: +3 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block, +2 healing', 'tidewatch_sapphire'); t.eq(say('sanctum_iolite'), 'Both heroes gain 6 Block', 'sanctum_iolite'); t.eq(say('ironbark_sapphire'), '+3 Block, gain 4 Feedback', 'ironbark_sapphire');
+  t.eq(say('featherlight_emerald'), 'Costs 1 less', 'featherlight_emerald'); t.eq(say('wellspring_tourmaline'), 'Gain 1 Breath', 'wellspring_tourmaline');
+  t.eq(say('dusklight_amber'), 'Backing: draw 2 cards, gain 1 Shimmy', 'dusklight_amber'); t.eq(say('thornwake_lapis'), 'Gain 2 Feedback', 'thornwake_lapis'); t.eq(say('inkwell_amber'), 'Gain 1 Vox, 2 gold and 3 Warm Tea', 'inkwell_amber'); t.eq(say('solstice_citrine'), 'Gain 1 Crescendo, gain 2 Volume', 'solstice_citrine'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
 });
 
 // ================================================================================================ 5 gems on cards
@@ -569,9 +571,9 @@ t.test('junk cards: the six status cards exactly as CONTENT_SPEC section 2 words
   t.deep(c.status_wilt.hand, { drawn: [{ op: 'energy', n: -1 }] }, 'status_wilt: when drawn, lose 1 Energy'); t.deep(c.status_wilt.kw, ['unplayable'], 'status_wilt: unplayable');
   if (HAS_TEXT) {
     junk.forEach((d) => { const s = DATA.cardPlain(d.id); t.ok(s.length > 0 && s.length <= 110 && !/undefined|NaN/.test(s), `${d.id}: rules text "${s}"`); });
-    t.eq(DATA.cardPlain('curse_regret'), 'Unplayable. If this is in your hand at the end of your turn, the front hero loses 2 HP.', 'regret text');
-    t.eq(DATA.cardPlain('status_tangle'), 'Remove Bind from both heroes. Exhaust.', 'tangle text');
-    t.eq(DATA.cardPlain('status_wilt'), 'Unplayable. When drawn, lose 1 Energy.', 'wilt text');
+    t.eq(DATA.cardPlain('curse_regret'), 'Unplayable. If this is in your hand at the end of your turn, the lead hero loses 2 HP.', 'regret text');
+    t.eq(DATA.cardPlain('status_tangle'), 'Remove Tangled from both heroes. Fade.', 'tangle text');
+    t.eq(DATA.cardPlain('status_wilt'), 'Unplayable. When drawn, lose 1 Breath.', 'wilt text');
   }
 });
 
@@ -911,7 +913,7 @@ if (RB) {
 
   t.test('run hooks: onPickup relics act once, when taken, and never twice', () => {
     { const R = NEW(); const hp0 = R.heroes.map((h) => h.maxHp); const r = RUN.addRelic(R, 'heart_charm'); t.ok(r.ok, 'taken'); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), hp0.map((m) => [m + 5, m + 5]), 'heart_charm: +5 max HP and current HP for both heroes'); t.eq(RUN.addRelic(R, 'heart_charm').ok, false, 'a relic cannot be taken twice'); t.deep(R.heroes.map((h) => h.maxHp), hp0.map((m) => m + 5), '(so it does not pay twice)'); }
-    { const R = NEW(); const b = upgraded(R); RUN.addRelic(R, 'whetstone'); t.eq(upgraded(R), b + 3, 'whetstone (Honing Stone): 3 cards upgraded'); }
+    { const R = NEW(); const b = upgraded(R); RUN.addRelic(R, 'whetstone'); t.eq(upgraded(R), b + 3, 'whetstone (Practice Pad): 3 cards upgraded'); }
     { const R = NEW(); RUN.addRelic(R, 'koi_pouch'); t.eq(R.gems.length, 1, 'koi_pouch: one gem'); t.eq(RD.gems[R.gems[0]].tier, 2, 'koi_pouch: of tier 2'); }
     { const R = NEW(); const n = R.deck.length; RUN.addRelic(R, 'tyrants_crown'); t.eq(curses(R), 3, 'tyrants_crown: 3 curses in the deck'); t.eq(R.deck.length, n + 3, 'and nothing else'); t.eq(RUN.mods(R).energy, 4, 'tyrants_crown: 4 Energy in the run mods'); }
     { const R = NEW(); const r = RUN.addRelic(R, 'toll_bridge'); t.eq(r.pending.length, 0, 'toll_bridge: no choice waits on pickup (a boss relic is claimed on the reward page)'); t.eq(R.gems.length, 1, 'toll_bridge: a gem on pickup'); t.eq(RD.gems[R.gems[0]].tier, 3, 'toll_bridge: of tier 3'); t.eq(RUN.mods(R).cardChoices, 5, 'toll_bridge: 5 cards in every later reward'); t.eq(RUN.addRelic(R, 'toll_bridge').ok, false, 'and it pays once'); t.eq(R.gems.length, 1, '(so one gem only)'); }

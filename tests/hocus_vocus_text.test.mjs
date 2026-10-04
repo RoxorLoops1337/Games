@@ -202,7 +202,7 @@ t.test('card text: damage', () => {
     ['repeat of one dmg reads as times', [{ op: 'repeat', n: 3, do: [dmg(2)] }], {}, 'Deal 2 damage 3 times.'],
     ['X hits', [dmg(4, { hits: { per: 'X' } })], XC, 'Deal 4 damage X times.'],
     ['X repeat', [{ op: 'repeat', n: { per: 'X' }, do: [dmg(4)] }], XC, 'Deal 4 damage X times.'],
-    ['X mul', [dmg({ per: 'X', mul: 4 })], XC, 'Deal 4 damage for each Energy spent.'],
+    ['X mul', [dmg({ per: 'X', mul: 4 })], XC, 'Deal 4 damage for each Breath spent.'],
     ['repeat two ops', [{ op: 'repeat', n: 2, do: [dmg(3), blk(2)] }], {}, 'Repeat 2 times: deal 3 damage and gain 2 Block.'],
     ['repeat per hand', [{ op: 'repeat', n: { per: 'handSize' }, do: [dmg(1)] }], {}, 'Deal 1 damage for each card in your hand.'],
     ['zero damage', [dmg(0)], {}, 'Deal 0 damage.'],
@@ -214,16 +214,16 @@ t.test('card text: block, heal, hurt and the targets of each', () => {
     ['block', [blk(8)], 'Gain 8 Block.'],
     ['block ally', [blk(8, { tgt: 'ally' })], 'Give your ally 8 Block.'],
     ['block both', [blk(8, { tgt: 'both' })], 'Both heroes gain 8 Block.'],
-    ['block front', [blk(8, { tgt: 'front' })], 'The front hero gains 8 Block.'],
-    ['block back', [blk(8, { tgt: 'back' })], 'The back hero gains 8 Block.'],
+    ['block front', [blk(8, { tgt: 'front' })], 'The lead hero gains 8 Block.'],
+    ['block back', [blk(8, { tgt: 'back' })], 'The backing hero gains 8 Block.'],
     ['heal', [{ op: 'heal', n: 4 }], 'Heal 4 HP.'],
     ['heal ally', [{ op: 'heal', n: 4, tgt: 'ally' }], 'Heal your ally for 4 HP.'],
     ['heal both', [{ op: 'heal', n: 4, tgt: 'both' }], 'Heal both heroes for 4 HP.'],
-    ['heal front', [{ op: 'heal', n: 4, tgt: 'front' }], 'Heal the front hero for 4 HP.'],
+    ['heal front', [{ op: 'heal', n: 4, tgt: 'front' }], 'Heal the lead hero for 4 HP.'],
     ['hurt', [{ op: 'hurt', n: 3 }], 'Lose 3 HP.'],
     ['hurt ally', [{ op: 'hurt', n: 3, tgt: 'ally' }], 'Your ally loses 3 HP.'],
     ['hurt both', [{ op: 'hurt', n: 3, tgt: 'both' }], 'Both heroes lose 3 HP.'],
-    ['hurt lethal', [{ op: 'hurt', n: 3, lethal: true }], 'Lose 3 HP (this can be fatal).'],
+    ['hurt lethal', [{ op: 'hurt', n: 3, lethal: true }], 'Lose 3 HP (this can leave a hero voiceless).'],
     ['block then dmg', [blk(5), dmg(5)], 'Gain 5 Block. Deal 5 damage.'],
     ['dmg then heal', [dmg(5), { op: 'heal', n: 2 }], 'Deal 5 damage. Heal 2 HP.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, name));
@@ -232,78 +232,78 @@ t.test('card text: block, heal, hurt and the targets of each', () => {
 t.test('card text: statuses merge into one sentence per side', () => {
   [
     ['gain a status', [st('bloom', 1)], 'Gain 1 Bloom.'],
-    ['debuff defaults to the enemy', [st('weak', 2)], 'Apply 2 Weak.'],
-    ['two debuffs merge', [st('vulnerable', 2), st('weak', 1)], 'Apply 2 Vulnerable and 1 Weak.'],
-    ['two buffs merge', [st('might', 2), st('bulwark', 1)], 'Gain 2 Might and 1 Bulwark.'],
-    ['three merge with commas', [st('might', 2), st('bulwark', 1), st('bloom', 3)], 'Gain 2 Might, 1 Bulwark and 3 Bloom.'],
-    ['a debuff and a buff stay apart', [st('weak', 1), st('might', 1)], 'Apply 1 Weak. Gain 1 Might.'],
-    ['all enemies', [st('poison', 3, { tgt: 'all' })], 'Apply 3 Poison to all enemies.'],
-    ['random enemy', [st('poison', 3, { tgt: 'random' })], 'Apply 3 Poison to a random enemy.'],
-    ['weakest enemy', [st('weak', 1, { tgt: 'lowest' })], 'Apply 1 Weak to the enemy with the lowest HP.'],
-    ['all other enemies', [st('burn', 3, { tgt: 'others' })], 'Apply 3 Burn to all other enemies.'],
-    ['ally', [st('might', 2, { tgt: 'ally' })], 'Give your ally 2 Might.'],
-    ['both', [st('bulwark', 2, { tgt: 'both' })], 'Both heroes gain 2 Bulwark.'],
-    ['front', [st('bulwark', 2, { tgt: 'front' })], 'The front hero gains 2 Bulwark.'],
-    ['different targets do not merge', [st('weak', 1), st('weak', 1, { tgt: 'all' })], 'Apply 1 Weak. Apply 1 Weak to all enemies.'],
+    ['debuff defaults to the enemy', [st('weak', 2)], 'Apply 2 Muffled.'],
+    ['two debuffs merge', [st('vulnerable', 2), st('weak', 1)], 'Apply 2 Exposed and 1 Muffled.'],
+    ['two buffs merge', [st('might', 2), st('bulwark', 1)], 'Gain 2 Volume and 1 Soundproof.'],
+    ['three merge with commas', [st('might', 2), st('bulwark', 1), st('bloom', 3)], 'Gain 2 Volume, 1 Soundproof and 3 Bloom.'],
+    ['a debuff and a buff stay apart', [st('weak', 1), st('might', 1)], 'Apply 1 Muffled. Gain 1 Volume.'],
+    ['all enemies', [st('poison', 3, { tgt: 'all' })], 'Apply 3 Earworm to all enemies.'],
+    ['random enemy', [st('poison', 3, { tgt: 'random' })], 'Apply 3 Earworm to a random enemy.'],
+    ['weakest enemy', [st('weak', 1, { tgt: 'lowest' })], 'Apply 1 Muffled to the enemy with the lowest HP.'],
+    ['all other enemies', [st('burn', 3, { tgt: 'others' })], 'Apply 3 Sizzle to all other enemies.'],
+    ['ally', [st('might', 2, { tgt: 'ally' })], 'Give your ally 2 Volume.'],
+    ['both', [st('bulwark', 2, { tgt: 'both' })], 'Both heroes gain 2 Soundproof.'],
+    ['front', [st('bulwark', 2, { tgt: 'front' })], 'The lead hero gains 2 Soundproof.'],
+    ['different targets do not merge', [st('weak', 1), st('weak', 1, { tgt: 'all' })], 'Apply 1 Muffled. Apply 1 Muffled to all enemies.'],
     ['negative on self', [st('bloom', -1)], 'Lose 1 Bloom.'],
-    ['negative on an enemy', [st('vulnerable', -1, { tgt: 'enemy' })], 'Remove 1 Vulnerable from the enemy.'],
-    ['per status', [st('poison', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Double the target\'s Poison (adds at most 10).'],
-    ['per turn', [st('burn', { per: 'turn', mul: 2, cap: 10 }, { tgt: 'enemy' })], 'Apply 2 Burn for each turn of this combat (max 10).'],
+    ['negative on an enemy', [st('vulnerable', -1, { tgt: 'enemy' })], 'Remove 1 Exposed from the enemy.'],
+    ['per status', [st('poison', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Double the target\'s Earworm (adds at most 10).'],
+    ['per turn', [st('burn', { per: 'turn', mul: 2, cap: 10 }, { tgt: 'enemy' })], 'Apply 2 Sizzle for each turn of this combat (max 10).'],
     ['remove all debuffs', [{ op: 'removeStatus', s: 'debuffs' }], 'Remove all debuffs.'],
     ['remove debuffs from the ally', [{ op: 'removeStatus', s: 'debuffs', tgt: 'ally' }], 'Remove all debuffs from your ally.'],
     ['remove debuffs from both', [{ op: 'removeStatus', s: 'debuffs', tgt: 'both' }], 'Remove all debuffs from both heroes.'],
     ['remove buffs from the enemy', [{ op: 'removeStatus', s: 'buffs' }], 'Remove all buffs from the enemy.'],
-    ['remove one status from self', [{ op: 'removeStatus', s: 'weak' }], 'Lose all Weak.'],
-    ['remove a counted status', [{ op: 'removeStatus', s: 'weak', n: 1 }], 'Lose 1 Weak.'],
-    ['remove a buff from the enemy', [{ op: 'removeStatus', s: 'might', tgt: 'enemy' }], 'Remove Might from the enemy.'],
+    ['remove one status from self', [{ op: 'removeStatus', s: 'weak' }], 'Lose all Muffled.'],
+    ['remove a counted status', [{ op: 'removeStatus', s: 'weak', n: 1 }], 'Lose 1 Muffled.'],
+    ['remove a buff from the enemy', [{ op: 'removeStatus', s: 'might', tgt: 'enemy' }], 'Remove Volume from the enemy.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, name));
   // a conditional bonus of the same status reads "more"
-  t.eq(text([dmg(4), st('burn', 3), cond({ row: 'front' }, [st('burn', 2)])]), 'Deal 4 damage. Apply 3 Burn. Front: apply 2 more Burn.', 'a same status conditional bonus reads "more"');
-  t.eq(text([dmg(4), st('bloom', 1), cond({ row: 'back' }, [st('bloom', 2)])]), 'Deal 4 damage. Gain 1 Bloom. Back: gain 2 more Bloom.', 'and works for buffs');
-  t.eq(text([dmg(4), st('burn', 3), cond({ row: 'front' }, [st('poison', 2)])]), 'Deal 4 damage. Apply 3 Burn. Front: apply 2 Poison.', 'a different status does not read "more"');
+  t.eq(text([dmg(4), st('burn', 3), cond({ row: 'front' }, [st('burn', 2)])]), 'Deal 4 damage. Apply 3 Sizzle. Lead: apply 2 more Sizzle.', 'a same status conditional bonus reads "more"');
+  t.eq(text([dmg(4), st('bloom', 1), cond({ row: 'back' }, [st('bloom', 2)])]), 'Deal 4 damage. Gain 1 Bloom. Backing: gain 2 more Bloom.', 'and works for buffs');
+  t.eq(text([dmg(4), st('burn', 3), cond({ row: 'front' }, [st('poison', 2)])]), 'Deal 4 damage. Apply 3 Sizzle. Lead: apply 2 Earworm.', 'a different status does not read "more"');
 });
 
 t.test('card text: energy, draw, cards and the rest', () => {
   [
     ['draw 2', [{ op: 'draw', n: 2 }], 'Draw 2 cards.'],
     ['draw 1', [{ op: 'draw', n: 1 }], 'Draw 1 card.'],
-    ['energy', [{ op: 'energy', n: 1 }], 'Gain 1 Energy.'],
-    ['energy 2', [{ op: 'energy', n: 2 }], 'Gain 2 Energy.'],
-    ['lose energy', [{ op: 'energy', n: -1 }], 'Lose 1 Energy.'],
-    ['swap', [{ op: 'swap' }], 'Swap rows.'],
+    ['energy', [{ op: 'energy', n: 1 }], 'Gain 1 Breath.'],
+    ['energy 2', [{ op: 'energy', n: 2 }], 'Gain 2 Breath.'],
+    ['lose energy', [{ op: 'energy', n: -1 }], 'Lose 1 Breath.'],
+    ['swap', [{ op: 'swap' }], 'Swap spots.'],
     ['discard one', [pick('hand', 1, 'discard')], 'Discard a card.'],
     ['discard up to two', [pick('hand', 2, 'discard', { optional: true })], 'Discard up to 2 cards.'],
     ['discard two', [pick('hand', 2, 'discard')], 'Discard 2 cards.'],
-    ['exhaust one', [pick('hand', 1, 'exhaust')], 'Exhaust a card.'],
-    ['retain one', [pick('hand', 1, 'retain')], 'Retain a card.'],
+    ['exhaust one', [pick('hand', 1, 'exhaust')], 'Fade a card.'],
+    ['retain one', [pick('hand', 1, 'retain')], 'Hold a card.'],
     ['upgrade in hand', [pick('hand', 1, 'upgrade')], 'Upgrade a card in your hand.'],
     ['copy in hand', [pick('hand', 1, 'copy')], 'Copy a card in your hand.'],
     ['discard to hand', [pick('discard', 1, 'toHand')], 'Put a card from your discard pile into your hand.'],
-    ['exhaust to hand', [pick('exhaust', 1, 'toHand')], 'Return a card from your Exhaust pile to your hand.'],
+    ['exhaust to hand', [pick('exhaust', 1, 'toHand')], 'Return a card from your Faded pile to your hand.'],
     ['draw top to hand', [pick('draw', 1, 'toHand', { top: 3 })], 'Put a card from the top 3 cards of your draw pile into your hand.'],
     ['draw top 1', [pick('draw', 1, 'toHand', { top: 1 })], 'Put a card from the top of your draw pile into your hand.'],
     ['draw pile whole', [pick('draw', 1, 'discard')], 'Discard a card from your draw pile.'],
     ['discard to draw top', [pick('discard', 1, 'toDrawTop')], 'Put a card from your discard pile on top of your draw pile.'],
-    ['random exhaust', [pick('hand', 1, 'exhaust', { random: true })], 'Exhaust a random card.'],
+    ['random exhaust', [pick('hand', 1, 'exhaust', { random: true })], 'Fade a random card.'],
     ['random two', [pick('hand', 2, 'discard', { random: true })], 'Discard 2 random cards.'],
     ['type filter', [pick('hand', 1, 'discard', { filter: { type: 'attack' } })], 'Discard an Attack.'],
     ['type filter plural', [pick('hand', 2, 'discard', { filter: { type: 'skill' } })], 'Discard 2 Skills.'],
-    ['hero filter', [pick('discard', 2, 'toHand', { filter: { hero: 'kuro' } })], 'Put 2 Kuro cards from your discard pile into your hand.'],
+    ['hero filter', [pick('discard', 2, 'toHand', { filter: { hero: 'kuro' } })], 'Put 2 RoxorLoops cards from your discard pile into your hand.'],
     ['choose', [pick('hand', 1, undefined)], 'Choose a card.'],
     ['picked count', [pick('hand', 2, 'discard'), { op: 'draw', n: { per: 'picked' } }], 'Discard 2 cards. Draw 1 card for each card chosen.'],
-    ['picked mul', [pick('hand', 2, 'exhaust', { optional: true }), blk({ per: 'picked', mul: 3 })], 'Exhaust up to 2 cards. Gain 3 Block for each card chosen.'],
+    ['picked mul', [pick('hand', 2, 'exhaust', { optional: true }), blk({ per: 'picked', mul: 3 })], 'Fade up to 2 cards. Gain 3 Block for each card chosen.'],
     ['gold', [{ op: 'gold', n: 10 }], 'Gain 10 gold.'],
-    ['ink', [{ op: 'ink', n: 2 }], 'Gain 2 Echo.'],
+    ['ink', [{ op: 'ink', n: 2 }], 'Gain 2 Vox.'],
     ['max hp', [{ op: 'maxHp', n: 2 }], 'Gain 2 max HP.'],
-    ['revive pct', [{ op: 'revive', pct: 0.3 }], 'Revive a fallen hero with 30% HP.'],
-    ['revive n', [{ op: 'revive', n: 8 }], 'Revive a fallen hero with 8 HP.'],
+    ['revive pct', [{ op: 'revive', pct: 0.3 }], 'Bring a voiceless hero back with 30% HP.'],
+    ['revive n', [{ op: 'revive', n: 8 }], 'Bring a voiceless hero back with 8 HP.'],
     ['empty', [], ''],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, name));
   t.eq(text([{ op: 'add', card: PLAINC }], SK), 'Add a Pebble to your hand.', 'add: a normal card goes to the hand');
   t.eq(text([{ op: 'add', card: INK }], SK), 'Add an Ink Blot card to your discard pile.', 'add: junk goes to the discard pile, and "an" before a vowel');
   t.eq(text([{ op: 'add', card: INK, n: 2, to: 'discard' }], SK), 'Add 2 Ink Blot cards to your discard pile.', 'add: a count');
   t.eq(text([{ op: 'add', card: INK, to: 'draw' }], SK), 'Shuffle an Ink Blot card into your draw pile.', 'add: to the draw pile shuffles');
-  t.eq(text([{ op: 'add', card: PLAINC, to: 'exhaust' }], SK), 'Add a Pebble to your Exhaust pile.', 'add: to the exhaust pile');
+  t.eq(text([{ op: 'add', card: PLAINC, to: 'exhaust' }], SK), 'Add a Pebble to your Faded pile.', 'add: to the exhaust pile');
   t.eq(text([{ op: 'add', card: PLAINC, up: 1 }], SK), 'Add a Pebble+ to your hand.', 'add: an upgraded copy');
   t.eq(text([{ op: 'add', card: 't_missing' }], SK), 'Add a t_missing to your hand.', 'add: an unknown card falls back to its id');
   const spicy = W.card([], { name: 'A&B <i>' });
@@ -314,27 +314,27 @@ t.test('card text: energy, draw, cards and the rest', () => {
 t.test('card text: conditions', () => {
   const hero = (s, x) => Object.assign({ who: 'self', s }, x);
   [
-    ['front bonus merges into the damage', [dmg(6), cond({ row: 'front' }, [dmg(3)])], 'Deal 6 damage. Front: deal 3 more damage.'],
-    ['back bonus merges into the block', [blk(6), cond({ row: 'back' }, [blk(3)])], 'Gain 6 Block. Back: gain 3 more Block.'],
-    ['row bonus of another kind stays whole', [dmg(4), cond({ row: 'back' }, [{ op: 'draw', n: 1 }])], 'Deal 4 damage. Back: draw 1 card.'],
-    ['row with an else', [cond({ row: 'front' }, [dmg(9)], [blk(5)])], 'Front: deal 9 damage. Back: gain 5 Block.'],
-    ['back with an else', [cond({ row: 'back' }, [blk(9)], [dmg(5)])], 'Back: gain 9 Block. Front: deal 5 damage.'],
+    ['front bonus merges into the damage', [dmg(6), cond({ row: 'front' }, [dmg(3)])], 'Deal 6 damage. Lead: deal 3 more damage.'],
+    ['back bonus merges into the block', [blk(6), cond({ row: 'back' }, [blk(3)])], 'Gain 6 Block. Backing: gain 3 more Block.'],
+    ['row bonus of another kind stays whole', [dmg(4), cond({ row: 'back' }, [{ op: 'draw', n: 1 }])], 'Deal 4 damage. Backing: draw 1 card.'],
+    ['row with an else', [cond({ row: 'front' }, [dmg(9)], [blk(5)])], 'Lead: deal 9 damage. Backing: gain 5 Block.'],
+    ['back with an else', [cond({ row: 'back' }, [blk(9)], [dmg(5)])], 'Backing: gain 9 Block. Lead: deal 5 damage.'],
     ['status gte', [dmg(4), cond({ status: hero('bloom', { gte: 3 }) }, [dmg(4)])], 'Deal 4 damage. If you have at least 3 Bloom, deal 4 more damage.'],
     ['status gte 1', [cond({ status: hero('bloom', { gte: 1 }) }, [{ op: 'draw', n: 1 }])], 'If you have Bloom, draw 1 card.'],
     ['status none', [cond({ status: hero('bloom', { lte: 0 }) }, [{ op: 'draw', n: 1 }])], 'If you have no Bloom, draw 1 card.'],
     ['status at most', [cond({ status: hero('bloom', { lte: 2 }) }, [{ op: 'draw', n: 1 }])], 'If you have at most 2 Bloom, draw 1 card.'],
     ['status range', [cond({ status: hero('bloom', { gte: 2, lte: 4 }) }, [{ op: 'draw', n: 1 }])], 'If you have 2 to 4 Bloom, draw 1 card.'],
-    ['ally status', [cond({ status: { who: 'ally', s: 'weak', gte: 1 } }, [blk(4)])], 'If your ally has Weak, gain 4 Block.'],
-    ['target status', [cond({ status: { who: 'target', s: 'poison', gte: 2 } }, [dmg(4)])], 'If the target has at least 2 Poison, deal 4 damage.'],
+    ['ally status', [cond({ status: { who: 'ally', s: 'weak', gte: 1 } }, [blk(4)])], 'If your ally has Muffled, gain 4 Block.'],
+    ['target status', [cond({ status: { who: 'target', s: 'poison', gte: 2 } }, [dmg(4)])], 'If the target has at least 2 Earworm, deal 4 damage.'],
     ['hp below', [dmg(5), cond({ hpPct: { who: 'target', lt: 0.5 } }, [dmg(5)])], 'Deal 5 damage. If the target is below 50% HP, deal 5 more damage.'],
     ['hp above self', [cond({ hpPct: { who: 'self', gt: 0.5 } }, [blk(5)])], 'If you are above 50% HP, gain 5 Block.'],
     ['hp ally', [cond({ hpPct: { who: 'ally', lt: 0.3 } }, [blk(5)])], 'If your ally is below 30% HP, gain 5 Block.'],
     ['hand empty', [cond({ handEmpty: true }, [{ op: 'draw', n: 2 }])], 'If your hand is empty, draw 2 cards.'],
-    ['no card played', [cond({ cardsPlayed: { lte: 0 } }, [{ op: 'energy', n: 1 }])], 'If you have not played a card this turn, gain 1 Energy.'],
-    ['three cards played', [cond({ cardsPlayed: { gte: 3 } }, [{ op: 'energy', n: 1 }])], 'If you have played at least 3 cards this turn, gain 1 Energy.'],
-    ['a card played', [cond({ cardsPlayed: { gte: 1 } }, [{ op: 'energy', n: 1 }])], 'If you have played a card this turn, gain 1 Energy.'],
-    ['at most one card', [cond({ cardsPlayed: { lte: 1 } }, [{ op: 'energy', n: 1 }])], 'If you have played at most 1 card this turn, gain 1 Energy.'],
-    ['card range', [cond({ cardsPlayed: { gte: 2, lte: 3 } }, [{ op: 'energy', n: 1 }])], 'If you have played 2 to 3 cards this turn, gain 1 Energy.'],
+    ['no card played', [cond({ cardsPlayed: { lte: 0 } }, [{ op: 'energy', n: 1 }])], 'If you have not played a card this turn, gain 1 Breath.'],
+    ['three cards played', [cond({ cardsPlayed: { gte: 3 } }, [{ op: 'energy', n: 1 }])], 'If you have played at least 3 cards this turn, gain 1 Breath.'],
+    ['a card played', [cond({ cardsPlayed: { gte: 1 } }, [{ op: 'energy', n: 1 }])], 'If you have played a card this turn, gain 1 Breath.'],
+    ['at most one card', [cond({ cardsPlayed: { lte: 1 } }, [{ op: 'energy', n: 1 }])], 'If you have played at most 1 card this turn, gain 1 Breath.'],
+    ['card range', [cond({ cardsPlayed: { gte: 2, lte: 3 } }, [{ op: 'energy', n: 1 }])], 'If you have played 2 to 3 cards this turn, gain 1 Breath.'],
     ['no attack played', [cond({ attacksPlayed: { lte: 0 } }, [blk(4)])], 'If you have not played an Attack this turn, gain 4 Block.'],
     ['an attack played', [cond({ attacksPlayed: { gte: 1 } }, [{ op: 'draw', n: 1 }])], 'If you have played an Attack this turn, draw 1 card.'],
     ['two attacks played', [cond({ attacksPlayed: { gte: 2 } }, [{ op: 'draw', n: 1 }])], 'If you have played at least 2 Attacks this turn, draw 1 card.'],
@@ -342,34 +342,34 @@ t.test('card text: conditions', () => {
     ['turn or later', [cond({ turn: { gte: 3 } }, [blk(6)])], 'If it is turn 3 or later, gain 6 Block.'],
     ['turn or earlier', [cond({ turn: { lte: 2 } }, [blk(6)])], 'If it is turn 2 or earlier, gain 6 Block.'],
     ['turn range', [cond({ turn: { gte: 2, lte: 4 } }, [blk(6)])], 'If it is turn 2 to 4, gain 6 Block.'],
-    ['last kill', [dmg(5), cond({ lastKill: true }, [{ op: 'energy', n: 1 }])], 'Deal 5 damage. If this defeats an enemy, gain 1 Energy.'],
-    ['target status key', [dmg(5), cond({ targetStatus: { s: 'poison', gte: 1 } }, [dmg(5)])], 'Deal 5 damage. If the target has Poison, deal 5 more damage.'],
-    ['ally down', [cond({ allyDown: true }, [blk(9)])], 'If your ally is down, gain 9 Block.'],
+    ['last kill', [dmg(5), cond({ lastKill: true }, [{ op: 'energy', n: 1 }])], 'Deal 5 damage. If this defeats an enemy, gain 1 Breath.'],
+    ['target status key', [dmg(5), cond({ targetStatus: { s: 'poison', gte: 1 } }, [dmg(5)])], 'Deal 5 damage. If the target has Earworm, deal 5 more damage.'],
+    ['ally down', [cond({ allyDown: true }, [blk(9)])], 'If your ally is voiceless, gain 9 Block.'],
     ['block', [cond({ block: { gte: 10 } }, [{ op: 'draw', n: 1 }])], 'If you have at least 10 Block, draw 1 card.'],
     ['no block', [cond({ block: { lte: 0 } }, [{ op: 'draw', n: 1 }])], 'If you have no Block, draw 1 card.'],
-    ['no energy', [cond({ energy: { lte: 0 } }, [{ op: 'draw', n: 1 }])], 'If you have no Energy left, draw 1 card.'],
-    ['energy gte', [cond({ energy: { gte: 2 } }, [{ op: 'draw', n: 1 }])], 'If you have at least 2 Energy left, draw 1 card.'],
-    ['energy at most', [cond({ energy: { lte: 1 } }, [{ op: 'draw', n: 1 }])], 'If you have at most 1 Energy left, draw 1 card.'],
-    ['energy range', [cond({ energy: { gte: 1, lte: 2 } }, [{ op: 'draw', n: 1 }])], 'If you have 1 to 2 Energy left, draw 1 card.'],
+    ['no energy', [cond({ energy: { lte: 0 } }, [{ op: 'draw', n: 1 }])], 'If you have no Breath left, draw 1 card.'],
+    ['energy gte', [cond({ energy: { gte: 2 } }, [{ op: 'draw', n: 1 }])], 'If you have at least 2 Breath left, draw 1 card.'],
+    ['energy at most', [cond({ energy: { lte: 1 } }, [{ op: 'draw', n: 1 }])], 'If you have at most 1 Breath left, draw 1 card.'],
+    ['energy range', [cond({ energy: { gte: 1, lte: 2 } }, [{ op: 'draw', n: 1 }])], 'If you have 1 to 2 Breath left, draw 1 card.'],
     ['hand small', [cond({ handSize: { lte: 2 } }, [{ op: 'draw', n: 2 }])], 'If you hold at most 2 cards, draw 2 cards.'],
     ['hand none', [cond({ handSize: { lte: 0 } }, [{ op: 'draw', n: 2 }])], 'If you hold no cards, draw 2 cards.'],
-    ['hand big', [cond({ handSize: { gte: 6 } }, [{ op: 'energy', n: 1 }])], 'If you hold at least 6 cards, gain 1 Energy.'],
-    ['hand range', [cond({ handSize: { gte: 2, lte: 4 } }, [{ op: 'energy', n: 1 }])], 'If you hold 2 to 4 cards, gain 1 Energy.'],
+    ['hand big', [cond({ handSize: { gte: 6 } }, [{ op: 'energy', n: 1 }])], 'If you hold at least 6 cards, gain 1 Breath.'],
+    ['hand range', [cond({ handSize: { gte: 2, lte: 4 } }, [{ op: 'energy', n: 1 }])], 'If you hold 2 to 4 cards, gain 1 Breath.'],
     ['enemies many', [cond({ enemies: { gte: 2 } }, [dmg(4, { tgt: 'all' })])], 'If 2 or more enemies remain, deal 4 damage to all enemies.'],
     ['enemies one', [cond({ enemies: { gte: 1 } }, [dmg(4)])], 'If an enemy remains, deal 4 damage.'],
     ['enemies few', [cond({ enemies: { lte: 2 } }, [dmg(4)])], 'If 2 or fewer enemies remain, deal 4 damage.'],
     ['one enemy', [cond({ enemies: { lte: 1 } }, [dmg(4)])], 'If only one enemy remains, deal 4 damage.'],
     ['enemies range', [cond({ enemies: { gte: 2, lte: 3 } }, [dmg(4)])], 'If 2 to 3 enemies remain, deal 4 damage.'],
-    ['two keys in one condition', [cond({ row: 'front', status: hero('might', { gte: 2 }) }, [dmg(9)])], 'If you are in the front row and you have at least 2 Might, deal 9 damage.'],
+    ['two keys in one condition', [cond({ row: 'front', status: hero('might', { gte: 2 }) }, [dmg(9)])], 'If you are in the lead and you have at least 2 Volume, deal 9 damage.'],
     ['else without a row', [cond({ handEmpty: true }, [{ op: 'draw', n: 2 }], [{ op: 'draw', n: 1 }])], 'If your hand is empty, draw 2 cards. Otherwise, draw 1 card.'],
     ['two ops in then', [cond({ handEmpty: true }, [{ op: 'draw', n: 2 }, blk(3)])], 'If your hand is empty, draw 2 cards and gain 3 Block.'],
-    ['nested', [cond({ row: 'front' }, [cond({ handEmpty: true }, [{ op: 'draw', n: 2 }])])], 'Front: if your hand is empty, draw 2 cards.'],
-    ['cond in a repeat', [{ op: 'repeat', n: 2, do: [cond({ row: 'front' }, [dmg(3)])] }], 'Repeat 2 times: Front: deal 3 damage.'],
+    ['nested', [cond({ row: 'front' }, [cond({ handEmpty: true }, [{ op: 'draw', n: 2 }])])], 'Lead: if your hand is empty, draw 2 cards.'],
+    ['cond in a repeat', [{ op: 'repeat', n: 2, do: [cond({ row: 'front' }, [dmg(3)])] }], 'Repeat 2 times: Lead: deal 3 damage.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, 'cond: ' + name));
-  t.eq(text([dmg(6), cond({ row: 'front' }, [dmg(3, { pierce: true })])]), 'Deal 6 damage. Front: deal 3 damage, ignoring Block.', 'cond: a fancy bonus stays a whole clause');
-  t.eq(text([dmg(6), cond({ row: 'front' }, [dmg(3, { tgt: 'all' })])]), 'Deal 6 damage. Front: deal 3 damage to all enemies.', 'cond: a different target does not merge');
-  t.eq(text([blk(6, { tgt: 'both' }), cond({ row: 'front' }, [blk(3, { tgt: 'both' })])], SK), 'Both heroes gain 6 Block. Front: both heroes gain 3 more Block.', 'cond: a same target block bonus merges');
-  t.eq(text([{ op: 'heal', n: 3 }, cond({ row: 'back' }, [{ op: 'heal', n: 2 }])], SK), 'Heal 3 HP. Back: heal 2 more HP.', 'cond: a heal bonus merges');
+  t.eq(text([dmg(6), cond({ row: 'front' }, [dmg(3, { pierce: true })])]), 'Deal 6 damage. Lead: deal 3 damage, ignoring Block.', 'cond: a fancy bonus stays a whole clause');
+  t.eq(text([dmg(6), cond({ row: 'front' }, [dmg(3, { tgt: 'all' })])]), 'Deal 6 damage. Lead: deal 3 damage to all enemies.', 'cond: a different target does not merge');
+  t.eq(text([blk(6, { tgt: 'both' }), cond({ row: 'front' }, [blk(3, { tgt: 'both' })])], SK), 'Both heroes gain 6 Block. Lead: both heroes gain 3 more Block.', 'cond: a same target block bonus merges');
+  t.eq(text([{ op: 'heal', n: 3 }, cond({ row: 'back' }, [{ op: 'heal', n: 2 }])], SK), 'Heal 3 HP. Backing: heal 2 more HP.', 'cond: a heal bonus merges');
 });
 
 t.test('card text: value expressions (per)', () => {
@@ -382,16 +382,16 @@ t.test('card text: value expressions (per)', () => {
     ['status mul 1', dmg(status('bloom')), 'Deal damage equal to your Bloom.'],
     ['status base', dmg(status('bloom', { base: 2, mul: 2 })), 'Deal 2 damage, plus 2 for each Bloom you have.'],
     ['status base 1', dmg(status('bloom', { base: 3 })), 'Deal damage equal to 3 plus your Bloom.'],
-    ['ally status', dmg(status('might', { who: 'ally', mul: 2 })), 'Deal 2 damage for each Might your ally has.'],
-    ['target status', dmg(status('poison', { who: 'target', mul: 5, cap: 50 })), 'Deal 5 damage for each Poison the target has (max 50).'],
+    ['ally status', dmg(status('might', { who: 'ally', mul: 2 })), 'Deal 2 damage for each Volume your ally has.'],
+    ['target status', dmg(status('poison', { who: 'target', mul: 5, cap: 50 })), 'Deal 5 damage for each Earworm the target has (max 50).'],
     ['hand', blk({ per: 'handSize', mul: 2 }), 'Gain 2 Block for each card in your hand.'],
     ['draw pile', blk({ per: 'drawPile' }), 'Gain Block equal to the number of cards in your draw pile.'],
     ['discard pile cap', dmg({ per: 'discardPile', mul: 1, cap: 12 }), 'Deal damage equal to the number of cards in your discard pile (max 12).'],
-    ['exhaust pile', dmg({ per: 'exhaustPile', mul: 2 }), 'Deal 2 damage for each card in your Exhaust pile.'],
+    ['exhaust pile', dmg({ per: 'exhaustPile', mul: 2 }), 'Deal 2 damage for each card in your Faded pile.'],
     ['cards played', dmg({ per: 'cardsPlayed', mul: 2 }), 'Deal 2 damage for each card played earlier this turn.'],
     ['attacks played', dmg({ per: 'attacksPlayed', mul: 2 }), 'Deal 2 damage for each Attack played earlier this turn.'],
     ['skills played', dmg({ base: 2, per: 'skillsPlayed', mul: 3, upTo: 3 }), 'Deal 2 damage, plus 3 for each Skill played earlier this turn (up to 3).'],
-    ['energy', dmg({ per: 'energy', mul: 3 }), 'Deal 3 damage for each Energy you have left.'],
+    ['energy', dmg({ per: 'energy', mul: 3 }), 'Deal 3 damage for each Breath you have left.'],
     ['hp', blk({ per: 'hp', who: 'self', mul: 1 }), 'Gain Block equal to your current HP.'],
     ['missing hp', dmg({ per: 'missingHp', who: 'self', mul: 1, upTo: 20 }), 'Deal damage equal to your missing HP (up to 20).'],
     ['debuffs', dmg({ per: 'debuffs', who: 'target', mul: 3 }), 'Deal 3 damage for each debuff on the target.'],
@@ -402,10 +402,10 @@ t.test('card text: value expressions (per)', () => {
     ['gems', dmg({ per: 'gems', mul: 3 }), 'Deal 3 damage for each gem in this card.'],
     ['damage taken', dmg({ base: 2, per: 'damageTaken', cap: 15 }), 'Deal damage equal to 2 plus the damage you took last enemy turn (max 15).'],
     ['hits taken', blk({ per: 'hitsTaken', mul: 2 }), 'Gain 2 Block for each hit you took last enemy turn.'],
-    ['front', dmg({ base: 4, per: 'front', mul: 3 }), 'Deal 4 damage (7 in the Front row).'],
-    ['front only', dmg({ per: 'front', mul: 3 }), 'Deal 3 damage while in the Front row.'],
-    ['X', dmg({ per: 'X', mul: 4 }), 'Deal 4 damage for each Energy spent.'],
-    ['X plus base', dmg({ base: 2, per: 'X', mul: 3 }), 'Deal 2 damage, plus 3 for each Energy spent.'],
+    ['front', dmg({ base: 4, per: 'front', mul: 3 }), 'Deal 4 damage (7 in the lead).'],
+    ['front only', dmg({ per: 'front', mul: 3 }), 'Deal 3 damage while in the lead.'],
+    ['X', dmg({ per: 'X', mul: 4 }), 'Deal 4 damage for each Breath spent.'],
+    ['X plus base', dmg({ base: 2, per: 'X', mul: 3 }), 'Deal 2 damage, plus 3 for each Breath spent.'],
   ].forEach(([name, op, want]) => t.eq(text([op], name === 'X' || name === 'X plus base' ? Object.assign({ cost: 'X' }, SK) : SK), want, 'per: ' + name));
   ['X', 'handSize', 'drawPile', 'discardPile', 'exhaustPile', 'cardsPlayed', 'attacksPlayed', 'skillsPlayed', 'energy', 'block', 'hp', 'missingHp', 'status', 'debuffs', 'enemies', 'kills', 'turn', 'gems', 'damageTaken', 'hitsTaken', 'targetBlock', 'picked', 'front'].forEach((per) => {
     const v = { per, who: 'self', s: 'bloom', mul: 2, base: 1 }, v1 = { per, who: 'self', s: 'bloom' };
@@ -423,70 +423,70 @@ t.test('card text: spend, lose all Block, and the spent count', () => {
     ['spend with base', [dmg(bloom(3, { base: 3 }), { consume: { s: 'bloom', upTo: 3 } })], 'Spend up to 3 Bloom. Deal 3 damage, plus 3 for each Bloom spent.'],
     ['spend for block', [blk(bloom(2), { consume: 'bloom', tgt: 'both' })], 'Spend all Bloom. Both heroes gain 2 Block for each Bloom spent.'],
     ['spend for heal', [{ op: 'heal', n: bloom(3), consume: { s: 'bloom', upTo: 4 }, tgt: 'both' }], 'Spend up to 4 Bloom. Heal both heroes for 3 HP for each Bloom spent.'],
-    ['spend for draw', [{ op: 'draw', n: { per: 'status', who: 'self', s: 'sumi' }, consume: 'sumi' }], 'Spend all Breath. Draw cards equal to the Breath spent.'],
-    ['spend for energy', [{ op: 'energy', n: { per: 'status', who: 'self', s: 'sumi', mul: 1 }, consume: 'sumi' }], 'Spend all Breath. Gain Energy equal to the Breath spent.'],
-    ['spend for hits', [dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })], 'Spend up to 4 Breath. Deal 3 damage for each Breath spent.'],
-    ['spend for status', [st('poison', { per: 'status', who: 'self', s: 'sumi', mul: 2 }, { consume: 'sumi' })], 'Spend all Breath. Apply 2 Poison for each Breath spent.'],
+    ['spend for draw', [{ op: 'draw', n: { per: 'status', who: 'self', s: 'sumi' }, consume: 'sumi' }], 'Spend all Groove. Draw cards equal to the Groove spent.'],
+    ['spend for energy', [{ op: 'energy', n: { per: 'status', who: 'self', s: 'sumi', mul: 1 }, consume: 'sumi' }], 'Spend all Groove. Gain Breath equal to the Groove spent.'],
+    ['spend for hits', [dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })], 'Spend up to 4 Groove. Deal 3 damage for each Groove spent.'],
+    ['spend for status', [st('poison', { per: 'status', who: 'self', s: 'sumi', mul: 2 }, { consume: 'sumi' })], 'Spend all Groove. Apply 2 Earworm for each Groove spent.'],
     ['consume block', [dmg({ per: 'block', who: 'self' }, { consume: 'block' })], 'Deal damage equal to your Block. Lose all your Block.'],
     ['consume block upTo', [dmg({ per: 'block', who: 'self' }, { consume: { s: 'block', upTo: 6 } })], 'Deal damage equal to your Block. Lose up to 6 Block.'],
     ['sums to hit count when hits per is spent', [dmg(2, { hits: { per: 'status', who: 'self', s: 'bloom' }, consume: 'bloom' })], 'Spend all Bloom. Deal 2 damage for each Bloom spent.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, name));
-  t.eq(text([dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 } })], SK), 'Deal 3 damage for each Breath you have (up to 4).', 'without a consume the count reads "you have"');
-  t.eq(text([dmg(3, { tgt: 'random' }), dmg(3, { tgt: 'random', hits: { per: 'status', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })]), 'Deal 3 damage to a random enemy. Spend up to 4 Breath. Deal 3 damage to a random enemy for each Breath spent.', 'a strike followed by a spending strike');
+  t.eq(text([dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 } })], SK), 'Deal 3 damage for each Groove you have (up to 4).', 'without a consume the count reads "you have"');
+  t.eq(text([dmg(3, { tgt: 'random' }), dmg(3, { tgt: 'random', hits: { per: 'status', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })]), 'Deal 3 damage to a random enemy. Spend up to 4 Groove. Deal 3 damage to a random enemy for each Groove spent.', 'a strike followed by a spending strike');
 });
 
 t.test('card text: keywords lead, Exhaust trails, hand text for curses', () => {
   [
-    ['innate', [dmg(4)], { kw: ['innate'] }, 'Innate. Deal 4 damage.'],
-    ['retain and exhaust', [blk(4)], { kw: ['retain', 'exhaust'], type: 'skill' }, 'Retain. Gain 4 Block. Exhaust.'],
-    ['ethereal', [dmg(9)], { kw: ['ethereal'] }, 'Ethereal. Deal 9 damage.'],
-    ['exhaust', [dmg(9)], { kw: ['exhaust'] }, 'Deal 9 damage. Exhaust.'],
-    ['fixed lead order', [dmg(9)], { kw: ['exhaust', 'ethereal', 'retain', 'innate'] }, 'Innate. Retain. Ethereal. Deal 9 damage. Exhaust.'],
-    ['unplayable curse with a turn end', [], { type: 'curse', hero: 'curse', kw: ['unplayable'], cost: null, hand: { turnEnd: [{ op: 'hurt', n: 2, tgt: 'front' }] } }, 'Unplayable. If this is in your hand at the end of your turn, the front hero loses 2 HP.'],
-    ['status when drawn', [], { type: 'status', hero: 'status', kw: ['unplayable'], cost: null, hand: { drawn: [{ op: 'energy', n: -1 }] } }, 'Unplayable. When drawn, lose 1 Energy.'],
-    ['both hand hooks', [], { type: 'curse', hero: 'curse', kw: ['unplayable'], cost: null, hand: { turnEnd: [st('weak', 1, { tgt: 'front' })], drawn: [st('vulnerable', 1, { tgt: 'front' })] } }, 'Unplayable. If this is in your hand at the end of your turn, the front hero gains 1 Weak. When drawn, the front hero gains 1 Vulnerable.'],
-    ['a playable status', [{ op: 'hurt', n: 2 }, { op: 'draw', n: 1 }], { type: 'status', hero: 'status', cost: 0, kw: ['exhaust'] }, 'The front hero loses 2 HP. Draw 1 card. Exhaust.'],
+    ['innate', [dmg(4)], { kw: ['innate'] }, 'Opener. Deal 4 damage.'],
+    ['retain and exhaust', [blk(4)], { kw: ['retain', 'exhaust'], type: 'skill' }, 'Hold. Gain 4 Block. Fade.'],
+    ['ethereal', [dmg(9)], { kw: ['ethereal'] }, 'One Take. Deal 9 damage.'],
+    ['exhaust', [dmg(9)], { kw: ['exhaust'] }, 'Deal 9 damage. Fade.'],
+    ['fixed lead order', [dmg(9)], { kw: ['exhaust', 'ethereal', 'retain', 'innate'] }, 'Opener. Hold. One Take. Deal 9 damage. Fade.'],
+    ['unplayable curse with a turn end', [], { type: 'curse', hero: 'curse', kw: ['unplayable'], cost: null, hand: { turnEnd: [{ op: 'hurt', n: 2, tgt: 'front' }] } }, 'Unplayable. If this is in your hand at the end of your turn, the lead hero loses 2 HP.'],
+    ['status when drawn', [], { type: 'status', hero: 'status', kw: ['unplayable'], cost: null, hand: { drawn: [{ op: 'energy', n: -1 }] } }, 'Unplayable. When drawn, lose 1 Breath.'],
+    ['both hand hooks', [], { type: 'curse', hero: 'curse', kw: ['unplayable'], cost: null, hand: { turnEnd: [st('weak', 1, { tgt: 'front' })], drawn: [st('vulnerable', 1, { tgt: 'front' })] } }, 'Unplayable. If this is in your hand at the end of your turn, the lead hero gains 1 Muffled. When drawn, the lead hero gains 1 Exposed.'],
+    ['a playable status', [{ op: 'hurt', n: 2 }, { op: 'draw', n: 1 }], { type: 'status', hero: 'status', cost: 0, kw: ['exhaust'] }, 'The lead hero loses 2 HP. Draw 1 card. Fade.'],
   ].forEach(([name, fx, over, want]) => t.eq(text(fx, over), want, name));
   const withNote = W.card([dmg(4)], { kw: ['retain'], slots: ['red'] });
-  t.eq(P(withNote), 'Retain. Deal 4 damage.', 'keywords do not disturb the ops');
+  t.eq(P(withNote), 'Hold. Deal 4 damage.', 'keywords do not disturb the ops');
 });
 
 t.test('card text: hooks read as sentences', () => {
   [
-    ['play a skill', hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } }), 'Whenever you play a Skill, gain 1 Breath.'],
+    ['play a skill', hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } }), 'Whenever you play a Skill, gain 1 Groove.'],
     ['limit one', hook('onPlay', [blk(2)], { filter: { type: 'attack' }, limit: 1 }), 'Once per turn, whenever you play an Attack, gain 2 Block.'],
     ['limit two', hook('onPlay', [st('bloom', 1)], { filter: { type: 'attack' }, limit: 2 }), 'Up to 2 times per turn, whenever you play an Attack, gain 1 Bloom.'],
     ['turn start', hook('turnStart', [{ op: 'draw', n: 1 }]), 'At the start of your turn, draw 1 card.'],
-    ['turn start once', hook('turnStart', [{ op: 'energy', n: 2 }], { once: true }), 'Next turn: gain 2 Energy.'],
+    ['turn start once', hook('turnStart', [{ op: 'energy', n: 2 }], { once: true }), 'Next turn: gain 2 Breath.'],
     ['turn end', hook('turnEnd', [blk(4)]), 'At the end of your turn, gain 4 Block.'],
-    ['turn end once', hook('turnEnd', [st('might', -2)], { once: true }), 'At the end of this turn, lose 2 Might.'],
-    ['every third turn', hook('turnStart', [{ op: 'energy', n: 1 }], { every: 3 }), 'At the start of every 3rd turn, gain 1 Energy.'],
+    ['turn end once', hook('turnEnd', [st('might', -2)], { once: true }), 'At the end of this turn, lose 2 Volume.'],
+    ['every third turn', hook('turnStart', [{ op: 'energy', n: 1 }], { every: 3 }), 'At the start of every 3rd turn, gain 1 Breath.'],
     ['every second turn end', hook('turnEnd', [blk(2)], { every: 2 }), 'At the end of every 2nd turn, gain 2 Block.'],
     ['every third play', hook('onPlay', [{ op: 'draw', n: 1 }], { filter: { type: 'attack' }, every: 3 }), 'Every 3rd time you play an Attack, draw 1 card.'],
     ['on damaged', hook('onDamaged', [dmg(3)]), 'Whenever you are hit, deal 3 damage to the attacker.'],
-    ['on kill', hook('onKill', [{ op: 'heal', n: 5 }], { filter: { tier: ['elite', 'boss'] } }), 'Whenever you defeat an Elite or a Keeper, heal 5 HP.'],
-    ['on any kill', hook('onKill', [{ op: 'energy', n: 1 }]), 'Whenever you defeat an enemy, gain 1 Energy.'],
-    ['on kill spreads', hook('onKill', [st('burn', 3, { tgt: 'all' })]), 'Whenever you defeat an enemy, apply 3 Burn to all enemies.'],
-    ['on exhaust', hook('onExhaust', [{ op: 'draw', n: 1 }]), 'Whenever a card is Exhausted, draw 1 card.'],
-    ['on swap', hook('onSwap', [blk(3)]), 'Whenever you swap into the front row, gain 3 Block.'],
-    ['on hero down', hook('onHeroDown', [{ op: 'revive', pct: 0.5 }], { once: true }), 'The next time you fall, revive yourself with 50% HP.'],
+    ['on kill', hook('onKill', [{ op: 'heal', n: 5 }], { filter: { tier: ['elite', 'boss'] } }), 'Whenever you defeat a Rival or a Headliner, heal 5 HP.'],
+    ['on any kill', hook('onKill', [{ op: 'energy', n: 1 }]), 'Whenever you defeat an enemy, gain 1 Breath.'],
+    ['on kill spreads', hook('onKill', [st('burn', 3, { tgt: 'all' })]), 'Whenever you defeat an enemy, apply 3 Sizzle to all enemies.'],
+    ['on exhaust', hook('onExhaust', [{ op: 'draw', n: 1 }]), 'Whenever a card fades, draw 1 card.'],
+    ['on swap', hook('onSwap', [blk(3)]), 'Whenever you swap into the lead, gain 3 Block.'],
+    ['on hero down', hook('onHeroDown', [{ op: 'revive', pct: 0.5 }], { once: true }), 'The next time you lose your voice, bring yourself back with 50% HP.'],
     ['on shuffle', hook('onShuffle', [blk(3)]), 'Whenever you reshuffle your draw pile, gain 3 Block.'],
     ['free plays', hook('onPlay', [dmg(2, { tgt: 'random' })], { filter: { cost: { lte: 0 } } }), 'Whenever you play a card that costs 0, deal 2 damage to a random enemy.'],
     ['cheap plays', hook('onPlay', [blk(1)], { filter: { cost: { lte: 1 } } }), 'Whenever you play a card that costs 1 or less, gain 1 Block.'],
     ['pricey plays', hook('onPlay', [blk(1)], { filter: { cost: { gte: 2 } } }), 'Whenever you play a card that costs 2 or more, gain 1 Block.'],
     ['exact cost', hook('onPlay', [blk(1)], { filter: { cost: { gte: 2, lte: 2 } } }), 'Whenever you play a card that costs 2, gain 1 Block.'],
     ['cost range', hook('onPlay', [blk(1)], { filter: { cost: { gte: 1, lte: 2 } } }), 'Whenever you play a card that costs 1 to 2, gain 1 Block.'],
-    ['keyword filter', hook('onPlay', [blk(2)], { filter: { kw: ['exhaust'] } }), 'Whenever you play a card with Exhaust, gain 2 Block.'],
-    ['two keywords', hook('onPlay', [blk(2)], { filter: { kw: ['exhaust', 'retain'] } }), 'Whenever you play a card with Exhaust and Retain, gain 2 Block.'],
-    ['hero filter', hook('onPlay', [blk(2)], { filter: { hero: 'kuro', type: 'attack' } }), 'Whenever you play a Kuro Attack, gain 2 Block.'],
+    ['keyword filter', hook('onPlay', [blk(2)], { filter: { kw: ['exhaust'] } }), 'Whenever you play a card with Fade, gain 2 Block.'],
+    ['two keywords', hook('onPlay', [blk(2)], { filter: { kw: ['exhaust', 'retain'] } }), 'Whenever you play a card with Fade and Hold, gain 2 Block.'],
+    ['hero filter', hook('onPlay', [blk(2)], { filter: { hero: 'kuro', type: 'attack' } }), 'Whenever you play a RoxorLoops Attack, gain 2 Block.'],
     ['type list', hook('onPlay', [blk(2)], { filter: { type: ['attack', 'skill'] } }), 'Whenever you play an Attack or Skill, gain 2 Block.'],
-    ['same target', hook('onPlay', [st('mark', 1)], { filter: { type: 'attack' } }), 'Whenever you play an Attack, apply 1 Mark to the same target.'],
+    ['same target', hook('onPlay', [st('mark', 1)], { filter: { type: 'attack' } }), 'Whenever you play an Attack, apply 1 Tag to the same target.'],
     ['gems filter', hook('onPlay', [blk(2)], { filter: { gems: { gte: 1 } } }), 'Whenever you play a card with a gem, gain 2 Block.'],
     ['gems filter 2', hook('onPlay', [blk(2)], { filter: { gems: { gte: 2 } } }), 'Whenever you play a card with 2 or more gems, gain 2 Block.'],
-    ['exhausted filter', hook('onExhaust', [blk(2)], { filter: { type: 'attack' } }), 'Whenever an Attack is Exhausted, gain 2 Block.'],
+    ['exhausted filter', hook('onExhaust', [blk(2)], { filter: { type: 'attack' } }), 'Whenever an Attack fades, gain 2 Block.'],
     ['two ops', hook('onDamaged', [dmg(2), st('bloom', 1)]), 'Whenever you are hit, deal 2 damage to the attacker and gain 1 Bloom.'],
   ].forEach(([name, op, want]) => t.eq(text([op], PW), want, 'hook: ' + name));
-  t.eq(text([hook('onPlay', [st('mark', 1)], { filter: { type: 'skill' } })], PW), 'Whenever you play a Skill, apply 1 Mark to the same target.', 'hook: onPlay enemy effects read "the same target"');
+  t.eq(text([hook('onPlay', [st('mark', 1)], { filter: { type: 'skill' } })], PW), 'Whenever you play a Skill, apply 1 Tag to the same target.', 'hook: onPlay enemy effects read "the same target"');
   t.eq(text([hook('onShuffle', [dmg(3)])], PW), 'Whenever you reshuffle your draw pile, deal 3 damage to a random enemy.', 'hook: other triggers read "a random enemy"');
 });
 
@@ -496,11 +496,11 @@ t.test('card text: empty and silent branches print nothing, and an else-only bra
   t.eq(text([dmg(4), { op: 'repeat', n: 3, do: [] }], {}), 'Deal 4 damage.', 'an empty repeat prints nothing');
   t.eq(text([dmg(4), hook('onPlay', [])], {}), 'Deal 4 damage.', 'an empty hook prints nothing');
   t.eq(text([dmg(4), { op: 'flag', id: 'x' }], {}), 'Deal 4 damage.', 'a flag op is silent');
-  t.eq(text([cond({ row: 'front' }, [], [blk(5)])], SK), 'Back: gain 5 Block.', 'a row conditional that only has an else reads as the other row');
+  t.eq(text([cond({ row: 'front' }, [], [blk(5)])], SK), 'Backing: gain 5 Block.', 'a row conditional that only has an else reads as the other row');
   t.eq(text([cond({ handEmpty: true }, [], [blk(5)])], SK), 'Unless your hand is empty, gain 5 Block.', 'any other else-only conditional reads as "unless"');
   t.eq(text([cond({ row: 'front' }, [{ op: 'flag', id: 'x' }])], SK), '', 'a conditional of silent ops prints nothing');
   t.eq(D.hookText({ on: 'turnStart', fx: [] }), '', 'hookText of an empty hook');
-  t.eq(text([], { kw: ['exhaust'] }), 'Exhaust.', 'a card with only a keyword prints the keyword');
+  t.eq(text([], { kw: ['exhaust'] }), 'Fade.', 'a card with only a keyword prints the keyword');
 });
 
 t.test('card text: text stays under the 110 character audit for the typical shapes', () => {
@@ -511,6 +511,14 @@ t.test('card text: text stays under the 110 character audit for the typical shap
     [hook('onPlay', [dmg(2, { tgt: 'all' })], { filter: { type: 'attack' }, limit: 2 })],
   ];
   shapes.forEach((fx, i) => { const s = text(fx, { kw: ['retain', 'exhaust'] }); t.ok(s.length <= 110, `shape ${i} stays short (${s.length}): ${s}`); });
+  // a card whose full wording would run past 110 characters reads its turn hooks the compact way; a shorter card keeps the full wording
+  const storm = (n) => [blk(5), st('thorns', n), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })])];
+  const longOne = text(storm(1), PW);
+  t.eq(longOne, 'Gain 5 Block and 1 Feedback. At turn start, deal damage equal to your Feedback (max 8) to all enemies.', 'a long turn start hook reads "At turn start"');
+  t.ok(longOne.length <= 110, `the compact wording fits (${longOne.length})`);
+  t.eq(text([st('thorns', 1), hook('turnStart', [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })])], PW), 'Gain 1 Feedback. At the start of your turn, deal damage equal to your Feedback (max 8) to all enemies.', 'a card that fits keeps "At the start of your turn"');
+  t.eq(text([blk(5), st('thorns', 1), hook('turnEnd', [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })])], PW), 'Gain 5 Block and 1 Feedback. At turn end, deal damage equal to your Feedback (max 8) to all enemies.', 'and a long turn end hook reads "At turn end"');
+  t.eq(D.hookText({ on: 'turnStart', fx: [dmg({ per: 'status', s: 'thorns', cap: 8 }, { tgt: 'all' })] }), 'At the start of your turn, deal damage equal to your Feedback (max 8) to all enemies.', 'hookText never uses the compact wording');
 });
 
 // ------------------------------------------------------------------ markup
@@ -526,9 +534,9 @@ t.test('markup: only kw and num spans, keyword keys resolve, plain equals stripp
   t.eq(strip(html), P(rich), 'cardPlain is cardHtml with the tags removed');
   t.ok(!/[<>]/.test(P(rich).replace(/&[a-z]+;/g, '')), 'no stray angle brackets in the plain text');
   const words = Object.fromEntries(kws(html));
-  t.eq(words.innate, 'Innate', 'Innate keyword word'); t.eq(words.exhaust, 'Exhaust', 'Exhaust keyword word'); t.eq(words.block, 'Block', 'Block keyword word'); t.eq(words.vulnerable, 'Vulnerable', 'status keyword word'); t.eq(words.swap, 'Swap', 'Swap keyword word');
-  t.eq(words.front, 'Front', 'row keyword word'); t.eq(words.xcost, undefined, 'the cost X is not part of rules text here');
-  t.ok(html.indexOf('<span class="kw" data-kw="innate">Innate</span>.') === 0, 'a leading keyword opens the text');
+  t.eq(words.innate, 'Opener', 'Innate keyword word'); t.eq(words.exhaust, 'Fade', 'Exhaust keyword word'); t.eq(words.block, 'Block', 'Block keyword word'); t.eq(words.vulnerable, 'Exposed', 'status keyword word'); t.eq(words.swap, 'Swap', 'Swap keyword word');
+  t.eq(words.front, 'Lead', 'row keyword word'); t.eq(words.xcost, undefined, 'the cost X is not part of rules text here');
+  t.ok(html.indexOf('<span class="kw" data-kw="innate">Opener</span>.') === 0, 'a leading keyword opens the text');
   // a keyword key for every keyword the engine can print
   const all = W.card([dmg(4, { lifesteal: true, pierce: true }), blk(1), pick('exhaust', 1, 'retain'), pick('hand', 1, 'exhaust'), { op: 'ink', n: 1 }, dmg({ per: 'X', mul: 1 })], { kw: ['retain', 'ethereal', 'unplayable', 'exhaust', 'innate'], cost: 'X' });
   kws(H(all)).forEach(([k]) => t.ok(okKey(k), 'keyword ' + k + ' is a registered key'));
@@ -583,7 +591,7 @@ t.test('up and down: gems colour the numbers they change', () => {
   t.eq(P(I([W.gem({ hits: 2 })])), 'Deal 6 damage 3 times.', 'a +2 hits gem reads 3 times');
   t.deep(nums(H(I([null, gdraw]))), [[6, ''], [1, 'up']], 'an appended draw is up');
   t.eq(P(I([null, gdraw])), 'Deal 6 damage. Draw 1 card.', 'and reads as one more sentence');
-  t.eq(P(I([null, null, gpo])), 'Deal 6 damage. Apply 2 Poison.', 'a poison gem appends poison on the enemy target');
+  t.eq(P(I([null, null, gpo])), 'Deal 6 damage. Apply 2 Earworm.', 'a poison gem appends poison on the enemy target');
   t.deep(nums(H(I([null, null, gpo]))), [[6, ''], [2, 'up']], 'and is up');
   t.eq(P(I([gb])), 'Deal 6 damage.', 'a gem that cannot apply changes nothing');
   t.eq(P(I([null, gdraw, null, gb])), 'Deal 6 damage. Draw 1 card.', 'a block gem on a dmg-only card stays grey while the draw gem applies');
@@ -603,7 +611,7 @@ t.test('up and down: gems colour the numbers they change', () => {
   // keyword gems reach the text through the keywords
   const gk = W.gem({ kw: ['retain'] }, { color: 'blue' }), grm = W.gem({ kwRemove: ['exhaust'] }, { color: 'blue' });
   const kc = W.card([blk(5)], { slots: ['blue'], kw: ['exhaust'], type: 'skill' });
-  t.eq(P({ id: kc, gems: [gk] }), 'Retain. Gain 5 Block. Exhaust.', 'a kw gem adds a leading keyword'); t.eq(P({ id: kc, gems: [grm] }), 'Gain 5 Block.', 'a kwRemove gem removes the trailing one');
+  t.eq(P({ id: kc, gems: [gk] }), 'Hold. Gain 5 Block. Fade.', 'a kw gem adds a leading keyword'); t.eq(P({ id: kc, gems: [grm] }), 'Gain 5 Block.', 'a kwRemove gem removes the trailing one');
   // fx gems
   const gfx = W.gem({ fx: [{ op: 'block', n: 2 }, { op: 'draw', n: 1 }] }, { color: 'blue' });
   t.eq(P({ id, gems: [null, gfx] }), 'Deal 6 damage. Gain 2 Block. Draw 1 card.', 'an fx gem appends its ops as text');
@@ -613,10 +621,10 @@ t.test('up and down: gems colour the numbers they change', () => {
 t.test('up and down: row gated gems read as a note until the unit stands in the row', () => {
   const gf = W.gem({ dmg: 3, cond: 'front' }), gbk = W.gem({ block: 2, hits: 1, draw: 1, cond: 'back' }, { color: 'blue' });
   const id = W.card([dmg(6), blk(4)], { slots: ['red', 'blue'] });
-  t.eq(P({ id, gems: [gf] }), 'Deal 6 damage. Gain 4 Block. Front: +3 damage.', 'no ctx: a front gem is a Front note');
-  t.eq(P({ id, gems: [null, gbk] }), 'Deal 6 damage. Gain 4 Block. Back: +2 Block, +1 hit, draw 1 card.', 'no ctx: a back gem lists its effects');
-  t.ok(H({ id, gems: [gf] }).indexOf('<span class="kw" data-kw="front">Front</span>: +3 damage.') > 0, 'the note carries a Front keyword');
-  t.eq(P({ id, gems: [gf] }, HANAE_UNIT({}, 'back')), 'Deal 6 damage. Gain 5 Block. Front: +3 damage.', 'a unit in the back: still a note, and Hanae\'s back row adds 1 Block');
+  t.eq(P({ id, gems: [gf] }), 'Deal 6 damage. Gain 4 Block. Lead: +3 damage.', 'no ctx: a front gem is a Front note');
+  t.eq(P({ id, gems: [null, gbk] }), 'Deal 6 damage. Gain 4 Block. Backing: +2 Block, +1 hit, draw 1 card.', 'no ctx: a back gem lists its effects');
+  t.ok(H({ id, gems: [gf] }).indexOf('<span class="kw" data-kw="front">Lead</span>: +3 damage.') > 0, 'the note carries a Front keyword');
+  t.eq(P({ id, gems: [gf] }, HANAE_UNIT({}, 'back')), 'Deal 6 damage. Gain 5 Block. Lead: +3 damage.', 'a unit in the back: still a note, and Hanae\'s back row adds 1 Block');
   t.deep(nums(H({ id, gems: [gf] }, HANAE_UNIT({}, 'front'))), [[11, 'up'], [4, '']], 'a unit in the front: merged (6 + 3 gem + 2 Hanae front row) and marked up');
   t.eq(P({ id, gems: [gf] }, HANAE_UNIT({}, 'front')), 'Deal 11 damage. Gain 4 Block.', 'and the note is gone');
   t.eq(P({ id, gems: [null, gbk] }, HANAE_UNIT({}, 'back')), 'Deal 6 damage 2 times. Gain 7 Block. Draw 1 card.', 'a unit in the back: the back gem merges (4 + 2 gem + 1 Hanae back row)');
@@ -666,26 +674,26 @@ t.test('hookText and opsText: hooks of relics and events', () => {
   [
     [{ on: 'onPickup', fx: [{ op: 'maxHp', n: 5, who: 'both' }] }, 'When you take this, both heroes gain 5 max HP.'],
     [{ on: 'onFightWon', fx: [{ op: 'gold', n: 10 }] }, 'Whenever you win a fight, gain 10 gold.'],
-    [{ on: 'onFightWon', filter: { tier: 'elite' }, fx: [{ op: 'heal', pct: 0.1 }] }, 'Whenever you win an elite fight, heal both heroes for 10% of max HP.'],
-    [{ on: 'onFightWon', filter: { tier: ['normal', 'elite'] }, fx: [{ op: 'gold', n: 5 }] }, 'Whenever you win a normal or elite fight, gain 5 gold.'],
-    [{ on: 'onRest', fx: [{ op: 'maxHp', n: 2, who: 'front' }] }, 'Whenever you rest at a camp, the front hero gains 2 max HP.'],
-    [{ on: 'onChapterStart', fx: [{ op: 'ink', n: 2 }] }, 'At the start of each verse, gain 2 Echo.'],
-    [{ on: 'onChapterStart', every: 2, fx: [{ op: 'ink', n: 2 }] }, 'Every 2nd verse start, gain 2 Echo.'],
-    [{ on: 'onShopEnter', fx: [{ op: 'gold', n: 20 }] }, 'Whenever you enter a shop, gain 20 gold.'],
-    [{ on: 'onPaint', limit: 1, fx: [{ op: 'ink', n: 1 }] }, 'Once per verse, whenever you wake a hex, gain 1 Echo.'],
+    [{ on: 'onFightWon', filter: { tier: 'elite' }, fx: [{ op: 'heal', pct: 0.1 }] }, 'Whenever you win a Rival fight, heal both heroes for 10% of max HP.'],
+    [{ on: 'onFightWon', filter: { tier: ['normal', 'elite'] }, fx: [{ op: 'gold', n: 5 }] }, 'Whenever you win a normal or Rival fight, gain 5 gold.'],
+    [{ on: 'onRest', fx: [{ op: 'maxHp', n: 2, who: 'front' }] }, 'Whenever you rest in a green room, the lead hero gains 2 max HP.'],
+    [{ on: 'onChapterStart', fx: [{ op: 'ink', n: 2 }] }, 'At the start of each act, gain 2 Vox.'],
+    [{ on: 'onChapterStart', every: 2, fx: [{ op: 'ink', n: 2 }] }, 'Every 2nd act start, gain 2 Vox.'],
+    [{ on: 'onShopEnter', fx: [{ op: 'gold', n: 20 }] }, 'Whenever you visit a merch stall, gain 20 gold.'],
+    [{ on: 'onPaint', limit: 1, fx: [{ op: 'ink', n: 1 }] }, 'Once per act, whenever you unmute a hex, gain 1 Vox.'],
     [{ on: 'combatStart', fx: [blk(6)] }, 'At the start of combat, gain 6 Block.'],
     [{ on: 'combatEnd', fx: [{ op: 'heal', n: 3 }] }, 'At the end of combat, heal 3 HP.'],
     [{ on: 'turnStart', fx: [{ op: 'draw', n: 1 }] }, 'At the start of your turn, draw 1 card.'],
     [{ on: 'turnEnd', fx: [blk(2)], limit: 1 }, 'Once per turn, at the end of your turn, gain 2 Block.'],
     [{ on: 'onPlay', filter: { type: 'attack' }, limit: 2, fx: [st('bloom', 1)] }, 'Up to 2 times per turn, whenever you play an Attack, gain 1 Bloom.'],
     [{ on: 'onPlay', filter: { type: 'attack' }, every: 3, fx: [{ op: 'draw', n: 1 }] }, 'Every 3rd time you play an Attack, draw 1 card.'],
-    [{ on: 'onKill', once: true, fx: [{ op: 'energy', n: 1 }] }, 'The next time you defeat an enemy, gain 1 Energy.'],
-    [{ on: 'onDamaged', fx: [st('thorns', 1)] }, 'Whenever you are hit, gain 1 Thorns.'],
+    [{ on: 'onKill', once: true, fx: [{ op: 'energy', n: 1 }] }, 'The next time you defeat an enemy, gain 1 Breath.'],
+    [{ on: 'onDamaged', fx: [st('thorns', 1)] }, 'Whenever you are hit, gain 1 Feedback.'],
     [{ on: 'onWhatever', fx: [{ op: 'draw', n: 1 }] }, 'When onWhatever, draw 1 card.'],
   ].forEach(([h, want]) => t.eq(D.hookText(h), want, 'hookText: ' + h.on + (h.filter ? ' ' + JSON.stringify(h.filter) : '')));
   t.eq(D.hookText({ op: 'hook', on: 'turnStart', fx: [{ op: 'draw', n: 1 }] }), 'At the start of your turn, draw 1 card.', 'a hook op is accepted as well as a bare hook');
-  t.eq(D.opsText([hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } })]), 'Whenever you play a Skill, gain 1 Breath.', 'opsText of a hook op');
-  t.eq(D.opsText([hook('turnStart', [{ op: 'energy', n: 2 }], { once: true })]), 'Next turn: gain 2 Energy.', 'opsText of a one-shot next turn hook');
+  t.eq(D.opsText([hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } })]), 'Whenever you play a Skill, gain 1 Groove.', 'opsText of a hook op');
+  t.eq(D.opsText([hook('turnStart', [{ op: 'energy', n: 2 }], { once: true })]), 'Next turn: gain 2 Breath.', 'opsText of a one-shot next turn hook');
   t.eq(D.opsText([hook('turnStart', [blk(2)])]), 'At the start of your turn, gain 2 Block.', 'opsText of a turn start hook');
   t.eq(D.opsText([dmg(3), blk(2)]), 'Deal 3 damage. Gain 2 Block.', 'opsText of combat ops');
   t.eq(D.opsText([]), '', 'opsText of nothing'); t.eq(D.opsText(undefined), '', 'opsText of undefined'); t.eq(D.opsText(null), '', 'opsText of null');
@@ -696,14 +704,14 @@ t.test('hookText and opsText: hooks of relics and events', () => {
 
 t.test('opsText: run ops (events and run hooks)', () => {
   const RUN = { run: true };
-  t.eq(D.opsText([{ op: 'gold', n: 30 }, { op: 'heal', pct: 0.3 }, { op: 'hurt', pct: 0.1, who: 'both' }, { op: 'maxHp', n: 3, who: 'hanae' }, { op: 'ink', n: 2 }], RUN), 'Gain 30 gold. Heal both heroes for 30% of max HP. Both heroes lose 10% of max HP. Hanae gains 3 max HP. Gain 2 Echo.', 'gold, heal, hurt, max HP and ink');
-  t.eq(D.opsText([{ op: 'heal', who: 'front', n: 5 }, { op: 'hurt', who: 'kuro', n: 4 }, { op: 'heal', who: 'lowest', pct: 0.5 }, { op: 'heal', who: 'random', n: 2 }], RUN), 'Heal the front hero for 5 HP. Kuro loses 4 HP. Heal the weakest hero for 50% of max HP. Heal a random hero for 2 HP.', 'who variants');
-  t.eq(D.opsText([{ op: 'gold', n: -20 }, { op: 'gold', pct: -0.1 }, { op: 'ink', n: -1 }, { op: 'ink', pct: 0.5 }, { op: 'maxHp', n: -2, who: 'front' }], RUN), 'Lose 20 gold. Lose 10% of your gold. Lose 1 Echo. Gain 50% of your max Echo. The front hero loses 2 max HP.', 'negative and percent forms');
+  t.eq(D.opsText([{ op: 'gold', n: 30 }, { op: 'heal', pct: 0.3 }, { op: 'hurt', pct: 0.1, who: 'both' }, { op: 'maxHp', n: 3, who: 'hanae' }, { op: 'ink', n: 2 }], RUN), 'Gain 30 gold. Heal both heroes for 30% of max HP. Both heroes lose 10% of max HP. Jasmin gains 3 max HP. Gain 2 Vox.', 'gold, heal, hurt, max HP and ink');
+  t.eq(D.opsText([{ op: 'heal', who: 'front', n: 5 }, { op: 'hurt', who: 'kuro', n: 4 }, { op: 'heal', who: 'lowest', pct: 0.5 }, { op: 'heal', who: 'random', n: 2 }], RUN), 'Heal the lead hero for 5 HP. RoxorLoops loses 4 HP. Heal the weakest hero for 50% of max HP. Heal a random hero for 2 HP.', 'who variants');
+  t.eq(D.opsText([{ op: 'gold', n: -20 }, { op: 'gold', pct: -0.1 }, { op: 'ink', n: -1 }, { op: 'ink', pct: 0.5 }, { op: 'maxHp', n: -2, who: 'front' }], RUN), 'Lose 20 gold. Lose 10% of your gold. Lose 1 Vox. Gain 50% of your max Vox. The lead hero loses 2 max HP.', 'negative and percent forms');
   t.eq(D.opsText([{ op: 'heal', pct: 0.3 }]), 'Heal both heroes for 30% of max HP.', 'a pct heal is a run heal even without the run flag');
   t.eq(D.opsText([{ op: 'hurt', n: 3, who: 'both' }]), 'Both heroes lose 3 HP.', 'a who hurt is a run hurt even without the run flag');
   t.eq(D.opsText([{ op: 'addCard', card: PLAINC }, { op: 'addCard', n: 2, rarity: 'rare' }, { op: 'addCard' }, { op: 'removeCard' }, { op: 'removeCard', n: 2 }, { op: 'upgradeCard', n: 2 }, { op: 'transformCard', random: true }, { op: 'duplicateCard' }], RUN), 'Add a Pebble to your deck. Add 2 random rare cards to your deck. Add a random card to your deck. Remove a card from your deck. Remove 2 cards from your deck. Upgrade 2 cards. Transform a random card. Duplicate a card.', 'card ops');
   const rl = W.relic({ name: 'Lucky Coin' }), gm = W.gem({ dmg: 1 }, { name: 'Ruby' });
-  t.eq(D.opsText([{ op: 'addRelic', rarity: 'rare' }, { op: 'addRelic', id: rl }, { op: 'addGem', color: 'red', tier: 2 }, { op: 'addGem', id: gm }, { op: 'addGem' }, { op: 'addBrush', id: 'random' }, { op: 'addCurse', n: 2 }, { op: 'addCurse' }, { op: 'paint', n: 3 }, { op: 'paint', n: 1 }, { op: 'cardReward' }, { op: 'fight' }, { op: 'flag', id: 'x' }], RUN), 'Gain a random rare Treasure. Gain Lucky Coin. Gain a random red gem of tier 2. Gain Ruby. Gain a random gem. Learn a random Song. Add 2 curses to your deck. Add a curse to your deck. Wake 3 hexes for free. Wake 1 hex for free. Choose a card reward. A fight begins.', 'relic, gem, brush, curse, paint, reward, fight, and flags print nothing');
+  t.eq(D.opsText([{ op: 'addRelic', rarity: 'rare' }, { op: 'addRelic', id: rl }, { op: 'addGem', color: 'red', tier: 2 }, { op: 'addGem', id: gm }, { op: 'addGem' }, { op: 'addBrush', id: 'random' }, { op: 'addCurse', n: 2 }, { op: 'addCurse' }, { op: 'paint', n: 3 }, { op: 'paint', n: 1 }, { op: 'cardReward' }, { op: 'fight' }, { op: 'flag', id: 'x' }], RUN), 'Gain a random rare Charm. Gain Lucky Coin. Gain a random pink gem of tier 2. Gain Ruby. Gain a random gem. Learn a random Spell. Add 2 curses to your deck. Add a curse to your deck. Unmute 3 hexes for free. Unmute 1 hex for free. Choose a card reward. A fight begins.', 'relic, gem, brush, curse, paint, reward, fight, and flags print nothing');
   t.eq(D.opsText([{ op: 'flag', id: 'x' }], RUN), '', 'a flag op is silent');
   t.eq(D.opsText([{ op: 'addCurse', id: INK }], RUN), 'Add Ink Blot to your deck.', 'a named curse');
 });
@@ -713,10 +721,10 @@ t.test('gemText: mods read as compact plain text', () => {
   const G = (mod, extra) => D.gemText(Object.assign({ name: 'g', color: 'red', tier: 1, mod }, extra));
   [
     [{ dmg: 2 }, '+2 damage'], [{ block: 3 }, '+3 Block'], [{ heal: 2 }, '+2 healing'], [{ hits: 1 }, '+1 hit'], [{ hits: 2 }, '+2 hits'], [{ cost: -1 }, 'Costs 1 less'], [{ cost: -2 }, 'Costs 2 less'],
-    [{ draw: 1 }, 'Draw 1 card'], [{ draw: 2 }, 'Draw 2 cards'], [{ energy: 1 }, 'Gain 1 Energy'], [{ status: { s: 'bloom', n: 2, tgt: 'self' } }, 'Gain 2 Bloom'], [{ status: { s: 'weak', n: 1 } }, 'Apply 1 Weak'],
-    [{ poison: 2 }, 'Apply 2 Poison'], [{ fx: [{ op: 'block', n: 2 }] }, 'Gain 2 Block'], [{ kw: ['retain'] }, 'Gains Retain'], [{ kwRemove: ['exhaust'] }, 'Loses Exhaust'],
-    [{ kw: ['retain'], kwRemove: ['exhaust'] }, 'Gains Retain, loses Exhaust'], [{ dmg: 3, cond: 'front' }, 'Front row: +3 damage'], [{ block: 2, hits: 1, draw: 1, cond: 'back' }, 'Back row: +2 Block, +1 hit, draw 1 card'],
-    [{ dmg: 2, hits: 1 }, '+2 damage, +1 hit'], [{ dmg: 2, draw: 1, energy: 1 }, '+2 damage, draw 1 card, gain 1 Energy'],
+    [{ draw: 1 }, 'Draw 1 card'], [{ draw: 2 }, 'Draw 2 cards'], [{ energy: 1 }, 'Gain 1 Breath'], [{ status: { s: 'bloom', n: 2, tgt: 'self' } }, 'Gain 2 Bloom'], [{ status: { s: 'weak', n: 1 } }, 'Apply 1 Muffled'],
+    [{ poison: 2 }, 'Apply 2 Earworm'], [{ fx: [{ op: 'block', n: 2 }] }, 'Gain 2 Block'], [{ kw: ['retain'] }, 'Gains Hold'], [{ kwRemove: ['exhaust'] }, 'Loses Fade'],
+    [{ kw: ['retain'], kwRemove: ['exhaust'] }, 'Gains Hold, loses Fade'], [{ dmg: 3, cond: 'front' }, 'Lead: +3 damage'], [{ block: 2, hits: 1, draw: 1, cond: 'back' }, 'Backing: +2 Block, +1 hit, draw 1 card'],
+    [{ dmg: 2, hits: 1 }, '+2 damage, +1 hit'], [{ dmg: 2, draw: 1, energy: 1 }, '+2 damage, draw 1 card, gain 1 Breath'],
   ].forEach(([mod, want]) => t.eq(G(mod), want, 'gemText ' + JSON.stringify(mod)));
   t.eq(G({ dmg: 2 }, { text: 'Custom words' }), 'Custom words', 'a def.text wins');
   const id = W.gem({ block: 3 });
@@ -742,81 +750,81 @@ t.test('statusText: the stack is inserted and durations get a Lasts sentence', (
     else t.ok(!/Lasts/.test(withN), `${id}: only durations say Lasts`);
     t.ok(!DASH.test(withN), `${id}: no dashes`);
   });
-  t.eq(D.statusText('poison', 4), 'Poison 4: At the start of its turn, lose 4 HP (ignores Block), then Poison falls by 1.', 'poison 4');
-  t.eq(D.statusText('poison'), 'Poison: At the start of its turn, lose N HP (ignores Block), then Poison falls by 1.', 'poison with no stack');
-  t.eq(D.statusText('weak', 2), 'Weak 2: Deals 25% less attack damage. Lasts 2 more rounds.', 'weak 2');
-  t.eq(D.statusText('weak', 1), 'Weak 1: Deals 25% less attack damage. Lasts 1 more round.', 'weak 1 is singular');
-  t.eq(D.statusText('stun', 1), 'Stun 1: Skips its next action. A stunned hero cannot play cards on their next turn.', 'stun has no Lasts');
-  t.eq(D.statusText('might', 3), 'Might 3: Attacks deal +3 damage per hit.', 'might 3');
-  t.eq(D.statusText('thorns', 2), 'Thorns 2: Whenever it is hit by an attack, the attacker takes 2 damage.', 'thorns 2');
-  t.eq(D.statusText('mark', 2), 'Mark 2: The next 2 attack hits against it deal +3 damage each (one stack per hit).', 'mark 2');
+  t.eq(D.statusText('poison', 4), 'Earworm 4: At the start of its turn, lose 4 HP (ignores Block), then Earworm falls by 1.', 'poison 4');
+  t.eq(D.statusText('poison'), 'Earworm: At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.', 'poison with no stack');
+  t.eq(D.statusText('weak', 2), 'Muffled 2: Deals 25% less attack damage. Lasts 2 more rounds.', 'weak 2');
+  t.eq(D.statusText('weak', 1), 'Muffled 1: Deals 25% less attack damage. Lasts 1 more round.', 'weak 1 is singular');
+  t.eq(D.statusText('stun', 1), 'Starstruck 1: Skips its next action. A starstruck hero cannot play cards on their next turn.', 'stun has no Lasts');
+  t.eq(D.statusText('might', 3), 'Volume 3: Attacks deal +3 damage per hit.', 'might 3');
+  t.eq(D.statusText('thorns', 2), 'Feedback 2: Whenever it is hit by an attack, the attacker takes 2 damage.', 'thorns 2');
+  t.eq(D.statusText('mark', 2), 'Tag 2: The next 2 attack hits against it deal +3 damage each (one stack per hit).', 'mark 2');
   t.eq(D.statusText('t_nope', 2), 't_nope', 'an unknown status is just its id');
   t.eq(D.statusText('weak', null), D.statusText('weak'), 'null n reads like no n');
-  t.eq(D.statusText('poison', 0), 'Poison 0: At the start of its turn, lose 0 HP (ignores Block), then Poison falls by 1.', 'zero is a number');
+  t.eq(D.statusText('poison', 0), 'Earworm 0: At the start of its turn, lose 0 HP (ignores Block), then Earworm falls by 1.', 'zero is a number');
 });
 
 t.test('intentText: the line under an enemy', () => {
   const IT = (o) => Object.assign({ move: 'x', name: 'Hit', kind: 'attack', dmg: null, hits: 1, tgt: ['hanae'], tgtKind: 'front', taunted: false, statuses: [], adds: [], summons: [], removes: [] }, o);
   const mid = W.card([], { name: 'Blot', type: 'status', hero: 'status', kw: ['unplayable'], cost: null, rarity: 'token' }), foe = W.enemy({ name: 'Imp' });
   [
-    [{ dmg: 7 }, 'Deals 7 to the front hero'],
-    [{ dmg: 7, hits: 2 }, 'Deals 7 x2 to the front hero'],
-    [{ dmg: 7, hits: 1 }, 'Deals 7 to the front hero'],
-    [{ dmg: 4, tgtKind: 'back', tgt: ['kuro'] }, 'Deals 4 to the back hero'],
+    [{ dmg: 7 }, 'Deals 7 to the lead hero'],
+    [{ dmg: 7, hits: 2 }, 'Deals 7 x2 to the lead hero'],
+    [{ dmg: 7, hits: 1 }, 'Deals 7 to the lead hero'],
+    [{ dmg: 4, tgtKind: 'back', tgt: ['kuro'] }, 'Deals 4 to the backing hero'],
     [{ dmg: 4, tgtKind: 'both', tgt: ['hanae', 'kuro'] }, 'Deals 4 to both heroes'],
     [{ dmg: 4, tgtKind: 'random', tgt: 'random' }, 'Deals 4 to a random hero'],
     [{ dmg: 4, tgtKind: 'lowest', tgt: ['kuro'] }, 'Deals 4 to the weakest hero'],
-    [{ dmg: 4, tgtKind: 'back', tgt: ['hanae'], taunted: true }, 'Deals 4 to Hanae'],
-    [{ dmg: 0 }, 'Deals 0 to the front hero'],
-    [{ kind: 'debuff', statuses: [{ s: 'weak', n: 2, to: 'front' }] }, 'Applies 2 Weak to the front hero'],
-    [{ dmg: 7, statuses: [{ s: 'weak', n: 2, to: 'front' }] }, 'Deals 7 to the front hero and applies 2 Weak'],
-    [{ kind: 'debuff', statuses: [{ s: 'vulnerable', n: 1, to: 'both' }] }, 'Applies 1 Vulnerable to both heroes'],
-    [{ kind: 'debuff', statuses: [{ s: 'frail', n: 1, to: 'back' }] }, 'Applies 1 Frail to the back hero'],
-    [{ kind: 'debuff', statuses: [{ s: 'poison', n: 2, to: 'random' }] }, 'Applies 2 Poison to a random hero'],
-    [{ kind: 'debuff', statuses: [{ s: 'bind', n: 1, to: 'lowest' }] }, 'Applies 1 Bind to the weakest hero'],
-    [{ kind: 'buff', statuses: [{ s: 'might', n: 2, to: 'self' }] }, 'Gains 2 Might'],
-    [{ kind: 'buff', statuses: [{ s: 'might', n: 2, to: 'self' }, { s: 'plating', n: 3, to: 'self' }] }, 'Gains 2 Might and 3 Plating'],
+    [{ dmg: 4, tgtKind: 'back', tgt: ['hanae'], taunted: true }, 'Deals 4 to Jasmin'],
+    [{ dmg: 0 }, 'Deals 0 to the lead hero'],
+    [{ kind: 'debuff', statuses: [{ s: 'weak', n: 2, to: 'front' }] }, 'Applies 2 Muffled to the lead hero'],
+    [{ dmg: 7, statuses: [{ s: 'weak', n: 2, to: 'front' }] }, 'Deals 7 to the lead hero and applies 2 Muffled'],
+    [{ kind: 'debuff', statuses: [{ s: 'vulnerable', n: 1, to: 'both' }] }, 'Applies 1 Exposed to both heroes'],
+    [{ kind: 'debuff', statuses: [{ s: 'frail', n: 1, to: 'back' }] }, 'Applies 1 Wobbly to the backing hero'],
+    [{ kind: 'debuff', statuses: [{ s: 'poison', n: 2, to: 'random' }] }, 'Applies 2 Earworm to a random hero'],
+    [{ kind: 'debuff', statuses: [{ s: 'bind', n: 1, to: 'lowest' }] }, 'Applies 1 Tangled to the weakest hero'],
+    [{ kind: 'buff', statuses: [{ s: 'might', n: 2, to: 'self' }] }, 'Gains 2 Volume'],
+    [{ kind: 'buff', statuses: [{ s: 'might', n: 2, to: 'self' }, { s: 'plating', n: 3, to: 'self' }] }, 'Gains 2 Volume and 3 Sequins'],
     [{ kind: 'defend', block: 8 }, 'Gains 8 Block'],
     [{ kind: 'heal', heal: 6 }, 'Heals 6'],
-    [{ kind: 'defend', block: 8, statuses: [{ s: 'thorns', n: 2, to: 'self' }] }, 'Gains 8 Block and 2 Thorns'],
+    [{ kind: 'defend', block: 8, statuses: [{ s: 'thorns', n: 2, to: 'self' }] }, 'Gains 8 Block and 2 Feedback'],
     [{ kind: 'debuff', adds: [{ card: mid, n: 2, to: 'discard' }] }, 'Adds 2 Blot cards to your discard pile'],
     [{ kind: 'debuff', adds: [{ card: mid, n: 1, to: 'draw' }] }, 'Adds a Blot card to your draw pile'],
     [{ kind: 'summon', summons: [{ enemy: foe, n: 2 }] }, 'Summons 2 Imps'],
     [{ kind: 'summon', summons: [{ enemy: foe, n: 1 }] }, 'Summons an Imp'],
     [{ kind: 'debuff', steals: 15 }, 'Steals 15 gold'],
-    [{ kind: 'debuff', swap: true }, 'Swaps your rows'],
+    [{ kind: 'debuff', swap: true }, 'Swaps your spots'],
     [{ kind: 'flee', flee: true }, 'Flees'],
-    [{ kind: 'debuff', removes: [{ s: 'buffs' }, { s: 'might' }] }, 'Removes all buffs and Might from the front hero'],
-    [{ kind: 'debuff', removes: [{ s: 'debuffs' }] }, 'Removes all debuffs from the front hero'],
+    [{ kind: 'debuff', removes: [{ s: 'buffs' }, { s: 'might' }] }, 'Removes all buffs and Volume from the lead hero'],
+    [{ kind: 'debuff', removes: [{ s: 'debuffs' }] }, 'Removes all debuffs from the lead hero'],
     [{ kind: 'none', name: 'Idle' }, 'Idle'],
     [{ kind: 'none', name: '' }, ''],
     [{ kind: 'attack', name: 'Mystery' }, 'Mystery'],
-    [{ stunned: true, text: '' }, 'Stunned'],
+    [{ stunned: true, text: '' }, 'Starstruck'],
     [{ stunned: true, text: 'Dazed' }, 'Dazed'],
-    [{ dmg: 3, hits: 3, block: 4, heal: 2 }, 'Deals 3 x3 to the front hero, gains 4 Block and heals 2'],
-    [{ dmg: 5, adds: [{ card: 't_missing', n: 1, to: 'discard' }] }, 'Deals 5 to the front hero and adds a t_missing to your discard pile'],
+    [{ dmg: 3, hits: 3, block: 4, heal: 2 }, 'Deals 3 x3 to the lead hero, gains 4 Block and heals 2'],
+    [{ dmg: 5, adds: [{ card: 't_missing', n: 1, to: 'discard' }] }, 'Deals 5 to the lead hero and adds a t_missing to your discard pile'],
   ].forEach(([o, want]) => t.eq(D.intentText(IT(o)), want, 'intentText ' + JSON.stringify(o).slice(0, 80)));
   t.eq(D.intentText(null), '', 'null intent'); t.eq(D.intentText(undefined), '', 'undefined intent');
-  t.eq(D.intentText({ dmg: 6, hits: 2, tgtKind: 'front', tgt: ['hanae'] }), 'Deals 6 x2 to the front hero', 'a minimal intent object');
+  t.eq(D.intentText({ dmg: 6, hits: 2, tgtKind: 'front', tgt: ['hanae'] }), 'Deals 6 x2 to the lead hero', 'a minimal intent object');
   t.eq(D.intentText({ dmg: 6, hits: 1, tgt: ['hanae', 'kuro'] }), 'Deals 6 to both heroes', 'two hero names read as both');
-  t.eq(D.intentText({ dmg: 6, hits: 1, tgt: ['kuro'] }), 'Deals 6 to Kuro', 'a single hero name reads as the name');
-  t.eq(D.intentText({ dmg: 6, hits: 1 }), 'Deals 6 to the front hero', 'no target reads as the front hero');
+  t.eq(D.intentText({ dmg: 6, hits: 1, tgt: ['kuro'] }), 'Deals 6 to RoxorLoops', 'a single hero name reads as the name');
+  t.eq(D.intentText({ dmg: 6, hits: 1 }), 'Deals 6 to the lead hero', 'no target reads as the front hero');
 });
 
 t.test('rowText: rows read as one line per hero', () => {
-  t.eq(D.rowText('hanae', 'front'), 'Front: +2 damage on attacks', 'Hanae front'); t.eq(D.rowText('hanae', 'back'), 'Back: +1 Block on cards', 'Hanae back');
-  t.eq(D.rowText('kuro', 'front'), 'Front: no bonus', 'Kuro front'); t.eq(D.rowText('kuro', 'back'), 'Back: +2 damage on attacks', 'Kuro back');
-  t.eq(D.rowText('suzu', 'front'), 'Front: +1 Block on cards, Thorns 2', 'Suzu front'); t.eq(D.rowText('suzu', 'back'), 'Back: Regen 2', 'Suzu back');
-  t.eq(D.rowText('raiga', 'front'), 'Front: start each turn with 3 Block, Thorns 2', 'Raiga front'); t.eq(D.rowText('raiga', 'back'), 'Back: +1 damage on attacks', 'Raiga back');
-  t.eq(D.rowText('t_nobody', 'front'), 'Front: no bonus', 'an unknown hero has no bonus'); t.eq(D.rowText('t_nobody', 'back'), 'Back: no bonus', 'in either row');
+  t.eq(D.rowText('hanae', 'front'), 'Lead: +2 damage on attacks', 'Hanae front'); t.eq(D.rowText('hanae', 'back'), 'Backing: +1 Block on cards', 'Hanae back');
+  t.eq(D.rowText('kuro', 'front'), 'Lead: no bonus', 'Kuro front'); t.eq(D.rowText('kuro', 'back'), 'Backing: +2 damage on attacks', 'Kuro back');
+  t.eq(D.rowText('suzu', 'front'), 'Lead: +1 Block on cards, Feedback 2', 'Suzu front'); t.eq(D.rowText('suzu', 'back'), 'Backing: Warm Tea 2', 'Suzu back');
+  t.eq(D.rowText('raiga', 'front'), 'Lead: start each turn with 3 Block, Feedback 2', 'Raiga front'); t.eq(D.rowText('raiga', 'back'), 'Backing: +1 damage on attacks', 'Raiga back');
+  t.eq(D.rowText('t_nobody', 'front'), 'Lead: no bonus', 'an unknown hero has no bonus'); t.eq(D.rowText('t_nobody', 'back'), 'Backing: no bonus', 'in either row');
   const h = { id: 't_hero', name: 'Test', rows: { front: { dmgAdd: -1, blockAdd: -2, drawAdd: 1, regen: 1 }, back: { drawAdd: 2, startBlock: 2, thorns: 1 } } };
   const saved = D.heroes.hanae.rows;
   D.heroes.hanae.rows = h.rows;
-  t.eq(D.rowText('hanae', 'front'), 'Front: -1 damage on attacks, -2 Block on cards, Regen 1, draw 1 extra card each turn', 'negative bonuses keep their sign; every field reads');
-  t.eq(D.rowText('hanae', 'back'), 'Back: start each turn with 2 Block, Thorns 1, draw 2 extra cards each turn', 'back with every field');
+  t.eq(D.rowText('hanae', 'front'), 'Lead: -1 damage on attacks, -2 Block on cards, Warm Tea 1, draw 1 extra card each turn', 'negative bonuses keep their sign; every field reads');
+  t.eq(D.rowText('hanae', 'back'), 'Backing: start each turn with 2 Block, Feedback 1, draw 2 extra cards each turn', 'back with every field');
   D.heroes.hanae.rows = saved;
-  t.eq(D.rowText('hanae', 'front'), 'Front: +2 damage on attacks', 'restored');
-  ['hanae', 'kuro', 'suzu', 'raiga'].forEach((id) => ['front', 'back'].forEach((row) => t.ok(!DASH.test(D.rowText(id, row)) && D.rowText(id, row).indexOf(row === 'front' ? 'Front: ' : 'Back: ') === 0, `${id} ${row}: prefixed, no dashes`)));
+  t.eq(D.rowText('hanae', 'front'), 'Lead: +2 damage on attacks', 'restored');
+  ['hanae', 'kuro', 'suzu', 'raiga'].forEach((id) => ['front', 'back'].forEach((row) => t.ok(!DASH.test(D.rowText(id, row)) && D.rowText(id, row).indexOf(row === 'front' ? 'Lead: ' : 'Backing: ') === 0, `${id} ${row}: prefixed, no dashes`)));
 });
 
 // ------------------------------------------------------------------ target mode and cardOps
@@ -958,7 +966,7 @@ t.test('real content: every real card, base and upgraded, has clean, short rules
       if (plain && !/[.)]$/.test(plain)) p.push('no final period');
       if (strip(html) !== plain) p.push('plain differs from html');
       if (![...html.matchAll(/data-kw="([^"]+)"/g)].every((m) => okKey(m[1]))) p.push('unknown data-kw');
-      if (RD.resolveCard(inst).kw.indexOf('exhaust') >= 0 && !/Exhaust\.$/.test(plain) && (def.type !== 'power')) p.push('Exhaust is not last');
+      if (RD.resolveCard(inst).kw.indexOf('exhaust') >= 0 && !/Fade\.$/.test(plain) && (def.type !== 'power')) p.push('Fade is not last');
       if (p.length) bad.push(`${id}${up ? '+' : ''}: ${p.join('; ')}`);
     });
   });
@@ -1048,7 +1056,7 @@ t.test('intentText reads a live C.intent object', () => {
   const C = COMBAT.create({ heroes: [{ id: 'hanae', hp: 60, maxHp: 60 }, { id: 'kuro', hp: 60, maxHp: 60 }], frontIdx: 0, deck, enemies: [foe], seed: 1, mods: {}, gold: 50 });
   C.start();
   // the last strike is printed with the Might 2 the enemy gained two moves earlier: 4 + 2
-  const want = ['Deals 7 x2 to the front hero and applies 2 Weak', 'Gains 8 Block and 2 Might', 'Adds 2 Blot cards to your discard pile and steals 15 gold', 'Summons 2 Imps', 'Heals 6 and swaps your rows', 'Deals 6 to both heroes'];
+  const want = ['Deals 7 x2 to the lead hero and applies 2 Muffled', 'Gains 8 Block and 2 Volume', 'Adds 2 Blot cards to your discard pile and steals 15 gold', 'Summons 2 Imps', 'Heals 6 and swaps your spots', 'Deals 6 to both heroes'];
   order.forEach((m, i) => {
     const e = C.enemies[0];
     t.eq(e.intent.move, m, `move ${m} is up`);
@@ -1063,96 +1071,96 @@ t.test('card text: hero:any hooks name BOTH heroes, plain owned hooks name only 
   [
     ['play', hook('onPlay', [dmg(2, { tgt: 'all' })], { filter: { type: 'attack', hero: 'any' }, limit: 2 }), 'Up to 2 times per turn, whenever either hero plays an Attack, deal 2 damage to all enemies.'],
     ['play without any', hook('onPlay', [dmg(2, { tgt: 'all' })], { filter: { type: 'attack' }, limit: 2 }), 'Up to 2 times per turn, whenever you play an Attack, deal 2 damage to all enemies.'],
-    ['kill', hook('onKill', [st('burn', 3, { tgt: 'all' })], { filter: any }), 'Whenever either hero defeats an enemy, apply 3 Burn to all enemies.'],
+    ['kill', hook('onKill', [st('burn', 3, { tgt: 'all' })], { filter: any }), 'Whenever either hero defeats an enemy, apply 3 Sizzle to all enemies.'],
     ['damaged', hook('onDamaged', [dmg(2)], { filter: any }), 'Whenever either hero is hit, deal 2 damage to the attacker.'],
-    ['swap with any is any swap', hook('onSwap', [blk(2)], { filter: any, limit: 1 }), 'Once per turn, whenever either hero swaps rows, gain 2 Block.'],
-    ['swap without any only hears swaps that put the owner in front', hook('onSwap', [blk(2)]), 'Whenever you swap into the front row, gain 2 Block.'],
-    ['hero down with any', hook('onHeroDown', [{ op: 'revive', pct: 0.4 }], { filter: any, once: true }), 'The next time a hero falls, revive that hero with 40% HP.'],
-    ['hero down without any is the owner', hook('onHeroDown', [{ op: 'revive', pct: 0.4 }], { once: true }), 'The next time you fall, revive yourself with 40% HP.'],
+    ['swap with any is any swap', hook('onSwap', [blk(2)], { filter: any, limit: 1 }), 'Once per turn, whenever either hero swaps spots, gain 2 Block.'],
+    ['swap without any only hears swaps that put the owner in front', hook('onSwap', [blk(2)]), 'Whenever you swap into the lead, gain 2 Block.'],
+    ['hero down with any', hook('onHeroDown', [{ op: 'revive', pct: 0.4 }], { filter: any, once: true }), 'The next time a hero loses their voice, bring them back with 40% HP.'],
+    ['hero down without any is the owner', hook('onHeroDown', [{ op: 'revive', pct: 0.4 }], { once: true }), 'The next time you lose your voice, bring yourself back with 40% HP.'],
   ].forEach(([name, op, want]) => t.eq(text([op], PW), want, 'hook: ' + name));
   // a party hook (relic, passive) keeps "you": the phrase is the old one
   t.eq(D.hookText({ on: 'onPlay', filter: { type: 'attack' }, fx: [blk(1)] }), 'Whenever you play an Attack, gain 1 Block.', 'a relic hook keeps the plain you');
-  t.eq(D.hookText({ on: 'onSwap', fx: [blk(1)] }), 'Whenever you swap rows, gain 1 Block.', 'and so does a relic swap hook');
+  t.eq(D.hookText({ on: 'onSwap', fx: [blk(1)] }), 'Whenever you swap spots, gain 1 Block.', 'and so does a relic swap hook');
 });
 
 t.test('card text: gains of different kinds share one sentence, same kinds do not', () => {
   [
-    ['block and a status', [blk(5), st('taunt', 1)], 'Gain 5 Block and 1 Taunt.'],
+    ['block and a status', [blk(5), st('taunt', 1)], 'Gain 5 Block and 1 Spotlight.'],
     ['a status and block', [st('bloom', 1), blk(3)], 'Gain 1 Bloom and 3 Block.'],
-    ['three kinds', [blk(10), st('taunt', 2), st('thorns', 1)], 'Gain 10 Block, 2 Taunt and 1 Thorns.'],
-    ['both heroes', [blk(4, { tgt: 'both' }), st('thorns', 1, { tgt: 'both' })], 'Both heroes gain 4 Block and 1 Thorns.'],
+    ['three kinds', [blk(10), st('taunt', 2), st('thorns', 1)], 'Gain 10 Block, 2 Spotlight and 1 Feedback.'],
+    ['both heroes', [blk(4, { tgt: 'both' }), st('thorns', 1, { tgt: 'both' })], 'Both heroes gain 4 Block and 1 Feedback.'],
     ['different targets stay apart', [blk(4, { tgt: 'both' }), st('bloom', 1)], 'Both heroes gain 4 Block. Gain 1 Bloom.'],
     ['two blocks stay apart', [blk(4), blk(2)], 'Gain 4 Block. Gain 2 Block.'],
     ['a computed block stays apart', [blk({ per: 'block', who: 'ally' }), st('bloom', 1)], 'Gain Block equal to your ally\'s Block. Gain 1 Bloom.'],
-    ['gold and Ink', [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }], 'Gain 1 Echo and 3 gold.'],
+    ['gold and Ink', [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }], 'Gain 1 Vox and 3 gold.'],
     ['a draw is not a gain', [st('bloom', 1), { op: 'draw', n: 1 }], 'Gain 1 Bloom. Draw 1 card.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, 'gain: ' + name));
-  t.eq(text([blk(6), st('thorns', 1), cond({ row: 'front' }, [st('thorns', 2)])], SK), 'Gain 6 Block and 1 Thorns. Front: gain 2 more Thorns.', 'a same status row bonus still reads "more" after a merged sentence');
-  t.eq(text([blk(6), cond({ row: 'front' }, [blk(6)])], SK), 'Gain 6 Block. Front: gain 6 more Block.', 'and a block row bonus too');
+  t.eq(text([blk(6), st('thorns', 1), cond({ row: 'front' }, [st('thorns', 2)])], SK), 'Gain 6 Block and 1 Feedback. Lead: gain 2 more Feedback.', 'a same status row bonus still reads "more" after a merged sentence');
+  t.eq(text([blk(6), cond({ row: 'front' }, [blk(6)])], SK), 'Gain 6 Block. Lead: gain 6 more Block.', 'and a block row bonus too');
 });
 
 t.test('card text: a status taken back by a once-hook reads as "this turn" or "until your next turn"', () => {
   const back = (on, s, n, tgt) => hook(on, [st(s, -n, tgt ? { tgt } : undefined)], { once: true });
   [
-    ['might this turn', [st('might', 2), back('turnEnd', 'might', 2)], 'Gain 2 Might until the end of this turn.'],
-    ['dodge until next turn', [st('dodge', 1), back('turnStart', 'dodge', 1)], 'Gain 1 Dodge until your next turn.'],
-    ['both heroes', [st('might', 2, { tgt: 'both' }), back('turnEnd', 'might', 2, 'both')], 'Both heroes gain 2 Might until the end of this turn.'],
-    ['the ally', [st('might', 3, { tgt: 'ally' }), back('turnEnd', 'might', 3, 'ally')], 'Give your ally 3 Might until the end of this turn.'],
-    ['with a draw between', [st('might', 2, { tgt: 'both' }), { op: 'draw', n: 2 }, back('turnEnd', 'might', 2, 'both')], 'Both heroes gain 2 Might until the end of this turn. Draw 2 cards.'],
-    ['an op in front', [dmg({ per: 'status', s: 'dodge', mul: 3, who: 'self' }), st('dodge', 1), back('turnStart', 'dodge', 1)], 'Deal 3 damage for each Dodge you have. Gain 1 Dodge until your next turn.'],
-    ['a different amount is not a pair', [st('might', 2), back('turnEnd', 'might', 1)], 'Gain 2 Might. At the end of this turn, lose 1 Might.'],
-    ['a different status is not a pair', [st('might', 2), back('turnEnd', 'bulwark', 2)], 'Gain 2 Might. At the end of this turn, lose 2 Bulwark.'],
-    ['a different target is not a pair', [st('might', 2), back('turnEnd', 'might', 2, 'both')], 'Gain 2 Might. At the end of this turn, both heroes lose 2 Might.'],
-    ['a repeating hook is not a pair', [st('might', 2), hook('turnEnd', [st('might', -2)])], 'Gain 2 Might. At the end of your turn, lose 2 Might.'],
+    ['might this turn', [st('might', 2), back('turnEnd', 'might', 2)], 'Gain 2 Volume until the end of this turn.'],
+    ['dodge until next turn', [st('dodge', 1), back('turnStart', 'dodge', 1)], 'Gain 1 Shimmy until your next turn.'],
+    ['both heroes', [st('might', 2, { tgt: 'both' }), back('turnEnd', 'might', 2, 'both')], 'Both heroes gain 2 Volume until the end of this turn.'],
+    ['the ally', [st('might', 3, { tgt: 'ally' }), back('turnEnd', 'might', 3, 'ally')], 'Give your ally 3 Volume until the end of this turn.'],
+    ['with a draw between', [st('might', 2, { tgt: 'both' }), { op: 'draw', n: 2 }, back('turnEnd', 'might', 2, 'both')], 'Both heroes gain 2 Volume until the end of this turn. Draw 2 cards.'],
+    ['an op in front', [dmg({ per: 'status', s: 'dodge', mul: 3, who: 'self' }), st('dodge', 1), back('turnStart', 'dodge', 1)], 'Deal 3 damage for each Shimmy you have. Gain 1 Shimmy until your next turn.'],
+    ['a different amount is not a pair', [st('might', 2), back('turnEnd', 'might', 1)], 'Gain 2 Volume. At the end of this turn, lose 1 Volume.'],
+    ['a different status is not a pair', [st('might', 2), back('turnEnd', 'bulwark', 2)], 'Gain 2 Volume. At the end of this turn, lose 2 Soundproof.'],
+    ['a different target is not a pair', [st('might', 2), back('turnEnd', 'might', 2, 'both')], 'Gain 2 Volume. At the end of this turn, both heroes lose 2 Volume.'],
+    ['a repeating hook is not a pair', [st('might', 2), hook('turnEnd', [st('might', -2)])], 'Gain 2 Volume. At the end of your turn, lose 2 Volume.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, 'temp: ' + name));
 });
 
 t.test('card text: swaps read as steps and row bonuses after a swap say "Now"', () => {
   [
-    ['a step to the front', [cond({ row: 'back' }, [{ op: 'swap' }]), st('bloom', 1)], 'Move to the front row. Gain 1 Bloom.'],
-    ['a step to the back', [cond({ row: 'front' }, [{ op: 'swap' }]), blk(3)], 'Move to the back row. Gain 3 Block.'],
-    ['a step then a bonus', [cond({ row: 'back' }, [{ op: 'swap' }]), dmg(5), cond({ row: 'front' }, [st('bloom', 1)])], 'Move to the front row. Deal 5 damage. Front: gain 1 Bloom.'],
-    ['a swap then rows', [{ op: 'swap' }, cond({ row: 'front' }, [blk(6)], [{ op: 'heal', n: 4, tgt: 'both' }])], 'Swap rows. Now Front: gain 6 Block. Now Back: heal both heroes for 4 HP.'],
-    ['a swap then one row', [dmg(6), { op: 'swap' }, cond({ row: 'back' }, [blk(3, { tgt: 'both' })])], 'Deal 6 damage. Swap rows. Now Back: both heroes gain 3 Block.'],
-    ['rows before a swap are plain', [cond({ row: 'front' }, [dmg(3)]), { op: 'swap' }], 'Front: deal 3 damage. Swap rows.'],
-    ['a swap then a long condition', [{ op: 'swap' }, cond({ row: 'back', handEmpty: true }, [{ op: 'draw', n: 1 }])], 'Swap rows. If you are now in the back row and your hand is empty, draw 1 card.'],
+    ['a step to the front', [cond({ row: 'back' }, [{ op: 'swap' }]), st('bloom', 1)], 'Move to the lead. Gain 1 Bloom.'],
+    ['a step to the back', [cond({ row: 'front' }, [{ op: 'swap' }]), blk(3)], 'Move to the backing spot. Gain 3 Block.'],
+    ['a step then a bonus', [cond({ row: 'back' }, [{ op: 'swap' }]), dmg(5), cond({ row: 'front' }, [st('bloom', 1)])], 'Move to the lead. Deal 5 damage. Lead: gain 1 Bloom.'],
+    ['a swap then rows', [{ op: 'swap' }, cond({ row: 'front' }, [blk(6)], [{ op: 'heal', n: 4, tgt: 'both' }])], 'Swap spots. Now Lead: gain 6 Block. Now Backing: heal both heroes for 4 HP.'],
+    ['a swap then one row', [dmg(6), { op: 'swap' }, cond({ row: 'back' }, [blk(3, { tgt: 'both' })])], 'Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block.'],
+    ['rows before a swap are plain', [cond({ row: 'front' }, [dmg(3)]), { op: 'swap' }], 'Lead: deal 3 damage. Swap spots.'],
+    ['a swap then a long condition', [{ op: 'swap' }, cond({ row: 'back', handEmpty: true }, [{ op: 'draw', n: 1 }])], 'Swap spots. If you are now in the backing spot and your hand is empty, draw 1 card.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, 'swap: ' + name));
 });
 
 t.test('card text: doubling, area strikes with a debuff, spent counts and the target placement', () => {
   const sumi = (mul, x) => Object.assign({ per: 'status', who: 'self', s: 'sumi', mul }, x);
   [
-    ['double the target\'s status', [st('poison', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Double the target\'s Poison (adds at most 10).'],
-    ['double your own', [st('thorns', { per: 'status', s: 'thorns', cap: 8 })], 'Double your Thorns (adds at most 8).'],
-    ['double with no cap', [st('burn', { per: 'status', who: 'target', s: 'burn' })], 'Double the target\'s Burn.'],
-    ['another status is not a double', [st('burn', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Apply Burn equal to the target\'s Poison (max 10).'],
-    ['a strike and a debuff on all', [dmg(5, { tgt: 'all' }), st('weak', 1, { tgt: 'all' })], 'Deal 5 damage and apply 1 Weak to all enemies.'],
-    ['and a second debuff', [dmg(5, { tgt: 'all' }), st('weak', 1, { tgt: 'all' }), st('vulnerable', 1, { tgt: 'all' })], 'Deal 5 damage and apply 1 Weak and 1 Vulnerable to all enemies.'],
-    ['one target keeps two sentences', [dmg(5), st('weak', 1)], 'Deal 5 damage. Apply 1 Weak.'],
-    ['a strike and a debuff on others', [dmg(5, { tgt: 'others' }), st('weak', 1, { tgt: 'others' })], 'Deal 5 damage and apply 1 Weak to all other enemies.'],
-    ['a strike and a debuff on another target', [dmg(3, { tgt: 'all' }), st('mark', 1, { tgt: 'lowest' })], 'Deal 3 damage to all enemies. Apply 1 Mark to the enemy with the lowest HP.'],
-    ['repeat of a strike and a debuff', [{ op: 'repeat', n: { per: 'X' }, do: [dmg(3, { tgt: 'all' }), st('burn', 1, { tgt: 'all' })] }], 'Repeat X times: deal 3 damage and apply 1 Burn to all enemies.'],
-    ['a spent count puts the target first', [dmg(sumi(2, { base: 4, upTo: 3 }), { tgt: 'all', consume: { s: 'sumi', upTo: 3 } })], 'Spend up to 3 Breath. Deal 4 damage to all enemies, plus 2 for each Breath spent.'],
-    ['and the for each form', [dmg(sumi(4, { upTo: 6 }), { tgt: 'all', consume: { s: 'sumi', upTo: 6 } })], 'Spend up to 6 Breath. Deal 4 damage to all enemies for each Breath spent.'],
+    ['double the target\'s status', [st('poison', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Double the target\'s Earworm (adds at most 10).'],
+    ['double your own', [st('thorns', { per: 'status', s: 'thorns', cap: 8 })], 'Double your Feedback (adds at most 8).'],
+    ['double with no cap', [st('burn', { per: 'status', who: 'target', s: 'burn' })], 'Double the target\'s Sizzle.'],
+    ['another status is not a double', [st('burn', { per: 'status', who: 'target', s: 'poison', cap: 10 })], 'Apply Sizzle equal to the target\'s Earworm (max 10).'],
+    ['a strike and a debuff on all', [dmg(5, { tgt: 'all' }), st('weak', 1, { tgt: 'all' })], 'Deal 5 damage and apply 1 Muffled to all enemies.'],
+    ['and a second debuff', [dmg(5, { tgt: 'all' }), st('weak', 1, { tgt: 'all' }), st('vulnerable', 1, { tgt: 'all' })], 'Deal 5 damage and apply 1 Muffled and 1 Exposed to all enemies.'],
+    ['one target keeps two sentences', [dmg(5), st('weak', 1)], 'Deal 5 damage. Apply 1 Muffled.'],
+    ['a strike and a debuff on others', [dmg(5, { tgt: 'others' }), st('weak', 1, { tgt: 'others' })], 'Deal 5 damage and apply 1 Muffled to all other enemies.'],
+    ['a strike and a debuff on another target', [dmg(3, { tgt: 'all' }), st('mark', 1, { tgt: 'lowest' })], 'Deal 3 damage to all enemies. Apply 1 Tag to the enemy with the lowest HP.'],
+    ['repeat of a strike and a debuff', [{ op: 'repeat', n: { per: 'X' }, do: [dmg(3, { tgt: 'all' }), st('burn', 1, { tgt: 'all' })] }], 'Repeat X times: deal 3 damage and apply 1 Sizzle to all enemies.'],
+    ['a spent count puts the target first', [dmg(sumi(2, { base: 4, upTo: 3 }), { tgt: 'all', consume: { s: 'sumi', upTo: 3 } })], 'Spend up to 3 Groove. Deal 4 damage to all enemies, plus 2 for each Groove spent.'],
+    ['and the for each form', [dmg(sumi(4, { upTo: 6 }), { tgt: 'all', consume: { s: 'sumi', upTo: 6 } })], 'Spend up to 6 Groove. Deal 4 damage to all enemies for each Groove spent.'],
     ['and X hits with a plus', [dmg({ base: 2, per: 'status', who: 'self', s: 'bloom', mul: 1 }, { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })], 'Spend all Bloom. Deal 2 damage to all enemies X times, plus 1 for each Bloom spent.'],
     ['a plain equal form keeps the target at the end', [dmg({ per: 'block' }, { tgt: 'all' })], 'Deal damage equal to your Block to all enemies.'],
     ['draw for each chosen', [pick('hand', 2, 'discard', { optional: true }), { op: 'draw', n: { per: 'picked' } }], 'Discard up to 2 cards. Draw 1 card for each card chosen.'],
-    ['a status for each chosen', [pick('hand', 2, 'exhaust', { optional: true }), st('sumi', { per: 'picked' })], 'Exhaust up to 2 cards. Gain 1 Breath for each card chosen.'],
+    ['a status for each chosen', [pick('hand', 2, 'exhaust', { optional: true }), st('sumi', { per: 'picked' })], 'Fade up to 2 cards. Gain 1 Groove for each card chosen.'],
     ['earlier plays', [dmg({ per: 'cardsPlayed', mul: 2 })], 'Deal 2 damage for each card played earlier this turn.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, name.indexOf('X hits') >= 0 || name.indexOf('repeat of') >= 0 ? Object.assign({ cost: 'X' }, SK) : SK), want, 'wording: ' + name));
 });
 
 t.test('card text: Curse and Status cards are acted by the front hero, and dead resource conditions are not printed', () => {
   const junk = (fx, hand) => text(fx, { type: 'status', hero: 'status', cost: 0, kw: ['exhaust'], hand });
-  t.eq(junk([{ op: 'hurt', n: 2 }, { op: 'draw', n: 1 }]), 'The front hero loses 2 HP. Draw 1 card. Exhaust.', 'hurt self reads the front hero');
-  t.eq(junk([blk(3), st('bloom', 1)]), 'The front hero gains 3 Block and 1 Bloom. Exhaust.', 'block and a status read the front hero');
-  t.eq(junk([{ op: 'energy', n: -1 }]), 'Lose 1 Energy. Exhaust.', 'Energy is the player\'s, not the hero\'s');
-  t.eq(junk([{ op: 'removeStatus', s: 'debuffs' }]), 'Remove all debuffs from the front hero. Exhaust.', 'a cleanse reads the front hero');
-  t.eq(junk([], { turnEnd: [{ op: 'hurt', n: 1, tgt: 'both' }] }), 'If this is in your hand at the end of your turn, both heroes lose 1 HP. Exhaust.', 'explicit targets stay');
+  t.eq(junk([{ op: 'hurt', n: 2 }, { op: 'draw', n: 1 }]), 'The lead hero loses 2 HP. Draw 1 card. Fade.', 'hurt self reads the front hero');
+  t.eq(junk([blk(3), st('bloom', 1)]), 'The lead hero gains 3 Block and 1 Bloom. Fade.', 'block and a status read the front hero');
+  t.eq(junk([{ op: 'energy', n: -1 }]), 'Lose 1 Breath. Fade.', 'Energy is the player\'s, not the hero\'s');
+  t.eq(junk([{ op: 'removeStatus', s: 'debuffs' }]), 'Remove all debuffs from the lead hero. Fade.', 'a cleanse reads the front hero');
+  t.eq(junk([], { turnEnd: [{ op: 'hurt', n: 1, tgt: 'both' }] }), 'If this is in your hand at the end of your turn, both heroes lose 1 HP. Fade.', 'explicit targets stay');
   const res = (hero) => W.card([st('might', 1), cond({ status: { s: 'bloom', who: 'self' } }, [st('bloom', 2)]), cond({ status: { s: 'sumi', who: 'self' } }, [st('sumi', 2)])], { hero, type: 'skill' });
-  t.eq(P(res('hanae')), 'Gain 1 Might. If you have Bloom, gain 2 Bloom.', 'a Hanae card never holds Sumi, so that line is left out');
-  t.eq(P(res('kuro')), 'Gain 1 Might. If you have Breath, gain 2 Breath.', 'and a Kuro card never holds Bloom');
-  t.eq(P(W.card([cond({ status: { s: 'bloom', who: 'self', lte: 0 } }, [st('might', 1)])], { hero: 'kuro', type: 'skill' })), 'If you have no Bloom, gain 1 Might.', 'an "at most" condition on another hero\'s resource is still true, so it stays');
+  t.eq(P(res('hanae')), 'Gain 1 Volume. If you have Bloom, gain 2 Bloom.', 'a Hanae card never holds Sumi, so that line is left out');
+  t.eq(P(res('kuro')), 'Gain 1 Volume. If you have Groove, gain 2 Groove.', 'and a Kuro card never holds Bloom');
+  t.eq(P(W.card([cond({ status: { s: 'bloom', who: 'self', lte: 0 } }, [st('might', 1)])], { hero: 'kuro', type: 'skill' })), 'If you have no Bloom, gain 1 Volume.', 'an "at most" condition on another hero\'s resource is still true, so it stays');
 });
 
 t.test('card text: numbers inside a hook are not given the hero\'s row, Might or Weak, and hook Block gets no row bonus', () => {
@@ -1183,23 +1191,23 @@ t.test('enemy text: an enemy move reads from the enemy\'s side (the bestiary pri
   D.add('enemies', { t_cat_kit: Object.assign({}, D.enemies[foe], { id: 't_cat_kit', name: 'Kitten', tier: 'minion', size: 's' }) });
   const e = D.enemies[foe];
   const M = (k) => D.opsText(e.moves[k].fx);
-  t.eq(M('a'), 'Deal 5 damage and apply 1 Vulnerable to the front hero.', 'a strike and a debuff on the front hero share the target');
+  t.eq(M('a'), 'Deal 5 damage and apply 1 Exposed to the lead hero.', 'a strike and a debuff on the front hero share the target');
   t.eq(M('b'), 'Deal 3 damage to a random hero 3 times.', 'a random enemy op hits a random HERO');
-  t.eq(M('c'), 'Apply 1 Weak and 1 Frail to both heroes.', 'debuffs merge');
-  t.eq(M('d'), 'Gain 8 Block and 2 Thorns.', 'self gains merge');
-  t.eq(M('e'), 'Heal the enemy with the lowest HP for 6 HP. All enemies gain 4 Block. Another enemy gains 1 Ritual.', 'help for other enemies');
+  t.eq(M('c'), 'Apply 1 Muffled and 1 Wobbly to both heroes.', 'debuffs merge');
+  t.eq(M('d'), 'Gain 8 Block and 2 Feedback.', 'self gains merge');
+  t.eq(M('e'), 'Heal the enemy with the lowest HP for 6 HP. All enemies gain 4 Block. Another enemy gains 1 Crescendo.', 'help for other enemies');
   t.eq(M('f'), 'Summon 2 Kittens. Summon a Kitten.', 'summons are pluralised');
-  t.eq(M('g'), 'Shuffle 2 Ink Blot cards into your draw pile. Put an Ink Blot card on top of your draw pile. Steal 10 gold. Swap your rows. Flee.', 'junk, theft, swap and flee');
-  t.eq(M('h'), 'Deal 5 damage to the front hero, plus 3 for each debuff on the hero (max 14). Deal 4 damage to the front hero, plus 3 for each enemy still standing (max 14). Deal 9 damage to the front hero, plus 1 for every 2 Block the hero has (max 18), ignoring Block. Deal 14 damage to the weakest hero, plus 1 for every 4 HP the hero is missing (max 30).', 'per values read from the enemy\'s side, fractions never print as decimals');
-  t.eq(M('i'), 'Deal damage equal to 6 plus its turn count (max 12) to both heroes. Deal damage equal to 15 plus its Plating (max 26) to the front hero.', 'self counters read "its"');
-  t.eq(M('j'), 'Remove all buffs, Bloom and Breath from both heroes. Lose all Thorns. Remove all debuffs from itself.', 'removals');
-  t.eq(D.opsText(e.start), 'Gain 3 Plating and 2 Thorns.', 'start ops');
-  t.eq(D.hookText(e.hooks[0]), 'When it dies, deal 4 damage to the front hero.', 'an onDeath hook');
-  t.eq(D.hookText(e.hooks[1]), 'Once per turn, when it is hurt, lose 1 Plating.', 'an onHurt hook');
-  t.eq(D.opsText(e.phases[0].fx), 'Gain 1 Might and 12 Block.', 'a phase');
-  t.eq(D.moveText(e.moves.a), 'Deal 5 damage and apply 1 Vulnerable to the front hero.', 'moveText is opsText with the enemy side forced');
+  t.eq(M('g'), 'Shuffle 2 Ink Blot cards into your draw pile. Put an Ink Blot card on top of your draw pile. Steal 10 gold. Swap your spots. Flee.', 'junk, theft, swap and flee');
+  t.eq(M('h'), 'Deal 5 damage to the lead hero, plus 3 for each debuff on the hero (max 14). Deal 4 damage to the lead hero, plus 3 for each enemy still standing (max 14). Deal 9 damage to the lead hero, plus 1 for every 2 Block the hero has (max 18), ignoring Block. Deal 14 damage to the weakest hero, plus 1 for every 4 HP the hero is missing (max 30).', 'per values read from the enemy\'s side, fractions never print as decimals');
+  t.eq(M('i'), 'Deal damage equal to 6 plus its turn count (max 12) to both heroes. Deal damage equal to 15 plus its Sequins (max 26) to the lead hero.', 'self counters read "its"');
+  t.eq(M('j'), 'Remove all buffs, Bloom and Groove from both heroes. Lose all Feedback. Remove all debuffs from itself.', 'removals');
+  t.eq(D.opsText(e.start), 'Gain 3 Sequins and 2 Feedback.', 'start ops');
+  t.eq(D.hookText(e.hooks[0]), 'When it is defeated, deal 4 damage to the lead hero.', 'an onDeath hook');
+  t.eq(D.hookText(e.hooks[1]), 'Once per turn, when it is hurt, lose 1 Sequins.', 'an onHurt hook');
+  t.eq(D.opsText(e.phases[0].fx), 'Gain 1 Volume and 12 Block.', 'a phase');
+  t.eq(D.moveText(e.moves.a), 'Deal 5 damage and apply 1 Exposed to the lead hero.', 'moveText is opsText with the enemy side forced');
   t.eq(D.opsText([dmg(5)]), 'Deal 5 damage.', 'a card op list is still a card op list');
-  t.eq(D.opsText([dmg(5)], { enemy: true }), 'Deal 5 damage to the front hero.', 'unless the caller says it is an enemy');
+  t.eq(D.opsText([dmg(5)], { enemy: true }), 'Deal 5 damage to the lead hero.', 'unless the caller says it is an enemy');
 });
 
 t.test('intentText: help for other enemies is told apart from help for itself, and parts group by target', () => {
@@ -1213,22 +1221,22 @@ t.test('intentText: help for other enemies is told apart from help for itself, a
   const IT = (o) => Object.assign({ name: 'x', kind: 'attack', dmg: null, hits: 1, tgt: ['hanae'], tgtKind: 'front', taunted: false, statuses: [], adds: [], summons: [], removes: [] }, o);
   t.eq(D.intentText(IT({ move: 'wall', name: 'Shield Wall', kind: 'defend', block: 8 })), 'Gives all enemies 8 Block', 'all enemies get the Block');
   t.eq(D.intentText(IT({ move: 'warm', name: 'Warm Glow', kind: 'defend' })), 'Gives another enemy 5 Block', 'a Block for another enemy is no longer just the move name');
-  t.eq(D.intentText(IT({ move: 'kindle', name: 'Light the Wicks', kind: 'buff', statuses: [{ s: 'ritual', n: 1, to: 'self' }] })), 'Gives all enemies 1 Ritual', 'a buff for everyone');
-  t.eq(D.intentText(IT({ move: 'tighten', name: 'Tighten', dmg: 10, tgt: ['hanae'], statuses: [{ s: 'might', n: 2, to: 'self' }] })), 'Deals 10 to the front hero and gives another enemy 2 Might', 'a strike plus a buff for another');
+  t.eq(D.intentText(IT({ move: 'kindle', name: 'Light the Wicks', kind: 'buff', statuses: [{ s: 'ritual', n: 1, to: 'self' }] })), 'Gives all enemies 1 Crescendo', 'a buff for everyone');
+  t.eq(D.intentText(IT({ move: 'tighten', name: 'Tighten', dmg: 10, tgt: ['hanae'], statuses: [{ s: 'might', n: 2, to: 'self' }] })), 'Deals 10 to the lead hero and gives another enemy 2 Volume', 'a strike plus a buff for another');
   t.eq(D.intentText(IT({ move: 'mend', name: 'Mend', kind: 'heal', heal: 12 })), 'Heals the enemy with the lowest HP for 12', 'a heal for the weakest enemy');
   t.eq(D.intentText(IT({ move: 'wall', name: 'Not The Same Name', kind: 'defend', block: 8 })), 'Gains 8 Block', 'a name that matches no enemy move reads as before');
-  t.eq(D.intentText(IT({ dmg: 6, tgtKind: 'both', tgt: ['hanae', 'kuro'], statuses: [{ s: 'burn', n: 2, to: 'both' }] })), 'Deals 6 to both heroes and applies 2 Burn', 'the same target is not repeated');
-  t.eq(D.intentText(IT({ dmg: 6, statuses: [{ s: 'weak', n: 1, to: 'both' }, { s: 'frail', n: 1, to: 'both' }] })), 'Deals 6 to the front hero and applies 1 Weak and 1 Frail to both heroes', 'two debuffs on another target group');
-  t.eq(D.intentText(IT({ kind: 'debuff', removes: [{ s: 'bloom', to: 'both' }, { s: 'sumi', to: 'both' }, { s: 'ward', to: 'both' }, { s: 'charge', to: 'both' }] })), 'Removes Bloom, Breath, Ward and Charge from both heroes', 'resource wipes group');
-  t.eq(D.intentText(IT({ dmg: 24, removes: [{ s: 'thorns', to: 'self' }] })), 'Deals 24 to the front hero and loses its Thorns', 'an enemy dropping its own buff');
+  t.eq(D.intentText(IT({ dmg: 6, tgtKind: 'both', tgt: ['hanae', 'kuro'], statuses: [{ s: 'burn', n: 2, to: 'both' }] })), 'Deals 6 to both heroes and applies 2 Sizzle', 'the same target is not repeated');
+  t.eq(D.intentText(IT({ dmg: 6, statuses: [{ s: 'weak', n: 1, to: 'both' }, { s: 'frail', n: 1, to: 'both' }] })), 'Deals 6 to the lead hero and applies 1 Muffled and 1 Wobbly to both heroes', 'two debuffs on another target group');
+  t.eq(D.intentText(IT({ kind: 'debuff', removes: [{ s: 'bloom', to: 'both' }, { s: 'sumi', to: 'both' }, { s: 'ward', to: 'both' }, { s: 'charge', to: 'both' }] })), 'Removes Bloom, Groove, Reverb and Rumble from both heroes', 'resource wipes group');
+  t.eq(D.intentText(IT({ dmg: 24, removes: [{ s: 'thorns', to: 'self' }] })), 'Deals 24 to the lead hero and loses its Feedback', 'an enemy dropping its own buff');
   t.eq(D.intentText(IT({ kind: 'summon', summons: [{ enemy: kit, n: 1 }] })), 'Summons a Kit', 'a summon of a named enemy');
 });
 
 t.test('gemText: effects read as sentences, and lifesteal is not a clumsy phrase', () => {
   const G = (mod) => D.gemText({ name: 'g', color: 'red', tier: 1, mod });
   t.eq(G({ fx: [dmg(4, { tgt: 'enemy', lifesteal: true })] }), 'Deal 4 damage and heal for the HP it removes', 'lifesteal');
-  t.eq(G({ fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }] }), 'Gain 1 Echo and 3 gold', 'Ink and gold share a gain');
-  t.eq(G({ status: { s: 'thorns', n: 2, tgt: 'self' }, block: 1 }), '+1 Block, gain 2 Thorns', 'a flat bonus and a status');
+  t.eq(G({ fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }] }), 'Gain 1 Vox and 3 gold', 'Ink and gold share a gain');
+  t.eq(G({ status: { s: 'thorns', n: 2, tgt: 'self' }, block: 1 }), '+1 Block, gain 2 Feedback', 'a flat bonus and a status');
 });
 
 t.test('markup: an upgrade colours the base and the multiplier of a "plus ... for each" number too', () => {

@@ -1,239 +1,251 @@
-// Echowake -- chapter 1 roster: the Whispering Bamboo Grove (forest spirits and folk monsters, the teaching chapter).
-// Content only: one IIFE that registers 10 normals, 3 elites, 3 minions and the boss into DATA.enemies, then the
-// chapter's encounter pools into DATA.encounters[1]. No functions in the data, no random calls, no dashes.
+// Hocus Vocus: Act I roster (chapter 1): Blossom Bay, a sunny harbour town and its Snack Pier, where the Gloss is only starting (the
+// teaching act). Content only: one IIFE that registers 10 Creatures (normal), 3 Rivals (elite), 3 Sidekicks (minion) and the Headliner
+// (boss) into DATA.enemies, then the act's encounter pools into DATA.encounters[1]. No functions in the data, no random calls, no dashes.
+// Every name, title, move name, bark, phase line, lore line and tag is copied from hocus_vocus/plan/HV_ENEMIES.md section 2; ids, numbers,
+// ops and AI never change for the re-theme. Tags are display only (the Who's Who chips).
 //
 // HOW THE ROSTER TEACHES. Fights with a real deck last 2 to 6 turns, so an enemy's FIRST one or two actions carry its identity and
-// the rest of its cycle is what a slow player meets. Each normal owns one lesson, the elites combine two, the boss examines all.
-//   kappa          Vulnerable and Block: Muddy Slap leaves the front hero Vulnerable, so the River Claw after it lands x1.5; then a
-//                  guard turn, and a dish it refills once at half HP.
-//   tanuki_bandit  Priorities: it OPENS with Snatch and Grab (20 gold, telegraphed from turn 1), thumps, then dashes off. Killing it
-//                  first returns the gold as a gold event; letting it run loses it. In company it escapes far more often.
-//   kodama         Kill the caller: it opens by calling a Leaf Imp, rattles BOTH heroes lightly, and calls again once its imp is gone.
-//   karakasa       Frail and Block: two hops, snaps shut (Block 8, a wall on your next turn), a lick that leaves Frail, hops again.
-//   hitodama       Cheap hits: starts with Dodge 1, burns (unblockable), scatters scorch cards into the draw pile, immune to Burn.
-//   oni_cub        Tempo: Ritual gives it +1 Might every round, so a slow kill costs more with every turn.
-//   crow_tengu     The two rows: pecks anyone, dives at the back row, and swaps your heroes out of position. Weighted, never repeats twice.
-//   bamboo_sprite  Many small hits: three 2-damage cuts at random heroes, and a whetted blade after two flurries. Comes in packs.
-//   mushroom_folk  Poison and Thorns: grows its cap FIRST (Thorns 2, again every 4th turn), Poison spores after; immune to Poison.
-//   bamboo_boar    Reading the heavy: Plating, a bristle, then a telegraphed 14 damage gore, then a barge.
-//   oni_brute      Weak and rage: backhand with Weak, twin swing, mountain smash; below half HP a bellow (Block 8, Weak on both heroes)
-//                  and Might 2 for the rest of the fight.
-//   tengu_duelist  Back row, Dodge and the riposte: lunge at the back hero, a step that raises Dodge 2, three thrusts; a hook returns 3
-//                  damage the first time it loses HP each round; at half HP the blade dance (Dodge 3, Might 1).
-//   moss_guardian  A wall: opens by shaking out 2 Leaf Imps, Plating 3 and Thorns 2 from the start, a slow fist and slam, and every 4th
-//                  turn the moss thickens (+1 Plating, +1 Thorns). Poison and non-flurry hits are the answer.
+// the rest of its cycle is what a slow player meets. Each Creature owns one lesson, the Rivals combine two, the Headliner examines all.
+//   kappa          Fussy Foghorn. Exposed and Block: Prim Honk leaves the lead hero Exposed, so the Brass Bump after it lands x1.5; then
+//                  a guard turn (Close the Bell), and Puff Back Up, a heal it uses once at half HP.
+//   tanuki_bandit  Coin Crab. Priorities: it OPENS with Hat Grab (20 gold, telegraphed from turn 1), thumps, then scuttles off. Winning
+//                  it over first returns the gold as a gold event; letting it run loses it. In company it escapes far more often.
+//   kodama         Tuning Forkling. Win over the caller: it opens by ringing for a Kazoo Imp, rings at BOTH heroes lightly, and rings
+//                  again once its imp is gone.
+//   karakasa       Squeezebox. Wobbly and Block: two polka hops, squeezes shut (Block 8, a wall on your next turn), a wheeze that leaves
+//                  Wobbly, hops again.
+//   hitodama       Hot Chilli. Cheap hits: starts with Shimmy 1, Sizzles (unblockable), showers status_scorch cards into the draw pile,
+//                  immune to Sizzle.
+//   oni_cub        Jitterbug. Tempo: Crescendo gives it +1 Volume every round, so a slow win costs more with every turn.
+//   crow_tengu     Pitch-Perfect Gull. The two spots: pecks anyone, swoops at the backing spot, and swaps your heroes out of position.
+//                  Weighted, never repeats twice.
+//   bamboo_sprite  Pea Pod. Many small hits: three 2-damage pea volleys at random heroes, and Load Up after two volleys. Comes in packs.
+//   mushroom_folk  Jingle Machine. Earworm and Feedback: the Bubble Wrap goes up FIRST (Feedback 2, again every 4th turn), the Earworm
+//                  jingle after; immune to Earworm.
+//   bamboo_boar    Runaway Melon. Reading the heavy: Sequins, a Toughen Up, then a telegraphed 14 damage Downhill Roll, then a bump.
+//   oni_brute      One-Hit Jukebox. Muffled and rage: Record Slap with Muffled, Double A-Side, Greatest Hit; below half HP Turn It Up
+//                  (Block 8, Muffled on both heroes) and Volume 2 for the rest of the fight.
+//   tengu_duelist  Dance-Off Heron. The backing spot, Shimmy and the riposte: a lunge at the backing hero, a Heel Click that raises
+//                  Shimmy 2, a Triple Tap; a hook returns 3 damage the first time it loses HP each round; at half HP the Showstopper
+//                  (Shimmy 3, Volume 1).
+//   moss_guardian  Old Bandstand. A wall: opens by shaking 2 Kazoo Imps out of its rafters, Sequins 3 and Feedback 2 from the start, a
+//                  slow punch and stomp, and every 4th turn More Bunting (+1 Sequins, +1 Feedback). Earworm and non-flurry hits are
+//                  the answer.
 //
-// NUMBERS (CONTENT_SPEC 4.2, Trial 0), before Might and Vulnerable. Normal hits 4 to 9 (heavy 12 to 14; multi hits and the
-// both-heroes rattle are lighter per hit), elite single hits 8 to 14, minion hits 2 to 5, boss hits 9 to 13 (heavy 16 to 20; the
-// biggest round is 24 in the first form and 30 in the second). A group's summed average round damage (DATA.audit's metric: the seq or
-// weighted average of dmg n * hits per enemy, minions free) stays under 16 for normal groups and 22 for elites. Pairs and swarms carry
-// 8 or more; solos with a guard turn cannot (a solo kappa is 4.3) and are the gentle openers. Summoners keep at most 2 living summons.
-// Reference results with the real engine and the greedy bot (Hanae and Kuro, 40 seeds), starter deck / a developed deck:
+// NUMBERS (CONTENT_SPEC 4.2, no encore), before Volume and Exposed. Creature hits 4 to 9 (heavy 12 to 14; multi hits and the
+// both-heroes Ring Out are lighter per hit), Rival single hits 8 to 14, Sidekick hits 2 to 5, Headliner hits 9 to 13 (heavy 16 to 20;
+// the biggest round is 24 in the first form and 30 in the second). A group's summed average round damage (DATA.audit's metric: the seq
+// or weighted average of dmg n * hits per enemy, Sidekicks free) stays under 16 for normal groups and 22 for Rivals. Pairs and swarms
+// carry 8 or more; solos with a guard turn cannot (a solo kappa is 4.3) and are the gentle openers. Summoners keep at most 2 living
+// summons. Reference results with the real engine and the greedy bot (hanae and kuro, 40 seeds), starter deck / a developed deck:
 //   normal groups 1.9 to 4.6 turns, HP lost 2 to 26 (pooled 3.2 turns and about 11 HP with the developed deck, solos about 2.1 turns)
-//   elites 6.3 / 5.1 (guardian), 6.4 / 5.1 (brute), 7.6 / 6.1 (duelist) turns; 50 / 33, 44 / 28, 58 / 38 HP lost
-//   boss 16 / 10.8 turns, 107 / 63 HP lost, won 84 percent / 100 percent
+//   Rivals 6.3 / 5.1 (bandstand), 6.4 / 5.1 (jukebox), 7.6 / 6.1 (heron) turns; 50 / 33, 44 / 28, 58 / 38 HP lost
+//   Headliner 16 / 10.8 turns, 107 / 63 HP lost, won 84 percent / 100 percent
 // BALANCE PASS 1 (balance bot report 1, about 22,000 runs; measured here with refights of the bot's own fights, solo probes and a paired
-// greedy run set). What the numbers said, enemy by enemy, for the greedy party: kodama was the one truly soft normal (a lone kodama cost
-// 0.4 percent of party HP: it dies before it acts), and the hard end was karakasa, boar, mushroom folk, hitodama and oni cub. Poison and
-// Burn are booked by the bot under their own names, not under the enemy that applied them, so hitodama and mushroom_folk are NOT soft;
-// the "per turn" tables that suggested it were reading only direct hits, and crow_tengu is not twice its peers either. Changes: kodama
-// Rattle 3 to 4 and Branch Poke 6 to 7; tanuki_bandit Club Thump 7 to 8 and Snatch 4 to 5 (the gold stays its real cost); karakasa Hop 6x2
-// to 5x2; bamboo_boar Gore 14 to 13 and Barge 7 to 6; mushroom_folk Cap Bonk 7 to 6, Poison 3 to 2, HP 28 to 34 down to 26 to 32; crow_tengu
-// Dive Bomb 8 to 7; oni_cub HP 32 to 38 down to 28 to 34; hitodama HP 20 to 24 down to 18 to 22; bamboo_sprite HP 20 to 24 up to 22 to 26.
-// Net effect on normal fights: about 8 to 10 percent less party HP lost. What each enemy adds to a group fight, relative to the chapter
-// mean, went from 0.26x to 1.54x down to 0.34x to 1.40x (the bandit leaves after three turns and sprites come in packs, so those two stay
-// low by design; hitodama stays on top because of its Burn). Elites, minions and the boss are untouched.
-// Enemy Block and Plating gained in the enemy phase last through the hero's next turn: a `defend` intent is a free window THIS turn
+// greedy run set). What the numbers said, enemy by enemy, for the greedy party: kodama was the one truly soft normal (a lone kodama
+// cost 0.4 percent of party HP: it is won over before it acts), and the hard end was karakasa, bamboo_boar, mushroom_folk, hitodama and
+// oni_cub. Earworm and Sizzle (status ids poison and burn) are booked by the bot under their own names, not under the enemy that applied
+// them, so hitodama and mushroom_folk are NOT soft; the "per turn" tables that suggested it were reading only direct hits, and
+// crow_tengu is not twice its peers either. Changes: kodama Ring Out 3 to 4 and Prong Poke 6 to 7; tanuki_bandit Pincer Thump 7 to 8
+// and Hat Grab 4 to 5 (the gold stays its real cost); karakasa Polka Hop 6x2 to 5x2; bamboo_boar Downhill Roll 14 to 13 and Melon Bump
+// 7 to 6; mushroom_folk Can Drop 7 to 6, Earworm 3 to 2, HP 28 to 34 down to 26 to 32; crow_tengu Swoop Behind 8 to 7; oni_cub HP 32 to
+// 38 down to 28 to 34; hitodama HP 20 to 24 down to 18 to 22; bamboo_sprite HP 20 to 24 up to 22 to 26.
+// Net effect on normal fights: about 8 to 10 percent less party HP lost. What each enemy adds to a group fight, relative to the act
+// mean, went from 0.26x to 1.54x down to 0.34x to 1.40x (the crab leaves after three turns and pea pods come in packs, so those two
+// stay low by design; hitodama stays on top because of its Sizzle). Rivals, Sidekicks and the Headliner are untouched.
+// Enemy Block and Sequins gained in the enemy phase last through the hero's next turn: a `defend` intent is a free window THIS turn
 // and a wall NEXT turn. A `dur` status an enemy puts on itself needs n 2 to survive the end-of-round tick (heroes get the fresh flag).
 //
-// Kuzunoha, the boss. Turn 1 she calls two hollow kodama out of her tails (open), then cycles Bell Strike, Drown the Grove (2 blots into
-// the draw pile), the telegraphed Great Bell Toll (heavy 20), Tail Flurry (4 random hits) and Tail Sweep (both heroes). Rules:
-// a Mask Gaze (Weak and Frail on both) every 5th turn (every 6th in the second form), Needle Note at the weakest hero whenever one is below 30 percent HP, a
-// re-call if the kodama are all gone by turn 8, and Frayed Voice (Might 2 and Ritual 1) from turn 14, so stalling is punished.
-// Below half HP (the one phases entry) the mask splits: debuffs wash off, +1 Might, she is Vulnerable for two rounds (n 2 so it outlasts
-// the tick) and the two halves of the mask become hollow kodama (never more than 2 alive). Her second form opens with Nine Tails Rise
-// (Block 5, a breath for the party) and cycles Nine-Tail Storm, Bell Strike, Tail Sweep, Drown the Grove, Rise: the storm is nine random
-// hits of 2 plus Might, 27 in all, every fifth turn. It is answerable: Block on BOTH heroes, Weak on her (each 3 becomes 2, so 27
-// becomes 18), Dodge, or Taunt (random hits go to the taunter) plus Thorns to punish all nine.
+// Kraki, the Karaoke Kraken (boss_kuzunoha), the Headliner. Turn 1 her Mic Check calls two Mic Squeals (paper_kodama) out of the
+// speakers (open), then she cycles Mic Slam, Drown Them Out (2 status_blot cards into the draw pile), the telegraphed Power Anthem
+// (heavy 20), Tentacle Twirl (4 random hits) and Arm Sweep (both heroes). Rules: a Glossy Smile (Muffled and Wobbly on both) every 5th
+// turn (every 6th in the second form), a Too-High Note at the weakest hero whenever one is below 30 percent HP, a re-call if the squeals
+// are all gone by turn 8, and Hoarse but Louder (Volume 2 and Crescendo 1) from turn 14, so stalling is punished.
+// Below half HP (the one phases entry) the mask cracks: debuffs wash off, +1 Volume, she is Exposed for two rounds (n 2 so it outlasts
+// the tick) and up to two more Mic Squeals pop out (never more than 2 alive). Her second form opens with Eight Mics Up (Block 5, a
+// breather for the party) and cycles Every Voice at Once, Mic Slam, Arm Sweep, Drown Them Out, Eight Mics Up: Every Voice at Once is
+// nine random hits of 2 plus Volume (eight mics and her own voice), 27 in all, every fifth turn. It is answerable: Block on BOTH heroes,
+// Muffled on her (each 3 becomes 2, so 27 becomes 18), Shimmy, or Spotlight (random hits go to the hero in the Spotlight) plus Feedback
+// to punish all nine.
 (() => {
   DATA.add('enemies', {
-    // ------------------------------------------------------------------ normals
+    // ================================================================== Creatures (normal)
     kappa: {
-      id: 'kappa', name: 'Kappa', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
+      id: 'kappa', name: 'Fussy Foghorn', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
       moves: {
-        mud_slap: { name: 'Muddy Slap', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }, { op: 'status', s: 'vulnerable', n: 1, tgt: 'front' }] },
-        river_claw: { name: 'River Claw', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
-        shell_guard: { name: 'Shell Guard', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }], say: 'Manners first!' },
-        refill_dish: { name: 'Refill Dish', kind: 'heal', fx: [{ op: 'heal', n: 6, tgt: 'self' }], say: 'Ahh. Much better.' },
+        mud_slap: { name: 'Prim Honk', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }, { op: 'status', s: 'vulnerable', n: 1, tgt: 'front' }] },
+        river_claw: { name: 'Brass Bump', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        shell_guard: { name: 'Close the Bell', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }], say: 'Ahem. Manners first.' },
+        refill_dish: { name: 'Puff Back Up', kind: 'heal', fx: [{ op: 'heal', n: 6, tgt: 'self' }], say: 'Hhhaaah. Much better.' },
       },
       ai: { seq: ['mud_slap', 'river_claw', 'shell_guard'], rules: [{ if: { hpLt: 0.5 }, do: 'refill_dish', once: true }] },
       art: { id: 'kappa' },
-      lore: 'A river imp who keeps a small pond on his head and a large amount of pride. He fights fair and fights hard, right up until the water spills.',
-      tags: ['aquatic', 'spirit'],
+      lore: 'A harbour foghorn the Gloss tuned to one perfect note, and now it will not honk any other. It fights fair and honks hard, right up until it runs out of puff.',
+      tags: ['aquatic', 'construct'],
     },
 
     tanuki_bandit: {
-      id: 'tanuki_bandit', name: 'Tanuki Bandit', chapter: 1, tier: 'normal', size: 'm', hp: [30, 34],
+      id: 'tanuki_bandit', name: 'Coin Crab', chapter: 1, tier: 'normal', size: 'm', hp: [30, 34],
       moves: {
-        club_thump: { name: 'Club Thump', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
-        snatch_and_grab: { name: 'Snatch and Grab', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }, { op: 'stealGold', n: 20 }], say: 'Nice purse. Mine now!' },
-        dash_off: { name: 'Dash Off', kind: 'flee', fx: [{ op: 'flee' }], say: 'Catch me if you can!' },
+        club_thump: { name: 'Pincer Thump', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        snatch_and_grab: { name: 'Hat Grab', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }, { op: 'stealGold', n: 20 }], say: 'Nice hat. Mine now!' },
+        dash_off: { name: 'Scuttle Off', kind: 'flee', fx: [{ op: 'flee' }], say: 'Catch me if you can!' },
       },
       ai: { seq: ['snatch_and_grab', 'club_thump', 'dash_off'] },
       art: { id: 'tanuki_bandit' },
-      lore: 'The tanuki of the bamboo road will lighten your purse and swear the gold was only leaves. Catch him before the last bend and the leaves turn back into gold.',
-      tags: ['beast', 'folk'],
+      lore: 'A crab who has decided that every open busking hat on the pier belongs to it. Catch it before it scuttles back into the sea and the coins come tumbling out.',
+      tags: ['beast', 'aquatic'],
     },
 
     kodama: {
-      id: 'kodama', name: 'Kodama', chapter: 1, tier: 'normal', size: 's', hp: [20, 24],
+      id: 'kodama', name: 'Tuning Forkling', chapter: 1, tier: 'normal', size: 's', hp: [20, 24],
       moves: {
-        rattle: { name: 'Rattle', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }], say: 'Kata kata kata!' },
-        branch_poke: { name: 'Branch Poke', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
-        call_leaf_imp: { name: 'Call Leaf Imp', kind: 'summon', fx: [{ op: 'summon', enemy: 'leaf_imp', n: 1 }], say: 'Come out, come out!' },
+        rattle: { name: 'Ring Out', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'both' }], say: 'Ting ting ting!' },
+        branch_poke: { name: 'Prong Poke', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'front' }] },
+        call_leaf_imp: { name: 'Ring for a Friend', kind: 'summon', fx: [{ op: 'summon', enemy: 'leaf_imp', n: 1 }], say: 'Ting! Anyone out there?' },
       },
       ai: { open: ['call_leaf_imp'], seq: ['rattle', 'branch_poke'], rules: [{ if: { turnGte: 4, minions: { lt: 1 } }, do: 'call_leaf_imp' }] },
       art: { id: 'kodama' },
-      lore: 'A tree spirit no bigger than a lantern, rattling its head like a gourd. It hears everything the grove hears, and when it gets lonely it calls for friends.',
-      tags: ['spirit'],
+      lore: 'A tuning fork no taller than a teacup, humming the one note it knows. It hears every wobble in the bay, and when it gets lonely it rings for a friend.',
+      tags: ['construct', 'spirit'],
     },
 
     karakasa: {
-      id: 'karakasa', name: 'Karakasa', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
+      id: 'karakasa', name: 'Squeezebox', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
       moves: {
-        tongue_lick: { name: 'Long Lick', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }], say: 'Blegh!' },
-        hop_hop: { name: 'Hop, Hop!', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
-        snap_shut: { name: 'Snap Shut', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
+        tongue_lick: { name: 'Wheezy Blast', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'frail', n: 1, tgt: 'front' }], say: 'Hwheeeee!' },
+        hop_hop: { name: 'Polka Hop', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 2, tgt: 'front' }] },
+        snap_shut: { name: 'Squeeze Shut', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }] },
       },
       ai: { seq: ['hop_hop', 'snap_shut', 'tongue_lick', 'hop_hop'] },
       art: { id: 'karakasa' },
-      lore: 'An old umbrella that dreamed of walking and, one rainy night, got its wish. It hops, it snaps, and it will absolutely lick you, for reasons nobody has explained.',
-      tags: ['spirit', 'construct'],
+      lore: 'An old accordion that always wanted to dance and, one windy night, simply started. It hops, it snaps shut, and it will absolutely wheeze on you, for reasons nobody has explained.',
+      tags: ['construct', 'folk'],
     },
 
     hitodama: {
-      id: 'hitodama', name: 'Hitodama', chapter: 1, tier: 'normal', size: 's', hp: [18, 22],
+      id: 'hitodama', name: 'Hot Chilli', chapter: 1, tier: 'normal', size: 's', hp: [18, 22],
       start: [{ op: 'status', s: 'dodge', n: 1, tgt: 'self' }],
       immune: ['burn'],
       moves: {
-        ember_touch: { name: 'Ember Touch', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
-        scorch_scatter: { name: 'Scatter Sparks', kind: 'debuff', fx: [{ op: 'add', card: 'status_scorch', n: 1, to: 'draw' }] },
+        ember_touch: { name: 'Spicy Hug', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
+        scorch_scatter: { name: 'Chilli Shower', kind: 'debuff', fx: [{ op: 'add', card: 'status_scorch', n: 1, to: 'draw' }] },
       },
       ai: { weighted: [['ember_touch', 3], ['scorch_scatter', 2]], noRepeat: 2 },
       art: { id: 'hitodama' },
-      lore: 'A soul-flame that never learned which way the road home was, so it drifts toward warm things. Please do not be warm near it.',
+      lore: 'A chilli from the noodle cart who got so excited about the music that it started to sizzle. It hops towards anyone warm, so please do not be warm near it.',
       tags: ['spirit'],
     },
 
     oni_cub: {
-      id: 'oni_cub', name: 'Oni Cub', chapter: 1, tier: 'normal', size: 'm', hp: [28, 34],
+      id: 'oni_cub', name: 'Jitterbug', chapter: 1, tier: 'normal', size: 'm', hp: [28, 34],
       start: [{ op: 'status', s: 'ritual', n: 1, tgt: 'self' }],
       moves: {
-        horn_butt: { name: 'Horn Butt', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] },
-        tantrum: { name: 'Tantrum', kind: 'multi', fx: [{ op: 'dmg', n: 3, hits: 2, tgt: 'front' }], say: 'WAAAH!' },
+        horn_butt: { name: 'Butterfly Bump', kind: 'attack', fx: [{ op: 'dmg', n: 5, tgt: 'front' }] },
+        tantrum: { name: 'The Jitters', kind: 'multi', fx: [{ op: 'dmg', n: 3, hits: 2, tgt: 'front' }], say: 'Eep! EEEP!' },
       },
       ai: { seq: ['horn_butt', 'tantrum'] },
       art: { id: 'oni_cub' },
-      lore: 'A very small oni with very large opinions. It gets angrier every minute it is ignored, and it has a great many minutes.',
-      tags: ['spirit', 'folk'],
+      lore: 'A very small bug made of pre-show nerves, with very large knees, and they knock. It grows louder every minute you put off going on, and it has a great many minutes.',
+      tags: ['insect', 'spirit'],
     },
 
     crow_tengu: {
-      id: 'crow_tengu', name: 'Crow Tengu', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
+      id: 'crow_tengu', name: 'Pitch-Perfect Gull', chapter: 1, tier: 'normal', size: 'm', hp: [30, 36],
       moves: {
-        peck_flurry: { name: 'Peck Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 3, hits: 3, tgt: 'random' }] },
-        dive_bomb: { name: 'Dive Bomb', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'back' }], say: 'Behind you!' },
-        switcheroo: { name: 'Switcheroo', kind: 'special', fx: [{ op: 'swap' }, { op: 'dmg', n: 4, tgt: 'front' }], say: 'Shuffle, shuffle!' },
+        peck_flurry: { name: 'Perfect Pecks', kind: 'multi', fx: [{ op: 'dmg', n: 3, hits: 3, tgt: 'random' }] },
+        dive_bomb: { name: 'Swoop Behind', kind: 'attack', fx: [{ op: 'dmg', n: 7, tgt: 'back' }], say: 'Behind you!' },
+        switcheroo: { name: 'Shuffle Swoop', kind: 'special', fx: [{ op: 'swap' }, { op: 'dmg', n: 4, tgt: 'front' }], say: 'Shuffle, shuffle!' },
       },
       ai: { weighted: [['peck_flurry', 3], ['dive_bomb', 2], ['switcheroo', 1]], noRepeat: 2 },
       art: { id: 'crow_tengu' },
-      lore: 'A lesser tengu, all feathers and mischief, who believes the best game is swapping places. It dives at whoever is standing behind you.',
-      tags: ['avian', 'folk'],
+      lore: 'A harbour gull the Gloss gave perfect pitch, and it will not stop showing off. It dives at whoever is standing at the back, then shuffles the whole band out of place.',
+      tags: ['avian', 'beast'],
     },
 
     bamboo_sprite: {
-      id: 'bamboo_sprite', name: 'Bamboo Sprite', chapter: 1, tier: 'normal', size: 's', hp: [22, 26],
+      id: 'bamboo_sprite', name: 'Pea Pod', chapter: 1, tier: 'normal', size: 's', hp: [22, 26],
       moves: {
-        leaf_flurry: { name: 'Leaf Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 3, tgt: 'random' }] },
-        whet_blades: { name: 'Whet Blades', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 1, tgt: 'self' }] },
+        leaf_flurry: { name: 'Pea Volley', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 3, tgt: 'random' }] },
+        whet_blades: { name: 'Load Up', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 1, tgt: 'self' }] },
       },
       ai: { seq: ['leaf_flurry', 'leaf_flurry', 'whet_blades'] },
       art: { id: 'bamboo_sprite' },
-      lore: 'Leaf-bladed sprites born where the bamboo grows thickest. Each is a small nuisance, and the trouble is that they never come alone.',
+      lore: 'Three peas in a pod who harmonise beautifully and aim terribly. One pod is a small nuisance, and the trouble is that pods never come alone.',
       tags: ['spirit'],
     },
 
     mushroom_folk: {
-      id: 'mushroom_folk', name: 'Mushroom Folk', chapter: 1, tier: 'normal', size: 'm', hp: [26, 32],
+      id: 'mushroom_folk', name: 'Jingle Machine', chapter: 1, tier: 'normal', size: 'm', hp: [26, 32],
       immune: ['poison'],
       moves: {
-        spore_puff: { name: 'Spore Puff', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'poison', n: 2, tgt: 'front' }] },
-        thicken_cap: { name: 'Thicken Cap', kind: 'buff', fx: [{ op: 'status', s: 'thorns', n: 2, tgt: 'self' }] },
-        cap_bonk: { name: 'Cap Bonk', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
+        spore_puff: { name: 'Catchy Jingle', kind: 'attack', fx: [{ op: 'dmg', n: 4, tgt: 'front' }, { op: 'status', s: 'poison', n: 2, tgt: 'front' }] },
+        thicken_cap: { name: 'Bubble Wrap', kind: 'buff', fx: [{ op: 'status', s: 'thorns', n: 2, tgt: 'self' }] },
+        cap_bonk: { name: 'Can Drop', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
       },
       ai: { open: ['thicken_cap'], seq: ['spore_puff', 'cap_bonk'], rules: [{ if: { turnEvery: [4, 3] }, do: 'thicken_cap' }] },
       art: { id: 'mushroom_folk' },
-      lore: 'A wandering spore-cap, gentle until you swing at it. Its cap grows thorny in the damp, and its breath is best left unbreathed.',
-      tags: ['folk'],
+      lore: 'A seaside vending machine that sings its jingle every time you walk past, and every time you do not. Bump it and it squeals back; leave it and the tune follows you home.',
+      tags: ['construct'],
     },
 
     bamboo_boar: {
-      id: 'bamboo_boar', name: 'Bamboo Boar', chapter: 1, tier: 'normal', size: 'l', hp: [36, 38],
+      id: 'bamboo_boar', name: 'Runaway Melon', chapter: 1, tier: 'normal', size: 'l', hp: [36, 38],
       start: [{ op: 'status', s: 'plating', n: 3, tgt: 'self' }],
       moves: {
-        shoulder_barge: { name: 'Shoulder Barge', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
-        bristle: { name: 'Bristle Up', kind: 'buff', fx: [{ op: 'status', s: 'plating', n: 2, tgt: 'self' }], say: 'Snort.' },
-        gore: { name: 'Bamboo Gore', kind: 'heavy', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
+        shoulder_barge: { name: 'Melon Bump', kind: 'attack', fx: [{ op: 'dmg', n: 6, tgt: 'front' }] },
+        bristle: { name: 'Toughen Up', kind: 'buff', fx: [{ op: 'status', s: 'plating', n: 2, tgt: 'self' }], say: 'Thunk.' },
+        gore: { name: 'Downhill Roll', kind: 'heavy', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
       },
       ai: { seq: ['bristle', 'gore', 'shoulder_barge'] },
       art: { id: 'bamboo_boar' },
-      lore: 'A boar that has eaten so much bamboo its hide has turned to green armour. It paws the earth once, thinks about it, and charges.',
+      lore: 'A prize watermelon that rolled off the Snack Pier and has been gathering speed and rind ever since. It wobbles at the top of the hill once, thinks about it, and rolls.',
       tags: ['beast'],
     },
 
-    // ------------------------------------------------------------------ elites
+    // ================================================================== Rivals (elite)
     oni_brute: {
-      id: 'oni_brute', name: 'Oni Brute', chapter: 1, tier: 'elite', size: 'l', hp: [82, 85],
+      id: 'oni_brute', name: 'One-Hit Jukebox', chapter: 1, tier: 'elite', size: 'l', hp: [82, 85],
       moves: {
-        backhand: { name: 'Bruising Backhand', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'front' }] },
-        twin_swing: { name: 'Twin Swing', kind: 'multi', fx: [{ op: 'dmg', n: 8, hits: 2, tgt: 'front' }] },
-        club_smash: { name: 'Mountain Smash', kind: 'heavy', fx: [{ op: 'dmg', n: 14, tgt: 'front' }], say: 'SMAAASH!' },
-        enraged_bellow: { name: 'Enraged Bellow', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }], say: 'KNEEL, LITTLE HEROES!' },
+        backhand: { name: 'Record Slap', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'weak', n: 1, tgt: 'front' }] },
+        twin_swing: { name: 'Double A-Side', kind: 'multi', fx: [{ op: 'dmg', n: 8, hits: 2, tgt: 'front' }] },
+        club_smash: { name: 'Greatest Hit', kind: 'heavy', fx: [{ op: 'dmg', n: 14, tgt: 'front' }], say: 'NUMBER ONE!' },
+        enraged_bellow: { name: 'Turn It Up', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'self' }, { op: 'status', s: 'weak', n: 1, tgt: 'both' }], say: 'EVERYBODY PICK MY RECORD!' },
       },
       ai: { seq: ['backhand', 'twin_swing', 'club_smash'] },
       phases: [{
-        at: 0.5, say: 'You dare laugh at a champion?!',
+        at: 0.5, say: 'You dare skip my big hit?!',
         fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }],
         ai: { open: ['enraged_bellow'], seq: ['club_smash', 'twin_swing', 'backhand'] },
       }],
       art: { id: 'oni_brute' },
-      lore: 'A champion of the mountain oni, sent down to test whether the grove\'s heroes are as brave as the songs say. He was famous once, and he is furious that the songs stopped.',
-      tags: ['spirit', 'folk'],
+      lore: 'A hulking old jukebox that played the bay\'s favourite song every night until the Gloss brought newer, shinier ones. It was famous once, and it is furious that nobody picks its record.',
+      tags: ['construct', 'folk'],
     },
 
     tengu_duelist: {
-      id: 'tengu_duelist', name: 'Tengu Duelist', chapter: 1, tier: 'elite', size: 'l', hp: [72, 80],
+      id: 'tengu_duelist', name: 'Dance-Off Heron', chapter: 1, tier: 'elite', size: 'l', hp: [72, 80],
       moves: {
-        lunge: { name: 'Piercing Lunge', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'back' }], say: 'Guard your rear, if you can.' },
-        riposte_step: { name: 'Riposte Step', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }, { op: 'status', s: 'dodge', n: 2, tgt: 'self' }] },
-        triple_thrust: { name: 'Triple Thrust', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 3, tgt: 'front' }] },
-        blade_dance: { name: 'Blade Dance', kind: 'buff', fx: [{ op: 'status', s: 'dodge', n: 3, tgt: 'self' }, { op: 'status', s: 'might', n: 1, tgt: 'self' }], say: 'Now we begin properly.' },
+        lunge: { name: 'Long-Leg Lunge', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'back' }], say: 'Mind the back, if you can.' },
+        riposte_step: { name: 'Heel Click', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }, { op: 'status', s: 'dodge', n: 2, tgt: 'self' }] },
+        triple_thrust: { name: 'Triple Tap', kind: 'multi', fx: [{ op: 'dmg', n: 4, hits: 3, tgt: 'front' }] },
+        blade_dance: { name: 'Showstopper', kind: 'buff', fx: [{ op: 'status', s: 'dodge', n: 3, tgt: 'self' }, { op: 'status', s: 'might', n: 1, tgt: 'self' }], say: 'Now we dance properly.' },
       },
       ai: { seq: ['lunge', 'riposte_step', 'triple_thrust'], rules: [{ if: { hpLt: 0.5 }, do: 'blade_dance', once: true }] },
       hooks: [{ on: 'onHurt', limit: 1, fx: [{ op: 'dmg', n: 3, tgt: 'front' }] }],
       art: { id: 'tengu_duelist' },
-      lore: 'A tengu who took up the blade at nine hundred and has not lost since. He bows before every strike, and he does not bow after.',
+      lore: 'A heron who took up tap at ninety and has not lost a dance-off since. He bows before every step, and he does not bow after.',
       tags: ['avian', 'folk'],
     },
 
     moss_guardian: {
-      id: 'moss_guardian', name: 'Moss Guardian', chapter: 1, tier: 'elite', size: 'l', hp: [74, 80],
+      id: 'moss_guardian', name: 'Old Bandstand', chapter: 1, tier: 'elite', size: 'l', hp: [74, 80],
       start: [{ op: 'status', s: 'plating', n: 3, tgt: 'self' }, { op: 'status', s: 'thorns', n: 2, tgt: 'self' }],
       moves: {
-        moss_fist: { name: 'Mossy Fist', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
-        mountain_slam: { name: 'Mountain Slam', kind: 'heavy', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
-        shake_leaves: { name: 'Shake Loose Leaves', kind: 'summon', fx: [{ op: 'summon', enemy: 'leaf_imp', n: 2 }], say: 'The grove wakes.' },
-        moss_thicken: { name: 'Moss Thickens', kind: 'buff', fx: [{ op: 'status', s: 'plating', n: 1, tgt: 'self' }, { op: 'status', s: 'thorns', n: 1, tgt: 'self' }] },
+        moss_fist: { name: 'Railing Punch', kind: 'attack', fx: [{ op: 'dmg', n: 8, tgt: 'front' }] },
+        mountain_slam: { name: 'Bandstand Stomp', kind: 'heavy', fx: [{ op: 'dmg', n: 13, tgt: 'front' }] },
+        shake_leaves: { name: 'Shake the Rafters', kind: 'summon', fx: [{ op: 'summon', enemy: 'leaf_imp', n: 2 }], say: 'Everybody out of the rafters!' },
+        moss_thicken: { name: 'More Bunting', kind: 'buff', fx: [{ op: 'status', s: 'plating', n: 1, tgt: 'self' }, { op: 'status', s: 'thorns', n: 1, tgt: 'self' }] },
       },
       ai: {
         open: ['shake_leaves'],
@@ -244,63 +256,63 @@
         ],
       },
       art: { id: 'moss_guardian' },
-      lore: 'A shrine guardian so old the moss has grown into its bones. It was told to keep the grove safe, and nobody ever told it to stop.',
-      tags: ['construct', 'spirit'],
+      lore: 'The harbour\'s oldest bandstand, so overgrown with bunting and ivy that one day it got up and walked. It was built to keep the bay\'s music safe, and nobody ever told it to stop.',
+      tags: ['construct', 'aquatic'],
     },
 
-    // ------------------------------------------------------------------ minions
+    // ================================================================== Sidekicks (minion)
     ember_wisp: {
-      id: 'ember_wisp', name: 'Ember Wisp', chapter: 1, tier: 'minion', size: 's', hp: [6, 8],
+      id: 'ember_wisp', name: 'Chilli Flake', chapter: 1, tier: 'minion', size: 's', hp: [6, 8],
       immune: ['burn'],
       moves: {
-        flare: { name: 'Flare', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
+        flare: { name: 'Spice Flare', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front', el: 'fire' }, { op: 'status', s: 'burn', n: 3, tgt: 'front' }] },
         fizzle: { name: 'Fizzle Out', kind: 'flee', fx: [{ op: 'flee' }] },
       },
       ai: { seq: ['flare', 'fizzle'] },
       art: { id: 'ember_wisp' },
-      lore: 'A spark that broke off a hitodama. It burns exactly once, brilliantly, and then goes out with a small polite pop.',
+      lore: 'A flake that jumped off a hot chilli to see the show. It sizzles exactly once, brilliantly, and then goes out with a small polite pop.',
       tags: ['spirit'],
     },
 
     leaf_imp: {
-      id: 'leaf_imp', name: 'Leaf Imp', chapter: 1, tier: 'minion', size: 's', hp: [6, 8],
+      id: 'leaf_imp', name: 'Kazoo Imp', chapter: 1, tier: 'minion', size: 's', hp: [6, 8],
       moves: {
-        leaf_poke: { name: 'Leaf Poke', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front' }] },
+        leaf_poke: { name: 'Kazoo Poke', kind: 'attack', fx: [{ op: 'dmg', n: 3, tgt: 'front' }] },
       },
       ai: { seq: ['leaf_poke'] },
       art: { id: 'leaf_imp' },
-      lore: 'A sprite made of one leaf and one bad idea. Kodama and old guardians call them, and they always come running.',
-      tags: ['spirit'],
+      lore: 'A kazoo with legs and one bad idea. Tuning forks and old bandstands call them, and they always come running.',
+      tags: ['construct'],
     },
 
     paper_kodama: {
-      id: 'paper_kodama', name: 'Hollow Kodama', chapter: 1, tier: 'minion', size: 's', hp: [6, 6],
+      id: 'paper_kodama', name: 'Mic Squeal', chapter: 1, tier: 'minion', size: 's', hp: [6, 6],
       moves: {
-        ink_smudge: { name: 'Hollow Hum', kind: 'debuff', fx: [{ op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
-        paper_slap: { name: 'Twig Slap', kind: 'attack', fx: [{ op: 'dmg', n: 2, tgt: 'front' }] },
+        ink_smudge: { name: 'High Squeal', kind: 'debuff', fx: [{ op: 'add', card: 'status_blot', n: 1, to: 'draw' }] },
+        paper_slap: { name: 'Cable Flick', kind: 'attack', fx: [{ op: 'dmg', n: 2, tgt: 'front' }] },
       },
       ai: { seq: ['ink_smudge', 'paper_slap'] },
       art: { id: 'paper_kodama' },
-      lore: 'A tree spirit with its echo eaten out, given a borrowed voice by the fox. It carries a little of the Hush inside, and it spills.',
+      lore: 'A tiny shrieking creature born where Kraki\'s stolen mics touch the speakers. It carries a little of the Gloss inside, and it spills.',
       tags: ['construct', 'void'],
     },
 
-    // ------------------------------------------------------------------ boss
+    // ================================================================== the Headliner (boss)
     boss_kuzunoha: {
-      id: 'boss_kuzunoha', name: 'Kuzunoha', title: 'The Nine-Voiced Fox', chapter: 1, tier: 'boss', size: 'xl', hp: [170, 178],
+      id: 'boss_kuzunoha', name: 'Kraki', title: 'The Karaoke Kraken', chapter: 1, tier: 'boss', size: 'xl', hp: [170, 178],
       immune: ['stun'],
       moves: {
-        paper_fold: { name: 'Call the Kodama', kind: 'summon', fx: [{ op: 'summon', enemy: 'paper_kodama', n: 2 }], say: 'Answer me, little echoes. Answer, and live.' },
-        ink_strike: { name: 'Bell Strike', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front', el: 'ink' }], say: 'Every note is a promise.' },
-        brush_flurry: { name: 'Tail Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 4, tgt: 'random', el: 'ink' }], say: 'Let me sing you smaller.' },
-        ink_bleed: { name: 'Drown the Grove', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 2, to: 'draw' }], say: 'Hear nothing but me.' },
-        tail_sweep: { name: 'Tail Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'both', el: 'ink' }], say: 'Louder!' },
-        great_stroke: { name: 'Great Bell Toll', kind: 'heavy', fx: [{ op: 'dmg', n: 20, tgt: 'front', el: 'ink' }], say: 'One great note.' },
-        mask_gaze: { name: 'Mask Gaze', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }], say: 'Listen to me. Listen, and forget.' },
-        ink_needle: { name: 'Needle Note', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'lowest', el: 'ink' }], say: 'Ah. There you are, little one.' },
-        tails_rise: { name: 'Nine Tails Rise', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'self' }], say: 'Nine tails... one song.' },
-        nine_tails: { name: 'Nine-Tail Storm', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 9, tgt: 'random', el: 'ink' }], say: 'NINE VOICES. ONE SONG!' },
-        frayed_ink: { name: 'Frayed Voice', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }], say: 'The song is running out.' },
+        paper_fold: { name: 'Mic Check', kind: 'summon', fx: [{ op: 'summon', enemy: 'paper_kodama', n: 2 }], say: 'Mic check, one, two. Out you come, little squeals!' },
+        ink_strike: { name: 'Mic Slam', kind: 'attack', fx: [{ op: 'dmg', n: 13, tgt: 'front', el: 'ink' }], say: 'Every song is mine to sing!' },
+        brush_flurry: { name: 'Tentacle Twirl', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 4, tgt: 'random', el: 'ink' }], say: 'Let me sing it for you!' },
+        ink_bleed: { name: 'Drown Them Out', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front', el: 'ink' }, { op: 'add', card: 'status_blot', n: 2, to: 'draw' }], say: 'Nobody else needs a mic!' },
+        tail_sweep: { name: 'Arm Sweep', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'both', el: 'ink' }], say: 'Louder!' },
+        great_stroke: { name: 'Power Anthem', kind: 'heavy', fx: [{ op: 'dmg', n: 20, tgt: 'front', el: 'ink' }], say: 'One big note!' },
+        mask_gaze: { name: 'Glossy Smile', kind: 'debuff', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'both' }, { op: 'status', s: 'frail', n: 1, tgt: 'both' }], say: 'Smile! Nobody gets embarrassed tonight.' },
+        ink_needle: { name: 'Too-High Note', kind: 'attack', fx: [{ op: 'dmg', n: 11, tgt: 'lowest', el: 'ink' }], say: 'Oh, a wobbly one. Let me sing that for you.' },
+        tails_rise: { name: 'Eight Mics Up', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'self' }], say: 'Eight mics... one song.' },
+        nine_tails: { name: 'Every Voice at Once', kind: 'multi', fx: [{ op: 'dmg', n: 2, hits: 9, tgt: 'random', el: 'ink' }], say: 'EIGHT MICS AND ME. ALL TOGETHER!' },
+        frayed_ink: { name: 'Hoarse but Louder', kind: 'buff', fx: [{ op: 'status', s: 'might', n: 2, tgt: 'self' }, { op: 'status', s: 'ritual', n: 1, tgt: 'self' }], say: 'My voice is going. LOUDER, then!' },
       },
       ai: {
         open: ['paper_fold'],
@@ -313,7 +325,7 @@
         ],
       },
       phases: [{
-        at: 0.5, say: 'You broke the mask. Very well, little songbirds. Hear my TRUE voices!',
+        at: 0.5, say: 'You cracked my mask! Fine. Hear my REAL voices!',
         fx: [
           { op: 'removeStatus', s: 'debuffs', tgt: 'self' },
           { op: 'status', s: 'might', n: 1, tgt: 'self' },
@@ -332,17 +344,17 @@
         },
       }],
       art: { id: 'boss_kuzunoha' },
-      lore: 'A white fox who learned to sing and never stopped. Each of her nine tails rings with its own voice, and every note drowns out a little more of the grove.',
-      tags: ['spirit', 'beast'],
+      lore: 'A huge, friendly kraken who has run Blossom Bay\'s open mic from the harbour for as long as anyone remembers. When the Gloss arrived she grabbed every mic so nobody would be embarrassed, and now she sings every song herself, perfectly.',
+      tags: ['aquatic', 'beast', 'folk'],
     },
   });
 
-  // ---------------------------------------------------------------------- encounters
-  // Early groups (min <= 0.1) are the tutorials: a lone kappa, a lone bandit, a lone kodama, a lone karakasa. (The kodama and kappa pair
-  // moved to min 0.12 when the kodama was strengthened: at min 0 a group must stay under 9 average damage.) `min` only gates a
-  // group IN (nothing phases the easy ones out), so the late groups carry weight 2 and the gentle solos 1 or 2: at tile diff 1 about
-  // half the pool is the second half of the list. Summoners never share a group (two kodama would both roll "call" against the same
-  // minion count and overshoot the cap of 2).
+  // ====================================================================== encounters
+  // Early groups (min <= 0.1) are the tutorials: a lone Fussy Foghorn (kappa), a lone Coin Crab (tanuki_bandit), a lone Tuning Forkling
+  // (kodama), a lone Squeezebox (karakasa). (The kodama and kappa pair moved to min 0.12 when the kodama was strengthened: at min 0 a
+  // group must stay under 9 average damage.) `min` only gates a group IN (nothing phases the easy ones out), so the late groups carry
+  // weight 2 and the gentle solos 1 or 2: at tile diff 1 about half the pool is the second half of the list. Summoners never share a
+  // group (two kodama would both roll "call_leaf_imp" against the same Sidekick count and overshoot the cap of 2).
   DATA.addEncounters(1, {
     normal: [
       { id: 'ch1_kappa_solo', enemies: ['kappa'], w: 2, min: 0 },

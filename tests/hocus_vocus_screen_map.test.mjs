@@ -569,7 +569,8 @@ await t.test('a fable with nothing left to tell resolves as an instant and the s
   await clickHex(g, E.q, E.r);
   const n = entered(g)[0];
   t.ok(n && (n.kind === 'event' || n.kind === 'well'), 'RUN gave a node or the fallback instant (' + (n && n.kind) + ')');
-  if (n && n.fallback) t.ok(toasts(g).some((x) => /nothing left to tell/i.test(x)), 'the fallback shows its own line');
+  // run.js says it in the new words (HV_UI_COPY 2.2): "The detour leads nowhere. You find a little Vox."
+  if (n && n.fallback) t.ok(toasts(g).some((x) => /detour leads nowhere/i.test(x)), 'the fallback shows its own line');
   else t.ok(R.node && R.node.kind === 'event', 'an event node otherwise');
   t.eq(errs(g), 0, 'clean');
 });

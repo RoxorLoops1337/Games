@@ -652,7 +652,7 @@ t.test('mercy: painting the last useful hex hands back one Ink; it can repeat', 
   t.eq(res.ok, true, 'painted'); t.eq(res.mercy, true, 'paint reports the grant'); t.eq(R.ink, 1, '1 - 1 + 1'); t.eq(R.stats.mercy, 1, 'counted');
   const next = MAP.pathToPaint(R.map, R.map.boss.q, R.map.boss.r).path[0];
   t.eq(RUN.paint(R, next[0], next[1]).mercy, true, 'and again on the next hex'); t.eq(R.stats.mercy, 2, 'twice');
-  t.ok(R.log.some((l) => /Echo/.test(l.msg)), 'the log remembers');
+  t.ok(R.log.some((l) => /Vox/.test(l.msg)), 'the log remembers');
 });
 t.test('mercy: finishing a node and the brush rack also run the check', () => {
   const R = NEW({ seed: 21 });
@@ -1291,7 +1291,7 @@ t.test('a fable tile: the event node, seen list, stat, preset ids and the empty 
   while (q.length) { const c = q.shift(); empty.MAP.neighbors(E1.map, c[0], c[1]).forEach((n) => { const k = empty.MAP.key(n[0], n[1]); if (!(k in prev) && E1.map.tiles[k].painted && E1.map.tiles[k].type !== 'block') { prev[k] = c; q.push(n); } }); }
   const path = []; for (let c = [et.q, et.r]; c; c = prev[empty.MAP.key(c[0], c[1])]) path.unshift(c);
   let res = null; path.slice(1).forEach((c) => { res = empty.RUN.step(E1, c[0], c[1]); });
-  t.eq(res.kind, 'well', 'the fallback is an Instant'); t.eq(res.fallback, 'event', 'flagged as the event fallback'); t.eq(res.gained, 1, '+1 Ink'); t.eq(res.done, true, 'done'); t.ok(/Echo/.test(res.toast), 'with a one-line toast: ' + res.toast); t.eq(E1.ink, 6, 'applied'); t.eq(et.done, true, 'the tile resolves'); t.eq(E1.node, null, 'no node'); t.eq(E1.stats.eventsSeen, 0, 'nothing was seen');
+  t.eq(res.kind, 'well', 'the fallback is an Instant'); t.eq(res.fallback, 'event', 'flagged as the event fallback'); t.eq(res.gained, 1, '+1 Ink'); t.eq(res.done, true, 'done'); t.ok(/Vox/.test(res.toast), 'with a one-line toast: ' + res.toast); t.eq(E1.ink, 6, 'applied'); t.eq(et.done, true, 'the tile resolves'); t.eq(E1.node, null, 'no node'); t.eq(E1.stats.eventsSeen, 0, 'nothing was seen');
 });
 function eventRun(events, over) {
   const A = evWorld(events);
@@ -1334,9 +1334,9 @@ t.test('locked choices say what is missing (relic by name, chapter, hp, flag hin
   const { A, R } = eventRun({ rs: ev });
   R.gold = 5; R.heroes[0].hp = 1;
   const rows = A.RUN.eventChoices(R, ev), why = rows.map((x) => x.reason);
-  t.ok(why[0].indexOf(A.DATA.relics.silver_bell.name) >= 0, 'the relic is named: ' + why[0]); t.eq(why[1], 'Verse 3 only', 'the chapter is named');
+  t.ok(why[0].indexOf(A.DATA.relics.silver_bell.name) >= 0, 'the relic is named: ' + why[0]); t.eq(why[1], 'Act 3 only', 'the chapter is named');
   t.ok(/80%/.test(why[2]), 'the hp bar is named: ' + why[2]); t.ok(/40%/.test(why[3]) || rows[3].ok, 'so is the hurt bar: ' + why[3]);
-  t.ok(/^Not yet/.test(why[4]) && /fox/.test(why[4]), 'a flag gives a story hint: ' + why[4]); t.ok(/^Not yet/.test(why[5]) && why[5].length > 8, 'an unknown flag still gets a hint: ' + why[5]); t.eq(why[6], 'Needs 70 gold', 'gold keeps its price');
+  t.ok(/^Not yet/.test(why[4]) && /gull/.test(why[4]), 'a flag gives a story hint: ' + why[4]); t.ok(/^Not yet/.test(why[5]) && why[5].length > 8, 'an unknown flag still gets a hint: ' + why[5]); t.eq(why[6], 'Needs 70 gold', 'gold keeps its price');
   why.forEach((w, i) => { if (!rows[i].ok) t.ok(!/^(Not yet|Wrong chapter|Needs a treasure|Party too hurt|Nobody is hurt enough)$/.test(w), 'no vague reason: ' + w); });
   R.heroes[0].hp = A.DATA.heroes.hanae.maxHp; R.heroes[1].hp = A.DATA.heroes.kuro.maxHp; t.ok(/hero below 40%/.test(A.RUN.eventChoices(R, ev)[3].reason), 'at full health the hurt bar says why: ' + A.RUN.eventChoices(R, ev)[3].reason);
 });
@@ -1356,7 +1356,7 @@ t.test('choices that can only do nothing are locked with a reason: no curse to r
   R.gold = 300; R.deck.forEach((c) => { if (A.DATA.cards[c.id].up) c.up = 1; });
   const rows = () => A.RUN.eventChoices(R, ev), ok = () => rows().map((x) => x.ok);
   t.deep(ok(), [false, false, true, true, true, false, false, true], 'curse removal, a paid sharpen with every card sharp, copying a hero who is not here and transforming a curse that is not there are locked; a gamble with a live outcome, a grower and a plain choice stay open');
-  t.ok(/no curse/i.test(rows()[0].reason) && /sharpen/i.test(rows()[1].reason) && /Nothing to copy/.test(rows()[5].reason) && /Nothing to transform/.test(rows()[6].reason), 'each lock says why: ' + rows().filter((x) => !x.ok).map((x) => x.reason).join(' | '));
+  t.ok(/no curse/i.test(rows()[0].reason) && /rehearse/i.test(rows()[1].reason) && /Nothing to copy/.test(rows()[5].reason) && /Nothing to transform/.test(rows()[6].reason), 'each lock says why: ' + rows().filter((x) => !x.ok).map((x) => x.reason).join(' | '));
   t.eq(rows()[0].hidden, false, 'shown, not hidden');
   R.relics = ['brass_lantern']; t.eq(rows()[2].ok, false, 'the lamp locks once the Brass Lantern is owned'); t.ok(rows()[2].reason.indexOf(A.DATA.relics.brass_lantern.name) >= 0, 'by name: ' + rows()[2].reason);
   R.relics = []; R.deck.push({ uid: 990, id: 'curse_regret', up: 0, gems: [] }); t.eq(ok()[0], true, 'a curse in the deck opens the removal'); t.eq(ok()[6], false, 'a curse is no card to transform'); R.deck.pop();
@@ -1405,7 +1405,7 @@ t.test('eventChoose: result shape, chosen guard, applied log, node bookkeeping',
   const bare = evWorld({ s: ev }); const R2 = bare.RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 3, unlocked: ALL });
   t.eq(bare.RUN.eventChoose(R2, ev, 0).reason, 'node', 'needs an open event node');
   t.eq(A.RUN.eventChoose(R, null, 0).reason, 'node', 'and a real event');
-  t.ok(R.log.some((l) => /kind|give|Fable/i.test(l.msg)), 'the run log remembers');
+  t.ok(R.log.some((l) => /kind|give|Detour/i.test(l.msg)), 'the run log remembers');
 });
 t.test('eventChoose fight: the combat node replaces the event node and pays out through combatDone', () => {
   const ev = mkEv('f', { choices: [{ label: 'brawl', out: [{ w: 1, text: 'A brawl!', ops: [{ op: 'gold', n: 5 }, { op: 'fight', enemies: ['kappa', 'kodama'], tier: 'elite', win: [{ op: 'gold', n: 30 }, { op: 'flag', k: 'won' }] }] }] }, { label: 'plain', out: [{ w: 1, text: 'A plain one.', ops: [{ op: 'fight', enc: 'ch1_n1' }] }] }, { label: 'dry', out: [{ w: 1, text: 'A dry one.', ops: [{ op: 'fight', enemies: ['kappa'], rewards: false }] }] }] });
@@ -1568,8 +1568,8 @@ t.test('op addRelic: by id or rarity, owned and empty cases, hero relics only wi
   t.ok(!seen.has('t_hanae') && !seen.has('t_kuro'), 'a hero relic needs its hero'); t.ok(seen.size > 4, 'variety: ' + seen.size);
   const locked = new Set(); for (let s = 0; s < 200; s++) { const x = NEW({ seed: s }); ops(x, [{ op: 'addRelic', rarity: 'uncommon' }], { rng: U.rng(s) }); locked.add(x.relics[0]); }
   t.ok(!locked.has('t_locked'), 'a locked relic is not drawn until owned');
-  const E2 = NEW(); DATA.relicPool('shop').forEach((x) => E2.relics.push(x.id)); r = ops(E2, [{ op: 'addRelic', rarity: 'shop' }]); t.ok(/No treasure/.test(r.log[0].text), 'nothing left: says so'); t.eq(E2.relics.length, 4, 'nothing added');
-  t.eq(ops(NEW(), [{ op: 'addRelic', id: 'ghost' }]).log[0].text, 'No treasure to find.', 'an unknown id is refused, and does not claim a relic');
+  const E2 = NEW(); DATA.relicPool('shop').forEach((x) => E2.relics.push(x.id)); r = ops(E2, [{ op: 'addRelic', rarity: 'shop' }]); t.ok(/No charm/.test(r.log[0].text), 'nothing left: says so'); t.eq(E2.relics.length, 4, 'nothing added');
+  t.eq(ops(NEW(), [{ op: 'addRelic', id: 'ghost' }]).log[0].text, 'No charm to find.', 'an unknown id is refused, and does not claim a relic');
   const F = NEW(); DATA.relicPool('shop').forEach((x) => F.relics.push(x.id)); const shopId = F.relics[0], g0 = F.gold, f0 = F.relics.length;
   r = ops(F, [{ op: 'addRelic', id: shopId }]); const pay = Math.round(E.price.relic.shop * 0.4);
   t.eq(F.relics.length, f0, 'owned and nothing of its rarity left: no relic'); t.eq(r.log[0].text, 'Already owned.', 'the first line says it is already owned'); t.eq(r.log[0].id, shopId, 'with the id (so a screen can tell what was refused)'); t.eq(r.log[1].op, 'gold', 'then pays gold instead'); t.eq(r.log[1].n, pay, 'its gold entry carries the amount'); t.eq(F.gold, g0 + pay, '40% of the shop price (' + pay + ')'); t.ok(/already carry/.test(r.log[1].text) && new RegExp(String(pay)).test(r.log[1].text), 'and says so truthfully: ' + r.log[1].text); t.eq(F.stats.goldEarned >= pay, true, 'counted as gold earned');
@@ -1595,8 +1595,8 @@ t.test('ops addGem addBrush addCurse flag', () => {
 });
 t.test('op paint log: a plural that agrees with the count', () => {
   const R = NEW({ seed: 3 });
-  const one = ops(R, [{ op: 'paint', n: 1 }]); t.eq(one.log[0].text, 'The land wakes (1 hex).', 'one hex'); t.eq(one.log[0].n, 1, 'n');
-  const many = ops(R, [{ op: 'paint', n: 3 }]); t.eq(many.log[0].text, 'The land wakes (3 hexes).', 'three hexes');
+  const one = ops(R, [{ op: 'paint', n: 1 }]); t.eq(one.log[0].text, 'The sound comes back (1 hex).', 'one hex'); t.eq(one.log[0].n, 1, 'n');
+  const many = ops(R, [{ op: 'paint', n: 3 }]); t.eq(many.log[0].text, 'The sound comes back (3 hexes).', 'three hexes');
 });
 t.test('op paint: free hexes along the cheapest chain to the boss', () => {
   const R = NEW({ seed: 3 });

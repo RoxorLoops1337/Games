@@ -576,7 +576,7 @@ await t.test('glossary: keywords and statuses by key or name, with stacks', () =
   t.eq(g.UI.tip.info('nonsense'), null, 'unknown is null'); t.eq(g.UI.tip.kw('nonsense'), null, 'kw() of unknown is null');
   const node = g.UI.tip.kw('poison', 3);
   t.ok(node.querySelector('.tk-name') && new RegExp(esc(g.DATA.statuses.poison.name) + ' 3').test(node.querySelector('.tk-name').textContent), 'title carries the stack'); t.ok(node.querySelector('.tk-kind.k-debuff'), 'kind chip'); t.ok(node.querySelector('canvas'), 'status icon');
-  g._run('DATA.statusText = (id, n) => "Poison " + n + ": lose " + n + " HP."');
+  g._run('DATA.statusText = (id, n) => DATA.statuses[id].name + " " + n + ": lose " + n + " HP."');   // the prefix is the DATA name (Earworm), read from DATA
   const n2 = g.UI.tip.kw('poison', 4);
   t.eq(n2.querySelector('.tk-text').textContent, 'lose 4 HP.', 'DATA.statusText is used with its duplicate "Name N:" prefix stripped');
 });

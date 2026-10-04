@@ -375,7 +375,7 @@ const RUN = (() => {
       const d = o.n !== undefined ? o.n : trunc(R.inkMax * o.pct);
       const before = R.ink;
       R.ink = Math.min(R.inkMax, Math.max(0, R.ink + d));
-      out.log.push({ op: 'ink', n: R.ink - before, text: R.ink >= before ? `Gained ${R.ink - before} Echo.` : `Lost ${before - R.ink} Echo.` });
+      out.log.push({ op: 'ink', n: R.ink - before, text: R.ink >= before ? `Gained ${R.ink - before} Vox.` : `Lost ${before - R.ink} Vox.` });
     },
     heal(R, o, ctx, out) {
       const healMul = mods(R).healMul;
@@ -434,7 +434,7 @@ const RUN = (() => {
         const c = relicCandidates(R, o.rarity);
         id = c.length ? ctx.rng.pick(c).id : null;
       }
-      if (!id) { out.log.push({ op: 'addRelic', text: 'No treasure to find.' }); return; }
+      if (!id) { out.log.push({ op: 'addRelic', text: 'No charm to find.' }); return; }
       if (DATA.relics[id] && R.relics.indexOf(id) >= 0) {
         // A fixed treasure the party already carries (a peddler's lamp, the fox's mask): never "paid, got nothing". A stand-in of the same
         // rarity takes its place; with none left, the log says it is already owned and a share of its shop price comes back as gold.
@@ -449,7 +449,7 @@ const RUN = (() => {
         }
       }
       const res = gainRelic(R, id);
-      if (!res.ok) { out.log.push({ op: 'addRelic', text: 'No treasure to find.' }); return; }
+      if (!res.ok) { out.log.push({ op: 'addRelic', text: 'No charm to find.' }); return; }
       out.log.push({ op: 'addRelic', id, text: `Found ${relicName(id)}.` });
       res.log.forEach((x) => out.log.push(x));
       res.pending.forEach((p) => out.pending.push(p));
@@ -469,7 +469,7 @@ const RUN = (() => {
     addBrush(R, o, ctx, out) {
       const id = o.id === 'random' ? rollBrush(ctx.rng) : o.id;
       if (id && DATA.brushes[id]) R.brushes.push(id);
-      out.log.push(id && DATA.brushes[id] ? { op: 'addBrush', id, text: `Found the ${DATA.brushes[id].name}.` } : { op: 'addBrush', text: 'No Song to find.' });
+      out.log.push(id && DATA.brushes[id] ? { op: 'addBrush', id, text: `Learned ${DATA.brushes[id].name}.` } : { op: 'addBrush', text: 'No Spell to find.' });
     },
     addCurse(R, o, ctx, out) {
       const ids = (DATA.FIXED.curses || []).filter((id) => DATA.cards[id]);
@@ -497,7 +497,7 @@ const RUN = (() => {
         h.log.forEach((x) => out.log.push(x));
         h.pending.forEach((x) => out.pending.push(x));
       });
-      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The land wakes (${U.plural(tiles.length, 'hex', 'hexes')}).` : 'The way ahead is already open.' });
+      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The sound comes back (${U.plural(tiles.length, 'hex', 'hexes')}).` : 'The way ahead is already open.' });
     },
     cardReward(R, o, ctx, out) {
       const n = o.n || 3;
@@ -653,7 +653,7 @@ const RUN = (() => {
     const m = mods(R);
     R.inkMax = m.inkMax;
     R.ink = Math.min(m.inkMax, Math.max(R.ink, m.startInk));       // chapter 1: startInk; later chapters top up to it
-    note(R, `Verse ${n} begins.`);
+    note(R, `Act ${n} begins.`);
     const h = hook(R, 'onChapterStart', {});
     return { ok: true, chapter: n, log: h.log, pending: h.pending };
   }
@@ -739,7 +739,7 @@ const RUN = (() => {
     if (unresolvedReachable(R)) return false;
     R.ink = Math.min(R.inkMax, R.ink + cost);
     R.stats.mercy += 1;
-    note(R, 'The land hums back one Echo.');
+    note(R, 'A passer-by hums along: 1 Vox.');
     return true;
   }
 
@@ -832,7 +832,7 @@ const RUN = (() => {
   const removePrice = (R) => Math.max(1, Math.round((E().price.remove + E().price.removeStep * R.removals) * mods(R).priceMul));
 
   // What a flag-locked choice tells the player: a hint at the story beat that is missing.
-  const FLAG_HINTS = { fox_spared: 'Not yet: you never freed the fox', fox_bond: 'Not yet: the fox has not befriended you' };
+  const FLAG_HINTS = { fox_spared: 'Not yet: you never untangled the gull', fox_bond: 'Not yet: the gull has not made friends with you' };
   const pct = (f) => Math.round(f * 100) + '%';
   function eventReq(R, req) {
     if (!req) return { ok: true };
@@ -842,13 +842,13 @@ const RUN = (() => {
     if (req.hpPct !== undefined && !live.every((h) => h.hp >= req.hpPct * h.maxHp)) return { ok: false, reason: `Every hero needs ${pct(req.hpPct)} HP` };
     if (req.hpBelow !== undefined && !live.some((h) => h.hp < req.hpBelow * h.maxHp)) return { ok: false, reason: `Needs a hero below ${pct(req.hpBelow)} HP` };
     if (req.relic !== undefined && R.relics.indexOf(req.relic) < 0) return { ok: false, reason: `Needs the ${relicName(req.relic)}` };
-    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the journey has not led here' };
-    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Verse ${req.chapter} only` };
+    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the tour has not come this way' };
+    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Act ${req.chapter} only` };
     return { ok: true };
   }
   // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed treasure
   // the party already carries. A choice whose every outcome holds one is locked with the reason, rather than taking the player's gold or HP for nothing.
-  const DEAD_DECK_TEXT = { removeCard: 'No card to remove', upgradeCard: 'Nothing left to sharpen', transformCard: 'Nothing to transform', duplicateCard: 'Nothing to copy' };
+  const DEAD_DECK_TEXT = { removeCard: 'No card to remove', upgradeCard: 'Nothing left to rehearse', transformCard: 'Nothing to transform', duplicateCard: 'Nothing to copy' };
   const DECK_GROWERS = ['addCard', 'addCurse', 'cardReward'];             // ops after one of these depend on cards it adds: not judged
   function deadOp(R, o) {
     if (DEAD_DECK_TEXT[o.op]) {
@@ -922,7 +922,7 @@ const RUN = (() => {
     const outcome = rng.weighted(choice.out, (o) => o.w);
     const res = applyOps(R, outcome.ops, { rng, tile: node.tile, key: 'event' });
     node.chosen = i;
-    note(R, def.title ? `${def.title}: ${choice.label}.` : 'A fable unfolds.');
+    note(R, def.title ? `${def.title}: ${choice.label}.` : 'A detour begins.');
     const out = { ok: true, text: outcome.text, applied: res.log };
     if (res.pending.length) out.pending = res.pending;
     if (res.fight) { R.node = res.fight; out.fight = res.fight; }
@@ -967,7 +967,7 @@ const RUN = (() => {
         if (n) return (R.node = n);
         R.ink = Math.min(R.inkMax, R.ink + 1);
         t.done = true;
-        return { kind: 'well', tile: at, gained: 1, amount: 1, fallback: 'event', toast: 'The fable has nothing left to tell. You find a little Echo.', done: true };
+        return { kind: 'well', tile: at, gained: 1, amount: 1, fallback: 'event', toast: 'The detour leads nowhere. You find a little Vox.', done: true };
       }
       default: return null;
     }
@@ -1019,7 +1019,7 @@ const RUN = (() => {
       R.done = true;
       R.victory = false;
       R.node = null;
-      note(R, 'The party fell.');
+      note(R, 'The party lost their voices.');
       return null;
     }
     const m = mods(R);
@@ -1037,7 +1037,7 @@ const RUN = (() => {
     const front = typeof C.front === 'function' ? C.front() : null;
     const fi = front ? R.heroes.findIndex((h) => h.id === front.id) : (Number.isInteger(S.frontIdx) ? S.frontIdx : -1);
     if (fi >= 0 && fi < R.heroes.length) R.frontIdx = fi;
-    note(R, tier === 'boss' ? 'A keeper fell.' : 'Fight won.');
+    note(R, tier === 'boss' ? 'A headliner bowed out.' : 'Fight won.');
 
     const won = hook(R, 'onFightWon', { tier });
     const pending = won.pending.slice();
@@ -1101,7 +1101,7 @@ const RUN = (() => {
       g.pending.forEach((x) => res.pending.push(x));
     }
     if (choice.gem) { R.gems.push(choice.gem); res.log.push({ op: 'addGem', id: choice.gem, text: `Found ${DATA.gems[choice.gem].name}.` }); }
-    if (choice.takeBrush) { R.brushes.push(rewards.brush); res.log.push({ op: 'addBrush', id: rewards.brush, text: 'Learned the Song.' }); }
+    if (choice.takeBrush) { R.brushes.push(rewards.brush); res.log.push({ op: 'addBrush', id: rewards.brush, text: 'Learned the Spell.' }); }
     rewards.claimed = true;
     if (R.node && R.node.rewards && R.node.rewards !== rewards) R.node.rewards.claimed = true;
     checkStranded(R);
@@ -1264,7 +1264,7 @@ const RUN = (() => {
       R.victory = true;
       R.chapterCleared = false;
       R.node = null;
-      note(R, 'The last note rings out.');
+      note(R, 'The whole crowd sings the last line.');
       return { next: 'victory', healed: [], maxHp: 0, log: [], pending: [] };
     }
     const healMul = mods(R).healMul;

@@ -28,7 +28,7 @@
 //   Settings   get(k)  set(k, v) -> cleaned value | undefined (saves at once)      keys and domains: DATA.SETTINGS
 //   Run save   saveRun(R) -> bool (a finished or already paid run is never kept: its key is removed, true is returned)  loadRun() -> R | null
 //              clearRun(id?) (with an id, another run's save is left alone)  hasRun() -> bool  runPaid(id) -> bool (this run id was paid out)
-//              runInfo() -> {chapter, ink, heroes[ids], trial, daily, text:'Verse 2, Echo 5, Hanae and Kuro'} | null
+//              runInfo() -> {chapter, ink, heroes[ids], trial, daily, text:'Act 2, Vox 5, Jasmin and RoxorLoops'} | null
 //   Stats      track(stat, n=1) -> new value (sum, or max for LISTS.statMax; unknown keys ignored)  stat(k) -> number  mergeStats(dst, src)
 //   Feats      check(R?, now?) -> [newly unlocked achievement ids], each id only ever once. Reads profile.stats plus the live R.stats
 //              (never merges them), and R.deck for maxDeck / curseCards, so GAME can call it at every chapterClear and Suzu and Raiga
@@ -329,7 +329,7 @@ const META = (() => {
     if (!isObj(o) || o.v !== RUN.VERSION || !Array.isArray(o.heroes) || o.heroes.length !== 2 || runPaid(o.id)) return null;
     const ids = o.heroes.map((h) => h && h.id);
     const names = ids.map((id) => (DATA.heroes[id] ? DATA.heroes[id].name : String(id)));
-    return { chapter: o.chapter, ink: o.ink, heroes: ids, trial: o.trial | 0, daily: !!o.daily, text: `Verse ${o.chapter}, Echo ${o.ink}, ${names[0]} and ${names[1]}` };
+    return { chapter: o.chapter, ink: o.ink, heroes: ids, trial: o.trial | 0, daily: !!o.daily, text: `Act ${o.chapter}, Vox ${o.ink}, ${names[0]} and ${names[1]}` };
   }
 
   // ---------------------------------------------------------------- stats

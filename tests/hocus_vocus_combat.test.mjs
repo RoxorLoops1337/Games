@@ -1761,13 +1761,13 @@ t.test('C.intent: live numbers (Might, Weak, enemyDmg, the target\'s Vulnerable)
   const setMove = (m) => { u._move = m; return C.intent(u); };
   let it = setMove('hit');
   t.deep([it.move, it.name, it.kind, it.dmg, it.hits, it.tgt, it.tgtKind, it.taunted], ['hit', 'Claw', 'multi', 7, 2, ['hanae'], 'front', false], 'plain multi-hit intent');
-  t.eq(it.text, 'Deals 7 x2 to the front hero', 'intent text');
+  t.eq(it.text, 'Deals 7 x2 to the lead hero', 'intent text');
   u.st.might = 3; u.st.weak = 1; t.eq(C.intent(u).dmg, 7, 'Might 3 then Weak: floor(10 * 0.75) = 7'); u.st = {};
   C.heroes[0].st.vulnerable = 1; t.eq(C.intent(u).dmg, 10, 'the target hero\'s Vulnerable is included: floor(7 * 1.5)'); C.heroes[0].st = {};
   const C2 = W.fight({ enemies: [e], mods: { enemyDmg: 1.5 } }); C2.enemies[0]._move = 'hit'; t.eq(C2.intent(C2.enemies[0]).dmg, 10, 'the trial factor is included: floor(7 * 1.5)');
   it = setMove('rnd'); t.deep([it.tgt, it.tgtKind], ['random', 'random'], 'random targets are reported as random');
   C.heroes[1].st.taunt = 2; it = setMove('rnd'); t.deep([it.tgt, it.taunted], [['kuro'], true], 'Taunt redirects the intent'); it = setMove('bk'); t.deep([it.tgt, it.taunted], [['kuro'], false], 'a back attack on the taunter itself is not redirected');
-  C.heroes[1].st = {}; C.heroes[0].st.taunt = 1; it = setMove('bk'); t.deep([it.tgt, it.taunted], [['hanae'], true], 'back attack redirected to the front taunter'); t.eq(it.text, 'Deals 5 to Hanae', 'text names the taunter'); C.heroes[0].st = {};
+  C.heroes[1].st = {}; C.heroes[0].st.taunt = 1; it = setMove('bk'); t.deep([it.tgt, it.taunted], [['hanae'], true], 'back attack redirected to the front taunter'); t.eq(it.text, 'Deals 5 to ' + W.D.heroes.hanae.name, 'text names the taunter'); C.heroes[0].st = {};
   it = setMove('bo'); t.deep(it.tgt, ['hanae', 'kuro'], 'both'); t.eq(it.text, 'Deals 3 to both heroes', 'both'); C.heroes[1].hp = 10; it = setMove('lo'); t.deep(it.tgt, ['kuro'], 'lowest'); t.eq(C.intent(u).text, 'Deals 3 to the weakest hero', 'lowest text');
   it = setMove('mix');
   t.deep([it.dmg, it.hits, it.block, it.heal, it.steals, it.swap, it.flee], [6, 1, 8, 5, 9, true, true], 'the other parts of a move');
@@ -1803,7 +1803,8 @@ t.test('C.intent: help for other enemies says who gets it (to, blockTo, healTo) 
   // reading the same objects: the sentence needs no lookup
   t.eq(at('wall').text, 'Gives all enemies 8 Block', 'text: all enemies');
   t.eq(at('warm').text, 'Gives another enemy 5 Block', 'text: another enemy');
-  t.eq(at('tight').text, 'Deals 10 to the front hero, gains 1 Ritual, applies 1 Weak and gives another enemy 2 Might', 'text: a strike with help for itself and for another');
+  const SN = (s) => W.D.statuses[s].name;
+  t.eq(at('tight').text, `Deals 10 to the lead hero, gains 1 ${SN('ritual')}, applies 1 ${SN('weak')} and gives another enemy 2 ${SN('might')}`, 'text: a strike with help for itself and for another');
   t.eq(at('own').text, 'Gains 6 Block and heals 3', 'text: help for itself');
 });
 
