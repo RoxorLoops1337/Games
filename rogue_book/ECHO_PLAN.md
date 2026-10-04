@@ -1,6 +1,6 @@
 # ECHOWAKE: the Echo re-theme of `rogue_book` (execution plan)
 
-Status: PLAN rev 2 (three critic reviews applied, Appendix F), not started. Phases merged: none. (Each phase PR updates this line,
+Status: PLAN rev 2 (three critic reviews applied, Appendix F), in progress. Phases merged: P1 (this PR; see git log for the sha). (Each phase PR updates this line,
 for example `Phases merged: P1 <sha>, P2 <sha>`; 9.0.0 says how to find the next phase.) Base commit `a2bd24b` (main, 2026-10-03). Every line number in this file is from that commit: always match on
 the quoted code, never on a number alone, because earlier phases move lines.
 

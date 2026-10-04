@@ -670,8 +670,8 @@ if (want('library')) {
     t.ok(/UNLOCKED/i.test(txt(item)) || /Unlocked\./.test(item.getAttribute('aria-label') || ''), 'library: the item shows it is unlocked');
     const paneText = () => txt($$(g, '.s-library .mn-pane').find((p) => p.getBoundingClientRect().width > 0 && !p.hidden));
     const tabs = $$(g, '.s-library [role=tab]');
-    await tap(g, tabs.find((x) => /Story/.test(txt(x))), 500);
-    t.ok(/Once, a Book/.test(paneText()) && /\?\?\?/.test(paneText()), 'library: Story lists the pages read and hides the rest as ???');
+    await tap(g, tabs.find((x) => x.dataset.id === 'story'), 500);
+    t.ok(new RegExp(g.DATA.lore.intro.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(paneText()) && /\?\?\?/.test(paneText()), 'library: Story lists the pages read and hides the rest as ???');
     await tap(g, tabs.find((x) => /Bestiary/.test(txt(x))), 500);
     t.ok(/Kappa/.test(paneText()) && /1 of 17 met/.test(paneText()), 'library: Bestiary names the foe that was met and counts it');
     await tap(g, tabs.find((x) => /History/.test(txt(x))), 500);

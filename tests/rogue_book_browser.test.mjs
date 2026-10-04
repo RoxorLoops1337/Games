@@ -109,7 +109,7 @@ try {
     await s.press('.mn-cards button', '^Kuro', { ms: 250 });
     const chosen = await s.ev(() => UI.screens.heroSelect.state().chosen);
     t.eq(chosen.join(','), 'hanae,kuro', 'guided: two clicks chose Hanae in front, Kuro behind');
-    await s.press('button', 'begin the tale', { ms: 700 });
+    await s.press('[data-act=begin]', '', { ms: 700 });
     for (let i = 0; i < 5 && (await s.screen()) === 'story'; i++) { await s.press('button', '^skip', { ms: 900 }); }
     for (let i = 0; i < 4 && (await s.screen()) !== 'map'; i++) await s.tick(700);
     t.eq(await s.screen(), 'map', 'guided: Begin leads through the story pages to the map');
@@ -258,10 +258,10 @@ try {
     t.eq(await s.screen(), 'heroSelect', 'phone: a tap opens the hero select');
     await s.press('.mn-cards button', '^Hanae', { touch: true, ms: 250 });
     await s.press('.mn-cards button', '^Kuro', { touch: true, ms: 250 });
-    const begin = await s.ev(() => { const b = [...document.querySelectorAll('button')].find((x) => /begin the tale/i.test(x.textContent)); const r = b.getBoundingClientRect(); return { inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, h: r.height }; });
+    const begin = await s.ev(() => { const b = document.querySelector('[data-act=begin]'); const r = b.getBoundingClientRect(); return { inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, h: r.height }; });
     t.ok(begin.inView, 'phone: Begin the Tale is fully on the screen');
     t.ok(begin.h >= 44, 'phone: Begin the Tale is tall enough to tap (' + Math.round(begin.h) + ' px)');
-    await s.press('button', 'begin the tale', { touch: true, ms: 800 });
+    await s.press('[data-act=begin]', '', { touch: true, ms: 800 });
     for (let i = 0; i < 5 && (await s.screen()) === 'story'; i++) await s.press('button', '^skip', { touch: true, ms: 900 });
     for (let i = 0; i < 4 && (await s.screen()) !== 'map'; i++) await s.tick(700);
     t.eq(await s.screen(), 'map', 'phone: taps reached the map');

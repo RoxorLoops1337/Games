@@ -106,7 +106,18 @@ t.test('starters are the three named cards and the starter deck resolves', () =>
   t.ok(byRarity('starter').every((c) => !c.locked), 'starters are never locked');
 });
 
-t.test('names: unique, one to three words, capitalised, no dashes, and the id is kuro_ plus the name', () => {
+// Frozen: saves store these ids, so a rename of the display names must never touch them.
+const KURO_IDS = [
+  'kuro_blinding_blot', 'kuro_cinder_note', 'kuro_creeping_ink', 'kuro_epilogue_flame', 'kuro_first_stroke',
+  'kuro_flip_the_page', 'kuro_ghost_ink', 'kuro_grand_flourish', 'kuro_grind_ink', 'kuro_ink_bolt', 'kuro_ink_cloak',
+  'kuro_ink_flick', 'kuro_ink_flood', 'kuro_ink_reservoir', 'kuro_ink_ward', 'kuro_inkblot_verdict', 'kuro_inkfall_inferno',
+  'kuro_inkwash_sanctum', 'kuro_miasma_verse', 'kuro_midnight_oil', 'kuro_nightshade_verdict', 'kuro_plague_garden',
+  'kuro_rain_of_strokes', 'kuro_redraft', 'kuro_rot_script', 'kuro_running_script', 'kuro_scene_change', 'kuro_second_edition',
+  'kuro_shared_umbrella', 'kuro_shelter_script', 'kuro_skim_the_scroll', 'kuro_slow_match', 'kuro_strikethrough',
+  'kuro_venom_script', 'kuro_viper_nib', 'kuro_well_of_ink', 'kuro_wildfire_verse',
+];
+
+t.test('names: unique, one to three words, capitalised, no dashes; the ids are frozen (saves store them)', () => {
   const names = cards.map((c) => c.name);
   t.eq(new Set(names).size, names.length, 'no duplicate card names');
   t.eq(new Set(names.map((n) => n.toLowerCase())).size, names.length, 'no duplicate names ignoring case');
@@ -116,8 +127,9 @@ t.test('names: unique, one to three words, capitalised, no dashes, and the id is
     t.ok(/^[A-Z]/.test(c.name), `${c.id}: name starts with a capital`);
     t.ok(!/^kuro\b/i.test(c.name), `${c.id}: no hero prefix in the name`);
     t.ok(!DASH.test(c.name), `${c.id}: no dash in the name`);
-    t.eq(c.id, 'kuro_' + c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''), `${c.id}: id is kuro_ plus the snake_case name`);
+    t.ok(/^kuro_[a-z0-9_]+$/.test(c.id), `${c.id}: id is kuro_ plus snake_case`);
   });
+  t.deep(cards.map((c) => c.id).sort(), KURO_IDS, 'the 37 Kuro ids are frozen: saves store them');
 });
 
 t.test('upgrades: every card has one, it changes fx, cost or keywords, and it never makes a card worse on its face', () => {

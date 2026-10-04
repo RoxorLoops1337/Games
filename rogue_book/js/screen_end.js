@@ -458,8 +458,10 @@
       const para = mk('p', { class: 'st-text', 'aria-hidden': 'true' }, dropCap ? mk('span', { class: 'st-drop' }, mk('b', { text: first })) : null, typed);
       const bodyEl = mk('div', { class: 'st-body' }, para, mk('p', { class: 'sr-only', text: title + '. ' + text }));
       const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => leaveStory(S), key: 'Esc' });
+      skip.dataset.act = 'skip';
       skip.classList.add('st-skip');
       const turn = UI.btn('Turn the page', { kind: 'primary', size: 'lg', breathe: true, onclick: () => advanceStory(S), key: 'Enter' });
+      turn.dataset.act = 'turn';
       turn.classList.add('st-turn');
       const hint = mk('span', { class: 'st-hint', text: 'Tap the page to read on' });
       const foot = mk('footer', { class: 'st-foot' }, skip, hint, turn);

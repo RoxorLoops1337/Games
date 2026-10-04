@@ -201,7 +201,7 @@ await t.test('story: Enter completes then turns the page; Skip, Esc and a tap on
   await openStory('ch3_intro', { name: 'settings' });
   await click(g, $(g, '.s-story .en-tap')); t.eq(UI.currentName, 'settings', 'a tap turns the page once the text is done');
   await openStory('intro', { name: 'howto' });
-  const turn = btnByText(g, /Turn the page/);
+  const turn = $(g, '[data-act=turn]');
   g._click(turn); g._click(turn); await settle(g);
   t.eq(UI.currentName, 'howto', 'a double tap lands on `then` once');
   t.ok(UI.epoch >= epoch0, 'the epoch moved on');
@@ -209,14 +209,14 @@ await t.test('story: Enter completes then turns the page; Skip, Esc and a tap on
 await t.test('story: without `then` it goes back; a missing lore id is a blank page that still turns', async () => {
   await UI.go('howto', null, { force: true, transition: 'none' }); await settle(g);
   await openStory('defeat');
-  await click(g, btnByText(g, /Turn the page/));
+  await click(g, $(g, '[data-act=turn]'));
   t.eq(UI.currentName, 'howto', 'UI.back returns to where the story was opened from');
   await UI.go('title', null, { force: true, transition: 'none' }); await settle(g);
   const root = await openStory('no_such_page', { name: 'settings' });
   t.eq(txt($('.st-title', root)), 'A Blank Page', 'a graceful title');
   t.ok(txt($('.st-text', root)).length > 10, 'and some text');
   t.ok(!META.loreSeen('no_such_page'), 'nothing is marked for an unknown page');
-  await click(g, btnByText(g, /Turn the page/)); t.eq(UI.currentName, 'settings', 'it still turns');
+  await click(g, $(g, '[data-act=turn]')); t.eq(UI.currentName, 'settings', 'it still turns');
 });
 await t.test('story: the menu button only shows while a run is live; leaving cleans up', async () => {
   const R = RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 3 }); if (!R.map) RUN.startChapter(R, 1);
@@ -320,7 +320,7 @@ await t.test('chapterClear through GAME: nodeDone after the boss routes here, Co
   await click(g, $(g, '.cc-go'));
   t.eq(UI.currentName, 'story', 'Continue opens the next chapter\'s story page');
   t.ok(/Sunken Lantern City/.test(txt($(g, '.st-title'))), 'chapter 2\'s page');
-  await click(g, btnByText(g, /Turn the page/));
+  await click(g, $(g, '[data-act=turn]'));
   t.eq(UI.currentName, 'map', 'then the map');
 });
 await t.test('chapterClear: Enter continues, a tap on the backdrop never does, no run is survivable', async () => {

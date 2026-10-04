@@ -690,7 +690,7 @@ await t.test('library story: seen pages replay through the story screen and come
   t.eq($$(g, '.mn-st').length, list.length, 'one row per META.storyList entry (' + list.length + ', no barks)');
   t.ok(list.every((x) => !/^barks_/.test(x.id)), 'the in-combat barks are not stories');
   t.eq($$(g, '.mn-st.seen').length, 2, 'two pages are read');
-  t.eq($(g, '.mn-st[data-id=intro] .mn-st-title').textContent, 'Once, a Book', 'a seen page shows its title');
+  t.eq($(g, '.mn-st[data-id=intro] .mn-st-title').textContent, g.DATA.lore.intro.title, 'a seen page shows its title');
   t.eq($(g, '.mn-st[data-id=victory] .mn-st-title').textContent, '???', 'an unseen page shows ???');
   t.ok(!/Victory|victory/.test($(g, '.mn-st[data-id=victory]').getAttribute('aria-label')), 'and does not leak its name to screen readers: ' + $(g, '.mn-st[data-id=victory]').getAttribute('aria-label'));
   t.ok(/2 of \d+ pages read/.test($(g, '.mn-st-sub').textContent), 'the subtitle counts: ' + $(g, '.mn-st-sub').textContent);
