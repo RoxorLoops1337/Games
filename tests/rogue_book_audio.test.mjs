@@ -12,7 +12,9 @@ const L = DATA.LISTS;
 
 // ------------------------------------------------------------------------------------------------ helpers
 const SCALE = { 'in-sen': [0, 1, 5, 7, 10], yo: [0, 2, 5, 7, 9], 'miyako-bushi': [0, 1, 5, 7, 8] };
-const LAYERED = ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final'];
+const INTENSE = ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final'];   // layered by AUDIO.intensity (fights)
+const WOKEN = ['map1', 'map2', 'map3'];                                                         // layered by AUDIO.awake (the Hush)
+const LAYERED = INTENSE.concat(WOKEN);
 const mod = (a, n) => ((a % n) + n) % n;
 const near = (a, b, eps) => Math.abs(a - b) <= eps;
 const descs = {};
@@ -321,10 +323,11 @@ t.test('the phrases breathe: a 4 bar phrase ends open (not on the tonic) until t
     t.eq(mod(endOf(3).midi - d.tonic, 12), 0, id + ' closes on the tonic');
   }
 });
-t.test('the intensity tracks are layered, every other track is a single bed', () => {
+t.test('the fight and map tracks are layered, every other track is a single bed', () => {
   for (const id of L.music) {
     const d = descs[id];
-    if (LAYERED.indexOf(id) < 0) { t.eq(d.layers, 1, id + ' is not layered'); t.deep(d.thresholds, [0], id + ' has one threshold'); continue; }
+    if (LAYERED.indexOf(id) < 0) { t.eq(d.layers, 1, id + ' is not layered'); t.deep(d.thresholds, [0], id + ' has one threshold'); t.eq(d.drive, null, id + ' has no drive'); continue; }
+    t.eq(d.drive, WOKEN.indexOf(id) >= 0 ? 'awake' : 'intensity', id + ' drive');
     t.eq(d.layers, 4, id + ' has four layers');
     t.eq(d.thresholds.length, 4, id + ' thresholds');
     t.eq(d.thresholds[0], 0, id + ' layer 0 is always on');
@@ -415,12 +418,12 @@ t.test('elements sound like their element', () => {
   t.ok(r('ice').layers.filter((ly) => ly.k === 'fm').length >= 3, 'ice is glass tinkles');
   t.ok(r('zap').layers.some((ly) => ly.w === 'square') && r('zap').layers.some((ly) => ly.w === 'sawtooth' && ly.f2 > ly.f * 4), 'zap is a rising saw with stepped square blips');
   t.ok(r('poison_tick').layers.filter((ly) => ly.k === 'osc' && ly.f2 > ly.f).length >= 2, 'poison is bubbles that bloop upward');
-  t.ok(r('page_turn').layers.every((ly) => ly.k === 'noise'), 'a page turn is paper noise');
+  t.ok(r('page_turn').layers.filter((ly) => ly.v === 'hyoshigi').length >= 2, 'a page_turn is two hyoshigi claps: the kamishibai opens');
   t.ok(r('gold').layers.filter((ly) => ly.k === 'fm').length >= 2, 'coins clink');
   t.ok(r('gem_socket').layers.filter((ly) => ly.k === 'fm').length >= 2 && r('gem_socket').layers.some((ly) => ly.k === 'noise'), 'a gem clicks in and chimes');
   t.ok(r('relic_get').layers.filter((ly) => ly.k === 'voice' && ly.v === 'koto').length >= 4 && r('relic_get').layers.some((ly) => ly.v === 'rin'), 'a relic is a koto arpeggio with a bell');
   t.ok(r('level_up').layers.filter((ly) => ly.v === 'koto').length >= 4, 'level up rises');
-  t.ok(r('paint').layers.some((ly) => ly.k === 'noise' && ly.f2 > ly.f) && r('ink_splash').layers.some((ly) => ly.k === 'noise' && ly.ft === 'lowpass'), 'paint sweeps, ink splashes wet');
+  t.ok(r('paint').layers.some((ly) => ly.k === 'noise' && ly.f2 > ly.f) && r('ink_splash').layers.some((ly) => ly.v === 'hyoshigi'), 'a wake breathes open, a find knocks twice');
   t.ok(r('chest_open').layers.some((ly) => ly.vib) && r('chest_open').layers.filter((ly) => ly.v === 'koto').length >= 3, 'a chest creaks then sparkles');
   t.ok(r('boss_die').dur >= 2 && r('boss_die').duck >= 1000 && r('boss_intro').duck >= 1000, 'boss moments are big and duck the music');
   t.ok(r('block_break').layers.some((ly) => ly.k === 'fm') && r('block_break').layers.some((ly) => ly.k === 'noise' && ly.ft === 'highpass'), 'block_break shatters');
@@ -683,6 +686,8 @@ t.test('soak: five minutes of switching, storms, intensity and suspends leaks no
     else if (r < 0.72) A.duck(rnd.int(50, 1500));
     else if (r < 0.73) { A.suspend(); gg._advance(400, 20); A.resume(); }
     else if (r < 0.75) A.setVolume(rnd() < 0.5 ? 'music' : 'sfx', rnd());
+    else if (r < 0.77) A.wake(rnd.int(0, 20), rnd.int(0, 12), { chapter: rnd.int(1, 3), seed: 7, song: rnd() < 0.5 ? undefined : rnd.pick(Object.keys(gg.DATA.brushes)), i: rnd.int(0, 6), aq: 3, ar: 5 });
+    else if (r < 0.78) A.awake(rnd());
     gg._advance(200, 20);
     const d = A.debug();
     maxLive = Math.max(maxLive, d.live); maxDecks = Math.max(maxDecks, d.decks.length);
@@ -715,6 +720,8 @@ t.test('every track schedules into an OfflineAudioContext', async () => {
   const d = A.compose('combat1'), [o1, g1] = mk(), [o2, g2] = mk();
   const lo = A.render(o1, g1.music, d, { intensity: 0 }), hi = A.render(o2, g2.music, d, { intensity: 1 });
   t.ok(hi.notes > lo.notes, 'intensity 1 renders more notes than intensity 0');
+  const m3 = A.compose('map3'), [o3, g3] = mk(), [o4, g4] = mk();
+  t.ok(A.render(o3, g3.music, m3, { intensity: 0 }).notes < A.render(o4, g4.music, m3, { intensity: 1 }).notes, 'a map track renders fewer notes asleep (wake level 0) than awake (1)');
 });
 t.test('every sfx recipe and every voice renders offline, also at the edges', () => {
   const gg = fresh();
@@ -737,6 +744,267 @@ t.test('rendering is deterministic: the same description builds the same graph',
   const W = g._win, A = AUDIO;
   const count = () => { const off = new W.OfflineAudioContext(2, 44100, 44100), gr = A.graph(off); const before = off._nodes; A.render(off, gr.music, A.compose('boss2'), { intensity: 1 }); return off._nodes - before; };
   t.eq(count(), count(), 'same number of nodes');
+});
+
+// ------------------------------------------------------------------------------------------------ 7. Echo: the melodic reveal, the Hush, temple bells, the vox voice
+const echoInfo = (ch, seed) => ({ chapter: ch, seed, cols: 21, rows: 13 });
+const hexQ = (col, r) => col - Math.floor(r / 2);
+t.test('echo: every hex of a map owns a note in its chapter key, and the tune belongs to the map', () => {
+  const g2 = fresh();
+  for (const ch of [1, 2, 3]) {
+    const d = descs['map' + ch], info = echoInfo(ch, 1234);
+    let bad = 0, outside = 0, differ = 0;
+    for (let r = 0; r <= 12; r++) for (let col = 0; col <= 20; col++) {
+      const n = AUDIO.hexNote(hexQ(col, r), r, info), n2 = g2.AUDIO.hexNote(hexQ(col, r), r, info);
+      if (!Number.isInteger(n.midi) || SCALE[d.scale].indexOf(mod(n.midi - d.tonic, 12)) < 0) bad++;
+      if (!(n.deg >= -4 && n.deg <= 9)) outside++;
+      if (n.midi !== n2.midi || n.deg !== n2.deg) differ++;
+    }
+    t.eq(bad, 0, 'verse ' + ch + ': every hex is a whole note of ' + d.scale + ' in the key of ' + d.id);
+    t.eq(outside, 0, 'verse ' + ch + ': degrees stay in -4..9');
+    t.eq(differ, 0, 'verse ' + ch + ': the same map sounds the same across fresh boots');
+  }
+  let steps = 0, small = 0, leap = 0, fewDegrees = 0;
+  for (let seed = 0; seed < 50; seed++) for (const ch of [1, 2, 3]) {
+    const row = []; for (let col = 0; col <= 20; col++) row.push(AUDIO.hexNote(hexQ(col, 6), 6, echoInfo(ch, seed)).deg);
+    for (let i = 1; i < row.length; i++) { const dd = Math.abs(row[i] - row[i - 1]); steps++; if (dd <= 1) small++; if (dd > 2) leap++; }
+    if (new Set(row).size < 3) fewDegrees++;
+  }
+  t.eq(leap, 0, 'neighbouring columns never differ by more than 2 degrees');
+  t.ok(small / steps >= 0.7, 'the tune moves mostly by step: ' + (small / steps).toFixed(2));
+  t.eq(fewDegrees, 0, 'every contour uses at least 3 degrees');
+  for (let c = 6; c <= 20; c++) t.ok(AUDIO.hexNote(c, 0, echoInfo(1, 9)).deg >= AUDIO.hexNote(c - 6, 12, echoInfo(1, 9)).deg, 'up the map is up the scale at column ' + c);
+  let cols = 0; for (let col = 0; col <= 20; col++) if (AUDIO.hexNote(hexQ(col, 6), 6, echoInfo(2, 1)).deg !== AUDIO.hexNote(hexQ(col, 6), 6, echoInfo(2, 2)).deg) cols++;
+  t.ok(cols >= 5, 'seeds 1 and 2 differ in ' + cols + ' columns');
+  t.ok(Number.isInteger(AUDIO.hexNote(3, 3).midi) && Number.isInteger(AUDIO.hexNote(-50, 99, { chapter: 9 }).midi), 'missing or wild info never throws');
+});
+t.test('echo: each Song sings its shape', () => {
+  const brushes = Object.keys(DATA.brushes).sort();
+  t.deep(Object.keys(AUDIO.SONGS).filter((k) => k !== 'single' && k !== 'step').sort(), brushes, 'SONGS has one entry per DATA.brushes id');
+  t.eq(AUDIO.songDegrees('stroke', 3, 2), null, 'Drum Line: every cell its own note');
+  t.deep(AUDIO.songDegrees('wave', 5, 1), [1, 2, 3, 4, 5], 'Ripple is a rising run');
+  t.deep(AUDIO.songDegrees('fan', 3, 0), [0, 2, 4], 'Shout strums a triad');
+  t.eq(AUDIO.songDegrees('splash', 7, 3)[0], -2, 'Beat Drop: the centre drops an octave');
+  const h = AUDIO.songDegrees('halo', 6, 0);
+  t.ok(h.length === 6 && h.every((x, i) => i === 0 || x > h[i - 1]), 'Chorus rises: ' + h);
+  t.eq(AUDIO.songDegrees('nope', 3, 0), null, 'unknown song is null');
+  const info = echoInfo(1, 5);
+  t.eq(AUDIO.wakeDegree(4, 4, info), AUDIO.hexNote(4, 4, info).deg, 'without an anchor a cell sings its own hexNote');
+  t.eq(AUDIO.wakeDegree(4, 4, Object.assign({}, info, { aq: null, ar: null, song: 'wave', i: 2 })), AUDIO.hexNote(4, 4, info).deg, 'a null anchor is no anchor');
+  const root = AUDIO.hexNote(3, 5, info).deg;
+  t.eq(AUDIO.wakeDegree(4, 4, Object.assign({}, info, { aq: 3, ar: 5, song: 'wave', i: 2 })), root + 2, 'with an anchor a Ripple cell sings its place in the run');
+  t.eq(AUDIO.SONGS.single.byVerse.length, 3, 'one voice per verse');
+});
+t.test('echo: a wake note plays live, never before init, muted or suspended, and a storm is capped', () => {
+  t.eq(fresh().AUDIO.wake(3, 3, echoInfo(1, 1)), false, 'dropped before init');
+  const gg = live();
+  const A = gg.AUDIO, au = gg._audio, info = echoInfo(1, 1);
+  const n0 = au.started;
+  t.eq(A.wake(3, 3, info), true, 'plays live');
+  t.ok(au.started > n0, 'and starts sources');
+  gg._advance(2000, 20);
+  A.setVolume('sfx', 0);
+  const n1 = au.started;
+  t.eq(A.wake(4, 3, info), false, 'Effects at 0 drops it');
+  t.eq(au.started, n1, 'with no source built (true mute)');
+  A.setVolume('sfx', 0.8);
+  A.suspend();
+  t.eq(A.wake(4, 3, info), false, 'suspended drops it');
+  A.resume();
+  gg._advance(2000, 20);
+  let ok = 0; for (let i = 0; i < 60; i++) if (A.wake(i % 20, 3, info)) ok++;
+  t.ok(ok >= 5 && ok <= 12, 'a storm at one instant is capped by the token bucket: ' + ok + ' of 60');
+  t.eq(A.wake(2, 2, Object.assign({ last: true }, info)), true, 'a cadence (last) always plays');
+  t.eq(A.wake(NaN, 2, info), false, 'garbage coordinates are dropped');
+  for (const song of Object.keys(DATA.brushes).concat(['single', 'step', 'nope'])) {
+    gg._advance(1500, 20);
+    for (let i = 0; i <= 6; i++) A.wake(5 + i, 4, Object.assign({ song, i, n: 7, aq: 5, ar: 4, soft: song === 'step' }, info));
+  }
+  t.eq(gg._uncaught.length, 0, 'every Song sings without a throw');
+  gg._advance(10000, 100);
+  t.eq(A.debug().live, 0, 'nothing is left ringing');
+  t.eq(au.stopped, au.started, 'every source ended');
+});
+t.test('echo: the echo send exists, is fed by wake notes, and is skipped when calm or lite; no delay node still works', () => {
+  const gg = live();
+  const A = gg.AUDIO, d = A.debug(), gr = d.graph, info = echoInfo(2, 3);
+  t.ok(gr.echoIn && gr.echoDelay, 'the echo is built');
+  t.ok(reaches(gr.echoIn, gr.sfxBus) && reaches(gr.echoIn, d.ctx.destination), 'and reaches the sfx bus and the destination');
+  gg._run(`globalThis.__g = []; const gc = AudioContext.prototype.createGain; AudioContext.prototype.createGain = function () { const n = gc.call(this); __g.push(n); return n; };`);
+  const sent = () => gg._run('__g').some((n) => (n._out || []).indexOf(gr.echoIn) >= 0);
+  t.eq(A.wake(3, 3, info), true, 'a wake note');
+  t.ok(sent(), 'feeds the echo');
+  gg._advance(2000, 20); gg._run('__g.length = 0');
+  t.deep(A.options({ calm: true }), { calm: true, lite: false }, 'options returns the settings');
+  t.eq(A.wake(4, 3, info), true, 'a wake note when calm');
+  t.ok(!sent(), 'does not feed the echo when calm');
+  A.options({ calm: false, lite: true }); gg._advance(2000, 20); gg._run('__g.length = 0');
+  t.eq(A.wake(5, 3, info), true, 'a wake note when lite');
+  t.ok(!sent(), 'does not feed the echo when lite');
+  t.deep(A.options(), { calm: false, lite: true }, 'options() reads them back');
+  t.deep(A.options('junk'), { calm: false, lite: true }, 'junk changes nothing');
+  A.options({ lite: false }); gg._advance(2000, 20);
+  t.eq(A.wake(6, 3, Object.assign({ soft: true }, info)), true, 'a soft step plays when not calm');
+  A.options({ calm: true }); gg._advance(2000, 20);
+  t.eq(A.wake(6, 3, Object.assign({ soft: true }, info)), false, 'and not when calm');
+  const g3 = fresh();
+  g3._run("AudioContext.prototype.createDelay = function () { throw new Error('no delay'); };");
+  t.eq(g3.AUDIO.init({ force: true }), true, 'a missing delay node still builds the graph');
+  t.eq(g3.AUDIO.debug().graph.echoIn, null, 'with no echo');
+  t.eq(g3.AUDIO.wake(3, 3, info), true, 'and wake notes play dry');
+  t.eq(g3._uncaught.length, 0, 'nothing threw');
+});
+t.test('the map sounds are re-voiced for Echo (ids kept)', () => {
+  t.eq(L.sfx.length, 73, 'still 73 sound ids');
+  for (const id of ['paint', 'ink_splash', 'brush_pick', 'brush_use', 'ink_gain', 'well', 'page_turn']) t.ok(L.sfx.indexOf(id) >= 0 && AUDIO.sfxRecipe(id), id + ' keeps its id and its recipe');
+  t.eq(AUDIO.sfxRecipe('well').tune, 55, 'the temple bell is written in G');
+  t.eq(AUDIO.sfxRecipe('paint').tune, 0, 'other recipes are never transposed');
+  t.ok(AUDIO.sfxRecipe('brush_pick').layers.filter((ly) => ly.v === 'shakuhachi').length >= 3, 'a Song is learned with a hummed three note motif');
+  t.ok(AUDIO.sfxRecipe('brush_use').layers.some((ly) => ly.v === 'taiko'), 'a Song is sung with a downbeat');
+});
+t.test('the Hush: a map track is muffled, sparse and quiet while the land sleeps, and opens as it wakes', () => {
+  for (const id of WOKEN) {
+    const h = descs[id].hush;
+    t.eq(descs[id].drive, 'awake', id + ' is driven by the wake level');
+    t.ok(h && h.lo >= 500 && h.lo <= 1000 && h.floor >= 0.75 && h.floor < 1, id + ' hush ' + JSON.stringify(h));
+  }
+  t.ok(descs.map3.hush.lo < descs.map1.hush.lo, 'the third verse is the deepest hush');
+  const gg = live();
+  const A = gg.AUDIO, au = gg._audio;
+  t.eq(A.awake(), 1, 'awake is 1 by default');
+  A.awake(0.06);                                             // wake level 0 whatever the calibration
+  A.music('map1');
+  advance(gg, 500);
+  let deck = A.debug().decks[0];
+  t.deep(deck.target, [1, 0, 0, 0], 'a sleeping land plays the still bed only');
+  t.ok(deck.lp.frequency.value < 1000 && deck.hg.gain.value < 0.9, 'muffled and quiet: ' + deck.lp.frequency.value + ' Hz, gain ' + deck.hg.gain.value);
+  const a0 = au.started; advance(gg, 6000); const asleep = au.started - a0;
+  A.awake(0.6);
+  deck = A.debug().decks[0];
+  t.deep(deck.target, [1, 1, 1, 1], 'an awake land plays the whole band');
+  t.ok(deck.lp.frequency.value > 12000 && deck.hg.gain.value > 0.99, 'and the filter opens: ' + deck.lp.frequency.value + ' Hz');
+  advance(gg, 1000);
+  const a1 = au.started; advance(gg, 6000); const woken = au.started - a1;
+  t.ok(woken > asleep * 1.3, 'a sleeping land schedules fewer notes: ' + asleep + ' versus ' + woken);
+  t.eq(A.intensity(), 0, 'intensity() stays out of it');
+  A.intensity(1);
+  t.deep(A.debug().decks[0].target, [1, 1, 1, 1], 'intensity does not move a map deck');
+  A.awake(0.06);
+  A.intensity(1);
+  t.deep(A.debug().decks[0].target, [1, 0, 0, 0], 'even at full intensity a sleeping map stays asleep');
+  A.intensity(0);
+  A.music('combat1');
+  deck = A.debug().decks.find((x) => x.id === 'combat1');
+  t.ok(!deck.lp && !deck.hg, 'a fight deck has no Hush filter, so a fight is never muffled');
+  t.deep(deck.target, [1, 0, 0, 0], 'a fight starts from its bed');
+  t.eq(A.awake('x'), 1, 'garbage is awake'); t.eq(A.awake(-2), 0, 'clamped low'); t.eq(A.awake(5), 1, 'clamped high');
+  t.eq(A.awake(), 1, 'awake() reads it back');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+t.test('the well sound is a temple bell: big, struck, beating, tuned to the map it rings over', () => {
+  const r = AUDIO.sfxRecipe('well');
+  const low = r.layers.filter((ly) => ly.k === 'osc' && ly.f < 130 && ly.d >= 2);
+  t.ok(low.length >= 2, 'a long low hum');
+  t.ok(low.some((a) => low.some((b) => a !== b && Math.abs(a.f - b.f) < 1.5 && a.f !== b.f)), 'two hum tones less than 1.5 Hz apart beat like a bonsho');
+  t.ok(r.layers.some((ly) => ly.k === 'fm') && r.layers.some((ly) => ly.k === 'noise' && ly.ft === 'lowpass'), 'inharmonic strike partials and a wooden thud');
+  t.ok(r.duck > 0 && r.tune === 55, 'it ducks the music and is tuned');
+  const gg = live();
+  const A = gg.AUDIO;
+  gg._run(`globalThis.__f = []; const oc = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () { const o = oc.call(this); const s = o.frequency.setValueAtTime.bind(o.frequency); o.frequency.setValueAtTime = (v, t) => { __f.push(v); return s(v, t); }; return o; };`);
+  const lowest = () => Math.min(...gg._run('__f').filter((f) => f < 150));
+  const cents = (f, ref) => Math.abs(1200 * Math.log2(f / ref));
+  A.music('map2'); advance(gg, 300);
+  gg._run('__f.length = 0'); A.sfx('well');
+  t.ok(cents(lowest(), 110) <= 20, 'over the key of A the bell hums an A: ' + lowest().toFixed(1) + ' Hz');
+  advance(gg, 4000);
+  A.music('map1'); advance(gg, 300);
+  gg._run('__f.length = 0'); A.sfx('well');
+  t.ok(cents(lowest(), 98) <= 20, 'over the key of G it hums a G: ' + lowest().toFixed(1) + ' Hz');
+  advance(gg, 4000);
+  A.music('map3'); advance(gg, 300);
+  gg._run('__f.length = 0'); A.sfx('well');
+  t.ok(cents(lowest(), 73.42) <= 20, 'over the key of D it hums a D: ' + lowest().toFixed(1) + ' Hz');
+  advance(gg, 4000);
+  A.music(null, { fade: 0.2 }); advance(gg, 5000);
+  gg._run('__f.length = 0'); A.sfx('well');
+  t.ok(cents(lowest(), 98) <= 20, 'with no music it rings as written: ' + lowest().toFixed(1) + ' Hz');
+});
+t.test('echo: Song chords never hold a semitone, a tritone or a major seventh', () => {
+  t.deep(Object.keys(AUDIO.CHORD_ROOTS).sort(), ['0,1,5,7,10', '0,1,5,7,8', '0,2,5,7,9'], 'CHORD_ROOTS covers the three scales');
+  let checked = 0;
+  for (const ch of [1, 2, 3]) {
+    const d = descs['map' + ch], sc = d.scaleIntervals;
+    const midi = (x) => d.tonic + 12 + 12 * Math.floor(x / 5) + sc[mod(x, 5)];
+    for (const [song, n] of [['fan', 3], ['splash', 7], ['halo', 6]]) {
+      for (let root = -4; root <= 9; root++) {
+        const ms = AUDIO.songDegrees(song, n, root, ch).map(midi);
+        for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) {
+          const iv = mod(ms[j] - ms[i], 12);
+          checked++;
+          if (iv === 1 || iv === 6 || iv === 11) t.ok(false, `verse ${ch} ${song} root ${root}: notes ${i} and ${j} hold ${iv} semitones`);
+        }
+      }
+    }
+  }
+  t.ok(checked > 1000, 'checked ' + checked + ' pairs');
+});
+t.test('the Hush is calibrated to real play', () => {
+  // m = 0.19: the median woken share of the map when the greedy bot reaches the keeper (217 boss fights, ch1 0.19, ch2 0.19, ch3 0.20),
+  // measured on 2026-10-04 with: node tools/rogue_book/bot.mjs --all-pairs --runs 8 --trial 0,5 --seed 11 --combat greedy --effort fast
+  //   --jobs 1 --quiet --brief --awake-report
+  // WAKE_SPAN = clamp(m - 0.06, 0.12, 0.44) = 0.13; T3 = clamp((0.6 m - 0.06) / 0.13 - 0.1, 0.15, 0.65) = 0.32;
+  // TH_WAKE = [0, round2(0.23 T3), round2(0.62 T3), T3] = [0, 0.07, 0.2, 0.32]
+  t.eq(AUDIO.HUSH.from, 0.06, 'the wake curve starts at 6 percent');
+  t.eq(AUDIO.HUSH.span, 0.13, 'and is full at the median keeper visit (m = 0.19)');
+  t.deep(AUDIO.HUSH.th, [0, 0.07, 0.2, 0.32], 'the layers come in at 0.07, 0.2 and 0.32');
+  t.deep([descs.map1.hush, descs.map2.hush, descs.map3.hush], [{ lo: 900, floor: 0.85 }, { lo: 750, floor: 0.8 }, { lo: 600, floor: 0.75 }], 'the verse hush values');
+  t.deep(descs.map1.thresholds, AUDIO.HUSH.th, 'the map tracks use the calibrated thresholds');
+  const wl = (f) => Math.min(1, Math.max(0, (f - AUDIO.HUSH.from) / AUDIO.HUSH.span));
+  t.ok(wl(0.19) === 1 && wl(0.114) >= AUDIO.HUSH.th[3] + 0.1 - 0.01, 'the melody is fully in by 0.6 of the median, the whole bed at the median');
+  const gg = live();
+  const A = gg.AUDIO;
+  t.eq(A.debug().liftKey, null, 'no map has woken yet');
+  A.wake(3, 3, { chapter: 2, seed: 77, cols: 21, rows: 13 });
+  t.eq(A.debug().liftKey, '2|77', 'the first wake of a map is remembered');
+  gg._advance(1000, 20);
+  A.wake(4, 3, { chapter: 2, seed: 77, cols: 21, rows: 13 });
+  t.eq(A.debug().liftKey, '2|77', 'a second wake on the same map leaves it');
+  A.music('map2'); advance(gg, 300);
+  A.awake(0.06);
+  const lp = A.debug().decks[0].lp, f0 = lp.frequency.value, calls = [], orig = lp.frequency.setTargetAtTime.bind(lp.frequency);
+  lp.frequency.setTargetAtTime = (v, tm, tc) => { calls.push(v); return orig(v, tm, tc); };
+  A.wake(5, 3, { chapter: 3, seed: 78, cols: 21, rows: 13 });
+  t.eq(A.debug().liftKey, '3|78', 'a new map is a new first wake');
+  t.ok(calls.length === 2 && near(calls[0], f0 * 1.5, 1) && calls[1] === f0, 'which opens the hushed deck to 1.5 times its cut-off and back: ' + f0 + ', ' + calls.join(', '));
+});
+t.test('the vox voice sings and speaks, and no score uses it', () => {
+  const gg = fresh();
+  const A = gg.AUDIO, W = gg._win;
+  t.ok(A.VOICES.indexOf('vox') >= 0, 'vox is a voice');
+  gg._run(`globalThis.__env = [];
+    const cg = AudioContext.prototype.createGain;
+    OfflineAudioContext.prototype.createGain = function () {
+      const n = cg.call(this), p = n.gain, ev = []; __env.push(ev);
+      for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime']) { const o = p[m].bind(p); p[m] = (v, t) => { ev.push([m, v, t]); return o(v, t); }; }
+      return n;
+    };`);
+  const off = new W.OfflineAudioContext(2, 44100 * 4, 44100), dest = off.destination;
+  for (const vowel of ['a', 'o', 'u', 'e', 'm', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, vowel }), true, 'vowel ' + vowel);
+  for (const syl of ['don', 'ka', 'tsu', 'hey', 'boom', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, syl }), true, 'syllable ' + syl);
+  t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 1, vel: 0.7, r: 0.3, vowel: 'a', detune: 8 }), true, 'detune');
+  let envs = 0, bad = 0;
+  for (const ev of gg._run('__env')) {
+    if (!ev.some((e) => e[0] === 'exponentialRampToValueAtTime' && e[1] === 0.0001)) continue;
+    envs++;
+    if (!(ev[0][0] === 'setValueAtTime' && ev[0][1] === 0 && ev[0][2] === 0)) bad++;
+  }
+  t.ok(envs >= 12, 'checked ' + envs + ' amplitude envelopes');
+  t.eq(bad, 0, 'every vox envelope starts at zero: no click');
+  for (const id of L.music) t.ok(!descs[id].tracks.some((tr) => tr.voice === 'vox'), id + ' never uses vox (the wake-note voice)');
+  t.eq(A.SONGS.blot.v, 'vox', 'Hum is a vox'); t.eq(A.SONGS.step.v, 'vox', 'a walked step is a vox');
+  t.ok(A.RANGES.vox[0] < A.RANGES.vox[1], 'vox has a range');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
 
 t.done();

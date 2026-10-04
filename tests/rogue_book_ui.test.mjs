@@ -11,7 +11,7 @@ const SKIP = ['data_*', 'art*', 'audio', 'combat', 'map', 'run', 'meta', 'scene'
 // ---------------------------------------------------------------------------------------------------- fakes installed into the page
 const FAKES = `
 globalThis.__log = { sfx: [], music: [], vol: [], calls: [], icons: [], art: [], medals: [], speed: [], saves: [], records: [], claims: [], chapters: [], order: [], cleared: 0, checks: 0, chEnd: 0, n: 0, next: 2, chapterEnded: false, failSave: false, saved: null, newRun: null };
-globalThis.AUDIO = { ready: false, init() { __log.calls.push('init'); }, resume() { __log.calls.push('resume'); }, suspend() { __log.calls.push('suspend'); }, sfx(id) { __log.sfx.push(id); }, music(id) { __log.music.push(id); }, setVolume(k, v) { __log.vol.push([k, v]); }, duck() {}, intensity() {} };
+globalThis.AUDIO = { ready: false, init() { __log.calls.push('init'); }, resume() { __log.calls.push('resume'); }, suspend() { __log.calls.push('suspend'); }, sfx(id) { __log.sfx.push(id); }, music(id) { __log.music.push(id); }, setVolume(k, v) { __log.vol.push([k, v]); }, duck() {}, intensity() {}, options(o) { __log.opts = o; }, wake() {}, awake() {} };
 globalThis.ART = { res: 1, tk: { opt: {} }, sprite: Object.assign(function () {}, { clear() { __log.calls.push('spriteClear'); } }),
   icon: { draw(ctx, kind, id, x, y, size) { __log.icons.push([kind, id, size]); } }, card: { draw(ctx, id, w, h) { __log.art.push([typeof id === 'string' ? id : id.id, w, h]); } }, hero: { medallion(ctx, id) { __log.medals.push(id); } } };
 globalThis.SCENE = { speed(k) { __log.speed.push(k); } };
@@ -888,7 +888,7 @@ await t.test('applySettings: --ts, body classes, UI.opt, ART.tk.opt, SCENE.speed
   t.ok(g.UI.opt === same, 'UI.opt keeps its identity'); t.eq(g.UI.opt.textScale, 1.3, 'textScale'); t.eq($(g, '#stage').style.getPropertyValue('--ts'), '1.3', '--ts on #stage');
   const cls = g._doc.body.classList;
   t.ok(cls.contains('reduce-motion') && cls.contains('colorblind') && cls.contains('low'), 'body classes'); t.eq(g.UI.opt.speed, 2.5, 'fastAnim 2 is x2.5'); t.eq(g.log.speed[g.log.speed.length - 1], 2.5, 'SCENE.speed');
-  t.deep(g.log.vol.slice(-2), [['music', 0.25], ['sfx', 0.5]], 'AUDIO.setVolume'); t.eq(g._run('ART.tk.opt.quality'), 'low', 'ART.tk.opt.quality'); t.eq(g._run('ART.tk.opt.reduceMotion'), true, 'ART.tk.opt.reduceMotion');
+  t.deep(g.log.vol.slice(-2), [['music', 0.25], ['sfx', 0.5]], 'AUDIO.setVolume'); t.deep(g.log.opts, { calm: true, lite: true }, 'AUDIO.options bridges reduce motion and low quality'); t.eq(g._run('ART.tk.opt.quality'), 'low', 'ART.tk.opt.quality'); t.eq(g._run('ART.tk.opt.reduceMotion'), true, 'ART.tk.opt.reduceMotion');
   t.eq(g.UI.opt.shake, 0.5, 'shake');
   g._run('META.set("textScale", 99); META.set("colorblind", false); META.set("reduceMotion", null); META.set("quality", "auto")');
   g.UI.applySettings();

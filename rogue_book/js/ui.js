@@ -9,7 +9,7 @@
 //   UI.perf(on)               the ?perf=1 frame-time overlay
 // SETTINGS    UI.opt (stable object: reduceMotion shake textScale speed fastAnim damageNumbers colorblind quality)   UI.applySettings()   UI.getSetting(k)
 //   UI.setSetting(k, v)       META.set + save + applySettings         UI.cycleSpeed() -> 0|1|2 (the combat Z key)
-//   applySettings sets --ts on #stage, body classes reduce-motion / colorblind / low, ART.tk.opt, SCENE.speed(k), AUDIO.setVolume. quality 'auto' drops to low
+//   applySettings sets --ts on #stage, body classes reduce-motion / colorblind / low, ART.tk.opt, SCENE.speed(k), AUDIO.setVolume, AUDIO.options. quality 'auto' drops to low
 //   when the 2 s average frame time is above 24 ms.
 // SCREENS     UI.screens {}   UI.go(name, params, {transition:'page'|'ink'|'fade'|'none', force}) -> Promise   UI.back()   UI.current (the screen object)
 //   UI.currentName  UI.params  UI.epoch  UI.live() -> () => bool   UI.after(ms, fn)  UI.tween(obj, {k: v}, ms, ease, onUpdate) -> Promise
@@ -192,6 +192,7 @@ const UI = (() => {
     if (isFn(sc, 'speed')) safe(() => sc.speed(o.speed));
     const au = AU();
     if (isFn(au, 'setVolume')) safe(() => { au.setVolume('music', getSetting('musicVol')); au.setVolume('sfx', getSetting('sfxVol')); });
+    if (isFn(au, 'options')) safe(() => au.options({ calm: !!o.reduceMotion, lite: o.quality === 'low' }));
     return o;
   }
 

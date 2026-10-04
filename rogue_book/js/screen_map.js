@@ -67,6 +67,7 @@
 // (tests/rogue_book_screen_map.test.mjs). CSS classes: mp-* the screen, mr-* the relics overlay, lg-* the legend (rl-* belongs to node.css).
 //
 // CLOSED LIST IDS USED. Sounds: ui_click ui_back ui_error ui_open ui_hover paint ink_splash ink_gain brush_use step reveal_landmark boss_intro page_turn.
+// AUDIO.wake (one note per woken hex, with a rising note mark), AUDIO.wakeDegree (the mark's height and the bloom's note), AUDIO.awake (the Hush), each optional at call time.
 // Overlays opened: deck (mode view), relics, legend. Bus: map:paint map:brush map:walk. Art: ART.map paper hex fogEdge edgeMasks route brushPreview
 // paintBloom token frame frameInner warm, ART.fx inkSplash ring sparkle, ART.icon tile, ART.tk glow petal. Each is optional at call time.
 //
@@ -85,6 +86,27 @@
   const reduced = () => !!(UI.opt && UI.opt.reduceMotion);
   const lowQ = () => !!(UI.opt && UI.opt.quality === 'low');
   const snd = (id) => { safe(() => { if (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.sfx)) AUDIO.sfx(id); }); };
+  // Echo: one woken hex sings its note (AUDIO.wake), panned with its place on the stage. Every call leaves a rising note mark (also with sound off).
+  const echoInfo = (s) => ({ chapter: s.M.chapter, seed: s.M.seed, cols: s.M.cols, rows: s.M.rows });
+  const wakeDeg = (s, q, r, o) => safe(() => (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.wakeDegree) ? AUDIO.wakeDegree(q, r, Object.assign(echoInfo(s), o || {})) | 0 : 0), 0);
+  const noteOf = (deg) => ((deg % 7) + 7) % 7;
+  function wakeNote(s, q, r, o) {
+    safe(() => {
+      if (!s.heard) s.heard = new Map();
+      s.heard.set(keyOf(q, r), s.t);
+      if (s.heard.size > 64) { const old = []; s.heard.forEach((t, k) => { if (s.t - t >= 4) old.push(k); }); old.forEach((k) => s.heard.delete(k)); }
+      if (!headless()) {
+        const w = worldOf(q, r);
+        if (!s.noteMarks) s.noteMarks = [];
+        s.noteMarks.push({ wx: w.x, wy: w.y, t0: s.t, deg: wakeDeg(s, q, r, o), soft: !!(o && o.soft) });
+        if (s.noteMarks.length > 24) s.noteMarks.splice(0, s.noteMarks.length - 24);
+      }
+      if (typeof AUDIO === 'undefined' || !AUDIO || !isFn(AUDIO.wake)) return;
+      const p = screenOf(s, q, r);
+      AUDIO.wake(q, r, Object.assign(echoInfo(s), { pan: clamp((p.x - 640) / 900, -0.5, 0.5) }, o || {}));
+    });
+  }
+  const heardRecently = (s, q, r) => { const t = s.heard && s.heard.get(keyOf(q, r)); return t !== undefined && s.t - t < 4; };
   const warned = {};
   const warnOnce = (key, e) => {
     if (warned[key]) return;
@@ -171,7 +193,7 @@
       ptrs: new Map(), pinch: null, mode: 'mouse', hover: null, hoverPt: null, cursor: null,
       chain: null, brush: null, walk: null, busy: false, beat: null,
       tiles: [], byKey: null, touch: new Set(), edge: [], edgePool: [], ver: 0,
-      reveals: new Map(), pops: [], parts: [], petals: [],
+      reveals: new Map(), pops: [], parts: [], petals: [], noteMarks: [], heard: new Map(), walkK: 0,
       tok: { x: 0, y: 0, dir: 1, moving: false }, tokTo: null,
       hud: {}, last: {}, info: null, anchorKey: '', artBad: {},
       intro: null, pendingTimer: 0,
@@ -779,6 +801,29 @@
     });
   }
 
+  // the melody made visible: each wake note rises from its hex as a small note and fades (static under reduced motion)
+  function drawNoteMarks(s, ctx, size) {
+    if (!s.noteMarks || !s.noteMarks.length) return;
+    s.noteMarks = s.noteMarks.filter((m) => s.t - m.t0 < 1.2);
+    const c = s.cam, calm = reduced();
+    s.noteMarks.forEach((m) => {
+      const age = s.t - m.t0, sx = wx2sx(c, m.wx), top = size * (0.55 + 0.06 * (Math.max(-4, Math.min(12, m.deg)) + 4));
+      const sy = wy2sy(c, m.wy) - (calm ? top : top * U.ease.outCubic(clamp(age / 0.6, 0, 1)));
+      const a = (m.soft ? 0.5 : 1) * (1 - clamp(age / 1.2, 0, 1));
+      if (a <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = clamp(a, 0, 1);
+      const drawn = ART && ART.tk && isFn(ART.tk.note) && !s.artBad.note && guard(s, 'note', () => { ART.tk.note(ctx, sx, sy, size * 0.42, { kind: 'quarter', color: '#fff6dc', outline: '#140f2e', alpha: 1 }); return true; });
+      if (!drawn) {
+        const rw = size * 0.14, rh = size * 0.1;
+        ctx.fillStyle = '#fff6dc'; ctx.strokeStyle = '#140f2e'; ctx.lineWidth = Math.max(1.5, size * 0.04);
+        ctx.beginPath(); ctx.ellipse(sx, sy, rw, rh, -0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx + rw * 0.9, sy - rh * 0.2); ctx.lineTo(sx + rw * 0.9, sy - size * 0.42); ctx.lineTo(sx + rw * 2, sy - size * 0.3); ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+
   function drawWorld(s, ctx, t) {
     const c = s.cam, z = c.z, size = HEX * z, w = s.win;
     // the paper
@@ -813,7 +858,7 @@
         const p = (s.t - rv.t0) / REVEAL_S;
         if (p > 0 && p < 1) {
           const fx = wx2sx(c, rv.fx), fy = wy2sy(c, rv.fy);
-          if (!(amHas('paintBloom') && !s.artBad.bloom && guard(s, 'bloom', () => ART.map.paintBloom(ctx, sx, sy, size, Math.min(p, 0.999), { tile: T.type, seed: e.seed, fromX: fx, fromY: fy })))) {
+          if (!(amHas('paintBloom') && !s.artBad.bloom && guard(s, 'bloom', () => ART.map.paintBloom(ctx, sx, sy, size, Math.min(p, 0.999), { tile: T.type, seed: e.seed, fromX: fx, fromY: fy, note: rv.note | 0 })))) {
             ctx.save(); ctx.globalAlpha = p; fallbackHex(ctx, 'painted', sx, sy, size * (0.4 + 0.6 * p), T.type); ctx.restore();
           }
         }
@@ -844,6 +889,7 @@
     const tx = wx2sx(c, s.tok.x), ty = wy2sy(c, s.tok.y);
     drawToken(s, ctx, tx, ty, size, t);
     drawPops(s, ctx, size);
+    drawNoteMarks(s, ctx, size);
     drawParts(s, ctx);
     ctx.restore();
     drawPetals(s, ctx);
@@ -1101,6 +1147,7 @@
     H.progText.textContent = pct + '% awake';
     H.prog.setAttribute('aria-valuenow', String(pct));
     H.prog.setAttribute('aria-valuetext', p.painted + ' of ' + p.total + ' hexes awake');
+    safe(() => { if (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.awake)) AUDIO.awake(p.frac); });
     if (animate) UI.pulse(H.prog);
   }
 
@@ -1308,14 +1355,16 @@
   }
 
   // tiles: the T objects RUN just painted, in painting order. from: the world point the first drop of ink comes from
-  function startReveals(s, tiles, from, gap) {
+  function startReveals(s, tiles, from, gap, song, anchor) {
     if (!tiles.length) return;
     if (headless()) { rebuildVisual(s); s.infoKey = ''; return; }
     const g = gap === undefined ? REVEAL_GAP : gap;
     tiles.forEach((T, i) => {
       const prev = i && g > 0.1 ? tiles[i - 1] : null;
       const f = prev ? worldOf(prev.q, prev.r) : from;
-      s.reveals.set(keyOf(T.q, T.r), { t0: s.t + 0.04 + i * g, fx: f.x, fy: f.y, started: false, T, i });
+      const rec = { t0: s.t + 0.04 + i * g, fx: f.x, fy: f.y, started: false, T, i, n: tiles.length, song: song || null, aq: anchor ? anchor.q : null, ar: anchor ? anchor.r : null, note: 0 };
+      rec.note = noteOf(wakeDeg(s, T.q, T.r, { song: rec.song, i, n: rec.n, aq: rec.aq, ar: rec.ar }));
+      s.reveals.set(keyOf(T.q, T.r), rec);
     });
     rebuildVisual(s);
   }
@@ -1327,7 +1376,7 @@
       if (!rv.started && s.t >= rv.t0) {
         rv.started = true;
         const p = worldOf(rv.T.q, rv.T.r);
-        snd('paint');
+        wakeNote(s, rv.T.q, rv.T.r, { song: rv.song, i: rv.i, n: rv.n, aq: rv.aq, ar: rv.ar, last: rv.i === rv.n - 1 });
         addFx(s, 'inkSplash', p.x, p.y, 700, { sc: 0.9 });
       }
       if (s.t >= rv.t0 + REVEAL_S) {
@@ -1564,8 +1613,7 @@
     const tiles = res.tiles.slice().sort((p, q2) => MAP.dist(a.q, a.r, p.q, p.r) - MAP.dist(a.q, a.r, q2.q, q2.r));
     exitBrush(s, false);
     snd('brush_use');
-    snd('paint');
-    startReveals(s, tiles, origin, 0.07);
+    startReveals(s, tiles, origin, 0.07, id, a);
     { const lt = tiles[tiles.length - 1]; s.walkCell = lt ? [lt.q, lt.r] : null; s.anchorKey = ''; }
     UI.bus.emit('map:brush', { id });
     UI.announce('The ' + brushDef(id).name + ' wakes ' + U.plural(tiles.length, 'hex', 'hexes') + '.');
@@ -1602,6 +1650,7 @@
     if (!path.length) { followParty(s, true); return false; }
     s.chain = null; s.hoverPath = null;
     s.walk = { path, i: 0, t: 0, from: { x: s.tok.x, y: s.tok.y } };
+    s.walkK = 0;
     followParty(s, true);
     const dest = path[path.length - 1];
     s.walkCell = null; s.anchorKey = '';
@@ -1640,6 +1689,8 @@
     s.tok.x = to.x; s.tok.y = to.y; W.from = { x: to.x, y: to.y }; W.i++;
     snd('step');
     if (s.M.pos.q !== q || s.M.pos.r !== r) { endWalk(s); return; }          // RUN refused the step: stop where the party really is
+    s.walkK = (s.walkK | 0) + 1;
+    if ((s.walkK <= 6 || (s.walkK - 6) % 2 === 0) && !heardRecently(s, q, r)) wakeNote(s, q, r, { soft: true });
     checkMercy(s, mercy0);
     if (res && res.kind) { endWalk(s); onArrive(s, res, q, r); return; }
     if (W.i >= W.path.length) endWalk(s);

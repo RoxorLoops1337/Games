@@ -1,4 +1,4 @@
-// Inkwoven -- AUDIO: procedural music and sound effects, all synthesised with WebAudio (no audio files, no network).
+// Echowake -- AUDIO: procedural music and sound effects, all synthesised with WebAudio (no audio files, no network).
 // This header is the contract of record for js/audio.js (DESIGN 5.7, ART_BIBLE 9). audio.js loads before combat, run,
 // meta and ui, so it references only U and DATA, and never META: UI.applySettings() is the bridge.
 //
@@ -16,9 +16,25 @@
 //   AUDIO.music(id|null, {fade, restart}?)   id in DATA.LISTS.music; crossfades; null fades out and stops. Asking for the track
 //                                  that is already current does nothing. `fade` is seconds (a value above 20 is read as ms).
 //                                  Before init the request is remembered and starts inside init(). Unknown ids are ignored.
-//   AUDIO.intensity(n)             0..1. Layered tracks (combat1..3, elite, boss1..3, final) fade extra layers in as n rises.
-//                                  Calling with no argument returns the current value. Leaving a layered track for a plain one
-//                                  resets it to 0; a value set just before a layered track starts is kept.
+//   AUDIO.intensity(n)             0..1. Layered fight tracks (combat1..3, elite, boss1..3, final: drive 'intensity') fade extra layers
+//                                  in as n rises. Calling with no argument returns the current value. Leaving a track that is not
+//                                  intensity-driven (a plain one, or a map track) resets it to 0; a value set just before a layered
+//                                  fight track starts is kept. The map tracks ignore it: they follow AUDIO.awake.
+//   AUDIO.awake(frac?)             the woken share of the map (MAP.progress(M).frac, 0..1), default 1. The map tracks (map1..3, drive
+//                                  'awake') are hushed until it rises: a per-deck low-pass and gain (the track's `hush` {lo, floor}) and
+//                                  layers 1..3 that fade in at wakeLevel = clamp((frac - HUSH.from) / HUSH.span, 0, 1) (layer k fully in
+//                                  at HUSH.th[k] + 0.1; level 0 plays the still bed only).
+//                                  Never touches the music bus, so a fight is never muffled. No argument returns the stored value.
+//   AUDIO.wake(q, r, o?) -> bool   one woken hex sings its note of the land's hidden tune. o = {chapter, seed, cols, rows (the map's),
+//                                  song? (a DATA.brushes id), i?, n?, aq?, ar? (the Song's anchor hex), last? (the held cadence), soft?
+//                                  (a walked hex), pan?}. false when dropped (before init, suspended, Effects at 0, over the note budget).
+//   AUDIO.hexNote(q, r, info) -> {deg, midi}      info = {chapter, seed, cols, rows}. Pure: the same map always has the same tune.
+//   AUDIO.songDegrees(song, n, root, chapter?) -> [deg] | null   the scale degrees a Song's n cells sing (null: each cell its own hexNote;
+//                                  chord and run Songs reach about -11..21, octave folded into the voice's range when sung)
+//   AUDIO.wakeDegree(q, r, o) -> deg              the degree AUDIO.wake will sing for that cell (pure, works with sound off)
+//   AUDIO.options({calm, lite}?) -> {calm, lite}  from UI.applySettings: calm = reduced motion (no echo, no hummed steps), lite = quality
+//                                  low (arp voice only, no vox, no extras, smaller note budget, no echo). No argument reads them.
+//   AUDIO.HUSH -> {from, span, th}  the calibrated wake curve (read only). AUDIO.SONGS and AUDIO.CHORD_ROOTS are plain data copies.
 //   AUDIO.setVolume('music'|'sfx', 0..1)   AUDIO.volume(kind) -> the stored slider value (remembered before init)
 //   AUDIO.duck(ms)                 dip the music under a big moment for ms milliseconds, then swell back. Big sfx do it themselves.
 //   AUDIO.suspend() / AUDIO.resume()       explicit suspend; init also listens to visibilitychange (hidden suspends, visible resumes,
@@ -30,7 +46,8 @@
 //   AUDIO.compose(trackId) -> frozen description (cached, treat as read-only) or null:
 //     { id, mood, tempo (bpm), key ('D'), tonic (midi of the key), scale ('in-sen'|'yo'|'miyako-bushi'), scaleIntervals:[semitones],
 //       beatsPerBar, bars (introBars + loopBars), introBars, loopBars, beats, loopBeats, introBeats, seconds, loopSeconds,
-//       layers (1, or 4 for the intensity tracks), thresholds:[intensity where each layer is fully in], xfade (seconds),
+//       layers (1, or 4 for the layered tracks), thresholds:[drive value where each layer is fully in], xfade (seconds),
+//       drive ('intensity' fight tracks | 'awake' map tracks | null single bed), hush ({lo, floor} for 'awake' tracks, else null),
 //       tracks:[{voice, role, layer, gain, pan, range:[lo,hi], section, notes:[{t, dur, midi, vel, hit?, big?, double?, bend?}]}] }
 //     t and dur are in BEATS (quarter notes, from the start of the intro), midi is a note number, vel is 0..1. Every note lies
 //     inside the declared scale and inside its track's range, every note ends before bars * beatsPerBar (nothing overhangs the
@@ -38,20 +55,23 @@
 //     Melodies are a seeded motif walk (statement, variation, sequence, cadence; forms like A a2 B a) that ends on the tonic.
 //     Tracks with introBars > 0 (victory, defeat) play a short stinger once and then fall into a soft loop.
 //   AUDIO.sfxRecipe(id) -> fresh plain recipe or null:
-//     { id, vol, var (random pitch cents), gainVar (dB), pan, duck (ms), cd (cooldown ms), pri (0..3), dur (seconds, tail included),
+//     { id, vol, var (random pitch cents), gainVar (dB), pan, duck (ms), cd (cooldown ms), pri (0..3), tune (midi note the recipe is
+//       written in: 0 = never transposed; the temple bell has 55 and rings in the key of the playing track), dur (seconds, tail included),
 //       layers:[ {k:'osc', w, f, f2, t, d, a, g, ...} | {k:'noise', n, ft, f, f2, q, t, d, a, g} | {k:'fm', f, ratio, idx, t, d, g}
 //              | {k:'voice', v, m, t, d, vel} ] }
 //     Layer times are seconds from the start of the sound, g is a linear gain, a is the attack and d the whole length (the
 //     envelope decays exponentially to silence over d). f2 sweeps the frequency over the layer. The synth turns a recipe into nodes.
 //
 // SYNTHESIS (every voice takes any BaseAudioContext, so an OfflineAudioContext renders exactly what the game plays)
-//   AUDIO.VOICES  names of the instruments: koto shamisen biwa arp shakuhachi taiko hyoshigi rin pad crackle
-//   AUDIO.voice(name, ctx, out, t, note) -> bool   one note of one instrument, note = {midi, dur (s), vel, r, hit?, big?, bend?}
+//   AUDIO.VOICES  names of the instruments: koto shamisen biwa arp shakuhachi taiko hyoshigi rin pad crackle vox
+//   AUDIO.voice(name, ctx, out, t, note) -> bool   one note of one instrument, note = {midi, dur (s), vel, r, hit?, big?, bend?,
+//                                  vowel? ('a' 'o' 'u' 'e' 'm'), syl? ('don' 'ka' 'tsu' 'hey' 'boom'), detune? (cents): the last three are vox only}
 //   AUDIO.graph(ctx, {musicVol, sfxVol}?) -> {music, sfx, out, ...}   master chain: music bus (high-pass 55 Hz, gentle high shelf,
 //                                  duck) and sfx bus into glue compressor, limiter, soft clip (unity below 0.6, squeezes
 //                                  overshoots up to +6 dB) and a small temple-hall reverb; missing optional nodes are skipped
 //   AUDIO.render(ctx, dest, desc, {t0, loops, intensity}?) -> {end, notes}   schedule a whole composition (intro plus `loops`
-//                                  passes of the loop) into dest, for offline analysis (no voice cap)
+//                                  passes of the loop) into dest, for offline analysis (no voice cap). For 'awake' tracks `intensity`
+//                                  is the wake level and defaults to 1 (fully awake)
 //   AUDIO.renderSfx(ctx, dest, idOrRecipe, {t0, vol, pitch, pan, seed}?) -> {end}   schedule one sound effect (a plain recipe
 //                                  object as returned by sfxRecipe also works, for experiments)
 //   AUDIO.debug() -> inspection hook for the suite: ctx, graph nodes, live source count, decks (with raw deck), tick(), mixLengths
@@ -62,6 +82,13 @@
 //   slapped string, shakuhachi is a sine with breath noise, vibrato and a pitch scoop, taiko is a pitch-dropped sine with a
 //   noise slap (its body sits an octave above the written pitch so it carries on small speakers), hyoshigi is two resonant
 //   noise clacks, rin is inharmonic FM, pad is detuned saws through a low-pass, crackle is filtered noise pops.
+//   Echo: every hex of a map owns one note of a seeded tune (columns carry a stepwise contour, rows bend it) in the key and scale of that
+//   verse's map track an octave up, so a chain, a Song or a walk plays a phrase. Each Song has a gesture (table SONGS) with a sung or
+//   spoken layer from `vox` (a formant voice: vowels a o u e m and the syllables don ka tsu hey boom; wake notes and sfx only, no
+//   score uses it). A shared half-beat echo (one delay, built once, off when calm or lite) answers wake notes. The map tracks sleep
+//   until the land wakes (AUDIO.awake). The seven map sounds keep their ids and are re-voiced: paint a sung "hah", ink_splash two
+//   wooden knocks and an answer, brush_pick a hummed motif, brush_use an intake of breath and a downbeat, ink_gain a rising "ooh"
+//   that echoes, well a struck temple bell tuned to the map key, page_turn two hyoshigi claps (the kamishibai opening).
 //   Layered tracks: layer 0 is always audible, layers 1..3 fade in at AUDIO.compose(id).thresholds. Boss tracks are
 //   already full at intensity 0 and the layers add drama as phases begin (intensity 0.25 per phase entered).
 //   Scheduling: a setInterval lookahead (60 ms tick, 0.42 s ahead) on the AudioContext clock, never rAF or Date. A deck that
@@ -83,6 +110,16 @@ const AUDIO = (() => {
   const EPS = 0.0001;                    // exponential ramps may not touch 0
   const TAPER = 1.5;                     // slider value to amplitude curve: v ^ TAPER
 
+  // Echo (the melodic reveal and the Hush): see the ECHO section below and DESIGN 5.7
+  // WAKE_SPAN is CALIBRATED (plan 7.2.4): the bot's median woken share of the map at the keeper was m = 0.19, so WAKE_SPAN = 0.19 - WAKE_FROM
+  const WAKE_FROM = 0.06, WAKE_SPAN = 0.13;
+  const HUSH_HI = 16000;                                    // a fully awake map deck's low-pass (transparent)
+  const DEG_LO = -4, DEG_HI = 9;                            // wake notes, in scale degrees above the chapter tonic + 12
+  const NOTE_CAP = { rate: 14, burst: 8, ring: 12 };        // wake notes: per second, bucket size, notes still ringing
+  const NOTE_CAP_LITE = { rate: 8, burst: 5, ring: 6 };
+  const WAKE_GAIN = 0.8;                                    // bus gain of one wake note (checked by ear against card_hover and card_pick)
+  const ECHO = { send: 0.3, feedback: 0.32, lp: 2200, ret: 0.55, beats: 0.5 };
+
   const mod = (a, n) => ((a % n) + n) % n;
   const frac = (x) => x - Math.floor(x);
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -103,7 +140,7 @@ const AUDIO = (() => {
   // Playable range of every instrument in MIDI notes (a track may use a narrower window inside it).
   const RANGES = {
     koto: [43, 96], shamisen: [48, 88], biwa: [31, 64], arp: [48, 100], shakuhachi: [60, 91],
-    taiko: [31, 64], hyoshigi: [24, 100], rin: [60, 108], pad: [31, 90], crackle: [24, 100],
+    taiko: [31, 64], hyoshigi: [24, 100], rin: [60, 108], pad: [31, 90], crackle: [24, 100], vox: [45, 84],
   };
   const VOICE_NAMES = Object.keys(RANGES);
   // Wind and breath instruments play one note at a time.
@@ -549,6 +586,9 @@ const AUDIO = (() => {
   const TH_COMBAT = [0, 0.25, 0.5, 0.75];
   const TH_BOSS = [0, 0.12, 0.35, 0.6];
   const TH_FINAL = [0, 0.05, 0.2, 0.4];
+  // the map tracks wake with the land: layer k is fully in at wakeLevel th[k] + 0.1 (AUDIO.awake, not AUDIO.intensity). Calibrated with
+  // WAKE_SPAN from m = 0.19: T3 = clamp((0.6 * m - WAKE_FROM) / WAKE_SPAN - 0.1, 0.15, 0.65) = 0.32, th = [0, 0.23 T3, 0.62 T3, T3]
+  const TH_WAKE = [0, 0.07, 0.2, 0.32];
 
   function combatKit(o) {
     return [
@@ -589,35 +629,35 @@ const AUDIO = (() => {
     },
     // ---- exploration
     map1: {
-      key: 55, scale: 'yo', tempo: 72, bpb: 4, mood: 'calm, golden dusk, pastoral', xfade: 2.5,
+      key: 55, scale: 'yo', tempo: 72, bpb: 4, mood: 'calm, golden dusk, pastoral', xfade: 2.5, drive: 'awake', thresholds: TH_WAKE, hush: { lo: 900, floor: 0.85 },
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [3, 2], [2, 2], [4, 2], [0, 2], [1, 2], [3, 2], [0, 2]], roles: [
-        { role: 'melody', voice: 'shakuhachi', range: [60, 86], cells: 'flow', phrase: 4, vel: 0.72, gap: 0.12, gain: 0.95, pan: 0.1 },
-        { role: 'arp', voice: 'koto', range: [48, 74], step: 0.5, pattern: 'roll', skip: 0.25, vel: 0.4, len: 1.8, gain: 0.8, pan: -0.3 },
-        { role: 'pad', voice: 'pad', range: [47, 72], voicing: 'full', vel: 0.4, gain: 0.9 },
-        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'half', vel: 0.5, gain: 0.75 },
-        { role: 'clack', voice: 'hyoshigi', pattern: 'phraseEnd', vel: 0.35, gain: 0.6 },
-        { role: 'bell', voice: 'rin', range: [74, 98], p: 0.3, perBlock: true, vel: 0.4, gain: 0.6, pan: 0.3 },
+        { role: 'melody', voice: 'shakuhachi', range: [60, 86], cells: 'flow', phrase: 4, vel: 0.72, gap: 0.12, gain: 0.95, pan: 0.1, layer: 3 },
+        { role: 'arp', voice: 'koto', range: [48, 74], step: 0.5, pattern: 'roll', skip: 0.25, vel: 0.4, len: 1.8, gain: 0.8, pan: -0.3, layer: 2 },
+        { role: 'pad', voice: 'pad', range: [47, 72], voicing: 'full', vel: 0.4, gain: 0.9, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'half', vel: 0.5, gain: 0.75, layer: 1 },
+        { role: 'clack', voice: 'hyoshigi', pattern: 'phraseEnd', vel: 0.35, gain: 0.6, layer: 1 },
+        { role: 'bell', voice: 'rin', range: [74, 98], p: 0.3, perBlock: true, vel: 0.4, gain: 0.6, pan: 0.3, layer: 0 },
       ] }],
     },
     map2: {
-      key: 57, scale: 'in-sen', tempo: 66, bpb: 4, mood: 'nocturnal, watery, lantern-lit', xfade: 2.5,
+      key: 57, scale: 'in-sen', tempo: 66, bpb: 4, mood: 'nocturnal, watery, lantern-lit', xfade: 2.5, drive: 'awake', thresholds: TH_WAKE, hush: { lo: 750, floor: 0.8 },
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [2, 2], [3, 2], [0, 2], [0, 2], [4, 2], [3, 2], [0, 2]], roles: [
-        { role: 'arp', voice: 'koto', range: [57, 84], step: 0.5, pattern: 'wave', skip: 0.12, vel: 0.5, len: 2.2, gain: 0.95, pan: -0.25 },
-        { role: 'melody', voice: 'shakuhachi', range: [64, 88], cells: 'sparse', phrase: 4, vel: 0.68, gap: 0.12, gain: 0.9, pan: 0.15 },
-        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'open', vel: 0.4, gain: 0.9 },
-        { role: 'bell', voice: 'rin', range: [76, 102], p: 0.55, vel: 0.42, gain: 0.65, pan: 0.35 },
-        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'pedal', vel: 0.42, gain: 0.7, every: 2 },
+        { role: 'arp', voice: 'koto', range: [57, 84], step: 0.5, pattern: 'wave', skip: 0.12, vel: 0.5, len: 2.2, gain: 0.95, pan: -0.25, layer: 2 },
+        { role: 'melody', voice: 'shakuhachi', range: [64, 88], cells: 'sparse', phrase: 4, vel: 0.68, gap: 0.12, gain: 0.9, pan: 0.15, layer: 3 },
+        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'open', vel: 0.4, gain: 0.9, layer: 0 },
+        { role: 'bell', voice: 'rin', range: [76, 102], p: 0.55, vel: 0.42, gain: 0.65, pan: 0.35, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'pedal', vel: 0.42, gain: 0.7, every: 2, layer: 1 },
       ] }],
     },
     map3: {
-      key: 50, scale: 'miyako-bushi', tempo: 70, bpb: 4, mood: 'ominous, wide, storm on the horizon', xfade: 3,
+      key: 50, scale: 'miyako-bushi', tempo: 70, bpb: 4, mood: 'ominous, wide, storm on the horizon', xfade: 3, drive: 'awake', thresholds: TH_WAKE, hush: { lo: 600, floor: 0.75 },
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 4], [1, 2], [0, 2], [4, 2], [3, 2], [1, 2], [0, 2]], roles: [
-        { role: 'drone', voice: 'pad', range: [43, 65], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95 },
-        { role: 'pad', voice: 'pad', range: [50, 74], voicing: 'open', vel: 0.32, gain: 0.8 },
-        { role: 'melody', voice: 'shakuhachi', range: [69, 91], cells: 'sparse', phrase: 4, vel: 0.65, gap: 0.12, gain: 0.9, pan: 0.2 },
-        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.55, gain: 0.8 },
-        { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'heartbeat', vel: 0.5, gain: 0.7 },
-        { role: 'bell', voice: 'rin', range: [74, 100], p: 0.4, perBlock: true, vel: 0.4, gain: 0.6, pan: -0.3 },
+        { role: 'drone', voice: 'pad', range: [43, 65], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95, layer: 0 },
+        { role: 'pad', voice: 'pad', range: [50, 74], voicing: 'open', vel: 0.32, gain: 0.8, layer: 2 },
+        { role: 'melody', voice: 'shakuhachi', range: [69, 91], cells: 'sparse', phrase: 4, vel: 0.65, gap: 0.12, gain: 0.9, pan: 0.2, layer: 3 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.55, gain: 0.8, layer: 1 },
+        { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'heartbeat', vel: 0.5, gain: 0.7, layer: 0 },
+        { role: 'bell', voice: 'rin', range: [74, 100], p: 0.4, perBlock: true, vel: 0.4, gain: 0.6, pan: -0.3, layer: 1 },
       ] }],
     },
     // ---- combat: layered by AUDIO.intensity
@@ -686,7 +726,7 @@ const AUDIO = (() => {
       ] }],
     },
     boss3: {
-      key: 48, scale: 'yo', tempo: 152, bpb: 4, mood: 'cold, relentless, erased', xfade: 0.6, thresholds: TH_BOSS,
+      key: 48, scale: 'yo', tempo: 152, bpb: 4, mood: 'cold, relentless, silencing', xfade: 0.6, thresholds: TH_BOSS,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 3, 2, 4, 0, 3, 4, 1, 0, 2, 3, 4, 1, 3, 4, 0]), roles: [
         { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.5, gain: 0.9, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossA', fill: true, vel: 1, gain: 1, layer: 0 },
@@ -702,7 +742,7 @@ const AUDIO = (() => {
       ] }],
     },
     final: {
-      key: 47, scale: 'in-sen', tempo: 160, bpb: 4, mood: 'epic, desperate, the last page', xfade: 0.6, thresholds: TH_FINAL,
+      key: 47, scale: 'in-sen', tempo: 160, bpb: 4, mood: 'epic, desperate, the last verse', xfade: 0.6, thresholds: TH_FINAL,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 1, 4, 1, 0, 1, 3, 4, 0, 1, 4, 1, 3, 4, 1, 0]), roles: [
         { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'full', vel: 0.5, gain: 0.95, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossA', fill: true, vel: 1, gain: 1, layer: 0 },
@@ -783,7 +823,7 @@ const AUDIO = (() => {
       ],
     },
     defeat: {
-      key: 50, scale: 'miyako-bushi', tempo: 68, bpb: 4, mood: 'ink fading to blank', xfade: 0.15,
+      key: 50, scale: 'miyako-bushi', tempo: 68, bpb: 4, mood: 'the last echo swallowed by the Hush', xfade: 0.15,
       sections: [
         { id: 'stinger', bars: 3, loop: false, prog: [[0, 1], [1, 1], [0, 1]], roles: [
           { role: 'perc', voice: 'taiko', range: [33, 57], pattern: ['X..x............', 'X..x............', 'D...............'], vel: 0.8, gain: 0.9 },
@@ -873,10 +913,90 @@ const AUDIO = (() => {
       beatsPerBar: bpb, bars, introBars, loopBars, beats: bars * bpb, introBeats: introBars * bpb, loopBeats: loopBars * bpb,
       seconds: round3(bars * bpb * 60 / T.tempo), loopSeconds: round3(loopBars * bpb * 60 / T.tempo),
       layers, thresholds: layers > 1 ? (T.thresholds || TH_COMBAT).slice(0, layers) : [0], xfade: T.xfade == null ? 1 : T.xfade,
+      drive: T.drive || (layers > 1 ? 'intensity' : null), hush: T.hush ? { lo: T.hush.lo, floor: T.hush.floor } : null,
       tracks,
     };
     COMPOSED[id] = deepFreeze(desc);
     return COMPOSED[id];
+  }
+
+  // ==================================================================================================================
+  // ECHO: every hex of a map owns one note of the land's hidden song, so a chain, a Song or a walk plays a phrase.
+  // Pure and deterministic (seeded by the map seed and chapter), in the key and scale of that chapter's map track an octave up.
+  // ==================================================================================================================
+  // How each Song sounds. Keys are DATA.brushes ids (save data: never renamed) plus 'single' (one hex or a chain) and 'step' (a walk).
+  // deg: 'hex' every cell its own note, 'run' a rising run from the anchor's note, 'chord' offsets (scale degrees) above the anchor's note.
+  const SONGS = {
+    single: { v: 'koto', byVerse: ['koto', 'shamisen', 'rin'], echoByVerse: [1, 1, 0.5], dur: 0.3, vel: 0.5, deg: 'hex', echo: 1 },
+    step: { v: 'vox', vowel: 'm', dur: 0.14, vel: 0.18, deg: 'hex', echo: 0 },
+    stroke: { v: 'shamisen', dur: 0.16, vel: 0.62, deg: 'hex', perc: true, syl: ['don', 'ka', 'tsu'], echo: 1 },
+    wave: { v: 'koto', dur: 0.22, vel: 0.5, deg: 'run', dbl: 'u', echo: 1 },
+    fan: { v: 'shamisen', dur: 0.34, vel: 0.6, deg: 'chord', offs: [0, 2, 4], shout: true, echo: 1 },
+    splash: { v: 'koto', dur: 0.3, vel: 0.52, deg: 'chord', offs: [-5, 0, 2, 4, 5, 7, 9], drop: true, echo: 1 },
+    halo: { v: 'rin', dur: 0.7, vel: 0.34, deg: 'chord', offs: [0, 2, 4, 5, 7, 9], choir: true, pad: true, echo: 0.6 },
+    blot: { v: 'vox', vowel: 'm', dur: 1.0, vel: 0.56, deg: 'hex', echo: 1 },
+  };
+  // pentatonic indices whose stacked chords hold no 1, 6 or 11 semitone interval, keyed by the scale's intervals (checked by test A12)
+  const CHORD_ROOTS = { '0,2,5,7,9': [0, 1, 2, 3, 4], '0,1,5,7,10': [0, 2, 3], '0,1,5,7,8': [0, 2, 3] };
+  function snapRoot(root, sc) {
+    const n = sc.length, ok = CHORD_ROOTS[sc.join(',')] || [0, 1, 2, 3, 4], i = mod(root, n);
+    if (ok.indexOf(i) >= 0) return root;
+    for (let d = 1; d < n; d++) {
+      if (ok.indexOf(mod(i - d, n)) >= 0) return root - d;
+      if (ok.indexOf(mod(i + d, n)) >= 0) return root + d;
+    }
+    return root;
+  }
+  const W_STEP = [[-2, 0.1], [-1, 0.36], [0, 0.08], [1, 0.36], [2, 0.1]];      // the hidden tune moves by step, now and then by a skip, never further
+  const CONTOURS = new Map();
+  function contour(seed, chapter, cols) {
+    const key = seed + '|' + chapter + '|' + cols;
+    let c = CONTOURS.get(key);
+    if (c) return c;
+    const rng = U.rng(U.hash('rb-echo', seed, chapter));
+    c = [];
+    let d = 2;
+    for (let i = 0; i < cols; i++) {
+      if (i > 0) {
+        const pull = clamp((2 - d) * 0.15, -0.6, 0.6);
+        d = clamp(d + rng.weighted(W_STEP.map((e) => [e[0], Math.max(0.02, e[1] * Math.exp(pull * Math.sign(e[0]) * 1.5))])), -2, 6);
+      }
+      c.push(d);
+    }
+    if (CONTOURS.size > 24) CONTOURS.clear();
+    CONTOURS.set(key, c);
+    return c;
+  }
+  function echoKey(chapter) {
+    const d = compose('map' + clamp((chapter | 0) || 1, 1, 3));
+    return { tonic: d.tonic + 12, sc: d.scaleIntervals };
+  }
+  const degToMidi = (k, d) => k.tonic + 12 * Math.floor(d / k.sc.length) + k.sc[mod(d, k.sc.length)];
+  // info = {chapter, seed, cols, rows}: the map's own fields (M.chapter, M.seed, M.cols, M.rows)
+  function hexNote(q, r, info) {
+    const o = info || {}, rows = o.rows > 0 ? o.rows : 13, cols = o.cols > 0 ? o.cols : 21, ch = clamp((o.chapter | 0) || 1, 1, 3);
+    const col = clamp(Math.round(q) + Math.floor(Math.round(r) / 2), 0, cols - 1);
+    const lift = Math.round(((rows - 1) / 2 - r) / 3);
+    const deg = clamp(contour((o.seed >>> 0) || 0, ch, cols)[col] + lift, DEG_LO, DEG_HI);
+    return { deg, midi: degToMidi(echoKey(ch), deg) };
+  }
+  // the degrees a Song's cells sing in reveal order (nearest the anchor first); null when every cell sings its own hexNote
+  // chapter (optional): chord Songs snap their root to a consonant degree of that verse's scale (without it, no snap: test A4)
+  function songDegrees(song, n, root, chapter) {
+    const st = Object.prototype.hasOwnProperty.call(SONGS, song) ? SONGS[song] : null;
+    if (!st || st.deg === 'hex') return null;
+    const r0 = st.deg === 'chord' && chapter ? snapRoot(root, echoKey(chapter).sc) : root;
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(clamp(st.deg === 'run' ? r0 + i : r0 + st.offs[Math.min(i, st.offs.length - 1)], DEG_LO - 10, DEG_HI + 12));
+    return out;
+  }
+  // the degree AUDIO.wake will sing for this cell (the screens draw the same contour with it)
+  function wakeDegree(q, r, o) {
+    o = o || {};
+    const own = hexNote(q, r, o).deg;
+    if (o.aq == null || o.ar == null || !isNum(+o.aq) || !isNum(+o.ar)) return own;
+    const i = Math.max(0, o.i | 0), list = songDegrees(o.song, i + 1, hexNote(+o.aq, +o.ar, o).deg, clamp((o.chapter | 0) || 1, 1, 3));
+    return list ? list[i] : own;
   }
 
   // ==================================================================================================================
@@ -887,12 +1007,12 @@ const AUDIO = (() => {
   const N = (n, t, d, g, ft, f, f2, q, x) => Object.assign({ k: 'noise', n, t, d, g, ft, f, f2: f2 || 0, q: q || 1 }, x);
   const FM = (f, ratio, idx, t, d, g, x) => Object.assign({ k: 'fm', f, ratio, idx, t, d, g }, x);
   const V = (v, m, t, d, vel, x) => Object.assign({ k: 'voice', v, m, t, d, vel }, x);
-  const VOICE_TAIL = { koto: 2.4, shamisen: 0.7, biwa: 1.1, arp: 0.7, shakuhachi: 0.25, taiko: 0.7, hyoshigi: 0.12, rin: 3.2, pad: 1.5, crackle: 0.05 };
-  const SUSTAINED = { shakuhachi: true, pad: true };
+  const VOICE_TAIL = { koto: 2.4, shamisen: 0.7, biwa: 1.1, arp: 0.7, shakuhachi: 0.25, taiko: 0.7, hyoshigi: 0.12, rin: 3.2, pad: 1.5, crackle: 0.05, vox: 0.3 };
+  const SUSTAINED = { shakuhachi: true, pad: true, vox: true };
   const SFX_FILTERS = ['lowpass', 'highpass', 'bandpass', 'notch'];
   const SFX_WAVES = ['sine', 'triangle', 'square', 'sawtooth'];
 
-  // a scatter of tiny noise pops (fire, ice, paper) from a fixed seed, so the recipe stays deterministic plain data
+  // a scatter of tiny noise pops (fire, ice, crackle) from a fixed seed, so the recipe stays deterministic plain data
   function pops(seed, count, t0, span, g, lo, hi) {
     const r = U.rng(seed), out = [];
     for (let i = 0; i < count; i++) out.push(N('white', t0 + r() * span, 0.006 + r() * 0.014, g * (0.4 + 0.6 * r()), 'bandpass', lo + r() * (hi - lo), 0, 1.3, { a: 0.001 }));
@@ -959,15 +1079,15 @@ const AUDIO = (() => {
     boss_die: [0.36, { var: 15, duck: 1400, pri: 3 }, () => [V('taiko', 38, 0, 0.9, 1.0), V('taiko', 31, 0.28, 1.0, 1.0, { big: 1 }), O('sine', 80, 30, 0, 1.4, 0.9, { a: 0.005 }), N('white', 0, 1.4, 0.55, 'lowpass', 2800, 120, 0.8, { a: 0.005 }), FM(880, 2.76, 3, 0.15, 1.6, 0.25), N('white', 0.05, 1.0, 0.35, 'highpass', 2500, 900, 0.8, { a: 0.005 }), V('rin', 62, 0.5, 0.9, 0.35)]],
     boss_intro: [0.452, { var: 10, duck: 1600, pri: 3 }, () => [V('taiko', 38, 0, 0.6, 0.8), V('taiko', 38, 0.22, 0.6, 0.85), V('taiko', 38, 0.4, 0.6, 0.9), V('taiko', 31, 0.62, 1.0, 1.0, { big: 1 }), swell(0, 1.6, 0.3, 150, 700), V('biwa', 31, 0.7, 1.2, 0.9), V('shakuhachi', 62, 0.8, 1.4, 0.5)]],
     phase_change: [0.413, { var: 10, duck: 900, pri: 3 }, () => [N('white', 0, 0.7, 0.5, 'bandpass', 300, 5000, 1.2, { a: 0.5 }), V('taiko', 38, 0.55, 0.7, 1.0), V('taiko', 38, 0.72, 0.7, 1.0), FM(700, 3.7, 4, 0.55, 1.0, 0.3), N('white', 0.6, 0.5, 0.4, 'highpass', 3000, 800, 0.8, { a: 0.003 })]],
-    // ---- the map
-    paint: [1.17, { var: 50, cd: 60 }, () => [N('white', 0, 0.3, 0.5, 'bandpass', 600, 2000, 1.1, { a: 0.08 }), N('white', 0.05, 0.25, 0.3, 'lowpass', 900, 300, 0.7, { a: 0.04 }), V('rin', 86, 0.2, 0.35, 0.3), O('sine', 392, 523, 0, 0.18, 0.18, { a: 0.01 })]],
-    ink_splash: [0.363, { var: 60, cd: 50 }, () => [N('white', 0, 0.2, 0.6, 'lowpass', 1600, 300, 0.8, { a: 0.002 }), O('sine', 200, 70, 0, 0.18, 0.7, { a: 0.002 }), O('sine', 500, 900, 0.12, 0.06, 0.3, { a: 0.002 }), O('sine', 380, 700, 0.19, 0.06, 0.25, { a: 0.002 }), O('sine', 620, 1000, 0.25, 0.05, 0.2, { a: 0.002 })]],
-    brush_pick: [0.661, { var: 50, cd: 60 }, () => [N('white', 0, 0.04, 0.4, 'bandpass', 900, 0, 1.3, { a: 0.002 }), V('koto', 67, 0.03, 0.4, 0.4), N('white', 0.02, 0.12, 0.15, 'bandpass', 2500, 1800, 1, { a: 0.03 })]],
-    brush_use: [0.832, { var: 40, cd: 80 }, () => [N('white', 0, 0.32, 0.45, 'bandpass', 900, 3200, 1.1, { a: 0.06 }), V('koto', 74, 0.05, 0.4, 0.45), V('koto', 79, 0.1, 0.4, 0.4), V('koto', 86, 0.16, 0.5, 0.45)]],
+    // ---- the map: waking the land (ids are internal and kept: paint = the sung wake, ink_splash = a find, brush_* = Songs, ink_gain = Echo, well = a temple bell, page_turn = a segue)
+    paint: [0.7, { var: 50, cd: 60 }, () => [N('pink', 0, 0.22, 0.45, 'bandpass', 650, 1150, 4, { a: 0.03 }), N('white', 0, 0.012, 0.35, 'bandpass', 2400, 0, 1.4, { a: 0.001 }), O('triangle', 392, 523, 0.01, 0.16, 0.2, { a: 0.01 }), V('rin', 86, 0.14, 0.3, 0.22)]],
+    ink_splash: [0.5, { var: 40, cd: 50 }, () => [V('hyoshigi', 60, 0, 0.05, 0.55, { double: 1 }), V('koto', 81, 0.06, 0.35, 0.42), V('koto', 86, 0.13, 0.45, 0.4), N('white', 0, 0.1, 0.12, 'highpass', 5000, 0, 0.8, { a: 0.004 })]],
+    brush_pick: [0.62, { var: 30, cd: 60 }, () => [V('shakuhachi', 74, 0, 0.18, 0.45), V('shakuhachi', 79, 0.2, 0.18, 0.45), V('shakuhachi', 86, 0.4, 0.4, 0.5), V('koto', 86, 0.4, 0.5, 0.35)]],
+    brush_use: [0.75, { var: 30, cd: 80, duck: 250 }, () => [N('pink', 0, 0.28, 0.4, 'bandpass', 500, 1800, 2.5, { a: 0.2 }), V('taiko', 38, 0.26, 0.5, 0.75), V('hyoshigi', 60, 0.26, 0.05, 0.45)]],
     step: [0.365, { var: 120, cd: 70, pri: 0 }, () => [N('white', 0, 0.05, 0.5, 'lowpass', 700, 300, 0.8, { a: 0.002 }), N('white', 0, 0.015, 0.3, 'bandpass', 2000, 0, 1.2, { a: 0.001 })]],
     reveal_landmark: [1.058, { var: 20, duck: 500, pri: 2 }, () => [V('rin', 74, 0, 0.5, 0.5), V('rin', 81, 0.22, 0.5, 0.42), shimmer(0, 0.8, 0.12, 2500, 4500), V('koto', 93, 0.4, 0.7, 0.4)]],
-    ink_gain: [0.392, { var: 60, cd: 60 }, () => [O('sine', 600, 1400, 0, 0.09, 0.5, { a: 0.002 }), O('sine', 900, 1800, 0.09, 0.08, 0.3, { a: 0.002 }), N('white', 0, 0.15, 0.12, 'bandpass', 4500, 0, 1, { a: 0.01 })]],
-    well: [0.595, { var: 30, cd: 100 }, () => [0, 0.1, 0.17, 0.26].map((t, i) => O('sine', 300 + i * 40, 800 + i * 60, t, 0.07, 0.4, { a: 0.003 })).concat([N('white', 0, 0.6, 0.2, 'lowpass', 1500, 600, 0.8, { a: 0.1 }), V('rin', 86, 0.3, 0.4, 0.3)])],
+    ink_gain: [0.32, { var: 60, cd: 60 }, () => [O('sine', 660, 990, 0, 0.1, 0.45, { a: 0.004 }), O('sine', 660, 990, 0.12, 0.1, 0.22, { a: 0.004 }), O('sine', 660, 990, 0.24, 0.1, 0.1, { a: 0.004 }), N('white', 0, 0.12, 0.1, 'bandpass', 4200, 0, 1, { a: 0.01 })]],
+    well: [0.52, { var: 12, cd: 300, duck: 600, pri: 2, tune: 55 }, () => [N('pink', 0, 0.09, 0.55, 'lowpass', 420, 160, 0.8, { a: 0.002 }), O('sine', 98, 0, 0, 3.0, 0.42, { a: 0.004 }), O('sine', 98.8, 0, 0, 3.0, 0.28, { a: 0.004 }), FM(196, 2.76, 2.4, 0, 2.4, 0.2), O('sine', 262, 0, 0, 2.0, 0.12, { a: 0.003 }), V('rin', 79, 0.03, 1.0, 0.3), N('pink', 0.3, 0.9, 0.1, 'bandpass', 400, 1600, 0.9, { a: 0.5 })]],
     // ---- economy and treasure
     gold: [0.38, { var: 120, cd: 40 }, () => [FM(2637, 2.76, 2.5, 0, 0.28, 0.4), FM(3520, 2.76, 2.2, 0.055, 0.3, 0.34), N('white', 0, 0.01, 0.3, 'highpass', 6000, 0, 0.8, { a: 0.001 })]],
     buy: [0.616, { var: 40, cd: 80 }, () => [FM(2637, 2.76, 2.5, 0, 0.26, 0.38), FM(3136, 2.76, 2.5, 0.06, 0.26, 0.34), FM(4186, 2.76, 2.2, 0.12, 0.32, 0.3), V('rin', 88, 0.14, 0.4, 0.3)]],
@@ -982,7 +1102,7 @@ const AUDIO = (() => {
     event_open: [0.813, { var: 30, cd: 200 }, () => [V('rin', 86, 0, 0.5, 0.35), V('rin', 91, 0.08, 0.5, 0.3), V('rin', 98, 0.19, 0.5, 0.28), N('white', 0, 0.9, 0.16, 'bandpass', 900, 1500, 0.8, { a: 0.3 }), O('sine', 147, 0, 0, 0.9, 0.18, { a: 0.3 })]],
     choice: [0.629, { var: 40, cd: 60 }, () => [V('hyoshigi', 60, 0, 0.05, 0.5), V('koto', 74, 0.02, 0.5, 0.45)]],
     // ---- fanfares and progress
-    page_turn: [0.654, { var: 60, cd: 120 }, () => [N('white', 0, 0.22, 0.5, 'bandpass', 3200, 900, 0.8, { a: 0.05 }), N('white', 0.14, 0.18, 0.35, 'bandpass', 2000, 700, 0.9, { a: 0.02 }), N('white', 0.3, 0.06, 0.2, 'highpass', 4000, 0, 0.8, { a: 0.002 })]],
+    page_turn: [0.6, { var: 30, cd: 120 }, () => [V('hyoshigi', 60, 0, 0.05, 0.6), V('hyoshigi', 62, 0.16, 0.05, 0.55), N('pink', 0.02, 0.35, 0.12, 'bandpass', 900, 500, 1.2, { a: 0.003 }), N('pink', 0.18, 0.35, 0.1, 'bandpass', 900, 500, 1.2, { a: 0.003 })]],
     level_up: [0.733, { var: 15, duck: 800, pri: 3 }, () => run([62, 69, 74, 81], 0, 0.1, 0.7, 0.55).concat([V('rin', 86, 0.36, 0.6, 0.5), V('taiko', 38, 0, 0.5, 0.7), shimmer(0.3, 0.9, 0.14, 5000, 8500)])],
     victory: [0.7, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 38, 0, 0.8, 0.9), V('taiko', 38, 0.2, 0.8, 0.9)].concat(run([62, 69, 74, 79, 86], 0.4, 0.09, 0.7, 0.55), [V('rin', 74, 0.8, 0.8, 0.5), swell(0.2, 0.9, 0.14, 400, 1800)])],
     defeat: [0.582, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 33, 0, 1.0, 1.0), V('koto', 62, 0.2, 1.0, 0.5), V('koto', 57, 0.55, 1.0, 0.5), V('koto', 53, 0.95, 1.4, 0.5), V('biwa', 38, 0.3, 1.0, 0.7), swell(0.3, 1.4, 0.1, 200, 800)]],
@@ -1013,7 +1133,7 @@ const AUDIO = (() => {
       const layers = def[2]().map(finishLayer);
       SFX_CACHE[id] = {
         id, vol: def[0], var: o.var == null ? 40 : o.var, gainVar: o.gainVar == null ? 1.2 : o.gainVar, pan: o.pan || 0,
-        duck: o.duck || 0, cd: o.cd || 0, pri: o.pri == null ? 1 : o.pri,
+        duck: o.duck || 0, cd: o.cd || 0, pri: o.pri == null ? 1 : o.pri, tune: o.tune || 0,
         dur: round3(layers.reduce((m, L) => Math.max(m, layerEnd(L)), 0)), layers,
       };
     }
@@ -1292,18 +1412,83 @@ const AUDIO = (() => {
     } else { la.connect(env); lb.connect(env); }
     go(oa, t, end + 0.05); go(ob, t, end + 0.05);
   }
+  // vox: a small sung or spoken voice. A sawtooth (plus a quiet square an octave down for body) through two or three formant
+  // band-passes, a gentle vibrato and breath noise. n.vowel 'a' | 'o' | 'u' | 'e' | 'm' (closed-mouth hum: a low-passed 'u' with the
+  // upper formants removed). n.syl, for spoken rhythm, overrides the vowel: 'don' | 'ka' | 'tsu' (kuchi shoga, the spoken taiko
+  // syllables), 'hey' (a shout), 'boom' (a beatbox kick: a sine falling 150 -> 45 Hz over 0.25 s with a 4 ms click). n.detune in cents.
+  // Unknown vowels and syllables fall back to 'a'. A wake-note and sfx voice only: no score role uses it, so MIX is unaffected.
+  const FORMANTS = { a: [800, 1150, 2900], o: [450, 800, 2830], u: [325, 700, 2530], e: [400, 1700, 2600], m: [250, 0, 0] };
+  const SYLLABLES = { don: true, ka: true, tsu: true, hey: true, boom: true };
+  // a short filtered noise hit through its own decaying gain
+  function voxNoise(ctx, out, t, dur, peak, type, f, q, kind, r) {
+    const nz = noiseSrc(ctx, kind, t, dur, r), fl = filt(ctx, type, f, q), g = ctx.createGain();
+    decayEnv(g.gain, t, peak, 0.001, Math.max(0.004, dur));
+    nz.connect(fl); fl.connect(g); g.connect(out);
+  }
+  // one sung vowel; o = {glide: [from multiplier, seconds], detune: cents, a, rel, breath}
+  function voxVowel(ctx, out, t, f, dur, v, vowel, o) {
+    o = o || {};
+    const fm = FORMANTS[vowel] || FORMANTS.a, closed = fm === FORMANTS.m;
+    const a = Math.min(o.a == null ? (closed ? 0.08 : 0.04) : o.a, Math.max(0.01, dur * 0.6)), rel = o.rel == null ? 0.12 : o.rel;
+    const env = ctx.createGain(), end = holdEnv(env.gain, t, (closed ? 0.78 : 1.1) * v, a, dur, rel);
+    env.connect(out);
+    const src = oscAt(ctx, 'sawtooth', f, t), low = oscAt(ctx, 'square', f * 0.5, t), lg = gainOf(ctx, 0.14), mix = gainOf(ctx, 1);
+    if (o.glide) { src.frequency.setValueAtTime(f * o.glide[0], t); src.frequency.exponentialRampToValueAtTime(f, t + o.glide[1]); low.frequency.setValueAtTime(f * 0.5 * o.glide[0], t); low.frequency.exponentialRampToValueAtTime(f * 0.5, t + o.glide[1]); }
+    if (o.detune) { src.detune.value = o.detune; low.detune.value = o.detune; }
+    const lfo = oscAt(ctx, 'sine', 5.5, t), vg2 = ctx.createGain();      // vibrato: 0 -> 0.6 percent of the pitch over 0.3 s
+    vg2.gain.setValueAtTime(0, t); vg2.gain.linearRampToValueAtTime(f * 0.006, t + 0.3);
+    lfo.connect(vg2); vg2.connect(src.frequency); vg2.connect(low.frequency);
+    src.connect(mix); low.connect(lg); lg.connect(mix);
+    if (closed) {
+      const lp = filt(ctx, 'lowpass', 400, 0.7), bp = filt(ctx, 'bandpass', 250, 4), bg = gainOf(ctx, 0.9);
+      mix.connect(lp); lp.connect(env); mix.connect(bp); bp.connect(bg); bg.connect(env);
+    } else {
+      [1, 0.5, 0.25].forEach((gn, i) => {
+        if (!fm[i]) return;
+        const bp = filt(ctx, 'bandpass', fm[i], [6, 8, 10][i]), fg = gainOf(ctx, gn * 2.2);
+        mix.connect(bp); bp.connect(fg); fg.connect(env);
+      });
+      if (o.breath !== 0) {                                              // pink breath noise, band-passed at 1800 Hz, at 0.08 of the level
+        const nz = noiseSrc(ctx, 'pink', t, dur + rel, 0.3), nb = filt(ctx, 'bandpass', 1800, 1.2), ng = gainOf(ctx, 0.08 * 2.2);
+        nz.connect(nb); nb.connect(ng); ng.connect(env);
+      }
+    }
+    go(src, t, end + 0.05); go(low, t, end + 0.05); go(lfo, t, end + 0.05);
+  }
+  function vVox(ctx, out, t, n) {
+    const f = mtof(n.midi), v = vg(n.vel), dur = Math.max(0.05, n.dur), syl = SYLLABLES[n.syl] === true ? n.syl : null;
+    const r = n.r == null ? 0.5 : n.r, detune = isNum(n.detune) ? n.detune : 0;
+    if (syl === 'don') {
+      voxVowel(ctx, out, t, f, 0.14, v * 0.75, 'o', { glide: [1.5, 0.05], detune, rel: 0.08 });
+      voxNoise(ctx, out, t, 0.006, 0.5 * v, 'bandpass', 900, 0.8, 'white', r);
+    } else if (syl === 'ka') {
+      voxNoise(ctx, out, t, 0.015, 0.9 * v, 'bandpass', 1800, 1.5, 'white', r);
+      voxVowel(ctx, out, t + 0.015, f, 0.05, v * 0.75, 'a', { detune, rel: 0.05, a: 0.01 });
+    } else if (syl === 'tsu') {
+      voxNoise(ctx, out, t, 0.08, 0.9 * v, 'highpass', 5000, 0.8, 'white', r);
+    } else if (syl === 'hey') {
+      voxNoise(ctx, out, t, 0.03, 0.5 * v, 'highpass', 2000, 0.8, 'pink', r);
+      voxVowel(ctx, out, t + 0.03, f, Math.max(0.15, dur), v * 0.75, 'e', { glide: [1.06, 0.12], detune, a: 0.015 });
+    } else if (syl === 'boom') {
+      const o = oscAt(ctx, 'sine', 150, t), g = ctx.createGain();
+      o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+      const end = decayEnv(g.gain, t, 0.7 * v, 0.003, 0.35);
+      o.connect(g); g.connect(out); go(o, t, end + 0.03);
+      voxNoise(ctx, out, t, 0.004, 0.6 * v, 'highpass', 1500, 0.7, 'white', r);
+    } else voxVowel(ctx, out, t, f, dur, v, Object.prototype.hasOwnProperty.call(FORMANTS, n.vowel) ? n.vowel : 'a', { detune });
+  }
   function vCrackle(ctx, out, t, n) {
     const v = vg(n.vel), r = n.r == null ? 0.5 : n.r;
     const nz = noiseSrc(ctx, 'white', t, 0.03, r), bp = filt(ctx, 'bandpass', 900 + r * 4500, 1.1), hp = filt(ctx, 'highpass', 700, 0.7), g = ctx.createGain();
     decayEnv(g.gain, t, 0.5 * v, 0.0008, 0.012 + r * 0.02);
     nz.connect(bp); bp.connect(hp); hp.connect(g); g.connect(out);
   }
-  const VOICES = { koto: vKoto, shamisen: vShamisen, biwa: vBiwa, arp: vArp, shakuhachi: vShakuhachi, taiko: vTaiko, hyoshigi: vHyoshigi, rin: vRin, pad: vPad, crackle: vCrackle };
+  const VOICES = { koto: vKoto, shamisen: vShamisen, biwa: vBiwa, arp: vArp, shakuhachi: vShakuhachi, taiko: vTaiko, hyoshigi: vHyoshigi, rin: vRin, pad: vPad, crackle: vCrackle, vox: vVox };
   // per-voice loudness trim for the score, measured with A-weighted momentary loudness so a note at the same velocity is about
   // equally loud on every instrument (the sfx recipes were balanced against the raw voices and do not use it)
-  const TRIM = { koto: 0.67, shamisen: 1.4, biwa: 0.78, arp: 0.99, shakuhachi: 0.43, taiko: 0.78, hyoshigi: 1, rin: 0.69, pad: 1.9, crackle: 1 };
+  const TRIM = { koto: 0.67, shamisen: 1.4, biwa: 0.78, arp: 0.99, shakuhachi: 0.43, taiko: 0.78, hyoshigi: 1, rin: 0.69, pad: 1.9, crackle: 1, vox: 0.8 };
   // small timing looseness per instrument (seconds, peak to peak) so a loop never sounds machine-perfect
-  const HUMAN = { koto: 0.012, shamisen: 0.008, biwa: 0.008, arp: 0.01, shakuhachi: 0.02, taiko: 0.008, hyoshigi: 0.006, rin: 0.01, pad: 0.03, crackle: 0 };
+  const HUMAN = { koto: 0.012, shamisen: 0.008, biwa: 0.008, arp: 0.01, shakuhachi: 0.02, taiko: 0.008, hyoshigi: 0.006, rin: 0.01, pad: 0.03, crackle: 0, vox: 0.015 };
 
   // ---- sound effect layers
   function layerOsc(ctx, out, t, L, pitch, r) {
@@ -1411,6 +1596,15 @@ const AUDIO = (() => {
       g.musicOut.connect(g.sendM); g.sendM.connect(g.verb); g.sfxBus.connect(g.sendS); g.sendS.connect(g.verb);
       g.verb.connect(hp); hp.connect(lp); lp.connect(ret); ret.connect(g.master);
     } catch (e) { g.verb = null; }
+    // the echo of a wake note: half a beat of the map track, darker on every repeat, returned into the sfx bus (optional, like the hall)
+    g.echoIn = null; g.echoDelay = null;
+    try {
+      const dl = ctx.createDelay(1.5), fb = gainOf(ctx, ECHO.feedback), lp = filt(ctx, 'lowpass', ECHO.lp, 0.7), ret = gainOf(ctx, ECHO.ret);
+      dl.delayTime.value = 0.42;
+      g.echoIn = gainOf(ctx, 1);
+      g.echoIn.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(ret); ret.connect(g.sfxBus);
+      g.echoDelay = dl;
+    } catch (e) { g.echoIn = null; g.echoDelay = null; }
     g.music = g.musicBus; g.sfx = g.sfxBus;
     applyVolumes(g, o.musicVol == null ? 0.7 : o.musicVol, o.sfxVol == null ? 0.8 : o.sfxVol, true);
     return g;
@@ -1434,6 +1628,7 @@ const AUDIO = (() => {
     decks: [], main: null,
     timer: 0, susp: { user: false, hidden: false }, hooked: false,
     rng: U.rng(0x5fe1), last: {}, duckUntil: 0, lastKick: -1e9,
+    awake: 1, opt: { calm: false, lite: false }, notes: [], tokens: NOTE_CAP.burst, tokT: 0, liftKey: null,
   };
   const DUCK_LEVEL = 0.42;
   const safe = (p) => { if (p && typeof p.catch === 'function') p.catch(() => {}); };
@@ -1457,15 +1652,27 @@ const AUDIO = (() => {
     FLAT.set(desc, f);
     return f;
   }
-  const layerTarget = (desc, k, x) => (k === 0 ? 1 : clamp((x - (desc.thresholds[k] - 0.1)) / 0.2, 0, 1));
+  // layer k ramps in over 0.2 of the drive value, fully in at thresholds[k] + 0.1. A map track (drive 'awake') never starts a ramp below
+  // wake level 0, so a sleeping land (level 0) plays its still bed only, whatever the calibrated thresholds are.
+  const layerTarget = (desc, k, x) => {
+    if (k === 0) return 1;
+    const lo = desc.drive === 'awake' ? Math.max(0, desc.thresholds[k] - 0.1) : desc.thresholds[k] - 0.1;
+    return clamp((x - lo) / (desc.thresholds[k] + 0.1 - lo), 0, 1);
+  };
 
   function buildDeck(ctx, dest, desc) {
     const deck = { id: desc.id, desc, out: ctx.createGain(), layerG: [], tr: [], flat: flatten(desc), i: 0, pass: 0, t0: 0, beatSec: 60 / desc.tempo, dying: false, done: false, target: [] };
     deck.out.connect(dest);
+    let into = deck.out;
+    if (desc.drive === 'awake' && desc.hush) {                // the Hush: a low-pass and a gain on the DECK, never on the music bus
+      deck.lp = filt(ctx, 'lowpass', Math.min(HUSH_HI, ctx.sampleRate * 0.45), 0.5);
+      deck.hg = gainOf(ctx, 1);
+      deck.lp.connect(deck.hg); deck.hg.connect(deck.out); into = deck.lp;
+    }
     for (let k = 0; k < desc.layers; k++) {
       const lg = ctx.createGain();
       lg.gain.value = k === 0 ? 1 : 0;
-      lg.connect(deck.out);
+      lg.connect(into);
       deck.layerG.push(lg);
       deck.target.push(k === 0 ? 1 : 0);
     }
@@ -1478,13 +1685,24 @@ const AUDIO = (() => {
     });
     return deck;
   }
+  // the value that drives a deck's layers: the wake level (map tracks) or the fight intensity (everything else)
+  const driveOf = (desc) => (desc.drive === 'awake' ? wakeLevel(S.awake) : S.intensity);
   function applyLayers(deck, instant) {
-    const now = S.ctx.currentTime;
+    const now = S.ctx.currentTime, x = driveOf(deck.desc), tc = deck.desc.drive === 'awake' ? 0.6 : 0.3;
     for (let k = 1; k < deck.desc.layers; k++) {
-      const v = layerTarget(deck.desc, k, S.intensity);
+      const v = layerTarget(deck.desc, k, x);
       deck.target[k] = v;
-      if (instant) deck.layerG[k].gain.value = v; else deck.layerG[k].gain.setTargetAtTime(v, now, 0.3);
+      if (instant) deck.layerG[k].gain.value = v; else deck.layerG[k].gain.setTargetAtTime(v, now, tc);
     }
+    applyHush(deck, instant, deck.desc.drive === 'awake' ? x : 1);
+  }
+  // w = 0 (hushed: low cut-off, floor gain) .. 1 (awake: transparent)
+  function applyHush(deck, instant, w) {
+    if (!deck.lp) return;
+    const h = deck.desc.hush, ctx = deck.lp.context, hi = Math.min(HUSH_HI, ctx.sampleRate * 0.45);
+    const f = h.lo * Math.pow(hi / h.lo, w), gv = h.floor + (1 - h.floor) * w;
+    if (instant) { deck.lp.frequency.value = f; deck.hg.gain.value = gv; }
+    else { const now = ctx.currentTime; deck.lp.frequency.setTargetAtTime(f, now, 0.8); deck.hg.gain.setTargetAtTime(gv, now, 0.8); }
   }
   function playNote(ctx, deck, e, when, pass, minT, capped) {
     const tr = deck.tr[e.ti];
@@ -1531,7 +1749,7 @@ const AUDIO = (() => {
   }
   function startMusic(id, o) {
     const desc = compose(id), ctx = S.ctx, now = ctx.currentTime;
-    if (desc.layers <= 1) S.intensity = 0;
+    if (desc.drive !== 'intensity') S.intensity = 0;
     const fade = fadeSeconds(o, desc.xfade);
     for (const d of S.decks) if (!d.dying) fadeOutDeck(d, fade);
     const deck = buildDeck(ctx, S.g.musicBus, desc);
@@ -1541,6 +1759,7 @@ const AUDIO = (() => {
     deck.out.gain.linearRampToValueAtTime(1, now + fade);
     S.decks.push(deck);
     S.main = deck;
+    if (desc.drive === 'awake' && S.g.echoDelay) { try { S.g.echoDelay.delayTime.setTargetAtTime(clamp(ECHO.beats * 60 / desc.tempo, 0.2, 0.6), now, 0.05); } catch (e) { /* the echo keeps its time */ } }
     startTimer();
     pump(deck, ctx, now, now + LOOKAHEAD);
   }
@@ -1614,8 +1833,87 @@ const AUDIO = (() => {
     if (n === undefined) return S.intensity;
     const x = isNum(+n) ? clamp(+n, 0, 1) : 0;
     S.intensity = x;
-    if (S.ready) for (const d of S.decks) if (!d.dying) applyLayers(d, false);
+    if (S.ready) for (const d of S.decks) if (!d.dying && d.desc.drive === 'intensity') applyLayers(d, false);
     return x;
+  }
+  // ---- Echo, live. The Hush: how awake the land is (the woken share of the map) drives the map tracks.
+  const wakeLevel = (frac) => clamp((frac - WAKE_FROM) / WAKE_SPAN, 0, 1);
+  function awake(frac) {
+    if (frac === undefined) return S.awake;
+    const x = isNum(+frac) ? clamp(+frac, 0, 1) : 1;
+    S.awake = x;
+    if (S.ready) for (const d of S.decks) if (!d.dying && d.desc.drive === 'awake') applyLayers(d, false);
+    return x;
+  }
+  function options(o) {
+    if (o && typeof o === 'object') {
+      if (Object.prototype.hasOwnProperty.call(o, 'calm')) S.opt.calm = !!o.calm;
+      if (Object.prototype.hasOwnProperty.call(o, 'lite')) S.opt.lite = !!o.lite;
+    }
+    return Object.assign({}, S.opt);
+  }
+  // one woken hex sings. o = {chapter, seed, cols, rows, song?, i?, n?, aq?, ar?, last?, soft?, pan?}. false when dropped.
+  function wake(q, r, o) {
+    o = o || {};
+    if (!S.ready || S.susp.user || S.susp.hidden || S.vol.sfx <= 0.001 || !isNum(+q) || !isNum(+r)) return false;
+    if (o.soft && S.opt.calm) return false;
+    try {
+      firstLift(o);                                            // the first woken hex of a map opens the hushed map deck for 2 s (music side)
+      const ctx = S.ctx, now = ctx.currentTime, lite = S.opt.lite, cap = lite ? NOTE_CAP_LITE : NOTE_CAP;
+      kick();
+      if (live.n > MAX_LIVE * 0.8) return false;
+      S.notes = S.notes.filter((e) => e > now);
+      S.tokens = Math.min(cap.burst, S.tokens + Math.max(0, now - S.tokT) * cap.rate);
+      S.tokT = now;
+      if (!o.last && (S.tokens < 1 || S.notes.length >= cap.ring)) return false;
+      S.tokens = Math.max(0, S.tokens - 1);
+      const st = Object.prototype.hasOwnProperty.call(SONGS, o.song) ? SONGS[o.song] : (o.soft ? SONGS.step : SONGS.single);
+      const ch = clamp((o.chapter | 0) || 1, 1, 3), k = echoKey(ch), deg = wakeDegree(+q, +r, o);
+      const v = lite ? 'arp' : (st.byVerse ? st.byVerse[ch - 1] : st.v), rg = RANGES[v];
+      const echoAmt = st.echoByVerse ? st.echoByVerse[ch - 1] : st.echo;
+      const midi = foldInto(degToMidi(k, deg), rg[0], rg[1]);
+      const cad = o.last && st.deg !== 'chord';
+      const dur = st.dur * (cad ? 2 : 1);
+      const vel = clamp(st.vel * (o.last ? 1.15 : 1) / Math.sqrt(1 + 0.15 * S.notes.length), 0.05, 1);
+      const t = now + 0.004, rr = S.rng();
+      const bus = gainOf(ctx, WAKE_GAIN);
+      let head = bus;
+      if (isNum(o.pan) && o.pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = clamp(o.pan, -1, 1); bus.connect(p); head = p; }
+      head.connect(S.g.sfxBus);
+      if (echoAmt && S.g.echoIn && !S.opt.calm && !lite) { const send = gainOf(ctx, ECHO.send * echoAmt); head.connect(send); send.connect(S.g.echoIn); }
+      VOICES[v](ctx, bus, t, { midi, dur, vel, r: rr, vowel: st.vowel });
+      if (!lite) wakeExtras(ctx, bus, t, st, Math.max(0, o.i | 0), k, deg, rr);
+      S.notes.push(t + Math.max(0.4, dur * 2.2));
+      return true;
+    } catch (e) { return false; }
+  }
+  // the sung and spoken layers of a Song (never in lite mode)
+  function wakeExtras(ctx, bus, t, st, i, k, deg, rr) {
+    const low = foldInto(k.tonic - 24, 33, 57), sung = foldInto(degToMidi(k, deg), RANGES.vox[0], RANGES.vox[1]);
+    if (st.perc) VOICES.taiko(ctx, bus, t, { midi: low, dur: 0.1, vel: i === 0 ? 0.75 : 0.5, hit: i === 0 ? 'don' : 'ka', r: rr });
+    if (st.syl) VOICES.vox(ctx, bus, t, { midi: foldInto(low + 12, RANGES.vox[0], RANGES.vox[1]), dur: 0.12, vel: 0.5, syl: st.syl[i === 0 ? 0 : 1 + ((i - 1) % 2)], r: rr });
+    if (st.dbl) VOICES.vox(ctx, bus, t, { midi: sung, dur: st.dur, vel: 0.22, vowel: st.dbl, r: rr });
+    if (st.shout && i === 0) VOICES.vox(ctx, bus, t, { midi: sung, dur: 0.22, vel: 0.7, syl: 'hey', r: rr });
+    if (st.choir) VOICES.vox(ctx, bus, t, { midi: sung, dur: 1.2, vel: 0.2, vowel: 'a', detune: (rr - 0.5) * 16, r: rr });
+    if (st.drop && i === 0) {
+      VOICES.vox(ctx, bus, t, { midi: 36, dur: 0.3, vel: 0.9, syl: 'boom', r: rr });
+      VOICES.taiko(ctx, bus, t + 0.12, { midi: foldInto(low, 33, 45), dur: 0.25, vel: 0.9, hit: 'don', big: 1, r: rr });
+      VOICES.biwa(ctx, bus, t + 0.12, { midi: foldInto(degToMidi(k, deg) - 12, 31, 64), dur: 0.8, vel: 0.7, r: rr });
+    }
+    if (st.pad && i === 0) VOICES.pad(ctx, bus, t, { midi: foldInto(degToMidi(k, deg), 45, 72), dur: 1.6, vel: 0.32, r: rr });
+  }
+  // the first woken hex of each map (chapter and seed) opens every hushed map deck to 1.5 times its cut-off for 2 s, then back
+  function firstLift(o) {
+    const key = ((o.chapter | 0) || 1) + '|' + ((o.seed >>> 0) || 0);
+    if (S.liftKey === key) return;
+    S.liftKey = key;
+    const now = S.ctx.currentTime;
+    for (const d of S.decks) {
+      if (d.dying || !d.lp) continue;
+      const hi = Math.min(HUSH_HI, S.ctx.sampleRate * 0.45), f = d.lp.frequency.value;
+      d.lp.frequency.setTargetAtTime(Math.min(hi, f * 1.5), now, 0.15);
+      d.lp.frequency.setTargetAtTime(f, now + 2, 0.8);
+    }
   }
   function sfx(id, o) {
     if (!S.ready || S.susp.user || S.susp.hidden || !isSfx(id)) return false;
@@ -1626,7 +1924,9 @@ const AUDIO = (() => {
     o = o || {};
     S.last[id] = now;
     const rg = S.rng;
-    const pitch = (isNum(o.pitch) && o.pitch > 0 ? o.pitch : 1) * Math.pow(2, ((rg() * 2 - 1) * R.var) / 1200);
+    let key = 1;                                                   // a tuned recipe (the temple bell) rings in the key of the deck that is playing
+    if (R.tune && S.main && !S.main.dying && S.main.desc) key = Math.pow(2, (mod(S.main.desc.tonic - R.tune + 6, 12) - 6) / 12);
+    const pitch = (isNum(o.pitch) && o.pitch > 0 ? o.pitch : 1) * key * Math.pow(2, ((rg() * 2 - 1) * R.var) / 1200);
     const vol = clamp(isNum(o.vol) ? o.vol : 1, 0, 2) * db((rg() * 2 - 1) * R.gainVar);
     const pj = (rg() - 0.5) * 0.12, pan = isNum(o.pan) ? clamp(o.pan, -1, 1) : clamp(R.pan + pj, -1, 1);        // an explicit pan is exact
     const dl = isNum(o.delay) && o.delay > 0 ? (o.delay > 5 ? o.delay / 1000 : o.delay) : 0;
@@ -1669,10 +1969,11 @@ const AUDIO = (() => {
   // ---- offline rendering and inspection (the audio suite and the browser analysis use these)
   function render(ctx, dest, desc, o) {
     o = o || {};
-    const t0 = o.t0 || 0, loops = Math.max(1, o.loops == null ? 1 : o.loops), x = o.intensity == null ? 0 : o.intensity;
+    const t0 = o.t0 || 0, loops = Math.max(1, o.loops == null ? 1 : o.loops), x = o.intensity == null ? (desc.drive === 'awake' ? 1 : 0) : o.intensity;     // for awake tracks o.intensity is the wake level
     const deck = buildDeck(ctx, dest, desc);
     deck.out.gain.value = 1;
     for (let k = 1; k < desc.layers; k++) { deck.target[k] = layerTarget(desc, k, x); deck.layerG[k].gain.value = deck.target[k]; }
+    applyHush(deck, true, desc.drive === 'awake' ? x : 1);
     deck.t0 = t0;
     const f = deck.flat, bs = deck.beatSec;
     let count = 0;
@@ -1706,7 +2007,8 @@ const AUDIO = (() => {
     return {
       ready: S.ready, ctx: S.ctx, graph: S.g, live: live.n, intensity: S.intensity, current: S.cur, pending: S.pending, vol: Object.assign({}, S.vol),
       suspended: Object.assign({}, S.susp), timer: !!S.timer, duckUntil: S.duckUntil,
-      decks: S.decks.map((d) => ({ id: d.id, dying: d.dying, pass: d.pass, index: d.i, target: d.target.slice(), out: d.out, layerG: d.layerG.slice(), raw: d })),
+      awake: S.awake, wake: wakeLevel(S.awake), opt: Object.assign({}, S.opt), notes: S.notes.length, liftKey: S.liftKey,
+      decks: S.decks.map((d) => ({ id: d.id, dying: d.dying, pass: d.pass, index: d.i, target: d.target.slice(), out: d.out, layerG: d.layerG.slice(), drive: d.desc.drive, lp: d.lp || null, hg: d.hg || null, raw: d })),
       mixLengths: Object.keys(MIX).reduce((o, k) => { o[k] = MIX[k].length; return o; }, {}),
       tick,
     };
@@ -1714,9 +2016,13 @@ const AUDIO = (() => {
 
   return {
     init, sfx, music, setVolume, volume, duck, suspend, resume, intensity, list, preview,
+    wake, awake, options, hexNote, songDegrees, wakeDegree,
     compose, sfxRecipe, graph: buildGraph, render, renderSfx, voice, debug,
     get ready() { return S.ready; },
     get current() { return S.cur; },
     VOICES: VOICE_NAMES.slice(), SCALES: JSON.parse(JSON.stringify(SCALES)), RANGES: JSON.parse(JSON.stringify(RANGES)), MUSIC_SCALE,
+    SONGS: JSON.parse(JSON.stringify(SONGS)),
+    CHORD_ROOTS: JSON.parse(JSON.stringify(CHORD_ROOTS)),
+    HUSH: { from: WAKE_FROM, span: WAKE_SPAN, th: TH_WAKE.slice() },
   };
 })();
