@@ -1,35 +1,37 @@
-// Inkwoven -- ART.map: the hand-painted map page (extends ART from art.js; DESIGN 4.8 geometry, 5.6 signatures, ART_BIBLE 6 look).
+// Echowake -- ART.map: the hushed land and the woken hexes (extends ART from art.js; DESIGN 4.8 geometry, 5.6 signatures, ART_BIBLE 6 look).
 //
-// The look: a storybook page being coloured in. Unpainted hexes are blank parchment with stitched dotted edges and faint pencil sketches; landmarks
-// (boss shop camp forge elite chest) are known from the start and show a ghost silhouette of their stamp. Painted hexes are watercolour washes
-// (a pigment per tile type, wet edge, granulation, a hard cel shadow with screen-tone, a wobbly ink outline varied by seed) with the tile's ink
-// stamp on top (ART.icon kind 'tile' when real art exists, otherwise a built-in hanko + glyph, so the page is complete either way).
+// The look: a cool grey land the Hush has made silent and still. Silent hexes are pale grey felt with ash grain, a dotted outline (a rest) and faint
+// sketches; landmarks (boss shop camp forge elite chest) are heard from the start and show a ghost silhouette of their stamp. Woken hexes are watercolour
+// washes (a pigment per tile type, wet edge, granulation, a hard cel shadow with screen-tone, an inked outline varied by seed) ringed by soft echo rings,
+// with the tile's stamp on top (ART.icon kind 'tile' when real art exists, otherwise a built-in glyph, so the map is complete either way). Woken hexes
+// near the party move a little (liveTile): the awake signal. The reveal is a circular sound wavefront with rings escaping and a note rising.
 //
-// API (all safe with the headless no-op context, never throw for bad input, deterministic, no Math.random). Hex geometry: pointy-top, `size` is the
+// API (all safe with the headless no-op context, never throw for bad input, deterministic, no unseeded random). Hex geometry: pointy-top, `size` is the
 // centre-to-corner radius (46 at zoom 1), (x, y) is the hex CENTRE. Everything below is in the caller's current transform.
 //   ART.map.hex(ctx, kind, x, y, size, opts)       kind in DATA.LISTS.mapKinds: fog known ground block painted edge path hover target.
 //        opts {tile, seed, done, t}: tile = LISTS.tiles id (wash and stamp; 'known' needs a landmark id), seed = U.hash(q, r), done fades the stamp,
-//        t = seconds (drives the live touches: camp and forge glow, chest glint, well ripple, boss and elite pulse, edge and target marching dashes).
+//        near = true for a woken hex within 3 of the party (liveNear: sway, flicker and a faint sound ring), the screen passes it for at most 19 hexes.
+//        t = seconds (drives the live touches: camp and forge glow, chest glint, bell ring, boss and elite pulse, edge and target marching dashes).
 //        Cached per (kind, tile, done, seed % 8, size rung): sprites are baked on a ladder of sizes 12 percent apart and scaled, at most 8 new bakes per
 //        frame (neighbour rung is scaled meanwhile), so a smooth zoom 0.6..2.0 never stalls. 'path' 'hover' 'target' are translucent overlays drawn
 //        over the hex that is already there; 'edge' is a fog hex touching painted ground (lit, gold stitches: it can be painted); 'block' is the Void.
-//   ART.map.paintBloom(ctx, x, y, size, p, opts?)  the reveal, p 0..1. opts {tile, seed, fromX, fromY, ox, oy}. With opts.tile the wash is revealed
-//        inside a growing wet blot (draw the fog hex first); without it a neutral wet wash fades out over a hex already painted. fromX/fromY = where the
-//        brush arrives from. Droplets, a pale back-run ring, a gleam streak and a final sparkle; p >= 1 draws the settled painted hex.
+//   ART.map.paintBloom(ctx, x, y, size, p, opts?)  the reveal, p 0..1. opts {tile, seed, fromX, fromY, ox, oy, note}. With opts.tile the wash is revealed
+//        inside a growing wavefront circle (draw the fog hex first); without it a neutral wash fades out over a hex already woken. fromX/fromY = where the
+//        wave starts from. Three rings escape the hex and a note rises (opts.note 0..6 tints it); p >= 1 draws the settled woken hex.
 //   ART.map.token(ctx, heroIds, x, y, t, moving, opts?)  the two chibi tokens (ART.hero.draw scaled down, leader larger in front, second behind),
-//        soft shadows, a gold ink ring, idle bob or walk cycle. opts {size, dir (1 or -1 faces right or left), alpha, ring}.
-//   ART.map.frame(ctx, w, h, t)                    the open book: leather cover, page stack, gutter with sewing, bookmark ribbon, gilt corners, ink-blot
-//        vignette, page curls. Draw LAST; the window is transparent. ART.map.frameInner(w, h) -> {x, y, w, h} (1280 x 720 gives 1192 x 648, at least
+//        soft shadows, a gold ring, idle bob or walk cycle. opts {size, dir (1 or -1 faces right or left), alpha, ring}.
+//   ART.map.frame(ctx, w, h, t)                    the lacquer frame: lacquered wood, a kumiko band, a gold inlay, gilt corners, a grey mist
+//        vignette creeping from the edges. Draw LAST; the window is transparent. ART.map.frameInner(w, h) -> {x, y, w, h} (1280 x 720 gives 1192 x 648, at least
 //        the contractual 1180 x 640).
-//   ART.map.paper(ctx, w, h, camX, camY, zoom, opts?)  the parchment ground in WORLD space ((camX, camY) = the world point at the view centre, hex size
-//        46 at zoom 1): fibre, mottling and stains in seamless cached chunks (about 6 opaque blits), sea-monster, compass, boat and koi doodles in the
+//   ART.map.paper(ctx, w, h, camX, camY, zoom, opts?)  the hushed ground in WORLD space ((camX, camY) = the world point at the view centre, hex size
+//        46 at zoom 1): ash grain, mottling and stains in seamless cached chunks (about 6 opaque blits), silent bell, cranes, drum and koi doodles in the
 //        margins and faintly under the fog. opts {doodles:false, world:{x0,y0,x1,y1}, t}. ART.map.worldBox(opts) is the box the doodles are placed in.
-//   ART.map.route(ctx, pts, t, opts?)              the dotted brush-stroke path preview: pts = [[x, y]] or [{x, y}] in screen px, wet underlay, marching
-//        ink dabs, a destination ring and the ink cost pill. opts {size, cost | label, affordable (false = red, shaking pill), pill:false, alpha}.
-//   ART.map.brushPreview(ctx, hexes, size, valid, t)  the cells a brush would paint (hexes = centres) as one wet shape with a marching outline,
-//        sparkles, a wet sheen; valid === false shows a red shape with an X. ART.map.brushEdges(hexes, size) -> {inner, outer} side segments.
-//   ART.map.fogEdge(ctx, cells, size, t, opts?)    the soft ink-wash boundary where painted ground meets blank paper (and the torn rim where it meets the
-//        Void): cells = [{x, y, mask, voidMask}] for PAINTED hexes, bit d of mask = the neighbour across side d (MAP.DIRS order) is fog, of voidMask is
+//   ART.map.route(ctx, pts, t, opts?)              the dotted note path preview: pts = [[x, y]] or [{x, y}] in screen px, wet underlay, marching
+//        note heads, a destination ring and the echo cost pill. opts {size, cost | label, affordable (false = red, shaking pill), pill:false, alpha}.
+//   ART.map.brushPreview(ctx, hexes, size, valid, t)  the cells a Song would wake (hexes = centres) as one shape with a marching outline,
+//        ring pulses, a sine sheen; valid === false shows a red shape with an X. ART.map.brushEdges(hexes, size) -> {inner, outer} side segments.
+//   ART.map.fogEdge(ctx, cells, size, t, opts?)    the sound wavefront where woken ground meets silent ground (and the dark rim where it meets
+//        Dead Silence): cells = [{x, y, mask, voidMask}] for WOKEN hexes, bit d of mask = the neighbour across side d (MAP.DIRS order) is fog, of voidMask is
 //        the Void. ART.map.edgeMasks(q, r, kindAt) builds both masks from a predicate returning 'fog' | 'void' | anything else. Draw it after the hexes.
 // Extras for screens and tests: ART.map.warm(size, {tiles, done, ms}) pre-bakes the sprites of a size (call on screen load), ART.map.bakedSize(size),
 // ART.map.info(), ART.map.corners(x, y, size), ART.map.washOf(tile), ART.map.geom.
@@ -90,8 +92,8 @@
     shop: { c: '#e9a13a', glyph: 'noren' },
     camp: { c: '#ff8a55', glyph: 'glowwarm' },
     event: { c: '#9b6be4', glyph: 'wisps' },
-    well: { c: '#4aa4ee', glyph: 'ripples' },
-    brush: { c: '#2fbdb5', glyph: 'swash' },
+    well: { c: '#4aa4ee', glyph: 'rings' },
+    brush: { c: '#2fbdb5', glyph: 'notes' },
     gemcache: { c: '#4bcf78', glyph: 'glints' },
     forge: { c: '#c9452b', glyph: 'embers' },
     block: { c: '#241a3a', glyph: 'void' },
@@ -140,7 +142,7 @@
   const softDisc = (g, x, y, rad, col, a) => { g.beginPath(); g.arc(x, y, rad, 0, TAU); g.fillStyle = A(col, a); g.fill(); };
 
   // ---------------------------------------------------------------------------------------------------------------
-  // fog: blank paper with a fibre texture and a running stitch around the edge
+  // fog: hushed grey felt with baked ash grain and a dotted outline (a rest). Static: nothing here depends on t
   // ---------------------------------------------------------------------------------------------------------------
   function stitches(g, cx, cy, s, r, col, a, k) {
     const inset = s * 0.8, n = 5;
@@ -149,18 +151,18 @@
       const ax = cx + Math.cos(cornerAng(c0)) * inset, ay = cy + Math.sin(cornerAng(c0)) * inset;
       const bx = cx + Math.cos(cornerAng(c1)) * inset, by = cy + Math.sin(cornerAng(c1)) * inset;
       for (let i = 0; i < n; i++) {
-        const u0 = (i + 0.14) / n, u1 = (i + 0.72) / n, j = (r() - 0.5) * 0.9 * k;
+        const u0 = (i + 0.14) / n, u1 = (i + 0.5) / n, j = (r() - 0.5) * 0.9 * k;
         const x0 = lerp(ax, bx, u0), y0 = lerp(ay, by, u0) + j, x1 = lerp(ax, bx, u1), y1 = lerp(ay, by, u1) + j;
         g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1);
-        g.lineWidth = 1.5 * k; g.lineCap = 'round'; g.strokeStyle = A('#f8efd8', a * 0.7); g.stroke();       // the thread's light edge
+        g.lineWidth = 1.5 * k; g.lineCap = 'round'; g.strokeStyle = A('#f4f3f8', a * 0.7); g.stroke();       // the dotted rest's light edge
         g.beginPath(); g.moveTo(x0, y0 + 0.5 * k); g.lineTo(x1, y1 + 0.5 * k);
         g.lineWidth = 1.1 * k; g.strokeStyle = A(col, a); g.stroke();
       }
     }
   }
-  // faint pencil sketches of the lands nobody has painted yet (by variant), so the blank page is not quite blank
+  // faint sketches of the lands nobody has woken yet (by variant), so the grey is not quite empty
   function sketch(g, cx, cy, s, kind, k) {
-    const col = '#6b5238', P = (pts) => pts.map((q) => [cx + q[0] * s / 46, cy + q[1] * s / 46]), ln = (pts, w) => tk.inkPath(g, P(pts), { w: w * k, color: col, alpha: 0.2, taper: 0.35, wobble: 0.1, seed: kind });
+    const col = '#5a566e', P = (pts) => pts.map((q) => [cx + q[0] * s / 46, cy + q[1] * s / 46]), ln = (pts, w) => tk.inkPath(g, P(pts), { w: w * k, color: col, alpha: 0.2, taper: 0.35, wobble: 0.1, seed: kind });
     if (kind === 1) { ln([[0, 10], [0, -2]], 1.3); [[-9, 2, 0, -14], [-7, -4, 0, -18]].forEach((t2) => ln([[t2[0], t2[1]], [t2[2], t2[3]], [-t2[0], t2[1]]], 1.1)); }
     else if (kind === 2) { ln([[-16, 10], [-7, -6], [0, 4], [8, -10], [18, 10]], 1.3); ln([[8, -10], [5, -4], [9, -3]], 0.9); }
     else if (kind === 4) { ln([[-14, -2], [-8, -8], [-2, -2], [4, -8], [10, -2]], 1.2); ln([[-8, 6], [-2, 0], [4, 6], [10, 0], [16, 6]], 1.2); }
@@ -171,25 +173,25 @@
     const cx = w / 2, cy = h / 2, k = s / BASE, r = R('fog', v);
     const ring = hexRing(cx, cy, s * 0.995, R('ring', v), 0.014);
     g.save(); clipRing(g, ring);
-    g.fillStyle = A('#fbf3dc', 0.34); g.fillRect(0, 0, w, h);
-    // faint fibres: short strokes along the grain, and a few darker specks
+    g.fillStyle = A('#eceaf2', 0.30); g.fillRect(0, 0, w, h);
+    // ash grain: short horizontal dashes (grey ash and frost flecks), and a few darker specks
     g.lineCap = 'round';
     const nf = tk.lowQ() ? 8 : 22;
     for (let i = 0; i < nf; i++) {
-      const x = cx + (r() - 0.5) * s * 1.7, y = cy + (r() - 0.5) * s * 1.9, a = r() * TAU, l = (3 + r() * 6) * k;
-      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + (r() - 0.5) * 2 * k, y + Math.sin(a) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l);
-      g.lineWidth = (0.5 + r() * 0.5) * k; g.strokeStyle = r() < 0.5 ? A('#7a5a3a', 0.09 + r() * 0.08) : A('#ffffff', 0.25 + r() * 0.2); g.stroke();
+      const x = cx + (r() - 0.5) * s * 1.7, y = cy + (r() - 0.5) * s * 1.9, l = (2 + r() * 3) * k;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y);
+      g.lineWidth = (0.6 + r() * 0.4) * k; g.strokeStyle = r() < 0.5 ? A('#5a566e', 0.10 + r() * 0.10) : A('#ffffff', 0.18 + r() * 0.14); g.stroke();
     }
-    for (let i = 0; i < 6; i++) { g.fillStyle = A('#8a6a3a', 0.05 + r() * 0.05); g.fillRect(cx + (r() - 0.5) * s * 1.5, cy + (r() - 0.5) * s * 1.7, (0.6 + r()) * k, (0.6 + r()) * k); }
+    for (let i = 0; i < 6; i++) { g.fillStyle = A('#6f6b86', 0.05 + r() * 0.05); g.fillRect(cx + (r() - 0.5) * s * 1.5, cy + (r() - 0.5) * s * 1.7, (0.6 + r()) * k, (0.6 + r()) * k); }
     if (!noSketch && !tk.lowQ() && v !== 0 && v !== 3 && v !== 6) sketch(g, cx + (r() - 0.5) * s * 0.25, cy + (r() - 0.5) * s * 0.2, s, v, k);
     if (lit) { const gr = g.createRadialGradient(cx, cy, 0, cx, cy, s); gr.addColorStop(0, A('#ffe9a8', 0.34)); gr.addColorStop(1, A('#ffe9a8', 0.04)); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
     g.restore();
-    stitches(g, cx, cy, s, r, '#8a6f55', 0.62, k);
+    stitches(g, cx, cy, s, r, '#77738c', 0.62, k);
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // the ink stamp on a hex: the tile icon (ART.icon) once real icon art exists, else a small vermilion hanko with a black-ink glyph of
-  // our own, so the page is readable and beautiful before (and without) art_icons.js
+  // the stamp on a hex: the tile icon (ART.icon) once real icon art exists, else a small vermilion seal with an ink glyph of
+  // our own, so the map is readable and beautiful before (and without) art_icons.js
   // ---------------------------------------------------------------------------------------------------------------
   const GLYPH = {
     enemy(S, F) { S([[-24, -26], [-4, -2], [22, 26]], 8); S([[-6, -30], [10, -6], [30, 12]], 6); S([[-30, -8], [-16, 10], [0, 30]], 6); },
@@ -199,11 +201,11 @@
     shop(S, F) { S([[0, -30], [24, -14], [24, 14], [0, 30], [-24, 14], [-24, -14], [0, -30]], 6); F([[-8, -8], [8, -8], [8, 8], [-8, 8]], '#e8383d'); },
     camp(S, F) { F([[0, -34], [14, -14], [22, 4], [14, 20], [0, 26], [-14, 20], [-22, 4], [-12, -8], [-4, -18]]); F([[0, -8], [8, 6], [4, 18], [-4, 18], [-8, 6]], '#f5c96a'); S([[-26, 30], [26, 22]], 5); S([[-26, 22], [26, 30]], 5); },
     event(S, F) { S([[-14, -18], [-10, -30], [4, -32], [16, -22], [12, -8], [0, 2], [0, 12]], 8); F([[-5, 20], [5, 20], [5, 30], [-5, 30]]); },
-    well(S, F) { F([[0, -34], [16, -8], [20, 8], [10, 22], [-10, 22], [-20, 8], [-16, -8]]); S([[-28, 32], [-12, 28], [12, 28], [28, 32]], 4, '#f5c96a'); },
-    brush(S, F) { S([[24, -32], [8, -8], [-8, 12]], 6); F([[-6, 8], [4, 2], [8, 6], [-12, 34], [-24, 30], [-16, 18]]); },
+    well(S, F) { S([[-34, -30], [34, -30]], 6); S([[-28, -30], [-28, 30]], 4); S([[28, -30], [28, 30]], 4); F([[-5, -26], [5, -26], [13, -14], [17, 4], [24, 20], [-24, 20], [-17, 4], [-13, -14]]); S([[-26, 24], [26, 24]], 4, '#f5c96a'); },
+    brush(S, F) { F([[-24, 22], [-18, 16], [-8, 18], [-4, 24], [-10, 30], [-20, 28]]); F([[4, 12], [10, 6], [20, 8], [24, 14], [18, 20], [8, 18]]); S([[-6, 22], [-6, -18]], 4); S([[22, 12], [22, -28]], 4); F([[-8, -20], [24, -30], [24, -20], [-8, -10]]); },
     gemcache(S, F) { S([[0, -30], [26, -8], [0, 30], [-26, -8], [0, -30]], 6); S([[-26, -8], [26, -8]], 4); S([[-10, -8], [0, 30], [10, -8], [0, -30]], 3.4, '#f5c96a'); },
     forge(S, F) { F([[-30, -8], [26, -8], [14, 4], [12, 14], [24, 24], [-24, 24], [-12, 14], [-10, 4], [-30, 0]]); S([[8, -34], [26, -20]], 7); S([[-4, -14], [14, -28]], 4, '#f5c96a'); },
-    start(S, F) { F([[-14, -32], [14, -32], [14, 30], [0, 16], [-14, 30]]); S([[-6, -20], [6, -20]], 3, '#f3e6c8'); },
+    start(S, F) { F([[-30, -14], [-24, -24], [26, 2], [20, 12]]); F([[30, -14], [24, -24], [-26, 2], [-20, 12]]); S([[0, -4], [-6, 14], [2, 30]], 3, '#f5c96a'); },
   };
   function fallbackStamp(g, tile, cx, cy, size, done) {
     const u = size / 100, r = R('stamp', tile), rr = 43 * u;
@@ -229,10 +231,10 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // painted: a watercolour wash with a wet edge, granulation, a hard cel shadow with screen-tone, an ink outline and the stamp
+  // woken: a watercolour wash with a wet edge, granulation, a hard cel shadow with screen-tone, an inked outline, echo rings and the stamp
   // ---------------------------------------------------------------------------------------------------------------
   const DECOR = {
-    tufts(g, s, r, c, k, cx, cy) {                                     // dry-brush grass tufts
+    tufts(g, s, r, c, k, cx, cy) {                                     // grass tufts
       for (let i = 0; i < 4; i++) {
         const x = cx + (r() - 0.5) * s * 1.1, y = cy + (r() - 0.3) * s * 1.0;
         for (let j = -1; j <= 1; j++) tk.inkPath(g, [[x + j * 3 * k, y], [x + j * 4.5 * k, y - 4 * k], [x + j * 6 * k, y - (8 + r() * 3) * k]], { w: 1.3 * k, color: c.d, alpha: 0.5, taper: 0.4, wobble: 0.1, seed: i * 3 + j });
@@ -246,8 +248,8 @@
     noren(g, s, r, c, k, cx, cy) { for (let i = 0; i < 4; i++) { const x = cx + (i - 1.5) * s * 0.3; g.fillStyle = i % 2 ? A('#fff4d8', 0.7) : A('#c8321f', 0.6); g.fillRect(x - s * 0.13, cy - s * 0.86, s * 0.26, s * 0.34); } },
     glowwarm(g, s, r, c, k, cx, cy) { const gr = g.createRadialGradient(cx, cy + s * 0.1, 0, cx, cy + s * 0.1, s * 0.85); gr.addColorStop(0, A('#ffe0a0', 0.8)); gr.addColorStop(1, A('#ffe0a0', 0)); g.fillStyle = gr; g.fillRect(cx - s, cy - s, s * 2, s * 2); },
     wisps(g, s, r, c, k, cx, cy) { for (let i = 0; i < 3; i++) { const a = r() * TAU; tk.inkPath(g, [[cx + Math.cos(a) * s * 0.3, cy + Math.sin(a) * s * 0.3], [cx + Math.cos(a + 1) * s * 0.55, cy + Math.sin(a + 1) * s * 0.55], [cx + Math.cos(a + 2) * s * 0.75, cy + Math.sin(a + 2) * s * 0.75]], { w: 1.6 * k, color: '#e2d0ff', alpha: 0.6, taper: 0.4, seed: i }); } },
-    ripples(g, s, r, c, k, cx, cy) { for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(cx, cy + s * 0.05, s * (0.42 + i * 0.16), s * (0.24 + i * 0.09), 0, 0, TAU); g.lineWidth = 1.2 * k; g.strokeStyle = A('#e8f6ff', 0.5 - i * 0.12); g.stroke(); } },
-    swash(g, s, r, c, k, cx, cy) { tk.inkPath(g, [[cx - s * 0.7, cy + s * 0.4], [cx - s * 0.1, cy + s * 0.15], [cx + s * 0.7, cy + s * 0.35]], { w: 7 * k, color: '#8ff0e8', alpha: 0.5, taper: 0.3, seed: 2 }); },
+    rings(g, s, r, c, k, cx, cy) { [0.56, 0.70, 0.84].forEach((m, i) => { g.beginPath(); g.arc(cx, cy + s * 0.02, s * m, 0, TAU); g.lineWidth = 1.2 * k; g.strokeStyle = A('#e8f6ff', [0.5, 0.36, 0.22][i]); g.stroke(); }); },
+    notes(g, s, r, c, k, cx, cy) { for (let i = 0; i < 3; i++) tk.note(g, cx + (r() - 0.5) * s * 1.1, cy + (r() - 0.3) * s * 0.9, (7 + r() * 3) * k, { kind: i === 1 ? 'quarter' : 'eighth', color: '#8ff0e8', alpha: 0.7 }); },
     glints(g, s, r, c, k, cx, cy) { for (let i = 0; i < 4; i++) tk.sparkle(g, cx + (r() - 0.5) * s * 1.3, cy + (r() - 0.5) * s * 1.3, (2.5 + r() * 3) * k, { color: '#d8ffe6', glow: 0, alpha: 0.9 }); },
     embers(g, s, r, c, k, cx, cy) { for (let i = 0; i < 8; i++) softDisc(g, cx + (r() - 0.5) * s * 1.4, cy + (r() - 0.4) * s * 1.4, (0.9 + r() * 1.6) * k, i % 2 ? '#ffd27a' : '#ff9a2e', 0.85); },
     void() {},
@@ -256,13 +258,13 @@
   function paintedSprite(g, w, h, s, tile, done, v) {
     const spec = washOf(tile), cx = w / 2, cy = h / 2, k = s / BASE, r = R('wash', tile, v);
     const spiky = tile === 'boss';
-    // the colour is put on a hair off the pencil line, like a child colouring in: it spills over on one side and leaves a sliver of paper on the other
+    // the colour is put on a hair off the line: it spills over on one side and leaves a sliver of grey on the other
     const ro = R('spill', v), ox = (ro() - 0.5) * s * 0.06, oy = (ro() - 0.5) * s * 0.06;
     const ring = hexRing(cx + ox, cy + oy, s * 0.995, R('washring', v), 0.03, spiky), lineRing = hexRing(cx, cy, s * 0.98, R('ring', v), 0.022, spiky);
     const box = [0, 0, w, h];
     const hue = spec.c;
     const paleK = done ? 0.62 : (tile === 'boss' ? 0.02 : 0.2);
-    const base = mixc(hue, '#f3e6c8', paleK), deep = tk.shade(hue, 0.3), wet = mixc(hue, pal.ink, done ? 0.15 : 0.3), light = mixc(hue, '#fff6dc', 0.55);
+    const base = mixc(hue, '#f7f6fb', paleK), deep = tk.shade(hue, 0.3), wet = mixc(hue, pal.ink, done ? 0.15 : 0.3), light = mixc(hue, '#fff6dc', 0.55);
     // 1. the flat wash
     fillRing(g, ring, A(base, done ? 0.82 : 0.95));
     g.save(); clipRing(g, ring);
@@ -282,18 +284,22 @@
     g.fillStyle = A(tk.shade(hue, 0.42), done ? 0.32 : 0.5); g.fillRect(0, 0, w, h);
     if (!done) tk.halftone(g, 0, 0, w, h, { d: Math.max(3, 4.6 * k), r: 1.1 * k, color: tk.deep(hue, 0.4), alpha: 0.42, force: true });
     g.restore();
+    // 6b. echo rings: soft sound rings round the stamp (one faint ring on bare ground)
+    g.lineWidth = 1.2 * k;
+    if (tile !== 'empty') [[0.62, 0.35], [0.78, 0.2]].forEach((p) => { g.beginPath(); g.arc(cx, cy + s * 0.02, s * p[0], 0, TAU); g.strokeStyle = A(light, p[1] * (done ? 0.7 : 1)); g.stroke(); });
+    else { g.beginPath(); g.arc(cx, cy + s * 0.02, s * 0.7, 0, TAU); g.strokeStyle = A(light, 0.14); g.stroke(); }
     // 7. the stamp
     if (tile !== 'empty') { g.beginPath(); g.ellipse(cx, cy + s * 0.02, s * 0.5, s * 0.5, 0, 0, TAU); g.fillStyle = A('#fff6dc', done ? 0.3 : 0.4); g.fill(); }
     g.restore();
     if (tile !== 'empty') stamp(g, tile, cx, cy + s * 0.02, s * 1.0, done);
-    // 8. rim light on the lit edge, ink outline
+    // 8. rim light on the lit edge, inked outline
     g.save(); clipRing(g, lineRing); clipCrescent(g, lineRing, box, -LX * s * 0.05, -LY * s * 0.05);
     g.fillStyle = A('#fff8f0', 0.5); g.fillRect(0, 0, w, h); g.restore();
     tk.inkPath(g, lineRing, { closed: true, w: (spiky ? 2.9 : 2.1) * k, color: pal.ink, align: 0.15, wobble: 0.16, weightVar: 0.55, seed: v * 7 + 1, tension: TENS, alpha: done ? 0.7 : 0.92 });
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // void (Unwritten Void): a hole torn in the page
+  // void (Dead Silence): a dark hole fringed with ash and frost flecks
   // ---------------------------------------------------------------------------------------------------------------
   function voidSprite(g, w, h, s, v) {
     const cx = w / 2, cy = h / 2, k = s / BASE, r = R('void', v);
@@ -302,11 +308,15 @@
     g.save(); clipRing(g, ring);
     const gr = g.createRadialGradient(cx, cy, 0, cx, cy, s);
     gr.addColorStop(0, '#1a1236'); gr.addColorStop(1, '#0a0716'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 5; i++) tk.inkPath(g, [[cx + (r() - 0.5) * s, cy + (r() - 0.5) * s], [cx + (r() - 0.5) * s * 1.4, cy + (r() - 0.5) * s * 1.4], [cx + (r() - 0.5) * s * 1.6, cy + (r() - 0.5) * s * 1.6]], { w: (3 + r() * 5) * k, color: '#3b2a7a', alpha: 0.4, taper: 0.4, seed: i });
-    tk.halftone(g, 0, 0, w, h, { d: Math.max(3, 5 * k), r: 1 * k, color: '#8f5fe8', alpha: 0.22, force: true });
-    for (let i = 0; i < 9; i++) softDisc(g, cx + (r() - 0.5) * s * 1.5, cy + (r() - 0.5) * s * 1.7, (0.8 + r() * 1.2) * k, '#f3e6c8', 0.5);
+    g.lineCap = 'round';
+    for (let i = 0; i < 40; i++) {
+      const x = cx + (r() - 0.5) * s * 1.7, y = cy + (r() - 0.5) * s * 1.9, l = (2 + r() * 4) * k, ash = r() < 0.5;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y); g.lineWidth = 0.8 * k; g.strokeStyle = ash ? A('#8e8aa3', 0.25 + r() * 0.25) : A('#ffffff', 0.2 + r() * 0.2); g.stroke();
+    }
+    tk.halftone(g, 0, 0, w, h, { d: Math.max(3, 5 * k), r: 1 * k, color: '#6f6b86', alpha: 0.22, force: true });
+    for (let i = 0; i < 9; i++) { g.fillStyle = A('#ffffff', 0.5); g.fillRect(cx + (r() - 0.5) * s * 1.5, cy + (r() - 0.5) * s * 1.7, Math.max(1, k), Math.max(1, k)); }
     g.restore();
-    tk.inkPath(g, ring, { closed: true, w: 2.2 * k, color: '#3b2a7a', align: -0.2, wobble: 0.2, seed: v, tension: TENS, alpha: 0.9 });
+    tk.inkPath(g, ring, { closed: true, w: 2.2 * k, color: '#4a465e', align: -0.2, wobble: 0.2, seed: v, tension: TENS, alpha: 0.9 });
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -338,10 +348,10 @@
   // whatever the icon artist does
   // ---------------------------------------------------------------------------------------------------------------
   function silSprite(g, w, h, s, tile) {
-    const cx = w / 2, cy = h / 2, boss = tile === 'boss', u = s * (boss ? 1.5 : 1.16) / 100, col = boss ? '#2a1a4a' : '#5a4636';
+    const cx = w / 2, cy = h / 2, boss = tile === 'boss', u = s * (boss ? 1.5 : 1.16) / 100, col = boss ? '#2a1a4a' : '#5a566e';
     if (ART.has('tile', tile)) {                                       // the real stamp, washed out to a ghost so it still matches the painted one
       stamp(g, tile, cx, cy, s * (boss ? 1.3 : 1.02), false);
-      g.globalCompositeOperation = 'source-atop'; g.fillStyle = boss ? A('#2a1a4a', 0.66) : A('#8a7660', 0.7); g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'source-over';
+      g.globalCompositeOperation = 'source-atop'; g.fillStyle = boss ? A('#2a1a4a', 0.66) : A('#7d7992', 0.7); g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'source-over';
       return;
     }
     const glyph = GLYPH[tile];
@@ -401,7 +411,7 @@
     else ART.blit(ctx, sp.spr, x - sp.w * f / 2, y - sp.h * f / 2, sp.w * f, sp.h * f);
     if (kind === 'edge') liveEdge(ctx, x, y, size, tt, v, mo);
     else if (kind === 'target') liveTarget(ctx, x, y, size, tt, mo);
-    else if (kind === 'painted' && !done) liveTile(ctx, tile, x, y, size, tt, v, mo);
+    else if (kind === 'painted' && !done) { liveTile(ctx, tile, x, y, size, tt, v, mo); if (opts.near) liveNear(ctx, tile, x, y, size, tt, num(opts.seed, 0), mo); }
   }
   // live touches over the cached sprites: cheap and never baked
   function liveEdge(ctx, x, y, size, t, v, mo) {
@@ -414,6 +424,10 @@
     ctx.setLineDash([]);
     ctx.restore();
     tk.glow(ctx, x, y, size * 0.85, '#ffd070', 0.06 + 0.06 * pulse * mo);
+    if (mo > 0.5) {                                                   // a listening ring: the next note to wake
+      const a = (t / 2.6) % 1;
+      ctx.beginPath(); ctx.arc(x, y, lerp(size * 0.2, size * 0.8, a), 0, TAU); ctx.lineWidth = Math.max(0.8, 1.2 * k); ctx.strokeStyle = A('#fff2b8', 0.5 * (1 - a)); ctx.stroke();
+    }
   }
   function liveTarget(ctx, x, y, size, t, mo) {
     const k = size / BASE;
@@ -422,25 +436,46 @@
     ctx.restore();
     const a = t * 1.6 * mo; tk.sparkle(ctx, x + Math.cos(a) * size * 0.74, y + Math.sin(a) * size * 0.74, 4.2 * k, { color: pal.gold2, glow: 0.4 });
   }
-  // a little life on landmarks: chest glint, camp and forge glow, well ripple, boss and elite pulse
+  // a little life on landmarks: chest glint, camp and forge glow, temple bell ring, boss and elite pulse
   function liveTile(ctx, tile, x, y, size, t, v, mo) {
     const k = size / BASE, ph = t + v * 0.9;
     if (tile === 'camp') tk.glow(ctx, x, y + size * 0.05, size * (0.75 + 0.05 * Math.sin(ph * 7.3)), '#ffb060', 0.2 + 0.1 * Math.sin(ph * 5.1) * mo);
     else if (tile === 'forge') tk.glow(ctx, x, y + size * 0.05, size * 0.7, '#ff7a30', 0.16 + 0.1 * (0.5 + 0.5 * Math.sin(ph * 2.2)) * mo);
     else if (tile === 'chest') { const a = (ph * 0.55) % 1; if (a < 0.35) tk.sparkle(ctx, x + size * (0.35 - a * 1.2), y - size * (0.5 - a * 0.9), (2 + 5 * Math.sin(a / 0.35 * PI)) * k, { color: '#ffffff', alpha: Math.sin(a / 0.35 * PI), glow: 0.5 }); }
-    else if (tile === 'well') { const a = (ph * 0.45) % 1; ctx.beginPath(); ctx.ellipse(x, y + size * 0.05, size * (0.3 + 0.45 * a), size * (0.18 + 0.26 * a), 0, 0, TAU); ctx.lineWidth = 1.6 * k; ctx.strokeStyle = A('#e8f6ff', 0.6 * (1 - a) * (mo > 0.5 ? 1 : 0.5)); ctx.stroke(); }
+    else if (tile === 'well') {                                        // the temple bell: a ring every 2.2 s and a gold glint on the lip as it starts
+      const a = (ph / 2.2) % 1; ctx.beginPath(); ctx.arc(x, y, size * (0.3 + 0.55 * a), 0, TAU); ctx.lineWidth = 1.6 * k; ctx.strokeStyle = A('#e8f6ff', 0.6 * (1 - a) * (mo > 0.5 ? 1 : 0.5)); ctx.stroke();
+      if (a < 0.25 && mo > 0.5) tk.sparkle(ctx, x + size * 0.2, y + size * 0.3, (2 + 3 * Math.sin(a / 0.25 * PI)) * k, { color: '#f5c96a', alpha: Math.sin(a / 0.25 * PI), glow: 0.4 });
+    }
     else if (tile === 'boss') tk.glow(ctx, x, y, size * 0.95, '#8f5fe8', 0.14 + 0.12 * (0.5 + 0.5 * Math.sin(ph * 1.7)) * mo);
     else if (tile === 'elite') { const a = ph * 0.9; tk.sparkle(ctx, x + Math.cos(a) * size * 0.66, y + Math.sin(a) * size * 0.66, 3.4 * k, { color: pal.gold2, alpha: 0.85, glow: 0.4 }); }
+  }
+
+  // MAP-27: motion is the awake signal. Only for a woken hex near the party (opts.near); skipped under reduced motion and low quality.
+  // A seeded sway by kind plus one faint sound ring every 4 to 6 s (phase from the hex seed). About two draw calls each.
+  const LAMPS = { camp: 1, forge: 1, boss: 1, elite: 1, well: 1 };
+  function liveNear(ctx, tile, x, y, size, t, seed, mo) {
+    if (!(mo > 0.5) || tk.lowQ()) return;
+    const k = size / BASE, h1 = U.hash(seed, 11), h2 = U.hash(seed, 29), per = 4 + 2 * ((h1 % 100) / 100), ph = (h2 % 1000) / 1000 * per;
+    if (LAMPS[tile]) {                                                 // lantern and bell stamps flicker
+      tk.glow(ctx, x, y, size * 0.5, '#ffe0a0', 0.1 + 0.1 * Math.sin(t * 6.3 + h1) * 0.5);
+    } else if (tile !== 'block') {                                     // bamboo and grass bend about 2 px over 3 to 5 s
+      const sw = Math.sin(t * TAU / (3 + 2 * ((h1 >> 3) % 10) / 10) + h2) * 2 * k, bx = x - size * 0.5, by = y + size * 0.72;
+      ctx.beginPath();
+      for (let i = 0; i < 2; i++) { const px = bx + i * size * 0.16; ctx.moveTo(px, by); ctx.quadraticCurveTo(px + sw * 0.4, by - size * 0.09, px + sw, by - size * 0.17); }
+      ctx.lineWidth = Math.max(1, 1.4 * k); ctx.lineCap = 'round'; ctx.strokeStyle = A('#3a6a4a', 0.5); ctx.stroke();
+    }
+    const a = ((t + ph) % per) / 2.4;
+    if (a < 1) tk.soundRings(ctx, x, y, size * (0.5 + 0.38 * a), { n: 1, color: '#e8fbff', alpha: 0.32 * (1 - a), lw: Math.max(0.8, 1.1 * k) });
   }
 
   const M = ART.map;
 
   // ---------------------------------------------------------------------------------------------------------------
-  // PAPER: the parchment ground. World space, so it scrolls and zooms with the map: a seamless fibre tile, big stains placed by a hash of the
-  // world cell (so nothing repeats), and sea-monster doodles in the margins and, faintly, under the fog
+  // PAPER: the hushed ground (the name stays). World space, so it scrolls and zooms with the map: a seamless ash-grain tile, big frozen stains
+  // placed by a hash of the world cell (so nothing repeats), and doodles (rings, a silent bell, sleeping cranes, a drum) in the margins and, faintly, under the fog
   // ---------------------------------------------------------------------------------------------------------------
-  const PAPER_BASE = '#f0e0b8', DOODLE_INK = '#5c4530';
-  // The fibre tile is TILE world px and repeats. A CHUNK is 2 x 2 of it plus up to two stains kept clear of the chunk border, so chunks of any
+  const PAPER_BASE = '#cfcdd8', DOODLE_INK = '#4a465e';
+  // The grain tile is TILE world px and repeats. A CHUNK is 2 x 2 of it plus up to two stains kept clear of the chunk border, so chunks of any
   // variant join with no seam, and a page is ~6 opaque blits instead of a pattern fill plus a dozen rotated alpha blits.
   const TILE = 150, CHUNK = TILE * 2, NVAR = 5, CELL = 540;     // CELL: the grid the margin doodles are placed on
   function wrapAt(x, y, rad, fn) {
@@ -452,34 +487,33 @@
   function paperTile(g) {
     const r = R('paper', 'tile');
     g.lineCap = 'round';
-    for (let i = 0; i < 200; i++) {                                    // fibres
-      const x = r() * TILE, y = r() * TILE, a = r() * TAU, l = 4 + r() * 12, dark = r() < 0.5, bend = (r() - 0.5) * 6;
+    for (let i = 0; i < 160; i++) {                                    // ash and frost grain: short horizontal dashes
+      const x = r() * TILE, y = r() * TILE, l = 2 + r() * 4, dark = r() < 0.5;
       wrapAt(x, y, l + 3, (px, py) => {
-        g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + Math.cos(a) * l * 0.5 - Math.sin(a) * bend, py + Math.sin(a) * l * 0.5 + Math.cos(a) * bend, px + Math.cos(a) * l, py + Math.sin(a) * l);
-        g.lineWidth = 0.4 + r() * 0.6; g.strokeStyle = dark ? A('#7a5a34', 0.1 + r() * 0.12) : A('#ffffff', 0.2 + r() * 0.22); g.stroke();
+        g.beginPath(); g.moveTo(px, py); g.lineTo(px + l, py);
+        g.lineWidth = 0.5 + r() * 0.5; g.strokeStyle = dark ? A('#5a566e', 0.06 + r() * 0.10) : A('#ffffff', 0.12 + r() * 0.18); g.stroke();
       });
     }
-    for (let i = 0; i < 150; i++) { const x = r() * TILE, y = r() * TILE, sz = 0.5 + r() * 1.2; g.fillStyle = r() < 0.55 ? A('#5a3c1c', 0.06 + r() * 0.14) : A('#ffffff', 0.12 + r() * 0.18); wrapAt(x, y, 2, (px, py) => g.fillRect(px, py, sz, sz)); }
+    for (let i = 0; i < 120; i++) { const x = r() * TILE, y = r() * TILE, sz = 0.5 + r() * 1.2; g.fillStyle = r() < 0.55 ? A('#4a465e', 0.06 + r() * 0.14) : A('#ffffff', 0.12 + r() * 0.18); wrapAt(x, y, 2, (px, py) => g.fillRect(px, py, sz, sz)); }
   }
-  // stains: a pool of soft blotches
+  // stains: a pool of frozen ripples, flecks and mist
   const STAIN_N = 6, STAIN_S = 340;
   function stainSprite(g, i) {
     const r = R('stain', i), c = STAIN_S / 2;
-    if (i === 0 || i === 1) {                                          // a tea or water ring: pale inside, a darker rim
-      const rad = 96 + r() * 40, ring = blobPts(c, c, rad, rad * (0.8 + r() * 0.2), r, 0.12, 12);
-      g.beginPath(); tk.trace(g, ring); g.fillStyle = A('#b58a4a', i === 0 ? 0.07 : 0.1); g.fill();
-      g.beginPath(); tk.trace(g, ring); g.lineWidth = 3 + r() * 2; g.strokeStyle = A('#8a5a2a', 0.12 + r() * 0.06); g.stroke();
-      g.beginPath(); tk.trace(g, tk.xf(ring, { s: 0.86, cx: c, cy: c })); g.lineWidth = 1.2; g.strokeStyle = A('#8a5a2a', 0.08); g.stroke();
-    } else if (i === 2) {                                              // foxing: rust freckles
-      for (let n = 0; n < 34; n++) { const a = r() * TAU, d = Math.sqrt(r()) * 120; softDisc(g, c + Math.cos(a) * d, c + Math.sin(a) * d, 1 + r() * 4, '#9a5a24', 0.06 + r() * 0.1); }
-    } else if (i === 3) {                                              // sun-bleached patch
-      const gr = g.createRadialGradient(c, c, 0, c, c, 150); gr.addColorStop(0, A('#fff8e0', 0.3)); gr.addColorStop(1, A('#fff8e0', 0)); g.fillStyle = gr; g.fillRect(0, 0, STAIN_S, STAIN_S);
-    } else if (i === 4) {                                              // a soft fold line
+    if (i === 0 || i === 1) {                                          // a frozen ripple: three thin concentric circles, no fill
+      const rad = 96 + r() * 40;
+      [1, 0.8, 0.62].forEach((m, n) => { g.beginPath(); g.arc(c, c, rad * m, 0, TAU); g.lineWidth = 2.4 - n * 0.5; g.strokeStyle = A('#6f6b86', [0.10, 0.08, 0.06][n]); g.stroke(); });
+    } else if (i === 2) {                                              // a cluster of ash flecks
       g.lineCap = 'round';
-      tk.inkPath(g, [[20, c + 30], [c, c - 10], [STAIN_S - 20, c + 20]], { w: 4, color: '#6a4a24', alpha: 0.07, taper: 0.4, wobble: 0.3 });
-      tk.inkPath(g, [[20, c + 34], [c, c - 6], [STAIN_S - 20, c + 24]], { w: 3, color: '#ffffff', alpha: 0.2, taper: 0.4, wobble: 0.3 });
-    } else {                                                           // a wash of tea with a soft edge
-      const gr = g.createRadialGradient(c, c, 10, c, c, 140); gr.addColorStop(0, A('#a87a3a', 0.09)); gr.addColorStop(0.75, A('#a87a3a', 0.05)); gr.addColorStop(1, A('#a87a3a', 0)); g.fillStyle = gr; g.fillRect(0, 0, STAIN_S, STAIN_S);
+      for (let n = 0; n < 34; n++) { const a = r() * TAU, d = Math.sqrt(r()) * 120, l = 2 + r() * 3; g.beginPath(); g.moveTo(c + Math.cos(a) * d, c + Math.sin(a) * d); g.lineTo(c + Math.cos(a) * d + l, c + Math.sin(a) * d); g.lineWidth = 1 + r(); g.strokeStyle = A(r() < 0.6 ? '#4a465e' : '#ffffff', 0.08 + r() * 0.1); g.stroke(); }
+    } else if (i === 3) {                                              // a pale mist patch
+      const gr = g.createRadialGradient(c, c, 0, c, c, 150); gr.addColorStop(0, A('#f4f3f8', 0.3)); gr.addColorStop(1, A('#f4f3f8', 0)); g.fillStyle = gr; g.fillRect(0, 0, STAIN_S, STAIN_S);
+    } else if (i === 4) {                                              // the silence line: a flat line with a white twin (a flatline)
+      g.lineCap = 'round';
+      tk.inkPath(g, [[20, c], [c, c], [STAIN_S - 20, c]], { w: 3.4, color: '#4a465e', alpha: 0.08, taper: 0.4, wobble: 0 });
+      tk.inkPath(g, [[20, c + 2], [c, c + 2], [STAIN_S - 20, c + 2]], { w: 2.6, color: '#ffffff', alpha: 0.2, taper: 0.4, wobble: 0 });
+    } else {                                                           // a soft grey wash
+      const gr = g.createRadialGradient(c, c, 10, c, c, 140); gr.addColorStop(0, A('#8e8aa3', 0.09)); gr.addColorStop(0.75, A('#8e8aa3', 0.05)); gr.addColorStop(1, A('#8e8aa3', 0)); g.fillStyle = gr; g.fillRect(0, 0, STAIN_S, STAIN_S);
     }
   }
 
@@ -488,7 +522,7 @@
     ART.blit(g, tile, 0, 0, TILE, TILE); ART.blit(g, tile, TILE, 0, TILE, TILE); ART.blit(g, tile, 0, TILE, TILE, TILE); ART.blit(g, tile, TILE, TILE, TILE, TILE);
     const r = R('chunk', v);
     for (let i = 0; i < 4; i++) {                                      // soft mottling, fully inside the chunk so it never meets a seam
-      const rad = 40 + r() * 70, x = rad + r() * (CHUNK - 2 * rad), y = rad + r() * (CHUNK - 2 * rad), dark = r() < 0.5, c = dark ? '#8a6a3a' : '#fff8e4';
+      const rad = 40 + r() * 70, x = rad + r() * (CHUNK - 2 * rad), y = rad + r() * (CHUNK - 2 * rad), dark = r() < 0.5, c = dark ? '#8e8aa3' : '#f4f3f8';
       const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, A(c, dark ? 0.08 : 0.13)); gr.addColorStop(1, A(c, 0)); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
     const idx = [0, 2, 5, 4, -1][v % 5];
@@ -503,55 +537,50 @@
   // ---- doodles (drawn once as opaque ink, blitted at low alpha)
   const pen = (g, pts, w, o) => tk.inkPath(g, pts, Object.assign({ w, color: DOODLE_INK, taper: 0.28, wobble: 0.12 }, o));
   const DOODLES = {
-    compass: { w: 236, h: 236, draw(g) {
-      const c = 118, R0 = 64;
-      [R0, R0 - 8].forEach((rr, i) => pen(g, tk.ellipsePts(c, c, rr, rr, 22), 2 - i * 0.6, { closed: true, taper: 0 }));
-      for (let i = 0; i < 32; i++) { const a = i * TAU / 32; pen(g, [[c + Math.cos(a) * (R0 + 1), c + Math.sin(a) * (R0 + 1)], [c + Math.cos(a) * (R0 + (i % 4 ? 5 : 10)), c + Math.sin(a) * (R0 + (i % 4 ? 5 : 10))]], 1.4, { taper: 0.1 }); }
-      for (let i = 0; i < 8; i++) {
-        const a = i * TAU / 8 - PI / 2, len = i % 2 ? 40 : 84, wd = i % 2 ? 7 : 10;
-        const tip = [c + Math.cos(a) * len, c + Math.sin(a) * len], l = [c + Math.cos(a - 1.5) * wd, c + Math.sin(a - 1.5) * wd], rr = [c + Math.cos(a + 1.5) * wd, c + Math.sin(a + 1.5) * wd];
-        g.beginPath(); g.moveTo(c, c); g.lineTo(l[0], l[1]); g.lineTo(tip[0], tip[1]); g.lineTo(rr[0], rr[1]); g.closePath();
-        g.fillStyle = i % 4 === 0 ? DOODLE_INK : A(DOODLE_INK, 0.38); g.fill();
-        pen(g, [l, tip, rr], 1.5, { taper: 0.05 });
-      }
+    rings: { w: 236, h: 236, draw(g) {
+      const c = 118;
+      [22, 38, 54, 70].forEach((rr, i) => pen(g, tk.ellipsePts(c, c, rr, rr, 22), 2.2 - i * 0.3, { closed: true, taper: 0 }));
+      for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + PI / 8; pen(g, [[c + Math.cos(a) * 80, c + Math.sin(a) * 80], [c + Math.cos(a) * 94, c + Math.sin(a) * 94]], 2, { taper: 0.1 }); }
       softDisc(g, c, c, 5, DOODLE_INK, 1);
-      g.font = 'italic 700 24px Georgia,serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = DOODLE_INK; g.fillText('N', c, c - 98);
     } },
-    kraken: { w: 300, h: 230, draw(g) {
+    bell: { w: 300, h: 230, draw(g) {                                  // a silent bonsho, tied with a cloth band
       const cx = 150;
-      g.beginPath(); tk.trace(g, [[cx - 62, 96], [cx - 66, 50], [cx - 30, 14], [cx + 18, 10], [cx + 56, 36], [cx + 66, 84], [cx + 40, 108], [cx - 40, 108]]); g.fillStyle = A(DOODLE_INK, 0.13); g.fill();
-      pen(g, [[cx - 62, 100], [cx - 68, 50], [cx - 30, 14], [cx + 18, 10], [cx + 56, 36], [cx + 68, 88]], 3.4, { taper: 0.05 });
-      [-1, 1].forEach((sd) => { const ex = cx + sd * 26; pen(g, tk.ellipsePts(ex, 62, 12, 15, 10), 2.2, { closed: true, taper: 0 }); softDisc(g, ex + sd * 2, 65, 6, DOODLE_INK, 1); softDisc(g, ex + sd * 5, 60, 2.2, '#ffffff', 1); });
-      pen(g, [[cx - 24, 34], [cx - 6, 24], [cx + 12, 26]], 2, {});
-      for (let i = 0; i < 7; i++) {
-        const sx = cx - 54 + i * 18, dir = i % 2 ? 1 : -1, len = 96 + (i % 3) * 16;
-        const sp = [[sx, 104], [sx + dir * 14, 104 + len * 0.3], [sx - dir * 8, 104 + len * 0.6], [sx + dir * 20, 104 + len * 0.82], [sx + dir * 30, 104 + len * 0.7], [sx + dir * 22, 104 + len * 0.6]];
-        pen(g, sp, 7.5, { taper: 0.5, wobble: 0.1 });
-        for (let d = 1; d < 4; d++) { const q = sp[d]; softDisc(g, q[0] - dir * 3, q[1] + 2, 1.7, DOODLE_INK, 0.8); }
-      }
-      for (let i = 0; i < 3; i++) pen(g, [[cx - 120 + i * 30, 200 + i * 6], [cx - 108 + i * 30, 192 + i * 6], [cx - 96 + i * 30, 200 + i * 6]], 2, {});
+      g.beginPath(); tk.trace(g, [[cx - 24, 34], [cx - 46, 72], [cx - 58, 130], [cx - 74, 176], [cx, 186], [cx + 74, 176], [cx + 58, 130], [cx + 46, 72], [cx + 24, 34], [cx, 28]]); g.fillStyle = A(DOODLE_INK, 0.13); g.fill();
+      pen(g, tk.ellipsePts(cx, 14, 12, 9, 12), 2.6, { closed: true, taper: 0 });
+      pen(g, [[cx - 24, 34], [cx - 46, 72], [cx - 58, 130], [cx - 74, 176]], 3.4, { taper: 0.05 });
+      pen(g, [[cx + 24, 34], [cx + 46, 72], [cx + 58, 130], [cx + 74, 176]], 3.4, { taper: 0.05 });
+      pen(g, [[cx - 24, 34], [cx, 26], [cx + 24, 34]], 3, { taper: 0.05 });
+      pen(g, [[cx - 74, 176], [cx, 186], [cx + 74, 176]], 3.4, { taper: 0.05 });
+      pen(g, [[cx - 46, 84], [cx, 92], [cx + 46, 84]], 2, { taper: 0.1 });
+      pen(g, [[cx - 62, 150], [cx, 160], [cx + 62, 150]], 2, { taper: 0.1 });
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) softDisc(g, cx - 24 + i * 24, 102 + j * 14 + (i === 1 ? 2 : 0), 2.6, DOODLE_INK, 0.8);
+      g.beginPath(); tk.trace(g, [[cx - 54, 116], [cx + 56, 128], [cx + 58, 142], [cx - 56, 130]]); g.fillStyle = A(DOODLE_INK, 0.3); g.fill();
+      pen(g, [[cx - 54, 116], [cx + 56, 128]], 2.2, {}); pen(g, [[cx - 56, 130], [cx + 58, 142]], 2.2, {});
+      pen(g, [[cx + 46, 126], [cx + 62, 150], [cx + 54, 170]], 3, { taper: 0.3 }); pen(g, [[cx + 50, 128], [cx + 74, 142], [cx + 72, 162]], 3, { taper: 0.3 });
+      pen(g, [[cx - 80, 208], [cx + 80, 208]], 8, { taper: 0.15 }); pen(g, [[cx - 40, 188], [cx - 40, 204]], 2, {}); pen(g, [[cx + 40, 188], [cx + 40, 204]], 2, {});
     } },
-    serpent: { w: 360, h: 150, draw(g) {
+    cranes: { w: 360, h: 150, draw(g) {                                // three sleeping cranes, heads tucked
       for (let i = 0; i < 3; i++) {
-        const x0 = 70 + i * 96;
-        pen(g, [[x0, 112], [x0 + 12, 70], [x0 + 46, 56], [x0 + 74, 82], [x0 + 82, 112]], 5, { taper: 0.1, wobble: 0.08 });
-        for (let d = 0; d < 5; d++) pen(g, [[x0 + 16 + d * 11, 64 + Math.abs(d - 2) * 5], [x0 + 22 + d * 11, 76 + Math.abs(d - 2) * 4]], 1.5, { taper: 0.4 });
+        const x0 = 70 + i * 110;
+        g.beginPath(); tk.trace(g, [[x0 - 34, 86], [x0 - 10, 60], [x0 + 30, 64], [x0 + 44, 84], [x0 + 10, 100]]); g.fillStyle = A(DOODLE_INK, 0.13); g.fill();
+        pen(g, [[x0 - 34, 86], [x0 - 10, 60], [x0 + 30, 64], [x0 + 44, 84], [x0 + 10, 100], [x0 - 20, 98]], 3.4, { taper: 0.05 });
+        pen(g, [[x0 + 30, 66], [x0 + 46, 50], [x0 + 38, 36], [x0 + 24, 44]], 4, { taper: 0.1 });
+        pen(g, [[x0 + 24, 44], [x0 + 8, 56]], 2.4, { taper: 0.3 });
+        pen(g, [[x0 - 34, 86], [x0 - 54, 98]], 4, { taper: 0.4 });
+        for (let d = 0; d < 4; d++) pen(g, [[x0 - 14 + d * 11, 70 + Math.abs(d - 1.5) * 3], [x0 - 8 + d * 11, 82 + Math.abs(d - 1.5) * 2]], 1.4, { taper: 0.4 });
+        pen(g, [[x0, 100], [x0 - 1, 134]], 2.6, { taper: 0.1 }); pen(g, [[x0 - 9, 134], [x0 + 7, 134]], 2, {});
       }
-      pen(g, [[20, 112], [26, 78], [44, 50], [40, 30]], 6, { taper: 0.1 });
-      g.beginPath(); tk.trace(g, [[26, 26], [44, 12], [72, 18], [66, 36], [44, 40]]); g.fillStyle = A(DOODLE_INK, 0.13); g.fill();
-      pen(g, [[26, 26], [44, 12], [72, 18], [66, 36], [44, 40], [26, 30]], 3, { taper: 0.05 });
-      softDisc(g, 52, 24, 3.4, DOODLE_INK, 1); pen(g, [[40, 12], [30, 0], [36, 12]], 2, {}); pen(g, [[72, 24], [88, 26], [72, 30]], 1.8, {});
-      for (let i = 0; i < 5; i++) pen(g, [[10 + i * 70, 128 + (i % 2) * 6], [30 + i * 70, 118 + (i % 2) * 6], [50 + i * 70, 128 + (i % 2) * 6], [70 + i * 70, 118 + (i % 2) * 6]], 2, { taper: 0.4 });
+      for (let i = 0; i < 5; i++) pen(g, [[10 + i * 70, 144], [30 + i * 70, 138], [50 + i * 70, 144]], 2, { taper: 0.4 });
     } },
-    boat: { w: 150, h: 140, draw(g) {
-      pen(g, [[20, 92], [40, 108], [110, 108], [132, 88]], 4, { taper: 0.05 });
-      pen(g, [[20, 92], [132, 88]], 3, { taper: 0.05 });
-      pen(g, [[74, 90], [74, 14]], 3, { taper: 0.05 });
-      g.beginPath(); g.moveTo(78, 18); g.lineTo(122, 78); g.lineTo(78, 82); g.closePath(); g.fillStyle = A(DOODLE_INK, 0.14); g.fill();
-      pen(g, [[78, 18], [122, 78], [78, 82]], 2.6, { taper: 0.05, closed: false });
-      for (let i = 0; i < 3; i++) pen(g, [[78, 34 + i * 16], [104 - i * 4, 48 + i * 14]], 1.2, { taper: 0.3 });
-      g.beginPath(); g.moveTo(70, 20); g.lineTo(46, 34); g.lineTo(70, 44); g.closePath(); g.fillStyle = A(DOODLE_INK, 0.24); g.fill();
-      for (let i = 0; i < 3; i++) pen(g, [[8 + i * 46, 124], [24 + i * 46, 116], [40 + i * 46, 124], [56 + i * 46, 116]], 2, { taper: 0.4 });
+    drum: { w: 150, h: 140, draw(g) {                                  // a taiko on a stand with two crossed bachi
+      g.beginPath(); tk.trace(g, [[31, 50], [26, 80], [34, 104], [75, 114], [116, 104], [124, 80], [119, 50], [75, 60]]); g.fillStyle = A(DOODLE_INK, 0.14); g.fill();
+      pen(g, tk.ellipsePts(75, 50, 44, 12, 18), 2.8, { closed: true, taper: 0 });
+      pen(g, [[31, 50], [26, 80], [34, 104]], 3.4, { taper: 0.05 }); pen(g, [[119, 50], [124, 80], [116, 104]], 3.4, { taper: 0.05 });
+      pen(g, [[34, 104], [75, 114], [116, 104]], 3.4, { taper: 0.05 });
+      for (let i = 0; i < 7; i++) softDisc(g, 34 + i * 13.7, 66 + Math.sin(i / 6 * PI) * 5, 1.8, DOODLE_INK, 0.8);
+      pen(g, [[40, 108], [24, 134]], 3.4, { taper: 0.1 }); pen(g, [[110, 108], [126, 134]], 3.4, { taper: 0.1 }); pen(g, [[30, 124], [120, 124]], 2.4, { taper: 0.1 });
+      pen(g, [[34, 14], [112, 56]], 4, { taper: 0.1 }); pen(g, [[116, 14], [38, 56]], 4, { taper: 0.1 });
+      [[34, 14], [116, 14]].forEach((q) => softDisc(g, q[0], q[1], 4, DOODLE_INK, 1));
     } },
     waves: { w: 170, h: 44, draw(g) {
       for (let row = 0; row < 3; row++) for (let i = 0; i < 4; i++) { const x = 6 + i * 40 + (row % 2) * 18, y = 12 + row * 12; pen(g, [[x, y + 4], [x + 8, y - 6], [x + 18, y - 4], [x + 24, y + 4], [x + 32, y - 2]], 2, { taper: 0.4 }); }
@@ -572,7 +601,7 @@
       for (let j = 0; j < 7; j++) pen(g, [[16 + j * 8, 52], [14 + j * 8 + (j - 3) * 2, 34], [12 + j * 8 + (j - 3) * 5, 14 + Math.abs(j - 3) * 4]], 2, { taper: 0.5, wobble: 0.06 });
     } },
   };
-  const DOODLE_MARGIN = ['waves', 'koi', 'stars', 'tuft', 'waves', 'boat'];
+  const DOODLE_MARGIN = ['waves', 'koi', 'stars', 'tuft', 'waves', 'drum'];
   function doodleSprite(id) { const d = DOODLES[id]; return { spr: ART.sprite('map|doodle|' + id, d.w, d.h, (g) => d.draw(g)), w: d.w, h: d.h }; }
 
   function worldBox(o) {
@@ -581,8 +610,8 @@
   }
   // fixed doodles, placed relative to the world box: {id, fx, fy (0..1 across the box), dx, dy (px), sc, rot, a}
   const PLACED = [
-    { id: 'compass', fx: 0.15, fy: 0.9, sc: 1.0, a: 0.34 }, { id: 'kraken', fx: 0.66, fy: 0.12, sc: 1.05, a: 0.3 },
-    { id: 'serpent', fx: 0.5, fy: 0.9, sc: 1.0, a: 0.3 }, { id: 'boat', fx: 0.3, fy: 0.07, sc: 0.9, a: 0.32, rot: -0.08 },
+    { id: 'rings', fx: 0.15, fy: 0.9, sc: 1.0, a: 0.34 }, { id: 'bell', fx: 0.66, fy: 0.12, sc: 1.05, a: 0.3 },
+    { id: 'cranes', fx: 0.5, fy: 0.9, sc: 1.0, a: 0.3 }, { id: 'drum', fx: 0.3, fy: 0.07, sc: 0.9, a: 0.32, rot: -0.08 },
     { id: 'koi', fx: 0.88, fy: 0.88, sc: 1.0, a: 0.3, rot: 0.12 }, { id: 'stars', fx: 0.84, fy: 0.5, sc: 1.1, a: 0.24 },
     { id: 'waves', fx: 0.42, fy: 0.5, sc: 1.1, a: 0.24 }, { id: 'waves', fx: 0.06, fy: 0.12, sc: 1.0, a: 0.26 },
     { id: 'tuft', fx: 0.24, fy: 0.72, sc: 1.2, a: 0.22 }, { id: 'waves', fx: 0.75, fy: 0.72, sc: 1.0, a: 0.24 },
@@ -636,7 +665,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // FRAME: the open book. Leather cover, page stack, gutter with sewing, gilt corners, ink-blot vignette. Drawn LAST: the window is transparent.
+  // FRAME: lacquered wood with a kumiko band, gold inlay, gilt corners and grey mist creeping from the edges. Drawn LAST: the window is transparent.
   // ---------------------------------------------------------------------------------------------------------------
   function frameMetrics(w, h) {
     const mx = Math.round(w * 0.0344), my = Math.round(h * 0.05), cb = Math.max(4, Math.round(Math.min(w, h) * 0.03));
@@ -654,78 +683,47 @@
   }
   function frameSprite(g, w, h) {
     const fm = frameMetrics(w, h), mx = fm.mx, my = fm.my, cb = fm.cb, r = R('frame', w, h);
-    // 1. leather
-    const lg = g.createLinearGradient(0, 0, w, h); lg.addColorStop(0, '#48264a'); lg.addColorStop(0.5, '#2c1734'); lg.addColorStop(1, '#1b0e26');
+    // 1. lacquered wood: a deep violet gradient with fine vertical grain and two gold inlay lines
+    const lg = g.createLinearGradient(0, 0, w, h); lg.addColorStop(0, '#2a1f48'); lg.addColorStop(0.5, '#1b1430'); lg.addColorStop(1, '#100b1e');
     g.fillStyle = lg; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 1400; i++) { const x = r() * w, y = r() * h, dark = r() < 0.6; g.fillStyle = dark ? A('#0d0616', 0.1 + r() * 0.14) : A('#8a5a8a', 0.05 + r() * 0.08); g.fillRect(x, y, 0.8 + r() * 2, 0.8 + r() * 2); }
     g.lineCap = 'round';
-    for (let i = 0; i < 90; i++) { const x = r() * w, y = r() * h, a = r() * TAU, l = 6 + r() * 16; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + (r() - 0.5) * 6, y + Math.sin(a) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.lineWidth = 0.6 + r() * 0.8; g.strokeStyle = A(r() < 0.5 ? '#0d0616' : '#9a6a9a', 0.12 + r() * 0.1); g.stroke(); }
-    // blind-tooled gold border lines on the cover
+    for (let i = 0; i < 90; i++) { const x = r() * w, y = r() * h, l = 20 + r() * 60; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y + l); g.lineWidth = 0.6 + r() * 0.6; g.strokeStyle = A(r() < 0.5 ? '#000000' : '#c8b8ff', 0.06); g.stroke(); }
     [[0.34, 0.6, 1.6], [0.66, 0.28, 1]].forEach((p) => { g.strokeStyle = A(GOLD, p[1]); g.lineWidth = p[2]; g.strokeRect(cb * p[0], cb * p[0], w - cb * p[0] * 2, h - cb * p[0] * 2); });
     g.strokeStyle = A('#ffffff', 0.12); g.lineWidth = 1; g.beginPath(); g.moveTo(1, h - 1); g.lineTo(1, 1); g.lineTo(w - 1, 1); g.stroke();
     g.strokeStyle = A('#000000', 0.4); g.beginPath(); g.moveTo(w - 1, 1); g.lineTo(w - 1, h - 1); g.lineTo(1, h - 1); g.stroke();
-    // 2. the page block: stacked page edges on every side
-    g.fillStyle = '#c9b184'; g.fillRect(cb, cb, w - 2 * cb, h - 2 * cb);
-    g.save(); g.beginPath(); g.rect(cb, cb, w - 2 * cb, h - 2 * cb); g.clip();
-    const sideN = Math.floor((mx - cb) / 2.2), tbN = Math.floor((my - cb) / 2.2);
-    for (let i = 0; i < sideN; i++) {
-      const dx = cb + i * 2.2, light = r() < 0.55, ins = r() * 5;
-      [dx, w - dx - 1].forEach((x, sd) => { g.fillStyle = light ? A('#f6ead0', 0.9) : A('#b89a68', 0.7); g.fillRect(x, cb + ins + i * 0.6, 1.3, h - 2 * cb - 2 * ins - i * 1.2); });
+    // 2. the kumiko band between the inlay and the window: an asanoha (hemp leaf) lattice of thin lines, clipped to the margin ring, gold hairline inside
+    g.save(); g.beginPath(); g.rect(cb, cb, w - 2 * cb, h - 2 * cb); g.rect(mx, my, w - 2 * mx, h - 2 * my); g.clip('evenodd');
+    const ar = 12, ax = ar * SQ3, ay = ar * 1.5;
+    g.lineWidth = 1; g.strokeStyle = A('#3a2f5c', 0.9); g.beginPath();
+    for (let row = -1; row * ay < h + ar; row++) for (let col = -1; col * ax < w + ax; col++) {
+      const cx = col * ax + (row & 1 ? ax / 2 : 0), cy = row * ay, V = [];
+      for (let i = 0; i < 6; i++) { const a = cornerAng(i); V.push([cx + Math.cos(a) * ar, cy + Math.sin(a) * ar]); }
+      for (let i = 0; i < 6; i++) { g.moveTo(cx, cy); g.lineTo(V[i][0], V[i][1]); g.moveTo(V[i][0], V[i][1]); g.lineTo(V[(i + 1) % 6][0], V[(i + 1) % 6][1]); }
+      for (let i = 0; i < 6; i += 2) { g.moveTo(V[i][0], V[i][1]); g.lineTo(V[(i + 2) % 6][0], V[(i + 2) % 6][1]); }
     }
-    for (let i = 0; i < tbN; i++) {
-      const dy = cb + i * 2.2, light = r() < 0.55, ins = r() * 5;
-      [dy, h - dy - 1].forEach((y) => { g.fillStyle = light ? A('#f6ead0', 0.9) : A('#b89a68', 0.7); g.fillRect(cb + ins + i * 0.6, y, w - 2 * cb - 2 * ins - i * 1.2, 1.3); });
-    }
-    const sh = g.createLinearGradient(cb, 0, mx, 0); sh.addColorStop(0, A('#1a0e22', 0.55)); sh.addColorStop(0.35, A('#1a0e22', 0)); g.fillStyle = sh; g.fillRect(cb, cb, mx - cb, h - 2 * cb);
-    const sh2 = g.createLinearGradient(w - cb, 0, w - mx, 0); sh2.addColorStop(0, A('#1a0e22', 0.55)); sh2.addColorStop(0.35, A('#1a0e22', 0)); g.fillStyle = sh2; g.fillRect(w - mx, cb, mx - cb, h - 2 * cb);
-    const sh3 = g.createLinearGradient(0, cb, 0, my); sh3.addColorStop(0, A('#1a0e22', 0.5)); sh3.addColorStop(0.4, A('#1a0e22', 0)); g.fillStyle = sh3; g.fillRect(cb, cb, w - 2 * cb, my - cb);
-    const sh4 = g.createLinearGradient(0, h - cb, 0, h - my); sh4.addColorStop(0, A('#1a0e22', 0.5)); sh4.addColorStop(0.4, A('#1a0e22', 0)); g.fillStyle = sh4; g.fillRect(cb, h - my, w - 2 * cb, my - cb);
+    g.stroke();
     g.restore();
+    g.strokeStyle = A(GOLD, 0.5); g.lineWidth = 1; g.strokeRect(mx - 0.5, my - 0.5, w - 2 * mx + 1, h - 2 * my + 1);
     // 3. the window
     g.clearRect(mx, my, w - 2 * mx, h - 2 * my);
     const iw = w - 2 * mx, ih = h - 2 * my;
     g.save(); g.beginPath(); g.rect(mx, my, iw, ih); g.clip();
-    // 4. paper curling into the stack: an inner shadow on every side
-    [[mx, my, mx + 16, my, 'x'], [w - mx, my, w - mx - 16, my, 'x']].forEach((p) => { const gr = g.createLinearGradient(p[0], 0, p[2], 0); gr.addColorStop(0, A('#2a1a10', 0.32)); gr.addColorStop(1, A('#2a1a10', 0)); g.fillStyle = gr; g.fillRect(Math.min(p[0], p[2]), my, 16, ih); });
-    [[my, my + 14], [h - my, h - my - 14]].forEach((p) => { const gr = g.createLinearGradient(0, p[0], 0, p[1]); gr.addColorStop(0, A('#2a1a10', 0.3)); gr.addColorStop(1, A('#2a1a10', 0)); g.fillStyle = gr; g.fillRect(mx, Math.min(p[0], p[1]), iw, 14); });
-    // 5. the gutter
+    // 4. inner bevel shadows on every side
+    [[mx, my, mx + 16, my, 'x'], [w - mx, my, w - mx - 16, my, 'x']].forEach((p) => { const gr = g.createLinearGradient(p[0], 0, p[2], 0); gr.addColorStop(0, A('#100b1e', 0.3)); gr.addColorStop(1, A('#100b1e', 0)); g.fillStyle = gr; g.fillRect(Math.min(p[0], p[2]), my, 16, ih); });
+    [[my, my + 14], [h - my, h - my - 14]].forEach((p) => { const gr = g.createLinearGradient(0, p[0], 0, p[1]); gr.addColorStop(0, A('#100b1e', 0.3)); gr.addColorStop(1, A('#100b1e', 0)); g.fillStyle = gr; g.fillRect(mx, Math.min(p[0], p[1]), iw, 14); });
+    // 6. the Hush at the edges: a soft violet-grey vignette and mist blobs creeping in from the window edges
     const gx = w / 2;
-    const gg = g.createLinearGradient(gx - 90, 0, gx + 90, 0);
-    gg.addColorStop(0, A('#2a1a10', 0)); gg.addColorStop(0.36, A('#2a1a10', 0.05)); gg.addColorStop(0.47, A('#2a1a10', 0.2)); gg.addColorStop(0.5, A('#1a0e08', 0.42)); gg.addColorStop(0.53, A('#2a1a10', 0.2)); gg.addColorStop(0.64, A('#2a1a10', 0.05)); gg.addColorStop(1, A('#2a1a10', 0));
-    g.fillStyle = gg; g.fillRect(gx - 90, my, 180, ih);
-    [-1, 1].forEach((sd) => { const gr = g.createLinearGradient(gx + sd * 70, 0, gx + sd * 118, 0); gr.addColorStop(0, A('#fff8e4', 0)); gr.addColorStop(0.5, A('#fff8e4', 0.13)); gr.addColorStop(1, A('#fff8e4', 0)); g.fillStyle = gr; g.fillRect(Math.min(gx + sd * 70, gx + sd * 118), my, 48, ih); });
-    g.beginPath(); g.moveTo(gx, my); g.lineTo(gx, my + ih); g.lineWidth = 1.4; g.strokeStyle = A('#1a0e08', 0.5); g.stroke();
-    for (let y = my + 14, i = 0; y < my + ih - 20; y += 34, i++) {                                    // the binding thread
-      g.lineCap = 'round';
-      g.beginPath(); g.moveTo(gx, y); g.lineTo(gx, y + 17); g.lineWidth = 2.6; g.strokeStyle = A('#3a2410', 0.35); g.stroke();
-      g.beginPath(); g.moveTo(gx - 0.5, y); g.lineTo(gx - 0.5, y + 17); g.lineWidth = 1.8; g.strokeStyle = A('#e6c98a', 0.7); g.stroke();
-      g.beginPath(); g.moveTo(gx - 7, y + 8.5); g.lineTo(gx + 7, y + 8.5); g.lineWidth = 2.2; g.strokeStyle = A('#3a2410', 0.3); g.stroke();
-      g.beginPath(); g.moveTo(gx - 7, y + 8); g.lineTo(gx + 7, y + 8); g.lineWidth = 1.5; g.strokeStyle = A('#e6c98a', 0.6); g.stroke();
-    }
-    // 6. ink-blot vignette: soft shade plus organic blots that creep in from the corners
     const vg = g.createRadialGradient(gx, h / 2, Math.min(iw, ih) * 0.42, gx, h / 2, Math.hypot(iw, ih) * 0.56);
-    vg.addColorStop(0, A('#1a1340', 0)); vg.addColorStop(1, A('#1a1340', 0.34)); g.fillStyle = vg; g.fillRect(mx, my, iw, ih);
-    const rb = R('blots', w, h);
-    for (let i = 0; i < 46; i++) {
-      const edge = Math.floor(rb() * 4), u = rb(), rad = 10 + rb() * 22;
+    vg.addColorStop(0, A('#2a2640', 0)); vg.addColorStop(1, A('#2a2640', 0.3)); g.fillStyle = vg; g.fillRect(mx, my, iw, ih);
+    const rb = R('mist', w, h);
+    for (let i = 0; i < 30; i++) {
+      const edge = Math.floor(rb() * 4), u = rb(), rad = 24 + rb() * 40, a = 0.06 + rb() * 0.08;
       let x = mx + u * iw, y = my + u * ih;
-      if (edge === 0) y = my - rad * 0.2; else if (edge === 1) y = my + ih + rad * 0.2; else if (edge === 2) x = mx - rad * 0.2; else x = mx + iw + rad * 0.2;
-      g.globalAlpha = 0.08 + rb() * 0.1; tk.inkBlot(g, x, y, rad, { color: '#1a1340', seed: i, jag: 0.4, n: 9 }); g.globalAlpha = 1;
+      if (edge === 0) y = my - rad * 0.1; else if (edge === 1) y = my + ih + rad * 0.1; else if (edge === 2) x = mx - rad * 0.1; else x = mx + iw + rad * 0.1;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, A('#5a566e', a)); gr.addColorStop(1, A('#5a566e', 0)); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
-    [[mx, my, 1, 1], [mx + iw, my, -1, 1], [mx, my + ih, 1, -1], [mx + iw, my + ih, -1, -1]].forEach((c, i) => {
-      g.globalAlpha = 0.3; tk.inkBlot(g, c[0], c[1], 42 + i * 3, { color: '#1a1340', seed: 20 + i, jag: 0.42, n: 12 }); g.globalAlpha = 0.2; tk.inkBlot(g, c[0] + c[2] * 34, c[1] + c[3] * 18, 20, { color: '#241a3a', seed: 30 + i, jag: 0.4 }); g.globalAlpha = 1;
-    });
-    // 7. page curls, bottom corners
-    [[mx + iw, my + ih, -1], [mx, my + ih, 1]].forEach((c) => {
-      const x = c[0], y = c[1], d = c[2], sz = 40;
-      g.save(); g.beginPath(); g.moveTo(x, y - sz); g.lineTo(x, y); g.lineTo(x + d * sz, y); g.closePath(); g.clip();
-      g.fillStyle = A('#2a1a10', 0.35); g.fillRect(x - sz, y - sz, sz * 2, sz * 2); g.restore();
-      const cg = g.createLinearGradient(x, y, x + d * sz * 0.5, y - sz * 0.5); cg.addColorStop(0, '#d8c08a'); cg.addColorStop(1, '#fbf1d6');
-      g.beginPath(); g.moveTo(x, y - sz * 0.92); g.quadraticCurveTo(x + d * sz * 0.34, y - sz * 0.34, x + d * sz * 0.92, y); g.lineTo(x, y); g.closePath(); g.fillStyle = cg; g.fill();
-      g.lineWidth = 1.2; g.strokeStyle = A('#5a4028', 0.6); g.beginPath(); g.moveTo(x, y - sz * 0.92); g.quadraticCurveTo(x + d * sz * 0.34, y - sz * 0.34, x + d * sz * 0.92, y); g.stroke();
-    });
     g.restore();
-    // 8. gilt corners and clasps
+    // 8. gilt corners, and two gold mon fittings at the top and bottom centre
     [[0, 0, 1, 1], [w, 0, -1, 1], [0, h, 1, -1], [w, h, -1, -1]].forEach((c) => { g.save(); g.translate(c[0], c[1]); g.scale(c[2], c[3]); cornerCap(g, Math.min(1, cb * 3.2 / 70) * 0.9 + 0.1); g.restore(); });
     [[gx, cb * 0.5], [gx, h - cb * 0.5]].forEach((c) => { tk.celFill(g, [[c[0] - 12, c[1], 1], [c[0], c[1] - cb * 0.42, 1], [c[0] + 12, c[1], 1], [c[0], c[1] + cb * 0.42, 1]], GOLD, { line: 1.6, depth: 3, hi: true, hiW: 1.5, tension: 0.2 }); });
   }
@@ -733,12 +731,11 @@
     w = pos(w, 1280); h = pos(h, 720); t = num(t, 0);
     const spr = ART.sprite('map|frame|' + Math.round(w) + 'x' + Math.round(h), w, h, (g) => frameSprite(g, w, h));
     ART.blit(ctx, spr, 0, 0, w, h);
-    const fm = frameMetrics(w, h), mo = tk.motion(), gx = w / 2;
-    // the bookmark ribbon sways a hair; gilt corners twinkle
-    const sw = Math.sin(t * 1.3) * 1.6 * mo;
+    const fm = frameMetrics(w, h), mo = tk.motion();
+    // a slow gold shimmer along the inner edge; gilt corners twinkle
     ctx.save();
-    ctx.beginPath(); ctx.moveTo(gx + 10, fm.cb * 0.4); ctx.lineTo(gx + 20, fm.cb * 0.4); ctx.lineTo(gx + 20 + sw * 0.5, fm.my + 2); ctx.lineTo(gx + 15 + sw * 0.6, fm.my - 5); ctx.lineTo(gx + 10 + sw * 0.5, fm.my + 2); ctx.closePath();
-    ctx.fillStyle = pal.vermilion; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = pal.ink; ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = A(pal.gold2, clamp(0.12 + 0.1 * Math.sin(t * 1.3) * mo, 0, 1));
+    ctx.strokeRect(fm.mx + 1, fm.my + 1, w - 2 * fm.mx - 2, h - 2 * fm.my - 2);
     ctx.restore();
     [[fm.cb * 0.55, fm.cb * 0.55], [w - fm.cb * 0.55, fm.cb * 0.55], [fm.cb * 0.55, h - fm.cb * 0.55], [w - fm.cb * 0.55, h - fm.cb * 0.55]].forEach((c, i) => {
       const a = 0.5 + 0.5 * Math.sin(t * 2 + i * 1.7);
@@ -746,7 +743,7 @@
     });
   }
   // ---------------------------------------------------------------------------------------------------------------
-  // FOG EDGE: the soft ink-wash boundary where painted ground meets blank paper (and the torn rim where it meets the Void). One cached strip per
+  // FOG EDGE: the sound wavefront where woken ground meets silent ground (and the dark rim where it meets Dead Silence). One cached strip per
   // boundary side, drawn rotated: cells = [{x, y, mask, voidMask}], bit d of mask = the neighbour across side d (MAP.DIRS order) is fog
   // ---------------------------------------------------------------------------------------------------------------
   const FE_W = 1.5, FE_H = 0.72, FE_OY = 0.2;                         // strip box in units of s, and where the edge line sits inside it
@@ -760,22 +757,23 @@
       const gr = g.createLinearGradient(0, oy - s * 0.24, 0, oy - s * 0.02); gr.addColorStop(0, A('#1a0e22', 0)); gr.addColorStop(1, A('#1a0e22', 0.28));
       g.fillStyle = gr; g.fillRect(x0 - s * 0.1, oy - s * 0.24, s * 1.2, s * 0.22);
       g.beginPath(); g.moveTo(top[0][0], top[0][1]); top.forEach((q) => g.lineTo(q[0], q[1])); for (let i = line.length - 1; i >= 0; i--) g.lineTo(line[i][0], line[i][1]); g.closePath();
-      g.fillStyle = A('#fbf3dc', 0.96); g.fill();
-      g.lineWidth = 1 * k; g.strokeStyle = A('#8a6a4a', 0.55); g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.stroke();
+      g.fillStyle = A('#1d1a2e', 0.9); g.fill();
+      g.lineWidth = 1 * k; g.strokeStyle = A('#8e8aa3', 0.55); g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.stroke();
       g.lineCap = 'round';
-      for (let i = 0; i < 20; i++) { const x = lerp(x0, x1, r()), y = oy + s * 0.01 + (U.noise.n1(x * 0.06 + (v + 3) * 9.1, v + 3) * 2 - 1) * s * 0.03, a = PI / 2 + (r() - 0.5) * 1.1, l = (2 + r() * 4) * k; g.beginPath(); g.moveTo(x, y - 1); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.lineWidth = 0.7 * k; g.strokeStyle = A('#fffdf2', 0.85); g.stroke(); }
+      for (let i = 0; i < 20; i++) { const x = lerp(x0, x1, r()), y = oy + s * 0.01 + (U.noise.n1(x * 0.06 + (v + 3) * 9.1, v + 3) * 2 - 1) * s * 0.03 - r() * s * 0.08, l = (2 + r() * 4) * k; g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y); g.lineWidth = 0.8 * k; g.strokeStyle = i % 2 ? A('#ffffff', 0.5) : A('#8e8aa3', 0.5); g.stroke(); }
     } else {
       g.lineCap = 'round'; g.lineJoin = 'round';
       const line = noisePoly(x0 - s * 0.06, x1 + s * 0.06, oy + s * 0.03, s * 0.03, v + 1, s * 0.09);
-      [0.56, 0.5, 0.44, 0.38, 0.32, 0.26, 0.2, 0.14, 0.08].map((wd, i) => [wd, 0.03 + i * 0.004]).forEach((p2) => { g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.lineWidth = p2[0] * s; g.strokeStyle = A('#5a4570', p2[1]); g.stroke(); });
-      tk.inkPath(g, line.map((q) => [q[0], q[1] + s * 0.02]), { w: 1.5 * k, color: '#2a1f3a', alpha: 0.45, taper: 0.3, wobble: 0.3, seed: v });
-      const nT = 1 + (r() < 0.6 ? 1 : 0);
+      [0.56, 0.5, 0.44, 0.38, 0.32, 0.26, 0.2, 0.14, 0.08].map((wd, i) => [wd, 0.03 + i * 0.004]).forEach((p2) => { g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.lineWidth = p2[0] * s; g.strokeStyle = A('#8e8aa3', p2[1]); g.stroke(); });
+      // the wavefront: a cyan underline and a bright white line along the boundary
+      g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q[0], q[1] + s * 0.02) : g.moveTo(q[0], q[1] + s * 0.02)));
+      g.lineWidth = 3 * k; g.strokeStyle = A('#5ff5ff', 0.22); g.stroke();
+      g.lineWidth = 1.2 * k; g.strokeStyle = A('#ffffff', 0.55); g.stroke();
+      const nT = 1 + (r() < 0.6 ? 1 : 0);                              // one or two tiny ripple arcs on the silent side
       for (let i = 0; i < nT; i++) {
-        const x = lerp(x0 + s * 0.15, x1 - s * 0.15, r()), j1 = (r() - 0.5) * s * 0.12, j2 = (r() - 0.5) * s * 0.2;
-        tk.inkPath(g, [[x, oy + s * 0.04], [x + j1, oy + s * 0.15], [x + j2, oy + s * 0.27], [x + j2 * 1.4, oy + s * (0.34 + r() * 0.08)]], { w: 1.1 * k, color: '#3a2a4a', alpha: 0.3, taper: 0.5, wobble: 0.2, seed: v * 3 + i });
-        if (r() < 0.6) tk.inkPath(g, [[x + j1 * 0.6, oy + s * 0.12], [x + j1 + s * 0.06, oy + s * 0.2], [x + j1 + s * 0.1, oy + s * 0.25]], { w: 0.8 * k, color: '#3a2a4a', alpha: 0.24, taper: 0.5, seed: v * 5 + i });
+        const x = lerp(x0 + s * 0.15, x1 - s * 0.15, r()), rr = s * (0.08 + r() * 0.06), yy = oy + s * (0.14 + r() * 0.12);
+        g.beginPath(); g.arc(x, yy, rr, 0.15 * PI, 0.85 * PI); g.lineWidth = 1 * k; g.strokeStyle = A('#e8fbff', 0.4); g.stroke();
       }
-      for (let i = 0; i < 3; i++) softDisc(g, lerp(x0, x1, r()), oy + s * (0.14 + r() * 0.24), (0.6 + r() * 1.1) * k, '#3a2a4a', 0.24);
     }
     g.restore();
   }
@@ -816,10 +814,13 @@
   // ---------------------------------------------------------------------------------------------------------------
   // TOKEN: the party on the hex. ids[0] is the leader (larger, in front), ids[1] the second hero (smaller, behind)
   // ---------------------------------------------------------------------------------------------------------------
-  function inkDrop(g, x, y, r, fill, line) {
-    g.beginPath(); g.moveTo(x, y - r * 1.25); g.bezierCurveTo(x + r * 0.5, y - r * 0.45, x + r * 0.95, y + r * 0.1, x + r * 0.62, y + r * 0.72); g.bezierCurveTo(x + r * 0.3, y + r * 1.15, x - r * 0.3, y + r * 1.15, x - r * 0.62, y + r * 0.72);
-    g.bezierCurveTo(x - r * 0.95, y + r * 0.1, x - r * 0.5, y - r * 0.45, x, y - r * 1.25); g.closePath();
-    g.fillStyle = fill; g.fill(); if (line) { g.lineWidth = Math.max(1, r * 0.22); g.strokeStyle = line; g.stroke(); }
+  // the echo ping: a solid centre dot, one full ring, and the outer ring broken into left and right arcs
+  function echoPing(g, x, y, r, fill, line) {
+    g.beginPath(); g.arc(x, y, r * 0.38, 0, TAU); g.fillStyle = fill; g.fill(); if (line) { g.lineWidth = Math.max(0.8, r * 0.12); g.strokeStyle = line; g.stroke(); }
+    g.lineCap = 'round'; g.lineWidth = Math.max(1, r * 0.25); g.strokeStyle = fill;
+    g.beginPath(); g.arc(x, y, r * 0.8, 0, TAU); g.stroke();
+    g.beginPath(); g.arc(x, y, r * 1.2, -0.9, 0.9); g.stroke();
+    g.beginPath(); g.arc(x, y, r * 1.2, PI - 0.9, PI + 0.9); g.stroke();
   }
   function token(ctx, heroIds, x, y, t, moving, opts) {
     opts = opts || {};
@@ -830,7 +831,7 @@
     const bob = mv ? Math.abs(Math.sin(t * 8)) * 3.2 * k * mo : (0.5 + 0.5 * Math.sin(t * 1.9)) * 1.6 * k * mo;
     const ga = ctx.globalAlpha;
     if (opts.alpha !== undefined) ctx.globalAlpha = ga * cA(opts.alpha);
-    // a gold ink ring on the hex and two soft ink shadows, pulsing a little
+    // a gold ring on the hex and two soft shadows, pulsing a little
     if (opts.ring !== false) {
       ctx.save(); ctx.translate(x, y + 0.36 * size); ctx.scale(1, 0.34);
       ctx.beginPath(); ctx.arc(0, 0, size * (0.66 + 0.02 * Math.sin(t * 2.4) * mo), 0, TAU); ctx.setLineDash([size * 0.16, size * 0.1]); ctx.lineDashOffset = -t * size * 0.2 * mo;
@@ -848,14 +849,17 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // ROUTE: the dotted brush-stroke path preview with an ink cost pill
+  // ROUTE: the dotted note path preview with an echo cost pill
   // ---------------------------------------------------------------------------------------------------------------
   const asPts = (pts) => (Array.isArray(pts) ? pts : []).map((q) => (Array.isArray(q) ? [num(q[0], 0), num(q[1], 0)] : [num(q && q.x, 0), num(q && q.y, 0)]));
+  // a note head on the path: v0 head only, v1 head and stem, v2 head, stem and flag (drawn to fit the small dab sprite)
   function dabSprite(g, w, h, v) {
-    const r = R('dab', v), pts = [];
-    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, kk = 1 + (r() - 0.5) * 0.5; pts.push([w / 2 + Math.cos(a) * w * 0.4 * kk * (v === 1 ? 1.15 : 1), h / 2 + Math.sin(a) * h * 0.4 * kk]); }
-    g.beginPath(); tk.trace(g, pts); g.fillStyle = '#3a2a1a'; g.fill();
-    g.beginPath(); g.ellipse(w * 0.4, h * 0.38, w * 0.12, h * 0.1, 0, 0, TAU); g.fillStyle = A('#fff2c8', 0.5); g.fill();
+    const hx = w * 0.4, hy = h * 0.7, rx = w * 0.27, ry = h * 0.2;
+    g.fillStyle = '#2a2245'; g.strokeStyle = '#2a2245'; g.lineCap = 'round';
+    if (v > 0) { const sx = hx + rx * 0.86; g.beginPath(); g.moveTo(sx, hy - ry * 0.2); g.lineTo(sx, h * 0.04); g.lineWidth = Math.max(0.7, w * 0.11); g.stroke();
+      if (v > 1) { g.beginPath(); g.moveTo(sx, h * 0.04); g.quadraticCurveTo(sx + w * 0.3, h * 0.16, sx + w * 0.2, h * 0.4); g.stroke(); } }
+    g.beginPath(); g.ellipse(hx, hy, rx, ry, -0.35, 0, TAU); g.fill();
+    g.beginPath(); g.ellipse(hx - w * 0.06, hy - h * 0.05, w * 0.07, h * 0.06, 0, 0, TAU); g.fillStyle = A('#ffffff', 0.5); g.fill();
   }
   function pill(ctx, x, y, k, text, ok, t) {
     const w = (text.length > 2 ? 64 : 54) * k, h = 28 * k, mo = tk.motion();
@@ -867,7 +871,7 @@
     ctx.save(); capsule(); ctx.clip(); ctx.translate(-2.4 * k, 3.4 * k); capsule(); ctx.fillStyle = A(ok ? '#b8965a' : '#7d1230', 0.4); ctx.fill('evenodd'); ctx.restore();
     ctx.save(); capsule(); ctx.clip(); ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h * 0.42); ctx.fillStyle = A('#ffffff', ok ? 0.5 : 0.22); ctx.fill(); ctx.restore();
     capsule(); ctx.lineJoin = 'round'; ctx.lineWidth = 2.4 * k; ctx.strokeStyle = pal.ink; ctx.stroke();
-    inkDrop(ctx, -w / 2 + 15 * k, 0.5 * k, 6.4 * k, ok ? '#2a1a6a' : '#fff0f0', pal.ink);
+    echoPing(ctx, -w / 2 + 15 * k, 0.5 * k, 5.2 * k, ok ? '#2a1a6a' : '#fff0f0', null);
     ctx.font = '900 ' + Math.round(17 * k) + 'px ' + tk.font.num; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     ctx.lineWidth = 3.4 * k; ctx.strokeStyle = ok ? '#fffaf0' : pal.ink; ctx.strokeText(text, 8 * k, 1 * k); ctx.fillStyle = ok ? pal.ink : '#ffffff'; ctx.fillText(text, 8 * k, 1 * k);
     ctx.restore();
@@ -886,12 +890,12 @@
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(dense[2 * i] - dense[2 * i - 2], dense[2 * i + 1] - dense[2 * i - 1]));
     const total = cum[n - 1] || 0;
     if (n > 1) {
-      ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';                       // the wet underlay of the brush
+      ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';                       // the soft underlay of the path
       ctx.beginPath(); ctx.moveTo(dense[0], dense[1]); for (let i = 1; i < n; i++) ctx.lineTo(dense[2 * i], dense[2 * i + 1]);
       ctx.lineWidth = size * 0.5; ctx.strokeStyle = A(wash, 0.12); ctx.stroke();
       ctx.lineWidth = size * 0.26; ctx.strokeStyle = A(wash, 0.14); ctx.stroke();
       ctx.restore();
-      // ink dabs marching toward the destination
+      // note heads marching toward the destination
       const sp = size * 0.27, phase = (t * size * 0.55 * mo) % sp, dw = 7.4 * k, dh = 6.4 * k;
       let j = 1;
       for (let i = 0, d = phase; d < total; i++, d += sp) {
@@ -905,7 +909,7 @@
       }
       if (col !== '#7a4a12') { /* custom colour: a thin line under the dabs so it shows */ }
     }
-    // the destination: a small ink ring and the cost pill
+    // the destination: a small ring and the cost pill
     const e = P[P.length - 1], ex = e[0], ey = e[1];
     ctx.save(); ctx.translate(ex, ey); ctx.scale(1, 1);
     ctx.beginPath(); ctx.arc(0, 0, size * (0.3 + 0.03 * Math.sin(t * 3.2) * mo), 0, TAU); ctx.lineWidth = 2.4 * k; ctx.strokeStyle = A(ok ? pal.ink : '#7d1230', 0.85); ctx.stroke();
@@ -917,7 +921,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // BRUSH PREVIEW: the cells a brush would paint, as one wet shape with a marching ink outline
+  // BRUSH PREVIEW: the cells a Song would wake, as one shape with a marching outline and a sine sheen
   // ---------------------------------------------------------------------------------------------------------------
   // the sides of a set of hexes (centres in px): inner = shared by two hexes of the set, outer = the boundary of the union
   function brushEdges(hexes, size) {
@@ -942,12 +946,15 @@
     ctx.save();
     ctx.beginPath(); P.forEach((c) => hexPath(ctx, c[0], c[1], size * 0.985));
     ctx.fillStyle = A(fill, (ok ? 0.24 : 0.2) + 0.1 * pulse); ctx.fill();
-    // wet sheen sweeping across
+    // a sheen sweeping across along a sine path
     ctx.save(); ctx.clip();
     const bx = P.reduce((m, c) => Math.min(m, c[0]), Infinity) - size, bw = P.reduce((m, c) => Math.max(m, c[0]), -Infinity) + size - bx;
-    const sx = bx + ((t * 0.5 * mo) % 1.4 - 0.2) * bw, gr = ctx.createLinearGradient(sx - size * 0.5, 0, sx + size * 0.5, 0);
-    gr.addColorStop(0, A('#ffffff', 0)); gr.addColorStop(0.5, A('#ffffff', ok ? 0.34 : 0.2)); gr.addColorStop(1, A('#ffffff', 0));
-    ctx.fillStyle = gr; ctx.fillRect(bx, P.reduce((m, c) => Math.min(m, c[1]), Infinity) - size, bw, P.length * size * 2);
+    const sx = bx + ((t * 0.5 * mo) % 1.4 - 0.2) * bw, by0 = P.reduce((m, c) => Math.min(m, c[1]), Infinity) - size, strip = size * 0.25, nS = Math.min(48, Math.ceil(P.length * size * 2 / strip));
+    for (let i = 0; i < nS; i++) {
+      const yy = by0 + i * strip, cx2 = sx + Math.sin(yy * 0.045 + t * 1.2 * mo) * size * 0.22, gr = ctx.createLinearGradient(cx2 - size * 0.5, 0, cx2 + size * 0.5, 0);
+      gr.addColorStop(0, A('#ffffff', 0)); gr.addColorStop(0.5, A('#ffffff', ok ? 0.34 : 0.2)); gr.addColorStop(1, A('#ffffff', 0));
+      ctx.fillStyle = gr; ctx.fillRect(bx, yy, bw, strip + 0.5);
+    }
     ctx.restore();
     // inner seams, then the boundary of the union
     const be = brushEdges(P, size), inner = be.inner, outer = be.outer;
@@ -959,10 +966,10 @@
     ctx.setLineDash([9 * k, 5 * k]); ctx.lineDashOffset = -t * 22 * k * mo; ctx.lineWidth = 2.6 * k; ctx.strokeStyle = A(lineCol, 0.95); ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
-    // sparkles on the wet paint, or an X on an impossible brush
+    // ring pulses on the cells, or an X on an impossible Song
     P.forEach((c, i) => {
       const a = 0.5 + 0.5 * Math.sin(t * 2.6 + i * 1.9);
-      if (ok && a > 0.4) tk.sparkle(ctx, c[0] + Math.sin(i * 2.3) * size * 0.25, c[1] + Math.cos(i * 1.7) * size * 0.22, (3 + 3 * a) * k, { color: '#eaffff', alpha: a, glow: 0.3 });
+      if (ok && a > 0.4) { ctx.beginPath(); ctx.arc(c[0] + Math.sin(i * 2.3) * size * 0.25, c[1] + Math.cos(i * 1.7) * size * 0.22, (2.5 + 4 * a) * k, 0, TAU); ctx.lineWidth = Math.max(0.8, 1.2 * k); ctx.strokeStyle = A('#eaffff', a); ctx.stroke(); }
     });
     if (!ok) {
       const c0 = P[0];
@@ -974,16 +981,19 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // PAINT BLOOM: the reveal. A watercolour wash spreading from the brush touch point with a wet edge, flung droplets and a fading gleam.
-  //   ART.map.paintBloom(ctx, x, y, size, p, opts?)   p = 0..1;  opts {tile, seed, ox, oy, fromX, fromY}
-  //   With opts.tile the bloom PAINTS the hex (the wash is revealed inside the growing blot, over whatever is under it: draw the fog hex first);
-  //   without it, it is a neutral wet-paper wash that fades out over a hex that is already painted underneath.
+  // PAINT BLOOM: the reveal (the name stays). A circular sound wavefront spreads from the touch point: inside it the woken hex is revealed, the
+  // front is a bright double line with a second ring behind it, three rings escape past the hex and a note rises.
+  //   ART.map.paintBloom(ctx, x, y, size, p, opts?)   p = 0..1;  opts {tile, seed, ox, oy, fromX, fromY, note}
+  //   With opts.tile the bloom WAKES the hex (revealed inside the growing circle, over whatever is under it: draw the fog hex first);
+  //   without it, it is a neutral wash that fades out over a hex that is already woken underneath. opts.note (0..6) tints the rising note.
   // ---------------------------------------------------------------------------------------------------------------
-  function blobClip(ctx, tx, ty, rr, sd, p) {
-    const n = 24;
+  const NOTE_RAMP = ['#ff7eb6', '#ff9a2e', '#f5c96a', '#3fd6b0', '#5fb4ff', '#7a6bff', '#c49bff'];
+  // a circle polygon of 28 points with a gentle six-lobe ripple
+  function waveClip(ctx, tx, ty, rr, sd, p) {
+    const n = 28;
     ctx.beginPath();
     for (let i = 0; i <= n; i++) {
-      const a = (i % n) / n * TAU, kk = 1 + 0.2 * (U.noise.n1(a * 2.1 + sd * 3.3 + p * 1.6, sd) * 2 - 1) + 0.08 * Math.sin(a * 5 + sd);
+      const a = (i % n) / n * TAU, kk = 1 + 0.035 * Math.sin(6 * a + sd + 9 * p);
       const px = tx + Math.cos(a) * rr * kk, py = ty + Math.sin(a) * rr * kk;
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
@@ -996,52 +1006,44 @@
     const sd = Math.floor(num(opts.seed, U.hash(Math.round(x), Math.round(y)) & 1023));
     if (p <= 0) return;
     if (p >= 1) { if (tile) hex(ctx, 'painted', x, y, size, { tile, seed: sd }); return; }
-    const k = size / BASE, r = R('bloom', sd), hue = tile ? washOf(tile).c : '#c99a5a', deepHue = tk.shade(hue, 0.25);
+    const hue = tile ? washOf(tile).c : '#9fe8ff', light = tile ? mixc(hue, '#ffffff', 0.55) : '#9fe8ff';
     let ox = num(opts.ox, 0), oy = num(opts.oy, 0);
-    if (opts.fromX !== undefined && opts.fromY !== undefined) {                       // touch the hex where the brush arrives from
+    if (opts.fromX !== undefined && opts.fromY !== undefined) {                       // the wave starts where it arrives from
       const a = Math.atan2(num(opts.fromY, y) - y, num(opts.fromX, x) - x); ox = Math.cos(a) * size * 0.7; oy = Math.sin(a) * size * 0.7;
     }
     const tx = x + ox, ty = y + oy, e = U.ease.outCubic(clamp(p / 0.72, 0, 1)), rr = size * (0.06 + (1.15 + Math.hypot(ox, oy) / size) * e);
     const ga = ctx.globalAlpha;
     ctx.save();
-    ctx.beginPath(); hexPath(ctx, x, y, size * 1.02); ctx.clip();                                     // everything stays on the hex
+    ctx.beginPath(); hexPath(ctx, x, y, size * 1.02); ctx.clip();                                     // the wave itself stays on the hex
     if (tile) {
-      ctx.save(); blobClip(ctx, tx, ty, rr, sd, p); ctx.clip();
+      ctx.save(); waveClip(ctx, tx, ty, rr, sd, p); ctx.clip();
       hex(ctx, 'painted', x, y, size, { tile, seed: sd });
       ctx.restore();
     } else {
-      blobClip(ctx, tx, ty, rr, sd, p); ctx.fillStyle = A(hue, 0.34 * (1 - p * p)); ctx.fill();
+      waveClip(ctx, tx, ty, rr, sd, p); ctx.fillStyle = A(hue, 0.34 * (1 - p * p)); ctx.fill();
     }
-    // the wet edge: a darker line where the pigment is still moving, a paler backrun inside it
+    // the wavefront: a coloured line under a white one, and a second ring behind it
     if (p < 0.9) {
       const fade = 1 - p * 0.9;
-      blobClip(ctx, tx, ty, rr, sd, p); ctx.lineJoin = 'round';
-      ctx.lineWidth = size * 0.1; ctx.strokeStyle = A(deepHue, 0.22 * fade); ctx.stroke();
-      ctx.lineWidth = size * 0.035; ctx.strokeStyle = A(tk.shade(hue, 0.5), 0.5 * fade); ctx.stroke();
-      blobClip(ctx, tx, ty, rr * 0.86, sd + 1, p); ctx.lineWidth = size * 0.05; ctx.strokeStyle = A('#fff6dc', 0.34 * fade); ctx.stroke();
-    }
-    // the gleam: a light streak crossing the wet paint
-    const q = clamp((p - 0.4) / 0.55, 0, 1);
-    if (q > 0 && q < 1) {
-      const gx = x - size * 1.2 + q * size * 2.4, gr = ctx.createLinearGradient(gx - size * 0.3, y + size * 0.3, gx + size * 0.3, y - size * 0.3);
-      gr.addColorStop(0, A('#ffffff', 0)); gr.addColorStop(0.5, A('#ffffff', 0.5 * Math.sin(PI * q))); gr.addColorStop(1, A('#ffffff', 0));
-      ctx.fillStyle = gr; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+      waveClip(ctx, tx, ty, rr, sd, p); ctx.lineJoin = 'round';
+      ctx.lineWidth = size * 0.06; ctx.strokeStyle = A(light, 0.6 * fade); ctx.stroke();
+      ctx.lineWidth = size * 0.02; ctx.strokeStyle = A('#ffffff', 0.8 * fade); ctx.stroke();
+      waveClip(ctx, tx, ty, rr * 0.72, sd + 1, p); ctx.lineWidth = size * 0.03; ctx.strokeStyle = A(light, 0.3 * fade); ctx.stroke();
     }
     ctx.restore();
-    // droplets thrown from the touch point (they may leave the hex), and ink creeping into the fibres
-    const nD = tk.lowQ() ? 4 : 8;
-    for (let i = 0; i < nD; i++) {
-      const a = r() * TAU, sp = size * (0.7 + r() * 0.9), st = r() * 0.18, rad = size * (0.045 + r() * 0.05), qd = clamp((p - st) / 0.62, 0, 1);
-      const bias = Math.atan2(y - ty, x - tx);
+    // three rings escape the hex (they may leave it), then a note rises from the corner
+    for (let i = 0; i < 3; i++) {
+      const qd = clamp((p - 0.08 * i) / 0.7, 0, 1);
       if (qd <= 0 || qd >= 1) continue;
-      const ang = (Math.hypot(ox, oy) > 1 ? bias + (a - PI) * 0.5 : a), dd = sp * U.ease.outCubic(qd);
-      const dx = tx + Math.cos(ang) * dd, dy = ty + Math.sin(ang) * dd + size * 0.45 * qd * qd;
-      ctx.globalAlpha = ga * Math.pow(1 - qd, 0.7);
-      softDisc(ctx, dx, dy, rad * (1 - qd * 0.5), deepHue, 0.9);
-      softDisc(ctx, dx - rad * 0.3, dy - rad * 0.3, rad * 0.32, '#ffffff', 0.7);
+      ctx.beginPath(); ctx.arc(tx, ty, rr + size * (0.15 + 0.35 * i) * qd, 0, TAU);
+      ctx.globalAlpha = ga * (1 - qd) * 0.6; ctx.lineWidth = Math.max(0.8, size * 0.035); ctx.strokeStyle = tile ? light : '#9fe8ff'; ctx.stroke();
     }
     ctx.globalAlpha = ga;
-    if (q > 0.25 && q < 1) { const sa = Math.sin(PI * clamp((q - 0.25) / 0.75, 0, 1)); tk.sparkle(ctx, x + size * 0.46, y - size * 0.5, size * 0.24 * sa, { color: '#fff8e0', alpha: sa, glow: 0.5 }); }
+    const q = clamp((p - 0.4) / 0.55, 0, 1);
+    if (q > 0 && q < 1) {
+      const deg = opts.note === undefined ? -1 : Math.floor(num(opts.note, -1)), col = deg >= 0 && deg <= 6 ? NOTE_RAMP[deg] : pal.gold;
+      tk.note(ctx, x + size * 0.3, y - size * 0.3 - size * 0.5 * q, size * 0.34, { kind: 'eighth', color: col, alpha: Math.sin(PI * q) });
+    }
   }
 
   M.paper = paper;
@@ -1162,12 +1164,14 @@
     const vis = page.tiles.filter((T) => { const c = scr(T.q, T.r); return c.x > inner.x - size * 1.2 && c.x < inner.x + inner.w + size * 1.2 && c.y > inner.y - size * 1.2 && c.y < inner.y + inner.h + size * 1.2; });
     vis.sort((a, b) => a.r - b.r || a.q - b.q);
     const cells = [];
+    const nearSet = {};                                                // MAP-27: the 19 woken hexes nearest the party, within 3
+    vis.filter((T) => T.painted && !T.done && hexDist(T.q, T.r, page.pos.q, page.pos.r) <= 3).sort((a, b) => hexDist(a.q, a.r, page.pos.q, page.pos.r) - hexDist(b.q, b.r, page.pos.q, page.pos.r)).slice(0, 19).forEach((T) => { nearSet[T.q + ',' + T.r] = true; });
     vis.forEach((T) => {
       const c = scr(T.q, T.r), seed = U.hash(T.q, T.r);
       let touch = false;
       for (let d = 0; d < 6; d++) if (painted(T.q + DIRS[d][0], T.r + DIRS[d][1])) touch = true;
       if (T.painted) {
-        hex(g, 'painted', c.x, c.y, size, { tile: T.type, seed, done: T.done, t });
+        hex(g, 'painted', c.x, c.y, size, { tile: T.type, seed, done: T.done, t, near: !!nearSet[T.q + ',' + T.r] });
         const m = M.edgeMasks(T.q, T.r, kindAt);
         if (m.mask | m.voidMask) cells.push({ x: c.x, y: c.y, mask: m.mask, voidMask: m.voidMask });
       } else if (T.type === 'block') { if (touch) hex(g, 'block', c.x, c.y, size, { seed, t }); else hex(g, 'fog', c.x, c.y, size, { seed, t }); }
@@ -1210,7 +1214,7 @@
       const s = Math.min(w / 2.05, h / 2.2);
       if (c.kind === 'hover' || c.kind === 'target' || c.kind === 'path') hex(g, 'painted', w / 2, h / 2, s, { tile: 'empty', seed: i });
       hex(g, c.kind, w / 2, h / 2, s, { tile: c.tile, done: c.done, seed: i, t });
-    }, { bg: 'paper', title: 'ART.map.hex: every kind and every tile wash (overlays hover, target, path shown over ground)', cols: 8 });
+    }, { bg: 'paper', title: 'ART.map.hex: every kind and every tile wash, hushed grey versus woken (overlays hover, target, path shown over ground)', cols: 8 });
   });
   ART.sheet('map_page', (canvas, params) => {
     const g = canvas.getContext('2d'), W = num(params.w, 1600), H = num(params.h, 900);
@@ -1241,9 +1245,9 @@
     ART.sheetGrid(canvas, params, cells, (g, c, w, h) => {
       g.fillStyle = PAPER_BASE; g.fillRect(0, 0, w, h);
       const s = Math.min(w / 2.3, h / 2.3);
-      if (c.tile) { hex(g, 'fog', w / 2, h / 2, s, { seed: c.seed }); paintBloom(g, w / 2, h / 2, s, c.p, { tile: c.tile, seed: c.seed, fromX: w / 2 - s * 2, fromY: h / 2 - s * 0.4 }); }
+      if (c.tile) { hex(g, 'fog', w / 2, h / 2, s, { seed: c.seed }); paintBloom(g, w / 2, h / 2, s, c.p, { tile: c.tile, seed: c.seed, note: c.seed % 7, fromX: w / 2 - s * 2, fromY: h / 2 - s * 0.4 }); }
       else { hex(g, 'painted', w / 2, h / 2, s, { tile: 'event', seed: c.seed }); paintBloom(g, w / 2, h / 2, s, c.p, { seed: c.seed }); }
-    }, { bg: 'paper', cols: 8, title: 'ART.map.paintBloom film strip (touch point at the left edge; last row is the neutral overlay)' });
+    }, { bg: 'paper', cols: 8, title: 'ART.map.paintBloom film strip (wavefront from the touch point at the left edge; last row is the neutral overlay)' });
   });
   ART.sheet('map_token', (canvas, params) => {
     const pairs = [['hanae', 'kuro'], ['kuro', 'suzu'], ['suzu', 'raiga'], ['raiga', 'hanae']];
@@ -1269,6 +1273,6 @@
       g.fillStyle = PAPER_BASE; g.fillRect(0, 0, w, h);
       const d = DOODLES[id], k = Math.min(w / d.w, h / d.h) * 0.9;
       drawDoodle(g, id, w / 2, h / 2, k, 1, 0, 0.9);
-    }, { bg: 'paper', cols: 4, title: 'ART.map.paper doodles (drawn at 0.9 alpha here; the page uses 0.2 to 0.34)' });
+    }, { bg: 'paper', cols: 4, title: 'ART.map.paper doodles: rings, silent bell, cranes, drum (drawn at 0.9 alpha here; the page uses 0.2 to 0.34)' });
   });
 })();
