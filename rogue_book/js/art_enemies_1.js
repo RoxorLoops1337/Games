@@ -2584,7 +2584,7 @@
         const s = Math.min(slot * 0.98 / b.w, h * 0.9 / b.h);
         ART.enemy.draw(g, cell.id, { x: slot * (k + 0.5), y: h * 0.9, s, pose, t: t + k * 0.31, pt: params.pt !== undefined ? num(params.pt, 0) : KEYPT[pose] || 0 });
       });
-    }, { cols: 4, title: 'Chapter 1, the Whispering Bamboo Grove: idle, telegraph, attack (params poses=a,b,c  t=)', gap: 6, labelH: 16, cellBg: false });
+    }, { cols: 4, title: 'Verse 1, the Whispering Bamboo Grove: idle, telegraph, attack (params poses=a,b,c  t=)', gap: 6, labelH: 16, cellBg: false });
   });
   ART.sheet('boss1', (canvas, params) => {
     const ctx = canvas.getContext('2d'), W = params.w, H = params.h, t = num(params.t, 0), id = 'boss_kuzunoha';

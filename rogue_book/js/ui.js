@@ -1643,7 +1643,7 @@ const UI = (() => {
     const root = mk('span', { class: 'relic rar-' + def.rarity + ' sz-' + size + (o.class ? ' ' + o.class : ''), role: clickable ? 'button' : 'img', tabindex: '0', 'aria-label': def.name + '. ' + (typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), dataset: { id } },
       iconCanvas('relic', id, RELIC_PX[size] - 8, {}));
     if (clickable) root.addEventListener('click', (e) => o.onclick(e, id, root));
-    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', cap(def.rarity), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), { side: o.side || 'bottom' });
+    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', (def.rarity === 'boss' ? 'Keeper' : cap(def.rarity)), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), { side: o.side || 'bottom' });
     return root;
   }
 
@@ -1705,7 +1705,7 @@ const UI = (() => {
 
   const STAT_TIP = {
     gold: ['Gold', 'Spend it at peddlers. Keep some for the next shop.'], ink: ['Echo', null], hp: ['Health', 'Hit points. A hero at 0 is downed.'],
-    energy: ['Energy', 'Spend Energy to play cards. It refills every turn.'], brush: ['Songs', null], inkstone: ['Chimes', 'Earned every run. Spend them in the Hall of Echoes to unlock new content.'], block: ['Block', null],
+    energy: ['Energy', 'Spend Energy to play cards. It refills every turn.'], brush: ['Songs', null], inkstone: ['Chimes', 'Earned every journey. Spend them in the Hall of Echoes to unlock new content.'], block: ['Block', null],
   };
 
   function stat(kind, value, o) {
@@ -1891,7 +1891,7 @@ const UI = (() => {
       row('Reduce motion', seg([{ value: null, label: 'Auto' }, { value: true, label: 'On' }, { value: false, label: 'Off' }], { label: 'Reduce motion', value: S1('reduceMotion'), onchange: (v) => setSetting('reduceMotion', v) })),
       row('Screen shake', slider({ label: 'Screen shake', value: S1('shake'), step: 0.25, onchange: (v) => setSetting('shake', v) })),
       row('Animation speed', seg([{ value: 0, label: 'Normal' }, { value: 1, label: 'Fast' }, { value: 2, label: 'Faster' }], { label: 'Animation speed', value: S1('fastAnim'), onchange: (v) => setSetting('fastAnim', v) })),
-      row('Hints', toggle({ label: 'Hints', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Short tips during your first run'));
+      row('Hints', toggle({ label: 'Hints', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Short tips during your first journey'));
     return root;
   }
 

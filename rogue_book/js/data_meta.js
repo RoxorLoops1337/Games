@@ -39,19 +39,19 @@
     ch2_clear: { name: 'Lanterns Out', text: 'Defeat Jorogumo, the Silk Courtesan, and let the guests go home.', stat: { k: 'boss2Kills', gte: 1 }, reward: { inkstones: 15 } },
     ch3_clear: { name: 'The Last Note', text: 'Defeat the Conductor and sing the ending.', stat: { k: 'boss3Kills', gte: 1 }, reward: { inkstones: 30 } },
 
-    first_draft: { name: 'First Rehearsal', text: 'Finish your first run, win or lose. Every journey starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
-    regular_reader: { name: 'Regular Listener', text: 'Finish 10 runs. The land is starting to recognise your voice.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
-    happy_endings: { name: 'Happy Endings', text: 'Win 5 runs. Some journeys are worth taking more than once.', stat: { k: 'wins', gte: 5 }, reward: { inkstones: 20 } },
+    first_draft: { name: 'First Rehearsal', text: 'Finish your first journey, win or lose. Every journey starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
+    regular_reader: { name: 'Regular Listener', text: 'Finish 10 journeys. The land is starting to recognise your voice.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
+    happy_endings: { name: 'Happy Endings', text: 'Win 5 journeys. Some journeys are worth taking more than once.', stat: { k: 'wins', gte: 5 }, reward: { inkstones: 20 } },
 
-    petal_and_steel: { name: 'Petal and Steel', text: 'Win 3 runs with Hanae in the party.', stat: { k: 'winsHanae', gte: 3 }, reward: { inkstones: 15 } },
-    ink_and_insight: { name: 'Flute and Insight', text: 'Win 3 runs with Kuro in the party.', stat: { k: 'winsKuro', gte: 3 }, reward: { inkstones: 15 } },
-    moonlit_vigil: { name: 'Moonlit Vigil', text: 'Win 3 runs with Suzu in the party.', stat: { k: 'winsSuzu', gte: 3 }, reward: { inkstones: 15 } },
-    thunder_and_laughter: { name: 'Thunder and Laughter', text: 'Win 3 runs with Raiga in the party.', stat: { k: 'winsRaiga', gte: 3 }, reward: { inkstones: 15 } },
+    petal_and_steel: { name: 'Petal and Steel', text: 'Win 3 journeys with Hanae in the party.', stat: { k: 'winsHanae', gte: 3 }, reward: { inkstones: 15 } },
+    ink_and_insight: { name: 'Flute and Insight', text: 'Win 3 journeys with Kuro in the party.', stat: { k: 'winsKuro', gte: 3 }, reward: { inkstones: 15 } },
+    moonlit_vigil: { name: 'Moonlit Vigil', text: 'Win 3 journeys with Suzu in the party.', stat: { k: 'winsSuzu', gte: 3 }, reward: { inkstones: 15 } },
+    thunder_and_laughter: { name: 'Thunder and Laughter', text: 'Win 3 journeys with Raiga in the party.', stat: { k: 'winsRaiga', gte: 3 }, reward: { inkstones: 15 } },
 
-    cartographer: { name: 'Cartographer of Echoes', text: 'Wake 500 hexes across all your runs.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
+    cartographer: { name: 'Cartographer of Echoes', text: 'Wake 500 hexes across all your journeys.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
     brush_collector: { name: 'Song Collector', text: 'Sing 25 Songs on the map.', stat: { k: 'brushesUsed', gte: 25 }, reward: { inkstones: 10 } },
     treasure_hunter: { name: 'Treasure Hunter', text: 'Open 25 chests.', stat: { k: 'chestsOpened', gte: 25 }, reward: { inkstones: 10 } },
-    curio_cabinet: { name: 'Curio Cabinet', text: 'Find 50 treasures across your runs.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
+    curio_cabinet: { name: 'Curio Cabinet', text: 'Find 50 treasures across your journeys.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
     fable_fan: { name: 'Fable Fan', text: 'Hear 60 fables. Some of them were even true.', stat: { k: 'eventsSeen', gte: 60 }, reward: { inkstones: 10 } },
 
     big_spender: { name: 'Big Spender', text: 'Spend 3000 gold in shops. The peddlers send their regards.', stat: { k: 'goldSpent', gte: 3000 }, reward: { inkstones: 10 } },
@@ -65,7 +65,7 @@
     free_verse: { name: 'Free Verse', text: 'Play 3 or more free cards in one turn, on 10 different turns.', stat: { k: 'zeroCostTurns', gte: 10 }, reward: { inkstones: 8 } },
     slow_burn: { name: 'Slow Burn', text: 'Finish off 30 enemies with Poison. Patience is a weapon.', stat: { k: 'poisonKills', gte: 30 }, reward: { inkstones: 8 } },
 
-    minimalist_author: { name: 'Minimalist Composer', text: 'Win a run with 15 cards or fewer. Every note earns its place.', stat: { k: 'smallDeckWins', gte: 1 }, reward: { inkstones: 20 } },
+    minimalist_author: { name: 'Minimalist Composer', text: 'Win a journey with 15 cards or fewer. Every note earns its place.', stat: { k: 'smallDeckWins', gte: 1 }, reward: { inkstones: 20 } },
 
     charity_case: { name: 'Charity Case', text: "Be rescued by the land's mercy 3 times. It happens to the best of us.", stat: { k: 'mercy', gte: 3 }, reward: { inkstones: 5 } },
     face_in_the_petals: { name: 'Face in the Petals', text: 'Have a hero knocked down 30 times. Getting back up counts too.', stat: { k: 'heroDowns', gte: 30 }, reward: { inkstones: 5 } },
@@ -73,9 +73,9 @@
 
     daily_reader: { name: 'A Jam a Day', text: 'Play 5 Daily Jams.', stat: { k: 'dailyRuns', gte: 5 }, reward: { inkstones: 10 } },
 
-    inkling: { name: 'First Beat', text: 'Win a run on Tempo Trial 1.', stat: { k: 'trialBest', gte: 1 }, reward: { inkstones: 10 } },
-    ink_adept: { name: 'Tempo Adept', text: 'Win a run on Tempo Trial 5.', stat: { k: 'trialBest', gte: 5 }, reward: { inkstones: 25 } },
-    master_of_ink: { name: 'Master of Tempo', text: 'Win a run on Tempo Trial 10. The Red Baton bows.', stat: { k: 'trialBest', gte: 10 }, reward: { inkstones: 60 } },
+    inkling: { name: 'First Beat', text: 'Win a journey on Tempo Trial 1.', stat: { k: 'trialBest', gte: 1 }, reward: { inkstones: 10 } },
+    ink_adept: { name: 'Tempo Adept', text: 'Win a journey on Tempo Trial 5.', stat: { k: 'trialBest', gte: 5 }, reward: { inkstones: 25 } },
+    master_of_ink: { name: 'Master of Tempo', text: 'Win a journey on Tempo Trial 10. The Red Baton bows.', stat: { k: 'trialBest', gte: 10 }, reward: { inkstones: 60 } },
   });
 
   // ------------------------------------------------------------------ Tempo Trials
@@ -87,7 +87,7 @@
     trial_5: { level: 5, name: 'Sharp Claws', text: 'Enemies deal 15% more damage.', mods: { enemyDmg: 0.15 } },
     trial_6: { level: 6, name: 'Cracked Bells', text: 'Temple bells give 1 less Echo, and fallen heroes rise with 15% HP, not 25%.', mods: { wellInk: -1, reviveFrac: -0.10 } },
     trial_7: { level: 7, name: 'Dear Peddlers', text: 'Shops charge 15% more, and you start with 20 less gold.', mods: { priceMul: 0.15, startGold: -20 } },
-    trial_8: { level: 8, name: 'Burdened Start', text: 'Begin the run with a curse in your deck.', mods: { curses: 1 } },
+    trial_8: { level: 8, name: 'Burdened Start', text: 'Begin the journey with a curse in your deck.', mods: { curses: 1 } },
     trial_9: { level: 9, name: 'Proud Champions', text: 'Elites have 20% more HP, and bosses have 15% more.', mods: { eliteHp: 0.20, bossHp: 0.15 } },
     trial_10: { level: 10, name: 'The Red Baton', text: 'Enemies hit 10% harder, and card rewards offer one card fewer.', mods: { cardChoices: -1, enemyDmg: 0.10 } },
   });
@@ -185,7 +185,7 @@
         start: ['Try to keep up.', 'Shall we? I have an appointment with excellence.', 'This will take a minute. Two, out of courtesy.', 'Stand back. I am about to be brilliant.', 'Let us not make a scene. Fine. A small one.'],
         hurt: ['Is that all? ...Ow. Is that all?', 'I will remember that. Loudly.', 'A lucky hit. Do not get used to it.', 'Bold. Rude, but bold.', 'My ponytail is fine. My pride, however...'],
         kill: ['Next.', 'Petals. Always petals.', 'Was that supposed to be difficult?', 'Consider that a firm rejection.', 'One more for the collection.'],
-        down: ['I am simply lying down. Strategically.', 'Nobody. Saw. That.', 'Tell my ponytail it was a good run.', 'I meant to do that. Mostly.', 'Not... my best angle.'],
+        down: ['I am simply lying down. Strategically.', 'Nobody. Saw. That.', 'Tell my ponytail it was a good journey.', 'I meant to do that. Mostly.', 'Not... my best angle.'],
         win: ['Flawless. Well. Mostly flawless.', 'And that is how it is done.', 'You may applaud. Quietly. I am tired.', 'Another verse, another win.', 'Easy. I would gloat, but it is unbecoming.'],
         swap: ['My turn to stand in front.', 'Step aside. I will handle this.', 'Finally. The good spot.', 'Front row suits me.', 'Hero coming through. Everyone move.'],
       },

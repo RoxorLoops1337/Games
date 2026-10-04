@@ -1059,7 +1059,7 @@
   };
 
   // ---------------------------------------------------------------------------------------------------------------
-  // TILE: hanko stamps. A vermilion seal, uneven like real ink, with a black-ink drawing on it. opts.done fades the stamp into the paper.
+  // TILE: hanko stamps. A vermilion seal, uneven like real ink, with a dark line drawing on it. opts.done fades the stamp into the ground.
   // ---------------------------------------------------------------------------------------------------------------
   const STAMP = '#e8383d';
   const TILE_SQUARE = { chest: 1, shop: 1, forge: 1, gemcache: 1 };
@@ -1969,7 +1969,7 @@
     const paper = params.bg !== 'dark';
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
       multi(g, 'tile', cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [52, 40, 30, 20], opts: Object.assign(flagOpts(params), { done: cell.done }) });
-    }, { title: 'ART.icon tiles: hanko stamps with black-ink drawings (opts.done fades them into the page)', cols: params.cols || 7, aspect: 1.3, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
+    }, { title: 'ART.icon tiles: hanko stamps with dark line drawings (opts.done fades them into the ground)', cols: params.cols || 7, aspect: 1.3, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
 
   // icons_gems: every gem and every empty socket at four sizes (params: size, bg=paper, gray=1 draws in greyscale to prove the glyphs carry the colour,

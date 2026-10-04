@@ -259,7 +259,7 @@ const GAME = (() => {
   }
 
   function abandon() {
-    return UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The run ends here. You keep a share of the Chimes for the hexes you woke.', yes: 'Abandon', no: 'Keep playing', danger: true }).then((ok) => {
+    return UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The journey ends here. You keep a share of the Chimes for the hexes you woke.', yes: 'Abandon', no: 'Keep playing', danger: true }).then((ok) => {
       if (!ok) return false;
       const e = finishRun('abandon');
       const stones = e && e.rec && e.rec.inkstones;
@@ -628,10 +628,10 @@ const GAME = (() => {
         draw: phBackdrop,
         enter(params, root) {
           const R = state.R;
-          if (!R) { shell(root, '', hint('No run is active.'), UI.btn('Title', { kind: 'primary', onclick: () => toTitle() })); return; }
+          if (!R) { shell(root, '', hint('No journey is active.'), UI.btn('Title', { kind: 'primary', onclick: () => toTitle() })); return; }
           const stats = mk('div', { class: 'row gap ph-stats' }, UI.stat('gold', R.gold), UI.stat('ink', R.ink, { max: R.inkMax }), ...R.heroes.map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp })));
           const buttons = mk('div', { class: 'row gap-s center wrap ph-nodes' });
-          [['Fight', 'enemy'], ['Elite', 'elite'], ['Shop', 'shop'], ['Camp', 'camp'], ['Fable', 'event'], ['Chest', 'chest'], ['Forge', 'forge'], ['Gem cache', 'gemcache'], ['Boss', 'boss']].forEach(([label, kind]) => {
+          [['Fight', 'enemy'], ['Elite', 'elite'], ['Shop', 'shop'], ['Camp', 'camp'], ['Fable', 'event'], ['Chest', 'chest'], ['Forge', 'forge'], ['Gem cache', 'gemcache'], ['Keeper', 'boss']].forEach(([label, kind]) => {
             buttons.appendChild(UI.btn(label, { kind: 'secondary', size: 'sm', onclick: () => { const node = nodeFor(R, kind, {}); enterNode(node); } }));
           });
           const menu = UI.menuButton();
@@ -727,7 +727,7 @@ const GAME = (() => {
           b('Treasures', 'secondary', () => UI.overlay.open('relics', {})),
           b('Settings', 'secondary', () => UI.overlay.open('settings')),
           b('How to play', 'secondary', () => UI.overlay.open('modal', { title: 'How to play', body: 'Wake hexes with Echo, fight with two heroes in two rows, play cards with Energy, and socket gems into card slots. Reach the keeper of each verse.' })),
-          R ? b('Abandon run', 'ghost', () => { close(); abandon(); }) : null,
+          R ? b('Abandon journey', 'ghost', () => { close(); abandon(); }) : null,
           R ? b('Save and quit', 'ghost', () => { save(); close(); toTitle(); }) : null,
         ].filter(Boolean);
         root.appendChild(UI.panel({ kind: 'dark', title: 'Paused', class: 'pause-panel' }, mk('div', { class: 'col gap ph-menu' }, ...items), tip ? mk('p', { class: 'pause-tip', text: tip }) : null));
@@ -804,7 +804,7 @@ const GAME = (() => {
         });
       },
       modal() { UI.after(0, () => UI.modal({ title: 'Something broke the rhythm', body: 'Something went wrong in the music, but your progress is safe. Turn back to the title and try again.', buttons: [{ label: 'Copy details', kind: 'secondary', cb: () => false }, { label: 'Back to Title', kind: 'primary' }] })); },
-      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The run ends here. You keep a share of the Chimes.', yes: 'Abandon', no: 'Keep playing', danger: true })); },
+      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The journey ends here. You keep a share of the Chimes.', yes: 'Abandon', no: 'Keep playing', danger: true })); },
       pick() { UI.after(0, () => UI.overlay.open('cardPick', { title: 'Choose a card to exhaust', cards: ['hanae', 'kuro', 'suzu'].map((h) => inst(byRarity('common', h))), n: 1, confirm: 'Exhaust' })); },
       legend() { UI.after(0, () => UI.overlay.open('legend', {})); },
       settings() { UI.after(0, () => UI.overlay.open('settings', {})); },

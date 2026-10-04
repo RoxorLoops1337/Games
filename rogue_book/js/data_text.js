@@ -505,11 +505,11 @@
     return s;
   }
   function tierPhrase(tier) {
-    const t = list(tier).map((x) => ({ minion: 'a Minion', normal: 'a normal enemy', elite: 'an Elite', boss: 'a Boss' }[x] || x));
+    const t = list(tier).map((x) => ({ minion: 'a Minion', normal: 'a normal enemy', elite: 'an Elite', boss: 'a Keeper' }[x] || x));
     return t.length ? t.join(' or ') : 'an enemy';
   }
   function fightPhrase(tier) {
-    const t = list(tier).map((x) => ({ minion: 'minion', normal: 'normal', elite: 'elite', boss: 'boss' }[x] || x));
+    const t = list(tier).map((x) => ({ minion: 'minion', normal: 'normal', elite: 'elite', boss: 'Keeper' }[x] || x));
     return t.length ? `${aAn(t[0])} ${t.join(' or ')} fight` : 'a fight';
   }
 

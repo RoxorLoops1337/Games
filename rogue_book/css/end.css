@@ -54,12 +54,12 @@
 .s-victory { --pg-x: 250px; --vc-col: 588px; }          /* --vc-col: the showcase is two equal columns with 36 px margins, so the gap between them sits on the stage axis (x 640) */
 .st-page { position: absolute; left: var(--pg-x); top: 54px; width: 700px; height: 612px; pointer-events: auto; animation: enSlideR .6s var(--ease-out) both; cursor: pointer;
   box-shadow: 0 18px 44px rgba(5, 3, 18, .7), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 0 46px rgba(95, 80, 160, .22), 0 0 0 3px #1b1430, 0 0 0 4px rgba(245, 201, 106, .7); }
-.st-page::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 46px; pointer-events: none; border-radius: 10px 0 0 10px;
-  background: linear-gradient(90deg, transparent 0 3px, rgba(245, 201, 106, .85) 3px 4px, transparent 4px 41px, rgba(245, 201, 106, .55) 41px 42px, transparent 42px), linear-gradient(90deg, #1b1430, #2a1f4a 82%, #1b1430); }
-.st-page::after { content: ""; position: absolute; right: 0; bottom: 0; width: 58px; height: 58px; pointer-events: none; border-radius: 0 0 8px 0;
-  background: linear-gradient(135deg, transparent 0 56%, #f5c96a 56% 62%, transparent 62% 70%, rgba(245, 201, 106, .6) 70% 73%, transparent 73%), linear-gradient(135deg, transparent 50%, rgba(27, 20, 48, .9) 50%); }
-.st-page > .p-body { display: flex; flex-direction: column; height: 100%; padding: 26px 42px 20px 50px;
-  background: radial-gradient(circle at 82% 78%, transparent 0 74px, rgba(168, 116, 32, .13) 75px 78px, transparent 79px), radial-gradient(circle at 82% 78%, rgba(95, 80, 160, .07) 0 70px, transparent 71px); }
+.st-page::before { content: ""; position: absolute; inset: 9px; pointer-events: none; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(168, 116, 32, .85), inset 0 0 0 4px rgba(27, 20, 48, .1), inset 0 0 0 5px rgba(168, 116, 32, .4); }   /* the plaque's gold hairline */
+.st-page::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 8px;   /* four gold corner fittings, flat: no fold */
+  --cf: linear-gradient(#d9a441, #d9a441);
+  background: var(--cf) 4px 4px / 22px 4px no-repeat, var(--cf) 4px 4px / 4px 22px no-repeat, var(--cf) right 4px top 4px / 22px 4px no-repeat, var(--cf) right 4px top 4px / 4px 22px no-repeat,
+    var(--cf) left 4px bottom 4px / 22px 4px no-repeat, var(--cf) left 4px bottom 4px / 4px 22px no-repeat, var(--cf) right 4px bottom 4px / 22px 4px no-repeat, var(--cf) right 4px bottom 4px / 4px 22px no-repeat; }
+.st-page > .p-body { display: flex; flex-direction: column; height: 100%; padding: 26px 42px 20px 50px; }
 .st-head { flex: none; text-align: center; margin: 0 4px 0 -4px; }   /* the page pads 50 left (the spine) and 42 right: -4 and +4 centre the head on the page itself */
 .st-kicker { position: relative; display: inline-block; margin: 0; padding: 0 1.3em; font: 800 calc(13px * var(--ts)) / 1 var(--font-ui); letter-spacing: .42em; color: var(--verm-d); animation: enRise .6s var(--ease-out) .1s both; }
 .st-kicker::before, .st-kicker::after { content: ""; position: absolute; top: 50%; width: 44px; height: 2px; background: linear-gradient(90deg, transparent, var(--verm-d)); }
@@ -164,6 +164,12 @@
 .cc-chip.heal { background: var(--jade); }
 .cc-chip.on { opacity: 1; transform: none; }
 .cc-extra { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 2px solid rgba(245, 201, 106, .3); }
+.cc-boons .en-scroll-body.more { -webkit-mask: none; mask: none; }   /* the totals row below is pinned, so the fade would only dim it */
+.cc-boons .cc-extra { position: sticky; bottom: -2px; z-index: 2; flex-wrap: nowrap; gap: 8px; padding: 4px 4px 2px; margin-top: 4px; background: rgba(22, 16, 52, .97); }   /* 14/14, TREASURES n and the icons stay on one pinned line; the heroes above scroll */
+.cc-boons .cc-relics { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+.cc-boons .cc-relics > * { flex: none; }
+.cc-boons .cc-rel-lab { flex: none; white-space: nowrap; }
+.cc-boons .cc-heroes { gap: 4px; }
 .cc-rel-lab { font: 700 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--paper2); }
 .cc-relics { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cc-more, .cc-none { font: italic 500 calc(12px * var(--ts)) var(--font-display); opacity: .8; }

@@ -1779,7 +1779,7 @@ const ART = (() => {
         names.forEach((n, i) => { sky(g, 0, i * sh, w, sh, n); g.font = '600 11px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = i === 6 ? pal.ink : pal.white; g.fillText(n, 8, i * sh + sh / 2); });
         mist(g, 0, 0, w, h, t, { seed: 2, alpha: 0.2 });
       } },
-      { label: 'paper grain, ink bleed, blot, lettering', fn(g, w, h) {
+      { label: 'ground grain, edge-bled shape, spill, lettering', fn(g, w, h) {
         g.fillStyle = pal.paper; g.fillRect(0, 0, w, h);
         paperGrain(g, 0, 0, w, h, { alpha: 0.9 });
         const sh = [[w * 0.1, h * 0.2], [w * 0.4, h * 0.14], [w * 0.46, h * 0.5], [w * 0.14, h * 0.55]];

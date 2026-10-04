@@ -282,7 +282,7 @@
 
   const noRunScreen = (S) => {
     const back = UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => UI.toTitle() });
-    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No journey is underway' }, mk('p', { class: 'nk-empty-text', text: 'There is no run to show here.' }), mk('div', { class: 'row center' }, back))));
+    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No journey is underway' }, mk('p', { class: 'nk-empty-text', text: 'There is no journey to show here.' }), mk('div', { class: 'row center' }, back))));
   };
 
   // finish a node: resolve anything still pending, then hand control back to GAME
@@ -864,7 +864,7 @@
       mk('span', { class: 'rl-ico' }, UI.icon('relic', id, size || 84)),
       mk('span', { class: 'rl-info' },
         mk('b', { class: 'rl-name', text: d.name }),
-        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Boss treasure' : cap(d.rarity) + ' treasure' }),
+        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Keeper treasure' : cap(d.rarity) + ' treasure' }),
         mk('span', { class: 'rl-text', text: safe(() => DATA.relicText(id), d.text) || d.text })),
     ];
   }
@@ -1346,7 +1346,7 @@
     };
     let ri = 0;
     by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || 'gem'), () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || ''), gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
-    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Rare find' : cap(d.rarity || 'treasure'), () => tipBubble(d.name || it.id, cap(d.rarity || ''), safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Rare find' : d.rarity === 'boss' ? 'Keeper treasure' : cap(d.rarity || 'treasure'), () => tipBubble(d.name || it.id, d.rarity === 'boss' ? 'Keeper' : cap(d.rarity || ''), safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
     by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Song', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
 
     // services: card removal (price rises) and free gem cutting

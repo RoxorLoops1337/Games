@@ -1407,7 +1407,7 @@ await t.test('relics overlay: every treasure with art, text and where it came fr
     t.ok($(g, '.relic canvas', row), d.name + ': art');
     t.eq(txt($(g, '.mr-name', row)), d.name, d.name + ': name');
     t.eq(txt($(g, '.mr-text', row)), g.DATA.relicText(d.id), d.name + ': the relic text');
-    t.ok(new RegExp(d.rarity, 'i').test(txt($(g, '.mr-tag', row))), d.name + ': rarity tag');
+    t.ok(new RegExp(d.rarity === 'boss' ? 'keeper' : d.rarity, 'i').test(txt($(g, '.mr-tag', row))), d.name + ': rarity tag (the boss rarity reads Keeper)');
     t.ok(/Found in Verse (I|II),/.test(txt($(g, '.mr-from', row))), d.name + ': where it was found (' + txt($(g, '.mr-from', row)).slice(0, 50) + ')');
   });
   t.ok(/Found in Verse I,/.test(txt($(g, '.mr-from', rows[4]))) && /Found in Verse II,/.test(txt($(g, '.mr-from', rows[1]))), 'the chapter comes from RUN\'s log');
