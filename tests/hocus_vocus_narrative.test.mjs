@@ -193,14 +193,14 @@ t.test('costs are honest: a certain price is shown, backed by a req, and every c
     }
     if (c.req && c.req.gold) t.ok(c.out.some((o) => goldDelta(o) < 0), `${w}: a gold requirement means gold can be spent`);
     const certainInk = Math.min(...c.out.map((o) => -A(o.ops).reduce((s, x) => s + (x.op === 'ink' && x.n < 0 ? x.n : 0), 0)));
-    if (certainInk > 0) t.ok(c.cost && /echo/i.test(c.cost), `${w}: a certain Echo price is shown in cost`);
+    if (certainInk > 0) t.ok(c.cost && /vox/i.test(c.cost), `${w}: a certain Vox price is shown in cost`);
     if (c.cost && /lose a card/i.test(c.cost)) t.ok(c.out.every((o) => A(o.ops).some((x) => x.op === 'removeCard')), `${w}: "Lose a card" really removes one`);
     if (c.cost && /curse/i.test(c.cost)) {
       const adds = (o) => A(o.ops).some((x) => x.op === 'addCurse');
       t.ok(c.out.some(adds), `${w}: a curse cost really can add a curse`);
       if (!c.out.every(adds)) t.ok(/\b(may|maybe|might)\b/i.test(c.cost), `${w}: a curse that is not certain says maybe`);
     }
-    if (c.cost && /hurts the front/i.test(c.cost)) t.ok(c.out.every((o) => A(o.ops).some((x) => x.op === 'hurt' && x.who === 'front')), `${w}: "hurts the front hero" hurts the front hero`);
+    if (c.cost && /hurts the lead/i.test(c.cost)) t.ok(c.out.every((o) => A(o.ops).some((x) => x.op === 'hurt' && x.who === 'front')), `${w}: "hurts the lead hero" hurts the lead hero (who: front)`);
   }));
 });
 
@@ -255,24 +255,34 @@ t.test('relic-gated fables: silver_bell merchant, jade_door, brass_lantern, and 
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'addRelic' && x.id === 'brass_lantern')), 'a merchant sells brass_lantern');
   const rel = ['brass_lantern', 'fox_mask', 'silver_bell', 'jade_key'];
   t.ok(rel.every((id) => evs.some((e) => (e.when && e.when.relic === id) || e.choices.some((c) => (c.req && c.req.relic === id) || c.out.some((o) => A(o.ops).some((x) => x.id === id))))), 'every fixed relic appears in the fables');
+  // the Detour copy says the four fixed Charms by their DATA names (HV_STORY D2-3): renaming a Charm means changing these strings too
+  if (DATA.relics && rel.every((id) => DATA.relics[id])) {
+    const says = (str, id) => new RegExp(esc(DATA.relics[id].name), 'i').test(str);
+    const E = DATA.events;
+    t.ok(says(E.peddler_silver_bell.choices[1].label, 'brass_lantern') && says(E.brass_lantern_secret.text, 'brass_lantern'), `the poster Detours say ${DATA.relics.brass_lantern.name}`);
+    t.ok(says(E.fox_returns.choices[0].label, 'fox_mask') && says(E.mask_market.choices[1].label, 'fox_mask'), `the mask Detours say ${DATA.relics.fox_mask.name}`);
+    t.ok(says(E.peddler_silver_bell.choices[2].label, 'silver_bell'), `the bell choice says ${DATA.relics.silver_bell.name}`);
+    t.ok(says(E.jade_door.text, 'jade_key'), `the door Detour says ${DATA.relics.jade_key.name}`);
+  }
 });
 
 t.test('hero moments: one gated fable per hero, a hero choice for every hero, and voices that fit', () => {
   const moment = (h) => evs.filter((e) => e.when && e.when.hero === h);
+  const nameOf = (h) => DATA.heroes[h].name;                                   // the player reads the DATA name (Jasmin), never the id (hanae)
   L.heroIds.forEach((h) => {
     t.ok(moment(h).length >= 1, `${h} has a moment`);
     t.ok(evs.filter((e) => e.choices.some((c) => c.req && c.req.hero === h)).length >= 2, `${h} has a hero-only choice in at least 2 fables`);
     moment(h).forEach((e) => {
-      t.ok(new RegExp(h, 'i').test(e.title + ' ' + e.text), `${e.id}: names ${h}`);
+      t.ok(new RegExp(esc(nameOf(h)), 'i').test(e.title + ' ' + e.text), `${e.id}: names ${nameOf(h)}`);
       t.ok(e.w >= 2, `${e.id}: hero moments are weighted up`);
       const others = L.heroIds.filter((o) => o !== h);
-      t.ok(!others.some((o) => new RegExp('\\b' + o + '\\b', 'i').test(e.text)), `${e.id}: the text does not mention a hero who might not be there`);
+      t.ok(!others.some((o) => new RegExp('\\b(' + o + '|' + esc(nameOf(o)) + ')\\b', 'i').test(e.text)), `${e.id}: the text does not mention a hero who might not be there`);
     });
   });
   const seenHeroes = new Set(); evs.forEach((e) => { if (e.when && e.when.hero) seenHeroes.add(e.when.hero); });
   t.eq(seenHeroes.size, 4, 'all four heroes have a moment');
   // nobody may be named where they might be absent: the scene, and every outcome of a choice that any hero can pick
-  const named = (str) => L.heroIds.filter((h) => new RegExp('\\b' + h + '\\b', 'i').test(str));
+  const named = (str) => L.heroIds.filter((h) => new RegExp('\\b(' + h + '|' + esc(nameOf(h)) + ')\\b', 'i').test(str));
   evs.forEach((e) => {
     const owner = e.when && e.when.hero;
     if (!owner) t.deep(named(e.text), [], `${e.id}: the scene text names no hero`);
@@ -470,15 +480,15 @@ t.test('each trial text quotes its own numbers, so the rule and the mod cannot d
     goldMul: (v, s) => new RegExp(pct(v) + '% less gold').test(s),
     enemyHp: (v, s) => new RegExp(pct(v) + '% more HP').test(s),
     healMul: (v, s) => new RegExp(pct(v) + '% less').test(s),
-    startInk: (v, s) => new RegExp(Math.abs(v) + ' less Echo').test(s),
+    startInk: (v, s) => new RegExp(Math.abs(v) + ' less Vox').test(s),
     enemyDmg: (v, s) => new RegExp(pct(v) + '% (more damage|harder)').test(s),
-    wellInk: (v, s) => new RegExp('bells give ' + Math.abs(v) + ' less Echo').test(s),
+    wellInk: (v, s) => new RegExp('stalls give ' + Math.abs(v) + ' less Vox').test(s),
     reviveFrac: (v, s) => new RegExp(Math.round((E.reviveFrac + v) * 100) + '% HP, not ' + Math.round(E.reviveFrac * 100) + '%').test(s),
     priceMul: (v, s) => new RegExp('charge ' + pct(v) + '% more').test(s),
     startGold: (v, s) => new RegExp(Math.abs(v) + ' less gold').test(s),
     curses: (v, s) => /curse/.test(s),
-    eliteHp: (v, s) => new RegExp('Elites have ' + pct(v) + '% more HP').test(s),
-    bossHp: (v, s) => new RegExp('bosses have ' + pct(v) + '% more').test(s),
+    eliteHp: (v, s) => new RegExp('Rivals have ' + pct(v) + '% more HP').test(s),
+    bossHp: (v, s) => new RegExp('headliners have ' + pct(v) + '% more').test(s),
     cardChoices: (v, s) => /one card fewer/.test(s),
   };
   trials.forEach((x) => Object.keys(x.mods).forEach((k) => t.ok(want[k] && want[k](x.mods[k], x.text), `${x.id}: text "${x.text}" quotes ${k} ${x.mods[k]}`)));
@@ -494,7 +504,7 @@ t.test('tips: 30, short, unique, plain sentences, and they only claim mechanics 
     t.ok(!/\d/.test(s.replace(/\bX\b/, '')), `tip ${i}: no hand-typed numbers that tuning could change`);
   });
   const all = DATA.tips.join(' ').toLowerCase();
-  ['echo', 'song', 'swap', 'block', 'poison', 'bind', 'gem', 'camp', 'forge', 'shop', 'curse', 'fable', 'treasure', 'retain', 'exhaust', 'trial', 'daily', 'vulnerable', 'weak', 'front', 'back', 'downed', 'bloom'].forEach((w) => t.ok(all.indexOf(w) >= 0, `a tip covers ${w}`));
+  ['vox', 'spell', 'swap', 'block', 'earworm', 'tangled', 'gem', 'green room', 'studio', 'merch', 'curse', 'detour', 'charm', 'hold', 'fade', 'encore', 'daily duet', 'exposed', 'muffled', 'lead', 'backing', 'voiceless', 'bloom'].forEach((w) => t.ok(all.indexOf(w) >= 0, `a tip covers ${w}`));
 });
 
 // =================================================================================================== lore
@@ -512,32 +522,28 @@ t.test('lore: every fixed id, titles and text within the page, one paragraph eac
   t.eq(new Set(stories.map((s) => s.text)).size, stories.length, 'page texts are unique');
 });
 
-t.test('lore is the spine: the Singer, the Hush, the Conductor, each keeper who held on, each hero and why they were sung', () => {
+t.test('lore is the spine: the Gloss, the two voices, each Headliner who held on, each hero entry, and the finale is Human', () => {
+  // bible 2.6 and HV_STORY 8: the required words of each Tour Diary entry
   const T = (id) => DATA.lore[id].text;
-  t.ok(/Singer/.test(T('intro')) && /Hush/.test(T('intro')), 'the intro names the Singer and the Hush');
-  t.ok(/two voices/.test(T('intro')), 'and the two who wake');
-  t.ok(/yamabiko/.test(T('intro')) && /held a breath/.test(T('intro')), 'the Hush is a held breath in the shape of a yamabiko');
-  t.ok(/Grove/.test(T('ch1_intro')) && /fox/.test(T('ch1_intro')) && /nine/.test(T('ch1_intro')), 'verse 1 introduces the grove and the fox');
-  t.ok(/Lantern City/.test(T('ch2_intro')) && /silk/.test(T('ch2_intro')) && /holds/.test(T('ch2_intro')), 'verse 2 introduces the city and the one who holds it together');
-  t.ok(/Citadel/.test(T('ch3_intro')) && /red baton/.test(T('ch3_intro')) && /Keeper of the Last Note/.test(T('ch3_intro')), 'verse 3 introduces the citadel and the Keeper');
-  t.ok(/Kuzunoha/.test(T('ch1_clear')) && /walls/.test(T('ch1_clear')), 'the fox held the sounds and sang walls');
-  t.ok(/Jorogumo/.test(T('ch2_clear')) && /kept/.test(T('ch2_clear')), 'the spider held the people and kept them');
-  t.ok(/Conductor/.test(T('victory')) && /perfect/.test(T('victory')) && /Singer/.test(T('victory')) && /again/.test(T('victory')), 'the victory reveals the Conductor speaks with the Singer\'s voice (he is the Singer\'s doubt) and the land asks to be sung again');
-  t.ok(/the last line together/.test(T('victory')) && /open/.test(T('victory')), 'the ending is sung together and left open');
-  t.ok(/fade|grey/.test(T('defeat')) && /comes back around/.test(T('defeat')) && !/dead|die|kill/i.test(T('defeat')), 'defeat is soft: the beat comes back around, nobody dies');
-  t.ok(/silver hair/.test(T('ch1_clear')) && /shrine/.test(T('ch1_clear')), 'the end of verse 1 points at Suzu, who unlocks now');
-  t.ok(/storm|thunder/.test(T('ch2_clear')) && /knuckles/.test(T('ch2_clear')), 'the end of verse 2 points at Raiga, who unlocks now');
-  const hero = { hanae: /first bar|hero/, kuro: /harmony/, suzu: /shrine|bell|tune/, raiga: /thunderstorm|laugh/ };
+  t.ok(/Gloss/.test(T('intro')) && /two voices/.test(T('intro')), 'the intro names the Gloss and the two voices it never smoothed');
+  t.ok(/Blossom Bay/.test(T('ch1_intro')) && /eight microphones/.test(T('ch1_intro')), 'Act I introduces Blossom Bay and the one singing through eight microphones');
+  t.ok(/Scrollopolis/.test(T('ch2_intro')) && /Feed/.test(T('ch2_intro')) && /moon/.test(T('ch2_intro')), 'Act II introduces Scrollopolis, the Feed and the moon nobody looks at');
+  t.ok(/Flawless/.test(T('ch3_intro')) && /nobody sings/.test(T('ch3_intro')), 'Act III introduces the Perfect Stage, where nobody sings, and Flawless');
+  t.ok(/Kraki/.test(T('ch1_clear')) && /goat/.test(T('ch1_clear')) && /rooftop/.test(T('ch1_clear')), 'Kraki gives back the mics, and a goat mask on a rooftop points at the hero who unlocks now');
+  t.ok(/Scrollspinner/.test(T('ch2_clear')) && /bass/.test(T('ch2_clear')) && /below/.test(T('ch2_clear')), 'the city looks up, and a bass line from below points at the hero who unlocks now');
+  t.ok(/human/.test(T('victory')) && /together/.test(T('victory')) && /open/.test(T('victory')), 'the finale: the duo stay human, and the last line is sung together and left open');
+  t.ok(/Flawless/.test(T('victory')) && /filter/.test(T('victory')), 'and Flawless turns out to be the first little filter');
+  t.ok(/intermission/.test(T('defeat')) && /goes on/.test(T('defeat')) && !/dead|die|kill/i.test(T('defeat')), 'defeat is an intermission and the show goes on: nobody dies');
+  const hero = { hanae: /blossom|petal/, kuro: /beat/, suzu: /reverb|studio/, raiga: /bass|low end/ };
   L.heroIds.forEach((h) => {
-    const l = DATA.lore['hero_' + h];
-    // the title starts with the hero's DATA name, not the id (bible 2.6: "Jasmin, the Blossom Voice"); the text half is P2's (2A) to rewrite
-    t.ok(new RegExp(h[0].toUpperCase() + h.slice(1)).test(l.text) && l.title.indexOf(DATA.heroes[h].name) === 0, `hero_${h} is about ${h}`);
-    t.ok(/Singer/.test(l.text), `hero_${h} says why the Singer sang them`);
+    const l = DATA.lore['hero_' + h], name = DATA.heroes[h].name;
+    // the title starts with the hero's DATA name, not the id (bible 2.6: "Jasmin, the Blossom Voice"), and the text names them too
+    t.ok(new RegExp(esc(name)).test(l.text) && l.title.indexOf(name) === 0, `hero_${h} is about ${name}`);
     t.ok(hero[h].test(l.text), `hero_${h} carries their signature imagery`);
     t.ok(l.title.indexOf(DATA.heroes[h].title.replace(/^The /, '')) >= 0, `hero_${h} title carries the hero title from DATA.heroes`);
   });
   const all = stories.map((s) => s.text).join(' ');
-  t.ok(all.split('Hush').length >= 6, 'the Hush recurs through the pages');
+  t.ok(all.split('Gloss').length - 1 >= 6, `the Gloss recurs through the entries (${all.split('Gloss').length - 1} times)`);
   t.ok(!new RegExp(L.heroIds.map((h) => esc(DATA.heroes[h].name)).join('|')).test([T('intro'), T('ch1_intro'), T('ch2_intro'), T('ch3_intro'), T('ch1_clear'), T('ch2_clear'), T('victory'), T('defeat')].join(' ')), 'the shared story pages never name a hero (the party is chosen by the player)');
   t.ok(all.length > 6000, 'a lot of story');
 });
@@ -558,21 +564,27 @@ t.test('barks: five lines for each of start, hurt, kill, down, win and swap, at 
   t.eq(new Set(every).size, 120, 'no line is shared between heroes or events');
   const lines = (h) => Object.values(DATA.lore['barks_' + h].lines).flat();
   const frac = (h, re) => lines(h).filter((s) => re.test(s)).length / lines(h).length;
-  t.ok(frac('raiga', /!/) >= 0.6, `Raiga booms (${frac('raiga', /!/).toFixed(2)} of lines shout)`);
-  t.ok(frac('raiga', /friend|thunder|storm|boom/i) >= 0.4, 'and speaks of friends and thunder');
-  t.ok(frac('suzu', /!/) <= 0.03, 'Suzu never raises her voice');
-  t.ok(frac('suzu', /moon|gently|rest|peace|breathe|thread|steady|together|kind|sorry|truly|forgive|stay|careful|thank|quiet|watch|hold|light|worry|page/i) >= 0.5, 'Suzu is soft and steady');
-  t.ok(frac('kuro', /verse|chorus|flute|note|\bbars?\b|scene|song|sing|sung|tune|tempo|key|crescendo|cadence|coda|score|solo|spotlight|curtain|applause|perform|play|listen|\brest\b|melody|harmony|rhythm|beat|encore|review|singer|echo|reprise|seats|musical/i) >= 0.6, 'Kuro is musical');
-  t.ok(frac('kuro', /!/) <= 0.05, 'and teases with a straight face');
-  t.ok(frac('hanae', /!/) <= 0.05, 'Hanae is dry');
-  t.ok(frac('hanae', /ponytail|brilliant|excellen|petals|edited|hero|flawless|pride|win|first|front|good spot|next|collection|difficult|lucky|bold|rude/i) >= 0.4, 'and proud');
-  t.ok(lines('raiga').some((s) => s.length <= 8) && lines('hanae').some((s) => s.length <= 8), 'shouts and quips can be short');
+  const bangs = (h) => lines(h).filter((s) => /!/.test(s)).length;
+  const once = (h, line) => lines(h).filter((s) => s === line).length;
+  // the voice targets of HV_HEROES 1.6 (bible 3.1 to 3.4)
+  t.ok(bangs('hanae') <= 1, `Jasmin never shouts (${bangs('hanae')} of 30 lines with !)`);
+  t.eq(once('hanae', 'I do not need to be loud.'), 1, 'Jasmin says her signature line exactly once');
+  t.ok(bangs('kuro') <= 10, `RoxorLoops shouts in a third of his lines at most (${bangs('kuro')} of 30)`);
+  t.eq(once('kuro', 'Party on top. Party at the back.'), 1, 'RoxorLoops says his signature line exactly once');
+  t.eq(bangs('suzu'), 0, 'RawClaw never raises his voice');
+  t.eq(once('suzu', 'It is not a costume.'), 1, 'RawClaw says his signature line exactly once');
+  t.ok(bangs('raiga') <= 7, `Andy rarely shouts, a quarter of his lines at most (${bangs('raiga')} of 30)`);
+  t.eq(once('raiga', 'Just Andy.'), 1, 'Andy introduces himself exactly once');
+  t.ok(frac('hanae', /soft|sing|song|note|petal|bloom|pretty|lovely|gentl|sorry|thank|voice|pitch|flat|sour|chorus|tea|mic|scrunchie|ponytail|lean|la\b|solo|front|light|bit/i) >= 0.5, 'Jasmin is soft, sweet and musical');
+  t.ok(frac('kuro', /beat|groove|bmm|\bts\b|pff|\bka\b|kick|snare|bass|drop|mix|wikka|bounce|mic|solo|hair|outro|fade|album|show|front|boots/i) >= 0.5, 'RoxorLoops talks in beats');
+  t.ok(frac('suzu', /mix|reverb|level|fader|record|session|save|channel|signal|headphone|room|warm|filter|fade|bounce|clip|peak|distortion|goat|gentl|steady|calm|rest|noise|front|take|wall|ears|minute|moment/i) >= 0.5, 'RawClaw talks like a calm producer');
+  t.ok(frac('raiga', /bass|low|floor|groove|rumble|hum|amp|string|subs?|thump|womp|boom|cups|chill|calm|nice|lovely|feel|front|right|nap|resting|bottom/i) >= 0.5, 'Andy talks low end');
+  t.ok(lines('raiga').some((s) => s.length <= 8) && lines('hanae').some((s) => s.length <= 8), 'quips can be short (Womp. and Ta-da.)');
   L.heroIds.forEach((h) => {
-    const own = lines(h).join(' ').toLowerCase();
-    L.heroIds.filter((o) => o !== h).forEach((o) => t.ok(own.indexOf(o) < 0, `${h}'s barks never name ${o}`));
+    const own = lines(h).join(' ');
+    L.heroIds.filter((o) => o !== h).forEach((o) => t.ok(own.toLowerCase().indexOf(o) < 0 && own.indexOf(DATA.heroes[o].name) < 0, `${DATA.heroes[h].name}'s barks never name ${DATA.heroes[o].name}`));
   });
   t.ok(barks.every((b) => Object.values(b.lines).flat().every((s) => /[.!?]$/.test(s) || /\.\.\.$/.test(s))), 'every bark ends with punctuation');
-  t.ok(lines('hanae').filter((s) => /^Nobody\. Saw\. That\.$/.test(s)).length === 1, 'the running gags exist');
 });
 
 t.test('the Library lists every story page and no bark set', () => {
@@ -709,9 +721,9 @@ t.test('integration: a choice that can only do nothing is locked with a reason (
   const dead = (e, over) => { const R = richRun(e, 7); R.gold = 400; R.flags = { fox_spared: 1, fox_bond: 1 }; R.deck = R.deck.filter((c) => !(DATA.cards[c.id] && DATA.cards[c.id].hero === 'curse')); R.deck.forEach((c) => { if (DATA.cards[c.id] && DATA.cards[c.id].up) c.up = 1; }); Object.assign(R, over || {}); return R; };
   const row = (id, ci, R) => RUN.eventChoices(R, DATA.events[id])[ci];
   let r = row('peddler_silver_bell', 1, dead(DATA.events.peddler_silver_bell));
-  t.ok(!r.ok && new RegExp(esc(DATA.relics.brass_lantern.name)).test(r.reason), 'the brass lamp is locked while the Brass Lantern is owned (' + r.reason + ')');
+  t.ok(!r.ok && new RegExp(esc(DATA.relics.brass_lantern.name)).test(r.reason), 'the tour poster is locked while the ' + DATA.relics.brass_lantern.name + ' is owned (' + r.reason + ')');
   const free = dead(DATA.events.peddler_silver_bell); free.relics = ['silver_bell']; t.eq(row('peddler_silver_bell', 1, free).ok, true, 'and open without it');
-  r = row('fox_returns', 0, dead(DATA.events.fox_returns)); t.ok(!r.ok && new RegExp(esc(DATA.relics.fox_mask.name)).test(r.reason), 'the fox mask is locked while owned (' + r.reason + ')');
+  r = row('fox_returns', 0, dead(DATA.events.fox_returns)); t.ok(!r.ok && new RegExp(esc(DATA.relics.fox_mask.name)).test(r.reason), 'the ' + DATA.relics.fox_mask.name + ' is locked while owned (' + r.reason + ')');
   r = row('void_tear', 1, dead(DATA.events.void_tear)); t.ok(!r.ok && /no curse/i.test(r.reason), 'feeding the tear a regret needs a curse (' + r.reason + ')');
   r = row('blank_patch', 2, dead(DATA.events.blank_patch)); t.ok(!r.ok && /no curse/i.test(r.reason), 'so does the cursed page (' + r.reason + ')');
   const cursed = dead(DATA.events.void_tear); RUN.addCard(cursed, 'curse_regret'); t.eq(row('void_tear', 1, cursed).ok, true, 'open with a curse in the deck');

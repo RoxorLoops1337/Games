@@ -117,7 +117,7 @@ await t.test('portrait: the rotate panel shows, Play anyway hides it, rotating b
   const r = $(g, '#rotate');
   t.ok(r && !r.hidden, 'rotate panel is visible in portrait on a small screen'); t.ok(g.UI.rotating, 'UI.rotating');
   t.ok(g.log.calls.indexOf('suspend') >= 0, 'AUDIO.suspend when the panel appears');
-  t.ok(/sideways/i.test(r.textContent), 'friendly copy'); t.ok(Array.from(r.querySelectorAll('button')).some((b) => /play anyway/i.test(b.textContent)), 'Play anyway button');
+  t.ok(/sideways/i.test(r.textContent), 'friendly copy'); t.ok(/Hocus Vocus is a landscape tour/.test(r.textContent) && /Soundlands/.test(r.textContent), 'the rotate line speaks Hocus Vocus'); t.ok(Array.from(r.querySelectorAll('button')).some((b) => /play anyway/i.test(b.textContent)), 'Play anyway button');
   let calls = 0;
   g.UI.screens.a = { enter() {}, update() { calls++; } };
   g.UI.go('a');
@@ -209,7 +209,7 @@ await t.test('a screen that throws in enter shows the recoverable error modal an
   t.ok(g._win.__errors.some((e) => e.screen === 'bad.enter' && /enter exploded/.test(e.message) && 'stack' in e), '__errors has {screen, message, stack}');
   t.eq(g.UI.overlay.count(), 1, 'the error modal is open');
   const modal = $(g, '.o-modal');
-  t.ok(/Something broke the rhythm/.test(modal.textContent), 'title'); t.ok(/Back to Title/.test(modal.textContent) && /Copy details/.test(modal.textContent), 'buttons');
+  t.ok(/Something went a bit off-key/.test(modal.textContent), 'title'); t.ok(/Your tour is safe/.test(modal.textContent), 'the body says the tour is safe'); t.ok(/Back to Title/.test(modal.textContent) && /Copy details/.test(modal.textContent), 'buttons');
   const back = Array.from(modal.querySelectorAll('button')).find((b) => /Back to Title/.test(b.textContent));
   back.click();
   await settle(g);
@@ -519,7 +519,7 @@ await t.test('legend, relics and deck overlays open without errors', async () =>
     g.UI.overlay.close();
     await p;
   }
-  t.ok(/No treasures/.test('No treasures yet'), 'sanity');
+  t.ok(/No charms/.test('No charms yet'), 'sanity');
   t.eq(errCount(g), 0, 'no console errors');
 });
 
@@ -819,6 +819,38 @@ await t.test('UI.cardBack, relic, gem, status, stat, heroBadge', () => {
   t.eq(errCount(g), 0, 'no console errors');
 });
 
+await t.test('shared components speak Hocus Vocus: card back, Charm rarity and flavour line, gem tier, socket colours, stat tips', () => {
+  const g = fresh();
+  g.UI.init();
+  const word = g.UI.cardBack('deck').querySelector('.back-word');
+  t.ok(word && word.textContent === 'HOCUSVOCUS' && word.querySelector('br'), 'the card back word is HOCUS stacked over VOCUS');
+  g.DATA.add('relics', {
+    t_crown: { name: 'Test Crown', rarity: 'boss', text: 'Glows.', hooks: [], art: { m: 'lantern' }, flavor: 'It fits a little loose.' },
+    t_pin: { name: 'Test Pin', rarity: 'shop', text: 'Shines.', hooks: [], art: { m: 'lantern' } },
+    t_ring: { name: 'Test Ring', rarity: 'uncommon', text: 'Hums.', hooks: [], art: { m: 'lantern' } },
+  });
+  const crown = g.UI.relic('t_crown', {}).rbTip();
+  t.eq(crown.querySelector('.tk-kind').textContent, 'Headliner', 'a boss Charm reads Headliner, never the id');
+  t.eq(crown.querySelector('.tk-flavor').textContent, 'It fits a little loose.', 'the Charm flavour line is printed');
+  t.ok(crown.querySelector('.tk-flavor').previousSibling === crown.querySelector('.tk-text'), 'under the rules text');
+  const pin = g.UI.relic('t_pin', {}).rbTip();
+  t.eq(pin.querySelector('.tk-kind').textContent, 'Merch', 'a shop Charm reads Merch'); t.ok(!pin.querySelector('.tk-flavor'), 'no flavour element when the Charm has none');
+  t.eq(g.UI.relic('t_ring', {}).rbTip().querySelector('.tk-kind').textContent, 'Uncommon', 'the other rarities keep their words');
+  t.eq(g.UI.gem('t_ruby', {}).rbTip().querySelector('.tk-kind').textContent, 'Tier 1 pink gem', 'the red gem family reads pink (DATA.COLOUR_NAME)');
+  t.eq(g.UI.gem('t_topaz', {}).rbTip().querySelector('.tk-kind').textContent, 'Tier 2 gold gem', 'a gold gem reads gold');
+  const socks = Array.from(g.UI.card(inst('t_guard'), { size: 'big' }).querySelectorAll('.c-sock')).map((x) => x.getAttribute('aria-label'));
+  t.deep(socks, ['Empty blue socket', 'Empty rainbow socket'], 'empty sockets read the colour word, the any slot reads rainbow');
+  t.deep(Array.from(g.UI.card(inst('t_slash'), { size: 'big' }).querySelectorAll('.c-sock')).map((x) => x.getAttribute('aria-label')), ['Empty pink socket'], 'a red slot reads pink, never red');
+  const tip = (kind) => g.UI.stat(kind, 3).rbTip();
+  t.eq(tip('energy').querySelector('.tk-name').textContent, 'Breath', 'the energy stat is Breath'); t.ok(/Spend Breath to play cards/.test(tip('energy').textContent), 'its tip');
+  t.eq(g.UI.stat('ink', 7, { max: 14 }).getAttribute('aria-label'), 'Vox 7/14', 'the pill aria reads Vox');
+  t.eq(tip('brush').querySelector('.tk-name').textContent, 'Spells', 'the brush stat is Spells');
+  t.eq(tip('inkstone').querySelector('.tk-name').textContent, 'Cheers', 'the meta currency is Cheers'); t.ok(/Tour Bus/.test(tip('inkstone').textContent), 'spent on the Tour Bus');
+  t.ok(/Jordan's merch stalls/.test(tip('gold').textContent), 'gold is spent at Jordan\'s merch stalls');
+  t.ok(/loses their voice/.test(tip('hp').textContent) && !/down/i.test(tip('hp').textContent), 'a hero at 0 loses their voice');
+  t.eq(errCount(g), 0, 'no console errors');
+});
+
 await t.test('a missing or throwing ART never breaks components', () => {
   const g = fresh();
   g._run('globalThis.ART = { card: { draw() { throw new Error("art broke"); } }, icon: { draw() { throw new Error("icon broke"); } }, hero: { medallion() { throw new Error("medal broke"); } } }');
@@ -1041,9 +1073,9 @@ await t.test('GAME.enterNode routes every node kind; instants only toast; saves 
   await g._tick(120);
   t.eq(g.UI.params.rewards.gold, 9, 'reward params carry rewards'); t.eq(g.UI.params.source, 'elite', 'and source');
   await g.GAME.enterNode({ kind: 'well', gained: 4, done: true });
-  t.eq(g.UI.currentName, 'reward', 'a well does not change screens'); t.ok($$(g, '#toasts .toast').some((x) => /bell/i.test(x.textContent)), 'it toasts'); t.ok(g.log.sfx.indexOf('well') >= 0, 'with the well sound');
+  t.eq(g.UI.currentName, 'reward', 'a well does not change screens'); t.ok($$(g, '#toasts .toast').some((x) => /tea/i.test(x.textContent)), 'it toasts'); t.ok(g.log.sfx.indexOf('well') >= 0, 'with the well sound');
   await g.GAME.enterNode({ kind: 'brush', id: 'stroke', done: true });
-  t.ok($$(g, '#toasts .toast').some((x) => /song/i.test(x.textContent)), 'brush toasts');
+  t.ok($$(g, '#toasts .toast').some((x) => /spell/i.test(x.textContent)), 'brush toasts');
   g.GAME.enterNode({ kind: 'mystery' });
   await g._tick(120);
   t.eq(g.UI.currentName, 'map', 'unknown kind: back to the map with a warning'); t.ok(g._console.warn.some((w) => /unknown node kind/.test(w)), 'warned');
@@ -1131,7 +1163,7 @@ await t.test('abandon, toTitle, continueRun, and the one persistent "cannot be s
   Array.from($(g, '.o-confirm').querySelectorAll('.btn'))[1].click();
   t.eq(await p, true, 'Yes abandons'); await g._tick(200);
   t.deep(g._run('__log.records'), ['abandon'], 'recorded as abandon'); t.eq(g.UI.currentName, 'title', 'back to the title'); t.eq(g.GAME.state.R, null, 'run cleared');
-  t.ok($$(g, '#toasts .toast').some((x) => /Chimes/.test(x.textContent)), 'shows the Chimes earned');
+  t.ok($$(g, '#toasts .toast').some((x) => /Cheers/.test(x.textContent)), 'shows the Cheers earned');
   // continue
   g._run('__log.saved = { id: "saved1", chapter: 2, heroes: [{ id: "suzu", hp: 5, maxHp: 9 }], deck: [], relics: [], node: { kind: "shop", tile: { q: 2, r: 2 } }, map: {} }');
   await g.GAME.toTitle();
@@ -1146,7 +1178,7 @@ await t.test('abandon, toTitle, continueRun, and the one persistent "cannot be s
   t.eq(g.UI.currentName, 'map', 'no node: the map');
   g._run('__log.saved = null');
   await g.GAME.continueRun();
-  t.ok($$(g, '#toasts .toast').some((x) => /no saved journey/i.test(x.textContent)), 'nothing to continue: a toast, no crash');
+  t.ok($$(g, '#toasts .toast').some((x) => /no saved tour/i.test(x.textContent)), 'nothing to continue: a toast, no crash');
   g._run('__log.failSave = true');
   g.GAME.save(); g.GAME.save(); g.GAME.save();
   t.eq($$(g, '#toasts .toast[data-tid="nosave"]').length, 1, 'exactly one persistent save warning'); t.ok(/cannot be saved/.test($(g, '.toast[data-tid="nosave"]').textContent), 'copy');
@@ -1158,12 +1190,12 @@ await t.test('META.bus achievement and unlock events become toasts with sounds',
   g.DATA.add('achievements', { t_ach: { name: 'Test Feat', text: 'Do it.', stat: { k: 'runs', gte: 1 } } });
   g._run('META.bus.emit("achievement", { id: "t_ach" }); META.bus.emit("unlock", { kind: "card", id: "t_slash" })');
   const texts = $$(g, '#toasts .toast').map((x) => x.textContent);
-  t.ok(texts.some((x) => /Achievement: Test Feat/.test(x)), 'achievement toast'); t.ok(texts.some((x) => /Unlocked: Test Slash/.test(x)), 'unlock toast');
+  t.ok(texts.some((x) => /Sticker earned: Test Feat/.test(x)), 'achievement toast'); t.ok(texts.some((x) => /Unlocked: Test Slash/.test(x)), 'unlock toast');
   t.ok($$(g, '#toasts .toast.tk-achievement').length === 1, 'achievement kind');
   t.ok(g.log.sfx.indexOf('achievement') >= 0 && g.log.sfx.indexOf('unlock') >= 0, 'sounds');
 });
 
-await t.test('the pause overlay: Resume, Deck, Treasures, Settings, How to play, Abandon, Save and quit', async () => {
+await t.test('the pause overlay: Resume, Deck, Charms, Settings, How to play, Abandon tour, Save and quit', async () => {
   const g = fresh({ autoboot: true });
   await g._tick(100);
   g.GAME.newRun({ heroes: ['hanae', 'kuro'] });
@@ -1172,7 +1204,7 @@ await t.test('the pause overlay: Resume, Deck, Treasures, Settings, How to play,
   const box = $(g, '.o-pause');
   t.ok(box, 'Esc on the map opens pause');
   const labels = Array.from(box.querySelectorAll('.btn')).map((b) => b.textContent.trim());
-  t.deep(labels, ['Resume', 'Deck', 'Treasures', 'Settings', 'How to play', 'Abandon journey', 'Save and quit'], 'the seven entries in order');
+  t.deep(labels, ['Resume', 'Deck', 'Charms', 'Settings', 'How to play', 'Abandon tour', 'Save and quit'], 'the seven entries in order');
   Array.from(box.querySelectorAll('.btn'))[1].click();
   t.eq(g.UI.overlay.count(), 2, 'Deck opens on top of pause'); t.ok($(g, '.o-deck'), 'deck overlay');
   g._key('Escape');
@@ -1227,15 +1259,15 @@ await t.test('the placeholder screens work end to end: heroSelect starts a run, 
   await g._tick(100);
   await g.UI.go('heroSelect', null, { force: true });
   const badges = $$(g, '.s-heroSelect .badge');
-  t.eq(badges.length, 4, 'four heroes'); const start = () => Array.from($$(g, '.s-heroSelect .btn')).find((b) => /Begin/.test(b.textContent));
-  t.eq(start().getAttribute('aria-disabled'), 'true', 'Begin is disabled until two are chosen');
+  t.eq(badges.length, 4, 'four heroes'); const start = () => Array.from($$(g, '.s-heroSelect .btn')).find((b) => /Start/.test(b.textContent));
+  t.eq(start().getAttribute('aria-disabled'), 'true', 'Start is disabled until two are chosen');
   badges[0].click(); badges[1].click();
-  t.ok(!start().getAttribute('aria-disabled'), 'two chosen enables Begin'); t.eq($$(g, '.s-heroSelect .badge.sel').length, 2, 'two badges selected');
+  t.ok(!start().getAttribute('aria-disabled'), 'two chosen enables Start'); t.eq($$(g, '.s-heroSelect .badge.sel').length, 2, 'two badges selected');
   badges[2].click();
   t.eq($$(g, '.s-heroSelect .badge.sel').length, 2, 'choosing a third drops the oldest');
   start().click();
   await g._tick(200);
-  t.eq(g.UI.currentName, 'map', 'Begin starts the run'); t.deep(g._run('__log.newRun.heroes'), ['kuro', 'suzu'], 'with the two most recent picks');
+  t.eq(g.UI.currentName, 'map', 'Start starts the run'); t.deep(g._run('__log.newRun.heroes'), ['kuro', 'suzu'], 'with the two most recent picks');
   await g.GAME.debug.open('reward', { cards: ['t_slash'] });
   $$(g, '.s-reward .card')[0].click();
   Array.from($$(g, '.s-reward .btn')).find((b) => /Take/.test(b.textContent)).click();

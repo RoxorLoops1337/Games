@@ -99,11 +99,12 @@
   const WATCHDOG_S = 6;                          // a SCENE beat that has not resolved after this many seconds is force-finished
   const FALLBACK_GATES = { hit: 120, heal: 60, draw: 40, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 };
   const REASONS = {
-    energy: 'Not enough Energy', unplayable: 'That card cannot be played', pending: 'Finish your choice first', phase: 'Wait for your turn',
+    energy: 'Not enough Breath', unplayable: 'That card cannot be played', pending: 'Finish your choice first', phase: 'Wait for your turn',
     target: 'Choose a target', notInHand: 'That card is not in your hand',
   };
-  const PICK_VERB = { discard: 'discard', exhaust: 'exhaust', retain: 'keep', upgrade: 'upgrade', copy: 'copy', toHand: 'take into your hand', toDrawTop: 'put on top of your draw pile' };
-  const INTENT_LABEL = { attack: 'Attack', multi: 'Flurry', heavy: 'Heavy blow', defend: 'Guard', buff: 'Power up', debuff: 'Curse', summon: 'Summon', heal: 'Heal', special: 'Special', flee: 'Flee', none: 'Idle' };
+  const PICK_VERB = { discard: 'discard', exhaust: 'fade', retain: 'keep', upgrade: 'upgrade', copy: 'copy', toHand: 'take into your hand', toDrawTop: 'put on top of your draw pile' };
+  const INTENT_LABEL = { attack: 'Attack', multi: 'Flurry', heavy: 'Big hit', defend: 'Guard', buff: 'Hype up', debuff: 'Jinx', summon: 'Summon', heal: 'Heal', special: 'Special', flee: 'Flee', none: 'Idle' };
+  const TIER_NAME = { minion: 'Sidekick', normal: 'Creature', elite: 'Rival', boss: 'Headliner' };
   const KIND_ORDER = { buff: 0, resource: 1, debuff: 2 };
 
   // ==================================================================================================================
@@ -360,19 +361,19 @@
       case 'turn_start': return e.who === 'player' ? 'Turn ' + e.turn + '. Your move.' : 'Enemy turn.';
       case 'play': return heroName(e.hero) + ' plays ' + ((cardDef(e.card.id) && cardDef(e.card.id).name) || e.card.id) + (e.card.up ? ' plus' : '') + '.';
       case 'enemy_act': return (enemyOf(vm, e.enemy) ? enemyOf(vm, e.enemy).name : 'An enemy') + ' uses ' + e.name + '.';
-      case 'skip': return nm(e.unit) + ' is stunned and loses its action.';
+      case 'skip': return nm(e.unit) + ' is starstruck and loses its action.';
       case 'hit': {
         if (e.amount <= 0 && e.blocked <= 0) return '';
         const who = e.src ? nm(e.src) : 'Something';
-        return who + ' hits ' + nm(e.dst) + ' for ' + e.amount + (e.blocked ? ', ' + e.blocked + ' blocked' : '') + (e.killed ? ', a killing blow' : '') + '.';
+        return who + ' hits ' + nm(e.dst) + ' for ' + e.amount + (e.blocked ? ', ' + e.blocked + ' blocked' : '') + (e.killed ? ', a finishing blow' : '') + '.';
       }
       case 'dodge': return nm(e.dst) + ' dodges.';
       case 'death': return nm(e.unit) + ' is defeated.';
       case 'flee': return nm(e.unit) + ' flees.';
-      case 'hero_down': return heroName(e.hero) + ' is down.';
-      case 'hero_revive': return heroName(e.hero) + ' stands up with ' + e.hp + ' HP.';
+      case 'hero_down': return heroName(e.hero) + ' is voiceless.';
+      case 'hero_revive': return heroName(e.hero) + ' finds their voice again with ' + e.hp + ' HP.';
       case 'heal': return e.amount > 0 ? nm(e.dst) + ' heals ' + e.amount + '.' : '';
-      case 'swap': return heroName(e.front) + ' steps to the front, ' + heroName(e.back) + ' to the back.';
+      case 'swap': return heroName(e.front) + ' takes the lead, ' + heroName(e.back) + ' moves to backing.';
       case 'summon': return e.enemy.name + ' joins the fight.';
       case 'enemy_phase': return (enemyOf(vm, e.enemy) ? enemyOf(vm, e.enemy).name : 'The enemy') + ' changes form.';
       case 'status': {
@@ -388,8 +389,8 @@
 
   // the C.canPlay reason as a sentence ("<Hero> is down", "<Hero> is stunned"); ctx.hero names the owner of the card
   function reasonText(reason, heroId) {
-    if (reason === 'down') return heroName(heroId) + ' is down';
-    if (reason === 'stunned') return heroName(heroId) + ' is stunned';
+    if (reason === 'down') return heroName(heroId) + ' is voiceless';
+    if (reason === 'stunned') return heroName(heroId) + ' is starstruck';
     return REASONS[reason] || 'You cannot do that now';
   }
 
@@ -708,7 +709,7 @@
     const def = DATA.heroes[id];
     const u = heroOf(S.vm, id);
     const body = mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: def.name }), mk('span', { class: 'tk-kind k-keyword', text: def.title })));
-    if (u) body.appendChild(mk('p', { class: 'tk-text', text: u.down ? 'Down. Their cards are dead until the fight is won.' : 'HP ' + u.hp + '/' + u.maxHp + (u.block ? ', Block ' + u.block : '') }));
+    if (u) body.appendChild(mk('p', { class: 'tk-text', text: u.down ? 'Voiceless. Their cards clog your hand until the fight is won.' : 'HP ' + u.hp + '/' + u.maxHp + (u.block ? ', Block ' + u.block : '') }));
     ['front', 'back'].forEach((row) => body.appendChild(mk('p', { class: 'tk-text' + (u && u.row === row ? ' now' : ''), text: DATA.rowText(id, row) })));
     (def.passives || []).forEach((p) => body.appendChild(mk('p', { class: 'tk-text', text: p.name + ': ' + safe(() => DATA.hookText(p), '') })));
     if (u) statusList(u.st).forEach((k) => body.appendChild(mk('p', { class: 'tk-text', text: statusLabel(k) + ' ' + u.st[k] + ': ' + DATA.statuses[k].text })));
@@ -718,7 +719,7 @@
   function buildHero(u, i) {
     const def = DATA.heroes[u.id];
     const bar = makeBar('hero-bar'), blk = makeBlock(), st = makeStatusRow('sm', 'hero-st');
-    const tagRow = mk('i', { class: 'ct-row', text: 'FRONT' }), tagBonus = mk('em', { class: 'ct-bonus' });
+    const tagRow = mk('i', { class: 'ct-row', text: 'LEAD' }), tagBonus = mk('em', { class: 'ct-bonus' });
     const pv = mk('span', { class: 'cm-hpv', hidden: true });
     const el = mk('div', { class: 'cm-hero h-' + u.id, tabindex: '0', role: 'group', 'data-hero': u.id },
       mk('span', { class: 'ch-medal' }, UI.medallion(u.id, 62)),
@@ -726,7 +727,7 @@
         mk('div', { class: 'ch-l1' }, mk('b', { class: 'ch-name', text: def.name }), mk('span', { class: 'ch-tag' }, tagRow, tagBonus)),
         mk('div', { class: 'ch-l2' }, bar.el, blk.el),
         st.el),
-      pv, mk('span', { class: 'ch-fallen', 'aria-hidden': 'true', text: 'FALLEN' }));
+      pv, mk('span', { class: 'ch-fallen', 'aria-hidden': 'true', text: 'VOICELESS' }));
     UI.vars(el, { '--hc': def.color, '--hc2': def.dark, '--i': i });      // --i places the panel (css: 64 + i * (--hh + 2)), so a phone can make them taller
     UI.tip.attach(el, () => (S ? heroTip(u.id) : null), { side: 'right' });       // S is null once the screen is left, but a long press can still land on a badge that has not been removed yet
     return { id: u.id, el, bar, blk, st, tagRow, tagBonus, pv, row: null, down: null };
@@ -743,7 +744,7 @@
     p.el.classList.toggle('back', u.row === 'back');
     if (p.row !== u.row) {
       p.row = u.row;
-      p.tagRow.textContent = u.row === 'front' ? 'FRONT' : 'BACK';
+      p.tagRow.textContent = u.row === 'front' ? 'LEAD' : 'BACKING';
       p.tagBonus.textContent = rowBrief(u.id, u.row, S.C.relics);
       if (animate) flare(p.el.querySelector('.ch-tag'), 'pulse', 500);
     }
@@ -752,12 +753,12 @@
       if (u.down && animate) flare(p.el, 'shatter', 700);
     }
     const stTxt = statusList(u.st).map((k) => statusLabel(k) + ' ' + u.st[k]).join(', ');
-    p.el.setAttribute('aria-label', DATA.heroes[u.id].name + ', ' + (u.row === 'front' ? 'front row' : 'back row') + ', ' + (u.down ? 'down' : u.hp + ' of ' + u.maxHp + ' health') + (u.block ? ', Block ' + u.block : '') + (stTxt ? '. ' + stTxt : ''));
+    p.el.setAttribute('aria-label', DATA.heroes[u.id].name + ', ' + (u.row === 'front' ? 'the lead' : 'backing') + ', ' + (u.down ? 'voiceless' : u.hp + ' of ' + u.maxHp + ' health') + (u.block ? ', Block ' + u.block : '') + (stTxt ? '. ' + stTxt : ''));
   }
 
   function buildSwap() {
     const cost = mk('em', { class: 'sw-cost', text: 'FREE' });
-    const el = mk('button', { type: 'button', class: 'cm-swap', 'aria-label': 'Swap rows', 'data-sfx': 'swap' },
+    const el = mk('button', { type: 'button', class: 'cm-swap', 'aria-label': 'Swap spots', 'data-sfx': 'swap' },
       mk('span', { class: 'sw-ring', 'aria-hidden': 'true' }), mk('span', { class: 'sw-glyph', html: GLYPH.swap }),
       mk('span', { class: 'sw-lock', html: GLYPH.lock, 'aria-hidden': 'true' }), cost, mk('kbd', { class: 'btn-key', text: 'S', 'aria-hidden': 'true' }));
     tut(el, 'swap');
@@ -765,8 +766,8 @@
     UI.tip.attach(el, () => {
       const cs = S && S.C ? S.C.canSwap() : null;
       const t = DATA.keywords.swap;
-      return UI.el('div', { class: 'tk' }, UI.el('div', { class: 'tk-head' }, UI.el('b', { class: 'tk-name', text: 'Swap rows' })), UI.el('p', { class: 'tk-text', text: t.text }),
-        cs && !cs.ok && cs.reason === 'bind' ? UI.el('p', { class: 'tk-text', text: 'Bound: neither hero can swap while a hero has Bind.' }) : null);
+      return UI.el('div', { class: 'tk' }, UI.el('div', { class: 'tk-head' }, UI.el('b', { class: 'tk-name', text: 'Swap spots' })), UI.el('p', { class: 'tk-text', text: t.text }),
+        cs && !cs.ok && cs.reason === 'bind' ? UI.el('p', { class: 'tk-text', text: 'Tangled: neither hero can swap while a hero is Tangled.' }) : null);
     }, { side: 'right' });
     return { el, cost };
   }
@@ -777,13 +778,13 @@
     const cs = C.canSwap();
     const busy = S.draining || S.ended || S.picking;
     const free = cs.cost === 0;
-    s.cost.textContent = free ? 'FREE' : cs.cost + ' Energy';
+    s.cost.textContent = free ? 'FREE' : cs.cost + ' Breath';
     s.el.classList.toggle('free', free && cs.ok);
     s.el.classList.toggle('bound', cs.reason === 'bind');
     let reason = '';
-    if (cs.reason === 'bind') reason = 'Bound: the heroes cannot swap rows';
+    if (cs.reason === 'bind') reason = 'Tangled: the heroes cannot swap spots';
     else if (cs.reason === 'solo') reason = 'Only one hero is standing';
-    else if (cs.reason === 'energy') reason = 'Not enough Energy to swap';
+    else if (cs.reason === 'energy') reason = 'Not enough Breath to swap';
     else if (cs.reason === 'phase') reason = 'Wait for your turn';
     else if (cs.reason === 'pending') reason = 'Finish your choice first';
     // "disabled" is for a reason the player can read (Bind, one hero standing, no Energy, not your turn, a pending pick): UI.setDisabled, which the
@@ -791,7 +792,7 @@
     // on it fast-forwards (swapClicked), but it is not a refusal, so a hint raised at the start of the turn is not dropped while the cards are still dealt.
     UI.setDisabled(s.el, !cs.ok, reason || 'Wait a moment');
     s.el.classList.toggle('busy', busy && cs.ok);
-    s.el.setAttribute('aria-label', 'Swap rows, ' + (free ? 'free' : 'costs ' + cs.cost + ' Energy') + (cs.reason === 'bind' ? ', bound' : ''));
+    s.el.setAttribute('aria-label', 'Swap spots, ' + (free ? 'free' : 'costs ' + cs.cost + ' Breath') + (cs.reason === 'bind' ? ', tangled' : ''));
     s.el.hidden = C.heroes.length < 2;
   }
 
@@ -817,17 +818,17 @@
   function intentTip(u) {
     const it = u.intent;
     const d = DATA.enemies[u.def] || {};
-    const head = mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: u.name }), mk('span', { class: 'tk-kind k-keyword', text: (u.tier === 'boss' ? 'Keeper' : cap(u.tier || 'normal')) }));
+    const head = mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: u.name }), mk('span', { class: 'tk-kind k-keyword', text: TIER_NAME[u.tier || 'normal'] || cap(u.tier || 'normal') }));
     const body = mk('div', { class: 'tk' }, head);
     if (!it) { body.appendChild(mk('p', { class: 'tk-text', text: 'It is not planning anything yet.' })); return body; }
     if (it.stunned) {
-      body.appendChild(mk('p', { class: 'tk-text', text: 'Stunned: it loses its next action.' }));
+      body.appendChild(mk('p', { class: 'tk-text', text: 'Starstruck: it loses its next action.' }));
       return body;
     }
     body.appendChild(mk('p', { class: 'tk-text tk-move', text: (it.name || 'Move') + ' (' + (INTENT_LABEL[it.kind] || cap(it.kind)) + ')' }));
     const txt = safe(() => DATA.intentText(it), it.text || '');
     if (txt) body.appendChild(mk('p', { class: 'tk-text', text: txt + (txt.slice(-1) === '.' ? '' : '.') }));
-    if (it.taunted) body.appendChild(mk('p', { class: 'tk-text', text: 'A Taunt is pulling this attack.' }));
+    if (it.taunted) body.appendChild(mk('p', { class: 'tk-text', text: 'A Spotlight is pulling this attack.' }));
     (it.statuses || []).forEach((s) => { if (DATA.statuses[s.s]) body.appendChild(mk('p', { class: 'tk-text', text: statusLabel(s.s) + ': ' + DATA.statuses[s.s].text })); });
     if (d.lore && u.tier !== 'minion') body.appendChild(mk('p', { class: 'tk-text tk-lore', text: d.lore }));
     return body;
@@ -906,7 +907,7 @@
     b.className = 'cm-int k-' + (stunned ? 'stun' : it.kind) + (stunned ? ' stunned' : '') + (it.kind === 'heavy' ? ' heavy' : '');
     const num = stunned ? '' : intentNumber(it);
     const main = mk('div', { class: 'ib-main' }, ico(stunned ? 'status' : 'intent', stunned ? 'stun' : (INTENT_ICON[it.kind] || 'special'), 34, {}, 'ib-ico'));
-    if (stunned) main.appendChild(mk('b', { class: 'ib-num ib-word', text: 'STUN' }));
+    if (stunned) main.appendChild(mk('b', { class: 'ib-num ib-word', text: 'WOW' }));
     else if (num) main.appendChild(mk('b', { class: 'ib-num' + (it.hits > 1 ? ' multi' : ''), text: num }));
     else main.appendChild(mk('b', { class: 'ib-num ib-word', text: INTENT_LABEL[it.kind] || '' }));
     b.appendChild(main);
@@ -930,7 +931,7 @@
         b.appendChild(tg);
       } else if (it.tgt === 'random' && it.dmg !== null) b.appendChild(mk('div', { class: 'ib-tgt ib-rand', 'aria-hidden': 'true', text: '?' }));
     }
-    b.setAttribute('aria-label', (u.name) + ' intends: ' + (stunned ? 'stunned' : safe(() => DATA.intentText(it), it.text || it.name || '')));
+    b.setAttribute('aria-label', (u.name) + ' intends: ' + (stunned ? 'starstruck' : safe(() => DATA.intentText(it), it.text || it.name || '')));
     en.bh = 0;                                   // measured again on the next placement
   }
 
@@ -947,7 +948,7 @@
     en.hit.disabled = !!u.down;
     en.hit.tabIndex = u.down ? -1 : 0;
     const stTxt = statusList(u.st).map((k) => statusLabel(k) + ' ' + u.st[k]).join(', ');
-    en.hit.setAttribute('aria-label', u.name + ', ' + u.hp + ' of ' + u.maxHp + ' health' + (u.block ? ', Block ' + u.block : '') + (stTxt ? '. ' + stTxt : '') + (u.intent && !u.down ? '. Intends: ' + (u.intent.stunned ? 'stunned' : safe(() => DATA.intentText(u.intent), u.intent.text || '')) : ''));
+    en.hit.setAttribute('aria-label', u.name + ', ' + u.hp + ' of ' + u.maxHp + ' health' + (u.block ? ', Block ' + u.block : '') + (stTxt ? '. ' + stTxt : '') + (u.intent && !u.down ? '. Intends: ' + (u.intent.stunned ? 'starstruck' : safe(() => DATA.intentText(u.intent), u.intent.text || '')) : ''));
     renderIntent(en, u);
   }
 
@@ -1166,15 +1167,15 @@
     const vm = S.vm, u = S.ui;
     setCount(u.draw, vm.drawN, animate);
     setCount(u.disc, vm.discardN, animate);
-    if (u.exh.n !== vm.exhaustN) { u.exh.n = vm.exhaustN; u.exh.num.textContent = String(vm.exhaustN); u.exh.el.hidden = vm.exhaustN === 0; u.exh.el.setAttribute('aria-label', 'Exhausted, ' + vm.exhaustN + ' cards'); if (animate) flare(u.exh.el, 'bump', 320); }
+    if (u.exh.n !== vm.exhaustN) { u.exh.n = vm.exhaustN; u.exh.num.textContent = String(vm.exhaustN); u.exh.el.hidden = vm.exhaustN === 0; u.exh.el.setAttribute('aria-label', 'Faded, ' + vm.exhaustN + ' cards'); if (animate) flare(u.exh.el, 'bump', 320); }
     if (u.pow.n !== vm.powersN) { u.pow.n = vm.powersN; u.pow.num.textContent = String(vm.powersN); u.pow.el.hidden = vm.powersN === 0; u.pow.el.setAttribute('aria-label', 'Active powers, ' + vm.powersN); if (animate) flare(u.pow.el, 'bump', 320); }
   }
 
   function buildOrb() {
     const n = mk('b', { class: 'o-n', text: '0' }), max = mk('span', { class: 'o-max', text: '/3' });
-    const el = mk('div', { class: 'cm-orb', role: 'img', tabindex: '0', 'aria-label': 'Energy', style: { left: px(PILE.orb.x - 44) } }, mk('i', { class: 'o-glow', 'aria-hidden': 'true' }), mk('i', { class: 'o-ring', 'aria-hidden': 'true' }), n, max);
+    const el = mk('div', { class: 'cm-orb', role: 'img', tabindex: '0', 'aria-label': 'Breath', style: { left: px(PILE.orb.x - 44) } }, mk('i', { class: 'o-glow', 'aria-hidden': 'true' }), mk('i', { class: 'o-ring', 'aria-hidden': 'true' }), n, max);
     tut(el, 'energy');
-    UI.tip.attach(el, () => UI.tip.kw('Energy') || mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: 'Energy' })), mk('p', { class: 'tk-text', text: 'Spend Energy to play cards. It refills every turn and never carries over.' })), { side: 'top' });
+    UI.tip.attach(el, () => UI.tip.kw('Breath') || mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: 'Breath' })), mk('p', { class: 'tk-text', text: 'Spend Breath to play cards. It refills every turn and never carries over.' })), { side: 'top' });
     return { el, n, max, v: null };
   }
   function renderEnergy(animate) {
@@ -1188,7 +1189,7 @@
     }
     o.max.textContent = '/' + vm.maxEnergy;
     o.el.classList.toggle('empty', vm.energy <= 0);
-    o.el.setAttribute('aria-label', 'Energy ' + vm.energy + ' of ' + vm.maxEnergy);
+    o.el.setAttribute('aria-label', 'Breath ' + vm.energy + ' of ' + vm.maxEnergy);
   }
 
   function buildEnd() {
@@ -1423,7 +1424,7 @@
     if (S.draining && !S.picking) { fastForward(); return; }
     const cs = S.C.canSwap();
     if (!cs.ok || !canAct()) {
-      const msg = cs.reason === 'bind' ? 'Bound: the heroes cannot swap rows' : cs.reason === 'solo' ? 'Only one hero is standing' : cs.reason === 'energy' ? 'Not enough Energy to swap' : REASONS[cs.reason] || 'You cannot swap now';
+      const msg = cs.reason === 'bind' ? 'Tangled: the heroes cannot swap spots' : cs.reason === 'solo' ? 'Only one hero is standing' : cs.reason === 'energy' ? 'Not enough Breath to swap' : REASONS[cs.reason] || 'You cannot swap now';
       UI.toast(msg, 'warn');
       return;
     }
@@ -1944,7 +1945,7 @@
     renderEnd(); renderSwap();
     const pile = S.vm[p.from] || [];
     const cards = p.uids.map((uid) => pile.find((c) => c.uid === uid)).filter(Boolean).map(cp);
-    const from = { draw: 'your draw pile', discard: 'your discard pile', exhaust: 'the exhaust pile' }[p.from] || 'the pile';
+    const from = { draw: 'your draw pile', discard: 'your discard pile', exhaust: 'the faded pile' }[p.from] || 'the pile';
     const title = pickTitle(p) + (p.from === 'draw' && p.top ? ' (top ' + p.top + ' of ' + from + ')' : '');
     return UI.overlay.open('cardPick', { title, cards, n: p.n, optional: !!p.optional, confirm: cap(pickWord(p)) }).then((res) => {
       if (S) S.picking = null;
@@ -1960,7 +1961,7 @@
     if (S.picking && S.picking.mode === 'overlay') return;
     hidePreview();
     const vm = S.vm;
-    const src = { draw: ['Draw pile', vm.draw], discard: ['Discard pile', vm.discard.concat(vm.inPlay && vm.inPlay.to === 'discard' ? [vm.inPlay] : [])], exhaust: ['Exhausted', vm.exhaust], powers: ['Powers in play', vm.powers.concat(vm.inPlay && vm.inPlay.to === 'power' ? [vm.inPlay] : [])] }[kind];
+    const src = { draw: ['Draw pile', vm.draw], discard: ['Discard pile', vm.discard.concat(vm.inPlay && vm.inPlay.to === 'discard' ? [vm.inPlay] : [])], exhaust: ['Faded', vm.exhaust], powers: ['Powers in play', vm.powers.concat(vm.inPlay && vm.inPlay.to === 'power' ? [vm.inPlay] : [])] }[kind];
     if (!src) return;
     const heroRank = (c) => { const d = cardDef(c.id); const i = d ? DATA.LISTS.heroIds.indexOf(d.hero) : -1; return i < 0 ? 9 : vm.heroes.findIndex((h) => h.id === d.hero) < 0 ? 8 : vm.heroes.findIndex((h) => h.id === d.hero); };
     const typeRank = (c) => { const d = cardDef(c.id); return d ? ['attack', 'skill', 'power', 'curse', 'status'].indexOf(d.type) : 9; };
@@ -2015,7 +2016,7 @@
       UI.bus.emit('combat:end', { result: 'lose' });
       sfx('defeat');
       endCard('DEFEAT', 'lose');
-      UI.announce('Defeat. Both heroes have fallen.');
+      UI.announce('Defeat. Both heroes have lost their voices.');
       await wait(me, 1000);
       if (S !== me || !me.live()) return;
       GAME.enterNode({ kind: 'defeat' });
@@ -2120,7 +2121,7 @@
 
     // ---- top bar (y 0..56): relic strip left, gold and ink, the turn label in the centre, speed and menu on the right
     const top = mk('div', { class: 'cm-top' });
-    u.relics = tut(mk('div', { class: 'cm-relics', role: 'list', 'aria-label': 'Treasures' }), 'relics');
+    u.relics = tut(mk('div', { class: 'cm-relics', role: 'list', 'aria-label': 'Charms' }), 'relics');
     const ids = (R.relics || []).filter((id) => DATA.relics[id]);
     const shown = ids.length > RELIC_SLOTS ? RELIC_SLOTS - 1 : ids.length;
     ids.slice(0, shown).forEach((id) => {
@@ -2129,7 +2130,7 @@
       u.relicEls[id] = el;
       u.relics.appendChild(el);
     });
-    if (ids.length > shown) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - shown) + ' more treasures', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - shown) }));
+    if (ids.length > shown) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - shown) + ' more charms', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - shown) }));
     u.gold = UI.stat('gold', R.gold, { size: 'sm', focusable: false });
     u.ink = UI.stat('ink', R.ink, { size: 'sm', max: R.inkMax, focusable: false });
     const tn = mk('b', { class: 'ct-n' }), tp = mk('span', { class: 'ct-p' });
@@ -2180,7 +2181,7 @@
     // the pile chips ride in the free strip of the top bar (between the turn banner and the speed button): under the enemies sit their status rows, which the
     // old spot (y 552) covered for the foes in lanes 3 and 4, and there is no room for a 40 px chip between those rows and the piles
     u.pow = chip('pow', 'Powers', 748, 6, 'powers');
-    u.exh = chip('exh', 'Exhausted', 888, 6, 'exhaust');
+    u.exh = chip('exh', 'Faded', 888, 6, 'exhaust');
     u.end = buildEnd();
     [u.orb.el, u.draw.el, u.pow.el, u.disc.el, u.exh.el, u.end].forEach((el) => root.appendChild(el));
 
@@ -2200,13 +2201,13 @@
     const C = me.C;
     const boss = C.enemies.find((e) => e.tier === 'boss') || C.enemies.find((e) => e.tier === 'elite') || C.enemies[0];
     const d = boss ? DATA.enemies[boss.def] : null;
-    UI.announce((C.tier === 'boss' ? 'Keeper: ' : 'Champion: ') + (boss ? boss.name : '') + (d && d.title ? ', ' + d.title : ''));
+    UI.announce((C.tier === 'boss' ? 'Headliner: ' : 'Rival: ') + (boss ? boss.name : '') + (d && d.title ? ', ' + d.title : ''));
     sfx(C.tier === 'boss' ? 'boss_intro' : 'phase_change');
-    if (C.tier === 'boss' && me.realScene) { safe(() => me.sc.banner(boss ? boss.name : 'KEEPER', 'BOSS')); return 2600; }
+    if (C.tier === 'boss' && me.realScene) { safe(() => me.sc.banner(boss ? boss.name : 'HEADLINER', 'BOSS')); return 2600; }
     const r = me.ui.reveal;
     r.textContent = '';
     r.className = 'cm-reveal ' + (C.tier === 'boss' ? 'boss' : 'elite');
-    r.appendChild(mk('span', { class: 'cr-tag', text: C.tier === 'boss' ? 'KEEPER' : 'CHAMPION' }));
+    r.appendChild(mk('span', { class: 'cr-tag', text: C.tier === 'boss' ? 'HEADLINER' : 'RIVAL' }));
     r.appendChild(mk('b', { class: 'cr-name', text: boss ? boss.name : 'A foe' }));
     if (d && d.title) r.appendChild(mk('span', { class: 'cr-title', text: d.title }));
     r.appendChild(mk('i', { class: 'cr-brush', 'aria-hidden': 'true' }));

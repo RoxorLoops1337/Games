@@ -71,6 +71,8 @@
 .rl-rar.r-boss { color: var(--white); background: linear-gradient(90deg, #a91d2c, #e8383d, #a91d2c); } .rl-rar.r-shop { background: linear-gradient(90deg, #2fb59a, #8dffdc, #2fb59a); }
 .rl-info { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .rl-text { max-width: 30ch; font: 500 calc(15px * var(--ts) * var(--nkc, 1)) / 1.35 var(--font-ui); color: var(--paper); text-align: center; }
+/* the Charm's own joke line (DATA.relics[id].flavor), under the rules text: italic and a little quieter. The elite box on the left is the tightest place on the page, so it drops the line where it is already trimmed. */
+.rl-flavor { max-width: 30ch; font: italic 600 calc(13px * var(--ts) * var(--nkc, 1)) / 1.3 var(--font-display); color: var(--paper2); opacity: .85; text-align: center; }
 
 /* sparks, ripples and coins: little DOM effects laid on the fx layer */
 .nk-spk { position: absolute; z-index: 1; width: var(--sz, 10px); height: var(--sz, 10px); background: #ffe9a8; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); filter: drop-shadow(0 0 4px rgba(255, 233, 168, .9)); animation: nkSpark var(--d, 700ms) cubic-bezier(.2, .7, .3, 1) both; pointer-events: none; }
@@ -206,7 +208,7 @@
 .ev-plate { position: relative; width: 480px; height: 372px; padding: 10px; border-radius: 8px; background: var(--gold-leaf); box-shadow: 0 8px 16px rgba(0, 0, 0, .55), inset 0 0 0 2px rgba(20, 15, 46, .7); transform: rotate(-.6deg); }
 .ev-plate-c { width: 460px; height: 352px; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--ink); background: var(--ink); }
 .ev-frame { position: absolute; inset: 10px; border-radius: 3px; pointer-events: none; box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 26px rgba(13, 11, 30, .55); }
-.ev-seal { position: absolute; right: -14px; bottom: -16px; display: grid; place-items: center; width: 68px; height: 68px; font: 900 calc(15px * var(--ts) * var(--nkc, 1)) / 1 var(--font-display); letter-spacing: .06em; color: var(--gold2); border-radius: 12px; transform: rotate(-6deg);
+.ev-seal { position: absolute; right: -14px; bottom: -16px; display: grid; place-items: center; box-sizing: border-box; min-width: 68px; width: max-content; padding: 0 .5em; white-space: nowrap; height: 68px; font: 900 calc(15px * var(--ts) * var(--nkc, 1)) / 1 var(--font-display); letter-spacing: .06em; color: var(--gold2); border-radius: 12px; transform: rotate(-6deg);
   background: linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 40%), linear-gradient(165deg, #2a1d5a 0%, #160f36 74%); box-shadow: inset 0 0 0 2px #d9a441, inset 0 0 0 4px rgba(20, 15, 46, .95), 0 4px 6px rgba(0, 0, 0, .5); }
 .ev-title { margin: 0 0 8px; font: 800 calc(31px * var(--ts) * var(--nkc, 1)) / 1.1 var(--font-display); letter-spacing: .04em; color: var(--ink); text-shadow: 0 1px 0 rgba(255, 255, 255, .55); }
 .ev-title::after { content: ""; display: block; height: 9px; margin-top: 8px; width: 78%; background: var(--vermilion); opacity: .8; -webkit-mask: var(--brush) left / 100% 100% no-repeat; mask: var(--brush) left / 100% 100% no-repeat; }
@@ -313,7 +315,7 @@
 .ch-loot { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .ch-loot .nk-row { width: 300px; margin: 0; }
 .ch-relic { flex-direction: row; align-items: center; gap: 16px; width: 560px; padding: 14px 20px; text-align: left; background: linear-gradient(180deg, rgba(58, 42, 122, .96), rgba(22, 15, 54, .97)); box-shadow: inset 0 0 0 2.5px var(--gold), inset 0 0 0 6px rgba(20, 15, 46, .95), 0 14px 22px rgba(0, 0, 0, .6); border-radius: 18px; }
-.ch-relic .rl-info { align-items: flex-start; flex: 1; } .ch-relic .rl-text { text-align: left; max-width: none; }
+.ch-relic .rl-info { align-items: flex-start; flex: 1; } .ch-relic .rl-text { text-align: left; max-width: none; } .ch-relic .rl-flavor { text-align: left; max-width: none; }
 .ch-gems { display: flex; gap: 18px; }
 .ch-gem { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 214px; padding: 8px 10px 12px; border: 0; border-radius: 16px; cursor: pointer; color: var(--paper); font: inherit; text-align: center;
   background: linear-gradient(180deg, rgba(58, 42, 122, .96), rgba(22, 15, 54, .97)); box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .7), inset 0 0 0 5px rgba(20, 15, 46, .95), 0 12px 18px rgba(0, 0, 0, .55); transition: transform .25s var(--ease-back), box-shadow .25s; }
@@ -517,6 +519,8 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 #stage.compact .nk-top { height: calc(var(--hit) + 14px); padding: 0 104px 14px 14px; }
 /* the reward banner sits under that taller bar on a phone */
 #stage.compact .rw-wrap .nk-titlebox { top: 98px; }
+/* The Green Room is two letters longer than The Campfire was: at the larger text sizes on a phone the ribbon would wrap and hide Room behind the tiles, so its side padding gives back the room */
+#stage.compact .cp-titlebox .nk-banner span { padding-left: 1.3em; padding-right: 1.3em; }
 #stage.compact .nk-screen, #stage.compact .o-deck, #stage.compact .o-cardPick { --nkc: 1.3; }
 /* compact stages make every button taller: keep the foot buttons clear of hints and price tags */
 #stage.compact .rw-hint { bottom: 70px; }
@@ -527,6 +531,7 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
    The elite relic box (its Take it and Leave it buttons used to fall off the bottom of the stage; `.dense` is added by the screen when 3 rows sit above it and `.tall` when 4 do) and the four camp tiles are trimmed to do so. */
 #stage.compact .rw-relicbox, .rw-ledger.dense .rw-relicbox, .rw-ledger.tall .rw-relicbox { padding: 8px 10px 10px; gap: 4px; margin-top: 4px; }
 #stage.compact .rw-relicbox .rw-h3, .rw-ledger.dense .rw-relicbox .rw-h3, .rw-ledger.tall .rw-relicbox .rw-h3 { display: none; }
+#stage.compact .rw-relicbox .rl-flavor, .rw-ledger.dense .rw-relicbox .rl-flavor, .rw-ledger.tall .rw-relicbox .rl-flavor, .rw-ledger.snug .rw-relicbox .rl-flavor, #stage.compact .rw-ped .rl-flavor { display: none; }
 #stage.compact .rw-relic, .rw-ledger.dense .rw-relic, .rw-ledger.tall .rw-relic { padding: 4px; gap: 2px; }
 #stage.compact .rw-relic .ico, .rw-ledger.dense .rw-relic .ico, .rw-ledger.tall .rw-relic .ico { width: 60px; height: 60px; }
 /* text scale above 1 with a gem or a brush row above the relic box (desktop): tighter rows, a smaller icon and a little more height so Take it and Leave it stay on the stage */
@@ -578,13 +583,13 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 #stage.compact .dk-confirm .dk-note { flex: 1 1 9em; min-width: 0; text-align: left; }
 #stage.compact .dk-confirm .dk-actions { flex: none; }
 #stage.compact .dk-label { margin-bottom: 2px; }
-/* shop wares on a phone, and at the larger text sizes (the plaques are 109 stage px wide there): the name is capped at its text 1.0 size and may take three lines, the kicker is one line
-   small enough for UNCOMMON and TIER 2 GOLD (it ellipsizes rather than overflowing into its neighbour), the price figures stop growing with --ts (the SALE stamp, base rule above, sits clear of the price tag at every size) */
+/* shop wares on a phone, and at the larger text sizes (the plaques are 109 stage px wide there): the name is capped at its text 1.0 size and may take three lines, the kicker may take two lines
+   (TIER 2 GOLD GEM, HEADLINER CHARM; it is clamped there rather than overflowing into its neighbour), the price figures stop growing with --ts (the SALE stamp, base rule above, sits clear of the price tag at every size) */
 #stage.compact .sh-plaque { gap: 4px; padding-top: 6px; }
 #stage.compact .sh-ico { height: 58px; }
 #stage.compact .sh-ico .ico { width: 56px !important; height: 56px !important; }
 #stage.compact .sh-name { font-size: calc(14px * min(var(--ts), 1) * var(--nkc, 1)); line-height: 1.08; max-width: 100%; padding: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow-wrap: normal; word-break: normal; hyphens: manual; text-wrap: balance; }
-#stage.compact .sh-kind { max-width: 100%; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; letter-spacing: 0; font-size: calc(9.6px * min(var(--ts), 1) * var(--nkc, 1)); }
+#stage.compact .sh-kind { max-width: 100%; padding: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-align: center; line-height: 1.2; overflow-wrap: normal; letter-spacing: 0; font-size: calc(9.6px * min(var(--ts), 1) * var(--nkc, 1)); }
 #stage.compact .sh-tag { gap: 5px; padding: 0 10px 0 6px; max-width: 100%; }
 #stage.compact .sh-tag b { font-size: calc(19px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .sh-tag s { font-size: calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)); }

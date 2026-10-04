@@ -392,6 +392,7 @@ button.badge, .badge[role=button] { cursor: pointer; }
 .tk-kind { padding: .1em .55em; border-radius: 5px; font: 800 calc(10px * var(--ts)) / 1.5 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--white); background: var(--ash); }
 .tk-kind.k-buff { background: #b98a2f; } .tk-kind.k-debuff { background: #b0245c; } .tk-kind.k-resource { background: #3b6fb0; } .tk-kind.k-keyword { background: var(--ink-soft); }
 .tk-text { margin: 0; }
+.tk-flavor { margin: .45em 0 0; font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: .92em; line-height: 1.25; opacity: .78; }   /* a Charm's flavour line under its rules text */
 .tk-ico { float: left; margin: 2px 9px 2px 0; }
 .tip-cardwrap { position: absolute; display: flex; gap: 16px; align-items: flex-start; transform-origin: 0 0; pointer-events: none; animation: fadeIn .14s ease-out both; }
 .tip-cardwrap.kw-left { flex-direction: row-reverse; }

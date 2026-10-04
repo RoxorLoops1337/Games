@@ -107,15 +107,23 @@
   const gemName = (id) => (DATA.gems[id] && DATA.gems[id].name) || String(id);
   const relicName = (id) => (DATA.relics[id] && DATA.relics[id].name) || String(id);
   const heroName = (id) => (DATA.heroes[id] && DATA.heroes[id].name) || String(id);
+  // a gem or socket colour as the player reads it (the id red is the pink family, any is rainbow): never print the id itself
+  const colourWord = (c) => (DATA.COLOUR_NAME && DATA.COLOUR_NAME[c]) || String(c);
+  // the rarity ids as the player reads them (a Charm's rarity: boss is a Headliner's, shop is Jordan's Merch)
+  const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
+  const rarityName = (r) => RARITY_NAME[r] || cap(String(r || ''));
   const slotsOf = (inst) => (inst && DATA.cards[inst.id] && DATA.cards[inst.id].slots) || [];
   // a card instance for an offered card id (rewards, shops, previews): uid 0 means "not in the deck"
   const instOf = (id, up, uid) => ({ uid: uid || 0, id, up: up ? 1 : 0, gems: ((DATA.cards[id] && DATA.cards[id].slots) || []).map(() => null) });
   const canUpgrade = (inst) => { const d = DATA.cards[inst.id]; return !!(d && d.up && !inst.up); };
   const gemColorOf = (id) => (DATA.gems[id] && DATA.gems[id].color) || 'gold';
+  const gemColourName = (id) => colourWord(gemColorOf(id));
   const slotFits = (slot, gemId) => slot === 'any' || slot === gemColorOf(gemId);
   // does some gem in the pouch fit some slot (a replacement counts): the same test RUN.forgeUsable uses for gems
   const canCutAny = (R) => R.gems.some((g) => R.deck.some((c) => slotsOf(c).some((s, i) => c.gems[i] !== g && slotFits(s, g))));
   const mods = (R) => safe(() => RUN.mods(R), null) || {};
+  // the map resource as the player reads it (DATA.keywords.ink.name): never print the id
+  const voxName = () => (DATA.keywords && DATA.keywords.ink && DATA.keywords.ink.name) || 'Vox';
   const gemLine = (id) => safe(() => DATA.gemText(id), '') || '';
 
   // ==================================================================================================================
@@ -282,7 +290,7 @@
 
   const noRunScreen = (S) => {
     const back = UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => UI.toTitle() });
-    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No journey is underway' }, mk('p', { class: 'nk-empty-text', text: 'There is no journey to show here.' }), mk('div', { class: 'row center' }, back))));
+    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No tour is on the road' }, mk('p', { class: 'nk-empty-text', text: 'There is no tour to show here.' }), mk('div', { class: 'row center' }, back))));
   };
 
   // finish a node: resolve anything still pending, then hand control back to GAME
@@ -311,9 +319,9 @@
     const deckBtn = UI.btn('Deck ' + R.deck.length, { kind: 'ghost', size: 'sm', icon: { kind: 'type', id: 'skill', size: 22 }, onclick: () => { UI.overlay.open('deck', { mode: 'view' }); } });
     deckBtn.setAttribute('data-tut', 'deck');
     deckBtn.classList.add('nk-deckbtn');
-    const relBtn = UI.btn('' + R.relics.length, { kind: 'ghost', size: 'sm', icon: { kind: 'relic', id: 'lantern', size: 22 }, tip: 'Treasures', onclick: () => { UI.overlay.open('relics', {}); } });
+    const relBtn = UI.btn('' + R.relics.length, { kind: 'ghost', size: 'sm', icon: { kind: 'relic', id: 'lantern', size: 22 }, tip: 'Charms', onclick: () => { UI.overlay.open('relics', {}); } });
     relBtn.setAttribute('data-tut', 'relics');
-    relBtn.setAttribute('aria-label', 'Treasures');
+    relBtn.setAttribute('aria-label', 'Charms');
     relBtn.classList.add('nk-relbtn');
     const el = mk('div', { class: 'nk-top' },
       mk('div', { class: 'nk-heroes' }, ...badges),
@@ -362,10 +370,10 @@
   // pending choices: deck ops and card rewards that RUN raised (hooks, fights, events, relic pickups) wait in R.pending
   // ==================================================================================================================
   const DECK_OPS = { removeCard: 'remove', upgradeCard: 'upgrade', transformCard: 'pick', duplicateCard: 'pick' };
-  const OP_TITLE = { removeCard: 'Remove a card', upgradeCard: 'Sharpen a card', transformCard: 'Transform a card', duplicateCard: 'Copy a card' };
-  const OP_CONFIRM = { removeCard: 'Remove it', upgradeCard: 'Sharpen it', transformCard: 'Transform it', duplicateCard: 'Copy it' };
+  const OP_TITLE = { removeCard: 'Remove a card', upgradeCard: 'Rehearse a card', transformCard: 'Transform a card', duplicateCard: 'Copy a card' };
+  const OP_CONFIRM = { removeCard: 'Remove it', upgradeCard: 'Rehearse it', transformCard: 'Transform it', duplicateCard: 'Copy it' };
   const OP_NOTE = {
-    removeCard: 'It is torn out of your deck for good.',
+    removeCard: 'It leaves your deck for good.',
     upgradeCard: 'It gains its upgrade.',
     transformCard: 'It becomes a random card of the same hero and rarity.',
     duplicateCard: 'A second copy joins the deck.',
@@ -433,7 +441,7 @@
         if (S.chrome) S.chrome.sync(false);
       } else if (++fails > 2) {
         // the player keeps backing out of a mandatory choice: RUN says no card qualifies or the overlay was cancelled. Never trap the screen.
-        UI.toast('That choice can wait: the journey goes on without it.', 'warn');
+        UI.toast('That choice can wait: the tour goes on without it.', 'warn');
         break;
       }
     }
@@ -457,9 +465,9 @@
   const SORTS = [{ value: 'order', label: 'Order' }, { value: 'cost', label: 'Cost' }, { value: 'type', label: 'Type' }, { value: 'hero', label: 'Hero' }, { value: 'rarity', label: 'Rarity' }];
   const SOCKET_WHY = {
     card: 'That card is no longer in the deck.', slot: 'That socket does not exist.', gem: 'That gem is not in your pouch any more.',
-    color: 'Wrong colour for that socket.', same: 'That gem is already set there.', used: 'The forge has done its work for today.', actions: 'The fire has burned low.', node: 'This moment has passed.',
+    color: 'Wrong colour for that socket.', same: 'That gem is already set there.', used: 'The studio has done its work for today.', actions: 'No more breaks in this green room.', node: 'This moment has passed.',
   };
-  const slotName = (s) => (s === 'any' ? 'Prism' : cap(s));
+  const slotName = (s) => cap(colourWord(s));
 
   const filterMatch = (inst, f) => {
     const d = DATA.cards[inst.id] || {};
@@ -591,7 +599,7 @@
       const list = visible();
       countEl.textContent = filtered() ? list.length + ' of ' + all.length + ' cards' : U.plural(all.length, 'card');
       if (!list.length) {
-        const msg = !all.length ? (mode === 'upgrade' ? 'Nothing left to sharpen.' : mode === 'socket' ? 'No cards to cut gems into.' : 'There are no cards here.') : 'No card matches these filters.';
+        const msg = !all.length ? (mode === 'upgrade' ? 'Nothing left to rehearse.' : mode === 'socket' ? 'No cards to set gems into.' : 'There are no cards here.') : 'No card matches these filters.';
         grid.appendChild(mk('div', { class: 'dk-none' }, mk('p', { class: 'empty', text: msg }), all.length ? UI.btn('Clear filters', { kind: 'secondary', size: 'sm', onclick: clearFilters }) : null));
         return;
       }
@@ -608,7 +616,7 @@
       grid.querySelectorAll('.card').forEach((el) => el.rbUpdate({ selected: Number(el.dataset.uid) === st.sel }));
     }
     function why(inst) {
-      if (mode === 'upgrade') return inst.up ? 'Already sharpened.' : 'This card cannot be upgraded.';
+      if (mode === 'upgrade') return inst.up ? 'Already rehearsed.' : 'This card cannot be upgraded.';
       if (mode === 'socket') return 'This card has no sockets.';
       return '';
     }
@@ -623,7 +631,7 @@
     const paneHint = () => ({
       view: 'Tap a card to look closer. Keywords are explained beside it.',
       pick: 'Choose a card.',
-      upgrade: 'Choose a card to sharpen. You will see the result before you commit.',
+      upgrade: 'Choose a card to rehearse. You will see the result before you commit.',
       remove: 'Choose the card to remove. Fewer, sharper cards win fights.',
       socket: 'Choose a card, then a socket, then a gem from your pouch.',
     }[mode]);
@@ -632,7 +640,7 @@
       const box = mk('div', { class: 'dk-hint' }, mk('i', { class: 'dk-hint-mark', 'aria-hidden': 'true' }), mk('p', { text: p.hint || paneHint() }));
       if (mode === 'view' && R) {
         const up = all.filter((c) => c.up).length, gems = all.reduce((n, c) => n + (c.gems || []).filter(Boolean).length, 0);
-        box.appendChild(mk('ul', { class: 'dk-facts' }, mk('li', {}, mk('b', { text: up }), ' sharpened'), mk('li', {}, mk('b', { text: gems }), ' gems set'), mk('li', {}, mk('b', { text: R.gems.length }), ' gems in the pouch')));
+        box.appendChild(mk('ul', { class: 'dk-facts' }, mk('li', {}, mk('b', { text: up }), ' rehearsed'), mk('li', {}, mk('b', { text: gems }), ' gems set'), mk('li', {}, mk('b', { text: R.gems.length }), ' gems in the pouch')));
       }
       return box;
     }
@@ -645,7 +653,7 @@
       const shown = st.up && canPrev ? Object.assign({}, inst, { up: 1 }) : inst;
       const card = UI.card(shown, { size: 'big', showGems: true });
       card.classList.add('dk-big');
-      const note = mode === 'remove' ? mk('p', { class: 'dk-note warn', text: p.note || 'It is torn out of your deck for good.' }) : (p.note && mode === 'pick' ? mk('p', { class: 'dk-note', text: p.note }) : null);
+      const note = mode === 'remove' ? mk('p', { class: 'dk-note warn', text: p.note || 'It leaves your deck for good.' }) : (p.note && mode === 'pick' ? mk('p', { class: 'dk-note', text: p.note }) : null);
       const side = mk('div', { class: 'dk-side' }, note, glossaryOf(card), socketList(shown));   // the note rides beside the card (never between the card and the button)
       const btns = mk('div', { class: 'dk-actions' });
       if (canPrev) btns.appendChild(UI.btn(st.up ? 'Show plain' : 'Preview upgrade', { kind: 'ghost', size: 'sm', onclick: () => { st.up = !st.up; renderPane(); } }));
@@ -672,7 +680,7 @@
       const before = UI.card(inst, { size: 'hand' });
       const after = UI.card(Object.assign({}, inst, { up: 1 }), { size: 'hand' });
       before.classList.add('dk-half'); after.classList.add('dk-half');
-      const go = actionBtn(p.confirm || 'Sharpen this card', 'dk-go', () => close(inst.uid), { breathe: true });
+      const go = actionBtn(p.confirm || 'Rehearse this card', 'dk-go', () => close(inst.uid), { breathe: true });
       pane.appendChild(mk('div', { class: 'dk-detail dk-up' },
         mk('div', { class: 'dk-ba' },
           mk('div', { class: 'dk-bacol' }, mk('span', { class: 'dk-label', text: 'Before' }), before),
@@ -692,7 +700,7 @@
       const slots = slotsOf(inst);
       if (st.slot === null || st.slot >= slots.length) return { ok: false, reason: 'Choose a socket first.' };
       if (!st.gem) return { ok: false, reason: R && R.gems.length ? 'Choose a gem from the pouch.' : 'You carry no gems.' };
-      if (!slotFits(slots[st.slot], st.gem)) return { ok: false, reason: gemName(st.gem) + ' is ' + gemColorOf(st.gem) + ': it fits ' + gemColorOf(st.gem) + ' and prism sockets only.' };
+      if (!slotFits(slots[st.slot], st.gem)) return { ok: false, reason: gemName(st.gem) + ' is ' + gemColourName(st.gem) + ': it fits ' + gemColourName(st.gem) + ' and rainbow sockets only.' };
       if (inst.gems[st.slot] === st.gem) return { ok: false, reason: 'That gem is already set there.' };
       return { ok: true, replace: inst.gems[st.slot] || null };
     }
@@ -748,13 +756,13 @@
           st.gem = st.gem === id ? null : id;
           if (st.gem && st.slot !== null && !slotFits(slots[st.slot], st.gem)) {
             const alt = slots.findIndex((s, i) => slotFits(s, st.gem) && inst.gems[i] !== st.gem);
-            if (alt >= 0) st.slot = alt; else { UI.toast(gemName(id) + ' is ' + gemColorOf(id) + ': this card has no ' + gemColorOf(id) + ' or prism socket.', 'warn'); snd('ui_error'); UI.shake(b); }
+            if (alt >= 0) st.slot = alt; else { UI.toast(gemName(id) + ' is ' + gemColourName(id) + ': this card has no ' + gemColourName(id) + ' or rainbow socket.', 'warn'); snd('ui_error'); UI.shake(b); }
           }
           renderPane();
         });
         tray.appendChild(b);
       });
-      if (!ids.length) tray.appendChild(mk('p', { class: 'dk-nogems', text: 'The pouch is empty. Chests, caches and peddlers carry gems.' }));
+      if (!ids.length) tray.appendChild(mk('p', { class: 'dk-nogems', text: 'The pouch is empty. Gift boxes, sparkle booths and merch stalls carry gems.' }));
       const state = chk.ok ? (chk.replace ? { cls: 'warn', text: 'Replacing ' + gemName(chk.replace) + ' destroys it for good. There is no taking a gem back out.' } : { cls: 'ok', text: gemName(st.gem) + ' will be set in the ' + slotName(slots[st.slot]).toLowerCase() + ' socket.' }) : { cls: st.gem && st.slot !== null && !slotFits(slots[st.slot], st.gem) ? 'bad' : '', text: chk.reason };
       const stateEl = mk('p', { class: 'dk-state ' + state.cls, role: 'status', text: state.text });
       const go = actionBtn(chk.replace ? 'Replace the gem' : 'Set the gem', 'dk-go' + (chk.replace ? ' dk-danger' : ''), () => insert(inst), { disabled: !chk.ok, reason: chk.reason, danger: !!chk.replace });
@@ -782,7 +790,7 @@
     }
 
     // ---- assemble
-    const title = p.title || { view: 'Your Deck', pick: 'Choose a Card', upgrade: 'Sharpen a Card', remove: 'Remove a Card', socket: 'Cut Gems' }[mode];
+    const title = p.title || { view: 'Your Deck', pick: 'Choose a Card', upgrade: 'Rehearse a Card', remove: 'Remove a Card', socket: 'Set Gems' }[mode];
     const head = mk('div', { class: 'dk-head' }, mk('div', { class: 'dk-counts' }, countEl, typesEl), chipsEl);
     const done = mode === 'view' ? UI.btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }) : (mode === 'socket' ? UI.btn('Done', { kind: 'primary', size: 'lg', onclick: () => close(st.cut) }) : (required ? null : UI.btn('Cancel', { kind: 'secondary', size: 'lg', sfx: 'ui_back', onclick: () => close(null) })));
     if (done) done.setAttribute('data-autofocus', '');
@@ -849,12 +857,12 @@
   // centred on its axis (x + w / 2 = 796), because the ledger takes the left of the page; css reads --rw-x and --rw-w from here.
   const RW = { x: 336, w: 920 };
   const rwAxis = () => RW.x + RW.w / 2;
-  const REWARD_TITLE = { normal: 'Victory', elite: 'A Champion Falls', boss: 'The Guardian Falls', event: 'The Journey Goes On' };
+  const REWARD_TITLE = { normal: 'Victory', elite: 'A Rival Bows Out', boss: 'The Headliner Bows Out', event: 'The Tour Goes On' };
   const REWARD_SUB = {
-    normal: ['The air settles, and something shiny is left in the grass.', 'The echoes fade. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
-    elite: ['A worthy foe, and a worthy prize.', 'The champion kneels, and yields what it guarded.', 'Even the crickets stop to listen for a moment.'],
-    boss: ['The verse ends on a satisfying final beat.', 'A silence breaks, and stays broken.'],
-    event: ['A fable ends the way fables do: with a bill.', 'The journey goes on, a little richer.'],
+    normal: ['The air settles, and something shiny is left in the grass.', 'The street hums again. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
+    elite: ['A worthy foe, and a worthy prize.', 'The rival takes a bow, and hands over what it guarded.', 'Even the crickets stop to listen for a moment.'],
+    boss: ['The act ends on a satisfying final beat.', 'The mute is off, and it stays off.'],
+    event: ['A detour ends the way detours do: with a souvenir.', 'The tour goes on, a little richer.'],
   };
 
   // a rarity-coloured relic offer: icon, name, rarity and the hand-written line
@@ -864,8 +872,9 @@
       mk('span', { class: 'rl-ico' }, UI.icon('relic', id, size || 84)),
       mk('span', { class: 'rl-info' },
         mk('b', { class: 'rl-name', text: d.name }),
-        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Keeper treasure' : cap(d.rarity) + ' treasure' }),
-        mk('span', { class: 'rl-text', text: safe(() => DATA.relicText(id), d.text) || d.text })),
+        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Headliner charm' : rarityName(d.rarity) + ' charm' }),
+        mk('span', { class: 'rl-text', text: safe(() => DATA.relicText(id), d.text) || d.text }),
+        d.flavor ? mk('span', { class: 'rl-flavor', text: d.flavor }) : null),
     ];
   }
 
@@ -958,7 +967,7 @@
     root.appendChild(wrap);
     fxLayer(S);
     const boss = DATA.enemies[DATA.FIXED.bosses[R.chapter]];
-    const title = tier === 'boss' ? (boss ? boss.name + ' Falls' : REWARD_TITLE.boss) : REWARD_TITLE[tier];
+    const title = tier === 'boss' ? (boss ? boss.name + ' Bows Out' : REWARD_TITLE.boss) : REWARD_TITLE[tier];
     const subs = REWARD_SUB[tier];
     const sub = tier === 'boss' && boss && boss.title ? boss.title + '. ' + subs[cosRng(S, 'sub').int(0, subs.length - 1)] : subs[cosRng(S, 'sub').int(0, subs.length - 1)];
     const goldBefore = R.gold - (rw.gold || 0);
@@ -973,12 +982,12 @@
     // thieves can take more than the fight paid: a net loss reads "Gold lost -6" in a warning tone, never "+-6"
     const signed = (n) => (n < 0 ? '-' + Math.abs(n) : '+' + n);
     if (rw.gold) rows.push({ row: ledgerRow(UI.icon('stat', 'gold', 38), rw.gold < 0 ? 'Gold lost' : 'Gold', rw.gold < 0 ? '-0' : '+0', { kind: rw.gold < 0 ? 'loss' : 'gold' }), to: rw.gold, tick: 'gold', fmt: signed });
-    if (rw.ink) rows.push({ row: ledgerRow(UI.icon('stat', 'ink', 38), 'Echo', '+0', { kind: 'ink' }), to: rw.ink, tick: 'ink_gain' });
+    if (rw.ink) rows.push({ row: ledgerRow(UI.icon('stat', 'ink', 38), voxName(), '+0', { kind: 'ink' }), to: rw.ink, tick: 'ink_gain' });
     if (rw.maxHp) rows.push({ row: ledgerRow(UI.icon('stat', 'hp', 38), 'Max HP', '+0', { kind: 'hp' }), to: rw.maxHp, tick: 'level_up' });
     const gemId = (rw.gems || [])[0] || null;
     let gemRow = null, brushRow = null;
     if (gemId) { gemRow = ledgerRow(UI.gem(gemId, { size: 'sm' }), gemName(gemId), 'Gem', { kind: 'gem', cls: 'bonus' }); rows.push({ row: gemRow }); }
-    if (rw.brush) { brushRow = ledgerRow(UI.icon('brush', rw.brush, 38), (DATA.brushes[rw.brush] || {}).name || 'Song', 'Song', { kind: 'brush', cls: 'bonus' }); rows.push({ row: brushRow }); }
+    if (rw.brush) { brushRow = ledgerRow(UI.icon('brush', rw.brush, 38), (DATA.brushes[rw.brush] || {}).name || 'Spell', 'Spell', { kind: 'brush', cls: 'bonus' }); rows.push({ row: brushRow }); }
     rows.forEach((r) => ledger.appendChild(r.row));
     wrap.appendChild(ledger);
     stagger(S, rows.map((r) => r.row), { delay: 250, step: 160 });
@@ -988,7 +997,7 @@
       if (reduced()) run(); else UI.after(wait(420 + i * 160), run);
     });
     if ((headless() || reduced()) && S.chrome) S.chrome.gold.rbSet(R.gold, { animate: false });
-    if (!rows.length) ledger.appendChild(mk('p', { class: 'rw-nothing', text: 'The foe left nothing but an echo.' }));
+    if (!rows.length) ledger.appendChild(mk('p', { class: 'rw-nothing', text: 'The foe left nothing but a squeak.' }));
 
     // ---- decisions
     const cards = rw.cards || [], relics = rw.relics || [];
@@ -1157,7 +1166,7 @@
       const take = mk('button', { type: 'button', class: 'rw-relic', 'aria-label': 'Take ' + relicName(id) }, ...relicBody(id, 84));
       take.addEventListener('click', () => relicChoice(id, take, []));
       const leave = UI.btn('Leave it', { kind: 'ghost', size: 'sm', onclick: relicLeave });
-      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A treasure guarded here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
+      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A charm, waiting here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
       if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a brush above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
       if (rows.length >= 4) ledger.classList.add('tall');      // gold, ink, a gem AND a brush: even the desktop stage needs the slim box
       if (rows.length >= 2 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
@@ -1168,7 +1177,7 @@
       UI.after(wait(300), () => { if (S.alive()) safe(() => { if (ledger.scrollHeight > ledger.clientHeight + 40) ledger.scrollTop = ledger.scrollHeight; }); });
     }
     function buildRelicPage() {           // boss: choose one of three, grandly
-      const page = mk('div', { class: 'rw-relics', role: 'group', 'aria-label': 'Treasure choices' });
+      const page = mk('div', { class: 'rw-relics', role: 'group', 'aria-label': 'Charm choices' });
       const els = [];
       relics.forEach((id, i) => {
         const b = mk('button', { type: 'button', class: 'rw-ped', 'aria-label': 'Take ' + relicName(id), dataset: { relic: id } }, mk('i', { class: 'rw-burst', 'aria-hidden': 'true' }), ...relicBody(id, 112));
@@ -1179,7 +1188,7 @@
         page.appendChild(b);
       });
       stage.insertBefore(page, hint);
-      hint.textContent = 'Choose one treasure. The others fade with the verse.';
+      hint.textContent = 'Choose one charm. The others fade with the act.';
       S.relicPage = page;
       skip.hidden = true;
     }
@@ -1201,7 +1210,7 @@
     } else {
       if (S.boss && need.relic) buildRelicPage();                          // the cards page follows the relic choice
       else { if (need.relic) buildRelicPanel(); if (need.card) buildCards(); }
-      if (!need.card && need.relic && !S.boss) hint.textContent = 'Take the treasure, or leave it.';
+      if (!need.card && need.relic && !S.boss) hint.textContent = 'Take the charm, or leave it.';
     }
     UI.after(wait(700), () => { if (S.alive() && R.pending && R.pending.length && !rw.claimed) resolvePending(S); });
     UI.announce('Spoils. ' + (rw.gold ? rw.gold + ' gold. ' : '') + (cards.length ? 'Choose a card.' : ''));
@@ -1219,15 +1228,15 @@
   // screen: shop (a lantern-lit peddler stall)
   // ==================================================================================================================
   const PEDDLER = {
-    hello: ['Welcome, welcome! Mind the lanterns, they bite.', 'Ah, travellers from the quiet roads! Wares for the weary.', 'Everything here fell off something else. Good as new!', 'Step closer. The prices are only a little bit frightening.'],
-    buy: ['Excellent taste! Terrible for my stock, wonderful for my purse.', 'Sold! I will wrap it in a tune, free of charge.', 'A fine choice. I was sad to see it go. Only slightly.', 'Ha! The land will thank you. I will thank your gold.'],
-    poor: ['Ah... the purse is a little thin, friend.', 'Come back with more gold and fewer regrets.', 'I do not take IOUs. The Hush eats those.', 'Almost! Almost is a lovely word, but it does not spend.'],
-    sold: ['That one is gone. Ask the ghost who bought it.', 'Sold out! Try the one next to it.'],
-    remove: ['Burn it, bury it, forget it. A satisfied customer!', 'Gone. As if it never made a sound.'],
-    cut: ['Free gem cutting! Do not tell the other stalls.', 'Steady hands make sparkling cards.'],
-    empty: ['You have cleaned me out! Take a bow. I will take a nap.'],
-    leave: ['Come again! I will be here. Probably. The Hush is closing in.', 'Safe roads, traveller. Mind the silence.', 'Off you go! Buy something next time, or at least admire it louder.'],
-    idle: ['Psst. The blue gems are the sensible ones.', 'A relic is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of discounts.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
+    hello: ['Fresh merch! I made a sticker of your face. It is very flattering.', 'Tote bag? It has a picture of a tote bag on it.', 'Everything here is one of a kind. I made two.', 'Welcome back! I redesigned everything since you got here.'],
+    buy: ['Great choice. I drew that one on the bus.', 'Sold! Want it in a tote bag? It is a very good tote bag.', 'You have excellent taste. I would know, I designed it.', 'That one suits you. Everything suits you, but that one most.'],
+    poor: ['Not quite enough gold. I will keep it warm for you.', 'So close! Come back with a few more coins.', 'Gold first, then merch. Those are my only rules.', 'Almost! Almost is a lovely word, but it does not buy stickers.'],
+    sold: ['That one is gone. I am already drawing a new one.', 'Sold out! Try the one next to it.'],
+    remove: ['Gone! Your deck feels lighter already.', 'Decluttered. I might put it on a sticker.'],
+    cut: ['Free gem setting! Do not tell the other stalls.', 'Steady hands make sparkling cards.'],
+    empty: ['You have cleaned me out! Time to draw more merch.'],
+    leave: ['Come again! I will have new designs by then.', 'Safe travels! Wear the merch with pride.', 'Off you go! Buy something next time, or at least admire it louder.'],
+    idle: ['Psst. The blue gems are the sensible ones.', 'A charm is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of new merch.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
   };
 
   // The stall's geometry: the painted posts, planks and peddler (shopBackdrop, paintShop) and the DOM wares, nameplate and speech tail all read this one table. enterShop
@@ -1260,7 +1269,7 @@
     const bubbleText = mk('p', { class: 'sh-say' });
     const bubble = mk('div', { class: 'sh-bubble', role: 'status' }, bubbleText, mk('i', { class: 'sh-tail', 'aria-hidden': 'true' }));
     wrap.appendChild(bubble);
-    wrap.appendChild(mk('div', { class: 'sh-sign' }, mk('h1', { class: 'nk-banner' }, mk('span', { text: 'The Peddler' }))));
+    wrap.appendChild(mk('div', { class: 'sh-sign' }, mk('h1', { class: 'nk-banner' }, mk('span', { text: "Jordan's Merch Stall" }))));
     // S.t is the frame clock since boot (0 only until the first frame), so the idle timer is armed by the first tick after a line, never from S.t at enter time
     let lineNo = 0, idleGap = 11, nextIdle = null;
     const say = (kind, mood) => {
@@ -1285,7 +1294,7 @@
     stock.items.forEach((it) => { if (by[it.kind]) by[it.kind].push(it); });
     const els = {};
     const cardShelf = mk('div', { class: 'sh-cards', role: 'group', 'aria-label': 'Cards for sale' });
-    const row2 = mk('div', { class: 'sh-row2', role: 'group', 'aria-label': 'Gems, treasures and services' });
+    const row2 = mk('div', { class: 'sh-row2', role: 'group', 'aria-label': 'Gems, charms and services' });
 
     const tagEl = (price, was) => mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), was ? mk('s', { text: was }) : null, mk('b', { text: price }));
     const stampEl = () => mk('i', { class: 'sh-stamp', 'aria-hidden': 'true', text: 'SOLD' });
@@ -1345,18 +1354,18 @@
       return b;
     };
     let ri = 0;
-    by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || 'gem'), () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || ''), gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
-    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Rare find' : d.rarity === 'boss' ? 'Keeper treasure' : cap(d.rarity || 'treasure'), () => tipBubble(d.name || it.id, d.rarity === 'boss' ? 'Keeper' : cap(d.rarity || ''), safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
-    by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Song', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Merch charm' : d.rarity === 'boss' ? 'Headliner charm' : d.rarity ? rarityName(d.rarity) : 'Charm', () => tipBubble(d.name || it.id, d.rarity ? rarityName(d.rarity) : '', safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Spell', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
 
     // services: card removal (price rises) and free gem cutting
     const removeTag = mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), mk('b', { text: stock.removePrice }));
-    const removeBtn = mk('button', { type: 'button', class: 'sh-plaque kind-service kind-remove', 'aria-label': 'Card removal, ' + stock.removePrice + ' gold' }, mk('span', { class: 'sh-kind', text: 'Service' }), mk('span', { class: 'sh-ico' }, UI.icon('motif', 'fire', 62)), mk('b', { class: 'sh-name', text: 'Card removal' }), removeTag);
+    const removeBtn = mk('button', { type: 'button', class: 'sh-plaque kind-service kind-remove', 'aria-label': 'Declutter, ' + stock.removePrice + ' gold' }, mk('span', { class: 'sh-kind', text: 'Service' }), mk('span', { class: 'sh-ico' }, UI.icon('motif', 'fire', 62)), mk('b', { class: 'sh-name', text: 'Declutter' }), removeTag);
     removeBtn.addEventListener('click', () => doRemove());
-    UI.tip.attach(removeBtn, () => tipBubble('Card removal', 'Service', 'Burn one card from your deck for good. Every removal costs ' + (DATA.ECONOMY.price.removeStep) + ' gold more.'), { side: 'top' });
-    const cutBtn = mk('button', { type: 'button', class: 'sh-plaque kind-service kind-cut', 'aria-label': 'Cut gems, free' }, mk('span', { class: 'sh-kind', text: 'Service' }), mk('span', { class: 'sh-ico' }, UI.icon('gem', 'slot:any', 62)), mk('b', { class: 'sh-name', text: 'Cut gems' }), mk('span', { class: 'sh-tag free' }, mk('b', { text: 'FREE' })));
+    UI.tip.attach(removeBtn, () => tipBubble('Declutter', 'Service', 'Remove a card from your deck for good. Every declutter costs ' + (DATA.ECONOMY.price.removeStep) + ' gold more.'), { side: 'top' });
+    const cutBtn = mk('button', { type: 'button', class: 'sh-plaque kind-service kind-cut', 'aria-label': 'Set gems, free' }, mk('span', { class: 'sh-kind', text: 'Service' }), mk('span', { class: 'sh-ico' }, UI.icon('gem', 'slot:any', 62)), mk('b', { class: 'sh-name', text: 'Set gems' }), mk('span', { class: 'sh-tag free' }, mk('b', { text: 'FREE' })));
     cutBtn.addEventListener('click', () => doCut());
-    UI.tip.attach(cutBtn, () => tipBubble('Cut gems', 'Free', 'Set gems from your pouch into card sockets. Replacing a gem destroys the old one.'), { side: 'top' });
+    UI.tip.attach(cutBtn, () => tipBubble('Set gems', 'Free', 'Set gems from your pouch into card sockets. Replacing a gem destroys the old one.'), { side: 'top' });
     [removeBtn, cutBtn].forEach((b, i) => { b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri + i)); row2.appendChild(b); });
     wrap.appendChild(cardShelf);
     wrap.appendChild(row2);
@@ -1366,7 +1375,7 @@
     const leave = UI.btn('Leave the stall', { kind: 'primary', size: 'lg', onclick: () => { say('leave', 'idle'); snd('ui_back'); UI.after(wait(500), () => leaveNode(S)); } });
     leave.classList.add('sh-leave');
     wrap.appendChild(mk('div', { class: 'sh-foot' }, leave));
-    if (!stock.items.length) row2.appendChild(mk('p', { class: 'sh-none', text: 'The stall is bare. Nothing to sell today.' }));
+    if (!stock.items.length) row2.appendChild(mk('p', { class: 'sh-none', text: 'The stall is bare. Jordan is restocking.' }));
 
     function refresh() {
       let left = 0;
@@ -1380,7 +1389,7 @@
       removeBtn.classList.toggle('poor', R.gold < stock.removePrice);
       removeBtn.classList.toggle('can', R.gold >= stock.removePrice);
       removeTag.querySelector('b').textContent = stock.removePrice;
-      removeBtn.setAttribute('aria-label', 'Card removal, ' + stock.removePrice + ' gold');
+      removeBtn.setAttribute('aria-label', 'Declutter, ' + stock.removePrice + ' gold');
       cutBtn.classList.toggle('poor', !R.gems.length || !canCutAny(R));
       const all = stock.items.length > 0 && left === 0;
       soldOut.hidden = !all;
@@ -1415,8 +1424,8 @@
       const res = RUN.shopBuy(R, stock, it.key);
       if (!res.ok) {
         if (res.reason === 'gold') poorFeedback(entry.slot, it.price - R.gold);
-        else if (res.reason === 'owned') { UI.toast('You already own that treasure.', 'warn'); snd('ui_error'); }
-        else UI.toast('The peddler shakes his head.', 'warn');
+        else if (res.reason === 'owned') { UI.toast('You already own that charm.', 'warn'); snd('ui_error'); }
+        else UI.toast('Jordan shakes his head.', 'warn');
         refresh();
         return;
       }
@@ -1445,7 +1454,7 @@
       if (R.gold < price) { poorFeedback(removeBtn, price - R.gold); return; }
       if (!R.deck.length) { UI.toast('There is no card left to remove.', 'warn'); return; }
       S.busy = true;
-      UI.overlay.open('deck', { mode: 'remove', title: 'Remove a Card', price, confirm: 'Pay ' + price + ' and remove', note: 'The peddler burns it for good. The price goes up by ' + DATA.ECONOMY.price.removeStep + ' next time.' }).then((uid) => {
+      UI.overlay.open('deck', { mode: 'remove', title: 'Remove a Card', price, confirm: 'Pay ' + price + ' and remove', note: 'Jordan takes it off your hands for good. The price goes up by ' + DATA.ECONOMY.price.removeStep + ' next time.' }).then((uid) => {
         S.busy = false;
         if (!S.alive() || uid === null || uid === undefined) return;
         const gone = R.deck.find((c) => c.uid === uid);
@@ -1468,7 +1477,7 @@
       if (!canCutAny(R)) { UI.toast('No card has a socket for those gems.', 'warn'); snd('ui_error'); return; }
       S.busy = true;
       say('cut', 'happy');
-      UI.overlay.open('deck', { mode: 'socket', title: 'Cut Gems (free)' }).then(() => { S.busy = false; if (S.alive()) { S.chrome.sync(false); refresh(); } });
+      UI.overlay.open('deck', { mode: 'socket', title: 'Set Gems (free)' }).then(() => { S.busy = false; if (S.alive()) { S.chrome.sync(false); refresh(); } });
     }
 
     // hooks that fired when the stall opened (a treasure paid out, say)
@@ -1476,7 +1485,7 @@
     refresh();
     say('hello');
     if (R.pending && R.pending.length) UI.after(wait(500), () => { if (S.alive()) resolvePending(S).then(() => { S.chrome.sync(false); refresh(); }); });
-    UI.announce('The peddler\'s stall. You have ' + R.gold + ' gold.');
+    UI.announce("Jordan's merch stall. You have " + R.gold + ' gold.');
     S.keys = (e) => {
       if (S.dead || UI.overlay.count()) return false;
       if (/^[1-5]$/.test(e.key)) { const it = by.card[Number(e.key) - 1]; if (it) { buy(it); return true; } }
@@ -1503,7 +1512,7 @@
       }
       switch (l.op) {
         case 'gold': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'gold', 30), sign(l.n) + ' gold')); break;
-        case 'ink': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'ink', 30), sign(l.n) + ' Echo')); break;
+        case 'ink': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'ink', 30), sign(l.n) + ' ' + voxName())); break;
         case 'heal': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('good', UI.medallion(w.id, 30), heroName(w.id) + ' +' + w.n + ' HP')); }); break;
         case 'hurt': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('bad', UI.medallion(w.id, 30), heroName(w.id) + ' -' + w.n + ' HP')); }); break;
         case 'maxHp': (l.who || []).forEach((w) => { if (w.n) chips.push(chip(w.n > 0 ? 'good' : 'bad', UI.icon('stat', 'hp', 30), heroName(w.id) + ' ' + sign(w.n) + ' max HP')); }); break;
@@ -1516,7 +1525,7 @@
         case 'addRelic': if (l.id && DATA.relics[l.id]) chips.push(chip('good', UI.relic(l.id, { size: 'sm', tip: false }), relicName(l.id), 'has-relic')); break;
         case 'addGem': if (l.id && DATA.gems[l.id]) chips.push(chip('good', UI.gem(l.id, { size: 'sm', tip: false }), gemName(l.id), 'has-gem')); break;
         case 'addBrush': if (l.id && DATA.brushes[l.id]) chips.push(chip('good', UI.icon('brush', l.id, 30), DATA.brushes[l.id].name)); break;
-        case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The land wakes')); break;
+        case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The sound comes back')); break;
         case 'fight': chips.push(chip('bad', UI.icon('tile', 'enemy', 30), 'A fight breaks out!')); break;
         default: if (l.text && l.op !== 'relic' && l.op !== 'flag') chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
       }
@@ -1606,11 +1615,11 @@
       const tk = TK();
       if (tk) safe(() => tk.vignette(g, w, h, { alpha: 0.4 }));
     }, 'ev-plate-c');
-    const title = mk('h2', { class: 'ev-title', text: ev ? ev.title : 'A Lost Fable' });
+    const title = mk('h2', { class: 'ev-title', text: ev ? ev.title : 'A Lost Detour' });
     const textEl = mk('p', { class: 'ev-text', tabindex: '-1' });
     const choicesEl = mk('div', { class: 'ev-choices', role: 'group', 'aria-label': 'What will you do?' });
     const outEl = mk('div', { class: 'ev-outcome', hidden: true });
-    const left = mk('div', { class: 'ev-page left' }, mk('div', { class: 'ev-plate' }, plate, mk('i', { class: 'ev-frame', 'aria-hidden': 'true' }), mk('i', { class: 'ev-seal', 'aria-hidden': 'true', text: 'Fable' })));
+    const left = mk('div', { class: 'ev-page left' }, mk('div', { class: 'ev-plate' }, plate, mk('i', { class: 'ev-frame', 'aria-hidden': 'true' }), mk('i', { class: 'ev-seal', 'aria-hidden': 'true', text: (DATA.tiles && DATA.tiles.event && DATA.tiles.event.name) || 'Detour' })));
     const right = mk('div', { class: 'ev-page right' }, title, textEl, choicesEl, outEl);
     const more = mk('i', { class: 'ev-more', 'aria-hidden': 'true', text: 'More' });
     const book = mk('div', { class: 'ev-book' }, left, mk('i', { class: 'ev-gutter', 'aria-hidden': 'true' }), right, mk('i', { class: 'ev-ribbon', 'aria-hidden': 'true' }), more);
@@ -1635,9 +1644,9 @@
     };
 
     if (!ev) {
-      textEl.textContent = 'Only silence. The fable slipped away before it could be heard.';
+      textEl.textContent = 'Nothing here. The detour wandered off before you arrived.';
       outEl.hidden = false;
-      showLeave('Play on');
+      showLeave('On we go');
       return;
     }
 
@@ -1661,7 +1670,7 @@
       const outText = mk('p', { class: 'ev-result', tabindex: '-1' });
       outEl.appendChild(outText);
       outEl.appendChild(gains);
-      const tw = typewriter(S, outText, res && res.text ? res.text : 'The journey has already moved on.', { cps: 70 });
+      const tw = typewriter(S, outText, res && res.text ? res.text : 'The tour has already moved on.', { cps: 70 });
       S.tw = tw; S.outTw = tw;                                                  // Enter or Space completes it, like the fable
       // a tap anywhere on the page (not on a button) finishes the outcome text at once, and the way on follows after a short beat instead of 2 to 4 seconds
       right.addEventListener('click', (e) => { if (!tw.done && !(e.target.closest && e.target.closest('button'))) { tw.skipped = true; tw.complete(); } });
@@ -1754,10 +1763,10 @@
   // screen: camp
   // ==================================================================================================================
   const CAMP_ACTIONS = [
-    { id: 'rest', name: 'Rest', verb: 'Mend by the fire' },
-    { id: 'sharpen', name: 'Sharpen', verb: 'Upgrade a card' },
-    { id: 'gems', name: 'Cut Gems', verb: 'Set gems in cards' },
-    { id: 'meditate', name: 'Meditate', verb: 'Echo and a Song' },
+    { id: 'rest', name: 'Rest', verb: 'Put your feet up' },
+    { id: 'sharpen', name: 'Rehearse', verb: 'Upgrade a card' },
+    { id: 'gems', name: 'Set Gems', verb: 'Set gems in cards' },
+    { id: 'meditate', name: 'Warm Up', verb: 'Vox and a Spell' },
   ];
   const campMax = (R) => Math.min(3, Math.max(1, (mods(R).campActions || 1) + ((R.flags && R.flags.extraCampActions) | 0)));
 
@@ -1783,12 +1792,12 @@
     chrome(S);
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
-    wrap.appendChild(bannerEl('The Campfire', 'One fire, one moment of peace. Use it well.', 'cp-titlebox'));
+    wrap.appendChild(bannerEl('The ' + DATA.tiles.camp.name, 'Five minutes backstage. Use them well.', 'cp-titlebox'));
 
     const meter = mk('div', { class: 'cp-meter', role: 'status' });
-    const grid = mk('div', { class: 'cp-grid', role: 'group', 'aria-label': 'Camp actions' });
+    const grid = mk('div', { class: 'cp-grid', role: 'group', 'aria-label': 'Green room actions' });
     const tiles = {};
-    const leave = UI.btn('Break camp', { kind: 'primary', size: 'lg', onclick: () => onLeave() });
+    const leave = UI.btn('Back on the road', { kind: 'primary', size: 'lg', onclick: () => onLeave() });
     leave.classList.add('cp-leave');
     wrap.appendChild(grid);
     wrap.appendChild(mk('div', { class: 'cp-foot' }, meter, leave));
@@ -1802,13 +1811,13 @@
       const rem = remaining();
       if (id === 'gems') {
         const cutting = usedNow('gems');
-        if (!R.gems.length) return { lines: ['No gems in the pouch.', 'Chests, caches and peddlers carry them.'], off: 'You carry no gems to cut.', state: cutting ? 'used' : '' };
+        if (!R.gems.length) return { lines: ['No gems in the pouch.', 'Gift boxes, sparkle booths and merch stalls carry them.'], off: 'You carry no gems to set.', state: cutting ? 'used' : '' };
         if (!canCutAny(R)) return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.', 'No socket fits them yet.'], off: 'No card has a socket for those gems.', state: cutting ? 'used' : '' };
-        if (!cutting && rem <= 0) return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.'], off: 'The fire has burned low: no actions left.', state: 'locked' };
-        return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.', cutting ? 'Cut more: still open this visit.' : 'Set or replace gems, as many as you like.'], state: cutting ? 'again' : '' };
+        if (!cutting && rem <= 0) return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.'], off: 'The break is over: no actions left.', state: 'locked' };
+        return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.', cutting ? 'Set more: still open this visit.' : 'Set or replace gems, as many as you like.'], state: cutting ? 'again' : '' };
       }
       if (usedNow(id)) return { lines: ['Done for this visit.'], off: 'Already used this visit.', state: 'used' };
-      if (rem <= 0) return { lines: [{ rest: 'Heals both heroes.', sharpen: 'Upgrade one card.', meditate: 'Gain Echo and a Song.' }[id]], off: 'The fire has burned low: no actions left.', state: 'locked' };
+      if (rem <= 0) return { lines: [{ rest: 'Heals both heroes.', sharpen: 'Upgrade one card.', meditate: 'Gain Vox and a Spell.' }[id]], off: 'The break is over: no actions left.', state: 'locked' };
       if (id === 'rest') {
         const pv = restPreview(R);
         const total = U.sum(pv, (x) => x.gain);
@@ -1816,10 +1825,10 @@
       }
       if (id === 'sharpen') {
         const n = upCount();
-        return n ? { lines: [U.plural(n, 'card') + ' can be sharpened.', 'Pick one; it gains its upgrade.'], state: '' } : { lines: ['Every card is already sharp.'], off: 'Nothing left to sharpen.', state: '' };
+        return n ? { lines: [U.plural(n, 'card') + ' can be rehearsed.', 'Pick one; it gains its upgrade.'], state: '' } : { lines: ['Every card is already rehearsed.'], off: 'Nothing left to rehearse.', state: '' };
       }
       const gain = Math.max(0, Math.min(R.inkMax - R.ink, DATA.ECONOMY.campInk));
-      return { lines: [gain ? '+' + gain + ' Echo (' + R.ink + ' to ' + (R.ink + gain) + ')' : 'Echo is already full.', '+ one random Song'], state: '' };
+      return { lines: [gain ? '+' + gain + ' Vox (' + R.ink + ' to ' + (R.ink + gain) + ')' : 'Vox is already full.', '+ one random Spell'], state: '' };
     }
 
     CAMP_ACTIONS.forEach((a, i) => {
@@ -1842,14 +1851,14 @@
         t.b.classList.toggle('used', inf.state === 'used');
         t.b.classList.toggle('locked', inf.state === 'locked');
         t.b.classList.toggle('again', inf.state === 'again');
-        t.badge.textContent = inf.state === 'used' ? 'DONE' : inf.state === 'again' ? 'OPEN' : inf.state === 'locked' ? 'EMBERS' : '';
+        t.badge.textContent = inf.state === 'used' ? 'DONE' : inf.state === 'again' ? 'OPEN' : inf.state === 'locked' ? 'CLOSED' : '';
         UI.setDisabled(t.b, !!inf.off, inf.off);
         t.b.setAttribute('aria-label', a.name + '. ' + a.verb + '. ' + inf.lines.join(' ') + (inf.off ? ' Unavailable: ' + inf.off : ''));
       });
       const rem = remaining(), max = campMax(R);
       meter.textContent = '';
       for (let k = 0; k < max; k++) meter.appendChild(mk('i', { class: 'cp-flame' + (k < rem ? ' lit' : ''), 'aria-hidden': 'true' }));
-      meter.appendChild(mk('span', { class: 'cp-meter-txt', text: rem ? U.plural(rem, 'action') + ' left by the fire' : 'The fire has burned low' }));
+      meter.appendChild(mk('span', { class: 'cp-meter-txt', text: rem ? U.plural(rem, 'action') + ' left in the green room' : 'The break is over' }));
       leave.classList.toggle('breathe', rem === 0 || node.used.length > 0);
       if (S.chrome) S.chrome.sync(false);
     }
@@ -1866,7 +1875,7 @@
       try {
         if (id === 'rest') {
           const res = RUN.campAction(R, 'rest');
-          if (!res.ok) { UI.toast('The fire will not take you in.', 'warn'); return; }
+          if (!res.ok) { UI.toast('The green room is not ready for you.', 'warn'); return; }
           snd('rest'); snd('heal');
           poseHeroes('cheer', 1800);
           (res.healed || []).forEach((h, k) => {
@@ -1880,20 +1889,20 @@
           if (R.pending && R.pending.length) await resolvePending(S);
         } else if (id === 'meditate') {
           const res = RUN.campAction(R, 'meditate');
-          if (!res.ok) { UI.toast('The mind will not settle.', 'warn'); return; }
+          if (!res.ok) { UI.toast('Your voice will not warm up right now.', 'warn'); return; }
           snd('ink_gain'); snd('brush_pick');
           poseHeroes('cast', 1800);
           const p = campFirePos();
           burst(S, p.x, p.y - 160, { kind: 'ink', n: 20, spread: 120 });
           ripple(S, p.x, p.y - 100, 'ink');
-          UI.toast((res.ink ? '+' + res.ink + ' Echo' : 'Echo is full') + (res.brush && DATA.brushes[res.brush] ? ' and the ' + DATA.brushes[res.brush].name : ''), 'good');
+          UI.toast((res.ink ? '+' + res.ink + ' Vox' : 'Vox is full') + (res.brush && DATA.brushes[res.brush] ? ' and ' + DATA.brushes[res.brush].name : ''), 'good');
           sync();
           if (S.chrome) S.chrome.sync(true);
         } else if (id === 'sharpen') {
-          const uid = await UI.overlay.open('deck', { mode: 'upgrade', title: 'Sharpen a Card', confirm: 'Sharpen it by the fire', note: 'The whetstone rings. The card comes back keener.' });
+          const uid = await UI.overlay.open('deck', { mode: 'upgrade', title: 'Rehearse a Card', confirm: 'Rehearse it backstage', note: 'One more take. The card comes back sharper.' });
           if (!S.alive() || uid === null || uid === undefined) return;
           const res = RUN.campAction(R, 'sharpen', uid);
-          if (!res.ok) { UI.toast('That card cannot be sharpened.', 'warn'); snd('ui_error'); return; }
+          if (!res.ok) { UI.toast('That card cannot be rehearsed.', 'warn'); snd('ui_error'); return; }
           snd('forge_hit'); snd('upgrade');
           poseHeroes('attack', 1200);
           const p = campFirePos();
@@ -1907,7 +1916,7 @@
           const gate = RUN.campAction(R, 'gems');
           if (!gate.ok) { UI.toast(SOCKET_WHY[gate.reason] || 'The gems will not come out.', 'warn'); return; }
           poseHeroes('cast', 1200);
-          await UI.overlay.open('deck', { mode: 'socket', title: 'Cut Gems', onSocket: (uid, slot, gem) => RUN.campAction(R, 'gems', { uid, slot, gem }) });
+          await UI.overlay.open('deck', { mode: 'socket', title: 'Set Gems', onSocket: (uid, slot, gem) => RUN.campAction(R, 'gems', { uid, slot, gem }) });
           if (S.alive()) { sync(); if (S.chrome) S.chrome.sync(false); }
         }
       } finally { S.busy = false; }
@@ -1918,16 +1927,16 @@
       if (S.busy) return;
       if (!node.used.length && remaining() > 0 && !armed) {
         armed = true;
-        leave.rbSet({ label: 'Leave without resting?' });
+        leave.rbSet({ label: 'Leave without a break?' });
         leave.classList.add('nudge');
         snd('ui_toggle');
-        later(S, 2800, () => { armed = false; leave.rbSet({ label: 'Break camp' }); leave.classList.remove('nudge'); });
+        later(S, 2800, () => { armed = false; leave.rbSet({ label: 'Back on the road' }); leave.classList.remove('nudge'); });
         return;
       }
       leaveNode(S);
     }
     sync();
-    UI.announce('The campfire. ' + U.plural(remaining(), 'action') + ' available.');
+    UI.announce('The green room. ' + U.plural(remaining(), 'action') + ' available.');
     S.keys = (e) => {
       if (S.dead || UI.overlay.count()) return false;
       const a = CAMP_ACTIONS[Number(e.key) - 1];
@@ -1941,7 +1950,7 @@
     if (!inst || S.dead) return;
     const big = UI.card(inst, { size: 'reward', showGems: true });
     big.classList.add('nk-flourish-card');
-    const box = mk('div', { class: 'nk-flourish', 'aria-hidden': 'true' }, big, mk('span', { class: 'nk-flourish-lab', text: label || 'Sharpened!' }));
+    const box = mk('div', { class: 'nk-flourish', 'aria-hidden': 'true' }, big, mk('span', { class: 'nk-flourish-lab', text: label || 'Rehearsed!' }));
     S.root.appendChild(box);
     later(S, 1900, () => { box.classList.add('out'); later(S, 420, () => box.remove()); });
   }
@@ -1961,16 +1970,16 @@
     chrome(S);
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
-    wrap.appendChild(bannerEl('The ' + DATA.tiles.forge.name, 'One good blow, or a jeweller\'s patience. Not both.', 'fg-titlebox'));
+    wrap.appendChild(bannerEl('The ' + DATA.tiles.forge.name, 'One great take, or a jeweller\'s patience. Not both.', 'fg-titlebox'));
 
-    const modes = mk('div', { class: 'fg-modes', role: 'group', 'aria-label': 'Forge actions' });
+    const modes = mk('div', { class: 'fg-modes', role: 'group', 'aria-label': 'Studio actions' });
     const mode = (id, name, text, kind) => {
       const art = liveCanvas(S, 260, 130, (g, t, w, h) => forgeIcon(g, kind, t, w, h), 'fg-art');
       const b = mk('button', { type: 'button', class: 'fg-mode m-' + kind, dataset: { action: kind } }, mk('span', { class: 'fg-illus' }, art), mk('b', { class: 'fg-name', text: name }), mk('span', { class: 'fg-text', text }));
       return b;
     };
-    const upBtn = mode('up', 'Sharpen a Card', 'Bring one card to the anvil. One blow, one upgrade.', 'up');
-    const gemBtn = mode('gem', 'Cut Gems', 'Set or replace gems as often as you like.', 'gem');
+    const upBtn = mode('up', 'Rehearse a Card', 'Bring one card to the mic. One take, one upgrade.', 'up');
+    const gemBtn = mode('gem', 'Set Gems', 'Set or replace gems as often as you like.', 'gem');
     upBtn.addEventListener('click', () => chooseUpgrade());
     gemBtn.addEventListener('click', () => chooseGems());
     modes.appendChild(upBtn); modes.appendChild(gemBtn);
@@ -1980,21 +1989,21 @@
     const result = mk('p', { class: 'fg-result', role: 'status' });
     wrap.appendChild(stageEl);
     wrap.appendChild(result);
-    const leave = UI.btn('Leave the forge', { kind: 'primary', size: 'lg', onclick: () => leaveNode(S) });
+    const leave = UI.btn('Leave the studio', { kind: 'primary', size: 'lg', onclick: () => leaveNode(S) });
     leave.classList.add('fg-leave');
     wrap.appendChild(mk('div', { class: 'fg-foot' }, leave));
 
     function refreshModes() {
       const used = node.used;
       const ups = RUN.upgradable(R).length;
-      const upOff = used === 'gems' ? 'You chose gem cutting. One upgrade or gems, not both.' : used ? 'The forge has done its work today.' : !ups ? 'Nothing left to sharpen.' : '';
+      const upOff = used === 'gems' ? 'You chose gem setting. One upgrade or gems, not both.' : used ? 'The studio has done its work today.' : !ups ? 'Nothing left to rehearse.' : '';
       UI.setDisabled(upBtn, !!upOff, upOff);
-      const gemOff = used === 'upgrade' ? 'One upgrade or gem cutting, not both.' : !R.gems.length ? 'You carry no gems to cut.' : !canCutAny(R) ? 'No card has a socket for those gems.' : '';
+      const gemOff = used === 'upgrade' ? 'One upgrade or gem setting, not both.' : !R.gems.length ? 'You carry no gems to set.' : !canCutAny(R) ? 'No card has a socket for those gems.' : '';
       UI.setDisabled(gemBtn, !!gemOff, gemOff);
       upBtn.classList.toggle('dim', !!upOff); gemBtn.classList.toggle('dim', !!gemOff);
-      upBtn.querySelector('.fg-text').textContent = upOff && ups ? upOff : !ups && !used ? 'Every card is already sharp.' : 'Bring one card to the anvil. One blow, one upgrade.';
-      gemBtn.querySelector('.fg-text').textContent = gemOff ? gemOff : used === 'gems' ? 'The gems are cutting. Keep going, or leave.' : 'Set or replace gems as often as you like.';
-      if (used === 'upgrade' && !S.phase) result.textContent = 'The forge has cooled. Its work is done.';
+      upBtn.querySelector('.fg-text').textContent = upOff && ups ? upOff : !ups && !used ? 'Every card is already rehearsed.' : 'Bring one card to the mic. One take, one upgrade.';
+      gemBtn.querySelector('.fg-text').textContent = gemOff ? gemOff : used === 'gems' ? 'The gems are setting. Keep going, or leave.' : 'Set or replace gems as often as you like.';
+      if (used === 'upgrade' && !S.phase) result.textContent = 'The ON AIR light is off. Its work is done.';
       S.chrome.sync(false);
     }
     S.refreshModes = refreshModes;
@@ -2003,7 +2012,7 @@
       if (S.busy) return;
       if (upBtn.getAttribute('aria-disabled') === 'true') { UI.toast(upBtn.rbReason || 'Not now.', 'warn'); return; }
       S.busy = true;
-      const uid = await UI.overlay.open('deck', { mode: 'upgrade', title: 'Choose a Card for the Anvil', confirm: 'Bring it to the anvil', note: 'One blow. The card comes back keener.' });
+      const uid = await UI.overlay.open('deck', { mode: 'upgrade', title: 'Choose a Card for the Mic', confirm: 'Bring it to the mic', note: 'One take. The card comes back sharper.' });
       S.busy = false;
       if (!S.alive() || uid === null || uid === undefined) return;
       showPreview(uid);
@@ -2020,14 +2029,14 @@
       const before = UI.card(inst, { size: 'hand', showGems: true });
       const after = UI.card(Object.assign({}, inst, { up: 1 }), { size: 'hand', showGems: true });
       before.classList.add('fg-before'); after.classList.add('fg-after');
-      const go = UI.btn('Strike!', { kind: 'primary', size: 'lg', breathe: true, onclick: () => strike() });
+      const go = UI.btn('Hit it!', { kind: 'primary', size: 'lg', breathe: true, onclick: () => strike() });
       go.classList.add('fg-strike');
       const other = UI.btn('Choose another', { kind: 'ghost', size: 'sm', onclick: () => { if (S.busy) return; stageEl.hidden = true; modes.classList.remove('away'); S.phase = null; S.chosen = null; result.textContent = ''; chooseUpgrade(); } });
       stageEl.appendChild(mk('div', { class: 'fg-ba' },
         mk('div', { class: 'fg-side before' }, mk('span', { class: 'dk-label', text: 'Before' }), before),
         mk('div', { class: 'fg-mid' }, mk('i', { class: 'dk-arrow', 'aria-hidden': 'true' }), go, other),
         mk('div', { class: 'fg-side after' }, mk('span', { class: 'dk-label', text: 'After' }), after)));
-      result.textContent = 'Strike the anvil and the card comes back sharpened.';
+      result.textContent = 'Hit it and the card comes back rehearsed.';
       snd('card_pick');
     }
 
@@ -2046,7 +2055,7 @@
       UI.after(wait(190), () => {
         if (!S.alive()) return;
         const res = RUN.forgeAction(R, 'upgrade', uid);
-        if (!res.ok) { S.busy = false; UI.toast(SOCKET_WHY[res.reason] || 'The anvil rings, but nothing changes.', 'warn'); snd('ui_error'); return; }
+        if (!res.ok) { S.busy = false; UI.toast(SOCKET_WHY[res.reason] || 'The take is fine, but nothing changes.', 'warn'); snd('ui_error'); return; }
         S.phase = 'done'; S.flashT = S.t;
         snd('upgrade');
         const ar = stageRect(stageEl.querySelector('.fg-after')), br = stageRect(stageEl.querySelector('.fg-before'));
@@ -2055,7 +2064,7 @@
         ripple(S, ar.cx, ar.cy, 'gold');
         stageEl.classList.add('struck');
         const inst = R.deck.find((c) => c.uid === uid);
-        result.textContent = (inst ? cardName(inst.id) : 'The card') + ' is sharpened.';
+        result.textContent = (inst ? cardName(inst.id) : 'The card') + ' is rehearsed.';
         UI.announce(result.textContent);
         const mid = stageEl.querySelector('.fg-mid');
         if (mid) mid.classList.add('gone');
@@ -2073,16 +2082,16 @@
       const gate = RUN.forgeAction(R, 'gems');
       if (!gate.ok) { UI.toast(SOCKET_WHY[gate.reason] || 'Not now.', 'warn'); return; }
       S.busy = true;
-      await UI.overlay.open('deck', { mode: 'socket', title: 'Cut Gems at the Forge', onSocket: (uid, slot, gem) => RUN.forgeAction(R, 'gems', { uid, slot, gem }) });
+      await UI.overlay.open('deck', { mode: 'socket', title: 'Set Gems at the Studio', onSocket: (uid, slot, gem) => RUN.forgeAction(R, 'gems', { uid, slot, gem }) });
       S.busy = false;
       if (!S.alive()) return;
-      if (node.used === 'gems') { result.textContent = 'The gems are set. Cut more, or leave.'; leave.classList.add('breathe'); }
+      if (node.used === 'gems') { result.textContent = 'The gems are set. Set more, or leave.'; leave.classList.add('breathe'); }
       refreshModes();
     }
 
     S.phase = null;
     refreshModes();
-    UI.announce('The ' + DATA.tiles.forge.name + '. Sharpen one card, or cut gems.');
+    UI.announce('The ' + DATA.tiles.forge.name + '. Rehearse one card, or set gems.');
     S.keys = (e) => {
       if (S.dead || UI.overlay.count()) return false;
       if (e.key === '1') { chooseUpgrade(); return true; }
@@ -2106,10 +2115,10 @@
     chrome(S);
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
-    wrap.appendChild(bannerEl('A Treasure Chest', node.taken ? 'Already opened. Only dust remains.' : 'It has waited a long time for someone curious.', 'ch-titlebox'));
+    wrap.appendChild(bannerEl('A Gift Box', node.taken ? 'Already opened. Only ribbon remains.' : 'It has waited a long time for someone curious.', 'ch-titlebox'));
     const stage = mk('div', { class: 'ch-stage' });
-    const hit = mk('button', { type: 'button', class: 'ch-hit', 'aria-label': 'Open the chest' });
-    const openBtn = UI.btn('Open the chest', { kind: 'primary', size: 'lg', breathe: true, onclick: () => open() });
+    const hit = mk('button', { type: 'button', class: 'ch-hit', 'aria-label': 'Open the gift' });
+    const openBtn = UI.btn('Open the gift', { kind: 'primary', size: 'lg', breathe: true, onclick: () => open() });
     openBtn.classList.add('ch-open');
     const foot = mk('div', { class: 'ch-foot' }, openBtn);
     wrap.appendChild(stage);
@@ -2141,7 +2150,7 @@
       const res = RUN.take(R, node, choice);
       if (!res.ok) {
         S.busy = false;
-        UI.toast(res.reason === 'taken' ? 'That was already taken.' : 'The chest will not give that up.', 'warn'); snd('ui_error');
+        UI.toast(res.reason === 'taken' ? 'That was already taken.' : 'The gift box will not give that up.', 'warn'); snd('ui_error');
         return;
       }
       snd('buy'); if (res.relic) snd('relic_get'); if (res.gem) snd('gem_get');
@@ -2155,7 +2164,7 @@
       if (res.relic) parts.push(relicName(res.relic));
       if (res.gem) parts.push(gemName(res.gem));
       (res.log || []).forEach((l) => { if (l && l.text && l.op !== 'relic') UI.toast(l.text, 'good'); });
-      showDone(parts.length ? 'You take ' + parts.join(', ') + '.' : 'The chest is empty.');
+      showDone(parts.length ? 'You take ' + parts.join(', ') + '.' : 'The gift box is empty.');
       UI.announce('You take ' + parts.join(', ') + '.');
       resolvePending(S).then(() => { S.busy = false; if (S.alive()) S.chrome.sync(false); });
     }
@@ -2175,14 +2184,14 @@
         box.appendChild(take1);
         take1.classList.add('rise'); take1.style.setProperty('--i', '2');
         foot.appendChild(UI.btn('Just the gold', { kind: 'ghost', size: 'lg', onclick: () => take({ relic: false }) }));
-        foot.appendChild(UI.btn('Take the treasure', { kind: 'primary', size: 'lg', breathe: true, onclick: () => take({ relic: true }) }));
+        foot.appendChild(UI.btn('Take the charm', { kind: 'primary', size: 'lg', breathe: true, onclick: () => take({ relic: true }) }));
       } else if ((loot.gems || []).length) {
         const gr = mk('div', { class: 'ch-gems', role: 'group', 'aria-label': 'Choose a gem' });
         const takeGem = UI.btn('Take the gem', { kind: 'primary', size: 'lg', breathe: true, disabled: true, reason: 'Choose one of the gems first', onclick: () => take({ gem: selGem }) });
         loot.gems.forEach((id, i) => {
           const g = DATA.gems[id] || {};
           const b = mk('button', { type: 'button', class: 'ch-gem gc-' + (g.color || 'gold'), dataset: { gem: id }, 'aria-pressed': 'false', 'aria-label': gemName(id) + ', tier ' + (g.tier || 1) + '. ' + gemLine(id) },
-            mk('span', { class: 'ch-gem-ico' }, UI.icon('gem', id, 84)), mk('b', { class: 'ch-gem-name', text: gemName(id) }), mk('span', { class: 'ch-gem-tier', text: 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || '') }), mk('span', { class: 'ch-gem-text', text: gemLine(id) }));
+            mk('span', { class: 'ch-gem-ico' }, UI.icon('gem', id, 84)), mk('b', { class: 'ch-gem-name', text: gemName(id) }), mk('span', { class: 'ch-gem-tier', text: 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem' }), mk('span', { class: 'ch-gem-text', text: gemLine(id) }));
           b.classList.add('rise'); b.style.setProperty('--i', String(i + 1));
           b.addEventListener('click', () => {
             selGem = id;
@@ -2201,9 +2210,9 @@
 
     if (node.taken) {
       hit.hidden = true; openBtn.hidden = true;
-      showDone('The chest is empty. Whatever it held is yours now.');
+      showDone('The gift box is empty. Whatever it held is yours now.');
     }
-    UI.announce(node.taken ? 'An empty chest.' : 'A treasure chest. Open it.');
+    UI.announce(node.taken ? 'An empty gift box.' : 'A gift box. Open it.');
     S.keys = (e) => { if (S.dead || UI.overlay.count()) return false; if ((e.key === 'Enter' || e.key === ' ') && S.chest.state === 'closed' && !(e.target && e.target.closest && e.target.closest('button'))) { open(); return true; } return false; };
   }
 
@@ -2236,7 +2245,7 @@
     chrome(S);
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
-    wrap.appendChild(bannerEl('The Gem Cache', node.taken ? 'The hollow is empty now.' : 'Three gems glint in the dark. Only one will come with you.', 'gc-titlebox'));
+    wrap.appendChild(bannerEl('The ' + DATA.tiles.gemcache.name, node.taken ? 'The booth is empty now.' : 'Three gems sparkle on the counter. Only one will come with you.', 'gc-titlebox'));
     const row = mk('div', { class: 'gc-row', role: 'group', 'aria-label': 'Gems on offer' });
     UI.vars(row, { '--gx0': CACHE.x0 + 'px', '--gp': CACHE.pitch + 'px', '--gcw': CACHE.colW + 'px', '--gtop': CACHE.top + 'px', '--gh': cacheH() + 'px', '--gy': (CACHE.glowY - CACHE.top) + 'px' });
     // the status line and the buttons share one footer that grows upward, so the line can never sit on the buttons (they are 44 css px tall on a phone, taller at text 1.3)
@@ -2252,7 +2261,7 @@
       detail.textContent = '';
       if (!id) { detail.appendChild(mk('p', { class: 'gc-hint', text: 'Tap a gem to weigh it. You may keep only one.' })); return; }
       const f = fitsOf(R, id);
-      detail.appendChild(mk('p', { class: 'gc-ifit gc-' + gemColorOf(id), text: f.any ? gemName(id) + ' fits ' + U.plural(f.any, 'card') + ' in your deck' + (f.open ? ' (' + f.open + ' with an open socket).' : ', but every socket is taken: it would replace a gem.') : 'No card in your deck has a ' + f.color + ' or prism socket yet.' }));
+      detail.appendChild(mk('p', { class: 'gc-ifit gc-' + gemColorOf(id), text: f.any ? gemName(id) + ' fits ' + U.plural(f.any, 'card') + ' in your deck' + (f.open ? ' (' + f.open + ' with an open socket).' : ', but every socket is taken: it would replace a gem.') : 'No card in your deck has a ' + colourWord(f.color) + ' or rainbow socket yet.' }));
     }
 
     function pick(id, b) {
@@ -2270,7 +2279,7 @@
       if (S.busy || !sel || S.tookId) return;
       const id = sel;
       const res = RUN.take(R, node, { gem: id });
-      if (!res.ok) { UI.toast(res.reason === 'taken' ? 'That was already taken.' : 'The cache will not give it up.', 'warn'); snd('ui_error'); return; }
+      if (!res.ok) { UI.toast(res.reason === 'taken' ? 'That was already taken.' : 'The booth will not give it up.', 'warn'); snd('ui_error'); return; }
       S.tookId = id;
       snd('gem_get'); snd('buy');
       const el = row.querySelector('.gc-gem[data-gem="' + id + '"]');
@@ -2295,19 +2304,19 @@
       const g = DATA.gems[id] || {};
       const b = mk('button', { type: 'button', class: 'gc-gem gc-' + (g.color || 'gold'), dataset: { gem: id }, 'aria-pressed': 'false', 'aria-label': gemName(id) + ', tier ' + (g.tier || 1) + '. ' + gemLine(id) },
         mk('i', { class: 'gc-halo', 'aria-hidden': 'true' }), mk('span', { class: 'gc-ico' }, UI.icon('gem', id, 118)), mk('b', { class: 'gc-name', text: gemName(id) }),
-        mk('span', { class: 'gc-tier' }, ...U.range(g.tier || 1).map(() => mk('i', { class: 'pip' })), mk('em', { text: cap(g.color || '') })), mk('span', { class: 'gc-text', text: gemLine(id) }), mk('span', { class: 'gc-fit', text: fitsOf(R, id).any ? 'Fits ' + U.plural(fitsOf(R, id).any, 'card') : 'Fits no card yet' }));
+        mk('span', { class: 'gc-tier' }, ...U.range(g.tier || 1).map(() => mk('i', { class: 'pip' })), mk('em', { text: g.color ? cap(colourWord(g.color)) : '' })), mk('span', { class: 'gc-text', text: gemLine(id) }), mk('span', { class: 'gc-fit', text: fitsOf(R, id).any ? 'Fits ' + U.plural(fitsOf(R, id).any, 'card') : 'Fits no card yet' }));
       b.classList.add('rise'); b.style.setProperty('--i', String(i + 1));
       b.addEventListener('click', () => pick(id, b));
       row.appendChild(b);
     });
     if (node.taken || !offers.length) {
-      row.appendChild(mk('p', { class: 'gc-none', text: node.taken ? 'You already took a gem from this cache.' : 'The cache holds nothing you can use.' }));
+      row.appendChild(mk('p', { class: 'gc-none', text: node.taken ? 'You already took a gem from this booth.' : 'The booth holds nothing you can use.' }));
       btns.appendChild(contBtn);
     } else {
       btns.appendChild(takeBtn);
       showDetail(null);
     }
-    UI.announce(node.taken ? 'An empty cache.' : 'A gem cache. Choose one of three gems.');
+    UI.announce(node.taken ? 'An empty booth.' : 'A sparkle booth. Choose one of three gems.');
     S.keys = (e) => {
       if (S.dead || UI.overlay.count() || node.taken || S.tookId) return false;
       const b = /^[1-3]$/.test(e.key) ? row.querySelectorAll('.gc-gem')[Number(e.key) - 1] : null;

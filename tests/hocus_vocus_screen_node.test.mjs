@@ -183,7 +183,7 @@ await t.test('reward (elite): the relic is take-it-or-leave-it, both decisions g
     t.ok(rw.relics.length === 1, 'seed ' + seed + ': an elite offers one relic');
     const box = $(g, '.rw-relicbox');
     t.ok(box && txt(box).indexOf(g.DATA.relics[rw.relics[0]].name) >= 0, 'seed ' + seed + ': the relic offer names the relic');
-    t.eq(txt($(g, '.nk-banner')), 'A Champion Falls', 'seed ' + seed + ': elite banner');
+    t.eq(txt($(g, '.nk-banner')), 'A Rival Bows Out', 'seed ' + seed + ': elite banner');
     await click(g, $$(g, '.rw-slot .rw-face.front .card')[0]);
     t.ok(!rw.claimed, 'seed ' + seed + ': choosing the card alone does not claim while the relic is undecided');
     const relicsBefore = R.relics.length, gemsBefore = R.gems.length, brushBefore = R.brushes.length;
@@ -268,7 +268,7 @@ await t.test('reward (boss): the relic page comes first with three treasures, th
     const rw = node.rewards;
     t.ok(rw.boss && rw.relics.length === 3, 'seed ' + seed + ': a boss offers three treasures');
     const boss = g.DATA.enemies[g.DATA.FIXED.bosses[R.chapter]];
-    t.eq(txt($(g, '.nk-banner')), boss.name + ' Falls', 'seed ' + seed + ': the banner names the boss');
+    t.eq(txt($(g, '.nk-banner')), boss.name + ' Bows Out', 'seed ' + seed + ': the banner names the boss');
     t.eq($$(g, '.rw-ped').length, 3, 'seed ' + seed + ': three pedestals');
     t.eq($$(g, '.rw-slot').length, 0, 'seed ' + seed + ': no cards yet');
     await click(g, $$(g, '.rw-ped')[seed % 3]);
@@ -295,7 +295,7 @@ await t.test('reward: empty states (no cards, nothing at all, already claimed) s
   t.eq($$(g, '.rw-slot').length, 0, 'no card slots');
   node = mkNode({ gold: 0, ink: 0, cards: [], relics: [], gems: [], brush: null, maxHp: 0, boss: false, tier: 'normal', source: 'combat', claimed: false, pending: [], log: [] });
   await g.UI.go('reward', { rewards: node.rewards, node, R }, { force: true, transition: 'none' }); await settle(g);
-  t.ok(/nothing but an echo/.test(txt($(g, '.rw-ledger'))), 'no loot at all: the ledger says so');
+  t.ok(/nothing but a squeak/.test(txt($(g, '.rw-ledger'))), 'no loot at all: the ledger says so');
   node = mkNode({ gold: 5, ink: 1, cards: ['hanae_slash'], relics: [], gems: [], brush: null, maxHp: 0, boss: false, tier: 'normal', source: 'combat', claimed: true, pending: [], log: [] });
   await g.UI.go('reward', { rewards: node.rewards, node, R }, { force: true, transition: 'none' }); await settle(g);
   t.ok(/already gathered/.test(txt($(g, '.rw-hint'))) && !$(g, '.rw-cont').hidden, 'claimed rewards: Continue only');
@@ -430,7 +430,8 @@ await t.test('shop (phones, big text): long ware names get the sh-long class, an
   }
   t.ok(longs > 0 && short > 0, 'both kinds of name were seen (' + longs + ' long, ' + short + ' short)');
   t.ok(/#stage\.compact \.sh-name\s*\{[^}]*min\(var\(--ts\), 1\)[^}]*-webkit-line-clamp:\s*3/.test(CSS), 'css: the name never grows past its text 1.0 size on a phone and keeps to three lines');
-  t.ok(/#stage\.compact \.sh-kind\s*\{[^}]*white-space:\s*nowrap[^}]*text-overflow:\s*ellipsis/.test(CSS), 'css: the kicker is one line with an ellipsis, so UNCOMMON never runs into its neighbour');
+  // was one line with an ellipsis (TIER 2 GOLD fitted); the Hocus Vocus kickers TIER 2 GOLD GEM and HEADLINER CHARM are longer, so a phone plaque gets two clamped lines instead of a cut-off word
+  t.ok(/#stage\.compact \.sh-kind\s*\{[^}]*overflow:\s*hidden[^}]*-webkit-line-clamp:\s*2/.test(CSS), 'css: the kicker takes at most two lines, so TIER 2 GOLD GEM and HEADLINER CHARM never run into their neighbour');
   t.ok(/#stage\.compact \.sh-tag b\s*\{[^}]*min\(var\(--ts\), 1\.1\)/.test(CSS) && /#stage\.compact \.sh-tag\.free b\s*\{[^}]*letter-spacing/.test(CSS), 'css: the price figures and the FREE tag stop growing with the text size');
   t.ok(/\.sh-sale\s*\{[^}]*right:\s*-24px[^}]*top:\s*222px/.test(CSS), 'css: the SALE stamp sits clear of the price tag at every size');
 });
@@ -641,7 +642,7 @@ await t.test('shop: late in a session (the frame clock is far past zero) the gre
   now = frames(40, now);                       // 1.9 s: a line of 50 characters at 75 a second is done
   const hello = typed();
   t.ok(hello.on.length > 20 && hello.off === '', 'the hello line is fully typed after a moment (' + JSON.stringify(hello) + ')');
-  t.ok(/Welcome|travellers|Everything here|Step closer/.test(hello.on), 'and it is a greeting, not an idle remark that cut in on the first frame: ' + hello.on);
+  t.ok(/Fresh merch|Tote bag|Everything here|Welcome back/.test(hello.on), 'and it is a greeting, not an idle remark that cut in on the first frame: ' + hello.on);
   const seen = new Set([hello.on]);
   let lastLine = txt($(g, '.sh-say'));
   for (let i = 0; i < 1500 && seen.size < 4; i++) {   // up to 72 s of idling: each new line must type out to the end
@@ -954,7 +955,7 @@ await t.test('event: the blank page (no such fable) still offers a way on', asyn
   const g = fresh({ seed: 18 }); const R = mkRun(g, { seed: 18 });
   R.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'no_such_fable', chosen: null };
   await g.UI.go('event', { node: R.node, R }, { force: true, transition: 'none' }); await settle(g);
-  t.ok(/Only silence/.test(txt($(g, '.ev-text'))) && $(g, '.ev-go'), 'a blank page and a way on');
+  t.ok(/Nothing here/.test(txt($(g, '.ev-text'))) && $(g, '.ev-go'), 'a blank page and a way on');
   await click(g, $(g, '.ev-go'));
   t.eq(done(g), 1, 'leaving works');
 });
@@ -1002,7 +1003,7 @@ await t.test('camp (twelve seeds): Rest previews exactly what it heals, heals th
     t.deep(Array.from(node.used), ['rest'], 'seed ' + seed + ': RUN recorded the action');
     t.ok(tile(g, 'rest').classList.contains('used') && /DONE/.test(txt($(g, '.cp-badge', tile(g, 'rest')))), 'seed ' + seed + ': the Rest tile is stamped DONE');
     ['sharpen', 'meditate'].forEach((a) => t.ok(tile(g, a).classList.contains('locked') && tile(g, a).getAttribute('aria-disabled') === 'true', 'seed ' + seed + ': ' + a + ' is locked'));
-    t.ok(/burned low/.test(txt($(g, '.cp-meter'))), 'seed ' + seed + ': the meter says the fire is low');
+    t.ok(/break is over/.test(txt($(g, '.cp-meter'))), 'seed ' + seed + ': the meter says the fire is low');
     const ink = R.ink, deck = R.deck.length;
     await click(g, tile(g, 'sharpen')); await click(g, tile(g, 'meditate'));
     t.eq(R.ink, ink, 'seed ' + seed + ': a locked action changes nothing'); t.eq(R.deck.length, deck, 'seed ' + seed + ': deck unchanged');
@@ -1017,7 +1018,7 @@ await t.test('camp: Sharpen upgrades the chosen card through the deck picker wit
   R.deck[0].up = 1;
   const node = nodeAt(g, R, 'camp', {});
   await open(g, 'camp', R, node);
-  t.ok(/can be sharpened/.test(txt(tile(g, 'sharpen'))) && txt(tile(g, 'sharpen')).indexOf(String(g.RUN.upgradable(R).length)) >= 0, 'the tile counts the sharpenable cards');
+  t.ok(/can be rehearsed/.test(txt(tile(g, 'sharpen'))) && txt(tile(g, 'sharpen')).indexOf(String(g.RUN.upgradable(R).length)) >= 0, 'the tile counts the sharpenable cards');
   await click(g, tile(g, 'sharpen'));
   t.ok(g.UI.overlay.has('deck') && $(g, '.o-deck .nk-deck.dk-upgrade'), 'the picker opens in upgrade mode');
   const cards = $$(g, '.o-deck .dk-card');
@@ -1038,7 +1039,7 @@ await t.test('camp: Sharpen upgrades the chosen card through the deck picker wit
   // an all-sharp deck: the tile says so and is disabled
   const R2 = mkRun(g, { seed: 4 }); R2.deck.forEach((c) => { c.up = 1; });
   await open(g, 'camp', R2, nodeAt(g, R2, 'camp', {}));
-  t.ok(tile(g, 'sharpen').getAttribute('aria-disabled') === 'true' && /Every card is already sharp/.test(txt(tile(g, 'sharpen'))), 'nothing left to sharpen: disabled with the reason');
+  t.ok(tile(g, 'sharpen').getAttribute('aria-disabled') === 'true' && /Every card is already rehearsed/.test(txt(tile(g, 'sharpen'))), 'nothing left to sharpen: disabled with the reason');
   await click(g, tile(g, 'sharpen'));
   t.ok(!g.UI.overlay.has('deck'), 'and it does not open a picker');
 });
@@ -1048,7 +1049,7 @@ await t.test('camp: Meditate pays Ink and a brush; Cut Gems stays open all visit
   R.ink = 3;
   const node = nodeAt(g, R, 'camp', {});
   await open(g, 'camp', R, node);
-  t.ok(/\+4 Echo \(3 to 7\)/.test(txt(tile(g, 'meditate'))), 'Meditate previews +4 Ink (3 to 7)');
+  t.ok(/\+4 Vox \(3 to 7\)/.test(txt(tile(g, 'meditate'))), 'Meditate previews +4 Ink (3 to 7)');
   // opening and closing the gem cutter without cutting keeps the action
   await click(g, tile(g, 'gems'));
   t.ok($(g, '.o-deck .nk-deck.dk-socket'), 'the socket picker opens');
@@ -1093,7 +1094,7 @@ await t.test('camp: Cut Gems is disabled without gems or a fitting socket; Break
   const leave = $(g, '.cp-leave');
   await click(g, leave);
   t.eq(done(g), 0, 'the first tap only nudges');
-  t.ok(/without resting/i.test(txt(leave)) && leave.classList.contains('nudge'), 'the button asks');
+  t.ok(/without a break/i.test(txt(leave)) && leave.classList.contains('nudge'), 'the button asks');
   await click(g, leave);
   t.eq(done(g), 1, 'the second tap leaves');
   // after an action a single tap leaves
@@ -1197,7 +1198,7 @@ await t.test('forge: empty states (everything sharp, no gems) disable both actio
   R.deck.forEach((c) => { c.up = 1; });
   const node = nodeAt(g, R, 'forge', {});
   await open(g, 'forge', R, node);
-  t.ok(fmode(g, 'up').getAttribute('aria-disabled') === 'true' && /already sharp|Nothing left/.test(txt(fmode(g, 'up'))), 'Sharpen says why not');
+  t.ok(fmode(g, 'up').getAttribute('aria-disabled') === 'true' && /already rehearsed|Nothing left/.test(txt(fmode(g, 'up'))), 'Sharpen says why not');
   t.ok(fmode(g, 'gem').getAttribute('aria-disabled') === 'true' && /no gems/.test(txt(fmode(g, 'gem'))), 'Cut Gems says why not');
   await click(g, fmode(g, 'up')); await click(g, fmode(g, 'gem'));
   t.ok(!g.UI.overlay.has('deck'), 'no picker opens');
@@ -1208,7 +1209,7 @@ await t.test('forge: empty states (everything sharp, no gems) disable both actio
   const R3 = g.RUN.deserialize(JSON.parse(JSON.stringify(g.RUN.serialize(R2))));
   g.GAME.state.R = R3; g.UI.setRun(R3);
   await open(g, 'forge', R3, R3.node);
-  t.ok(/cooled/.test(txt($(g, '.fg-result'))) && fmode(g, 'up').getAttribute('aria-disabled') === 'true', 'the saved forge has cooled');
+  t.ok(/ON AIR light is off/.test(txt($(g, '.fg-result'))) && fmode(g, 'up').getAttribute('aria-disabled') === 'true', 'the saved studio is closed');
 });
 
 await t.test('forge: the hammer, the sparks and the flash paint through the whole strike with no canvas mistakes', async () => {
@@ -1244,10 +1245,10 @@ await t.test('chest with a relic (twelve seeds): closed, opened by the button, t
     await click(g, $(g, '.ch-open'));
     t.eq(chestRow(g), '+' + node.loot.gold, 'seed ' + seed + ': the gold row counted up to the real amount');
     t.ok($(g, '.ch-relic') && txt($(g, '.ch-relic')).indexOf(g.DATA.relics[node.loot.relic].name) >= 0, 'seed ' + seed + ': the relic is named');
-    t.ok(btnByText(g, /Just the gold/) && btnByText(g, /Take the treasure/), 'seed ' + seed + ': both choices are offered');
+    t.ok(btnByText(g, /Just the gold/) && btnByText(g, /Take the charm/), 'seed ' + seed + ': both choices are offered');
     t.eq(R.gold, g.RUN.newRun({ heroes: ['hanae', 'kuro'], seed }).gold, 'seed ' + seed + ': opening alone pays nothing');
     const gold0 = R.gold, rel0 = R.relics.length;
-    if (seed % 2) { await click(g, btnByText(g, /Take the treasure/)); took++; } else { await click(g, btnByText(g, /Just the gold/)); left++; }
+    if (seed % 2) { await click(g, btnByText(g, /Take the charm/)); took++; } else { await click(g, btnByText(g, /Just the gold/)); left++; }
     await answerOverlays(g, R);
     t.eq(R.gold, gold0 + node.loot.gold, 'seed ' + seed + ': the gold was paid');
     t.eq(R.relics.length, rel0 + (seed % 2 ? 1 : 0), 'seed ' + seed + ': the relic was taken or left');
@@ -1268,7 +1269,7 @@ await t.test('chest: the whole chest is a button, Enter opens it, and a second o
   const g = fresh({ seed: 4 }); const R = mkRun(g, { seed: 4 });
   const node = nodeAt(g, R, 'chest', { relic: 'common' });
   await open(g, 'chest', R, node);
-  t.eq($(g, '.ch-hit').getAttribute('aria-label'), 'Open the chest', 'the hit area is a labelled button');
+  t.eq($(g, '.ch-hit').getAttribute('aria-label'), 'Open the gift', 'the hit area is a labelled button');
   await click(g, $(g, '.ch-hit'));
   t.ok($(g, '.ch-loot'), 'a tap on the chest opens it');
   const rows = $$(g, '.ch-loot .nk-row').length;
@@ -1338,7 +1339,7 @@ await t.test('chest: only gold (nothing else inside) says Take the gold; an alre
   await click(g, $(g, '.ch-open'));
   g.RUN.take(R3, n3, { relic: false });
   const gold3 = R3.gold; const toasts0 = $$(g, '.toast').length;
-  await click(g, btnByText(g, /Take the treasure/));
+  await click(g, btnByText(g, /Take the charm/));
   t.eq(R3.gold, gold3, 'no second payment');
   t.ok($$(g, '.toast').length > toasts0, 'the refusal is a toast');
   t.eq(errs(g), 0, 'no console errors');
@@ -1353,7 +1354,7 @@ await t.test('chest: a relic whose pickup asks a question (remove a card) is ans
     await open(g, 'chest', R, node);
     await click(g, $(g, '.ch-open'));
     const deck0 = R.deck.length;
-    g._click(btnByText(g, /Take the treasure/)); await settle(g);
+    g._click(btnByText(g, /Take the charm/)); await settle(g);
     t.ok(R.pending.length > 0 && g.UI.overlay.has('deck'), 'seed ' + seed + ': the pickup question is on screen (a deck overlay in remove mode)');
     t.ok($(g, '.o-deck .nk-deck.dk-remove'), 'seed ' + seed + ': remove mode');
     await answerOverlays(g, R);
@@ -1439,7 +1440,7 @@ await t.test('gem cache: a gem no card can hold says so honestly, and the button
   await open(g, 'gemcache', R, node);
   gcTiles(g).forEach((b) => t.ok(/no card yet/i.test(txt($(g, '.gc-fit', b))), 'a gold gem (' + b.dataset.gem + ') fits no starter card'));
   await click(g, gcTiles(g)[1]);
-  t.ok(/No card in your deck has a gold or prism socket/.test(txt($(g, '.gc-detail'))), 'the detail explains');
+  t.ok(/No card in your deck has a gold or rainbow socket/.test(txt($(g, '.gc-detail'))), 'the detail explains');
   await click(g, btnByText(g, /Take this gem/));
   const setNow = btnByText(g, /Set it in a card now/);
   t.ok(setNow.getAttribute('aria-disabled') === 'true' && /No card has a socket/.test(setNow.rbReason || ''), 'Set it now is disabled with the reason');
@@ -1507,7 +1508,7 @@ await t.test('deck (view): every card of the run in deck order, a big card with 
   t.ok(/Your Deck/.test(txt($(g, '.o-deck'))), 'titled Your Deck');
   t.eq(txt($(g, '.o-deck .dk-count')), R.deck.length + ' cards', 'the count is the whole deck');
   t.deep(cardUids(g), R.deck.map((c) => c.uid), 'every card, in deck order');
-  t.ok($(g, '.o-deck .dk-hint') && /sharpened/.test(txt($(g, '.o-deck .dk-facts'))), 'with nothing chosen the pane shows a hint and the deck facts');
+  t.ok($(g, '.o-deck .dk-hint') && /rehearsed/.test(txt($(g, '.o-deck .dk-facts'))), 'with nothing chosen the pane shows a hint and the deck facts');
   const plain = R.deck.find((c) => g.DATA.cards[c.id].up && !c.up);
   await click(g, deckCard(g, plain.uid));
   t.eq($(g, '.o-deck .dk-big').dataset.id, plain.id, 'a tap shows the card big');
@@ -1627,9 +1628,9 @@ await t.test('deck (mandatory pickers): the confirm button is pinned in a fixed 
   const cases = [
     ['pick', { title: 'Transform a card', confirm: 'Transform it', note: 'It becomes a random card of the same hero and rarity.' }],
     ['pick', { title: 'Copy a card', confirm: 'Copy it', note: 'A second copy joins the deck.' }],
-    ['remove', { title: 'Remove a card', confirm: 'Remove it', note: 'It is torn out of your deck for good.' }],
-    ['upgrade', { title: 'Sharpen a card', confirm: 'Sharpen it', note: 'It gains its upgrade.' }],
-    ['remove', { title: 'Remove a Card', price: 75, confirm: 'Pay 75 and remove', note: 'The peddler burns it for good.' }],
+    ['remove', { title: 'Remove a card', confirm: 'Remove it', note: 'It leaves your deck for good.' }],
+    ['upgrade', { title: 'Rehearse a card', confirm: 'Rehearse it', note: 'It gains its upgrade.' }],
+    ['remove', { title: 'Remove a Card', price: 75, confirm: 'Pay 75 and remove', note: 'Jordan takes it off your hands for good.' }],
   ];
   for (const [mode, extra] of cases) {
     const ov = ovOpen(g, 'deck', Object.assign({ mode, required: true, dismiss: false }, extra)); await settle(g);
@@ -1653,7 +1654,7 @@ await t.test('deck (remove): the confirm needs a second tap that says so, the as
   const ov = ovOpen(g, 'deck', { mode: 'remove', price: 75 }); await settle(g);
   t.ok(/75/.test(txt($(g, '.o-deck .dk-price'))) && /remove a card/.test(txt($(g, '.o-deck .dk-price'))), 'the price is shown');
   await click(g, deckCard(g, R.deck[2].uid));
-  t.ok($(g, '.o-deck .dk-note.warn') && /torn out/.test(txt($(g, '.o-deck .dk-note'))), 'a warning says it is gone for good');
+  t.ok($(g, '.o-deck .dk-note.warn') && /leaves your deck/.test(txt($(g, '.o-deck .dk-note'))), 'a warning says it is gone for good');
   const go = () => $(g, '.o-deck .dk-go');
   t.ok(/Remove this card/.test(txt(go())) && go().classList.contains('dk-danger'), 'a danger button');
   await click(g, go());
@@ -1683,7 +1684,7 @@ await t.test('deck (upgrade): unsharpable cards are dimmed with a reason, the be
   await click(g, deckCard(g, plain.uid));
   t.eq($$(g, '.o-deck .dk-half').length, 2, 'before and after');
   t.eq($(g, '.o-deck .dk-bacol.after .card').dataset.id, plain.id, 'of the chosen card');
-  t.ok(/Sharpen this card/.test(txt($(g, '.o-deck .dk-go'))), 'default confirm label');
+  t.ok(/Rehearse this card/.test(txt($(g, '.o-deck .dk-go'))), 'default confirm label');
   await click(g, $(g, '.o-deck .dk-go'));
   t.ok(ov.done && ov.res === plain.uid, 'the result is the uid');
   // exactly one candidate
@@ -1693,7 +1694,7 @@ await t.test('deck (upgrade): unsharpable cards are dimmed with a reason, the be
   g.UI.overlay.closeAll(); await settle(g);
   // none
   const ov3 = ovOpen(g, 'deck', { mode: 'upgrade', cards: [] }); await settle(g);
-  t.ok(/Nothing left to sharpen/.test(txt($(g, '.o-deck .dk-none'))), 'no cards: says so');
+  t.ok(/Nothing left to rehearse/.test(txt($(g, '.o-deck .dk-none'))), 'no cards: says so');
   g.UI.overlay.closeAll(); await settle(g);
   const ov4 = ovOpen(g, 'deck', { mode: 'upgrade', cards: R.deck.filter((c) => c.up) }); await settle(g);
   t.ok(!$(g, '.o-deck .dk-ba') && $$(g, '.o-deck .dk-card').every((c) => c.getAttribute('aria-disabled') === 'true'), 'only sharpened cards: all dimmed, nothing preselected');
@@ -1718,7 +1719,7 @@ await t.test('deck: the cards and filter params narrow the grid, empty sets say 
   t.ok(/There are no cards here/.test(txt($(g, '.o-deck .dk-none'))), 'a filter that leaves nothing: a message');
   g.UI.overlay.closeAll(); await settle(g);
   ovOpen(g, 'deck', { mode: 'socket', cards: [] }); await settle(g);
-  t.ok(/No cards to cut gems into/.test(txt($(g, '.o-deck .dk-none'))), 'socket mode with no cards says so');
+  t.ok(/No cards to set gems into/.test(txt($(g, '.o-deck .dk-none'))), 'socket mode with no cards says so');
   g.UI.overlay.closeAll(); await settle(g);
   ovOpen(g, 'deck', { mode: 'view', cards: [{ uid: 991, id: 'no_such_card', up: 0, gems: [] }].concat(R.deck.slice(0, 2)) }); await settle(g);
   t.ok(cardUids(g).length >= 2 && $(g, '.o-deck .nk-deck'), 'a card the data does not know does not take the grid down');
@@ -1750,12 +1751,12 @@ await t.test('deck (socket): colour rules explain themselves, prism and two-sock
   const gemBtn = (id) => $$(g, '.o-deck .dk-gem').find((b) => txt(b).indexOf(g.DATA.gems[id].name) >= 0);
   t.ok(gemBtn('tidewatch_sapphire').classList.contains('nofit') && !gemBtn('ember_ruby').classList.contains('nofit'), 'a blue gem is marked as not fitting the red socket');
   await click(g, gemBtn('tidewatch_sapphire'));
-  t.ok(/blue: it fits blue and prism sockets only/.test(txt($(g, '.o-deck .dk-state'))) && $(g, '.o-deck .dk-state.bad'), 'the wrong colour is explained');
+  t.ok(/blue: it fits blue and rainbow sockets only/.test(txt($(g, '.o-deck .dk-state'))) && $(g, '.o-deck .dk-state.bad'), 'the wrong colour is explained');
   const gems0 = R.gems.length;
   await click(g, $(g, '.o-deck .dk-go'));
   t.ok(slash.gems[0] === null && R.gems.length === gems0, 'a wrong colour changes nothing');
   await click(g, gemBtn('ember_ruby'));
-  t.ok($(g, '.o-deck .dk-state.ok') && /will be set in the red socket/.test(txt($(g, '.o-deck .dk-state'))), 'the right colour says where it goes');
+  t.ok($(g, '.o-deck .dk-state.ok') && /will be set in the pink socket/.test(txt($(g, '.o-deck .dk-state'))), 'the right colour says where it goes');
   t.ok(txt($(g, '.o-deck .dk-sockcard')).indexOf(g.DATA.gems.ember_ruby.name) >= 0 || $(g, '.o-deck .dk-sockcard'), 'the big card previews it');
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(slash.gems[0], 'ember_ruby', 'the ruby is set (RUN.socket)');
@@ -1802,7 +1803,7 @@ await t.test('deck (socket): onSocket decides the cut (args, refusal reasons), a
   await click(g, $(g, '.o-deck .dk-go'));
   t.deep(calls, [[slash.uid, 0, 'ember_ruby']], 'the callback got (uid, slot, gem)');
   t.eq(slash.gems[0], null, 'a refusal changes nothing');
-  t.ok($$(g, '.toast').length > toasts0 && /forge has done its work/.test(txt($$(g, '.toast').pop())), 'the reason is a toast');
+  t.ok($$(g, '.toast').length > toasts0 && /studio has done its work/.test(txt($$(g, '.toast').pop())), 'the reason is a toast');
   verdict = { ok: true };
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(calls.length, 2, 'accepted on the next try');
@@ -1947,7 +1948,7 @@ await t.test('reload: Save and quit mid-visit, then Continue: every kind comes b
     chest: (g, R) => { t.ok(R.node.taken && $(g, '.ch-hit').hidden && /empty/i.test(txt($(g, '.ch-done'))), 'chest: reopened as taken'); },
     gemcache: (g, R) => { t.ok(R.node.taken && $(g, '.gc-none') && !$$(g, '.gc-gem').length, 'gemcache: reopened as taken'); },
     camp: (g, R) => { t.deep(Array.from(R.node.used), ['meditate'], 'camp: the used action is in the save'); t.ok(tile(g, 'meditate').classList.contains('used') && tile(g, 'rest').classList.contains('locked'), 'camp: reopened with the action stamped'); },
-    forge: (g, R) => { t.eq(R.node.used, 'upgrade', 'forge: used'); t.ok(/cooled/.test(txt($(g, '.fg-result'))) && fmode(g, 'up').getAttribute('aria-disabled') === 'true', 'forge: reopened cooled'); },
+    forge: (g, R) => { t.eq(R.node.used, 'upgrade', 'forge: used'); t.ok(/ON AIR light is off/.test(txt($(g, '.fg-result'))) && fmode(g, 'up').getAttribute('aria-disabled') === 'true', 'forge: reopened closed'); },
     shop: (g, R) => { t.ok(R.node.stock.items.some((i) => i.sold), 'shop: a sale is in the save'); t.eq($$(g, '.sh-item.sold, .sh-plaque.sold[data-key]').length, R.node.stock.items.filter((i) => i.sold).length, 'shop: the SOLD stamps came back'); t.eq(txt($(g, '.stat.st-gold .val')), String(R.gold), 'shop: the gold is the saved gold'); },
     event: (g, R) => { t.eq(R.node.chosen, 3, 'event: the choice is in the save'); t.ok($$(g, '.ev-choice.picked').length === 1 && $(g, '.ev-go'), 'event: reopened with the choice made and Continue offered'); },
     reward: (g, R) => { t.ok(R.node.rewards.claimed, 'reward: claimed is in the save'); t.ok(!$(g, '.rw-cont').hidden && $(g, '.rw-skip').hidden, 'reward: reopened claimed, with Continue'); },
@@ -1985,7 +1986,7 @@ await t.test('reload: an untouched reward, shop and chest come back untouched an
     t.eq(g2.UI.currentName, kind, kind + ': back on the page');
     t.eq([R2.gold, R2.deck.length, R2.gems.length].join(), [gold, deck, gems].join(), kind + ': nothing was spent or given');
     if (kind === 'reward') { t.ok(!R2.node.rewards.claimed && $$(g2, '.rw-slot').length === node.rewards.cards.length, 'reward: the same offers, unclaimed'); await click(g2, $$(g2, '.rw-slot .rw-face.front .card')[0]); t.eq(R2.deck.length, deck + 1, 'reward: still claimable'); }
-    if (kind === 'chest') { t.ok(!R2.node.taken && !$(g2, '.ch-hit').hidden, 'chest: still shut'); await click(g2, $(g2, '.ch-open')); await click(g2, btnByText(g2, /Take the treasure/)); await answerOverlays(g2, R2); t.ok(R2.node.taken, 'chest: still openable'); }
+    if (kind === 'chest') { t.ok(!R2.node.taken && !$(g2, '.ch-hit').hidden, 'chest: still shut'); await click(g2, $(g2, '.ch-open')); await click(g2, btnByText(g2, /Take the charm/)); await answerOverlays(g2, R2); t.ok(R2.node.taken, 'chest: still openable'); }
     if (kind === 'shop') { t.deep(g2.RUN.serialize(R2).node.stock.items.map((i) => i.key), node.stock.items.map((i) => i.key), 'shop: the same shelves'); }
     if (kind === 'gemcache') { t.deep($$(g2, '.gc-gem').map((b) => b.dataset.gem), node.offers, 'gemcache: the same three gems'); }
     t.eq(errs(g2), 0, kind + ': no console errors');
@@ -2035,7 +2036,7 @@ await t.test('cleanup: a pending choice interrupted by leaving does not stay hal
   g.DATA.relics.test_pickup = Object.assign({}, g.DATA.relics[Object.keys(g.DATA.relics)[0]], { id: 'test_pickup', name: 'Test Pickup', hooks: [{ on: 'onPickup', fx: [{ op: 'removeCard' }] }] });
   const node = nodeAt(g, R, 'chest', { relic: 'common' }); node.loot.relic = 'test_pickup';
   await open(g, 'chest', R, node);
-  await click(g, $(g, '.ch-open')); g._click(btnByText(g, /Take the treasure/)); await settle(g);
+  await click(g, $(g, '.ch-open')); g._click(btnByText(g, /Take the charm/)); await settle(g);
   t.ok(g.UI.overlay.has('deck'), 'the removal question is up');
   await goMap(g);
   t.eq(g.UI.overlay.count(), 0, 'navigating away closed it');
@@ -2078,7 +2079,7 @@ await t.test('no run: a page opened without a run says so and offers Back to Tit
     const g = await freshS({ seed: 24 });
     g.GAME.state.R = null; g.UI.setRun(null);
     await g.UI.go(kind, {}, { force: true, transition: 'none' }); await settle(g);
-    t.ok($(g, '.s-' + kind + ' .nk-empty-wrap') && /No journey is underway/.test(txt($(g, '.s-' + kind))), kind + ': the empty page');
+    t.ok($(g, '.s-' + kind + ' .nk-empty-wrap') && /No tour is on the road/.test(txt($(g, '.s-' + kind))), kind + ': the empty page');
     t.ok(btnByText(g, /Back to Title/), kind + ': with a way out');
     t.eq(errs(g), 0, kind + ': no console errors');
   }
@@ -2113,10 +2114,10 @@ await t.test('settings: reduced motion makes the ledger, the story and the pause
   const R2 = mkRun(g, { seed: 27, gems: ['ember_ruby', 'tidewatch_sapphire', 'quickthought_emerald'] });
   const cn = nodeAt(g, R2, 'gemcache', {}); cn.offers = ['ember_ruby', 'tidewatch_sapphire', 'quickthought_emerald'];
   await open(g, 'gemcache', R2, cn);
-  ['Red', 'Blue', 'Green'].forEach((c, i) => t.ok(new RegExp(c).test(txt($$(g, '.gc-gem')[i])), 'the cache tile ' + (i + 1) + ' names its colour (' + c + ') in text'));
+  ['Pink', 'Blue', 'Green'].forEach((c, i) => t.ok(new RegExp(c).test(txt($$(g, '.gc-gem')[i])), 'the cache tile ' + (i + 1) + ' names its colour (' + c + ') in text'));
   ovOpen(g, 'deck', { mode: 'socket' }); await settle(g);
   await click(g, $$(g, '.o-deck .dk-card')[0]);
-  t.ok($$(g, '.o-deck .dk-slot').every((b) => /red|blue|green|gold|prism/i.test(b.getAttribute('aria-label'))) && /red|blue|green|gold|prism/i.test(txt($(g, '.o-deck .dk-slot-lab'))), 'sockets are named by colour in text and label');
+  t.ok($$(g, '.o-deck .dk-slot').every((b) => /pink|blue|green|gold|rainbow/i.test(b.getAttribute('aria-label'))) && /pink|blue|green|gold|rainbow/i.test(txt($(g, '.o-deck .dk-slot-lab'))), 'sockets are named by colour in text and label');
   t.ok($$(g, '.o-deck .dk-gem').every((b) => /tier \d/.test(b.getAttribute('aria-label'))), 'gems carry their tier in the label');
   g.UI.overlay.closeAll(); await settle(g);
   // the whole set of screens with all the settings on, drawn for a while
@@ -2148,7 +2149,7 @@ await t.test('painters: every screen and every state (chest shut, opening, open,
   drive(40);
   g._win.__HEADLESS = true; g._click($(g, '.ch-open')); await settle(g);
   drive(200);
-  await click(g, btnByText(g, /Take the treasure/)); await answerOverlays(g, R);
+  await click(g, btnByText(g, /Take the charm/)); await answerOverlays(g, R);
   drive(120);
   t.eq(g._issues.length, 0, 'chest through shut, open and empty: no canvas issues ' + JSON.stringify(g._issues.slice(0, 1)));
   // cache before and after the take
@@ -2501,5 +2502,162 @@ await t.test('the exit controls share one right edge on a phone (the shop button
   const bottom = cssNum(shopC, 'bottom');
   t.ok(bottom > 0 && 720 - bottom - 88 >= plankBottom, 'the phone button (88 stage px at 740x360) starts at y ' + (720 - bottom - 88) + ', not above the lower plank, which ends at y ' + plankBottom);
 });
+
+// ==================================================================================================== Hocus Vocus copy (P2 2D)
+// What the player reads on every node page in the Hocus Vocus words: HV_UI_COPY section 2.9 and bible 4.1, 4.4 and 5.6. The older tests above pin the
+// strings they already checked; these pin the rows that nothing else reads (the sign, the services, the banners, the labels, the display words of ids).
+await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter and Set gems, gems read pink, Charms read Merch charm or Headliner charm, brushes read Spell', async () => {
+  let gems = 0, relics = 0, brushes = 0;
+  for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
+    const g = fresh({ seed }); const R = mkRun(g, { seed, gold: 999 });
+    const node = nodeAt(g, R, 'shop', { shop: { seed } }); await open(g, 'shop', R, node);
+    t.eq(txt($(g, '.sh-sign .nk-banner')), "Jordan's Merch Stall", 'seed ' + seed + ': the sign');
+    t.eq(txt($(g, '.sh-plaque.kind-remove .sh-name')), 'Declutter', 'seed ' + seed + ': the removal service');
+    t.eq(txt($(g, '.sh-plaque.kind-cut .sh-name')), 'Set gems', 'seed ' + seed + ': the gem service');
+    t.ok(/^Declutter, \d+ gold$/.test($(g, '.sh-plaque.kind-remove').getAttribute('aria-label')) && /^Set gems, free$/.test($(g, '.sh-plaque.kind-cut').getAttribute('aria-label')), 'seed ' + seed + ': the service labels');
+    t.ok(/Gems, charms and services/.test($(g, '.sh-row2').getAttribute('aria-label')), 'seed ' + seed + ': the shelf label');
+    $$(g, '.sh-plaque.kind-gem').forEach((p) => { gems++; t.ok(/^Tier \d (pink|blue|green|gold) gem$/.test(txt($(g, '.sh-kind', p))), 'seed ' + seed + ': a gem plaque reads "' + txt($(g, '.sh-kind', p)) + '"'); });
+    $$(g, '.sh-plaque.kind-relic').forEach((p) => { relics++; t.ok(/^(Common|Uncommon|Rare|Merch charm|Headliner charm)$/.test(txt($(g, '.sh-kind', p))), 'seed ' + seed + ': a Charm plaque reads "' + txt($(g, '.sh-kind', p)) + '"'); });
+    $$(g, '.sh-plaque.kind-brush').forEach((p) => { brushes++; t.eq(txt($(g, '.sh-kind', p)), 'Spell', 'seed ' + seed + ': a brush plaque reads Spell'); });
+    t.eq(errs(g), 0, 'seed ' + seed + ': no console errors');
+  }
+  t.ok(gems > 0 && relics > 0, 'the stalls held gems (' + gems + ') and Charms (' + relics + ')');
+  void brushes;
+  // the greeting, buying, a short purse, a sold ware, removal, gem setting, an empty stall, leaving and idle talk: every line is Jordan's
+  const bad = /\b(lanterns?|Hush|purse|travellers?|silence|Burn it|cutting|ghost|relic|land will)\b/i;
+  const srcPool = /const PEDDLER = \{([\s\S]*?)\n  \};/.exec(SRC);
+  t.ok(srcPool, 'the line pool is in the source');
+  const lines = [...srcPool[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1]).filter((x) => x.length > 12);
+  t.ok(lines.length >= 20, 'the pool has its lines (' + lines.length + ')');
+  lines.forEach((l) => t.ok(!bad.test(l), 'Jordan says nothing from the old stall: ' + l));
+  ['Fresh merch! I made a sticker of your face. It is very flattering.', 'Tote bag? It has a picture of a tote bag on it.', 'Everything here is one of a kind. I made two.'].forEach((l) => t.ok(lines.indexOf(l) >= 0, 'the bible 3.5 greeting is in the pool: ' + l));
+});
+
+await t.test('copy (reward): the Charm rarity reads as a Charm word and the flavour line sits right under the rules text on an elite box and a boss pedestal', async () => {
+  const RAR = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
+  for (const kind of ['elite', 'boss']) {
+    for (const seed of [8, 13]) {
+      const g = fresh({ seed }); const R = mkRun(g, { seed });
+      const node = await openReward(g, R, kind);
+      const rw = node.rewards;
+      const plaques = kind === 'boss' ? $$(g, '.rw-ped') : [$(g, '.rw-relic')];
+      t.eq(plaques.length, rw.relics.length, kind + ' ' + seed + ': a plaque per offered Charm');
+      plaques.forEach((p, i) => {
+        const d = g.DATA.relics[rw.relics[i]];
+        t.eq(txt($(g, '.rl-rar', p)), RAR[d.rarity] + ' charm', kind + ' ' + seed + ': ' + d.name + ' rarity word');
+        t.ok(d.flavor && txt($(g, '.rl-flavor', p)) === d.flavor, kind + ' ' + seed + ': ' + d.name + ' shows its flavour line');
+        t.ok($(g, '.rl-text', p).nextElementSibling === $(g, '.rl-flavor', p), kind + ' ' + seed + ': the flavour line follows the rules text');
+        t.ok(!/treasure|keeper/i.test(txt(p)), kind + ' ' + seed + ': no old rarity word on the plaque');
+      });
+    }
+  }
+  t.ok(/\.rl-flavor\s*\{[^}]*font:\s*italic/.test(CSS), 'css: the flavour line is italic');
+  t.ok(/rw-relicbox \.rl-flavor[^{]*\{\s*display:\s*none/.test(CSS), 'css: the elite box drops the line where it is already trimmed');
+  const g = fresh({ seed: 3 }); const R = mkRun(g, { seed: 3 });
+  const node = await openReward(g, R, 'enemy');
+  node.rewards.relics = []; node.rewards.gold = 0; node.rewards.ink = 0; node.rewards.maxHp = 0; node.rewards.gems = []; node.rewards.brush = null; node.rewards.claimed = false;
+  await g.UI.go('reward', { rewards: node.rewards, source: node.source, node, R }, { force: true, transition: 'none' }); await settle(g);
+  t.ok(/nothing but a squeak/.test(txt($(g, '.rw-ledger'))), 'a fight with no loot says so in the new words');
+});
+
+await t.test('copy (event): the Detour board says Detour on its seal, a lost Detour is "A Lost Detour", and On we go is the way on', async () => {
+  const g = fresh({ seed: 18 }); const R = mkRun(g, { seed: 18 });
+  const node = nodeAt(g, R, 'event', { id: 'kappa_toll' });
+  await open(g, 'event', R, node);
+  t.eq(g.DATA.tiles.event.name, 'Detour', 'the tile is named Detour');
+  t.eq(txt($(g, '.ev-seal')), g.DATA.tiles.event.name, 'the seal reads the tile name from DATA');
+  t.ok(/\.ev-seal\s*\{[^}]*min-width:\s*68px[^}]*width:\s*max-content/.test(CSS), 'css: the seal grows to fit its word (Detour is longer than Fable was) instead of clipping it');
+  const g2 = fresh({ seed: 19 }); const R2 = mkRun(g2, { seed: 19 });
+  R2.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'no_such_detour', chosen: null };
+  await g2.UI.go('event', { node: R2.node, R: R2 }, { force: true, transition: 'none' }); await settle(g2);
+  t.eq(txt($(g2, '.ev-title')), 'A Lost Detour', 'the lost Detour title');
+  t.eq(txt($(g2, '.ev-text')), 'Nothing here. The detour wandered off before you arrived.', 'the lost Detour text');
+  t.eq(txt($(g2, '.ev-go')), 'On we go', 'the way on');
+  t.eq(errs(g) + errs(g2), 0, 'no console errors');
+});
+
+await t.test('copy (green room, studio, gift box, sparkle booth): banners, tiles, buttons and badges in the Hocus Vocus words', async () => {
+  // the Green Room
+  let g = fresh({ seed: 4 }); let R = mkRun(g, { seed: 4, gems: ['ember_ruby'] });
+  await open(g, 'camp', R, nodeAt(g, R, 'camp', {}));
+  t.eq(g.DATA.tiles.camp.name, 'Green Room', 'the tile is the Green Room');
+  t.eq(txt($(g, '.cp-titlebox .nk-banner')), 'The Green Room', 'the banner reads the tile name');
+  t.eq(txt($(g, '.cp-titlebox .nk-sub')), 'Five minutes backstage. Use them well.', 'the sub line');
+  t.ok(/#stage\.compact \.cp-titlebox \.nk-banner span\s*\{[^}]*padding-left:\s*1\.3em/.test(CSS), 'css: The Green Room fits its ribbon on a phone at the larger text sizes (it is two letters longer than The Campfire was)');
+  t.deep($$(g, '.cp-tile .cp-name').map(txt), ['Rest', 'Rehearse', 'Set Gems', 'Warm Up'], 'the four tiles');
+  t.deep($$(g, '.cp-tile .cp-verb').map(txt), ['Put your feet up', 'Upgrade a card', 'Set gems in cards', 'Vox and a Spell'], 'the four verbs');
+  t.eq($(g, '.cp-grid').getAttribute('aria-label'), 'Green room actions', 'the grid label');
+  t.eq(txt($(g, '.cp-leave')), 'Back on the road', 'the leave button');
+  t.ok(/action left in the green room/.test(txt($(g, '.cp-meter'))), 'the meter: ' + txt($(g, '.cp-meter')));
+  await click(g, tile(g, 'rest'));
+  t.ok(/The break is over/.test(txt($(g, '.cp-meter'))), 'the used-up meter');
+  t.eq(txt($(g, '.cp-badge', tile(g, 'sharpen'))), 'CLOSED', 'a locked tile is stamped CLOSED');
+  t.ok(/The break is over: no actions left\./.test(tile(g, 'sharpen').getAttribute('aria-label')) || /Unavailable: The break is over/.test(tile(g, 'sharpen').getAttribute('aria-label')), 'the locked reason');
+  t.ok(/Rehearse\. Upgrade a card\./.test(tile(g, 'sharpen').getAttribute('aria-label')), 'the Rehearse label');
+  // the Studio
+  g = fresh({ seed: 4 }); R = mkRun(g, { seed: 4, gems: ['ember_ruby'] });
+  await open(g, 'forge', R, nodeAt(g, R, 'forge', {}));
+  t.eq(txt($(g, '.fg-titlebox .nk-banner')), 'The Studio', 'the Studio banner');
+  t.eq(txt($(g, '.fg-titlebox .nk-sub')), "One great take, or a jeweller's patience. Not both.", 'the Studio sub line');
+  t.eq($(g, '.fg-modes').getAttribute('aria-label'), 'Studio actions', 'the modes label');
+  t.ok(/Rehearse a Card/.test(txt(fmode(g, 'up'))) && /Bring one card to the mic\. One take, one upgrade\./.test(txt(fmode(g, 'up'))), 'the upgrade plaque: ' + txt(fmode(g, 'up')));
+  t.ok(/Set Gems/.test(txt(fmode(g, 'gem'))), 'the gem plaque');
+  t.eq(txt($(g, '.fg-leave')), 'Leave the studio', 'the leave button');
+  await click(g, fmode(g, 'up'));
+  t.ok(/Choose a Card for the Mic/.test(txt($(g, '.o-deck'))), 'the deck overlay title for the Studio');
+  const pick = $$(g, '.o-deck .dk-card').find((c) => c.getAttribute('aria-disabled') !== 'true');
+  await click(g, pick);
+  t.ok(/Bring it to the mic/.test(txt($(g, '.o-deck .dk-go'))) && /One take\. The card comes back sharper\./.test(txt($(g, '.o-deck .dk-note'))), 'the deck overlay button and note for the Studio');
+  await click(g, $(g, '.o-deck .dk-go'));
+  t.eq(txt($(g, '.fg-strike')), 'Hit it!', 'the strike button');
+  t.ok(/Hit it and the card comes back rehearsed\./.test(txt($(g, '.fg-result'))), 'the preview line');
+  await click(g, $(g, '.fg-strike')); g._flush(3000); await settle(g);
+  t.ok(/ is rehearsed\.$/.test(txt($(g, '.fg-result'))), 'the result: ' + txt($(g, '.fg-result')));
+  t.ok(/ON AIR light is off|studio has done its work/.test(txt($(g, '.fg-result')) + ' ' + txt(fmode(g, 'up'))), 'the studio closes');
+  // the Gift Box
+  g = fresh({ seed: 9 }); R = mkRun(g, { seed: 9 });
+  await open(g, 'chest', R, nodeAt(g, R, 'chest', {}));
+  t.eq(g.DATA.tiles.chest.name, 'Gift Box', 'the tile is the Gift Box');
+  t.eq(txt($(g, '.ch-titlebox .nk-banner')), 'A Gift Box', 'the Gift Box banner');
+  t.eq(txt($(g, '.ch-open')), 'Open the gift', 'the open button');
+  g = fresh({ seed: 9 }); R = mkRun(g, { seed: 9 });
+  const taken = nodeAt(g, R, 'chest', {}); taken.taken = true;
+  await open(g, 'chest', R, taken);
+  t.eq(txt($(g, '.ch-titlebox .nk-sub')), 'Already opened. Only ribbon remains.', 'the opened Gift Box sub line');
+  t.eq(txt($(g, '.ch-done')), 'The gift box is empty. Whatever it held is yours now.', 'the empty Gift Box');
+  // the Sparkle Booth
+  g = fresh({ seed: 10 }); R = mkRun(g, { seed: 10 });
+  const booth = nodeAt(g, R, 'gemcache', {});
+  await open(g, 'gemcache', R, booth);
+  t.eq(g.DATA.tiles.gemcache.name, 'Sparkle Booth', 'the tile is the Sparkle Booth');
+  t.eq(txt($(g, '.gc-titlebox .nk-banner')), 'The Sparkle Booth', 'the booth banner');
+  t.eq(txt($(g, '.gc-titlebox .nk-sub')), 'Three gems sparkle on the counter. Only one will come with you.', 'the booth sub line');
+  $$(g, '.gc-gem').forEach((b) => { const col = g.DATA.COLOUR_NAME[g.DATA.gems[b.dataset.gem].color]; t.ok(txt($(g, '.gc-tier em', b)) === col.charAt(0).toUpperCase() + col.slice(1), 'a booth tile names its colour as ' + col); });
+  g = fresh({ seed: 10 }); R = mkRun(g, { seed: 10 });
+  const empty = nodeAt(g, R, 'gemcache', {}); empty.taken = true;
+  await open(g, 'gemcache', R, empty);
+  t.eq(txt($(g, '.gc-titlebox .nk-sub')), 'The booth is empty now.', 'the empty booth');
+  t.eq(txt($(g, '.gc-none')), 'You already took a gem from this booth.', 'the booth, already taken');
+});
+
+await t.test('copy (chest and booth gems, the deck overlay): a chest gem reads "Tier N pink gem", the socket words are pink and rainbow, never red or prism', async () => {
+  const g = await freshS({ seed: 3 }); const R = mkRun(g, { seed: 3, gems: ['ember_ruby'] });
+  const col = (id) => g.DATA.COLOUR_NAME[g.DATA.gems[id].color];
+  const node = nodeAt(g, R, 'chest', { loot: { gold: 10, relic: null, gems: ['ember_ruby'] } });
+  node.loot = { gold: 10, relic: null, gems: ['ember_ruby'] };
+  await open(g, 'chest', R, node);
+  await click(g, $(g, '.ch-open'));
+  const tier = $(g, '.ch-gem .ch-gem-tier');
+  t.ok(tier && txt(tier) === 'Tier ' + g.DATA.gems.ember_ruby.tier + ' ' + col('ember_ruby') + ' gem', 'the chest gem tier line: ' + txt(tier));
+  t.eq(col('ember_ruby'), 'pink', 'ember_ruby is a pink gem');
+  // the colour words of the socket overlay
+  ovOpen(g, 'deck', { mode: 'socket' }); await settle(g);
+  const card = $$(g, '.o-deck .dk-card').find((c) => c.getAttribute('aria-disabled') !== 'true');
+  await click(g, card);
+  const sockets = txt($(g, '.o-deck .dk-slotcol'));
+  t.ok(/\b(Pink|Blue|Green|Gold|Rainbow) socket/.test(sockets) && !/\b(Red|Prism)\b/.test(sockets), 'the sockets are named by display colour: ' + sockets);
+  t.ok(!/\bprism\b/i.test(txt($(g, '.o-deck'))), 'no prism anywhere in the socket overlay');
+});
+
 
 await t.done();

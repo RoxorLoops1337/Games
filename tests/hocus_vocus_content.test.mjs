@@ -719,7 +719,7 @@ t.test('the story says what the ops do: numbers written as words match the gold 
       const lm = /\b(\w+) gold\b/i.exec(c.label);
       if (lm && num(lm[1]) !== undefined && (!c.req || c.req.gold !== num(lm[1]))) bad.push(`${e.id}[${ci}]: label "${c.label}" names a price that is not req.gold`);
       if (/\(fight\)/i.test(c.label) && !c.out.some((o) => A(o.ops).some((x) => x.op === 'fight'))) bad.push(`${e.id}[${ci}]: label says fight but no outcome fights`);
-      if (/\b1 Echo\b|\b2 Echo\b/.test(c.cost || '')) { const n = Number(/(\d) Echo/.exec(c.cost)[1]); if (!c.out.every((o) => A(o.ops).some((x) => x.op === 'ink' && x.n === -n))) bad.push(`${e.id}[${ci}]: cost "${c.cost}" is not charged in every outcome`); }
+      if (/\b1 Vox\b|\b2 Vox\b/.test(c.cost || '')) { const n = Number(/(\d) Vox/.exec(c.cost)[1]); if (!c.out.every((o) => A(o.ops).some((x) => x.op === 'ink' && x.n === -n))) bad.push(`${e.id}[${ci}]: cost "${c.cost}" is not charged in every outcome`); }
     });
     // a price quoted in the text of the event itself ("WISHES, 10 GOLD", "Twenty gold") matches some choice
     for (const m of e.text.matchAll(/\b(\w+) gold\b/gi)) { const n = num(m[1]); if (n !== undefined && !e.choices.some((c) => c.req && c.req.gold === n)) bad.push(`${e.id}: the event text quotes ${m[0]} but no choice asks for it`); }
@@ -807,7 +807,7 @@ t.test('achievements: every stat key is tracked by RUN, COMBAT or META, ladders 
   // the text quotes its own threshold
   ach.forEach((a) => { if (a.stat.gte > 1 && !new RegExp('\\b' + a.stat.gte + '\\b').test(a.text)) t.ok(a.stat.k === 'trialBest' || a.stat.k.indexOf('boss') === 0, `${a.id}: the text quotes ${a.stat.gte}: ${a.text}`); });
   // the three trial ladders say which trial they mean
-  [1, 5, 10].forEach((n) => t.ok(ach.some((a) => a.stat.k === 'trialBest' && a.stat.gte === n && new RegExp('Trial ' + n + '\\b').test(a.text)), `an achievement for Ink Trial ${n}`));
+  [1, 5, 10].forEach((n) => t.ok(ach.some((a) => a.stat.k === 'trialBest' && a.stat.gte === n && new RegExp('Encore ' + n + '\\b').test(a.text)), `a Sticker for Encore ${n}`));
   t.eq(DATA.achievements.ch1_clear.stat.k, 'boss1Kills', 'ch1_clear'); t.eq(DATA.achievements.ch2_clear.stat.k, 'boss2Kills', 'ch2_clear'); t.eq(DATA.achievements.ch3_clear.stat.k, 'boss3Kills', 'ch3_clear');
 });
 t.test('the hard achievements are reachable: a constructed combat reaches maxHit, maxTurnDamage and zeroCostTurns', () => {
@@ -853,7 +853,7 @@ t.test('Ink Trials: each text quotes its own mods, the staircase never gets easi
       t.ok(cands.some((c) => tr.text.indexOf(c) >= 0), `${tr.id}: the text "${tr.text}" quotes the ${k} number (${cands.join(' or ')})`);
       const harder = k === 'enemyHp' || k === 'eliteHp' || k === 'bossHp' || k === 'enemyDmg' || k === 'priceMul' || k === 'curses' ? v > 0 : v < 0;
       t.ok(harder, `${tr.id}: ${k} ${v} makes the game harder`);
-      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Echo/, wellInk: /less Echo/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/ };
+      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Vox/, wellInk: /less Vox/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/ };
       if (wordsFor[k]) t.ok(wordsFor[k].test(tr.text), `${tr.id}: the text uses the right direction for ${k}: ${tr.text}`);
     });
     t.ok(tr.text.length <= 100 && /^[A-Z]/.test(tr.text) && /[.]$/.test(tr.text) && !DASH.test(tr.text), `${tr.id}: a tidy sentence`);
@@ -881,11 +881,11 @@ t.test('tips, lore and barks: limits, no dashes, no repeats, and every hero spea
     });
   });
   Object.keys(heroLines).forEach((l) => t.eq(heroLines[l].length, 1, `the line "${l}" belongs to one hero only`));
-  // Raiga is loud, the others are not
+  // the voices of HV_HEROES 1.6: Andy rarely shouts (a quarter at most), RoxorLoops a third at most, Jasmin almost never, RawClaw never
   const loud = (h) => keys.flatMap((k) => DATA.lore['barks_' + h].lines[k]).filter((l) => /!/.test(l)).length;
-  t.ok(loud('raiga') >= 20 && loud('suzu') <= 2 && loud('kuro') <= 3 && loud('hanae') <= 3, 'Raiga shouts, the others mostly do not');
-  const friend = keys.flatMap((k) => DATA.lore.barks_raiga.lines[k]).filter((l) => /friend/i.test(l)).length;
-  t.ok(friend >= 4 && friend <= 12, `Raiga's "friend" is a tic, not a tic in every line (${friend} of 30)`);
+  t.ok(loud('raiga') <= 7 && loud('suzu') === 0 && loud('kuro') <= 10 && loud('hanae') <= 1, `Andy rarely shouts, RoxorLoops a little, Jasmin and RawClaw not at all (${['raiga', 'kuro', 'hanae', 'suzu'].map(loud).join(', ')})`);
+  const justAndy = keys.flatMap((k) => DATA.lore.barks_raiga.lines[k]).filter((l) => l === 'Just Andy.').length;
+  t.eq(justAndy, 1, `Andy introduces himself as "Just Andy." exactly once (${justAndy} of 30)`);
   Object.keys(DATA.lore).filter((id) => !/^barks_/.test(id)).forEach((id) => { const p = DATA.lore[id]; t.ok(p.title.length <= 40 && p.text.length <= 700 && p.text.length >= 300 && !DASH.test(p.title + p.text), `${id}: a story page inside its limits (${p.text.length})`); });
   values(DATA.enemies).forEach((e) => t.ok(e.lore.length <= 260 && e.lore.length >= 40 && !DASH.test(e.lore), `${e.id}: lore inside its limits (${e.lore.length})`));
 });

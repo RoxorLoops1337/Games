@@ -248,6 +248,12 @@ await t.test('describe: one screen-reader line per event that matters', () => {
   t.eq(describe(vm, { type: 'turn_start', who: 'player', turn: 3 }), 'Turn 3. Your move.', 'turn start');
   t.eq(describe(vm, { type: 'end', result: 'lose' }), 'Defeat.', 'end');
   t.eq(describe(vm, { type: 'draw', cards: [] }), '', 'draw is silent');
+  // the Hocus Vocus wording of the log (bible 4.1, 4.2, 4.3 and 1.3 rule 3: nobody dies, nobody is killed)
+  t.eq(describe(vm, { type: 'skip', unit: { kind: 'enemy', id: 'kappa#1' } }), 'Kappa is starstruck and loses its action.', 'a skipped action reads starstruck');
+  t.ok(/, a finishing blow\.$/.test(describe(vm, { type: 'hit', src: { kind: 'hero', id: 'hanae' }, dst: { kind: 'enemy', id: 'kappa#1' }, amount: 9, blocked: 0, killed: true })), 'a last hit is a finishing blow');
+  t.eq(describe(vm, { type: 'hero_down', hero: 'kuro' }), g.DATA.heroes.kuro.name + ' is voiceless.', 'a hero who drops is voiceless');
+  t.eq(describe(vm, { type: 'hero_revive', hero: 'kuro', hp: 5 }), g.DATA.heroes.kuro.name + ' finds their voice again with 5 HP.', 'and finds their voice again');
+  t.eq(describe(vm, { type: 'swap', front: 'kuro', back: 'hanae' }), g.DATA.heroes.kuro.name + ' takes the lead, ' + g.DATA.heroes.hanae.name + ' moves to backing.', 'a swap names the lead and the backing');
 });
 
 await t.test('pickBark: at most one per 6 s, about 35% of eligible events, seeded by the event index, lines from the hero own lore', () => {
@@ -290,8 +296,8 @@ await t.test('rowBrief and reasonText', () => {
   const { rowBrief, reasonText } = g.UI.screens.combat._t;
   t.eq(rowBrief('hanae', 'front', []), '+2 dmg', 'hanae front'); t.eq(rowBrief('hanae', 'back', []), '+1 Block', 'hanae back');
   t.eq(rowBrief('raiga', 'front', []), '3 Block/turn, ' + g.DATA.statuses.thorns.name + ' 2', 'raiga front'); t.eq(rowBrief('suzu', 'back', []), g.DATA.statuses.regen.name + ' 2', 'suzu back');
-  t.eq(reasonText('energy', 'hanae'), 'Not enough Energy', 'energy'); t.eq(reasonText('down', 'kuro'), g.DATA.heroes.kuro.name + ' is down', 'down names the hero');
-  t.eq(reasonText('stunned', 'suzu'), g.DATA.heroes.suzu.name + ' is stunned', 'stunned names the hero'); t.ok(reasonText('zzz', 'hanae').length > 3, 'unknown reasons still read');
+  t.eq(reasonText('energy', 'hanae'), 'Not enough Breath', 'energy'); t.eq(reasonText('down', 'kuro'), g.DATA.heroes.kuro.name + ' is voiceless', 'down names the hero');
+  t.eq(reasonText('stunned', 'suzu'), g.DATA.heroes.suzu.name + ' is starstruck', 'stunned names the hero'); t.ok(reasonText('zzz', 'hanae').length > 3, 'unknown reasons still read');
 });
 
 // ==================================================================================================== 2. mounting: the HUD zones and their DOM
@@ -309,7 +315,7 @@ await t.test('mount: the whole HUD exists, the intro drains, intents appear and 
   ['hand', 'energy', 'endturn', 'swap', 'intent', 'enemy', 'relics', 'deck'].forEach((a) => t.ok(!!$(g, '[data-tut="' + a + '"]'), 'tutorial anchor ' + a));
   // finding 38: the `hand` anchor is a box round the fan at rest, NOT the full-stage .cm-hand container the cards live in (a ring and a tail aimed at that pointed at empty sky)
   t.ok(g.UI.anchorEl('hand') === $(g, '.cm-handbox'), 'UI.anchorEl finds the hand box'); t.ok(!$(g, '.cm-hand').getAttribute('data-tut'), 'and the full-stage .cm-hand container is not an anchor');
-  t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-row')), 'FRONT', 'Hanae is in front'); t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-row')), 'BACK', 'Kuro is in back');
+  t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-row')), 'LEAD', 'Hanae is in front'); t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-row')), 'BACKING', 'Kuro is in back');
   t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-bonus')), '+2 dmg', 'the row bonus text is on the tag');
   t.eq(txt($(g, '.cm-swap .sw-cost')), 'FREE', 'the swap seal says FREE'); t.eq(txt($(g, '.cm-turn .ct-n')), 'Turn 1', 'the turn label');
   t.eq(txt($(g, '.cm-turn .ct-p')), 'Your turn', 'and whose turn it is');
@@ -344,7 +350,7 @@ await t.test('stunned enemies show a Stunned bubble and the star indicator', asy
   await idle(g);
   const el = $(g, '.cm-en[data-enemy="' + id + '"]');
   t.ok(el.classList.contains('stunned'), 'the overlay is marked stunned'); t.ok(!el.querySelector('.cm-stun').hidden, 'the star indicator shows');
-  t.ok(el.querySelector('.cm-int').classList.contains('stunned'), 'the bubble reads Stunned'); t.eq(txt(el.querySelector('.cm-int .ib-num')), 'STUN', 'with the word');
+  t.ok(el.querySelector('.cm-int').classList.contains('stunned'), 'the bubble reads Starstruck'); t.eq(txt(el.querySelector('.cm-int .ib-num')), 'WOW', 'with the word');
   t.eq(el.querySelectorAll('.cm-st .status').length, 1, 'and the stun status chip');
   scr(g).debug().setStatus(id, 'stun', 0);
   await idle(g);
@@ -443,7 +449,7 @@ await t.test('illegal plays: a toast with the reason, ui_error, and the engine i
   t.ok(cardEl(g, parry).classList.contains('dis'), 'with no Energy the card is dimmed');
   g._click(cardEl(g, parry));
   await idle(g);
-  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf('Not enough Energy') >= 0), 'the toast says why');
+  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf('Not enough Breath') >= 0), 'the toast says why');
   t.ok(sfxLog(g).indexOf('ui_error') >= 0, 'ui_error played (UI delegate on a dimmed card)');
   t.eq(JSON.stringify([st.C.hand.map((c) => c.uid), st.C.energy]), before, 'nothing changed in the engine');
   t.ok(!$(g, '.card.sel'), 'nothing got selected');
@@ -452,12 +458,12 @@ await t.test('illegal plays: a toast with the reason, ui_error, and the engine i
   await idle(g);
   const slash = st.C.hand[0].uid;
   g._click(cardEl(g, slash));
-  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is stunned') >= 0), 'a stunned hero: "Hanae is stunned"');
+  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is starstruck') >= 0), 'a stunned hero: "Jasmin is starstruck"');
   scr(g).debug().setStatus('hanae', 'stun', 0);
   scr(g).debug().setHp('hanae', 0);
   await idle(g);
   g._click(cardEl(g, st.C.hand[1].uid));
-  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is down') >= 0), 'a downed hero: "Hanae is down"');
+  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is voiceless') >= 0), 'a downed hero: "Jasmin is voiceless"');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -623,9 +629,9 @@ await t.test('swap: free once, then it costs Energy; rows, tags and bonus text f
   g._click(swap);
   await idle(g);
   t.eq(st.C.front().id, 'kuro', 'Kuro stepped to the front'); t.eq(st.C.energy, 3, 'for free');
-  t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-row')), 'FRONT', 'the tag follows'); t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-bonus')), '+0 dmg'.replace('+0 dmg', 'no bonus'), 'Kuro front has no bonus');
+  t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-row')), 'LEAD', 'the tag follows'); t.eq(txt($(g, '.cm-hero[data-hero="kuro"] .ct-bonus')), '+0 dmg'.replace('+0 dmg', 'no bonus'), 'Kuro front has no bonus');
   t.eq(txt($(g, '.cm-hero[data-hero="hanae"] .ct-bonus')), '+1 Block', 'Hanae back bonus');
-  t.eq(txt(swap.querySelector('.sw-cost')), '1 Energy', 'the next swap shows its price'); t.ok(!swap.classList.contains('free'), 'no longer free');
+  t.eq(txt(swap.querySelector('.sw-cost')), '1 Breath', 'the next swap shows its price'); t.ok(!swap.classList.contains('free'), 'no longer free');
   g._key('s');
   await idle(g);
   t.eq(st.C.energy, 2, 'the paid swap took 1 Energy'); t.eq(st.C.front().id, 'hanae', 'Hanae is back in front');
@@ -633,13 +639,13 @@ await t.test('swap: free once, then it costs Energy; rows, tags and bonus text f
   assertPicture(g, 'after swaps');
   scr(g).debug().setEnergy(0);
   g._click(swap);
-  t.ok(g._doc.querySelector('#toasts').textContent.indexOf('Not enough Energy to swap') >= 0, 'with no Energy the swap explains itself');
+  t.ok(g._doc.querySelector('#toasts').textContent.indexOf('Not enough Breath to swap') >= 0, 'with no Breath the swap explains itself');
   scr(g).debug().setEnergy(3);
   scr(g).debug().setStatus('kuro', 'bind', 2);
   await idle(g);
   t.ok(swap.classList.contains('bound'), 'Bind shows the lock'); t.ok(swap.getAttribute('aria-disabled') === 'true', 'and disables the button');
   g._click(swap);
-  t.ok(g._doc.querySelector('#toasts').textContent.indexOf('Bound') >= 0, 'clicking says why');
+  t.ok(g._doc.querySelector('#toasts').textContent.indexOf('Tangled') >= 0, 'clicking says why');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -752,7 +758,7 @@ await t.test('piles: draw and discard open the deck viewer with their contents (
   g._click(cardEl(g, powerUid)); g._click(cardEl(g, powerUid));
   await idle(g);
   t.eq(st.C.exhaust.length, 1, 'the engine exhausted Iai Draw'); t.eq(st.C.powers.length, 1, 'and holds one power');
-  t.ok(!$(g, '.cm-chip.exh').hidden && txt($(g, '.cm-chip.exh .cc-n')) === '1', 'the Exhausted chip appears with its count'); t.ok(!$(g, '.cm-chip.pow').hidden, 'so does the Powers chip');
+  t.ok(!$(g, '.cm-chip.exh').hidden && txt($(g, '.cm-chip.exh .cc-n')) === '1', 'the Faded chip appears with its count'); t.eq(txt($(g, '.cm-chip.exh .cc-l')), 'Faded', 'worded Faded'); t.ok(!$(g, '.cm-chip.pow').hidden, 'so does the Powers chip');
   g._click($(g, '.cm-chip.exh'));
   t.eq(g.UI.overlay.top().params.cards.length, 1, 'the chip opens the exhaust pile'); g.UI.overlay.closeAll();
   g._click($(g, '.cm-chip.pow'));
@@ -961,7 +967,7 @@ await t.test('a downed hero: the panel shows FALLEN, the survivor is forced to t
   let n = 0;
   while (!st.C.heroes[0].down && n++ < 6) { g._click($(g, '.cm-end')); await idle(g, 4); if (st.C.result) break; }
   t.ok(st.C.heroes[0].down, 'Hanae (1 HP) went down');
-  t.ok(heroPanel(g, 'hanae').classList.contains('down'), 'the panel greys out'); t.ok(heroPanel(g, 'kuro').classList.contains('front'), 'Kuro is in front');
+  t.ok(heroPanel(g, 'hanae').classList.contains('down'), 'the panel greys out'); t.eq(txt(heroPanel(g, 'hanae').querySelector('.ch-fallen')), 'VOICELESS', 'with the VOICELESS badge'); t.ok(/voiceless/.test(heroPanel(g, 'hanae').getAttribute('aria-label')), 'and says so to a screen reader'); t.ok(heroPanel(g, 'kuro').classList.contains('front'), 'Kuro is in front');
   const dead = st.C.hand.filter((c) => g.DATA.cards[c.id].hero === 'hanae');
   dead.forEach((c) => t.ok(cardEl(g, c.uid).classList.contains('dis'), 'Hanae card ' + c.id + ' is dimmed (dead)'));
   t.ok($(g, '.cm-swap').getAttribute('aria-disabled') === 'true', 'no swap with one hero standing');
@@ -1200,7 +1206,7 @@ await t.test('accessibility: labelled controls, a live region, focusable enemies
   const btns = $$(g, '.cm-ehit');
   t.eq(btns.length, 3, 'a button per enemy'); t.deep(btns.map((b) => b.closest('.cm-en').dataset.enemy), st.C.enemies.slice().sort((a, b) => a.lane - b.lane).map((e) => e.id), 'in line order for Tab');
   btns.forEach((b) => t.ok(/health/.test(b.getAttribute('aria-label')) && /Intends/.test(b.getAttribute('aria-label')), 'the enemy button says HP and intent'));
-  t.ok(heroPanel(g, 'hanae').getAttribute('aria-label').indexOf('front row') > 0, 'hero panels say their row');
+  t.ok(heroPanel(g, 'hanae').getAttribute('aria-label').indexOf('the lead') > 0, 'hero panels say their row');
   t.ok(g._doc.getElementById('sr').getAttribute('aria-live') === 'polite', 'the live region exists');
   const order = $$(g, '.cm button, .cm [tabindex="0"], .cm [role=button]').filter((e) => !e.hidden && e.tabIndex >= 0);
   t.ok(order.indexOf($(g, '.cm-swap')) < order.indexOf($(g, '.cm-ehit')) && order.indexOf($(g, '.cm-ehit')) < order.indexOf($(g, '.cm-hand .card')) && order.indexOf($(g, '.cm-hand .card')) < order.indexOf($(g, '.cm-end')), 'Tab order: heroes, enemies, hand, End Turn');
@@ -1576,6 +1582,26 @@ await t.test('finding 29: the three bottom docks share one centre line, set from
   });
   t.ok(!$(g, '.cm-orb').style.top && !$(g, '.cm-pile.draw').style.top && !$(g, '.cm-pile.discard').style.top, 'no dock has an inline top that could drift from it');
   t.eq(PILE.orb.y, DOCK_CY, 'card flights start at the orb centre'); t.ok(Math.abs(PILE.draw.y - DOCK_CY) <= 6 && Math.abs(PILE.discard.y - DOCK_CY) <= 6, 'and at the pile stacks, which sit within 6 px of the line');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('Hocus Vocus copy: the tier chip, the Starstruck note, the Breath orb, the swap seal, the Charms row and the CSS badges (bible 4.10)', async () => {
+  const g = fresh();
+  const { st } = await enter(g, { enemies: ['kappa', 'kodama'] });
+  const tips = () => g._doc.querySelector('#tips').textContent;
+  g._click(enemyBtn(g, st.C.enemies[0].id), { pointerType: 'touch' });
+  t.ok(/Creature/.test(tips()) && !/Keeper|Champion|Minion/.test(tips()), 'a normal enemy wears the Creature chip');
+  scr(g).debug().setStatus(st.C.enemies[1].id, 'stun', 1); await idle(g);
+  g._click(enemyBtn(g, st.C.enemies[1].id), { pointerType: 'touch' });
+  t.ok(/Starstruck: it loses its next action\./.test(tips()), 'a stunned enemy says Starstruck in its bubble tip');
+  t.ok(/^Breath \d+ of \d+$/.test($(g, '.cm-orb').getAttribute('aria-label')), 'the orb is Breath');
+  t.ok(/^Swap spots, /.test($(g, '.cm-swap').getAttribute('aria-label')), 'the swap seal says Swap spots');
+  t.eq($(g, '.cm-relics').getAttribute('aria-label'), 'Charms', 'the relic row is Charms');
+  const text = g._doc.body.textContent;
+  t.ok(!/\b(Energy|Exhausted|Keeper|Champion|FRONT|FALLEN|Treasures)\b/.test(text), 'no Echowake word is left on the combat screen');
+  t.ok(/\.cm-pv\.lethal::after \{ content: "WON";/.test(CSS), 'the lethal preview badge says WON'); t.ok(/\.hc\.retained::after \{ content: "HOLD";/.test(CSS), 'a held card says HOLD');
+  t.ok(/body\.colorblind \.cm-pv\.lethal::after \{ content: "WON!"; \}/.test(CSS), 'and the colour-blind badge says WON!');
+  t.ok(!/content: "(KO!?|RETAIN)"/.test(CSS), 'the old badge words are gone');
   t.eq(errs(g), 0, 'no console errors');
 });
 

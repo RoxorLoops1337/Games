@@ -78,6 +78,9 @@ const UI = (() => {
     console.warn('[ui] ' + msg + (e ? ': ' + (e.message || e) : ''));
   };
   const cap = (s) => (s ? String(s)[0].toUpperCase() + String(s).slice(1) : '');
+  // words the player reads for ids (never print the id): a gem colour through DATA.COLOUR_NAME (red reads pink), a Charm rarity through this map
+  const colourWord = (c) => (typeof DATA !== 'undefined' && DATA.COLOUR_NAME && DATA.COLOUR_NAME[c]) || String(c);
+  const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
   const px2 = (n) => Math.round(n * 100) / 100;
 
   // Every error the UI catches lands here (tools/hocus_vocus/shot.mjs reads window.__errors) and in the console.
@@ -262,7 +265,7 @@ const UI = (() => {
     return mk('div', { id: 'rotate', role: 'alertdialog', 'aria-label': 'Turn your device sideways', hidden: true },
       mk('div', { class: 'rot-card' }, book,
         mk('h2', { text: 'Turn your device sideways' }),
-        mk('p', { text: 'Echowake is a landscape journey. Rotate your phone and the land will open wide.' }),
+        mk('p', { text: 'Hocus Vocus is a landscape tour. Rotate your phone and the Soundlands open wide.' }),
         mk('div', { class: 'rot-btns' }, full, play)));
   }
 
@@ -478,9 +481,9 @@ const UI = (() => {
     S.errShown[key] = true;
     try {
       api.modal({
-        title: 'Something broke the rhythm',
+        title: 'Something went a bit off-key',
         body: mk('div', { class: 'm-err' },
-          mk('p', { text: 'The music skipped a beat in ' + where + '. Everything up to your last save is safe.' }),
+          mk('p', { text: 'The music skipped a beat in ' + where + '. Your tour is safe up to your last save.' }),
           mk('pre', { class: 'm-pre', text: String(err.message).slice(0, 300) })),
         buttons: [
           { label: 'Back to Title', kind: 'primary', cb: () => { toTitle(); } },
@@ -750,7 +753,7 @@ const UI = (() => {
     ctx.textBaseline = 'middle';
     ctx.font = '700 15px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#f5c96a';
-    ctx.fillText('A NOTE FROM THE ROAD', W / 2, 590);
+    ctx.fillText('A TIP FROM JORDAN', W / 2, 590);
     ctx.font = 'italic 24px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#f3e6c8';
     const words = String(text).split(' ');
@@ -1135,7 +1138,7 @@ const UI = (() => {
   // ==================================================================================================================
   const KIND_LABEL = { buff: 'Buff', debuff: 'Debuff', resource: 'Resource', keyword: 'Keyword' };
 
-  // word is a key of DATA.keywords or DATA.statuses, or a display name ("Front row", "Poison")
+  // word is a key of DATA.keywords or DATA.statuses, or a display name ("Lead", "Poison")
   function kwInfo(word, n) {
     if (word == null) return null;
     const raw = String(word);
@@ -1429,8 +1432,8 @@ const UI = (() => {
       case 'heal': return 'Heal ' + n(o.n) + '.';
       case 'status': { const st = DATA.statuses[o.s]; return (o.n < 0 ? 'Lose ' : 'Gain ') + n(Math.abs(o.n)) + ' ' + kw(o.s, st ? st.name : o.s) + '.'; }
       case 'draw': return 'Draw ' + n(o.n) + ' card' + (o.n === 1 ? '' : 's') + '.';
-      case 'energy': return 'Gain ' + n(o.n) + ' Energy.';
-      case 'swap': return kw('swap', 'Swap') + ' rows.';
+      case 'energy': return 'Gain ' + n(o.n) + ' Breath.';
+      case 'swap': return kw('swap', 'Swap') + ' spots.';
       default: return cap(o.op) + '.';
     }
   }
@@ -1471,7 +1474,7 @@ const UI = (() => {
 
   function socketEl(color, gemId, dimPx, showTip) {
     const filled = !!gemId;
-    const s = mk('span', { class: 'c-sock sc-' + color + (filled ? ' filled' : ''), 'aria-label': filled ? 'Socketed ' + ((DATA.gems[gemId] && DATA.gems[gemId].name) || gemId) : 'Empty ' + color + ' socket', dataset: filled ? { gem: gemId } : undefined },
+    const s = mk('span', { class: 'c-sock sc-' + color + (filled ? ' filled' : ''), 'aria-label': filled ? 'Socketed ' + ((DATA.gems[gemId] && DATA.gems[gemId].name) || gemId) : 'Empty ' + colourWord(color) + ' socket', dataset: filled ? { gem: gemId } : undefined },
       iconCanvas('gem', filled ? gemId : 'slot:' + color, dimPx, { on: filled }));
     if (showTip) {
       attach(s, () => {
@@ -1479,7 +1482,7 @@ const UI = (() => {
           const g = DATA.gems[gemId] || {};
           return bubbleBody(g.name || gemId, 'keyword', 'Tier ' + (g.tier || 1), typeof DATA.gemText === 'function' ? safe(() => DATA.gemText(gemId), '') : '');
         }
-        return bubbleBody(color === 'any' ? 'Prism slot' : cap(color) + ' slot', 'keyword', 'Empty', (DATA.keywords[color === 'any' ? 'prism' : 'slot'] || {}).text || '');
+        return bubbleBody(color === 'any' ? ((DATA.keywords.prism && DATA.keywords.prism.name) || 'Rainbow slot') : cap(colourWord(color)) + ' slot', 'keyword', 'Empty', (DATA.keywords[color === 'any' ? 'prism' : 'slot'] || {}).text || '');
       }, { side: 'top' });
     }
     return s;
@@ -1624,7 +1627,7 @@ const UI = (() => {
     const sizes = CARD_SIZES();
     const sz = sizes[size] ? size : 'deck';
     return mk('div', { class: 'card back c-' + sz, 'aria-label': 'Face-down card', dataset: { size: sz } },
-      mk('div', { class: 'c-in' }, mk('div', { class: 'c-face' }, mk('i', { class: 'back-drop' }), mk('i', { class: 'back-ring' }), mk('b', { class: 'back-word', text: 'ECHOWAKE' }))));
+      mk('div', { class: 'c-in' }, mk('div', { class: 'c-face' }, mk('i', { class: 'back-drop' }), mk('i', { class: 'back-ring' }), mk('b', { class: 'back-word' }, 'HOCUS', mk('br'), 'VOCUS'))));
   }
 
   // ==================================================================================================================
@@ -1643,7 +1646,8 @@ const UI = (() => {
     const root = mk('span', { class: 'relic rar-' + def.rarity + ' sz-' + size + (o.class ? ' ' + o.class : ''), role: clickable ? 'button' : 'img', tabindex: '0', 'aria-label': def.name + '. ' + (typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), dataset: { id } },
       iconCanvas('relic', id, RELIC_PX[size] - 8, {}));
     if (clickable) root.addEventListener('click', (e) => o.onclick(e, id, root));
-    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', (def.rarity === 'boss' ? 'Keeper' : cap(def.rarity)), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), { side: o.side || 'bottom' });
+    // the Charm's flavour line (display only) sits in italics under the rules text when the Charm has one
+    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', (RARITY_NAME[def.rarity] || cap(def.rarity)), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text, def.flavor ? mk('p', { class: 'tk-flavor', text: def.flavor }) : null), { side: o.side || 'bottom' });
     return root;
   }
 
@@ -1656,7 +1660,7 @@ const UI = (() => {
     const pips = root.querySelector('.gem-pips');
     for (let i = 0; i < (def.tier || 1); i++) pips.appendChild(mk('b', { class: 'pip' }));
     if (typeof o.onclick === 'function') root.addEventListener('click', (e) => o.onclick(e, id, root));
-    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', 'Tier ' + def.tier + ' ' + cap(def.color), typeof DATA.gemText === 'function' ? safe(() => DATA.gemText(id), '') : ''), { side: o.side || 'top' });
+    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', 'Tier ' + def.tier + ' ' + colourWord(def.color) + ' gem', typeof DATA.gemText === 'function' ? safe(() => DATA.gemText(id), '') : ''), { side: o.side || 'top' });
     return root;
   }
 
@@ -1704,8 +1708,8 @@ const UI = (() => {
   }
 
   const STAT_TIP = {
-    gold: ['Gold', 'Spend it at peddlers. Keep some for the next shop.'], ink: ['Echo', null], hp: ['Health', 'Hit points. A hero at 0 is downed.'],
-    energy: ['Energy', 'Spend Energy to play cards. It refills every turn.'], brush: ['Songs', null], inkstone: ['Chimes', 'Earned every journey. Spend them in the Hall of Echoes to unlock new content.'], block: ['Block', null],
+    gold: ['Gold', "Spend it at Jordan's merch stalls. Keep some for the next one."], ink: ['Vox', null], hp: ['Health', 'Hit points. A hero at 0 loses their voice.'],
+    energy: ['Breath', 'Spend Breath to play cards. It refills every turn.'], brush: ['Spells', null], inkstone: ['Cheers', 'Earned after every tour. Spend them on the Tour Bus.'], block: ['Block', null],
   };
 
   function stat(kind, value, o) {
@@ -1883,7 +1887,7 @@ const UI = (() => {
       divider(),
       mk('h3', { class: 'set-h', text: 'Display' }),
       row('Text size', seg([{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }], { label: 'Text size', value: S1('textScale'), onchange: (v) => setSetting('textScale', v) })),
-      row('Colorblind aids', toggle({ label: 'Colorblind aids', value: S1('colorblind'), onchange: (v) => setSetting('colorblind', v) }), 'Patterns and larger gem glyphs'),
+      row('Colour-blind aids', toggle({ label: 'Colour-blind aids', value: S1('colorblind'), onchange: (v) => setSetting('colorblind', v) }), 'Patterns and larger gem glyphs'),
       row('Damage numbers', toggle({ label: 'Damage numbers', value: S1('damageNumbers'), onchange: (v) => setSetting('damageNumbers', v) })),
       row('Quality', seg([{ value: 'auto', label: 'Auto' }, { value: 'high', label: 'High' }, { value: 'low', label: 'Low' }], { label: 'Quality', value: S1('quality'), onchange: (v) => { S.qualityDropped = false; setSetting('quality', v); } })),
       divider(),
@@ -1891,7 +1895,7 @@ const UI = (() => {
       row('Reduce motion', seg([{ value: null, label: 'Auto' }, { value: true, label: 'On' }, { value: false, label: 'Off' }], { label: 'Reduce motion', value: S1('reduceMotion'), onchange: (v) => setSetting('reduceMotion', v) })),
       row('Screen shake', slider({ label: 'Screen shake', value: S1('shake'), step: 0.25, onchange: (v) => setSetting('shake', v) })),
       row('Animation speed', seg([{ value: 0, label: 'Normal' }, { value: 1, label: 'Fast' }, { value: 2, label: 'Faster' }], { label: 'Animation speed', value: S1('fastAnim'), onchange: (v) => setSetting('fastAnim', v) })),
-      row('Hints', toggle({ label: 'Hints', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Short tips during your first journey'));
+      row('Hints', toggle({ label: 'Hints', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Short tips during your first tour'));
     return root;
   }
 
@@ -1999,8 +2003,8 @@ const UI = (() => {
           const d = DATA.relics[id] || { name: id, text: '' };
           grid.appendChild(mk('div', { class: 'relic-row' }, relic(id, { size: 'lg', tip: false }), mk('div', {}, mk('b', { text: d.name }), mk('p', { text: typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), d.text) : d.text }))));
         });
-        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No treasures yet. Elites, chests and shops hold them.' }));
-        root.appendChild(panel({ kind: 'dark', title: 'Treasures', class: 'relics-panel' }, grid, mk('div', { class: 'row center' }, btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }))));
+        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No charms yet. Rivals, gift boxes and merch stalls hold them.' }));
+        root.appendChild(panel({ kind: 'dark', title: 'Charms', class: 'relics-panel' }, grid, mk('div', { class: 'row center' }, btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }))));
       },
     },
     // a basic deck viewer; screen_node.js replaces it with the full version (sorting, socket UI)

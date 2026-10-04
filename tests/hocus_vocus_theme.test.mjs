@@ -1,20 +1,57 @@
-// THEME: the permanent theme-leak suite (ECHO_PLAN 8.3). The game was re-themed from INKWOVEN (a living book) to ECHOWAKE (a land that
-// sings, a Hush that swallows calls). This suite fails loudly, with a field path and the offending word, whenever an old word comes
-// back into player-facing text. It is also the re-grep to run after merging origin/main (squash merges resurrect old copy).
+// THEME: the permanent theme-leak suite (ECHO_PLAN 8.3, carried into the fork). The game was INKWOVEN (a living book), then ECHOWAKE (a
+// land that sings, a Hush that swallows calls), and is now HOCUS VOCUS: A Vocal Magic Adventure (beatboxing and vocal magic). This suite
+// fails loudly, with a field path and the offending word, whenever a retired word comes back into player-facing text. It is also the
+// re-grep to run after merging origin/main (squash merges resurrect old copy).
 //
-// Checks: 1 every DATA display field passes RETIRED, 2 every prose string and template literal of the UI scripts passes RETIRED and TALE,
-// 3 index.html and gallery.html text, 4 the seven kept sfx ids (policy D8), 5 the four docs outside backticks, 6 "song" as a map tool
+// The retired words (HV_BIBLE 6.2 and 6.3, Hocus Vocus P2): RETIRED is the Inkwoven list of bible 6.3 and TALE its world word; ECHO_CI and
+// ECHO_CS are the Echowake list of bible 6.2 (ECHO_CS holds the words whose lowercase form is plain English, so only the capitalised
+// label or name is retired); OLD_SPELL is the six Echowake Spell names, retired as names. leak() applies them all. A word that only a reader
+// can judge stays out of the lists and is pinned by the screen suites instead: scroll (6.3 bans it as a written object, 6.4 keeps the
+// social-media sense), heard (banned for hexes only), Breath (banned as RoxorLoops's resource only), Song as the map tool (check 6), and the
+// Echowake sound words of the hit text (ZAN!, BAN!, ...: art text, repainted in P5).
+//
+// Checks: 1 every DATA display field passes leak(), 2 every prose string and template literal of the UI scripts passes leak(), 3 index.html
+// and gallery.html text passes leak() and names HOCUS VOCUS, 4 the seven kept sfx ids (policy D8), 5 the four docs outside backticks pass
+// RETIRED (the docs are still the Echowake docs until P10 rewrites them, so the Echowake list waits for P10 there), 6 "song" as a map tool
 // must never come back: the word is banned in the names and texts of tiles, Spells (DATA.brushes), keywords and statuses, and in the
 // rules-text scripts. Hocus Vocus prose may say song and chorus (bible 6.4: the duo sing real songs), so nothing else is scanned for it.
-// It never reads hocus_vocus/ECHO_PLAN.md (the plan quotes every old word on purpose).
+// 7 CSS content strings, and the noun "run" (a run is a tour). Every allowlist entry has a reason and must still be in use.
+// It never reads hocus_vocus/ECHO_PLAN.md or hocus_vocus/plan/ (the plans quote every old word on purpose).
 import fs from 'node:fs';
 import path from 'node:path';
 import { boot, harness, DIR, tokenizeJs, lineOf } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus theme');
 
-const RETIRED = /\b(Ink|Inks|Inkstones?|Inkweaver|Inkwoven|INKWOVEN|Brush(es)?|brush(es)?|[Pp]aint(s|ed|ing)?|Blank|Daily Tale|Ink Trials?|Library|Author|Editor|Eraser|Sumi|Bookmark|Unwritten|Chapter|chapter|storybook|[Bb]ooks?|[Pp]ages?|quill|calligraph\w*|manuscript|ink)\b/;
+// bible 6.3, the Inkwoven words (the Echowake suite's list, widened in Hocus Vocus P2 with the rest of 6.3: inky, pen, nib, library,
+// archive, author, editor, edition, redacted, typo, scribble, footnote, margin, bookmark)
+const RETIRED = /\b(Ink|Inks|Inkstones?|Inkweaver|Inkwoven|INKWOVEN|Brush(es)?|brush(es)?|[Pp]aint(s|ed|ing)?|Blank|Daily Tale|Ink Trials?|Library|library|Author|author|Editor|editor|[Ee]ditions?|Eraser|Sumi|Bookmarks?|bookmarks?|Unwritten|Chapter|chapter|storybook|[Bb]ooks?|[Pp]ages?|quill|calligraph\w*|manuscript|ink|inky|[Pp]ens?|[Nn]ibs?|[Aa]rchives?|[Rr]edacted|[Tt]ypos?|[Ss]cribbl\w*|[Ff]ootnotes?|[Mm]argins?)\b/;
 const TALE = /\b[Tt]ales?\b/;
+// bible 6.2, the Echowake words, in any case
+const ECHO_CI = new RegExp('\\b(' + [
+  'Echowake', 'rogue ballad', 'echo(es|ed|ing)?', 'hush(ed)?', 'chimes?', 'ballads?', 'keepers?', 'fables?', 'tempo trials?', 'daily jam',
+  'verses?', 'songbirds?', 'songweavers?', 'drum line', 'beat drop', 'temple bells?', 'tuning forge', 'downbeat', 'dead silence',
+  'champions?', 'peddlers?', 'campfires?', 'ambush(es)?', 'gem cache', 'treasures?', 'wakes?', 'woken?', 'waking', 'awake',
+  'silent ground', 'heard from afar', 'journeys?', 'the land',
+  // the Echowake cast, titles, passives, Keepers and Verses
+  'Hanae', 'Kuro', 'Suzu', 'Raiga', 'Blossom Blade', 'Moon Miko', 'Thunder Monk', 'Steady Breath', 'Blade Flow', 'Moonlit Rite', 'Storm Born',
+  'Kuzunoha', 'Nine-Voiced Fox', 'Jorogumo', 'Silk Courtesan', 'Hollow Kodama', 'Whispering Bamboo Grove', 'Sunken Lantern City',
+  'Thunderless Citadel',
+  // the Echowake screen labels
+  'joins the band', 'liner notes?', 'a note from the road', 'the final chorus', 'a rest in the music', 'the song fades', 'a voice of the song',
+  // the Japanese folklore setting
+  'yokai', 'yamabiko', 'kodama', 'kappa', 'tanuki', 'oni', 'tengu', 'kitsune', 'karakasa', 'hitodama', 'chochin', 'karakuri', 'nopperabo',
+  'tsukumogami', 'nure-onna', 'rokurokubi', 'ittan-momen', 'umibozu', 'komainu', 'miko', 'kami', 'shrines?', 'temples?', 'torii', 'jizo',
+  'ofuda', 'omamori', 'kagura', 'gohei', 'hamaya', 'saisen', 'juzu', 'mizuhiki', 'kanzashi', 'tsuba', 'geta', 'kasa', 'kimono', 'shamisen',
+  'koto', 'taiko', 'shakuhachi', 'sakura', 'iai', 'Raijin', 'samurai',
+].join('|') + ')\\b', 'i');
+// bible 6.2, the Echowake words retired only as written: Trial (as the difficulty), Hall (the meta hub), Setlist (the story heading), the
+// Great Song and the Singer (the creator), the Conductor and the Damper (the bosses), Play on (the button) and the end-screen kickers
+const ECHO_CS = /\b(Trials?|Hall|Setlist|Great Song|the Singer|the Conductor|the Damper|Play on|INTRO|OUTRO|INTERLUDE)\b/;
+// bible 6.2, the Echowake Spell names: retired as the name, title or label of anything (lowercase chorus and hum stay in prose, bible 6.4)
+const OLD_SPELL = /\b(Drum Line|Ripple|Shout|Beat Drop|Chorus|Hum)\b/;
+const NAME_KEYS = new Set(['name', 'title', 'label']);
+const leak = (s) => hit(RETIRED, s) || hit(TALE, s) || hit(ECHO_CI, s) || hit(ECHO_CS, s);
 // Check 6 (rescoped in P1, 1F). The Echowake suite banned lowercase "song" everywhere in UI and rules text, because the map tool was a
 // Song there and "the song" was the world. In Hocus Vocus the map tool is a Spell and the lowercase words are allowed survivors in prose
 // (bible 6.4), so a blanket ban would fail honest sentences. What must never come back is "Song" as a MAP TOOL, and that lives in the
@@ -24,32 +61,25 @@ const SONG_REG = new Set(['tiles', 'brushes', 'keywords', 'statuses']);
 const SONG_KEYS = new Set(['name', 'text']);
 const SONG_SCRIPTS = new Set(['data_text.js', 'run.js', 'meta.js']);         // the generated rules text and the run log lines
 
-// ------------------------------------------------------------------ the allowlist (plan 8.3): [exact string, reason]
+// ------------------------------------------------------------------ the allowlist (plan 8.3, bible 6.4): [exact string, reason]
+// Hocus Vocus P2 dropped the Echowake entries whose strings are gone from the game (the paper folk crafts, the credits line, the
+// storyteller Detour, Blank Stare and Bounty Scroll); the liveness test below keeps the list from going stale again.
 const ALLOW_EXACT = [
-  ['Pages', 'How to play pagination label (screen_menu.js), generic help pagination, kept by Appendix B 3.6'],
-  ['Page ', 'How to play pagination label (screen_menu.js), generic help pagination'],
-  ['How to play pages', 'How to play pagination (aria label)'],
-  ['How to play, page ', 'How to play pagination (screen_menu.js)'],
-  ['This is the first page', 'How to play pagination (screen_menu.js)'],
-  ['Drawn in ink, sung in code. No two journeys alike.', 'credits line: "ink" is the drawing style'],
-  ['Paper Puppet', 'folk craft (never matches RETIRED anyway, listed so nobody "fixes" it)'],
-  ['Paper Crane', 'folk craft (never matches RETIRED anyway, listed so nobody "fixes" it)'],
-  ['Oil-Paper Umbrella', 'folk craft (never matches RETIRED anyway, listed so nobody "fixes" it)'],
-  ['A Sea of Paper Boats', 'folk craft (never matches RETIRED anyway, listed so nobody "fixes" it)'],
-  ['A Thousand Paper Cranes', 'folk craft (never matches RETIRED anyway, listed so nobody "fixes" it)'],
-  ['Paper Seal', 'folk craft, Suzu paper talisman (never matches RETIRED anyway, listed so nobody "fixes" it)'],
+  ['Pages', 'How to play pagination label (screen_menu.js), generic help pagination, kept by Appendix B 3.6 and bible 6.4 (the how-to pagination word page)'],
+  ['Page ', 'How to play pagination label (screen_menu.js), generic help pagination (bible 6.4)'],
+  ['How to play pages', 'How to play pagination (aria label, bible 6.4)'],
+  ['How to play, page ', 'How to play pagination (screen_menu.js, bible 6.4)'],
+  ['This is the first page', 'How to play pagination (screen_menu.js, bible 6.4)'],
+  ['Limited Edition', 'bible 6.4: Encore trial_7, a merch print run, not an Inkwoven book word (DATA.trials.trial_7.name)'],
   // CSS classes and developer messages that happen to read as prose (plan 5.11: a CSS class never changes)
   ['ev-page left', 'CSS class list in screen_node.js (event stage), never player-facing; classes keep their names (plan 5.11)'],
   ['ev-page right', 'CSS class list in screen_node.js (event stage), never player-facing; classes keep their names (plan 5.11)'],
   ['st-page vc-page', 'CSS class list in screen_end.js (story and victory panel), never player-facing; classes keep their names (plan 5.11)'],
   [' paint', 'developer warning suffix in screen_node.js warnOnce(S.kind + \' paint\'): the name of the canvas paint method, logged to the console only'],
-  ["A storyteller sits under a paper umbrella and pats the mat beside her. 'A tale for a coin,' she says, 'or a coin for a tale. I am flexible about the direction.'", 'DATA events.wandering_storyteller.text: "tale" meaning a folk tale told aloud, an allowed survivor (plan 3.2); never the world, never a run'],
 ];
-// the only non-exact entries: [substring, reason], checked against DATA fields only
-const ALLOW_CONTAINS = [
-  ['Blank Stare', 'a generic idiom (nopperabo), plan 3.2'],
-  ['Bounty Scroll', 'a bounty notice, plan 3.2'],
-];
+// the only non-exact entries: [substring, reason], checked against DATA fields only (none today; bible 6.4 survivors go here when a
+// survivor sits inside a longer DATA sentence)
+const ALLOW_CONTAINS = [];
 const exactSet = new Map(ALLOW_EXACT);
 const allowedExact = (s) => exactSet.has(s);
 const allowedData = (s) => allowedExact(s) || ALLOW_CONTAINS.some(([sub]) => s.includes(sub));
@@ -96,11 +126,11 @@ t.test('the DATA walk found the display fields it should (guards the walker itse
   t.ok(fields.some((f) => /\.choices\[\d+\]\.cost$/.test(f.path)), 'event choice cost is walked');
   t.ok(fields.some((f) => /^DATA\.heroes\.\w+\.passives\[\d+\]\.name$/.test(f.path)), 'hero passive names are walked');
 });
-t.test('check 1: no retired word in any DATA display field', () => {
+t.test('check 1: no retired word (bible 6.2 and 6.3) in any DATA display field', () => {
   const bad = [];
   for (const f of fields) {
     if (allowedData(f.text)) continue;
-    const w = hit(RETIRED, f.text) || hit(TALE, f.text);
+    const w = leak(f.text) || (NAME_KEYS.has(f.key) ? hit(OLD_SPELL, f.text) : null);
     if (w) bad.push(`${f.path}: "${w}" in "${abbrev(f.text)}"`);
   }
   t.eq(bad.length, 0, fail(bad, 'retired words in DATA'));
@@ -165,11 +195,11 @@ t.test('the literal walk found the UI strings it should (guards the tokenizer us
   const files = new Set(proseLits.map((l) => l.file));
   for (const f of UI_FILES) if (fs.existsSync(path.join(DIR, 'js', f))) t.ok(files.has(f), `no prose literal found in ${f}`);
 });
-t.test('check 2: no retired word or "tale" in any prose literal of the UI scripts', () => {
+t.test('check 2: no retired word (bible 6.2 and 6.3) or "tale" in any prose literal of the UI scripts', () => {
   const bad = [];
   for (const l of proseLits) {
     if (allowedExact(l.text)) continue;
-    const w = hit(RETIRED, l.text) || hit(TALE, l.text);
+    const w = leak(l.text);
     if (w) bad.push(`js/${l.file}:${l.line}: "${w}" in "${abbrev(l.text)}"`);
   }
   t.eq(bad.length, 0, fail(bad, 'retired words in UI string literals'));
@@ -199,7 +229,7 @@ t.test('check 2 (markup literals): visible text inside HTML string literals pass
       if (l.dev || !/^</.test(l.text)) continue;
       const text = l.text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
       if (!isProse(text) || allowedExact(text)) continue;
-      const w = hit(RETIRED, text) || hit(TALE, text);          // lowercase song is allowed in prose now (bible 6.4); check 6 owns the map tool
+      const w = leak(text);          // lowercase song is allowed in prose now (bible 6.4); check 6 owns the map tool
       if (w) bad.push(`js/${f}:${lineOf(src, l.s)}: "${w}" in "${abbrev(text)}"`);
     }
   }
@@ -207,7 +237,7 @@ t.test('check 2 (markup literals): visible text inside HTML string literals pass
 });
 
 // ------------------------------------------------------------------ check 3: the two pages
-t.test('check 3: index.html and gallery.html text passes RETIRED and TALE', () => {
+t.test('check 3: index.html and gallery.html text passes the retired words (bible 6.2 and 6.3)', () => {
   const bad = [];
   for (const file of ['index.html', 'gallery.html']) {
     const html = fs.readFileSync(path.join(DIR, file), 'utf8');
@@ -216,21 +246,22 @@ t.test('check 3: index.html and gallery.html text passes RETIRED and TALE', () =
     if (title) parts.push(['<title>', title[1]]);
     for (const m of html.matchAll(/<noscript>([\s\S]*?)<\/noscript>/g)) parts.push(['<noscript>', m[1]]);
     for (const m of html.matchAll(/<div id="boot">([\s\S]*?)<\/div>/g)) parts.push(['boot splash', m[1].replace(/<[^>]*>/g, ' ')]);
+    for (const m of html.matchAll(/<meta name="description" content="([^"]*)"/g)) parts.push(['meta description', m[1]]);
     for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) for (const l of literals(m[1])) if (!l.dev && isProse(l.text)) parts.push(['inline script', l.text]);
     for (const [where, text] of parts) {
       if (allowedExact(text.trim())) continue;
-      const w = hit(RETIRED, text) || hit(TALE, text);
+      const w = leak(text);
       if (w) bad.push(`${file} ${where}: "${w}" in "${abbrev(text.trim())}"`);
     }
   }
   t.eq(bad.length, 0, fail(bad, 'retired words in the page shells'));
   const idx = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
-  t.eq((/<title>([\s\S]*?)<\/title>/.exec(idx) || [])[1], 'ECHOWAKE: a rogue ballad', 'index.html <title>');
+  t.eq((/<title>([\s\S]*?)<\/title>/.exec(idx) || [])[1], 'HOCUS VOCUS: A Vocal Magic Adventure', 'index.html <title> (bible 1.2, HV_PHASES P2)');
 });
-t.test('check 3: the shell pages say ECHOWAKE somewhere a player sees it', () => {
+t.test('check 3: the shell pages say HOCUS VOCUS somewhere a player sees it', () => {
   const idx = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
-  t.ok(/<div id="boot"><b>ECHOWAKE<\/b>/.test(idx), 'boot splash names ECHOWAKE');
-  t.ok(/<noscript>[^<]*Echowake[^<]*<\/noscript>/.test(idx), 'noscript names Echowake');
+  t.ok(/<div id="boot"><b>HOCUS VOCUS<\/b>/.test(idx), 'boot splash names HOCUS VOCUS');
+  t.ok(/<noscript>[^<]*Hocus Vocus[^<]*<\/noscript>/.test(idx), 'noscript names Hocus Vocus');
 });
 
 // ------------------------------------------------------------------ check 4: policy D8, the seven kept sfx ids
@@ -254,7 +285,7 @@ t.test('check 5: README, DESIGN, ART_BIBLE and CONTENT_SPEC pass RETIRED outside
       // "Sumi-Shonen" is the art style's name in the docs and stays (the line style is unchanged by the re-theme)
       const prose = line.replace(/`[^`]*`/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/Sumi-Shonen/g, ' ');
       if (allowedExact(prose.trim())) return;
-      const w = hit(RETIRED, prose);
+      const w = hit(RETIRED, prose);          // the Inkwoven list only: the Echowake words join here when P10 rewrites the docs
       if (w) bad.push(`${f}:${i + 1}: "${w}" in "${abbrev(prose.trim())}"`);
     });
   }
@@ -270,11 +301,7 @@ const RUN_ALLOW = [
 ];
 // DATA fields (world text) may keep the verb inside these exact phrases: [phrase, reason]
 const RUN_ALLOW_CONTAINS = [
-  ['runs a tea stall', 'verb: to operate (events.tanuki_tea_house)'],
-  ['She runs. You run.', 'verb: to flee on foot (events.fox_returns)'],
-  ['Then it runs out of breath', 'verb: to be exhausted (events.kill_your_darlings)'],
-  ['Hot sound runs down your arm', 'verb: to flow (events.unfinished_sentence)'],
-  ['run out of nothing', 'verb: to be exhausted (events.weeping_eraser)'],
+  ['run out of nothing', 'verb: to be exhausted, "It has run out of nothing." (events.weeping_eraser, HV_STORY 2.4)'],
   // Hocus Vocus (P1, 1F): the musical sense of run (a quick run of notes) and the verb, never the noun for a tour (bible 1.3: a run is a "tour")
   ['Vocal Run', 'music: the Spell name, a fast run of sung notes (DATA.brushes.wave, bible 4.5); a reserved name'],
   ['vocal runs', 'music: runs of sung notes, in Jasmin\'s blurb and cards (DATA.heroes.hanae.blurb, bible 3.1)'],
@@ -282,11 +309,19 @@ const RUN_ALLOW_CONTAINS = [
   ['it runs out of puff', 'verb: to be exhausted (DATA.enemies.kappa.lore, HV_ENEMIES 2)'],
   ['has run Blossom Bay', 'verb: to operate, the open mic Kraki hosts (DATA.enemies.boss_kuzunoha.lore, bible 2.4)'],
   ['strings run to every phone', 'verb: to extend (DATA.enemies.puppet_master.lore, HV_ENEMIES 4)'],
+  // Hocus Vocus (P2, the lead): the verb and the musical sense in the Detours and the Tour Diary (HV_STORY 2 and 3)
+  ['runs a lemonade stand', 'verb: to operate, the very serious child (events.tanuki_tea_house text, HV_STORY 2.2)'],
+  ['a lemonade stand run by', 'verb: to operate, past participle, the same child (lore.ch1_intro text, HV_STORY 3.2)'],
+  ['a soft little run', 'music: a quick run of sung notes, Jasmin answering the gull (events.tengu_dice, bible 7.4 lists run in her words)'],
+  ['Run after it', 'verb: to chase on foot, the choice label (events.lantern_ferry, HV_STORY 2.3)'],
+  ['You run behind it through the rain', 'verb: to chase on foot (events.lantern_ferry outcomes, HV_STORY 2.3)'],
+  ['is run by a clicking little algorithm', 'verb: to operate, passive (events.endless_supper, HV_STORY 2.3)'],
+  ['It runs right under the stage', 'verb: to extend, the service corridor (events.fox_at_the_gate, HV_STORY 2.4)'],
 ];
 const RUN_ALLOW_CLASS = [['mn-p-run empty', 'CSS class list in screen_menu.js, never player-facing; classes keep their names (plan 5.11)']];
 const runAllowed = (s) => RUN_ALLOW.concat(RUN_ALLOW_CLASS).some(([a]) => a === s);
 const runAllowedData = (s) => runAllowed(s) || RUN_ALLOW_CONTAINS.some(([a]) => s.includes(a));
-t.test('check 7a: CSS content strings pass RETIRED, TALE and the run rule', () => {
+t.test('check 7a: CSS content strings pass the retired words (bible 6.2 and 6.3) and the run rule', () => {
   const bad = [];
   const dir = path.join(DIR, 'css');
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.css'))) {
@@ -296,7 +331,7 @@ t.test('check 7a: CSS content strings pass RETIRED, TALE and the run rule', () =
     while ((m = re.exec(src))) {
       const text = m[1].slice(1, -1).replace(/\\[0-9a-fA-F]{1,6}\s?/g, ' ').replace(/\\(.)/g, '$1');
       if (!text.trim() || allowedExact(text)) continue;
-      const w = hit(RETIRED, text) || hit(TALE, text) || hit(RUN_WORD, text);
+      const w = leak(text) || hit(RUN_WORD, text);
       if (w) bad.push(`css/${f}:${lineOf(src, m.index)}: "${w}" in "${abbrev(text)}"`);
     }
   }
@@ -323,8 +358,18 @@ t.test('the run allowlist is small and every entry has a reason', () => {
 // ------------------------------------------------------------------ the allowlist itself
 t.test('the allowlist is small, exact and every entry has a reason', () => {
   for (const [s, why] of [...ALLOW_EXACT, ...ALLOW_CONTAINS]) { t.ok(typeof s === 'string' && s.length > 0, 'allowlist string'); t.ok(typeof why === 'string' && why.length > 10, `reason for "${s}"`); }
-  t.eq(ALLOW_EXACT.length + ALLOW_CONTAINS.length, 19, 'allowlist size (add an entry only with the plan 3.2 reason)');
+  t.eq(ALLOW_EXACT.length + ALLOW_CONTAINS.length, 10, 'allowlist size (add an entry only with the plan 3.2 or bible 6.4 reason)');
   t.eq(new Set(ALLOW_EXACT.map((e) => e[0])).size, ALLOW_EXACT.length, 'no duplicate allowlist entries');
+});
+t.test('every allowlist entry is still in use (a stale entry would let the word come back unseen)', () => {
+  // exact entries must equal a DATA display field or a string literal of a UI script; contains entries must sit inside a DATA field
+  const lits = new Set(fields.map((f) => f.text));
+  for (const f of UI_FILES) {
+    const full = path.join(DIR, 'js', f);
+    if (fs.existsSync(full)) for (const l of literals(fs.readFileSync(full, 'utf8'))) lits.add(l.text);
+  }
+  for (const [s] of ALLOW_EXACT.concat(RUN_ALLOW, RUN_ALLOW_CLASS)) t.ok(lits.has(s), `allowlist entry "${s}" matches no DATA field or UI literal any more: drop it`);
+  for (const [s] of ALLOW_CONTAINS.concat(RUN_ALLOW_CONTAINS)) t.ok(fields.some((f) => f.text.includes(s)), `allowlist entry "${s}" is in no DATA field any more: drop it`);
 });
 
 t.done();

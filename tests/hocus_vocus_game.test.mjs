@@ -275,13 +275,13 @@ if (want('save')) {
     await tap(g, $(g, '[data-act=abandon]'), 600);
     t.eq(overlayName(g), 'confirm', 'abandon: a confirm overlay asks first');
     t.ok(/Abandon/.test(txt($(g, '.o-confirm'))), 'abandon: and says what it does [' + txt($(g, '.o-confirm')).slice(0, 80) + ']');
-    await tap(g, byText(g, /^Keep playing/), 600);
+    await tap(g, byText(g, /^Keep touring$/, $(g, '.o-confirm')), 600);
     t.ok(!!GAME.state.R && !GAME.state.R.done && UI.currentName === 'map', 'abandon: Keep playing leaves the run alone');
     t.eq(META.history.length, 0, 'abandon: nothing was recorded');
     if (UI.overlay.count() > 0) await key(g, 'Escape', 500);
     await key(g, 'Escape');
     await tap(g, $(g, '[data-act=abandon]'), 600);
-    await tap(g, byText(g, /^Abandon$/), 1500);
+    await tap(g, byText(g, /^Abandon tour$/, $(g, '.o-confirm')), 1500);
     await tick(g, 1500);
     t.eq(UI.currentName, 'title', 'abandon: Abandon returns to the title');
     t.eq(META.history.length, 1, 'abandon: one history row');
@@ -420,7 +420,7 @@ if (want('tabs')) {
     t.deep(metOf(g, ids), ids.map(() => 1), 'daily bestiary: met on entering the fight');
     R.foes = { [ids[0]]: 2 };
     const ask = GAME.abandon(); await tick(g, 400);
-    await tap(g, byText(g, /^Abandon$/), 1500); await ask;
+    await tap(g, byText(g, /^Abandon tour$/, $(g, '.o-confirm')), 1500); await ask;
     t.eq(META.bestiary().find((b) => b.id === ids[0]).kills, 2, 'daily bestiary: its kills are written when it ends');
     t.eq(META.stat('kills'), 0, 'daily bestiary: but the achievement kill counter is not touched');
     t.eq(META.stat('dailyRuns'), 1, 'daily bestiary: one daily run');
@@ -508,7 +508,7 @@ if (want('tabs')) {
     const RB = B.GAME.state.R;
     t.eq(RB.id, RA.id, 'tabs: tab B continued the same tale');
     // tab A abandons it through the real pause menu confirm and is paid once
-    const ask = A.GAME.abandon(); await tick(A, 400); await tap(A, byText(A, /^Abandon$/), 1500); await ask;
+    const ask = A.GAME.abandon(); await tick(A, 400); await tap(A, byText(A, /^Abandon tour$/, $(A, '.o-confirm')), 1500); await ask;
     const paid = A.META.inkstones;
     t.ok(paid > 0 && !A._store.hv_run_v1, 'tabs: tab A abandoned: paid, run key gone');
     share(A, B);
@@ -673,11 +673,11 @@ if (want('library')) {
     const tabs = $$(g, '.s-library [role=tab]');
     await tap(g, tabs.find((x) => x.dataset.id === 'story'), 500);
     t.ok(new RegExp(esc(g.DATA.lore.intro.title)).test(paneText()) && /\?\?\?/.test(paneText()), 'library: Story lists the pages read and hides the rest as ???');
-    await tap(g, tabs.find((x) => /Bestiary/.test(txt(x))), 500);
+    await tap(g, tabs.find((x) => /Who's Who/.test(txt(x))), 500);
     t.ok(new RegExp(esc(g.DATA.enemies.kappa.name)).test(paneText()) && /1 of 17 met/.test(paneText()), 'library: Bestiary names the foe that was met and counts it');
-    await tap(g, tabs.find((x) => /History/.test(txt(x))), 500);
+    await tap(g, tabs.find((x) => /Past Tours/.test(txt(x))), 500);
     t.ok(new RegExp(esc(g.DATA.heroes.hanae.name) + ' and ' + esc(g.DATA.heroes.kuro.name)).test(paneText()) && /Victory/.test(paneText()) && /900/.test(paneText()), 'library: History lists the won tale with its party and score');
-    await tap(g, tabs.find((x) => /Achievements/.test(txt(x))), 500);
+    await tap(g, tabs.find((x) => /Stickers/.test(txt(x))), 500);
     t.ok($$(g, '.mn-ach').length >= 30, 'library: Achievements lists every feat (' + $$(g, '.mn-ach').length + ')');
     clean(g, 'library');
   });

@@ -139,15 +139,15 @@ export function makePlayer(g, cfg = {}) {
     if (st2.chosen.join(',') !== C0.heroes.join(',')) {
       for (const n of names) { const b = $$('.mn-cards button').find((x) => label(x).startsWith(n + ',')); if (!b) throw new Error('hero card missing: ' + n); if (!/Chosen/.test(label(b))) await click(b, 80); }
     }
-    const trialBtn = () => $('[data-act=trial-up]') || $$('button').find((x) => /Raise the (Ink|Tempo) Trial/.test(label(x)));
+    const trialBtn = () => $('[data-act=trial-up]') || $$('button').find((x) => /Raise the (Ink|Tempo) Trial|Raise the Encore/.test(label(x)));
     for (let i = 0; i < 12 && (UI.screens.heroSelect.state().trial || 0) < C0.trial; i++) await click(trialBtn(), 60);
     if (C0.seed) { const inp = $('.mn-seed'); if (inp) await g._input(inp, C0.seed); await tick(60); }
-    await click($('[data-act=begin]') || byLabel(/begin the (tale|journey)/i), 500);
+    await click($('[data-act=begin]') || byLabel(/begin the (tale|journey)|start the tour/i), 500);
     return note('heroSelect begin');
   }
 
   async function story() {
-    const b = $('[data-act=skip]') || $('[data-act=turn]') || byLabel(/^skip/i) || byLabel(/play on|turn the page|continue/i);
+    const b = $('[data-act=skip]') || $('[data-act=turn]') || byLabel(/^skip/i) || byLabel(/play on|on we go|turn the page|continue/i);
     shown.add('story:' + (UI.params && UI.params.id));
     await click(b, 500);
     return note('story skip');
@@ -352,9 +352,9 @@ export function makePlayer(g, cfg = {}) {
       return note('camp ' + (want.className.match(/a-(\w+)/) || [])[1]);
     }
     state.campDone = 0;
-    const lb = byLabel(/break camp|leave/i);
+    const lb = byLabel(/break camp|back on the road|leave/i);
     await click(lb, 300);
-    if (UI.overlay.count() === 0 && UI.currentName === 'camp') await click(byLabel(/break camp|leave/i), 300);
+    if (UI.overlay.count() === 0 && UI.currentName === 'camp') await click(byLabel(/break camp|back on the road|leave/i), 300);
     return note('camp leave');
   }
 
@@ -363,7 +363,7 @@ export function makePlayer(g, cfg = {}) {
     const node = R().node;
     if (node && !node.used) {
       const up = live('.fg-mode.m-up').find((b) => !isOff(b));
-      const strike = byLabel(/^strike/i);
+      const strike = byLabel(/^(strike|hit it)/i);
       if (strike && state.forged) { await click(strike, 700); return note('forge strike'); }
       if (up && !state.forged) { state.forged = true; await click(up, 300); return note('forge sharpen mode'); }
       if (strike) { await click(strike, 700); return note('forge strike'); }
@@ -375,7 +375,7 @@ export function makePlayer(g, cfg = {}) {
 
   async function chest() {
     shown.add('chest');
-    const open = byLabel(/open the chest/i);
+    const open = byLabel(/open the (chest|gift)/i);
     if (open) { await click(open, 600); return note('chest open'); }
     const take = byLabel(/take the treasure|take .*gem|just the gold|take/i);
     if (take) { await click(take, 400); return note('chest take'); }
@@ -407,7 +407,7 @@ export function makePlayer(g, cfg = {}) {
     const picked = $$('.ev-choice.picked').length > 0 || (node && node.chosen !== undefined && node.chosen !== null && node.chosen !== false);
     if (picked) {
       // the outcome page: Continue, or Fight! when the gamble ended in a real combat
-      const go = byLabel(/^(continue|fight|leave|go on|play on|turn the page|move on|walk on)/i) || btns().find((b) => b.classList.contains('btn-primary'));
+      const go = byLabel(/^(continue|fight|leave|go on|play on|on we go|turn the page|move on|walk on)/i) || btns().find((b) => b.classList.contains('btn-primary'));
       await click(go, 600);
       return note('event continue');
     }
