@@ -203,9 +203,9 @@ shot({ id: 'logo', t0: LOGO_T, t1: DUR,
     const tt = Math.min(t, HOLD_T);
     headline(g, { id: 'logo', rect: [96, 330, 1824, 600], lines: [{ txt: 'CLAWSPIRE', at: LOGO_T + POP_IN, font: F.candy, fill: FILL.candy, depthK: .09, depthCol: '#6a0a3a', outline: '#2a0a22', outlineK: .1, glow: C.pink, tracking: 4 }] }, tt);
     headline(g, { id: 'badge', rect: [800, 610, 1120, 718], plate: true, pad: 20, plateStyle: { bg: '#1a0a2a', border: C.gold, bw: 6, r: 28 }, lines: [CL_('2.0', LOGO_T + POP_IN + .12, 1, FILL.gold, '#7a4a08', null, { depthK: .08 })] }, tt);
-    headline(g, { id: 'cta', rect: [96, 732, 1824, 872], plate: true, pad: 54, plateStyle: { bg: '#c8126a', border: '#ffb3d6', bw: 6, r: 40 },
+    headline(g, { id: 'cta', rect: [96, 728, 1824, 904], plate: true, pad: 44, plateStyle: { bg: '#c8126a', border: '#ffb3d6', bw: 6, r: 40 },
       lines: [{ txt: 'PLAY FREE IN YOUR BROWSER', font: F.ui, at: b(56.75) + POP_IN, fill: '#ffffff', depthK: 0, outline: '#7a0838', outlineK: .05, tracking: 2 }] }, tt);
-    headline(g, { id: 'url', rect: [96, 888, 1824, 1010], lines: [{ txt: 'games-71g.pages.dev/clawspire', at: b(57.25) + POP_IN, font: F.ui, fill: C.mint, depthK: 0, outline: '#0b0618', outlineK: .18 }] }, tt);
+    headline(g, { id: 'url', rect: [96, 912, 1824, 1012], lines: [{ txt: 'games-71g.pages.dev/clawspire', at: b(57.25) + POP_IN, font: F.ui, fill: C.mint, depthK: 0, outline: '#0b0618', outlineK: .18 }] }, tt);
   },
   post(lt, P, t) {
     const lf = Math.min(t, HOLD_T) - LOGO_T;
