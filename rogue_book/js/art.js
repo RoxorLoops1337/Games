@@ -1,4 +1,4 @@
-// Inkwoven -- ART: the art director's toolkit and the ART namespace skeleton. Every art file builds on this one.
+// Echowake: ART: the art director's toolkit and the ART namespace skeleton. Every art file builds on this one.
 //
 // STYLE ("Sumi-Shonen", ART_BIBLE.md is the law): a calligraphic ink line in deep indigo, base colour + ONE hard shadow shape + a thin lit-side
 // highlight + a backlight rim on the shadow edge + optional halftone dots in the shadow, anime gloss on hair and metal, sparkle stars and gold

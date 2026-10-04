@@ -1,4 +1,4 @@
-// Inkwoven -- ART.icon: the icon artist. Every small pictogram of the game, drawn in the house style (calligraphic ink line, hard cel shading,
+// Echowake: ART.icon: the icon artist. Every small pictogram of the game, drawn in the house style (calligraphic ink line, hard cel shading,
 // rim light, gloss, washi grain where it helps). Extends ART (art.js): REPLACES the ART.icon placeholder by plain assignment.
 //
 // PUBLIC API (DESIGN 5.6, ART_BIBLE 5)

@@ -1,4 +1,4 @@
-/* Inkwoven -- end.css: the story page, the chapter clear, the defeat and victory screens, and the first-run hint bubbles (owner: story and
+/* Echowake: end.css: the story page, the chapter clear, the defeat and victory screens, and the first-run hint bubbles (owner: story and
    endings engineer). Builds on base.css. Every selector is namespaced: .s-story .s-chapterClear .s-gameOver .s-victory for the screens
    (parts: .en- shared, .st- story, .cc- chapter clear, .go- game over, .vc- victory) and .tut- for the tutorial bubbles in #tips.
    Entrances are CSS animations driven by --i (stagger index), so they replay identically under GAME.debug.tick. reduce-motion swaps them

@@ -1,4 +1,4 @@
-// Inkwoven -- UI core: the stage, the screen manager, overlays, tooltips, input and every shared DOM component (owner: UI core).
+// Echowake: UI core: the stage, the screen manager, overlays, tooltips, input and every shared DOM component (owner: UI core).
 // This header is the contract of record for ui.js. Styles live in css/base.css (class names below are the ones it defines).
 //
 // STAGE       UI.W UI.H (1280 x 720)   UI.scale UI.px UI.ox UI.oy (live)   UI.layers {view, screens, overlays, over, tips, toasts}   UI.stageEl

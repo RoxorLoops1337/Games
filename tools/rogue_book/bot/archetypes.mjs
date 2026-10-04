@@ -1,4 +1,4 @@
-// Inkwoven balance bot: archetype classifier. CONTENT_SPEC section 3 names three archetypes per hero; the data has no archetype
+// Echowake balance bot: archetype classifier. CONTENT_SPEC section 3 names three archetypes per hero; the data has no archetype
 // field, so cards are classified from their effect tags (resources produced or spent, statuses applied, hooks). A card can fit more
 // than one; the strongest signal wins, ties go to the first archetype listed. Used by the report ("archetype usage") only: the draft
 // itself prices cards by synergy, it does not commit to a label.

@@ -1,4 +1,4 @@
-/* Inkwoven -- combat screen (owner: combat screen engineer). Everything here is namespaced .cm / .cm-* so no other sheet is touched.
+/* Echowake: combat screen (owner: combat screen engineer). Everything here is namespaced .cm / .cm-* so no other sheet is touched.
    Layout is absolute in stage px (the 1280 x 720 stage of DESIGN 5.8): top bar y 0..56, hero panels x 18..306 y 64..250 (the swap seal hangs on their right edge, x 304..360), enemy overlays
    placed per frame from SCENE.anchor, hand x 252..970 y 566..720 (a raised card's top is y 420), docks bottom left and right on one centre line (--dock-cy).
    Look: lacquered indigo panels with gold hairlines, washi paper speech bubbles for intents, vermilion hanko seals for counts, brush-stroke

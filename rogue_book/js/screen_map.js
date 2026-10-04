@@ -1,4 +1,4 @@
-// Inkwoven -- the map screen (owner: map screen engineer). One IIFE that registers UI.screens.map and the overlays `relics` (replacing the
+// Echowake: the map screen (owner: map screen engineer). One IIFE that registers UI.screens.map and the overlays `relics` (replacing the
 // basic version of ui.js) and `legend` (the page legend, tiles, brushes, controls and the glossary of words). Styles live in css/map.css
 // (classes mp-* for the screen, .o-relics and .o-legend overlays). This header is the contract of record for screen_map.js.
 //

@@ -1,4 +1,4 @@
-// Inkwoven balance bot: static card valuation.
+// Echowake balance bot: static card valuation.
 //
 // The bot never hard-codes card ids. It reads every card as the effect DSL (DESIGN 4.4) and prices each op in "points", where
 // one point is roughly one point of damage dealt or Block gained on a reference state (two enemies, three cards played, a few

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Records the games-index cover for Inkwoven: rogue_book/cover.webp (480x270 poster) and rogue_book/cover.webm (a short looping hover clip).
+// Records the games-index cover for Echowake: rogue_book/cover.webp (480x270 poster) and rogue_book/cover.webm (a short looping hover clip).
 //
 //   node tools/rogue_book/cover.mjs
 //
@@ -36,7 +36,7 @@ const tick = (ms) => pg.evaluate((m) => GAME.debug.tick(m, 16), ms);
 const grab = async () => sharp(await pg.screenshot({ type: 'png' })).resize(W, H, { kernel: 'lanczos3' }).png().toBuffer();
 
 const frames = [];
-// the poster: the title card, the book open and glowing
+// the poster: the title card, the temple bell under the moon
 await tick(1500);
 const poster = await grab();
 await sharp(poster).webp({ quality: 80 }).toFile(path.join(OUT, 'cover.webp'));

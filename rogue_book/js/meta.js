@@ -1,4 +1,4 @@
-// Inkwoven -- META: everything that lives ACROSS runs (DESIGN 4.10, 5.5). Profile, settings, run save, stats, achievements,
+// Echowake: META: everything that lives ACROSS runs (DESIGN 4.10, 5.5). Profile, settings, run save, stats, achievements,
 // Inkstones, the Library, bestiary, story and history. No DOM, no clock (callers pass `now` and `date`); the only browser
 // API used is window.localStorage, always inside try/catch. This header is the contract of record for GAME and the screens.
 //

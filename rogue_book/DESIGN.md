@@ -1,6 +1,6 @@
-# INKWOVEN -- design bible and module contracts
+# ECHOWAKE: design bible and module contracts
 
-> A rogue storybook. Two heroes, one living book, a deck of gem-socketed cards.
+> A rogue ballad. Two heroes, one silent land, a deck of gem-socketed cards.
 > Read this whole file, then `ART_BIBLE.md` and `CONTENT_SPEC.md`, before writing a line.
 > Many modules are built in parallel by different people. The contracts here are the
 > only thing keeping the pieces fitting. When a contract is unclear, pick the simplest
@@ -15,16 +15,21 @@ game (`tests/rogue_book_*`, `tools/rogue_book/*`).
 
 ## 1. The pitch
 
-The Living Book is a storybook that writes itself. Its Author has vanished and a spreading
-blankness, the **Blank**, is erasing the tale one page at a time. You lead **two heroes**,
-characters written into the book, across its pages to the last one and rewrite the ending.
+The land once sang itself: every hill answered, every river hummed back, and the whole country was
+one long song, the Great Song. Its Singer has gone quiet, and a polite, patient yokai called the
+**Hush** has eaten every sound. The land is grey and still. You lead **two heroes**, two of the
+voices the Singer left inside the song, across it with voice and rhythm, waking it hex by hex until
+the last note can be sung together. Every hex you wake plays a note, so the road you choose becomes a
+melody.
 
 The game is a deckbuilding roguelike in three parts:
 
-1. **The map is a page of blank paper.** A hex map hidden in fog. You spend **Ink** to paint a hex next
-   to the painted area and reveal it (fight, treasure, shop, camp, fable...), or use one-use **Brushes**
-   that paint whole shapes for free. Walk only on painted hexes. Reach the chapter boss on the far side.
-   The boss is about 16 paints from the start ring, so a rush is possible and every extra hex is a choice.
+1. **The map is a silent land.** A hex map hidden under grey fog. You spend **Echo** to wake a hex next
+   to the awake ground and reveal it (fight, treasure, shop, camp, fable...), or sing one-use **Songs**
+   that wake whole shapes for free. Walk only on woken hexes. Temple bells give Echo back. Reach the keeper
+   of the verse on the far side. The keeper is about 16 wakes from the start ring, so a rush is possible
+   and every extra hex is a choice. Each woken hex sings one note of a seeded tune, and the map music
+   stays muffled and sparse under the Hush until the land wakes.
 2. **Combat is two heroes against a line of enemies.** One shared deck, but every card belongs
    to one hero. Heroes stand in a **front row** and a **back row**. The front hero eats most
    attacks. Cards and heroes change with the row they stand in, and swapping rows is a tactical
@@ -33,11 +38,33 @@ The game is a deckbuilding roguelike in three parts:
    Camps, forges and shops let you shape the deck. **Relics** (called Treasures in the UI) bend
    the rules.
 
-Three chapters, each ending in a boss, the last in three phases. Four heroes (two unlocked at
-the start), a Library of meta unlocks, achievements, a bestiary, ten Ink Trials of difficulty,
-a Daily Tale seeded by the date.
+Three verses, each ending in a keeper, the last in three phases. Four heroes (two unlocked at
+the start), a Hall of Echoes of meta unlocks, achievements, a bestiary, ten Tempo Trials of
+difficulty, a Daily Jam seeded by the date.
 
-Tone: shonen adventure meets storybook melancholy. Warm, dramatic, a little funny. Never mean.
+Tone: shonen adventure meets folklore melancholy. Warm, dramatic, a little funny. Never mean.
+
+### 1.1 Player-facing names versus internal ids
+
+The game was first themed as INKWOVEN (ink, brushes, a living book) and re-themed to ECHOWAKE (Echo, Songs, the Hush) without changing
+a single internal id, so saves, seeds and balance stayed bit-identical. Never "fix" an id below to match its display word.
+
+| internal id or word | player sees | display source |
+|---|---|---|
+| `ink`, `R.ink`, `startInk`, `inkMax`, `wellInk`, `campInk`, `killInk`, op `ink`, keyword `ink`, element `ink` | Echo | `DATA.keywords.ink.name`, data_text.js `KW('Echo', 'ink')` |
+| `brush`, `brushes`, `R.brushes`, op `addBrush`, tile `brush`, `brushKinds`, keyword `brush` | Song(s); tile Songbird | `DATA.brushes[id].name`, `DATA.keywords.brush.name`, `DATA.tiles.brush.name` |
+| `paint`, `painted`, `RUN.paint`, op `paint`, hook `onPaint`, bus `map:paint`, sfx `paint`, stat `hexesPainted` | wake, woken, awake | data_text.js, screen copy |
+| tile `well`, sfx `well`, `wellsDrunk` | Temple Bell | `DATA.tiles.well.name` |
+| `inkstones` (profile, ECONOMY, reward), stat icon `inkstone` | Chimes | screen copy |
+| screen `library`, key `L` | the Hall of Echoes | screen copy |
+| `chapter`, `chapters`, `onChapterStart`, `chapterClear`, `ch1`..`ch3` | Verse | data_text.js, screen copy |
+| trials, `trialBest` | Tempo Trial | `DATA.trials`, screen copy |
+| `daily`, `dailyRuns` | Daily Jam | screen copy |
+| status `sumi` | Breath | `DATA.statuses.sumi.name` |
+| `boss_editor`, lore and move ids | The Conductor, Keeper of the Last Note | `DATA.ROSTER`, `data_enemies_3.js` |
+| sfx `ink_splash brush_pick brush_use ink_gain page_turn` | a find, learning a Song, singing a Song, Echo gained, the kamishibai claps | `js/audio.js` recipes |
+| scene `paper`, `ART.map.paper`, `paintBloom`, fx `inkSplash`, `brushDrag`, motifs `ink_*`, `brush_stroke`, `book`, `quill`, `scroll`, `calligraphy` | re-drawn art | ART_BIBLE |
+| CSS `--ink`, `--brush`, `--sumi`, `.mp-ink`, `.st-page`, `.mn-book`, `.ev-book`, `.ev-page`, `.rot-book`, `.s-library`, `.mn-daily`, `.mn-trial`, `.brush-div`, `.lg-brush` | re-styled | `css/*.css` |
 
 ## 2. Ground rules for every module
 
@@ -57,7 +84,7 @@ Tone: shonen adventure meets storybook melancholy. Warm, dramatic, a little funn
   page URL through `window.location` (a bare `location` is a hygiene error, and a ReferenceError headless);
   `document`, `localStorage`, `navigator`, `performance` and `matchMedia` are globals in the browser and in the test
   loader alike, so plain use inside a function is fine.
-- **Determinism and the clock.** No `Math.random` anywhere (the test loader makes it throw). Use `U.rng(seed)`
+- **Determinism and the clock.** No unseeded random call anywhere (the test loader makes it throw). Use `U.rng(seed)`
   streams and derive seeds with `U.hash(seed, 'ch2', 'map')`. `U.rng(0)` and `U.rng(1)` are different
   streams. Time-based animation reads a passed-in `t`. Logic modules (`data`, `combat`, `map`, `run`, `meta`)
   never read a clock: callers pass `now` or `date`. Only `GAME` (main.js) may call `Date.now()` or
@@ -135,7 +162,7 @@ references `META` (it loads before it).
 - Base **3 Energy** (`mods.energy`), draw **5** (`mods.hand`, plus the living heroes' row `drawAdd`), max hand 10
   (`ECONOMY.maxHand`). Unspent Energy never carries over.
 - Each hero has HP that persists across fights. Heroes are healed at camps, by some events, and partially at
-  the end of each chapter.
+  the end of each verse.
 - **Rows.** `DATA.heroes[id].rows.front` and `.back` list bonuses (`LISTS.rowFields`) applied while the hero
   stands in that row, plus any relic `rows` (`DATA.rowFor`): `dmgAdd` / `blockAdd` (added to each `dmg` / `block`
   op the hero's own cards produce), `startBlock` (raw Block at the start of each player turn), `regen`, `thorns`,
@@ -211,8 +238,8 @@ Vulnerable, Dodge and Block apply. Only `dmg` ops trigger Thorns, never poison, 
 Poison and burn ticks and the `hurt` op do NOT fire `onDamaged`. Poison and burn may down a hero; the `hurt` op
 cannot take a hero below 1 HP unless `lethal:true`. Trial `mods.enemyDmg` is a factor (4.7). Enemy `dmg` ops
 use the same formula with the enemy as attacker. The `element` of a hit is the op's `el`, else derived from the
-source card's `art.m` (`fire`, `flame_orb` -> fire; `ice` -> ice; the lightning family -> lightning; the ink
-family -> ink; anything else -> slash), and `slash` for enemy and hook damage.
+source card's `art.m` (`fire`, `flame_orb` -> fire; `ice` -> ice; the lightning family -> lightning; the Echo
+family -> `ink`; anything else -> slash), and `slash` for enemy and hook damage.
 
 **Block gain** (only `block` ops): `gain = floor((n + unit.st.bulwark + rowBlockAdd) * (unit.st.frail > 0 ? 0.75 : 1))`,
 min 0, where `rowBlockAdd` applies to heroes' own cards. `plating` and row/mod `startBlock` are raw. Hero Block is
@@ -253,7 +280,7 @@ A **card definition** (`DATA.cards[id]`):
   art: { m: 'slash', c: 'rose', hero: true },   // motif and palette from DATA.LISTS.motifs / palettes; hero pose composited when art.hero
   flavor: 'Optional one-line quote.',
   hand: { turnEnd: [ops], drawn: [ops] },       // curses and status cards: ops run if in hand at end of turn / when drawn
-  locked: true,                  // meta unlock (Library); starters and commons are never locked
+  locked: true,                  // meta unlock (Hall of Echoes); starters and commons are never locked
 }
 ```
 
@@ -370,7 +397,7 @@ hero target), and `turn` is that enemy's own turn count (1 on the turn of its fi
 | `swap` | none | swap rows (does not use the free swap; blocked by Bind) |
 | `cond` | `if:C, then:[ops], else?:[ops]` | conditional |
 | `repeat` | `n:V, do:[ops]` | run the ops n times (X-cost cards: `n:{per:'X'}`) |
-| `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, ink drop, permanent max HP) |
+| `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, Echo gain, permanent max HP) |
 | `revive` | `n:V` or `pct` (fraction of max HP) | a downed hero stands up in the back row with that HP (at least 1). No-op if nobody is downed. In a hook on `onHeroDown` it revives the triggering hero; otherwise the first downed hero. Emits `hero_revive` |
 | `hook` | `on, fx:[hook ops], filter?, limit?, once?, every?` | registers a combat hook owned by the acting hero until combat ends. `once:true` removes it after it fires once. Playing the card twice registers two hooks. Not allowed inside hook ops |
 
@@ -395,7 +422,7 @@ Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is
    the hook is a validator error.
 3. `limit:N`: at most N times per player turn (the following enemy phase counts as the same turn). `once:true`: once per combat.
    `every:N` (N >= 2): fires on every Nth trigger (counter per combat); `once` and `every` cannot be combined. For run hooks `limit` is
-   per chapter, `once` per run and `every` counts per run.
+   per verse, `once` per run and `every` counts per run.
 4. **Triggers.** `combatStart` after the opening shuffle and before the first intents; `turnStart` / `turnEnd` per 4.2;
    `onPlay` after the card resolves; `onDamaged` once per enemy attack hit on a hero, even when fully blocked, never for a dodged
    hit, poison, burn, `hurt` or thorns; `onKill` for every enemy death except `flee`, by cards, hooks, poison, burn or thorns (poison and
@@ -423,12 +450,12 @@ Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is
 }
 ```
 
-- **Fixed roster.** Ids, names, tiers, sizes and chapters are law and listed in `CONTENT_SPEC.md` 4 (machine copy `DATA.ROSTER`). Authors
-  keep freedom over stats, moves, AI and lore. `art.id` equals the enemy id. Boss ids: `boss_kuzunoha` (ch1), `boss_jorogumo` (ch2),
-  `boss_editor` (ch3). Nominal heights: `LISTS.sizeHeight` (`s` 110, `m` 170, `l` 250, `xl` 340 px at scale 1).
+- **Fixed roster.** Ids, names, tiers, sizes and verses are law and listed in `CONTENT_SPEC.md` 4 (machine copy `DATA.ROSTER`). Authors
+  keep freedom over stats, moves, AI and lore. `art.id` equals the enemy id. Boss ids: `boss_kuzunoha` (verse 1), `boss_jorogumo` (verse 2),
+  `boss_editor` (verse 3, the Conductor). Nominal heights: `LISTS.sizeHeight` (`s` 110, `m` 170, `l` 250, `xl` 340 px at scale 1).
 - **Intent `kind`** (`LISTS.intents`) selects the icon and must be honest: `attack` (single hit), `multi` (several hits), `heavy` (one big
   telegraphed hit), `defend` (a `block` op), `buff`, `debuff`, `summon` (a `summon` op), `heal` (a `heal` op), `special`, `flee` (a `flee` op),
-  `none`. The author picks the most threatening part: attack, multi or heavy over debuff or summon; a move that deals damage and adds junk
+  `none`. The writer of the enemy picks the most threatening part: attack, multi or heavy over debuff or summon; a move that deals damage and adds junk
   cards is an attack. A move that only adds junk cards or steals uses `debuff`.
 - **Enemy ops** (`LISTS.enemyOps`): `dmg {n, hits?, tgt: front|back|both|random|lowest (default front), pierce?, lifesteal?, el?}`; `block {n, tgt: self|allEnemies|otherEnemy|lowestEnemy}`
   and `heal` (same target list, default `self`); `status {s, n, tgt}` (hero tgt to debuff, enemy tgt to buff; default: debuffs -> `front`,
@@ -437,7 +464,7 @@ Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is
   (adds a `curse` or `status` card to the player's pile, `to` default `discard`; into `draw` it lands at a random position unless `top:true`);
   `summon {enemy, n?:1..4}` (the enemy must be a `minion` tier id; appends to the line while fewer than 5 enemies live, otherwise does nothing); `swap` (forces a hero row swap, blocked
   by Bind); `cond {if, then, else?}`; `stealGold {n}` (takes min(n, run gold not yet stolen), stored on the thief as `u.loot`; killing the thief
-  returns it as a positive `gold` event, fleeing loses it); `flee` (the enemy leaves after this move: no kill credit, no Ink, `down:true` and
+  returns it as a positive `gold` event, fleeing loses it); `flee` (the enemy leaves after this move: no kill credit, no Echo, `down:true` and
   `fled:true`, carried gold is lost; the fight is won when no enemy remains). Numbers are plain numbers or V objects limited to `perEnemy`.
 - **Enemy hooks** (`LISTS.enemyHooks`), the enemy is the actor and `limit` is per round: `onDeath` (runs as it dies, `summon` allowed and the cap
   applies), `onHurt` (it lost HP from a card or hook, not from a status tick), `onAllyDeath` (another enemy died), `onHeroPlay` (`filter.type` is a card type).
@@ -460,9 +487,9 @@ Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is
   Unit ids are `def + '#' + n` with a per-def counter that never reuses numbers and are opaque strings (UI never uses them in CSS selectors).
 - A stunned enemy's intent is `{kind:'none', text:'Stunned', stunned:true}`.
 - **Encounters** (`DATA.addEncounters(ch, {normal, elite, boss})`): `{id, enemies:[ids], w:weight, min: lowest tile.diff 0..1}`; group ids are `ch<N>_<name>` and
-  globally unique; 1 to 3 enemies in chapter 1, 1 to 4 later; a normal group has at least one normal enemy, an elite group exactly one elite (minions may pair
+  globally unique; 1 to 3 enemies in verse 1, 1 to 4 later; a normal group has at least one normal enemy, an elite group exactly one elite (minions may pair
   with either). The boss is a single enemy id. A group is eligible when `min <= tile.diff` and is chosen by `w` with the tile's map rng.
-- HP and damage guidance and the numbers per chapter are in `CONTENT_SPEC.md` 4 (machine copy `DATA.GUIDE`).
+- HP and damage guidance and the numbers per verse are in `CONTENT_SPEC.md` 4 (machine copy `DATA.GUIDE`).
 
 ### 4.6 Gems
 
@@ -486,68 +513,68 @@ only change ops that exist, slot colours must be useful for the card (CONTENT_SP
 (`LISTS.runHooks`) whose `fx` are run ops (4.9, `fight` excluded). `rows:{front:{...}, back:{...}}` uses `LISTS.rowFields` keys and is added to every hero's own row bonuses
 while owned. A relic with `hero` is owned by that hero (owned-hook rules, 4.4) and only drops when that hero is in the party. A relic needs `mods`, `hooks` or `rows`.
 
-**Run hooks** (`LISTS.runHooks`; their `fx` are run ops, `fight` excluded, and `RUN.hook` returns any `pending` choices): `onPickup` (when the relic is gained, from any source), `onChapterStart` (after the chapter's map is generated), `onRest` (after a camp
-Rest), `onPaint` (after each hex painted, by Ink, a brush or a chain), `onFightWon` (after a fight is won, before its rewards are rolled; `filter.tier` matches the fight tier), `onShopEnter` (when a shop opens).
+**Run hooks** (`LISTS.runHooks`; their `fx` are run ops, `fight` excluded, and `RUN.hook` returns any `pending` choices): `onPickup` (when the relic is gained, from any source), `onChapterStart` (after the verse's map is generated), `onRest` (after a camp
+Rest), `onPaint` (after each hex woken, by Echo, a Song or a chain), `onFightWon` (after a fight is won, before its rewards are rolled; `filter.tier` matches the fight tier), `onShopEnter` (when a shop opens).
 
-**Mods (relics and Ink Trials).** A relic's `mods` may only use `LISTS.mods`, an Ink Trial's `mods` only `LISTS.trialMods` (they overlap on `goldMul priceMul healMul startInk wellInk cardChoices`). Every key is an ADDITIVE DELTA, summed across all owned relics and all accumulated trial levels.
+**Mods (relics and Tempo Trials).** A relic's `mods` may only use `LISTS.mods`, a Tempo Trial's `mods` only `LISTS.trialMods` (they overlap on `goldMul priceMul healMul startInk wellInk cardChoices`). Every key is an ADDITIVE DELTA, summed across all owned relics and all accumulated trial levels.
 `RUN.mods(R)` returns the final flat object (`DATA.modsFor(R.relics, R.mods)`, folded by `DATA.foldMods`); `R.mods` holds the summed trial deltas (`DATA.trialDeltas(trial)`) fixed at `newRun`, relic deltas are summed at read time and never cached.
 `LISTS.modKind` and `LISTS.trialModKind` say which keys are counts and which are fractions.
 
 - **Count keys** (`int`): `final = base + sum`, clamped. `energy` (3, min 1), `hand` (5: cards drawn per turn; the hand still caps at 10), `startBlock` (0: raw Block every living hero
-  gains at each player turn start, added to the row value), `inkMax` (14, min 6), `startInk` (10, min 1, never above `inkMax`), `wellInk` (4, min 1: Ink per well),
+  gains at each player turn start, added to the row value), `inkMax` (14, min 6), `startInk` (10, min 1, never above `inkMax`), `wellInk` (4, min 1: Echo per temple bell),
   `cardChoices` (3, min 1), `freeSwaps` (1, min 0), `campActions` (1: how many different camp actions one visit allows, max 3), `rareBoost` (0: percentage points moved from
   common to rare in card reward weights), `startGold` (60), `curses` (0: N curses added to the deck at run start from the six `curse_*` cards, seeded).
 - **Fraction keys** (`frac`): a single mod entry is a non-zero number and a fraction stays within -0.9..2; `final factor = max(0.1, 1 + sum)`. `goldMul priceMul healMul enemyHp eliteHp bossHp enemyDmg`. Relic authors write `goldMul: 0.25` for x1.25 and
   `healMul: -0.25` for x0.75. `enemyHp` applies to normal and minion enemies. Rounding: HP round, damage floor per hit (4.2), gold and prices round.
 - `reviveFrac` (trial only) is a delta on `ECONOMY.reviveFrac` clamped to 0.05..1.
-- `healMul` scales run-level healing only: camp Rest, run `heal` ops and chapter-end healing. It never touches in-combat `heal` ops, regen, lifesteal or revive.
-- `goldMul` scales combat and chest gold only (never event `gold` ops, thief loot or costs); `priceMul` scales every shop price (cards, gems, relics, brush, card removal) and nothing else.
+- `healMul` scales run-level healing only: camp Rest, run `heal` ops and verse-end healing. It never touches in-combat `heal` ops, regen, lifesteal or revive.
+- `goldMul` scales combat and chest gold only (never event `gold` ops, thief loot or costs); `priceMul` scales every shop price (cards, gems, relics, Song, card removal) and nothing else.
 - COMBAT gets `mods` verbatim from `RUN.mods(R)` and reads only `energy hand startBlock freeSwaps enemyHp eliteHp bossHp enemyDmg`. COMBAT never reads `DATA.relics[id].mods`;
   `relics:[ids]` are for hooks only.
 
-### 4.8 Map, Ink and Brushes
+### 4.8 Map, Echo and Songs
 
 - **Layout.** Pointy-top axial hexes `(q, r)`, key `'q,r'`, odd-r offset: `column = q + floor(r / 2)`, and a tile exists iff `0 <= column < cols` and `0 <= r < rows`. The map is
-  `ECONOMY.map.cols x rows` (21 x 13) with holes (`block` tiles: Unwritten Void), the start in column `startCol` (1) on the left and the boss in column `bossCol` (19) on the right.
+  `ECONOMY.map.cols x rows` (21 x 13) with holes (`block` tiles: Dead Silence), the start in column `startCol` (1) on the left and the boss in column `bossCol` (19) on the right.
   `MAP.DIRS` order (dir index 0..5): E `[1,0]`, NE `[1,-1]`, NW `[0,-1]`, W `[-1,0]`, SW `[-1,1]`, SE `[0,1]`.
 - **Hex geometry** (`MAP.toPixel`, `MAP.corners`, `MAP.fromPixel`, `MAP.bounds`, `ART.map.*`, screen_map): `size` is the centre-to-corner radius (46 at zoom 1), width
   `sqrt(3) * size`, row pitch `1.5 * size`, odd rows shifted right by half a width, `toPixel` returns the hex CENTRE and `toPixel(0,0) = (0,0)`. The world is bigger than the screen so the
   map has a camera (pan by drag, zoom by wheel and pinch, follow the party).
-- **Camera and HUD.** The lacquer HUD (party, Ink, chapter banner, gold, menu button, the Deck, Legend, Fit, Zoom in and Zoom out buttons, the brush tray, the hex info chip, the treasure strip and, while a
-  brush is armed, the brush mode bar) lies over the page, so the camera works with the stage the HUD leaves free. The map screen measures the real rectangle of each piece in stage px at rest (the
+- **Camera and HUD.** The lacquer HUD (party, Echo, verse banner, gold, menu button, the Deck, Legend, Fit, Zoom in and Zoom out buttons, the Song tray, the hex info chip, the treasure strip and, while a
+  Song is armed, the Song mode bar) lies over the map, so the camera works with the stage the HUD leaves free. The map screen measures the real rectangle of each piece in stage px at rest (the
   slide-in of the entrance and a hover lift are measured out, a piece's ancestors included, so the first fit is the settled one), so the compact phone layout, the text size and the number of
-  brushes and treasures are accounted for; it measures again whenever one moves (a resize, a text size, a brush or a treasure gained, a brush armed or put away, a few times a second at most), and stands a
-  fixed fallback table in for a piece it cannot measure (a headless page). From the rectangles, each grown by 6 px: the **free box** is the largest box of the page window that no piece intrudes on (each
-  piece counts against the window side it hangs from); the **fit** is the largest zoom at which no hex of the page (the Void, the fog and the boss ring included) touches a piece or leaves the window, with
+  Songs and treasures are accounted for; it measures again whenever one moves (a resize, a text size, a Song or a treasure gained, a Song armed or put away, a few times a second at most), and stands a
+  fixed fallback table in for a piece it cannot measure (a headless page). From the rectangles, each grown by 6 px: the **free box** is the largest box of the map window that no piece intrudes on (each
+  piece counts against the window side it hangs from); the **fit** is the largest zoom at which no hex of the map (Dead Silence, the fog and the boss ring included) touches a piece or leaves the window, with
   its placement, found by a search over zoom and offset that runs when the HUD changes and never per frame. The fit is the camera of the Fit button and of the opening swoop, and its zoom is `zMin`, the
   minimum zoom: wheel, pinch and Zoom out stop there and the camera then sits on the fit (and counts as the fit view whether it was following the party or not: one press of Fit returns to the party), so
-  the whole page is always shown with nothing under the HUD (on a 1280x720 stage about 82 percent of the zoom the page used to fit at, 0.49 against 0.60). A camera on the fit glides to a fit that moved,
-  whichever way it moved. The **pan range** is the box the edges of the padded page (80 world px of margin) may travel to: the free box, so at every zoom above `zMin` any tile can be dragged onto ground the
-  HUD leaves free and the page cannot be lost off screen (a page smaller than the box roams inside it). The page edge may also rest inside the box by the gap the fit itself has at its sides (a page narrower
+  the whole map is always shown with nothing under the HUD (on a 1280x720 stage about 82 percent of the zoom the map used to fit at, 0.49 against 0.60). A camera on the fit glides to a fit that moved,
+  whichever way it moved. The **pan range** is the box the edges of the padded map (80 world px of margin) may travel to: the free box, so at every zoom above `zMin` any tile can be dragged onto ground the
+  HUD leaves free and the map cannot be lost off screen (a map smaller than the box roams inside it). The map edge may also rest inside the box by the gap the fit itself has at its sides (a map narrower
   than the free box has one); that slack fades out between 1.6 and 2 times `zMin` (the default zoom has none) and only ever widens the range, and it is what keeps a wheel zoom about a pointer over the
-  page anchored (the point under the pointer stays fixed) when it starts on the fit. Follow, the keyboard cursor, a fresh tile and the zoom buttons all use the middle of the free box, not the middle of the window, so
-  the party and its neighbours are never under a piece. The info chip and the brush mode bar have a fixed size (the chip: a name line, two lines of text, two of action; the bar: two lines of text; longer text
+  map anchored (the point under the pointer stays fixed) when it starts on the fit. Follow, the keyboard cursor, a fresh tile and the zoom buttons all use the middle of the free box, not the middle of the window, so
+  the party and its neighbours are never under a piece. The info chip and the Song mode bar have a fixed size (the chip: a name line, two lines of text, two of action; the bar: two lines of text; longer text
   is cut) so the footprint does not change with the hex under the pointer or what the bar says, and the primary hints come in shorter versions for the Larger text size and for a phone so they always fit. The
-  bar hangs from the top in the slot of the chapter banner (which fades while it is up), clear of the tray, the chip and the page's start hexes; arming or putting away a brush solves the fit again, and it
-  costs the page next to nothing because the bar sits where the banner already was.
-- **Painting.** Every tile starts hidden. `start` and every tile within `ECONOMY.map.startRing` (2) of it are painted (all `empty`, start itself `start`). Tiles of `LISTS.landmarks` are
-  `known` from the start: fog shows a dim silhouette of their icon. Painting an unpainted, non-block hex adjacent to a painted hex costs `ECONOMY.paintCost` (1) Ink and reveals it and its content.
-  Painting a far hex previews the cheapest chain (`MAP.pathToPaint`) with its total cost, and `RUN.paint` on it paints the whole chain, all or nothing.
-- **Ink** lives in `RUN` (`R.ink`, `R.inkMax`; chapter 1 starts at `mods.startInk` and later chapters at `max(R.ink, mods.startInk)`, always capped at `mods.inkMax`; `R.inkMax` follows `mods.inkMax` and is recomputed whenever the relic set changes). Sources: ink wells (`mods.wellInk`), kills (`ECONOMY.killInk`: +1 normal, +2 elite),
-  camp Meditate (`ECONOMY.campInk`), events, relics. **Mercy rule:** `RUN.checkStranded` grants exactly `paintCost` Ink when the party is stranded (`R.ink < paintCost`, no brushes, and no unresolved
-  painted non-block tile reachable from `M.pos`).
-- **Brushes** (`DATA.brushes`): free, one use each, kept in `R.brushes[]`. Geometry (`MAP.brushCells(M, id, q, r, dir)` returns only cells that would newly paint; each cell must exist, be hidden and not
-  Void, and other cells are skipped without stopping the brush): `line` (`stroke` 3, `wave` 5): `(q,r)` is a PAINTED hex and the cells are `(q,r) + k * DIRS[dir]` for `k = 1..len`; `fan`: `(q,r)` painted, the neighbours in
-  directions `dir-1`, `dir`, `dir+1` (mod 6); `blob` (`splash`): `(q,r)` is a hidden hex adjacent to the painted area, the cells are it and its 6 neighbours; `ring` (`halo`): `(q,r)` painted, its 6 neighbours;
-  `dot` (`blot`): `(q,r)` hidden with `MAP.dist(M.pos, (q,r)) <= 4` (adjacency to painted is not required). `MAP.canBrush(M, id, q, r, dir)` is ok iff the origin rule holds and at least one cell is new.
-  Brush-painted hexes never paint blocks.
-- **Walking.** Click any painted hex reachable through painted, non-block hexes to walk there one step at a time. Walking stops at the first tile with unresolved content. Stepping onto unresolved
+  bar hangs from the top in the slot of the verse banner (which fades while it is up), clear of the tray, the chip and the map's start hexes; arming or putting away a Song solves the fit again, and it
+  costs the map next to nothing because the bar sits where the banner already was.
+- **Waking.** Every tile starts hidden. `start` and every tile within `ECONOMY.map.startRing` (2) of it are woken (all `empty`, start itself `start`). Tiles of `LISTS.landmarks` are
+  `known` from the start: fog shows a dim silhouette of their icon. Waking a silent, non-block hex adjacent to a woken hex costs `ECONOMY.paintCost` (1) Echo and reveals it and its content.
+  Waking a far hex previews the cheapest chain (`MAP.pathToPaint`) with its total cost, and `RUN.paint` on it wakes the whole chain, all or nothing.
+- **Echo** lives in `RUN` (`R.ink`, `R.inkMax`; verse 1 starts at `mods.startInk` and later verses at `max(R.ink, mods.startInk)`, always capped at `mods.inkMax`; `R.inkMax` follows `mods.inkMax` and is recomputed whenever the relic set changes). Sources: temple bells (`mods.wellInk`), kills (`ECONOMY.killInk`: +1 normal, +2 elite),
+  camp Meditate (`ECONOMY.campInk`), events, relics. **Mercy rule:** `RUN.checkStranded` grants exactly `paintCost` Echo when the party is stranded (`R.ink < paintCost`, no Songs, and no unresolved
+  woken non-block tile reachable from `M.pos`).
+- **Songs** (`DATA.brushes`): free, one use each, kept in `R.brushes[]`. Geometry (`MAP.brushCells(M, id, q, r, dir)` returns only cells that would newly wake; each cell must exist, be hidden and not
+  Dead Silence, and other cells are skipped without stopping the Song): `line` (`stroke` 3, `wave` 5): `(q,r)` is an AWAKE hex and the cells are `(q,r) + k * DIRS[dir]` for `k = 1..len`; `fan`: `(q,r)` woken, the neighbours in
+  directions `dir-1`, `dir`, `dir+1` (mod 6); `blob` (`splash`): `(q,r)` is a hidden hex adjacent to the woken area, the cells are it and its 6 neighbours; `ring` (`halo`): `(q,r)` woken, its 6 neighbours;
+  `dot` (`blot`): `(q,r)` hidden with `MAP.dist(M.pos, (q,r)) <= 4` (adjacency to woken is not required). `MAP.canBrush(M, id, q, r, dir)` is ok iff the origin rule holds and at least one cell is new.
+  Song-woken hexes never wake blocks.
+- **Walking.** Click any woken hex reachable through woken, non-block hexes to walk there one step at a time. Walking stops at the first tile with unresolved content. Stepping onto unresolved
   content triggers it (`RUN.step`).
-- **Solvability guarantee.** `MAP.solve(M).minInk` counts the hexes to paint from the edge of the start ring to the boss, boss hex included, so its floor is `bossCol - startCol - startRing = 16`. From a fresh
-  map it lies in `ECONOMY.map.solve.min..max` (16..22; tests read the constants), and at least `map.wells.count` (3) Ink wells lie within `map.wells.within` (3) hexes of the cheapest routes. Budget check
-  (asserted by the data tests): `startInk + 3 * wellInk = 22 >= solve.max`, so even the worst legal map is solvable on wells alone before a single kill; kills, brushes and Meditate are surplus. Balance owners tune
+- **Solvability guarantee.** `MAP.solve(M).minInk` counts the hexes to wake from the edge of the start ring to the boss, boss hex included, so its floor is `bossCol - startCol - startRing = 16`. From a fresh
+  map it lies in `ECONOMY.map.solve.min..max` (16..22; tests read the constants), and at least `map.wells.count` (3) temple bells lie within `map.wells.within` (3) hexes of the cheapest routes. Budget check
+  (asserted by the data tests): `startInk + 3 * wellInk = 22 >= solve.max`, so even the worst legal map is solvable on wells alone before a single kill; kills, Songs and Meditate are surplus. Balance owners tune
   `startInk`, `wellInk` and `killInk`, never the geometry. Trials that lower `startInk` rely on kills and wells. **Rows:** the start and boss may sit in any rows, but a hex step
-  moves half a column per row, so a start and boss `dr` rows apart cost `16 + dr/2` paints (16 at `dr = 0`, exactly 22 at `dr = 12`, and `16 + floor` or `16 + ceil` of `dr/2` for odd `dr`, depending on which row is odd) before any Void detour. MAP therefore keeps `|dr| <= 6`, carves Void so the
+  moves half a column per row, so a start and boss `dr` rows apart cost `16 + dr/2` wakes (16 at `dr = 0`, exactly 22 at `dr = 12`, and `16 + floor` or `16 + ceil` of `dr/2` for odd `dr`, depending on which row is odd) before any Dead Silence detour. MAP therefore keeps `|dr| <= 6`, carves Dead Silence so the
   cheapest route stays inside `solve.min..max` with detours counted, and re-rolls with `U.hash(seed, 'retry', k)` (k = 1, 2, ...) when a candidate map falls outside, so `MAP.generate({chapter, seed})` stays a pure function of its arguments.
 - **Tile types** (`LISTS.tiles`): `start empty block enemy elite boss chest shop camp event well brush gemcache forge`. `ECONOMY.dist` gives target fractions of the non-block hexes; the final count of a
   type is `clamp(round(fraction * nonBlock), countMin, countMax)` (`DATA.tileCount`). `tile.diff = clamp(MAP.dist(start, tile) / MAP.dist(start, boss), 0, 1)` rounded to 2 decimals, and scales encounter
@@ -555,24 +582,24 @@ Rest), `onPaint` (after each hex painted, by Ink, a brush or a chain), `onFightW
 
 ### 4.9 Rewards, shops, camps, events
 
-- **Combat rewards** (`RUN.combatDone`): gold (`ECONOMY.gold[tier]` x `mods.goldMul`), Ink from kills, a card reward of `mods.cardChoices` cards, skippable; an elite also offers one relic (rarity by `ECONOMY.relicWeights.elite`, take it or leave it); bosses give a rare
-  card, a relic choice of 3 (boss-rarity relics, falling back to rare) and end the chapter. Some elites (seeded, half) and fable fights also drop a brush.
+- **Combat rewards** (`RUN.combatDone`): gold (`ECONOMY.gold[tier]` x `mods.goldMul`), Echo from kills, a card reward of `mods.cardChoices` cards, skippable; an elite also offers one relic (rarity by `ECONOMY.relicWeights.elite`, take it or leave it); bosses give a rare
+  card, a relic choice of 3 (boss-rarity relics, falling back to rare) and end the verse. Some elites (seeded, half) and fable fights also drop a Song.
 - **Card offers.** Each offer picks a hero uniformly among the two party heroes, then a rarity by `ECONOMY.rarity[tier]`, without duplicates. The rare weight is `base.rare + min(rareOffset,
   ECONOMY.rareOffsetCap) + mods.rareBoost` percentage points taken from common; `rareOffset` rises by 1 after each normal or elite reward that offered no rare and resets to 0 when a rare is taken.
 - **Shop** (`ECONOMY.shop`): 5 cards (a mix of both heroes, one on sale at `saleFrac`), 2 gems, 3 relics (`r0` is a `shop` rarity relic while one is unowned, the
-  other two roll `ECONOMY.relicWeights.shop`; `shop` and `boss` relics drop nowhere else), 1 brush, card removal (price `remove + removeStep * R.removals`), and a free Cut Gems button (4.6). Prices come from `ECONOMY.price`
+  other two roll `ECONOMY.relicWeights.shop`; `shop` and `boss` relics drop nowhere else), 1 Song, card removal (price `remove + removeStep * R.removals`), and a free Cut Gems button (4.6). Prices come from `ECONOMY.price`
   times `mods.priceMul`. The stock is built once on entering the tile from `content.shop.seed` and persisted in `R.node`: `{items:[{key, kind:'card'|'gem'|'relic'|'brush', id, price,
   sale:bool, sold:bool}], removePrice}` where `key` is the kind letter plus the index within its kind (`c0`..`c4`, `g0`..`g1`, `r0`..`r2`, `b0`). Sold-out items stay visible but disabled.
 - **Camp**: pick up to `mods.campActions` (1) different actions: **Rest** (heal both heroes `camp.restPct` of max HP, `healMul` applies), **Sharpen** (upgrade one card), **Cut Gems** (any number of
-  socket or replace operations in that visit; it counts as an action once the first gem is socketed or the player leaves), **Meditate** (`ECONOMY.campInk` Ink and 1 random brush).
+  socket or replace operations in that visit; it counts as an action once the first gem is socketed or the player leaves), **Meditate** (`ECONOMY.campInk` Echo and 1 random Song).
 - **Forge** tile: two buttons, Upgrade one card (once) and Cut Gems (any number of socket or replace operations); the tile is done when the player leaves after using either. **Gem cache**: choose 1 of 3 gems. **Chest**: gold plus either a relic offer or a gem choice (MAP rolls the relic rarity from `ECONOMY.relicWeights.chest`). **Brush rack** and **Well** are instant (`RUN.step` applies them).
 - **Events** (`DATA.events`): `{id, title, text, art:{scene}, once?, chapters?, when?, w?, choices:[{label, req?, cost?, out:[{w, text, ops}]}]}` with 2 to 4 choices, each choice with weighted outcomes using run ops.
-  `chapters` omitted means any chapter; `when:{flag?, relic?, hero?}` (all must hold or the event never rolls); `w` is the weight (default 1); `once:true` events never repeat in a run.
+  `chapters` omitted means any verse; `when:{flag?, relic?, hero?}` (all must hold or the event never rolls); `w` is the weight (default 1); `once:true` events never repeat in a run.
   `cost` is display text only: the engine never deducts it, so the outcome carries the negative op and the choice usually a matching `req`. A choice failing `req` is shown disabled with the reason,
   except a failed `req.hero`, which hides it.
 - **Dead-end choices lock.** A choice is locked, with a stated reason, when EVERY outcome holds an op that can only do nothing right now (`removeCard`, `upgradeCard`, `transformCard` or `duplicateCard` with no candidate card, or a fixed-id `addRelic` the player already owns), so a paid choice never takes the price and gives nothing. Ops after an `addCard`, `addCurse` or `cardReward` are not judged, gambles with a live outcome stay open, and if every choice would lock none does. A fixed-id `addRelic` that is still reached for an owned relic gives a same-rarity relic the player lacks, else a gold refund worth 40% of the shop price, and its log text says so (`Already owned.` only when neither is possible).
-- **Choosing an event for a Fable tile:** from the events allowed in this chapter whose `when` holds and (if `once`) not yet seen, weighted by `w`, preferring events not yet seen this run; if none
-  qualifies pick any repeatable event; if there is none the tile resolves as +1 Ink with a one-line toast.
+- **Choosing an event for a Fable tile:** from the events allowed in this verse whose `when` holds and (if `once`) not yet seen, weighted by `w`, preferring events not yet seen this run; if none
+  qualifies pick any repeatable event; if there is none the tile resolves as +1 Echo with a one-line toast.
 - **Run ops** (events and run hooks, `LISTS.runOps`; the same table is in the `js/data.js` header). Unknown fields are validator errors. `who` (heal, hurt, maxHp): `both` (default), `front`,
   `lowest`, `random`, or a hero id of the party.
 
@@ -586,29 +613,29 @@ Rest), `onPaint` (after each hex painted, by Ink, a brush or a chain), `onFightW
 | `removeCard` `upgradeCard` `transformCard` `duplicateCard` | `n?=1`, `random?`, `filter?:{type,hero}` | default: the player picks in the deck overlay (returned as a `pending` entry); `random:true` uses the RNG. Transform yields a random card of the same hero and rarity |
 | `addRelic` | `id` or `rarity` | rarity draws an unowned, unlocked relic |
 | `addGem` | `id` or `color?`, `tier?` | a random gem matching the filters goes to `R.gems` |
-| `addBrush` | `id` | a brush id or `'random'` |
+| `addBrush` | `id` | a Song id or `'random'` |
 | `addCurse` | `id?`, `n?=1` | a `curse_*` id, omitted = seeded random |
 | `fight` | `enc` or `enemies:[ids]`, `tier?`, `rewards?=true`, `win?:[run ops]` | the LAST op of its outcome: it starts after the earlier ops applied. `tier` (`normal` or `elite`) picks the reward table, `rewards:false` gives none, `win` ops (no nested fight) are stored on the Node (`node.onWin`) and applied by `RUN.combatDone`. The combat Node replaces `R.node` on the same tile (`RUN.eventChoose` returns it as `fight`), so `finishNode` marks the event tile done after the reward |
 | `flag` | `k`, `v?=1` | `R.flags[k] = v` |
-| `paint` | `n` | paints n hexes for free along the cheapest chain toward the boss |
+| `paint` | `n` | wakes n hexes for free along the cheapest chain toward the boss |
 | `cardReward` | `rarity?`, `hero?`, `n?=3` | a skippable card pick like a combat reward |
 
   Bounds the validator enforces: `n` on the card ops and `addCurse` and `cardReward` is 1..5, `paint` `n` is 1..12, `fight.enemies` lists 1 to 4 ids, `gold` and `ink` take a whole `n` (negative is a cost) or a non-zero `pct` in -1..1 (`heal` and `hurt` need a positive `n` or a `pct` in (0,1]), `maxHp` a non-zero whole `n`.
   `choice.req` keys (all must hold): `gold:N` (has at least N), `hpPct:F` (every living hero at or above fraction F of max HP), `hpBelow:F` (some living hero below F), `relic:id`, `flag:k` (truthy),
   `hero:id` (in the party), `chapter:n`. Ops that need a UI choice return `pending` entries from `RUN.applyOps`; `RUN.resolvePending` answers them.
-- **Chapter end**: after a boss, `ECONOMY.chapterEnd`: +8 max HP each, then heal 30% of max HP (`healMul` applies), then the next chapter's map. Ink is topped up to `mods.startInk` if it is lower (4.8).
+- **Verse end**: after a boss, `ECONOMY.chapterEnd`: +8 max HP each, then heal 30% of max HP (`healMul` applies), then the next verse's map. Echo is topped up to `mods.startInk` if it is lower (4.8).
 
-### 4.10 Difficulty, Trials, Daily Tale, score, stats, meta
+### 4.10 Difficulty, Trials, Daily Jam, score, stats, meta
 
-- **Ink Trials** 0 to 10 (`DATA.trials`): a level's `mods` (`LISTS.trialMods`) are that level's own INCREMENT and playing trial N sums levels 1..N (`DATA.trialDeltas`). Level 0 is the base game.
+- **Tempo Trials** 0 to 10 (`DATA.trials`): a level's `mods` (`LISTS.trialMods`) are that level's own INCREMENT and playing trial N sums levels 1..N (`DATA.trialDeltas`). Level 0 is the base game.
   Trial N+1 unlocks when trial N is won. `trialBest` = the highest trial level WON (0 if only trial 0 was won); `META.trialMax()` = `wins > 0 ? min(10, trialBest + 1) : 0`; an achievement
   `trialBest gte N` means trial N was won.
-- **Daily Tale**: seed = the local date as `YYYYMMDD` (`U.dateKey`), heroes from `RUN.dailyHeroes(seed)` (two distinct ids from all four, ignoring hero locks, drawn with `U.rng(U.hash(seed, 'daily', 'heroes'))`),
-  trial 0, and every locked card, relic and gem counts as unlocked so everyone plays the same tale. It reads and writes the profile only for `dailyRuns` and Inkstones at half rate.
+- **Daily Jam**: seed = the local date as `YYYYMMDD` (`U.dateKey`), heroes from `RUN.dailyHeroes(seed)` (two distinct ids from all four, ignoring hero locks, drawn with `U.rng(U.hash(seed, 'daily', 'heroes'))`),
+  trial 0, and every locked card, relic and gem counts as unlocked so everyone plays the same journey. It reads and writes the profile only for `dailyRuns` and Chimes at half rate.
 - **Score** (`RUN.score`): `max(0, 100 * chaptersCleared + 60 * bossKills + 15 * elites + floor(gold / 10) + 2 * sum(maxHp) + 2 * upgradedCards + 3 * filledGemSlots - 5 * curseCards - floor(turns / 2))`
   (constants in `ECONOMY.score`). Shown on the end screens and stored in run history.
-- **Inkstones** are the meta currency: `META.recordRun` pays `floor((4 * chaptersCleared + (win ? 15 : 0) + 3 * trial + floor(score / 60)) * (daily ? 0.5 : 1) * (abandon ? 0.5 : 1))`, floored once at the end
-  (`ECONOMY.inkstones`). They are spent in the **Library** on entries derived from every def with `locked:true` (cards, relics, gems; prices `ECONOMY.library`), plus achievement rewards. Heroes 3 and 4
+- **Chimes** are the meta currency: `META.recordRun` pays `floor((4 * chaptersCleared + (win ? 15 : 0) + 3 * trial + floor(score / 60)) * (daily ? 0.5 : 1) * (abandon ? 0.5 : 1))`, floored once at the end
+  (`ECONOMY.inkstones`). They are spent in the **Hall of Echoes** on entries derived from every def with `locked:true` (cards, relics, gems; prices `ECONOMY.library`), plus achievement rewards. Heroes 3 and 4
   unlock through achievements `ch1_clear` and `ch2_clear` (see `DATA.heroes`). Locked content is filtered out of every reward pool, shop, chest, event and gem cache until unlocked (`R.unlocked`).
 - **Stat counters** (`LISTS.statKeys`; `LISTS.statMax` keys merge with max, all others add). COMBAT reports per fight in `C.stats`: `turns cardsPlayed attacksPlayed damageDealt` (enemy HP removed) `damageTaken` (hero HP lost to
   hits and thorns) `blockGained maxHit` (largest raw single hit) `maxTurnDamage` (most `damageDealt` in one player phase) `swaps heroDowns revives poisonKills burnKills thornKills multiHitTurns` (player turns where
@@ -689,7 +716,7 @@ C.intent(enemyUnit) -> { move, name, kind, dmg (per hit or null), hits, tgt:[her
 C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
 ```
 
-`C.summary().ink` is only the sum of `ink` ops; `gold` = `gold` ops plus thief loot returned minus loot never returned. `RUN.combatDone` adds kill Ink from `stats.kills` and `ECONOMY.killInk`, applies HP (downed heroes revive at `mods.reviveFrac`),
+`C.summary().ink` is only the sum of `ink` ops; `gold` = `gold` ops plus thief loot returned minus loot never returned. `RUN.combatDone` adds kill Echo from `stats.kills` and `ECONOMY.killInk`, applies HP (downed heroes revive at `mods.reviveFrac`),
 max HP gains and `frontIdx`. `canPlay`, `legalTargets`, `preview` and `intent` are pure: they never consume `C.rng`.
 
 **Lanes.** `lane` is assigned by COMBAT so headless tests and presentation agree: the initial n enemies take lanes `5 - n .. 4` in `C.enemies` order (a boss stands alone in lane 4); each summon takes the highest free lane (a lane with no living unit,
@@ -722,7 +749,7 @@ end {result:'win'|'lose'}
 `group` is one int per executed op (shared by every hit, block, heal, status and dodge event that op produced); the presentation uses it to play AoE in parallel.
 `block_lost` says Block vanished without being spent on a hit's own absorption: `cause:'hit'` is emitted right after a `hit` that took the unit's last Block (`amount` = what it absorbed, SCENE plays `block_break`),
 `'turn'` when Block clears at the start of its owner's phase (only when it was above 0), `'consume'` for `consume:'block'`. `enemy_act.say` is the move's `say` bark text. `relic {id}` says a relic hook just ran (flash its
-icon); `gold {n}`, `ink {n}` and `max_hp {hero, n}` echo run-level ops applied mid-combat (the screen updates its counters from them); `end` is always the last event of a combat. `pick_needed` is always the LAST event of its array.
+icon); `gold {n}`, `ink {n}` and `max_hp {hero, n}` mirror run-level ops applied mid-combat (the screen updates its counters from them); `end` is always the last event of a combat. `pick_needed` is always the LAST event of its array.
 `intent` events are sent only when an intent is rolled or re-rolled by a phase; after every drained batch the UI calls `C.intent(e)` again for each living enemy, because swaps, Block, Taunt and statuses change the
 displayed numbers. `C.phase` is never the name of an event (the boss event is `enemy_phase`).
 
@@ -743,23 +770,23 @@ T = { q, r, type, painted, known, done, diff, content:{...} }
 
 ```
 MAP.key(q,r)  MAP.parse(key)  MAP.DIRS (6 [dq,dr], order in 4.8)  MAP.neighbors(M,q,r) -> [[q,r]] (existing tiles)  MAP.dist(aq,ar,bq,br)
-MAP.canPaint(M,q,r) -> { ok, reason? }            // hidden, not block, adjacent to a painted tile
-MAP.paint(M,q,r) -> tile                          // marks painted (no Ink accounting: RUN owns Ink)
-MAP.pathToPaint(M,q,r) -> { path:[[q,r]...], cost }   // cheapest chain of unpainted non-block hexes from the painted area to (q,r); cost = its length; null if impossible
+MAP.canPaint(M,q,r) -> { ok, reason? }            // hidden, not block, adjacent to a woken tile
+MAP.paint(M,q,r) -> tile                          // marks woken (no Echo accounting: RUN owns Echo)
+MAP.pathToPaint(M,q,r) -> { path:[[q,r]...], cost }   // cheapest chain of silent non-block hexes from the woken area to (q,r); cost = its length; null if impossible
 MAP.canBrush(M, brushId, q, r, dir) -> { ok, reason }   MAP.brushCells(M, brushId, q, r, dir) -> [[q,r]] ([] when not ok)   MAP.applyBrush(M, brushId, q, r, dir) -> [tiles]
-MAP.canMove(M,q,r) -> bool  MAP.move(M,q,r) -> tile  MAP.walkPath(M,q,r) -> [[q,r]...]|null   // painted, non-block, adjacent to pos for canMove
-MAP.solve(M) -> { ok, minInk }                    // minimum paints to connect the painted start area to the boss (4.8)
+MAP.canMove(M,q,r) -> bool  MAP.move(M,q,r) -> tile  MAP.walkPath(M,q,r) -> [[q,r]...]|null   // woken, non-block, adjacent to pos for canMove
+MAP.solve(M) -> { ok, minInk }                    // minimum wakes to connect the woken start area to the boss (4.8)
 MAP.progress(M) -> { painted, total, pct }
 MAP.toPixel(q,r,size) -> {x,y} (hex centre)   MAP.fromPixel(x,y,size) -> {q,r}   MAP.corners(x,y,size) -> [{x,y}x6]   MAP.bounds(M,size) -> {x0,y0,x1,y1}
 MAP.serialize(M) / MAP.deserialize(o)
 ```
 
-Tests: 300 seeds x 3 chapters generate valid maps (tile counts from `DATA.tileCount`, start in column 1, boss in column 19, start and boss reachable, `solve.minInk` in `ECONOMY.map.solve.min..max`, no landmark
-unreachable, at least 3 wells within 3 hexes of the cheapest route), round-trip serialise, brush geometry for every brush in every direction, pixel to hex round trip.
+Tests: 300 seeds x 3 verses generate valid maps (tile counts from `DATA.tileCount`, start in column 1, boss in column 19, start and boss reachable, `solve.minInk` in `ECONOMY.map.solve.min..max`, no landmark
+unreachable, at least 3 wells within 3 hexes of the cheapest route), round-trip serialise, Song geometry for every Song in every direction, pixel to hex round trip.
 
 ### 5.4 `RUN` (`run.js`)
 
-Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed, daily, unlocked, nonce}) -> R`. `nonce` (optional) is hashed into `R.id` only, never into any RNG stream: GAME passes a clock plus counter so every started tale has its own id (the paid-runs ledger in 5.5 depends on it), tests and the bot pass none and keep deterministic ids. `unlocked` is `{card,relic,gem}` (the locked defs the player owns); RUN stores it as `R.unlocked` (saved) and every pool draw
+Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed, daily, unlocked, nonce}) -> R`. `nonce` (optional) is hashed into `R.id` only, never into any RNG stream: GAME passes a clock plus counter so every started journey has its own id (the paid-runs ledger in 5.5 depends on it), tests and the bot pass none and keep deterministic ids. `unlocked` is `{card,relic,gem}` (the locked defs the player owns); RUN stores it as `R.unlocked` (saved) and every pool draw
 (card rewards, shop, chests, events, gem caches) skips a def that is `locked` and not in it. RUN never calls META. Key shape:
 
 ```
@@ -775,7 +802,7 @@ Public API (each returns plain data and never touches the DOM; the module header
 ```
 RUN.newRun(opts)  RUN.dailyHeroes(seed) -> [idA, idB]  RUN.startChapter(R, n)  RUN.mods(R) -> final flat mods (DATA.modsFor(R.relics, R.mods))
 RUN.paint(R,q,r) -> {ok, tiles, reason}     RUN.useBrush(R, brushId, q, r, dir) -> {ok, tiles, reason}    RUN.paintPreview(R,q,r) -> {path, cost, affordable}
-RUN.step(R,q,r) -> Node|Instant|null        // move onto a painted adjacent tile; returns what happens there. Instant = {kind:'well'|'brush', gained|id, done:true} (already applied, tile done)
+RUN.step(R,q,r) -> Node|Instant|null        // move onto a woken adjacent tile; returns what happens there. Instant = {kind:'well'|'brush', gained|id, done:true} (already applied, tile done)
 Node = { kind:'combat'|'reward'|'shop'|'event'|'camp'|'forge'|'chest'|'gemcache', tile:{q,r}, tier?, enc?, enemies?, stock?, event?, loot?, offers?, rewards?, source?, onWin?, ... }
 RUN.combatInit(R, node) -> opts for COMBAT.create      RUN.combatDone(R, C) -> Rewards       // applies hp, revives, kills, stats; turns R.node into {kind:'reward', rewards, source, tile}
 Rewards = { gold, ink, cards:[cardId...] (offers, may be empty), relics:[relicId] (offers), gems:[gemId], brush:id|null, maxHp:0, boss:bool, tier, source }   // rolled once inside combatDone, never re-rolled. `gold` and `ink` are already added to R (the screen only displays them, so a reload cannot lose or double them); the rest are offers that RUN.claim resolves
@@ -789,15 +816,15 @@ RUN.campAction(R, 'rest'|'sharpen'|'gems'|'meditate', arg) -> {ok,...}
 RUN.addCard(R,id,opts) RUN.removeCard(R,uid) RUN.upgradeCard(R,uid) RUN.socket(R,uid,slot,gemId)      // replacing a gem in a slot is the only way to lose one
 RUN.checkStranded(R) -> bool     // 4.8 mercy rule; called at the end of step, paint, useBrush, finishNode and claim
 RUN.finishNode(R) -> {chapterEnded}   // marks R.node's tile done, clears R.node, calls checkStranded. Screens never touch tile.done
-RUN.chapterEnd(R) -> { next:2|3|'victory', healed:[...], maxHp:8 }   // after the chapter 3 boss: next 'victory', no heal and no max HP (recordRun follows)
+RUN.chapterEnd(R) -> { next:2|3|'victory', healed:[...], maxHp:8 }   // after the verse 3 boss: next 'victory', no heal and no max HP (recordRun follows)
 RUN.score(R)  RUN.summary(R) -> {score, victory, chapter, trial, daily, seed, heroes:[{id,hp,maxHp}], deckSize, relics:[ids], gold, stats}
 RUN.serialize(R)  RUN.deserialize(o) -> R|null   // null when o.v differs; drops deck entries whose id is no longer in DATA.cards; calls U.resetUid(1 + max uid in deck)
 ```
 
 **Node lifecycle and saves.** `R.node` holds exactly one pending node: a Node (a shop's stock is built once from the tile seed), or a `{kind:'reward', ...}` created by `combatDone`. `GAME` calls `META.saveRun` after every
-`RUN.step` (node entry, or an instant well or brush rack that `step` already applied and marked done), after `combatDone` and after `finishNode`; `GAME.nodeDone()` calls `RUN.finishNode` then `META.saveRun`. A reload
-mid-node therefore restarts that node from its entry state with the deck, HP, gold and Ink from before it, and because every roll is seeded (above) the same shop, chest and event outcomes come back, so a reload never re-rolls a
-gamble and never keeps a purchase. Combat is not resumable: Continue re-enters a saved `combat` node with the same seed and deck. The title's Continue shows "Chapter 2, Ink 5, Hanae and Kuro".
+`RUN.step` (node entry, or an instant well or Songbird that `step` already applied and marked done), after `combatDone` and after `finishNode`; `GAME.nodeDone()` calls `RUN.finishNode` then `META.saveRun`. A reload
+mid-node therefore restarts that node from its entry state with the deck, HP, gold and Echo from before it, and because every roll is seeded (above) the same shop, chest and event outcomes come back, so a reload never re-rolls a
+gamble and never keeps a purchase. Combat is not resumable: Continue re-enters a saved `combat` node with the same seed and deck. The title's Continue shows "Verse 2, Echo 5, Hanae and Kuro".
 
 ### 5.5 `META` (`meta.js`)
 
@@ -817,7 +844,7 @@ META.unlockedSet() -> {card:[],relic:[],gem:[]}   // what GAME passes to RUN.new
 META.libraryList() -> [{kind,id,cost,unlocked,affordable}]   META.buy(kind,id) -> {ok,reason}
 META.inkstones  META.recordRun(R, outcome:'win'|'lose'|'abandon', now) -> { inkstones, newAchievements, newTrial, heroesUnlocked }   // calls check again after merging
 META.seen(enemyId) (GAME calls it once per enemy id when a fight node is entered; saves at once; daily runs record kills too) META.bestiary() -> [{id,seen,kills}]   META.history -> last 20 runs [{score,heroes,chapter,outcome,trial,daily,ts}]
-META.loreSeen(id) META.markLore(id) META.storyList() -> [{id,seen}]   // every lore id EXCEPT barks_* (those are in-combat lines, not stories), seen or not, for the Library Story tab
+META.loreSeen(id) META.markLore(id) META.storyList() -> [{id,seen}]   // every lore id EXCEPT barks_* (those are in-combat lines, not stories), seen or not, for the Hall of Echoes Ballads tab
 META.trialMax() -> highest selectable trial    META.dailySeed(date) -> YYYYMMDD int (U.dateKey; the caller passes the Date)    META.tutorial(flag) / META.setTutorial(flag)
 ```
 
@@ -834,7 +861,7 @@ ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow})   // origi
 ART.hero.portrait(ctx, heroId, {x, y, w, h, expr, t})   // bust; x,y = top-left; composed for 3:4, other ratios scale to cover and crop keeping the face; expr in LISTS.expressions
 ART.hero.medallion(ctx, heroId, x, y, r)                 // round face icon, x,y = centre
 ART.hero.bounds(heroId) -> {w, h, head:{x,y}, hand:{x,y}, feet:{x,y}, weapon:{x,y}}   ART.hero.poseMs(pose) -> natural length in ms
-ART.enemy.register(id, { draw(ctx, o), bounds:{w,h,head:{x,y},body:{x,y},feet:{x,y}} })   // art_enemies_N.js call this once per id of chapter N (the 3 files are disjoint by DATA.enemies[id].chapter)
+ART.enemy.register(id, { draw(ctx, o), bounds:{w,h,head:{x,y},body:{x,y},feet:{x,y}} })   // art_enemies_N.js call this once per id of verse N (the 3 files are disjoint by DATA.enemies[id].chapter)
 ART.enemy.draw(ctx, enemyId, {x, y, s, pose, t, pt, flip, hpPct, phase, alpha, glow})
 ART.enemy.bounds(enemyId) -> same shape as register      ART.enemy.poseMs(pose)
 ART.card.draw(ctx, cardIdOrInst, w, h, t?)      // paints at (0,0) of the current transform, cached per id + up + size
@@ -842,7 +869,7 @@ ART.card.motif(ctx, motifId, x, y, size, palette, t)   // exported and reused by
 ART.icon.draw(ctx, kind, id, x, y, size, opts)  // (x,y) = CENTRE, size = box edge in px
 ART.scene.draw(ctx, sceneId, w, h, t, opts)     // paints at (0,0); LISTS.scenes; opts {particles, parallaxX};  ART.scene.logo(ctx, x, y, w, t)
 ART.map.hex(ctx, kind, x, y, size, opts)        // (x,y) = centre; kind in LISTS.mapKinds
-ART.map.paintBloom(ctx, x, y, size, p)          // p = 0..1        ART.map.token(ctx, heroIds, x, y, t, moving)   // t = seconds
+ART.map.paintBloom(ctx, x, y, size, p)          // p = 0..1, the sound wavefront of a woken hex        ART.map.token(ctx, heroIds, x, y, t, moving)   // t = seconds
 ART.fx.NAME(ctx, o, t)                          // see below
 ```
 
@@ -863,8 +890,9 @@ engraved glyph (red sword, blue shield, green leaf, gold star, prism ring) so co
 
 **`ART.map.hex`** kinds: `fog known ground block painted edge path hover target`; `opts = { tile:LISTS.tiles id (wash colour and stamp), seed:int (wobble variant, pass U.hash(q,r)), done:bool, t:seconds }`; cached by kind, tile,
 done, `seed % 8` and size. Hex geometry is defined in 4.8.
+The map reads hushed versus awake: grey, still ground under the Hush, colour, echo rings and a little motion where hexes are woken, in a lacquer frame (`ART.map.frameInner` keeps its window). The HUD shows the Echo meter and the Song tray, the story screen is a lacquer plaque, and the transitions are a shoji door slide (`UI.transition('page')`) and a sound-ring wipe (`'ink'`).
 
-**`ART.fx.NAME(ctx, o, t)`** is ONE signature for every effect. `t` is progress 0..1; SCENE owns timing in ms (`ART.fx.ms[NAME]`). Each is a pure function of `(o, t)`: no internal state, no `Math.random`; particles derive from `o.seed`
+**`ART.fx.NAME(ctx, o, t)`** is ONE signature for every effect. `t` is progress 0..1; SCENE owns timing in ms (`ART.fx.ms[NAME]`). Each is a pure function of `(o, t)`: no internal state, no unseeded random call; particles derive from `o.seed`
 and `t`, so any `t` can be drawn in any order (the gallery relies on this). `o = { x, y, x2?, y2?, s?:1, color?, color2?, dir?:1|-1, ang?, seed?:int, text?, kind?, w?, h? }`, unknown keys ignored; `(x,y)` is the origin in stage px
 (impact point, caster centre or line start), `(x2,y2)` the end point for `chain`, `lightning`, `thrust`, `brushDrag`, `s` a size multiplier, `seed = U.hash(eventIndex)`. `ART.fx.names` is exactly `LISTS.fx` (24 names:
 `slash cross thrust burst ring inkSplash petals lightning chain flame frost poison shield heal buff debuff sparkle speedLines impactFrame sfxText vignette chromatic brushDrag numberPop`). `ART.fx.ms` are defaults art_fx may retune:
@@ -889,7 +917,16 @@ AUDIO.sfx(id, opts?)               // id in DATA.LISTS.sfx; opts {vol, pitch, pa
 AUDIO.music(trackId|null, opts?)   // id in DATA.LISTS.music; crossfades; null stops. Before init the request is remembered and starts inside init()
 AUDIO.setVolume('music'|'sfx', 0..1)   AUDIO.duck(ms)   AUDIO.suspend() / AUDIO.resume()   AUDIO.current -> track id   AUDIO.ready -> bool
 AUDIO.intensity(n)                 // 0..1; screen_combat calls it with 1 - living/starting enemies, plus 0.25 per boss phase entered
+AUDIO.wake(q, r, o)                // one woken hex sings: o = {chapter, seed, cols, rows (the map's), song? (a DATA.brushes id), i?, n?, aq?, ar? (the Song's anchor),
+                                   // last? (the held cadence), soft? (a walked hex), pan?}. Dropped like sfx, when the effects volume is 0, and above a note budget
+AUDIO.hexNote(q, r, info) -> {deg, midi}   AUDIO.songDegrees(song, n, root) -> [deg] | null   AUDIO.wakeDegree(q, r, o) -> deg   // pure: the land's hidden tune
+AUDIO.awake(frac?)                 // the woken share of the map (MAP.progress(M).frac); the map tracks are hushed (low-passed, quieter, fewer layers) until it rises; default 1
+AUDIO.options({calm, lite}?)       // from UI.applySettings: calm = reduceMotion (no echo, no hummed steps), lite = quality low (cheap voice, fewer notes, no echo)
+AUDIO.HUSH -> {from, span, th}     // the calibrated wake curve (read only); voice 'vox' sings vowels and speaks kuchi shoga, used by wake notes and never by a score
 ```
+
+screen_map calls `AUDIO.wake` when each bloom starts and on every walked hex, and `AUDIO.awake` whenever
+the woken count changes; the map tracks follow `awake`, the fight tracks follow `intensity`.
 
 `audio.js` never references `META`: `UI.applySettings()` is the only bridge. The suite `tests/rogue_book_audio.test.mjs` calls `AUDIO.sfx(id)` for every id in `LISTS.sfx` and `AUDIO.music(id)` for every id in `LISTS.music`,
 then pumps the loader's timers, and asserts no throw.
@@ -908,7 +945,7 @@ tutorial hints; `#toasts` [50]. `UI.layers = {view, screens, overlays, over, tip
 
 **Hit targets and small screens.** Hit targets are 44 CSS px on the SCREEN: `base.css` sets `--scale` and `--hit: max(44px, calc(44px / var(--scale)))` and every interactive element has `min-width` and `min-height` `var(--hit)`
 (the drawn art may be smaller, the hit area is padded or uses `::after`). Below `UI.scale` 0.75 UI adds class `compact` to `#stage`: screens may drop secondary chrome but never shrink `--hit`. **Portrait:** there is NO portrait layout.
-While `innerHeight > innerWidth * 1.1` and `UI.scale < 0.6`, UI creates and shows `#rotate` ("Turn your device sideways", animated book), stops `UI.frame` and calls `AUDIO.suspend()`; it tries `screen.orientation.lock('landscape')`
+While `innerHeight > innerWidth * 1.1` and `UI.scale < 0.6`, UI creates and shows `#rotate` ("Turn your device sideways", an animated phone with sound arcs), stops `UI.frame` and calls `AUDIO.suspend()`; it tries `screen.orientation.lock('landscape')`
 after the first fullscreen tap. The viewport meta must not disable page zoom.
 
 **Frame loop.** `UI.frame(now)` is called by the single rAF loop in GAME: `dt = clamp((now - last) / 1000, 0, 0.05)`; `t += dt`; tweens; `cur.update(dt, t)`; `ctx.setTransform(UI.px,0,0,UI.px,0,0)`; clear to `#0d0b1e`;
@@ -946,7 +983,7 @@ UI.card(inst | id, {size:'mini'|'deck'|'hand'|'reward'|'big', unit, C, selected,
 UI.cardBack(size) -> el      UI.relic(id, {size, onclick}) -> el     UI.gem(id, {size}) -> el     UI.status(id, n, {size}) -> el     UI.heroBadge(heroId, {size, hp, maxHp}) -> el
 UI.stat(kind, value, {size}) -> el      // kind in LISTS.statIcons: 'gold' 'ink' 'hp' 'energy' 'brush' 'inkstone' 'block'
 UI.tip.attach(el, () => html|node|null)  UI.tip.hide()      UI.tip.card(inst) UI.tip.kw(word)
-UI.transition(kind, midFn) -> Promise    // 'page' (page turn), 'ink' (ink bloom wipe), 'fade'
+UI.transition(kind, midFn) -> Promise    // 'page' (shoji door slide), 'ink' (sound-ring wipe), 'fade'
 UI.floatText(x, y, text, kind)    UI.pulse(el)    UI.shake(el)      // DOM screens only; combat numbers belong to SCENE
 UI.toStage(clientX, clientY) -> {x,y}    UI.announce(text)    UI.applySettings()    UI.anchorEl(selector) -> el|null    UI.init()    UI.frame(now)    UI.bus = U.bus()
 ```
@@ -977,12 +1014,12 @@ must emit these. `tutorial.js` is one IIFE that only subscribes (`UI.bus.on`) an
 `data-tut="hand|energy|endturn|swap|intent|enemy|ink|hex|brushes|deck|relics"` (`LISTS.tutAnchors`). Each hint has a `META.tutorial` flag and shows once; the settings toggle "Hints" and `?notutorial=1` disable it. The `tutorial`
 suite drives the whole guided run beat by beat through the bus. Public API: `UI.tutorial = {enabled(), fire(id, force?), current() -> {id, el}|null, queue() -> [ids], dismiss(why?), reset(),
 seen(id), flag(id) -> 'tut_<id>', idle(), HINTS, RULES, shown, counts}`. The map's `hex` anchor is an invisible box: it marks the first hex of the cheapest chain toward the boss (the `paint`
-hint), moves to the hex that was just painted after a paint or a brush (the `walk` hint) and goes back to the chain once a walk starts.
+hint), moves to the hex that was just painted after a paint or a Song (the `walk` hint) and goes back to the chain once a walk starts.
 
 **Accessibility.** Keyboard: every interactive element is a real `<button>` or has `tabindex=0` and `role=button`, with a 3 px gold focus ring; Tab and arrows move focus, Enter or Space activate, Esc = back or close top overlay or pause.
 Combat: `1`..`9` and `0` select a hand card, Left and Right move between cards and then cycle targets, Enter plays, `E` ends the turn, `S` swaps, `D` and `G` open the draw and discard piles, `Z` toggles fast animation. Map: arrows pan (Shift pans three times
 faster), plus and minus zoom, `F` fits the whole page (again: follows the party), `Q E A D Z C` move a hex cursor (NW NE W E SW SE), Enter or Space paints or walks to the
-cursor hex like a tap, Esc cancels a chain preview or a brush, `B` opens the brush tray and `1` to `9` pick a brush. Screen reader: every `UI.card` has `aria-label` = `DATA.cardPlain(inst)` plus cost and type; status, intent and relic elements use `statusText`, `intentText`,
+cursor hex like a tap, Esc cancels a chain preview or a Song, `B` opens the Song tray and `1` to `9` pick a Song. Screen reader: every `UI.card` has `aria-label` = `DATA.cardPlain(inst)` plus cost and type; status, intent and relic elements use `statusText`, `intentText`,
 `relicText`; a visually hidden `aria-live=polite` `#sr` region (declared in index.html, written with `UI.announce(text)`) receives one line per drained combat batch ("Kappa attacks Hanae for 7"). `textScale`: text uses `calc(var(--fs) * var(--ts))`; fixed-size parts must not clip at ts 1.3 (card
 rules text auto-shrinks to 0.8 then scrolls; buttons grow in width, not height); every screen is screenshotted once at ts 1.3. `colorblind` also draws gem and slot glyphs at 1.4x and adds a pattern fill to rarity (common solid, uncommon dots,
 rare stripes) and to buff, debuff and resource status discs.
@@ -1025,7 +1062,7 @@ DOM overlays are repositioned once per frame after `SCENE.update`.
 7. **SFX map** (in `SCENE.play`): `play` -> `card_play_attack|skill|power` by card type; `hit` -> `hit_crit` if crit, else `hit_multi` if hits > 1, else `hit_heavy` if amount >= 15, else `hit_light`; a blocked hit with amount 0 -> `block_hit`;
    `block_lost` with `cause:'hit'` -> `block_break`; `block` -> `block_gain`; `heal` -> `heal`; `status` with delta > 0 -> `stun` for Stun, else `buff` or `debuff` by `DATA.statuses[s].kind` (resource counts as buff); `dodge` -> `dodge`; `thorns` -> `thorn`; `swap` -> `swap`;
    `draw` -> `card_draw`; `shuffle` -> `shuffle`; `discard` -> `card_discard`; `exhaust` -> `card_exhaust`; `energy` with delta > 0 -> `energy_gain`; `turn_start` -> `turn_start` or `enemy_turn`; `death` -> `enemy_die` (`boss_die` for tier boss);
-   `hero_down`, `hero_revive`; `enemy_phase` -> `phase_change`; `summon` -> `debuff`. Every `hit` that removes HP also plays its element layer at 60% volume (fire -> `flame`, ice -> `ice`, lightning -> `zap`, poison -> `poison_tick`, slash, ink and holy -> `slash`), and a hit on a hero of amount >= 15 also plays `thud`. UI (not SCENE) plays `ui_*`, `card_hover` and `card_pick`; the map, shop and node screens play their own `paint`, `well`, `buy` style ids.
+   `hero_down`, `hero_revive`; `enemy_phase` -> `phase_change`; `summon` -> `debuff`. Every `hit` that removes HP also plays its element layer at 60% volume (fire -> `flame`, ice -> `ice`, lightning -> `zap`, poison -> `poison_tick`, slash, `ink` and holy -> `slash`), and a hit on a hero of amount >= 15 also plays `thud`. UI (not SCENE) plays `ui_*`, `card_hover` and `card_pick`; the map, shop and node screens play their own `paint`, `well`, `buy` style ids.
 8. **Poses** (SCENE picks them; poses last `ART.*.poseMs`): enemies idle, `telegraph` while their current intent kind is `heavy` (set on each `intent` event), `attack` on `enemy_act`, `hurt` on a hit that removed HP, `block` on Block gained, `buff` on a status gained by itself,
    `die` on `death`; heroes idle, `attack` when the played card has a `dmg` op and `cast` for any other card, `hurt`, `block` on Block gained, `down` on `hero_down`, `cheer` on a winning `end`; `walk` is the map token only.
 9. **Barks.** `barks_<id>` lore: `SCENE.bark(heroId, text)` draws a manga bubble for 1.8 s. screen_combat picks the key: `start` (`combat_start`), `hurt` (a hit on a hero with amount >= 25% of max HP), `kill` (a `death` right after a `hit` with `killed:true` whose `src` is that hero),
@@ -1037,19 +1074,19 @@ DOM overlays are repositioned once per frame after `SCENE.update`.
 GAME.boot()  GAME.state = { R, pendingChapter, lastCombat, ended, ... }  GAME.params (the parsed URL params and the opts a ?goto screen receives)
 GAME.newRun({heroes, trial, seed, daily})  GAME.continueRun()  GAME.abandon()  GAME.toTitle()  GAME.save() -> bool  GAME.defeat()  GAME.victory()
 GAME.enterNode(node)       // routes a RUN node to its screen; Instants {kind:'well'|'brush'} only toast and save (a fable tile with no eligible event arrives as a well with its own `toast`)
-GAME.nodeDone()            // called by a screen when finished: RUN.finishNode, META.saveRun, chapter flow, back to the map
+GAME.nodeDone()            // called by a screen when finished: RUN.finishNode, META.saveRun, verse flow, back to the map
 GAME.debug = { ... }       // below
 ```
 
-`GAME.continueRun()` routes a save with `R.chapterCleared` and no node to the chapter flow (chapter clear page for chapters 1 and 2, victory for chapter 3). `GAME.newRun` over a saved tale records the old one as an abandon (half Inkstones, stats, bestiary kills, a history row, a toast). `GAME.defeat()` and `GAME.victory()` end the run once (META.recordRun, META.clearRun, then the gameOver or victory screen; a second call is a no-op). A lost fight records the run at once when the combat
+`GAME.continueRun()` routes a save with `R.chapterCleared` and no node to the verse flow (verse clear page for verses 1 and 2, victory for verse 3). `GAME.newRun` over a saved journey records the old one as an abandon (half Chimes, stats, bestiary kills, a history row, a toast). `GAME.defeat()` and `GAME.victory()` end the run once (META.recordRun, META.clearRun, then the gameOver or victory screen; a second call is a no-op). A lost fight records the run at once when the combat
 screen emits `combat:end {result:'lose'}` and routes to gameOver after 1.6 s unless the screen already did. Try Again on the game over page calls `GAME.newRun` with the same heroes and trial; with `?seed=N` in the URL
-that is the same seed again (a fixed seed is a fixed tale), without it a fresh clock seed.
+that is the same seed again (a fixed seed is a fixed journey), without it a fresh clock seed.
 
 **Boot order** (`GAME.boot`): 1 `META.load()`; 2 `UI.init()`; 3 `UI.applySettings()`; 4 parse URL params from `window.location.search`; 5 GAME subscribes to `META.bus` `'achievement'` and `'unlock'` -> `UI.toast(text, 'achievement')` plus
 `AUDIO.sfx` (only GAME subscribes); 6 start the single rAF loop; 7 `UI.go(goto || 'title')`; 8 `window.__booted = true`, add class `out` to `#boot` and remove it after 400 ms. `main.js` ends with `if (!window.__NO_AUTOBOOT) GAME.boot();`
 (the test loader sets `__NO_AUTOBOOT` unless `boot({autoboot:true})`). `index.html` carries an inline watchdog that shows the load error and a Try again button if the game has not booted after 6 s.
 `GAME` builds `unlocked` with `META.unlockedSet()` for `RUN.newRun`, calls `META.check(R)` at every chapterClear, and shows the story: `intro` once ever (`META.tutorial('intro')`), `chN_intro` at `RUN.startChapter`, `chN_clear` inside `chapterClear`,
-`victory` and `defeat` inside those screens, `hero_<id>` on heroSelect and in the Library.
+`victory` and `defeat` inside those screens, `hero_<id>` on heroSelect and in the Hall of Echoes.
 
 **`GAME.debug`** ALWAYS exists (a dev tool); `?debug=1` only mirrors `window.GAME`, `window.RUN`, `window.COMBAT` and friends for the console.
 
@@ -1079,14 +1116,14 @@ URL params handled by `GAME.boot` (they work without `?debug=1`): `?goto=combat&
 Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Beyond this document the map screen exposes `UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y), hud(measure?), clamp(x, y, z)}`,
 a window onto the live visit (camera, where a hex is on the stage, which hex is under a stage point, the HUD footprint `{rects, free, box, slack, fit}` of 4.8 and where the clamp lets the camera be) for suites and the screenshot and autoplay tools. It only reads, with one exception: `hud(true)` measures the HUD again first, and when the HUD moved that re-fits, which can move the camera exactly as the next frame would have; the menu screens expose
 `state()` (title, heroSelect, library, settings, howto) and return null once left. Screens build DOM inside `root` on `enter`. They never route on their own: they call `GAME.nodeDone()` or `UI.go(...)` for menu navigation.
-Screen names and params (closed, `LISTS.screens`): `title`, `heroSelect`, `library {tab?}` (tabs `LISTS.libraryTabs`: Unlocks, Achievements, Story, Bestiary, History), `settings`, `howto`, `story {id, then?:{name, params}}`, `map`, `combat {node}`,
-`reward {rewards, source}`, `shop {node}`, `event {node}`, `camp {node}`, `forge {node}`, `chest {node}`, `gemcache {node}`, `chapterClear {chapter}` (chapters 1 and 2 only), `gameOver {summary}`, `victory {summary}`.
+Screen names and params (closed, `LISTS.screens`): `title`, `heroSelect`, `library {tab?}` (the Hall of Echoes; tabs `LISTS.libraryTabs`: Unlocks, Achievements, Ballads (tab id `story`), Bestiary, History), `settings`, `howto`, `story {id, then?:{name, params}}`, `map`, `combat {node}`,
+`reward {rewards, source}`, `shop {node}`, `event {node}`, `camp {node}`, `forge {node}`, `chest {node}`, `gemcache {node}`, `chapterClear {chapter}` (verses 1 and 2 only), `gameOver {summary}`, `victory {summary}`.
 Overlays (`LISTS.overlays`): `deck {mode:'view'|'pick'|'upgrade'|'remove'|'socket', cards?:[inst] (defaults to RUN.deck; the pile buttons pass their own), title?, filter?}` -> `Promise<uid|null>`; `pause`; `settings`; `relics {}`; `legend {}`;
 `cardPick {title, cards:[inst], n:1, optional:false, confirm:'Choose'}` -> `Promise<[uid]>`; `confirm {title, body, yes, no, danger}` -> `Promise<boolean>`; `modal`.
 
-**Display surfaces** (one owner each). The `story` screen (a storybook page, typewriter 30 characters per second, tap or Enter completes the text then continues, Skip button; owned by screen_end.js) shows the `lore` texts `intro` and
-`chN_intro` and replays any seen entry from the Library (`then` returns to the library). `chN_clear`, `victory` and `defeat` are shown inline by `chapterClear`, `victory` and `gameOver`. Every lore text shown marks `META.markLore(id)`, which is what the Library Story tab lists. `DATA.tips` are shown on the ink transition into a fight
-and on gameOver, chapterClear and pause. The Library (screen_menu.js) has tabs: Unlocks; Achievements (name, text, progress = `META.stat(k) / gte`, reward); Story (`META.storyList()`: every lore entry except `barks_*`, unseen ones as "???"); Bestiary (unseen enemies as a black
+**Display surfaces** (one owner each). The `story` screen (a story plaque, typewriter 30 characters per second, tap or Enter completes the text then continues, Skip button; owned by screen_end.js) shows the `lore` texts `intro` and
+`chN_intro` and replays any seen entry from the Hall of Echoes (`then` returns to the Hall of Echoes). `chN_clear`, `victory` and `defeat` are shown inline by `chapterClear`, `victory` and `gameOver`. Every lore text shown marks `META.markLore(id)`, which is what the Hall of Echoes Ballads tab lists. `DATA.tips` are shown on the Echo transition into a fight
+and on gameOver, chapterClear and pause. The Hall of Echoes (screen_menu.js) has tabs `unlocks achievements story bestiary history`, shown as Unlocks; Achievements (name, text, progress = `META.stat(k) / gte`, reward); Story (`META.storyList()`: every lore entry except `barks_*`, unseen ones as "???"); Bestiary (unseen enemies as a black
 silhouette with "???", seen ones with lore and kill count); History (`META.history` rows). The pause overlay (Esc, or `UI.menuButton()`) offers Resume, Deck, Treasures, Settings, How to play, Abandon run (confirm) and Save and quit.
 
 **Empty states** (never a blank panel): a reward with no card offers shows only Continue; Sharpen and the forge with nothing upgradable show a disabled button "Nothing left to sharpen"; the shop shows a sold-out badge; a deck filter with no match
@@ -1095,18 +1132,18 @@ says so; locked library and bestiary rows are shown, not hidden. **Saves:** when
 ## 6. Flow
 
 ```
-title -> heroSelect (pick 2 heroes, Ink Trial, seed / Daily) -> GAME.newRun -> story(intro, first time) -> story(ch1_intro) -> map(ch1)
-map: paint, use brush, walk -> RUN.step -> Node -> GAME.enterNode -> combat | shop | event | camp | forge | chest | gemcache (instant: well, brush)
-combat win -> RUN.combatDone -> reward -> map ;  boss win -> reward -> chapterClear -> story(chN_intro) -> map(next chapter)   (chapters 1 and 2) ;  chapter 3 boss win -> reward -> victory
+title -> heroSelect (pick 2 heroes, Tempo Trial, seed / Daily Jam) -> GAME.newRun -> story(intro, first time) -> story(ch1_intro) -> map(ch1)
+map: wake a hex, sing a Song, walk -> RUN.step -> Node -> GAME.enterNode -> combat | shop | event | camp | forge | chest | gemcache (instant: temple bell `well`, Songbird `brush`)
+combat win -> RUN.combatDone -> reward -> map ;  boss win -> reward -> chapterClear -> story(chN_intro) -> map(next verse)   (verses 1 and 2) ;  chapter 3 boss win -> reward -> victory
 combat lose -> gameOver ;  every finished node -> META.saveRun ;  title shows Continue when META.hasRun()
 ```
 
 ## 7. Verification (every owner, before reporting done)
 
 1. `node tests/rogue_book_<yours>.test.mjs` green and meaningful (real assertions, not "does not throw").
-2. `node tests/rogue_book_hygiene.test.mjs` green (no dashes, no `Math.random`, scripts parse, one namespace per file and no top-level names in extension files, the gallery script list is a prefix of index.html's, layering, forbidden
+2. `node tests/rogue_book_hygiene.test.mjs` green (no dashes, no unseeded random call, scripts parse, one namespace per file and no top-level names in extension files, the gallery script list is a prefix of index.html's, layering, forbidden
    APIs, the clock, closed-list ids, page wiring: the header of that suite lists every rule). `node tests/rogue_book_all.mjs --strict` is the integration gate: it also demands every file, every fixed id, `DATA.validate(undefined, {strict:true})` and a clean `DATA.audit()`.
-3. Content owners: `DATA.validate("cards", {hero:"kuro"})`, `DATA.validate("enemies", {chapter:2})`, `DATA.validate("relics")` and so on return zero errors and `DATA.audit("cards", {hero:"kuro"})` reports no `audit` lines for your hero or chapter
+3. Content owners: `DATA.validate("cards", {hero:"kuro"})`, `DATA.validate("enemies", {chapter:2})`, `DATA.validate("relics")` and so on return zero errors and `DATA.audit("cards", {hero:"kuro"})` reports no `audit` lines for your hero or verse
    (run them through `boot({only:['data*']})`). The integration wave runs `DATA.validate(undefined, {strict:true})` and every `DATA.audit()`.
 4. Drawing owners: render your sheets with `node tools/rogue_book/shot.mjs --url "rogue_book/gallery.html?sheet=NAME&w=1600&h=900" --out <scratchpad>/x.png` (the PNG is exactly w x h; animated sheets: add `&frames=6&t0=0&t1=1`; a throwaway
    experiment: `--js "ART.sheet('tmp', function(c,p){...}); __render('tmp',{t:0.5})"`). Sheets draw in logical px from `params.w` and `params.h` and never resize the canvas. Exit code 1 means a script error or a sheet exception. LOOK at the PNG with
@@ -1122,13 +1159,13 @@ combat lose -> gameOver ;  every finished node -> META.saveRun ;  title shows Co
 **Test loader contract** (`tests/rogue_book_lib.mjs`, owned by the tooling integrator; the header comment of that file is the record of every option and helper). What game code and suites may rely on: `boot({only, ...})`
 evaluates each script in ONE shared `vm` context, one file at a time, so a syntax error or top-level throw in a teammate's file never breaks a suite that did not ask for it: a broken file the suite named by exact name (or any file when
 `only` is omitted) makes `boot` throw a `BootError` with file and line (`continue:true` lists it in `api._errors` instead), while a broken file that was only matched by a glob or pulled in as a dependency is skipped and listed in `api._warnings`;
-`only` names are validated (a misspelt name throws), `util` and `data` are always added and each module pulls in the layers below it; `Math.random` throws; touching the DOM, storage or AudioContext while scripts load throws ("touch it lazily");
+`only` names are validated (a misspelt name throws), `util` and `data` are always added and each module pulls in the layers below it; an unseeded random call throws; touching the DOM, storage or AudioContext while scripts load throws ("touch it lazily");
 `window.__HEADLESS` is true unless `realtime` is set and `window.__NO_AUTOBOOT` is true unless `autoboot` is set; the document is built from `index.html`'s own markup, so `#wrap > #stage > #view #screens #overlays #over #tips #toasts`
 exist exactly when the page declares them; time is a virtual clock the suite moves (`_flush`, `_raf`, `_tick`); `_listeners(type)` counts window and document listeners for leak checks.
 
 ## 8. Definition of "done" for the whole game
 
-It boots, the full flow plays start to finish for all four heroes across three chapters with no console errors, every card/enemy/relic/gem/event is reachable and works, saves and resumes, works on touch, sounds and looks like nothing else on the
+It boots, the full flow plays start to finish for all four heroes across three verses with no console errors, every card/enemy/relic/gem/event is reachable and works, saves and resumes, works on touch, sounds and looks like nothing else on the
 site, and `npm run check` is green.
 
 ## 9. File ownership
@@ -1143,4 +1180,5 @@ Ownership by wave:
 | 1 presentation | `art.js art_heroes.js` (art director); `audio.js`; `ui.js main.js css/base.css` |
 | 2 art | `art_enemies_1.js`; `art_enemies_2.js`; `art_enemies_3.js`; `art_cards.js`; `art_icons.js`; `art_scenes.js art_map.js`; `art_fx.js` |
 | 2 screens | `scene.js`; `screen_combat.js css/combat.css`; `screen_map.js css/map.css`; `screen_menu.js css/menu.css`; `screen_node.js css/node.css`; `screen_end.js css/end.css tutorial.js` |
+| Echo re-theme (2026-10) | see `ECHO_PLAN.md`: player-facing words, art and audio only; every internal id kept (1.1) |
 | 3 to 4 | integration, balance and polish agents get explicit file lists in their prompts |

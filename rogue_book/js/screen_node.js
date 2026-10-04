@@ -1,4 +1,4 @@
-// Inkwoven -- node screens (owner: node screens engineer). One IIFE that registers into UI: the screens `reward`, `shop`, `event`,
+// Echowake: node screens (owner: node screens engineer). One IIFE that registers into UI: the screens `reward`, `shop`, `event`,
 // `camp`, `forge`, `chest`, `gemcache` and the overlays `deck` (replacing the basic viewer of ui.js) and `cardPick`. Styles live in
 // css/node.css (classes nk-* shared, rw-* reward, sh-* shop, ev-* event, cp-* camp, fg-* forge, ch-* chest, gc-* gem cache, dk-* deck
 // overlay, pk-* card pick, all scoped under .s-NAME or .o-NAME). This header is the contract of record for screen_node.js.

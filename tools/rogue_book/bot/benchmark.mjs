@@ -1,4 +1,4 @@
-// Inkwoven balance bot: head to head benchmark of the combat players. Takes the fights that real bot runs fought (their decks, relics,
+// Echowake balance bot: head to head benchmark of the combat players. Takes the fights that real bot runs fought (their decks, relics,
 // hero pair and enemy line-up, from the run records), puts the party at FULL HP and fights each one twice from the same seed: once with
 // COMBAT.greedyPolicy and once with the search bot. Same deck, same relics, same enemies, same RNG: only the player differs, so the
 // difference is the value of playing well, in HP and in fights lost.

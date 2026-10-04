@@ -1,4 +1,4 @@
-// Inkwoven balance bot: game loader and small shared helpers.
+// Echowake balance bot: game loader and small shared helpers.
 //
 // loadGame() boots the real RUN / COMBAT / MAP / META scripts (plus every data file) in the headless sandbox from
 // tests/rogue_book_lib.mjs, once per process, and returns { U, DATA, COMBAT, MAP, RUN, META }. No DOM is touched.

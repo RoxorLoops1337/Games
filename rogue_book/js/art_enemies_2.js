@@ -1,4 +1,4 @@
-// Inkwoven -- ART.enemy art for CHAPTER 2, the Sunken Lantern City (a haunted canal town at night of lanterns, puppets, faceless things and
+// Echowake: ART.enemy art for CHAPTER 2, the Sunken Lantern City (a haunted canal town at night of lanterns, puppets, faceless things and
 // spiders). Extends ART (art.js). This file draws exactly the 17 ids of DATA.ROSTER[2] and registers each with ART.enemy.register(id, {draw, bounds}).
 //
 //   normals   chochin karakuri_puppet nopperabo drowned_samurai koi_spirit tsukumogami silk_weaver nure_onna rokurokubi ittan_momen

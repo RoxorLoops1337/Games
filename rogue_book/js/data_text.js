@@ -1,4 +1,4 @@
-// Inkwoven -- text generation and card resolution. An extension of DATA (one IIFE, no top-level names).
+// Echowake: text generation and card resolution. An extension of DATA (one IIFE, no top-level names).
 //
 // Everything the player reads about rules is produced here from the ops themselves, so numbers can never drift from
 // behaviour. All functions are pure, DOM-free and deterministic. HTML output uses only two kinds of markup:
