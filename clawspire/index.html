@@ -117,12 +117,6 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;padding:0}
 .relic canvas{width:40px;height:40px;display:block}
 #playerRow{top:338px;height:44px;align-items:center;gap:8px;padding:0 10px}
-#pstatus{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
-#pstatus::-webkit-scrollbar{display:none}
-#pstatus .pip{flex:0 0 auto}
-/* a crowded row (six or more) packs tighter; past the width it scrolls instead of hiding chips */
-#pstatus.many{gap:2px}
-#pstatus.many .pip{padding:0 5px;gap:1px}
 .pip{display:inline-flex;align-items:center;gap:3px;height:44px;padding:0 9px;border-radius:9px;
   background:#1a1030;border:1.5px solid var(--line2);font-size:13px;font-weight:900;color:#fff;cursor:pointer;
   pointer-events:auto}
@@ -134,8 +128,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   box-shadow:0 0 10px rgba(46,230,214,.8)}
 #grabs .g.used{background:transparent;box-shadow:none;border-color:var(--dimmer)}
 #grabs .lbl{font-size:12px;letter-spacing:.14em;color:var(--cyan2);text-transform:uppercase;font-weight:900;margin-right:2px}
-#grabs,#pstatus{transition:opacity .2s}
-#playerRow.bannerOn #pstatus{opacity:.1}
+#grabs{transition:opacity .2s}
 #banner{position:absolute;left:0;right:0;top:-30px;height:100px;display:flex;align-items:center;justify-content:center;
   pointer-events:none;opacity:0;transition:opacity .2s}
 #banner.show{opacity:1}
@@ -2554,12 +2547,9 @@ html[class*="cb-"] #hpStat .hpbar .fl{background:var(--acc-dmg)}
 .uiRelList .uiRl .t{font-size:12.5px;color:var(--dim);line-height:1.35}
 .uiX{min-width:44px;min-height:44px;padding:0;font-size:20px}
 .calm .uiRelList.show{animation:none}
-/* the player row: the status chips and the GRABS pill share one height and one baseline */
+/* the player row: the GRABS pill at its right end (round 26: the status chips moved under the top bar, #pstatus) */
 #playerRow{gap:10px}
-#pstatus{align-items:center;height:40px}
-#pstatus .pip{height:36px;padding:0 10px;border-radius:12px;gap:4px;font-size:14px;background:rgba(18,9,31,.88);box-shadow:0 2px 8px rgba(0,0,0,.35)}
-#pstatus.many .pip{padding:0 6px}
-#grabs{height:38px;border-radius:19px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+#grabs{height:38px;border-radius:19px;box-shadow:0 2px 8px rgba(0,0,0,.35);margin-left:auto}
 /* the control bar: the round buttons, the hint and END TURN on one line, evenly spaced */
 #ctrl{gap:4px;padding:6px 12px 8px}
 .ctrlRow{gap:10px;height:54px}
@@ -3143,9 +3133,9 @@ html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
 </style>
 <style id="rrow-css">
 /* ================= RROW (round 21): the resolve row (DESIGN.md "The resolve row (round 21)") =================
-   The shelf is drawn on the canvas over the player row: the statuses and the GRABS pill step aside while it is up.
-   The speed pill sits in the fight's control row next to the camera (1x, 2x, 4x). */
-#playerRow.rrOn #pstatus,#playerRow.rrOn #grabs{opacity:0;pointer-events:none}
+   The shelf is drawn on the canvas over the player row: the GRABS pill steps aside while it is up (round 26: the
+   statuses no longer do, they live under the top bar). The speed pill sits in the fight's control row (1x, 2x, 4x). */
+#playerRow.rrOn #grabs{opacity:0;pointer-events:none}
 /* a banner (JACKPOT, TURN OVER) rises over the arena instead of covering the shelf */
 #playerRow.rrOn #banner{top:-122px}
 .ctrlRow .rrSpd{font-size:var(--fs-s);font-weight:900;letter-spacing:.02em;text-transform:none;color:var(--info);font-variant-numeric:tabular-nums}
@@ -3154,6 +3144,76 @@ html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
 @keyframes rrSpdPulse{50%{transform:scale(1.07)}}
 @media (prefers-reduced-motion:reduce){.ctrlRow .rrSpd.rrLive{animation:none}}
 /* ================= /RROW ================= */
+</style>
+<style id="stx-css">
+/* ================= STX (round 26): the status strip (DESIGN.md "The status strip (round 26)") =================
+   The player's statuses as chips directly under the top bar (stage 74..116, game.js STX), on through the whole fight:
+   the resolve row, the enemy turn and the cabinet never cover it. Debuffs (--bad) first, buffs (--good), counters
+   (--info). A chip is an icon and the number; a tap explains it (#pop), "+N" opens the whole list (#stxList). */
+#top #pstatus{position:absolute;left:8px;top:74px;height:42px;display:none;gap:5px;align-items:center;pointer-events:none}
+#top #pstatus.on{display:flex}
+.stx{--stc:var(--good);position:relative;display:inline-flex;align-items:center;justify-content:center;gap:2px;flex:0 0 auto;
+  box-sizing:border-box;width:56px;height:42px;min-height:0;padding:0 4px;border-radius:12px;border:2px solid var(--stc);
+  background:#1a0f2e;color:#fff;font-family:var(--font);cursor:pointer;pointer-events:auto;
+  box-shadow:0 3px 10px rgba(0,0,0,.45);transform-origin:50% 50%}
+.stx::before{content:'';position:absolute;inset:0;border-radius:10px;background:var(--stc);opacity:.2;pointer-events:none}
+.stx.w2{width:68px}
+.stx.stxBad{--stc:var(--bad)}
+.stx.stxGood{--stc:var(--good)}
+.stx.stxInfo{--stc:var(--info)}
+.stx .ic{position:relative;font-size:19px;line-height:1;width:21px;height:21px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;object-fit:contain}
+.stx .stxN{position:relative;font-size:19px;color:#fff;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 #12091f,0 0 4px #12091f}
+.stx.stxMore{--stc:var(--text-2);width:50px;font-size:17px;font-weight:900;letter-spacing:0}
+.stx.stxMore::before{opacity:.08}
+/* juice: a chip that changed pops (x1.25, 0.25 s) with its +N / -N; a debuff landing flashes red; calm: a short light */
+.stx.stxPop{animation:stxPop .25s ease-out}
+@keyframes stxPop{0%{transform:scale(1)}45%{transform:scale(1.25)}100%{transform:scale(1)}}
+.stx.stxHurt::after{content:'';position:absolute;inset:-2px;border-radius:12px;background:var(--bad);opacity:0;animation:stxHurt .55s ease-out;pointer-events:none}
+@keyframes stxHurt{0%{opacity:.9}100%{opacity:0}}
+.stx.stxHi{animation:stxHi .7s ease-out}
+@keyframes stxHi{0%{box-shadow:0 0 0 3px #fff,0 0 14px var(--stc)}100%{box-shadow:0 3px 10px rgba(0,0,0,.45)}}
+.stx .stxF{position:absolute;right:-6px;top:-10px;z-index:2;font-size:16px;font-weight:900;line-height:1;white-space:nowrap;pointer-events:none;
+  text-shadow:0 1px 0 #12091f,0 0 5px #12091f,0 0 2px #12091f;opacity:0;animation:stxF 1s ease-out}
+.stx .stxF.g{color:var(--good)}.stx .stxF.r{color:var(--bad)}.stx .stxF.i{color:var(--info)}
+@keyframes stxF{0%{opacity:0;transform:translateY(6px)}15%{opacity:1;transform:translateY(0)}70%{opacity:1}100%{opacity:0;transform:translateY(-12px)}}
+.stx.stxGone{pointer-events:none;animation:stxGone .5s ease-in forwards}
+.stx.stxGone .stxN{opacity:.6}
+@keyframes stxGone{0%{opacity:1;transform:scale(1)}70%{opacity:0;transform:scale(.8)}100%{opacity:0;transform:scale(.8);width:0;padding:0;border-width:0;margin-right:-5px}}
+.calm .stx.stxPop,.calm .stx.stxHurt::after{animation:none}
+.calm .stx .stxF,.calm .stx.stxGone{display:none}
+@media (prefers-reduced-motion:reduce){.stx.stxPop{animation:stxHi .7s ease-out}.stx.stxHurt::after{animation:none}.stx .stxF,.stx.stxGone{display:none}}
+/* a fight's corner card (a new Prizedex or Codex entry) steps under the strip instead of covering it; the INCOMING
+   pill goes under the card (game.js q9PillTop) */
+#stage.stxOn .mDex.tight:not(.hi){top:124px}
+#stage.stxWide .mSticker.tight:not(.hi){top:124px}
+/* colour-blind modes: a debuff chip is square cornered (the canvas chips are angular there too) */
+html[class*="cb-"] .stx.stxBad,html[class*="cb-"] .stx.stxBad::before{border-radius:3px}
+/* the popover card of one status */
+#pop .stxTip{display:flex;flex-direction:column;gap:5px;min-width:220px}
+#pop .stxTh{display:flex;align-items:center;gap:6px}
+#pop .stxTh .ic{font-size:20px}
+#pop .stxTh b{font-size:15px;color:#fff}
+#pop .stxTag{margin-left:auto;padding:2px 7px;border-radius:8px;font-size:12px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#12091f;background:var(--good)}
+#pop .stxBad .stxTag{background:var(--bad)}
+#pop .stxInfo .stxTag{background:var(--info)}
+#pop .stxWhat{font-size:14px;color:var(--text);line-height:1.4}
+#pop .stxEnd{font-size:13px;color:var(--text-2);line-height:1.35}
+html[class*="txt-"] #pop .stxTh b{font-size:calc(15px * var(--accK))}
+html[class*="txt-"] #pop .stxWhat{font-size:calc(14px * var(--accK))}
+html[class*="txt-"] #pop .stxEnd{font-size:calc(13px * var(--accK))}
+/* the whole list ("+N"): under the strip, each status with its chip, what it does and how it goes */
+.uiRelList.stxList{top:122px;max-height:520px}
+.stxList .uiRl .stx{cursor:default;box-shadow:none}
+.stxList .uiRl .stx .ic{width:21px;font-size:19px}
+.stxList .uiRl .n{color:#fff}
+.stxList .uiRl.stxBad{border-left:4px solid var(--bad)}
+.stxList .uiRl.stxGood{border-left:4px solid var(--good)}
+.stxList .uiRl.stxInfo{border-left:4px solid var(--info)}
+.stxList .uiRl .t{font-size:13px;color:var(--text)}
+.stxList .uiRl .t.stxEnd{color:var(--text-2)}
+html[class*="txt-"] .stxList .uiRl .n{font-size:calc(14px * var(--accK))}
+html[class*="txt-"] .stxList .uiRl .t{font-size:calc(13px * var(--accK))}
+/* ================= /STX ================= */
 </style>
 </head>
 <body>
@@ -3227,11 +3287,12 @@ html.txt-xl .m3-lobby .wkTargets{grid-template-columns:minmax(0,1fr)}
       </div>
     </div>
     <div id="relics"></div>
+    <!-- STX (round 26): the player's status strip, a row of chips just under the bar (always on in a fight) -->
+    <div id="pstatus"></div>
   </div>
 
-  <!-- player row: statuses, grabs pips, turn banner -->
+  <!-- player row: grabs pips, turn banner -->
   <div id="playerRow" class="hud">
-    <div id="pstatus"></div>
     <div id="grabs"></div>
     <div id="banner"><span id="bannerTxt"></span></div>
   </div>

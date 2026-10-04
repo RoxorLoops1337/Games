@@ -1041,4 +1041,44 @@ h.test('cr: the combo relics, the elite\'s pick, the help and the Compactor\'s +
   I18N.set('en');
 });
 
+// ---------------------------------------------------------------- STX (round 26): the status strip
+h.test('stx: every status card speaks Dutch with the fight\'s numbers; the tip and the list in Dutch', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N, DATA, COMBAT } = T;
+  I18N.set('nl');
+  const nl = I18N.table('nl').ui;
+  for (const k of Object.keys(G.stx.END)) h.ok(nl[G.stx.END[k]], 'Dutch for the end line "' + G.stx.END[k] + '"');
+  for (const k of ['Items that cleanse wash it off.', 'Debuff', 'Buff', 'Counter', 'Your statuses ({n})', '{n} more statuses']) h.ok(nl[k], 'Dutch for "' + k + '"');
+  const english = [];
+  for (const id of Object.keys(DATA.STATUS)) {
+    for (const n of [1, 3]) {
+      const I = G.stx.info(id, n);
+      for (const f of ['what', 'end', 'tag', 'name']) if (I[f] && /\b(the|your|you|turn|turns|damage|lose|start|every|fight)\b/i.test(I[f])) english.push(id + '.' + f + ': ' + I[f]);
+      h.ok(!/[{}]/.test(I.what + I.end), id + ': no raw {var} left');
+    }
+  }
+  h.eq(english.length, 0, 'no English left in the cards: ' + english.slice(0, 3).join(' | '));
+  h.eq(G.stx.info('weak', 2).what, 'Je doet ' + Math.round((1 - COMBAT.STATUS_K.weak) * 100) + '% minder schade, nog 2 beurten.', 'Zwak 2 with the multiplier from COMBAT');
+  h.eq(G.stx.info('weak', 1).what, 'Je doet 25% minder schade, nog 1 beurt.', 'one turn: beurt');
+  h.eq(G.stx.info('str', 3).what, 'Je aanvallen doen +3 schade per klap.', 'Kracht 3: +3');
+  h.eq(G.stx.info('str', 3).name, 'Kracht', 'the name from the content table');
+  h.eq(G.stx.info('poison', 4).end, 'Is op na nog 4 keer: 10 HP in totaal. Voorwerpen die reinigen wassen het weg.', 'Gif 4: 10 HP in totaal');
+  h.eq(G.stx.info('poison', 4).tag, 'Nadeel', 'a debuff is a Nadeel');
+  G.newRun('knight', 4242);
+  if (G.screen === 'boon') G.choose(0);
+  G.startFight(['rat'], 'normal');
+  for (let i = 0; i < 60; i++) G.update(1 / 60);
+  COMBAT.status(G.fight, 'p', 'burn', 3); G.fs.dirty = true;
+  for (let i = 0; i < 12; i++) G.update(1 / 60);
+  const chip = T._nodes.pstatus.children.find((c) => c.dataset && c.dataset.s === 'burn');
+  h.ok(chip, 'the Brand chip');
+  chip.onclick({});
+  const pop = T._nodes.pop.innerHTML;
+  h.ok(/Brand 3/.test(pop) && /aan het einde van je beurt/.test(pop) && /Nadeel/.test(pop), 'the tip in Dutch: ' + pop.replace(/<[^>]+>/g, ' '));
+  G.stx.more(true);
+  const head = T._nodes.stage.children.find((c) => c.id === 'stxList');
+  h.ok(head && /Jouw effecten \(1\)/.test(head.children[0].children[0].textContent), 'the list\'s title: Jouw effecten (1)');
+  I18N.set('en');
+});
+
 h.done();
