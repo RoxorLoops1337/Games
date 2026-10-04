@@ -77,6 +77,7 @@ const STATIC_PATHS = [
   'clawspire',
   'claw_crawl',
   'rogue_book',
+  'hocus_vocus',
   'pixel_colony',
   'tools',
 ];
