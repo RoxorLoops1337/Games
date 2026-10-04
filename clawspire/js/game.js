@@ -5380,6 +5380,7 @@ const GAME = (() => {
     const p = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y);
     POL_PN.x = U.clamp(p.x + (fan || 0) * 1.3, 40, W - 40);
     POL_PN.y = Math.min(POL_PNUM.yMax - 50, p.y + POL_PNUM.dy);
+    POL_PN.y = Math.max(POL_PN.y, stxBelow(POL_PN.x, 40, 34));   // STX (round 26): under the status strip when it reaches this far
     POL_PN.vx = (fan > 0 ? 1 : fan < 0 ? -1 : 0.3) * POL_PNUM.vx;
     POL_PN.vy = POL_PNUM.vy; POL_PN.g = POL_PNUM.g;
     return POL_PN;
@@ -5399,7 +5400,7 @@ const GAME = (() => {
     petEvent(ev);   // the pet reacts (PETS block)
     seaEvent(ev);   // Candy Corn pays candy, the Witch Broom sweeps (SEASON block)
     bumpShown(ev);
-    if (ev.t === 'turn') { FS.shown.p.block = F.player.block; }
+    if (ev.t === 'turn') { FS.shown.p.block = F.player.block; stxTurn(); }   // (STX: the turn start's ticks and decay show on the strip now)
     // die/summon/intent carry only an enemy index, no who.
     const enemy = ev.who === 'e' || (ev.who !== 'p' && (ev.t === 'die' || ev.t === 'summon' || ev.t === 'intent'));
     // Consecutive numbers on the same unit fan out sideways so they can be read.
@@ -5488,7 +5489,7 @@ const GAME = (() => {
         fx().text(pos.x, pos.y, (ev.v > 0 ? '+' : '') + ev.v + ' ' + (sd.icon || '') + sd.name, sd.color || '#fff');
         if (ev.v > 0 && STATUS_FX[ev.s]) fx().emit(STATUS_FX[ev.s], hitX, hitY, { col: STATUS_FX[ev.s] === 'sparks' || STATUS_FX[ev.s] === 'glint' ? sd.color : undefined });
         if (enemy) { const pp = FS.pipPop[ev.idx] || (FS.pipPop[ev.idx] = {}); pp[ev.s] = 1; }
-        else { const pe = S.pipEls && S.pipEls[ev.s]; if (pe) replay(pe, 'pop'); else S.pipPop = ev.s; }
+        else stxEv(ev);   // STX (round 26): the strip's chip moves now, as the event plays (it pops with its +N)
         if (ev.s === 'poison') snd('poison'); else if (ev.s === 'burn') snd('burn');
         else if (ev.s === 'freeze') { snd('freeze'); fx().emit('shatter', hitX, hitY, { col: '#bfe8ff', n: 0.6 }); }
         else if (ev.s === 'chill') snd('freeze');
@@ -14927,27 +14928,8 @@ const GAME = (() => {
       uiRelicFit();   // HUD (round 15): what does not fit folds into a "+N" chip
     } else if (UIH.need) uiRelicFit();
     if (force) { uiHudInit(); uiRelicList(false); }
+    stxSync(force);   // STX (round 26): the status strip under the top bar (#pstatus), cleared outside a fight
     if (F && FS) {
-      const st = F.player.status;
-      const sk = JSON.stringify(st) + '|' + F.target;
-      if (force || sk !== S.lastStatus) {
-        S.lastStatus = sk;
-        const el = $('pstatus');
-        clear(el);
-        S.pipEls = {};
-        let npip = 0;
-        for (const id in st) if (st[id]) npip++;
-        if (el && el.classList) el.classList[npip >= 6 ? 'add' : 'remove']('many');
-        for (const id in st) {
-          const sd = tbl('STATUS')[id] || { name: id, icon: '', kind: 'buff', text: '' };
-          const p = h('button', 'pip ' + (sd.kind || ''), `${sd.icon || ''}${st[id]}`);
-          p.style.borderColor = sd.color || '';
-          S.pipEls[id] = p;
-          if (S.pipPop === id) { p.classList.add('pop'); S.pipPop = null; }
-          p.onclick = (ev) => { popover(`<b>${sd.icon || ''} ${sd.name} ${st[id]}</b><br>${sd.text || ''}`, 120, 360); if (ev && ev.stopPropagation) ev.stopPropagation(); };
-          el.appendChild(p);
-        }
-      }
       const grabsShown = FS.enemyTurn ? 0 : F.player.grabs;
       const gk = grabsShown + '/' + F.player.grabsMax;
       if (force || gk !== S.lastGrabs) {
@@ -15088,6 +15070,311 @@ const GAME = (() => {
     el.classList.add('show');
     popover(null);
     return true;
+  }
+
+  /* ================= STX (round 26): the status strip =================
+     DESIGN.md "The status strip (round 26)". The owner: "I can not easily see my strength, poison, burn, weak". The
+     player's statuses are a row of chips directly under the top bar (#pstatus, moved there out of the player row, which
+     the resolve row covers), on for the whole fight: an icon and the number, debuffs first (red, --bad), then buffs
+     (green, --good), then counters (cyan, --info). Past STX.max chips (or when an elite's or boss's intent bubble sits
+     in the band) the first ones and a "+N" chip that opens the whole list. A tap on a chip explains it with the fight's
+     own numbers (STX_INFO, read from COMBAT.STATUS_K and COMBAT.LUCK). The chips show what has played so far: a queued
+     status event moves its chip when it plays, the turn start's ticks and decay land with the turn event, the rest once
+     the queue is empty. A chip that changed pops with its +N / -N; a debuff landing flashes red; calm only lights it. */
+  const STX = { x: 8, y: 74, h: 42, gap: 5, w1: 56, w2: 68, wMore: 50, max: 5, keep: 4, bubble: 50, half: 34 };
+  // what hurts you first (damage over time, then what spoils your turn), then what helps, then the counters
+  const STX_ORDER = ['poison', 'burn', 'bleed', 'weak', 'vuln', 'freeze', 'stun', 'chill', 'jam', 'grease', 'fog',
+    'str', 'thorns', 'regen', 'armor', 'dodge', 'shield_up', 'enrage', 'luck', 'streak'];
+  const STX_CLS = { bad: 'stxBad', good: 'stxGood', info: 'stxInfo' };
+  const stxK = () => (X.COMBAT && X.COMBAT.STATUS_K) || {};
+  const stxTot = (n) => (n * (n + 1)) / 2;   // a tick of n, then n - 1, ... 1
+  /* Each status in words, the numbers from the rules: what(n, K, F) and the line on how it goes away (STX_END; a status
+     that loses 1 after the enemy turn, COMBAT's turnDecay or a DATA 'turns' status without rules of its own, reads
+     'round'). Every debuff adds that a cleanse washes it off (COMBAT's cleanse removes every DATA debuff). */
+  const STX_INFO = {
+    str: { what: (n) => ['Your attacks deal +{n} damage per hit.', { n }], end: 'fight' },
+    weak: { what: (n, K) => ['You deal {p}% less damage for {n} more {n|turn|turns}.', { n, p: Math.round((1 - K.weak) * 100) }] },
+    vuln: { what: (n, K) => ['You take {p}% more damage from attacks for {n} more {n|turn|turns}.', { n, p: Math.round((K.vuln - 1) * 100) }] },
+    poison: { what: (n) => ['You lose {n} HP at the start of your turn, then it drops by 1. Block does not stop it.', { n }], end: 'tick' },
+    burn: { what: (n) => ['You lose {n} HP at the end of your turn, then it drops by 1. Block does not stop it.', { n }], end: 'tick' },
+    bleed: { what: (n) => ['You lose {n} HP each time you play an item, then it drops by 1. Block does not stop it.', { n }], end: 'tick' },
+    chill: { what: (n, K) => ['At {at} Chill you freeze and lose a grab next turn: {left} more to go.', { at: K.chillAt, left: Math.max(1, K.chillAt - n) }], end: 'stays' },
+    freeze: { what: (n) => ['You lose 1 grab at the start of each of your next {n} {n|turn|turns}.', { n }], end: 'start' },
+    stun: { what: (n) => ['You lose 1 grab at the start of each of your next {n} {n|turn|turns}.', { n }], end: 'start' },
+    jam: { what: (n) => ['One grab fewer at the start of your turn (never your last one) for {n} more {n|turn|turns}.', { n }] },
+    grease: { what: (n) => ['Your claw is slippery: prizes slide out of it for {n} more {n|turn|turns}.', { n }] },
+    fog: { what: (n) => ['The cabinet glass is fogged for {n} more {n|turn|turns}.', { n }] },
+    regen: { what: (n) => ['You heal {n} HP at the start of your turn, then it drops by 1.', { n }], end: 'heal' },
+    thorns: { what: (n) => ['An enemy that hits you takes {n} damage back for every hit.', { n }], end: 'fight' },
+    armor: { what: (n) => ['Every attack that hits you is {n} smaller.', { n }], end: 'fight' },
+    dodge: { what: (n) => ['The next {n} {n|attack|attacks} on you miss.', { n }], end: 'miss' },
+    shield_up: { what: (n) => ['Your Block does not fade at the start of your next {n} {n|turn|turns}.', { n }], end: 'use' },
+    enrage: { what: (n) => ['You gain {n} Strength at the start of every turn.', { n }], end: 'fight' },
+    luck: { what: (n, K, f) => { const L = (X.COMBAT && X.COMBAT.LUCK) || {}, per = (+L.per || 0) + Math.max(0, +(f && f.rules && f.rules.cashAmp) || 0);
+      return ['Dice roll twice and keep the best. A grab of 2+ prizes cashes it out: {d} damage to ALL enemies ({j} with 3+).', { d: Math.round(n * per), j: Math.round(n * per * (+L.jackpot || 1)) }]; }, end: 'luck' },
+    streak: { k: 'info', what: (n) => ['{n} {n|grab|grabs} in a row brought something up.', { n }], end: 'streak' },
+  };
+  const STX_END = {
+    round: 'Goes down by 1 after every enemy turn.',
+    tick: 'Runs out after {n} more {n|tick|ticks}: {t} HP in all.',
+    heal: 'Runs out after {n} more {n|turn|turns}: {t} HP in all.',
+    start: 'Goes down by 1 at the start of your turn.',
+    use: 'Uses 1 at every turn start.',
+    miss: 'Each miss uses 1.',
+    fight: 'Lasts the whole fight.',
+    stays: 'Does not wear off by itself.',
+    luck: 'Never wears off (at most {max}). Cashing out empties it.',
+    streak: 'An empty grab resets it.',
+  };
+  const stxDef = (id) => tbl('STATUS')[id] || { id, name: String(id), icon: '', kind: 'buff', stack: 'count', text: '' };
+  function stxKind(id) {
+    const I = STX_INFO[id];
+    if (I && I.k) return I.k;
+    return stxDef(id).kind === 'debuff' ? 'bad' : 'good';
+  }
+  // Loses 1 after the enemy turn (COMBAT's decayTurns rule)
+  function stxDecays(id) {
+    const K = stxK(), td = K.turnDecay || [], ru = K.ruled || [];
+    return td.indexOf(id) >= 0 || (ru.indexOf(id) < 0 && stxDef(id).stack === 'turns');
+  }
+  // One status in words, in the current language: {id, n, kind, icon, name, what, end, tag}.
+  function stxInfo(id, n) {
+    n = Math.max(0, Math.round(+n || 0));
+    const sd = stxDef(id), I = STX_INFO[id] || {}, K = stxK(), kind = stxKind(id);
+    let what = '';
+    try { if (I.what) { const r = I.what(n, K, F); what = i18nT(r[0], r[1]); } } catch (e) { what = ''; }
+    if (!what) what = i18nTr(sd.text || '');
+    const ek = I.end || (stxDecays(id) ? 'round' : '');
+    let end = ek && STX_END[ek] ? i18nT(STX_END[ek], { n, t: stxTot(n), max: ((X.COMBAT && X.COMBAT.LUCK) || {}).max }) : '';
+    if (sd.kind === 'debuff') end += (end ? ' ' : '') + i18nT('Items that cleanse wash it off.');
+    return { id, n, kind, icon: sd.icon || '', name: i18nTr(sd.name || id), what, end, tag: i18nT(kind === 'bad' ? 'Debuff' : kind === 'good' ? 'Buff' : 'Counter') };
+  }
+  // The statuses to show, in strip order: [{id, n, kind}].
+  function stxList(st) {
+    const out = [];
+    for (const id in st || {}) { const n = Math.round(+st[id] || 0); if (n > 0) out.push({ id, n, kind: stxKind(id) }); }
+    const rk = { bad: 0, good: 1, info: 2 }, ix = (id) => { const i = STX_ORDER.indexOf(id); return i < 0 ? 99 : i; };
+    out.sort((a, b) => (rk[a.kind] - rk[b.kind]) || (ix(a.id) - ix(b.id)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return out;
+  }
+  const stxW = (s) => (s.n >= 10 ? STX.w2 : STX.w1);
+  // How many chips show in room px (the rest fold into "+N"): all of them up to STX.max when they fit, else
+  // STX.keep or fewer and the "+N" chip (0: only the "+N" chip).
+  function stxFit(list, room) {
+    const n = list ? list.length : 0;
+    if (!n) return 0;
+    let all = 0;
+    for (let i = 0; i < n; i++) all += stxW(list[i]) + (i ? STX.gap : 0);
+    if (n <= STX.max && all <= room) return n;
+    let k = Math.min(n - 1, STX.keep);
+    for (; k > 0; k--) {
+      let w = STX.wMore;
+      for (let i = 0; i < k; i++) w += stxW(list[i]) + STX.gap;
+      if (w <= room) break;
+    }
+    return k;
+  }
+  // The strip's width for k chips of list (and the "+N" chip when some fold).
+  function stxWidth(list, k) {
+    let w = 0;
+    for (let i = 0; i < k; i++) w += stxW(list[i]) + (i ? STX.gap : 0);
+    if (k < list.length) w += (k ? STX.gap : 0) + STX.wMore;
+    return w;
+  }
+  // The room in the band under the top bar: up to the first intent bubble that reaches into it (an elite's, a boss's).
+  function stxRoom() {
+    let lim = W - STX.x;
+    if (!F || !FS || FS.vs) return lim - STX.x;
+    const y1 = STX.y + STX.h + 2;
+    for (let i = 0; i < F.enemies.length; i++) {
+      const e = F.enemies[i];
+      if (!e || !e.alive) continue;
+      const p = enemyPos(i);
+      if (intentY(p) - STX.bubble < y1) lim = Math.min(lim, p.x - STX.half - 6);
+    }
+    return Math.max(0, lim - STX.x);
+  }
+  // The fight's view of the player's statuses (see the block comment).
+  function stxState() {
+    if (!FS || !F) return null;
+    return FS.stx || (FS.stx = { base: Object.assign({}, F.player.status), add: {}, prev: null });
+  }
+  const stxLag = () => !!(FS && (FS.queue.length || FS.enemyTurn));
+  function stxShown() {
+    const T = stxState();
+    if (!T) return {};
+    if (!stxLag()) { T.base = Object.assign({}, F.player.status); T.add = {}; }
+    const out = {}, max = +stxK().max || 99;
+    for (const id of new Set(Object.keys(T.base).concat(Object.keys(T.add)))) {
+      const v = Math.min(max, Math.max(0, Math.round((+T.base[id] || 0) + (+T.add[id] || 0))));
+      if (v > 0) out[id] = v;
+    }
+    return out;
+  }
+  // applyEvent: one of the player's status events plays.
+  function stxEv(ev) {
+    const T = stxState();
+    if (!T || !ev || !ev.s) return;
+    T.add[ev.s] = (+T.add[ev.s] || 0) + (+ev.v || 0);
+    FS.dirty = true;
+  }
+  // applyEvent: the player's turn starts: everything up to here (the ticks, the decay) shows, the turn's own queued
+  // status events (Enrage, a relic) still wait for their beat.
+  function stxTurn() {
+    const T = stxState();
+    if (!T) return;
+    const b = Object.assign({}, F.player.status);
+    for (const q of FS.queue) { const e = q && q.ev; if (e && e.t === 'status' && e.who === 'p' && e.s) b[e.s] = (+b[e.s] || 0) - (+e.v || 0); }
+    T.base = b; T.add = {};
+    FS.dirty = true;
+  }
+  // The strip's bottom when it covers x +- hw, plus pad (0 when it does not): the player's numbers start under it.
+  function stxBelow(x, hw, pad) {
+    if (!S.stxOn || !(S.stxR > STX.x)) return 0;
+    return x - hw < S.stxR && x + hw > STX.x ? STX.y + STX.h + (pad || 0) : 0;
+  }
+  function stxIconEl(id, icon) {
+    const im = X.ART && X.ART.get ? (() => { try { return X.ART.get('status', id); } catch (e) { return null; } })() : null;
+    if (im && im.src && (im.naturalWidth || im.width)) { const i = document.createElement('img'); i.className = 'ic'; i.src = im.src; i.alt = ''; return i; }
+    return h('span', 'ic', icon || '?');
+  }
+  // One chip; d: the change since the strip last drew (it pops, floats +N / -N; a debuff landing flashes red).
+  function stxChip(s, d, calm) {
+    let cls = 'stx ' + STX_CLS[s.kind] + (s.n >= 10 ? ' w2' : '');
+    if (d) cls += calm ? ' stxHi' : ' stxPop' + (s.kind === 'bad' && d > 0 ? ' stxHurt' : '');
+    const b = h('button', cls);
+    const sd = stxDef(s.id);
+    b.appendChild(stxIconEl(s.id, sd.icon));
+    b.appendChild(h('b', 'stxN', String(s.n)));
+    if (d && !calm) b.appendChild(h('span', 'stxF ' + (s.kind === 'info' ? 'i' : (d > 0) === (s.kind === 'good') ? 'g' : 'r'), (d > 0 ? '+' : '−') + Math.abs(d)));
+    try { b.setAttribute('aria-label', i18nTr(sd.name || s.id) + ' ' + s.n); } catch (e) { /* stub */ }
+    b.dataset.s = s.id;
+    b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); stxTip(s.id, b); };
+    return b;
+  }
+  // Draws the strip when what it shows changed (force: always). Outside a fight it is empty and hidden.
+  function stxSync(force) {
+    const el = $('pstatus');
+    if (!el) return;
+    const on = !!(F && FS && F.player && S.screen === 'fight');
+    const st = on ? stxShown() : {};
+    const list = stxList(st);
+    const k = on ? stxFit(list, stxRoom()) : 0;
+    const key = on ? list.map((s) => s.id + ':' + s.n).join(',') + '|' + k : '';
+    if (!force && key === S.stxKey) return;
+    S.stxKey = key;
+    const T = on ? stxState() : null, prev = T ? T.prev : null;
+    if (T) T.prev = Object.assign({}, st);
+    clear(el);
+    S.pipEls = {};
+    S.stxOn = on && list.length > 0;
+    S.stxR = S.stxOn ? STX.x + stxWidth(list, k) : 0;
+    el.className = S.stxOn ? 'on' : '';
+    try {   // a fight's corner cards step under it (stx-css): the Prizedex card always, a sticker when the strip reaches it
+      const sg = $('stage');
+      if (sg && sg.classList) { sg.classList[S.stxOn ? 'add' : 'remove']('stxOn'); sg.classList[S.stxOn && S.stxR > W - 260 ? 'add' : 'remove']('stxWide'); }
+    } catch (e) { /* stub */ }
+    try { const f = fx(); if (f && f.zone) { if (S.stxOn) f.zone('stx', STX.x - 2, STX.y - 2, S.stxR + 2, STX.y + STX.h + 2); else f.zone('stx'); } } catch (e) { /* no layout */ }
+    if (!S.stxOn) { stxMore(false); return; }
+    const calm = mixCalm(), dOf = (s) => (prev ? s.n - (+prev[s.id] || 0) : 0);
+    for (const s of list.slice(0, k)) { const c = stxChip(s, dOf(s), calm); S.pipEls[s.id] = c; el.appendChild(c); }
+    // a status that just ran out leaves its chip for a moment: it fades with its -N (not in calm)
+    if (prev && !calm) {
+      for (const id in prev) {
+        if (st[id] > 0 || !(prev[id] > 0) || list.length > k) continue;
+        const g = stxChip({ id, n: 0, kind: stxKind(id) }, -prev[id], false);
+        g.className = 'stx ' + STX_CLS[stxKind(id)] + ' stxGone';
+        g.onclick = null;
+        el.appendChild(g);
+      }
+    }
+    if (k < list.length) {
+      const rest = list.slice(k), moved = rest.some((s) => dOf(s));
+      const m = h('button', 'stx stxMore' + (moved ? (calm ? ' stxHi' : ' stxPop') : ''), '+' + rest.length);
+      try { m.setAttribute('aria-label', i18nT('{n} more statuses', { n: rest.length })); } catch (e) { /* stub */ }
+      m.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); stxMore(); };
+      for (const s of rest) S.pipEls[s.id] = m;
+      el.appendChild(m);
+    }
+    if (STXL.el && STXL.el.className.indexOf('show') >= 0) stxMore(true);   // the open list follows
+  }
+  // The popover card of one status (a tap on its chip).
+  function stxTipHtml(I) {
+    return `<div class="stxTip ${STX_CLS[I.kind]}"><div class="stxTh"><span class="ic">${I.icon}</span><b>${I.name} ${I.n}</b><span class="stxTag">${I.tag}</span></div>` +
+      `<div class="stxWhat">${I.what}</div>${I.end ? `<div class="stxEnd">${I.end}</div>` : ''}</div>`;
+  }
+  function stxTip(id, el) {
+    if (!F) return false;
+    const T = stxState(), n = T && T.prev && T.prev[id] > 0 ? T.prev[id] : (+F.player.status[id] || 0);
+    if (!(n > 0)) return false;
+    const I = stxInfo(id, n);
+    const p = hudPoint(el, STX.x + 28, STX.y + STX.h / 2);
+    popover(stxTipHtml(I), p.x, STX.y + STX.h - 8);
+    S.stxTip = I;
+    return I;
+  }
+  // The whole list (the "+N" chip): every status with its number, what it does and how it goes. open: true / false / toggle.
+  const STXL = { el: null, closer: false };
+  function stxMore(open) {
+    const st0 = $('stage');
+    let el = STXL.el;
+    const on = !!(el && el.className.indexOf('show') >= 0);
+    if (open == null) open = !on;
+    if (!open) { if (on) { el.className = 'panel uiRelList stxList'; S.stxListOpen = false; } return false; }
+    if (!st0 || !st0.appendChild || !F) return false;
+    if (!el) {
+      el = STXL.el = h('div', 'panel uiRelList stxList');
+      el.id = 'stxList';
+      el.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      st0.appendChild(el);
+    }
+    if (!STXL.closer && st0.addEventListener && !S.headless) {
+      STXL.closer = true;
+      st0.addEventListener('pointerdown', (ev) => {
+        const t = ev && ev.target, L = STXL.el;
+        if (!L || L.className.indexOf('show') < 0) return;
+        if (t && ((L.contains && L.contains(t)) || (t.closest && t.closest('#pstatus')))) return;
+        stxMore(false);
+      }, true);
+    }
+    const T = stxState(), list = stxList(T && T.prev ? T.prev : F.player.status);
+    clear(el);
+    const head = h('div', 'uiRlHead');
+    head.appendChild(h('h3', null, i18nT('Your statuses ({n})', { n: list.length })));
+    const x = h('button', 'btn ghost sm uiX', '×');
+    try { x.setAttribute('aria-label', i18nT('Close')); } catch (e) { /* stub */ }
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); stxMore(false); };
+    head.appendChild(x);
+    el.appendChild(head);
+    const body = h('div', 'uiRlBody');
+    S.stxRows = [];
+    for (const s of list) {
+      const I = stxInfo(s.id, s.n), r = h('div', 'uiRl stxRow ' + STX_CLS[I.kind]);
+      const chip = h('span', 'stx ' + STX_CLS[I.kind] + (s.n >= 10 ? ' w2' : ''));
+      chip.appendChild(stxIconEl(s.id, I.icon));
+      chip.appendChild(h('b', 'stxN', String(s.n)));
+      r.appendChild(chip);
+      const c = h('div', 'col');
+      c.appendChild(h('div', 'n', I.name + ' ' + s.n));
+      c.appendChild(h('div', 't', I.what));
+      if (I.end) c.appendChild(h('div', 't stxEnd', I.end));
+      r.appendChild(c);
+      body.appendChild(r);
+      S.stxRows.push(I);
+    }
+    el.appendChild(body);
+    el.className = 'panel uiRelList stxList show';
+    S.stxListOpen = true;
+    popover(null);
+    return true;
+  }
+  // GAME.stx (tests and the screenshot drivers)
+  function STX_API() {
+    return { K: STX, ORDER: STX_ORDER, INFO: STX_INFO, END: STX_END, info: stxInfo, list: stxList, fit: stxFit, width: stxWidth, room: stxRoom,
+      shown: stxShown, sync: stxSync, tip: stxTip, more: stxMore, below: stxBelow, decays: stxDecays, html: stxTipHtml,
+      get on() { return !!S.stxOn; }, get right() { return S.stxR || 0; }, get el() { return $('pstatus'); }, get listEl() { return STXL.el; },
+      get listOpen() { return !!S.stxListOpen; }, get rows() { return S.stxRows || []; }, get lastTip() { return S.stxTip || null; },
+      get state() { return FS ? FS.stx || null : null; } };
   }
 
   // ---------------------------------------------------------------- input
@@ -16229,9 +16516,10 @@ const GAME = (() => {
      enemy), and back up when it goes. */
   function q9PillTop() {
     const cur = S.mcur, el = cur && cur.el;
-    if (!el || !el.classList || !el.classList.contains('mDex') || el.classList.contains('out')) return Q9_SLOT.y0;
+    const st = S.stxOn ? STX.y + STX.h + 4 : 0;   // STX (round 26): the INCOMING pill sits under the status strip
+    if (!el || !el.classList || !el.classList.contains('mDex') || el.classList.contains('out')) return Math.max(Q9_SLOT.y0, st);
     if (!(cur.q9h > 0)) { let hh = 0; try { hh = +el.offsetHeight || 0; } catch (e) { hh = 0; } cur.q9h = hh > 0 && hh < 160 ? hh : 56; }
-    return 74 + cur.q9h + 6;
+    return Math.max((st ? st + 4 : 74) + cur.q9h + 6, st);   // (STX: the card itself sits under the strip then, stx-css)
   }
   function q9PillSlot() {
     const top = q9PillTop();
@@ -28682,7 +28970,7 @@ const GAME = (() => {
   function rr2Block(ev, enemy) {
     if (enemy || !FS || !FS.rr2Q || !(ev.amt > 0)) return false;
     const p = rr2SelfPt({ pre: { b: 1 } });
-    fx().num(p.x, Math.max(p.y + 66, 100), '+' + ev.amt, '#7fe8ff', { size: U.clamp(32 + Math.sqrt(ev.amt) * 3, 32, 50), vy: -50, gravity: 60, vx: 0, life: 1.3 });   // (under the top bar, which is DOM)
+    fx().num(p.x, Math.max(p.y + 66, 100, stxBelow(p.x, 30, 44)), '+' + ev.amt, '#7fe8ff', { size: U.clamp(32 + Math.sqrt(ev.amt) * 3, 32, 50), vy: -50, gravity: 60, vx: 0, life: 1.3 });   // (under the top bar, which is DOM)
     fx().ring(p.x, p.y, '#2ee6d6', { r0: 8, r1: 46, w: 5, life: 0.4 });
     return true;
   }
@@ -28709,7 +28997,8 @@ const GAME = (() => {
     snd('whoosh', { pitch: 1.6 });
     return true;
   }
-  // The player row's statuses and the GRABS pill step aside while the shelf is up (a class, written on change);
+  // The player row's GRABS pill steps aside while the shelf is up (a class, written on change; round 26: the statuses
+  // stay, they live under the top bar now, STX);
   // your own numbers and relic badges (PLAYER_FX) pop under the HP stat meanwhile, not on the shelf.
   function rrRowShow(on) {
     on = !!on;
@@ -29032,6 +29321,8 @@ const GAME = (() => {
     tech: TECH_API(),
     // QA17 (round 17): QA pass 6's fixes (DESIGN.md "QA pass 6 (round 17)")
     qa17: QA17_API(),
+    // STX (round 26): the status strip under the top bar (DESIGN.md "The status strip (round 26)")
+    stx: STX_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

@@ -44,6 +44,9 @@ const COMBAT = (() => {
   // enemies (+rules.cashAmp), x jackpot on 3+ items. While the player holds
   // Luck, dice (the `random` fx) roll twice and keep the best.
   const LUCK = { max: 10, miss: 2, near: 1, per: 2, jackpot: 1.5 };
+  // Weak and Vulnerable multiply a hit (calcHit); 3 Chill freezes (api.status). Named here so the
+  // game's status strip (round 26, STX) explains them with the very numbers the fight uses.
+  const WEAK_MUL = 0.75, VULN_MUL = 1.5, CHILL_AT = 3;
   const CLAW0 = { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
 
   let override = null;
@@ -610,8 +613,8 @@ const COMBAT = (() => {
   // One hit's value after modifiers: (base + str) * weak * vuln, floor, - armor.
   function calcHit(base, str, weak, vuln, armor) {
     let v = num(base, 0) + num(str, 0);
-    if (weak) v *= 0.75;
-    if (vuln) v *= 1.5;
+    if (weak) v *= WEAK_MUL;
+    if (vuln) v *= VULN_MUL;
     v = Math.floor(v) - Math.max(0, num(armor, 0));
     return Math.max(0, v);
   }
@@ -708,8 +711,8 @@ const COMBAT = (() => {
     if (d > 0 && isPlayer(F, u) && F.phase === 'enemy') F.fresh[id] = true;
     if (d) emit(F, { t: 'status', who: whoOf(F, u), idx: idxOf(F, u), s: id, v: d });
     // Chill 3 -> freeze 1 (enemy skips an action; player loses a grab next turn).
-    if (id === 'chill' && now >= 3) {
-      if (now - 3) u.status.chill = now - 3; else delete u.status.chill;
+    if (id === 'chill' && now >= CHILL_AT) {
+      if (now - CHILL_AT) u.status.chill = now - CHILL_AT; else delete u.status.chill;
       text(F, u, 'FROZEN');
       api.status(F, u, 'freeze', 1);
     }
@@ -1273,6 +1276,10 @@ const COMBAT = (() => {
   api.DIGEST = DIGEST;
   api.ARMOR_MAX = ARMOR_MAX;
   api.DIGEST_FLOOR = DIGEST_FLOOR;
+  // (round 26, STX) the status rules' numbers, read by the game's status strip to explain each status:
+  // the hit multipliers, the freeze point, which statuses lose 1 after the enemy turn, which have their own rules.
+  api.STATUS_K = Object.freeze({ weak: WEAK_MUL, vuln: VULN_MUL, chillAt: CHILL_AT, max: MAX_STACK,
+    turnDecay: Object.freeze(TURN_DECAY.slice()), ruled: Object.freeze(RULED.slice()) });
 
   // ---------- boss signatures (DESIGN.md "Bosses") ----------
   /* Each boss has one signature trick that rides on top of its move, like

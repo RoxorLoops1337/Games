@@ -1506,3 +1506,49 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /PERF round 24
+
+// ---------------------------------------------------------------- STX (round 26): the status strip
+// DESIGN.md "The status strip (round 26)": the chips under the top bar, a tap's card (what a status does with the
+// fight's numbers, how it goes away), the "+N" list. "Statuses" is "Effecten" (lang_nl.js), the names come from
+// content.status (Kracht, Zwak, Gif, Brand...).
+I18N.add('nl', {
+"ui": {
+"Your attacks deal +{n} damage per hit.": "Je aanvallen doen +{n} schade per klap.",
+"You deal {p}% less damage for {n} more {n|turn|turns}.": "Je doet {p}% minder schade, nog {n} {n|beurt|beurten}.",
+"You take {p}% more damage from attacks for {n} more {n|turn|turns}.": "Aanvallen doen je {p}% meer schade, nog {n} {n|beurt|beurten}.",
+"You lose {n} HP at the start of your turn, then it drops by 1. Block does not stop it.": "Je verliest {n} HP aan het begin van je beurt, daarna zakt het met 1. Blok houdt het niet tegen.",
+"You lose {n} HP at the end of your turn, then it drops by 1. Block does not stop it.": "Je verliest {n} HP aan het einde van je beurt, daarna zakt het met 1. Blok houdt het niet tegen.",
+"You lose {n} HP each time you play an item, then it drops by 1. Block does not stop it.": "Je verliest {n} HP elke keer dat je een voorwerp speelt, daarna zakt het met 1. Blok houdt het niet tegen.",
+"At {at} Chill you freeze and lose a grab next turn: {left} more to go.": "Bij {at} Kou vries je vast en verlies je volgende beurt een greep: nog {left} te gaan.",
+"You lose 1 grab at the start of each of your next {n} {n|turn|turns}.": "Je verliest 1 greep aan het begin van elk van je volgende {n} {n|beurt|beurten}.",
+"One grab fewer at the start of your turn (never your last one) for {n} more {n|turn|turns}.": "Eén greep minder aan het begin van je beurt (nooit je laatste), nog {n} {n|beurt|beurten}.",
+"Your claw is slippery: prizes slide out of it for {n} more {n|turn|turns}.": "Je grijper is glibberig: prijzen glijden eruit, nog {n} {n|beurt|beurten}.",
+"The cabinet glass is fogged for {n} more {n|turn|turns}.": "Het glas van de kast is beslagen, nog {n} {n|beurt|beurten}.",
+"You heal {n} HP at the start of your turn, then it drops by 1.": "Je geneest {n} HP aan het begin van je beurt, daarna zakt het met 1.",
+"An enemy that hits you takes {n} damage back for every hit.": "Een vijand die je raakt krijgt bij elke klap {n} schade terug.",
+"Every attack that hits you is {n} smaller.": "Elke aanval die je raakt is {n} kleiner.",
+"The next {n} {n|attack|attacks} on you miss.": "De volgende {n} {n|aanval|aanvallen} op jou missen.",
+"Your Block does not fade at the start of your next {n} {n|turn|turns}.": "Je Blok verdwijnt niet aan het begin van je volgende {n} {n|beurt|beurten}.",
+"You gain {n} Strength at the start of every turn.": "Je krijgt aan het begin van elke beurt {n} Kracht erbij.",
+"Dice roll twice and keep the best. A grab of 2+ prizes cashes it out: {d} damage to ALL enemies ({j} with 3+).": "Dobbelstenen rollen twee keer en de beste telt. Een greep van 2+ prijzen betaalt het uit: {d} schade aan ALLE vijanden ({j} bij 3+).",
+"{n} {n|grab|grabs} in a row brought something up.": "{n} {n|greep|grepen} op rij die iets opleverden.",
+"Goes down by 1 after every enemy turn.": "Zakt met 1 na elke beurt van de vijanden.",
+"Runs out after {n} more {n|tick|ticks}: {t} HP in all.": "Is op na nog {n} keer: {t} HP in totaal.",
+"Runs out after {n} more {n|turn|turns}: {t} HP in all.": "Is op na nog {n} {n|beurt|beurten}: {t} HP in totaal.",
+"Goes down by 1 at the start of your turn.": "Zakt met 1 aan het begin van je beurt.",
+"Uses 1 at every turn start.": "Kost 1 aan het begin van elke beurt.",
+"Each miss uses 1.": "Elke misser kost 1.",
+"Lasts the whole fight.": "Blijft het hele gevecht.",
+"Does not wear off by itself.": "Gaat niet vanzelf weg.",
+"Never wears off (at most {max}). Cashing out empties it.": "Gaat nooit weg (hoogstens {max}). Uitbetalen maakt het leeg.",
+"An empty grab resets it.": "Een lege greep zet het op nul.",
+"Items that cleanse wash it off.": "Voorwerpen die reinigen wassen het weg.",
+"Debuff": "Nadeel",
+"Buff": "Voordeel",
+"Counter": "Teller",
+"Your statuses ({n})": "Jouw effecten ({n})",
+"{n} more statuses": "nog {n} effecten"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /STX round 26

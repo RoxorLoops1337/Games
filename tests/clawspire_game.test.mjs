@@ -12649,4 +12649,178 @@ h.test('stuck prize (round 25): every claw type, Ticklish Claw, a golden prize: 
   }
 });
 
+/* ------------------------------------------------- STX (round 26): the status strip (DESIGN.md "The status strip (round 26)") */
+{
+  const stxBoot = (foes, meta) => {
+    const { T, G } = metaBoot(meta || {});
+    G.newRun('knight', 4242);
+    if (G.screen === 'boon') G.choose(0);
+    G.startFight(foes || ['spider', 'mushroom'], 'normal');
+    settle(G, 10);
+    return { T, G, C: T.COMBAT, F: G.fight, el: T._nodes.pstatus };
+  };
+  const give = (G, C, list) => { for (const [s, v] of list) C.status(G.fight, 'p', s, v); G.fs.dirty = true; stepFor(G, 0.05); };
+  const chips = (el) => el.children.filter((c) => /\bstx\b/.test(c.className) && !/stxGone/.test(c.className));
+  const sOf = (c) => (c.dataset && c.dataset.s) || (/stxMore/.test(c.className) ? 'more' : '?');
+  const txt = (c) => c.children.map((k) => k.textContent).join('|') + (c.textContent || '');
+  const setIntent = (e, id) => { const i = e.def.moves.findIndex((m) => m.id === id); e.moveIdx = i; e.intent = e.def.moves[i]; };
+
+  h.test('stx: the markup: #pstatus lives under the top bar, no rule fades it while the resolve row or a banner is up', () => {
+    const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+    h.ok(/<div id="top"[\s\S]*<div id="relics"><\/div>[\s\S]*<div id="pstatus"><\/div>\s*<\/div>\s*<!-- player row/.test(html), '#pstatus is the top bar\'s last child, before the player row');
+    h.ok(!/<div id="playerRow"[^>]*>[\s\S]{0,80}id="pstatus"/.test(html), 'the player row no longer holds the statuses');
+    h.ok(!/rrOn #pstatus|bannerOn #pstatus/.test(html), 'neither the resolve row nor a banner fades the statuses');
+    h.ok(/#playerRow\.rrOn #grabs\{opacity:0/.test(html), 'the GRABS pill still steps aside for the row');
+    h.ok(/#top #pstatus\{position:absolute;left:8px;top:74px;height:42px/.test(html), 'the strip: stage 74..116 under the 70 px bar');
+    h.ok(/\.stx\{[^}]*height:42px/.test(html) && /\.stx \.stxN\{[^}]*font-size:19px/.test(html), 'chips 42 px tall (28 css px at 360), numbers 19 px');
+  });
+
+  h.test('stx: chip order (debuffs, buffs, counters) and colour classes; outside a fight it is empty', () => {
+    const { G, C, el, T } = stxBoot();
+    h.ok(!/\bon\b/.test(el.className) && chips(el).length === 0, 'no statuses: the strip is hidden');
+    give(G, C, [['str', 3], ['regen', 2], ['poison', 4], ['weak', 2], ['burn', 3]]);
+    G.fight.player.status.streak = 2; G.fs.dirty = true; stepFor(G, 0.2);
+    h.eq(el.className, 'on', 'shown');
+    const ids = chips(el).map(sOf);
+    h.eq(ids.join(), 'poison,burn,weak,str,more', 'debuffs first (poison, burn, weak), then buffs; six fold to four and "+2"');
+    h.eq(G.stx.list(G.fight.player.status).map((s) => s.id).join(), 'poison,burn,weak,str,regen,streak', 'the whole order: debuffs, buffs, the streak counter last');
+    h.ok(chips(el).slice(0, 3).every((c) => /\bstxBad\b/.test(c.className)), 'debuffs wear the bad colour');
+    h.ok(/\bstxGood\b/.test(chips(el)[3].className), 'buffs the good colour');
+    h.eq(G.stx.list({ streak: 2, str: 1 }).map((s) => s.kind).join(), 'good,info', 'the streak is a counter (info), after the buffs');
+    h.ok(/\+2/.test(txt(chips(el)[4])) && /stxMore/.test(chips(el)[4].className), 'the "+N" chip counts the rest');
+    h.ok(/^☠\|4/.test(txt(chips(el)[0])), 'a chip is the icon and the number');
+    G.fight.player.status = { str: 1 }; G.fs.dirty = true; stepFor(G, 0.2);
+    G.fight.player.status.streak = 2; G.fs.dirty = true; stepFor(G, 0.2);
+    h.ok(/\bstxInfo\b/.test(chips(el)[1].className), 'a counter wears the info colour');
+    h.eq(G.stx.list({ a: 0, b: -1 }).length, 0, 'zero and junk stacks show nothing');
+    G.endFight && G.toMap && G.toMap();
+    stepFor(G, 0.3);
+    h.ok(chips(el).length === 0 && !/\bon\b/.test(el.className), 'off the fight screen the strip is cleared (' + G.screen + ')');
+    h.ok(T._nodes.pstatus === el, 'the same #pstatus element');
+  });
+
+  h.test('stx: up to five fit, past that four and "+N"; the list shows every status; an intent bubble in the band narrows it', () => {
+    const { G, C, el } = stxBoot();
+    give(G, C, [['str', 3], ['poison', 4], ['weak', 2], ['burn', 12]]);
+    stepFor(G, 0.2);
+    h.eq(chips(el).map(sOf).join(), 'poison,burn,weak,str', 'four: all of them');
+    h.ok(/\bw2\b/.test(chips(el)[1].className), 'a two digit chip is the wide one');
+    give(G, C, [['thorns', 2]]); stepFor(G, 0.2);
+    h.eq(chips(el).length, 5, 'five still fit');
+    give(G, C, [['vuln', 1], ['regen', 2]]); stepFor(G, 0.2);
+    h.eq(chips(el).map(sOf).join(), 'poison,burn,weak,vuln,more', 'seven: the four that hurt most and "+3"');
+    chips(el)[4].onclick({});
+    h.ok(G.stx.listOpen, 'the "+N" chip opens the list');
+    h.eq(G.stx.rows.map((r) => r.id).join(), 'poison,burn,weak,vuln,str,thorns,regen', 'every status in the list, in strip order');
+    h.ok(G.stx.rows.every((r) => r.what && r.name), 'each with its name and what it does');
+    chips(el)[4].onclick({});
+    h.ok(!G.stx.listOpen, 'the chip toggles it shut');
+    // the fit itself, and the band's room
+    const L = (n) => Array.from({ length: n }, (x, i) => ({ id: 's' + i, n: 1, kind: 'bad' }));
+    h.eq(G.stx.fit(L(5), 524), 5, 'five fit in the full width');
+    h.eq(G.stx.fit(L(6), 524), 4, 'six: four and "+2"');
+    h.eq(G.stx.fit(L(5), 150), 1, 'a narrow band: one chip and "+4"');
+    h.eq(G.stx.fit(L(3), 40), 0, 'no room at all: only "+N"');
+    const { G: Gb, C: Cb, el: elb } = stxBoot(['hoard']);
+    const room = Gb.stx.room();
+    h.ok(room > 100 && room < 300, 'a boss\'s bubble under the bar narrows the band (' + room + ')');
+    give(Gb, Cb, [['poison', 2], ['burn', 2], ['weak', 2], ['vuln', 2], ['str', 2], ['thorns', 2]]);
+    stepFor(Gb, 0.2);
+    const p = Gb.q9.enemyPos(0);
+    h.ok(chips(elb).length >= 2 && /stxMore/.test(chips(elb)[chips(elb).length - 1].className), 'fewer chips and "+N" (' + chips(elb).map(sOf).join() + ')');
+    h.ok(Gb.stx.right <= p.x - Gb.stx.K.half, 'the strip ends left of the bubble (' + Gb.stx.right + ' < ' + (p.x - Gb.stx.K.half) + ')');
+  });
+
+  h.test('stx: a tap explains a status with the fight\'s own numbers (Strength 3 is +3, Weak from COMBAT\'s multiplier)', () => {
+    const { G, C, el, T, F } = stxBoot();
+    give(G, C, [['str', 3], ['weak', 2], ['poison', 4]]);
+    stepFor(G, 0.2);
+    const str = chips(el).find((c) => sOf(c) === 'str');
+    str.onclick({});
+    const pop = T._nodes.pop.innerHTML;
+    h.ok(/Strength 3/.test(pop) && /\+3 damage per hit/.test(pop) && /Lasts the whole fight/.test(pop), 'Strength 3: +3 damage per hit, the whole fight: ' + pop.replace(/<[^>]+>/g, ' '));
+    h.ok(/stxGood/.test(pop) && /Buff/.test(pop), 'tagged a buff, in the good colour');
+    const K = C.STATUS_K;
+    h.eq(K.weak, 0.75, 'COMBAT names the Weak multiplier');
+    const w = G.stx.info('weak', 2);
+    h.ok(w.what.indexOf(Math.round((1 - K.weak) * 100) + '% less damage for 2 more turns') >= 0, 'Weak 2: the percent from COMBAT, the turns: ' + w.what);
+    h.ok(/after every enemy turn/.test(w.end) && /cleanse/.test(w.end) && G.stx.decays('weak'), 'Weak drops after the enemy turn (COMBAT turnDecay), a cleanse removes it');
+    // the words match the rule: a Weak player's 8 is 6 on an enemy with no Block or Armor
+    const e = F.enemies[0]; e.block = 0; delete e.status.armor;
+    const hp0 = e.hp; C.damage(F, 'p', 0, 8);
+    h.eq(hp0 - e.hp, Math.floor((8 + 3) * K.weak), 'the fight uses that multiplier (Strength 3 included)');
+    const v = G.stx.info('vuln', 1);
+    h.ok(v.what.indexOf(Math.round((K.vuln - 1) * 100) + '% more damage') >= 0 && /1 more turn\./.test(v.what), 'Vulnerable 1: ' + v.what);
+    const po = G.stx.info('poison', 4);
+    h.ok(/lose 4 HP at the start of your turn/.test(po.what) && /4 more ticks: 10 HP in all/.test(po.end), 'Poison 4: 4 now, 10 in all: ' + po.end);
+    h.ok(/end of your turn/.test(G.stx.info('burn', 3).what) && /6 HP in all/.test(G.stx.info('burn', 3).end), 'Burn ticks at the end of your turn');
+    h.ok(new RegExp('At ' + K.chillAt + ' Chill').test(G.stx.info('chill', 1).what) && /2 more to go/.test(G.stx.info('chill', 1).what), 'Chill counts to COMBAT\'s freeze point');
+    const L = C.LUCK, lk = G.stx.info('luck', 3);
+    h.ok(lk.what.indexOf(Math.round(3 * L.per) + ' damage to ALL') >= 0 && lk.end.indexOf('at most ' + L.max) >= 0, 'Luck 3: the cash out from COMBAT.LUCK: ' + lk.what);
+    h.ok(/1 more turn/.test(G.stx.info('jam', 1).what) && G.stx.decays('jam') && !G.stx.decays('str') && !G.stx.decays('poison'), 'jam decays like a DATA turns status; Strength and Poison have their own rules');
+    for (const id of Object.keys(T.DATA.STATUS)) { const I = G.stx.info(id, 2); h.ok(I.what && I.name && I.tag, id + ' explains itself'); }
+    h.ok(G.stx.info('streak', 1).tag === 'Counter' && /1 grab in a row/.test(G.stx.info('streak', 1).what), 'the streak is a counter, singular words for 1');
+    h.ok(!/\u2014/.test(JSON.stringify(Object.keys(T.DATA.STATUS).map((id) => G.stx.info(id, 3)))), 'no em dash anywhere');
+  });
+
+  h.test('stx: juice: a gain pops with +N, a debuff landing flashes red, a status that ran out fades with its -N; calm only lights', () => {
+    const { G, C, el } = stxBoot();
+    give(G, C, [['str', 3]]); stepFor(G, 0.2);
+    let c = chips(el)[0];
+    h.ok(/\bstxPop\b/.test(c.className) && !/stxHurt/.test(c.className), 'a buff gained pops (no red flash)');
+    h.ok(c.children.some((k) => /stxF g/.test(k.className) && k.textContent === '+3'), 'with a green +3');
+    give(G, C, [['poison', 2]]); stepFor(G, 0.2);
+    c = chips(el).find((x) => sOf(x) === 'poison');
+    h.ok(/\bstxPop\b/.test(c.className) && /\bstxHurt\b/.test(c.className), 'a debuff landing pops and flashes red');
+    h.ok(/stxPop/.test(c.className) && !/stxPop/.test(chips(el).find((x) => sOf(x) === 'str').className), 'the unchanged chip stays still');
+    delete G.fight.player.status.poison; G.fs.dirty = true; stepFor(G, 0.2);
+    const gone = el.children.find((x) => /stxGone/.test(x.className));
+    h.ok(gone && gone.children.some((k) => k.textContent === '−2'), 'Poison ran out: its chip fades with -2');
+    const { G: G2, C: C2, el: el2 } = stxBoot(null, { settings: { shake: false } });
+    give(G2, C2, [['weak', 1]]); stepFor(G2, 0.2);
+    const c2 = chips(el2)[0];
+    h.ok(/\bstxHi\b/.test(c2.className) && !/stxPop|stxHurt/.test(c2.className), 'calm: a highlight, no pop, no flash (' + c2.className + ')');
+    h.ok(!c2.children.some((k) => /stxF/.test(k.className)), 'calm: no floating number');
+    delete G2.fight.player.status.weak; G2.fs.dirty = true; stepFor(G2, 0.2);
+    h.ok(!el2.children.some((x) => /stxGone/.test(x.className)), 'calm: a status that ran out just goes');
+  });
+
+  h.test('stx: the strip follows the enemy turn as it plays: a debuff when its move lands, Poison counting down at the turn start', () => {
+    const { G, C, el, F } = stxBoot();
+    setIntent(F.enemies[0], 'web'); setIntent(F.enemies[1], 'puff');
+    G.endTurn();
+    h.ok(F.player.status.weak > 0 && F.player.status.poison > 0, 'the engine already has Weak and Poison');
+    h.ok(!G.stx.shown().weak && !G.stx.shown().poison, 'the strip waits for the moves to land');
+    const seen = [], weakAt = [];
+    for (let i = 0; i < 60 * 12 && !ready(G); i++) {
+      G.update(DT);
+      const s = G.stx.shown(), last = seen[seen.length - 1];
+      if (s.poison !== last) seen.push(s.poison);
+      if (s.weak && !weakAt.length) weakAt.push(G.state().enemyTurn);
+    }
+    h.ok(weakAt[0] === true, 'Weak showed up during the enemy turn');
+    h.eq(seen.filter((x) => x != null).join(), '2,1', 'Poison 2 when the spores land, 1 after its tick at the turn start');
+    h.eq(JSON.stringify(G.stx.shown()), JSON.stringify(Object.fromEntries(Object.entries(F.player.status).filter(([k, v]) => v > 0))), 'settled: the strip is the fight\'s state');
+    h.ok(chips(el).some((c) => sOf(c) === 'weak') && chips(el).some((c) => sOf(c) === 'poison'), 'and the chips show it');
+  });
+
+  h.test('stx: the strip stays on while the resolve row fills and resolves', () => {
+    const { G, C, el, F } = stxBoot(['rat', 'rat']);
+    give(G, C, [['str', 2], ['poison', 3]]); stepFor(G, 0.2);
+    C.useGrab(F);
+    const fsx = G.fs;
+    fsx.grabInFlight = true; fsx.grabN++; fsx.dropAt = G.S.t; fsx.releaseAt = -1; fsx.delivered = 0; fsx.watch = false; fsx.pendingDrop = false;
+    const bodies = itemBodies(G).filter((b) => (b.data.def.fx || []).some((f) => f && f.k === 'dmg')).slice(0, 2);
+    G.playDelivered(bodies);
+    let rowFrames = 0, off = 0;
+    for (let i = 0; i < 60 * 15 && G.screen === 'fight' && (G.state().grabInFlight || G.state().queue); i++) {
+      G.update(DT);
+      const R = G.row.state;
+      if (R && R.slots && R.slots.length) { rowFrames++; if (!/\bon\b/.test(el.className) || chips(el).length < 2) off++; }
+    }
+    h.ok(rowFrames > 10, 'the row was up (' + rowFrames + ' frames)');
+    h.eq(off, 0, 'the strip showed both statuses on every one of them');
+  });
+}
+
 h.done();

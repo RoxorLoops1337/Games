@@ -8250,3 +8250,100 @@ go, Low and High fixed, a junk value repaired to Auto). The minified dist was dr
 boot, a fight with a 5-prize row, a drop, the shop, the vault, Settings (Quality round trip saved in the profile),
 a hidden page, and an online co-op lobby with a second player through the local relay: no console errors. Every
 other game's dist output is byte identical before and after.
+
+## The status strip (round 26)
+
+The owner, after a playtest: "It would also be nice to see all the buffs and debuffs on the players character... like I
+can not easily see my strength, poison, burn, weak or anything." **Why**: the chips lived in the player row over the
+cabinet (36 px, small emoji and a number, no colour beyond a thin border), the round 21 resolve row faded them out
+while it was up (`#playerRow.rrOn #pstatus{opacity:0}`), a banner faded them too, and a tap showed DATA's one generic
+line with no numbers. No combat number or rule changed in this round.
+
+**Where it sits, and why there.** Directly under the top bar, left aligned under the portrait and the HP bar: stage
+x 8, y 74..116 (`#pstatus`, now the top bar's last child, absolutely placed). Tried and rejected: the player row (the
+resolve row's panel covers 336..484, and the band must stay clear of the claw's rail at 436, so the row cannot move);
+the control bar's tray row (far from the HP bar, under the tip card, shared with the tray chips). Under the top bar it
+reads as part of "you" (portrait, HP, statuses), and nothing in the arena covers it: the resolve row, the enemy turn,
+the cabinet, the toasts (stage 400) and the banners (over the arena during the row) are all elsewhere. What moved for it:
+- the INCOMING pill goes under the strip (`q9PillTop`: 120 instead of 72 while the strip shows);
+- a fight's corner card (a new Prizedex / Codex entry, `.mDex.tight`) sits under the strip (`#stage.stxOn`, top 124),
+  the INCOMING pill under that card as before; a sticker card on the right steps down too when the strip reaches it
+  (`#stage.stxWide`, the strip past x 280);
+- the player's damage numbers (`polPlayerNum`) and a row's Block +N (`rr2Block`) start under the strip when it covers
+  their x (`stxBelow`); floating labels keep out of it through a label zone ('stx');
+- an elite's or a boss's intent bubble can reach into the band (`intentY` is 110 at most for them): the strip never
+  covers one; it only takes the room left of the first such bubble (`stxRoom`), so a boss fight shows fewer chips and
+  "+N". Normal enemies' bubbles sit lower, so a normal fight has the full width.
+The player row keeps the GRABS pill (now `margin-left:auto`) and the banner; the row still fades the GRABS pill only.
+
+**The chips** (`.stx`, `<style id="stx-css">`): 42 px tall (30 css px on a 390 px phone, 28 on 360), 56 px wide (68
+for two digits), the status's icon (19 px; an art file `status/<id>` replaces the emoji when one ships, as on the
+canvas chips) and the number (19 px, 900). Colour by kind from the design tokens: debuffs `--bad`, buffs `--good`,
+counters (the streak) `--info`: a 2 px border and a 20 % tint of it over the surface (colour-blind modes remap the tokens;
+a debuff chip is square cornered there). Order: debuffs first (Poison, Burn, Bleed, Weak, Vulnerable, Frozen, Stunned,
+Chill, Jammed, Greased, Fogged), then buffs (Strength, Thorns, Regen, Armor, Dodge, Bulwark, Enrage, Luck), then the
+Streak (`STX_ORDER`). Up to five show when they fit; past that the first four and a "+N" chip (`stxFit`); a narrow
+band (a boss bubble) shows fewer, never covering the bubble. Every DATA status is covered, Block excepted (it is the
+shield chip on the HP bar).
+
+**What a tap says** (`#pop`, `stxTip`): the icon, the name and the number, a DEBUFF / BUFF / COUNTER tag in the kind's
+colour, one plain sentence with the real numbers, and how it goes away. The sentences (`STX_INFO`) are functions of the
+stack count and read the rules' own numbers: COMBAT now names `WEAK_MUL` (0.75), `VULN_MUL` (1.5) and `CHILL_AT` (3)
+and uses them in `calcHit` and `api.status` (same values), and exposes them with the turn-decay and ruled lists as
+`COMBAT.STATUS_K`; Luck reads `COMBAT.LUCK` and the fight's `rules.cashAmp`. How it ends: a status COMBAT's
+`decayTurns` takes 1 from after the enemy turn (the turnDecay list, or a DATA `turns` status without rules of its own:
+Weak, Vulnerable, Greased, Fogged, Jammed) says so (`stxDecays`); the rest have their own line (Poison and Burn: "Runs
+out after N more ticks: T HP in all"; Frozen / Stunned at your turn start; Bulwark each turn start; Dodge each miss;
+Strength, Thorns, Armor, Enrage the whole fight; Chill never by itself); every DATA debuff adds "Items that cleanse wash
+it off" (COMBAT's cleanse removes exactly those). Examples: "Strength 3: Your attacks deal +3 damage per hit. Lasts the
+whole fight." "Weak 2: You deal 25% less damage for 2 more turns." "Poison 4: You lose 4 HP at the start of your turn,
+then it drops by 1. Block does not stop it. Runs out after 4 more ticks: 10 HP in all." The "+N" chip opens the whole
+list (`#stxList`, the relic list's panel under the strip): every status with its chip, name, sentence and end line; X,
+the chip again or a tap elsewhere closes it.
+
+**Timing: the strip shows what has played.** The engine resolves a whole enemy turn at END TURN; the strip follows the
+event queue instead (`FS.stx`: a base and the deltas played since): a queued status event moves its chip when it plays
+(an enemy's Weak lands with its move), the turn event shows the turn start's own changes (the Poison tick, Regen, the
+Weak decay, the freeze) while the turn's later status events (Enrage, a relic) still wait for their beat, and an empty
+queue is the fight's state. Burn ticks at the end of your turn in the engine; its chip counts down at the next turn event
+(no event marks the tick; COMBAT was left alone).
+
+**Juice** (diffing what the strip last drew): a chip whose number changed pops (x1.25 and back, 0.25 s) with its
+change floating off its corner (green when it helps you, red when it hurts, `+3`, `−1` with a minus sign); a debuff
+arriving also flashes the chip red once; a status that ran out leaves its chip a moment, fading with its last `−N`; the
+"+N" chip pops when a folded status changed. Poison and Burn ticks keep the old damage number by the HP bar (now under
+the strip). Calm (Shake off) and reduced motion: no pop, no flash, no float, no fading chip; just a short white light
+around the chip that changed.
+
+**Duo, versus, online.** The strip is the local fight's player (`F.player`), as the old chips were; in co-op the top bar
+shows `#duoBar` inside the bar, so the strip under it collides with nothing. The versus claw-off has no statuses and
+the band's room ignores it (`FS.vs`).
+
+**The enemies' statuses** were left as they are: canvas chips under each hp bar (`RENDER.statusPips`, centred, one row
+with "+N" past the room, a pop when one changes) read fine at 390 and 360 in the shots. Known limit: the resolve row's
+panel covers them while it is open (it covers the enemies' feet by design).
+
+**Words.** Every sentence, end line, tag and the list's title in Dutch (`js/lang_nl2.js`, block "STX (round 26)"); the
+names come from the content table (Kracht, Zwak, Gif, Brand...). "Statuses" is "Effecten" as in Help.
+
+**Code.** game.js STX block after the HUD block (`STX`, `STX_ORDER`, `STX_INFO`, `STX_END`, `stxInfo`, `stxList`,
+`stxFit`, `stxWidth`, `stxRoom`, `stxState`, `stxShown`, `stxEv`, `stxTurn`, `stxBelow`, `stxChip`, `stxSync`,
+`stxTip`, `stxMore`), `GAME.stx` (tests and drivers); one-line hooks in `refreshHud` (replaces the old chip loop),
+`applyEvent` (a player status event, the turn event), `polPlayerNum`, `rr2Block`, `q9PillTop`. combat.js: the three
+named constants and `STATUS_K`. index.html: the markup move, `<style id="stx-css">`, the old `#pstatus` / `.many` /
+fade rules removed.
+
+**Tests.** Game suite (`stx:`): the markup (the strip in the top bar, nothing fades it, the GRABS pill still does), the
+order and colour classes, five fit then four and "+N", the list holds every status in order, a boss bubble narrows the
+band and the strip ends left of it, the tap's words from the real numbers (Strength 3 is +3; Weak's percent from
+`STATUS_K` and the same multiplier in a real hit; Poison 4's 10 HP; Chill's freeze point; Luck from `COMBAT.LUCK`; every
+DATA status explains itself; no em dash), the juice classes (pop, red flash, +3, a fading -2; calm: a light only), the
+enemy turn played in order (Weak during the enemy turn, Poison 2 when the spores land then 1 after the tick, settled
+equals the fight), and the strip on through a resolve row. I18n suite: every new line has Dutch, no English or raw
+{var} left in any card, Zwak / Kracht / Gif exact, the tip and the list's title in Dutch. No render.js change.
+
+**Seen in the real build** (`npm run build`, dist/ served, Chromium, 390x844 and 360x780, English and Dutch, calm and
+extra large text): staged Strength, Weak, Poison and Burn, the tips, seven statuses and the list, a real drop with the
+resolve row filling and open (a tip open over it), an enemy turn landing Weak and Poison (frames), a boss with seven
+statuses, three enemies, duo co-op. Scratchpad `r26status/` (`shots.mjs`, `base.mjs`, `duo.mjs`, `sheet.py`;
+`out/`).
