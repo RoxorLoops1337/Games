@@ -1,4 +1,4 @@
-// Inkwoven -- data_events.js: the Fables (event tiles). 48 events: 12 per chapter (`chapters:[n]`) plus 12 for any chapter.
+// Echowake: data_events.js: the Fables (event tiles). 48 events: 12 per verse (`chapters:[n]`) plus 12 for any verse.
 // Data only (DESIGN 4.9, CONTENT_SPEC 6): one IIFE that registers into DATA.events. No functions, no clock, no unseeded randomness,
 // no em or en dashes. Everything here is validated by DATA.validate('events') and DATA.audit('events'), and
 // tests/rogue_book_narrative.test.mjs replays every outcome through the real RUN.applyOps when RUN is present.
@@ -8,17 +8,17 @@
 //     in any of its outcomes (the audit checks this). Gambles have several weighted outcomes, costs carry a display `cost`
 //     and the outcome carries the matching negative op (`cost` is display text only, the engine never deducts it).
 //   * Fights use `enemies:[ids]` from the fixed roster and only enemies of the event's own chapter (any-chapter events have
-//     no fights, because their difficulty could not follow the chapter). Fight choices say so in their label.
+//     no fights, because their difficulty could not follow the verse). Fight choices say so in their label.
 //   * Relics are referenced only by the fixed ids brass_lantern, fox_mask, silver_bell, jade_key (CONTENT_SPEC 2), everything
 //     else by `rarity`. Curses only by the fixed curse_* ids. No card, gem or relic id outside those.
 //   * Choices gated by `req.hero` are hidden when that hero is not in the party, so every event keeps two visible choices
-//     that need nothing. `req.chapter` and `req.relic` choices are shown disabled (the engine says why).
+//     that need nothing. `req.chapter` (a verse) and `req.relic` choices are shown disabled (the engine says why).
 //   * `once:true` marks the events with lasting story or deck consequences (flags, relics, card changes, curses).
 //
 // FLAG PATHS
-//   fox_spared  set by `fox_in_the_snare` (ch1, free the kit). Unlocks `fox_returns` (ch2, w 6) and a choice in `kappa_toll`
-//               and `lantern_ferry`. The fox has one tail in chapter 1, two in chapter 2 and three in chapter 3.
-//   fox_bond    set by any choice of `fox_returns`. Unlocks `fox_at_the_gate` (ch3, w 6), the fox's last gift.
+//   fox_spared  set by `fox_in_the_snare` (verse I, free the kit). Unlocks `fox_returns` (verse II, w 6) and a choice in `kappa_toll`
+//               and `lantern_ferry`. The fox has one tail in verse I, two in verse II and three in verse III.
+//   fox_bond    set by any choice of `fox_returns`. Unlocks `fox_at_the_gate` (verse III, w 6), the fox's last gift.
 //   silver_bell `peddler_silver_bell` has a choice that needs the relic (a rare relic as thanks).
 //   fox_mask    `mask_market` (ch2) has a choice that needs the relic. jade_key opens `jade_door`. brass_lantern wakes
 //               `brass_lantern_secret`.
@@ -30,18 +30,18 @@
 //   missing_page) or a card plus HP (kill_your_darlings), and the dull options (leave it, talk, step around) stay free and safe.
 //   lantern_ferry's free option was cut down to match. The bot's own expected values (tools/rogue_book/bot/policies.mjs) now sit
 //   within a few points of each other for most of these, and which one wins depends on HP and gold.
-// Tone: dry, warm, the odd shiver. Magnitudes follow the economy (ECONOMY.price, camp restPct 0.35): a 25 gold cost buys about
+// Tone: dry, warm, the odd shiver. Echowake wording: Echo is the map resource (op `ink`), Songs are the one-use map tools (op `addBrush`), waking a hex is op `paint`, and the Hush is the silence that swallows sound. Ids and ops keep their old names. Magnitudes follow the economy (ECONOMY.price, camp restPct 0.35): a 25 gold cost buys about
 // 5 gold of comfort plus a real perk, a gamble is roughly fair, a curse buys about 40 to 60 gold of value.
 (() => {
-  // ------------------------------------------------------------------ chapter 1: the Whispering Bamboo Grove
+  // ------------------------------------------------------------------ verse I: the Whispering Bamboo Grove
   DATA.add('events', {
     fox_in_the_snare: {
       title: 'A Fox in the Snare', art: { scene: 'ch1' }, chapters: [1], once: true, w: 3,
-      text: "A white fox kit is tangled in a hunter's snare, one ink-dipped tail thrashing. It has stopped struggling and started glaring, which is either a very good sign or a very bad one.",
+      text: "A white fox kit is tangled in a hunter's snare, one bell-tipped tail thrashing. It has stopped struggling and started glaring, which is either a very good sign or a very bad one.",
       choices: [
         { label: 'Loosen the snare', cost: 'Hurts the front hero',
           out: [
-            { w: 4, text: 'The kit nips you twice out of pure principle, then shoots free, stops, bows once like a tiny courtier, and vanishes into the bamboo. Where it stood, one ink pawprint is drying into a neat little note in the margin of your map.', ops: [{ op: 'hurt', n: 4, who: 'front' }, { op: 'flag', k: 'fox_spared' }, { op: 'ink', n: 1 }] },
+            { w: 4, text: 'The kit nips you twice out of pure principle, then shoots free, stops, bows once like a tiny courtier, and vanishes into the bamboo. Where it stood, one small pawprint is still humming a neat little note, and the note follows you.', ops: [{ op: 'hurt', n: 4, who: 'front' }, { op: 'flag', k: 'fox_spared' }, { op: 'ink', n: 1 }] },
             { w: 1, text: 'The snare is tighter than it looked, and the kit is in no mood for gratitude. It bites to the bone and is gone into the bamboo before you can say anything gentle. You are left with a throbbing hand and an empty snare.', ops: [{ op: 'hurt', n: 6, who: 'front' }] },
           ] },
         { label: 'Sell it to the hunter', cost: 'A curse: Regret',
@@ -158,17 +158,17 @@
     },
 
     stone_lantern_story: {
-      title: 'The Lantern Wants a Story', art: { scene: 'ch1' }, chapters: [1],
-      text: 'An old stone lantern, unlit for a century, says it will shine if someone tells it a story. It would like a good one. It has already heard most of the others.',
+      title: 'The Lantern Wants a Song', art: { scene: 'ch1' }, chapters: [1],
+      text: 'An old stone lantern, unlit for a century, says it will shine if someone sings it a song. It would like a good one. It has already heard most of the others.',
       choices: [
-        { label: 'Tell it a story',
+        { label: 'Sing it a song',
           out: [
-            { w: 3, text: "You tell of a fox, a bridge, and a very serious cucumber. It glows a proud pale gold. 'Acceptable,' it says, and light spills down the path ahead.", ops: [{ op: 'paint', n: 2 }] },
+            { w: 3, text: "You sing of a fox, a bridge, and a very serious cucumber. It glows a proud pale gold. 'Acceptable,' it says, and light spills down the path ahead.", ops: [{ op: 'paint', n: 2 }] },
             { w: 1, text: 'It has heard that one. But it is generous, and pretends it has not. The light is dim, but real.', ops: [{ op: 'paint', n: 1 }] },
           ] },
-        { label: 'Let Kuro recite one from the margins', req: { hero: 'kuro' },
-          out: [{ w: 1, text: 'He recites the one nobody remembers writing. The lantern weeps warm wax, and the road ahead lights itself for a long way.', ops: [{ op: 'paint', n: 3 }, { op: 'ink', n: 1 }] }] },
-        { label: 'Light it yourself', cost: '1 Ink',
+        { label: 'Let Kuro play it a tune', req: { hero: 'kuro' },
+          out: [{ w: 1, text: 'He plays the one nobody remembers composing. The lantern weeps warm wax, and the road ahead lights itself for a long way.', ops: [{ op: 'paint', n: 3 }, { op: 'ink', n: 1 }] }] },
+        { label: 'Light it yourself', cost: '1 Echo',
           out: [{ w: 1, text: 'Cheating, and the lantern knows it. But a lit lantern is a lit lantern, and it sulks for only a moment before shining on your behalf.', ops: [{ op: 'ink', n: -1 }, { op: 'paint', n: 3 }] }] },
       ],
     },
@@ -192,15 +192,15 @@
     },
 
     hermit_brush_seller: {
-      title: "The Hermit's Brushes", art: { scene: 'shop' }, chapters: [1],
-      text: "A hermit in a bamboo hut sells brushes of every size, all of them slightly damp. 'They are single use,' she says, 'like most good ideas.' She looks at your deck with interest.",
+      title: "The Hermit's Songs", art: { scene: 'shop' }, chapters: [1],
+      text: "A hermit in a bamboo hut sells songs of every length, all of them a little out of breath. 'They are single use,' she says, 'like most good ideas.' She looks at your deck with interest.",
       choices: [
-        { label: 'Buy a Wave Sweep', cost: '60 gold', req: { gold: 60 },
-          out: [{ w: 1, text: "She wraps it in a leaf and does not let go until you promise to use it properly. 'Five hexes,' she says. 'Enough to change your mind about a whole afternoon.'", ops: [{ op: 'gold', n: -60 }, { op: 'addBrush', id: 'wave' }] }] },
-        { label: 'Trade a card for a brush', cost: 'Lose a card, 70 gold', req: { gold: 70 },
+        { label: 'Buy a Ripple', cost: '60 gold', req: { gold: 60 },
+          out: [{ w: 1, text: "She hums it into a leaf and does not let go until you promise to sing it properly. 'Five hexes,' she says. 'Enough to change your mind about a whole afternoon.'", ops: [{ op: 'gold', n: -60 }, { op: 'addBrush', id: 'wave' }] }] },
+        { label: 'Trade a card for a song', cost: 'Lose a card, 70 gold', req: { gold: 70 },
           out: [
-            { w: 3, text: "She takes the card, sniffs it, nods, and hands you a brush from behind her ear. 'Fair,' she says, pocketing your coins. 'Cards are lighter than brushes. Both weigh on you, and I charge for the lifting.'", ops: [{ op: 'gold', n: -70 }, { op: 'removeCard' }, { op: 'addBrush', id: 'random' }] },
-            { w: 1, text: "She takes the card, reads it, and goes very quiet. 'Where did you get this?' she asks, and does not wait for an answer. She hands you the good brush from the back of the hut, and still takes the coins.", ops: [{ op: 'gold', n: -70 }, { op: 'removeCard' }, { op: 'addBrush', id: 'wave' }] },
+            { w: 3, text: "She takes the card, sniffs it, nods, and hums you a song from behind her ear. 'Fair,' she says, pocketing your coins. 'Cards are lighter than songs. Both weigh on you, and I charge for the carrying.'", ops: [{ op: 'gold', n: -70 }, { op: 'removeCard' }, { op: 'addBrush', id: 'random' }] },
+            { w: 1, text: "She takes the card, reads it, and goes very quiet. 'Where did you get this?' she asks, and does not wait for an answer. She teaches you the good song from the back of the hut, and still takes the coins.", ops: [{ op: 'gold', n: -70 }, { op: 'removeCard' }, { op: 'addBrush', id: 'wave' }] },
           ] },
         { label: 'Just talk',
           out: [{ w: 1, text: 'She tells you about the grove when it was young: greener, louder, with far fewer opinions. You leave with hot tea and a firm sense of direction.', ops: [{ op: 'ink', n: 1 }] }] },
@@ -208,57 +208,57 @@
     },
 
     paper_kodama_pilgrim: {
-      title: 'The Paper Kodama', art: { scene: 'ch1' }, chapters: [1],
-      text: 'A paper kodama shuffles along the road with a torn page clutched to its chest. It is hollow, folded, and very determined. When it sees you it stops, and holds out the page with both hands.',
+      title: "The Kodama's Echo", art: { scene: 'ch1' }, chapters: [1],
+      text: 'A hollow kodama shuffles along the road with one small echo cupped in its hands. It has no voice of its own. When it sees you it stops, and holds the echo out with both hands.',
       choices: [
-        { label: 'Read the torn page', cost: 'It may smudge your deck',
+        { label: 'Listen to the echo', cost: 'It may sour your deck',
           out: [
-            { w: 3, text: 'It is a spell, or the start of one, in a hand older than the grove. The kodama watches, hugely pleased. You take one good idea away with you.', ops: [{ op: 'cardReward', n: 3 }] },
-            { w: 1, text: 'The page is half Blank. A word slides off it, in through your eyes and out the back of your head. Nothing hurts, but something is quietly missing.', ops: [{ op: 'addCurse', id: 'curse_smudge' }] },
+            { w: 3, text: 'It is a spell, or the start of one, in a voice older than the grove. The kodama watches, hugely pleased. You take one good idea away with you.', ops: [{ op: 'cardReward', n: 3 }] },
+            { w: 1, text: 'The echo is half Hush. A note slides in through your ears and out the back of your head. Nothing hurts, but something is quietly missing.', ops: [{ op: 'addCurse', id: 'curse_smudge' }] },
           ] },
-        { label: 'Ask it to fold you a copy', cost: '40 gold', req: { gold: 40 },
-          out: [{ w: 1, text: 'It folds a duplicate of one of your cards with tiny, terrifying precision. The copy is still warm. The kodama bows, and then, slowly, with great dignity, unfolds a little at the edges.', ops: [{ op: 'gold', n: -40 }, { op: 'duplicateCard' }] }] },
+        { label: 'Ask it to echo a card', cost: '40 gold', req: { gold: 40 },
+          out: [{ w: 1, text: 'It echoes one of your cards back with tiny, terrifying precision. The copy is still warm. The kodama bows, and then, slowly, with great dignity, goes a little quieter at the edges.', ops: [{ op: 'gold', n: -40 }, { op: 'duplicateCard' }] }] },
         { label: 'Pat its head',
-          out: [{ w: 1, text: 'It vibrates with quiet joy. Then it presses the page into your hand anyway, and shuffles off down the road, much lighter.', ops: [{ op: 'heal', n: 5 }] }] },
+          out: [{ w: 1, text: 'It vibrates with quiet joy. Then it presses the echo into your hand anyway, and shuffles off down the road, much lighter.', ops: [{ op: 'heal', n: 5 }] }] },
       ],
     },
 
     missing_page: {
-      title: 'A Door of Nothing', art: { scene: 'defeat' }, chapters: [1],
-      text: 'In the middle of the grove hangs a rectangle of nothing, perfectly white, the size of a door. The bamboo leans away from it. Something is missing here, and you can feel it like a lost tooth.',
+      title: 'A Door of Silence', art: { scene: 'defeat' }, chapters: [1],
+      text: 'In the middle of the grove hangs a doorway of perfect silence, grey and still. The bamboo leans away from it. Something is missing here, and you can feel it like a lost tooth.',
       choices: [
         { label: 'Step around it',
           out: [{ w: 1, text: 'You give it a wide berth. It pretends not to watch you go, which is worse than watching. As you pass, the bamboo rustles what might be a thank you.', ops: [{ op: 'heal', n: 3 }] }] },
         { label: 'Reach in', cost: 'Something may change',
           out: [
-            { w: 1, text: 'Your hand comes back holding a coin with no face on it, and then another, and another. They spend fine.', ops: [{ op: 'gold', n: 55 }] },
-            { w: 1, text: 'Your hand comes back a little paler, and your memory of breakfast is gone. A small mercy: so is the dread.', ops: [{ op: 'hurt', n: 4 }, { op: 'ink', n: 2 }] },
-            { w: 1, text: 'Your hand comes back holding a brush that is not yours, and is still warm.', ops: [{ op: 'addBrush', id: 'random' }] },
+            { w: 1, text: 'Your hand comes back holding a coin that makes no sound when it drops, and then another, and another. They spend fine.', ops: [{ op: 'gold', n: 55 }] },
+            { w: 1, text: 'Your hand comes back a little greyer, and your memory of breakfast is gone. A small mercy: so is the dread.', ops: [{ op: 'hurt', n: 4 }, { op: 'ink', n: 2 }] },
+            { w: 1, text: 'Your hand comes back holding a song that is not yours, and it is still warm.', ops: [{ op: 'addBrush', id: 'random' }] },
           ] },
-        { label: 'Paint over it', cost: '2 Ink, maybe a curse',
+        { label: 'Sing into it', cost: '2 Echo, maybe a curse',
           out: [
-            { w: 3, text: 'You paint bamboo across the doorway, stalk by careful stalk. The white shivers, holds, and thickens into green. The whole grove breathes out.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 2 }, { op: 'heal', n: 6 }] },
-            { w: 1, text: 'You paint bamboo across the doorway, stalk by careful stalk, but the white drinks the green and spits something back: a smear that lands, somehow, in your deck.', ops: [{ op: 'ink', n: -2 }, { op: 'heal', n: 6 }, { op: 'addCurse', id: 'curse_smudge' }] },
+            { w: 3, text: 'You sing bamboo into the doorway, note by careful note. The grey shivers, holds, and thickens into green. The whole grove breathes out.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 2 }, { op: 'heal', n: 6 }] },
+            { w: 1, text: 'You sing bamboo into the doorway, note by careful note, but the silence swallows the green and spits something back: a sour note that lands, somehow, in your deck.', ops: [{ op: 'ink', n: -2 }, { op: 'heal', n: 6 }, { op: 'addCurse', id: 'curse_smudge' }] },
           ] },
       ],
     },
   });
 
-  // ------------------------------------------------------------------ chapter 2: the Sunken Lantern City
+  // ------------------------------------------------------------------ verse II: the Sunken Lantern City
   DATA.add('events', {
     fox_returns: {
       title: 'The Fox on the Bridge', art: { scene: 'ch2' }, chapters: [2], once: true, w: 6, when: { flag: 'fox_spared' },
-      text: 'A white fox with two tails, one dipped in ink, waits on a mossy bridge post. She looks exactly like a kit you once untangled, only taller, and she is holding a small carved mask in her mouth.',
+      text: 'A white fox with two tails, one tipped with a tiny bell, waits on a mossy bridge post. She looks exactly like a kit you once untangled, only taller, and she is holding a small carved mask in her mouth.',
       choices: [
         { label: 'Accept the mask', cost: 'Hurts the front hero',
           out: [{ w: 1, text: 'She sets it at your feet, bows, and nudges it toward you with her nose, the way you would return a lost glove. It smells of bamboo, and of something like a promise. It settles on your face a shade too snugly, and its first act is to bite.', ops: [{ op: 'addRelic', id: 'fox_mask' }, { op: 'flag', k: 'fox_bond' }, { op: 'hurt', n: 4, who: 'front' }] }] },
         { label: 'Follow her across the rooftops',
-          out: [{ w: 1, text: 'She runs. You run. The tiles are wet, and the city rearranges itself politely around the fox. Five hexes open ahead of you like a sentence someone finally finished.', ops: [{ op: 'paint', n: 5 }, { op: 'flag', k: 'fox_bond' }] }] },
+          out: [{ w: 1, text: 'She runs. You run. The tiles are wet, and the city rearranges itself politely around the fox. Five hexes ring open ahead of you like a song someone finally finished.', ops: [{ op: 'paint', n: 5 }, { op: 'flag', k: 'fox_bond' }] }] },
         { label: 'Ask her about Kuzunoha',
           out: [{ w: 1, text: "'She was my mother's mother's teacher,' says the fox, in the plain way of foxes. 'She is not angry. She is only very tired of forgetting.' She curls up near you until you feel better.", ops: [{ op: 'heal', pct: 0.1 }, { op: 'ink', n: 2 }, { op: 'flag', k: 'fox_bond' }] }] },
         { label: 'Scratch her behind the ears',
           out: [
-            { w: 3, text: 'She leans into it, eyes shut, both tails thumping. Something in the whole party unclenches. She leaves a scrap of ink on your sleeve, which is how foxes say thank you.', ops: [{ op: 'heal', pct: 0.25 }, { op: 'ink', n: 1 }, { op: 'flag', k: 'fox_bond' }] },
+            { w: 3, text: 'She leans into it, eyes shut, both tails thumping. Something in the whole party unclenches. She leaves a little yip ringing in your ears, which is how foxes say thank you.', ops: [{ op: 'heal', pct: 0.25 }, { op: 'ink', n: 1 }, { op: 'flag', k: 'fox_bond' }] },
             { w: 1, text: 'Foxes are not, it turns out, cats. She nips you once, thoroughly, and then forgives you with great ceremony.', ops: [{ op: 'hurt', n: 3, who: 'front' }, { op: 'ink', n: 2 }, { op: 'flag', k: 'fox_bond' }] },
           ] },
       ],
@@ -266,10 +266,10 @@
 
     lantern_ferry: {
       title: 'The Lantern Ferry', art: { scene: 'ch2' }, chapters: [2],
-      text: 'The ferryman is a paper lantern on a pole, steering a boat of folded newsprint. Fare is thirty gold, he says. Or one story. Or, if you are honest, one thing you are afraid of.',
+      text: 'The ferryman is a paper lantern on a pole, steering a boat of folded paper. Fare is thirty gold, he says. Or one song. Or, if you are honest, one thing you are afraid of.',
       choices: [
         { label: 'Pay the fare', cost: '30 gold', req: { gold: 30 },
-          out: [{ w: 1, text: 'He poles you through a wide glowing arc of canals, humming. When you step off, the map ahead has been quietly redrawn in your favour, and then some.', ops: [{ op: 'gold', n: -30 }, { op: 'paint', n: 6 }] }] },
+          out: [{ w: 1, text: 'He poles you through a wide glowing arc of canals, humming. When you step off, the land ahead has quietly woken in your favour, and then some.', ops: [{ op: 'gold', n: -30 }, { op: 'paint', n: 6 }] }] },
         { label: 'Swim it', cost: 'Cold water',
           out: [
             { w: 2, text: 'The water is cold enough to reconsider several life choices. But faster.', ops: [{ op: 'hurt', n: 4 }, { op: 'paint', n: 5 }] },
@@ -355,34 +355,34 @@
     },
 
     flooded_archive: {
-      title: 'The Flooded Archive', art: { scene: 'paper' }, chapters: [2], once: true,
-      text: 'A flooded archive, shelves knee-deep in black water. Books float open, their pages bleeding letters like tea. One volume on the top shelf is still dry, and humming.',
+      title: 'The Flooded Music Hall', art: { scene: 'paper' }, chapters: [2], once: true,
+      text: 'A flooded music hall, knee-deep in black water. Drums float upside down, their skins gone slack. On the top shelf one flute is still dry, and humming to itself.',
       choices: [
-        { label: 'Wade in for the dry book', cost: 'The water bites',
+        { label: 'Wade in for the dry flute', cost: 'The water bites',
           out: [
-            { w: 3, text: 'You wade, you climb, you take it down. It is a spell in an older hand, and it is very happy to be read again.', ops: [{ op: 'cardReward', n: 3, rarity: 'uncommon' }] },
-            { w: 1, text: 'You wade. The water is deeper than it looked, and colder, and something drifts past that is not a book. You get the volume anyway.', ops: [{ op: 'hurt', n: 6 }, { op: 'cardReward', n: 3, rarity: 'uncommon' }] },
+            { w: 3, text: 'You wade, you climb, you take it down. It plays a spell in an older key, and it is very happy to be played again.', ops: [{ op: 'cardReward', n: 3, rarity: 'uncommon' }] },
+            { w: 1, text: 'You wade. The water is deeper than it looked, and colder, and something drifts past that is not a drum. You get the flute anyway.', ops: [{ op: 'hurt', n: 6 }, { op: 'cardReward', n: 3, rarity: 'uncommon' }] },
           ] },
-        { label: 'Let Kuro read the spines', req: { hero: 'kuro' },
-          out: [{ w: 1, text: "Kuro reads the spines from the doorway, one finger raised. 'Third shelf, fourth from the left. Do not touch the fifth.' He is right. The fifth was a mimic.", ops: [{ op: 'cardReward', n: 3, rarity: 'uncommon' }] }] },
-        { label: 'Wring out a wet page',
-          out: [{ w: 1, text: "You wring a page into a bucket. Half a sentence survives: 'the bravest thing about her was that she was afraid.' You keep it.", ops: [{ op: 'ink', n: 2 }] }] },
+        { label: 'Let Kuro listen to the shelves', req: { hero: 'kuro' },
+          out: [{ w: 1, text: "Kuro listens from the doorway, one finger raised. 'Third shelf, fourth from the left. Do not touch the fifth.' He is right. The fifth was a mimic.", ops: [{ op: 'cardReward', n: 3, rarity: 'uncommon' }] }] },
+        { label: 'Shake out a drowned flute',
+          out: [{ w: 1, text: "You shake a flute out over a bucket. Half a lullaby survives, words and all: 'the bravest thing about her was that she was afraid.' You hum it all afternoon.", ops: [{ op: 'ink', n: 2 }] }] },
       ],
     },
 
     kuro_footnote: {
-      title: "Kuro's Footnote", art: { scene: 'paper' }, chapters: [2], once: true, w: 3, when: { hero: 'kuro' },
-      text: 'Kuro stops at a torn poster and goes very still. Beside his name, in a hand he knows better than his own, someone has scribbled a note. He has not read it. Not yet.',
+      title: "Kuro's Harmony", art: { scene: 'paper' }, chapters: [2], once: true, w: 3, when: { hero: 'kuro' },
+      text: 'Kuro stops beside a broken music box and goes very still. It is playing his harmony, the quiet line under the melody, in a voice he knows better than his own. He has not heard the end. Not yet.',
       choices: [
-        { label: 'Let him read it',
-          out: [{ w: 1, text: "'K.,' it says. 'Keep? Cut?' And below, pressed so hard the paper tore: KEEP. Kuro folds the poster carefully and says nothing for several hexes. He is grinning by the third.", ops: [{ op: 'maxHp', n: 4, who: 'kuro' }, { op: 'heal', n: 10, who: 'kuro' }] }] },
-        { label: 'Ask him to read it aloud',
+        { label: 'Let him listen',
+          out: [{ w: 1, text: 'At the end the voice stops, hums his line once more, and then, very firmly, sings it a third time: keep. Kuro closes the lid carefully and says nothing for several hexes. He is grinning by the third.', ops: [{ op: 'maxHp', n: 4, who: 'kuro' }, { op: 'heal', n: 10, who: 'kuro' }] }] },
+        { label: 'Ask him to sing along',
           out: [
-            { w: 2, text: 'He does the voice. It is an excellent voice, low and tired and fond. By the second line the whole party is grinning, and by the last, laughing.', ops: [{ op: 'heal', n: 10 }, { op: 'ink', n: 1 }] },
-            { w: 1, text: "He gets as far as the second line and stops. 'Sorry,' he says, very quietly. 'Give me a minute.' You give him several. The whole party is a little sturdier for having watched.", ops: [{ op: 'maxHp', n: 2 }] },
+            { w: 2, text: 'He does the voice. It is an excellent voice, low and tired and fond. By the second bar the whole party is grinning, and by the last, laughing.', ops: [{ op: 'heal', n: 10 }, { op: 'ink', n: 1 }] },
+            { w: 1, text: "He gets as far as the second bar and stops. 'Sorry,' he says, very quietly. 'Give me a minute.' You give him several. The whole party is a little sturdier for having watched.", ops: [{ op: 'maxHp', n: 2 }] },
           ] },
-        { label: 'Write a note under it', cost: '1 Ink',
-          out: [{ w: 1, text: 'You add, in your best hand: AGREED. Kuro pretends to be annoyed for nearly four seconds.', ops: [{ op: 'ink', n: -1 }, { op: 'maxHp', n: 2 }] }] },
+        { label: 'Hum a harmony of your own', cost: '1 Echo',
+          out: [{ w: 1, text: 'You hum a line on top of his, in your best voice, which in music means AGREED. Kuro pretends to be annoyed for nearly four seconds.', ops: [{ op: 'ink', n: -1 }, { op: 'maxHp', n: 2 }] }] },
       ],
     },
 
@@ -394,7 +394,7 @@
           out: [{ w: 1, text: "He stares. Then his shoulders drop three hundred years at once. 'About time,' he says, and salutes, and the water finally stops running off him. He leaves you his purse.", ops: [{ op: 'gold', n: 30 }] }] },
         { label: 'Guess a password', cost: 'It may hurt',
           out: [
-            { w: 1, text: "'Correct,' he says, which surprises everyone, himself included. 'Pass.' Two hexes of bridge unroll ahead like a scroll.", ops: [{ op: 'paint', n: 2 }] },
+            { w: 1, text: "'Correct,' he says, which surprises everyone, himself included. 'Pass.' Two hexes of bridge unroll ahead like a festival banner.", ops: [{ op: 'paint', n: 2 }] },
             { w: 1, text: "'Incorrect.' The spear does not hurt much. The dignity does.", ops: [{ op: 'hurt', n: 7, who: 'front' }] },
           ] },
         { label: 'Duel him for the bridge (fight)',
@@ -447,77 +447,77 @@
         { label: 'Trade gossip',
           out: [
             { w: 2, text: 'You tell her about the fox. She tells you about the butler. You both leave better informed and a little ashamed.', ops: [{ op: 'ink', n: 2 }] },
-            { w: 1, text: 'She trades you something better: where the Blank is thin, and where the canal doubles back on itself. You mark it on your map in your own small handwriting.', ops: [{ op: 'paint', n: 2 }] },
+            { w: 1, text: 'She trades you something better: where the Hush is thin, and where the canal doubles back on itself. You hum it to yourself until you know it by heart.', ops: [{ op: 'paint', n: 2 }] },
           ] },
       ],
     },
   });
 
-  // ------------------------------------------------------------------ chapter 3: the Crimson Sky Citadel
+  // ------------------------------------------------------------------ verse III: the Thunderless Citadel
   DATA.add('events', {
     fox_at_the_gate: {
       title: 'Three Tails at the Gate', art: { scene: 'ch3' }, chapters: [3], once: true, w: 6, when: { flag: 'fox_bond' },
-      text: 'Three white tails, one dipped in ink, curl around a broken gargoyle. The fox has grown. She writes something on the gate stone with one paw: a door, and beneath it a smaller word, HURRY.',
+      text: 'Three white tails, one tipped with a tiny bell, curl around a broken gargoyle. The fox has grown. She sings one clear note at the gate stone, and it hums back a door, and then, faintly, HURRY.',
       choices: [
         { label: 'Step through her door',
           out: [{ w: 1, text: 'The stone gives the way water gives, and behind it is a corridor that was not there before. Six hexes of it. She waves one tail as you go, the way you would wave off a child on the first day of school.', ops: [{ op: 'paint', n: 6 }] }] },
         { label: 'Let her mend you',
-          out: [{ w: 1, text: 'She writes better on each of you, in a cramped, careful hand, and it holds. The ache goes out of your bones as if it had never been written in.', ops: [{ op: 'heal', pct: 0.35 }, { op: 'maxHp', n: 3 }] }] },
+          out: [{ w: 1, text: 'She sings over each of you, a small, careful lullaby, and it holds. The ache goes out of your bones as if it had never been sung in.', ops: [{ op: 'heal', pct: 0.35 }, { op: 'maxHp', n: 3 }] }] },
         { label: 'Take her pawprint',
-          out: [{ w: 1, text: "She presses a paw to the flat of your hand. The ink dries into a stone the colour of the last light in the grove. 'For luck,' she says, which, for a fox, is practically a speech.", ops: [{ op: 'addGem', tier: 3 }] }] },
+          out: [{ w: 1, text: "She presses a paw to the flat of your hand. The note in it settles into a stone the colour of the last light in the grove. 'For luck,' she says, which, for a fox, is practically a speech.", ops: [{ op: 'addGem', tier: 3 }] }] },
         { label: 'Ask her for something bigger',
           out: [
-            { w: 1, text: "She thinks very hard, writes one word on the gate, and steps back. The word is RELIC. Something small and brass drops out of the stone, still warm, looking faintly surprised.", ops: [{ op: 'addRelic', rarity: 'rare' }] },
-            { w: 2, text: 'She thinks very hard, writes something long, smudges the ending, and looks deeply embarrassed. A good deal of ink runs down the wall onto your boots. You collect what you can.', ops: [{ op: 'ink', n: 3 }] },
+            { w: 1, text: 'She thinks very hard, sings one long note at the gate, and steps back. The note rings like a bell. Something small and brass drops out of the stone, still warm, looking faintly surprised.', ops: [{ op: 'addRelic', rarity: 'rare' }] },
+            { w: 2, text: 'She thinks very hard, sings something long, cracks on the high note, and looks deeply embarrassed. A good deal of echo rolls down the wall and around your boots. You collect what you can.', ops: [{ op: 'ink', n: 3 }] },
           ] },
       ],
     },
 
     kill_your_darlings: {
-      title: 'Notes in Red Pen', art: { scene: 'paper' }, chapters: [3],
-      text: "The corridor walls are covered in neat red-pen comments. Show, don't tell. Cut for length. Too many adjectives. Beside a sketch of your party, in capitals: NEEDS WORK.",
+      title: 'Notes from the Podium', art: { scene: 'paper' }, chapters: [3],
+      text: 'A rehearsal hall, chairs in neat rows. From an empty podium a dry voice gives notes on a loop. Too loud. Too slow. Cut the solo. Then, clearly about your party: NEEDS WORK.',
       choices: [
-        { label: 'Kill your darlings', cost: 'Lose a card and 8 HP',
-          out: [{ w: 1, text: 'A card fades from the deck like a word struck out, and the red pen, thorough, strikes at you as well. The comments rustle approvingly. Someone leaves fifteen gold at your feet, as if for good homework.', ops: [{ op: 'removeCard' }, { op: 'gold', n: 15 }, { op: 'hurt', n: 8, who: 'front' }] }] },
-        { label: 'Show, do not tell', cost: 'Hurts the front hero',
-          out: [{ w: 1, text: 'You act it out instead, loudly. It is brave, and it stings, and the card you were thinking of is better for it.', ops: [{ op: 'hurt', n: 8, who: 'front' }, { op: 'upgradeCard' }] }] },
-        { label: 'Write a comment of your own',
+        { label: 'Cut your favourite solo', cost: 'Lose a card and 8 HP',
+          out: [{ w: 1, text: 'A card fades from the deck like a note cut off, and the baton, thorough, raps at you as well. The empty chairs creak approvingly. Someone leaves fifteen gold at your feet, as if for good practice.', ops: [{ op: 'removeCard' }, { op: 'gold', n: 15 }, { op: 'hurt', n: 8, who: 'front' }] }] },
+        { label: 'Play it, do not explain', cost: 'Hurts the front hero',
+          out: [{ w: 1, text: 'You play it instead, loudly. It is brave, and it stings, and the card you were thinking of is better for it.', ops: [{ op: 'hurt', n: 8, who: 'front' }, { op: 'upgradeCard' }] }] },
+        { label: 'Give a note of your own',
           out: [
-            { w: 2, text: 'You write THIS IS FINE in the margin, in your best hand. The wall recoils in one satisfying rustle, and a little of its ink runs down and pools in your favour.', ops: [{ op: 'ink', n: 2 }] },
-            { w: 1, text: 'You write ACTUALLY, NO. The comments argue back, all at once, in tiny capitals. Then they run out of room, fall silent, and drop something into your pocket to make you stop.', ops: [{ op: 'gold', n: 25 }] },
+            { w: 2, text: 'You call THIS IS FINE at the podium, in your best voice. The hall recoils in one satisfying echo, and a little of it rolls back and pools in your favour.', ops: [{ op: 'ink', n: 2 }] },
+            { w: 1, text: 'You call ACTUALLY, NO. The voice argues back, all at once, in tiny capitals. Then it runs out of breath, falls silent, and drops something into your pocket to make you stop.', ops: [{ op: 'gold', n: 25 }] },
           ] },
       ],
     },
 
     unfinished_sentence: {
-      title: 'The Unfinished Sentence', art: { scene: 'paper' }, chapters: [3], once: true,
-      text: "On a ruined wall a sentence stops mid-word: 'And then the hero, who had never once been afraid, s'. There is a pen on the floor, still warm. The rest of the wall is bare.",
+      title: 'The Unfinished Song', art: { scene: 'paper' }, chapters: [3], once: true,
+      text: "In a ruined room a music box sings one line and stops mid-word: 'And then the hero, who had never once been afraid, s'. A flute lies on the floor, still warm. The rest is silence.",
       choices: [
         { label: 'Finish it bravely', cost: 'Hurts the front hero',
-          out: [{ w: 1, text: "'...stood up.' The pen glows red-gold. Hot ink runs down your arm and into your deck, and a card comes out better.", ops: [{ op: 'hurt', n: 6, who: 'front' }, { op: 'upgradeCard' }] }] },
+          out: [{ w: 1, text: "'...stood up.' The flute glows red-gold. Hot sound runs down your arm and into your deck, and a card comes out better.", ops: [{ op: 'hurt', n: 6, who: 'front' }, { op: 'upgradeCard' }] }] },
         { label: 'Finish it kindly',
           out: [{ w: 1, text: "'...sat down beside the one who was.' The room grows warm. The bars on the windows relax a little, as though they too had been waiting for this.", ops: [{ op: 'heal', pct: 0.25 }] }] },
         { label: 'Finish it cleverly',
           out: [
-            { w: 2, text: "'...read ahead.' A drawer you had not noticed slides open, and inside are a few pages nobody thought to cut.", ops: [{ op: 'cardReward', n: 3 }] },
-            { w: 1, text: "'...read ahead.' A drawer slides open, and beneath the ordinary pages lies one written in a very good hand indeed.", ops: [{ op: 'cardReward', n: 3, rarity: 'rare' }] },
+            { w: 2, text: "'...listened ahead.' A drawer you had not noticed slides open, and inside are a few tunes nobody thought to cut.", ops: [{ op: 'cardReward', n: 3 }] },
+            { w: 1, text: "'...listened ahead.' A drawer slides open, and beneath the ordinary tunes lies one sung in a very good voice indeed.", ops: [{ op: 'cardReward', n: 3, rarity: 'rare' }] },
           ] },
         { label: 'Leave it unfinished',
-          out: [{ w: 1, text: 'Some sentences are better left open. You leave the pen where it lay. The Blank, respecting this, gives you a wide berth and a little ink.', ops: [{ op: 'ink', n: 2 }] }] },
+          out: [{ w: 1, text: 'Some songs are better left open. You leave the flute where it lay. The Hush, respecting this, gives you a wide berth and a little echo.', ops: [{ op: 'ink', n: 2 }] }] },
       ],
     },
 
     void_tear: {
       title: 'A Tear in the Sky', art: { scene: 'defeat' }, chapters: [3],
-      text: "A tear in the sky, white and perfectly silent. Words drift toward it and vanish: 'the', 'and', half of 'mercy'. The wind smells of nothing. Nothing, it turns out, has a very specific smell.",
+      text: "A tear in the sky, grey and perfectly silent. Sounds drift toward it and vanish: a bird's call, a bell, half of a laugh. The wind smells of nothing. Nothing, it turns out, has a very specific smell.",
       choices: [
         { label: 'Step through', cost: 'Deck clutter',
           out: [
-            { w: 2, text: 'The world is one long white breath. You come out the far side with your map overshot by a good eight hexes, and something small and blank tucked into your deck.', ops: [{ op: 'paint', n: 8 }, { op: 'addCurse', id: 'curse_smudge' }] },
-            { w: 1, text: 'The white lasts longer than you thought. You come out with less map and more smudge.', ops: [{ op: 'paint', n: 4 }, { op: 'addCurse', id: 'curse_smudge', n: 2 }] },
+            { w: 2, text: 'The world is one long grey breath. You come out the far side eight hexes on, with something small and silent tucked into your deck.', ops: [{ op: 'paint', n: 8 }, { op: 'addCurse', id: 'curse_smudge' }] },
+            { w: 1, text: 'The grey lasts longer than you thought. You come out with less road and more clutter.', ops: [{ op: 'paint', n: 4 }, { op: 'addCurse', id: 'curse_smudge', n: 2 }] },
           ] },
         { label: 'Feed it something you regret',
-          out: [{ w: 1, text: 'You hold up whatever regret you have been carrying. The tear takes it gently, the way a cat takes a fish, and gives back a little ink out of politeness.', ops: [{ op: 'removeCard', filter: { type: 'curse' } }, { op: 'ink', n: 2 }] }] },
+          out: [{ w: 1, text: 'You hold up whatever regret you have been carrying. The tear takes it gently, the way a cat takes a fish, and gives back a little echo out of politeness.', ops: [{ op: 'removeCard', filter: { type: 'curse' } }, { op: 'ink', n: 2 }] }] },
         { label: 'Back away slowly',
           out: [{ w: 1, text: 'Wise. The tear watches you go. It has all the time in the world, and none of yours.' }] },
       ],
@@ -537,20 +537,20 @@
         { label: 'Bottle some lightning', cost: 'A little damage',
           out: [{ w: 1, text: 'You catch a spark in an empty vial and it crackles the whole way home. When you look, the vial holds a gem.', ops: [{ op: 'hurt', n: 4, who: 'random' }, { op: 'addGem', color: 'red', tier: 2 }] }] },
         { label: 'Ground the rod',
-          out: [{ w: 1, text: 'You ground it. The storm sulks, then sighs and lets the matter drop. A little static sparks off your fingertips and settles as ink.', ops: [{ op: 'ink', n: 1 }] }] },
+          out: [{ w: 1, text: 'You ground it. The storm sulks, then sighs and lets the matter drop. A little static sparks off your fingertips and settles as a low, friendly hum.', ops: [{ op: 'ink', n: 1 }] }] },
       ],
     },
 
     censor_office: {
-      title: 'The Office of Revisions', art: { scene: 'shop' }, chapters: [3],
-      text: "A tidy desk in a storm. A clerk with a black bar where his eyes should be stamps a form, reads it, stamps it again. 'Request for revision?' he says. 'Take a number. Or a stamp. Nobody is sure.'",
+      title: 'The Office of Silence', art: { scene: 'shop' }, chapters: [3],
+      text: "A tidy desk in a storm. A clerk with a felt gag where his mouth should be stamps a form, reads it, stamps it again. 'Request for silence?' he mimes. 'Take a number. Or a stamp. Nobody is sure.'",
       choices: [
         { label: 'File Form 27-B (Request to Be Forgotten)', cost: 'Lose a card, 60 gold', req: { gold: 60 },
-          out: [{ w: 1, text: "The clerk stamps it three times. A card leaves your deck with the faintest sigh, as if being politely cropped out of a group portrait. 'Approved,' he says, and looks almost pleased. 'There is a filing fee.'", ops: [{ op: 'gold', n: -60 }, { op: 'removeCard' }] }] },
+          out: [{ w: 1, text: "The clerk stamps it three times. A card leaves your deck with the faintest sigh, as if being politely hushed out of a group portrait. 'Approved,' he mimes, and looks almost pleased. 'There is a filing fee.'", ops: [{ op: 'gold', n: -60 }, { op: 'removeCard' }] }] },
         { label: 'Argue with the clerk (risky)',
           out: [
             { w: 1, text: 'He hears your whole argument, stamps it APPROVED, and slides it back. It is the worst thing that has ever happened to you. It comes with a small refund.', ops: [{ op: 'gold', n: 20 }] },
-            { w: 2, text: 'He stamps you, at length. The stamp is heavier than expected, and so is its owner: a knight in a black-barred helm. It seems he was never a clerk at all.', ops: [{ op: 'fight', enemies: ['redaction_knight'], win: [{ op: 'gold', n: 30 }] }] },
+            { w: 2, text: 'He stamps you, at length. The stamp is heavier than expected, and so is its owner: a knight in a felt-stuffed helm. It seems he was never a clerk at all.', ops: [{ op: 'fight', enemies: ['redaction_knight'], win: [{ op: 'gold', n: 30 }] }] },
           ] },
         { label: 'Leave quietly',
           out: [{ w: 1, text: 'Nobody notices you go. In this building, that is the highest compliment.' }] },
@@ -558,28 +558,28 @@
     },
 
     library_cat: {
-      title: 'The Cat on the Manuscript', art: { scene: 'camp' }, chapters: [3],
-      text: 'In the ruins of a great library, a very fat cat sits on the last manuscript, washing one paw. The Blank has eaten the shelves around it. It has not eaten the cat. It has clearly not tried.',
+      title: 'The Cat on the Koto', art: { scene: 'camp' }, chapters: [3],
+      text: 'In the ruins of a great music hall, a very fat cat sits on the last koto, washing one paw. The Hush has eaten the hall around it. It has not eaten the cat. It has clearly not tried.',
       choices: [
         { label: 'Pet the cat',
-          out: [{ w: 1, text: 'It allows this, closes its eyes, and warmth comes off it like a stove. Nothing is erased within three feet. You stay a while, and nobody is in a hurry.', ops: [{ op: 'heal', pct: 0.25 }] }] },
+          out: [{ w: 1, text: 'It allows this, closes its eyes, and purrs like a stove. Nothing goes quiet within three feet of it. You stay a while, and nobody is in a hurry.', ops: [{ op: 'heal', pct: 0.25 }] }] },
         { label: 'Share your rations', cost: '10 gold', req: { gold: 10 },
-          out: [{ w: 1, text: 'It eats, or half eats, or thoughtfully considers eating. In gratitude it stands, stretches, and leaves you a brush it had been sitting on. You did not notice the brush.', ops: [{ op: 'gold', n: -10 }, { op: 'addBrush', id: 'random' }] }] },
+          out: [{ w: 1, text: 'It eats, or half eats, or thoughtfully considers eating. In gratitude it stands, stretches, and leaves you a song it had been sitting on. You did not notice the song.', ops: [{ op: 'gold', n: -10 }, { op: 'addBrush', id: 'random' }] }] },
         { label: 'Move the cat (risky)',
           out: [
-            { w: 2, text: 'It moves like water, with contempt. Under it lie a few clean pages, still crisp from never being read.', ops: [{ op: 'cardReward', n: 3 }] },
-            { w: 1, text: 'It moves, but not before it bites you, precisely, in the fleshy part of the thumb. Under it, a few clean pages.', ops: [{ op: 'hurt', n: 5, who: 'front' }, { op: 'cardReward', n: 3 }] },
+            { w: 2, text: 'It moves like water, with contempt. Under it, the koto still holds a few tunes in its strings, never once played.', ops: [{ op: 'cardReward', n: 3 }] },
+            { w: 1, text: 'It moves, but not before it bites you, precisely, in the fleshy part of the thumb. Under it, a few tunes still caught in the strings.', ops: [{ op: 'hurt', n: 5, who: 'front' }, { op: 'cardReward', n: 3 }] },
           ] },
       ],
     },
 
     weeping_eraser: {
       title: 'The Wraith That Cannot Stop', art: { scene: 'ch3' }, chapters: [3], once: true,
-      text: 'An eraser wraith kneels in a ring of white dust, weeping. Everything it touches vanishes, so it has tried very hard to touch nothing. It has, by now, run out of nothing.',
+      text: 'A muffle wraith kneels in a ring of grey dust, weeping without a sound. Everything it touches goes silent, so it has tried very hard to touch nothing. It has, by now, run out of nothing.',
       choices: [
         { label: 'Sit with it',
           out: [
-            { w: 1, text: 'You sit near it, not touching. It cries a little more, then a little less. At last it gives you the one sentence it could not bring itself to rub out.', ops: [{ op: 'addRelic', rarity: 'uncommon' }] },
+            { w: 1, text: 'You sit near it, not touching. It cries a little more, then a little less. At last it gives you the one sound it could not bring itself to smother.', ops: [{ op: 'addRelic', rarity: 'uncommon' }] },
             { w: 1, text: 'You sit near it, not touching. It cries a little more, then a little less, and leaves you something small it had been keeping for someone.', ops: [{ op: 'addRelic', rarity: 'common' }] },
           ] },
         { label: 'Let Suzu sing to it', req: { hero: 'suzu' },
@@ -590,17 +590,17 @@
     },
 
     suzu_cracked_binding: {
-      title: "Suzu Hears the Binding", art: { scene: 'event' }, chapters: [3], once: true, w: 3, when: { hero: 'suzu' },
-      text: "Suzu stops, one hand held against the air, listening. Deep under the stone, the book's spine is creaking, thread by thread. 'It is the binding,' she says quietly. 'It is coming loose. I think I can hold it.'",
+      title: 'Suzu Hears the Strings', art: { scene: 'event' }, chapters: [3], once: true, w: 3, when: { hero: 'suzu' },
+      text: "Suzu stops, one hand held against the air, listening. Deep under the stone, something huge is humming out of tune, string by string. 'It is the song itself,' she says quietly. 'It is coming loose. I think I can hold it.'",
       choices: [
         { label: 'Let Suzu hold it',
           out: [
             { w: 3, text: 'She kneels, palms flat on the floor, and hums. The creaking slows. It costs her something, and she smiles anyway, a little thinner than before. The floor stays put, and so does everything on it.', ops: [{ op: 'heal', pct: 0.2 }, { op: 'ink', n: 2 }] },
             { w: 1, text: 'She kneels, palms flat on the floor, and hums, and the whole floor hums back. For one long breath the entire Citadel is in tune. When it ends, everyone feels mended, and a little taller.', ops: [{ op: 'heal', pct: 0.3 }, { op: 'ink', n: 2 }, { op: 'maxHp', n: 2 }] },
           ] },
-        { label: 'Help her pull the threads tight', cost: 'Rope burn for both',
-          out: [{ w: 1, text: 'It is rough work, all splinters and thread. Both your hands are raw by the end, and the book feels, from the inside, very slightly more like a book.', ops: [{ op: 'hurt', n: 5 }, { op: 'maxHp', n: 4 }] }] },
-        { label: 'Leave it to the Author',
+        { label: 'Help her tighten the strings', cost: 'String burn for both',
+          out: [{ w: 1, text: 'It is rough work, all splinters and wire. Both your hands are raw by the end, and the song feels, from the inside, very slightly more like a song.', ops: [{ op: 'hurt', n: 5 }, { op: 'maxHp', n: 4 }] }] },
+        { label: 'Leave it to the Singer',
           out: [{ w: 1, text: 'The floor creaks in a way that is very much like a sigh. Suzu looks back once, and you all keep walking, a little faster.' }] },
       ],
     },
@@ -628,27 +628,27 @@
 
     paper_boat_prayers: {
       title: 'A Sea of Paper Boats', art: { scene: 'ch3' }, chapters: [3],
-      text: 'Thousands of paper boats drift through the storm clouds, each carrying a candle and a single word, every candle out. Somebody folded them all by hand, in one night. They are waiting.',
+      text: 'Thousands of paper boats drift through the storm clouds, each carrying a candle and a tiny bell, every candle out, every bell still. Somebody folded them all by hand, in one night. They are waiting.',
       choices: [
-        { label: 'Light one', cost: '1 Ink',
-          out: [{ w: 1, text: 'The flame catches. The word on the boat is HOME, and something in the party remembers the shape of it. The light travels a long way before it goes.', ops: [{ op: 'ink', n: -1 }, { op: 'heal', pct: 0.2 }, { op: 'maxHp', n: 2 }] }] },
-        { label: 'Read the words',
-          out: [{ w: 1, text: 'Hope. Sorry. Later. Please. Mine. Wait. Home. Whoever wrote them meant every one.', ops: [{ op: 'ink', pct: 0.2 }] }] },
+        { label: 'Light one', cost: '1 Echo',
+          out: [{ w: 1, text: 'The flame catches, and the bell rings one word: HOME. Something in the party remembers the shape of it. The light travels a long way before it goes.', ops: [{ op: 'ink', n: -1 }, { op: 'heal', pct: 0.2 }, { op: 'maxHp', n: 2 }] }] },
+        { label: 'Ring the bells',
+          out: [{ w: 1, text: 'Hope. Sorry. Later. Please. Mine. Wait. Home. Whoever tuned them meant every one.', ops: [{ op: 'ink', pct: 0.2 }] }] },
         { label: 'Take a boat for the road',
           out: [
-            { w: 2, text: 'You fold one inside your coat. It weighs nothing and warms one hip. Later, on the road, it unfolds a little, into a brush.', ops: [{ op: 'addBrush', id: 'random' }] },
+            { w: 2, text: 'You fold one inside your coat. It weighs nothing and warms one hip. Later, on the road, it unfolds a little, and hums you a song.', ops: [{ op: 'addBrush', id: 'random' }] },
             { w: 1, text: 'You fold one inside your coat. It weighs nothing and warms one hip. Later, on the road, you find the candle has lit itself, and turned to a gem.', ops: [{ op: 'addGem', tier: 1 }] },
           ] },
       ],
     },
 
     waiting_room: {
-      title: 'Please Wait To Be Edited', art: { scene: 'boss3' }, chapters: [3],
-      text: 'A pristine waiting room with a ticket dispenser and a single chair. The sign says PLEASE WAIT TO BE EDITED. The chair is warm. Your ticket says you are number one.',
+      title: 'Please Wait To Be Auditioned', art: { scene: 'boss3' }, chapters: [3],
+      text: 'A pristine waiting room with a ticket dispenser and a single chair. The sign says PLEASE WAIT TO BE AUDITIONED. The chair is warm. Your ticket says you are number one.',
       choices: [
         { label: 'Take a ticket', cost: 'It may leave a mark',
           out: [
-            { w: 1, text: 'The clock strikes. Nothing happens. The Editor, you gather, is running behind. You keep the ticket. It is the only proof anyone was here.', ops: [{ op: 'ink', n: 2 }] },
+            { w: 1, text: 'The clock strikes. Nothing happens. The Conductor, you gather, is running behind. You keep the ticket. It is the only proof anyone was here.', ops: [{ op: 'ink', n: 2 }] },
             { w: 1, text: 'A small red X appears on the back of your hand, then fades. It is the first note. You have the sense there will be more.', ops: [{ op: 'addCurse', id: 'curse_doubt' }] },
           ] },
         { label: 'Bribe the receptionist', cost: '40 gold', req: { gold: 40 },
@@ -659,7 +659,7 @@
     },
   });
 
-  // ------------------------------------------------------------------ any chapter (no fights: the chapter scales the enemies, these events cannot)
+  // ------------------------------------------------------------------ any verse (no fights: the verse scales the enemies, these events cannot)
   DATA.add('events', {
     peddler_silver_bell: {
       title: 'The Peddler and the Bell', art: { scene: 'shop' }, once: true,
@@ -687,7 +687,7 @@
         { label: 'Open it',
           out: [
             { w: 3, text: 'The door opens on a small, well-lit room and a chest that has been waiting a long time for someone to bother.', ops: [{ op: 'addRelic', rarity: 'rare' }] },
-            { w: 2, text: 'Behind it, a library the size of a closet, and one book with your party on the cover.', ops: [{ op: 'cardReward', n: 3, rarity: 'rare' }, { op: 'addGem', tier: 3 }] },
+            { w: 2, text: "Behind it, a music room the size of a closet, and one song with your party's names in it.", ops: [{ op: 'cardReward', n: 3, rarity: 'rare' }, { op: 'addGem', tier: 3 }] },
             { w: 1, text: "Behind it, quite simply, a great deal of gold, and a note: 'Well done.'", ops: [{ op: 'gold', n: 150 }] },
           ] },
         { label: 'Knock first',
@@ -716,13 +716,13 @@
       choices: [
         { label: 'Pay for a story', cost: '20 gold', req: { gold: 20 },
           out: [{ w: 1, text: 'It is about a hero who did something clever at exactly the right moment. It is a small story. It is also, unmistakably, about a card in your deck, and that card is sharper for it.', ops: [{ op: 'gold', n: -20 }, { op: 'upgradeCard' }] }] },
-        { label: 'Let Kuro correct her citations', req: { hero: 'kuro' },
+        { label: 'Let Kuro correct her rhythm', req: { hero: 'kuro' },
           out: [{ w: 1, text: 'She is delighted. Nobody has corrected her in years. She opens the good tea.', ops: [{ op: 'heal', n: 10 }] }] },
         { label: 'Ask how it all ends', req: { chapter: 3 },
-          out: [{ w: 1, text: "'Ah,' she says. 'Nobody knows. But I have heard the last page is blank, and I have heard it is not the bad kind.' She smiles as if she has told you nothing at all.", ops: [{ op: 'ink', n: 2 }, { op: 'heal', pct: 0.1 }] }] },
+          out: [{ w: 1, text: "'Ah,' she says. 'Nobody knows. But I have heard the last note is a rest, and I have heard it is not the bad kind.' She smiles as if she has told you nothing at all.", ops: [{ op: 'ink', n: 2 }, { op: 'heal', pct: 0.1 }] }] },
         { label: 'Tell her a story',
           out: [
-            { w: 2, text: "You tell her about a fox and a kappa. She writes it down. 'That will do,' she says, and hands you a few coins for it.", ops: [{ op: 'gold', n: 25 }] },
+            { w: 2, text: "You tell her about a fox and a kappa. She hums it back to you. 'That will do,' she says, and hands you a few coins for it.", ops: [{ op: 'gold', n: 25 }] },
             { w: 1, text: "She listens all the way through and says, 'The ending needs work.' She is right, and you both know it. She pays you in advice.", ops: [{ op: 'ink', n: 1 }] },
           ] },
       ],
@@ -784,12 +784,12 @@
 
     weary_travellers: {
       title: 'Three Travellers and a Pot', art: { scene: 'camp' },
-      text: 'Three travellers share a small fire and a smaller pot of soup. They wave you over without asking who you are, which, in a book, is either great trust or great foreshadowing.',
+      text: 'Three travellers share a small fire and a smaller pot of soup. They wave you over without asking who you are, which, in a song, is either great trust or great foreshadowing.',
       choices: [
         { label: 'Take the first watch', req: { hpPct: 0.5 },
           out: [{ w: 1, text: 'You keep watch while they sleep. Nothing happens. It is the best night you have had in a long while, and in the morning someone has left you a full bowl.', ops: [{ op: 'heal', pct: 0.1 }, { op: 'maxHp', n: 2 }] }] },
-        { label: 'Trade for a brush', cost: '25 gold', req: { gold: 25 },
-          out: [{ w: 1, text: "One of them has a spare brush wrapped in an old scarf. 'Bought it from a hermit,' he says. 'Never had the nerve.'", ops: [{ op: 'gold', n: -25 }, { op: 'addBrush', id: 'random' }] }] },
+        { label: 'Trade for a song', cost: '25 gold', req: { gold: 25 },
+          out: [{ w: 1, text: "One of them has a spare song wrapped in an old scarf. 'Learned it from a hermit,' he says. 'Never had the nerve to sing it.'", ops: [{ op: 'gold', n: -25 }, { op: 'addBrush', id: 'random' }] }] },
         { label: 'Share the fire',
           out: [
             { w: 3, text: 'They tell you every route they have taken. All of them were harder than this one, and they are very pleased to say so.', ops: [{ op: 'heal', pct: 0.2 }, { op: 'paint', n: 1 }] },
@@ -799,44 +799,44 @@
     },
 
     blank_patch: {
-      title: 'The Patch of White', art: { scene: 'defeat' },
-      text: 'A patch of the road has gone white. Not snow: nothing. A butterfly flutters into it and does not come out. The edge of it is advancing, slowly, like a very patient tide.',
+      title: 'The Patch of Silence', art: { scene: 'defeat' },
+      text: 'A patch of the road has gone grey. Not fog: nothing. A cricket hops into it and stops mid-chirp. The edge of it is advancing, slowly, like a very patient tide.',
       choices: [
-        { label: 'Paint it back', cost: '2 Ink',
+        { label: 'Sing it back', cost: '2 Echo',
           out: [
-            { w: 3, text: 'You paint a wobbly stretch of road across the white. It holds, thin as a wish. On the far side the road remembers whom it belongs to.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 3 }] },
-            { w: 1, text: 'You paint a wobbly stretch of road across the white, and it takes, all at once, like a held breath let go. Where the patch stood, something small and bright is left behind.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 3 }, { op: 'addGem', tier: 1 }] },
+            { w: 3, text: 'You sing a wobbly stretch of road across the grey. It holds, thin as a wish. On the far side the road remembers whom it belongs to.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 3 }] },
+            { w: 1, text: 'You sing a wobbly stretch of road across the grey, and it takes, all at once, like a held breath let go. Where the patch stood, something small and bright is left behind.', ops: [{ op: 'ink', n: -2 }, { op: 'maxHp', n: 3 }, { op: 'addGem', tier: 1 }] },
           ] },
         { label: 'Let Suzu seal the edge', req: { hero: 'suzu' },
-          out: [{ w: 1, text: 'Suzu presses a talisman to the edge. The Blank pauses, considers, and turns aside. She says nothing. She looks tired, and very, very good at this.', ops: [{ op: 'ink', n: 3 }, { op: 'heal', pct: 0.1 }] }] },
-        { label: 'Throw in a cursed page',
-          out: [{ w: 1, text: 'The Blank eats it without chewing. Even it looks a little unwell afterward.', ops: [{ op: 'removeCard', filter: { type: 'curse' } }] }] },
+          out: [{ w: 1, text: 'Suzu presses a talisman to the edge. The Hush pauses, considers, and turns aside. She says nothing. She looks tired, and very, very good at this.', ops: [{ op: 'ink', n: 3 }, { op: 'heal', pct: 0.1 }] }] },
+        { label: 'Throw in a cursed card',
+          out: [{ w: 1, text: 'The Hush swallows it without chewing. Even it looks a little unwell afterward.', ops: [{ op: 'removeCard', filter: { type: 'curse' } }] }] },
         { label: 'Step around it',
-          out: [{ w: 1, text: 'You step around it, keeping to the green. The white does not follow. It only waits, which is the Blank\'s whole personality.', ops: [{ op: 'heal', n: 3 }] }] },
+          out: [{ w: 1, text: "You step around it, keeping to the green. The grey does not follow. It only waits, which is the Hush's whole personality.", ops: [{ op: 'heal', n: 3 }] }] },
       ],
     },
 
     scribes_bargain: {
-      title: 'The Scribe of Small Fates', art: { scene: 'paper' },
-      text: "A tiny scribe, inked to the elbows, offers to edit your fate for a small fee. 'One line,' he says. 'Anything you like. No refunds, no repeats, and not the ending.'",
+      title: 'The Busker of Small Fates', art: { scene: 'paper' },
+      text: "A tiny busker, drumming a beat on an upturned bowl, offers to sing your fate a new line for a small fee. 'One line,' he says. 'Anything you like. No refunds, no encores, and not the ending.'",
       choices: [
         { label: 'A line for the body', cost: '25 gold', req: { gold: 25 },
-          out: [{ w: 1, text: "He writes: 'and they were very sturdy.' The ink dries on your ribs and tingles. Tomorrow you will be surprised how little a tree branch hurts.", ops: [{ op: 'gold', n: -25 }, { op: 'maxHp', n: 3 }] }] },
+          out: [{ w: 1, text: "He sings: 'and they were very sturdy.' The tune settles in your ribs and tingles. Tomorrow you will be surprised how little a tree branch hurts.", ops: [{ op: 'gold', n: -25 }, { op: 'maxHp', n: 3 }] }] },
         { label: 'A line for the purse', cost: 'It may backfire',
           out: [
-            { w: 2, text: "He writes: 'and they found a lot of gold.' Fate reads the line, says 'that is not how this works,' but a little of it leaks through.", ops: [{ op: 'gold', n: 30 }] },
-            { w: 1, text: 'He writes it in the wrong ink. The gold, on reflection, was not yours.', ops: [{ op: 'gold', pct: -0.2 }] },
+            { w: 2, text: "He sings: 'and they found a lot of gold.' Fate hears the line, says 'that is not how this works,' but a little of it leaks through.", ops: [{ op: 'gold', n: 30 }] },
+            { w: 1, text: 'He sings it in the wrong key. The gold, on reflection, was not yours.', ops: [{ op: 'gold', pct: -0.2 }] },
           ] },
-        { label: 'Strike out a line', cost: 'Lose a card',
-          out: [{ w: 1, text: 'He strikes it out with a small silver knife, and it is gone before you can miss it. He charges nothing. He looks nearly fond of you.', ops: [{ op: 'removeCard' }] }] },
-        { label: 'Decline the pen',
-          out: [{ w: 1, text: "You decline. The scribe nods and blows on his fingers. 'Wise,' he says. 'Everyone wants a good ending. It does not work like that.'", ops: [{ op: 'ink', n: 1 }] }] },
+        { label: 'Cut a line', cost: 'Lose a card',
+          out: [{ w: 1, text: 'He cuts it short with one sharp beat on the bowl, and it is gone before you can miss it. He charges nothing. He looks nearly fond of you.', ops: [{ op: 'removeCard' }] }] },
+        { label: 'Decline the song',
+          out: [{ w: 1, text: "You decline. The busker nods and taps out one last beat. 'Wise,' he says. 'Everyone wants a good ending. It does not work like that.'", ops: [{ op: 'ink', n: 1 }] }] },
       ],
     },
 
     raiga_storm_laugh: {
       title: "Raiga's Laugh", art: { scene: 'event' }, once: true, w: 3, when: { hero: 'raiga' },
-      text: 'Raiga throws back his head and laughs for no reason at all, and everything within earshot laughs with him. The Blank, which had been creeping toward the path, stops. It seems, for a moment, to be listening.',
+      text: 'Raiga throws back his head and laughs for no reason at all, and everything within earshot laughs with him. The Hush, which had been creeping toward the path, stops. It seems, for a moment, to be listening.',
       choices: [
         { label: 'Laugh with him',
           out: [{ w: 1, text: 'It is contagious, in the good way. When it is over the air is clean and everyone is sore from grinning.', ops: [{ op: 'heal', pct: 0.2 }, { op: 'ink', n: 2 }] }] },

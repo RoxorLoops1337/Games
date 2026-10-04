@@ -1932,7 +1932,7 @@
       'You lead two heroes across a grey, still land. A yokai called the Hush has eaten every sound.',
       'Cross three verses. Each ends with a boss, and the last one guards the Hush itself.',
       'Every run is a new journey: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.'] },
-    { id: 'map', tip: /^(Painting|Waking) a hex costs (Ink|Echo)/, title: 'Wake the Land', kicker: 'The land is silent. Your Echo wakes it.', build: () => paintedCanvas(paintMapDiagram), rules: [
+    { id: 'map', tip: /^Waking a hex costs Echo/, title: 'Wake the Land', kicker: 'The land is silent. Your Echo wakes it.', build: () => paintedCanvas(paintMapDiagram), rules: [
       'Spend 1 Echo to wake a hex next to awake ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
       'Tap any awake hex to walk there. Stepping onto a fight or a fable starts it.',
       'Echo comes back from temple bells, wins and camps. One-use Songs wake whole shapes for free.'] },
