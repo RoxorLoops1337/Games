@@ -1,8 +1,8 @@
-// Inkwoven -- ART.fx: the combat VFX (24 effects, DATA.LISTS.fx). Extends ART (art.js); every member REPLACES the art.js placeholder by plain assignment.
+// Echowake (was Inkwoven) -- ART.fx: the combat VFX (24 effects, DATA.LISTS.fx). Extends ART (art.js); every member REPLACES the art.js placeholder by plain assignment.
 //
 // CONTRACT (DESIGN 5.6, ART_BIBLE 7)
 //   ART.fx.NAME(ctx, o, t)     t is PROGRESS 0..1 (clamped; NaN is 0). SCENE owns the timing (ART.fx.ms[NAME] ms by default). A pure function of (o, t) and the
-//                              ART.tk.opt settings: no state, no clock, no Math.random. Particles are closed-form functions of o.seed and t, so any t can be drawn in
+//                              ART.tk.opt settings: no state, no clock, no banned random call. Particles are closed-form functions of o.seed and t, so any t can be drawn in
 //                              any order (the gallery relies on it). Unknown keys are ignored, a missing or non-finite number falls back to its default, nothing throws.
 //   o = { x, y, x2?, y2?, s?:1, color?, color2?, dir?:1|-1, ang?, seed?, text?, kind?, w?, h? }   stage px, radians
 //        x y      origin: the impact point, the caster centre or the line start. s scales EVERYTHING (sizes, line weights, travel) about it.
@@ -20,7 +20,8 @@
 //                Without x2, y2 it thrusts 240 px along dir and ang.
 //   burst        a comic starburst impact: ink outline, colour body, halftone screen-tone, inner star, white core, radial speed lines, anime "boil" (new jitter every frame).
 //   ring         an expanding shock ring: an inked annulus that thins as it grows, a highlight, tick marks and a trailing second ring.
-//   inkSplash    a wet ink splat: the pool pops out, droplets fly and land, it dries (the gloss goes matte) while three drips run down, then it fades.
+//   inkSplash    the Sound Burst: a dark core pops with a waveform rim and nine tapered sound spikes, three rings expand outward, note heads fly off and settle,
+//                a white flash ring leaves at the start, then it fades. (The id stays from the old splat; Kuro's element and every summon and death use it.)
 //   petals       a swirling sakura storm: baked petals tumble on tilted orbits that widen and climb, with wind ribbons and a soft pink glow.
 //   lightning    a branching bolt from (x, y) to (x2, y2) that flickers on twos (a new bolt every frame), with an afterimage, an impact flare and sparks. Without
 //                x2, y2 it strikes down onto (x, y) from 360 px above.
@@ -31,7 +32,7 @@
 //   shield       a hex-ripple barrier over o.w x o.h: a honeycomb whose cells light up along an expanding ripple from where the hit landed, a glass rim, a sheen.
 //   heal         rising light motes, chunky plus signs, four-point stars, a soft light column and a healing ring on the ground.
 //   buff         an aura of upward glyph streams: chevrons and diamonds climbing three columns, a magic ring that sweeps feet to head, a light column.
-//   debuff       the same falling: downward chevrons, a ring that sinks head to feet, dark ink mist and dripping drops.
+//   debuff       the same falling: downward chevrons, a ring that sinks head to feet, dark mist and falling grey ash and frost flecks.
 //   sparkle      twinkling four-point stars around a big lens-flare star, drifting gold-leaf flecks.
 //   speedLines   manga speed lines: 'radial' focus lines converging on (x, y) (default), or kind 'dir' parallel lines along ang. With o.w and o.h it covers that
 //                whole box (SCENE always passes them); without, a local burst of lines around (x, y). New line set every frame ("boil").
@@ -39,11 +40,11 @@
 //                1280 x 720). Never reads pixels. ART.tk.opt.reduceMotion draws a soft tint instead of any flash.
 //   sfxText      onomatopoeia (o.text, default 'ZAN!'): heavy skewed letters, each its own sprite with a thick ink outline, an accent sticker edge and a block
 //                shadow; pops in with overshoot, shakes, then drops away. Letters are baked once per (character, colours), then placed with one drawImage each.
-//   vignette     hard dramatic edges over o.w x o.h: a torn dry-brush ink frame plus a colour bleed from the edges that beats once (default red). Baked once.
+//   vignette     hard dramatic edges over o.w x o.h: a torn ink-drawn frame plus a colour bleed from the edges that beats once (default red). Baked once.
 //   chromatic    RGB split: the canvas redrawn onto itself with the red and blue channels shifted (multiply masks and 'lighter'), over the o.w x o.h box in the
 //                current transform. Half resolution scratch canvases; draws nothing when the canvas cannot be copied (stub, zero size) or under reduceMotion.
-//   brushDrag    a fat dry-brush stroke dragged from (x, y) to (x2, y2): a bundle of tapered bristles (thick in the middle), a head that races ahead and a tail
-//                that follows, splatter thrown off the head. Without x2, y2 it drags 420 px along dir and ang.
+//   brushDrag    the Sound Sweep from (x, y) to (x2, y2): a ribbon whose two edges are sine waves (the swing falls toward the tail), three inner sine lines,
+//                a bright head bead and notes thrown off the head. Without x2, y2 it sweeps 420 px along dir and ang.
 //   numberPop    comic damage digits (o.text, o.kind dmg | crit | heal | block | poison | burn): heavy digits each baked once with a thick ink outline; they pop in
 //                one after the other with overshoot, wobble, float a little (SCENE adds the main rise) and fade. crit is hot red-gold and shakes, heal green,
 //                block blue, poison purple, burn orange, dmg white.
@@ -428,42 +429,41 @@
   nominal.ring = 150;
 
   // ===============================================================================================================
-  // inkSplash
+  // inkSplash (the Sound Burst: id kept, the picture is a sound, not a splat)
   // ===============================================================================================================
-  function blobPath(ctx, pts, n) {
-    // smooth closed blob through points (quadratic through midpoints)
-    ctx.moveTo((pts[2 * (n - 1)] + pts[0]) / 2, (pts[2 * (n - 1) + 1] + pts[1]) / 2);
-    for (let i = 0; i < n; i++) { const j = (i + 1) % n; ctx.quadraticCurveTo(pts[2 * i], pts[2 * i + 1], (pts[2 * i] + pts[2 * j]) / 2, (pts[2 * i + 1] + pts[2 * j + 1]) / 2); }
+  // a closed polygon through n points (straight lineTo, so the rim reads as a waveform and not a blob)
+  function wavePath(ctx, pts, n) {
+    ctx.moveTo(pts[0], pts[1]);
+    for (let i = 1; i < n; i++) ctx.lineTo(pts[2 * i], pts[2 * i + 1]);
     ctx.closePath();
   }
   const BP = new Float64Array(64);
-  const SPLAT = { M: 17, px: new Float64Array(17), py: new Float64Array(17), ns: 9, sa: new Float64Array(9), sl: new Float64Array(9), sw: new Float64Array(9), sb: new Float64Array(9), sd: new Float64Array(9), dl: new Float64Array(3), dx: new Float64Array(3), dy: new Float64Array(3), dw: new Float64Array(3), r: 0 };
+  const SPLAT = { M: 17, px: new Float64Array(17), py: new Float64Array(17), ns: 9, sa: new Float64Array(9), sl: new Float64Array(9), sw: new Float64Array(9), r: 0 };
   function poolPath(ctx, S, ox, oy) {
     for (let i = 0; i < S.M; i++) { BP[2 * i] = S.px[i] + ox; BP[2 * i + 1] = S.py[i] + oy; }
-    blobPath(ctx, BP, S.M);
+    wavePath(ctx, BP, S.M);
   }
-  // Spikes and drips as extra subpaths of the current path. Every subpath runs clockwise on screen, so the union fills cleanly with the nonzero rule
-  // (stroke the whole path thick in ink, then fill it: the outline only survives on the outside).
+  // The waveform rim plus nine tapered sound spikes as extra subpaths of the current path. Every subpath runs clockwise on screen, so the union fills
+  // cleanly with the nonzero rule (stroke the whole path thick in ink, then fill it: the outline only survives on the outside).
   function splatPath(ctx, S) {
     poolPath(ctx, S, 0, 0);
     for (let i = 0; i < S.ns; i++) {
-      const a = S.sa[i], c = cos(a), s = sin(a), nx = -s, ny = c, L = S.sl[i], w = S.sw[i], rb = S.sb[i];
+      const a = S.sa[i], c = cos(a), s = sin(a), nx = -s, ny = c, L = S.sl[i], w = S.sw[i];
       if (L < 3) continue;
       ctx.moveTo(c * S.r * 0.4 - nx * w, s * S.r * 0.4 - ny * w);
-      ctx.lineTo(c * L * 0.55 - nx * w * 0.5, s * L * 0.55 - ny * w * 0.5);
-      ctx.lineTo(c * L * 0.9 - nx * rb * 0.55, s * L * 0.9 - ny * rb * 0.55);
-      ctx.lineTo(c * L * 0.9 + nx * rb * 0.55, s * L * 0.9 + ny * rb * 0.55);
-      ctx.lineTo(c * L * 0.55 + nx * w * 0.5, s * L * 0.55 + ny * w * 0.5);
+      ctx.lineTo(c * L * 0.5 - nx * w * 0.42, s * L * 0.5 - ny * w * 0.42);
+      ctx.lineTo(c * L, s * L);
+      ctx.lineTo(c * L * 0.5 + nx * w * 0.42, s * L * 0.5 + ny * w * 0.42);
       ctx.lineTo(c * S.r * 0.4 + nx * w, s * S.r * 0.4 + ny * w);
       ctx.closePath();
-      ctx.moveTo(c * L + rb, s * L); ctx.arc(c * L, s * L, rb, 0, TAU);
-      if (S.sd[i] > 0.5) { const dd = L + rb + 9 + S.sd[i] * 8, dr = rb * 0.8; ctx.moveTo(c * dd + dr, s * dd); ctx.arc(c * dd, s * dd, dr, 0, TAU); }       // a drop that broke off the tip
     }
-    for (let i = 0; i < 3; i++) {
-      const dl = S.dl[i]; if (dl < 2) continue;
-      const x0 = S.dx[i], y0 = S.dy[i], w = S.dw[i];
-      ctx.moveTo(x0 + w, y0 - 5); ctx.lineTo(x0 + w * 0.6, y0 + dl); ctx.arc(x0, y0 + dl, w * 0.66, 0, PI, false); ctx.lineTo(x0 - w, y0 - 5); ctx.closePath();
-    }
+  }
+  // a small note head with a stem (a released sound), inked: head at (x, y)
+  function noteBit(ctx, x, y, rr, fill) {
+    ctx.beginPath(); ctx.moveTo(x + rr * 0.8, y - rr * 0.2); ctx.lineTo(x + rr * 0.8, y - rr * 3.2);
+    ctx.lineWidth = 4.6; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(x, y, rr * 1.2, rr * 0.86, -0.35, 0, TAU); ctx.lineWidth = 5; ctx.stroke(); ctx.fillStyle = fill; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + rr * 0.8, y - rr * 0.2); ctx.lineTo(x + rr * 0.8, y - rr * 3.2); ctx.lineWidth = 1.8; ctx.strokeStyle = fill; ctx.stroke();
   }
   FX.inkSplash = (ctx, o, t) => {
     const P = prep(o, '#7a6bff', (c) => tint(c, 0.4)); if (!P) return;
@@ -471,26 +471,36 @@
     const ga = ctx.globalAlpha, sd = P.seed, S = SPLAT;
     const dry = ramp(t, 0.32, 0.78), a = 1 - ramp(t, 0.8, 1), r = 41 * eoBack(ramp(t, 0, 0.17)) * (1 - 0.06 * dry);
     if (r < 2 || a < 0.02) { ctx.restore(); return; }
-    const body = mix(P.c1, INK, 0.26 + 0.26 * dry), shadowC = mix(P.c1, INK, 0.66), lit = tint(P.c1, 0.42), rot = hv(sd, 500) * TAU;
+    const body = mix(P.c1, INK, 0.5 + 0.2 * dry), shadowC = mix(P.c1, INK, 0.78), lit = tint(P.c1, 0.5), rot = hv(sd, 500) * TAU;
     S.r = r;
-    for (let i = 0; i < S.M; i++) { const an = rot + i / S.M * TAU, rr = r * (0.62 + 0.52 * hv(sd, i)); S.px[i] = cos(an) * rr; S.py[i] = sin(an) * rr; }
+    // the rim: 17 points alternating a high and a low radius, joined by straight lines
+    for (let i = 0; i < S.M; i++) { const an = rot + i / S.M * TAU, rr = r * ((i % 2 ? 0.66 : 1.08) + 0.14 * hs(sd, i)); S.px[i] = cos(an) * rr; S.py[i] = sin(an) * rr; }
     for (let i = 0; i < S.ns; i++) {
       const kind = i % 3, gi = eo3(ramp(t, 0.0 + 0.02 * hv(sd, i + 90), 0.13 + 0.07 * hv(sd, i + 91))), j = hv(sd, i + 20);
       S.sa[i] = rot + (i + hs(sd, i + 60) * 0.32) / S.ns * TAU;
       S.sl[i] = (kind === 0 ? 84 + 34 * j : kind === 1 ? 54 + 20 * j : 66 + 20 * j) * gi * (1 - 0.07 * dry);
-      S.sw[i] = kind === 0 ? 5.6 : kind === 1 ? 16 + 4 * j : 10 + 3 * j; S.sb[i] = (kind === 0 ? 3.6 : kind === 1 ? 8 : 5.4) * (0.6 + 0.4 * gi); S.sd[i] = kind === 0 ? 0.6 + 0.4 * hv(sd, i + 70) : 0;
+      S.sw[i] = kind === 0 ? 5.6 : kind === 1 ? 16 + 4 * j : 10 + 3 * j;
     }
-    for (let i = 0; i < 3; i++) { S.dl[i] = (14 + 30 * hv(sd, i + 800)) * eo3(ramp(t, 0.24 + 0.06 * i, 0.9)); S.dx[i] = (i - 1) * r * 0.5 + hs(sd, i + 820) * 5; S.dy[i] = r * (0.5 + 0.12 * hv(sd, i + 840)); S.dw[i] = 3.4 + 2 * hv(sd, i + 860); }
     ctx.globalAlpha = ga * a; ctx.lineJoin = 'round';
-    // satellite droplets flung out on short arcs; each sits where it landed
+    // three rings expand from r to r * 2.6 over 0.2 .. 0.9: an inked annulus each, in the two colours
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const tau = ramp(t, 0.2 + 0.07 * i, 0.9);
+      if (tau <= 0 || tau >= 1) continue;
+      const rr = r * (1 + 1.6 * eo3(tau)), th = max(1.6, 8 * pow(1 - tau, 1.1)), ra = (1 - ramp(tau, 0.45, 1)) * ga * a;
+      ctx.globalAlpha = ra;
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.lineWidth = th + 3.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.lineWidth = th; ctx.strokeStyle = i % 2 ? P.c2 : P.c1; ctx.stroke();
+    }
+    ctx.globalAlpha = ga * a;
+    // note heads flung out on short arcs; each one drifts to rest where it landed
     const nd = cnt(13);
     for (let i = 0; i < nd; i++) {
       const ts = 0.01 + 0.1 * hv(sd, i + 600), tau = c01((t - ts) / 0.3);
       if (t < ts) continue;
-      const an = hv(sd, i + 620) * TAU, dist = (78 + 90 * hv(sd, i + 640)) * eo3(tau), px = cos(an) * dist, py = sin(an) * dist * 0.9 + 30 * hv(sd, i + 700) * tau * tau;
-      const rr = (2.8 + 5.2 * hv(sd, i + 660)) * (0.7 + 0.3 * tau) * (1 - 0.1 * dry), st = tau < 1 ? 1 + 1.6 * (1 - tau) : 1;
-      ctx.beginPath(); ctx.ellipse(px, py, rr * st, rr, an, 0, TAU); ctx.lineWidth = 5; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = body; ctx.fill();
-      if (rr > 4 && dry < 0.8) disc(ctx, px - rr * 0.3, py - rr * 0.35, rr * 0.3, rgba(WHITE, 0.75 * (1 - dry)));
+      const an = hv(sd, i + 620) * TAU, dist = (78 + 90 * hv(sd, i + 640)) * eo3(tau), px = cos(an) * dist, py = sin(an) * dist * 0.9 - 30 * hv(sd, i + 700) * tau * tau;
+      const rr = (3.4 + 3.6 * hv(sd, i + 660)) * (0.7 + 0.3 * tau);
+      noteBit(ctx, px, py, rr, i % 2 ? P.c2 : body);
     }
     // the silhouette: a thick ink line, then the body colour on top
     ctx.beginPath(); splatPath(ctx, S); ctx.lineWidth = 9; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = body; ctx.fill();
@@ -502,22 +512,25 @@
       ctx.moveTo(cos(an) * r * 0.75 + nx * w, sin(an) * r * 0.75 + ny * w); ctx.lineTo(cos(an) * L * 0.72 + nx * w * 0.5, sin(an) * L * 0.72 + ny * w * 0.5);
     }
     ctx.stroke();
-    // the pool gets one hard shadow (itself minus itself shifted toward the light) with screen tone in it
+    // the core gets one hard shadow (itself minus itself shifted toward the light) with screen tone in it
     ctx.save(); ctx.beginPath(); poolPath(ctx, S, 0, 0); ctx.clip();
     ctx.beginPath(); ctx.rect(-120, -120, 240, 240); poolPath(ctx, S, 6, -6); ctx.fillStyle = shadowC; ctx.fill('evenodd');
     if (!tk.lowQ()) { ctx.clip('evenodd'); tk.halftone(ctx, -120, -120, 240, 240, { d: 5.5, r: 1.5, color: INK, alpha: 0.6, force: true }); }
     ctx.restore();
-    // gloss while it is wet, gone when it has dried
-    const wet = 1 - ramp(t, 0.3, 0.62);
-    if (wet > 0.02) {
-      ctx.globalAlpha = ga * a * wet;
-      ctx.beginPath(); ctx.ellipse(r * 0.3, -r * 0.34, r * 0.34, r * 0.12, -0.75, 0, TAU); ctx.fillStyle = WHITE; ctx.fill();
-      disc(ctx, r * 0.0, -r * 0.05, r * 0.07, WHITE);
-      ctx.globalAlpha = ga * a * wet * 0.7; ctx.beginPath(); ctx.ellipse(-r * 0.25, r * 0.28, r * 0.13, r * 0.055, -0.6, 0, TAU); ctx.fill();
+    // the waveform rim glows: a lit line round the core, so the zigzag reads as a sound wave
+    ctx.globalAlpha = ga * a * (1 - 0.5 * dry); ctx.lineJoin = 'miter'; ctx.miterLimit = 3; ctx.beginPath(); poolPath(ctx, S, 0, 0); ctx.lineWidth = 3.2; ctx.strokeStyle = P.c2; ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = WHITE; ctx.stroke(); ctx.lineJoin = 'round'; ctx.globalAlpha = ga * a;
+    glowAt(ctx, 0, 0, r * 2.1, P.c1, 0.3 * (1 - dry));
+    // a bright dot at the heart, and a white flash ring at 0.1 .. 0.3 where the sound leaves
+    disc(ctx, 0, 0, r * 0.2 * (1 - dry * 0.5), rgba(WHITE, 0.9 * (1 - dry)));
+    const fl = ramp(t, 0.1, 0.3);
+    if (fl > 0 && fl < 1) {
+      ctx.globalAlpha = ga * a * (1 - fl); ctx.beginPath(); ctx.arc(0, 0, r * (0.9 + 0.8 * eo3(fl)), 0, TAU);
+      ctx.lineWidth = 5 * (1 - 0.6 * fl); ctx.strokeStyle = WHITE; ctx.stroke();
     }
     ctx.restore(); ctx.globalAlpha = ga;
   };
-  nominal.inkSplash = 130;
+  nominal.inkSplash = 150;
 
   // ===============================================================================================================
   // petals
@@ -1088,13 +1101,15 @@
         ctx.globalAlpha = ga * a; chevron(ctx, (c - 1) * 28, y, 12 * sz, 11 * sz, up, P.c1, 10.5, 6.5);
       }
     }
-    // motes rising, or ink drops falling
+    // motes rising, or ash flecks falling
     for (let i = 0; i < cnt(10); i++) {
       const ph = ((t * 1.3 + hv(sd, i + 60)) % 1), x = hs(sd, i + 80) * 44 + sin(ph * 6 + i) * 4, y = up ? lerp(yBot, yTop - 10, ph) : lerp(yTop, yBot, ph * ph), a = sin(PI * ph) * e;
       if (up) { glowAt(ctx, x, y, 8, P.c1, 0.9 * a); ctx.globalAlpha = ga * a; disc(ctx, x, y, 1.8, WHITE); }
       else {
-        ctx.globalAlpha = ga * a; ctx.beginPath(); const r = 3 + 2.4 * hv(sd, i + 100); ctx.moveTo(x, y - r * 2.2); ctx.quadraticCurveTo(x + r * 1.2, y, x, y + r); ctx.quadraticCurveTo(x - r * 1.2, y, x, y - r * 2.2); ctx.closePath();
-        ctx.fillStyle = INK; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = P.c1; ctx.stroke();
+        // grey ash and frost flecks (the Hush), short dashes tumbling down
+        const fl = 3 + 2.6 * hv(sd, i + 100), fa = (hv(sd, i + 110) - 0.5) * 2;
+        ctx.globalAlpha = ga * a; ctx.beginPath(); ctx.moveTo(x - cos(fa) * fl, y - sin(fa) * fl); ctx.lineTo(x + cos(fa) * fl, y + sin(fa) * fl);
+        ctx.lineWidth = 3.4; ctx.strokeStyle = '#8e8aa3'; ctx.stroke(); ctx.lineWidth = 1.5; ctx.strokeStyle = i % 2 ? '#f2f0f6' : P.c1; ctx.stroke();
       }
     }
     ctx.restore(); ctx.globalAlpha = ga;
@@ -1429,81 +1444,56 @@
   nominal.chromatic = 0;
 
   // ===============================================================================================================
-  // brushDrag
+  // brushDrag (the Sound Sweep: id kept, the picture is a sine ribbon of sound)
   // ===============================================================================================================
   const PROF = new Float64Array(49);
   FX.brushDrag = (ctx, o, t) => {
-    const P = prep(o, INK, (c) => (luma(c) < 0.25 ? '#7a6bff' : tint(c, 0.5))); if (!P) return;
+    const P = prep(o, '#7a6bff', (c) => (luma(c) < 0.25 ? '#5ff5ff' : tint(c, 0.5))); if (!P) return;
     t = T01(t);
     let x1 = fin(o && o.x2, P.x), y1 = fin(o && o.y2, P.y);
     if (hypot(x1 - P.x, y1 - P.y) < 8) { x1 = P.x + cos(P.ang) * 420 * P.s * P.dir; y1 = P.y + sin(P.ang) * 420 * P.s; }
     const L = hypot(x1 - P.x, y1 - P.y), k = min(1.8, max(0.5, P.s)), W = 66 * k, sd = P.seed, ga = ctx.globalAlpha;
-    // the brush races along the path in the first half; the stroke then dries out from its start, bristle by bristle
+    // the sweep races along the path in the first half; the sound then fades out from its start
     const head = L * eo3(ramp(t, 0, 0.46)), tail = L * sm(ramp(t, 0.5, 1)), a = 1 - ramp(t, 0.9, 1);
     if (head - tail < 6 || a < 0.02) return;
     ctx.save(); ctx.translate(P.x, P.y); ctx.rotate(atan2(y1 - P.y, x1 - P.x));
-    const bow = L * 0.06 * hs(sd, 1), cl = (u) => bow * sin(PI * c01(u / L)) + sin(u * 0.05 + sd) * 2 * k;
-    // half width along the whole stroke: a heavy press at the touchdown, a long steady belly, a thin flick at the end
-    const prof1 = (v) => { return (0.5 + 0.5 * sm(ramp(v, 0, 0.07))) * (1 - 0.5 * sm(ramp(v, 0.14, 0.8))) * (1 - sm(ramp(v, 0.9, 1))) * (1 + 0.16 * sin(v * 17 + sd)) * (1 + 0.5 * exp(-pow((v - 0.09) / 0.06, 2))); };
-    for (let i = 0; i <= 48; i++) PROF[i] = prof1(i / 48);
+    const u0 = tail, u1 = head, span = max(1, u1 - u0), ph0 = hv(sd, 1) * TAU, wl = 0.066 / k;
+    // the amplitude falls toward the tail; the whole ribbon snakes on a sine and travels with the head
+    const amp = (u) => 11 * k * (0.2 + 0.8 * c01((u - u0) / span)) * (0.4 + 0.6 * sin(PI * c01(u / L) * 0.9 + 0.3));
+    const cl = (u) => amp(u) * sin(u * wl - ph0 - t * 9);
+    // half width along the whole stroke: a swell at the touchdown, a steady belly, a thin flick at the end
+    for (let i = 0; i <= 48; i++) { const v = i / 48; PROF[i] = (0.5 + 0.5 * sm(ramp(v, 0, 0.07))) * (1 - 0.45 * sm(ramp(v, 0.14, 0.8))) * (1 - sm(ramp(v, 0.9, 1))); }
     const prof0 = (u) => { const f = c01(u / L) * 48, i = f | 0, j = i < 48 ? i + 1 : 48; return PROF[i] + (PROF[j] - PROF[i]) * (f - i); };
-    const N = 28, u0 = tail, u1 = head, dry = tail > 2;
-    const prof = (u) => prof0(u) * (dry ? 0.12 + 0.88 * sm(c01((u - u0) / (80 * k))) : 1);
+    const dry = tail > 2, prof = (u) => prof0(u) * (dry ? 0.12 + 0.88 * sm(c01((u - u0) / (80 * k))) : 1) * sm(c01((u1 - u) / (14 * k) + 0.15));
+    const N = 40;
     const fillRibbon = (wMul, add, col, al) => {
-      const ue = max(u0 + 4, u1 - 12 * k);
-      for (let i = 0; i < N; i++) { const u = u0 + (ue - u0) * i / (N - 1); QX[i] = u; QY[i] = cl(u); QW[i] = W * 0.5 * prof(u) * wMul * (i === N - 1 ? 0.5 : 1); }
+      for (let i = 0; i < N; i++) { const u = u0 + span * i / (N - 1); QX[i] = u; QY[i] = cl(u); QW[i] = W * 0.32 * prof(u) * wMul * (i === N - 1 ? 0.4 : 1); }
       ctx.globalAlpha = ga * a * al; ctx.beginPath(); ribbonPath(ctx, N, 1, add); ctx.fillStyle = col; ctx.fill();
     };
-    // a pale halo and rim so the ink reads on a dark night backdrop as well as on paper
-    glowAt(ctx, (u0 + u1) / 2, cl((u0 + u1) / 2), (u1 - u0) * 0.5 + 30 * k, P.c2, 0.18 * a);
-    fillRibbon(1, 3.4 * k, P.c2, 0.62);
-    // the ink body: one fat solid core, trimmed at the leading edge so the bristles can run past it
-    const coreEnd = max(u0 + 4, u1 - 16 * k);
-    for (let i = 0; i < N; i++) { const u = u0 + (coreEnd - u0) * i / (N - 1); QX[i] = u; QY[i] = cl(u); QW[i] = W * 0.5 * prof(u) * 0.78; }
-    ctx.globalAlpha = ga * a; ctx.beginPath(); ribbonPath(ctx, N, 1, 0); ctx.fillStyle = P.c1; ctx.fill();
-    // bristles: thin ribbons side by side, the outer ones shorter, gappy and lighter (dry brush); the leading edge is a slanted chisel
-    const NB = cnt(12);
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.globalAlpha = ga * a * (pass ? 0.85 : 0.95); ctx.beginPath();
-      for (let j = pass; j < NB; j += 2) {
-        const lat = (j + 0.5) / NB * 2 - 1, al = abs(lat), nn = 12;
-        const lead = u1 - (lat * 22 + 22) * k * (0.5 + hv(sd, j + 10)) + (1 - al) * 10 * k, trail = u0 + (dry ? 10 + 60 * hv(sd, j + 20) : 0) * al * ramp(t, 0.5, 0.8);
-        const gap0 = lead - (lead - trail) * (0.35 + 0.4 * hv(sd, j + 30)), gap1 = gap0 + (lead - trail) * 0.14 * al * (hv(sd, j + 40) > 0.4 ? 1 : 0);
-        if (lead - trail < 8) continue;
-        const bw = (W / NB) * 0.62 * (0.7 + 0.5 * hv(sd, j + 50));
-        for (let seg = 0; seg < 2; seg++) {
-          const ua = seg ? gap1 : trail, ub = seg ? lead : gap0;
-          if (ub - ua < 6) continue;
-          for (let i = 0; i < nn; i++) {
-            const u = ua + (ub - ua) * i / (nn - 1), pr = prof(u);
-            QX[i] = u; QY[i] = cl(u) + lat * W * 0.49 * pr; QW[i] = bw * (0.3 + 0.7 * pr) * (0.2 + 0.8 * sin(PI * pow(i / (nn - 1), 0.7))) + 0.05;
-          }
-          ribbonPath(ctx, nn, 1, 0);
-        }
-      }
-      ctx.fillStyle = pass ? mix(P.c1, P.c2, 0.3) : P.c1; ctx.fill();
+    glowAt(ctx, (u0 + u1) / 2, cl((u0 + u1) / 2), span * 0.5 + 30 * k, P.c2, 0.2 * a);
+    fillRibbon(1, 3.6 * k, INK, 0.9);                    // the ink line round the ribbon so it reads on any ground
+    fillRibbon(1, 0, P.c1, 1);                            // the body
+    fillRibbon(0.62, 0, mix(P.c1, P.c2, 0.45), 0.9);      // a lighter core band
+    // three inner sine lines, each on its own phase and swing
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let g = 0; g < 3; g++) {
+      const off = (g - 1) * 0.5, ph = ph0 * (g + 1) + g * 2.1, f = wl * (1.6 + 0.5 * g);
+      for (let i = 0; i < N; i++) { const u = u0 + span * i / (N - 1); QX[i] = u; QY[i] = cl(u) + off * W * 0.32 * prof(u) + sin(u * f - ph - t * (11 + 3 * g)) * 0.34 * W * 0.32 * prof(u); }
+      ctx.globalAlpha = ga * a * (g === 1 ? 0.95 : 0.75); ctx.beginPath(); ctx.moveTo(QX[0], QY[0]);
+      for (let i = 1; i < N; i++) ctx.lineTo(QX[i], QY[i]);
+      ctx.lineWidth = (g === 1 ? 2.4 : 1.7) * k; ctx.strokeStyle = g === 1 ? WHITE : P.c2; ctx.stroke();
     }
-    // a thin lit streak along the upper edge (wet sheen) and a second faint one lower down
-    for (let pass = 0; pass < 2; pass++) {
-      const n2 = 24, off = pass ? 0.3 : -0.62;
-      for (let i = 0; i < n2; i++) { const v = 0.1 + 0.8 * i / (n2 - 1), u = u0 + (coreEnd - u0) * v; QX[i] = u; QY[i] = cl(u) + off * W * 0.5 * prof(u); QW[i] = (pass ? 1 : 1.7) * k * sin(PI * i / (n2 - 1)) + 0.05; }
-      ctx.globalAlpha = ga * a * (pass ? 0.4 : 0.8); ctx.beginPath(); ribbonPath(ctx, n2, 1, 0); ctx.fillStyle = pass ? P.c2 : mix(P.c2, WHITE, 0.4); ctx.fill();
-    }
-    // the press: a ragged blot where the brush touched down, with two drips
-    const blotU = L * 0.04, blotA = a * ramp(t, 0, 0.1) * (blotU > u0 - 20 ? 1 : 0);
-    if (blotA > 0.02 && blotU < head) {
-      const R = W * 0.5 * (1 + 0.1 * hs(sd, 70));
-      ctx.globalAlpha = ga * blotA; ctx.fillStyle = P.c1; ctx.beginPath();
-      for (let i = 0; i < 14; i++) { const an = i / 14 * TAU, r = R * (0.82 + 0.3 * hv(sd, i + 300)) * (i % 2 ? 0.88 : 1.06); if (i === 0) ctx.moveTo(blotU + cos(an) * r * 0.75, cl(blotU) + sin(an) * r); else ctx.lineTo(blotU + cos(an) * r * 0.75, cl(blotU) + sin(an) * r); }
-      ctx.closePath(); ctx.fill();
-      for (let i = 0; i < 2; i++) { const dx = (i ? 0.35 : -0.3) * R, dl = (10 + 22 * hv(sd, i + 340)) * k * ramp(t, 0.08, 0.5); ctx.beginPath(); ctx.ellipse(blotU + dx, cl(blotU) + R * 0.8 + dl * 0.5, 2.2 * k, dl * 0.5 + 2, 0, 0, TAU); ctx.fill(); }
-    }
-    // splatter flung off the head
-    for (let i = 0; i < cnt(13); i++) {
-      const ts = 0.06 + 0.36 * hv(sd, i + 100), tau = c01((t - ts) / 0.4);
+    // a bright bead at the head
+    disc(ctx, u1 - 10 * k, cl(u1 - 10 * k), 5 * k * a, rgba(WHITE, 0.9));
+    // notes thrown off the head instead of splatter
+    for (let i = 0; i < cnt(8); i++) {
+      const ts = 0.06 + 0.36 * hv(sd, i + 100), tau = c01((t - ts) / 0.42);
       if (t < ts || tau >= 1) continue;
-      const along = L * eo3(ramp(ts, 0, 0.46)) * (0.94 + 0.08 * hv(sd, i + 120)) + 30 * eo3(tau), side = hs(sd, i + 140) > 0 ? 1 : -1, off = side * (W * 0.5 + (10 + 60 * hv(sd, i + 160)) * eo3(tau)), r = (1.8 + 5 * hv(sd, i + 180)) * k * (1 - 0.4 * tau);
-      ctx.globalAlpha = ga * a * (1 - tau * tau); ctx.beginPath(); ctx.ellipse(along, cl(along) + off + 24 * tau * tau, r * (1 + 1.4 * (1 - tau)), r, 0, 0, TAU); ctx.fillStyle = i % 3 ? P.c1 : P.c2; ctx.fill();
+      const along = L * eo3(ramp(ts, 0, 0.46)) * (0.94 + 0.08 * hv(sd, i + 120)) + 26 * eo3(tau), side = hs(sd, i + 140) > 0 ? 1 : -1;
+      const nx = along, ny = cl(min(along, L)) + side * (W * 0.3 + (8 + 46 * hv(sd, i + 160)) * eo3(tau)) - 20 * tau * tau;
+      const kind = i % 3 === 0 ? 'beamed' : i % 3 === 1 ? 'quarter' : 'eighth', sz = (7 + 5 * hv(sd, i + 180)) * k * (1 - 0.3 * tau);
+      ctx.globalAlpha = ga * a * (1 - tau * tau);
+      tk.note(ctx, nx, ny, sz, { kind, color: i % 2 ? P.c2 : tint(P.c1, 0.3), rot: side * 0.2 * (1 - tau), line: max(1.2, sz * 0.16) });
     }
     ctx.restore(); ctx.globalAlpha = ga;
   };
@@ -1546,7 +1536,7 @@
     sfxText: (w, h) => ({ x: w / 2, y: h * 0.5, text: 'ZAN!' }),
     vignette: (w, h) => ({ x: w / 2, y: h / 2, w, h, color: '#e8383d' }),
     chromatic: (w, h) => ({ x: w / 2, y: h / 2, w, h }),
-    brushDrag: (w, h) => ({ x: w * 0.08, y: h * 0.72, x2: w * 0.92, y2: h * 0.3, color: '#140f2e' }),
+    brushDrag: (w, h) => ({ x: w * 0.08, y: h * 0.72, x2: w * 0.92, y2: h * 0.3, color: '#7a6bff' }),
     numberPop: (w, h) => ({ x: w / 2, y: h * 0.52, text: '128', kind: 'dmg' }),
   };
   const demoOf = (name, w, h, extra) => Object.assign({ seed: 7, s: 1 }, (DEMO[name] || DEMO.burst)(fin(w, 240), fin(h, 240)), extra || {});
@@ -1607,10 +1597,10 @@
       ['sfxText', 80, { x: LANES[1] + 34, y: 300, text: 'ZAN!', s: 1.25, ang: -0.1 }], ['numberPop', 90, { x: LANES[1] - 10, y: 330, text: '58', kind: 'crit', s: 1.3 }], ['vignette', 40, { w: 1280, h: 720, color: '#e8383d' }],
     ] },
     ink: { ms: 1100, list: (E) => [
-      ['inkSplash', 0, { x: LANES[0], y: 430, color: '#7a6bff', s: 1.2 }], ['sfxText', 40, { x: LANES[0], y: 300, text: 'SHAA!', s: 0.9, color: '#e8e0ff', color2: '#7a6bff' }],
+      ['inkSplash', 0, { x: LANES[0], y: 430, color: '#7a6bff', s: 1.2 }], ['sfxText', 40, { x: LANES[0], y: 300, text: 'WAAN!', s: 0.9, color: '#e8e0ff', color2: '#7a6bff' }],
       ['chain', 120, { x: LANES[0], y: 430, x2: LANES[1], y2: 420, color: '#7a6bff' }], ['chain', 200, { x: LANES[1], y: 420, x2: LANES[2], y2: 430, color: '#7a6bff' }],
       ['thrust', 60, { x: E.hero.x + 60, y: E.hero.y - 130, x2: LANES[0] - 30, y2: 420, color: '#fff8f0' }], ['debuff', 260, { x: LANES[2], y: 420, color: '#b58bff', s: 1.3 }],
-      ['brushDrag', 0, { x: 380, y: 200, x2: 1000, y2: 260, color: '#140f2e', s: 1 }], ['sparkle', 300, { x: LANES[3], y: 400, color: '#ffe9a8', s: 1.2 }],
+      ['brushDrag', 0, { x: 380, y: 200, x2: 1000, y2: 260, color: '#7a6bff', color2: '#5ff5ff', s: 1 }], ['sparkle', 300, { x: LANES[3], y: 400, color: '#ffe9a8', s: 1.2 }],
     ] },
   };
   ART.sheet('fx_combat', (canvas, params) => {
