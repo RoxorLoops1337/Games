@@ -633,7 +633,7 @@ const UI = (() => {
   }
 
   // ==================================================================================================================
-  // transitions: page turn, ink bloom, fade. Painted on #over, driven by the frame clock.
+  // transitions: shoji door slide, sound-ring wipe, fade. Painted on #over, driven by the frame clock.
   // ==================================================================================================================
   const DUR = { fade: [220, 260], ink: [420, 480], page: [340, 380] };
   const INK_BLOBS = (() => {
@@ -673,31 +673,34 @@ const UI = (() => {
 
   function paintInk(ctx, cover, seedShift) {
     if (cover <= 0.001) return;
-    // two tones (an indigo rim around a night core) so the bloom reads on dark screens too
-    const blob = (b, r, k) => {
-      ctx.beginPath();
-      const N = 34;
-      for (let i = 0; i <= N; i++) {
-        const a = (i / N) * Math.PI * 2;
-        const rr = r * (1 + 0.07 * Math.sin(a * 3 + b.s + seedShift) + 0.045 * Math.sin(a * 7 - b.s * 2 + seedShift * 2)) * k;
-        const x = b.x + Math.cos(a) * rr, y = b.y + Math.sin(a) * rr;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-    };
-    ctx.strokeStyle = 'rgba(160,140,255,0.55)';
+    // sound-ring wipe: each blob centre sends out a night-filled disc with a bright cyan ring edge and two fainter rings trailing inside
+    ctx.strokeStyle = '#5ff5ff';
     ctx.lineWidth = 3;
     INK_BLOBS.forEach((b) => {
       const local = clamp((cover - b.d) / (1 - b.d), 0, 1);
       const r = b.R * U.ease.outCubic(local);
       if (r < 2) return;
-      blob(b, r, 1);
-      ctx.fillStyle = '#2a1f66';
-      ctx.fill();
-      if (local < 0.98) ctx.stroke();
-      blob(b, r, 0.9);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
       ctx.fillStyle = '#0d0b1e';
       ctx.fill();
+      if (local < 0.98) {
+        ctx.globalAlpha = 0.9 * (1 - local * 0.6);
+        ctx.stroke();
+        ctx.lineWidth = 1.5;
+        for (let k = 1; k <= 2; k++) {
+          const rr = r - k * 26 - seedShift * 2;
+          if (rr < 4) continue;
+          ctx.globalAlpha = 0.5 / k;
+          ctx.strokeStyle = k === 1 ? '#7a6bff' : '#5ff5ff';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#5ff5ff';
+      }
     });
     const full = U.smooth((cover - 0.82) / 0.18);
     if (full > 0) paintFade(ctx, full);
@@ -705,32 +708,38 @@ const UI = (() => {
 
   function paintPage(ctx, phase, p) {
     const e = U.ease.inOutQuad(clamp(p, 0, 1));
-    // out: a sheet slides in from the right and covers the screen; in: it lifts away to the left like a turned page
+    // shoji door: out, it slides in from the right and covers the screen; in, it slides away to the left. A lacquer frame round rice-paper panes on a 4 x 3 kumiko grid.
     let x0, x1;
     if (phase === 'out') { x0 = W * (1 - e); x1 = W + 40; } else { x0 = -40; x1 = W * (1 - e); }
     if (x1 <= x0 + 1) return;
-    const edge = phase === 'out' ? x0 : x1;
-    const bow = 34 * Math.sin(Math.PI * clamp(phase === 'out' ? p : 1 - p, 0, 1)) + 6;
+    const w = x1 - x0;
     ctx.save();
     ctx.beginPath();
-    if (phase === 'out') { ctx.moveTo(x0, 0); ctx.quadraticCurveTo(x0 - bow, H / 2, x0, H); ctx.lineTo(x1, H); ctx.lineTo(x1, 0); }
-    else { ctx.moveTo(x0, 0); ctx.lineTo(x1, 0); ctx.quadraticCurveTo(x1 + bow, H / 2, x1, H); ctx.lineTo(x0, H); }
-    ctx.closePath();
+    ctx.rect(x0, 0, w, H);
     ctx.clip();
-    const g = ctx.createLinearGradient(Math.max(0, x0), 0, Math.min(W, x1) + 1, 0);
-    g.addColorStop(0, '#e9d8ae'); g.addColorStop(0.5, '#f3e6c8'); g.addColorStop(1, '#e6d3a3');
-    ctx.fillStyle = g;
-    ctx.fillRect(Math.max(-2, x0 - bow), 0, Math.min(W + 4, x1 + bow) - Math.max(-2, x0 - bow), H);
-    ctx.strokeStyle = 'rgba(120,90,40,0.10)'; ctx.lineWidth = 1;
-    for (let i = 1; i < 14; i++) { ctx.beginPath(); ctx.moveTo(Math.max(0, x0), i * 52); ctx.lineTo(Math.min(W, x1), i * 52 + 3); ctx.stroke(); }
+    ctx.fillStyle = '#1b1430';
+    ctx.fillRect(x0, 0, w, H);
+    // panes are laid out on the door's full width (W + 40) from its moving leading edge, so the grid travels with the door
+    const full = W + 40, left = phase === 'out' ? x0 : x1 - full;
+    const cols = 4, rows = 3, m = 14, pw = (full - m * (cols + 1)) / cols, ph = (H - m * (rows + 1)) / rows;
+    ctx.fillStyle = '#f1eff5';
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) ctx.fillRect(left + m + c * (pw + m), m + r * (ph + m), pw, ph);
+    ctx.strokeStyle = 'rgba(27,20,48,0.35)'; ctx.lineWidth = 1;
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
+      const px = left + m + c * (pw + m), py = m + r * (ph + m);
+      ctx.beginPath();
+      for (let k = 1; k < 3; k++) { ctx.moveTo(px + pw * k / 3, py); ctx.lineTo(px + pw * k / 3, py + ph); ctx.moveTo(px, py + ph * k / 3); ctx.lineTo(px + pw, py + ph * k / 3); }
+      ctx.stroke();
+    }
     ctx.restore();
-    // the shadow and highlight along the moving fold
-    const sx = phase === 'out' ? edge - bow * 0.5 - 46 : edge + bow * 0.5;
-    const sg = ctx.createLinearGradient(sx, 0, sx + 46, 0);
-    if (phase === 'out') { sg.addColorStop(0, 'rgba(13,11,30,0)'); sg.addColorStop(1, 'rgba(13,11,30,0.55)'); }
-    else { sg.addColorStop(0, 'rgba(13,11,30,0.55)'); sg.addColorStop(1, 'rgba(13,11,30,0)'); }
+    // a shadow on the screen beside the moving edge
+    const edge = phase === 'out' ? x0 : x1;
+    const sx = phase === 'out' ? edge - 40 : edge;
+    const sg = ctx.createLinearGradient(sx, 0, sx + 40, 0);
+    if (phase === 'out') { sg.addColorStop(0, 'rgba(13,11,30,0)'); sg.addColorStop(1, 'rgba(13,11,30,0.5)'); }
+    else { sg.addColorStop(0, 'rgba(13,11,30,0.5)'); sg.addColorStop(1, 'rgba(13,11,30,0)'); }
     ctx.fillStyle = sg;
-    ctx.fillRect(sx, 0, 46, H);
+    ctx.fillRect(sx, 0, 40, H);
   }
 
   function paintTip(ctx, text, alpha) {

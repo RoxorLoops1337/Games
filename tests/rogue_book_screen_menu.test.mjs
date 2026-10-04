@@ -1708,25 +1708,29 @@ await t.test('howto (screen and overlay): the dots sit on the page axis, the dia
   t.ok(decl(hb, 'top') === 'calc(var(--hit) / 2)' && /translate\(-50%,\s*-50%\)/.test(decl(hb, 'transform')), 'css: the overlay ribbon shares Back\'s centre line (--hit / 2)');
 });
 
-await t.test('title: the menu column starts clear of the painted book (cover, gold corner fittings, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
+await t.test('title: the menu column starts clear of the painted bell (its frame, ink line, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
   const rules = cssRules();
   const menu = rule(rules, '.s-title .mn-menu');
   const left = px(decl(menu, 'left')), width = px(decl(menu, 'width'));
-  // the painted book is read from the art source (art_scenes.js titleBook and the title scene), so repainting it shows up here
-  const art = fs.readFileSync(path.join(DIR, 'js', 'art_scenes.js'), 'utf8'), src = fs.readFileSync(path.join(DIR, 'js', 'screen_menu.js'), 'utf8');
-  const cover = /const cover = \[((?:\[\d+, \d+\](?:, )?)+)\];\s*tk\.celFill\(g, cover, '[^']+', \{ line: ([\d.]+)/.exec(art);
-  const layerK = /layer\('book', \{[^}]*\}, ([\d.]+),/.exec(art), camK = /parallaxX: reduce\(\) \? 0 : S\.px \* (\d+)/.exec(src);
-  t.ok(cover && layerK && camK, 'the cover polygon, the book layer factor and the title camera offset are readable');
-  const BOOK_PAGES_RIGHT = 958, BOOK_COVER_RIGHT = Math.max(...[...cover[1].matchAll(/\[(\d+), \d+\]/g)].map((m) => Number(m[1])));   // the cream pages end at x 958 (mirror of 322); the leather cover with its gold corner fittings at 988
-  const clear = BOOK_COVER_RIGHT + Number(cover[2]) / 2 + Number(layerK[1]) * Number(camK[1]);   // + half the ink line + the parallax (layer factor x camera offset: the pointer far left moves the book 7 px right)
-  t.eq(BOOK_COVER_RIGHT, 988, 'the painted cover ends at x 988');
-  t.ok(left >= BOOK_PAGES_RIGHT, 'the column (x ' + left + ') starts right of the last page of the painted book (' + BOOK_PAGES_RIGHT + ')');
-  t.ok(left >= clear, 'and covers NONE of the cover or its gold corner fitting, even with the pointer parallax: x ' + left + ' >= ' + clear.toFixed(1) + ' (was 972, which hid 16 px of the fitting)');
+  // the centrepiece's box comes from the art itself (ART.scene.info('title').focus = { x0, x1, y0, y1, k }: its bounding box in stage px
+  // including the ink line and gold fittings, and its layer parallax factor), so repainting it shows up here without reading art source
+  const g0 = fresh({});
+  const info = g0.ART && g0.ART.scene && typeof g0.ART.scene.info === 'function' ? g0.ART.scene.info('title') : null;
+  const f = info && info.focus;
+  const src = fs.readFileSync(path.join(DIR, 'js', 'screen_menu.js'), 'utf8');
+  const camK = /parallaxX: reduce\(\) \? 0 : S\.px \* (\d+)/.exec(src);
+  t.ok(f && [f.x0, f.x1, f.y0, f.y1, f.k].every((v) => typeof v === 'number' && isFinite(v)) && f.x0 < f.x1 && f.y0 < f.y1, 'ART.scene.info(\'title\').focus is { x0, x1, y0, y1, k } (numbers)');
+  t.ok(camK, 'the title camera offset is readable from screen_menu.js');
+  const focus = f || { x0: 0, x1: 988, y0: 0, y1: 0, k: 0.1 }, cam = camK ? Number(camK[1]) : 70;
+  const clear = focus.x1 + focus.k * cam;   // the right edge of the centrepiece + the parallax (layer factor x camera offset: the pointer far left moves it right)
+  t.ok(focus.x1 <= 988, 'the painted bell stays inside x 988 (the column\'s left edge less its gutter): ' + focus.x1);
+  t.ok(left >= focus.x1, 'the column (x ' + left + ') starts right of the painted bell (' + focus.x1 + ')');
+  t.ok(left >= clear, 'and covers NONE of the bell or its frame, even with the pointer parallax: x ' + left + ' >= ' + clear.toFixed(1));
   t.ok(left + width <= 1280 - 14, 'right edge ' + (left + width) + ': inside the 14 px margin of the full screen button');
   const gap = px(decl(rule(rules, '.mn-slims'), 'gap'));
   t.ok((width - 2 * gap) / 3 >= 84, 'phone: the three slim plaques stay 84 px or wider (' + ((width - 2 * gap) / 3).toFixed(1) + '), 42 css px on the narrowest phone');
   const halo = rule(rules, '.s-title .mn-menu::before'), insetLeft = px(/inset:\s*(-?\d+)px\s+(-?\d+)px\s+(-?\d+)px\s+(-?\d+)px/.exec(decl(halo, 'inset') ? 'inset: ' + decl(halo, 'inset') : '')[4]);
-  t.ok(left + insetLeft >= BOOK_COVER_RIGHT, 'the dark halo behind the plaques does not start over the painted book (starts at x ' + (left + insetLeft) + ')');
+  t.ok(left + insetLeft >= focus.x1, 'the dark halo behind the plaques does not start over the painted bell (starts at x ' + (left + insetLeft) + ')');
   const tag = rule(rules, '.s-title .mn-tag'); t.eq(decl(tag, 'text-indent'), decl(tag, 'letter-spacing'), 'the tagline cancels its trailing letter-spacing: its glyphs are centred on the logo axis');
   const sub = rule(rules, '.mn-gate-sub'); t.eq(decl(sub, 'text-indent'), decl(sub, 'letter-spacing'), 'and so does the gate hint');
   t.ok(/display\s*:\s*none/.test(rule(rules, '.s-title.ts-big .mn-p-meds, .compact .s-title .mn-p-meds').body), 'Larger text and phones drop the decorative hero faces so the Continue summary and the Daily seed are never clipped');

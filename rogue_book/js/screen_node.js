@@ -1524,26 +1524,65 @@
     return chips;
   }
 
+  // the dusk street behind the kamishibai stage: a violet sky going rose at the roofline, shuttered shopfronts down both edges, paper lanterns on a line,
+  // cobbles under the stage. Most of the middle is hidden by the butai itself, so the street lives at the edges. The baked layer is still; lantern light breathes live.
+  const DESK_LANTERNS = [[22, 214], [58, 292], [1222, 238], [1258, 318], [188, 62], [352, 74], [640, 66], [928, 74], [1092, 62]];
   function paintDesk(ctx, t, S) {
     layer(ctx, 'nk:desk', 1280, 720, (g) => {
-      const bg = g.createRadialGradient(640, 300, 40, 640, 360, 820);
-      bg.addColorStop(0, '#3b2a7a'); bg.addColorStop(0.55, '#1a1340'); bg.addColorStop(1, '#0a0820');
-      g.fillStyle = bg; g.fillRect(0, 0, 1280, 720);
-      // the reading desk: dark lacquered wood with a long grain
-      const wood = g.createLinearGradient(0, 560, 0, 720);
-      wood.addColorStop(0, '#2a1a2e'); wood.addColorStop(1, '#100a18');
-      g.fillStyle = wood; g.fillRect(0, 560, 1280, 160);
-      g.strokeStyle = 'rgba(245,201,106,0.10)'; g.lineWidth = 1;
-      for (let i = 0; i < 26; i++) { g.beginPath(); g.moveTo(0, 566 + i * 6); g.bezierCurveTo(400, 560 + i * 6 + (i % 3) * 3, 800, 574 + i * 6, 1280, 566 + i * 6 - (i % 4)); g.stroke(); }
+      const sky = g.createLinearGradient(0, 0, 0, 600);
+      sky.addColorStop(0, '#0a0820'); sky.addColorStop(0.42, '#1d1550'); sky.addColorStop(0.78, '#4a3490'); sky.addColorStop(1, '#a8527a');
+      g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
+      const r = U.rng(4242);
+      g.fillStyle = 'rgba(255,248,240,0.7)';
+      for (let i = 0; i < 46; i++) { g.globalAlpha = 0.25 + r() * 0.5; g.fillRect(Math.floor(r() * 1280), Math.floor(r() * 300), 2, 2); }
+      g.globalAlpha = 1;
+      // a far roofline of tiled eaves
+      g.fillStyle = '#241a50';
+      g.beginPath(); g.moveTo(0, 560);
+      for (let x = 0; x <= 1280; x += 80) { const hh = 430 + ((x / 80) * 37 % 5) * 14; g.lineTo(x, hh + 26); g.quadraticCurveTo(x + 40, hh - 18, x + 80, hh + 26); }
+      g.lineTo(1280, 560); g.closePath(); g.fill();
+      // shopfronts down both edges: dark timber, a curved eave, a lit paper window and a short noren
+      const shop = (x, w, top, flip) => {
+        g.fillStyle = '#150f34'; g.fillRect(x, top, w, 560 - top);
+        g.fillStyle = '#0b0820'; g.beginPath(); g.moveTo(x - 10, top + 10); g.quadraticCurveTo(x + w / 2, top - 30, x + w + 10, top + 10); g.lineTo(x + w + 10, top + 24); g.lineTo(x - 10, top + 24); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(245,201,106,0.55)'; g.fillRect(x - 10, top + 22, w + 20, 2);
+        const wx = x + (flip ? 12 : w - 56), wy = top + 52;
+        const win = g.createLinearGradient(0, wy, 0, wy + 70); win.addColorStop(0, '#ffd9a0'); win.addColorStop(1, '#ff9a5a');
+        g.fillStyle = win; g.fillRect(wx, wy, 44, 70);
+        g.strokeStyle = '#150f34'; g.lineWidth = 3;
+        g.beginPath(); g.moveTo(wx + 22, wy); g.lineTo(wx + 22, wy + 70); g.moveTo(wx, wy + 35); g.lineTo(wx + 44, wy + 35); g.stroke();
+        g.fillStyle = '#3b2a7a'; for (let i = 0; i < 3; i++) g.fillRect(x + 8 + i * ((w - 16) / 3), 468, (w - 16) / 3 - 4, 70);
+      };
+      shop(-16, 108, 300, true); shop(1188, 108, 330, false);
+      // the street: wet cobbles that hold the lantern light, a kerb line, the stage's own shadow
+      const st = g.createLinearGradient(0, 560, 0, 720); st.addColorStop(0, '#2c1f4e'); st.addColorStop(1, '#0d0a22');
+      g.fillStyle = st; g.fillRect(0, 560, 1280, 160);
+      g.strokeStyle = 'rgba(245,201,106,0.16)'; g.lineWidth = 1;
+      for (let row = 0; row < 6; row++) {
+        const y = 568 + row * row * 2.4 + row * 8, off = row % 2 ? 22 : 0, step = 44 + row * 12;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(1280, y); g.stroke();
+        for (let x = -step + off; x < 1300; x += step) { g.beginPath(); g.moveTo(x, y); g.lineTo(x - 6 - row, y + 14 + row * 3); g.stroke(); }
+      }
       g.fillStyle = 'rgba(245,201,106,0.5)'; g.fillRect(0, 558, 1280, 2);
+      // the lantern line: a sagging cord and paper lanterns with a vermilion band
+      g.strokeStyle = 'rgba(10,8,32,0.9)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 38); g.quadraticCurveTo(640, 98, 1280, 38); g.stroke();
+      DESK_LANTERNS.forEach((p, i) => {
+        const x = p[0], y = p[1], sc = i < 4 ? 1 : 0.8;
+        g.strokeStyle = '#0a0820'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - 30 * sc); g.lineTo(x, y - 18 * sc); g.stroke();
+        g.fillStyle = '#e8583d'; g.beginPath(); g.ellipse(x, y, 15 * sc, 20 * sc, 0, 0, TAU); g.fill();
+        g.lineWidth = 2.4; g.stroke();
+        g.strokeStyle = 'rgba(255,225,160,0.6)'; g.lineWidth = 1.4;
+        for (let k = -1; k <= 1; k++) { g.beginPath(); g.ellipse(x, y, 15 * sc, Math.abs(k) * 6 * sc + 2, 0, 0, TAU); g.stroke(); }
+        g.fillStyle = '#0a0820'; g.fillRect(x - 7 * sc, y - 22 * sc, 14 * sc, 4); g.fillRect(x - 7 * sc, y + 18 * sc, 14 * sc, 4);
+      });
     });
     const tk = TK();
     if (tk) {
-      glow(ctx, 640, 250, 520, '#ffd9a0', 0.16 + 0.03 * Math.sin(t * 1.7));
-      glow(ctx, 90, 120, 180, '#ffb070', 0.18 + 0.04 * Math.sin(t * 2.3 + 1));
-      safe(() => tk.kirakira(ctx, 0, 0, 1280, 720, t, { n: 24, seed: 5, size: 3, rise: 7 }));
-      safe(() => tk.mist(ctx, 0, 380, 1280, 340, t, { n: 4, seed: 9, alpha: 0.06, color: '#c9bff0', speed: 6 }));
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.55 }));
+      DESK_LANTERNS.forEach((p, i) => glow(ctx, p[0], p[1], (i < 4 ? 120 : 90) + 8 * Math.sin(t * 2.1 + i * 1.7), '#ffb070', 0.3 + 0.06 * Math.sin(t * 3.1 + i * 2.3)));
+      glow(ctx, 640, 380, 560, '#ffd9a0', 0.1 + 0.02 * Math.sin(t * 1.7));
+      safe(() => tk.kirakira(ctx, 0, 0, 1280, 720, t, { n: 18, seed: 5, size: 3, rise: 7 }));
+      safe(() => tk.mist(ctx, 0, 520, 1280, 200, t, { n: 4, seed: 9, alpha: 0.06, color: '#c9bff0', speed: 6 }));
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.45 }));
     }
   }
 
@@ -2688,21 +2727,35 @@
       g.restore();
       for (let i = 0; i < 4; i++) sparkleAt(g, 112 + Math.cos(t * 0.8 * m + i * 1.6) * 54, 54 + Math.sin(t * 1.1 * m + i * 1.6) * 30, 5 + (i % 2) * 3, { color: '#ffffff', alpha: 0.5 + 0.5 * Math.sin(t * 3 + i) });
     } else {
-      // meditate: a lotus on still water, and an ink drop falling into it
+      // meditate: a singing bowl on a cushion above still water, a wooden striker tapping its rim, and sound rings that spread out over the water
       const wy = 78;
       g.fillStyle = 'rgba(95,180,255,0.18)'; g.beginPath(); g.ellipse(112, wy, 96, 18, 0, 0, TAU); g.fill();
       const cyc = (t * 0.45 * m) % 1;
       for (let i = 0; i < 3; i++) { const ph = ((cyc + i * 0.3) % 1); g.strokeStyle = 'rgba(200,225,255,' + (0.7 * (1 - ph)).toFixed(2) + ')'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(112, wy + 2, 10 + ph * 80, 3 + ph * 14, 0, 0, TAU); g.stroke(); }
-      for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.36; g.save(); g.translate(112, wy - 4); g.rotate(a + Math.PI / 2); celOval(g, 0, -20, 9, 22, i % 2 ? '#ffb3d4' : '#ffc2dc', { line: 2.4, depth: 3 }); g.restore(); }
-      celOval(g, 112, wy - 8, 8, 6, '#f5c96a', { line: 2.2 });
-      const dy = cyc < 0.5 ? 6 + (cyc / 0.5) * (wy - 22) : -20;
-      if (cyc < 0.5) { g.fillStyle = '#5a4bd0'; g.strokeStyle = '#5ff5ff'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(112, dy - 8); g.quadraticCurveTo(105, dy + 2, 112, dy + 6); g.quadraticCurveTo(119, dy + 2, 112, dy - 8); g.fill(); g.stroke(); }
+      celOval(g, 112, wy - 6, 26, 7, '#8a2a3a', { line: 2.2, depth: 2 });
+      cel(g, { poly: [[82, wy - 40], [86, wy - 24], [98, wy - 12], [126, wy - 12], [138, wy - 24], [142, wy - 40]] }, '#c9893a', { tension: 0.5, line: 2.6, hi: true, rim: '#ffe9a8' });
+      celOval(g, 112, wy - 40, 30, 7.5, '#e0a850', { line: 2.4 });
+      g.fillStyle = '#4a2412'; g.beginPath(); g.ellipse(112, wy - 39, 24, 5, 0, 0, TAU); g.fill();
+      // the striker swings in, touches the rim at the top of each cycle, and the bowl answers with two arcs on each side
+      const hit = cyc < 0.16 ? 1 - cyc / 0.16 : 0;
+      g.save(); g.translate(148, wy - 58 + hit * 18); g.rotate(-0.5 - (1 - hit) * 0.1);
+      cel(g, { poly: [[-3, -3], [34, -2], [34, 2], [-3, 3]] }, '#a8743c', { tension: 0.1, line: 2 });
+      celOval(g, -4, 0, 6, 6, '#e8383d', { line: 2 });
+      g.restore();
+      const ring = cyc < 0.7 ? cyc / 0.7 : 1;
+      for (let i = 0; i < 2; i++) {
+        const q = Math.min(1, ring + i * 0.0) - i * 0.22; if (q <= 0) continue;
+        g.strokeStyle = 'rgba(95,245,255,' + (0.8 * (1 - q)).toFixed(2) + ')'; g.lineWidth = 2; g.lineCap = 'round';
+        const rr = 34 + q * 28;
+        g.beginPath(); g.arc(112, wy - 40, rr, Math.PI * 1.1, Math.PI * 1.32); g.stroke();
+        g.beginPath(); g.arc(112, wy - 40, rr, Math.PI * 1.68, Math.PI * 1.9); g.stroke();
+      }
       if (tk) sparkleAt(g, 112 + Math.sin(t * 1.2) * 30, 30 + Math.cos(t * 0.9) * 8, 4, { color: '#5ff5ff', alpha: 0.7 });
     }
     void S;
   }
 
-  // ---------------------------------------------------------------- forge: a smithy, a furnace, an anvil with an inkstone, a hammer
+  // ---------------------------------------------------------------- forge: a smithy, a furnace, an anvil with a tuning fork, a hammer
   // Anchors: the anvil face is at FORGE.hit, the hammer pivots at FORGE.pivot (stage px).
   // rest and restUp are the hammer's idle angles (radians, see drawHammer): hung at an angle while two plaques are up, and standing nearly upright behind the After card
   // while the before and after page is open, so the head never sits on the Strike! button (the first keyframe of a blow is whichever rest it starts from)
@@ -2730,10 +2783,10 @@
     g.beginPath(); g.moveTo(148, 660); g.lineTo(148, 470); g.quadraticCurveTo(148, 352, 235, 352); g.quadraticCurveTo(322, 352, 322, 470); g.lineTo(322, 660); g.closePath();
     g.fillStyle = mouth; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
     g.fillStyle = 'rgba(20,10,8,0.55)'; for (let i = 0; i < 4; i++) g.fillRect(166 + i * 36, 560, 22, 100);
-    // hanging tools and a shelf of inkstones on the right
+    // hanging tools and a shelf of little bronze bowls on the right
     for (let i = 0; i < 6; i++) { const x = 940 + i * 48; inkLine(g, [[x, 80], [x + 4, 150 + (i % 3) * 20]], 5, '#8a86a8', { taper: 0.05 }); cel(g, { poly: [[x - 8, 150 + (i % 3) * 20], [x + 12, 150 + (i % 3) * 20], [x + 14, 190 + (i % 3) * 20], [x - 10, 190 + (i % 3) * 20]] }, '#4a4863', { tension: 0.2, line: 2.4 }); }
     g.fillStyle = '#4b2e22'; g.fillRect(900, 360, 300, 16); g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(900, 360, 300, 16);
-    for (let i = 0; i < 5; i++) celOval(g, 930 + i * 56, 348, 20, 12, i % 2 ? '#241a3a' : '#33285a', { line: 2.6, hi: true, rim: '#7a6bff' });
+    for (let i = 0; i < 5; i++) celOval(g, 930 + i * 56, 348, 20, 12, i % 2 ? '#8a5a24' : '#c9893a', { line: 2.6, hi: true, rim: '#ffe9a8' });
     // floor
     const fl = g.createLinearGradient(0, 640, 0, 720); fl.addColorStop(0, '#1d1436'); fl.addColorStop(1, '#0a071c');
     g.fillStyle = fl; g.fillRect(0, 648, 1280, 72);
@@ -2743,10 +2796,11 @@
     cel(g, { poly: [[540, 600], [740, 600], [752, 700], [528, 700]] }, '#5a3a26', { tension: 0.2, line: 4, hi: true, rim: '#ff8a3a' });
     cel(g, [[500, 556], [560, 536], [770, 534], [786, 554], [736, 566], [724, 602], [772, 622], [776, 646], [512, 646], [512, 620], [562, 602], [556, 568]], '#565478', { tension: 0.3, line: 4.4, hi: true, rim: '#ff8a3a', rimSide: 'light', halftone: true });
     g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(560, 538, 200, 4);
-    // the inkstone resting on the anvil: a dark slab with a pool of ink and a gold rim
-    cel(g, { poly: [[586, 536], [694, 536], [700, 516], [594, 514]] }, '#241a3a', { tension: 0.2, line: 3, hi: true, rim: '#f5c96a' });
-    g.fillStyle = '#0d0b1e'; g.beginPath(); g.ellipse(646, 524, 34, 6, 0, 0, TAU); g.fill();
-    g.strokeStyle = 'rgba(245,201,106,0.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(646, 524, 34, 6, 0, 0, TAU); g.stroke();
+    // a tuning fork standing on the anvil face: a short stem, a U and two silver tines (the idle glint and the sound arcs are live, in paintForge)
+    const fork = (w, col) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(646, 536); g.lineTo(646, 512); g.moveTo(632, 462); g.lineTo(632, 496); g.quadraticCurveTo(632, 512, 646, 512); g.quadraticCurveTo(660, 512, 660, 496); g.lineTo(660, 462); g.stroke(); };
+    fork(11, INK); fork(6, '#e6ecff');
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(630, 466); g.lineTo(630, 494); g.moveTo(644, 530); g.lineTo(644, 516); g.stroke();
+    g.fillStyle = '#f5c96a'; g.fillRect(639, 522, 14, 5); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(639, 522, 14, 5);
   }
 
   const HAMMER_KEYS = [[0, null], [0.19, 0.26], [0.33, -0.3], [0.52, 0.26], [0.64, -0.14], [0.84, 0.26], [1.35, null]];     // null: the rest angle the blow starts from and settles to
@@ -2809,8 +2863,11 @@
       });
       ctx.restore();
     }
-    // an idle glint on the inkstone
-    sparkleAt(ctx, 660 + Math.sin(t * 0.7) * 20, 520, 5 + 2 * Math.sin(t * 3), { color: '#ffe9a8', alpha: 0.5 + 0.4 * Math.sin(t * 2.4) });
+    // the fork hums: two sound arcs on each side of the tines, and an idle glint on the tips
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) { const q = ((t * 0.5 * m + i * 0.5) % 1 + 1) % 1; ctx.strokeStyle = 'rgba(95,245,255,' + (0.7 * (1 - q)).toFixed(2) + ')'; const rr = 16 + q * 26; ctx.beginPath(); ctx.arc(646, 480, rr, Math.PI * 1.1, Math.PI * 1.34); ctx.stroke(); ctx.beginPath(); ctx.arc(646, 480, rr, Math.PI * 1.66, Math.PI * 1.9); ctx.stroke(); }
+    ctx.restore();
+    sparkleAt(ctx, 646 + Math.sin(t * 0.7) * 14, 464, 5 + 2 * Math.sin(t * 3), { color: '#ffe9a8', alpha: 0.5 + 0.4 * Math.sin(t * 2.4) });
     const tk = TK();
     if (tk) safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.62 }));
     if (S.flashT !== undefined) { const fa = Math.max(0, 1 - (t - S.flashT) / 0.55); if (fa > 0) { ctx.fillStyle = 'rgba(255,240,200,' + (fa * 0.55).toFixed(3) + ')'; ctx.fillRect(0, 0, 1280, 720); } }
