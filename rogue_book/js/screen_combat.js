@@ -2177,8 +2177,10 @@
       el.addEventListener('click', () => openPile(kind));
       return { el, num, n: -1 };
     };
-    u.exh = chip('exh', 'Exhausted', 1000, 552, 'exhaust');
-    u.pow = chip('pow', 'Powers', 112, 552, 'powers');
+    // the pile chips ride in the free strip of the top bar (between the turn banner and the speed button): under the enemies sit their status rows, which the
+    // old spot (y 552) covered for the foes in lanes 3 and 4, and there is no room for a 40 px chip between those rows and the piles
+    u.pow = chip('pow', 'Powers', 748, 6, 'powers');
+    u.exh = chip('exh', 'Exhausted', 888, 6, 'exhaust');
     u.end = buildEnd();
     [u.orb.el, u.draw.el, u.pow.el, u.disc.el, u.exh.el, u.end].forEach((el) => root.appendChild(el));
 
