@@ -1,4 +1,4 @@
-// Inkwoven -- ART.scene: the full-screen background paintings and the INKWOVEN logo. Extends ART (art.js).
+// Echowake -- ART.scene: the full-screen background paintings and the ECHOWAKE logo. Extends ART (art.js).
 //
 // PUBLIC API (DESIGN 5.6; these members REPLACE the placeholders of art.js)
 //   ART.scene.draw(ctx, sceneId, w, h, t, opts) -> true
@@ -12,6 +12,8 @@
 //                                          Far layers move about 5% of it, mid layers 30%, foreground 100%, the ground plane never moves.
 //                                          reduceMotion forces parallax 0. A slow automatic sway (a few px) runs when reduceMotion is off.
 //                              logo        title only: also paint ART.scene.logo(ctx, 640, 172, 740, t) (default false: the screen composes it)
+//                              rung        title only: true once the player has won. The temple bell hangs free of its grey Hush threads, the striker is pulled
+//                                          back and the ring stays whole and clear (default false: bound and muffled). Part of the title layer cache key.
 //                              seed        paper only: which stain layout (default 0), so two panels never look identical
 //                              edge        paper only: false skips the aged darkened edge (default true)
 //        Never throws: an unknown id paints a night sky with a small "scene ?" label and returns false; a drawing error is caught once per scene
@@ -20,18 +22,19 @@
 //        third, enemies across the right two thirds, the band below y 520 darkened for the HUD and the hand, mid-tone hazy backdrops behind the
 //        enemy lanes so the fight never competes with the painting.
 //   ART.scene.logo(ctx, x, y, w, t)
-//        The brush-lettered INKWOVEN logo, CENTRED on (x, y), w px wide (about 0.15 * w tall, plus the ink drip below). Every letter is a set of
-//        calligraphic brush strokes (ART.tk.inkPath), gold leaf over ink, with a soft glow, twinkling sparkles and a living ink drip
-//        (a 5.2 s loop: a bead swells, stretches, falls and splashes). t in seconds. The static part is cached per width.
+//        The brush-lettered ECHOWAKE logo, CENTRED on (x, y), w px wide (about 0.15 * w tall). Every letter is a set of calligraphic brush
+//        strokes (ART.tk.inkPath), gold leaf over ink, with a gold echo ping inside the O, a soft glow, twinkling sparkles and three sound-ring
+//        pulses (5.2, 7.3 and 6.1 s loops: a ring grows and fades, a note rises). t in seconds. The static part is cached per width.
 //   Extras beyond DESIGN:
 //   ART.scene.warm(id, w, h) -> bool      bakes every static layer of a scene at that size now (call while a screen loads to avoid a first-frame hitch)
-//   ART.scene.info(id) -> {id, combat, ground, mood, layers} | null     combat: bool, ground: 520 for combat scenes, mood: a short colour-script word
+//   ART.scene.info(id) -> {id, combat, ground, mood, layers, focus?} | null     combat: bool, ground: 520 for combat scenes, mood: a short colour-script word;
+//        focus (title only): {x0, x1, y0, y1, k}, the bell and belfry's bounding box in stage px and its layer parallax factor (the menu column clears it)
 //   ART.scene.ids -> [ids]                the scene ids that have real art (all of DATA.LISTS.scenes)
 //   ART.scene.lastError -> string | null  the message of the last caught drawing error (tests assert it stays null)
 //   ART.scene.DESIGN = {w: 1280, h: 720, ground: 520}
 //   Gallery sheets: `scenes` (all of them small, in a grid), `scene_<id>` for every id (large; params guides=1 draws the ground line and HUD
 //   zones, actors=1 stands the heroes and a chapter's enemies on their marks, px=N sets parallaxX, particles=N), `logo` (big, small, on paper, and the
-//   drip over one loop), `title_anim` (a film strip of the title over t).
+//   pulses over one loop), `title_anim` (a film strip of the title over t).
 //
 // HOW IT IS BUILT
 //   A scene is an ordered list of items. A LAYER is painted ONCE into a cached ART.sprite (only as large as it needs to be: an edge cluster of
@@ -41,7 +44,7 @@
 //   resolution when they are soft anyway. The washi grain is baked into the big painted layers (source-atop), so no full-screen grain pass runs per
 //   frame. An ANIM item draws the cheap moving things live: particles (one setTransform + drawImage each), flames, lanterns, reflections cut into
 //   strips, lightning. Combat scenes bake at up to 1.5x on a 2x display so they leave room in the sprite cache for the heroes and enemies.
-//   Everything is a pure function of (scene id, size, t, opts, ART.tk.opt): seeded streams, no clock, no Math.random. Quality 'low' halves the layer
+//   Everything is a pure function of (scene id, size, t, opts, ART.tk.opt): seeded streams, no clock, no banned random call. Quality 'low' halves the layer
 //   resolution and the particle counts, drops halftone and the cosmetic layers (rays, bokeh, mist, grain); reduceMotion slows every drift to 0.3 and
 //   removes flashes and parallax. The first draw of a scene bakes its layers (about 100 to 300 ms): call ART.scene.warm(id, w, h) while a screen loads.
 (() => {
@@ -172,7 +175,7 @@
 
   function layerSprite(L, rr, T) {
     const k = (T.low ? 0.5 : 1) * (L.q || 1) * T.cap;
-    const key = 'sc|' + (L.sk || T.sid) + '|' + L.name + '|' + Math.round(T.s * 1000) + '|' + k;
+    const key = 'sc|' + (L.sk || T.sid) + '|' + L.name + '|' + Math.round(T.s * 1000) + '|' + k + (L.vary ? '|' + L.vary(T) : '');
     const grainy = !T.low && L.grain !== false && !L.add && !L.op && !L.scroll && (L.q || 1) === 1;
     return ART.sprite(key, rr.w * T.s * k, rr.h * T.s * k, (g) => {
       g.scale(T.s * k, T.s * k);
@@ -189,9 +192,11 @@
   function blitLayer(ctx, T, L) {
     if (T.low && L.fx) return;                                    // cosmetic layers (rays, bokeh, mist) drop out at quality 'low'
     const r = L.rect, f = L.f, rr = layerGeom(L);
-    const spr = layerSprite(L, rr, T);
     let a = L.alpha === undefined ? 1 : (typeof L.alpha === 'function' ? L.alpha(T) : L.alpha);
     if (!(a > 0.003)) return;
+    const spr = layerSprite(L, rr, T);
+    const rot = L.rot ? L.rot(T) : 0;                              // a layer may swing about a pivot (the title bell)
+    if (rot) { const px = L.pivot[0] - T.par * f, py = L.pivot[1]; ctx.save(); ctx.translate(px, py); ctx.rotate(rot); ctx.translate(-px, -py); }
     let y = rr.y + (L.bob ? Math.sin(T.tt * L.bob[1] + (L.bob[2] || 0)) * L.bob[0] : 0);
     const op = L.add ? 'lighter' : L.op;
     if (op) { ctx.save(); ctx.globalCompositeOperation = op; }
@@ -206,6 +211,7 @@
       ART.blit(ctx, spr, x, y, rr.w, rr.h, a);
     }
     if (op) ctx.restore();
+    if (rot) ctx.restore();
   }
   // the time context every anim item receives
   function makeT(sid, w, h, t, o) {
@@ -961,31 +967,14 @@
 
 
   // ===============================================================================================================
-  // TITLE: a colossal open book on a cliff under a huge moon, bamboo and a sakura branch framing it, the Blank creeping in at the corners.
+  // TITLE: a bronze temple bell in a wooden belfry on a cliff under a huge moon, bamboo and a sakura branch framing it. Until the player's first
+  // win the bell is bound to the posts with grey Hush threads and its ring is muffled; after the first win (opts.rung) it hangs free and rings
+  // clear. Ash and frost creep in at the corners.
   // ===============================================================================================================
   const TM = { x: 905, y: 286, r: 172 };                          // the moon
-  const BK = { cx: 640, A: [322, 334], B: [640, 402], C: [640, 497], D: [322, 472], topCtl: [478, 318], botCtl: [468, 502] };
-  const bez2 = (p0, c, p1, u) => { const v = 1 - u; return [v * v * p0[0] + 2 * v * u * c[0] + u * u * p1[0], v * v * p0[1] + 2 * v * u * c[1] + u * u * p1[1]]; };
-  // a point on a book page: u 0 = outer edge .. 1 = gutter, v 0 = top edge .. 1 = bottom edge; side -1 left page, +1 right page
-  function pagePt(u, v, side) {
-    const T = bez2(BK.A, BK.topCtl, BK.B, u), Bm = bez2(BK.D, BK.botCtl, BK.C, u);
-    const x = T[0] * (1 - v) + Bm[0] * v, y = T[1] * (1 - v) + Bm[1] * v;
-    return side < 0 ? [x, y] : [2 * BK.cx - x, y];
-  }
-  function pageOutline(side, n) {
-    const P = [];
-    n = n || 16;
-    for (let i = 0; i <= n; i++) P.push(pagePt(i / n, 0, side));
-    for (let i = 1; i <= 4; i++) P.push(pagePt(1, i / 4, side));
-    for (let i = n; i >= 0; i--) P.push(pagePt(i / n, 1, side));
-    for (let i = 3; i >= 1; i--) P.push(pagePt(0, i / 4, side));
-    return P;
-  }
-  // the Blank's bite out of the right page: a ragged region near the outer bottom corner, in page coordinates
-  function erasedAt(u, v) {
-    const du = (u - 0.05) * 1.7, dv = (v - 0.98) * 1.25, d = Math.hypot(du, dv), a = Math.atan2(dv, du);
-    return d < 0.62 + (nz(a * 1.7 + 3, 1.3, 91, 3) - 0.4) * 0.5;
-  }
+  const BELL = { cx: 640, pivotY: 300, crown: 304, lip: 478 };    // the bell hangs from the crossbeam at (cx, pivotY)
+  // the centrepiece's bounding box in stage px (ink line and gold fittings included) and its layer parallax factor: exported by ART.scene.info
+  const TITLE_FOCUS = { x0: 360, x1: 920, y0: 238, y1: 506, k: 0.1 };
 
   function titleSky(g) {
     fillRectG(g, X0, 0, XW, 560, [[0, '#070516'], [0.34, '#140e42'], [0.62, '#2b1f6e'], [0.84, '#59399a'], [1, '#8a58aa']]);
@@ -998,9 +987,8 @@
     }
     blob(g, TM.x, TM.y, 680, 560, '#9a86ff', 0.28);
     blob(g, TM.x, TM.y, 420, 380, '#ffe9a8', 0.4);
-    // a dry-brush enso around the moon
-    const ring = tk.arcPts(TM.x, TM.y, TM.r + 48, TM.r + 48, -0.5, 5.6, 26);
-    for (let k = 0; k < 3; k++) tk.inkPath(g, ring.map((p, i) => [p[0] + (k - 1) * 3.2 * Math.sin(i * 0.7), p[1] + (k - 1) * 2.4]), { w: 10 - k * 2.6, color: A('#fff1cc', 0.5 - k * 0.1), pressure: 'head', taperStart: 0.02, taperEnd: 0.4, wobble: 0.35, seed: 5 + k });
+    // three faint sound rings around the moon, thinning outward
+    for (let k = 0; k < 3; k++) tk.soundRings(g, TM.x, TM.y, TM.r + 36 + k * 30, { n: 1, color: '#fff1cc', alpha: 0.25 - k * 0.075, lw: 3.2 - k * 0.7 });
     // the moon: paper-cream disc, hard lavender shadow crescent with screen-tone, ink-wash seas, a thick ink outline
     disc(g, TM.x, TM.y, TM.r, '#fff2d2');
     g.save();
@@ -1069,90 +1057,178 @@
     toro(g, 288, ridgeY(edge, 300) + 8, 78, { stone: '#5a5486', rim: '#c8c0ff' });
   }
 
-  function titleBook(g, healed) {
-    const cx = BK.cx;
-    blob(g, cx, 520, 420, 36, '#03020a', 0.8);
-    // the leather cover under everything, with gold trim, corner fittings and a red silk bookmark
-    const cover = [[296, 452], [640, 500], [984, 452], [988, 486], [640, 544], [292, 486]];
-    tk.celFill(g, cover, '#2a1654', { line: 4.2, depth: 5, hi: false, tension: 0.05, align: 0.5, shadow: '#180c3c' });
-    fillPoly(g, [[300, 448], [640, 500], [640, 506], [302, 456]], A('#9a88ff', 0.5)); fillPoly(g, [[640, 500], [980, 448], [982, 456], [640, 506]], A('#9a88ff', 0.5));
-    tk.inkPath(g, [[310, 480], [476, 514], [640, 534], [804, 514], [970, 480]], { w: 2.6, color: A('#f5c96a', 0.9), taper: 0.06, wobble: 0.08, pressure: 'flat' });
-    [[300, 470], [980, 470]].forEach((c, i) => { const s = i ? -1 : 1; fillPoly(g, [[c[0], c[1] - 24], [c[0] + s * 26, c[1] + 6], [c[0] - s * 2, c[1] + 16]], '#f5c96a'); tk.inkPath(g, { poly: [[c[0], c[1] - 24], [c[0] + s * 26, c[1] + 6], [c[0] - s * 2, c[1] + 16], [c[0], c[1] - 24]] }, { w: 1.6, color: pal.ink, pressure: 'flat', taper: 0 }); });
-    // page blocks (the stacked edges under each page)
-    [-1, 1].forEach((side) => {
-      const P = [];
-      for (let i = 0; i <= 12; i++) P.push(pagePt(i / 12, 1, side));
-      const Q = P.map((p) => [p[0], p[1] + 21 + 3 * (1 - Math.abs(p[0] - cx) / 320)]).reverse();
-      fillPoly(g, P.concat(Q), '#ecd8a6');
-      for (let k = 1; k < 8; k++) tk.inkPath(g, P.map((p) => [p[0], p[1] + k * 2.7]), { w: 1, color: A('#a8865a', 0.7), taper: 0.2, wobble: 0.05, pressure: 'flat', seed: k + side });
-      fillPoly(g, P.concat(P.map((p) => [p[0], p[1] + 5]).reverse()), '#b89a68');
-      tk.inkPath(g, Q.slice().reverse(), { w: 2.6, color: pal.ink, taper: 0.02, wobble: 0.08, pressure: 'flat', seed: 4 });
+  const BELL_PROFILE = [[304, 22], [310, 38], [322, 47], [345, 51], [385, 56], [425, 62], [452, 67], [468, 71], [478, 76]];   // [y, half width] down the bell
+  function bellHalf(y) {
+    const P = BELL_PROFILE;
+    if (y <= P[0][0]) return P[0][1];
+    for (let i = 1; i < P.length; i++) if (y <= P[i][0]) { const a = P[i - 1], b = P[i]; return lerp(a[1], b[1], (y - a[0]) / (b[0] - a[0])); }
+    return P[P.length - 1][1];
+  }
+  const BF = { px: [420, 860], pw: 26, top: 262, foot: 490 };      // belfry post centres, width, top and foot y
+
+  // the wooden belfry (shoro): footings, two lacquer posts, a crossbeam, a lower tie beam and a tiled hip roof with upturned eaves and gold ridge caps
+  function titleBelfry(g) {
+    const lac = '#2c1838', lacD = '#170c24', lacH = '#6a3a6a', gold = '#f5c96a';
+    blob(g, 640, 496, 330, 26, '#03020a', 0.75);
+    BF.px.forEach((x) => {
+      tk.celFill(g, { poly: [[x - 24, 496], [x - 19, 484], [x + 19, 484], [x + 24, 496], [x + 29, 504], [x - 29, 504]] }, '#4a4470', { line: 2.6, depth: 4, hi: 'auto', hiW: 2, shadow: '#2a2548', tension: 0.05, align: 0.5 });
     });
-    // the two pages: warm luminous paper, crease shadow at the gutter, brush text, and the Blank's bite on the right
-    [-1, 1].forEach((side) => {
-      const out = pageOutline(side, 18);
-      const gx = pagePt(1, 0.5, side)[0], ox = pagePt(0, 0.5, side)[0];
-      g.beginPath(); tk.trace(g, { poly: out }); g.fillStyle = tk.lin(g, ox, 0, gx, 0, [[0, '#f0d9a2'], [0.62, '#fff2cc'], [1, '#ffe8a8']]); g.fill();
-      g.save(); g.beginPath(); tk.trace(g, { poly: out }); g.clip();
-      blob(g, gx - side * 40, 470, 190, 90, '#fffbe8', 0.75);
-      fillRectG(g, ox - 6, 340, Math.abs(gx - ox) + 12, 40, [[0, A('#8a6a4a', 0.35)], [1, A('#8a6a4a', 0)]]);
-      g.fillStyle = tk.lin(g, ox, 0, ox - side * 34, 0, [[0, A('#8a6a4a', 0)], [1, A('#8a6a4a', 0)]]);
-      g.fillStyle = tk.lin(g, gx, 0, gx + side * 46, 0, [[0, A('#8a5a3a', 0.7)], [0.35, A('#b98a58', 0.28)], [1, A('#b98a58', 0)]]); g.fillRect(gx - 60, 340, 120, 220);
-      const r = R('title-text', side);
-      for (let j = 0; j < 10; j++) {
-        const v = 0.13 + 0.76 * j / 9;
-        if (side < 0 && v < 0.5) continue;
-        let u = 0.09 + (j === 0 ? 0.06 : 0);
-        while (u < 0.9) {
-          const len = 0.05 + r() * 0.13, u1 = Math.min(0.91, u + len);
-          if (side > 0 && !healed && (erasedAt(u, v) || erasedAt(u1, v))) { u = u1 + 0.03; continue; }
-          const pts = [], n = 4;
-          for (let k = 0; k <= n; k++) pts.push(pagePt(u + (u1 - u) * k / n, v + (r() - 0.5) * 0.008, side));
-          const gold = r() < 0.11;
-          tk.inkPath(g, pts, { w: 1.4 + r() * 0.8, color: gold ? '#c8862a' : '#4a3a6c', alpha: gold ? 0.85 : 0.6, taper: 0.25, wobble: 0.3, seed: j * 9 + Math.round(u * 20) });
-          u = u1 + 0.025 + r() * 0.02;
-        }
-      }
-      if (side < 0) {                                                 // a small sumi-e picture of the grove at the head of the page
-        const ip = (u, v) => pagePt(u, v, -1), ink = '#3b2b5c';
-        g.beginPath(); tk.trace(g, { poly: [ip(0.08, 0.1), ip(0.92, 0.1), ip(0.92, 0.46), ip(0.08, 0.46)] }); g.fillStyle = A('#e8d4a0', 0.7); g.fill();
-        const moon = []; for (let i = 0; i < 14; i++) { const a2 = i / 14 * TAU; moon.push(ip(0.66 + Math.cos(a2) * 0.075, 0.24 + Math.sin(a2) * 0.1)); }
-        g.beginPath(); tk.trace(g, moon); g.fillStyle = '#fff6dc'; g.fill(); tk.inkPath(g, moon, { closed: true, w: 1.6, color: A(ink, 0.8), align: 0.5, wobble: 0.2 });
-        [[[0.08, 0.42], [0.22, 0.34], [0.38, 0.4], [0.52, 0.31], [0.7, 0.4], [0.92, 0.33], [0.92, 0.46], [0.08, 0.46]], [[0.08, 0.46], [0.3, 0.4], [0.55, 0.44], [0.8, 0.38], [0.92, 0.42], [0.92, 0.46]]].forEach((h, hi) => { g.beginPath(); tk.trace(g, { poly: h.map((q) => ip(q[0], q[1])) }); g.fillStyle = A(hi ? '#3b2b5c' : '#6a5a8a', hi ? 0.55 : 0.4); g.fill(); });
-        [0.2, 0.27, 0.34].forEach((u, i) => { const p0 = ip(u, 0.46), p1 = ip(u + 0.006 * i, 0.16 + i * 0.04); tk.inkPath(g, [p0, [(p0[0] + p1[0]) / 2 + 1, (p0[1] + p1[1]) / 2], p1], { w: 2.4 - i * 0.4, color: A(ink, 0.85), taper: 0.3, wobble: 0.2, seed: i }); for (let k = 0; k < 3; k++) { const q = ip(u, 0.42 - k * 0.07); tk.inkPath(g, [q, [q[0] + 8, q[1] - 5]], { w: 1.4, color: A(ink, 0.8), taper: 0.5 }); } });
-        tk.inkPath(g, { poly: [ip(0.08, 0.1), ip(0.92, 0.1), ip(0.92, 0.46), ip(0.08, 0.46), ip(0.08, 0.1)] }, { w: 1.6, color: A(ink, 0.6), pressure: 'flat', taper: 0, wobble: 0.1 });
-        const q = [pagePt(0.075, 0.52, -1), pagePt(0.15, 0.51, -1), pagePt(0.15, 0.62, -1), pagePt(0.075, 0.625, -1)];   // an illuminated drop cap
-        fillPoly(g, q, '#e8383d'); tk.inkPath(g, { poly: q.concat([q[0]]) }, { w: 1.4, color: pal.ink, pressure: 'flat', taper: 0 });
-        const c = pagePt(0.112, 0.57, -1); tk.inkPath(g, tk.arcPts(c[0], c[1], 5, 6, -1.2, 3.6, 7), { w: 1.8, color: '#fff2cc', taper: 0.3, wobble: 0.1 });
-      } else if (!healed) {                                           // the erasure: blank paper, a dashed edge, dust
-        const pts = [];
-        for (let i = 0; i < 40; i++) {
-          const a = (i / 40) * TAU, rr = 0.62 + (nz(a * 1.7 + 3, 1.3, 91, 3) - 0.4) * 0.5;
-          pts.push(pagePt(clamp(0.05 + Math.cos(a) * rr / 1.7, 0, 1), clamp(0.98 + Math.sin(a) * rr / 1.25, 0, 1), 1));
-        }
-        g.beginPath(); tk.trace(g, { poly: pts }); g.fillStyle = '#fbf8f0'; g.fill();
-        g.setLineDash([7, 5]); g.strokeStyle = A('#8a7aa0', 0.75); g.lineWidth = 1.3; g.stroke(); g.setLineDash([]);
-        for (let i = 0; i < 14; i++) { const p = pagePt(0.02 + r() * 0.7, 0.55 + r() * 0.4, 1); disc(g, p[0], p[1], 0.8 + r() * 1.3, A('#8a7aa0', 0.4)); }
-      }
-      fillRectG(g, Math.min(ox, gx) - 4, 340, Math.abs(gx - ox) + 8, 60, [[0, A('#8a6a4a', 0.22)], [1, A('#8a6a4a', 0)]]);
-      g.restore();
-      for (let k = 1; k <= 3; k++) tk.inkPath(g, [pagePt(0, 0.02, side), pagePt(0, 0.5, side), pagePt(0, 0.98, side)].map((p) => [p[0] + side * k * 2.2, p[1] - k * 0.6]), { w: 1, color: A('#8a6a4a', 0.7 - k * 0.15), taper: 0.2, wobble: 0.1, pressure: 'flat', seed: k });
-      tk.inkPath(g, { poly: out.concat([out[0]]) }, { w: 3, color: pal.ink, taper: 0, pressure: 'flat', wobble: 0.08, seed: 6 + side, step: 4 });
+    // the lower tie beam, behind the bell
+    tk.celFill(g, { poly: [[BF.px[0], 440], [BF.px[1], 440], [BF.px[1], 452], [BF.px[0], 452]] }, lac, { line: 2.6, depth: 3, hi: lacH, hiW: 1.6, shadow: lacD, tension: 0.05, align: 0.5 });
+    // the posts, with gold bands
+    BF.px.forEach((x, i) => {
+      const hw = BF.pw / 2;
+      tk.celFill(g, { poly: [[x - hw, BF.foot], [x - hw + 1, BF.top], [x + hw - 1, BF.top], [x + hw, BF.foot]] }, lac, { line: 3, depth: 7, hi: lacH, hiW: 3, shadow: lacD, rim: '#ffd98a', rimSide: -0.5, rimW: 2, rimAlpha: 0.55, tension: 0.05, align: 0.5 });
+      [318, 404].forEach((y) => { fillPoly(g, [[x - hw - 2, y], [x + hw + 2, y], [x + hw + 2, y + 5], [x - hw - 2, y + 5]], gold); tk.inkPath(g, { poly: [[x - hw - 2, y], [x + hw + 2, y], [x + hw + 2, y + 5], [x - hw - 2, y + 5], [x - hw - 2, y]] }, { w: 1.4, color: pal.ink, pressure: 'flat', taper: 0 }); });
+      for (let k = 0; k < 5; k++) tk.inkPath(g, [[x - hw + 4 + k * 4.5, BF.top + 8], [x - hw + 4.5 + k * 4.5, BF.foot - 6]], { w: 1, color: A('#c9a0c8', 0.12), taper: 0.3, wobble: 0.1, seed: i * 5 + k, pressure: 'flat' });
     });
-    // gutter crease line
-    tk.inkPath(g, [[cx, 420], [cx + 1, 460], [cx, 497]], { w: 2.4, color: A('#5a3a2a', 0.8), taper: 0.3, wobble: 0.1 });
-    // bookmark ribbon
-    fillPoly(g, [[cx - 22, 519], [cx - 12, 519], [cx - 14, 566], [cx - 20, 558], [cx - 26, 566]], '#e8383d');
-    tk.inkPath(g, { poly: [[cx - 22, 519], [cx - 26, 566], [cx - 20, 558], [cx - 14, 566], [cx - 12, 519]] }, { w: 1.6, color: pal.ink, taper: 0, pressure: 'flat' });
+    // the crossbeam the bell hangs from (its lower half shows under the roof edge)
+    tk.celFill(g, { poly: [[404, 282], [876, 282], [876, 300], [404, 300]] }, lac, { line: 3, depth: 4, hi: lacH, hiW: 2, shadow: lacD, tension: 0.05, align: 0.5 });
+    [404, 876].forEach((x) => { disc(g, x, 291, 7, gold); tk.inkPath(g, tk.ellipsePts(x, 291, 7, 7, 14), { closed: true, w: 1.6, color: pal.ink, align: 0.5 }); disc(g, x, 291, 2.6, '#a8782a'); });
+    // the hip roof: a ridge, two sloping hips, an eave that sags in the middle
+    const eave = (x) => 276 + 14 * (1 - Math.pow((x - 640) / 254, 2));
+    const roof = [[472, 250], [808, 250], [894, 276]];
+    for (let x = 894; x >= 386; x -= 14) roof.push([x, eave(x)]);
+    roof.push([386, 276]);
+    const ry = (x, u) => 250 + (eave(x) - 250) * u, rxl = (u) => lerp(472, 386, u), rxr = (u) => lerp(808, 894, u), ROWS = 5;
+    tk.celFill(g, { poly: roof }, '#2a2670', {
+      line: 3.2, depth: 8, hi: '#5c54b8', hiW: 2.4, shadow: '#14104a', rim: '#b8a8ff', rimSide: -0.5, rimW: 1.8, rimAlpha: 0.5, tension: 0.05, align: 0.5,
+      decor: (c) => {
+        for (let i = 1; i <= ROWS; i++) {
+          const u = i / (ROWS + 1), l1 = [], l2 = [];
+          for (let x = rxl(u); x <= rxr(u) + 1; x += 24) { l1.push([x, ry(x, u)]); l2.push([x, ry(x, u) + 2]); }
+          tk.inkPath(c, l1, { w: 1.8, color: A(pal.ink, 0.8), taper: 0.05, wobble: 0.05, pressure: 'flat', step: 8 });
+          tk.inkPath(c, l2, { w: 1.4, color: A('#9a92f0', 0.7), taper: 0.05, wobble: 0.05, pressure: 'flat', step: 8 });
+        }
+        c.beginPath();
+        for (let i = 0; i <= ROWS; i++) {
+          const u0 = i / (ROWS + 1), u1 = (i + 1) / (ROWS + 1);
+          for (let x = rxl(u0) + (i % 2) * 11; x < rxr(u0); x += 22) { c.moveTo(x, ry(x, u0)); c.lineTo(x, ry(x, u1)); }
+        }
+        c.strokeStyle = A(pal.ink, 0.55); c.lineWidth = 1.2; c.stroke();
+        const eb = []; for (let x = 386; x <= 894; x += 12) eb.push([x, eave(x) - 3]);
+        tk.inkPath(c, eb, { w: 5, color: A('#7a72d8', 0.85), taper: 0, pressure: 'flat', wobble: 0.02, step: 8 });
+        tk.inkPath(c, eb.map((p) => [p[0], p[1] - 3]), { w: 1.2, color: A(pal.ink, 0.7), taper: 0, pressure: 'flat', wobble: 0.02, step: 8 });
+      },
+    });
+    // upturned eave tips
+    [-1, 1].forEach((s) => {
+      const x0 = 640 + s * 254, p = [[x0 - s * 6, 279], [x0 + s * 6, 274], [x0 + s * 16, 266], [x0 + s * 22, 254], [x0 + s * 15, 262], [x0 + s * 4, 268], [x0 - s * 10, 268]];
+      tk.celFill(g, p, '#2a2670', { line: 3, depth: 3, hi: false, shadow: '#14104a', tension: 0.5, align: 0.5 });
+    });
+    // rafter ends under the eave
+    g.fillStyle = '#1c1030';
+    for (let x = 404; x <= 876; x += 24) g.fillRect(x - 3, eave(x) - 1, 6, 7);
+    // gold ridge cap, hip caps and end ornaments
+    [[[472, 250], [808, 250], 7], [[472, 250], [386, 276], 5], [[808, 250], [894, 276], 5]].forEach((l, i) => {
+      tk.inkPath(g, [l[0], l[1]], { w: l[2] + 3, color: pal.ink, pressure: 'flat', taper: 0, align: 0.5 });
+      tk.inkPath(g, [l[0], l[1]], { w: l[2], color: gold, pressure: 'flat', taper: 0, align: 0.5 });
+      tk.inkPath(g, [[l[0][0], l[0][1] - 1.5], [l[1][0], l[1][1] - 1.5]], { w: 1.4, color: A('#fff6d0', 0.9), pressure: 'flat', taper: 0, align: 0.5 });
+    });
+    [472, 808].forEach((x) => { disc(g, x, 249, 8, pal.ink); disc(g, x, 249, 6.2, gold); disc(g, x - 1.4, 247.6, 2.2, '#fff6d0'); });
+  }
+
+  // the bell: hanger, body with two bands, a 4 x 4 grid of bosses, verdigris streaks, gold rim light, and the striker log on its two ropes
+  function titleBellBody(g, rung) {
+    const cx = BELL.cx, bz = '#c9893a', bzD = '#7a4a1c', vd = '#5fbfa8';
+    // hanger: a bronze loop and rod from the beam to the crown
+    tk.inkPath(g, [[cx, 296], [cx, 306]], { w: 11, color: pal.ink, pressure: 'flat', taper: 0, align: 0.5 });
+    tk.inkPath(g, [[cx, 296], [cx, 306]], { w: 7, color: bz, pressure: 'flat', taper: 0, align: 0.5 });
+    tk.inkPath(g, tk.ellipsePts(cx, 302, 13, 7, 18), { closed: true, w: 5, color: pal.ink, align: 0.5 });
+    tk.inkPath(g, tk.ellipsePts(cx, 302, 13, 7, 18), { closed: true, w: 2.6, color: '#e0a24c', align: 0.5 });
+    // the body
+    const pts = [];
+    BELL_PROFILE.forEach((p, i) => pts.push([cx + p[1], p[0], i === 0 || i === BELL_PROFILE.length - 1 ? 1 : 0]));
+    for (let i = BELL_PROFILE.length - 1; i >= 0; i--) pts.push([cx - BELL_PROFILE[i][1], BELL_PROFILE[i][0], i === 0 || i === BELL_PROFILE.length - 1 ? 1 : 0]);
+    tk.celFill(g, pts, bz, {
+      line: 3, depth: 15, hi: '#e8ac5a', hiW: 4, shadow: bzD, rim: '#ffe9a8', rimSide: -0.5, rimW: 3, rimAlpha: 0.75, tension: 0.5, align: 0.5, halftone: true,
+      decor: (c) => {
+        c.fillStyle = tk.lin(c, cx - 80, 0, cx + 4, 0, [[0, A('#3a1c08', 0.4)], [1, A('#3a1c08', 0)]]); c.fillRect(cx - 80, 300, 90, 190);
+        const bands = [[326, 334], [410, 418]];
+        bands.forEach((b, bi) => {
+          const top = [], bot = [];
+          for (let k = 0; k <= 10; k++) { const u = k / 10 * 2 - 1, y = Math.pow(u, 2); top.push([cx + u * 82, b[0] + 4 * (1 - y)]); bot.push([cx + u * 82, b[1] + 4 * (1 - y)]); }
+          fillPoly(c, top.concat(bot.slice().reverse()), '#8a5a24');
+          tk.inkPath(c, top, { w: 1.4, color: A(pal.ink, 0.8), taper: 0, pressure: 'flat', wobble: 0.05 });
+          tk.inkPath(c, bot, { w: 1.4, color: A(pal.ink, 0.8), taper: 0, pressure: 'flat', wobble: 0.05 });
+          tk.inkPath(c, top.map((p) => [p[0], p[1] + 2]), { w: 1, color: A('#ffe08a', 0.8), taper: 0, pressure: 'flat', wobble: 0.02 });
+          tk.inkPath(c, bot.map((p) => [p[0], p[1] - 2]), { w: 1, color: A('#ffe08a', 0.7), taper: 0, pressure: 'flat', wobble: 0.02 });
+        });
+        for (let row = 0; row < 4; row++) {
+          const y = 349 + row * 16, hw = bellHalf(y);
+          for (let col = 0; col < 4; col++) {
+            const u = [-0.62, -0.21, 0.21, 0.62][col], x = cx + u * hw, rr = 3.8 * Math.sqrt(1 - u * u * 0.6);
+            disc(c, x - 0.8, y + 1, rr, '#6a3c14');
+            disc(c, x + 0.3, y - 0.3, rr * 0.86, '#e0a24c');
+            disc(c, x + rr * 0.3, y - rr * 0.35, rr * 0.3, A('#fff6d0', 0.9));
+            tk.inkPath(c, tk.ellipsePts(x, y, rr, rr, 10), { closed: true, w: 1, color: A(pal.ink, 0.85), align: 0.5 });
+          }
+        }
+        // the striking boss near the lip: a lotus disc
+        disc(c, cx, 438, 10, '#8a5a24'); disc(c, cx, 438, 7, '#d89a44');
+        for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; tk.inkPath(c, [[cx + Math.cos(a) * 3, 438 + Math.sin(a) * 3], [cx + Math.cos(a) * 7, 438 + Math.sin(a) * 7]], { w: 1.2, color: A(pal.ink, 0.7), taper: 0.2 }); }
+        tk.inkPath(c, tk.ellipsePts(cx, 438, 10, 10, 14), { closed: true, w: 1.4, color: A(pal.ink, 0.85), align: 0.5 });
+        // the lip: a dark ring above a light underside
+        tk.inkPath(c, [[cx - 80, 463], [cx, 466], [cx + 80, 463]], { w: 2.6, color: A('#4a2a0e', 0.85), taper: 0, pressure: 'flat', wobble: 0.02 });
+        tk.inkPath(c, [[cx - 80, 474], [cx, 477], [cx + 80, 474]], { w: 3, color: A('#ffe08a', 0.8), taper: 0, pressure: 'flat', wobble: 0.02 });
+        // a vertical highlight streak on the lit side
+        tk.inkPath(c, [[cx + 34, 330], [cx + 40, 400], [cx + 46, 458]], { w: 5, color: A('#ffe9a8', 0.38), taper: 0.4, wobble: 0.08, pressure: 'mid' });
+        // verdigris streaks running down from the bands and the bosses
+        const r = R('bell-verdigris');
+        for (let i = 0; i < 11; i++) {
+          const y0 = [334, 346, 362, 378, 394, 418][i % 6] + r() * 4, x = cx + (r() - 0.5) * 120, len = 14 + r() * 44;
+          tk.inkPath(c, [[x, y0], [x + (r() - 0.5) * 3, y0 + len * 0.5], [x + (r() - 0.5) * 4, y0 + len]], { w: 2 + r() * 2.4, color: A(vd, 0.5 + r() * 0.2), taper: 0.5, taperStart: 0.05, wobble: 0.3, seed: i + 5, pressure: 'head' });
+        }
+        for (let i = 0; i < 14; i++) disc(c, cx + (r() - 0.5) * 130, 440 + r() * 36, 0.8 + r() * 1.6, A(vd, 0.5));
+      },
+    });
+    // the striker (shumoku): a wooden log on two ropes, pulled back to the right when the bell has been rung
+    g.save();
+    g.translate(770, 300); g.rotate(rung ? -0.34 : 0); g.translate(-770, -300);
+    [746, 794].forEach((x) => { tk.inkPath(g, [[x, 300], [x, 352]], { w: 5.4, color: pal.ink, pressure: 'flat', taper: 0, align: 0.5 }); tk.inkPath(g, [[x, 300], [x, 352]], { w: 3.2, color: '#d8c090', pressure: 'flat', taper: 0, align: 0.5 }); tk.inkPath(g, [[x - 0.8, 305], [x - 0.8, 349]], { w: 0.9, color: A('#8a6a4a', 0.8), pressure: 'flat', taper: 0 }); });
+    tk.celFill(g, [[728, 350, 1], [814, 350, 1], [824, 355], [826, 363], [824, 371], [814, 376, 1], [728, 376, 1], [718, 371], [716, 363], [718, 355]], '#a8743c', { line: 3, depth: 7, hi: '#d09858', hiW: 2.4, shadow: '#5a3a1c', tension: 0.3, align: 0.5, rim: '#ffe9a8', rimSide: -0.5, rimW: 1.6, rimAlpha: 0.55 });
+    [726, 816].forEach((x) => { fillPoly(g, [[x - 3.5, 351], [x + 3.5, 351], [x + 3.5, 375], [x - 3.5, 375]], '#f5c96a'); tk.inkPath(g, { poly: [[x - 3.5, 351], [x + 3.5, 351], [x + 3.5, 375], [x - 3.5, 375], [x - 3.5, 351]] }, { w: 1.3, color: pal.ink, pressure: 'flat', taper: 0 }); });
+    tk.inkPath(g, [[734, 358], [770, 357], [808, 358]], { w: 1.2, color: A('#4a2a0e', 0.6), taper: 0.3, wobble: 0.1 });
+    tk.inkPath(g, [[738, 368], [772, 369], [806, 367]], { w: 1.2, color: A('#4a2a0e', 0.5), taper: 0.3, wobble: 0.1 });
+    g.restore();
+  }
+
+  // the five grey Hush threads: tied to the posts, sagging, then drawn tight round the bell, with ash flecks along them
+  function titleThreads(g) {
+    const r = R('title-threads'), ash = '#8e8aa3', lx = BF.px[0] + BF.pw / 2 - 2, rx = BF.px[1] - BF.pw / 2 + 2, cx = BELL.cx;
+    const rows = [[336, -14, 10, 15], [368, 12, -16, 17], [400, -8, 16, 13], [432, 16, -10, 18], [462, -12, 12, 14]];     // [y at the bell, left knot offset, right knot offset, sag]
+    rows.forEach((ro, i) => {
+      const yb = ro[0], hw = bellHalf(yb) + 2, pts = [];
+      const wrap = (u) => yb + 8 * (1 - u * u);                       // tight round the bell, a shallow smile
+      for (let k = 0; k <= 6; k++) { const u = k / 6; pts.push([lerp(lx, cx - hw, u), lerp(yb + ro[1], yb - 2, u) + ro[3] * Math.sin(PI * u) + 2 * Math.sin(u * 13 + i)]); }
+      for (let k = 1; k < 6; k++) { const u = k / 6 * 2 - 1; pts.push([cx + u * hw, wrap(u)]); }
+      for (let k = 0; k <= 6; k++) { const u = k / 6; pts.push([lerp(cx + hw, rx, u), lerp(yb - 2, yb + ro[2], u) + ro[3] * Math.sin(PI * u) + 2 * Math.sin(u * 13 + i * 3)]); }
+      tk.inkPath(g, pts, { w: 4.6, color: A('#46425a', 0.6), taper: 0, pressure: 'flat', wobble: 0.04, seed: i, step: 6 });
+      tk.inkPath(g, pts, { w: 2.6, color: A(ash, 0.85), taper: 0.03, pressure: 'flat', wobble: 0.1, seed: i + 9, step: 6 });
+      tk.inkPath(g, pts.map((p) => [p[0], p[1] - 0.9]), { w: 0.8, color: A('#f2f0f6', 0.5), taper: 0.1, pressure: 'flat', wobble: 0.05, seed: i + 3, step: 6 });
+      [pts[0], pts[pts.length - 1]].forEach((p) => { disc(g, p[0], p[1], 5, '#46425a'); disc(g, p[0], p[1], 3.6, ash); disc(g, p[0] - 0.8, p[1] - 0.8, 1.2, '#f2f0f6'); });
+      for (let j = 0; j < 18; j++) {
+        const k = Math.floor(r() * (pts.length - 1)), p = pts[k], q = pts[k + 1], u = r(), x = lerp(p[0], q[0], u), y = lerp(p[1], q[1], u) + (r() - 0.5) * 9;
+        g.fillStyle = A(r() < 0.5 ? '#f2f0f6' : '#8e8aa3', 0.35 + r() * 0.5); g.fillRect(x, y, 2 + r() * 4, 1);
+      }
+    });
+  }
+  // the whole centrepiece in one go (victory and defeat use it): belfry, bell, and the threads unless the bell has rung
+  function titleBell(g, rung) {
+    titleBelfry(g);
+    titleBellBody(g, rung);
+    if (!rung) titleThreads(g);
   }
 
   function titleBeam(g) {
-    // a column of light rising from the gutter, three feathered layers
+    // soft light spilling down from under the bell lip onto the cliff, and a faint column behind the bell
     for (let k = 0; k < 3; k++) {
-      const wb = 70 + k * 34, wt = 200 + k * 90;
-      g.fillStyle = tk.lin(g, 0, 470, 0, -20, [[0, A('#fff0c0', 0)], [0.06, A('#fff0c0', 0.5 - k * 0.12)], [0.4, A('#ffe0a0', 0.2 - k * 0.05)], [1, A('#ffe0a0', 0)]]);
-      g.beginPath(); g.moveTo(640 - wb / 2, 470); g.lineTo(640 - wt / 2, -20); g.lineTo(640 + wt / 2, -20); g.lineTo(640 + wb / 2, 470); g.closePath(); g.fill();
+      const wb = 150 + k * 22, wt = 270 + k * 70;
+      g.fillStyle = tk.lin(g, 0, 480, 0, 524, [[0, A('#fff0c0', 0.5 - k * 0.12)], [1, A('#ffe0a0', 0)]]);
+      g.beginPath(); g.moveTo(640 - wb / 2, 480); g.lineTo(640 - wt / 2, 524); g.lineTo(640 + wt / 2, 524); g.lineTo(640 + wb / 2, 480); g.closePath(); g.fill();
     }
+    g.fillStyle = tk.lin(g, 0, 480, 0, 240, [[0, A('#ffe0a0', 0.16)], [0.7, A('#ffe0a0', 0.05)], [1, A('#ffe0a0', 0)]]);
+    g.fillRect(560, 240, 160, 240);
   }
 
   function titleFg(g, side) {
@@ -1180,7 +1256,7 @@
     for (let i = 0; i < 30; i++) { const s = spots[i % spots.length]; disc(g, s[0] + (rr() - 0.5) * s[2] * 2, s[1] + (rr() - 0.5) * s[2], 1.2 + rr() * 1.6, A('#ffffff', 0.85)); }
   }
 
-  // the Blank: torn paper creeping in from the corners and edges. `k` scales the reach, `sd` reshapes the tears.
+  // the Hush: grey ash and frost creeping in from the corners and edges (the colour drained, not paper). `k` scales the reach, `sd` reshapes the edges.
   function tornBlob(g, cx, cy, rx, ry, sd, k) {
     const n = 70, pts = [];
     for (let i = 0; i < n; i++) {
@@ -1190,29 +1266,36 @@
     }
     return pts;
   }
-  function titleBlank(g, k, sd) {
-    const spots = [[-12, 734, 190, 140], [1292, 738, 210, 150], [-10, -8, 110, 84], [1292, -10, 104, 80], [-12, 404, 40, 96], [1294, 330, 36, 90]];
+  // grey fog patches at spots [[x, y, rx, ry], ...]: a cool grey radial, no outline, a soft 18 px feather (the blob drawn three times, shrinking, with rising
+  // alpha) and 30 static ash and frost dashes per patch
+  function hushSpots(g, spots, k, sd, tag) {
     spots.forEach((s, i) => {
-      const pts = tornBlob(g, s[0], s[1], s[2], s[3], sd + i * 13, k);
-      g.beginPath(); tk.trace(g, { poly: pts.map((p) => [p[0] + 5, p[1] - 6]) }); g.fillStyle = A('#0d0b1e', 0.35); g.fill();
-      g.beginPath(); tk.trace(g, { poly: pts }); g.fillStyle = tk.rad(g, s[0], s[1], 10, s[0], s[1], Math.max(s[2], s[3]) * k, [[0, A('#fbf7ee', 0.98)], [0.75, A('#ece4d6', 0.96)], [1, A('#d8cee0', 0.94)]]); g.fill();
+      const pts = tornBlob(g, s[0], s[1], s[2], s[3], sd + i * 13, k), reach = Math.max(s[2], s[3]) * k;
+      [[0, 0.3], [9, 0.6], [18, 0.9]].forEach((p) => {
+        const sc = Math.max(0.5, 1 - p[0] / Math.max(40, reach));
+        g.save(); g.globalAlpha = g.globalAlpha * p[1];
+        g.beginPath(); tk.trace(g, { poly: pts.map((v) => [s[0] + (v[0] - s[0]) * sc, s[1] + (v[1] - s[1]) * sc]) });
+        g.fillStyle = tk.rad(g, s[0], s[1], 10, s[0], s[1], reach, [[0, '#b9b6c6'], [1, '#8e8aa3']]); g.fill();
+        g.restore();
+      });
       g.save(); g.beginPath(); tk.trace(g, { poly: pts }); g.clip();
-      tk.paperGrain(g, 0, 0, DW, DH, { alpha: 0.8, blend: 'multiply', force: true });
+      const rr = R(tag || 'hush-dash', i + sd);
+      for (let j = 0; j < 30; j++) {
+        const v = pts[Math.floor(rr() * pts.length)], u = 0.12 + rr() * 0.8, x = s[0] + (v[0] - s[0]) * u, y = s[1] + (v[1] - s[1]) * u;
+        g.fillStyle = j % 2 ? A('#f2f0f6', 0.8) : A('#5a566e', 0.55); g.fillRect(x, y, 3 + rr() * 4, 1);
+      }
       g.restore();
-      tk.inkPath(g, { poly: pts.concat([pts[0]]) }, { w: 2.6, color: A('#241a3a', 0.85), pressure: 'flat', taper: 0, wobble: 0.4, seed: i + sd, step: 3 });
-      const rr = R('blank-dust', i + sd);
-      for (let j = 0; j < 14; j++) { const p = pts[Math.floor(rr() * pts.length)], d = 6 + rr() * 22; disc(g, p[0] + (p[0] - s[0]) * d / 200, p[1] + (p[1] - s[1]) * d / 200, 0.8 + rr() * 1.8, A('#f6ecd2', 0.75)); }
     });
   }
-  function glyphSpr(k) {                                             // a tiny glowing brush glyph made of two or three strokes
-    return mkSpr('glyph|' + k, 28, 28, (g) => {
-      const r = R('glyph', k);
-      g.translate(14, 14);
-      for (let i = 0; i < 2 + (k % 2); i++) {
-        const a = r() * TAU, l = 5 + r() * 7, cx = (r() - 0.5) * 7, cy = (r() - 0.5) * 7;
-        tk.inkPath(g, [[cx - Math.cos(a) * l, cy - Math.sin(a) * l], [cx + (r() - 0.5) * 5, cy + (r() - 0.5) * 5], [cx + Math.cos(a) * l, cy + Math.sin(a) * l]], { w: 2.6, color: '#fff4d0', taper: 0.35, wobble: 0.2, seed: k * 5 + i });
-      }
-      g.globalAlpha = 0.5; disc(g, 0, 0, 12, A('#ffcf6a', 0.25));
+  function titleHush(g, k, sd) {
+    hushSpots(g, [[-12, 734, 190, 140], [1292, 738, 210, 150], [-10, -8, 110, 84], [1292, -10, 104, 80], [-12, 404, 40, 96], [1294, 330, 36, 90]], k, sd, 'title-hush');
+  }
+  // a rising note glyph with a soft gold glow (the title and victory drift)
+  function noteSpr(k) {
+    return mkSpr('note|' + k, 32, 32, (g) => {
+      g.globalAlpha = 0.5; disc(g, 16, 16, 14, A('#ffcf6a', 0.22)); g.globalAlpha = 1;
+      const kind = ['eighth', 'quarter', 'beamed', 'eighth', 'rest'][k % 5];
+      tk.note(g, kind === 'beamed' ? 13 : 14, kind === 'rest' ? 16 : 22, 9, { kind, color: '#fff4d0', rot: k % 5 === 3 ? 0.3 : 0, line: 1.7 });
     });
   }
   function fanSprite(key, dir, spread, base, base2, shadow, rim, seed) {
@@ -1224,7 +1307,50 @@
     addMode(ctx, () => { glowAt(ctx, 288 - T.par * 0.1, 470, 86 * f, '#ffb04a', 0.6 * f); glowAt(ctx, 288 - T.par * 0.1, 470, 22, '#fff0c0', 0.8 * f); });
   }
 
-  SCENES.title = { id: 'title', combat: false, mood: 'moonlit book', sway: 8, items: [
+  // the bell swings a hair (+-0.03 rad over 0.8 s) every 10.5 s, just as its ring leaves the lip
+  const TITLE_RING_P = 10.5;
+  function bellSwing(T) {
+    if (T.mot < 1) return 0;
+    const s = ((T.tt % TITLE_RING_P) + TITLE_RING_P) % TITLE_RING_P;
+    return s < 0.8 ? 0.03 * Math.sin(s / 0.8 * TAU) * (1 - s / 0.8) : 0;
+  }
+  // the ring: one circle expands from the lip to r 260. Muffled (no win yet) it breaks into grey ash flecks past r 160; once the bell has rung it stays whole and clear.
+  function titleRing(ctx, T) {
+    if (T.mot < 1) return;
+    const rung = !!T.o.rung, DUR = 2.6, s = ((T.tt % TITLE_RING_P) + TITLE_RING_P) % TITLE_RING_P;
+    if (s > DUR) return;
+    const u = s / DUR, r = 260 * (1 - Math.pow(1 - u, 2)), fade = 1 - ss(0.3, 1, u), cx = BELL.cx - T.par * 0.1, cy = BELL.lip + 2;
+    ctx.save();
+    ctx.lineCap = 'round';
+    if (rung) {
+      [[1, 1], [0.7, 0.55]].forEach((q) => {
+        const rr = r * q[0];
+        if (rr < 4) return;
+        ctx.globalAlpha = 0.8 * fade * q[1]; ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 2 + 5 * (1 - u); ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.stroke();
+        ctx.globalAlpha = 0.9 * fade * q[1]; ctx.strokeStyle = '#fffdf0'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.stroke();
+      });
+    } else {
+      const solid = 1 - ss(130, 170, r);
+      if (solid > 0.01 && r > 4) {
+        ctx.globalAlpha = 0.7 * fade * solid; ctx.strokeStyle = '#e8e4ff'; ctx.lineWidth = 2 + 3 * (1 - u); ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+      }
+      if (solid < 0.99) {
+        const n = 56;
+        for (let i = 0; i < n; i++) {
+          const h = U.hash('ring-ash', i) % 1000 / 1000, h2 = U.hash('ring-len', i) % 1000 / 1000;
+          if (h < 0.34) continue;
+          const a = i / n * TAU + (h2 - 0.5) * 0.05, rr = r + (h - 0.6) * 10, len = 3 + h2 * 5, tx = -Math.sin(a), ty = Math.cos(a);
+          const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+          if (y > 520) continue;
+          ctx.globalAlpha = 0.85 * fade * (1 - solid) * (0.5 + h * 0.5); ctx.strokeStyle = h2 < 0.5 ? '#8e8aa3' : '#f2f0f6'; ctx.lineWidth = 1.4;
+          ctx.beginPath(); ctx.moveTo(x - tx * len / 2, y - ty * len / 2); ctx.lineTo(x + tx * len / 2, y + ty * len / 2); ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  SCENES.title = { id: 'title', combat: false, mood: 'moonlit bell', sway: 8, focus: TITLE_FOCUS, items: [
     layer('sky', full(0, 560), 0.02, titleSky),
     layer('moonclouds', { x: 0, y: 150, w: DW, h: 300 }, 0.03, (g) => {
       [[240, 236, 420, 1], [700, 318, 520, 2], [1100, 214, 380, 3], [520, 168, 340, 4]].forEach((c) => wrapDraw(c[0], c[2] * 0.6, (x) => {
@@ -1239,32 +1365,18 @@
     anim((ctx, T) => {
       toroGlow(ctx, T);
       const p = 0.85 + 0.15 * Math.sin(T.tt * 1.1);
-      addMode(ctx, () => { glowE(ctx, 640 - T.par * 0.1, 478, 520, 120, '#ffd98a', 0.4 * p); glowE(ctx, 640 - T.par * 0.1, 470, 260, 60, '#fff2c8', 0.4 * p); });
+      addMode(ctx, () => { glowE(ctx, 640 - T.par * 0.1, 486, 520, 120, '#ffd98a', (T.o.rung ? 0.4 : 0.26) * p); glowE(ctx, 640 - T.par * 0.1, 478, 260, 60, '#fff2c8', (T.o.rung ? 0.4 : 0.26) * p); });
     }),
-    layer('book', { x: 280, y: 290, w: 720, h: 300 }, 0.1, (g) => titleBook(g, false)),
-    anim((ctx, T) => {                                                // a page turning over now and then, lifting in an arc
-      if (T.mot < 1) return;
-      const P = 10.5, u = (T.tt / P) % 1;
-      if (u > 0.24) return;
-      const k = u / 0.24, th = k * PI, cs = Math.cos(th), sn = Math.sin(th), cx = BK.cx - T.par * 0.1;
-      const map = (p) => [cx + (p[0] - BK.cx) * cs, p[1] - sn * 58 * Math.min(1, Math.abs(p[0] - BK.cx) / 260) - sn * 6];
-      const out = pageOutline(1, 12).map(map);
-      ctx.save();
-      ctx.globalAlpha = 1 - ss(0.88, 1, k);
-      ctx.beginPath(); tk.trace(ctx, { poly: out });
-      const x0 = cx, x1 = cx + 300 * cs;
-      ctx.fillStyle = tk.lin(ctx, x0, 0, x1, 0, [[0, cs > 0 ? '#e8cf98' : '#fff0c8'], [0.5, '#fff4d0'], [1, cs > 0 ? '#fff8dc' : '#e8cf98']]); ctx.fill();
-      ctx.lineWidth = 2.6; ctx.strokeStyle = pal.ink; ctx.stroke();
-      ctx.globalAlpha *= 0.5; ctx.strokeStyle = '#4a3a6c'; ctx.lineWidth = 1.4;
-      for (let j = 0; j < 7; j++) { ctx.beginPath(); for (let i = 0; i <= 8; i++) { const p = map(pagePt(0.1 + 0.8 * i / 8, 0.16 + 0.7 * j / 6, 1)); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); } ctx.stroke(); }
-      ctx.restore();
-    }),
-    layer('beam', full(0, 470), 0.1, titleBeam, { add: true, alpha: (T) => 0.75 + 0.25 * Math.sin(T.tt * 0.9) }),
+    layer('belfry', { x: 340, y: 236, w: 600, h: 276 }, 0.1, titleBelfry),
+    layer('bell', { x: 540, y: 284, w: 340, h: 200 }, 0.1, (g, rr, T) => titleBellBody(g, !!T.o.rung), { vary: (T) => (T.o.rung ? 'rung' : 'bound'), rot: bellSwing, pivot: [BELL.cx, BELL.pivotY] }),
+    layer('threads', { x: 400, y: 316, w: 480, h: 190 }, 0.1, titleThreads, { alpha: (T) => (T.o.rung ? 0 : 1) }),
+    anim(titleRing),
+    layer('beam', full(0, 540), 0.1, titleBeam, { add: true, alpha: (T) => (0.75 + 0.25 * Math.sin(T.tt * 0.9)) * (T.o.rung ? 1 : 0.55) }),
     anim((ctx, T) => {
-      const gl = [glyphSpr(0), glyphSpr(1), glyphSpr(2), glyphSpr(3), glyphSpr(4)];
-      drift(ctx, T, { key: 'title-glyphs', n: 16, sprs: gl, area: { x: 540, y: 0, w: 200, h: 470 }, vx: 0, vy: -34, sway: 40, size: [14, 24], aspect: 1, spin: 0.3, wob: 0.6, alpha: [0.6, 1], add: true });
-      addMode(ctx, () => { const p = 0.7 + 0.3 * Math.sin(T.tt * 2.2); glowAt(ctx, 640, 452, 60 * p, '#fff0c0', 0.55); });
-      tk.sparkle(ctx, 640, 440, 16 + 5 * Math.sin(T.tt * 2.6), { color: '#fffbe8', alpha: 0.9, glow: 0.6 });
+      const gl = [noteSpr(0), noteSpr(1), noteSpr(2), noteSpr(3), noteSpr(4)];
+      drift(ctx, T, { key: 'title-notes', n: 16, sprs: gl, area: { x: 540, y: 0, w: 200, h: 470 }, vx: 0, vy: -34, sway: 40, size: [20, 34], aspect: 1, spin: 0.3, wob: 0.4, alpha: [0.6, 1], add: true });
+      addMode(ctx, () => { const p = 0.7 + 0.3 * Math.sin(T.tt * 2.2); glowAt(ctx, 640 - T.par * 0.1, 400, 70 * p, '#ffe0a0', T.o.rung ? 0.42 : 0.22); });
+      tk.sparkle(ctx, 684 - T.par * 0.1, 326, (T.o.rung ? 15 : 10) + 4 * Math.sin(T.tt * 2.6), { color: '#fffbe8', alpha: 0.9, glow: 0.6 });
     }),
     anim((ctx, T) => {
       fireflies(ctx, T, { key: 'title-ff1', n: 16, area: { x: 270, y: 380, w: 760, h: 150 }, color: '#d8ff7a', size: 13 });
@@ -1277,8 +1389,8 @@
     anim((ctx, T) => {
       drift(ctx, T, { key: 'title-petals', n: 26, sprs: [petalSpr('#ffc2dc', 0), petalSpr('#ff9cc6', 1), petalSpr('#fff0f6', 2)], area: { x: 0, y: 0, w: DW, h: DH }, vx: -46, vy: 30, sway: 40, size: [12, 24], aspect: 1, tumble: true, spin: 0.7, alpha: [0.75, 1] });
     }),
-    layer('blankA', full(0), 0, (g) => titleBlank(g, 1, 3), { q: 0.7 }),
-    layer('blankB', full(0), 0, (g) => titleBlank(g, 1.16, 7), { q: 0.7, alpha: (T) => 0.5 + 0.5 * Math.sin(T.tt * 0.27) }),
+    layer('hushA', full(0), 0, (g) => titleHush(g, 1, 3), { q: 0.7 }),
+    layer('hushB', full(0), 0, (g) => titleHush(g, 1.16, 7), { q: 0.7, alpha: (T) => 0.5 + 0.5 * Math.sin(T.tt * 0.27) }),
     vigLayer('title-vig', { color: '#05030f', alpha: 0.6, inner: 0.32 }),
     anim((ctx, T) => { if (T.o.logo) logoDraw(ctx, 640, 172, 740, T.t); }),
     grain(0.3),
@@ -1588,15 +1700,17 @@
 
 
   // ===============================================================================================================
-  // CHAPTER 3: the Crimson Sky Citadel. A fortress on a floating rock above a crimson cloud sea in a storm; floating stones, lightning, torn
-  // pages drifting, and white tears of the Void ripping the sky. The ground plane (y = 520) is a cracked stone causeway with a dim rune circle.
+  // CHAPTER 3: the Crimson Sky Citadel, the soundless storm: lightning without thunder. A fortress on a floating rock above a crimson cloud sea; floating
+  // stones, lightning, grey felt scraps and cotton tufts drifting, and hush rifts ripping the sky. The ground plane (y = 520) is a cracked stone
+  // causeway with a dim rune circle.
   // ===============================================================================================================
   const C3 = { horizon: 452 };
   const C3_PAL = (boss) => (boss
     ? { sky: [[0, '#08040e'], [0.35, '#240a26'], [0.62, '#5a1636'], [0.84, '#a82a40'], [1, '#e0503c']], cloud: '#5a1a3a', cloudShade: '#1c0a20', cloudLit: '#ff5a4a', sea: '#8a1a3a', seaLit: '#ff9060', seaShade: '#3a0a24', stone: '#3a1a36', bolt: '#ffffff', glow: '#ff5a4a' }
     : { sky: [[0, '#12061e'], [0.3, '#3a0f34'], [0.55, '#7a1a44'], [0.78, '#c8384a'], [1, '#ff7a50']], cloud: '#4a1a48', cloudShade: '#200a2c', cloudLit: '#ff7a6a', sea: '#b02a4a', seaLit: '#ffb878', seaShade: '#5a1238', stone: '#3a2050', bolt: '#a8c8ff', glow: '#ff7a50' });
 
-  // a jagged white rip in the sky: cx, cy centre, len, w max width, ang tilt; the Void showing through
+  // a jagged hush rift in the sky: cx, cy centre, len, w max width, ang tilt; grey ash and frost showing through. Returns its edges and a way to place a
+  // point inside it (local u along 0..1, v across -1..1) for the live flicker.
   function voidTear(g, cx, cy, len, w, ang, seed, boss) {
     const r = R('tear', seed), n = 30, L = [], Rr = [];
     const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -1608,17 +1722,24 @@
     }
     const outline = L.concat(Rr.slice().reverse());
     g.save(); g.translate(0, 0);
-    blob(g, cx, cy, len * 0.6, w * 2.2, boss ? '#ffb0c8' : '#e8d8ff', 0.35);
+    blob(g, cx, cy, len * 0.6, w * 2.2, boss ? '#e0c8d4' : '#cfcdd8', 0.35);
     g.beginPath(); tk.trace(g, { poly: outline });
-    g.fillStyle = tk.rad(g, cx, cy, 2, cx, cy, len * 0.5, [[0, '#ffffff'], [0.6, '#f6f0ff'], [1, '#d8c8f0']]); g.fill();
+    g.fillStyle = tk.rad(g, cx, cy, 2, cx, cy, len * 0.5, [[0, '#d4d2de'], [0.6, '#b4b1c4'], [1, '#8e8aa3']]); g.fill();
     g.save(); g.clip();
-    for (let i = 0; i < 6; i++) tk.inkPath(g, [[cx + (r() - 0.5) * len * 0.5, cy + (r() - 0.5) * w * 0.4], [cx + (r() - 0.5) * len * 0.5, cy + (r() - 0.5) * w * 0.4]], { w: 1, color: A('#b0a0d0', 0.3) });
-    if (!tk.lowQ()) tk.halftone(g, cx - len / 2, cy - w, len, w * 2, { d: 6, r: 1.1, color: '#9a88c8', alpha: 0.3, force: true });
+    for (let i = 0; i < 30; i++) {                                    // thirty static ash and frost dashes baked inside the rift
+      const k = 1 + Math.floor(r() * (n - 1)), v = 0.12 + r() * 0.76, px = lerp(L[k][0], Rr[k][0], v), py = lerp(L[k][1], Rr[k][1], v);
+      g.fillStyle = i % 2 ? A('#f2f0f6', 0.85) : A('#5a566e', 0.55); g.fillRect(px, py, 3 + r() * 4, 1.1);
+    }
     g.restore();
     tk.inkPath(g, L, { w: 3, color: pal.ink, taper: 0.02, wobble: 0.3, seed: seed, weightVar: 0.5, pressure: 'flat', step: 4 });
     tk.inkPath(g, Rr, { w: 3, color: pal.ink, taper: 0.02, wobble: 0.3, seed: seed + 1, weightVar: 0.5, pressure: 'flat', step: 4 });
     g.restore();
     return { top: L[Math.floor(n / 2)], L, R: Rr };
+  }
+  // where inside a rift (cx, cy, len, w, ang) the point (u along 0..1, v across -1..1) falls
+  function riftPoint(cx, cy, len, w, ang, u, v) {
+    const along = (u - 0.5) * len, across = v * Math.pow(Math.sin(PI * u), 0.7) * w * 0.4;
+    return [cx + Math.cos(ang) * along - Math.sin(ang) * across, cy + Math.sin(ang) * along + Math.cos(ang) * across];
   }
 
   function c3Sky(g, boss) {
@@ -1753,16 +1874,33 @@
     for (let i = 0; i < 8; i++) { const x = 20 + i * 24, y = DH - 30 - (i % 3) * 14; fillPoly(g, [[x, y], [x + 22, y - 6], [x + 28, y + 10], [x + 6, y + 16]], mixc(st, '#000000', 0.2)); }
     g.restore();
   }
+  // a scrap of grey felt (quilted, with a stitched seam); variant 1 wears a cloth gag bound with cord
   function c3PageSpr(k) {
-    return mkSpr('c3page|' + k, 44, 56, (g) => {
+    return mkSpr('c3felt|' + k, 44, 56, (g) => {
       g.translate(22, 28);
-      const r = R('c3page', k), edge = [];
-      for (let i = 0; i < 9; i++) { const a = -PI / 2 + i / 9 * TAU; edge.push([Math.cos(a) * 17 * (0.8 + r() * 0.3), Math.sin(a) * 23 * (0.85 + r() * 0.25)]); }
+      const r = R('c3felt', k);
       const pts = [[-17, -23], [-3, -24 + r() * 3], [17, -22], [18 - r() * 3, -6], [16, 20 + r() * 3], [4, 24], [-15, 22 - r() * 4], [-18 + r() * 3, 0]];
-      tk.celFill(g, pts, '#f8f0dc', { line: 2, depth: 5, hi: false, shadow: '#d8c8a8', tension: 0.15, align: 0.4 });
-      g.strokeStyle = A('#3a2a5c', 0.65); g.lineWidth = 1.2;
-      for (let i = 0; i < 6; i++) { const y = -16 + i * 6.5, x1 = -11 + r() * 4, x2 = 11 - r() * 10; g.beginPath(); g.moveTo(x1, y); g.lineTo(x2, y); g.stroke(); }
-      g.fillStyle = A('#0d0b1e', 0.9); g.fillRect(-11, -4, 18, 4.5);                         // a censor bar
+      tk.celFill(g, pts, '#6e6a7e', { line: 2, depth: 5, hi: false, shadow: '#46425a', tension: 0.15, align: 0.4 });
+      g.strokeStyle = A('#cfcdd8', 0.35); g.lineWidth = 0.9; g.beginPath();                    // quilting: crossed diagonals
+      for (let i = -3; i <= 3; i++) { g.moveTo(-14, i * 8 - 14); g.lineTo(14, i * 8 + 14); g.moveTo(14, i * 8 - 14); g.lineTo(-14, i * 8 + 14); }
+      g.stroke();
+      g.setLineDash([3, 2.4]); g.strokeStyle = A('#f2f0f6', 0.7); g.lineWidth = 1; g.beginPath(); g.moveTo(-13, -18); g.lineTo(13, -17); g.lineTo(12, 17); g.lineTo(-12, 16); g.closePath(); g.stroke(); g.setLineDash([]);
+      if (k === 1) {                                                                          // the cloth gag and its cord
+        g.fillStyle = '#9a96aa'; g.fillRect(-14, -4, 28, 8);
+        g.strokeStyle = '#46425a'; g.lineWidth = 2; g.beginPath(); for (let x = -9; x <= 10; x += 6) { g.moveTo(x, -5); g.lineTo(x + 2, 5); } g.stroke();
+        g.lineWidth = 1.2; g.strokeRect(-14, -4, 28, 8);
+      }
+    });
+  }
+  // a cotton tuft: three cel-filled puffs
+  function c3TuftSpr(k) {
+    return mkSpr('c3tuft|' + k, 44, 36, (g) => {
+      g.translate(22, 20);
+      const r = R('c3tuft', k);
+      [[-9, 3, 9], [8, 4, 8.5], [0, -5, 10.5]].forEach((p, i) => {
+        const jr = 1 + (r() - 0.5) * 0.2;
+        tk.celFill(g, tk.ellipsePts(p[0] + (r() - 0.5) * 3, p[1], p[2] * jr, p[2] * 0.86 * jr, 12), i === 2 ? '#f2f0f6' : '#e6e4ee', { line: 1.6, lineColor: '#6e6a7e', depth: 3, hi: false, shadow: '#cfcdd8', tension: 1 });
+      });
     });
   }
   function c3RockLayerSpr(k, boss) { return mkSpr('c3fr|' + k + (boss ? 'b' : ''), 190, 150, (g) => { c3Rock(g, 190, 150, 30 + k, boss); }); }
@@ -1822,7 +1960,17 @@
       L('sea', full(380, 340), 0.1, (g) => c3Sea(g, boss)),
       ...(boss ? [bossGrade] : []),
       L('tears', { x: 0, y: 0, w: DW, h: 200 }, 0.05, (g) => { C3_TEARS.forEach((t) => voidTear(g, t[0], t[1], t[2], t[3], t[4], t[5], boss)); }),
-      anim((ctx, T) => { addMode(ctx, () => { C3_TEARS.forEach((t, i) => { const p = 0.75 + 0.25 * Math.sin(T.tt * 0.9 + i * 2); glowE(ctx, t[0] - T.par * 0.05, t[1], t[2] * 0.7, t[3] * 2.4, boss ? '#ffb0c8' : '#e8d8ff', 0.36 * p); }); }); }),
+      anim((ctx, T) => {
+        addMode(ctx, () => { C3_TEARS.forEach((t, i) => { const p = 0.75 + 0.25 * Math.sin(T.tt * 0.9 + i * 2); glowE(ctx, t[0] - T.par * 0.05, t[1], t[2] * 0.7, t[3] * 2.4, boss ? '#e0c8d4' : '#cfcdd8', 0.2 * p); }); });
+        // a cheap live flicker: two frost dashes per rift, re-chosen twelve times a second (hashed with the rift's seed)
+        const step = Math.floor(T.tt * 12);
+        C3_TEARS.forEach((t) => {
+          for (let j = 0; j < 2; j++) {
+            const h = U.hash('rift', t[5], step, j), p = riftPoint(t[0] - T.par * 0.05, t[1], t[2], t[3], t[4], 0.1 + 0.8 * ((h % 997) / 997), ((h >>> 10) % 1000) / 1000 * 1.4 - 0.7);
+            ctx.fillStyle = A('#ffffff', 0.9); ctx.fillRect(p[0], p[1], 3 + (h % 4), 1.4);
+          }
+        });
+      }),
       anim((ctx, T) => {
         C3_ROCKS.forEach((rk, i) => {
           const sp = c3RockLayerSpr(rk[3], boss), s = rk[2], w = 190 * s, h = 150 * s, bob = Math.sin(T.tt * 0.55 + i * 1.7) * 6 * s * T.mot;
@@ -1838,7 +1986,8 @@
       L('fgL', { x: 0, y: 0, w: 200, h: DH }, 1, (g) => c3Fg(g, -1, boss)),
       L('fgR', { x: 1080, y: 0, w: 200, h: DH }, 1, (g) => c3Fg(g, 1, boss)),
       anim((ctx, T) => {
-        drift(ctx, T, { key: sk + 'pages', n: 9, sprs: [c3PageSpr(0), c3PageSpr(1), c3PageSpr(2)], area: { x: 0, y: 20, w: DW, h: 520 }, vx: -30, vy: 16, sway: 40, size: [24, 40], aspect: 1.27, tumble: true, spin: 0.9, alpha: [0.8, 1], wob: 0.5 });
+        drift(ctx, T, { key: sk + 'scraps', n: 5, sprs: [c3PageSpr(0), c3PageSpr(1), c3PageSpr(2)], area: { x: 0, y: 20, w: DW, h: 520 }, vx: -30, vy: 16, sway: 40, size: [24, 40], aspect: 1.27, tumble: true, spin: 0.9, alpha: [0.8, 1], wob: 0.5 });
+        drift(ctx, T, { key: sk + 'tufts', n: 7, sprs: [c3TuftSpr(0), c3TuftSpr(1), c3TuftSpr(2)], area: { x: 0, y: 20, w: DW, h: 520 }, vx: -24, vy: 12, sway: 36, size: [22, 36], aspect: 0.82, tumble: true, spin: 0.6, alpha: [0.8, 1], wob: 0.5 });
         drift(ctx, T, { key: sk + 'tears', n: 14, sprs: [dropSpr()], area: { x: 100, y: 20, w: 1100, h: 480 }, vx: -2, vy: 46, sway: 6, size: [9, 15], aspect: 1.5, alpha: [0.5, 0.95], wob: 0.05 });
         drift(ctx, T, { key: sk + 'sparks', n: 24, sprs: [emberSpr(boss ? '#ff4a5a' : '#ff8a4a')], area: { x: 0, y: 200, w: DW, h: 480 }, vx: -18, vy: -30, sway: 20, size: [7, 14], aspect: 1, alpha: [0.4, 0.95], add: true, wob: 0 });
         rain(ctx, T, 70, boss ? '#ffb0c0' : '#c8d8ff');
@@ -1855,7 +2004,7 @@
 
 
   // ===============================================================================================================
-  // BOSS extras: silk webs and dangling spiderlings for Jorogumo (boss2); a censored, half-erased sky for the Editor (boss3).
+  // BOSS extras: silk webs and dangling spiderlings for Jorogumo (boss2); a silenced sky, gagged notes on a ghost staff, for the Conductor (boss3).
   // ===============================================================================================================
   function webPaint(g, ax, ay, a0, a1, Rd, n, rings, seed) {
     const r = R('web', seed), silk = '#efe8ff';
@@ -1898,39 +2047,45 @@
     });
   }
 
+  // a wrapped grey cloth gag with cord bindings (the censor bars): felt, a lit seam, dark cord strokes across
+  function gagBar(g, x, y, w, h) {
+    g.fillStyle = '#6e6a7e'; g.fillRect(x, y, w, h);
+    g.fillStyle = A('#f2f0f6', 0.2); g.fillRect(x, y + 1, w, 2);
+    g.strokeStyle = '#46425a'; g.lineWidth = 2; g.beginPath();
+    for (let cx = x + 6; cx < x + w - 3; cx += Math.max(10, w / 7)) { g.moveTo(cx, y - 1); g.lineTo(cx + 3, y + h + 1); }
+    g.stroke();
+    g.strokeStyle = A('#46425a', 0.9); g.lineWidth = 1.2; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  }
   function c3BossExtras(sk) {
     const L = (name, rect, f, draw, o) => layer(name, rect, f, draw, Object.assign({ sk }, o));
     return [
-      // a ghost of the page being erased: faint text rows, several struck out with black censor bars
+      // a ghost of the music being silenced: a faint five-line staff with note heads, several struck through by gags
       L('ghostpage', { x: 120, y: 20, w: 620, h: 330 }, 0.05, (g) => {
         g.save(); g.translate(430, 190); g.rotate(-0.1); g.translate(-300, -150);
-        fillPoly(g, [[0, 0], [600, 10], [590, 300], [10, 310]], A('#f8f0dc', 0.12));
-        tk.inkPath(g, { poly: [[0, 0], [600, 10], [590, 300], [10, 310], [0, 0]] }, { w: 2, color: A('#fff0e0', 0.3), taper: 0, pressure: 'flat', wobble: 0.3 });
-        const r = R('ghosttext');
-        for (let j = 0; j < 12; j++) {
-          let x = 40;
-          while (x < 540) { const l = 24 + r() * 60; tk.inkPath(g, [[x, 34 + j * 22], [x + l, 34 + j * 22 + (r() - 0.5) * 3]], { w: 1.8, color: A('#fff0e0', 0.34), taper: 0.3, wobble: 0.3, seed: j * 11 + Math.round(x) }); x += l + 10 + r() * 8; }
-        }
-        [[60, 78, 210], [250, 144, 250], [110, 232, 190], [330, 100, 150]].forEach((b) => { g.fillStyle = A('#050108', 0.92); g.fillRect(b[0], b[1], b[2], 14); });
+        const ink = A('#f2f0f6', 0.34), top = 96, gap = 26;
+        for (let i = 0; i < 5; i++) tk.inkPath(g, [[24, top + i * gap + (i % 2)], [300, top + i * gap - 2], [576, top + i * gap + 1]], { w: 1.8, color: ink, taper: 0.08, wobble: 0.15, seed: i + 3, pressure: 'flat' });
+        [24, 576].forEach((x) => tk.inkPath(g, [[x, top - 2], [x + 1, top + gap * 4 + 2]], { w: 2.4, color: ink, taper: 0, pressure: 'flat' }));
+        const r = R('ghoststaff'), kinds = ['eighth', 'quarter', 'beamed', 'eighth', 'quarter'];
+        for (let i = 0; i < 11; i++) tk.note(g, 66 + i * 46, top + gap * (r() * 4.6) - gap * 0.2, 15, { kind: kinds[i % 5], color: '#f2f0f6', alpha: 0.38, line: 1.8 });
+        [[40, top + 14, 176], [250, top + 54, 200], [150, top + 2, 120], [420, top + 38, 150]].forEach((b) => gagBar(g, b[0], b[1], b[2], 15));
         g.restore();
       }, { alpha: 0.9 }),
       L('rip', { x: 380, y: 60, w: 560, h: 240 }, 0.06, (g) => { voidTear(g, 660, 170, 470, 110, -0.12, 17, true); }),
-      anim((ctx, T) => { addMode(ctx, () => { const p = 0.7 + 0.3 * Math.sin(T.tt * 0.8); glowE(ctx, 660 - T.par * 0.06, 170, 340, 150, '#ffd0e0', 0.4 * p); }); }),
-      // floating black censor bars that drift slowly across the sky
+      anim((ctx, T) => { addMode(ctx, () => { const p = 0.7 + 0.3 * Math.sin(T.tt * 0.8); glowE(ctx, 660 - T.par * 0.06, 170, 340, 150, '#d8cfd8', 0.24 * p); }); }),
+      // floating cloth gags that drift slowly across the sky
       anim((ctx, T) => {
         const P = pset('c3bars', 6, (r) => ({ x: r(), y: r(), w: 70 + r() * 90, sp: 0.6 + r() * 0.8, ph: r() * TAU }));
         const n = Math.max(2, Math.round(6 * T.pf));
         for (let i = 0; i < n; i++) {
           const p = P[i], x = wrapv(p.x * DW + T.tt * 8 * p.sp, -160, DW + 320), y = 60 + p.y * 300 + Math.sin(T.tt * 0.5 + p.ph) * 8 * T.mot;
-          ctx.fillStyle = '#050108'; ctx.fillRect(x, y, p.w, 15);
-          ctx.strokeStyle = A('#ffffff', 0.5); ctx.lineWidth = 1.2; ctx.strokeRect(x + 0.5, y + 0.5, p.w - 1, 14);
+          gagBar(ctx, x, y, p.w, 15);
         }
       }),
     ];
   }
 
   SCENES.boss2 = { id: 'boss2', combat: true, cap: 1.5, mood: 'the spider court by red moon', sway: 5, items: c2Items('boss2', true) };
-  SCENES.boss3 = { id: 'boss3', combat: true, cap: 1.5, mood: 'the sky being edited', sway: 5, items: c3Items('boss3', true) };
+  SCENES.boss3 = { id: 'boss3', combat: true, cap: 1.5, mood: 'the sky falling silent', sway: 5, items: c3Items('boss3', true) };
 
 
   // ===============================================================================================================
@@ -2703,49 +2858,48 @@
 
 
   // ===============================================================================================================
-  // THE LOGO: INKWOVEN in hand-built brush strokes. Each letter is a few calligraphic strokes (thick pressed start, tapering flick), drawn as gold
-  // leaf over ink with cel shading, bristle streaks and gold flecks, baked once per width; the glow, sparkles and the living ink drip are live.
+  // THE LOGO: ECHOWAKE in hand-built brush strokes. Each letter is a few calligraphic strokes (thick pressed start, tapering flick), drawn as gold
+  // leaf over ink with cel shading, bristle streaks and gold flecks, baked once per width; the glow, sparkles and the sound-ring pulses are live.
   // ===============================================================================================================
   // Letter skeletons in a 100-unit-tall box (y down). p: control points, w: brush width in units, pr: pressure ('head' thick to thin, 'mid', 'flat'),
   // ts/te: taper fractions of the two ends. adv: advance to the next letter.
   const LOGO_LETTERS = [
-    { ch: 'I', adv: 46, s: [
-      { p: [[18, 8], [19, 50], [17, 94]], w: 22, pr: 'flat', te: 0.1 },
-      { p: [[4, 9], [18, 5], [33, 10]], w: 7.5, pr: 'mid', ts: 0.25, te: 0.25 },
-      { p: [[4, 95], [18, 98], [32, 94]], w: 7.5, pr: 'mid', ts: 0.25, te: 0.25 }] },
-    { ch: 'N', adv: 94, s: [
-      { p: [[12, 5], [14, 50], [10, 97]], w: 17, pr: 'head', te: 0.3 },
-      { p: [[14, 9], [46, 52], [76, 93]], w: 23, pr: 'mid', ts: 0.06, te: 0.2 },
-      { p: [[80, 4], [79, 50], [82, 96]], w: 18, pr: 'head', te: 0.32 },
-      { p: [[2, 9], [12, 4], [26, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
-    { ch: 'K', adv: 90, s: [
+    { ch: 'E', adv: 80, s: [
+      { p: [[12, 5], [14, 50], [10, 96]], w: 19, pr: 'head', te: 0.3 },
+      { p: [[12, 9], [38, 4], [66, 11], [69, 26]], w: 11, pr: 'head', te: 0.3 },
+      { p: [[14, 50], [34, 46], [54, 51]], w: 8, pr: 'head', te: 0.4 },
+      { p: [[10, 92], [40, 90], [66, 91], [72, 77]], w: 12, pr: 'head', te: 0.3 }] },
+    { ch: 'C', adv: 88, s: [
+      { p: [[72, 16], [48, 4], [20, 18], [10, 50], [22, 84], [48, 97], [74, 86]], w: 21, pr: 'mid', ts: 0.1, te: 0.18 },
+      { p: [[64, 8], [74, 12], [78, 22]], w: 7, pr: 'mid', ts: 0.3, te: 0.3 }] },
+    { ch: 'H', adv: 94, s: [
       { p: [[12, 5], [14, 50], [10, 97]], w: 19, pr: 'head', te: 0.3 },
-      { p: [[74, 4], [48, 32], [22, 60]], w: 13, pr: 'head', te: 0.4 },
-      { p: [[26, 50], [50, 72], [80, 97]], w: 21, pr: 'mid', ts: 0.06, te: 0.3 },
+      { p: [[80, 4], [79, 50], [82, 96]], w: 19, pr: 'head', te: 0.3 },
+      { p: [[14, 52], [46, 47], [79, 51]], w: 10, pr: 'head', te: 0.35 },
       { p: [[2, 9], [12, 4], [26, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
+    { ch: 'O', adv: 102, s: [
+      { p: [[56, 6], [26, 15], [10, 50], [24, 85], [54, 95]], w: 23, pr: 'mid', ts: 0.12, te: 0.12 },
+      { p: [[44, 5], [76, 15], [90, 50], [76, 85], [44, 96]], w: 21, pr: 'mid', ts: 0.12, te: 0.12 }] },
     { ch: 'W', adv: 146, s: [
       { p: [[6, 5], [20, 50], [34, 96]], w: 20, pr: 'head', te: 0.3 },
       { p: [[34, 96], [52, 52], [70, 9]], w: 10, pr: 'mid', ts: 0.15, te: 0.25 },
       { p: [[68, 7], [88, 52], [104, 96]], w: 20, pr: 'head', te: 0.3 },
       { p: [[104, 96], [122, 52], [140, 5]], w: 10, pr: 'mid', ts: 0.15, te: 0.3 },
       { p: [[0, 9], [10, 4], [22, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
-    { ch: 'O', adv: 102, s: [
-      { p: [[56, 6], [26, 15], [10, 50], [24, 85], [54, 95]], w: 23, pr: 'mid', ts: 0.12, te: 0.12 },
-      { p: [[44, 5], [76, 15], [90, 50], [76, 85], [44, 96]], w: 21, pr: 'mid', ts: 0.12, te: 0.12 }] },
-    { ch: 'V', adv: 98, s: [
-      { p: [[6, 5], [26, 50], [46, 96]], w: 22, pr: 'head', te: 0.3 },
-      { p: [[46, 96], [66, 52], [86, 5]], w: 10, pr: 'mid', ts: 0.15, te: 0.3 },
-      { p: [[0, 9], [10, 4], [22, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
+    { ch: 'A', adv: 96, s: [
+      { p: [[48, 4], [28, 50], [8, 96]], w: 12, pr: 'mid', ts: 0.15, te: 0.25 },
+      { p: [[46, 6], [66, 50], [88, 96]], w: 22, pr: 'head', te: 0.3 },
+      { p: [[24, 64], [50, 60], [76, 65]], w: 8, pr: 'head', te: 0.4 }] },
+    { ch: 'K', adv: 90, s: [
+      { p: [[12, 5], [14, 50], [10, 97]], w: 19, pr: 'head', te: 0.3 },
+      { p: [[74, 4], [48, 32], [22, 60]], w: 13, pr: 'head', te: 0.4 },
+      { p: [[26, 50], [50, 72], [80, 97]], w: 21, pr: 'mid', ts: 0.06, te: 0.3 },
+      { p: [[2, 9], [12, 4], [26, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
     { ch: 'E', adv: 80, s: [
       { p: [[12, 5], [14, 50], [10, 96]], w: 19, pr: 'head', te: 0.3 },
       { p: [[12, 9], [38, 4], [66, 11], [69, 26]], w: 11, pr: 'head', te: 0.3 },
       { p: [[14, 50], [34, 46], [54, 51]], w: 8, pr: 'head', te: 0.4 },
       { p: [[10, 92], [40, 90], [66, 91], [72, 77]], w: 12, pr: 'head', te: 0.3 }] },
-    { ch: 'N', adv: 90, s: [
-      { p: [[12, 5], [14, 50], [10, 97]], w: 17, pr: 'head', te: 0.3 },
-      { p: [[14, 9], [46, 52], [76, 93]], w: 23, pr: 'mid', ts: 0.06, te: 0.2 },
-      { p: [[80, 4], [79, 50], [82, 96]], w: 18, pr: 'head', te: 0.32 },
-      { p: [[2, 9], [12, 4], [26, 10]], w: 6.5, pr: 'mid', ts: 0.3, te: 0.3 }] },
   ];
   const LOGO_SLANT = 0.09;                                           // top leans right, like a brush hand
   const LOGO_GOLD = { top: '#fff2c0', mid: '#f5c96a', bot: '#cf8b2e', shade: '#b8741f', hi: '#fffbe0', deep: '#7a3f18' };
@@ -2793,10 +2947,9 @@
         const pts = s.p.map((p) => [X(p[0], p[1]), Y(p[1])]);
         strokes.push({ geo: strokeGeo(pts, s.w * k, s.pr, s.ts || 0, s.te === undefined ? 0.25 : s.te, si++), w: s.w * k, pts, thin: s.w < 14 });
       });
-      if (l.ch === 'K') anchors.push({ x: X(80, 98), y: Y(99), r: 0.075 * H, T: 5.2, ph: 0.0, len: 0.7 * H });
-      if (l.ch === 'W') anchors.push({ x: X(34, 97), y: Y(98), r: 0.05 * H, T: 7.3, ph: 0.34, len: 0.42 * H });
-      if (l.ch === 'N' && li === 7) anchors.push({ x: X(10, 97), y: Y(98), r: 0.045 * H, T: 6.1, ph: 0.61, len: 0.36 * H });
-      if (l.ch === 'O') anchors.moon = { x: X(50, 50), y: Y(50), r: 0.13 * H };
+      if (l.ch === 'O') { anchors.push({ x: X(50, 50), y: Y(50), r: 0.045 * H, T: 5.2, ph: 0.0, len: 0.8 * H }); anchors.moon = { x: X(50, 50), y: Y(50), r: 0.13 * H }; }
+      if (l.ch === 'K') anchors.push({ x: X(80, 97), y: Y(98), r: 0.04 * H, T: 7.3, ph: 0.34, len: 0.6 * H });
+      if (l.ch === 'E' && li === 7) anchors.push({ x: X(56, 51), y: Y(51), r: 0.04 * H, T: 6.1, ph: 0.61, len: 0.55 * H });
       ox += l.adv;
     });
     const mx = 0.09 * w, my = 0.34 * H;
@@ -2856,64 +3009,45 @@
         g.beginPath(); g.moveTo(-sz, -sz * 0.45); g.lineTo(sz * 0.8, -sz * 0.6); g.lineTo(sz, sz * 0.4); g.lineTo(-sz * 0.6, sz * 0.7); g.closePath(); g.fill(); g.restore();
       }
     });
-    // 7. the moon inside the O: a small gold disc with an ink ring
+    // 7. the echo ping inside the O: a gold dot, one gold ring and an outer ring broken into left and right arcs, each over an ink line
     if (L.moon) {
-      const m = L.moon;
-      disc(g, m.x, m.y, m.r * 1.18, pal.ink);
-      const mg = tk.rad(g, m.x - m.r * 0.3, m.y - m.r * 0.3, 1, m.x, m.y, m.r, [[0, '#fffbe0'], [0.6, '#ffd97a'], [1, '#e0a040']]);
-      disc(g, m.x, m.y, m.r, mg);
-      g.fillStyle = A('#b8741f', 0.45); g.beginPath(); g.arc(m.x + m.r * 0.32, m.y + m.r * 0.1, m.r * 0.18, 0, TAU); g.arc(m.x - m.r * 0.15, m.y + m.r * 0.42, m.r * 0.12, 0, TAU); g.fill();
+      const m = L.moon, dotR = m.r * 0.55, ringR = m.r * 1.0, outR = m.r * 1.45, lw = m.r * 0.18;
+      const arcs = (r) => { g.beginPath(); g.arc(m.x, m.y, r, PI * 0.65, PI * 1.35); g.moveTo(m.x + Math.cos(-PI * 0.35) * r, m.y + Math.sin(-PI * 0.35) * r); g.arc(m.x, m.y, r, -PI * 0.35, PI * 0.35); };
+      g.lineCap = 'round';
+      g.strokeStyle = pal.ink; g.lineWidth = lw * 1.9; g.beginPath(); g.arc(m.x, m.y, ringR, 0, TAU); g.stroke(); arcs(outR); g.stroke();
+      disc(g, m.x, m.y, dotR * 1.28, pal.ink);
+      g.strokeStyle = '#f5c96a'; g.lineWidth = lw; g.beginPath(); g.arc(m.x, m.y, ringR, 0, TAU); g.stroke();
+      g.lineWidth = lw * 0.8; arcs(outR); g.stroke();
+      const mg = tk.rad(g, m.x - dotR * 0.3, m.y - dotR * 0.3, 1, m.x, m.y, dotR, [[0, '#fffbe0'], [0.6, '#ffd97a'], [1, '#e0a040']]);
+      disc(g, m.x, m.y, dotR, mg);
     }
     // outer ink splatter flecks around the word
     const sr = R('logosplat');
     for (let i = 0; i < 22; i++) {
       const x = (sr() - 0.5) * L.w * 1.02, y = (sr() - 0.5) * H * 1.5, rr = (0.006 + sr() * sr() * 0.02) * H;
       if (Math.abs(y) < H * 0.5 && Math.abs(x) < L.w * 0.48) continue;
-      disc(g, x, y, rr, A(pal.ink, 0.85));
+      if (i % 4 === 0) tk.note(g, x, y + H * 0.04, H * 0.075, { kind: ['eighth', 'quarter', 'beamed'][(i >> 2) % 3], color: '#f5c96a', alpha: 0.85, line: Math.max(1, H * 0.012) });
+      else disc(g, x, y, rr, A(pal.ink, 0.85));
     }
   }
 
-  // the living ink drip under an anchor: a bead swells, stretches, pinches off, falls, splashes. u is the phase 0..1 of its own cycle.
-  function drawDrip(ctx, ax, ay, a, t, H) {
-    const u = (((t / a.T) + a.ph) % 1 + 1) % 1, r = a.r, inkC = '#2b2378', rimC = '#7ad8ff';
-    const tearDrop = (x, y, rad, stretch, alpha) => {
-      ctx.save(); ctx.globalAlpha *= cA(alpha);
-      ctx.beginPath();
-      ctx.moveTo(x, y - rad * (1.5 + stretch));
-      ctx.bezierCurveTo(x + rad * 0.35, y - rad * (0.6 + stretch * 0.5), x + rad, y - rad * 0.5, x + rad, y);
-      ctx.arc(x, y, rad, 0, PI);
-      ctx.bezierCurveTo(x - rad, y - rad * 0.5, x - rad * 0.35, y - rad * (0.6 + stretch * 0.5), x, y - rad * (1.5 + stretch));
-      ctx.closePath();
-      ctx.fillStyle = inkC; ctx.fill();
-      ctx.lineWidth = Math.max(1, rad * 0.22); ctx.strokeStyle = pal.ink; ctx.stroke();
-      ctx.fillStyle = A('#ffffff', 0.85); ctx.beginPath(); ctx.ellipse(x - rad * 0.38, y - rad * 0.1, rad * 0.16, rad * 0.32, 0.3, 0, TAU); ctx.fill();
-      ctx.strokeStyle = A(rimC, 0.7); ctx.lineWidth = Math.max(0.8, rad * 0.14); ctx.beginPath(); ctx.arc(x, y, rad * 0.86, 0.15, 1.5); ctx.stroke();
+  // a sound-ring pulse at an anchor: a ring grows from the anchor's radius to six times that and fades (gold, then cyan), and a small note rises and fades.
+  // u is the phase 0..1 of its own cycle.
+  function drawPulse(ctx, ax, ay, a, t, H) {
+    const u = (((t / a.T) + a.ph) % 1 + 1) % 1, r = a.r;
+    if (u < 0.6) {
+      const k = u / 0.6, rr = lerp(r, r * 6, 1 - Math.pow(1 - k, 2));
+      ctx.save();
+      ctx.globalAlpha *= cA(1 - k);
+      ctx.lineWidth = Math.max(0.5, lerp(r * 0.5, 0.5, k));
+      ctx.strokeStyle = k < 0.5 ? '#ffe9a8' : '#5ff5ff';
+      ctx.beginPath(); ctx.arc(ax, ay, rr, 0, TAU); ctx.stroke();
+      if (k < 0.7) { ctx.globalAlpha *= 0.6; ctx.lineWidth = Math.max(0.5, r * 0.18); ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ax, ay, rr * 0.94, 0, TAU); ctx.stroke(); }
       ctx.restore();
-    };
-    if (u < 0.56) {
-      const k = ss(0, 1, u / 0.56), Lg = a.len * 0.5 * k * k, rb = r * (0.35 + 0.65 * ss(0, 0.9, u / 0.56));
-      // the neck: a tapering strand from the stroke to the bead
-      const nw = Math.max(0.8, r * (0.9 - 0.55 * k));
-      ctx.beginPath(); ctx.moveTo(ax - nw * 1.6, ay - 2); ctx.quadraticCurveTo(ax - nw * 0.5, ay + Lg * 0.5, ax - nw * 0.5, ay + Lg); ctx.lineTo(ax + nw * 0.5, ay + Lg); ctx.quadraticCurveTo(ax + nw * 0.5, ay + Lg * 0.5, ax + nw * 1.6, ay - 2); ctx.closePath();
-      ctx.fillStyle = inkC; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = pal.ink; ctx.stroke();
-      tearDrop(ax, ay + Lg + rb * 0.3, rb, 0.2 + k * 0.9, 1);
-    } else if (u < 0.9) {
-      const f = (u - 0.56) / 0.34, fall = a.len * 0.5 + f * f * H * 1.5 * (0.9 + a.r / H * 4);
-      const rad = r * 0.95 * (1 - 0.25 * f);
-      // the retracting thread after the snap
-      if (f < 0.3) { const th = a.len * 0.5 * (1 - f / 0.3); ctx.beginPath(); ctx.moveTo(ax - 1.2, ay - 1); ctx.lineTo(ax - 0.6, ay + th); ctx.lineTo(ax + 0.6, ay + th); ctx.lineTo(ax + 1.2, ay - 1); ctx.closePath(); ctx.fillStyle = inkC; ctx.fill(); }
-      tearDrop(ax, ay + fall, rad, 0.5 + f * 1.6, 1 - ss(0.75, 1, f));
-      // a faint ink trail behind the falling drop
-      ctx.save(); ctx.globalAlpha *= 0.25 * (1 - f); ctx.strokeStyle = rimC; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax, ay + fall - rad * 3); ctx.lineTo(ax, ay + fall - rad * (5 + f * 8)); ctx.stroke(); ctx.restore();
-    } else if (u < 0.97) {
-      const f = (u - 0.9) / 0.07, y = ay + a.len * 0.5 + H * 1.5 * (0.9 + a.r / H * 4) * 1.0;
-      ctx.save(); ctx.globalAlpha *= 1 - f; ctx.strokeStyle = rimC; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.ellipse(ax, y, r * (1 + 5 * f), r * (0.25 + 1.2 * f), 0, 0, TAU); ctx.stroke();
-      for (let i = 0; i < 4; i++) { const an = -PI * (0.2 + 0.6 * i / 3); disc(ctx, ax + Math.cos(an) * r * 4 * f, y + Math.sin(an) * r * 5 * f * (1 - f * 0.4), r * 0.28 * (1 - f * 0.5), inkC); }
-      ctx.restore();
-    } else {
-      const k = (u - 0.97) / 0.03;
-      tearDrop(ax, ay + 1, r * 0.35 * k, 0, k);
+    }
+    if (u > 0.2 && u < 0.8) {
+      const k = (u - 0.2) / 0.6, fade = Math.sin(PI * k);
+      tk.note(ctx, ax + Math.sin(k * 5 + a.ph * 9) * r, ay - a.len * 0.6 * k, r * 3, { kind: a.T < 6 ? 'eighth' : 'quarter', color: '#fff4d0', alpha: fade * 0.95, line: Math.max(0.8, r * 0.35) });
     }
   }
 
@@ -2933,13 +3067,13 @@
       const tw = Math.pow(Math.max(0, Math.sin(t * (1.3 + i * 0.17) + p[2])), 3);
       if (tw > 0.05) tk.sparkle(ctx, x + (p[0] - 0.5) * L.w, y + p[1] * H * 1.05, H * (0.07 + 0.11 * tw), { color: i % 2 ? '#fffbe0' : '#ffe9a8', alpha: tw, rot: 0.2 * i, glow: 0.5 });
     });
-    L.anchors.forEach((a) => drawDrip(ctx, x + a.x, y + a.y, a, t, H));
+    L.anchors.forEach((a) => drawPulse(ctx, x + a.x, y + a.y, a, t, H));
   }
 
 
   // ===============================================================================================================
-  // VICTORY: dawn. A low golden sun on rose hills, lit clouds, cranes crossing the light, the Living Book open on a boulder with its story whole
-  // again (no Blank bite on the page), a sakura branch, petals on a warm wind, gold leaf in the air.
+  // VICTORY: dawn. A low golden sun on rose hills, lit clouds, cranes crossing the light, the temple bell free on a boulder, its striker pulled
+  // back, a gold ring leaving its lip every 2.4 s, a sakura branch, petals on a warm wind, notes and gold leaf in the air.
   // ===============================================================================================================
   const VC = { sx: 720, sy: 452 };
   function vcSky(g) {
@@ -2978,11 +3112,11 @@
     for (let i = 0; i < 260; i++) { const y = 574 + Math.pow(r(), 0.9) * 140, x = X0 + r() * XW; grass(g, x, y, 6 + (y - 574) * 0.06 + r() * 10, 3, A(r() < 0.5 ? '#6a8a3a' : '#c8b060', 0.75), i, -0.15); }
     for (let x = X0; x < X0 + XW; x += 22 + r() * 24) grass(g, x, 570 + (r() - 0.5) * 6, 20 + r() * 26, 4 + Math.floor(r() * 3), r() < 0.5 ? '#8a9a44' : '#d8c060', Math.round(x), -0.2);
     for (let i = 0; i < 70; i++) { const x = X0 + r() * XW, y = 580 + r() * 130; disc(g, x, y, 1.6 + r() * 1.6, r() < 0.5 ? '#fff0f6' : '#ffc0d8'); }
-    // the boulder and the mended book on it
+    // the boulder and the freed bell on it, striker pulled back
     g.save(); g.translate(430, 578); g.scale(0.72, 0.72); g.translate(-640, -500);
     tk.celFill(g, [[320, 560], [360, 520], [480, 500], [640, 494], [800, 500], [930, 522], [968, 562], [900, 590], [640, 606], [380, 592]], '#8a6a7a', { line: 5, depth: 22, hi: 'auto', hiW: 3, shadow: '#4a3448', rim: '#fff0c0', rimSide: 'light', rimW: 3, rimAlpha: 0.9, tension: 0.6, align: 0.5 });
     for (let i = 0; i < 6; i++) blob(g, 380 + r() * 520, 540 + r() * 40, 30 + r() * 40, 8 + r() * 10, '#5a8a4a', 0.5);
-    titleBook(g, true);
+    titleBell(g, true);
     g.restore();
   }
   function crane(ctx, x, y, s, t, ph, flip) {
@@ -3020,7 +3154,7 @@
       }
     });
   }
-  SCENES.victory = { id: 'victory', combat: false, mood: 'dawn over the finished book', sway: 8, items: [
+  SCENES.victory = { id: 'victory', combat: false, mood: 'dawn, the bell rings again', sway: 8, items: [
     layer('sky', full(0, 500), 0.02, vcSky),
     layer('clouds', { x: 0, y: 0, w: DW, h: 340 }, 0.02, vcClouds, { scroll: 2.6 }),
     anim((ctx, T) => {
@@ -3030,11 +3164,15 @@
     }),
     layer('hills', full(300, 300), 0.08, vcHills),
     mistLayer('vc-mist', 430, 170, '#ffe0a0', 0.5, 6, 0.1, 91),
-    layer('front', full(440, 280), 0.1, vcFront),
+    layer('front', full(370, 350), 0.1, vcFront),
     anim((ctx, T) => {
       const p = 0.8 + 0.2 * Math.sin(T.tt * 1.2), bx = 430 - T.par * 0.1;
       addMode(ctx, () => { glowE(ctx, bx, 520, 420, 200, '#ffd870', 0.4 * p); glowE(ctx, bx, 540, 230, 90, '#fff2c0', 0.4 * p); ctx.save(); ctx.translate(bx, 528); ctx.globalAlpha = 0.22 * p; ART.blit(ctx, vcRaysSpr(), -600, -700, 1200, 700); ctx.restore(); });
-      drift(ctx, T, { key: 'vc-glyphs', n: 14, sprs: [glyphSpr(0), glyphSpr(1), glyphSpr(2), glyphSpr(3), glyphSpr(4)], area: { x: 330, y: 200, w: 200, h: 340 }, vx: 6, vy: -30, sway: 30, size: [14, 24], aspect: 1, spin: 0.3, wob: 0.6, alpha: [0.6, 1], add: true });
+      if (T.mot >= 1) {                                        // every 2.4 s a gold ring leaves the bell lip and crosses the whole sky
+        const u = (T.tt / 2.4) % 1, rr = 900 * (1 - Math.pow(1 - u, 2.2));
+        if (rr > 3) { ctx.save(); ctx.strokeStyle = '#fff0c0'; ctx.lineWidth = 6 - 5 * u; ctx.globalAlpha = 0.75 * (1 - ss(0.2, 1, u)); ctx.beginPath(); ctx.arc(bx, 562, rr, 0, TAU); ctx.stroke(); ctx.restore(); }
+      }
+      drift(ctx, T, { key: 'vc-glyphs', n: 14, sprs: [noteSpr(0), noteSpr(1), noteSpr(2), noteSpr(3), noteSpr(4)], area: { x: 330, y: 200, w: 200, h: 340 }, vx: 6, vy: -30, sway: 30, size: [20, 34], aspect: 1, spin: 0.3, wob: 0.4, alpha: [0.6, 1], add: true });
       [[0.0, 1], [2.2, -1], [4.4, 1]].forEach((c, i) => { const u = ((T.tt * 0.018 + c[0] / 6) % 1 + 1) % 1; crane(ctx, lerp(-80, DW + 80, c[1] > 0 ? u : 1 - u), 210 + i * 46 + Math.sin(T.tt * 0.5 + i) * 10, 0.78 - i * 0.12, T.tt * T.mot, i * 1.3, c[1] < 0); });
       tk.kirakira(ctx, 0, 60, DW, 560, T.tt, { n: Math.round(24 * T.pf), seed: 9, size: 3.6, rise: 8, color: '#ffe9a8' });
     }),
@@ -3046,154 +3184,161 @@
 
 
   // ===============================================================================================================
-  // DEFEAT: the ink fading to blank paper. Old washi with a ghost of the grove in thin ink wash, torn blank patches eating it from the edges, a
-  // black pool at the bottom with long drips that keep creeping, a fallen brush, a vermilion seal, ash falling. The middle stays calm and pale
-  // so the story text sits well on it.
+  // DEFEAT: the world falls silent. A cool grey ground with a ghost of the grove drained of colour, grey fog patches eating it from the edges, a still
+  // grey puddle with three frozen ripples, colour running out of the sky in long grey drips, the hero's bachi and a dropped flute lying still, and the
+  // temple bell: whole, re-wrapped in grey Hush threads, its striker hanging still (a rest is not the end of the music). The middle stays calm and
+  // pale so the story text sits well on it.
   // ===============================================================================================================
+  // the drained ground: pale cool grey with soft mottling, static ash and frost dashes and a lavender vignette. Deterministic per seed.
+  function hushPaint(g, w, h, seed) {
+    const r = R('hush-ground', seed);
+    fillRectG(g, 0, 0, w, h, [[0, '#d6d4df'], [0.5, '#cfcdd8'], [1, '#bfbccb']]);
+    const step = 40;
+    for (let y = -step / 2; y < h + step; y += step) for (let x = -step / 2; x < w + step; x += step) {
+      const v = nz(x * 0.006 + seed * 3.1, y * 0.006, 23 + seed, 3) - 0.42;
+      if (Math.abs(v) < 0.02) continue;
+      blob(g, x + (r() - 0.5) * 12, y + (r() - 0.5) * 12, step * 2, step * 1.8, v > 0 ? '#f4f3f8' : '#8e8aa3', Math.min(0.16, Math.abs(v) * 0.45));
+    }
+    for (let i = 0; i < Math.round(w * h / 2400); i++) {
+      const x = r() * w, y = r() * h, len = 2 + r() * 4;
+      g.fillStyle = r() < 0.5 ? A('#5a566e', 0.06 + 0.1 * r()) : A('#ffffff', 0.12 + 0.18 * r()); g.fillRect(x, y, len, 1);
+    }
+    const e = Math.min(w, h) * 0.12;
+    fillRectG(g, 0, 0, w, e, [[0, A('#a898d8', 0.22)], [1, A('#a898d8', 0)]]); fillRectG(g, 0, h - e, w, e, [[0, A('#a898d8', 0)], [1, A('#a898d8', 0.26)]]);
+    g.fillStyle = tk.lin(g, 0, 0, e, 0, [[0, A('#a898d8', 0.22)], [1, A('#a898d8', 0)]]); g.fillRect(0, 0, e, h);
+    g.fillStyle = tk.lin(g, w - e, 0, w, 0, [[0, A('#a898d8', 0)], [1, A('#a898d8', 0.22)]]); g.fillRect(w - e, 0, e, h);
+  }
   function dfInk(g) {
-    const r = R('df-ink'), ink = '#1a1440';
-    // far wash hills, dissolving toward the middle
-    [[430, 70, 0.0026, 0.16, 5], [470, 56, 0.0034, 0.22, 6], [504, 42, 0.0044, 0.3, 7]].forEach((d, i) => {
+    const r = R('df-ink'), ink = '#6f6b86', ash = '#8e8aa3';
+    // far hills drained to grey, dissolving toward the middle
+    [[430, 70, 0.0026, 0.2, 5], [470, 56, 0.0034, 0.28, 6], [504, 42, 0.0044, 0.38, 7]].forEach((d, i) => {
       const pts = ridgePts(d[4], X0, X0 + XW, d[0], d[1], d[2], { oct: 4 });
-      fillRidge(g, pts, 620, tk.lin(g, 0, d[0] - d[1], 0, 620, [[0, A(ink, d[3])], [0.6, A(ink, d[3] * 0.5)], [1, A(ink, 0)]]));
-      tk.inkPath(g, pts, { w: 2 + i, color: A(ink, d[3] + 0.1), taper: 0.02, wobble: 0.4, pressure: 'flat', seed: i, step: 10 });
+      fillRidge(g, pts, 620, tk.lin(g, 0, d[0] - d[1], 0, 620, [[0, A(ash, d[3])], [0.6, A(ash, d[3] * 0.5)], [1, A(ash, 0)]]));
+      tk.inkPath(g, pts, { w: 2 + i, color: A(ink, d[3] + 0.12), taper: 0.02, wobble: 0.4, pressure: 'flat', seed: i, step: 10 });
     });
-    // dry-brush bamboo at both edges: the stalks are strong at the bottom and break up into flecks toward the top
+    // bamboo at both edges: strong at the bottom, breaking up into flecks toward the top
     [[70, 1], [150, 0.72], [1210, 1], [1130, 0.7], [250, 0.45], [1040, 0.5]].forEach((s, i) => {
       const x = s[0], top = 120 + (1 - s[1]) * 200 + r() * 40, pts = [[x + (r() - 0.5) * 20, top], [x + (r() - 0.5) * 22, top + 60], [x + (r() - 0.5) * 18, 480], [x, 710]];
-      tk.inkPath(g, pts, { w: 26 * s[1] + 6, color: A(ink, 0.6 * s[1] + 0.12), taper: 0, taperStart: 0.4, taperEnd: 0, pressure: 'tail', wobble: 0.35, seed: i + 3, step: 8 });
-      for (let n = 1; n < 6; n++) { const y = lerp(620, top + 40, n / 6); tk.inkPath(g, [[x - 13 * s[1], y], [x + 13 * s[1], y + 2]], { w: 3, color: A(ink, 0.55 * s[1]), taper: 0.3, wobble: 0.2, seed: n + i }); }
+      tk.inkPath(g, pts, { w: 26 * s[1] + 6, color: A(ink, 0.6 * s[1] + 0.14), taper: 0, taperStart: 0.4, taperEnd: 0, pressure: 'tail', wobble: 0.35, seed: i + 3, step: 8 });
+      for (let n = 1; n < 6; n++) { const y = lerp(620, top + 40, n / 6); tk.inkPath(g, [[x - 13 * s[1], y], [x + 13 * s[1], y + 2]], { w: 3, color: A('#46425a', 0.55 * s[1]), taper: 0.3, wobble: 0.2, seed: n + i }); }
       for (let n = 0; n < 26; n++) disc(g, x + (r() - 0.5) * 60, top - 10 - r() * 90, 0.8 + r() * 2.4, A(ink, 0.5 * s[1] * (1 - n / 30)));
-      for (let n = 0; n < 5; n++) { const a0 = (i % 2 ? PI + 0.5 : -0.5) + (r() - 0.5) * 1.1, l = 40 + r() * 46, x0 = x + (r() - 0.5) * 16, y0 = top + 10 + n * 26; tk.inkPath(g, [[x0, y0], [x0 + Math.cos(a0) * l * 0.5, y0 + Math.sin(a0) * l * 0.5 - 8], [x0 + Math.cos(a0) * l, y0 + Math.sin(a0) * l + 6]], { w: 5, color: A(ink, 0.32 * s[1] + 0.08), taper: 0.5, taperStart: 0.05, wobble: 0.3, seed: i * 9 + n }); }
+      for (let n = 0; n < 5; n++) { const a0 = (i % 2 ? PI + 0.5 : -0.5) + (r() - 0.5) * 1.1, l = 40 + r() * 46, x0 = x + (r() - 0.5) * 16, y0 = top + 10 + n * 26; tk.inkPath(g, [[x0, y0], [x0 + Math.cos(a0) * l * 0.5, y0 + Math.sin(a0) * l * 0.5 - 8], [x0 + Math.cos(a0) * l, y0 + Math.sin(a0) * l + 6]], { w: 5, color: A(ink, 0.34 * s[1] + 0.08), taper: 0.5, taperStart: 0.05, wobble: 0.3, seed: i * 9 + n }); }
     });
-    // big wet blots in the top corners, running down the page
-    tk.inkBlot(g, 30, -10, 150, { seed: 3, color: '#140f34', drips: 6, jag: 0.32 });
-    tk.inkBlot(g, 1262, -14, 128, { seed: 7, color: '#140f34', drips: 5, jag: 0.32 });
-    tk.inkBlot(g, 380, -30, 70, { seed: 11, color: '#140f34', drips: 3, jag: 0.3 });
-    // ink bleeds: soft wet halos around the darkest parts
+    // grey wet blots in the top corners, running down
+    tk.inkBlot(g, 30, -10, 150, { seed: 3, color: ash, drips: 6, jag: 0.32 });
+    tk.inkBlot(g, 1262, -14, 128, { seed: 7, color: ash, drips: 5, jag: 0.32 });
+    tk.inkBlot(g, 380, -30, 70, { seed: 11, color: ash, drips: 3, jag: 0.3 });
     for (let i = 0; i < 14; i++) blob(g, (i % 2 ? 40 : 1240) + (r() - 0.5) * 140, 200 + r() * 460, 60 + r() * 60, 40 + r() * 50, ink, 0.1);
   }
   function dfBlank(g) {
-    // torn blank patches eating the picture from the top and the inside edges; paper coloured with a wet ink rim
-    [[640, -30, 520, 130, 4], [180, 250, 90, 160, 5], [1110, 300, 100, 170, 6], [420, 560, 220, 90, 7], [880, 590, 240, 100, 8]].forEach((s, i) => {
-      const pts = tornBlob(g, s[0], s[1], s[2], s[3], s[4] * 11, 1);
-      g.beginPath(); tk.trace(g, { poly: pts }); g.fillStyle = tk.rad(g, s[0], s[1], 8, s[0], s[1], Math.max(s[2], s[3]), [[0, '#f8eed4'], [0.8, '#f3e6c8'], [1, '#eedcae']]); g.fill();
-      tk.inkPath(g, { poly: pts.concat([pts[0]]) }, { w: 2, color: A('#1a1440', 0.3), pressure: 'flat', taper: 0, wobble: 0.6, seed: i + 30, step: 3 });
-      const rr = R('df-dust', i);
-      for (let j = 0; j < 30; j++) { const q = pts[Math.floor(rr() * pts.length)], d = 3 + rr() * 16; disc(g, q[0] + (q[0] - s[0]) * d / 260, q[1] + (q[1] - s[1]) * d / 200, 0.6 + rr() * 1.6, A('#1a1440', 0.28)); }
-      blob(g, s[0], s[1], s[2] * 1.3, s[3] * 1.3, '#1a1440', 0.07);
-    });
+    // grey fog patches eating the picture from the top and the inside edges (the title's Hush painter)
+    g.save(); g.globalAlpha = 0.8;
+    hushSpots(g, [[640, -30, 520, 130], [180, 250, 90, 160], [1110, 300, 100, 170], [560, 590, 200, 80], [880, 590, 240, 100]], 1, 40, 'df-hush');
+    g.restore();
   }
   function dfPool(g) {
     const r = R('df-pool');
-    // the black pool with a glossy highlight, and splashes around it
+    // a still grey puddle with three frozen ripple rings
     const pts = []; for (let i = 0; i < 60; i++) { const a = i / 60 * TAU, k = 1 + (nz(Math.cos(a) * 3.2 + 3, Math.sin(a) * 3.2 + 3, 61, 4) - 0.4) * 1.1 + (i % 5 === 0 ? 0.1 : 0); pts.push([640 + Math.cos(a) * 560 * k, 744 + Math.sin(a) * 104 * k]); }
-    g.beginPath(); tk.trace(g, pts, 0, 0, 0.9); g.fillStyle = tk.lin(g, 0, 640, 0, 740, [[0, '#2a1f66'], [0.35, '#140f34'], [1, '#06041a']]); g.fill();
-    tk.inkPath(g, pts, { closed: true, w: 3, color: '#0a0620', pressure: 'flat', wobble: 0.3, seed: 3, align: 0.5, weightVar: 0.2 });
-    tk.inkPath(g, [[230, 690], [420, 676], [640, 672]], { w: 6, color: A('#8a80e8', 0.5), taper: 0.5, wobble: 0.2, seed: 2 });
-    tk.inkPath(g, [[760, 684], [880, 690]], { w: 4, color: A('#8a80e8', 0.4), taper: 0.5, wobble: 0.2, seed: 4 });
-    for (let i = 0; i < 40; i++) { const a = r() * PI + PI, d = 420 + r() * 300, x = 640 + Math.cos(a) * d * 1.1, y = 700 + Math.sin(a) * d * 0.16 - r() * 26; disc(g, x, y, 0.9 + r() * r() * 5, A('#140f34', 0.85)); }
-    // ink runs on the picture above the pool
-    for (let i = 0; i < 9; i++) { const x = 90 + i * 130 + (r() - 0.5) * 60, y0 = 610 + r() * 30; tk.inkPath(g, [[x, y0], [x + (r() - 0.5) * 6, y0 + 40], [x, 700]], { w: 3 + r() * 5, color: A('#140f34', 0.8), taper: 0.5, taperStart: 0.05, wobble: 0.3, seed: i, pressure: 'head' }); }
+    g.beginPath(); tk.trace(g, pts, 0, 0, 0.9); g.fillStyle = tk.lin(g, 0, 640, 0, 740, [[0, '#a6a3b8'], [0.4, '#8e8aa3'], [1, '#6f6b86']]); g.fill();
+    tk.inkPath(g, pts, { closed: true, w: 3, color: '#5a566e', pressure: 'flat', wobble: 0.3, seed: 3, align: 0.5, weightVar: 0.2 });
+    [[150, 13, 0.5], [236, 20, 0.34], [330, 28, 0.22]].forEach((q) => { g.beginPath(); g.ellipse(720, 702, q[0], q[1], 0, 0, TAU); g.strokeStyle = A('#f2f0f6', q[2]); g.lineWidth = 2; g.stroke(); });
+    tk.inkPath(g, [[230, 690], [420, 676], [640, 672]], { w: 6, color: A('#f2f0f6', 0.45), taper: 0.5, wobble: 0.2, seed: 2 });
+    tk.inkPath(g, [[760, 684], [880, 690]], { w: 4, color: A('#f2f0f6', 0.35), taper: 0.5, wobble: 0.2, seed: 4 });
+    for (let i = 0; i < 40; i++) { const a = r() * PI + PI, d = 420 + r() * 300, x = 640 + Math.cos(a) * d * 1.1, y = 700 + Math.sin(a) * d * 0.16 - r() * 26; g.fillStyle = r() < 0.5 ? A('#f2f0f6', 0.8) : A('#6f6b86', 0.7); g.fillRect(x, y, 2 + r() * 5, 1.2); }
   }
-  function dfBrush(g) {
-    g.save(); g.translate(1000, 640); g.rotate(-0.16);
-    tk.celFill(g, [[-150, -6], [40, -8], [42, 8], [-150, 7]], '#5a3a2a', { line: 3, depth: 4, hi: 'auto', shadow: '#2a1a1a', tension: 0.12, rim: '#ffd080', rimSide: 'light', rimW: 1.4, rimAlpha: 0.6 });
-    for (let i = 0; i < 3; i++) { tk.inkPath(g, [[-150, -6 + i * 6], [-90, -6 + i * 5], [-40, -6 + i * 4]], { w: 1.6, color: A('#f0dcae', 0.4), taper: 0.3 }); }
-    tk.celFill(g, [[40, -9], [66, -10], [68, 10], [40, 9]], '#c8b070', { line: 2.4, depth: 3, hi: false, tension: 0.12 });
-    tk.celFill(g, [[66, -10], [118, -3], [136, 0, 1], [118, 3], [66, 10]], '#1a1430', { line: 2.6, depth: 4, hi: false, shadow: '#08061a', tension: 0.4 });
-    tk.inkPath(g, [[122, 0], [150, 4], [168, 12]], { w: 4, color: A('#1a1430', 0.9), taper: 0.5, wobble: 0.3 });
+  // the hero's bachi drumsticks and a dropped shakuhachi, lying still
+  function dfInstruments(g) {
+    g.save(); g.translate(1010, 676); g.rotate(-0.1);
+    tk.celFill(g, [[-130, -5], [20, -6], [96, -3], [100, 0], [96, 3], [20, 6], [-130, 5]], '#d8b878', { line: 2.4, depth: 4, hi: 'auto', shadow: '#8a6a3a', tension: 0.15, rim: '#fff0c0', rimSide: 'light', rimW: 1.2, rimAlpha: 0.5 });
+    [-92, -52, -14, 24].forEach((x) => { g.fillStyle = A('#5a3a1a', 0.85); g.fillRect(x, -6, 5, 12); });
+    [[-100, 0], [-66, 0], [-34, 0], [-8, 0], [18, 0]].forEach((p, i) => { if (i % 2 === 0) { g.fillStyle = A('#2a1a10', 0.85); g.beginPath(); g.ellipse(p[0] + 14, -0.5, 2.2, 2.8, 0, 0, TAU); g.fill(); } });
+    tk.inkPath(g, [[-132, -4], [-126, 4]], { w: 2, color: A('#5a3a1a', 0.8), pressure: 'flat', taper: 0 });
     g.restore();
-    blob(g, 1170, 664, 60, 14, '#1a1440', 0.6);
-    // the seal: a vermilion hanko stamped in the corner, its glyph carved as brush cuts
-    g.save(); g.translate(1160, 596); g.rotate(0.06);
-    tk.celFill(g, [[-30, -30], [30, -30], [30, 30], [-30, 30]], '#e8383d', { line: 3, depth: 4, hi: false, shadow: '#a02030', tension: 0.08, align: 0.5 });
-    g.strokeStyle = '#fff4e0'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -16); g.lineTo(14, -16); g.moveTo(0, -16); g.lineTo(0, 16); g.moveTo(-16, 4); g.quadraticCurveTo(0, 12, 16, 4); g.stroke();
+    g.save(); g.translate(1070, 646); g.rotate(0.22);
+    [[-8, 2.2], [10, -3]].forEach((q, i) => {
+      tk.celFill(g, [[-96 + i * 6, -5.5], [-30, -6.5], [90, -7.5 + i], [96, 0], [90, 7.5 - i], [-30, 6.5], [-96 + i * 6, 5.5]], i ? '#a8743c' : '#b88a4c', { line: 2.6, depth: 4, hi: 'auto', shadow: '#5a3a1c', tension: 0.15, rim: '#fff0c0', rimSide: 'light', rimW: 1.2, rimAlpha: 0.5 });
+      if (i === 0) for (let x = -64; x <= 20; x += 28) { g.fillStyle = A('#5a3a1a', 0.8); g.fillRect(x, -6, 3, 12); }
+    });
     g.restore();
+    blob(g, 1070, 690, 150, 12, '#3a3650', 0.35);
   }
   function dfDripSpecs() { const r = R('df-drips'), out = []; for (let i = 0; i < 9; i++) out.push({ x: 60 + i * 148 + (r() - 0.5) * 80, len: 100 + r() * 190, w: 3.4 + r() * 4, T: 9 + r() * 8, ph: r(), blot: 8 + r() * 12 }); return out; }
   const DF_DRIPS = dfDripSpecs();
 
-  SCENES.defeat = { id: 'defeat', combat: false, mood: 'ink fading to blank paper', sway: 4, items: [
-    layer('paper', full(0), 0, (g) => paperPaint(g, DW, DH, 7, true)),
+  SCENES.defeat = { id: 'defeat', combat: false, mood: 'the world falls silent', sway: 4, items: [
+    layer('paper', full(0), 0, (g) => hushPaint(g, DW, DH, 7)),
     layer('ink', full(0), 0.04, dfInk),
     layer('blank', full(0), 0, dfBlank),
-    mistLayer('df-fade', 300, 260, '#f8eed4', 0.5, 3, 0.05, 101),
+    mistLayer('df-fade', 300, 260, '#e6e4ee', 0.5, 3, 0.05, 101),
+    // the temple bell, small, in the drained grove: whole, bound again in grey threads, striker still; never cracked
+    layer('bell', { x: 190, y: 480, w: 280, h: 140 }, 0.05, (g) => {
+      g.save(); g.translate(330, 598); g.scale(0.45, 0.45); g.translate(-640, -498);
+      titleBell(g, false);
+      g.restore();
+      g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = A('#8e8aa3', 0.46); g.fillRect(190, 480, 280, 140); g.restore();
+    }),
     layer('pool', { x: 0, y: 600, w: DW, h: 120 }, 0, dfPool),
-    // ink hanging from the top edge and pooled blots, creeping down again and again
+    // colour running out of the world: grey drips hanging from the top edge, creeping down again and again
     anim((ctx, T) => {
       DF_DRIPS.forEach((d, i) => {
         const u = ((T.tt / d.T + d.ph) % 1 + 1) % 1, grow = ss(0, 0.8, u), len = 24 + d.len * grow, x = d.x - T.par * 0.04;
-        tk.inkPath(ctx, [[x, -8], [x + Math.sin(i) * 3, len * 0.5], [x, len]], { w: d.w, color: A('#140f34', 0.92), taper: 0.5, taperStart: 0, pressure: 'flat', wobble: 0.2, seed: i, step: 8 });
-        ctx.fillStyle = A('#140f34', 0.94); ctx.beginPath(); ctx.arc(x, len + d.w * 0.4, d.w * (0.9 + 0.5 * grow), 0, TAU); ctx.fill();
-        ctx.fillStyle = A('#8a80e8', 0.5); ctx.beginPath(); ctx.ellipse(x - d.w * 0.3, len + d.w * 0.1, d.w * 0.26, d.w * 0.5, 0.3, 0, TAU); ctx.fill();
-        if (u > 0.8) { const f = (u - 0.8) / 0.2, fy = len + f * f * 260; ctx.save(); ctx.globalAlpha = 1 - f; ctx.fillStyle = '#140f34'; ctx.beginPath(); ctx.arc(x, fy, d.w * 0.8, 0, TAU); ctx.fill(); ctx.restore(); }
+        tk.inkPath(ctx, [[x, -8], [x + Math.sin(i) * 3, len * 0.5], [x, len]], { w: d.w, color: A('#8e8aa3', 0.92), taper: 0.5, taperStart: 0, pressure: 'flat', wobble: 0.2, seed: i, step: 8 });
+        ctx.fillStyle = A('#8e8aa3', 0.94); ctx.beginPath(); ctx.arc(x, len + d.w * 0.4, d.w * (0.9 + 0.5 * grow), 0, TAU); ctx.fill();
+        ctx.fillStyle = A('#ffffff', 0.7); ctx.beginPath(); ctx.ellipse(x - d.w * 0.3, len + d.w * 0.1, d.w * 0.26, d.w * 0.5, 0.3, 0, TAU); ctx.fill();
+        if (u > 0.8) { const f = (u - 0.8) / 0.2, fy = len + f * f * 260; ctx.save(); ctx.globalAlpha = 1 - f; ctx.fillStyle = '#8e8aa3'; ctx.beginPath(); ctx.arc(x, fy, d.w * 0.8, 0, TAU); ctx.fill(); ctx.restore(); }
       });
     }),
-    layer('brush', { x: 780, y: 540, w: 500, h: 180 }, 0.06, dfBrush),
+    layer('bachi', { x: 780, y: 540, w: 500, h: 180 }, 0.06, dfInstruments),
     anim((ctx, T) => {
       const P = pset('df-ash', 34, (r) => ({ x: r(), y: r(), sp: 0.5 + r() * 0.8, sz: 1 + r() * 3, ph: r() * TAU }));
       const n = Math.round(34 * T.pf);
       ctx.save();
-      for (let i = 0; i < n; i++) { const p = P[i], x = wrapv(p.x * DW + Math.sin(T.tt * 0.4 + p.ph) * 26 + T.tt * 6, -20, DW + 40), y = wrapv(p.y * DH + T.tt * 16 * p.sp, -20, DH + 40); ctx.fillStyle = A('#1a1440', 0.3 + 0.3 * p.sp); ctx.save(); ctx.translate(x, y); ctx.rotate(p.ph + T.tt * 0.3); ctx.fillRect(-p.sz, -p.sz * 0.5, p.sz * 2, p.sz); ctx.restore(); }
+      for (let i = 0; i < n; i++) { const p = P[i], x = wrapv(p.x * DW + Math.sin(T.tt * 0.4 + p.ph) * 26 + T.tt * 6, -20, DW + 40), y = wrapv(p.y * DH + T.tt * 16 * p.sp, -20, DH + 40); ctx.fillStyle = A(i % 2 ? '#6f6b86' : '#f2f0f6', 0.3 + 0.3 * p.sp); ctx.save(); ctx.translate(x, y); ctx.rotate(p.ph + T.tt * 0.3); ctx.fillRect(-p.sz, -p.sz * 0.5, p.sz * 2, p.sz); ctx.restore(); }
       ctx.restore();
     }),
-    vigLayer('df-vig', { color: '#5a3a1a', alpha: 0.4, inner: 0.36 }),
+    vigLayer('df-vig', { color: '#3a3650', alpha: 0.4, inner: 0.36 }),
     grain(0.3),
   ] };
 
 
   // ===============================================================================================================
-  // PAPER: a reusable parchment texture for panels. Warm washi with fibres, mottling, foxing spots, coffee-ring stains, faint creases and an aged
-  // darker edge. Deterministic per (size, seed); `paper` fills any w x h at 1:1 (not scaled from the stage).
+  // PAPER: a reusable silk texture for panels. Pale cool cream with a fine woven crosshatch, soft mottling, faint folds and a soft lavender vignette at
+  // the edge. Deterministic per (size, seed); `paper` fills any w x h at 1:1 (not scaled from the stage).
   // ===============================================================================================================
   function paperPaint(g, w, h, seed, edge) {
     const r = R('paper', seed), k = Math.sqrt(w * h) / 700;                  // features scale gently with the panel size
-    fillRectG(g, 0, 0, w, h, [[0, '#f8eed4'], [0.5, '#f3e6c8'], [1, '#ead8ac']]);
-    g.fillStyle = tk.lin(g, 0, 0, w, h, [[0, A('#fffaf0', 0.5)], [0.5, A('#fffaf0', 0)], [1, A('#c8a060', 0.25)]]); g.fillRect(0, 0, w, h);
+    fillRectG(g, 0, 0, w, h, [[0, '#f1eff5'], [0.5, '#ebe8f1'], [1, '#e2dfea']]);
+    g.fillStyle = tk.lin(g, 0, 0, w, h, [[0, A('#ffffff', 0.5)], [0.5, A('#ffffff', 0)], [1, A('#b8b4d0', 0.22)]]); g.fillRect(0, 0, w, h);
     // soft mottling: a coarse noise field of light and dark tone, drawn as overlapping soft blobs so there are no visible cells
     const step = clamp(Math.round(Math.sqrt(w * h) / 16), 22, 44), sf = 0.0085 / Math.max(0.6, k);
     for (let y = -step / 2; y < h + step; y += step) for (let x = -step / 2; x < w + step; x += step) {
       const v = nz(x * sf + seed * 3.1, y * sf, 17 + seed, 3) - 0.42;
       if (Math.abs(v) < 0.02) continue;
-      blob(g, x + (r() - 0.5) * step * 0.3, y + (r() - 0.5) * step * 0.3, step * 2.0, step * 1.8, v > 0 ? '#fffaf0' : '#c8a060', Math.min(0.13, Math.abs(v) * 0.4));
+      blob(g, x + (r() - 0.5) * step * 0.3, y + (r() - 0.5) * step * 0.3, step * 2.0, step * 1.8, v > 0 ? '#ffffff' : '#b8b4d0', Math.min(0.13, Math.abs(v) * 0.4));
     }
-    // fibres: short curved strokes, dark and light, in two batches
-    const nFib = Math.round(clamp(w * h / 2400, 40, 700));
-    [['#b89058', 0.24, 0.7], ['#fffdf4', 0.5, 0.9]].forEach((c, ci) => {
-      g.strokeStyle = A(c[0], c[1]); g.lineWidth = c[2]; g.beginPath();
-      for (let i = 0; i < nFib * (ci ? 0.8 : 1); i++) { const x = r() * w, y = r() * h, a = r() * TAU, l = 6 + r() * 20, bend = (r() - 0.5) * 8; g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 - Math.sin(a) * bend, y + Math.sin(a) * l * 0.5 + Math.cos(a) * bend, x + Math.cos(a) * l, y + Math.sin(a) * l); }
-      g.stroke();
-    });
-    // coffee-ring stains: an uneven wobbly ring, darker at its rim, with a pale centre and a second fainter ring
-    const nSt = clamp(Math.round(2 + k * 3), 2, 6);
-    for (let i = 0; i < nSt; i++) {
-      const x = r() * w, y = r() * h, rr = (30 + r() * 64) * Math.max(0.5, k), sy = 0.6 + r() * 0.5, sd = seed * 13 + i * 7, pts = [];
-      for (let j = 0; j < 30; j++) { const a2 = j / 30 * TAU, kk = 0.82 + (nz(Math.cos(a2) * 1.6 + sd, Math.sin(a2) * 1.6 + sd, sd, 3) - 0.4) * 0.7; pts.push([x + Math.cos(a2) * rr * kk, y + Math.sin(a2) * rr * kk * sy]); }
-      g.beginPath(); tk.trace(g, { poly: pts }); g.fillStyle = A('#b8905a', 0.05); g.fill();
-      tk.inkPath(g, { poly: pts.concat([pts[0]]) }, { w: 3.4, color: A('#8a6a3a', 0.22), pressure: 'flat', taper: 0, wobble: 0.6, seed: sd, step: 4 });
-      tk.inkPath(g, { poly: pts.map((p) => [x + (p[0] - x) * 0.86, y + (p[1] - y) * 0.86]).concat([[x + (pts[0][0] - x) * 0.86, y + (pts[0][1] - y) * 0.86]]) }, { w: 1.6, color: A('#8a6a3a', 0.12), pressure: 'flat', taper: 0, wobble: 0.6, seed: sd + 1, step: 4 });
-      if (r() < 0.5) { const j = Math.floor(r() * pts.length); disc(g, pts[j][0], pts[j][1], 1.6 + r() * 2, A('#8a6a3a', 0.22)); }
-    }
-    // foxing: tiny brown spots
-    for (let i = 0; i < clamp(Math.round(w * h / 9000), 8, 90); i++) { const x = r() * w, y = r() * h, s = 0.7 + r() * 1.8; g.fillStyle = A(r() < 0.7 ? '#a07840' : '#7a5a30', 0.18 + 0.2 * r()); g.beginPath(); g.arc(x, y, s, 0, TAU); g.fill(); if (s > 1.9) { g.fillStyle = A('#fff0d0', 0.2); g.beginPath(); g.arc(x - 0.4, y - 0.4, s * 0.45, 0, TAU); g.fill(); } }
-    // faint creases: a wobbly dark line with a light line beside it
+    // the weave: two sets of fine 1 px lines, across and down
+    g.lineWidth = 1; g.strokeStyle = A('#6a6684', 0.06); g.beginPath();
+    for (let y = 0.5; y < h; y += 3) { g.moveTo(0, y); g.lineTo(w, y); }
+    for (let x = 0.5; x < w; x += 3) { g.moveTo(x, 0); g.lineTo(x, h); }
+    g.stroke();
+    // faint folds: a wobbly soft line with a light line beside it
     for (let i = 0; i < 2; i++) {
       const vertical = i === 0, p = 0.22 + r() * 0.56, pts = [], n = 8;
       for (let j = 0; j <= n; j++) { const u = j / n, off = (nz(u * 4 + seed, i * 7, 31, 2) - 0.4) * 14; pts.push(vertical ? [w * p + off, u * h] : [u * w, h * p + off]); }
-      tk.inkPath(g, pts, { w: 1.1, color: A('#8a6a3a', 0.13), pressure: 'flat', taper: 0.1, wobble: 0.3, seed: i, step: 6 });
-      tk.inkPath(g, pts.map((q) => [q[0] + (vertical ? 1.5 : 0), q[1] + (vertical ? 0 : 1.5)]), { w: 1.1, color: A('#fffdf4', 0.45), pressure: 'flat', taper: 0.1, wobble: 0.3, seed: i + 5, step: 6 });
+      tk.inkPath(g, pts, { w: 1.1, color: A('#8a86a4', 0.13), pressure: 'flat', taper: 0.1, wobble: 0.3, seed: i, step: 6 });
+      tk.inkPath(g, pts.map((q) => [q[0] + (vertical ? 1.5 : 0), q[1] + (vertical ? 0 : 1.5)]), { w: 1.1, color: A('#ffffff', 0.5), pressure: 'flat', taper: 0.1, wobble: 0.3, seed: i + 5, step: 6 });
     }
-    if (edge !== false) {                                                     // aged edge: darker toward the border, uneven
+    if (edge !== false) {                                                     // a soft lavender vignette toward the border, uneven
       const e = Math.min(w, h) * 0.09;
-      fillRectG(g, 0, 0, w, e, [[0, A('#a8804a', 0.26)], [1, A('#a8804a', 0)]]); fillRectG(g, 0, h - e, w, e, [[0, A('#a8804a', 0)], [1, A('#a8804a', 0.32)]]);
-      g.fillStyle = tk.lin(g, 0, 0, e, 0, [[0, A('#a8804a', 0.26)], [1, A('#a8804a', 0)]]); g.fillRect(0, 0, e, h);
-      g.fillStyle = tk.lin(g, w - e, 0, w, 0, [[0, A('#a8804a', 0)], [1, A('#a8804a', 0.26)]]); g.fillRect(w - e, 0, e, h);
-      for (let i = 0; i < 18; i++) { const side = i % 4, t = r(), x = side === 0 ? t * w : side === 1 ? w : side === 2 ? t * w : 0, y = side === 0 ? 0 : side === 1 ? t * h : side === 2 ? h : t * h; blob(g, x, y, (20 + r() * 40) * Math.max(0.5, k), (14 + r() * 26) * Math.max(0.5, k), '#8a6a3a', 0.22); }
+      fillRectG(g, 0, 0, w, e, [[0, A('#b8a8e0', 0.24)], [1, A('#b8a8e0', 0)]]); fillRectG(g, 0, h - e, w, e, [[0, A('#b8a8e0', 0)], [1, A('#b8a8e0', 0.3)]]);
+      g.fillStyle = tk.lin(g, 0, 0, e, 0, [[0, A('#b8a8e0', 0.24)], [1, A('#b8a8e0', 0)]]); g.fillRect(0, 0, e, h);
+      g.fillStyle = tk.lin(g, w - e, 0, w, 0, [[0, A('#b8a8e0', 0)], [1, A('#b8a8e0', 0.24)]]); g.fillRect(w - e, 0, e, h);
+      for (let i = 0; i < 18; i++) { const side = i % 4, t = r(), x = side === 0 ? t * w : side === 1 ? w : side === 2 ? t * w : 0, y = side === 0 ? 0 : side === 1 ? t * h : side === 2 ? h : t * h; blob(g, x, y, (20 + r() * 40) * Math.max(0.5, k), (14 + r() * 26) * Math.max(0.5, k), '#a898d8', 0.16); }
     }
-    tk.paperGrain(g, 0, 0, w, h, { alpha: 0.75, blend: 'multiply', force: true });
+    tk.paperGrain(g, 0, 0, w, h, { alpha: 0.5, blend: 'multiply', force: true });
   }
-  SCENES.paper = { id: 'paper', combat: false, mood: 'washi parchment', custom: true, items: [layer('paper', full(0), 0, () => {})],
+  SCENES.paper = { id: 'paper', combat: false, mood: 'cool silk', custom: true, items: [layer('paper', full(0), 0, () => {})],
     draw(ctx, id, w, h, t, o) {
       const sd = Math.round(num(o.seed, 0)), edge = o.edge !== false;
       const lq = tk.lowQ() ? 0.5 : 1;
@@ -3243,7 +3388,9 @@
     id = String(id);
     if (!has(id)) return null;
     const d = SCENES[id];
-    return { id, combat: !!d.combat, ground: d.combat ? GROUND : null, mood: d.mood || '', layers: d.items ? d.items.filter((i) => i && i.isLayer).length : 0 };
+    const out = { id, combat: !!d.combat, ground: d.combat ? GROUND : null, mood: d.mood || '', layers: d.items ? d.items.filter((i) => i && i.isLayer).length : 0 };
+    if (d.focus) out.focus = Object.assign({}, d.focus);                 // title: the centrepiece's box in stage px and its layer parallax factor
+    return out;
   };
   scene.ids = ORDER.filter(has);
   scene.lastError = null;
@@ -3292,7 +3439,7 @@
   ORDER.forEach((id) => {
     ART.sheet('scene_' + id, (canvas, params) => {
       const g = canvas.getContext('2d'), t = num(params.t, 0);
-      scene.draw(g, id, params.w, params.h, t, { particles: params.particles === undefined ? 1 : params.particles, parallaxX: num(params.px, 0), logo: params.logo === undefined ? id === 'title' : !!params.logo, seed: num(params.seed, 0) });
+      scene.draw(g, id, params.w, params.h, t, { particles: params.particles === undefined ? 1 : params.particles, parallaxX: num(params.px, 0), logo: params.logo === undefined ? id === 'title' : !!params.logo, seed: num(params.seed, 0), rung: params.rung === true || num(params.rung, 0) > 0 });
       if (params.guides) drawGuides(g, params.w, params.h);
       if (params.actors) drawActors(g, params.w, params.h, id, t);
     });
@@ -3312,7 +3459,7 @@
   ART.sheet('title_anim', (canvas, params) => {
     const t = num(params.t, 0);
     ART.sheetGrid(canvas, params, [0, 1, 2, 3, 4, 5].map((i) => ({ label: 't = ' + (t + i * 2.3).toFixed(1) + ' s', i })), (g, cell, w, h) => {
-      scene.draw(g, 'title', w, h, t + cell.i * 2.3, { particles: 1, logo: true });
+      scene.draw(g, 'title', w, h, t + cell.i * 2.3, { particles: 1, logo: true, rung: params.rung === true || num(params.rung, 0) > 0 });
     }, { aspect: 16 / 9, cols: 3, pad: 8, gap: 6, labelH: 16, bg: 'night' });
   });
 })();

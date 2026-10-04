@@ -1,13 +1,13 @@
-// Inkwoven -- menu screens (owner: menu screens engineer). One IIFE that registers into UI: the screens `title`, `heroSelect`,
+// Echowake -- menu screens (owner: menu screens engineer). One IIFE that registers into UI: the screens `title`, `heroSelect`,
 // `library`, `settings`, `howto` and the overlays `pause` and `settings` (replacing UI's basic settings overlay). Styles live in
 // css/menu.css (classes `mn-*`, scoped under .s-NAME and .o-NAME). This header is the contract of record for screen_menu.js.
 //
 // SCREENS (DESIGN 5.11, 6)
 //   title       params none. The big animated scene (ART.scene.draw 'title' plus ART.scene.logo when the art is real, else a fallback
-//               painted here: moon, ridges, an open book on a cliff, bamboo, the creeping Blank), a pointer parallax (normalised -1..1,
+//               painted here: moon, ridges, a temple bell on a cliff, bamboo, the creeping Hush), a pointer parallax (normalised -1..1,
 //               passed to the scene as opts.parallaxX), petals and fireflies (x0.3 with reduceMotion), a "Tap to begin" gate while audio
-//               is not running, and the menu plaques: Continue (only when META.hasRun(), with META.runInfo() text), New Tale, Daily Tale
-//               (today's seed, the two daily heroes and the best score), Library, Settings, How to Play, a credits line, the version and
+//               is not running, and the menu plaques: Continue (only when META.hasRun(), with META.runInfo() text), New Journey, Daily Jam
+//               (today's seed, the two daily heroes and the best score), Hall, Settings, How to Play, a credits line, the version and
 //               a tiny fullscreen button. Keys: C continue, N new, D daily, L library, S settings, H how to play, arrows move focus.
 //   heroSelect  params none. Four portrait cards (animated ART.hero.portrait whose expression follows hover and selection, locked heroes
 //               silhouetted with the unlock hint of their achievement), a detail sheet (blurb, rows, resource, passive, HP, starter deck,
@@ -191,16 +191,18 @@
       g.fillStyle = gr; g.fillRect(0, 0, w, h);
       const r = U.rng(U.hash('menu-bg', variant));
       if (variant === 'library') {
-        // bookshelf silhouettes far behind the page: rows of spines
+        // rows of hanging bells far behind the page: a cord, a bell silhouette and a gold lip on each
         for (let row = 0; row < 4; row++) {
           const y = 150 + row * 138;
-          let x = -10;
+          let x = 10 + r() * 20;
           while (x < w + 10) {
-            const bw = 12 + r() * 22, bh = 70 + r() * 54, hue = r();
+            const bw = 16 + r() * 22, bh = bw * (1.0 + r() * 0.35), hue = r(), cord = 18 + r() * 34;
             g.fillStyle = hue < 0.5 ? 'rgba(59,42,122,0.42)' : hue < 0.8 ? 'rgba(91,63,168,0.30)' : 'rgba(176,36,92,0.26)';
-            g.fillRect(x, y - bh, bw, bh);
-            g.fillStyle = 'rgba(245,201,106,0.22)'; g.fillRect(x + 2, y - bh + 8, bw - 4, 2); g.fillRect(x + 2, y - bh + 14, bw - 4, 1);
-            x += bw + 1 + r() * 3;
+            g.fillRect(x - 0.8, y - cord - bh, 1.6, cord);
+            g.beginPath(); g.moveTo(x - bw * 0.5, y); g.quadraticCurveTo(x - bw * 0.46, y - bh * 0.7, x - bw * 0.2, y - bh); g.lineTo(x + bw * 0.2, y - bh);
+            g.quadraticCurveTo(x + bw * 0.46, y - bh * 0.7, x + bw * 0.5, y); g.closePath(); g.fill();
+            g.fillStyle = 'rgba(245,201,106,0.22)'; g.fillRect(x - bw * 0.5, y - 3, bw, 2); g.fillRect(x - bw * 0.36, y - bh * 0.55, bw * 0.72, 1);
+            x += bw + 14 + r() * 26;
           }
           g.fillStyle = 'rgba(20,15,46,0.85)'; g.fillRect(0, y, w, 10);
           g.fillStyle = 'rgba(245,201,106,0.25)'; g.fillRect(0, y, w, 2);
@@ -285,14 +287,7 @@
   const sceneIsReal = () => typeof ART !== 'undefined' && !!ART.scene && typeof ART.scene.draw === 'function'
     && (safe(() => ART.has('scene', 'title'), false) || (Array.isArray(ART.scene.ids) && ART.scene.ids.indexOf('title') >= 0));
 
-  const bilerp = (q, u, v) => {                             // a point inside the quad [tl, tr, br, bl]
-    const a = [q[0][0] + (q[1][0] - q[0][0]) * u, q[0][1] + (q[1][1] - q[0][1]) * u];
-    const b = [q[3][0] + (q[2][0] - q[3][0]) * u, q[3][1] + (q[2][1] - q[3][1]) * u];
-    return [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v];
-  };
-  const quadPath = (g, q) => { g.beginPath(); g.moveTo(q[0][0], q[0][1]); for (let i = 1; i < 4; i++) g.lineTo(q[i][0], q[i][1]); g.closePath(); };
-
-  const BOOK = { x: 520, y: 548, L: [[270, 512], [506, 532], [506, 596], [276, 576]], R: [[534, 532], [770, 512], [764, 576], [534, 596]] };
+  const BELL = { x: 520, y: 548 };                          // the fallback bell: its mouth sits on the cliff top, rings and notes rise from here
 
   function titleSprites() {
     if (typeof ART === 'undefined' || !ART.sprite || !T()) return null;
@@ -335,26 +330,20 @@
       const r = U.rng(21);
       g.strokeStyle = 'rgba(95,245,255,0.22)'; g.lineWidth = 1.4;
       for (let i = 0; i < 26; i++) { const x = 240 + r() * 560, y = 566 + r() * 12; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 6, y - 5 - r() * 7); g.stroke(); }
-      // the colossal open book: leather cover, pages, spine
-      const cover = (q) => { quadPath(g, q); g.fillStyle = '#5d0f1c'; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.stroke(); };
-      cover([[258, 508], [506, 528], [506, 608], [264, 588]]); cover([[534, 528], [782, 508], [776, 588], [534, 608]]);
-      const page = (q) => {
-        quadPath(g, q);
-        const pg = g.createLinearGradient(q[0][0], 0, q[1][0], 0); pg.addColorStop(0, '#e6d3a3'); pg.addColorStop(0.5, '#fdf3da'); pg.addColorStop(1, '#f0dfb5');
-        g.fillStyle = pg; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 2.4; g.stroke();
-      };
-      page(BOOK.L); page(BOOK.R);
-      g.fillStyle = '#140f2e'; g.fillRect(504, 526, 32, 74);
-      g.strokeStyle = 'rgba(36,26,58,0.55)'; g.lineWidth = 1.6;
-      for (let i = 0; i < 7; i++) {
-        const v = 0.12 + i * 0.12;
-        [[BOOK.L, 0.08, 0.9], [BOOK.R, 0.1, 0.5 + (i % 3) * 0.08]].forEach((s) => {
-          const a = bilerp(s[0], s[1], v), b = bilerp(s[0], s[2], v);
-          g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
-        });
-      }
-      // an ink bloom drifting across the left page
-      tk.inkBlot(g, 350, 552, 12, { seed: 4, color: '#3b2a7a', drips: 2 });
+      // a great temple bell (bonsho) hanging in a torii frame on the cliff
+      g.fillStyle = '#5d0f1c'; g.strokeStyle = '#140f2e'; g.lineWidth = 3;
+      g.fillRect(396, 398, 14, 170); g.strokeRect(396, 398, 14, 170); g.fillRect(630, 398, 14, 170); g.strokeRect(630, 398, 14, 170);
+      g.fillRect(376, 380, 288, 18); g.strokeRect(376, 380, 288, 18); g.fillRect(392, 412, 256, 10); g.strokeRect(392, 412, 256, 10);
+      g.fillStyle = '#140f2e'; g.fillRect(518, 422, 4, 22);
+      g.beginPath(); g.moveTo(474, 548); g.quadraticCurveTo(478, 494, 500, 470); g.quadraticCurveTo(506, 458, 508, 446); g.lineTo(532, 446); g.quadraticCurveTo(534, 458, 540, 470);
+      g.quadraticCurveTo(562, 494, 566, 548); g.closePath();
+      const bg = g.createLinearGradient(474, 0, 566, 0); bg.addColorStop(0, '#6b5224'); bg.addColorStop(0.45, '#c9a24c'); bg.addColorStop(1, '#5a4320');
+      g.fillStyle = bg; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.stroke();
+      g.fillStyle = 'rgba(20,15,46,0.5)'; g.fillRect(477, 526, 86, 4); g.fillRect(482, 506, 76, 3);
+      g.fillStyle = 'rgba(95,245,255,0.3)'; g.fillRect(500, 474, 4, 46);
+      // the striking log on its cords
+      g.strokeStyle = '#140f2e'; g.lineWidth = 2; g.beginPath(); g.moveTo(440, 422); g.lineTo(440, 500); g.moveTo(462, 422); g.lineTo(462, 500); g.stroke();
+      g.fillStyle = '#6b3a1e'; g.fillRect(428, 500, 44, 10); g.strokeRect(428, 500, 44, 10);
     });
     mkSprite('bam', (g) => {
       const r = U.rng(51);
@@ -371,16 +360,16 @@
       [-14, 34, 92, 148].forEach((x, i) => stalk(x, 16 + (i % 2) * 6, -TM + r() * 120));
       [1116, 1170, 1226, 1284].forEach((x, i) => stalk(x, 18 - (i % 2) * 4, -TM + r() * 140));
     });
-    mkSprite('blank', (g) => {
+    mkSprite('hush', (g) => {
       const r = U.rng(77);
       const edge = (right) => {
         g.beginPath(); g.moveTo(right ? 1280 + TM : -TM, -TM);
         for (let y = -TM; y < 720 + TM; y += 10 + r() * 16) g.lineTo(right ? 1280 - (16 + r() * 44 + Math.sin(y * 0.011) * 22) : 16 + r() * 44 + Math.sin(y * 0.011 + 2) * 22, y);
         g.lineTo(right ? 1280 + TM : -TM, 720 + TM); g.closePath();
-        g.fillStyle = 'rgba(243,230,200,0.13)'; g.fill(); g.strokeStyle = 'rgba(255,248,240,0.34)'; g.lineWidth = 2; g.stroke();
+        g.fillStyle = 'rgba(142,138,163,0.16)'; g.fill(); g.strokeStyle = 'rgba(190,186,210,0.30)'; g.lineWidth = 2; g.stroke();
       };
       edge(true); edge(false);
-      g.fillStyle = 'rgba(243,230,200,0.10)'; g.beginPath(); g.moveTo(-TM, -TM); g.lineTo(300, -TM);
+      g.fillStyle = 'rgba(142,138,163,0.12)'; g.beginPath(); g.moveTo(-TM, -TM); g.lineTo(300, -TM);
       for (let x = 300; x > -TM; x -= 14 + r() * 12) g.lineTo(x, 40 + r() * 70 + (x / 300) * 40);
       g.closePath(); g.fill();
     });
@@ -403,11 +392,19 @@
     if (tk && !reduce()) tk.mist(ctx, 0, 430, 1280, 200, t, { n: 4, seed: 7, color: '#a9c4ff', alpha: 0.10, speed: 12 });
     layer('mid', 20);
     if (tk) {
-      const bx = BOOK.x - S.px * 20 * k, by = BOOK.y - S.py * 12 * k;
+      const bx = BELL.x - S.px * 20 * k, by = BELL.y - S.py * 12 * k;
       const breathe = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.3);
-      tk.glow(ctx, bx, by - 30, 250 * breathe, '#ffe9a8', 0.5 * breathe);
-      tk.glow(ctx, bx, by - 10, 130, '#fff4d6', 0.35);
-      // words lifting off the open book, one by one
+      tk.glow(ctx, bx, by - 60, 220 * breathe, '#ffe9a8', 0.2 * breathe);
+      tk.glow(ctx, bx, by - 24, 90, '#fff4d6', 0.1);
+      // sound rings pulsing out of the bell's mouth
+      ctx.save();
+      for (let i = 0; i < (reduce() ? 1 : 3); i++) {
+        const ph = ((t * 0.28 + i / 3) % 1 + 1) % 1;
+        ctx.globalAlpha = (1 - ph) * 0.55; ctx.strokeStyle = tk.pal.cyan; ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.ellipse(bx, by - 30, 48 + ph * 120, 30 + ph * 90, 0, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+      // notes rising off the bell, one by one
       const nW = reduce() ? 3 : 10;
       for (let i = 0; i < nW; i++) {
         const ph = ((t * 0.11 + i / nW) % 1 + 1) % 1;
@@ -421,7 +418,7 @@
       }
     }
     if (k) { ctx.save(); ctx.translate(640, 760); ctx.rotate(Math.sin(t * 0.55) * 0.0035); ctx.translate(-640, -760); layer('bam', 44); ctx.restore(); } else layer('bam', 0);
-    ctx.save(); ctx.globalAlpha = reduce() ? 0.9 : 0.72 + 0.2 * Math.sin(t * 0.45); layer('blank', 8); ctx.restore();
+    ctx.save(); ctx.globalAlpha = reduce() ? 0.9 : 0.72 + 0.2 * Math.sin(t * 0.45); layer('hush', 8); ctx.restore();
     if (tk) tk.vignette(ctx, 1280, 720, { color: '#07051a', alpha: 0.6, inner: 0.42 });
   }
 
@@ -441,17 +438,16 @@
     ctx.save();
     for (let i = 0; i < 5; i++) {
       const x = cx - w * 0.4 + (i + 0.5) * (w * 0.8 / 5) + (r() - 0.5) * 30;
-      const len = 10 + r() * 22 + (reduce() ? 0 : Math.sin(t * 0.8 + i * 1.9) * 4);
+      const len = 10 + r() * 22 + (reduce() ? 0 : Math.sin(t * 2.4 + i * 1.9) * 7);
       const y0 = cy + size * 0.27;
-      ctx.beginPath(); ctx.moveTo(x - 4, y0); ctx.lineTo(x - 2.6, y0 + len); ctx.arc(x, y0 + len, 3, Math.PI, 0, true); ctx.lineTo(x + 4, y0); ctx.closePath();
-      ctx.fillStyle = tk.pal.ink; ctx.fill();
-      ctx.fillStyle = 'rgba(95,245,255,0.6)'; ctx.fillRect(x - 0.6, y0 + 5, 1.3, len * 0.7);
+      ctx.fillStyle = tk.pal.ink; ctx.fillRect(x - 4, y0, 8, len);
+      ctx.fillStyle = 'rgba(95,245,255,0.7)'; ctx.fillRect(x - 2, y0 + 2, 4, Math.max(2, len - 4));
     }
     // the hanko seal stamped beside the last letter
     ctx.translate(cx + w * 0.5 + 6, cy - size * 0.04); ctx.rotate(-0.07);
     ctx.fillStyle = '#e8383d'; ctx.fillRect(-23, -23, 46, 46);
     ctx.strokeStyle = 'rgba(255,248,240,0.9)'; ctx.lineWidth = 2; ctx.strokeRect(-19, -19, 38, 38);
-    ctx.fillStyle = '#fff8f0'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.bezierCurveTo(11, -2, 11, 11, 0, 11); ctx.bezierCurveTo(-11, 11, -11, -2, 0, -13); ctx.fill();
+    ctx.strokeStyle = '#fff8f0'; ctx.fillStyle = '#fff8f0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, TAU); ctx.stroke();   // an echo ping: dot and ring
     ctx.restore();
   }
 
@@ -465,7 +461,7 @@
     if (o.onclick) b.addEventListener('click', (e) => o.onclick(e, b));
     return b;
   }
-  const TITLE_MEDAL = 26;                                      // hero faces on the Continue and Daily plaques: sized for the 268 px column right of the painted book (menu.css .s-title .mn-menu)
+  const TITLE_MEDAL = 26;                                      // hero faces on the Continue and Daily plaques: sized for the 268 px column right of the painted bell (menu.css .s-title .mn-menu)
   const medalStrip = (ids, size) => mk('span', { class: 'mn-p-meds', 'aria-hidden': 'true' }, (ids || []).map((id) => UI.medallion(id, size || 34)));
 
   let TS = null;                                              // the live title state (one screen at a time)
@@ -481,7 +477,9 @@
       const played = seed ? !!safe(() => META.dailyPlayed(today()), false) : false;
       const real = sceneIsReal();
       const gateOn = !mem.gateDone && !(typeof AUDIO !== 'undefined' && AUDIO && AUDIO.ready);
-      const S = TS = { root, off, hasRun, info, seed, best, played, dHeroes, real, gateOn, px: 0, py: 0, tpx: 0, tpy: 0, atmos: makeAtmos('title', 1), spr: real ? null : titleSprites(), items: [], gate: null, fs: null };
+      const isFn = (f) => typeof f === 'function';
+      const won = isFn(typeof META !== 'undefined' && META && META.trialMax) ? safe(() => META.trialMax() > 0, false) : false;   // true exactly when the profile has a win: the title clears its threads (ART never reads META)
+      const S = TS = { root, off, hasRun, won, info, seed, best, played, dHeroes, real, gateOn, px: 0, py: 0, tpx: 0, tpy: 0, atmos: makeAtmos('title', 1), spr: real ? null : titleSprites(), items: [], gate: null, fs: null };
 
       const menu = mk('nav', { class: 'mn-menu', 'aria-label': 'Main menu' });
       const items = S.items;
@@ -565,7 +563,7 @@
     update(dt, t) {
       const S = TS;
       if (!S) return;
-      if (t - (S.dayT || 0) >= 1 || t < (S.dayT || 0)) { S.dayT = t; S.refreshDaily(); }          // a title left open across midnight must not keep selling yesterday's tale
+      if (t - (S.dayT || 0) >= 1 || t < (S.dayT || 0)) { S.dayT = t; S.refreshDaily(); }          // a title left open across midnight must not keep selling yesterday's jam
       const k = reduce() ? 0 : Math.min(1, dt * 3.2);
       S.px += (S.tpx - S.px) * k; S.py += (S.tpy - S.py) * k;
       if (reduce()) { S.px = 0; S.py = 0; }
@@ -576,7 +574,7 @@
       if (!S) return;
       if (S.real) {
         // parallaxX is a camera offset in STAGE PX (art_scenes.js clamps it to +-90): the pointer at the right edge pans the camera right
-        const ok = art(() => ART.scene.draw(ctx, 'title', 1280, 720, t, { particles: reduce() ? 0.3 : 1, parallaxX: reduce() ? 0 : S.px * 70 }), 'scene-title');
+        const ok = art(() => ART.scene.draw(ctx, 'title', 1280, 720, t, { particles: reduce() ? 0.3 : 1, parallaxX: reduce() ? 0 : S.px * 70, rung: S.won }), 'scene-title');
         if (ok === false || ok === undefined) S.real = false;              // a scene that fails once falls back for good (the fallback paints over it)
         else if (!art(() => { ART.scene.logo(ctx, 640, 176, 760, t); return true; }, 'scene-logo')) drawLogoFallback(ctx, 640, 172, 780, t);
       } else {
@@ -617,7 +615,7 @@
   const SLOT_DX = 75;
   const SLOT = { front: { x: PARTY_CX + SLOT_DX, y: 655, s: 0.92 }, back: { x: PARTY_CX - SLOT_DX, y: 649, s: 0.86 } };
   // The Begin button's two labels. The button is 264 to 273 stage px wide on a desktop (the launch panel is 296 px) and the Larger text size
-  // makes the label 27 px: 'Begin the Daily Tale' was 285 px wide and clipped the gold border, so the Daily label is the short one.
+  // makes the label 27 px: 'Begin the Daily Jam' was 285 px wide and clipped the gold border, so the Daily label is the short one.
   const BEGIN_TALE = 'Begin the Journey', BEGIN_DAILY = 'Begin Daily Jam';
   const heroUnlocked = (id) => safe(() => META.isUnlocked('hero', id), true) !== false;
   const isCompact = (root) => !!(root && root.closest && root.closest('.compact'));    // phone landscape: UI puts class compact on #stage
@@ -659,7 +657,7 @@
   }
 
   let HS = null;                                                // the live hero select state
-  // The Daily Tale hands out every hero, so a hero locked in the profile stops looking locked while Daily is on. ONE rule for the painted portrait,
+  // The Daily Jam hands out every hero, so a hero locked in the profile stops looking locked while Daily is on. ONE rule for the painted portrait,
   // the card's class (padlock, greyed plate), the detail sheet and the aria label: the canvas and the DOM cannot disagree about it.
   const heroLocked = (id) => !heroUnlocked(id) && !(HS && HS.daily);
   const BANTER = ['start', 'kill', 'swap', 'win', 'hurt', 'down'];
@@ -1534,7 +1532,7 @@
   const getSet = (k) => safe(() => UI.getSetting(k), DATA.SETTINGS[k] && DATA.SETTINGS[k].def);
   const setSet = (k, v) => { UI.setSetting(k, v); };
 
-  // Erase the profile behind two confirmations. Settings survive; the saved tale goes with the rest.
+  // Erase the profile behind two confirmations. Settings survive; the saved journey goes with the rest.
   function clearAllData(done) {
     UI.confirm({ title: 'Erase all progress?', body: 'Unlocks, achievements, history, the bestiary and your saved journey will be erased. Your settings stay.', yes: 'Continue', no: 'Keep everything', danger: true })
       .then((ok) => (ok ? UI.confirm({ title: 'Really erase every echo?', body: 'This cannot be undone. Every Chime and every verse you have heard will be gone.', yes: 'Erase everything', no: 'Cancel', danger: true }) : false))
@@ -1660,26 +1658,29 @@
     return { el: cv.c, update(dt, t) { if (!cv.g) return; cv.g.clearRect(0, 0, HT_W, HT_H); cv.g.save(); art(() => paint(cv.g, t), 'howto'); cv.g.restore(); } };
   }
 
-  // ---- 1. the living book
+  // ---- 1. a land without sound
   function paintBook(g, t) {
     illusBg(g, 'night');
     const tk = T();
     if (tk) { tk.stars(g, 0, 0, HT_W, 220, t, { n: 46, seed: 2 }); tk.moon(g, 430, 66, 32, { glow: 0.7, seed: 1 }); }
-    const L = [[104, 236], [256, 250], [256, 312], [110, 298]], R = [[264, 250], [416, 236], [410, 298], [264, 312]];
-    const cover = (q) => { quadPath(g, q); g.fillStyle = '#5d0f1c'; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.stroke(); };
-    cover([[96, 232], [256, 246], [256, 326], [102, 312]]); cover([[264, 246], [424, 232], [418, 312], [264, 326]]);
-    [L, R].forEach((q) => { quadPath(g, q); g.fillStyle = '#f7ecd0'; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 2.4; g.stroke(); });
-    g.fillStyle = '#140f2e'; g.fillRect(254, 248, 12, 66);
-    g.strokeStyle = 'rgba(36,26,58,0.5)'; g.lineWidth = 1.5;
-    for (let i = 0; i < 5; i++) { const v = 0.15 + i * 0.16; [[L, 0.1, 0.9], [R, 0.1, 0.55 + (i % 2) * 0.2]].forEach((s) => { const a = bilerp(s[0], s[1], v), b = bilerp(s[0], s[2], v); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }); }
-    if (tk) { const br = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.4); tk.glow(g, 260, 250, 150 * br, '#ffe9a8', 0.5 * br); }
-    // the road of ink across the pages: hero start, stops, the boss
+    // a grey, still landscape strip: two ridges and a pale ground band under the path
+    const ridge = (base, amp, col, seed) => {
+      const r = U.rng(seed);
+      g.beginPath(); g.moveTo(0, HT_H);
+      for (let x = 0; x <= HT_W; x += 20) g.lineTo(x, base + Math.sin(x * 0.02 + seed) * amp + (r() - 0.5) * amp * 0.5);
+      g.lineTo(HT_W, HT_H); g.closePath(); g.fillStyle = col; g.fill();
+    };
+    ridge(222, 20, 'rgba(96,92,122,0.85)', 3); ridge(262, 16, 'rgba(60,56,88,0.95)', 7);
+    g.fillStyle = 'rgba(38,34,62,0.95)'; g.fillRect(0, 310, HT_W, HT_H - 310);
+    g.fillStyle = 'rgba(190,186,210,0.18)'; g.fillRect(0, 310, HT_W, 2);
+    if (tk) { const br = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.4); tk.glow(g, 90, 170, 120 * br, '#5ff5ff', 0.22 * br); }
+    // the sound path from the heroes to the boss, with the shop, camp and elite stamps on it
     const pts = [[62, 160], [150, 118], [240, 162], [330, 112], [446, 148]];
     const p = (t * 0.16) % 1.25;
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    g.strokeStyle = 'rgba(245,201,106,0.28)'; g.lineWidth = 9; g.beginPath(); pts.forEach((q, i) => { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke();
+    g.strokeStyle = 'rgba(95,245,255,0.22)'; g.lineWidth = 9; g.beginPath(); pts.forEach((q, i) => { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke();
     const total = pts.length - 1, upto = clamp(p, 0, 1) * total;
-    g.strokeStyle = '#f5c96a'; g.lineWidth = 5; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    g.strokeStyle = '#7af7ff'; g.lineWidth = 5; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
     let head = pts[0];
     for (let i = 0; i < total; i++) { const k = clamp(upto - i, 0, 1); if (k <= 0) break; head = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k]; g.lineTo(head[0], head[1]); }
     g.stroke(); g.restore();
@@ -1689,8 +1690,12 @@
     if (tk) tk.glow(g, pts[4][0], pts[4][1], 44 * pulse, '#e8383d', 0.5);
     art(() => ART.icon.draw(g, 'tile', 'boss', pts[4][0], pts[4][1], 52 * pulse, {}), 'tile');
     partyOf().forEach((id, i) => art(() => ART.hero.medallion(g, id, pts[0][0] - 8 + i * 30, pts[0][1] + 2 - i * 4, 19), 'medal'));
-    // the Blank creeping in from the right
-    if (tk && !reduce()) tk.mist(g, 0, 200, HT_W, 170, t, { n: 3, seed: 5, color: '#f3e6c8', alpha: 0.08, speed: 14 });
+    // the Hush creeping in from the right as grey mist
+    g.save();
+    const hg = g.createLinearGradient(HT_W * 0.55, 0, HT_W, 0); hg.addColorStop(0, 'rgba(142,138,163,0)'); hg.addColorStop(1, 'rgba(142,138,163,' + (0.34 + (reduce() ? 0 : 0.06 * Math.sin(t * 0.8))).toFixed(2) + ')');
+    g.fillStyle = hg; g.fillRect(HT_W * 0.55, 90, HT_W * 0.45, 250);
+    g.restore();
+    if (tk && !reduce()) tk.mist(g, HT_W * 0.4, 130, HT_W * 0.6, 200, t, { n: 3, seed: 5, color: '#a9a6bd', alpha: 0.10, speed: 14 });
     label(g, '3 verses, 3 bosses', 260, 352, 17, '#ffe9a8');
     illusFg(g);
   }
@@ -1913,7 +1918,7 @@
     return { el: wrap };
   }
 
-  // ---- 8. after the tale
+  // ---- 8. after the journey
   function buildAfter() {
     const wrap = mk('div', { class: 'mn-after' });
     const tmax = safe(() => META.trialMax(), 0) || 0;

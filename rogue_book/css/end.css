@@ -10,7 +10,8 @@
 .en-none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .en-none-text { margin: .4em 0 1.2em; text-align: center; font: 500 calc(18px * var(--ts)) / 1.4 var(--font-ui); }
 .en-screen .tw-off { opacity: 0; }
-.tw-caret { display: inline-block; width: 3px; height: 1.05em; margin: 0 1px 0 2px; vertical-align: text-bottom; border-radius: 2px; background: var(--vermilion); animation: enBlink .8s steps(1) infinite; }
+.tw-caret { display: inline-block; width: 3px; height: 1.05em; margin: 0 1px 0 2px; vertical-align: text-bottom; border-radius: 2px; background: #5a4ae0; box-shadow: 0 0 6px rgba(95, 245, 255, .8); animation: enPulseBar .9s ease-in-out infinite; }
+@keyframes enPulseBar { 0%, 100% { transform: scaleY(.55); opacity: .55; } 50% { transform: scaleY(1.1); opacity: 1; } }
 @keyframes enBlink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 @keyframes enRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes enPop { 0% { opacity: 0; transform: scale(.6); } 60% { opacity: 1; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
@@ -52,13 +53,13 @@
 .s-story { --pg-x: 540px; }
 .s-victory { --pg-x: 250px; --vc-col: 588px; }          /* --vc-col: the showcase is two equal columns with 36 px margins, so the gap between them sits on the stage axis (x 640) */
 .st-page { position: absolute; left: var(--pg-x); top: 54px; width: 700px; height: 612px; pointer-events: auto; animation: enSlideR .6s var(--ease-out) both; cursor: pointer;
-  box-shadow: 0 18px 44px rgba(5, 3, 18, .7), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 0 46px rgba(150, 110, 50, .24); }
+  box-shadow: 0 18px 44px rgba(5, 3, 18, .7), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 0 46px rgba(95, 80, 160, .22), 0 0 0 3px #1b1430, 0 0 0 4px rgba(245, 201, 106, .7); }
 .st-page::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 46px; pointer-events: none; border-radius: 10px 0 0 10px;
-  background: linear-gradient(90deg, rgba(90, 60, 20, .34), rgba(90, 60, 20, 0)); }
+  background: linear-gradient(90deg, transparent 0 3px, rgba(245, 201, 106, .85) 3px 4px, transparent 4px 41px, rgba(245, 201, 106, .55) 41px 42px, transparent 42px), linear-gradient(90deg, #1b1430, #2a1f4a 82%, #1b1430); }
 .st-page::after { content: ""; position: absolute; right: 0; bottom: 0; width: 58px; height: 58px; pointer-events: none; border-radius: 0 0 8px 0;
-  background: linear-gradient(135deg, transparent 50%, rgba(120, 90, 40, .28) 50%, rgba(255, 246, 220, .65) 78%, rgba(120, 90, 40, .22) 100%); }
+  background: linear-gradient(135deg, transparent 0 56%, #f5c96a 56% 62%, transparent 62% 70%, rgba(245, 201, 106, .6) 70% 73%, transparent 73%), linear-gradient(135deg, transparent 50%, rgba(27, 20, 48, .9) 50%); }
 .st-page > .p-body { display: flex; flex-direction: column; height: 100%; padding: 26px 42px 20px 50px;
-  background: radial-gradient(circle at 82% 78%, transparent 0 74px, rgba(168, 116, 32, .13) 75px 78px, transparent 79px), radial-gradient(circle at 82% 78%, rgba(232, 56, 61, .05) 0 70px, transparent 71px); }
+  background: radial-gradient(circle at 82% 78%, transparent 0 74px, rgba(168, 116, 32, .13) 75px 78px, transparent 79px), radial-gradient(circle at 82% 78%, rgba(95, 80, 160, .07) 0 70px, transparent 71px); }
 .st-head { flex: none; text-align: center; margin: 0 4px 0 -4px; }   /* the page pads 50 left (the spine) and 42 right: -4 and +4 centre the head on the page itself */
 .st-kicker { position: relative; display: inline-block; margin: 0; padding: 0 1.3em; font: 800 calc(13px * var(--ts)) / 1 var(--font-ui); letter-spacing: .42em; color: var(--verm-d); animation: enRise .6s var(--ease-out) .1s both; }
 .st-kicker::before, .st-kicker::after { content: ""; position: absolute; top: 50%; width: 44px; height: 2px; background: linear-gradient(90deg, transparent, var(--verm-d)); }
@@ -77,7 +78,7 @@
 .st-body.scrolled { -webkit-mask: linear-gradient(180deg, transparent 0, #000 22px); mask: linear-gradient(180deg, transparent 0, #000 22px); }
 .st-text { margin: 0; font: 500 calc(19px * var(--ts)) / 1.6 var(--font-display); color: #231a3a; text-align: left; hyphens: auto; }
 .st-drop { position: relative; float: left; display: grid; place-items: center; width: calc(74px * var(--ts)); height: calc(78px * var(--ts)); margin: 6px 14px 2px 0; border: 4px solid transparent; border-radius: 6px;
-  background: radial-gradient(circle at 30% 22%, #6a48b8, #1a1340 72%) padding-box, var(--gold-leaf) border-box; box-shadow: 0 3px 0 var(--ink), 0 8px 14px rgba(40, 20, 0, .35), inset 0 0 0 2px rgba(20, 15, 46, .85);
+  background: radial-gradient(circle at 50% 50%, transparent 0 33px, rgba(245, 201, 106, .35) 34px 35px, transparent 36px), radial-gradient(circle at 30% 22%, #6a48b8, #1a1340 72%) padding-box, var(--gold-leaf) border-box; border-radius: 50%; box-shadow: 0 3px 0 var(--ink), 0 8px 14px rgba(40, 20, 0, .35), inset 0 0 0 2px rgba(20, 15, 46, .85);
   animation: enPop .6s var(--ease-back) .35s both; }
 .st-drop b { font: 800 calc(56px * var(--ts)) / 1 var(--font-display); color: var(--gold2); text-shadow: 0 2px 0 #140f2e, 0 0 16px rgba(245, 201, 106, .7); transform: translateY(-2px); }
 .st-drop::before, .st-drop::after { content: ""; position: absolute; width: 11px; height: 11px; background: radial-gradient(circle, #fff 0 16%, var(--gold2) 17% 40%, transparent 42%);
