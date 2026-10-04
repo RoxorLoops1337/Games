@@ -32,6 +32,10 @@ const PHYS = (() => {
     wallMu: 0.4,
     wallTol: 3,        // a body's EXTENT may sink this far into a side wall before it is pushed back (round 23, stuck prize fix)
     heldDecay: 8,     // b.held counts down this fast per second (2 -> 0 in a quarter second)
+    // (round 25) strandWatch's claw zone: a prize still for 3 s with its centre above strandHigh (cabinet y; the
+    // rail is at 26, the parked claw's palm at about 50) or its top above strandTop (the rail's underside and its
+    // end caps) is never resting on the pile, whatever it touches: it goes back in over the bin
+    strandHigh: 60, strandTop: 31,
   };
   // Item part shapes derived from Clawspire's shape descriptors.
   const SHAPE = {
@@ -362,6 +366,11 @@ const PHYS = (() => {
       m, I, invM: dyn ? 1 / m : 0, invI: dyn ? 1 / I : 0,
       parts, br, px: new Float64Array(parts.length), py: new Float64Array(parts.length),
       sl: !dyn, slT: 0, held: 0, world: null,
+      restOn: null, restN: -1,   // (round 25) the awake body a sleeper rests on, and the substep it last touched it (restLeft)
+      // (round 25) fields the rig and the stuck prize net set later, declared here so every body keeps one
+      // shape: added on the fly they made the hot loops polymorphic (a seeded stress with the net running every
+      // frame took 19 s, 4 s with them declared; the same steps, the same results)
+      passClaw: 0, tube: 0, tubeK: 1, stT: null, stX: 0, stY: 0, stN: 0,
       // material physics (applyMaterial): gravity scale, air drag, floor slickness, bounce threshold
       gs: o.gs == null ? 1 : o.gs, drag: o.drag || 0, slick: o.slick == null ? 1 : o.slick, bounceV: o.bounceV || PH.bounceV, mat: null,
       box: { x0: 0, y0: 0, x1: 0, y1: 0 },
@@ -522,6 +531,9 @@ const PHYS = (() => {
       if (b && a.sl !== b.sl) {
         const s = a.sl ? a : b, o = a.sl ? b : a;
         if (c.pen > PH.wakePen || Math.hypot(o.vx, o.vy) > PH.wakeV) wake(s);
+        // (round 25) ...and a sleeper resting ON an awake body notes it this substep: when that body moves
+        // away (the claw's load drops down the chute from under it), physStep wakes it so it falls too
+        else if (s.type === 'dynamic' && (s === a ? c.ny > 0.25 : c.ny < -0.25)) { s.restOn = o; s.restN = W.steps; }
       }
       const ima = a.sl ? 0 : a.invM, iIa = a.sl ? 0 : a.invI;
       const imb = b && !b.sl ? b.invM : 0, iIb = b && !b.sl ? b.invI : 0;
@@ -594,6 +606,31 @@ const PHYS = (() => {
     if (b.x + e.hi > maxR) { b.x = maxR - e.hi; if (b.vx > 0) b.vx = 0; }
     else if (b.x - e.lo < minL) { b.x = minL + e.lo; if (b.vx < 0) b.vx = 0; }
   }
+  /* (round 25) The same for the lid (cb.lidY, its underside; only a cabinet
+     has one): a long prize flung up on end stood with its top through the
+     lid, the lid pushed that part UP, the centre clamp held it, and it hung
+     there for ever.  Its top may sink PH.wallTol into the lid. */
+  function lidInside(b, cb) {
+    const c = Math.cos(b.a), s = Math.sin(b.a);
+    let up = -Infinity;
+    for (let i = 0; i < b.parts.length; i++) { const p = b.parts[i], u = p.r - (p.x * s + p.y * c); if (u > up) up = u; }
+    const minY = cb.lidY - PH.wallTol;
+    if (b.y - up < minY) { b.y = minY + up; if (b.vy < 0) b.vy = 0; }
+  }
+  /* (round 25) A sleeper does not move, collide with the walls or feel
+     gravity.  One that slept resting on an awake body (a prize riding the
+     claw's load while the claw waits over the chute) stayed asleep in mid-air
+     when that body dropped away from under it.  It wakes now, once that
+     support no longer touches it and is on its way (faster than PH.sleepV,
+     or clear of it); a support creeping a hair away is waited for, one that
+     fell asleep too still holds it, and a removed one already woke everything. */
+  function restLeft(b, W) {
+    if (b.restN === W.steps) return;
+    const o = b.restOn;
+    if (o.world !== W || o.sl) { b.restOn = null; return; }
+    const dx = o.x - b.x, dy = o.y - b.y, far = b.br + o.br + 4;
+    if (o.vx * o.vx + o.vy * o.vy > PH.sleepV * PH.sleepV || dx * dx + dy * dy > far * far) { b.restOn = null; wake(b); }
+  }
   /* One substep: gravity and damping, contacts, integration, the hard
      clamps, held decay and sleeping. */
   function physStep(W, h) {
@@ -609,7 +646,8 @@ const PHYS = (() => {
     prepContacts(W, h);
     solveContacts(W);
     for (const b of B) {
-      if (b.sl || b.type !== 'dynamic' || b.tube) continue;
+      if (b.sl) { if (b.restOn) restLeft(b, W); continue; }
+      if (b.type !== 'dynamic' || b.tube) continue;
       const sp = b.vx * b.vx + b.vy * b.vy;
       if (sp > PH.maxV * PH.maxV) { const k = PH.maxV / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
       b.x += b.vx * h; b.y += b.vy * h; b.a += b.av * h;
@@ -624,6 +662,7 @@ const PHYS = (() => {
       // clamp has its far end in or beyond the wall, where the wall segment pushes those parts OUT, pins
       // the body, and it hangs there at rail height for ever.  Bound the extent too.
       if (b.x + b.br > cb.xMax + 5 + PH.wallTol || b.x - b.br < cb.xMin - 5 - PH.wallTol) wallInside(b, cb);
+      if (cb.lidY != null && b.y - b.br < cb.lidY - PH.wallTol) lidInside(b, cb);   // (round 25) ...and the lid
       if (b.held > 0) b.held -= h * PH.heldDecay;
       if (b.passClaw > 0) b.passClaw -= h;
       if (!W.busy && sp < PH.sleepV * PH.sleepV && Math.abs(b.av) < PH.sleepW && b.held <= 0) {
@@ -767,7 +806,7 @@ const PHYS = (() => {
       segs.push(mkSeg(chuteX - slopeW, h + 2, chuteX - 6, h - slopeH, 5, 'slopeR'));
     }
     W.segs = segs;
-    W.clampBox = { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX, trayY: trayY - RIG.floorSink };
+    W.clampBox = { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX, trayY: trayY - RIG.floorSink, lidY: RIG.lid + 4 };   // lidY: the lid's underside (round 25)
     return {
       segs, bodies: [],
       bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, trayY, slopeW, slopeH },
@@ -1648,36 +1687,70 @@ const PHYS = (() => {
     return S;
   }
 
-  // ---- stuck prize safety net (round 23) ---------------------------------
-  /* Call once per frame after W.step(dt).  Two jobs, neither touches a body
-     that is behaving:
+  // ---- stuck prize safety net (round 23, widened in round 25) ------------
+  /* Call once per frame after W.step(dt).  None of it touches a body that is
+     behaving (a prize in the pile, moving, held, or held up on purpose):
        1. a body that left the glass (or is not a number) goes back in over
           the bin, still;
-       2. an awake body with nothing under it, nearly still, that has not
-          moved for o.after seconds (default 3) is nudged down and toward the
-          bin; if that does not free it, it is set back in over the bin.
-     o.skip(b) -> true exempts a body a game mode holds in the air on purpose.
-     Returns the bodies it moved.  Pure state, so it is deterministic. */
+       2. a SLEEPING body that pokes through the glass or the lid (a sleeper
+          is never clamped) goes straight back in over the bin when it is up
+          in the claw's zone (3 below), and lower down is woken so physStep's
+          clamps slide it back in at once;
+       3. a body up in the claw's zone (its centre above o.highY, default
+          PH.strandHigh, or its top above o.topY, default PH.strandTop: the
+          rail and its end caps) that has not moved 3 px for o.after seconds
+          (default 3) is set back in over the bin with a small push down,
+          asleep or awake, resting on something or not: no prize belongs up
+          there;
+       4. lower down, an awake body with nothing under it (a contact with the
+          lid or a side wall is not support: that is a part sunk into it),
+          nearly still, that has not moved for o.after seconds is nudged
+          down and toward the bin; if that does not free it, it is set back
+          in over the bin.
+     Exempt: bodies the claw holds (held, awake) or has in the vacuum's
+     canister (a tube flag the rig no longer knows is cleared), and
+     anything o.skip(b) names: a game mode holding it in the air on purpose,
+     for as long as that effect lasts.  Returns the bodies it moved.  Pure
+     state, so it is deterministic. */
   const strandSup = new Set();
+  const STRAND_NOSUP = { lid: 1, left: 1, right: 1 };
   function strandWatch(W, dt, o) {
     const out = [];
     o = o || {};
     if (!W || !(dt > 0) || !(W.gravity.y > 0)) return out;
     const cb = W.clampBox, after = o.after == null ? 3 : o.after;
     const wallR = cb.xMax + 5, binR = Math.min(cb.chuteX, wallR) - 10, dropY = o.dropY == null ? 30 : o.dropY;
+    const highY = o.highY == null ? PH.strandHigh : o.highY, topY = o.topY == null ? PH.strandTop : o.topY;
+    const tol = PH.wallTol + 1, K = W.ctl;
     strandSup.clear();
-    for (const c of W.contacts) { if (c.ny > 0.25) strandSup.add(c.a); if (c.b && c.ny < -0.25) strandSup.add(c.b); }
+    for (const c of W.contacts) {
+      if (c.seg && STRAND_NOSUP[c.seg.wall]) continue;   // (round 25) a part sunk into the lid or a wall is not resting on it
+      if (c.ny > 0.25) strandSup.add(c.a);
+      if (c.b && c.ny < -0.25) strandSup.add(c.b);
+    }
     for (const b of W.bodies) {
       if (b.type !== 'dynamic') continue;
       const nan = !(Number.isFinite(b.x) && Number.isFinite(b.y));
       if (nan || b.x < -2 || b.x > wallR + 2 || b.y < cb.yMin - 30 || b.y > cb.trayY + 30) { strandBack(b, cb, binR, dropY, nan); out.push(b); continue; }
-      if (b.sl || strandSup.has(b)) { b.stT = 0; b.stN = 0; continue; }   // settled: forgiven
-      if (b.tube || b.held > 0 || Math.hypot(b.vx, b.vy) > 14 || (o.skip && o.skip(b))) { b.stT = 0; continue; }
+      if (b.tube) {
+        if (K && K.tube && K.tube.some((e) => e.b === b)) { b.stT = 0; continue; }   // in the vacuum's canister
+        b.tube = 0; b.tubeK = 1; wake(b);   // (round 25) a canister flag nobody holds any more
+      }
+      if ((b.held > 0 && !b.sl) || (o.skip && o.skip(b))) { b.stT = 0; b.stN = 0; continue; }
+      const high = b.y < highY || b.box.y0 < topY;
+      if (b.sl && (b.box.x1 > wallR + tol || b.box.x0 < cb.xMin - 5 - tol || (cb.lidY != null && b.box.y0 < cb.lidY - tol))) {
+        // (round 25) a sleeper through the glass or the lid: up in the claw's zone it goes straight back in over
+        // the bin; lower down it is woken and the clamps take it from here
+        if (high) { strandBack(b, cb, binR, dropY, false); b.vy = 40; } else { wake(b); b.stT = 0; }
+        out.push(b); continue;
+      }
+      if (!high && (b.sl || strandSup.has(b))) { b.stT = 0; b.stN = 0; continue; }   // settled in the bin: forgiven
+      if (!high && !b.sl && Math.hypot(b.vx, b.vy) > 14) { b.stT = 0; continue; }   // (up high only the 3 px counts: a pinned body may buzz)
       if (b.stT == null || Math.hypot(b.x - b.stX, b.y - b.stY) > 3) { b.stX = b.x; b.stY = b.y; b.stT = 0; continue; }
       b.stT += dt;
       if (b.stT < after) continue;
       b.stT = 0;
-      if (b.stN > 0) { b.stN = 0; strandBack(b, cb, binR, dropY, false); }
+      if (high || b.stN > 0) { b.stN = 0; strandBack(b, cb, binR, dropY, false); if (high) b.vy = 40; }
       else { b.stN = 1; wake(b); b.vy = Math.max(b.vy, 80); b.vx += (b.x < binR * 0.5 ? 1 : -1) * 60; b.av += 1.5; }
       out.push(b);
     }
@@ -1686,7 +1759,7 @@ const PHYS = (() => {
   function strandBack(b, cb, binR, dropY, nan) {
     const x = nan ? binR * 0.5 : b.x;
     b.x = clamp(x, cb.xMin + b.br, Math.max(cb.xMin + b.br, binR - b.br));
-    b.y = dropY; b.vx = b.vy = b.av = 0; b.stT = 0; b.stN = 0; b.passClaw = 0; b.held = 0;
+    b.y = dropY; b.vx = b.vy = b.av = 0; b.stT = 0; b.stN = 0; b.passClaw = 0; b.held = 0; b.restOn = null;
     if (nan) b.a = 0;
     wake(b); sync(b);
   }
