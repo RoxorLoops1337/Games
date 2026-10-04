@@ -938,6 +938,7 @@ const GAME = (() => {
     replay(el, kind);
   }
   function setScreen(name) {
+    if (name !== S.screen) perfScreen();   // PERF (round 24): Auto quality starts every new screen at full
     transition(S.screen, name);
     mixScreen(S.screen, name);   // MIX (round 10): the content rises in, the lists stagger, the HUD slides back, the run-end numbers count
     m2Leave(S.screen, name);   // M2 (round 18): back home, the hidden run stops let their cards go
@@ -15241,6 +15242,7 @@ const GAME = (() => {
     } else if (S.screen === 'map' || (run && S.screen !== 'fight' && S.screen !== 'gameover' && S.screen !== 'win')) {
       drawMap(ctx, t);
     } else if (S.screen === 'fight' && F && FS) {
+      if (MGL.cv) mapGroundFree();   // (PERF round 24: the map's ground layer is not kept through a fight)
       drawFight(ctx, t);
     } else if (run && R && R.bg) {
       R.bg(ctx, W, H, run.act, t);
@@ -15315,6 +15317,65 @@ const GAME = (() => {
     MAPC.prog = pr ? `${pr.revealed} of ${pr.total} hexes lit` : '';
     return MAPC;
   }
+  /* PERF (round 24, DESIGN.md "Optimization pass (round 24)"): the map's ground (pass 1) for the hexes that
+     never move (RENDER.terrainLive false: land, fords, calm water) is painted once into a layer on the main
+     canvas's own device pixel grid and copied in with one drawImage while the view holds still; the hexes that
+     do move (ripples, lava, embers) are painted live over it, in the same order as before. The camera math is
+     untouched: the layer is keyed on everything the ground's pixels depend on (the map's paint cache, zoom,
+     the origin, the hex size, the map area, the backing store) and only built once that key has held for two
+     frames, so a pan, a zoom or a walk paints live exactly as before. Any other transform on the canvas (a
+     shake, the zoom punch, photo mode) paints live too. Returns false when the caller must paint the ground. */
+  const MGL = { cv: null, g: null, key: '', cand: '', n: 0, ix: 0, iy: 0, P: null };
+  function mapGroundFree() { if (MGL.cv) { MGL.cv.width = MGL.cv.height = 0; } MGL.cv = MGL.g = MGL.P = null; MGL.key = MGL.cand = ''; MGL.n = 0; }
+  function mapGround(ctx, P, A, z, ox, oy, size, x0, x1, y0, y1, st) {
+    const R = X.RENDER;
+    if (S.headless || !R || !R.terrainLive || !R.terrainHex || P.biome === 'machine' || P.biome === 'depths' || typeof ctx.getTransform !== 'function' || typeof document === 'undefined') return false;
+    const px = S.px, cv = S.cv;
+    let m;
+    try { m = ctx.getTransform(); } catch (e) { return false; }
+    // (the canvas keeps its matrix in single precision: S.px reads back to about 1e-7)
+    if (!m || !cv || Math.abs(m.a - px) > 1e-5 || Math.abs(m.d - px) > 1e-5 || m.b !== 0 || m.c !== 0 || Math.abs(m.e) > 1e-6 || Math.abs(m.f) > 1e-6) return false;
+    const key = z + ',' + ox + ',' + oy + ',' + size + ',' + A.x + ',' + A.y + ',' + A.w + ',' + A.h + ',' + px + ',' + cv.width + ',' + cv.height + ',' + st.orient;
+    if (MGL.P !== P) { mapGroundFree(); MGL.P = P; }
+    if (key !== MGL.key) {
+      if (key === MGL.cand) MGL.n++; else { MGL.cand = key; MGL.n = 1; }
+      if (MGL.n < 2) return false;   // the view is still moving: live, as before
+      // build: the area's device pixels, snapped to whole pixels of the main canvas
+      const ix = Math.floor(A.x * px), iy = Math.floor(A.y * px);
+      const w = Math.min(cv.width, Math.ceil((A.x + A.w) * px)) - ix, h = Math.min(cv.height, Math.ceil((A.y + A.h) * px)) - iy;
+      if (!(w > 0 && h > 0)) return false;
+      try {
+        if (!MGL.cv) { MGL.cv = document.createElement('canvas'); MGL.g = MGL.cv.getContext('2d'); }
+        const g = MGL.g;
+        if (!g) { mapGroundFree(); return false; }
+        if (MGL.cv.width !== w || MGL.cv.height !== h) { MGL.cv.width = w; MGL.cv.height = h; } else { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h); }
+        g.setTransform(px, 0, 0, px, -ix, -iy);
+        g.save();
+        g.beginPath(); g.rect(A.x, A.y, A.w, A.h); g.clip();
+        for (const it of P.items) {
+          const x = it.wx * z + ox, y = it.wy * z + oy;
+          if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+          st.fill = it.fill; st.seed = it.seed;
+          if (it.gl === undefined) it.gl = !!R.terrainLive(it.t, st);
+          if (!it.gl) R.terrainHex(g, x, y, size, it.t, st);
+        }
+        g.restore();
+      } catch (e) { mapGroundFree(); return false; }
+      MGL.key = key; MGL.ix = ix; MGL.iy = iy;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(MGL.cv, MGL.ix, MGL.iy);
+    ctx.restore();
+    for (const it of P.items) {
+      if (!it.gl) continue;
+      const x = it.wx * z + ox, y = it.wy * z + oy;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      st.fill = it.fill; st.seed = it.seed;
+      R.terrainHex(ctx, x, y, size, it.t, st);
+    }
+    return true;
+  }
   function drawMap(ctx, t) {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
@@ -15345,7 +15406,7 @@ const GAME = (() => {
     accMapPunch(ctx, A);   // ACCESS (round 6): the zoom punch toward a hex just lit (a draw transform, inside the area)
     // Pass 1: the ground (water, fords, land) under every hex in view.
     st.t = t; st.orient = L.orient; st.biome = P.biome; st.ink = M.ink;
-    for (const it of P.items) {
+    if (!mapGround(ctx, P, A, z, ox, oy, size, x0, x1, y0, y1, st)) for (const it of P.items) {   // (PERF round 24: the still ground from its layer)
       const x = it.wx * z + ox, y = it.wy * z + oy;
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       st.fill = it.fill; st.seed = it.seed;
@@ -16250,21 +16311,33 @@ const GAME = (() => {
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
   }
-  /* Adaptive quality (Polish and QA perf): a device that cannot keep up
-     (real frames over PERF.slow ms on average for PERF.onAfter s) thins the
-     particles (RENDER.fx.lite: half the preset counts, half the pool) until
-     it runs under PERF.fast again for long enough; each re-entry waits
-     longer before letting go, so it never flickers between the two. */
-  const PERF = { slow: 26, fast: 19, onAfter: 0.5, offAfter: 2.5 };
+  /* Adaptive quality (Polish and QA perf; PERF round 24, DESIGN.md "Optimization pass (round 24)"): the
+     Quality setting (meta.settings.quality). Auto: a device that cannot keep up (real frames averaging over
+     PERF.slow ms for PERF.onAfter s) goes light (RENDER.fx.lite: half the particles, no light rays or turning
+     rays, thinner fog, the faint glows left out) for the rest of that screen; a new screen starts at full
+     again (perfScreen), so it never flickers back and forth while the lighter frames run faster. High never
+     goes light, Low always is. */
+  const PERF = { slow: 22, onAfter: 2 };
+  function perfMode() { const s = S.meta && S.meta.settings, q = s && s.quality; return q === 'high' || q === 'low' ? q : 'auto'; }
+  function perfState() { return S.perf || (S.perf = { ema: 16.7, slowT: 0, lite: false, n: 0 }); }
+  function perfSet() {
+    const P = perfState(), q = perfMode(), lite = q === 'low' ? true : q === 'high' ? false : P.lite;
+    const f = fx();
+    if (f && f.lite !== lite) f.lite = lite;
+    return lite;
+  }
   function perfTick(ms) {
     if (!(ms > 0) || ms > 250) return;   // a tab switch or a one-off hitch says nothing
-    const P = S.perf || (S.perf = { ema: 16.7, slowT: 0, fastT: 0, lite: false, n: 0 });
+    const P = perfState();
     P.ema += (ms - P.ema) * 0.1;
-    if (P.ema > PERF.slow) { P.slowT += ms / 1000; P.fastT = 0; } else if (P.ema < PERF.fast) { P.fastT += ms / 1000; P.slowT = 0; }
-    if (!P.lite && P.slowT > PERF.onAfter) { P.lite = true; P.n++; P.fastT = 0; }
-    else if (P.lite && P.fastT > PERF.offAfter * P.n) { P.lite = false; P.slowT = 0; }
-    const f = fx();
-    if (f && f.lite !== P.lite) f.lite = P.lite;
+    if (P.ema > PERF.slow) P.slowT += ms / 1000; else P.slowT = 0;
+    if (!P.lite && P.slowT > PERF.onAfter && perfMode() === 'auto') { P.lite = true; P.n++; }
+    perfSet();
+  }
+  function perfScreen() {
+    const P = perfState();
+    P.lite = false; P.slowT = 0; P.ema = 16.7;
+    perfSet();
   }
   function frame(now) {
     if (!S.headless) S.frame = requestAnimationFrame(frame);
@@ -16331,7 +16404,13 @@ const GAME = (() => {
       document.addEventListener('keyup', (ev) => onKey(ev, false));
       document.addEventListener('pointerdown', () => { if (X.AUDIO && X.AUDIO.init) { try { X.AUDIO.init(); } catch (e) { /* optional */ } } });
       window.addEventListener('resize', resize);
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.last = performance.now(); S.acc = 0; } if (FS) FS.keyDir = 0; if (document.hidden) save(); });
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { S.last = performance.now(); S.acc = 0; }
+        if (FS) FS.keyDir = 0;
+        if (document.hidden) save();
+        // PERF (round 24): the frames stop with the page (requestAnimationFrame does not run hidden); the sound now too
+        if (X.AUDIO && X.AUDIO.hidden) { try { X.AUDIO.hidden(!!document.hidden); } catch (e) { /* optional */ } }
+      });
       window.addEventListener('blur', () => { if (FS) FS.keyDir = 0; });
     } catch (e) { /* headless */ }
     const e = $('endTurn');
@@ -16450,7 +16529,11 @@ const GAME = (() => {
      previews every change live (a sample strip in the panel, and the game
      behind it), registers its own buttons for GAME.choose and hands the
      screen's buttons back on close. */
-  const ACC_DEF = { shake: true, haptics: true, volMaster: 1, volMusic: 1, volSfx: 1, noFlash: false, cb: 'off', text: 'n', hc: false, hand: 'off', slowClaw: false };
+  const ACC_DEF = { shake: true, haptics: true, volMaster: 1, volMusic: 1, volSfx: 1, noFlash: false, cb: 'off', text: 'n', hc: false, hand: 'off', slowClaw: false, quality: 'auto' };
+  // PERF (round 24): the Quality setting (perfTick, perfSet: Auto watches the frame rate, High and Low are fixed)
+  const ACC_Q = ['auto', 'high', 'low'];
+  const ACC_Q_NAME = { auto: 'Auto', high: 'High', low: 'Low' };
+  const ACC_Q_SUB = { auto: 'Full effects, lighter for the rest of a screen when the frame rate drops.', high: 'Every effect, always.', low: 'Fewer particles, no light rays, softer glows. Easier on the battery.' };
   const ACC_CB = ['off', 'deutan', 'protan', 'tritan'];
   const ACC_CB_NAME = { off: 'Standard', deutan: 'Deutan', protan: 'Protan', tritan: 'Tritan' };
   const ACC_CB_SUB = { off: 'The game\'s own colours.', deutan: 'Red-green (green-weak): orange and blue signals.', protan: 'Red-green (red-weak): brighter orange and blue.', tritan: 'Blue-yellow: red, green and silver signals.' };
@@ -16471,7 +16554,7 @@ const GAME = (() => {
       if (typeof d === 'boolean') { if (typeof s[k] !== 'boolean') s[k] = d; }
       else if (typeof d === 'number') s[k] = typeof s[k] === 'number' && isFinite(s[k]) ? U.clamp(s[k], 0, 1) : d;
       else {
-        const opts = k === 'cb' ? ACC_CB : k === 'text' ? ACC_TXT : ACC_HAND;
+        const opts = k === 'cb' ? ACC_CB : k === 'text' ? ACC_TXT : k === 'quality' ? ACC_Q : ACC_HAND;
         if (opts.indexOf(s[k]) < 0) s[k] = d;
       }
     }
@@ -16492,6 +16575,7 @@ const GAME = (() => {
     if (!S.meta) return null;
     const s = accS();
     if (fx()) fx().reduced = !s.shake;
+    perfSet();   // PERF (round 24): Quality: Low is light at once, High lets go at once
     applyCalm();
     const R = X.RENDER;
     if (R && R.acc && R.acc.set) { try { R.acc.set({ mode: s.cb, text: s.text, noFlash: s.noFlash, hc: s.hc }); } catch (e) { /* optional */ } }
@@ -16658,6 +16742,7 @@ const GAME = (() => {
     tog(feel, 'Shake', s.shake, (v) => accSet('shake', v), 'Off also calms the camera, the zooms and the heavy animations.');
     tog(feel, 'Buzz', s.haptics !== false, (v) => { feelSetHaptics(v); accApply(); }, 'Phone vibration on hits, grabs and prizes.');
     tog(feel, 'Reduced flashing', s.noFlash, (v) => accSet('noFlash', v), 'Caps screen flashes and whiteouts, slows strobing bulbs and party lights.');
+    seg(feel, 'Quality', 'quality', ACC_Q, ACC_Q_NAME, ACC_Q_SUB[s.quality]);   // PERF (round 24)
     const vis = sec('Vision');
     seg(vis, 'Colours', 'cb', ACC_CB, ACC_CB_NAME, ACC_CB_SUB[s.cb]);
     seg(vis, 'Text size', 'text', ACC_TXT, ACC_TXT_NAME, 'Menus, cards, banners and the floating numbers.');
@@ -28784,7 +28869,7 @@ const GAME = (() => {
     best: { K: BST_K, event: (ev) => { if (FS) bestEvent(ev); }, turnEnd: () => { if (FS) bestTurnEnd(); }, glue: () => { if (FS) gluePairs(BST()); }, hook: bestHook,
       dig: (i) => { if (FS && FS.best && FS.best.mounds[i || 0]) bestDig(FS.best.mounds[i || 0]); }, get state() { return FS ? FS.best : null; } },
     // Adaptive quality (Polish and QA perf): feed real frame times to perfTick.
-    perf: { PERF, tick: perfTick, get state() { return S.perf; } },
+    perf: { PERF, tick: perfTick, screen: perfScreen, mode: perfMode, get state() { return S.perf; } },   // (round 24: screen, mode)
     // ARCADE (DESIGN.md "Arcade"): the mini-game cabinets, roaming monsters, event scenes
     arc: {
       ARC, PLK, PLK_SLOTS, WHEEL, WH, REEL, show: arcShow, act: arcAct, skip: arcSkip, leave: arcLeave, hurry: arcHurry, pointer: arcPointer,

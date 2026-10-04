@@ -1491,3 +1491,18 @@ I18N.add('nl', {
 "content": {}
 });
 // ---------------------------------------------------------------- /SHOP round 23
+
+// ---------------------------------------------------------------- PERF (round 24): the Quality setting
+// DESIGN.md "Optimization pass (round 24)": Settings, Motion and feel, Quality (Auto, High, Low).
+I18N.add('nl', {
+"ui": {
+"Quality": "Kwaliteit",
+"Auto": "Automatisch",
+"High": "Hoog",
+"Low": "Laag",
+"Full effects, lighter for the rest of a screen when the frame rate drops.": "Alle effecten, lichter voor de rest van een scherm als het beeld hapert.",
+"Every effect, always.": "Altijd alle effecten.",
+"Fewer particles, no light rays, softer glows. Easier on the battery.": "Minder deeltjes, geen lichtstralen, zachtere gloed. Spaart de batterij."
+}
+});
+// ---------------------------------------------------------------- /PERF round 24

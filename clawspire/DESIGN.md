@@ -8091,3 +8091,114 @@ the skilled bot's deaths spread more evenly (act 1 from 52 to 38 of its deaths).
   untouched), minions and act 2 normals and elites untouched, the bare bin needs 3+ turns and loses 5%+ in the model;
   the "beatable" guard plays the back quarter of the act 1 list (the band, never a first fight) with a mid-act deck.
   Data: `act1` has no `first` and an elite sub-dial in (0.5, 1].
+
+## Optimization pass (round 24)
+
+Owner request: "optimize the game". Rounds 18 and 19 had done the delivery (minified, hashed, long cached) and
+the first runtime pass. This pass measured what landed since (the round 21/22 resolve row, the round 20 title,
+the cabinet events, the Depths, the stuck-prize watch, online co-op) and fixed the top findings. Nothing in the
+game's rules, numbers, timers or physics results changed: physics and rendering stay deterministic for a seed
+(the same state hash in a busy 8000-step physics run, and a frozen-loop screenshot set that is pixel identical
+except where noted below).
+
+**How it was measured.** Chromium 141 without a GPU (it rasters in software, so absolute raster times are
+pessimistic and only the ratios count), 390 x 844 mobile emulation. Boot: the minified dist served with gzip and
+the deployed cache headers, cold and warm, normal and with slow 4G (1.44 Mbps, 150 ms) plus a 4x CPU throttle,
+five runs each, medians. Frames: per scenario a 3 to 6 s rAF probe with the CDP profiler (self and inclusive time),
+the sampling heap profiler counting objects a minor GC collects too (KB allocated per frame), CDP script time per
+frame, `draw()` alone and with a forced raster, a MutationObserver for DOM writes, and an instrumented 2D context
+for calls per frame. Memory: 10 fights (driven drops and 5-prize resolve rows, a boss and a Depths boss among
+them) with 3 longer map visits, then the shop and vault 5 times: heap after GC, listeners, live canvases (detached
+ones too, by creator), live AudioNodes, active intervals and timeouts.
+
+| | before | after |
+| --- | --- | --- |
+| cold first frame, no throttle (dist) | 0.33 s | 0.33 s |
+| cold first frame, slow 4G + 4x CPU | 5.76 s (scripts all run at 5.25 s) | 5.65 s (5.11 s) |
+| cold first frame, Dutch, slow 4G + 4x CPU | 6.61 s | 6.45 s |
+| warm first frame, no throttle / slow 4G + 4x CPU | 0.19 / 0.87 s | 0.20 / 0.87 s |
+| bytes on the wire, English cold | 836 KB, 14 requests | 838 KB, 14 requests |
+| map idle: rAF fps / script per frame | 34 fps / 3.2 ms | 47 fps / 2.3 ms |
+| map: `draw()` JS / with raster | 2.0 / 25.2 ms | 1.4 / 19.0 ms |
+| map: canvas paths a frame (beginPath) | 925 | 578 |
+| fight with a 5-prize resolve row open: fps / script per frame | 44 fps / 3.6 ms | 46 fps / 3.7 ms (within noise) |
+| the row: measureText / shadowBlur a frame | 25.6 / 1 | 0.8 / 0 (a cached sprite) |
+| boss fight (hoard), dropping: script per frame / draw with raster | 3.1 ms / 16.6 ms | 2.9 ms / 12.9 ms |
+| Depths boss (jukebox), dropping: script per frame | 2.7 ms | 2.5 ms |
+| title / shop: script per frame | 1.1 / 0.6 ms (unchanged) | 1.2 / 0.5 ms |
+| allocated a frame: map / row fight / boss / Depths | 163 / 139 / 227 / 161 KB | 94 / 134 / 146 / 90 KB |
+| physics alone, a busy grab (node, 36 contacts a step) | 221 KB a step | 143 KB a step |
+| heap after 10 fights / after the shop and vault churn | 9.5 to 9.8 / 9.9 MB | 9.8 / 10.2 MB (flat) |
+| listeners, DOM nodes, AudioNodes, intervals across 10 fights | flat (1111, about 415, 31 to 40, 2) | flat (the same) |
+| a hidden page | music and the 25 ms sequencer timer keep running | sound suspended, timer cleared |
+
+Top self time in a fight (JS only; raster is 80% or more of a frame here): the GC (0.3 ms a frame), `txt`,
+`drawImage`, `tone`, the physics contact loop (`collide`, `addContact`, `bodyVsSeg`, `solveContacts`), `drawFight`,
+the cabinet and the claw. On the map: `drawMap`, `hex`, `terrainHex`, `tone`, `hexIcon`. No single function owns
+more than about 10% of the JS; the wins were in allocation and in what the canvas is asked to fill.
+
+**What changed** (each with a `PERF (round 24)` comment at the spot):
+
+- **The map's still ground is a layer** (B3.6, game.js `mapGround` above `drawMap`, render.js `terrainLive`). Pass 1
+  of the map (the ground under every hex) is painted once into a canvas on the main canvas's own device pixel grid
+  and copied in with one `drawImage` while the view holds still. Hexes whose drawing moves with time (ripples, lava
+  foam, the foundry's embers, every Back Room and Depths hex: `RENDER.terrainLive`, and a render test proves it is
+  true for every hex that moves) are painted live over it, in their old order. The camera math is untouched: the
+  layer is keyed on the map's paint cache, zoom, origin, hex size, the map area and the backing store, is built only
+  once that key has held for two frames (a pan, a zoom or a walk paints live exactly as before), and any other
+  transform on the canvas (a shake, the zoom punch, photo mode) paints live. It is freed when a fight draws. The only
+  pixel change: the one device pixel seam between a moving hex and its still neighbour can come out the other way
+  round (0.006% to 0.05% of the map's pixels over 24 levels; not visible).
+- **Contacts are pooled** (physics.js `addContact`, `W.cpool`). A busy pile made about 40 contact records a substep;
+  they are reused with every field set as a new one would be. Same order, same values: the physics hash and every
+  fight screenshot are identical.
+- **The map's reveal test builds no arrays** (map.js `touchesRevealed`, asked of every dark hex in view each frame).
+- **The resolve row**: its words are measured once per size and string per context (render.js `rrMw`, used by
+  `rr2W` and `rrRowChips`; the font is the system stack, never a late web font), and the panel's drop shadow is the
+  same canvas shadow painted once per panel size into a sprite and copied in at the panel's whole device pixel
+  (`rr2Shadow`; a `shadowBlur` of 16 on a 524 x 148 panel cost 2.1 ms a frame in software raster, and canvas
+  shadows are slow in Safari). Screens: at most 7 levels of difference, in the shadow.
+- **Item sprites keep to a pixel budget** (render.js `itemSprite`, `ITEM_SPR_PX` 2.5 MP, least recently drawn go to
+  75%). The row's flying and lifting cards made a sprite for every quarter step of scale and kept it (112 canvases
+  and climbing toward the 700 cap).
+- **Quality: Auto / High / Low** (Settings, Motion and feel; `meta.settings.quality`, inside clawspire_meta, no new
+  key). game.js `perfTick` / `perfSet` / `perfScreen`: Auto goes light when real frames average over 22 ms for 2 s
+  and stays light for the rest of that screen (a new screen starts at full; before, it let go after fast frames,
+  and the light frames are the fast ones, so it could flip back and forth). High never goes light, Low always is.
+  Light (`RENDER.fx.lite`): half the particles and pool (as before), plus no Depths light shafts or rays, no turning
+  rays behind evolved items, half the seasonal fog, and glows under 0.12 alpha left out (render.js `liteOn`).
+  Dutch in lang_nl2.js ("PERF (round 24)").
+- **A hidden page is silent** (audio.js `hidden`, called from game.js's visibilitychange). requestAnimationFrame
+  already stops the game loop in a hidden page (checked); now the AudioContext is suspended and the sequencer's 25 ms
+  interval cleared, and both come back when the page shows (a context the player never unlocked stays as it was).
+- **The scripts are asked for from the head** (index.html `<link rel="preload" as="script">` for the 12 scripts;
+  build.js stamps their hrefs with the same `?v=` as the script tags, or each would load twice). The 200 KB of markup
+  and CSS above the script tags no longer delays the requests: everything has run about 140 ms sooner on slow 4G.
+  The tags, their order and the headless loader are unchanged.
+
+**What was measured and left alone, and why:**
+
+- **Deferring scripts.** intro.js (11 KB gzip) is needed at once by a first visit (the intro plays before the
+  title) and is 1.3% of the bytes; net.js is 4 KB. data.js, render.js and game.js are needed for the first frame.
+  Splitting DATA or the render code would rename or move globals for about 1% of a slow boot. Cold boot on slow
+  4G is the bytes (838 KB at 1.44 Mbps is about 4.7 s of the 5.65 s).
+- **A preload for the art manifest.** It is `[]` in production and loads after the first frame on purpose (round 9);
+  a preload would compete with the scripts.
+- **Bodies with a fixed shape.** The physics functions deopt on "wrong map" (bodies gain `passClaw`, `stT`, `tube`
+  later). Declaring those fields up front (as `undefined`, same semantics) cut deopts 28 to 21 in the node bench
+  and changed neither time nor allocation; not worth touching every body.
+- **Pooling the claw's segments and prong points** (`buildSegs`, `prongPts`, about 13 KB a step): the rig's
+  picture (`R.bodies.prongs`) hands those arrays to the renderer and the duo stream; reuse would alias them.
+- **The seasonal map overlay** (Halloween fog, bats, the violet vignette) is the largest raster item on the map in
+  October (about 13 ms of 25 in software raster); on a GPU it is a dozen textured quads. Light quality halves the fog.
+- **Duplicate helpers** (B3.12): the one-line `clamp` / `lerp` copies live in separate files' scopes; no measurable
+  gain. No dead exports found beyond round 19's.
+- **Frames at 4x CPU without a GPU** run at 7 to 20 fps before and after (raster-bound, and the update loop's catch-up
+  steps scale with the frame time), so they are not in the table; the map went from 7.2 to 9.2 fps there.
+
+Tests: `perf24` in the render suite (every hex whose drawing moves with time is painted live), and the frame
+governor test in the game suite rewritten for the new rules (2 s over 22 ms, held for the screen, a new screen lets
+go, Low and High fixed, a junk value repaired to Auto). The minified dist was driven in English and Dutch through
+boot, a fight with a 5-prize row, a drop, the shop, the vault, Settings (Quality round trip saved in the profile),
+a hidden page, and an online co-op lobby with a second player through the local relay: no console errors. Every
+other game's dist output is byte identical before and after.

@@ -97,6 +97,25 @@ const AUDIO = (() => {
     return true;
   }
 
+  /* PERF (round 24): the page hidden (another app, a locked phone, a background tab) stops the game's
+     frames, and now the sound too: the context is suspended (its clock stops, so the music picks up on the
+     next step) and the 25 ms sequencer timer is cleared. Shown again: the timer restarts and the context
+     resumes (a context the player never unlocked stays as the browser left it). Returns true on a change. */
+  function hidden(on) {
+    on = !!on;
+    if (!!S.hid === on) return false;
+    S.hid = on;
+    if (on) {
+      if (S.timer && typeof clearInterval === 'function') { try { clearInterval(S.timer); } catch (e) { /* ignore */ } }
+      S.timer = null;
+      if (S.ac && S.ac.suspend && S.ac.state === 'running') { try { const p = S.ac.suspend(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ } }
+      return true;
+    }
+    if (!S.ac) return true;
+    if (!S.timer && typeof setInterval === 'function') { try { S.timer = setInterval(tick, 25) || null; } catch (e) { S.timer = null; } }
+    if (S.ac.state === 'suspended' && S.ac.resume) { try { const p = S.ac.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ } }
+    return true;
+  }
   function build(ac) {
     S.ac = ac;
     const comp = ac.createDynamicsCompressor();
@@ -3610,6 +3629,7 @@ const AUDIO = (() => {
   return {
     mix: mixApi,   // MIX (round 10): tiers, trims, caps, ducks, the spread and the offline renderer
     init, sfx, music, setVolume, duck, haptic, intro, renderIntroWav,
+    hidden, get isHidden() { return !!S.hid; },   // PERF (round 24): silent while the page is hidden
     musicState, victory,   // round 3: the dynamic fight layers and the victory sting
     get layers() { return { hype: S.lay.hype, tense: S.lay.tense }; },
     _layerSong: layerSong,

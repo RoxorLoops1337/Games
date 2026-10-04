@@ -211,6 +211,12 @@ const minifyClawspire = () => {
       if (!hash[f]) throw new Error(`clawspire/${page}: js/${f} is not in clawspire/js`);
       return `${a}js/${f}?v=${hash[f]}${b}`;
     });
+    // (round 24) the head's <link rel="preload" as="script"> get the same stamp, or the browser would fetch
+    // each script twice (the preloaded URL and the stamped one)
+    html = html.replace(/(<link\b[^>]*\bhref=")js\/([\w.-]+\.js)(")/g, (m, a, f, b) => {
+      if (!hash[f]) throw new Error(`clawspire/${page}: a preload names js/${f}, which is not in clawspire/js`);
+      return `${a}js/${f}?v=${hash[f]}${b}`;
+    });
     if (page === 'index.html') {
       // the loader's weights: one per script tag, its gzip KB as built
       const wt = [...html.matchAll(/<script\b[^>]*\bsrc="js\/(\w+)\.js\?v=/g)].map((m) => `${m[1]}: ${gzKB[m[1]]}`);

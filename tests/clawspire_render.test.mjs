@@ -3236,4 +3236,29 @@ h.test('title art (round 20): the logo sits high and clear, the claw clears the 
   });
 }
 
+// ---- PERF (round 24): the map's cached ground layer may only hold hexes that never move with time
+{
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER;
+  h.test('perf24: terrainLive is true for every hex whose terrainHex drawing moves with t (the cached ground never freezes one)', () => {
+    const fp = (tile, st) => {
+      const s = [];
+      const ctx = new Proxy({}, { get(o, p) { if (p === 'measureText') return () => ({ width: 40 }); if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} }); if (typeof p !== 'string' || p in o) return o[p]; return (...a) => s.push(p + a.map((v) => typeof v === 'number' ? v.toFixed(4) : '').join(',')); }, set(o, p, v) { s.push(p + '=' + v); o[p] = v; return true; } });
+      R.terrainHex(ctx, 100, 100, 28, tile, st);
+      return s.join('|');
+    };
+    const kinds = [['sea'], ['shallow'], ['land', 'grass'], ['land', 'forest'], ['land', 'hill'], ['land', 'mountain'], ['land', 'sand'], ['land', 'dirt']];
+    let moving = 0, missed = [];
+    for (const biome of ['cellar', 'foundry', 'vault', 'machine', 'depths']) for (const [terrain, ground] of kinds) for (let seed = 0; seed < 64; seed++) {
+      const tile = { q: 1, r: 2, terrain, ground, elev: 0.4 }, st = (t) => ({ t, seed: seed * 2654435761 >>> 0, biome, orient: 'v' });
+      const moves = fp(tile, st(0.3)) !== fp(tile, st(2.9));
+      if (moves) moving++;
+      if (moves && !R.terrainLive(tile, st(0))) missed.push(biome + ' ' + terrain + '/' + (ground || '') + ' seed ' + seed);
+    }
+    h.ok(moving > 50, 'some hexes do move (' + moving + ')');
+    h.eq(missed.length, 0, 'every moving hex is painted live: ' + missed.slice(0, 5).join(', '));
+    h.ok(!R.terrainLive({ terrain: 'land', ground: 'grass' }, { biome: 'cellar', seed: 7 }), 'a grass hex is cached');
+  });
+}
+
 h.done();

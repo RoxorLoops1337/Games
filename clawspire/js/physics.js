@@ -403,9 +403,21 @@ const PHYS = (() => {
   }
 
   // ---- contacts ------------------------------------------------------------
+  /* PERF (round 24): the contact records are pooled per world (W.cpool), reused step after step with every
+     field set as a new one would be: a busy pile made ~40 a substep, the largest share of a fight's garbage.
+     W.contacts still lists this substep's contacts only; nothing keeps one past the next collide(). */
   function addContact(W, a, b, px, py, nx, ny, pen, mu, seg) {
-    W.contacts.push({ a, b, px, py, nx, ny, pen, mu, seg, jn: 0, jt: 0, kn: 0, kt: 0, bias: 0,
-      rax: 0, ray: 0, rbx: 0, rby: 0, kvx: 0, kvy: 0, ima: 0, iIa: 0, imb: 0, iIb: 0 });
+    const P = W.cpool, i = W.contacts.length;
+    let c = P[i];
+    if (!c) {
+      c = P[i] = { a, b, px, py, nx, ny, pen, mu, seg, jn: 0, jt: 0, kn: 0, kt: 0, bias: 0,
+        rax: 0, ray: 0, rbx: 0, rby: 0, kvx: 0, kvy: 0, ima: 0, iIa: 0, imb: 0, iIb: 0 };
+    } else {
+      c.a = a; c.b = b; c.px = px; c.py = py; c.nx = nx; c.ny = ny; c.pen = pen; c.mu = mu; c.seg = seg;
+      c.jn = 0; c.jt = 0; c.kn = 0; c.kt = 0; c.bias = 0;
+      c.rax = 0; c.ray = 0; c.rbx = 0; c.rby = 0; c.kvx = 0; c.kvy = 0; c.ima = 0; c.iIa = 0; c.imb = 0; c.iIb = 0;
+    }
+    W.contacts.push(c);
   }
   /* Parts of b against one capsule segment (a wall or a claw part).  Claw
      contacts also feed the rig: touch (the claw landed on something) and
@@ -629,7 +641,7 @@ const PHYS = (() => {
     const w = o.w || 480, h = o.h || 390;
     const W = {
       gravity: { x: o.gravity ? o.gravity.x : 0, y: o.gravity ? o.gravity.y : 1400 },
-      w, h, bodies: [], segs: [], csegs: [], contacts: [], ctl: null, busy: false,
+      w, h, bodies: [], segs: [], csegs: [], contacts: [], cpool: [], ctl: null, busy: false,
       pre: [], post: [], time: 0, acc: 0, steps: 0,
       clampBox: { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX: w + 100, trayY: h - RIG.floorSink },
       add, remove, step, setGravity, energy, contactsOf, queryAABB, wakeAll, addHook, removeHook, addPost, removePost, sync,

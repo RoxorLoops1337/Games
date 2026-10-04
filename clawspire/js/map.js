@@ -241,7 +241,12 @@ const MAP = (() => {
   // must grow out from where the player has actually been, or the far side
   // of the map could be lit open from the boss's doorstep.
   function touchesRevealed(M, q, r) {
-    return neighbors(M, q, r).some(([nq, nr]) => isFoothold(M.tiles[key(nq, nr)]));
+    // (PERF round 24: the map asks this of every dark hex in view each frame; no neighbour list is built)
+    for (let i = 0; i < DIRS.length; i++) {
+      const nq = q + DIRS[i][0], nr = r + DIRS[i][1];
+      if (inBounds(M, nq, nr) && isFoothold(M.tiles[key(nq, nr)])) return true;
+    }
+    return false;
   }
 
   // Cheapest chain of dark tiles from the lit area to (q, r), in lighting
