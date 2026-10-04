@@ -1,0 +1,299 @@
+{
+ "_": "Shared clock for trailer.html (picture) and audio.py (sound). 144 BPM: beat 0.41667 s (25 frames at 60 fps), bar 1.6667 s, 60 beats = 15 bars = 25.0 s. Times are in beats; t = beat * 60 / 144.",
+ "bpm": 144,
+ "dur": 25.0,
+ "sections": [
+  {
+   "id": "open",
+   "b0": 0,
+   "b1": 4,
+   "what": "black; a coin drops into a neon slot (b1); macro on the title claw diving for the star, grab on b3 with a hit-stop; yank up into the drop"
+  },
+  {
+   "id": "title",
+   "b0": 4,
+   "b1": 12,
+   "what": "DROP. the title phone flies in over the neon arcade (grid floor, city, bokeh, rays); b6 push, b7.5 zoom-through into the screen; b8 the 2.0 numeral slams under the logo; b10 THE BIG UPDATE; b11.5 glitch out"
+  },
+  {
+   "id": "grab",
+   "b0": 12,
+   "b1": 20,
+   "what": "perfect_grab full frame, speed ramp into 0.2x slow motion on the PERFECT cue (b14) + callout; b16 SEE EVERY HIT beside the tilted phone, the resolve row's hits re-timed onto 8ths (b17..b18.5) with a hit counter + YOUR HITS callout"
+  },
+  {
+   "id": "cabinet",
+   "b0": 20,
+   "b1": 28,
+   "what": "whip to THE CABINET IS ALIVE; three phones on cabinet_event_surge / _coins / _capsule, each landing on its beat (b21.5, b22.25, b23) with its own 2D effect; b24 punch into the game's own LAMP FEVER! banner, confetti, strobes, beacon rays, callouts"
+  },
+  {
+   "id": "build",
+   "b0": 28,
+   "b1": 36,
+   "what": "BUILD ANYTHING: the combo relic pick (Weapon Rack taken on b28.6, COMBO RELICS callout); b29 full frame on the resolve row as the combos fire (ARMORY X5 b29, MAGNETIZED X5 b29.5); b29.75 Joy Stick (callout), jump cut on b30.25 to her CABINET TECH build in a fight; b31 THE COMPACTOR (press, lift, COMPACTED!); b32 the wall of eight claw types slams in on 8ths, 8 CLAW TYPES"
+  },
+  {
+   "id": "capsule",
+   "b0": 36,
+   "b1": 44,
+   "what": "breakdown: the capsule taps up uncommon (b36.5), rare (b37), legendary (b37.5) on 8ths; the burst lands on b38: white flash, god rays, gold flare, slow motion; b40 CAPSULE FEVER; b41 the Minis vault"
+  },
+  {
+   "id": "halloween",
+   "b0": 44,
+   "b1": 52,
+   "what": "bat swarm wipe (b43.5) into CLAW-O-WEEN: moon, pumpkins, orange grade; b47 the Halloween fight; b49 NEON DEPTHS glitch flash; b50 the Dutch flash; b51 whip"
+  },
+  {
+   "id": "coop",
+   "b0": 52,
+   "b1": 56,
+   "what": "two phones face each other, host and guest, an arc of light between them on every beat: ONLINE CO-OP; tape stop into black (b55.5)"
+  },
+  {
+   "id": "logo",
+   "b0": 56,
+   "b1": 60,
+   "what": "logo lockup: CLAWSPIRE 2.0, moon and bats behind; PLAY FREE IN YOUR BROWSER; games-71g.pages.dev/clawspire; dead still from 24.0 s"
+  }
+ ],
+ "hits": [
+  {
+   "b": 1,
+   "k": "coin"
+  },
+  {
+   "b": 3,
+   "k": "grab"
+  },
+  {
+   "b": 4,
+   "k": "drop"
+  },
+  {
+   "b": 6,
+   "k": "push"
+  },
+  {
+   "b": 7.5,
+   "k": "through"
+  },
+  {
+   "b": 8,
+   "k": "twoh"
+  },
+  {
+   "b": 10,
+   "k": "sub"
+  },
+  {
+   "b": 11.5,
+   "k": "glitch"
+  },
+  {
+   "b": 12,
+   "k": "cut"
+  },
+  {
+   "b": 14,
+   "k": "perfect"
+  },
+  {
+   "b": 15.5,
+   "k": "deliver"
+  },
+  {
+   "b": 16,
+   "k": "word"
+  },
+  {
+   "b": 17,
+   "k": "hit"
+  },
+  {
+   "b": 17.5,
+   "k": "hit"
+  },
+  {
+   "b": 18,
+   "k": "hit"
+  },
+  {
+   "b": 18.5,
+   "k": "hit"
+  },
+  {
+   "b": 20,
+   "k": "whip"
+  },
+  {
+   "b": 21.5,
+   "k": "surge"
+  },
+  {
+   "b": 22.25,
+   "k": "coins"
+  },
+  {
+   "b": 23,
+   "k": "capsule"
+  },
+  {
+   "b": 24,
+   "k": "fever"
+  },
+  {
+   "b": 26,
+   "k": "fever2"
+  },
+  {
+   "b": 28,
+   "k": "word"
+  },
+  {
+   "b": 28.6,
+   "k": "pick"
+  },
+  {
+   "b": 29,
+   "k": "combo"
+  },
+  {
+   "b": 29.5,
+   "k": "combo"
+  },
+  {
+   "b": 29.75,
+   "k": "joy"
+  },
+  {
+   "b": 30.25,
+   "k": "tech"
+  },
+  {
+   "b": 31,
+   "k": "compactor"
+  },
+  {
+   "b": 32,
+   "k": "claw"
+  },
+  {
+   "b": 32.5,
+   "k": "claw"
+  },
+  {
+   "b": 33,
+   "k": "claw"
+  },
+  {
+   "b": 33.5,
+   "k": "claw"
+  },
+  {
+   "b": 34,
+   "k": "claw"
+  },
+  {
+   "b": 34.5,
+   "k": "claw"
+  },
+  {
+   "b": 35,
+   "k": "claw"
+  },
+  {
+   "b": 35.5,
+   "k": "claw"
+  },
+  {
+   "b": 36,
+   "k": "breakdown"
+  },
+  {
+   "b": 36.5,
+   "k": "tier"
+  },
+  {
+   "b": 37,
+   "k": "tier"
+  },
+  {
+   "b": 37.5,
+   "k": "tier"
+  },
+  {
+   "b": 38,
+   "k": "legendary"
+  },
+  {
+   "b": 40,
+   "k": "word"
+  },
+  {
+   "b": 41,
+   "k": "minis"
+  },
+  {
+   "b": 43.5,
+   "k": "bats"
+  },
+  {
+   "b": 44,
+   "k": "halloween"
+  },
+  {
+   "b": 44.5,
+   "k": "word"
+  },
+  {
+   "b": 47,
+   "k": "hfight"
+  },
+  {
+   "b": 49,
+   "k": "depths"
+  },
+  {
+   "b": 50,
+   "k": "nl"
+  },
+  {
+   "b": 51,
+   "k": "whip"
+  },
+  {
+   "b": 52,
+   "k": "coop"
+  },
+  {
+   "b": 52.5,
+   "k": "word"
+  },
+  {
+   "b": 53,
+   "k": "arc"
+  },
+  {
+   "b": 54,
+   "k": "arc"
+  },
+  {
+   "b": 55,
+   "k": "tapestop"
+  },
+  {
+   "b": 56,
+   "k": "logo"
+  },
+  {
+   "b": 56.75,
+   "k": "cta"
+  },
+  {
+   "b": 57.25,
+   "k": "url"
+  }
+ ]
+}
