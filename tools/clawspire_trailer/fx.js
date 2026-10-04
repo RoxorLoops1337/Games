@@ -273,6 +273,8 @@ function candyText(g, txt, x, y, o = {}) {
   const ow = o.outlineW != null ? o.outlineW : asc * .11;
   g.lineJoin = 'round'; g.miterLimit = 2;
   const depth = o.depth != null ? o.depth : asc * .1;
+  { const e = Math.max(ow / 2, o.glow ? ow * .85 : 0);
+    layText(g, o.id || txt, x - m.actualBoundingBoxLeft - e, y - asc - e, x + m.actualBoundingBoxRight + e, y + dsc + depth + e); }
   if (o.glow) {
     g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha *= .35; g.lineWidth = ow * 1.7; g.strokeStyle = o.glow;
     g.strokeText(txt, x, y + depth * .5); g.restore();
@@ -297,10 +299,10 @@ function candyText(g, txt, x, y, o = {}) {
   g.restore();
   return m;
 }
-function measure(txt, font, tracking = 0) {
-  const g = _mctx; g.font = font; g.letterSpacing = tracking + 'px';
+function measure(txt, font, tracking = 0, align = 'center') {
+  const g = _mctx; g.font = font; g.letterSpacing = tracking + 'px'; g.textAlign = align; g.textBaseline = 'alphabetic';
   const m = g.measureText(txt);
-  return { w: m.width, asc: m.actualBoundingBoxAscent, dsc: m.actualBoundingBoxDescent };
+  return { w: m.width, asc: m.actualBoundingBoxAscent, dsc: m.actualBoundingBoxDescent, l: m.actualBoundingBoxLeft, r: m.actualBoundingBoxRight };
 }
 const _mctx = document.createElement('canvas').getContext('2d');
 // fit a size so txt spans at most maxW
@@ -331,12 +333,13 @@ function slam(g, txt, x, y, lt, o = {}) {
   g.translate(x + ox, y + oy); g.scale(s * fitK, s * fitK);
   if (o.rot) g.rotate(o.rot * (lt < inT ? 1 : Math.exp(-(lt - inT) * 6) * .3 + .7));
   g.globalAlpha *= a;
-  candyText(g, txt, 0, 0, o);
+  layBegin(o.id || txt); candyText(g, txt, 0, 0, o); layEnd();
   g.restore();
   return s;
 }
 // letters fly in one by one with punch
 function stagger(g, txt, x, y, lt, o = {}) {
+  layBegin(o.id || txt);
   g.save();
   g.font = o.font; g.textBaseline = 'alphabetic';
   if (o.tracking) g.letterSpacing = o.tracking + 'px';
@@ -364,20 +367,34 @@ function stagger(g, txt, x, y, lt, o = {}) {
     cx += w;
   }
   g.restore();
+  layEnd();
 }
-// a pill label (UI chips, the CTA): o {font, fg, bg, border, padX, h}
+// a pill label (UI chips): sized FROM the measured glyph box + padding.
+// o {font, fg, bg, border, borderW, padX, padY, tracking, glow, r}
 function pill(g, txt, x, y, o = {}) {
   g.save();
-  g.font = o.font; g.textAlign = 'center'; g.textBaseline = 'middle';
-  if (o.tracking) g.letterSpacing = o.tracking + 'px';
+  g.font = o.font; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.letterSpacing = (o.tracking || 0) + 'px';
   const m = g.measureText(txt);
-  const ph = o.h || m.actualBoundingBoxAscent * 2.1, pw = m.width + (o.padX || ph * .9);
+  const asc = m.actualBoundingBoxAscent, dsc = m.actualBoundingBoxDescent, l = m.actualBoundingBoxLeft, r = m.actualBoundingBoxRight;
+  const padX = o.padX != null ? o.padX : 44, padY = o.padY != null ? o.padY : 24;
+  const pw = l + r + padX * 2, ph = asc + dsc + padY * 2;
+  const tx = x - (r - l) / 2, ty = y + (asc - dsc) / 2;     // the glyph box, centred on (x, y)
   if (o.glow) glowEllipse(g, x, y, pw * .8, ph * 1.4, o.glow, .45);
-  g.fillStyle = o.bg || C.ink; g.beginPath(); g.roundRect(x - pw / 2, y - ph / 2, pw, ph, ph / 2); g.fill();
+  g.fillStyle = o.bg || C.ink; g.beginPath(); g.roundRect(x - pw / 2, y - ph / 2, pw, ph, o.r != null ? o.r : Math.min(ph / 2, 44)); g.fill();
   if (o.border) { g.lineWidth = o.borderW || 5; g.strokeStyle = o.border; g.stroke(); }
-  g.fillStyle = o.fg || '#fff'; g.fillText(txt, x + (o.tracking || 0) / 2, y + (o.dy || 2));
+  g.fillStyle = o.fg || '#fff'; g.fillText(txt, tx, ty);
+  const pl = layPlate(g, 'pill:' + txt, x - pw / 2, y - ph / 2, x + pw / 2, y + ph / 2);
+  layWith(pl, () => layText(g, txt, tx - l, ty - asc, tx + r, ty + dsc));
   g.restore();
   return { w: pw, h: ph };
+}
+// the size at which a pill with this text is at most maxW wide
+function pillFit(txt, fontFn, size, maxW, o = {}) {
+  const padX = o.padX != null ? o.padX : 44;
+  let lo = 4, hi = size;
+  for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2, m = measure(txt, fontFn(mid), o.tracking || 0); if (m.l + m.r + 2 * padX <= maxW) lo = mid; else hi = mid; }
+  return fontFn(lo);
 }
 
 // ---------------------------------------------------------------- UI callouts
@@ -423,27 +440,29 @@ function callout(g, lt, tx, ty, lx, ly, label, o = {}) {
   if (d <= seg1) { g.lineTo(lerp(sx0, elbowX, d / seg1), lerp(sy0, elbowY, d / seg1)); }
   else { g.lineTo(elbowX, elbowY); g.lineTo(lerp(elbowX, ex, (d - seg1) / seg2), ey); }
   g.stroke();
-  // label
+  // label: plate sized from the measured glyph box, kept inside the safe zone
   const la = clamp((lt - .22) / .16);
   if (la > 0 && label) {
     const size = o.size || L(84, 112);
-    const font = F.disp(size * .72);
-    g.font = font; g.letterSpacing = '2px';
-    const tw = g.measureText(label).width;
-    const padX = 34, bh = size * 1.25, bw = tw + padX * 2;
+    g.font = F.disp(size * .72); g.letterSpacing = '2px'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    const m = g.measureText(label);
+    const asc = m.actualBoundingBoxAscent, dsc = m.actualBoundingBoxDescent, ml = m.actualBoundingBoxLeft, mr = m.actualBoundingBoxRight;
+    const padX = 30, padY = 22, bar = 12;
+    const bw = ml + mr + padX * 2 + bar, bh = asc + dsc + padY * 2;
     let right = ex >= tx;
-    if (right && ex + bw > W - 30) right = false;            // keep the label inside the frame
-    else if (!right && ex - bw < 30) right = true;
-    const bx = clamp(right ? ex : ex - bw, 30, Math.max(30, W - 30 - bw));
-    const slide = (1 - E.outCubic(la)) * (right ? -40 : 40);
+    if (right && ex + bw > SAFE[2]) right = false;
+    else if (!right && ex - bw < SAFE[0]) right = true;
+    const bx = clamp(right ? ex : ex - bw, SAFE[0], Math.max(SAFE[0], SAFE[2] - bw));
+    const by = clamp(ey - bh / 2, SAFE[1], SAFE[3] - bh);
     g.save();
-    g.beginPath(); g.rect(bx - 4, ey - bh, bw + 8, bh * 2); g.clip();
-    g.translate(slide, 0);
-    g.fillStyle = 'rgba(11,6,24,.92)'; g.beginPath(); g.roundRect(bx, ey - bh / 2, bw, bh, 14); g.fill();
+    g.globalAlpha *= E.outCubic(la);
+    g.fillStyle = 'rgba(11,6,24,.92)'; g.beginPath(); g.roundRect(bx, by, bw, bh, 14); g.fill();
     g.lineWidth = 5; g.strokeStyle = col; g.stroke();
-    g.fillStyle = col; g.fillRect(right ? bx : bx + bw - 12, ey - bh / 2 + 10, 12, bh - 20);
-    g.fillStyle = '#ffffff'; g.textAlign = 'left'; g.textBaseline = 'middle';
-    g.fillText(label, bx + padX, ey + size * .06);
+    g.fillStyle = col; g.fillRect(right ? bx : bx + bw - bar, by + 10, bar, bh - 20);
+    const tx0 = bx + padX + (right ? bar : 0) + ml, base = by + padY + asc;
+    g.fillStyle = '#ffffff'; g.fillText(label, tx0, base);
+    const pl = layPlate(g, 'callout:' + label, bx, by, bx + bw, by + bh);
+    layWith(pl, () => layText(g, label, tx0 - ml, base - asc, tx0 + mr, base + dsc));
     g.restore();
   }
   g.restore();
@@ -468,4 +487,127 @@ function ring(g, x, y, age, o = {}) {
   g.lineWidth = (o.lw || 14) * (1 - u) + 1;
   g.beginPath(); g.arc(x, y, lerp(o.r0 || 20, o.r1 || 400, E.outCubic(u)), 0, 7); g.stroke();
   g.restore();
+}
+
+
+// ================================================================ text-fit layer
+// Every headline is laid out from measured metrics: the real glyph box of each
+// line (canvas measureText with the loaded font), plus the stroke, the glow halo
+// and the 3D extrude that candyText draws. The size is binary-searched so the
+// widest line (times its pop overshoot) and the stacked block fit the given
+// rect; a plate is then sized FROM the block + padding. Explicit lines only.
+const POP_IN = .16, POP_OV = 1.05;                         // pop length (s) and its max overshoot (outBack peak ~1.04)
+// the box candyText paints for txt, relative to (x, baseline y), align center
+function candyBox(txt, font, o = {}) {
+  const m = measure(txt, font, o.tracking || 0, o.align || 'center');
+  const ow = o.outlineW != null ? o.outlineW : m.asc * .11, depth = o.depth != null ? o.depth : m.asc * .1;
+  const e = Math.max(ow / 2, o.glow ? ow * .85 : 0);
+  return { l: m.l + e, r: m.r + e, top: m.asc + e, bot: m.dsc + depth + e + (o.extraBot || 0), adv: m.w };
+}
+// line spec: {txt, k (size factor), font (fontFn, default F.disp), fill, depthK (extrude / size), depthCol,
+//   glow, outline, outlineK, at (landing time in the headline's clock), ov (overshoot factor), extraBot, draw(g, L)}
+function _lineOpts(ln, size) {
+  return { fill: ln.fill || FILL.white, depth: size * (ln.depthK != null ? ln.depthK : .08), depthCol: ln.depthCol || '#4a2a7a',
+    glow: ln.glow, outline: ln.outline, outlineW: ln.outlineK != null ? size * ln.outlineK : undefined, tracking: ln.tracking || 0, extraBot: ln.extraBot || 0, id: ln.id || ln.txt };
+}
+const _hlCache = new Map();
+function hlLayout(spec) {
+  const key = JSON.stringify([spec.rect, spec.plate ? 1 : 0, spec.pad, spec.gap, spec.valign, spec.lines.map(l => [l.txt, l.k, l.font ? l.font(100) : '', l.depthK, l.outlineK, !!l.glow, l.ov, l.extraBot, l.tracking])]);
+  let L = _hlCache.get(key);
+  if (L) return L;
+  const [x0, y0, x1, y1] = spec.rect, cx = (x0 + x1) / 2;
+  const pad = spec.plate ? (spec.pad != null ? spec.pad : 36) : 0, gapK = spec.gap != null ? spec.gap : .1;
+  const measureAt = S => {
+    const ls = spec.lines.map(ln => { const size = S * (ln.k || 1), font = (ln.font || F.disp)(size); return { ln, size, font, box: candyBox(ln.txt, font, _lineOpts(ln, size)) }; });
+    const w = Math.max(...ls.map(q => (q.box.l + q.box.r) * (q.ln.ov || POP_OV)));
+    const h = ls.reduce((a, q) => a + q.box.top + q.box.bot, 0) + gapK * S * (ls.length - 1);
+    return { ls, w, h };
+  };
+  let lo = 4, hi = spec.maxSize || 400;
+  for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2, q = measureAt(mid); if (q.w + 2 * pad <= x1 - x0 && q.h + 2 * pad <= y1 - y0) lo = mid; else hi = mid; }
+  const q = measureAt(lo);
+  const va = spec.valign || 'center';
+  let y = va === 'top' ? y0 + pad : va === 'bottom' ? y1 - pad - q.h : (y0 + y1) / 2 - q.h / 2;
+  const lines = q.ls.map(({ ln, size, font, box }) => {
+    const base = y + box.top; y += box.top + box.bot + gapK * lo;
+    return { ln, size, font, box, x: cx, y: base, bb: [cx - box.l, base - box.top, cx + box.r, base + box.bot] };
+  });
+  const bb = lines.reduce((a, l) => _union(a, l.bb), null);
+  L = { S: lo, lines, bb, plate: spec.plate ? [bb[0] - pad, bb[1] - pad, bb[2] + pad, bb[3] + pad] : null };
+  _hlCache.set(key, L);
+  return L;
+}
+// pop: lands exactly at lt = 0 (scale .6 -> overshoot ~1.04 -> 1), then holds still
+function popScale(lt) { if (lt < -POP_IN) return 0; if (lt >= 0) return 1; return .6 + .4 * E.outBack((lt + POP_IN) / POP_IN, 1.6); }
+function popAlpha(lt) { return clamp((lt + POP_IN) / (POP_IN * .45)); }
+// draw a headline at time t (in the clock the lines' `at` use); spec.until: fades out in place
+function headline(g, spec, t) {
+  const Lh = hlLayout(spec);
+  const first = Math.min(...spec.lines.map(l => l.at || 0));
+  if (t < first - POP_IN) return Lh;
+  const out = spec.until != null ? clamp((t - spec.until) / .12) : 0;
+  if (out >= 1) return Lh;
+  g.save();
+  g.globalAlpha *= 1 - out;
+  let plate = null;
+  if (Lh.plate) {
+    const [a, c, d, e] = Lh.plate, pa = clamp((t - first + POP_IN) / .12);
+    g.save(); g.globalAlpha *= pa;
+    const ps = spec.plateStyle || {};
+    g.fillStyle = ps.bg || 'rgba(11,6,24,.8)'; g.beginPath(); g.roundRect(a, c, d - a, e - c, ps.r || 34); g.fill();
+    g.lineWidth = ps.bw || 4; g.strokeStyle = ps.border || 'rgba(255,255,255,.22)'; g.stroke();
+    plate = layPlate(g, spec.id || spec.lines[0].txt, a, c, d, e);
+    g.restore();
+  }
+  layWith(plate, () => {
+    Lh.lines.forEach((l0, li) => {
+      const l = Object.assign({}, l0, { ln: spec.lines[li] });  // geometry from the cache, behaviour from this frame's spec
+      const lt = t - (l.ln.at || 0), sc = popScale(lt);
+      if (sc <= 0) return;
+      const pcx = (l.bb[0] + l.bb[2]) / 2, pcy = (l.bb[1] + l.bb[3]) / 2;
+      g.save();
+      g.globalAlpha *= popAlpha(lt);
+      g.translate(pcx, pcy); g.scale(sc, sc); g.translate(-pcx, -pcy);
+      const opts = _lineOpts(l.ln, l.size);
+      opts.font = l.font;
+      if (l.ln.draw) l.ln.draw(g, l, opts, lt); else candyText(g, l.ln.txt, l.x, l.y, opts);
+      g.restore();
+    });
+  });
+  g.restore();
+  return Lh;
+}
+
+// the SEE EVERY HIT line: "HIT" plus a fixed slot for the x1..x5 counter (sized for the widest)
+function hitsLine(at, n, lh, k = 1) {
+  return { txt: 'HIT  x5', at, k, fill: FILL.candy, depthCol: '#8a0f50', glow: C.pink, ov: 1.12, depthK: .09, id: 'HIT', draw(g, l, opts) {
+    const xL = l.x - measure('HIT  x5', l.font).w / 2;
+    candyText(g, 'HIT', xL, l.y, Object.assign({}, opts, { align: 'left', id: 'HIT' }));
+    if (!n) return;
+    const xc = xL + measure('HIT  ', l.font).w, cw = measure('x' + n, l.font, 0, 'left'), ps = 1 + .08 * Math.exp(-lh * 12);
+    const pcx = xc + (cw.r - cw.l) / 2, pcy = l.y - cw.asc / 2;
+    g.save(); g.translate(pcx, pcy); g.scale(ps, ps); g.translate(-pcx, -pcy);
+    candyText(g, 'x' + n, xc, l.y, Object.assign({}, opts, { align: 'left', fill: FILL.gold, depthCol: '#7a4a08', glow: C.gold, id: 'counter' }));
+    g.restore();
+  } };
+}
+// candy line shorthand for headline specs
+const CL_ = (txt, at, k, fill, depthCol, glow, extra) => Object.assign({ txt, at, k, fill, depthCol, glow }, extra || {});
+const PL_DARK = { bg: 'rgba(11,6,24,.82)', border: 'rgba(255,255,255,.2)' };
+// a dripping spooky line (CLAW-O-WEEN): drips belong to the line's box
+function spookyLine(txt, at, k = 1, seed = 31) {
+  return CL_(txt, at, k, FILL.orange, '#5a1a00', C.orange, { outline: '#1a0608', extraBot: 92, ov: 1.06, draw(g, l, opts, lt) {
+    layBegin(txt);
+    candyText(g, l.ln.txt, l.x, l.y, opts);
+    const m = measure(l.ln.txt, l.font), r = rng(seed), nd = Math.max(4, Math.round((m.l + m.r) / 75));
+    g.save(); g.fillStyle = '#ff7a12';
+    for (let i = 0; i < nd; i++) {
+      const dx = l.x - m.l + 20 + r() * (m.l + m.r - 40), len = lerp(20, 80, r()) * E.outCubic(clamp((lt - .1 - r() * .3) / .5)), w = lerp(8, 16, r());
+      if (len <= 1) continue;
+      g.beginPath(); g.moveTo(dx - w / 2, l.y - 4); g.lineTo(dx + w / 2, l.y - 4); g.lineTo(dx + w / 2, l.y + len); g.arc(dx, l.y + len, w / 2, 0, Math.PI); g.closePath(); g.fill();
+      layText(g, 'drip', dx - w / 2, l.y - 4, dx + w / 2, l.y + len + w / 2);
+    }
+    g.restore();
+    layEnd();
+  } });
 }

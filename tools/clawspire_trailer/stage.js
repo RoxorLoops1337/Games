@@ -139,6 +139,11 @@ function phone(g, o) {
     glowEllipse(g, o.x, o.y, lw * .75 * sc, lh * .6 * sc, col, .28 * gl * a);
   }
   drawPlane(g, cv, res / k0 / sc, o.x, o.y, rx, ry, rz, f, { alpha: a });
+  if (LAY_ON && a > .06) {                                   // the whole phone (bezel included) is keep-clear
+    const bz = BEZ / STAGE_W, bzy = BEZ / STAGE_H, pts = [[-bz, -bzy], [1 + bz, -bzy], [1 + bz, 1 + bzy], [-bz, 1 + bzy]].map(([u, v]) => map(u, v));
+    const tm = g.getTransform(), X = p => (tm.a * p[0] + tm.c * p[1] + tm.e) / SCALE, Y = p => (tm.b * p[0] + tm.d * p[1] + tm.f) / SCALE;
+    keepClear('phone:' + o.slot, [Math.min(...pts.map(X)), Math.min(...pts.map(Y)), Math.max(...pts.map(X)), Math.max(...pts.map(Y))]);
+  }
   return { map, w: lw * sc, h: lh * sc };
 }
 // where a phone's screen lands without drawing it: map(sx, sy) takes stage fractions

@@ -178,6 +178,7 @@ function framePair(id, ft) {
 // draw scene `id` at source time ft so that the stage (STAGE_W x STAGE_H) lands
 // under the current transform at (0,0)-(STAGE_W,STAGE_H)
 function drawStage(g, id, ft, o = {}) {
+  if (LAY_ON) return true;                                  // the layout check needs geometry only
   const pr = framePair(id, ft);
   if (!pr) { g.fillStyle = '#1a1030'; g.fillRect(0, 0, STAGE_W, STAGE_H); return false; }
   const [a, bb, m] = pr;

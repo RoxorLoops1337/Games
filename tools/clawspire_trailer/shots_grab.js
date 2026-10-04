@@ -59,7 +59,7 @@ shot({ id: 'resolve', t0: b(16), t1: b(20),
     const push = 1 + .05 * E.outCubic(inv(b(16), b(20), t)) + .02 * hits;
     camZoom(g, push, W * L(.6, .5), H * L(.45, .55));
     neonBg(g, t, { cam: [(t - b(16)) * 160, 0], speed: 1.4 });
-    const fly = spring(t - b(16), 8, 6);
+    const fly = E.outExpo(clamp((t - b(16)) / .4));      // no overshoot: the phone never slides under the words
     const ph = { slot: 'rr', id: RR, ft: rrFt(t), x: lerp(W + 500, W * L(.655, .5), fly), y: H * L(.52, .6), h: L(900, 1250), ry: lerp(-.9, -.32, fly), rx: .06, rz: .02, col: C.teal, glare: .3 + .1 * lt };
     const pr = phone(g, ph);
     const [rx_, ry_] = pr.map(RR_ROW[0], RR_ROW[1]);
@@ -69,20 +69,11 @@ shot({ id: 'resolve', t0: b(16), t1: b(20),
       burst(g, t - b(x), { x: hx, y: hy, n: 26, seed: 30 + i, speed: [300, 900], life: [.25, .6], size: [3, 6], gy: 600, cols: [C.gold, '#fff', C.pink], shape: 'spark' });
     });
     const [bl, bt_] = pr.map(.01, .385), [br, bb_] = pr.map(.99, .475);
-    callout(g, t - b(16.5), (bl + br) / 2, (bt_ + bb_) / 2, L(br + 70, bl + 40), L(bt_ - 150, bb_ + 190), 'YOUR HITS', { col: C.teal, dur: b(3.1), box: [br - bl + 30, bb_ - bt_ + 30] });
+    callout(g, t - b(16.5), (bl + br) / 2, (bt_ + bb_) / 2, bl - 60, 880, 'YOUR HITS', { col: C.teal, dur: b(3.1), box: [br - bl + 30, bb_ - bt_ + 30] });
     g.restore();
-    // the words, left
-    const x0 = W * L(.27, .5);
-    stagger(g, 'SEE EVERY', x0, H * L(.36, .085), t - b(16), { font: F.disp(84), fill: FILL.white, depth: 8, depthCol: '#4a2a7a', tracking: 2, per: .03 });
-    slam(g, 'HIT', L(x0, W * .4), H * L(.6, .2), t - b(16.5), { font: F.disp(190), fill: FILL.candy, depth: 18, glow: C.pink, dur: 9, from: 3, rot: -.06 });
-    // the hit counter ticks on every hit
-    const n = RR_B.filter(x => t >= b(x)).length;
-    if (n > 0) {
-      const lh = t - b(RR_B[n - 1]);
-      g.save(); g.translate(L(x0, W * .8), H * L(.82, .2)); const s = 1 + .35 * Math.exp(-lh * 12); g.scale(s, s);
-      candyText(g, 'x' + n, 0, 0, { font: F.disp(120), fill: FILL.gold, depth: 10, depthCol: '#7a4a08', glow: C.gold });
-      g.restore();
-    }
+    // the words, left of the phone (measured, never over it)
+    const n = RR_B.filter(x => t >= b(x)).length, lh = n ? t - b(RR_B[n - 1]) : 9;
+    headline(g, { id: 'hits', rect: [96, 110, 800, 780], lines: [CL_('SEE EVERY', b(16) + POP_IN, .5, FILL.white, '#4a2a7a', null, { depthK: .07 }), hitsLine(b(16.5) + POP_IN, n, lh)] }, t);
   },
   post(lt, P, t) {
     P.flash = [1, 1, 1, .5 * kick(t, b(16), .05)];
@@ -108,10 +99,10 @@ shot({ id: 'cabinet', t0: b(20), t1: b(24),
     neonBg(g, t, { cam: [(t - b(20)) * 140 + whip * 900, 0], speed: 1.5 });
     EVENTS.forEach((ev, i) => {
       const on = inv(b(ev.at) - .03, b(ev.at), t);
-      const fly = spring(t - b(20.3) - i * .07, 7, 6);
+      const fly = E.outExpo(clamp((t - b(20.3) - i * .07) / .45));   // no overshoot: phones never rise into the headline band
       const id = 'cabinet_event_' + ev.k;
       const ft = cue(id, 'cab_event_' + ev.k + '_land', .2) + (t - b(ev.at));
-      const pr = phone(g, { slot: 'ev' + i, id, ft, x: W * ev.x, y: lerp(H * 1.6, H * ev.y, fly) - 18 * kick(t, b(ev.at), .15), h: L(700, 620),
+      const pr = phone(g, { slot: 'ev' + i, id, ft, x: W * ev.x, y: lerp(H * 1.6, 655, fly) - 12 * kick(t, b(ev.at), .15), h: 600,
         ry: ev.ry, rx: .05, col: ev.col, dim: .55 * (1 - on), glow: .4 + on * .8, flash: .6 * kick(t, b(ev.at), .06), glare: .4 + i * .1 });
       const [px, py] = pr.map(.5, .5), [tx, ty] = ev.up ? pr.map(.5, -.02) : pr.map(.5, 1.12);
       const age = t - b(ev.at);
@@ -120,19 +111,19 @@ shot({ id: 'cabinet', t0: b(20), t1: b(24),
       }
       if (ev.k === 'coins') burst(g, age, { x: px, y: py - 260, n: 46, seed: 51, speed: [400, 1300], angle: [-Math.PI * .95, -Math.PI * .05], life: [.6, 1.3], size: [16, 30], gy: 2200, drag: .6, cols: [C.gold], shape: 'coin', add: false });
       if (ev.k === 'capsule') { ring(g, px, py, age, { r0: 30, r1: 420, life: .45, col: C.pink, lw: 18 }); burst(g, age, { x: px, y: py, n: 50, seed: 61, speed: [300, 1100], life: [.4, .9], size: [4, 8], gy: 400, cols: [C.pink, '#fff', C.teal], shape: 'star' }); }
-      // the label chip above the phone
-      if (age >= 0) {
-        const s = spring(age, 12, 7);
-        g.save(); g.translate(tx, ty - 46 * (ev.up ? 1 : -1)); g.scale(s * L(1, .85), s * L(1, .85));
-        pill(g, ev.label, 0, 0, { font: F.cond(84), bg: 'rgba(11,6,24,.94)', border: ev.col, fg: '#fff', h: 104, padX: 60, tracking: 3, glow: ev.col });
-        g.restore();
-      }
     });
     g.restore();
-    // the headline arrives with the whip, leaves before the first event
-    const hl = t - b(20.15);
-    slam(g, 'THE CABINET', W / 2, H * L(.42, .45), hl, { font: F.disp(124), fill: FILL.white, depth: 12, depthCol: '#4a2a7a', dur: b(1.25), exitTo: 'up', out: .12, from: 2.4 });
-    slam(g, 'IS ALIVE', W / 2, H * L(.66, .56), hl - .08, { font: F.disp(170), fill: FILL.candy, depth: 16, glow: C.pink, dur: b(1.25) - .04, exitTo: 'up', out: .12, from: 2.8, rot: .05 });
+    // the label chips in the top band, over their phones (drawn outside the camera so they never grow over a phone)
+    EVENTS.forEach((ev, i) => {
+      const lt2 = t - b(ev.at) - POP_IN, s = popScale(lt2);
+      if (s <= 0 || t > b(23.5)) return;
+      g.save(); g.globalAlpha *= popAlpha(lt2) * (1 - clamp((t - b(23.5) + .12) / .12)); g.translate(W * ev.x, 190); g.scale(s, s);
+      pill(g, ev.label, 0, 0, { font: pillFit(ev.label, F.cond, 84, 540, { padX: 40, tracking: 3 }), bg: 'rgba(11,6,24,.94)', border: ev.col, fg: '#fff', padX: 40, padY: 20, tracking: 3, glow: ev.col });
+      g.restore();
+    });
+    // the headline arrives with the whip in the top band, and leaves before the first event's chip
+    headline(g, { id: 'cabinet', rect: [96, 60, 1824, 330], until: b(21.5) - .14, lines: [
+      CL_('THE CABINET IS ALIVE', b(20.15) + POP_IN, 1, FILL.candy, '#8a0f50', C.pink)] }, t);
   },
   post(lt, P, t) {
     P.zoomBlur = .3 * (1 - E.outExpo(inv(b(20), b(20.6), t))) + .3 * E.inCubic(inv(b(23.5), b(24), t)); P.zbCenter = [.5, .5];
@@ -155,6 +146,7 @@ shot({ id: 'fever', t0: b(24), t1: b(28),
     const o = LF_CROP(t);
     fullFrame(g, LF, LF_AT() + (t - b(24)), o);
     const [lx, ly] = ffPoint(o, LF_LAMP[0], LF_LAMP[1]);
+    { const [a, c] = ffPoint(o, .25, .505), [d, e] = ffPoint(o, .75, .565); keepClear('game LAMP FEVER banner', [a, c, d, e]); }
     // the fever light: beat strobes, rays from the lamp, a gold flare
     const bk = beatKick(t, 24, 28, .12, .5);
     shafts(g, lx, ly, .55 + .35 * bk, { n: 12, dir: Math.PI * .72, spread: 1.4, len: 1500, seed: 77, t, col: 'rgba(255,215,110,A)', width: 1.4 });
@@ -167,7 +159,7 @@ shot({ id: 'fever', t0: b(24), t1: b(28),
     vignetteDark(g, .45, .3);
     const [fx_, fy_] = ffPoint(o, LF_TEXT[0], LF_TEXT[1]);
     ring(g, fx_, fy_, t - b(24), { r0: 80, r1: 900, life: .5, col: C.gold, lw: 26 });
-    callout(g, t - b(24.6), lx - 30, ly + 10, lx - L(420, 300), ly + L(300, 420), 'JACKPOT LAMP', { col: C.gold, dur: b(1.2), r: 100 });
+    callout(g, t - b(24.6), lx - 30, ly + 10, lx - 260, ly + 10, 'JACKPOT LAMP', { col: C.gold, dur: b(.8), r: 100 });
     const [px_, py_] = ffPoint(o, LF_PILE[0], LF_PILE[1]);
     callout(g, t - b(26.4), px_, py_, px_ + L(380, 60), py_ - L(300, 420), 'PRIZES RAIN', { col: C.gold, dur: b(1.4), box: [700, 260] });
   },

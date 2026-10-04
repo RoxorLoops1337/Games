@@ -37,21 +37,22 @@ BUILD.forEach((s, i) => shot({ id: 'build' + i, t0: b(s.b0), t1: b(s.b1),
     const pr = phone(g, { slot: 'b' + i, id: s.id, ft: s.ft(lt), flash: s.wordAt ? .6 * kick(lt, s.wordAt, .05) : 0, x: W * L(s.x, .5) + s.side * (1 - fly) * W * .3, y: H * L(.52, .6), h: L(900, 1250),
       ry: s.ry + s.side * (1 - fly) * -.6, rx: .05, rz: s.side * -.02, col: s.col, glare: .3 + lt * .3 });
     g.restore();
+    const T0_ = b(s.b0), side = s.wx != null && s.wx < .5 ? [96, 120, 960, 940] : [960, 120, 1824, 940];
     if (s.call) {
-      stagger(g, 'BUILD', W * L(.28, .5), H * L(.42, .1), lt, { font: F.disp(150), fill: FILL.white, depth: 14, depthCol: '#4a2a7a', per: .03 });
-      stagger(g, 'ANYTHING', W * L(.28, .5), H * L(.66, .19), lt - .12, { font: F.disp(112), fill: FILL.gold, depth: 12, depthCol: '#7a4a08', per: .03, glow: C.gold });
+      headline(g, { id: 'build', rect: [96, 120, 960, 700], lines: [CL_('BUILD', T0_ + POP_IN, .75, FILL.white, '#4a2a7a'), CL_('ANYTHING', T0_ + POP_IN + .12, 1, FILL.gold, '#7a4a08', C.gold)] }, t);
       const [tx, ty] = pr.map(s.call[1], s.call[2]);
-      callout(g, lt - b(.25), tx, ty, tx - L(240, 160), ty + L(300, 420), s.call[0], { col: C.gold, dur: 9, box: [L(420, 560), L(150, 200)] });
+      callout(g, lt - b(.25), tx, ty, tx - 380, 850, s.call[0], { col: C.gold, dur: 9, box: [420, 150] });
     } else if (s.word) {
       if (s.joy) {                                            // meet Joy Stick, the technician
         const [jx, jy] = pr.map(s.joy[0], s.joy[1]);
-        callout(g, lt - .02, jx, jy, jx + 40, jy, '', { col: C.teal, dur: b(.4), box: [L(300, 420), L(110, 150)] });
-        slam(g, 'JOY STICK', W * L(s.wx, .5), H * L(.52, .14), lt - .02, { font: F.disp(130), fill: FILL.teal, depth: 12, depthCol: '#06504c', glow: C.teal, dur: b(.42), out: .06, from: 2.2, rot: -.05 });
+        callout(g, lt - .02, jx, jy, jx + 40, jy, '', { col: C.teal, dur: b(.4), box: [300, 110] });
+        headline(g, { id: 'joy', rect: [960, 330, 1824, 750], until: T0_ + s.wordAt - .12, lines: [CL_('JOY STICK', T0_ + POP_IN * .5, 1, FILL.teal, '#06504c', C.teal)] }, t);
       }
-      const wl = lt - (s.wordAt || 0);
-      if (wl < 0) return;
-      slam(g, s.word[0], W * L(s.wx, .5), H * L(.42, .1), wl - .04, { font: F.disp(fit(s.word[0], F.disp, 100, 760)), fill: FILL.white, depth: 10, depthCol: '#4a2a7a', dur: 9, from: 2.2 });
-      slam(g, s.word[1], W * L(s.wx, .5), H * L(.63, .19), wl - .1, { font: F.disp(fit(s.word[1], F.disp, 150, 820)), fill: s.col === C.teal ? FILL.teal : FILL.candy, depth: 14, depthCol: s.col === C.teal ? '#06504c' : '#8a0f50', glow: s.col, dur: 9, from: 2.6, rot: s.side * .05 });
+      const W0 = T0_ + (s.wordAt || 0);
+      if (t < W0) return;
+      const teal = s.col === C.teal;
+      headline(g, { id: s.word[1], rect: side, lines: [CL_(s.word[0], W0 + POP_IN * .6, .62, FILL.white, '#4a2a7a'),
+        CL_(s.word[1], W0 + POP_IN * .6 + .08, 1, teal ? FILL.teal : FILL.candy, teal ? '#06504c' : '#8a0f50', s.col)] }, t);
     }
   },
   post(lt, P, t) {
@@ -90,13 +91,13 @@ shot({ id: 'wall', t0: b(32), t1: b(36),
       const s = spring(age, 13, 7.5);
       const geo = wallGeom(w, t);
       phone(g, Object.assign({ slot: 'w' + w.c, id: 'claw_' + w.c, ft: cue('claw_' + w.c, ['claw_close', 'grab'], .6) - .3 + age, col: CLAW_COL[w.c], zoom: 1.3, cx: .5, cy: .6,
-        flash: .7 * kick(age, 0, .05), glare: .5 + w.s * .1, glow: .6 }, geo, { scale: geo.scale * lerp(1.5, 1, s), y: geo.y - (1 - s) * 120, alpha: clamp(age / .05) }));
+        flash: .7 * kick(age, 0, .05), glare: .5 + w.s * .1, glow: .6 }, geo, { scale: geo.scale * lerp(1.12, 1, s), y: geo.y - (1 - s) * 30, alpha: clamp(age / .05) }));
       ring(g, geo.x, geo.y, age, { r0: 60, r1: 420, life: .3, col: CLAW_COL[w.c], lw: 10 });
     }
     g.restore();
     // the headline on the wall
     const hb = b(34);
-    if (t > hb) slam(g, '8 CLAW TYPES', W / 2, H * L(.2, .16), t - hb, { font: F.disp(fit('8 CLAW TYPES', F.disp, 120, 1300)), fill: FILL.candy, depth: 12, glow: C.pink, dur: 9, from: 2.6 });
+    headline(g, { id: 'claws', rect: [96, 64, 1824, 245], until: b(35.6) - .12, lines: [CL_('8 CLAW TYPES', hb + POP_IN, 1, FILL.candy, '#8a0f50', C.pink)] }, t);
   },
   post(lt, P, t) {
     P.flash = [1, 1, 1, .25 * kick(t, b(32), .05) + .4 * kick(t, b(34), .05)];
@@ -126,6 +127,7 @@ shot({ id: 'capsule', t0: b(36), t1: b(41),
     shakeAt(g, t, [36.5, 37, 37.5], 16, .1); shakeAt(g, t, [38], 40, .25, 18, 2);
     const o = CL_CROP(t);
     fullFrame(g, CL, clFt(t), o);
+    { const [a, c] = ffPoint(o, .18, .09), [d, e] = ffPoint(o, .82, .225); keepClear('game LEGENDARY title', [a, c, d, e]); }
     g.restore();
     const [cx, cy] = ffPoint(o, CL_CAP[0], CL_CAP[1]);
     // anticipation: darkness closes in, a held breath
@@ -144,10 +146,10 @@ shot({ id: 'capsule', t0: b(36), t1: b(41),
       burst(g, t - b(bb), { x: cx, y: cy, n: 30, seed: 37 + i, speed: [400, 1200], life: [.3, .7], size: [4, 9], gy: 600, cols: [col, '#fff'], shape: 'star' });
     });
     const [lx, ly] = ffPoint(o, CL_TITLE[0], CL_TITLE[1]);
-    callout(g, t - b(39.15), lx + L(330, 240), ly + 10, lx + L(640, 120), ly + L(260, 330), 'LEGENDARY', { col: C.gold, dur: b(.6), box: [700, 150] });
+    const legBot = ffPoint(o, .5, .225)[1];
+    callout(g, t - b(39.15), lx + 330, ly + 10, lx + 420, legBot + 80, 'LEGENDARY', { col: C.gold, dur: b(.35), box: [700, 150] });
     if (t > b(40)) {
-      slam(g, 'CAPSULE', W / 2, H * L(.52, .62), t - b(40), { font: F.disp(150), fill: FILL.white, depth: 14, depthCol: '#4a2a7a', dur: 9, from: 2.6 });
-      slam(g, 'FEVER', W / 2, H * L(.8, .73), t - b(40.12), { font: F.disp(220), fill: FILL.gold, depth: 20, depthCol: '#7a4a08', glow: C.gold, dur: 9, from: 3, rot: -.06 });
+      headline(g, { id: 'capsule', rect: [96, 760, 1824, 1026], plate: true, plateStyle: PL_DARK, lines: [CL_('CAPSULE FEVER', b(40) + POP_IN, 1, FILL.gold, '#7a4a08', C.gold)] }, t);
     }
     vignetteDark(g, .5, .3);
   },
@@ -175,12 +177,11 @@ shot({ id: 'minis', t0: b(41), t1: b(44),
     drift(g, lt, 1.2);
     neonBg(g, t, { cam: [t * 120, 0], speed: 1.2 });
     const fly = spring(lt, 7, 6);
-    const pr = phone(g, { slot: 'vm', id: VM, ft: cue(VM, 'minis_tab', .5) + .1 + lt * 1.25, x: lerp(W * .3, W * L(.66, .5), fly), y: lerp(H * 1.5, H * L(.52, .6), fly), h: L(900, 1250), ry: lerp(.9, -.28, fly) + .1 * Math.sin(lt * 1.7) * fly, rz: lerp(.3, .02, fly), rx: .05, col: C.purple, glare: .3 + lt * .2 });
+    const pr = phone(g, { slot: 'vm', id: VM, ft: cue(VM, 'minis_tab', .5) + .1 + lt * 1.25, x: lerp(W * 1.25, W * .66, E.outExpo(clamp(lt / .4))), y: lerp(H * 1.5, H * L(.52, .6), fly), h: L(900, 1250), ry: lerp(.9, -.28, fly) + .1 * Math.sin(lt * 1.7) * fly, rz: lerp(.3, .02, fly), rx: .05, col: C.purple, glare: .3 + lt * .2 });
     // the minis bounce out of the screen as sparkles
     burst(g, lt - .25, { x: pr.map(.5, .3)[0], y: pr.map(.5, .3)[1], n: 40, seed: 44, speed: [200, 900], angle: [-Math.PI * .9, -Math.PI * .1], life: [.8, 1.6], size: [5, 10], gy: 700, cols: [C.teal, C.pink, C.gold], shape: 'star' });
     g.restore();
-    stagger(g, 'COLLECT', W * L(.28, .5), H * L(.44, .09), lt - .05, { font: F.disp(120), fill: FILL.white, depth: 12, depthCol: '#4a2a7a', per: .03 });
-    stagger(g, 'MINIS', W * L(.28, .5), H * L(.7, .2), lt - .2, { font: F.disp(190), fill: FILL.teal, depth: 16, depthCol: '#06504c', per: .05, glow: C.teal, spin: .3 });
+    headline(g, { id: 'minis', rect: [96, 150, 960, 930], lines: [CL_('COLLECT', b(41) + POP_IN, .62, FILL.white, '#4a2a7a'), CL_('MINIS', b(41) + POP_IN + .12, 1, FILL.teal, '#06504c', C.teal)] }, t);
   },
   post(lt, P, t) {
     P.flash = [1, 1, 1, .35 * kick(lt, 0, .05)];

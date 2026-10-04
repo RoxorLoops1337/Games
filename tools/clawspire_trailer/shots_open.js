@@ -58,7 +58,7 @@ shot({ id: 'open', t0: 0, t1: b(4),
       g.restore();
       const blink = (Math.floor(t * 6) % 2) ? 1 : .35;
       g.save(); g.globalAlpha = blink;
-      candyText(g, 'INSERT COIN', W / 2, H * .55 + 300, { font: F.disp(64), fill: FILL.candy, depth: 6, tracking: 4 });
+      headline(g, { id: 'insert', rect: [96, 830, 1824, 960], lines: [CL_('INSERT COIN', 0, 1, FILL.candy, '#8a0f50', null, { ov: 1, tracking: 4 })] }, 1);
       g.restore();
       return;
     }
@@ -129,11 +129,13 @@ shot({ id: 'title-phone', t0: T0, t1: b(7.5),
   },
 });
 // full frame on the title, the 2.0 reveal
-const TITLE_FF = t => ({ cx: .5, cy: .21, zoom: lerp(1.0, 1.06, E.outCubic(inv(b(7.5), b(8.5), t))) + .07 * inv(b(8.5), b(12), t), rot: -.012 * inv(b(8.5), b(12), t) });
+const TITLE_FF = t => ({ cx: .5, cy: .21, zoom: 1 + .03 * E.outCubic(inv(b(7.5), b(12), t)) });
 shot({ id: 'title-ff', t0: b(7.5), t1: b(12),
   draw(g, lt, P, t) {
     shakeAt(g, t, [8], 34, .16); shakeAt(g, t, [10], 12, .1, 24, 5);
-    fullFrame(g, 'title_neon', titleFt(t), TITLE_FF(t));
+    const tfo = TITLE_FF(t);
+    fullFrame(g, 'title_neon', titleFt(t), tfo);
+    if (!VERT) { const [a, c] = ffPoint(tfo, .06, .1), [d, e] = ffPoint(tfo, .94, .207); keepClear('game logo', [a, c, d, e]); }
     // pull the bottom down so the numeral reads
     const gr = g.createLinearGradient(0, H * L(.3, .5), 0, H);
     gr.addColorStop(0, 'rgba(10,5,22,0)'); gr.addColorStop(.45, 'rgba(10,5,22,.72)'); gr.addColorStop(1, 'rgba(10,5,22,.9)');
@@ -144,14 +146,11 @@ shot({ id: 'title-ff', t0: b(7.5), t1: b(12),
     shafts(g, W / 2, H * .62, t > tb ? .5 * (.4 + .6 * kick(t, tb, .6)) : 0, { n: 16, dir: -Math.PI / 2, spread: Math.PI * 2, len: 1300, seed: 8, t, col: 'rgba(255,120,190,A)', spin: .05 });
     burst(g, t - tb, { x: W / 2, y: H * .62, n: 140, seed: 21, speed: [500, 2400], life: [.4, 1.3], size: [3, 9], gy: 700, drag: 2.2, cols: [C.gold, C.pink, '#fff', C.teal], shape: 'star' });
     motes(g, t, { n: 70, seed: 81, speed: [80, 260], size: [2, 5], cols: [C.gold, C.pink, '#fff', C.teal], alpha: .9 });
-    const bp_ = beatKick(t, 9, 12, .1);                     // the numeral breathes on every beat
-    g.save(); g.translate(W / 2, H * .7); g.scale(1 + .045 * bp_, 1 + .045 * bp_); g.translate(-W / 2, -H * .7);
-    slam(g, '2.0', W / 2, H * .79, t - tb, { font: F.disp(300), fill: FILL.candy, depth: 26, depthCol: '#8a0f50', glow: C.pink, dur: 9, from: 3.4, in: .11, rot: -.08, settle: .1 });
-    g.restore();
-    // the dot of 2.0 gets a gold flare
-    flare(g, W / 2 - 6, H * .74, 1.1 * kick(t, tb + .05, .35) + .5 * kick(t, b(10), .3));
-    // the line under it
-    if (t > b(10)) stagger(g, 'THE BIG UPDATE', W / 2, H * .93, t - b(10), { font: F.disp(60), fill: FILL.teal, depth: 6, depthCol: '#06504c', tracking: 6, per: .025, glow: C.teal });
+    // 2.0 under the game's own logo; THE BIG UPDATE on a plate sized from its text
+    headline(g, { id: '2.0', rect: [96, 580, 1824, 878], lines: [CL_('2.0', tb, 1, FILL.candy, '#8a0f50', C.pink, { depthK: .085 })] }, t);
+    flare(g, W / 2 - 6, 790, 1.1 * kick(t, tb + .05, .35) + .5 * kick(t, b(10), .3));
+    headline(g, { id: 'big update', rect: [96, 905, 1824, 1026], plate: true, pad: 24, plateStyle: { bg: 'rgba(6,30,34,.85)', border: 'rgba(46,230,214,.6)' },
+      lines: [CL_('THE BIG UPDATE', b(10) + POP_IN, 1, FILL.teal, '#06504c', null, { depthK: .07, tracking: 4 })] }, t);
   },
   post(lt, P, t) {
     const tb = b(8);

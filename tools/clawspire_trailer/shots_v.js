@@ -14,8 +14,10 @@ const VS = { x0: 65, x1: 1015, y0: 230, y1: 1536 };          // the safe zone
 const VW = VS.x1 - VS.x0;                                  // 950
 const vfit = (txt, fontFn, size, maxW = VW) => fontFn(fit(txt, fontFn, size, maxW));
 const vff = (zoom = 1, o = {}) => Object.assign({ cx: .5, cy: .5, zoom: Math.min(zoom, o.max || 1.09) }, o);
-const VT1 = 340, VT2 = 490;                                // a two-line headline in the top band
-const V_PH = { x: W / 2, y: 1085, h: 1040 };               // a phone under the headline (screen ~565..1605)
+// the top band for a headline above a phone, and that phone (bezel top 610, below the band)
+const V_TOP = [65, 236, 1015, 575];
+const V_PH = { x: W / 2, y: 1140, h: 1000 };
+// PL_DARK, CL_, hitsLine and spookyLine live in fx.js
 function vplate(g, y0, y1, a = .62) {
   if (a <= 0) return;
   const gr = g.createLinearGradient(0, y0 - 80, 0, y1 + 80);
@@ -31,9 +33,14 @@ function subline(g, txt, y, lt, o = {}) {
   const yy = y + (1 - u) * 24;
   g.lineWidth = 14; g.strokeStyle = '#0b0618'; g.strokeText(txt, W / 2, yy);
   g.fillStyle = o.col || '#ffffff'; g.fillText(txt, W / 2, yy);
+  { const m = g.measureText(txt); layText(g, txt, W / 2 - m.actualBoundingBoxLeft - 7, yy - m.actualBoundingBoxAscent - 7, W / 2 + m.actualBoundingBoxRight + 7, yy + m.actualBoundingBoxDescent + 7); }
   g.restore();
 }
 const vshot = def => shot(Object.assign({ vert: true }, def));
+// keep-clear rects: game UI in stage fractions under a full-frame crop, or a whole phone
+function kcFF(o, id, r) { const [a, c] = ffPoint(o, r[0], r[1]), [d, e] = ffPoint(o, r[2], r[3]); keepClear(id, [a, c, d, e]); }
+function kcPhone(pr, id) { const [a, c] = pr.map(-.04, -.025), [d, e] = pr.map(1.04, 1.025); keepClear(id, [Math.min(a, d), Math.min(c, e), Math.max(a, d), Math.max(c, e)]); }
+const KC_HUD = [0, 0, 1, .066], KC_HP = [0, .31, 1, .345];
 // a piecewise source-time map: pts [[beat, sourceSeconds], ...], 1x outside
 function pmap(t, pts) {
   const p = pts.map(([bb, s]) => [b(bb), s]);
@@ -49,7 +56,7 @@ vshot({ id: 'v-open', t0: 0, t1: b(4),
       const u = clamp(t / b(1));
       coinSlot(g, W / 2, 900, 0);
       g.save(); g.globalAlpha = clamp(t / .12); coin(g, W / 2, lerp(-140, 860, E.inQuad(u)), 80, t * 14); g.restore();
-      candyText(g, 'INSERT COIN', W / 2, 1300, { font: vfit('INSERT COIN', F.disp, 84), fill: FILL.candy, depth: 7, tracking: 4 });
+      headline(g, { id: 'insert', rect: [65, 1200, 1015, 1400], lines: [CL_('INSERT COIN', 0, 1, FILL.candy, '#8a0f50', null, { ov: 1 })] }, 1);
       return;
     }
     const tg = b(3);
@@ -106,7 +113,7 @@ vshot({ id: 'v-title-ff', t0: b(6), t1: b(10),
   draw(g, lt, P, t) {
     const tb = b(6);
     shakeAt(g, t, [6], 30, .16); shakeAt(g, t, [8], 10, .1, 24, 5);
-    fullFrame(g, 'title_neon', titleFt(t), vff(1 + .06 * E.outCubic(inv(b(6), b(10), t))));
+    { const o = vff(1 + .06 * E.outCubic(inv(b(6), b(10), t))); fullFrame(g, 'title_neon', titleFt(t), o); kcFF(o, 'game logo', [.06, .1, .94, .228]); }
     const gr = g.createLinearGradient(0, 560, 0, 1700);
     gr.addColorStop(0, 'rgba(10,5,22,0)'); gr.addColorStop(.3, 'rgba(10,5,22,.62)'); gr.addColorStop(1, 'rgba(10,5,22,.8)');
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
@@ -114,13 +121,11 @@ vshot({ id: 'v-title-ff', t0: b(6), t1: b(10),
     shafts(g, W / 2, 980, .5 * (.4 + .6 * kick(t, tb, .6)), { n: 16, dir: -Math.PI / 2, spread: Math.PI * 2, len: 1300, seed: 8, t, col: 'rgba(255,120,190,A)', spin: .05 });
     burst(g, t - tb, { x: W / 2, y: 980, n: 140, seed: 21, speed: [500, 2400], life: [.4, 1.3], size: [3, 9], gy: 700, drag: 2.2, cols: [C.gold, C.pink, '#fff', C.teal], shape: 'star' });
     motes(g, t, { n: 70, seed: 81, speed: [80, 260], size: [2, 5], cols: [C.gold, C.pink, '#fff', C.teal], alpha: .9 });
-    const bp_ = beatKick(t, 7, 10, .1);
-    g.save(); g.translate(W / 2, 1000); g.scale(1 + .04 * bp_, 1 + .04 * bp_); g.translate(-W / 2, -1000);
-    slam(g, '2.0', W / 2, 1140, t - tb, { font: F.disp(300), fill: FILL.candy, depth: 26, depthCol: '#8a0f50', glow: C.pink, dur: 9, from: 3.4, in: .11, rot: -.08, settle: .1 });
-    g.restore();
+    // 2.0 lands on b6 exactly; THE BIG UPDATE sits on its own plate under it
+    headline(g, { id: '2.0', rect: [65, 600, 1015, 1250], maxSize: 330, lines: [CL_('2.0', tb, 1, FILL.candy, '#8a0f50', C.pink, { depthK: .085 })] }, t);
     flare(g, W / 2 - 6, 1080, 1.1 * kick(t, tb + .05, .35));
-    vplate(g, 1320, 1430, .7 * clamp((t - b(6.25)) / .1));
-    stagger(g, 'THE BIG UPDATE', W / 2, 1400, t - b(6.25), { font: vfit('THE BIG UPDATE', F.disp, 72, 900), fill: FILL.teal, depth: 6, depthCol: '#06504c', tracking: 4, per: .02, glow: C.teal });
+    headline(g, { id: 'big update', rect: [65, 1290, 1015, 1480], plate: true, plateStyle: { bg: 'rgba(6,30,34,.85)', border: 'rgba(46,230,214,.6)' },
+      lines: [CL_('THE BIG UPDATE', b(6.4), 1, FILL.teal, '#06504c', null, { depthK: .07 })] }, t);
   },
   post(lt, P, t) {
     const tb = b(6);
@@ -149,6 +154,7 @@ vshot({ id: 'v-hits', t0: b(10), t1: b(21),
     const o = vff(1 + .025 * hk, { cy: .3 });
     o.ox = (1 - fly) * W;
     fullFrame(g, RR, vrrFt(t), o);
+    kcFF(o, 'HUD', KC_HUD); kcFF(o, 'enemy HP bars', KC_HP); kcFF(o, 'YOUR HITS row', [0, .345, 1, .5]); kcFF(o, 'card panels', [0, .865, 1, .94]);
     V_HITS.forEach((x, i) => {
       const [hx, hy] = ffPoint(o, .1 + .2 * i, .43);              // the card that strikes
       ring(g, hx, hy, t - b(x), { r0: 30, r1: 240, life: .35, col: [C.gold, C.pink, C.teal, '#fff', C.gold][i], lw: 12 });
@@ -158,18 +164,21 @@ vshot({ id: 'v-hits', t0: b(10), t1: b(21),
     g.restore();
     // bracket the row as it fills and GO! stamps it
     callout(g, t - b(10.75), (bl + br) / 2, (bt_ + bb_) / 2, (bl + br) / 2, (bt_ + bb_) / 2, '', { col: C.teal, dur: b(2.2), box: [br - bl + 20, bb_ - bt_ + 24] });
-    // the words live over the cabinet (idle once the row runs); the row and the enemies stay clear
-    vplate(g, 1010, 1530, .72 * fly);
-    stagger(g, 'SEE EVERY', W / 2, 1120, t - b(10.25), { font: vfit('SEE EVERY', F.disp, 96), fill: FILL.white, depth: 9, depthCol: '#4a2a7a', tracking: 2, per: .03 });
-    slam(g, 'HIT', W * .4, 1335, t - b(10.6), { font: F.disp(190), fill: FILL.candy, depth: 18, glow: C.pink, dur: 99, from: 3, rot: -.06, drift: .004 });
-    const n = V_HITS.filter(x => t >= b(x)).length;
-    if (n > 0) {
-      const lh = t - b(V_HITS[n - 1]);
-      g.save(); g.translate(W * .79, 1325); const s = 1 + .35 * Math.exp(-lh * 12); g.scale(s, s);
-      candyText(g, 'x' + n, 0, 0, { font: F.disp(130), fill: FILL.gold, depth: 10, depthCol: '#7a4a08', glow: C.gold });
-      g.restore();
-    }
-    subline(g, 'Every hit, one by one', 1490, t - b(11.5), { col: C.mint });
+    // the words live on a plate over the cabinet (idle once the row runs); the row and the enemies stay clear
+    const n = V_HITS.filter(x => t >= b(x)).length, lh = n ? t - b(V_HITS[n - 1]) : 9;
+    headline(g, { id: 'hits', rect: [65, 1000, 1015, 1530], plate: true, plateStyle: PL_DARK, gap: .12, lines: [
+      CL_('SEE EVERY', b(10.25) + POP_IN, .52, FILL.white, '#4a2a7a', null, { depthK: .07 }),
+      CL_('HIT  x5', b(10.5) + POP_IN, 1, FILL.candy, '#8a0f50', C.pink, { ov: 1.12, depthK: .09, id: 'HIT', draw(g, l, opts) {
+        const xL = l.x - measure('HIT  x5', l.font).w / 2;
+        candyText(g, 'HIT', xL, l.y, Object.assign({}, opts, { align: 'left', id: 'HIT' }));
+        if (!n) return;
+        const xc = xL + measure('HIT  ', l.font).w, cw = measure('x' + n, l.font, 0, 'left'), ps = 1 + .08 * Math.exp(-lh * 12);
+        g.save(); g.translate(xc + (cw.l + cw.r) / 2 - cw.l, l.y - cw.asc / 2); g.scale(ps, ps); g.translate(-(xc + (cw.l + cw.r) / 2 - cw.l), -(l.y - cw.asc / 2));
+        candyText(g, 'x' + n, xc, l.y, Object.assign({}, opts, { align: 'left', fill: FILL.gold, depthCol: '#7a4a08', glow: C.gold, id: 'counter' }));
+        g.restore();
+      } }),
+      { txt: 'Every hit, one by one', at: b(11.5), k: .3, font: F.ui, fill: C.mint, depthK: 0, outline: '#0b0618', outlineK: .12, ov: 1 },
+    ] }, t);
   },
   post(lt, P, t) {
     P.flash = [1, 1, 1, .45 * kick(t, b(10), .05) + .25 * kick(t, b(11), .04)];
@@ -190,20 +199,19 @@ V_EV.forEach((ev, i) => vshot({ id: 'v-ev' + i, t0: b(ev.b0), t1: b(ev.b1),
   draw(g, lt, P, t) {
     g.save();
     shakeAt(g, t, [ev.b0, ev.at], 14, .12, 24, i);
-    const o = vff(1 + .04 * kick(t, b(ev.at), .25), { cy: .55 });
+    const o = vff(1 + .04 * kick(t, b(ev.at), .25), { cy: 0 });   // zoom anchored at the top: the HUD and HP bars stay put
     o.ox = (i ? 1 : -1) * (1 - E.outExpo(clamp(lt / .25))) * W * .7;
     fullFrame(g, ev.id, cue(ev.id, ev.land, 1.52) + (t - b(ev.at)), o);
+    kcFF(o, 'HUD', KC_HUD); kcFF(o, 'enemy HP bars', KC_HP); kcFF(o, 'GRABS', [.6, .35, 1, .395]); kcFF(o, 'event sign', [.05, .52, .95, .65]);
     const [px, py] = ffPoint(o, .5, .6), age = t - b(ev.at);
     if (i === 0 && age >= 0 && age < .55) for (let j = 0; j < 3; j++) lightning(g, px + (j - 1) * 220, 560, px + (j - 1) * 90, py + 80, 100 + j + Math.floor(age * 30), { alpha: 1 - age / .55, lw: 5, glow: C.teal });
     if (i === 1) burst(g, age, { x: W / 2, y: 900, n: 46, seed: 51, speed: [400, 1300], angle: [-Math.PI * .95, -Math.PI * .05], life: [.6, 1.3], size: [18, 34], gy: 2200, drag: .6, cols: [C.gold], shape: 'coin', add: false });
     ring(g, px, py, age, { r0: 40, r1: 560, life: .45, col: ev.col, lw: 16 });
     g.restore();
-    // one headline across both events (it does not restart on the second cut)
-    const hl = t - b(21.25);
-    vplate(g, 250, 560, .6);
-    const keep = { dur: b(4.65), out: .12, exitTo: 'up' };
-    slam(g, 'THE CABINET', W / 2, 360, hl, Object.assign({ font: vfit('THE CABINET', F.disp, 104), fill: FILL.white, depth: 10, depthCol: '#4a2a7a', from: i ? 1 : 2.4, settle: i ? 0 : .07 }, keep));
-    slam(g, 'IS ALIVE', W / 2, 520, hl - .08, Object.assign({ font: vfit('IS ALIVE', F.disp, 140), fill: FILL.candy, depth: 14, glow: C.pink, from: i ? 1 : 2.8, rot: i ? 0 : .05, settle: i ? 0 : .07 }, keep, { dur: b(4.65) - .08 }));
+    // one headline across both events (the second cut finds it already settled)
+    headline(g, { id: 'cabinet', rect: [65, 240, 1015, 585], plate: true, plateStyle: PL_DARK, lines: [
+      CL_('THE CABINET', b(21.25) + POP_IN, .72, FILL.white, '#4a2a7a'),
+      CL_('IS ALIVE', b(21.4) + POP_IN, 1, FILL.candy, '#8a0f50', C.pink)] }, t);
   },
   post(lt, P, t) {
     P.zoomBlur = .22 * (1 - E.outExpo(clamp(lt / .25))); P.zbCenter = [.5, .5];
@@ -215,16 +223,17 @@ V_EV.forEach((ev, i) => vshot({ id: 'v-ev' + i, t0: b(ev.b0), t1: b(ev.b1),
 vshot({ id: 'v-fever', t0: b(26), t1: b(29),
   draw(g, lt, P, t) {
     shakeAt(g, t, [26], 24, .16); shakeAt(g, t, [27, 28], 8, .1, 24, 9);
-    const o = vff(keys([[b(26), 1.0], [b(26.25), 1.07, E.outExpo], [b(29), 1.04]], t), { cy: .55 });
+    const o = vff(keys([[b(26), 1.0], [b(26.25), 1.07, E.outExpo], [b(29), 1.04]], t), { cy: 0 });
     fullFrame(g, LF, LF_AT() - .1 + (t - b(26)), o);
+    kcFF(o, 'HUD', KC_HUD); kcFF(o, 'enemy HP bars', KC_HP); kcFF(o, 'game LAMP FEVER banner', [.25, .505, .75, .565]);
     const [lx, ly] = ffPoint(o, LF_LAMP[0], LF_LAMP[1]);
     const bk = beatKick(t, 26, 29, .12, .5);
     shafts(g, lx, ly, .5 + .3 * bk, { n: 12, dir: Math.PI * .72, spread: 1.4, len: 1500, seed: 77, t, col: 'rgba(255,215,110,A)', width: 1.4 });
     flare(g, lx, ly, .5 + .4 * bk, { size: .7 });
     burst(g, t - b(26), { x: W / 2, y: -60, n: 170, seed: 91, speed: [300, 1500], angle: [Math.PI * .1, Math.PI * .9], life: [1.4, 2.6], size: [8, 16], gy: 650, drag: 1.4, cols: [C.pink, C.teal, C.gold, '#fff', C.purple], shape: 'confetti', spin: 18, add: false });
     burst(g, t - b(26), { x: lx, y: ly, n: 70, seed: 7, speed: [600, 2000], life: [.4, 1], size: [4, 9], gy: 900, cols: [C.gold, '#fff'], shape: 'spark' });
-    vplate(g, 250, 560, .6);
-    slam(g, 'LAMP FEVER', W / 2, 470, t - b(26), { font: vfit('LAMP FEVER', F.disp, 150), fill: FILL.gold, depth: 16, depthCol: '#7a4a08', glow: C.gold, dur: 99, from: 3, rot: -.06 });
+    headline(g, { id: 'fever', rect: [65, 240, 1015, 585], plate: true, plateStyle: PL_DARK, lines: [
+      CL_('LAMP FEVER', b(26) + POP_IN * .5, 1, FILL.gold, '#7a4a08', C.gold)] }, t);
   },
   post(lt, P, t) {
     const bk = beatKick(t, 26, 29, .1, .5);
@@ -240,8 +249,9 @@ vshot({ id: 'v-fever', t0: b(26), t1: b(29),
 
 // ================================================================ 4. BUILD YOUR WAY (b29 - b35.5) hold, then the claws fast
 function buildTitle(g, t) {
-  stagger(g, 'BUILD', W / 2, VT1, t - b(29), { font: vfit('BUILD', F.disp, 100), fill: FILL.white, depth: 9, depthCol: '#4a2a7a', per: .03 });
-  stagger(g, 'YOUR WAY', W / 2, VT2, t - b(29.15), { font: vfit('YOUR WAY', F.disp, 130), fill: FILL.gold, depth: 12, depthCol: '#7a4a08', per: .03, glow: C.gold });
+  headline(g, { id: 'build', rect: V_TOP, until: b(35.1) - .12, lines: [
+    CL_('BUILD', b(29) + POP_IN, .7, FILL.white, '#4a2a7a'),
+    CL_('YOUR WAY', b(29) + POP_IN + .14, 1, FILL.gold, '#7a4a08', C.gold)] }, t);
 }
 vshot({ id: 'v-build', t0: b(29), t1: b(31.5),
   draw(g, lt, P, t) {
@@ -264,7 +274,7 @@ vshot({ id: 'v-build', t0: b(29), t1: b(31.5),
   },
 });
 const V_CLAWS = CLAW_IDS.map((c, k) => ({ c, k, at: 31.5 + k * .5 }));
-const vGrid = k => ({ x: 65 + 119 + (k % 4) * 237, y: 790 + Math.floor(k / 4) * 455, h: 385 });
+const vGrid = k => ({ x: 65 + 119 + (k % 4) * 237, y: 815 + Math.floor(k / 4) * 370, h: 310 });
 vshot({ id: 'v-claws', t0: b(31.5), t1: b(35.5),
   draw(g, lt, P, t) {
     g.save();
@@ -277,12 +287,12 @@ vshot({ id: 'v-claws', t0: b(31.5), t1: b(35.5),
       if (age < 0) continue;
       const s = spring(age, 13, 7.5), geo = vGrid(w.k);
       phone(g, Object.assign({ slot: 'vw' + w.c, id: 'claw_' + w.c, ft: cue('claw_' + w.c, ['claw_close', 'grab'], .6) - .3 + age, col: CLAW_COL[w.c],
-        flash: .6 * kick(age, 0, .05), glare: .5, glow: .6, rx: .03, ry: ((w.k % 4) - 1.5) * -.1 }, geo, { scale: lerp(1.5, 1, s), alpha: clamp(age / .05) }));
+        flash: .6 * kick(age, 0, .05), glare: .5, glow: .6, rx: .03, ry: ((w.k % 4) - 1.5) * -.1 }, geo, { scale: lerp(1.1, 1, s), alpha: clamp(age / .05) }));
       ring(g, geo.x, geo.y, age, { r0: 60, r1: 360, life: .3, col: CLAW_COL[w.c], lw: 10 });
     }
     g.restore();
     buildTitle(g, t);
-    slam(g, '8 CLAW TYPES', W / 2, 1530, t - b(31.6), { font: vfit('8 CLAW TYPES', F.disp, 92), fill: FILL.candy, depth: 9, glow: C.pink, dur: 99, from: 2.2 });
+    headline(g, { id: 'claws', rect: [65, 1384, 1015, 1530], until: b(35.1) - .12, lines: [CL_('8 CLAW TYPES', b(31.5) + POP_IN, 1, FILL.candy, '#8a0f50', C.pink)] }, t);
   },
   post(lt, P, t) {
     P.flash = [1, 1, 1, .2 * kick(t, b(31.5), .05)];
@@ -305,8 +315,9 @@ vshot({ id: 'v-capsule', t0: b(35.5), t1: b(42),
     g.save();
     if (tr > 0) { const s = shake(t, tr * 3, 30, 4); g.translate(s[0], s[1]); }
     shakeAt(g, t, [36, 36.5, 37], 14, .1); shakeAt(g, t, [37.5], 34, .25, 18, 2);
-    const o = vff(keys([[b(35.5), 1.0], [b(37.4), 1.08, E.inQuad], [b(37.5), 1.0, E.outExpo], [b(42), 1.04]], t), { cy: .48 });
+    const o = vff(keys([[b(35.5), 1.0], [b(37.4), 1.08, E.inQuad], [b(37.5), 1.0, E.outExpo]], t), { cy: .48 });
     fullFrame(g, CL, vclFt(t), o);
+    kcFF(o, 'game LEGENDARY title', [.18, .09, .82, .225]); kcFF(o, 'capsule', [.28, .4, .72, .62]);
     g.restore();
     const [cx, cy] = ffPoint(o, CL_CAP[0], CL_CAP[1]);
     wash(g, '#05020c', .45 * inv(b(35.5), b(37.4), t) * (1 - inv(lg, lg + .06, t)));
@@ -321,9 +332,9 @@ vshot({ id: 'v-capsule', t0: b(35.5), t1: b(42),
       burst(g, t - lg, { x: cx, y: cy, n: 200, seed: 38, speed: [400, 2600], life: [.7, 2.2], size: [3, 9], gy: 150, drag: 1.8, cols: [C.gold, '#fff6c8', C.pink, C.teal], shape: 'star' });
       ring(g, cx, cy, t - lg, { r0: 40, r1: 1000, life: .5, col: '#ffd68a', lw: 22 });
     }
-    vplate(g, 1120, 1530, .55 * clamp((t - b(38)) / .15));
-    slam(g, 'CAPSULE', W / 2, 1250, t - b(38), { font: vfit('CAPSULE', F.disp, 140), fill: FILL.white, depth: 13, depthCol: '#4a2a7a', dur: 99, from: 2.6 });
-    slam(g, 'FEVER', W / 2, 1480, t - b(38.12), { font: vfit('FEVER', F.disp, 200), fill: FILL.gold, depth: 18, depthCol: '#7a4a08', glow: C.gold, dur: 99, from: 3, rot: -.06 });
+    headline(g, { id: 'capsule', rect: [65, 1240, 1015, 1536], plate: true, plateStyle: PL_DARK, gap: .06, lines: [
+      CL_('CAPSULE', b(38) + POP_IN, .72, FILL.white, '#4a2a7a'),
+      CL_('FEVER', b(38) + POP_IN + .12, 1, FILL.gold, '#7a4a08', C.gold)] }, t);
     vignetteDark(g, .4, .35);
   },
   post(lt, P, t) {
@@ -353,12 +364,25 @@ vshot({ id: 'v-halloween', t0: b(42), t1: b(45.5),
     moon(g, mx, my, 120);
     for (let i = 0; i < 6; i++) { const a = t * 1.4 + i * 1.05; bat(g, mx + Math.cos(a) * (190 + i * 14), my + Math.sin(a) * 70, 1.1 + (i % 3) * .3, t * 20 + i, '#120610'); }
     for (const [px, s] of [[.1, 1.3], [.9, 1.2]]) pumpkin(g, W * px, 1800, s, .7 + .3 * Math.sin(t * 9 + px * 20));
-    const fly = spring(lt, 8, 6);
+    const fly = E.outExpo(clamp(lt / .5));               // no overshoot: the phone never rises into the headline
     phone(g, { slot: 'vhw', id: 'halloween_title', ft: cue('halloween_title', 'sheen_start', 1) - .2 + lt, x: W / 2, y: lerp(H * 1.5, V_PH.y, fly), h: V_PH.h,
       ry: lerp(-1.0, -.1, fly) + .06 * Math.sin(lt * 1.5) * fly, rx: .04, rz: lerp(-.25, .02, fly), col: C.orange, glare: .3 + .2 * lt });
     motes(g, t, { n: 40, seed: 9, speed: [40, 120], size: [2, 4], cols: [C.orange, C.gold, C.purple], alpha: .8 });
     g.restore();
-    spookyText(g, 'CLAW-O-WEEN', W / 2, 440, t - b(42.25), { font: vfit('CLAW-O-WEEN', F.disp, 120), drips: 12 });
+    headline(g, { id: 'halloween', rect: V_TOP, lines: [CL_('CLAW-O-WEEN', b(42.25) + POP_IN, 1, FILL.orange, '#5a1a00', C.orange, { outline: '#1a0608', extraBot: 92, ov: 1.06, draw(g, l, opts, lt) {
+      layBegin('CLAW-O-WEEN');
+      candyText(g, l.ln.txt, l.x, l.y, opts);
+      const m = measure(l.ln.txt, l.font), r = rng(31);           // goo drips grow under the letters
+      g.save(); g.fillStyle = '#ff7a12';
+      for (let i = 0; i < 12; i++) {
+        const dx = l.x - m.l + 20 + r() * (m.l + m.r - 40), len = lerp(20, 80, r()) * E.outCubic(clamp((lt - .1 - r() * .3) / .5)), w = lerp(8, 16, r());
+        if (len <= 1) continue;
+        g.beginPath(); g.moveTo(dx - w / 2, l.y - 4); g.lineTo(dx + w / 2, l.y - 4); g.lineTo(dx + w / 2, l.y + len); g.arc(dx, l.y + len, w / 2, 0, Math.PI); g.closePath(); g.fill();
+        layText(g, 'drip', dx - w / 2, l.y - 4, dx + w / 2, l.y + len + w / 2);
+      }
+      g.restore();
+      layEnd();
+    } })] }, t);
   },
   post(lt, P, t) {
     P.tint = [1.0, .72, .5]; P.tintA = .22; P.lift = [.03, .0, .05];
@@ -372,10 +396,11 @@ vshot({ id: 'v-halloween', t0: b(42), t1: b(45.5),
 vshot({ id: 'v-depths', t0: b(45.5), t1: b(48.5),
   draw(g, lt, P, t) {
     shakeAt(g, t, [45.5], 16, .12);
-    fullFrame(g, 'depths', cue('depths', 'tide_high', 4.93) - .4 + lt, vff(1 + lt * .05, { cy: .4 }));
+    { const o = vff(1 + lt * .05, { cy: .4 }); fullFrame(g, 'depths', cue('depths', 'tide_high', 4.93) - .4 + lt, o);
+      kcFF(o, 'HUD', [0, 0, 1, .075]); kcFF(o, 'boss HP bar', [.2, .31, .8, .36]); kcFF(o, 'HIGH TIDE sign', [.3, .395, .7, .44]); }
     burst(g, lt, { x: W / 2, y: H + 40, n: 70, seed: 49, speed: [200, 700], angle: [-Math.PI * .7, -Math.PI * .3], life: [.6, 1.4], size: [6, 16], gy: -300, drag: 1, cols: ['#8bfff2', '#ffffff', '#2ee6d6'], shape: 'dot', alpha: .5 });
-    vplate(g, 1080, 1320, .5);
-    slam(g, 'NEON DEPTHS', W / 2, 1250, lt - .03, { font: vfit('NEON DEPTHS', F.disp, 140), fill: FILL.teal, depth: 14, depthCol: '#06504c', glow: C.teal, dur: 99, from: 2.4 });
+    headline(g, { id: 'depths', rect: [65, 1180, 1015, 1500], plate: true, plateStyle: { bg: 'rgba(4,22,30,.82)', border: 'rgba(46,230,214,.5)' }, lines: [
+      CL_('NEON DEPTHS', b(45.5) + POP_IN, 1, FILL.teal, '#06504c', C.teal)] }, t);
   },
   post(lt, P) {
     P.tint = [.5, 1.0, 1.1]; P.tintA = .2;
@@ -413,11 +438,11 @@ vshot({ id: 'v-coop', t0: b(48.5), t1: b(53),
       glowEllipse(g, ax, ay, 70, 70, C.pink, .6 * (.5 + bk)); glowEllipse(g, bx, by, 70, 70, C.teal, .6 * (.5 + bk));
     }
     g.restore();
-    slam(g, 'PLAY TOGETHER', W / 2, 390, t - b(48.75), { font: vfit('PLAY TOGETHER', F.disp, 120), fill: FILL.teal, depth: 12, depthCol: '#06504c', glow: C.teal, dur: 99, from: 2.4 });
-    if (t > b(49)) {
-      const s = spring(t - b(49), 12, 7);
-      g.save(); g.translate(W / 2, 1500); g.scale(s, s);
-      pill(g, 'ONLINE CO-OP', 0, 0, { font: vfit('ONLINE CO-OP', F.cond, 120, 700), bg: 'rgba(11,6,24,.94)', border: C.pink, borderW: 6, fg: '#fff', h: 140, padX: 80, tracking: 3, glow: C.pink });
+    headline(g, { id: 'together', rect: [65, 236, 1015, 560], lines: [CL_('PLAY TOGETHER', b(48.5) + POP_IN, 1, FILL.teal, '#06504c', C.teal)] }, t);
+    const ps = popScale(t - b(49) - POP_IN);
+    if (ps > 0) {
+      g.save(); g.globalAlpha *= popAlpha(t - b(49) - POP_IN); g.translate(W / 2, 1468); g.scale(ps, ps);
+      pill(g, 'ONLINE CO-OP', 0, 0, { font: pillFit('ONLINE CO-OP', F.cond, 104, 720, { tracking: 3 }), bg: 'rgba(11,6,24,.94)', border: C.pink, borderW: 6, fg: '#fff', padY: 18, tracking: 3, glow: C.pink });
       g.restore();
     }
     wash(g, '#000', t0 > b(52.9) ? 1 : 0);
@@ -442,39 +467,18 @@ vshot({ id: 'v-logo', t0: V_LOGO_T, t1: DUR,
     moon(g, W / 2, MY, 230 + 10 * E.outCubic(clamp(lf / .6)), .85);
     for (let i = 0; i < 9; i++) { const a = (V_LOGO_T + lf) * .9 + i * .7; bat(g, W / 2 + Math.cos(a) * (300 + i * 18), MY + Math.sin(a * 1.3) * 150, 1.2 + (i % 3) * .4, (V_LOGO_T + lf) * 22 + i, '#100510'); }
     for (const [px, s] of [[.13, 1.4], [.36, .9], [.66, .95], [.88, 1.45]]) pumpkin(g, W * px, 1780, s * .85, .55);
-    const inT = .12;
-    const s = lf < inT ? lerp(2.6, .96, E.inQuad(lf / inT)) : 1 - .05 * Math.exp(-(lf - inT) * 9) * Math.cos((lf - inT) * 30);
     glowEllipse(g, W / 2, 900, 640, 260, C.pink, .35 + .4 * kick(lf, 0, .4));
     burst(g, lf, { x: W / 2, y: 900, n: 160, seed: 56, speed: [500, 2600], life: [.4, 1.2], size: [3, 9], gy: 600, drag: 2.4, cols: [C.gold, C.pink, C.teal, '#fff'], shape: 'star' });
-    g.globalAlpha = clamp(lf / .03);
-    logoMark(g, W / 2, 960, s * fit('CLAWSPIRE', F.candy, 250, 940) / 250);
-    const bu = spring(lf - .1, 12, 7);
-    if (bu > 0) {
-      g.save(); g.translate(W * .74, 1060); g.rotate(-.12); g.scale(bu, bu);
-      g.fillStyle = '#1a0a2a'; g.beginPath(); g.roundRect(-150, -92, 300, 150, 40); g.fill();
-      g.lineWidth = 8; g.strokeStyle = C.gold; g.stroke();
-      candyText(g, '2.0', 0, 40, { font: F.disp(104), fill: FILL.gold, depth: 8, depthCol: '#7a4a08' });
-      g.restore();
-    }
-    g.globalAlpha = 1;
     g.restore();
-    const ca = clamp((t - b(53.75)) / .14);
-    if (ca > 0) {
-      g.save(); g.translate(W / 2, 1335); const sc = lerp(1.35, 1, E.outBack(ca, 2)); g.scale(sc, sc); g.globalAlpha = ca;
-      pill(g, 'PLAY FREE IN', 0, -78, { font: vfit('YOUR BROWSER', F.disp, 76, 800), bg: '#c8126a', border: '#ffb3d6', borderW: 6, fg: '#ffffff', h: 124, padX: 90, tracking: 3 });
-      pill(g, 'YOUR BROWSER', 0, 62, { font: vfit('YOUR BROWSER', F.disp, 76, 800), bg: '#c8126a', border: '#ffb3d6', borderW: 6, fg: '#ffffff', h: 124, padX: 90, tracking: 3 });
-      g.restore();
-    }
-    const ua = clamp((t - b(54)) / .14);
-    if (ua > 0) {
-      g.save(); g.globalAlpha = ua;
-      const URL_ = 'games-71g.pages.dev/clawspire';
-      g.font = F.ui(fit(URL_, F.ui, 70, 930)); g.textAlign = 'center'; g.lineJoin = 'round'; g.letterSpacing = '1px';
-      const y = 1525 + (1 - E.outCubic(ua)) * 16;
-      g.lineWidth = 14; g.strokeStyle = '#0b0618'; g.strokeText(URL_, W / 2, y);
-      g.fillStyle = C.mint; g.fillText(URL_, W / 2, y);
-      g.restore();
-    }
+    // the lockup, stacked and measured: logo, the 2.0 badge, the call to action on one plate, the URL
+    const tt = Math.min(t, V_HOLD_T);
+    headline(g, { id: 'logo', rect: [65, 830, 1015, 1060], lines: [{ txt: 'CLAWSPIRE', at: V_LOGO_T + POP_IN, font: F.candy, fill: FILL.candy, depthK: .09, depthCol: '#6a0a3a', outline: '#2a0a22', outlineK: .1, glow: C.pink, tracking: 4 }] }, tt);
+    headline(g, { id: 'badge', rect: [380, 1062, 700, 1192], plate: true, pad: 22, plateStyle: { bg: '#1a0a2a', border: C.gold, bw: 6, r: 30 },
+      lines: [CL_('2.0', V_LOGO_T + POP_IN + .12, 1, FILL.gold, '#7a4a08', null, { depthK: .08 })] }, tt);
+    headline(g, { id: 'cta', rect: [65, 1200, 1015, 1440], plate: true, pad: 34, gap: .16, plateStyle: { bg: '#c8126a', border: '#ffb3d6', bw: 6, r: 40 }, lines: [
+      { txt: 'PLAY FREE IN', at: b(53.75) + POP_IN, fill: '#ffffff', depthK: 0, outline: '#7a0838', outlineK: .05 },
+      { txt: 'YOUR BROWSER', at: b(53.75) + POP_IN, fill: '#ffffff', depthK: 0, outline: '#7a0838', outlineK: .05 }] }, tt);
+    headline(g, { id: 'url', rect: [65, 1452, 1015, 1528], lines: [{ txt: 'games-71g.pages.dev/clawspire', at: b(54) + POP_IN, font: F.ui, fill: C.mint, depthK: 0, outline: '#0b0618', outlineK: .18 }] }, tt);
   },
   post(lt, P, t) {
     const lf = Math.min(t, V_HOLD_T) - V_LOGO_T;
