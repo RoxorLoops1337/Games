@@ -363,7 +363,7 @@ await t.test('boss, elite and xl: the reveal plate, the boss banner and the boss
   t.ok($(g2, '.cm-reveal').className.indexOf('elite') >= 0 && $(g2, '.cm-reveal').textContent.indexOf('Oni Brute') >= 0, 'an elite gets the champion plate (SCENE has no banner for it)');
   const g3 = fresh({ stage: 'none' });
   await enter(g3, { enemies: ['boss_kuzunoha'], tier: 'boss' });
-  t.ok($(g3, '.cm-reveal').className.indexOf('boss') >= 0 && $(g3, '.cm-reveal').textContent.indexOf('Nine-Tail') >= 0, 'without a SCENE the boss gets the DOM plate with its title');
+  t.ok($(g3, '.cm-reveal').className.indexOf('boss') >= 0 && $(g3, '.cm-reveal').textContent.indexOf(g3.DATA.enemies.boss_kuzunoha.title) >= 0, 'without a SCENE the boss gets the DOM plate with its title');
   t.eq(errs(g) + errs(g2) + errs(g3), 0, 'no console errors');
 });
 

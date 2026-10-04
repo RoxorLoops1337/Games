@@ -1337,7 +1337,7 @@
   }
 
   const REASON_TEXT = {
-    busy: 'Finish what is in front of you first.', done: 'This tale has ended.', void: 'The Unwritten Void cannot be painted.', painted: 'That hex is already painted.',
+    busy: 'Finish what is in front of you first.', done: 'This tale has ended.', get void() { return 'The ' + DATA.tiles.block.name + ' cannot be painted.'; }, painted: 'That hex is already painted.',
     unreachable: 'No way to reach it through the Void.', off: 'That is off the page.', nomap: 'There is no page.', ink: 'Not enough Ink.', nobrush: 'You do not hold that brush.', nothing: 'That would paint nothing new.',
     brush: 'That brush is unknown.', dir: 'Aim the brush first.', origin: 'That is not a place this brush can start.', far: 'Too far from the painted page.',
   };
@@ -2192,7 +2192,7 @@
     [['fog', null, false, 'Blank paper', 'A hex nobody has painted. Paint it next to the painted page for ' + DATA.ECONOMY.paintCost + ' Ink to see what it holds.'],
       ['known', 'boss', false, 'Glimpsed from afar', 'Landmarks show as faint silhouettes in the fog: ' + DATA.LISTS.landmarks.map((t) => tileInfo(t).name).join(', ') + '.'],
       ['painted', 'enemy', true, 'Done', 'A tile that has been dealt with fades back into the page. Walk over it freely.'],
-      ['block', null, false, 'The Unwritten Void', 'Holes in the story. Nothing can cross them and no brush paints them.']].forEach((e) => {
+      ['block', null, false, 'The ' + DATA.tiles.block.name, 'Holes in the story. Nothing can cross them and no brush paints them.']].forEach((e) => {
       reading.appendChild(mk('div', { class: 'lg-read-i' }, miniHex(e[0], e[1], e[2], 22, px), mk('div', {}, mk('b', { text: e[3] }), mk('p', { text: e[4] }))));
     });
     wrap.appendChild(reading);

@@ -770,20 +770,22 @@
       const trialName = mk('b', { class: 'mn-tr-name' });
       const trialText = mk('span', { class: 'mn-tr-text' });
       const trialRule = mk('span', { class: 'mn-tr-rule' });                     // the newest rule in words: on a phone it replaces the rules list, which has no room
-      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Ink Trial', text: '‹' });
-      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Ink Trial', text: '›' });
+      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Ink Trial', dataset: { act: 'trial-down' }, text: '‹' });
+      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Ink Trial', dataset: { act: 'trial-up' }, text: '›' });
       minus.addEventListener('click', () => setTrial(S.trial - 1, true));
       plus.addEventListener('click', () => setTrial(S.trial + 1, true));
       const pips = mk('div', { class: 'mn-pips', 'aria-hidden': 'true' }, U.range(11).map((n) => mk('i', { class: 'mn-pip', dataset: { n } })));
       const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Ink Trial rules' });
       const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Ink Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
       const dailyToggle = UI.toggle({ label: 'Daily Tale', value: S.daily, onchange: (v) => setDaily(v) });
+      dailyToggle.dataset.act = 'daily-toggle';
       const seed = mk('input', { type: 'text', class: 'mn-seed', 'aria-label': 'Seed (any word or number)', placeholder: 'Random seed', title: 'Any word or number. The same seed gives the same map.', maxlength: '24', autocomplete: 'off', spellcheck: 'false', value: S.seedText });
       seed.addEventListener('input', () => { S.seedText = seed.value; mem.seedText = seed.value; });
       const dice = mk('button', { type: 'button', class: 'mn-dice', 'aria-label': 'Roll a random seed', title: 'Roll a seed' }, mk('i', { class: 'mn-dice-ico' }));
       dice.addEventListener('click', () => { if (S.daily) return; S.diceN = (S.diceN | 0) + 1; const v = U.rng(U.hash('menu-dice', Math.floor(nowS() * 1000), S.diceN))().toString().slice(2, 8); seed.value = v; S.seedText = v; mem.seedText = v; UI.pulse(seed); });
       const begin = btn(BEGIN_TALE, { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => doBegin() });
       begin.classList.add('mn-begin');
+      begin.dataset.act = 'begin';
       const launch = UI.panel({ kind: 'dark', class: 'mn-launch-panel' }, trialBox, rules,
         mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Tale' }), mk('i', { text: 'the same tale for everyone today' }))),
         mk('div', { class: 'mn-seedrow' }, mk('span', { class: 'mn-seed-label', text: 'Seed' }), seed, dice), begin);
@@ -1930,7 +1932,7 @@
       'You lead two heroes written into the Living Book. A creeping Blank is erasing its pages.',
       'Cross three chapters. Each ends with a boss, and the last one guards the ending.',
       'Every run is a new tale: a different map, different cards, different treasures. Win or lose, you earn Inkstones to unlock more.'] },
-    { id: 'map', tip: /Painting a hex costs Ink/, title: 'Paint the Map', kicker: 'The page is blank. Ink makes it real.', build: () => paintedCanvas(paintMapDiagram), rules: [
+    { id: 'map', tip: /^(Painting|Waking) a hex costs (Ink|Echo)/, title: 'Paint the Map', kicker: 'The page is blank. Ink makes it real.', build: () => paintedCanvas(paintMapDiagram), rules: [
       'Spend 1 Ink to paint a hex next to painted ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
       'Tap any painted hex to walk there. Stepping onto a fight or a fable starts it.',
       'Ink comes back from wells, wins and camps. One-use Brushes paint whole shapes for free.'] },

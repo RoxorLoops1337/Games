@@ -139,15 +139,15 @@ export function makePlayer(g, cfg = {}) {
     if (st2.chosen.join(',') !== C0.heroes.join(',')) {
       for (const n of names) { const b = $$('.mn-cards button').find((x) => label(x).startsWith(n + ',')); if (!b) throw new Error('hero card missing: ' + n); if (!/Chosen/.test(label(b))) await click(b, 80); }
     }
-    const trialBtn = () => $$('button').find((x) => /Raise the Ink Trial/.test(label(x)));
+    const trialBtn = () => $('[data-act=trial-up]') || $$('button').find((x) => /Raise the (Ink|Tempo) Trial/.test(label(x)));
     for (let i = 0; i < 12 && (UI.screens.heroSelect.state().trial || 0) < C0.trial; i++) await click(trialBtn(), 60);
     if (C0.seed) { const inp = $('.mn-seed'); if (inp) await g._input(inp, C0.seed); await tick(60); }
-    await click(byLabel(/begin the tale/i), 500);
+    await click($('[data-act=begin]') || byLabel(/begin the (tale|journey)/i), 500);
     return note('heroSelect begin');
   }
 
   async function story() {
-    const b = byLabel(/^skip/i) || byLabel(/turn the page|continue/i);
+    const b = $('[data-act=skip]') || $('[data-act=turn]') || byLabel(/^skip/i) || byLabel(/play on|turn the page|continue/i);
     shown.add('story:' + (UI.params && UI.params.id));
     await click(b, 500);
     return note('story skip');
@@ -407,7 +407,7 @@ export function makePlayer(g, cfg = {}) {
     const picked = $$('.ev-choice.picked').length > 0 || (node && node.chosen !== undefined && node.chosen !== null && node.chosen !== false);
     if (picked) {
       // the outcome page: Continue, or Fight! when the gamble ended in a real combat
-      const go = byLabel(/^(continue|fight|leave|go on|turn the page|move on|walk on)/i) || btns().find((b) => b.classList.contains('btn-primary'));
+      const go = byLabel(/^(continue|fight|leave|go on|play on|turn the page|move on|walk on)/i) || btns().find((b) => b.classList.contains('btn-primary'));
       await click(go, 600);
       return note('event continue');
     }

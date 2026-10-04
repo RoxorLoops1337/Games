@@ -1922,7 +1922,7 @@
     chrome(S);
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
-    wrap.appendChild(bannerEl('The Inkstone Forge', 'One good blow, or a jeweller\'s patience. Not both.', 'fg-titlebox'));
+    wrap.appendChild(bannerEl('The ' + DATA.tiles.forge.name, 'One good blow, or a jeweller\'s patience. Not both.', 'fg-titlebox'));
 
     const modes = mk('div', { class: 'fg-modes', role: 'group', 'aria-label': 'Forge actions' });
     const mode = (id, name, text, kind) => {
@@ -2043,7 +2043,7 @@
 
     S.phase = null;
     refreshModes();
-    UI.announce('The Inkstone Forge. Sharpen one card, or cut gems.');
+    UI.announce('The ' + DATA.tiles.forge.name + '. Sharpen one card, or cut gems.');
     S.keys = (e) => {
       if (S.dead || UI.overlay.count()) return false;
       if (e.key === '1') { chooseUpgrade(); return true; }

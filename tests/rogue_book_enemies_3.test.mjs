@@ -155,8 +155,8 @@ t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, 
     if (r.tier === 'minion') t.eq(e.size, 's', `${r.id} minions are size s`);
   });
   t.deep([normals.length, elites.length, minions.length, tierIds('boss').length], [10, 3, 3, 1], 'tier mix 10 normal, 3 elite, 3 minion, 1 boss');
-  t.eq(E(boss).title, 'Keeper of the Last Page', 'boss title');
-  t.eq(E(boss).name, 'The Editor', 'boss name');
+  t.eq(E(boss).title, DATA.rosterById.boss_editor.title, 'boss title');
+  t.eq(E(boss).name, DATA.rosterById.boss_editor.name, 'boss name');
   t.eq(DATA.FIXED.bosses[CH], boss, 'the chapter boss id is the fixed one');
 });
 

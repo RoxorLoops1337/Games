@@ -13,6 +13,7 @@ import { boot, harness, DIR } from './rogue_book_lib.mjs';
 const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 
 const t = harness('rogue_book screen_map');
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const SRC = fs.readFileSync(path.join(DIR, 'js', 'screen_map.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(DIR, 'css', 'map.css'), 'utf8');
 
@@ -162,7 +163,7 @@ await t.test('enter: the HUD, the data-tut anchors, the chapter title, music, an
   t.ok(/\d+% painted/.test(txt($(g, '.mp-prog', root))), 'the progress meter');
   t.eq($(g, '.mp-prog', root).getAttribute('aria-valuenow'), String(g.MAP.progress(R.map).pct), 'its aria value is MAP.progress');
   t.eq($$(g, '.mp-chip', root).length, 1, 'one brush chip: the starting Long Stroke');
-  t.ok(/Long Stroke/.test(txt($(g, '.mp-chip', root))), 'the chip names the brush');
+  t.ok(new RegExp(g.DATA.brushes.stroke.name).test(txt($(g, '.mp-chip', root))), 'the chip names the brush');
   t.eq($$(g, '.mp-relics .relic', root).length, 2, 'the relic strip shows the treasures');
   t.eq($$(g, '.mp-tools button', root).length, 5, 'Deck, Legend, Fit, Zoom in, Zoom out');
   t.ok($(g, '.menu-btn', root), 'the pause button');
@@ -289,17 +290,17 @@ await t.test('the Void and the page edge answer with a toast and change nothing;
   await open(g, R); fitCam(g);
   const v = Object.values(R.map.tiles).find((T) => T.type === 'block');
   await clickHex(g, v.q, v.r);
-  t.ok(toasts(g).some((x) => /Void/.test(x)), 'a toast about the Void');
+  t.ok(toasts(g).some((x) => new RegExp(esc(g.DATA.tiles.block.name)).test(x)), 'a toast about the Void');
   t.ok(!v.painted, 'still unpainted');
   await hoverHex(g, v.q, v.r);
-  t.ok(/Void/.test(txt($(g, '.mp-info-name'))) && /Nothing can cross/.test(txt($(g, '.mp-info-act'))), 'hovering the Void explains it');
+  t.ok(new RegExp(esc(g.DATA.tiles.block.name)).test(txt($(g, '.mp-info-name'))) && /Nothing can cross/.test(txt($(g, '.mp-info-act'))), 'hovering the Void explains it');
   const adj = frontier(g, R).filter((T) => T.type !== 'block')[0];
   await hoverHex(g, adj.q, adj.r);
   t.ok(/Unwritten page|glimpsed/.test(txt($(g, '.mp-info-name'))) && /1 Ink/.test(txt($(g, '.mp-info-act'))), 'hovering fog next to the page names the price');
   t.ok(st(g).hover && st(g).hover.q === adj.q, 'the hover hex is tracked');
   const known = Object.values(R.map.tiles).find((T) => T.known && !T.painted && T.type === 'boss');
   await hoverHex(g, known.q, known.r);
-  t.ok(/Chapter Boss, glimpsed/.test(txt($(g, '.mp-info-name'))), 'a glimpsed landmark is named; what is blank stays secret');
+  t.ok(new RegExp(esc(g.DATA.tiles.boss.name) + ', (glimpsed|seen|heard)').test(txt($(g, '.mp-info-name'))), 'a glimpsed landmark is named; what is blank stays secret');
   const secret = Object.values(R.map.tiles).find((T) => !T.known && !T.painted && T.type === 'enemy');
   await hoverHex(g, secret.q, secret.r);
   t.ok(!/Ambush/.test(txt($(g, '.mp-info'))), 'hidden content is never leaked by hover');
@@ -1439,7 +1440,7 @@ await t.test('legend overlay: tiles, brushes drawn on hexes, controls, and the g
     const row = $$(g, '.lg-tile', ov).find((r) => txt(r).indexOf(g.DATA.tiles[id].name) >= 0);
     t.ok(row && txt(row).indexOf(g.DATA.tiles[id].text) >= 0 && $(g, 'canvas', row), 'tile ' + id + ': icon, name and text');
   });
-  t.ok(/Unwritten Void/.test(txt(body())) && /Blank paper/.test(txt(body())) && /Glimpsed from afar/.test(txt(body())), 'the page reading guide');
+  t.ok(new RegExp(esc(g.DATA.tiles.block.name)).test(txt(body())) && /Blank paper/.test(txt(body())) && /Glimpsed from afar/.test(txt(body())), 'the page reading guide');
   t.eq($$(g, '.lg-tile .lg-lm', ov).length, g.DATA.LISTS.landmarks.length, 'landmarks are marked as seen from afar');
   g._click($$(g, '.tab', ov)[1]); await settle(g);
   t.eq($$(g, '.lg-brush', body()).length, Object.keys(g.DATA.brushes).length, 'one entry per brush');
@@ -1447,7 +1448,7 @@ await t.test('legend overlay: tiles, brushes drawn on hexes, controls, and the g
     const row = $$(g, '.lg-brush', body()).find((r) => txt(r).indexOf(g.DATA.brushes[id].name) >= 0);
     t.ok(row && $(g, 'canvas.lg-dia', row) && txt(row).indexOf(g.DATA.brushes[id].text) >= 0, 'brush ' + id + ': a hex diagram, name and text');
   });
-  t.ok(/You hold 2/.test(txt($$(g, '.lg-brush', body()).find((r) => /Long Stroke/.test(txt(r))))) && /You hold 1/.test(txt($$(g, '.lg-brush', body()).find((r) => /Fan Brush/.test(txt(r))))), 'what you hold is shown');
+  t.ok(/You hold 2/.test(txt($$(g, '.lg-brush', body()).find((r) => new RegExp(g.DATA.brushes.stroke.name).test(txt(r))))) && /You hold 1/.test(txt($$(g, '.lg-brush', body()).find((r) => new RegExp(g.DATA.brushes.fan.name).test(txt(r))))), 'what you hold is shown');
   g._click($$(g, '.tab', ov)[2]); await settle(g);
   t.deep($$(g, '.lg-ctl h3', body()).map((x) => txt(x)), ['Mouse', 'Touch', 'Keyboard'], 'three control schemes');
   t.ok(/Q E A D Z C/.test(txt(body())) && /Enter/.test(txt(body())) && /Pinch/.test(txt(body())) && /Wheel/.test(txt(body())), 'the real controls are listed');

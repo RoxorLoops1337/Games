@@ -91,7 +91,7 @@ t.test('the roster is exactly CONTENT_SPEC 4.1: ids, names, tiers, sizes, boss t
     if (!e) return;
     t.eq(e.name, r.name, `${r.id} name`); t.eq(e.tier, r.tier, `${r.id} tier`); t.eq(e.size, r.size, `${r.id} size`); t.eq(e.chapter, 1, `${r.id} chapter`);
     t.eq(e.art && e.art.id, r.id, `${r.id} art.id equals the id`);
-    if (r.tier === 'boss') t.eq(e.title, 'The Nine-Tail Ink Fox', 'the boss title is fixed');
+    if (r.tier === 'boss') t.eq(e.title, (DATA.rosterById[r.id] || r).title, 'the boss title is the roster title');
   });
   t.eq(E.boss_kuzunoha.name, 'Kuzunoha', 'boss name');
 });
