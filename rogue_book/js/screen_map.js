@@ -644,10 +644,10 @@
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(20,15,46,0.55)'; ctx.stroke();
   }
 
-  const HOPT = { tile: 'empty', seed: 0, done: false, t: 0 };
-  function drawHex(s, ctx, kind, x, y, size, tile, seed, done, t) {
+  const HOPT = { tile: 'empty', seed: 0, done: false, t: 0, near: false };
+  function drawHex(s, ctx, kind, x, y, size, tile, seed, done, t, near) {
     if (amHas('hex') && !s.artBad.hex) {
-      HOPT.tile = tile || 'empty'; HOPT.seed = seed || 0; HOPT.done = !!done; HOPT.t = t;
+      HOPT.tile = tile || 'empty'; HOPT.seed = seed || 0; HOPT.done = !!done; HOPT.t = t; HOPT.near = !!near;
       try { ART.map.hex(ctx, kind, x, y, size, HOPT); return; } catch (e) { s.artBad.hex = true; warnOnce('ART.map.hex', e); }
     }
     fallbackHex(ctx, kind, x, y, size, tile);
@@ -791,6 +791,19 @@
     const m = size * 1.3, ax = w.x - m, bx = w.x + w.w + m, ay = w.y - m, by = w.y + w.h + m;
     let boss = null;
     const tiles = s.tiles;
+    // the awake signal: woken, not-done hexes within 3 of the party move (at most the 19 nearest)
+    const nearSet = new Set();
+    if (s.M && s.M.pos) {
+      const cand = [];
+      for (let i = 0; i < tiles.length; i++) {
+        const T0 = tiles[i].T;
+        if (!T0.painted || T0.done) continue;
+        const d = MAP.dist(s.M.pos.q, s.M.pos.r, T0.q, T0.r);
+        if (d <= 3) cand.push([d, tiles[i].k]);
+      }
+      cand.sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i < cand.length && i < 19; i++) nearSet.add(cand[i][1]);
+    }
     for (let i = 0; i < tiles.length; i++) {
       const e = tiles[i], sx = wx2sx(c, e.x), sy = wy2sy(c, e.y);
       if (sx < ax || sx > bx || sy < ay || sy > by) continue;
@@ -806,7 +819,7 @@
         }
         continue;
       }
-      if (T.painted) { drawHex(s, ctx, 'painted', sx, sy, size, T.type, e.seed, T.done, t); if (T.type === 'boss' && !T.done) boss = { sx, sy }; continue; }
+      if (T.painted) { drawHex(s, ctx, 'painted', sx, sy, size, T.type, e.seed, T.done, t, nearSet.has(e.k)); if (T.type === 'boss' && !T.done) boss = { sx, sy }; continue; }
       if (T.type === 'block') { drawHex(s, ctx, s.touch.has(e.k) ? 'block' : 'fog', sx, sy, size, null, e.seed, false, t); continue; }
       if (T.known) { drawHex(s, ctx, 'known', sx, sy, size, T.type, e.seed, false, t); if (T.type === 'boss') boss = { sx, sy }; continue; }
       drawHex(s, ctx, s.touch.has(e.k) ? 'edge' : 'fog', sx, sy, size, null, e.seed, false, t);
@@ -2126,7 +2139,7 @@
     const g = safe(() => c.getContext('2d'), null);
     if (!g) return c;
     g.setTransform(px, 0, 0, px, 0, 0);
-    HOPT.t = 0;
+    HOPT.t = 0; HOPT.near = false;
     const draw = () => { if (amHas('hex')) ART.map.hex(g, kind, w / 2, h / 2, size, { tile, seed: 3, done, t: 0 }); else fallbackHex(g, kind, w / 2, h / 2, size, tile); };
     try { draw(); } catch (e) { warnOnce('legend hex', e); safe(() => fallbackHex(g, kind, w / 2, h / 2, size, tile)); }
     return c;

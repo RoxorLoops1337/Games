@@ -34,7 +34,7 @@
 // 1.5 px), d1 up to 76 px (facets, secondary marks), d2 above (screen-tone, paper grain, gloss bands, extra glints). UI draws statuses at 22..48,
 // relics at 20..84, gems at 16..118, card type glyphs at 14..28: all of those must read.
 //
-// DETERMINISM. Nothing here reads a clock or Math.random. Variation is seeded from the icon id; animation reads the t you pass.
+// DETERMINISM. Nothing here reads a clock or the banned random call. Variation is seeded from the icon id; animation reads the t you pass.
 (() => {
   'use strict';
   const tk = ART.tk, pal = tk.pal;
@@ -367,9 +367,13 @@
     S.circle(0, 0, 6.5, N.gold); S.ring(0, 0, 6.5, 2, INK);
   };
   GLYPH.sumi = (S, f) => {
-    S.cel(unit(DROP, 0, 2, 24, 30), N.black, { line: S.L(2.6), shadow: '#100a24', depth: 6, rim: pal.cyan, rimW: S.L(1.8), hi: false });
-    S.stroke([[-9, 0], [-9, 12]], 5, '#ffffff', { ow: 0, taperStart: 0.2, taperEnd: 0.4, alpha: 0.9 });
-    S.spark(15, -18, 6, { color: pal.cyan });
+    // Breath: a white breath curl (three stacked wind spirals) rising from a short flute mouthpiece, two cyan dots
+    const curl = (y, k) => S.stroke([[-20 * k, y + 3], [-6 * k, y - 3], [10 * k, y - 3], [18 * k, y + 2], [15 * k, y + 8], [8 * k, y + 5], [9 * k, y + 1]], 4.2, '#ffffff', { ow: 1.4, taperStart: 0.15, taperEnd: 0.2 });
+    curl(-24, 0.9); curl(-8, 1); curl(8, 0.8);
+    S.cel(rr(-15, 22, 30, 10, 4), N.black, { line: S.L(2.2), shadow: '#100a24', depth: 2, hi: false, tension: 0.5 });
+    S.stroke([[-8, 27], [8, 27]], 2.6, N.gold, { ow: 0 });
+    S.circle(-3, 18, 2.2, pal.cyan); S.circle(5, 15, 1.8, pal.cyan);
+    S.spark(22, -26, 5, { color: pal.cyan });
   };
   GLYPH.ward = (S) => {
     S.at(0, 0, -0.14, 1, 1, () => {
@@ -440,8 +444,22 @@
   // ---------------------------------------------------------------------------------------------------------------
   // STAT: gold koban, ink drop, heart with a brush stroke, energy tama orb, fude brush, inkstone, block shield
   // ---------------------------------------------------------------------------------------------------------------
-  const STAT_LOOK = { gold: N.gold, ink: '#7a6bff', hp: '#e8383d', energy: '#5ff5ff', brush: '#3fd6b0', inkstone: '#8a86a8', block: '#5fb4ff' };
+  const STAT_LOOK = { gold: N.gold, ink: '#7a6bff', hp: '#e8383d', energy: '#5ff5ff', brush: '#3fd6b0', inkstone: '#6a5be8', block: '#5fb4ff' };
   const STATF = {};
+  // Echo sound helpers: an outlined round-capped arc, a beamed-note head (tilted ellipse), a filled ellipse
+  function arcLine(S, x, y, r, a0, a1, w, color, ow) {
+    const g = S.g;
+    g.save(); g.lineCap = 'round';
+    if (ow !== 0) { g.beginPath(); g.arc(x, y, r, a0, a1); g.strokeStyle = INK; g.lineWidth = S.L(w + (ow === undefined ? 3 : ow)); g.stroke(); }
+    g.beginPath(); g.arc(x, y, r, a0, a1); g.strokeStyle = color; g.lineWidth = S.T(w); g.stroke();
+    g.restore();
+  }
+  function noteHead(S, x, y, rx, ry, rot, color, outline) {
+    const g = S.g;
+    g.save(); g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, TAU); g.fillStyle = color; g.fill();
+    if (outline) { g.lineWidth = S.L(outline); g.strokeStyle = INK; g.stroke(); }
+    g.restore();
+  }
   STATF.gold = (S) => {
     S.at(0, 0, -0.2, 1, 1, () => {
       S.glow(0, 0, 46, N.gold2, 0.22);
@@ -456,17 +474,24 @@
     S.spark(20, -30, 7, { color: WHITE });
   };
   STATF.ink = (S) => {
-    const D = unit(DROP, 0, 2, 31, 39);
+    // the Echo ping: a solid centre, one full ring, an outer ring broken into left and right arcs
     if (S.on) {
-      S.glow(0, 4, 44, '#7a6bff', 0.4);
-      S.cel(D, '#5a4ae0', { line: S.L(3), shadow: '#1e1670', depth: 9, rim: pal.cyan, rimW: S.L(2), hi: S.d ? '#8a7bff' : undefined, hiW: S.L(2.4) });
-      S.stroke([[-13, 2], [-13, 17]], 6, '#ffffff', { ow: 0, taperStart: 0.2, taperEnd: 0.45, alpha: 0.92 });
-      S.spark(17, -14, 6.5, { color: pal.cyan });
-      if (S.d >= 2) S.ink([[-22, 42], [0, 46], [22, 42]], { w: 2, color: '#7a6bff', alpha: 0.6, taper: 0.5 });
+      S.glow(0, 0, 46, '#7a6bff', 0.4);
+      S.cel(circ(0, 0, 13), '#5a4ae0', { line: S.L(2.6), shadow: '#1e1670', depth: 5, rim: pal.cyan, rimW: S.L(1.6), hi: S.d ? '#8a7bff' : undefined, hiW: S.L(2) });
+      arcLine(S, 0, 0, 24, 0, TAU, 6, '#7a6bff', 3);
+      arcLine(S, 0, 0, 36, -0.75, 0.75, 5, pal.cyan, 2.6);
+      arcLine(S, 0, 0, 36, PI - 0.75, PI + 0.75, 5, pal.cyan, 2.6);
+      S.spark(22, -22, 6.5, { color: pal.cyan });
     } else {
-      // the empty drop: a dashed outline and a faint fill, so an Ink meter reads full versus spent
-      S.fill(D, '#3a2f5a', 0.4);
-      S.g.save(); S.g.setLineDash([S.T(7), S.T(5)]); S.g.beginPath(); tk.trace(S.g, D); S.g.strokeStyle = '#8a86a8'; S.g.lineWidth = S.L(3); S.g.stroke(); S.g.restore();
+      // the spent ping: the same three shapes as a dashed outline, so an Echo meter reads full versus empty
+      const g = S.g;
+      S.fill(circ(0, 0, 13), '#3a2f5a', 0.4);
+      g.save(); g.setLineDash([S.T(6), S.T(5)]); g.strokeStyle = '#8a86a8'; g.lineWidth = S.L(2.6);
+      g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.stroke();
+      g.beginPath(); g.arc(0, 0, 24, 0, TAU); g.stroke();
+      g.beginPath(); g.arc(0, 0, 36, -0.75, 0.75); g.stroke();
+      g.beginPath(); g.arc(0, 0, 36, PI - 0.75, PI + 0.75); g.stroke();
+      g.restore();
     }
   };
   STATF.hp = (S) => {
@@ -496,29 +521,35 @@
     if (lit) { S.gloss(0, 0, 25, -PI * 0.42, -PI * 0.1, 3.4, 0.7); S.spark(20, -22, 7, { color: WHITE }); }
   };
   STATF.brush = (S) => {
-    S.g.save(); S.g.translate(-1, 1); S.g.rotate(0.78);
-    // a fat fude: bamboo shaft with a node, gold ferrule, ink-loaded bristles pointing down-left
-    S.cel(rr(-6.5, -46, 13, 46, 4), '#e0a466', { line: S.L(2.6), shadow: N.woodD, depth: 4, tension: 0.5, hi: false });
-    S.stroke([[-6.6, -28], [6.6, -28]], 2.6, N.woodD, { ow: 0 });
-    S.cel(rr(-8.5, -6, 17, 12, 2.5), N.gold, { line: S.L(2.4), shadow: N.goldD, hi: false, tension: 0.5 });
-    S.cel([[-9, 5], [-12, 18], [-8, 32], [0, 46, 1], [8, 32], [12, 18], [9, 5]], '#f3ead6', { line: S.L(2.6), shadow: N.boneD, depth: 4.5, hi: false });
-    S.cel([[-8, 22], [-5, 34], [0, 46, 1], [5, 34], [8, 22]], N.black, { line: false, shadow: '#100a24', depth: 2, hi: false });
-    S.g.restore();
-    // a dab of ink where the tip lands
-    S.g.save(); tk.inkBlot(S.g, -34, 36, 7, { seed: 5, color: N.black, jag: 0.3 }); S.g.restore();
-    S.circle(-25, 43, 2.2, N.black); S.circle(-44, 27, 1.8, N.black);
+    // Song: two beamed eighth notes, teal heads with an ink outline, a small sound swash under them
+    const hx1 = -16, hy1 = 22, hx2 = 16, hy2 = 14;
+    const sx1 = hx1 + 8.6, sx2 = hx2 + 8.6;
+    S.glow(0, 0, 42, '#3fd6b0', 0.2);
+    S.stroke([[sx1, hy1 - 2], [sx1, -26]], 5, N.black, { ow: 1.4 });
+    S.stroke([[sx2, hy2 - 2], [sx2, -34]], 5, N.black, { ow: 1.4 });
+    S.cel(poly([[sx1 - 2.5, -26], [sx2 + 2.5, -34], [sx2 + 2.5, -22], [sx1 - 2.5, -14]]), N.black, { line: S.L(2.4), shadow: '#100a24', depth: 2, hi: false });
+    S.stroke([[sx1 + 1, -22], [sx2 - 1, -30]], 2, '#3fd6b0', { ow: 0, alpha: 0.85 });
+    noteHead(S, hx1, hy1, 11, 8, -0.35, '#3fd6b0', 2.6);
+    noteHead(S, hx2, hy2, 11, 8, -0.35, '#3fd6b0', 2.6);
+    S.ink([[hx1 - 6, hy1 - 3], [hx1 - 2, hy1 - 5]], { w: 2.2, color: '#d8fff2', alpha: 0.9, taper: 0.4, wobble: 0 });
+    S.ink([[hx2 - 6, hy2 - 3], [hx2 - 2, hy2 - 5]], { w: 2.2, color: '#d8fff2', alpha: 0.9, taper: 0.4, wobble: 0 });
+    arcLine(S, 0, 6, 36, 0.6, 2.54, 3.4, '#5ff5ff', 2);
+    S.spark(-30, -24, 5, { color: WHITE });
   };
   STATF.inkstone = (S) => {
-    // a stone slab seen from above at a slant: a hollow with the ink pool, a sumi stick lying across
-    const slab = [[-44, -14], [-38, -30], [38, -30], [44, -14], [44, 26], [38, 36], [-38, 36], [-44, 26]];
-    S.cel(poly(slab), '#5a5678', { line: S.L(3.2), shadow: '#2e2a44', depth: 8, rim: '#a49fc4', rimW: S.L(1.6), hi: S.d ? '#8a86a8' : undefined, tension: 0.4 });
-    S.g.save(); S.g.beginPath(); S.g.ellipse(-6, 4, 28, 17, -0.1, 0, TAU); S.g.fillStyle = '#0c0820'; S.g.fill(); S.g.lineWidth = S.L(2.8); S.g.strokeStyle = INK; S.g.stroke(); S.g.restore();
-    S.ink([[-24, -2], [-8, -6], [8, -3]], { w: 3, color: pal.cyan, alpha: 0.8, taper: 0.5 });
-    S.circle(-14, 10, 2.2, '#7a6bff', 0.85);
-    S.at(28, 12, -0.5, 1, 1, () => {
-      S.cel(rr(-7.5, -26, 15, 52, 2.5), N.black, { line: S.L(2.6), shadow: '#100a24', depth: 3, tension: 0.4, hi: false });
-      S.stroke([[0, -16], [0, 16]], 3, N.gold, { ow: 0 });
-    });
+    // Chimes (the meta currency): three hanging tubular chimes from a lacquer bar, a round striker between them, two sound arcs
+    S.glow(0, 0, 44, '#c9893a', 0.18);
+    const tube = (x, len) => {
+      S.stroke([[x, -26], [x, -26 + 10]], 2.6, N.goldD, { ow: 1 });
+      S.cel(rr(x - 5.5, -18, 11, len, 3), pal.bronze, { line: S.L(2.4), shadow: '#7a4a1c', depth: 3.4, rim: '#f0c27a', rimW: S.L(1.2), hi: S.d ? '#f0c27a' : undefined, tension: 0.4 });
+      S.cel(rr(x - 6.5, -20, 13, 5, 2), N.gold, { line: S.L(2), shadow: N.goldD, hi: false, tension: 0.5 });
+    };
+    tube(-26, 54); tube(-2, 70); tube(22, 42);
+    S.cel(rr(-40, -40, 76, 13, 5), '#5a4ae0', { line: S.L(2.8), shadow: '#1e1670', depth: 4, rim: '#9a8bff', rimW: S.L(1.3), hi: false, tension: 0.5 });
+    S.stroke([[-14, -27], [-14, 14]], 1.8, N.goldD, { ow: 0.8 });
+    S.cel(circ(-14, 20, 6), N.gold, { line: S.L(2.2), shadow: N.goldD, depth: 2, hi: false });
+    arcLine(S, 26, 8, 20, -0.7, 0.7, 3.2, '#f5c96a', 2);
+    arcLine(S, 26, 8, 30, -0.7, 0.7, 3.2, '#f5c96a', 2);
   };
   STATF.block = (S) => {
     const shield = [[-30, -30], [0, -37], [30, -30], [30, -2], [21, 20], [0, 39], [-21, 20], [-30, -2]];
@@ -580,12 +611,15 @@
     S.circle(-8, -9, 1.5, '#ff5a8a'); S.circle(8, -9, 1.5, '#ff5a8a');
   };
   TYPEF.status = (S, c) => {
-    // a torn page: a folded corner, a ragged bottom, lines of text, an ink stain
-    const page = [[-28, -40], [12, -40], [30, -22], [30, 34], [20, 30], [14, 40], [4, 32], [-6, 41], [-15, 33], [-28, 40]];
-    S.cel(poly(page), c || N.paper, { line: S.L(2.8), shadow: N.paperD, depth: 5, hi: false, tension: 0.4 });
-    S.cel(poly([[12, -40], [12, -22], [30, -22]]), '#e6d3a3', { line: S.L(2.4), shadow: N.paperD, hi: false, depth: 3 });
-    (S.d ? [-24, -13, -2, 9] : [-22, -8, 6]).forEach((y, i) => S.stroke([[-19, y], [i === 0 ? 2 : 15 - i * 2, y]], S.d ? 3.2 : 5, N.inkL, { ow: 0, alpha: 0.8 }));
-    S.g.save(); S.g.globalAlpha *= 0.92; tk.inkBlot(S.g, 13, 21, 10, { seed: 7, color: N.black, jag: 0.34 }); S.g.restore();
+    // a card with three static bands, a jagged crack, no text lines and no blot
+    const card = [[-26, -38], [26, -38], [30, -34], [30, 34], [26, 38], [-26, 38], [-30, 34], [-30, -34]];
+    S.cel(poly(card), c || N.paper, { line: S.L(2.8), shadow: N.paperD, depth: 5, hi: false });
+    [-22, -6, 10].forEach((y, i) => {
+      S.stroke([[-22, y], [22, y]], S.d ? 6 : 8, '#fff8f0', { ow: 1.2 });
+      S.g.save(); S.g.setLineDash([S.T(5), S.T(4)]); S.g.beginPath(); S.g.moveTo(-22, y); S.g.lineTo(22, y); S.g.strokeStyle = '#8a86a8'; S.g.lineWidth = S.T(S.d ? 3 : 4); S.g.stroke(); S.g.restore();
+    });
+    S.stroke([[8, -38], [-2, -22], [10, -10], [-4, 4], [8, 18], [0, 38]], 4.4, INK, { ow: 0, poly: true, step: 3 });
+    S.stroke([[8, -38], [-2, -22], [10, -10], [-4, 4], [8, 18], [0, 38]], 1.8, '#ff5a6e', { ow: 0, poly: true, step: 3 });
   };
   REG.type = {
     ids: L.cardTypes.slice(),
@@ -650,6 +684,23 @@
     if (def.kind === 'line') return def.len >= 5 ? BRUSH_LAYOUT.line5 : BRUSH_LAYOUT.line3;
     return BRUSH_LAYOUT[def.kind] || null;
   }
+  // the badge in the top-left corner: strokes, arcs and ellipses only (never closePath, so the hexagon count stays the cell count)
+  function brushBadge(S, id) {
+    const g = S.g, cx = -30, cy = -30;
+    const line = (pts) => { g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(cx + p[0], cy + p[1]) : g.moveTo(cx + p[0], cy + p[1]))); g.stroke(); };
+    const dot = (x, y, r) => { g.beginPath(); g.arc(cx + x, cy + y, r, 0, TAU); g.fill(); };
+    g.save();
+    g.beginPath(); g.arc(cx, cy, 13, 0, TAU); g.fillStyle = tk.rgba('#241a3a', 0.92); g.fill();
+    g.lineWidth = S.T(1.4); g.strokeStyle = tk.rgba(N.gold, 0.9); g.stroke();
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#f5c96a'; g.fillStyle = '#f5c96a'; g.lineWidth = S.T(2.2);
+    if (id === 'stroke') { line([[-7, -7], [7, 7]]); line([[7, -7], [-7, 7]]); dot(-7, -7, 2.2); dot(7, -7, 2.2); }
+    else if (id === 'wave') { [5, 9.5, 14].forEach((r) => { g.beginPath(); g.arc(cx - 7, cy + 7, r, -PI / 2, 0); g.stroke(); }); }
+    else if (id === 'fan') { [-2.3, -1.57, -0.84].forEach((a) => line([[0, 8], [cos(a) * 15, 8 + sin(a) * 15]])); }
+    else if (id === 'splash') { line([[-8, 8], [8, 8]]); line([[0, -8], [0, 5]]); line([[-4, 1], [0, 5], [4, 1]]); line([[-10, 3], [-7, 5]]); line([[10, 3], [7, 5]]); line([[-9, -3], [-6, -1]]); line([[9, -3], [6, -1]]); }
+    else if (id === 'halo') { for (let i = 0; i < 6; i++) dot(cos(i * TAU / 6) * 8.5, sin(i * TAU / 6) * 8.5, 1.8); dot(0, 0, 2.2); }
+    else { g.beginPath(); g.ellipse(cx - 2, cy + 4, 4.4, 3.2, -0.35, 0, TAU); g.fill(); line([[2, 3], [2, -8]]); g.beginPath(); g.moveTo(cx - 8, cy - 5); g.quadraticCurveTo(cx - 5, cy - 9, cx - 2, cy - 5); g.quadraticCurveTo(cx + 1, cy - 1, cx + 4, cy - 5); g.stroke(); }
+    g.restore();
+  }
   function brushSpec(id, o) {
     const lay = brushLayout(id);
     if (!lay) return null;
@@ -657,9 +708,8 @@
       key: 'brush|' + id, glow: '#3fd6b0',
       render(S, oo) {
         const ink = colorOpt(oo && oo.color) || '#3fd6b0', f = tone(ink);
-        // the paper tag the picture sits on
-        S.cel(rr(-44, -44, 88, 88, 14), '#f3e6c8', { line: S.L(3), shadow: '#c9b58a', depth: 6, rim: '#fff8f0', rimW: S.L(1.4), hi: false, tension: 0.7 });
-        if (S.d >= 2) tk.paperGrain(S.g, -44, -44, 88, 88, { alpha: 0.35 });
+        // the lacquer plaque the picture sits on
+        S.cel(rr(-44, -44, 88, 88, 14), '#241a3a', { line: S.L(3), shadow: '#100a24', depth: 6, rim: N.gold, rimW: S.L(1.6), hi: false, tension: 0.7 });
         const xy = lay.cells.map((c) => hexXY(c[0], c[1], lay.s));
         let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         xy.forEach((p) => { x0 = min(x0, p[0] - lay.s * 0.87); x1 = max(x1, p[0] + lay.s * 0.87); y0 = min(y0, p[1] - lay.s); y1 = max(y1, p[1] + lay.s); });
@@ -671,7 +721,7 @@
             if (used.has(q + ',' + r)) continue;
             const p = hexXY(q, r, lay.s), px = p[0] + ox, py = p[1] + oy;
             if (abs(px) > 38 - lay.s * 0.5 || abs(py) > 38 - lay.s * 0.5) continue;
-            S.g.save(); S.g.setLineDash([S.T(3), S.T(3)]); S.g.beginPath(); tk.trace(S.g, poly(hexPts(px, py, lay.s * 0.92))); S.g.strokeStyle = tk.rgba('#8a6a3a', 0.5); S.g.lineWidth = S.T(1.3); S.g.stroke(); S.g.restore();
+            S.g.save(); S.g.setLineDash([S.T(3), S.T(3)]); S.g.beginPath(); tk.trace(S.g, poly(hexPts(px, py, lay.s * 0.92))); S.g.strokeStyle = tk.rgba('#5a5678', 0.6); S.g.lineWidth = S.T(1.3); S.g.stroke(); S.g.restore();
           }
         }
         // origin first (paper), then the paint
@@ -679,8 +729,8 @@
           if (roles.indexOf(c[2]) < 0) return;
           const px = xy[i][0] + ox, py = xy[i][1] + oy, hp = poly(hexPts(px, py, lay.s * 0.96));
           if (c[2] === 'o') {
-            S.cel(hp, '#fff8f0', { line: S.L(2.2), shadow: '#d8c8a0', depth: lay.s * 0.22, hi: false });
-            S.circle(px, py, lay.s * 0.22, '#8a6a3a');
+            S.cel(hp, '#e8e6f0', { line: S.L(2.2), shadow: '#b4b0cc', depth: lay.s * 0.22, hi: false });
+            S.circle(px, py, lay.s * 0.22, '#5a5678');
           } else {
             S.cel(hp, ink, { line: S.L(2.4), shadow: f.shade, depth: lay.s * 0.26, rim: f.pale, rimW: S.L(1.1), hi: S.d ? f.light : undefined, hiW: S.L(1.6) });
             if (c[2] === 'c') S.spark(px + lay.s * 0.2, py - lay.s * 0.25, lay.s * 0.45, { color: WHITE, glow: 0 });
@@ -689,6 +739,7 @@
         if (id === 'blot' || (DATA.brushes[id] && DATA.brushes[id].kind === 'dot')) {
           S.g.save(); S.g.setLineDash([S.T(4), S.T(4)]); S.g.beginPath(); S.g.arc(0, 0, 37, 0, TAU); S.g.strokeStyle = tk.rgba(f.deep, 0.5); S.g.lineWidth = S.T(1.8); S.g.stroke(); S.g.restore();
         }
+        brushBadge(S, id);
       },
     };
   }
@@ -1053,10 +1104,10 @@
     });
   }
   TILEF.start = (S) => {
-    blk(S, poly([[-11, -31], [11, -31], [11, 30], [0, 19], [-11, 30]]));
-    paperBar(S, [[-6, -26], [-6, 20]], 1.8, 0.75); paperBar(S, [[6, -26], [6, 20]], 1.8, 0.75);
-    S.circle(0, -30, 5.5, INK); S.circle(0, -30, 2.4, PAPER);
-    S.spark(19, 8, 6.5, { color: PAPER, glow: 0 }); S.spark(-20, -14, 4.5, { color: PAPER, glow: 0 });
+    // hyoshigi: two wooden clappers crossed at the top, joined by a cord loop, impact sparks at the meeting point
+    [-0.42, 0.42].forEach((a) => S.at(0, -16, a, 1, 1, () => { blk(S, rr(-5.5, -6, 11, 50, 3)); paperBar(S, [[-2, 0], [-2, 38]], 1.4, 0.6); }));
+    S.stroke([[-5, -22], [0, -30], [5, -22], [0, -16]], 2.2, INK, { ow: 0, poly: true, step: 3 });
+    S.spark(0, -14, 6.5, { color: PAPER, glow: 0 }); S.spark(14, -24, 4.5, { color: PAPER, glow: 0 });
   };
   TILEF.empty = (S) => {
     const print = (x, y, a) => S.at(x, y, a, 1, 1, () => {
@@ -1127,23 +1178,29 @@
     // a wishing well: a little gabled roof on two posts over a stone drum, and the drop falling in
     blk(S, poly([[-30, -14], [0, -34], [30, -14], [25, -14], [0, -29], [-25, -14]]));
     blk(S, rect(-22, -15, 4.4, 24)); blk(S, rect(17.6, -15, 4.4, 24));
-    blk(S, [[-26, 8], [-26, 24], [-14, 32], [0, 34], [14, 32], [26, 24], [26, 8]]);
-    S.fill(ell(0, 8, 26, 8.5, 0, 22), INK);
-    S.fill(ell(0, 8, 19, 5.4, 0, 22), PAPER);
-    [[-20, 18], [-6, 18], [8, 18], [-13, 27], [1, 27]].forEach((b) => paperBar(S, [[b[0], b[1]], [b[0] + 10, b[1]]], 1.4, 0.55));
-    S.cel(unit(DROP, 0, -8, 5.8, 8), PAPER, { line: S.L(2.2), shadow: '#cfd6f0', depth: 2, hi: false });
-    paperBar(S, [[-13, -12], [-13, -1]], 1.2, 0.6); S.stroke([[0, -26], [0, -17]], 1.6, PAPER, { ow: 0 });
+    // the temple bell: a hung bell with a flared lip, two bands, a striker log on two ropes and sound arcs
+    S.stroke([[0, -27], [0, -15]], 2.4, INK, { ow: 0 });
+    blk(S, poly([[-6, -15], [6, -15], [10, -11], [12, 2], [15, 15], [18, 26], [-18, 26], [-15, 15], [-12, 2], [-10, -11]]));
+    blk(S, ell(0, 26, 18, 3, 0, 14));
+    paperBar(S, [[-12, 3], [12, 3]], 2, 0.85); paperBar(S, [[-15.5, 15], [15.5, 15]], 2, 0.85);
+    S.ink([[-7, -9], [-8, 1]], { w: 1.4, color: PAPER, alpha: 0.7, taper: 0.4, wobble: 0 });
+    paperBar(S, [[25, -13], [25, 19]], 1.4, 0.9); paperBar(S, [[31, -13], [31, 19]], 1.4, 0.9);
+    S.fill(rr(21, 19, 14, 6, 2), PAPER);
+    [-26, -34].forEach((rx, i) => { S.g.save(); S.g.beginPath(); S.g.arc(-17, 18, 8 + i * 7, PI - 0.7, PI + 0.7); S.g.strokeStyle = PAPER; S.g.lineWidth = S.T(1.8); S.g.lineCap = 'round'; S.g.globalAlpha *= 0.85 - i * 0.2; S.g.stroke(); S.g.restore(); });
   };
   TILEF.brush = (S) => {
-    S.g.save(); S.g.rotate(0.78);
-    blk(S, rr(-4.5, -40, 9, 38, 3));
-    S.circle(0, -41, 4.6, INK);
-    blk(S, rr(-6.5, -4, 13, 9, 2)); paperBar(S, [[-6.5, 0.5], [6.5, 0.5]], 1.4, 0.8);
-    blk(S, [[-7, 5], [-9.5, 17], [-5.5, 30], [0, 42, 1], [5.5, 30], [9.5, 17], [7, 5]]);
-    paperBar(S, [[-2.5, 9], [-3.5, 26]], 1.8, 0.7);
-    S.g.restore();
-    tk.inkPath(S.g, [[-32, 28], [-14, 35], [8, 34], [26, 26]], { w: S.L(6), color: INK, taperStart: 0.2, taperEnd: 0.4, pressure: 'mid', wobble: 0.08, seed: 5 });
-    S.circle(-27, 36, 2.4, INK);
+    // the Songbird: a round uguisu silhouette on a branch, an open beak, two sound arcs and an eighth note in front of it
+    S.stroke([[-30, 22], [-8, 24], [14, 20], [24, 14]], 3.4, INK, { ow: 0, taperEnd: 0.3 });
+    blk(S, ell(-6, 6, 13, 9, -0.1, 18));
+    blk(S, ell(8, -2, 7.5, 7, 0, 14));
+    blk(S, poly([[-17, 5], [-32, 12], [-30, 17], [-15, 11]]));
+    blk(S, poly([[14, -4], [24, -1], [14, 1]]));
+    S.circle(10, -4, 1.7, PAPER);
+    paperBar(S, [[-9, 6], [-1, 9]], 1.4, 0.6);
+    S.stroke([[-8, 15], [-8, 22]], 2.4, INK, { ow: 0 }); S.stroke([[-1, 15], [-1, 22]], 2.4, INK, { ow: 0 });
+    [0, 1].forEach((i) => { S.g.save(); S.g.beginPath(); S.g.arc(14, -2, 15 + i * 7, -0.55, 0.55); S.g.strokeStyle = PAPER; S.g.lineWidth = S.T(1.8); S.g.lineCap = 'round'; S.g.globalAlpha *= 0.9 - i * 0.25; S.g.stroke(); S.g.restore(); });
+    S.g.save(); S.g.beginPath(); S.g.ellipse(22, -14, 4.4, 3.2, -0.35, 0, TAU); S.g.fillStyle = PAPER; S.g.fill(); S.g.restore();
+    paperBar(S, [[25.8, -15], [25.8, -27]], 1.6, 0.95); paperBar(S, [[25.8, -27], [31, -22]], 1.6, 0.95);
   };
   TILEF.gemcache = (S) => {
     const gem = (x, y, k) => S.at(x, y, 0, k, k, () => {
@@ -1166,11 +1223,13 @@
       render(S) {
         const R = tk.rng('void'), pts = [];
         for (let i = 0; i < 22; i++) { const a = i * TAU / 22, k = 0.72 + R() * 0.34 + (i % 2 ? 0 : 0.1); pts.push([cos(a) * 42 * k, sin(a) * 40 * k]); }
-        S.fill(poly(pts.map((p) => [p[0] * 1.08, p[1] * 1.08])), '#f3e6c8', 0.9);
-        S.cel(poly(pts), '#0d0b1e', { line: S.L(2.6), shadow: '#1a1340', depth: 8, rim: '#5b3fa8', rimW: S.L(1.8), hi: false, halftone: { d: 5, alpha: 0.3 } });
-        S.glow(0, 0, 30, '#5b3fa8', 0.35);
-        for (let i = 0; i < (S.d ? 9 : 4); i++) { const a = R() * TAU, rad = R() * 22; S.circle(cos(a) * rad, sin(a) * rad, 0.8 + R() * 1.3, i % 3 ? '#b9a0ff' : '#ffffff', 0.9); }
-        S.spark(6, -6, S.d ? 6 : 5, { color: '#e2d0ff', glow: 0.3 });
+        // Dead Silence: a dark hole with a cold grey rim and a grain of still ash dashes inside, no stars
+        S.cel(poly(pts), '#0d0b1e', { line: S.L(2.6), shadow: '#1a1340', depth: 8, rim: '#4a465e', rimW: S.L(1.8), hi: false, halftone: { d: 5, alpha: 0.3 } });
+        const nd = S.d ? 26 : 12;
+        for (let i = 0; i < nd; i++) {
+          const ang = R() * TAU, rad = R() * 20, dx = cos(ang) * rad, dy = sin(ang) * rad, len = 2.5 + R() * 4, lean = (R() - 0.5) * 0.8;
+          S.ink([[dx - len, dy - lean * len], [dx + len, dy + lean * len]], { w: 1.2, color: i % 2 ? '#ffffff' : '#8e8aa3', alpha: 0.5, taper: 0, pressure: 'flat', wobble: 0 });
+        }
       },
     };
   }
@@ -1370,24 +1429,24 @@
     S.circle(cos(-PI * 0.7) * 9, 2 + sin(-PI * 0.7) * 9, S.T(5.4), p.base);
   };
   RELICF.brush = (S, p) => {
-    S.at(0, 0, 0.74, 1, 1, () => {
-      oc(S, rr(-5.5, -40, 11, 42, 3.5), p.base, { depth: 3.5, shadow: p.shade, tension: 0.5, rim: p.glow, rimW: S.L(1.2) });
-      S.stroke([[-5.6, -24], [5.6, -24]], 2.4, p.dark, { ow: 0 }); S.circle(0, -41, 4.6, N.gold); S.ring(0, -41, 4.6, 1.6, INK);
-      oc(S, rr(-8, -3, 16, 11, 2.5), N.gold, { depth: 2.5, shadow: N.goldD, tension: 0.5 });
-      oc(S, [[-8.5, 8], [-11.5, 20], [-8, 33], [0, 45, 1], [8, 33], [11.5, 20], [8.5, 8]], '#f3ead6', { depth: 4.5, shadow: N.boneD });
-      S.cel([[-7.5, 25], [-5, 35], [0, 45, 1], [5, 35], [7.5, 25]], N.black, { line: false, shadow: '#100a24', depth: 2, hi: false });
-    });
-    S.g.save(); tk.inkBlot(S.g, -29, 32, 7.5, { seed: 5, color: N.black, jag: 0.3 }); S.g.restore();
-    S.circle(-20, 38, 2.3, N.black); S.circle(-38, 22, 1.8, N.black);
-    S.spark(22, -22, 5, { color: p.glow });
+    // a pair of taiko bachi drumsticks crossed, gold end caps, two sound arcs
+    [0.8, -0.8].forEach((a, i) => S.at(0, 4, a, 1, 1, () => {
+      oc(S, [[-3.5, -40], [3.5, -40], [5.5, 38], [-5.5, 38]].map((q) => q), p.base, { depth: 3, shadow: p.shade, rim: p.glow, rimW: S.L(1.1) });
+      S.stroke([[-4.6, -14], [4.6, -14]], 2, p.dark, { ow: 0 });
+      oc(S, ell(0, -41, 5.4, 4.6, 0, 12), N.gold, { depth: 2, shadow: N.goldD });
+      oc(S, rr(-6.4, 33, 12.8, 9, 3.5), N.gold, { depth: 2, shadow: N.goldD, tension: 0.5 });
+    }));
+    [11, 19].forEach((r, i) => { S.g.save(); S.g.lineCap = 'round'; S.g.beginPath(); S.g.arc(0, -12, r, -2.3, -0.84); S.g.strokeStyle = INK; S.g.lineWidth = S.T(4.2); S.g.stroke(); S.g.strokeStyle = p.glow; S.g.lineWidth = S.T(2.2); S.g.globalAlpha *= 1 - i * 0.2; S.g.stroke(); S.g.restore(); });
+    S.spark(24, 22, 5, { color: p.glow });
   };
   RELICF.inkstone = (S, p) => {
-    const slab = [[-33, -14], [-28, -27], [28, -27], [33, -14], [33, 24], [28, 32], [-28, 32], [-33, 24]];
-    oc(S, poly(slab), '#5a5678', { depth: 7, shadow: '#2e2a44', rim: '#a49fc4', rimW: S.L(1.5), tension: 0.4 });
-    S.g.save(); S.g.beginPath(); S.g.ellipse(-3, 6, 21, 13.5, -0.1, 0, TAU); S.g.fillStyle = '#0c0820'; S.g.fill(); S.g.lineWidth = S.L(2.6); S.g.strokeStyle = INK; S.g.stroke(); S.g.restore();
-    S.ink([[-18, 1], [-4, -3], [9, 0]], { w: 2.6, color: p.glow, alpha: 0.85, taper: 0.5 });
-    S.circle(-10, 10, 2, p.light, 0.85);
-    S.at(20, 12, -0.55, 1, 1, () => { oc(S, rr(-6, -21, 12, 42, 2.5), N.black, { depth: 3, shadow: '#100a24', tension: 0.4 }); S.stroke([[0, -13], [0, 13]], 2.6, N.gold, { ow: 0 }); });
+    // a rin singing bowl: a bronze bowl on a small cushion, a striker resting on the rim, two rising sound arcs
+    oc(S, rr(-26, 22, 52, 12, 5), p.base, { depth: 3, shadow: p.shade, tension: 0.6, rim: p.glow, rimW: S.L(1.1) });
+    oc(S, [[-30, -4], [30, -4], [29, 6], [21, 17], [0, 23], [-21, 17], [-29, 6]], pal.bronze, { depth: 6, shadow: '#7a4a1c', rim: '#f0c27a', rimW: S.L(1.3), tension: 0.6 });
+    S.g.save(); S.g.beginPath(); S.g.ellipse(0, -4, 30, 7, 0, 0, TAU); S.g.fillStyle = '#5a3a14'; S.g.fill(); S.g.lineWidth = S.L(2.4); S.g.strokeStyle = INK; S.g.stroke(); S.g.restore();
+    S.ink([[-22, -4], [0, -1], [22, -4]], { w: 1.8, color: '#f0c27a', alpha: 0.8, taper: 0.5, wobble: 0 });
+    S.at(14, -8, 0.7, 1, 1, () => { oc(S, rr(-3, -22, 6, 30, 2.5), N.woodL, { depth: 2, shadow: N.woodD, tension: 0.5 }); oc(S, circ(0, -23, 4.4), N.gold, { depth: 2, shadow: N.goldD }); });
+    [14, 22].forEach((r, i) => { S.g.save(); S.g.lineCap = 'round'; S.g.beginPath(); S.g.arc(-8, -10, r + 6, -2.3, -0.9); S.g.strokeStyle = INK; S.g.lineWidth = S.T(4.2); S.g.stroke(); S.g.strokeStyle = p.glow; S.g.lineWidth = S.T(2.2); S.g.globalAlpha *= 1 - i * 0.2; S.g.stroke(); S.g.restore(); });
   };
   RELICF.seal = (S, p) => {
     // a chop: a lacquered handle with a gold collar, a stone block and the red imprint it leaves
@@ -1746,11 +1805,18 @@
     S.cel(rr(-7.5, -28, 15, 11, 3), '#dcecff', { line: S.L(2.2), shadow: '#a9c4e8', depth: 2, hi: false, tension: 0.5 });
     S.cel(circ(0, 7, 27), '#dcecff', { line: S.L(3), shadow: '#a9c4e8', depth: 5, hi: false, rim: '#ffffff', rimW: S.L(1.4) });
     S.clip(circ(0, 7, 24.5), () => {
-      S.fill(poly([[-30, -4], [-12, -7], [0, -3], [12, -7], [30, -4], [30, 40], [-30, 40]]), '#241a3a');
-      S.fill(poly([[-30, 24], [30, 24], [30, 40], [-30, 40]]), '#140f2e');
+      S.fill(poly([[-30, -4], [-12, -7], [0, -3], [12, -7], [30, -4], [30, 40], [-30, 40]]), '#2a1470');
+      S.fill(poly([[-30, 24], [30, 24], [30, 40], [-30, 40]]), '#1a0c52');
       S.ink(bez2([-24, -4], [-12, -9], [0, -3]).concat(bez2([0, -3], [12, -9], [24, -4])), { w: 2, color: pal.cyan, alpha: 0.85, taper: 0.3, wobble: 0 });
+      // the echo ping inside the glass: a dot, a ring and a broken outer ring
+      S.circle(0, 20, 3.4, pal.cyan);
+      S.ring(0, 20, 8.5, 1.8, pal.cyan, 0.85);
+      S.g.save(); S.g.lineCap = 'round'; S.g.strokeStyle = pal.cyan; S.g.lineWidth = S.T(1.6); S.g.globalAlpha *= 0.6;
+      S.g.beginPath(); S.g.arc(0, 20, 15, -0.7, 0.7); S.g.stroke(); S.g.beginPath(); S.g.arc(0, 20, 15, PI - 0.7, PI + 0.7); S.g.stroke(); S.g.restore();
     });
-    S.cel(unit(DROP, 0, 11, 8.6, 11), p.base, { line: S.L(1.8), shadow: p.shade, depth: 2.4, rim: p.glow, hi: false });
+    // the label: a small eighth note
+    S.g.save(); S.g.beginPath(); S.g.ellipse(-2, 9, 4.4, 3.2, -0.35, 0, TAU); S.g.fillStyle = p.base; S.g.fill(); S.g.lineWidth = S.L(1.5); S.g.strokeStyle = INK; S.g.stroke(); S.g.restore();
+    S.stroke([[1.6, 8], [1.6, -3], [6, 0]], 2, p.base, { ow: 1, poly: true, step: 2 });
     S.stroke([[-17, -6], [-21, 6], [-17, 18]], 4, '#ffffff', { ow: 0, alpha: 0.85, taperStart: 0.2, taperEnd: 0.4 });
     S.spark(20, -10, 4.4, { color: pal.cyan });
   };
@@ -1927,7 +1993,7 @@
     const paper = params.bg === 'paper';
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
       multi(g, cell.kind, cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [40, 32, 24, 16], opts: Object.assign(flagOpts(params), cell.n !== undefined && params.n === undefined ? { n: cell.n } : {}) });
-    }, { title: 'ART.icon intents (sumi-e), stats, brushes (mini hex grids), card types, rows', cols: params.cols || 7, aspect: 1.35, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
+    }, { title: 'ART.icon intents (sumi-e), stats, songs (mini hex grids), card types, rows', cols: params.cols || 7, aspect: 1.35, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
 
   // the pixel-true view: every icon at the sizes the game really draws it (ART.res 1), magnified with nearest-neighbour so a blurry line or a lost detail

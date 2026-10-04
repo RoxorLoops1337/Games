@@ -109,6 +109,7 @@ const ART = (() => {
     paper: '#f3e6c8', paper2: '#e6d3a3', sumi: '#241a3a', gold: '#f5c96a', gold2: '#ffe9a8',
     vermilion: '#e8383d', sakura: '#ff7eb6', sakura2: '#ffc2dc', jade: '#3fd6b0', azure: '#5fb4ff',
     cyan: '#5ff5ff', amber: '#ff9a2e', bloodmoon: '#b0245c', ash: '#8a86a8', white: '#fff8f0',
+    hush: '#cfcdd8', hush2: '#8e8aa3', felt: '#6e6a7e', bronze: '#c9893a', verdigris: '#5fbfa8',
   };
   // card palette names -> {base, light, dark, glow}
   const fams = {
@@ -858,6 +859,52 @@ const ART = (() => {
     ctx.closePath(); ctx.fillStyle = col; ctx.fill();
     ctx.restore();
   }
+  // Inked music note glyph centred on (x, y), head width about size. o: kind ('eighth' | 'quarter' | 'beamed' | 'rest'), color (ink), alpha, rot, line (stroke width)
+  function note(ctx, x, y, size, o) {
+    o = o || {};
+    size = pos(size, 16);
+    const col = hexOk(o.color || pal.ink), lw = pos(o.line, Math.max(1.2, size * 0.14)), kind = o.kind || 'eighth';
+    ctx.save();
+    if (o.alpha !== undefined) ctx.globalAlpha = ctx.globalAlpha * cA(o.alpha);
+    ctx.translate(x, y); ctx.rotate(num(o.rot, 0));
+    const hw = size * 0.5, hh = size * 0.36, sh = size * 1.7;
+    const head = (hx, hy) => { ctx.beginPath(); ctx.ellipse(hx, hy, hw, hh, -0.35, 0, TAU); ctx.fillStyle = col; ctx.fill(); };
+    const stem = (hx, hy) => { const sx = hx + hw * 0.86, sy = hy - hh * 0.2; inkPath(ctx, [[sx, sy], [sx, sy - sh]], { w: lw, color: col, align: 0, wobble: 0 }); return [sx, sy - sh]; };
+    if (kind === 'rest') {
+      const pts = [[-hw * 0.3, -size * 0.9], [hw * 0.7, -size * 0.5], [-hw * 0.3, -size * 0.1], [hw * 0.6, size * 0.3]];
+      inkPath(ctx, pts, { w: lw * 1.2, color: col, align: 0, wobble: 0 });
+      ctx.beginPath(); ctx.ellipse(-hw * 0.1, size * 0.6, hw * 0.6, hh * 0.9, 0, 0, TAU); ctx.fillStyle = col; ctx.fill();
+    } else if (kind === 'beamed') {
+      const ax = -hw * 1.1, bx = hw * 1.5;
+      head(ax, 0); head(bx, -size * 0.2);
+      const t1 = stem(ax, 0), t2 = stem(bx, -size * 0.2);
+      inkPath(ctx, [[t1[0], t1[1]], [t2[0], t2[1]]], { w: lw * 2.2, color: col, align: 0, wobble: 0 });
+    } else {
+      head(0, 0);
+      const top = stem(0, 0);
+      if (kind !== 'quarter') inkPath(ctx, [[top[0], top[1]], [top[0] + size * 0.55, top[1] + size * 0.5], [top[0] + size * 0.4, top[1] + size * 0.95]], { w: lw, color: col, align: 0, wobble: 0 });
+    }
+    ctx.restore();
+  }
+  // Concentric sound rings centred on (x, y), first ring at r. o: n (3), gap (0.32, share of r), color (gold), alpha, lw, broken (false: outermost ring as left and right arcs), rot
+  function soundRings(ctx, x, y, r, o) {
+    o = o || {};
+    r = pos(r, 10);
+    const n = Math.max(1, Math.min(12, Math.round(num(o.n, 3)))), gap = num(o.gap, 0.32), lw = pos(o.lw, Math.max(1, r * 0.1));
+    ctx.save();
+    if (o.alpha !== undefined) ctx.globalAlpha = ctx.globalAlpha * cA(o.alpha);
+    ctx.strokeStyle = hexOk(o.color || pal.gold); ctx.lineWidth = lw; ctx.lineCap = 'round';
+    const rot = num(o.rot, 0);
+    for (let i = 0; i < n; i++) {
+      const rr = r * (1 + gap * i);
+      ctx.beginPath();
+      if (o.broken && i === n - 1) {
+        ctx.arc(x, y, rr, rot + PI * 0.65, rot + PI * 1.35); ctx.moveTo(x + Math.cos(rot - PI * 0.35) * rr, y + Math.sin(rot - PI * 0.35) * rr); ctx.arc(x, y, rr, rot - PI * 0.35, rot + PI * 0.35);
+      } else ctx.arc(x, y, rr, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   // Drifting gold-leaf flecks over the rect (x, y, w, h). t in seconds; o: n (14), seed, color (gold), size (max radius, 3.2), rise (px/s, 6)
   function kirakira(ctx, x, y, w, h, t, o) {
     o = o || {};
@@ -1472,7 +1519,7 @@ const ART = (() => {
     P, circlePts, ellipsePts, arcPts, rrectPts, xf, mirrorPts, lerpPts, bendPts, bbox, dist, flatten, trace: traceShape, shapeBox,
     inkPath, inkStroke: sane(inkStroke, 1, 5), inkCurve: sane(inkCurve, 1, 7), inkBlot: sane(inkBlot, 1, 4), inkBleed, inkText: sane(inkText, 2, 5),
     celFill, celEllipse: sane(celEllipse, 1, 5), celCircle: sane(celCircle, 1, 4), ribbon, hairLock, gloss,
-    halftone: sane(halftone, 1, 5), halftoneRamp: sane(halftoneRamp, 1, 5), glow: sane(glow, 1, 4), sparkle: sane(sparkle, 1, 4), kirakira: sane(kirakira, 1, 6), speedLines: sane(speedLines, 1, 3),
+    halftone: sane(halftone, 1, 5), halftoneRamp: sane(halftoneRamp, 1, 5), glow: sane(glow, 1, 4), sparkle: sane(sparkle, 1, 4), note: sane(note, 1, 4), soundRings: sane(soundRings, 1, 4), kirakira: sane(kirakira, 1, 6), speedLines: sane(speedLines, 1, 3),
     eye: sane(eye, 1, 5), eyePresets: EYE_PRESETS, brow: sane(brow, 1, 4), mouth: sane(mouth, 1, 4), blush: sane(blush, 1, 4), nose: sane(nose, 1, 4),
     paperGrain: sane(paperGrain, 1, 5), vignette: sane(vignette, 1, 3), sky: sane(sky, 1, 5), mist: sane(mist, 1, 6), stars: sane(stars, 1, 6), moon: sane(moon, 1, 4),
     petal: sane(petal, 1, 4), bolt: sane(bolt, 1, 5), lin, rad, withAlpha, flipX,
@@ -1623,7 +1670,7 @@ const ART = (() => {
       ctx.font = '700 22px ' + font.ui; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = pal.white;
       ctx.fillText('scene ' + sceneId, w / 2, h / 2);
     },
-    logo(ctx, x, y, w) { w = pos(w, 400); inkText(ctx, 'INKWOVEN', num(x, 0), num(y, 0), w / 4.6, { family: font.display, fill: pal.paper, weight: 900, skew: -0.08 }); },
+    logo(ctx, x, y, w) { w = pos(w, 400); inkText(ctx, 'ECHOWAKE', num(x, 0), num(y, 0), w / 4.6, { family: font.display, fill: pal.paper, weight: 900, skew: -0.08 }); },
   };
   A.map = {
     hex(ctx, kind, x, y, size, opts) {
@@ -1762,11 +1809,17 @@ const ART = (() => {
         bolt(g, w * 0.15, h * 0.45, w * 0.5, h * 0.62, { seed: Math.floor(t * 8), jag: 14 }); bolt(g, w * 0.5, h * 0.62, w * 0.86, h * 0.44, { seed: Math.floor(t * 8) + 5, jag: 14, color: '#ff9ac8' });
         [1, 0.7, 0.4, 0.15, 0].forEach((o, i) => eye(g, 34 + i * (w - 68) / 4, h - 48, 26, 34, { open: o, iris: ['#8a1848', '#ff6fb0'], side: 1 }));
       } },
+      { label: 'note, soundRings', fn(g, w, h) {
+        sky(g, 0, 0, w, h, 'night');
+        ['eighth', 'quarter', 'beamed', 'rest'].forEach((k, i) => note(g, w * (0.14 + i * 0.24), h * 0.34, 16, { kind: k, color: pal.gold, rot: i === 1 ? 0.1 : 0 }));
+        soundRings(g, w * 0.28, h * 0.72, 16, { n: 3, color: pal.jade, alpha: 0.9, lw: 2.4 });
+        soundRings(g, w * 0.7, h * 0.72, 16, { n: 3, color: pal.sakura, broken: true, rot: 0, lw: 2.4 });
+      } },
       { label: 'palette and hue families', fn(g, w, h) {
         g.fillStyle = pal.night; g.fillRect(0, 0, w, h);
         const keys = Object.keys(pal), sw = w / 10;
         keys.forEach((k, i) => { g.fillStyle = pal[k]; g.fillRect((i % 10) * sw, Math.floor(i / 10) * 28, sw - 2, 26); });
-        Object.keys(fams).forEach((k, i) => { const f = fams[k], y = 64 + i * ((h - 70) / 12); ['dark', 'base', 'light', 'glow'].forEach((n, j) => { g.fillStyle = f[n]; g.fillRect(6 + j * 22, y, 20, (h - 70) / 12 - 2); }); g.font = '600 10px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = pal.paper; g.fillText(k, 100, y + 5); });
+        Object.keys(fams).forEach((k, i) => { const f = fams[k], y = 92 + i * ((h - 98) / 12); ['dark', 'base', 'light', 'glow'].forEach((n, j) => { g.fillStyle = f[n]; g.fillRect(6 + j * 22, y, 20, (h - 98) / 12 - 2); }); g.font = '600 10px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = pal.paper; g.fillText(k, 100, y + 5); });
       } },
     ];
     sheetGrid(canvas, params, cells, (g, cell, w, h) => cell.fn(g, w, h), { cols: 5, title: 'ART.tk toolkit (t = ' + t.toFixed(2) + 's)' });

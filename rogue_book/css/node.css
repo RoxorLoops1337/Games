@@ -392,7 +392,7 @@
 .dk-confirm .dk-actions { margin-top: 0; }
 .dk-hint { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; text-align: center; color: var(--paper); font: italic 600 calc(19px * var(--ts) * var(--nkc, 1)) / 1.4 var(--font-display); padding: 0 22px; }
 .dk-hint p { margin: 0; text-shadow: 0 2px 0 var(--ink); }
-.dk-hint-mark { width: 70px; height: 78px; background: var(--drop) center / 100% 100% no-repeat; filter: drop-shadow(0 0 14px rgba(95, 245, 255, .6)); animation: nkBob 3.2s ease-in-out infinite; }
+.dk-hint-mark { width: 70px; height: 78px; background: var(--orb) center / 100% 100% no-repeat; filter: drop-shadow(0 0 14px rgba(95, 245, 255, .6)); animation: nkBob 3.2s ease-in-out infinite; }
 .dk-facts { display: flex; gap: 20px; margin: 4px 0 0; padding: 0; list-style: none; font: 600 calc(14px * var(--ts) * var(--nkc, 1)) / 1.2 var(--font-ui); font-style: normal; }
 .dk-facts b { font: 900 calc(22px * var(--ts) * var(--nkc, 1)) / 1 var(--font-num); color: var(--gold2); }
 .dk-detail { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }

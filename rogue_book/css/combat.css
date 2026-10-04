@@ -210,7 +210,7 @@
 .cm-playzone.show { opacity: .85; } .cm-playzone.hot { opacity: 1; border-top-color: var(--gold2); filter: drop-shadow(0 0 8px rgba(245, 201, 106, .9)); }
 
 /* ------------------------------------------------------------------------------------------------ docks: orb, piles, End Turn */
-.cm-orb { position: absolute; top: calc(var(--dock-cy) - 50px); width: 88px; height: 100px; display: grid; place-items: center; pointer-events: auto; cursor: help; background: var(--drop) center / 100% 100% no-repeat; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .55)) drop-shadow(0 0 12px rgba(95, 245, 255, .5)); transition: filter .3s; }
+.cm-orb { position: absolute; top: calc(var(--dock-cy) - 50px); width: 88px; height: 100px; display: grid; place-items: center; pointer-events: auto; cursor: help; background: var(--orb) center / 100% 100% no-repeat; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .55)) drop-shadow(0 0 12px rgba(95, 245, 255, .5)); transition: filter .3s; }
 .cm-orb .o-glow { position: absolute; inset: 14% 12% 6%; border-radius: 50%; background: radial-gradient(circle at 50% 66%, rgba(95, 245, 255, .4), transparent 66%); animation: orbGlow 3s ease-in-out infinite; }
 .cm-orb .o-ring { position: absolute; inset: 0; pointer-events: none; }
 .o-n { position: relative; margin-top: 16px; font: 900 44px / 1 var(--font-num); color: var(--white); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 0 14px rgba(95, 245, 255, .8); }
