@@ -2040,7 +2040,7 @@
   function enterEmpty(s, root) {
     const back = UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => UI.toTitle() });
     root.appendChild(mk('div', { class: 'mp-empty' }, UI.panel({ kind: 'paper', torn: true, title: 'Only silence' },
-      mk('p', { class: 'm-text', text: 'There is no map to show. The land was never woken, or the run is over.' }), mk('div', { class: 'row center' }, back))));
+      mk('p', { class: 'm-text', text: 'There is no map to show. The land was never woken, or the journey is over.' }), mk('div', { class: 'row center' }, back))));
     root.appendChild(UI.menuButton());
   }
 
@@ -2163,7 +2163,7 @@
         const row = mk('div', { class: 'mr-row rar-' + d.rarity, role: 'group', tabindex: '0', 'aria-label': d.name + ', ' + d.rarity + '. ' + relicLine(id) + ' ' + relicSource(R, id), dataset: { id } },
           UI.relic(id, { size: 'lg', tip: false }),
           mk('div', { class: 'mr-txt' },
-            mk('div', { class: 'mr-head' }, mk('b', { class: 'mr-name', text: d.name }), mk('span', { class: 'mr-tag mr-' + d.rarity, text: cap(d.rarity) })),
+            mk('div', { class: 'mr-head' }, mk('b', { class: 'mr-name', text: d.name }), mk('span', { class: 'mr-tag mr-' + d.rarity, text: d.rarity === 'boss' ? 'Keeper' : cap(d.rarity) })),
             mk('p', { class: 'mr-text', text: relicLine(id) }),
             mk('p', { class: 'mr-from', text: relicSource(R, id) })));
         UI.vars(row, { '--i': i });

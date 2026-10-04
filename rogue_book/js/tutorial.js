@@ -50,7 +50,7 @@
     brush: { title: 'A Song wakes for free', anchor: ['brushes'], at: { x: 1000, y: 80 }, side: 'bottom', scope: ['map'], completeOn: ['map:brush'], ttl: 18000,
       text: 'One-use Songs wake whole shapes of fog at no Echo cost. Save the long ones for the road to the boss.' },
     relics: { title: 'Treasures', anchor: ['relics'], at: { x: 120, y: 660 }, side: 'top', scope: ['map'], ttl: 14000,
-      text: 'Treasures bend the rules for the rest of the run. Tap here any time to read what yours do.' },
+      text: 'Treasures bend the rules for the rest of the journey. Tap here any time to read what yours do.' },
     // ---- combat
     energy: { title: 'Energy', anchor: ['energy'], at: { x: 70, y: 650 }, side: 'top', scope: ['combat'], ttl: 14000,
       text: 'You get 3 Energy each turn, and a card\'s cost is the number in its corner orb. Whatever you do not spend is gone when the turn ends.' },
@@ -74,7 +74,7 @@
     reward: { title: 'The spoils', anchor: ['deck'], at: { x: 640, y: 120 }, side: 'bottom', scope: ['reward'], ttl: 18000,
       text: 'Take one card for your deck, or skip them all. A lean deck draws its best cards more often, so skipping is a real choice.' },
     camp: { title: 'A campfire', at: { x: 640, y: 120 }, side: 'bottom', scope: ['camp'], ttl: 18000,
-      text: 'Rest to heal, Sharpen a card, Cut gems, or Meditate for Echo and a Song. You only get so many, so pick what the run needs.' },
+      text: 'Rest to heal, Sharpen a card, Cut gems, or Meditate for Echo and a Song. You only get so many, so pick what the journey needs.' },
     shop: { title: 'The peddler', at: { x: 640, y: 120 }, side: 'bottom', scope: ['shop'], ttl: 18000,
       text: 'Cards, gems, treasures and a Song are for sale. Paying to remove a weak card is often the best buy on the shelf.' },
     event: { title: 'A fable', at: { x: 640, y: 120 }, side: 'bottom', scope: ['event'], ttl: 18000,

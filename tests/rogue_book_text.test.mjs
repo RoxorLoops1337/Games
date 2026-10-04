@@ -464,7 +464,7 @@ t.test('card text: hooks read as sentences', () => {
     ['every second turn end', hook('turnEnd', [blk(2)], { every: 2 }), 'At the end of every 2nd turn, gain 2 Block.'],
     ['every third play', hook('onPlay', [{ op: 'draw', n: 1 }], { filter: { type: 'attack' }, every: 3 }), 'Every 3rd time you play an Attack, draw 1 card.'],
     ['on damaged', hook('onDamaged', [dmg(3)]), 'Whenever you are hit, deal 3 damage to the attacker.'],
-    ['on kill', hook('onKill', [{ op: 'heal', n: 5 }], { filter: { tier: ['elite', 'boss'] } }), 'Whenever you defeat an Elite or a Boss, heal 5 HP.'],
+    ['on kill', hook('onKill', [{ op: 'heal', n: 5 }], { filter: { tier: ['elite', 'boss'] } }), 'Whenever you defeat an Elite or a Keeper, heal 5 HP.'],
     ['on any kill', hook('onKill', [{ op: 'energy', n: 1 }]), 'Whenever you defeat an enemy, gain 1 Energy.'],
     ['on kill spreads', hook('onKill', [st('burn', 3, { tgt: 'all' })]), 'Whenever you defeat an enemy, apply 3 Burn to all enemies.'],
     ['on exhaust', hook('onExhaust', [{ op: 'draw', n: 1 }]), 'Whenever a card is Exhausted, draw 1 card.'],

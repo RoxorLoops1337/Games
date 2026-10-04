@@ -3387,7 +3387,7 @@
       dropShadowBg(g, w, h, t, i);
       const gy = h * 0.9, sc = fitScale(cell.id, w / np, h, 1.7);
       (poses.length ? poses : ['idle']).forEach((pose, k) => ART.enemy.draw(g, cell.id, { x: w * (k + 0.5) / np, y: gy, s: sc, pose, t: t + i * 0.37, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: 0 }));
-    }, { cols: 4, title: 'Chapter 2, the Sunken Lantern City: normals, elites, minions (' + poses.join(', ') + ')', gap: 6, labelH: 16 });
+    }, { cols: 4, title: 'Verse 2, the Sunken Lantern City: normals, elites, minions (' + poses.join(', ') + ')', gap: 6, labelH: 16 });
   });
 
   // the boss: both phases large in idle, then every pose of each phase underneath
@@ -3428,6 +3428,6 @@
       const o = { x: w * 0.5, y: h * 0.9, s: sc, t: t0 + cell.i * (cell.kind === 'idle' ? 0.3 : 0.033) };
       if (cell.kind === 'idle') ART.enemy.draw(g, cell.id, Object.assign(o, { pose: 'idle', pt: 0 }));
       else ART.enemy.draw(g, cell.id, Object.assign(o, { pose: cell.kind, pt: u * POSE_MS[cell.kind] / 1000 }));
-    }, { cols: n, title: 'Chapter 2 film strips: ' + ids.join(' and ') + ' (idle loop, attack, death)', gap: 4, labelH: 14 });
+    }, { cols: n, title: 'Verse 2 film strips: ' + ids.join(' and ') + ' (idle loop, attack, death)', gap: 4, labelH: 14 });
   });
 })();

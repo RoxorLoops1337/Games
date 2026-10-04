@@ -1151,7 +1151,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.ok($(g, '.menu-btn'), 'the map has the hamburger menu button');
   g._click('.menu-btn'); await settle(g);
   t.ok(pausing(g), 'the pause overlay opens'); t.ok(/Paused/.test($(g, '.o-pause .panel h2, .o-pause .panel-title, .o-pause h2').textContent), 'titled Paused');
-  t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Treasures, Settings, How to play, Save and quit, Abandon run');
+  t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Treasures, Settings, How to play, Save and quit, Abandon journey');
   t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Verse 1Tempo Trial II', 'the run card names the chapter and the trial');
   t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(/Hanae/.test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
   t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No treasures yet/.test($(g, '.mn-p-relics').textContent), 'no treasures yet');
@@ -1251,7 +1251,7 @@ await t.test('pause: the diagrams inside the overlay are driven by the frame clo
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: Abandon run asks first, records the run as abandoned, pays Inkstones and returns to the title', async () => {
+await t.test('pause: Abandon journey asks first, records the run as abandoned, pays Inkstones and returns to the title', async () => {
   const g = fresh();
   const R = await startRun(g, { trial: 1 });
   await openPause(g);

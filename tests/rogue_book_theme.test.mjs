@@ -248,6 +248,58 @@ t.test('check 5: README, DESIGN, ART_BIBLE and CONTENT_SPEC pass RETIRED outside
   t.eq(bad.length, 0, fail(bad, 'retired words in the docs'));
 });
 
+// ------------------------------------------------------------------ check 7: CSS content strings, and the word "run" (plan 3: a run is a journey)
+const RUN_WORD = /\b[Rr]uns?\b/;
+// exact survivors of the word "run" in player-facing prose, each with a reason (the verb, never the noun)
+const RUN_ALLOW = [
+  ['Runs away', 'verb: the Flee intent tooltip in screen_menu.js (a creature that runs away)'],
+  ['Nowhere to run!', 'verb: an enemy shout in scene.js (to flee), never the noun'],
+];
+// DATA fields (world text) may keep the verb inside these exact phrases: [phrase, reason]
+const RUN_ALLOW_CONTAINS = [
+  ['runs a tea stall', 'verb: to operate (events.tanuki_tea_house)'],
+  ['She runs. You run.', 'verb: to flee on foot (events.fox_returns)'],
+  ['Then it runs out of breath', 'verb: to be exhausted (events.kill_your_darlings)'],
+  ['Hot sound runs down your arm', 'verb: to flow (events.unfinished_sentence)'],
+  ['run out of nothing', 'verb: to be exhausted (events.weeping_eraser)'],
+];
+const RUN_ALLOW_CLASS = [['mn-p-run empty', 'CSS class list in screen_menu.js, never player-facing; classes keep their names (plan 5.11)']];
+const runAllowed = (s) => RUN_ALLOW.concat(RUN_ALLOW_CLASS).some(([a]) => a === s);
+const runAllowedData = (s) => runAllowed(s) || RUN_ALLOW_CONTAINS.some(([a]) => s.includes(a));
+t.test('check 7a: CSS content strings pass RETIRED, TALE and the run rule', () => {
+  const bad = [];
+  const dir = path.join(DIR, 'css');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.css'))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+    const re = /\bcontent\s*:\s*("([^"\\]|\\.)*"|'([^'\\]|\\.)*')/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const text = m[1].slice(1, -1).replace(/\\[0-9a-fA-F]{1,6}\s?/g, ' ').replace(/\\(.)/g, '$1');
+      if (!text.trim() || allowedExact(text)) continue;
+      const w = hit(RETIRED, text) || hit(TALE, text) || hit(RUN_WORD, text);
+      if (w) bad.push(`css/${f}:${lineOf(src, m.index)}: "${w}" in "${abbrev(text)}"`);
+    }
+  }
+  t.eq(bad.length, 0, fail(bad, 'retired words or "run" in CSS content strings'));
+});
+t.test('check 7b: the standalone word run or runs is gone from player-facing prose (a run is a journey)', () => {
+  const bad = [];
+  for (const f of fields) {
+    if (runAllowedData(f.text)) continue;
+    const w = hit(RUN_WORD, f.text);
+    if (w) bad.push(`${f.path}: "${w}" in "${abbrev(f.text)}"`);
+  }
+  for (const l of proseLits) {
+    if (runAllowed(l.text)) continue;
+    const w = hit(RUN_WORD, l.text);
+    if (w) bad.push(`js/${l.file}:${l.line}: "${w}" in "${abbrev(l.text)}"`);
+  }
+  t.eq(bad.length, 0, fail(bad, 'the word "run" in player-facing text (say journey)'));
+});
+t.test('the run allowlist is small and every entry has a reason', () => {
+  for (const [s, why] of RUN_ALLOW.concat(RUN_ALLOW_CLASS, RUN_ALLOW_CONTAINS)) { t.ok(s.length > 0, 'run allowlist string'); t.ok(why.length > 10, `reason for "${s}"`); }
+});
+
 // ------------------------------------------------------------------ the allowlist itself
 t.test('the allowlist is small, exact and every entry has a reason', () => {
   for (const [s, why] of [...ALLOW_EXACT, ...ALLOW_CONTAINS]) { t.ok(typeof s === 'string' && s.length > 0, 'allowlist string'); t.ok(typeof why === 'string' && why.length > 10, `reason for "${s}"`); }

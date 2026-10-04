@@ -1170,7 +1170,7 @@ await t.test('the pause overlay: Resume, Deck, Treasures, Settings, How to play,
   const box = $(g, '.o-pause');
   t.ok(box, 'Esc on the map opens pause');
   const labels = Array.from(box.querySelectorAll('.btn')).map((b) => b.textContent.trim());
-  t.deep(labels, ['Resume', 'Deck', 'Treasures', 'Settings', 'How to play', 'Abandon run', 'Save and quit'], 'the seven entries in order');
+  t.deep(labels, ['Resume', 'Deck', 'Treasures', 'Settings', 'How to play', 'Abandon journey', 'Save and quit'], 'the seven entries in order');
   Array.from(box.querySelectorAll('.btn'))[1].click();
   t.eq(g.UI.overlay.count(), 2, 'Deck opens on top of pause'); t.ok($(g, '.o-deck'), 'deck overlay');
   g._key('Escape');

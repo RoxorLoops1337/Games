@@ -817,7 +817,7 @@
   function intentTip(u) {
     const it = u.intent;
     const d = DATA.enemies[u.def] || {};
-    const head = mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: u.name }), mk('span', { class: 'tk-kind k-keyword', text: cap(u.tier || 'normal') }));
+    const head = mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: u.name }), mk('span', { class: 'tk-kind k-keyword', text: (u.tier === 'boss' ? 'Keeper' : cap(u.tier || 'normal')) }));
     const body = mk('div', { class: 'tk' }, head);
     if (!it) { body.appendChild(mk('p', { class: 'tk-text', text: 'It is not planning anything yet.' })); return body; }
     if (it.stunned) {
@@ -2198,9 +2198,9 @@
     const C = me.C;
     const boss = C.enemies.find((e) => e.tier === 'boss') || C.enemies.find((e) => e.tier === 'elite') || C.enemies[0];
     const d = boss ? DATA.enemies[boss.def] : null;
-    UI.announce((C.tier === 'boss' ? 'Boss: ' : 'Champion: ') + (boss ? boss.name : '') + (d && d.title ? ', ' + d.title : ''));
+    UI.announce((C.tier === 'boss' ? 'Keeper: ' : 'Champion: ') + (boss ? boss.name : '') + (d && d.title ? ', ' + d.title : ''));
     sfx(C.tier === 'boss' ? 'boss_intro' : 'phase_change');
-    if (C.tier === 'boss' && me.realScene) { safe(() => me.sc.banner(boss ? boss.name : 'BOSS', 'BOSS')); return 2600; }
+    if (C.tier === 'boss' && me.realScene) { safe(() => me.sc.banner(boss ? boss.name : 'KEEPER', 'BOSS')); return 2600; }
     const r = me.ui.reveal;
     r.textContent = '';
     r.className = 'cm-reveal ' + (C.tier === 'boss' ? 'boss' : 'elite');

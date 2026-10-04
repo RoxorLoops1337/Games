@@ -1273,6 +1273,6 @@
       g.fillStyle = PAPER_BASE; g.fillRect(0, 0, w, h);
       const d = DOODLES[id], k = Math.min(w / d.w, h / d.h) * 0.9;
       drawDoodle(g, id, w / 2, h / 2, k, 1, 0, 0.9);
-    }, { bg: 'paper', cols: 4, title: 'ART.map.paper doodles: rings, silent bell, cranes, drum (drawn at 0.9 alpha here; the page uses 0.2 to 0.34)' });
+    }, { bg: 'paper', cols: 4, title: 'ART.map.paper doodles: rings, silent bell, cranes, drum (drawn at 0.9 alpha here; the game uses 0.2 to 0.34)' });
   });
 })();

@@ -2400,14 +2400,14 @@
       stamp: {
         box: [-64, -70, 64, 78], pivot: [0, 0],
         draw(S) {
-          // the great rubber stamp: a wooden knob handle and a big base with SHH cut backwards into its face
+          // the great rubber stamp: a wooden knob handle and a big base with SHH painted on its face
           S.cel(cap(0, 4, 0, -30, 18, 14), CG.wood, { depth: 5, line: 3, hi: true, hiW: 1.6, rim: '#e0b070', tension: 0.5 });
           S.cel(E(0, -44, 26, 22, 14), CG.wood, { depth: 8, line: 3.4, hi: true, hiW: 2, rim: '#e0b070' });
           S.cel({ poly: [[-40, 6], [40, 6], [44, 18], [-44, 18]] }, CG.brass, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#fff0b0' });
           S.cel({ poly: [[-46, 18], [46, 18], [48, 68], [-48, 68]] }, CG.black, {
             depth: 6, line: 3.4, hi: false, rim: '#ff9aa4', rimW: 1.6, shadow: '#2e2b3a',
             decor(g) {
-              g.save(); g.translate(0, 44); g.scale(-1, 1); g.fillStyle = CG.red; g.font = '900 34px ' + tk.font.num; g.textAlign = 'center'; g.textBaseline = 'middle';
+              g.save(); g.translate(0, 44); g.fillStyle = CG.red; g.font = '900 34px ' + tk.font.num; g.textAlign = 'center'; g.textBaseline = 'middle';
               g.fillText('SHH', 0, 0); g.restore();
               g.fillStyle = 'rgba(255,58,74,0.35)'; g.fillRect(-46, 62, 92, 6);
             },

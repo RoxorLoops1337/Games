@@ -49,7 +49,7 @@
 }
 .mp-banner::before { content: ""; position: absolute; left: 10px; right: 10px; bottom: 11px; height: 1.5px; background: linear-gradient(90deg, transparent, rgba(245, 201, 106, .85), transparent); }
 .mp-ch { display: block; font: 800 calc(11px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .34em; text-transform: uppercase; color: var(--gold2); text-shadow: 0 1px 0 var(--ink); }
-.mp-title { position: relative; margin: 3px 0 4px; font: 800 calc(25px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .05em; color: var(--paper); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(255, 126, 182, .4); white-space: nowrap; }
+.mp-title { position: relative; margin: 3px 0 4px; font: 800 calc(25px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .05em; color: var(--paper); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(255, 126, 182, .4); white-space: normal; text-wrap: balance; overflow-wrap: normal; }   /* a long verse name wraps inside the plaque at Larger text instead of spilling past it */
 .mp-title::after { content: ""; position: absolute; left: 6%; right: 6%; bottom: -5px; height: 8px; background: linear-gradient(90deg, #7a66ff, #5ff5ff 50%, #ff7eb6); opacity: .85; -webkit-mask: var(--wave) center / 100% 100% no-repeat; mask: var(--wave) center / 100% 100% no-repeat; }
 .mp-prog { position: relative; width: 230px; height: 14px; margin: 9px auto 0; border-radius: 99px; overflow: hidden; background: rgba(8, 5, 22, .8); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .6), inset 0 2px 3px rgba(0, 0, 0, .6); }
 .mp-prog-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--gold-leaf); border-radius: 99px; transition: width .6s var(--ease-out); box-shadow: 0 0 8px rgba(245, 201, 106, .55); }

@@ -1105,7 +1105,7 @@
     { id: 'bestiary', label: 'Bestiary', icon: 'mask' },
     { id: 'history', label: 'History', icon: 'lantern' },
   ];
-  const TIER_NAME = { minion: 'Minion', normal: 'Creature', elite: 'Champion', boss: 'Boss' };
+  const TIER_NAME = { minion: 'Minion', normal: 'Creature', elite: 'Champion', boss: 'Keeper' };
   const KIND_NAME = { card: 'Card', relic: 'Treasure', gem: 'Gem' };
   const CHAPTER_SKY = { 1: 'golden', 2: 'night', 3: 'crimson' };
   const stoneIcon = (size) => UI.icon('stat', 'inkstone', size || 22, {}, 'mn-stone-ico');
@@ -1174,7 +1174,7 @@
       } else if (e.kind === 'relic') {
         const d = DATA.relics[e.id] || {};
         art = mk('div', { class: 'mn-tile-body' }, mk('div', { class: 'mn-tile-ico' }, UI.relic(e.id, { size: 'lg', tip: false })),
-          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: cap(d.rarity || '') + ' treasure' + (d.hero ? ' of ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' })));
+          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: (d.rarity === 'boss' ? 'Keeper' : cap(d.rarity || '')) + ' treasure' + (d.hero ? ' of ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' })));
       } else {
         const d = DATA.gems[e.id] || {};
         art = mk('div', { class: 'mn-tile-body' }, mk('div', { class: 'mn-tile-ico' }, UI.gem(e.id, { size: 'lg', tip: false })),
@@ -1439,7 +1439,7 @@
     const pane = mk('div', { class: 'mn-pane mn-hist-pane' });
     const hist = safe(() => META.history, []) || [];
     if (!hist.length) {
-      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No journeys yet' }), mk('p', { text: 'Finish a run, win or lose, and it will be remembered here: the heroes, the score, how far you got.' })));
+      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No journeys yet' }), mk('p', { text: 'Finish a journey, win or lose, and it will be remembered here: the heroes, the score, how far you got.' })));
       return { el: pane };
     }
     const best = hist.reduce((m, r) => Math.max(m, r.score || 0), 0);
@@ -1580,7 +1580,7 @@
     const defBtn = btn('Restore defaults', { kind: 'secondary', size: 'sm', onclick: () => { Object.keys(DATA.SETTINGS).forEach((k) => UI.setSetting(k, DATA.SETTINGS[k].def)); rebuild(); UI.toast('Settings restored', 'info'); } });
     const clearBtn = btn('Clear saved data', { kind: 'primary', size: 'sm', danger: true, onclick: () => clearAllData(() => rebuild()) });
     const dataRow = mode === 'overlay'
-      ? row('', 'Saved data', mk('span', { class: 'mn-set-hint', text: 'Leave the run from the title screen to clear it' }))
+      ? row('', 'Saved data', mk('span', { class: 'mn-set-hint', text: 'Leave the journey from the title screen to clear it' }))
       : row('clear', 'Saved data', clearBtn, 'Erases unlocks, history and your saved journey. Asks twice.');
 
     shakeRowEl = row('shake', 'Screen shake', shakeSl, 'Try it: the row shakes as you drag');
@@ -1588,9 +1588,9 @@
       mk('div', { class: 'mn-set-col' },
         group('Sound', row('musicVol', 'Music', music), row('sfxVol', 'Effects', sfxSl)),
         group('Motion', row('reduceMotion', 'Reduce motion', rmSeg), mk('div', { class: 'mn-set-note' }, rmNote), shakeRowEl, row('fastAnim', 'Animation speed', animSeg), row('damageNumbers', 'Damage numbers', dmg)),
-        group('Help', row('hints', 'Hints', hints, 'Short tips during your first run'))),
+        group('Help', row('hints', 'Hints', hints, 'Short tips during your first journey'))),
       mk('div', { class: 'mn-set-col' },
-        group('Display', row('textScale', 'Text size', tsSeg), mk('div', { class: 'mn-set-note' }, sample), row('colorblind', 'Colour-blind aids', cb, 'Patterns, and bigger glyphs on gems'), mk('div', { class: 'mn-set-note' }, glyphs), row('quality', 'Quality', qSeg, 'Auto lowers effects if the game runs slowly')),
+        group('Display', row('textScale', 'Text size', tsSeg), mk('div', { class: 'mn-set-note' }, sample), row('colorblind', 'Colour-blind aids', cb, 'Patterns, and bigger glyphs on gems'), mk('div', { class: 'mn-set-note' }, glyphs), row('quality', 'Quality', qSeg, 'Auto lowers effects if the game slows down')),
         group('Screen and data', row('fullscreen', 'Full screen', fsBtn), row('defaults', 'Defaults', defBtn), dataRow))));
     function rebuild() { const parent = root.parentNode; if (!parent) return; const next = settingsForm(mode); parent.replaceChild(next, root); }
     return root;
@@ -1925,7 +1925,7 @@
     const seals = mk('div', { class: 'mn-af-seals', role: 'img', 'aria-label': 'Tempo Trials 0 to 10; you have opened up to ' + tmax }, U.range(11).map((n) => mk('span', { class: 'mn-af-seal' + (n <= tmax ? ' on' : ''), text: n === 0 ? '0' : roman(n) })));
     const seed = dailySeed();
     add(wrap,
-      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Chimes' }), mk('span', { text: 'Earned after every run. Spend them in the Hall of Echoes.' }))),
+      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Chimes' }), mk('span', { text: 'Earned after every journey. Spend them in the Hall of Echoes.' }))),
       mk('div', { class: 'mn-af-card' }, mk('div', { class: 'mn-af-body' }, mk('b', { text: 'Tempo Trials' }), mk('span', { text: 'Win a journey to unlock the next trial. Each one stacks a new rule.' }), seals)),
       mk('div', { class: 'mn-af-card' }, UI.hanko('D', { size: 'lg' }), mk('div', {}, mk('b', { text: 'Daily Jam' }), mk('span', { text: (seed ? 'Today’s seed is ' + seed + '. ' : '') + 'Same heroes and map for everyone, once a day.' }))));
     return { el: wrap };
@@ -1936,7 +1936,7 @@
     { id: 'book', tip: /both heroes fall/, title: 'A Land Without Sound', kicker: 'Two heroes, three verses, one silence to break.', build: () => paintedCanvas(paintBook), rules: [
       'You lead two heroes across a grey, still land. A yokai called the Hush has eaten every sound.',
       'Cross three verses. Each ends with a boss, and the last one guards the Hush itself.',
-      'Every run is a new journey: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.'] },
+      'Every journey is a new one: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.'] },
     { id: 'map', tip: /^Waking a hex costs Echo/, title: 'Wake the Land', kicker: 'The land is silent. Your Echo wakes it.', build: () => paintedCanvas(paintMapDiagram), rules: [
       'Spend 1 Echo to wake a hex next to awake ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
       'Tap any awake hex to walk there. Stepping onto a fight or a fable starts it.',
@@ -1959,10 +1959,10 @@
       'Cut gems at camps, forges and shops. Replacing a gem destroys the old one, so choose well.'] },
     { id: 'places', tip: /A fable is a choice/, title: 'Camps, Shops and Fables', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
       'Camps let you rest, sharpen a card, cut gems or meditate for Echo. Peddlers sell cards, gems, treasures and card removal.',
-      'Fables are choices with a safe way, a gamble and often a price. Treasures bend the rules for the whole run.',
+      'Fables are choices with a safe way, a gamble and often a price. Treasures bend the rules for the whole journey.',
       'Champions guard treasure, the forge upgrades a card, and a gem cache lets you pick one gem.'] },
-    { id: 'after', title: 'After the Journey', kicker: 'Every run leaves something behind.', build: buildAfter, extra: 'keys', rules: [
-      'You earn Chimes after every run. Spend them in the Hall of Echoes on new cards, treasures and gems.',
+    { id: 'after', title: 'After the Journey', kicker: 'Every journey leaves something behind.', build: buildAfter, extra: 'keys', rules: [
+      'You earn Chimes after every journey. Spend them in the Hall of Echoes on new cards, treasures and gems.',
       'Win a journey to open Tempo Trials, stackable challenges. The Daily Jam is the same seed for everyone.',
       'Keys, if you play with a keyboard, are listed below. Everything also works by touch.'] },
   ];
@@ -2112,7 +2112,7 @@
         col.appendChild(UI.divider());
         if (run) {
           col.appendChild(it('secondary', 'Save and quit', { act: 'quit', sfx: QUIET, onclick: () => saveAndQuit() }));
-          const ab = it('secondary', 'Abandon run', { act: 'abandon', onclick: () => abandonRun() });
+          const ab = it('secondary', 'Abandon journey', { act: 'abandon', onclick: () => abandonRun() });
           ab.classList.add('mn-danger');
           col.appendChild(ab);
         } else col.appendChild(it('secondary', 'Back to title', { act: 'title', sfx: QUIET, onclick: () => { sfx('ui_back'); close(); UI.toTitle(); } }));

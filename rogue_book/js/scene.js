@@ -892,7 +892,7 @@ const SCENE = (() => {
     if (!a) a = S.actors.find((x) => x.kind === 'enemy' && x.tier === 'boss' && !x.gone) || null;
     const d = a && DATA.enemies ? DATA.enemies[a.def] : null;
     if (d) return { name: d.name || a.def, title: d.title || '' };
-    return { name: text && text !== 'BOSS' ? String(text) : 'BOSS', title: '' };
+    return { name: text && text !== 'BOSS' ? String(text) : 'KEEPER', title: '' };
   }
   function banner(text, kind) {
     if (!S.mounted) return;
@@ -2046,7 +2046,7 @@ const SCENE = (() => {
     const ha = rm ? 1 : EASE.outBack(clamp((tms - 700) / 260, 0, 1));
     ctx.globalAlpha = env * clamp(ha, 0, 1); ctx.save(); ctx.translate(96, y0 + 44); ctx.rotate(-0.12); ctx.scale(max(0.01, ha), max(0.01, ha));
     ctx.fillStyle = '#e8383d'; ctx.fillRect(-34, -20, 68, 40); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe1e1'; ctx.strokeRect(-30, -16, 60, 32);
-    T.inkText(ctx, 'BOSS', 0, 1, 22, { fill: '#fff8f0', stroke: '#7d1230', skew: 0, strokeW: 3 }); ctx.restore();
+    T.inkText(ctx, 'KEEPER', 0, 1, 15, { fill: '#fff8f0', stroke: '#7d1230', skew: 0, strokeW: 3 }); ctx.restore();
     ctx.restore();
   }
 

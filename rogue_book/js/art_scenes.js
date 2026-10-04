@@ -3224,17 +3224,28 @@
       for (let n = 0; n < 26; n++) disc(g, x + (r() - 0.5) * 60, top - 10 - r() * 90, 0.8 + r() * 2.4, A(ink, 0.5 * s[1] * (1 - n / 30)));
       for (let n = 0; n < 5; n++) { const a0 = (i % 2 ? PI + 0.5 : -0.5) + (r() - 0.5) * 1.1, l = 40 + r() * 46, x0 = x + (r() - 0.5) * 16, y0 = top + 10 + n * 26; tk.inkPath(g, [[x0, y0], [x0 + Math.cos(a0) * l * 0.5, y0 + Math.sin(a0) * l * 0.5 - 8], [x0 + Math.cos(a0) * l, y0 + Math.sin(a0) * l + 6]], { w: 5, color: A(ink, 0.34 * s[1] + 0.08), taper: 0.5, taperStart: 0.05, wobble: 0.3, seed: i * 9 + n }); }
     });
-    // grey wet blots in the top corners, running down
-    tk.inkBlot(g, 30, -10, 150, { seed: 3, color: ash, drips: 6, jag: 0.32 });
-    tk.inkBlot(g, 1262, -14, 128, { seed: 7, color: ash, drips: 5, jag: 0.32 });
-    tk.inkBlot(g, 380, -30, 70, { seed: 11, color: ash, drips: 3, jag: 0.3 });
-    for (let i = 0; i < 14; i++) blob(g, (i % 2 ? 40 : 1240) + (r() - 0.5) * 140, 200 + r() * 460, 60 + r() * 60, 40 + r() * 50, ink, 0.1);
+    // Hush materials: grey felt strips hanging from the top, stitched, with ragged hems and frost flecks, and wadding clumps in the corners
+    [[60, 150, 56], [190, 90, 40], [330, 120, 34], [940, 70, 36], [1090, 140, 44], [1210, 190, 58]].forEach((d, i) => {
+      const x = d[0], len = d[1], wd = d[2], hem = [];
+      for (let k = 0; k <= 6; k++) hem.push([x + wd / 2 - (k / 6) * wd, len + (k % 2 ? 9 : -4) + r() * 8]);
+      tk.celFill(g, [[x - wd / 2, -8], [x + wd / 2, -8]].concat(hem), i % 2 ? '#a6a3b8' : '#9794ab', { line: 2, depth: 3, hi: false, shadow: '#6f6b86', tension: 0.05, rim: '#f2f0f6', rimW: 1, rimAlpha: 0.4 });
+      for (let y = 14; y < len - 8; y += 12) { g.fillStyle = A('#f2f0f6', 0.55); g.fillRect(x - wd / 2 + 5, y, 4, 1.5); g.fillRect(x + wd / 2 - 9, y, 4, 1.5); }
+      for (let n = 0; n < 7; n++) g.fillRect(x + (r() - 0.5) * wd, r() * len, 2 + r() * 3, 1);
+    });
+    [[20, 14, 1], [1262, 10, -1], [420, -6, 0.6]].forEach((c, i) => {
+      for (let n = 0; n < 16; n++) {
+        const a = r() * TAU, d = r() * 70 * c[2], x = c[0] + Math.cos(a) * d, y = c[1] + Math.abs(Math.sin(a)) * d * 0.7, rad = 14 + r() * 20;
+        blob(g, x, y + 3, rad * 2, rad * 1.6, '#6f6b86', 0.16); blob(g, x, y, rad * 2, rad * 1.5, r() < 0.5 ? '#e6e4ee' : '#cfcdd8', 0.85);
+        blob(g, x - rad * 0.3, y - rad * 0.3, rad, rad * 0.7, '#ffffff', 0.5);
+      }
+    });
+    for (let i = 0; i < 40; i++) { const x = (i % 2 ? 40 : 1240) + (r() - 0.5) * 140, y = 200 + r() * 460; g.fillStyle = A(r() < 0.6 ? '#f2f0f6' : '#8e8aa3', 0.5); g.fillRect(x, y, 2 + r() * 4, 1.2); }
   }
   function dfBlank(g) {
-    // grey fog patches eating the picture from the top and the inside edges (the title's Hush painter)
-    g.save(); g.globalAlpha = 0.8;
-    hushSpots(g, [[640, -30, 520, 130], [180, 250, 90, 160], [1110, 300, 100, 170], [560, 590, 200, 80], [880, 590, 240, 100]], 1, 40, 'df-hush');
-    g.restore();
+    // soft grey felt-wool fog banks eating the picture from the top and the inside edges
+    [[640, -30, 520, 130], [180, 250, 90, 160], [1110, 300, 100, 170], [560, 590, 200, 80], [880, 590, 240, 100]].forEach((d) => {
+      for (let k = 0; k < 4; k++) blob(g, d[0], d[1], d[2] * (2.2 - k * 0.4), d[3] * (2.2 - k * 0.4), '#d6d4df', 0.22);
+    });
   }
   function dfPool(g) {
     const r = R('df-pool');
@@ -3279,14 +3290,11 @@
       g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = A('#8e8aa3', 0.46); g.fillRect(190, 480, 280, 140); g.restore();
     }),
     layer('pool', { x: 0, y: 600, w: DW, h: 120 }, 0, dfPool),
-    // colour running out of the world: grey drips hanging from the top edge, creeping down again and again
+    // loose grey Hush threads hanging from the top edge, swaying very slowly
     anim((ctx, T) => {
       DF_DRIPS.forEach((d, i) => {
-        const u = ((T.tt / d.T + d.ph) % 1 + 1) % 1, grow = ss(0, 0.8, u), len = 24 + d.len * grow, x = d.x - T.par * 0.04;
-        tk.inkPath(ctx, [[x, -8], [x + Math.sin(i) * 3, len * 0.5], [x, len]], { w: d.w, color: A('#8e8aa3', 0.92), taper: 0.5, taperStart: 0, pressure: 'flat', wobble: 0.2, seed: i, step: 8 });
-        ctx.fillStyle = A('#8e8aa3', 0.94); ctx.beginPath(); ctx.arc(x, len + d.w * 0.4, d.w * (0.9 + 0.5 * grow), 0, TAU); ctx.fill();
-        ctx.fillStyle = A('#ffffff', 0.7); ctx.beginPath(); ctx.ellipse(x - d.w * 0.3, len + d.w * 0.1, d.w * 0.26, d.w * 0.5, 0.3, 0, TAU); ctx.fill();
-        if (u > 0.8) { const f = (u - 0.8) / 0.2, fy = len + f * f * 260; ctx.save(); ctx.globalAlpha = 1 - f; ctx.fillStyle = '#8e8aa3'; ctx.beginPath(); ctx.arc(x, fy, d.w * 0.8, 0, TAU); ctx.fill(); ctx.restore(); }
+        const len = 60 + d.len * 0.7, x = d.x - T.par * 0.04, sw = Math.sin(T.tt / d.T * TAU + d.ph * TAU) * 6;
+        tk.inkPath(ctx, [[x, -8], [x + sw * 0.4, len * 0.5], [x + sw, len]], { w: 1.6 + d.w * 0.12, color: A(i % 2 ? '#8e8aa3' : '#f2f0f6', 0.8), taper: 0.3, taperStart: 0, pressure: 'flat', wobble: 0.1, seed: i, step: 8 });
       });
     }),
     layer('bachi', { x: 780, y: 540, w: 500, h: 180 }, 0.06, dfInstruments),

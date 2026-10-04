@@ -917,7 +917,7 @@
         if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'Nothing new this time. The next journey might be the one.' }));
         stones.appendChild(list);
       } else {
-        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Chimes were paid.' }));
+        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This journey was not recorded, so no Chimes were paid.' }));
       }
       const stonesCard = lacquer('go-stonescard', 'The Land Remembers', stones);
       root.appendChild(mk('div', { class: 'go-right' }, scoreCard, stonesCard));
@@ -1013,7 +1013,7 @@
     spaced(ctx, 'ECHOWAKE', cx, py + 52, 5);
     ctx.font = '800 11px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = '#a91d2c';
-    spaced(ctx, d.win === false ? 'THE SONG FADED IN VERSE ' + (d.chapter || 1) : 'THE HUSH, BROKEN', cx, py + 72, 3);
+    spaced(ctx, d.win === false ? 'THE SONG FADED IN VERSE ' + (d.chapter || 1) : 'THE HUSH, LET GO', cx, py + 72, 3);
     const rule = ctx.createLinearGradient(px + 30, 0, px + pw - 30, 0);
     rule.addColorStop(0, 'rgba(185,138,47,0)'); rule.addColorStop(0.5, '#b98a2f'); rule.addColorStop(1, 'rgba(185,138,47,0)');
     ctx.fillStyle = rule; ctx.fillRect(px + 30, py + 82, pw - 60, 3);
@@ -1097,7 +1097,7 @@
   function buildEpilogue(S) {
     const x = S.extra, root = S.root;
     const lore = loreOf('victory');
-    const title = lore ? lore.title : 'The Hush, Broken';
+    const title = lore ? lore.title : 'The Hush Lets Go';
     const text = lore ? lore.text : 'The last note rings out, and is left to echo on purpose. The land begins to sing on its own.';
     const dropCap = /^[A-Za-z]/.test(text);
     const words = String(title).split(' ');
@@ -1183,7 +1183,7 @@
       if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'No new unlocks this time. Spend your Chimes in the Hall of Echoes.' }));
     } else {
       foot.appendChild(mk('div', { class: 'vc-stone' }));
-      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Chimes were paid.' }));
+      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This journey was not recorded, so no Chimes were paid.' }));
     }
     const stonesCard = lacquer('vc-newcard', 'Newly Unlocked', list);
 
