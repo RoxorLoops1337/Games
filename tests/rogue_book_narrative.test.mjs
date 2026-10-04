@@ -1,10 +1,10 @@
-// NARRATIVE: the fables (data_events.js) and the meta content (data_meta.js): achievements, Ink Trials, tips, lore and barks.
+// NARRATIVE: the fables (data_events.js) and the meta content (data_meta.js): achievements, Tempo Trials, tips, lore and barks.
 //
 // Three layers, each honest about what it can and cannot see:
 //   1. STRUCTURE   what DATA.validate and DATA.audit assert, repeated here so a regression names this suite, plus every rule of
 //                  CONTENT_SPEC 6 that the validator cannot express (safe choice, `once` only for lasting change, fixed ids only,
 //                  fights only from the event's own chapter, no dead or unreachable flags, run-op and req coverage, text hygiene).
-//   2. MEANING     the Ink Trial staircase gets a difficulty score and must never drop; every trial's text must quote its own numbers;
+//   2. MEANING     the Tempo Trial staircase gets a difficulty score and must never drop; every trial's text must quote its own numbers;
 //                  achievements must read stats that COMBAT, RUN or META really write; barks must sound like their hero.
 //   3. INTEGRATION when the real RUN, MAP and META exist (they do once their files are written) every outcome of every choice is
 //                  replayed through RUN.applyOps, every fable is proven reachable through RUN.pickEvent, and every achievement is
@@ -176,7 +176,7 @@ t.test('run op coverage: every run op, every req key, every when key, every who 
   ['ink', 'gold'].forEach((k) => { let neg = false; walkRun((x) => { if (x.op === k && x.n < 0) neg = true; }); t.ok(neg, `${k} is spent somewhere`); });
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'fight' && x.win)), 'a fight uses win ops');
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'fight' && x.tier === 'elite')), 'a fight uses the elite table');
-  t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'removeCard' && x.filter && x.filter.type === 'curse')), 'a fable lets you feed a curse to the Blank');
+  t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'removeCard' && x.filter && x.filter.type === 'curse')), 'a fable lets you feed a curse to the Hush');
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'upgradeCard' && x.filter && x.filter.hero)), 'a fable upgrades a specific hero card');
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'upgradeCard' && x.random)), 'a fable upgrades at random');
   t.ok(evs.some((e) => opsOf(e).some((x) => x.op === 'cardReward' && x.rarity)), 'a fable offers a rarity-locked card reward');
@@ -192,7 +192,7 @@ t.test('costs are honest: a certain price is shown, backed by a req, and every c
     }
     if (c.req && c.req.gold) t.ok(c.out.some((o) => goldDelta(o) < 0), `${w}: a gold requirement means gold can be spent`);
     const certainInk = Math.min(...c.out.map((o) => -A(o.ops).reduce((s, x) => s + (x.op === 'ink' && x.n < 0 ? x.n : 0), 0)));
-    if (certainInk > 0) t.ok(c.cost && /ink/i.test(c.cost), `${w}: a certain Ink price is shown in cost`);
+    if (certainInk > 0) t.ok(c.cost && /echo/i.test(c.cost), `${w}: a certain Echo price is shown in cost`);
     if (c.cost && /lose a card/i.test(c.cost)) t.ok(c.out.every((o) => A(o.ops).some((x) => x.op === 'removeCard')), `${w}: "Lose a card" really removes one`);
     if (c.cost && /curse/i.test(c.cost)) {
       const adds = (o) => A(o.ops).some((x) => x.op === 'addCurse');
@@ -282,7 +282,7 @@ t.test('hero moments: one gated fable per hero, a hero choice for every hero, an
   });
 });
 
-t.test('scenes suit the event: shops for merchants, defeat for the Blank, boss scenes for dread', () => {
+t.test('scenes suit the event: shops for merchants, defeat for the Hush, boss scenes for dread', () => {
   const scenes = new Set(evs.map((e) => e.art.scene));
   ['ch1', 'ch2', 'ch3', 'shop', 'event', 'camp', 'paper', 'treasure', 'defeat', 'boss3'].forEach((s) => t.ok(scenes.has(s), `scene ${s} is used`));
   evs.filter((e) => chapterOf(e) >= 1).forEach((e) => t.ok(['ch' + chapterOf(e), 'shop', 'event', 'camp', 'paper', 'defeat', 'boss' + chapterOf(e), 'treasure'].indexOf(e.art.scene) >= 0, `${e.id}: scene ${e.art.scene} does not belong to another chapter`));
@@ -309,6 +309,26 @@ t.test('text hygiene: printable ASCII only, no dashes, no line breaks, no double
   const words = strings.filter(([w]) => /^event .*|^lore /.test(w)).map(([, s]) => s).join(' ');
   t.ok(!/\b(very very very|really really)\b/i.test(words), 'no stuttering intensifiers');
   t.ok(!/\b(the the|a a|is is|to to)\b/i.test(words), 'no doubled words');
+});
+
+t.test('old theme guard: no ink, brush, page, book, author, blank, quill, scroll, write or paint words in prose fields', () => {
+  const OLD = /\b(ink|inks|inked|inky|brush|brushes|pages?|books?|author|blank|quill|scrolls?|write|writes|writing|written|wrote|paint|painted|painting)\b/i;
+  const prose = [];
+  evs.forEach((e) => {
+    prose.push(['event ' + e.id + ' title', e.title], ['event ' + e.id + ' text', e.text]);
+    e.choices.forEach((c, ci) => {
+      prose.push([`event ${e.id} label ${ci}`, c.label]);
+      if (c.cost) prose.push([`event ${e.id} cost ${ci}`, c.cost]);
+      c.out.forEach((o, oi) => prose.push([`event ${e.id} outcome ${ci}.${oi}`, o.text]));
+    });
+  });
+  achs.forEach((a) => prose.push(['ach ' + a.id + ' name', a.name], ['ach ' + a.id + ' text', a.text]));
+  trials.forEach((x) => prose.push(['trial ' + x.id + ' name', x.name], ['trial ' + x.id + ' text', x.text]));
+  stories.forEach((l) => prose.push(['lore ' + l.id + ' title', l.title], ['lore ' + l.id + ' text', l.text]));
+  barks.forEach((l) => Object.keys(l.lines).forEach((k) => l.lines[k].forEach((line, i) => prose.push([`${l.id}.${k}[${i}]`, line]))));
+  DATA.tips.forEach((tip, i) => prose.push(['tip ' + i, tip]));
+  t.ok(prose.length > 600, `a lot of prose to scan (${prose.length} strings)`);
+  prose.forEach(([w, str]) => t.ok(!OLD.test(str || ''), `${w}: no old-theme word`));
 });
 
 // =================================================================================================== 2. achievements
@@ -381,7 +401,7 @@ const HARM = { enemyHp: 40, eliteHp: 12, bossHp: 25, enemyDmg: 60, goldMul: -12,
 const score = (mods) => Object.keys(mods).reduce((s, k) => s + HARM[k] * mods[k], 0);
 const cumulative = (n) => { const sum = {}; trials.filter((x) => x.level <= n).forEach((x) => Object.keys(x.mods).forEach((k) => { sum[k] = (sum[k] || 0) + x.mods[k]; })); return sum; };
 
-t.test('Ink Trials: ten levels, ids and names, own increments, distinct headlines, every trial mod used', () => {
+t.test('Tempo Trials: ten levels, ids and names, own increments, distinct headlines, every trial mod used', () => {
   t.eq(trials.length, 10, 'ten trials');
   t.deep(trials.map((x) => x.level), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'levels 1 to 10');
   trials.forEach((x) => {
@@ -397,7 +417,7 @@ t.test('Ink Trials: ten levels, ids and names, own increments, distinct headline
   L.trialMods.forEach((k) => t.ok(used.has(k), `trial mod ${k} appears in some level`));
 });
 
-t.test('Ink Trials get monotonically harder, and the last one is punishing but fair', () => {
+t.test('Tempo Trials get monotonically harder, and the last one is punishing but fair', () => {
   let prev = 0;
   const incs = [];
   trials.forEach((x) => {
@@ -417,7 +437,7 @@ t.test('Ink Trials get monotonically harder, and the last one is punishing but f
   t.ok(score(cumulative(10)) < 100, 'and the total stays fair');
 });
 
-t.test('Ink Trials fold into fair final numbers and never break the Ink budget', () => {
+t.test('Tempo Trials fold into fair final numbers and never break the Ink budget', () => {
   const E = DATA.ECONOMY;
   trials.forEach((x) => {
     const deltas = DATA.trialDeltas(x.level), want = cumulative(x.level);
@@ -449,9 +469,9 @@ t.test('each trial text quotes its own numbers, so the rule and the mod cannot d
     goldMul: (v, s) => new RegExp(pct(v) + '% less gold').test(s),
     enemyHp: (v, s) => new RegExp(pct(v) + '% more HP').test(s),
     healMul: (v, s) => new RegExp(pct(v) + '% less').test(s),
-    startInk: (v, s) => new RegExp(Math.abs(v) + ' less Ink').test(s),
+    startInk: (v, s) => new RegExp(Math.abs(v) + ' less Echo').test(s),
     enemyDmg: (v, s) => new RegExp(pct(v) + '% (more damage|harder)').test(s),
-    wellInk: (v, s) => new RegExp('wells give ' + Math.abs(v) + ' less Ink').test(s),
+    wellInk: (v, s) => new RegExp('bells give ' + Math.abs(v) + ' less Echo').test(s),
     reviveFrac: (v, s) => new RegExp(Math.round((E.reviveFrac + v) * 100) + '% HP, not ' + Math.round(E.reviveFrac * 100) + '%').test(s),
     priceMul: (v, s) => new RegExp('charge ' + pct(v) + '% more').test(s),
     startGold: (v, s) => new RegExp(Math.abs(v) + ' less gold').test(s),
@@ -473,7 +493,7 @@ t.test('tips: 30, short, unique, plain sentences, and they only claim mechanics 
     t.ok(!/\d/.test(s.replace(/\bX\b/, '')), `tip ${i}: no hand-typed numbers that tuning could change`);
   });
   const all = DATA.tips.join(' ').toLowerCase();
-  ['ink', 'brush', 'swap', 'block', 'poison', 'bind', 'gem', 'camp', 'forge', 'shop', 'curse', 'fable', 'treasure', 'retain', 'exhaust', 'trial', 'daily', 'vulnerable', 'weak', 'front', 'back', 'downed', 'bloom'].forEach((w) => t.ok(all.indexOf(w) >= 0, `a tip covers ${w}`));
+  ['echo', 'song', 'swap', 'block', 'poison', 'bind', 'gem', 'camp', 'forge', 'shop', 'curse', 'fable', 'treasure', 'retain', 'exhaust', 'trial', 'daily', 'vulnerable', 'weak', 'front', 'back', 'downed', 'bloom'].forEach((w) => t.ok(all.indexOf(w) >= 0, `a tip covers ${w}`));
 });
 
 // =================================================================================================== lore
@@ -491,30 +511,31 @@ t.test('lore: every fixed id, titles and text within the page, one paragraph eac
   t.eq(new Set(stories.map((s) => s.text)).size, stories.length, 'page texts are unique');
 });
 
-t.test('lore is the spine: the Author, the Blank, the Editor, each keeper who held on, each hero and why they were written', () => {
+t.test('lore is the spine: the Singer, the Hush, the Conductor, each keeper who held on, each hero and why they were sung', () => {
   const T = (id) => DATA.lore[id].text;
-  t.ok(/Author/.test(T('intro')) && /Blank/.test(T('intro')), 'the intro names the Author and the Blank');
-  t.ok(/two characters/.test(T('intro')), 'and the two who wake');
-  t.ok(/Grove/.test(T('ch1_intro')) && /fox/.test(T('ch1_intro')) && /nine/.test(T('ch1_intro')), 'chapter 1 introduces the grove and the fox');
-  t.ok(/Lantern City/.test(T('ch2_intro')) && /silk/.test(T('ch2_intro')) && /holds/.test(T('ch2_intro')), 'chapter 2 introduces the city and the one who holds it together');
-  t.ok(/Citadel/.test(T('ch3_intro')) && /red pen/.test(T('ch3_intro')) && /Keeper of the Last Page/.test(T('ch3_intro')), 'chapter 3 introduces the citadel and the Keeper');
-  t.ok(/Kuzunoha/.test(T('ch1_clear')) && /walls/.test(T('ch1_clear')), 'the fox held the words and wrote walls');
+  t.ok(/Singer/.test(T('intro')) && /Hush/.test(T('intro')), 'the intro names the Singer and the Hush');
+  t.ok(/two voices/.test(T('intro')), 'and the two who wake');
+  t.ok(/yamabiko/.test(T('intro')) && /held a breath/.test(T('intro')), 'the Hush is a held breath in the shape of a yamabiko');
+  t.ok(/Grove/.test(T('ch1_intro')) && /fox/.test(T('ch1_intro')) && /nine/.test(T('ch1_intro')), 'verse 1 introduces the grove and the fox');
+  t.ok(/Lantern City/.test(T('ch2_intro')) && /silk/.test(T('ch2_intro')) && /holds/.test(T('ch2_intro')), 'verse 2 introduces the city and the one who holds it together');
+  t.ok(/Citadel/.test(T('ch3_intro')) && /red baton/.test(T('ch3_intro')) && /Keeper of the Last Note/.test(T('ch3_intro')), 'verse 3 introduces the citadel and the Keeper');
+  t.ok(/Kuzunoha/.test(T('ch1_clear')) && /walls/.test(T('ch1_clear')), 'the fox held the sounds and sang walls');
   t.ok(/Jorogumo/.test(T('ch2_clear')) && /kept/.test(T('ch2_clear')), 'the spider held the people and kept them');
-  t.ok(/Editor/.test(T('victory')) && /perfect/.test(T('victory')) && /Author/.test(T('victory')) && /again/.test(T('victory')), 'the victory reveals the Editor is the Author and the book asks to be read again');
-  t.ok(/the last line together/.test(T('victory')) && /open/.test(T('victory')), 'the ending is written together and left open');
-  t.ok(/fade|pale|white/.test(T('defeat')) && /turns back/.test(T('defeat')) && !/dead|die|kill/i.test(T('defeat')), 'defeat is soft: the page turns back, nobody dies');
-  t.ok(/silver hair/.test(T('ch1_clear')) && /shrine/.test(T('ch1_clear')), 'the end of chapter 1 points at Suzu, who unlocks now');
-  t.ok(/storm|thunder/.test(T('ch2_clear')) && /knuckles/.test(T('ch2_clear')), 'the end of chapter 2 points at Raiga, who unlocks now');
-  const hero = { hanae: /first page|hero/, kuro: /footnote|margin/, suzu: /shrine|binding|thread/, raiga: /thunderstorm|laugh/ };
+  t.ok(/Conductor/.test(T('victory')) && /perfect/.test(T('victory')) && /Singer/.test(T('victory')) && /again/.test(T('victory')), 'the victory reveals the Conductor speaks with the Singer\'s voice (he is the Singer\'s doubt) and the land asks to be sung again');
+  t.ok(/the last line together/.test(T('victory')) && /open/.test(T('victory')), 'the ending is sung together and left open');
+  t.ok(/fade|grey/.test(T('defeat')) && /comes back around/.test(T('defeat')) && !/dead|die|kill/i.test(T('defeat')), 'defeat is soft: the beat comes back around, nobody dies');
+  t.ok(/silver hair/.test(T('ch1_clear')) && /shrine/.test(T('ch1_clear')), 'the end of verse 1 points at Suzu, who unlocks now');
+  t.ok(/storm|thunder/.test(T('ch2_clear')) && /knuckles/.test(T('ch2_clear')), 'the end of verse 2 points at Raiga, who unlocks now');
+  const hero = { hanae: /first bar|hero/, kuro: /harmony/, suzu: /shrine|bell|tune/, raiga: /thunderstorm|laugh/ };
   L.heroIds.forEach((h) => {
     const l = DATA.lore['hero_' + h];
     t.ok(new RegExp(h[0].toUpperCase() + h.slice(1)).test(l.text) && l.title.toLowerCase().indexOf(h) === 0, `hero_${h} is about ${h}`);
-    t.ok(/Author/.test(l.text), `hero_${h} says why the Author wrote them`);
+    t.ok(/Singer/.test(l.text), `hero_${h} says why the Singer sang them`);
     t.ok(hero[h].test(l.text), `hero_${h} carries their signature imagery`);
     t.ok(l.title.indexOf(DATA.heroes[h].title.replace(/^The /, '')) >= 0, `hero_${h} title carries the hero title from DATA.heroes`);
   });
   const all = stories.map((s) => s.text).join(' ');
-  t.ok(all.split('Blank').length >= 6, 'the Blank recurs through the pages');
+  t.ok(all.split('Hush').length >= 6, 'the Hush recurs through the pages');
   t.ok(!/Hanae|Kuro|Suzu|Raiga/.test([T('intro'), T('ch1_intro'), T('ch2_intro'), T('ch3_intro'), T('ch1_clear'), T('ch2_clear'), T('victory'), T('defeat')].join(' ')), 'the shared story pages never name a hero (the party is chosen by the player)');
   t.ok(all.length > 6000, 'a lot of story');
 });
@@ -539,7 +560,7 @@ t.test('barks: five lines for each of start, hurt, kill, down, win and swap, at 
   t.ok(frac('raiga', /friend|thunder|storm|boom/i) >= 0.4, 'and speaks of friends and thunder');
   t.ok(frac('suzu', /!/) <= 0.03, 'Suzu never raises her voice');
   t.ok(frac('suzu', /moon|gently|rest|peace|breathe|thread|steady|together|kind|sorry|truly|forgive|stay|careful|thank|quiet|watch|hold|light|worry|page/i) >= 0.5, 'Suzu is soft and steady');
-  t.ok(frac('kuro', /chapter|verse|ink|page|footnote|margin|scene|story|edit|draft|read|book|sentence|plot|author|note|curtain|spoiler|revis|review|mark|line|write|written|spotlight|action|cross|struck|citation/i) >= 0.6, 'Kuro is bookish');
+  t.ok(frac('kuro', /verse|chorus|flute|note|\bbars?\b|scene|song|sing|sung|tune|tempo|key|crescendo|cadence|coda|score|solo|spotlight|curtain|applause|perform|play|listen|\brest\b|melody|harmony|rhythm|beat|encore|review|singer|echo|reprise|seats|musical/i) >= 0.6, 'Kuro is musical');
   t.ok(frac('kuro', /!/) <= 0.05, 'and teases with a straight face');
   t.ok(frac('hanae', /!/) <= 0.05, 'Hanae is dry');
   t.ok(frac('hanae', /ponytail|brilliant|excellen|petals|edited|hero|flawless|pride|win|first|front|good spot|next|collection|difficult|lucky|bold|rude/i) >= 0.4, 'and proud');

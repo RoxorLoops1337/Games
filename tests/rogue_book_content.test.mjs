@@ -717,7 +717,7 @@ t.test('the story says what the ops do: numbers written as words match the gold 
       const lm = /\b(\w+) gold\b/i.exec(c.label);
       if (lm && num(lm[1]) !== undefined && (!c.req || c.req.gold !== num(lm[1]))) bad.push(`${e.id}[${ci}]: label "${c.label}" names a price that is not req.gold`);
       if (/\(fight\)/i.test(c.label) && !c.out.some((o) => A(o.ops).some((x) => x.op === 'fight'))) bad.push(`${e.id}[${ci}]: label says fight but no outcome fights`);
-      if (/\b1 Ink\b|\b2 Ink\b/.test(c.cost || '')) { const n = Number(/(\d) Ink/.exec(c.cost)[1]); if (!c.out.every((o) => A(o.ops).some((x) => x.op === 'ink' && x.n === -n))) bad.push(`${e.id}[${ci}]: cost "${c.cost}" is not charged in every outcome`); }
+      if (/\b1 Echo\b|\b2 Echo\b/.test(c.cost || '')) { const n = Number(/(\d) Echo/.exec(c.cost)[1]); if (!c.out.every((o) => A(o.ops).some((x) => x.op === 'ink' && x.n === -n))) bad.push(`${e.id}[${ci}]: cost "${c.cost}" is not charged in every outcome`); }
     });
     // a price quoted in the text of the event itself ("WISHES, 10 GOLD", "Twenty gold") matches some choice
     for (const m of e.text.matchAll(/\b(\w+) gold\b/gi)) { const n = num(m[1]); if (n !== undefined && !e.choices.some((c) => c.req && c.req.gold === n)) bad.push(`${e.id}: the event text quotes ${m[0]} but no choice asks for it`); }
@@ -851,7 +851,7 @@ t.test('Ink Trials: each text quotes its own mods, the staircase never gets easi
       t.ok(cands.some((c) => tr.text.indexOf(c) >= 0), `${tr.id}: the text "${tr.text}" quotes the ${k} number (${cands.join(' or ')})`);
       const harder = k === 'enemyHp' || k === 'eliteHp' || k === 'bossHp' || k === 'enemyDmg' || k === 'priceMul' || k === 'curses' ? v > 0 : v < 0;
       t.ok(harder, `${tr.id}: ${k} ${v} makes the game harder`);
-      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Ink/, wellInk: /less Ink/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/ };
+      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Echo/, wellInk: /less Echo/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/ };
       if (wordsFor[k]) t.ok(wordsFor[k].test(tr.text), `${tr.id}: the text uses the right direction for ${k}: ${tr.text}`);
     });
     t.ok(tr.text.length <= 100 && /^[A-Z]/.test(tr.text) && /[.]$/.test(tr.text) && !DASH.test(tr.text), `${tr.id}: a tidy sentence`);
@@ -859,7 +859,7 @@ t.test('Ink Trials: each text quotes its own mods, the staircase never gets easi
   const headlines = trials.map((x) => Object.keys(x.mods).sort().join('+'));
   t.eq(new Set(headlines).size >= 9, true, 'each level has its own headline');
   const d10 = DATA.trialDeltas(10);
-  t.ok(DATA.foldMods([d10]).startInk >= 1 && DATA.foldMods([d10]).wellInk >= 1, 'trial 10 never takes Ink to zero');
+  t.ok(DATA.foldMods([d10]).startInk >= 1 && DATA.foldMods([d10]).wellInk >= 1, 'trial 10 never takes Echo to zero');
 });
 
 t.test('tips, lore and barks: limits, no dashes, no repeats, and every hero speaks in their own lines', () => {
