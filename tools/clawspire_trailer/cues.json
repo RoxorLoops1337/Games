@@ -1,0 +1,243 @@
+{
+ "_": "Shared clock for the vertical cut (shots_v.js) and audio.py. 144 BPM: beat 0.41667 s (25 frames at 60 fps), 60 beats = 25.0 s. Times are in beats; t = beat * 60 / 144. The 16:9 cut keeps its own frozen sheet (cues_169.json + audio_169.py).",
+ "bpm": 144,
+ "dur": 25.0,
+ "sections": [
+  {
+   "id": "open",
+   "b0": 0,
+   "b1": 4,
+   "pace": "fast",
+   "what": "INSERT COIN, a coin drops in (b1), the title claw dives and grabs the star (b3)"
+  },
+  {
+   "id": "title",
+   "b0": 4,
+   "b1": 10,
+   "pace": "hold",
+   "what": "the title phone flies in over the neon arcade, zoom-through (b5 to b6), 2.0 slams under the real logo (b6), THE BIG UPDATE (b6.25 to b10)"
+  },
+  {
+   "id": "hits",
+   "b0": 10,
+   "b1": 21,
+   "pace": "hold",
+   "what": "SEE EVERY HIT + 'Every hit, one by one': the resolve row uncut, GO! on b11, five cards hit on b12.5, 14.25, 16, 17.75, 19.5 with a counter; the music breathes b13.5 to b17.5, then builds"
+  },
+  {
+   "id": "cabinet",
+   "b0": 21,
+   "b1": 29,
+   "pace": "hold",
+   "what": "THE CABINET IS ALIVE: POWER SURGE lands b21.5, COIN SHOWER b24, then LAMP FEVER (b26 to b29)"
+  },
+  {
+   "id": "build",
+   "b0": 29,
+   "b1": 35.5,
+   "pace": "hold+fast",
+   "what": "BUILD YOUR WAY over the combo relic pick (Weapon Rack taken on b31), then the 8 claw types land into a 4x2 grid on 8ths (b31.5 to b35), 8 CLAW TYPES"
+  },
+  {
+   "id": "capsule",
+   "b0": 35.5,
+   "b1": 42,
+   "pace": "fast+hold",
+   "what": "the capsule taps up (b36, 36.5, 37), LEGENDARY burst b37.5 into slow motion, CAPSULE FEVER (b38 to b42)"
+  },
+  {
+   "id": "halloween",
+   "b0": 42,
+   "b1": 45.5,
+   "pace": "fast",
+   "what": "bats wipe (b41.5) into CLAW-O-WEEN: moon, pumpkins, the Claw-o-ween title"
+  },
+  {
+   "id": "depths",
+   "b0": 45.5,
+   "b1": 48.5,
+   "pace": "fast",
+   "what": "NEON DEPTHS punch: the Drowned Jukebox at high tide"
+  },
+  {
+   "id": "coop",
+   "b0": 48.5,
+   "b1": 53,
+   "pace": "hold",
+   "what": "PLAY TOGETHER / ONLINE CO-OP: two whole phones side by side, the link sparks on 8ths; tape stop b52.25"
+  },
+  {
+   "id": "logo",
+   "b0": 53,
+   "b1": 60,
+   "pace": "hold",
+   "what": "CLAWSPIRE 2.0 over the moon and bats, PLAY FREE IN YOUR BROWSER (b53.75), games-71g.pages.dev/clawspire (b54), dead still from 24.0 s"
+  }
+ ],
+ "hits": [
+  {
+   "b": 1,
+   "k": "coin"
+  },
+  {
+   "b": 3,
+   "k": "grab"
+  },
+  {
+   "b": 4,
+   "k": "drop"
+  },
+  {
+   "b": 5,
+   "k": "through"
+  },
+  {
+   "b": 6,
+   "k": "twoh"
+  },
+  {
+   "b": 8,
+   "k": "sub"
+  },
+  {
+   "b": 10,
+   "k": "whip"
+  },
+  {
+   "b": 11,
+   "k": "go"
+  },
+  {
+   "b": 12.5,
+   "k": "hit"
+  },
+  {
+   "b": 14.25,
+   "k": "hit"
+  },
+  {
+   "b": 16,
+   "k": "hit"
+  },
+  {
+   "b": 17.75,
+   "k": "hit"
+  },
+  {
+   "b": 19.5,
+   "k": "hit"
+  },
+  {
+   "b": 21,
+   "k": "cabinet"
+  },
+  {
+   "b": 21.5,
+   "k": "surge"
+  },
+  {
+   "b": 24,
+   "k": "coins"
+  },
+  {
+   "b": 26,
+   "k": "fever"
+  },
+  {
+   "b": 29,
+   "k": "build"
+  },
+  {
+   "b": 31,
+   "k": "pick"
+  },
+  {
+   "b": 31.5,
+   "k": "claw"
+  },
+  {
+   "b": 32,
+   "k": "claw"
+  },
+  {
+   "b": 32.5,
+   "k": "claw"
+  },
+  {
+   "b": 33,
+   "k": "claw"
+  },
+  {
+   "b": 33.5,
+   "k": "claw"
+  },
+  {
+   "b": 34,
+   "k": "claw"
+  },
+  {
+   "b": 34.5,
+   "k": "claw"
+  },
+  {
+   "b": 35,
+   "k": "claw"
+  },
+  {
+   "b": 36,
+   "k": "tier"
+  },
+  {
+   "b": 36.5,
+   "k": "tier"
+  },
+  {
+   "b": 37,
+   "k": "tier"
+  },
+  {
+   "b": 37.5,
+   "k": "legendary"
+  },
+  {
+   "b": 38,
+   "k": "word"
+  },
+  {
+   "b": 41.5,
+   "k": "bats"
+  },
+  {
+   "b": 42,
+   "k": "halloween"
+  },
+  {
+   "b": 45.5,
+   "k": "depths"
+  },
+  {
+   "b": 48.5,
+   "k": "coop"
+  },
+  {
+   "b": 49,
+   "k": "arc"
+  },
+  {
+   "b": 52.25,
+   "k": "tapestop"
+  },
+  {
+   "b": 53,
+   "k": "logo"
+  },
+  {
+   "b": 53.75,
+   "k": "cta"
+  },
+  {
+   "b": 54,
+   "k": "url"
+  }
+ ]
+}

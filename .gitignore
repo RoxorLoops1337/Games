@@ -18,5 +18,6 @@ tools/beastfont/out/
 tools/beatborne/shots/
 
 # No Room For Heroes trailer: render output (frames, wav) -- regenerate with tools/nrfh_trailer/render.mjs
+# Clawspire 2.0 trailer renders into trailer_out/clawspire too -- regenerate with tools/clawspire_trailer/render.mjs
 trailer_out/
 __pycache__/
