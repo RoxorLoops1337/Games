@@ -25,6 +25,7 @@ function fresh(opts = {}) {
   g.GAME.boot();
   if (spy !== false) g._run('globalThis.__entered = []; globalThis.__done = 0; GAME.enterNode = (n) => { __entered.push(n); return Promise.resolve(); }; GAME.nodeDone = () => { __done++; return Promise.resolve(); };');
   g._run("globalThis.__sfx = []; { const o = AUDIO.sfx; AUDIO.sfx = function (id, x) { __sfx.push(id); return o.call(AUDIO, id, x); }; }");
+  g._run("globalThis.__wake = []; globalThis.__awake = []; { const o = AUDIO.wake, a = AUDIO.awake; AUDIO.wake = function (q, r, x) { __wake.push([q, r, x && x.song || null, x ? x.i : null, x && x.soft ? 1 : 0, x && x.last ? 1 : 0]); return o ? o.call(AUDIO, q, r, x) : false; }; AUDIO.awake = function (f) { __awake.push(f); return a ? a.apply(AUDIO, arguments) : 1; }; }");
   g._run("globalThis.__ann = []; { const o = UI.announce; UI.announce = function (x) { __ann.push(String(x)); return o.call(UI, x); }; }");
   g._run("globalThis.__bus = []; ['map:paint', 'map:brush', 'map:walk'].forEach((k) => UI.bus.on(k, (d) => __bus.push([k, JSON.parse(JSON.stringify(d))])));");
   return g;
@@ -37,6 +38,8 @@ const errs = (g) => g._console.error.length;
 const entered = (g) => g._run('__entered');
 const bus = (g, k) => g._run('__bus').filter((e) => e[0] === k).map((e) => e[1]);
 const sfx = (g) => g._run('__sfx');
+const wakes = (g) => g._run('__wake');
+const awakes = (g) => g._run('__awake');
 const toasts = (g) => $$(g, '#toasts .toast .t-text').map(txt);
 const view = (g) => g.UI.layers.view;
 const md = (g) => g.UI.screens.map.mapDebug;
@@ -1954,6 +1957,109 @@ await t.test('stress: 600 seeded random actions (taps anywhere, keys, wheel, dra
     t.eq(g._run('window.__errors.length'), 0, 'seed ' + seed + ': no UI errors');
     t.ok(g.MAP.progress(R.map).painted > 19, 'seed ' + seed + ': the page was actually played on (' + g.MAP.progress(R.map).painted + ' hexes painted)');
   }
+});
+
+// ==================================================================================================== Echo: every woken hex sings, the Hush follows the land
+const chipOf = (g) => $(g, '.mp-chip');
+async function singSong(g, R, id) {
+  g._click(chipOf(g)); await settle(g);
+  const list = g.MAP.brushAnchors(R.map, id), dirKind = g.DATA.brushes[id].kind === 'line' || g.DATA.brushes[id].kind === 'fan';
+  let pick = null;
+  for (const a of list) {
+    const ds = dirKind ? a.dirs : [0];
+    const d = ds.find((dd) => g.MAP.tile(R.map, a.q + g.MAP.DIRS[dd][0], a.r + g.MAP.DIRS[dd][1]));
+    if (d !== undefined) { pick = { a, d }; break; }
+  }
+  if (dirKind) {
+    await clickHex(g, pick.a.q, pick.a.r);
+    const nb = [pick.a.q + g.MAP.DIRS[pick.d][0], pick.a.r + g.MAP.DIRS[pick.d][1]];
+    await hoverHex(g, nb[0], nb[1]);
+    await clickHex(g, nb[0], nb[1]);
+  } else await clickHex(g, pick.a.q, pick.a.r);
+  return pick;
+}
+
+await t.test('echo: a walk hums the path back, thinned: the first six steps, then every second one, never twice within four seconds', async () => {
+  const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5 });
+  await open(g, R); fitCam(g);
+  const M = R.map;
+  Object.values(M.tiles).forEach((T) => { if (T.type !== 'block') { T.painted = true; T.known = true; if (T.type !== 'start') T.type = 'empty'; } });
+  const start = { q: M.pos.q, r: M.pos.r };
+  const far = Object.values(M.tiles).filter((T) => T.type === 'empty').map((T) => ({ T, p: g.MAP.walkPath(M, T.q, T.r) })).filter((x) => x.p && x.p.length >= 10).sort((a, b) => b.p.length - a.p.length)[0];
+  t.ok(far, 'a walk of at least ten hexes exists');
+  const L = far.p.length;
+  await clickHex(g, far.T.q, far.T.r);
+  t.deep(M.pos, { q: far.T.q, r: far.T.r }, 'the party walked the whole way');
+  const soft = wakes(g).filter((w) => w[4]);
+  t.eq(soft.length, Math.min(L, 6) + Math.floor(Math.max(0, L - 6) / 2), 'the soft notes are thinned (' + L + ' steps)');
+  const want = far.p.filter((c, i) => (i + 1) <= 6 || (i + 1 - 6) % 2 === 0).map((c) => c[0] + ',' + c[1]);
+  t.deep(soft.map((w) => w[0] + ',' + w[1]), want, 'they are the path steps 1..6, 8, 10, ...');
+  const n0 = wakes(g).length;
+  for (const c of far.p.slice(0, -1).reverse().concat([[start.q, start.r]])) await clickHex(g, c[0], c[1]);
+  const back = wakes(g).slice(n0).filter((w) => w[4]);
+  const heardKeys = new Set(soft.map((w) => w[0] + ',' + w[1]));
+  t.ok(back.every((w) => !heardKeys.has(w[0] + ',' + w[1])), 'walking straight back over the same hexes adds no soft note on a hex that just sounded');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('realtime echo: a chain sings its hexes in path order and holds the last; the melody is visible as one rising mark per note, even with sound off', async () => {
+  const g = await rt({ seed: 6 }); const R = mkRun(g, { seed: 6, ink: 12 });
+  await open(g, R); fitCam(g);
+  await g._tick(4000);
+  const f = farFog(g, R, 3, 5), n = f.pre.path.length;
+  t.ok(n >= 3 && n <= 8, 'a chain of a few hexes');
+  const w0 = wakes(g).length, m0 = st(g).noteMarks.length;
+  await clickHex(g, f.T.q, f.T.r); await clickHex(g, f.T.q, f.T.r);
+  await g._tick(n * 130 + 250);
+  const sung = wakes(g).slice(w0).filter((w) => !w[4]);
+  t.deep(sung.map((w) => [w[0], w[1]]), f.pre.path.map((c) => [c[0], c[1]]), 'the notes follow the path in order');
+  t.deep(sung.map((w) => w[3]), f.pre.path.map((c, i) => i), 'i runs 0..n-1');
+  t.deep(sung.map((w) => w[5]), f.pre.path.map((c, i) => (i === n - 1 ? 1 : 0)), 'only the last is held');
+  t.eq(st(g).noteMarks.length - m0, n, 'one rising mark per wake call');
+  await g._tick(3000);
+  t.ok(st(g).noteMarks.length <= 24, 'marks fade away and never pass the cap');
+  // sound off: the marks still come
+  g._run("if (AUDIO.setVolume) AUDIO.setVolume('sfx', 0)");
+  const g2 = farFog(g, R, 2, 6);
+  if (g2) {
+    const k0 = st(g).noteMarks.length, c0 = wakes(g).length;
+    await clickHex(g, g2.T.q, g2.T.r); await clickHex(g, g2.T.q, g2.T.r);
+    await g._tick(g2.pre.path.length * 130 + 250);
+    const added = wakes(g).slice(c0).filter((w) => !w[4]).length;
+    t.ok(added > 0 && st(g).noteMarks.length - k0 === added, 'with the Effects slider at 0 every note still leaves its mark');
+  }
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('realtime echo: a Song sings every cell it wakes with its own gesture (brush_use, no extra paint)', async () => {
+  for (const id of ['fan', 'splash']) {
+    const g = await rt({ seed: 4 }); const R = mkRun(g, { seed: 4, brushes: [id], ink: 4 });
+    await open(g, R); fitCam(g);
+    await g._tick(4000);
+    const w0 = wakes(g).length, p0 = paintSfx(g), before = g.MAP.progress(R.map).painted;
+    await singSong(g, R, id);
+    await g._tick(3000);
+    const painted = g.MAP.progress(R.map).painted - before;
+    const sung = wakes(g).slice(w0).filter((w) => !w[4]);
+    t.ok(painted > 0 && sung.length === painted, id + ': one note per painted cell (' + painted + ')');
+    t.ok(sung.every((w) => w[2] === id), id + ': every call carries the Song id');
+    t.ok(sfx(g).indexOf('brush_use') >= 0, id + ': brush_use plays');
+    t.eq(paintSfx(g), p0, id + ': applyBrushNow no longer plays paint');
+    t.eq(errs(g), 0, id + ': clean');
+  }
+});
+
+await t.test('echo: the Hush follows the painted share (AUDIO.awake from the progress meter)', async () => {
+  const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5, ink: 9 });
+  await open(g, R); fitCam(g);
+  const a0 = awakes(g).slice();
+  t.ok(a0.length > 0, 'AUDIO.awake was told on enter');
+  t.near(a0[a0.length - 1], g.MAP.progress(R.map).frac, 1e-9, 'it equals the progress fraction');
+  const T = frontier(g, R).filter((x) => x.type !== 'block')[0];
+  await clickHex(g, T.q, T.r); await settle(g); await g._tick(100);
+  const a1 = awakes(g);
+  t.near(a1[a1.length - 1], g.MAP.progress(R.map).frac, 1e-9, 'and follows a paint');
+  t.ok(a1[a1.length - 1] > a0[a0.length - 1], 'it grew');
 });
 
 await t.done();

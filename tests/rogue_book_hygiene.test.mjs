@@ -434,6 +434,9 @@ t.test('string ids handed to AUDIO, UI, ART and the bus exist in their closed li
   bad.push(...literalUses(/\bART\s*\.\s*hero\s*\.\s*draw\s*\(\s*[\w$.]+\s*,\s*['"]([\w-]+)['"]/g, 'heroIds', 'ART.hero.draw hero'));
   bad.push(...literalUses(/\bART\s*\.\s*fx\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g, 'fx', 'ART.fx effect', 'code', ['names', 'ms']));
   bad.push(...literalUses(/\bdata-tut\s*=\s*["']([\w-]+)["']|\bdataset\s*\.\s*tut\s*=\s*['"]([\w-]+)['"]/g, 'tutAnchors', 'data-tut anchor'));
+  bad.push(...literalUses(/(?<![.\w$])(?:snd|sfx)\s*\(\s*['"]([\w-]+)['"]/g, 'sfx', 'sound helper id'));
+  bad.push(...literalUses(/\btick\s*:\s*['"]([\w-]+)['"]/g, 'sfx', 'counter tick sound'));
+  bad.push(...literalUses(/['"]data-sfx['"]\s*:\s*['"]([\w-]+)['"]/g, 'sfx', 'data-sfx attribute', 'codeStr', ['none']));
   t.eq(bad.length, 0, fail(bad, 'ids used in code'));
 });
 t.test('closed lists are lists: non-empty, no duplicates, plain values', () => {

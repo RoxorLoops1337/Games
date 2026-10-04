@@ -20,6 +20,9 @@ const STYLE = {
 };
 
 const cache = new WeakMap();
+// Opt-in calibration probe (bot.mjs --awake-report): when on, every boss fight records the woken share of the map at that moment.
+// Read-only: nothing here touches a run, an RNG stream or a record. Needs --jobs 1 (worker threads have their own copy).
+export const AWAKE_REPORT = { on: false, list: [] };
 function toolsFor(G, cfg) {
   const k = JSON.stringify([cfg.draftNoise, cfg.pickBias, cfg.archetype, cfg.beam, cfg.depth, cfg.potential, cfg.effort, cfg.combat === 'beam', !!cfg.clairvoyant]);
   let m = cache.get(G.DATA);
@@ -70,6 +73,7 @@ export function playRun(G, cfg) {
 
   // ------------------------------------------------------------------ combat
   function doCombat(node) {
+    if (AWAKE_REPORT.on && node.tier === 'boss') AWAKE_REPORT.list.push({ ch: R.chapter, frac: MAP.progress(R.map).frac });
     const opts = RUN.combatInit(R, node);
     opts.maxTurns = 60;
     const hpBefore = R.heroes.map((h) => h.hp);

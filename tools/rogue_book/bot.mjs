@@ -34,10 +34,13 @@
 //   --resume            with --stream: skip the tasks whose records are already in the stream file (same options, same seeds)
 //   --from file[,file2] build the report from stream or --runs-out files instead of simulating (concatenated, duplicates by task key dropped;
 //                       --trial and --pair/--all-pairs, when given, select which of the stored runs are reported)
+//   --awake-report      calibration probe for the audio Hush: also prints the median woken share of the map when a boss fight starts (per chapter and
+//                       overall; forces --jobs 1; records and --runs-out are unchanged, and with the flag off nothing is recorded)
 //   --progress N        when stderr is not a terminal, print a progress line every N finished runs (default 20)
 // The bot is deterministic: same options, same output. See tools/rogue_book/bot/*.mjs headers for how it plays and where it is biased.
 import fs from 'node:fs';
 import { loadGame, ALL_PAIRS } from './bot/game.mjs';
+import { AWAKE_REPORT } from './bot/driver.mjs';
 import { runPool, defaultJobs } from './bot/pool.mjs';
 import { buildReport, renderText, renderMarkdown } from './bot/report.mjs';
 import { benchmark } from './bot/benchmark.mjs';
@@ -73,6 +76,7 @@ export function parseArgs(argv) {
     else if (a === '--stream') o.stream = take(i++);
     else if (a === '--resume') o.resume = true;
     else if (a === '--from') o.from = String(take(i++)).split(',');
+    else if (a === '--awake-report') o.awakeReport = true;
     else if (a === '--progress') o.progress = Math.max(1, parseInt(take(i++), 10));
     else if (a === '--help' || a === '-h') o.help = true;
     else throw new Error('unknown option ' + a + ' (try --help)');
@@ -183,6 +187,7 @@ async function main() {
     return;
   }
   const G = loadGame();
+  if (o.awakeReport) { o.jobs = 1; AWAKE_REPORT.on = true; AWAKE_REPORT.list = []; }
   const { recs, tasks } = await collect(o, (m) => { if (!o.quiet) process.stderr.write(m); });
   const progress = (done, total) => { if (!o.quiet && process.stderr.isTTY) process.stderr.write(`\r${done}/${total} runs`); };
   const S = buildReport(recs, G, {});
@@ -206,7 +211,16 @@ async function main() {
   if (o.json) fs.writeFileSync(o.json, JSON.stringify(S2 ? { options: o, summary: S, greedy: S2 } : { options: o, summary: S }, null, 1));
   if (o.md) fs.writeFileSync(o.md, renderMarkdown(S, ropts));
   if (o.runsOut) fs.writeFileSync(o.runsOut, recs.map((r) => JSON.stringify(r)).join('\n'));
+  if (o.awakeReport) console.log(awakeLine(AWAKE_REPORT.list));
   if (S.meta.errors) process.exitCode = 1;
+}
+
+// one line: the median woken share of the map at each boss fight, per chapter and overall (the audio calibration of AUDIO.HUSH)
+export function awakeLine(list) {
+  const med = (a) => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
+  const f2 = (x) => (x === x ? x.toFixed(2) : 'n/a');
+  const per = [1, 2, 3].map((c) => { const a = list.filter((x) => x.ch === c).map((x) => x.frac); return `ch${c} median ${f2(med(a))} (${a.length})`; });
+  return `awake at keeper: ${per.join(', ')}, all ${f2(med(list.map((x) => x.frac)))} (${list.length})`;
 }
 
 const isMain = process.argv[1] && new URL(import.meta.url).pathname === fs.realpathSync(process.argv[1]);
