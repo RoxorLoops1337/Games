@@ -1,4 +1,4 @@
-// Inkwoven -- the story and ending screens (owner: story and endings engineer). One IIFE that registers into UI: the screens `story`,
+// Echowake: the story and ending screens (owner: story and endings engineer). One IIFE that registers into UI: the screens `story`,
 // `chapterClear`, `gameOver` and `victory`. Styles live in css/end.css (classes en-* shared, st-* story, cc-* chapterClear, go-* gameOver,
 // vc-* victory, all under .s-NAME). This header is the contract of record for screen_end.js.
 //
@@ -530,7 +530,7 @@
     const score = sm && typeof sm.score === 'number' ? sm.score : Math.max(0, rows.reduce((a, r) => a + r.pts, 0));
     const known = rows.reduce((a, r) => a + r.pts, 0);
     const rest = score - known;
-    if (rest !== 0) rows.splice(rows.length - 1, 0, { k: 'rest', label: deck ? 'The book\'s mercy' : 'Deck work', n: 0, pts: rest, icon: ['type', 'skill'], noCount: true });
+    if (rest !== 0) rows.splice(rows.length - 1, 0, { k: 'rest', label: deck ? 'The land\'s mercy' : 'Deck work', n: 0, pts: rest, icon: ['type', 'skill'], noCount: true });
     return { rows, score };
   }
 

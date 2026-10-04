@@ -1,4 +1,4 @@
-// Inkwoven -- GAME: boot, the single frame loop, run flow and routing, and the debug hooks (owner: UI core).
+// Echowake: GAME: boot, the single frame loop, run flow and routing, and the debug hooks (owner: UI core).
 //
 // PUBLIC API (DESIGN 5.10)
 //   GAME.boot()                       META.load, UI.init, UI.applySettings, URL params, META.bus toasts, the rAF loop, UI.go(goto or 'title').
@@ -611,7 +611,7 @@ const GAME = (() => {
               const i = chosen.indexOf(id);
               if (i >= 0) chosen.splice(i, 1); else { if (chosen.length >= 2) chosen.shift(); chosen.push(id); }
               Object.keys(badges).forEach((h) => badges[h].rbSet({ selected: chosen.indexOf(h) >= 0 }));
-              info.textContent = chosen.length === 2 ? chosen.map((h) => DATA.heroes[h].name).join(' and ') + ' step onto the page.' : 'Choose two heroes.';
+              info.textContent = chosen.length === 2 ? chosen.map((h) => DATA.heroes[h].name).join(' and ') + ' step into the silence.' : 'Choose two heroes.';
               start.rbSet({ disabled: chosen.length !== 2, reason: 'Choose two heroes first' });
             } });
             if (!unlocked) b.classList.add('down');
@@ -687,7 +687,7 @@ const GAME = (() => {
       },
       victory: {
         music: 'victory', draw: phBackdrop,
-        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, gold: true, title: 'The last page is rewritten' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
+        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, gold: true, title: 'The Hush lets go' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
       },
       story: {
         draw: phBackdrop,
@@ -696,7 +696,7 @@ const GAME = (() => {
           const lore = DATA.lore && DATA.lore[p.id];
           call('META', 'markLore', p.id);
           const next = () => { if (p.then) go(p.then.name, p.then.params, { transition: 'page' }); else UI.back(); };
-          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: lore ? lore.title : 'A page' }, mk('p', { class: 'm-text story-text', text: lore ? lore.text : 'Once upon a time...' }), mk('div', { class: 'row gap center' }, UI.btn('Skip', { kind: 'ghost', onclick: next }), finishBtn('Turn the page', next))));
+          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: lore ? lore.title : 'A verse' }, mk('p', { class: 'm-text story-text', text: lore ? lore.text : 'Once, the land could sing...' }), mk('div', { class: 'row gap center' }, UI.btn('Skip', { kind: 'ghost', onclick: next }), finishBtn('Play on', next))));
         },
       },
       settings: {
