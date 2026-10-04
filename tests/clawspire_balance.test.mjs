@@ -143,7 +143,19 @@ function fight(run, enemyIds, seed) {
 // finished act also brings two upgrades, an Extra Token (rests and shops buy
 // it first) and two relics (a treasure and the boss relic).
 const PER_ACT = 8;
+// (speed, round 24) deckFor is a pure function of (char, act, seed, picks): it draws only from its own U.rng(seed)
+// and never looks at the encounter, yet the sweep below asked for the same deck once per encounter (5 to 8 times).
+// DECKS keeps the first result and hands out a structuredClone each time, so a fight may mutate its run freely
+// (the printed table and every assertion below see exactly the decks they saw before). CLAWSPIRE_NO_DECK_CACHE=1 turns it off.
+const DECKS = new Map();
 function deckFor(char, act, seed, picks) {
+  if (process.env.CLAWSPIRE_NO_DECK_CACHE) return buildDeck(char, act, seed, picks);
+  const key = char + '|' + act + '|' + seed + '|' + picks;
+  let d = DECKS.get(key);
+  if (!d) { d = buildDeck(char, act, seed, picks); DECKS.set(key, structuredClone(d)); return d; }
+  return structuredClone(d);
+}
+function buildDeck(char, act, seed, picks) {
   const c = DATA.CHARACTERS[char];
   const rng = U.rng(seed);
   const bin = c.bin.map(id => ({ id, plus: false }));

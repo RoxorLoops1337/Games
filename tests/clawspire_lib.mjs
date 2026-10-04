@@ -1,5 +1,42 @@
 // Shared loader for the Clawspire suites.
 //
+// ---------------------------------------------------------------------------
+// Running the suites (round 24)
+//
+//   npm run test:clawspire         tests/run_clawspire.mjs: the 12 suites, two node processes at a time, output
+//                                  printed in the canonical order, a summary table (assertions, wall, peak RSS)
+//                                  at the end, nonzero exit if any suite fails. This is the pre-release command.
+//   npm run test:clawspire:full    the same with CLAWSPIRE_FULL=1 (see below)
+//   npm run test:clawspire:seq     the old one-at-a-time chain of node tests/clawspire_<suite>.test.mjs
+//   node tests/run_clawspire.mjs game map      only these suites (also --jobs 1, --times, --full)
+//   node tests/clawspire_<suite>.test.mjs      one suite by itself, as before
+//
+// Environment flags (all optional, all off by default):
+//   CLAWSPIRE_TEST_TIMES=1    h.test() times every test; each suite ends with a "[times]" block: total wall, time
+//                             inside h.test versus outside, how many boot() calls and what they cost, CPU seconds,
+//                             peak RSS, then the 15 slowest tests. CPU seconds is the figure to compare on a busy
+//                             machine (wall time moves with whatever else is running).
+//   CLAWSPIRE_FULL=1          exported here as FULL for any suite that samples a loop by default. TODAY NO SUITE
+//                             SAMPLES: every default run is already the full sweep (every seed, claw, crawler and
+//                             encounter), so the flag changes nothing yet. A suite that ever samples must read FULL,
+//                             keep the full loop one flag away, and say so in a comment next to the test.
+//   CLAWSPIRE_NO_BOOT_CACHE=1 turn the source cache off (for timing the old behaviour).
+//   CLAWSPIRE_NO_MAP_MEMO=1   turn the cross-test map memo off.
+//   CLAWSPIRE_MAP_MEMO_VERIFY=1 check every memo hit against a fresh generate (slow; proves the memo exact).
+//   CLAWSPIRE_NO_DECK_CACHE=1 balance suite only: rebuild every deck instead of cloning a cached one.
+//   CLAWSPIRE_NODE_FLAGS="..." runner only: V8 flags for the child processes (default --max-semi-space-size=64).
+//
+// What is cached, and why it is safe
+//   source()   the concatenated 4.5 MB of game scripts is read and joined once per module list and process (the
+//              files do not change while a suite runs). That was about half of a boot(): the game suite makes 658
+//              of them, 36 ms each before and about 15 ms now. Every boot() still compiles and runs the scripts
+//              afresh, so each gets its own GAME, DATA, COMBAT ... and its own stub DOM, storage and timers.
+//   MAP.generate  full boots memoise it across tests only (never within one h.test, so a same-seed determinism check
+//              inside a test still compares two real runs); see "map memo" below. CLAWSPIRE_NO_MAP_MEMO=1 turns it off,
+//              CLAWSPIRE_MAP_MEMO_VERIFY=1 re-checks every hit against a fresh generate.
+//   Not cached on purpose: the compiled Function (measured slower overall, see boot()).
+// ---------------------------------------------------------------------------
+//
 // clawspire/index.html loads js/util.js .. js/game.js as classic scripts in a
 // shared global scope.  This concatenates them in the order index.html lists
 // them, stubs a DOM (a no-op 2d context that counts calls, a queued setTimeout
@@ -12,16 +49,39 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.join(__dirname, '..', 'clawspire');
 const HTML = path.join(DIR, 'index.html');
+const TIMES = !!process.env.CLAWSPIRE_TEST_TIMES;
+const NO_CACHE = !!process.env.CLAWSPIRE_NO_BOOT_CACHE;
+export const FULL = !!process.env.CLAWSPIRE_FULL;
+
+const T0 = process.hrtime.bigint();
+const ms = () => Number(process.hrtime.bigint() - T0) / 1e6;
+const BOOT_STATS = { calls: 0, ms: 0 };
 
 export function harness(name) {
   let pass = 0, fail = 0;
+  const times = [];
+  let inTests = 0;
   const h = {
     ok(cond, msg) { if (cond) pass++; else { fail++; console.log('FAIL:', msg); } },
     eq(a, b, msg) { h.ok(a === b, `${msg} [${a} != ${b}]`); },
     near(a, b, eps, msg) { h.ok(Math.abs(a - b) <= eps, `${msg} [${a} vs ${b}]`); },
     throws(fn, msg) { let t = false; try { fn(); } catch (e) { t = true; } h.ok(t, msg); },
-    test(msg, fn) { try { fn(); } catch (e) { fail++; console.log('FAIL:', msg, '::', e && e.stack || e); } },
-    done() { console.log(`${name}: ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); },
+    test(msg, fn) {
+      MEMO.test++;
+      const a = TIMES ? ms() : 0;
+      try { fn(); } catch (e) { fail++; console.log('FAIL:', msg, '::', e && e.stack || e); }
+      if (TIMES) { const d = ms() - a; inTests += d; times.push([d, msg]); }
+    },
+    done() {
+      console.log(`${name}: ${pass} passed, ${fail} failed`);
+      if (TIMES) {
+        const total = ms();
+        console.log(`[times] ${name}: total ${(total / 1000).toFixed(1)} s, inside h.test ${(inTests / 1000).toFixed(1)} s (${times.length} tests), outside ${((total - inTests) / 1000).toFixed(1)} s, boot() x${BOOT_STATS.calls} = ${(BOOT_STATS.ms / 1000).toFixed(1)} s, map memo ${MEMO.hits}/${MEMO.calls} generate calls served, cpu ${((process.cpuUsage().user + process.cpuUsage().system) / 1e6).toFixed(1)} s, peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MB${FULL ? ', CLAWSPIRE_FULL=1' : ''}`);
+        times.sort((x, y) => y[0] - x[0]);
+        for (const [d, m] of times.slice(0, 15)) console.log(`[times]   ${(d / 1000).toFixed(2).padStart(7)} s  ${m}`);
+      }
+      process.exit(fail ? 1 : 0);
+    },
   };
   return h;
 }
@@ -40,8 +100,14 @@ export function scriptFiles() {
   return found.length ? found : canon;
 }
 
-/* Concatenated source of the given modules (default: all that exist). */
+/* Concatenated source of the given modules (default: all that exist).
+   Cached per module list: the files do not change while a suite runs, and
+   re-reading and re-joining 4.5 MB for every boot() was about half of its cost. */
+const SOURCE_CACHE = new Map();
 export function source(only) {
+  const ck = only ? only.join(',') : '*';
+  let out = NO_CACHE ? undefined : SOURCE_CACHE.get(ck);
+  if (out !== undefined) return out;
   const files = scriptFiles().filter(f => !only || only.some(n => f.endsWith(`/${n}.js`)));
   const parts = [];
   for (const f of files) {
@@ -52,7 +118,9 @@ export function source(only) {
   const html = fs.existsSync(HTML) ? fs.readFileSync(HTML, 'utf8') : '';
   const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   if (!only) parts.push(...inline);
-  return parts.join('\n');
+  out = parts.join('\n');
+  if (!NO_CACHE) SOURCE_CACHE.set(ck, out);
+  return out;
 }
 
 export function makeSandbox(opts) {
@@ -146,10 +214,66 @@ export function makeSandbox(opts) {
   return { sandbox, store, counts, nodes, timers, listeners, mkEl, flush, ctxStub, advance: (ms) => { now += ms; } };
 }
 
+/* ---- map memo (full boots only) --------------------------------------------------------------------------------
+   GAME.newRun builds a map with MAP.generate, about 30 ms of the game suite's 160 s for each of 1100 calls, and 1 in 3
+   of those calls repeats a map an EARLIER TEST already built (the same seed, options, rng state and DATA tables). A
+   call is served from the memo only when the entry was made by a different h.test() than the one asking, so inside
+   any one test every generate() is real: a test that builds the same seed twice to prove the map is deterministic
+   still compares two genuine runs, and the map suite (which boots util+map alone) never touches the memo at all.
+   A hit hands out a structuredClone and fast-forwards the caller's rng by the number of draws the real call took
+   (mulberry32 steps its state by a constant per draw, so the count is read off the state), so the code after the call
+   sees exactly the rng it would have seen. The key covers every option except the rng object, the rng's state, and
+   everything MAP.generate reads from DATA (tool ids, the bulb count, event ids, claw upgrade ids, the encounter pools).
+   CLAWSPIRE_NO_MAP_MEMO=1 turns it off; CLAWSPIRE_MAP_MEMO_VERIFY=1 serves nothing but regenerates on every hit and
+   throws if the memo's map or the rng state differs (run once to prove the memo exact). */
+const MEMO = { test: 0, map: new Map(), hits: 0, calls: 0 };
+const MEMO_OFF = !!process.env.CLAWSPIRE_NO_MAP_MEMO;
+const MEMO_VERIFY = !!process.env.CLAWSPIRE_MAP_MEMO_VERIFY;
+const RNG_STEP = 0x6D2B79F5;
+const RNG_STEP_INV = (() => { let x = RNG_STEP; for (let i = 0; i < 5; i++) x = Math.imul(x, 2 - Math.imul(RNG_STEP, x)); return x >>> 0; })();
+function installMapMemo(M, D) {
+  const real = M.generate;
+  const bail = () => { throw new Error('unkeyable'); };
+  M.generate = function (o) {
+    MEMO.calls++;
+    if (!o || typeof o.rng !== 'function' || typeof o.rng.seed !== 'function') return real.apply(this, arguments);
+    const st0 = o.rng.seed();
+    let key;
+    try {
+      key = JSON.stringify([st0, o, D.TOOLS ? Object.keys(D.TOOLS) : null, D.BRUSHES ? Object.keys(D.BRUSHES) : null,
+        D.ECONOMY && D.ECONOMY.inkTile, D.EVENTS ? Object.keys(D.EVENTS) : null,
+        D.CLAW_UPGRADES ? Object.keys(D.CLAW_UPGRADES) : null, D.DEP_ENC, D.ENCOUNTERS],
+      (k, v) => (k === 'rng' ? undefined : typeof v === 'function' ? bail() : v));
+    } catch (e) { return real.apply(this, arguments); }
+    const hit = MEMO.map.get(key);
+    if (hit && hit.test !== MEMO.test) {
+      if (MEMO_VERIFY) {
+        const fresh = real.apply(this, arguments);
+        if (JSON.stringify(fresh) !== JSON.stringify(hit.map)) throw new Error('map memo: a cached map differs from a fresh generate for ' + key.slice(0, 120));
+        if (o.rng.seed() !== hit.st1) throw new Error('map memo: the rng state after generate differs from the cached one');
+        MEMO.hits++;
+        return fresh;
+      }
+      for (let i = 0; i < hit.draws; i++) o.rng();
+      MEMO.hits++;
+      return structuredClone(hit.map);
+    }
+    const r = real.apply(this, arguments);
+    if (!hit) {
+      const st1 = o.rng.seed(), draws = Math.imul((st1 - st0) | 0, RNG_STEP_INV) >>> 0;
+      if (draws < 2e6) {
+        try { MEMO.map.set(key, { map: structuredClone(r), st1, draws, test: MEMO.test }); } catch (e) { /* not cloneable: never memoised */ }
+      }
+    }
+    return r;
+  };
+}
+
 /* Evaluates the game (or only the named modules) in a fresh sandbox and hands
    back window.CS plus the sandbox hooks (_store, _counts, _flush, ...).
    boot({only:['util','physics']}) returns {U, PHYS} for module-level suites. */
 export function boot(opts) {
+  const _t0 = TIMES ? ms() : 0;
   opts = opts || {};
   const sb = makeSandbox(opts);
   const { sandbox } = sb;
@@ -157,6 +281,11 @@ export function boot(opts) {
   const names = ['U', 'ART', 'I18N', 'PHYS', 'DATA', 'COMBAT', 'MAP', 'AUDIO', 'RENDER', 'GAME'];
   const files = ['util', 'art', 'i18n', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'];
   const wanted = only ? files.filter(f => only.includes(f)) : files;
+  // Only the SOURCE text is cached (source() above); the Function is compiled afresh on every boot. V8's own
+  // compilation cache makes that compile cheap (it recognises the identical 4.5 MB string), and every boot gets
+  // fresh closures with fresh type feedback. Caching the compiled Function and calling it again was measured: it
+  // saved another 6 s of boot time in the game suite but made the tests themselves about 8 percent slower (the
+  // JIT's feedback then mixes 600 different game worlds), a net loss.
   const expose = '\n;__out.mods = {' + wanted.map((f, i) => `${names[files.indexOf(f)]}: (typeof ${names[files.indexOf(f)]} !== 'undefined' ? ${names[files.indexOf(f)]} : undefined)`).join(', ') + '};\n';
   // (round 13) the i18n module brings its language tables along
   // (round 15) opts.noLang: no language table, as an English player's browser boots (only-mode suites)
@@ -166,11 +295,13 @@ export function boot(opts) {
   fn(sandbox.window, sandbox.document, sandbox.localStorage, sandbox.requestAnimationFrame, sandbox.cancelAnimationFrame,
     sandbox.setTimeout, sandbox.clearTimeout, sandbox.setInterval, sandbox.clearInterval, sandbox.performance,
     sandbox.navigator, sandbox.__out);
+  if (!only && !MEMO_OFF && sandbox.__out.mods.MAP && sandbox.__out.mods.DATA) installMapMemo(sandbox.__out.mods.MAP, sandbox.__out.mods.DATA);
   const api = Object.assign({}, sandbox.__out.mods, sandbox.window.CS || {});
   api._store = sb.store; api._counts = sb.counts; api._nodes = sb.nodes; api._timers = sb.timers;
   api._listeners = sb.listeners; api._flush = sb.flush; api._advance = sb.advance; api._ctx = sb.ctxStub;
   api._window = sandbox.window; api._document = sandbox.document;
   api._resetCounts = () => { for (const k in sb.counts) delete sb.counts[k]; };
+  if (TIMES) { BOOT_STATS.calls++; BOOT_STATS.ms += ms() - _t0; }
   return api;
 }
 

@@ -2755,7 +2755,7 @@ h.test('feel: a tap on an enemy lists every status in words (the chips may be cu
   h.ok(['poison', 'burn', 'bleed'].every((id) => html.includes((SD[id] && SD[id].name) || id)), 'the popover names them: ' + html.replace(/<[^>]+>/g, ' ').slice(0, 160));
 });
 
-h.test('perf: the frame governor thins particles on a slow device and lets go when it recovers', () => {
+h.test('perf: the frame governor thins particles on a slow device and lets go on the next screen (round 24: Quality Auto / High / Low)', () => {
   const T = boot();
   const G = T.GAME, fx = T.RENDER.fx, P = G.perf;
   h.ok(!fx.lite, 'full quality to start');
@@ -2763,23 +2763,35 @@ h.test('perf: the frame governor thins particles on a slow device and lets go wh
   h.ok(!fx.lite, 'a 60 fps device stays full');
   P.tick(400); P.tick(16.7);
   h.ok(!fx.lite, 'one hitch (a tab switch) is ignored');
-  for (let i = 0; i < 40; i++) P.tick(45);
-  h.ok(fx.lite && P.state.lite, 'sustained slow frames switch to lite');
+  for (let i = 0; i < 30; i++) P.tick(45);
+  h.ok(!fx.lite, 'slow frames for under 2 s: still full');
+  for (let i = 0; i < 30; i++) P.tick(45);
+  h.ok(fx.lite && P.state.lite, 'sustained slow frames (over 22 ms for 2 s) switch to lite');
   // lite halves the preset counts and the pool
   fx.clear && fx.clear();
   fx.emit('confetti', 270, 400);
   const lite = fx.count ? fx.count() : null;
-  for (let i = 0; i < 30; i++) P.tick(22);
-  h.ok(fx.lite, 'in between the two thresholds it holds');
   for (let i = 0; i < 300; i++) P.tick(12);
-  h.ok(!fx.lite, 'fast frames for long enough let go');
+  h.ok(fx.lite, 'the lighter frames run fast, but it holds for the rest of the screen (no flicker)');
+  G.newRun('knight', 5);
+  if (G.screen === 'boon') G.choose(0);
+  G.toMap();
+  h.ok(!fx.lite, 'a new screen starts at full again');
   if (lite != null) { fx.clear(); fx.emit('confetti', 270, 400); h.ok(fx.count() > lite, 'lite made fewer particles (' + lite + ' vs ' + fx.count() + ')'); }
-  for (let i = 0; i < 40; i++) P.tick(45);
-  h.ok(fx.lite, 'back to lite');
-  for (let i = 0; i < 200; i++) P.tick(12);
-  h.ok(fx.lite, 'the second time it waits longer before letting go');
+  G.acc.set('quality', 'low');
+  h.ok(fx.lite && G.meta.settings.quality === 'low', 'Quality Low: light at once');
+  P.screen();
   for (let i = 0; i < 300; i++) P.tick(12);
-  h.ok(!fx.lite, 'but it does let go');
+  h.ok(fx.lite, 'Low stays light on fast frames and new screens');
+  G.acc.set('quality', 'high');
+  h.ok(!fx.lite, 'Quality High: full at once');
+  for (let i = 0; i < 200; i++) P.tick(60);
+  h.ok(!fx.lite, 'High never goes light');
+  G.acc.set('quality', 'auto');
+  for (let i = 0; i < 80; i++) P.tick(45);
+  h.ok(fx.lite, 'Auto again: slow frames make it light');
+  G.acc.set('quality', 'nonsense');
+  h.eq(G.meta.settings.quality, 'auto', 'a junk value is repaired to Auto');
 });
 
 h.test('perf: the map caches its reachable ring and progress line, and still draws', () => {

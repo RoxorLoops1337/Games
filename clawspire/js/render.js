@@ -230,7 +230,12 @@ const RENDER = (() => {
     if (glowPx > GLOW_BUDGET) glowTrim();
     return cv;
   }
+  /* PERF (round 24): light quality (RENDER.fx.lite, game.js perfSet: Quality Low, or Auto on a device that
+     cannot keep up) leaves out the faintest additive glows (under 0.12 alpha), the light rays and shafts and
+     half the fog. Never throws, also before fx exists. */
+  function liteOn() { try { return !!(fx && fx.lite); } catch (e) { return false; } }
   function glow(ctx, x, y, r, col, a) {
+    if (a != null && a < 0.12 && liteOn()) return;
     const sp = glowSprite(col, r);
     if (!sp) return;
     ctx.save();
@@ -781,6 +786,23 @@ const RENDER = (() => {
   const ITEM_SPR = new WeakMap();
   const ITEM_SPR_MAX = 700;
   let itemSprN = 0;
+  /* PERF (round 24): the sprites also keep to a pixel budget. The resolve row's cards lift and fly their prizes
+     at changing scales, and every quarter step of scale was a sprite kept for the session (112 canvases,
+     1.4 MP after ten fights and still climbing toward the 700 cap). Past ITEM_SPR_PX the least recently drawn
+     go (to 75%), like the glow sprites; one that is needed again is simply drawn again, the same pixels. */
+  const ITEM_SPR_PX = 2.5e6;
+  const ITEM_LIVE = new Set();
+  let itemSprPx = 0, itemSprUse = 0;
+  function itemSprDrop(sp) {
+    if (!ITEM_LIVE.delete(sp)) return;
+    itemSprPx -= sp.cv.width * sp.cv.height;
+    if (sp.V && sp.V[sp.vk] === sp) { delete sp.V[sp.vk]; itemSprN--; }
+    try { sp.cv.width = sp.cv.height = 0; } catch (e) { /* stub */ }
+  }
+  function itemSprTrim() {
+    const all = [...ITEM_LIVE].sort((a, b) => a.use - b.use);
+    for (const sp of all) { if (itemSprPx <= ITEM_SPR_PX * 0.75) break; itemSprDrop(sp); }
+  }
   function itemSprite(ctx, def, s, opts, w, h, c1, c2, img) {
     if (FLAT || typeof document === 'undefined' || !document || !document.createElement || typeof ctx.getTransform !== 'function') return null;
     let m = null;
@@ -794,7 +816,7 @@ const RENDER = (() => {
     let sp = V[vk];
     // dk: the POLISH identity layer (decals, silhouette, rim) the sprite was drawn with
     const dk = img ? '' : polInfo(def).key;
-    if (sp && sp.w === w && sp.h === h && sp.c1 === c1 && sp.c2 === c2 && sp.dk === dk) return sp;
+    if (sp && sp.w === w && sp.h === h && sp.c1 === c1 && sp.c2 === c2 && sp.dk === dk) { sp.use = ++itemSprUse; return sp; }
     if (sp && sp.dk !== dk) sp = undefined;   // the identity layer changed: draw it again
     if (sp === null || itemSprN >= ITEM_SPR_MAX) return null;
     // a tight box: the art's w x h plus room for the outline, the gold rim,
@@ -807,8 +829,11 @@ const RENDER = (() => {
     g.translate(pw / 2, ph / 2); g.scale(q, q);
     try { itemArt(g, def, opts, w, h, c1, c2, img); } catch (e) { /* art must never throw */ }
     if (!V[vk]) itemSprN++;
-    sp = { cv, cx: pw / 2, cy: ph / 2, q, w, h, c1, c2, dk };
+    else if (ITEM_LIVE.has(V[vk])) { const old = V[vk]; ITEM_LIVE.delete(old); itemSprPx -= old.cv.width * old.cv.height; }   // (round 24: a redrawn sprite replaces its old canvas)
+    sp = { cv, cx: pw / 2, cy: ph / 2, q, w, h, c1, c2, dk, V, vk, use: ++itemSprUse };
     V[vk] = sp;
+    ITEM_LIVE.add(sp); itemSprPx += pw * ph;
+    if (itemSprPx > ITEM_SPR_PX) itemSprTrim();
     return sp;
   }
   // The item's own drawing, in a w x h box at the origin (scaled already).
@@ -3894,6 +3919,17 @@ const RENDER = (() => {
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
+  }
+  /* PERF (round 24): true when terrainHex(tile, st) moves with st.t (drifting ripples, lava foam, the ash
+     forest's embers, every Back Room and Depths hex), so game.js's cached ground layer leaves it out and
+     paints it live. The same tests terrainHex makes, in its order. */
+  function terrainLive(tile, st) {
+    tile = tile || {}; st = st || {};
+    if (st.biome === 'machine' || tile.biome === 'machine' || st.biome === 'depths' || (tile.biome === 'depths' && !st.biome)) return true;
+    const p = biomePal(st.biome), seed = st.seed || 0, terrain = tile.terrain || 'land';
+    if (terrain === 'sea') return (seed % 5) < 2 || !!(p.lava && (seed & 3) !== 0);
+    if (terrain === 'shallow') return false;
+    return groundOf(tile) === 'forest' && p.accent === 'ash';
   }
   // The coastline: thick ink on every edge (bit i = edge from corner i to
   // corner i+1, hexPath order) that faces water, plus a thin pale foam line
@@ -10473,6 +10509,7 @@ const RENDER = (() => {
     const col = def.glow || PAL.gold;
     if (layer === 'back') {
       glow(ctx, 0, 0, R * 2.1, col, 0.35 + 0.15 * Math.sin(t * 3.2 + seed));
+      if (liteOn()) return;   // (PERF round 24: the glow without its turning rays in light quality)
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.13 + 0.06 * Math.sin(t * 2 + seed);
       ctx.rotate(t * 0.6 + seed); F(ctx, col); ctx.beginPath();
       for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.moveTo(0, 0); ctx.arc(0, 0, R * 1.65, a - 0.1, a + 0.1); ctx.closePath(); }
@@ -10615,6 +10652,7 @@ const RENDER = (() => {
     ctx.globalAlpha = 1;
   }
   function seaFog(ctx, x0, y0, w, h, t, n, a, col) {
+    if (liteOn()) n = Math.ceil(n / 2);   // (PERF round 24: half the puffs in light quality)
     ctx.save();
     try {
       for (let i = 0; i < n; i++) {
@@ -16677,7 +16715,7 @@ const RENDER = (() => {
     try {
       t = t || 0;
       ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 4 && !liteOn(); i++) {   // (PERF round 24: no light shafts in light quality)
         const sx = x + w * (0.12 + i * 0.26) + Math.sin(t * 0.3 + i * 1.9) * 24, a = 0.05 + 0.025 * Math.sin(t * 0.7 + i);
         F(ctx, rgba(DEP_GLOW, a)); ctx.beginPath(); ctx.moveTo(sx - 18, y); ctx.lineTo(sx + 26, y); ctx.lineTo(sx + 26 + h * 0.28, y + h); ctx.lineTo(sx - 60 + h * 0.28, y + h); ctx.closePath(); ctx.fill();
       }
@@ -16722,7 +16760,7 @@ const RENDER = (() => {
       ctx.stroke();
       // light rays slanting down through the water
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 5 && !liteOn(); i++) {   // (PERF round 24: no light rays in light quality)
         const sx = w * (0.08 + i * 0.22) + Math.sin(t * 0.35 + i * 1.3) * 18, a = 0.07 + 0.035 * Math.sin(t * 0.8 + i * 2.1);
         F(ctx, rgba('#bff8ff', a)); ctx.beginPath(); ctx.moveTo(sx - 14, 0); ctx.lineTo(sx + 22, 0); ctx.lineTo(sx + 70, fy); ctx.lineTo(sx + 8, fy); ctx.closePath(); ctx.fill();
       }
@@ -17789,7 +17827,7 @@ const RENDER = (() => {
       const ic = kind === 'gr' ? 0 : sz;
       ctx.font = 'bold ' + sz + 'px ' + FONT;
       let tw = 0, s1 = str;
-      const mw = (x) => { try { return ctx.measureText(x).width || 0; } catch (e) { return 0; } };
+      const mw = (x) => rrMw(ctx, sz, x);   // (PERF round 24: cached)
       tw = mw(s1);
       if (kind === 'd' && n.all && dx + ic + tw > maxW) { s1 = String(n.d); tw = mw(s1); }   // a narrow slot drops the ALL
       if (k > 0 && dx + ic + tw > maxW) break;
@@ -17881,7 +17919,20 @@ const RENDER = (() => {
   // The width of s in bold at size z (0 without a canvas).
   function rr2W(ctx, s, z) {
     ctx.font = 'bold ' + z + 'px ' + FONT;
-    try { return ctx.measureText(String(s)).width || 0; } catch (e) { return 0; }
+    return rrMw(ctx, z, String(s));
+  }
+  /* PERF (round 24): the row measured its words with measureText 25 times a frame while it was open. The width
+     of s in bold z px (the font the caller just set; FONT is a system stack, never a late web font) is
+     measured once and kept, per context (a 0 is never kept). */
+  const RRW_MW = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function rrMw(ctx, z, s) {
+    let M = null, w;
+    try { M = RRW_MW && ctx && typeof ctx === 'object' ? RRW_MW.get(ctx) : null; if (RRW_MW && !M && ctx && typeof ctx === 'object') RRW_MW.set(ctx, M = new Map()); } catch (e) { M = null; }
+    const key = z + '|' + s;
+    if (M) { w = M.get(key); if (w !== undefined) return w; }
+    try { w = ctx.measureText(s).width || 0; } catch (e) { w = 0; }
+    if (M && w > 0) { if (M.size > 400) M.clear(); M.set(key, w); }
+    return w;
   }
   // A label's size so it fits maxW (from size down to min).
   function rr2Fs(ctx, s, size, min, maxW) {
@@ -18055,6 +18106,34 @@ const RENDER = (() => {
     F(ctx, '#fff6dc'); ctx.beginPath(); ctx.moveTo((st.x0 + st.x1) / 2 - 10, y + 1); ctx.lineTo((st.x0 + st.x1) / 2, y - 11); ctx.lineTo((st.x0 + st.x1) / 2 + 10, y + 1); ctx.closePath(); ctx.fill();
     txt(ctx, s, (st.x0 + st.x1) / 2, y + hgt / 2 + 0.5, fz, INK, true, 'center');
   }
+  /* PERF (round 24): the panel's drop shadow (black 0.6, blur 16, 5 down, all device px, as canvas shadows are)
+     was a shadowBlur on every frame the panel was up: the slowest single thing in a fight frame without a GPU,
+     and slow in Safari. It is now that very shadow, painted once per panel size into a sprite (the shape kept
+     off the sprite, its shadow thrown onto it) and copied in at the panel's whole device pixel. Under any
+     rotation or skew, or without a real canvas, the caller sets the shadow as before. */
+  const RR2_SH = { cv: null, key: '', pad: 40 };
+  function rr2Shadow(ctx, x, y, w, h, r) {
+    if (typeof document === 'undefined' || !ctx || typeof ctx.getTransform !== 'function') return false;
+    let m = null;
+    try { m = ctx.getTransform(); } catch (e) { m = null; }
+    if (!m || m.b !== 0 || m.c !== 0 || !(m.a > 0) || Math.abs(m.a - m.d) > 1e-5) return false;
+    const q = m.a, P = RR2_SH.pad, wd = w * q, hd = h * q, key = wd.toFixed(3) + ',' + hd.toFixed(3) + ',' + (r * q).toFixed(3);
+    try {
+      if (key !== RR2_SH.key || !RR2_SH.cv) {
+        const cv = RR2_SH.cv || document.createElement('canvas'), W0 = Math.ceil(wd) + P * 2, H0 = Math.ceil(hd) + P * 2;
+        if (cv.width !== W0 || cv.height !== H0) { cv.width = W0; cv.height = H0; }
+        const g = cv.getContext('2d');
+        if (!g) return false;
+        g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W0, H0);
+        g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 16; g.shadowOffsetY = 5; g.shadowOffsetX = W0 + 1000;
+        g.beginPath(); rrect(g, P - W0 - 1000, P, wd, hd, r * q); g.fillStyle = '#000'; g.fill();
+        RR2_SH.cv = cv; RR2_SH.key = key;
+      }
+      const dx = Math.round(m.a * x + m.e) - P, dy = Math.round(m.d * y + m.f) - P;
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(RR2_SH.cv, dx, dy); ctx.restore();
+      return true;
+    } catch (e) { return false; }
+  }
   function rr2Paint(ctx, st) {
     const a = st.a == null ? 1 : st.a, op = Math.max(0, Math.min(1, +st.op || 0)), x0 = st.x0, x1 = st.x1, y = st.y, ph = st.ph, t = st.t || 0;
     const go = Math.max(0, +st.go || 0);
@@ -18068,7 +18147,7 @@ const RENDER = (() => {
     }
     ctx.globalAlpha = a;
     ctx.save();
-    try { ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5; } catch (e) { /* stub */ }
+    if (!rr2Shadow(ctx, x0, y, x1 - x0, ph, 16)) { try { ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5; } catch (e) { /* stub */ } }
     ctx.beginPath(); rrect(ctx, x0, y, x1 - x0, ph, 16); F(ctx, RR2_C.panel); ctx.fill();
     ctx.restore();
     ctx.globalAlpha = a;
@@ -18266,7 +18345,7 @@ const RENDER = (() => {
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
     q9: { arena: Q9A, titleSprites: Q9_TSPR, logo: Q9_LOGO, title: Q9_TL, tt: TT, ttGeo,   // LABELS / PERF / TITLE (round 9): the arena's word rects, the title's caches and layout (round 20: the scene's caches and layout)
       glowStats: () => { let n = 0, px = 0; for (const m of glowCache.values()) for (const r in m) if (m[r].cv) { n++; px += glowArea(+r); } return { cols: glowCache.size, n, mb: +(px * 4 / 1048576).toFixed(2) }; } },   // MEMORY (round 9)
-    terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
+    terrainHex, terrainLive, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames, glint, enemyAura, RARITY_COL,
     belly, affixAura, affixBadges, binMark, wrench, rageCrown,
     capsule, ticket, CAP_COL,

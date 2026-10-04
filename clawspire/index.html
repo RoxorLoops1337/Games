@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#12091f">
+<!-- PERF (round 24): the scripts are asked for from the head, while the 200 KB of markup and CSS above them still
+     streams in; they still run in order at the end of the body. build.js stamps these hrefs like the script srcs. -->
+<link rel="preload" as="script" href="js/util.js"><link rel="preload" as="script" href="js/art.js"><link rel="preload" as="script" href="js/i18n.js">
+<link rel="preload" as="script" href="js/physics.js"><link rel="preload" as="script" href="js/data.js"><link rel="preload" as="script" href="js/combat.js">
+<link rel="preload" as="script" href="js/map.js"><link rel="preload" as="script" href="js/audio.js"><link rel="preload" as="script" href="js/render.js">
+<link rel="preload" as="script" href="js/intro.js"><link rel="preload" as="script" href="js/game.js"><link rel="preload" as="script" href="js/net.js">
 <title>CLAWSPIRE -- a claw machine roguelike</title>
 <meta name="description" content="Strap a cursed arcade claw to your back and climb the Clawspire. Your deck is a bin of real objects, your turn is a handful of claw drops.">
 <style id="boot-css">
