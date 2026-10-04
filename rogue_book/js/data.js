@@ -1,4 +1,4 @@
-// Inkwoven -- data core: registries, closed vocabularies, statuses, keywords,
+// Echowake data core: registries, closed vocabularies, statuses, keywords,
 // economy, heroes, brushes, tiles, the fixed roster, quotas, and the validator.
 //
 // This file is the machine-readable half of the contract (DESIGN.md is the human
@@ -203,7 +203,7 @@ const DATA = (() => {
     ritual:     { id: 'ritual', name: 'Ritual', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Might.' },
     plating:    { id: 'plating', name: 'Plating', kind: 'buff', stack: 'int', text: 'At the start of its turn, gain N Block.' },
     bloom:      { id: 'bloom', name: 'Bloom', kind: 'resource', stack: 'int', hero: 'hanae', text: 'Hanae\'s petals. Built by her attacks, spent by her finishers.' },
-    sumi:       { id: 'sumi', name: 'Sumi', kind: 'resource', stack: 'int', hero: 'kuro', text: 'Kuro\'s ink charge. Built by his skills, poured into his spells.' },
+    sumi:       { id: 'sumi', name: 'Breath', kind: 'resource', stack: 'int', hero: 'kuro', text: 'Kuro\'s breath. Built by his skills, released through his flute.' },
     ward:       { id: 'ward', name: 'Ward', kind: 'resource', stack: 'int', hero: 'suzu', text: 'Suzu\'s talisman charges. Built by her prayers, spent by her rites.' },
     charge:     { id: 'charge', name: 'Charge', kind: 'resource', stack: 'int', hero: 'raiga', text: 'Raiga\'s static. Built by taking hits and striking, released in storms.' },
     vulnerable: { id: 'vulnerable', name: 'Vulnerable', kind: 'debuff', stack: 'dur', text: 'Takes 50% more attack damage.' },
@@ -227,13 +227,13 @@ const DATA = (() => {
     front: { name: 'Front row', text: 'The hero in front takes most enemy attacks. A card line starting Front: only works while its hero stands here.' },
     back: { name: 'Back row', text: 'The hero in back is safe from most enemy attacks. A card line starting Back: only works while its hero stands here.' },
     swap: { name: 'Swap', text: 'Trade rows. One swap per turn is free, more cost 1 Energy.' },
-    ink: { name: 'Ink', text: 'Spend Ink on the map to paint a hex and reveal it.' },
-    brush: { name: 'Brush', text: 'A one-use brush that paints a shape of hexes for free.' },
+    ink: { name: 'Echo', text: 'Spend Echo on the map to wake a silent hex and reveal it.' },
+    brush: { name: 'Song', text: 'A one-use Song that wakes a shape of hexes for free.' },
     gem: { name: 'Gem', text: 'Socket gems into card slots. A slot only accepts its own colour, prism slots accept any.' },
     slot: { name: 'Gem slot', text: 'Colour-matched socket. Gems change how the card plays.' },
     prism: { name: 'Prism slot', text: 'A prism slot accepts a gem of any colour.' },
     xcost: { name: 'X cost', text: 'Spends all your remaining Energy. The card reads X as the Energy spent.' },
-    down: { name: 'Downed', text: 'A hero at 0 HP is downed: their cards are dead and they cannot be targeted. If both fall, the tale ends.' },
+    down: { name: 'Downed', text: 'A hero at 0 HP is downed: their cards are dead and they cannot be targeted. If both fall, the journey ends.' },
   };
 
   // ------------------------------------------------------------------
@@ -295,30 +295,30 @@ const DATA = (() => {
   // Brushes: one-use map tools. MAP.brushCells implements the geometry (DESIGN 4.8).
   // ------------------------------------------------------------------
   const brushes = {
-    stroke: { id: 'stroke', name: 'Long Stroke', kind: 'line', len: 3, text: 'Paint 3 hexes in a straight line, starting next to any painted hex.' },
-    wave:   { id: 'wave', name: 'Wave Sweep', kind: 'line', len: 5, text: 'Paint 5 hexes in a straight line, starting next to any painted hex.' },
-    fan:    { id: 'fan', name: 'Fan Brush', kind: 'fan', text: 'Paint a wedge of 3 hexes next to a painted hex.' },
-    splash: { id: 'splash', name: 'Ink Splash', kind: 'blob', text: 'Paint a hex next to the painted area and the 6 hexes around it.' },
-    halo:   { id: 'halo', name: 'Halo Ring', kind: 'ring', text: 'Paint all 6 hexes around any painted hex.' },
-    blot:   { id: 'blot', name: 'Quick Blot', kind: 'dot', text: 'Paint any one hex within 4 of the party.' },
+    stroke: { id: 'stroke', name: 'Drum Line', kind: 'line', len: 3, text: 'Wake 3 hexes in a straight line, starting next to any woken hex.' },
+    wave:   { id: 'wave', name: 'Ripple', kind: 'line', len: 5, text: 'Wake 5 hexes in a straight line, starting next to any woken hex.' },
+    fan:    { id: 'fan', name: 'Shout', kind: 'fan', text: 'Wake a wedge of 3 hexes next to a woken hex.' },
+    splash: { id: 'splash', name: 'Beat Drop', kind: 'blob', text: 'Wake a hex next to the woken land and the 6 hexes around it.' },
+    halo:   { id: 'halo', name: 'Chorus', kind: 'ring', text: 'Wake all 6 hexes around any woken hex.' },
+    blot:   { id: 'blot', name: 'Hum', kind: 'dot', text: 'Wake any one hex within 4 of the party.' },
   };
 
   // Map tile presentation names (icons come from ART.icon 'tile').
   const tiles = {
-    start: { name: 'Bookmark', text: 'Where the tale begins.' },
+    start: { name: 'Downbeat', text: 'Where the journey begins.' },
     empty: { name: 'Path', text: 'Open ground.' },
-    block: { name: 'Unwritten Void', text: 'A hole in the story. Nothing can cross it.' },
-    enemy: { name: 'Ambush', text: 'A creature of the tale blocks the way.' },
+    block: { name: 'Dead Silence', text: 'A hole in the land. Nothing can cross it.' },
+    enemy: { name: 'Ambush', text: 'A creature of the Hush blocks the way.' },
     elite: { name: 'Champion', text: 'A dangerous foe guarding a treasure.' },
-    boss: { name: 'Chapter Boss', text: 'The keeper of this chapter.' },
+    boss: { name: 'Keeper', text: 'The keeper of this verse.' },
     chest: { name: 'Treasure', text: 'A chest. Relics, gold, or gems.' },
     shop: { name: 'Peddler', text: 'A travelling merchant of odd things.' },
     camp: { name: 'Campfire', text: 'Rest, mend, or sharpen.' },
     event: { name: 'Fable', text: 'Something strange is happening.' },
-    well: { name: 'Ink Well', text: 'Refills your Ink.' },
-    brush: { name: 'Brush Rack', text: 'Take a one-use brush.' },
+    well: { name: 'Temple Bell', text: 'Ring it to refill your Echo.' },
+    brush: { name: 'Songbird', text: 'Learn a one-use Song.' },
     gemcache: { name: 'Gem Cache', text: 'Choose a gem.' },
-    forge: { name: 'Inkstone Forge', text: 'Upgrade one card, or cut gems.' },
+    forge: { name: 'Tuning Forge', text: 'Upgrade one card, or cut gems.' },
   };
 
   // ------------------------------------------------------------------
@@ -338,18 +338,18 @@ const DATA = (() => {
       unlock: null,
     },
     kuro: {
-      id: 'kuro', name: 'Kuro', title: 'The Inkweaver', prefer: 'back', res: 'sumi',
+      id: 'kuro', name: 'Kuro', title: 'The Songweaver', prefer: 'back', res: 'sumi',
       color: '#7a6bff', accent: '#5ff5ff', dark: '#1a1740', maxHp: 68,
-      blurb: 'A calligrapher who writes spells into the air. Fragile up close, devastating when the page is his to fill.',
+      blurb: 'A flautist who plays spells into the air. Fragile up close, devastating when the melody is his to carry.',
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
-      passives: [{ id: 'steady_hand', name: 'Steady Hand', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
+      passives: [{ id: 'steady_hand', name: 'Steady Breath', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
       starter: ['kuro_ink_bolt', 'kuro_ink_bolt', 'kuro_ink_ward', 'kuro_ink_ward', 'kuro_first_stroke'],
       unlock: null,
     },
     suzu: {
       id: 'suzu', name: 'Suzu', title: 'The Moon Miko', prefer: 'back', res: 'ward',
       color: '#a9c4ff', accent: '#e8424f', dark: '#4a5c9c', maxHp: 68,
-      blurb: 'A shrine maiden who keeps the tale from fraying. Her talismans turn the tide of any fight.',
+      blurb: 'A shrine maiden who keeps the land in tune. Her talismans turn the tide of any fight.',
       rows: { front: { blockAdd: 1, thorns: 2 }, back: { regen: 2 } },
       passives: [{ id: 'moonlit_rite', name: 'Moonlit Rite', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],
       starter: ['suzu_ofuda', 'suzu_ofuda', 'suzu_barrier', 'suzu_barrier', 'suzu_moon_prayer'],
@@ -393,9 +393,9 @@ const DATA = (() => {
       minion: [
         ['ember_wisp', 'Ember Wisp', 's', 'Tiny fire wisp. Burns a hero once, then fizzles.'],
         ['leaf_imp', 'Leaf Imp', 's', 'Fast leaf sprite called by kodama and guardians. One weak poke.'],
-        ['paper_kodama', 'Paper Kodama', 's', 'Hollow paper doll. Clogs the deck with blot cards.'],
+        ['paper_kodama', 'Hollow Kodama', 's', 'Hollow tree spirit. Clogs the deck with silence cards.'],
       ],
-      boss: ['boss_kuzunoha', 'Kuzunoha', 'xl', 'White fox whose nine tails end in brush tips. Ink strikes and paper kodama, then all nine tails at once.', 'The Nine-Tail Ink Fox'],
+      boss: ['boss_kuzunoha', 'Kuzunoha', 'xl', 'White fox whose nine tails each ring a bell. Bell strikes and hollow kodama, then all nine voices at once.', 'The Nine-Voiced Fox'],
     },
     2: {
       normal: [
@@ -404,7 +404,7 @@ const DATA = (() => {
         ['nopperabo', 'Nopperabo', 'm', 'Faceless ghost. Applies Weak and Frail, then strikes harder while they stick.'],
         ['drowned_samurai', 'Drowned Samurai', 'l', 'Waterlogged blade-master. Heavy cuts and Plating from sodden armour.'],
         ['koi_spirit', 'Koi Spirit', 'm', 'Spectral carp. Heals its allies and splashes both heroes.'],
-        ['tsukumogami', 'Tsukumogami', 'm', 'Haunted household object. Hits and shuffles blot cards into your draw pile.'],
+        ['tsukumogami', 'Tsukumogami', 'm', 'Haunted household object. Hits and shuffles silence cards into your draw pile.'],
         ['silk_weaver', 'Silk Weaver', 'm', 'Spider servant. Binds a hero and calls a Spiderling.'],
         ['nure_onna', 'Nure-onna', 'l', 'Snake-bodied river woman. Strikes the back row and poisons.'],
         ['rokurokubi', 'Rokurokubi', 'm', 'Long-necked ghost that reaches over the front hero to hit the back row twice.'],
@@ -426,26 +426,26 @@ const DATA = (() => {
       normal: [
         ['storm_drone', 'Storm Drone', 'm', 'Hovering shock drone. Rapid lightning jabs in threes.'],
         ['komainu_guardian', 'Komainu Guardian', 'l', 'Stone lion-dog. Plating and Thorns, then a crushing pounce.'],
-        ['redaction_knight', 'Redaction Knight', 'm', 'Black bars over its face. Hits hard and adds redacted cards.'],
-        ['void_scribe', 'Void Scribe', 'm', 'Writes with blank ink. Erases your buffs and adds blot cards.'],
-        ['blank_soldier', 'Blank Soldier', 'm', 'Paper soldier that fights in ranks. Steady hits, weak alone.'],
+        ['redaction_knight', 'Muffled Knight', 'm', 'Felt-stuffed helm. Hits hard and adds muted cards.'],
+        ['void_scribe', 'Grey Cantor', 'm', 'Chants silence. Strips your buffs and adds silence cards.'],
+        ['blank_soldier', 'Silent Soldier', 'm', 'Grey soldier that marches in step. Steady hits, weak alone.'],
         ['sky_serpent', 'Sky Serpent', 'l', 'Coiling wind serpent. Multi-hit strikes across the back row.'],
-        ['eraser_wraith', 'Eraser Wraith', 'm', 'Rubs out your Block and your hero resource stacks.'],
+        ['eraser_wraith', 'Muffle Wraith', 'm', 'Smothers your Block and your hero resource stacks.'],
         ['thunder_crow', 'Thunder Crow', 'm', 'Storm crow. Dives for a Stun and pecks the back row.'],
-        ['paper_golem', 'Paper Golem', 'l', 'Folded paper giant. Slow, heavy hits and Plating.'],
-        ['margin_imp', 'Margin Imp', 'm', 'Scribbling imp. Calls Typo Sprites and adds wilt cards.'],
+        ['paper_golem', 'Felt Golem', 'l', 'Padded felt giant. Slow, heavy hits and Plating.'],
+        ['margin_imp', 'Off-Key Imp', 'm', 'Off-key imp. Calls Sour Notes and adds wilt cards.'],
       ],
       elite: [
-        ['censor_golem', 'Censor Golem', 'l', 'Stamps things out. Redacted cards, Plating, and one huge stamp.'],
+        ['censor_golem', 'Censor Golem', 'l', 'Stamps things silent. Muted cards, Plating, and one huge stamp.'],
         ['storm_whelp', 'Storm Dragon Whelp', 'l', 'Young storm dragon. Lightning across the whole party and multi-strikes.'],
-        ['black_bar_inquisitor', 'Black-Bar Inquisitor', 'l', 'Hunts the weak. Stun, Bind, and a finisher against a low hero.'],
+        ['black_bar_inquisitor', 'Hush Inquisitor', 'l', 'Hunts the weak. Stun, Bind, and a finisher against a low hero.'],
       ],
       minion: [
-        ['blank_page', 'Blank Page', 's', 'Drifting blank sheet. Gains Block, then wraps a hero in Frail.'],
+        ['blank_page', 'Hush Moth', 's', 'Drifting grey moth. Gains Block, then wraps a hero in Frail.'],
         ['spark_mote', 'Spark Mote', 's', 'Tiny storm spark. One zap and it bursts.'],
-        ['typo_sprite', 'Typo Sprite', 's', 'Mischievous glitch. Adds a wilt card.'],
+        ['typo_sprite', 'Sour Note', 's', 'Mischievous sour note. Adds a wilt card.'],
       ],
-      boss: ['boss_editor', 'The Editor', 'xl', 'Pale scholar with a red pen. Becomes an eraser-armed giant, then a colossal tear in the page.', 'Keeper of the Last Page'],
+      boss: ['boss_editor', 'The Conductor', 'xl', 'Pale conductor with a red baton. Becomes a felt-armed giant, then a colossal hole of silence.', 'Keeper of the Last Note'],
     },
   };
 

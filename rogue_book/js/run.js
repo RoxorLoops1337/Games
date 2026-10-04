@@ -31,7 +31,7 @@
 //            step(R,q,r) -> Node | Instant | null. null: the move was illegal (R.map.pos unchanged) or nothing waits on that tile.
 //            Instant = {kind:'well', tile, gained (what fitted), amount (nominal), done:true} | {kind:'brush', tile, id, done:true}. A fable tile with
 //            no eligible event resolves as {kind:'well', gained:1, fallback:'event', toast, done:true}. Instants are already applied and the tile is done.
-//            Mercy: compare R.stats.mercy before and after a call to show the "the Book lends a drop of Ink" toast (paint and useBrush also say mercy:true).
+//            Mercy: compare R.stats.mercy before and after a call to show the "the land hums back one Echo" toast (paint and useBrush also say mercy:true).
 //   Combat   combatInit(R, node) -> the options for COMBAT.create (deck, heroes and mods are copies)
 //            combatDone(R, C) -> Rewards | null. null: C is not over (nothing changed), or the party fell (then R.done is true). A repeat call for the
 //            same fight returns the same Rewards and changes nothing. Applies HP (downed heroes revive at mods.reviveFrac of max HP, at least 1),
@@ -375,7 +375,7 @@ const RUN = (() => {
       const d = o.n !== undefined ? o.n : trunc(R.inkMax * o.pct);
       const before = R.ink;
       R.ink = Math.min(R.inkMax, Math.max(0, R.ink + d));
-      out.log.push({ op: 'ink', n: R.ink - before, text: R.ink >= before ? `Gained ${R.ink - before} Ink.` : `Lost ${before - R.ink} Ink.` });
+      out.log.push({ op: 'ink', n: R.ink - before, text: R.ink >= before ? `Gained ${R.ink - before} Echo.` : `Lost ${before - R.ink} Echo.` });
     },
     heal(R, o, ctx, out) {
       const healMul = mods(R).healMul;
@@ -469,7 +469,7 @@ const RUN = (() => {
     addBrush(R, o, ctx, out) {
       const id = o.id === 'random' ? rollBrush(ctx.rng) : o.id;
       if (id && DATA.brushes[id]) R.brushes.push(id);
-      out.log.push(id && DATA.brushes[id] ? { op: 'addBrush', id, text: `Found the ${DATA.brushes[id].name}.` } : { op: 'addBrush', text: 'No brush to find.' });
+      out.log.push(id && DATA.brushes[id] ? { op: 'addBrush', id, text: `Found the ${DATA.brushes[id].name}.` } : { op: 'addBrush', text: 'No Song to find.' });
     },
     addCurse(R, o, ctx, out) {
       const ids = (DATA.FIXED.curses || []).filter((id) => DATA.cards[id]);
@@ -497,7 +497,7 @@ const RUN = (() => {
         h.log.forEach((x) => out.log.push(x));
         h.pending.forEach((x) => out.pending.push(x));
       });
-      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The path opens (${U.plural(tiles.length, 'hex', 'hexes')}).` : 'The way ahead is already open.' });
+      out.log.push({ op: 'paint', n: tiles.length, text: tiles.length ? `The land wakes (${U.plural(tiles.length, 'hex', 'hexes')}).` : 'The way ahead is already open.' });
     },
     cardReward(R, o, ctx, out) {
       const n = o.n || 3;
@@ -653,7 +653,7 @@ const RUN = (() => {
     const m = mods(R);
     R.inkMax = m.inkMax;
     R.ink = Math.min(m.inkMax, Math.max(R.ink, m.startInk));       // chapter 1: startInk; later chapters top up to it
-    note(R, `Chapter ${n} begins.`);
+    note(R, `Verse ${n} begins.`);
     const h = hook(R, 'onChapterStart', {});
     return { ok: true, chapter: n, log: h.log, pending: h.pending };
   }
@@ -739,7 +739,7 @@ const RUN = (() => {
     if (unresolvedReachable(R)) return false;
     R.ink = Math.min(R.inkMax, R.ink + cost);
     R.stats.mercy += 1;
-    note(R, 'The Book lends a drop of Ink.');
+    note(R, 'The land hums back one Echo.');
     return true;
   }
 
@@ -842,8 +842,8 @@ const RUN = (() => {
     if (req.hpPct !== undefined && !live.every((h) => h.hp >= req.hpPct * h.maxHp)) return { ok: false, reason: `Every hero needs ${pct(req.hpPct)} HP` };
     if (req.hpBelow !== undefined && !live.some((h) => h.hp < req.hpBelow * h.maxHp)) return { ok: false, reason: `Needs a hero below ${pct(req.hpBelow)} HP` };
     if (req.relic !== undefined && R.relics.indexOf(req.relic) < 0) return { ok: false, reason: `Needs the ${relicName(req.relic)}` };
-    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the story has not led here' };
-    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Chapter ${req.chapter} only` };
+    if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the journey has not led here' };
+    if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Verse ${req.chapter} only` };
     return { ok: true };
   }
   // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed treasure
@@ -967,7 +967,7 @@ const RUN = (() => {
         if (n) return (R.node = n);
         R.ink = Math.min(R.inkMax, R.ink + 1);
         t.done = true;
-        return { kind: 'well', tile: at, gained: 1, amount: 1, fallback: 'event', toast: 'The fable has nothing left to tell. You find a drop of Ink.', done: true };
+        return { kind: 'well', tile: at, gained: 1, amount: 1, fallback: 'event', toast: 'The fable has nothing left to tell. You find a little Echo.', done: true };
       }
       default: return null;
     }
@@ -1037,7 +1037,7 @@ const RUN = (() => {
     const front = typeof C.front === 'function' ? C.front() : null;
     const fi = front ? R.heroes.findIndex((h) => h.id === front.id) : (Number.isInteger(S.frontIdx) ? S.frontIdx : -1);
     if (fi >= 0 && fi < R.heroes.length) R.frontIdx = fi;
-    note(R, tier === 'boss' ? 'A chapter boss fell.' : 'Fight won.');
+    note(R, tier === 'boss' ? 'A keeper fell.' : 'Fight won.');
 
     const won = hook(R, 'onFightWon', { tier });
     const pending = won.pending.slice();
@@ -1101,7 +1101,7 @@ const RUN = (() => {
       g.pending.forEach((x) => res.pending.push(x));
     }
     if (choice.gem) { R.gems.push(choice.gem); res.log.push({ op: 'addGem', id: choice.gem, text: `Found ${DATA.gems[choice.gem].name}.` }); }
-    if (choice.takeBrush) { R.brushes.push(rewards.brush); res.log.push({ op: 'addBrush', id: rewards.brush, text: 'Took the brush.' }); }
+    if (choice.takeBrush) { R.brushes.push(rewards.brush); res.log.push({ op: 'addBrush', id: rewards.brush, text: 'Learned the Song.' }); }
     rewards.claimed = true;
     if (R.node && R.node.rewards && R.node.rewards !== rewards) R.node.rewards.claimed = true;
     checkStranded(R);
@@ -1264,7 +1264,7 @@ const RUN = (() => {
       R.victory = true;
       R.chapterCleared = false;
       R.node = null;
-      note(R, 'The last page is turned.');
+      note(R, 'The last note rings out.');
       return { next: 'victory', healed: [], maxHp: 0, log: [], pending: [] };
     }
     const healMul = mods(R).healMul;

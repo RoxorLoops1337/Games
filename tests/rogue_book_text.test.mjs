@@ -293,7 +293,7 @@ t.test('card text: energy, draw, cards and the rest', () => {
     ['picked count', [pick('hand', 2, 'discard'), { op: 'draw', n: { per: 'picked' } }], 'Discard 2 cards. Draw 1 card for each card chosen.'],
     ['picked mul', [pick('hand', 2, 'exhaust', { optional: true }), blk({ per: 'picked', mul: 3 })], 'Exhaust up to 2 cards. Gain 3 Block for each card chosen.'],
     ['gold', [{ op: 'gold', n: 10 }], 'Gain 10 gold.'],
-    ['ink', [{ op: 'ink', n: 2 }], 'Gain 2 Ink.'],
+    ['ink', [{ op: 'ink', n: 2 }], 'Gain 2 Echo.'],
     ['max hp', [{ op: 'maxHp', n: 2 }], 'Gain 2 max HP.'],
     ['revive pct', [{ op: 'revive', pct: 0.3 }], 'Revive a fallen hero with 30% HP.'],
     ['revive n', [{ op: 'revive', n: 8 }], 'Revive a fallen hero with 8 HP.'],
@@ -423,16 +423,16 @@ t.test('card text: spend, lose all Block, and the spent count', () => {
     ['spend with base', [dmg(bloom(3, { base: 3 }), { consume: { s: 'bloom', upTo: 3 } })], 'Spend up to 3 Bloom. Deal 3 damage, plus 3 for each Bloom spent.'],
     ['spend for block', [blk(bloom(2), { consume: 'bloom', tgt: 'both' })], 'Spend all Bloom. Both heroes gain 2 Block for each Bloom spent.'],
     ['spend for heal', [{ op: 'heal', n: bloom(3), consume: { s: 'bloom', upTo: 4 }, tgt: 'both' }], 'Spend up to 4 Bloom. Heal both heroes for 3 HP for each Bloom spent.'],
-    ['spend for draw', [{ op: 'draw', n: { per: 'status', who: 'self', s: 'sumi' }, consume: 'sumi' }], 'Spend all Sumi. Draw cards equal to the Sumi spent.'],
-    ['spend for energy', [{ op: 'energy', n: { per: 'status', who: 'self', s: 'sumi', mul: 1 }, consume: 'sumi' }], 'Spend all Sumi. Gain Energy equal to the Sumi spent.'],
-    ['spend for hits', [dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })], 'Spend up to 4 Sumi. Deal 3 damage for each Sumi spent.'],
-    ['spend for status', [st('poison', { per: 'status', who: 'self', s: 'sumi', mul: 2 }, { consume: 'sumi' })], 'Spend all Sumi. Apply 2 Poison for each Sumi spent.'],
+    ['spend for draw', [{ op: 'draw', n: { per: 'status', who: 'self', s: 'sumi' }, consume: 'sumi' }], 'Spend all Breath. Draw cards equal to the Breath spent.'],
+    ['spend for energy', [{ op: 'energy', n: { per: 'status', who: 'self', s: 'sumi', mul: 1 }, consume: 'sumi' }], 'Spend all Breath. Gain Energy equal to the Breath spent.'],
+    ['spend for hits', [dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })], 'Spend up to 4 Breath. Deal 3 damage for each Breath spent.'],
+    ['spend for status', [st('poison', { per: 'status', who: 'self', s: 'sumi', mul: 2 }, { consume: 'sumi' })], 'Spend all Breath. Apply 2 Poison for each Breath spent.'],
     ['consume block', [dmg({ per: 'block', who: 'self' }, { consume: 'block' })], 'Deal damage equal to your Block. Lose all your Block.'],
     ['consume block upTo', [dmg({ per: 'block', who: 'self' }, { consume: { s: 'block', upTo: 6 } })], 'Deal damage equal to your Block. Lose up to 6 Block.'],
     ['sums to hit count when hits per is spent', [dmg(2, { hits: { per: 'status', who: 'self', s: 'bloom' }, consume: 'bloom' })], 'Spend all Bloom. Deal 2 damage for each Bloom spent.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, name));
-  t.eq(text([dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 } })], SK), 'Deal 3 damage for each Sumi you have (up to 4).', 'without a consume the count reads "you have"');
-  t.eq(text([dmg(3, { tgt: 'random' }), dmg(3, { tgt: 'random', hits: { per: 'status', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })]), 'Deal 3 damage to a random enemy. Spend up to 4 Sumi. Deal 3 damage to a random enemy for each Sumi spent.', 'a strike followed by a spending strike');
+  t.eq(text([dmg(3, { hits: { per: 'status', who: 'self', s: 'sumi', upTo: 4 } })], SK), 'Deal 3 damage for each Breath you have (up to 4).', 'without a consume the count reads "you have"');
+  t.eq(text([dmg(3, { tgt: 'random' }), dmg(3, { tgt: 'random', hits: { per: 'status', s: 'sumi', upTo: 4 }, consume: { s: 'sumi', upTo: 4 } })]), 'Deal 3 damage to a random enemy. Spend up to 4 Breath. Deal 3 damage to a random enemy for each Breath spent.', 'a strike followed by a spending strike');
 });
 
 t.test('card text: keywords lead, Exhaust trails, hand text for curses', () => {
@@ -453,7 +453,7 @@ t.test('card text: keywords lead, Exhaust trails, hand text for curses', () => {
 
 t.test('card text: hooks read as sentences', () => {
   [
-    ['play a skill', hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } }), 'Whenever you play a Skill, gain 1 Sumi.'],
+    ['play a skill', hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } }), 'Whenever you play a Skill, gain 1 Breath.'],
     ['limit one', hook('onPlay', [blk(2)], { filter: { type: 'attack' }, limit: 1 }), 'Once per turn, whenever you play an Attack, gain 2 Block.'],
     ['limit two', hook('onPlay', [st('bloom', 1)], { filter: { type: 'attack' }, limit: 2 }), 'Up to 2 times per turn, whenever you play an Attack, gain 1 Bloom.'],
     ['turn start', hook('turnStart', [{ op: 'draw', n: 1 }]), 'At the start of your turn, draw 1 card.'],
@@ -669,10 +669,10 @@ t.test('hookText and opsText: hooks of relics and events', () => {
     [{ on: 'onFightWon', filter: { tier: 'elite' }, fx: [{ op: 'heal', pct: 0.1 }] }, 'Whenever you win an elite fight, heal both heroes for 10% of max HP.'],
     [{ on: 'onFightWon', filter: { tier: ['normal', 'elite'] }, fx: [{ op: 'gold', n: 5 }] }, 'Whenever you win a normal or elite fight, gain 5 gold.'],
     [{ on: 'onRest', fx: [{ op: 'maxHp', n: 2, who: 'front' }] }, 'Whenever you rest at a camp, the front hero gains 2 max HP.'],
-    [{ on: 'onChapterStart', fx: [{ op: 'ink', n: 2 }] }, 'At the start of each chapter, gain 2 Ink.'],
-    [{ on: 'onChapterStart', every: 2, fx: [{ op: 'ink', n: 2 }] }, 'Every 2nd chapter start, gain 2 Ink.'],
+    [{ on: 'onChapterStart', fx: [{ op: 'ink', n: 2 }] }, 'At the start of each verse, gain 2 Echo.'],
+    [{ on: 'onChapterStart', every: 2, fx: [{ op: 'ink', n: 2 }] }, 'Every 2nd verse start, gain 2 Echo.'],
     [{ on: 'onShopEnter', fx: [{ op: 'gold', n: 20 }] }, 'Whenever you enter a shop, gain 20 gold.'],
-    [{ on: 'onPaint', limit: 1, fx: [{ op: 'ink', n: 1 }] }, 'Once per chapter, whenever you paint a hex, gain 1 Ink.'],
+    [{ on: 'onPaint', limit: 1, fx: [{ op: 'ink', n: 1 }] }, 'Once per verse, whenever you wake a hex, gain 1 Echo.'],
     [{ on: 'combatStart', fx: [blk(6)] }, 'At the start of combat, gain 6 Block.'],
     [{ on: 'combatEnd', fx: [{ op: 'heal', n: 3 }] }, 'At the end of combat, heal 3 HP.'],
     [{ on: 'turnStart', fx: [{ op: 'draw', n: 1 }] }, 'At the start of your turn, draw 1 card.'],
@@ -684,7 +684,7 @@ t.test('hookText and opsText: hooks of relics and events', () => {
     [{ on: 'onWhatever', fx: [{ op: 'draw', n: 1 }] }, 'When onWhatever, draw 1 card.'],
   ].forEach(([h, want]) => t.eq(D.hookText(h), want, 'hookText: ' + h.on + (h.filter ? ' ' + JSON.stringify(h.filter) : '')));
   t.eq(D.hookText({ op: 'hook', on: 'turnStart', fx: [{ op: 'draw', n: 1 }] }), 'At the start of your turn, draw 1 card.', 'a hook op is accepted as well as a bare hook');
-  t.eq(D.opsText([hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } })]), 'Whenever you play a Skill, gain 1 Sumi.', 'opsText of a hook op');
+  t.eq(D.opsText([hook('onPlay', [st('sumi', 1)], { filter: { type: 'skill' } })]), 'Whenever you play a Skill, gain 1 Breath.', 'opsText of a hook op');
   t.eq(D.opsText([hook('turnStart', [{ op: 'energy', n: 2 }], { once: true })]), 'Next turn: gain 2 Energy.', 'opsText of a one-shot next turn hook');
   t.eq(D.opsText([hook('turnStart', [blk(2)])]), 'At the start of your turn, gain 2 Block.', 'opsText of a turn start hook');
   t.eq(D.opsText([dmg(3), blk(2)]), 'Deal 3 damage. Gain 2 Block.', 'opsText of combat ops');
@@ -696,14 +696,14 @@ t.test('hookText and opsText: hooks of relics and events', () => {
 
 t.test('opsText: run ops (events and run hooks)', () => {
   const RUN = { run: true };
-  t.eq(D.opsText([{ op: 'gold', n: 30 }, { op: 'heal', pct: 0.3 }, { op: 'hurt', pct: 0.1, who: 'both' }, { op: 'maxHp', n: 3, who: 'hanae' }, { op: 'ink', n: 2 }], RUN), 'Gain 30 gold. Heal both heroes for 30% of max HP. Both heroes lose 10% of max HP. Hanae gains 3 max HP. Gain 2 Ink.', 'gold, heal, hurt, max HP and ink');
+  t.eq(D.opsText([{ op: 'gold', n: 30 }, { op: 'heal', pct: 0.3 }, { op: 'hurt', pct: 0.1, who: 'both' }, { op: 'maxHp', n: 3, who: 'hanae' }, { op: 'ink', n: 2 }], RUN), 'Gain 30 gold. Heal both heroes for 30% of max HP. Both heroes lose 10% of max HP. Hanae gains 3 max HP. Gain 2 Echo.', 'gold, heal, hurt, max HP and ink');
   t.eq(D.opsText([{ op: 'heal', who: 'front', n: 5 }, { op: 'hurt', who: 'kuro', n: 4 }, { op: 'heal', who: 'lowest', pct: 0.5 }, { op: 'heal', who: 'random', n: 2 }], RUN), 'Heal the front hero for 5 HP. Kuro loses 4 HP. Heal the weakest hero for 50% of max HP. Heal a random hero for 2 HP.', 'who variants');
-  t.eq(D.opsText([{ op: 'gold', n: -20 }, { op: 'gold', pct: -0.1 }, { op: 'ink', n: -1 }, { op: 'ink', pct: 0.5 }, { op: 'maxHp', n: -2, who: 'front' }], RUN), 'Lose 20 gold. Lose 10% of your gold. Lose 1 Ink. Gain 50% of your max Ink. The front hero loses 2 max HP.', 'negative and percent forms');
+  t.eq(D.opsText([{ op: 'gold', n: -20 }, { op: 'gold', pct: -0.1 }, { op: 'ink', n: -1 }, { op: 'ink', pct: 0.5 }, { op: 'maxHp', n: -2, who: 'front' }], RUN), 'Lose 20 gold. Lose 10% of your gold. Lose 1 Echo. Gain 50% of your max Echo. The front hero loses 2 max HP.', 'negative and percent forms');
   t.eq(D.opsText([{ op: 'heal', pct: 0.3 }]), 'Heal both heroes for 30% of max HP.', 'a pct heal is a run heal even without the run flag');
   t.eq(D.opsText([{ op: 'hurt', n: 3, who: 'both' }]), 'Both heroes lose 3 HP.', 'a who hurt is a run hurt even without the run flag');
   t.eq(D.opsText([{ op: 'addCard', card: PLAINC }, { op: 'addCard', n: 2, rarity: 'rare' }, { op: 'addCard' }, { op: 'removeCard' }, { op: 'removeCard', n: 2 }, { op: 'upgradeCard', n: 2 }, { op: 'transformCard', random: true }, { op: 'duplicateCard' }], RUN), 'Add a Pebble to your deck. Add 2 random rare cards to your deck. Add a random card to your deck. Remove a card from your deck. Remove 2 cards from your deck. Upgrade 2 cards. Transform a random card. Duplicate a card.', 'card ops');
   const rl = W.relic({ name: 'Lucky Coin' }), gm = W.gem({ dmg: 1 }, { name: 'Ruby' });
-  t.eq(D.opsText([{ op: 'addRelic', rarity: 'rare' }, { op: 'addRelic', id: rl }, { op: 'addGem', color: 'red', tier: 2 }, { op: 'addGem', id: gm }, { op: 'addGem' }, { op: 'addBrush', id: 'random' }, { op: 'addCurse', n: 2 }, { op: 'addCurse' }, { op: 'paint', n: 3 }, { op: 'paint', n: 1 }, { op: 'cardReward' }, { op: 'fight' }, { op: 'flag', id: 'x' }], RUN), 'Gain a random rare Treasure. Gain Lucky Coin. Gain a random red gem of tier 2. Gain Ruby. Gain a random gem. Gain a random Brush. Add 2 curses to your deck. Add a curse to your deck. Paint 3 hexes for free. Paint 1 hex for free. Choose a card reward. A fight begins.', 'relic, gem, brush, curse, paint, reward, fight, and flags print nothing');
+  t.eq(D.opsText([{ op: 'addRelic', rarity: 'rare' }, { op: 'addRelic', id: rl }, { op: 'addGem', color: 'red', tier: 2 }, { op: 'addGem', id: gm }, { op: 'addGem' }, { op: 'addBrush', id: 'random' }, { op: 'addCurse', n: 2 }, { op: 'addCurse' }, { op: 'paint', n: 3 }, { op: 'paint', n: 1 }, { op: 'cardReward' }, { op: 'fight' }, { op: 'flag', id: 'x' }], RUN), 'Gain a random rare Treasure. Gain Lucky Coin. Gain a random red gem of tier 2. Gain Ruby. Gain a random gem. Learn a random Song. Add 2 curses to your deck. Add a curse to your deck. Wake 3 hexes for free. Wake 1 hex for free. Choose a card reward. A fight begins.', 'relic, gem, brush, curse, paint, reward, fight, and flags print nothing');
   t.eq(D.opsText([{ op: 'flag', id: 'x' }], RUN), '', 'a flag op is silent');
   t.eq(D.opsText([{ op: 'addCurse', id: INK }], RUN), 'Add Ink Blot to your deck.', 'a named curse');
 });
@@ -1084,7 +1084,7 @@ t.test('card text: gains of different kinds share one sentence, same kinds do no
     ['different targets stay apart', [blk(4, { tgt: 'both' }), st('bloom', 1)], 'Both heroes gain 4 Block. Gain 1 Bloom.'],
     ['two blocks stay apart', [blk(4), blk(2)], 'Gain 4 Block. Gain 2 Block.'],
     ['a computed block stays apart', [blk({ per: 'block', who: 'ally' }), st('bloom', 1)], 'Gain Block equal to your ally\'s Block. Gain 1 Bloom.'],
-    ['gold and Ink', [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }], 'Gain 1 Ink and 3 gold.'],
+    ['gold and Ink', [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }], 'Gain 1 Echo and 3 gold.'],
     ['a draw is not a gain', [st('bloom', 1), { op: 'draw', n: 1 }], 'Gain 1 Bloom. Draw 1 card.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, SK), want, 'gain: ' + name));
   t.eq(text([blk(6), st('thorns', 1), cond({ row: 'front' }, [st('thorns', 2)])], SK), 'Gain 6 Block and 1 Thorns. Front: gain 2 more Thorns.', 'a same status row bonus still reads "more" after a merged sentence');
@@ -1132,12 +1132,12 @@ t.test('card text: doubling, area strikes with a debuff, spent counts and the ta
     ['a strike and a debuff on others', [dmg(5, { tgt: 'others' }), st('weak', 1, { tgt: 'others' })], 'Deal 5 damage and apply 1 Weak to all other enemies.'],
     ['a strike and a debuff on another target', [dmg(3, { tgt: 'all' }), st('mark', 1, { tgt: 'lowest' })], 'Deal 3 damage to all enemies. Apply 1 Mark to the enemy with the lowest HP.'],
     ['repeat of a strike and a debuff', [{ op: 'repeat', n: { per: 'X' }, do: [dmg(3, { tgt: 'all' }), st('burn', 1, { tgt: 'all' })] }], 'Repeat X times: deal 3 damage and apply 1 Burn to all enemies.'],
-    ['a spent count puts the target first', [dmg(sumi(2, { base: 4, upTo: 3 }), { tgt: 'all', consume: { s: 'sumi', upTo: 3 } })], 'Spend up to 3 Sumi. Deal 4 damage to all enemies, plus 2 for each Sumi spent.'],
-    ['and the for each form', [dmg(sumi(4, { upTo: 6 }), { tgt: 'all', consume: { s: 'sumi', upTo: 6 } })], 'Spend up to 6 Sumi. Deal 4 damage to all enemies for each Sumi spent.'],
+    ['a spent count puts the target first', [dmg(sumi(2, { base: 4, upTo: 3 }), { tgt: 'all', consume: { s: 'sumi', upTo: 3 } })], 'Spend up to 3 Breath. Deal 4 damage to all enemies, plus 2 for each Breath spent.'],
+    ['and the for each form', [dmg(sumi(4, { upTo: 6 }), { tgt: 'all', consume: { s: 'sumi', upTo: 6 } })], 'Spend up to 6 Breath. Deal 4 damage to all enemies for each Breath spent.'],
     ['and X hits with a plus', [dmg({ base: 2, per: 'status', who: 'self', s: 'bloom', mul: 1 }, { hits: { per: 'X' }, tgt: 'all', consume: 'bloom' })], 'Spend all Bloom. Deal 2 damage to all enemies X times, plus 1 for each Bloom spent.'],
     ['a plain equal form keeps the target at the end', [dmg({ per: 'block' }, { tgt: 'all' })], 'Deal damage equal to your Block to all enemies.'],
     ['draw for each chosen', [pick('hand', 2, 'discard', { optional: true }), { op: 'draw', n: { per: 'picked' } }], 'Discard up to 2 cards. Draw 1 card for each card chosen.'],
-    ['a status for each chosen', [pick('hand', 2, 'exhaust', { optional: true }), st('sumi', { per: 'picked' })], 'Exhaust up to 2 cards. Gain 1 Sumi for each card chosen.'],
+    ['a status for each chosen', [pick('hand', 2, 'exhaust', { optional: true }), st('sumi', { per: 'picked' })], 'Exhaust up to 2 cards. Gain 1 Breath for each card chosen.'],
     ['earlier plays', [dmg({ per: 'cardsPlayed', mul: 2 })], 'Deal 2 damage for each card played earlier this turn.'],
   ].forEach(([name, fx, want]) => t.eq(text(fx, name.indexOf('X hits') >= 0 || name.indexOf('repeat of') >= 0 ? Object.assign({ cost: 'X' }, SK) : SK), want, 'wording: ' + name));
 });
@@ -1151,7 +1151,7 @@ t.test('card text: Curse and Status cards are acted by the front hero, and dead 
   t.eq(junk([], { turnEnd: [{ op: 'hurt', n: 1, tgt: 'both' }] }), 'If this is in your hand at the end of your turn, both heroes lose 1 HP. Exhaust.', 'explicit targets stay');
   const res = (hero) => W.card([st('might', 1), cond({ status: { s: 'bloom', who: 'self' } }, [st('bloom', 2)]), cond({ status: { s: 'sumi', who: 'self' } }, [st('sumi', 2)])], { hero, type: 'skill' });
   t.eq(P(res('hanae')), 'Gain 1 Might. If you have Bloom, gain 2 Bloom.', 'a Hanae card never holds Sumi, so that line is left out');
-  t.eq(P(res('kuro')), 'Gain 1 Might. If you have Sumi, gain 2 Sumi.', 'and a Kuro card never holds Bloom');
+  t.eq(P(res('kuro')), 'Gain 1 Might. If you have Breath, gain 2 Breath.', 'and a Kuro card never holds Bloom');
   t.eq(P(W.card([cond({ status: { s: 'bloom', who: 'self', lte: 0 } }, [st('might', 1)])], { hero: 'kuro', type: 'skill' })), 'If you have no Bloom, gain 1 Might.', 'an "at most" condition on another hero\'s resource is still true, so it stays');
 });
 
@@ -1192,7 +1192,7 @@ t.test('enemy text: an enemy move reads from the enemy\'s side (the bestiary pri
   t.eq(M('g'), 'Shuffle 2 Ink Blot cards into your draw pile. Put an Ink Blot card on top of your draw pile. Steal 10 gold. Swap your rows. Flee.', 'junk, theft, swap and flee');
   t.eq(M('h'), 'Deal 5 damage to the front hero, plus 3 for each debuff on the hero (max 14). Deal 4 damage to the front hero, plus 3 for each enemy still standing (max 14). Deal 9 damage to the front hero, plus 1 for every 2 Block the hero has (max 18), ignoring Block. Deal 14 damage to the weakest hero, plus 1 for every 4 HP the hero is missing (max 30).', 'per values read from the enemy\'s side, fractions never print as decimals');
   t.eq(M('i'), 'Deal damage equal to 6 plus its turn count (max 12) to both heroes. Deal damage equal to 15 plus its Plating (max 26) to the front hero.', 'self counters read "its"');
-  t.eq(M('j'), 'Remove all buffs, Bloom and Sumi from both heroes. Lose all Thorns. Remove all debuffs from itself.', 'removals');
+  t.eq(M('j'), 'Remove all buffs, Bloom and Breath from both heroes. Lose all Thorns. Remove all debuffs from itself.', 'removals');
   t.eq(D.opsText(e.start), 'Gain 3 Plating and 2 Thorns.', 'start ops');
   t.eq(D.hookText(e.hooks[0]), 'When it dies, deal 4 damage to the front hero.', 'an onDeath hook');
   t.eq(D.hookText(e.hooks[1]), 'Once per turn, when it is hurt, lose 1 Plating.', 'an onHurt hook');
@@ -1219,7 +1219,7 @@ t.test('intentText: help for other enemies is told apart from help for itself, a
   t.eq(D.intentText(IT({ move: 'wall', name: 'Not The Same Name', kind: 'defend', block: 8 })), 'Gains 8 Block', 'a name that matches no enemy move reads as before');
   t.eq(D.intentText(IT({ dmg: 6, tgtKind: 'both', tgt: ['hanae', 'kuro'], statuses: [{ s: 'burn', n: 2, to: 'both' }] })), 'Deals 6 to both heroes and applies 2 Burn', 'the same target is not repeated');
   t.eq(D.intentText(IT({ dmg: 6, statuses: [{ s: 'weak', n: 1, to: 'both' }, { s: 'frail', n: 1, to: 'both' }] })), 'Deals 6 to the front hero and applies 1 Weak and 1 Frail to both heroes', 'two debuffs on another target group');
-  t.eq(D.intentText(IT({ kind: 'debuff', removes: [{ s: 'bloom', to: 'both' }, { s: 'sumi', to: 'both' }, { s: 'ward', to: 'both' }, { s: 'charge', to: 'both' }] })), 'Removes Bloom, Sumi, Ward and Charge from both heroes', 'resource wipes group');
+  t.eq(D.intentText(IT({ kind: 'debuff', removes: [{ s: 'bloom', to: 'both' }, { s: 'sumi', to: 'both' }, { s: 'ward', to: 'both' }, { s: 'charge', to: 'both' }] })), 'Removes Bloom, Breath, Ward and Charge from both heroes', 'resource wipes group');
   t.eq(D.intentText(IT({ dmg: 24, removes: [{ s: 'thorns', to: 'self' }] })), 'Deals 24 to the front hero and loses its Thorns', 'an enemy dropping its own buff');
   t.eq(D.intentText(IT({ kind: 'summon', summons: [{ enemy: kit, n: 1 }] })), 'Summons a Kit', 'a summon of a named enemy');
 });
@@ -1227,7 +1227,7 @@ t.test('intentText: help for other enemies is told apart from help for itself, a
 t.test('gemText: effects read as sentences, and lifesteal is not a clumsy phrase', () => {
   const G = (mod) => D.gemText({ name: 'g', color: 'red', tier: 1, mod });
   t.eq(G({ fx: [dmg(4, { tgt: 'enemy', lifesteal: true })] }), 'Deal 4 damage and heal for the HP it removes', 'lifesteal');
-  t.eq(G({ fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }] }), 'Gain 1 Ink and 3 gold', 'Ink and gold share a gain');
+  t.eq(G({ fx: [{ op: 'ink', n: 1 }, { op: 'gold', n: 3 }] }), 'Gain 1 Echo and 3 gold', 'Ink and gold share a gain');
   t.eq(G({ status: { s: 'thorns', n: 2, tgt: 'self' }, block: 1 }), '+1 Block, gain 2 Thorns', 'a flat bonus and a status');
 });
 

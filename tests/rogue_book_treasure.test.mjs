@@ -214,11 +214,11 @@ t.test('text: one plain sentence of at most 90 characters, capitalised, ending i
 const NUMWORDS = { 0: ['zero', 'no', 'free'], 1: ['one', 'a', 'an', 'once', 'first', 'next', 'single', 'another', 'extra', 'more', 'less', 'fewer'], 2: ['two', 'twice', 'second', 'both'], 3: ['three', 'third'], 4: ['four', 'fourth'], 5: ['five', 'fifth'], 6: ['six'], 8: ['eight'], 10: ['ten'], 20: ['twenty'] };
 const mentions = (text, n) => new RegExp('(^|[^0-9.])' + n + '(?![0-9])').test(text) || (NUMWORDS[n] || []).some((w) => new RegExp('\\b' + w + '\\b', 'i').test(text));
 const OPWORD = {
-  dmg: /damage/i, block: /block/i, heal: /heal/i, draw: /draw/i, energy: /energy/i, gold: /gold/i, ink: /\bink\b/i, maxHp: /max HP/i, revive: /revive/i,
-  hurt: /lose|hurt/i, removeStatus: /cleanse|remove|spend/i, paint: /paint/i, addBrush: /brush/i, addGem: /gem/i, addCurse: /curse/i, upgradeCard: /upgrade/i,
+  dmg: /damage/i, block: /block/i, heal: /heal/i, draw: /draw/i, energy: /energy/i, gold: /gold/i, ink: /\becho\b/i, maxHp: /max HP/i, revive: /revive/i,
+  hurt: /lose|hurt/i, removeStatus: /cleanse|remove|spend/i, paint: /wake/i, addBrush: /song/i, addGem: /gem/i, addCurse: /curse/i, upgradeCard: /upgrade/i,
 };
 const MODWORD = {
-  energy: [/energy/i], hand: [/card/i, /draw/i], startBlock: [/block/i], inkMax: [/ink/i], startInk: [/ink/i], wellInk: [/well/i, /ink/i], cardChoices: [/card/i],
+  energy: [/energy/i], hand: [/card/i, /draw/i], startBlock: [/block/i], inkMax: [/echo/i], startInk: [/echo/i], wellInk: [/bell/i, /echo/i], cardChoices: [/card/i],
   freeSwaps: [/swap/i], campActions: [/camp/i], rareBoost: [/rare/i], goldMul: [/gold/i], priceMul: [/price/i], healMul: [/heal/i],
 };
 const ROWWORD = { dmgAdd: /damage/i, blockAdd: /block/i, startBlock: /block/i, regen: /regen/i, thorns: /thorns/i, drawAdd: /draw/i };
@@ -226,7 +226,7 @@ const TRIG = {
   combatStart: /start(s)? (of )?(each )?(combat|fight)/i, combatEnd: /end of (each|the) (combat|fight)/i,
   turnStart: /start of (your|each|every) turn|turn start|first turn|\d(st|nd|rd|th) turn|each turn|every turn|\ba turn\b/i, turnEnd: /end of (your|each) turn/i,
   onPlay: /\bplay(s|ed)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /falls?\b/i, onShuffle: /reshuffle/i, onExhaust: /exhaust/i,
-  onPickup: /when you take this|taking this/i, onChapterStart: /chapter/i, onRest: /rest/i, onPaint: /paint/i, onFightWon: /fight|winning/i, onShopEnter: /shop/i,
+  onPickup: /when you take this|taking this/i, onChapterStart: /verse/i, onRest: /rest/i, onPaint: /wake/i, onFightWon: /fight|winning/i, onShopEnter: /shop/i,
 };
 const TGTWORD = { all: /\ball\b/i, both: /both|heroes|each/i, ally: /ally/i, front: /front/i };
 const TIERWORD = { elite: /elite/i, boss: /boss/i, normal: /normal/i, minion: /minion/i };
@@ -261,7 +261,7 @@ function summary(r) {
       if (o.tier) needNum(o.tier, `${o.op} tier`);
       if (o.op === 'status' || (o.op === 'removeStatus' && DATA.statuses[o.s])) needWord(new RegExp(DATA.statuses[o.s].name, 'i'), `status ${o.s}`);
       if (o.op === 'removeStatus' && o.s === 'debuffs') needWord(/cleanse|debuff/i, 'debuffs');
-      if (o.op === 'addBrush') needWord(/random/i, 'random brush');
+      if (o.op === 'addBrush') needWord(/random/i, 'random song');
       if (o.op === 'upgradeCard' && o.random) needWord(/random/i, 'random upgrade');
       if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onDamaged') needWord(/attacker/i, 'attacker');
       if (o.op === 'dmg' && o.tgt === 'enemy' && h.on === 'onPlay') needWord(/target|more damage/i, 'same target');
@@ -306,7 +306,7 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   // a sample checked against exact machine phrases (eyeballed once, now pinned)
   const say = (id, i) => DATA.hookText(DATA.relics[id].hooks[i || 0]);
   t.eq(say('rice_ball'), 'Whenever you win a fight, heal both heroes for 2 HP and heal the weakest hero for 2 HP.', 'rice_ball');
-  t.eq(say('pilgrim_compass'), 'Every 5th time you paint a hex, gain 1 Ink.', 'pilgrim_compass');
+  t.eq(say('pilgrim_compass'), 'Every 5th time you wake a hex, gain 1 Echo.', 'pilgrim_compass');
   t.eq(say('silver_bell'), 'The next time you are hit, both heroes gain 6 Block.', 'silver_bell reads as a once per fight hook');
   t.eq(say('fox_mask'), 'Once per turn, every 2nd time you swap rows, gain 1 Dodge.', 'fox_mask (the actor is the new front hero)');
   t.eq(say('mirror_of_two_faces'), 'Once per turn, whenever you swap rows, gain 1 Energy.', 'mirror_of_two_faces');
@@ -439,7 +439,7 @@ t.test('gem text: generated text is readable for every gem, and a hand written t
   t.eq(say('ember_ruby'), '+2 damage', 'ember_ruby'); t.eq(say('vanguard_garnet'), 'Front row: +3 damage', 'vanguard_garnet'); t.eq(say('twinfang_spinel'), '+1 hit', 'twinfang_spinel');
   t.eq(say('kirin_jasper'), 'Front row: +3 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block, +2 healing', 'tidewatch_sapphire'); t.eq(say('sanctum_iolite'), 'Both heroes gain 6 Block', 'sanctum_iolite'); t.eq(say('ironbark_sapphire'), '+3 Block, gain 4 Thorns', 'ironbark_sapphire');
   t.eq(say('featherlight_emerald'), 'Costs 1 less', 'featherlight_emerald'); t.eq(say('wellspring_tourmaline'), 'Gain 1 Energy', 'wellspring_tourmaline');
-  t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('thornwake_lapis'), 'Gain 2 Thorns', 'thornwake_lapis'); t.eq(say('inkwell_amber'), 'Gain 1 Ink, 2 gold and 3 Regen', 'inkwell_amber'); t.eq(say('solstice_citrine'), 'Gain 1 Ritual, gain 2 Might', 'solstice_citrine'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
+  t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('thornwake_lapis'), 'Gain 2 Thorns', 'thornwake_lapis'); t.eq(say('inkwell_amber'), 'Gain 1 Echo, 2 gold and 3 Regen', 'inkwell_amber'); t.eq(say('solstice_citrine'), 'Gain 1 Ritual, gain 2 Might', 'solstice_citrine'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
 });
 
 // ================================================================================================ 5 gems on cards

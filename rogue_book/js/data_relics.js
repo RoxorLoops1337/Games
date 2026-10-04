@@ -1,4 +1,4 @@
-// Inkwoven -- the 66 relics ("Treasures"): common 22, uncommon 22, rare 12, boss 6, shop 4.
+// Echowake -- the 66 relics ("Treasures"): common 22, uncommon 22, rare 12, boss 6, shop 4.
 //
 // One IIFE that registers into DATA.relics (no top-level names). Data only: `text` is the one hand written line (one sentence, at
 // most 90 characters) and the test recomputes a machine summary of every mod, row and hook (DATA.hookText) and checks that the
@@ -13,7 +13,7 @@
 //     never Block or draw. First turn Block is a turnStart hook with `cond turn lte 1`.
 //   * A party hook (no `hero`) is acted by the hero that triggered it (onPlay, onDamaged, onKill, onSwap, onHeroDown, onExhaust), else
 //     by the FRONT hero, so anything meant for both heroes says tgt 'both'. A `hero` relic fires only for that hero's own events.
-//   * `limit` is per turn for combat hooks and per chapter for run hooks; `once` is per fight (combat) or per run (run hooks);
+//   * `limit` is per turn for combat hooks and per verse for run hooks; `once` is per fight (combat) or per run (run hooks);
 //     `every` counts triggers per fight (combat) or per run (run hooks), and never fires on the 1st trigger.
 //   * The onSwap hook fires for the free swap, the paid swap and the card `swap` op, never for a forced swap.
 //   * combatEnd fires on a win only, before downed heroes revive, so a heal there cannot lift a fallen hero.
@@ -24,22 +24,22 @@
 //
 // THE SET, BY JOB (every mod key, every combat and run hook and rows on both the front and the back row appear at least once; the
 // audit and the test check it). Energy and hand size come only from boss relics and always with a drawback.
-//   MAP AND INK   brass_lantern paints 2 hexes a chapter, pilgrim_compass and plum_pendant refund Ink on paints, ink_jar and
-//                 inkstone_weight (Heavy Inkstone) move the Ink floor and ceiling, well_kasa feeds on wells, sable_brush hands
-//                 out a Brush every chapter, shrine_box pays Ink at camps, jade_key adds a second camp action (and a rest heal).
+//   MAP AND ECHO  brass_lantern wakes 2 hexes a verse, pilgrim_compass and plum_pendant refund Echo on wakes, ink_jar and
+//                 inkstone_weight (Heavy Singing Bowl) move the Echo floor and ceiling, well_kasa feeds on temple bells, sable_brush hands
+//                 out a Song every verse, shrine_box pays Echo at camps, jade_key adds a second camp action (and a rest heal).
 //   COMMONS       small, readable, always on: 1 Block a turn, 25% gold, 25% healing, 2 HP after fights, Block on a kill,
 //                 Block after a hit, a Burn or Weak opener, first turn Block, and so on.
-//   ROW SYSTEM    war_banner (front damage) and formation_scroll (front Block, back Block from cards) are `rows` relics; fox_mask,
+//   ROW SYSTEM    war_banner (front damage) and formation_scroll (Marching Cadence, front Block, back Block from cards) are `rows` relics; fox_mask,
 //                 flute_of_changing_tunes, mirror_of_two_faces and dancer_geta pay for swapping; longbow_of_reach reads the
 //                 row with a cond and remembrance_candle watches the front hero. A hook `limit` is spent BEFORE a cond inside the hook
 //                 is read, so longbow_of_reach's limit of 2 counts every Attack of the turn, whoever plays it, and only a back row
 //                 play gets the bonus: its text says exactly that ("your first 2 Attacks each turn ... when played from the back row").
 //   GEM RELICS    facet_lens (gold), jewelers_loupe (draw) and prism_crown (Energy) key on `filter.gems`; koi_pouch and
 //                 pearl_satchel hand out gems.
-//   HEROES        three per hero, each built on that hero's resource: Hanae (Bloom), Kuro (Sumi), Suzu (Ward), Raiga (Charge).
+//   HEROES        three per hero, each built on that hero's resource: Hanae (Bloom), Kuro (Breath), Suzu (Ward), Raiga (Charge).
 //   BOSS TRADES   every boss relic is a real trade, and each one is a different BUILD (a boss offer is three of these six):
 //                 tyrants_crown +1 Energy for 3 curses and blood_moon_vow +1 Energy for 2 HP each every turn (the tempo picks),
-//                 book_of_falling_leaves +1 card for 40% weaker healing (the engine pick), ironclad_tsuba Block and Thorns for one
+//                 song_of_falling_leaves (id book_of_falling_leaves) +1 card for 40% weaker healing (the engine pick), ironclad_tsuba Block and Thorns for one
 //                 card fewer (the turtle and retaliation pick), bottomless_gourd 3 Might against 2 Vulnerable at the start of every
 //                 fight (the glass cannon: neutral in trash fights, big against elites and bosses) and toll_bridge a free rare
 //                 a tier 3 gem plus two more reward cards against dearer shops (the draft pick; it gives a gem, not a card choice, because a
@@ -57,7 +57,7 @@
     // ================================================================== COMMON (22)
     brass_lantern: {
       name: 'Brass Lantern', rarity: 'common', art: { m: 'lantern', c: 'amber' },
-      text: 'At the start of each chapter, paint 2 hexes for free toward the boss.',
+      text: 'At the start of each verse, wake 2 hexes for free toward the boss.',
       hooks: [{ on: 'onChapterStart', fx: [{ op: 'paint', n: 2 }] }],
     },
     paper_umbrella: {
@@ -87,7 +87,7 @@
     },
     pilgrim_compass: {
       name: 'Pilgrim\'s Compass', rarity: 'common', art: { m: 'compass', c: 'jade' },
-      text: 'Every 5th hex you paint refunds 1 Ink.',
+      text: 'Every 5th hex you wake refunds 1 Echo.',
       hooks: [{ on: 'onPaint', every: 5, fx: [{ op: 'ink', n: 1 }] }],
     },
     bounty_scroll: {
@@ -96,13 +96,13 @@
       hooks: [{ on: 'onFightWon', filter: { tier: 'elite' }, fx: [{ op: 'gold', n: 20 }] }],
     },
     ink_jar: {
-      name: 'Jar of Fresh Ink', rarity: 'common', art: { m: 'jar', c: 'indigo' },
-      text: 'Start each chapter with 2 more Ink.',
+      name: 'Bottled Echo', rarity: 'common', art: { m: 'jar', c: 'indigo' },
+      text: 'Start each verse with 2 more Echo.',
       mods: { startInk: 2 },
     },
     inkstone_weight: {
-      name: 'Heavy Inkstone', rarity: 'common', art: { m: 'inkstone', c: 'ink' },
-      text: 'Your Ink pool can hold 2 more, and taking this gives both heroes 3 max HP.',
+      name: 'Heavy Singing Bowl', rarity: 'common', art: { m: 'inkstone', c: 'ink' },
+      text: 'Your Echo pool can hold 2 more, and taking this gives both heroes 3 max HP.',
       mods: { inkMax: 2 },
       hooks: [{ on: 'onPickup', fx: [{ op: 'maxHp', n: 3, who: 'both' }] }],
     },
@@ -153,8 +153,8 @@
       hooks: [{ on: 'turnStart', fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
     },
     vial_of_spare_ink: {
-      name: 'Vial of Spare Ink', rarity: 'common', hero: 'kuro', art: { m: 'ink_drop', c: 'violet' },
-      text: 'Kuro starts each combat with 3 Sumi.',
+      name: 'Spare Mouthpiece', rarity: 'common', hero: 'kuro', art: { m: 'ink_drop', c: 'violet' },
+      text: 'Kuro starts each combat with 3 Breath.',
       hooks: [{ on: 'combatStart', fx: [{ op: 'status', s: 'sumi', n: 3, tgt: 'self' }] }],
     },
     mizuhiki_cord: {
@@ -180,8 +180,8 @@
       hooks: [{ on: 'onDamaged', once: true, fx: [{ op: 'block', n: 6, tgt: 'both' }] }],
     },
     well_kasa: {
-      name: 'Well-Wisher\'s Kasa', rarity: 'uncommon', art: { m: 'kasa', c: 'jade' },
-      text: 'Ink Wells give 1 more Ink.',
+      name: 'Bell-Ringer\'s Kasa', rarity: 'uncommon', art: { m: 'kasa', c: 'jade' },
+      text: 'Temple Bells give 1 more Echo.',
       mods: { wellInk: 1 },
     },
     loaded_dice: {
@@ -190,18 +190,18 @@
       mods: { rareBoost: 8 },
     },
     sable_brush: {
-      name: 'Sable Brush', rarity: 'uncommon', art: { m: 'brush', c: 'ink' },
-      text: 'At the start of each chapter, gain a random Brush.',
+      name: 'Songbird Whistle', rarity: 'uncommon', art: { m: 'brush', c: 'ink' },
+      text: 'At the start of each verse, learn a random Song.',
       hooks: [{ on: 'onChapterStart', fx: [{ op: 'addBrush', id: 'random' }] }],
     },
     plum_pendant: {
       name: 'Plum Blossom Pendant', rarity: 'uncommon', art: { m: 'plum', c: 'rose' },
-      text: 'Every 3rd hex you paint refunds 1 Ink.',
+      text: 'Every 3rd hex you wake refunds 1 Echo.',
       hooks: [{ on: 'onPaint', every: 3, fx: [{ op: 'ink', n: 1 }] }],
     },
     shrine_box: {
       name: 'Offering Box', rarity: 'uncommon', art: { m: 'shrine', c: 'gold' },
-      text: 'When you rest at a camp, gain 2 Ink.',
+      text: 'When you rest at a camp, gain 2 Echo.',
       hooks: [{ on: 'onRest', fx: [{ op: 'ink', n: 2 }] }],
     },
     whetstone: {
@@ -266,8 +266,8 @@
       hooks: [{ on: 'onKill', fx: [{ op: 'status', s: 'bloom', n: 2, tgt: 'self' }, { op: 'block', n: 3, tgt: 'self' }] }],
     },
     scholars_spectacles: {
-      name: 'Scholar\'s Spectacles', rarity: 'uncommon', hero: 'kuro', art: { m: 'eye', c: 'indigo' },
-      text: 'Every 2nd Skill Kuro plays, he draws 1 card and gains 1 Sumi.',
+      name: 'Pocket Metronome', rarity: 'uncommon', hero: 'kuro', art: { m: 'eye', c: 'indigo' },
+      text: 'Every 2nd Skill Kuro plays, he draws 1 card and gains 1 Breath.',
       hooks: [{ on: 'onPlay', filter: { type: 'skill' }, every: 2, fx: [{ op: 'draw', n: 1 }, { op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
     },
     crescent_kanzashi: {
@@ -289,7 +289,7 @@
       hooks: [{ on: 'onRest', fx: [{ op: 'heal', n: 4, who: 'both' }] }],
     },
     branching_bookmark: {
-      name: 'Branching Bookmark', rarity: 'rare', art: { m: 'ribbon', c: 'violet' },
+      name: 'Harmony Ribbon', rarity: 'rare', art: { m: 'ribbon', c: 'violet' },
       text: 'Card rewards offer 1 more card.',
       mods: { cardChoices: 1 },
     },
@@ -309,7 +309,7 @@
       hooks: [{ on: 'onSwap', limit: 1, fx: [{ op: 'energy', n: 1 }] }],
     },
     formation_scroll: {
-      name: 'Formation Scroll', rarity: 'rare', art: { m: 'scroll', c: 'ink' },
+      name: 'Marching Cadence', rarity: 'rare', art: { m: 'scroll', c: 'ink' },
       text: 'Front hero starts turns with 3 Block, and the back hero gains 1 extra Block from cards.',
       rows: { front: { startBlock: 3 }, back: { blockAdd: 1 } },
     },
@@ -330,7 +330,7 @@
       hooks: [{ on: 'onPlay', filter: { type: 'attack', cost: { lte: 0 } }, limit: 2, fx: [{ op: 'draw', n: 1 }, { op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
     },
     nightlong_inkwell: {
-      name: 'Nightlong Inkwell', rarity: 'rare', hero: 'kuro', art: { m: 'inkstone', c: 'indigo' },
+      name: 'Nightlong Dirge', rarity: 'rare', hero: 'kuro', art: { m: 'inkstone', c: 'indigo' },
       text: 'At the end of your turn, Kuro applies 2 Poison to all enemies.',
       hooks: [{ on: 'turnEnd', fx: [{ op: 'status', s: 'poison', n: 2, tgt: 'all' }] }],
     },
@@ -353,7 +353,7 @@
       hooks: [{ on: 'onPickup', fx: [{ op: 'addCurse', n: 3 }] }],
     },
     book_of_falling_leaves: {
-      name: 'Book of Falling Leaves', rarity: 'boss', art: { m: 'maple', c: 'amber' },
+      name: 'Song of Falling Leaves', rarity: 'boss', art: { m: 'maple', c: 'amber' },
       text: 'Draw 1 more card each turn, but healing outside combat is 40% weaker.',
       mods: { hand: 1, healMul: -0.4 },
     },

@@ -53,13 +53,13 @@
 // Writing rules of thumb (so card text stays under the 110 character audit): sentences are short and merged where it reads
 // well ("Apply 2 Vulnerable and 1 Weak." "Deal 4 damage 3 times."), a conditional bonus after a same-kind op reads "Front:
 // deal 3 more damage.", leading keywords (Innate, Retain, Ethereal, Unplayable) come first and Exhaust comes last.
-// A hook op reads "Whenever you play a Skill, gain 1 Sumi." / "At the start of your turn, ..." / "Next turn: gain 2 Energy."
+// A hook op reads "Whenever you play a Skill, gain 1 Breath." / "At the start of your turn, ..." / "Next turn: gain 2 Energy."
 //
 // Editor's rules (what the generator does so a card never has to): gains of different kinds share a sentence ("Gain 5 Block and 1
 // Taunt."); a status taken back by a once-hook reads "until the end of this turn" or "until your next turn"; a swap that only happens
-// from one row reads "Move to the front row."; row bonuses after a swap read "Now Front:"; "Spend up to 3 Sumi. Deal 4 damage to all
-// enemies, plus 2 for each Sumi spent." keeps the target next to "damage"; doubling reads "Double the target's Poison (adds at most
-// 10)."; Curse and Status cards are acted by the front hero ("The front hero loses 2 HP."); a "If you have Sumi" line on another
+// from one row reads "Move to the front row."; row bonuses after a swap read "Now Front:"; "Spend up to 3 Breath. Deal 4 damage to all
+// enemies, plus 2 for each Breath spent." keeps the target next to "damage"; doubling reads "Double the target's Poison (adds at most
+// 10)."; Curse and Status cards are acted by the front hero ("The front hero loses 2 HP."); a "If you have Breath" line on another
 // hero's card is not printed (a hero never holds another hero's resource); numbers inside a hook are never given the hero's row,
 // Might or Weak, because hook damage has no attacker (DESIGN 4.2).
 (() => {
@@ -318,7 +318,7 @@
 
   // "6 damage" | "damage equal to your Block" | "3 damage for each Bloom you have". noun may be ''.
   // o.mid is text that belongs right after the noun (a target, a hit count): the "plus" and "for each" forms put it there, so
-  // "Deal 4 damage to all enemies, plus 2 for each Sumi spent." never hangs the target on the tail; the plain and "equal to"
+  // "Deal 4 damage to all enemies, plus 2 for each Breath spent." never hangs the target on the tail; the plain and "equal to"
   // forms leave it to the caller (o.out.mid reports whether it was used).
   function frac(mul) {
     // 0.5 reads "1 for every 2", 0.25 "1 for every 4", 0.75 "3 for every 4": a player never sees a decimal
@@ -531,12 +531,12 @@
       case 'onSwap': core = any ? 'either hero swaps rows' : owned ? `you swap into the ${KW('front', 'front')} row` : 'you swap rows'; break;
       case 'onHeroDown': core = owned && !any ? 'you fall' : 'a hero falls'; break;
       case 'onShuffle': core = 'you reshuffle your draw pile'; break;
-      case 'onPaint': core = 'you paint a hex'; break;
+      case 'onPaint': core = 'you wake a hex'; break;
       case 'onFightWon': core = `you win ${fightPhrase(f.tier)}`; break;
       case 'onRest': core = 'you rest at a camp'; break;
       case 'onShopEnter': core = 'you enter a shop'; break;
       case 'onPickup': return 'when you take this';
-      case 'onChapterStart': return h.every ? `every ${ordinal(h.every)} chapter start` : 'at the start of each chapter';
+      case 'onChapterStart': return h.every ? `every ${ordinal(h.every)} verse start` : 'at the start of each verse';
       case 'combatStart': return 'at the start of combat';
       case 'combatEnd': return 'at the end of combat';
       case 'turnStart': return h.every ? `at the start of every ${ordinal(h.every)} turn` : h.once ? 'next turn' : 'at the start of your turn';
@@ -554,7 +554,7 @@
   }
   const RUN_HOOKS = ['onPickup', 'onChapterStart', 'onRest', 'onPaint', 'onFightWon', 'onShopEnter'];
   function limitPhrase(h) {
-    const per = RUN_HOOKS.indexOf(h.on) >= 0 ? 'chapter' : 'turn';
+    const per = RUN_HOOKS.indexOf(h.on) >= 0 ? 'verse' : 'turn';
     if (h.limit === undefined) return '';
     return h.limit === 1 ? `once per ${per}` : `up to ${h.limit} times per ${per}`;
   }
@@ -610,7 +610,7 @@
       // "more" always follows a strike on the same enemies, so the target is not said twice: "Back: deal 2 more damage."
       h = `deal ${A}${timesTxt}`;
     } else {
-      // the "plus" and "for each" forms carry the target and the count right after "damage": "Deal 4 damage to all enemies, plus 2 for each Sumi spent."
+      // the "plus" and "for each" forms carry the target and the count right after "damage": "Deal 4 damage to all enemies, plus 2 for each Breath spent."
       A = amt(n, 'damage', { plus: op.plus, ref: refN, refV: refVOf(S, op, 'n'), live: S.live.dmg, spent, mid: sfx + timesTxt, out: out0 });
       h = `deal ${A}${out0.mid ? '' : sfx + timesTxt}`;
     }
@@ -911,7 +911,7 @@
         const word = s === 'buffs' || s === 'debuffs' ? `all ${s}` : `${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`;
         if (tgt === 'self') return [{ h: s === 'buffs' || s === 'debuffs' ? `remove ${word} from itself` : `lose ${op.n === undefined ? 'all ' : ''}${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`, k: 'eremove' }];
         const etgt = E_HERO[tgt] || E_SIDE[tgt] || 'the front hero';
-        // consecutive removals from the same side share one sentence: "Remove Bloom, Sumi, Ward and Charge from both heroes."
+        // consecutive removals from the same side share one sentence: "Remove Bloom, Breath, Ward and Charge from both heroes."
         if (prev && prev.k === 'eremoveh' && prev.etgt === etgt) { prev.items.push(word); prev.h = `remove ${joinAnd(prev.items)} from ${etgt}`; return { merged: true }; }
         return [{ h: `remove ${word} from ${etgt}`, k: 'eremoveh', etgt, items: [word] }];
       }
@@ -970,7 +970,7 @@
       case 'swap': return [{ h: `${KW('Swap', 'swap')} rows`, k: 'swap' }];
       case 'gold': case 'ink': {
         if (op.pct !== undefined) return runFrags(op, S);
-        const word = op.op === 'gold' ? 'gold' : KW('Ink', 'ink');
+        const word = op.op === 'gold' ? 'gold' : KW('Echo', 'ink');
         if (isNum(op.n) && op.n < 0) return [{ h: `lose ${NUM(-op.n)} ${word}`, k: op.op }];
         const A = amt(op.n, word, {});
         const f = { h: `gain ${A}`, k: op.op };
@@ -1015,7 +1015,7 @@
     const keys = Object.keys(c);
     const thenOps = list(op.then), elseOps = list(op.else);
     const rowOnly = keys.length === 1 && !!c.row;
-    // "If you have Sumi, gain 2 more" on a Hanae card can never fire (a hero only ever holds their own resource): leave it out
+    // "If you have Breath, gain 2 more" on a Hanae card can never fire (a hero only ever holds their own resource): leave it out
     if (S.heroId && keys.length === 1 && c.status && (c.status.who === undefined || c.status.who === 'self') && c.status.lte === undefined && ST[c.status.s] && ST[c.status.s].kind === 'resource' && ST[c.status.s].hero && ST[c.status.s].hero !== S.heroId) return elseOps.length ? fragsOfList(elseOps, S) : [];
     // "Front:" / "Back:" lead a sentence; after a swap in the same card they read "Now Front:" (the row you ended up in)
     const lead = (row) => `${S.swapped ? 'Now ' : ''}${ROWKW[row]()}: `;
@@ -1073,7 +1073,7 @@
     const cardsWord = (o) => (o.random ? runCount(o.n, 'random card', 'random cards') : runCount(o.n, 'card', 'cards'));
     switch (op.op) {
       case 'gold': return [{ h: op.pct !== undefined ? `${op.pct < 0 ? 'lose' : 'gain'} ${runPct(op.pct)} of your gold` : op.n < 0 ? `lose ${NUM(-op.n)} gold` : `gain ${NUM(op.n)} gold`, k: 'run' }];
-      case 'ink': return [{ h: op.pct !== undefined ? `${op.pct < 0 ? 'lose' : 'gain'} ${runPct(op.pct)} of your max ${KW('Ink', 'ink')}` : op.n < 0 ? `lose ${NUM(-op.n)} ${KW('Ink', 'ink')}` : `gain ${NUM(op.n)} ${KW('Ink', 'ink')}`, k: 'run' }];
+      case 'ink': return [{ h: op.pct !== undefined ? `${op.pct < 0 ? 'lose' : 'gain'} ${runPct(op.pct)} of your max ${KW('Echo', 'ink')}` : op.n < 0 ? `lose ${NUM(-op.n)} ${KW('Echo', 'ink')}` : `gain ${NUM(op.n)} ${KW('Echo', 'ink')}`, k: 'run' }];
       case 'heal': return [{ h: `heal ${runWho(op.who)} for ${op.pct !== undefined ? runPct(op.pct) + ' of max HP' : NUM(op.n) + ' HP'}`, k: 'run' }];
       case 'hurt': return [{ h: `${runWho(op.who)} ${op.who === undefined || op.who === 'both' ? 'lose' : 'loses'} ${op.pct !== undefined ? runPct(op.pct) + ' of max HP' : NUM(op.n) + ' HP'}`, k: 'run' }];
       case 'maxHp': return [{ h: `${runWho(op.who)} ${op.who === undefined || op.who === 'both' ? (op.n < 0 ? 'lose' : 'gain') : (op.n < 0 ? 'loses' : 'gains')} ${NUM(Math.abs(op.n))} max HP`, k: 'run' }];
@@ -1086,10 +1086,10 @@
       case 'duplicateCard': return [{ h: `duplicate ${cardsWord(op)}`, k: 'run' }];
       case 'addRelic': return [{ h: op.id ? `gain ${nameOf('relics', op.id)}` : `gain a random ${op.rarity} Treasure`, k: 'run' }];
       case 'addGem': return [{ h: op.id ? `gain ${nameOf('gems', op.id)}` : `gain a random ${op.color ? op.color + ' ' : ''}gem${op.tier ? ' of tier ' + op.tier : ''}`, k: 'run' }];
-      case 'addBrush': return [{ h: op.id === 'random' ? 'gain a random Brush' : `gain ${nameOf('brushes', op.id)}`, k: 'run' }];
+      case 'addBrush': return [{ h: op.id === 'random' ? 'learn a random Song' : `learn ${nameOf('brushes', op.id)}`, k: 'run' }];
       case 'addCurse': return [{ h: op.id ? `add ${nameOf('cards', op.id)} to your deck` : `add ${runCount(op.n, 'curse', 'curses')} to your deck`, k: 'run' }];
       case 'flag': return [];
-      case 'paint': return [{ h: `paint ${NUM(op.n)} ${op.n === 1 ? 'hex' : 'hexes'} for free`, k: 'run' }];
+      case 'paint': return [{ h: `wake ${NUM(op.n)} ${op.n === 1 ? 'hex' : 'hexes'} for free`, k: 'run' }];
       case 'cardReward': return [{ h: 'choose a card reward', k: 'run' }];
       case 'fight': return [{ h: 'a fight begins', k: 'run' }];
       default: return [{ h: esc(String(op.op)), k: 'unknown' }];
@@ -1288,7 +1288,7 @@
     if (!it.block && sides && sides.block && sides.blockN) others.push({ who: SIDE_WORD[sides.block], what: `${sides.blockN} Block` });
     others.forEach((o) => clauses.push(`gives ${o.who} ${o.what}`));
     if (it.heal) clauses.push(healSide ? `heals ${SIDE_WORD[healSide]} for ${it.heal}` : `heals ${it.heal}`);
-    // removals: "removes Bloom, Sumi, Ward and Charge from both heroes", "loses its Thorns"
+    // removals: "removes Bloom, Breath, Ward and Charge from both heroes", "loses its Thorns"
     const rem = [];
     list(it.removes).forEach((r) => {
       const word = r.s === 'buffs' || r.s === 'debuffs' ? `all ${r.s}` : stName(r.s);

@@ -121,8 +121,8 @@ enemy's moves should show it. Encounter group ids are `ch<N>_<name>` (for exampl
 | `moss_guardian` | Moss Guardian | elite | l | Stone guardian overgrown with moss. Plating and Thorns, slow slams, calls Leaf Imps. |
 | `ember_wisp` | Ember Wisp | minion | s | Tiny fire wisp. Burns a hero once, then fizzles. |
 | `leaf_imp` | Leaf Imp | minion | s | Fast leaf sprite called by kodama and guardians. One weak poke. |
-| `paper_kodama` | Paper Kodama | minion | s | Hollow paper doll. Clogs the deck with blot cards. |
-| `boss_kuzunoha` | Kuzunoha | boss | xl | White fox whose nine tails end in brush tips. Ink strikes and paper kodama, then all nine tails at once. |
+| `paper_kodama` | Hollow Kodama | minion | s | Hollow tree spirit. Clogs the deck with silence cards. |
+| `boss_kuzunoha` | Kuzunoha | boss | xl | White fox whose nine tails each ring a bell. Bell strikes and hollow kodama, then all nine voices at once. |
 
 **Chapter 2, the Sunken Lantern City**
 
@@ -133,7 +133,7 @@ enemy's moves should show it. Encounter group ids are `ch<N>_<name>` (for exampl
 | `nopperabo` | Nopperabo | normal | m | Faceless ghost. Applies Weak and Frail, then strikes harder while they stick. |
 | `drowned_samurai` | Drowned Samurai | normal | l | Waterlogged blade-master. Heavy cuts and Plating from sodden armour. |
 | `koi_spirit` | Koi Spirit | normal | m | Spectral carp. Heals its allies and splashes both heroes. |
-| `tsukumogami` | Tsukumogami | normal | m | Haunted household object. Hits and shuffles blot cards into your draw pile. |
+| `tsukumogami` | Tsukumogami | normal | m | Haunted household object. Hits and shuffles silence cards into your draw pile. |
 | `silk_weaver` | Silk Weaver | normal | m | Spider servant. Binds a hero and calls a Spiderling. |
 | `nure_onna` | Nure-onna | normal | l | Snake-bodied river woman. Strikes the back row and poisons. |
 | `rokurokubi` | Rokurokubi | normal | m | Long-necked ghost that reaches over the front hero to hit the back row twice. |
@@ -152,24 +152,24 @@ enemy's moves should show it. Encounter group ids are `ch<N>_<name>` (for exampl
 |---|---|---|---|---|
 | `storm_drone` | Storm Drone | normal | m | Hovering shock drone. Rapid lightning jabs in threes. |
 | `komainu_guardian` | Komainu Guardian | normal | l | Stone lion-dog. Plating and Thorns, then a crushing pounce. |
-| `redaction_knight` | Redaction Knight | normal | m | Black bars over its face. Hits hard and adds redacted cards. |
-| `void_scribe` | Void Scribe | normal | m | Writes with blank ink. Erases your buffs and adds blot cards. |
-| `blank_soldier` | Blank Soldier | normal | m | Paper soldier that fights in ranks. Steady hits, weak alone. |
+| `redaction_knight` | Muffled Knight | normal | m | Felt-stuffed helm. Hits hard and adds muted cards. |
+| `void_scribe` | Grey Cantor | normal | m | Chants silence. Strips your buffs and adds silence cards. |
+| `blank_soldier` | Silent Soldier | normal | m | Grey soldier that marches in step. Steady hits, weak alone. |
 | `sky_serpent` | Sky Serpent | normal | l | Coiling wind serpent. Multi-hit strikes across the back row. |
-| `eraser_wraith` | Eraser Wraith | normal | m | Rubs out your Block and your hero resource stacks. |
+| `eraser_wraith` | Muffle Wraith | normal | m | Smothers your Block and your hero resource stacks. |
 | `thunder_crow` | Thunder Crow | normal | m | Storm crow. Dives for a Stun and pecks the back row. |
-| `paper_golem` | Paper Golem | normal | l | Folded paper giant. Slow, heavy hits and Plating. |
-| `margin_imp` | Margin Imp | normal | m | Scribbling imp. Calls Typo Sprites and adds wilt cards. |
-| `censor_golem` | Censor Golem | elite | l | Stamps things out. Redacted cards, Plating, and one huge stamp. |
+| `paper_golem` | Felt Golem | normal | l | Padded felt giant. Slow, heavy hits and Plating. |
+| `margin_imp` | Off-Key Imp | normal | m | Off-key imp. Calls Sour Notes and adds wilt cards. |
+| `censor_golem` | Censor Golem | elite | l | Stamps things silent. Muted cards, Plating, and one huge stamp. |
 | `storm_whelp` | Storm Dragon Whelp | elite | l | Young storm dragon. Lightning across the whole party and multi-strikes. |
-| `black_bar_inquisitor` | Black-Bar Inquisitor | elite | l | Hunts the weak. Stun, Bind, and a finisher against a low hero. |
-| `blank_page` | Blank Page | minion | s | Drifting blank sheet. Gains Block, then wraps a hero in Frail. |
+| `black_bar_inquisitor` | Hush Inquisitor | elite | l | Hunts the weak. Stun, Bind, and a finisher against a low hero. |
+| `blank_page` | Hush Moth | minion | s | Drifting grey moth. Gains Block, then wraps a hero in Frail. |
 | `spark_mote` | Spark Mote | minion | s | Tiny storm spark. One zap and it bursts. |
-| `typo_sprite` | Typo Sprite | minion | s | Mischievous glitch. Adds a wilt card. |
-| `boss_editor` | The Editor | boss | xl | Pale scholar with a red pen. Becomes an eraser-armed giant, then a colossal tear in the page. |
+| `typo_sprite` | Sour Note | minion | s | Mischievous sour note. Adds a wilt card. |
+| `boss_editor` | The Conductor | boss | xl | Pale conductor with a red baton. Becomes a felt-armed giant, then a colossal hole of silence. |
 
 
-Boss titles (the `title` field): Kuzunoha, The Nine-Tail Ink Fox; Jorogumo, The Silk Courtesan; The Editor, Keeper of the Last Page.
+Boss titles (the `title` field): Kuzunoha, The Nine-Voiced Fox; Jorogumo, The Silk Courtesan; The Conductor, Keeper of the Last Note.
 
 ### 4.2 Numbers at Trial 0 (starting guidance the balance wave tunes)
 
