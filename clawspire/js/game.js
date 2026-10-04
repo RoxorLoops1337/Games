@@ -7670,9 +7670,12 @@ const GAME = (() => {
 
   // (round 23) Stuck prize safety net: a prize that left the glass, or hangs motionless over nothing for
   // 3 s, is nudged down (then set back in over the bin).  Items a mode holds up on purpose are exempt.
+  // (round 25) ...and only while that hold lasts: a prize still flagged for the magnetic lid once the lid
+  // is off is fair game (the vacuum's canister is checked by PHYS.strandWatch against the rig itself), and
+  // up in the claw's zone the net no longer asks whether something holds it up: nothing should.
   function strandSkip(b) {
-    const d = b.data;
-    if (b.tube || (d && d.bestHang)) return true;   // the vacuum's canister, the magnetic lid / zero g hang
+    const d = b.data, B = FS && FS.best;
+    if (d && d.bestHang === 1 && B && B.ceil) return true;   // the magnetic lid / zero g hang, while it is on
     if (rosBubOf(b) || rosGlued(b)) return true;    // ROS bubbles and glue
     const rv = FS && FS.best && FS.best.rival;
     return !!(rv && rv.b === b);                    // the rival claw's catch

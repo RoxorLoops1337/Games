@@ -12532,7 +12532,8 @@ h.test('stuck prize (round 23): a prize left hanging over nothing is freed in a 
   // one prize pinned at rail height by the right wall (what the jammed sword looked like); another held up by the magnetic lid
   const pin = () => { stuck.x = 470; stuck.y = 59; stuck.vx = 0; stuck.vy = 0; stuck.sl = false; };
   W.addPost(pin);
-  hung.data.bestHang = 1;
+  Gt.best.event({ t: 'binCeiling', insts: [] });   // (round 25) the lid is on: its hang is exempt only while it lasts
+  hung.data.bestHang = 1; stuck.data.bestHang = 0;   // (0: the lid lets this one go, so it never pulls the pinned prize up)
   const hungPin = () => { hung.x = 120; hung.y = 100; hung.vx = 0; hung.vy = 0; hung.sl = false; };
   W.addPost(hungPin);
   for (frame = 0; frame < 9 * 60; frame++) Gt.update(DT);
@@ -12544,6 +12545,108 @@ h.test('stuck prize (round 23): a prize left hanging over nothing is freed in a 
   hung.data.bestHang = null;
   stepFor(Gt, 4);
   h.ok(stuck.y > 150, `and a freed prize falls back into the bin (y ${stuck.y.toFixed(0)})`);
+});
+
+// (round 25) The owner's Ticklish Claw run: a golden prize (a face, sparkles) hung at the right end of the
+// rail, half through the glass, and never fell.  A sleeper was never clamped or watched, and one that
+// slept riding another prize stayed asleep in mid-air when that prize slid away from under it.
+h.test('stuck prize (round 25): a Ticklish Claw fight: a golden prize asleep at the rail\'s end goes back into the bin, one left by its support falls, the lid\'s hang lasts only while the lid is on', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 25);
+  Gt.startFight(['tickler'], 'normal');
+  stepFor(Gt, 3);
+  Gt.best.event({ t: 'binTickle', turns: 1 });
+  h.ok(Gt.best.state && Gt.best.state.tickle > 0, 'the claw is ticklish this turn');
+  const W = Gt.fs.world, C = Gt.fs.cabinet;
+  const list = Gt.fs.items.slice().sort((p, q) => q.br - p.br || p.id - q.id);
+  h.ok(list.length >= 3, 'there are prizes in the cabinet');
+  const gold = list[0], load = list[1], hung = list[2];
+  Gt.fs.golden = { uid: gold.data.inst.uid, was: !!gold.data.inst.plus };
+  gold.data.inst.plus = true;
+  const pose = (b, x, y, sl) => { b.x = x; b.y = y; b.a = 0; b.vx = b.vy = b.av = 0; b.held = 0; b.sl = sl; b.slT = 0; T.PHYS.sync(b); };
+  // 1. the screenshot: asleep at the right end of the rail, its centre at the glass clamp, half through the glass
+  pose(gold, W.clampBox.xMax, 44, true);
+  h.ok(gold.box.x1 > C.bounds.w + 10, 'the setup: it pokes well through the glass');
+  stepFor(Gt, 4);
+  h.ok(Gt.fs.items.indexOf(gold) >= 0 && gold.y > 150 && gold.x < C.bounds.chuteX, `it is back in the bin, not played (${gold.x.toFixed(0)}, ${gold.y.toFixed(0)})`);
+  Gt.draw();
+  // 2. it rides another prize up at the claw's height while that one is held still, falls asleep on it, and the
+  //    prize under it slides off into the bin (nothing is removed, so nothing wakes the pile)
+  const hold = () => { load.x = 380; load.y = 88; load.a = 0; load.vx = load.vy = load.av = 0; load.held = 2; load.sl = false; };
+  W.addHook(hold);
+  pose(gold, 386, 72, false);
+  stepFor(Gt, 1.5);
+  h.ok(gold.sl && gold.y < 88, `it fell asleep riding it (y ${gold.y.toFixed(0)}, asleep ${gold.sl})`);
+  W.removeHook(hold);   // it drops away into the bin from under the golden prize, from rest (too slow to wake a sleeper)
+  stepFor(Gt, 1.5);
+  h.ok(gold.y > 150, `the golden prize drops too instead of hanging in mid-air (y ${gold.y.toFixed(0)})`);
+  // 3. the magnetic lid holds a prize up at the rail on purpose: left alone while the lid is on, fair game after
+  const real = T.PHYS.strandWatch, log = [];
+  let frame = 0;
+  T.PHYS.strandWatch = (w, dt, o) => { const m = real(w, dt, o); for (const b of m) log.push({ b, frame }); return m; };
+  Gt.best.event({ t: 'binCeiling', insts: [] });
+  for (const b of Gt.fs.items) if (b !== hung) b.data.bestHang = 0;   // (only this one hangs)
+  hung.data.bestHang = 1;
+  const hungPin = () => { hung.x = 330; hung.y = 50; hung.vx = hung.vy = 0; hung.sl = false; };   // (clear of the parked claw)
+  W.addPost(hungPin);
+  for (frame = 0; frame < 6 * 60; frame++) Gt.update(DT);
+  h.ok(!log.some(e => e.b === hung), 'the lid-held prize is never touched while the lid is on, even up at the rail');
+  Gt.best.turnEnd();   // the lid lets go (the hang flag is cleared); the prize is still stuck up there
+  for (frame = 0; frame < 6 * 60; frame++) Gt.update(DT);
+  T.PHYS.strandWatch = real;
+  const freed = log.find(e => e.b === hung);
+  h.ok(freed && freed.frame > 2.5 * 60 && freed.frame < 4.5 * 60, `once the lid is off the net takes it after about 3 s (frame ${freed && freed.frame})`);
+  W.removePost(hungPin);
+  stepFor(Gt, 3);
+  h.ok(hung.y > 150, `and it falls into the bin (y ${hung.y.toFixed(0)})`);
+});
+
+// (round 25) Many seeded Ticklish Claw drops with every claw type and a golden prize in the bin, the real fight
+// loop (the net included): no prize may be outside the glass after a frame, or sit still up at the rail, not
+// held, for longer than the watch time.
+h.test('stuck prize (round 25): every claw type, Ticklish Claw, a golden prize: seeded drops never leave a prize outside the glass or up at the rail', () => {
+  const T = boot();
+  const Gt = T.GAME, P = T.PHYS;
+  const types = Object.keys(P.CLAW_TYPES);
+  h.eq(types.length, 8, 'eight claw types');
+  for (const ty of types) {
+    Gt.newRun('knight', 2500 + types.indexOf(ty));
+    Gt.run.clawType = ty;
+    Gt.startFight(['tickler'], 'normal');
+    for (let i = 0; i < 60 * 20 && !ready(Gt); i++) Gt.update(DT);
+    const W = Gt.fs.world, C = Gt.fs.cabinet;
+    const long = Gt.fs.items.slice().sort((p, q) => q.br - p.br || p.id - q.id)[0];
+    Gt.fs.golden = { uid: long.data.inst.uid, was: !!long.data.inst.plus };
+    long.data.inst.plus = true;
+    const rng = T.U.rng(250 + types.indexOf(ty)), still = new Map(), bad = [];
+    let drops = 0;
+    for (let g = 0; g < 14 && drops < 6 && Gt.screen === 'fight' && Gt.fs; g++) {
+      Gt.best.event({ t: 'binTickle', turns: 1 });
+      Gt.fight.player.grabs = Math.max(Gt.fight.player.grabs, 2);
+      Gt.fight.enemies.forEach(e => { e.hp = Math.max(e.hp, 999); });
+      Gt.steer(40 + rng() * 380);
+      stepFor(Gt, 0.4 + rng() * 0.6);
+      if (!Gt.dropClaw()) { stepFor(Gt, 1); continue; }
+      drops++;
+      for (let i = 0; i < 60 * 12; i++) {
+        Gt.update(DT);
+        if (!Gt.fs) break;
+        for (const b of W.bodies) {
+          if (b.type !== 'dynamic') continue;
+          if (b.box.x0 < -4 || b.box.x1 > C.bounds.w + 4 || b.y < -60 || b.y > C.bounds.trayY + 1) bad.push(`${ty} grab ${g}: outside at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+          const high = b.y < P.PH.strandHigh || b.box.y0 < P.PH.strandTop;
+          const s = still.get(b);
+          if (!s || !high || (b.held > 0 && !b.sl) || b.tube || Math.hypot(b.x - s.x, b.y - s.y) > 3) { still.set(b, { x: b.x, y: b.y, t: 0 }); continue; }
+          s.t += DT;
+          if (s.t > 4 && !s.rep) { s.rep = 1; bad.push(`${ty} grab ${g}: still up at ${b.x.toFixed(0)},${b.y.toFixed(0)} for 4 s`); }
+        }
+        if (i > 60 && ready(Gt)) break;
+      }
+    }
+    h.ok(drops >= 5, `${ty}: the claw dropped (${drops})`);
+    h.eq(bad.length, 0, `${ty}: no stranded prize ${bad.slice(0, 2).join(' | ')}`);
+  }
 });
 
 h.done();

@@ -1690,6 +1690,54 @@ beaten by wall friction. Fixes, none of which changes a body that is behaving:
   `clawspire_game` (the net frees a pinned prize in a fight and leaves the
   magnetic lid's hang alone).
 
+Round 25 follow-up: in a Ticklish Claw fight a golden prize (face, sparkles)
+hung at the right end of the rail, its centre exactly on the glass clamp and
+half of it through the glass. An awake body cannot be left like that (the
+extent clamp above slides it in), so it was ASLEEP, and sleepers were the
+hole: `physStep` never clamps one and `strandWatch` forgave every sleeper (and
+every body with a contact pointing down, which included a part sunk into the
+lid or a wall). How a prize falls asleep up there: it rests on another prize
+that is held still at the claw's height (the claw waits about a second over
+the chute with its load, `W.busy` off), sleeps after 0.45 s, and when that
+prize drops or slides away from under it nothing woke it: the engine only
+woke sleepers on a hard hit or a deep push, never when their support left
+(a delivery's `wakeAll` saved it only when the support went down the chute).
+The headless repro (`island`: a load held still, a rider asleep on it, the
+load released) left the rider at y 70 for ever. Fixes:
+
+- Root cause, `prepContacts` / `restLeft`: a sleeper resting on an awake body
+  notes it each substep (`b.restOn`, `b.restN`); once that body no longer
+  touches it and is on its way (faster than `PH.sleepV`, or clear of it) the
+  sleeper wakes and falls. A support that only creeps a hair away is waited
+  for, one that falls asleep too still holds it.
+- The lid gets the side walls' extent clamp (`lidInside`, `clampBox.lidY`, the
+  lid's underside): a long prize flung up on end stood with its top through
+  the lid, pinned by the centre clamp (13 of 3000 random flings at the top
+  right jammed there for good, all of them long prizes).
+- `strandWatch`, widened: a contact with the lid or a side wall is never
+  support; a sleeper poking through the glass or the lid is caught at once;
+  anything up in the claw's zone (centre above `PH.strandHigh` 60, or top
+  above `PH.strandTop` 31: the rail and its end caps) that has not moved 3 px
+  for 3 s goes back in over the bin with a small push down, asleep or awake,
+  supported or not, golden or not; a canister flag no rig holds is cleared.
+  Exempt only: the claw's own load (held, awake) and canister, and
+  `GAME.strandSkip`'s holds for as long as each lasts (the magnetic lid / zero
+  g hang now only while `FS.best.ceil` is on; bubbles and glue end with the
+  turn; the rival's catch with its animation).
+- Every body is built with the fields the rig and the net set later
+  (`passClaw`, `tube`, `tubeK`, `stT`..`stN`, `restOn`, `restN`): added on the
+  fly they made the hot loops polymorphic (a seeded stress with the net on
+  every frame: 19 s before, 4 s after, same results).
+- Tests: `clawspire_physics` (a rider asleep on the load drops with it, the
+  lid jam, `strandWatch` on the screenshot's pose, a shelved prize at the
+  rail, held and skipped bodies, a stale canister flag, and a Ticklish wiggle
+  stress for all 8 claw types), `clawspire_game` (a Ticklish fight: the
+  golden prize at the rail's end goes back into the bin, one left by its
+  support falls, the lid's hang is exempt only while the lid is on; and 8
+  claw types x 6 Ticklish drops with a golden prize, nothing outside the glass
+  or still at the rail past the watch time). The new tests fail on the old
+  code; a 360 drop version of the game stress (3 seeds a type) is clean.
+
 ### The picker, the run, the save
 
 Character select has a claw row (`clawPickerRow`, one line in `showChars`):

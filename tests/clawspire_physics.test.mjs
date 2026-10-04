@@ -1279,4 +1279,150 @@ h.test('strandWatch: back in over the bin, nudged, then set back; behaving bodie
   h.eq(hit, 0, 'a body the game holds up on purpose is left alone');
 });
 
+// ---- stuck prize follow-up (round 25) ------------------------------------
+// The owner's Ticklish Claw run left a golden prize hanging at the right end
+// of the rail, half through the glass, for ever.  Holes the round 23 net and
+// clamps left: a sleeper is never clamped or watched, and one that slept on
+// the claw's load stayed asleep in mid-air when the load dropped from under
+// it; a part sunk into the lid (or a wall) counted as "resting on" it; and a
+// long prize flung up on end could jam through the lid.
+const BROOM = { shape: { kind: 'box', w: 56, h: 10 }, density: 0.6, friction: 0.5 };
+
+h.test('stuck prize (round 25): a prize asleep on the claw\'s load wakes and drops with it', () => {
+  const { W } = mkWorld();
+  const load = spawn(W, ITEM.sword({}), 445, 80, { angle: 0 });
+  const rider = spawn(W, BROOM, 450, 66, { angle: 0 });
+  let hold = true;
+  // the claw holds its load still over the chute (carry wait, then the prongs open)
+  W.addHook(() => { if (!hold) return; load.x = 445; load.y = 80; load.a = 0; load.vx = load.vy = load.av = 0; load.held = 2; load.sl = false; });
+  settle(W, 1.5);
+  h.ok(rider.sl && rider.y < 80, `the rider fell asleep on the load (y ${rider.y.toFixed(0)}, asleep ${rider.sl})`);
+  hold = false;
+  settle(W, 3);
+  h.ok(load.y > 300, 'the load dropped down the chute');
+  h.ok(rider.y > 300, `and the rider went with it instead of hanging in mid-air (y ${rider.y.toFixed(0)})`);
+  // a support that only creeps a hair away is waited for (no wake churn in a settling pile)
+  const { W: W2 } = mkWorld();
+  const base = spawn(W2, ITEM.ball({}), 200, 360), top = spawn(W2, ITEM.marble({}), 200, 330);
+  settle(W2, 2);
+  h.ok(base.sl && top.sl, 'a two prize stack settles asleep');
+});
+
+h.test('stuck prize (round 25): a long prize flung up on end through the lid slides back down', () => {
+  for (const x of [120, 440]) {
+    const { W, C } = mkWorld();
+    const b = spawn(W, ITEM.sword({}), x, -50, { angle: -Math.PI / 2 });   // (this pose jammed the old physics for good)
+    b.vy = -600;
+    settle(W, 0.05);
+    h.ok(b.box.y0 >= W.clampBox.lidY - PHYS.PH.wallTol - 0.5, `x ${x}: its top stays under the lid (top ${b.box.y0.toFixed(1)})`);
+    settle(W, 3);
+    h.ok(b.y > 200, `x ${x}: it fell back down instead of hanging from the lid (y ${b.y.toFixed(1)})`);
+  }
+  // and should one jam there anyway (here: a world without the lid clamp), the net does not read the
+  // part sunk into the lid as the prize resting on it: back in over the bin after about 3 s
+  const { W, C } = mkWorld();
+  W.clampBox.lidY = null;
+  const b = spawn(W, ITEM.sword({}), 300, -50, { angle: -Math.PI / 2 });
+  b.vy = -600;
+  let at = 0;
+  for (let i = 1; i <= 6 * 60 && !at; i++) { W.step(DT); if (PHYS.strandWatch(W, DT).indexOf(b) >= 0) at = i; }
+  h.ok(at > 2.5 * 60 && at < 4.5 * 60, `a jammed prize is set back in over the bin after about 3 s (frame ${at})`);
+  settle(W, 3);
+  h.ok(b.y > 300 && b.x < C.bounds.chuteX, `and it is in the bin (${b.x.toFixed(0)}, ${b.y.toFixed(0)})`);
+});
+
+h.test('strandWatch (round 25): nothing holds a prize up in the claw zone; a sleeper through the glass goes back; held and skipped ones stay', () => {
+  // the owner's screenshot: a golden prize asleep at the right end of the rail, its centre at the glass
+  // clamp, half through the glass
+  const { W, C } = mkWorld();
+  const calm = spawn(W, ITEM.ball({}), 150, 300);
+  settle(W, 2);
+  const y0 = calm.y;
+  const gold = spawn(W, BROOM, W.clampBox.xMax, 44, { angle: 0, data: { golden: true } });
+  gold.sl = true; PHYS.sync(gold);
+  h.ok(gold.box.x1 > C.bounds.w + 10, 'the setup: it pokes well through the glass');
+  let at = 0;
+  for (let i = 1; i <= 5 * 60; i++) { W.step(DT); if (PHYS.strandWatch(W, DT).indexOf(gold) >= 0 && !at) at = i; }
+  h.ok(at > 0 && at <= 2, `it is caught at once (frame ${at})`);
+  h.ok(gold.y > 300 && gold.x < C.bounds.chuteX && gold.box.x1 <= C.bounds.w + 4, `and lands back in the bin (${gold.x.toFixed(0)}, ${gold.y.toFixed(0)})`);
+  h.eq(calm.y, y0, 'a resting prize is never moved');
+  // a prize resting on something up at the rail (a shelf: supported, and asleep) goes back in over the bin
+  const { W: W2, C: C2 } = mkWorld();
+  const shelf = PHYS.body({ type: 'static', shape: { kind: 'box', w: 60, h: 8 }, x: 445, y: 52, group: 'shelf' });
+  W2.add(shelf);
+  const sat = spawn(W2, ITEM.ball({}), 445, 30);
+  let back = 0, slept = false;
+  for (let i = 1; i <= 6 * 60; i++) {
+    W2.step(DT);
+    if (sat.sl) slept = true;
+    if (PHYS.strandWatch(W2, DT).indexOf(sat) >= 0 && !back) back = i;
+  }
+  h.ok(slept, 'the shelved prize settled (asleep, resting on the shelf)');
+  h.ok(back > 2.5 * 60 && back < 4.5 * 60, `after about 3 s it is set back in over the bin (frame ${back})`);
+  h.ok(sat.y > 300 && sat.x < C2.bounds.chuteX, `and it is in the bin (${sat.x.toFixed(0)}, ${sat.y.toFixed(0)})`);
+  // held by the claw, or held up on purpose (skip): never touched, even up at the rail
+  const { W: W4 } = mkWorld();
+  const held = spawn(W4, ITEM.ball({}), 200, 40), kept = spawn(W4, ITEM.ball({}), 300, 40);
+  W4.addPost(() => { held.x = 200; held.y = 40; held.vx = held.vy = 0; held.held = 2; held.sl = false; kept.x = 300; kept.y = 40; kept.vx = kept.vy = 0; kept.sl = false; });
+  let hit = 0;
+  for (let i = 0; i < 8 * 60; i++) { W4.step(DT); hit += PHYS.strandWatch(W4, DT, { skip: (b) => b === kept }).length; }
+  h.eq(hit, 0, 'a prize in the claw and one a mode holds up are left alone');
+  // a vacuum canister flag no rig holds any more is cleared and the prize falls
+  const { W: W5 } = mkWorld();
+  const lost = spawn(W5, ITEM.ball({}), 250, 120);
+  lost.tube = 1;
+  for (let i = 0; i < 3 * 60; i++) { W5.step(DT); PHYS.strandWatch(W5, DT); }
+  h.ok(!lost.tube && lost.y > 300, `a stale canister flag is cleared and the prize falls (y ${lost.y.toFixed(0)})`);
+});
+
+/* The Ticklish Claw (a bestiary trick): the claw wiggles side to side while it
+   drops, closes, lifts and carries (game.js bestHook, BST_K tickleA / tickleHz).
+   Many seeded drops per claw type from a heap with long prizes, the net running
+   every frame as in a fight: nothing may be outside the glass after a frame, or
+   sit still up in the claw zone (not held) longer than the watch time. */
+function stressTickle(type, seed, grabs) {
+  const rng = U.rng(seed), bad = [];
+  const { W, C } = mkWorld();
+  const defs = [BROOM, ITEM.sword({}), { shape: { kind: 'box', w: 40, h: 14 } }, ITEM.ball({}), ITEM.shield({}), ITEM.marble({})];
+  const put = (i) => spawn(W, defs[i % defs.length], 30 + rng() * 370, 20 + rng() * 100, { angle: rng() * 6.28, data: { tags: i % 2 ? ['metal'] : [] } });
+  for (let i = 0; i < 16; i++) put(i);
+  settle(W, 3);
+  const R = PHYS.clawRig(W, { cabinet: C, type, grip: 1, rand: U.rng(seed + 5) });
+  let tk = 0;
+  W.addHook((hh) => {
+    const K = R.ctl;
+    if (!K || !(K.st === 'drop' || K.st === 'close' || K.st === 'lift' || (K.st === 'carry' && Math.abs(K.x - R.chuteX) > 12))) return;
+    tk += hh; const w = 2 * Math.PI * 7.5;
+    K.vx += 7 * w * Math.cos(w * tk) * (1 + 0.5 * Math.sin(tk * 3.1));
+  });
+  const still = new Map();
+  const frame = (g) => {
+    R.update(DT); W.step(DT); PHYS.strandWatch(W, DT);
+    for (const b of items(W)) {
+      if (b.box.x0 < -4 || b.box.x1 > C.bounds.w + 4 || b.y < -60 || b.y > C.bounds.trayY + 1) bad.push(`${type} seed ${seed} grab ${g}: outside at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+      const high = b.y < PHYS.PH.strandHigh || b.box.y0 < PHYS.PH.strandTop;
+      let s = still.get(b);
+      if (!s || !high || b.held > 0 || Math.hypot(b.x - s.x, b.y - s.y) > 3) { still.set(b, { x: b.x, y: b.y, t: 0 }); continue; }
+      s.t += DT;
+      if (s.t > 4 && !s.rep) { s.rep = 1; bad.push(`${type} seed ${seed} grab ${g}: still up at ${b.x.toFixed(0)},${b.y.toFixed(0)} for 4 s`); }
+    }
+  };
+  for (let g = 0; g < grabs; g++) {
+    R.setTarget(g % 4 === 0 ? 330 + rng() * 25 : 60 + rng() * 290);
+    for (let i = 0; i < 90; i++) frame(g);
+    R.drop();
+    for (let i = 0; i < 2000 && !(i > 30 && R.phase === 'idle'); i++) frame(g);
+    for (const b of items(W)) if (C.inChute(b) && b.y > C.bounds.h) { W.remove(b); put(g); }
+    for (let i = 0; i < 5 * 60; i++) frame(g);
+  }
+  return bad;
+}
+
+h.test('stuck prize (round 25): every claw type with the Ticklish Claw wiggle, seeded drops, nothing outside the glass or left up at the rail', () => {
+  for (const t of TYPES) {
+    const bad = stressTickle(t, 25, 8);
+    h.eq(bad.length, 0, `${t}: ${bad.slice(0, 2).join(' | ')}`);
+  }
+});
+
 h.done();
