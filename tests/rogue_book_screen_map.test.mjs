@@ -159,8 +159,8 @@ await t.test('enter: the HUD, the data-tut anchors, the chapter title, music, an
   t.eq($$(g, '.mp-ink .mp-drop.full', root).length, R.ink, 'as many full drops as Ink');
   t.eq(txt($(g, '.mp-ink-n', root)), R.ink + '/' + R.inkMax, 'the number reads Ink over maximum');
   t.eq(txt($(g, '.mp-gold .val', root)), String(R.gold), 'gold');
-  t.ok(/Chapter I/.test(txt($(g, '.mp-ch', root))) && txt($(g, '.mp-title', root)) === g.DATA.lore.ch1_intro.title, 'the banner names the chapter from the lore title');
-  t.ok(/\d+% painted/.test(txt($(g, '.mp-prog', root))), 'the progress meter');
+  t.ok(/Verse I/.test(txt($(g, '.mp-ch', root))) && txt($(g, '.mp-title', root)) === g.DATA.lore.ch1_intro.title, 'the banner names the chapter from the lore title');
+  t.ok(/\d+% awake/.test(txt($(g, '.mp-prog', root))), 'the progress meter');
   t.eq($(g, '.mp-prog', root).getAttribute('aria-valuenow'), String(g.MAP.progress(R.map).pct), 'its aria value is MAP.progress');
   t.eq($$(g, '.mp-chip', root).length, 1, 'one brush chip: the starting Long Stroke');
   t.ok(new RegExp(g.DATA.brushes.stroke.name).test(txt($(g, '.mp-chip', root))), 'the chip names the brush');
@@ -169,7 +169,7 @@ await t.test('enter: the HUD, the data-tut anchors, the chapter title, music, an
   t.ok($(g, '.menu-btn', root), 'the pause button');
   ['ink', 'hex', 'brushes', 'deck', 'relics'].forEach((a) => t.ok(g.UI.anchorEl(a), 'data-tut anchor ' + a + ' resolves through UI.anchorEl'));
   t.ok(g.UI.anchorEl('deck').tagName === 'BUTTON' && g.UI.anchorEl('relics').classList.contains('mp-relics'), 'the deck anchor is the button, the relics anchor the strip');
-  t.eq($(g, '.mp-info-name', root).textContent.indexOf('hexes painted') > 0, true, 'the info chip rests on a progress line');
+  t.eq($(g, '.mp-info-name', root).textContent.indexOf('hexes awake') > 0, true, 'the info chip rests on a progress line');
   const interactive = $$(g, 'button, [role=button], [tabindex="0"]', root);
   t.ok(interactive.length >= 8 && interactive.every((e) => e.localName === 'button' || e.getAttribute('role') || e.getAttribute('tabindex') === '0'), 'every interactive element is a real button or has a role');
   t.ok($$(g, '.mp-tool', root).every((b) => b.getAttribute('aria-label')), 'tool buttons are labelled');
@@ -183,7 +183,7 @@ await t.test('empty states: no run, a run without a map, and the way back', asyn
   const g = fresh(); g.GAME.state.R = null; g.UI.setRun(null);
   await g.UI.go('map', {}, { force: true, transition: 'none' }); await settle(g);
   const root = $(g, '.s-map');
-  t.ok(root && /blank page/i.test(txt(root)), 'a friendly blank page, never an empty screen');
+  t.ok(root && /silence/i.test(txt(root)), 'a friendly blank page, never an empty screen');
   t.ok($(g, '.menu-btn', root), 'the menu is still there');
   g._raf(16); g._raf(16);
   let went = 0; g._run('globalThis.__title = 0; UI.hooks.toTitle = () => { __title++; };');
@@ -191,7 +191,7 @@ await t.test('empty states: no run, a run without a map, and the way back', asyn
   t.eq(g._run('__title'), 1, 'Back to Title goes to the title');
   const R = mkRun(g); R.map = null;
   await g.UI.go('map', { R }, { force: true, transition: 'none' }); await settle(g);
-  t.ok(/blank page/i.test(txt($(g, '.s-map'))), 'a run with no map shows the same page');
+  t.ok(/silence/i.test(txt($(g, '.s-map'))), 'a run with no map shows the same page');
   g._raf(16);
   t.eq(errs(g), 0, 'no errors in the empty states');
 });
@@ -214,7 +214,7 @@ await t.test('tap a fogged hex next to the page: RUN.paint for 1 Ink, the tile i
     t.eq(txt($(g, '.mp-ink-n')), R.ink + '/' + R.inkMax, 'seed ' + seed + ': the meter number');
     t.eq($$(g, '.mp-ink .mp-drop.full').length, R.ink, 'seed ' + seed + ': the drops');
     t.ok(sfx(g).indexOf('paint') >= 0, 'seed ' + seed + ': the paint sound');
-    t.ok(/hexes painted/.test(txt($(g, '.mp-prog'))) || /% painted/.test(txt($(g, '.mp-prog'))), 'seed ' + seed + ': the progress text');
+    t.ok(/hexes awake/.test(txt($(g, '.mp-prog'))) || /% awake/.test(txt($(g, '.mp-prog'))), 'seed ' + seed + ': the progress text');
     t.eq(errs(g), 0, 'seed ' + seed + ': no console errors');
   }
 });
@@ -268,7 +268,7 @@ await t.test('not enough Ink: the meter shakes, a toast says how much is missing
   const painted0 = g.MAP.progress(R.map).painted;
   await clickHex(g, T.q, T.r);
   t.ok(!T.painted && R.ink === 0, 'nothing painted, no Ink spent');
-  t.ok(toasts(g).some((x) => /Ink/.test(x)), 'a toast about Ink (' + toasts(g).join(' | ') + ')');
+  t.ok(toasts(g).some((x) => /Echo/.test(x)), 'a toast about Ink (' + toasts(g).join(' | ') + ')');
   t.ok(sfx(g).indexOf('ui_error') >= 0, 'the error sound');
   t.ok($(g, '.mp-ink').classList.contains('shake') || $(g, '.mp-ink').classList.contains('flash-bad'), 'the meter shakes');
   t.eq(bus(g, 'map:paint').length, 0, 'no map:paint');
@@ -278,10 +278,10 @@ await t.test('not enough Ink: the meter shakes, a toast says how much is missing
   const f = farFog(g, R, 3, 6);
   await clickHex(g, f.T.q, f.T.r);
   t.ok(st(g).chain && !st(g).chain.affordable, 'the preview says it is not affordable');
-  t.ok(/Too far for your Ink/.test(txt($(g, '.mp-info'))), 'and the chip says so');
+  t.ok(/Too far for your Echo/.test(txt($(g, '.mp-info'))), 'and the chip says so');
   await clickHex(g, f.T.q, f.T.r);
   t.ok(!f.T.painted && R.ink === 1, 'the second tap refuses and keeps your Ink');
-  t.ok(toasts(g).some((x) => new RegExp('needs ' + f.pre.cost + ' Ink').test(x)), 'the toast names the price');
+  t.ok(toasts(g).some((x) => new RegExp('needs ' + f.pre.cost + ' Echo').test(x)), 'the toast names the price');
   t.eq(errs(g), 0, 'clean');
 });
 
@@ -296,11 +296,11 @@ await t.test('the Void and the page edge answer with a toast and change nothing;
   t.ok(new RegExp(esc(g.DATA.tiles.block.name)).test(txt($(g, '.mp-info-name'))) && /Nothing can cross/.test(txt($(g, '.mp-info-act'))), 'hovering the Void explains it');
   const adj = frontier(g, R).filter((T) => T.type !== 'block')[0];
   await hoverHex(g, adj.q, adj.r);
-  t.ok(/Unwritten page|glimpsed/.test(txt($(g, '.mp-info-name'))) && /1 Ink/.test(txt($(g, '.mp-info-act'))), 'hovering fog next to the page names the price');
+  t.ok(/Silent ground|heard/.test(txt($(g, '.mp-info-name'))) && /1 Echo/.test(txt($(g, '.mp-info-act'))), 'hovering fog next to the page names the price');
   t.ok(st(g).hover && st(g).hover.q === adj.q, 'the hover hex is tracked');
   const known = Object.values(R.map.tiles).find((T) => T.known && !T.painted && T.type === 'boss');
   await hoverHex(g, known.q, known.r);
-  t.ok(new RegExp(esc(g.DATA.tiles.boss.name) + ', (glimpsed|seen|heard)').test(txt($(g, '.mp-info-name'))), 'a glimpsed landmark is named; what is blank stays secret');
+  t.ok(new RegExp(esc(g.DATA.tiles.boss.name) + ', (heard)').test(txt($(g, '.mp-info-name'))), 'a glimpsed landmark is named; what is blank stays secret');
   const secret = Object.values(R.map.tiles).find((T) => !T.known && !T.painted && T.type === 'enemy');
   await hoverHex(g, secret.q, secret.r);
   t.ok(!/Ambush/.test(txt($(g, '.mp-info'))), 'hidden content is never leaked by hover');
@@ -319,7 +319,7 @@ await t.test('map:paint fires per action, the mercy rule surfaces as a toast, an
   t.ok(T.painted, 'painted');
   t.eq(R.stats.mercy, mercy0 + 1, 'RUN lent a drop');
   t.eq(R.ink, 1, 'exactly paintCost Ink: the one spent comes back');
-  t.ok(toasts(g).some((x) => /lends a drop of Ink/.test(x)), 'the toast says so');
+  t.ok(toasts(g).some((x) => /hums back one Echo/.test(x)), 'the toast says so');
   t.ok(sfx(g).indexOf('ink_gain') >= 0, 'with the Ink sound');
   t.eq(errs(g), 0, 'clean');
 });
@@ -375,7 +375,7 @@ await t.test('every brush through the screen: chip, glowing anchors, hover previ
       t.ok(expect.length > 0 && expect.every((c) => tileOf(g, R, c[0], c[1]).painted), id + '/' + seed + ': every cell the brush covers is painted (' + expect.length + ')');
       t.eq(R.brushes.length, 0, id + '/' + seed + ': the brush is used up');
       t.eq($$(g, '.mp-chip').length, 0, id + '/' + seed + ': the chip is gone');
-      t.ok(/No brushes/.test(txt($(g, '.mp-tray'))), id + '/' + seed + ': the tray says so');
+      t.ok(/No Songs/.test(txt($(g, '.mp-tray'))), id + '/' + seed + ': the tray says so');
       t.ok(modeBar(g).hidden && !st(g).brush, id + '/' + seed + ': brush mode ended');
       t.eq(R.ink, 4, id + '/' + seed + ': brushes are free');
       t.eq(R.stats.brushesUsed, 1, id + '/' + seed + ': RUN counted it');
@@ -396,7 +396,7 @@ await t.test('brush mode: touch needs the confirming tap, Esc backs out one leve
   const exp = g.MAP.brushCells(R.map, 'splash', a.q, a.r, 0);
   await clickHex(g, a.q, a.r, { pointerType: 'touch' });
   t.ok(exp.every((c) => !tileOf(g, R, c[0], c[1]).painted), 'a first touch tap only shows the shape');
-  t.ok(st(g).brush && st(g).brush.anchor && /Tap again|Paint/.test(txt(modeBar(g))), 'and asks for a second tap');
+  t.ok(st(g).brush && st(g).brush.anchor && /Tap again|Sing/.test(txt(modeBar(g))), 'and asks for a second tap');
   t.eq(R.brushes.length, 3, 'nothing used');
   await press(g, 'Escape');
   t.ok(st(g).brush && !st(g).brush.anchor, 'Esc first releases the anchor');
@@ -425,7 +425,7 @@ await t.test('brush mode: touch needs the confirming tap, Esc backs out one leve
   t.eq(st(g).brush.dir, fa.dirs[1], 'a touch tap on the neighbouring hex aims the fan');
   t.eq(R.brushes.length, 2, 'aiming spends nothing');
   const want = g.MAP.brushCells(R.map, 'fan', fa.q, fa.r, fa.dirs[1]);
-  const apply = $(g, '.mp-mode .btn-primary'); t.ok(apply && /Paint \d/.test(txt(apply)), 'the Paint button shows the count (' + txt(apply) + ')');
+  const apply = $(g, '.mp-mode .btn-primary'); t.ok(apply && /Sing \d/.test(txt(apply)), 'the Paint button shows the count (' + txt(apply) + ')');
   g._click(apply); await settle(g);
   t.ok(want.every((c) => tileOf(g, R, c[0], c[1]).painted), 'Paint applies the fan');
   t.eq(R.brushes.length, 1, 'one fan left');
@@ -455,11 +455,11 @@ await t.test('brush mode: an invalid start refuses with a hint, keys B and 1 to 
   g._raf(16); g._raf(16);
   t.eq($$(g, '.mp-chip').length, 0, 'the tray follows RUN (no chips)');
   await press(g, 'b');
-  t.ok(toasts(g).some((x) => /no brushes/i.test(x)), 'B with an empty tray says so');
+  t.ok(toasts(g).some((x) => /no songs/i.test(x)), 'B with an empty tray says so');
   R.brushes = ['blot']; fullyPainted(g, R);
   g._raf(16); g._raf(16);
   await press(g, 'b');
-  t.ok(!st(g).brush && toasts(g).some((x) => /nowhere to paint/i.test(x)), 'a brush with no room refuses to start');
+  t.ok(!st(g).brush && toasts(g).some((x) => /nowhere to wake/i.test(x)), 'a brush with no room refuses to start');
   t.eq(errs(g), 0, 'clean');
 });
 
@@ -1183,8 +1183,8 @@ await t.test('info chip copy: the walk hint and the resting hint come in shorter
     // resting: the primary hint is in the description (or, on a phone that has no room for it, in the action line)
     await g._tick(100);
     const rest = txt($(g, '.mp-info'));
-    t.ok(/walk/.test(rest) && /paint/i.test(rest), tier.name + ': the resting chip says to paint fog and walk on painted ground (' + rest.slice(0, 80) + ')');
-    t.ok(tier.vp ? /ground to walk\./.test(txt($(g, '.mp-info-act'))) : /tap painted ground to walk\./.test(txt($(g, '.mp-info-text'))), tier.name + ': and the whole sentence is there');
+    t.ok(/walk/.test(rest) && /wake/i.test(rest), tier.name + ': the resting chip says to paint fog and walk on painted ground (' + rest.slice(0, 80) + ')');
+    t.ok(tier.vp ? /ground to walk\./.test(txt($(g, '.mp-info-act'))) : /tap awake ground to walk\./.test(txt($(g, '.mp-info-text'))), tier.name + ': and the whole sentence is there');
     // every hex of a fully painted page, then of the unpainted one with the party's Ink low: the longest action line of each kind
     fullyPainted(g, R); st(g).infoKey = ''; fitCam(g);
     let longest = 0, longestTxt = '', walks = new Set();
@@ -1405,10 +1405,10 @@ await t.test('relics overlay: every treasure with art, text and where it came fr
     t.eq(txt($(g, '.mr-name', row)), d.name, d.name + ': name');
     t.eq(txt($(g, '.mr-text', row)), g.DATA.relicText(d.id), d.name + ': the relic text');
     t.ok(new RegExp(d.rarity, 'i').test(txt($(g, '.mr-tag', row))), d.name + ': rarity tag');
-    t.ok(/Found in Chapter (I|II),/.test(txt($(g, '.mr-from', row))), d.name + ': where it was found (' + txt($(g, '.mr-from', row)).slice(0, 50) + ')');
+    t.ok(/Found in Verse (I|II),/.test(txt($(g, '.mr-from', row))), d.name + ': where it was found (' + txt($(g, '.mr-from', row)).slice(0, 50) + ')');
   });
-  t.ok(/Found in Chapter I,/.test(txt($(g, '.mr-from', rows[4]))) && /Found in Chapter II,/.test(txt($(g, '.mr-from', rows[1]))), 'the chapter comes from RUN\'s log');
-  t.ok(/chapter boss/i.test(txt($(g, '.mr-from', rows[0]))) && /peddler/i.test(txt($(g, '.mr-from', rows[2]))), 'and the source from the rarity');
+  t.ok(/Found in Verse I,/.test(txt($(g, '.mr-from', rows[4]))) && /Found in Verse II,/.test(txt($(g, '.mr-from', rows[1]))), 'the chapter comes from RUN\'s log');
+  t.ok(/keeper/i.test(txt($(g, '.mr-from', rows[0]))) && /peddler/i.test(txt($(g, '.mr-from', rows[2]))), 'and the source from the rarity');
   t.ok(/5 treasures/.test(txt($(g, '.mr-sum', ov))), 'a summary line');
   g._click($(g, '.btn', ov)); await settle(g);
   t.eq(g.UI.overlay.count(), 0, 'Close closes it');
@@ -1433,14 +1433,14 @@ await t.test('legend overlay: tiles, brushes drawn on hexes, controls, and the g
   const ov = $(g, '.o-legend');
   t.ok(ov, 'the Legend button opens the legend');
   t.eq($$(g, '.tab', ov).length, 4, 'four tabs');
-  t.deep($$(g, '.tab', ov).map((x) => txt(x)), ['The page', 'Brushes', 'Controls', 'Words'], 'named');
+  t.deep($$(g, '.tab', ov).map((x) => txt(x)), ['The land', 'Songs', 'Controls', 'Words'], 'named');
   const body = () => $(g, '.lg-body', ov);
   g.LISTS = g.DATA.LISTS;
   g.DATA.LISTS.tiles.filter((x) => x !== 'block').forEach((id) => {
     const row = $$(g, '.lg-tile', ov).find((r) => txt(r).indexOf(g.DATA.tiles[id].name) >= 0);
     t.ok(row && txt(row).indexOf(g.DATA.tiles[id].text) >= 0 && $(g, 'canvas', row), 'tile ' + id + ': icon, name and text');
   });
-  t.ok(new RegExp(esc(g.DATA.tiles.block.name)).test(txt(body())) && /Blank paper/.test(txt(body())) && /Glimpsed from afar/.test(txt(body())), 'the page reading guide');
+  t.ok(new RegExp(esc(g.DATA.tiles.block.name)).test(txt(body())) && /Silent ground/.test(txt(body())) && /Heard from afar/.test(txt(body())), 'the page reading guide');
   t.eq($$(g, '.lg-tile .lg-lm', ov).length, g.DATA.LISTS.landmarks.length, 'landmarks are marked as seen from afar');
   g._click($$(g, '.tab', ov)[1]); await settle(g);
   t.eq($$(g, '.lg-brush', body()).length, Object.keys(g.DATA.brushes).length, 'one entry per brush');
@@ -1693,7 +1693,7 @@ await t.test('realtime: a well sends drops flying into the meter and the meter f
 await t.test('realtime: the chapter intro plays once per chapter (title, brush stroke, swoop from the whole page), never twice, and is a fade under reduced motion', async () => {
   const g = await rt({ seed: 9 }); const R = mkRun(g, { seed: 9 });
   await open(g, R);
-  t.ok($(g, '.mp-intro') && /Chapter I/.test(txt($(g, '.mp-intro'))) && /Whispering/.test(txt($(g, '.mp-intro-t'))), 'the first visit shows the chapter title');
+  t.ok($(g, '.mp-intro') && /Verse I/.test(txt($(g, '.mp-intro'))) && /Whispering/.test(txt($(g, '.mp-intro-t'))), 'the first visit shows the chapter title');
   t.ok($(g, '.mp-hud').classList.contains('intro'), 'the small banner waits for it');
   const c0 = camOf(g);
   t.ok(Math.abs(c0.z - c0.zMin) < 1e-9, 'the camera starts on the whole page');
@@ -1706,7 +1706,7 @@ await t.test('realtime: the chapter intro plays once per chapter (title, brush s
   t.ok(!$(g, '.mp-intro') && Math.abs(camOf(g).z - 1) < 1e-9, 'coming back from a node plays no intro and starts on the party');
   g.RUN.startChapter(R, 2);
   await open(g, R);
-  t.ok($(g, '.mp-intro') && /Chapter II/.test(txt($(g, '.mp-intro'))), 'a new chapter plays it again');
+  t.ok($(g, '.mp-intro') && /Verse II/.test(txt($(g, '.mp-intro'))), 'a new chapter plays it again');
   const g2 = await rt({ seed: 9 }); g2.UI.setSetting('reduceMotion', true);
   const R2 = mkRun(g2, { seed: 9 });
   await open(g2, R2);
@@ -1764,7 +1764,7 @@ await t.test('input: pointercancel frees a stuck pointer, contextmenu is swallow
   t.ok(st(g).ptrs.size === 0 && !st(g).pinch, 'a cancelled pinch leaves nothing behind');
   await clickHex(g, T.q, T.r);
   t.ok(T.painted, 'and the next tap still paints');
-  t.ok(g._run('__ann').some((x) => /Painted 1 hex for 1 Ink/.test(x)), 'the screen reader line says what happened (' + g._run('__ann').slice(-2).join(' | ').slice(0, 90) + ')');
+  t.ok(g._run('__ann').some((x) => /Woke 1 hex for 1 Echo/.test(x)), 'the screen reader line says what happened (' + g._run('__ann').slice(-2).join(' | ').slice(0, 90) + ')');
   g._click($(g, '.mp-chip')); await settle(g);
   t.ok(st(g).brush, 'brush mode');
   const ev = g._run("(() => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }); UI.layers.view.dispatchEvent(e); return e.defaultPrevented; })()");
@@ -1815,10 +1815,10 @@ await t.test('realtime: a finger leaves its hex info for a moment, then the chip
   await clickHex(g, T.q, T.r, { pointerType: 'touch' });
   t.ok(T.painted && st(g).hover && st(g).hover.q === T.q, 'the touch tap painted and remembers its hex');
   await g._tick(600);
-  t.ok(/\S/.test(txt($(g, '.mp-info-name'))) && !/hexes painted/.test(txt($(g, '.mp-info-name'))), 'the chip still describes the tapped hex');
+  t.ok(/\S/.test(txt($(g, '.mp-info-name'))) && !/hexes awake/.test(txt($(g, '.mp-info-name'))), 'the chip still describes the tapped hex');
   await g._tick(3300);
   t.eq(st(g).hover, null, 'after three seconds the touch hover lets go');
-  t.ok(/hexes painted/.test(txt($(g, '.mp-info-name'))), 'and the chip rests on the progress line');
+  t.ok(/hexes awake/.test(txt($(g, '.mp-info-name'))), 'and the chip rests on the progress line');
   t.eq(errs(g), 0, 'clean');
 });
 

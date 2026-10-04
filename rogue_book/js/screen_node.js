@@ -282,7 +282,7 @@
 
   const noRunScreen = (S) => {
     const back = UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => UI.toTitle() });
-    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No tale is open' }, mk('p', { class: 'nk-empty-text', text: 'There is no run to show this page for.' }), mk('div', { class: 'row center' }, back))));
+    S.root.appendChild(mk('div', { class: 'nk-wrap nk-empty-wrap' }, UI.panel({ kind: 'paper', torn: true, title: 'No journey is underway' }, mk('p', { class: 'nk-empty-text', text: 'There is no run to show here.' }), mk('div', { class: 'row center' }, back))));
   };
 
   // finish a node: resolve anything still pending, then hand control back to GAME
@@ -433,7 +433,7 @@
         if (S.chrome) S.chrome.sync(false);
       } else if (++fails > 2) {
         // the player keeps backing out of a mandatory choice: RUN says no card qualifies or the overlay was cancelled. Never trap the screen.
-        UI.toast('That choice can wait: the page turns without it.', 'warn');
+        UI.toast('That choice can wait: the journey goes on without it.', 'warn');
         break;
       }
     }
@@ -457,7 +457,7 @@
   const SORTS = [{ value: 'order', label: 'Order' }, { value: 'cost', label: 'Cost' }, { value: 'type', label: 'Type' }, { value: 'hero', label: 'Hero' }, { value: 'rarity', label: 'Rarity' }];
   const SOCKET_WHY = {
     card: 'That card is no longer in the deck.', slot: 'That socket does not exist.', gem: 'That gem is not in your pouch any more.',
-    color: 'Wrong colour for that socket.', same: 'That gem is already set there.', used: 'The forge has done its work for today.', actions: 'The fire has burned low.', node: 'This page has closed.',
+    color: 'Wrong colour for that socket.', same: 'That gem is already set there.', used: 'The forge has done its work for today.', actions: 'The fire has burned low.', node: 'This moment has passed.',
   };
   const slotName = (s) => (s === 'any' ? 'Prism' : cap(s));
 
@@ -849,12 +849,12 @@
   // centred on its axis (x + w / 2 = 796), because the ledger takes the left of the page; css reads --rw-x and --rw-w from here.
   const RW = { x: 336, w: 920 };
   const rwAxis = () => RW.x + RW.w / 2;
-  const REWARD_TITLE = { normal: 'Victory', elite: 'A Champion Falls', boss: 'The Guardian Falls', event: 'The Tale Moves On' };
+  const REWARD_TITLE = { normal: 'Victory', elite: 'A Champion Falls', boss: 'The Guardian Falls', event: 'The Journey Goes On' };
   const REWARD_SUB = {
-    normal: ['The page settles, and something shiny is left in the margin.', 'The ink dries. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
-    elite: ['A worthy foe, and a worthy prize.', 'The champion kneels, and yields what it guarded.', 'Even the margins go quiet for a moment.'],
-    boss: ['The chapter closes with a satisfying thud.', 'A page turns that will not turn back.'],
-    event: ['A fable ends the way fables do: with a bill.', 'The story goes on, a little richer.'],
+    normal: ['The air settles, and something shiny is left in the grass.', 'The echoes fade. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
+    elite: ['A worthy foe, and a worthy prize.', 'The champion kneels, and yields what it guarded.', 'Even the crickets stop to listen for a moment.'],
+    boss: ['The verse ends on a satisfying final beat.', 'A silence breaks, and stays broken.'],
+    event: ['A fable ends the way fables do: with a bill.', 'The journey goes on, a little richer.'],
   };
 
   // a rarity-coloured relic offer: icon, name, rarity and the hand-written line
@@ -973,12 +973,12 @@
     // thieves can take more than the fight paid: a net loss reads "Gold lost -6" in a warning tone, never "+-6"
     const signed = (n) => (n < 0 ? '-' + Math.abs(n) : '+' + n);
     if (rw.gold) rows.push({ row: ledgerRow(UI.icon('stat', 'gold', 38), rw.gold < 0 ? 'Gold lost' : 'Gold', rw.gold < 0 ? '-0' : '+0', { kind: rw.gold < 0 ? 'loss' : 'gold' }), to: rw.gold, tick: 'gold', fmt: signed });
-    if (rw.ink) rows.push({ row: ledgerRow(UI.icon('stat', 'ink', 38), 'Ink', '+0', { kind: 'ink' }), to: rw.ink, tick: 'ink_gain' });
+    if (rw.ink) rows.push({ row: ledgerRow(UI.icon('stat', 'ink', 38), 'Echo', '+0', { kind: 'ink' }), to: rw.ink, tick: 'ink_gain' });
     if (rw.maxHp) rows.push({ row: ledgerRow(UI.icon('stat', 'hp', 38), 'Max HP', '+0', { kind: 'hp' }), to: rw.maxHp, tick: 'level_up' });
     const gemId = (rw.gems || [])[0] || null;
     let gemRow = null, brushRow = null;
     if (gemId) { gemRow = ledgerRow(UI.gem(gemId, { size: 'sm' }), gemName(gemId), 'Gem', { kind: 'gem', cls: 'bonus' }); rows.push({ row: gemRow }); }
-    if (rw.brush) { brushRow = ledgerRow(UI.icon('brush', rw.brush, 38), (DATA.brushes[rw.brush] || {}).name || 'Brush', 'Brush', { kind: 'brush', cls: 'bonus' }); rows.push({ row: brushRow }); }
+    if (rw.brush) { brushRow = ledgerRow(UI.icon('brush', rw.brush, 38), (DATA.brushes[rw.brush] || {}).name || 'Song', 'Song', { kind: 'brush', cls: 'bonus' }); rows.push({ row: brushRow }); }
     rows.forEach((r) => ledger.appendChild(r.row));
     wrap.appendChild(ledger);
     stagger(S, rows.map((r) => r.row), { delay: 250, step: 160 });
@@ -988,7 +988,7 @@
       if (reduced()) run(); else UI.after(wait(420 + i * 160), run);
     });
     if ((headless() || reduced()) && S.chrome) S.chrome.gold.rbSet(R.gold, { animate: false });
-    if (!rows.length) ledger.appendChild(mk('p', { class: 'rw-nothing', text: 'The foe left nothing but a story.' }));
+    if (!rows.length) ledger.appendChild(mk('p', { class: 'rw-nothing', text: 'The foe left nothing but an echo.' }));
 
     // ---- decisions
     const cards = rw.cards || [], relics = rw.relics || [];
@@ -1179,7 +1179,7 @@
         page.appendChild(b);
       });
       stage.insertBefore(page, hint);
-      hint.textContent = 'Choose one treasure. The others fade with the chapter.';
+      hint.textContent = 'Choose one treasure. The others fade with the verse.';
       S.relicPage = page;
       skip.hidden = true;
     }
@@ -1219,14 +1219,14 @@
   // screen: shop (a lantern-lit peddler stall)
   // ==================================================================================================================
   const PEDDLER = {
-    hello: ['Welcome, welcome! Mind the lanterns, they bite.', 'Ah, travellers from the margins! Wares for the weary.', 'Everything here fell off something else. Good as new!', 'Step closer. The prices are only a little bit frightening.'],
-    buy: ['Excellent taste! Terrible for my stock, wonderful for my purse.', 'Sold! I will wrap it in a story, free of charge.', 'A fine choice. I was sad to see it go. Only slightly.', 'Ha! The Book will thank you. I will thank your gold.'],
-    poor: ['Ah... the purse is a little thin, friend.', 'Come back with more gold and fewer regrets.', 'I do not take IOUs. The Book keeps those.', 'Almost! Almost is a lovely word, but it does not spend.'],
+    hello: ['Welcome, welcome! Mind the lanterns, they bite.', 'Ah, travellers from the quiet roads! Wares for the weary.', 'Everything here fell off something else. Good as new!', 'Step closer. The prices are only a little bit frightening.'],
+    buy: ['Excellent taste! Terrible for my stock, wonderful for my purse.', 'Sold! I will wrap it in a tune, free of charge.', 'A fine choice. I was sad to see it go. Only slightly.', 'Ha! The land will thank you. I will thank your gold.'],
+    poor: ['Ah... the purse is a little thin, friend.', 'Come back with more gold and fewer regrets.', 'I do not take IOUs. The Hush eats those.', 'Almost! Almost is a lovely word, but it does not spend.'],
     sold: ['That one is gone. Ask the ghost who bought it.', 'Sold out! Try the one next to it.'],
-    remove: ['Burn it, bury it, forget it. A satisfied customer!', 'Gone. As if the Author never wrote it.'],
+    remove: ['Burn it, bury it, forget it. A satisfied customer!', 'Gone. As if it never made a sound.'],
     cut: ['Free gem cutting! Do not tell the other stalls.', 'Steady hands make sparkling cards.'],
     empty: ['You have cleaned me out! Take a bow. I will take a nap.'],
-    leave: ['Come again! I will be here. Probably. The Blank is closing in.', 'Safe roads, traveller. Mind the void.', 'Off you go! Buy something next time, or at least admire it louder.'],
+    leave: ['Come again! I will be here. Probably. The Hush is closing in.', 'Safe roads, traveller. Mind the silence.', 'Off you go! Buy something next time, or at least admire it louder.'],
     idle: ['Psst. The blue gems are the sensible ones.', 'A relic is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of discounts.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
   };
 
@@ -1347,7 +1347,7 @@
     let ri = 0;
     by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || 'gem'), () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + cap(g.color || ''), gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
     by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Rare find' : cap(d.rarity || 'treasure'), () => tipBubble(d.name || it.id, cap(d.rarity || ''), safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
-    by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Brush', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Song', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
 
     // services: card removal (price rises) and free gem cutting
     const removeTag = mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), mk('b', { text: stock.removePrice }));
@@ -1503,7 +1503,7 @@
       }
       switch (l.op) {
         case 'gold': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'gold', 30), sign(l.n) + ' gold')); break;
-        case 'ink': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'ink', 30), sign(l.n) + ' Ink')); break;
+        case 'ink': if (l.n) chips.push(chip(l.n > 0 ? 'good' : 'bad', UI.icon('stat', 'ink', 30), sign(l.n) + ' Echo')); break;
         case 'heal': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('good', UI.medallion(w.id, 30), heroName(w.id) + ' +' + w.n + ' HP')); }); break;
         case 'hurt': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('bad', UI.medallion(w.id, 30), heroName(w.id) + ' -' + w.n + ' HP')); }); break;
         case 'maxHp': (l.who || []).forEach((w) => { if (w.n) chips.push(chip(w.n > 0 ? 'good' : 'bad', UI.icon('stat', 'hp', 30), heroName(w.id) + ' ' + sign(w.n) + ' max HP')); }); break;
@@ -1516,7 +1516,7 @@
         case 'addRelic': if (l.id && DATA.relics[l.id]) chips.push(chip('good', UI.relic(l.id, { size: 'sm', tip: false }), relicName(l.id), 'has-relic')); break;
         case 'addGem': if (l.id && DATA.gems[l.id]) chips.push(chip('good', UI.gem(l.id, { size: 'sm', tip: false }), gemName(l.id), 'has-gem')); break;
         case 'addBrush': if (l.id && DATA.brushes[l.id]) chips.push(chip('good', UI.icon('brush', l.id, 30), DATA.brushes[l.id].name)); break;
-        case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The path opens')); break;
+        case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The land wakes')); break;
         case 'fight': chips.push(chip('bad', UI.icon('tile', 'enemy', 30), 'A fight breaks out!')); break;
         default: if (l.text && l.op !== 'relic' && l.op !== 'flag') chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
       }
@@ -1567,7 +1567,7 @@
       const tk = TK();
       if (tk) safe(() => tk.vignette(g, w, h, { alpha: 0.4 }));
     }, 'ev-plate-c');
-    const title = mk('h2', { class: 'ev-title', text: ev ? ev.title : 'A Blank Page' });
+    const title = mk('h2', { class: 'ev-title', text: ev ? ev.title : 'A Lost Fable' });
     const textEl = mk('p', { class: 'ev-text', tabindex: '-1' });
     const choicesEl = mk('div', { class: 'ev-choices', role: 'group', 'aria-label': 'What will you do?' });
     const outEl = mk('div', { class: 'ev-outcome', hidden: true });
@@ -1596,9 +1596,9 @@
     };
 
     if (!ev) {
-      textEl.textContent = 'The page is blank. The fable slipped away before it could be told.';
+      textEl.textContent = 'Only silence. The fable slipped away before it could be heard.';
       outEl.hidden = false;
-      showLeave('Turn the page');
+      showLeave('Play on');
       return;
     }
 
@@ -1622,7 +1622,7 @@
       const outText = mk('p', { class: 'ev-result', tabindex: '-1' });
       outEl.appendChild(outText);
       outEl.appendChild(gains);
-      const tw = typewriter(S, outText, res && res.text ? res.text : 'The tale has already moved on.', { cps: 70 });
+      const tw = typewriter(S, outText, res && res.text ? res.text : 'The journey has already moved on.', { cps: 70 });
       S.tw = tw; S.outTw = tw;                                                  // Enter or Space completes it, like the fable
       // a tap anywhere on the page (not on a button) finishes the outcome text at once, and the way on follows after a short beat instead of 2 to 4 seconds
       right.addEventListener('click', (e) => { if (!tw.done && !(e.target.closest && e.target.closest('button'))) { tw.skipped = true; tw.complete(); } });
@@ -1718,7 +1718,7 @@
     { id: 'rest', name: 'Rest', verb: 'Mend by the fire' },
     { id: 'sharpen', name: 'Sharpen', verb: 'Upgrade a card' },
     { id: 'gems', name: 'Cut Gems', verb: 'Set gems in cards' },
-    { id: 'meditate', name: 'Meditate', verb: 'Ink and a brush' },
+    { id: 'meditate', name: 'Meditate', verb: 'Echo and a Song' },
   ];
   const campMax = (R) => Math.min(3, Math.max(1, (mods(R).campActions || 1) + ((R.flags && R.flags.extraCampActions) | 0)));
 
@@ -1769,7 +1769,7 @@
         return { lines: [U.plural(R.gems.length, 'gem') + ' in the pouch.', cutting ? 'Cut more: still open this visit.' : 'Set or replace gems, as many as you like.'], state: cutting ? 'again' : '' };
       }
       if (usedNow(id)) return { lines: ['Done for this visit.'], off: 'Already used this visit.', state: 'used' };
-      if (rem <= 0) return { lines: [{ rest: 'Heals both heroes.', sharpen: 'Upgrade one card.', meditate: 'Gain Ink and a brush.' }[id]], off: 'The fire has burned low: no actions left.', state: 'locked' };
+      if (rem <= 0) return { lines: [{ rest: 'Heals both heroes.', sharpen: 'Upgrade one card.', meditate: 'Gain Echo and a Song.' }[id]], off: 'The fire has burned low: no actions left.', state: 'locked' };
       if (id === 'rest') {
         const pv = restPreview(R);
         const total = U.sum(pv, (x) => x.gain);
@@ -1780,7 +1780,7 @@
         return n ? { lines: [U.plural(n, 'card') + ' can be sharpened.', 'Pick one; it gains its upgrade.'], state: '' } : { lines: ['Every card is already sharp.'], off: 'Nothing left to sharpen.', state: '' };
       }
       const gain = Math.max(0, Math.min(R.inkMax - R.ink, DATA.ECONOMY.campInk));
-      return { lines: [gain ? '+' + gain + ' Ink (' + R.ink + ' to ' + (R.ink + gain) + ')' : 'Ink is already full.', '+ one random brush'], state: '' };
+      return { lines: [gain ? '+' + gain + ' Echo (' + R.ink + ' to ' + (R.ink + gain) + ')' : 'Echo is already full.', '+ one random Song'], state: '' };
     }
 
     CAMP_ACTIONS.forEach((a, i) => {
@@ -1847,7 +1847,7 @@
           const p = campFirePos();
           burst(S, p.x, p.y - 160, { kind: 'ink', n: 20, spread: 120 });
           ripple(S, p.x, p.y - 100, 'ink');
-          UI.toast((res.ink ? '+' + res.ink + ' Ink' : 'Ink is full') + (res.brush && DATA.brushes[res.brush] ? ' and the ' + DATA.brushes[res.brush].name : ''), 'good');
+          UI.toast((res.ink ? '+' + res.ink + ' Echo' : 'Echo is full') + (res.brush && DATA.brushes[res.brush] ? ' and the ' + DATA.brushes[res.brush].name : ''), 'good');
           sync();
           if (S.chrome) S.chrome.sync(true);
         } else if (id === 'sharpen') {

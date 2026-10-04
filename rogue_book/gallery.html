@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>INKWOVEN gallery</title>
+<title>ECHOWAKE gallery</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0b1e'/%3E%3Cpath d='M16 4C16 4 7 14 7 20a9 9 0 0 0 18 0C25 14 16 4 16 4z' fill='%233a2589' stroke='%235ff5ff' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M16 8C16 8 10.5 14.5 10.5 19' fill='none' stroke='%23fff' stroke-opacity='.55' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Art sheet viewer. Nothing here is game code: it is the workbench drawing owners use with tools/rogue_book/shot.mjs. */
@@ -226,7 +226,7 @@ body.nolabel .sheet h2{display:none}
     if (key === lastNav) return;
     lastNav = key;
     nav.textContent = '';
-    var b = document.createElement('b'); b.textContent = 'INKWOVEN gallery'; nav.appendChild(b);
+    var b = document.createElement('b'); b.textContent = 'ECHOWAKE gallery'; nav.appendChild(b);
     var links = document.createElement('div'); links.className = 'links';
     names.forEach(function (n) {
       var a = document.createElement('a'); a.href = keepQuery({ sheet: n }); a.textContent = n; a.setAttribute('data-sheet', n);

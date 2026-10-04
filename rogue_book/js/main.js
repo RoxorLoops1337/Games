@@ -101,7 +101,7 @@ const GAME = (() => {
     }
     if (ok && state.paidWarned !== R.id && safe(() => m.runPaid(R.id), false)) {      // another tab already ended this very tale
       state.paidWarned = R.id;
-      UI.toast('This tale already ended in another window. Nothing more will be kept.', 'warn', { id: 'paid' });
+      UI.toast('This journey already ended in another window. Nothing more will be kept.', 'warn', { id: 'paid' });
     }
     return ok;
   }
@@ -132,7 +132,7 @@ const GAME = (() => {
     if (!old) return;
     const rec = call('META', 'recordRun', old, 'abandon', Date.now());
     call('META', 'clearRun', old.id);
-    if (rec && rec.inkstones) UI.toast('+' + rec.inkstones + ' Inkstones for the tale you set down', 'good');
+    if (rec && rec.inkstones) UI.toast('+' + rec.inkstones + ' Chimes for the journey you set down', 'good');
   }
 
   function newRun(opts) {
@@ -150,7 +150,7 @@ const GAME = (() => {
     const unlocked = daily ? undefined : (meta && typeof meta.unlockedSet === 'function' ? safe(() => meta.unlockedSet(), undefined) : undefined);
     payOffSavedRun();
     const R = call('RUN', 'newRun', { heroes, trial, seed, daily, unlocked, nonce: runNonce() });
-    if (!R) { UI.toast('The tale could not begin (RUN is not ready)', 'bad'); return null; }
+    if (!R) { UI.toast('The journey could not begin (RUN is not ready)', 'bad'); return null; }
     if (!R.map) call('RUN', 'startChapter', R, 1);
     setRun(R);
     state.ended = null; state.pendingChapter = null; state.lastCombat = null;
@@ -165,7 +165,7 @@ const GAME = (() => {
     const meta = ns.META();
     let R = null;
     try { R = meta && typeof meta.loadRun === 'function' ? meta.loadRun() : null; } catch (e) { console.error('[game] META.loadRun threw: ' + e.message); }
-    if (!R) { UI.toast('There is no saved tale to continue', 'warn'); return Promise.resolve(); }
+    if (!R) { UI.toast('There is no saved journey to continue', 'warn'); return Promise.resolve(); }
     setRun(R);
     state.ended = null; state.pendingChapter = null; state.lastCombat = null;
     if (R.node) return enterNode(R.node);
@@ -174,8 +174,8 @@ const GAME = (() => {
   }
 
   function instant(node) {
-    if (node.kind === 'well') { UI.toast(node.toast || 'The well refills your Ink' + (node.gained ? ' (+' + node.gained + ')' : ''), 'good'); sfx('well'); }   // node.toast: RUN's fable fallback (a well with its own words)
-    else { const b = DATA.brushes[node.id]; UI.toast('You take a brush' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
+    if (node.kind === 'well') { UI.toast(node.toast || 'The temple bell rings' + (node.gained ? ' (+' + node.gained + ' Echo)' : ''), 'good'); sfx('well'); }   // node.toast: RUN's fable fallback (a well with its own words)
+    else { const b = DATA.brushes[node.id]; UI.toast('You learn a Song' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
   }
 
   // The bestiary writes a page for every creature the party stands in front of, not only the ones it kills. node.met is saved with the node, so
@@ -259,12 +259,12 @@ const GAME = (() => {
   }
 
   function abandon() {
-    return UI.overlay.open('confirm', { title: 'Abandon this tale?', body: 'The run ends here. You keep a share of the Inkstones for the pages you wrote.', yes: 'Abandon', no: 'Keep playing', danger: true }).then((ok) => {
+    return UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The run ends here. You keep a share of the Chimes for the hexes you woke.', yes: 'Abandon', no: 'Keep playing', danger: true }).then((ok) => {
       if (!ok) return false;
       const e = finishRun('abandon');
       const stones = e && e.rec && e.rec.inkstones;
       toTitle();
-      if (stones) UI.toast('+' + stones + ' Inkstones', 'good');
+      if (stones) UI.toast('+' + stones + ' Chimes', 'good');
       return true;
     });
   }
@@ -553,7 +553,7 @@ const GAME = (() => {
   function summaryLines(s) {
     if (!s) return [];
     const heroes = (s.heroes || []).map((h) => (DATA.heroes[h.id] ? DATA.heroes[h.id].name : h.id)).join(' and ');
-    return [heroes ? 'Heroes: ' + heroes : '', 'Chapter ' + (s.chapter || 1), 'Score ' + (s.score || 0), s.record && s.record.inkstones !== undefined ? '+' + s.record.inkstones + ' Inkstones' : ''].filter(Boolean);
+    return [heroes ? 'Heroes: ' + heroes : '', 'Verse ' + (s.chapter || 1), 'Score ' + (s.score || 0), s.record && s.record.inkstones !== undefined ? '+' + s.record.inkstones + ' Chimes' : ''].filter(Boolean);
   }
 
   function synthReward(R) {
@@ -588,10 +588,10 @@ const GAME = (() => {
           const hasRun = !!safe(() => meta.hasRun(), false);
           const menu = mk('div', { class: 'col gap ph-menu' });
           if (hasRun) menu.appendChild(UI.btn('Continue', { kind: 'primary', size: 'lg', breathe: true, onclick: () => continueRun() }));
-          menu.appendChild(UI.btn('New Tale', { kind: hasRun ? 'secondary' : 'primary', size: 'lg', onclick: () => go('heroSelect', null, { transition: 'page' }) }));
-          menu.appendChild(UI.btn('Daily Tale', { kind: 'secondary', size: 'lg', onclick: () => newRun({ daily: true }) }));
-          menu.appendChild(mk('div', { class: 'row gap center' }, UI.btn('Library', { kind: 'ghost', onclick: () => go('library', null, { transition: 'page' }) }), UI.btn('Settings', { kind: 'ghost', onclick: () => go('settings') }), UI.btn('How to play', { kind: 'ghost', onclick: () => go('howto') })));
-          shell(root, 'ph-title', mk('h1', { class: 't-title stroke ph-logo', text: 'INKWOVEN' }), mk('p', { class: 'ph-sub', text: 'a rogue storybook' }), menu);
+          menu.appendChild(UI.btn('New Journey', { kind: hasRun ? 'secondary' : 'primary', size: 'lg', onclick: () => go('heroSelect', null, { transition: 'page' }) }));
+          menu.appendChild(UI.btn('Daily Jam', { kind: 'secondary', size: 'lg', onclick: () => newRun({ daily: true }) }));
+          menu.appendChild(mk('div', { class: 'row gap center' }, UI.btn('Hall', { kind: 'ghost', onclick: () => go('library', null, { transition: 'page' }) }), UI.btn('Settings', { kind: 'ghost', onclick: () => go('settings') }), UI.btn('How to play', { kind: 'ghost', onclick: () => go('howto') })));
+          shell(root, 'ph-title', mk('h1', { class: 't-title stroke ph-logo', text: 'ECHOWAKE' }), mk('p', { class: 'ph-sub', text: 'a rogue ballad' }), menu);
         },
       },
       heroSelect: {
@@ -601,13 +601,13 @@ const GAME = (() => {
           const chosen = [];
           let trial = 0;
           const info = hint('Choose two heroes.');
-          const start = UI.btn('Begin the tale', { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => newRun({ heroes: chosen.slice(), trial }) });
+          const start = UI.btn('Begin the journey', { kind: 'primary', size: 'lg', disabled: true, reason: 'Choose two heroes first', onclick: () => newRun({ heroes: chosen.slice(), trial }) });
           const row = mk('div', { class: 'row gap center ph-heroes' });
           const badges = {};
           DATA.LISTS.heroIds.forEach((id) => {
             const unlocked = safe(() => meta.isUnlocked('hero', id), true) !== false;
             const b = UI.heroBadge(id, { size: 'lg', onclick: () => {
-              if (!unlocked) { UI.toast('Locked: finish an earlier chapter to write this hero into the book', 'warn'); return; }
+              if (!unlocked) { UI.toast('Locked: finish an earlier verse to wake this hero', 'warn'); return; }
               const i = chosen.indexOf(id);
               if (i >= 0) chosen.splice(i, 1); else { if (chosen.length >= 2) chosen.shift(); chosen.push(id); }
               Object.keys(badges).forEach((h) => badges[h].rbSet({ selected: chosen.indexOf(h) >= 0 }));
@@ -619,7 +619,7 @@ const GAME = (() => {
             row.appendChild(mk('div', { class: 'col ph-hero' }, b, mk('p', { class: 'ph-blurb', text: DATA.heroes[id].blurb })));
           });
           const trialMax = safe(() => meta.trialMax(), 0) || 0;
-          const trials = trialMax > 0 ? mk('div', { class: 'row gap-s center' }, mk('span', { class: 'dim', text: 'Ink Trial' }), UI.seg(Array.from({ length: trialMax + 1 }, (_, i) => ({ value: i, label: String(i) })), { value: 0, onchange: (v) => { trial = v; } })) : null;
+          const trials = trialMax > 0 ? mk('div', { class: 'row gap-s center' }, mk('span', { class: 'dim', text: 'Tempo Trial' }), UI.seg(Array.from({ length: trialMax + 1 }, (_, i) => ({ value: i, label: String(i) })), { value: 0, onchange: (v) => { trial = v; } })) : null;
           shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Choose your heroes' }), row, info, trials, mk('div', { class: 'row gap center' }, UI.btn('Back', { kind: 'ghost', size: 'lg', onclick: () => go('title', null, { transition: 'page' }) }), start));
         },
       },
@@ -636,7 +636,7 @@ const GAME = (() => {
           });
           const menu = UI.menuButton();
           root.appendChild(menu);
-          shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Chapter ' + (R.chapter || 1) + ': the map (placeholder)' }), stats, hint('The real map arrives in a later wave. Enter any node type to test the flow.'), buttons, UI.btn('Deck', { kind: 'ghost', onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
+          shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Verse ' + (R.chapter || 1) + ': the map (placeholder)' }), stats, hint('The real map arrives in a later wave. Enter any node type to test the flow.'), buttons, UI.btn('Deck', { kind: 'ghost', onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
         },
       },
       combat: {
@@ -661,7 +661,7 @@ const GAME = (() => {
             const c = UI.card(id, { size: 'reward', onclick: () => { chosen = chosen === id ? null : id; cards.querySelectorAll('.card').forEach((el) => el.rbUpdate({ selected: el.dataset.id === chosen })); } });
             cards.appendChild(c);
           });
-          const lines = ['+' + (rw.gold || 0) + ' gold', rw.ink ? '+' + rw.ink + ' Ink' : '', (rw.relics || []).length ? 'Treasure offered' : ''].filter(Boolean).join('   ');
+          const lines = ['+' + (rw.gold || 0) + ' gold', rw.ink ? '+' + rw.ink + ' Echo' : '', (rw.relics || []).length ? 'Treasure offered' : ''].filter(Boolean).join('   ');
           shell(root, '', mk('h2', { class: 't-xl serif stroke', text: 'Spoils (placeholder)' }), hint(lines), cards,
             mk('div', { class: 'row gap center' }, UI.btn('Skip card', { kind: 'ghost', size: 'lg', onclick: () => { call('RUN', 'claim', R, rw, { card: null, relic: null, gem: null, takeBrush: false }); nodeDone(); } }),
               finishBtn('Take and continue', () => { call('RUN', 'claim', R, rw, { card: chosen, relic: (rw.relics || [])[0] || null, gem: (rw.gems || [])[0] || null, takeBrush: !!rw.brush }); nodeDone(); })));
@@ -678,12 +678,12 @@ const GAME = (() => {
         enter(params, root) {
           const p = params || {};
           const lore = DATA.lore && DATA.lore['ch' + p.chapter + '_clear'];
-          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'Chapter ' + (p.chapter || 1) + ' complete' }, mk('p', { class: 'm-text', text: lore ? lore.text : 'The page turns.' }), finishBtn('Continue', () => nodeDone())));
+          shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'Verse ' + (p.chapter || 1) + ' complete' }, mk('p', { class: 'm-text', text: lore ? lore.text : 'The verse ends.' }), finishBtn('Continue', () => nodeDone())));
         },
       },
       gameOver: {
         music: 'defeat', draw: phBackdrop,
-        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'The tale ends' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
+        enter(params, root) { shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'The journey ends' }, ...summaryLines(params && params.summary).map((l) => mk('p', { class: 'm-text', text: l })), finishBtn('Back to title', () => toTitle()))); },
       },
       victory: {
         music: 'victory', draw: phBackdrop,
@@ -706,7 +706,7 @@ const GAME = (() => {
       howto: {
         draw: phBackdrop,
         enter(params, root) {
-          const steps = ['Paint the fog away with Ink to reveal hexes, then walk onto them.', 'Fight with two heroes: one in front, one behind. Swap rows when it helps.', 'Play cards with Energy. Socket gems into cards to change how they play.', 'Reach the chapter boss and rewrite the ending.'];
+          const steps = ['Wake the grey fog with Echo to reveal hexes, then walk onto them.', 'Fight with two heroes: one in front, one behind. Swap rows when it helps.', 'Play cards with Energy. Socket gems into cards to change how they play.', 'Reach the keeper of the verse and break the Hush.'];
           shell(root, '', UI.panel({ kind: 'paper', torn: true, title: 'How to play' }, ...steps.map((l, i) => mk('p', { class: 'm-text', text: (i + 1) + '. ' + l })), mk('div', { class: 'row center' }, UI.btn('Back', { kind: 'primary', size: 'lg', onclick: () => UI.back() }))));
         },
       },
@@ -726,7 +726,7 @@ const GAME = (() => {
           b('Deck', 'secondary', () => UI.overlay.open('deck', { mode: 'view' })),
           b('Treasures', 'secondary', () => UI.overlay.open('relics', {})),
           b('Settings', 'secondary', () => UI.overlay.open('settings')),
-          b('How to play', 'secondary', () => UI.overlay.open('modal', { title: 'How to play', body: 'Paint hexes with Ink, fight with two heroes in two rows, play cards with Energy, and socket gems into card slots. Reach the boss of each chapter.' })),
+          b('How to play', 'secondary', () => UI.overlay.open('modal', { title: 'How to play', body: 'Wake hexes with Echo, fight with two heroes in two rows, play cards with Energy, and socket gems into card slots. Reach the keeper of each verse.' })),
           R ? b('Abandon run', 'ghost', () => { close(); abandon(); }) : null,
           R ? b('Save and quit', 'ghost', () => { save(); close(); toTitle(); }) : null,
         ].filter(Boolean);
@@ -800,11 +800,11 @@ const GAME = (() => {
         UI.after(0, () => {
           UI.tip.card(inst(id, 0, true), { x: 80, y: 130 });
           UI.tip.showFor(anchor, UI.tip.kw('poison', 3), { side: 'bottom' });
-          ['info', 'good', 'warn', 'achievement'].forEach((k, i) => UI.toast(['A quiet toast', 'The well refills your Ink (+4)', 'Not enough Energy', 'Achievement: First Ink'][i], k, { ms: 600000 }));
+          ['info', 'good', 'warn', 'achievement'].forEach((k, i) => UI.toast(['A quiet toast', 'The temple bell rings (+4 Echo)', 'Not enough Energy', 'Achievement: First Echo'][i], k, { ms: 600000 }));
         });
       },
-      modal() { UI.after(0, () => UI.modal({ title: 'A page has torn', body: 'Something went wrong in the tale, but your progress is safe. Turn back to the title and try again.', buttons: [{ label: 'Copy details', kind: 'secondary', cb: () => false }, { label: 'Back to Title', kind: 'primary' }] })); },
-      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this tale?', body: 'The run ends here. You keep a share of the Inkstones.', yes: 'Abandon', no: 'Keep playing', danger: true })); },
+      modal() { UI.after(0, () => UI.modal({ title: 'Something broke the rhythm', body: 'Something went wrong in the music, but your progress is safe. Turn back to the title and try again.', buttons: [{ label: 'Copy details', kind: 'secondary', cb: () => false }, { label: 'Back to Title', kind: 'primary' }] })); },
+      confirm() { UI.after(0, () => UI.overlay.open('confirm', { title: 'Abandon this journey?', body: 'The run ends here. You keep a share of the Chimes.', yes: 'Abandon', no: 'Keep playing', danger: true })); },
       pick() { UI.after(0, () => UI.overlay.open('cardPick', { title: 'Choose a card to exhaust', cards: ['hanae', 'kuro', 'suzu'].map((h) => inst(byRarity('common', h))), n: 1, confirm: 'Exhaust' })); },
       legend() { UI.after(0, () => UI.overlay.open('legend', {})); },
       settings() { UI.after(0, () => UI.overlay.open('settings', {})); },
@@ -814,7 +814,7 @@ const GAME = (() => {
       enter(params, root) {
         const sec = (params && params.section) || 'cards';
         const w = mk('div', { class: 'gal gal-' + sec });
-        w.appendChild(mk('h2', { class: 'gal-h serif', text: 'INKWOVEN components: ' + sec }));
+        w.appendChild(mk('h2', { class: 'gal-h serif', text: 'ECHOWAKE components: ' + sec }));
         root.appendChild(w);
         if (S_[sec]) S_[sec](w); else w.appendChild(mk('p', { text: 'Unknown section. Try: ' + Object.keys(S_).join(', ') }));
       },

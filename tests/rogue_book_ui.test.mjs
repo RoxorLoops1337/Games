@@ -207,7 +207,7 @@ await t.test('a screen that throws in enter shows the recoverable error modal an
   t.ok(g._win.__errors.some((e) => e.screen === 'bad.enter' && /enter exploded/.test(e.message) && 'stack' in e), '__errors has {screen, message, stack}');
   t.eq(g.UI.overlay.count(), 1, 'the error modal is open');
   const modal = $(g, '.o-modal');
-  t.ok(/Something tore the page/.test(modal.textContent), 'title'); t.ok(/Back to Title/.test(modal.textContent) && /Copy details/.test(modal.textContent), 'buttons');
+  t.ok(/Something broke the rhythm/.test(modal.textContent), 'title'); t.ok(/Back to Title/.test(modal.textContent) && /Copy details/.test(modal.textContent), 'buttons');
   const back = Array.from(modal.querySelectorAll('button')).find((b) => /Back to Title/.test(b.textContent));
   back.click();
   await settle(g);
@@ -1039,9 +1039,9 @@ await t.test('GAME.enterNode routes every node kind; instants only toast; saves 
   await g._tick(120);
   t.eq(g.UI.params.rewards.gold, 9, 'reward params carry rewards'); t.eq(g.UI.params.source, 'elite', 'and source');
   await g.GAME.enterNode({ kind: 'well', gained: 4, done: true });
-  t.eq(g.UI.currentName, 'reward', 'a well does not change screens'); t.ok($$(g, '#toasts .toast').some((x) => /well/i.test(x.textContent)), 'it toasts'); t.ok(g.log.sfx.indexOf('well') >= 0, 'with the well sound');
+  t.eq(g.UI.currentName, 'reward', 'a well does not change screens'); t.ok($$(g, '#toasts .toast').some((x) => /bell/i.test(x.textContent)), 'it toasts'); t.ok(g.log.sfx.indexOf('well') >= 0, 'with the well sound');
   await g.GAME.enterNode({ kind: 'brush', id: 'stroke', done: true });
-  t.ok($$(g, '#toasts .toast').some((x) => /brush/i.test(x.textContent)), 'brush toasts');
+  t.ok($$(g, '#toasts .toast').some((x) => /song/i.test(x.textContent)), 'brush toasts');
   g.GAME.enterNode({ kind: 'mystery' });
   await g._tick(120);
   t.eq(g.UI.currentName, 'map', 'unknown kind: back to the map with a warning'); t.ok(g._console.warn.some((w) => /unknown node kind/.test(w)), 'warned');
@@ -1129,7 +1129,7 @@ await t.test('abandon, toTitle, continueRun, and the one persistent "cannot be s
   Array.from($(g, '.o-confirm').querySelectorAll('.btn'))[1].click();
   t.eq(await p, true, 'Yes abandons'); await g._tick(200);
   t.deep(g._run('__log.records'), ['abandon'], 'recorded as abandon'); t.eq(g.UI.currentName, 'title', 'back to the title'); t.eq(g.GAME.state.R, null, 'run cleared');
-  t.ok($$(g, '#toasts .toast').some((x) => /Inkstones/.test(x.textContent)), 'shows the Inkstones earned');
+  t.ok($$(g, '#toasts .toast').some((x) => /Chimes/.test(x.textContent)), 'shows the Chimes earned');
   // continue
   g._run('__log.saved = { id: "saved1", chapter: 2, heroes: [{ id: "suzu", hp: 5, maxHp: 9 }], deck: [], relics: [], node: { kind: "shop", tile: { q: 2, r: 2 } }, map: {} }');
   await g.GAME.toTitle();
@@ -1144,7 +1144,7 @@ await t.test('abandon, toTitle, continueRun, and the one persistent "cannot be s
   t.eq(g.UI.currentName, 'map', 'no node: the map');
   g._run('__log.saved = null');
   await g.GAME.continueRun();
-  t.ok($$(g, '#toasts .toast').some((x) => /no saved tale/i.test(x.textContent)), 'nothing to continue: a toast, no crash');
+  t.ok($$(g, '#toasts .toast').some((x) => /no saved journey/i.test(x.textContent)), 'nothing to continue: a toast, no crash');
   g._run('__log.failSave = true');
   g.GAME.save(); g.GAME.save(); g.GAME.save();
   t.eq($$(g, '#toasts .toast[data-tid="nosave"]').length, 1, 'exactly one persistent save warning'); t.ok(/cannot be saved/.test($(g, '.toast[data-tid="nosave"]').textContent), 'copy');

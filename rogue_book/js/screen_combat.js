@@ -2204,7 +2204,7 @@
     const r = me.ui.reveal;
     r.textContent = '';
     r.className = 'cm-reveal ' + (C.tier === 'boss' ? 'boss' : 'elite');
-    r.appendChild(mk('span', { class: 'cr-tag', text: C.tier === 'boss' ? 'CHAPTER BOSS' : 'CHAMPION' }));
+    r.appendChild(mk('span', { class: 'cr-tag', text: C.tier === 'boss' ? 'KEEPER' : 'CHAMPION' }));
     r.appendChild(mk('b', { class: 'cr-name', text: boss ? boss.name : 'A foe' }));
     if (d && d.title) r.appendChild(mk('span', { class: 'cr-title', text: d.title }));
     r.appendChild(mk('i', { class: 'cr-brush', 'aria-hidden': 'true' }));

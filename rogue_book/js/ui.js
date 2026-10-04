@@ -261,7 +261,7 @@ const UI = (() => {
     return mk('div', { id: 'rotate', role: 'alertdialog', 'aria-label': 'Turn your device sideways', hidden: true },
       mk('div', { class: 'rot-card' }, book,
         mk('h2', { text: 'Turn your device sideways' }),
-        mk('p', { text: 'Inkwoven is a landscape tale. Rotate your phone and the page will open wide.' }),
+        mk('p', { text: 'Echowake is a landscape journey. Rotate your phone and the land will open wide.' }),
         mk('div', { class: 'rot-btns' }, full, play)));
   }
 
@@ -477,9 +477,9 @@ const UI = (() => {
     S.errShown[key] = true;
     try {
       api.modal({
-        title: 'Something tore the page',
+        title: 'Something broke the rhythm',
         body: mk('div', { class: 'm-err' },
-          mk('p', { text: 'The tale hit a snag in ' + where + '. Everything up to your last save is safe.' }),
+          mk('p', { text: 'The music skipped a beat in ' + where + '. Everything up to your last save is safe.' }),
           mk('pre', { class: 'm-pre', text: String(err.message).slice(0, 300) })),
         buttons: [
           { label: 'Back to Title', kind: 'primary', cb: () => { toTitle(); } },
@@ -533,7 +533,7 @@ const UI = (() => {
         const back = api.btn('Back', { kind: 'secondary', onclick: () => api.back() });
         const home = api.btn('Title', { kind: 'ghost', onclick: () => toTitle() });
         const box = api.panel({ kind: 'paper', torn: true, title: prettyName(name), class: 'soon-panel' },
-          mk('p', { class: 'soon-text', text: 'This page of the book is still being written.' }),
+          mk('p', { class: 'soon-text', text: 'This part of the music is still being written.' }),
           mk('div', { class: 'row center gap' }, back, home));
         root.appendChild(mk('div', { class: 'soon' }, box));
       },
@@ -740,7 +740,7 @@ const UI = (() => {
     ctx.textBaseline = 'middle';
     ctx.font = '700 15px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#f5c96a';
-    ctx.fillText('- A HINT FROM THE MARGINS -', W / 2, 590);
+    ctx.fillText('A NOTE FROM THE ROAD', W / 2, 590);
     ctx.font = 'italic 24px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#f3e6c8';
     const words = String(text).split(' ');
@@ -817,7 +817,7 @@ const UI = (() => {
     if (!def) {
       warnOnce('ov:' + name, 'overlay "' + name + '" is not registered yet');
       def = api.overlays.modal; useName = 'modal';
-      p = { title: prettyName(name), body: 'This page of the book is still being written.' };
+      p = { title: prettyName(name), body: 'This part of the music is still being written.' };
     }
     const rec = {
       id: ++S.ovSeq, name: useName, def, params: p, offs: [], closed: false, resolve: null,
@@ -1614,7 +1614,7 @@ const UI = (() => {
     const sizes = CARD_SIZES();
     const sz = sizes[size] ? size : 'deck';
     return mk('div', { class: 'card back c-' + sz, 'aria-label': 'Face-down card', dataset: { size: sz } },
-      mk('div', { class: 'c-in' }, mk('div', { class: 'c-face' }, mk('i', { class: 'back-drop' }), mk('i', { class: 'back-ring' }), mk('b', { class: 'back-word', text: 'INKWOVEN' }))));
+      mk('div', { class: 'c-in' }, mk('div', { class: 'c-face' }, mk('i', { class: 'back-drop' }), mk('i', { class: 'back-ring' }), mk('b', { class: 'back-word', text: 'ECHOWAKE' }))));
   }
 
   // ==================================================================================================================
@@ -1694,8 +1694,8 @@ const UI = (() => {
   }
 
   const STAT_TIP = {
-    gold: ['Gold', 'Spend it at peddlers. Keep some for the next shop.'], ink: ['Ink', null], hp: ['Health', 'Hit points. A hero at 0 is downed.'],
-    energy: ['Energy', 'Spend Energy to play cards. It refills every turn.'], brush: ['Brushes', null], inkstone: ['Inkstones', 'Earned every run. Spend them in the Library to unlock new content.'], block: ['Block', null],
+    gold: ['Gold', 'Spend it at peddlers. Keep some for the next shop.'], ink: ['Echo', null], hp: ['Health', 'Hit points. A hero at 0 is downed.'],
+    energy: ['Energy', 'Spend Energy to play cards. It refills every turn.'], brush: ['Songs', null], inkstone: ['Chimes', 'Earned every run. Spend them in the Hall of Echoes to unlock new content.'], block: ['Block', null],
   };
 
   function stat(kind, value, o) {

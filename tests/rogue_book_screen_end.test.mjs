@@ -172,7 +172,7 @@ for (const id of LORE) {
     t.eq(txt($('.st-typed', root)), lore.text.slice(1).replace(/\s+/g, ' ').trim(), 'the rest of the text, typed in full (headless is instant)');
     t.ok(txt($('.sr-only', root)).indexOf(lore.title) === 0, 'screen readers get the whole page at once');
     t.ok(META.loreSeen(id), 'META.markLore ran');
-    t.ok(root.className.indexOf('en-settled') >= 0 && $('.st-turn', root), 'settled, with a Turn the page button');
+    t.ok(root.className.indexOf('en-settled') >= 0 && $('.st-turn', root), 'settled, with a Play on button');
     await g._tick(300);
     t.eq(errs(g), e0, 'no console errors while drawing');
     t.ok(ART.scene.lastError === null, 'the scene art drew without error');
@@ -213,7 +213,7 @@ await t.test('story: without `then` it goes back; a missing lore id is a blank p
   t.eq(UI.currentName, 'howto', 'UI.back returns to where the story was opened from');
   await UI.go('title', null, { force: true, transition: 'none' }); await settle(g);
   const root = await openStory('no_such_page', { name: 'settings' });
-  t.eq(txt($('.st-title', root)), 'A Blank Page', 'a graceful title');
+  t.eq(txt($('.st-title', root)), 'A Silent Ballad', 'a graceful title');
   t.ok(txt($('.st-text', root)).length > 10, 'and some text');
   t.ok(!META.loreSeen('no_such_page'), 'nothing is marked for an unknown page');
   await click(g, $(g, '[data-act=turn]')); t.eq(UI.currentName, 'settings', 'it still turns');
@@ -271,7 +271,7 @@ await t.test('chapterClear: the headline, the stats counting from the run, the h
   const root = $(g, '.s-chapterClear');
   t.ok(root, 'the screen is up');
   t.eq(txt($('.cc-title', root)), DATA.lore.ch1_clear.title, 'the lore title is the headline');
-  t.eq(txt($('.cc-kicker', root)), 'CHAPTER ONE COMPLETE', 'the kicker');
+  t.eq(txt($('.cc-kicker', root)), 'VERSE ONE COMPLETE', 'the kicker');
   t.ok(txt($('.cc-boss', root)).indexOf('Kuzunoha') === 0, 'the boss is named');
   t.eq(txt($('.cc-lore', root)), DATA.lore.ch1_clear.text, 'the clear lore is in the scroll');
   t.ok(META.loreSeen('ch1_clear'), 'and marked');
@@ -303,7 +303,7 @@ await t.test('chapterClear: a hero the chapter unlocks gets her own announcement
   t.ok(META.isUnlocked('hero', 'suzu'), 'chapter 1 cleared unlocks Suzu through META.check');
   await UI.go('chapterClear', { chapter: 1, next: 2, healed: ce.healed, maxHp: ce.maxHp, R }, { force: true, transition: 'none' }); await settle(g);
   const nh = $(g, '.cc-newhero');
-  t.ok(nh && /Suzu joins the book/.test(txt(nh)), 'the announcement names her'); t.ok(nh.className.indexOf('show') >= 0, 'and is shown');
+  t.ok(nh && /Suzu joins the band/.test(txt(nh)), 'the announcement names her'); t.ok(nh.className.indexOf('show') >= 0, 'and is shown');
 });
 await t.test('chapterClear through GAME: nodeDone after the boss routes here, Continue goes on to the chapter 2 story and the map', async () => {
   const R = RUN.newRun({ heroes: ['kuro', 'hanae'], seed: 41, trial: 0 }); if (!R.map) RUN.startChapter(R, 1);
@@ -356,7 +356,7 @@ await t.test('gameOver through GAME.defeat: the breakdown adds up to the real sc
   const rec = META.profile.history[0];
   t.eq(txt($('.go-title', root)), DATA.lore.defeat.title, 'the defeat page title'); t.ok(META.loreSeen('defeat'), 'defeat lore marked');
   t.eq(txt($('.go-lore-text', root)), DATA.lore.defeat.text, 'the defeat text');
-  t.ok(/Fell on page I/.test(txt($('.go-fell', root))), 'which page the tale ended on');
+  t.ok(/Fell in Verse I/.test(txt($('.go-fell', root))), 'which page the tale ended on');
   const { rows, sum } = expectRows(root, sm, R);
   t.ok(rows.length >= 8, 'a row per score term'); t.eq(sum, sm.score, 'the rows add up to RUN.score exactly');
   t.eq(num(txt($('.en-total-n', root))), sm.score, 'the total shows the score');
@@ -395,7 +395,7 @@ await t.test('gameOver: unlock entries from a record, the achievements, a hero, 
   const sm = RUN.summary(LOSE.R);
   await UI.go('gameOver', { summary: sm, record: rec, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
   const list = $$(g, '.en-unlock');
-  t.eq(list.length, 3, 'three rows'); t.ok(/Suzu joins the book/.test(txt(list[0])), 'Suzu'); t.ok(/Ink Trial 2 unlocked/.test(txt(list[2])), 'the trial');
+  t.eq(list.length, 3, 'three rows'); t.ok(/Suzu joins the band/.test(txt(list[0])), 'Suzu'); t.ok(/Tempo Trial 2 unlocked/.test(txt(list[2])), 'the trial');
   t.eq(txt($('.go-stone-n')), '+33', 'the Inkstone count'); t.ok(/Achievement bonus \+10/.test(txt($('.go-stone-sub'))), 'bonus and library total shown');
   await UI.go('gameOver', { summary: sm, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
   t.ok(/not recorded/.test(txt($('.s-gameOver .go-stonescard'))), 'no record: an honest empty state');
@@ -442,7 +442,7 @@ await t.test('victory through GAME.victory: the three beats, the share card, the
   await click(g, $('.vc-copy', root));
   const text = UI.screens.victory._t.summaryText(sm, R, true);
   t.eq(g._clipboard, text, 'Copy summary puts the share text on the clipboard');
-  t.ok(/Hanae and Kuro \| Score [\d,]+ \| Ink Trial 0/.test(text) && text.indexOf('Seed ' + (R.seed >>> 0)) > 0 && text.indexOf(R.deck.length + ' cards') > 0, 'the text names heroes, score, trial, seed and deck size');
+  t.ok(/Hanae and Kuro \| Score [\d,]+ \| Tempo Trial 0/.test(text) && text.indexOf('Seed ' + (R.seed >>> 0)) > 0 && text.indexOf(R.deck.length + ' cards') > 0, 'the text names heroes, score, trial, seed and deck size');
   t.ok(!DASH.test(text), 'and has no dashes');
   await click(g, $('.vc-save', root));
   t.ok($$(g, '#toasts .toast').some((x) => /Card saved|Could not save/.test(txt(x))), 'Save card answers either way');
@@ -738,7 +738,7 @@ await settle(gt);
     t.eq(U2.currentName, 'map', 'the (placeholder) map after two story pages');
     await tick();
     t.eq(bubble(), 'paint', 'the first map hint: paint'); t.eq(tuts().length, 1, 'exactly one bubble'); t.ok(M2.tutorial('tut_paint'), 'its flag is stored the moment it shows');
-    t.ok(/Ink/.test(txt(tuts()[0])) && $(gt, '.tut-ok'), 'it says something about Ink and has Got it');
+    t.ok(/Echo/.test(txt(tuts()[0])) && $(gt, '.tut-ok'), 'it says something about Echo and has Got it');
     // the player acts: painting completes the hint, and the next one follows
     U2.bus.emit('map:paint', { q: 3, r: 2, cost: 1 }); await tick();
     t.eq(cur(), 'ink', 'painting completes paint, and ink follows'); t.eq(tuts().length, 1, 'still one bubble');

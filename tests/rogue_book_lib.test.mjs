@@ -202,7 +202,7 @@ t.test('the document mirrors index.html and elements behave', () => {
   t.eq(d.getElementById('view').width, 1280, 'canvas size comes from the attribute');
   t.ok(d.getElementById('view') instanceof g._win.HTMLCanvasElement, 'instanceof HTMLCanvasElement');
   t.ok(d.getElementById('stage') instanceof g._win.HTMLElement && d.getElementById('stage') instanceof g._win.Node, 'instanceof HTMLElement and Node');
-  t.eq(d.title, 'INKWOVEN -- a rogue storybook', 'document.title');
+  t.eq(d.title, 'ECHOWAKE: a rogue ballad', 'document.title');
   t.eq(d.getElementById('stage').parentNode.id, 'wrap', 'tree structure');
 });
 t.test('selectors: compound, descendant, child, sibling, attribute, pseudo', () => {
