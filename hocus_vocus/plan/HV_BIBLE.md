@@ -722,7 +722,7 @@ printable ASCII.
 | difficulty notes | daily `The Daily Duet never has an encore.`; none unlocked `Win a tour to unlock Encores.`; level 0 `The tour, just as it comes.`; level n `Every encore below is added on top.`; empty rules `No encores yet. Beat the Gloss once to earn the first.` / `No extra rules. Higher encores stack their rules here.` |
 | daily toggle | `Daily Duet`, sub `the same duet for everyone today` |
 | seed label | `Seed` |
-| begin button | `Start the Tour` / `Start the Daily Duet` |
+| begin button | `Start the Tour` / `Start Daily Duet` (the Daily label stays short: it must fit the Larger text width model of the hero select suite) |
 | overwrite confirm | title `Start a new tour?`, body `You have a tour on the road. Starting a new one will replace it.`, yes `Start fresh`, no `Keep my tour` |
 
 ### 5.3 Pause
@@ -904,10 +904,11 @@ today's build makes no file request at all.
 
 ### 7.4 Naming conventions for the other plan files
 
-- Cards: playful English music and magic words, 1 to 3 words, 3 to 28 characters, capitalised, unique among all 160 cards, no hero
-  prefix, no dash, no reserved name (H16). Jasmin: sung, soft, blossom, moon, run, trill, arpeggio, harmony, lullaby. RoxorLoops: kick,
-  snare, hi-hat, throat bass, scratch, drop, loop, remix, groove, beatbox sounds. RawClaw: reverb, delay, filter, synth, pad, sample,
-  mix, studio. Andy: bass, slap, low end, amp, pedal, groove, thunder (as sound).
+- Cards: playful English music and magic words, 1 to 3 words (one exception: `hanae_blade_duet` **Calling of the Moon**, the owners'
+  song title of 2.9), 3 to 28 characters, capitalised, unique among all 160 cards, no hero prefix, no dash, no reserved name (H16).
+  Jasmin: sung, soft, blossom, moon, run, trill, arpeggio, harmony, lullaby. RoxorLoops: kick, snare, hi-hat, throat bass, scratch,
+  drop, loop, remix, groove, beatbox sounds. RawClaw: reverb, delay, filter, synth, pad, sample, mix, studio. Andy: bass, slap, low
+  end, amp, pedal, groove, thunder (as sound).
 - Enemies: silly, readable creature names (2 words at most where possible) from the Act pools in 2.4; lore is kind about them.
 - Charms (relics): things a touring musician would treasure (lucky plectrum, sticker sheet, travel mug, mic-wand keyring, ring light
   that was set free), never animal products (H5); no individual Charm name ends in "Charm" (it is the category word).
@@ -915,3 +916,48 @@ today's build makes no file request at all.
   stones only (rose quartz, pink tourmaline, aquamarine, lapis, jade, peridot, citrine, amber, topaz); never pearl or coral.
 - Detours: a little scene on the road, a choice, and a joke; at most one per Act may name a hero, and only when that hero is in the
   party (the existing gates).
+
+## 8. Reconciliation log (P0)
+
+Agent 0A linted the five content plans and this bible against each other and against the suites' limits with a scratch lint (never in
+the repository). Checked: case-insensitive uniqueness across 160 card names, 66 Charms, 24 gems, 51 enemies, 184 enemy move names, 6
+Spells, 20 statuses, 16 keywords, 14 tiles, 32 Stickers, 10 Encores, 4 passives, 4 hero titles, the 3 Headliner titles, the 3 outfits
+and the reserved names of H16; the card, Charm, enemy, move, say, phase line, roster role, lore, Sticker, Encore, Tour Diary, bark,
+tip, Detour and tutorial hint limits of the suites; every copy of a 4.x glossary row in the other files; and the words of 6.1 to 6.3,
+H3 to H7, dashes, ASCII, American spellings and "run" as a noun. One line per change:
+
+| # | File, row | Old | New | Reason |
+|---|---|---|---|---|
+| 1 | `HV_BIBLE.md` 5.2, begin button | `Start the Daily Duet` | `Start Daily Duet` | 20 characters need 294 px at Larger text and the hero select button has 259 (`tests/hocus_vocus_screen_menu.test.mjs`, "Begin labels"); 16 characters need 242 px (HV_PHASES R9) |
+| 2 | `HV_BIBLE.md` 7.4, Cards | 1 to 3 words | 1 to 3 words, one exception: Calling of the Moon | agree with 2.9 and `HV_HEROES.md` 2 (the owners' song title has 4 words; P1 adds the named test exception) |
+| 3 | `HV_HEROES.md` 1.6.2, `barks_kuro` kill spare 11 | `Ka-ching. That was the outro.` | `Bmm, tss. Roll the credits.` | OUTRO is a banned Echowake token with no case note (6.2); a spare must be safe to swap in |
+| 4 | `HV_HEROES.md` 2.5, `curse_regret` flavour | `Your brain plays it back at 2 am. In slow motion. With subtitles.` | `Your brain plays it back at two in the morning. In slow motion. With subtitles.` | flavour carries no digits (the hero card suites' rule: numbers come from ops), and this curse costs 2 HP; 79 characters |
+| 5 | `HV_HEROES.md` 2.6, name census | two words 106, three words 32 | two words 105, three words 33 | recount of the 160 names in section 2 |
+| 6 | `HV_ENEMIES.md` 2.2, `oni_brute` `enraged_bellow` say | `EVERYBODY SING MY SONG!` | `EVERYBODY PICK MY RECORD!` | 6.4 allows only lowercase song in prose; the new line matches its lore (nobody picks its record) |
+| 7 | `HV_ENEMIES.md` 4.1, `censor_golem` phase line | `THIS SONG HAS BEEN MUTED FOR YOUR COMFORT.` | `THIS TRACK HAS BEEN MUTED FOR YOUR COMFORT.` | as row 6; 43 characters |
+| 8 | `HV_ENEMIES.md` 4.1, `storm_drone` art brief | swings to dead centre | swings to the exact centre | H7 word (dead), even in a brief |
+| 9 | `HV_WORLD_DATA.md` 2.3, `sands_of_patience` flavour | `Somehow it always lands on the downbeat.` | `Somehow it always lands on the one.` | Downbeat is a banned Echowake token (the old start tile, 6.2, no case note); "the one" is the musicians' word for it |
+| 10 | `HV_STORY.md` 3.1, `victory` row | 689 / 6 | 690 / 6 | recount of the entry text in 3.2 |
+
+Verified, no change:
+
+- a) The curses Stage Fright and Hot Take share a name with nothing else (the stage-fright creature is the Jitterbug, the hot-take
+  creature is Flamebait). The only shared name in any registry is the move Smooth Over of `eraser_wraith` and `boss_editor`, allowed.
+- b) Encore `trial_7` Limited Edition is an allowed survivor in 6.4 (a merch print run).
+- d) The sixth Tour Bus tab `follow` (keys 1 to 6): 5.5, `HV_WORLD_DATA.md` 10 and `HV_STORY.md` 5.3 agree.
+- e) The link config is `DATA.LINKS` in `js/data.js` in 7.2, `HV_STORY.md` 5.2 and `HV_WORLD_DATA.md` 11; no HV_LINKS is left.
+- f) `HV_ART_AUDIO.md` 13 items 2 and 4: no keytar and no mic-wand for Jasmin's own mic in this file or `HV_HEROES.md` (3.1 says a
+  black mic with a pink band, 3.3 a pad sampler and no keytar). Item 3 needs no change.
+- g) Jasmin's passive is Every Note Blooms everywhere; no "Vocal Runs" is left in the content plans (`HV_PHASES.md` O10 and
+  `HV_README.md` item 10 keep it only as rename history).
+- Every 4.x row copied into `HV_HEROES.md` 3, `HV_WORLD_DATA.md` 4 to 9 and `HV_ART_AUDIO.md` 6.1 matches word for word; the enemy
+  move ids and the 83 says match the game's DATA; every Detour that names a hero is gated by that hero; each of the 7 How to Play tip
+  regexes matches exactly one tip; every other length, word and sentence limit holds.
+
+Owner questions (flagged, no change in P0):
+
+- `HV_ART_AUDIO.md` 13 item 1, the logo letter colour: 1.2 says cream letters with a thick dark outline; `HV_ART_AUDIO.md` 3.1 and the
+  default of `HV_PHASES.md` O6 draw HOCUS pink and VOCUS green with a cream inner rim, as on the owners' own logo. The owners decide
+  before P4 (O6); 1.2 changes then if they pick pink and green.
+- `HV_ART_AUDIO.md` 13 item 5, the hit words: 4.10 fixes one word per element, so RoxorLoops's slash hits read `LA!`; the optional
+  amendment is `PKAH!` for a RoxorLoops slash hit. The owners decide before P5 (O9); until then 4.10 stands.

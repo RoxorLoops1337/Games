@@ -1,7 +1,6 @@
 # HOCUS VOCUS: the phases (agent F: process, ownership, gates, agent prompts)
 
-Status: PHASES rev 1 (agent F). Phases merged: none. HV_BASE: not set yet (P0 writes the short SHA of origin/main here, for example
-`HV_BASE 1a2b3c4`). Each phase PR edits this line in the same commit (`Phases merged: P0 <sha>, P1 <sha>, ...`).
+Status: PHASES rev 1 (agent F). Phases merged: P0 (this PR; see git log for the sha). HV_BASE ada3ca5 (the fork on main). Each phase PR edits this line in the same commit (`Phases merged: P0 <sha>, P1 <sha>, ...`).
 
 This file is the executable order of the Hocus Vocus re-theme. It decides WHEN each piece of work happens, WHO (which agent) owns which
 files, and which GATES a phase must pass. It never decides a word, a name, a picture or a sound: those live in the content plans

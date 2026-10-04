@@ -125,7 +125,7 @@ t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, 
     if (r.tier === 'minion') t.eq(e.size, 's', `${r.id} minions are size s`);
   });
   t.deep([normals.length, elites.length, minions.length, tierIds('boss').length], [10, 3, 3, 1], 'tier mix 10 normal, 3 elite, 3 minion, 1 boss');
-  t.eq(E(boss).title, 'The Silk Courtesan', 'boss title');
+  t.eq(E(boss).title, DATA.rosterById[boss].title, 'boss title');
 });
 
 t.test('DATA.validate and DATA.audit are clean for chapter 2 (errors, warnings, audit lines, guide lines)', () => {

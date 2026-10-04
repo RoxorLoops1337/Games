@@ -1147,11 +1147,11 @@ await t.test('banners: the BOSS banner reads the DATA title, repeats are ignored
   await g.SCENE.play({ type: 'combat_start' });
   await pump(g, g.SCENE.play({ type: 'turn_start', who: 'player', turn: 1, energy: 3, maxEnergy: 3 }));
   t.eq(stats(g).banners.length, 0, 'no automatic banners unless the screen opts in');
-  g.SCENE.banner('Kuzunoha', 'BOSS');
+  g.SCENE.banner(g.DATA.enemies.boss_kuzunoha.name, 'BOSS');
   g.SCENE.banner('BOSS', 'BOSS');
   const b = stats(g).banners;
   t.eq(b.length, 1, 'the second request for the same banner was ignored');
-  t.eq(b[0].style, 'boss', 'boss style'); t.eq(b[0].text, 'Kuzunoha', 'the boss name'); t.eq(b[0].sub, g.DATA.enemies.boss_kuzunoha.title, 'and its DATA.enemies title: ' + b[0].sub);
+  t.eq(b[0].style, 'boss', 'boss style'); t.eq(b[0].text, g.DATA.enemies.boss_kuzunoha.name, 'the boss name'); t.eq(b[0].sub, g.DATA.enemies.boss_kuzunoha.title, 'and its DATA.enemies title: ' + b[0].sub);
   t.ok(g.ids().indexOf('boss_intro') < 0, 'an explicit banner call plays no sound of its own (screen_combat plays boss_intro)');
   await runFor(g, 3000, { draw: true });
   t.eq(stats(g).banners.length, 0, 'the banner ends');
@@ -1159,7 +1159,7 @@ await t.test('banners: the BOSS banner reads the DATA title, repeats are ignored
   t.deep(stats(g).banners.map((x) => x.style + ':' + x.text), ['player:YOUR TURN', 'enemy:ENEMY TURN'], 'turn banners by text and kind');
   await runFor(g, 900, { draw: true });
   t.eq(stats(g).banners.length, 0, 'turn banners are short');
-  g.SCENE.banner('', 'boss'); t.eq(stats(g).banners[0].text, 'Kuzunoha', 'an empty boss banner still finds the boss');
+  g.SCENE.banner('', 'boss'); t.eq(stats(g).banners[0].text, g.DATA.enemies.boss_kuzunoha.name, 'an empty boss banner still finds the boss');
   g.SCENE.autoBanners(true);
   g.SCENE.play({ type: 'turn_start', who: 'player', turn: 2, energy: 3, maxEnergy: 3 });
   t.ok(stats(g).banners.some((x) => x.text === 'YOUR TURN' || x.style === 'boss'), 'with the opt-in play() raises turn banners');

@@ -161,7 +161,7 @@ Buttons: the advance button `Play on` becomes `On we go`, `Skip` stays. Any lore
 | `ch2_intro` | `ACT TWO` | `II` | **Scrollopolis** | 667 / 6 |
 | `ch2_clear` | `END OF ACT TWO` | `II` | **The City Looks Up** | 666 / 6 |
 | `ch3_intro` | `ACT THREE` | `III` | **The Perfect Stage** | 682 / 6 |
-| `victory` | `FINALE` | `BRAVO` | **Human** | 689 / 6 |
+| `victory` | `FINALE` | `BRAVO` | **Human** | 690 / 6 |
 | `defeat` | `INTERMISSION` | `PAUSE` | **The Show Must Go On** | 611 / 6 |
 | `hero_hanae` | `MEET THE CREW` | `J` | **Jasmin, the Blossom Voice** | 677 / 6 |
 | `hero_kuro` | `MEET THE CREW` | `R` | **RoxorLoops, the Beatbox Wizard** | 687 / 6 |

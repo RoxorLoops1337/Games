@@ -105,8 +105,8 @@ try {
     if (gate) { await s.page.mouse.click(gate.x, gate.y); await s.tick(300); }
     await s.press('[data-act=new]', null, { ms: 1300 });
     t.eq(await s.screen(), 'heroSelect', 'guided: New Tale opens the hero select');
-    await s.press('.mn-cards button', '^Hanae', { ms: 250 });
-    await s.press('.mn-cards button', '^Kuro', { ms: 250 });
+    await s.press('.mn-cards button[data-hero=hanae]', null, { ms: 250 });
+    await s.press('.mn-cards button[data-hero=kuro]', null, { ms: 250 });
     const chosen = await s.ev(() => UI.screens.heroSelect.state().chosen);
     t.eq(chosen.join(','), 'hanae,kuro', 'guided: two clicks chose Hanae in front, Kuro behind');
     await s.press('[data-act=begin]', '', { ms: 700 });
@@ -256,8 +256,8 @@ try {
     t.ok(small.h >= 44 && small.w >= 44, 'phone: the New Tale plaque is at least 44 px on the real screen (' + Math.round(small.w) + 'x' + Math.round(small.h) + ')');
     await s.press('[data-act=new]', null, { touch: true, ms: 1300 });
     t.eq(await s.screen(), 'heroSelect', 'phone: a tap opens the hero select');
-    await s.press('.mn-cards button', '^Hanae', { touch: true, ms: 250 });
-    await s.press('.mn-cards button', '^Kuro', { touch: true, ms: 250 });
+    await s.press('.mn-cards button[data-hero=hanae]', null, { touch: true, ms: 250 });
+    await s.press('.mn-cards button[data-hero=kuro]', null, { touch: true, ms: 250 });
     const begin = await s.ev(() => { const b = document.querySelector('[data-act=begin]'); const r = b.getBoundingClientRect(); return { inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, h: r.height }; });
     t.ok(begin.inView, 'phone: Begin the Tale is fully on the screen');
     t.ok(begin.h >= 44, 'phone: Begin the Tale is tall enough to tap (' + Math.round(begin.h) + ' px)');

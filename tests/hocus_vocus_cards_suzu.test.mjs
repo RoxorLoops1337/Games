@@ -31,6 +31,7 @@ import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus cards suzu');
 const STRICT = !!process.env.RB_STRICT;
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const has = (file) => fs.existsSync(path.join(DIR, 'js', file));
 
 // ---------------------------------------------------------------------------------------------- load
@@ -448,23 +449,24 @@ if (TEXT) {
   });
   t.test('text: a few cards say what they do (their numbers and key words, not the exact phrasing)', () => {
     const P = (id, up) => DATA.cardPlain(inst(id, up));
+    const S = (id) => new RegExp(esc(DATA.statuses[id].name)), K = (id) => new RegExp(esc(DATA.keywords[id].name));
     const says = (id, up, ...res) => res.forEach((re) => t.ok(re.test(P(id, up)), `${id}${up ? '+' : ''} says ${re}: ${P(id, up)}`));
-    says('suzu_ofuda', 0, /\b5\b/, /damage/i, /\b1\b/, /Mark/); says('suzu_ofuda', 1, /\b7\b/);
-    says('suzu_barrier', 0, /both/i, /\b3\b/, /Block/); says('suzu_barrier', 1, /\b5\b/);
+    says('suzu_ofuda', 0, /\b5\b/, /damage/i, /\b1\b/, S('mark')); says('suzu_ofuda', 1, /\b7\b/);
+    says('suzu_barrier', 0, /both/i, /\b3\b/, K('block')); says('suzu_barrier', 1, /\b5\b/);
     says('suzu_banishing_seal', 0, /\b2\b/, /\b3\b/, /debuff/i, /damage/i);
-    says('suzu_prayer_wall', 0, /Retain/, /\b3\b/, /\b2\b/, /Ward/, /Block/, /both/i);
-    says('suzu_blessed_blade', 0, /ally/i, /\b3\b/, /Might/, /end of/i);
-    says('suzu_silencing_seal', 0, /Stun/, /Weak/, /\b2\b/, /Ward/, /Retain/);
-    says('suzu_lunar_domain', 0, /2nd|second|other/i, /Weak/, /Vulnerable/, /all enemies/i);
-    says('suzu_guardian_kami', 0, /revive/i, /50/, /fall|down/i, /Block/);
-    says('suzu_ring_of_thorns', 1, /Innate/); t.ok(!/Innate/.test(P('suzu_ring_of_thorns', 0)), 'the base Ring is not Innate');
-    says('suzu_renewal_rite', 0, /Retain/, /\b3\b/, /\b2\b/, /Ward/, /heal/i);
-    says('suzu_komainu_roar', 0, /Block/, /all enemies/i, /\b16\b/, /Exhaust/); t.ok(!/Exhaust/.test(P('suzu_komainu_roar', 1)), 'the upgraded Roar no longer exhausts');
-    says('suzu_yata_mirror', 0, /Thorns/, /\b2\b/, /Taunt/, /Exhaust/);
-    says('suzu_kagura_blessing', 0, /Upgrade/, /\b2\b/, /Exhaust/);
-    says('suzu_trailing_charms', 0, /Attack/, /Mark/);
-    says('suzu_kagura_step', 0, /Swap/, /Front/, /Back/);
-    says('suzu_moonbeam', 0, /all enemies/i, /Mark/);
+    says('suzu_prayer_wall', 0, K('retain'), /\b3\b/, /\b2\b/, S('ward'), K('block'), /both/i);
+    says('suzu_blessed_blade', 0, /ally/i, /\b3\b/, S('might'), /end of/i);
+    says('suzu_silencing_seal', 0, S('stun'), S('weak'), /\b2\b/, S('ward'), K('retain'));
+    says('suzu_lunar_domain', 0, /2nd|second|other/i, S('weak'), S('vulnerable'), /all enemies/i);
+    says('suzu_guardian_kami', 0, /revive/i, /50/, /fall|down/i, K('block'));
+    says('suzu_ring_of_thorns', 1, K('innate')); t.ok(!K('innate').test(P('suzu_ring_of_thorns', 0)), 'the base Ring is not Innate');
+    says('suzu_renewal_rite', 0, K('retain'), /\b3\b/, /\b2\b/, S('ward'), /heal/i);
+    says('suzu_komainu_roar', 0, K('block'), /all enemies/i, /\b16\b/, K('exhaust')); t.ok(!K('exhaust').test(P('suzu_komainu_roar', 1)), 'the upgraded Roar no longer exhausts');
+    says('suzu_yata_mirror', 0, S('thorns'), /\b2\b/, S('taunt'), K('exhaust'));
+    says('suzu_kagura_blessing', 0, /Upgrade/, /\b2\b/, K('exhaust'));
+    says('suzu_trailing_charms', 0, /Attack/, S('mark'));
+    says('suzu_kagura_step', 0, K('swap'), /Front/, /Back/);
+    says('suzu_moonbeam', 0, /all enemies/i, S('mark'));
   });
   t.test('text: every gem colour on every slot resolves without throwing', () => {
     const gems = { red: { id: 'tg_red', color: 'red', mod: { dmg: 2 } }, blue: { id: 'tg_blue', color: 'blue', mod: { block: 2, heal: 2 } }, green: { id: 'tg_green', color: 'green', mod: { draw: 1 } }, gold: { id: 'tg_gold', color: 'gold', mod: { status: { s: 'ward', n: 1, tgt: 'self' } } } };

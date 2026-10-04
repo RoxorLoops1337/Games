@@ -344,7 +344,7 @@ RawClaw never uses `!` and says `It is not a costume.` exactly once; Andy uses `
 8. `Remixed you. You sound better now.`
 9. `Wikka wikka. Scratched off the list!`
 10. `Gotcha. That one goes on the album.`
-11. `Ka-ching. That was the outro.`
+11. `Bmm, tss. Roll the credits.`
 12. `See? Everybody loves a breakdown.`
 
 **down**
@@ -749,7 +749,7 @@ Every one keeps a flavour line (as in Echowake). The curse names are little ever
 
 | id (stays) | Echowake name | type | what it does | art.m | **new name** | concept (what it looks and sounds like) | flavour (exact) |
 |---|---|---|---|---|---|---|---|
-| `curse_regret` | Regret | curse | Unplayable; in hand at end of turn: the lead hero loses 2 HP | mirror | **Cringe Replay** | A little phone screen replays your most awkward moment on a loop; the lead hero winces every turn it sits in hand. | `Your brain plays it back at 2 am. In slow motion. With subtitles.` |
+| `curse_regret` | Regret | curse | Unplayable; in hand at end of turn: the lead hero loses 2 HP | mirror | **Cringe Replay** | A little phone screen replays your most awkward moment on a loop; the lead hero winces every turn it sits in hand. | `Your brain plays it back at two in the morning. In slow motion. With subtitles.` |
 | `curse_smudge` | Wrong Note | curse | Unplayable, pure clutter | ink_splash | **Pitchy** | A grumpy comment bubble that only says "pitchy", wedged in your hand doing nothing. | `Someone in the comments said so, and now it lives in your deck.` |
 | `curse_doubt` | Doubt | curse | Unplayable; when drawn: the lead hero gains 1 Muffled | eye | **Stage Fright** | Cold hands, wobbly knees, a tiny voice; the lead hero goes small for a turn. | `Cold hands, small voice. Breathe. It always passes.` |
 | `curse_burden` | Burden | curse | Opener, Unplayable | void | **Excess Baggage** | A battered suitcase that is always in your opening hand and never gets opened. | `Somebody has to carry it, and the van is already full.` |
@@ -768,8 +768,8 @@ Untangle card"; Detour outcomes read "Add a Pitchy card" or "Add a Stage Fright 
 
 ### 2.6 Name census (for the uniqueness check)
 
-148 hero names plus 12 shared names, all different ignoring case and punctuation. Names by word count: one word 21, two words 106,
-three words 32, four words 1 (`Calling of the Moon`). Longest: `Shoulder to Shoulder` (20 characters) and `Calling of the Moon` (19);
+148 hero names plus 12 shared names, all different ignoring case and punctuation. Names by word count: one word 21, two words 105,
+three words 33, four words 1 (`Calling of the Moon`). Longest: `Shoulder to Shoulder` (20 characters) and `Calling of the Moon` (19);
 shortest: `Undo` (4). Hyphens only in RoxorLoops's `Hi-Hat Guard` and `Build-Up`.
 
 ---------------------------------------------------------------------------------------------------------------------------------

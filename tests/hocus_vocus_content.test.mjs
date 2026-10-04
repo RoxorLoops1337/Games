@@ -251,7 +251,7 @@ t.test('every reward pool is non-empty for every hero and rarity, with and witho
 
 // =================================================================================================== 6. text
 const STATUS_WORDS = values(DATA.statuses).map((s) => s.name);
-const KEYWORD_WORDS = ['Block', 'Exhaust', 'Retain', 'Innate', 'Ethereal', 'Unplayable', 'Energy'];
+const KEYWORD_WORDS = ['block', 'exhaust', 'retain', 'innate', 'ethereal', 'unplayable'].map((k) => DATA.keywords[k].name).concat(['Energy']);
 const wordRe = (w) => new RegExp('(^|[^A-Za-z])' + w.toLowerCase() + '([^A-Za-z]|$)');
 const lowerKeyword = (s) => STATUS_WORDS.concat(KEYWORD_WORDS).filter((w) => wordRe(w).test(s)).filter((w) => !(w === 'Weak' && /weak(est|ly)?/.test(s) && !/\bweak\b/.test(s)));
 

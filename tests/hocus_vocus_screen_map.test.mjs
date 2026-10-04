@@ -306,7 +306,7 @@ await t.test('the Void and the page edge answer with a toast and change nothing;
   t.ok(new RegExp(esc(g.DATA.tiles.boss.name) + ', (heard)').test(txt($(g, '.mp-info-name'))), 'a glimpsed landmark is named; what is blank stays secret');
   const secret = Object.values(R.map.tiles).find((T) => !T.known && !T.painted && T.type === 'enemy');
   await hoverHex(g, secret.q, secret.r);
-  t.ok(!/Ambush/.test(txt($(g, '.mp-info'))), 'hidden content is never leaked by hover');
+  t.ok(!new RegExp(esc(g.DATA.tiles.enemy.name)).test(txt($(g, '.mp-info'))), 'hidden content is never leaked by hover');
   t.eq(errs(g), 0, 'clean');
 });
 
@@ -1696,7 +1696,7 @@ await t.test('realtime: a well sends drops flying into the meter and the meter f
 await t.test('realtime: the chapter intro plays once per chapter (title, brush stroke, swoop from the whole page), never twice, and is a fade under reduced motion', async () => {
   const g = await rt({ seed: 9 }); const R = mkRun(g, { seed: 9 });
   await open(g, R);
-  t.ok($(g, '.mp-intro') && /Verse I/.test(txt($(g, '.mp-intro'))) && /Whispering/.test(txt($(g, '.mp-intro-t'))), 'the first visit shows the chapter title');
+  t.ok($(g, '.mp-intro') && /Verse I/.test(txt($(g, '.mp-intro'))) && txt($(g, '.mp-intro-t')).indexOf(g.DATA.lore.ch1_intro.title) >= 0, 'the first visit shows the chapter title');
   t.ok($(g, '.mp-hud').classList.contains('intro'), 'the small banner waits for it');
   const c0 = camOf(g);
   t.ok(Math.abs(c0.z - c0.zMin) < 1e-9, 'the camera starts on the whole page');

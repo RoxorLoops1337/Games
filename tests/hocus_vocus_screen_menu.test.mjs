@@ -9,6 +9,7 @@ import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus screen_menu');
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const SKIP = ['screen_combat', 'screen_node', 'screen_map', 'screen_end', 'tutorial'];
 const EPOCH = Date.UTC(2026, 8, 29, 12, 0, 0);               // 29 Sep 2026 at noon UTC: the same calendar day in every timezone within 11 hours
 
@@ -248,11 +249,11 @@ await t.test('heroSelect: four hero cards, two unlocked at the start, locked her
   await settle(g);
   t.deep(g.UI.screens.heroSelect.state().chosen, [], 'a locked hero cannot be chosen');
   t.ok($(g, '.mn-d.locked'), 'the sheet shows the locked view');
-  t.ok(/Out of the Grove/.test($(g, '.mn-d-hint').textContent) && /Kuzunoha/.test($(g, '.mn-d-hint').textContent), 'the hint is the text of the ch1_clear achievement: ' + $(g, '.mn-d-hint').textContent);
+  t.ok($(g, '.mn-d-hint').textContent.indexOf(g.DATA.achievements.ch1_clear.name) >= 0 && $(g, '.mn-d-hint').textContent.indexOf(g.DATA.enemies.boss_kuzunoha.name) >= 0, 'the hint is the text of the ch1_clear achievement: ' + $(g, '.mn-d-hint').textContent);
   t.ok($(g, '.mn-d-prog .bar'), 'with a progress bar');
   t.ok(sfxLog(g).indexOf('ui_error') >= 0, 'a locked card plays the error sound');
   g._click(card(g, 'raiga'));
-  t.ok(/Lanterns Out/.test($(g, '.mn-d-hint').textContent), 'Raiga unlocks with ch2_clear');
+  t.ok($(g, '.mn-d-hint').textContent.indexOf(g.DATA.achievements.ch2_clear.name) >= 0, 'Raiga unlocks with ch2_clear');
   // unlocking through META changes the card
   g.META.profile.unlocked.hero.push('suzu');
   await go(g, 'heroSelect');
@@ -265,7 +266,7 @@ await t.test('heroSelect: the detail sheet shows blurb, rows, resource, passive,
   await go(g, 'heroSelect');
   hover(g, 'hanae'); await settle(g);
   const h = g.DATA.heroes.hanae;
-  t.eq($(g, '.mn-d-name h3').textContent, 'Hanae', 'the name'); t.eq($(g, '.mn-d-title').textContent, h.title, 'the title');
+  t.eq($(g, '.mn-d-name h3').textContent, h.name, 'the name'); t.eq($(g, '.mn-d-title').textContent, h.title, 'the title');
   t.ok($(g, '.mn-d-hp').textContent.indexOf(String(h.maxHp)) >= 0, 'HP ' + h.maxHp);
   t.eq($(g, '.mn-d-blurb').textContent, h.blurb, 'the blurb');
   const rows = $$(g, '.mn-d-row');
@@ -274,14 +275,14 @@ await t.test('heroSelect: the detail sheet shows blurb, rows, resource, passive,
   t.ok(rows[0].classList.contains('best') && /best/.test(rows[0].textContent), 'her favourite row (front) is marked');
   t.ok(rows[1].textContent.indexOf('Block') >= 0, 'back bonus');
   const lines = $$(g, '.mn-d-line').map((l) => l.textContent);
-  t.ok(/Bloom/.test(lines[0]) && lines[0].indexOf(g.DATA.statuses.bloom.text) >= 0, 'the resource and its description');
-  t.ok(/Blade Flow/.test(lines[1]) && /Bloom/.test(lines[1]), 'the passive by name and effect: ' + lines[1]);
+  t.ok(lines[0].indexOf(g.DATA.statuses.bloom.name) >= 0 && lines[0].indexOf(g.DATA.statuses.bloom.text) >= 0, 'the resource and its description');
+  t.ok(lines[1].indexOf(h.passives[0].name) >= 0 && lines[1].indexOf(g.DATA.statuses.bloom.name) >= 0, 'the passive by name and effect: ' + lines[1]);
   t.eq($$(g, '.mn-dc').length, 3, 'three distinct starter cards');
   t.deep($$(g, '.mn-dc-n').map((n) => n.textContent), ['x2', 'x2'], 'the strike and the defence show a x2 count');
   t.ok(/starting deck \(5 cards\)/i.test($(g, '.mn-d-sec h4').textContent), 'the deck heading counts five cards');
   t.ok($(g, '.mn-d-bio p').textContent.length > 100 && g.DATA.lore.hero_hanae.text.indexOf($(g, '.mn-d-bio p').textContent.slice(0, 60)) === 0, 'the bio is the hero_hanae lore');
   hover(g, 'kuro'); await settle(g);
-  t.eq($(g, '.mn-d-name h3').textContent, 'Kuro', 'hovering another hero swaps the sheet');
+  t.eq($(g, '.mn-d-name h3').textContent, g.DATA.heroes.kuro.name, 'hovering another hero swaps the sheet');
   t.ok($(g, '.mn-d-bio h4').textContent.indexOf('His') === 0, 'his story');
   // a starter card previews big on hover
   const sc = $(g, '.mn-cs');
@@ -371,7 +372,7 @@ await t.test('heroSelect: Ink Trial stepper lists every level cumulatively, capp
   t.eq(g2.UI.screens.heroSelect.state().trial, 3, 'the stepper stops at trialMax');
   const li = $$(g2, '.mn-rule');
   t.eq(li.length, 3, 'levels 1 to 3 are all listed');
-  t.ok(li[0].textContent.indexOf('Lean Purse') >= 0 && li[1].textContent.indexOf('Tough Hides') >= 0 && li[2].textContent.indexOf('Slow Mending') >= 0, 'in order, with the real trial names and texts: ' + li.map((x) => x.textContent).join(' | '));
+  t.ok(li[0].textContent.indexOf(g2.DATA.trials.trial_1.name) >= 0 && li[1].textContent.indexOf(g2.DATA.trials.trial_2.name) >= 0 && li[2].textContent.indexOf(g2.DATA.trials.trial_3.name) >= 0, 'in order, with the real trial names and texts: ' + li.map((x) => x.textContent).join(' | '));
   t.ok(li[2].classList.contains('new') && !li[1].classList.contains('new'), 'the newest is highlighted');
   t.ok(li[0].textContent.indexOf(g2.DATA.trials.trial_1.text) >= 0, 'each rule carries the trial text');
   t.eq($$(g2, '.mn-pip.on').length, 3, 'the pips show the level');
@@ -720,18 +721,18 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   const data = g.META.bestiary();
   t.eq($$(g, '.mn-beast').length, data.length, 'one tile per creature (' + data.length + ')');
   t.eq($$(g, '.mn-beast.seen').length, 5, 'five have been met'); t.eq($$(g, '.mn-beast.unseen').length, data.length - 5, 'the rest are unseen');
-  t.eq($$(g, '.mn-sec-h').length, 3, 'three chapter headings'); t.ok(/Verse 1: /.test($$(g, '.mn-sec-h span')[0].textContent) && /Whispering Bamboo Grove/.test($$(g, '.mn-sec-h span')[0].textContent), 'named after the chapter story: ' + $$(g, '.mn-sec-h span')[0].textContent);
+  t.eq($$(g, '.mn-sec-h').length, 3, 'three chapter headings'); t.ok(/Verse 1: /.test($$(g, '.mn-sec-h span')[0].textContent) && new RegExp(esc(g.DATA.lore.ch1_intro.title)).test($$(g, '.mn-sec-h span')[0].textContent), 'named after the chapter story: ' + $$(g, '.mn-sec-h span')[0].textContent);
   t.ok(/5 of 17 met/.test($$(g, '.mn-sec-n')[0].textContent), 'and counting met creatures: ' + $$(g, '.mn-sec-n')[0].textContent);
   const un = $(g, '.mn-beast[data-id=chochin]');
-  t.eq(un.querySelector('.mn-b-name').textContent, '???', 'an unseen tile says ???'); t.ok(un.querySelector('canvas'), 'over a silhouette canvas'); t.ok(!/Chochin|Lantern/i.test(un.getAttribute('aria-label')), 'and its aria-label does not name it: ' + un.getAttribute('aria-label'));
+  t.eq(un.querySelector('.mn-b-name').textContent, '???', 'an unseen tile says ???'); t.ok(un.querySelector('canvas'), 'over a silhouette canvas'); t.ok(!new RegExp(g.DATA.enemies.chochin.name.split(' ').map(esc).join('|'), 'i').test(un.getAttribute('aria-label')), 'and its aria-label does not name it: ' + un.getAttribute('aria-label'));
   const kappa = $(g, '.mn-beast[data-id=kappa]');
-  t.eq(kappa.querySelector('.mn-b-name').textContent, 'Kappa', 'a met creature shows its name'); t.eq(kappa.querySelector('.mn-b-kills').textContent, '2', 'and its kill count');
+  t.eq(kappa.querySelector('.mn-b-name').textContent, g.DATA.enemies.kappa.name, 'a met creature shows its name'); t.eq(kappa.querySelector('.mn-b-kills').textContent, '2', 'and its kill count');
   t.ok($(g, '.mn-beast[data-id=boss_kuzunoha]').classList.contains('tier-boss') && $(g, '.mn-beast[data-id=oni_brute]').classList.contains('tier-elite'), 'tiers are styled');
   const firstOfCh1 = $$(g, '.mn-grid.beasts')[0].children[0];
   t.eq(firstOfCh1.dataset.id, 'boss_kuzunoha', 'bosses come first in a chapter');
   g._click(kappa); await settle(g);
   const def = g.DATA.enemies.kappa;
-  t.eq($(g, '.mn-bdetail h3').textContent, 'Kappa', 'the detail names it'); t.eq($(g, '.mn-bd-lore').textContent, def.lore, 'with its lore');
+  t.eq($(g, '.mn-bdetail h3').textContent, def.name, 'the detail names it'); t.eq($(g, '.mn-bd-lore').textContent, def.lore, 'with its lore');
   t.eq($$(g, '.mn-move').length, Object.keys(def.moves).length, 'every move is listed (' + Object.keys(def.moves).length + ')');
   t.ok($$(g, '.mn-move b').map((b) => b.textContent).indexOf(def.moves.mud_slap.name) >= 0, 'by name'); t.ok(/Deal 5 damage/.test($(g, '.mn-move span').textContent), 'and effect: ' + $(g, '.mn-move span').textContent);
   t.ok($(g, '.mn-bd-stats').textContent.indexOf(def.hp[0] + ' to ' + def.hp[1]) >= 0, 'the HP range ' + def.hp.join(' to '));
@@ -741,7 +742,7 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   const txt = $(g, '.mn-bdetail').textContent;
   t.eq($(g, '.mn-bdetail h3').textContent, '???', 'an unseen creature stays ???');
   t.ok(!$(g, '.mn-bd-lore') && !$(g, '.mn-moves'), 'no lore and no move list');
-  t.ok(txt.indexOf(g.DATA.enemies.chochin.lore) < 0 && txt.indexOf('Chochin') < 0, 'nothing of it leaks into the panel');
+  t.ok(txt.indexOf(g.DATA.enemies.chochin.lore) < 0 && txt.indexOf(g.DATA.enemies.chochin.name.split(' ')[0]) < 0, 'nothing of it leaks into the panel');
   t.ok(/Meet this creature/.test(txt), 'it says how to meet it');
   g._frames(60, 16);
   t.eq(g._issues.length, 0, 'the live portrait draws without canvas issues: ' + JSON.stringify(g._issues.slice(0, 2)));
@@ -760,14 +761,14 @@ await t.test('library history: newest runs first with heroes, score, chapter, tr
   const rows = $$(g, '.mn-hist');
   t.eq(rows.length, 4, 'one row per run');
   t.deep(rows.map((r) => r.querySelector('.mn-h-out b').textContent), ['Victory', 'Fallen', 'Abandoned', 'Fallen'], 'outcomes, in the order META keeps (newest first)');
-  t.eq(rows[0].querySelector('.mn-h-names').textContent, 'Hanae and Kuro', 'the party'); t.eq(rows[0].querySelectorAll('.mn-h-heroes .ico').length, 2, 'as medallions');
+  t.eq(rows[0].querySelector('.mn-h-names').textContent, g.DATA.heroes.hanae.name + ' and ' + g.DATA.heroes.kuro.name, 'the party'); t.eq(rows[0].querySelectorAll('.mn-h-heroes .ico').length, 2, 'as medallions');
   t.eq(rows[0].querySelector('.mn-h-score b').textContent, '1,420', 'score'); t.eq(rows[0].querySelector('.mn-h-ch').textContent, 'Verse 3', 'chapter reached');
   t.ok(/\+52 Chimes/.test(rows[0].querySelector('.mn-h-out').textContent), 'Inkstones earned');
   t.ok(rows[0].querySelector('.hanko') && /T2/.test(rows[0].querySelector('.mn-h-tags').textContent), 'the trial seal T2'); t.ok(!rows[1].querySelector('.mn-h-tags .hanko'), 'trial 0 has no seal');
   t.ok(/D/.test(rows[3].querySelector('.mn-h-tags').textContent) && rows[3].classList.contains('daily'), 'the daily run is marked');
   t.ok(rows[0].classList.contains('win') && rows[1].classList.contains('lose') && rows[2].classList.contains('abandon'), 'rows are styled by outcome');
   t.ok(/\d{1,2} [A-Z][a-z]{2} 2026/.test(rows[0].querySelector('.mn-h-date').textContent), 'a date: ' + rows[0].querySelector('.mn-h-date').textContent);
-  t.ok(/Victory with Hanae and Kuro/.test(rows[0].getAttribute('aria-label')), 'and a spoken summary: ' + rows[0].getAttribute('aria-label'));
+  t.ok(new RegExp('Victory with ' + esc(g.DATA.heroes.hanae.name) + ' and ' + esc(g.DATA.heroes.kuro.name)).test(rows[0].getAttribute('aria-label')), 'and a spoken summary: ' + rows[0].getAttribute('aria-label'));
   const sums = $$(g, '.mn-hist-sum b').map((b) => b.textContent);
   t.deep(sums, ['7', '2', '1,420', '4'], 'the summary strip: tales begun, wins, best score, rows');
   const g2 = fresh();
@@ -1153,7 +1154,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.ok(pausing(g), 'the pause overlay opens'); t.ok(/Paused/.test($(g, '.o-pause .panel h2, .o-pause .panel-title, .o-pause h2').textContent), 'titled Paused');
   t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Treasures, Settings, How to play, Save and quit, Abandon journey');
   t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Verse 1Tempo Trial II', 'the run card names the chapter and the trial');
-  t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(/Hanae/.test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
+  t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(new RegExp(esc(g.DATA.heroes.hanae.name)).test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
   t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No treasures yet/.test($(g, '.mn-p-relics').textContent), 'no treasures yet');
   t.eq($(g, '[data-act=deck] .hanko').textContent.trim(), String(R.deck.length), 'the Deck plaque counts the deck: ' + R.deck.length);
   t.eq($(g, '[data-act=relics] .hanko').textContent.trim(), '0', 'the Treasures plaque counts 0');
@@ -1180,7 +1181,7 @@ await t.test('pause: the run card follows the run (daily tag, treasures, brushes
   await openPause(g);
   t.ok(/Daily Jam/.test($(g, '.mn-p-chips').textContent), 'a Daily Jam chip'); t.ok(!/Tempo Trial/.test($(g, '.mn-p-chips').textContent), 'no trial chip at trial 0');
   t.eq($$(g, '.mn-p-relics .relic, .mn-p-relics > *').length, 3, 'three treasures are pictured'); t.eq($(g, '[data-act=relics] .hanko').textContent.trim(), '3', 'and counted');
-  t.ok(/123/.test($(g, '.mn-p-stats').textContent), 'gold 123 is shown'); t.ok(/Kuro/.test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Kuro is in the party');
+  t.ok(/123/.test($(g, '.mn-p-stats').textContent), 'gold 123 is shown'); t.ok(new RegExp(esc(g.DATA.heroes.kuro.name)).test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Kuro is in the party');
   const tips = new Set();
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) { g._key('Escape'); await settle(g); g.UI.run.seed = seed; await openPause(g); tips.add($(g, '.mn-p-tip p').textContent); }
   t.ok(tips.size >= 3, 'the tip varies with the seed (' + tips.size + ' different in 10)');

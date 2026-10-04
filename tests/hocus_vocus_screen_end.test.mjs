@@ -10,6 +10,8 @@ import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus screen_end');
+// DATA-owned names are read from DATA of the same boot (the re-theme renames them); this escapes one for a RegExp
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DASH = new RegExp('[' + String.fromCharCode(0x2013, 0x2014) + ']');
 const RNG = new RegExp('Math' + '\\.' + 'random');
 const SRC = fs.readFileSync(path.join(DIR, 'js', 'screen_end.js'), 'utf8');
@@ -272,7 +274,7 @@ await t.test('chapterClear: the headline, the stats counting from the run, the h
   t.ok(root, 'the screen is up');
   t.eq(txt($('.cc-title', root)), DATA.lore.ch1_clear.title, 'the lore title is the headline');
   t.eq(txt($('.cc-kicker', root)), 'VERSE ONE COMPLETE', 'the kicker');
-  t.ok(txt($('.cc-boss', root)).indexOf('Kuzunoha') === 0, 'the boss is named');
+  t.ok(txt($('.cc-boss', root)).indexOf(DATA.enemies.boss_kuzunoha.name) === 0, 'the boss is named');
   t.eq(txt($('.cc-lore', root)), DATA.lore.ch1_clear.text, 'the clear lore is in the scroll');
   t.ok(META.loreSeen('ch1_clear'), 'and marked');
   const tiles = Object.fromEntries($$(g, '.en-tile', root).map((el) => [txt($('.en-tile-lab', el)), num(txt($('.en-num', el)))]));
@@ -303,7 +305,7 @@ await t.test('chapterClear: a hero the chapter unlocks gets her own announcement
   t.ok(META.isUnlocked('hero', 'suzu'), 'chapter 1 cleared unlocks Suzu through META.check');
   await UI.go('chapterClear', { chapter: 1, next: 2, healed: ce.healed, maxHp: ce.maxHp, R }, { force: true, transition: 'none' }); await settle(g);
   const nh = $(g, '.cc-newhero');
-  t.ok(nh && /Suzu joins the band/.test(txt(nh)), 'the announcement names her'); t.ok(nh.className.indexOf('show') >= 0, 'and is shown');
+  t.ok(nh && new RegExp(esc(DATA.heroes.suzu.name) + ' joins the band').test(txt(nh)), 'the announcement names her'); t.ok(nh.className.indexOf('show') >= 0, 'and is shown');
 });
 await t.test('chapterClear through GAME: nodeDone after the boss routes here, Continue goes on to the chapter 2 story and the map', async () => {
   const R = RUN.newRun({ heroes: ['kuro', 'hanae'], seed: 41, trial: 0 }); if (!R.map) RUN.startChapter(R, 1);
@@ -319,7 +321,7 @@ await t.test('chapterClear through GAME: nodeDone after the boss routes here, Co
   t.eq(hp.join('|'), R.heroes.map((h) => h.hp + '/' + h.maxHp).join('|'), 'the HP rows match the run');
   await click(g, $(g, '.cc-go'));
   t.eq(UI.currentName, 'story', 'Continue opens the next chapter\'s story page');
-  t.ok(/Sunken Lantern City/.test(txt($(g, '.st-title'))), 'chapter 2\'s page');
+  t.ok(txt($(g, '.st-title')).indexOf(DATA.lore.ch2_intro.title) >= 0, 'chapter 2\'s page');
   await click(g, $(g, '[data-act=turn]'));
   t.eq(UI.currentName, 'map', 'then the map');
 });
@@ -395,7 +397,7 @@ await t.test('gameOver: unlock entries from a record, the achievements, a hero, 
   const sm = RUN.summary(LOSE.R);
   await UI.go('gameOver', { summary: sm, record: rec, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
   const list = $$(g, '.en-unlock');
-  t.eq(list.length, 3, 'three rows'); t.ok(/Suzu joins the band/.test(txt(list[0])), 'Suzu'); t.ok(/Tempo Trial 2 unlocked/.test(txt(list[2])), 'the trial');
+  t.eq(list.length, 3, 'three rows'); t.ok(new RegExp(esc(DATA.heroes.suzu.name) + ' joins the band').test(txt(list[0])), 'Suzu'); t.ok(/Tempo Trial 2 unlocked/.test(txt(list[2])), 'the trial');
   t.eq(txt($('.go-stone-n')), '+33', 'the Inkstone count'); t.ok(/Achievement bonus \+10/.test(txt($('.go-stone-sub'))), 'bonus and library total shown');
   await UI.go('gameOver', { summary: sm, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
   t.ok(/not recorded/.test(txt($('.s-gameOver .go-stonescard'))), 'no record: an honest empty state');
@@ -426,7 +428,7 @@ await t.test('victory through GAME.victory: the three beats, the share card, the
   g._key('Enter'); await settle(g);
   t.ok($('.vc-caps', root), 'beat two: the curtain call');
   t.eq($$(g, '.vc-cap', root).length, 4, 'four heroes, a line each');
-  t.eq($$(g, '.vc-cap.party', root).map((c) => txt($('.vc-cap-name', c)).replace(/ \*$/, '')).join(','), 'Hanae,Kuro', 'the party is marked');
+  t.eq($$(g, '.vc-cap.party', root).map((c) => txt($('.vc-cap-name', c)).replace(/ \*$/, '')).join(','), DATA.heroes.hanae.name + ',' + DATA.heroes.kuro.name, 'the party is marked');
   t.ok($$(g, '.vc-cap-line', root).every((l) => txt(l).length > 40), 'every line is written');
   t.deep(UI.screens.victory._t.curtainOrder(['kuro', 'hanae']), ['kuro', 'hanae', 'suzu', 'raiga'], 'the party first, in party order');
   g._key('Enter'); await settle(g);
@@ -442,7 +444,7 @@ await t.test('victory through GAME.victory: the three beats, the share card, the
   await click(g, $('.vc-copy', root));
   const text = UI.screens.victory._t.summaryText(sm, R, true);
   t.eq(g._clipboard, text, 'Copy summary puts the share text on the clipboard');
-  t.ok(/Hanae and Kuro \| Score [\d,]+ \| Tempo Trial 0/.test(text) && text.indexOf('Seed ' + (R.seed >>> 0)) > 0 && text.indexOf(R.deck.length + ' cards') > 0, 'the text names heroes, score, trial, seed and deck size');
+  t.ok(new RegExp(esc(DATA.heroes.hanae.name) + ' and ' + esc(DATA.heroes.kuro.name) + ' \\| Score [\\d,]+ \\| Tempo Trial 0').test(text) && text.indexOf('Seed ' + (R.seed >>> 0)) > 0 && text.indexOf(R.deck.length + ' cards') > 0, 'the text names heroes, score, trial, seed and deck size');
   t.ok(!DASH.test(text), 'and has no dashes');
   await click(g, $('.vc-save', root));
   t.ok($$(g, '#toasts .toast').some((x) => /Card saved|Could not save/.test(txt(x))), 'Save card answers either way');

@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus screen_combat');
+// DATA-owned names are read from DATA of the same boot (the re-theme renames them); this escapes one for a RegExp
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 if (process.env.RB_TIMING) { const orig = t.test.bind(t); t.test = (msg, fn) => orig(msg, async () => { const s0 = Date.now(); await fn(); console.log(String(Date.now() - s0).padStart(6) + ' ms  ' + msg.slice(0, 90)); }); }
 
 // ---------------------------------------------------------------------------------------------------- the recording fake SCENE
@@ -287,9 +289,9 @@ await t.test('rowBrief and reasonText', () => {
   const g = boot({ only: ['screen_combat'], skip: ['scene'] });
   const { rowBrief, reasonText } = g.UI.screens.combat._t;
   t.eq(rowBrief('hanae', 'front', []), '+2 dmg', 'hanae front'); t.eq(rowBrief('hanae', 'back', []), '+1 Block', 'hanae back');
-  t.eq(rowBrief('raiga', 'front', []), '3 Block/turn, Thorns 2', 'raiga front'); t.eq(rowBrief('suzu', 'back', []), 'Regen 2', 'suzu back');
-  t.eq(reasonText('energy', 'hanae'), 'Not enough Energy', 'energy'); t.eq(reasonText('down', 'kuro'), 'Kuro is down', 'down names the hero');
-  t.eq(reasonText('stunned', 'suzu'), 'Suzu is stunned', 'stunned names the hero'); t.ok(reasonText('zzz', 'hanae').length > 3, 'unknown reasons still read');
+  t.eq(rowBrief('raiga', 'front', []), '3 Block/turn, ' + g.DATA.statuses.thorns.name + ' 2', 'raiga front'); t.eq(rowBrief('suzu', 'back', []), g.DATA.statuses.regen.name + ' 2', 'suzu back');
+  t.eq(reasonText('energy', 'hanae'), 'Not enough Energy', 'energy'); t.eq(reasonText('down', 'kuro'), g.DATA.heroes.kuro.name + ' is down', 'down names the hero');
+  t.eq(reasonText('stunned', 'suzu'), g.DATA.heroes.suzu.name + ' is stunned', 'stunned names the hero'); t.ok(reasonText('zzz', 'hanae').length > 3, 'unknown reasons still read');
 });
 
 // ==================================================================================================== 2. mounting: the HUD zones and their DOM
@@ -353,14 +355,14 @@ await t.test('boss, elite and xl: the reveal plate, the boss banner and the boss
   const g = fresh();
   const { st } = await enter(g, { enemies: ['boss_kuzunoha'], tier: 'boss' });
   t.eq(sc(g).mountOpts.boss, true, 'SCENE.mount got boss:true');
-  t.ok(sc(g).banners.some((b) => b[0] === 'Kuzunoha' && b[1] === 'BOSS'), 'the BOSS banner was raised with the boss name (SCENE draws the reveal)');
+  t.ok(sc(g).banners.some((b) => b[0] === g.DATA.enemies.boss_kuzunoha.name && b[1] === 'BOSS'), 'the BOSS banner was raised with the boss name (SCENE draws the reveal)');
   t.ok(sfxLog(g).indexOf('boss_intro') >= 0, 'with its sting');
   t.ok($(g, '.cm-reveal').hidden, 'and no second, DOM plate on top of it');
   t.eq($$(g, '.cm-en').length, 1, 'one overlay'); t.ok($(g, '.cm-en').classList.contains('sz-xl'), 'xl size class');
   assertPicture(g, 'boss');
   const g2 = fresh();
   await enter(g2, { enemies: ['oni_brute'], tier: 'elite' });
-  t.ok($(g2, '.cm-reveal').className.indexOf('elite') >= 0 && $(g2, '.cm-reveal').textContent.indexOf('Oni Brute') >= 0, 'an elite gets the champion plate (SCENE has no banner for it)');
+  t.ok($(g2, '.cm-reveal').className.indexOf('elite') >= 0 && $(g2, '.cm-reveal').textContent.indexOf(g2.DATA.enemies.oni_brute.name) >= 0, 'an elite gets the champion plate (SCENE has no banner for it)');
   const g3 = fresh({ stage: 'none' });
   await enter(g3, { enemies: ['boss_kuzunoha'], tier: 'boss' });
   t.ok($(g3, '.cm-reveal').className.indexOf('boss') >= 0 && $(g3, '.cm-reveal').textContent.indexOf(g3.DATA.enemies.boss_kuzunoha.title) >= 0, 'without a SCENE the boss gets the DOM plate with its title');
@@ -450,12 +452,12 @@ await t.test('illegal plays: a toast with the reason, ui_error, and the engine i
   await idle(g);
   const slash = st.C.hand[0].uid;
   g._click(cardEl(g, slash));
-  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf('Hanae is stunned') >= 0), 'a stunned hero: "Hanae is stunned"');
+  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is stunned') >= 0), 'a stunned hero: "Hanae is stunned"');
   scr(g).debug().setStatus('hanae', 'stun', 0);
   scr(g).debug().setHp('hanae', 0);
   await idle(g);
   g._click(cardEl(g, st.C.hand[1].uid));
-  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf('Hanae is down') >= 0), 'a downed hero: "Hanae is down"');
+  t.ok($$(g, '#toasts .toast').some((x) => x.textContent.indexOf(g.DATA.heroes.hanae.name + ' is down') >= 0), 'a downed hero: "Hanae is down"');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -662,7 +664,7 @@ await t.test('status chips: up to six with counts, a +N chip beyond that, and th
   t.eq(txt(p.querySelector('.status.s-might .n')), '4', 'and updates in place');
   const chip = p.querySelector('.status.s-thorns');
   const tip = chip.rbTip ? chip.rbTip() : null;
-  t.ok(tip && tip.textContent.indexOf('Thorns') >= 0, 'the chip carries a tooltip that explains Thorns');
+  t.ok(tip && tip.textContent.indexOf(g.DATA.statuses.thorns.name) >= 0, 'the chip carries a tooltip that explains Thorns');
   scr(g).debug().setStatus(st.C.enemies[0].id, 'vulnerable', 2);
   await idle(g);
   const en = $(g, '.cm-en .cm-st');
@@ -717,8 +719,8 @@ await t.test('hero panel: low HP flags, the danger vignette, the block chip and 
   await idle(g);
   t.ok(!p.querySelector('.cm-blk').hidden && txt(p.querySelector('.cm-blk .n')) === '9', 'Block 9 shows on the chip');
   const tip = p.rbTip();
-  t.ok(tip.textContent.indexOf('Blossom Blade') >= 0 && tip.textContent.indexOf('Front: +2 damage') >= 0 && tip.textContent.indexOf('Back: ') >= 0, 'the hover tooltip names the hero and both rows');
-  t.ok(tip.textContent.indexOf('Blade Flow') >= 0, 'and the passive');
+  t.ok(tip.textContent.indexOf(g.DATA.heroes.hanae.title) >= 0 && tip.textContent.indexOf('Front: +2 damage') >= 0 && tip.textContent.indexOf('Back: ') >= 0, 'the hover tooltip names the hero and both rows');
+  t.ok(tip.textContent.indexOf(g.DATA.heroes.hanae.passives[0].name) >= 0, 'and the passive');
   scr(g).debug().setHp('hanae', 60); scr(g).debug().setHp('kuro', 60);
   await idle(g);
   t.ok(!$(g, '.cm-danger').classList.contains('on'), 'healthy again: no vignette');
@@ -1121,12 +1123,12 @@ await t.test('touch: taps select and play, hover-only paths stay quiet, tooltips
   t.ok(st.C.enemies[1].hp < st.C.enemies[1].maxHp, 'tap card, tap enemy');
   g._click(enemyBtn(g, st.C.enemies[0].id), { pointerType: 'touch' });
   t.ok(g.UI.tip.open, 'tapping an enemy with nothing selected shows what it is about to do');
-  t.ok(g._doc.querySelector('#tips').textContent.indexOf('Kappa') >= 0, 'in a bubble with its name');
+  t.ok(g._doc.querySelector('#tips').textContent.indexOf(g.DATA.enemies.kappa.name) >= 0, 'in a bubble with its name');
   scr(g).debug().setStatus(st.C.enemies[1].id, 'vulnerable', 2);
   await idle(g);
   g._click(enemyBtn(g, st.C.enemies[1].id), { pointerType: 'touch' });
   const tipText = g._doc.querySelector('#tips').textContent;
-  t.ok(/Right now/.test(tipText) && /Vulnerable 2/.test(tipText) && /50% more/.test(tipText), 'a tap on a foe that carries a status names it and says what it does (the chips are too small to press on a phone)');
+  t.ok(/Right now/.test(tipText) && new RegExp(esc(g.DATA.statuses.vulnerable.name) + ' 2').test(tipText) && /50% more/.test(tipText), 'a tap on a foe that carries a status names it and says what it does (the chips are too small to press on a phone)');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -1361,7 +1363,7 @@ await t.test('intent targets: a back-row attack shows the back hero medallion; a
   const bub = $(g, '.cm-en .cm-int');
   if (Array.isArray(it.tgt) && it.tgt.length) t.eq(bub.querySelectorAll('.ib-tgt .ico').length, it.tgt.length, 'one medallion per targeted hero');
   else t.ok(true, 'this move has no fixed target');
-  t.ok(/Crow Tengu intends/.test(bub.getAttribute('aria-label')), 'the bubble is labelled for screen readers');
+  t.ok(new RegExp(esc(g.DATA.enemies.crow_tengu.name) + ' intends').test(bub.getAttribute('aria-label')), 'the bubble is labelled for screen readers');
   t.eq(errs(g), 0, 'no console errors');
 });
 // L22 of the final verification: '[ui] tooltip content threw: Cannot read properties of null (reading vm)' when a tip was asked for after the screen was left

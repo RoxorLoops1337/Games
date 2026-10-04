@@ -119,6 +119,8 @@ const wipeDist = () => {
 // code requests these) and the design docs.
 const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
+  // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed
+  hocus_vocus: new Set(['plan']),
 };
 
 const copyStatic = () => {

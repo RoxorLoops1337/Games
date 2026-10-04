@@ -9,6 +9,7 @@ import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus screen_node');
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const SRC = fs.readFileSync(path.join(DIR, 'js', 'screen_node.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(DIR, 'css', 'node.css'), 'utf8');
 
@@ -573,7 +574,7 @@ await t.test('shop: Cut Gems is free, needs gems and a socket that fits, and ope
   t.ok(g.UI.overlay.has('deck') && $(g, '.o-deck .nk-deck.dk-socket'), 'the socket picker opens');
   const gold = R.gold;
   await click(g, $$(g, '.o-deck .dk-card').find((c) => c.dataset.id === 'hanae_slash'));
-  await click(g, $$(g, '.o-deck .dk-gem').find((b) => /Ember/.test(b.textContent)));
+  await click(g, $$(g, '.o-deck .dk-gem').find((b) => b.textContent.indexOf(g.DATA.gems.ember_ruby.name) >= 0));
   await click(g, $(g, '.o-deck .dk-go'));
   const slash = R.deck.find((c) => c.id === 'hanae_slash' && c.gems[0] === 'ember_ruby');
   t.ok(slash, 'the gem was set in the card through RUN.socket');
@@ -772,7 +773,7 @@ await t.test('event: a treasure chip is drawn only for a treasure the party real
     t.eq(chips.length, gained, 'owned ' + owned + ': ' + chips.length + ' treasure chip(s) for ' + gained + ' treasure(s) really gained');
     chips.forEach((c) => t.ok(R.relics.some((r) => g.DATA.relics[r].name === txt(c)), 'the chip names a treasure the party now carries'));
     if (owned === 'all') t.ok($$(g, '.ev-chip').some((c) => /\+\d+ gold/.test(txt(c))), 'nothing left to find: the gold it turns into is shown');
-    t.ok(!$$(g, '.ev-chip.k-good.has-relic').some((c) => txt(c) === 'Brass Lantern') || gained === 0 || R.relics.indexOf('brass_lantern') >= 0, 'never "Brass Lantern gained" when it was already carried');
+    t.ok(!$$(g, '.ev-chip.k-good.has-relic').some((c) => txt(c) === g.DATA.relics.brass_lantern.name) || gained === 0 || R.relics.indexOf('brass_lantern') >= 0, 'never "Brass Lantern gained" when it was already carried');
     t.eq(errs(g), 0, 'no console errors');
   }
 });
@@ -883,12 +884,13 @@ await t.test('event: requirements lock a choice with the reason, and the heroes 
   const node2 = nodeAt(g, R2, 'event', { id: 'kappa_toll' });
   await open(g, 'event', R2, node2);
   t.ok(!$$(g, '.ev-choice')[0].classList.contains('locked') && !$$(g, '.ev-choice')[2].classList.contains('locked'), 'with the gold and the flag both open');
+  const KURO_MENU = new RegExp(esc(g.DATA.events.tanuki_tea_house.choices.find((c) => c.req && c.req.hero === 'kuro').label));
   const tea = mkRun(g, { seed: 13, heroes: ['hanae', 'suzu'] });
   await open(g, 'event', tea, nodeAt(g, tea, 'event', { id: 'tanuki_tea_house' }));
-  t.ok(!$$(g, '.ev-choice').some((b) => /Let Kuro read the menu/.test(txt(b))), 'Kuro\'s menu reading is hidden when Kuro is not in the party');
+  t.ok(!$$(g, '.ev-choice').some((b) => KURO_MENU.test(txt(b))), 'Kuro\'s menu reading is hidden when Kuro is not in the party');
   const tea2 = mkRun(g, { seed: 13, heroes: ['hanae', 'kuro'] });
   await open(g, 'event', tea2, nodeAt(g, tea2, 'event', { id: 'tanuki_tea_house' }));
-  t.ok($$(g, '.ev-choice').some((b) => /Let Kuro read the menu/.test(txt(b)) && b.querySelector('.ico')), 'and shown with his face when he is');
+  t.ok($$(g, '.ev-choice').some((b) => KURO_MENU.test(txt(b)) && b.querySelector('.ico')), 'and shown with his face when he is');
 });
 
 await t.test('event: the typewriter writes on the frame clock, tap or Enter completes it, and the choices wait for the end of the fable', async () => {
@@ -1054,7 +1056,7 @@ await t.test('camp: Meditate pays Ink and a brush; Cut Gems stays open all visit
   t.deep(Array.from(node.used), [], 'no gem was cut: the action is not spent');
   await click(g, tile(g, 'gems'));
   await click(g, $$(g, '.o-deck .dk-card').find((c) => c.dataset.id === 'hanae_slash'));
-  await click(g, $$(g, '.o-deck .dk-gem').find((b) => /Ember/.test(txt(b))));
+  await click(g, $$(g, '.o-deck .dk-gem').find((b) => txt(b).indexOf(g.DATA.gems.ember_ruby.name) >= 0));
   await click(g, $(g, '.o-deck .dk-go'));
   t.ok(R.deck.find((c) => c.gems.indexOf('ember_ruby') >= 0), 'a gem was set');
   t.deep(Array.from(node.used), ['gems'], 'the first cut spends the action');
@@ -1178,7 +1180,7 @@ await t.test('forge: Choose another goes back; the gem path sets gems through RU
   await click(g, fmode(g, 'gem'));
   t.ok($(g, '.o-deck .nk-deck.dk-socket'), 'the gem picker is up');
   await click(g, $$(g, '.o-deck .dk-card').find((c) => c.dataset.id === 'hanae_slash'));
-  await click(g, $$(g, '.o-deck .dk-gem').find((b) => /Ember/.test(txt(b))));
+  await click(g, $$(g, '.o-deck .dk-gem').find((b) => txt(b).indexOf(g.DATA.gems.ember_ruby.name) >= 0));
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(node.used, 'gems', 'the forge is now a gem cutter for this visit');
   await click(g, btnByText(g, /Done/, $(g, '.o-deck')));
@@ -1418,7 +1420,7 @@ await t.test('gem cache: number keys choose, and Set it in a card now opens the 
   t.ok($(g, '.o-deck .nk-deck.dk-socket'), 'the socket overlay opened');
   const card = $$(g, '.o-deck .dk-card').find((c) => c.dataset.id === 'hanae_slash');
   await click(g, card);
-  t.ok($(g, '.o-deck .dk-gem.on') && /Ember Ruby/.test(txt($(g, '.o-deck .dk-gem.on'))), 'with the new gem already chosen in the pouch');
+  t.ok($(g, '.o-deck .dk-gem.on') && txt($(g, '.o-deck .dk-gem.on')).indexOf(g.DATA.gems.ember_ruby.name) >= 0, 'with the new gem already chosen in the pouch');
   await click(g, $(g, '.o-deck .dk-go'));
   t.ok(R.deck.some((c) => c.gems.indexOf('ember_ruby') >= 0), 'the gem is set in a card');
   t.eq(R.gems.indexOf('ember_ruby'), -1, 'and gone from the pouch');
@@ -1482,6 +1484,7 @@ function ovOpen(g, name, params) {
 const cardIds = (g) => $$(g, '.o-deck .dk-card').map((c) => c.dataset.id);
 const cardUids = (g) => $$(g, '.o-deck .dk-card').map((c) => Number(c.dataset.uid));
 const chipBy = (g, re) => $$(g, '.o-deck .dk-chip').find((c) => re.test(txt(c)));
+const heroRe = (g, id) => new RegExp(esc(g.DATA.heroes[id].name));
 const deckCard = (g, uid) => $$(g, '.o-deck .dk-card').find((c) => Number(c.dataset.uid) === uid);
 
 // a deck with every type, rarity and hero mix, some sharpened, one gem set
@@ -1560,19 +1563,19 @@ await t.test('deck: hero, type, Upgraded and Gems chips filter and combine, the 
   g.RUN.socket(R, slotted.uid, (g.DATA.cards[slotted.id].slots).indexOf('red'), 'ember_ruby');
   ovOpen(g, 'deck', { mode: 'view' }); await settle(g);
   const D = g.DATA.cards, total = R.deck.length;
-  await click(g, chipBy(g, /Hanae/));
+  await click(g, chipBy(g, heroRe(g, 'hanae')));
   t.ok(cardIds(g).every((id) => D[id].hero === 'hanae') && cardIds(g).length === R.deck.filter((c) => D[c.id].hero === 'hanae').length, 'the hero chip keeps only that hero');
   t.eq(txt($(g, '.o-deck .dk-count')), cardIds(g).length + ' of ' + total + ' cards', 'the count says how many of how many');
-  t.eq(chipBy(g, /Hanae/).getAttribute('aria-pressed'), 'true', 'the chip is pressed');
+  t.eq(chipBy(g, heroRe(g, 'hanae')).getAttribute('aria-pressed'), 'true', 'the chip is pressed');
   await click(g, chipBy(g, /^Attack/));
   t.ok(cardIds(g).every((id) => D[id].hero === 'hanae' && D[id].type === 'attack'), 'hero and type combine');
   await click(g, chipBy(g, /Upgraded/));
   t.ok(cardUids(g).every((u) => R.deck.find((c) => c.uid === u).up), 'Upgraded keeps only sharpened cards');
-  await click(g, chipBy(g, /Upgraded/)); await click(g, chipBy(g, /^Attack/)); await click(g, chipBy(g, /Hanae/));
+  await click(g, chipBy(g, /Upgraded/)); await click(g, chipBy(g, /^Attack/)); await click(g, chipBy(g, heroRe(g, 'hanae')));
   t.eq(cardIds(g).length, total, 'switching every chip off restores the deck');
   await click(g, chipBy(g, /^Gems/));
   t.deep(cardUids(g), [slotted.uid], 'the Gems chip keeps only cards with a gem set');
-  await click(g, chipBy(g, /Kuro/));
+  await click(g, chipBy(g, heroRe(g, 'kuro')));
   t.ok($(g, '.o-deck .dk-none') && /No card matches these filters/.test(txt($(g, '.o-deck .dk-none'))), 'no match: a message instead of a blank grid (if the gem card is Hanae)');
   const clear = btnByText(g, /Clear filters/, $(g, '.o-deck'));
   t.ok(clear, 'with a way out');
@@ -1744,22 +1747,22 @@ await t.test('deck (socket): colour rules explain themselves, prism and two-sock
   t.ok($$(g, '.o-deck .dk-slot').length === 1 && $$(g, '.o-deck .dk-gem').length === 5, 'one socket, five kinds of gem in the tray');
   t.ok(/Choose a gem/.test(txt($(g, '.o-deck .dk-state'))), 'no gem yet: the state asks for one');
   t.ok($(g, '.o-deck .dk-go').getAttribute('aria-disabled') === 'true', 'and Set is disabled');
-  const gemBtn = (re) => $$(g, '.o-deck .dk-gem').find((b) => re.test(txt(b)));
-  t.ok(gemBtn(/Tidewatch/).classList.contains('nofit') && !gemBtn(/Ember/).classList.contains('nofit'), 'a blue gem is marked as not fitting the red socket');
-  await click(g, gemBtn(/Tidewatch/));
+  const gemBtn = (id) => $$(g, '.o-deck .dk-gem').find((b) => txt(b).indexOf(g.DATA.gems[id].name) >= 0);
+  t.ok(gemBtn('tidewatch_sapphire').classList.contains('nofit') && !gemBtn('ember_ruby').classList.contains('nofit'), 'a blue gem is marked as not fitting the red socket');
+  await click(g, gemBtn('tidewatch_sapphire'));
   t.ok(/blue: it fits blue and prism sockets only/.test(txt($(g, '.o-deck .dk-state'))) && $(g, '.o-deck .dk-state.bad'), 'the wrong colour is explained');
   const gems0 = R.gems.length;
   await click(g, $(g, '.o-deck .dk-go'));
   t.ok(slash.gems[0] === null && R.gems.length === gems0, 'a wrong colour changes nothing');
-  await click(g, gemBtn(/Ember/));
+  await click(g, gemBtn('ember_ruby'));
   t.ok($(g, '.o-deck .dk-state.ok') && /will be set in the red socket/.test(txt($(g, '.o-deck .dk-state'))), 'the right colour says where it goes');
-  t.ok(/Ember Ruby/.test(txt($(g, '.o-deck .dk-sockcard'))) || $(g, '.o-deck .dk-sockcard'), 'the big card previews it');
+  t.ok(txt($(g, '.o-deck .dk-sockcard')).indexOf(g.DATA.gems.ember_ruby.name) >= 0 || $(g, '.o-deck .dk-sockcard'), 'the big card previews it');
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(slash.gems[0], 'ember_ruby', 'the ruby is set (RUN.socket)');
   t.eq(R.gems.indexOf('ember_ruby'), -1, 'and left the pouch');
-  t.ok(/Empty|Ember Ruby/.test(txt($(g, '.o-deck .dk-slot-lab'))) && /Ember Ruby/.test(txt($(g, '.o-deck .dk-slot-lab'))), 'the socket shows the gem');
+  t.ok(new RegExp('Empty|' + esc(g.DATA.gems.ember_ruby.name)).test(txt($(g, '.o-deck .dk-slot-lab'))) && txt($(g, '.o-deck .dk-slot-lab')).indexOf(g.DATA.gems.ember_ruby.name) >= 0, 'the socket shows the gem');
   // replace: a second red gem
-  await click(g, gemBtn(/Vanguard/));
+  await click(g, gemBtn('vanguard_garnet'));
   t.ok($(g, '.o-deck .dk-state.warn') && /destroys it for good/.test(txt($(g, '.o-deck .dk-state'))), 'replacing warns that the old gem is destroyed');
   t.ok(/Replace the gem/.test(txt($(g, '.o-deck .dk-go'))) && $(g, '.o-deck .dk-go').classList.contains('dk-danger'), 'a danger button');
   await click(g, $(g, '.o-deck .dk-go'));
@@ -1768,13 +1771,13 @@ await t.test('deck (socket): colour rules explain themselves, prism and two-sock
   // prism card: a gold gem goes into the prism socket
   await click(g, deckCard(g, prism.uid));
   t.eq($$(g, '.o-deck .dk-slot').length, 2, 'the prism card has two sockets');
-  await click(g, gemBtn(/Sunwake/));
+  await click(g, gemBtn('sunwake_topaz'));
   t.ok($(g, '.o-deck .dk-slot.on.sc-any') && $(g, '.o-deck .dk-state.ok'), 'a gold gem picks the prism socket by itself');
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(prism.gems[1], 'sunwake_topaz', 'gold went into the prism socket');
   // two-socket card: the second socket takes green
   await click(g, deckCard(g, two.uid));
-  await click(g, gemBtn(/Quickthought/));
+  await click(g, gemBtn('quickthought_emerald'));
   t.ok($$(g, '.o-deck .dk-slot')[1].classList.contains('on'), 'green moves the choice to the green socket');
   await click(g, $(g, '.o-deck .dk-go'));
   t.eq(two.gems[1], 'quickthought_emerald', 'the emerald is in the second socket');

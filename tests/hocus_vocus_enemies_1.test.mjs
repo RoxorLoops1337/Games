@@ -30,6 +30,7 @@ t.ok(!g._errors || g._errors.length === 0, 'data_enemies_1 loads without errors:
 
 const L = DATA.LISTS;
 const E = DATA.enemies;
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ROSTER = DATA.ROSTER[1];
 const GUIDE = DATA.GUIDE;
 const ch1 = Object.values(E).filter((e) => e.chapter === 1);
@@ -93,7 +94,7 @@ t.test('the roster is exactly CONTENT_SPEC 4.1: ids, names, tiers, sizes, boss t
     t.eq(e.art && e.art.id, r.id, `${r.id} art.id equals the id`);
     if (r.tier === 'boss') t.eq(e.title, (DATA.rosterById[r.id] || r).title, 'the boss title is the roster title');
   });
-  t.eq(E.boss_kuzunoha.name, 'Kuzunoha', 'boss name');
+  t.eq(E.boss_kuzunoha.name, DATA.rosterById.boss_kuzunoha.name, 'boss name');
 });
 
 t.test('every enemy has bestiary lore in voice (1 to 2 sentences) and honest tags', () => {
@@ -1340,11 +1341,12 @@ else {
       function lists2() { return groups.map((x) => x.enemies).concat([['boss_kuzunoha']]).flatMap((ids) => chip(ids, 3)); }
       const has2 = (k, re) => t.ok(re.test(texts[k] || ''), `${k}: "${texts[k]}" matches ${re}`);
       const I = (src) => new RegExp(src, 'i');
+      const N = (id) => I(esc((DATA.statuses[id] || DATA.keywords[id]).name));   // a status or keyword word as the page names it
       has2('snatch_and_grab@tanuki_bandit', I('steals 20 gold')); has2('switcheroo@crow_tengu', I('swaps your rows')); has2('dive_bomb@crow_tengu', I('back hero'));
-      has2('call_leaf_imp@kodama', I('summons')); has2('rattle@kodama', I('both heroes')); has2('ember_touch@hitodama', I('burn')); has2('scorch_scatter@hitodama', I('adds'));
-      has2('mud_slap@kappa', I('vulnerable')); has2('hop_hop@karakasa', /x2/); has2('tongue_lick@karakasa', I('frail')); has2('spore_puff@mushroom_folk', I('poison'));
-      has2('nine_tails@boss_kuzunoha', /x9/); has2('tail_sweep@boss_kuzunoha', I('both heroes')); has2('ink_bleed@boss_kuzunoha', I('adds 2')); has2('mask_gaze@boss_kuzunoha', I('weak'));
-      has2('paper_fold@boss_kuzunoha', I('summons 2')); has2('shell_guard@kappa', I('block')); has2('refill_dish@kappa', I('heals')); has2('dash_off@tanuki_bandit', I('flees'));
+      has2('call_leaf_imp@kodama', I('summons')); has2('rattle@kodama', I('both heroes')); has2('ember_touch@hitodama', N('burn')); has2('scorch_scatter@hitodama', I('adds'));
+      has2('mud_slap@kappa', N('vulnerable')); has2('hop_hop@karakasa', /x2/); has2('tongue_lick@karakasa', N('frail')); has2('spore_puff@mushroom_folk', N('poison'));
+      has2('nine_tails@boss_kuzunoha', /x9/); has2('tail_sweep@boss_kuzunoha', I('both heroes')); has2('ink_bleed@boss_kuzunoha', I('adds 2')); has2('mask_gaze@boss_kuzunoha', N('weak'));
+      has2('paper_fold@boss_kuzunoha', I('summons 2')); has2('shell_guard@kappa', N('block')); has2('refill_dish@kappa', I('heals')); has2('dash_off@tanuki_bandit', I('flees'));
     });
 
     t.test('engine: start ops are in force from turn 1, and immunities refuse the statuses they name', () => {
