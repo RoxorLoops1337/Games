@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0b1e">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0b1e'/%3E%3Cpath d='M16 4C16 4 7 14 7 20a9 9 0 0 0 18 0C25 14 16 4 16 4z' fill='%233a2589' stroke='%235ff5ff' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M16 8C16 8 10.5 14.5 10.5 19' fill='none' stroke='%23fff' stroke-opacity='.55' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E">
-<title>INKWOVEN -- a rogue storybook</title>
-<meta name="description" content="Two heroes, one living book. Paint the fog away with ink, build a deck of gem-socketed cards, and rewrite the ending. An anime deckbuilding roguelike.">
+<title>ECHOWAKE: a rogue ballad</title>
+<meta name="description" content="Two heroes, one silent land. Wake the grey fog hex by hex with Echo, build a deck of gem-socketed cards, and break the Hush. An anime deckbuilding roguelike.">
 <style id="boot-css">
 /* Painted from the HTML while the scripts download; GAME.boot removes #boot after the first frame. Kept ABOVE the
    stylesheet links so base.css can override html,body. */
@@ -39,8 +39,8 @@ html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
     if (window.__booted || !b) return;
     var why = window.__errors[0] ? window.__errors[0].message + ' (' + window.__errors[0].file + ':' + window.__errors[0].line + ')' : window.__missing.length ? 'Could not load ' + window.__missing[0] : 'The game did not start.';
     b.innerHTML = '';
-    var h = document.createElement('b'); h.textContent = 'INKWOVEN';
-    var p = document.createElement('p'); p.textContent = 'The book would not open. ' + why;
+    var h = document.createElement('b'); h.textContent = 'ECHOWAKE';
+    var p = document.createElement('p'); p.textContent = 'The music would not start. ' + why;
     var r = document.createElement('button'); r.textContent = 'Try again'; r.onclick = function () { window.location.reload(); };
     b.appendChild(h); b.appendChild(p); b.appendChild(r);
   }, 6000);
@@ -54,7 +54,7 @@ html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
 <link rel="stylesheet" href="css/end.css">
 </head>
 <body>
-<div id="boot"><b>INKWOVEN</b><i></i></div>
+<div id="boot"><b>ECHOWAKE</b><i></i></div>
 <div id="wrap">
   <div id="stage">
     <canvas id="view" width="1280" height="720"></canvas>   <!-- z0  world, painted by the current screen.draw -->
@@ -66,7 +66,7 @@ html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
   </div>
   <div id="sr" role="status" aria-live="polite"></div>      <!-- visually hidden: one line per combat batch, written by UI.announce -->
 </div>
-<noscript>Inkwoven needs JavaScript.</noscript>
+<noscript>Echowake needs JavaScript.</noscript>
 
 <!-- Load order matters: each file may use every namespace above it. -->
 <script src="js/util.js"></script>

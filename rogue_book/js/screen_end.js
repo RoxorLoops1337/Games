@@ -85,13 +85,13 @@
   // what a story page is: its kicker line, seal text, scene and the portrait expression
   function pageInfo(id) {
     let m;
-    if (id === 'intro') return { kicker: 'PROLOGUE', seal: 'ONCE', scene: 'title', expr: 'determined' };
-    if ((m = /^ch(\d)_intro$/.exec(id))) return { kicker: 'CHAPTER ' + (numberWord[+m[1]] || m[1]), seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'determined' };
-    if ((m = /^ch(\d)_clear$/.exec(id))) return { kicker: 'CHAPTER ' + (numberWord[+m[1]] || m[1]) + ' COMPLETE', seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'smile' };
-    if (id === 'victory') return { kicker: 'EPILOGUE', seal: 'END', scene: 'victory', expr: 'smile' };
-    if (id === 'defeat') return { kicker: 'INTERLUDE', seal: 'BLANK', scene: 'defeat', expr: 'hurt' };
-    if ((m = /^hero_(\w+)$/.exec(id))) return { kicker: 'A HERO OF THE BOOK', seal: (heroName(m[1])[0] || '?').toUpperCase(), scene: 'camp', expr: 'determined' };
-    return { kicker: 'A PAGE', seal: '?', scene: 'event', expr: 'neutral' };
+    if (id === 'intro') return { kicker: 'INTRO', seal: 'ONCE', scene: 'title', expr: 'determined' };
+    if ((m = /^ch(\d)_intro$/.exec(id))) return { kicker: 'VERSE ' + (numberWord[+m[1]] || m[1]), seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'determined' };
+    if ((m = /^ch(\d)_clear$/.exec(id))) return { kicker: 'VERSE ' + (numberWord[+m[1]] || m[1]) + ' COMPLETE', seal: U.roman(+m[1]), scene: 'ch' + clamp(+m[1], 1, 3), expr: 'smile' };
+    if (id === 'victory') return { kicker: 'OUTRO', seal: 'END', scene: 'victory', expr: 'smile' };
+    if (id === 'defeat') return { kicker: 'INTERLUDE', seal: 'REST', scene: 'defeat', expr: 'hurt' };
+    if ((m = /^hero_(\w+)$/.exec(id))) return { kicker: 'A VOICE OF THE SONG', seal: (heroName(m[1])[0] || '?').toUpperCase(), scene: 'camp', expr: 'determined' };
+    return { kicker: 'A BALLAD', seal: '?', scene: 'event', expr: 'neutral' };
   }
 
   // a tip, seeded so the same page always shows the same line
@@ -345,8 +345,8 @@
     return el;
   }
   function noRunPage(S, what) {
-    S.root.appendChild(mk('div', { class: 'en-none' }, UI.panel({ kind: 'paper', torn: true, title: 'A blank page' },
-      mk('p', { class: 'en-none-text', text: what || 'There is no tale open for this page.' }),
+    S.root.appendChild(mk('div', { class: 'en-none' }, UI.panel({ kind: 'paper', torn: true, title: 'Only silence' },
+      mk('p', { class: 'en-none-text', text: what || 'There is no journey to show here.' }),
       mk('div', { class: 'row center' }, UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => { const g = game(); if (g) g.toTitle(); else UI.toTitle(); } })))));
   }
   // a body that scrolls says so: while there is more below the fold its bottom edge fades (class `more`), instead of cutting a line in half
@@ -439,8 +439,8 @@
       const cast = castFor(id, S.R, null);
       Object.assign(S.extra, { id, info, cast, lore });
       safe(() => { if (lore) META.markLore(id); });
-      const title = lore ? lore.title : 'A Blank Page';
-      const text = lore ? lore.text : 'Nothing is written on this page yet. Turn it, and the tale goes on.';
+      const title = lore ? lore.title : 'A Silent Ballad';
+      const text = lore ? lore.text : 'Nothing has been sung here yet. Play on, and the journey goes on.';
       const dropCap = /^[A-Za-z]/.test(text);
       const first = dropCap ? text[0] : '';
       const rest = dropCap ? text.slice(1) : text;
@@ -460,10 +460,10 @@
       const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => leaveStory(S), key: 'Esc' });
       skip.dataset.act = 'skip';
       skip.classList.add('st-skip');
-      const turn = UI.btn('Turn the page', { kind: 'primary', size: 'lg', breathe: true, onclick: () => advanceStory(S), key: 'Enter' });
+      const turn = UI.btn('Play on', { kind: 'primary', size: 'lg', breathe: true, onclick: () => advanceStory(S), key: 'Enter' });
       turn.dataset.act = 'turn';
       turn.classList.add('st-turn');
-      const hint = mk('span', { class: 'st-hint', text: 'Tap the page to read on' });
+      const hint = mk('span', { class: 'st-hint', text: 'Tap to listen on' });
       const foot = mk('footer', { class: 'st-foot' }, skip, hint, turn);
       const page = UI.panel({ kind: 'paper', gold: true, class: 'st-page' }, head, bodyEl, foot);
       page.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('button')) return; advanceStory(S); });
@@ -511,7 +511,7 @@
     const gold = sm && typeof sm.gold === 'number' ? sm.gold : (R ? R.gold | 0 : 0);
     const bk = st.bossKills | 0;
     const rows = [
-      { k: 'chapters', label: 'Chapters cleared', n: bk, pts: E.chapter * bk, icon: ['motif', 'book'] },
+      { k: 'chapters', label: 'Verses cleared', n: bk, pts: E.chapter * bk, icon: ['motif', 'bell'] },
       { k: 'bosses', label: 'Bosses felled', n: bk, pts: E.boss * bk, icon: ['relic', 'crown'] },
       { k: 'elites', label: 'Elites defeated', n: st.elites | 0, pts: E.elite * (st.elites | 0), icon: ['relic', 'skull'] },
       { k: 'gold', label: 'Gold in the purse', n: gold, pts: Math.floor(gold / E.goldDiv), icon: ['stat', 'gold'] },
@@ -553,10 +553,10 @@
   function summaryText(sm, R, win) {
     const ids = ((sm.heroes && sm.heroes.map((h) => h.id)) || DEFAULT_PARTY).filter((h) => DATA.heroes[h]);
     const names = ids.map(heroName).join(' and ');
-    const mode = sm.daily ? 'Daily Tale ' + sm.seed : (sm.trial ? 'Ink Trial ' + sm.trial : 'Ink Trial 0');
-    const line1 = 'INKWOVEN: ' + (win ? 'the ending, rewritten' : 'the tale ended on page ' + (sm.chapter || 1));
+    const mode = sm.daily ? 'Daily Jam ' + sm.seed : (sm.trial ? 'Tempo Trial ' + sm.trial : 'Tempo Trial 0');
+    const line1 = 'ECHOWAKE: ' + (win ? 'the Hush let go' : 'a rest in Verse ' + (sm.chapter || 1));
     const line2 = names + ' | Score ' + fmt(sm.score || 0) + ' | ' + mode;
-    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'treasure') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'chapter') + ' cleared';
+    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'treasure') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'verse') + ' cleared';
     return [line1, line2, line3].join('\n');
   }
 
@@ -564,13 +564,13 @@
   function unlockEntries(rec, sm) {
     const out = [];
     if (!rec) return out;
-    (rec.heroesUnlocked || []).forEach((id) => out.push({ kind: 'hero', id, seal: 'NEW', title: heroName(id) + ' joins the book', text: heroTitle(id) + '. Choose ' + heroName(id) + ' when you begin a new tale.' }));
+    (rec.heroesUnlocked || []).forEach((id) => out.push({ kind: 'hero', id, seal: 'NEW', title: heroName(id) + ' joins the band', text: heroTitle(id) + '. Choose ' + heroName(id) + ' when you begin a new journey.' }));
     (rec.newAchievements || []).forEach((id) => {
       const a = DATA.achievements[id];
       if (!a) return;
       out.push({ kind: 'ach', id, seal: 'WON', title: a.name, text: a.text, reward: a.reward && a.reward.inkstones });
     });
-    if (rec.newTrial) out.push({ kind: 'trial', id: rec.newTrial, seal: 'TRIAL', title: 'Ink Trial ' + rec.newTrial + ' unlocked', text: (trialName(rec.newTrial) ? trialName(rec.newTrial) + '. ' : '') + 'A harder telling of the same tale is waiting on the hero select.' });
+    if (rec.newTrial) out.push({ kind: 'trial', id: rec.newTrial, seal: 'TRIAL', title: 'Tempo Trial ' + rec.newTrial + ' unlocked', text: (trialName(rec.newTrial) ? trialName(rec.newTrial) + '. ' : '') + 'A faster tempo of the same journey is waiting on the hero select.' });
     return out;
   }
   function unlockRow(S, e, i) {
@@ -702,18 +702,18 @@
       snd('victory');
 
       // ---- the banner
-      const title = lore ? lore.title : 'Chapter ' + U.roman(ch) + ' Complete';
+      const title = lore ? lore.title : 'Verse ' + U.roman(ch) + ' Complete';
       const unlockedHero = heroUnlockedBy(ch);
       const banner = mk('header', { class: 'cc-banner' },
-        mk('p', { class: 'cc-kicker', text: 'CHAPTER ' + (numberWord[ch] || ch) + ' COMPLETE' }),
+        mk('p', { class: 'cc-kicker', text: 'VERSE ' + (numberWord[ch] || ch) + ' COMPLETE' }),
         mk('h1', { class: 'cc-title', text: title }),
         mk('i', { class: 'cc-flourish', 'aria-hidden': 'true' }, mk('b'), mk('b'), mk('b')),
-        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + bossDef.title : '') + ', is undone' }) : null);
+        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + bossDef.title : '') + ', falls silent' }) : null);
       root.appendChild(banner);
       if (unlockedHero) {
-        const card = mk('div', { class: 'cc-newhero', role: 'status', 'aria-label': heroName(unlockedHero) + ' joins the book' },
+        const card = mk('div', { class: 'cc-newhero', role: 'status', 'aria-label': heroName(unlockedHero) + ' joins the band' },
           mk('span', { class: 'cc-nh-med' }, UI.medallion(unlockedHero, 52)),
-          mk('span', { class: 'cc-nh-text' }, mk('b', { text: heroName(unlockedHero) + ' joins the book' }), mk('i', { text: heroTitle(unlockedHero) + '. Waiting on the hero select.' })),
+          mk('span', { class: 'cc-nh-text' }, mk('b', { text: heroName(unlockedHero) + ' joins the band' }), mk('i', { text: heroTitle(unlockedHero) + '. Waiting on the hero select.' })),
           UI.hanko('NEW', { size: 'sm' }));
         root.appendChild(card);
         at(S, 2600, () => { card.classList.add('show'); snd('unlock'); });
@@ -721,8 +721,8 @@
       }
 
       // ---- left: the lore, in a scroll
-      const textEl = mk('p', { class: 'cc-lore', text: lore ? lore.text : 'The page turns. Whatever held this chapter together has let go.' });
-      const leftCard = scroll('cc-scroll', 'The Page Turns', textEl);
+      const textEl = mk('p', { class: 'cc-lore', text: lore ? lore.text : 'The music swells. Whatever held this verse silent has let go.' });
+      const leftCard = scroll('cc-scroll', 'The Land Sings', textEl);
 
       // ---- middle: the run so far
       const st = (R && R.stats) || {};
@@ -735,7 +735,7 @@
         statTile(S, iconOf('stat', 'ink', 30), 'Hexes', st.hexesPainted | 0, { delay: 1400 }),
       ];
       tiles.forEach((el, i) => UI.vars(el, { '--i': i }));
-      const midCard = lacquer('cc-stats', 'The Tale So Far', mk('div', { class: 'cc-tiles' }, ...tiles));
+      const midCard = lacquer('cc-stats', 'The Journey So Far', mk('div', { class: 'cc-tiles' }, ...tiles));
 
       // ---- right: what the page gave back
       const plan = healPlan(R, params);
@@ -766,7 +766,7 @@
       if (relics.length > 8) relicRow.appendChild(mk('span', { class: 'cc-more', text: '+' + (relics.length - 8) }));
       if (!relics.length) relicRow.appendChild(mk('span', { class: 'cc-none', text: 'None yet' }));
       const inkStat = R ? UI.stat('ink', R.ink | 0, { max: R.inkMax | 0, size: 'sm' }) : null;
-      const rightCard = lacquer('cc-boons', 'What the Page Gives', mk('div', { class: 'cc-heroes' }, ...rows),
+      const rightCard = lacquer('cc-boons', 'What the Land Gives', mk('div', { class: 'cc-heroes' }, ...rows),
         mk('div', { class: 'cc-extra' }, inkStat, mk('span', { class: 'cc-rel-lab', text: 'Treasures ' + relics.length }), relicRow));
 
       root.appendChild(mk('div', { class: 'cc-cols' }, leftCard, midCard, rightCard));
@@ -779,7 +779,7 @@
       root.appendChild(foot);
       if (hasLiveRun(R)) root.appendChild(UI.menuButton());
       petals(S, 18);
-      UI.announce('Chapter ' + ch + ' complete. ' + title);
+      UI.announce('Verse ' + ch + ' complete. ' + title);
       if (instant()) flush(S);
     },
     update(dt) { if (CUR && CUR.kind === 'chapterClear') step(CUR, dt); },
@@ -841,16 +841,16 @@
       UI.vars(c, { '--i': i, '--n': shown.length });
       fan.appendChild(c);
     });
-    const deckBtn = UI.btn((deck.length || sm.deckSize | 0) + ' cards', { kind: 'secondary', size: 'sm', icon: { kind: 'type', id: 'skill', size: 22 }, onclick: () => { if (deck.length) UI.overlay.open('deck', { mode: 'view', cards: deck.slice() }); else UI.toast('The deck was not kept with this page', 'warn'); } });
+    const deckBtn = UI.btn((deck.length || sm.deckSize | 0) + ' cards', { kind: 'secondary', size: 'sm', icon: { kind: 'type', id: 'skill', size: 22 }, onclick: () => { if (deck.length) UI.overlay.open('deck', { mode: 'view', cards: deck.slice() }); else UI.toast('The deck was not kept with this journey', 'warn'); } });
     deckBtn.classList.add('go-deckbtn');
     const rel = mk('div', { class: 'go-relics', role: 'list', 'aria-label': 'Treasures' });
     relics.slice(0, 7).forEach((id) => { const r = UI.relic(id, { size: 'sm' }); r.setAttribute('role', 'listitem'); rel.appendChild(r); });
     if (relics.length > 7) rel.appendChild(mk('span', { class: 'go-more', text: '+' + (relics.length - 7) }));
     if (!relics.length) rel.appendChild(mk('span', { class: 'go-none', text: 'No treasures' }));
-    const relBtn = UI.btn('Treasures ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No treasures were found on this tale', 'info'); } });
+    const relBtn = UI.btn('Treasures ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No treasures were found on this journey', 'info'); } });
     relBtn.classList.add('go-relbtn');
     const panel = UI.panel({ kind: 'paper', gold: true, class: 'go-recap en-card pad-top' },
-      mk('h2', { class: 'en-h' }, mk('span', { text: 'The Tale Kept' })),
+      mk('h2', { class: 'en-h' }, mk('span', { text: 'What You Carried' })),
       mk('div', { class: 'go-recap-row' }, deck.length ? fan : mk('span', { class: 'go-none', text: 'No deck to show' }), deckBtn),
       mk('div', { class: 'go-recap-row' }, rel, relBtn));
     return panel;
@@ -877,9 +877,9 @@
 
       // ---- header
       root.appendChild(mk('header', { class: 'go-head' },
-        mk('p', { class: 'go-kicker', text: 'THE TALE ENDS' }),
-        mk('h1', { class: 'go-title', text: lore ? lore.title : 'The Page Goes White' }),
-        mk('p', { class: 'go-fell', text: 'Fell on page ' + U.roman(ch) + (chTitle ? ': ' + chTitle : '') + (sm.trial ? '  |  Ink Trial ' + sm.trial : '') + (sm.daily ? '  |  Daily Tale' : '') })));
+        mk('p', { class: 'go-kicker', text: 'THE SONG FADES' }),
+        mk('h1', { class: 'go-title', text: lore ? lore.title : 'The Hush Returns' }),
+        mk('p', { class: 'go-fell', text: 'Fell in Verse ' + U.roman(ch) + (chTitle ? ': ' + chTitle : '') + (sm.trial ? '  |  Tempo Trial ' + sm.trial : '') + (sm.daily ? '  |  Daily Jam' : '') })));
 
       // ---- left: the fallen, and what the tale kept
       // the party fell: RUN keeps the last HP of a lost fight, but the page shows them as they ended, at 0
@@ -887,7 +887,7 @@
       root.appendChild(mk('div', { class: 'go-left' }, fallen, tapRecap(S, sm, R)));
 
       // ---- middle: the lore, a tip, the buttons
-      const loreCard = scroll('go-lore', null, mk('p', { class: 'go-lore-text', text: lore ? lore.text : 'The ink thinned, and the page went white. Turn it, and try again.' }));
+      const loreCard = scroll('go-lore', null, mk('p', { class: 'go-lore-text', text: lore ? lore.text : 'The echoes thinned, and the land went still. Breathe, and try again.' }));
       const tip = tipFor(R, 'over');
       const again = UI.btn('Try Again', { kind: 'primary', size: 'lg', breathe: true, key: 'Enter', onclick: () => tryAgain(S, sm) });
       again.classList.add('go-again');
@@ -904,24 +904,24 @@
       const stoneNum = mk('b', { class: 'go-stone-n' });
       if (rec) {
         const earned = rec.inkstones | 0;
-        stones.appendChild(mk('div', { class: 'go-stone-main' }, iconOf('stat', 'inkstone', 40), mk('span', { class: 'go-stone-lab', text: 'Inkstones earned' }), stoneNum));
+        stones.appendChild(mk('div', { class: 'go-stone-main' }, iconOf('stat', 'inkstone', 40), mk('span', { class: 'go-stone-lab', text: 'Chimes earned' }), stoneNum));
         count(S, stoneNum, earned, { ms: 900, delay: 1000 + led.data.rows.length * 260 + 600, fmt: (n) => '+' + fmt(n) });
         if (instant()) stoneNum.textContent = '+' + fmt(earned);
         const sub = [];
         if (rec.bonus) sub.push('Achievement bonus +' + fmt(rec.bonus));
-        if (typeof rec.total === 'number') sub.push('Library total ' + fmt(rec.total));
+        if (typeof rec.total === 'number') sub.push('Chimes held ' + fmt(rec.total));
         if (sub.length) stones.appendChild(mk('p', { class: 'go-stone-sub', text: sub.join('  |  ') }));
         const ents = unlockEntries(rec, sm);
         const list = mk('div', { class: 'en-unlocks' });
         ents.forEach((e, i) => list.appendChild(unlockRow(S, e, i)));
-        if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'Nothing new this time. The next page might be the one.' }));
+        if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'Nothing new this time. The next journey might be the one.' }));
         stones.appendChild(list);
       } else {
-        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Inkstones were paid.' }));
+        stones.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Chimes were paid.' }));
       }
-      const stonesCard = lacquer('go-stonescard', 'The Book Remembers', stones);
+      const stonesCard = lacquer('go-stonescard', 'The Land Remembers', stones);
       root.appendChild(mk('div', { class: 'go-right' }, scoreCard, stonesCard));
-      UI.announce('The tale ends. Score ' + fmt(sm.score || 0));
+      UI.announce('The music rests. Score ' + fmt(sm.score || 0));
       if (instant()) flush(S);
     },
     update(dt) { if (CUR && CUR.kind === 'gameOver') step(CUR, dt); },
@@ -961,8 +961,8 @@
   // one closing line per hero for the curtain call (kept short: they sit under the heroes at 14 px)
   const CURTAIN = {
     hanae: 'Hanae sheathed her blade and glanced about to see who had noticed how well that went. Everyone had. She studied the sky.',
-    kuro: 'Kuro pushed up his glasses, smudged ink across his nose, and began writing the margins of the next story. He called it research.',
-    suzu: 'Suzu tied a new ribbon to the shrine bell and listened. For the first time in a very long while, nothing was fraying.',
+    kuro: 'Kuro pushed up his glasses, tucked his flute under one arm, and began humming the harmony of the next tune. He called it research.',
+    suzu: 'Suzu tied a new ribbon to the shrine bell and listened. For the first time in a very long while, nothing was out of tune.',
     raiga: 'Raiga laughed so hard the thunder came to see what was funny, then stayed for tea. Nobody asked it to leave.',
   };
 
@@ -1010,10 +1010,10 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.font = '800 31px Georgia, "Hiragino Mincho ProN", serif';
     ctx.fillStyle = '#140f2e';
-    spaced(ctx, 'INKWOVEN', cx, py + 52, 5);
+    spaced(ctx, 'ECHOWAKE', cx, py + 52, 5);
     ctx.font = '800 11px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = '#a91d2c';
-    spaced(ctx, d.win === false ? 'THE TALE ENDED ON PAGE ' + (d.chapter || 1) : 'THE ENDING, REWRITTEN', cx, py + 72, 3);
+    spaced(ctx, d.win === false ? 'THE SONG FADED IN VERSE ' + (d.chapter || 1) : 'THE HUSH, BROKEN', cx, py + 72, 3);
     const rule = ctx.createLinearGradient(px + 30, 0, px + pw - 30, 0);
     rule.addColorStop(0, 'rgba(185,138,47,0)'); rule.addColorStop(0.5, '#b98a2f'); rule.addColorStop(1, 'rgba(185,138,47,0)');
     ctx.fillStyle = rule; ctx.fillRect(px + 30, py + 82, pw - 60, 3);
@@ -1029,7 +1029,7 @@
     ctx.strokeText(sc, cx, py + 206); ctx.fillStyle = '#ffd36a'; ctx.fillText(sc, cx, py + 206);
     // the small facts, two by two
     const facts = [
-      [d.daily ? 'DAILY TALE' : 'INK TRIAL', d.daily ? String(d.seed >>> 0) : String(d.trial | 0)],
+      [d.daily ? 'DAILY JAM' : 'TEMPO TRIAL', d.daily ? String(d.seed >>> 0) : String(d.trial | 0)],
       ['SEED', String(d.seed >>> 0)],
       ['DECK', U.plural(d.deckSize | 0, 'card')],
       ['TREASURES', String((d.relics || []).length)],
@@ -1097,12 +1097,12 @@
   function buildEpilogue(S) {
     const x = S.extra, root = S.root;
     const lore = loreOf('victory');
-    const title = lore ? lore.title : 'The Ending, Rewritten';
-    const text = lore ? lore.text : 'The last line is written, and left open on purpose. The book turns itself to page one.';
+    const title = lore ? lore.title : 'The Hush, Broken';
+    const text = lore ? lore.text : 'The last note rings out, and is left to echo on purpose. The land begins to sing on its own.';
     const dropCap = /^[A-Za-z]/.test(text);
     const words = String(title).split(' ');
     const head = mk('header', { class: 'st-head' },
-      mk('p', { class: 'st-kicker', text: 'EPILOGUE' }),
+      mk('p', { class: 'st-kicker', text: 'OUTRO' }),
       mk('h1', { class: 'st-title' }, ...words.map((w, i) => [i ? ' ' : null, UI.vars(mk('span', { class: 'st-w', text: w }), { '--i': i })])),
       mk('i', { class: 'st-flourish', 'aria-hidden': 'true' }, mk('b', { class: 'fl-l' }), mk('b', { class: 'fl-m' }), mk('b', { class: 'fl-r' })));
     const typed = mk('span', { class: 'st-typed' });
@@ -1111,7 +1111,7 @@
     const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => gotoPhase(S, 'show'), key: 'Esc' });
     const turn = UI.btn('Continue', { kind: 'primary', size: 'lg', breathe: true, key: 'Enter', onclick: () => tapVictory(S) });
     turn.classList.add('st-turn');
-    const foot = mk('footer', { class: 'st-foot' }, skip, mk('span', { class: 'st-hint', text: 'Tap the page to read on' }), turn);
+    const foot = mk('footer', { class: 'st-foot' }, skip, mk('span', { class: 'st-hint', text: 'Tap to listen on' }), turn);
     const page = UI.panel({ kind: 'paper', gold: true, class: 'st-page vc-page' }, head, bodyEl, foot);
     page.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('button')) return; tapVictory(S); });
     const seal = mk('div', { class: 'st-seal vc-seal', 'aria-hidden': 'true' }, UI.hanko('END', { size: 'lg' }));
@@ -1126,7 +1126,7 @@
   function buildCast(S) {
     const x = S.extra, root = S.root;
     root.classList.remove('st-done');
-    const head = mk('header', { class: 'vc-cast-head' }, mk('p', { class: 'vc-cast-kicker', text: 'CURTAIN CALL' }), mk('h1', { class: 'vc-cast-title', text: 'Everyone Who Was Ever Written In' }),
+    const head = mk('header', { class: 'vc-cast-head' }, mk('p', { class: 'vc-cast-kicker', text: 'CURTAIN CALL' }), mk('h1', { class: 'vc-cast-title', text: 'Every Voice That Ever Sang' }),
       mk('i', { class: 'st-flourish', 'aria-hidden': 'true' }, mk('b', { class: 'fl-l' }), mk('b', { class: 'fl-m' }), mk('b', { class: 'fl-r' })));
     const caps = mk('div', { class: 'vc-caps' });
     x.order.forEach((id, i) => {
@@ -1150,7 +1150,7 @@
   function buildShow(S) {
     const x = S.extra, root = S.root, sm = x.sm, R = S.R, rec = x.rec;
     root.classList.remove('st-done', 'vc-cast-done');
-    const head = mk('header', { class: 'vc-head' }, UI.hanko('END', { size: 'lg' }), mk('div', {}, mk('p', { class: 'vc-kicker', text: 'THE LAST PAGE' }), mk('h1', { class: 'vc-title', text: 'The Ending, Rewritten' })));
+    const head = mk('header', { class: 'vc-head' }, UI.hanko('END', { size: 'lg' }), mk('div', {}, mk('p', { class: 'vc-kicker', text: 'THE LAST NOTE' }), mk('h1', { class: 'vc-title', text: 'The Final Chorus' })));
     // the share card
     const cw = 600, ch = 338;
     const canvas = mk('canvas', { class: 'vc-card', 'aria-label': 'Summary card: ' + summaryText(sm, R, true).replace(/\n/g, '. ') });
@@ -1175,17 +1175,17 @@
       if (instant()) n.textContent = '+' + fmt(rec.inkstones | 0);
       const sub = [];
       if (rec.bonus) sub.push('bonus +' + fmt(rec.bonus));
-      if (typeof rec.total === 'number') sub.push('library ' + fmt(rec.total));
+      if (typeof rec.total === 'number') sub.push('chimes ' + fmt(rec.total));
       foot.appendChild(mk('div', { class: 'vc-stone' }, iconOf('stat', 'inkstone', 44),
-        mk('div', { class: 'vc-stone-t' }, mk('span', { class: 'go-stone-lab', text: 'Inkstones earned' }), sub.length ? mk('span', { class: 'go-stone-sub', text: sub.join('  |  ') }) : null), n));
+        mk('div', { class: 'vc-stone-t' }, mk('span', { class: 'go-stone-lab', text: 'Chimes earned' }), sub.length ? mk('span', { class: 'go-stone-sub', text: sub.join('  |  ') }) : null), n));
       const ents = unlockEntries(rec, sm);
       ents.forEach((e, i) => list.appendChild(unlockRow(S, e, i)));
-      if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'No new unlocks this time. Spend your Inkstones in the Library.' }));
+      if (!ents.length) list.appendChild(mk('p', { class: 'en-unlock-none', text: 'No new unlocks this time. Spend your Chimes in the Hall of Echoes.' }));
     } else {
       foot.appendChild(mk('div', { class: 'vc-stone' }));
-      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Inkstones were paid.' }));
+      list.appendChild(mk('p', { class: 'en-unlock-none', text: 'This run was not recorded, so no Chimes were paid.' }));
     }
-    const stonesCard = lacquer('vc-newcard', 'New in the Book', list);
+    const stonesCard = lacquer('vc-newcard', 'Newly Unlocked', list);
 
     // score and stats
     const led = ledger(S, sm, R, { delay: 700, gap: 230, seal: 'WIN' });
@@ -1258,7 +1258,7 @@
   }
   function saveCard(S, canvas) {
     try {
-      const a = mk('a', { href: canvas.toDataURL('image/png'), download: 'inkwoven-' + ((S.extra.sm.seed >>> 0) || 'tale') + '.png', style: { display: 'none' } });
+      const a = mk('a', { href: canvas.toDataURL('image/png'), download: 'echowake-' + ((S.extra.sm.seed >>> 0) || 'journey') + '.png', style: { display: 'none' } });
       document.body.appendChild(a);
       a.click();
       a.remove();

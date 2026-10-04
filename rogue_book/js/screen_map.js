@@ -146,7 +146,7 @@
   const heroName = (id) => (DATA.heroes[id] && DATA.heroes[id].name) || String(id);
   const keyOf = (q, r) => MAP.key(q, r);
   const tileAt = (M, q, r) => (M && M.tiles ? M.tiles[keyOf(q, r)] || null : null);
-  const chapterTitle = (n) => (DATA.lore && DATA.lore['ch' + n + '_intro'] && DATA.lore['ch' + n + '_intro'].title) || ('Chapter ' + n);
+  const chapterTitle = (n) => (DATA.lore && DATA.lore['ch' + n + '_intro'] && DATA.lore['ch' + n + '_intro'].title) || ('Verse ' + n);
   const relicLine = (id) => safe(() => DATA.relicText(id), '') || (DATA.relics[id] && DATA.relics[id].text) || '';
 
   function stageRect(el) {
@@ -928,7 +928,7 @@
   function makeInk(s) {
     const row = mk('span', { class: 'mp-drops', 'aria-hidden': 'true' });
     const num = mk('b', { class: 'mp-ink-n' });
-    const root = mk('div', { class: 'mp-ink', role: 'img', tabindex: '0' }, UI.icon('stat', 'ink', 34, {}, 'mp-ink-ico'), mk('div', { class: 'mp-ink-body' }, mk('span', { class: 'mp-ink-l', text: 'Ink' }), row), num);
+    const root = mk('div', { class: 'mp-ink', role: 'img', tabindex: '0' }, UI.icon('stat', 'ink', 34, {}, 'mp-ink-ico'), mk('div', { class: 'mp-ink-body' }, mk('span', { class: 'mp-ink-l', text: 'Echo' }), row), num);
     tut(root, 'ink');
     const m = { root, row, num, drops: [], shown: -1, max: -1, disp: 0 };
     m.build = (max) => {
@@ -953,10 +953,10 @@
       const proxy = { n: from };
       if (old !== n && !reduced()) { UI.tween(proxy, { n }, 520, 'outCubic', () => { num.textContent = Math.round(proxy.n) + '/' + max; }); } else num.textContent = n + '/' + max;
       if (headless()) num.textContent = n + '/' + max;
-      root.setAttribute('aria-label', 'Ink ' + n + ' of ' + max);
+      root.setAttribute('aria-label', 'Echo ' + n + ' of ' + max);
       if (old !== n) UI.pulse(root);
     };
-    UI.tip.attach(root, () => tipNode('Ink', 'Resource', 'Spend ' + DATA.ECONOMY.paintCost + ' Ink to paint a hex next to the painted page. Wells, kills, camps and the Book itself refill it.'), { side: 'bottom' });
+    UI.tip.attach(root, () => tipNode('Echo', 'Resource', 'Spend ' + DATA.ECONOMY.paintCost + ' Echo to wake a hex next to the awake land. Temple bells, kills, camps and the land itself refill it.'), { side: 'bottom' });
     return m;
   }
 
@@ -977,10 +977,10 @@
       const chip = mk('button', { type: 'button', class: 'mp-chip' + (s.brush && s.brush.id === id ? ' on' : ''), 'aria-pressed': s.brush && s.brush.id === id ? 'true' : 'false', 'aria-label': d.name + (n > 1 ? ', ' + n + ' left' : ', one use') + '. ' + d.text, dataset: { id } },
         UI.icon('brush', id, 40, {}, 'mp-chip-ico'), mk('span', { class: 'mp-chip-n', text: d.name }), n > 1 ? mk('i', { class: 'mp-chip-c', text: 'x' + n }) : null, i < 9 ? mk('kbd', { class: 'mp-chip-k', 'aria-hidden': 'true', text: String(i + 1) }) : null);
       chip.addEventListener('click', () => toggleBrush(s, id));
-      UI.tip.attach(chip, () => tipNode(d.name, 'Brush', d.text, n > 1 ? 'You hold ' + n + '.' : 'One use, then it is gone.'), { side: 'top' });
+      UI.tip.attach(chip, () => tipNode(d.name, 'Song', d.text, n > 1 ? 'You hold ' + n + '.' : 'Sung once, then it fades.'), { side: 'top' });
       H.chips.appendChild(chip); H.chipEls[id] = chip;
     });
-    if (!bc.order.length) H.chips.appendChild(mk('span', { class: 'mp-tray-empty', text: 'No brushes. Brush racks and champions hold them.' }));
+    if (!bc.order.length) H.chips.appendChild(mk('span', { class: 'mp-tray-empty', text: 'No Songs. Songbirds and champions teach them.' }));
     H.tray.classList.toggle('empty', !bc.order.length);
     s.last.brushes = R.brushes.join(',');
     s.hudDirty = true;
@@ -1027,11 +1027,11 @@
     H.inkMeter = makeInk(s);
     H.inkMeter.onbuild = () => { s.hudDirty = true; };
     // banner: chapter, title written with a brush, and how much of the page is painted
-    H.chapterN = mk('span', { class: 'mp-ch', text: 'Chapter ' + U.roman(R.chapter || 1) });
+    H.chapterN = mk('span', { class: 'mp-ch', text: 'Verse ' + U.roman(R.chapter || 1) });
     H.title = mk('h1', { class: 'mp-title', text: chapterTitle(R.chapter || 1) });
     H.progFill = mk('i', { class: 'mp-prog-fill' });
     H.progText = mk('span', { class: 'mp-prog-t' });
-    H.prog = mk('div', { class: 'mp-prog', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Page painted' }, H.progFill, H.progText);
+    H.prog = mk('div', { class: 'mp-prog', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Land awake' }, H.progFill, H.progText);
     H.banner = mk('div', { class: 'mp-banner' }, H.chapterN, H.title, H.prog);
     // gold
     H.gold = UI.stat('gold', R.gold, { size: 'md', class: 'mp-gold' });
@@ -1040,8 +1040,8 @@
     H.deckBtn = tool('Deck', 'deck', () => UI.overlay.open('deck', { mode: 'view' }), 'Look through every card of your deck.', 'Shift D');
     H.deckBtn.appendChild(H.deckN);
     tut(H.deckBtn, 'deck');
-    H.legendBtn = tool('Legend', 'legend', () => UI.overlay.open('legend', {}), 'What every hex, brush and control means.', 'L');
-    H.fitBtn = tool('Fit', 'fit', () => toggleFit(s), 'See the whole page, or return to following the party.', 'F');
+    H.legendBtn = tool('Legend', 'legend', () => UI.overlay.open('legend', {}), 'What every hex, Song and control means.', 'L');
+    H.fitBtn = tool('Fit', 'fit', () => toggleFit(s), 'See the whole land, or return to following the party.', 'F');
     H.zoomIn = tool('Zoom in', 'zin', () => zoomStep(s, 1.3), 'Zoom in. The wheel and two fingers work too.', '+');
     H.zoomOut = tool('Zoom out', 'zout', () => zoomStep(s, 1 / 1.3), 'Zoom out.', '-');
     H.tools = mk('div', { class: 'mp-tools' }, H.deckBtn, H.legendBtn, H.fitBtn, H.zoomIn, H.zoomOut);
@@ -1049,7 +1049,7 @@
     H.relics = mk('div', { class: 'mp-relics' });
     tut(H.relics, 'relics');
     H.chips = mk('div', { class: 'mp-chips' });
-    H.tray = mk('div', { class: 'mp-tray' }, mk('span', { class: 'mp-tray-l', text: 'Brushes' }), H.chips);
+    H.tray = mk('div', { class: 'mp-tray' }, mk('span', { class: 'mp-tray-l', text: 'Songs' }), H.chips);
     tut(H.tray, 'brushes');
     // what is under the pointer
     H.infoIco = mk('span', { class: 'mp-info-ico', 'aria-hidden': 'true' });
@@ -1061,9 +1061,9 @@
     H.modeName = mk('b', { class: 'mp-mode-name' });
     H.modeText = mk('span', { class: 'mp-mode-text' });
     H.modeIco = mk('span', { class: 'mp-mode-ico', 'aria-hidden': 'true' });
-    H.apply = UI.btn('Paint', { kind: 'primary', size: 'sm', onclick: () => applyBrushNow(s), sfx: 'ui_click' });
+    H.apply = UI.btn('Sing', { kind: 'primary', size: 'sm', onclick: () => applyBrushNow(s), sfx: 'ui_click' });
     H.cancel = UI.btn('Cancel', { kind: 'ghost', size: 'sm', onclick: () => exitBrush(s, true), sfx: 'ui_back' });
-    H.mode = mk('div', { class: 'mp-mode', hidden: true, role: 'group', 'aria-label': 'Brush mode' }, H.modeIco, mk('p', { class: 'mp-mode-txt' }, H.modeName, ' ', H.modeText), H.apply, H.cancel);
+    H.mode = mk('div', { class: 'mp-mode', hidden: true, role: 'group', 'aria-label': 'Song mode' }, H.modeIco, mk('p', { class: 'mp-mode-txt' }, H.modeName, ' ', H.modeText), H.apply, H.cancel);
     // the box the tutorial points at, and the layer the flying drops live in
     H.hexAnchor = tut(mk('div', { class: 'mp-hexanchor', 'aria-hidden': 'true' }), 'hex');
     H.fly = mk('div', { class: 'mp-fly-layer', 'aria-hidden': 'true' });
@@ -1085,9 +1085,9 @@
     s.last.prog = p.painted;
     const pct = clamp(p.pct, 0, 100);
     H.progFill.style.width = pct + '%';
-    H.progText.textContent = pct + '% painted';
+    H.progText.textContent = pct + '% awake';
     H.prog.setAttribute('aria-valuenow', String(pct));
-    H.prog.setAttribute('aria-valuetext', p.painted + ' of ' + p.total + ' hexes painted');
+    H.prog.setAttribute('aria-valuetext', p.painted + ' of ' + p.total + ' hexes awake');
     if (animate) UI.pulse(H.prog);
   }
 
@@ -1127,8 +1127,8 @@
     const c = T.content || {};
     switch (T.type) {
       case 'enemy': case 'elite': return foesOf(T);
-      case 'brush': return c.id && c.id !== 'random' && DATA.brushes[c.id] ? 'Holds the ' + DATA.brushes[c.id].name + '.' : '';
-      case 'well': return 'Refills ' + (c.ink || DATA.ECONOMY.wellInk) + ' Ink.';
+      case 'brush': return c.id && c.id !== 'random' && DATA.brushes[c.id] ? 'Teaches the ' + DATA.brushes[c.id].name + '.' : '';
+      case 'well': return 'Rings back ' + (c.ink || DATA.ECONOMY.wellInk) + ' Echo.';
       case 'chest': return c.relic ? 'Holds a treasure and gold.' : 'Holds gems and gold.';
       default: return '';
     }
@@ -1152,20 +1152,20 @@
       else if (T.done && T.type !== 'empty' && T.type !== 'start') { o.action = 'Done. Walk over it freely.'; o.tone = 'info'; }
       else {
         const path = MAP.walkPath(M, q, r);
-        if (!path) { o.action = 'No painted path leads there.'; o.tone = 'bad'; }
+        if (!path) { o.action = 'No awake path leads there.'; o.tone = 'bad'; }
         else if (path.length && (path[path.length - 1][0] !== q || path[path.length - 1][1] !== r)) { const n = U.plural(path.length, 'step'); o.action = say('Walk toward it: ' + n + ', stopping at the first thing in the way.', 'Walk: ' + n + ', stops at the first thing in the way.', 'Walk ' + n + ', stops early.'); o.tone = 'go'; }
         else o.action = (T.type === 'empty' || T.type === 'start' || T.done ? 'Walk there: ' : 'Walk there and begin: ') + U.plural(path.length, 'step') + '.', o.tone = 'go';
       }
       return o;
     }
-    if (T.known) { const ti = tileInfo(T.type); o.tile = T.type; o.name = ti.name + (copyTier() === 2 && UI.opt && UI.opt.textScale > 1.01 ? ', seen' : ', glimpsed'); o.text = ti.text; }   // a phone at the Larger size has no room for the longer word
-    else { o.name = 'Unwritten page'; o.text = 'Blank paper. Paint it to see what the tale holds.'; }
+    if (T.known) { const ti = tileInfo(T.type); o.tile = T.type; o.name = ti.name + (copyTier() === 2 && UI.opt && UI.opt.textScale > 1.01 ? ', heard' : ', heard'); o.text = ti.text; }   // a phone at the Larger size has no room for the longer word
+    else { o.name = 'Silent ground'; o.text = 'Grey and still. Wake it to hear what it holds.'; }
     if (MAP.canPaint(M, q, r).ok) {
-      o.action = (R.ink >= cost ? 'Tap to paint: ' : 'Not enough Ink to paint: ') + cost + ' Ink.';
+      o.action = (R.ink >= cost ? 'Tap to wake: ' : 'Not enough Echo to wake: ') + cost + ' Echo.';
       o.tone = R.ink >= cost ? 'paint' : 'bad';
     } else {
       const pre = RUN.paintPreview(R, q, r);
-      if (pre.ok) { o.action = (pre.affordable ? say('Tap twice to paint a chain of ', 'Tap twice: a chain of ') : say('Too far for your Ink: a chain of ', 'Too far: a chain of ')) + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
+      if (pre.ok) { o.action = (pre.affordable ? say('Tap twice to wake a chain of ', 'Tap twice: a chain of ') : say('Too far for your Echo: a chain of ', 'Too far: a chain of ')) + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
       else { o.action = 'No way to reach it.'; o.tone = 'bad'; }
     }
     return o;
@@ -1187,11 +1187,11 @@
   // the line that stands in for the info chip while nothing is pointed at
   function restingInfo(s) {
     const p = MAP.progress(s.M), R = s.R, c = DATA.ECONOMY.paintCost, can = R.ink >= c;
-    const txt = can ? say('Paint fog beside the page for ' + c + ' Ink, or tap painted ground to walk.', 'Tap fog to paint it (' + c + ' Ink), tap painted ground to walk.')
-      : say('No Ink left to paint. Walk to a well, fight, or use a brush.', 'No Ink to paint. Walk to a well, or use a brush.');
+    const txt = can ? say('Wake fog beside the land for ' + c + ' Echo, or tap awake ground to walk.', 'Tap fog to wake it (' + c + ' Echo), tap awake ground to walk.')
+      : say('No Echo left to wake. Walk to a bell, fight, or sing a Song.', 'No Echo to wake. Walk to a bell, or sing a Song.');
     // a phone has no room for the description line, so the primary hint goes in the action line there
-    const act = isCompact() ? (can ? 'Tap fog to paint, ground to walk.' : 'No Ink: walk, or use a brush.') : R.brushes.length ? 'Brushes: ' + R.brushes.length + ' ready.' : '';
-    return { q: -1, r: -1, tile: null, name: p.painted + ' of ' + p.total + ' hexes painted', text: txt, action: act, tone: 'rest' };
+    const act = isCompact() ? (can ? 'Tap fog to wake, ground to walk.' : 'No Echo: walk, or sing a Song.') : R.brushes.length ? 'Songs: ' + R.brushes.length + ' ready.' : '';
+    return { q: -1, r: -1, tile: null, name: p.painted + ' of ' + p.total + ' hexes awake', text: txt, action: act, tone: 'rest' };
   }
 
   function refreshInfo(s, announce) {
@@ -1238,9 +1238,9 @@
     const n = s.R.stats.mercy | 0;
     if (n > before) {
       MEMO.mercy = n;
-      UI.toast('The Book lends a drop of Ink.', 'good');
+      UI.toast('The land hums back one Echo.', 'good');
       snd('ink_gain');
-      UI.announce('The Book lends a drop of Ink.');
+      UI.announce('The land hums back one Echo.');
       return true;
     }
     return false;
@@ -1337,9 +1337,9 @@
   }
 
   const REASON_TEXT = {
-    busy: 'Finish what is in front of you first.', done: 'This tale has ended.', get void() { return 'The ' + DATA.tiles.block.name + ' cannot be painted.'; }, painted: 'That hex is already painted.',
-    unreachable: 'No way to reach it through the Void.', off: 'That is off the page.', nomap: 'There is no page.', ink: 'Not enough Ink.', nobrush: 'You do not hold that brush.', nothing: 'That would paint nothing new.',
-    brush: 'That brush is unknown.', dir: 'Aim the brush first.', origin: 'That is not a place this brush can start.', far: 'Too far from the painted page.',
+    busy: 'Finish what is in front of you first.', done: 'This journey has ended.', get void() { return DATA.tiles.block.name + ' cannot be woken.'; }, painted: 'That hex is already awake.',
+    unreachable: 'No way to reach it through the silence.', off: 'That is off the map.', nomap: 'There is no map.', ink: 'Not enough Echo.', nobrush: 'You do not know that Song.', nothing: 'That would wake nothing new.',
+    brush: 'That Song is unknown.', dir: 'Aim the Song first.', origin: 'That is not a place this Song can start.', far: 'Too far from the awake land.',
   };
   const reasonText = (r) => REASON_TEXT[r] || 'That does not work here.';
 
@@ -1350,7 +1350,7 @@
     if (!pre.ok) { refuse(s, reasonText(pre.reason)); return false; }
     if (!pre.affordable) {
       shakeInk(s);
-      refuse(s, 'That needs ' + pre.cost + ' Ink and you hold ' + R.ink + '.', 'warn');
+      refuse(s, 'That needs ' + pre.cost + ' Echo and you hold ' + R.ink + '.', 'warn');
       return false;
     }
     const from = chainFrom(s, pre.path);
@@ -1366,7 +1366,7 @@
     s.walkCell = [q, r];                                       // the tutorial's `hex` anchor now points at what was just painted: that is the hex to walk onto
     s.anchorKey = '';
     UI.bus.emit('map:paint', { q, r, cost: res.cost });
-    UI.announce('Painted ' + U.plural(res.tiles.length, 'hex', 'hexes') + ' for ' + res.cost + ' Ink. ' + R.ink + ' Ink left.');
+    UI.announce('Woke ' + U.plural(res.tiles.length, 'hex', 'hexes') + ' for ' + res.cost + ' Echo. ' + R.ink + ' Echo left.');
     drainPending(s);
     syncHud(s, true);
     checkMercy(s, mercy0);
@@ -1377,7 +1377,7 @@
   // ==================================================================================================================
   // brushes
   // ==================================================================================================================
-  const ORIGIN_HINT = { painted: () => 'Start from a painted hex.', 'hidden-adjacent': () => say('Start from a blank hex beside the painted page.', 'Start beside the painted page.'), 'hidden-near': () => say('Start from a blank hex within 4 hexes of the party.', 'Start within 4 hexes of the party.') };
+  const ORIGIN_HINT = { painted: () => 'Start from an awake hex.', 'hidden-adjacent': () => say('Start from a silent hex beside the awake land.', 'Start beside the awake land.'), 'hidden-near': () => say('Start from a silent hex within 4 hexes of the party.', 'Start within 4 hexes of the party.') };
   const originHint = (can) => (can && can.need && ORIGIN_HINT[can.need] ? ORIGIN_HINT[can.need]() : '');
 
   function bestDir(s, a) {
@@ -1395,10 +1395,10 @@
   function enterBrush(s, id) {
     if (s.empty || s.busy || s.walk) return false;
     const R = s.R;
-    if (R.brushes.indexOf(id) < 0) { refuse(s, 'You do not hold that brush.'); return false; }
+    if (R.brushes.indexOf(id) < 0) { refuse(s, 'You do not know that Song.'); return false; }
     const def = brushDef(id);
     const list = safe(() => MAP.brushAnchors(s.M, id), []) || [];
-    if (!list.length) { refuse(s, 'The ' + def.name + ' has nowhere to paint right now.'); return false; }
+    if (!list.length) { refuse(s, 'The ' + def.name + ' has nowhere to wake right now.'); return false; }
     s.chain = null; s.hoverPath = null;
     const anchors = new Map();
     list.forEach((a) => anchors.set(keyOf(a.q, a.r), a));
@@ -1422,7 +1422,7 @@
     s.hudDirty = true;                                          // the bar is gone from the footprint: back to the normal fit
     markChips(s);
     s.infoKey = ''; s.infoDirty = true;
-    if (announce) { snd('ui_back'); UI.announce('Brush put away.'); }
+    if (announce) { snd('ui_back'); UI.announce('Song set aside.'); }
   }
 
   function toggleBrush(s, id) {
@@ -1447,15 +1447,15 @@
     if (b.anchor) {
       ok = b.valid;
       const n = U.plural(b.preview.length, 'hex', 'hexes');
-      txt = b.dirKind ? (b.valid ? say('Aim, then tap the arrow hex again to paint ' + n + '.', 'Tap the arrow again to paint ' + n + '.') : say('Nothing would paint that way. Aim elsewhere.', 'Nothing paints that way. Aim elsewhere.')) : say('Tap the hex again or press Paint to fill ' + n + '.', 'Tap again to fill ' + n + '.');
+      txt = b.dirKind ? (b.valid ? say('Aim, then tap the arrow hex again to wake ' + n + '.', 'Tap the arrow again to wake ' + n + '.') : say('Nothing would wake that way. Aim elsewhere.', 'Nothing wakes that way. Aim elsewhere.')) : say('Tap the hex again or press Sing to wake ' + n + '.', 'Tap again to wake ' + n + '.');
     } else {
       const fh = focusHex(s), a = fh ? b.anchors.get(keyOf(fh.q, fh.r)) : null;
       ok = !!a && b.preview.length > 0 && !b.dirKind;
-      txt = b.dirKind ? say('Glowing hexes are places to start. Pick one, then aim.', 'Pick a glowing hex, then aim.') : say('Glowing hexes are places to start. Hover for the shape, tap to paint.', 'Tap a glowing hex to paint.');
+      txt = b.dirKind ? say('Glowing hexes are places to start. Pick one, then aim.', 'Pick a glowing hex, then aim.') : say('Glowing hexes are places to start. Hover for the shape, tap to sing.', 'Tap a glowing hex to sing.');
     }
     H.modeText.textContent = txt;
-    H.apply.rbSet({ disabled: !ok, reason: b.anchor ? 'Aim the brush at hexes it can paint' : 'Pick a glowing hex first' });
-    H.apply.rbSet({ label: b.anchor && b.valid ? 'Paint ' + b.preview.length : 'Paint' });
+    H.apply.rbSet({ disabled: !ok, reason: b.anchor ? 'Aim the Song at hexes it can wake' : 'Pick a glowing hex first' });
+    H.apply.rbSet({ label: b.anchor && b.valid ? 'Sing ' + b.preview.length : 'Sing' });
   }
 
   // a locked directional brush faces the pointer (or the keyboard cursor): MAP.dirOf from the anchor to the hex it is on
@@ -1490,9 +1490,9 @@
   function brushInfo(s, fh) {
     const b = s.brush, d = b.def;
     const o = { q: -1, r: -1, tile: null, name: d.name, text: d.text, action: '', tone: 'paint' };
-    if (b.anchor) { o.action = b.dirKind ? (b.valid ? 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + say('. Tap the aimed direction to apply.', '. Tap the arrow again.') : 'Nothing to paint that way.') : 'Painting ' + U.plural(b.preview.length, 'hex', 'hexes') + '. Tap again to apply.'; if (!b.valid) o.tone = 'bad'; return o; }
+    if (b.anchor) { o.action = b.dirKind ? (b.valid ? 'Waking ' + U.plural(b.preview.length, 'hex', 'hexes') + say('. Tap the aimed direction to apply.', '. Tap the arrow again.') : 'Nothing to wake that way.') : 'Waking ' + U.plural(b.preview.length, 'hex', 'hexes') + '. Tap again to apply.'; if (!b.valid) o.tone = 'bad'; return o; }
     if (!fh) { o.action = 'Glowing hexes are places to start.'; return o; }
-    if (b.anchors.has(keyOf(fh.q, fh.r))) { o.action = (b.dirKind ? 'Tap to start here, then aim.' : s.mode === 'touch' ? 'Tap to see the shape.' : 'Tap to paint ' + U.plural(b.preview.length, 'hex', 'hexes') + '.'); return o; }
+    if (b.anchors.has(keyOf(fh.q, fh.r))) { o.action = (b.dirKind ? 'Tap to start here, then aim.' : s.mode === 'touch' ? 'Tap to see the shape.' : 'Tap to wake ' + U.plural(b.preview.length, 'hex', 'hexes') + '.'); return o; }
     const can = MAP.canBrush(s.M, b.id, fh.q, fh.r, 0);
     o.action = originHint(can) || reasonText(can && can.reason);
     o.tone = 'bad';
@@ -1508,17 +1508,17 @@
         b.anchor = { q, r }; b.dir = bestDir(s, a);
         snd('ui_click');
         updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true;
-        UI.announce('Brush anchored. Aim it, then tap to paint. Facing ' + DIR_NAMES[b.dir] + '.');
+        UI.announce('Song anchored. Aim it, then tap to sing. Facing ' + DIR_NAMES[b.dir] + '.');
         return;
       }
-      if (q === b.anchor.q && r === b.anchor.r) { if (b.valid) applyBrushNow(s); else refuse(s, 'Aim the brush at hexes it can paint.'); return; }
+      if (q === b.anchor.q && r === b.anchor.r) { if (b.valid) applyBrushNow(s); else refuse(s, 'Aim the Song at hexes it can wake.'); return; }
       const d = MAP.dirOf(s.M, b.anchor.q, b.anchor.r, q, r);
       if (d !== b.dir) {
         b.dir = d; snd('ui_click'); updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true;
-        UI.announce('Facing ' + DIR_NAMES[d] + '. ' + (b.valid ? U.plural(b.preview.length, 'hex', 'hexes') + ' would paint.' : 'Nothing would paint.'));
+        UI.announce('Facing ' + DIR_NAMES[d] + '. ' + (b.valid ? U.plural(b.preview.length, 'hex', 'hexes') + ' would wake.' : 'Nothing would wake.'));
         return;
       }
-      if (b.valid) applyBrushNow(s); else refuse(s, 'Nothing would paint that way.');
+      if (b.valid) applyBrushNow(s); else refuse(s, 'Nothing would wake that way.');
       return;
     }
     // the shapes that need no aim: a mouse has already seen the preview on hover, a finger confirms with a second tap
@@ -1526,7 +1526,7 @@
     if (!a) { const can = MAP.canBrush(s.M, b.id, q, r, 0); refuse(s, originHint(can) || reasonText(can && can.reason)); return; }
     if (touch && !(b.anchor && b.anchor.q === q && b.anchor.r === r)) {
       b.anchor = { q, r }; snd('ui_click'); updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true;
-      UI.announce(U.plural(b.preview.length, 'hex', 'hexes') + ' would paint. Tap again to apply.');
+      UI.announce(U.plural(b.preview.length, 'hex', 'hexes') + ' would wake. Tap again to apply.');
       return;
     }
     b.anchor = { q, r };
@@ -1541,7 +1541,7 @@
     if (!a) {
       const fh = focusHex(s);
       const cand = fh ? b.anchors.get(keyOf(fh.q, fh.r)) : null;
-      if (!cand || b.dirKind) { refuse(s, 'Pick a glowing hex for the brush to start from.'); return; }
+      if (!cand || b.dirKind) { refuse(s, 'Pick a glowing hex for the Song to start from.'); return; }
       a = { q: cand.q, r: cand.r }; dir = 0;
     }
     const R = s.R, id = b.id, mercy0 = mercyOf(s);
@@ -1555,7 +1555,7 @@
     startReveals(s, tiles, origin, 0.07);
     { const lt = tiles[tiles.length - 1]; s.walkCell = lt ? [lt.q, lt.r] : null; s.anchorKey = ''; }
     UI.bus.emit('map:brush', { id });
-    UI.announce('The ' + brushDef(id).name + ' paints ' + U.plural(tiles.length, 'hex', 'hexes') + '.');
+    UI.announce('The ' + brushDef(id).name + ' wakes ' + U.plural(tiles.length, 'hex', 'hexes') + '.');
     drainPending(s);
     s.hud.chips.classList.add('used');
     UI.after(400, () => s.hud.chips.classList.remove('used'));
@@ -1585,7 +1585,7 @@
     const R = s.R;
     if (R.node) { refuse(s, reasonText('busy')); return false; }
     const path = MAP.walkPath(s.M, q, r);
-    if (path === null || path === undefined) { refuse(s, 'No painted path leads there.'); return false; }
+    if (path === null || path === undefined) { refuse(s, 'No awake path leads there.'); return false; }
     if (!path.length) { followParty(s, true); return false; }
     s.chain = null; s.hoverPath = null;
     s.walk = { path, i: 0, t: 0, from: { x: s.tok.x, y: s.tok.y } };
@@ -1649,7 +1649,7 @@
       addPop(s, q, r, '#5fb4ff', 'well');
       const gained = res.gained | 0;
       if (gained > 0) {
-        UI.floatText(p.x, p.y - 28, '+' + gained + ' Ink', 'block');
+        UI.floatText(p.x, p.y - 28, '+' + gained + ' Echo', 'block');
         let land = 0;
         for (let i = 0; i < Math.min(gained, 8); i++) land = Math.max(land, flyTo(s, 'drop', p.x + (i - 3.5) * 5, p.y - 10, H.inkMeter.root, 120 + i * 90));
         s.inkHold = s.t + land;
@@ -1669,7 +1669,7 @@
       }
     }
     syncHud(s, true);
-    UI.announce(res.kind === 'well' ? 'The well gives ' + (res.gained | 0) + ' Ink.' : 'You take the ' + brushDef(res.id).name + '.');
+    UI.announce(res.kind === 'well' ? 'The bell rings: ' + (res.gained | 0) + ' Echo.' : 'You learn the ' + brushDef(res.id).name + '.');
     enterNode(res);
   }
 
@@ -1680,7 +1680,7 @@
     addPop(s, q, r, boss ? '#b0245c' : elite ? '#f5c96a' : '#fff6dc', null);
     addFx(s, 'ring', worldOf(q, r).x, worldOf(q, r).y, 420, { color: boss ? '#b0245c' : '#f5c96a', sc: boss ? 1.6 : 1.1 });
     snd(boss ? 'boss_intro' : res.kind === 'combat' ? 'reveal_landmark' : 'page_turn');
-    UI.announce(boss ? 'The chapter boss.' : (tileInfo(s.M.tiles[keyOf(q, r)].type).name) + '.');
+    UI.announce(boss ? 'The keeper of this verse.' : (tileInfo(s.M.tiles[keyOf(q, r)].type).name) + '.');
     const wait = headless() ? 0 : boss ? 1100 : reduced() ? 150 : 420;
     s.busyRetry = s.t + 3.5 + wait / 1000;
     UI.after(wait, () => { if (!s.live()) return; enterNode(res); });
@@ -1841,7 +1841,7 @@
     s.chain = { q, r, path: pre.path, cost: pre.cost, affordable: pre.affordable, from: chainFrom(s, pre.path) };
     snd('ui_click');
     if (!pre.affordable) shakeInk(s);
-    UI.announce('A chain of ' + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + ' Ink. ' + (pre.affordable ? 'Tap it again to paint.' : 'You hold ' + s.R.ink + '.'));
+    UI.announce('A chain of ' + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + ' Echo. ' + (pre.affordable ? 'Tap it again to wake.' : 'You hold ' + s.R.ink + '.'));
   }
 
   // ==================================================================================================================
@@ -1867,7 +1867,7 @@
 
   function nextBrush(s) {
     const ids = brushCounts(s.R).order;
-    if (!ids.length) { refuse(s, 'You hold no brushes. Brush racks and champions carry them.', 'info'); return; }
+    if (!ids.length) { refuse(s, 'You know no Songs. Songbirds and champions teach them.', 'info'); return; }
     if (!s.brush) { enterBrush(s, ids[0]); return; }
     const i = ids.indexOf(s.brush.id);
     if (ids.length === 1) { exitBrush(s, true); return; }
@@ -1975,8 +1975,8 @@
   // ==================================================================================================================
   function enterEmpty(s, root) {
     const back = UI.btn('Back to Title', { kind: 'primary', size: 'lg', onclick: () => UI.toTitle() });
-    root.appendChild(mk('div', { class: 'mp-empty' }, UI.panel({ kind: 'paper', torn: true, title: 'A blank page' },
-      mk('p', { class: 'm-text', text: 'There is no map to show. The page was never written, or the run is over.' }), mk('div', { class: 'row center' }, back))));
+    root.appendChild(mk('div', { class: 'mp-empty' }, UI.panel({ kind: 'paper', torn: true, title: 'Only silence' },
+      mk('p', { class: 'm-text', text: 'There is no map to show. The land was never woken, or the run is over.' }), mk('div', { class: 'row center' }, back))));
     root.appendChild(UI.menuButton());
   }
 
@@ -1984,7 +1984,7 @@
     const R = s.R;
     s.intro = { t: 0, dur: 3.4 };
     const el = mk('div', { class: 'mp-intro', 'aria-hidden': 'true' },
-      mk('span', { class: 'mp-intro-n', text: 'Chapter ' + U.roman(R.chapter || 1) }),
+      mk('span', { class: 'mp-intro-n', text: 'Verse ' + U.roman(R.chapter || 1) }),
       mk('h2', { class: 'mp-intro-t', text: chapterTitle(R.chapter || 1) }),
       mk('i', { class: 'mp-intro-brush' }));
     s.hud.root.appendChild(el);
@@ -2029,13 +2029,13 @@
     UI.canvasOn('contextmenu', (e) => { if (e.preventDefault) e.preventDefault(); if (S) cancelModes(S, true); }, { passive: false });
     UI.canvasOn('pointerleave', (e) => { if (S && (e.pointerType === 'mouse' || !e.pointerType)) { setHover(S, null); flushInfo(S); } });
     // the mercy rule can fire while a node closes (finishNode, claim): say so once
-    if (MEMO.runId === R.id && (R.stats.mercy | 0) > MEMO.mercy) UI.toast('The Book lends a drop of Ink.', 'good');
+    if (MEMO.runId === R.id && (R.stats.mercy | 0) > MEMO.mercy) UI.toast('The land hums back one Echo.', 'good');
     MEMO.runId = R.id; MEMO.mercy = R.stats.mercy | 0;
     drainPending(s);
     safe(() => { if (AM() && isFn(AM().warm) && !headless()) AM().warm(HEX * s.cam.z, { ms: 24 }); });
     s.infoDirty = true;
     flushInfo(s);
-    UI.announce('Chapter ' + (R.chapter || 1) + ', ' + chapterTitle(R.chapter || 1) + '. ' + R.ink + ' Ink. ' + MAP.progress(M).pct + ' percent painted.');
+    UI.announce('Verse ' + (R.chapter || 1) + ', ' + chapterTitle(R.chapter || 1) + '. ' + R.ink + ' Echo. ' + MAP.progress(M).pct + ' percent awake.');
   }
 
   function leave() {
@@ -2077,10 +2077,10 @@
     let ch = 0;
     if (R && Array.isArray(R.log)) R.log.forEach((e) => { if (e && e.msg === 'Found ' + d.name + '.') ch = e.ch | 0; });
     const how = d.hero ? 'A keepsake of ' + heroName(d.hero) + '.'
-      : d.rarity === 'boss' ? 'Dropped by a chapter boss.'
+      : d.rarity === 'boss' ? 'Dropped by a verse\'s keeper.'
         : d.rarity === 'shop' ? 'Sold only by peddlers.'
           : 'Dropped by champions, treasure chests and peddlers.';
-    const where = ch ? 'Found in Chapter ' + U.roman(ch) + ', ' + chapterTitle(ch) + '.' : 'Carried since the tale began.';
+    const where = ch ? 'Found in Verse ' + U.roman(ch) + ', ' + chapterTitle(ch) + '.' : 'Carried since the journey began.';
     return where + ' ' + how;
   }
 
@@ -2181,18 +2181,18 @@
   }
 
   const CONTROLS = [
-    ['Mouse', [['Drag', 'slide the page, with a little glide'], ['Wheel', 'zoom toward the pointer'], ['Click fog beside the painted page', 'paint it for 1 Ink'], ['Click far fog', 'preview the cheapest chain, click again to paint all of it'], ['Click painted ground', 'walk there, stopping at the first thing in the way'], ['Right click or Esc', 'back out of a brush or a preview']]],
-    ['Touch', [['Drag', 'slide the page'], ['Pinch', 'zoom'], ['Tap fog beside the page', 'paint it for 1 Ink'], ['Tap far fog twice', 'preview the chain, then paint it'], ['Tap painted ground', 'walk there'], ['Brush chip, glowing hex, aim, tap again', 'paint with a brush']]],
-    ['Keyboard', [['Arrow keys', 'pan (hold Shift to go faster)'], ['+ and -', 'zoom'], ['F', 'fit the whole page, again to follow the party'], ['Q E A D Z C', 'move the hex cursor: NW NE W E SW SE'], ['Enter or Space', 'paint or walk to the cursor hex'], ['B or 1 to 9', 'pick a brush, Esc to put it away'], ['L and Shift D', 'this legend and your deck']]],
+    ['Mouse', [['Drag', 'slide the land, with a little glide'], ['Wheel', 'zoom toward the pointer'], ['Click fog beside the awake land', 'wake it for 1 Echo'], ['Click far fog', 'preview the cheapest chain, click again to wake all of it'], ['Click awake ground', 'walk there, stopping at the first thing in the way'], ['Right click or Esc', 'back out of a Song or a preview']]],
+    ['Touch', [['Drag', 'slide the land'], ['Pinch', 'zoom'], ['Tap fog beside the land', 'wake it for 1 Echo'], ['Tap far fog twice', 'preview the chain, then wake it'], ['Tap awake ground', 'walk there'], ['Song chip, glowing hex, aim, tap again', 'sing a Song']]],
+    ['Keyboard', [['Arrow keys', 'pan (hold Shift to go faster)'], ['+ and -', 'zoom'], ['F', 'fit the whole land, again to follow the party'], ['Q E A D Z C', 'move the hex cursor: NW NE W E SW SE'], ['Enter or Space', 'wake or walk to the cursor hex'], ['B or 1 to 9', 'pick a Song, Esc to set it aside'], ['L and Shift D', 'this legend and your deck']]],
   ];
 
   function legendMap(px) {
     const wrap = mk('div', { class: 'lg-map' });
     const reading = mk('div', { class: 'lg-read' });
-    [['fog', null, false, 'Blank paper', 'A hex nobody has painted. Paint it next to the painted page for ' + DATA.ECONOMY.paintCost + ' Ink to see what it holds.'],
-      ['known', 'boss', false, 'Glimpsed from afar', 'Landmarks show as faint silhouettes in the fog: ' + DATA.LISTS.landmarks.map((t) => tileInfo(t).name).join(', ') + '.'],
-      ['painted', 'enemy', true, 'Done', 'A tile that has been dealt with fades back into the page. Walk over it freely.'],
-      ['block', null, false, 'The ' + DATA.tiles.block.name, 'Holes in the story. Nothing can cross them and no brush paints them.']].forEach((e) => {
+    [['fog', null, false, 'Silent ground', 'A hex nobody has woken. Wake it next to the awake land for ' + DATA.ECONOMY.paintCost + ' Echo to hear what it holds.'],
+      ['known', 'boss', false, 'Heard from afar', 'Landmarks ring faintly through the fog, as silhouettes: ' + DATA.LISTS.landmarks.map((t) => tileInfo(t).name).join(', ') + '.'],
+      ['painted', 'enemy', true, 'Done', 'A tile that has been dealt with fades back into the land. Walk over it freely.'],
+      ['block', null, false, DATA.tiles.block.name, 'Holes the Hush swallowed whole. Nothing can cross them and no Song wakes them.']].forEach((e) => {
       reading.appendChild(mk('div', { class: 'lg-read-i' }, miniHex(e[0], e[1], e[2], 22, px), mk('div', {}, mk('b', { text: e[3] }), mk('p', { text: e[4] }))));
     });
     wrap.appendChild(reading);
@@ -2201,7 +2201,7 @@
       const ti = tileInfo(id);
       grid.appendChild(mk('div', { class: 'lg-tile', role: 'group', 'aria-label': ti.name + '. ' + ti.text },
         UI.icon('tile', id, 46, {}, 'lg-tile-ico'),
-        mk('div', {}, mk('b', { text: ti.name }), DATA.LISTS.landmarks.indexOf(id) >= 0 ? mk('span', { class: 'lg-lm', text: 'seen from afar' }) : null, mk('p', { text: ti.text }))));
+        mk('div', {}, mk('b', { text: ti.name }), DATA.LISTS.landmarks.indexOf(id) >= 0 ? mk('span', { class: 'lg-lm', text: 'heard from afar' }) : null, mk('p', { text: ti.text }))));
     });
     wrap.appendChild(grid);
     return wrap;
@@ -2211,7 +2211,7 @@
     const R = UI.run, held = {};
     ((R && R.brushes) || []).forEach((id) => { held[id] = (held[id] || 0) + 1; });
     const wrap = mk('div', { class: 'lg-brushes' });
-    wrap.appendChild(mk('p', { class: 'lg-note', text: 'Brushes are free and used once. The gold ring is where the brush starts, teal is what it paints. Lines and fans can face any of the six directions.' }));
+    wrap.appendChild(mk('p', { class: 'lg-note', text: 'Songs are free and sung once. The gold ring is where the Song starts, teal is what it wakes. Lines and fans can face any of the six directions.' }));
     Object.keys(DATA.brushes).forEach((id) => {
       const d = DATA.brushes[id];
       wrap.appendChild(mk('div', { class: 'lg-brush', role: 'group', 'aria-label': d.name + '. ' + d.text },
@@ -2255,7 +2255,7 @@
       p = p || {};
       const px = UI.px || 1;
       const body = mk('div', { class: 'lg-body' });
-      const TABS = [{ id: 'map', label: 'The page' }, { id: 'brushes', label: 'Brushes' }, { id: 'controls', label: 'Controls' }, { id: 'words', label: 'Words' }];
+      const TABS = [{ id: 'map', label: 'The land' }, { id: 'brushes', label: 'Songs' }, { id: 'controls', label: 'Controls' }, { id: 'words', label: 'Words' }];
       const make = { map: () => legendMap(px), brushes: () => legendBrushes(px), controls: legendControls, words: legendWords };
       const show = (id) => { clearKids(body); body.appendChild((make[id] || make.map)()); body.scrollTop = 0; body.setAttribute('data-tab', id); };
       const start = TABS.some((t) => t.id === p.tab) ? p.tab : 'map';

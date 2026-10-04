@@ -244,7 +244,7 @@
   let starting = false;
   function confirmOverwrite() {
     if (!safe(() => META.hasRun(), false)) return Promise.resolve(true);
-    return UI.confirm({ title: 'Start a new tale?', body: 'You have a tale in progress. Beginning a new one will replace it.', yes: 'Begin anew', no: 'Keep my tale', danger: true });
+    return UI.confirm({ title: 'Start a new journey?', body: 'You have a journey in progress. Beginning a new one will replace it.', yes: 'Begin anew', no: 'Keep my journey', danger: true });
   }
   function beginRun(opts) {
     if (starting) return Promise.resolve(false);
@@ -252,7 +252,7 @@
     return confirmOverwrite().then((ok) => {
       if (!ok) { starting = false; return false; }
       const G = game();
-      if (!G || typeof G.newRun !== 'function') { starting = false; UI.toast('The tale cannot begin yet', 'bad'); return false; }
+      if (!G || typeof G.newRun !== 'function') { starting = false; UI.toast('The journey cannot begin yet', 'bad'); return false; }
       const R = G.newRun(opts);
       UI.after(900, () => { starting = false; });
       if (!R) starting = false;
@@ -431,12 +431,12 @@
     const family = tk.font.display;
     ctx.save();
     ctx.font = '900 100px ' + family;
-    const m = safe(() => ctx.measureText('INKWOVEN').width, 0) || 600;
+    const m = safe(() => ctx.measureText('ECHOWAKE').width, 0) || 600;
     ctx.restore();
     const size = clamp(w / m * 100, 60, 190);
     tk.glow(ctx, cx, cy, w * 0.55, '#7a6bff', 0.3);
     tk.glow(ctx, cx - w * 0.18, cy - size * 0.1, w * 0.3, '#ff7eb6', 0.16);
-    tk.inkText(ctx, 'INKWOVEN', cx, cy, size, { family, weight: 900, skew: -0.06, grad: [tk.pal.white, tk.pal.gold], stroke: tk.pal.ink, strokeW: size * 0.13, shadow: '#3b2a7a', shadowOff: size * 0.05 });
+    tk.inkText(ctx, 'ECHOWAKE', cx, cy, size, { family, weight: 900, skew: -0.06, grad: [tk.pal.white, tk.pal.gold], stroke: tk.pal.ink, strokeW: size * 0.13, shadow: '#3b2a7a', shadowOff: size * 0.05 });
     const r = U.rng(9);
     ctx.save();
     for (let i = 0; i < 5; i++) {
@@ -486,17 +486,17 @@
       const menu = mk('nav', { class: 'mn-menu', 'aria-label': 'Main menu' });
       const items = S.items;
       if (hasRun) {
-        const sub = info ? info.text : 'Return to your saved tale';
-        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('T' + info.trial, { size: 'sm', label: 'Ink Trial ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Tale' }) : null, medalStrip(info && info.heroes, TITLE_MEDAL));
+        const sub = info ? info.text : 'Return to your saved journey';
+        const extra = mk('span', { class: 'mn-p-side' }, info && info.trial > 0 ? UI.hanko('T' + info.trial, { size: 'sm', label: 'Tempo Trial ' + info.trial }) : null, info && info.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Jam' }) : null, medalStrip(info && info.heroes, TITLE_MEDAL));
         items.push(plaque('primary', 'Continue', sub, { big: true, breathe: true, act: 'continue', sfx: 'page_turn', extra, onclick: () => { const G = game(); if (G) G.continueRun(); } }));
       }
-      items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Tale', 'Choose two heroes and an Ink Trial', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
+      items.push(plaque(hasRun ? 'secondary' : 'primary', 'New Journey', 'Choose two heroes and a Tempo Trial', { big: true, breathe: !hasRun, act: 'new', sfx: 'page_turn', onclick: () => UI.go('heroSelect', null, { transition: 'page' }) }));
       // the Daily plaque is built from S so it can be rebuilt when the date turns over while the title stays open (L26)
       const dailyPlaque = () => {
-        const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new tale every day');
-        return plaque('secondary', 'Daily Tale', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, TITLE_MEDAL)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
+        const dSub = (S.seed ? 'Seed ' + S.seed + ' · ' : '') + (S.best !== null ? 'Best ' + fmt(S.best) : S.played ? 'Played today' : 'A new jam every day');
+        return plaque('secondary', 'Daily Jam', dSub, { big: true, act: 'daily', sfx: 'page_turn', extra: mk('span', { class: 'mn-p-side' }, S.played ? UI.hanko('', { size: 'sm', class: 'mn-ck', label: 'Played today' }) : null, medalStrip(S.dHeroes, TITLE_MEDAL)), onclick: () => { if (!S.refreshDaily()) beginRun({ daily: true }); } });
       };
-      S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new tale and nothing starts
+      S.refreshDaily = () => {                                  // true when the day had changed: the plaque now shows the new jam and nothing starts
         const nowSeed = dailySeed();
         if (nowSeed === S.seed) return false;
         S.seed = nowSeed;
@@ -511,18 +511,18 @@
           items[items.indexOf(old)] = fresh;
           if (had) safe(() => fresh.focus());
         }
-        if (nowSeed) UI.toast('A new Daily Tale has begun', 'info');
+        if (nowSeed) UI.toast('A new Daily Jam has begun', 'info');
         return true;
       };
       items.push(dailyPlaque());
-      items.push(plaque('secondary', 'Library', null, { slim: true, act: 'library', sfx: 'page_turn', onclick: () => UI.go('library', { tab: mem.libTab }, { transition: 'page' }) }));
+      items.push(plaque('secondary', 'Hall', null, { slim: true, act: 'library', sfx: 'page_turn', onclick: () => UI.go('library', { tab: mem.libTab }, { transition: 'page' }) }));
       items.push(plaque('secondary', 'Settings', null, { slim: true, act: 'settings', onclick: () => UI.go('settings') }));
       items.push(plaque('secondary', 'How to Play', null, { slim: true, act: 'howto', onclick: () => UI.go('howto') }));
       const slims = mk('div', { class: 'mn-slims' });
       items.forEach((b) => (b.classList.contains('mn-slim') ? slims : menu).appendChild(b));
       menu.appendChild(slims);
 
-      const foot = mk('div', { class: 'mn-foot' }, mk('span', { class: 'mn-credits', text: 'Painted in ink and code. No two tales alike.' }), mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
+      const foot = mk('div', { class: 'mn-foot' }, mk('span', { class: 'mn-credits', text: 'Drawn in ink, sung in code. No two journeys alike.' }), mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
       const fs = fsSupported() ? mk('button', { type: 'button', class: 'mn-fs', 'aria-label': 'Toggle full screen', title: 'Full screen' }, mk('i', { class: 'mn-fs-ico' })) : null;
       if (fs) {
         fs.addEventListener('click', () => { toggleFullscreen(); });
@@ -531,11 +531,11 @@
         sync();
       }
       S.fs = fs;
-      const tag = mk('p', { class: 'mn-tag', text: 'a rogue storybook' });
+      const tag = mk('p', { class: 'mn-tag', text: 'a rogue ballad' });
       const gate = gateOn ? mk('button', { type: 'button', class: 'mn-gate', 'aria-label': 'Tap to begin', 'data-autofocus': '' }, mk('span', { class: 'mn-gate-text', text: 'Tap to begin' }), mk('span', { class: 'mn-gate-sub', text: 'sound on' })) : null;
       S.gate = gate;
       root.classList.toggle('ts-big', bigText());
-      add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Inkwoven, a rogue storybook' }), tag, menu, foot, fs, gate));
+      add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Echowake, a rogue ballad' }), tag, menu, foot, fs, gate));
       S.wrap = root.firstChild;
       if (gateOn) menu.setAttribute('inert', '');                // Tab must not reach the plaques hidden under the gate
 
@@ -618,7 +618,7 @@
   const SLOT = { front: { x: PARTY_CX + SLOT_DX, y: 655, s: 0.92 }, back: { x: PARTY_CX - SLOT_DX, y: 649, s: 0.86 } };
   // The Begin button's two labels. The button is 264 to 273 stage px wide on a desktop (the launch panel is 296 px) and the Larger text size
   // makes the label 27 px: 'Begin the Daily Tale' was 285 px wide and clipped the gold border, so the Daily label is the short one.
-  const BEGIN_TALE = 'Begin the Tale', BEGIN_DAILY = 'Begin Daily Tale';
+  const BEGIN_TALE = 'Begin the Journey', BEGIN_DAILY = 'Begin Daily Jam';
   const heroUnlocked = (id) => safe(() => META.isUnlocked('hero', id), true) !== false;
   const isCompact = (root) => !!(root && root.closest && root.closest('.compact'));    // phone landscape: UI puts class compact on #stage
   const heroArtId = (id) => (DATA.heroes[id] && DATA.heroes[id].unlock && DATA.heroes[id].unlock.ach) || null;
@@ -677,10 +677,10 @@
       const ach = DATA.achievements[heroArtId(id)] || null;
       const prog = safe(() => META.achievements().find((a) => a.id === heroArtId(id)), null);
       add(box, mk('div', { class: 'mn-d-locknote' },
-        mk('p', { class: 'mn-d-lockhead' }, UI.hanko('LOCKED', { size: 'sm' }), mk('span', { text: ' Not yet written into the book' })),
+        mk('p', { class: 'mn-d-lockhead' }, UI.hanko('LOCKED', { size: 'sm' }), mk('span', { text: ' Not yet woken from the Hush' })),
         ach ? mk('p', { class: 'mn-d-hint' }, mk('b', { text: ach.name + ': ' }), ach.text) : null,
         prog ? mk('div', { class: 'mn-d-prog' }, UI.bar(prog.value, prog.gte, 'xp', { text: true })) : null,
-        mk('p', { class: 'mn-d-quiet', text: 'Finish the chapter to unlock ' + h.name + ' for every future tale.' })));
+        mk('p', { class: 'mn-d-quiet', text: 'Finish the verse to unlock ' + h.name + ' for every future journey.' })));
       return box;
     }
     add(box, mk('p', { class: 'mn-d-blurb', text: h.blurb }));
@@ -699,7 +699,7 @@
     });
     add(box, mk('div', { class: 'mn-d-sec' }, mk('h4', { text: 'Starting deck (' + ((h.starter || []).length) + ' cards)' }), mk('p', { class: 'mn-d-tapnote', text: 'Tap a card to read it.' }), deck));
     const lore = DATA.lore && DATA.lore['hero_' + id];
-    if (lore) add(box, mk('div', { class: 'mn-d-sec mn-d-bio' }, mk('h4', { text: 'Her story'.replace('Her', id === 'kuro' || id === 'raiga' ? 'His' : 'Her') }), mk('p', { text: lore.text })));
+    if (lore) add(box, mk('div', { class: 'mn-d-sec mn-d-bio' }, mk('h4', { text: 'Her voice'.replace('Her', id === 'kuro' || id === 'raiga' ? 'His' : 'Her') }), mk('p', { text: lore.text })));
     return box;
   }
 
@@ -725,7 +725,7 @@
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
       const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });        // the same size as the Library's pill, so it does not jump when you navigate
-      const top = mk('header', { class: 'mn-hs-top' }, back, banner('Choose Two Heroes'), mk('div', { class: 'mn-stones', 'aria-label': 'Inkstones' }, stones));
+      const top = mk('header', { class: 'mn-hs-top' }, back, banner('Choose Two Heroes'), mk('div', { class: 'mn-stones', 'aria-label': 'Chimes' }, stones));
 
       // ---- hero cards
       const cardsWrap = mk('div', { class: 'mn-cards', role: 'group', 'aria-label': 'Heroes' });
@@ -770,14 +770,14 @@
       const trialName = mk('b', { class: 'mn-tr-name' });
       const trialText = mk('span', { class: 'mn-tr-text' });
       const trialRule = mk('span', { class: 'mn-tr-rule' });                     // the newest rule in words: on a phone it replaces the rules list, which has no room
-      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Ink Trial', dataset: { act: 'trial-down' }, text: '‹' });
-      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Ink Trial', dataset: { act: 'trial-up' }, text: '›' });
+      const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Tempo Trial', dataset: { act: 'trial-down' }, text: '‹' });
+      const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Tempo Trial', dataset: { act: 'trial-up' }, text: '›' });
       minus.addEventListener('click', () => setTrial(S.trial - 1, true));
       plus.addEventListener('click', () => setTrial(S.trial + 1, true));
       const pips = mk('div', { class: 'mn-pips', 'aria-hidden': 'true' }, U.range(11).map((n) => mk('i', { class: 'mn-pip', dataset: { n } })));
-      const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Ink Trial rules' });
-      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Ink Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
-      const dailyToggle = UI.toggle({ label: 'Daily Tale', value: S.daily, onchange: (v) => setDaily(v) });
+      const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Tempo Trial rules' });
+      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Tempo Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
+      const dailyToggle = UI.toggle({ label: 'Daily Jam', value: S.daily, onchange: (v) => setDaily(v) });
       dailyToggle.dataset.act = 'daily-toggle';
       const seed = mk('input', { type: 'text', class: 'mn-seed', 'aria-label': 'Seed (any word or number)', placeholder: 'Random seed', title: 'Any word or number. The same seed gives the same map.', maxlength: '24', autocomplete: 'off', spellcheck: 'false', value: S.seedText });
       seed.addEventListener('input', () => { S.seedText = seed.value; mem.seedText = seed.value; });
@@ -787,7 +787,7 @@
       begin.classList.add('mn-begin');
       begin.dataset.act = 'begin';
       const launch = UI.panel({ kind: 'dark', class: 'mn-launch-panel' }, trialBox, rules,
-        mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Tale' }), mk('i', { text: 'the same tale for everyone today' }))),
+        mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Jam' }), mk('i', { text: 'the same jam for everyone today' }))),
         mk('div', { class: 'mn-seedrow' }, mk('span', { class: 'mn-seed-label', text: 'Seed' }), seed, dice), begin);
       launch.classList.add('mn-launch');
       Object.assign(S, { minus, plus, trialName, trialText, trialRule, pips, rules, dailyToggle, seed, dice, begin, launch, trialBox });
@@ -809,7 +809,7 @@
       function react(id, expr, sec) { S.expr[id] = expr; S.exprUntil[id] = S.t + sec; }
       function onCard(id, el) {
         S.pinned = id;
-        if (S.daily) { showDetail(id); UI.toast('The Daily Tale chooses your heroes', 'info'); return; }
+        if (S.daily) { showDetail(id); UI.toast('The Daily Jam chooses your heroes', 'info'); return; }
         if (!heroUnlocked(id)) { showDetail(id); UI.shake(el); sfx('ui_error'); react(id, 'hurt', 1.1); return; }
         toggleHero(id);
         showDetail(id);
@@ -830,7 +830,7 @@
         refresh();
       }
       function swapOrder() {
-        if (S.daily) { UI.toast('The Daily Tale sets the order too', 'info'); return; }
+        if (S.daily) { UI.toast('The Daily Jam sets the order too', 'info'); return; }
         if (S.chosen.length < 2) { UI.toast('Choose two heroes first', 'warn'); sfx('ui_error'); return; }
         S.chosen.reverse();
         S.chosen.forEach((id, i) => { S.slotFrom[id] = { from: i === 0 ? 'back' : 'front', t0: S.t }; });
@@ -847,7 +847,7 @@
       }
       function setDaily(on) {
         if (on === S.daily) return;
-        if (on && !S.seedToday) { S.dailyToggle.rbSet(false); UI.toast('Today’s Daily Tale is not available right now', 'warn'); return; }
+        if (on && !S.seedToday) { S.dailyToggle.rbSet(false); UI.toast('Today’s Daily Jam is not available right now', 'warn'); return; }
         S.daily = on; mem.daily = on;
         if (on) { S.saved = S.chosen.slice(); S.chosen = (safe(() => RUN.dailyHeroes(S.seedToday), S.chosen) || S.chosen).slice(0, 2); S.chosen.forEach((id) => { S.pose[id] = { name: 'cheer', t0: S.t }; }); S.trial = 0; }
         else { S.chosen = (S.saved || []).filter(heroUnlocked).slice(0, 2); S.trial = clamp(mem.trial | 0, 0, S.trialMax); }
@@ -857,7 +857,7 @@
         refresh();
         showDetail(S.hover || S.pinned || S.chosen[0]);
       }
-      // a hero select left open across midnight: the Daily plaque, seed and heroes follow the date, and a start that crossed the line shows the new tale first (L26)
+      // a hero select left open across midnight: the Daily plaque, seed and heroes follow the date, and a start that crossed the line shows the new jam first (L26)
       function refreshDay() {
         const nowSeed = dailySeed();
         if (nowSeed === S.seedToday) return false;
@@ -868,7 +868,7 @@
           S.slotFrom = {};
         }
         refresh();
-        if (S.daily) UI.toast('A new Daily Tale has begun', 'info');
+        if (S.daily) UI.toast('A new Daily Jam has begun', 'info');
         return true;
       }
       S.refreshDay = refreshDay;
@@ -935,7 +935,7 @@
         S.trialName.textContent = S.trial === 0 ? 'Trial 0' : 'Trial ' + roman(S.trial) + ': ' + (tr ? tr.name : '');
         S.trialRule.textContent = tr && S.trial > 0 && !S.daily ? tr.text : '';
         S.trialBox.classList.toggle('has-rule', !!S.trialRule.textContent);
-        S.trialText.textContent = S.daily ? 'The Daily Tale is always Trial 0.' : maxT === 0 ? 'Win a tale to unlock Ink Trials.' : S.trial === 0 ? 'The tale as the Author wrote it.' : 'Every level below is added on top.';
+        S.trialText.textContent = S.daily ? 'The Daily Jam is always Trial 0.' : maxT === 0 ? 'Win a journey to unlock Tempo Trials.' : S.trial === 0 ? 'The tune as it was first sung.' : 'Every level below is added on top.';
         S.minus.classList.toggle('dim', S.daily || S.trial <= 0);
         S.plus.classList.toggle('dim', S.daily || S.trial >= maxT);
         S.minus.setAttribute('aria-disabled', S.daily || S.trial <= 0 ? 'true' : 'false');
@@ -943,7 +943,7 @@
         S.trialBox.classList.toggle('locked', maxT === 0 || S.daily);
         S.pips.querySelectorAll('.mn-pip').forEach((p) => { const k = Number(p.dataset.n); p.classList.toggle('on', k > 0 && k <= S.trial); p.classList.toggle('open', k <= maxT); });
         clear(S.rules);
-        if (S.trial === 0) S.rules.appendChild(mk('li', { class: 'mn-rule none', text: maxT === 0 ? 'No trials yet. Reach the last page once to open the first.' : 'No extra rules. Higher trials stack their rules here.' }));
+        if (S.trial === 0) S.rules.appendChild(mk('li', { class: 'mn-rule none', text: maxT === 0 ? 'No trials yet. Break the Hush once to open the first.' : 'No extra rules. Higher trials stack their rules here.' }));
         for (let k = 1; k <= S.trial; k++) { const d = DATA.trials['trial_' + k]; if (d) S.rules.appendChild(mk('li', { class: 'mn-rule' + (k === S.trial ? ' new' : '') }, mk('b', { text: roman(k) + '. ' + d.name }), mk('span', { text: ' ' + d.text }))); }
         S.rules.scrollTop = S.trial > 0 ? S.rules.scrollHeight : 0;      // the newest rule is the one at the bottom; the lone "no trials" line starts at its top
         // seed and daily
@@ -1103,9 +1103,9 @@
   const LIB_TABS = [
     { id: 'unlocks', label: 'Unlocks', icon: 'key' },
     { id: 'achievements', label: 'Achievements', icon: 'star' },
-    { id: 'story', label: 'Story', icon: 'scroll' },
+    { id: 'story', label: 'Ballads', icon: 'bell' },
     { id: 'bestiary', label: 'Bestiary', icon: 'mask' },
-    { id: 'history', label: 'History', icon: 'book' },
+    { id: 'history', label: 'History', icon: 'lantern' },
   ];
   const TIER_NAME = { minion: 'Minion', normal: 'Creature', elite: 'Champion', boss: 'Boss' };
   const KIND_NAME = { card: 'Card', relic: 'Treasure', gem: 'Gem' };
@@ -1149,7 +1149,7 @@
     sortBtn.addEventListener('click', () => { S.affordFirst = !S.affordFirst; sortBtn.classList.toggle('on', S.affordFirst); sortBtn.setAttribute('aria-pressed', S.affordFirst ? 'true' : 'false'); order(); });
     const count = mk('span', { class: 'mn-count', role: 'status' });
     add(filterBar, kindSeg, chips, sortBtn, count);
-    const empty = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'Nothing on the shelves matches those filters.' }), btn('Show everything', { kind: 'secondary', size: 'sm', onclick: () => { mem.libKind = 'all'; mem.libHero = 'any'; kindSeg.rbSet('all'); chips.querySelectorAll('.mn-chip').forEach((c) => { const on = c.dataset.hero === 'any'; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); apply(); } }));
+    const empty = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'Nothing in the Hall matches those filters.' }), btn('Show everything', { kind: 'secondary', size: 'sm', onclick: () => { mem.libKind = 'all'; mem.libHero = 'any'; kindSeg.rbSet('all'); chips.querySelectorAll('.mn-chip').forEach((c) => { const on = c.dataset.hero === 'any'; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); apply(); } }));
     const bare = mk('div', { class: 'mn-empty', hidden: true }, mk('p', { text: 'The shelves are bare. Nothing is waiting to be unlocked yet.' }));
     const secs = {};
     ['card', 'relic', 'gem'].forEach((k) => {
@@ -1196,9 +1196,9 @@
       it.el.classList.toggle('poor', !e.unlocked && !e.affordable);
       it.unlock.hidden = !!e.unlocked;
       const need = e.cost - (safe(() => META.inkstones, 0) || 0);
-      it.unlock.rbSet({ disabled: !e.unlocked && !e.affordable, reason: 'You need ' + need + ' more Inkstones' });
+      it.unlock.rbSet({ disabled: !e.unlocked && !e.affordable, reason: 'You need ' + need + ' more Chimes' });
       it.unlock.classList.toggle('breathe', !e.unlocked && e.affordable && false);
-      it.el.setAttribute('aria-label', (e.name || e.id) + '. ' + (e.unlocked ? 'Unlocked.' : e.affordable ? 'Costs ' + e.cost + ' Inkstones. You can afford it.' : 'Costs ' + e.cost + ' Inkstones.'));
+      it.el.setAttribute('aria-label', (e.name || e.id) + '. ' + (e.unlocked ? 'Unlocked.' : e.affordable ? 'Costs ' + e.cost + ' Chimes. You can afford it.' : 'Costs ' + e.cost + ' Chimes.'));
     }
     function refreshAll() {
       const list = safe(() => META.libraryList(), []) || [];
@@ -1247,7 +1247,7 @@
       const r = safe(() => META.buy(e.kind, e.id), { ok: false, reason: 'unknown' });
       if (!r.ok) {
         sfx('ui_error'); UI.shake(it.el);
-        UI.toast(r.reason === 'funds' ? 'You need ' + (e.cost - before) + ' more Inkstones' : r.reason === 'owned' ? 'You already own that' : 'That cannot be unlocked', 'warn');
+        UI.toast(r.reason === 'funds' ? 'You need ' + (e.cost - before) + ' more Chimes' : r.reason === 'owned' ? 'You already own that' : 'That cannot be unlocked', 'warn');
         return;
       }
       sfx(e.kind === 'card' ? 'card_pick' : e.kind === 'relic' ? 'relic_get' : 'gem_get');
@@ -1270,7 +1270,7 @@
     const rows = new Map();
     const done = list.filter((a) => a.done);
     const earned = done.reduce((n, a) => n + ((a.reward && a.reward.inkstones) || 0), 0);
-    const sum = mk('span', { class: 'mn-count', role: 'status', text: done.length + ' of ' + list.length + ' done, ' + fmt(earned) + ' Inkstones earned' });
+    const sum = mk('span', { class: 'mn-count', role: 'status', text: done.length + ' of ' + list.length + ' done, ' + fmt(earned) + ' Chimes earned' });
     const sortSeg = UI.seg([{ value: 'order', label: 'In order' }, { value: 'close', label: 'Closest' }, { value: 'done', label: 'Done first' }], { label: 'Sort', value: mem.achSort, onchange: (v) => { mem.achSort = v; order(); } });
     const grid = mk('div', { class: 'mn-grid achs' });
     add(pane, mk('div', { class: 'mn-filters' }, mk('span', { class: 'mn-filter-label', text: 'Sort' }), sortSeg, sum), grid);
@@ -1279,13 +1279,13 @@
       const bar = UI.bar(0, a.gte, 'xp', { text: false });
       const num = mk('span', { class: 'mn-ach-num', text: a.done ? 'Done' + (a.ts ? ' ' + dateText(a.ts) : '') : fmt(Math.min(a.value, a.gte)) + ' / ' + fmt(a.gte) });
       const seal = mk('span', { class: 'mn-ach-seal' }, a.done ? UI.hanko('', { size: 'lg', class: 'mn-ck', label: 'Done' }) : mk('i', { class: 'mn-ach-star', 'aria-hidden': 'true' }));
-      const rew = a.reward && a.reward.inkstones ? mk('div', { class: 'mn-ach-rew', 'aria-label': 'Reward ' + a.reward.inkstones + ' Inkstones' }, stoneIcon(22), mk('b', { text: '+' + a.reward.inkstones })) : mk('div', { class: 'mn-ach-rew none' });
+      const rew = a.reward && a.reward.inkstones ? mk('div', { class: 'mn-ach-rew', 'aria-label': 'Reward ' + a.reward.inkstones + ' Chimes' }, stoneIcon(22), mk('b', { text: '+' + a.reward.inkstones })) : mk('div', { class: 'mn-ach-rew none' });
       const el = mk('article', { class: 'mn-ach' + (a.done ? ' done' : ''), dataset: { id: a.id }, 'aria-label': a.name + '. ' + a.text + ' ' + (a.done ? 'Done.' : pct + ' percent.') },
         seal, mk('div', { class: 'mn-ach-body' }, mk('b', { class: 'mn-ach-name', text: a.name }), mk('p', { class: 'mn-ach-text', text: a.text }), mk('div', { class: 'mn-ach-prog' }, bar, num)), rew);
       rows.set(a.id, { a, el, bar });
       grid.appendChild(el);
     });
-    if (!list.length) grid.appendChild(mk('p', { class: 'empty', text: 'No achievements are written yet.' }));
+    if (!list.length) grid.appendChild(mk('p', { class: 'empty', text: 'No achievements yet.' }));
     function order() {
       const arr = list.slice();
       const idx = (a) => list.indexOf(a);
@@ -1302,15 +1302,15 @@
 
   // ---- Story
   const STORY_GROUPS = [
-    { name: 'The Chapters', test: (id) => /^(intro|ch\d_intro)$/.test(id) },
+    { name: 'The Verses', test: (id) => /^(intro|ch\d_intro)$/.test(id) },
     { name: 'The Endings', test: (id) => /(_clear|^victory|^defeat)$|^victory$|^defeat$/.test(id) },
-    { name: 'The Heroes', test: (id) => /^hero_/.test(id) },
+    { name: 'The Voices', test: (id) => /^hero_/.test(id) },
   ];
   function buildStory() {
     const pane = mk('div', { class: 'mn-pane mn-story' });
     const list = safe(() => META.storyList(), []) || [];
     const seen = list.filter((s) => s.seen).length;
-    const page = mk('div', { class: 'mn-storypage' }, mk('h3', { class: 'mn-st-head', text: 'Contents' }), mk('p', { class: 'mn-st-sub', text: seen + ' of ' + list.length + ' pages read. Pages you have not read yet stay blank.' }));
+    const page = mk('div', { class: 'mn-storypage' }, mk('h3', { class: 'mn-st-head', text: 'Setlist' }), mk('p', { class: 'mn-st-sub', text: seen + ' of ' + list.length + ' ballads heard. Ballads you have not heard yet stay silent.' }));
     let no = 0;
     const used = new Set();
     const section = (name, ids) => {
@@ -1318,18 +1318,18 @@
       page.appendChild(mk('h4', { class: 'mn-st-group', text: name }));
       ids.forEach((s) => {
         used.add(s.id); no++;
-        const row = mk('button', { type: 'button', class: 'mn-st' + (s.seen ? ' seen' : ''), dataset: { id: s.id }, 'aria-label': s.seen ? 'Page ' + no + ': ' + s.title + '. Read again.' : 'Page ' + no + ': not read yet.' },
-          mk('span', { class: 'mn-st-no', text: String(no) }), mk('span', { class: 'mn-st-title', text: s.seen ? s.title : '???' }), mk('i', { class: 'mn-st-dots', 'aria-hidden': 'true' }), mk('span', { class: 'mn-st-state', text: s.seen ? 'Read again' : 'Unread' }));
+        const row = mk('button', { type: 'button', class: 'mn-st' + (s.seen ? ' seen' : ''), dataset: { id: s.id }, 'aria-label': s.seen ? 'Ballad ' + no + ': ' + s.title + '. Hear again.' : 'Ballad ' + no + ': not heard yet.' },
+          mk('span', { class: 'mn-st-no', text: String(no) }), mk('span', { class: 'mn-st-title', text: s.seen ? s.title : '???' }), mk('i', { class: 'mn-st-dots', 'aria-hidden': 'true' }), mk('span', { class: 'mn-st-state', text: s.seen ? 'Hear again' : 'Unheard' }));
         row.addEventListener('click', () => {
-          if (!s.seen) { UI.shake(row); sfx('ui_error'); UI.toast('You have not read this page yet. Play on to find it.', 'info'); return; }
+          if (!s.seen) { UI.shake(row); sfx('ui_error'); UI.toast('You have not heard this ballad yet. Play on to find it.', 'info'); return; }
           UI.go('story', { id: s.id, then: { name: 'library', params: { tab: 'story' } } }, { transition: 'page' });
         });
         page.appendChild(row);
       });
     };
     STORY_GROUPS.forEach((g) => section(g.name, list.filter((s) => !used.has(s.id) && g.test(s.id))));
-    section('Loose Pages', list.filter((s) => !used.has(s.id)));
-    if (!list.length) page.appendChild(mk('p', { class: 'empty', text: 'The book has no pages yet.' }));
+    section('Stray Ballads', list.filter((s) => !used.has(s.id)));
+    if (!list.length) page.appendChild(mk('p', { class: 'empty', text: 'No ballads yet.' }));
     pane.appendChild(page);
     return { el: pane };
   }
@@ -1375,7 +1375,7 @@
       if (!inCh.length) return;
       const met = inCh.filter((d) => d.seen > 0).length;
       const lore = DATA.lore && DATA.lore['ch' + ch + '_intro'];
-      left.appendChild(mk('h3', { class: 'mn-sec-h' }, mk('span', { text: 'Chapter ' + ch + (lore ? ': ' + lore.title : '') }), mk('em', { class: 'mn-sec-n', text: met + ' of ' + inCh.length + ' met' })));
+      left.appendChild(mk('h3', { class: 'mn-sec-h' }, mk('span', { text: 'Verse ' + ch + (lore ? ': ' + lore.title : '') }), mk('em', { class: 'mn-sec-n', text: met + ' of ' + inCh.length + ' met' })));
       const grid = mk('div', { class: 'mn-grid beasts' });
       const order = { boss: 0, elite: 1, normal: 2, minion: 3 };
       inCh.slice().sort((a, b) => (order[a.tier] - order[b.tier])).forEach((d) => {
@@ -1401,10 +1401,10 @@
       clear(detail);
       cv.c.classList.toggle('unseen', !known);
       const head = mk('div', { class: 'mn-bd-head' }, mk('h3', { text: known ? (def.name || id) : '???' }), mk('p', { class: 'mn-bd-title', text: known ? (def.title || '') : 'Not yet met' }));
-      const chips = mk('div', { class: 'mn-bd-chips' }, mk('span', { class: 'mn-tag-chip tier-' + (d ? d.tier : 'normal'), text: TIER_NAME[d ? d.tier : 'normal'] }), mk('span', { class: 'mn-tag-chip', text: 'Chapter ' + (d ? d.chapter : '?') }));
+      const chips = mk('div', { class: 'mn-bd-chips' }, mk('span', { class: 'mn-tag-chip tier-' + (d ? d.tier : 'normal'), text: TIER_NAME[d ? d.tier : 'normal'] }), mk('span', { class: 'mn-tag-chip', text: 'Verse ' + (d ? d.chapter : '?') }));
       if (known) (def.tags || []).forEach((tg) => chips.appendChild(mk('span', { class: 'mn-tag-chip soft', text: cap(tg) })));
       add(detail, mk('div', { class: 'mn-bd-art' }, cv.c), head, chips);
-      if (!known) { add(detail, mk('p', { class: 'mn-bd-unknown', text: 'A shape in the ink. Meet this creature in a fight and the book will write its page.' })); return; }
+      if (!known) { add(detail, mk('p', { class: 'mn-bd-unknown', text: 'A shape in the silence. Meet this creature in a fight and its echo will be kept here.' })); return; }
       add(detail, mk('div', { class: 'mn-bd-stats' }, mk('span', {}, mk('b', { text: hpText(def) }), mk('i', { text: 'HP at Trial 0' })), mk('span', {}, mk('b', { text: String(d.kills) }), mk('i', { text: 'defeated' })), mk('span', {}, mk('b', { text: String(d.seen) }), mk('i', { text: 'met' }))));
       add(detail, mk('p', { class: 'mn-bd-lore', text: def.lore || '' }));
       const moves = mk('ul', { class: 'mn-moves' });
@@ -1441,27 +1441,27 @@
     const pane = mk('div', { class: 'mn-pane mn-hist-pane' });
     const hist = safe(() => META.history, []) || [];
     if (!hist.length) {
-      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No tales told yet' }), mk('p', { text: 'Finish a run, win or lose, and it will be written here: the heroes, the score, how far you got.' })));
+      add(pane, mk('div', { class: 'mn-hist-empty' }, mk('i', { class: 'mn-emptybook', 'aria-hidden': 'true' }), mk('h3', { text: 'No journeys yet' }), mk('p', { text: 'Finish a run, win or lose, and it will be remembered here: the heroes, the score, how far you got.' })));
       return { el: pane };
     }
     const best = hist.reduce((m, r) => Math.max(m, r.score || 0), 0);
     const wins = hist.filter((r) => r.outcome === 'win').length;
     add(pane, mk('div', { class: 'mn-hist-sum' },
-      mk('span', {}, mk('b', { text: String(safe(() => META.stat('runs'), hist.length)) }), mk('i', { text: 'tales begun' })),
-      mk('span', {}, mk('b', { text: String(safe(() => META.stat('wins'), wins)) }), mk('i', { text: 'told to the end' })),
+      mk('span', {}, mk('b', { text: String(safe(() => META.stat('runs'), hist.length)) }), mk('i', { text: 'journeys begun' })),
+      mk('span', {}, mk('b', { text: String(safe(() => META.stat('wins'), wins)) }), mk('i', { text: 'sung to the end' })),
       mk('span', {}, mk('b', { text: fmt(best) }), mk('i', { text: 'best score' })),
       mk('span', {}, mk('b', { text: String(hist.length) }), mk('i', { text: 'in the list' }))));
     const list = mk('div', { class: 'mn-hist-list' });
     hist.forEach((r, i) => {
       const outcome = r.outcome === 'win' ? 'Victory' : r.outcome === 'abandon' ? 'Abandoned' : 'Fallen';
-      const chapter = 'Chapter ' + (r.chapter || 1);
-      const row = mk('article', { class: 'mn-hist ' + (r.outcome || 'lose') + (r.daily ? ' daily' : ''), 'aria-label': outcome + ' with ' + heroList(r.heroes) + ', score ' + r.score + ', ' + chapter + (r.trial ? ', Ink Trial ' + r.trial : '') + (r.daily ? ', Daily Tale' : '') },
+      const chapter = 'Verse ' + (r.chapter || 1);
+      const row = mk('article', { class: 'mn-hist ' + (r.outcome || 'lose') + (r.daily ? ' daily' : ''), 'aria-label': outcome + ' with ' + heroList(r.heroes) + ', score ' + r.score + ', ' + chapter + (r.trial ? ', Tempo Trial ' + r.trial : '') + (r.daily ? ', Daily Jam' : '') },
         mk('span', { class: 'mn-h-date', text: dateText(r.ts) || 'Long ago' }),
         mk('span', { class: 'mn-h-heroes' }, (r.heroes || []).map((id) => UI.medallion(id, 38)), mk('i', { class: 'mn-h-names', text: heroList(r.heroes) })),
         mk('span', { class: 'mn-h-score' }, mk('b', { text: fmt(r.score || 0) }), mk('i', { text: 'score' })),
         mk('span', { class: 'mn-h-ch', text: chapter }),
-        mk('span', { class: 'mn-h-tags' }, r.trial ? UI.hanko('T' + r.trial, { size: 'sm', label: 'Ink Trial ' + r.trial }) : null, r.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Tale' }) : null),
-        mk('span', { class: 'mn-h-out' }, mk('b', { class: 'mn-out-' + (r.outcome || 'lose'), text: outcome }), r.inkstones ? mk('i', { text: '+' + r.inkstones + ' Inkstones' }) : null));
+        mk('span', { class: 'mn-h-tags' }, r.trial ? UI.hanko('T' + r.trial, { size: 'sm', label: 'Tempo Trial ' + r.trial }) : null, r.daily ? UI.hanko('D', { size: 'sm', label: 'Daily Jam' }) : null),
+        mk('span', { class: 'mn-h-out' }, mk('b', { class: 'mn-out-' + (r.outcome || 'lose'), text: outcome }), r.inkstones ? mk('i', { text: '+' + r.inkstones + ' Chimes' }) : null));
       row.style.setProperty('--i', String(Math.min(i, 12)));
       list.appendChild(row);
     });
@@ -1477,7 +1477,7 @@
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
       S.stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });
-      const top = mk('header', { class: 'mn-lib-top' }, back, banner('The Library'), mk('div', { class: 'mn-stones', 'aria-label': 'Inkstones' }, S.stones));
+      const top = mk('header', { class: 'mn-lib-top' }, back, banner('The Hall of Echoes'), mk('div', { class: 'mn-stones', 'aria-label': 'Chimes' }, S.stones));
       const tabs = UI.tabs(LIB_TABS.map((t) => ({ id: t.id, label: t.label })), { value: tab, onchange: (id) => show(id, true) });
       tabs.classList.add('mn-tabs');
       tabs.querySelectorAll('.tab').forEach((b, i) => b.insertBefore(UI.icon('motif', LIB_TABS[i].icon, 22, {}, 'mn-tab-ico'), b.firstChild));
@@ -1536,14 +1536,14 @@
 
   // Erase the profile behind two confirmations. Settings survive; the saved tale goes with the rest.
   function clearAllData(done) {
-    UI.confirm({ title: 'Erase all progress?', body: 'Unlocks, achievements, history, the bestiary and your saved tale will be erased. Your settings stay.', yes: 'Continue', no: 'Keep everything', danger: true })
-      .then((ok) => (ok ? UI.confirm({ title: 'Really erase the whole book?', body: 'This cannot be undone. Every Inkstone and every page you have written will be gone.', yes: 'Erase everything', no: 'Cancel', danger: true }) : false))
+    UI.confirm({ title: 'Erase all progress?', body: 'Unlocks, achievements, history, the bestiary and your saved journey will be erased. Your settings stay.', yes: 'Continue', no: 'Keep everything', danger: true })
+      .then((ok) => (ok ? UI.confirm({ title: 'Really erase every echo?', body: 'This cannot be undone. Every Chime and every verse you have heard will be gone.', yes: 'Erase everything', no: 'Cancel', danger: true }) : false))
       .then((ok2) => {
         if (!ok2) return;
         safe(() => META.reset({ keepSettings: true }));
         UI.applySettings();
         mem.party = []; mem.trial = 0; mem.libTab = 'unlocks'; mem.beast = null; mem.daily = false;
-        UI.toast('The book is blank again', 'info');
+        UI.toast('All is quiet again', 'info');
         sfx('page_turn');
         if (done) done();
       });
@@ -1571,7 +1571,7 @@
     const animSeg = UI.seg([{ value: 0, label: 'Normal' }, { value: 1, label: 'Fast' }, { value: 2, label: 'Faster' }], { label: 'Animation speed', value: getSet('fastAnim'), onchange: (v) => setSet('fastAnim', v) });
     const dmg = UI.toggle({ label: 'Damage numbers', value: getSet('damageNumbers'), onchange: (v) => setSet('damageNumbers', v) });
 
-    const sample = mk('p', { class: 'mn-sample', text: 'The fox wrote the grove, stroke by stroke.' });
+    const sample = mk('p', { class: 'mn-sample', text: 'The fox sang the grove awake, note by note.' });
     const tsSeg = UI.seg([{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }], { label: 'Text size', value: getSet('textScale'), onchange: (v) => setSet('textScale', v) });
     const glyphs = mk('span', { class: 'mn-glyphs', 'aria-hidden': 'true' }, ['red', 'blue', 'green', 'gold', 'any'].map((c) => mk('span', { class: 'gem gc-' + (c === 'any' ? 'gold' : c) + ' sz-sm' }, UI.icon('gem', 'slot:' + c, 26))));
     const cb = UI.toggle({ label: 'Colour-blind aids', value: getSet('colorblind'), onchange: (v) => setSet('colorblind', v) });
@@ -1583,7 +1583,7 @@
     const clearBtn = btn('Clear saved data', { kind: 'primary', size: 'sm', danger: true, onclick: () => clearAllData(() => rebuild()) });
     const dataRow = mode === 'overlay'
       ? row('', 'Saved data', mk('span', { class: 'mn-set-hint', text: 'Leave the run from the title screen to clear it' }))
-      : row('clear', 'Saved data', clearBtn, 'Erases unlocks, history and your saved tale. Asks twice.');
+      : row('clear', 'Saved data', clearBtn, 'Erases unlocks, history and your saved journey. Asks twice.');
 
     shakeRowEl = row('shake', 'Screen shake', shakeSl, 'Try it: the row shakes as you drag');
     root.appendChild(mk('div', { class: 'mn-set-cols' },
@@ -1691,7 +1691,7 @@
     partyOf().forEach((id, i) => art(() => ART.hero.medallion(g, id, pts[0][0] - 8 + i * 30, pts[0][1] + 2 - i * 4, 19), 'medal'));
     // the Blank creeping in from the right
     if (tk && !reduce()) tk.mist(g, 0, 200, HT_W, 170, t, { n: 3, seed: 5, color: '#f3e6c8', alpha: 0.08, speed: 14 });
-    label(g, '3 chapters, 3 bosses', 260, 352, 17, '#ffe9a8');
+    label(g, '3 verses, 3 bosses', 260, 352, 17, '#ffe9a8');
     illusFg(g);
   }
 
@@ -1728,7 +1728,7 @@
     label(g, ink + ' / 14', 78, 30, 20, '#f3e6c8', 'left');
     if (started[2] && T0 < bloomAt(2) + 1.2) label(g, '+4', 150, 30 - prog(T0, bloomAt(2), bloomAt(2) + 1.2) * 8, 20, '#8dffc2', 'left');
     steps.forEach((s, k) => { if (started[k] && k !== 2 && T0 < bloomAt(k) + 0.9) label(g, '-1', 150, 30 + prog(T0, bloomAt(k), bloomAt(k) + 0.9) * 8, 18, '#ff9a9a', 'left'); });
-    label(g, 'paint, then walk', 260, 352, 17, '#ffe9a8');
+    label(g, 'wake, then walk', 260, 352, 17, '#ffe9a8');
     illusFg(g, 0.4);
   }
 
@@ -1917,25 +1917,25 @@
   function buildAfter() {
     const wrap = mk('div', { class: 'mn-after' });
     const tmax = safe(() => META.trialMax(), 0) || 0;
-    const seals = mk('div', { class: 'mn-af-seals', role: 'img', 'aria-label': 'Ink Trials 0 to 10; you have opened up to ' + tmax }, U.range(11).map((n) => mk('span', { class: 'mn-af-seal' + (n <= tmax ? ' on' : ''), text: n === 0 ? '0' : roman(n) })));
+    const seals = mk('div', { class: 'mn-af-seals', role: 'img', 'aria-label': 'Tempo Trials 0 to 10; you have opened up to ' + tmax }, U.range(11).map((n) => mk('span', { class: 'mn-af-seal' + (n <= tmax ? ' on' : ''), text: n === 0 ? '0' : roman(n) })));
     const seed = dailySeed();
     add(wrap,
-      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Inkstones' }), mk('span', { text: 'Earned after every run. Spend them in the Library.' }))),
-      mk('div', { class: 'mn-af-card' }, mk('div', { class: 'mn-af-body' }, mk('b', { text: 'Ink Trials' }), mk('span', { text: 'Win a tale to unlock the next trial. Each one stacks a new rule.' }), seals)),
-      mk('div', { class: 'mn-af-card' }, UI.hanko('D', { size: 'lg' }), mk('div', {}, mk('b', { text: 'Daily Tale' }), mk('span', { text: (seed ? 'Today’s seed is ' + seed + '. ' : '') + 'Same heroes and map for everyone, once a day.' }))));
+      mk('div', { class: 'mn-af-card' }, UI.icon('stat', 'inkstone', 44, {}), mk('div', {}, mk('b', { text: 'Chimes' }), mk('span', { text: 'Earned after every run. Spend them in the Hall of Echoes.' }))),
+      mk('div', { class: 'mn-af-card' }, mk('div', { class: 'mn-af-body' }, mk('b', { text: 'Tempo Trials' }), mk('span', { text: 'Win a journey to unlock the next trial. Each one stacks a new rule.' }), seals)),
+      mk('div', { class: 'mn-af-card' }, UI.hanko('D', { size: 'lg' }), mk('div', {}, mk('b', { text: 'Daily Jam' }), mk('span', { text: (seed ? 'Today’s seed is ' + seed + '. ' : '') + 'Same heroes and map for everyone, once a day.' }))));
     return { el: wrap };
   }
 
-  const KEYS = [['E', 'End turn'], ['S', 'Swap rows'], ['1 to 9', 'Pick a card'], ['Enter', 'Play it'], ['Z', 'Fast mode'], ['D / G', 'Draw / discard pile'], ['Arrows', 'Move the map'], ['B', 'Brush tray']];
+  const KEYS = [['E', 'End turn'], ['S', 'Swap rows'], ['1 to 9', 'Pick a card'], ['Enter', 'Play it'], ['Z', 'Fast mode'], ['D / G', 'Draw / discard pile'], ['Arrows', 'Move the map'], ['B', 'Song tray']];
   const HOWTO = [
-    { id: 'book', tip: /both heroes fall/, title: 'A Book That Writes Itself', kicker: 'Two heroes, three chapters, one ending to rewrite.', build: () => paintedCanvas(paintBook), rules: [
-      'You lead two heroes written into the Living Book. A creeping Blank is erasing its pages.',
-      'Cross three chapters. Each ends with a boss, and the last one guards the ending.',
-      'Every run is a new tale: a different map, different cards, different treasures. Win or lose, you earn Inkstones to unlock more.'] },
-    { id: 'map', tip: /^(Painting|Waking) a hex costs (Ink|Echo)/, title: 'Paint the Map', kicker: 'The page is blank. Ink makes it real.', build: () => paintedCanvas(paintMapDiagram), rules: [
-      'Spend 1 Ink to paint a hex next to painted ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
-      'Tap any painted hex to walk there. Stepping onto a fight or a fable starts it.',
-      'Ink comes back from wells, wins and camps. One-use Brushes paint whole shapes for free.'] },
+    { id: 'book', tip: /both heroes fall/, title: 'A Land Without Sound', kicker: 'Two heroes, three verses, one silence to break.', build: () => paintedCanvas(paintBook), rules: [
+      'You lead two heroes across a grey, still land. A yokai called the Hush has eaten every sound.',
+      'Cross three verses. Each ends with a boss, and the last one guards the Hush itself.',
+      'Every run is a new journey: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.'] },
+    { id: 'map', tip: /^(Painting|Waking) a hex costs (Ink|Echo)/, title: 'Wake the Land', kicker: 'The land is silent. Your Echo wakes it.', build: () => paintedCanvas(paintMapDiagram), rules: [
+      'Spend 1 Echo to wake a hex next to awake ground. It reveals what waits there: a fight, a shop, a camp, a fable.',
+      'Tap any awake hex to walk there. Stepping onto a fight or a fable starts it.',
+      'Echo comes back from temple bells, wins and camps. One-use Songs wake whole shapes for free.'] },
     { id: 'rows', tip: /front hero takes most/, title: 'Two Heroes, Two Rows', kicker: 'Who stands in front matters.', build: () => paintedCanvas(paintRows), rules: [
       'The front hero takes most attacks. The back hero is safe from most of them.',
       'Each hero has a favourite row and a bonus there. Check it on the hero card.',
@@ -1953,12 +1953,12 @@
       'Gems add damage, Block, extra hits, cards, Energy and more. The card text changes to match.',
       'Cut gems at camps, forges and shops. Replacing a gem destroys the old one, so choose well.'] },
     { id: 'places', tip: /A fable is a choice/, title: 'Camps, Shops and Fables', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
-      'Camps let you rest, sharpen a card, cut gems or meditate for Ink. Peddlers sell cards, gems, treasures and card removal.',
+      'Camps let you rest, sharpen a card, cut gems or meditate for Echo. Peddlers sell cards, gems, treasures and card removal.',
       'Fables are choices with a safe way, a gamble and often a price. Treasures bend the rules for the whole run.',
       'Champions guard treasure, the forge upgrades a card, and a gem cache lets you pick one gem.'] },
-    { id: 'after', title: 'After the Tale', kicker: 'Every run leaves something behind.', build: buildAfter, extra: 'keys', rules: [
-      'You earn Inkstones after every run. Spend them in the Library on new cards, treasures and gems.',
-      'Win a tale to open Ink Trials, stackable challenges. The Daily Tale is the same seed for everyone.',
+    { id: 'after', title: 'After the Journey', kicker: 'Every run leaves something behind.', build: buildAfter, extra: 'keys', rules: [
+      'You earn Chimes after every run. Spend them in the Hall of Echoes on new cards, treasures and gems.',
+      'Win a journey to open Tempo Trials, stackable challenges. The Daily Jam is the same seed for everyone.',
       'Keys, if you play with a keyboard, are listed below. Everything also works by touch.'] },
   ];
 
@@ -1999,7 +1999,7 @@
         right.appendChild(kl);
       }
       const tip = pg.tip && pg.extra !== 'keys' && !(UI.opt && UI.opt.textScale > 1.1) ? (DATA.tips || []).find((x) => pg.tip.test(x)) : null;
-      if (tip) right.appendChild(mk('div', { class: 'mn-margin' }, mk('b', { text: 'Margin note' }), mk('p', { text: tip })));
+      if (tip) right.appendChild(mk('div', { class: 'mn-margin' }, mk('b', { text: 'Liner note' }), mk('p', { text: tip })));
       right.appendChild(mk('span', { class: 'mn-pg-no', text: (i + 1) + ' / ' + HOWTO.length }));
       [left, right].forEach((el) => { el.classList.remove('turn-next', 'turn-prev'); if (!first) { void el.offsetWidth; el.classList.add(H.dir > 0 ? 'turn-next' : 'turn-prev'); } });
       book.setAttribute('aria-label', 'How to play, page ' + (i + 1) + ' of ' + HOWTO.length + ': ' + pg.title);
@@ -2081,13 +2081,13 @@
       const tip = tips.length ? tips[Math.floor(U.rng(U.hash('menu-pause-tip', run ? run.seed : 0, UI.epoch))() * tips.length)] : '';
 
       function runCard() {
-        if (!run) return mk('div', { class: 'mn-p-run empty' }, mk('p', { class: 'mn-p-none', text: 'No tale is open right now.' }));
+        if (!run) return mk('div', { class: 'mn-p-run empty' }, mk('p', { class: 'mn-p-none', text: 'No journey is underway.' }));
         const trial = run.trial | 0;
         const chip = (txt) => mk('span', { class: 'mn-p-chip', text: txt });
         const heroes = mk('div', { class: 'mn-p-heroes' }, (run.heroes || []).map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp })));
         return mk('div', { class: 'mn-p-run' },
-          mk('h3', { class: 'mn-p-h', text: 'Your tale' }),
-          mk('div', { class: 'mn-p-chips' }, chip('Chapter ' + (run.chapter || 1)), trial > 0 ? chip('Ink Trial ' + roman(trial)) : null, run.daily ? chip('Daily Tale') : null),
+          mk('h3', { class: 'mn-p-h', text: 'Your journey' }),
+          mk('div', { class: 'mn-p-chips' }, chip('Verse ' + (run.chapter || 1)), trial > 0 ? chip('Tempo Trial ' + roman(trial)) : null, run.daily ? chip('Daily Jam') : null),
           heroes,
           mk('div', { class: 'mn-p-stats' }, UI.stat('gold', run.gold || 0, { size: 'sm' }), UI.stat('ink', run.ink || 0, { size: 'sm', max: run.inkMax }), (run.brushes || []).length ? UI.stat('brush', run.brushes.length, { size: 'sm' }) : null),
           mk('div', { class: 'mn-p-relics', 'aria-label': 'Treasures' }, (run.relics || []).length ? (run.relics || []).slice(0, 10).map((id) => UI.relic(id, { size: 'sm' })) : mk('span', { class: 'mn-p-none', text: 'No treasures yet' })));
@@ -2119,7 +2119,7 @@
         if (S.H) S.H = null;
         clear(holder);
         const panel = UI.panel({ kind: 'dark', gold: true, title: 'Paused', class: 'mn-pause' },
-          mk('div', { class: 'mn-p-grid' }, mk('div', { class: 'mn-p-left' }, runCard(), tip ? mk('div', { class: 'mn-p-tip' }, mk('b', { text: 'A hint from the margins' }), mk('p', { text: tip })) : null), buildMenu()));
+          mk('div', { class: 'mn-p-grid' }, mk('div', { class: 'mn-p-left' }, runCard(), tip ? mk('div', { class: 'mn-p-tip' }, mk('b', { text: 'A note from the road' }), mk('p', { text: tip })) : null), buildMenu()));
         holder.appendChild(panel);
         const rs = holder.querySelector('[data-act=resume]');
         if (rs) { rs.setAttribute('data-autofocus', ''); UI.after(0, () => safe(() => rs.focus())); }
@@ -2136,14 +2136,14 @@
       function saveAndQuit() {
         const ok = run ? !!safe(() => META.saveRun(run), false) : true;
         sfx(ok ? 'save' : 'ui_error');
-        UI.toast(ok ? 'Your tale is saved. See you on the next page.' : 'Progress cannot be saved in this browser', ok ? 'good' : 'warn');
+        UI.toast(ok ? 'Your journey is saved. See you at the next beat.' : 'Progress cannot be saved in this browser', ok ? 'good' : 'warn');
         close();
         UI.toTitle();
       }
       function abandonRun() {
         const G = game();
         if (G && typeof G.abandon === 'function') G.abandon();
-        else UI.toast('The tale cannot be abandoned right now', 'warn');
+        else UI.toast('The journey cannot be abandoned right now', 'warn');
       }
       S.showMenu = showMenu; S.showHowto = showHowto;
 

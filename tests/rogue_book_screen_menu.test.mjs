@@ -176,7 +176,7 @@ await t.test('title: the Daily Tale plaque shows today\'s seed, the two daily he
   t.eq(expected, seed, 'and it comes from the page clock, not from Date() in the screen');
   const sub = $(g, '[data-act=daily] .mn-p-sub').textContent;
   t.ok(sub.indexOf('Seed ' + expected) >= 0, 'the plaque says the seed: ' + sub);
-  t.ok(/not played|new tale/i.test(sub), 'and that it has not been played');
+  t.ok(/not played|new jam/i.test(sub), 'and that it has not been played');
   t.eq($$(g, '[data-act=daily] .mn-p-meds .ico').length, 2, 'the two daily heroes are pictured');
   const heroes = g.RUN.dailyHeroes(expected);
   t.eq(heroes.length, 2, 'RUN.dailyHeroes gives two heroes'); t.ok(heroes[0] !== heroes[1], 'two distinct heroes');
@@ -469,7 +469,7 @@ await t.test('heroSelect: the Daily toggle fixes the heroes, the trial and the s
   t.ok($$(g, '.mn-hcard').every((b) => b.classList.contains('fixed')), 'the cards are fixed');
   t.ok(/Daily/.test($(g, '.mn-begin .btn-label').textContent), 'Begin says Daily: ' + $(g, '.mn-begin .btn-label').textContent);
   g._click(card(g, 'hanae')); await settle(g);
-  t.deep(g.UI.screens.heroSelect.state().chosen, daily, 'a card tap cannot change the party'); t.ok(toasts(g).some((x) => /Daily Tale chooses/.test(x)), 'and a toast explains');
+  t.deep(g.UI.screens.heroSelect.state().chosen, daily, 'a card tap cannot change the party'); t.ok(toasts(g).some((x) => /Daily Jam chooses/.test(x)), 'and a toast explains');
   g._click('.mn-swap'); t.deep(g.UI.screens.heroSelect.state().chosen, daily, 'nor can Swap');
   g._click($$(g, '.mn-step')[1]); t.eq(g.UI.screens.heroSelect.state().trial, 0, 'nor the trial stepper');
   g._click($(g, '.mn-begin')); await settle(g);
@@ -541,7 +541,7 @@ await t.test('library unlocks: every locked def is listed, with kind and hero fi
   t.eq($$(g, '.mn-item').length, list.length, 'one tile per META.libraryList entry (' + list.length + ')');
   t.deep([$$(g, '.mn-item.k-card').length, $$(g, '.mn-item.k-relic').length, $$(g, '.mn-item.k-gem').length], [by('card'), by('relic'), by('gem')], 'cards, treasures and gems');
   t.ok(by('card') > 0 && by('relic') > 0 && by('gem') > 0, 'the game has all three kinds locked');
-  t.ok($$(g, '.mn-item').every((i) => i.getAttribute('aria-label') && /Costs \d+ Inkstones|Unlocked/.test(i.getAttribute('aria-label'))), 'every tile states its price');
+  t.ok($$(g, '.mn-item').every((i) => i.getAttribute('aria-label') && /Costs \d+ Chimes|Unlocked/.test(i.getAttribute('aria-label'))), 'every tile states its price');
   t.eq($(g, '.mn-filters .mn-count').textContent, '0 of ' + list.length + ' unlocked', 'the header counts what you own');
   t.ok($$(g, '.mn-item:not(.owned) .mn-padlock').length === list.length, 'unowned tiles wear padlocks');
   t.ok($$(g, '.mn-item.k-card .card').length === by('card'), 'cards are real UI.card faces');
@@ -613,7 +613,7 @@ await t.test('library unlocks: buying spends Inkstones, stamps the tile, and the
   g._click(rt.querySelector('.mn-unlock')); await settle(g);
   t.eq(g.META.inkstones, before, 'a click does not spend anything');
   t.ok(!g.META.isUnlocked('relic', relic.id), 'and unlocks nothing');
-  t.ok(toasts(g).some((x) => /more Inkstones/.test(x)), 'it tells you how many more you need: ' + toasts(g).join(' | '));
+  t.ok(toasts(g).some((x) => /more Chimes/.test(x)), 'it tells you how many more you need: ' + toasts(g).join(' | '));
   t.ok(sfxLog(g).indexOf('ui_error') >= 0, 'with the error sound');
   // a purchase that META refuses (stale screen) is handled too
   g.META.profile.inkstones = 500;
@@ -663,7 +663,7 @@ await t.test('library achievements: 32 rows with progress from META.stat, done s
   t.eq(row('cartographer').querySelector('.bar').getAttribute('aria-valuemax'), '500', 'and knows its maximum');
   t.eq(row('regular_reader').querySelector('.mn-ach-num').textContent, '7 / 10', 'runs 7 of 10');
   t.ok(!row('cartographer').classList.contains('done'), 'a locked row is not styled as done');
-  t.ok($(g, '.mn-count').textContent.indexOf('2 of 32 done') === 0 && /13 Inkstones/.test($(g, '.mn-count').textContent), 'the summary: ' + $(g, '.mn-count').textContent);
+  t.ok($(g, '.mn-count').textContent.indexOf('2 of 32 done') === 0 && /13 Chimes/.test($(g, '.mn-count').textContent), 'the summary: ' + $(g, '.mn-count').textContent);
   const ids = () => $$(g, '.mn-ach').map((r) => r.dataset.id);
   t.deep(ids(), list.map((a) => a.id), 'default order is the data order');
   g._click(segBtn(g, 'Closest')); await settle(g, 1);
@@ -693,11 +693,11 @@ await t.test('library story: seen pages replay through the story screen and come
   t.eq($(g, '.mn-st[data-id=intro] .mn-st-title').textContent, g.DATA.lore.intro.title, 'a seen page shows its title');
   t.eq($(g, '.mn-st[data-id=victory] .mn-st-title').textContent, '???', 'an unseen page shows ???');
   t.ok(!/Victory|victory/.test($(g, '.mn-st[data-id=victory]').getAttribute('aria-label')), 'and does not leak its name to screen readers: ' + $(g, '.mn-st[data-id=victory]').getAttribute('aria-label'));
-  t.ok(/2 of \d+ pages read/.test($(g, '.mn-st-sub').textContent), 'the subtitle counts: ' + $(g, '.mn-st-sub').textContent);
+  t.ok(/2 of \d+ ballads heard/.test($(g, '.mn-st-sub').textContent), 'the subtitle counts: ' + $(g, '.mn-st-sub').textContent);
   t.ok($$(g, '.mn-st-group').length >= 3, 'pages are grouped (chapters, endings, heroes)');
   g._click('.mn-st[data-id=victory]'); await settle(g);
   t.eq(g.UI.currentName, 'library', 'an unseen page does not open');
-  t.ok(toasts(g).some((x) => /not read this page/.test(x)), 'a toast explains: ' + toasts(g).join(' | '));
+  t.ok(toasts(g).some((x) => /not heard this ballad/.test(x)), 'a toast explains: ' + toasts(g).join(' | '));
   g._click('.mn-st[data-id=intro]'); await settle(g, 6);
   t.eq(g.UI.currentName, 'story', 'a seen page opens the story screen');
   t.eq(g.UI.params.id, 'intro', 'with its id'); t.deep(JSON.parse(JSON.stringify(g.UI.params.then)), { name: 'library', params: { tab: 'story' } }, 'and a then that returns to the Library story tab');
@@ -720,7 +720,7 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   const data = g.META.bestiary();
   t.eq($$(g, '.mn-beast').length, data.length, 'one tile per creature (' + data.length + ')');
   t.eq($$(g, '.mn-beast.seen').length, 5, 'five have been met'); t.eq($$(g, '.mn-beast.unseen').length, data.length - 5, 'the rest are unseen');
-  t.eq($$(g, '.mn-sec-h').length, 3, 'three chapter headings'); t.ok(/Chapter 1: /.test($$(g, '.mn-sec-h span')[0].textContent) && /Whispering Bamboo Grove/.test($$(g, '.mn-sec-h span')[0].textContent), 'named after the chapter story: ' + $$(g, '.mn-sec-h span')[0].textContent);
+  t.eq($$(g, '.mn-sec-h').length, 3, 'three chapter headings'); t.ok(/Verse 1: /.test($$(g, '.mn-sec-h span')[0].textContent) && /Whispering Bamboo Grove/.test($$(g, '.mn-sec-h span')[0].textContent), 'named after the chapter story: ' + $$(g, '.mn-sec-h span')[0].textContent);
   t.ok(/5 of 17 met/.test($$(g, '.mn-sec-n')[0].textContent), 'and counting met creatures: ' + $$(g, '.mn-sec-n')[0].textContent);
   const un = $(g, '.mn-beast[data-id=chochin]');
   t.eq(un.querySelector('.mn-b-name').textContent, '???', 'an unseen tile says ???'); t.ok(un.querySelector('canvas'), 'over a silhouette canvas'); t.ok(!/Chochin|Lantern/i.test(un.getAttribute('aria-label')), 'and its aria-label does not name it: ' + un.getAttribute('aria-label'));
@@ -735,7 +735,7 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   t.eq($$(g, '.mn-move').length, Object.keys(def.moves).length, 'every move is listed (' + Object.keys(def.moves).length + ')');
   t.ok($$(g, '.mn-move b').map((b) => b.textContent).indexOf(def.moves.mud_slap.name) >= 0, 'by name'); t.ok(/Deal 5 damage/.test($(g, '.mn-move span').textContent), 'and effect: ' + $(g, '.mn-move span').textContent);
   t.ok($(g, '.mn-bd-stats').textContent.indexOf(def.hp[0] + ' to ' + def.hp[1]) >= 0, 'the HP range ' + def.hp.join(' to '));
-  t.ok(/Creature/.test($(g, '.mn-bd-chips').textContent) && /Chapter 1/.test($(g, '.mn-bd-chips').textContent), 'tier and chapter chips');
+  t.ok(/Creature/.test($(g, '.mn-bd-chips').textContent) && /Verse 1/.test($(g, '.mn-bd-chips').textContent), 'tier and chapter chips');
   t.ok(kappa.classList.contains('sel'), 'the selected tile is marked');
   g._click(un); await settle(g);
   const txt = $(g, '.mn-bdetail').textContent;
@@ -761,8 +761,8 @@ await t.test('library history: newest runs first with heroes, score, chapter, tr
   t.eq(rows.length, 4, 'one row per run');
   t.deep(rows.map((r) => r.querySelector('.mn-h-out b').textContent), ['Victory', 'Fallen', 'Abandoned', 'Fallen'], 'outcomes, in the order META keeps (newest first)');
   t.eq(rows[0].querySelector('.mn-h-names').textContent, 'Hanae and Kuro', 'the party'); t.eq(rows[0].querySelectorAll('.mn-h-heroes .ico').length, 2, 'as medallions');
-  t.eq(rows[0].querySelector('.mn-h-score b').textContent, '1,420', 'score'); t.eq(rows[0].querySelector('.mn-h-ch').textContent, 'Chapter 3', 'chapter reached');
-  t.ok(/\+52 Inkstones/.test(rows[0].querySelector('.mn-h-out').textContent), 'Inkstones earned');
+  t.eq(rows[0].querySelector('.mn-h-score b').textContent, '1,420', 'score'); t.eq(rows[0].querySelector('.mn-h-ch').textContent, 'Verse 3', 'chapter reached');
+  t.ok(/\+52 Chimes/.test(rows[0].querySelector('.mn-h-out').textContent), 'Inkstones earned');
   t.ok(rows[0].querySelector('.hanko') && /T2/.test(rows[0].querySelector('.mn-h-tags').textContent), 'the trial seal T2'); t.ok(!rows[1].querySelector('.mn-h-tags .hanko'), 'trial 0 has no seal');
   t.ok(/D/.test(rows[3].querySelector('.mn-h-tags').textContent) && rows[3].classList.contains('daily'), 'the daily run is marked');
   t.ok(rows[0].classList.contains('win') && rows[1].classList.contains('lose') && rows[2].classList.contains('abandon'), 'rows are styled by outcome');
@@ -772,7 +772,7 @@ await t.test('library history: newest runs first with heroes, score, chapter, tr
   t.deep(sums, ['7', '2', '1,420', '4'], 'the summary strip: tales begun, wins, best score, rows');
   const g2 = fresh();
   await go(g2, 'library', { tab: 'history' });
-  t.ok($(g2, '.mn-hist-empty') && /No tales told yet/.test($(g2, '.mn-hist-empty').textContent), 'an empty history has a friendly page');
+  t.ok($(g2, '.mn-hist-empty') && /No journeys yet/.test($(g2, '.mn-hist-empty').textContent), 'an empty history has a friendly page');
   t.eq($$(g2, '.mn-hist').length, 0, 'and no rows');
 });
 
@@ -937,7 +937,7 @@ await t.test('settings: Clear saved data asks twice, keeps the settings, erases 
   g._click(clear()); await settle(g); g._click('.o-confirm .btn-primary'); await settle(g); g._click('.o-confirm .btn-primary'); await settle(g);
   t.eq(g.META.inkstones, 0, 'both yeses: Inkstones erased'); t.eq(g.META.history.length, 0, 'history erased'); t.ok(!g.META.hasRun(), 'the saved tale is gone'); t.eq(g.META.profile.unlocked.hero.length, 0, 'unlocks erased'); t.eq(Object.keys(g.META.profile.seen).length, 0, 'bestiary erased');
   t.eq(g.META.get('textScale'), 1.15, 'but the settings stay'); t.eq(g.META.get('musicVol'), 0.4, 'all of them');
-  t.ok(toasts(g).some((x) => /blank again/i.test(x)), 'a toast confirms it');
+  t.ok(toasts(g).some((x) => /quiet again/i.test(x)), 'a toast confirms it');
   t.eq(g.UI.overlay.has('confirm'), false, 'no confirm is left open');
   await go(g, 'title'); await settle(g); g._flush(1000);
   t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'the title no longer offers Continue');
@@ -1069,7 +1069,7 @@ await t.test('howto: the margin notes are real tips from DATA, statuses come fro
   const notes = [];
   for (let i = 0; i < 8; i++) { g._click($$(g, '.mn-dot')[i]); await settle(g, 2); const m = $(g, '.mn-margin'); if (m) notes.push(m.querySelector('p').textContent); }
   t.eq(notes.length, 7, 'seven pages carry a margin note (all but the last)'); t.ok(notes.every((n) => g.DATA.tips.indexOf(n) >= 0), 'each note is a tip from DATA.tips'); t.eq(new Set(notes).size, 7, 'and all are different');
-  t.ok(/Margin note/.test($(g, '.mn-margin b') ? $(g, '.mn-margin b').textContent : 'Margin note'), 'headed Margin note');
+  t.ok(/Liner note/.test($(g, '.mn-margin b') ? $(g, '.mn-margin b').textContent : 'Liner note'), 'headed Liner note');
   g._click($$(g, '.mn-dot')[4]); await settle(g, 2);
   const st = $$(g, '.mn-pg-extra.statuses .status, .mn-pg-extra.statuses > *');
   t.eq(st.length, 9, 'nine statuses on the Intents page');
@@ -1152,7 +1152,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   g._click('.menu-btn'); await settle(g);
   t.ok(pausing(g), 'the pause overlay opens'); t.ok(/Paused/.test($(g, '.o-pause .panel h2, .o-pause .panel-title, .o-pause h2').textContent), 'titled Paused');
   t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Treasures, Settings, How to play, Save and quit, Abandon run');
-  t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Chapter 1Ink Trial II', 'the run card names the chapter and the trial');
+  t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Verse 1Tempo Trial II', 'the run card names the chapter and the trial');
   t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(/Hanae/.test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
   t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No treasures yet/.test($(g, '.mn-p-relics').textContent), 'no treasures yet');
   t.eq($(g, '[data-act=deck] .hanko').textContent.trim(), String(R.deck.length), 'the Deck plaque counts the deck: ' + R.deck.length);
@@ -1178,7 +1178,7 @@ await t.test('pause: the run card follows the run (daily tag, treasures, brushes
   R.daily = true; R.gold = 123; R.ink = 4;
   const relicIds = Object.keys(g.DATA.relics).slice(0, 3); R.relics = relicIds.slice();
   await openPause(g);
-  t.ok(/Daily Tale/.test($(g, '.mn-p-chips').textContent), 'a Daily Tale chip'); t.ok(!/Ink Trial/.test($(g, '.mn-p-chips').textContent), 'no trial chip at trial 0');
+  t.ok(/Daily Jam/.test($(g, '.mn-p-chips').textContent), 'a Daily Jam chip'); t.ok(!/Tempo Trial/.test($(g, '.mn-p-chips').textContent), 'no trial chip at trial 0');
   t.eq($$(g, '.mn-p-relics .relic, .mn-p-relics > *').length, 3, 'three treasures are pictured'); t.eq($(g, '[data-act=relics] .hanko').textContent.trim(), '3', 'and counted');
   t.ok(/123/.test($(g, '.mn-p-stats').textContent), 'gold 123 is shown'); t.ok(/Kuro/.test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Kuro is in the party');
   const tips = new Set();
@@ -1257,7 +1257,7 @@ await t.test('pause: Abandon run asks first, records the run as abandoned, pays 
   await openPause(g);
   const hist = g.META.history.length;
   g._click(pbtn(g, 'abandon')); await settle(g);
-  t.ok(g.UI.overlay.has('confirm'), 'a confirm asks first'); t.ok(/Abandon this tale/.test($(g, '.o-confirm').textContent), 'it says what it is: ' + $(g, '.o-confirm h2, .o-confirm .panel-title').textContent);
+  t.ok(g.UI.overlay.has('confirm'), 'a confirm asks first'); t.ok(/Abandon this journey/.test($(g, '.o-confirm').textContent), 'it says what it is: ' + $(g, '.o-confirm h2, .o-confirm .panel-title').textContent);
   t.eq(g.META.history.length, hist, 'nothing is recorded yet');
   g._click('.o-confirm .btn-secondary'); await settle(g);
   t.ok(!g.UI.overlay.has('confirm') && pausing(g), 'Keep playing leaves the pause menu open'); t.eq(g.UI.currentName, 'map', 'still on the map'); t.eq(g.META.history.length, hist, 'nothing recorded');
@@ -1298,7 +1298,7 @@ await t.test('pause: without a run (opened on the title) it offers Resume, Setti
   await go(g, 'title'); g._click('.mn-gate'); await settle(g);
   await openPause(g);
   t.deep(acts(g), ['resume', 'settings', 'howto', 'title'], 'no Deck, Treasures, Save and quit or Abandon');
-  t.ok(/No tale is open/.test($(g, '.mn-p-run').textContent), 'the card says there is no tale');
+  t.ok(/No journey is underway/.test($(g, '.mn-p-run').textContent), 'the card says there is no tale');
   g._click(pbtn(g, 'title')); await settle(g);
   t.ok(!pausing(g), 'Back to title closes the overlay'); t.eq(g.UI.currentName, 'title', 'and stays on the title');
   await openPause(g); g._key('d'); await settle(g);
@@ -1452,7 +1452,7 @@ await t.test('title and hero select follow the date when left open across midnig
   g2.META.dailySeed = () => key1;                                    // the date turned over between two polls
   g2._click('[data-act=daily]'); await settle(g2);
   t.eq(calls2.length, 0, 'the click that crossed midnight does not start yesterday\'s tale');
-  t.ok(toasts(g2).some((x) => /new Daily Tale/i.test(x)), 'a toast says a new tale has begun');
+  t.ok(toasts(g2).some((x) => /new Daily Jam/i.test(x)), 'a toast says a new tale has begun');
   t.eq(g2.UI.screens.title.state().seed, key1, 'the plaque now shows the new tale');
   g2._flush(1000);
   g2._click('[data-act=daily]'); await settle(g2);
@@ -1771,9 +1771,9 @@ await t.test('heroSelect: the Begin labels are short enough for their button at 
   const plain = label();
   press(g, $(g, '.mn-daily .toggle')); await settle(g);
   const daily = label();
-  t.eq(plain, 'Begin the Tale', 'the normal label is unchanged'); t.ok(/^Begin Daily Tale$/.test(daily), 'the Daily label is "Begin Daily Tale" (the word Daily still says what starts): ' + daily);
+  t.eq(plain, 'Begin the Journey', 'the normal label is unchanged'); t.ok(/^Begin Daily Jam$/.test(daily), 'the Daily label is "Begin Daily Jam" (the word Daily still says what starts): ' + daily);
   press(g, $(g, '.mn-daily .toggle')); await settle(g);
-  t.eq(label(), 'Begin the Tale', 'and switching Daily off restores it');
+  t.eq(label(), 'Begin the Journey', 'and switching Daily off restores it');
   // width model, measured in the widest stack font available to headless Chromium (DejaVu Serif Bold): 0.46 em per glyph plus the letter-spacing
   const rules = cssRules();
   const em = (v) => parseFloat(v), ls = em(decl(rule(rules, '.ts-big .mn-begin'), 'letter-spacing')), font = 21 * 1.3;

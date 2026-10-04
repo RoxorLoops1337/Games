@@ -294,7 +294,7 @@ await t.test('reward: empty states (no cards, nothing at all, already claimed) s
   t.eq($$(g, '.rw-slot').length, 0, 'no card slots');
   node = mkNode({ gold: 0, ink: 0, cards: [], relics: [], gems: [], brush: null, maxHp: 0, boss: false, tier: 'normal', source: 'combat', claimed: false, pending: [], log: [] });
   await g.UI.go('reward', { rewards: node.rewards, node, R }, { force: true, transition: 'none' }); await settle(g);
-  t.ok(/nothing but a story/.test(txt($(g, '.rw-ledger'))), 'no loot at all: the ledger says so');
+  t.ok(/nothing but an echo/.test(txt($(g, '.rw-ledger'))), 'no loot at all: the ledger says so');
   node = mkNode({ gold: 5, ink: 1, cards: ['hanae_slash'], relics: [], gems: [], brush: null, maxHp: 0, boss: false, tier: 'normal', source: 'combat', claimed: true, pending: [], log: [] });
   await g.UI.go('reward', { rewards: node.rewards, node, R }, { force: true, transition: 'none' }); await settle(g);
   t.ok(/already gathered/.test(txt($(g, '.rw-hint'))) && !$(g, '.rw-cont').hidden, 'claimed rewards: Continue only');
@@ -952,7 +952,7 @@ await t.test('event: the blank page (no such fable) still offers a way on', asyn
   const g = fresh({ seed: 18 }); const R = mkRun(g, { seed: 18 });
   R.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'no_such_fable', chosen: null };
   await g.UI.go('event', { node: R.node, R }, { force: true, transition: 'none' }); await settle(g);
-  t.ok(/page is blank/.test(txt($(g, '.ev-text'))) && $(g, '.ev-go'), 'a blank page and a way on');
+  t.ok(/Only silence/.test(txt($(g, '.ev-text'))) && $(g, '.ev-go'), 'a blank page and a way on');
   await click(g, $(g, '.ev-go'));
   t.eq(done(g), 1, 'leaving works');
 });
@@ -1046,7 +1046,7 @@ await t.test('camp: Meditate pays Ink and a brush; Cut Gems stays open all visit
   R.ink = 3;
   const node = nodeAt(g, R, 'camp', {});
   await open(g, 'camp', R, node);
-  t.ok(/\+4 Ink \(3 to 7\)/.test(txt(tile(g, 'meditate'))), 'Meditate previews +4 Ink (3 to 7)');
+  t.ok(/\+4 Echo \(3 to 7\)/.test(txt(tile(g, 'meditate'))), 'Meditate previews +4 Ink (3 to 7)');
   // opening and closing the gem cutter without cutting keeps the action
   await click(g, tile(g, 'gems'));
   t.ok($(g, '.o-deck .nk-deck.dk-socket'), 'the socket picker opens');
@@ -2075,7 +2075,7 @@ await t.test('no run: a page opened without a run says so and offers Back to Tit
     const g = await freshS({ seed: 24 });
     g.GAME.state.R = null; g.UI.setRun(null);
     await g.UI.go(kind, {}, { force: true, transition: 'none' }); await settle(g);
-    t.ok($(g, '.s-' + kind + ' .nk-empty-wrap') && /No tale is open/.test(txt($(g, '.s-' + kind))), kind + ': the empty page');
+    t.ok($(g, '.s-' + kind + ' .nk-empty-wrap') && /No journey is underway/.test(txt($(g, '.s-' + kind))), kind + ': the empty page');
     t.ok(btnByText(g, /Back to Title/), kind + ': with a way out');
     t.eq(errs(g), 0, kind + ': no console errors');
   }

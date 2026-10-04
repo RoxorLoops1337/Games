@@ -236,7 +236,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 /* Larger text on a desktop: the newest rule is what the rules list is for, so the generic sub-line goes, the gaps and the Begin plaque tighten, and the list gets about 20 px more (C1) */
 .ts-big .mn-trial.has-rule .mn-tr-text { display: none; }
 .ts-big .mn-launch .p-body { gap: 6px; }
-.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .04em; }   /* the label is 27 px here: 'Begin Daily Tale' keeps 29 px each side inside the 273 px button (and 24 px in the 264 px one with a scrollbar) instead of touching the gold border */
+.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .02em; }   /* the label is 27 px here: 'Begin the Journey' needs .02em to fit (255 px of 259); 'Begin Daily Jam' keeps 29 px each side inside the 273 px button (and 24 px in the 264 px one with a scrollbar) instead of touching the gold border */
 .compact .mn-launch .p-body { gap: 5px; padding: 6px 14px 8px; }
 /* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the trial name sits between the arrows
    and the newest rule is written out in full under them, never clipped: the trailing words are the penalty (C1). The panel body scrolls, and Begin stays pinned. */
