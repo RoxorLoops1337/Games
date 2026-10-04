@@ -63,12 +63,38 @@ list for the current format. The 16:9 cut keeps its own frozen clock and score
 | 48.5 | 20.21 | hold | **PLAY TOGETHER** + ONLINE CO-OP: host and guest phones side by side; tape stop b52.25 |
 | 53 | 22.08 | hold | CLAWSPIRE 2.0 over the moon and bats, PLAY FREE IN YOUR BROWSER (b53.75), `games-71g.pages.dev/clawspire` (b54, held 2.5 s), dead still from 24.0 s |
 
+## Text-fit layer and the layout check (`layout.js`, `layout_check.mjs`)
+
+Every on-screen word is laid out from measured metrics: `candyBox` measures the
+real glyph box with the loaded font (canvas `measureText`) and adds the stroke, the
+glow halo and the 3D extrude; `headline()` takes explicit lines and a maximum rect,
+binary-searches the size so the widest line (times its pop overshoot) and the
+stacked block fit, then sizes the plate FROM the block plus padding. Pills and
+callout labels are sized from their glyph boxes the same way. Words pop in (scale
+.6 to an outBack peak of ~1.04 to 1) and land exactly on their beat; plates never
+scale, so the overshoot stays inside the padding. No browser wrapping, no slams
+from huge scales, no rotation or drift.
+
+Every text draw also registers its on-screen box (after the full transform), its
+plate, and the shot's keep-clear rects (the HUD, enemy HP bars, the YOUR HITS row,
+event signs, the game's own banners and logos, and every phone). The checker paints
+each frame's geometry (no pixels) and fails on: text outside its plate minus 14 px,
+two texts intersecting, text over a keep-clear rect, text outside the safe zone
+(vertical x 65..1015, y 230..1536; 16:9 x 96..1824, y 54..1026), text touching
+someone else's plate, or a plate wider than the frame minus margins.
+
+    CLAW_FMT=v node tools/clawspire_trailer/layout_check.mjs          # all 1500 frames, vertical
+    node tools/clawspire_trailer/layout_check.mjs                     # 16:9
+
+It prints counts per rule and per element and writes `layout_report.json` next to
+the frames.
+
 ## Files
 
 - `trailer.html`: the renderer page. `#play` (or no hash) loops it live; `#render`
   waits for `window.frameJpeg(t)`. Query: `?fmt=v` vertical cut, `?scale=0.25` previews,
   `?cacheMB=2200` footage cache budget.
-- `engine.js` (clock, easing, fonts, assets, design space vs canvas scale), `post.js`
+- `layout.js` (the layout registry and rules), `engine.js` (clock, easing, fonts, assets, design space vs canvas scale), `post.js`
   (the WebGL2 lens from nrfh_trailer plus sharpen, straight RGB split and tint),
   `fx.js` (particles, candy type, slams, staggers, UI callouts, counters, lens flare,
   lightning, bats, moon, pumpkins), `footage.js` (capture loader, LRU frame cache,

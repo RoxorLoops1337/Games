@@ -83,6 +83,20 @@ window.contactSheet = async (ts, cols = 6) => {
   return sh.toDataURL('image/jpeg', .9);
 };
 
+// the layout check (?layout): paint each frame's geometry once and collect the violations
+window.layoutCheck = (from = 0, to = DUR * FPS, step = 1) => {
+  const all = [];
+  for (let i = from; i < to; i += step) {
+    const t = i / FPS;
+    LAY.els = []; LAY.plates = []; LAY.keep = []; LAY.grp = null;
+    FRAME_T = t;
+    const P = postParams(t);
+    paint(t, P);
+    for (const v of layViolations(t)) all.push(v);
+  }
+  return all;
+};
+window.layoutAt = t => { LAY.els = []; LAY.plates = []; LAY.keep = []; LAY.grp = null; FRAME_T = t; paint(t, postParams(t)); return { els: LAY.els, plates: LAY.plates, keep: LAY.keep }; };
 window.trailerReady = false;
 window.addEventListener('load', () => Promise.all([assetsReady(), fontsReady(), loadScenes()]).then(() => {
   window.trailerReady = true;
