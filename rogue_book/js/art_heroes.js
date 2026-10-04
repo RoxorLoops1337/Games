@@ -1,4 +1,4 @@
-// Inkwoven -- ART.hero: the four heroes (Hanae, Kuro, Suzu, Raiga), their eight poses, bust portraits and medallions. Extends ART (art.js).
+// Echowake -- ART.hero: the four heroes (Hanae, Kuro, Suzu, Raiga), their eight poses, bust portraits and medallions. Extends ART (art.js).
 //
 // PUBLIC API (DESIGN 5.6; these members REPLACE the placeholders of art.js)
 //   ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow, shadow})
@@ -42,7 +42,7 @@
 //   (eyes, mouth, brow, blush) and effect strengths (glow, trail, power, wind). BASE below lists every key with its default.
 //   The rig: heads are scaled 0.88 about the neck (rig.headScale), and every part box is padded by 8 px so outlines never clip.
 //   A hero spec (defineHero) = {id, col (palette), rig, lm (face landmarks), skull, parts (draw order), poses, anchors, bounds, bust}.
-//   Determinism: nothing here reads a clock or Math.random; a hero draw is a pure function of its arguments (plus the sprite cache).
+//   Determinism: nothing here reads a clock or the banned random call; a hero draw is a pure function of its arguments (plus the sprite cache).
 (() => {
   'use strict';
   const tk = ART.tk, pal = tk.pal, mat = tk.mat;
@@ -795,7 +795,7 @@
   })();
 
   // ===============================================================================================================
-  // KURO, the Inkweaver
+  // KURO, the Songweaver
   // ===============================================================================================================
   (() => {
     const c = {
@@ -804,7 +804,7 @@
       iris: ['#3a2a9a', '#b0a4ff'], irisRing: '#150a4a', pupil: '#0a0630', lash: '#0d0826', brow: '#1a1445',
       mouthIn: '#5a1030', tongue: '#e0708c',
       rim: '#9af6ff', aura: '#7a6bff',
-      coat: '#2b2678', coatD: '#141040', coatL: '#5654c8', trim: '#5ff5ff', gold: '#f5c96a', paper: '#f3e6c8', paperD: '#cbb98f',
+      coat: '#2b2678', coatD: '#141040', coatL: '#5654c8', trim: '#5ff5ff', gold: '#f5c96a', paper: '#f3e6c8', paperD: '#cbb98f', bronze: '#c9893a', bronzeD: '#7a4a1c', horn: '#f4f0ff',
       shaft: '#2a1f52', shaftD: '#150f30', boot: '#181236', glass: '#5ff5ff',
     };
     const R = Object.assign({}, DEFAULT_RIG, { shF: [-9, -124], shB: [11, -126] });
@@ -896,8 +896,9 @@
       S.cel([[x - 16, ty + 19], [x + 16, ty + 19], [x + 17, ty + 25], [x - 17, ty + 25]], c.coatL, { shadow: c.coat, depth: 2, line: S.L(1.7), rim: null });
       S.line([[x - 15, ty + 22], [x + 15, ty + 22]], { w: 1.3, color: c.trim, taper: 0.1 });
       S.cel(S.ell(x + 1, ty + 31, 7, 7.4, 10), dark ? dk(c.skin) : c.skin, { shadow: c.skinD, depth: 3, line: S.L(1.8), rim: null });
-      // the glowing calligraphy on the back of the hand
-      S.line([[x - 2, ty + 28], [x + 3, ty + 30], [x - 1, ty + 34], [x + 4, ty + 35]], { w: 1.4, color: c.trim, taper: 0.2 });
+      // a small glowing echo ping on the back of the hand: a ring and a dot
+      S.line(S.ell(x + 1, ty + 31, 3.6, 3.6, 12), { closed: true, w: 1.2, color: c.trim, align: 0, alpha: 0.95, wobble: 0 });
+      S.cel(S.ell(x + 1, ty + 31, 1.3, 1.3, 8), '#eaffff', { shadow: false, depth: 0.5, line: S.L(0.6), rim: null });
     };
     const legParts = (tag, hip, dark) => [
       { id: 'leg' + tag + '1', bone: 'leg' + tag + '1', box: [hip[0] - 14, -72, hip[0] + 14, -30], draw: (S) => tube(S, hip[0], -66, hip[1] + 19, 14, 12, dark ? dk('#2a2260') : '#2a2260', { shadow: '#13103a', depth: 4, line: S.L(2.0), capTop: 0.1 }) },
@@ -913,9 +914,9 @@
       id: 'coatFront', bone: 'hips', box: [-46, -84, 50, -22], sway: { px: 0, py: -76, amp: 0.045, freq: 0.4, phase: 0.1, drag: 0.6 },
       draw(S) {
         S.cel([[-26, -78], [26, -78], [34, -58], [40, -36], [30, -24], [12, -26], [2, -34], [-8, -24], [-30, -26], [-40, -34], [-34, -58]], c.coat, { shadow: c.coatD, depth: 7, line: S.L(3), halftone: { d: 4.2, alpha: 0.36, color: '#05031a' } });
-        // ink-splash hem
-        [[-30, -30, 4], [-6, -30, 5], [16, -28, 4.5], [34, -33, 3.6]].forEach((b, i) => tk.inkBlot(S.g, b[0], b[1], b[2], { color: i % 2 ? '#ffffff' : c.trim, seed: i + 2, drips: 1, n: 9, jag: 0.4 }));
-        S.line([[-34, -34], [-20, -30], [-4, -34], [10, -30], [26, -34], [38, -36]], { w: 1.4, color: c.trim, taper: 0.1, alpha: 0.9 });
+        // waveform hem: a sine line along the hem and three small sound rings
+        S.line(Array.from({ length: 12 }, (_, i) => { const u = i / 11; return [lerp(-34, 38, u), lerp(-33, -35, u) + Math.sin(u * TAU * 2.5) * 2.5]; }), { w: 1.5, color: c.trim, taper: 0.1, alpha: 0.95 });
+        [[-26, -28], [2, -27], [28, -29]].forEach((b) => { S.g.beginPath(); S.g.arc(b[0], b[1], 3, 0, TAU); S.g.lineWidth = S.L(1.2); S.g.strokeStyle = tk.rgba(c.trim, 0.9); S.g.stroke(); });
         S.line([[0, -76], [3, -50], [2, -30]], { w: 1.4, color: '#3a3a8a', taper: 0.4 });
       },
     };
@@ -924,19 +925,24 @@
       chain: { spine: [[-14, -74], [-32, -62], [-46, -40], [-52, -14]], cuts: [0.4, 0.72], reach: 32, sway: { amp: 0.16, freq: 0.36, phase: 0.3, drag: 1.6 } },
       draw(S) {
         S.lock([[-14, -74], [-32, -62], [-46, -40], [-52, -14]], c.coat, { wMax: 34, w0: 22, w1: 14, cap: 'flat', tipPow: 1, shadow: c.coatD, shadowW: 0.6, line: S.L(3), gloss: false, strands: 0, halftone: { d: 4.2, alpha: 0.34, color: '#05031a' } });
-        [[-50, -20, 4.6], [-44, -10, 3.4]].forEach((b, i) => tk.inkBlot(S.g, b[0], b[1], b[2], { color: i % 2 ? '#ffffff' : c.trim, seed: i + 7, drips: 1, n: 9, jag: 0.4 }));
+        S.line(Array.from({ length: 8 }, (_, i) => { const u = i / 7; return [lerp(-60, -40, u), -16 + Math.sin(u * TAU * 1.5) * 2.5]; }), { w: 1.4, color: c.trim, taper: 0.1, alpha: 0.9 });
+        [[-50, -26], [-44, -7]].forEach((b) => { S.g.beginPath(); S.g.arc(b[0], b[1], 3.2, 0, TAU); S.g.lineWidth = S.L(1.2); S.g.strokeStyle = tk.rgba(c.trim, 0.9); S.g.stroke(); });
       },
     };
     const scroll = {
       id: 'scroll', bone: 'torso', box: [4, -100, 76, -20],
       chain: { spine: [[24, -84], [34, -76], [42, -62], [44, -44]], cuts: [0.4, 0.72], reach: 20, sway: { amp: 0.24, freq: 0.5, phase: 0.8, drag: 1.5, gain: [0.5, 1.1, 1.7] } },
       draw(S) {
-        S.lock([[24, -84], [34, -76], [42, -62], [44, -44]], '#f8eed2', { wMax: 15, w0: 12, w1: 12, cap: 'flat', tipPow: 1, shadow: '#d2bd8e', shadowW: 0.5, line: S.L(2), gloss: false, strands: 0, rim: null, tipColor: '#e8383d', tipShadow: '#a01c34', tipFrac: 0.12 });
-        [[28, -80, 33, -75], [34, -72, 39, -66], [38, -62, 41, -54], [40, -54, 42, -47]].forEach((l) => S.line([[l[0], l[1]], [l[2], l[3]]], { w: 1.5, color: '#2a2058', taper: 0.3 }));
-        // the rolled scroll at his belt
-        S.cel([[14, -90], [30, -90], [32, -80], [16, -80]], '#f8eed2', { shadow: '#d2bd8e', depth: 3, line: S.L(2), rim: null, tension: 0.4 });
-        S.cel(S.ell(15, -85, 3.4, 5.6, 8), '#e6d3a3', { shadow: false, depth: 1, line: S.L(1.8), rim: null });
-        S.cel([[22, -90], [26, -90], [26, -80], [22, -80]], c.trim, { shadow: false, depth: 1, line: S.L(1.4), rim: null, tension: 0.2 });
+        // the flute bag cord: indigo brocade ending in a gold tassel and a miniature bronze shakuhachi charm
+        S.lock([[24, -84], [34, -76], [42, -62], [44, -44]], c.coatL, { wMax: 6, w0: 6, w1: 5, cap: 'flat', tipPow: 1, shadow: c.coatD, shadowW: 0.5, line: S.L(1.8), gloss: false, strands: 0, rim: null, tipColor: c.gold, tipShadow: '#b98a2e', tipFrac: 0.14 });
+        [[28, -80, 33, -75], [35, -71, 39, -65], [39, -60, 41, -53]].forEach((l) => S.line([[l[0], l[1]], [l[2], l[3]]], { w: 1.2, color: c.trim, taper: 0.3, alpha: 0.85 }));
+        S.cel([[41, -46], [47, -46], [48, -38], [40, -38]], c.gold, { shadow: '#b98a2e', depth: 1.5, line: S.L(1.4), rim: null, tension: 0.2 });
+        S.cel([[42.2, -38], [45.8, -38], [46, -24], [42, -24]], c.bronze, { shadow: c.bronzeD, depth: 1.4, line: S.L(1.5), rim: null, tension: 0.1 });
+        [-33, -28].forEach((y) => S.cel(S.ell(44, y, 0.9, 1.3, 6), '#0a0620', { shadow: false, depth: 0.4, line: S.L(0.5), rim: null }));
+        // the flute's brocade bag tie at the belt: a short indigo cylinder with gold bands
+        S.cel([[14, -90], [30, -90], [32, -80], [16, -80]], c.coatL, { shadow: c.coatD, depth: 3, line: S.L(2), rim: null, tension: 0.4 });
+        S.cel(S.ell(15, -85, 3.4, 5.6, 8), c.coat, { shadow: false, depth: 1, line: S.L(1.8), rim: null });
+        [[19, -90, 21, -80], [26, -90, 28, -80]].forEach((b) => S.cel([[b[0], b[1]], [b[0] + 2.4, b[1]], [b[2] + 2.4, b[3]], [b[2], b[3]]], c.gold, { shadow: false, depth: 1, line: S.L(1.3), rim: null, tension: 0.2 }));
       },
     };
     const torso = {
@@ -955,27 +961,32 @@
         S.cel([[8, -132], [10, -150], [20, -148], [26, -138], [22, -126], [14, -124]], c.coat, { shadow: c.coatD, depth: 4, line: S.L(2.3), halftone: { d: 4, alpha: 0.3, color: '#05031a' } });
         S.line([[-15, -142], [-6, -148], [4, -144]], { w: 1.3, color: c.trim, taper: 0.2 });
         S.line([[10, -145], [18, -144], [24, -136]], { w: 1.3, color: c.trim, taper: 0.2 });
-        // drips of cyan ink down the chest
-        S.line([[-10, -118], [-9, -108], [-11, -96]], { w: 1.3, color: c.trim, taper: 0.4, alpha: 0.8 });
+        // a short cyan sine line (sound line) down the chest
+        S.line(Array.from({ length: 8 }, (_, i) => { const u = i / 7; return [-10 + Math.sin(u * TAU * 1.5) * 2.2, lerp(-120, -94, u)]; }), { w: 1.3, color: c.trim, taper: 0.4, alpha: 0.85 });
       },
     };
     const weapon = {
       id: 'weapon', bone: 'weapon', box: [W[0] - 30, W[1] - 218, W[0] + 30, W[1] + 44],
       draw(S) {
         S.g.translate(W[0], W[1]);
-        // the shaft with gold bands and glowing runes
-        S.cel([[-3.6, 36], [3.6, 36], [3.4, -150], [-3.4, -150]], c.shaft, { shadow: c.shaftD, depth: 2.4, line: S.L(2.0), rim: '#7a6bff', rimW: 1, tension: 0.15 });
-        [-110, -70, -30, 8].forEach((y) => S.cel([[-4.6, y], [4.6, y], [4.6, y + 4], [-4.6, y + 4]], c.gold, { depth: 1, line: S.L(1.6), rim: null }));
-        [-90, -50, -12, 20].forEach((y) => S.line([[-1.4, y], [1.4, y + 6]], { w: 1.2, color: c.trim, taper: 0.2 }));
-        // ferrule and the brush head: dark at the ferrule, white-cyan at the point
-        S.cel([[-5.4, -150], [5.4, -150], [5.8, -158], [-5.8, -158]], c.gold, { depth: 1.5, line: S.L(1.5), rim: null });
-        S.cel([[-5.6, -158], [5.6, -158], [10, -178], [8, -198], [0, -216, 1], [-8, -198], [-10, -178]], '#2a3a9a', { shadow: '#151a5a', depth: 3, line: S.L(2.2), rim: null });
-        S.g.save();
-        S.clip([[-5.6, -158], [5.6, -158], [10, -178], [8, -198], [0, -216], [-8, -198], [-10, -178]]);
-        const gr = S.g.createLinearGradient(0, -158, 0, -216); gr.addColorStop(0, 'rgba(95,245,255,0)'); gr.addColorStop(0.5, 'rgba(95,245,255,0.75)'); gr.addColorStop(1, 'rgba(230,255,255,1)');
-        S.g.fillStyle = gr; S.g.fillRect(-14, -220, 28, 66);
-        S.g.restore();
-        [[-4, -170, -1, -206], [0, -166, 1, -212], [4, -170, 3, -204]].forEach((l) => S.line([[l[0], l[1]], [l[2], l[3]]], { w: 1, color: '#ffffff', taper: 0.4, alpha: 0.8 }));
+        // an oversized lacquered shakuhachi: root end at y 36, blowing end at y -198
+        S.cel([[-3.6, 36], [3.6, 36], [3.2, -198], [-3.2, -198]], c.shaft, { shadow: c.shaftD, depth: 2.4, line: S.L(2.0), rim: '#7a6bff', rimW: 1, tension: 0.15 });
+        // the bamboo nodes as gold bindings
+        [-176, -128, -82, -36, 10].forEach((y) => S.cel([[-4.6, y], [4.6, y], [4.6, y + 4], [-4.6, y + 4]], c.gold, { depth: 1, line: S.L(1.6), rim: null }));
+        // four finger holes with a cyan rim
+        [-60, -86, -112, -138].forEach((y) => {
+          S.cel(S.ell(0, y, 1.8, 2.6, 10), '#0a0620', { shadow: false, depth: 0.5, line: S.L(0.8), rim: null });
+          S.g.beginPath(); S.g.ellipse(0, y, 1.8, 2.6, 0, 0, TAU); S.g.lineWidth = S.L(0.8); S.g.strokeStyle = tk.rgba(c.trim, 0.95); S.g.stroke();
+        });
+        // the utaguchi: an angled cut with a white horn inlay
+        S.cel([[-3.4, -198], [3.4, -198], [4.2, -206], [-3.0, -212]], c.shaft, { shadow: c.shaftD, depth: 1.5, line: S.L(1.8), rim: '#7a6bff', rimW: 0.8, tension: 0 });
+        S.cel([[-0.6, -205], [3.8, -206], [3.2, -210]], c.horn, { shadow: false, depth: 0.8, line: S.L(0.9), rim: null, tension: 0 });
+        // the flared root knob with its gold ring
+        S.cel(S.ell(0, 38, 6.5, 8, 14), c.shaftD, { shadow: c.shaft, depth: 2, line: S.L(1.8), rim: '#7a6bff', rimW: 0.8 });
+        S.cel([[-5.6, 31], [5.6, 31], [5.8, 35], [-5.8, 35]], c.gold, { depth: 1, line: S.L(1.4), rim: null });
+        // a short indigo tassel cord tied below the second binding
+        S.line([[3.4, -124], [8, -116], [7, -104], [9, -94]], { w: 2.4, color: c.coatL, taper: 0.2, wobble: 0 });
+        S.line([[9, -100], [9.4, -90]], { w: 3.2, color: c.gold, taper: 0.1, wobble: 0 });
       },
     };
     const fingers = {
@@ -989,14 +1000,17 @@
     };
 
     // ------------------------------------------------------------------ live fx: orbs, glyph, glow
-    const orb = (ctx, x, y, r, t, ph) => {
+    const orb = (ctx, x, y, r, t, ph, fine) => {
       tk.glow(ctx, x, y, r * 2.4, '#7a6bff', 0.45);
       ctx.save();
       const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
       g.addColorStop(0, '#8f86ff'); g.addColorStop(0.55, '#2f2a80'); g.addColorStop(1, '#0d0a34');
       ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = g; ctx.fill();
       ctx.lineWidth = 2.2; ctx.strokeStyle = pal.ink; ctx.stroke();
+      // the thin cyan sound ring around each pearl
+      ctx.beginPath(); ctx.arc(x, y, r * 1.5, 0, TAU); ctx.lineWidth = 1; ctx.strokeStyle = tk.rgba('#5ff5ff', 0.5); ctx.stroke();
       ctx.beginPath(); ctx.ellipse(x - r * 0.34, y - r * 0.4, r * 0.28, r * 0.18, -0.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill();
+      if (fine) tk.note(ctx, x - r * 0.3, y - r * 0.32, r * 0.34, { kind: 'quarter', color: '#ffffff', alpha: 0.9, line: 0.7 });
       ctx.beginPath(); ctx.arc(x + r * 0.4, y + r * 0.42, r * 0.09, 0, TAU); ctx.fillStyle = 'rgba(95,245,255,0.9)'; ctx.fill();
       ctx.restore();
     };
@@ -1009,12 +1023,13 @@
           const cx = lerp(-68, -26, conv * 0.6), cy = lerp(-160, -132, conv * 0.6);
           const rx = lerp(24, 20, conv), ry = lerp(40, 22, conv);
           const x = cx + Math.sin(a) * rx, y = cy + Math.cos(a * 0.5 + i) * ry * 0.5 + Math.sin(a) * ry * 0.5 + Math.sin(t * 1.6 + i) * 3 * m;
-          orb(ctx, x, y, 6.2 + depth * 1.2 + conv * 1.5, t, i);
+          orb(ctx, x, y, 6.2 + depth * 1.2 + conv * 1.5, t, i, !(st.s < 0.7));
         }
       },
     });
+    // the cast sigil: a beamed note pair written stroke by stroke (stems, beam, two thick heads), then two sound arcs
     const glyphStrokes = [
-      [[0, -40], [0, 40]], [[-34, -12], [34, -12]], [[-26, -34], [-10, 6], [-26, 34]], [[26, -34], [10, 6], [26, 34]], [[-30, 34], [0, 44], [30, 34]],
+      [[-14, 22], [-14, -26]], [[-14, -26], [16, -34]], [[16, -34], [16, 14]], [[-26, 22], [-8, 26]], [[4, 14], [22, 18]],
     ];
     const glyphFx = {
       id: 'glyph', bone: 'root', live(ctx, st) {
@@ -1030,9 +1045,13 @@
           const pts = s.map((p) => [p[0], p[1]]);
           const n = Math.max(2, Math.ceil(pts.length * v + 0.001)), part = pts.slice(0, n);
           if (v < 1 && pts.length === 2) part[1] = [lerp(pts[0][0], pts[1][0], v), lerp(pts[0][1], pts[1][1], v)];
-          tk.inkPath(ctx, part, { w: 4.2, color: '#eaffff', taper: 0.15, wobble: 0.1, seed: i });
-          tk.inkPath(ctx, part, { w: 8, color: tk.rgba('#5ff5ff', 0.35), taper: 0.15, wobble: 0.1, seed: i });
+          const head = i >= 3, hw = head ? 7.5 : 4.2;
+          tk.inkPath(ctx, part, { w: hw, color: '#eaffff', taper: head ? 0.05 : 0.15, wobble: 0.1, seed: i });
+          tk.inkPath(ctx, part, { w: hw + 4, color: tk.rgba('#5ff5ff', 0.35), taper: head ? 0.05 : 0.15, wobble: 0.1, seed: i });
         });
+        // the arc pair outside, sound waves at radius 30 and 38
+        const va = clamp(u * glyphStrokes.length - glyphStrokes.length + 1, 0, 1);
+        if (va > 0) [30, 38].forEach((rr, k) => { ctx.beginPath(); ctx.arc(0, 0, rr, -0.6, -0.6 + 1.2 * va); ctx.lineWidth = 2.4 - k * 0.5; ctx.lineCap = 'round'; ctx.strokeStyle = tk.rgba('#eaffff', 0.9 - k * 0.3); ctx.stroke(); });
         ctx.restore();
       },
     };
@@ -1044,13 +1063,21 @@
         tk.glow(ctx, a[0], a[1], 10 + 3 * pulse + 10 * K.power, '#5ff5ff', 0.12 + 0.1 * pulse + 0.3 * K.glow);
         tk.glow(ctx, tip[0], tip[1], 22 + 6 * pulse + 16 * K.power, '#5ff5ff', 0.55 + 0.2 * pulse + 0.25 * K.glow);
         if (K.power > 0.3 || st.pose === 'idle') {
-          for (let i = 0; i < 3; i++) { const ph = (st.t * 0.5 + i * 0.33) % 1; tk.sparkle(ctx, tip[0] + Math.sin(ph * 9 + i) * 8, tip[1] - ph * 26, 3 * (1 - ph) + 1, { color: '#eaffff', alpha: 1 - ph, glow: 0.4 }); }
+          // two thin rings expanding from the mouthpiece (period 1.6 s) and a note or two drifting up
+          for (let i = 0; i < 2; i++) { const ph = ((st.t / 1.6 + i * 0.5) % 1 + 1) % 1; ctx.beginPath(); ctx.arc(tip[0], tip[1], 4 + ph * 22, 0, TAU); ctx.lineWidth = 1.4; ctx.strokeStyle = tk.rgba('#5ff5ff', 0.8 * (1 - ph)); ctx.stroke(); }
+          for (let i = 0; i < 2; i++) { const ph = ((st.t * 0.5 + i * 0.5) % 1 + 1) % 1; tk.note(ctx, tip[0] + 8 + Math.sin(ph * 7 + i * 2) * 7, tip[1] - 6 - ph * 30, 8 - ph * 2, { kind: i ? 'quarter' : 'eighth', color: i ? '#ffffff' : '#9af6ff', alpha: (1 - ph) * 0.95, rot: Math.sin(ph * 5) * 0.2, line: 1 }); }
         }
         if (st.pose === 'attack' && K.trail > 0.1) {
-          for (let i = 0; i < 7; i++) {
+          // notes and rings flung along the swing
+          for (let i = 0; i < 5; i++) {
             const sd = tk.vary('kuro', 'ink' + i), u = clamp(st.p * 2.2 - 0.6 - sd * 0.25, 0, 1);
             if (u <= 0 || u >= 1) continue;
-            tk.inkBlot(ctx, tip[0] + 30 + u * 90 + sd * 20, tip[1] + (sd - 0.5) * 30 + u * 16, (1 - u) * (3 + sd * 4) + 1.5, { color: sd > 0.5 ? '#151044' : '#5ff5ff', seed: i });
+            tk.note(ctx, tip[0] + 30 + u * 90 + sd * 20, tip[1] + (sd - 0.5) * 30 + u * 16, (1 - u) * (3 + sd * 3) + 3, { kind: sd > 0.5 ? 'eighth' : 'quarter', color: sd > 0.5 ? '#ffffff' : '#5ff5ff', alpha: 1 - u * 0.6, rot: u * 2 * (sd - 0.5), line: 1 });
+          }
+          for (let i = 0; i < 2; i++) {
+            const u = clamp(st.p * 2.2 - 0.5 - i * 0.2, 0, 1);
+            if (u <= 0 || u >= 1) continue;
+            ctx.beginPath(); ctx.arc(tip[0] + 24 + u * 80 + i * 14, tip[1] + 6 + u * 14, 5 + u * 14, 0, TAU); ctx.lineWidth = 1.6; ctx.strokeStyle = tk.rgba('#5ff5ff', 0.85 * (1 - u)); ctx.stroke();
           }
         }
       },
@@ -1910,25 +1937,28 @@
     tk.celFill(g, [[100, 308], [94, 258], [112, 236], [136, 250], [140, 298], [120, 314]], c.coat, { shadow: c.coatD, depth: 9, line: 3.4, rim: c.rim, tension: 0.32, hi: c.coatL, hiW: 3, halftone: hal });
     tk.celFill(g, [[170, 296], [176, 246], [200, 228], [224, 246], [224, 308], [196, 316]], c.coat, { shadow: c.coatD, depth: 9, line: 3.4, rim: c.rim, tension: 0.32, hi: c.coatL, hiW: 3, halftone: hal });
     seam(g, [[98, 296], [100, 262], [114, 242]], c.trim, 2.6); seam(g, [[220, 300], [220, 258], [204, 236]], c.trim, 2.6);
-    // shoulder seams, folds and glowing calligraphy
+    // shoulder seams, folds and glowing waveform lines
     seam(g, [[104, 316], [70, 326], [40, 350]], c.coatL, 2.4); seam(g, [[222, 320], [252, 328], [280, 350]], c.coatL, 2.4);
-    [[[40, 392], [62, 366], [54, 346]], [[262, 392], [280, 366], [270, 346]], [[64, 340], [92, 334], [112, 324]]].forEach((st, i) => { tk.inkPath(g, st, { w: 5, color: tk.rgba(c.trim, 0.35), taper: 0.3, seed: i }); tk.inkPath(g, st, { w: 2.2, color: c.trim, taper: 0.3, seed: i }); });
-    [[20, 398, 9], [80, 402, 7], [232, 400, 8], [274, 394, 10]].forEach((b, i) => tk.inkBlot(g, b[0], b[1], b[2], { color: i % 2 ? '#ffffff' : c.trim, seed: i + 3, drips: 1 }));
-    // the fude staff, climbing out of the frame at the right
+    const wave = (x0, y0, x1, y1, amp, n) => Array.from({ length: 14 }, (_, i) => { const u = i / 13, dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, o = Math.sin(u * TAU * n) * amp; return [x0 + dx * u - dy / L * o, y0 + dy * u + dx / L * o]; });
+    [wave(40, 392, 54, 346, 5, 2), wave(262, 392, 270, 346, 5, 2), wave(64, 340, 112, 324, 4, 3), wave(222, 324, 270, 344, 4, 3)].forEach((st, i) => { tk.inkPath(g, st, { w: 5, color: tk.rgba(c.trim, 0.35), taper: 0.3, seed: i }); tk.inkPath(g, st, { w: 2.2, color: c.trim, taper: 0.3, seed: i }); });
+    // hem: sound ring motifs
+    [[20, 398, 9], [80, 402, 7], [232, 400, 8], [274, 394, 10]].forEach((b) => { g.beginPath(); g.arc(b[0], b[1], b[2], 0, TAU); g.lineWidth = 2.4; g.strokeStyle = tk.rgba(c.trim, 0.9); g.stroke(); g.beginPath(); g.arc(b[0], b[1], b[2] * 0.45, 0, TAU); g.lineWidth = 1.6; g.strokeStyle = tk.rgba('#ffffff', 0.7); g.stroke(); });
+    // the shakuhachi, climbing out of the frame at the right, with gold bindings and three finger holes
     tk.celFill(g, taperPoly(272, 406, 246, 40, 15, 12), c.shaft, { shadow: c.shaftD, depth: 5, line: 3.2, rim: '#7a6bff', rimW: 2, tension: 0.15 });
     [346, 266, 186, 116].forEach((yy) => { const u = (406 - yy) / 366, cx = lerp(272, 246, u); tk.celFill(g, [[cx - 9, yy], [cx + 9, yy], [cx + 9, yy + 8], [cx - 9, yy + 8]], c.gold, { depth: 2, line: 2.4, shadow: false, rim: null, tension: 0.25, hi: false }); });
+    [296, 226, 156].forEach((yy) => { const u = (406 - yy) / 366, cx = lerp(272, 246, u); tk.celFill(g, tk.ellipsePts(cx, yy, 4.2, 6, 12, 0), '#0a0620', { depth: 1, line: 1.6, shadow: false, rim: null, hi: false }); g.beginPath(); g.ellipse(cx, yy, 4.2, 6, 0, 0, TAU); g.lineWidth = 1.6; g.strokeStyle = tk.rgba(c.trim, 0.95); g.stroke(); });
   };
   BUSTFX.kuro = (ctx, st) => {
     const c = st.spec.col, t = st.t, m = st.m;
-    // the glowing brush head above the frame's right edge
+    // the flute mouthpiece above the frame's right edge: an angled cut with a white horn inlay, cyan glow and two expanding rings
     const bx = 240, by = 26, p = 0.5 + 0.5 * Math.sin(t * 3);
     tk.glow(ctx, bx, by + 10, 60 + 6 * p, '#5ff5ff', 0.6);
     ctx.save(); ctx.translate(bx, by);
-    const pts = [[-10, 34], [10, 34], [20, 8], [15, -22], [0, -50, 1], [-15, -22], [-20, 8]];
-    tk.celFill(ctx, pts, '#2a3a9a', { shadow: '#151a5a', depth: 5, line: 3.4, rim: null });
-    ctx.save(); ctx.beginPath(); tk.trace(ctx, pts); ctx.clip();
-    const gr = ctx.createLinearGradient(0, 34, 0, -50); gr.addColorStop(0, 'rgba(95,245,255,0)'); gr.addColorStop(0.5, 'rgba(95,245,255,0.8)'); gr.addColorStop(1, 'rgba(240,255,255,1)');
-    ctx.fillStyle = gr; ctx.fillRect(-30, -60, 60, 100); ctx.restore();
+    tk.celFill(ctx, [[-13, 40], [13, 40], [12, 0], [15, -22], [-11, -34], [-15, -22], [-13, 0]], c.shaft, { shadow: c.shaftD, depth: 5, line: 3.4, rim: '#7a6bff', rimW: 2, tension: 0 });
+    tk.celFill(ctx, [[-2, -26], [12, -22], [9, -31]], '#f4f0ff', { shadow: false, depth: 1, line: 2.2, rim: null, hi: false, tension: 0 });
+    tk.celFill(ctx, [[-14, 36], [14, 36], [14, 44], [-14, 44]], c.gold, { depth: 2, line: 2.4, shadow: false, rim: null, tension: 0.25, hi: false });
+    ctx.beginPath(); ctx.ellipse(0, 12, 4.4, 6.4, 0, 0, TAU); ctx.fillStyle = '#0a0620'; ctx.fill(); ctx.lineWidth = 1.8; ctx.strokeStyle = tk.rgba('#5ff5ff', 0.95); ctx.stroke();
+    for (let i = 0; i < 2; i++) { const ph = ((t / 1.6 + i * 0.5) % 1 + 1) % 1; ctx.beginPath(); ctx.arc(6, -26, 8 + ph * 44, 0, TAU); ctx.lineWidth = 2.2; ctx.strokeStyle = tk.rgba('#5ff5ff', 0.75 * (1 - ph)); ctx.stroke(); }
     ctx.restore();
     for (let i = 0; i < 3; i++) { const a = t * 0.7 + i * TAU / 3, x = 40 + Math.cos(a) * 26, y = 250 + Math.sin(a) * 60 + Math.sin(t * 1.6 + i) * 4 * m, r = 10 + Math.sin(a) * 2; tk.glow(ctx, x, y, r * 2.4, '#7a6bff', 0.5); const gr2 = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r); gr2.addColorStop(0, '#8f86ff'); gr2.addColorStop(0.55, '#2f2a80'); gr2.addColorStop(1, '#0d0a34'); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = gr2; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = pal.ink; ctx.stroke(); ctx.beginPath(); ctx.ellipse(x - r * 0.34, y - r * 0.4, r * 0.28, r * 0.18, -0.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); }
     void c;

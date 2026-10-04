@@ -1,4 +1,4 @@
-// Inkwoven -- ART.enemy, chapter 1: the Whispering Bamboo Grove (forest spirits and folk monsters, golden dusk). Extends ART (art.js).
+// Echowake (was Inkwoven) -- ART.enemy, chapter 1: the Whispering Bamboo Grove (forest spirits and folk monsters, golden dusk). Extends ART (art.js).
 //
 // PUBLIC API. Nothing new is exported beyond DESIGN 5.6: this file calls ART.enemy.register(id, {draw, bounds}) once for each of the 17 ids of
 // chapter 1 (10 normals, 3 elites, 3 minions, the boss) and registers gallery sheets. Extras a reader may want:
@@ -18,7 +18,7 @@
 //   Arms swing with rot = A * wind - B * strike (wind raises the weapon, strike brings it down), which reads as a wind-up and a blow on every creature.
 //   Poses: one-shots (attack hurt block buff die) derive from pt and hold their end pose; telegraph ramps up over 0.34 s and then holds with a
 //   tremble; idle is a loop of t. Death is generic: the body is cut into torn strips that drift away and thin out, with themed bits and a soul orb.
-//   Determinism: no clock and no Math.random; every draw is a pure function of (id, pose, t, pt, phase) plus the sprite cache.
+//   Determinism: no clock and no banned random call; every draw is a pure function of (id, pose, t, pt, phase) plus the sprite cache.
 (() => {
   'use strict';
   const tk = ART.tk, pal = tk.pal, mat = tk.mat;
@@ -294,7 +294,7 @@
   // effects shared by every creature (all drawn live, all cheap)
   // ---------------------------------------------------------------------------------------------------------------
   const FX = {};
-  // a small themed bit: a leaf, petal, drop, ember, paper scrap, ink blot, spore, feather or dust mote centred at (x, y)
+  // a small themed bit: a leaf, petal, drop, ember, paper scrap, dark blot, spore, feather or dust mote centred at (x, y)
   FX.bit = (ctx, kind, x, y, sz, rot, a, c1, c2) => {
     if (!(a > 0.02) || !(sz > 0.3)) return;
     ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha *= cA(a);
@@ -325,18 +325,19 @@
     }
     ctx.restore();
   };
-  // a page torn from the book: curled corner, ruled lines of brush script and one violet glyph. size = half the width
+  // a captured sound: a small translucent bubble with a glowing violet note inside (the sound the fox swallowed). size = half the width.
+  // (The name FX.page stays so every caller keeps working.)
   FX.page = (ctx, x, y, sz, rot, a, glowc) => {
     if (!(a > 0.02)) return;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha *= cA(a);
-    if (glowc) tk.glow(ctx, 0, 0, sz * 2.2, glowc, 0.28);
-    const w = sz, h = sz * 1.35;
-    ctx.beginPath(); ctx.moveTo(-w, -h); ctx.quadraticCurveTo(0, -h - 3, w, -h + 1); ctx.lineTo(w + 1, h - 8); ctx.lineTo(w - 9, h); ctx.quadraticCurveTo(0, h + 3, -w, h - 1); ctx.closePath();
-    ctx.fillStyle = '#f6ecd0'; ctx.fill(); ctx.lineWidth = Math.max(1.4, sz * 0.13); ctx.strokeStyle = pal.ink; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(w + 1, h - 8); ctx.lineTo(w - 9, h); ctx.lineTo(w - 8, h - 9); ctx.closePath(); ctx.fillStyle = '#d8c090'; ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = 'rgba(26,16,48,0.75)'; ctx.lineWidth = Math.max(1, sz * 0.1); ctx.lineCap = 'round';
-    [-0.55, -0.2, 0.15, 0.5].forEach((f, i) => { ctx.beginPath(); ctx.moveTo(-w * 0.62, h * f); ctx.quadraticCurveTo(0, h * f + (i % 2 ? 2 : -2), w * (0.62 - (i === 3 ? 0.4 : 0)), h * f); ctx.stroke(); });
-    ctx.fillStyle = 'rgba(143,95,232,0.85)'; ctx.beginPath(); ctx.arc(w * 0.28, -h * 0.72, sz * 0.2, 0, TAU); ctx.fill();
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot * 0.12); ctx.globalAlpha *= cA(a);
+    if (glowc) tk.glow(ctx, 0, 0, sz * 2.4, glowc, 0.3);
+    const r = sz * 1.15;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fillStyle = 'rgba(232,224,255,0.5)'; ctx.fill();
+    ctx.lineWidth = Math.max(1.2, sz * 0.12); ctx.strokeStyle = pal.ink; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r - ctx.lineWidth * 1.1, 0.2 * PI, 1.1 * PI); ctx.lineWidth = Math.max(0.8, sz * 0.07); ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+    tk.glow(ctx, 0, sz * 0.1, sz * 0.9, '#a878ff', 0.55);
+    tk.note(ctx, -sz * 0.12, sz * 0.32, sz * 0.62, { kind: 'eighth', color: '#8f5fe8', line: Math.max(1, sz * 0.1) });
+    ctx.beginPath(); ctx.ellipse(-r * 0.42, -r * 0.46, r * 0.16, r * 0.1, -0.7, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill();
     ctx.restore();
   };
   // a rising soul orb: the last thing a dying spirit leaves behind
@@ -2077,7 +2078,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // PAPER KODAMA (minion, s): a hollow doll folded from a torn page and given a face by the fox's brush. It leaks the Blank: violet ink.
+  // PAPER KODAMA (minion, s; the Hollow Kodama): a hollow paper doll with its echo eaten out. Silence leaks from its eye holes as slow grey mist.
   // ---------------------------------------------------------------------------------------------------------------
   define({
     id: 'paper_kodama', size: 's', acc: '#a070ff', lunge: 30, alertColor: '#c8a0ff', lw: 2.2,
@@ -2117,7 +2118,7 @@
       { id: 'face', box: [-26, -84, 24, -50], parent: 'head', pivot: [0, -72], face: true,
         draw(S, state) {
           const [ey, mo] = state.split('|'), g = S.g, ink = S.c.ink;
-          // brush-drawn holes: slightly uneven ink ovals with a violet gleam
+          // hollow holes: slightly uneven dark ovals with a violet gleam
           const eye = (x, y, w, h) => {
             if (ey === 'closed') { tk.inkPath(g, [[x - w / 2, y], [x, y + 2], [x + w / 2, y]], { w: 2.6, color: ink, taper: 0.3 }); return; }
             if (ey === 'hurt') { tk.inkPath(g, [[x - w / 2, y - 4], [x + w / 2, y + 4]], { w: 2.6, color: ink, taper: 0.2 }); tk.inkPath(g, [[x - w / 2, y + 4], [x + w / 2, y - 4]], { w: 2.6, color: ink, taper: 0.2 }); return; }
@@ -2140,32 +2141,37 @@
       { id: 'ink', parent: 'head', live(ctx, st) {
         const K = st.K, t = st.t, m = st.m, k = 0.5 + 0.7 * K.alert + 0.5 * K.strike;
         tk.glow(ctx, -11, -70, 12, '#a070ff', 0.3 * k); tk.glow(ctx, 10, -70, 12, '#a070ff', 0.3 * k); tk.glow(ctx, 0, -56, 10, '#a070ff', 0.25 * k);
-        // ink drips from the holes: a slow bead that stretches and falls
+        // silence leaking from the holes: slow grey mist puffs that swell, drift up and thin out
         [[-11, -62, 0], [10, -62, 0.4], [0, -50, 0.7]].forEach((d, i) => {
-          const ph = (t * 0.4 + d[2]) % 1, y = d[1] + Math.pow(ph, 1.6) * 44 * (0.6 + 0.4 * m);
-          ctx.save(); ctx.globalAlpha *= (1 - ph * ph); ctx.strokeStyle = '#1a1030'; ctx.lineWidth = 2.2 * (1 - ph * 0.5); ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(d[0], d[1]); ctx.lineTo(d[0], Math.min(y, d[1] + ph * 26)); ctx.stroke();
-          ctx.beginPath(); ctx.arc(d[0], y, 2.6 * (1 - ph * 0.4), 0, TAU); ctx.fillStyle = '#1a1030'; ctx.fill(); ctx.restore(); void i;
+          for (let q = 0; q < 2; q++) {
+            const ph = (t * 0.28 + d[2] + q * 0.5) % 1, y = d[1] + ph * 30 * (0.6 + 0.4 * m), x = d[0] + sin(ph * 5 + i * 2 + q) * 4 * m, r = 3.5 + 9 * ph;
+            ctx.save(); ctx.globalAlpha *= 0.85 * sin(PI * ph);
+            ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = '#8e8aa3'; ctx.fill();
+            ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.55, 0, TAU); ctx.fillStyle = '#cfcdd8'; ctx.fill(); ctx.restore();
+          }
         });
       } },
     ],
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // KUZUNOHA, THE NINE-TAIL INK FOX (boss, xl). She sits like a shrine statue: chest raised, ink-dipped forepaws, a vermilion collar with a
-  // gold bell, violet eyes, a noh mask floating at her shoulder, nine plumed tails that end in dripping brush tips and pages of the book
-  // turning around her.
+  // KUZUNOHA, THE NINE-VOICED FOX (boss, xl). She sits like a shrine statue: chest raised, dark-stockinged forepaws, a vermilion collar with a
+  // gold bell, violet eyes, a noh mask floating at her shoulder, nine plumed tails that end in a ragged tip of violet hush smoke and a small brass
+  // bell, and captured sounds (bubbles with a note inside) drifting around her.
   //   phase 0: the tails ride in a loose bundle behind her and the mask floats whole.
-  //   phase 1 (below half HP): the tails open into a peacock wheel with an ink-brush halo behind it, the mask splits down its middle and its
-  //   halves drift apart with violet light between, more pages wheel about her, ink veins spread over her fur and her eyes blaze.
-  // Poses: telegraph raises the great centre tail like a brush poised over the page; attack brings it down in a calligraphic sweep and the
-  // head snaps forward; block (Nine Tails Rise) folds every tail forward into a dome; buff flares the fan open; die unravels her into ink,
-  // petals and pages.
+  //   phase 1 (below half HP): the tails open into a peacock wheel with three turning sound rings behind it, the mask splits down its middle and its
+  //   halves drift apart with violet light between, more captured sounds wheel about her, veins of hush spread over her fur and her eyes blaze.
+  // Poses: telegraph raises the great centre tail like a baton poised; attack brings it down in a sweeping arc and the head snaps forward; block
+  // (Nine Tails Rise) folds every tail forward into a dome; buff flares the fan open; die lets her go in petals and the sounds she held, popping
+  // free as notes. A hit pops a few bubbles into free notes.
   // ---------------------------------------------------------------------------------------------------------------
-  const FOX = cs('#fbf4ee'), VIOLET = '#8f5fe8', INKV = '#2a1a5a';
+  const HUE = ['#ff7eb6', '#ff9a2e', '#f5c96a', '#3fd6b0', '#5fb4ff', '#7a6bff', '#c49bff'];
+  // colour of a smoke puff at age u: violet hush fading to grey
+  const mix3 = (u) => tk.mix('#5a3a8a', '#8e8aa3', clamp(u * 1.4, 0, 1));
+  const FOX = cs('#fbf4ee'), VIOLET = '#8f5fe8', INKV = '#2a1a5a';   // INKV: the dark violet of the stockings and tips (name kept)
   const TAIL_SP = [[0, 0], [9, -64], [-2, -136], [11, -214]], TAIL_R = [88, -152];
   const tailBase = (i, ph) => (ph >= 1 ? -0.2 + (i - 4) * 0.2 : 0.02 + (i - 4) * 0.095);
-  // a fluffy plume dipped in ink like a calligraphy brush: smooth scalloped white body, ragged dark tip that ends in a point
+  // a fluffy plume whose tip is smoke of violet hush: smooth scalloped white body, ragged dark tip that ends in a point and fades to grey
   function foxTailArt(S, v) {
     const p1 = String(v).charAt(0) === 'p' && String(v).charAt(1) === '1', tone = +String(v).split('|')[1] || 0;
     S.tube(TAIL_SP, 36, 8, tk.mix(p1 ? '#fbf6ff' : FOX.b, p1 ? '#a48ae8' : '#b8a4e8', 0.15 * tone), { bulge: 3.3, profile: (u) => 1 + 0.05 * sin(u * 24), depth: 13, halftone: { d: 4.8, alpha: 0.24 }, tension: 0.9, rim: p1 ? '#c8a0ff' : '#d8c0ff', rimW: 2.4, hi: '#ffffff', hiW: 3.2, line: S.lw,
@@ -2174,7 +2180,7 @@
         for (let k = 0; k <= 8; k++) { const f = k / 8 - 0.5, u = u0 + (r() - 0.5) * 0.08 + Math.abs(f) * 0.08, sp = spineAt(TAIL_SP, u); pts.push([sp.x - sp.ty * f * 140, sp.y + sp.tx * f * 140]); }
         pts.push([pts[8][0], -230], [pts[0][0], -230]);
         const a = spineAt(TAIL_SP, u0), b = spineAt(TAIL_SP, 1);
-        const gr = gg.createLinearGradient(a.x, a.y, b.x, b.y); gr.addColorStop(0, '#9a68f0'); gr.addColorStop(0.35, '#5a34b0'); gr.addColorStop(1, '#241458');
+        const gr = gg.createLinearGradient(a.x, a.y, b.x, b.y); gr.addColorStop(0, '#7a58b4'); gr.addColorStop(0.35, '#5a3a8a'); gr.addColorStop(1, '#8e8aa3');
         gg.beginPath(); tk.trace(gg, { poly: pts }); gg.fillStyle = gr; gg.fill();
         for (let k = 0; k < 7; k++) { const f = k / 6 - 0.5, sp = spineAt(TAIL_SP, u0 + 0.03), sp2 = spineAt(TAIL_SP, 0.97 - Math.abs(f) * 0.1); tk.inkPath(gg, [[sp.x - sp.ty * f * 84, sp.y + sp.tx * f * 84], [sp2.x - sp2.ty * f * 16, sp2.y + sp2.tx * f * 16]], { w: 2.4, color: '#b088ff', alpha: 0.55, taper: 0.4, wobble: 0.1, seed: k }); }
         const gl = spineAt(TAIL_SP, 0.84); tk.inkPath(gg, [[gl.x - 10, gl.y + 16], [gl.x - 8, gl.y - 8], [gl.x - 3, gl.y - 22]], { w: 3.2, color: '#ffffff', alpha: 0.6, taper: 0.5 });
@@ -2223,7 +2229,7 @@
       tk.inkPath(g, zig.map((p) => [p[0] + (half === 'L' ? -0.5 : 0.5), p[1]]), { w: 3, color: pal.ink, taper: 0.1, alpha: 0.95 });
     }
   }
-  // an ink-dipped stocking hanging from a foreleg: x the paw centre, y the ground, yTop where the ink stops
+  // a dark stocking hanging from a foreleg: x the paw centre, y the ground, yTop where the dark stops
   function foxSock(S, x, y, yTop, far) {
     const g = S.g, base = far ? '#1a0f40' : INKV;
     S.tube([[x + 2, yTop], [x + 1, (yTop + y) / 2], [x, y - 8]], 24, 22, base, { depth: 5, line: S.lw * 0.95, hi: false, tension: 0.9, rim: '#8f5fe8', halftone: { d: 4.4, alpha: 0.24 } });
@@ -2250,22 +2256,21 @@
         ctx.lineWidth = 3; ctx.strokeStyle = rgba('#ffffff', 0.9 * (1 - q)); ctx.beginPath(); ctx.ellipse(-10, -170, 40 + q * 250, 26 + q * 160, 0, 0, TAU); ctx.stroke(); ctx.restore();
         tk.glow(ctx, -10, -170, 220 * (1 - q * 0.4), '#c8a0ff', 0.55 * (1 - q));
       }
-      const rr = table('kuz-die', 14, 4);
-      for (let i = 0; i < rr.length; i++) { const life = clamp((p - 0.1 - rr[i][0] * 0.3) / 0.6, 0, 1); if (life <= 0 || life >= 1) continue; FX.page(ctx, -160 + rr[i][1] * 380 + sin(life * 7 + i) * 22, -60 - life * (120 + rr[i][2] * 200), 7 + rr[i][3] * 4, life * 9 + i, sin(life * PI), '#a878ff'); }
+      const rr = table('kuz-die', 14, 4);   // the sounds she held, let go
+      for (let i = 0; i < rr.length; i++) { const life = clamp((p - 0.1 - rr[i][0] * 0.3) / 0.6, 0, 1); if (life <= 0 || life >= 1) continue; const px = -160 + rr[i][1] * 380 + sin(life * 7 + i) * 22, py = -60 - life * (120 + rr[i][2] * 200);
+        if (i % 3 === 0 && life > 0.35) tk.note(ctx, px, py, 9 + rr[i][3] * 4, { kind: i % 2 ? 'eighth' : 'beamed', color: HUE[i % HUE.length], alpha: sin(life * PI), rot: sin(life * 5 + i) * 0.25, line: 1.6 });
+        else FX.page(ctx, px, py, 7 + rr[i][3] * 4, life * 9 + i, sin(life * PI), '#a878ff'); }
     },
     parts: [
       { id: 'halo', parent: 'root', live(ctx, st) {
         if (st.phase < 1) return;
         const t = st.t, m = st.m, pl = 0.7 + 0.3 * sin(t * 2);
         tk.glow(ctx, 40, -190, 250, '#6a3ac8', 0.28 * pl);
-        // a great brushed enso ring behind the wheel of tails, turning slowly
-        const spr = ART.sprite('en1|enso', 520, 520, (g) => {
-          const pts = [];
-          for (let k = 0; k <= 60; k++) { const a = 0.5 + k / 60 * 5.5, r = 214 + 5 * sin(k * 0.7) - k * 0.12; pts.push([260 + cos(a) * r, 260 + sin(a) * r]); }
-          tk.inkPath(g, pts, { w: 30, color: '#2a1a5a', taper: 0.06, taperEnd: 0.5, pressure: (u) => 1 - 0.55 * u, wobble: 0.2, seed: 9 });
-          tk.inkPath(g, pts.map((p) => [260 + (p[0] - 260) * 0.985, 260 + (p[1] - 260) * 0.985]), { w: 11, color: '#8f5fe8', taper: 0.1, taperEnd: 0.6, pressure: (u) => 1 - 0.5 * u, wobble: 0.3, seed: 4, alpha: 0.9 });
-          for (let k = 0; k < 9; k++) { const a = 0.5 + (0.1 + k * 0.1) * 5.5, r = 214 - k * 0.6; tk.inkPath(g, [[260 + cos(a) * (r - 13), 260 + sin(a) * (r - 13)], [260 + cos(a + 0.12) * (r + 14), 260 + sin(a + 0.12) * (r + 14)]], { w: 1.6, color: '#ffffff', alpha: 0.5, taper: 0.5 }); }
-          [[6.0, 226, 5], [6.15, 240, 3.4], [5.9, 246, 2.6]].forEach((d, k) => { const a = d[0]; g.beginPath(); g.arc(260 + cos(a) * d[1], 260 + sin(a) * d[1], d[2], 0, TAU); g.fillStyle = '#2a1a5a'; g.fill(); void k; });
+        // three concentric sound rings behind the wheel of tails, turning slowly (the outer one broken)
+        const spr = ART.sprite('en1|soundrings', 520, 520, (g) => {
+          tk.soundRings(g, 260, 260, 178, { n: 3, gap: 0.085, color: '#2a1a5a', lw: 18, broken: true, alpha: 0.95 });
+          tk.soundRings(g, 260, 260, 178, { n: 3, gap: 0.085, color: '#8f5fe8', lw: 8, broken: true, alpha: 0.95 });
+          tk.soundRings(g, 260, 260, 178, { n: 3, gap: 0.085, color: '#ffffff', lw: 1.6, broken: true, alpha: 0.5 });
         });
         ctx.save(); ctx.translate(40, -190); ctx.rotate(t * 0.12 * m); ctx.globalAlpha *= 0.85; ctx.drawImage(spr, -260, -260, 520, 520); ctx.restore();
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
@@ -2284,7 +2289,7 @@
         for (let k = 0; k < 2; k++) { const u = (t * 0.3 + k * 0.5) % 1; ctx.strokeStyle = rgba('#c8a0ff', 0.5 * (1 - u) * m); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-40, -16, 30 + u * (R - 40), 0, TAU); ctx.stroke(); }
         ctx.restore();
       } },
-      { id: 'pagesBack', parent: 'root', live(ctx, st) { foxPages(ctx, st, false); } },
+      { id: 'pagesBack', parent: 'root', live(ctx, st) { foxBubbles(ctx, st, false); } },
       ...[0, 8, 1, 7, 2, 6, 3, 5, 4].map(foxTail),
       { id: 'seat', parent: 'root', pivot: [20, -30], live() {},
         xf: (K, t, st) => ({ sy: 1 + 0.012 * sin(t * 1.5) * st.m - 0.02 * K.guard, sx: 1 - 0.006 * sin(t * 1.5) * st.m, rot: 0.008 * sin(t * 0.9) * st.m - 0.03 * K.strike + 0.02 * K.wind }) },
@@ -2391,33 +2396,49 @@
           const cb = cos(bend), sb = sin(bend), tx = 11, ty = -216, px = tx * cb - ty * sb, py = tx * sb + ty * cb;
           const tip = mat.pt(tm, px, py);
           tk.glow(ctx, tip[0], tip[1], (p1 ? 30 : 22) * (0.8 + 0.4 * (i === 4 ? 1 + K.wind : 1)), '#8f5fe8', (0.2 + 0.28 * k) * (p1 ? 1.2 : 1));
-          const ph = (t * 0.32 + i * 0.211) % 1, fall = Math.pow(clamp((ph - 0.55) / 0.45, 0, 1), 1.7);
-          const sz = 2.4 + 2.4 * clamp(ph / 0.55, 0, 1);
-          ctx.save(); ctx.globalAlpha *= ph < 0.55 ? 0.95 : 1 - fall * 0.9; ctx.fillStyle = '#1a0f40';
-          ctx.beginPath(); ctx.arc(tip[0] - 1, tip[1] + 3 + fall * 120 * (0.5 + 0.5 * m), sz * (1 - fall * 0.3), 0, TAU); ctx.fill();
-          ctx.fillStyle = 'rgba(200,160,255,0.7)'; ctx.beginPath(); ctx.arc(tip[0] - 2, tip[1] + 2 + fall * 120 * (0.5 + 0.5 * m), sz * 0.3, 0, TAU); ctx.fill(); ctx.restore();
+          // violet hush smoke curling up off the tip: three puffs swell, drift and thin to grey
+          for (let q = 0; q < 3; q++) {
+            const ph = (t * 0.3 + i * 0.211 + q / 3) % 1, rx = tip[0] + sin(ph * 5 + i + q * 2) * 5 * m, ry = tip[1] - 4 - ph * 34 * (0.6 + 0.4 * m), rr2 = 2.6 + 6.5 * ph;
+            ctx.save(); ctx.globalAlpha *= 0.62 * sin(PI * ph); ctx.beginPath(); ctx.arc(rx, ry, rr2, 0, TAU); ctx.fillStyle = mix3(ph); ctx.fill(); ctx.restore();
+          }
+          // a small brass bell hung from the tip
+          ctx.save(); ctx.translate(tip[0], tip[1] + 6); ctx.rotate(0.12 * sin(t * 2.2 + i) * m);
+          ctx.beginPath(); ctx.moveTo(-5.2, 5); ctx.quadraticCurveTo(-5, -4, 0, -5.4); ctx.quadraticCurveTo(5, -4, 5.2, 5); ctx.closePath();
+          ctx.fillStyle = '#c9893a'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = pal.ink; ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-4.4, 2.6); ctx.lineTo(4.4, 2.6); ctx.lineWidth = 1; ctx.strokeStyle = '#7a4a1c'; ctx.stroke();
+          ctx.beginPath(); ctx.arc(0, 6.4, 1.5, 0, TAU); ctx.fillStyle = '#7a4a1c'; ctx.fill();
+          ctx.beginPath(); ctx.arc(-1.8, -1.2, 1.1, 0, TAU); ctx.fillStyle = 'rgba(255,240,200,0.85)'; ctx.fill(); ctx.restore();
         }
         if (K.wind > 0.2) { const c = mat.pt(M.tail4, 11, -218 * (1 + 0.22 * K.wind)); tk.glow(ctx, c[0], c[1], 64 * K.wind, '#c8a0ff', 0.6 * K.alert); tk.sparkle(ctx, c[0], c[1], 18 * K.wind, { color: '#ffffff', rot: t * 2, glow: 0.7 }); }
       } },
       { id: 'pagesFront', parent: 'root', live(ctx, st) {
-        foxPages(ctx, st, true);
+        foxBubbles(ctx, st, true);
         const t = st.t, m = st.m, p1 = st.phase >= 1, rr = table('kuz-motes', 22, 3);
         for (let i = 0; i < (p1 ? 22 : 12); i++) { const ph = (t * 0.16 + rr[i][0]) % 1; tk.sparkle(ctx, -190 + rr[i][1] * 380 + sin(ph * 6 + i) * 10, -30 - ph * 330, 2.4 + rr[i][2] * 3, { color: rr[i][2] > 0.5 ? '#d8c0ff' : '#ffffff', alpha: sin(ph * PI) * 0.85 * m, glow: 0.4 }); }
       } },
     ],
   });
-  // pages of the book turning about the fox: back ones behind her, front ones over her
-  function foxPages(ctx, st, front) {
-    const t = st.t, m = st.m, p1 = st.phase >= 1, n = p1 ? 8 : 5, rr = table('kuz-pages', 10, 4);
+  // captured sounds drifting about the fox: back ones behind her, front ones over her
+  function foxBubbles(ctx, st, front) {
+    const t = st.t, m = st.m, p1 = st.phase >= 1, n = p1 ? 12 : 6, rr = table('kuz-pages', 14, 4), hurt = st.K ? st.K.hurt : 0;
     for (let i = 0; i < n; i++) {
       const a = t * (0.32 + rr[i][0] * 0.1) * m + i * TAU / n + rr[i][1] * 2, sn = sin(a);
       if ((sn > 0) !== front) continue;
       const rx = (p1 ? 190 : 170) + rr[i][2] * 24, ry = 60 + rr[i][3] * 40, x = 10 + cos(a) * rx, y = -200 + sn * ry - 40 * sin(t * 0.7 + i) * m;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(a * 1.3 + i); ctx.scale(1, 0.55 + 0.45 * Math.abs(cos(a * 2 + i)));
-      FX.page(ctx, 0, 0, 9 + rr[i][2] * 4, 0, 0.95, p1 ? '#a878ff' : null);
+      const pop = i % 4 === 0 && hurt > 0.04;
+      if (pop) {
+        // a hit pops this bubble: a ring flashes and the note flies free
+        const u = 1 - hurt;
+        ctx.save(); ctx.globalAlpha *= hurt; ctx.beginPath(); ctx.arc(x, y, 10 + 22 * u, 0, TAU); ctx.lineWidth = 2; ctx.strokeStyle = '#e8e0ff'; ctx.stroke(); ctx.restore();
+        tk.note(ctx, x + 8 * u, y - 36 * u, 12, { kind: i % 8 === 0 ? 'beamed' : 'eighth', color: HUE[i % HUE.length], alpha: hurt, rot: 0.25 * sin(t * 9 + i), line: 1.8 });
+        continue;
+      }
+      ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.92 + 0.08 * Math.abs(cos(a * 2 + i)));
+      FX.page(ctx, 0, 0, 9 + rr[i][2] * 4, a * 0.3, 0.95, p1 ? '#a878ff' : null);
       ctx.restore();
     }
   }
+
 
   //@CREATURES
 

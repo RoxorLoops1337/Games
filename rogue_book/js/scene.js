@@ -71,7 +71,7 @@
 //   scales speech bubbles, ART.tk.opt.quality 'low' halves particles and skips afterimages, speed lines, the hit-flash pass and the chromatic pass.
 //
 // DETERMINISM: every random choice comes from U.rng(U.hash(C.seed, 'fx', eventIndex)) (one stream per played event, kept by every callback that event schedules) or from a
-//   per-actor stream for auras; ambient particles are pure functions of the loop clock. No Math.random, no wall clock. The same event stream and the same dt sequence
+//   per-actor stream for auras; ambient particles are pure functions of the loop clock. No banned random call, no wall clock. The same event stream and the same dt sequence
 //   give the same picture (SCENE.signature() proves it in the suite).
 //
 // ART FALLBACKS: the art modules land at different times. An ART.fx effect that is still the art.js placeholder (or throws), or a scene id whose ART.scene is still the
@@ -141,7 +141,7 @@ const SCENE = (() => {
     fire: { c: '#ff9a2e', c2: '#ffe45e', fx: 'flame', word: 'BAN!' },
     ice: { c: '#8fdcff', c2: '#ffffff', fx: 'frost', word: 'KIN!' },
     lightning: { c: '#ffe45e', c2: '#eaffff', fx: 'lightning', word: 'PIKA!' },
-    ink: { c: '#7a6bff', c2: '#5ff5ff', fx: 'inkSplash', word: 'SHAA!' },
+    ink: { c: '#7a6bff', c2: '#5ff5ff', fx: 'inkSplash', word: 'WAAN!' },
     poison: { c: '#3fd6b0', c2: '#c8fff0', fx: 'poison', word: 'BUKU!' },
     holy: { c: '#ffe9a8', c2: '#ffffff', fx: 'sparkle', word: 'PIKA!' },
   };
@@ -185,7 +185,7 @@ const SCENE = (() => {
   // state
   // ==================================================================================================================
   // particle kinds
-  const P_DOT = 0, P_SPARK = 1, P_PETAL = 2, P_INK = 3, P_SHARD = 4, P_STAR = 5, P_EMBER = 6, P_BUBBLE = 7, P_MOTE = 8, P_PUFF = 9;
+  const P_DOT = 0, P_SPARK = 1, P_PETAL = 2, P_INK = 3, P_SHARD = 4, P_STAR = 5, P_EMBER = 6, P_BUBBLE = 7, P_MOTE = 8, P_PUFF = 9, P_NOTE = 10;
   // one preallocated pool (DESIGN 5.8: particles capped at 500). Nothing is allocated per particle.
   const PART = [];
   for (let i = 0; i < MAX_PARTICLES; i++) PART.push({ on: false, k: 0, x: 0, y: 0, vx: 0, vy: 0, ay: 0, drag: 0, age: 0, life: 1, s: 1, s1: 0, rot: 0, vr: 0, col: '#fff', a: 1, add: false, front: true });
@@ -395,6 +395,7 @@ const SCENE = (() => {
   // ==================================================================================================================
   // particles, fx and numbers (pooled, capped)
   // ==================================================================================================================
+  const HUE_RAMP = ['#ff7eb6', '#ff9a2e', '#f5c96a', '#3fd6b0', '#5fb4ff', '#7a6bff', '#c49bff'];
   function spawnP(k, x, y, vx, vy, life, s, col, o) {
     if (S.flushing || !S.mounted) return null;
     o = o || {};
@@ -529,10 +530,26 @@ const SCENE = (() => {
       ctx.lineWidth = 1.6; ctx.globalAlpha *= 0.6; ctx.beginPath(); ctx.arc(0, 0, (8 + 88 * e) * o.s, 0, TAU); ctx.stroke(); ctx.restore();
     },
     inkSplash(ctx, o, p) {
-      const T = TK(), e = EASE.outCubic(min(1, p * 2.2)), a = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
-      ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1);
-      T.inkBlot(ctx, o.x, o.y, (16 + 34 * e) * o.s, { seed: o.seed, color: hexOr(o.color, '#7a6bff'), drips: 4 });
-      T.inkBlot(ctx, o.x, o.y, (8 + 20 * e) * o.s, { seed: o.seed + 3, color: '#140f2e', drips: 2 });
+      // cheap stand-in for ART.fx.inkSplash (a sound burst): three expanding rings, sound spikes and a few note heads
+      const T = TK(), e = EASE.outCubic(min(1, p * 1.8)), a = p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5, col = hexOr(o.color, '#7a6bff');
+      ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1); ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const u = clamp(e * 1.15 - k * 0.16, 0, 1);
+        if (u <= 0) continue;
+        ctx.globalAlpha = clamp(a * (1 - u) * 1.2, 0, 1); ctx.strokeStyle = k ? col : '#e8fbff'; ctx.lineWidth = (3.4 - k) * o.s;
+        ctx.beginPath(); ctx.arc(o.x, o.y, (10 + 52 * u) * o.s, 0, TAU); ctx.stroke();
+      }
+      ctx.globalAlpha = clamp(a, 0, 1); ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 2.4 * o.s;
+      for (let i = 0; i < 10; i++) {
+        const an = i / 10 * TAU + vs(o.seed, i) * 0.4, r0 = (12 + 14 * e) * o.s, r1 = r0 + (10 + 26 * vs(o.seed, i + 20)) * e * o.s;
+        ctx.beginPath(); ctx.moveTo(o.x + cos(an) * r0, o.y + sin(an) * r0); ctx.lineTo(o.x + cos(an) * r1, o.y + sin(an) * r1); ctx.stroke();
+      }
+      if (T.note) {
+        for (let i = 0; i < 3; i++) {
+          const an = -PI / 2 + (i - 1) * 0.9 + (vs(o.seed, i + 50) - 0.5) * 0.4, d = (24 + 34 * e) * o.s;
+          T.note(ctx, o.x + cos(an) * d, o.y + sin(an) * d - 10 * e * o.s, 9 * o.s, { kind: i === 1 ? 'quarter' : 'eighth', color: i === 1 ? '#f5c96a' : col, alpha: clamp(a, 0, 1) });
+        }
+      }
       ctx.restore();
     },
     petals(ctx, o, p) {
@@ -658,10 +675,18 @@ const SCENE = (() => {
     vignette(ctx, o, p) { TK().vignette(ctx, W, H, { color: hexOr(o.color, '#e8383d'), alpha: 0.75 * sin(min(1, p) * PI) }); },
     chromatic() { /* the RGB split needs channel masks: no stand-in */ },
     brushDrag(ctx, o, p) {
-      const T = TK(), e = EASE.outCubic(min(1, p * 1.5)), pts = [];
-      for (let i = 0; i <= 12; i++) { const u = i / 12 * e; pts.push([lerp(o.x, o.x2, u), lerp(o.y, o.y2, u) + sin(u * 5) * 6]); }
-      ctx.save(); ctx.globalAlpha *= p > 0.75 ? clamp((1 - p) / 0.25, 0, 1) : 1;
-      T.inkPath(ctx, { poly: pts }, { w: 46 * o.s, color: o.color, taper: 0.18, wobble: 0.3, seed: o.seed, pressure: 'head' });
+      // cheap stand-in for ART.fx.brushDrag (a sine sound sweep): a thin wave that rides from the start to the end point
+      const e = EASE.outCubic(min(1, p * 1.5)), dx = o.x2 - o.x, dy = o.y2 - o.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, col = hexOr(o.color, '#7a6bff');
+      ctx.save(); ctx.globalAlpha *= p > 0.75 ? clamp((1 - p) / 0.25, 0, 1) : 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let k = 0; k < 2; k++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 24; i++) {
+          const u = i / 24 * e, env = sin(u / max(0.01, e) * PI * 0.5 + 0.2) * (k ? 0.6 : 1), w = sin(u * 26 - p * 14 + k * 1.2) * 16 * o.s * env;
+          const px = lerp(o.x, o.x2, u) + nx * w, py = lerp(o.y, o.y2, u) + ny * w;
+          if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+        }
+        ctx.strokeStyle = k ? '#e8fbff' : col; ctx.lineWidth = (k ? 2.2 : 5) * o.s; ctx.stroke();
+      }
       ctx.restore();
     },
     numberPop(ctx, o, p) {
@@ -1110,7 +1135,7 @@ const SCENE = (() => {
           break;
         case 'ink':
           spawnFx('inkSplash', ex, ey, { s: sc * big, color: col.c });
-          burstP(P_INK, 9, ex, ey, 300, 800, 5, '#140f2e', { ay: 380, drag: 1.2, front: true });
+          burstP(P_INK, 9, ex, ey, 300, 800, 5, '#7a6bff', { ay: 380, drag: 1.2, front: true });
           break;
         case 'holy':
           spawnFx('sparkle', ex, ey, { s: sc * big, color: col.c });
@@ -1322,7 +1347,7 @@ const SCENE = (() => {
     spawnFx('inkSplash', p.x, p.y - 6, { s: sc * 0.9, color: '#7a6bff', layer: 0 });
     spawnFx('ringGround', p.x, p.y, { s: sc, color: '#b58bff', ms: 480 });
     spawnFx('burst', p.x, p.y - bnd(a).h * 0.4, { s: sc * 0.7, color: '#b58bff' });
-    burstP(P_INK, 8, p.x, p.y - 10, 200, 700, 4.5, '#140f2e', { ay: 260, drag: 1.4, up: 90 });
+    burstP(P_INK, 8, p.x, p.y - 10, 200, 700, 4.5, '#8e8aa3', { ay: 260, drag: 1.4, up: 90 });
     burstP(P_PETAL, 5, p.x, p.y - 20, 100, 1000, 5, '#ffc2dc', { up: 80, ay: 90, drag: 1 });
     const who = S.acting ? enemyActor(S.acting) : null;
     if (who && !who.dying) { setPose(who, 'buff'); squash(who, 0.07); }
@@ -1361,7 +1386,10 @@ const SCENE = (() => {
     if (S.hover && S.hover.id === a.id) S.hover = null;
     const wsz = bb.w * b.s;
     burstP(P_PETAL, boss ? 40 : elite ? 22 : 12, b.cx, b.cy, boss ? 280 : 190, 1500, 6.5, (rr) => (rr() > 0.4 ? '#ffc2dc' : '#ffffff'), { up: 90, ay: 70, drag: 1, jit: wsz * 0.5 });
-    burstP(P_INK, boss ? 26 : 12, b.cx, b.cy, 260, 1000, 6, '#140f2e', { ay: 300, drag: 1.1, up: 60, jit: wsz * 0.4 });
+    // the creature releases the sounds it ate: grey hush motes, then bright notes in the seven-step hue ramp rising out of it
+    burstP(P_INK, boss ? 14 : 6, b.cx, b.cy, 220, 900, 5, '#8e8aa3', { ay: 300, drag: 1.1, up: 60, jit: wsz * 0.4 });
+    burstP(P_NOTE, boss ? 22 : 9, b.cx, b.cy, 150, 1900, 11, (rr) => HUE_RAMP[(rr() * HUE_RAMP.length) | 0], { up: 150, ay: -40, drag: 0.7, s1: 8, jit: wsz * 0.5, add: false });
+    burstP(P_STAR, boss ? 14 : 6, b.cx, b.cy, 200, 1200, 5.5, (rr) => HUE_RAMP[(rr() * HUE_RAMP.length) | 0], { up: 100, ay: -30, drag: 0.9, add: true, jit: wsz * 0.5 });
     burstP(P_MOTE, boss ? 24 : 10, b.cx, b.cy, 90, 1700, 4.5, '#fff4c8', { up: 120, ay: -50, drag: 0.6, add: true, jit: wsz * 0.5 });
     spawnFx('petals', b.cx, b.cy, { s: sc * (boss ? 2 : 1.1), color: '#ff9cc6', ms: 1300 });
     spawnFx('inkSplash', b.x, b.y - 8, { s: sc * 1.1, color: '#7a6bff', layer: 0, ms: 900 });
@@ -1932,6 +1960,7 @@ const SCENE = (() => {
         case P_BUBBLE: ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fillStyle = 'rgba(63,214,176,0.28)'; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = p.col; ctx.stroke(); break;
         case P_MOTE: T.glow(ctx, p.x, p.y, s * 2.6, hexOr(p.col, '#ffffff'), 0.9); break;
         case P_PUFF: ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fillStyle = p.col; ctx.fill(); break;
+        case P_NOTE: if (T.note) T.note(ctx, p.x, p.y, s, { kind: (p.rot * 7 | 0) % 3 === 0 ? 'quarter' : 'eighth', color: hexOr(p.col, '#f5c96a'), rot: sin(p.age * 0.004 + p.rot) * 0.25 }); else T.sparkle(ctx, p.x, p.y, s, { color: p.col, rot: p.rot, glow: 0.3 }); break;
         case P_INK: ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fillStyle = p.col; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(122,107,255,0.6)'; ctx.stroke(); break;
         case P_EMBER: ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fillStyle = p.col; ctx.fill(); break;
         default: ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fillStyle = p.col; ctx.fill();
