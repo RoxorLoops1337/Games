@@ -2127,12 +2127,17 @@
   ];
   const SQ_GOWN = [[-46, -198], [-58, -170], [-78, -120], [-108, -52], [-126, -18], [-98, -8], [0, -4], [98, -8], [126, -18], [108, -52], [78, -120], [58, -170], [46, -198], [0, -206]];
   const SQ_FACE = E(-6, -258, 31, 34, 24);
+  // The eight phase 1 legs: chunky chibi limbs, a warm brown line and a lighter violet fill so they read on the dark gown body and on the navy
+  // Act II night (P11 D10). The bake is wider than it looks: the leg is squashed sideways by its spread (0.44 to 0.86) when it is placed, so
+  // the line weight and the width are drawn for the thinnest case. A round knee ball and a round pink foot give it rounded joints.
+  const SQ_LEGC = { n: '#8f7bf5', f: '#7a66e2', nHi: '#cabdff', fHi: '#a99bf6', line: '#2d170f', pink: '#ff8fc4', pinkF: '#e56aa6' };
   function sqLeg(S, far) {
-    const base = far ? SQ.legF : SQ.leg;
-    S.rib(SQ_SPINE, base, { wMax: 20, w0: 18, w1: 5, cap: 'round', profile: (u) => 1 - 0.72 * Math.pow(u, 0.9), gloss: true, glossColor: far ? '#5f50b8' : '#8f7bff', glossAlpha: 0.7 });
-    S.ell(74, -146, 10, 10, far ? SQ.goldD : SQ.gold, {});
-    [0.2, 0.55, 0.8].forEach((u) => { const p = along(SQ_SPINE, u); S.g.save(); S.g.fillStyle = far ? 'rgba(255,216,77,0.5)' : 'rgba(255,216,77,0.9)'; S.g.beginPath(); S.g.arc(p.x, p.y, 2.2, 0, TAU); S.g.fill(); S.g.restore(); });
-    S.cel([[230, 108], [244, 120, 1], [234, 126]], SQ.pink, { shadow: false });
+    const base = far ? SQ_LEGC.f : SQ_LEGC.n;
+    S.rib(SQ_SPINE, base, { wMax: 36, w0: 34, w1: 15, cap: 'round', profile: (u) => 1 - 0.6 * Math.pow(u, 0.9), line: far ? 4.4 : 5, lineColor: SQ_LEGC.line, shadow: shadeOf(base), shadowW: 0.34, gloss: true, glossColor: far ? SQ_LEGC.fHi : SQ_LEGC.nHi, glossAlpha: 0.6 });
+    S.ell(0, 0, 17, 15, base, { line: 4.6, lineColor: SQ_LEGC.line, hi: true });
+    S.ell(74, -146, 15, 15, far ? SQ.goldD : SQ.gold, { line: 4.6, lineColor: SQ_LEGC.line, hi: true });
+    [0.2, 0.55, 0.8].forEach((u) => { const p = along(SQ_SPINE, u); S.g.save(); S.g.fillStyle = far ? 'rgba(255,216,77,0.6)' : 'rgba(255,216,77,0.95)'; S.g.beginPath(); S.g.arc(p.x, p.y, 3, 0, TAU); S.g.fill(); S.g.restore(); });
+    S.ell(238, 116, 13, 10, far ? SQ_LEGC.pinkF : SQ_LEGC.pink, { line: 4.6, lineColor: SQ_LEGC.line, shadow: false });
   }
   // a glittering scalloped flounce at the hem of the gown
   function sqTier(S, hw, col, seed) {
@@ -2257,8 +2262,8 @@
       clawF: { box: [16, -280, 112, -170], pivot: [30, -206], draw(S) { S.limb([30, -206], [62, -220], 10, SQ.gownD); S.limb([62, -220], [86, -250], 9, SQ.gownD); S.ell(90, -256, 7.5, 7, '#f0cdbd', {}); [-1, 0, 1].forEach((k) => S.limb([92, -260], [98 + k * 7, -274 + Math.abs(k) * 3], 4, '#f0cdbd')); } },
     },
     chains: {
-      legN: { spine: SQ_SPINE, cuts: [0.34, 0.68], overlap: 10, reach: 26, draw(S) { sqLeg(S, false); } },
-      legF: { spine: SQ_SPINE, cuts: [0.34, 0.68], overlap: 10, reach: 26, draw(S) { sqLeg(S, true); } },
+      legN: { spine: SQ_SPINE, cuts: [0.34, 0.68], overlap: 12, reach: 30, draw(S) { sqLeg(S, false); } },
+      legF: { spine: SQ_SPINE, cuts: [0.34, 0.68], overlap: 12, reach: 30, draw(S) { sqLeg(S, true); } },
       pony: {
         spine: [[6, -314], [40, -318], [64, -290], [74, -248]], cuts: [0.45], overlap: 8, reach: 22,
         draw(S) { S.rib([[6, -314], [40, -318], [64, -290], [74, -248]], SQ.hair, { wMax: 26, w0: 20, w1: 4, cap: 'round', gloss: true, glossColor: SQ.hairL, glossAlpha: 0.6 }); },

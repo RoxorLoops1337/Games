@@ -22,6 +22,12 @@
 //  10  art text: the literals passed to text drawing in js/art*.js are only the set of HV_ART_AUDIO 1 rule 7
 //  11  American spellings in DATA and UI prose
 //  12  CSS content strings pass the lists and the run rule
+// Check 13 (P11, fix F5) is the rest of bible 6.1 that a script can enforce, H17 and H18:
+//  13  the owners' nods are placed exactly once (Arabic Impro, Calling of the Moon, The Viral Clip and its Detour, Human, Still Human and the
+//      three Detour nods of bible 2.9; the two song nods nowhere else in any text); RoxorLoops is never "a looper" and the duo are never "a
+//      looping duo" (the loop station is a minor prop: not in his hero entry, at most one card); no romance word; Jasmin never belts (belt,
+//      shout, scream, roar, yell, bellow) in her hero entry, cards, rules text, outfit, barks or any sentence that names her. A lyric of a real
+//      song cannot be told from any other line by a script: that half of H17 stays a reviewer item (DESIGN section 2, The world's rules).
 // Every check has a live self-test: a deliberately bad fixture goes through the SAME matcher function the scan uses and must be flagged (and
 // a good one must pass), so a broken regex can never pass silently; the extractors (literals, markup, docs, art text) have fixture tests too.
 //
@@ -204,6 +210,11 @@ const ALLOW = [
   ['?', 'art_icons.js: the fallback glyph of an unknown icon id'],
   ['ground y 520', 'art_scenes.js drawGuides: a gallery guide drawn only with params guides=1'],
   ['L', 'art_scenes.js drawGuides: the lane labels L0 to L4 of the gallery guide'],
+  // check 13, "Jasmin never belts" (bible 6.1 H18): the three sentences that name a belt or a shout in order to say she does not. Each is one
+  // exact SENTENCE (the check reads her text sentence by sentence) and each is valid at one place only (SCOPE below)
+  ['She never shouts, and every note she sings blooms a little brighter.', 'bible 3.1: the blurb of DATA.heroes.hanae; it states the rule (she never shouts), it does not describe a shout'],
+  ['Everyone braced for a belt.', 'bible 2.7 gag 1: first sentence of the flavour of The High Note (DATA.cards.hanae_thousand_petals); the room expects a belt and gets a whisper'],
+  ['Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in.', 'bible 2.7 gag 1: a sentence of her hero entry (DATA.lore.hero_hanae.text); the room expects a belt and gets a whisper'],
 ];
 // the only non-exact entries: [substring, reason], checked against DATA fields only
 const ALLOW_CONTAINS = [
@@ -228,6 +239,9 @@ const SCOPE = new Map([
   ['Blossom Breath', (r) => r.kind === 'data'],
   ['Out of Breath', (r) => r.kind === 'data'],
   ['Deep Breath Tourmaline', (r) => r.kind === 'data'],
+  ['She never shouts, and every note she sings blooms a little brighter.', (r) => r.kind === 'data' && /^DATA\.heroes\.hanae\.blurb\b/.test(r.where)],
+  ['Everyone braced for a belt.', (r) => r.kind === 'data' && /^DATA\.cards\.hanae_thousand_petals\.flavor\b/.test(r.where)],
+  ['Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in.', (r) => r.kind === 'data' && /^DATA\.lore\.hero_hanae\.text\b/.test(r.where)],
 ]);
 const allowMap = new Map(ALLOW);
 const usedExact = new Set();
@@ -759,10 +773,221 @@ t.test('check 12 self-test: a retired CSS content string and a noun run are flag
   selfTest('css content (run)', nounRun, ['Start a run'], ['LEAD'], { kind: 'css' });
 });
 
+// ------------------------------------------------------------------ check 13: H17 and H18 (the nods, looper, romance, Jasmin never belts)
+// The words, each one matched whole (a longer word never trips a shorter one: "lovely", "crushing" and "Roxorloops" pass).
+// H18: RoxorLoops is never "a looper", the duo are never "a looping duo"; the loop station is a minor prop (bible 3.2)
+const LOOPER = /\bloopers?\b|\bloop(?:ing)?[ -](?:duos?|pairs?|acts?|bands?|artists?|musicians?)\b/i;
+const looper = (s) => hit(LOOPER, s);
+const LOOP_PROP = /\bloop(?:s|ed|ing)?\b/i;                  // his hero entry never says "loop" at all: the little loop station lives on one card and in his lore
+const loopProp = (s) => hit(LOOP_PROP, s);
+// H18: no romance between any characters (the extras after "valentine" are plain romance words that no line of the game needs either)
+const ROMANCE = new RegExp('\\b(?:' + [
+  'kiss(?:es|ed|ing)?', 'crush(?:es)?', 'darlings?', 'sweethearts?', 'boyfriends?', 'girlfriends?', 'lovers?', 'dates?', 'dating', 'romances?', 'romantic(?:ally)?',
+  'valentines?', 'flirt\\w*', 'weddings?', 'marr(?:y|ies|ied|iage)', 'honeymoons?', 'soulmates?', 'beloved',
+].join('|') + ')\\b', 'i');
+const romance = (s) => hit(ROMANCE, s);
+// H18: Jasmin never belts. Read sentence by sentence, so the gag sentences ("Everyone braced for a belt.") are exact allowlist entries and
+// the rest of the same text is still held to the rule
+const LOUD = /\b(?:belt(?:s|ed|ing)?|belters?|shout(?:s|ed|ing)?|scream(?:s|ed|ing)?|roar(?:s|ed|ing)?|yell(?:s|ed|ing)?|bellow(?:s|ed|ing)?)\b/i;
+const loud = (s) => hit(LOUD, s);
+const sentences = (r) => {
+  const parts = r.text.split(/(?<=[^.][.!?])\s+/).filter((x) => x.trim());
+  return parts.map((x, i) => Object.assign({}, r, { text: x, where: parts.length > 1 ? `${r.where} (sentence ${i + 1})` : r.where }));
+};
+const herCardIds = new Set(Object.keys(D.cards).filter((id) => D.cards[id].hero === 'hanae'));
+// the rules text of her cards is generated, so it is read from the generator (the card and its upgraded form)
+const herRules = [];
+for (const id of herCardIds) for (const up of [0, 1]) {
+  if (up && !D.cards[id].up) continue;
+  herRules.push({ kind: 'data', where: `DATA.cards.${id}.rules${up ? ' (upgraded)' : ''}`, text: D.cardPlain({ id, up, gems: [] }), reg: 'cards', key: 'rules' });
+}
+// her own records: the hero entry (DATA.heroes.hanae and the lore entry hero_hanae), her cards, her outfit, her barks
+const isHers = (r) => {
+  if (r.kind !== 'data') return false;
+  if (r.reg === 'heroes') return r.where.startsWith('DATA.heroes.hanae.');
+  if (r.reg === 'outfits') return r.where.startsWith('DATA.outfits.hanae.');
+  if (r.reg === 'lore') return /^DATA\.lore\.(?:hero_hanae|barks_hanae)\./.test(r.where);
+  if (r.reg === 'cards') { const m = /^DATA\.cards\.(\w+)\./.exec(r.where); return !!m && herCardIds.has(m[1]); }
+  return false;
+};
+// the sentences the rule reads: all her own records, and any sentence of DATA or UI prose that names her (a Detour, a bark of her partner)
+const jasminSentences = (recs) => {
+  const out = [], seen = new Set();
+  for (const r of recs) {
+    const own = isHers(r);
+    for (const s of sentences(r)) {
+      if (!own && !/\bJasmin\b/.test(s.text)) continue;
+      const key = s.where + '|' + s.text;
+      if (!seen.has(key)) { seen.add(key); out.push(s); }
+    }
+  }
+  return out;
+};
+const jasminRecs = jasminSentences(data.concat(herRules, ui));
+const prose13 = data.concat(ui, css, html);                 // the corpora of the other tone checks (9, 8): DATA, UI prose, CSS content, the page shells
+
+t.test('check 13: the walk reaches everything of Jasmin\'s (guards the Jasmin corpus itself)', () => {
+  const at = (re) => jasminRecs.some((r) => re.test(r.where));
+  t.ok(herCardIds.size >= 30, `her card set has ${herCardIds.size} cards, expected at least 30`);
+  t.ok(at(/^DATA\.heroes\.hanae\.blurb/) && at(/^DATA\.heroes\.hanae\.name$/) && at(/^DATA\.heroes\.hanae\.passives\[0\]\.name$/), 'the hero entry of DATA.heroes.hanae is read');
+  t.ok(at(/^DATA\.lore\.hero_hanae\.text \(sentence \d+\)$/) && at(/^DATA\.lore\.hero_hanae\.title$/), 'the lore hero entry is read, sentence by sentence');
+  t.ok(at(/^DATA\.lore\.barks_hanae\.lines\.start\[0\]$/) && at(/^DATA\.lore\.barks_hanae\.lines\.win\[4\] \(sentence 2\)$/), 'her barks are read, sentence by sentence');
+  t.ok(at(/^DATA\.cards\.hanae_thousand_petals\.name$/) && at(/^DATA\.cards\.hanae_thousand_petals\.flavor \(sentence 1\)$/), 'her card names and flavour are read');
+  t.ok(at(/^DATA\.cards\.hanae_thousand_petals\.rules \(sentence 1\)$/) && at(/^DATA\.cards\.hanae_slash\.rules \(upgraded\)$/), 'her generated rules text is read, base and upgraded');
+  t.ok(at(/^DATA\.outfits\.hanae\.name$/), 'her outfit name is read');
+  t.ok(jasminRecs.filter((r) => /^DATA\.cards\./.test(r.where)).length >= 100, 'at least 100 card sentences of hers are read');
+  t.ok(!jasminRecs.some((r) => /^DATA\.(?:heroes\.kuro|lore\.barks_kuro)/.test(r.where)), 'RoxorLoops\'s own records are not Jasmin\'s corpus');
+});
+t.test('check 13: H18 Jasmin never belts (belt, shout, scream, roar, yell, bellow): her hero entry, cards, rules text, outfit and barks, and every sentence that names her', () => {
+  const bad = scan(jasminRecs, loud);
+  t.eq(bad.length, 0, fail(bad, 'belting or shouting words in Jasmin\'s text (bible 6.1 H18; a gag that says she does NOT belt is an exact sentence allowlist entry)'));
+});
+t.test('check 13: H18 RoxorLoops is never "a looper" and the duo are never "a looping duo" (DATA, UI prose, CSS, page shells)', () => {
+  const bad = scan(prose13, looper);
+  t.eq(bad.length, 0, fail(bad, '"looper" or "looping duo" wording (bible 6.1 H18)'));
+});
+t.test('check 13: H18 the loop station is a minor prop: not in RoxorLoops\'s hero entry, and at most one card is named for it', () => {
+  const hero = data.filter((r) => r.reg === 'heroes' && r.where.startsWith('DATA.heroes.kuro.'));
+  t.ok(hero.length >= 4 && hero.some((r) => /\.blurb$/.test(r.where)), `his hero entry contributed ${hero.length} strings, including the blurb`);
+  const bad = scan(hero, loopProp);
+  t.eq(bad.length, 0, fail(bad, 'loop words in RoxorLoops\'s hero entry (the loop station is a minor prop, bible 3.2)'));
+  const stations = Object.keys(D.cards).filter((id) => /\bloop station\b/i.test(D.cards[id].name));
+  t.ok(stations.length <= 1, `${stations.length} cards are named for the loop station: ${stations.join(', ')} (at most one, as a gag)`);
+});
+t.test('check 13: H18 no romance between any characters (kiss, crush, darling, sweetheart, boyfriend, girlfriend, lover, date, romance, valentine) in DATA, UI prose, CSS, the page shells', () => {
+  const bad = scan(prose13, romance);
+  t.eq(bad.length, 0, fail(bad, 'romance words (bible 6.1 H18; a plant food named "dates" would be an exact allowlist entry with its reason)'));
+});
+
+// ---- H17: the owners' nods are placed exactly once, as in bible 2.9 (the placement is binding; the content plans write the words)
+// A nod is placed when exactly ONE name, title or label in DATA is the nod's text, at the place bible 2.9 names. The three Detours may move to
+// another event of their Act (bible 2.9, last paragraph), so their place is "any event title"; the card, relic, lore entry and sticker are fixed.
+const NODS = [
+  { text: 'Arabic Impro', at: /^DATA\.cards\.hanae_whirling_petals\.name$/, ex: 'DATA.cards.hanae_whirling_petals.name', what: 'the name of the card hanae_whirling_petals' },
+  { text: 'Calling of the Moon', at: /^DATA\.cards\.hanae_blade_duet\.name$/, ex: 'DATA.cards.hanae_blade_duet.name', what: 'the name of the card hanae_blade_duet' },
+  { text: 'The Viral Clip', at: /^DATA\.relics\.branching_bookmark\.name$/, ex: 'DATA.relics.branching_bookmark.name', what: 'the name of the relic branching_bookmark' },
+  { text: 'Have You Seen the Clip?', at: /^DATA\.events\.\w+\.title$/, ex: 'DATA.events.wandering_storyteller.title', what: 'the title of a Detour (wandering_storyteller)' },
+  { text: 'Human', at: /^DATA\.lore\.victory\.title$/, ex: 'DATA.lore.victory.title', what: 'the title of the victory entry (no card is named Human)' },
+  { text: 'Still Human', at: /^DATA\.achievements\.ch3_clear\.name$/, ex: 'DATA.achievements.ch3_clear.name', what: 'the name of the sticker ch3_clear' },
+  { text: "Jordan's New Design", at: /^DATA\.events\.\w+\.title$/, ex: 'DATA.events.peddler_silver_bell.title', what: 'the title of a Detour (peddler_silver_bell)' },
+  { text: 'Jasmin and the Perfect Voice', at: /^DATA\.events\.\w+\.title$/, ex: 'DATA.events.hanae_mirror_pool.title', what: 'the title of a Detour (hanae_mirror_pool)' },
+  { text: 'The Night Noodle Market', at: /^DATA\.events\.\w+\.title$/, ex: 'DATA.events.mask_market.title', what: 'the title of a Detour (mask_market)' },
+];
+const nodProblems = (recs) => {
+  const bad = [];
+  for (const n of NODS) {
+    const at = recs.filter((r) => NAME_KEYS.has(r.key) && r.text === n.text).map((r) => r.where);
+    if (at.length !== 1) bad.push(`"${n.text}" is the name of ${at.length} records ${JSON.stringify(at)}; bible 2.9 places it exactly once, as ${n.what}`);
+    else if (!n.at.test(at[0])) bad.push(`"${n.text}" is at ${at[0]}; bible 2.9 places it as ${n.what}`);
+  }
+  return bad;
+};
+// the two song nods never appear in any other text at all (flavour, a Detour, a screen, the page shells, art text)
+const SONG_NODS = ['Arabic Impro', 'Calling of the Moon'];
+const everyText = data.concat(uiAll, html, css, art);
+const nodMentions = (recs, phrase) => recs.filter((r) => r.text.includes(phrase)).map((r) => r.where);
+// the Viral Clip placements (bible 2.9): the relic, the Detour, and the hero pages of Jasmin and RoxorLoops that remember their first audition.
+// "No view counts, no numbers, no show names, no judges, no channel": the show names are check 6; the rest is read here
+const CLIP_BAD = /\d|\b(?:views?|viewers?|millions?|billions?|thousands?|hundreds?|followers?|subscribers?|judges?|channels?)\b/i;
+const clipProblems = (recs) => {
+  const bad = [];
+  const heroText = (id) => recs.filter((r) => r.where === `DATA.lore.${id}.text`).map((r) => r.text).join(' ');
+  for (const id of ['hero_hanae', 'hero_kuro']) if (!/\bfirst audition\b/i.test(heroText(id))) bad.push(`DATA.lore.${id}.text does not remember the first audition (bible 2.9: the hero pages of Jasmin and RoxorLoops do)`);
+  const places = recs.filter((r) => r.key !== 'cost' && (r.where.startsWith('DATA.events.wandering_storyteller.') || r.where === 'DATA.relics.branching_bookmark.flavor' || r.where === 'DATA.lore.hero_hanae.text' || r.where === 'DATA.lore.hero_kuro.text'));
+  for (const r of places) { const w = hit(CLIP_BAD, r.text); if (w) bad.push(`${r.where}: "${w}" in "${abbrev(r.text)}" (bible 2.9: the clip has no view counts, no numbers, no judges, no channel)`); }
+  return bad;
+};
+t.test('check 13: H17 the owners\' nods are placed exactly once, as in bible 2.9', () => {
+  t.deep(nodProblems(data), [], 'a nod of bible 2.9 is missing, doubled or moved');
+});
+t.test('check 13: H17 the two song nods are named exactly once in any text (the one card name; no flavour, Detour, screen, page shell or art text repeats them)', () => {
+  for (const p of SONG_NODS) {
+    const at = nodMentions(everyText, p);
+    t.eq(at.length, 1, `"${p}" occurs ${at.length} times in DATA, UI, page shell, CSS and art text: ${JSON.stringify(at)}`);
+  }
+  t.ok(everyText.length > 2000, 'the corpus the count reads is the whole text of the game');
+});
+t.test('check 13: H17 the Viral Clip nod: the relic, the Detour and the two hero pages as bible 2.9 says; no view count, no number, no judge, no channel', () => {
+  t.deep(clipProblems(data), [], 'the Viral Clip placements of bible 2.9');
+  t.ok(data.some((r) => r.where === 'DATA.events.wandering_storyteller.title' && r.text === 'Have You Seen the Clip?'), 'the Detour wandering_storyteller is Have You Seen the Clip?');
+  t.ok(data.some((r) => r.where === 'DATA.events.peddler_silver_bell.title') && data.some((r) => r.where === 'DATA.events.hanae_mirror_pool.title') && data.some((r) => r.where === 'DATA.events.mask_market.title'), 'the other three nod Detours still exist under their ids');
+});
+t.test('check 13: H17 the Human nod and its share line: the sticker and the victory entry are placed, and the share line says Still human', () => {
+  t.ok(uiAll.some((r) => r.file === 'ui.js' && /\bStill human\.$/.test(r.text)), 'the share line of ui.js ends "Still human." (bible 2.9)');
+  t.ok(!Object.keys(D.cards).some((id) => D.cards[id].name === 'Human'), 'no card is named Human (bible 2.9)');
+});
+
+// ---- the live self-tests of check 13
+t.test('check 13 self-test: looper, romance, loop-prop and belt words are flagged; their near misses pass', () => {
+  selfTest('looper', looper, ['RoxorLoops is a looper', 'the loopers of the Soundlands', 'a looping duo', 'the loop duo', 'a Looping-Duo act', 'two loopers on stage', 'a loop band', 'a looping pair'],
+    ['RoxorLoops builds a groove.', 'The Soundlands loop right back to the start.', 'the Three-Bar Loop', 'a looping arrow', 'loops right back round to lovely', 'a duo that sings', 'Loop Station']);
+  selfTest('loop prop', loopProp, ['A beatboxer who loops every beat', 'The Loop Station wizard', 'a loop of drums', 'looping all night'],
+    ['A beatboxer who plays a whole band with one mouth.', 'RoxorLoops', 'The Beatbox Wizard', 'In the Pocket', 'loopholes']);
+  selfTest('romance', romance, ['She kisses the mic', 'an Air Kiss', 'a crush on the singer', 'my darling', 'Sweetheart, sit down', 'his girlfriend', 'her boyfriend', 'the lovers of the stage', 'a date with the drummer', 'a romantic song',
+    'a little romance', 'Valentine\'s card', 'dating the bassist', 'they flirt a lot', 'a wedding on the quay', 'they got married', 'her soulmate', 'the beloved band', 'a kiss'],
+    ['a lovely big breath', 'a crushing bounce', 'Love that for you!', 'a lovelorn pigeon', 'Update your hat', 'an outdated hat', 'the candidate', 'a mandate', 'Sing a love song', 'Kissel', 'kisses'.replace('kisses', 'ski sess')]);
+  selfTest('Jasmin belts', loud, ['She belts the chorus', 'Jasmin screams', 'a mighty ROAR', 'he shouted', 'Hear me yell!', 'a bellowing voice', 'a belter', 'Everyone braced for a belt.', 'Roaring Applause', 'belting it out'],
+    ['She sings softly.', 'I do not need to be loud.', 'A whisper that hits harder.', 'a quiet bell', 'a shout-out'.replace('shout-out', 'shy hum'), 'Beltway', 'Yellow petals', 'a roaring'.replace('roaring', 'rowing')]);
+});
+t.test('check 13 self-test: the Jasmin corpus takes her records and any sentence that names her, sentence by sentence, and nobody else\'s', () => {
+  const bark = { kind: 'data', where: 'DATA.lore.barks_hanae.lines.win[0]', text: 'Hear me ROAR!', reg: 'lore', key: 'text' };
+  const flav = { kind: 'data', where: 'DATA.cards.hanae_slash.flavor', text: 'She sang it softly. Then she screamed.', reg: 'cards', key: 'flavor' };
+  const hero = { kind: 'data', where: 'DATA.heroes.hanae.blurb', text: 'A soft singer. She yells at nobody.', reg: 'heroes', key: 'blurb' };
+  const named = { kind: 'ui', where: 'js/screen_menu.js:1', text: 'RawClaw hums. Jasmin bellows, loudly.', file: 'screen_menu.js' };
+  const his = { kind: 'data', where: 'DATA.lore.barks_kuro.lines.win[0]', text: 'Hear me ROAR!', reg: 'lore', key: 'text' };
+  const hisCard = { kind: 'data', where: 'DATA.cards.kuro_ink_bolt.flavor', text: 'A roar of a kick.', reg: 'cards', key: 'flavor' };
+  const other = { kind: 'ui', where: 'js/ui.js:1', text: 'The crowd roars. Jasmin hums.', file: 'ui.js' };
+  const read = (recs) => scan(jasminSentences(recs), loud);
+  t.eq(read([bark]).length, 1, 'a roar in her bark is flagged');
+  t.eq(read([flav]).length, 1, 'a scream in the second sentence of her card flavour is flagged');
+  t.ok(/sentence 2/.test(read([flav])[0]), 'the failure names the sentence');
+  t.eq(read([hero]).length, 1, 'a yell in her hero entry is flagged');
+  t.eq(read([named]).length, 1, 'a Detour or screen sentence that names Jasmin and bellows is flagged');
+  t.eq(read([his, hisCard]).length, 0, 'RoxorLoops\'s bark and card are not held to her rule');
+  t.eq(read([other]).length, 0, 'a roar in a sentence that does not name her is not hers (the crowd may roar)');
+  t.deep(sentences({ text: 'One. Two? Three!', where: 'w' }).map((s) => s.where), ['w (sentence 1)', 'w (sentence 2)', 'w (sentence 3)'], 'a text is split at . ? !');
+  t.deep(sentences({ text: 'Deep breath in. And... la.', where: 'w' }).map((s) => s.text), ['Deep breath in.', 'And... la.'], 'an ellipsis does not split mid-sentence');
+  // the three exact gag sentences pass where they live and nowhere else
+  const gag = (text, where) => ({ kind: 'data', where, text, reg: 'lore', key: 'text' });
+  const here = [['She never shouts, and every note she sings blooms a little brighter.', 'DATA.heroes.hanae.blurb'], ['Everyone braced for a belt.', 'DATA.cards.hanae_thousand_petals.flavor (sentence 1)'],
+    ['Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in.', 'DATA.lore.hero_hanae.text (sentence 2)']];
+  for (const [text, where] of here) {
+    t.ok(!!loud(text), `"${abbrev(text)}" is a sentence the matcher flags (so its allowlist entry is needed)`);
+    t.ok(SCOPE.get(text)(gag(text, where)), `the gag sentence is allowed at ${where}`);
+    t.ok(!SCOPE.get(text)(gag(text, 'DATA.lore.barks_hanae.lines.win[0]')), 'the gag sentence is not allowed in her barks');
+    t.ok(!SCOPE.get(text)(gag(text, 'DATA.cards.kuro_ink_bolt.flavor')), 'the gag sentence is not allowed in another hero\'s card');
+    t.ok(!SCOPE.get(text)(Object.assign(gag(text, where), { kind: 'ui' })), 'the gag sentence is not allowed in UI text');
+  }
+});
+t.test('check 13 self-test: a missing, doubled or moved nod, a view count and a forgotten audition are flagged', () => {
+  const rec = (where, text, key) => ({ kind: 'data', where, text, key: key || 'name' });
+  const good = NODS.map((n) => rec(n.ex, n.text, /\.title$/.test(n.ex) ? 'title' : 'name'));       // a synthetic data set that places every nod once
+  t.deep(nodProblems(good), [], 'a data set that places every nod once passes');
+  t.ok(nodProblems(good.filter((r) => r.text !== 'Arabic Impro')).length === 1, 'a missing nod is flagged');
+  t.ok(nodProblems(good.concat([rec('DATA.cards.some_card.name', 'Arabic Impro')])).length === 1, 'a second card with the name is flagged');
+  t.ok(nodProblems(good.concat([rec('DATA.gems.some_gem.name', 'Calling of the Moon')])).length === 1, 'the name used by a gem as well is flagged');
+  t.ok(nodProblems(good.concat([rec('DATA.cards.some_card.name', 'Human')])).length === 1, 'a card named Human is flagged');
+  t.ok(nodProblems(good.concat([rec('DATA.events.some_event.choices[0].label', 'The Viral Clip', 'label')])).length === 1, 'a choice label that repeats the Viral Clip is flagged');
+  t.ok(nodProblems(good.map((r) => (r.text === 'The Viral Clip' ? Object.assign({}, r, { where: 'DATA.relics.other_relic.name' }) : r))).length === 1, 'the nod on another relic is flagged (moved)');
+  t.ok(nodProblems(good.map((r) => (r.text === 'Still Human' ? Object.assign({}, r, { where: 'DATA.achievements.other.name' }) : r))).length === 1, 'the sticker on another id is flagged');
+  t.eq(nodProblems(good.map((r) => (r.text === 'Have You Seen the Clip?' ? Object.assign({}, r, { where: 'DATA.events.another_detour.title' }) : r))).length, 0, 'a Detour nod moved to another event passes (bible 2.9 allows it)');
+  t.eq(nodMentions([rec('DATA.cards.hanae_whirling_petals.name', 'Arabic Impro'), { text: 'She sings Arabic Impro again.', where: 'fixture' }, { text: 'Calling of the Moon', where: 'other' }], 'Arabic Impro').length, 2, 'a second mention in any text is counted');
+  const clip = [rec('DATA.events.wandering_storyteller.text', 'A fan stops you, phone out. Two nervous voices at a talent show, then everybody standing up.', 'text'), rec('DATA.events.wandering_storyteller.choices[0].cost', '20 gold', 'cost'),
+    rec('DATA.relics.branching_bookmark.flavor', 'Somebody always has it on their phone.', 'flavor'), rec('DATA.lore.hero_hanae.text', 'Jasmin remembers her first audition at a talent show.', 'text'),
+    rec('DATA.lore.hero_kuro.text', 'He remembers that first audition beside Jasmin.', 'text')];
+  t.deep(clipProblems(clip), [], 'a data set with the placements of bible 2.9 passes the clip check (a gold cost with digits is not a view count)');
+  const ev = 'DATA.events.wandering_storyteller.text';
+  const bump = (where, text) => clip.map((r) => (r.where === where ? Object.assign({}, r, { text }) : r));
+  t.eq(clipProblems(bump(ev, 'A fan shows you a clip with 3 million views.')).length, 1, 'digits and a view count in the Detour are flagged');
+  t.ok(clipProblems(bump('DATA.relics.branching_bookmark.flavor', 'The judges loved it.')).length === 1, 'a judge in the relic flavour is flagged');
+  t.ok(clipProblems(bump('DATA.lore.hero_kuro.text', 'He remembers a clip on a channel.')).length >= 1, 'a channel, and a hero page that forgot the audition, are flagged');
+  t.ok(clipProblems(bump('DATA.lore.hero_hanae.text', 'Jasmin sings.')).length === 1, 'a Jasmin page that forgot the audition is flagged');
+});
+
 // ------------------------------------------------------------------ the allowlist itself
 t.test('the allowlist is small, exact, pinned and every entry has a reason', () => {
   for (const [s, why] of [...ALLOW, ...ALLOW_CONTAINS]) { t.ok(typeof s === 'string' && s.length > 0, 'allowlist string'); t.ok(typeof why === 'string' && why.length > 20, `reason for "${s}"`); }
-  t.eq(ALLOW.length, 17, 'exact allowlist size (add an entry only with a bible 6.4 or plan reason, and bump this number in the same change)');
+  t.eq(ALLOW.length, 20, 'exact allowlist size (add an entry only with a bible 6.4 or plan reason, and bump this number in the same change)');
   t.ok(ALLOW_CONTAINS.length <= 2, 'at most two contains entries');
   t.eq(ALLOW_CONTAINS.length, 1, 'contains allowlist size (DATA only)');
   t.eq(new Set(ALLOW.map((e) => e[0])).size, ALLOW.length, 'no duplicate allowlist entries');

@@ -146,7 +146,7 @@
       },
       ai: { seq: ['horn_butt', 'tantrum'] },
       art: { id: 'oni_cub' },
-      lore: 'A very small bug made of pre-show nerves, with very large knees, and they knock. It grows louder every minute you put off going on, and it has a great many minutes.',
+      lore: 'A very small bug made of pre-show nerves, whose very large knees knock. It grows louder every minute you put off going on, and it has a great many minutes.',
       tags: ['insect', 'spirit'],
     },
 

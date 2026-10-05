@@ -1,5 +1,5 @@
 // Hocus Vocus: AUDIO, the band. Procedural music and sound effects, all synthesised with WebAudio (beatbox, sung voices, synths and
-// bass), plus an optional hook that plays the owners' own recordings instead (DATA.SAMPLES, ships empty, so nothing is ever fetched).
+// bass), plus an optional hook that plays the owners' own recordings instead (DATA.SAMPLES: empty until the owners list files, and with no entries nothing is ever fetched).
 // This header is the contract of record for js/audio.js (DESIGN 5.7, plan HV_ART_AUDIO 10 and 11). audio.js loads before combat,
 // run, meta and ui, so it references only U and DATA, and never META: UI.applySettings() is the bridge.
 //
@@ -126,7 +126,8 @@
 //   Samples (HV_ART_AUDIO 11): DATA.SAMPLES lists optional same-origin files per sfx id, variant, Spell, vox syllable and stinger.
 //   Nothing is requested before an init that started audio, nothing at all while the manifest is empty, and a file:// page never
 //   fetches. Files load 1.5 s after init ('idle') or on first use ('lazy'), are decoded once, play through the sfx bus at the
-//   recipe's measured level, and any missing or broken file simply leaves the synth recipe playing.
+//   recipe's measured level, and any missing or broken file simply leaves the synth recipe playing. On Quality Low (options lite) a
+//   wake note is the plain arp and has no extras, so Spell and syllable recordings are skipped there (sfx and stingers still play).
 const AUDIO = (() => {
   'use strict';
 
@@ -984,23 +985,23 @@ const AUDIO = (() => {
   // loudness per role against a target per role type). Regenerate after changing a score.
   // MIX-BEGIN
   const MIX = {
-    title: [0.271, 0.418, 0.267, 2.157, 1.371, 1.481, 0.545, 0.503],
-    hero_select: [0.225, 0.539, 1.05, 1.195, 0.335, 1.325, 1.264, 0.412],
-    map1: [0.323, 0.364, 1.45, 1.5, 0.277, 0.291, 1.015],
-    map2: [0.328, 0.9, 0.858, 1.498, 1.841, 0.641],
-    map3: [0.303, 0.512, 1.626, 0.725, 0.32],
-    combat1: [0.959, 0.268, 0.986, 0.685, 1.063, 0.744, 3.4, 2.515, 0.418, 1.511, 1.53, 1.964, 0.583, 1.191, 0.539, 0.658],
-    combat2: [0.655, 0.8, 0.859, 0.603, 1.907, 1.275, 3.12, 2.488, 0.414, 1.801, 1.926, 0.582, 0.978, 0.491, 0.67],
-    combat3: [0.941, 0.232, 0.871, 0.604, 1.698, 0.825, 3.125, 2.355, 0.373, 1.446, 1.49, 0.582, 1.15, 0.497, 0.662],
-    elite: [0.782, 0.662, 0.468, 0.464, 2.973, 1.543, 0.482, 1.116, 0.431, 0.358, 2.909, 0.557],
-    boss1: [0.207, 0.468, 0.248, 1.218, 0.628, 0.208, 0.623, 0.462, 1.488, 0.951, 0.345, 0.777, 0.409, 0.529, 0.259],
+    title: [0.302, 0.461, 0.295, 2.388, 1.519, 1.639, 0.6, 0.555],
+    hero_select: [0.226, 0.542, 1.055, 1.201, 0.337, 1.33, 1.27, 0.411],
+    map1: [0.324, 0.356, 1.438, 1.493, 0.275, 0.289, 1.002],
+    map2: [0.337, 0.897, 0.852, 1.502, 1.846, 0.638],
+    map3: [0.337, 0.575, 1.82, 0.815, 0.357],
+    combat1: [0.923, 0.245, 0.949, 0.658, 1.023, 0.714, 3.27, 2.424, 0.401, 1.463, 1.482, 1.892, 0.561, 1.146, 0.522, 0.635],
+    combat2: [0.653, 0.794, 0.855, 0.599, 1.905, 1.271, 3.106, 2.476, 0.413, 1.8, 1.919, 0.579, 0.97, 0.493, 0.66],
+    combat3: [0.93, 0.229, 0.864, 0.601, 1.692, 0.819, 3.1, 2.341, 0.372, 1.434, 1.48, 0.577, 1.139, 0.495, 0.662],
+    elite: [0.772, 0.652, 0.459, 0.453, 2.94, 1.523, 0.475, 1.102, 0.424, 0.357, 2.867, 0.542],
+    boss1: [0.23, 0.519, 0.275, 1.351, 0.696, 0.231, 0.691, 0.513, 1.65, 1.055, 0.382, 0.862, 0.454, 0.587, 0.287],
     boss2: [0.306, 0.682, 0.202, 0.785, 0.565, 1.564, 0.318, 1.257, 1.171, 2.761, 1.507, 0.546, 0.998, 0.585, 1.49, 0.494, 0.4],
-    boss3: [0.191, 0.634, 0.419, 0.432, 0.803, 1.231, 0.223, 0.367, 1.456, 0.36, 0.475, 0.154],
-    final: [0.44, 0.9, 0.931, 0.6, 1.234, 1.197, 0.286, 1.317, 0.63, 0.293, 0.547, 1.395, 1.782, 1.009],
-    shop: [0.191, 0.661, 1.129, 2.389, 0.348, 0.411, 0.358],
+    boss3: [0.212, 0.703, 0.465, 0.479, 0.891, 1.366, 0.248, 0.407, 1.615, 0.399, 0.527, 0.171],
+    final: [0.425, 0.87, 0.899, 0.58, 1.192, 1.157, 0.276, 1.273, 0.608, 0.4, 0.528, 1.347, 1.722, 0.975],
+    shop: [0.204, 0.712, 1.208, 2.563, 0.374, 0.441, 0.387],
     camp: [1.487, 0.621, 2.102, 2.131, 1.479],
     event: [0.324, 0.711, 0.603, 2.58, 1.027],
-    reward: [0.423, 0.205, 0.794, 0.251, 0.946, 1.356, 0.658, 0.474],
+    reward: [0.423, 0.205, 0.799, 0.253, 0.948, 1.362, 0.662, 0.471],
     victory: [0.461, 1.863, 0.822, 2.127, 0.869, 0.571, 0.869, 1.737, 1.831, 2.137, 1.807],
     defeat: [1.297, 1.189, 0.592, 1.157, 2.465, 2.831, 1.099],
   };
@@ -2183,7 +2184,7 @@ const AUDIO = (() => {
   }
 
   // ==================================================================================================================
-  // SAMPLES (HV_ART_AUDIO 11): the owners' optional recordings. DATA.SAMPLES ships empty, so nothing is ever requested. The manifest
+  // SAMPLES (HV_ART_AUDIO 11): the owners' optional recordings. DATA.SAMPLES holds no entries until the owners list some, and then nothing is ever requested. The manifest
   // is validated here (never in DATA.audit); a bad entry is reported once and skipped, never thrown. Files are fetched from the
   // game's own folder only (a name is ^[a-z0-9][a-z0-9_-]*$: no dot, slash, colon or space, so no URL and no folder escape),
   // decoded once into the one AudioContext and played through the sfx bus. Anything missing or broken leaves the synth recipe.

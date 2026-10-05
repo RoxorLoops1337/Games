@@ -521,7 +521,7 @@ await t.test('legend, relics and deck overlays open without errors', async () =>
     g.UI.overlay.close();
     await p;
   }
-  t.ok(/No charms/.test('No charms yet'), 'sanity');
+  t.ok(/No Charms/.test('No Charms yet'), 'sanity');
   t.eq(errCount(g), 0, 'no console errors');
 });
 

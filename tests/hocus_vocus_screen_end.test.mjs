@@ -204,11 +204,11 @@ await t.test('Hocus Vocus copy: the kickers and seals (HV_STORY 3.4), the curtai
   const won = V.summaryText(Object.assign({ trial: 3 }, base), null, true).split('\n'), lost = V.summaryText(Object.assign({ trial: 0 }, base), null, false).split('\n'), daily = V.summaryText(Object.assign({ daily: true }, base), null, true).split('\n');
   t.eq(won[0], 'HOCUS VOCUS: still human', 'a win shares as still human'); t.eq(lost[0], 'HOCUS VOCUS: intermission in Act 2', 'a loss shares as an intermission');
   t.ok(/ \| Encore 3$/.test(won[1]) && / \| Encore 0$/.test(lost[1]) && / \| Daily Duet 7$/.test(daily[1]), 'the mode reads Encore N, Encore 0 and Daily Duet seed');
-  t.eq(won[2], 'Seed 7 | 20 cards | 1 charm | 2 acts cleared', 'the third line counts cards, charms and acts');
+  t.eq(won[2], 'Seed 7 | 20 cards | 1 Charm | 2 acts cleared', 'the third line counts cards, charms and acts');
   const cards = V.unlockEntries({ heroesUnlocked: ['suzu'], newTrial: 4 }, null);
   t.eq(cards.map((c) => c.seal + ' / ' + c.title).join(' ; '), 'NEW / ' + DATA.heroes.suzu.name + ' joins the tour! ; ENCORE / Encore 4 unlocked', 'the unlock cards');
   t.ok(/^.+\. Waiting on the hero select\.$/.test(cards[0].text) && /A harder encore of the same tour is waiting on the hero select\.$/.test(cards[1].text), 'and their lines');
-  t.eq(V.scoreRows({ stats: { bossKills: 1, elites: 2 }, heroes: [], gold: 10, score: 0 }, null).rows.slice(0, 4).map((r) => r.label).join(' | '), 'Acts cleared | Headliners won over | Rivals defeated | Gold in your pocket', 'the score row labels');
+  t.eq(V.scoreRows({ stats: { bossKills: 1, elites: 2 }, heroes: [], gold: 10, score: 0 }, null).rows.slice(0, 4).map((r) => r.label).join(' | '), 'Acts cleared | Headliners won over | Rivals won over | Gold in your pocket', 'the score row labels');
 });
 await t.test('story: Enter completes then turns the page; Skip, Esc and a tap on the backdrop; no double turn', async () => {
   await UI.go('title', null, { force: true, transition: 'none' }); await settle(g);

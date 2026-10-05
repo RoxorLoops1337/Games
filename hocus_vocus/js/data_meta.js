@@ -66,7 +66,7 @@
     cartographer: { name: 'Volume Up', text: 'Unmute 500 hexes across all your tours.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
     brush_collector: { name: 'Spellcaster', text: 'Cast 25 Spells on the map.', stat: { k: 'brushesUsed', gte: 25 }, reward: { inkstones: 10 } },
     treasure_hunter: { name: 'Unboxing', text: 'Open 25 gift boxes.', stat: { k: 'chestsOpened', gte: 25 }, reward: { inkstones: 10 } },
-    curio_cabinet: { name: 'Charm Bracelet', text: 'Find 50 charms across your tours.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
+    curio_cabinet: { name: 'Charm Bracelet', text: 'Find 50 Charms across your tours.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
     fable_fan: { name: 'Scenic Route', text: 'Take 60 detours. Some of them were even shortcuts.', stat: { k: 'eventsSeen', gte: 60 }, reward: { inkstones: 10 } },
 
     big_spender: { name: 'Merch Legend', text: 'Spend 3000 gold at merch stalls. Jordan sends his regards.', stat: { k: 'goldSpent', gte: 3000 }, reward: { inkstones: 10 } },
@@ -173,7 +173,7 @@
     },
     defeat: {
       title: 'The Show Must Go On',
-      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the kraken keeps the spare mics. Have a sip of water, try a different road, and remember that the show goes on.',
+      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the spare mics are kept. Have a sip of water, try a different road, and remember that the show goes on.',
     },
 
     // ---------------------------------------------------------------- lore: the four hero entries

@@ -233,7 +233,7 @@ await t.test('a far fogged hex previews the cheapest chain, a second tap on it p
     await clickHex(g, T.q, T.r);
     t.ok(!T.painted && R.ink === ink0, 'seed ' + seed + ': the first tap only previews');
     t.ok(st(g).chain && st(g).chain.cost === pre.cost && st(g).chain.path.length === pre.path.length, 'seed ' + seed + ': the preview is RUN.paintPreview');
-    t.ok(new RegExp('chain of ' + pre.path.length).test(txt($(g, '.mp-info'))) && new RegExp('costs ' + pre.cost).test(txt($(g, '.mp-info'))), 'seed ' + seed + ': the info chip names the chain and its price');
+    t.ok(new RegExp('chain of ' + pre.path.length).test(txt($(g, '.mp-info'))) && new RegExp('(?:for|costs) ' + pre.cost + '(?: Vox)?\\.').test(txt($(g, '.mp-info'))), 'seed ' + seed + ': the info chip names the chain and its price');
     t.eq(bus(g, 'map:paint').length, 0, 'seed ' + seed + ': no paint event yet');
     await clickHex(g, T.q, T.r);
     t.ok(T.painted && pre.path.every((c) => tileOf(g, R, c[0], c[1]).painted), 'seed ' + seed + ': the whole chain is painted');
@@ -1413,7 +1413,7 @@ await t.test('relics overlay: every charm with art, text and where it came from,
   });
   t.ok(/Found in Act I,/.test(txt($(g, '.mr-from', rows[4]))) && /Found in Act II,/.test(txt($(g, '.mr-from', rows[1]))), 'the chapter comes from RUN\'s log');
   t.ok(/headliner/i.test(txt($(g, '.mr-from', rows[0]))) && /merch/i.test(txt($(g, '.mr-from', rows[2]))), 'and the source from the rarity');
-  t.ok(/5 charms/.test(txt($(g, '.mr-sum', ov))), 'a summary line');
+  t.ok(/5 Charms/.test(txt($(g, '.mr-sum', ov))), 'a summary line');
   g._click($(g, '.btn', ov)); await settle(g);
   t.eq(g.UI.overlay.count(), 0, 'Close closes it');
   // empty
@@ -1421,7 +1421,7 @@ await t.test('relics overlay: every charm with art, text and where it came from,
   await open(g2, R2);
   t.ok(/Charms/.test(txt($(g2, '.mp-relics'))) && $(g2, '.mp-relics').classList.contains('empty'), 'an empty strip still shows a Charms button');
   g2._click($(g2, '.mp-relic-none')); await settle(g2);
-  t.ok(/No charms yet/.test(txt($(g2, '.o-relics'))), 'the overlay has an empty state, never a blank panel');
+  t.ok(/No Charms yet/.test(txt($(g2, '.o-relics'))), 'the overlay has an empty state, never a blank panel');
   await press(g2, 'Escape'); t.eq(g2.UI.overlay.count(), 0, 'Esc closes it');
   // the pause menu's Charms button and an explicit list
   g2.UI.overlay.open('relics', { relics: picks.slice(0, 2) }); await settle(g2);

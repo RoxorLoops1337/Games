@@ -9,7 +9,13 @@ import path from 'node:path';
 import { boot, harness, DIR, stripJs, lineOf } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus audio');
-const fresh = (opts) => boot({ only: ['audio'], ...(opts || {}) });
+// The shipped DATA.SAMPLES holds whatever recordings the owners have listed (README step 3), so no suite below depends on it: every boot
+// from fresh() starts with an EMPTY manifest, and only block S (S1 in particular) reads the shipped one, kept in SHIPPED.
+const EMPTY_SAMPLES = { version: 1, base: 'audio/', formats: ['m4a', 'ogg', 'mp3'], preload: 'idle', maxSeconds: 120, gain: 1, sfx: {}, spells: {}, syllables: {}, stingers: {} };
+const rawBoot = boot({ only: ['audio'] });
+const SHIPPED = rawBoot.DATA.SAMPLES ? JSON.parse(JSON.stringify(rawBoot.DATA.SAMPLES)) : null;
+const SHIPPED_FROZEN = Object.isFrozen(rawBoot.DATA.SAMPLES);
+const fresh = (opts) => { const gg = boot({ only: ['audio'], ...(opts || {}) }); gg._run('DATA.SAMPLES = ' + JSON.stringify(EMPTY_SAMPLES) + ';'); return gg; };
 const g = fresh();
 const { AUDIO, DATA } = g;
 const L = DATA.LISTS;
@@ -1304,22 +1310,80 @@ function sampleBoot(manifest, o) {
 const fetches = (gg) => gg._run('__fetches');
 const sampleSrcs = (gg) => gg._run('__srcs').filter((s) => s.buffer && s.buffer._name);
 const warns = (gg) => gg._console.warn.filter((w) => /AUDIO samples/.test(w));
-t.test('S1: the shipped DATA.SAMPLES is valid and empty, and init requests nothing', async () => {
-  const M = DATA.SAMPLES;
-  t.ok(M && typeof M === 'object', 'DATA.SAMPLES exists (js/data_samples.js)');
-  if (!M) return;
-  t.ok(Object.isFrozen(M), 'and is frozen');
-  t.eq(M.version, 1, 'version 1');
-  t.eq(M.base, 'audio/', 'files live in hocus_vocus/audio/');
-  t.deep(M.formats, ['m4a', 'ogg', 'mp3'], 'the format order');
-  t.ok(M.preload === 'idle' && M.maxSeconds === 120 && M.gain === 1, 'idle preload, 120 s budget, unity gain');
-  for (const k of ['sfx', 'spells', 'syllables', 'stingers']) t.deep(M[k], {}, 'the ' + k + ' table ships empty');
-  const gg = sampleBoot();
+// The manifest's own contract, restated here from the README (the loader is the other judge: it must accept every entry without a warning).
+const SAMPLE_SYLS = ['boots', 'cats', 'ts', 'pf', 'k', 'bwaa', 'ab', 'ra', 'ca', 'tada', 'hey', 'boom', 'oo', 'ah', 'mm'];
+const SAMPLE_STINGS = ['victory', 'defeat', 'boss_intro', 'phase_change'];
+const SAMPLE_NAME = /^[a-z0-9][a-z0-9_-]*$/;
+function manifestProblems(M, gg) {
+  const bad = [], D = gg.DATA, heroes = D.LISTS.heroIds || [];
+  const inRange = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
+  if (!M || typeof M !== 'object' || Array.isArray(M)) return ['DATA.SAMPLES is not an object'];
+  if (M.version !== 1) bad.push('version is not 1');
+  if (typeof M.base !== 'string' || !/^([a-z0-9][a-z0-9_-]*\/)+$/.test(M.base)) bad.push('base is not a plain relative folder: ' + M.base);
+  if (!Array.isArray(M.formats) || !M.formats.length || !M.formats.every((f) => typeof f === 'string' && /^[a-z0-9]+$/.test(f))) bad.push('formats is not a list of extensions');
+  if (M.preload !== 'idle' && M.preload !== 'lazy') bad.push('preload is neither idle nor lazy');
+  if (!inRange(M.maxSeconds, 1, 3600)) bad.push('maxSeconds is not a positive number of seconds');
+  if (!inRange(M.gain, 0, 4)) bad.push('gain is not a number from 0 to 4');
+  const keyOk = {
+    sfx: (k) => { const p = k.split('.'); return D.LISTS.sfx.indexOf(p[0]) >= 0 && (p.length === 1 || (p.length === 2 && heroes.indexOf(p[1]) >= 0)); },
+    spells: (k) => Object.prototype.hasOwnProperty.call(D.brushes, k),
+    syllables: (k) => SAMPLE_SYLS.indexOf(k) >= 0,
+    stingers: (k) => SAMPLE_STINGS.indexOf(k) >= 0,
+  };
+  for (const group of Object.keys(keyOk)) {
+    const tab = M[group];
+    if (!tab || typeof tab !== 'object' || Array.isArray(tab)) { bad.push(group + ' is not an object'); continue; }
+    for (const k of Object.keys(tab)) {
+      const at = group + ':' + k, raw = tab[k];
+      if (!keyOk[group](k)) bad.push(at + ': unknown key');
+      const ent = typeof raw === 'string' ? { files: [raw] } : Array.isArray(raw) ? { files: raw } : raw;
+      if (!ent || typeof ent !== 'object' || !Array.isArray(ent.files) || !ent.files.length || !ent.files.every((f) => typeof f === 'string' && SAMPLE_NAME.test(f))) { bad.push(at + ': files must be names of lowercase letters, digits, _ and -, no extension'); continue; }
+      for (const [f, lo, hi] of [['vol', 0, 2], ['midi', 0, 127], ['var', 0, 1200], ['start', 0, 600], ['end', 0, 600]]) if (ent[f] !== undefined && !inRange(ent[f], lo, hi)) bad.push(at + ': ' + f + ' is outside ' + lo + ' to ' + hi);
+      if (group === 'syllables' && ent.midi !== undefined && !Number.isInteger(ent.midi)) bad.push(at + ': midi is not a whole note number');
+    }
+  }
+  return bad;
+}
+const entriesOf = (M) => (M ? ['sfx', 'spells', 'syllables', 'stingers'].reduce((n, k) => n + Object.keys(M[k] || {}).length, 0) : 0);
+t.test('S1: the shipped DATA.SAMPLES is a valid manifest (whatever it lists), and it requests only its own folder', async () => {
+  t.ok(SHIPPED && typeof SHIPPED === 'object', 'DATA.SAMPLES exists (js/data_samples.js)');
+  if (!SHIPPED) return;
+  t.ok(SHIPPED_FROZEN, 'and is frozen');
+  t.eq(SHIPPED.version, 1, 'version 1');
+  t.eq(SHIPPED.base, 'audio/', 'files live in hocus_vocus/audio/');
+  t.deep(SHIPPED.formats, ['m4a', 'ogg', 'mp3'], 'the format order');
+  t.ok(SHIPPED.preload === 'idle' && SHIPPED.maxSeconds === 120 && SHIPPED.gain === 1, 'idle preload, 120 s budget, unity gain');
+  t.deep(Object.keys(SHIPPED).filter((k) => ['sfx', 'spells', 'syllables', 'stingers'].indexOf(k) < 0).sort(), ['base', 'formats', 'gain', 'maxSeconds', 'preload', 'version'], 'six settings and four tables, nothing else');
+  t.deep(manifestProblems(SHIPPED, g), [], 'every table and every entry is valid');
+  const n = entriesOf(SHIPPED);
+  const gg = sampleBoot(SHIPPED);
   t.eq(gg.AUDIO.init({ force: true }), true, 'init');
   await gg._tick(5000, 50);
-  t.eq(fetches(gg).length, 0, 'zero requests after init and 5 s');
+  t.eq(gg.AUDIO.samples().length, n, 'the loader accepts all ' + n + ' listed keys');
+  t.eq(warns(gg).length, 0, 'and has no warning about any of them: ' + warns(gg).join(' | '));
+  const f = fetches(gg);
+  t.ok(f.every((x) => /^audio\/[a-z0-9_-]+\.(m4a|ogg|mp3)$/.test(x.url)), 'every request stays in audio/: ' + f.map((x) => x.url).join(' '));
+  if (n === 0) t.eq(f.length, 0, 'an empty shipped manifest requests nothing');
+  else t.ok(f.length >= 1, 'a listed manifest requests its files');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+t.test('S1b: an empty manifest requests nothing, ever, and a manifest of the wrong shape never throws', async () => {
+  t.deep(manifestProblems(EMPTY_SAMPLES, g), [], 'the empty manifest is itself valid');
+  t.ok(manifestProblems({ version: 2, base: 'http://x/', formats: [], preload: 'now', maxSeconds: 0, gain: -1, sfx: [], spells: { nope: 'a' }, syllables: { boots: 'A B' }, stingers: { victory: { files: [] } } }, g).length >= 9, 'the validator itself flags a bad manifest');
+  const gg = sampleBoot(EMPTY_SAMPLES);
+  t.eq(gg.AUDIO.init({ force: true }), true, 'init');
+  for (const id of L.sfx) gg.AUDIO.sfx(id);
+  await gg._tick(5000, 50);
+  t.eq(fetches(gg).length, 0, 'zero requests after init, every sound played and 5 s');
   t.deep(gg.AUDIO.samples(), [], 'no sample keys');
   t.eq(warns(gg).length, 0, 'and no warnings');
+  for (const bad of [null, 0, 'x', [], { version: 1 }]) {
+    const g2 = sampleBoot(bad);
+    t.eq(g2.AUDIO.init({ force: true }), true, 'init with the manifest ' + JSON.stringify(bad));
+    await g2._tick(3000, 50);
+    t.eq(fetches(g2).length, 0, 'requests nothing');
+    t.eq(g2._uncaught.length, 0, 'and nothing threw');
+  }
 });
 t.test('S2: one listed file is fetched once, after init and the idle delay, from the game\'s own folder', async () => {
   const gg = sampleBoot({ version: 1, base: 'audio/', formats: ['m4a', 'ogg', 'mp3'], preload: 'idle', maxSeconds: 120, gain: 1, sfx: { hit_light: 'kick' } });
@@ -1488,6 +1552,28 @@ t.test('S9: a recorded syllable is re-pitched within 7 semitones; beyond that th
   A.wake(5, 4, { chapter: 1, seed: 3, cols: 21, rows: 13, song: 'wave', i: 0, n: 5, aq: 5, ar: 4 });
   const spell = gg._run('__srcs').slice(s0).filter((s) => s.buffer && s.buffer._name);
   t.deep(spell.map((s) => s.buffer._name), ['audio/run_up.m4a'], 'a recorded Spell replaces the gesture on its first cell (the hex still sings its note)');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+
+t.test('S10: on Quality Low the map sings its plain pluck, so Spell and syllable recordings do not play there (README says so)', async () => {
+  const gg = sampleBoot({ syllables: { boots: { files: ['bts'], midi: 50 } }, spells: { wave: 'run_up', stroke: 'bc_up' } });
+  const A = gg.AUDIO;
+  A.init({ force: true });
+  await gg._tick(3000, 50);
+  t.deep(A.samples().map((s) => s.state), ['ready', 'ready', 'ready'], 'the Spells and the syllable are ready');
+  const named = (s0) => gg._run('__srcs').slice(s0).filter((s) => s.buffer && s.buffer._name).map((s) => s.buffer._name);
+  let s0 = gg._run('__srcs').length;
+  A.wake(5, 4, { chapter: 1, seed: 3, cols: 21, rows: 13, song: 'wave', i: 0, n: 5, aq: 5, ar: 4 });
+  t.deep(named(s0), ['audio/run_up.m4a'], 'Quality High: the recorded Spell plays on its first cell');
+  await gg._tick(1500, 50);
+  A.options({ lite: true });
+  s0 = gg._run('__srcs').length;
+  t.eq(A.wake(6, 4, { chapter: 1, seed: 3, cols: 21, rows: 13, song: 'wave', i: 0, n: 5, aq: 6, ar: 4 }), true, 'Quality Low: the hex still sings');
+  t.deep(named(s0), [], 'but no recording plays: the Spell sample is skipped');
+  await gg._tick(1500, 50);
+  s0 = gg._run('__srcs').length;
+  A.wake(7, 4, { chapter: 1, seed: 3, cols: 21, rows: 13, song: 'stroke', i: 0, n: 5, aq: 7, ar: 4 });
+  t.deep(named(s0), [], 'a Boots and Cats recording and the sung syllables are skipped too (the voice is the arp, never vox)');
   t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
 

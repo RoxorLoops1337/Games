@@ -250,7 +250,8 @@ await t.test('describe: one screen-reader line per event that matters', () => {
   t.eq(describe(vm, { type: 'draw', cards: [] }), '', 'draw is silent');
   // the Hocus Vocus wording of the log (bible 4.1, 4.2, 4.3 and 1.3 rule 3: nobody dies, nobody is killed)
   t.eq(describe(vm, { type: 'skip', unit: { kind: 'enemy', id: 'kappa#1' } }), 'Kappa is starstruck and loses its action.', 'a skipped action reads starstruck');
-  t.ok(/, a finishing blow\.$/.test(describe(vm, { type: 'hit', src: { kind: 'hero', id: 'hanae' }, dst: { kind: 'enemy', id: 'kappa#1' }, amount: 9, blocked: 0, killed: true })), 'a last hit is a finishing blow');
+  t.ok(/, and that wins it over\.$/.test(describe(vm, { type: 'hit', src: { kind: 'hero', id: 'hanae' }, dst: { kind: 'enemy', id: 'kappa#1' }, amount: 9, blocked: 0, killed: true })), 'a last hit wins the listener over (the screen-reader log never says finishing blow)');
+  t.eq(describe(vm, { type: 'dodge', dst: { kind: 'enemy', id: 'kappa#1' } }), 'Kappa shimmies out of it.', 'a dodge is a shimmy');
   t.eq(describe(vm, { type: 'hero_down', hero: 'kuro' }), g.DATA.heroes.kuro.name + ' is voiceless.', 'a hero who drops is voiceless');
   t.eq(describe(vm, { type: 'hero_revive', hero: 'kuro', hp: 5 }), g.DATA.heroes.kuro.name + ' finds their voice again with 5 HP.', 'and finds their voice again');
   t.eq(describe(vm, { type: 'swap', front: 'kuro', back: 'hanae' }), g.DATA.heroes.kuro.name + ' takes the lead, ' + g.DATA.heroes.hanae.name + ' moves to backing.', 'a swap names the lead and the backing');

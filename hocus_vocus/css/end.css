@@ -235,7 +235,7 @@
 .vc-cap-name { display: inline; font: 800 calc(19px * var(--ts)) var(--font-display); letter-spacing: .06em; color: var(--white); text-shadow: 0 0 12px var(--hc), 0 2px 0 var(--ink); }
 .vc-cap-title { display: block; margin-bottom: 4px; font: italic 600 calc(12px * var(--ts)) var(--font-display); color: var(--paper2); }
 .vc-cap-line { margin: 0; font: 500 calc(12.5px * var(--ts)) / 1.35 var(--font-display); color: var(--paper); }
-.vc-cap.party .vc-cap-name::after { content: " *"; color: var(--hv-pink-l, #ffc9de); }
+.vc-cap.party { background: rgba(13, 11, 30, .86); box-shadow: 0 8px 18px rgba(0, 0, 0, .5), 0 0 16px var(--hc); }   /* the duo who played: a brighter box with a glow in their own colour, no symbol that would need a legend */
 /* the closing credit: one small plain line under the four curtain lines, shown with the Continue button */
 .vc-credit { position: absolute; left: 0; right: 0; bottom: 6px; z-index: 4; margin: 0; text-align: center; pointer-events: none; font: italic 600 calc(12px * var(--ts)) / 1.2 var(--font-display); letter-spacing: .03em; color: var(--paper); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); opacity: 0; transition: opacity .6s ease .2s; }
 .vc-cast-done .vc-credit { opacity: .92; }

@@ -89,7 +89,7 @@
 //   cells       array of strings or {label, ...anything}      drawCell(ctx, cell, w, h, i, {col, row, x, y, cw, ch}): the context is clipped to the cell
 //               and translated so (0, 0) is its top-left; w x h is the drawing area (the label strip sits below it)
 //   opts        cols pad gap labelH title titleH bg ('night' | 'paper' | any fill) cellBg aspect      returns {cols, rows, cw, ch, rects}
-//   ART.sheets.toolkit demonstrates every helper; look at it (gallery.html?sheet=toolkit) before drawing anything.
+//   ART.sheets.toolkit shows the candy helpers (chunky outlines, sticker bands, bunting, marquee bulbs, sparkles); look at it (gallery.html?sheet=toolkit) before drawing anything.
 const ART = (() => {
   'use strict';
   const A = { res: 1 };                                    // the public namespace; ART.res is read live by the sprite cache
@@ -1715,122 +1715,193 @@ const ART = (() => {
   // ---------------------------------------------------------------------------------------------------------------
   A.sheet('toolkit', (canvas, params) => {
     const t = num(params.t, 0);
+    // The candy helper demo: chunky warm-brown outlines of even weight, flat candy colour with one hard shadow, sticker bands, bunting,
+    // marquee bulbs and sparkles. Nothing here uses the tapered ink line, the screen tone or the paper grain: those helpers still exist
+    // for old art, but the Hocus Vocus look does not ask for them.
+    const LN = pal.hvLine, CREAM = pal.hvCream;
+    const CANDY = [pal.hvPink, pal.hvLime, pal.hvViolet, pal.hvOrange, pal.hvTeal, pal.hvGreen];
+    // a chunky candy shape: even brown outline, one hard shadow, a thin lit edge
+    const chunk = (g, shape, col, o) => celFill(g, shape, col, Object.assign({ line: 3.2, lineColor: LN, weightVar: 0, wobble: 0, hi: true, hiW: 2.4, tension: 0.7 }, o || {}));
+    const starPts = (cx, cy, ro, ri, n, rot) => { const p = []; for (let i = 0; i < n * 2; i++) { const a = (rot || -PI / 2) + i * PI / n, r = i % 2 ? ri : ro; p.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } return p; };
+    const heartPts = (cx, cy, s) => { const p = []; for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; p.push([cx + s * 16 * Math.pow(Math.sin(a), 3), cy - s * (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) + s * 3]); } return p; };
+    // a sticker: a cream border under a brown-lined candy shape
+    const sticker = (g, shape, col, o) => {
+      g.save(); g.beginPath(); traceShape(g, shape, 0, 0, 0.7); g.lineJoin = 'round'; g.lineWidth = 11; g.strokeStyle = CREAM; g.stroke(); g.fillStyle = CREAM; g.fill(); g.restore();
+      chunk(g, shape, col, o);
+    };
+    const label = (g, txt, x, y, size, o) => inkText(g, txt, x, y, size, Object.assign({ skew: 0, family: font.display, stroke: LN, fill: CREAM, weight: 800, strokeW: size * 0.22 }, o || {}));
     const cells = [
-      { label: 'inkPath: taper, pressure, wobble', fn(g, w, h) {
-        g.fillStyle = pal.paper; g.fillRect(0, 0, w, h);
-        for (let i = 0; i < 6; i++) {
-          const y = 22 + i * (h - 44) / 5;
-          inkPath(g, [[16, y + 6], [w * 0.3, y - 10 + i * 2], [w * 0.62, y + 9], [w - 16, y - 4]], { w: 3 + i * 1.5, seed: i, wobble: 0.05 + i * 0.06, taper: i < 3 ? 0.3 : 0.05, pressure: i === 4 ? 'head' : i === 5 ? (u) => 0.35 + 0.65 * Math.abs(Math.sin(u * 9)) : 'mid', t: i > 3 ? t : undefined });
-        }
+      { label: 'chunky outlines: celFill with an even brown line', fn(g, w, h) {
+        g.fillStyle = CREAM; g.fillRect(0, 0, w, h);
+        const u = Math.min(w, h);
+        chunk(g, { poly: starPts(w * 0.27, h * 0.32, u * 0.2, u * 0.1, 5) }, pal.hvOrange, { line: 3.6, tension: 1 });
+        chunk(g, heartPts(w * 0.72, h * 0.31, u * 0.0105), pal.hvPink, { line: 3.6 });
+        celCircle(g, w * 0.27, h * 0.74, u * 0.15, pal.hvLime, { line: 3.6, lineColor: LN, weightVar: 0, wobble: 0, hi: true, hiW: 2.6 });
+        chunk(g, rrectPts(w * 0.5, h * 0.58, w * 0.4, h * 0.3, u * 0.07), pal.hvViolet, { line: 3.6, tension: 0.4 });
+        sparkle(g, w * 0.86, h * 0.14, 9, { color: pal.hvOrange, glow: 0 }); sparkle(g, w * 0.08, h * 0.56, 7, { color: pal.hvPink, glow: 0 });
       } },
-      { label: 'closed outline: light-side thin, shadow-side heavy', fn(g, w, h) {
-        g.fillStyle = pal.paper; g.fillRect(0, 0, w, h);
-        const leaf = [[w * 0.2, h * 0.5], [w * 0.32, h * 0.22], [w * 0.5, h * 0.14], [w * 0.5, h * 0.5, 1], [w * 0.46, h * 0.82], [w * 0.28, h * 0.8]];
-        celFill(g, leaf, '#ff7eb6', { line: 6 });
-        celFill(g, ellipsePts(w * 0.74, h * 0.5, w * 0.16, h * 0.28, 14), '#8f5fe8', { line: 6, weightVar: 0.9 });
-        sparkle(g, w * 0.5, h * 0.9, 8, { color: pal.vermilion });
+      { label: 'sticker bands: cream border, notched tail', fn(g, w, h) {
+        g.fillStyle = '#ffc9de'; g.fillRect(0, 0, w, h);
+        const band = (y, rot, col, txt, notch) => {
+          g.save(); g.translate(w / 2, y); g.rotate(rot);
+          const bw = w * 0.74, bh = h * 0.2, x0 = -bw / 2, y0 = -bh / 2;
+          const pts = notch ? [[x0, y0], [x0 + bw, y0], [x0 + bw - bh * 0.42, 0, 1], [x0 + bw, y0 + bh], [x0, y0 + bh]] : rrectPts(x0, y0, bw, bh, bh * 0.45);
+          sticker(g, notch ? { poly: pts } : pts, col, { tension: notch ? 1 : 0.4 });
+          label(g, txt, notch ? -bh * 0.12 : 0, 1, bh * 0.52);
+          g.restore();
+        };
+        band(h * 0.24, -0.1, pal.hvViolet, 'SPARKLE', true);
+        band(h * 0.52, 0.07, pal.hvGreen, 'BIG LA!', false);
+        band(h * 0.8, -0.05, pal.hvOrange, 'ENCORE', true);
       } },
-      { label: 'celFill: base, shadow, lit edge (hi), rim, halftone', fn(g, w, h) {
-        sky(g, 0, 0, w, h, 'night');
-        celCircle(g, w * 0.2, h * 0.5, w * 0.14, '#ffc2dc', { line: 3.4, hi: true, hiW: 3 });
-        celFill(g, [[w * 0.45, h * 0.3], [w * 0.62, h * 0.25], [w * 0.7, h * 0.55], [w * 0.55, h * 0.78], [w * 0.42, h * 0.6]], '#5b8bff', { rim: pal.cyan, rimW: 2.4, depth: 10, halftone: true, hi: true, hiW: 3 });
-        celFill(g, [[w * 0.78, h * 0.2], [w * 0.92, h * 0.4], [w * 0.86, h * 0.75], [w * 0.74, h * 0.6, 1], [w * 0.7, h * 0.35]], '#ff9a2e', { depth: 9, rim: '#ffe45e', rimW: 2, halftone: { d: 4.5 }, light: -2.4, hi: true });
-      } },
-      { label: 'ribbon / hairLock: gloss, strands, dipped tips, sway (t)', fn(g, w, h) {
-        sky(g, 0, 0, w, h, 'dusk');
-        const cols = ['#ff7eb6', '#a9c4ff', '#7a6bff', '#ff9a2e', '#3fd6b0'], tips = ['#ffd0e6', '#ffffff', '#5ff5ff', '#ffe45e', '#c8fff0'];
-        for (let i = 0; i < 5; i++) {
-          const x = 34 + i * (w - 68) / 4, len = h * 0.62;
-          hairLock(g, [[x, 22], [x + 10, 22 + len * 0.35], [x - 8, 22 + len * 0.7], [x + 6, 22 + len]], cols[i], { wMax: 28 - i * 2, w0: 12, sway: { amp: 0.3, freq: 0.6, phase: i * 1.3 }, t, rim: '#ffffff', rimW: 1.4, tipColor: tips[i], tipFrac: 0.3, strands: 2 });
-        }
-        ribbon(g, [[16, h - 28], [w * 0.4, h - 58], [w * 0.7, h - 18], [w - 16, h - 44]], '#e8383d', { wMax: 16, w0: 6, w1: 4, cap: 'round', bend: Math.sin(t) * 0.15, gloss: true });
-      } },
-      { label: 'eye: neutral happy closed angry determined hurt sad wide', fn(g, w, h) {
-        g.fillStyle = '#ffe3d0'; g.fillRect(0, 0, w, h);
-        const ex = ['neutral', 'happy', 'closed', 'angry', 'determined', 'hurt', 'sad', 'wide'];
-        const iris = [['#4a2a8a', '#b5a0ff'], ['#8a1848', '#ff6fb0'], ['#0a5a7a', '#5ff5ff'], ['#7a4a00', '#ffd23a']];
-        const cw = w / 4, ch = h / 2;
-        ex.forEach((e, i) => {
-          const cx = cw * (i % 4) + cw / 2, cy = ch * Math.floor(i / 4) + ch / 2;
-          eye(g, cx, cy, cw * 0.42, ch * 0.55, { expr: e, iris: iris[i % 4], side: i % 2 ? -1 : 1, open: e === 'neutral' ? 0.5 + 0.5 * Math.abs(Math.cos(t * 1.3)) : 1 });
+      { label: 'bunting: flags on a swag, sway (t)', fn(g, w, h) {
+        sky(g, 0, 0, w, h, 'dawn');
+        [[0.2, 0], [0.62, 1.7]].forEach(([y0, ph], row) => {
+          const ax = 8, bx = w - 8, ay = h * y0, sag = h * 0.16, cur = (u) => [ax + (bx - ax) * u, ay + 4 * sag * u * (1 - u)];
+          const spine = []; for (let i = 0; i <= 16; i++) spine.push(cur(i / 16));
+          g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = LN; g.lineWidth = 3; g.beginPath(); spine.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke(); g.restore();
+          for (let i = 0; i < 7; i++) {
+            const u = (i + 0.7) / 7.4, p = cur(u), sw = 0.12 * Math.sin(t * 1.7 + i * 0.9 + ph) * motion();
+            g.save(); g.translate(p[0], p[1]); g.rotate(sw);
+            chunk(g, { poly: [[-14, 0], [14, 0], [0, 38]] }, CANDY[(i + row * 2) % CANDY.length], { line: 3, tension: 1 });
+            g.restore();
+          }
         });
       } },
-      { label: 'mouths, brows, blush', fn(g, w, h) {
-        g.fillStyle = '#ffe3d0'; g.fillRect(0, 0, w, h);
-        const kinds = ['smile', 'smirk', 'grin', 'shout', 'open', 'grit', 'cat', 'frown', 'flat', 'tiny'];
-        kinds.forEach((k, i) => mouth(g, w * (0.12 + 0.19 * (i % 5)), h * (0.3 + 0.33 * Math.floor(i / 5)), w * 0.14, k));
-        for (let i = 0; i < 5; i++) brow(g, w * (0.12 + 0.19 * i), h * 0.86, w * 0.13, { tilt: (i - 2) * 0.3, arch: 0.3 + i * 0.1, side: i % 2 ? -1 : 1 });
-        blush(g, w * 0.88, h * 0.88, w * 0.14);
+      { label: 'marquee bulbs: a chase of lit and dim (t)', fn(g, w, h) {
+        sky(g, 0, 0, w, h, 'night');
+        const fx = w * 0.12, fy = h * 0.2, fw = w * 0.76, fh = h * 0.6;
+        chunk(g, rrectPts(fx, fy, fw, fh, 16), pal.hvViolet, { line: 3.6, tension: 0.4 });
+        const per = 2 * (fw + fh), n = 20, step = Math.floor(t * 5);
+        for (let i = 0; i < n; i++) {
+          let d = (i / n) * per, x, y;
+          if (d < fw) { x = fx + d; y = fy; } else if ((d -= fw) < fh) { x = fx + fw; y = fy + d; } else if ((d -= fh) < fw) { x = fx + fw - d; y = fy + fh; } else { d -= fw; x = fx; y = fy + fh - d; }
+          const on = (i + step) % 3 === 0;
+          if (on) glow(g, x, y, 17, '#ffd84a', 0.95);
+          celCircle(g, x, y, 5.4, on ? '#fff2a0' : '#b98a3a', { line: 2, lineColor: LN, weightVar: 0, wobble: 0, shadow: on ? false : undefined, hi: on });
+        }
+        label(g, 'SING!', w / 2, h / 2, Math.min(w * 0.22, 46), { fill: '#fff2a0', rot: -0.05 });
       } },
-      { label: 'sparkle, kirakira, glow', fn(g, w, h) {
+      { label: 'sticker faces: dot eyes, catchlights, blush', fn(g, w, h) {
+        g.fillStyle = '#d9fff4'; g.fillRect(0, 0, w, h);
+        const faces = [['smile', pal.hvPink], ['open', pal.hvLime], ['wink', pal.hvOrange], ['grin', pal.hvViolet]];
+        faces.forEach(([kind, col], i) => {
+          const cx = w * (0.27 + 0.46 * (i % 2)), cy = h * (0.28 + 0.46 * Math.floor(i / 2)), r = Math.min(w, h) * 0.2;
+          sticker(g, ellipsePts(cx, cy, r, r, 18, 0), col, { line: 3.2 });
+          g.save(); g.fillStyle = LN; g.strokeStyle = LN; g.lineCap = 'round'; g.lineWidth = 3;
+          [-1, 1].forEach((s) => {
+            const ex = cx + s * r * 0.36, ey = cy - r * 0.1;
+            if (kind === 'wink' && s === 1) { g.beginPath(); g.arc(ex, ey + 2, r * 0.14, PI * 1.1, PI * 1.9); g.stroke(); return; }
+            g.beginPath(); g.ellipse(ex, ey, r * 0.11, r * 0.15, 0, 0, TAU); g.fill();
+            g.fillStyle = CREAM; g.beginPath(); g.arc(ex - r * 0.035, ey - r * 0.06, r * 0.045, 0, TAU); g.fill(); g.fillStyle = LN;
+          });
+          g.fillStyle = 'rgba(255,90,130,0.55)'; [-1, 1].forEach((s) => { g.beginPath(); g.ellipse(cx + s * r * 0.64, cy + r * 0.26, r * 0.16, r * 0.1, 0, 0, TAU); g.fill(); });
+          g.beginPath();
+          if (kind === 'open' || kind === 'grin') { g.ellipse(cx, cy + r * 0.34, r * 0.2, r * (kind === 'open' ? 0.2 : 0.13), 0, 0, TAU); g.fillStyle = '#9c2f45'; g.fill(); g.stroke(); } else { g.arc(cx, cy + r * 0.14, r * 0.26, PI * 0.15, PI * 0.85); g.stroke(); }
+          g.restore();
+        });
+      } },
+      { label: 'ribbon streamers: round caps, no gloss, sway (t)', fn(g, w, h) {
+        sky(g, 0, 0, w, h, 'dawn');
+        const cols = [pal.hvPink, pal.hvLime, pal.hvTeal, pal.hvViolet, pal.hvOrange];
+        for (let i = 0; i < 5; i++) {
+          const x = 40 + i * (w - 96) / 4, len = h * 0.6;
+          ribbon(g, [[x, 22], [x + 10, 22 + len * 0.35], [x - 8, 22 + len * 0.7], [x + 6, 22 + len]], cols[i], { wMax: 22, w0: 20, w1: 14, cap: 'round', gloss: false, strands: 0, sway: { amp: 0.18, freq: 0.6, phase: i * 1.3 }, t, line: 3, lineColor: LN, shadowW: 0.28, rim: false });
+        }
+        ribbon(g, [[16, h - 26], [w * 0.4, h - 56], [w * 0.7, h - 16], [w - 16, h - 42]], pal.hvPink, { wMax: 16, w0: 14, w1: 12, cap: 'round', gloss: false, strands: 0, bend: Math.sin(t) * 0.12, line: 3, lineColor: LN, shadowW: 0.28 });
+      } },
+      { label: 'sparkles: stars, kirakira flecks, glows', fn(g, w, h) {
         sky(g, 0, 0, w, h, 'night');
         kirakira(g, 0, 0, w, h, t, { n: 26, seed: 4 });
         sparkle(g, w * 0.2, h * 0.5, 22, { color: pal.white });
         sparkle(g, w * 0.4, h * 0.34, 12, { color: pal.gold2, rot: 0.5 });
-        glow(g, w * 0.62, h * 0.5, 36, pal.cyan, 0.9);
-        glow(g, w * 0.82, h * 0.5, 30, pal.sakura, 0.9);
+        glow(g, w * 0.62, h * 0.5, 36, pal.hvLime, 0.9);
+        glow(g, w * 0.82, h * 0.5, 30, pal.hvPink, 0.9);
         sparkle(g, w * 0.62, h * 0.5, 12, { color: '#ffffff', glow: 0 });
         sparkle(g, w * 0.82, h * 0.5, 12, { color: '#ffffff', glow: 0 });
       } },
-      { label: 'halftone, halftone ramp, speed lines (radial, dir)', fn(g, w, h) {
-        g.fillStyle = pal.paper; g.fillRect(0, 0, w, h);
-        halftone(g, 0, 0, w * 0.34, h * 0.5, { d: 6, force: true });
-        halftoneRamp(g, w * 0.36, 0, w * 0.32, h * 0.5, { d: 7, dir: 0.4, r1: 3.6 });
-        halftone(g, w * 0.7, 0, w * 0.3, h * 0.5, { d: 4, r: 1.4, color: pal.bloodmoon, alpha: 0.7, force: true });
-        g.save(); g.beginPath(); g.rect(0, h * 0.52, w * 0.5, h * 0.48); g.clip(); g.fillStyle = pal.ink; g.fillRect(0, h * 0.52, w * 0.5, h * 0.48);
-        speedLines(g, w * 0.25, h * 0.76, { n: 40, seed: 2, r0: 20, r1: 200, w: 4 }); g.restore();
-        g.save(); g.beginPath(); g.rect(w * 0.5, h * 0.52, w * 0.5, h * 0.48); g.clip(); g.fillStyle = '#2a4a8a'; g.fillRect(w * 0.5, h * 0.52, w * 0.5, h * 0.48);
-        speedLines(g, 0, 0, { mode: 'dir', rect: [w * 0.5, h * 0.52, w * 0.5, h * 0.48], angle: 0, len: 110, n: 28, seed: 3, w: 3 }); g.restore();
+      { label: 'pop burst: wedge rays behind a sticker star (t)', fn(g, w, h) {
+        const cx = w / 2, cy = h / 2, n = 18, r = Math.hypot(w, h), rot = t * 0.12 * motion();
+        for (let i = 0; i < n; i++) {
+          g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(rot + i * TAU / n) * r, cy + Math.sin(rot + i * TAU / n) * r); g.lineTo(cx + Math.cos(rot + (i + 1) * TAU / n) * r, cy + Math.sin(rot + (i + 1) * TAU / n) * r); g.closePath();
+          g.fillStyle = i % 2 ? '#ffe0ef' : '#ffc2dc'; g.fill();
+        }
+        sticker(g, { poly: starPts(cx, cy, Math.min(w, h) * 0.36, Math.min(w, h) * 0.22, 9, -PI / 2 + t * 0.1) }, pal.hvLime, { line: 3.4, tension: 1 });
+        label(g, 'POP', cx, cy + 1, Math.min(w, h) * 0.17, { fill: pal.hvPinkD, stroke: CREAM, strokeW: Math.min(w, h) * 0.05 });
+        sparkle(g, w * 0.14, h * 0.2, 10, { color: pal.hvOrange, glow: 0 }); sparkle(g, w * 0.88, h * 0.82, 9, { color: pal.hvViolet, glow: 0 });
       } },
-      { label: 'sky presets and mist', fn(g, w, h) {
+      { label: 'sky presets (candy names) and haze', fn(g, w, h) {
         const names = Object.keys(SKIES), sh = h / names.length;
-        names.forEach((n, i) => { sky(g, 0, i * sh, w, sh, n); g.font = '600 11px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = i === 6 ? pal.ink : pal.white; g.fillText(n, 8, i * sh + sh / 2); });
-        mist(g, 0, 0, w, h, t, { seed: 2, alpha: 0.2 });
+        const candy = { dusk: 'Sherbet', golden: 'Honey Pop', night: 'Midnight Fizz', dawn: 'Cotton Candy', storm: 'Grape Soda', crimson: 'Cherry Fizz', paper: 'Vanilla', moon: 'Blueberry' };
+        names.forEach((n, i) => {
+          sky(g, 0, i * sh, w, sh, n);
+          g.font = '700 12px ' + font.display; g.textAlign = 'left'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = 3.4; g.strokeStyle = LN; g.fillStyle = CREAM;
+          g.strokeText(candy[n] || n, 8, i * sh + sh / 2); g.fillText(candy[n] || n, 8, i * sh + sh / 2);
+        });
+        mist(g, 0, 0, w, h, t, { seed: 2, alpha: 0.14, color: '#ffffff' });
       } },
-      { label: 'ground grain, edge-bled shape, spill, lettering', fn(g, w, h) {
-        g.fillStyle = pal.paper; g.fillRect(0, 0, w, h);
-        paperGrain(g, 0, 0, w, h, { alpha: 0.9 });
-        const sh = [[w * 0.1, h * 0.2], [w * 0.4, h * 0.14], [w * 0.46, h * 0.5], [w * 0.14, h * 0.55]];
-        g.beginPath(); traceShape(g, sh); g.fillStyle = '#ffd889'; g.fill();
-        inkBleed(g, sh, { w: 6 });
-        inkBlot(g, w * 0.72, h * 0.3, 20, { seed: 3, drips: 3 });
-        inkText(g, 'LA!', w * 0.5, h * 0.78, Math.min(w * 0.3, 54), { fill: pal.white, shadow: pal.vermilion, rot: -0.08 });
+      { label: 'lettering: heavy sticker type with a block shadow', fn(g, w, h) {
+        g.fillStyle = '#fff4e6'; g.fillRect(0, 0, w, h);
+        for (let i = 0; i < 9; i++) sparkle(g, w * (0.08 + 0.84 * vary(5, 'lx' + i)), h * (0.1 + 0.8 * vary(5, 'ly' + i)), 5 + 5 * vary(5, 'ls' + i), { color: CANDY[i % CANDY.length], glow: 0, rot: i });
+        inkText(g, 'LA LA', w * 0.5, h * 0.36, Math.min(w * 0.27, 56), { skew: 0, family: font.display, stroke: LN, grad: ['#ffd0e6', '#ff6fb0'], shadow: pal.hvTeal, rot: -0.06 });
+        inkText(g, 'POP!', w * 0.5, h * 0.72, Math.min(w * 0.3, 62), { skew: 0, family: font.display, stroke: LN, grad: ['#e6ff9a', '#7ed321'], shadow: pal.hvViolet, rot: 0.05 });
       } },
-      { label: 'ease curves (outBack, outElastic, snap, spring)', fn(g, w, h) {
-        g.fillStyle = pal.indigo; g.fillRect(0, 0, w, h);
-        const list = [['outBack', pal.sakura], ['outElastic', pal.cyan], ['snap', pal.gold], ['inOutSine', pal.jade]];
-        list.forEach(([n, c]) => { const pts = []; for (let i = 0; i <= 40; i++) { const u = i / 40; pts.push([16 + u * (w - 32), h - 24 - ease[n](u) * (h - 60)]); } inkPath(g, pts, { w: 2.4, color: c, taper: 0.05, wobble: 0 }); });
-        const sp = []; for (let i = 0; i <= 40; i++) sp.push([16 + i / 40 * (w - 32), h - 24 - spring(i / 40 * 1.2, 14, 6) * (h - 60)]);
-        inkPath(g, sp, { w: 1.4, color: pal.white, taper: 0.05, wobble: 0, alpha: 0.7 });
+      { label: 'ease curves with a bead riding each (t)', fn(g, w, h) {
+        g.fillStyle = '#3b2a7a'; g.fillRect(0, 0, w, h);
+        const list = [['outBack', pal.hvPink], ['outElastic', pal.cyan], ['snap', pal.gold], ['inOutSine', pal.hvLime]];
+        const px = (u) => 16 + u * (w - 32), py = (v) => h - 24 - v * (h - 96);
+        g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+        list.forEach(([n, c]) => {
+          g.strokeStyle = c; g.lineWidth = 4; g.beginPath();
+          for (let i = 0; i <= 40; i++) { const u = i / 40; (i ? g.lineTo : g.moveTo).call(g, px(u), py(ease[n](u))); }
+          g.stroke();
+        });
+        g.restore();
+        const k = (t * 0.35) % 1;
+        list.forEach(([n, c]) => celCircle(g, px(k), py(ease[n](k)), 6, c, { line: 2.4, lineColor: LN, weightVar: 0, wobble: 0, shadow: false }));
+        g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath();
+        for (let i = 0; i <= 40; i++) { const u = i / 40, sv = spring(u * 1.2, 14, 6); (i ? g.lineTo : g.moveTo).call(g, px(u), py(sv)); }
+        g.stroke();
       } },
       { label: 'ART.tk.chain: one baked drawing bent at its joints (t)', fn(g, w, h) {
         sky(g, 0, 0, w, h, 'night');
         for (let i = 0; i < 3; i++) {
-          const ch = ART.tk.chain('sheet|chain' + i, { spine: [[0, 0], [8, 40], [-6, 80], [4, 120]], cuts: [0.34, 0.68], reach: 30, draw: (gg) => { ribbon(gg, [[0, 0], [8, 40], [-6, 80], [4, 120]], ['#ff7eb6', '#a9c4ff', '#ffd889'][i], { wMax: 24, w0: 10, tipColor: '#ffffff', tipFrac: 0.28, sway: null, rim: '#ffffff' }); } });
+          const ch = ART.tk.chain('sheet|chain' + i, { spine: [[0, 0], [8, 40], [-6, 80], [4, 120]], cuts: [0.34, 0.68], reach: 30, draw: (gg) => { ribbon(gg, [[0, 0], [8, 40], [-6, 80], [4, 120]], [pal.hvPink, pal.hvLime, pal.hvOrange][i], { wMax: 24, w0: 20, w1: 14, cap: 'round', gloss: false, strands: 0, line: 3, lineColor: LN, shadowW: 0.28, sway: null, rim: false }); } });
           g.save(); g.translate(w * (0.2 + 0.3 * i), 20 + (h - 160) * 0.3); ch.draw(g, [0.12 * Math.sin(t * 1.4 + i), 0.3 * Math.sin(t * 1.4 + i - 0.8), 0.4 * Math.sin(t * 1.4 + i - 1.6)], 1); g.restore();
         }
-        inkText(g, 'one sprite per slab', w / 2, h - 18, 14, { skew: 0, fill: pal.paper, weight: 700, strokeW: 3 });
+        label(g, 'one sprite per slab', w / 2, h - 18, 14, { weight: 700 });
       } },
-      { label: 'petal, bolt, sparkle, eye blink and half-lids', fn(g, w, h) {
-        sky(g, 0, 0, w, h, 'dusk');
-        for (let i = 0; i < 7; i++) petal(g, 30 + i * (w - 60) / 6, 40 + 20 * Math.sin(t * 2 + i), 10 + (i % 3) * 3, t + i, 1, i % 2 ? '#ffc2dc' : '#ff9cc6');
-        bolt(g, w * 0.15, h * 0.45, w * 0.5, h * 0.62, { seed: Math.floor(t * 8), jag: 14 }); bolt(g, w * 0.5, h * 0.62, w * 0.86, h * 0.44, { seed: Math.floor(t * 8) + 5, jag: 14, color: '#ff9ac8' });
-        [1, 0.7, 0.4, 0.15, 0].forEach((o, i) => eye(g, 34 + i * (w - 68) / 4, h - 48, 26, 34, { open: o, iris: ['#8a1848', '#ff6fb0'], side: 1 }));
-      } },
-      { label: 'note, soundRings', fn(g, w, h) {
+      { label: 'confetti, zap bolts, sparkle stars (t)', fn(g, w, h) {
         sky(g, 0, 0, w, h, 'night');
-        ['eighth', 'quarter', 'beamed', 'rest'].forEach((k, i) => note(g, w * (0.14 + i * 0.24), h * 0.34, 16, { kind: k, color: pal.gold, rot: i === 1 ? 0.1 : 0 }));
-        soundRings(g, w * 0.28, h * 0.72, 16, { n: 3, color: pal.jade, alpha: 0.9, lw: 2.4 });
-        soundRings(g, w * 0.7, h * 0.72, 16, { n: 3, color: pal.sakura, broken: true, rot: 0, lw: 2.4 });
+        for (let i = 0; i < 28; i++) {
+          const x = w * vary(7, 'cx' + i), y = ((h * vary(7, 'cy' + i) + t * 14 * (0.5 + vary(7, 'cv' + i))) % (h + 20)) - 10, a = t * (1 + 2 * vary(7, 'cr' + i)) + i;
+          g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = CANDY[i % CANDY.length];
+          if (i % 3 === 0) { g.beginPath(); g.arc(0, 0, 3.4, 0, TAU); g.fill(); } else g.fillRect(-6, -2.6, 12, 5.2);
+          g.restore();
+        }
+        bolt(g, w * 0.15, h * 0.45, w * 0.5, h * 0.62, { seed: Math.floor(t * 8), jag: 14, w: 5, color: '#e6ff9a', core: '#ffffff' }); bolt(g, w * 0.5, h * 0.62, w * 0.86, h * 0.44, { seed: Math.floor(t * 8) + 5, jag: 14, w: 5, color: '#ff9ac8' });
+        sparkle(g, w * 0.3, h * 0.2, 14, { color: pal.gold2, rot: t }); sparkle(g, w * 0.72, h * 0.8, 11, { color: pal.hvPinkL, rot: -t });
       } },
-      { label: 'palette and hue families', fn(g, w, h) {
-        g.fillStyle = pal.night; g.fillRect(0, 0, w, h);
-        const keys = Object.keys(pal), sw = w / 10;
-        keys.forEach((k, i) => { g.fillStyle = pal[k]; g.fillRect((i % 10) * sw, Math.floor(i / 10) * 28, sw - 2, 26); });
-        Object.keys(fams).forEach((k, i) => { const f = fams[k], y = 92 + i * ((h - 98) / 12); ['dark', 'base', 'light', 'glow'].forEach((n, j) => { g.fillStyle = f[n]; g.fillRect(6 + j * 22, y, 20, (h - 98) / 12 - 2); }); g.font = '600 10px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = pal.paper; g.fillText(k, 100, y + 5); });
+      { label: 'notes and sound rings', fn(g, w, h) {
+        sky(g, 0, 0, w, h, 'night');
+        ['eighth', 'quarter', 'beamed', 'rest'].forEach((k, i) => note(g, w * (0.14 + i * 0.24), h * 0.36, 22, { kind: k, color: CANDY[i], rot: i === 1 ? 0.1 : 0 }));
+        soundRings(g, w * 0.28, h * 0.72, 16, { n: 3, color: pal.hvLime, alpha: 0.95, lw: 3.4 });
+        soundRings(g, w * 0.7, h * 0.72, 16, { n: 3, color: pal.hvPink, broken: true, rot: 0, lw: 3.4 });
+      } },
+      { label: 'candy palette and hue families', fn(g, w, h) {
+        g.fillStyle = '#2a1c55'; g.fillRect(0, 0, w, h);
+        const keys = ['hvPink', 'hvPinkD', 'hvPinkL', 'hvGreen', 'hvGreenD', 'hvLime', 'hvViolet', 'hvOrange', 'hvTeal', 'hvCream', 'hvLine', 'gloss', 'glossLilac', 'glossMint', 'glossBlush', 'vox'];
+        const sw = (w - 12) / 8;
+        keys.forEach((k, i) => { chunk(g, rrectPts(6 + (i % 8) * sw + 1, 8 + Math.floor(i / 8) * 26, sw - 3, 21, 6), pal[k], { line: 2, shadow: false, hi: false, tension: 0.4 }); });
+        const names = Object.keys(fams), rh = (h - 74) / 6;
+        names.forEach((k, i) => {
+          const f = fams[k], col = Math.floor(i / 6), y = 64 + (i % 6) * rh, x0 = 8 + col * (w / 2);
+          ['dark', 'base', 'light', 'glow'].forEach((n, j) => { g.fillStyle = f[n]; g.fillRect(x0 + j * 18, y, 16, rh - 3); });
+          g.font = '600 10px ' + font.ui; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = CREAM; g.fillText(k, x0 + 78, y + rh / 2 - 1);
+        });
       } },
     ];
-    sheetGrid(canvas, params, cells, (g, cell, w, h) => cell.fn(g, w, h), { cols: 5, title: 'ART.tk toolkit (t = ' + t.toFixed(2) + 's)' });
+    sheetGrid(canvas, params, cells, (g, cell, w, h) => cell.fn(g, w, h), { cols: 5, bg: '#2a1c55', cellBg: false, title: 'Candy helpers: ART.tk (t = ' + t.toFixed(2) + 's)' });
   });
 
   return A;

@@ -29,6 +29,9 @@
 //             add up), then one to three full-mix renders correct it. It is printed per score ("roles aim at target -16 dB"):
 //             about -10 dB means the targets were met as levels before the music slider (0.7 taper x MUSIC_SCALE = -9.8 dB), much
 //             lower means the score's own voices and gains are hot. --literal skips the fit (trims from the targets plus --offset).
+//   Boosts    AIM_BOOST_DB gives one named line extra aim over its type (the Human theme of `final`, +3 dB: about 5 dB over the bass and
+//             6 over the beat). LOUD_SCORES (boss1, boss3, map3, shop, title: the ones whose A-weighted gated loudness reads low) are fitted
+//             0.6 dB under the loud edge of their window instead of its middle, about 1 dB louder than the rest; the window caps any more.
 //   Windows   fights (combat*, elite, boss*, final) -25 to -28 dBFS RMS, every other score -28 to -31, peaks under -3 dBFS. A score
 //             outside its window after the fit has a role stuck on a trim clamp (marked * in the table), a gain that is far off, or a
 //             peak that is too high: that needs its voices, gains or layers changed (8A), not a bigger trim. The A-weighted gated
@@ -80,14 +83,24 @@ const TARGET_DB = { lead: -24, bass: -26, beat: -27, pad: -30, sparkle: -32 };  
 const TRIM_MIN = 0.15, TRIM_MAX = 4;
 // role -> type. A role this table does not know falls back to its voice (VOICE_TYPE), then to lead, and the report says so.
 const ROLE_TYPE = {
-  melody: 'lead', 'melody-double': 'lead', theme: 'lead', run: 'lead',
+  melody: 'lead', 'melody-double': 'lead', theme: 'lead', 'theme-harmony': 'lead', run: 'lead',
   bass: 'bass',
   beat: 'beat', perc: 'beat', clack: 'beat', clap: 'beat', ostinato: 'beat', stab: 'beat',
   pad: 'pad', drone: 'pad', crackle: 'pad',
   arp: 'sparkle', bell: 'sparkle',
 };
 const VOICE_TYPE = { kick: 'beat', snare: 'beat', hat: 'beat', scratch: 'beat', clap: 'beat', throat: 'bass', ebass: 'bass', pad: 'pad', crackle: 'pad', glock: 'sparkle', arp: 'sparkle' };
+// Extra aim for a line the plan wants clearly on top of its score (dB over its type's target; the score is then re-fitted, so every other
+// role sits a little lower). A line is named by score, voice, role and layer. The Human theme of the final score (the croon on layer 2, the
+// choir on layer 3 stays a plain theme) sits about 5 dB over the throat bass and 6 over the beat (10.9: "clearly the loudest line").
+const AIM_BOOST_DB = [{ score: 'final', voice: 'croon', role: 'theme', layer: 2, db: 3 }];
+const boostOf = (id, t) => AIM_BOOST_DB.reduce((sum, b) => sum + (b.score === id && b.voice === t.voice && b.role === t.role && b.layer === t.layer ? b.db : 0), 0);
 const WINDOW_DB = { fight: [-28, -25], calm: [-31, -28] };                                // full mix at the default sliders
+// Scores whose A-weighted gated loudness reads well under their neighbours (a bass-heavy or sparse score is discounted by the weighting):
+// they are fitted near the loud edge of their window (LOUD_BACKOFF_DB under it, which also keeps the fit's 0.35 dB stopping band inside the
+// window) instead of on its middle. That is all the window allows: a bigger lift needs the score's voices, gains or layers changed.
+const LOUD_SCORES = new Set(['boss1', 'boss3', 'map3', 'shop', 'title']);
+const LOUD_BACKOFF_DB = 0.6;
 const PEAK_MAX_DB = -3;
 const FIGHT = /^(combat\d*|elite|boss\d*|final)$/;
 const FIT_STEPS = 5;                                                                       // most full-mix renders per score while fitting its level offset G
@@ -531,8 +544,9 @@ async function runTracks(pages, defaults) {
     const rt = roleType(t);
     t.type = rt.type; t.guessed = rt.guessed; t.live = LIVE_MIX[id] ? LIVE_MIX[id][t.i] : undefined;
     if (!m || m.lvl < -150) { t.m = null; return live; }
-    const want = Math.pow(10, (TARGET_DB[rt.type] + G - m.lvl) / 20), trim = Math.min(TRIM_MAX, Math.max(TRIM_MIN, want));
-    t.m = m; t.target = TARGET_DB[rt.type] + G; t.trim = roundTrim(trim); t.clamped = trim !== want; t.after = m.lvl + 20 * Math.log10(t.trim);
+    const aim = TARGET_DB[rt.type] + boostOf(id, t) + G;
+    const want = Math.pow(10, (aim - m.lvl) / 20), trim = Math.min(TRIM_MAX, Math.max(TRIM_MIN, want));
+    t.m = m; t.target = aim; t.trim = roundTrim(trim); t.clamped = trim !== want; t.after = m.lvl + 20 * Math.log10(t.trim);
     return t.trim;
   });
   // a first guess for G from the solo levels alone: the roles are uncorrelated enough that their powers add, so the mix RMS follows
@@ -548,7 +562,7 @@ async function runTracks(pages, defaults) {
     for (let k = 0; k < 24; k++) { const mid = (lo + hi) / 2; if (predictRms(id, mid) < centreOf(id)) lo = mid; else hi = mid; }
     return Math.round((lo + hi) / 2 * 10) / 10;
   };
-  const centreOf = (id) => { const w = WINDOW_DB[FIGHT.test(id) ? 'fight' : 'calm']; return (w[0] + w[1]) / 2; };
+  const centreOf = (id) => { const w = WINDOW_DB[FIGHT.test(id) ? 'fight' : 'calm']; return LOUD_SCORES.has(id) ? w[1] - LOUD_BACKOFF_DB : (w[0] + w[1]) / 2; };
   // 2. one fit per score: the level of the whole score at full intensity decides G (a few full-mix renders), the peak limit caps it
   const fits = {};
   {

@@ -371,13 +371,13 @@ await t.test('heroSelect: pick exactly two (the first is the front hero), swap t
   t.ok(card(g, 'hanae').classList.contains('on') && card(g, 'hanae').getAttribute('aria-pressed') === 'true', 'chosen cards are pressed');
   t.ok(!$(g, '.mn-begin').getAttribute('aria-disabled'), 'Begin is ready');
   t.ok($(g, '.mn-party-empty').hidden, 'the empty prompt is gone');
-  t.ok($$(g, '.mn-slot-note').every((n) => /element/.test(n.textContent)), 'both fight in their favourite rows: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
+  t.ok($$(g, '.mn-slot-note').every((n) => /^In (his|her) element$/.test(n.textContent)), 'both fight in their favourite rows: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
   t.ok(g.META.loreSeen('hero_hanae') && g.META.loreSeen('hero_kuro'), 'picking a hero marks their story page as read (the Library lists it)');
   // swap
   g._click('.mn-swap'); await settle(g);
   t.deep(st().chosen, ['kuro', 'hanae'], 'Swap trades the rows');
   t.eq(card(g, 'kuro').querySelector('.mn-hc-badge').textContent, 'LEAD', 'the badges follow');
-  t.ok($$(g, '.mn-slot-note').every((n) => /prefers/.test(n.textContent)), 'both are now out of place and the stage says so: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
+  t.ok($$(g, '.mn-slot-note').every((n) => /^Prefers (lead|backing)$/.test(n.textContent)), 'both are now out of place and the stage says so: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
   g._key('s'); await settle(g);
   t.deep(st().chosen, ['hanae', 'kuro'], 'the S key swaps too');
   // a third pick
@@ -1230,7 +1230,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Charms, Settings, How to play, Save and quit, Abandon tour');
   t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Act 1Encore II', 'the run card names the act and the encore');
   t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(new RegExp(esc(g.DATA.heroes.hanae.name)).test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
-  t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No charms yet/.test($(g, '.mn-p-relics').textContent), 'no charms yet');
+  t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No Charms yet/.test($(g, '.mn-p-relics').textContent), 'no Charms yet');
   t.eq($(g, '[data-act=deck] .hanko').textContent.trim(), String(R.deck.length), 'the Deck plaque counts the deck: ' + R.deck.length);
   t.eq($(g, '[data-act=relics] .hanko').textContent.trim(), '0', 'the Charms plaque counts 0');
   t.ok($(g, '.mn-p-tip') && g.DATA.tips.indexOf($(g, '.mn-p-tip p').textContent) >= 0, 'the tip is one of DATA.tips: ' + $(g, '.mn-p-tip p').textContent);
@@ -2100,9 +2100,10 @@ await t.test('copy: the hero select, bible 5.2 (heading, slots, Encore stepper, 
   g0._click(card(g0, 'hanae')); g0._click(card(g0, 'kuro')); await settle(g0, 1);
   t.eq($$(g0, '.mn-hcard .mn-hc-badge.show').map((b) => b.textContent).join(), 'LEAD,BACKING', 'the badges read LEAD and BACKING');
   t.ok(/Chosen, lead hero\./.test(card(g0, 'hanae').getAttribute('aria-label')) && /Chosen, backing hero\./.test(card(g0, 'kuro').getAttribute('aria-label')), 'and so do the aria labels: ' + card(g0, 'hanae').getAttribute('aria-label'));
-  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['RoxorLoops: in his element', 'Jasmin: in her element'], 'in their favourite spots (the backing slot is first in the DOM), with the right pronoun');
+  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['In his element', 'In her element'], 'in their favourite spots (the backing slot is first in the DOM), with the right pronoun (no hero name: the caption stays one line in its 150 px slot)');
   g0._click('.mn-swap'); await settle(g0, 1);
-  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['Jasmin: prefers the lead', 'RoxorLoops: prefers backing'], 'out of place: prefers the lead, prefers backing, never the ids front or back');
+  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['Prefers lead', 'Prefers backing'], 'out of place: Prefers lead, Prefers backing (short and symmetric), never the ids front or back');
+  t.deep($$(g0, '.mn-slot').map((n) => n.getAttribute('aria-label')), ['Backing: Jasmin. Prefers lead.', 'Lead: RoxorLoops. Prefers backing.'], 'the caption has no name, so each slot is a group whose label says who it is about');
   g0._click(card(g0, 'suzu')); await settle(g0, 1);
   const lockSpans = $$(g0, '.mn-d-lockhead span');
   t.eq(lockSpans[lockSpans.length - 1].textContent.trim(), 'Not on the tour yet', 'a locked hero is Not on the tour yet');
@@ -2130,13 +2131,13 @@ await t.test('copy: the Tour Bus unlocks tab, HV_WORLD_DATA 10.1 and 10.2 (banne
   t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'on the same ids');
   t.deep($$(g, '.mn-tabpane:not([hidden]) .seg-b').map((b) => b.textContent), ['All', 'Cards', 'Charms', 'Gems'], 'the kind filter');
   t.deep($$(g, '.mn-sec-h > span').map((e) => e.textContent), ['Cards', 'Charms', 'Gems'], 'the section headings');
-  // Charm tiles: rarity word + " charm" + " for Hero", then the flavour line in italics from DATA
+  // Charm tiles: rarity word + " Charm" + " for Hero", then the flavour line in italics from DATA
   const RAR = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
   const relicTiles = $$(g, '.mn-item.k-relic');
   t.ok(relicTiles.length > 0, 'there are Charm tiles (' + relicTiles.length + ')');
   relicTiles.forEach((el) => {
     const d = g.DATA.relics[el.dataset.id], txt = el.querySelector('.mn-tile-txt');
-    const want = RAR[d.rarity] + ' charm' + (d.hero ? ' for ' + g.DATA.heroes[d.hero].name : '');
+    const want = RAR[d.rarity] + ' Charm' + (d.hero ? ' for ' + g.DATA.heroes[d.hero].name : '');
     t.eq(txt.querySelector('em').textContent, want, d.name + ' reads ' + want);
     const fl = txt.querySelector('.mn-tile-flavor');
     if (d.flavor) t.ok(fl && fl.textContent === d.flavor && txt.lastChild === fl, d.name + ' shows its flavour line last: ' + d.flavor);
@@ -2196,7 +2197,7 @@ await t.test('copy: the Tour Bus Stickers, Diary, Who\'s Who and Past Tours tabs
     const def = g.DATA.enemies[b.dataset.id] || g.DATA.rosterById[b.dataset.id];
     t.deep($$(g, '.mn-tag-chip.soft').map((c) => c.textContent), (def.tags || []).map((tg) => TAGS[tg]), def.name + ' wears its tag labels: ' + (def.tags || []).join());
   }
-  t.deep($$(g, '.mn-bd-stats i').map((e) => e.textContent), ['HP with no encore', 'defeated', 'met'], 'the stat captions');
+  t.deep($$(g, '.mn-bd-stats i').map((e) => e.textContent), ['HP with no encore', 'won over', 'met'], 'the stat captions');
   const tier = (id) => /, (Sidekick|Creature|Rival|Headliner)\. Won over/.exec($(g, '.mn-beast[data-id=' + id + ']').getAttribute('aria-label'))[1];
   t.deep(['boss_kuzunoha', 'oni_brute', 'kappa'].map(tier), ['Headliner', 'Rival', 'Creature'], 'tiers read Headliner, Rival, Creature');
   g._click($(g, '.mn-beast.unseen')); await settle(g, 1);
@@ -2253,14 +2254,14 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
 
 await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rules, the seven margin notes, the legends, the After page, the diagram lettering)', async () => {
   const HT = [
-    ['A World on Mute', 'Two heroes, three acts, one Gloss to sing through.', ['You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.', "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.", 'Every tour is a new one: a different map, different cards, different charms. Win or lose, you earn Cheers to unlock more.']],
+    ['A World on Mute', 'Two heroes, three acts, one Gloss to sing through.', ['You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.', "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.", 'Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.']],
     ['Unmute the Soundlands', 'The Soundlands are on mute. Your Vox turns them back on.', ['Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.', 'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.', 'Vox comes back from tea stalls, wins and green rooms. One-use Spells unmute whole shapes for free.']],
     ['Two Heroes, Two Spots', 'Who takes the lead matters.', ['The lead hero takes most attacks. The backing hero is safe from most of them.', 'Each hero has a favourite spot and a bonus there. Check it on the hero card.', 'You get one free swap per turn, more cost 1 Breath. If one hero loses their voice, the other steps up.']],
     ['Breath and Cards', 'Three Breath, five cards, one enemy turn.', ['Every card belongs to one hero. Play cards with Breath: you have 3 each turn.', 'Attacks hurt, skills defend or set things up. Block soaks damage until your next turn.', 'End your turn and unplayed cards are discarded while the enemies act. Then you draw 5 more.']],
     ['Read the Intents', 'Every enemy shows what it is about to do.', ['The bubble over an enemy tells you what it will do next: hit, block, jinx, summon.', 'Statuses stack. Exposed takes more damage, Muffled deals less, Earworm ignores Block.', 'Hover or press and hold any icon or underlined word to read what it means.']],
     ['Gems in Slots', 'Set a gem, change the card.', ['Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a rainbow slot takes any.', 'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.', 'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.']],
-    ['Green Rooms, Stalls and Detours', 'The map is full of small choices.', ["Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems and charms, and declutter your deck.", 'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.', 'Rivals guard charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.']],
-    ['After the Tour', 'Every tour leaves something behind.', ['You earn Cheers after every tour. Spend them on the Tour Bus on new cards, charms and gems.', 'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.', 'Keys, if you play with a keyboard, are listed below. Everything also works by touch.']],
+    ['Green Rooms, Stalls and Detours', 'The map is full of small choices.', ["Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.", 'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.', 'Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.']],
+    ['After the Tour', 'Every tour leaves something behind.', ['You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.', 'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.', 'Keys, if you play with a keyboard, are listed below. Everything also works by touch.']],
   ];
   const TIPS = [/both heroes lose their voice/, /^Unmuting a hex costs Vox/, /lead hero takes most/, /Block wears off/, /Enemy intents show/, /Gems only fit slots/, /A detour is a choice/];
   const g = fresh(); seedProfile(g);
@@ -2301,7 +2302,7 @@ await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rul
   const rows = await lettering(2, 800);
   t.ok(rows.has('LEAD') && rows.has('BACKING') && !rows.has('FRONT') && !rows.has('BACK'), 'page 3 labels the spots LEAD and BACKING');
   t.ok(rows.has('Jasmin likes it here') || rows.has('RoxorLoops likes it here'), 'and says who likes it here');
-  t.ok(rows.has('RoxorLoops prefers backing') || rows.has('Jasmin prefers the lead'), 'and who prefers the lead or backing, never the id: ' + [...rows].filter((x) => /prefers/.test(x)).join(' | '));
+  t.ok(rows.has('RoxorLoops prefers the backing spot') || rows.has('Jasmin prefers the lead spot'), 'and who prefers the lead or backing, never the id: ' + [...rows].filter((x) => /prefers/.test(x)).join(' | '));
   t.ok(![...rows].some((x) => /prefers (front|back)$/.test(x)), 'no "prefers front" or "prefers back"');
   const cards = await lettering(3, 40);
   t.ok(cards.has('Breath') && !cards.has('Energy'), 'page 4 captions the orbs Breath');
@@ -2315,8 +2316,8 @@ await t.test('copy: the pause overlay, bible 5.3 (plaques, run card, Charms, the
   await openPause(g);
   t.deep($$(g, '.mn-pause [data-act] .mn-p-main').map((e) => e.textContent), ['Resume', 'Deck', 'Charms', 'Settings', 'How to play', 'Save and quit', 'Abandon tour'], 'the plaques');
   t.eq($(g, '.mn-p-h').textContent, 'Your tour', 'the run card heading'); t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Act 1Encore II', 'the chips');
-  t.eq($(g, '.mn-p-relics').getAttribute('aria-label'), 'Charms', 'the strip is named Charms'); t.eq($(g, '.mn-p-relics .mn-p-none').textContent, 'No charms yet', 'and empty it says No charms yet');
-  t.eq($(g, '[data-act=relics] .hanko').getAttribute('aria-label'), '0 charms', 'the Charms seal is named 0 charms');
+  t.eq($(g, '.mn-p-relics').getAttribute('aria-label'), 'Charms', 'the strip is named Charms'); t.eq($(g, '.mn-p-relics .mn-p-none').textContent, 'No Charms yet', 'and empty it says No Charms yet');
+  t.eq($(g, '[data-act=relics] .hanko').getAttribute('aria-label'), '0 Charms', 'the Charms seal is named 0 Charms');
   t.eq($(g, '.mn-p-tip b').textContent, 'A tip from Jordan', 'the tip label');
   g.GAME.abandon = undefined;
   g._click(pbtn(g, 'abandon')); await settle(g);

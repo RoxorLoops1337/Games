@@ -4,7 +4,8 @@ For RoxorLoops and Jasmin. The game makes every sound itself (a synthesised band
 fine with this folder empty. This is where your real beatbox and vocal recordings go when you want them to replace the synthesised ones.
 You can swap in one sound at a time: anything you have not recorded, or anything that fails to load, simply stays synthesised.
 
-Today `js/data_samples.js` lists nothing, so the game requests no file at all.
+Until you list something, `js/data_samples.js` holds empty tables and the game requests no file at all. Once you do list files, the
+repository check (`npm run check`) stays green as long as every entry is well formed (see step 4).
 
 ## The five steps
 
@@ -13,8 +14,11 @@ Today `js/data_samples.js` lists nothing, so the game requests no file at all.
 2. Put the files in this folder, `hocus_vocus/audio/`.
 3. List them in `hocus_vocus/js/data_samples.js`, for example `sfx: { hit_light: 'my_kick' }`. A list of names plays them in turn:
    `sfx: { hit_light: ['kick_1', 'kick_2', 'kick_3'] }`.
-4. Run `npm run check`, then open the game through a local server (see "Trying it" below) and play. Anything missing or broken stays
-   synthesised, so you cannot break the game with a wrong name; the browser console says what it skipped.
+4. Run `npm run check`. It accepts a manifest with entries and judges the manifest itself: the shape, the key of every entry (a real
+   sound id, Spell, syllable or stinger) and every file name (lowercase letters, digits, `_`, `-`, no extension). A typo turns it red
+   with the entry named. It does not look for the files, so a missing file stays green: run `node tools/hocus_vocus/mix.mjs --samples`
+   (see "Volume") to have missing files reported. Then open the game through a local server (see "Trying it" below) and play. Anything
+   missing or broken stays synthesised, so you cannot break the game with a wrong name; the browser console says what it skipped.
 5. Commit and push as usual. The build copies this whole folder to the site (`dist/hocus_vocus/audio/`).
 
 ## File rules
@@ -97,7 +101,7 @@ heroes fall back to the plain id, or to the synthesised sound):
 `.hanae` (Jasmin), `.kuro` (RoxorLoops), `.suzu` (RawClaw) or `.raiga` (Andy). For example `'card_play_attack.kuro'`. That is 24 variant keys.
 
 **`spells`: the six Spells, by their internal ids.** A recording plays on the first cell of the Spell instead of the synthesised gesture
-(the per-cell melody notes still play, so the map keeps singing).
+(the per-cell melody notes still play, so the map keeps singing). Not on Quality Low: see "Quality Low" below.
 
 | Key | Spell |
 |---|---|
@@ -112,6 +116,10 @@ heroes fall back to the plain id, or to the synthesised sound):
 `boom`, and the vowels `oo` `ah` `mm`. The game re-pitches a recording to the note it needs, but only within 7 semitones of the note it
 was recorded at, so give the long form with `midi` (`{ files: ['oo_c4'], midi: 60 }`). Outside that range, or without `midi`, the
 synthesised syllable plays instead.
+
+**Quality Low (Settings, Quality).** On Low the map answers each unmuted hex with the plain pluck instead of the sung and spoken layers,
+so Spell recordings and sung syllable recordings do not play on the map there (the plain pluck does). Sound effects, stingers and the
+syllables sung inside the boss scores are not affected. Auto switches to Low by itself only when the game is running slowly.
 
 **`stingers`: `victory` `defeat` `boss_intro` `phase_change`.** A recording plays together with the matching sound, over the music, and the
 music ducks under it for its length.
@@ -148,7 +156,7 @@ then open `http://localhost:8000/`, tap once (the sound only starts after a tap 
 
 | Console | Does |
 |---|---|
-| `AUDIO.samples()` | Lists every key you listed with its state (`loading`, `ready`, `failed`, `over`) and the seconds decoded. |
+| `AUDIO.samples()` | Lists every key you listed with its state (`idle`, `loading`, `ready`, `failed`, `over`) and the seconds decoded. `idle` means listed but not requested yet: in the first 1.5 seconds after the first tap, while it waits its turn (two files load at a time), or, with `preload: 'lazy'`, until the sound is first used. |
 | `AUDIO.preview('hit_light')` | Plays that sound: your recording when it is ready. |
 | `AUDIO.preview('hit_light', { synth: true })` | Plays the synthesised version, for an A/B against your recording. |
 
@@ -159,7 +167,8 @@ decode) and says which one. A key that failed is not tried again until the page 
 
 | Symptom | Likely cause |
 |---|---|
-| Nothing loads at all | The page was opened from disk (`file://`); use a local server. Or the manifest has no entries. |
+| Nothing loads at all | The page was opened from disk (`file://`); use a local server. Or the manifest has no entries. Or you have not tapped yet (nothing loads before the first tap or key press). |
+| A Spell or syllable recording never plays on the map | Quality is set to Low: the map uses the plain pluck there (see "Quality Low"). |
 | `AUDIO samples: bad file name` | The name has an extension, a capital, a space or a dot. Write `'kick_soft'`, not `'kick_soft.m4a'`. |
 | `AUDIO samples: unknown key` | The key is not in the lists above (check the spelling, and that a variant ends in `.hanae`, `.kuro`, `.suzu` or `.raiga`). |
 | State `failed` | The file is not in this folder, has another extension than `m4a`, `ogg` or `mp3`, or the browser could not decode it. |

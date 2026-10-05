@@ -1899,18 +1899,28 @@
   function jdTote(g, S) {
     const x = -70, y = 0;
     g.save(); g.fillStyle = 'rgba(20,6,40,0.28)'; g.beginPath(); g.ellipse(x + 2, y + 2, 25, 5.5, 0, 0, TAU); g.fill(); g.restore();
-    // two folded tees: a cream one behind and a pink one in front, each with a tiny round print
-    RJ.cel(g, rbox(x - 3, y - 66, 17, 30, 3), '#fff6e6', { shadow: '#eadcc3', line: LINE.main, depth: 3, tension: 0, hi: false, decor: (gg) => { RJ.ink(gg, [[x - 1, y - 58], [x + 12, y - 60]], { w: 1.1, color: '#eadcc3', taper: 0.4, wobble: 0 }); } });
-    RJ.cel(g, [[x - 17, y - 42], [x - 16, y - 55], [x - 10, y - 59], [x - 2, y - 57], [x + 1, y - 50], [x + 1, y - 42]], J.tee2, { shadow: J.tee2Sh, line: LINE.main, depth: 3, tension: 0.6, decor: (gg) => {
-      RJ.ink(gg, [[x - 15, y - 51], [x - 8, y - 54], [x, y - 50]], { w: 1.2, color: J.tee2Sh, taper: 0.4, wobble: 0 });
-      gg.beginPath(); gg.arc(x - 7, y - 47.5, 2.4, 0, TAU); gg.fillStyle = J.logoG; gg.fill();
-    } });
-    // the handles, then the bag itself
+    // the handles first, so the shirts sit in front of them
     [[x - 11, y - 42, x - 9, y - 68, x + 7, y - 68, x + 9, y - 42]].forEach((h) => {
       const sp = [[h[0], h[1]], [h[2], h[3]], [h[4], h[5]], [h[6], h[7]]];
       RJ.ink(g, sp, { w: 6.6, color: C.ink, taper: 0, wobble: 0, weightVar: 0 });
       RJ.ink(g, sp, { w: 4, color: J.tealDk, taper: 0, wobble: 0, weightVar: 0 });
     });
+    // two folded T-shirts tucked in the bag, leaning apart: a violet one behind with a star print and a sunny yellow one in front with a round print.
+    // Each shows its shoulders, two short sleeves and a round neckline, so they read as shirts and not as a pair of ears (P11 D11)
+    const tee = (cx, cy, rot, hw, col, sh, collar, print) => {
+      g.save(); g.translate(cx, cy); g.rotate(rot);
+      const body = [[-3.8, 0, 1], [-hw * 0.6, 1.4, 1], [-hw, 7.5, 1], [-hw + 3.8, 12.8, 1], [-hw * 0.6, 10.4, 1], [-hw * 0.6, 28, 1], [hw * 0.6, 28, 1], [hw * 0.6, 10.4, 1], [hw - 3.8, 12.8, 1], [hw, 7.5, 1], [hw * 0.6, 1.4, 1], [3.8, 0, 1], [0, 3.2]];
+      RJ.cel(g, body, col, { shadow: sh, line: LINE.main, depth: 2.6, tension: 0.2, hi: false, decor: (gg) => {
+        gg.beginPath(); gg.moveTo(-3.8, 0); gg.quadraticCurveTo(0, 7.4, 3.8, 0); gg.closePath(); gg.fillStyle = sh; gg.fill();      // the inside of the collar
+        RJ.ink(gg, [[-hw * 0.6, 1.4], [-hw * 0.6 + 0.6, 10.4]], { w: 1, color: sh, taper: 0, wobble: 0 });
+        RJ.ink(gg, [[hw * 0.6, 1.4], [hw * 0.6 - 0.6, 10.4]], { w: 1, color: sh, taper: 0, wobble: 0 });
+        if (print === 'dot') { gg.beginPath(); gg.arc(0, 16.5, 2.8, 0, TAU); gg.fillStyle = J.logoG; gg.fill(); } else tk.sparkle(gg, 0, 16.5, 3.6, { color: '#fff6e6', glow: 0, thin: 0.25 });
+      } });
+      RJ.ink(g, [[-3.8, 0], [0, 4.6], [3.8, 0]], { w: 1.7, color: collar, taper: 0, wobble: 0, weightVar: 0 });                      // the neckband
+      g.restore();
+    };
+    tee(x + 7, y - 66, 0.12, 12.5, '#a77bff', '#7e56d8', '#d6c2ff', 'star');
+    tee(x - 8, y - 62, -0.14, 12.5, '#ffd84d', '#e0aa22', '#fff2a8', 'dot');
     RJ.cel(g, rbox(x - 18, y - 42, 36, 42, 3.5), J.teal, { shadow: J.tealSh, line: LINE.main, depth: 5, tension: 0, hi: J.tealHi, hiW: 1.4, hiAlpha: 0.75, decor: (gg) => {
       gg.beginPath(); gg.rect(x - 20, y - 42, 40, 6); gg.fillStyle = J.tealDk; gg.fill();
       RJ.ink(gg, [[x - 13, y - 33], [x - 13, y - 4]], { w: 1.1, color: J.tealSh, taper: 0, wobble: 0 });

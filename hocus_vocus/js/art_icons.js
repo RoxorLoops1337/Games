@@ -1420,12 +1420,18 @@
     S.hl([[-12, -8], [-12, 8]], 2.6, 0.55);
   };
   RELICF.riceball = (S, p) => {
-    // Warm Oat Bar: a golden oat bar snapped in two, a wisp of warmth
-    S.at(-9, 8, -0.26, 1, 1, () => rc(S, [[-24, -9], [11, -10], [13, -4], [9, 2], [13, 9], [-24, 10]], '#e8b050', { depth: 4, shadow: '#b9773a', tension: 0.3 }));
-    S.at(10, 12, 0.22, 1, 1, () => rc(S, [[-10, -10], [24, -9], [24, 10], [-12, 10], [-8, 4], [-12, -2]], '#f0be5c', { depth: 4, shadow: '#b9773a', tension: 0.3 }));
-    [[-24, 12], [-14, 6], [-4, 17], [14, 14], [22, 20], [8, 8]].forEach((q, i) => { S.fill(ell(q[0], q[1], 2.6, 1.4, i * 0.8, 8), '#fff0c8'); });
-    curl(S, -2, -6, 20, CREAM, 3.4); curl(S, 9, -4, 14, CREAM, 2.6);
-    S.spark(24, -18, 5, { color: GOLD2 });
+    // Warm Oat Bar: a light golden oat bar tilted across the plate with oat flecks on it, half wrapped in a torn teal wrapper with a star on it
+    S.glow(0, 2, 40, '#ffe08a', 0.3);
+    S.at(0, 3, -0.3, 1, 1, () => {
+      rc(S, rr(-33, -15, 66, 30, 8), '#f6d37a', { depth: 5, shadow: '#e2a94a', tension: 0.5, hi: '#fff0b8', hiW: 2.4 });
+      [[8, -7, 0.4], [14, 6, -0.5], [20, -3, 0.9], [24, 9, 0.1], [26, -9, -0.3], [6, 8, 0.7], [-0.5, -10, 0.2]].forEach((q) => { S.fill(ell(q[0], q[1], 3.1, 1.6, q[2], 8), '#fff6dc'); });
+      if (S.d) [[12, -11, 0.3], [18, 11, -0.2], [27, 1, 0.8], [3, 2, 0.5]].forEach((q) => { S.fill(ell(q[0], q[1], 2.4, 1.3, q[2], 8), '#c98a3a'); });
+      // the wrapper covers the left half: crimped at the far end, torn in a zigzag where the bar comes out
+      rc(S, poly([[-37, -17], [-34, -18], [-1, -17], [2, -12], [-2, -8], [2, -3], [-2, 2], [2, 7], [-2, 12], [2, 16], [-34, 18], [-37, 17]]), N.teal, { depth: 4, shadow: N.tealD, tension: 0.2, hi: '#a8f0e8', hiW: 1.8 });
+      if (S.d) { S.ink([[-33, -14], [-33, 14]], { w: 1.2, color: N.tealD }); S.ink([[-28, -14], [-28, 14]], { w: 1.2, color: N.tealD }); }
+      S.cel(star5(-17, 0, 7), '#fff6dc', { line: S.L(1.3), depth: 1, shadow: '#f1d9b0', tension: 0.2 });
+    });
+    S.spark(24, -22, 5, { color: GOLD2 }); S.spark(-26, 24, 4, { color: '#ffffff' });
   };
   RELICF.comb = (S, p) => {
     // Mixtape: a cassette with a hand-written label and two spinning reels
@@ -1541,16 +1547,17 @@
     S.spark(-24, -14, 5, { color: '#ffffff' });
   };
   RELICF.incense = (S, p) => {
-    // Glow Stick: a bent glow stick in pink, glowing softly
-    S.glow(0, 0, 40, N.pink, 0.55);
-    const path = [[-28, 16], [0, -12], [28, 16]];
-    S.stroke(path, 14, N.pink, { ow: 2.4, poly: true, step: 3 });
-    S.stroke(path, 7, '#ffd0e6', { ow: 0, poly: true, step: 3, alpha: 0.95 });
-    S.stroke([[-31, 19], [-27, 15]], 14, CREAM, { ow: 2 });
-    S.stroke([[27, 15], [31, 19]], 14, CREAM, { ow: 2 });
-    S.stroke([[-2, -16], [2, -9]], 3, CREAM, { ow: 0, alpha: 0.9 });
-    S.hl([[-20, 4], [-10, -6]], 2.6, 0.9);
-    S.spark(-14, -22, 6, { color: '#ffffff' }); S.spark(24, -14, 5, { color: N.pinkL }); S.spark(0, 28, 4, { color: N.pinkL });
+    // Glow Stick: a straight, bright lime glow stick (a fat cylinder with a pale glowing core, two cream end caps and a lanyard loop) with a soft halo
+    S.glow(0, 0, 46, N.lime, 0.65); S.glow(0, 0, 28, '#f4ffd0', 0.35);
+    S.at(0, 0, -0.72, 1, 1, () => {
+      S.ring(40, 0, 4.4, 2.6, INK); S.ring(40, 0, 4.4, 1.3, N.cream);
+      rc(S, rr(-34, -11, 68, 22, 10), N.lime, { depth: 4.6, shadow: N.limeD, tension: 0.4, hi: '#f4ffd0', hiW: 2.2 });
+      S.stroke([[-24, -1], [22, -1]], 6.6, '#f4ffd0', { ow: 0, alpha: 0.95 });
+      rc(S, rr(-38, -12, 12, 24, 4), N.cream, { depth: 3, shadow: N.creamD, tension: 0.4 });
+      rc(S, rr(24, -12, 12, 24, 4), N.cream, { depth: 3, shadow: N.creamD, tension: 0.4 });
+      if (S.d) { S.ink([[-12, -9], [-12, 9]], { w: 1.2, color: N.limeD }); S.ink([[8, -9], [8, 9]], { w: 1.2, color: N.limeD }); }
+    });
+    S.spark(-22, -24, 6, { color: '#ffffff' }); S.spark(26, 22, 5, { color: N.lime }); S.spark(-28, 18, 3.6, { color: '#f4ffd0' });
   };
   RELICF.petal = (S, p) => {
     // Pink Scrunchie: a gathered pink ring with a blossom tucked in it
@@ -1682,12 +1689,17 @@
     S.stroke([[-24, 16], [24, 16]], 4, p.base, { ow: 0 });
   };
   RELICF.sword = (S, p) => {
-    // Practice Pad: a round drum practice pad with two crossed sticks
-    S.cel(ell(0, 12, 33, 15, 0, 24), N.blackL, { line: S.L(2.8), depth: 3.4, shadow: N.black });
-    rc(S, [[-33, 12], [-33, 20], [-18, 29], [18, 29], [33, 20], [33, 12]], '#6a6090', { depth: 2.4, shadow: N.blackL, tension: 0.6 });
-    S.cel(ell(0, 10, 27, 11.4, 0, 22), '#dcd6ec', { line: S.L(2.2), depth: 2.6, shadow: '#b4aad8' });
-    S.at(0, -2, 0.8, 1, 1, () => { S.stroke([[0, -34], [0, 30]], 5.6, CREAM, { ow: 2 }); S.cel(circ(0, -34, 3.6), N.pink, { line: S.L(1.8), depth: 1, shadow: N.pinkD }); });
-    S.at(0, -2, -0.8, 1, 1, () => { S.stroke([[0, -34], [0, 30]], 5.6, '#f1e2c4', { ow: 2 }); S.cel(circ(0, -34, 3.6), N.green, { line: S.L(1.8), depth: 1, shadow: N.greenD }); });
+    // Practice Pad: a small round practice pad under two crossed wooden drumsticks (a thick butt, a shaft, a small egg-shaped bead on the tip: never a blade)
+    S.cel(ell(0, 17, 30, 12.5, 0, 24), N.blackL, { line: S.L(2.6), depth: 3, shadow: N.black });
+    S.cel(ell(0, 15, 25, 9.4, 0, 22), '#dcd6ec', { line: S.L(2), depth: 2.2, shadow: '#b4aad8' });
+    const stick = (ang, wood) => S.at(0, 2, ang, 1, 1, () => {
+      rc(S, poly([[-36, -5], [-36, 5], [20, 3.4], [20, -3.4]]), wood, { line: S.L(2.2), depth: 2.6, shadow: N.woodD, tension: 0.2 });
+      S.cel(ell(-36, 0, 2.8, 5, 0, 10), wood, { line: S.L(2), depth: 1, shadow: N.woodD });
+      S.cel(ell(27, 0, 9, 5.6, 0, 16), N.woodL, { line: S.L(2.2), depth: 2.2, shadow: N.woodD, hi: true });
+      if (S.d) { S.ink([[-28, -1.4], [8, -0.6]], { w: 1, color: N.woodD }); S.ink([[-22, 2.2], [2, 1.6]], { w: 0.9, color: N.woodD, alpha: 0.7 }); }
+    });
+    stick(-2.34, N.wood);
+    stick(-0.8, '#d99a5e');
   };
   RELICF.koi = (S, p) => {
     // Tote Bag: a teal tote bag printed with a tiny tote bag, a gem peeking out

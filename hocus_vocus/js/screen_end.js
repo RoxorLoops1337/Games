@@ -553,7 +553,7 @@
     const rows = [
       { k: 'chapters', label: 'Acts cleared', n: bk, pts: E.chapter * bk, icon: ['motif', 'bell'] },
       { k: 'bosses', label: 'Headliners won over', n: bk, pts: E.boss * bk, icon: ['relic', 'crown'] },
-      { k: 'elites', label: 'Rivals defeated', n: st.elites | 0, pts: E.elite * (st.elites | 0), icon: ['relic', 'skull'] },
+      { k: 'elites', label: 'Rivals won over', n: st.elites | 0, pts: E.elite * (st.elites | 0), icon: ['relic', 'skull'] },
       { k: 'gold', label: 'Gold in your pocket', n: gold, pts: Math.floor(gold / E.goldDiv), icon: ['stat', 'gold'] },
       { k: 'maxhp', label: 'Heroes\' max HP', n: heroes.reduce((a, h) => a + (h.maxHp | 0), 0), pts: E.maxHp * heroes.reduce((a, h) => a + (h.maxHp | 0), 0), icon: ['stat', 'hp'] },
     ];
@@ -596,7 +596,7 @@
     const mode = sm.daily ? 'Daily Duet ' + sm.seed : (sm.trial ? 'Encore ' + sm.trial : 'Encore 0');
     const line1 = 'HOCUS VOCUS: ' + (win ? 'still human' : 'intermission in Act ' + (sm.chapter || 1));
     const line2 = names + ' | Score ' + fmt(sm.score || 0) + ' | ' + mode;
-    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'charm') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'act') + ' cleared';
+    const line3 = 'Seed ' + (sm.seed >>> 0) + ' | ' + U.plural(sm.deckSize | 0, 'card') + ' | ' + U.plural((sm.relics || []).length, 'Charm') + ' | ' + U.plural((sm.stats && sm.stats.bossKills) | 0, 'act') + ' cleared';
     return [line1, line2, line3].join('\n');
   }
 
@@ -956,8 +956,8 @@
     const rel = mk('div', { class: 'go-relics', role: 'list', 'aria-label': 'Charms' });
     relics.slice(0, 7).forEach((id) => { const r = UI.relic(id, { size: 'sm' }); r.setAttribute('role', 'listitem'); rel.appendChild(r); });
     if (relics.length > 7) rel.appendChild(mk('span', { class: 'go-more', text: '+' + (relics.length - 7) }));
-    if (!relics.length) rel.appendChild(mk('span', { class: 'go-none', text: 'No charms' }));
-    const relBtn = UI.btn('Charms ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No charms were found on this tour', 'info'); } });
+    if (!relics.length) rel.appendChild(mk('span', { class: 'go-none', text: 'No Charms' }));
+    const relBtn = UI.btn('Charms ' + relics.length, { kind: 'secondary', size: 'sm', onclick: () => { if (relics.length) UI.overlay.open('relics', { relics: relics.slice() }); else UI.toast('No Charms were found on this tour', 'info'); } });
     relBtn.classList.add('go-relbtn');
     const panel = UI.panel({ kind: 'paper', gold: true, class: 'go-recap en-card pad-top' },
       mk('h2', { class: 'en-h' }, mk('span', { text: 'What Was in the Van' })),
@@ -1014,7 +1014,7 @@
         mk('div', { class: 'go-follow' }, share, follow)));
 
       // ---- right: the score ledger, then Cheers and what is new
-      const led = ledger(S, sm, R, { delay: 1000, seal: 'FIN' });
+      const led = ledger(S, sm, R, { delay: 1000, seal: 'PAUSE' });
       const scoreCard = lacquerSplit('go-score', 'Final Score', [led.list], led.total);
       const stones = mk('div', { class: 'go-stones' });
       const stoneNum = mk('b', { class: 'go-stone-n' });

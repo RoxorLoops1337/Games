@@ -1079,7 +1079,7 @@
     const open = () => UI.overlay.open('relics', {});
     const shown = relicShown(R);
     R.relics.slice(-shown).forEach((id) => H.relics.appendChild(UI.relic(id, { size: 'sm', onclick: open, side: 'top' })));
-    if (R.relics.length > shown) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-more', 'aria-label': (R.relics.length - shown) + ' more charms', text: '+' + (R.relics.length - shown), onclick: open }));
+    if (R.relics.length > shown) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-more', 'aria-label': (R.relics.length - shown) + ' more Charms', text: '+' + (R.relics.length - shown), onclick: open }));
     if (!R.relics.length) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-none', 'aria-label': 'Charms: none yet', onclick: open }, UI.icon('relic', 'lantern', 24, { dim: true }, 'mp-relic-none-ico'), mk('span', { text: 'Charms' })));
     H.relics.classList.toggle('empty', !R.relics.length);
     s.last.relics = relicKey(R);
@@ -1205,7 +1205,7 @@
       case 'enemy': case 'elite': return foesOf(T);
       case 'brush': return c.id && c.id !== 'random' && DATA.brushes[c.id] ? 'Teaches ' + DATA.brushes[c.id].name + '.' : '';
       case 'well': return 'A warm tea worth ' + (c.ink || DATA.ECONOMY.wellInk) + ' Vox.';
-      case 'chest': return c.relic ? 'Holds a charm and gold.' : 'Holds gems and gold.';
+      case 'chest': return c.relic ? 'Holds a Charm and gold.' : 'Holds gems and gold.';
       default: return '';
     }
   }
@@ -1241,7 +1241,7 @@
       o.tone = R.ink >= cost ? 'paint' : 'bad';
     } else {
       const pre = RUN.paintPreview(R, q, r);
-      if (pre.ok) { o.action = (pre.affordable ? say('Tap twice to unmute a chain of ', 'Tap twice: a chain of ') : say('Too far for your Vox: a chain of ', 'Too far: a chain of ')) + U.plural(pre.path.length, 'hex', 'hexes') + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
+      if (pre.ok) { const hx = U.plural(pre.path.length, 'hex', 'hexes'); o.action = pre.affordable ? say('Tap twice to unmute a chain of ' + hx + ' for ' + pre.cost + ' Vox.', 'Tap twice: a chain of ' + hx + ' costs ' + pre.cost + '.') : say('Too far for your Vox: a chain of ', 'Too far: a chain of ') + hx + ' costs ' + pre.cost + '.'; o.tone = pre.affordable ? 'paint' : 'bad'; }
       else { o.action = 'No way to reach it.'; o.tone = 'bad'; }
     }
     return o;
@@ -2186,11 +2186,11 @@
         grid.appendChild(row);
       });
       if (!sorted.length) {
-        grid.appendChild(mk('div', { class: 'mr-empty' }, UI.icon('relic', 'lantern', 64, { dim: true }), mk('p', { class: 'empty', text: 'No charms yet. Rivals, gift boxes and merch stalls hold them.' })));
+        grid.appendChild(mk('div', { class: 'mr-empty' }, UI.icon('relic', 'lantern', 64, { dim: true }), mk('p', { class: 'empty', text: 'No Charms yet. Rivals, gift boxes and merch stalls hold them.' })));
       }
       const counts = {};
       sorted.forEach((id) => { const r = DATA.relics[id].rarity; counts[r] = (counts[r] || 0) + 1; });
-      const sum = mk('p', { class: 'mr-sum', text: sorted.length ? U.plural(sorted.length, 'charm') + ': ' + RARITY_ORDER.filter((r) => counts[r]).map((r) => counts[r] + ' ' + (RARITY_NAME[r] || r).toLowerCase()).join(', ') + '.' : 'Your pack is light.' });
+      const sum = mk('p', { class: 'mr-sum', text: sorted.length ? U.plural(sorted.length, 'Charm') + ': ' + RARITY_ORDER.filter((r) => counts[r]).map((r) => counts[r] + ' ' + (RARITY_NAME[r] || r).toLowerCase()).join(', ') + '.' : 'Your pack is light.' });
       const closeBtn = UI.btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() });
       closeBtn.setAttribute('data-autofocus', '');
       root.appendChild(UI.panel({ kind: 'dark', gold: true, title: 'Charms', class: 'relics-panel mp-relics-panel' }, sum, grid, mk('div', { class: 'row center' }, closeBtn)));

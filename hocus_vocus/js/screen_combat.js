@@ -365,9 +365,9 @@
       case 'hit': {
         if (e.amount <= 0 && e.blocked <= 0) return '';
         const who = e.src ? nm(e.src) : 'Something';
-        return who + ' hits ' + nm(e.dst) + ' for ' + e.amount + (e.blocked ? ', ' + e.blocked + ' blocked' : '') + (e.killed ? ', a finishing blow' : '') + '.';
+        return who + ' hits ' + nm(e.dst) + ' for ' + e.amount + (e.blocked ? ', ' + e.blocked + ' blocked' : '') + (e.killed ? ', and that wins it over' : '') + '.';
       }
-      case 'dodge': return nm(e.dst) + ' dodges.';
+      case 'dodge': return nm(e.dst) + ' shimmies out of it.';
       case 'death': return nm(e.unit) + ' is defeated.';
       case 'flee': return nm(e.unit) + ' flees.';
       case 'hero_down': return heroName(e.hero) + ' is voiceless.';
@@ -2130,7 +2130,7 @@
       u.relicEls[id] = el;
       u.relics.appendChild(el);
     });
-    if (ids.length > shown) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - shown) + ' more charms', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - shown) }));
+    if (ids.length > shown) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - shown) + ' more Charms', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - shown) }));
     u.gold = UI.stat('gold', R.gold, { size: 'sm', focusable: false });
     u.ink = UI.stat('ink', R.ink, { size: 'sm', max: R.inkMax, focusable: false });
     const tn = mk('b', { class: 'ct-n' }), tp = mk('span', { class: 'ct-p' });

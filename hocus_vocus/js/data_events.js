@@ -145,19 +145,19 @@
 
     tengu_dice: {
       title: "The Gull's Dice", art: { scene: 'event' }, chapters: [1],
-      text: "A gull in an enormous hat sits on a crate with three dice. 'Even or odd,' he offers. 'Fifty gold a throw, and I only cheat a little.' The dice look extremely well loved.",
+      text: "A gull in an enormous hat sits on a crate with three dice and a small crowd of cheering pigeons. 'Even or odd?' he offers. 'Fifty gold to play, and a silly prize for a lucky guess.' The dice look extremely well loved.",
       choices: [
-        { label: 'Bet fifty gold on even', cost: 'Up to 50 gold', req: { gold: 50 },
+        { label: 'Guess even for fifty gold', cost: 'Up to 50 gold', req: { gold: 50 },
           out: [
-            { w: 1, text: 'Even! The gull is not sad. He was, he explains, cheating in your favour, to see what you would do with it. You count the fifty gold twice.', ops: [{ op: 'gold', n: 50 }] },
-            { w: 1, text: 'Odd. On closer inspection the dice have no even faces at all. The gull tips his enormous hat with enormous sincerity.', ops: [{ op: 'gold', n: -50 }] },
+            { w: 1, text: 'Even! The pigeons cheer. The gull is not sad: he was, he explains, fibbing in your favour, to see what you would do with it. You count the fifty gold twice.', ops: [{ op: 'gold', n: 50 }] },
+            { w: 1, text: 'Odd. On closer inspection the dice have no even faces at all. The pigeons cheer anyway, and the gull tips his enormous hat with enormous sincerity.', ops: [{ op: 'gold', n: -50 }] },
           ] },
         { label: 'Ask RoxorLoops about the dice', req: { hero: 'kuro' },
-          out: [{ w: 1, text: "'Listen to them land,' says RoxorLoops, and beatboxes the rattle back. 'Left one. Heavy on odd. Ts.' You bet odd. The gull's hat trembles with respect, and forty gold changes hands.", ops: [{ op: 'gold', n: 40 }] }] },
+          out: [{ w: 1, text: "'Listen to them land,' says RoxorLoops, and beatboxes the rattle back. 'Left one. Heavy on odd. Ts.' You call odd. The gull's hat trembles with respect, and the pigeons cheer you out forty gold richer.", ops: [{ op: 'gold', n: 40 }] }] },
         { label: 'Let Jasmin challenge him to a sing-off', req: { hero: 'hanae' },
           out: [{ w: 1, text: 'The gull squawks one magnificent, terrible note. Jasmin answers with a soft little run, and the whole pier goes quiet to listen. He hands over his hat badge, a little dented, with a pink gem pinned in it.', ops: [{ op: 'addGem', color: 'red' }] }] },
         { label: 'Watch him play a round',
-          out: [{ w: 1, text: 'He wins, loses, wins, and squawks along the whole time. You learn two things: the dice are loaded, and the squawking is, in its way, beautiful.', ops: [{ op: 'ink', n: 1 }] }] },
+          out: [{ w: 1, text: 'He throws, laughs, throws again, and squawks along the whole time. You learn two things: the dice are suspiciously fond of odd, and the squawking is, in its way, beautiful.', ops: [{ op: 'ink', n: 1 }] }] },
       ],
     },
 
@@ -345,7 +345,7 @@
         { label: 'Sell a card', cost: 'Maybe a curse',
           out: [
             { w: 1, text: 'The till bleeps, the card is gone, and you walk out with a little more gold and a little less to carry. The kettle tuts all the way to the door.', ops: [{ op: 'removeCard' }, { op: 'gold', n: 35 }] },
-            { w: 1, text: 'You haggle over one card for ten minutes, loudly and badly, and the ring light films the whole thing. You do not even sell the card. The clip plays on a loop in the shop window, and somewhere in your head it keeps playing.', ops: [{ op: 'addCurse', id: 'curse_regret' }] },
+            { w: 1, text: 'You haggle over one card for ten minutes, loudly and badly, and the ring light films the whole thing. You do not even sell the card. The footage plays on a loop in the shop window, and somewhere in your head it keeps playing.', ops: [{ op: 'addCurse', id: 'curse_regret' }] },
           ] },
         { label: 'Buy a mystery box', cost: '60 gold', req: { gold: 60 },
           out: [
@@ -415,7 +415,7 @@
         { label: 'Try the face-filter booth', cost: 'It may not come off right',
           out: [
             { w: 1, text: 'The booth gives you a perfect, glossy face. Every glossy door in the city opens for it, and you slip through three streets nobody else can reach before it wears off.', ops: [{ op: 'paint', n: 3 }] },
-            { w: 1, text: 'The filter comes off, but the feeling does not. For the rest of the tour, just before you go on, a small voice asks whether your real face is good enough.', ops: [{ op: 'addCurse', id: 'curse_doubt' }] },
+            { w: 1, text: 'The filter fades, but the fluttery feeling stays. For the rest of the tour, just before you go on, a small voice asks whether you are quite ready. You are. It asks again.', ops: [{ op: 'addCurse', id: 'curse_doubt' }] },
           ] },
         { label: 'Show them your goat mask', req: { relic: 'fox_mask' },
           out: [{ w: 1, text: "The noodle chef sees the goat mask, laughs and points up at the gull nesting on her awning. 'She stole that, you know. Any friend of hers eats free.' You get noodles and a Charm from under the counter.", ops: [{ op: 'addRelic', rarity: 'uncommon' }] }] },
@@ -770,12 +770,12 @@
 
     two_doors: {
       title: 'Two Mirrors', art: { scene: 'event' },
-      text: 'Two mirrors stand side by side on the road, both wearing name tags. The left one says I WILL TELL YOU THE TRUTH. The right one is a filter, and it says YOU LOOK PERFECT. Neither has a wall.',
+      text: 'Two mirrors stand side by side on the road, both wearing name tags. The left one says I WILL TELL YOU THE TRUTH. The right one is a filter, and it says YOU SOUND PERFECT. Neither has a wall.',
       choices: [
         { label: 'The honest mirror',
           out: [{ w: 1, text: 'It tells you the truth: that your wobbles are the best bit, and that one of your cards could be braver. You make it braver.', ops: [{ op: 'upgradeCard', random: true }] }] },
         { label: 'The kind filter',
-          out: [{ w: 1, text: 'It tells you that you look perfect. You do not, and you know it, but it is so nice to hear that you feel better anyway.', ops: [{ op: 'heal', pct: 0.25 }] }] },
+          out: [{ w: 1, text: 'It tells you that your whole set was perfect. It was not, and you know it, but it is so nicely said that you feel better anyway.', ops: [{ op: 'heal', pct: 0.25 }] }] },
         { label: 'Try the little mirror at the back',
           out: [
             { w: 1, text: 'The little mirror at the back shows you exactly as you are, and then winks. Behind it, someone has left a Charm.', ops: [{ op: 'addRelic', rarity: 'common' }] },

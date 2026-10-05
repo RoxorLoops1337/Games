@@ -1,6 +1,6 @@
 # HOCUS VOCUS: the phases (agent F: process, ownership, gates, agent prompts)
 
-Status: PHASES rev 1 (agent F). Phases merged: P0 f4720c3, P1 f0c9d7b, P2 f28333c, P3 to P8 5377a0f, 8C and P9 and P10 (this PR; see git log for the sha). HV_BASE ada3ca5 (the fork on main). Each phase PR edits this line in the same commit (`Phases merged: P0 <sha>, P1 <sha>, ...`).
+Status: PHASES rev 1 (agent F). Phases merged: P0 f4720c3, P1 f0c9d7b, P2 f28333c, P3 to P8 5377a0f, 8C, P9 and P10 55d3bbd, P11 fixes (this PR; see git log for the sha). HV_BASE ada3ca5 (the fork on main). Each phase PR edits this line in the same commit (`Phases merged: P0 <sha>, P1 <sha>, ...`).
 
 This file is the executable order of the Hocus Vocus re-theme. It decides WHEN each piece of work happens, WHO (which agent) owns which
 files, and which GATES a phase must pass. It never decides a word, a name, a picture or a sound: those live in the content plans
@@ -241,7 +241,9 @@ grep -c hv_run_v1 $SP/hv_baseline/save_before.txt          # must print 1 or mor
 node -e "const fs=require('fs');const l=fs.readFileSync(process.argv[1],'utf8').split('\n').find((x)=>/^[{\"]/.test(x.trim()));let v=JSON.parse(l.trim());if(typeof v==='string')v=JSON.parse(v);fs.writeFileSync(process.argv[2],JSON.stringify(v));" $SP/hv_baseline/save_before.txt $SP/hv_baseline/store.json
 # 3. load it in the current tree:
 node tools/hocus_vocus/shot.mjs --url "hocus_vocus/index.html?notutorial=1" --store "$(cat $SP/hv_baseline/store.json)" --js "document.querySelector('[data-act=continue] .mn-p-sub').textContent" --frames 90 --out $SP/hv_baseline/save_title.png
-node tools/hocus_vocus/shot.mjs --url "hocus_vocus/index.html?notutorial=1" --store "$(cat $SP/hv_baseline/store.json)" --js "GAME.continueRun().then(() => 'continued')" --frames 150 --out $SP/hv_baseline/save_map.png
+# (do not return a promise through --js here: it never settles under the frozen clock; set a flag and use --steps)
+printf '[{"js":"GAME.continueRun().then(() => { window.__done = 1; })","frames":150},{"expect":"window.__done === 1"},{"shot":"%s"}]' $SP/hv_baseline/save_map.png > $SP/hv_baseline/continue_steps.json
+node tools/hocus_vocus/shot.mjs --url "hocus_vocus/index.html?notutorial=1" --store "$(cat $SP/hv_baseline/store.json)" --steps $SP/hv_baseline/continue_steps.json
 ```
 
 Acceptance: before P1 the Continue line reads `Verse 1, Echo N, Hanae and Kuro`; from P1 on it matches `/^Act 1, Vox \d+, Jasmin and

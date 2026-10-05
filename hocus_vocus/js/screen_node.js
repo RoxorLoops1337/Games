@@ -860,8 +860,8 @@
   const rwAxis = () => RW.x + RW.w / 2;
   const REWARD_TITLE = { normal: 'Victory', elite: 'A Rival Bows Out', boss: 'The Headliner Bows Out', event: 'The Tour Goes On' };
   const REWARD_SUB = {
-    normal: ['The air settles, and something shiny is left in the grass.', 'The street hums again. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
-    elite: ['A worthy foe, and a worthy prize.', 'The rival takes a bow, and hands over what it guarded.', 'Even the crickets stop to listen for a moment.'],
+    normal: ['The air settles, and something shiny is left on the stage.', 'The street hums again. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
+    elite: ['A worthy foe, and a worthy prize.', 'The rival takes a bow, and hands over what it guarded.', 'Even the stage lights stop to listen for a moment.'],
     boss: ['The act ends on a satisfying final beat.', 'The mute is off, and it stays off.'],
     event: ['A detour ends the way detours do: with a souvenir.', 'The tour goes on, a little richer.'],
   };
@@ -873,7 +873,7 @@
       mk('span', { class: 'rl-ico' }, UI.icon('relic', id, size || 84)),
       mk('span', { class: 'rl-info' },
         mk('b', { class: 'rl-name', text: d.name }),
-        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Headliner charm' : rarityName(d.rarity) + ' charm' }),
+        mk('span', { class: 'rl-rar r-' + d.rarity, text: d.rarity === 'boss' ? 'Headliner Charm' : rarityName(d.rarity) + ' Charm' }),
         mk('span', { class: 'rl-text', text: safe(() => DATA.relicText(id), d.text) || d.text }),
         d.flavor ? mk('span', { class: 'rl-flavor', text: d.flavor }) : null),
     ];
@@ -1189,7 +1189,7 @@
       const take = mk('button', { type: 'button', class: 'rw-relic', 'aria-label': 'Take ' + relicName(id) }, ...relicBody(id, 84));
       take.addEventListener('click', () => relicChoice(id, take, []));
       const leave = UI.btn('Leave it', { kind: 'ghost', size: 'sm', onclick: relicLeave });
-      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A charm, waiting here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
+      const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A Charm, waiting here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
       if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a Spell above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
       if (rows.length >= 4) ledger.classList.add('tall');      // gold, Vox, a gem AND a Spell: even the desktop stage needs the slim box
       if (rows.length >= 2 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
@@ -1211,7 +1211,7 @@
         page.appendChild(b);
       });
       stage.insertBefore(page, hint);
-      hint.textContent = 'Choose one charm. The others fade with the act.';
+      hint.textContent = 'Choose one Charm. The others fade with the act.';
       S.relicPage = page;
       skip.hidden = true;
     }
@@ -1233,7 +1233,7 @@
     } else {
       if (S.boss && need.relic) buildRelicPage();                          // the cards page follows the relic choice
       else { if (need.relic) buildRelicPanel(); if (need.card) buildCards(); }
-      if (!need.card && need.relic && !S.boss) hint.textContent = 'Take the charm, or leave it.';
+      if (!need.card && need.relic && !S.boss) hint.textContent = 'Take the Charm, or leave it.';
     }
     UI.after(wait(700), () => { if (S.alive() && R.pending && R.pending.length && !rw.claimed) resolvePending(S); });
     UI.announce('Spoils. ' + (rw.gold ? rw.gold + ' gold. ' : '') + (cards.length ? 'Choose a card.' : ''));
@@ -1259,7 +1259,7 @@
     cut: ['Free gem setting! Do not tell the other stalls.', 'Steady hands make sparkling cards.'],
     empty: ['You have cleaned me out! Time to draw more merch.'],
     leave: ['Come again! I will have new designs by then.', 'Safe travels! Wear the merch with pride.', 'Off you go! Buy something next time, or at least admire it louder.'],
-    idle: ['Psst. The blue gems are the sensible ones.', 'A charm is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of new merch.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
+    idle: ['Psst. The blue gems are the sensible ones.', 'A Charm is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of new merch.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
   };
 
   // The stall's geometry: the painted posts, planks and Jordan (shopBackdrop, paintShop) and the DOM wares, nameplate and speech tail all read this one table. enterShop
@@ -1317,7 +1317,7 @@
     stock.items.forEach((it) => { if (by[it.kind]) by[it.kind].push(it); });
     const els = {};
     const cardShelf = mk('div', { class: 'sh-cards', role: 'group', 'aria-label': 'Cards for sale' });
-    const row2 = mk('div', { class: 'sh-row2', role: 'group', 'aria-label': 'Gems, charms and services' });
+    const row2 = mk('div', { class: 'sh-row2', role: 'group', 'aria-label': 'Gems, Charms and services' });
 
     const tagEl = (price, was) => mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), was ? mk('s', { text: was }) : null, mk('b', { text: price }));
     const stampEl = () => mk('i', { class: 'sh-stamp', 'aria-hidden': 'true', text: 'SOLD' });
@@ -1378,7 +1378,7 @@
     };
     let ri = 0;
     by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
-    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Merch charm' : d.rarity === 'boss' ? 'Headliner charm' : d.rarity ? rarityName(d.rarity) : 'Charm', () => tipBubble(d.name || it.id, d.rarity ? rarityName(d.rarity) : '', safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Merch Charm' : d.rarity === 'boss' ? 'Headliner Charm' : d.rarity ? rarityName(d.rarity) : 'Charm', () => tipBubble(d.name || it.id, d.rarity ? rarityName(d.rarity) : '', safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
     by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Spell', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
 
     // services: card removal (price rises) and free gem cutting
@@ -1447,7 +1447,7 @@
       const res = RUN.shopBuy(R, stock, it.key);
       if (!res.ok) {
         if (res.reason === 'gold') poorFeedback(entry.slot, it.price - R.gold);
-        else if (res.reason === 'owned') { UI.toast('You already own that charm.', 'warn'); snd('ui_error'); }
+        else if (res.reason === 'owned') { UI.toast('You already own that Charm.', 'warn'); snd('ui_error'); }
         else UI.toast('Jordan shakes his head.', 'warn');
         refresh();
         return;
@@ -2203,7 +2203,7 @@
         box.appendChild(take1);
         take1.classList.add('rise'); take1.style.setProperty('--i', '2');
         foot.appendChild(UI.btn('Just the gold', { kind: 'ghost', size: 'lg', onclick: () => take({ relic: false }) }));
-        foot.appendChild(UI.btn('Take the charm', { kind: 'primary', size: 'lg', breathe: true, onclick: () => take({ relic: true }) }));
+        foot.appendChild(UI.btn('Take the Charm', { kind: 'primary', size: 'lg', breathe: true, onclick: () => take({ relic: true }) }));
       } else if ((loot.gems || []).length) {
         const gr = mk('div', { class: 'ch-gems', role: 'group', 'aria-label': 'Choose a gem' });
         const takeGem = UI.btn('Take the gem', { kind: 'primary', size: 'lg', breathe: true, disabled: true, reason: 'Choose one of the gems first', onclick: () => take({ gem: selGem }) });

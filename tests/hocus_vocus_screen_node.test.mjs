@@ -1245,10 +1245,10 @@ await t.test('chest with a relic (twelve seeds): closed, opened by the button, t
     await click(g, $(g, '.ch-open'));
     t.eq(chestRow(g), '+' + node.loot.gold, 'seed ' + seed + ': the gold row counted up to the real amount');
     t.ok($(g, '.ch-relic') && txt($(g, '.ch-relic')).indexOf(g.DATA.relics[node.loot.relic].name) >= 0, 'seed ' + seed + ': the relic is named');
-    t.ok(btnByText(g, /Just the gold/) && btnByText(g, /Take the charm/), 'seed ' + seed + ': both choices are offered');
+    t.ok(btnByText(g, /Just the gold/) && btnByText(g, /Take the Charm/), 'seed ' + seed + ': both choices are offered');
     t.eq(R.gold, g.RUN.newRun({ heroes: ['hanae', 'kuro'], seed }).gold, 'seed ' + seed + ': opening alone pays nothing');
     const gold0 = R.gold, rel0 = R.relics.length;
-    if (seed % 2) { await click(g, btnByText(g, /Take the charm/)); took++; } else { await click(g, btnByText(g, /Just the gold/)); left++; }
+    if (seed % 2) { await click(g, btnByText(g, /Take the Charm/)); took++; } else { await click(g, btnByText(g, /Just the gold/)); left++; }
     await answerOverlays(g, R);
     t.eq(R.gold, gold0 + node.loot.gold, 'seed ' + seed + ': the gold was paid');
     t.eq(R.relics.length, rel0 + (seed % 2 ? 1 : 0), 'seed ' + seed + ': the relic was taken or left');
@@ -1339,7 +1339,7 @@ await t.test('chest: only gold (nothing else inside) says Take the gold; an alre
   await click(g, $(g, '.ch-open'));
   g.RUN.take(R3, n3, { relic: false });
   const gold3 = R3.gold; const toasts0 = $$(g, '.toast').length;
-  await click(g, btnByText(g, /Take the charm/));
+  await click(g, btnByText(g, /Take the Charm/));
   t.eq(R3.gold, gold3, 'no second payment');
   t.ok($$(g, '.toast').length > toasts0, 'the refusal is a toast');
   t.eq(errs(g), 0, 'no console errors');
@@ -1354,7 +1354,7 @@ await t.test('chest: a relic whose pickup asks a question (remove a card) is ans
     await open(g, 'chest', R, node);
     await click(g, $(g, '.ch-open'));
     const deck0 = R.deck.length;
-    g._click(btnByText(g, /Take the charm/)); await settle(g);
+    g._click(btnByText(g, /Take the Charm/)); await settle(g);
     t.ok(R.pending.length > 0 && g.UI.overlay.has('deck'), 'seed ' + seed + ': the pickup question is on screen (a deck overlay in remove mode)');
     t.ok($(g, '.o-deck .nk-deck.dk-remove'), 'seed ' + seed + ': remove mode');
     await answerOverlays(g, R);
@@ -1986,7 +1986,7 @@ await t.test('reload: an untouched reward, shop and chest come back untouched an
     t.eq(g2.UI.currentName, kind, kind + ': back on the page');
     t.eq([R2.gold, R2.deck.length, R2.gems.length].join(), [gold, deck, gems].join(), kind + ': nothing was spent or given');
     if (kind === 'reward') { t.ok(!R2.node.rewards.claimed && $$(g2, '.rw-slot').length === node.rewards.cards.length, 'reward: the same offers, unclaimed'); await click(g2, $$(g2, '.rw-slot .rw-face.front .card')[0]); t.eq(R2.deck.length, deck + 1, 'reward: still claimable'); }
-    if (kind === 'chest') { t.ok(!R2.node.taken && !$(g2, '.ch-hit').hidden, 'chest: still shut'); await click(g2, $(g2, '.ch-open')); await click(g2, btnByText(g2, /Take the charm/)); await answerOverlays(g2, R2); t.ok(R2.node.taken, 'chest: still openable'); }
+    if (kind === 'chest') { t.ok(!R2.node.taken && !$(g2, '.ch-hit').hidden, 'chest: still shut'); await click(g2, $(g2, '.ch-open')); await click(g2, btnByText(g2, /Take the Charm/)); await answerOverlays(g2, R2); t.ok(R2.node.taken, 'chest: still openable'); }
     if (kind === 'shop') { t.deep(g2.RUN.serialize(R2).node.stock.items.map((i) => i.key), node.stock.items.map((i) => i.key), 'shop: the same shelves'); }
     if (kind === 'gemcache') { t.deep($$(g2, '.gc-gem').map((b) => b.dataset.gem), node.offers, 'gemcache: the same three gems'); }
     t.eq(errs(g2), 0, kind + ': no console errors');
@@ -2036,7 +2036,7 @@ await t.test('cleanup: a pending choice interrupted by leaving does not stay hal
   g.DATA.relics.test_pickup = Object.assign({}, g.DATA.relics[Object.keys(g.DATA.relics)[0]], { id: 'test_pickup', name: 'Test Pickup', hooks: [{ on: 'onPickup', fx: [{ op: 'removeCard' }] }] });
   const node = nodeAt(g, R, 'chest', { relic: 'common' }); node.loot.relic = 'test_pickup';
   await open(g, 'chest', R, node);
-  await click(g, $(g, '.ch-open')); g._click(btnByText(g, /Take the charm/)); await settle(g);
+  await click(g, $(g, '.ch-open')); g._click(btnByText(g, /Take the Charm/)); await settle(g);
   t.ok(g.UI.overlay.has('deck'), 'the removal question is up');
   await goMap(g);
   t.eq(g.UI.overlay.count(), 0, 'navigating away closed it');
@@ -2149,7 +2149,7 @@ await t.test('painters: every screen and every state (chest shut, opening, open,
   drive(40);
   g._win.__HEADLESS = true; g._click($(g, '.ch-open')); await settle(g);
   drive(200);
-  await click(g, btnByText(g, /Take the charm/)); await answerOverlays(g, R);
+  await click(g, btnByText(g, /Take the Charm/)); await answerOverlays(g, R);
   drive(120);
   t.eq(g._issues.length, 0, 'chest through shut, open and empty: no canvas issues ' + JSON.stringify(g._issues.slice(0, 1)));
   // cache before and after the take
@@ -2506,7 +2506,7 @@ await t.test('the exit controls share one right edge on a phone (the shop button
 // ==================================================================================================== Hocus Vocus copy (P2 2D)
 // What the player reads on every node page in the Hocus Vocus words: HV_UI_COPY section 2.9 and bible 4.1, 4.4 and 5.6. The older tests above pin the
 // strings they already checked; these pin the rows that nothing else reads (the sign, the services, the banners, the labels, the display words of ids).
-await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter and Set gems, gems read pink, Charms read Merch charm or Headliner charm, Spell plaques read Spell', async () => {
+await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter and Set gems, gems read pink, Charms read Merch Charm or Headliner Charm, Spell plaques read Spell', async () => {
   let gems = 0, relics = 0, brushes = 0;
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const g = fresh({ seed }); const R = mkRun(g, { seed, gold: 999 });
@@ -2515,9 +2515,9 @@ await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter a
     t.eq(txt($(g, '.sh-plaque.kind-remove .sh-name')), 'Declutter', 'seed ' + seed + ': the removal service');
     t.eq(txt($(g, '.sh-plaque.kind-cut .sh-name')), 'Set gems', 'seed ' + seed + ': the gem service');
     t.ok(/^Declutter, \d+ gold$/.test($(g, '.sh-plaque.kind-remove').getAttribute('aria-label')) && /^Set gems, free$/.test($(g, '.sh-plaque.kind-cut').getAttribute('aria-label')), 'seed ' + seed + ': the service labels');
-    t.ok(/Gems, charms and services/.test($(g, '.sh-row2').getAttribute('aria-label')), 'seed ' + seed + ': the shelf label');
+    t.ok(/Gems, Charms and services/.test($(g, '.sh-row2').getAttribute('aria-label')), 'seed ' + seed + ': the shelf label');
     $$(g, '.sh-plaque.kind-gem').forEach((p) => { gems++; t.ok(/^Tier \d (pink|blue|green|gold) gem$/.test(txt($(g, '.sh-kind', p))), 'seed ' + seed + ': a gem plaque reads "' + txt($(g, '.sh-kind', p)) + '"'); });
-    $$(g, '.sh-plaque.kind-relic').forEach((p) => { relics++; t.ok(/^(Common|Uncommon|Rare|Merch charm|Headliner charm)$/.test(txt($(g, '.sh-kind', p))), 'seed ' + seed + ': a Charm plaque reads "' + txt($(g, '.sh-kind', p)) + '"'); });
+    $$(g, '.sh-plaque.kind-relic').forEach((p) => { relics++; t.ok(/^(Common|Uncommon|Rare|Merch Charm|Headliner Charm)$/.test(txt($(g, '.sh-kind', p))), 'seed ' + seed + ': a Charm plaque reads "' + txt($(g, '.sh-kind', p)) + '"'); });
     $$(g, '.sh-plaque.kind-brush').forEach((p) => { brushes++; t.eq(txt($(g, '.sh-kind', p)), 'Spell', 'seed ' + seed + ': a brush plaque reads Spell'); });
     t.eq(errs(g), 0, 'seed ' + seed + ': no console errors');
   }
@@ -2544,7 +2544,7 @@ await t.test('copy (reward): the Charm rarity reads as a Charm word and the flav
       t.eq(plaques.length, rw.relics.length, kind + ' ' + seed + ': a plaque per offered Charm');
       plaques.forEach((p, i) => {
         const d = g.DATA.relics[rw.relics[i]];
-        t.eq(txt($(g, '.rl-rar', p)), RAR[d.rarity] + ' charm', kind + ' ' + seed + ': ' + d.name + ' rarity word');
+        t.eq(txt($(g, '.rl-rar', p)), RAR[d.rarity] + ' Charm', kind + ' ' + seed + ': ' + d.name + ' rarity word');
         t.ok(d.flavor && txt($(g, '.rl-flavor', p)) === d.flavor, kind + ' ' + seed + ': ' + d.name + ' shows its flavour line');
         t.ok($(g, '.rl-text', p).nextElementSibling === $(g, '.rl-flavor', p), kind + ' ' + seed + ': the flavour line follows the rules text');
         t.ok(!/treasure|keeper/i.test(txt(p)), kind + ' ' + seed + ': no old rarity word on the plaque');
@@ -2583,7 +2583,8 @@ await t.test('copy (green room, studio, gift box, sparkle booth): banners, tiles
   t.eq(g.DATA.tiles.camp.name, 'Green Room', 'the tile is the Green Room');
   t.eq(txt($(g, '.cp-titlebox .nk-banner')), 'The Green Room', 'the banner reads the tile name');
   t.eq(txt($(g, '.cp-titlebox .nk-sub')), 'Five minutes backstage. Use them well.', 'the sub line');
-  t.ok(/#stage\.compact \.cp-titlebox \.nk-banner span\s*\{[^}]*padding-left:\s*1\.3em/.test(CSS), 'css: The Green Room fits its ribbon on a phone at the larger text sizes (it is two letters longer than The Campfire was)');
+  t.ok(/#stage\.compact \.cp-titlebox \.nk-banner span(?:,\s*#stage\.compact \.gc-titlebox \.nk-banner span)?\s*\{[^}]*padding-left:\s*1\.3em/.test(CSS), 'css: The Green Room fits its ribbon on a phone at the larger text sizes (it is two letters longer than The Campfire was)');
+  t.ok(/#stage\.compact \.cp-titlebox \.nk-banner span,\s*#stage\.compact \.gc-titlebox \.nk-banner span\s*\{[^}]*font-size:\s*min\([^}]*36px\)[^}]*white-space:\s*nowrap/.test(CSS), 'css: the two long ribbons (Green Room, Sparkle Booth) stop growing at 36 stage px and never wrap on a phone (P11 B1, B5)');
   t.deep($$(g, '.cp-tile .cp-name').map(txt), ['Rest', 'Rehearse', 'Set Gems', 'Warm Up'], 'the four tiles');
   t.deep($$(g, '.cp-tile .cp-verb').map(txt), ['Put your feet up', 'Upgrade a card', 'Set gems in cards', 'Vox and a Spell'], 'the four verbs');
   t.eq($(g, '.cp-grid').getAttribute('aria-label'), 'Green room actions', 'the grid label');
