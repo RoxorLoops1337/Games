@@ -8,7 +8,7 @@
 <style>
   html, body {
     margin: 0; padding: 0; height: 100%;
-    background: #16241a; overflow: hidden;
+    background: #1a1340; overflow: hidden;
     font-family: 'Segoe UI', system-ui, sans-serif;
     -webkit-user-select: none; user-select: none;
     touch-action: none; overscroll-behavior: none;
@@ -33,7 +33,19 @@
 // ============================================================
 
 const cvs = document.getElementById('game');
-let ctx = cvs.getContext('2d'); // let: temporarily swapped to offscreen canvases for sprite caching
+let ctx = cvs.getContext('2d');
+let fillRaw = null;
+{ // every label gets the warm Hocus Vocus outline
+  const c0 = ctx, ft = c0.fillText, szc = new Map(), lumc = new Map(); fillRaw = ft;
+  if (ft && c0.strokeText) c0.fillText = function (t, x, y, mw) {
+    const f = this.font; let sz = szc.get(f); if (sz === undefined) { const m = /(\d+(?:\.\d+)?)px/.exec(f || ''); sz = m ? +m[1] : 14; szc.set(f, sz); }
+    const fs = this.fillStyle; let dark = lumc.get(fs);
+    if (dark === undefined && typeof fs === 'string') { const m = /^#([0-9a-f]{6})$/i.exec(fs) || null, r = /^rgba?\((\d+),(\d+),(\d+)/.exec(fs); const v = m ? [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4), 16)] : r ? [+r[1], +r[2], +r[3]] : null; dark = v ? (v[0] * 0.3 + v[1] * 0.59 + v[2] * 0.11) < 105 : false; lumc.set(fs, dark); }
+    if (dark) return ft.call(this, t, x, y, mw);
+    this.save(); this.lineJoin = 'round'; this.strokeStyle = 'rgba(45,23,15,0.85)'; this.lineWidth = Math.max(2, sz * 0.2); this.strokeText(t, x, y); this.restore();
+    ft.call(this, t, x, y, mw);
+  };
+} // let: temporarily swapped to offscreen canvases for sprite caching
 
 // ---- world geometry -----------------------------------------
 // The world is a grid of cells. The hub sits at cell (0,0);
@@ -424,12 +436,18 @@ const GEMU = {
   coin:   { icon: '🪙', name: 'MIDAS',    what: '+25% coin value' },
 };
 function gemUpCost(key, lvl) { return 2 + lvl * (key === 'magnet' ? 2 : 3); }
-const FOE_NAMES = ['Grunt', 'Raider', 'Ogre', 'Wraith', 'Golem', 'Demon', 'Titan', 'Dread'];
-const FOE_COLS  = ['#c15840', '#c99a3a', '#7c52c9', '#4ba8b5', '#8a9a4a', '#c94a8a', '#5a6dcf', '#3f3f4f'];
+// the Soundlands' creatures: Act I Blossom Bay, Act II the Feed, Act III the Gloss (names from Hocus Vocus)
+const FOE_ACT_NAMES = [
+  ['Fussy Foghorn', 'Jitterbug', 'Runaway Melon', 'Pitch-Perfect Gull', 'Jingle Machine', 'Hot Chilli', 'One-Hit Jukebox', 'Squeezebox'],
+  ['Flamebait', 'Clickbait Goblin', 'Unskippable Ad', 'Filter Fairy', 'Hug Emoji', 'Notification Imp', 'Phone Charger', 'Algo Rhythm'],
+  ['Tuner Drone', 'Synchro Dancer', 'VIP Bouncer', 'Chrome Siren', 'Clapperboard Knight', 'Glitch Gremlin', 'Ring Light Sentinel', 'Airbrush Wraith'],
+];
+const FOE_NAMES = FOE_ACT_NAMES[0];
+const FOE_COLS  = ['#ff6a5a', '#ffb640', '#a77bff', '#2ec4b6', '#8fdc4a', '#ff7eb6', '#5fb4ff', '#8a86a8'];
 // behavior archetype per foe family — every land plays differently
 const FOE_ARCH  = ['melee', 'fast', 'tank', 'spitter', 'tank', 'fast', 'tank', 'spitter'];
 function foeArch(k) { return FOE_ARCH[(k - 1) % FOE_ARCH.length]; }
-function foeName(k) { const i = (k - 1) % FOE_NAMES.length; const cyc = Math.floor((k - 1) / FOE_NAMES.length); return FOE_NAMES[i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
+function foeName(k) { const i = (k - 1) % FOE_NAMES.length, act = Math.floor((k - 1) / FOE_NAMES.length), cyc = Math.floor(act / 3); return FOE_ACT_NAMES[act % 3][i] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
 function foeCol(k)  { return FOE_COLS[(k - 1) % FOE_COLS.length]; }
 function hexRgb(h)  { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 // ---- bestiary: a collection log of every foe family + boss -----
@@ -857,7 +875,7 @@ const D2CFG = (() => {
   const at = (cell, x, y, r) => ({ x: cell[0] * CELL_W + x, y: cell[1] * CELL_H + y, r: r || 55 });
   const cfg = {
     farm: {
-      key: 'farm', name: 'FARMLANDS', icon: '🌾', cell: [-1, 1], need: 3, cost: 700, ground: '#4c5a2e',
+      key: 'farm', name: 'FARMLANDS', icon: '🌾', cell: [-1, 1], need: 3, cost: 700, ground: '#d2ea9c',
       plate: { x: 60, y: CELL_H + 500 },              // land 2's west edge
       producers: [
         { id: 'wheat', icon: '🌾', name: 'WHEAT FIELD', cost: 300, out: 'wheat', t: 1.7 },
@@ -869,7 +887,7 @@ const D2CFG = (() => {
       ],
     },
     mine: {
-      key: 'mine', name: 'DEEP MINES', icon: '⚒️', cell: [-1, -1], need: 4, cost: 1200, ground: '#4a4448',
+      key: 'mine', name: 'DEEP MINES', icon: '⚒️', cell: [-1, -1], need: 4, cost: 1200, ground: '#ddd2ea',
       plate: { x: -CELL_W + 525, y: 60 },             // land 3's north edge
       producers: [
         { id: 'orevein', icon: '⛓️', name: 'ORE VEIN', cost: 500, out: 'ore', t: 2.6 },
@@ -881,7 +899,7 @@ const D2CFG = (() => {
       ],
     },
     artisan: {
-      key: 'artisan', name: 'ARTISAN QUARTER', icon: '🎨', cell: [1, -1], need: 6, cost: 2600, ground: '#4a4054',
+      key: 'artisan', name: 'ARTISAN QUARTER', icon: '🎨', cell: [1, -1], need: 6, cost: 2600, ground: '#f7d3ea',
       plate: { x: CELL_W + 525, y: 60 },              // land 1's north edge
       producers: [
         { id: 'sheep', icon: '🐑', name: 'SHEEP PEN', cost: 900, out: 'wool', t: 2.1 },
@@ -1197,14 +1215,14 @@ function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * d
 // Recolor the knight's body + cape. Some bought with crowns/gems, one
 // unlocked by reaching Legend rank. Purely cosmetic — zero balance impact.
 const SKINS = [
-  { id: 'royal',   name: 'Royal Blue',     body: '#3f6fb5', cape: '#a03030', cost: 0,  cur: null },
-  { id: 'crimson', name: 'Crimson Guard',  body: '#b5403f', cape: '#5a1a1a', cost: 3,  cur: 'crown' },
-  { id: 'emerald', name: 'Emerald Knight', body: '#3faa6a', cape: '#1f5a3a', cost: 3,  cur: 'crown' },
-  { id: 'gold',    name: 'Golden King',    body: '#d9a93a', cape: '#8a6a10', cost: 6,  cur: 'crown' },
-  { id: 'shadow',  name: 'Shadowblade',    body: '#3a3a4a', cape: '#15151f', cost: 40, cur: 'gem' },
-  { id: 'frost',   name: 'Frostborn',      body: '#5aa9d0', cape: '#2a5a7a', cost: 40, cur: 'gem' },
-  { id: 'void',    name: 'Voidwalker',     body: '#7a3faa', cape: '#3a1a5a', cost: 80, cur: 'gem' },
-  { id: 'legend',  name: 'Legend Regalia', body: '#e8c44a', cape: '#b03030', cost: 0,  cur: null, need: () => heroRankIdx() >= 8, needTxt: 'Reach Legend rank' },
+  { id: 'royal',   name: 'Jasmin',         body: '#3f6fb5', cape: '#a03030', cost: 0,  cur: null },
+  { id: 'crimson', name: 'RoxorLoops',     body: '#b5403f', cape: '#5a1a1a', cost: 3,  cur: 'crown' },
+  { id: 'emerald', name: 'RawClaw',       body: '#3faa6a', cape: '#1f5a3a', cost: 3,  cur: 'crown' },
+  { id: 'gold',    name: 'Andy',            body: '#d9a93a', cape: '#8a6a10', cost: 6,  cur: 'crown' },
+  { id: 'shadow',  name: 'Monster Onesie',  body: '#3a3a4a', cape: '#15151f', cost: 40, cur: 'gem' },
+  { id: 'frost',   name: 'Unicorn Onesie',  body: '#5aa9d0', cape: '#2a5a7a', cost: 40, cur: 'gem' },
+  { id: 'void',    name: 'Goat Onesie',     body: '#7a3faa', cape: '#3a1a5a', cost: 80, cur: 'gem' },
+  { id: 'legend',  name: 'Legend Spotlight', body: '#e8c44a', cape: '#b03030', cost: 0,  cur: null, need: () => heroRankIdx() >= 8, needTxt: 'Reach Legend rank' },
 ];
 function skinDef(id) { return SKINS.find(s => s.id === id) || SKINS[0]; }
 function skinOwned(id) { return !!(S.skins && S.skins.owned && S.skins.owned[id]); }
@@ -1871,17 +1889,17 @@ function checkAch() {
 // A persistent title ladder that blends every accomplishment into one
 // renown score, so all playstyles feed a single sense of growth. No rng.
 const RANKS = [
-  { name: 'Squire',    ic: '🪵', at: 0 },
-  { name: 'Footman',   ic: '🗡', at: 60 },
-  { name: 'Knight',    ic: '🛡', at: 220 },
-  { name: 'Captain',   ic: '🎖', at: 600 },
-  { name: 'Baron',     ic: '🏰', at: 1500 },
-  { name: 'Warlord',   ic: '⚔️', at: 3600 },
-  { name: 'Duke',      ic: '👑', at: 8000 },
-  { name: 'Champion',  ic: '🏆', at: 18000 },
+  { name: 'Busker',     ic: '🎤', at: 0 },
+  { name: 'Open-Mic Hero', ic: '🎙', at: 60 },
+  { name: 'Opening Act', ic: '🎸', at: 220 },
+  { name: 'Crowd Pleaser', ic: '🎶', at: 600 },
+  { name: 'Local Celebrity', ic: '📻', at: 1500 },
+  { name: 'Tour Headliner', ic: '🎪', at: 3600 },
+  { name: 'Chart Topper', ic: '📀', at: 8000 },
+  { name: 'Platinum Star', ic: '🏆', at: 18000 },
   { name: 'Legend',    ic: '🌟', at: 40000 },
-  { name: 'Myth',      ic: '☄️', at: 90000 },
-  { name: 'God-King',  ic: '⚡', at: 220000 },
+  { name: 'Hall of Fame', ic: '☄️', at: 90000 },
+  { name: 'Soundlands Icon', ic: '⚡', at: 220000 },
 ];
 function renown() {
   return Math.floor(S.stats.kills + (S.stats.bosses || 0) * 50 + S.crowns * 500 + S.zones.length * 80 + (S.stats.elites || 0) * 30 + (S.stats.spins || 0) * 5);
@@ -1919,7 +1937,7 @@ function tick(dt) {
   if (S.offlineMsg > 0) S.offlineMsg -= dt;
   const p = S.player;
   p.invuln = Math.max(0, p.invuln - dt);
-  p.hurtT = Math.max(0, p.hurtT - dt);
+  p.hurtT = Math.max(0, p.hurtT - dt); p.atkT = Math.max(0, (p.atkT || 0) - dt);
   // keep max HP in sync with VITALITY level + crowns; buying HP / prestige heals
   const mh = pMaxHp();
   if (mh > p.maxHp) p.hp += mh - p.maxHp;
@@ -2002,7 +2020,7 @@ function tick(dt) {
     if (inRange.length) {
       inRange.sort((a, b) => a[0] - b[0]);
       const shots = 1 + pk('multi'), spd = 460 * (1 + 0.18 * pk('velocity'));
-      p.fireCd = pRate();
+      p.fireCd = pRate(); p.atkT = 0.4;
       for (let i = 0; i < shots; i++) {
         const tgt = inRange[i % inRange.length][1];
         const crit = rnd() < critChance();
@@ -2737,7 +2755,7 @@ function tick(dt) {
         sh.done = true;
         S.fx.push({ kind: 'boom', x: sh.tx, y: sh.ty, r: CAT_AOE, t: 0, dur: 0.4 });
         for (const e of S.enemies) if (e.hp > 0 && dist2(e.x, e.y, sh.tx, sh.ty) < CAT_AOE * CAT_AOE) hurtEnemy(e, sh.dmg);
-        puff(sh.tx, sh.ty, '#8a7a5c', 14, true);
+        puff(sh.tx, sh.ty, '#ffc2dc', 14, true);
         S.shake = Math.max(S.shake, 6); sfx('boom', true);
       }
       continue;
@@ -2830,6 +2848,42 @@ function shadow(x, y, w) {
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.4, 0, 0, 6.29); ctx.fill();
 }
+// Hocus Vocus look: indigo stage veil with candy stripes + sparkles behind every menu
+function veil(a) {
+  a = Math.max(a, 0.97);
+  const g = ctx.createLinearGradient(0, 0, 0, vh);
+  g.addColorStop(0, 'rgba(58,36,124,' + a + ')'); g.addColorStop(1, 'rgba(21,14,54,' + a + ')');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, vw, vh);
+  const sg = ctx.createLinearGradient(0, 0, vw, 0);
+  sg.addColorStop(0, '#ff7eb6'); sg.addColorStop(0.45, '#ffd9ea'); sg.addColorStop(0.55, '#d9fff0'); sg.addColorStop(1, '#3fcf6a');
+  ctx.fillStyle = sg; ctx.globalAlpha = 0.9; ctx.fillRect(0, 0, vw, 5); ctx.fillRect(0, vh - 5, vw, 5); ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(255,244,230,0.55)';
+  for (let i = 0; i < 14; i++) { const x = ((i * 137.5) % 100) / 100 * vw, y = ((i * 71.3 + 11) % 100) / 100 * vh, tw = 0.5 + 0.5 * Math.sin(S.t * 2 + i); ctx.globalAlpha = 0.25 + 0.5 * tw; ctx.fillRect(x - 1, y - 4, 2, 8); ctx.fillRect(x - 4, y - 1, 8, 2); }
+  ctx.globalAlpha = 1;
+}
+const HV = { line: '#2d170f', cream: '#fff4e6', pink: '#ff7eb6', pinkD: '#c93f78', green: '#3fcf6a', greenD: '#1f7a3a', violet: '#a77bff', gold: '#ffd84d', orange: '#ff9a2e', teal: '#2ec4b6', indigo: '#2a1d5a' };
+// indigo stage plaque: warm outline, cream hairline, pink echo
+function plaque(x, y, w, h, r) {
+  ctx.fillStyle = HV.line; rr(x - 2, y - 2, w + 4, h + 4, r + 2); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4a3394'); g.addColorStop(1, '#241857');
+  ctx.fillStyle = g; rr(x, y, w, h, r); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,244,230,0.55)'; ctx.lineWidth = 1.2; rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(2, r - 1.5)); ctx.stroke();
+}
+// candy sticker pill: outline, gradient body, gloss band
+function pill(x, y, w, h, c1, c2) {
+  const r = Math.min(h / 2, 14);
+  ctx.fillStyle = HV.line; rr(x - 2, y - 1, w + 4, h + 5, r + 2); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; rr(x, y, w, h, r); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.38)'; rr(x + 3, y + 2, w - 6, h * 0.38, r * 0.7); ctx.fill();
+}
+// candy round button
+function disc(x, y, r, c1, c2) {
+  ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, y + 1.5, r + 2.5, 0, 6.29); ctx.fill();
+  const g = ctx.createLinearGradient(0, y - r, 0, y + r); g.addColorStop(0, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(x, y - r * 0.5, r * 0.62, r * 0.34, 0, 0, 6.29); ctx.fill();
+}
 // ---- perf helpers -------------------------------------------
 // in-place array compaction: same order as filter(), zero allocation
 function compact(a, keep) { let w = 0; for (let i = 0; i < a.length; i++) { const v = a[i]; if (keep(v)) a[w++] = v; } a.length = w; }
@@ -2855,6 +2909,47 @@ function sprite(key, size, paint) {
   }
   return c;
 }
+// ---- Hocus Vocus chibi art atlas (baked by tools/kingshot/bake_art.mjs) --------------------
+// Missing or failed art never breaks the game: every caller falls back to the drawn shapes.
+const ART = { spr: null, sheets: {}, ready: false };
+const HERO_ART = { royal: 'jasmin', crimson: 'roxor', emerald: 'rawclaw', gold: 'andy', shadow: 'roxor_monster', frost: 'jasmin_unicorn', void: 'rawclaw_goat', legend: 'andy' };
+const FOE_ART = [
+  ['kappa', 'oni_cub', 'bamboo_boar', 'crow_tengu', 'mushroom_folk', 'hitodama', 'oni_brute', 'karakasa'],
+  ['chochin', 'karakuri_puppet', 'drowned_samurai', 'nopperabo', 'koi_spirit', 'tsukumogami', 'ittan_momen', 'silk_weaver'],
+  ['storm_drone', 'blank_soldier', 'komainu_guardian', 'void_scribe', 'redaction_knight', 'margin_imp', 'thunder_crow', 'eraser_wraith'],
+];
+const BOSS_ART = ['boss_kuzunoha', 'boss_jorogumo', 'boss_editor'];
+const INHAB_ART = ['rawclaw', 'roxor', 'andy', 'jasmin_unicorn', 'rawclaw_goat', 'roxor_monster'];
+function foeArt(k, boss) { const act = Math.floor((k - 1) / FOE_NAMES.length) % 3; return boss ? BOSS_ART[act] : FOE_ART[act][(k - 1) % FOE_NAMES.length]; }
+function loadArt() {
+  if (typeof fetch !== 'function' || typeof Image !== 'function') return;
+  fetch('art/atlas.json').then(r => r.json()).then(a => {
+    let left = Object.keys(a.sheets).length;
+    for (const n in a.sheets) {
+      const im = new Image();
+      im.onload = () => { ART.sheets[n] = im; if (--left === 0) { ART.spr = a.spr; ART.ready = true; } };
+      im.src = 'art/' + n + '.webp';
+    }
+  }).catch(() => {});
+}
+// draws frame `fr` of the named animation, feet anchored at (x,y), k = world units per baked pixel
+function artDraw(name, anim, fr, x, y, k, flip) {
+  if (!ART.ready) return false;
+  const s = ART.spr[name]; if (!s) return false;
+  const a = s.anims && s.anims[anim] || [0, s.n];
+  const f = a[0] + ((fr % a[1]) + a[1]) % a[1];
+  const im = ART.sheets[s.sheet], w = s.w * k, h = s.h * k;
+  if (flip) { ctx.save(); ctx.translate(x, y); ctx.scale(-1, 1); ctx.drawImage(im, s.x + f * s.w, s.y, s.w, s.h, -s.ax * k, -s.ay * k, w, h); ctx.restore(); }
+  else ctx.drawImage(im, s.x + f * s.w, s.y, s.w, s.h, x - s.ax * k, y - s.ay * k, w, h);
+  return true;
+}
+function artIcon(kind, id, x, y, size) {
+  if (!ART.ready) return false;
+  const s = ART.spr[kind + ':' + id]; if (!s) return false;
+  ctx.drawImage(ART.sheets[s.sheet], s.x, s.y, s.w, s.h, x - size / 2, y - size / 2, size, size);
+  return true;
+}
+loadArt();
 // living foes bucketed per land, rebuilt once per tick — towers, catapults and
 // spawn gates read these instead of scanning the global enemy list each time
 const FOE_BUCKETS = new Map();
@@ -2955,7 +3050,7 @@ function drawFlourIcon(x, y, s) {
   s = s || 1;
   ctx.fillStyle = '#e8e0cc'; rr(x - 7 * s, y - 6 * s, 14 * s, 13 * s, 4 * s); ctx.fill();
   ctx.fillStyle = '#c9bea0'; ctx.fillRect(x - 4 * s, y - 8 * s, 8 * s, 3 * s);
-  ctx.fillStyle = '#b8a878'; ctx.font = 'bold ' + Math.round(7 * s) + 'px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#b8a878'; ctx.font = 'bold ' + Math.round(7 * s) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('F', x, y + 3 * s);
 }
 function drawPieIcon(x, y, s) {
@@ -3041,23 +3136,33 @@ function drawStackEntry(e, x, y, s) {
 }
 function drawTree(x, y, s, c1, c2) {
   s = s || 1;
-  ctx.fillStyle = '#3a2e22'; ctx.fillRect(x - 3 * s, y - 6 * s, 6 * s, 14 * s);
-  ctx.fillStyle = c1 || '#24421f';
-  ctx.beginPath(); ctx.arc(x, y - 20 * s, 16 * s, 0, 6.29); ctx.fill();
-  ctx.fillStyle = c2 || '#2e5226';
-  ctx.beginPath(); ctx.arc(x - 6 * s, y - 14 * s, 11 * s, 0, 6.29); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + 7 * s, y - 13 * s, 10 * s, 0, 6.29); ctx.fill();
+  const LN = '#2d170f';
+  ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.beginPath(); ctx.ellipse(x, y + 8 * s, 15 * s, 5 * s, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = LN; ctx.fillRect(x - 4.5 * s, y - 7 * s, 9 * s, 16 * s);
+  ctx.fillStyle = '#9a6a48'; ctx.fillRect(x - 2.8 * s, y - 7 * s, 5.6 * s, 15 * s);
+  const puffs = [[0, -22, 17], [-9, -15, 12], [9, -14, 12]];
+  ctx.fillStyle = LN;
+  for (const q of puffs) { ctx.beginPath(); ctx.arc(x + q[0] * s, y + q[1] * s, (q[2] + 2) * s, 0, 6.29); ctx.fill(); }
+  ctx.fillStyle = c1 || '#ff9cc6';
+  for (const q of puffs) { ctx.beginPath(); ctx.arc(x + q[0] * s, y + q[1] * s, q[2] * s, 0, 6.29); ctx.fill(); }
+  ctx.fillStyle = c2 || '#ffc2dc';
+  ctx.beginPath(); ctx.arc(x - 4 * s, y - 26 * s, 7 * s, 0, 6.29); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 8 * s, y - 17 * s, 4.5 * s, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#fff8f0';
+  ctx.fillRect(x - 8 * s, y - 20 * s, 2.4 * s, 2.4 * s); ctx.fillRect(x + 3 * s, y - 29 * s, 2.4 * s, 2.4 * s); ctx.fillRect(x + 10 * s, y - 12 * s, 2.4 * s, 2.4 * s);
 }
 function plateCircle(x, y, r, stroke, paid, costV, fillCol) {
-  ctx.fillStyle = 'rgba(38,46,66,0.85)';
+  ctx.fillStyle = 'rgba(58,40,116,0.85)';
   ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.fill();
   if (paid > 0) {
     ctx.beginPath(); ctx.moveTo(x, y);
     ctx.arc(x, y, r, -1.5708, -1.5708 + paid / costV * 6.283); ctx.closePath();
     ctx.fillStyle = fillCol || 'rgba(110,203,90,0.35)'; ctx.fill();
   }
+  ctx.strokeStyle = 'rgba(255,244,230,0.85)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(x, y, r + 1, 0, 6.29); ctx.stroke();
   ctx.strokeStyle = stroke; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r - 1.5, 0, 6.29); ctx.stroke();
 }
 function cellWalkable(cx, cy) {
   if (cx === 0 && cy === 0) return true;
@@ -3068,23 +3173,23 @@ function cellWalkable(cx, cy) {
 function drawGround() {
   // dark forest everywhere
   const b = worldBounds();
-  ctx.fillStyle = '#16241a';
+  ctx.fillStyle = '#58b894';
   ctx.fillRect(b.minX - 2500, b.minY - 2500, (b.maxX - b.minX) + 5000, (b.maxY - b.minY) + 5000);
   // grass for hub + each unlocked cell
   // biomes: each arm of the kingdom has its own palette
   // E: plains, S: swamp, W: autumn, N: tundra
-  const GRASS = [['#405c38', '#3a563c'], ['#3b5748', '#365243'], ['#565a33', '#50542f'], ['#49584f', '#43524a']];
-  const CANOPY = [['#24421f', '#2e5226'], ['#1f3d33', '#28493d'], ['#4a4d1e', '#575a28'], ['#2c443e', '#37524a']];
+  const GRASS = [['#8fdc8a', '#86d684'], ['#7fd9b4', '#76d2ac'], ['#f3cf8e', '#eec886'], ['#c6e6f7', '#bde0f2']];
+  const CANOPY = [['#ff9cc6', '#ffc2dc'], ['#7fe8d0', '#a9f3e2'], ['#ffa05a', '#ffc58a'], ['#b9a2ff', '#d9c9ff']];
   const cells = [{ cx: 0, cy: 0, k: 0 }].concat(S.zones.map(z => ({ cx: z.cx, cy: z.cy, k: z.k })));
-  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1, g: '#57543e' });
+  if (S.distPlate.built) cells.push({ cx: 1, cy: 1, k: -1, g: '#f3e2bb' });
   for (const dk in D2CFG) if (S.d2Plate[dk].built) cells.push({ cx: D2CFG[dk].cell[0], cy: D2CFG[dk].cell[1], k: -1, g: D2CFG[dk].ground });
   for (const c of cells) {
     const x0 = c.cx * CELL_W, y0 = c.cy * CELL_H;
     if (!rectVis(x0, y0, x0 + CELL_W, y0 + CELL_H)) continue;
     const dir = c.k <= 0 ? 0 : (c.k - 1) % 4;
-    ctx.fillStyle = c.k === 0 ? '#3d5a3a' : c.k === -1 ? (c.g || '#57543e') : GRASS[dir][c.k % 2];
+    ctx.fillStyle = c.k === 0 ? '#98e48f' : c.k === -1 ? (c.g || '#e9d9b0') : GRASS[dir][c.k % 2];
     ctx.fillRect(x0, y0, CELL_W, CELL_H);
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
     for (let gx = x0; gx < x0 + CELL_W; gx += 160) ctx.fillRect(gx, y0, 80, CELL_H);
     // treeline on edges facing the dark forest
     const rowStep = 88;
@@ -3099,75 +3204,91 @@ function drawGround() {
   const nxt = cellFor(S.zones.length + 1);
   const px0 = nxt.cx * CELL_W, py0 = nxt.cy * CELL_H;
   if (!rectVis(px0, py0, px0 + CELL_W, py0 + CELL_H)) { drawHubAndPens(); return; }
-  ctx.fillStyle = 'rgba(30,40,34,0.9)'; ctx.fillRect(px0, py0, CELL_W, CELL_H);
+  ctx.fillStyle = 'rgba(90,70,160,0.55)'; ctx.fillRect(px0, py0, CELL_W, CELL_H);
   ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 4; ctx.setLineDash([18, 14]);
   ctx.strokeRect(px0 + 30, py0 + 30, CELL_W - 60, CELL_H - 60); ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = 'bold 60px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = 'bold 60px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('🔒', px0 + CELL_W / 2, py0 + CELL_H / 2 - 10);
-  ctx.font = 'bold 22px sans-serif';
+  ctx.font = 'bold 22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('NEW LANDS — ' + DIR_NAME[nxt.dir], px0 + CELL_W / 2, py0 + CELL_H / 2 + 44);
   drawHubAndPens();
 }
 function drawHubAndPens() {
   // hub plaza
   if (rectVis(0, 0, CELL_W, CELL_H)) {
-    ctx.fillStyle = '#8a7a5c'; rr(115, 90, 820, 820, 26); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.06)';
-    for (let i = 0; i < 8; i++) ctx.fillRect(115, 90 + i * 110, 820, 3);
+    ctx.fillStyle = '#2d170f'; rr(109, 84, 832, 832, 30); ctx.fill();
+    ctx.fillStyle = '#fff1d6'; rr(115, 90, 820, 820, 26); ctx.fill();
+    ctx.fillStyle = 'rgba(255,126,182,0.10)';
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2) ctx.fillRect(115 + j * 102.5, 90 + i * 102.5, 102.5, 102.5);
+    ctx.strokeStyle = 'rgba(255,126,182,0.55)'; ctx.lineWidth = 4; ctx.setLineDash([14, 12]); rr(131, 106, 788, 788, 18); ctx.stroke(); ctx.setLineDash([]);
+    // bunting + twinkling fairy lights along the plaza edge
+    for (let i = 0; i <= 20; i++) {
+      const bx2 = 130 + i * 39, by2 = 98 + Math.sin(i * 0.5) * 3 + Math.sin(i / 20 * Math.PI) * 10;
+      if (!vis(bx2, by2, 30)) continue;
+      ctx.fillStyle = [HV.pink, HV.green, HV.gold, HV.violet][i % 4]; ctx.strokeStyle = HV.line; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(bx2 - 8, by2); ctx.lineTo(bx2 + 8, by2); ctx.lineTo(bx2, by2 + 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      const tw2 = 0.5 + 0.5 * Math.sin(S.t * 3 + i * 1.3);
+      ctx.fillStyle = 'rgba(255,244,200,' + (0.4 + tw2 * 0.6) + ')'; ctx.beginPath(); ctx.arc(bx2 + 19, by2 + 3, 2.4 + tw2, 0, 6.29); ctx.fill();
+    }
     // cottages — the village row along the top of the plaza (one per house built)
     for (let i = 0; i < (S.houses || 0); i++) {
       const hx = 190 + i * 96, hy = 118;
       shadow(hx, hy + 22, 22);
-      ctx.fillStyle = i % 2 ? '#8a6a46' : '#7a5f42'; rr(hx - 20, hy - 8, 40, 30, 4); ctx.fill();       // walls
-      ctx.fillStyle = i % 2 ? '#a03030' : '#7a4a26';                                                    // roof
-      ctx.beginPath(); ctx.moveTo(hx - 26, hy - 6); ctx.lineTo(hx, hy - 30); ctx.lineTo(hx + 26, hy - 6); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#3a2e22'; rr(hx - 5, hy + 6, 10, 16, 2); ctx.fill();                              // door
+      ctx.fillStyle = '#2d170f'; rr(hx - 22, hy - 10, 44, 34, 6); ctx.fill();
+      ctx.fillStyle = i % 2 ? '#ffe3f1' : '#d9fff0'; rr(hx - 20, hy - 8, 40, 30, 4); ctx.fill();         // walls
+      ctx.fillStyle = '#2d170f'; ctx.beginPath(); ctx.moveTo(hx - 30, hy - 5); ctx.lineTo(hx, hy - 35); ctx.lineTo(hx + 30, hy - 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = i % 2 ? '#ff7eb6' : '#3fcf6a';                                                    // roof
+      ctx.beginPath(); ctx.moveTo(hx - 25, hy - 7); ctx.lineTo(hx, hy - 31); ctx.lineTo(hx + 25, hy - 7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(hx - 20, hy - 9); ctx.lineTo(hx, hy - 28); ctx.lineTo(hx - 4, hy - 9); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#9a6a48'; rr(hx - 5, hy + 6, 10, 16, 3); ctx.fill();                              // door
       const night = daylight() < 0.35;
-      ctx.fillStyle = night ? '#ffd94a' : '#2a2118'; ctx.fillRect(hx + 8, hy - 2, 7, 7);                 // window (lit at night)
+      ctx.fillStyle = night ? '#ffd94a' : '#8fd0ff'; rr(hx + 8, hy - 2, 8, 8, 2); ctx.fill();            // window (lit at night)
       if (night) { ctx.fillStyle = 'rgba(255,217,74,0.25)'; ctx.beginPath(); ctx.arc(hx + 11, hy + 1, 10, 0, 6.29); ctx.fill(); }
     }
   }
   // zone pens
   for (const z of S.zones) {
     if (!rectVis(z.x0, z.y0, z.x1, z.y1)) continue;
-    ctx.fillStyle = z.k % 2 ? '#57503c' : '#5c483c';
+    ctx.fillStyle = z.k % 2 ? '#ecd0ae' : '#e6c4a0';
     rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
     const trgb = hexRgb(foeCol(z.k));
-    ctx.fillStyle = 'rgba(' + trgb[0] + ',' + trgb[1] + ',' + trgb[2] + ',0.07)';
+    ctx.fillStyle = 'rgba(' + trgb[0] + ',' + trgb[1] + ',' + trgb[2] + ',0.13)';
     rr(z.pen.x0 - 20, z.pen.y0 - 20, z.pen.x1 - z.pen.x0 + 40, z.pen.y1 - z.pen.y0 + 40, 22); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
     for (let i = 0; i < 10; i++) {
       const bx = z.pen.x0 + ((i * 173) % (z.pen.x1 - z.pen.x0 - 40));
       const by = z.pen.y0 + ((i * 311) % (z.pen.y1 - z.pen.y0 - 40));
       ctx.beginPath(); ctx.ellipse(bx, by, 26, 11, 0, 0, 6.29); ctx.fill();
     }
     // fence with a gap on the hub-facing side
-    ctx.fillStyle = '#3a2e22';
+    ctx.fillStyle = '#fff4e6'; ctx.strokeStyle = '#2d170f'; ctx.lineWidth = 2;
     const step = 56;
     const gapC = DIRS[z.dir][0] ? z.y0 + 500 : z.x0 + 525;
     for (let fx = z.pen.x0 - 20; fx <= z.pen.x1 + 20; fx += step) {
       const gapTop = z.dir === 1 && Math.abs(fx - gapC) < 90; // south zone: gap on north fence
       const gapBot = z.dir === 3 && Math.abs(fx - gapC) < 90; // north zone: gap on south fence
-      if (!gapTop) ctx.fillRect(fx - 4, z.pen.y0 - 30, 8, 18);
-      if (!gapBot) ctx.fillRect(fx - 4, z.pen.y1 + 12, 8, 18);
+      if (!gapTop) ctx.fillRect(fx - 4, z.pen.y0 - 30, 8, 18); ctx.strokeRect(fx - 4, z.pen.y0 - 30, 8, 18);
+      if (!gapBot) ctx.fillRect(fx - 4, z.pen.y1 + 12, 8, 18); ctx.strokeRect(fx - 4, z.pen.y1 + 12, 8, 18);
     }
     for (let fy = z.pen.y0 - 20; fy <= z.pen.y1 + 20; fy += step) {
       const gapL = z.dir === 0 && Math.abs(fy - gapC) < 90;  // east zone: gap on west fence
       const gapR = z.dir === 2 && Math.abs(fy - gapC) < 90;  // west zone: gap on east fence
-      if (!gapR) ctx.fillRect(z.pen.x1 + 12, fy - 4, 18, 8);
-      if (!gapL) ctx.fillRect(z.pen.x0 - 30, fy - 4, 18, 8);
+      if (!gapR) ctx.fillRect(z.pen.x1 + 12, fy - 4, 18, 8); ctx.strokeRect(z.pen.x1 + 12, fy - 4, 18, 8);
+      if (!gapL) ctx.fillRect(z.pen.x0 - 30, fy - 4, 18, 8); ctx.strokeRect(z.pen.x0 - 30, fy - 4, 18, 8);
     }
     // banner
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff4e6'; ctx.strokeStyle = '#a8265f'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+    ctx.font = 'bold 26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+    ctx.strokeText('ZONE ' + z.k + ' — ' + foeName(z.k).toUpperCase() + 'S', (z.x0 + z.x1) / 2, z.pen.y0 - 40);
     ctx.fillText('ZONE ' + z.k + ' — ' + foeName(z.k).toUpperCase() + 'S', (z.x0 + z.x1) / 2, z.pen.y0 - 40);
     // spawner gate
-    ctx.fillStyle = '#241c30';
+    ctx.fillStyle = '#2d170f'; rr(z.gate.x - 30, z.gate.y - 74, 60, 148, 14); ctx.fill();
+    ctx.fillStyle = '#5b3fa8';
     rr(z.gate.x - 26, z.gate.y - 70, 52, 140, 10); ctx.fill();
     ctx.fillStyle = foeCol(z.k);
     ctx.beginPath(); ctx.ellipse(z.gate.x, z.gate.y, 16, 44 + Math.sin(S.t * 3) * 5, 0, 0, 6.29); ctx.fill();
     if (z.hordeLvl > 0) {
-      ctx.fillStyle = '#ff8a7a'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#ff8a7a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('HORDE LV' + z.hordeLvl, z.gate.x, z.gate.y - 80);
     }
   }
@@ -3181,14 +3302,14 @@ function drawPad(x, y, r, label, charge) {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(x, y, r - 12, -1.5708, -1.5708 + charge * 6.283); ctx.stroke();
   }
-  ctx.fillStyle = '#6ec9e0'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#6ec9e0'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(label, x, y + r + 16);
 }
 function drawCoinMountain() {
   shadow(PALLET.x, PALLET.y + 30, 62);
   ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]);
   ctx.beginPath(); ctx.arc(PALLET.x, PALLET.y, PALLET.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#7a5c38'; rr(PALLET.x - 62, PALLET.y - 4, 124, 36, 6); ctx.fill();
+  ctx.fillStyle = HV.line; rr(PALLET.x - 65, PALLET.y - 7, 130, 42, 9); ctx.fill(); ctx.fillStyle = '#c9965f'; rr(PALLET.x - 62, PALLET.y - 4, 124, 36, 6); ctx.fill();
   const stacks = Math.min(56, Math.ceil(3 * Math.sqrt(S.pallet / 12)));
   // the pile is ~340 ellipses at full size — pre-render it and redraw as one image,
   // re-rendering only when the stack count actually changes
@@ -3211,7 +3332,7 @@ function drawCoinMountain() {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(sx - 1, sy - 4, 2, 8); ctx.fillRect(sx - 4, sy - 1, 8, 2);
   }
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(S.pallet > 0 ? fmt(S.pallet) + ' ¢' : 'coin pallet', PALLET.x, PALLET.y + 56);
 }
 function drawStands() {
@@ -3220,52 +3341,61 @@ function drawStands() {
   shadow(SELL.x, SELL.y + 34, 52);
   ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]);
   ctx.beginPath(); ctx.arc(SELL.x, SELL.y, SELL.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#6a4a2e'; rr(SELL.x - 46, SELL.y - 40, 92, 56, 8); ctx.fill();
-  ctx.fillStyle = '#c0392b'; rr(SELL.x - 54, SELL.y - 58, 108, 22, 8); ctx.fill();
-  ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('⚖ SELL', SELL.x, SELL.y - 42);
-  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(SELL.x, SELL.y - 6 + Math.sin(S.t * 4) * 1.5, 9, 0, 6.29); ctx.fill();
+  // Jordan's junk stall: shopkeeper behind a candy-striped counter
+  const jf = (S.t * 0.7 | 0) % 2 ? 0 : 3;
+  if (!artDraw('jordan', 'idle', jf, SELL.x, SELL.y + 4, 0.34, false)) { ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(SELL.x, SELL.y - 6 + Math.sin(S.t * 4) * 1.5, 9, 0, 6.29); ctx.fill(); }
+  ctx.fillStyle = HV.line; rr(SELL.x - 50, SELL.y - 14, 100, 40, 10); ctx.fill();
+  ctx.fillStyle = '#c9965f'; rr(SELL.x - 47, SELL.y - 11, 94, 34, 8); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; rr(SELL.x - 43, SELL.y - 9, 86, 8, 4); ctx.fill();
+  ctx.fillStyle = HV.line; ctx.fillRect(SELL.x - 52, SELL.y - 84, 5, 72); ctx.fillRect(SELL.x + 47, SELL.y - 84, 5, 72);
+  ctx.fillStyle = HV.line; rr(SELL.x - 60, SELL.y - 102, 120, 26, 10); ctx.fill();
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#fff4e6' : HV.pink; ctx.beginPath(); ctx.moveTo(SELL.x - 57 + i * 19, SELL.y - 100); ctx.lineTo(SELL.x - 57 + (i + 1) * 19, SELL.y - 100); ctx.lineTo(SELL.x - 57 + (i + 1) * 19, SELL.y - 84); ctx.arc(SELL.x - 57 + (i + 0.5) * 19, SELL.y - 84, 9.5, 0, 3.1416); ctx.lineTo(SELL.x - 57 + i * 19, SELL.y - 100); ctx.fill(); }
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('SELL', SELL.x, SELL.y - 108);
   drawCoinMountain();
   // forge
   if (S.forgePlate.built) {
     shadow(FORGE.x, FORGE.y + 36, 50);
-    ctx.fillStyle = '#4a3f3a'; rr(FORGE.x - 42, FORGE.y - 44, 84, 74, 10); ctx.fill();
-    ctx.fillStyle = '#332b28'; rr(FORGE.x + 18, FORGE.y - 70, 20, 30, 4); ctx.fill();
+    ctx.fillStyle = HV.line; rr(FORGE.x - 45, FORGE.y - 47, 90, 80, 13); ctx.fill();
+    ctx.fillStyle = '#6b4fc4'; rr(FORGE.x - 42, FORGE.y - 44, 84, 74, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; rr(FORGE.x - 38, FORGE.y - 41, 76, 14, 7); ctx.fill();
+    ctx.fillStyle = HV.line; rr(FORGE.x + 16, FORGE.y - 72, 24, 34, 6); ctx.fill();
+    ctx.fillStyle = '#ff9ac8'; rr(FORGE.x + 18, FORGE.y - 70, 20, 30, 4); ctx.fill();
     const glow = 0.5 + Math.sin(S.t * 5) * 0.25;
-    ctx.fillStyle = 'rgba(255,120,40,' + glow + ')';
+    ctx.fillStyle = 'rgba(255,154,46,' + glow + ')';
     rr(FORGE.x - 22, FORGE.y - 12, 44, 28, 8); ctx.fill();
-    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('⚒ SMELTER LV' + ((S.forgeLvl || 0) + 1) + '  x' + BAR_MUL, FORGE.x, FORGE.y - 52);
     // upgrade pad
     if ((S.forgeLvl || 0) < FORGE_LVL_MAX) {
       plateCircle(FUP.x, FUP.y, 40, '#ffb060', S.forgeUpPlate.paid, S.forgeUpPlate.cost, 'rgba(255,176,96,0.3)');
-      ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.font = '22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
       ctx.fillText('⬆', FUP.x, FUP.y);
-      ctx.font = 'bold 10px sans-serif'; ctx.fillText('UPGRADE', FUP.x, FUP.y + 18);
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px sans-serif';
+      ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('UPGRADE', FUP.x, FUP.y + 18);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(fmt(S.forgeUpPlate.cost - S.forgeUpPlate.paid) + ' ¢', FUP.x, FUP.y + 60);
     } else {
-      ctx.fillStyle = '#8fa07a'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = '#8fa07a'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('MAX LEVEL', FUP.x, FUP.y);
     }
-    ctx.fillStyle = '#ffb060'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#ffb060'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('shields only · ' + S.forge.queue.length + '/' + forgeQ(), FORGE.x, FORGE.y + 44);
     ctx.strokeStyle = 'rgba(232,185,58,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(TRAY.x, TRAY.y, TRAY.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#5c4a30'; rr(TRAY.x - 40, TRAY.y - 6, 80, 22, 5); ctx.fill();
+    ctx.fillStyle = HV.line; rr(TRAY.x - 43, TRAY.y - 9, 86, 28, 8); ctx.fill(); ctx.fillStyle = '#c9965f'; rr(TRAY.x - 40, TRAY.y - 6, 80, 22, 5); ctx.fill();
     for (let i = 0; i < S.forge.tray.length; i++) {
       const m = metal(S.forge.tray[i] || 1);
       drawBarIcon(TRAY.x - 30 + (i % 5) * 15, TRAY.y - Math.floor(i / 5) * 9, 0.8, m.col, m.glow);
     }
     const topM = S.forge.tray.length ? metal(S.forge.tray[S.forge.tray.length - 1]) : null;
-    ctx.fillStyle = topM ? topM.col : '#e8b93a'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = topM ? topM.col : '#e8b93a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(topM ? topM.name + ' bars' : 'metal bars', TRAY.x, TRAY.y + 34);
   } else {
     plateCircle(FORGE.x, FORGE.y, 52, '#ff8a3c', S.forgePlate.paid, S.forgePlate.cost, 'rgba(255,138,60,0.35)');
-    ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '28px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText('⚒', FORGE.x, FORGE.y - 2);
-    ctx.font = 'bold 11px sans-serif'; ctx.fillText('SMELTER (shields→bars)', FORGE.x, FORGE.y + 20);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('SMELTER (shields→bars)', FORGE.x, FORGE.y + 20);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(S.forgePlate.cost - S.forgePlate.paid) + ' ¢', FORGE.x, FORGE.y + 74);
   }
   // waygate
@@ -3288,10 +3418,10 @@ function drawStands() {
     }
   } else if (S.zones.length >= 2) {
     plateCircle(HUBPAD.x, HUBPAD.y, 52, '#6ec9e0', S.wayPlate.paid, S.wayPlate.cost, 'rgba(110,201,224,0.35)');
-    ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '28px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText('🌀', HUBPAD.x, HUBPAD.y - 2);
-    ctx.font = 'bold 11px sans-serif'; ctx.fillText('WAYGATE', HUBPAD.x, HUBPAD.y + 20);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('WAYGATE', HUBPAD.x, HUBPAD.y + 20);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(S.wayPlate.cost - S.wayPlate.paid) + ' ¢', HUBPAD.x, HUBPAD.y + 74);
   }
   // coin upgrade plates
@@ -3299,11 +3429,11 @@ function drawStands() {
   for (const key in UPG) {
     const lvl = S.up[key], cost = upgCost(key, lvl), paid = S.upPaid[key];
     plateCircle(ux, UPG_Y, 48, '#ffd94a', paid, cost, 'rgba(255,217,74,0.35)');
-    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText(UPG[key].icon, ux, UPG_Y - 2);
-    ctx.font = 'bold 11px sans-serif';
+    ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(UPG[key].name + ' LV' + (lvl + 1), ux, UPG_Y + 20);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(cost - paid) + ' ¢', ux, UPG_Y + 62);
     ux += UPG_STEP;
   }
@@ -3312,14 +3442,14 @@ function drawStands() {
   for (const key in GEMU) {
     const lvl = S.gemUp[key], cost = gemUpCost(key, lvl), paid = S.gemPaid[key];
     plateCircle(GEM_X, gy, 44, '#6ee0d8', paid, cost, 'rgba(110,224,216,0.35)');
-    ctx.font = '24px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText(GEMU[key].icon, GEM_X, gy - 4);
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(GEMU[key].name + (lvl ? ' LV' + lvl : ''), GEM_X, gy + 16);
-    ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText((cost - paid) + ' 💎', GEM_X, gy + 66);
     if (dist2(S.player.x, S.player.y, GEM_X, gy) < 100 * 100) {
-      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(GEMU[key].what, GEM_X, gy + 82);
     }
     gy += GEM_STEP;
@@ -3333,8 +3463,8 @@ function drawStands() {
   {
     const ready = S.zones.length >= PRESTIGE_MIN;
     shadow(MONU.x, MONU.y + 30, 44);
-    ctx.fillStyle = '#6d6455'; rr(MONU.x - 36, MONU.y - 4, 72, 34, 6); ctx.fill();
-    ctx.fillStyle = ready ? '#8a7930' : '#5c5c5c'; rr(MONU.x - 24, MONU.y - 36, 48, 38, 6); ctx.fill();
+    ctx.fillStyle = HV.line; rr(MONU.x - 39, MONU.y - 7, 78, 40, 9); ctx.fill(); ctx.fillStyle = '#e6d3a3'; rr(MONU.x - 36, MONU.y - 4, 72, 34, 6); ctx.fill();
+    ctx.fillStyle = HV.line; rr(MONU.x - 27, MONU.y - 39, 54, 44, 9); ctx.fill(); ctx.fillStyle = ready ? '#ffd84d' : '#b9b2d0'; rr(MONU.x - 24, MONU.y - 36, 48, 38, 6); ctx.fill();
     drawCrownIcon(MONU.x, MONU.y - 46 + Math.sin(S.t * 2) * 2, ready ? 1.6 : 1.2);
     ctx.textAlign = 'center';
     if (ready) {
@@ -3343,13 +3473,13 @@ function drawStands() {
         ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(MONU.x, MONU.y - 10, 52, -1.5708, -1.5708 + chg * 6.283); ctx.stroke();
       }
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('👑 NEW KINGDOM  +' + crownsToGain(), MONU.x, MONU.y + 48);
-      ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('hold still ' + PREST_T + 's: reset lands & coins, earn crowns', MONU.x, MONU.y + 64);
       ctx.fillText('(+' + Math.round(CROWN_BONUS * 100) + '% coins, +' + Math.round(CROWN_DMG * 100) + '% dmg, +' + Math.round(CROWN_HP * 100) + '% HP & faster dash — forever)', MONU.x, MONU.y + 77);
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('👑 unlocks at ' + PRESTIGE_MIN + ' lands', MONU.x, MONU.y + 48);
     }
   }
@@ -3373,14 +3503,14 @@ function drawStands() {
     }
     ctx.strokeStyle = 'rgba(201,160,106,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(CAMP.x, CAMP.y, CAMP.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('🪵 ' + n + '/' + CAMP_MAX + '  (worth ' + fmt(Math.ceil(helmVal(S.zones.length) * coinMul())) + '¢ each)', CAMP.x, CAMP.y + 42);
   } else if (S.zones.length >= 2) {
     plateCircle(CAMP.x, CAMP.y, 48, '#c9a06a', S.campPlate.paid, S.campPlate.cost, 'rgba(201,160,106,0.35)');
-    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText('🪵', CAMP.x, CAMP.y - 2);
-    ctx.font = 'bold 11px sans-serif'; ctx.fillText('LUMBER CAMP', CAMP.x, CAMP.y + 18);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('LUMBER CAMP', CAMP.x, CAMP.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(S.campPlate.cost - S.campPlate.paid) + ' ¢', CAMP.x, CAMP.y + 70);
   }
   // war dog kennel
@@ -3390,14 +3520,14 @@ function drawStands() {
     ctx.fillStyle = '#4a3826';
     ctx.beginPath(); ctx.arc(KENNEL.x, KENNEL.y + 4, 14, 3.14159, 0); ctx.fill();
     ctx.fillRect(KENNEL.x - 14, KENNEL.y + 4, 28, 14);
-    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('🐕 kennel', KENNEL.x, KENNEL.y + 38);
   } else if (S.zones.length >= 2) {
     plateCircle(KENNEL.x, KENNEL.y, 44, '#c98a3c', S.dogPlate.paid, S.dogPlate.cost, 'rgba(201,138,60,0.35)');
-    ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText('🐕', KENNEL.x, KENNEL.y - 2);
-    ctx.font = 'bold 11px sans-serif'; ctx.fillText('WAR DOG', KENNEL.x, KENNEL.y + 18);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('WAR DOG', KENNEL.x, KENNEL.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(S.dogPlate.cost - S.dogPlate.paid) + ' ¢', KENNEL.x, KENNEL.y + 66);
   }
   drawZoneStands();
@@ -3410,20 +3540,20 @@ function drawZoneStands() {
       if (pl.built) continue;
       if (pl.id === 'unlock' && z.k < S.zones.length) continue;
       plateCircle(pl.x, pl.y, 52, pl.id === 'unlock' ? '#6ec9e0' : pl.repeat ? '#e0a13c' : '#6ecb5a', pl.paid, pl.cost);
-      ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.font = '28px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
       ctx.fillText(pl.icon, pl.x, pl.y - 2);
-      ctx.font = 'bold 11px sans-serif';
+      ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(pl.name + (pl.repeat && pl.lvl ? ' LV' + (pl.lvl + 1) : ''), pl.x, pl.y + 20);
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pl.x, pl.y + 74);
     }
     if (z.altar) {
       const a = z.altar, ready = a.cd <= 0;
       shadow(a.x, a.y + 24, 40);
       ctx.fillStyle = '#2e2636'; rr(a.x - 34, a.y - 26, 68, 46, 8); ctx.fill();
-      ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
+      ctx.font = '30px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('💀', a.x, a.y + 4);
-      ctx.font = 'bold 11px sans-serif';
+      ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillStyle = ready ? '#ff8a7a' : '#8a7a8a';
       ctx.fillText(ready ? 'SUMMON BOSS!' : 'recharging ' + Math.ceil(a.cd) + 's', a.x, a.y + 38);
       if (!ready) {
@@ -3433,7 +3563,7 @@ function drawZoneStands() {
     }
     if (z.towerLvl > 0) {
       const pl = z.plates.find(q => q.id === 'towersUp');
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('🎯 TOWERS +' + Math.round(z.towerLvl * TOWER_TRAIN * 100) + '%', pl.x, pl.y - 60);
     }
   }
@@ -3443,10 +3573,10 @@ function drawDistrict() {
   if (!S.distPlate.built) {
     if (S.zones.length >= 2 && vis(DIST.plate.x, DIST.plate.y, 100)) {
       plateCircle(DIST.plate.x, DIST.plate.y, 52, '#e0a13c', S.distPlate.paid, S.distPlate.cost, 'rgba(224,161,60,0.35)');
-      ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+      ctx.font = '28px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
       ctx.fillText('🏭', DIST.plate.x, DIST.plate.y - 2);
-      ctx.font = 'bold 11px sans-serif'; ctx.fillText('INDUSTRY DISTRICT', DIST.plate.x, DIST.plate.y + 20);
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+      ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('INDUSTRY DISTRICT', DIST.plate.x, DIST.plate.y + 20);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(fmt(S.distPlate.cost - S.distPlate.paid) + ' ¢', DIST.plate.x, DIST.plate.y + 74);
     }
     return;
@@ -3454,16 +3584,16 @@ function drawDistrict() {
   const D = S.district;
   if (!rectVis(DX, DY, DX + CELL_W, DY + CELL_H)) return;
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px sans-serif';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🏭 INDUSTRY DISTRICT', DX + 525, DY + 130);
   const stationPlate = (id, pos, icon, name) => {
     const pl = D.plates[id];
     if (pl.built) return true;
     plateCircle(pos.x, pos.y, 50, '#e0a13c', pl.paid, pl.cost, 'rgba(224,161,60,0.35)');
-    ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
     ctx.fillText(icon, pos.x, pos.y - 2);
-    ctx.font = 'bold 10px sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+    ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pos.x, pos.y + 70);
     return false;
   };
@@ -3480,7 +3610,7 @@ function drawDistrict() {
       drawLogIcon(DIST.grove.x - 18 + (i % 6) * 13 - Math.floor(i / 6) * 6, DIST.grove.y + 14 - Math.floor(i / 6) * 9, 0.9);
     ctx.strokeStyle = 'rgba(201,160,106,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(DIST.grove.x, DIST.grove.y, DIST.grove.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#c9a06a'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('🪵 ' + D.grove.logs.length + '/' + PILE_MAX, DIST.grove.x, DIST.grove.y + 44);
   }
   // quarry
@@ -3502,7 +3632,7 @@ function drawDistrict() {
       drawStoneIcon(DIST.quarry.x - 18 + (i % 6) * 12 - Math.floor(i / 6) * 6, DIST.quarry.y + 14 - Math.floor(i / 6) * 8, 0.9);
     ctx.strokeStyle = 'rgba(158,166,174,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(DIST.quarry.x, DIST.quarry.y, DIST.quarry.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#aeb6be'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#aeb6be'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('🪨 ' + D.quarry.stones.length + '/' + PILE_MAX, DIST.quarry.x, DIST.quarry.y + 44);
   }
   // sawmill
@@ -3516,13 +3646,13 @@ function drawDistrict() {
     for (let i = 0; i < 8; i++) { ctx.rotate(0.785); ctx.fillRect(-2, -16, 4, 8); }
     ctx.beginPath(); ctx.arc(0, 0, 11, 0, 6.29); ctx.fill();
     ctx.restore();
-    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('🪚 2 logs → 1 plank  (' + D.saw.ks.length + ' in)', DIST.saw.x, DIST.saw.y + 42);
     ctx.strokeStyle = 'rgba(217,185,138,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(DIST.sawTray.x, DIST.sawTray.y, DIST.sawTray.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
     for (let i = 0; i < D.saw.tray.length; i++)
       drawPlankIcon(DIST.sawTray.x - 20 + (i % 4) * 14, DIST.sawTray.y - Math.floor(i / 4) * 8, 0.85);
-    ctx.fillStyle = '#d9b98a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#d9b98a'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('planks', DIST.sawTray.x, DIST.sawTray.y + 34);
   }
   // toolmaker
@@ -3532,14 +3662,14 @@ function drawDistrict() {
     ctx.fillStyle = '#7a6a52'; rr(DIST.tool.x - 36, DIST.tool.y - 44, 72, 14, 5); ctx.fill();
     const bang = Math.abs(Math.sin(S.t * 5));
     drawToolIcon(DIST.tool.x, DIST.tool.y - 50 - bang * 8, 1.4);
-    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('🔨 1 plank + 2 stones → 1 tool', DIST.tool.x, DIST.tool.y + 40);
     ctx.fillText('wood ' + D.tool.wood.length + '  stone ' + D.tool.stone.length, DIST.tool.x, DIST.tool.y + 54);
     ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(DIST.toolTray.x, DIST.toolTray.y, DIST.toolTray.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
     for (let i = 0; i < D.tool.tray.length; i++)
       drawToolIcon(DIST.toolTray.x - 21 + (i % 4) * 14, DIST.toolTray.y - Math.floor(i / 4) * 12, 0.9);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('tools (x' + TOOL_MUL + ')', DIST.toolTray.x, DIST.toolTray.y + 34);
   }
   stationPlate('hauler', DIST.hauler, '🧑‍🌾', 'HAULER (auto-feed)');
@@ -3548,42 +3678,55 @@ function drawDistrict() {
 }
 function drawTower(tw) {
   shadow(tw.x, tw.y + 30, 34);
-  if (tw.type === 'catapult') {
-    ctx.fillStyle = '#6a5138'; rr(tw.x - 26, tw.y - 14, 52, 34, 6); ctx.fill();
-    ctx.fillStyle = '#4a3826';
-    ctx.beginPath(); ctx.arc(tw.x - 14, tw.y + 20, 8, 0, 6.29); ctx.fill();
-    ctx.beginPath(); ctx.arc(tw.x + 14, tw.y + 20, 8, 0, 6.29); ctx.fill();
+  const LN = HV.line;
+  if (tw.type === 'catapult') { // boom-box cannon
+    ctx.fillStyle = LN; rr(tw.x - 29, tw.y - 17, 58, 40, 9); ctx.fill();
+    ctx.fillStyle = '#ff7eb6'; rr(tw.x - 26, tw.y - 14, 52, 34, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; rr(tw.x - 22, tw.y - 12, 44, 8, 4); ctx.fill();
+    for (const dx of [-14, 14]) { ctx.fillStyle = LN; ctx.beginPath(); ctx.arc(tw.x + dx, tw.y + 20, 10, 0, 6.29); ctx.fill(); ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.arc(tw.x + dx, tw.y + 20, 7, 0, 6.29); ctx.fill(); }
     const arm = Math.max(0, 1 - tw.cd / CAT_RATE);
-    ctx.strokeStyle = '#8a6a48'; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(tw.x, tw.y);
-    ctx.lineTo(tw.x - 26 * Math.cos(arm * 1.2), tw.y - 34 * Math.sin(0.4 + arm * 1.1)); ctx.stroke();
-    ctx.fillStyle = '#5c5c66';
-    ctx.beginPath(); ctx.arc(tw.x - 26 * Math.cos(arm * 1.2), tw.y - 34 * Math.sin(0.4 + arm * 1.1), 6, 0, 6.29); ctx.fill();
+    const ax = tw.x - 26 * Math.cos(arm * 1.2), ay = tw.y - 34 * Math.sin(0.4 + arm * 1.1);
+    ctx.strokeStyle = LN; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(tw.x, tw.y); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(tw.x, tw.y); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.fillStyle = LN; ctx.beginPath(); ctx.arc(ax, ay, 9, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#a77bff'; ctx.beginPath(); ctx.arc(ax, ay, 6.5, 0, 6.29); ctx.fill();
     return;
   }
-  if (tw.type === 'wizard') {
-    ctx.fillStyle = '#4a3a6a'; rr(tw.x - 20, tw.y - 36, 40, 66, 8); ctx.fill();
-    ctx.fillStyle = '#7c52c9';
-    ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 36); ctx.lineTo(tw.x, tw.y - 68); ctx.lineTo(tw.x + 24, tw.y - 36); ctx.closePath(); ctx.fill();
+  if (tw.type === 'wizard') { // disco-ball tower
+    ctx.fillStyle = LN; rr(tw.x - 23, tw.y - 39, 46, 72, 11); ctx.fill();
+    ctx.fillStyle = '#6b4fc4'; rr(tw.x - 20, tw.y - 36, 40, 66, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; rr(tw.x - 16, tw.y - 33, 14, 58, 6); ctx.fill();
     const pulse = 0.5 + Math.sin(S.t * 6) * 0.4;
-    ctx.fillStyle = 'rgba(160,120,255,' + pulse + ')';
-    ctx.beginPath(); ctx.arc(tw.x, tw.y - 68, 6, 0, 6.29); ctx.fill();
+    ctx.fillStyle = 'rgba(255,200,255,' + (0.2 + pulse * 0.3) + ')'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 56, 22, 0, 6.29); ctx.fill();
+    ctx.fillStyle = LN; ctx.beginPath(); ctx.arc(tw.x, tw.y - 56, 15, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#e6d9ff'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 56, 12.5, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#fff'; for (let k = 0; k < 5; k++) { const a = S.t * 2 + k * 1.26; ctx.fillRect(tw.x + Math.cos(a) * 8 - 1.5, tw.y - 56 + Math.sin(a) * 8 - 1.5, 3, 3); }
     return;
   }
-  ctx.fillStyle = '#6a5138'; rr(tw.x - 22, tw.y - 30, 44, 60, 6); ctx.fill();
-  ctx.fillStyle = '#584330'; rr(tw.x - 28, tw.y - 44, 56, 18, 5); ctx.fill();
-  ctx.fillStyle = '#3a2e22';
-  for (let i = -2; i <= 2; i++) ctx.fillRect(tw.x + i * 12 - 3, tw.y - 52, 6, 8);
+  // speaker tower with a chibi singer on top
+  ctx.fillStyle = LN; rr(tw.x - 25, tw.y - 33, 50, 66, 10); ctx.fill();
+  ctx.fillStyle = '#8f6be8'; rr(tw.x - 22, tw.y - 30, 44, 60, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.22)'; rr(tw.x - 18, tw.y - 27, 12, 52, 5); ctx.fill();
+  const beat = Math.abs(Math.sin(S.t * 5 + tw.x));
+  for (const [cy, cr] of [[-8, 9], [14, 7]]) {
+    ctx.fillStyle = LN; ctx.beginPath(); ctx.arc(tw.x + 3, tw.y + cy, cr + 2 + beat, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#3a2a7a'; ctx.beginPath(); ctx.arc(tw.x + 3, tw.y + cy, cr + beat * 0.6, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.arc(tw.x + 3, tw.y + cy, cr * 0.4, 0, 6.29); ctx.fill();
+  }
+  ctx.fillStyle = LN; rr(tw.x - 29, tw.y - 46, 58, 20, 7); ctx.fill();
+  ctx.fillStyle = '#fff4e6'; rr(tw.x - 26, tw.y - 43, 52, 14, 5); ctx.fill();
+  for (let i = -2; i <= 2; i++) { ctx.fillStyle = [HV.pink, HV.green, HV.gold, HV.violet, HV.pink][i + 2]; ctx.fillRect(tw.x + i * 10 - 3, tw.y - 41, 6, 10); }
   // pennant
-  ctx.strokeStyle = '#3a2e22'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 44); ctx.lineTo(tw.x - 24, tw.y - 74); ctx.stroke();
+  ctx.strokeStyle = LN; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 46); ctx.lineTo(tw.x - 24, tw.y - 78); ctx.stroke();
   const wave = Math.sin(S.t * 5 + tw.x) * 3;
-  ctx.fillStyle = '#c0392b';
-  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 74); ctx.lineTo(tw.x - 4 + wave, tw.y - 69); ctx.lineTo(tw.x - 24, tw.y - 64); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#6ecb5a'; rr(tw.x - 6, tw.y - 66, 12, 16, 3); ctx.fill();
-  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 70, 5.5, 0, 6.29); ctx.fill();
-  ctx.strokeStyle = '#d9c9a0'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(tw.x + 8, tw.y - 60, 6, -1.1, 1.1); ctx.stroke();
+  ctx.fillStyle = HV.pink; ctx.strokeStyle = LN; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(tw.x - 24, tw.y - 78); ctx.lineTo(tw.x - 4 + wave, tw.y - 73); ctx.lineTo(tw.x - 24, tw.y - 67); ctx.closePath(); ctx.fill(); ctx.stroke();
+  const sing = INHAB_ART[(((tw.x * 0.37) | 0) + 3) % INHAB_ART.length];
+  if (!ART.ready || !artDraw(sing, 'idle', (S.t * 5 + tw.x) | 0, tw.x + 4, tw.y - 42, 0.26, false)) {
+    ctx.fillStyle = '#6ecb5a'; rr(tw.x - 6, tw.y - 66, 12, 16, 3); ctx.fill();
+    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(tw.x, tw.y - 70, 5.5, 0, 6.29); ctx.fill();
+  }
 }
 function drawDrums(z) {
   const pl = z.plates.find(p => p.id === 'drums');
@@ -3591,15 +3734,22 @@ function drawDrums(z) {
   const x = pl.x, y = pl.y;
   shadow(x, y + 18, 26);
   const beat = Math.abs(Math.sin(S.t * 4));
-  ctx.fillStyle = '#8a4a3a'; rr(x - 20, y - 14 - beat * 3, 40, 30, 6); ctx.fill();
-  ctx.fillStyle = '#d9c9a0';
-  ctx.beginPath(); ctx.ellipse(x, y - 14 - beat * 3, 20, 7, 0, 0, 6.29); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,150,100,' + (0.5 - beat * 0.4) + ')'; ctx.lineWidth = 3;
+  ctx.fillStyle = HV.line; rr(x - 23, y - 17 - beat * 3, 46, 36, 9); ctx.fill();
+  ctx.fillStyle = HV.pink; rr(x - 20, y - 14 - beat * 3, 40, 30, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; rr(x - 16, y - 8 - beat * 3, 8, 20, 4); ctx.fill();
+  ctx.fillStyle = HV.line; ctx.beginPath(); ctx.ellipse(x, y - 14 - beat * 3, 23, 9, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.ellipse(x, y - 14 - beat * 3, 20, 7, 0, 0, 6.29); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,126,182,' + (0.7 - beat * 0.55) + ')'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(x, y, 30 + beat * 26, 0, 6.29); ctx.stroke();
-  ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(x + 26, y - 22, 6, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#ffd84d'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('♪', x + 26, y - 18 - beat * 6);
 }
 function drawPorter(po) {
   shadow(po.x, po.y + 14, 14);
+  if (ART.ready && artDraw('jordan', 'idle', (S.t * 4) | 0, po.x, po.y + 14, 0.32, false)) {
+    for (let i = 0; i < po.carry.length; i++) drawStackEntry(po.carry[i], po.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), po.y - 42 - i * 6, 0.7);
+    return;
+  }
   ctx.fillStyle = '#c98a3c'; rr(po.x - 8, po.y - 10, 16, 18, 4); ctx.fill();
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(po.x, po.y - 16, 6.5, 0, 6.29); ctx.fill();
   for (let i = 0; i < po.carry.length; i++)
@@ -3610,6 +3760,17 @@ function drawInhab(q) {
   const working = worker && q.waitT > 0;
   const bob = Math.abs(Math.sin(S.t * (working ? 14 : 8) + q.ph)) * 2;
   shadow(q.x, q.y + 13, 12);
+  if (ART.ready) {
+    const dx = q.x - (q.lx === undefined ? q.x : q.lx); q.lx = q.x;
+    if (Math.abs(dx) > 0.02) { q.fx = dx > 0 ? 1 : -1; q.mv = 0.15; } else if (q.mv > 0) q.mv -= 1 / 60;
+    const nm = INHAB_ART[((q.ph * 7) | 0) % INHAB_ART.length], mv = q.mv > 0 && !working;
+    ctx.strokeStyle = fight ? '#7fe36a' : worker ? '#ffb640' : '#6ac8ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(q.x, q.y + 13, 11, 4, 0, 0, 6.29); ctx.stroke();
+    if (artDraw(nm, working ? 'attack' : mv ? 'walk' : 'idle', working ? ((S.t * 6 + q.ph) | 0) : ((S.t * 10 + q.ph * 3) | 0), q.x, q.y + 14 - bob * 0.5, 0.3, (fight ? q.face || q.fx || 1 : q.fx || 1) < 0)) {
+      if (!fight && q.carry && q.carry.length) for (let i = 0; i < q.carry.length; i++) drawStackEntry(q.carry[i], q.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), q.y - 40 - bob - i * 6, 0.66);
+      return;
+    }
+  }
   // body — green tunic fighters, blue gatherers, ochre apron for stationed workers
   ctx.fillStyle = fight ? '#4a9a56' : worker ? '#b07a3a' : '#4a78b0'; rr(q.x - 7, q.y - 9 - bob, 14, 16, 4); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(q.x - 7, q.y - 9 - bob, 14, 6, 4); ctx.fill();
@@ -3639,6 +3800,16 @@ function drawInhab(q) {
 }
 function drawWorker(w, col, carry, kind) {
   shadow(w.x, w.y + 14, 14);
+  if (ART.ready && artDraw(col === '#8a9a4a' ? 'andy' : 'jordan', 'idle', (S.t * 4 + w.x * 0.1) | 0, w.x, w.y + 14, 0.3, false)) {
+    for (let i = 0; i < (carry || []).length; i++) {
+      const y = w.y - 40 - i * 6, x = w.x + Math.sin(S.t * 6 + i) * (1 + i * 0.3), c = carry[i];
+      if (kind === 'entries') drawStackEntry(c, x, y, 0.7);
+      else if (kind === 'stone') drawStoneIcon(x, y, 0.7);
+      else if (kind === 'plank') drawPlankIcon(x, y, 0.7);
+      else drawLogIcon(x, y, 0.7);
+    }
+    return;
+  }
   ctx.fillStyle = col; rr(w.x - 8, w.y - 10, 16, 18, 4); ctx.fill();
   ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(w.x, w.y - 16, 6.5, 0, 6.29); ctx.fill();
   ctx.fillStyle = '#6a4520'; rr(w.x - 7, w.y - 24, 14, 4, 2); ctx.fill(); // hat brim
@@ -3674,6 +3845,21 @@ function drawEnemy(e) {
     ctx.fillStyle = 'rgba(255,215,90,' + (gl * 0.4) + ')';
     ctx.beginPath(); ctx.arc(e.x, e.y - bob, e.r + 9 + Math.sin(S.t * 5) * 3, 0, 6.29); ctx.fill();
   }
+  if (ART.ready) {
+    if (e.gold) { ctx.fillStyle = 'rgba(255,217,74,0.35)'; ctx.beginPath(); ctx.ellipse(e.x, e.y - e.r * 0.8, e.r * 1.1, e.r * 1.5, 0, 0, 6.29); ctx.fill(); }
+    const nm = foeArt(e.k, e.boss), k = e.r * (e.boss ? 4.4 : 5) / (e.boss ? 178 : 128);
+    const fr = e.hurt > 0 ? 6 : e.atkCd > 0.55 ? 4 + ((S.t * 8) | 0) % 2 : ((S.t * 4 + e.sway) | 0);
+    if (artDraw(nm, e.hurt > 0 ? 'hurt' : e.atkCd > 0.55 ? 'attack' : 'idle', e.hurt > 0 ? 0 : e.atkCd > 0.55 ? (S.t * 8) | 0 : fr, e.x, e.y + e.r * 0.75 - bob * 0.6, k, S.player.x > e.x)) {
+      if (e.elite) { ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⭐', e.x, e.y - e.r * 3.9 - bob); }
+      if (e.gold && Math.floor(S.t * 8) % 3 === 0) puff(e.x + (mrnd() - 0.5) * e.r * 2, e.y - e.r - bob, '#fff8c0', 1, true);
+      if (e.hp < e.max) {
+        const f = e.hp / e.max, w = e.boss ? 70 : 38, by = e.y - e.r * (e.boss ? 4.2 : 3.6) - bob;
+        ctx.fillStyle = 'rgba(58,26,58,0.75)'; rr(e.x - w / 2 - 1.5, by - 1.5, w + 3, (e.boss ? 8 : 6) + 3, 4); ctx.fill();
+        ctx.fillStyle = f > 0.4 ? '#7fe36a' : '#ff6a8a'; rr(e.x - w / 2, by, Math.max(3, w * f), e.boss ? 8 : 6, 3); ctx.fill();
+      }
+      return;
+    }
+  }
   ctx.fillStyle = e.hurt > 0 ? '#fff' : e.elite ? '#e8b93a' : e.gold ? '#ffd94a' : foeCol(e.k);
   rr(e.x - e.r * 0.75, e.y - e.r * 0.8 - bob, e.r * 1.5, e.r * 1.4, 5); ctx.fill();
   ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 1.05 - bob, e.r * 0.5, 0, 6.29); ctx.fill();
@@ -3687,7 +3873,7 @@ function drawEnemy(e) {
   }
   if (e.boss) drawCrownIcon(e.x, e.y - e.r * 1.55 - bob, e.r / 14);
   else drawHelmetIcon(e.x, e.y - e.r * 1.35 - bob, e.k, e.r / 18);
-  if (e.elite) { ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⭐', e.x, e.y - e.r * 1.9 - bob); }
+  if (e.elite) { ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⭐', e.x, e.y - e.r * 1.9 - bob); }
   if (e.gold && Math.floor(S.t * 8) % 3 === 0) puff(e.x + (rnd() - 0.5) * e.r * 2, e.y - e.r - bob, '#fff8c0', 1, true);
   ctx.fillStyle = e.gold ? '#7a5a10' : '#fff';
   ctx.fillRect(e.x - e.r * 0.28 - 2, e.y - e.r * 1.08 - bob, 4, 4);
@@ -3706,12 +3892,41 @@ function drawPlayer() {
   if (ap && S.petPos) {
     const pb = Math.sin(S.t * 6) * 2;
     shadow(S.petPos.x, S.petPos.y + 8, 9);
-    ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '20px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(ap.ic, S.petPos.x, S.petPos.y - pb);
     ctx.textBaseline = 'alphabetic';
   }
   shadow(p.x, p.y + 16, 18);
   if (p.invuln > 0 && Math.floor(S.t * 12) % 2) ctx.globalAlpha = 0.45;
+  if (ART.ready) {
+    const sk = activeSkin(), nm = HERO_ART[sk.id] || 'jasmin', hk = 0.5;
+    const hur = p.hurtT > 0, atk = p.atkT > 0;
+    const anim = hur ? 'hurt' : atk ? 'attack' : p.moving ? 'walk' : 'idle';
+    const fr = hur ? 0 : atk ? Math.min(3, ((0.4 - p.atkT) * 10) | 0) : p.moving ? (S.t * 12) | 0 : (S.t * 5) | 0;
+    if (sk.id === 'legend' || sk.id === 'gold') { ctx.fillStyle = 'rgba(255,217,74,' + (0.18 + Math.sin(S.t * 3) * 0.06) + ')'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 30, 34, 50, 0, 0, 6.29); ctx.fill(); }
+    if (artDraw(nm, anim, fr, p.x, p.y + 16 - bob * 0.5, hk, p.face < 0)) {
+      ctx.globalAlpha = 1;
+      const lean = -p.face * 14;
+      for (let i = 0; i < p.helmets.length; i++) {
+        const sway = Math.sin(S.t * 5 + i * 0.8) * (0.5 + i * 0.5) * (p.moving ? 1.6 : 0.6);
+        drawStackEntry(p.helmets[i], p.x + lean + sway, p.y - 40 - bob - i * 7.5, 0.95);
+      }
+      if (p.helmets.length) {
+        ctx.fillStyle = p.helmets.length >= cap() ? '#ffd94a' : 'rgba(255,255,255,0.9)';
+        ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(p.helmets.length + '/' + cap(), p.x + lean, p.y - 46 - bob - p.helmets.length * 7.5);
+      }
+      const fm0 = flowMul();
+      if (S.flowKey !== null && fm0 >= 2) {
+        const pulse = 1 + Math.sin(S.t * 10) * 0.1;
+        ctx.save(); ctx.translate(p.x + 34, p.y - 40 - bob); ctx.scale(pulse, pulse);
+        ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('⏩x' + (fm0 >= 1000 ? fmt(Math.round(fm0)) : Math.round(fm0)), 0, 0);
+        ctx.restore();
+      }
+      return;
+    }
+  }
   // cape
   const skin = activeSkin();
   const flap = (p.moving ? Math.sin(S.t * 10) * 5 : Math.sin(S.t * 2) * 2);
@@ -3743,7 +3958,7 @@ function drawPlayer() {
   }
   if (p.helmets.length) {
     ctx.fillStyle = p.helmets.length >= cap() ? '#ffd94a' : 'rgba(255,255,255,0.8)';
-    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(p.helmets.length + '/' + cap(), p.x, p.y - 40 - bob - p.helmets.length * 7.5);
   }
   // coin-flow speed indicator
@@ -3751,7 +3966,7 @@ function drawPlayer() {
   if (S.flowKey !== null && fm >= 2) {
     const pulse = 1 + Math.sin(S.t * 10) * 0.1;
     ctx.save(); ctx.translate(p.x + 30, p.y - 30 - bob); ctx.scale(pulse, pulse);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left';
     ctx.fillText('⏩x' + (fm >= 1000 ? fmt(Math.round(fm)) : Math.round(fm)), 0, 0);
     ctx.restore();
   }
@@ -3762,10 +3977,10 @@ function drawD2() {
     if (!S.d2Plate[dk].built) {
       if (S.zones.length >= cfg.need && vis(cfg.plate.x, cfg.plate.y, 100)) {
         plateCircle(cfg.plate.x, cfg.plate.y, 52, '#e0a13c', S.d2Plate[dk].paid, S.d2Plate[dk].cost, 'rgba(224,161,60,0.35)');
-        ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+        ctx.font = '28px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
         ctx.fillText(cfg.icon, cfg.plate.x, cfg.plate.y - 2);
-        ctx.font = 'bold 11px sans-serif'; ctx.fillText(cfg.name, cfg.plate.x, cfg.plate.y + 20);
-        ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif';
+        ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(cfg.name, cfg.plate.x, cfg.plate.y + 20);
+        ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
         ctx.fillText(fmt(S.d2Plate[dk].cost - S.d2Plate[dk].paid) + ' ¢', cfg.plate.x, cfg.plate.y + 74);
       }
       continue;
@@ -3774,16 +3989,16 @@ function drawD2() {
     if (!rectVis(ox, oy, ox + CELL_W, oy + CELL_H)) continue;
     const d = S.d2[dk];
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(cfg.icon + ' ' + cfg.name, ox + 525, oy + 130);
     const plate = (id, pos, icon, name) => {
       const pl = d.plates[id];
       if (pl.built) return true;
       plateCircle(pos.x, pos.y, 50, '#e0a13c', pl.paid, pl.cost, 'rgba(224,161,60,0.35)');
-      ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
       ctx.fillText(icon, pos.x, pos.y - 2);
-      ctx.font = 'bold 10px sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif';
+      ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(name, pos.x, pos.y + 18);
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(fmt(pl.cost - pl.paid) + ' ¢', pos.x, pos.y + 70);
       return false;
     };
@@ -3832,7 +4047,7 @@ function drawD2() {
         (RES_ICON[pr.out] || drawLogIcon)(pr.pos.x - 16 + (i % 6) * 13 - Math.floor(i / 6) * 6, pr.pos.y + 16 - Math.floor(i / 6) * 9, 0.8);
       ctx.strokeStyle = 'rgba(224,161,60,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.pos.r, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(pr.icon + ' ' + pile.arr.length + '/' + PILE_MAX, pr.pos.x, pr.pos.y + 44);
     }
     for (const cr of cfg.crafters) {
@@ -3855,13 +4070,13 @@ function drawD2() {
         (RES_ICON[cr.out] || drawToolIcon)(cr.pos.x, cr.pos.y - 48 - bob, 1.3);
       }
       const need = Object.keys(cr.recipe).map(r => cr.recipe[r] + ' ' + r + ' (' + c.in[r].length + ')').join(' + ');
-      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(cr.icon + ' ' + need + ' → ' + cr.out, cr.pos.x, cr.pos.y + 40);
       ctx.strokeStyle = 'rgba(255,217,74,0.5)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(cr.trayPos.x, cr.trayPos.y, cr.trayPos.r - 10, 0, 6.29); ctx.stroke(); ctx.setLineDash([]);
       for (let i = 0; i < c.tray.length; i++)
         (RES_ICON[cr.out] || drawToolIcon)(cr.trayPos.x - 20 + (i % 4) * 14, cr.trayPos.y - Math.floor(i / 4) * 11, 0.85);
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(cr.out + ' (x' + RES_MUL[cr.out] + ')', cr.trayPos.x, cr.trayPos.y + 34);
     }
     plate('hauler', cfg.hauler, '🧑‍🌾', 'HAULER (auto-feed)');
@@ -3897,13 +4112,13 @@ function drawWorld() {
     ctx.fillStyle = '#8a4a30'; rr(m.x - 26, m.y - 40 - bob, 52, 10, 3); ctx.fill();
     for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#d9584a' : '#f0f0e0'; rr(m.x - 26 + i * 13, m.y - 40 - bob, 13, 10, 2); ctx.fill(); }
     // merchant emoji
-    ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '30px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('🧙', m.x, m.y - 12 - bob);
     ctx.textBaseline = 'alphabetic';
-    ctx.font = '18px sans-serif'; ctx.fillText('🛒', m.x + 22, m.y + 6);
+    ctx.font = '18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('🛒', m.x + 22, m.y + 6);
     // "!" bubble while he has unsold stock
     if (m.deals.some(d => !d.sold) && Math.floor(S.t * 2) % 2) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('!', m.x - 24, m.y - 30 - bob);
     }
   }
@@ -3914,13 +4129,14 @@ function drawWorld() {
     if (it.gem) drawGemIcon(it.x, it.y + wob, 1.1);
     else drawStackEntry(it, it.x, it.y + wob, 0.9);
   }
-  // ambient butterflies
+  // ambient cherry petals
   for (const b of S.amb) {
     if (!vis(b.x, b.y, 20)) continue;
     const flap = Math.sin(b.ph) * 3;
-    ctx.fillStyle = b.col;
-    ctx.fillRect(b.x - 2 - Math.abs(flap) * 0.3, b.y - flap * 0.4, 2, 2);
-    ctx.fillRect(b.x + 1 + Math.abs(flap) * 0.3, b.y + flap * 0.4, 2, 2);
+    ctx.fillStyle = b.col === '#fff8c0' ? '#ff9ac8' : '#fff4e6'; ctx.globalAlpha = 0.9;
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.ph * 0.7);
+    ctx.beginPath(); ctx.ellipse(0, 0, 3.4 + Math.abs(flap) * 0.2, 1.8, 0, 0, 6.29); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
   }
   const actors = [];
   for (const z of S.zones) {
@@ -3958,15 +4174,18 @@ function drawWorld() {
   for (const sh of S.shots) {
     if (!vis(sh.x, sh.y, 40)) continue;
     if (sh.boulder) {
-      ctx.fillStyle = '#5c5c66';
-      ctx.beginPath(); ctx.arc(sh.x, sh.y, 9, 0, 6.29); ctx.fill();
+      ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(sh.x, sh.y, 11, 0, 6.29); ctx.fill(); ctx.fillStyle = '#a77bff';
+      ctx.beginPath(); ctx.arc(sh.x, sh.y, 8.5, 0, 6.29); ctx.fill();
       continue;
     }
-    ctx.save(); ctx.translate(sh.x, sh.y); ctx.rotate(sh.a || 0);
-    ctx.strokeStyle = sh.crit ? '#ff8a3c' : '#e8dcc0'; ctx.lineWidth = sh.crit ? 3.5 : 2.5;
-    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke();
-    ctx.fillStyle = sh.crit ? '#ff8a3c' : '#e8dcc0';
-    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
+    const wob = Math.sin(S.t * 18 + sh.x * 0.1) * 0.25;
+    ctx.save(); ctx.translate(sh.x, sh.y); ctx.rotate(wob);
+    const nc = sh.crit ? '#ff9a2e' : sh.ally ? '#3fcf6a' : '#ff7eb6', sz = sh.crit ? 1.35 : 1;
+    ctx.scale(sz, sz);
+    ctx.fillStyle = HV.line; ctx.beginPath(); ctx.ellipse(-2, 5, 7, 5.2, -0.4, 0, 6.29); ctx.fill(); ctx.fillRect(3.2, -12, 4.4, 17);
+    ctx.beginPath(); ctx.moveTo(3.2, -12); ctx.quadraticCurveTo(13, -8, 11, 1); ctx.lineTo(7.6, -2); ctx.lineTo(7.6, -12); ctx.fill();
+    ctx.fillStyle = nc; ctx.beginPath(); ctx.ellipse(-2, 5, 5, 3.4, -0.4, 0, 6.29); ctx.fill(); ctx.fillRect(4, -11, 2.4, 15);
+    ctx.beginPath(); ctx.moveTo(4, -11); ctx.quadraticCurveTo(11, -8, 9.4, -1); ctx.lineTo(6.4, -4); ctx.lineTo(6.4, -11); ctx.fill();
     ctx.restore();
   }
   for (const q of S.fx) {
@@ -4000,14 +4219,14 @@ function drawWorld() {
       const pop = 1 + Math.max(0, 0.14 - f.t) * 7;
       const sz = 24 * pop;
       ctx.save(); ctx.translate(f.x, f.y);
-      ctx.font = 'bold ' + sz.toFixed(1) + 'px sans-serif'; ctx.textAlign = 'center';
+      ctx.font = 'bold ' + sz.toFixed(1) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(f.txt, 0, 0);
       ctx.fillStyle = '#fff2b0'; ctx.fillText(f.txt, 0, 0);
-      ctx.fillStyle = f.color || '#ff8a3c'; ctx.font = 'bold ' + (sz * 0.55).toFixed(1) + 'px sans-serif';
+      ctx.fillStyle = f.color || '#ff8a3c'; ctx.font = 'bold ' + (sz * 0.55).toFixed(1) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('✦', 0, -sz * 0.62);
       ctx.restore();
     } else {
-      ctx.font = 'bold ' + (f.big ? 20 : 14) + 'px sans-serif'; ctx.textAlign = 'center';
+      ctx.font = 'bold ' + (f.big ? 20 : 14) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.fillStyle = '#000'; ctx.fillText(f.txt, f.x + 1.5, f.y + 1.5);
       ctx.fillStyle = f.color; ctx.fillText(f.txt, f.x, f.y);
     }
@@ -4015,9 +4234,19 @@ function drawWorld() {
   ctx.globalAlpha = 1;
 }
 let hits = [];
+let leftBottom = 200; // y where the left HUD stack ends (set by drawMinimap, read by the quest tracker)
+// short screens wrap the right-hand button column into a second column so it never reaches the dash button
+function btnMap(x, y) {
+  if (x === vw - 46) {
+    const rows = Math.max(4, Math.floor((vh - 140) / 34)), sl = Math.round((y - 10) / 34);
+    if (sl >= rows) return { x: x - Math.floor(sl / rows) * 42, y: y + ((sl % rows) - sl) * 34 };
+  }
+  return { x, y };
+}
 function hudBtn(x, y, w, h, label, act) {
-  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(x, y, w, h, 8); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+  ({ x, y } = btnMap(x, y));
+  pill(x, y, w, h, '#ff9ac8', '#f0599a');
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(label, x + w / 2, y + h / 2 + 5);
   hits.push({ x, y, w, h, act });
 }
@@ -4027,61 +4256,63 @@ function anyPanelOpen() {
 }
 function drawHud() {
   const p = S.player;
-  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 10, 128, 36, 10); ctx.fill();
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'left';
+  plaque(10, 10, 128, 36, 10);
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left';
   ctx.fillText('¢ ' + fmt(S.wallet), 22, 35);
-  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 52, 128, 16, 8); ctx.fill();
+  plaque(10, 52, 128, 16, 8);
   ctx.fillStyle = '#d1553f'; rr(12, 54, 124 * Math.max(0, p.hp / p.maxHp), 12, 6); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('❤ ' + Math.ceil(p.hp) + ' / ' + p.maxHp, 74, 63);
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 74, 128, 24, 8); ctx.fill();
-  ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px sans-serif';
+  plaque(10, 74, 128, 24, 8);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('LANDS ' + S.zones.length + '  ⚔ ' + fmt(S.stats.kills), 20, 90);
-  ctx.fillStyle = '#ffd94a'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = '#ffd94a'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'right';
   ctx.fillText('🏆', 130, 90); ctx.textAlign = 'left';
   hits.push({ x: 10, y: 74, w: 128, h: 24, act: () => { S.showStats = !S.showStats; } });
   if (S.gems > 0 || S.gemUp.magnet + S.gemUp.crit + S.gemUp.coin > 0) {
-    ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 104, 128, 26, 8); ctx.fill();
-    drawGemIcon(26, 117, 1);
-    ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(' ' + S.gems, 38, 122);
+    plaque(10, 138, 128, 26, 8);
+    drawGemIcon(26, 151, 1);
+    ctx.fillStyle = '#6ee0d8'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    ctx.fillText(' ' + S.gems, 38, 156);
   }
   if (S.crowns > 0 || S.prestiges > 0) {
-    ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(10, 134, 128, 26, 8); ctx.fill();
-    drawCrownIcon(26, 147, 0.9);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(S.crowns + '  🏛 HALL', 40, 152);
-    hits.push({ x: 10, y: 134, w: 128, h: 26, act: () => { S.showCrownHall = !S.showCrownHall; save(); } });
+    plaque(10, 168, 128, 26, 8);
+    drawCrownIcon(26, 181, 0.9);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(S.crowns + '  🏛 HALL', 40, 186);
+    hits.push({ x: 10, y: 168, w: 128, h: 26, act: () => { S.showCrownHall = !S.showCrownHall; save(); } });
     if (S.crowns > 0) { // spendable pip
       ctx.fillStyle = '#ffd94a';
-      ctx.beginPath(); ctx.arc(130, 138, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
+      ctx.beginPath(); ctx.arc(130, 172, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
     }
   }
   // hero rank badge (top-center) with progress to the next title
   if (S.started) {
     const rk = heroRank(), nx = nextRank(), rw = 156, rx = vw / 2 - rw / 2, ry = 8;
-    ctx.fillStyle = 'rgba(20,25,36,0.85)'; rr(rx, ry, rw, 30, 8); ctx.fill();
+    plaque(rx, ry, rw, 30, 8);
     ctx.strokeStyle = 'rgba(255,217,74,0.35)'; ctx.lineWidth = 1; rr(rx, ry, rw, 30, 8); ctx.stroke();
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(rk.ic + ' ' + rk.name, vw / 2, ry + 14);
     if (nx) {
       const f = Math.min(1, (renown() - rk.at) / (nx.at - rk.at));
       ctx.fillStyle = 'rgba(255,255,255,0.14)'; rr(rx + 12, ry + 20, rw - 24, 4, 2); ctx.fill();
       ctx.fillStyle = '#6ecb5a'; rr(rx + 12, ry + 20, (rw - 24) * f, 4, 2); ctx.fill();
     } else {
-      ctx.fillStyle = '#9aa7b5'; ctx.font = '8px sans-serif'; ctx.fillText('MAX RANK', vw / 2, ry + 26);
+      ctx.fillStyle = '#9aa7b5'; ctx.font = '8px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('MAX RANK', vw / 2, ry + 26);
     }
     hits.push({ x: rx, y: ry, w: rw, h: 30, act: () => { S.showStats = !S.showStats; } });
   }
   // milestone toasts
-  let ty = 70;
-  for (const to of S.toasts) {
+  let ty = Math.max(176, vh * 0.2);
+  for (const to of S.toasts.slice(0, 3)) {
     const a = Math.min(1, 4 * Math.min(to.t, 3 - to.t));
     ctx.globalAlpha = Math.max(0, a);
-    ctx.fillStyle = 'rgba(20,25,36,0.92)'; rr(vw / 2 - 120, ty, 240, 34, 10); ctx.fill();
-    ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 1.5; rr(vw / 2 - 120, ty, 240, 34, 10); ctx.stroke();
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    const tw = Math.min(vw - 20, Math.max(240, ctx.measureText(to.txt).width + 36));
+    plaque(vw / 2 - tw / 2, ty, tw, 34, 10);
+    ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 1.5; rr(vw / 2 - tw / 2, ty, tw, 34, 10); ctx.stroke();
+    ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'center';
     ctx.fillText(to.txt, vw / 2, ty + 22);
     ctx.globalAlpha = 1;
     ty += 40;
@@ -4112,8 +4343,8 @@ function drawHud() {
     rr(5, 5, vw - 10, vh - 10, 18); ctx.stroke();
   }
   if (S.offlineMsg > 0 && S.offlineAmt > 0) {
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(vw / 2 - 150, 14, 300, 44, 10); ctx.fill();
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    plaque(vw / 2 - 150, 14, 300, 44, 10);
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('While you were away…', vw / 2, 32);
     ctx.fillText('+' + fmt(S.offlineAmt) + ' ¢ piled up at the pallet!', vw / 2, 50);
   }
@@ -4128,7 +4359,7 @@ function drawHud() {
     ctx.fillStyle = '#ffd94a';
     ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-8, -11); ctx.lineTo(-3, 0); ctx.lineTo(-8, 11); ctx.closePath(); ctx.fill();
     ctx.restore();
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(g.label, ax, ay + 26);
   }
   if (S.stick && !anyPanelOpen()) {
@@ -4140,87 +4371,105 @@ function drawHud() {
     ctx.globalAlpha = 1;
   }
   // dash button (bottom-right, thumb-reachable) with cooldown ring
-  if (S.started && !anyPanelOpen()) {
+  if (S.started && !anyPanelOpen() && !S.cards) {
     const bx = vw - 58, by = vh - 84, r = 36;
     const ready = p.dashCd <= 0;
-    ctx.fillStyle = ready ? 'rgba(56,120,150,0.85)' : 'rgba(30,38,52,0.8)';
-    ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.29); ctx.fill();
+    if (ready) disc(bx, by, r, '#7cf09a', '#25a84f'); else disc(bx, by, r, '#8a7ac0', '#4a3a88');
     if (!ready) {
-      ctx.strokeStyle = '#6ec9e0'; ctx.lineWidth = 4;
+      ctx.strokeStyle = '#fff4e6'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(bx, by, r - 3, -1.5708, -1.5708 + (1 - p.dashCd / dashCdMax()) * 6.283); ctx.stroke();
     } else {
       const pulse = 0.5 + Math.sin(S.t * 6) * 0.3;
-      ctx.strokeStyle = 'rgba(110,201,224,' + pulse + ')'; ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,244,230,' + pulse + ')'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(bx, by, r - 3, 0, 6.29); ctx.stroke();
     }
-    ctx.fillStyle = ready ? '#fff' : '#6a7684';
-    ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = ready ? '#fff' : '#cfc6ee';
+    ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('💨', bx, by + 8);
-    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = ready ? '#cfeaf2' : '#6a7684';
+    ctx.font = 'bold 9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = ready ? '#fff4e6' : '#cfc6ee';
     ctx.fillText('DASH', bx, by + 24);
     hits.push({ x: bx - r, y: by - r, w: r * 2, h: r * 2, act: dashAbility });
     // ultimate button (bottom-left) — charges from kills, unleashes Arrow Storm
     const ux = 58, uy = vh - 84, ur = 36, uReady = ultReady();
-    ctx.fillStyle = uReady ? 'rgba(150,90,40,0.9)' : 'rgba(30,38,52,0.8)';
-    ctx.beginPath(); ctx.arc(ux, uy, ur, 0, 6.29); ctx.fill();
+    if (uReady) disc(ux, uy, ur, '#ff9ac8', '#f0599a'); else disc(ux, uy, ur, '#8a7ac0', '#4a3a88');
     // charge ring
     ctx.strokeStyle = uReady ? 'rgba(255,210,90,' + (0.6 + Math.sin(S.t * 6) * 0.35) + ')' : '#c9873f';
     ctx.lineWidth = uReady ? 4 : 4;
     ctx.beginPath(); ctx.arc(ux, uy, ur - 3, -1.5708, -1.5708 + ultFrac() * 6.283); ctx.stroke();
-    ctx.fillStyle = uReady ? '#fff' : '#8a7a66';
-    ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = uReady ? '#fff' : '#cfc6ee';
+    ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('☄️', ux, uy + 8);
-    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = uReady ? '#ffe8b0' : '#8a7a66';
+    ctx.font = 'bold 9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = uReady ? '#fff4e6' : '#cfc6ee';
     ctx.fillText(uReady ? 'STORM!' : Math.floor(ultFrac() * 100) + '%', ux, uy + 24);
     if (uReady) hits.push({ x: ux - ur, y: uy - ur, w: ur * 2, h: ur * 2, act: castUlt });
     // pet ability button (bottom-left, above the ultimate) — only with an active pet
     const ap2 = activePet();
     if (ap2) {
       const px2 = 58, py2 = vh - 158, pr = 30, pReady = petAbilityReady();
-      ctx.fillStyle = pReady ? 'rgba(60,120,80,0.9)' : 'rgba(30,38,52,0.8)';
-      ctx.beginPath(); ctx.arc(px2, py2, pr, 0, 6.29); ctx.fill();
+      if (pReady) disc(px2, py2, pr, '#c6a8ff', '#9a70ff'); else disc(px2, py2, pr, '#8a7ac0', '#4a3a88');
       if (pReady) { const pu = 0.5 + Math.sin(S.t * 6) * 0.3; ctx.strokeStyle = 'rgba(110,203,90,' + pu + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px2, py2, pr - 3, 0, 6.29); ctx.stroke(); }
       else { ctx.strokeStyle = '#6ecb5a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(px2, py2, pr - 3, -1.5708, -1.5708 + (1 - S.petCd / PET_CD) * 6.283); ctx.stroke(); }
-      ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(ap2.ic, px2, py2 - 2); ctx.textBaseline = 'alphabetic';
-      ctx.font = 'bold 8px sans-serif'; ctx.fillStyle = pReady ? '#bfe9cd' : '#6a7684';
+      ctx.font = 'bold 8px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = pReady ? '#fff4e6' : '#cfc6ee';
       ctx.fillText(pReady ? 'READY' : Math.ceil(S.petCd) + 's', px2, py2 + 20);
       if (pReady) hits.push({ x: px2 - pr, y: py2 - pr, w: pr * 2, h: pr * 2, act: petAbility });
     }
   }
-  if (!S.started) {
-    ctx.fillStyle = 'rgba(8,10,16,0.8)'; ctx.fillRect(0, 0, vw, vh);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 44px sans-serif';
-    ctx.fillText('KINGSHOT', vw / 2, vh * 0.32);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('E N D L E S S', vw / 2, vh * 0.32 + 34);
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '14px sans-serif';
-    ctx.fillText('You fire automatically. Enemies drop helmets —', vw / 2, vh * 0.45);
-    ctx.fillText('stack them, sell them (or smelt them into gold),', vw / 2, vh * 0.45 + 22);
-    ctx.fillText('build towers, drums, altars and waygates, and', vw / 2, vh * 0.45 + 44);
-    ctx.fillText('carve new lands out of the forest — in all directions.', vw / 2, vh * 0.45 + 66);
-    ctx.fillText('Drag anywhere to walk.', vw / 2, vh * 0.45 + 98);
-    const pulse = 1 + Math.sin(S.t * 4) * 0.05;
-    ctx.save(); ctx.translate(vw / 2, vh * 0.68); ctx.scale(pulse, pulse);
-    ctx.fillStyle = '#7a5f18'; rr(-110, -26, 220, 52, 12); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('▶ TAP TO PLAY', 0, 7);
-    ctx.restore();
+  if (!S.started) drawTitle();
+}
+// candy title card: chibi duo on a spotlight, bouncy sticker lettering, pink pill button
+function drawTitle() {
+  veil(0.97);
+  const cx = vw / 2, t = S.t;
+  const sp = ctx.createRadialGradient(cx, vh * 0.52, 10, cx, vh * 0.52, Math.min(vw, vh) * 0.6);
+  sp.addColorStop(0, 'rgba(255,233,168,0.38)'); sp.addColorStop(1, 'rgba(255,233,168,0)');
+  ctx.fillStyle = sp; ctx.fillRect(0, 0, vw, vh);
+  // bunting
+  for (let i = 0; i <= 14; i++) {
+    const x = (i / 14) * vw, y = 12 + Math.sin((i / 14) * Math.PI) * 26;
+    ctx.fillStyle = [HV.pink, HV.green, HV.gold, HV.violet][i % 4]; ctx.strokeStyle = HV.line; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x + 9, y); ctx.lineTo(x, y + 18 + Math.sin(t * 2 + i) * 1.5); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+  ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+  const bounce = Math.sin(t * 2.4) * 3, fs = Math.min(64, vw / 6.4);
+  const word = (txt, y, c1, c2, rot) => {
+    ctx.save(); ctx.translate(cx, y); ctx.rotate(rot);
+    ctx.font = 'bold ' + fs + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    ctx.strokeStyle = HV.line; ctx.lineWidth = fs * 0.34; ctx.strokeText(txt, 0, 0);
+    ctx.strokeStyle = HV.cream; ctx.lineWidth = fs * 0.16; ctx.strokeText(txt, 0, 0);
+    const g = ctx.createLinearGradient(0, -fs, 0, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g; (fillRaw || ctx.fillText).call(ctx, txt, 0, 0);
+    ctx.restore();
+  };
+  word('KINGSHOT', vh * 0.2 + bounce, '#ffc9de', '#ff5fa6', -0.04);
+  word('ENDLESS', vh * 0.2 + fs * 0.95 - bounce, '#d9fff0', '#35c46a', 0.03);
+  // the duo
+  const k = Math.min(0.8, vh / 960);
+  artDraw('roxor', 'idle', (t * 5) | 0, cx + 62 * k, vh * 0.66, k * 1.05, true);
+  artDraw('jasmin', 'idle', (t * 5 + 2) | 0, cx - 62 * k, vh * 0.68, k * 1.1, false);
+  ctx.fillStyle = HV.cream; ctx.font = '14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+  const lines = ['Sing-shoot happens on its own. Foes drop their helmets —', 'stack them, sell them (or smelt them into gold bars),', 'build towers, drums & waygates and grow the Soundlands', 'in every direction. Drag anywhere to walk.'];
+  lines.forEach((l, i) => ctx.fillText(l, cx, vh * 0.74 + i * 20));
+  const pulse = 1 + Math.sin(t * 4) * 0.05;
+  ctx.save(); ctx.translate(cx, vh * 0.9); ctx.scale(pulse, pulse);
+  pill(-110, -26, 220, 52, '#ff9ac8', '#f0599a');
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+  ctx.fillText('▶ TAP TO PLAY', 0, 8);
+  ctx.restore();
 }
 function drawProgression() {
   // XP / level bar under the wallet
   const bx = 10, by = 100, bw = 128;
-  ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(bx, by, bw, 14, 7); ctx.fill();
+  plaque(bx, by, bw, 14, 7);
   const f = Math.min(1, S.xp / xpNeed(S.level));
   ctx.fillStyle = '#8a6ad8'; rr(bx + 2, by + 2, (bw - 4) * f, 10, 5); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left';
   ctx.fillText('LV ' + S.level, bx + 6, by + 11);
   // active boon timers
   let tbx = bx; const tby = by + 18;
-  if (S.frenzyT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('⚡' + Math.ceil(S.frenzyT) + 's', tbx, tby + 8); tbx += 44; }
-  if (S.goldRushT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('💰' + Math.ceil(S.goldRushT) + 's', tbx, tby + 8); }
+  if (S.frenzyT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('⚡' + Math.ceil(S.frenzyT) + 's', tbx, tby + 8); tbx += 44; }
+  if (S.goldRushT > 0) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('💰' + Math.ceil(S.goldRushT) + 's', tbx, tby + 8); }
   // golden boon shiny
   if (S.boon) {
     const bob = Math.sin(S.t * 5 + S.boon.bob) * 6;
@@ -4230,7 +4479,7 @@ function drawProgression() {
     ctx.fillStyle = 'rgba(255,217,74,' + gl + ')';
     ctx.beginPath(); ctx.arc(gx, gy, 26 + Math.sin(S.t * 6) * 3, 0, 6.29); ctx.fill();
     ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.arc(gx, gy, 15, 0, 6.29); ctx.fill();
-    ctx.fillStyle = '#fff8c0'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff8c0'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('★', gx, gy + 6);
     ctx.restore();
     hits.push({ x: gx - 30, y: gy - 30, w: 60, h: 60, act: triggerBoon });
@@ -4240,22 +4489,22 @@ function drawProgression() {
   // level-up card draft (bottom of screen, non-blocking)
   if (S.cards) {
     ctx.fillStyle = 'rgba(8,10,16,0.55)'; ctx.fillRect(0, vh - 170, vw, 170);
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('⭐ LEVEL UP — pick an upgrade', vw / 2, vh - 150);
     const n = S.cards.length, cw = Math.min(120, (vw - 40) / n - 8), gap = 8;
     const total = n * cw + (n - 1) * gap, x0 = (vw - total) / 2;
     for (let i = 0; i < n; i++) {
       const c = S.cards[i], cx = x0 + i * (cw + gap), cy = vh - 132, ch = 116;
-      ctx.fillStyle = 'rgba(38,46,66,0.96)'; rr(cx, cy, cw, ch, 10); ctx.fill();
+      ctx.fillStyle = 'rgba(58,40,116,0.96)'; rr(cx, cy, cw, ch, 10); ctx.fill();
       ctx.strokeStyle = '#8a6ad8'; ctx.lineWidth = 2.5; rr(cx, cy, cw, ch, 10); ctx.stroke();
-      ctx.font = '30px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.font = '30px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
       ctx.fillText(c.ic, cx + cw / 2, cy + 38);
-      ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#ffd94a';
+      ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#ffd94a';
       ctx.fillText(c.name, cx + cw / 2, cy + 62);
-      ctx.font = '10px sans-serif'; ctx.fillStyle = '#c8d0da';
+      ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#c8d0da';
       wrapText(c.d, cx + cw / 2, cy + 80, cw - 12, 12);
       const owned = pk(c.id);
-      if (owned > 0) { ctx.fillStyle = '#8a6ad8'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('owned x' + owned, cx + cw / 2, cy + ch - 8); }
+      if (owned > 0) { ctx.fillStyle = '#8a6ad8'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('owned x' + owned, cx + cw / 2, cy + ch - 8); }
       hits.push({ x: cx, y: cy, w: cw, h: ch, act: () => pickCard(i) });
     }
   }
@@ -4275,10 +4524,10 @@ function drawCombo() {
   const cx = vw / 2, cy = 116;
   const sc = 1 + (S.comboFlash > 0 ? S.comboFlash * 0.6 : 0) + Math.sin(S.t * 12) * 0.02 * comboTier();
   ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
-  ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+  ctx.font = 'bold 30px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText('x' + mul, 2, 2);
   ctx.fillStyle = col; ctx.fillText('x' + mul, 0, 0);
-  ctx.font = 'bold 12px sans-serif';
+  ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(S.combo + ' COMBO', 1, 17);
   ctx.fillStyle = '#fff'; ctx.fillText(S.combo + ' COMBO', 0, 16);
   ctx.restore();
@@ -4295,16 +4544,16 @@ function fmtTime(s) {
 function drawStatsPanel() {
   if (!S.showStats) return;
   const st = S.stats;
-  ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.9);
   // tap anywhere to close
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showStats = false; } });
   const cx = vw / 2, top = Math.max(40, vh * 0.06);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 26px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🏆 KINGDOM RECORDS', cx, top);
   const unlocked = ACH.filter(a => S.ach[a.id]).length;
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
-  ctx.fillText(unlocked + ' / ' + ACH.length + ' milestones · tap anywhere to close', cx, top + 20);
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+  ctx.fillText(unlocked + ' / ' + ACH.length + ' milestones · tap empty space to close', cx, top + 20);
   // lifetime stats grid (two columns)
   const stats = [
     ['⚔️ Foes slain', fmt(st.kills)], ['💀 Bosses', fmt(st.bosses || 0)],
@@ -4322,81 +4571,81 @@ function drawStatsPanel() {
     ['⚒️ Enhances', fmt(S.stats.enhanced || 0)], ['💎 Gems held', fmt(S.gems)],
     ['🛒 Merchant buys', fmt(S.stats.trades || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
     ['📖 Bestiary', bestiarySeen() + '/' + FOE_NAMES.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
-    ['🎡 Wheel spins', fmt(S.stats.spins || 0)], ['☄️ Arrow Storms', fmt(S.stats.ults || 0)],
+    ['🎡 Wheel spins', fmt(S.stats.spins || 0)], ['👕 Outfits', skinsOwnedCount() + '/' + SKINS.length],
     [heroRank().ic + ' Rank', heroRank().name], ['🎗 Renown', fmt(renown())],
-    ['👕 Outfits', skinsOwnedCount() + '/' + SKINS.length], ['⭐ Champions', fmt(S.stats.elites || 0)],
   ];
-  let sy = top + 44;
-  ctx.font = 'bold 13px sans-serif';
-  for (let i = 0; i < stats.length; i += 2) {
-    for (let c = 0; c < 2 && i + c < stats.length; c++) {
-      const x0 = c === 0 ? 18 : cx + 6, w = cx - 24;
-      const [label, val] = stats[i + c];
-      ctx.fillStyle = 'rgba(20,25,36,0.8)'; rr(x0, sy, w, 26, 6); ctx.fill();
-      ctx.fillStyle = '#c8d0da'; ctx.textAlign = 'left'; ctx.font = '12px sans-serif';
-      ctx.fillText(label, x0 + 8, sy + 17);
-      ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'right'; ctx.font = 'bold 13px sans-serif';
-      ctx.fillText(val, x0 + w - 8, sy + 17);
+  // two pages: RECORDS (lifetime numbers) and MILESTONES (achievements) — a phone screen can't hold both
+  const tabs = [['RECORDS', 0], ['MILESTONES', 1]], tw = Math.min(150, (vw - 48) / 2);
+  tabs.forEach(([lab, id], n) => {
+    const tx = cx + (n ? 6 : -6 - tw), on = (S.statsTab || 0) === id;
+    pill(tx, top + 32, tw, 26, on ? '#ffe98a' : '#8a7ac0', on ? '#f0b422' : '#4a3a88');
+    ctx.fillStyle = on ? '#3a2410' : '#fff'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(lab, tx + tw / 2, top + 50);
+    hits.push({ x: tx, y: top + 32, w: tw, h: 26, act: () => { S.statsTab = id; sfx('built', true); } });
+  });
+  let sy = top + 74;
+  if ((S.statsTab || 0) === 0) {
+    for (let i = 0; i < stats.length; i += 2) {
+      for (let c = 0; c < 2 && i + c < stats.length; c++) {
+        const x0 = c === 0 ? 18 : cx + 6, w = cx - 24;
+        const [label, val] = stats[i + c];
+        plaque(x0, sy, w, 26, 6);
+        ctx.fillStyle = '#e6dcff'; ctx.textAlign = 'left'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+        ctx.fillText(label, x0 + 8, sy + 17);
+        ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'right'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+        ctx.fillText(val, x0 + w - 8, sy + 17);
+      }
+      sy += 30;
     }
-    sy += 30;
+    return;
   }
-  // milestones list
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
-  ctx.fillText('MILESTONES', 18, sy + 20);
-  sy += 32;
-  const rh = Math.min(30, Math.floor((vh - sy - 20) / ACH.length));
-  for (const a of ACH) {
-    const got = !!S.ach[a.id];
-    ctx.globalAlpha = got ? 1 : 0.5;
-    ctx.fillStyle = got ? 'rgba(110,203,90,0.16)' : 'rgba(20,25,36,0.7)';
-    rr(18, sy, vw - 36, rh - 3, 6); ctx.fill();
-    ctx.font = (rh > 22 ? 16 : 13) + 'px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(got ? a.ic : '🔒', 28, sy + rh / 2 + 4);
-    ctx.fillStyle = got ? '#6ecb5a' : '#c8d0da'; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(a.name, 54, sy + (rh > 22 ? rh / 2 - 1 : rh / 2 + 4));
-    if (rh > 22) {
-      ctx.fillStyle = '#8792a0'; ctx.font = '10px sans-serif';
-      ctx.fillText(a.d, 54, sy + rh / 2 + 11);
-    }
-    if (got) { ctx.fillStyle = '#6ecb5a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right'; ctx.fillText('✓', vw - 30, sy + rh / 2 + 4); }
+  const per = Math.ceil(ACH.length / 2), rh = Math.max(15, Math.min(30, Math.floor((vh - sy - 24) / per))), cw2 = cx - 24;
+  ACH.forEach((a, n) => {
+    const got = !!S.ach[a.id], c = n >= per ? 1 : 0, x0 = c === 0 ? 18 : cx + 6, y0 = sy + (n % per) * rh;
+    ctx.globalAlpha = got ? 1 : 0.55;
+    ctx.fillStyle = got ? 'rgba(63,207,106,0.22)' : 'rgba(44,28,96,0.75)';
+    rr(x0, y0, cw2, rh - 3, 6); ctx.fill();
+    ctx.font = (rh > 22 ? 14 : 11) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+    ctx.fillText(got ? a.ic : '🔒', x0 + 6, y0 + rh / 2 + 3);
+    ctx.fillStyle = got ? '#8ff0a8' : '#d6ceee'; ctx.font = 'bold ' + (rh > 22 ? 12 : 10) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    ctx.fillText(a.name, x0 + 30, y0 + rh / 2 + 3);
+    if (got) { ctx.textAlign = 'right'; ctx.fillText('✓', x0 + cw2 - 8, y0 + rh / 2 + 3); }
     ctx.globalAlpha = 1;
-    sy += rh;
-  }
+  });
 }
 function drawQuests() {
   if (anyPanelOpen()) return;
   hudBtn(vw - 46, 44, 36, 30, '📜', () => { S.showQuests = !S.showQuests; save(); });
   if (S.goldPulse > 0) { // fresh completion ping on the button
     ctx.fillStyle = '#ffd94a';
-    ctx.beginPath(); ctx.arc(vw - 14, 48, 4 + Math.sin(S.t * 8), 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(btnMap(vw - 46, 44).x + 32, btnMap(vw - 46, 44).y + 4, 4 + Math.sin(S.t * 8), 0, 6.29); ctx.fill();
   }
   if (!S.showQuests) return;
   const rows = S.dailies.concat(S.quests);
   if (!rows.length) return;
-  const w = 208, rh = 27, oy = 170;
+  const w = 208, rh = 27, oy = leftBottom;
   const h = rows.length * rh + (S.streak > 0 ? 18 : 6) + 6;
-  ctx.fillStyle = 'rgba(20,25,36,0.72)'; rr(10, oy, w, h, 10); ctx.fill();
+  plaque(10, oy, w, h, 10);
   let y = oy + 6;
   ctx.textAlign = 'left';
   for (const q of rows) {
     ctx.globalAlpha = q.done ? 0.45 : 1;
-    ctx.font = '12px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText((q.daily ? '☀️' : '') + q.icon, 16, y + 13);
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillStyle = q.done ? '#6ecb5a' : '#e8e8e8';
     ctx.fillText(q.done ? '✓ ' + q.txt : q.txt, 44, y + 9);
     // progress bar
     ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(44, y + 13, 100, 6, 3); ctx.fill();
     const f = Math.min(1, q.prog / q.target);
     if (f > 0) { ctx.fillStyle = q.done ? '#6ecb5a' : '#ffd94a'; rr(44, y + 13, 100 * f, 6, 3); ctx.fill(); }
-    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('+' + fmt(q.reward) + '¢' + (q.gem ? '💎' : ''), 150, y + 19);
     ctx.globalAlpha = 1;
     y += rh;
   }
   if (S.streak > 0) {
-    ctx.fillStyle = '#ff9a4a'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = '#ff9a4a'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText('🔥 ' + S.streak + '-day streak  (+' + Math.round((streakMul() - 1) * 100) + '% daily pay)', 16, y + 10);
   }
 }
@@ -4407,22 +4656,22 @@ function drawPets() {
   hudBtn(bx, by, 36, 30, '🐾', () => { S.showPets = !S.showPets; save(); });
   if (S.gems >= eggCost()) {
     ctx.fillStyle = '#6ee0d8';
-    ctx.beginPath(); ctx.arc(bx + 32, by + 4, 4 + Math.sin(S.t * 6) * 0.8, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(btnMap(bx, by).x + 32, btnMap(bx, by).y + 4, 4 + Math.sin(S.t * 6) * 0.8, 0, 6.29); ctx.fill();
   }
   if (!S.showPets) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.92)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.92);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPets = false; } });
   const cx = vw / 2, top = Math.max(40, vh * 0.05);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🐾 PET MENAGERIE', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText(petsOwned() + ' / ' + PETS.length + ' species · +' + Math.round((petCollectionMul() - 1) * 100) + '% coins from collection', cx, top + 20);
   // hatch button
   const hw = 240, hx = cx - hw / 2, hy = top + 34;
   const canHatch = S.gems >= eggCost();
-  ctx.fillStyle = canHatch ? '#2f7d6e' : 'rgba(40,48,60,0.9)'; rr(hx, hy, hw, 42, 10); ctx.fill();
-  ctx.fillStyle = canHatch ? '#eafff9' : '#7a8792'; ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = canHatch ? '#2f7d6e' : 'rgba(78,56,150,0.9)'; rr(hx, hy, hw, 42, 10); ctx.fill();
+  ctx.fillStyle = canHatch ? '#eafff9' : '#7a8792'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🥚 HATCH EGG   ' + eggCost() + '💎', cx, hy + 26);
   hits.push({ x: hx, y: hy, w: hw, h: 42, act: () => { hatchEgg(); } });
   // grid of species
@@ -4435,24 +4684,24 @@ function drawPets() {
     const x = gx0 + col * cellW, y = gy + row * cellH;
     const active = S.activePet === def.id;
     ctx.globalAlpha = owned ? 1 : 0.4;
-    ctx.fillStyle = active ? 'rgba(255,217,74,0.18)' : 'rgba(20,25,36,0.85)';
+    ctx.fillStyle = active ? 'rgba(255,217,74,0.18)' : 'rgba(44,28,96,0.85)';
     rr(x + 3, y + 3, cellW - 6, cellH - 6, 8); ctx.fill();
     ctx.strokeStyle = active ? '#ffd94a' : RARITY[def.rar].col; ctx.lineWidth = active ? 2.5 : 1.2;
     rr(x + 3, y + 3, cellW - 6, cellH - 6, 8); ctx.stroke();
-    ctx.font = '26px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.font = '26px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(owned ? def.ic : '❔', x + cellW / 2, y + 30);
-    ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = owned ? '#fff' : '#7a8792';
+    ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = owned ? '#fff' : '#7a8792';
     ctx.fillText(owned ? def.name : '???', x + cellW / 2, y + 44);
-    ctx.font = '8px sans-serif'; ctx.fillStyle = RARITY[def.rar].col;
+    ctx.font = '8px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = RARITY[def.rar].col;
     ctx.fillText(RARITY[def.rar].name + (owned ? '  ·  Lv' + lvl : ''), x + cellW / 2, y + 55);
     if (owned) {
-      ctx.font = '8px sans-serif'; ctx.fillStyle = '#9aa7b5';
+      ctx.font = '8px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#9aa7b5';
       ctx.fillText(def.desc, x + cellW / 2, y + 66);
       hits.push({ x: x + 3, y: y + 3, w: cellW - 6, h: cellH - 6, act: () => { setActivePet(def.id); } });
     }
     ctx.globalAlpha = 1;
   }
-  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap an owned pet to make it your active companion · tap empty space to close', cx, vh - 16);
 }
 function drawWheel() {
@@ -4462,16 +4711,16 @@ function drawWheel() {
   hudBtn(bx, by, 36, 30, '🎡', () => { S.showWheel = !S.showWheel; save(); });
   if ((S.gems || 0) >= SPIN_COST) {
     ctx.fillStyle = '#ff5a8a';
-    ctx.beginPath(); ctx.arc(bx + 32, by + 4, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(btnMap(bx, by).x + 32, btnMap(bx, by).y + 4, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill();
   }
   if (!S.showWheel) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.94)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.94);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showWheel = false; } });
   const cx = vw / 2, top = Math.max(44, vh * 0.08);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🎡 FORTUNE WHEEL', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Spin for a random prize · you have ' + (S.gems || 0) + ' 💎', cx, top + 20);
   // the wheel: N colored slices, icons around the rim, landed slice highlighted
   const wy = top + 40 + Math.min(150, vh * 0.2), rad = Math.min(140, vw * 0.34, vh * 0.22);
@@ -4499,7 +4748,7 @@ function drawWheel() {
     ctx.fillStyle = WHEEL[i].col; ctx.globalAlpha = landed ? 1 : 0.82; ctx.fill();
     ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
     ctx.save(); ctx.translate(cx + Math.cos(mid) * rad * 0.66, wy + Math.sin(mid) * rad * 0.66);
-    ctx.fillStyle = '#1a1208'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a1208'; ctx.font = '20px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(WHEEL[i].ic, 0, 0); ctx.restore();
   }
   ctx.textBaseline = 'alphabetic';
@@ -4507,23 +4756,23 @@ function drawWheel() {
   ctx.fillStyle = '#2a2f3a'; ctx.beginPath(); ctx.arc(cx, wy, rad * 0.2, 0, 6.29); ctx.fill();
   ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.moveTo(cx, wy - rad - 4); ctx.lineTo(cx - 12, wy - rad - 24); ctx.lineTo(cx + 12, wy - rad - 24); ctx.closePath(); ctx.fill();
   // result banner (only once the wheel has settled)
-  if (S.wheel && !spinning) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🎉 ' + S.wheel.msg, cx, wy + rad + 34); }
+  if (S.wheel && !spinning) { ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🎉 ' + S.wheel.msg, cx, wy + rad + 34); }
   // spin button (disabled mid-spin)
   const can = (S.gems || 0) >= SPIN_COST && !spinning, sbw = 200, sbx = cx - sbw / 2, sby = wy + rad + 48;
   ctx.fillStyle = spinning ? 'rgba(60,50,60,0.9)' : can ? '#b0357a' : 'rgba(50,44,52,0.9)'; rr(sbx, sby, sbw, 46, 12); ctx.fill();
-  ctx.fillStyle = spinning ? '#9a8a92' : can ? '#ffe8f2' : '#7a6a72'; ctx.font = 'bold 17px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = spinning ? '#9a8a92' : can ? '#ffe8f2' : '#7a6a72'; ctx.font = 'bold 17px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(spinning ? 'SPINNING…' : '🎡 SPIN   ' + SPIN_COST + '💎', cx, sby + 29);
   if (can) hits.push({ x: sbx, y: sby, w: sbw, h: 46, act: () => { spinWheel(); } });
-  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap empty space to close', cx, sby + 68);
 }
 function drawPop() {
   if (anyPanelOpen() && !S.showPop) return;
   hudBtn(vw - 46, 350, 36, 30, '👥', () => { S.showPop = !S.showPop; save(); });
   const pop = S.pop || [];
-  if (S.wallet >= recruitCost() && pop.length < popCap()) { ctx.fillStyle = '#6ecb5a'; ctx.beginPath(); ctx.arc(vw - 14, 354, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill(); }
+  if (S.wallet >= recruitCost() && pop.length < popCap()) { ctx.fillStyle = '#6ecb5a'; ctx.beginPath(); ctx.arc(btnMap(vw - 46, 350).x + 32, btnMap(vw - 46, 350).y + 4, 3.5 + Math.sin(S.t * 6) * 0.7, 0, 6.29); ctx.fill(); }
   if (!S.showPop) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.95);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showPop = false; } });
   const cx = vw / 2, top = Math.max(38, vh * 0.045);
   // the content column itself is inert — a near-miss on a button must not close
@@ -4531,21 +4780,21 @@ function drawPop() {
   const inertPad = { x: cx - 195, y: top - 28, w: 390, h: 0, act: () => {} };
   hits.push(inertPad);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 22px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('👥 TOWNSFOLK', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText(pop.length + ' / ' + popCap() + ' beds' + (S.houses ? '  ·  🏠 ' + S.houses : '') + '  ·  🪙 ' + fmt(S.wallet), cx, top + 19);
   // recruit + cottage, side by side
   const bw2 = Math.min(178, (vw - 44) / 2), by2 = top + 30;
   const canR = S.wallet >= recruitCost() && pop.length < popCap();
-  ctx.fillStyle = canR ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(cx - bw2 - 6, by2, bw2, 44, 10); ctx.fill();
-  ctx.fillStyle = canR ? '#eafff0' : '#7a8792'; ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = canR ? '#2f7d4a' : 'rgba(78,56,150,0.9)'; rr(cx - bw2 - 6, by2, bw2, 44, 10); ctx.fill();
+  ctx.fillStyle = canR ? '#eafff0' : '#7a8792'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('👤 RECRUIT', cx - bw2 / 2 - 6, by2 + 19);
   ctx.fillText(fmt(recruitCost()) + '¢', cx - bw2 / 2 - 6, by2 + 35);
   hits.push({ x: cx - bw2 - 6, y: by2, w: bw2, h: 44, act: () => { recruit(); } });
   const canH = (S.houses || 0) < HOUSE_MAX && S.wallet >= houseCost();
-  ctx.fillStyle = (S.houses || 0) >= HOUSE_MAX ? 'rgba(60,60,52,0.9)' : canH ? '#7a5a1e' : 'rgba(40,48,60,0.9)'; rr(cx + 6, by2, bw2, 44, 10); ctx.fill();
-  ctx.fillStyle = canH ? '#ffe8a8' : '#7a8792'; ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = (S.houses || 0) >= HOUSE_MAX ? 'rgba(60,60,52,0.9)' : canH ? '#7a5a1e' : 'rgba(78,56,150,0.9)'; rr(cx + 6, by2, bw2, 44, 10); ctx.fill();
+  ctx.fillStyle = canH ? '#ffe8a8' : '#7a8792'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText((S.houses || 0) >= HOUSE_MAX ? '🏠 VILLAGE FULL' : '🏠 COTTAGE +' + BEDS_PER_HOUSE + ' beds', cx + bw2 / 2 + 6, by2 + 19);
   if ((S.houses || 0) < HOUSE_MAX) ctx.fillText(fmt(houseCost()) + '¢', cx + bw2 / 2 + 6, by2 + 35);
   if ((S.houses || 0) < HOUSE_MAX) hits.push({ x: cx + 6, y: by2, w: bw2, h: 44, act: () => { buyHouse(); } });
@@ -4557,27 +4806,27 @@ function drawPop() {
   let y = by2 + 56;
   for (const jd of defs) {
     const n = popCount(jd.id), pool = jd.id === 'collect';
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rh - 6, 9); ctx.fill();
+    plaque(cx - w / 2, y, w, rh - 6, 9);
     if (n > 0 && !pool) { ctx.strokeStyle = 'rgba(255,217,74,0.35)'; ctx.lineWidth = 1; rr(cx - w / 2, y, w, rh - 6, 9); ctx.stroke(); }
-    ctx.textAlign = 'left'; ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left'; ctx.font = '18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(jd.ic, cx - w / 2 + 12, y + rh / 2 + 3);
-    ctx.font = 'bold 13px sans-serif'; ctx.fillText(jd.name, cx - w / 2 + 42, y + rh / 2 - 5);
-    ctx.fillStyle = '#8792a0'; ctx.font = '9px sans-serif'; ctx.fillText(jd.desc, cx - w / 2 + 42, y + rh / 2 + 9);
+    ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(jd.name, cx - w / 2 + 42, y + rh / 2 - 5);
+    ctx.fillStyle = '#8792a0'; ctx.font = '9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(jd.desc, cx - w / 2 + 42, y + rh / 2 + 9);
     // count + [-][+] (the gatherer row is the idle pool — no buttons)
     ctx.textAlign = 'center';
     if (pool) {
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(String(n), cx + w / 2 - 26, y + rh / 2 + 6);
     } else {
       const bs = 30, byy = y + (rh - 6) / 2 - bs / 2;
       const canMinus = n > 0, canPlus = popCount('collect') > 0;
-      ctx.fillStyle = canMinus ? '#7a3a3a' : 'rgba(50,56,66,0.9)'; rr(cx + w / 2 - 108, byy, bs, bs, 7); ctx.fill();
-      ctx.fillStyle = canMinus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.fillText('−', cx + w / 2 - 108 + bs / 2, byy + 21);
+      ctx.fillStyle = canMinus ? '#7a3a3a' : 'rgba(88,64,160,0.9)'; rr(cx + w / 2 - 108, byy, bs, bs, 7); ctx.fill();
+      ctx.fillStyle = canMinus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('−', cx + w / 2 - 108 + bs / 2, byy + 21);
       if (canMinus) hits.push({ x: cx + w / 2 - 108, y: byy, w: bs, h: bs, act: () => { movePop(jd.id, 'collect'); } });
-      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px sans-serif';
+      ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(String(n), cx + w / 2 - 62, y + rh / 2 + 6);
-      ctx.fillStyle = canPlus ? '#2f7d4a' : 'rgba(50,56,66,0.9)'; rr(cx + w / 2 - 40, byy, bs, bs, 7); ctx.fill();
-      ctx.fillStyle = canPlus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.fillText('+', cx + w / 2 - 40 + bs / 2, byy + 21);
+      ctx.fillStyle = canPlus ? '#2f7d4a' : 'rgba(88,64,160,0.9)'; rr(cx + w / 2 - 40, byy, bs, bs, 7); ctx.fill();
+      ctx.fillStyle = canPlus ? '#fff' : '#6a7684'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('+', cx + w / 2 - 40 + bs / 2, byy + 21);
       if (canPlus) hits.push({ x: cx + w / 2 - 40, y: byy, w: bs, h: bs, act: () => { movePop('collect', jd.id); } });
     }
     y += rh;
@@ -4588,11 +4837,11 @@ function drawPop() {
       for (let i = 0; i < POP_FILTERS.length; i++) {
         const fdef = POP_FILTERS[i], on = (S.popFilter || 'all') === fdef.id;
         const fx = cx - w / 2 + 4 + i * chipW;
-        ctx.fillStyle = on ? '#ffd94a' : 'rgba(20,25,36,0.9)'; rr(fx, y, chipW - 4, chipH, 8); ctx.fill();
+        ctx.fillStyle = on ? '#ffd94a' : 'rgba(44,28,96,0.9)'; rr(fx, y, chipW - 4, chipH, 8); ctx.fill();
         ctx.strokeStyle = on ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; rr(fx, y, chipW - 4, chipH, 8); ctx.stroke();
-        ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+        ctx.font = '14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
         ctx.fillText(fdef.ic, fx + (chipW - 4) / 2, y + 17);
-        ctx.font = 'bold 8px sans-serif'; ctx.fillStyle = on ? '#1a1208' : '#9aa7b5';
+        ctx.font = 'bold 8px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = on ? '#1a1208' : '#9aa7b5';
         ctx.fillText(fdef.label.toUpperCase(), fx + (chipW - 4) / 2, y + 32);
         hits.push({ x: fx, y, w: chipW - 4, h: chipH, act: () => {
           if (S.popFilter === fdef.id) return;
@@ -4604,7 +4853,7 @@ function drawPop() {
       y += chipH + 8;
     }
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Build workplaces to unlock new jobs · workers speed them up & you see them working', cx, y + 12);
   ctx.fillText('Tap below to close', cx, y + 26);
   inertPad.h = (y + 34) - inertPad.y;
@@ -4613,13 +4862,13 @@ function drawSkins() {
   if (anyPanelOpen() && !S.showSkins) return;
   hudBtn(vw - 46, 316, 36, 30, '👕', () => { S.showSkins = !S.showSkins; save(); });
   if (!S.showSkins) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.95);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showSkins = false; } });
   const cx = vw / 2, top = Math.max(42, vh * 0.05);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('👕 WARDROBE', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText(skinsOwnedCount() + ' / ' + SKINS.length + ' outfits · 👑 ' + S.crowns + '   💎 ' + S.gems, cx, top + 20);
   const cols = 2, cw = Math.min(180, (vw - 36) / cols), ch = Math.min(96, (vh - top - 50) / Math.ceil(SKINS.length / cols)), gx0 = cx - (cols * cw) / 2;
   let gy = top + 34;
@@ -4627,24 +4876,25 @@ function drawSkins() {
     const s = SKINS[i], owned = skinOwned(s.id), active = S.skins.active === s.id;
     const locked = !owned && s.need && !s.need();
     const col = i % cols, row = Math.floor(i / cols), x = gx0 + col * cw, y = gy + row * ch;
-    ctx.fillStyle = active ? 'rgba(255,217,74,0.16)' : 'rgba(20,25,36,0.9)'; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.fill();
+    ctx.fillStyle = active ? 'rgba(255,217,74,0.16)' : 'rgba(44,28,96,0.9)'; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.fill();
     ctx.strokeStyle = active ? '#ffd94a' : owned ? '#6ecb5a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = active ? 2.5 : 1.2; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.stroke();
-    // little knight swatch
-    const kx = x + 28, ky = y + ch / 2;
-    ctx.fillStyle = s.cape; ctx.beginPath(); ctx.moveTo(kx - 4, ky - 8); ctx.lineTo(kx - 14, ky + 6); ctx.lineTo(kx - 6, ky + 8); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = s.body; rr(kx - 8, ky - 10, 16, 20, 4); ctx.fill();
-    ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(kx, ky - 14, 6, 0, 6.29); ctx.fill();
-    ctx.fillStyle = '#ffd94a'; ctx.beginPath(); ctx.moveTo(kx - 6, ky - 17); ctx.lineTo(kx, ky - 23); ctx.lineTo(kx + 6, ky - 17); ctx.closePath(); ctx.fill();
-    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(s.name, x + 46, y + 30);
-    ctx.font = '10px sans-serif';
-    if (active) { ctx.fillStyle = '#ffd94a'; ctx.fillText('✓ Equipped', x + 46, y + 48); }
-    else if (owned) { ctx.fillStyle = '#6ecb5a'; ctx.fillText('Tap to equip', x + 46, y + 48); }
-    else if (locked) { ctx.fillStyle = '#8a7f5a'; ctx.fillText('🔒 ' + (s.needTxt || 'Locked'), x + 46, y + 48); }
-    else { ctx.fillStyle = '#ffd94a'; ctx.fillText((s.cur === 'crown' ? '👑 ' : '💎 ') + s.cost, x + 46, y + 48); }
+    // chibi preview
+    const kx = x + 34, ky = y + ch / 2;
+    if (!artDraw(HERO_ART[s.id] || 'jasmin', 'idle', (S.t * 5) | 0, kx, y + ch - 8, 0.3, false)) {
+      ctx.fillStyle = s.cape; ctx.beginPath(); ctx.moveTo(kx - 4, ky - 8); ctx.lineTo(kx - 14, ky + 6); ctx.lineTo(kx - 6, ky + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = s.body; rr(kx - 8, ky - 10, 16, 20, 4); ctx.fill();
+      ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(kx, ky - 14, 6, 0, 6.29); ctx.fill();
+    }
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    ctx.fillText(s.name, x + 68, y + 30);
+    ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+    if (active) { ctx.fillStyle = '#ffd94a'; ctx.fillText('✓ Equipped', x + 68, y + 48); }
+    else if (owned) { ctx.fillStyle = '#6ecb5a'; ctx.fillText('Tap to equip', x + 68, y + 48); }
+    else if (locked) { ctx.fillStyle = '#8a7f5a'; ctx.fillText('🔒 ' + (s.needTxt || 'Locked'), x + 68, y + 48); }
+    else { ctx.fillStyle = '#ffd94a'; ctx.fillText((s.cur === 'crown' ? '👑 ' : '💎 ') + s.cost, x + 68, y + 48); }
     hits.push({ x: x + 4, y: y + 4, w: cw - 8, h: ch - 8, act: () => { buySkin(s.id); } });
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap empty space to close', cx, vh - 14);
 }
 function toggleSetting(k) { if (!S.settings) S.settings = {}; S.settings[k] = S.settings[k] === false ? true : false; sfx('built', true); save(); }
@@ -4652,32 +4902,32 @@ function drawSettings() {
   if (anyPanelOpen() && !S.showSettings) return;
   hudBtn(vw - 46, 282, 36, 30, '⚙️', () => { S.showSettings = !S.showSettings; save(); });
   if (!S.showSettings) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.95)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.95);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showSettings = false; } });
   const cx = vw / 2, top = Math.max(50, vh * 0.16);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('⚙️ SETTINGS', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tune the visuals — easier on the eyes, or the battery', cx, top + 20);
   let y = top + 40;
   const w = Math.min(320, vw - 40), rh = 48;
   for (const s of SETTINGS) {
     const on = setg(s.k);
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rh - 8, 10); ctx.fill();
-    ctx.textAlign = 'left'; ctx.font = '20px sans-serif'; ctx.fillStyle = '#fff';
+    plaque(cx - w / 2, y, w, rh - 8, 10);
+    ctx.textAlign = 'left'; ctx.font = '20px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(s.ic, cx - w / 2 + 16, y + 27);
-    ctx.font = 'bold 14px sans-serif'; ctx.fillText(s.name, cx - w / 2 + 46, y + 26);
+    ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText(s.name, cx - w / 2 + 46, y + 26);
     // toggle switch
     const tw = 48, th = 24, tx = cx + w / 2 - tw - 14, ty = y + (rh - 8) / 2 - th / 2;
     ctx.fillStyle = on ? '#2f7d4a' : 'rgba(90,96,108,0.9)'; rr(tx, ty, tw, th, th / 2); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 3, 0, 6.29); ctx.fill();
-    ctx.fillStyle = on ? '#bfe9cd' : '#c8ccd2'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = on ? '#bfe9cd' : '#c8ccd2'; ctx.font = 'bold 9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(on ? 'ON' : 'OFF', tx + tw / 2, ty - 4);
     hits.push({ x: cx - w / 2, y, w, h: rh - 8, act: () => { toggleSetting(s.k); } });
     y += rh;
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap a row to toggle · tap empty space to close', cx, y + 16);
 }
 function drawBestiary() {
@@ -4685,13 +4935,13 @@ function drawBestiary() {
   // 📖 button below the gear button
   hudBtn(vw - 46, 214, 36, 30, '📖', () => { S.showBestiary = !S.showBestiary; save(); });
   if (!S.showBestiary) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.94)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.94);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showBestiary = false; } });
   const cx = vw / 2, top = Math.max(40, vh * 0.05);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('📖 BESTIARY', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText(bestiarySeen() + ' / ' + FOE_NAMES.length + ' foe families discovered · tap empty space to close', cx, top + 20);
   const cols = 2, cw = Math.min(210, (vw - 36) / cols), ch = Math.min(88, (vh - top - 60) / Math.ceil(FOE_NAMES.length / cols)), gx0 = cx - (cols * cw) / 2;
   let gy = top + 34;
@@ -4699,30 +4949,30 @@ function drawBestiary() {
     const rec = S.bestiary && S.bestiary[f], seen = rec && rec.k > 0;
     const col = f % cols, row = Math.floor(f / cols);
     const x = gx0 + col * cw, y = gy + row * ch;
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.fill();
+    plaque(x + 4, y + 4, cw - 8, ch - 8, 8);
     ctx.strokeStyle = seen ? FOE_COLS[f] : 'rgba(255,255,255,0.1)'; ctx.lineWidth = seen ? 2 : 1; rr(x + 4, y + 4, cw - 8, ch - 8, 8); ctx.stroke();
     // colored foe blob
-    const bxx = x + 30, byy = y + ch / 2;
+    const bxx = x + 34, byy = y + ch / 2;
     if (seen) {
-      ctx.fillStyle = FOE_COLS[f]; ctx.beginPath(); ctx.arc(bxx, byy, 15, 0, 6.29); ctx.fill();
-      ctx.fillStyle = '#0d0f16'; ctx.fillRect(bxx - 6, byy - 4, 3, 4); ctx.fillRect(bxx + 3, byy - 4, 3, 4);
+      ctx.fillStyle = 'rgba(255,244,230,0.9)'; ctx.beginPath(); ctx.arc(bxx, byy, 24, 0, 6.29); ctx.fill();
+      if (!artDraw(FOE_ART[0][f], 'idle', (S.t * 3) | 0, bxx, byy + 22, 0.4, true)) { ctx.fillStyle = FOE_COLS[f]; ctx.beginPath(); ctx.arc(bxx, byy, 15, 0, 6.29); ctx.fill(); }
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.arc(bxx, byy, 15, 0, 6.29); ctx.fill();
-      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', bxx, byy + 6);
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 18px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', bxx, byy + 6);
     }
     ctx.textAlign = 'left';
     if (seen) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
-      ctx.fillText(FOE_NAMES[f], x + 54, y + 26);
-      ctx.fillStyle = '#9aa7b5'; ctx.font = '10px sans-serif';
-      ctx.fillText(ARCH_DESC[FOE_ARCH[f]] || FOE_ARCH[f], x + 54, y + 42);
-      ctx.fillStyle = '#c8d0da'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('⚔ ' + fmt(rec.k) + '   👑 ' + fmt(rec.b || 0), x + 54, y + 60);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+      ctx.fillText(FOE_NAMES[f], x + 64, y + 26);
+      ctx.fillStyle = '#9aa7b5'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+      ctx.fillText(ARCH_DESC[FOE_ARCH[f]] || FOE_ARCH[f], x + 64, y + 42);
+      ctx.fillStyle = '#c8d0da'; ctx.font = 'bold 11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+      ctx.fillText('⚔ ' + fmt(rec.k) + '   👑 ' + fmt(rec.b || 0), x + 64, y + 60);
     } else {
-      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px sans-serif';
-      ctx.fillText('? ? ?', x + 54, y + 30);
-      ctx.fillStyle = '#55606c'; ctx.font = '10px sans-serif';
-      ctx.fillText('Undiscovered', x + 54, y + 46);
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+      ctx.fillText('? ? ?', x + 64, y + 30);
+      ctx.fillStyle = '#55606c'; ctx.font = '10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
+      ctx.fillText('Undiscovered', x + 64, y + 46);
     }
   }
 }
@@ -4733,17 +4983,17 @@ function drawShop() {
   const bx = vw - 46, by = 180;
   const pulse = 0.5 + Math.sin(S.t * 5) * 0.4;
   ctx.fillStyle = 'rgba(122,90,30,' + (0.6 + pulse * 0.35) + ')'; rr(bx, by, 36, 30, 8); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('🛒', bx + 18, by + 20);
   hits.push({ x: bx, y: by, w: 36, h: 30, act: () => { S.showShop = !S.showShop; } });
   if (!S.showShop) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.93);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showShop = false; } });
   const cx = vw / 2, top = Math.max(50, vh * 0.14);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🛒 WANDERING MERCHANT', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('"Rare wares, friend — but I ride on soon!"  ·  ' + Math.ceil(Math.max(0, S.merchant.stay)) + 's left', cx, top + 22);
   ctx.fillText('🪙 ' + fmt(S.wallet) + '     💎 ' + S.gems, cx, top + 40);
   let y = top + 56;
@@ -4751,26 +5001,26 @@ function drawShop() {
   for (let i = 0; i < S.merchant.deals.length; i++) {
     const d = S.merchant.deals[i];
     const have = d.cur === 'gem' ? S.gems : S.wallet, can = !d.sold && have >= d.cost;
-    ctx.fillStyle = d.sold ? 'rgba(30,40,32,0.7)' : 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.fill();
+    ctx.fillStyle = d.sold ? 'rgba(30,40,32,0.7)' : 'rgba(44,28,96,0.9)'; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.fill();
     ctx.strokeStyle = d.sold ? 'rgba(110,203,90,0.4)' : 'rgba(255,217,74,0.4)'; ctx.lineWidth = 1.2; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.stroke();
     ctx.globalAlpha = d.sold ? 0.5 : 1;
-    ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = '30px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
     ctx.fillText(d.ic, cx - w / 2 + 36, y + rowH / 2 - 2);
-    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(d.name, cx - w / 2 + 66, y + 26);
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(d.desc, cx - w / 2 + 66, y + 45);
     // buy button
     const cbw = 96, cbx = cx + w / 2 - cbw - 10, cby = y + rowH / 2 - 21;
     ctx.fillStyle = d.sold ? 'rgba(60,70,50,0.8)' : can ? '#2f7d4a' : 'rgba(50,44,30,0.9)';
     rr(cbx, cby, cbw, 30, 7); ctx.fill();
-    ctx.fillStyle = d.sold ? '#8fa07a' : can ? '#eafff0' : '#8a7f5a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = d.sold ? '#8fa07a' : can ? '#eafff0' : '#8a7f5a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(d.sold ? 'SOLD' : d.cost + (d.cur === 'gem' ? '💎' : '¢'), cbx + cbw / 2, cby + 19);
     ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     if (!d.sold) hits.push({ x: cbx, y: cby, w: cbw, h: 30, act: () => { buyDeal(i); } });
     y += rowH;
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap empty space to close', cx, y + 14);
 }
 function drawGear() {
@@ -4779,47 +5029,47 @@ function drawGear() {
   const bx = vw - 46, by = 146;
   hudBtn(bx, by, 36, 30, '🗡', () => { S.showGear = !S.showGear; save(); });
   if (!S.showGear) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.93);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showGear = false; } });
   const cx = vw / 2, top = Math.max(46, vh * 0.12);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🗡 EQUIPMENT', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Boss kings drop gear · ⚒️ enhance at the forge with 💎  (' + S.gems + ' 💎)', cx, top + 22);
   let y = top + 44;
   const rowH = 84, w = Math.min(360, vw - 32);
   for (const s of GEAR_SLOTS) {
     const g = S.gear[s.id];
     const rc = g ? RARITY[g.rar].col : 'rgba(255,255,255,0.12)';
-    ctx.fillStyle = 'rgba(20,25,36,0.9)'; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.fill();
+    plaque(cx - w / 2, y, w, rowH - 10, 10);
     ctx.strokeStyle = rc; ctx.lineWidth = g ? 2 : 1; rr(cx - w / 2, y, w, rowH - 10, 10); ctx.stroke();
-    ctx.font = '34px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = g ? '#fff' : 'rgba(255,255,255,0.3)';
+    ctx.font = '34px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = g ? '#fff' : 'rgba(255,255,255,0.3)';
     ctx.fillText(s.ic, cx - w / 2 + 40, y + rowH / 2 - 2);
     ctx.textAlign = 'left';
     if (g) {
-      ctx.fillStyle = rc; ctx.font = 'bold 15px sans-serif';
+      ctx.fillStyle = rc; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(gearLabel(g) + (g.enh ? '  ⚒️+' + g.enh : ''), cx - w / 2 + 74, y + 26);
-      ctx.fillStyle = '#c8d0da'; ctx.font = '13px sans-serif';
+      ctx.fillStyle = '#c8d0da'; ctx.font = '13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(gearStatText(g), cx - w / 2 + 74, y + 48);
       // enhance button
       const maxed = (g.enh || 0) >= ENH_MAX, cost = enhCost(g), can = !maxed && S.gems >= cost;
       const ebw = 96, ebx = cx + w / 2 - ebw - 10, eby = y + rowH / 2 - 22;
       ctx.fillStyle = maxed ? 'rgba(60,60,50,0.9)' : can ? '#7a5a1e' : 'rgba(50,44,30,0.9)';
       rr(ebx, eby, ebw, 30, 7); ctx.fill();
-      ctx.fillStyle = maxed ? '#9a9a80' : can ? '#ffe8a8' : '#8a7f5a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = maxed ? '#9a9a80' : can ? '#ffe8a8' : '#8a7f5a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(maxed ? 'MAXED' : '⚒️ ' + cost + '💎', ebx + ebw / 2, eby + 19);
       ctx.textAlign = 'left';
       if (!maxed) hits.push({ x: ebx, y: eby, w: ebw, h: 30, act: () => { enhanceGear(s.id); } });
     } else {
-      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillStyle = '#6a7684'; ctx.font = 'bold 14px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText(s.name + ' — empty', cx - w / 2 + 74, y + 34);
-      ctx.fillStyle = '#55606c'; ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#55606c'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
       ctx.fillText('Slay a boss king to find one', cx - w / 2 + 74, y + 52);
     }
     y += rowH;
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap empty space to close', cx, y + 14);
 }
 function drawLogin() {
@@ -4833,16 +5083,16 @@ function drawLogin() {
     ctx.strokeStyle = 'rgba(255,217,74,' + (0.5 + Math.sin(S.t * 5) * 0.3) + ')'; ctx.lineWidth = 2;
     rr(bx - 1, by - bob - 1, 38, 32, 8); ctx.stroke();
     ctx.fillStyle = '#ff5a5a';
-    ctx.beginPath(); ctx.arc(bx + 32, by - bob + 2, 4, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(btnMap(bx, by).x + 32, btnMap(bx, by).y - bob + 2, 4, 0, 6.29); ctx.fill();
   }
   if (!S.showLogin) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.93);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showLogin = false; } });
   const cx = vw / 2, top = Math.max(46, vh * 0.1);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🎁 DAILY REWARDS', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText(ready ? 'Your reward is ready — come back every day!' : 'Come back tomorrow for the next reward', cx, top + 22);
   // 7 day tiles (4 + 3), current day highlighted
   const cols = 4, tw = Math.min(96, (vw - 40) / cols), th = 78, gx0 = cx - (cols * tw) / 2;
@@ -4851,63 +5101,63 @@ function drawLogin() {
     const col = i % cols, row = Math.floor(i / cols);
     const x = gx0 + col * tw + (row === 1 ? tw / 2 : 0), y = gy + row * (th + 8);
     const isToday = i === S.loginDay, claimedPast = i < S.loginDay;
-    ctx.fillStyle = isToday ? 'rgba(255,217,74,0.2)' : claimedPast ? 'rgba(30,40,32,0.85)' : 'rgba(20,25,36,0.85)';
+    ctx.fillStyle = isToday ? 'rgba(255,217,74,0.2)' : claimedPast ? 'rgba(30,40,32,0.85)' : 'rgba(44,28,96,0.85)';
     rr(x + 3, y + 3, tw - 6, th - 6, 8); ctx.fill();
     ctx.strokeStyle = isToday ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = isToday ? 2.5 : 1;
     rr(x + 3, y + 3, tw - 6, th - 6, 8); ctx.stroke();
-    ctx.fillStyle = '#8792a0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#8792a0'; ctx.font = 'bold 10px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('DAY ' + (i + 1), x + tw / 2, y + 18);
-    ctx.font = (i === 6 ? 30 : 26) + 'px sans-serif'; ctx.fillStyle = claimedPast ? 'rgba(255,255,255,0.4)' : '#fff';
+    ctx.font = (i === 6 ? 30 : 26) + 'px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = claimedPast ? 'rgba(255,255,255,0.4)' : '#fff';
     ctx.fillText(CALENDAR[i].ic, x + tw / 2, y + 46);
-    ctx.font = 'bold 9px sans-serif'; ctx.fillStyle = isToday ? '#ffd94a' : '#9aa7b5';
+    ctx.font = 'bold 9px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillStyle = isToday ? '#ffd94a' : '#9aa7b5';
     ctx.fillText(CALENDAR[i].name, x + tw / 2, y + th - 12);
-    if (claimedPast) { ctx.fillStyle = '#6ecb5a'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('✓', x + tw - 14, y + 18); }
+    if (claimedPast) { ctx.fillStyle = '#6ecb5a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.fillText('✓', x + tw - 14, y + 18); }
   }
   // claim button
   const clw = 220, clx = cx - clw / 2, cly = gy + 2 * (th + 8) + 12;
-  ctx.fillStyle = ready ? '#2f7d4a' : 'rgba(40,48,60,0.9)'; rr(clx, cly, clw, 44, 10); ctx.fill();
-  ctx.fillStyle = ready ? '#eafff0' : '#7a8792'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = ready ? '#2f7d4a' : 'rgba(78,56,150,0.9)'; rr(clx, cly, clw, 44, 10); ctx.fill();
+  ctx.fillStyle = ready ? '#eafff0' : '#7a8792'; ctx.font = 'bold 16px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(ready ? '🎁 CLAIM DAY ' + (S.loginDay + 1) : '✓ CLAIMED TODAY', cx, cly + 28);
   if (ready) hits.push({ x: clx, y: cly, w: clw, h: 44, act: () => { claimLogin(); } });
-  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Tap empty space to close', cx, cly + 66);
 }
 function drawCrownHall() {
   if (!S.showCrownHall) return;
-  ctx.fillStyle = 'rgba(8,10,16,0.93)'; ctx.fillRect(0, 0, vw, vh);
+  veil(0.93);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => { S.showCrownHall = false; } });
   const cx = vw / 2, top = Math.max(40, vh * 0.06);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 24px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('🏛 CROWN HALL', cx, top);
-  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#9aa7b5'; ctx.font = '12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('Permanent perks — they survive every New Kingdom', cx, top + 20);
-  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px sans-serif';
+  ctx.fillStyle = '#ffd94a'; ctx.font = 'bold 15px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
   ctx.fillText('👑 ' + S.crowns + ' crowns to spend', cx, top + 42);
   let y = top + 60;
   const rowH = Math.min(58, Math.floor((vh - y - 40) / CPERKS.length));
   for (const def of CPERKS) {
     const lvl = cpk(def.id), maxed = lvl >= def.max, cost = cperkCost(def.id);
     const can = !maxed && S.crowns >= cost;
-    ctx.fillStyle = 'rgba(20,25,36,0.85)'; rr(16, y, vw - 32, rowH - 6, 8); ctx.fill();
+    plaque(16, y, vw - 32, rowH - 6, 8);
     ctx.strokeStyle = lvl > 0 ? '#ffd94a' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = lvl > 0 ? 1.4 : 1;
     rr(16, y, vw - 32, rowH - 6, 8); ctx.stroke();
-    ctx.font = '22px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+    ctx.font = '22px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
     ctx.fillText(def.ic, 28, y + rowH / 2);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(def.name + '  Lv' + lvl + '/' + def.max, 58, y + rowH / 2 - 6);
-    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#9aa7b5'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif';
     ctx.fillText(def.desc + ' / lvl  ·  now +' + Math.round(def.amt * lvl * (def.kind === 'crown' ? 1 : 100)) + (def.kind === 'crown' ? ' crown' : '%'), 58, y + rowH / 2 + 11);
     // buy button
     const bw = 92, bx = vw - 32 - bw, by = y + (rowH - 6) / 2 - 15;
     ctx.fillStyle = maxed ? 'rgba(60,70,50,0.9)' : can ? '#2f7d4a' : 'rgba(50,44,30,0.9)';
     rr(bx, by, bw, 30, 7); ctx.fill();
-    ctx.fillStyle = maxed ? '#8fa07a' : can ? '#eafff0' : '#8a7f5a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = maxed ? '#8fa07a' : can ? '#eafff0' : '#8a7f5a'; ctx.font = 'bold 12px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(maxed ? 'MAX' : '👑 ' + cost, bx + bw / 2, by + 19);
     if (!maxed) hits.push({ x: bx, y: by, w: bw, h: 30, act: () => { buyCperk(def.id); } });
     y += rowH;
   }
-  ctx.fillStyle = '#8792a0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#8792a0'; ctx.font = '11px "Arial Rounded MT Bold","Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('Tap empty space to close', cx, vh - 16);
 }
 // live event markers for the minimap — so you never miss a timed event
@@ -4941,10 +5191,12 @@ function drawMinimap() {
     const size = 108, pad = 3;
     const cs = Math.min(22, Math.floor((size - pad * 2) / Math.max(cols, rows)));
     const w = cols * cs + pad * 2, h = rows * cs + pad * 2;
-    MM = { key: mmKey, cells, nxt, minC, minR, cs, pad, w, h, ox: vw - 10 - w, oy: 48 };
+    MM = { key: mmKey, cells, nxt, minC, minR, cs, pad, w, h, ox: 10, oy: 0 };
   }
-  const { cells, nxt, minC, minR, cs, pad, w, h, ox, oy } = MM;
-  ctx.fillStyle = 'rgba(20,25,36,0.75)'; rr(ox, oy, w, h, 8); ctx.fill();
+  const { cells, nxt, minC, minR, cs, pad, w, h, ox } = MM;
+  const oy = 138 + ((S.gems > 0 || S.gemUp.magnet + S.gemUp.crit + S.gemUp.coin > 0) ? 30 : 0) + ((S.crowns > 0 || S.prestiges > 0) ? 30 : 0);
+  leftBottom = oy + h + 8;
+  plaque(ox, oy, w, h, 8);
   const cellX = (cx2) => ox + pad + (cx2 - minC) * cs, cellY = (cy2) => oy + pad + (cy2 - minR) * cs;
   for (const c of cells) {
     ctx.fillStyle = c.k === 0 ? '#d9c9a0' : c.k === -1 ? '#e0a13c' : foeCol(c.k);
@@ -5036,11 +5288,11 @@ function drawSky() {
   const b = daylight(), p = dayPhase();
   // warm wash through the dawn (~0.25) and dusk (~0.75) transitions
   const warm = Math.max(0, 1 - Math.abs(p - 0.25) / 0.12) + Math.max(0, 1 - Math.abs(p - 0.75) / 0.12);
-  if (warm > 0) { ctx.fillStyle = 'rgba(255,140,54,' + (0.16 * Math.min(1, warm)) + ')'; ctx.fillRect(0, 0, vw, vh); }
+  if (warm > 0) { ctx.fillStyle = 'rgba(255,126,182,' + (0.14 * Math.min(1, warm)) + ')'; ctx.fillRect(0, 0, vw, vh); }
   // night: deep-blue darkening, strongest at midnight
   if (b < 0.5) {
     const k = 1 - b * 2;
-    ctx.fillStyle = 'rgba(10,16,44,' + (0.42 * k) + ')'; ctx.fillRect(0, 0, vw, vh);
+    ctx.fillStyle = 'rgba(52,28,110,' + (0.30 * k) + ')'; ctx.fillRect(0, 0, vw, vh);
   }
   // stars fade in as it gets dark
   if (b < 0.4) {
@@ -5073,7 +5325,6 @@ function onDown(ev) {
   audio();
   const p = pointerXY(ev);
   if (!S.started) { S.started = true; sfx('built', true); return; }
-  if (S.showStats) { S.showStats = false; return; } // records overlay: any tap closes
   // topmost-first: later-drawn elements (modals, panel buttons) win over HUD beneath
   for (let i = hits.length - 1; i >= 0; i--) {
     const h = hits[i];
@@ -5150,6 +5401,7 @@ window.KS = {
   ULT_NEED, ultCharge, ultFrac, ultReady, castUlt,
   WEATHER_LEN, WEATHER_SEQ, weatherType, weatherBucket, drawWeather,
   recordKill, famOf, bestiarySeen, drawBestiary, FOE_NAMES,
+  FOE_ACT_NAMES, FOE_ART, BOSS_ART, HERO_ART, INHAB_ART, foeArt, ART, artDraw, artIcon, drawTitle,
   ELITE_CD, promoteElite, dropItemM,
   WHEEL, SPIN_COST, spinWheel, drawWheel,
   RANKS, renown, heroRank, heroRankIdx, nextRank, checkRankUp,
