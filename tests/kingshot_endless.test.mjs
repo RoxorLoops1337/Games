@@ -1674,4 +1674,27 @@ KS.start();
 for (let i = 0; i < 60 * 30; i++) { KS.tick(1 / 60); if (i % 20 === 0) KS.draw(); }
 t.ok(true, '30s mixed simulation with draws did not throw');
 
+// ---- Hocus Vocus retheme: names, art mapping, baked atlas integrity ----
+{
+  t.ok(KS.FOE_ACT_NAMES.length === 3 && KS.FOE_ACT_NAMES.every(a => a.length === KS.FOE_NAMES.length), 'three acts of eight creatures');
+  t.ok(KS.foeName(1) === 'Fussy Foghorn' && KS.foeName(9) === 'Flamebait' && KS.foeName(17) === 'Tuner Drone', 'foe names follow the Soundlands acts');
+  t.ok(KS.foeName(25) === 'Fussy Foghorn II', 'after three acts the names cycle with a numeral');
+  t.ok(KS.SKINS.every(s => KS.HERO_ART[s.id]), 'every outfit maps to a baked chibi');
+  t.ok(KS.foeArt(1) !== KS.foeArt(9) && KS.foeArt(1, true) !== KS.foeArt(9, true), 'acts use different creature art and bosses');
+  t.ok(KS.artDraw('jasmin', 'idle', 0, 0, 0, 1, false) === false, 'artDraw is a no-op until the atlas has loaded');
+  const here = dirname(fileURLToPath(import.meta.url)), artDir = join(here, '..', 'kingshot_endless', 'art');
+  const atlas = JSON.parse(readFileSync(join(artDir, 'atlas.json'), 'utf8'));
+  const names = [].concat(Object.values(KS.HERO_ART), KS.INHAB_ART, KS.BOSS_ART, ['jordan'], ...KS.FOE_ART);
+  t.ok(names.every(n => atlas.spr[n]), 'every sprite the game asks for is in the atlas');
+  t.ok(Object.values(atlas.spr).every(s => { const sh = atlas.sheets[s.sheet]; return sh && s.x >= 0 && s.y >= 0 && s.x + s.w * s.n <= sh.w && s.y + s.h <= sh.h; }), 'atlas frames sit inside their sheets');
+  t.ok(Object.keys(atlas.sheets).every(n => readFileSync(join(artDir, n + '.webp')).length > 1000), 'every atlas sheet exists on disk');
+  t.ok(KS.HERO_ART.royal && atlas.spr[KS.HERO_ART.royal].anims.walk && atlas.spr[KS.HERO_ART.royal].anims.attack, 'heroes have walk and attack flipbooks');
+  KS.reset && KS.reset();
+  KS.S.started = false; KS.drawTitle(); KS.draw();
+  t.ok(true, 'title card draws headless');
+  KS.S.started = true;
+  KS.S.showStats = true; KS.S.statsTab = 1; KS.draw(); KS.S.statsTab = 0; KS.draw(); KS.S.showStats = false;
+  t.ok(true, 'records + milestones pages draw headless');
+}
+
 t.done();
