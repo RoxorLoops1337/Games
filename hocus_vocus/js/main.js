@@ -497,6 +497,9 @@ const GAME = (() => {
   function frameTick(ts) {
     loop.raf = 0;
     if (!loop.on || loop.frozen) return;
+    // a 90 or 120 Hz screen would redraw the whole scene twice as often for no visible gain: cap at about 60 fps
+    if (loop.lastTs && ts - loop.lastTs < 14) { if (!document.hidden) loop.raf = requestAnimationFrame(frameTick); return; }
+    loop.lastTs = ts;
     try { UI.frame(ts); } catch (e) { console.error('[game] frame threw: ' + e.message + (e.stack ? '\n' + e.stack : '')); }
     if (!document.hidden) loop.raf = requestAnimationFrame(frameTick);
   }

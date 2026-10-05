@@ -242,7 +242,8 @@ const UI = (() => {
     st.style.setProperty('--scale', String(px2(scale * 10000) / 10000));
     st.classList.toggle('compact', scale < 0.75);
     const dpr = window.devicePixelRatio || 1;
-    const pxNew = clamp(scale * dpr, 1, 2);
+    const touchDev = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const pxNew = clamp(scale * dpr, 1, touchDev ? 1.5 : 2);      // a phone fills fewer pixels per frame, which also keeps the audio thread fed
     if (Math.abs(pxNew - S.px) > 0.001 || S.view.width !== Math.round(W * pxNew)) {
       S.px = pxNew;
       [S.view, S.over].forEach((c) => { c.width = Math.round(W * pxNew); c.height = Math.round(H * pxNew); });
