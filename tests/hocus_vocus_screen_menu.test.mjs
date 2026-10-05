@@ -1566,6 +1566,17 @@ await t.test('hero select: a speech bubble never covers the Swap pill (it slides
   t.eq(errors(g), 0, 'no console errors');
 });
 
+await t.test('css (menu): the How to Play tip label and page counter keep 8 screen px on a phone, and the Past Tours empty state is a microphone', () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const lab = rules.find((r) => r.sel === '.compact .mn-margin b');
+  t.ok(lab && /max\(calc\(11px \* var\(--ts\)\), var\(--fs8\)\)/.test(lab.body), "Jordan's tip label is lifted to 8 screen px");
+  const no = rules.find((r) => r.sel === '.compact .mn-pg-no');
+  t.ok(no && /max\(calc\(14px \* var\(--ts\)\), var\(--fs8\)\)/.test(no.body), 'and the page counter');
+  const mic = rules.find((r) => r.sel === '.mn-emptybook');
+  t.ok(mic && /repeating-linear-gradient/.test(mic.body) && /mask/.test(mic.body), 'the empty Past Tours picture is a microphone head with a printed grille (a ball, a collar and a handle), not a plain blob');
+});
+
 await t.test('css: a trial rule is never clipped, the phone launch panel is wider, and phone text keeps 8 to 9 screen px (C1, C8)', () => {
   const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));

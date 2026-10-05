@@ -1661,4 +1661,8 @@ await t.test('finding 38 (tutorial): findAnchor skips an anchor that covers most
   t.ok(g.UI.tutorial.current().anchored, 'a box the size of the hand is an anchor');
   t.eq(errs(g), 0, 'no console errors');
 });
+await t.test('css (piles): a phone hides the HOCUS VOCUS word on the Draw and Discard card backs, which landed on their labels', () => {
+  t.ok(/#stage\.compact \.p-stack \.back-word \{[^}]*display: none/.test(CSS), 'the back word is hidden when the stage is compact');
+  t.ok(!/\.cm-pile[^{]*\.back-word \{[^}]*display: none/.test(CSS.replace(/#stage\.compact[^{]*\{[^}]*\}/g, '')), 'and only there: a full-size stage still shows it');
+});
 await t.done();

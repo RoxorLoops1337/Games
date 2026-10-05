@@ -297,6 +297,7 @@ await t.test('chapterClear: the headline, the stats counting from the run, the h
   t.eq(txt($('.cc-title', root)), DATA.lore.ch1_clear.title, 'the lore title is the headline');
   t.eq(txt($('.cc-kicker', root)), 'END OF ACT ONE', 'the kicker');
   t.ok(txt($('.cc-boss', root)).indexOf(DATA.enemies.boss_kuzunoha.name) === 0, 'the boss is named');
+  t.eq(txt($('.cc-boss', root)), 'Kraki, the Karaoke Kraken, sings along', 'the subtitle reads as a sentence (the bible spells it "the Karaoke Kraken", only the title card capitalises The)');
   t.eq(txt($('.cc-lore', root)), DATA.lore.ch1_clear.text, 'the clear lore is in the scroll');
   t.ok(META.loreSeen('ch1_clear'), 'and marked');
   const tiles = Object.fromEntries($$(g, '.en-tile', root).map((el) => [txt($('.en-tile-lab', el)), num(txt($('.en-num', el)))]));
@@ -849,6 +850,26 @@ await t.test('every interactive element is a real button or has a role; images a
   });
 }
 
+// ================================================================================================ phone and Larger text rules (F2b: the 844x390 floors, the ribbons at 1.3, the curtain-call boxes)
+await t.test('css (end): phone text keeps the 8 and 9 screen px floors, the ribbons and curtain-call boxes fit at 1.3', () => {
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const find = (re) => rules.find((r) => re.test(r.sel));
+  const kick = find(/^#stage\.compact \.cc-kicker$/);
+  t.ok(kick && /max\(calc\(14px \* var\(--ts\)\), var\(--fs9\)\)/.test(kick.body), 'the END OF ACT kicker keeps 9 screen px on a phone');
+  t.ok(rules.some((r) => /#stage\.compact \.en-tile-lab/.test(r.sel) && /#stage\.compact \.en-row-n/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'the Act-clear tile labels and the game-over counts keep 8 screen px');
+  t.ok(rules.some((r) => /#stage\.compact \.cc-tip \.hanko/.test(r.sel) && /#stage\.compact \.go-tip \.hanko/.test(r.sel) && /font-size\s*:\s*var\(--fs8\)/.test(r.body)), 'the TIP badge keeps 8 screen px');
+  t.ok(rules.some((r) => /#stage\.compact \.go-tip$/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'and so does the game-over tip line');
+  const kc = find(/^\.cc-kicker$/);
+  t.ok(kc && /color\s*:\s*var\(--white\)/.test(kc.body) && /-webkit-text-stroke\s*:\s*4px var\(--ink\)/.test(kc.body), 'the kicker is white with an ink outline (pale pink on the pale sky of Act I could not be read)');
+  const rib = find(/^\.ts-big \.en-h span$/);
+  t.ok(rib && /padding-left\s*:\s*1em/.test(rib.body) && /letter-spacing\s*:\s*\.06em/.test(rib.body), 'the ribbons tighten at Larger text so "What the Soundlands Give" stays inside its card');
+  const cap = find(/^\.vc-cap$/);
+  t.ok(cap && /min-height\s*:\s*130px/.test(cap.body) && !/(^|[;\s])height\s*:/.test(cap.body), 'a curtain-call box grows upward instead of clipping its line');
+  t.ok(rules.some((r) => r.sel === '.ts-big .vc-cap-line' && /min\(var\(--ts\), 1\.12\)/.test(r.body)), 'and its type stops growing past 1.12 at Larger text');
+  t.ok(/\.tut-dock \.tut-tail \{[^}]*display: none/.test(CSS), 'a docked tip card has no tail');
+});
+
 // ================================================================================================ the tutorial
 const TU = UI.tutorial;
 await t.test('tutorial catalog: every hint is written well and wired to real bus events, anchors and screens', () => {
@@ -945,6 +966,9 @@ await settle(gt);
     t.eq(U2.currentName, 'combat', 'the real combat screen');
     t.eq(cur(), 'energy', 'energy first'); t.ok($(gt, '#tips .tut-ring'), 'a spotlight ring is drawn around the anchor');
     t.ok(!$(gt, '#tips .tut').closest('.screen'), 'the bubble lives in #tips, not inside the screen');
+    // the Breath card is parked on the sea between the heroes and the enemies: above the orb it covered the heroes' legs
+    t.ok(U2.tutorial.HINTS.energy.dock && U2.tutorial.HINTS.energy.dock.x >= 400 && U2.tutorial.HINTS.energy.dock.bottom <= 540, 'the Breath hint is docked clear of the heroes (x from 400, bottom edge above the hand)');
+    t.ok($(gt, '#tips .tut').classList.contains('tut-dock'), 'and the card wears the dock class (no tail; the spotlight ring marks the orb)');
     // never gates input: the bubble does not capture pointer events (it is pointer-transparent except its buttons)
     t.ok(/\.tut \{[^}]*pointer-events: none/.test(CSS), 'the bubble is pointer-transparent in css');
     const d = G2.debug.combat();

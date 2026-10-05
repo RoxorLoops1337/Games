@@ -228,6 +228,7 @@
 .p-stack .card { position: absolute; left: 0; top: 0; pointer-events: none; }
 .p-stack .card:nth-child(1) { transform: translate(-4px, 5px) rotate(-4deg); filter: brightness(.7); } .p-stack .card:nth-child(2) { transform: translate(-1px, 2px) rotate(-1deg); filter: brightness(.85); }
 .p-stack .card:nth-child(3) { transform: rotate(2deg); }
+#stage.compact .p-stack .back-word { display: none; }   /* at a phone's scale the HOCUS VOCUS word on a pile's card back is 3.7 screen px and lands on the Draw and Discard labels: the monogram alone says it */
 .cm-pile.discard .p-stack { filter: grayscale(.55) saturate(.9) brightness(.88); }
 .cm-pile.empty .p-stack { opacity: .35; }
 .p-n { position: absolute; right: -2px; bottom: 16px; display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 6px; font: 900 calc(17px * var(--ts2)) / 1 var(--font-num); color: var(--hv-line); background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .6) 0, rgba(255, 255, 255, 0) 38%), var(--hv-pink); border-radius: 999px; transform: rotate(-4deg); box-shadow: inset 0 0 0 2px var(--hv-cream), 0 0 0 2px var(--hv-line), 0 3px 0 2px var(--hv-line); text-shadow: 0 1px 0 rgba(255, 255, 255, .45); }
