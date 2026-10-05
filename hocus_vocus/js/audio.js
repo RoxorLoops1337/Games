@@ -1938,7 +1938,7 @@ const AUDIO = (() => {
     if (g.glue) link(g.glue);
     g.limiter = opt(() => { const c = ctx.createDynamicsCompressor(); c.threshold.value = -5; c.knee.value = 0; c.ratio.value = 20; c.attack.value = 0.002; c.release.value = 0.09; return c; });
     if (g.limiter) link(g.limiter);
-    g.shaper = opt(() => { const w = ctx.createWaveShaper(); w.curve = softClipCurve(); w.oversample = '2x'; return w; });
+    g.shaper = opt(() => { const w = ctx.createWaveShaper(); w.curve = softClipCurve(); w.oversample = o.touch ? 'none' : '2x'; return w; });
     if (g.shaper) { g.clipIn = link(gainOf(ctx, 0.5)); link(g.shaper); g.clipOut = link(gainOf(ctx, 2)); }
     g.out = gainOf(ctx, 0.92);
     link(g.out); g.out.connect(ctx.destination);
@@ -2356,9 +2356,12 @@ const AUDIO = (() => {
     const Ctor = win.AudioContext || win.webkitAudioContext;
     if (!Ctor) return false;
     let ctx = null;
-    try { ctx = new Ctor({ latencyHint: 'interactive' }); } catch (e) { try { ctx = new Ctor(); } catch (e2) { ctx = null; } }
+    // a phone's audio thread starves when the main thread is busy drawing, which is the crackle: give touch devices a bigger buffer
+    const touch = !!(win.matchMedia && win.matchMedia('(pointer: coarse)').matches) || (win.navigator && win.navigator.maxTouchPoints > 0);
+    S.touch = touch;
+    try { ctx = new Ctor({ latencyHint: touch ? 'playback' : 'interactive' }); } catch (e) { try { ctx = new Ctor(); } catch (e2) { ctx = null; } }
     if (!ctx) return false;
-    try { S.g = buildGraph(ctx, { musicVol: S.vol.music, sfxVol: S.vol.sfx }); }
+    try { S.g = buildGraph(ctx, { musicVol: S.vol.music, sfxVol: S.vol.sfx, touch }); }
     catch (e) { try { safe(ctx.close()); } catch (e2) { /* nothing to close */ } S.g = null; return false; }
     S.ctx = ctx; S.ready = true;
     if (!S.hooked && typeof document !== 'undefined' && document.addEventListener) {
