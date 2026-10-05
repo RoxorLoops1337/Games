@@ -12823,4 +12823,22 @@ h.test('stuck prize (round 25): every claw type, Ticklish Claw, a golden prize: 
   });
 }
 
+h.test('early fights: a run\'s first 3 normal fights are a single enemy, then packs come back', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 11);
+  const run = Gt.S.run;
+  const seen = [];
+  for (let f = 0; f < 4; f++) { run.fights = f; seen.push(Gt.earlySolo(['rat', 'bat', 'rat'], 'normal').length); }
+  h.eq(seen.join(','), '1,1,1,3', 'fights 1 to 3 solo, the 4th keeps its pack');
+  run.fights = 0;
+  h.eq(Gt.earlySolo(['rat', 'bat'], 'elite').length, 2, 'an elite is untouched');
+  h.eq(Gt.earlySolo(['spider', 'rat'], 'normal').join(), 'spider', 'the lead enemy is the one that stays');
+  run.act = 2;
+  h.eq(Gt.earlySolo(['drone', 'imp'], 'normal').length, 2, 'only act 1');
+  run.act = 1;
+  Gt.startFight(['rat', 'rat'], 'normal');
+  h.eq(Gt.fight.enemies.length, 2, 'a forced startFight keeps what it was asked for');
+});
+
 h.done();

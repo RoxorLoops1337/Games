@@ -4382,7 +4382,7 @@ const GAME = (() => {
     switch (t.type) {
       case 'fight': case 'elite': {
         finish();
-        const enc = c.enc || encounterFor(t.type === 'elite' ? 'elite' : 'normal');
+        const enc = earlySolo(c.enc || encounterFor(t.type === 'elite' ? 'elite' : 'normal'), t.type === 'elite' ? 'elite' : 'normal');
         startFight(enc, t.type === 'elite' ? 'elite' : 'normal');
         return;
       }
@@ -4492,6 +4492,15 @@ const GAME = (() => {
   // ---------------------------------------------------------------- fight
   function clawFor() {
     return (F && F.claw) || (S.run && S.run.claw) || { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
+  }
+  // (round 27) a run's first 3 normal fights are never against a pack: one enemy, so the first fights teach without piling on.
+  // Applied where an encounter is chosen (a tile, a roaming monster, an event), not in startFight, so a forced fight stays as asked.
+  const EARLY_SOLO = 3;
+  function earlySolo(ids, tier) {
+    const run = S.run;
+    if (!run || !ids || ids.length < 2 || (tier || 'normal') !== 'normal') return ids;
+    if ((run.act | 0) > 1 || (run.fights | 0) >= EARLY_SOLO) return ids;
+    return ids.slice(0, 1);
   }
   function startFight(enemyIds, tier, opts) {
     opts = opts || {};
@@ -9721,7 +9730,7 @@ const GAME = (() => {
   function arcRoamFight(m, ambush) {
     const run = S.run, M = run.map;
     X.MAP.roamRemove(M, m.id);
-    const enc = m.enc && m.enc.length ? m.enc.slice() : encounterFor('normal');
+    const enc = earlySolo(m.enc && m.enc.length ? m.enc.slice() : encounterFor('normal'), 'normal');
     if (mapLayout()) { const p = hexToStage(M.pos.q, M.pos.r); fx().emit('poof', p.x, p.y); fx().ring(p.x, p.y, '#ff5a4a', { r0: 10, r1: 90, w: 6, life: 0.4 }); }
     snd(ambush ? 'ambush' : 'roamWake');
     stopWalk();
@@ -14719,7 +14728,7 @@ const GAME = (() => {
         }
         case 'fight': {
           const rest = i + 1;
-          startFight(f.enc && f.enc.length ? f.enc : encounterFor(f.elite ? 'elite' : 'normal'), f.elite ? 'elite' : 'normal', { then: { fx: list, i: rest } });
+          startFight(earlySolo(f.enc && f.enc.length ? f.enc : encounterFor(f.elite ? 'elite' : 'normal'), f.elite ? 'elite' : 'normal'), f.elite ? 'elite' : 'normal', { then: { fx: list, i: rest } });
           return;
         }
         default: break;
@@ -29078,7 +29087,7 @@ const GAME = (() => {
 
   return {
     boot, update, draw, loop, resize,
-    newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
+    newRun, toMap, enterTile, addItem, earlySolo, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
     tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, selectTool, towerPrize, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,

@@ -8347,3 +8347,7 @@ extra large text): staged Strength, Weak, Poison and Burn, the tips, seven statu
 resolve row filling and open (a tip open over it), an enemy turn landing Weak and Poison (frames), a boss with seven
 statuses, three enemies, duo co-op. Scratchpad `r26status/` (`shots.mjs`, `base.mjs`, `duo.mjs`, `sheet.py`;
 `out/`).
+
+## Gentle start (round 27)
+
+A run's first 3 normal fights in act 1 are a single enemy (the lead one of the pack). The rule is `earlySolo(ids, tier)` in game.js, applied where an encounter is chosen: a fight tile, a roaming monster, an event fight. `startFight` itself is untouched, so a forced fight keeps what it was asked for. Elites, bosses and later acts are unchanged. Dial: `EARLY_SOLO = 3`.
