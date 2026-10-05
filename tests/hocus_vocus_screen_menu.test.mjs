@@ -292,6 +292,69 @@ await t.test('heroSelect: the detail sheet shows blurb, rows, resource, passive,
   t.ok(!g.UI.tip.open, 'and leaving closes it');
 });
 
+// P3 3C (HV_ART_AUDIO 2.11, bible 7.1): the Outfit row of the detail sheet. Locked until the hero's Sticker, then a pick goes to hv_skins_v1 and ART.
+await t.test('heroSelect outfit row: locked then unlocked, aria-pressed, keyboard, the store and ART follow a pick, Andy has no row', async () => {
+  const g = fresh();
+  g.META.profile.unlocked.hero.push('suzu', 'raiga');
+  await go(g, 'heroSelect');
+  hover(g, 'hanae'); await settle(g);
+  const row = () => $(g, '.mn-d-outfit');
+  const said = () => sfxLog(g).filter((id) => id !== 'ui_hover');           // the pointer moving onto a swatch may also play its hover sound
+  const sw = (skin) => $(g, '.mn-d-outfit .mn-sw[data-skin=' + skin + ']');
+  t.ok(row(), 'Jasmin has an Outfit row');
+  t.eq(row().querySelector('b').textContent, 'Outfit', 'labelled Outfit'); t.eq(row().getAttribute('aria-label'), 'Outfit', 'and named for screen readers');
+  const lines = $$(g, '.mn-d .mn-d-line');
+  const at = lines.indexOf(row());
+  t.ok(at > 0 && /passive/.test(lines[at - 1].textContent), 'it comes after the passive lines');
+  const kids = Array.from(row().parentNode.children);
+  t.ok(kids.indexOf(row()) < kids.indexOf($(g, '.mn-d-deck').parentNode), 'and before the starting deck');
+  t.deep($$(g, '.mn-d-outfit .mn-sw-name').map((n) => n.textContent), ['Stage clothes', g.DATA.outfits.hanae.name], 'two swatches: Stage clothes and the outfit name from DATA.outfits');
+  t.ok($$(g, '.mn-d-outfit .mn-sw').every((b) => b.tagName === 'BUTTON' && b.getAttribute('type') === 'button' && !(b.getAttribute('tabindex') === '-1')), 'both swatches are buttons in tab order (the locked one too)');
+  t.ok($$(g, '.mn-d-outfit .mn-sw-face canvas').length === 2, 'each swatch shows a medallion canvas');
+  // locked: Jasmin has not won 3 tours yet
+  t.eq(sw('stage').getAttribute('aria-pressed'), 'true', 'stage clothes are worn'); t.eq(sw('skin').getAttribute('aria-pressed'), 'false', 'the outfit is not');
+  t.ok(sw('skin').classList.contains('locked') && sw('skin').getAttribute('aria-disabled') === 'true', 'the outfit swatch is locked (dimmed, padlock)');
+  t.eq($(g, '.mn-d-olock').textContent, 'Win 3 tours with ' + g.DATA.heroes.hanae.name + ' to unlock.', 'the unlock line (bible 7.1)'); t.ok(!$(g, '.mn-d-olock').hidden, 'shown while locked');
+  g._run('__sfx.length = 0');
+  g._click(sw('skin')); await settle(g);
+  t.deep(said(), ['ui_error'], 'a tap on the locked outfit is a soft no (one ui_error, no click sound)');
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'false', 'nothing changes'); t.ok(!('hv_skins_v1' in g._store), 'nothing is stored');
+  // unlocked: the Sticker In Full Bloom is done
+  g.META.profile.ach[g.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g, 'title'); await go(g, 'heroSelect'); hover(g, 'hanae'); await settle(g);
+  t.ok(!sw('skin').classList.contains('locked') && !sw('skin').hasAttribute('aria-disabled'), 'with the Sticker the outfit unlocks'); t.ok($(g, '.mn-d-olock').hidden, 'and the unlock line goes');
+  const medalBefore = $(g, '.mn-d-medal canvas');
+  g._run('__sfx.length = 0');
+  g._click(sw('skin')); await settle(g);
+  t.deep(said(), ['ui_toggle'], 'a pick plays ui_toggle (and no click sound)');
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'true', 'the outfit is pressed'); t.eq(sw('stage').getAttribute('aria-pressed'), 'false', 'stage clothes are not'); t.ok(sw('skin').classList.contains('on'), 'and wears the hero-colour ring');
+  t.deep(JSON.parse(g._store.hv_skins_v1), { hanae: 'skin' }, 'stored in hv_skins_v1');
+  t.eq(g.ART.hero.outfits().hanae, 'skin', 'ART draws Jasmin in her outfit at once (portrait, stage, title duo)'); t.eq(g.ART.hero.castId('hanae'), 'jasmin_unicorn', 'the unicorn onesie');
+  t.ok($(g, '.mn-d-medal canvas') && $(g, '.mn-d-medal canvas') !== medalBefore, 'the sheet medallion is redrawn in the outfit');
+  t.ok(!g.META.profile.outfits && JSON.stringify(g.META.profile).indexOf('skin') < 0, 'nothing new goes into the profile');
+  // keyboard: focus the stage swatch and press Enter
+  sw('stage').focus(); g._key('Enter'); await settle(g);
+  t.eq(sw('stage').getAttribute('aria-pressed'), 'true', 'Enter on a focused swatch picks it'); t.eq(g.ART.hero.outfits().hanae, 'stage', 'and ART follows');
+  g._click(sw('skin')); await settle(g);
+  // other heroes: RoxorLoops has his own (locked) row; Andy has none
+  hover(g, 'kuro'); await settle(g);
+  t.deep($$(g, '.mn-d-outfit .mn-sw-name').map((n) => n.textContent), ['Stage clothes', g.DATA.outfits.kuro.name], 'RoxorLoops: Stage clothes and the Monster Onesie'); t.ok(sw('skin').classList.contains('locked'), 'still locked');
+  hover(g, 'raiga'); await settle(g);
+  t.eq($(g, '.mn-d-name h3').textContent, g.DATA.heroes.raiga.name, 'Andy\'s sheet'); t.ok(!row(), 'Andy has no Outfit row (bible 7.1)');
+  hover(g, 'hanae'); await settle(g);
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'true', 'back on Jasmin the pick is still shown');
+  // a fresh page with that store wears it; junk in the store means stage clothes
+  const g2 = fresh({ store: { hv_skins_v1: g._store.hv_skins_v1 } });
+  g2.META.profile.ach[g2.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g2, 'heroSelect');
+  t.eq(g2.ART.hero.outfits().hanae, 'skin', 'a reload wears the stored outfit');
+  const g3 = fresh({ store: { hv_skins_v1: '{not json' } });
+  g3.META.profile.ach[g3.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g3, 'heroSelect');
+  t.eq($(g3, '.mn-d-outfit .mn-sw[data-skin=stage]').getAttribute('aria-pressed'), 'true', 'garbled storage: stage clothes');
+  t.eq(errors(g) + errors(g2) + errors(g3), 0, 'no console errors');
+});
+
 await t.test('heroSelect: pick exactly two (the first is the front hero), swap the order, a third pick drops the oldest', async () => {
   const g = fresh();
   g.META.profile.unlocked.hero.push('suzu');
@@ -1803,9 +1866,8 @@ await t.test('copy: no Echowake word in any string literal of screen_menu.js (th
     if (tk.t !== 'str' && tk.t !== 'tplHead' && tk.t !== 'tplMid' && tk.t !== 'tplTail') continue;
     if (BAN.test(tk.v)) hits.push(lineOf(src, tk.s) + ': ' + tk.v.slice(0, 70));
   }
-  // P4 (agent 4C) repaints the canvas logo fallback and owns its two ECHOWAKE literals
-  const rest = hits.filter((h) => !/ECHOWAKE/.test(h));
-  t.deep(rest, [], 'no Echowake or Inkwoven word survives in a string: ' + rest.join(' | '));
+  // P4 (agent 4C) repainted the canvas logo fallback: its two ECHOWAKE literals are gone, so no exception is left
+  t.deep(hits, [], 'no Echowake or Inkwoven word survives in a string: ' + hits.join(' | '));
   t.ok(!new RegExp('[' + String.fromCharCode(0x2013, 0x2014) + ']').test(src), 'no em or en dash'); t.ok(!/\t/.test(src), 'no tab indentation');
   t.ok(src.indexOf('Today' + String.fromCharCode(0x2019) + 's') < 0, 'the apostrophes the plan made straight are straight');
 });

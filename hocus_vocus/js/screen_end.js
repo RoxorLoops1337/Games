@@ -1,27 +1,30 @@
-// Echowake: the story and ending screens (owner: story and endings engineer). One IIFE that registers into UI: the screens `story`,
+// Hocus Vocus: the story and ending screens (owner: story and endings engineer). One IIFE that registers into UI: the screens `story`,
 // `chapterClear`, `gameOver` and `victory`. Styles live in css/end.css (classes en-* shared, st-* story, cc-* chapterClear, go-* gameOver,
 // vc-* victory, all under .s-NAME). This header is the contract of record for screen_end.js.
 //
 // SCREENS (DESIGN 5.8, 5.10, 5.11, 6). Params are exactly what GAME routes: story {id, then?:{name, params}}, chapterClear {chapter, next, healed,
 // maxHp, R}, gameOver and victory {summary, record, R}. R falls back to UI.run. Nothing is ever required: a page with no run, no lore entry, no
 // record or no ART still renders and still has a way on.
-//   story         A storybook page. ART.scene.draw of the page's scene (intro title, chN ch1..3, victory, defeat, hero pages camp), the party's bust
-//                 portraits in tilted gold-leaf frames, a washi page with a kicker, the lore title, a brush flourish, a hanko seal that stamps down, an
-//                 illuminated first letter and the text typed at 30 characters per second (a caret blinks at the pen). A tap on the page, Enter, Space or
-//                 Right completes the text, the next one turns the page (UI.go(then, {transition:'page'}), or UI.back() with no `then`); Skip, Esc or S
-//                 turn it at once. Every shown page marks META.markLore(id). reduceMotion types instantly.
-//   chapterClear  After a boss (chapters 1 and 2): the chapter scene with the heroes cheering and the boss dissolving into ink, the chN_clear page
-//                 (lore title as the headline, text in a scroll), the run stats so far counting up (turns, damage, cards, gold, foes, hexes), what
-//                 RUN.chapterEnd did (max HP gain, healing: each hero's HP bar grows, then fills, with floating numbers), Ink, the treasures carried,
-//                 a freshly unlocked hero (Suzu after chapter 1, Raiga after chapter 2), a tip and Continue, which calls GAME.nodeDone (the next
-//                 chapter's story page and map follow).
-//   gameOver      The defeat page: a whitening scene, the fallen heroes, the `defeat` lore, the score broken down line by line (RUN.score's own terms,
-//                 counting up) with the total, the Inkstones META.recordRun paid, achievements, heroes and Ink Trials newly unlocked, a recap of the deck
-//                 and treasures (tap to open the deck or treasure viewer), a tip, Try Again (same heroes, same trial, GAME.newRun) and Title.
-//   victory       The grand ending in three beats: the `victory` page typed over the dawn, a curtain call of all four heroes with a line each, then the
-//                 showcase: the score breakdown and run stats counting up, Inkstones, achievements, unlocks (Suzu, Raiga, the next Ink Trial), a share
-//                 card drawn on a canvas (heroes, score, seed, trial, deck size) with Copy summary and Save card, and Continue to Title. Petals fall
-//                 throughout. Skip jumps to the showcase.
+//   story         A Tour Diary entry. ART.scene.draw of the page's scene (intro title, chN ch1..3, victory, defeat, hero pages camp), the party's bust
+//                 portraits as tilted instant photo stickers (cream frame, tape, a strip in the hero colour), a cream gig-poster page with a pink and
+//                 green print stripe and two strips of tape, a kicker, the entry title, a row of stage bulbs either side of a sparkle, a round sticker
+//                 seal that stamps down, the first letter on a pink sticker and the text typed at 30 characters per second (a caret blinks at the pen).
+//                 A tap on the page, Enter, Space or Right completes the text, the next one turns the page (UI.go(then, {transition:'page'}), or
+//                 UI.back() with no `then`); Skip, Esc or S turn it at once. Every shown page marks META.markLore(id). reduceMotion types instantly.
+//   chapterClear  After a Headliner (Acts I and II): the Act's scene with the duo cheering, the Act number on a big round pink and green sticker,
+//                 confetti and sparkles, the Headliner fading into a memory of itself, the chN_clear entry (title as the headline, text in a scroll),
+//                 the tour so far counting up (turns, damage, cards, gold, foes, hexes), what RUN.chapterEnd did (max HP gain, healing: each hero's HP
+//                 bar grows, then fills, with floating numbers), Vox, the Charms carried, a freshly unlocked hero (RawClaw after Act I, Andy after
+//                 Act II), a tip and Continue, which calls GAME.nodeDone (the next Act's entry and map follow).
+//   gameOver      The defeat page: the `defeat` scene under a Gloss sheen that lifts, the duo losing their voice at the stage edge and standing up
+//                 again as the curtain twitches (STAND_AT), the `defeat` entry, the score broken down line by line (RUN.score's own terms, counting
+//                 up) with the total, the Cheers META.recordRun paid, Stickers, outfits, heroes and Encores newly unlocked, a recap of the deck and
+//                 Charms (tap to open the deck or Charm viewer), a tip, Try Again (same heroes, same Encore, GAME.newRun) and Title.
+//   victory       The grand ending in three beats: the `victory` entry typed over the dawn stage, a curtain call of all four heroes with a line each,
+//                 then the showcase: the score breakdown and tour stats counting up, Cheers, Stickers, unlocks (RawClaw, Andy, the next Encore, a
+//                 New outfit card), a share card drawn on a canvas (the duo card: the split pink and green ground, the logo, the duo cheering in
+//                 their outfits, the score, the RJ monogram and the handle) with Copy summary and Save card, and Continue to Title. Petals and
+//                 confetti fall throughout. Skip jumps to the showcase.
 //   Big text (textScale above 1.1) adds class ts-big to the screen root: fewer ornaments, one column of tiles, taller story page.
 //   Every screen: tap the backdrop to finish the animations at once; the buttons never wait for them. Counters, typewriter, staggers and the sequences
 //   run on the frame clock (update(dt)), so GAME.debug.tick drives them exactly; with window.__HEADLESS or reduceMotion every sequence is flushed
@@ -57,6 +60,27 @@
   const ease = U.ease;
   const fmt = U.commas;
   const W = 1280, H = 720;
+  const TAU = Math.PI * 2;
+  // the house look (bible 3.6, HV_ART_AUDIO 1 and 9.1): candy pink and green stickers with a cream rim and the warm chibi line on the indigo night
+  const HV = { pink: '#ff7eb6', pinkL: '#ffc2dc', pinkD: '#c93f78', green: '#3fcf6a', lime: '#c6ff3d', greenL: '#bff5cf', cream: '#fff8ec', paper: '#fff4e6', line: '#2d170f',
+    gold: '#ffd84d', violet: '#a77bff', sky: '#7cc6ff', warm: '#fff4d6', peach: '#ffb38a' };
+  const GLOSS = ['#f4f1fb', '#e6d9ff', '#d9fff4', '#ffe3f1'];
+  const CONFETTI = [HV.pink, HV.green, HV.gold, HV.sky, HV.violet, HV.cream];
+  const ROUND = '"Arial Rounded MT Bold", "Nunito", "Quicksand", "Varela Round", "Trebuchet MS", Arial, "Liberation Sans", system-ui, sans-serif';
+  const rgba = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + clamp(a, 0, 1).toFixed(3) + ')'; };
+  function rrect(g, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  // a 4-point sparkle, the house magic
+  function spark(g, x, y, r, col, a, rot) {
+    if (!(r > 0.2) || !(a > 0.01)) return;
+    g.save(); g.globalAlpha *= clamp(a, 0, 1); g.translate(x, y); g.rotate(rot || 0);
+    g.beginPath();
+    for (let i = 0; i < 4; i++) { const an = i * Math.PI / 2; g.quadraticCurveTo(Math.cos(an + Math.PI / 4) * r * 0.16, Math.sin(an + Math.PI / 4) * r * 0.16, Math.cos(an + Math.PI / 2) * r, Math.sin(an + Math.PI / 2) * r); }
+    g.closePath(); g.fillStyle = col; g.fill();
+    g.restore();
+  }
 
   // the one seam to GAME (see the header)
   // hygiene-allow(layers): Starting a new run needs GAME.newRun, and nodeDone and toTitle go through the same seam; DESIGN 5.10 gives screens no bus event for newRun
@@ -286,50 +310,44 @@
     g.addColorStop(0, 'rgba(' + (color || '13,11,30') + ',0)'); g.addColorStop(1, 'rgba(' + (color || '13,11,30') + ',' + a + ')');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
-  // a slanted, gold-leaf framed panel (manga style) with content painted by draw(ctx, w, h) at its own origin
+  // a portrait as an instant photo sticker (HV_ART_AUDIO 3.4): a cream die-cut frame with a wide bottom edge, the warm line, a soft drop shadow,
+  // a strip of tape on top and (o.color) a sticker strip in the hero colour on the wide edge. draw(ctx, w, h) paints the picture at its own origin.
+  // o: x, y, w, h (the frame), rot, alpha, color; o.skew is accepted and ignored (the old slanted plaque)
   function framed(ctx, o, draw) {
-    const w = o.w, h = o.h, sk = o.skew === undefined ? 14 : o.skew;
+    const w = o.w, h = o.h, m = Math.max(5, Math.round(w * 0.036)), mb = Math.max(18, Math.round(h * 0.1));
     ctx.save();
     ctx.translate(o.x + w / 2, o.y + h / 2);
     ctx.rotate(o.rot || 0);
     ctx.globalAlpha = clamp(o.alpha === undefined ? 1 : o.alpha, 0, 1);
-    const poly = (g, ins) => {
-      g.beginPath();
-      g.moveTo(-w / 2 + sk + ins, -h / 2 + ins); g.lineTo(w / 2 - ins, -h / 2 + ins); g.lineTo(w / 2 - sk - ins, h / 2 - ins); g.lineTo(-w / 2 + ins, h / 2 - ins); g.closePath();
-    };
-    ctx.shadowColor = 'rgba(5,3,18,0.6)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 10;
-    poly(ctx, 0); ctx.fillStyle = '#140f2e'; ctx.fill();
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    const gold = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    gold.addColorStop(0, '#a87420'); gold.addColorStop(0.25, '#ffe9a8'); gold.addColorStop(0.5, '#d9a441'); gold.addColorStop(0.75, '#fff2c0'); gold.addColorStop(1, '#b98a2f');
-    poly(ctx, 4); ctx.fillStyle = gold; ctx.fill();
-    poly(ctx, 9); ctx.fillStyle = '#140f2e'; ctx.fill();
+    ctx.fillStyle = 'rgba(20,10,40,0.45)'; rrect(ctx, -w / 2 + 5, -h / 2 + 9, w, h, 9); ctx.fill();
+    rrect(ctx, -w / 2, -h / 2, w, h, 9); ctx.fillStyle = HV.cream; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = HV.line; ctx.stroke();
+    const px = -w / 2 + m, py = -h / 2 + m, pw = w - m * 2, ph = h - m - mb;
     ctx.save();
-    poly(ctx, 11); ctx.clip();
-    ctx.translate(-w / 2, -h / 2);
-    try { draw(ctx, w, h); } catch (e) { warnOnce('framed content', e); }
+    rrect(ctx, px, py, pw, ph, 4); ctx.clip();
+    ctx.translate(px, py);
+    try { draw(ctx, pw, ph); } catch (e) { warnOnce('framed content', e); }
     ctx.restore();
-    // a hero-coloured stripe along the bottom edge
-    if (o.color) {
-      ctx.save(); poly(ctx, 11); ctx.clip();
-      ctx.fillStyle = o.color; ctx.globalAlpha *= 0.9;
-      ctx.beginPath(); ctx.moveTo(-w / 2 + 11, h / 2 - 16); ctx.lineTo(w / 2 - sk - 11, h / 2 - 22); ctx.lineTo(w / 2 - sk - 11, h / 2); ctx.lineTo(-w / 2 + 11, h / 2); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
+    rrect(ctx, px, py, pw, ph, 4); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(45,23,15,0.55)'; ctx.stroke();
+    if (o.color) { rrect(ctx, px + pw * 0.18, h / 2 - mb * 0.72, pw * 0.64, mb * 0.42, mb * 0.21); ctx.fillStyle = o.color; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = HV.line; ctx.stroke(); }
+    ctx.save(); ctx.translate(0, -h / 2 + 2); ctx.rotate(-0.07);
+    ctx.fillStyle = 'rgba(255,248,236,0.8)'; ctx.fillRect(-w * 0.16, -9, w * 0.32, 18);
+    ctx.fillStyle = 'rgba(255,126,182,0.3)'; ctx.fillRect(-w * 0.16, -9, w * 0.32, 5);
+    ctx.restore();
     ctx.restore();
   }
 
-  // glittering gold flecks drifting up the stage (cheap, deterministic): used on the chapter and ending screens
+  // sparkles and stage confetti drifting up the stage in the house colours (cheap, deterministic): used on the story, Act and ending screens.
+  // color: one colour for every sparkle, or none for the pink, green, gold and cream mix
   function flecks(ctx, S, t, n, color) {
     if (reduced()) return;
     const r = U.rng(U.hash('flecks', S.kind));
     ctx.save();
     for (let i = 0; i < n; i++) {
-      const x0 = r() * W, y0 = r() * H, sp = 14 + r() * 26, ph = r() * 6.28, sz = 1.2 + r() * 2.2;
+      const x0 = r() * W, y0 = r() * H, sp = 14 + r() * 26, ph = r() * 6.28, sz = 2.2 + r() * 3.4, col = color || CONFETTI[i % CONFETTI.length];
       const y = ((y0 - t * sp) % H + H) % H, x = x0 + Math.sin(t * 0.6 + ph) * 14;
-      ctx.globalAlpha = 0.25 + 0.5 * Math.abs(Math.sin(t * 1.3 + ph));
-      ctx.fillStyle = color || '#ffe9a8';
-      ctx.fillRect(x, y, sz, sz);
+      const a = 0.3 + 0.55 * Math.abs(Math.sin(t * 1.3 + ph));
+      if (i % 3) spark(ctx, x, y, sz * 1.5, col, a, t * 0.5 + ph);
+      else { ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(t * 1.6 + ph); ctx.fillStyle = col; ctx.fillRect(-sz * 0.6, -sz * 0.35, sz * 1.2, sz * 0.7); ctx.restore(); }
     }
     ctx.restore();
   }
@@ -411,8 +429,8 @@
   function paintStory(ctx, t, S) {
     const x = S.extra;
     artScene(ctx, x.info.scene, t, { particles: 1, parallaxX: Math.sin(S.t * 0.25) * 18 });
-    vignette(ctx, x.info.scene === 'defeat' ? 0.35 : 0.55);
-    flecks(ctx, S, t, 26, '#ffe9a8');
+    vignette(ctx, x.info.scene === 'defeat' ? 0.35 : 0.5);
+    flecks(ctx, S, t, 26);
     const n = x.cast.length;
     const reveal = (i) => ease.outBack(clamp((S.t - 0.25 - i * 0.22) / 0.7, 0, 1));
     x.cast.forEach((id, i) => {
@@ -560,6 +578,12 @@
     return [line1, line2, line3].join('\n');
   }
 
+  // the hero whose outfit a Sticker unlocks (DATA.outfits, presentation only), or null
+  function outfitBySticker(achId) {
+    const o = DATA.outfits || {};
+    return DATA.LISTS.heroIds.find((h) => Object.prototype.hasOwnProperty.call(o, h) && o[h] && o[h].sticker === achId) || null;
+  }
+
   // newly unlocked things from META.recordRun's result, as display entries
   function unlockEntries(rec, sm) {
     const out = [];
@@ -569,9 +593,20 @@
       const a = DATA.achievements[id];
       if (!a) return;
       out.push({ kind: 'ach', id, seal: 'WON', title: a.name, text: a.text, reward: a.reward && a.reward.inkstones });
+      // a Sticker that unlocks an outfit (bible 7.1) adds its own card right under it: the hero in the new outfit, smiling
+      const hero = outfitBySticker(id);
+      if (hero) out.push({ kind: 'outfit', id: hero, seal: 'NEW', title: 'New outfit: ' + DATA.outfits[hero].name, text: 'Jordan packed it in the van. Pick it for ' + heroName(hero) + ' on the hero select.' });
     });
     if (rec.newTrial) out.push({ kind: 'trial', id: rec.newTrial, seal: 'ENCORE', title: 'Encore ' + rec.newTrial + ' unlocked', text: (trialName(rec.newTrial) ? trialName(rec.newTrial) + '. ' : '') + 'A harder encore of the same tour is waiting on the hero select.' });
     return out;
+  }
+  // the new outfit's card art: ART.hero.portrait in the outfit, smiling, on a small 3:4 canvas (a plain hero-coloured tile without ART)
+  function outfitPortrait(id, w, h) {
+    const px = UI.px || 1;
+    const c = mk('canvas', { class: 'en-unlock-pic', width: Math.round(w * px), height: Math.round(h * px), style: { width: w + 'px', height: h + 'px' }, 'aria-hidden': 'true' });
+    const g = safe(() => c.getContext('2d'), null);
+    if (g) { g.setTransform(px, 0, 0, px, 0, 0); artPortrait(g, id, { x: 0, y: 0, w, h, expr: 'smile', t: 0, skin: 'skin' }); }
+    return c;
   }
   function unlockRow(S, e, i) {
     const row = mk('div', { class: 'en-unlock k-' + e.kind, role: 'group', 'aria-label': e.title });
@@ -579,6 +614,7 @@
     row.appendChild(mk('span', { class: 'en-unlock-seal' }, UI.hanko(e.seal, { size: 'sm' })));
     const body = mk('div', { class: 'en-unlock-body' }, mk('b', { class: 'en-unlock-t', text: e.title }), mk('span', { class: 'en-unlock-x', text: e.text }));
     if (e.kind === 'hero') row.appendChild(mk('span', { class: 'en-unlock-med' }, UI.medallion(e.id, 44)));
+    if (e.kind === 'outfit') row.appendChild(mk('span', { class: 'en-unlock-art' }, outfitPortrait(e.id, 42, 56)));
     row.appendChild(body);
     if (e.reward) row.appendChild(mk('span', { class: 'en-unlock-r' }, UI.stat('inkstone', '+' + e.reward, { size: 'sm', focusable: false, tip: false })));
     return row;
@@ -638,7 +674,7 @@
     });
   }
 
-  // the hero a chapter's achievement writes into the book (Suzu after chapter 1, Raiga after chapter 2), if the player now has them
+  // the hero an Act's Sticker brings on tour (RawClaw after Act I, Andy after Act II), if the player now has them
   function heroUnlockedBy(ch) {
     const id = DATA.LISTS.heroIds.find((h) => DATA.heroes[h].unlock && DATA.heroes[h].unlock.ach === 'ch' + ch + '_clear');
     if (!id) return null;
@@ -657,18 +693,43 @@
     } catch (e) { warnOnce('boss ghost', e); return false; }
   }
 
+  // the Act number on a big round sticker (HV_ART_AUDIO 3.4): a disc in the duo's split pink and green, a cream rim, the warm line and the roman
+  // numeral in sticker letters, popping in with a little overshoot and a few sparkles
+  function actSticker(ctx, cx, cy, r, ch, k, t) {
+    if (k <= 0) return;
+    const s = ease.outBack(clamp(k, 0, 1));
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(-0.16 + (reduced() ? 0 : Math.sin(t * 1.1) * 0.03)); ctx.scale(s, s);
+    ctx.beginPath(); ctx.arc(4, 7, r, 0, TAU); ctx.fillStyle = 'rgba(20,10,40,0.45)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fillStyle = HV.cream; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = HV.line; ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r * 0.84, 0, TAU); ctx.clip();
+    ctx.fillStyle = HV.pink; ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.beginPath(); ctx.moveTo(r, -r); ctx.lineTo(r, r); ctx.lineTo(-r, r); ctx.closePath(); ctx.fillStyle = HV.green; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.45, r * 0.42, r * 0.2, -0.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.84, 0, TAU); ctx.lineWidth = 2; ctx.strokeStyle = HV.line; ctx.stroke();
+    const txt = U.roman(ch), size = r * (txt.length > 2 ? 0.72 : 0.95);
+    ctx.font = '900 ' + size + 'px ' + ROUND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.26; ctx.strokeStyle = HV.line; ctx.strokeText(txt, 0, size * 0.04);
+    ctx.lineWidth = size * 0.1; ctx.strokeStyle = HV.cream; ctx.strokeText(txt, 0, size * 0.04);
+    ctx.fillStyle = HV.cream; ctx.fillText(txt, 0, size * 0.04);
+    ctx.restore();
+    const tw = (i) => (reduced() ? 0.8 : 0.4 + 0.6 * Math.abs(Math.sin(t * 1.6 + i * 1.9)));
+    [[r * 1.08, -r * 0.8, 0.3], [-r * 1.12, r * 0.55, 0.22], [r * 0.7, r * 1.08, 0.18]].forEach((p, i) => spark(ctx, cx + p[0], cy + p[1], r * p[2] * s, i % 2 ? HV.lime : HV.cream, tw(i) * clamp(k * 2 - 1, 0, 1), 0));
+  }
+
   function paintClear(ctx, t, S) {
     const x = S.extra;
     artScene(ctx, 'ch' + x.ch, t, { particles: 1.5, parallaxX: Math.sin(S.t * 0.2) * 14 }, -146);
-    // warm light spilling over the scene: the page is turning in the heroes' favour
+    // warm stage light spilling over the scene: the Act is won
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const g = ctx.createRadialGradient(640, 150, 20, 640, 260, 760);
-    g.addColorStop(0, 'rgba(255,214,140,0.28)'); g.addColorStop(1, 'rgba(255,214,140,0)');
+    g.addColorStop(0, 'rgba(255,214,170,0.26)'); g.addColorStop(1, 'rgba(255,214,170,0)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     ctx.restore();
     vignette(ctx, 0.5);
-    flecks(ctx, S, t, 36, '#ffe9a8');
+    flecks(ctx, S, t, 40);
     const ground = 372;
     // the boss, undone: the die pose plays once (SCENE-free: ART.enemy.draw derives it from pt) and holds its end
     // the defeated boss: the hurt pose held (the die pose ends invisible), fading to a memory of itself. A boss is the costliest sprite in the game,
@@ -681,6 +742,24 @@
       const k = ease.outCubic(clamp((S.t - 0.2 - i * 0.18) / 0.6, 0, 1));
       artHero(ctx, id, { x: (i === 0 ? 330 : 170) - (1 - k) * 60, y: ground, s: i === 0 ? 0.98 : 0.92, pose: 'cheer', t, pt: Math.max(0, S.t - 0.5 - i * 0.18), alpha: k });
     });
+    actSticker(ctx, 520, 254, 50, x.ch, (S.t - 0.9) / 0.5, t);
+    confetti(ctx, S, t, 0.7);
+  }
+
+  // stage confetti falling over a win, NOT in a grid (the Gloss's grid confetti is the Perfect Stage's): seeded strips and squares that flutter
+  // as they fall. k scales how many. None under reduced motion.
+  function confetti(ctx, S, t, k) {
+    if (reduced() || !(k > 0)) return;
+    const n = Math.round((lowQ() ? 22 : 44) * k), r = U.rng(U.hash('confetti', S.kind));
+    ctx.save();
+    for (let i = 0; i < n; i++) {
+      const x0 = r() * W, sp = 50 + r() * 70, ph = r() * TAU, w = 5 + r() * 6, h = 3 + r() * 4, col = CONFETTI[i % CONFETTI.length], d = r() * H;
+      const y = ((d + t * sp) % (H + 40)) - 20, x = x0 + Math.sin(t * 1.4 + ph) * 22;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 2.2 + ph); ctx.scale(1, Math.cos(t * 3 + ph));
+      ctx.fillStyle = col; ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   const chapterClear = {
@@ -812,19 +891,28 @@
   // ==================================================================================================================
   // GAME OVER
   // ==================================================================================================================
+  // when the duo get back up: the defeat scene's curtain twitches every 6 s (the show goes on), and on the second twitch they stand again
+  const STAND_AT = 6.2;
   function paintOver(ctx, t, S) {
     const x = S.extra;
     artScene(ctx, 'defeat', t, { particles: 0.7 });
-    // the ink pulls back: a paper-coloured wash lifts off the page as the screen settles
+    // the Gloss settles: an opalescent pastel sheen lifts off the stage as the screen settles (it smooths, it never darkens)
     const wash = clamp(1 - S.t / 2.2, 0, 1);
-    if (wash > 0.01) { ctx.save(); ctx.globalAlpha = wash * 0.8; ctx.fillStyle = '#f3e6c8'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    if (wash > 0.01) {
+      ctx.save(); ctx.globalAlpha = wash * 0.75;
+      const gl = ctx.createLinearGradient(0, 0, W, H); GLOSS.forEach((c, i) => gl.addColorStop(i / 3, c));
+      ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
     vignette(ctx, 0.28, '36,26,58');
     const ground = 376;
     x.cast.forEach((id, i) => {
       const k = ease.outCubic(clamp((S.t - 0.5 - i * 0.3) / 0.9, 0, 1));
-      // the heroes fade toward the colour of the paper over a few seconds, like ink drying out of the page
-      const fade = 1 - 0.4 * clamp((S.t - 2) / 5, 0, 1);
-      artHero(ctx, id, { x: 130 + i * 150, y: ground + (1 - k) * 18, s: 0.86, pose: 'down', t, pt: Math.max(0, S.t - 0.3 - i * 0.3), alpha: k * fade, glow: 0 });
+      // they lose their voice for a moment at the stage edge, then, as the curtain twitches, get up again: a hop and a sparkle, the show goes on
+      const up = clamp((S.t - STAND_AT - i * 0.25) / 0.45, 0, 1);
+      if (up <= 0) { artHero(ctx, id, { x: 130 + i * 150, y: ground + (1 - k) * 18, s: 0.86, pose: 'down', t, pt: Math.max(0, S.t - 0.3 - i * 0.3), alpha: k, glow: 0 }); return; }
+      const hop = Math.sin(Math.PI * up) * 16;
+      artHero(ctx, id, { x: 130 + i * 150, y: ground - hop, s: 0.86, pose: 'idle', t, pt: 0, alpha: k, glow: up < 1 ? 0.3 * (1 - up) : 0 });
+      if (up < 1) { spark(ctx, 130 + i * 150 + 34, ground - 210 - up * 20, 9 * (1 - up) + 3, HV.cream, 1 - up, 0); spark(ctx, 130 + i * 150 - 40, ground - 150 - up * 12, 6 * (1 - up) + 2, HV.lime, 1 - up, 0); }
     });
   }
 
@@ -966,105 +1054,78 @@
     raiga: 'Andy played one last low note so warm that the stage lights hummed along. \'Nice,\' he said, and that was the whole speech.',
   };
 
-  // pieces of the share card, kept separate so the card is easy to read
-  function spaced(ctx, text, cx, y, gap) {
-    const widths = Array.from(text).map((c) => ctx.measureText(c).width);
-    const total = widths.reduce((a, b) => a + b, 0) + gap * (text.length - 1);
-    let x = cx - total / 2;
-    ctx.textAlign = 'left';
-    Array.from(text).forEach((c, i) => { ctx.fillText(c, x, y); x += widths[i] + gap; });
-    ctx.textAlign = 'center';
+  // the share card (HV_ART_AUDIO 3.4), composed like the owners' duo card: a background split diagonally light green and pink with a cream seam,
+  // the stacked HOCUS VOCUS logo, the two heroes of the tour in `cheer` (in their outfits), the score digits, the RJ monogram in a corner and
+  // @roxorloopsandjasmin in small cream letters along the bottom (the only handle drawn). The saved image keeps its 600 x 338 (the victory
+  // showcase column and the tests pin it), so the duo stand on the left and the logo and score sit on the right. Nothing else is written on it:
+  // the full summary is the canvas's text alternative and what Copy summary puts on the clipboard.
+  // d = {heroes, score, trial, seed, deckSize, relics, chapters, daily, win}
+  const HANDLE = '@roxorloopsandjasmin';
+  function stickerText(g, text, x, y, size, top, base, o) {
+    o = o || {};
+    g.save();
+    g.translate(x, y); g.rotate(o.rot || 0);
+    g.font = '900 ' + size + 'px ' + ROUND; g.textAlign = o.align || 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.miterLimit = 2;
+    const str = String(text);
+    g.fillStyle = 'rgba(20,10,40,0.4)'; g.strokeStyle = 'rgba(20,10,40,0.4)'; g.lineWidth = size * 0.24;
+    g.strokeText(str, -size * 0.04, size * 0.07); g.fillText(str, -size * 0.04, size * 0.07);
+    g.strokeStyle = HV.line; g.lineWidth = size * 0.24; g.strokeText(str, 0, 0);
+    g.strokeStyle = HV.cream; g.lineWidth = size * 0.1; g.strokeText(str, 0, 0);
+    const gr = g.createLinearGradient(0, -size * 0.42, 0, size * 0.42);
+    gr.addColorStop(0, top); gr.addColorStop(0.44, top); gr.addColorStop(0.48, base); gr.addColorStop(1, base);
+    g.fillStyle = gr; g.fillText(str, 0, 0);
+    g.restore();
   }
-  function plaquePath(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+  function cardLogo(ctx, cx, cy, w, t) {
+    if (typeof ART !== 'undefined' && ART && ART.scene && isFn(ART.scene.logo)) {
+      try { ART.scene.logo(ctx, cx, cy, w, t || 0); return; } catch (e) { warnOnce('ART.scene.logo card', e); }
+    }
+    stickerText(ctx, 'HOCUS', cx, cy - w * 0.1, w * 0.2, HV.pinkL, HV.pink, { rot: -0.03 });
+    stickerText(ctx, 'VOCUS', cx, cy + w * 0.1, w * 0.2, HV.lime, HV.green, { rot: 0.03 });
   }
-
-  // the share card: heroes, score, seed, trial, deck size, on the dawn scene. d = {heroes, score, trial, seed, deckSize, relics, chapters, daily, win}
   function drawCard(ctx, w, h, d, t) {
-    artSceneSized(ctx, d.win === false ? 'defeat' : 'victory', t || 0, { particles: 0 }, w, h);
-    const sh = ctx.createLinearGradient(0, 0, w, 0);
-    sh.addColorStop(0, 'rgba(13,11,30,0.55)'); sh.addColorStop(0.55, 'rgba(13,11,30,0.1)'); sh.addColorStop(1, 'rgba(13,11,30,0)');
-    ctx.fillStyle = sh; ctx.fillRect(0, 0, w, h);
-    const ids = (d.heroes || DEFAULT_PARTY).slice(0, 2);
-    ids.forEach((id, i) => {
-      framed(ctx, { x: 16 + i * 80, y: 26 + i * 84, w: 138, h: 184, rot: i ? 0.045 : -0.05, color: heroColor(id), skew: 10 }, (g, fw, fh) => artPortrait(g, id, { x: 0, y: 0, w: fw, h: fh, expr: d.win === false ? 'hurt' : 'smile', t: t || 0 }));
-    });
-    // the plaque
-    const px = 236, py = 16, pw = w - px - 16, ph = h - 32;
+    const win = d.win !== false;
+    const k = Math.max(0.1, Math.min(w / 600, h / 338));
     ctx.save();
-    ctx.shadowColor = 'rgba(5,3,18,0.55)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-    plaquePath(ctx, px, py, pw, ph, 10); ctx.fillStyle = '#140f2e'; ctx.fill();
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    const gold = ctx.createLinearGradient(px, py, px + pw, py + ph);
-    gold.addColorStop(0, '#a87420'); gold.addColorStop(0.25, '#ffe9a8'); gold.addColorStop(0.5, '#d9a441'); gold.addColorStop(0.75, '#fff2c0'); gold.addColorStop(1, '#b98a2f');
-    plaquePath(ctx, px + 2, py + 2, pw - 4, ph - 4, 9); ctx.fillStyle = gold; ctx.fill();
-    const paper = ctx.createLinearGradient(px, py, px, py + ph);
-    paper.addColorStop(0, '#fdf3da'); paper.addColorStop(0.5, '#f3e6c8'); paper.addColorStop(1, '#e6d3a3');
-    plaquePath(ctx, px + 6, py + 6, pw - 12, ph - 12, 7); ctx.fillStyle = paper; ctx.fill();
-    ctx.restore();
-    if (typeof ART !== 'undefined' && ART && ART.tk && isFn(ART.tk.paperGrain)) safe(() => { ctx.save(); plaquePath(ctx, px + 6, py + 6, pw - 12, ph - 12, 7); ctx.clip(); ART.tk.paperGrain(ctx, px, py, pw, ph, { alpha: 0.5 }); ctx.restore(); });
-    const cx = px + pw / 2;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#140f2e';
-    // HOCUS VOCUS is three letters longer than the old title: step the size down from 31 px until the word (letters plus 5 px gaps) clears the seal in the plaque's top right corner
-    const cardTitle = 'HOCUS VOCUS';
-    for (let tsz = 31; tsz >= 16; tsz--) {
-      ctx.font = '800 ' + tsz + 'px Georgia, "Hiragino Mincho ProN", serif';
-      if (Array.from(cardTitle).reduce((a, c) => a + ctx.measureText(c).width, 0) + 5 * (cardTitle.length - 1) <= pw - 140) break;
+    rrect(ctx, 0, 0, w, h, 14 * k); ctx.clip();
+    // the split: light green over the top left, pink under the bottom right, a cream seam between, soft sparkles and notes on both
+    ctx.fillStyle = win ? '#c9f7d6' : '#e3f2ea'; ctx.fillRect(0, 0, w, h);
+    ctx.beginPath(); ctx.moveTo(w * 0.62, 0); ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(w * 0.18, h); ctx.closePath();
+    ctx.fillStyle = win ? '#ffcfe3' : '#f6e4ee'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(w * 0.62, 0); ctx.lineTo(w * 0.18, h); ctx.lineWidth = 7 * k; ctx.strokeStyle = HV.cream; ctx.stroke();
+    const r = U.rng(U.hash('sharecard', d.seed >>> 0));
+    for (let i = 0; i < 26; i++) {
+      const x = r() * w, y = r() * h;
+      if (i % 3) spark(ctx, x, y, (3 + r() * 5) * k, '#ffffff', 0.5 + r() * 0.4, r());
+      else { ctx.beginPath(); ctx.arc(x, y, (2 + r() * 3) * k, 0, TAU); ctx.fillStyle = rgba(i % 2 ? HV.pink : HV.green, 0.3); ctx.fill(); }
     }
-    spaced(ctx, cardTitle, cx, py + 52, 5);
-    ctx.font = '800 11px "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = '#a91d2c';
-    spaced(ctx, d.win === false ? 'INTERMISSION IN ACT ' + (d.chapter || 1) : 'STILL HUMAN', cx, py + 72, 3);
-    const rule = ctx.createLinearGradient(px + 30, 0, px + pw - 30, 0);
-    rule.addColorStop(0, 'rgba(185,138,47,0)'); rule.addColorStop(0.5, '#b98a2f'); rule.addColorStop(1, 'rgba(185,138,47,0)');
-    ctx.fillStyle = rule; ctx.fillRect(px + 30, py + 82, pw - 60, 3);
-    ctx.font = '700 20px Georgia, serif'; ctx.fillStyle = '#241a3a';
-    ctx.fillText(ids.map(heroName).join(' and '), cx, py + 112);
-    ctx.font = 'italic 12px Georgia, serif'; ctx.fillStyle = 'rgba(36,26,58,0.7)';
-    ctx.fillText(ids.map(heroTitle).join('  |  '), cx, py + 129);
-    ctx.font = '800 11px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = '#7d5a1c';
-    spaced(ctx, 'SCORE', cx, py + 156, 4);
-    ctx.font = '900 58px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-    ctx.lineJoin = 'round'; ctx.lineWidth = 8; ctx.strokeStyle = '#140f2e';
-    const sc = fmt(d.score || 0);
-    ctx.strokeText(sc, cx, py + 206); ctx.fillStyle = '#ffd36a'; ctx.fillText(sc, cx, py + 206);
-    // the small facts, two by two
-    const facts = [
-      [d.daily ? 'DAILY DUET' : 'ENCORE', d.daily ? String(d.seed >>> 0) : String(d.trial | 0)],
-      ['SEED', String(d.seed >>> 0)],
-      ['DECK', U.plural(d.deckSize | 0, 'card')],
-      ['CHARMS', String((d.relics || []).length)],
-    ];
-    const fy = py + 232;
-    facts.forEach((f, i) => {
-      const col = i % 2, row = (i / 2) | 0;
-      const fx = px + 24 + col * ((pw - 48) / 2) + ((pw - 48) / 4);
-      ctx.font = '800 9px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = '#7d5a1c';
-      spaced(ctx, f[0], fx, fy + row * 32, 2);
-      ctx.font = '800 15px "Trebuchet MS", "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = '#241a3a';
-      ctx.fillText(f[1], fx, fy + 14 + row * 32);
-    });
-    // the seal
-    ctx.save();
-    ctx.translate(px + pw - 38, py + 40); ctx.rotate(-0.14);
-    const sealWord = d.win === false ? 'FIN' : 'BRAVO', sealHalf = sealWord.length > 3 ? 28 : 22;      // BRAVO needs a wider plate than FIN
-    plaquePath(ctx, -sealHalf, -22, sealHalf * 2, 44, 9); ctx.fillStyle = '#e8383d'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,248,240,0.9)'; plaquePath(ctx, 4 - sealHalf, -18, sealHalf * 2 - 8, 36, 6); ctx.stroke();
-    ctx.fillStyle = '#fff8f0'; ctx.font = '900 ' + (sealWord.length > 3 ? 11 : 14) + 'px Georgia, serif'; ctx.textBaseline = 'middle'; ctx.fillText(sealWord, 0, 1);
+    // a soft spotlight behind the duo
+    const sp = ctx.createRadialGradient(150 * k, 190 * k, 10, 150 * k, 210 * k, 170 * k);
+    sp.addColorStop(0, 'rgba(255,255,255,0.75)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sp; ctx.fillRect(0, 0, w, h);
+    ctx.beginPath(); ctx.ellipse(150 * k, 312 * k, 138 * k, 16 * k, 0, 0, TAU); ctx.fillStyle = 'rgba(45,23,15,0.16)'; ctx.fill();
+    // the duo of this tour: the first on the left facing right, the second on the right turned to face them, both in the viewer's outfits
+    const ids = (d.heroes && d.heroes.length ? d.heroes : DEFAULT_PARTY).filter((id) => DATA.heroes[id]).slice(0, 2);
+    const pose = win ? 'cheer' : 'idle';
+    const pt = win && typeof ART !== 'undefined' && ART && ART.hero && isFn(ART.hero.keyPt) ? safe(() => ART.hero.keyPt('cheer'), 0.3) : 0;
+    ids.forEach((id, i) => artHero(ctx, id, { x: (ids.length === 1 ? 150 : i === 0 ? 92 : 210) * k, y: 314 * k, s: 0.78 * k, pose, t: t || 0, pt, flip: i === 1, shadow: false }));
+    // the logo and the score on the right
+    cardLogo(ctx, 430 * k, 98 * k, 300 * k, t);
+    const sc = fmt(d.score || 0), size = (sc.length > 6 ? 46 : 56) * k;
+    stickerText(ctx, sc, 430 * k, 222 * k, size, win ? HV.cream : '#f4f1fb', win ? '#ffe9a8' : '#e6d9ff', { rot: -0.02 });
+    spark(ctx, (430 + sc.length * 15 + 16) * k, 196 * k, 11 * k, HV.cream, 0.95, 0.2);
+    spark(ctx, (430 - sc.length * 15 - 14) * k, 244 * k, 7 * k, HV.lime, 0.9, 0);
+    // the RJ monogram in the bottom right corner (the logo's wand star owns the top right), the handle along the bottom
+    let mono = false;
+    if (typeof ART !== 'undefined' && ART && ART.scene && isFn(ART.scene.monogram)) { try { mono = ART.scene.monogram(ctx, w - 36 * k, h - 36 * k, 22 * k) !== false; } catch (e) { warnOnce('ART.scene.monogram', e); } }
+    if (!mono) { ctx.beginPath(); ctx.arc(w - 36 * k, h - 36 * k, 22 * k, 0, TAU); ctx.fillStyle = HV.pink; ctx.fill(); ctx.lineWidth = 2.5 * k; ctx.strokeStyle = HV.line; ctx.stroke(); }
+    ctx.font = '900 ' + Math.round(13 * k) + 'px ' + ROUND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 4 * k; ctx.strokeStyle = HV.line; ctx.strokeText(HANDLE, 430 * k, 312 * k);
+    ctx.fillStyle = HV.cream; ctx.fillText(HANDLE, 430 * k, 312 * k);
     ctx.restore();
-    // a thin frame around the whole card
-    ctx.strokeStyle = 'rgba(245,201,106,0.9)'; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
-  }
-  function artSceneSized(ctx, id, t, opts, w, h) {
-    let ok = false;
-    if (typeof ART !== 'undefined' && ART && ART.scene && isFn(ART.scene.draw)) {
-      try { ok = ART.scene.draw(ctx, id, w, h, t, opts || {}) !== false; } catch (e) { warnOnce('ART.scene.draw card', e); }
-    }
-    if (!ok) { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#f5c0a0'); g.addColorStop(1, '#3b2a7a'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); }
+    // the die-cut edge: the warm line with a cream rim inside
+    rrect(ctx, 2.5 * k, 2.5 * k, w - 5 * k, h - 5 * k, 13 * k); ctx.lineWidth = 5 * k; ctx.strokeStyle = HV.line; ctx.stroke();
+    rrect(ctx, 6.5 * k, 6.5 * k, w - 13 * k, h - 13 * k, 10 * k); ctx.lineWidth = 2.5 * k; ctx.strokeStyle = HV.cream; ctx.stroke();
   }
 
   const CAST_X = [250, 510, 770, 1030];
@@ -1078,9 +1139,10 @@
   function paintVictory(ctx, t, S) {
     const x = S.extra, pt = S.t - x.phaseAt;
     artScene(ctx, 'victory', t, { particles: 1.6, parallaxX: Math.sin(S.t * 0.2) * 16 });
-    if (x.phase === 'show') { ctx.fillStyle = 'rgba(13,11,30,0.55)'; ctx.fillRect(0, 0, W, H); vignette(ctx, 0.5); flecks(ctx, S, t, 40, '#ffe9a8'); return; }
+    if (x.phase === 'show') { ctx.fillStyle = 'rgba(13,11,30,0.55)'; ctx.fillRect(0, 0, W, H); vignette(ctx, 0.5); flecks(ctx, S, t, 40); confetti(ctx, S, t, 0.5); return; }
     vignette(ctx, 0.32, '36,26,58');
-    flecks(ctx, S, t, 30, '#fff2c0');
+    flecks(ctx, S, t, 30);
+    confetti(ctx, S, t, 1);
     if (x.phase === 'story') {
       x.party.forEach((id, i) => {
         const k = ease.outCubic(clamp((pt - 0.3 - i * 0.3) / 0.7, 0, 1));
@@ -1095,7 +1157,7 @@
         const arrived = k >= 1;
         const pose = !arrived ? 'walk' : inParty ? 'cheer' : 'idle';
         artHero(ctx, id, { x: px, y: 578, s: inParty ? 1.0 : 0.94, pose, t, pt: Math.max(0, pt - t0 - travel), alpha: 1 });
-        if (arrived && pt - t0 - travel < 0.7 && typeof ART !== 'undefined' && ART && ART.fx && isFn(ART.fx.sparkle)) safe(() => ART.fx.sparkle(ctx, { x: px, y: 452, s: 1.8, seed: i + 3, color: '#ffe9a8' }, (pt - t0 - travel) / 0.7));
+        if (arrived && pt - t0 - travel < 0.7 && typeof ART !== 'undefined' && ART && ART.fx && isFn(ART.fx.sparkle)) safe(() => ART.fx.sparkle(ctx, { x: px, y: 452, s: 1.8, seed: i + 3, color: DATA.heroes[id] ? DATA.heroes[id].color : HV.cream }, (pt - t0 - travel) / 0.7));
       });
     }
   }

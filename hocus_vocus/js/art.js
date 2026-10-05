@@ -21,7 +21,8 @@
 //                           key whose content depends on anything not in the key. Include size, palette and variant in the key.
 //   ART.blit(ctx, spr, x, y, w, h, alpha?)   drawImage that tolerates an inert sprite
 //   ART.placeholder(ctx, label, x, y, w, h, opts?)   labelled coloured box (opts.round for a circle, opts.color, opts.alpha)
-//   ART.hero    (art_heroes.js)  draw portrait medallion bounds poseMs pointAt keyPt warm audit expressions ids
+//   ART.hero    (art_cast.js)  draw portrait medallion bounds poseMs pointAt keyPt warm audit expressions ids outfits skins castId; the chibi
+//               cast kit is ART.rj (art_cast_kit.js), Jordan and the gallery helpers are ART.cast
 //   ART.enemy   register(id, {draw(ctx, o), bounds}) draw bounds poseMs -- art.js owns the shell: ground shadow, elite ring, boss aura, tier scale
 //   ART.card    draw(ctx, cardOrId, w, h, t)   motif(ctx, id, x, y, size, palette, t)
 //   ART.icon    draw(ctx, kind, id, x, y, size, opts)      ART.scene draw(ctx, id, w, h, t, opts) logo(ctx, x, y, w, t)
@@ -110,6 +111,11 @@ const ART = (() => {
     vermilion: '#e8383d', sakura: '#ff7eb6', sakura2: '#ffc2dc', jade: '#3fd6b0', azure: '#5fb4ff',
     cyan: '#5ff5ff', amber: '#ff9a2e', bloodmoon: '#b0245c', ash: '#8a86a8', white: '#fff8f0',
     hush: '#cfcdd8', hush2: '#8e8aa3', felt: '#6e6a7e', bronze: '#c9893a', verdigris: '#5fbfa8',
+    // the Hocus Vocus skin (HV_ART_AUDIO 9.1): the same values as the --hv-* and --gloss* tokens of css/base.css. `vox` is the light tint of the Vox orb
+    // (the orb itself is the inline SVG --vox in the CSS), for canvas numbers and glows.
+    hvPink: '#ff7eb6', hvPinkD: '#c93f78', hvPinkL: '#ffc9de', hvGreen: '#3fcf6a', hvGreenD: '#1f7a3a', hvLime: '#c6ff3d',
+    hvViolet: '#a77bff', hvOrange: '#ff9a2e', hvTeal: '#2ec4b6', hvCream: '#fff4e6', hvLine: '#2d170f',
+    gloss: '#f4f1fb', glossLilac: '#e6d9ff', glossMint: '#d9fff4', glossBlush: '#ffe3f1', vox: '#ffd0e6',
   };
   // card palette names -> {base, light, dark, glow}
   const fams = {
@@ -1395,9 +1401,9 @@ const ART = (() => {
   // lettering
   // ---------------------------------------------------------------------------------------------------------------
   const font = {
-    num: '"Trebuchet MS","Segoe UI",system-ui,sans-serif',
-    display: '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP","Palatino Linotype",Georgia,serif',
-    ui: '"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP","Segoe UI",system-ui,sans-serif',
+    num: '"Trebuchet MS","Segoe UI",Arial,"Liberation Sans",system-ui,sans-serif',
+    display: '"Arial Rounded MT Bold","Nunito","Quicksand","Varela Round","Trebuchet MS",Arial,"Liberation Sans",system-ui,sans-serif',   // the css --font-display stack (HV_ART_AUDIO 9)
+    ui: '"Segoe UI","Helvetica Neue",Arial,"Liberation Sans",system-ui,sans-serif',                                                          // the css --font-ui stack
   };
   // Heavy comic lettering: fill, thick ink outline, optional block shadow. o: fill (white), stroke (ink), strokeW (size * 0.16),
   // family (font.num), weight (900), skew (-0.18, negative leans right), align ('center'), rot (radians), shadow (colour), shadowOff (size * 0.08),
@@ -1670,7 +1676,7 @@ const ART = (() => {
       ctx.font = '700 22px ' + font.ui; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = pal.white;
       ctx.fillText('scene ' + sceneId, w / 2, h / 2);
     },
-    logo(ctx, x, y, w) { w = pos(w, 400); inkText(ctx, 'ECHOWAKE', num(x, 0), num(y, 0), w / 4.6, { family: font.display, fill: pal.paper, weight: 900, skew: -0.08 }); },
+    logo(ctx, x, y, w) { w = pos(w, 400); inkText(ctx, 'HOCUS VOCUS', num(x, 0), num(y, 0), w / 6.3, { family: font.display, fill: pal.paper, weight: 900, skew: -0.08 }); },
   };
   A.map = {
     hex(ctx, kind, x, y, size, opts) {

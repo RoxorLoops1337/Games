@@ -550,7 +550,7 @@
         st.nums = st.nums.filter((n) => st.t - n.t0 < 1);
         st.nums.forEach((n) => {
           const p = (st.t - n.t0), y = n.y - 60 * p;
-          ctx.save(); ctx.globalAlpha = clamp(1.4 - p * 1.2, 0, 1); ctx.textAlign = 'center'; ctx.font = '900 ' + (n.kind === 'crit' ? 40 : 30) + 'px "Trebuchet MS", system-ui, sans-serif';
+          ctx.save(); ctx.globalAlpha = clamp(1.4 - p * 1.2, 0, 1); ctx.textAlign = 'center'; ctx.font = '900 ' + (n.kind === 'crit' ? 40 : 30) + 'px "Trebuchet MS", Arial, "Liberation Sans", system-ui, sans-serif';
           ctx.lineWidth = 6; ctx.strokeStyle = '#140f2e'; ctx.fillStyle = n.kind === 'heal' ? '#8dffc2' : n.kind === 'block' ? '#9fd6ff' : n.kind === 'crit' ? '#ffe45e' : '#fff8f0';
           ctx.strokeText(n.text, n.x, y); ctx.fillText(n.text, n.x, y); ctx.restore();
         });

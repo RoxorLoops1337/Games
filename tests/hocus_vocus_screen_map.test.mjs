@@ -1571,6 +1571,19 @@ await t.test('a missing or throwing ART.map never breaks the page: fallbacks dra
   t.eq(errs(g), 0, 'and not as errors');
 });
 
+await t.test('the Act reaches the art: paper gets opts.chapter and every hex gets it too (the Act picks the ground tone and the doodles), in all three Acts', async () => {
+  for (const chapter of [1, 2, 3]) {
+    const g = fresh({ seed: chapter }); const R = mkRun(g, { seed: 9, chapter });
+    g._run("globalThis.__act = { paper: [], hex: [] }; { const p = ART.map.paper, h = ART.map.hex; ART.map.paper = function (c, w, hh, x, y, z, o) { __act.paper.push(o && o.chapter); return p.apply(this, arguments); }; ART.map.hex = function (c, k, x, y, s, o) { __act.hex.push(o && o.chapter); return h.apply(this, arguments); }; }");
+    await open(g, R); fitCam(g);
+    for (let i = 0; i < 4; i++) g._raf(16);
+    const act = g._run('__act');
+    t.ok(act.paper.length > 0 && act.paper.every((c) => c === chapter), 'chapter ' + chapter + ': every paper call carries the Act (' + JSON.stringify(act.paper.slice(0, 3)) + ')');
+    t.ok(act.hex.length > 100 && act.hex.every((c) => c === chapter), 'chapter ' + chapter + ': every hex call carries the Act (' + act.hex.length + ' calls)');
+    t.eq(errs(g), 0, 'chapter ' + chapter + ': clean');
+  }
+});
+
 // ==================================================================================================== the animated paths (realtime: the frame clock decides)
 // boot starts with the title's fade transition, which realtime plays out on the frame clock: let it finish before the suite navigates
 const rt = async (o = {}) => { const g = fresh({ realtime: true, ...o }); await g._tick(1200); return g; };

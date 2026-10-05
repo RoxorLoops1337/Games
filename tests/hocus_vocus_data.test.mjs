@@ -933,9 +933,12 @@ t.test('index.html: layers, boot watchdog and load order', () => {
   t.ok(/window\.__booted/.test(html) && /Try again/.test(html) && /6000/.test(html), 'watchdog waits for __booted and offers Try again');
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
   t.eq(new Set(scripts).size, scripts.length, 'no script listed twice'); t.eq(scripts[0], 'js/util.js', 'util first'); t.eq(scripts[1], 'js/data.js', 'data second'); t.eq(scripts[scripts.length - 1], 'js/main.js', 'main last');
-  const need = ['data_text', 'data_cards_hanae', 'data_cards_kuro', 'data_cards_suzu', 'data_cards_raiga', 'data_cards_shared', 'data_enemies_1', 'data_enemies_2', 'data_enemies_3', 'data_relics', 'data_gems', 'data_events', 'data_meta', 'art', 'art_heroes', 'art_enemies_1', 'art_enemies_2', 'art_enemies_3', 'art_cards', 'art_icons', 'art_scenes', 'art_map', 'art_fx', 'audio', 'combat', 'map', 'run', 'meta', 'ui', 'scene', 'screen_menu', 'screen_map', 'screen_combat', 'screen_node', 'screen_end', 'tutorial', 'main'];
+  const need = ['data_text', 'data_cards_hanae', 'data_cards_kuro', 'data_cards_suzu', 'data_cards_raiga', 'data_cards_shared', 'data_enemies_1', 'data_enemies_2', 'data_enemies_3', 'data_relics', 'data_gems', 'data_events', 'data_meta', 'data_samples', 'art', 'art_cast_kit', 'art_cast', 'art_enemies_1', 'art_enemies_2', 'art_enemies_3', 'art_cards', 'art_icons', 'art_scenes', 'art_map', 'art_fx', 'audio', 'combat', 'map', 'run', 'meta', 'ui', 'scene', 'screen_menu', 'screen_map', 'screen_combat', 'screen_node', 'screen_end', 'tutorial', 'main'];
   need.forEach((n) => t.ok(scripts.indexOf(`js/${n}.js`) > 1, `${n}.js is listed`));
   const design = read('DESIGN.md');
+  // P8: the owners' sample manifest is a data file: after the last content file, before the first art file, and named in DESIGN section 3
+  t.ok(scripts.indexOf('js/data_samples.js') === scripts.indexOf('js/data_meta.js') + 1 && scripts.indexOf('js/data_samples.js') + 1 === scripts.indexOf('js/art.js'), 'data_samples.js sits right after data_meta.js and right before art.js');
+  t.ok(/^js\/data_samples\.js\s/m.test(design), 'DESIGN section 3 lists js/data_samples.js');
   scripts.forEach((s) => t.ok(design.includes(s.replace(/^js\//, '')) || design.includes(s.replace(/^js\//, '').replace(/\.js$/, '')), `DESIGN lists ${s}`));
 });
 t.test('util: rng streams and date key', () => {

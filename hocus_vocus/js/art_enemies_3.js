@@ -1,39 +1,59 @@
-// Echowake -- ART.enemy art for VERSE III, the Thunderless Citadel (a storm fortress above crimson clouds where the Hush eats every sound: storm constructs
-// beside servants built of grey felt, wadding, futon quilting and cloth gags: mute knights, hush acolytes, felt soldiers and golems). Extends ART (art.js). This file draws exactly the 17 ids of DATA.ROSTER[3] and
-// registers each with ART.enemy.register(id, {draw, bounds}).
+// Hocus Vocus: ART.enemy art for Act III, the Perfect Stage: the biggest talent show in the world with the life polished out of it (every act perfect
+// and identical, blinding opal white and pastel chrome, mirror floors, ring lights like halos, an APPLAUSE sign that never switches off). Extends ART
+// (art.js) and builds on the chibi cast kit's foe kit ART.rj.foe (art_cast_kit.js). This file draws exactly the 17 ids of DATA.ROSTER[3] and
+// registers each with ART.enemy.register(id, {draw, bounds}). The ids stay (bible H1); the names below are the player's names (HV_ENEMIES 4.1).
 //
-//   normals   storm_drone komainu_guardian redaction_knight void_scribe blank_soldier sky_serpent eraser_wraith thunder_crow paper_golem margin_imp
-//   elites    censor_golem storm_whelp black_bar_inquisitor
-//   minions   blank_page spark_mote typo_sprite
-//   boss      boss_editor   phase 0 the Conductor (a pale figure in a felt-grey haori with a white baton), phase 1 the Damper (a hulking giant of
-//                           quilted felt), phase 2 the Hush (a colossal grey face pouring out of him, a faint yamabiko inside)
+//   creatures (E3a)  storm_drone Tuner Drone, komainu_guardian VIP Bouncer, redaction_knight Clapperboard Knight, void_scribe Chrome Siren,
+//                    blank_soldier Synchro Dancer, sky_serpent Streamer Dragon, eraser_wraith Airbrush Wraith, thunder_crow Ring Light Sentinel,
+//                    paper_golem Sequin Golem, margin_imp Glitch Gremlin
+//   rivals (E3b)     censor_golem Big Mute Button, storm_whelp Applause Sign (art word APPLAUSE), black_bar_inquisitor Mannequin Judge (generic)
+//   sidekicks (E3b)  blank_page Lip-Sync Clone, spark_mote Confetti Popper, typo_sprite Pitch Glitch
+//   headliner (E3c)  boss_editor Flawless, Star of the Perfect Stage: phase 0 Flawless (the idol with the mirror mic), phase 1 the Filter (a ring-light
+//                    lens head, selfie-stick arms, the art word FLAWLESS! on the chest band), phase 2 the Gloss (a sky-filling mirror face)
 //
-// CONTRACT (DESIGN 5.6). draw(ctx, o) receives the context ALREADY translated to the feet centre and scaled; it paints around (0, 0), y negative up, facing
-// LEFT. o = {s, pose, t, pt, hpPct, phase, glow, flip}. t is absolute seconds (loops), pt seconds since the pose began (one-shot poses). Poses are
-// LISTS.enemyPoses: idle attack hurt block buff die telegraph. Elite ornament, the aura ring and the ground shadow are drawn by ART.enemy.draw: nothing
-// here duplicates them. Every id is deterministic (no clock, no unseeded random call), never throws for odd input, and keeps save and restore balanced.
+// CONTRACT (DESIGN 5.6, unchanged). draw(ctx, o) receives the context ALREADY translated to the feet centre and scaled; it paints around (0, 0), y
+// negative up, facing LEFT. o = {s, pose, t, pt, hpPct, phase, glow, flip}. t is absolute seconds (loops), pt seconds since the pose began (one-shot
+// poses). Poses are LISTS.enemyPoses: idle attack hurt block buff die telegraph, with the Echowake timings (POSE_MS below). Elite ornament, the aura
+// ring and the ground shadow are drawn by ART.enemy.draw: nothing here duplicates them. Every id is deterministic (no clock, never the banned random
+// call), never throws for odd input, and keeps save and restore balanced.
 //
-// HOW THEY ARE BUILT (cutout puppets, the same trick as the heroes).
-//   A creature is a handful of PARTS (a head, an arm, a page, a lantern), each drawn ONCE at rest with the toolkit (celFill, ribbon, ...) into a cached
-//   sprite per raster scale q = ceil(2 * s) / 2, then composited every frame under its own transform (a pivot, a rotation, a squash) so the pieces
-//   move independently. Things that flow (tails, necks, cloth, whiskers, felt) are ART.tk.chain parts: one baked drawing sliced into slabs that bend
-//   at joints. Whatever changes every frame is drawn LIVE and cheaply: eyes (blink, look, flare), lightning, glows, sparks, cotton fluff, orbiting marks.
-//   A shared pose state (wind-up, strike, recoil, guard, buff pulse, dissolve) is read by each creature's rig(), so every creature answers every pose.
-//   Death is a themed dissolve: the creature is clipped by shrinking cells (cotton, felt, shards) or gag strips or a muffling wipe, with matching
-//   fragments flying away (felt scraps, cloth gags, notes, cotton puffs, stone chunks, sparks, feathers). A hurt pose flashes a baked white silhouette.
-//   Chapter look: the Hush is grey felt, cotton white and wrapped gags, the storm is electric cyan and yellow, both against a crimson sky, so creatures
-//   carry a cool or pale body, a dark ink line and one hot emissive accent that pops off the red.
+// THE LOOK (HV_ART_AUDIO 1 and 4, HV_ENEMIES 4.4 and 6). The owners' chibi cast is the style authority: an even outline (the foe kit's Act III slate
+// #5a5f7a, its width by size class), flat cel colour with one hard shadow and one highlight, big flat-cel eyes, round bouncy shapes, stubby limbs,
+// cute faces. The Act III palette is the Gloss (opal #f4f1fb, lilac #e6d9ff, mint #d9fff4, blush #ffe3f1), chrome #c9cbd6 and one mirror gradient;
+// nothing saturated except ONE small accent per creature. Every creature is symmetric until hurt, and every face wears the one shared Gloss smile.
+// Two gags carry the Act: a hurt pose cracks a hairline of REAL colour (warm, saturated, a little messy) through the polish for a moment; the win-over
+// (the die pose, HV_ENEMIES 6.4) flakes the Gloss off, gives the creature its real colours, a warm line and a lopsided real smile with one eyebrow
+// up, one happy hop, then a pop into confetti that breaks the grid, leaving a small sparkle of real colour on the floor. Nothing is dark or scary.
+//
+// HOW THEY ARE BUILT (cutout puppets).
+//   A creature is a handful of PARTS (a head, an arm, a lens), each drawn ONCE at rest into a cached sprite per raster scale q = ceil(2 * s) / 2 and
+//   composited every frame under its own transform (a pivot, a rotation, a squash). Things that flow (streamers, a ponytail, a gown hem) are
+//   ART.tk.chain parts: one baked drawing sliced into slabs that bend at joints. Every part has three baked variants: the polished one (the paint
+//   with the Gloss film baked over it: an opalescent wash and a diagonal highlight sweep in creature space, so every part of a creature shares one
+//   sweep), 'w' (the white silhouette of the hurt flash) and 'r' (the real colours of the win-over: spec.real overrides spec.col, the line turns
+//   warm, no film). Whatever changes every frame is drawn LIVE and cheaply: eyes (blink, look), the Gloss smile, propellers, pitch lines, mist,
+//   sparkles, the hurt crack. One shared pose state (wind-up, strike, recoil, guard, buff pulse, telegraph) is read by each creature's rig().
+//
+// THE POLISH HELPER SET (HV_ART_AUDIO 4.3, used by every creature): chrome(S, shape, o) two-band chrome with one mirror streak; mirror(S, shape, o)
+// a reflective panel in the one mirror gradient; sequins(g, x, y, w, h, o) aligned sequin discs that flick off as o.k rises; ringLight(S, x, y, r, o)
+// a ring light torus with its LEDs; crack(c, x, y, s, seed, k) the hurt gag; confettiGrid(c, box, p, broken, seed) square confetti that falls in a
+// grid (or breaks it); reflection(c, fn, floorY, alpha) the cheap mirror-floor copy (the gallery cells use it). The Gloss smile, the eyes, the
+// sheen and the win-over come from the foe kit.
 //
 // EXTRAS beyond DESIGN 5.6
-//   ART.enemy.warm3(id, s) -> parts baked      pre-bake every sprite of a chapter 3 creature at the raster scale for s (avoids a first-frame hitch)
+//   ART.enemy.warm3(id, s) -> parts baked      pre-bake every sprite of an Act III creature at the raster scale for s (avoids a first-frame hitch)
 //   ART.enemy.ids3() -> the 17 ids drawn here
-//   boss_editor is ONE spec holding the parts of all three forms (prefixes p0_ p1_ p2_) and one rig per form, chosen by o.phase (0 Conductor, 1 Damper, 2 Hush;
-//   later values keep the last form); each form has its own bounds-compatible dissolve (felt, notes and gags; cotton puffs; notes and gags imploding).
-//   Gallery sheets: enemies3 (normals, elites, minions, several poses each), boss3 (The Conductor, three phases, every pose, large), enemies3_anim (film
-//   strips of two creatures), enemies3_dev (params id[,id]|all pose|all zoom t pt phase hp: the workbench).
+//   boss_editor is ONE spec holding the parts of all three forms (prefixes p0_ p1_ p2_) and one rig per form, chosen by o.phase (later values keep
+//   the last form). Each form has its own win-over, and every one ends the same way: left floating is a tiny shy round lens with a nervous smile
+//   that wobbles one crooked note (HV_ENEMIES 5.3).
+//   Gallery sheets: enemies3 (Act III, the Perfect Stage: every creature, rival and sidekick in several poses), boss3 (Flawless, all three forms:
+//   each form large, then every pose), enemies3_anim (film strips of two creatures), enemies3_dev (params id[,id]|all pose|all zoom t pt phase hp).
+//
+// RIG MAP (HV_ENEMIES 4.5): each creature keeps the motion of the Echowake rig it started from, named in its header below.
 (() => {
   'use strict';
-  const tk = ART.tk, pal = tk.pal;
+  const tk = ART.tk, RJ = ART.rj, foe = RJ && RJ.foe;
+  if (!foe) return;                                     // the cast kit loads first (index.html); without it there is nothing to draw with
   const clamp = tk.clamp, lerp = tk.lerp, num = tk.num, ease = tk.ease;
   const TAU = Math.PI * 2, PI = Math.PI;
   const sin = Math.sin, cos = Math.cos;
@@ -41,182 +61,350 @@
   const sm = tk.smoothstep;
   const SPECS = {};
   const PAD = 8;
-  const LIGHT = -2.05;                                  // key light: up and to the LEFT, so the faces they turn toward the heroes are lit
   const POSES = ['idle', 'attack', 'hurt', 'block', 'buff', 'die', 'telegraph'];
   const POSE_MS = { attack: 420, hurt: 260, block: 300, buff: 400, die: 700, telegraph: 0, idle: 0 };
 
-  // chapter palette
-  const C = {
-    paper: '#f3e6c8', paper2: '#e6d3a3', white: '#fff8f0', ink: '#140f2e', night: '#0d0b1e', bar: '#0b0916',
-    cyan: '#5ff5ff', azure: '#5fb4ff', volt: '#ffe45e', crimson: '#e8383d', red: '#ff3a4a', magenta: '#ff3a8a',
-    brass: '#d9a441', gold: '#f5c96a', stone: '#8d94b8', iron: '#4a4f6e', pink: '#f4a3b8', violet: '#5b3fa8', lilac: '#b9a8ff',
-    felt: '#6e6a7e', feltL: '#9d99b2', feltD: '#46425a', wad: '#f2f0f6', foam: '#2e2b3a', static: '#8e8aa3',
+  // ---------------------------------------------------------------------------------------------------------------
+  // the Act III palette: the Gloss tokens, chrome, the slate line, the one accent, and the REAL colours the win-over and the hurt crack reveal
+  // ---------------------------------------------------------------------------------------------------------------
+  const G = {
+    opal: '#f4f1fb', lilac: '#e6d9ff', mint: '#d9fff4', blush: '#ffe3f1', chrome: '#c9cbd6', chromeL: '#dfe0ea', chromeD: '#a4a8bc',
+    line: '#5a5f7a', white: '#ffffff', porcelain: '#fbf8ff', accent: '#ff4d6d', lemon: '#fff3b8', mist: '#f7f5ff', slateD: '#474b63',
   };
+  const REAL_LINE = '#2d2747';                         // the warm line a won-over creature gets back
+  const REAL = ['#ff5a3d', '#ffd84d', '#ff6fb5', '#3fcf6a', '#7cc6ff', '#8b4dff'];   // the hurt crack and the floor sparkle: real, warm, a little messy
+  const LW = { s: 2.0, m: 2.4, l: 2.8, xl: 3.2 };      // the foe kit's main line by size class (foe.ink)
 
   // ---------------------------------------------------------------------------------------------------------------
-  // Hush materials (6.1 rule 7): quilted grey felt with stitched seams, cotton wadding, layered futon quilting, wrapped cloth gags with a darker cord
-  // across them, grey ash and frost flecks. Everything the Hush builds is soft, so nothing here rings.
+  // shape helpers (control-point arrays for RJ.cel / tk.celFill)
   // ---------------------------------------------------------------------------------------------------------------
-  // a dashed stitch line through the points
-  function stitch(g, pts, o) {
-    o = o || {};
-    g.save();
-    g.setLineDash([num(o.dash, 3.2), num(o.gap, 2.6)]);
-    g.lineCap = 'butt';
-    tk.inkPath(g, pts, { w: num(o.w, 1.3), color: o.color || C.wad, alpha: num(o.alpha, 0.7), taper: 0, pressure: 'flat', wobble: 0 });
-    g.restore();
-  }
-  // a wrapped cloth gag: a felt band with the darker cord wound diagonally across it (the old black mute bar, same rectangle)
-  function gag(g, x, y, w, h, o) {
-    o = o || {};
-    g.save();
-    g.fillStyle = o.fill || C.felt; g.fillRect(x, y, w, h);
-    g.beginPath(); g.rect(x, y, w, h); g.clip();
-    g.strokeStyle = o.cord || C.feltD; g.lineWidth = Math.max(1.2, Math.min(h * 0.28, 2.6)); g.lineCap = 'butt';
-    const step = Math.max(4, h * 0.9);
-    g.beginPath();
-    for (let cx = x - h; cx < x + w + h; cx += step) { g.moveTo(cx, y + h); g.lineTo(cx + h * 0.7, y); }
-    g.stroke();
-    g.globalAlpha = 0.35; g.strokeStyle = C.wad; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(x, y + 0.8); g.lineTo(x + w, y + 0.8); g.stroke();
-    g.restore();
-  }
-  function gagPoly(g, pts, o) {
-    o = o || {};
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    pts.forEach((p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); });
-    g.save();
-    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath();
-    g.fillStyle = o.fill || C.felt; g.fill(); g.clip();
-    const h = Math.min(y1 - y0, 14);
-    g.strokeStyle = o.cord || C.feltD; g.lineWidth = Math.max(1.2, Math.min(h * 0.28, 2.6)); g.lineCap = 'butt';
-    const step = Math.max(4, h * 0.9);
-    g.beginPath();
-    for (let cx = x0 - (y1 - y0); cx < x1 + (y1 - y0); cx += step) { g.moveTo(cx, y1); g.lineTo(cx + (y1 - y0) * 0.7, y0); }
-    g.stroke();
-    g.restore();
-  }
-  // layered futon quilting: diamond stitch lines across a box (call inside a clip)
-  function quiltDiamonds(g, x, y, w, h, step, col, alpha) {
-    g.save();
-    g.strokeStyle = col || C.feltD; g.globalAlpha = g.globalAlpha * num(alpha, 0.55); g.lineWidth = 1.2; g.setLineDash([3, 2.4]);
-    g.beginPath();
-    for (let d = -h; d < w + h; d += step) { g.moveTo(x + d, y); g.lineTo(x + d + h, y + h); g.moveTo(x + d + h, y); g.lineTo(x + d, y + h); }
-    g.stroke();
-    g.restore();
-  }
-  // grey ash and frost flecks: short dashes in the two fleck colours (the old static dashes)
-  function ashFlecks(g, x, y, w, h, n, seed, o) {
-    o = o || {};
-    g.save();
-    g.lineCap = 'round'; g.lineWidth = num(o.w, 1.6);
-    const ga = g.globalAlpha;
-    for (let i = 0; i < n; i++) {
-      const fx = x + tk.vary(seed, 'fx' + i) * w, fy = y + tk.vary(seed, 'fy' + i) * h, l = 2 + 5 * tk.vary(seed, 'fl' + i);
-      g.globalAlpha = ga * num(o.alpha, 0.8);
-      g.strokeStyle = i % 2 ? C.static : C.wad;
-      g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx + l, fy + (tk.vary(seed, 'fd' + i) - 0.5) * 2); g.stroke();
-    }
-    g.restore();
-  }
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // shape helpers (control-point arrays for tk.celFill / tk.inkPath)
-  // ---------------------------------------------------------------------------------------------------------------
-  const E = (cx, cy, rx, ry, n, rot) => tk.ellipsePts(cx, cy, rx, ry, n || Math.max(10, Math.round(Math.max(rx, ry) / 3) + 8), rot || 0);
-  // a rounded capsule between two points with end widths wa and wb
-  function cap(ax, ay, bx, by, wa, wb) {
-    const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, nx = -uy, ny = ux;
-    const ra = wa / 2, rb = wb / 2, mx = (ax + bx) / 2, my = (ay + by) / 2, rm = (ra + rb) / 2 * 1.04;
-    return [[ax + nx * ra, ay + ny * ra], [mx + nx * rm, my + ny * rm], [bx + nx * rb, by + ny * rb], [bx + ux * rb * 1.05, by + uy * rb * 1.05],
-      [bx - nx * rb, by - ny * rb], [mx - nx * rm, my - ny * rm], [ax - nx * ra, ay - ny * ra], [ax - ux * ra * 1.05, ay - uy * ra * 1.05]];
-  }
-  // a straight-edged polygon descriptor, and an axis-aligned rectangle of it
-  const poly = (pts) => ({ poly: pts });
-  const rect = (x, y, w, h) => ({ poly: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]] });
-  // a rectangle with the corners skewed: top edge shifted by sk px (paper and cardboard look folded, not machined)
-  const quad = (x, y, w, h, sk) => ({ poly: [[x + (sk || 0), y], [x + w + (sk || 0), y], [x + w, y + h], [x, y + h]] });
-  const mirrorX = (pts) => pts.map((p) => { const q = [-p[0], p[1]]; if (p[2]) q.push(p[2]); return q; }).reverse();
-  // a zig-zag row of points along x0..x1 at y with n teeth of height dy (sharp corners): jaws, torn paper, lightning fins
-  function zig(x0, x1, y, dy, n, jitter, seed) {
-    const pts = [], step = (x1 - x0) / n;
-    for (let i = 0; i < n; i++) {
-      const jx = jitter ? (tk.vary(seed || 3, 'zx' + i) - 0.5) * jitter : 0, jy = jitter ? (tk.vary(seed || 3, 'zy' + i) - 0.5) * jitter * 0.6 : 0;
-      pts.push([x0 + step * i, y, 1], [x0 + step * (i + 0.5) + jx, y + dy + jy, 1]);
-    }
-    pts.push([x1, y, 1]);
+  const E = (cx, cy, rx, ry, n, rot) => tk.ellipsePts(cx, cy, rx, ry, n || Math.max(12, Math.round(Math.max(rx, ry) / 3) + 10), rot || 0);
+  // a rounded rectangle with true quarter-arc corners (three points each), so the spline smoothing never overshoots into spikes at the ends of
+  // thin bars; r up to half the short side gives a stadium
+  function RR(x, y, w, h, r) {
+    w = Math.abs(num(w, 1)); h = Math.abs(num(h, 1));
+    r = clamp(r === undefined ? Math.min(w, h) * 0.25 : num(r, 0), 0, Math.min(w, h) / 2);
+    if (r < 0.5) return [[x, y, 1], [x + w, y, 1], [x + w, y + h, 1], [x, y + h, 1]];
+    const pts = [];
+    const corner = (cx, cy, a0) => { for (let i = 0; i <= 2; i++) { const a = a0 + i * PI / 4, p = [cx + cos(a) * r, cy + sin(a) * r], q = pts[pts.length - 1]; if (!q || Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.4) pts.push(p); } };
+    corner(x + w - r, y + r, -PI / 2); corner(x + w - r, y + h - r, 0); corner(x + r, y + h - r, PI / 2); corner(x + r, y + r, PI);
+    const a = pts[0], b = pts[pts.length - 1];
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) <= 0.4) pts.pop();
     return pts;
+  }
+  // a closed shape symmetric about x = 0 from its LEFT half listed top to bottom (x <= 0); points on the axis are not doubled, corners keep their flag.
+  // Act III is perfectly symmetric, so most bodies are drawn this way.
+  function sym(half) {
+    const back = half.filter((p) => Math.abs(p[0]) > 0.001).reverse().map((p) => (p[2] ? [-p[0], p[1], 1] : [-p[0], p[1]]));
+    return half.concat(back);
   }
   // deterministic tiny helpers for live animation
   const hv = (id, salt) => tk.vary(id, salt);
-  const wob = (t, per, ph) => sin(TAU * (t / per + (ph || 0)));
-  const flick = (t, seed, rate) => clamp(0.5 + 0.5 * (tk.noise1(t * (rate || 8) + seed * 13.7, seed | 0) * 2 - 1), 0, 1);
+  const fr = (v) => v - Math.floor(v);
+  const blink = (t, id, per) => {
+    per = per || 3.6 + 1.6 * hv(id, 'bp');
+    const ph = ((t + hv(id, 'bo') * per) % per + per) % per;
+    return ph < 0.16 ? Math.abs(ph - 0.08) / 0.08 : 1;                    // 1 open, dips to 0 for a moment
+  };
+  // move, rotate and scale the context about a pivot (px, py): the way every creature body is posed
+  function xform(ctx, px, py, dx, dy, rot, sx, sy) {
+    ctx.translate(px + dx, py + dy);
+    if (rot) ctx.rotate(rot);
+    if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
+    ctx.translate(-px, -py);
+  }
+  // point and unit tangent at fraction u (0..1) along a control-point spine
+  function along(spine, u) {
+    const d = tk.flatten(spine, { step: 2 }), n = d.length / 2 - 1, L = [0];
+    for (let i = 1; i <= n; i++) L.push(L[i - 1] + Math.hypot(d[2 * i] - d[2 * i - 2], d[2 * i + 1] - d[2 * i - 1]));
+    const s = clamp(u, 0, 1) * L[n];
+    let i = 1;
+    while (i < n && L[i] < s) i++;
+    const f = clamp((s - L[i - 1]) / ((L[i] - L[i - 1]) || 1), 0, 1);
+    const x = lerp(d[2 * i - 2], d[2 * i], f), y = lerp(d[2 * i - 1], d[2 * i + 1], f);
+    let tx = d[2 * i] - d[2 * i - 2], ty = d[2 * i + 1] - d[2 * i - 1];
+    const tl = Math.hypot(tx, ty) || 1;
+    return { x, y, tx: tx / tl, ty: ty / tl };
+  }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // the paint helper handed to every part
+  // the paint helper handed to every part: the house cel in the Act line (or the warm real line), limbs, and the POLISH set
   // ---------------------------------------------------------------------------------------------------------------
-  function makeS(g, spec) {
-    const c = spec.col || {}, lw = spec.lw || 3;
-    const S = { g, c, lw, spec };
-    // one cel-shaded closed shape with the house defaults: outline lw, hard shadow, backlight rim in the creature's rim colour
-    S.cel = (pts, base, o) => tk.celFill(g, pts, base, Object.assign({ line: lw, light: LIGHT, rim: c.rim, rimW: 1.7, rimAlpha: 0.8, shadowT: c.shT, lineColor: c.lineColor, wobble: c.wobble }, o));
+  function makeS(g, spec, v) {
+    const real = v === 'r';
+    const c = real ? Object.assign({}, spec.col, spec.real || {}) : spec.col;
+    const L = LW[spec.size] || 2.4, lc = real ? REAL_LINE : G.line;
+    const S = { g, c, L, lc, real, spec };
+    S.cel = (pts, base, o) => RJ.cel(g, pts, base, Object.assign({ line: L, lineColor: lc, wobble: 0 }, o));
     S.ell = (cx, cy, rx, ry, base, o) => S.cel(E(cx, cy, rx, ry), base, o);
-    S.line = (pts, o) => tk.inkPath(g, pts, Object.assign({ w: 1.5, color: pal.ink }, o));
-    S.fill = (pts, col, alpha, tension) => { g.save(); if (alpha !== undefined) g.globalAlpha *= cA(alpha); g.beginPath(); tk.trace(g, pts, 0, 0, tension); g.fillStyle = col; g.fill(); g.restore(); };
-    S.rib = (spine, base, o) => tk.ribbon(g, spine, base, Object.assign({ line: lw, light: LIGHT, rim: c.rim, rimW: 1.4, gloss: false, strands: 0 }, o));
-    S.clip = (pts, tension) => { g.beginPath(); tk.trace(g, pts, 0, 0, tension); g.clip(); };
-    S.dots = (x, y, w, h, o) => tk.halftone(g, x, y, w, h, Object.assign({ d: 5, r: 1.1, alpha: 0.4, force: true }, o));
-    S.glow = (x, y, r, col, a) => tk.glow(g, x, y, r, col, a);
+    S.line = (pts, o) => RJ.ink(g, pts, Object.assign({ w: L * 0.75, color: lc, taper: 0.25, wobble: 0 }, o));
+    S.limb = (a, b, w, col, o) => RJ.blob(g, [{ a, b, w }], Object.assign({ fill: col, shade: RJ.shade(col, 0.1), ink: lc, L, lit: 1.3 }, o));
+    S.blob = (items, col, o) => RJ.blob(g, items, Object.assign({ fill: col, shade: RJ.shade(col, 0.1), ink: lc, L, lit: 1.3 }, o));
+    S.fill = (pts, col, alpha) => RJ.fillPts(g, pts, col, alpha === undefined ? 1 : alpha);
+    S.chrome = (pts, o) => chrome(S, pts, o);
+    S.mirror = (pts, o) => mirror(S, pts, o);
+    S.glove = (x, y, ang, k, col) => glove(S, x, y, ang, k, col);
     return S;
   }
-  // washi grain baked into every sprite, only where there is paint
-  function grainOver(g, x, y, w, h) {
-    g.save(); g.globalCompositeOperation = 'source-atop';
-    tk.paperGrain(g, x, y, w, h, { alpha: 0.7, force: true });
+
+  // two-band chrome: a pale upper band, a darker reflected lower band with a hard horizon, one mirror streak. o: base, horizon (0..1 of the
+  // height), streak (false to skip), tension, hi
+  function chrome(S, pts, o) {
+    o = o || {};
+    const base = o.base || (S.real ? S.c.chromeReal || '#9fb4ff' : G.chromeL), box = tk.shapeBox(pts) || [0, 0, 1, 1];
+    const bw = box[2] - box[0], bh = box[3] - box[1], hz = box[1] + bh * num(o.horizon, 0.56);
+    S.cel(pts, base, {
+      tension: o.tension, shadow: o.shadow || RJ.shade(base, 0.16), hi: o.hi === false ? false : '#ffffff', hiW: 2,
+      decor(g) {
+        g.fillStyle = S.real ? 'rgba(40,30,90,0.16)' : 'rgba(120,124,156,0.22)'; g.fillRect(box[0] - 2, hz, bw + 4, box[3] - hz + 2);
+        g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(box[0] - 2, hz - Math.max(1, bh * 0.025), bw + 4, Math.max(1, bh * 0.025));
+        if (o.streak !== false) {
+          const sx = box[0] + bw * 0.16, sw = Math.max(2, bw * 0.07);
+          g.fillStyle = 'rgba(255,255,255,0.8)';
+          g.beginPath(); g.moveTo(sx, box[1] - 2); g.lineTo(sx + sw, box[1] - 2); g.lineTo(sx + sw + bh * 0.3, box[3] + 2); g.lineTo(sx + bh * 0.3, box[3] + 2); g.closePath(); g.fill();
+          g.globalAlpha = 0.5; g.beginPath(); g.moveTo(sx + sw * 1.8, box[1] - 2); g.lineTo(sx + sw * 2.3, box[1] - 2); g.lineTo(sx + sw * 2.3 + bh * 0.3, box[3] + 2); g.lineTo(sx + sw * 1.8 + bh * 0.3, box[3] + 2); g.closePath(); g.fill();
+        }
+      },
+    });
+  }
+  // a reflective panel in THE mirror gradient (lilac to mint to blush on the diagonal) with two white streaks. o: base, tension, streaks (2)
+  function mirror(S, pts, o) {
+    o = o || {};
+    const box = tk.shapeBox(pts) || [0, 0, 1, 1], bw = box[2] - box[0], bh = box[3] - box[1];
+    S.cel(pts, o.base || (S.real ? '#bfe9ff' : G.opal), {
+      tension: o.tension, shadow: false, hi: false,
+      decor(g) {
+        const gr = g.createLinearGradient(box[0], box[1], box[2], box[3]);
+        if (S.real) { gr.addColorStop(0, '#9fd8ff'); gr.addColorStop(0.5, '#ffd6f0'); gr.addColorStop(1, '#fff0a0'); } else { gr.addColorStop(0, G.lilac); gr.addColorStop(0.5, G.mint); gr.addColorStop(1, G.blush); }
+        g.fillStyle = gr; g.fillRect(box[0] - 2, box[1] - 2, bw + 4, bh + 4);
+        const n = o.streaks === undefined ? 2 : o.streaks;
+        g.fillStyle = 'rgba(255,255,255,0.75)';
+        for (let i = 0; i < n; i++) {
+          const sx = box[0] + bw * (0.18 + i * 0.2), sw = Math.max(2, bw * (i ? 0.05 : 0.1));
+          g.beginPath(); g.moveTo(sx - bh * 0.25, box[1] - 2); g.lineTo(sx + sw - bh * 0.25, box[1] - 2); g.lineTo(sx + sw + bh * 0.25, box[3] + 2); g.lineTo(sx + bh * 0.25, box[3] + 2); g.closePath(); g.fill();
+        }
+        if (o.decor) o.decor(g, box);
+      },
+    });
+  }
+  // aligned sequin discs over [x, y, w, h] (call inside a clip): rows of small discs with a gradient through o.cols, each with a catch of light.
+  // o.k 0..1 drops sequins (deterministic per index) so a hurt or bare patch shows; o.d spacing, o.r radius, o.seed
+  function sequins(g, x, y, w, h, o) {
+    o = o || {};
+    const d = num(o.d, 7), r = num(o.r, d * 0.42), cols = o.cols || [G.lilac, G.blush, G.opal], k = clamp(num(o.k, 0), 0, 1), seed = o.seed || 1;
+    const rows = Math.ceil(h / (d * 0.86)) + 1, n = Math.ceil(w / d) + 1;
+    g.save();
+    g.lineWidth = Math.max(0.6, r * 0.26);
+    for (let j = 0; j < rows; j++) {
+      const yy = y + j * d * 0.86, col = cols[Math.min(cols.length - 1, Math.floor(j / rows * cols.length))];
+      for (let i = 0; i < n; i++) {
+        if (k > 0 && hv(seed, 'q' + i + '_' + j) < k) continue;
+        const xx = x + i * d + (j % 2 ? d / 2 : 0);
+        g.beginPath(); g.arc(xx, yy, r, 0, TAU); g.fillStyle = col; g.fill();
+        g.strokeStyle = 'rgba(90,95,122,0.35)'; g.stroke();
+        g.beginPath(); g.arc(xx - r * 0.3, yy - r * 0.32, r * 0.32, 0, TAU); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fill();
+      }
+    }
     g.restore();
   }
-  const qOf = (s) => Math.max(0.5, Math.ceil(clamp(num(s, 1), 0.25, 2.5) * 2) / 2);
+  // a ring light: a white diffuser torus (outer r, inner r * o.inner) with an even ring of LEDs, a chrome outer lip. o: inner (0.62), leds (16), lit (0..1)
+  function ringLight(S, x, y, r, o) {
+    o = o || {};
+    const ri = r * num(o.inner, 0.62), n = o.leds || 16, g = S.g;
+    const ring = (gg) => { gg.beginPath(); gg.arc(x, y, r, 0, TAU); gg.moveTo(x + ri, y); gg.arc(x, y, ri, 0, TAU, true); };
+    g.save();
+    ring(g); g.fillStyle = S.real ? '#fff4c2' : '#fbfaff'; g.fill('evenodd');
+    // the soft lower half shading of the torus, clipped to the ring
+    ring(g); g.clip('evenodd');
+    g.beginPath(); g.arc(x - r * 0.12, y + r * 0.14, r, 0, TAU); g.moveTo(x + ri * 0.9, y); g.arc(x, y, ri * 1.04, 0, TAU, true);
+    g.fillStyle = S.real ? 'rgba(255,170,90,0.35)' : 'rgba(201,203,214,0.55)'; g.fill('evenodd');
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU, rr = (r + ri) / 2;
+      g.beginPath(); g.arc(x + cos(a) * rr, y + sin(a) * rr, Math.max(0.8, (r - ri) * 0.12), 0, TAU); g.fillStyle = S.real ? '#ffd84d' : '#fffbe6'; g.fill();
+    }
+    g.restore();
+    g.save(); g.lineWidth = S.L; g.strokeStyle = S.lc;
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke();
+    g.lineWidth = S.L * 0.8; g.beginPath(); g.arc(x, y, ri, 0, TAU); g.stroke();
+    g.restore();
+  }
+  // a cartoon white glove (the Applause Sign, the judge's hand): a fat mitten with three finger bumps and a cuff, at (x, y) pointing along ang
+  function glove(S, x, y, ang, k, col) {
+    const g = S.g;
+    k = k || 1;
+    g.save(); g.translate(x, y); g.rotate(ang || 0); g.scale(k, k);
+    S.blob([{ e: [9, 0, 10, 9] }, { a: [12, -6], b: [20, -6], w: 6 }, { a: [12, 0], b: [21, 0], w: 6 }, { a: [12, 6], b: [19, 6], w: 6 }, { a: [4, -8], b: [9, -13], w: 6 }], col || '#ffffff', { L: S.L * 0.85 / Math.sqrt(k) });
+    S.cel(RR(-6, -8, 7, 16, 3), col || '#ffffff', { line: S.L * 0.8 / k });
+    RJ.ink(g, [[13, -3], [20, -3]], { w: 0.9, color: S.lc, taper: 0.4, alpha: 0.6 });
+    RJ.ink(g, [[13, 3], [20, 3]], { w: 0.9, color: S.lc, taper: 0.4, alpha: 0.6 });
+    g.restore();
+  }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // spec registry and baking
+  // live helpers (drawn every frame, cheap): the hurt crack, square confetti, the mirror-floor copy, pitch lines, mist, the face
   // ---------------------------------------------------------------------------------------------------------------
+  // THE hurt gag: a hairline of REAL colour cracking through the polish at (x, y), s long, k 0..1. Three messy warm strands and a tiny glow.
+  function crack(c, x, y, s, seed, k) {
+    k = cA(k);
+    if (k < 0.04) return;
+    const pts = [[x, y]];
+    let px = x, py = y;
+    const a0 = (hv(seed, 'a') - 0.5) * 1.2 + PI * 0.5;
+    for (let i = 1; i <= 5; i++) { const a = a0 + (i % 2 ? 0.7 : -0.7) * (0.6 + hv(seed, 'j' + i)); px += cos(a) * s / 5; py += sin(a) * s / 5; pts.push([px, py]); }
+    c.save();
+    c.globalAlpha = c.globalAlpha * k;
+    tk.glow(c, x, y + s * 0.4, s * 0.9, '#ff9a4a', 0.35 * k);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const strand = (w, col, ox) => { c.lineWidth = w; c.strokeStyle = col; c.beginPath(); pts.forEach((p, i) => { if (i) c.lineTo(p[0] + ox, p[1]); else c.moveTo(p[0] + ox, p[1]); }); c.stroke(); };
+    strand(4.2, G.line, 0);
+    strand(2.8, REAL[0], 0);
+    strand(1.2, REAL[1], -0.6);
+    c.lineWidth = 1.6; c.strokeStyle = REAL[2];
+    const b = pts[2];
+    c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(b[0] + s * 0.22 * (hv(seed, 'b') > 0.5 ? 1 : -1), b[1] + s * 0.12); c.stroke();
+    c.restore();
+  }
+  // square confetti in a grid over box [x0, y0, x1, y1] falling with p 0..1; broken scatters it (the Gloss losing), else it falls in perfect rows
+  function confettiGrid(c, box, p, broken, seed) {
+    const x0 = box[0], y0 = box[1], w = box[2] - box[0], h = box[3] - box[1], cols = 7, rows = 4, cl = [G.lilac, G.mint, G.blush, G.lemon, G.chrome];
+    p = clamp(p, 0, 1);
+    c.save();
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const k = j * cols + i, sp = broken ? (hv(seed, 'c' + k) - 0.5) : 0, fall = fr(p + j / rows);
+      const x = x0 + (i + 0.5) / cols * w + sp * 40 * fall + (broken ? sin(fall * 9 + k) * 6 : 0), y = y0 + fall * h;
+      const a = sin(PI * fall);
+      if (a < 0.05) continue;
+      c.globalAlpha = a; c.save(); c.translate(x, y); c.rotate(broken ? fall * 6 * sp : 0);
+      c.fillStyle = cl[k % cl.length]; c.fillRect(-3, -3, 6, 6); c.strokeStyle = 'rgba(90,95,122,0.5)'; c.lineWidth = 0.8; c.strokeRect(-3, -3, 6, 6);
+      c.restore();
+    }
+    c.restore();
+  }
+  // the cheap mirror-floor copy: fn(c) drawn upside down about floorY at a low alpha (HV_ENEMIES 4.4: mirror floors double every creature)
+  function reflection(c, fn, floorY, alpha) {
+    c.save();
+    c.translate(0, 2 * floorY); c.scale(1, -1);
+    c.globalAlpha = c.globalAlpha * cA(alpha === undefined ? 0.18 : alpha);
+    try { fn(c); } finally { c.restore(); }
+  }
+  // perfectly regular pitch lines (the Act's "lightning"): a sine wave from (x0, y0) to (x1, y1), amp px, waves n, an outline then a pastel core
+  function pitchLine(c, x0, y0, x1, y1, amp, n, col, w, alpha) {
+    const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l, steps = Math.max(8, Math.round(n * 8));
+    c.save();
+    c.globalAlpha = c.globalAlpha * cA(alpha === undefined ? 1 : alpha);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      c.beginPath();
+      for (let i = 0; i <= steps; i++) { const u = i / steps, o = sin(u * n * TAU) * amp * sin(PI * u); const px = x0 + dx * u + nx * o, py = y0 + dy * u + ny * o; if (i) c.lineTo(px, py); else c.moveTo(px, py); }
+      c.lineWidth = pass ? w : w + 2.4; c.strokeStyle = pass ? col : G.line; c.stroke();
+    }
+    c.restore();
+  }
+  // soft pastel mist puffs drifting from (x, y) along dir (radians): the airbrush, the confetti smoke. o: n, spread, size, life, alpha, cols
+  function mist(c, x, y, t, dir, o) {
+    o = o || {};
+    const n = o.n || 6, life = num(o.life, 1), cols = o.cols || [G.blush, G.lilac, G.mint], m = tk.motion();
+    c.save();
+    for (let i = 0; i < n; i++) {
+      const per = life * (0.8 + 0.4 * hv(o.seed || 1, 'l' + i)), u = fr((t * m + hv(o.seed || 1, 'p' + i) * per) / per);
+      const a = sin(u * PI) * num(o.alpha, 0.6);
+      if (a < 0.03) continue;
+      const d = u * num(o.reach, 60), sp = (hv(o.seed || 1, 's' + i) - 0.5) * num(o.spread, 0.6);
+      c.globalAlpha = cA(a); c.fillStyle = cols[i % cols.length];
+      c.beginPath(); c.arc(x + cos(dir + sp) * d, y + sin(dir + sp) * d, num(o.size, 7) * (0.5 + u * 1.2), 0, TAU); c.fill();
+    }
+    c.restore();
+  }
+  // THE face of an Act III creature (live): eyes from the foe kit and the one shared Gloss smile. Hurt squeezes the eyes and pops a little O; the
+  // win-over (st.won) gives real round eyes, one eyebrow up and a lopsided, real smile. o: kind (foe eye kind), w (eye width), gap, my (mouth
+  // offset below the eyes), sw (smile width), iris, look, open, noMouth, noEyes (only the mouth, at y + my), brow (the brow height above the eyes when won)
+  function face(c, st, x, y, o) {
+    o = o || {};
+    const E0 = st.E, hurt = E0.hurt, won = !!st.won, w = num(o.w, 14), lc = won ? REAL_LINE : G.line;
+    const kind = won && o.kind !== 'needle' ? (o.kind === 'dot' ? 'dot' : 'round') : (o.kind || 'lens');
+    const open = won ? 1 : num(o.open, 1) * (kind === 'lens' || kind === 'needle' ? 1 : blink(st.t, st.spec.id, o.per)) * (1 - 0.75 * hurt);
+    const look = o.look || [0, 0];
+    if (!o.noEyes) foe.eyes(c, x, y, w, { kind: hurt > 0.45 && !won && kind !== 'needle' ? 'round' : kind, open: hurt > 0.45 && !won ? 0.05 : open, look, gap: o.gap, act: 3, lineColor: lc, iris: won ? ['#3a2f6b', '#6f8cff'] : o.iris, h: o.h });
+    if (o.noMouth) return;
+    const my = y + num(o.my, w * 1.1), sw = num(o.sw, w * 0.95);
+    if (won) {
+      // one eyebrow lifts, the smile goes lopsided and real
+      const gap = num(o.gap, w * 1.3), by = y - num(o.brow, w * 0.9);
+      if (!o.noEyes) {
+        RJ.ink(c, [[x - gap / 2 - w * 0.4, by + 1], [x - gap / 2 + w * 0.35, by - 1]], { w: Math.max(1.2, w * 0.13), color: lc, taper: 0.3, wobble: 0 });
+        RJ.ink(c, [[x + gap / 2 - w * 0.4, by - w * 0.32], [x + gap / 2, by - w * 0.48], [x + gap / 2 + w * 0.4, by - w * 0.3]], { w: Math.max(1.2, w * 0.13), color: lc, taper: 0.3, wobble: 0 });
+      }
+      c.save(); c.translate(x, my); c.rotate(-0.16);
+      RJ.mouth(c, sw * 0.12, 0, sw * 1.15, 'happyOpen', { ink: lc });
+      c.restore();
+      if (!o.noEyes) {
+        c.save(); c.globalAlpha = c.globalAlpha * 0.6; c.fillStyle = '#ff8d98';
+        c.beginPath(); c.ellipse(x - gap * 0.75, my - w * 0.15, w * 0.32, w * 0.16, 0, 0, TAU); c.fill();
+        c.beginPath(); c.ellipse(x + gap * 0.75, my - w * 0.15, w * 0.32, w * 0.16, 0, 0, TAU); c.fill();
+        c.restore();
+      }
+    } else if (hurt > 0.45) foe.mouth(c, x, my - sw * 0.1, sw * 0.8, 'O', { ink: lc });
+    else foe.glossSmile(c, x, my, sw, { color: lc });
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // spec registry and baking: three variants per part ('' polished with the Gloss film, 'w' the white hurt flash, 'r' the real colours)
+  // ---------------------------------------------------------------------------------------------------------------
+  const qOf = (s) => Math.max(0.5, Math.ceil(clamp(num(s, 1), 0.25, 2.5) * 2) / 2);
   function define(id, spec) {
     spec.id = id;
     spec.parts = spec.parts || {};
     spec.chains = spec.chains || {};
+    spec.col = spec.col || {};
     spec._chain = {};
     SPECS[id] = spec;
     return spec;
   }
   function boxOf(p) { const b = p.box; return [b[0] - PAD, b[1] - PAD, b[2] + PAD, b[3] + PAD]; }
-  function partSpr(spec, name, q, white) {
+  // the Gloss film baked over a polished part (source-atop keeps it on the paint): an opalescent wash on the creature's diagonal and one soft
+  // highlight sweep, both in CREATURE space so every part of a creature shares them (a phone screen catching the light). spec.film scales it.
+  function filmOver(g, spec, b) {
+    const k = num(spec.film, 1);
+    if (k <= 0) return;
+    const B = spec.bounds, x0 = -B.w / 2, y0 = -B.h, x1 = B.w / 2, w = b[2] - b[0], h = b[3] - b[1];
+    g.save();
+    g.globalCompositeOperation = 'source-atop';
+    const gr = g.createLinearGradient(x0, y0, x1, 0);
+    gr.addColorStop(0, tk.rgba(G.lilac, 0.2 * k)); gr.addColorStop(0.5, tk.rgba(G.mint, 0.12 * k)); gr.addColorStop(1, tk.rgba(G.blush, 0.2 * k));
+    g.fillStyle = gr; g.fillRect(b[0], b[1], w, h);
+    const sw = spec.sweep || [x0 + B.w * 0.3, y0 + B.h * 0.3], bw = Math.max(6, B.w * 0.07), lean = B.h * 0.32;
+    g.fillStyle = tk.rgba('#ffffff', 0.24 * k);
+    g.beginPath(); g.moveTo(sw[0] - bw - lean, sw[1] - B.h); g.lineTo(sw[0] - lean, sw[1] - B.h); g.lineTo(sw[0] + lean, sw[1] + B.h); g.lineTo(sw[0] - bw + lean, sw[1] + B.h); g.closePath(); g.fill();
+    g.fillStyle = tk.rgba('#ffffff', 0.14 * k);
+    g.beginPath(); g.moveTo(sw[0] + bw * 0.5 - lean, sw[1] - B.h); g.lineTo(sw[0] + bw * 0.9 - lean, sw[1] - B.h); g.lineTo(sw[0] + bw * 0.9 + lean, sw[1] + B.h); g.lineTo(sw[0] + bw * 0.5 + lean, sw[1] + B.h); g.closePath(); g.fill();
+    g.restore();
+  }
+  function partSpr(spec, name, q, v) {
     const p = spec.parts[name], b = boxOf(p), w = b[2] - b[0], h = b[3] - b[1];
-    return ART.sprite('en3|' + spec.id + '|' + name + '|' + q + (white ? '|w' : ''), w * q, h * q, (g) => {
+    return ART.sprite('en3|' + spec.id + '|' + name + '|' + q + '|' + (v || ''), w * q, h * q, (g) => {
       g.scale(q, q); g.translate(-b[0], -b[1]);
-      p.draw(makeS(g, spec));
-      grainOver(g, b[0], b[1], w, h);
-      if (white) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(b[0], b[1], w, h); }
+      p.draw(makeS(g, spec, v === 'r' ? 'r' : ''));
+      if (v === 'w') { g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(b[0], b[1], w, h); } else if (v !== 'r' && p.film !== false) filmOver(g, spec, b);
     });
   }
-  function chainOf(spec, name, white) {
-    const key = name + (white ? '|w' : '');
+  function chainOf(spec, name, v) {
+    const key = name + '|' + (v || '');
     let c = spec._chain[key];
     if (c) return c;
     const d = spec.chains[name];
-    c = tk.chain('en3|' + spec.id + '|' + name + (white ? '|w' : ''), {
+    c = tk.chain('en3|' + spec.id + '|' + key, {
       spine: d.spine, cuts: d.cuts, reach: d.reach, overlap: d.overlap,
       draw: (g) => {
-        d.draw(makeS(g, spec));
-        grainOver(g, -700, -700, 1400, 1400);
-        if (white) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(-700, -700, 1400, 1400); }
+        d.draw(makeS(g, spec, v === 'r' ? 'r' : ''));
+        if (v === 'w') { g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(-700, -700, 1400, 1400); } else if (v !== 'r' && d.film !== false) filmOver(g, spec, [-700, -700, 700, 700]);
       },
     });
     spec._chain[key] = c;
     return c;
   }
 
-  // draw the baked part `name` at its rest place, under an extra transform about its pivot. T = {x, y, r, sx, sy, a, kids, pre}.
-  // `kids(ctx)` runs inside the transform (after the sprite), `pre(ctx)` before it, both in REST coordinates, so children with their own pivots nest.
+  // draw the baked part `name` at its rest place, under an extra transform about its pivot. T = {x, y, r, sx, sy, a, kids, pre, noFlash}.
+  // kids(ctx) runs inside the transform (after the sprite), pre(ctx) before it, both in REST coordinates, so children with their own pivots nest.
   function put(ctx, st, name, T) {
     T = T || {};
     const spec = st.spec, p = spec.parts[name];
@@ -230,18 +418,18 @@
     if (T.a !== undefined) ctx.globalAlpha = ga * cA(T.a);
     const ox = b[0] - pv[0], oy = b[1] - pv[1];
     if (T.pre) { ctx.save(); ctx.translate(-pv[0], -pv[1]); T.pre(ctx); ctx.restore(); }
-    ctx.drawImage(partSpr(spec, name, st.q), ox, oy, w, h);
+    ctx.drawImage(partSpr(spec, name, st.q, st.v), ox, oy, w, h);
     if (st.flash > 0.02 && !T.noFlash) {
       const ga2 = ctx.globalAlpha;
       ctx.globalAlpha = ga2 * cA(st.flash);
-      ctx.drawImage(partSpr(spec, name, st.q, true), ox, oy, w, h);
+      ctx.drawImage(partSpr(spec, name, st.q, 'w'), ox, oy, w, h);
       ctx.globalAlpha = ga2;
     }
     ctx.globalAlpha = ga;
     if (T.kids) { ctx.translate(-pv[0], -pv[1]); T.kids(ctx); }
     ctx.restore();
   }
-  // a chain part (tail, neck, cloth, whisker) drawn with per-joint bends (radians, see ART.tk.chain), under an optional transform about its root
+  // a chain part (streamer, ponytail, hem) drawn with per-joint bends (radians, see ART.tk.chain), under an optional transform about its root
   function putChain(ctx, st, name, bends, T) {
     T = T || {};
     const spec = st.spec;
@@ -257,38 +445,18 @@
     }
     const ga = ctx.globalAlpha;
     if (T.a !== undefined) ctx.globalAlpha = ga * cA(T.a);
-    chainOf(spec, name, false).draw(ctx, bends, st.q);
+    chainOf(spec, name, st.v).draw(ctx, bends, st.q);
     if (st.flash > 0.02) {
       ctx.globalAlpha = ctx.globalAlpha * cA(st.flash);
-      chainOf(spec, name, true).draw(ctx, bends, st.q);
+      chainOf(spec, name, 'w').draw(ctx, bends, st.q);
     }
     ctx.globalAlpha = ga;
     if (T.kids) T.kids(ctx);
     ctx.restore();
   }
-  // move, rotate and scale the context about a pivot (px, py): the way every creature body is posed
-  function xform(ctx, px, py, dx, dy, rot, sx, sy) {
-    ctx.translate(px + dx, py + dy);
-    if (rot) ctx.rotate(rot);
-    if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
-    ctx.translate(-px, -py);
-  }
-  // point and unit tangent at fraction u (0..1) along a control-point spine: places rings, scales and spots along tails and necks
-  function along(spine, u) {
-    const d = tk.flatten(spine, { step: 2 }), n = d.length / 2 - 1, L = [0];
-    for (let i = 1; i <= n; i++) L.push(L[i - 1] + Math.hypot(d[2 * i] - d[2 * i - 2], d[2 * i + 1] - d[2 * i - 1]));
-    const s = clamp(u, 0, 1) * L[n];
-    let i = 1;
-    while (i < n && L[i] < s) i++;
-    const f = clamp((s - L[i - 1]) / ((L[i] - L[i - 1]) || 1), 0, 1);
-    const x = lerp(d[2 * i - 2], d[2 * i], f), y = lerp(d[2 * i - 1], d[2 * i + 1], f);
-    let tx = d[2 * i] - d[2 * i - 2], ty = d[2 * i + 1] - d[2 * i - 1];
-    const tl = Math.hypot(tx, ty) || 1;
-    return { x, y, tx: tx / tl, ty: ty / tl };
-  }
-  // where the tip of a chain part ends up for a set of bends (the same accumulation ART.tk.chain.draw does), and the total turn there: heads ride on it
+  // where the tip of a chain part ends up for a set of bends (the same accumulation ART.tk.chain.draw does), and the total turn there
   function chainTip(spec, name, bends) {
-    const c = chainOf(spec, name), d = spec.chains[name], end = d.spine[d.spine.length - 1];
+    const c = chainOf(spec, name, ''), d = spec.chains[name], end = d.spine[d.spine.length - 1];
     let M = tk.mat.I(), ang = 0;
     for (let j = 0; j < c.segs.length; j++) {
       const b = bends && bends[j] ? bends[j] : 0;
@@ -296,14 +464,20 @@
       ang += b;
     }
     const p = tk.mat.pt(M, end[0], end[1]);
-    return { x: p[0], y: p[1], r: ang, dx: p[0] - end[0], dy: p[1] - end[1] };
+    return { x: p[0], y: p[1], r: ang };
+  }
+  // the polite sparkle of the Gloss (live): a small white four-point star that breathes, gone once the creature is won over
+  function polite(c, st, x, y, r) {
+    if (st.won) return;
+    const k = 0.55 + 0.45 * sin(st.t * 2.6 + hv(st.spec.id, 'tw') * 6) * st.m;
+    tk.sparkle(c, x, y, r * (0.8 + 0.2 * k), { color: '#ffffff', alpha: 0.9 * k, glow: 0.35 });
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // the shared pose state
+  // the shared pose state (the Echowake timings, unchanged)
   // ---------------------------------------------------------------------------------------------------------------
   // attack: 0..0.3 anticipation (wind rises, swing dips to -0.5), 0.3..0.5 strike (swing reaches 1 at p = 0.5), then recovery
-  // hurt: recoil spike then settle;  block: guard rises fast and holds;  buff: a pulse;  die: 0..1 dissolve;  telegraph: wind-up ramps to 1 and holds
+  // hurt: recoil spike then settle;  block: guard rises fast and holds;  buff: a pulse;  die: 0..1 win-over;  telegraph: wind-up ramps to 1 and holds
   function poseState(pose, t, pt) {
     const m = tk.motion();
     const P = { pose, t, pt, m, p: 0, wind: 0, strike: 0, swing: 0, hit: 0, hurt: 0, flash: 0, guard: 0, buff: 0, buffP: 0, die: 0, tele: 0, shake: 0 };
@@ -336,286 +510,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // live helpers: eyes, blink, sparks, lightning, crumbs, notes
-  // ---------------------------------------------------------------------------------------------------------------
-  const blink = (t, id, per) => {
-    per = per || 3.6 + 1.6 * hv(id, 'bp');
-    const ph = ((t + hv(id, 'bo') * per) % per + per) % per;
-    return ph < 0.16 ? Math.abs(ph - 0.08) / 0.08 : 1;                    // 1 open, dips to 0 for a moment
-  };
-  // an emissive creature eye drawn live: soft glow, socket, iris gradient, pupil, catchlight, lid squash. o: open (0..1), iris [top, bottom],
-  // pupil ('slit' 'round' 'dot' 'none'), look [dx, dy], sclera, ring (outline colour), glow (colour), glowK, rot, lw, catch, lidTop (0..1 top lid drop)
-  function eyeLive(ctx, x, y, rx, ry, o) {
-    o = o || {};
-    const open = clamp(num(o.open, 1), 0, 1), iris = o.iris || ['#ff5a2a', '#ffc04a'], look = o.look || [0, 0];
-    const ery = Math.max(0.6, ry * open);
-    if (o.glow && o.glowK !== 0) tk.glow(ctx, x, y, Math.max(rx, ry) * (o.glowR || 2.6), o.glow, cA(num(o.glowK, 0.7) * (0.35 + 0.65 * open)));
-    ctx.save();
-    ctx.translate(x, y);
-    if (o.rot) ctx.rotate(o.rot);
-    if (open < 0.14) {
-      tk.inkPath(ctx, [[-rx, 0], [0, ry * 0.18], [rx, 0]], { w: o.lw || 2.4, taper: 0.3, wobble: 0 });
-      ctx.restore();
-      return;
-    }
-    ctx.beginPath(); ctx.ellipse(0, 0, rx, ery, 0, 0, TAU);
-    ctx.fillStyle = o.sclera || pal.white; ctx.fill();
-    ctx.save();
-    ctx.clip();
-    const gr = ctx.createLinearGradient(0, -ery, 0, ery);
-    gr.addColorStop(0, iris[0]); gr.addColorStop(1, iris[1]);
-    const ix = num(look[0], 0) * rx * 0.28, iy = num(look[1], 0) * ery * 0.22, irx = rx * (o.irisK || 0.78), iry = ery * 1.02;
-    ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(ix, iy, irx, iry, 0, 0, TAU); ctx.fill();
-    const pk = o.pupil === undefined ? 'slit' : o.pupil;
-    if (pk !== 'none') {
-      ctx.fillStyle = o.pupilColor || pal.ink; ctx.beginPath();
-      if (pk === 'slit') ctx.ellipse(ix, iy, irx * 0.2, iry * 0.86, 0, 0, TAU);
-      else if (pk === 'dot') ctx.ellipse(ix, iy, irx * 0.28, iry * 0.28, 0, 0, TAU);
-      else ctx.ellipse(ix, iy, irx * 0.44, iry * 0.5, 0, 0, TAU);
-      ctx.fill();
-    }
-    if (o.catch !== false) {
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.ellipse(ix - irx * 0.36, iy - iry * 0.42, Math.max(0.8, irx * 0.2), Math.max(0.8, iry * 0.18), 0, 0, TAU); ctx.fill();
-      ctx.globalAlpha = ctx.globalAlpha * 0.8;
-      ctx.beginPath(); ctx.arc(ix + irx * 0.34, iy + iry * 0.45, Math.max(0.6, irx * 0.09), 0, TAU); ctx.fill();
-    }
-    if (o.lidTop) {                                                       // an angry lid: a hard ink wedge across the top of the eye
-      ctx.globalAlpha = 1; ctx.fillStyle = o.lidColor || pal.ink;
-      ctx.beginPath(); ctx.moveTo(-rx * 1.2, -ery * 1.2); ctx.lineTo(rx * 1.2, -ery * 1.2); ctx.lineTo(rx * 1.2, -ery + ery * 2 * o.lidTop * 0.5); ctx.lineTo(-rx * 1.2, -ery + ery * 2 * o.lidTop * 1.1); ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
-    tk.inkPath(ctx, E(0, 0, rx, ery, 18), { closed: true, w: o.lw || 2.4, color: o.ring || pal.ink, align: 0.2, wobble: 0.05 });
-    ctx.restore();
-  }
-  // drifting motes rising from (x, y): n particles, deterministic in t. o: col, size, rise (px/s), spread, life (s), alpha, add (additive, default true)
-  function motes(ctx, x, y, t, n, seed, o) {
-    o = o || {};
-    const col = o.col || '#ffb040', size = o.size || 2.4, rise = num(o.rise, 30), spread = num(o.spread, 16), life = num(o.life, 1.6), m = tk.motion();
-    ctx.save();
-    if (o.add !== false) ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < n; i++) {
-      const per = life * (0.7 + 0.6 * hv(seed, 'l' + i)), ph = hv(seed, 'p' + i) * per, u = (((t + ph) % per) + per) % per / per;
-      const px = x + (hv(seed, 'x' + i) - 0.5) * spread * 2 + sin(u * 5 + i) * 5 * m, py = y - u * rise * per;
-      const a = sin(u * PI) * (o.alpha === undefined ? 0.9 : o.alpha);
-      if (a < 0.05) continue;
-      const r = size * (0.5 + hv(seed, 's' + i)) * (1 - u * 0.5);
-      ctx.globalAlpha = cA(a);
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fill();
-    }
-    ctx.restore();
-  }
-  // a live lightning bolt between two points that re-rolls about 14 times a second. o: w, jag, n, color, core, seed
-  function zap(ctx, x0, y0, x1, y1, t, o) {
-    o = o || {};
-    tk.bolt(ctx, x0, y0, x1, y1, { seed: Math.floor(t * 14) + (o.seed | 0) * 17, w: o.w || 2, jag: o.jag === undefined ? 9 : o.jag, n: o.n || 6, color: o.color || '#5fd0ff', core: o.core || '#eaffff' });
-  }
-  // sparks: short bright dashes flying out of (x, y) in a spread, looping. o: col, size, speed, life, spread (radians), dir (radians), alpha
-  function sparks(ctx, x, y, t, n, seed, o) {
-    o = o || {};
-    const col = o.col || '#fff2a0', len = num(o.size, 6), speed = num(o.speed, 60), life = num(o.life, 0.7), dir = num(o.dir, -PI / 2), spread = num(o.spread, PI);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.lineWidth = num(o.w, 1.8);
-    for (let i = 0; i < n; i++) {
-      const per = life * (0.7 + 0.6 * hv(seed, 'sl' + i)), u = ((((t + hv(seed, 'sp' + i) * per) % per) + per) % per) / per;
-      const a = dir + (hv(seed, 'sa' + i) - 0.5) * spread, d = u * speed * (0.5 + hv(seed, 'sv' + i));
-      const px = x + cos(a) * d, py = y + sin(a) * d + u * u * num(o.grav, 0), al = (1 - u) * (o.alpha === undefined ? 0.95 : o.alpha);
-      if (al < 0.04) continue;
-      ctx.globalAlpha = cA(al);
-      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - cos(a) * len * (1 - u * 0.5), py - sin(a) * len * (1 - u * 0.5)); ctx.stroke();
-    }
-    ctx.restore();
-  }
-  // soft translucent puffs rising or drifting from (x, y): smoke, steam, cloud, dust. o: col, rise, spread, size, life, alpha, dx
-  function puffs(ctx, x, y, t, n, seed, o) {
-    o = o || {};
-    const col = o.col || '#ffffff', rise = num(o.rise, 40), spread = num(o.spread, 8), size = num(o.size, 6), life = num(o.life, 1.1);
-    ctx.save();
-    for (let i = 0; i < n; i++) {
-      const per = life * (0.8 + 0.4 * hv(seed, 'l' + i)), u = ((((t + hv(seed, 'p' + i) * per) % per) + per) % per) / per;
-      const a = sin(u * PI) * num(o.alpha, 0.5);
-      if (a < 0.03) continue;
-      ctx.globalAlpha = cA(a); ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(x + (hv(seed, 'x' + i) - 0.5) * spread * 2 + num(o.dx, 0) * u, y - u * rise, size * (0.5 + u * 1.1) * (0.7 + hv(seed, 's' + i) * 0.6), 0, TAU); ctx.fill();
-    }
-    ctx.restore();
-  }
-  // a crescent slash: an arc of radius r from angle a0 to a1 with a pointed, tapering body `thick` px deep at its middle. o: alpha, fill, edge, glow
-  function swoosh(ctx, cx, cy, r, thick, a0, a1, o) {
-    o = o || {};
-    const am = (a0 + a1) / 2, half = (a1 - a0) / 2;
-    const cm = [cos(am) * r * cos(half), sin(am) * r * cos(half)], im = [cos(am) * (r - thick), sin(am) * (r - thick)];
-    const q = [2 * im[0] - cm[0], 2 * im[1] - cm[1]];
-    ctx.save(); ctx.translate(cx, cy);
-    ctx.globalAlpha = ctx.globalAlpha * cA(o.alpha === undefined ? 1 : o.alpha);
-    ctx.beginPath(); ctx.arc(0, 0, r, a0, a1, a1 < a0); ctx.quadraticCurveTo(q[0], q[1], cos(a0) * r, sin(a0) * r); ctx.closePath();
-    ctx.fillStyle = o.fill || '#ffffff'; ctx.fill();
-    if (o.edge) { ctx.strokeStyle = o.edge; ctx.lineWidth = 2; ctx.stroke(); }
-    ctx.restore();
-  }
-  // ballistic offsets for a part that flies apart in a death: p 0..1 -> {x, y, r, a}. Deterministic per (seed, name)
-  function fling(seed, name, p, o) {
-    o = o || {};
-    const vx = (hv(seed, name + 'vx') - 0.5) * num(o.spread, 150) + num(o.bias, 0), vy = -num(o.up, 70) * (0.4 + hv(seed, name + 'vy')), g = num(o.g, 300);
-    const u = clamp(p, 0, 1), ground = num(o.ground, 1e9);
-    return { x: vx * u, y: Math.min(ground, vy * u + g * u * u), r: (hv(seed, name + 'r') - 0.5) * num(o.spin, 6) * u, a: 1 - clamp((u - 0.62) / 0.38, 0, 1) };
-  }
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // the themed dissolve used by every death: a clip made of shrinking cells, redaction strips or an eraser wipe, plus matching flying fragments
-  // ---------------------------------------------------------------------------------------------------------------
-  const cellCache = {};
-  function cellsOf(spec) {
-    const ck = spec.id + '|' + (spec.die.key || '');
-    if (cellCache[ck]) return cellCache[ck];
-    const d = spec.die, b = d.box, nx = d.nx || 11, ny = d.ny || 14, cw = (b[2] - b[0]) / nx, ch = (b[3] - b[1]) / ny, cells = [], r = tk.rng('en3die', spec.id);
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const u = (i + 0.5) / nx, v = (j + 0.5) / ny, rnd = r();
-      let f;
-      switch (d.from) {
-        case 'bottom': f = 1 - v; break;                                             // the bottom goes first
-        case 'top': f = v; break;
-        case 'left': f = u; break;
-        case 'right': f = 1 - u; break;
-        case 'out': f = 1 - Math.min(1, Math.hypot((u - 0.5) * 2, (v - 0.5) * 2) / 1.05); break;
-        case 'in': f = Math.min(1, Math.hypot((u - 0.5) * 2, (v - 0.5) * 2) / 1.05); break;
-        default: f = rnd;
-      }
-      const th = 0.05 + 0.72 * clamp(f * (d.order === undefined ? 0.72 : d.order) + rnd * (1 - (d.order === undefined ? 0.72 : d.order)), 0, 1);
-      cells.push({ x: b[0] + (i + 0.5) * cw, y: b[1] + (j + 0.5) * ch, th, rnd, r2: r(), r3: r() });
-    }
-    cellCache[ck] = { cells, cw, ch };
-    return cellCache[ck];
-  }
-  const LIFE = 0.2;
-  function dissolveClip(ctx, spec, p) {
-    const d = spec.die, b = d.box;
-    if (d.shape === 'strips') {
-      // redaction: horizontal bands whose visible part is eaten from alternating sides
-      const n = d.ny || 16, bh = (b[3] - b[1]) / n, w = b[2] - b[0];
-      ctx.beginPath();
-      for (let i = 0; i < n; i++) {
-        const th = 0.04 + 0.6 * (d.from === 'bottom' ? (n - 1 - i) / n : i / n) * 0.85 + 0.12 * hv(spec.id, 'st' + i), u = clamp((p - th) / 0.3, 0, 1);
-        if (u >= 1) continue;
-        const cut = w * ease.inQuad(u);
-        if (i % 2) ctx.rect(b[0], b[1] + i * bh - 0.5, w - cut, bh + 1); else ctx.rect(b[0] + cut, b[1] + i * bh - 0.5, w - cut, bh + 1);
-      }
-      ctx.clip();
-      return;
-    }
-    if (d.shape === 'wipe') {
-      // an eraser rubbing left to right in three slanted passes: everything behind the edge is gone
-      const w = b[2] - b[0], h = b[3] - b[1], edge = b[0] - 30 + (w + 60) * ease.inOutQuad(p), sl = h * 0.35, k = sin(p * PI * 3.2);
-      ctx.beginPath();
-      ctx.moveTo(edge + sl * 0.5 * k, b[1] - 10); ctx.lineTo(b[2] + 60, b[1] - 10); ctx.lineTo(b[2] + 60, b[3] + 10); ctx.lineTo(edge - sl * 0.5 * k, b[3] + 10); ctx.closePath();
-      ctx.clip();
-      return;
-    }
-    const { cells, cw, ch } = cellsOf(spec), sq = d.shape === 'paper', hexs = d.shape === 'diamond', rad = Math.max(cw, ch) * 0.78;
-    ctx.beginPath();
-    for (let i = 0; i < cells.length; i++) {
-      const c = cells[i];
-      if (p >= c.th + LIFE) continue;
-      const f = p < c.th ? 1 : 1 - (p - c.th) / LIFE;
-      const r = rad * (0.15 + 0.85 * f);
-      if (sq) {
-        const a = (p - c.th) * (c.rnd - 0.5) * 9, cs = cos(a) * r * 0.86, sn = sin(a) * r * 0.86;
-        ctx.moveTo(c.x - cs + sn, c.y - sn - cs); ctx.lineTo(c.x + cs + sn, c.y + sn - cs); ctx.lineTo(c.x + cs - sn, c.y + sn + cs); ctx.lineTo(c.x - cs - sn, c.y - sn + cs); ctx.closePath();
-      } else if (hexs) {
-        ctx.moveTo(c.x + r, c.y); ctx.lineTo(c.x, c.y + r * 0.9); ctx.lineTo(c.x - r, c.y); ctx.lineTo(c.x, c.y - r * 0.9); ctx.closePath();
-      } else { ctx.moveTo(c.x + r, c.y); ctx.arc(c.x, c.y, r, 0, TAU); }
-    }
-    ctx.clip();
-  }
-  // flying fragments for a dissolve. kinds: petal scrap ember spark shard ink bar letter crumb stone puff feather wind
-  function dissolveFx(ctx, spec, st) {
-    const d = spec.die, p = st.E.die, b = d.box, kinds = d.kinds || ['scrap'], cols = d.cols || ['#f3e6c8'], wind = d.wind || [-14, -40];
-    ctx.save();
-    if (d.shape === 'strips') {
-      // the black bars that strike each band out: they sweep in from the eaten side, hold for a beat, then fade
-      const n = d.ny || 16, bh = (b[3] - b[1]) / n, w = b[2] - b[0];
-      for (let i = 0; i < n; i++) {
-        const th = 0.04 + 0.6 * (d.from === 'bottom' ? (n - 1 - i) / n : i / n) * 0.85 + 0.12 * hv(spec.id, 'st' + i), u = clamp((p - th) / 0.3, 0, 1);
-        if (u <= 0) continue;
-        const cut = w * ease.inQuad(u), lead = clamp(u * 3, 0, 1) * 14, fade = 1 - clamp((p - th - 0.3) / 0.16, 0, 1);
-        if (fade <= 0) continue;
-        ctx.globalAlpha = cA(fade);
-        if (i % 2) gag(ctx, b[0] + w - cut - lead, b[1] + i * bh + bh * 0.12, cut + lead, bh * 0.76); else gag(ctx, b[0], b[1] + i * bh + bh * 0.12, cut + lead, bh * 0.76);
-      }
-    }
-    let drawn = 0;
-    const { cells } = cellsOf(spec);
-    for (let i = 0; i < cells.length && drawn < 70; i++) {
-      const c = cells[i];
-      const th = d.shape === 'strips' || d.shape === 'wipe' ? 0.08 + 0.6 * c.rnd : c.th;
-      if (c.rnd < (d.thin === undefined ? 0.42 : d.thin) || p < th) continue;
-      const a = p - th, life = d.life || 0.5;
-      if (a > life) continue;
-      const u = a / life, kind = kinds[i % kinds.length], col = cols[(i >> 1) % cols.length];
-      const px = c.x + wind[0] * a * 5 + sin(a * 14 + i) * 5 * (1 - u * 0.4) + (c.r2 - 0.5) * 30 * u, py = c.y + wind[1] * a * 5 * (0.5 + c.r3) + (kind === 'stone' || kind === 'shard' ? 70 * u * u : 0);
-      const al = cA((1 - u) * (1 - p * p * 0.5) * 1.15), sz = (d.size || 6) * (0.55 + c.r3 * 0.8);
-      ctx.globalAlpha = al;
-      fragment(ctx, kind, px, py, sz, col, a, u, i, c, al);
-      drawn++;
-    }
-    ctx.restore();
-  }
-  function fragment(ctx, kind, px, py, sz, col, a, u, i, c, al) {
-    if (kind === 'petal') tk.petal(ctx, px, py, sz, a * 9 + i, al, col);
-    else if (kind === 'felt') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate(a * 11 * (c.r2 - 0.5) * 3 + i); ctx.fillStyle = col; ctx.strokeStyle = C.feltD; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.rect(-sz * 0.8, -sz * 0.55, sz * 1.6, sz * 1.1); ctx.fill(); ctx.stroke();
-      ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.rect(-sz * 0.55, -sz * 0.33, sz * 1.1, sz * 0.66); ctx.lineWidth = 0.8; ctx.strokeStyle = C.wad; ctx.stroke();
-      ctx.restore();
-    } else if (kind === 'note') {
-      tk.note(ctx, px, py, sz * 1.5, { kind: c.rnd < 0.5 ? 'eighth' : 'quarter', color: col, alpha: al, rot: (c.r2 - 0.5) * 0.8, line: 1.4 });
-    } else if (kind === 'cotton') {
-      ctx.fillStyle = col; ctx.strokeStyle = 'rgba(70,66,90,0.5)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(px, py, sz * (0.5 + u * 0.7), 0, TAU); ctx.arc(px + sz * 0.5, py - sz * 0.15, sz * (0.38 + u * 0.5), 0, TAU); ctx.fill();
-    } else if (kind === 'scrap') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate(a * 11 * (c.r2 - 0.5) * 3 + i); ctx.fillStyle = col; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.rect(-sz * 0.8, -sz * 0.55, sz * 1.6, sz * 1.1); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-sz * 0.5, -sz * 0.15); ctx.lineTo(sz * 0.5, -sz * 0.15); ctx.moveTo(-sz * 0.5, sz * 0.2); ctx.lineTo(sz * 0.2, sz * 0.2); ctx.lineWidth = 0.8; ctx.stroke();
-      ctx.restore();
-    } else if (kind === 'ember') {
-      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py - u * 20, sz * 0.5 * (1 - u * 0.6), 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
-    } else if (kind === 'spark') {
-      ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
-      const ang = (c.r2 - 0.5) * TAU, l = sz * (1 - u * 0.5);
-      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + cos(ang) * l * 0.5 + 2, py + sin(ang) * l * 0.5); ctx.lineTo(px + cos(ang) * l - 2, py + sin(ang) * l * 0.9); ctx.stroke();
-      ctx.globalCompositeOperation = 'source-over';
-    } else if (kind === 'shard') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate(a * 8 * (c.r2 - 0.5) * 3 + i); ctx.fillStyle = col; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.3;
-      ctx.beginPath(); ctx.moveTo(-sz * 0.7, sz * 0.4); ctx.lineTo(sz * 0.1, -sz * 0.8); ctx.lineTo(sz * 0.8, sz * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-    } else if (kind === 'ink') {
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, sz * 0.6 * (1 - u * 0.5), 0, TAU); ctx.fill();
-    } else if (kind === 'bar') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate((c.r2 - 0.5) * 0.5); gag(ctx, -sz * 1.2, -sz * 0.28, sz * 2.4, sz * 0.56, { fill: col }); ctx.restore();
-    } else if (kind === 'letter') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate((c.r2 - 0.5) * 1.6 + a * 2); ctx.fillStyle = col; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.6; ctx.font = '900 ' + Math.round(sz * 1.9) + 'px ' + tk.font.num;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const ch = 'aeg#@?!%&xzq'.charAt((i * 7) % 12);
-      ctx.strokeText(ch, 0, 0); ctx.fillText(ch, 0, 0); ctx.restore();
-    } else if (kind === 'crumb') {
-      ctx.save(); ctx.translate(px, py + u * u * 30); ctx.rotate(a * 9 + i); ctx.fillStyle = col; ctx.strokeStyle = 'rgba(120,50,70,0.6)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.rect(-sz * 0.5, -sz * 0.35, sz, sz * 0.7); ctx.fill(); ctx.stroke(); ctx.restore();
-    } else if (kind === 'stone') {
-      ctx.save(); ctx.translate(px, py); ctx.rotate(a * 5 * (c.r2 - 0.5) * 3 + i); ctx.fillStyle = col; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.moveTo(-sz * 0.8, sz * 0.2); ctx.lineTo(-sz * 0.4, -sz * 0.7); ctx.lineTo(sz * 0.5, -sz * 0.6); ctx.lineTo(sz * 0.8, sz * 0.3); ctx.lineTo(0, sz * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-    } else if (kind === 'puff') {
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, sz * (0.6 + u * 1.2), 0, TAU); ctx.fill();
-    } else if (kind === 'feather') {
-      ctx.save(); ctx.translate(px, py + u * 26); ctx.rotate(sin(a * 12 + i) * 0.9 + (c.r2 - 0.5) * 2); ctx.fillStyle = col; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(0, -sz * 1.1); ctx.quadraticCurveTo(sz * 0.7, -sz * 0.2, 0, sz * 1.1); ctx.quadraticCurveTo(-sz * 0.7, -sz * 0.2, 0, -sz * 1.1); ctx.fill(); ctx.stroke(); ctx.restore();
-    } else if (kind === 'wind') {
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.arc(px, py, sz * (0.5 + u), a * 6, a * 6 + PI * 1.3); ctx.stroke();
-    }
-  }
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // registration
+  // registration: the rig for every pose but die; the win-over for die
   // ---------------------------------------------------------------------------------------------------------------
   function makeState(spec, o) {
     o = o || {};
@@ -624,9 +519,32 @@
     const E0 = poseState(pose, t, pt);
     const hp = o.hpPct === undefined ? 1 : clamp(num(o.hpPct, 1), 0, 1);
     return {
-      spec, E: E0, s, q: qOf(s), t, pt, pose, hp, phase: o.phase | 0, glow: num(o.glow, 0),
-      flash: E0.flash, m: E0.m, wound: sm((0.5 - hp) / 0.5),
+      spec, E: E0, s, q: qOf(s), t, pt, pose, hp, phase: clamp(num(o.phase, 0) | 0, 0, 9), glow: num(o.glow, 0),
+      flash: E0.flash, m: E0.m, wound: sm((0.5 - hp) / 0.5), v: '', won: false,
     };
+  }
+  // the default win-over (HV_ENEMIES 6.4 on the foe kit): the polished creature fades out over its real-colour self while the Gloss flakes off as
+  // sparkles, one happy hop with the real colours and the lopsided smile, the pop into confetti that breaks the grid, and a little sparkle of real
+  // colour left on the floor. The body is the creature's own rig in its idle pose.
+  function winOverDefault(ctx, spec, st) {
+    const p = st.E.die, B = spec.dieBox || [-spec.bounds.w / 2, -spec.bounds.h, spec.bounds.w / 2, 0];
+    const base = Object.assign({}, st, { E: poseState('idle', st.t, 0), flash: 0, v: '', won: false });
+    const real = Object.assign({}, base, { v: 'r', won: true });
+    foe.winOver(ctx, null, p, {
+      act: 3, box: B, seed: Math.floor(hv(spec.id, 'wo') * 997), hop: spec.hop || 18, confetti: 'broken',
+      draw: (g) => spec.rig(g, real),
+      gloss: (g, S, k) => { g.globalAlpha = g.globalAlpha * cA(k); spec.rig(g, base); },
+    });
+    floorSparkle(ctx, spec, p);
+  }
+  // the small sparkle of real colour a won-over creature leaves on the mirror floor
+  function floorSparkle(ctx, spec, p) {
+    if (p < 0.62) return;
+    const q = (p - 0.62) / 0.38, a = sin(PI * Math.min(1, q * 1.3));
+    if (a < 0.03) return;
+    const x = (hv(spec.id, 'fs') - 0.5) * spec.bounds.w * 0.3, col = REAL[Math.floor(hv(spec.id, 'fc') * REAL.length) % REAL.length];
+    tk.sparkle(ctx, x, -5, 4 + 5 * a, { color: col, alpha: a, glow: 0.6 });
+    tk.sparkle(ctx, x + 10, -12, 2 + 2.5 * a, { color: REAL[1], alpha: a * 0.8, glow: 0.3 });
   }
   function register(spec) {
     ART.enemy.register(spec.id, {
@@ -634,3249 +552,2072 @@
       draw(ctx, o) {
         const st = makeState(spec, o);
         if (st.E.die >= 1) return;
-        const dieSpec = typeof spec.die === 'function' ? spec.die(st) : spec.die;
         ctx.save();
-        if (spec.k) ctx.scale(spec.k, spec.k);
-        if (st.E.die > 0 && dieSpec && dieSpec.clip !== false) dissolveClip(ctx, { id: spec.id, die: dieSpec }, st.E.die);
-        spec.rig(ctx, st);
-        ctx.restore();
-        if (st.E.die > 0 && dieSpec) { ctx.save(); if (spec.k) ctx.scale(spec.k, spec.k); dissolveFx(ctx, { id: spec.id, die: dieSpec }, st); ctx.restore(); }
+        try {
+          if (spec.k) ctx.scale(spec.k, spec.k);
+          if (st.E.die > 0) (spec.winOver || winOverDefault)(ctx, spec, st);
+          else spec.rig(ctx, st);
+        } finally { ctx.restore(); }
       },
     });
   }
   function warm(id, s) {
-    const spec = SPECS[id];
+    const spec = Object.prototype.hasOwnProperty.call(SPECS, id) ? SPECS[id] : null;
     if (!spec) return 0;
     const q = qOf(s);
     let n = 0;
-    Object.keys(spec.parts).forEach((k) => { partSpr(spec, k, q); n++; });
-    Object.keys(spec.chains).forEach((k) => { n += chainOf(spec, k).warm(q); });
+    Object.keys(spec.parts).forEach((k) => { partSpr(spec, k, q, ''); n++; });
+    Object.keys(spec.chains).forEach((k) => { n += chainOf(spec, k, '').warm(q); });
     return n;
   }
 
   // ===============================================================================================================
-  // CREATURES
+  // CREATURES (E3a)
   // ===============================================================================================================
+  // a propeller seen nearly edge on, drawn live: a soft white blur disc, one blade line, a hub
+  function rotor(c, x, y, r, spin, lc) {
+    c.save();
+    c.globalAlpha = c.globalAlpha * 0.4; c.fillStyle = '#ffffff';
+    c.beginPath(); c.ellipse(x, y, r, r * 0.26, 0, 0, TAU); c.fill();
+    c.globalAlpha = c.globalAlpha / 0.4 * 0.9;
+    c.strokeStyle = lc; c.lineCap = 'round'; c.lineWidth = 2.2;
+    const bx = cos(spin) * r, by = sin(spin) * r * 0.26;
+    c.beginPath(); c.moveTo(x - bx, y - by); c.lineTo(x + bx, y + by); c.stroke();
+    c.fillStyle = lc; c.beginPath(); c.arc(x, y, 2, 0, TAU); c.fill();
+    c.restore();
+  }
+  // a wobbly ring of perfectly regular pitch (block shields, the siren's croon): a circle of radius r with n sine wobbles of amp px
+  function pitchRing(c, x, y, rx, ry, amp, n, col, alpha, ph) {
+    if (!(alpha > 0.02)) return;
+    c.save(); c.globalAlpha = c.globalAlpha * cA(alpha); c.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      c.beginPath();
+      for (let i = 0; i <= 64; i++) { const a = i / 64 * TAU, o = sin(a * n + (ph || 0)) * amp; const px = x + cos(a) * (rx + o), py = y + sin(a) * (ry + o); if (i) c.lineTo(px, py); else c.moveTo(px, py); }
+      c.lineWidth = pass ? 2 : 4.4; c.strokeStyle = pass ? col : G.line; c.stroke();
+    }
+    c.restore();
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
-  // STORM DRONE (normal, m): a brass Aladdin lamp that flew into a thundercloud and came out humming. It hovers on a scrap of storm, a toy rotor on
-  // its lid, lightning rods either side, one big cyan lens for an eye and a trumpet spout that jabs three times. Accent: the cyan lens and the arcs.
+  // TUNER DRONE (storm_drone, normal, m). Echowake rig: STORM DRONE (keeps the hover bob, the rotors and the triple jab timing). A hovering
+  // chrome disc whose face is a tuner: a needle that always swings to the exact centre, two little eyes either side of its pivot and the Gloss
+  // smile under it, four little propellers, tuning pegs for ears, a tuning fork hanging under it and a mint status light on top. Its lightning
+  // became perfectly regular pitch lines. Accent: the red needle.
   // ---------------------------------------------------------------------------------------------------------------
-  const DR = { brass: '#d9a441', brassD: '#9a6320', gold: '#ffe08a', teal: '#2f8f8a', cloud: '#6b6796', cloudD: '#3a3568', arc: '#5fd0ff', arcCore: '#eaffff' };
+  const DRN = { cy: -100, R: 44, face: 30, pv: [0, -94] };
   define('storm_drone', {
-    size: 'm', lw: 3.1,
-    col: { rim: '#9ffbff' },
-    bounds: { w: 190, h: 177, head: { x: -26, y: -166 }, body: { x: 0, y: -98 }, feet: { x: 0, y: 0 } },
-    die: { box: [-96, -174, 84, -26], nx: 10, ny: 10, from: 'out', order: 0.6, shape: 'diamond', kinds: ['spark', 'shard', 'spark', 'ember'], cols: ['#bffcff', '#d9a441', '#ffe45e', '#5ff5ff'], wind: [0, -6], size: 8 },
+    size: 'm',
+    col: { face: G.porcelain, peg: G.lilac, pod: G.lilac, light: '#aef3df', fork: G.chromeL, tick: '#9ea2bb', tune: '#bdf5e4' },
+    real: { face: '#fff4d8', peg: '#ffd84d', pod: '#ff8a5a', light: '#3fcf6a', fork: '#ffc94d', chromeReal: '#6fb8ff', tick: '#6b5a8a', tune: '#3fcf6a' },
+    bounds: { w: 180, h: 168, head: { x: 0, y: -150 }, body: { x: 0, y: -100 }, feet: { x: 0, y: 0 } },
+    dieBox: [-70, -160, 70, -30],
+    sweep: [-40, -120],
     parts: {
-      cloud: {
-        box: [-58, -70, 58, -24], pivot: [0, -48],
+      fork: {
+        box: [-14, -64, 14, -24], pivot: [0, -58],
+        draw(S) { S.blob([{ a: [0, -60], b: [0, -46], w: 7 }, { a: [-6, -46], b: [6, -46], w: 6 }, { a: [-6, -46], b: [-6, -30], w: 5 }, { a: [6, -46], b: [6, -30], w: 5 }], S.c.fork); },
+      },
+      armL: {
+        box: [-80, -162, -20, -100], pivot: [-28, -122],
         draw(S) {
-          const puffs3 = [[-30, -46, 20, 15], [-8, -52, 24, 19], [18, -47, 22, 16], [40, -42, 15, 11], [-46, -38, 13, 9]];
-          puffs3.forEach((c, i) => S.ell(c[0], c[1], c[2], c[3], i % 2 ? DR.cloud : '#7a76a8', { depth: 6, line: 2.6, hi: false, rim: '#a8f4ff', rimW: 1.6, halftone: { d: 5, alpha: 0.3 } }));
-          tk.inkPath(S.g, [[-52, -36], [-20, -30], [16, -30], [50, -36]], { w: 2.2, color: DR.cloudD, alpha: 0.7, taper: 0.4 });
+          S.limb([-26, -126], [-46, -144], 7, S.c.fork);
+          S.limb([-36, -112], [-62, -116], 7, S.c.fork);
+          S.ell(-46, -147, 10, 6.5, S.c.pod, { hi: true });
+          S.ell(-64, -117, 9, 6, S.c.pod, { hi: true });
         },
       },
-      handle: {
-        box: [22, -130, 76, -74], pivot: [30, -104],
+      armR: {
+        box: [20, -162, 80, -100], pivot: [28, -122],
         draw(S) {
-          S.rib([[28, -118], [52, -128], [66, -106], [52, -84], [28, -88]], DR.brass, { wMax: 9, w0: 9, w1: 9, tipPow: 1, cap: 'round', shadow: DR.brassD, rim: '#fff0b0', profile: () => 1 });
-          S.cel(E(66, -106, 6, 6), DR.brassD, { depth: 2, line: 2.2, hi: false, rim: null });
+          S.limb([26, -126], [46, -144], 7, S.c.fork);
+          S.limb([36, -112], [62, -116], 7, S.c.fork);
+          S.ell(46, -147, 10, 6.5, S.c.pod, { hi: true });
+          S.ell(64, -117, 9, 6, S.c.pod, { hi: true });
         },
       },
-      spout: {
-        box: [-86, -140, -20, -80], pivot: [-30, -104],
+      light: {
+        box: [-12, -162, 12, -138], pivot: [0, -142],
         draw(S) {
-          S.cel([[-24, -118], [-44, -118], [-62, -122], [-78, -132, 1], [-80, -104, 1], [-64, -104], [-46, -96], [-24, -90]], DR.brass, {
-            depth: 8, tension: 0.6, hi: true, hiW: 2.4, rim: '#fff0b0', halftone: { d: 5, alpha: 0.25 },
-            decor(g) { [-34, -52, -68].forEach((x, i) => tk.inkPath(g, [[x, -128 + i * 2], [x - 2, -88 + i * 3]], { w: 3, color: DR.gold, alpha: 0.75, taper: 0.1, wobble: 0.1 })); },
-          });
-          S.cel(E(-79, -118, 5.4, 15, 12, 0.12), DR.brassD, { depth: 3, line: 2.8, hi: false, rim: null });
-          S.ell(-80, -118, 2.8, 10.5, '#120a24', { line: 1.4, shadow: false, rim: null });
+          S.cel(RR(-9, -146, 18, 6, 2), G.chromeL, { tension: 0 });
+          S.cel(tk.arcPts(0, -146, 7.5, 8, PI, TAU, 9), S.c.light, { hi: true, tension: 0.4 });
         },
       },
       body: {
-        box: [-42, -146, 44, -60], pivot: [0, -98],
+        box: [-64, -148, 64, -52], pivot: [0, -100],
         draw(S) {
-          // the foot ring, then the pot-belly with an engraved cloud-scroll band, then the lid
-          S.cel({ poly: [[-16, -74], [16, -74], [12, -64], [-12, -64]] }, DR.brassD, { depth: 3, line: 2.6, hi: false, rim: null });
-          S.cel([[-24, -124], [0, -130], [24, -124], [37, -104], [35, -86], [21, -73], [0, -69], [-21, -73], [-35, -86], [-37, -104]], DR.brass, {
-            depth: 14, hi: true, hiW: 3.2, halftone: { d: 5, alpha: 0.3 }, rim: '#fff0b0',
-            decor(g) {
-              tk.inkPath(g, [[-40, -104], [-20, -108], [0, -104], [20, -108], [40, -104]], { w: 3, color: DR.gold, alpha: 0.85, taper: 0.02, wobble: 0.03 });
-              tk.inkPath(g, [[-40, -92], [-20, -96], [0, -92], [20, -96], [40, -92]], { w: 2.4, color: DR.teal, alpha: 0.9, taper: 0.02, wobble: 0.03 });
-              for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(-32 + i * 16, -98, 2, 0, TAU); g.fillStyle = DR.brassD; g.fill(); }
-              for (let i = 0; i < 4; i++) tk.inkCurve(g, 6 + i * 6, -86, 10 + i * 6, -80, 14 + i * 6, -86, { w: 1.4, color: DR.brassD, alpha: 0.8, taper: 0.3 });
-            },
-          });
-          S.cel([[-22, -126], [-10, -138], [10, -138], [22, -126], [12, -122], [-12, -122]], DR.brass, { depth: 5, hi: true, rim: '#fff0b0', line: 2.8 });
-          S.cel({ poly: [[-6, -150], [6, -150], [8, -138], [-8, -138]] }, DR.brassD, { depth: 2, line: 2.4, hi: false, rim: null });
-        },
-      },
-      antL: {
-        box: [-40, -176, -10, -124], pivot: [-16, -128],
-        draw(S) {
-          S.cel(cap(-16, -128, -30, -162, 5.4, 3.8), '#b9b4d8', { depth: 2, line: 2.4, hi: false, rim: '#ffffff' });
-          S.cel(E(-31, -166, 5.4, 5.4), '#9ffbff', { depth: 2, line: 2.2, hi: true, rim: null });
-        },
-      },
-      antR: {
-        box: [10, -176, 40, -124], pivot: [16, -128],
-        draw(S) {
-          S.cel(cap(16, -128, 30, -162, 5.4, 3.8), '#b9b4d8', { depth: 2, line: 2.4, hi: false, rim: '#ffffff' });
-          S.cel(E(31, -166, 5.4, 5.4), '#9ffbff', { depth: 2, line: 2.2, hi: true, rim: null });
-        },
-      },
-      brow: {
-        box: [-38, -122, 8, -96], pivot: [-14, -110],
-        draw(S) {
-          S.cel([[-34, -118], [-14, -122], [4, -112], [2, -104], [-14, -111], [-32, -108]], DR.brassD, { depth: 3, line: 2.6, hi: true, hiW: 1.4, rim: '#fff0b0', tension: 0.5 });
+          const cy = DRN.cy, R = DRN.R, pv = DRN.pv;
+          // the tuning pegs (ears), then the chrome disc and the tuner face
+          [-1, 1].forEach((sd) => { S.limb([sd * 40, cy], [sd * 52, cy], 6, S.c.fork); S.ell(sd * 57, cy, 4.5, 9, S.c.peg, { hi: true }); });
+          S.chrome(E(0, cy, R, R, 26));
+          S.cel(E(0, cy, DRN.face, DRN.face, 22), S.c.face, { shadow: RJ.shade(S.c.face, 0.06) });
+          const g = S.g;
+          g.save(); g.lineCap = 'round';
+          // the in-tune zone, then the ticks of the scale
+          g.strokeStyle = S.c.tune; g.lineWidth = 5; g.beginPath(); g.arc(pv[0], pv[1], 24, -PI / 2 - 0.2, -PI / 2 + 0.2); g.stroke();
+          g.strokeStyle = S.c.tick; g.lineWidth = 1.6;
+          for (let i = 0; i <= 8; i++) { const a = -PI * 0.86 + i * PI * 0.72 / 8, r0 = i === 4 ? 17 : 20; g.beginPath(); g.moveTo(pv[0] + cos(a) * r0, pv[1] + sin(a) * r0); g.lineTo(pv[0] + cos(a) * 26, pv[1] + sin(a) * 26); g.stroke(); }
+          g.restore();
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
       let jab = 0, jabN = -1;
       if (atk) { const q = clamp((E0.p - 0.08) / 0.84, 0, 0.999) * 3; jabN = Math.floor(q); jab = sin(PI * (q % 1)); }
-      const hot = clamp(tele + buff + jab * 0.8 + die, 0, 1);
-      const shake = (tele * 1.6 + buff * 2.2 + die * 3.5) * sin(t * 61);
+      const hot = clamp(tele + buff + jab * 0.8, 0, 1);
+      const shake = (tele * 1.4 + buff * 1.8) * sin(t * 61) * m;
       const bob = sin(t * 2.3) * 5 * m;
-      const dx = -jab * 16 + hurt * 22 + tele * 10 + shake, dy = bob - hurt * 8 + shake * 0.4 - tele * 3 + guard * 2;
-      const rot = 0.03 * sin(t * 1.7) * m + hurt * 0.32 + tele * 0.14 - jab * 0.08;
-      const spin = t * (38 + 34 * hot + 20 * guard);
-      // the scrap of storm it rides on
-      const cpulse = 1 + 0.03 * sin(t * 3.1);
-      put(ctx, st, 'cloud', { x: dx * 0.4, y: bob * 0.4 + hurt * 3, sx: cpulse, sy: 1 / cpulse });
-      const fl = flick(t, 5, 6);
-      tk.glow(ctx, -6 + dx * 0.4, -44, 44, '#8ff4ff', 0.12 + 0.34 * (fl > 0.72 ? 1 : 0) * (1 - die) + 0.1 * hot);
+      const dx = -jab * 16 + hurt * 22 + tele * 6 + shake, dy = bob - hurt * 8 + guard * 5 - tele * 6;
+      const rot = hurt * 0.3 - jab * 0.1 - tele * 0.12;
+      const spin = t * (30 + 30 * hot) * m + 0.6;
+      const lc = st.won ? REAL_LINE : G.line;
+      // the soft hover glow under it
+      tk.glow(ctx, dx * 0.4, -18, 36, st.won ? '#ffd84d' : G.mint, 0.3 + 0.1 * sin(t * 3));
       ctx.save();
-      xform(ctx, 0, -98, dx, dy, rot, 1 - 0.06 * guard, 1 - 0.06 * guard + 0.03 * jab);
-      put(ctx, st, 'handle', { r: 0.05 * sin(t * 2.1) * m - 0.1 * hurt });
-      // tail rotor on the handle
-      {
-        const hx = 66, hy = -106, ph = spin * 1.3;
-        tk.glow(ctx, hx, hy, 15, '#dfffff', 0.16);
-        ctx.save(); ctx.translate(hx, hy); ctx.scale(0.5, 1); ctx.globalAlpha = 0.34; ctx.fillStyle = '#e8fdff'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
-        ctx.strokeStyle = 'rgba(20,15,46,0.85)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -cos(ph) * 15); ctx.lineTo(0, cos(ph) * 15); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(sin(ph) * 6, -sin(ph) * 15 * 0.4); ctx.lineTo(-sin(ph) * 6, sin(ph) * 15 * 0.4); ctx.stroke(); ctx.restore();
-      }
-      put(ctx, st, 'spout', { r: -0.04 * jab + 0.05 * tele - 0.05 * hurt });
-      put(ctx, st, 'antL', { r: -0.06 * sin(t * 2.6 + 1) * m - 0.1 * hot });
-      put(ctx, st, 'antR', { r: 0.06 * sin(t * 2.6) * m + 0.1 * hot });
-      // the mast and its toy rotor
-      tk.inkPath(ctx, [[0, -138], [0, -152]], { w: 3.2, color: pal.ink, taper: 0.05, pressure: 'flat', wobble: 0 });
-      {
-        const mx = 0, my = -153, rx = 38, wob2 = 0.5 + 0.5 * cos(spin);
-        ctx.save(); ctx.translate(mx, my);
-        ctx.globalAlpha = 0.3 * (1 - die); ctx.fillStyle = '#e8fdff'; ctx.beginPath(); ctx.ellipse(0, 0, rx, 6, 0, 0, TAU); ctx.fill();
-        ctx.globalAlpha = 0.9 * (1 - die * 0.7); ctx.strokeStyle = pal.ink; ctx.lineCap = 'round'; ctx.lineWidth = 3.4;
-        ctx.beginPath(); ctx.moveTo(-cos(spin) * rx, -sin(spin) * 3.2); ctx.lineTo(cos(spin) * rx, sin(spin) * 3.2); ctx.stroke();
-        ctx.strokeStyle = DR.brass; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-cos(spin) * rx * 0.96, -sin(spin) * 3.2); ctx.lineTo(cos(spin) * rx * 0.96, sin(spin) * 3.2); ctx.stroke();
-        ctx.globalAlpha = 0.5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.ellipse(0, 0, rx * (0.7 + 0.25 * wob2), 4.2, 0, 0.2, PI - 0.2); ctx.stroke();
-        ctx.restore();
-        tk.sparkle(ctx, mx, my, 3.2, { color: '#ffffff', glow: 0.2, alpha: 0.9 });
-      }
+      xform(ctx, 0, DRN.cy, dx, dy, rot, 1, 1);
+      put(ctx, st, 'fork', { r: 0.08 * sin(t * 2.3 + 1) * m - 0.2 * hurt + 0.1 * jab });
+      const fold = guard * 0.55;
+      const pods = (sd) => (c) => { rotor(c, sd * 46, -155, 16, spin + (sd > 0 ? 1.3 : 0), lc); rotor(c, sd * 64, -124, 14, -spin * 1.1 + (sd > 0 ? 0.4 : 2), lc); };
+      put(ctx, st, 'armL', { r: fold, kids: pods(-1) });
+      put(ctx, st, 'armR', { r: -fold, kids: pods(1) });
+      put(ctx, st, 'light', { sy: 1 + 0.06 * buff });
+      tk.glow(ctx, 0, -150, 16 + 8 * hot, hot > 0.4 && !st.won ? G.accent : st.won ? '#3fcf6a' : '#8ff5d8', 0.55 + 0.25 * sin(t * 4));
       put(ctx, st, 'body', {
         kids(c) {
-          // the lens: a live glass eye with a dilating pupil and a shutter lid
-          const lx = -14, ly = -98, R = 13.5, open = blink(t, 'drone', 3.4) * (1 - 0.35 * hurt) * (1 - 0.3 * tele) * (1 - 0.15 * guard);
-          tk.glow(c, lx, ly, 34, hot > 0.3 ? '#ffb040' : '#5ff5ff', 0.4 + 0.4 * hot);
-          c.save(); c.beginPath(); c.arc(lx, ly, R, 0, TAU); c.clip();
-          const gr = c.createRadialGradient(lx - 3, ly - 3, 1, lx, ly, R);
-          if (hot > 0.35) { gr.addColorStop(0, '#fffbd0'); gr.addColorStop(0.55, '#ffb030'); gr.addColorStop(1, '#a01a20'); } else { gr.addColorStop(0, '#f2ffff'); gr.addColorStop(0.5, '#4fd8f0'); gr.addColorStop(1, '#0a4a90'); }
-          c.fillStyle = gr; c.fillRect(lx - R, ly - R, R * 2, R * 2);
-          const lk = [sin(t * 0.9) * 0.7 - 0.2 + tele * -0.4, cos(t * 0.7) * 0.4 * m], pr = R * (0.36 + 0.1 * hot + 0.08 * Math.max(0, sin(t * 0.5))), px = lx + lk[0] * 4, py = ly + lk[1] * 3;
-          c.fillStyle = '#0a0620'; c.beginPath(); c.arc(px, py, pr, 0, TAU); c.fill();
-          c.strokeStyle = 'rgba(10,6,32,0.55)'; c.lineWidth = 1.4;
-          for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + spin * 0.05; c.beginPath(); c.moveTo(px + cos(a) * pr, py + sin(a) * pr); c.lineTo(px + cos(a) * R, py + sin(a) * R); c.stroke(); }
-          c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.ellipse(lx - 5, ly - 5.5, 3.6, 2.4, -0.6, 0, TAU); c.fill(); c.beginPath(); c.arc(lx + 5.5, ly + 5, 1.4, 0, TAU); c.fill();
-          // the shutter: brass lid coming down from the top
-          const ld = (1 - open) * R * 2;
-          if (ld > 0.5) { c.fillStyle = DR.brassD; c.fillRect(lx - R, ly - R, R * 2, ld); c.fillStyle = pal.ink; c.fillRect(lx - R, ly - R + ld - 1.2, R * 2, 1.6); }
+          const pv = DRN.pv;
+          // the needle: dead centre with a tiny settling tremble; it swings off on a hit and spins when it retunes
+          let na = 0.025 * sin(t * 9) * m;
+          if (tele > 0) na += sin(t * 21) * 0.65 * tele;
+          na += 0.95 * hurt - 0.35 * jab * (jabN === 1 ? -1 : 1);
+          if (buff > 0) na += E0.buffP * TAU;
+          if (st.won) na = 0.3;
+          const tip = [pv[0] + sin(na) * 22, pv[1] - cos(na) * 22];
+          c.save(); c.lineCap = 'round';
+          c.strokeStyle = lc; c.lineWidth = 4.4; c.beginPath(); c.moveTo(pv[0], pv[1]); c.lineTo(tip[0], tip[1]); c.stroke();
+          c.strokeStyle = st.won ? '#ff5a3d' : G.accent; c.lineWidth = 2.2; c.beginPath(); c.moveTo(pv[0], pv[1]); c.lineTo(tip[0], tip[1]); c.stroke();
+          c.fillStyle = lc; c.beginPath(); c.arc(pv[0], pv[1], 3.4, 0, TAU); c.fill();
           c.restore();
-          tk.inkPath(c, E(lx, ly, R, R, 18), { closed: true, w: 2.6, color: pal.ink, align: 0.2, wobble: 0.04 });
+          face(c, st, 0, -92, { kind: 'round', w: 10, gap: 30, my: 14, sw: 13, iris: ['#6d7196', '#b9bde0'], look: [-0.4 * tele - 0.5 * jab, 0] });
+          crack(c, -16, -126, 34, 'drone', hurt * 1.4);
+          polite(c, st, 26, -126, 5);
         },
       });
-      put(ctx, st, 'brow', { r: -0.06 * hot + 0.03 * hurt, y: 2 * hurt });
-      // arcs between the lightning rods, wider when it is worked up
-      {
-        const a0 = [-30 + 0.06 * -12 * hot, -166], a1 = [30 + 0.06 * 12 * hot, -166], arcK = 0.55 + 0.45 * hot + 0.25 * flick(t, 9, 7);
-        if (flick(t, 3, 9) > 0.32 - 0.3 * hot) {
-          ctx.save(); ctx.globalAlpha = cA(arcK * (1 - die * 0.4));
-          zap(ctx, a0[0], a0[1], a1[0], a1[1], t, { seed: 1, w: 1.6 + hot * 1.4, jag: 8 + 8 * hot, n: 7, color: DR.arc, core: DR.arcCore });
-          if (hot > 0.25) zap(ctx, a0[0], a0[1] + 2, a1[0], a1[1] - 8, t, { seed: 2, w: 1.4, jag: 12, n: 6 });
-          ctx.restore();
-        }
-        tk.glow(ctx, a0[0], a0[1], 14 + 10 * hot, DR.arc, 0.5 + 0.3 * flick(t, 4, 8));
-        tk.glow(ctx, a1[0], a1[1], 14 + 10 * hot, DR.arc, 0.5 + 0.3 * flick(t, 5, 8));
-      }
-      // the spout: a charge orb gathers on a telegraph, a bolt fires on every jab
-      {
-        const mx = -80, my = -118;
-        if (tele > 0.02 || jab > 0.02 || buff > 0.1) {
-          const r = 3 + 12 * tele + 6 * jab + 4 * buff;
-          tk.glow(ctx, mx - 4, my, r * 2.6, '#8ff4ff', cA(0.5 + 0.4 * tele));
-          ctx.beginPath(); ctx.arc(mx - 4, my, r, 0, TAU); ctx.fillStyle = '#f6ffff'; ctx.fill();
-          if (tele > 0.15) for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + t * 7; zap(ctx, mx - 4 + cos(a) * r, my + sin(a) * r, mx - 4 + cos(a) * (r + 18 * tele), my + sin(a) * (r + 18 * tele), t, { seed: i + 4, w: 1.4, jag: 4, n: 3 }); }
-        }
-        if (atk && jab > 0.3) {
-          const tgt = [[-176, -116], [-164, -148], [-164, -84]][jabN] || [-170, -116];
-          zap(ctx, mx, my, tgt[0], tgt[1], t, { seed: jabN + 10, w: 3, jag: 12, n: 8 });
-          zap(ctx, mx, my, tgt[0] + 10, tgt[1] + 10, t, { seed: jabN + 20, w: 1.6, jag: 16, n: 6 });
-          tk.glow(ctx, tgt[0], tgt[1], 36, '#bffcff', 0.6 * jab);
-        }
-      }
-      if (guard > 0.05) {
-        for (let i = 0; i < 6; i++) {
-          const a = t * 3 + i * TAU / 6, r0 = 62;
-          zap(ctx, cos(a) * r0, -98 + sin(a) * r0 * 0.8, cos(a + 0.7) * r0, -98 + sin(a + 0.7) * r0 * 0.8, t, { seed: i, w: 1.8, jag: 5, n: 4 });
-        }
-      }
+      // a perfectly regular pitch ring for a guard
+      pitchRing(ctx, 0, DRN.cy, 70, 64, 3, 12, G.lilac, guard, t * 6);
       ctx.restore();
-      if (hot > 0.15 || die > 0) sparks(ctx, dx, -98 + dy, t, 10, 31, { col: '#fff2a0', speed: 54 + 40 * die, size: 6, spread: TAU, life: 0.6, alpha: 0.9 * clamp(hot + die, 0, 1) });
-      if (buff > 0.05) { ctx.save(); ctx.globalAlpha = buff * 0.7; ctx.strokeStyle = '#fff2a0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, -98, 40 + 60 * E0.buffP, 34 + 50 * E0.buffP, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+      // every jab beeps a regular pitch line at the heroes
+      if (atk && jab > 0.25) {
+        const y0 = DRN.cy + dy - 4, ty = [-118, -96, -110][jabN] || -110;
+        pitchLine(ctx, -50 + dx, y0, -190, ty, 6, 3.5, G.mint, 2.4, jab);
+        tk.glow(ctx, -190, ty, 26, '#ffffff', 0.5 * jab);
+      }
+      if (tele > 0.2) for (let i = 0; i < 2; i++) { const u = fr(t * 1.4 + i * 0.5); ctx.save(); ctx.globalAlpha = (1 - u) * tele * 0.8; ctx.strokeStyle = G.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-46 + dx, DRN.cy + dy, 8 + 26 * u, PI * 0.7, PI * 1.3); ctx.stroke(); ctx.restore(); }
+      if (buff > 0.03) pitchRing(ctx, dx, DRN.cy + dy, 50 + 70 * E0.buffP, 44 + 60 * E0.buffP, 2.5, 10, G.mint, buff, 0);
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // KOMAINU GUARDIAN (normal, l): a stone lion-dog off a shrine gate, alone on a chipped plinth, curly stone mane, a straw shimenawa with paper streamers,
-  // amber light leaking out of every crack. Braces (stone spikes rise), then pounces. Accent: glowing amber eyes and cracks.
+  // VIP BOUNCER (komainu_guardian, normal, l). Echowake rig: KOMAINU GUARDIAN (keeps the plinth, the braced stance and the pounce arc). A stocky
+  // polished brass rope post come alive on a round podium: a big brass ball finial for a head in chrome sunglasses with an earpiece coil, the
+  // Gloss smile, a plum rope looped round the post as its two arms with brass snap clips for hands. It folds its arms on the guard, leaps off
+  // the podium on the pounce, and slides its shades down for the VIP Glare. Accent: the plum rope.
   // ---------------------------------------------------------------------------------------------------------------
-  const KM = { stone: '#8d94b8', stoneD: '#646b92', stoneL: '#b9bfdc', mane: '#8189b4', maneD: '#5e6690', crack: '#ff9a3a', crackH: '#ffe08a', rope: '#c9a35f', ropeD: '#7a5a28', paper: '#fff8f0', eye: '#ffb040', horn: '#d8d4e8' };
-  function whorl(S, cx, cy, r, col, a0, sweep) {
-    const pts = [];
-    for (let i = 0; i <= 14; i++) { const u = i / 14, a = (a0 || 0) + u * (sweep || 5.2), rr = r * (1 - u * 0.86); pts.push([cx + cos(a) * rr, cy + sin(a) * rr]); }
-    S.line(pts, { w: Math.max(1.4, r * 0.16), color: col, alpha: 0.9, taper: 0.25, wobble: 0.06 });
-  }
-  function crackLine(S, pts, w) {
-    S.line(pts, { w: (w || 3.2) + 1.6, color: '#2a0d0a', taper: 0.15, wobble: 0.1 });
-    S.line(pts, { w: (w || 3.2) * 0.55, color: KM.crack, taper: 0.15, wobble: 0.1 });
-  }
-  const KM_GLOW = [[-22, -128], [42, -142], [58, -92], [-58, -104], [8, -84], [-78, -60], [70, -70]];
-  function komainuLeg(S, far, hind) {
-    const c = far ? KM.stoneD : KM.stone, o = { depth: 8, hi: !far, hiW: 2.4, rim: far ? null : S.c.rim, halftone: { d: 5, alpha: far ? 0.36 : 0.28 } };
-    if (!hind) {
-      const ox = far ? 34 : 0;
-      S.cel(cap(-68 + ox, -128, -73 + ox, -30, 36, 28), c, o);
-      S.cel([[-98 + ox, -20], [-92 + ox, -34], [-70 + ox, -38], [-52 + ox, -30], [-50 + ox, -18], [-60 + ox, -12], [-92 + ox, -12]], c, Object.assign({}, o, { depth: 5 }));
-      [-88, -76, -64].forEach((x) => S.line([[x + ox, -34], [x - 2 + ox, -16]], { w: 1.8, color: pal.ink, alpha: 0.7, taper: 0.4 }));
-      if (!far) crackLine(S, [[-70, -96], [-64, -78], [-72, -62], [-66, -46]], 2.6);
-      else S.line([[-40 + ox, -100], [-34 + ox, -70]], { w: 1.6, color: pal.ink, alpha: 0.5, taper: 0.4 });
-    } else {
-      const ox = far ? 26 : 0;
-      S.cel(E(56 + ox, -98, 33, 40, 14, -0.25), c, Object.assign({}, o, { depth: 10 }));
-      S.cel(cap(52 + ox, -74, 44 + ox, -30, 30, 22), c, Object.assign({}, o, { depth: 6, hi: false }));
-      S.cel([[18 + ox, -20], [26 + ox, -36], [48 + ox, -38], [64 + ox, -28], [62 + ox, -16], [50 + ox, -12], [22 + ox, -12]], c, Object.assign({}, o, { depth: 5, hi: false }));
-      [22, 34, 46].forEach((x) => S.line([[x + ox, -34], [x - 2 + ox, -16]], { w: 1.8, color: pal.ink, alpha: 0.7, taper: 0.4 }));
-      if (!far) { whorl(S, 58, -102, 15, KM.stoneD, 0.4); crackLine(S, [[74, -118], [66, -100], [76, -84]], 2.4); }
-    }
-  }
+  const BNC = { headY: -196, R: 46 };
+  const ropeArm = (sd) => ({
+    spine: [[sd * 30, -142], [sd * 50, -124], [sd * 56, -98], [sd * 52, -74]], cuts: [0.36, 0.7], reach: 40, overlap: 4,
+    draw(S) {
+      tk.ribbon(S.g, [[sd * 30, -142], [sd * 50, -124], [sd * 56, -98], [sd * 52, -76]], S.c.rope, { wMax: 13, w0: 13, w1: 12, profile: () => 1, cap: 'round', shadow: RJ.shade(S.c.rope, 0.12), shadowW: 0.4, gloss: true, glossColor: RJ.tint(S.c.rope, 0.45), glossAlpha: 0.7, strands: 0, line: S.L, lineColor: S.lc, light: RJ.lightAngle(),
+        decor(g) { for (let i = 0; i < 6; i++) { const p = along([[sd * 30, -142], [sd * 50, -124], [sd * 56, -98], [sd * 52, -76]], 0.08 + i * 0.16); RJ.ink(g, [[p.x - 4, p.y - 3], [p.x + 4, p.y + 3]], { w: 1.2, color: RJ.shade(S.c.rope, 0.22), taper: 0.2, wobble: 0 }); } } });
+      // the brass snap clip at the end (its hand) and the hook at the shoulder
+      S.cel(RR(sd * 52 - 7, -78, 14, 12, 4), S.c.brass, { hi: true });
+      S.cel([[sd * 52 - 5, -66], [sd * 52 + 5, -66], [sd * 52 + 6, -56, 1], [sd * 52, -50], [sd * 52 - 6, -56, 1]], S.c.brass, { hi: true, tension: 0.3 });
+      S.ell(sd * 30, -142, 7, 7, S.c.brass, { hi: true });
+    },
+  });
   define('komainu_guardian', {
-    size: 'l', lw: 3.6,
-    col: { rim: '#c7d0ff', shT: 0.5 },
-    bounds: { w: 290, h: 276, head: { x: -96, y: -246 }, body: { x: -4, y: -118 }, feet: { x: 0, y: 0 } },
-    die: { box: [-160, -270, 130, 4], nx: 12, ny: 14, from: 'top', order: 0.55, shape: 'diamond', kinds: ['stone', 'stone', 'ember', 'puff'], cols: ['#8d94b8', '#646b92', '#ffb040', '#b9bfdc'], wind: [6, 10], size: 11, life: 0.55 },
+    size: 'l',
+    col: { brass: '#f1dda4', post: '#efd896', podium: G.lilac, podiumTop: '#f1ebff', rope: '#a23d8c', shades: '#4a4f6e', coil: G.lilac },
+    real: { brass: '#ffc94d', post: '#ffb83d', podium: '#8b4dff', podiumTop: '#b48cff', rope: '#e8335a', shades: '#2b2645', coil: '#3fcf6a' },
+    bounds: { w: 220, h: 250, head: { x: 0, y: -236 }, body: { x: 0, y: -120 }, feet: { x: 0, y: 0 } },
+    dieBox: [-80, -250, 80, -20],
+    sweep: [-52, -170],
     parts: {
-      plinth: {
-        box: [-130, -22, 128, 4], pivot: [0, 0],
+      podium: {
+        box: [-96, -38, 96, 4], pivot: [0, -10],
         draw(S) {
-          S.cel([[-118, -18], [102, -18], [116, -3], [124, 0, 1], [-124, 0, 1], [-112, -3]], KM.stoneD, { depth: 6, tension: 0.15, hi: true, hiW: 2, rim: '#c7d0ff', halftone: { d: 5, alpha: 0.32 }, line: 3.4 });
-          S.line([[-100, -12], [-60, -10], [-52, -4]], { w: 1.8, color: pal.ink, alpha: 0.5, taper: 0.4 });
-          crackLine(S, [[52, -17], [58, -10], [50, -3]], 2.4);
-          S.line([[-30, -17], [-24, -10], [-34, -4]], { w: 1.6, color: pal.ink, alpha: 0.5, taper: 0.4 });
+          const side = [[-92, -22, 1]].concat(tk.arcPts(0, -8, 92, 9, PI, 0, 14).map((p) => [p[0], p[1]]).reverse()).concat([[92, -22, 1]]);
+          S.chrome(side.map((p) => [p[0], p[1] + (p[1] > -10 ? 0 : 0)]), { horizon: 0.5, streak: false });
+          S.cel(E(0, -22, 92, 13, 30), S.c.podiumTop, { shadow: RJ.shade(S.c.podiumTop, 0.08), hi: '#ffffff' });
+          S.cel(E(0, -24, 60, 7, 24), S.c.podium, { shadow: false, line: S.L * 0.6 });
         },
       },
-      legHF: { box: [-4, -138, 112, -8], pivot: [70, -18], draw(S) { komainuLeg(S, true, true); } },
-      legFF: { box: [-94, -150, -6, -8], pivot: [-38, -18], draw(S) { komainuLeg(S, true, false); } },
-      torso: {
-        box: [-104, -184, 116, -56], pivot: [0, -100],
+      post: {
+        box: [-40, -160, 40, -22], pivot: [0, -30],
         draw(S) {
-          S.cel([[-90, -130], [-72, -160], [-30, -174], [20, -172], [66, -162], [94, -138], [100, -108], [80, -78], [34, -64], [-20, -62], [-64, -70], [-92, -96]], KM.stone, {
-            depth: 20, hi: true, hiW: 3.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 },
-            decor(g) {
-              whorl(S, -54, -122, 20, KM.stoneD, 1.2);
-              for (let i = 0; i < 4; i++) tk.inkPath(g, [[-26 + i * 24, -168], [-22 + i * 24, -134], [-30 + i * 24, -104]], { w: 2.4, color: KM.stoneD, alpha: 0.75, taper: 0.3, wobble: 0.08 });
-              for (let i = 0; i < 3; i++) tk.inkPath(g, [[-16 + i * 26, -92 + i * 2], [4 + i * 26, -84], [22 + i * 26, -92]], { w: 1.8, color: KM.stoneD, alpha: 0.6, taper: 0.4 });
-            },
-          });
-          crackLine(S, [[-30, -172], [-22, -150], [-34, -132], [-24, -112], [-30, -96]], 3.4);
-          crackLine(S, [[44, -166], [38, -148], [50, -134], [42, -118]], 3);
-          crackLine(S, [[10, -66], [4, -78], [16, -88]], 2.4);
-          S.line([[80, -140], [70, -122]], { w: 1.6, color: pal.ink, alpha: 0.55, taper: 0.4 });
-        },
-      },
-      legHN: { box: [-4, -138, 112, -8], pivot: [56, -18], draw(S) { komainuLeg(S, false, true); } },
-      legFN: { box: [-124, -150, -36, -8], pivot: [-72, -18], draw(S) { komainuLeg(S, false, false); } },
-      spikes: {
-        box: [-60, -240, 100, -150], pivot: [16, -160],
-        draw(S) {
-          [[-46, 44], [-26, 58], [-4, 66], [18, 64], [40, 56], [62, 46], [82, 34]].forEach((sp, i) => {
-            const x = sp[0], h = sp[1], y0 = -160 + (i > 4 ? 6 : 0);
-            S.cel([[x - 11, y0 + 4, 1], [x - 2, y0 - h * 0.7], [x + 1, y0 - h, 1], [x + 8, y0 - h * 0.5], [x + 12, y0 + 4, 1]], KM.stoneL, { depth: 5, hi: true, hiW: 1.8, rim: '#ffffff', tension: 0.3, line: 2.8, halftone: { d: 4, alpha: 0.3 } });
-            S.line([[x - 1, y0 - 2], [x + 1, y0 - h * 0.6]], { w: 1.4, color: KM.crack, alpha: 0.9, taper: 0.4 });
-          });
-        },
-      },
-      maneB: {
-        box: [-150, -270, 20, -100], pivot: [-66, -186],
-        draw(S) {
-          const cur = [];
-          for (let i = 0; i < 10; i++) { const a = PI * (0.95 + i * 0.13), R = 60 + 5 * (i % 3); cur.push([-66 + cos(a) * R, -186 + sin(a) * R * 0.98, 19 + 3 * ((i + 1) % 3), i]); }
-          [[-22, -166, 20], [-40, -146, 18], [-100, -126, 20], [-118, -146, 17]].forEach((c, i) => cur.push([c[0], c[1], c[2], 20 + i]));
-          cur.forEach((c) => {
-            S.cel(E(c[0], c[1], c[2], c[2], 14), c[3] % 2 ? KM.mane : KM.maneD, { depth: 5, hi: c[3] % 2 === 1, hiW: 1.8, rim: S.c.rim, line: 3, halftone: { d: 4, alpha: 0.28 } });
-            whorl(S, c[0], c[1], c[2] * 0.78, pal.ink, c[3] * 0.9, 4.8);
-          });
-        },
-      },
-      jaw: {
-        box: [-162, -172, -46, -120], pivot: [-62, -160],
-        draw(S) {
-          S.cel([[-62, -164], [-104, -167], [-134, -166], [-146, -158], [-138, -142], [-108, -134], [-74, -138], [-56, -150]], KM.stone, { depth: 8, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
-          [-130, -114, -98].forEach((x, i) => S.cel([[x - 4, -166, 1], [x + 1, -178 - (i % 2) * 2, 1], [x + 6, -166, 1]], KM.paper, { depth: 2, line: 2, hi: false, rim: null, tension: 0.2, shadow: false }));
-          S.line([[-130, -146], [-96, -142], [-70, -146]], { w: 1.6, color: KM.stoneD, alpha: 0.8, taper: 0.4 });
+          S.cel(E(0, -32, 36, 9, 20), S.c.brass, { hi: true });
+          S.cel(sym([[0, -150], [-24, -148], [-26, -130], [-28, -60], [-34, -40], [-34, -34], [0, -32]]), S.c.post, { hi: '#fff6d8', hiW: 3,
+            decor(g) { g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(-16, -146, 6, 108); } });
+          [[-56, 31], [-130, 27]].forEach((b) => S.cel(RR(-b[1], b[0] - 6, b[1] * 2, 11, 5), S.c.brass, { hi: true }));
+          S.cel(E(0, -150, 24, 6, 16), S.c.brass, { hi: true });
         },
       },
       head: {
-        box: [-166, -272, -30, -140], pivot: [-56, -178],
+        box: [-60, -250, 62, -142], pivot: [0, -150],
         draw(S) {
-          // the ear, the horn, then the big square lion face
-          S.cel([[-66, -226], [-52, -250], [-44, -222]], KM.stoneD, { depth: 4, line: 3, hi: false, rim: null, tension: 0.4 });
-          S.cel([[-98, -234, 1], [-104, -250], [-114, -268, 1], [-92, -250], [-86, -232, 1]], KM.horn, { depth: 4, line: 3, hi: true, hiW: 1.6, rim: '#ffffff', tension: 0.3 });
-          S.cel([[-60, -232], [-90, -243], [-120, -233], [-141, -213], [-150, -192], [-150, -172], [-137, -161], [-110, -157], [-84, -155], [-62, -156], [-46, -176], [-46, -206]], KM.stone, {
-            depth: 16, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 },
+          const cy = BNC.headY, R = BNC.R;
+          S.cel(RR(-14, -158, 28, 14, 5), S.c.brass, { hi: true });
+          S.cel(E(0, cy, R, R * 0.96, 28), S.c.brass, { hi: '#fff8e0', hiW: 3.4 });
+          // the earpiece: a little lilac bud at the side of the ball and its curly coil running down to the collar
+          S.ell(R - 3, cy + 8, 6, 7, S.c.coil, { hi: true });
+          const coil = [];
+          for (let i = 0; i <= 24; i++) { const u = i / 24; coil.push([R - 2 + sin(u * TAU * 4) * 4, cy + 14 + u * 36]); }
+          S.line(coil, { w: 1.8, color: S.lc, taper: 0 });
+          RJ.ink(S.g, coil, { w: 0.9, color: S.c.coil, taper: 0, wobble: 0 });
+          S.cel(E(0, cy - R + 6, 8, 5, 12), S.c.brass, { hi: true });
+        },
+      },
+      shades: {
+        box: [-48, -222, 48, -186], pivot: [0, -204],
+        draw(S) {
+          const y = -205;
+          S.cel([[-44, y - 8], [-6, y - 8], [-4, y - 4], [4, y - 4], [6, y - 8], [44, y - 8], [42, y + 2], [30, y + 12], [12, y + 12], [4, y + 2], [-4, y + 2], [-12, y + 12], [-30, y + 12], [-42, y + 2]], S.c.shades, { shadow: false, tension: 0.25,
             decor(g) {
-              tk.inkPath(g, [[-150, -186], [-128, -192], [-108, -186]], { w: 1.8, color: KM.stoneD, alpha: 0.85, taper: 0.4 });
-              tk.inkPath(g, [[-92, -230], [-90, -214], [-98, -204]], { w: 1.8, color: KM.stoneD, alpha: 0.6, taper: 0.4 });
-            },
-          });
-          // heavy brow, cheek curls, nose, fangs
-          S.cel([[-128, -206], [-108, -214], [-84, -212], [-78, -204], [-98, -200], [-122, -198]], KM.stoneD, { depth: 4, line: 3, hi: false, rim: S.c.rim, tension: 0.5 });
-          whorl(S, -68, -178, 11, KM.stoneD, 2.2);
-          S.cel(E(-143, -180, 10.5, 8.6, 10), KM.stoneD, { depth: 3, line: 2.8, hi: true, hiW: 1.2, rim: null });
-          S.ell(-147, -179, 2.8, 3.4, '#241a3a', { line: 1, shadow: false, rim: null });
-          [[-132, -162], [-110, -158]].forEach((f, i) => S.cel([[f[0] - 5, f[1] - 2, 1], [f[0], f[1] + 16 - i * 2, 1], [f[0] + 6, f[1] - 2, 1]], KM.paper, { depth: 3, line: 2.2, hi: false, rim: null, tension: 0.2, shadow: false }));
-          crackLine(S, [[-72, -232], [-74, -216], [-64, -202], [-70, -186]], 2.6);
-        },
-      },
-      rope: {
-        box: [-130, -168, -34, -104], pivot: [-80, -150],
-        draw(S) {
-          S.rib([[-56, -156], [-76, -146], [-100, -142], [-122, -152]], KM.rope, { wMax: 12, w0: 12, w1: 10, tipPow: 1, cap: 'round', profile: () => 1, shadow: KM.ropeD, rim: '#f2d894', line: 3 });
-          for (let i = 0; i < 6; i++) { const p = along([[-56, -156], [-76, -146], [-100, -142], [-122, -152]], 0.08 + i * 0.17); S.line([[p.x - 3, p.y - 5], [p.x + 3, p.y + 5]], { w: 1.6, color: KM.ropeD, taper: 0.3 }); }
-          [[-70, -146], [-92, -142], [-112, -146]].forEach((s0, k) => {
-            const x = s0[0], y = s0[1];
-            S.cel([[x - 3, y + 4, 1], [x + 5, y + 14, 1], [x - 4, y + 22, 1], [x + 6, y + 32, 1], [x - 3, y + 40, 1], [x - 8, y + 30, 1], [x + 1, y + 22, 1], [x - 8, y + 14, 1]], KM.paper, { depth: 2, line: 2, hi: false, rim: null, tension: 0, shadow: '#c9bdd8' });
-          });
+              const gr = g.createLinearGradient(-44, y - 8, 44, y + 12);
+              gr.addColorStop(0, S.real ? '#3b2a6a' : '#7d7fae'); gr.addColorStop(0.5, S.real ? '#2b2645' : '#c9c3ea'); gr.addColorStop(1, S.real ? '#3b2a6a' : '#8f8bbd');
+              g.fillStyle = gr; g.fillRect(-46, y - 10, 92, 24);
+              g.fillStyle = 'rgba(255,255,255,0.7)';
+              [-34, 16].forEach((x) => { g.beginPath(); g.moveTo(x, y - 7); g.lineTo(x + 6, y - 7); g.lineTo(x + 14, y + 10); g.lineTo(x + 8, y + 10); g.closePath(); g.fill(); });
+            } });
         },
       },
     },
-    chains: {
-      tail: {
-        spine: [[92, -128], [116, -148], [130, -186], [116, -222], [92, -240]], cuts: [0.34, 0.68], reach: 46, overlap: 4,
-        draw(S) {
-          S.rib([[92, -128], [116, -148], [130, -186], [116, -222], [92, -240]], KM.stone, { wMax: 40, w0: 24, w1: 8, tipPow: 1.2, shadow: KM.stoneD, rim: S.c.rim, rimW: 1.8, line: 3.4, halftone: { d: 5, alpha: 0.3 },
-            decor(g) { for (let i = 0; i < 4; i++) { const p = along([[92, -128], [116, -148], [130, -186], [116, -222], [92, -240]], 0.2 + i * 0.2); whorl(S, p.x + 4, p.y, 11 - i * 1.5, KM.stoneD, i, 4.6); } } });
-          crackLine(S, [[124, -170], [128, -190], [120, -206]], 2.4);
-        },
-      },
-    },
+    chains: { armL: ropeArm(-1), armR: ropeArm(1) },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
       const p = atk ? E0.p : 0;
       const leap = atk ? sm((p - 0.27) / 0.16) * (1 - sm((p - 0.6) / 0.32)) : 0;
-      const crouch = 15 * tele + (atk ? 12 * Math.max(0, -E0.swing) * 2 : 0) + 5 * guard + 10 * die;
-      const br = sin(TAU * t / 3.6) * m;
-      const rage = clamp(tele + guard * 0.4 + buff + st.wound * 0.6 + die, 0, 1);
-      const dx = -leap * 92 + hurt * 15 + E0.shake * 1.6 * 0.5 + (buff > 0 ? -6 * buff : 0);
+      const crouch = 14 * tele + (atk ? 22 * Math.max(0, -E0.swing) : 0) + 6 * guard;
+      const br = sin(TAU * t / 3.2) * m;
+      const dx = -leap * 92 + hurt * 15 + E0.shake * 1.4 + (buff > 0 ? 3 * sin(t * 30) * buff : 0);
       const dy = crouch - leap * 44 + 0.6 * br;
-      const rot = -0.05 * tele + leap * -0.1 + 0.05 * hurt;
-      // the plinth stays put (a little dust jumps off it)
-      put(ctx, st, 'plinth', {});
-      const dust = (tele > 0.3 ? tele : 0) + leap * 0.6 + guard * 0.4;
-      if (dust > 0.05 || die > 0) puffs(ctx, -40 + dx * 0.2, -16, t, 6, 61, { col: '#d9d2ea', rise: 30, spread: 60, size: 6, life: 1.2, alpha: 0.4 * clamp(dust + die, 0, 1) });
+      const rot = -0.06 * tele - leap * 0.12 + 0.08 * hurt;
+      put(ctx, st, 'podium', {});
+      if (leap > 0.2) { ctx.save(); ctx.globalAlpha = leap; tk.sparkle(ctx, -60, -20, 6, { color: '#ffffff' }); tk.sparkle(ctx, 54, -26, 4, { color: '#ffffff' }); ctx.restore(); }
       ctx.save();
-      xform(ctx, 0, -18, dx, dy, rot, 1, 1);
-      const legK = 1 - (crouch * 0.6) / 110;
-      const leg = (name, r0) => put(ctx, st, name, { sy: legK, r: r0 });
-      leg('legHF', 0.25 * leap + 0.02 * br); leg('legFF', -0.4 * leap - 0.05 * tele);
-      putChain(ctx, st, 'tail', [0.05 * sin(t * 1.9) * m + 0.25 * tele - 0.2 * leap + 0.2 * buff, 0.16 * sin(t * 1.9 - 0.8) * m, 0.24 * sin(t * 1.9 - 1.6) * m]);
-      put(ctx, st, 'torso', { sy: 1 + 0.014 * br - 0.04 * tele + 0.03 * guard, sx: 1 + 0.008 * br + 0.02 * guard, r: 0.01 * br });
-      if (guard > 0.02) put(ctx, st, 'spikes', { sy: 0.15 + 0.85 * ease.outBack(clamp(guard, 0, 1)), sx: 0.7 + 0.3 * guard, a: clamp(guard * 3, 0, 1) });
-      leg('legHN', 0.3 * leap + 0.02 * br); leg('legFN', -0.5 * leap - 0.06 * tele);
-      // the mane, the head and the jaw all ride on the neck
-      const nodR = 0.03 * sin(t * 1.3) * m, headR = nodR - 0.13 * tele - 0.2 * (atk ? E0.strike : 0) + 0.3 * buff + 0.2 * hurt + 0.05 * tele * sin(t * 40);
-      const open = (0.06 + 0.05 * sin(t * 2.4)) * m + 0.62 * tele + (atk ? 0.95 * E0.wind * (1 - E0.strike) : 0) + 0.85 * buff + 0.35 * hurt + 0.6 * die;
-      put(ctx, st, 'maneB', { r: 0.02 * sin(t * 1.7) * m + headR * 0.5, sx: 1 + 0.05 * buff + 0.03 * tele + 0.02 * br, sy: 1 + 0.05 * buff + 0.03 * tele + 0.02 * br });
-      ctx.save(); xform(ctx, -56, -178, 0, 0, 0, 1.12, 1.12);
+      xform(ctx, 0, -30, dx, dy, rot, 1 + crouch * 0.003, 1 - crouch * 0.006);
+      put(ctx, st, 'post', { sy: 1 + 0.01 * br });
+      // the rope arms: hanging and swaying, folded across the post on the guard, flung back on the leap, pulled in on the glare
+      const fold = guard, sw = 0.05 * sin(t * 1.9) * m, back = 0.45 * tele + 0.5 * leap;
+      const arm = (sd) => [sd * fold * 0.55 - sd * back * 0.6 - sd * 0.12 * buff + sw, sd * fold * 1.25 - sd * back * 0.3 + sd * 0.12 * hurt, sd * fold * 0.9 + 0.06 * sin(t * 1.9 - 0.8 + sd) * m];
+      const nod = (buff > 0 ? 0.12 * sin(t * 22) * buff : 0) + 0.05 * hurt - 0.06 * tele;
+      ctx.save(); xform(ctx, 0, -150, 0, -2 * br, nod, 1, 1);
       put(ctx, st, 'head', {
-        r: headR, y: 0,
-        pre(c) {
-          // the mouth cavity, glowing when it is angry, then the lower jaw hinged under it
-          if (open > 0.1) {
-            const H = [-62, -160], U = [-140, -164], jx = H[0] - 80 * cos(open) + 10 * sin(open), jy = H[1] + 80 * sin(open) + 10 * cos(open);
-            c.beginPath(); c.moveTo(H[0], H[1] - 6); c.lineTo(U[0], U[1]); c.lineTo(jx, jy - 4); c.lineTo(H[0], H[1] + 6); c.closePath();
-            const gr = c.createLinearGradient(H[0], H[1], U[0], U[1] + 30);
-            gr.addColorStop(0, '#ffcf6a'); gr.addColorStop(0.5, '#ff7a30'); gr.addColorStop(1, '#5a1010');
-            c.fillStyle = gr; c.globalAlpha = 0.95; c.fill(); c.globalAlpha = 1;
-            tk.glow(c, -108, -156 + open * 20, 46, '#ffb040', cA(0.35 + 0.5 * rage));
-          }
-          put(c, st, 'jaw', { r: -open });
-        },
         kids(c) {
-          const ob = blink(t, 'komainu', 4.6) * (1 - 0.3 * hurt);
-          eyeLive(c, -101, -191, 10.5, 8.2, { open: ob, iris: ['#ff7a20', '#ffe070'], sclera: '#fff0c8', pupil: 'slit', glow: KM.eye, glowK: 0.7 + 0.3 * rage, glowR: 3, lw: 2.6, rot: -0.14, look: [-0.5 - tele * 0.4, 0.1], lidTop: 0.32 + 0.2 * rage });
-          if (rage > 0.25) tk.glow(c, -100, -190, 30 + 20 * rage, '#ff9a3a', 0.22 * rage);
+          // the eyes behind the shades: only seen when the shades slide down for the glare, or once it is won over
+          const slide = st.won ? -22 : 15 * buff + 4 * hurt;
+          if (slide > 3 || st.won) face(c, st, 0, -206, { kind: buff > 0.3 ? 'glare' : 'round', w: 14, gap: 36, noMouth: true, iris: ['#6d7196', '#b9bde0'] });
+          put(c, st, 'shades', { y: slide, r: 0.12 * hurt });
+          face(c, st, 0, -176, { kind: 'lens', w: 1, noEyes: true, sw: 22, my: 0, open: 0 });
+          crack(c, -26, -230, 38, 'bouncer', hurt * 1.4);
+          if (tele > 0.3 && !st.won) tk.sparkle(c, 30, -212, 6 * tele, { color: '#ffffff', glow: 0.6 });
+          polite(c, st, 24, -228, 6);
         },
       });
       ctx.restore();
-      put(ctx, st, 'rope', { r: 0.03 * sin(t * 1.5 + 1) * m + headR * 0.3 + 0.04 * hurt });
-      // light leaking out of the cracks
-      const ck = 0.3 + 0.5 * rage + 0.15 * sin(t * 2.4);
-      KM_GLOW.forEach((g0, i) => tk.glow(ctx, g0[0], g0[1], 14 + 12 * rage, KM.crack, cA(ck * (0.5 + 0.5 * sin(t * 2.2 + i * 1.3)) * (1 - die * 0.5))));
-      if (guard > 0.05) tk.glow(ctx, 16, -170, 70, '#ffffff', 0.18 * guard);
+      putChain(ctx, st, 'armL', arm(-1));
+      putChain(ctx, st, 'armR', arm(1));
       ctx.restore();
-      if (buff > 0.03) {
-        for (let i = 0; i < 3; i++) {
-          const u = (E0.buffP + i * 0.28) % 1, r = 20 + 130 * u;
-          ctx.save(); ctx.globalAlpha = cA((1 - u) * 0.7 * buff * 2); ctx.strokeStyle = '#ffb040'; ctx.lineWidth = 4 * (1 - u) + 1; ctx.beginPath(); ctx.ellipse(-130 + dx, -172, r * 0.55, r, 0, -1.1, 1.1); ctx.stroke(); ctx.restore();
-        }
-      }
-      if (E0.pose === 'hurt' && E0.p < 0.7) for (let i = 0; i < 5; i++) { const fj = fling('kmhurt' + i, 'c', E0.p, { spread: 130, up: 60, g: 260, ground: -16 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-30 + fj.x, -130 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = KM.stone; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-5, 3); ctx.lineTo(-2, -5); ctx.lineTo(5, -3); ctx.lineTo(4, 4); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // REDACTION KNIGHT (normal, m): ivory paper plate armour struck through with black censor bars, a face that is one black bar with two red slits,
-  // a crest that is a black bar, a document for a cape, a tower shield stamped CLASSIFIED and a cleaver that is a very heavy black bar.
-  // Accent: the red slit eyes and the red seal.
+  // CLAPPERBOARD KNIGHT (redaction_knight, normal, m). Echowake rig: REDACTION KNIGHT (keeps the knight body and the cleave swings; the black bars
+  // became clapperboard stripes, the face bar a snapping clapper visor). A chibi knight in pastel chrome: a round helmet whose visor is a striped
+  // clapper stick that snaps shut over the eyes on every take, a little slate board under the face window with the Gloss smile chalked on it,
+  // striped pauldrons, a clapper-stick blade and a lilac megaphone for a shield. Accent: the red recording light on the helmet.
   // ---------------------------------------------------------------------------------------------------------------
-  const KN = { plate: '#c4c1d4', plateD: '#9d99b2', black: '#6e6a7e', red: '#ff3a4a', redD: '#a01028', gold: '#f5c96a', cloth: '#46425a', steel: '#cfd3e8' };
-  function redactTicks(g, x, y, w, n, col) {
-    for (let i = 0; i < n; i++) stitch(g, [[x, y + i * 5.5], [x + w * (0.55 + 0.4 * tk.vary('tick', 'w' + i)), y + i * 5.5]], { w: 1.4, color: col || '#6e6a7e', alpha: 0.8 });
-  }
-  // the red mute mon: a red roundel with one white bar across it (silence, stamped)
-  function seal(S, cx, cy, r) {
-    S.cel(E(cx, cy, r, r, 14), KN.red, { depth: r * 0.4, line: 2.4, hi: true, hiW: 1.4, rim: '#ffb0a0', rimW: 1.2 });
-    S.line([[cx - r * 0.62, cy], [cx + r * 0.62, cy]], { w: 2.6, color: '#ffe8e0', taper: 0.05, pressure: 'flat' });
+  const KNT = { slate: '#43475f', chalk: '#f4f1fb' };
+  // the black and white diagonal clapper stripes over a box (call inside a clip)
+  function clapStripes(g, x, y, w, h, dark, light) {
+    g.fillStyle = light; g.fillRect(x, y, w, h);
+    g.fillStyle = dark;
+    const st = Math.max(5, h * 1.1);
+    for (let i = -2; i < w / st + 2; i++) { const x0 = x + i * st * 2; g.beginPath(); g.moveTo(x0, y + h); g.lineTo(x0 + st, y + h); g.lineTo(x0 + st + h * 0.8, y); g.lineTo(x0 + h * 0.8, y); g.closePath(); g.fill(); }
   }
   define('redaction_knight', {
-    size: 'm', lw: 3.1,
-    col: { rim: '#ffffff', shT: 0.38 },
-    bounds: { w: 190, h: 195, head: { x: -6, y: -170 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
-    die: { box: [-74, -196, 62, 4], ny: 16, shape: 'strips', from: 'top', kinds: ['bar', 'felt', 'bar', 'felt'], cols: ['#6e6a7e', '#f2f0f6', '#46425a', '#c4c1d4'], wind: [4, 10], size: 9, thin: 0.5 },
+    size: 'm',
+    col: { plate: G.chromeL, boot: G.lilac, belt: G.lilac, megaphone: G.lilac, bell: '#f4efff', dark: '#4f5470', light: '#fbfaff', face: G.porcelain, plume: G.blush },
+    real: { plate: '#9fd8ff', boot: '#8b4dff', belt: '#ff8a1f', megaphone: '#ff7eb6', bell: '#ffd84d', dark: '#22264a', light: '#fff8ec', face: '#ffe1c8', plume: '#ff5a8a' },
+    bounds: { w: 190, h: 196, head: { x: 0, y: -180 }, body: { x: 0, y: -96 }, feet: { x: 0, y: 0 } },
+    dieBox: [-70, -196, 70, 0],
+    sweep: [-30, -140],
     parts: {
-      legF: {
-        box: [-2, -60, 40, 2], pivot: [16, -56],
-        draw(S) {
-          S.cel(cap(16, -56, 20, -14, 24, 20), KN.plateD, { depth: 6, hi: false, rim: null, halftone: { d: 5, alpha: 0.3 } });
-          S.cel([[2, -16], [30, -16], [38, -8], [32, -2], [4, -2]], '#6e6a7e', { depth: 4, hi: false, rim: null, tension: 0.4 });
-          gagPoly(S.g, [[6, -36], [30, -36], [30, -28], [6, -28]]);
-        },
-      },
-      legN: {
-        box: [-44, -60, 4, 2], pivot: [-12, -56],
-        draw(S) {
-          S.cel(cap(-12, -56, -16, -14, 26, 22), KN.plate, { depth: 7, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel([[-40, -16], [-6, -16], [2, -8], [-4, -2], [-38, -2], [-44, -8]], '#8e8aa3', { depth: 4, hi: true, hiW: 1.4, rim: S.c.rim, tension: 0.4 });
-          gagPoly(S.g, [[-27, -38], [-3, -38], [-3, -29], [-27, -29]]);
-          tk.inkPath(S.g, [[-25, -33.5], [-5, -33.5]], { w: 1.4, color: '#ffffff', alpha: 0.35, taper: 0.1, pressure: 'flat' });
-        },
-      },
+      legL: { box: [-34, -60, 4, 2], pivot: [-14, -54], draw(S) { S.limb([-14, -56], [-15, -18], 18, S.c.plate); S.cel(RR(-32, -18, 30, 17, 7), S.c.boot, { hi: true }); } },
+      legR: { box: [-4, -60, 34, 2], pivot: [14, -54], draw(S) { S.limb([14, -56], [15, -18], 18, S.c.plate); S.cel(RR(2, -18, 30, 17, 7), S.c.boot, { hi: true }); } },
       torso: {
-        box: [-44, -124, 48, -40], pivot: [0, -60],
+        box: [-42, -120, 42, -44], pivot: [0, -56],
         draw(S) {
-          // tassets, then the breastplate with its bars and the seal
-          [[-34, 0], [-14, 1], [6, 0], [24, 1]].forEach((ts, i) => S.cel(quad(ts[0], -66, 22, 26, 0), i % 2 ? KN.plateD : KN.plate, { depth: 4, line: 2.6, hi: false, rim: i ? null : S.c.rim, tension: 0.2 }));
-          S.cel([[-32, -112], [-12, -122], [20, -118], [34, -104], [38, -78], [28, -56], [-14, -54], [-33, -68], [-38, -94]], KN.plate, {
-            depth: 16, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 },
-            decor(g) {
-              redactTicks(g, -32, -114, 64, 2, '#9a8ab8');
-              gagPoly(g, [[-44, -100], [6, -103], [6, -91], [-44, -88]]);
-              gagPoly(g, [[-6, -72], [44, -74], [44, -64], [-6, -62]]);
-              stitch(g, [[-30, -80], [-8, -82]], { color: '#6e6a7e' });
-              tk.inkPath(g, [[-40, -97], [4, -99]], { w: 1.2, color: '#ffffff', alpha: 0.3, taper: 0.1, pressure: 'flat' });
-              redactTicks(g, -34, -78, 22, 3, '#9a8ab8');
-              tk.inkPath(g, [[-2, -120], [2, -80], [-2, -56]], { w: 1.6, color: '#8a7aa8', alpha: 0.7, taper: 0.3 });
-            },
-          });
-          seal(S, 14, -84, 7);
-          S.cel({ poly: [[-36, -60], [38, -60], [36, -52], [-34, -52]] }, '#46425a', { depth: 2, line: 2.4, hi: false, rim: null });
-          S.cel(E(2, -56, 5.5, 5, 10), KN.gold, { depth: 2, line: 2, hi: false, rim: null });
+          S.chrome(sym([[0, -116], [-30, -114], [-36, -100], [-30, -64], [-24, -50], [0, -48]]), { horizon: 0.62 });
+          S.cel(RR(-31, -100, 62, 14, 4), S.c.light, { shadow: false, decor(g) { clapStripes(g, -32, -100, 64, 14, S.c.dark, S.c.light); } });
+          S.cel(RR(-28, -62, 56, 9, 4), S.c.belt, { hi: true });
+          S.ell(0, -57.5, 6, 6, S.c.plate, { hi: true });
+        },
+      },
+      paulL: { box: [-52, -124, -16, -92], pivot: [-28, -108], draw(S) { S.cel(E(-32, -108, 17, 13, 18), S.c.light, { decor(g) { clapStripes(g, -50, -122, 36, 14, S.c.dark, S.c.light); } }); } },
+      paulR: { box: [16, -124, 52, -92], pivot: [28, -108], draw(S) { S.cel(E(32, -108, 17, 13, 18), S.c.light, { decor(g) { clapStripes(g, 14, -122, 36, 14, S.c.dark, S.c.light); } }); } },
+      armF: {
+        box: [-12, -118, 52, -66], pivot: [30, -104],
+        draw(S) { S.limb([30, -104], [24, -80], 15, S.c.plate); S.blob([{ e: [22, -76, 9, 8] }], S.c.boot); },
+      },
+      blade: {
+        box: [-12, -116, 12, 16], pivot: [0, 0],
+        draw(S) {
+          S.cel(RR(-4, -2, 8, 16, 3), S.c.boot, { hi: true });
+          S.cel(RR(-12, -6, 24, 7, 3), S.c.plate, { hi: true });
+          S.cel([[-8, -6, 1], [8, -6, 1], [9, -100, 1], [0, -112, 1], [-9, -100, 1]], S.c.light, { shadow: false, tension: 0,
+            decor(g) { g.save(); g.translate(0, -60); g.rotate(-PI / 2); clapStripes(g, -56, -10, 112, 20, S.c.dark, S.c.light); g.restore(); } });
         },
       },
       armN: {
-        box: [-64, -126, 4, -60], pivot: [-28, -100],
-        draw(S) {
-          S.cel(cap(-30, -98, -46, -80, 19, 16), KN.plate, { depth: 5, hi: false, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel([[-50, -112], [-34, -122], [-14, -112], [-12, -94], [-30, -88], [-48, -96]], KN.plate, { depth: 9, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 }, tension: 0.7 });
-          gagPoly(S.g, [[-48, -104], [-14, -102], [-13, -95], [-47, -97]]);
-          S.line([[-44, -114], [-32, -119], [-20, -114]], { w: 1.6, color: '#ffffff', alpha: 0.5, taper: 0.4 });
-        },
+        box: [-60, -118, -14, -66], pivot: [-30, -104],
+        draw(S) { S.limb([-30, -104], [-38, -82], 15, S.c.plate); S.blob([{ e: [-40, -78, 9, 8] }], S.c.boot); },
       },
-      armF: {
-        box: [-64, -126, 44, -60], pivot: [16, -102],
+      megaphone: {
+        box: [-44, -34, 30, 34], pivot: [0, 0],
         draw(S) {
-          S.cel(cap(16, -102, -8, -104, 20, 17), '#8e8aa3', { depth: 5, hi: false, rim: null });
-          S.cel(cap(-8, -104, -36, -108, 17, 15), '#8e8aa3', { depth: 5, hi: false, rim: null });
-          S.cel(E(-40, -108, 9.5, 9.5, 10), '#6e6a7e', { depth: 3, line: 2.6, hi: false, rim: null });
-          S.cel(E(14, -104, 15, 13, 12), KN.plateD, { depth: 5, line: 3, hi: false, rim: null });
-        },
-      },
-      cleaver: {
-        box: [-24, -108, 24, 28], pivot: [0, 0],
-        draw(S) {
-          // grip wrapped in red, a guard, then the black-bar blade with a bright edge and a partial line of "text"
-          S.cel(cap(0, 26, 0, 2, 9, 9), KN.redD, { depth: 3, line: 2.6, hi: false, rim: null, tension: 0.5 });
-          for (let i = 0; i < 4; i++) S.line([[-4, 22 - i * 5], [4, 19 - i * 5]], { w: 1.4, color: '#ffb0a0', taper: 0.2 });
-          S.cel({ poly: [[-15, 4], [15, 4], [13, -3], [-13, -3]] }, KN.gold, { depth: 2, line: 2.4, hi: true, rim: null });
-          S.cel({ poly: [[-14, -4], [15, -4], [17, -78], [12, -100], [-11, -102], [-16, -78]] }, KN.black, {
-            depth: 5, line: 3, hi: false, rim: '#cfcdd8', rimW: 1.6, shadow: '#46425a',
-            decor(g) {
-              for (let i = 0; i < 3; i++) stitch(g, [[-9, -21 - i * 20], [5 - i * 3, -21 - i * 20]], { color: '#f2f0f6', alpha: 0.85, w: 1.6 });
-            },
-          });
-          tk.inkPath(S.g, [[-15, -8], [-14, -50], [-12, -92]], { w: 2.4, color: KN.steel, taper: 0.1, wobble: 0.05, pressure: 'flat' });
-        },
-      },
-      shield: {
-        box: [-34, -60, 34, 60], pivot: [0, 0],
-        draw(S) {
-          S.cel([[-26, -50, 1], [24, -54, 1], [28, 24], [4, 52], [-24, 24]], KN.black, {
-            depth: 8, line: 3.2, tension: 0.3, hi: false, rim: '#cfcdd8', rimW: 1.6, shadow: '#46425a',
-            decor(g) {
-              g.strokeStyle = KN.plate; g.lineWidth = 2.4; g.setLineDash([5, 3]); g.beginPath(); g.moveTo(-20, -42); g.lineTo(20, -46); g.lineTo(22, 20); g.lineTo(3, 42); g.lineTo(-19, 20); g.closePath(); g.stroke();
-              g.setLineDash([]); quiltDiamonds(g, -20, -42, 40, 60, 10, '#c4c1d4', 0.6);
-            },
-          });
-          seal(S, 4, 12, 8);
+          S.cel([[22, -8], [22, 8], [-26, 26], [-30, 0], [-26, -26]], S.c.megaphone, { hi: true, tension: 0.2 });
+          S.cel(E(-28, 0, 9, 27, 20), S.c.bell, { shadow: RJ.shade(S.c.bell, 0.1) });
+          S.cel(E(-29, 0, 4, 16, 14), RJ.shade(S.c.bell, 0.2), { shadow: false, line: S.L * 0.6 });
+          S.cel(RR(18, -9, 10, 18, 3), S.c.plate, { hi: true });
         },
       },
       head: {
-        box: [-44, -186, 40, -104], pivot: [-2, -110],
+        box: [-46, -190, 46, -102], pivot: [0, -112],
         draw(S) {
-          S.cel(E(-3, -132, 31, 29, 16), KN.plate, { depth: 12, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
-          S.cel({ poly: [[-34, -138], [30, -138], [29, -118], [-33, -118]] }, KN.black, { depth: 3, line: 3, hi: false, rim: '#cfcdd8', rimW: 1.4, shadow: '#46425a' });
-          S.cel({ poly: [[-34, -156], [-3, -160], [30, -156], [32, -146], [-35, -146]] }, KN.plate, { depth: 4, line: 2.6, hi: true, hiW: 1.4, rim: null, tension: 0.4 });
-          tk.inkPath(S.g, [[-30, -146], [-3, -149], [26, -146]], { w: 2.2, color: KN.gold, alpha: 0.9, taper: 0.1 });
-          S.cel({ poly: [[-30, -116], [26, -116], [22, -106], [-26, -106]] }, KN.plateD, { depth: 3, line: 2.6, hi: false, rim: null });
+          S.chrome(E(0, -144, 38, 36, 24), { horizon: 0.7 });
+          S.cel(RR(-25, -160, 50, 30, 13), S.c.face, { shadow: RJ.shade(S.c.face, 0.05) });
+          S.cel(RR(-22, -128, 44, 18, 5), S.c.dark, { shadow: false,
+            decor(g) { g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-22, -119); g.lineTo(22, -119); g.moveTo(0, -128); g.lineTo(0, -119); g.stroke(); } });
+          S.cel(E(0, -181, 6, 8, 12), S.c.plume, { hi: true });
+          S.ell(26, -170, 4, 4, S.real ? '#ff5a3d' : G.accent, { shadow: false, line: S.L * 0.6 });
         },
       },
-      crest: {
-        box: [-30, -204, 46, -140], pivot: [-2, -156],
+      clapper: {
+        box: [-34, -176, 34, -158], pivot: [-29, -166],
         draw(S) {
-          S.cel({ poly: [[-6, -156], [8, -164], [36, -196], [46, -190], [22, -156]] }, KN.black, { depth: 4, line: 3, hi: false, rim: '#cfcdd8', rimW: 1.4, shadow: '#46425a' });
-          S.line([[16, -170], [36, -190]], { w: 3, color: KN.red, taper: 0.1, pressure: 'flat' });
-        },
-      },
-    },
-    chains: {
-      capeD: {
-        spine: [[18, -108], [38, -84], [50, -50], [48, -14]], cuts: [0.34, 0.68], reach: 60, overlap: 4,
-        draw(S) {
-          S.cel([[8, -112, 1], [30, -110, 1], [58, -66], [72, -12, 1], [36, -4, 1], [24, -30], [12, -70]], '#6e6a7e', {
-            depth: 12, line: 3, tension: 0.4, hi: false, rim: null, halftone: { d: 5, alpha: 0.3 },
-            decor(g) {
-              for (let i = 0; i < 7; i++) { g.fillStyle = i % 2 ? 'rgba(70,66,90,0.7)' : 'rgba(242,240,246,0.45)'; g.beginPath(); g.moveTo(0, -112 + i * 16); g.lineTo(70, -112 + i * 16 + 4); g.lineTo(70, -112 + i * 16 + 14); g.lineTo(0, -112 + i * 16 + 10); g.fill(); stitch(g, [[0, -112 + i * 16 + 1], [70, -112 + i * 16 + 5]], { color: '#f2f0f6', alpha: 0.5 }); }
-            },
-          });
-          S.fill(zig(14, 72, -8, 9, 6, 3, 21), '#6e6a7e', 1, 0);
+          S.cel(RR(-31, -172, 62, 11, 3), S.c.light, { shadow: false, decor(g) { clapStripes(g, -32, -172, 64, 11, S.c.dark, S.c.light); } });
+          S.ell(-29, -166, 3.5, 3.5, S.c.plate, { shadow: false, line: S.L * 0.6 });
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const br = sin(TAU * t / 2.8) * m;
-      const hot = clamp(tele + buff + (atk ? E0.strike : 0), 0, 1);
-      const dx = -E0.strike * 26 * (atk ? 1 : 0) + hurt * 16 + E0.shake * 1.2 + 4 * tele;
-      const dy = 2 * tele;
-      const rot = 0.02 * br + 0.06 * tele - 0.09 * E0.strike * (atk ? 1 : 0) + 0.12 * hurt;
-      // the weapon arm: raise on the wind-up, chop on the strike
-      let A = 0.05 * br, W = -0.7 + 0.03 * br;
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const br = sin(TAU * t / 2.6) * m;
+      const strike = atk ? E0.strike : 0;
+      const dx = -strike * 24 + hurt * 16 + E0.shake * 1.2 + 3 * tele;
+      const rot = 0.06 * tele - 0.08 * strike + 0.12 * hurt;
+      // the blade arm: raise on the wind-up, chop on the strike (the Echowake cleave timing)
+      let A = 0.04 * br, W = 0.25;
       if (atk) {
-        if (p < 0.3) { const k = sm(p / 0.3); A = 1.9 * k; W = lerp(-0.7, 0.5, k); } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); A = lerp(1.9, -0.25, k); W = lerp(0.5, -1.3, k); } else { const k = sm((p - 0.5) / 0.5); A = lerp(-0.25, 0.05, k); W = lerp(-1.3, -0.7, k); }
-      } else if (E0.pose === 'telegraph') { A = 1.9 * tele + 0.03 * E0.shake; W = lerp(-0.7, 0.5, tele); } else if (E0.pose === 'block') { A = -0.5 * guard; W = lerp(-0.7, -1.6, guard); } else if (E0.pose === 'hurt') { A = 0.4 * hurt; W = -0.7 + 0.5 * hurt; } else if (E0.pose === 'buff') { A = 0.9 * E0.buff; W = -0.7 + 0.6 * E0.buff; } else if (die > 0) { A = 0.6 * die; }
-      putChain(ctx, st, 'capeD', [0.08 * sin(t * 2.2) * m + 0.1 * tele - 0.2 * E0.strike + 0.1 * hurt, 0.16 * sin(t * 2.2 - 0.9) * m, 0.22 * sin(t * 2.2 - 1.8) * m], { x: dx * 0.6, y: dy });
+        if (p < 0.3) { const k = sm(p / 0.3); A = -1.8 * k; W = lerp(0.25, -0.9, k); } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); A = lerp(-1.8, 0.5, k); W = lerp(-0.9, -2.0, k); } else { const k = sm((p - 0.5) / 0.5); A = lerp(0.5, 0.04, k); W = lerp(-2.0, 0.25, k); }
+      } else if (E0.pose === 'telegraph') { A = -1.8 * tele + 0.03 * E0.shake; W = lerp(0.25, -0.9, tele); } else if (E0.pose === 'block') { A = -0.4 * guard; W = lerp(0.25, -0.6, guard); } else if (E0.pose === 'hurt') { A = -0.3 * hurt; W = 0.25 + 0.4 * hurt; } else if (E0.pose === 'buff') { A = -1.2 * buff; W = 0.25 - 0.8 * buff; }
+      // the clapper visor: half open at rest, wide open on the wind-up, SNAP shut on the strike, open on a hit
+      let vis = -0.32 + 0.04 * sin(t * 1.3) * m;
+      if (atk) vis = p < 0.3 ? lerp(-0.32, -1.1, sm(p / 0.3)) : p < 0.42 ? lerp(-1.1, 0.02, ease.inCubic((p - 0.3) / 0.12)) : lerp(0.02, -0.32, sm((p - 0.62) / 0.38));
+      else if (tele > 0) vis = lerp(-0.32, -1.1, tele);
+      else if (guard > 0) vis = lerp(-0.32, 0.02, guard);
+      else if (buff > 0) vis = -0.32 - 0.9 * buff;
+      vis += -0.5 * hurt;
+      if (st.won) vis = -1.3;
       ctx.save();
-      xform(ctx, 0, -60, dx, dy, rot, 1, 1);
-      put(ctx, st, 'legF', { r: 0.03 * br - 0.1 * tele + 0.05 * E0.strike * (atk ? 1 : 0) });
-      // the far arm carries the weapon
-      put(ctx, st, 'armF', {
-        r: A,
-        kids(c) { put(c, st, 'cleaver', { x: -40, y: -110, r: W - A - rot }); if (hot > 0.3 || tele > 0.2) tk.glow(c, -40, -108, 26 + 14 * tele, KN.red, 0.4 * clamp(hot + tele, 0, 1)); },
-      });
-      put(ctx, st, 'torso', { r: 0.01 * br, sy: 1 + 0.012 * br - 0.02 * tele });
-      put(ctx, st, 'legN', { r: -0.03 * br + 0.08 * tele - 0.08 * E0.strike * (atk ? 1 : 0) });
-      // the shield on the near arm: it comes up in front on a block
-      put(ctx, st, 'shield', { x: -54 - 10 * guard - 4 * tele, y: -62 - 22 * guard, r: -0.1 - 0.16 * guard + 0.08 * hurt + 0.02 * br, sx: 0.82 + 0.06 * buff, sy: 0.82 + 0.06 * buff });
-      put(ctx, st, 'armN', { r: 0.04 * br - 0.3 * guard + 0.1 * hurt });
-      // black bars sliding across the body on a Blackout
-      const bl = clamp(guard + buff * 0.8, 0, 1);
-      if (bl > 0.02) {
-        [[-112, 8], [-92, 6], [-72, 8], [-56, 6]].forEach((b, i) => { const w = 96 * ease.outQuad(clamp(bl * 1.4 - i * 0.12, 0, 1)); if (w > 1) gag(ctx, 38 - w, b[0], w, b[1] + 2); });
-      }
-      put(ctx, st, 'crest', { r: 0.05 * sin(t * 2.6) * m - 0.1 * tele + 0.14 * hurt });
+      xform(ctx, 0, -56, dx, 2 * tele, rot, 1, 1);
+      put(ctx, st, 'legL', { r: 0.04 * br * 0 - 0.06 * tele + 0.08 * strike });
+      put(ctx, st, 'legR', { r: 0.06 * tele - 0.04 * strike });
+      put(ctx, st, 'armF', { r: A, kids(c) { put(c, st, 'blade', { x: 22, y: -76, r: W }); } });
+      put(ctx, st, 'torso', { sy: 1 + 0.012 * br });
+      put(ctx, st, 'paulR', { r: 0.05 * br });
       put(ctx, st, 'head', {
-        r: 0.02 * br - 0.04 * E0.strike * (atk ? 1 : 0) + 0.1 * hurt - 0.03 * tele,
+        r: 0.02 * br - 0.04 * strike + 0.12 * hurt - 0.03 * tele, y: -1.5 * br,
         kids(c) {
-          // two red slits in the bar: they glitch sideways now and then, thicken when angry, blink shut
-          const ob = blink(t, 'knight', 4.2) * (1 - 0.4 * hurt), gl = flick(t, 8, 3) > 0.9 ? 3 : 0, th = 3.2 + 2.6 * hot;
-          c.save(); c.globalCompositeOperation = 'lighter';
-          tk.glow(c, -8, -128, 30 + 16 * hot, KN.red, 0.4 + 0.4 * hot);
-          c.restore();
-          c.fillStyle = hot > 0.4 ? '#ffe0d0' : '#ff5a5a';
-          [-1, 1].forEach((sd) => { const w = 15; c.fillRect(-3 + sd * 14 - w / 2 + gl * sd, -128 - th * ob / 2, w, Math.max(0.8, th * ob)); });
-          c.fillStyle = KN.red; c.globalAlpha = 0.6;
-          [-1, 1].forEach((sd) => { const w = 19; c.fillRect(-3 + sd * 14 - w / 2 + gl * sd, -128 - th * ob * 0.9, w, Math.max(1.4, th * ob * 1.8)); });
-          c.globalAlpha = 1;
+          face(c, st, 0, -146, { kind: 'round', w: 12, gap: 24, noMouth: true, iris: ['#6d7196', '#b9bde0'], look: [-0.5 * tele, 0] });
+          // the Gloss smile chalked on the slate board
+          if (st.won) face(c, st, 0, -146, { kind: 'round', w: 12, gap: 24, my: 26, sw: 16, noEyes: true });
+          else if (hurt > 0.45) foe.mouth(c, 0, -122, 12, 'O', { ink: KNT.chalk });
+          else foe.glossSmile(c, 0, -121, 16, { color: KNT.chalk });
+          put(c, st, 'clapper', { r: vis });
+          if (atk && p > 0.38 && p < 0.55) { const u = (p - 0.38) / 0.17; c.save(); c.globalAlpha = c.globalAlpha * (1 - u); tk.sparkle(c, 30, -166, 6 + 10 * u, { color: '#ffffff', glow: 0.6 }); c.restore(); }
+          crack(c, 18, -176, 30, 'knight', hurt * 1.4);
+          polite(c, st, -22, -168, 5);
         },
       });
+      put(ctx, st, 'paulL', { r: -0.05 * br });
+      // the megaphone shield: held out at the side, brought up in front on a guard
+      put(ctx, st, 'armN', { r: 0.05 * br - 0.5 * guard + 0.15 * hurt, kids(c) { put(c, st, 'megaphone', { x: -46 - 4 * guard, y: -80 - 22 * guard, r: -0.1 - 0.4 * guard + 0.05 * br, sx: 0.8 + 0.2 * guard + 0.08 * buff, sy: 0.8 + 0.2 * guard + 0.08 * buff }); } });
       ctx.restore();
       if (atk && p > 0.42 && p < 0.72) {
         const u = sm((p - 0.42) / 0.12) * (1 - sm((p - 0.62) / 0.1));
-        swoosh(ctx, -22 + dx, -108, 112, 36, -1.1, -3.7, { alpha: u * 0.9, fill: '#f2f0f6', edge: '#ff3a4a' });
+        ctx.save(); ctx.globalAlpha = u * 0.85; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(10 + dx, -100, 96, -2.1, -3.6, true); ctx.stroke();
+        ctx.strokeStyle = G.lilac; ctx.lineWidth = 4; ctx.stroke(); ctx.restore();
       }
+      if (buff > 0.05) for (let i = 0; i < 3; i++) { const u = fr(E0.buffP + i / 3); ctx.save(); ctx.globalAlpha = (1 - u) * buff; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-70 + dx, -100, 10 + 40 * u, PI * 0.75, PI * 1.25); ctx.stroke(); ctx.restore(); }
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // VOID SCRIBE (normal, m): a hooded, floating clerk of the Blank in a violet-black robe, a blank paper mask for a face and a brush loaded with ink the
-  // colour of nothing: the strokes it makes are WHITE. A jar of the stuff glows at its belt and an unwritten scroll drifts beside it. It writes in the air
-  // (the white trail is live) and erases everything else. Accent: the glowing white-lilac ink and two pinprick eyes.
+  // CHROME SIREN (void_scribe, normal, m). Echowake rig: VOID SCRIBE (keeps the float and the robe hem). A floating chrome singer in a long lilac
+  // gown whose hem ends in a flat, perfectly regular soundwave, a perfectly smooth face with serene closed eyes, a sleek mint-chrome bob, both
+  // hands holding a mirror-ball mic to its lips and a halo of little tuning sliders that it keeps perfectly level. It croons in flat, evenly
+  // spaced rings. Accent: the one pink slider knob in the middle.
   // ---------------------------------------------------------------------------------------------------------------
-  const VS = { robe: '#2f2a52', robeL: '#4d4880', trim: '#f2f0f6', ink: '#f2f0f6', inkG: '#cfcdd8', cyan: '#bff0ff', skin: '#f2f0f6', shaft: '#a8743c', gold: '#f5c96a' };
-  // where the brush tip of the scribe is for a given time and pose channels: hand position and the brush's world angle
-  function scribeBrush(t, E0, m) {
-    const k = m;
-    let hx = -78 + 8 * sin(2.1 * t) * k, hy = -96 + 6 * sin(3.2 * t + 1) * k, W = -0.75 + 0.22 * sin(2.1 * t + 0.6) * k;
-    if (E0.pose === 'attack') {
-      const p = E0.p;
-      const a = p < 0.3 ? sm(p / 0.3) : 1, b = p < 0.3 ? 0 : p < 0.5 ? ease.inCubic((p - 0.3) / 0.2) : 1 - sm((p - 0.5) / 0.5);
-      hx += 12 * a - 46 * b; hy += -26 * a + 34 * b; W = lerp(W, -0.1, a) + b * (-2.0);
-    } else if (E0.pose === 'telegraph') { hx += 16 * E0.tele; hy += -38 * E0.tele; W = lerp(W, -0.2, E0.tele) + 0.03 * E0.shake; }
-    else if (E0.pose === 'buff') { hx += -30 * E0.buff * cos(E0.buffP * TAU); hy += -10 * E0.buff; W += -0.6 * sin(E0.buffP * TAU); }
-    else if (E0.pose === 'hurt') { hx += 20 * E0.hurt; hy += -8 * E0.hurt; W += 0.7 * E0.hurt; }
-    else if (E0.pose === 'block') { hx += 16 * E0.guard; hy += -20 * E0.guard; W += 0.5 * E0.guard; }
-    return { hx, hy, W };
-  }
+  const SRN = { hy: -152, halo: 46, sl: [-2.62, -2.09, -1.57, -1.05, -0.52] };
   define('void_scribe', {
-    size: 'm', lw: 3.1,
-    col: { rim: '#c9c0ff', shT: 0.42 },
-    bounds: { w: 200, h: 200, head: { x: -8, y: -172 }, body: { x: -2, y: -96 }, feet: { x: 0, y: 0 } },
-    die: { box: [-150, -196, 78, -14], nx: 10, ny: 12, from: 'bottom', order: 0.6, shape: 'ink', kinds: ['cotton', 'note', 'felt', 'cotton'], cols: ['#f2f0f6', '#cfc0ff', '#9d99b2', '#2f2a52'], wind: [-10, -22], size: 8 },
+    size: 'm',
+    col: { gown: G.lilac, bodice: G.mint, skin: G.porcelain, hair: '#d6f5ec', glove: G.opal, track: '#8f93ad', ball: G.opal },
+    real: { gown: '#8b4dff', bodice: '#3fcf6a', skin: '#ffd8bd', hair: '#2f8f6a', glove: '#ffe8d8', track: '#5a3f8a', ball: '#ffd84d' },
+    bounds: { w: 170, h: 204, head: { x: 0, y: -194 }, body: { x: 0, y: -100 }, feet: { x: 0, y: 0 } },
+    dieBox: [-64, -204, 64, -20],
+    sweep: [-36, -130],
+    hop: 14,
     parts: {
-      tip: {
-        box: [6, -206, 74, -150], pivot: [16, -158],
+      halo: {
+        box: [-58, -210, 58, -150], pivot: [0, SRN.hy],
         draw(S) {
-          S.cel([[14, -164, 1], [30, -190], [58, -204, 1], [56, -190], [44, -172], [30, -158, 1]], VS.robe, { depth: 7, line: 3, tension: 0.5, hi: false, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
-          S.cel(E(58, -202, 4.4, 4.4, 8), VS.ink, { depth: 1.5, line: 2, hi: false, rim: null, shadow: VS.inkG });
-        },
-      },
-      robe: {
-        box: [-60, -130, 66, -14], pivot: [0, -100],
-        draw(S) {
-          const pts = [[-36, -108], [-18, -122], [16, -122], [34, -108], [44, -76], [52, -44, 1]].concat(zig(52, -50, -44, 20, 8, 7, 5)).concat([[-46, -76]]);
-          S.cel(pts, VS.robe, {
-            depth: 18, tension: 0.5, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-            decor(g) {
-              g.fillStyle = VS.robeL; g.beginPath(); g.moveTo(-50, -84); g.lineTo(52, -88); g.lineTo(52, -72); g.lineTo(-50, -68); g.fill();
-              tk.inkPath(g, [[-50, -84], [0, -87], [52, -88]], { w: 1.6, color: pal.ink, taper: 0.05, pressure: 'flat' });
-              tk.inkPath(g, [[-50, -68], [0, -70], [52, -72]], { w: 1.6, color: pal.ink, taper: 0.05, pressure: 'flat' });
-              for (let i = 0; i < 5; i++) tk.inkPath(g, [[-34 + i * 17, -62], [-32 + i * 17, -32]], { w: 2, color: '#1a1238', alpha: 0.7, taper: 0.3, wobble: 0.08 });
-              for (let i = 0; i < 4; i++) stitch(g, [[-26 + i * 18, -53 + (i % 2) * 8], [-16 + i * 18, -53 + (i % 2) * 8]], { color: '#cfcdd8', alpha: 0.6 });
-            },
+          SRN.sl.forEach((a) => {
+            const x0 = cos(a) * (SRN.halo - 8), y0 = SRN.hy + sin(a) * (SRN.halo - 8), x1 = cos(a) * (SRN.halo + 8), y1 = SRN.hy + sin(a) * (SRN.halo + 8);
+            S.limb([x0, y0], [x1, y1], 5, S.c.track, { L: S.L * 0.7 });
           });
-          S.cel([[-20, -120], [0, -90], [20, -120], [12, -121], [0, -104], [-12, -121]], VS.trim, { depth: 3, line: 2.6, hi: false, rim: null, tension: 0.3 });
-        },
-      },
-      jar: {
-        box: [-12, -20, 12, 20], pivot: [0, -16],
-        draw(S) {
-          S.line([[0, -16], [0, -6]], { w: 1.8, color: pal.ink, taper: 0.05, pressure: 'flat', wobble: 0 });
-          S.cel({ poly: [[-4, -8], [4, -8], [4, -3], [-4, -3]] }, '#7a5a3a', { depth: 1.5, line: 2, hi: false, rim: null });
-          S.cel([[-5, -3, 1], [-11, 6], [-8, 16], [8, 16], [11, 6], [5, -3, 1]], '#e8f6ff', {
-            depth: 5, line: 2.6, hi: false, rim: '#ffffff', tension: 0.5,
-            decor(g) { const rg = g.createRadialGradient(0, 8, 1, 0, 8, 12); rg.addColorStop(0, '#ffffff'); rg.addColorStop(1, 'rgba(160,140,255,0.9)'); g.fillStyle = rg; g.fillRect(-12, -4, 24, 22); },
-          });
-        },
-      },
-      hood: {
-        box: [-52, -176, 48, -92], pivot: [-6, -108],
-        draw(S) {
-          S.cel([[-42, -124], [-38, -150], [-16, -168], [12, -166], [32, -148], [36, -124], [30, -102], [0, -96], [-30, -102]], VS.robe, {
-            depth: 14, tension: 0.9, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-          });
-          // the dark opening, then the blank paper mask with its two pinprick sockets
-          S.cel(E(-14, -124, 25, 29, 16), '#0d0a1e', { depth: 4, line: 3, hi: false, rim: null, shadow: false });
-          S.cel(E(-14, -124, 20, 24, 16), VS.skin, { depth: 8, line: 2.8, hi: true, hiW: 2, rim: '#ffffff', halftone: { d: 5, alpha: 0.2, color: '#8a7aa8' } });
-          // the mouth is stitched shut: a straight seam with little cross stitches
-          S.line([[-24, -108], [-4, -108]], { w: 1.8, color: '#6e6a7e', taper: 0.05, pressure: 'flat' });
-          for (let i = 0; i < 5; i++) S.line([[-23 + i * 4.6, -111.5], [-21 + i * 4.6, -104.5]], { w: 1.5, color: '#46425a', taper: 0.05, pressure: 'flat' });
-          S.line([[-34, -140], [-26, -146]], { w: 1.2, color: '#b8a8c8', alpha: 0.8, taper: 0.4 });
-        },
-      },
-      sleeve: {
-        box: [-100, -136, -8, -60], pivot: [-26, -104],
-        draw(S) {
-          S.cel([[-20, -118], [-44, -124], [-72, -114], [-84, -96], [-74, -76], [-48, -80], [-22, -92]], VS.robe, { depth: 12, tension: 0.8, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 } });
-          S.cel([[-76, -114], [-86, -98], [-76, -78], [-68, -80], [-76, -98], [-68, -112]], VS.trim, { depth: 3, line: 2.6, hi: false, rim: null, tension: 0.4 });
-          S.line([[-40, -116], [-46, -96], [-40, -84]], { w: 1.6, color: '#1a1238', alpha: 0.7, taper: 0.3 });
-        },
-      },
-      hand: {
-        box: [-22, -18, 22, 22], pivot: [0, 0],
-        draw(S) {
-          S.cel(E(0, 0, 9, 8, 10), VS.skin, { depth: 3, line: 2.6, hi: false, rim: '#ffffff' });
-          [[-5, -4], [1, -6], [6, -3]].forEach((f) => S.line([[f[0], f[1]], [f[0] - 2, f[1] - 4]], { w: 2.2, color: VS.skin, taper: 0.3 }));
-        },
-      },
-      brush: {
-        box: [-16, -108, 16, 34], pivot: [0, 0],
-        draw(S) {
-          // the damper mallet: a wooden shaft and a fat padded head wrapped in grey cloth, bound with cord (no bristles)
-          S.cel(cap(0, 30, 0, -50, 6.4, 5), VS.shaft, { depth: 2, line: 2.6, hi: true, hiW: 1.2, rim: S.c.rim, tension: 0.5 });
-          S.cel({ poly: [[-4, -46], [4, -46], [4.4, -54], [-4.4, -54]] }, VS.gold, { depth: 1.5, line: 2, hi: false, rim: null });
-          S.cel(E(0, -80, 14, 25, 16), '#a9a5bd', {
-            depth: 7, line: 2.8, hi: true, hiW: 1.8, rim: '#ffffff', shadow: '#6e6a7e', halftone: { d: 4, alpha: 0.25, color: '#46425a' },
-            decor(g) { gagPoly(g, [[-15, -86], [15, -92], [15, -83], [-15, -77]]); gagPoly(g, [[-14, -70], [14, -75], [14, -67], [-14, -62]]); quiltDiamonds(g, -14, -104, 28, 14, 7, '#46425a', 0.5); },
-          });
-        },
-      },
-      scroll: {
-        box: [-34, -46, 34, 46], pivot: [0, 0],
-        draw(S) {
-          // a folded grey cloth: three soft folds, stitched hems, a cord tie round the middle
-          S.cel({ poly: [[-24, -34], [26, -36], [24, 34], [-22, 36]] }, '#9d99b2', { depth: 6, line: 2.8, hi: true, hiW: 1.4, rim: '#e4e1ee', halftone: { d: 5, alpha: 0.18, color: '#46425a' } });
-          S.cel(cap(-28, -37, 30, -38, 9, 9), '#6e6a7e', { depth: 3, line: 2.6, hi: false, rim: null });
-          S.cel(cap(-26, 37, 28, 36, 9, 9), '#6e6a7e', { depth: 3, line: 2.6, hi: false, rim: null });
-          [-18, 0, 18].forEach((y, i) => stitch(S.g, [[-20, y - 3 + i], [22, y - 1 + i]], { color: '#e4e1ee', alpha: 0.7 }));
-          gagPoly(S.g, [[-24, -6], [26, -8], [26, 4], [-24, 6]]);
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
-      const hot = clamp(tele + buff + (atk ? E0.strike : 0), 0, 1);
-      const bob = sin(t * 1.9) * 5 * m, sway = 0.03 * sin(t * 1.3) * m;
-      const dx = -E0.strike * 14 * (atk ? 1 : 0) + hurt * 20 + 5 * tele, dy = bob - hurt * 6 + 6 - 8 * die;
-      const rot = sway + 0.08 * tele + 0.15 * hurt - 0.06 * (atk ? E0.strike : 0);
-      const br = scribeBrush(t, E0, m), br0 = scribeBrush(t, { pose: 'idle' }, m);
-      // the air-writing trail: the same brush path a moment ago, shifted to where the brush is now, fading and thinning
-      const tipOf = (b) => [b.hx + sin(b.W) * 96, b.hy - cos(b.W) * 96];
-      const tip = tipOf(br);
-      const trailPts = [];
-      for (let k = 0; k <= 10; k++) { const b2 = scribeBrush(t - k * 0.045, { pose: 'idle' }, m), tp = tipOf(b2), t0 = tipOf(br0); trailPts.push([tip[0] + (tp[0] - t0[0]) + (E0.pose === 'attack' ? k * 5 * E0.strike : 0), tip[1] + (tp[1] - t0[1])]); }
-      ctx.save();
-      xform(ctx, 0, -100, dx, dy, rot, 1 - 0.05 * die, 1 - 0.1 * die);
-      // the scroll floats to the side
-      put(ctx, st, 'scroll', { x: -96 + 4 * sin(t * 1.4) * m - 8 * guard - 12 * (atk ? E0.strike : 0), y: -66 + 5 * sin(t * 1.9 + 1) * m + 0 * guard, r: 0.08 * sin(t * 1.6) * m - 0.3 * guard + 0.6 * buff * sin(t * 12) * 0.2 - 0.1 * hurt });
-      put(ctx, st, 'tip', { r: -0.08 * sin(t * 2.4) * m + 0.2 * hurt - 0.1 * tele });
-      put(ctx, st, 'robe', { r: 0.02 * sin(t * 1.7) * m, sy: 1 + 0.02 * sin(t * 2.4) * m });
-      put(ctx, st, 'jar', { x: 18, y: -80, r: 0.18 * sin(t * 2.1) * m - 0.3 * hurt, kids(c) { tk.glow(c, 0, 8, 22 + 10 * hot, VS.inkG, 0.45 + 0.2 * sin(t * 3)); } });
-      put(ctx, st, 'hood', {
-        r: 0.02 * sin(t * 1.5 + 1) * m + 0.1 * hurt - 0.05 * tele,
-        kids(c) {
-          const ob = blink(t, 'scribe', 3.9) * (1 - 0.5 * hurt);
-          eyeLive(c, -22, -128, 3.4 + 1.2 * hot, 5 + 1.6 * hot, { open: ob, iris: [VS.cyan, '#ffffff'], sclera: '#eafcff', pupil: 'none', glow: VS.cyan, glowK: 0.85 + 0.15 * hot, glowR: 3.4, lw: 1.5, catch: false });
-          eyeLive(c, -6, -128, 3 + 1 * hot, 4.6 + 1.4 * hot, { open: ob, iris: [VS.cyan, '#ffffff'], sclera: '#eafcff', pupil: 'none', glow: VS.cyan, glowK: 0.85 + 0.15 * hot, glowR: 3.4, lw: 1.5, catch: false });
-        },
-      });
-      // the arm: sleeve, hand and the brush riding on the hand
-      const sleeveR = 1.05 * guard + 0.1 * sin(t * 2.1 + 1) * m + (atk ? -0.35 * E0.strike : 0) + 0.3 * tele + 0.3 * hurt;
-      put(ctx, st, 'sleeve', { r: sleeveR * 0.5 - 0.05 * sin(t * 2.1) * m });
-      // the hand and brush are placed directly in body space: the sleeve cuff is only a visual anchor
-      if (trailPts.length > 2 && (E0.pose !== 'die')) {
-        for (let k = 0; k < trailPts.length - 1; k++) {
-          const a = trailPts[k], b = trailPts[k + 1], f = 1 - k / trailPts.length;
-          ctx.save(); ctx.globalAlpha = cA(f * f * (0.55 + 0.4 * hot));
-          tk.inkPath(ctx, [a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], b], { w: 5 * f + 1, color: VS.ink, taper: 0.3, wobble: 0.05, pressure: 'flat', minW: 0.6 });
-          ctx.restore();
-        }
-      }
-      put(ctx, st, 'brush', { x: br.hx, y: br.hy, r: br.W });
-      put(ctx, st, 'hand', { x: br.hx, y: br.hy, r: br.W * 0.6 });
-      // the hush at the mallet head glows, and cotton fluff drifts down
-      tk.glow(ctx, tip[0], tip[1], 16 + 20 * hot, VS.inkG, 0.6 + 0.3 * hot);
-      if (tele > 0.05 || (atk && E0.p < 0.32)) { const r = 4 + 16 * (tele || sm(E0.p / 0.3)); tk.glow(ctx, tip[0], tip[1] - 10, r * 2.2, '#ffffff', 0.6); ctx.beginPath(); ctx.arc(tip[0], tip[1] - 10, r, 0, TAU); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = VS.inkG; ctx.stroke(); }
-      for (let i = 0; i < 3; i++) { const per = 1.3 + 0.3 * i, u = ((t / per + i * 0.33) % 1 + 1) % 1; ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 1.2) * (1 - die); ctx.beginPath(); ctx.arc(tip[0] + 2 + sin(u * 7 + i) * 3, tip[1] + 6 + u * 46, 2.6 + u * 1.4, 0, TAU); ctx.fillStyle = '#f2f0f6'; ctx.fill(); ctx.restore(); }
-      ctx.restore();
-      // a brushed swipe across the front on an attack, splashes on the hit, a wide erasing stroke on a buff
-      if (atk && E0.p > 0.42 && E0.p < 0.8) {
-        const u = clamp((E0.p - 0.42) / 0.38, 0, 1);
-        swoosh(ctx, -30 + dx, -110, 112, 30, -1.0, -3.4, { alpha: (1 - u) * 0.9, fill: '#ffffff', edge: VS.inkG });
-        for (let i = 0; i < 8; i++) { const a = 2.5 + hv('vsp', 'a' + i) * 1.4, d = 30 + 80 * u * (0.5 + hv('vsp', 'd' + i)); ctx.save(); ctx.globalAlpha = cA(1 - u); ctx.beginPath(); ctx.arc(-70 + cos(a) * d, -100 + sin(a) * d * 0.6 + u * 16, 2 + 4 * hv('vsp', 's' + i), 0, TAU); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore(); }
-      }
-      if (buff > 0.05) {
-        const u = E0.buffP;
-        ctx.save(); ctx.globalAlpha = cA(buff * 1.3);
-        tk.inkPath(ctx, [[60 - 230 * u * 0 + dx, -120], [-40 + dx, -112 + 6 * sin(u * 9)], [-200 + dx, -124]], { w: 22 * buff + 2, color: '#ffffff', taper: 0.35, wobble: 0.1, pressure: 'mid' });
-        tk.glow(ctx, -80 + dx, -118, 90, VS.inkG, 0.4 * buff);
-        ctx.restore();
-      }
-      if (hurt > 0.2) for (let i = 0; i < 5; i++) { const fj = fling('vshurt' + i, 'd', E0.p, { spread: 110, up: 50, g: 200 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.beginPath(); ctx.arc(-10 + fj.x, -110 + fj.y, 2.6, 0, TAU); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore(); }
-    },
-  });
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // BLANK SOLDIER (normal, m): a drill sergeant's dream cut from one sheet and folded: a rectangle body with a crease, accordion arms and legs, an origami
-  // helmet, a face that is a blank square with two pinprick eyes, a bamboo spear with a paper head and a flag. Braver in a crowd. On death it unfolds flat
-  // and blows away as scraps. Accent: the cyan pinprick eyes and the glowing spear edge.
-  // ---------------------------------------------------------------------------------------------------------------
-  const BS = { paper: '#b9b5ca', paper2: '#9d99b2', crease: '#f2f0f6', red: '#e8383d', black: '#46425a', bamboo: '#c9a35f', cyan: '#7ff4ff' };
-  function pleats(S, x0, y0, x1, y1, n, w) {
-    const dx = x1 - x0, dy = y1 - y0;
-    for (let i = 1; i < n; i++) { const u = i / n; stitch(S.g, [[x0 + dx * u - w / 2, y0 + dy * u + (i % 2 ? 1 : -1)], [x0 + dx * u + w / 2, y0 + dy * u + (i % 2 ? -1 : 1)]], { w: 1.5, color: BS.crease, alpha: 0.85, dash: 2.6, gap: 2 }); }
-  }
-  define('blank_soldier', {
-    size: 'm', lw: 3,
-    col: { rim: '#ffffff', shT: 0.38 },
-    bounds: { w: 180, h: 214, head: { x: -6, y: -170 }, body: { x: -2, y: -98 }, feet: { x: 0, y: 0 } },
-    die: { box: [-80, -186, 70, 4], nx: 10, ny: 14, from: 'top', order: 0.5, shape: 'paper', kinds: ['felt', 'felt', 'cotton', 'felt'], cols: ['#b9b5ca', '#9d99b2', '#f2f0f6', '#6e6a7e'], wind: [-20, -30], size: 9, thin: 0.3, life: 0.6 },
-    parts: {
-      legF: {
-        box: [-2, -60, 40, 2], pivot: [14, -54],
-        draw(S) {
-          S.cel(quad(6, -54, 16, 44, 0), BS.paper2, { depth: 5, hi: false, rim: null, tension: 0.2 });
-          pleats(S, 14, -50, 14, -8, 5, 16);
-          S.cel({ poly: [[4, -10], [28, -14], [32, -1], [2, -1]] }, BS.paper2, { depth: 3, hi: false, rim: null });
-        },
-      },
-      legN: {
-        box: [-44, -60, 2, 2], pivot: [-12, -54],
-        draw(S) {
-          S.cel(quad(-20, -54, 17, 46, 0), BS.paper, { depth: 6, hi: true, hiW: 1.6, rim: S.c.rim, tension: 0.2, halftone: { d: 5, alpha: 0.2, color: '#46425a' } });
-          pleats(S, -12, -50, -12, -8, 5, 17);
-          S.cel({ poly: [[-32, -10], [-6, -14], [-2, -1], [-36, -1]] }, BS.paper, { depth: 3, hi: false, rim: S.c.rim });
-          stitch(S.g, [[-30, -6], [-8, -8]], { color: BS.crease });
-        },
-      },
-      torso: {
-        box: [-38, -128, 36, -44], pivot: [-2, -60],
-        draw(S) {
-          S.cel({ poly: [[-30, -122], [26, -124], [24, -54], [-28, -52]] }, BS.paper, {
-            depth: 12, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.24, color: '#46425a' },
-            decor(g) {
-              g.fillStyle = 'rgba(70,66,90,0.4)'; g.beginPath(); g.moveTo(-32, -126); g.lineTo(-2, -88); g.lineTo(-30, -54); g.fill();
-              stitch(g, [[-32, -126], [-2, -88], [-30, -54]], { color: BS.crease });
-              stitch(g, [[26, -124], [2, -86], [24, -54]], { color: BS.crease, alpha: 0.6 });
-              for (let i = 0; i < 3; i++) stitch(g, [[6, -110 + i * 6], [20, -110 + i * 6]], { color: '#f2f0f6', alpha: 0.55 });
-            },
-          });
-          S.cel({ poly: [[-30, -64], [26, -66], [26, -56], [-30, -54]] }, BS.black, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false, decor(g) { stitch(g, [[-28, -60], [24, -61]], { color: '#9d99b2', alpha: 0.8 }); } });
-          S.cel(E(10, -92, 7, 7, 12), BS.red, { depth: 2.5, line: 2, hi: true, hiW: 1.2, rim: null });
         },
       },
       head: {
-        box: [-46, -190, 40, -108], pivot: [-2, -114],
+        box: [-40, -194, 40, -116], pivot: [0, -124],
         draw(S) {
-          S.cel({ poly: [[-26, -146], [22, -148], [20, -114], [-24, -112]] }, BS.paper, { depth: 8, hi: true, hiW: 1.6, rim: S.c.rim, tension: 0.2, halftone: { d: 5, alpha: 0.2, color: '#46425a' } });
-          S.cel({ poly: [[-40, -140, 1], [-12, -184, 1], [4, -188, 1], [34, -140, 1], [30, -132, 1], [-34, -132, 1]] }, BS.paper2, {
-            depth: 9, hi: false, rim: S.c.rim, tension: 0.15, halftone: { d: 5, alpha: 0.26, color: '#46425a' },
-            decor(g) { g.fillStyle = 'rgba(70,66,90,0.45)'; g.beginPath(); g.moveTo(-4, -190); g.lineTo(38, -132); g.lineTo(-4, -132); g.fill(); stitch(g, [[-4, -188], [-4, -132]], { color: BS.crease }); },
-          });
-          S.cel(E(-4, -160, 7, 7, 12), BS.red, { depth: 2, line: 2, hi: false, rim: null });
-          stitch(S.g, [[-30, -120], [16, -122]], { color: BS.crease, alpha: 0.6 });
+          const y = SRN.hy;
+          S.cel(sym([[0, y - 32], [-24, y - 28], [-34, y - 10], [-34, y + 14], [-28, y + 22], [-18, y + 16], [-20, y - 4], [-10, y - 14], [0, y - 15]]), S.c.hair, { hi: '#ffffff', hiW: 2.6 });
+          S.cel(E(0, y + 2, 21, 23, 22), S.c.skin, { shadow: RJ.shade(S.c.skin, 0.05) });
+          S.cel(sym([[0, y - 30], [-22, y - 26], [-27, y - 12], [-14, y - 18], [-4, y - 12], [0, y - 14]]), S.c.hair, { hi: '#ffffff', hiW: 2.2 });
+          S.line([[0, y - 30], [0, y - 15]], { w: 1.2, alpha: 0.5 });
         },
       },
-      armN: {
-        box: [-64, -124, -8, -70], pivot: [-24, -110],
+      arms: {
+        box: [-40, -126, 40, -88], pivot: [0, -106],
         draw(S) {
-          S.cel(cap(-24, -110, -38, -92, 14, 12), BS.paper, { depth: 4, hi: false, rim: S.c.rim });
-          pleats(S, -24, -110, -38, -92, 3, 13);
-          S.cel(cap(-38, -92, -50, -82, 12, 11), BS.paper2, { depth: 3, hi: false, rim: null });
-          S.cel(E(-52, -81, 8, 7.5, 10), BS.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim });
+          [-1, 1].forEach((sd) => { S.limb([sd * 21, -106], [sd * 30, -96], 10, S.c.skin); S.limb([sd * 30, -96], [sd * 10, -114], 9, S.c.skin); S.blob([{ e: [sd * 8, -116, 7, 6.5] }], S.c.glove); });
         },
       },
-      shield: {
-        box: [-30, -42, 30, 42], pivot: [0, 0],
+      mic: {
+        box: [-12, -140, 12, -96], pivot: [0, -112],
         draw(S) {
-          S.cel({ poly: [[-22, -34], [22, -38], [26, 26], [0, 38], [-24, 26]] }, BS.paper2, {
-            depth: 8, hi: true, hiW: 1.6, rim: S.c.rim, tension: 0.2, halftone: { d: 5, alpha: 0.24, color: '#46425a' },
-            decor(g) { gag(g, -26, -12, 54, 12); stitch(g, [[-24, -34], [0, 34]], { color: BS.crease, alpha: 0.5 }); },
-          });
-          S.cel(E(0, -20, 6, 6, 10), BS.red, { depth: 2, line: 2, hi: false, rim: null });
-        },
-      },
-      spear: {
-        box: [-18, -168, 22, 40], pivot: [0, 0],
-        draw(S) {
-          S.cel(cap(0, 36, 0, -118, 5.6, 4.6), BS.bamboo, { depth: 2, line: 2.6, hi: true, hiW: 1, rim: null, tension: 0.4 });
-          [[-20], [-56], [-92]].forEach((n) => S.line([[-3, n[0]], [3, n[0] - 1]], { w: 1.6, color: '#7a5a28', taper: 0.2 }));
-          S.cel([[-9, -116, 1], [0, -164, 1], [9, -116, 1], [0, -122, 1]], BS.paper, {
-            depth: 4, line: 2.6, tension: 0, hi: false, rim: '#ffffff',
-            decor(g) { g.fillStyle = 'rgba(70,66,90,0.45)'; g.beginPath(); g.moveTo(0, -164); g.lineTo(9, -116); g.lineTo(0, -122); g.fill(); },
-          });
+          S.cel(RR(-3.5, -118, 7, 20, 3), G.chromeL, { hi: true });
+          S.cel(E(0, -124, 8.5, 8.5, 18), S.c.ball, { decor(g) { g.strokeStyle = 'rgba(120,124,156,0.55)'; g.lineWidth = 0.8; for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(-10, -124 + i * 3.4); g.lineTo(10, -124 + i * 3.4); g.stroke(); g.beginPath(); g.moveTo(i * 3.4, -134); g.lineTo(i * 3.4, -114); g.stroke(); } } });
         },
       },
     },
     chains: {
-      flag: {
-        spine: [[3, -108], [16, -104], [28, -92], [38, -74]], cuts: [0.34, 0.68], reach: 30, overlap: 3,
+      gown: {
+        spine: [[0, -118], [0, -86], [0, -56], [0, -26]], cuts: [0.42, 0.74], reach: 70, overlap: 4,
         draw(S) {
-          S.cel({ poly: [[2, -114], [14, -112], [40, -70], [26, -66], [4, -100]] }, BS.paper, {
-            depth: 4, line: 2.6, tension: 0.2, hi: false, rim: S.c.rim,
-            decor(g) { g.fillStyle = BS.red; g.beginPath(); g.moveTo(8, -112); g.lineTo(18, -108); g.lineTo(34, -76); g.lineTo(26, -74); g.fill(); gagPoly(g, [[14, -96], [28, -94], [30, -86], [18, -88]]); },
-          });
+          const hem = [];
+          for (let i = 0; i <= 14; i++) hem.push([-56 + i * 8, -28 + (i % 2 ? -4 : 0), 1]);
+          const gown = [[-20, -116], [20, -116], [24, -96], [34, -64], [56, -28, 1]].concat(hem.slice().reverse().slice(1, -1)).concat([[-56, -28, 1], [-34, -64], [-24, -96]]);
+          S.cel(gown, S.c.gown, { hi: true, hiW: 3, tension: 0.4,
+            decor(g) {
+              g.strokeStyle = tk.rgba(RJ.shade(S.c.gown, 0.12), 0.7); g.lineWidth = 1.4;
+              [-26, -10, 10, 26].forEach((x) => { g.beginPath(); g.moveTo(x * 0.4, -96); g.lineTo(x * 1.25, -34); g.stroke(); });
+            } });
+          S.cel(sym([[0, -118], [-20, -117], [-24, -98], [-16, -90], [0, -88]]), S.c.bodice, { hi: '#ffffff', tension: 0.3 });
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const step = sin(TAU * t / 1.2) * m, br = sin(TAU * t / 2.6) * m;
-      // paper flexes: a slow skew in the whole body, sharper on a hit
-      const skew = 0.035 * sin(t * 1.9) * m + 0.16 * hurt - 0.1 * tele - 0.08 * (atk ? E0.strike : 0);
-      const hop = Math.max(0, step) * 2.2 * (1 - tele) * (1 - die);
-      const dx = -E0.strike * 34 * (atk ? 1 : 0) + hurt * 16 + 12 * tele * 0.5 + E0.shake * 1.1, dy = -hop + 3 * guard;
-      // the spear: held at the ready, drawn back on a wind-up, driven straight out on a strike
-      let W = -0.2 + 0.03 * br, hx = -52, hy = -82;
-      if (atk) {
-        if (p < 0.3) { const k = sm(p / 0.3); W = lerp(-0.2, -1.05, k); hx += 22 * k; hy += 6 * k; } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); W = lerp(-1.05, -1.5, k); hx += lerp(22, -26, k); hy += lerp(6, -4, k); } else { const k = sm((p - 0.5) / 0.5); W = lerp(-1.5, -0.2, k); hx += lerp(-26, 0, k); hy += lerp(-4, 0, k); }
-      } else if (E0.pose === 'telegraph') { W = lerp(-0.2, -1.1, tele) + 0.03 * E0.shake; hx += 24 * tele; hy += 8 * tele; } else if (E0.pose === 'hurt') { W += 0.5 * hurt; hy += 8 * hurt; } else if (E0.pose === 'buff') { W += -0.5 * buff; hy += -14 * buff; } else if (E0.pose === 'block') { W = lerp(-0.2, 0.15, guard); hx += 14 * guard; }
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
+      const fl = sin(t * 1.8) * 6 * m;
+      const lean = atk ? -0.16 * E0.strike + 0.06 * E0.wind : 0;
+      const dx = (atk ? -14 * E0.strike : 0) + hurt * 18 + E0.shake;
+      const dy = fl - 6 * tele - 4 * buff + 4 * hurt;
+      const rot = lean + 0.12 * hurt;
+      tk.glow(ctx, 0, -10, 46, st.won ? '#ffd84d' : G.lilac, 0.35);
       ctx.save();
-      if (die > 0) { ctx.translate(0, 0); ctx.transform(1 + 0.5 * die, 0, 0, 1 - 0.55 * die, -0.25 * 60 * die, 0); }
-      ctx.save();
-      xform(ctx, 0, -50, dx, dy, 0, 1, 1);
-      ctx.transform(1, 0, skew, 1 - 0.01 * br, -skew * 50, 0);
-      put(ctx, st, 'legF', { r: 0.1 * step * (1 - tele) + 0.03 * hurt });
-      put(ctx, st, 'torso', { r: 0.012 * br, sy: 1 + 0.012 * br });
-      put(ctx, st, 'legN', { r: -0.1 * step * (1 - tele) - 0.05 * E0.strike * (atk ? 1 : 0) });
-      // shield: it slides into the guard
-      if (guard > 0.02 || buff > 0.02) put(ctx, st, 'shield', { x: -48 - 4 * guard, y: -76, r: -0.06, sx: clamp(guard * 1.3 + buff, 0, 1), sy: 1, a: clamp(guard * 3 + buff * 2, 0, 1) });
-      // the spear rides on the near hand: bamboo, paper head with a glowing edge, and the flag on a chain in the spear's own frame
-      put(ctx, st, 'spear', {
-        x: hx, y: hy, r: W,
-        kids(c) {
-          const fb = [0.22 * sin(t * 5.5) * m + 0.12 * (atk ? E0.strike : 0) - 0.2 * hurt, 0.34 * sin(t * 5.5 - 1) * m, 0.4 * sin(t * 5.5 - 2) * m];
-          putChain(c, st, 'flag', fb, { r: 0.1 * tele });
-          tk.glow(c, 0, -142, 18 + 12 * (tele + E0.strike * (atk ? 1 : 0)), BS.cyan, 0.35 + 0.4 * clamp(tele + buff + (atk ? E0.strike : 0), 0, 1));
-        },
-      });
-      put(ctx, st, 'armN', { r: 0.05 * br + 0.5 * (atk ? E0.wind : 0) * -1 + 0.15 * tele - 0.1 * E0.strike * (atk ? 1 : 0), x: 0, y: 0 });
+      xform(ctx, 0, -100, dx, dy, rot, 1 - 0.08 * guard, 1);
+      const sway = 0.05 * sin(t * 1.6) * m;
+      putChain(ctx, st, 'gown', [sway * 0.4 + 0.1 * hurt, -sway + 0.08 * E0.strike, -sway * 1.4 + 0.06 * sin(t * 2.3) * m]);
+      // the halo of sliders: knobs perfectly level, all slammed up on the wind-up, a ripple on the croon, a jumble when hit
+      put(ctx, st, 'halo', { r: 0.04 * hurt, kids(c) {
+        SRN.sl.forEach((a, i) => {
+          let u = 0.5 + 0.03 * sin(t * 1.2) * m;
+          u += 0.45 * tele + 0.4 * buff;
+          if (atk) u += 0.4 * sin(PI * clamp(E0.p * 2 - i * 0.15, 0, 1));
+          u += (hv('srn', 'h' + i) - 0.5) * 1.4 * hurt;
+          if (st.won) u = 0.2 + 0.15 * i;
+          u = clamp(u, 0, 1);
+          const r = SRN.halo - 8 + 16 * u, x = cos(a) * r, y = SRN.hy + sin(a) * r;
+          c.save(); c.translate(x, y); c.rotate(a + PI / 2);
+          c.fillStyle = i === 2 ? (st.won ? '#ff5a3d' : G.accent) : (st.won ? '#ffd84d' : G.opal); c.strokeStyle = st.won ? REAL_LINE : G.line; c.lineWidth = 1.6;
+          c.beginPath(); c.rect(-5, -3, 10, 6); c.fill(); c.stroke();
+          c.restore();
+        });
+      } });
       put(ctx, st, 'head', {
-        r: 0.02 * br - 0.05 * E0.strike * (atk ? 1 : 0) + 0.12 * hurt, x: 0, y: 0,
+        r: 0.03 * sin(t * 1.1) * m - 0.08 * E0.strike + 0.1 * hurt, y: -tele * 2,
         kids(c) {
-          const ob = blink(t, 'soldier', 3.4) * (1 - 0.4 * hurt);
-          [[-16, -130], [4, -130]].forEach((e) => eyeLive(c, e[0], e[1], 2.8, 3.4, { open: ob, iris: [BS.cyan, '#ffffff'], sclera: '#ffffff', pupil: 'none', glow: BS.cyan, glowK: 0.9, glowR: 3.6, lw: 1.4, catch: false }));
+          face(c, st, 0, SRN.hy + 2, { kind: 'round', w: 11, gap: 22, open: st.won ? 1 : 0, my: 13, sw: 11, per: 99 });
+          crack(c, 10, SRN.hy - 18, 30, 'siren', hurt * 1.4);
+          polite(c, st, -16, SRN.hy - 16, 5);
         },
       });
+      // both hands hold the mirror mic: lifted high on the wind-up, held out on the croon
+      const lift = -8 * tele - 6 * (atk ? E0.wind : 0) - 6 * buff;
+      put(ctx, st, 'arms', { y: lift * 0.5, sy: 1 + 0.04 * tele });
+      put(ctx, st, 'mic', { y: lift, x: -4 * (atk ? E0.strike : 0), r: -0.25 * (atk ? E0.strike : 0) });
+      tk.sparkle(ctx, -4, -127 + lift, 3 + 2 * sin(t * 3), { color: '#ffffff', alpha: 0.8, glow: 0.4 });
+      pitchRing(ctx, 0, -100, 64, 92, 2.5, 14, G.mint, guard, t * 5);
       ctx.restore();
-      ctx.restore();
+      // the croon: flat, evenly spaced rings rolling off the mic toward the heroes
+      if (atk || tele > 0.2 || buff > 0.1) {
+        const k = atk ? Math.max(E0.strike, E0.wind * 0.3) : Math.max(tele * 0.6, buff * 0.5);
+        for (let i = 0; i < 4; i++) {
+          const u = fr(t * 1.6 + i / 4), x = -12 + dx - 26 - u * 110, y = -130 + dy + lift;
+          ctx.save(); ctx.globalAlpha = sin(PI * u) * k; ctx.lineCap = 'round';
+          ctx.strokeStyle = G.line; ctx.lineWidth = 4.4; ctx.beginPath(); ctx.arc(x + 30, y, 30, PI * 0.82, PI * 1.18); ctx.stroke();
+          ctx.strokeStyle = i % 2 ? G.mint : G.lilac; ctx.lineWidth = 2.2; ctx.stroke();
+          ctx.restore();
+        }
+      }
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // SKY SERPENT (normal, l): a long white wind that learned to hold a shape: an eastern dragon-serpent coiled on the flagstones, pale as cloud, wind-curl
-  // patterns down its scales, a mane of cloud puffs, antler horns and two long whiskers that never stop streaming. The neck rears, the jaws snap in threes.
-  // Accent: glowing cyan eyes and the streaks of wind that circle it.
+  // SYNCHRO DANCER (blank_soldier, normal, m). Echowake rig: BLANK SOLDIER (keeps the in-step march, now a synchronised dance step on the shared
+  // clock so every dancer on stage moves as one, and the rank spacing). A smooth porcelain mannequin dancer with ball joints, a glossy lilac bob,
+  // a blush sequin leotard and jazz hands, the fixed Gloss smile. Accent: a tiny red heart sequin on the leotard.
   // ---------------------------------------------------------------------------------------------------------------
-  const SP = { body: '#e4f3ff', bodyD: '#8fb4e6', belly: '#fff2d2', line: '#7ab0e0', horn: '#f5d98a', cyan: '#5ff5ff', cloud: '#ffffff' };
-  const SP_NECK = [[24, -96], [2, -124], [6, -156], [-24, -182], [-60, -194]];
-  const SP_TAIL = [[86, -30], [114, -40], [132, -70], [124, -100], [104, -112]];
-  // points offset sideways from a spine by off(u) px (positive = to the left of the direction of travel)
-  function spineOffset(spine, n, off) {
-    const out = [];
-    for (let i = 0; i <= n; i++) { const u = i / n, p = along(spine, u), o = off(u); out.push([p.x + p.ty * o, p.y - p.tx * o]); }
-    return out;
-  }
-  function windCurl(S, x, y, r, a0) {
-    const pts = [];
-    for (let i = 0; i <= 12; i++) { const u = i / 12, a = a0 + u * 4.6, rr = r * (1 - u * 0.8); pts.push([x + cos(a) * rr, y + sin(a) * rr]); }
-    S.line(pts, { w: Math.max(1.3, r * 0.14), color: SP.line, alpha: 0.85, taper: 0.3, wobble: 0.05 });
-  }
-  define('sky_serpent', {
-    size: 'l', lw: 3.4,
-    col: { rim: '#ffffff', shT: 0.42 },
-    bounds: { w: 330, h: 296, head: { x: -80, y: -250 }, body: { x: 6, y: -70 }, feet: { x: 0, y: 0 } },
-    die: { box: [-190, -270, 150, 6], nx: 13, ny: 14, from: 'out', order: 0.4, shape: 'ink', kinds: ['wind', 'puff', 'spark', 'wind'], cols: ['#ffffff', '#cfeaff', '#5ff5ff', '#e4f3ff'], wind: [-24, -14], size: 11, life: 0.6 },
+  const DNC = { hy: -176 };
+  const dncLeg = (sd) => ({
+    box: [sd < 0 ? -28 : -2, -110, sd < 0 ? 2 : 28, 2], pivot: [sd * 11, -104],
+    draw(S) {
+      S.limb([sd * 11, -104], [sd * 12, -58], 13, S.c.skin);
+      S.limb([sd * 12, -58], [sd * 13, -16], 11, S.c.skin);
+      S.ell(sd * 12, -58, 5, 5, S.c.joint, { line: S.L * 0.6 });
+      S.cel(RR(sd * 13 - 10, -16, 20, 13, 6), S.c.shoe, { hi: true });
+    },
+  });
+  const dncArm = (sd) => ({
+    box: [sd < 0 ? -66 : 14, -180, sd < 0 ? -14 : 66, -118], pivot: [sd * 22, -140],
+    draw(S) {
+      S.limb([sd * 22, -140], [sd * 40, -126], 10, S.c.skin);
+      S.limb([sd * 40, -126], [sd * 46, -152], 9, S.c.skin);
+      S.ell(sd * 40, -126, 4.5, 4.5, S.c.joint, { line: S.L * 0.6 });
+      RJ.hand(S.g, 'open', sd * 46, -154, -PI / 2 + sd * 0.25, { skin: S.c.skin, shade: RJ.shade(S.c.skin, 0.08), k: 1.05 });
+    },
+  });
+  define('blank_soldier', {
+    size: 'm',
+    col: { skin: G.porcelain, joint: G.lilac, hair: '#d9c8ff', leo: G.blush, shoe: G.lilac },
+    real: { skin: '#ffd2b4', joint: '#ff8a5a', hair: '#5a2f8a', leo: '#ff3f8e', shoe: '#ffd84d' },
+    bounds: { w: 160, h: 212, head: { x: 0, y: -202 }, body: { x: 0, y: -110 }, feet: { x: 0, y: 0 } },
+    dieBox: [-60, -212, 60, 0],
+    sweep: [-30, -150],
     parts: {
-      coil: {
-        box: [-112, -122, 116, 4], pivot: [0, -50],
+      legL: dncLeg(-1), legR: dncLeg(1), armL: dncArm(-1), armR: dncArm(1),
+      torso: {
+        box: [-30, -152, 30, -96], pivot: [0, -104],
         draw(S) {
-          const band = (cx, cy, rx, ry, seed, lite) => {
-            S.cel(E(cx, cy, rx, ry, 18), lite ? SP.body : '#d4e6fb', {
-              depth: 12, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.26 },
-              decor(g) {
-                g.fillStyle = SP.belly; g.beginPath(); g.ellipse(cx - rx * 0.05, cy + ry * 0.55, rx * 0.86, ry * 0.5, 0, 0, PI); g.fill();
-                for (let i = 0; i < 9; i++) tk.inkPath(g, [[cx - rx * 0.82 + i * rx * 0.2, cy + ry * 0.12], [cx - rx * 0.82 + i * rx * 0.2 + 2, cy + ry * 0.98]], { w: 1.3, color: '#b9a878', alpha: 0.6, taper: 0.3 });
-                for (let i = 0; i < 4; i++) tk.inkCurve(g, cx - rx * 0.7 + i * rx * 0.4, cy - ry * 0.5, cx - rx * 0.5 + i * rx * 0.4, cy - ry * 0.9, cx - rx * 0.3 + i * rx * 0.4, cy - ry * 0.5, { w: 1.6, color: SP.line, alpha: 0.75, taper: 0.3 });
-              },
-            });
-          };
-          band(0, -24, 100, 25, 1, false);
-          band(-6, -56, 86, 24, 2, true);
-          band(8, -86, 70, 22, 3, false);
-          windCurl(S, 60, -28, 14, 0.4); windCurl(S, -56, -60, 12, 2.4); windCurl(S, 44, -90, 10, 1.2);
-        },
-      },
-      jaw: {
-        box: [-160, -206, -40, -150], pivot: [-56, -190],
-        draw(S) {
-          S.cel([[-56, -192], [-94, -190], [-126, -186], [-148, -184], [-148, -172], [-124, -166], [-90, -168], [-60, -174]], SP.body, { depth: 7, hi: true, hiW: 1.8, rim: S.c.rim, halftone: { d: 5, alpha: 0.24 } });
-          S.cel({ poly: [[-56, -192], [-94, -190], [-126, -186], [-148, -184], [-148, -178], [-100, -182], [-60, -186]] }, SP.belly, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-          [[-136, -186], [-116, -188], [-96, -190]].forEach((f) => S.cel([[f[0] - 3, f[1], 1], [f[0], f[1] - 12, 1], [f[0] + 4, f[1], 1]], '#ffffff', { depth: 2, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
+          const body = sym([[0, -148], [-20, -146], [-22, -132], [-17, -116], [-20, -104], [-8, -98], [0, -102]]);
+          S.cel(body, S.c.leo, { hi: true, decor(g) { sequins(g, -24, -150, 48, 56, { d: 6, cols: [S.c.leo, RJ.tint(S.c.leo, 0.4), S.c.leo], seed: 5 }); } });
+          S.cel(sym([[0, -149], [-12, -149], [-8, -142], [0, -140]]), S.c.skin, { shadow: false, line: S.L * 0.7 });
+          const hx = 9, hy = -128;
+          S.g.save(); S.g.fillStyle = S.real ? '#ff2a4a' : G.accent; S.g.beginPath(); S.g.moveTo(hx, hy + 3); S.g.bezierCurveTo(hx - 5, hy - 1, hx - 2, hy - 5, hx, hy - 2); S.g.bezierCurveTo(hx + 2, hy - 5, hx + 5, hy - 1, hx, hy + 3); S.g.fill(); S.g.restore();
         },
       },
       head: {
-        box: [-166, -274, -20, -160], pivot: [-60, -194],
+        box: [-38, -212, 38, -142], pivot: [0, -150],
         draw(S) {
-          // antler horns and the cloud mane behind, then the long skull
-          S.cel([[-64, -226, 1], [-58, -252], [-40, -274, 1], [-36, -252], [-44, -232, 1]], SP.horn, { depth: 4, line: 3, tension: 0.4, hi: true, hiW: 1.4, rim: '#ffffff' });
-          S.cel([[-84, -228, 1], [-88, -252], [-102, -268, 1], [-96, -248], [-92, -228, 1]], SP.horn, { depth: 4, line: 3, tension: 0.4, hi: true, hiW: 1.2, rim: '#ffffff' });
-          [[-34, -214, 20], [-26, -190, 17], [-46, -236, 15], [-70, -166, 12]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[2] * 0.9, SP.cloud, { depth: 5, line: 3, hi: false, rim: S.c.rim, halftone: { d: 4, alpha: 0.2, color: '#8fb4e6' } }));
-          S.cel([[-36, -222], [-66, -238], [-98, -238], [-126, -228], [-146, -214], [-162, -206, 1], [-160, -192], [-144, -185], [-118, -188], [-92, -180], [-64, -178], [-40, -190], [-28, -204]], SP.body, {
-            depth: 12, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.24 },
-            decor(g) {
-              tk.inkCurve(g, -46, -216, -70, -230, -98, -224, { w: 1.6, color: SP.line, alpha: 0.85, taper: 0.4 });
-              tk.inkPath(g, [[-146, -204], [-128, -210], [-110, -204]], { w: 1.5, color: SP.line, alpha: 0.8, taper: 0.4 });
-              windCurl(S, -60, -200, 12, 0.8);
-            },
+          const y = DNC.hy;
+          S.limb([0, -150], [0, -142], 9, S.c.skin);
+          S.cel(sym([[0, y - 30], [-26, y - 26], [-34, y - 6], [-33, y + 18], [-24, y + 20], [-22, y + 2], [0, y - 4]]), S.c.hair, { hi: '#ffffff', hiW: 3 });
+          S.cel(E(0, y + 4, 23, 24, 22), S.c.skin, { shadow: RJ.shade(S.c.skin, 0.05) });
+          S.cel(sym([[0, y - 30], [-26, y - 26], [-30, y - 8], [-27, y - 6], [0, y - 8]]), S.c.hair, { hi: '#ffffff', hiW: 2.6, tension: 0.35 });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      // the shared beat: every Synchro Dancer reads the same absolute clock, so a rank moves as one
+      const beat = t * 1.6, ph = fr(beat), side = Math.floor(beat) % 2 ? 1 : -1, step = sin(PI * ph) * m;
+      const bounce = -Math.abs(sin(PI * beat)) * 6 * m;
+      const kick = atk ? sin(PI * clamp((p - 0.25) / 0.5, 0, 1)) : 0;
+      const dx = -kick * 18 + hurt * 18 + E0.shake;
+      const dy = bounce - 8 * tele + 2 * guard + 4 * hurt;
+      const rot = 0.1 * kick + 0.12 * hurt;
+      ctx.save();
+      xform(ctx, 0, -104, dx, dy, rot, 1, 1);
+      // the legs: step-touch on the beat, a high kick on the attack, together on the guard
+      const lStep = (st2) => (atk || tele > 0 || guard > 0 || buff > 0 ? 0 : st2);
+      put(ctx, st, 'legL', { r: lStep(side < 0 ? 0.28 * step : 0) + 1.2 * kick + 0.08 * guard - 0.06 * tele });
+      put(ctx, st, 'legR', { r: lStep(side > 0 ? -0.28 * step : 0) - 0.12 * kick - 0.08 * guard + 0.06 * tele });
+      // jazz hands: a shimmy at rest, up in a V on the wind-up, crossed on the guard, flung on the kick
+      const shim = 0.08 * sin(t * 26) * m;
+      const up = 0.5 * tele + 0.3 * buff;
+      put(ctx, st, 'armR', { r: shim + up * 0.6 - 0.62 * guard - 0.3 * kick + 0.4 * hurt });
+      put(ctx, st, 'torso', { sy: 1 + 0.02 * sin(PI * beat) * m });
+      put(ctx, st, 'head', {
+        r: 0.06 * sin(beat * PI) * m * 0.4 + 0.15 * hurt - 0.05 * kick, y: bounce * 0.2,
+        kids(c) {
+          face(c, st, 0, DNC.hy + 4, { kind: 'round', w: 12, gap: 20, my: 12, sw: 11, iris: ['#7d6fb0', '#c9b8ff'], look: [-0.3 * kick, 0] });
+          crack(c, 8, DNC.hy - 20, 32, 'dancer', hurt * 1.4);
+          polite(c, st, -18, DNC.hy - 18, 5);
+        },
+      });
+      put(ctx, st, 'armL', { r: -shim - up * 0.6 + 0.62 * guard + 0.5 * kick - 0.2 * hurt });
+      ctx.restore();
+      if (buff > 0.05) foe.sparkles(ctx, 0, -120, [[-50, -40, 6, 0], [46, -60, 5, 0.3], [-30, 20, 4, 0.6]], 3, E0.buffP * 2);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // STREAMER DRAGON (sky_serpent, normal, l). Echowake rig: SKY SERPENT (keeps the coil chain and the back-row strike). A long dragon of pastel
+  // party streamers in a perfectly repeating mint, blush, lilac and lemon pattern, coiled on the stage and rising in an S; its head is a confetti
+  // cannon with a big Gloss grin along the barrel, curly ribbon whiskers and a tiny party hat. Accent: the red ring round the muzzle.
+  // ---------------------------------------------------------------------------------------------------------------
+  const STR = { band: ['#d9fff4', '#ffe3f1', '#e6d9ff', '#fff3b8'], bandR: ['#3fcf6a', '#ff6fb5', '#8b4dff', '#ffd84d'] };
+  // a streamer ribbon along a spine with perpendicular bands in the repeating pattern
+  function streamer(S, spine, w, o) {
+    o = o || {};
+    const bands = S.real ? STR.bandR : STR.band;
+    tk.ribbon(S.g, spine, bands[0], { wMax: w, w0: num(o.w0, w), w1: num(o.w1, w), profile: o.profile || (() => 1), cap: 'round', shadow: false, gloss: true, glossColor: '#ffffff', glossAlpha: 0.55, strands: 0, line: S.L, lineColor: S.lc, light: RJ.lightAngle(),
+      decor(g) {
+        const n = o.n || 12;
+        for (let i = 0; i < n; i++) {
+          const a = along(spine, i / n), b = along(spine, (i + 1) / n), col = bands[(i + (o.off || 0)) % bands.length];
+          g.fillStyle = col;
+          g.beginPath(); g.moveTo(a.x - a.ty * w, a.y + a.tx * w); g.lineTo(b.x - b.ty * w, b.y + b.tx * w); g.lineTo(b.x + b.ty * w, b.y - b.tx * w); g.lineTo(a.x + a.ty * w, a.y - a.tx * w); g.closePath(); g.fill();
+          g.strokeStyle = 'rgba(90,95,122,0.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(a.x - a.ty * w, a.y + a.tx * w); g.lineTo(a.x + a.ty * w, a.y - a.tx * w); g.stroke();
+        }
+        g.fillStyle = 'rgba(160,150,200,0.22)';
+        for (let i = 0; i < 24; i++) { const a = along(spine, i / 24); g.beginPath(); g.arc(a.x + a.ty * w * 0.3, a.y - a.tx * w * 0.3 + w * 0.25, w * 0.32, 0, TAU); g.fill(); }
+      } });
+  }
+  const NECK = [[34, -54], [64, -100], [44, -150], [0, -186], [-34, -204]];
+  define('sky_serpent', {
+    size: 'l',
+    col: { barrel: G.lemon, cap: G.lilac, hat: G.mint, pom: G.blush, whisker: G.blush, skin: '#fff6dc' },
+    real: { barrel: '#ffd84d', cap: '#8b4dff', hat: '#3fcf6a', pom: '#ff6fb5', whisker: '#ff6fb5', skin: '#ffe9a8' },
+    bounds: { w: 300, h: 276, head: { x: -66, y: -250 }, body: { x: 10, y: -90 }, feet: { x: 0, y: 0 }, right: 167 },
+    dieBox: [-130, -268, 140, 0],
+    sweep: [-40, -170],
+    hop: 14,
+    parts: {
+      coilB: {
+        box: [-92, -76, 128, -6], pivot: [20, -40],
+        draw(S) { streamer(S, tk.arcPts(20, -40, 92, 24, PI * 1.02, PI * 1.98, 12), 22, { n: 10, off: 1 }); },
+      },
+      coilF: {
+        box: [-96, -50, 136, 8], pivot: [20, -20],
+        draw(S) { streamer(S, tk.arcPts(20, -26, 100, 22, PI * 0.06, PI * 0.94, 12).reverse(), 24, { n: 10, off: 2 }); },
+      },
+      head: {
+        box: [-138, -270, 0, -180], pivot: [-34, -204],
+        draw(S) {
+          // curly ribbon whiskers, the barrel snout with its red ring, the round head, the little party hat
+          [[-70, -206, -1], [-60, -204, 1]].forEach((w, i) => {
+            const pts = [];
+            for (let k = 0; k <= 16; k++) { const u = k / 16, a = u * TAU * 1.4; pts.push([w[0] - u * 18 + cos(a) * 5 * (1 - u * 0.4), w[1] + u * 22 + sin(a) * 5 * w[2]]); }
+            S.line(pts, { w: 5, taper: 0.45 }); RJ.ink(S.g, pts, { w: 3, color: i ? S.c.hat : S.c.whisker, taper: 0.45, wobble: 0 });
           });
-          S.cel([[-118, -216], [-96, -222], [-72, -218], [-68, -208], [-92, -206], [-114, -206]], '#b9d6f6', { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.5 });
-          S.ell(-152, -197, 3.6, 3.2, '#3a4a78', { line: 1.4, shadow: false, rim: null });
-          [[-132, -184], [-110, -181]].forEach((f) => S.cel([[f[0] - 3, f[1], 1], [f[0] + 1, f[1] + 12, 1], [f[0] + 5, f[1], 1]], '#ffffff', { depth: 2, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
+          S.cel(tk.xf(sym([[0, -258], [-22, -254], [-34, -236], [-34, -214], [-24, -198], [0, -194]]), { dx: -40 }), S.c.cap, { hi: true });
+          S.cel([[-46, -238], [-104, -236], [-110, -232], [-112, -212], [-106, -206], [-46, -204]], S.c.barrel, { hi: '#ffffff', hiW: 3, tension: 0.15,
+            decor(g) { g.fillStyle = S.real ? '#ff8a1f' : G.mint; [-62, -80].forEach((x) => g.fillRect(x, -240, 7, 40)); g.fillStyle = S.real ? '#ff2a4a' : G.accent; g.fillRect(-102, -240, 6, 40); } });
+          S.cel(E(-113, -221, 6, 15, 16), S.c.cap, { shadow: false });
+          S.cel(E(-114, -221, 3.4, 10, 12), '#5a5f7a', { shadow: false, line: false });
+          S.cel([[-36, -252, 1], [-24, -282, 1], [-14, -250, 1]], S.c.hat, { hi: true, tension: 0, decor(g) { g.fillStyle = S.c.pom; g.fillRect(-40, -268, 30, 5); } });
+          S.ell(-24, -283, 5, 5, S.c.pom, { hi: true });
         },
       },
     },
     chains: {
       neck: {
-        spine: SP_NECK, cuts: [0.34, 0.68], reach: 76, overlap: 9,
-        draw(S) {
-          S.rib(SP_NECK, SP.body, {
-            cap: 'round', wMax: 62, w0: 62, w1: 46, tipPow: 1, profile: (u) => 1 - 0.26 * u, shadow: '#cfe3f8', rim: S.c.rim, rimW: 1.8, line: 3.4, halftone: { d: 5, alpha: 0.26 }, shadowW: 0.55,
-            decor(g) {
-              const bp = spineOffset(SP_NECK, 16, (u) => 16 * (1 - 0.26 * u));
-              tk.ribbon(g, bp, SP.belly, { wMax: 22, w0: 22, w1: 16, tipPow: 1, profile: () => 1, shadow: false, line: false, gloss: false, strands: 0 });
-              for (let i = 0; i < 12; i++) { const p = along(SP_NECK, 0.05 + i * 0.08); tk.inkPath(g, [[p.x - p.ty * 32, p.y + p.tx * 32], [p.x + p.ty * 6, p.y - p.tx * 6]], { w: 1.3, color: '#b9a878', alpha: 0.55, taper: 0.3 }); }
-              for (let i = 0; i < 4; i++) { const p = along(SP_NECK, 0.15 + i * 0.22); windCurl(S, p.x - p.ty * 16 + 6, p.y + p.tx * 16, 10, i); }
-            },
-          });
-        },
+        spine: NECK, cuts: [0.3, 0.58, 0.82], reach: 60, overlap: 5,
+        draw(S) { streamer(S, NECK, 28, { n: 9, w0: 30, w1: 22, profile: (u) => 1 - 0.25 * u }); },
       },
       tail: {
-        spine: SP_TAIL, cuts: [0.34, 0.68], reach: 40, overlap: 4,
+        spine: [[112, -24], [138, -40], [150, -64], [138, -86]], cuts: [0.5], reach: 40, overlap: 4,
+        draw(S) { streamer(S, [[112, -24], [138, -40], [150, -64], [138, -86]], 14, { n: 5, w0: 16, w1: 6, profile: (u) => 1 - 0.6 * u, off: 3 }); },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
+      const sw = sin(t * 1.3) * m, sw2 = sin(t * 1.3 - 0.9) * m;
+      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : tele;
+      const bends = [
+        0.04 * sw + 0.16 * wind - 0.32 * strike + 0.18 * hurt + 0.1 * guard,
+        0.06 * sw2 + 0.12 * wind - 0.22 * strike + 0.1 * hurt + 0.25 * guard,
+        0.06 * sw + 0.1 * wind - 0.2 * strike - 0.05 * hurt + 0.2 * guard,
+        0.05 * sw2 - 0.1 * strike + 0.1 * buff * sin(t * 12),
+      ];
+      const twirl = buff > 0 ? sin(PI * E0.buffP) : 0;
+      ctx.save();
+      xform(ctx, 20, -20, hurt * 12 + E0.shake, 0, 0, 1 + 0.03 * twirl, 1 - 0.03 * twirl);
+      put(ctx, st, 'coilB', { sy: 1 + 0.03 * sin(t * 2) * m });
+      putChain(ctx, st, 'tail', [0.1 * sw2 + 0.2 * buff, 0.2 * sw + 0.3 * tele]);
+      putChain(ctx, st, 'neck', bends);
+      const tip = chainTip(st.spec, 'neck', bends);
+      put(ctx, st, 'head', {
+        x: tip.x - NECK[4][0], y: tip.y - NECK[4][1], r: tip.r * 0.6 - 0.1 * wind + 0.12 * strike + 0.2 * hurt,
+        kids(c) {
+          face(c, st, -42, -242, { kind: 'round', w: 16, gap: 22, noMouth: true, iris: ['#6d7196', '#b9bde0'], look: [-0.6, 0] });
+          if (st.won) face(c, st, -76, -236, { noEyes: true, my: 24, sw: 22 });
+          else if (hurt > 0.45) foe.mouth(c, -80, -214, 14, 'O', {});
+          else foe.glossSmile(c, -76, -212, 30, { color: G.line });
+          crack(c, -40, -250, 28, 'dragon', hurt * 1.4);
+          // the muzzle: it glows on the wind-up and fires square confetti on the strike
+          if (wind > 0.1 && !st.won) tk.glow(c, -118, -221, 22 + 14 * wind, '#ffffff', 0.6 * wind);
+          polite(c, st, -86, -230, 5);
+        },
+      });
+      put(ctx, st, 'coilF', {});
+      ctx.restore();
+      if (atk && E0.p > 0.42 && E0.p < 0.95) {
+        const u = clamp((E0.p - 0.42) / 0.5, 0, 1), mx = tip.x - 84 + hurt * 12, my = tip.y - 18;
+        tk.glow(ctx, mx - 30 * u, my, 40, '#ffffff', 0.7 * (1 - u));
+        for (let i = 0; i < 14; i++) {
+          const a = PI + (hv('strc', 'a' + i) - 0.5) * 0.9, d = 30 + 170 * u * (0.5 + hv('strc', 'd' + i) * 0.6), x = mx + cos(a) * d, y = my + sin(a) * d + u * u * 30;
+          ctx.save(); ctx.globalAlpha = 1 - u * u; ctx.translate(x, y); ctx.rotate(u * 4 * (hv('strc', 'r' + i) - 0.5));
+          ctx.fillStyle = STR.band[i % 4]; ctx.fillRect(-4, -4, 8, 8); ctx.strokeStyle = G.line; ctx.lineWidth = 1.2; ctx.strokeRect(-4, -4, 8, 8); ctx.restore();
+        }
+      }
+      if (buff > 0.05) foe.sparkles(ctx, 0, -140, [[-60, -60, 6, 0], [70, -20, 5, 0.3], [0, -110, 7, 0.6]], 3, E0.buffP * 2);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // AIRBRUSH WRAITH (eraser_wraith, normal, m). Echowake rig: ERASER WRAITH (keeps the soft half-there edge and the pressing hand). A hovering
+  // soft-focus figure with an airbrushed halo for an edge, a smooth porcelain face with sleepy eyes and the Gloss smile, one hand an airbrush
+  // nozzle puffing pastel mist, the other a soft open palm that smooths. Accent: the red ring on the nozzle.
+  // ---------------------------------------------------------------------------------------------------------------
+  const WRT = { body: sym([[0, -174], [-24, -170], [-38, -150], [-42, -118], [-48, -84], [-44, -58], [-36, -40, 1], [-26, -52], [-16, -38, 1], [-6, -50], [0, -40, 1]]) };
+  define('eraser_wraith', {
+    size: 'm',
+    col: { body: G.mist, low: G.blush, face: G.porcelain, nozzle: G.chromeL, cup: G.lilac, palm: G.opal, halo: G.lilac },
+    real: { body: '#9fd8ff', low: '#ff8fc8', face: '#ffd8bd', nozzle: '#ffc94d', cup: '#8b4dff', palm: '#ffe1c8', halo: '#ff9fd0' },
+    bounds: { w: 190, h: 184, head: { x: 0, y: -176 }, body: { x: 0, y: -100 }, feet: { x: 0, y: 0 } },
+    dieBox: [-60, -184, 60, -30],
+    sweep: [-20, -140],
+    parts: {
+      body: {
+        box: [-60, -186, 60, -28], pivot: [0, -100],
         draw(S) {
-          S.rib(SP_TAIL, SP.body, { wMax: 36, w0: 34, w1: 5, tipPow: 1.2, shadow: '#cfe3f8', rim: S.c.rim, rimW: 1.6, line: 3.2, halftone: { d: 5, alpha: 0.26 },
-            decor(g) { for (let i = 0; i < 6; i++) { const p = along(SP_TAIL, 0.1 + i * 0.13); tk.inkPath(g, [[p.x - p.ty * 16, p.y + p.tx * 16], [p.x + p.ty * 16, p.y - p.tx * 16]], { w: 1.3, color: SP.line, alpha: 0.6, taper: 0.3 }); } } });
-          const e = SP_TAIL[SP_TAIL.length - 1];
-          S.ell(e[0] - 2, e[1] - 4, 14, 12, SP.cloud, { depth: 4, line: 2.8, hi: false, rim: S.c.rim });
-          windCurl(S, e[0] - 2, e[1] - 4, 10, 0.5);
+          const g = S.g;
+          // the airbrushed edge: wide soft strokes of the halo colour under a lighter, thinner line
+          g.save(); g.lineJoin = 'round';
+          [[16, 0.1], [10, 0.16], [5, 0.24]].forEach((w) => { g.beginPath(); tk.trace(g, WRT.body); g.closePath(); g.lineWidth = w[0]; g.strokeStyle = tk.rgba(S.c.halo, w[1]); g.stroke(); });
+          g.restore();
+          S.cel(WRT.body, S.c.body, { lineColor: S.real ? S.lc : '#8a8fae', line: S.L * 0.8, hi: '#ffffff', hiW: 3,
+            decor(gg) { const gr = gg.createLinearGradient(0, -120, 0, -40); gr.addColorStop(0, tk.rgba(S.c.low, 0)); gr.addColorStop(1, tk.rgba(S.c.low, 0.85)); gg.fillStyle = gr; gg.fillRect(-60, -120, 120, 90); } });
+          S.cel(E(0, -138, 23, 20, 22), S.c.face, { lineColor: S.real ? S.lc : '#8a8fae', line: S.L * 0.7, shadow: RJ.shade(S.c.face, 0.04) });
         },
       },
-      whisk: {
-        spine: [[-140, -194], [-166, -206], [-190, -194], [-208, -212]], cuts: [0.5], reach: 24, overlap: 3,
+      palm: {
+        box: [22, -128, 70, -76], pivot: [34, -108],
         draw(S) {
-          S.rib([[-140, -194], [-166, -206], [-190, -194], [-208, -212]], '#d8f6ff', { wMax: 7, w0: 6, w1: 1, tipPow: 1, shadow: '#9fd0f0', rim: false, line: 2.4, halftone: false, gloss: false });
+          S.limb([34, -108], [52, -96], 13, S.c.body, { ink: S.real ? S.lc : '#8a8fae' });
+          RJ.hand(S.g, 'open', 54, -96, -0.5, { skin: S.c.palm, shade: RJ.shade(S.c.palm, 0.06), k: 1.1 });
+        },
+      },
+      nozzle: {
+        box: [-108, -122, -24, -80], pivot: [-34, -106],
+        draw(S) {
+          S.limb([-34, -106], [-56, -98], 13, S.c.body, { ink: S.real ? S.lc : '#8a8fae' });
+          S.cel(RR(-64, -96, 10, 16, 3), S.c.nozzle, { hi: true });
+          S.cel(RR(-88, -106, 32, 13, 6), S.c.nozzle, { hi: '#ffffff' });
+          S.cel([[-88, -104], [-102, -100], [-102, -98], [-88, -94]], S.c.nozzle, { tension: 0, hi: true });
+          S.cel(RR(-92, -106, 5, 13, 2), S.real ? '#ff2a4a' : G.accent, { shadow: false, line: S.L * 0.6 });
+          S.cel([[-78, -106], [-76, -116], [-66, -116], [-64, -106]], S.c.cup, { tension: 0.3, hi: true });
+          S.blob([{ e: [-58, -98, 8, 8] }], S.c.palm);
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const w1 = t * 1.5, br = sin(TAU * t / 3.4) * m;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
-      // three quick bites across the strike window
-      const bite = atk ? Math.max(0, sin(clamp((p - 0.26) / 0.44, 0, 1) * PI * 3)) : 0;
-      const A = -0.06 * tele;
-      const sw = [0.05 * sin(w1) * m, 0.09 * sin(w1 - 0.9) * m, 0.11 * sin(w1 - 1.8) * m];
-      const rear = 0.34 * tele + 0.36 * wind - 0.9 * strike + 0.5 * buff + 0.35 * hurt + die * 0.3;
-      const tuck = guard;
-      const bends = [sw[0] + rear * 0.3 + 0.18 * tuck - 0.1 * strike, sw[1] + rear * 0.36 - 0.55 * tuck - 0.42 * strike, sw[2] + rear * 0.34 - 0.75 * tuck - 0.42 * strike];
-      const tip = chainTip(st.spec, 'neck', bends);
-      const dx = -strike * 30 + hurt * 14, spread = 1 + 0.04 * tuck + 0.02 * br;
-      // wind streaks circling the coil
-      const streak = (front) => {
-        for (let i = 0; i < 5; i++) {
-          const a0 = t * (1.1 + 0.1 * i) + i * 1.3, r = 88 + 12 * i, cy = -70 - 8 * i;
-          const fa = sin(a0);
-          if ((fa > 0) !== front) continue;
-          ctx.save(); ctx.globalAlpha = cA(0.5 * (0.4 + 0.6 * Math.abs(fa)) * (1 - die)) * (0.5 + 0.5 * clamp(buff + tele + 0.4, 0, 1));
-          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 + i % 2; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.ellipse(10, cy, r, 20 + 4 * i, 0, a0 - 0.7, a0 + 0.7); ctx.stroke(); ctx.restore();
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
+      const fl = sin(t * 1.5) * 6 * m;
+      const press = atk ? E0.strike : 0;
+      const dx = -press * 26 + hurt * 18 + E0.shake + 4 * tele;
+      const dy = fl + 2 * hurt - 4 * tele;
+      const rot = -0.1 * press + 0.04 * tele + 0.12 * hurt;
+      tk.glow(ctx, 0, -14, 40, st.won ? '#ff9fd0' : G.blush, 0.32);
+      ctx.save();
+      xform(ctx, 0, -100, dx, dy, rot, 1 - 0.06 * guard, 1 + 0.02 * sin(t * 1.5) * m);
+      put(ctx, st, 'palm', { r: 0.05 * sin(t * 1.7) * m - 0.4 * guard + 0.2 * hurt });
+      put(ctx, st, 'body', {
+        kids(c) {
+          face(c, st, 0, -142, { kind: 'sleepy', w: 12, gap: 20, my: 13, sw: 11, iris: ['#7d6fb0', '#c9b8ff'], look: [-0.4, 0.2] });
+          crack(c, 12, -160, 30, 'wraith', hurt * 1.4);
+          polite(c, st, -18, -160, 5);
+        },
+      });
+      // the nozzle: aimed at the heroes; raised and charging on the wind-up, a spray on the press
+      const aim = -0.3 * tele - 0.25 * (atk ? E0.wind : 0) + 0.2 * press + 0.5 * guard;
+      put(ctx, st, 'nozzle', { r: aim + 0.03 * sin(t * 2) * m });
+      const nz = [-34 + cos(PI + aim + 0.32) * 70, -106 + sin(PI + aim + 0.32) * 70];
+      mist(ctx, nz[0], nz[1], t, PI + aim * 0.6, { n: 5 + Math.round(8 * (press + tele + buff)), reach: 36 + 90 * press + 30 * tele, size: 5 + 4 * press, alpha: 0.45 + 0.4 * (press + tele), seed: 3, cols: st.won ? ['#ff9fd0', '#ffd84d', '#9fd8ff'] : undefined });
+      if (guard > 0.05) mist(ctx, 0, -100, t, -PI / 2, { n: 10, reach: 70, spread: 6, size: 12, alpha: 0.45 * guard, seed: 7 });
+      ctx.restore();
+      // the smoothing swipe: a soft pastel band wiped across the heroes on the press
+      if (atk && E0.p > 0.4 && E0.p < 0.85) {
+        const u = clamp((E0.p - 0.4) / 0.45, 0, 1);
+        ctx.save(); ctx.globalAlpha = sin(PI * u) * 0.6; ctx.lineCap = 'round';
+        ctx.strokeStyle = G.blush; ctx.lineWidth = 26; ctx.beginPath(); ctx.moveTo(-120 - 60 * u, -140); ctx.quadraticCurveTo(-150, -100, -120 - 60 * u, -60); ctx.stroke();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 10; ctx.stroke(); ctx.restore();
+      }
+      if (buff > 0.05) foe.sparkles(ctx, 0, -110, [[-40, -40, 6, 0], [40, -30, 5, 0.4]], 3, E0.buffP * 2);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // RING LIGHT SENTINEL (thunder_crow, normal, m). Echowake rig: THUNDER CROW (keeps the dive and the perch timing). A big white ring light with a
+  // tiny pair of stern eyes and the Gloss smile floating in its hollow middle, on a folding chrome tripod that tucks up when it dives; lens
+  // flares on every flash. Accent: the lemon flare.
+  // ---------------------------------------------------------------------------------------------------------------
+  const RLS = { cy: -124, R: 54 };
+  const rlsLeg = (sd, back) => ({
+    box: back ? [-10, -60, 10, 0] : (sd < 0 ? [-56, -60, 6, 4] : [-6, -60, 56, 4]), pivot: [0, -54],
+    draw(S) {
+      const end = back ? [0, -8] : [sd * 44, -4];
+      S.limb([0, -54], end, back ? 6 : 7, back ? RJ.shade(S.c.leg, 0.1) : S.c.leg);
+      S.ell(end[0], end[1] + 1, back ? 5 : 7, 3.5, S.c.foot, { shadow: false });
+    },
+  });
+  define('thunder_crow', {
+    size: 'm',
+    col: { leg: G.chromeL, foot: G.lilac, clamp: G.chromeL, hole: G.opal },
+    real: { leg: '#ffb83d', foot: '#ff6fb5', clamp: '#7cc6ff', hole: '#fff4d8' },
+    bounds: { w: 180, h: 186, head: { x: 0, y: -176 }, body: { x: 0, y: -120 }, feet: { x: 0, y: 0 } },
+    dieBox: [-64, -184, 64, 0],
+    sweep: [-40, -150],
+    parts: {
+      legL: rlsLeg(-1), legR: rlsLeg(1), legB: rlsLeg(0, true),
+      stem: {
+        box: [-12, -76, 12, -48], pivot: [0, -54],
+        draw(S) { S.cel(RR(-3.5, -74, 7, 22, 3), S.c.clamp, { hi: true }); S.ell(0, -54, 7, 6, S.c.clamp, { hi: true }); },
+      },
+      ring: {
+        box: [-62, -186, 62, -64], pivot: [0, RLS.cy],
+        draw(S) {
+          S.g.save(); S.g.globalAlpha = 0.6; S.g.fillStyle = S.c.hole; S.g.beginPath(); S.g.arc(0, RLS.cy, RLS.R * 0.62, 0, TAU); S.g.fill(); S.g.restore();
+          ringLight(S, 0, RLS.cy, RLS.R, { inner: 0.62, leds: 18 });
+          S.cel(RR(-10, RLS.cy + RLS.R - 4, 20, 12, 4), S.c.clamp, { hi: true });
+          S.cel(RR(-6, RLS.cy - RLS.R - 8, 12, 9, 3), S.c.clamp, { hi: true });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      // the dive: tripod tucks on the wind-up, the ring tilts and drops toward the lead hero, then perches again
+      const tuck = clamp((atk ? sm(p / 0.3) * (1 - sm((p - 0.7) / 0.3)) : 0) + 0.6 * tele, 0, 1);
+      const dive = atk ? sin(PI * clamp((p - 0.3) / 0.5, 0, 1)) : 0;
+      const dx = -dive * 70 + hurt * 18 + E0.shake;
+      const dy = dive * 26 - tuck * 22 + sin(t * 2) * 1.5 * m + 3 * guard;
+      const rot = -0.45 * dive - 0.12 * tele + 0.14 * hurt;
+      const dim = clamp(buff, 0, 1);
+      ctx.save();
+      xform(ctx, 0, -54, dx, dy, rot, 1, 1);
+      put(ctx, st, 'legB', { sy: 1 - 0.5 * tuck });
+      put(ctx, st, 'legL', { r: -0.8 * tuck + 0.15 * guard });
+      put(ctx, st, 'legR', { r: 0.8 * tuck - 0.15 * guard });
+      put(ctx, st, 'stem', {});
+      const lit = st.won ? 0.5 : clamp(0.55 + 0.15 * sin(t * 2.2) * m + 0.45 * tele + 0.6 * dive - 0.5 * dim, 0, 1.2);
+      tk.glow(ctx, 0, RLS.cy, RLS.R * 1.5, st.won ? '#ffd84d' : '#ffffff', 0.32 * Math.min(1, lit));
+      put(ctx, st, 'ring', {
+        r: 0.04 * hurt, sx: 1 + 0.04 * guard, sy: 1 + 0.04 * guard,
+        kids(c) {
+          face(c, st, 0, RLS.cy - 4, { kind: st.won ? 'round' : 'glare', w: 11, gap: 17, my: 14, sw: 10, iris: ['#6d7196', '#b9bde0'], open: 1 - 0.55 * dim, look: [-0.5 * tele - 0.6 * dive, 0.2 * dive] });
+          crack(c, -30, RLS.cy - 44, 30, 'ring', hurt * 1.4);
+          polite(c, st, 34, RLS.cy - 36, 5);
+        },
+      });
+      ctx.restore();
+      // the flash: a burst of white, a lemon flare and a string of lens flares across the stage
+      const fk = st.won ? 0 : Math.max(atk ? sin(PI * clamp((p - 0.42) / 0.3, 0, 1)) : 0, tele > 0.9 ? 0.25 + 0.25 * sin(t * 18) : 0);
+      if (fk > 0.03) {
+        const cx = dx, cy = RLS.cy + dy;
+        tk.glow(ctx, cx, cy, 78, '#ffffff', 0.55 * fk);
+        tk.glow(ctx, cx, cy, 40, '#fff3a0', 0.6 * fk);
+        ctx.save(); ctx.globalAlpha = fk; ctx.fillStyle = '#fffbe0';
+        ctx.beginPath(); ctx.moveTo(cx - 120, cy); ctx.lineTo(cx, cy - 2.5); ctx.lineTo(cx + 80, cy); ctx.lineTo(cx, cy + 2.5); ctx.closePath(); ctx.fill();
+        [[0.35, 8, '#fff3a0'], [0.6, 14, '#e6d9ff'], [0.85, 6, '#d9fff4'], [1.15, 18, '#ffe3f1']].forEach((f) => {
+          ctx.globalAlpha = fk * 0.5; ctx.fillStyle = f[2]; ctx.beginPath(); ctx.arc(cx - 150 * f[0], cy + 40 * f[0], f[1], 0, TAU); ctx.fill();
+        });
+        ctx.restore();
+      }
+      if (guard > 0.05) pitchRing(ctx, dx, RLS.cy + dy, 72, 72, 2.5, 16, G.lemon, guard, t * 4);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // SEQUIN GOLEM (paper_golem, normal, l). Echowake rig: PAPER GOLEM (keeps the giant body, the pad-up and the slam; the paper facets became sequin
+  // panels). A huge round giant stitched from stage costumes, every sequin perfectly in line in a lilac to blush to silver gradient, a sequinned
+  // mask of a face with the Gloss smile, big mitten fists and stubby legs. Sequins flick off when it is hurt and pile back on when it sequins up
+  // (its Sequins status, drawn literally). Accent: one red sequin heart on the chest.
+  // ---------------------------------------------------------------------------------------------------------------
+  const GLM = { cy: -118, rx: 84, ry: 80, hy: -210 };
+  const glmArm = (sd) => ({
+    box: [sd < 0 ? -128 : 50, -170, sd < 0 ? -50 : 128, -40], pivot: [sd * 68, -150],
+    draw(S) {
+      S.limb([sd * 68, -150], [sd * 98, -112], 30, S.c.arm);
+      S.limb([sd * 98, -112], [sd * 100, -74], 28, S.c.arm);
+      S.blob([{ e: [sd * 100, -62, 21, 19] }, { a: [sd * 88, -70], b: [sd * 84, -58], w: 12 }], S.c.fist);
+    },
+  });
+  define('paper_golem', {
+    size: 'l',
+    col: { arm: G.lilac, fist: G.opal, leg: G.lilac, foot: G.chromeL, mask: '#e8e6f2', seqA: G.lilac, seqB: G.blush, seqC: '#e4e5ee' },
+    real: { arm: '#8b4dff', fist: '#ffd84d', leg: '#5a2f8a', foot: '#ff6fb5', mask: '#ffd8bd', seqA: '#8b4dff', seqB: '#ff3f8e', seqC: '#ffd84d' },
+    bounds: { w: 250, h: 250, head: { x: 0, y: -240 }, body: { x: 0, y: -120 }, feet: { x: 0, y: 0 } },
+    dieBox: [-110, -248, 110, 0],
+    sweep: [-50, -170],
+    hop: 12,
+    parts: {
+      legL: { box: [-56, -60, -12, 4], pivot: [-34, -46], draw(S) { S.limb([-34, -50], [-36, -16], 30, S.c.leg); S.cel(RR(-58, -18, 44, 18, 9), S.c.foot, { hi: true }); } },
+      legR: { box: [12, -60, 56, 4], pivot: [34, -46], draw(S) { S.limb([34, -50], [36, -16], 30, S.c.leg); S.cel(RR(14, -18, 44, 18, 9), S.c.foot, { hi: true }); } },
+      armL: glmArm(-1), armR: glmArm(1),
+      body: {
+        box: [-92, -204, 92, -34], pivot: [0, GLM.cy],
+        draw(S) {
+          const shape = E(0, GLM.cy, GLM.rx, GLM.ry, 36);
+          S.cel(shape, S.c.seqA, { hi: '#ffffff', hiW: 3,
+            decor(g) {
+              sequins(g, -92, GLM.cy - GLM.ry - 6, 184, GLM.ry * 2 + 10, { d: 9, cols: [S.c.seqA, S.c.seqA, S.c.seqB, S.c.seqB, S.c.seqC], seed: 9 });
+              g.save(); g.setLineDash([5, 4]); g.lineWidth = 1.6; g.strokeStyle = tk.rgba(S.lc, 0.55);
+              [-1, 1].forEach((sd) => { g.beginPath(); g.moveTo(sd * 34, GLM.cy - 76); g.quadraticCurveTo(sd * 50, GLM.cy, sd * 34, GLM.cy + 76); g.stroke(); });
+              g.beginPath(); g.moveTo(-80, GLM.cy + 10); g.quadraticCurveTo(0, GLM.cy + 26, 80, GLM.cy + 10); g.stroke();
+              g.restore();
+              const hx = -14, hy = GLM.cy - 30;
+              g.fillStyle = S.real ? '#ff2a4a' : G.accent; g.beginPath(); g.moveTo(hx, hy + 7); g.bezierCurveTo(hx - 11, hy - 2, hx - 5, hy - 11, hx, hy - 5); g.bezierCurveTo(hx + 5, hy - 11, hx + 11, hy - 2, hx, hy + 7); g.fill();
+            } });
+        },
+      },
+      head: {
+        box: [-44, -252, 44, -168], pivot: [0, -180],
+        draw(S) {
+          S.cel(E(0, GLM.hy, 36, 34, 26), S.c.mask, { hi: '#ffffff',
+            decor(g) { sequins(g, -40, GLM.hy - 36, 80, 40, { d: 7, cols: [S.c.seqC, S.c.seqA], seed: 4 }); } });
+          S.cel(sym([[0, GLM.hy - 12], [-30, GLM.hy - 16], [-34, GLM.hy - 2], [-20, GLM.hy + 4], [-6, GLM.hy - 2], [0, GLM.hy - 4]]), S.c.seqB, { hi: true, tension: 0.3,
+            decor(g) { sequins(g, -36, GLM.hy - 18, 72, 24, { d: 6, cols: [S.c.seqB, RJ.tint(S.c.seqB, 0.4)], seed: 6 }); } });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const sway = sin(t * 1.2) * m;
+      const raise = clamp((atk ? E0.wind : 0) + tele, 0, 1), slam = atk ? E0.strike : 0;
+      const dx = -slam * 18 + hurt * 14 + E0.shake;
+      const dy = -6 * raise + 10 * slam + 4 * guard + 2 * Math.abs(sway);
+      ctx.save();
+      xform(ctx, 0, -40, dx, 0, 0.12 * hurt - 0.06 * slam, 1, 1);
+      put(ctx, st, 'legL', { r: 0.04 * sway });
+      put(ctx, st, 'legR', { r: 0.04 * sway });
+      ctx.save();
+      xform(ctx, 0, -40, 0, dy, 0.03 * sway, 1 + 0.04 * guard, 1 - 0.03 * guard + 0.02 * sin(t * 2) * m);
+      // the arms: up over the head on the wind-up, down in a slam, hugging in on the guard
+      const armR = (sd) => -sd * (2.3 * raise) + sd * 1.4 * slam * (1 - raise) + sd * 0.55 * guard - 0.04 * sway + sd * 0.2 * hurt;
+      put(ctx, st, 'armR', { r: armR(1) });
+      put(ctx, st, 'body', {});
+      put(ctx, st, 'head', {
+        r: 0.04 * sway + 0.12 * hurt, y: -2 * raise,
+        kids(c) {
+          face(c, st, 0, GLM.hy - 4, { kind: 'lens', w: 13, gap: 26, my: 22, sw: 14, look: [-0.4, 0.1] });
+          crack(c, -16, GLM.hy - 28, 30, 'golem', hurt * 1.4);
+          polite(c, st, 22, GLM.hy - 22, 5);
+        },
+      });
+      put(ctx, st, 'armL', { r: armR(-1) });
+      crack(ctx, 30, GLM.cy - 50, 44, 'golem2', hurt * 1.4);
+      polite(ctx, st, -46, GLM.cy - 42, 7);
+      ctx.restore();
+      ctx.restore();
+      // sequins: flicking off when hurt, flying in and piling on when it sequins up, a ring of them on the slam
+      const flick = (k, inward, n, seed) => {
+        for (let i = 0; i < n; i++) {
+          const a = hv(seed, 'a' + i) * TAU, d0 = 40 + 40 * hv(seed, 'd' + i), d = inward ? d0 + 120 * (1 - k) : d0 + 110 * k;
+          const x = dx + cos(a) * d, y = GLM.cy + sin(a) * d * 0.8 + (inward ? 0 : 60 * k * k), al = inward ? sin(PI * k) : 1 - k;
+          if (al < 0.05) continue;
+          ctx.save(); ctx.globalAlpha = al; ctx.fillStyle = [G.lilac, G.blush, '#e4e5ee'][i % 3]; ctx.strokeStyle = G.line; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.ellipse(x, y, 4.5, 4.5 * Math.abs(cos(k * 9 + i)) + 0.8, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
         }
       };
-      streak(false);
-      ctx.save();
-      xform(ctx, 0, -50, dx * 0.4, 0, 0, spread, 1 - 0.02 * br - 0.04 * tuck);
-      putChain(ctx, st, 'tail', [0.1 * sin(w1 * 1.3) * m + 0.2 * tuck, 0.22 * sin(w1 * 1.3 - 1) * m + 0.2 * tuck, 0.3 * sin(w1 * 1.3 - 2) * m - 0.4 * hurt + 0.3 * buff * sin(t * 8)]);
-      put(ctx, st, 'coil', { sy: 1 + 0.02 * br + 0.03 * buff, sx: 1 + 0.01 * br });
-      ctx.restore();
-      ctx.save();
-      xform(ctx, 24, -96, dx, 0, A, 1, 1);
-      putChain(ctx, st, 'neck', bends);
-      // the head rides the tip of the neck
-      const open = 0.06 + 0.06 * sin(t * 2.2) * m + 0.62 * tele + 0.5 * wind * (1 - strike) + 0.7 * bite + 0.55 * buff + 0.4 * hurt + 0.5 * die;
-      const headR = tip.r * 0.55 - 0.1 * strike + 0.08 * sin(t * 1.7) * m + 0.05 * tele * sin(t * 44);
-      put(ctx, st, 'head', {
-        x: tip.dx, y: tip.dy, r: tip.r + headR, sx: 1.28, sy: 1.28,
-        pre(c) {
-          // whiskers and the glowing mouth behind the skull
-          [[0, 0.3, 1], [8, -0.1, 0.8]].forEach((w, k) => putChain(c, st, 'whisk', [0.5 * sin(t * 3 + k) * m - 0.3 * strike, 0.7 * sin(t * 3 - 1 + k) * m], { y: w[0], r: w[1] + 0.1 * sin(t * 2.4 + k) * m, sx: w[2], sy: w[2] }));
-          if (open > 0.12) {
-            const H = [-58, -188], U = [-146, -184], jx = H[0] - 90 * cos(open) + 4 * sin(open), jy = H[1] + 90 * sin(open) + 4 * cos(open);
-            c.beginPath(); c.moveTo(H[0], H[1] - 6); c.lineTo(U[0], U[1]); c.lineTo(jx, jy - 2); c.lineTo(H[0], H[1] + 6); c.closePath();
-            const gr = c.createLinearGradient(H[0], H[1], U[0], U[1] + 30); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.6, '#8ff4ff'); gr.addColorStop(1, '#2a7aa8');
-            c.fillStyle = gr; c.fill();
-            tk.glow(c, -100, -184 + open * 22, 44, SP.cyan, cA(0.3 + 0.6 * clamp(tele + wind + buff, 0, 1)));
-          }
-          put(c, st, 'jaw', { r: -open });
-        },
-        kids(c) {
-          const ob = blink(t, 'serpent', 4.1) * (1 - 0.3 * hurt);
-          eyeLive(c, -96, -206, 10, 7.2, { open: ob, iris: ['#5ff5ff', '#ffffff'], sclera: '#ffffff', pupil: 'slit', pupilColor: '#0a3a6a', glow: SP.cyan, glowK: 0.8 + 0.2 * (tele + buff), glowR: 3, lw: 2.4, rot: -0.2, lidTop: 0.3 + 0.2 * clamp(tele + strike, 0, 1) });
-        },
-      });
-      ctx.restore();
-      streak(true);
-      if (buff > 0.05) for (let i = 0; i < 3; i++) { const u = (E0.buffP + i * 0.3) % 1; ctx.save(); ctx.globalAlpha = cA((1 - u) * buff * 1.6); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(10, -90 - 30 * u, 100 + 30 * u, 26 + 20 * u, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
-      if (atk && strike > 0.3) { ctx.save(); ctx.globalAlpha = 0.6 * strike; sparks(ctx, -150 + dx, -160, t, 8, 44, { col: '#ffffff', speed: 60, size: 12, dir: PI, spread: 1.2, life: 0.4 }); ctx.restore(); }
+      if (E0.pose === 'hurt') flick(E0.p, false, 12, 'gh');
+      if (buff > 0.02) flick(E0.buffP, true, 14, 'gb');
+      if (atk && p > 0.45 && p < 0.9) { const u = (p - 0.45) / 0.45; ctx.save(); ctx.globalAlpha = 1 - u; ctx.strokeStyle = G.lilac; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(-60 + dx, -6, 40 + 90 * u, 10 + 16 * u, 0, 0, TAU); ctx.stroke(); ctx.restore(); flick(u, false, 10, 'gs'); }
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // ERASER WRAITH (normal, m): a pencil ghost, half rubbed out already: a smudged graphite cloak in a soft grey line, a blank oval face with round dark
-  // eyes and a tiny humming mouth, a tail that frays into smudge and crumbs, and one enormous pink eraser held out in front, rubbing. Accent: the eraser
-  // pink and the crumbs it sheds.
+  // GLITCH GREMLIN (margin_imp, normal, m). Echowake rig: MARGIN IMP (keeps the shaky line idea, now a pixel jitter, and the summon pose; the
+  // horns became headphone cups). A small magenta gremlin drawn in a jittery line with cyan and lime fringes that keeps slipping a pixel
+  // sideways, big chrome headphone cups with lime cushions, a clipboard of wobbles held in both hands, little glitch blocks fizzing off its
+  // edges. Accent: the gremlin's magenta itself.
   // ---------------------------------------------------------------------------------------------------------------
-  const EW = { ghost: '#8b87a0', ghostL: '#b9b5ca', mask: '#ece9f8', pink: '#f2f0f6', pinkD: '#b9b5ca', wrap: '#9d99b2', blue: '#46425a', red: '#e8383d', line: '#3c3858', smudge: '#6f6b8f' };
-  function note(ctx, x, y, s, a, col) {
-    ctx.save(); ctx.globalAlpha = ctx.globalAlpha * cA(a); ctx.fillStyle = col || '#ffffff'; ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1.2, s * 0.16); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.ellipse(x, y, s * 0.5, s * 0.36, -0.4, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x + s * 0.42, y - s * 0.06); ctx.lineTo(x + s * 0.42, y - s * 1.1); ctx.quadraticCurveTo(x + s * 0.8, y - s * 0.9, x + s * 0.72, y - s * 0.5); ctx.stroke();
-    ctx.restore();
-  }
-  // grey ash and frost flecks sprinkled in rows (the old graphite hatch): short dashes of ash and frost, jittered off a grid
-  function hatch(g, x0, y0, x1, y1, gap, col, a) {
-    const gp = gap * 0.62;
-    g.save(); g.lineCap = 'round'; g.lineWidth = 1.5;
-    const ga = g.globalAlpha;
-    for (let y = y0, j = 0; y < y1; y += gp, j++) for (let x = x0 + (j % 2) * gp * 0.7, i = 0; x < x1; x += gp * 1.5, i++) {
-      const r1 = tk.vary('fleck', (x | 0) + ':' + (y | 0)), r2 = tk.vary('fleck2', (x | 0) + ':' + (y | 0));
-      if (r1 < 0.28) continue;
-      g.globalAlpha = ga * clamp(a * 2.2, 0, 1) * (0.55 + 0.45 * r2);
-      g.strokeStyle = (i + j) % 2 ? C.static : C.wad;
-      const l = 2 + 3.4 * r2;
-      g.beginPath(); g.moveTo(x + (r1 - 0.5) * 3, y + (r2 - 0.5) * 3); g.lineTo(x + (r1 - 0.5) * 3 + l, y + (r2 - 0.5) * 3 + (r1 - 0.5)); g.stroke();
-    }
+  const GRM = { hy: -122 };
+  // the jittery line: the outline drawn twice, slipped a little in cyan and in lime, under the real cel
+  function fringe(S, pts, d) {
+    if (S.real) return;
+    const g = S.g;
+    g.save(); g.lineJoin = 'round'; g.lineWidth = S.L;
+    g.globalAlpha = 0.75; g.strokeStyle = '#4fe3ff'; g.save(); g.translate(-d, 0); g.beginPath(); tk.trace(g, pts); g.closePath(); g.stroke(); g.restore();
+    g.strokeStyle = '#b6ff4f'; g.save(); g.translate(d, 0.5); g.beginPath(); tk.trace(g, pts); g.closePath(); g.stroke(); g.restore();
     g.restore();
   }
-  define('eraser_wraith', {
-    size: 'm', lw: 2.8,
-    col: { rim: '#ffffff', shT: 0.38, lineColor: EW.line },
-    bounds: { w: 200, h: 185, head: { x: -8, y: -166 }, body: { x: 0, y: -92 }, feet: { x: 0, y: 0 } },
-    die: { box: [-130, -176, 140, -20], shape: 'wipe', kinds: ['cotton', 'cotton', 'puff', 'cotton'], cols: ['#f2f0f6', '#ffffff', '#8e8aa3', '#cfcdd8'], wind: [-8, 10], size: 6, thin: 0.3, nx: 12, ny: 8 },
-    parts: {
-      cloak: {
-        box: [-62, -130, 66, -20], pivot: [0, -80],
-        draw(S) {
-          S.cel([[-38, -110], [-46, -84], [-38, -56], [-16, -38], [10, -28], [36, -38], [50, -60], [48, -92], [36, -114], [0, -122]], EW.ghost, {
-            depth: 18, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 4, alpha: 0.32, color: '#2e2b3a' },
-            decor(g) { hatch(g, -50, -100, 56, -30, 9, '#2e2b3a', 0.34); stitch(g, [[-30, -100], [-28, -64], [-16, -42]], { color: '#f2f0f6', alpha: 0.6 }); },
-          });
-          // rubbed-through patches where the graphite is gone
-          S.ell(24, -66, 9, 6, EW.ghostL, { depth: 2, line: 0, hi: false, rim: null, shadow: false });
-          S.ell(2, -48, 6, 4, EW.ghostL, { depth: 2, line: 0, hi: false, rim: null, shadow: false });
-        },
-      },
-      hood: {
-        box: [-54, -176, 44, -84], pivot: [-6, -108],
-        draw(S) {
-          S.cel([[-44, -128], [-40, -152], [-20, -172], [8, -172], [30, -154], [36, -128], [30, -104], [-2, -94], [-34, -104]], EW.ghost, {
-            depth: 14, tension: 0.9, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 4, alpha: 0.3, color: '#2e2b3a' },
-            decor(g) { hatch(g, -46, -170, 38, -96, 9, '#2e2b3a', 0.3); },
-          });
-          S.cel([[16, -168], [30, -186, 1], [40, -176], [32, -160]], EW.ghost, { depth: 4, line: 2.4, hi: false, rim: null, tension: 0.4 });
-          S.cel(E(-14, -126, 24, 29, 16), EW.mask, { depth: 8, line: 2.6, hi: true, hiW: 1.8, rim: '#ffffff', halftone: { d: 5, alpha: 0.16, color: '#8a86a8' } });
-          tk.blush(S.g, -32, -112, 12, { color: '#cfcdd8', alpha: 0.4, hatch: false });
-          tk.blush(S.g, 4, -112, 11, { color: '#cfcdd8', alpha: 0.4, hatch: false });
-        },
-      },
-      sleeve: {
-        box: [-96, -120, -14, -60], pivot: [-28, -98],
-        draw(S) {
-          S.cel([[-24, -114], [-50, -118], [-74, -108], [-84, -92], [-72, -76], [-46, -78], [-22, -88]], EW.ghost, { depth: 10, tension: 0.8, hi: true, hiW: 1.8, rim: S.c.rim, halftone: { d: 4, alpha: 0.3, color: '#2e2b3a' } });
-          S.cel([[-72, -110], [-84, -94], [-72, -78], [-64, -80], [-72, -94], [-64, -108]], EW.mask, { depth: 3, line: 2.4, hi: false, rim: null, tension: 0.4 });
-        },
-      },
-      eraser: {
-        box: [-64, -22, 34, 22], pivot: [0, 0],
-        draw(S) {
-          // a fat wad of cotton wadding it presses over mouths: lumpy white puffs gathered into a grey cloth knot, tied with a darker cord
-          S.cel([[-14, -12, 1], [24, -13, 1], [26, 12, 1], [-12, 13, 1]], EW.wrap, {
-            depth: 5, line: 3, tension: 0.3, hi: false, rim: '#cfcdd8',
-            decor(g) { gag(g, -14, -6, 40, 12, { fill: '#6e6a7e' }); stitch(g, [[-12, -9], [24, -10]], { color: '#f2f0f6', alpha: 0.6 }); },
-          });
-          [[-52, -2, 12, 11], [-40, -10, 11, 9], [-38, 8, 11, 9], [-26, -2, 13, 12], [-20, -12, 8, 7], [-18, 11, 8, 7]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[3], i % 2 ? '#f2f0f6' : '#e2dfec', { depth: 3, line: 2.6, hi: i % 2 === 0, hiW: 1.4, rim: '#ffffff', shadow: '#b9b5ca' }));
-          tk.inkPath(S.g, [[-58, -4], [-50, 4], [-44, -3]], { w: 1.2, color: '#9d99b2', alpha: 0.7, taper: 0.3 });
-        },
-      },
-      hand: {
-        box: [-16, -14, 16, 16], pivot: [0, 0],
-        draw(S) { S.cel(E(0, 0, 9, 8, 10), EW.mask, { depth: 3, line: 2.4, hi: false, rim: '#ffffff' }); [[-6, -3], [-1, -6], [5, -4]].forEach((f) => S.line([[f[0], f[1]], [f[0] - 2, f[1] - 4]], { w: 2.4, color: EW.mask, taper: 0.3 })); },
-      },
-    },
-    chains: {
-      tail: {
-        spine: [[28, -46], [56, -52], [82, -42], [106, -54], [130, -44]], cuts: [0.34, 0.68], reach: 34, overlap: 5,
-        draw(S) {
-          S.rib([[28, -46], [56, -52], [82, -42], [106, -54], [130, -44]], EW.ghost, { wMax: 44, w0: 40, w1: 2, tipPow: 1.3, shadow: '#7a7699', rim: S.c.rim, rimW: 1.4, line: 2.8, halftone: { d: 4, alpha: 0.3, color: '#2e2b3a' }, gloss: false, strands: 0,
-            decor(g) { hatch(g, 20, -80, 140, -20, 9, '#2e2b3a', 0.3); } });
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
-      const bob = sin(t * 2) * 6 * m, hot = clamp(tele + buff + strike, 0, 1);
-      const dx = -strike * 40 + hurt * 20 + 6 * tele + wind * 8, dy = bob - hurt * 5 - 10 * tele * 0 - wind * 6;
-      const rot = 0.035 * sin(t * 1.4) * m + 0.06 * tele + 0.12 * hurt - 0.06 * strike;
-      // the rubbing hand: small quick strokes at idle, a raised wind-up, a hard zig-zag swipe on the strike
-      const rub = sin(t * 9) * m;
-      let hx = -78 + 9 * rub, hy = -88 + 3 * sin(t * 4.5) * m, ER = -0.02 + 0.08 * rub;
-      if (atk) { const k = sm(p / 0.3), z = sin(p * 60) * 6 * strike; hx += 20 * k - 68 * strike; hy += -28 * k + 30 * strike + z; ER = lerp(-0.02, -0.5, k) + 0.9 * strike; }
-      else if (E0.pose === 'telegraph') { hx += 12 * tele + 3 * E0.shake; hy += -46 * tele; ER = -0.5 * tele + 0.05 * E0.shake; }
-      else if (E0.pose === 'block') { hx += 40 * guard; hy += -6 * guard; ER = 0.3 * guard; }
-      else if (E0.pose === 'buff') { hy += -16 * buff; hx += 6 * buff; }
-      else if (E0.pose === 'hurt') { hx += 18 * hurt; hy += -6 * hurt; ER = 0.4 * hurt; }
-      ctx.save();
-      ctx.globalAlpha = 1 - 0.18 * guard;
-      xform(ctx, 0, -80, dx, dy, rot, 1 - 0.1 * guard + 0.1 * hurt, 1 + 0.06 * guard - 0.05 * hurt);
-      putChain(ctx, st, 'tail', [0.1 * sin(t * 2.2) * m + 0.12 * tele - 0.2 * strike, 0.2 * sin(t * 2.2 - 0.9) * m, 0.3 * sin(t * 2.2 - 1.8) * m - 0.2 * hurt], { y: 4 * sin(t * 2.2) * m });
-      put(ctx, st, 'cloak', { sy: 1 + 0.02 * sin(t * 2.6) * m, sx: 1 - 0.015 * sin(t * 2.6) * m });
-      put(ctx, st, 'hood', {
-        r: 0.02 * sin(t * 1.6 + 1) * m + 0.1 * hurt - 0.05 * tele,
-        kids(c) {
-          const ob = blink(t, 'wraith', 3.6) * (1 - 0.6 * hurt);
-          eyeLive(c, -25, -128, 6, 8, { open: ob, iris: ['#2a2540', '#5a5580'], sclera: '#ffffff', pupil: 'none', irisK: 0.96, lw: 2, catch: true, glow: '#ffd0e0', glowK: 0.2 + 0.4 * hot, glowR: 2.2 });
-          eyeLive(c, -6, -128, 5.4, 7.4, { open: ob, iris: ['#2a2540', '#5a5580'], sclera: '#ffffff', pupil: 'none', irisK: 0.96, lw: 2, catch: true, glow: '#ffd0e0', glowK: 0.2 + 0.4 * hot, glowR: 2.2 });
-          // a humming mouth that opens wider when it works, and a grimace on the wind-up
-          const mo = 3.2 + 1.6 * (0.5 + 0.5 * sin(t * 4.2)) * m + 5 * tele + 3 * buff + 4 * strike;
-          c.beginPath(); c.ellipse(-16, -108, mo * 0.8, mo, 0, 0, TAU); c.fillStyle = '#2e2b3a'; c.fill(); c.lineWidth = 1.8; c.strokeStyle = EW.line; c.stroke();
-          if (tele > 0.3) { c.beginPath(); c.ellipse(-16, -105, mo * 0.5, mo * 0.4, 0, 0, TAU); c.fillStyle = '#8e8aa3'; c.fill(); }
-        },
-      });
-      put(ctx, st, 'sleeve', { r: (E0.pose === 'telegraph' ? -0.5 * tele : 0) + (atk ? -0.5 * sm(p / 0.3) + 0.9 * strike : 0) + 0.7 * guard + 0.05 * sin(t * 1.9) * m + 0.2 * hurt });
-      put(ctx, st, 'eraser', { x: hx, y: hy, r: ER, sx: 1.3, sy: 1.3 });
-      put(ctx, st, 'hand', { x: hx + 2, y: hy });
-      // pink glow on the eraser when it means it
-      tk.glow(ctx, hx - 30, hy, 28 + 22 * hot, '#cfcdd8', 0.2 + 0.5 * hot);
-      ctx.restore();
-      // crumbs shed by the eraser and by the tail, graphite dust, hummed notes
-      motes(ctx, hx - 30 + dx, hy + 8 + dy, t, 7, 71, { col: '#f2f0f6', size: 2.2, rise: -34, spread: 18, life: 1.2, alpha: 0.95, add: false });
-      motes(ctx, 100 + dx, -50 + dy, t, 5, 72, { col: '#8e8aa3', size: 2, rise: -22, spread: 20, life: 1.5, alpha: 0.8, add: false });
-      for (let i = 0; i < 2 + (buff > 0 ? 3 : 0); i++) { const per = 2.2, u = ((t / per + i / 2) % 1 + 1) % 1; note(ctx, -20 + dx + sin(u * 6 + i) * 12, -150 + dy - u * 40, 9 + 3 * buff, sin(u * PI) * (0.9 - die * 0.9), '#ffffff'); }
-      if (atk && p > 0.36 && p < 0.8) {
-        const u = (p - 0.36) / 0.44;
-        ctx.save(); ctx.globalAlpha = (1 - u) * 0.85;
-        for (let i = 0; i < 3; i++) { ctx.fillStyle = i === 1 ? '#cfcdd8' : '#f2f0f6'; ctx.beginPath(); ctx.moveTo(-110 + dx, -110 + i * 12); ctx.lineTo(-40 + dx, -96 + i * 12); ctx.lineTo(-44 + dx, -86 + i * 12); ctx.lineTo(-116 + dx, -100 + i * 12); ctx.closePath(); ctx.fill(); }
-        ctx.restore();
-      }
-      if (tele > 0.05) for (let i = 0; i < 6; i++) { const a = t * 5 + i * TAU / 6, r = 22 + 20 * tele; ctx.save(); ctx.globalAlpha = tele * 0.8; ctx.fillStyle = '#f2f0f6'; ctx.fillRect(hx - 30 + dx + cos(a) * r, hy - 4 + dy + sin(a) * r * 0.7, 3.4, 2.4); ctx.restore(); }
-    },
-  });
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // THUNDER CROW (normal, m): a crow that flew too close to the storm and came back louder. Storm-indigo plumage struck through with yellow lightning
-  // marks, a crest that stands on end with static, a heavy gold beak, wings that crackle when they spread. Dives like a hammer. Accent: the white-gold
-  // glaring eye and the lightning in its feathers.
-  // ---------------------------------------------------------------------------------------------------------------
-  const TC = { plumage: '#3b418c', plumageD: '#22265a', belly: '#6068a8', beak: '#f5c96a', beakD: '#c48a2a', volt: '#ffe45e', voltCore: '#ffffff', eye: '#fff2a0', cloud: '#d8d4f4' };
-  // one long feather from the origin: base width w, length len, rotated by ang, with a lightning zig down its middle
-  function feather(S, ang, len, w, col, mark) {
-    const c = cos(ang), s = sin(ang), R = (x, y) => [x * c - y * s, x * s + y * c];
-    const pts = [R(0, 0), R(len * 0.3, -w / 2), R(len * 0.72, -w * 0.4), R(len, 0), R(len * 0.72, w * 0.4), R(len * 0.3, w / 2)];
-    pts[3].push(1);
-    S.cel(pts, col, { depth: 3.6, line: 2.6, tension: 0.7, hi: false, rim: S.c.rim, rimW: 1.2, halftone: { d: 4, alpha: 0.22 } });
-    if (mark) {
-      const zz = [R(len * 0.22, 0), R(len * 0.42, -w * 0.14), R(len * 0.52, w * 0.12), R(len * 0.72, -w * 0.1), R(len * 0.9, 0)];
-      S.line(zz, { w: 3, color: TC.volt, taper: 0.2, pressure: 'flat', wobble: 0 });
-      S.line(zz, { w: 1.1, color: TC.voltCore, taper: 0.2, pressure: 'flat', wobble: 0 });
-    }
-  }
-  function crowWing(S, far) {
-    const col = far ? TC.plumageD : TC.plumage, n = 6;
-    for (let i = 0; i < n; i++) feather(S, -0.45 - i * 0.24 - (far ? 0.1 : 0), 96 - i * 6 + (far ? 4 : 0), 24, i % 2 ? col : (far ? '#2a2e68' : '#464da0'), !far && i % 2 === 0);
-    S.cel([[-6, -12], [30, -30], [58, -24], [46, 6], [10, 14]], col, { depth: 6, line: 2.8, tension: 0.8, hi: !far, hiW: 1.6, rim: far ? null : S.c.rim, halftone: { d: 4, alpha: 0.24 } });
-  }
-  define('thunder_crow', {
-    size: 'm', lw: 3,
-    col: { rim: '#ffe98a', shT: 0.4 },
-    bounds: { w: 200, h: 188, head: { x: -44, y: -166 }, body: { x: 0, y: -90 }, feet: { x: 0, y: 0 } },
-    die: { box: [-110, -180, 110, 4], nx: 11, ny: 12, from: 'out', order: 0.5, shape: 'diamond', kinds: ['feather', 'spark', 'feather', 'feather'], cols: ['#3b418c', '#ffe45e', '#22265a', '#6068a8'], wind: [8, -12], size: 10, life: 0.6 },
-    parts: {
-      legF: { box: [-4, -60, 34, 4], pivot: [14, -46], draw(S) { S.cel(cap(14, -46, 16, -10, 8, 6), TC.beakD, { depth: 2, line: 2.4, hi: false, rim: null, tension: 0.5 }); [[-8, 4], [0, -2], [10, 6]].forEach((t3) => S.line([[16, -8], [16 + t3[0] - 6, t3[1]]], { w: 3.4, color: TC.beakD, taper: 0.2, wobble: 0 })); } },
-      legN: { box: [-28, -60, 12, 4], pivot: [-8, -46], draw(S) { S.cel(cap(-8, -46, -12, -10, 9, 7), TC.beak, { depth: 2, line: 2.6, hi: false, rim: S.c.rim, tension: 0.5 }); [[-16, 4], [-8, -2], [3, 6]].forEach((t3) => S.line([[-12, -8], [-12 + t3[0] - 4, t3[1]]], { w: 3.6, color: TC.beak, taper: 0.2, wobble: 0 })); } },
-      wingF: { box: [-20, -220, 110, -60], pivot: [12, -114], draw(S) { S.g.save(); S.g.translate(12, -114); crowWing(S, true); S.g.restore(); } },
-      body: {
-        box: [-58, -140, 60, -44], pivot: [0, -92],
-        draw(S) {
-          // tail feathers first, then the plump barrel of a body with a paler chest
-          [[-0.1, 70], [0.15, 62], [0.4, 54]].forEach((f, i) => { S.g.save(); S.g.translate(34, -76); feather(S, f[0] + 0.2, f[1] + 12, 20, i % 2 ? TC.plumage : '#464da0', i === 1); S.g.restore(); });
-          S.cel(E(0, -92, 46, 40, 16, -0.15), TC.plumage, {
-            depth: 16, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 4, alpha: 0.3 },
-            decor(g) { g.fillStyle = TC.belly; g.beginPath(); g.ellipse(-14, -80, 30, 28, 0.2, 0, TAU); g.fill(); for (let i = 0; i < 4; i++) tk.inkPath(g, [[-34 + i * 10, -92 + (i % 2) * 8], [-30 + i * 10, -84 + (i % 2) * 8], [-26 + i * 10, -92 + (i % 2) * 8]], { w: 1.6, color: TC.plumageD, alpha: 0.85, taper: 0.3 }); },
-          });
-        },
-      },
-      wingN: { box: [-20, -220, 110, -60], pivot: [4, -108], draw(S) { S.g.save(); S.g.translate(4, -108); crowWing(S, false); S.g.restore(); } },
-      crest: {
-        box: [-84, -190, -8, -130], pivot: [-32, -150],
-        draw(S) { [[-1.9, 34], [-1.55, 42], [-1.2, 36], [-0.9, 28]].forEach((f, i) => { S.g.save(); S.g.translate(-32 + i * 4, -152); feather(S, f[0], f[1], 11, i % 2 ? TC.plumage : '#464da0', false); S.g.restore(); tk.sparkle(S.g, -32 + i * 4 + cos(f[0]) * f[1], -152 + sin(f[0]) * f[1], 3.4, { color: TC.volt, glow: 0.3 }); }); },
-      },
-      jaw: {
-        box: [-104, -134, -42, -100], pivot: [-56, -122],
-        draw(S) { S.cel([[-56, -124], [-84, -124], [-104, -118, 1], [-82, -108], [-58, -108]], TC.beak, { depth: 4, line: 2.8, tension: 0.4, hi: false, rim: S.c.rim }); S.line([[-100, -118], [-64, -122]], { w: 1.3, color: TC.beakD, alpha: 0.7, taper: 0.3 }); },
-      },
-      head: {
-        box: [-108, -170, -4, -96], pivot: [-32, -112],
-        draw(S) {
-          S.cel(E(-38, -128, 31, 29, 16), TC.plumage, { depth: 12, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 4, alpha: 0.3 } });
-          S.cel([[-56, -134], [-84, -138], [-108, -122, 1], [-84, -120], [-58, -118]], TC.beak, { depth: 5, line: 3, tension: 0.4, hi: true, hiW: 1.4, rim: S.c.rim });
-          S.cel(E(-70, -130, 2.6, 2.2, 8), TC.beakD, { line: 1, shadow: false, rim: null });
-          // a heavy angry brow ridge
-          S.cel([[-72, -146], [-52, -144], [-34, -138], [-36, -134], [-52, -138], [-70, -140]], TC.plumageD, { depth: 2, line: 2.4, hi: false, rim: S.c.rim, tension: 0.5 });
-          S.line([[-30, -120], [-14, -116]], { w: 2, color: TC.volt, taper: 0.3 });
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
-      const hop = Math.abs(sin(t * 2.1)) * 5 * m * (1 - tele) * (1 - guard), flap = sin(t * 2.6) * m;
-      const hot = clamp(tele + buff + strike + die * 0.5, 0, 1);
-      const dx = -strike * 110 + hurt * 16 + 4 * tele + 5 * wind, dy = -hop + strike * 14 + 4 * guard - 10 * wind * 0 - hurt * 4;
-      const rot = -0.12 * strike * 4 * (atk ? 1 : 0) * 0.5 + 0.16 * tele - 0.5 * strike + 0.05 * sin(t * 1.9) * m + 0.2 * hurt;
-      // wings: up and crackling on a wind-up, swept back for the dive, wrapped round the body on a perch
-      const wingSpread = -0.4 * tele - 0.35 * wind + 1.6 * strike + 1.35 * guard - 0.55 * buff + 0.2 * hurt;
-      const wr = 0.16 * flap + wingSpread + 0.3 * sin(t * 30) * tele * 0.1;
-      const beakOpen = 0.05 + 0.04 * sin(t * 3) * m + 0.6 * tele + 0.5 * wind * (1 - strike) + 0.65 * buff + 0.35 * hurt + 0.4 * die;
-      // a dive leaves speed lines behind it
-      if (strike > 0.1) { ctx.save(); ctx.globalAlpha = 0.6 * strike; tk.speedLines(ctx, 0, 0, { mode: 'dir', rect: [10 + dx, -150, 160, 110], angle: 0.3, n: 8, len: 90, seed: 9, color: '#ffffff', w: 3, alpha: 0.7 }); ctx.restore(); }
-      // storm gathering overhead on the wind-up
-      if (tele > 0.05) {
-        puffs(ctx, 0, -190, t, 6, 81, { col: TC.cloud, rise: -4, spread: 50, size: 16, life: 1.4, alpha: 0.6 * tele });
-        if (flick(t, 6, 8) > 0.5) { ctx.save(); ctx.globalAlpha = tele; zap(ctx, -10 + 24 * sin(t * 5), -196, -20, -130, t, { seed: 2, w: 2.4, jag: 10, n: 6, color: '#ffe45e', core: '#ffffff' }); ctx.restore(); }
-      }
-      ctx.save();
-      xform(ctx, 0, -50, dx, dy, rot, 1 - 0.04 * guard, 1 - 0.04 * guard + 0.02 * sin(t * 2.5) * m);
-      put(ctx, st, 'legF', { r: 0.1 * sin(t * 2.1) * m + 0.2 * strike });
-      ctx.save(); ctx.translate(0, 10);
-      put(ctx, st, 'wingF', { r: wr * 1.05 - 0.1 - 0.05 * sin(t * 2.6 + 1) * m });
-      put(ctx, st, 'body', { sy: 1 + 0.02 * sin(t * 3.1) * m });
-      ctx.restore();
-      put(ctx, st, 'legN', { r: -0.1 * sin(t * 2.1) * m - 0.3 * strike });
-      ctx.save(); ctx.translate(0, 10);
-      put(ctx, st, 'wingN', { r: wr });
-      const nod = 0.06 * sin(t * 2.1 + 0.6) * m - 0.3 * tele * 0 - 0.24 * strike + 0.1 * tele * -1 + 0.25 * buff + 0.15 * hurt;
-      put(ctx, st, 'crest', { r: 0.14 * sin(t * 6) * m + nod * 0.8, sx: 1 + 0.4 * buff + 0.25 * tele, sy: 1 + 0.4 * buff + 0.25 * tele });
-      put(ctx, st, 'head', {
-        r: nod, x: 0, y: 2 * tele,
-        pre(c) { put(c, st, 'jaw', { r: -beakOpen * 0.9 }); },
-        kids(c) {
-          const ob = blink(t, 'crow', 3.8) * (1 - 0.4 * hurt);
-          eyeLive(c, -50, -132, 10.4, 9, { open: ob, iris: ['#fff2a0', '#ffffff'], sclera: '#ffffff', pupil: 'dot', glow: TC.volt, glowK: 0.7 + 0.3 * hot, glowR: 3, lw: 2.4, rot: -0.2, look: [-0.7, 0.1], lidTop: 0.34 + 0.2 * hot, pupilColor: '#221a44' });
-          if (beakOpen > 0.3) tk.glow(c, -80, -118, 20, TC.volt, 0.4 * clamp(beakOpen, 0, 1));
-        },
-      });
-      ctx.restore();
-      // static: sparks off the crest and wing tips, arcs when it is worked up
-      sparks(ctx, -36, -158, t, 5, 82, { col: TC.volt, speed: 26, size: 5, spread: 2.6, life: 0.6, alpha: 0.9 });
-      if (hot > 0.2 || flick(t, 12, 6) > 0.85) { ctx.save(); ctx.globalAlpha = 0.5 + 0.5 * hot; zap(ctx, -60, -158, 30, -170, t, { seed: 3, w: 1.6 + hot * 1.4, jag: 8, n: 6, color: '#ffe45e', core: '#ffffff' }); ctx.restore(); }
-      if (hot > 0.15) tk.glow(ctx, 0, -100, 80, TC.volt, 0.16 * hot + 0.14 * flick(t, 3, 12) * hot);
-      ctx.restore();
-    },
-  });
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // PAPER GOLEM (normal, l): a giant folded by patient hands from the pages of an unfinished chapter: faceted cream paper, printed with rows of
-  // unreadable text, bound at every joint with red thread, a folded-paper head with two round eyes that glow like lanterns and a stitched slit of a
-  // mouth. A lantern window in the chest lights up as it works itself up. Slow, big, and every fold makes the next slam worse. Accent: the amber
-  // lantern light and the red thread.
-  // ---------------------------------------------------------------------------------------------------------------
-  const PG = { paper: '#a09cb6', paperL: '#c4c1d4', paperD: '#7d7993', thread: '#46425a', glow: '#ffb84a', text: '#46425a', dark: '#2e2b3a' };
-  // layered futon quilting on the big facets: a row of small quilted ridges (zigzag) with a stitch line along the top (the old printed text rows)
-  function textRows(g, x, y, w, n, col, gap) {
-    for (let i = 0; i < n; i++) {
-      const yy = y + i * (gap || 6), ww = w * (0.6 + 0.4 * tk.vary('txt', 'r' + i + x)), teeth = Math.max(2, Math.round(ww / 7));
-      g.save(); g.beginPath(); g.moveTo(x, yy + 3);
-      for (let j = 0; j < teeth; j++) { g.lineTo(x + ww * (j + 0.5) / teeth, yy - 2.2); g.lineTo(x + ww * (j + 1) / teeth, yy + 3); }
-      g.strokeStyle = col || PG.text; g.globalAlpha = g.globalAlpha * 0.85; g.lineWidth = 1.5; g.lineJoin = 'miter'; g.stroke(); g.restore();
-      stitch(g, [[x, yy + 4.6], [x + ww, yy + 4.6]], { color: '#e4e1ee', alpha: 0.55, dash: 2.4, gap: 2 });
-    }
-  }
-  // a stitched button: a round felt disc with four thread holes and a cross stitch (the old red-thread knot)
-  function knot(S, x, y, r) {
-    S.cel(E(x, y, r * 1.15, r * 1.0, 10), PG.thread, { depth: r * 0.4, line: 2.2, hi: true, hiW: 1.2, rim: null });
-    S.line([[x - r * 0.55, y - r * 0.45], [x + r * 0.55, y + r * 0.45]], { w: 1.5, color: '#e4e1ee', taper: 0.05, pressure: 'flat' });
-    S.line([[x + r * 0.55, y - r * 0.45], [x - r * 0.55, y + r * 0.45]], { w: 1.5, color: '#e4e1ee', taper: 0.05, pressure: 'flat' });
-  }
-  function foldBox(S, pts, base, o) {
-    S.cel({ poly: pts }, base, Object.assign({
-      depth: 8, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.22, color: '#46425a' },
-      decor(g) {
-        const b = tk.bbox(pts);
-        g.fillStyle = 'rgba(46,43,58,0.26)'; g.beginPath(); g.moveTo(b[0], b[1]); g.lineTo(b[2], b[3]); g.lineTo(b[0], b[3]); g.fill();
-        stitch(g, [[b[0], b[1]], [b[2], b[3]]], { color: '#e4e1ee', alpha: 0.75 });
-      },
-    }, o));
-  }
-  define('paper_golem', {
-    size: 'l', lw: 3.4,
-    col: { rim: '#ffffff', shT: 0.36 },
-    bounds: { w: 250, h: 252, head: { x: -6, y: -240 }, body: { x: 0, y: -120 }, feet: { x: 0, y: 0 } },
-    die: { box: [-150, -262, 130, 4], nx: 12, ny: 14, from: 'top', order: 0.45, shape: 'paper', kinds: ['felt', 'felt', 'cotton', 'ember'], cols: ['#c4c1d4', '#a09cb6', '#f2f0f6', '#ffb84a'], wind: [-22, -26], size: 12, thin: 0.25, life: 0.62 },
-    parts: {
-      legF: {
-        box: [0, -76, 84, 4], pivot: [34, -70],
-        draw(S) {
-          foldBox(S, [[10, -70], [56, -70], [58, -22], [8, -22]], PG.paperD, { rim: null });
-          foldBox(S, [[0, -22], [72, -22], [78, -6], [68, 0], [-2, 0]], PG.paperD, { rim: null, depth: 4 });
-          knot(S, 34, -48, 5);
-        },
-      },
-      legN: {
-        box: [-78, -76, 6, 4], pivot: [-30, -70],
-        draw(S) {
-          foldBox(S, [[-56, -70], [-4, -70], [-2, -22], [-54, -22]], PG.paper, {});
-          foldBox(S, [[-74, -22], [0, -22], [2, -8], [-6, 0], [-70, 0], [-78, -10]], PG.paper, { depth: 5 });
-          knot(S, -30, -48, 5.5);
-          S.g.save(); textRows(S.g, -48, -64, 34, 3, PG.text, 6); S.g.restore();
-        },
-      },
-      torso: {
-        box: [-96, -204, 96, -58], pivot: [0, -110],
-        draw(S) {
-          S.cel({ poly: [[-78, -176], [-40, -192], [40, -192], [82, -176], [70, -122], [58, -66], [-58, -66], [-70, -122]] }, PG.paper, {
-            depth: 22, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.24, color: '#46425a' },
-            decor(g) {
-              g.fillStyle = 'rgba(255,255,255,0.4)'; g.beginPath(); g.moveTo(-78, -176); g.lineTo(-40, -192); g.lineTo(-6, -130); g.lineTo(-70, -122); g.fill();
-              g.fillStyle = 'rgba(46,43,58,0.3)'; g.beginPath(); g.moveTo(82, -176); g.lineTo(70, -122); g.lineTo(58, -66); g.lineTo(0, -66); g.lineTo(-6, -130); g.fill();
-              [[[-78, -176], [-6, -130]], [[-6, -130], [58, -66]], [[-70, -122], [-6, -130]], [[-6, -130], [40, -192]]].forEach((cr) => stitch(g, cr, { color: '#e4e1ee', alpha: 0.8, w: 1.5 }));
-              textRows(g, -66, -176, 44, 4, PG.text, 6); textRows(g, 14, -96, 38, 4, PG.text, 6); textRows(g, -54, -92, 30, 3, PG.text, 6);
-              g.fillStyle = '#e4e1ee'; g.globalAlpha = 0.28; g.fillRect(20, -176, 30, 8); g.globalAlpha = 1;
-            },
-          });
-          // the lantern window in the chest: a diamond cut through the page
-          S.cel({ poly: [[-6, -166], [22, -136], [-6, -106], [-34, -136]] }, PG.dark, { depth: 3, line: 3, hi: false, rim: null, shadow: false });
-          S.cel({ poly: [[-6, -158], [14, -136], [-6, -114], [-26, -136]] }, PG.glow, { depth: 2, line: 0, hi: false, rim: null, shadow: false });
-          S.line([[-6, -158], [-6, -114]], { w: 1.8, color: PG.dark, alpha: 0.7, taper: 0.1, pressure: 'flat' });
-          S.line([[-26, -136], [14, -136]], { w: 1.8, color: PG.dark, alpha: 0.7, taper: 0.1, pressure: 'flat' });
-          S.cel({ poly: [[-58, -82], [58, -82], [56, -68], [-56, -68]] }, PG.thread, { depth: 3, line: 2.8, hi: true, hiW: 1.2, rim: null });
-          knot(S, 0, -75, 6);
-        },
-      },
-      armF: {
-        box: [30, -210, 150, -50], pivot: [86, -172],
-        draw(S) {
-          foldBox(S, [[70, -196], [112, -186], [114, -152], [78, -148]], PG.paperD, { rim: null });
-          foldBox(S, [[84, -150], [116, -150], [116, -100], [84, -100]], PG.paperD, { rim: null });
-          foldBox(S, [[78, -100], [124, -100], [126, -62], [82, -58]], PG.paperD, { rim: null, depth: 6 });
-          knot(S, 100, -148, 4.5); knot(S, 100, -102, 4);
-        },
-      },
-      armN: {
-        box: [-160, -214, -30, -40], pivot: [-84, -172],
-        draw(S) {
-          foldBox(S, [[-112, -204], [-62, -196], [-58, -152], [-108, -148]], PG.paper, {});
-          foldBox(S, [[-106, -152], [-70, -152], [-72, -102], [-104, -102]], PG.paper, {});
-          foldBox(S, [[-118, -102], [-62, -102], [-60, -50], [-116, -46], [-122, -74]], PG.paperL, { depth: 9 });
-          S.g.save(); textRows(S.g, -110, -100, 34, 3, PG.text, 6); S.g.restore();
-          knot(S, -86, -150, 5.5); knot(S, -88, -104, 5);
-        },
-      },
-      plates: {
-        box: [-84, -190, 84, -60], pivot: [0, -128],
-        draw(S) {
-          foldBox(S, [[-70, -180], [0, -196], [70, -180], [62, -140], [-62, -140]], PG.paperL, { depth: 10 });
-          foldBox(S, [[-58, -140], [58, -140], [54, -96], [-54, -96]], PG.paper, { depth: 10 });
-          foldBox(S, [[-52, -96], [52, -96], [46, -62], [-46, -62]], PG.paperD, { depth: 10 });
-          S.g.save(); textRows(S.g, -40, -180, 60, 3, PG.text, 8); S.g.restore();
-        },
-      },
-      head: {
-        box: [-60, -256, 56, -170], pivot: [-2, -178],
-        draw(S) {
-          // a folded peak like an origami helmet, then the boxy paper head with two round eye holes and a stitched mouth
-          S.cel({ poly: [[-40, -222, 1], [-4, -256, 1], [36, -222, 1], [30, -214, 1], [-34, -214, 1]] }, PG.paperL, {
-            depth: 8, hi: false, rim: S.c.rim, halftone: { d: 5, alpha: 0.22, color: '#46425a' },
-            decor(g) { g.fillStyle = 'rgba(46,43,58,0.3)'; g.beginPath(); g.moveTo(-4, -258); g.lineTo(38, -212); g.lineTo(-4, -212); g.fill(); stitch(g, [[-4, -256], [-4, -214]], { color: '#e4e1ee' }); },
-          });
-          foldBox(S, [[-44, -218], [40, -220], [36, -176], [-40, -174]], PG.paper, { depth: 12 });
-          S.cel(E(-20, -198, 11, 12, 14), PG.dark, { depth: 2, line: 3, hi: false, rim: null, shadow: false });
-          S.cel(E(10, -198, 10, 11, 14), PG.dark, { depth: 2, line: 3, hi: false, rim: null, shadow: false });
-          S.line([[-28, -186], [-10, -184], [6, -186], [22, -186]], { w: 2.4, color: pal.ink, taper: 0.1, pressure: 'flat' });
-          for (let i = 0; i < 5; i++) S.line([[-24 + i * 11, -191], [-24 + i * 11, -181]], { w: 2, color: '#e4e1ee', taper: 0.3, pressure: 'flat' });
-          stitch(S.g, [[-36, -172], [34, -174]], { color: '#e4e1ee', alpha: 0.6 });
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.6) * m, fold = clamp(guard + buff * 0.8, 0, 1);
-      const hot = clamp(tele + buff + strike + fold * 0.6 + st.wound * 0.3, 0, 1);
-      const dx = -strike * 26 + hurt * 14 + E0.shake * 1.4 + 6 * tele, dy = 4 * tele + 3 * fold + 10 * die;
-      const rot = -0.1 * tele + 0.06 * strike + 0.1 * hurt + 0.012 * br - 0.04 * wind;
-      // arms: raised over the head on a wind-up, an overhand smash on the strike, crossed over the chest when folding up
-      let aN = 0.06 * br, aF = -0.05 * br;
-      if (atk) { if (p < 0.3) { const k = sm(p / 0.3); aN = lerp(0, 2.45, k); aF = lerp(0, 2.55, k); } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aN = lerp(2.45, -0.15, k); aF = lerp(2.55, -0.1, k); } else { const k = sm((p - 0.5) / 0.5); aN = lerp(-0.15, 0.06 * br, k); aF = lerp(-0.1, 0, k); } }
-      else if (E0.pose === 'telegraph') { aN = 2.45 * tele + 0.03 * E0.shake; aF = 2.55 * tele - 0.03 * E0.shake; }
-      else if (E0.pose === 'block') { aN = 0.85 * guard; aF = 0.9 * guard; }
-      else if (E0.pose === 'buff') { aN = 0.5 * buff + 0.2 * sin(E0.buffP * TAU); aF = 0.5 * buff; }
-      else if (E0.pose === 'hurt') { aN = 0.5 * hurt; aF = 0.4 * hurt; }
-      else if (die > 0) { aN = 0.6 * die; aF = 0.5 * die; }
-      ctx.save();
-      if (die > 0) ctx.transform(1 + 0.4 * die, 0, 0, 1 - 0.5 * die, -20 * die, 0);
-      ctx.save();
-      xform(ctx, 0, -60, dx, dy, rot, 1, 1 - 0.05 * fold);
-      const skew = 0.02 * sin(t * 1.7) * m + 0.05 * hurt;
-      ctx.transform(1, 0, skew, 1, -skew * 110, 0);
-      put(ctx, st, 'legF', { r: 0.02 * br });
-      put(ctx, st, 'armF', { r: aF });
-      put(ctx, st, 'torso', { sy: 1 + 0.012 * br - 0.02 * tele, sx: 1 + 0.006 * br });
-      // the lantern in the chest: a warm window that pulses, blazes when it is winding up
-      {
-        const lg = 0.4 + 0.15 * sin(t * 2.4) * m + 0.5 * hot;
-        tk.glow(ctx, -6, -136, 40 + 26 * hot, PG.glow, cA(lg * 0.9));
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = cA(lg * 0.55); ctx.fillStyle = '#ffd890'; ctx.beginPath(); ctx.moveTo(-6, -158); ctx.lineTo(14, -136); ctx.lineTo(-6, -114); ctx.lineTo(-26, -136); ctx.closePath(); ctx.fill(); ctx.restore();
-      }
-      put(ctx, st, 'legN', { r: -0.02 * br });
-      if (fold > 0.02) put(ctx, st, 'plates', { sy: 0.4 + 0.6 * ease.outBack(clamp(fold, 0, 1)), sx: 0.85 + 0.15 * fold, a: clamp(fold * 3, 0, 1) });
-      put(ctx, st, 'armN', { r: aN });
-      put(ctx, st, 'head', {
-        r: 0.02 * sin(t * 1.3 + 1) * m - 0.06 * tele + 0.05 * strike + 0.12 * hurt, y: 2 * fold + 3 * tele,
-        kids(c) {
-          const ob = blink(t, 'golem', 5.2) * (1 - 0.3 * hurt), gl = 0.7 + 0.2 * sin(t * 2.2) * m + 0.4 * hot;
-          [[-20, -198, 8.5, 9.4], [10, -198, 8, 8.8]].forEach((e) => { tk.glow(c, e[0], e[1], 26 + 10 * hot, PG.glow, cA(gl * 0.8)); c.fillStyle = '#fff3c8'; c.beginPath(); c.ellipse(e[0], e[1], e[2] * 0.78 * (0.3 + 0.7 * ob), e[3] * 0.78 * (0.3 + 0.7 * ob), 0, 0, TAU); c.fill(); });
-        },
-      });
-      ctx.restore();
-      // loose pages peeling off and drifting away
-      motes(ctx, 0 + dx, -150 + dy, t, 6, 91, { col: '#f2f0f6', size: 3, rise: 16, spread: 90, life: 2.6, alpha: 0.8, add: false });
-      if (atk && p > 0.48 && p < 0.9) { const u = (p - 0.48) / 0.42; puffs(ctx, -110 + dx, -6, t * 0 + u, 5, 92, { col: '#cfcdd8', rise: 12, spread: 60, size: 10, life: 1, alpha: 0.5 * (1 - u), dx: -30 }); }
-      if (hurt > 0.3) for (let i = 0; i < 5; i++) { const fj = fling('pghurt' + i, 's', E0.p, { spread: 120, up: 70, g: 160, spin: 10 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-20 + fj.x, -150 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = PG.paperL; ctx.strokeStyle = pal.ink; ctx.lineWidth = 1.6; ctx.fillRect(-6, -4, 12, 8); ctx.strokeRect(-6, -4, 12, 8); ctx.restore(); }
-      ctx.restore();
-    },
-  });
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // MARGIN IMP (normal, m): the doodle in the margin that climbed out of the page: cream paper skin drawn in a shaky, hatched pen line, magenta horns and
-  // a magenta arrow of a tail, a huge grin, a giant black quill for a pen and a list of your mistakes trailing from its belt. It draws horns on
-  // everyone and calls friends by sketching them. Accent: magenta ink (eyes, horns, tail, the nib).
-  // ---------------------------------------------------------------------------------------------------------------
-  const MI = { skin: '#dcdae4', hatch: '#241a3a', mag: '#ff3a8a', magD: '#b0245c', magL: '#ff8cc0', quill: '#3b2a7a', vane: '#5b3fa8', gold: '#f5c96a' };
-  function penHatch(g, x0, y0, x1, y1, gap, a) {
-    for (let x = x0; x < x1 + (y1 - y0); x += gap) tk.inkPath(g, [[x, y0], [x - (y1 - y0) * 0.7, y1]], { w: 1.5, color: MI.hatch, alpha: a === undefined ? 0.75 : a, taper: 0.25, wobble: 0.3, seed: (x | 0) });
-  }
   define('margin_imp', {
-    size: 'm', lw: 3.4,
-    col: { rim: '#ffffff', shT: 0.3, wobble: 0.34 },
-    bounds: { w: 190, h: 231, head: { x: -6, y: -170 }, body: { x: 0, y: -88 }, feet: { x: 0, y: 0 } },
-    die: { box: [-100, -186, 90, 4], nx: 11, ny: 14, from: 'top', order: 0.6, shape: 'ink', kinds: ['cotton', 'note', 'felt', 'note'], cols: ['#8e8aa3', '#ff3a8a', '#dcdae4', '#ff8cc0'], wind: [4, 10], size: 8, thin: 0.3 },
+    size: 'm',
+    col: { skin: '#e45bc9', belly: '#f4a6e2', cup: G.chromeL, cushion: '#d6ff9a', paper: '#f7ffe8', clip: G.chromeL, wob: '#7a8fd0' },
+    real: { skin: '#ff3fa8', belly: '#ffd0ec', cup: '#7cc6ff', cushion: '#7dff3f', paper: '#fff8ec', clip: '#ffc94d', wob: '#3a2f8a' },
+    bounds: { w: 180, h: 186, head: { x: 0, y: -172 }, body: { x: 0, y: -90 }, feet: { x: 0, y: 0 } },
+    dieBox: [-66, -176, 66, 0],
+    sweep: [-30, -140],
+    film: 0.6,
     parts: {
-      legF: { box: [-2, -50, 40, 4], pivot: [14, -44], draw(S) { S.line([[14, -44], [16, -12]], { w: 5, color: MI.hatch, taper: 0.05, pressure: 'flat', wobble: 0.2 }); S.cel([[2, -12], [28, -14], [34, -4], [26, 2], [4, 2]], MI.magD, { depth: 3, line: 2.8, hi: false, rim: null }); } },
-      legN: { box: [-40, -50, 4, 4], pivot: [-10, -44], draw(S) { S.line([[-10, -44], [-14, -12]], { w: 5.6, color: MI.hatch, taper: 0.05, pressure: 'flat', wobble: 0.2 }); S.cel([[-34, -12], [-4, -14], [2, -4], [-4, 2], [-32, 2], [-38, -6]], MI.mag, { depth: 4, line: 3, hi: true, hiW: 1.4, rim: S.c.rim }); } },
-      list: {
-        box: [-6, -86, 60, 6], pivot: [22, -78],
-        draw(S) {
-          S.cel({ poly: [[10, -78], [40, -80], [44, -12], [38, 0], [30, -6], [20, 0], [12, -10]] }, MI.skin, { depth: 5, line: 3, hi: true, hiW: 1.2, rim: S.c.rim, tension: 0.2 });
-          for (let i = 0; i < 7; i++) tk.inkPath(S.g, [[14, -70 + i * 9], [14 + 18 * (0.5 + 0.5 * tk.vary('lst', 'w' + i)), -70 + i * 9 + 1]], { w: 1.6, color: MI.hatch, alpha: 0.8, taper: 0.1, pressure: 'flat', wobble: 0.3, seed: i });
-          [[34, -66], [34, -48], [34, -30]].forEach((c, i) => { tk.inkPath(S.g, [[c[0] - 3, c[1] - 3], [c[0] + 3, c[1] + 3]], { w: 2.2, color: MI.mag, taper: 0.2 }); tk.inkPath(S.g, [[c[0] + 3, c[1] - 3], [c[0] - 3, c[1] + 3]], { w: 2.2, color: MI.mag, taper: 0.2 }); });
-        },
+      legs: {
+        box: [-30, -50, 30, 2], pivot: [0, -40],
+        draw(S) { [-1, 1].forEach((sd) => { S.limb([sd * 11, -44], [sd * 13, -14], 12, S.c.skin); S.cel(E(sd * 15, -9, 12, 7, 14), S.c.skin, { hi: true }); }); },
       },
       body: {
-        box: [-38, -112, 44, -36], pivot: [2, -76],
+        box: [-34, -92, 34, -30], pivot: [0, -40],
         draw(S) {
-          S.cel(E(2, -76, 28, 32, 14), MI.skin, { depth: 14, hi: true, hiW: 2, rim: S.c.rim, halftone: false, decor(g) { penHatch(g, 6, -100, 36, -50, 6, 0.7); ashFlecks(g, -26, -104, 56, 52, 14, 'mibody', { alpha: 0.8 }); g.fillStyle = MI.mag; g.globalAlpha = 0.9; g.beginPath(); g.moveTo(-26, -66); g.lineTo(30, -70); g.lineTo(30, -60); g.lineTo(-26, -56); g.fill(); g.globalAlpha = 1; } });
-          S.cel(E(-8, -84, 5.6, 5.6, 8), MI.gold, { depth: 1.5, line: 2.4, hi: false, rim: null });
+          const b = E(0, -62, 26, 28, 20);
+          fringe(S, b, 1.8);
+          S.cel(b, S.c.skin, { hi: true });
+          S.cel(E(0, -56, 15, 16, 16), S.c.belly, { shadow: false, line: S.L * 0.6 });
         },
       },
-      armF: { box: [-4, -110, 46, -60], pivot: [20, -96], draw(S) { S.line([[20, -96], [34, -80], [30, -68]], { w: 5, color: MI.hatch, taper: 0.05, pressure: 'flat', wobble: 0.2 }); S.cel(E(30, -66, 6.4, 6, 10), MI.skin, { depth: 2, line: 2.6, hi: false, rim: null }); } },
-      armN: { box: [-56, -110, 2, -60], pivot: [-16, -94], draw(S) { S.line([[-16, -94], [-32, -84], [-42, -88]], { w: 6, color: MI.hatch, taper: 0.05, pressure: 'flat', wobble: 0.2 }); } },
-      hand: { box: [-16, -14, 16, 16], pivot: [0, 0], draw(S) { S.cel(E(0, 0, 8, 7.4, 10), MI.skin, { depth: 2, line: 2.6, hi: false, rim: S.c.rim }); [[-5, -3], [0, -6], [5, -3]].forEach((f) => S.line([[f[0], f[1]], [f[0] - 2, f[1] - 4]], { w: 2.4, color: MI.skin, taper: 0.3 })); } },
-      quill: {
-        // a bent tuning fork (the off-key imp's pen): a stem, a yoke and two prongs, one bent sour; the nib stays 34 px below the grip
-        box: [-30, -128, 30, 24], pivot: [0, 0],
-        draw(S) {
-          S.cel(cap(0, 24, 0, -46, 6.4, 5.6), '#cfcdd8', { depth: 2, line: 2.8, hi: true, hiW: 1.2, rim: '#ffffff', tension: 0.5 });
-          S.cel([[-14, -112, 1], [-16, -84], [-12, -58], [-6, -46], [0, -42], [6, -46], [13, -60], [18, -88], [16, -108, 1], [10, -108, 1], [12, -86], [8, -62], [0, -52], [-8, -62], [-9, -86], [-8, -112, 1]], MI.quill, {
-            depth: 5, line: 3, tension: 0.6, hi: true, hiW: 1.6, rim: '#cfcdd8', shadow: '#2e2b3a',
-            decor(g) { tk.inkPath(g, [[-12, -108], [-12, -62]], { w: 1.4, color: '#e4e1ee', alpha: 0.7, taper: 0.3 }); },
-          });
-          S.cel(cap(0, 14, 0, 4, 9, 9), MI.gold, { depth: 1.5, line: 2.4, hi: false, rim: null, tension: 0.5 });
-          S.cel([[-4, 22, 1], [0, 34, 1], [4, 22, 1]], MI.gold, { depth: 1, line: 2, tension: 0, hi: false, rim: null, shadow: false });
-        },
-      },
-      hornF: { box: [10, -184, 48, -140], pivot: [22, -150], draw(S) { S.cel([[14, -150, 1], [24, -172], [40, -182, 1], [36, -160], [30, -146, 1]], MI.magD, { depth: 4, line: 3, tension: 0.4, hi: false, rim: null }); } },
-      hornN: { box: [-50, -184, -10, -140], pivot: [-24, -152], draw(S) { S.cel([[-40, -148, 1], [-42, -170], [-36, -182, 1], [-22, -162], [-14, -148, 1]], MI.mag, { depth: 5, line: 3, tension: 0.4, hi: true, hiW: 1.4, rim: S.c.rim }); } },
       head: {
-        box: [-62, -176, 52, -88], pivot: [-6, -100],
+        box: [-66, -172, 66, -74], pivot: [0, -84],
         draw(S) {
-          S.cel([[-46, -140, 1], [-66, -146], [-72, -134, 1], [-56, -126]], MI.skin, { depth: 3, line: 3, tension: 0.4, hi: false, rim: null });
-          S.cel([[30, -138, 1], [50, -146], [54, -132, 1], [40, -124]], MI.skin, { depth: 3, line: 3, tension: 0.4, hi: false, rim: null });
-          S.cel(E(-6, -128, 46, 42, 18), MI.skin, { depth: 16, hi: true, hiW: 2.8, rim: S.c.rim, decor(g) { penHatch(g, 6, -166, 46, -90, 6, 0.55); ashFlecks(g, -50, -168, 100, 80, 26, 'mihead', { alpha: 0.85 }); } });
-          // a shock of ink spikes for hair
-          [[-26, -168, -34, -184], [-6, -172, -4, -190], [14, -168, 24, -184]].forEach((h, i) => S.line([[h[0], h[1]], [(h[0] + h[2]) / 2 + 3, (h[1] + h[3]) / 2], [h[2], h[3]]], { w: 4, color: MI.hatch, taper: 0.5, wobble: 0.2, seed: i }));
-          tk.blush(S.g, -38, -110, 13, { color: MI.magL, alpha: 0.55, hatch: true });
-          tk.blush(S.g, 26, -110, 12, { color: MI.magL, alpha: 0.5, hatch: true });
-          // brows and a grin full of teeth
-          tk.brow(S.g, -26, -150, 22, { side: -1, tilt: 0.55, thick: 3.4, seed: 2 });
-          tk.brow(S.g, 12, -150, 20, { side: 1, tilt: 0.55, thick: 3.2, seed: 5 });
-          tk.mouth(S.g, -10, -104, 40, 'grin', { lineW: 2.6, inner: '#6a0a3a', tongue: MI.magL });
+          const y = GRM.hy, h = E(0, y, 42, 38, 28);
+          // the headband over the top, the cups with their lime cushions
+          RJ.ink(S.g, tk.arcPts(0, y + 2, 48, 48, PI * 1.08, PI * 1.92, 10), { w: S.L * 3.4, color: S.lc, taper: 0, wobble: 0 });
+          RJ.ink(S.g, tk.arcPts(0, y + 2, 48, 48, PI * 1.08, PI * 1.92, 10), { w: S.L * 2, color: S.c.cup, taper: 0, wobble: 0 });
+          fringe(S, h, 2);
+          S.cel(h, S.c.skin, { hi: true, hiW: 3 });
+          [-1, 1].forEach((sd) => {
+            S.cel(E(sd * 46, y + 2, 13, 19, 18), S.c.cup, { hi: '#ffffff' });
+            S.cel(E(sd * 40, y + 2, 6, 14, 14), S.c.cushion, { shadow: false, line: S.L * 0.6 });
+          });
         },
       },
-    },
-    chains: {
-      tail: {
-        spine: [[26, -60], [52, -68], [64, -94], [52, -120]], cuts: [0.5], reach: 34, overlap: 4,
+      board: {
+        box: [-30, -96, 30, -34], pivot: [0, -64],
         draw(S) {
-          S.rib([[26, -60], [52, -68], [64, -94], [52, -118]], MI.hatch, { wMax: 6, w0: 6, w1: 4, tipPow: 1, profile: () => 1, shadow: false, rim: false, line: 0, gloss: false, strands: 0 });
-          S.cel([[52, -116, 1], [40, -130, 1], [52, -142, 1], [60, -128, 1]], MI.mag, { depth: 3, line: 2.8, tension: 0, hi: false, rim: S.c.rim });
+          S.cel(RR(-24, -88, 48, 50, 5), S.c.paper, { hi: false });
+          [-74, -64, -54, -46].forEach((y, i) => { const pts = []; for (let k = 0; k <= 10; k++) pts.push([-16 + k * 3.2, y + sin(k * 1.3 + i) * 2.2]); RJ.ink(S.g, pts, { w: 1.3, color: S.c.wob, taper: 0.2, wobble: 0 }); });
+          S.cel(RR(-10, -94, 20, 10, 3), S.c.clip, { hi: true });
+          [-1, 1].forEach((sd) => S.blob([{ e: [sd * 25, -62, 7, 8] }], S.c.skin));
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
-      const hopP = (t / 0.9) % 1, hop = Math.abs(sin(PI * hopP)) * 8 * m * (1 - tele) * (1 - guard);
-      const hot = clamp(tele + buff + strike, 0, 1);
-      const dx = -strike * 36 + hurt * 16 + 3 * tele + wind * 6, dy = -hop + 3 * guard + (hurt ? -4 * hurt : 0);
-      const rot = 0.03 * sin(t * 3.4) * m + 0.05 * tele + 0.16 * hurt - 0.1 * strike;
-      // the quill: it doodles at idle, is hoisted with a fat ink bead on the wind-up, and stabs on the strike
-      let qx = -46 + 7 * sin(t * 5.2) * m, qy = -90 + 6 * sin(t * 6.1 + 1) * m, QR = 0.45 + 0.25 * sin(t * 5.2) * m;
-      if (atk) { const k = sm(p / 0.3); qx += 12 * k - 48 * strike; qy += -34 * k + 38 * strike; QR = 0.45 + 1.6 * k - 1.1 * strike; }
-      else if (E0.pose === 'telegraph') { qx += 20 * tele + 2 * E0.shake; qy += -46 * tele; QR = 0.45 + 1.7 * tele; }
-      else if (E0.pose === 'buff') { qx += -20 * buff * cos(E0.buffP * TAU * 2); qy += -14 * buff * sin(E0.buffP * TAU * 2); QR += 0.5 * sin(E0.buffP * TAU * 2); }
-      else if (E0.pose === 'block') { qx += 34 * guard; qy += 10 * guard; QR += 0.5 * guard; }
-      else if (E0.pose === 'hurt') { qx += 16 * hurt; QR += 0.6 * hurt; }
-      // the writing tip is 34 px below the grip along the quill
-      const nibW = [qx - sin(QR) * 34 * 1.25, qy + cos(QR) * 34 * 1.25];
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      // the glitch: every so often the whole gremlin slips a pixel or three sideways for a moment (always on the wind-up)
+      const gph = fr(t / 1.1 + hv('grm', 'g')), glitching = !st.won && (gph < 0.12 || tele > 0.3 || (atk && p > 0.3 && p < 0.6));
+      const slip = glitching ? (Math.floor(t * 30) % 2 ? 3 : -2) : 0;
+      const hop = Math.abs(sin(t * 3.2)) * 4 * m;
+      const thrust = atk ? E0.strike : 0, lift = clamp((atk ? E0.wind : 0) + tele + buff * 0.8, 0, 1);
+      const dx = -thrust * 22 + hurt * 18 + slip + E0.shake;
+      const dy = -hop + 3 * guard;
       ctx.save();
-      xform(ctx, 0, -50, dx, dy, rot, 1 - 0.05 * die, 1 - 0.05 * die);
-      putChain(ctx, st, 'tail', [0.2 * sin(t * 3.2) * m + 0.2 * tele - 0.3 * hurt, 0.3 * sin(t * 3.2 - 1) * m]);
-      put(ctx, st, 'legF', { r: 0.2 * sin(TAU * t / 0.9) * m });
-      put(ctx, st, 'armF', { r: 0.1 * sin(t * 3) * m - 0.2 * guard });
-      put(ctx, st, 'body', { sy: 1 + 0.02 * sin(TAU * t / 0.9) * m, sx: 1 - 0.015 * sin(TAU * t / 0.9) * m });
-      put(ctx, st, 'legN', { r: -0.2 * sin(TAU * t / 0.9) * m });
-      put(ctx, st, 'list', { r: 0.1 * sin(t * 2.7) * m + 0.2 * hurt, sx: 1 + 0.9 * guard, sy: 1 + 0.5 * guard, x: -14 * guard, y: -10 * guard });
-      put(ctx, st, 'armN', { r: (E0.pose === 'telegraph' ? -0.7 * tele : 0) + (atk ? -0.5 * sm(p / 0.3) + 0.9 * strike : 0) + 0.06 * sin(t * 5) * m });
-      put(ctx, st, 'quill', { x: qx, y: qy, r: QR, sx: 1.25, sy: 1.25 });
-      put(ctx, st, 'hand', { x: qx + 2, y: qy + 20, r: 0 });
-      put(ctx, st, 'hornF', { r: 0.1 * sin(t * 3.3) * m + 0.2 * hot });
-      put(ctx, st, 'hornN', { r: -0.1 * sin(t * 3.3 + 1) * m - 0.2 * hot });
+      xform(ctx, 0, -40, dx, dy, 0.12 * hurt - 0.08 * thrust, 1, 1);
+      put(ctx, st, 'legs', { sy: 1 - 0.05 * hop / 4 });
+      put(ctx, st, 'body', {});
       put(ctx, st, 'head', {
-        r: 0.03 * sin(t * 2.2) * m - 0.06 * strike + 0.12 * hurt + 0.05 * tele, y: 2 * tele,
+        r: 0.05 * sin(t * 2.1) * m + 0.12 * hurt - 0.06 * thrust, y: -lift * 3,
         kids(c) {
-          const ob = blink(t, 'imp', 3.3) * (1 - 0.5 * hurt);
-          const lk = [-0.6 + 0.4 * sin(t * 0.8), 0.1 * m];
-          eyeLive(c, -26, -130, 10.5, 12.5, { open: ob, iris: [MI.magD, MI.magL], sclera: '#ffffff', pupil: 'round', glow: MI.mag, glowK: 0.3 + 0.5 * hot, glowR: 2.2, lw: 2.8, look: lk, rot: 0.05, lidTop: 0.16 + 0.24 * hot, pupilColor: '#3a0a2a' });
-          eyeLive(c, 12, -130, 9.6, 11.6, { open: ob, iris: [MI.magD, MI.magL], sclera: '#ffffff', pupil: 'round', glow: MI.mag, glowK: 0.3 + 0.5 * hot, glowR: 2.2, lw: 2.8, look: lk, rot: -0.05, lidTop: 0.16 + 0.24 * hot, pupilColor: '#3a0a2a' });
+          face(c, st, 0, GRM.hy - 2, { kind: 'round', w: 17, gap: 28, my: 18, sw: 14, iris: ['#3d7d2a', '#b6ff4f'], look: [-0.4 - 0.4 * thrust, 0.1] });
+          crack(c, 18, GRM.hy - 30, 30, 'gremlin', hurt * 1.4);
+          polite(c, st, -26, GRM.hy - 26, 5);
         },
       });
-      // the magenta ink bead at the nib and the scribble it leaves in the air
-      const bead = 3 + 6 * tele + 3 * wind;
-      tk.glow(ctx, nibW[0], nibW[1], 14 + 14 * hot, MI.mag, 0.4 + 0.4 * hot);
-      ctx.beginPath(); ctx.arc(nibW[0], nibW[1] + 2, bead, 0, TAU); ctx.fillStyle = MI.mag; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = MI.hatch; ctx.stroke();
-      if (!die) {
-        const trail = [];
-        for (let k = 0; k < 9; k++) { const tt = t - k * 0.05; trail.push([nibW[0] + (sin(tt * 11) * 8 + k * 3) * m - (k ? 0 : 0), nibW[1] + cos(tt * 13) * 6 * m + k * (atk ? 2 : 0)]); }
-        for (let k = 0; k < trail.length - 1; k++) { const f = 1 - k / trail.length; ctx.save(); ctx.globalAlpha = cA(f * f * (0.5 + 0.4 * hot)); tk.inkPath(ctx, [trail[k], [(trail[k][0] + trail[k + 1][0]) / 2, (trail[k][1] + trail[k + 1][1]) / 2 + 2], trail[k + 1]], { w: 3.4 * f + 0.8, color: MI.mag, taper: 0.3, pressure: 'flat', wobble: 0.2 }); ctx.restore(); }
-      }
+      // the clipboard: held up high to summon, thrust at the heroes, up in front of the face on a guard
+      put(ctx, st, 'board', { y: -34 * lift - 40 * guard, x: -10 * thrust, r: -0.2 * thrust + 0.1 * lift, sx: 1 + 0.15 * guard, sy: 1 + 0.15 * guard });
       ctx.restore();
-      // a doodle sketching itself in the air: a small imp outline scribbled in on a buff (the friend it calls)
-      if (buff > 0.03) {
-        const u = E0.buffP;
-        ctx.save(); ctx.translate(-118 + dx, -110); ctx.globalAlpha = cA(buff * 1.4);
-        tk.inkPath(ctx, E(0, 0, 18 * (0.5 + 0.5 * u), 16 * (0.5 + 0.5 * u), 14), { closed: true, w: 3, color: MI.mag, align: 0, wobble: 0.3 });
-        tk.inkPath(ctx, [[-14 * u, -18 * u], [-8 * u, -30 * u], [-2 * u, -18 * u]], { w: 2.6, color: MI.mag, taper: 0.3 });
-        tk.inkPath(ctx, [[14 * u, -18 * u], [8 * u, -30 * u], [2 * u, -18 * u]], { w: 2.6, color: MI.mag, taper: 0.3 });
-        tk.sparkle(ctx, 22, -22, 6, { color: '#ffffff' });
-        ctx.restore();
+      // glitch blocks fizzing off its edges (more while glitching), a burst at the heroes on the thrust
+      const nb = glitching ? 7 : 3;
+      for (let i = 0; i < nb; i++) {
+        const u = fr(t * 0.9 + hv('grmb', 'p' + i)), sd = i % 2 ? 1 : -1, x = dx + sd * (40 + 30 * u) + (hv('grmb', 'x' + i) - 0.5) * 20, y = -150 + 110 * hv('grmb', 'y' + i) - 30 * u;
+        const a = sin(PI * u);
+        if (a < 0.1 || st.won) continue;
+        ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = ['#4fe3ff', '#b6ff4f', '#e45bc9'][i % 3]; ctx.fillRect(Math.round(x), Math.round(y), 6, 6); ctx.restore();
       }
-      if (atk && p > 0.42 && p < 0.85) {
-        const u = (p - 0.42) / 0.43;
-        ctx.save(); ctx.globalAlpha = 1 - u;
-        for (let i = 0; i < 3; i++) { const pts = []; for (let k = 0; k < 9; k++) pts.push([-96 + dx - k * 9 - i * 8, -98 + i * 16 + (k % 2 ? 9 : -9) * (1 - u)]); tk.inkPath(ctx, pts, { w: 3, color: i === 1 ? '#ffffff' : MI.mag, taper: 0.2, pressure: 'flat', wobble: 0.1 }); }
-        ctx.restore();
+      if (atk && p > 0.4 && p < 0.9) {
+        const u = (p - 0.4) / 0.5;
+        for (let i = 0; i < 9; i++) { const x = dx - 40 - 140 * u * (0.5 + hv('grma', 'd' + i)), y = -100 + (hv('grma', 'y' + i) - 0.5) * 80; ctx.save(); ctx.globalAlpha = 1 - u; ctx.fillStyle = ['#4fe3ff', '#b6ff4f', '#e45bc9'][i % 3]; ctx.fillRect(Math.round(x), Math.round(y), 7, 7); ctx.restore(); }
       }
-      if (die > 0) {
-        // the strike-through: two fat pen strokes cross it out before it goes
-        const u = clamp(die * 1.6, 0, 1);
-        ctx.save(); ctx.globalAlpha = cA(1 - clamp((die - 0.7) / 0.3, 0, 1));
-        tk.inkPath(ctx, [[-60 + dx, -150], [60 + dx, -20 - 130 * (1 - u)]], { w: 9, color: MI.mag, taper: 0.1, pressure: 'flat', wobble: 0.15 });
-        if (u > 0.5) tk.inkPath(ctx, [[60 + dx, -150], [-60 + dx, -20 - 130 * (1 - clamp((u - 0.5) * 2, 0, 1))]], { w: 9, color: MI.mag, taper: 0.1, pressure: 'flat', wobble: 0.15 });
-        ctx.restore();
-      }
+      if (buff > 0.05) foe.sparkles(ctx, 0, -120, [[-50, -30, 6, 0], [50, -40, 5, 0.4]], 3, E0.buffP * 2);
     },
   });
 
+  // ===============================================================================================================
+  // RIVALS (E3b)
+  // ===============================================================================================================
   // ---------------------------------------------------------------------------------------------------------------
-  // CENSOR GOLEM (elite, l): built by the Blank to approve nothing. An iron filing-cabinet of a body with brass handles and a black censor bar across
-  // the drawers, a visor-slit lamp for a head crowned with a row of little rubber stamps, brass epaulettes, wax seals swinging at the hip, one arm that
-  // is a rubber stamp the size of a door (DENIED, back to front) and one that is an ink pad. Steam vents, a scanning red eye, papers spilling out.
-  // Accent: the red scanner light and the red stamp face.
+  // BIG MUTE BUTTON (censor_golem, elite, l). Echowake rig: CENSOR GOLEM (keeps the stamp arm and its raise-then-press timing; the cabinet became a
+  // round button). A giant blush push button on a chrome rim with stubby legs: its face is a big crossed-out speaker icon with two little eyes
+  // above it and the Gloss smile under it; one arm is a chrome piston ending in a padded plunger that rises on the quiet turn and presses down on
+  // the heavy one; a soft click light on the rim. Accent: the red slash across the speaker.
   // ---------------------------------------------------------------------------------------------------------------
-  const CG = { iron: '#4d5273', ironL: '#6d739c', ironD: '#33375a', brass: '#e2ae4c', brassD: '#a06f20', black: '#46425a', red: '#ff3a4a', redD: '#9a1226', wood: '#9a6a34', woodD: '#5a3a1a', paper: '#fff8f0' };
-  function rivet(S, x, y, r) { S.cel(E(x, y, r || 3, r || 3, 8), CG.brass, { depth: 1, line: 1.6, hi: false, rim: null, shadow: false }); }
+  const MUT = { capY: -150 };
   define('censor_golem', {
-    size: 'l', lw: 3.5,
-    col: { rim: '#ff9aa4', shT: 0.42 },
-    bounds: { w: 260, h: 275, head: { x: -6, y: -256 }, body: { x: 0, y: -130 }, feet: { x: 0, y: 0 } },
-    die: { box: [-170, -276, 130, 4], nx: 12, ny: 15, from: 'top', order: 0.5, shape: 'paper', kinds: ['felt', 'shard', 'cotton', 'ember'], cols: ['#f2f0f6', '#4d5273', '#9d99b2', '#ff3a4a'], wind: [-10, -6], size: 12, thin: 0.25, life: 0.6 },
+    size: 'l',
+    col: { cap: G.blush, rim: G.chromeL, ring: '#e9e3f6', leg: G.chromeL, foot: '#d9d4ea', icon: '#7d81a0', pad: '#e3dcf3', piston: G.chromeL, mitt: G.opal },
+    real: { cap: '#ff4f8e', rim: '#7cc6ff', ring: '#ffd84d', leg: '#5a8aff', foot: '#3fcf6a', icon: '#2d2747', pad: '#ffd84d', piston: '#ffb83d', mitt: '#ffe1c8' },
+    bounds: { w: 236, h: 236, head: { x: 0, y: -226 }, body: { x: 0, y: -126 }, feet: { x: 0, y: 0 }, right: 120 },
+    dieBox: [-110, -236, 110, 0],
+    sweep: [-50, -170],
+    hop: 12,
     parts: {
-      legF: { box: [-2, -76, 88, 4], pivot: [36, -70], draw(S) { S.cel({ poly: [[8, -72], [64, -72], [66, -20], [6, -20]] }, CG.ironD, { depth: 8, hi: false, rim: null, halftone: { d: 5, alpha: 0.3 } }); S.cel({ poly: [[-2, -22], [76, -22], [82, -6], [76, 0], [-2, 0]] }, CG.brassD, { depth: 4, hi: false, rim: null }); rivet(S, 20, -52); rivet(S, 52, -52); } },
-      legN: { box: [-90, -76, 6, 4], pivot: [-34, -70], draw(S) { S.cel({ poly: [[-64, -72], [-6, -72], [-4, -20], [-62, -20]] }, CG.iron, { depth: 9, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } }); S.cel({ poly: [[-84, -22], [0, -22], [4, -6], [-2, 0], [-82, 0], [-88, -8]] }, CG.brass, { depth: 4, hi: true, hiW: 1.4, rim: '#fff0b0' }); rivet(S, -50, -52); rivet(S, -20, -52); } },
-      armS: {
-        box: [-132, -212, -62, -76], pivot: [-88, -188],
+      legs: {
+        box: [-66, -70, 66, 2], pivot: [0, -60],
+        draw(S) { [-1, 1].forEach((sd) => { S.limb([sd * 40, -64], [sd * 44, -16], 22, S.c.leg); S.cel(RR(sd * 44 - 20, -18, 40, 17, 8), S.c.foot, { hi: true }); }); },
+      },
+      base: {
+        box: [-100, -106, 100, -40], pivot: [0, -60],
         draw(S) {
-          S.cel(cap(-90, -190, -96, -130, 32, 28), CG.iron, { depth: 8, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel(cap(-96, -130, -100, -92, 30, 26), CG.ironL, { depth: 7, hi: true, hiW: 2, rim: S.c.rim });
-          rivet(S, -92, -160, 3.4); rivet(S, -98, -112, 3.2);
-          S.cel({ poly: [[-116, -140], [-82, -142], [-82, -128], [-116, -126]] }, CG.brass, { depth: 3, line: 2.8, hi: true, hiW: 1.2, rim: '#fff0b0' });
+          const side = [[-96, -88, 1]].concat(tk.arcPts(0, -60, 96, 20, PI, 0, 14).reverse()).concat([[96, -88, 1]]);
+          S.chrome(side, { horizon: 0.45 });
+          S.cel(E(0, -88, 96, 16, 30), S.c.ring, { hi: '#ffffff' });
+          S.ell(0, -62, 7, 5, S.real ? '#ff2a4a' : G.accent, { shadow: false, line: S.L * 0.7 });
         },
       },
-      armF: {
-        box: [30, -216, 150, -60], pivot: [88, -188],
+      cap: {
+        box: [-92, -230, 92, -80], pivot: [0, -90],
         draw(S) {
-          S.cel(cap(88, -188, 104, -140, 30, 26), CG.ironD, { depth: 7, hi: false, rim: null, halftone: { d: 5, alpha: 0.3 } });
-          // the felt pad: a quilted tray of grey felt for a fist
-          S.cel({ poly: [[84, -140], [136, -138], [140, -96], [88, -92]] }, '#6e6a7e', { depth: 6, line: 3.4, hi: false, rim: S.c.rim, shadow: '#46425a', decor(g) { g.fillStyle = '#9d99b2'; g.beginPath(); g.moveTo(90, -134); g.lineTo(130, -132); g.lineTo(132, -108); g.lineTo(92, -106); g.fill(); quiltDiamonds(g, 90, -134, 42, 28, 9, '#46425a', 0.7); g.fillStyle = 'rgba(242,240,246,0.45)'; g.fillRect(96, -128, 24, 4); } });
-          rivet(S, 90, -136); rivet(S, 134, -134);
-          S.ell(100, -88, 5, 9, '#46425a', { line: 0, depth: 1, hi: false, rim: null, shadow: false });
+          const cap = sym([[0, -226], [-50, -220], [-78, -192], [-86, -150], [-84, -106], [-74, -90], [0, -86]]);
+          S.cel(cap, S.c.cap, { hi: '#ffffff', hiW: 4 });
+          // the crossed-out speaker icon
+          const ic = S.c.icon, y = MUT.capY + 6;
+          S.cel(RR(-30, y - 10, 14, 20, 3), ic, { shadow: false, line: S.L * 0.7 });
+          S.cel([[-17, y - 10], [2, y - 26], [2, y + 26], [-17, y + 10]], ic, { shadow: false, tension: 0, line: S.L * 0.7 });
+          S.g.save(); S.g.strokeStyle = ic; S.g.lineWidth = 4; S.g.lineCap = 'round';
+          [12, 22].forEach((r) => { S.g.beginPath(); S.g.arc(4, y, r, -0.7, 0.7); S.g.stroke(); });
+          S.g.restore();
+          RJ.ink(S.g, [[-38, y + 30], [38, y - 30]], { w: 9, color: S.lc, taper: 0, wobble: 0 });
+          RJ.ink(S.g, [[-38, y + 30], [38, y - 30]], { w: 5.4, color: S.real ? '#ff2a4a' : G.accent, taper: 0, wobble: 0 });
         },
       },
-      torso: {
-        box: [-108, -216, 108, -60], pivot: [0, -130],
-        draw(S) {
-          S.cel({ poly: [[-92, -204], [86, -208], [98, -72], [-82, -68]] }, CG.iron, {
-            depth: 22, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 },
-            decor(g) {
-              // three drawers with brass pulls and label cards, the middle one under the censor bar
-              [[-198, 0], [-160, 1], [-122, 2]].forEach((dr, i) => {
-                const y = dr[0], sk = dr[1];
-                g.fillStyle = i === 1 ? '#3d4262' : '#575c82'; g.fillRect(-84 + sk * 2, y + 3, 172, 32);
-                g.save(); g.beginPath(); g.rect(-84 + sk * 2, y + 3, 172, 32); g.clip(); quiltDiamonds(g, -84 + sk * 2, y + 3, 172, 32, 14, '#9aa0c8', 0.5); g.restore();
-                tk.inkPath(g, [[-84 + sk * 2, y + 3], [88 + sk * 2, y + 3], [88 + sk * 2, y + 35], [-84 + sk * 2, y + 35], [-84 + sk * 2, y + 3]], { w: 2.4, color: pal.ink, taper: 0.02, pressure: 'flat', wobble: 0.02 });
-                g.fillStyle = CG.brass; g.fillRect(-14 + sk * 2, y + 22, 28, 6); tk.inkPath(g, [[-14 + sk * 2, y + 25], [14 + sk * 2, y + 25]], { w: 1.2, color: CG.brassD, taper: 0.1, pressure: 'flat' });
-                g.fillStyle = CG.paper; [[-58, 20, 6], [-48, 15, 7], [-38, 20, 6]].forEach((c) => { g.beginPath(); g.arc(c[0] + sk * 2, y + c[1], c[2], 0, TAU); g.fill(); });
-                g.strokeStyle = 'rgba(46,43,58,0.6)'; g.lineWidth = 1.2; g.beginPath(); g.arc(-48 + sk * 2, y + 15, 7, 0.4, 2.6); g.stroke();
-                g.fillStyle = CG.red; g.beginPath(); g.arc(-18 + sk * 2, y + 14, 3.6, 0, TAU); g.fill();
-              });
-            },
-          });
-          rivet(S, -80, -196); rivet(S, 80, -200); rivet(S, -74, -78); rivet(S, 90, -80);
-          // the censor bar
-          S.cel({ poly: [[-96, -166], [94, -170], [94, -142], [-96, -138]] }, CG.black, { depth: 3, line: 3.2, hi: false, rim: '#ff9aa4', rimW: 1.4, shadow: '#2e2b3a', decor(g) { gagPoly(g, [[-96, -166], [94, -170], [94, -142], [-96, -138]]); } });
-          S.cel({ poly: [[-96, -70], [-4, -70], [-4, -58], [-96, -58]] }, CG.brassD, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-        },
+      mitt: {
+        box: [60, -150, 116, -96], pivot: [74, -128],
+        draw(S) { S.limb([74, -128], [98, -114], 14, S.c.piston); S.blob([{ e: [102, -110, 11, 10] }], S.c.mitt); },
       },
-      epaulet: {
-        box: [-120, -224, 120, -170], pivot: [0, -190],
+      plunger: {
+        box: [-150, -232, -52, -126], pivot: [-70, -150],
         draw(S) {
-          [[-98, -192], [98, -196]].forEach((e, i) => {
-            S.cel([[e[0] - 24, e[1] + 4], [e[0] - 20, e[1] - 20], [e[0], e[1] - 28], [e[0] + 20, e[1] - 20], [e[0] + 24, e[1] + 4]], CG.brass, { depth: 6, line: 3.2, tension: 0.7, hi: true, hiW: 2, rim: '#fff0b0' });
-            for (let k = 0; k < 4; k++) tk.inkPath(S.g, [[e[0] - 18 + k * 12, e[1] + 2], [e[0] - 16 + k * 12, e[1] - 18]], { w: 1.6, color: CG.brassD, alpha: 0.9, taper: 0.3 });
-            rivet(S, e[0], e[1] - 12, 4);
-          });
-        },
-      },
-      seal: {
-        box: [-16, -6, 16, 62], pivot: [0, 0],
-        draw(S) { S.line([[0, 0], [0, 16]], { w: 2, color: pal.ink, taper: 0.05, pressure: 'flat', wobble: 0 }); S.cel(E(0, 26, 11, 11, 12), CG.red, { depth: 4, line: 2.6, hi: true, hiW: 1.4, rim: '#ffb0a0' }); S.line([[-6, 26], [6, 26]], { w: 2.4, color: '#ffe8e0', taper: 0.05, pressure: 'flat' }); S.cel([[-6, 36, 1], [-9, 58, 1], [-1, 52, 1], [0, 38, 1]], CG.red, { depth: 1, line: 2, tension: 0, hi: false, rim: null, shadow: false }); S.cel([[6, 36, 1], [9, 58, 1], [1, 52, 1], [0, 38, 1]], CG.redD, { depth: 1, line: 2, tension: 0, hi: false, rim: null, shadow: false }); },
-      },
-      head: {
-        box: [-52, -290, 52, -196], pivot: [-2, -204],
-        draw(S) {
-          // a crown of little rubber stamps, then the square lamp of a head with its visor slit
-          [[-32, 0], [-16, 1], [0, 2], [16, 1], [32, 0]].forEach((c, i) => {
-            const h = 22 + (i === 2 ? 10 : 0);
-            S.cel({ poly: [[c[0] - 5, -246], [c[0] + 5, -246], [c[0] + 5, -246 - h + 8], [c[0] - 5, -246 - h + 8]] }, CG.wood, { depth: 2, line: 2.2, hi: false, rim: null });
-            S.cel(E(c[0], -246 - h + 6, 6.6, 6.6, 8), CG.wood, { depth: 3, line: 2.4, hi: true, hiW: 1, rim: '#e0b070' });
-            S.cel({ poly: [[c[0] - 8, -246], [c[0] + 8, -246], [c[0] + 8, -240], [c[0] - 8, -240]] }, CG.brass, { depth: 1, line: 1.8, hi: false, rim: null, shadow: false });
-          });
-          S.cel({ poly: [[-40, -242], [36, -244], [40, -208], [-44, -206]] }, CG.iron, { depth: 12, line: 3.4, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel({ poly: [[-34, -232], [30, -234], [32, -216], [-38, -214]] }, '#2e2b3a', { depth: 2, line: 2.8, hi: false, rim: null, shadow: false });
-          rivet(S, -34, -240); rivet(S, 32, -242); rivet(S, -38, -210); rivet(S, 36, -212);
-          S.cel(E(-46, -226, 5, 7, 8), CG.brass, { depth: 2, line: 2, hi: false, rim: null }); S.cel(E(44, -228, 5, 7, 8), CG.brassD, { depth: 2, line: 2, hi: false, rim: null });
-        },
-      },
-      stamp: {
-        box: [-64, -70, 64, 78], pivot: [0, 0],
-        draw(S) {
-          // the great rubber stamp: a wooden knob handle and a big base with SHH painted on its face
-          S.cel(cap(0, 4, 0, -30, 18, 14), CG.wood, { depth: 5, line: 3, hi: true, hiW: 1.6, rim: '#e0b070', tension: 0.5 });
-          S.cel(E(0, -44, 26, 22, 14), CG.wood, { depth: 8, line: 3.4, hi: true, hiW: 2, rim: '#e0b070' });
-          S.cel({ poly: [[-40, 6], [40, 6], [44, 18], [-44, 18]] }, CG.brass, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#fff0b0' });
-          S.cel({ poly: [[-46, 18], [46, 18], [48, 68], [-48, 68]] }, CG.black, {
-            depth: 6, line: 3.4, hi: false, rim: '#ff9aa4', rimW: 1.6, shadow: '#2e2b3a',
-            decor(g) {
-              g.save(); g.translate(0, 44); g.fillStyle = CG.red; g.font = '900 34px ' + tk.font.num; g.textAlign = 'center'; g.textBaseline = 'middle';
-              g.fillText('SHH', 0, 0); g.restore();
-              g.fillStyle = 'rgba(255,58,74,0.35)'; g.fillRect(-46, 62, 92, 6);
-            },
-          });
+          S.limb([-70, -150], [-96, -180], 15, S.c.piston);
+          S.limb([-96, -180], [-112, -196], 11, RJ.shade(S.c.piston, 0.06));
+          S.ell(-96, -180, 8, 8, S.c.piston, { hi: true });
+          S.cel(RR(-124, -206, 26, 10, 4), S.c.piston, { hi: true });
+          S.cel(E(-111, -216, 34, 13, 24), S.c.pad, { hi: '#ffffff', hiW: 3 });
+          S.g.save(); S.g.strokeStyle = tk.rgba(S.lc, 0.35); S.g.lineWidth = 1.2; S.g.setLineDash([3, 3]);
+          S.g.beginPath(); S.g.ellipse(-111, -216, 26, 8, 0, 0, TAU); S.g.stroke(); S.g.restore();
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.8) * m;
-      const hot = clamp(tele + buff + strike + guard * 0.6 + st.wound * 0.4, 0, 1);
-      const dx = -strike * 20 + hurt * 12 + E0.shake * 1.3 + 5 * tele, dy = 3 * tele + 4 * guard + 8 * die;
-      const rot = -0.05 * tele + 0.045 * strike + 0.08 * hurt + 0.008 * br;
-      // the stamp arm: heavy and slow, over the head on the wind-up, a smash on the strike, up in front on a block
-      let aS = 0.05 * br, aI = -0.05 * br;
-      if (atk) { if (p < 0.3) { const k = sm(p / 0.3); aS = lerp(0, 2.5, k); aI = lerp(0, 2.2, k); } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aS = lerp(2.5, -0.1, k); aI = lerp(2.2, 0, k); } else { const k = sm((p - 0.5) / 0.5); aS = lerp(-0.1, 0.05 * br, k); aI = lerp(0, 0, k); } }
-      else if (E0.pose === 'telegraph') { aS = 2.5 * tele + 0.03 * E0.shake; aI = 2.2 * tele; }
-      else if (E0.pose === 'block') { aS = 1.3 * guard; aI = 0.6 * guard; }
-      else if (E0.pose === 'buff') { aS = 0.6 * buff; aI = 0.4 * buff; }
-      else if (E0.pose === 'hurt') { aS = 0.5 * hurt; aI = 0.3 * hurt; }
-      else if (die > 0) { aS = 0.5 * die; aI = 0.3 * die; }
-      // steam whistling from the shoulder vents
-      const steamK = 0.4 + 0.6 * hot;
-      puffs(ctx, -98 + dx, -218 + dy, t, 4, 101, { col: '#f0e8ff', rise: 50, spread: 8, size: 6 + 4 * hot, life: 1.3 - 0.4 * hot, alpha: 0.5 * steamK * (1 - die), dx: -8 });
-      puffs(ctx, 98 + dx, -222 + dy, t, 4, 102, { col: '#f0e8ff', rise: 50, spread: 8, size: 6 + 4 * hot, life: 1.3 - 0.4 * hot, alpha: 0.5 * steamK * (1 - die), dx: 8 });
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const br = sin(t * 1.6) * m;
+      // the press: raised high on the wind-up (Hover Over), down on the heroes on the strike (MUTED)
+      const raise = clamp((atk ? E0.wind : 0) + tele, 0, 1), press = atk ? E0.strike : 0;
+      const armA = 0.5 * raise * (1 - press) - 1.3 * press + 0.06 * br + 0.2 * hurt + 0.25 * buff;
+      const squash = 0.08 * guard + 0.05 * press;               // pressed in like a button on the guard
+      const dx = -10 * press + hurt * 14 + E0.shake, dy = 3 * guard;
       ctx.save();
-      if (die > 0) ctx.transform(1 + 0.2 * die, 0, 0, 1 - 0.3 * die, -8 * die, 0);
-      xform(ctx, 0, -70, dx, dy, rot, 1, 1);
-      put(ctx, st, 'legF', { r: 0.015 * br });
-      put(ctx, st, 'armF', { r: aI });
-      put(ctx, st, 'torso', { sy: 1 + 0.012 * br - 0.02 * tele + 0.01 * guard, sx: 1 + 0.006 * br });
-      // the censor bar carries a red scanning light
-      {
-        const sx = -80 + 160 * (0.5 + 0.5 * sin(t * 1.3)) * (1 - 0.6 * tele);
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, sx, -155, 30 + 12 * hot, CG.red, 0.55 + 0.4 * hot); ctx.restore();
-        ctx.fillStyle = hot > 0.4 ? '#ffd0d0' : CG.red; ctx.globalAlpha = 0.9; ctx.fillRect(sx - 14, -157, 28, 4); ctx.globalAlpha = 1;
-        if (hot > 0.3) { ctx.fillStyle = CG.red; ctx.globalAlpha = 0.35 * hot; ctx.fillRect(-94, -167, 186, 26); ctx.globalAlpha = 1; }
-      }
-      put(ctx, st, 'legN', { r: -0.015 * br });
-      put(ctx, st, 'epaulet', { sy: 1 + 0.01 * br, r: 0.01 * br });
-      [[-78, -78], [70, -82]].forEach((s0, i) => put(ctx, st, 'seal', { x: s0[0], y: s0[1], r: 0.25 * sin(t * 2.2 + i * 2) * m + 0.4 * hurt * (i ? 1 : -1) + 0.2 * strike, sy: 1 }));
-      // the stamp arm: a plated arm on the shoulder and the stamp riding the fist with its face turned to the front
-      put(ctx, st, 'armS', {
-        r: aS,
-        kids(c) { put(c, st, 'stamp', { x: -104, y: -96, r: -aS * 0.7 + 0.1 * br - 0.25 * guard, sx: 1 + 0.06 * hot, sy: 1 + 0.06 * hot }); },
-      });
-      if (hot > 0.2) tk.glow(ctx, -104 - aS * 14, -60 - aS * 30, 46 + 20 * hot, CG.red, 0.35 * hot);
-      put(ctx, st, 'head', {
-        r: 0.02 * sin(t * 0.9) * m - 0.05 * tele + 0.05 * strike + 0.1 * hurt, y: 2 * tele,
+      xform(ctx, 0, -60, dx, dy, 0.1 * hurt - 0.04 * press, 1, 1);
+      put(ctx, st, 'legs', {});
+      put(ctx, st, 'base', {});
+      put(ctx, st, 'mitt', { r: 0.1 * br + 0.4 * buff - 0.2 * guard });
+      put(ctx, st, 'cap', {
+        sy: 1 - squash + 0.03 * buff + 0.01 * br, sx: 1 + squash * 0.5,
         kids(c) {
-          // the visor slit: a red eye that sweeps left and right, flares and narrows
-          const sweep = -6 + 12 * (0.5 + 0.5 * sin(t * 1.1)) * (1 - 0.7 * hot), th = 3.4 + 3.4 * hot, ob = blink(t, 'censor', 5.4);
-          tk.glow(c, sweep, -224, 30 + 16 * hot, CG.red, 0.5 + 0.4 * hot);
-          c.fillStyle = hot > 0.4 ? '#ffe0d0' : CG.red; c.fillRect(sweep - 18, -224 - th * ob / 2, 36, Math.max(0.8, th * ob));
+          face(c, st, 0, -196, { kind: 'round', w: 14, gap: 30, noMouth: true, iris: ['#6d7196', '#b9bde0'], look: [-0.5 * raise, 0.4 * press] });
+          face(c, st, 0, -196, { noEyes: true, my: 92, sw: 22 });
+          crack(c, 30, -212, 40, 'mute', hurt * 1.4);
+          polite(c, st, -44, -200, 7);
         },
       });
+      put(ctx, st, 'plunger', { r: armA });
+      // the click light blinks; a soft mute wave rolls out when it presses
+      const blinkL = fr(t * 0.8) < 0.15 ? 1 : 0.3;
+      if (!st.won) tk.glow(ctx, 0, -62, 18, G.accent, 0.4 * blinkL + 0.4 * raise);
       ctx.restore();
-      if (atk && p > 0.5 && p < 0.9) {
-        const u = (p - 0.5) / 0.4;
-        ctx.save(); ctx.globalAlpha = (1 - u) * 0.9; ctx.translate(-150 + dx, -40); ctx.scale(1, 0.35); ctx.strokeStyle = CG.red; ctx.lineWidth = 6 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, 0, 30 + 90 * u, 0, TAU); ctx.stroke(); ctx.restore();
-        sparks(ctx, -140 + dx, -30, u, 8, 103, { col: '#ff5a6a', speed: 70, size: 8, spread: 2.4, dir: -PI / 2, life: 1, alpha: 1 - u });
-      }
-      if (die > 0.15) {
-        // the hanko that ends it: a big red seal stamped on the chest
-        const u = clamp((die - 0.15) / 0.3, 0, 1);
-        ctx.save(); ctx.globalAlpha = cA(u * (1 - clamp((die - 0.75) / 0.25, 0, 1)) * 0.95); ctx.translate(0, -130); ctx.scale(2 - u, 2 - u); ctx.rotate(-0.2);
-        ctx.strokeStyle = CG.red; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 46, 0, TAU); ctx.stroke();
-        ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-30, 0); ctx.lineTo(30, 0); ctx.stroke(); ctx.restore();
-      }
+      if (press > 0.3) for (let i = 0; i < 3; i++) { const u = fr(p * 2 + i / 3); ctx.save(); ctx.globalAlpha = (1 - u) * press; ctx.strokeStyle = i % 2 ? G.lilac : G.blush; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(-150 + dx, -40, 30 + 60 * u, 8 + 16 * u, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+      if (buff > 0.05) pitchRing(ctx, 0, -140, 100, 100, 2, 18, G.lilac, buff, t * 4);
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // STORM DRAGON WHELP (elite, l): a chubby young storm dragon still growing into its thunder: slate-blue scales and a cream belly, stubby gold horns, a
-  // ruff of thundercloud puffs, little bat wings whose veins are lightning, a row of dorsal spikes that crackle and a tail ending in a lightning fin.
-  // A pocket thundercloud rides above its head. It gets more excited every time you hit it (more sparks as HP falls). Accent: cyan eyes, yellow static.
+  // APPLAUSE SIGN (storm_whelp, elite, l). Echowake rig: STORM DRAGON WHELP (keeps the charge glow that grows with each stack and the clap that spends
+  // it). A big marquee box on chrome scaffold legs with the word APPLAUSE (one of the four art words) across its cream panel in bulb-white
+  // letters, a ring of light bulbs round the frame, a little face under the word, and two noodle arms in cartoon white gloves for slow claps.
+  // The bulbs chase and brighten as it charges. Accent: the marquee red.
   // ---------------------------------------------------------------------------------------------------------------
-  const SW = { scale: '#3f5fb0', scaleL: '#6e90e6', scaleD: '#2a3f88', belly: '#fff2d2', horn: '#f8ecb8', wing: '#5a3fa8', bone: '#e8d8a0', volt: '#ffe45e', cyan: '#5ff5ff', cloud: '#dcdcf4', cloudD: '#5a5090' };
-  function wingDraw(S, far) {
-    const col = far ? '#3d2a78' : SW.wing, fingers = [[-1.25, 96], [-0.72, 104], [-0.22, 86]];
-    const tips = fingers.map((f) => [cos(f[0]) * f[1], sin(f[0]) * f[1]]);
-    S.cel([[0, 0, 1], [tips[0][0], tips[0][1], 1], [(tips[0][0] + tips[1][0]) / 2 - 8, (tips[0][1] + tips[1][1]) / 2 + 22], [tips[1][0], tips[1][1], 1], [(tips[1][0] + tips[2][0]) / 2 - 8, (tips[1][1] + tips[2][1]) / 2 + 20], [tips[2][0], tips[2][1], 1], [16, 34, 1]], col, {
-      depth: 12, tension: 0.35, hi: !far, hiW: 2, rim: far ? null : S.c.rim, halftone: { d: 5, alpha: 0.3 },
-      decor(g) { tips.forEach((tp, i) => { const zz = []; for (let k = 0; k <= 5; k++) zz.push([tp[0] * k / 5 + (k % 2 ? 5 : -5) * (k > 0 && k < 5 ? 1 : 0), tp[1] * k / 5 + (k % 2 ? -3 : 3) * (k > 0 && k < 5 ? 1 : 0)]); tk.inkPath(g, zz, { w: 2.6, color: SW.volt, alpha: far ? 0.6 : 0.95, taper: 0.2, pressure: 'flat', wobble: 0 }); }); },
-    });
-    fingers.forEach((f, i) => S.cel(cap(0, 0, cos(f[0]) * f[1], sin(f[0]) * f[1], 8, 4), SW.bone, { depth: 2, line: 2.6, hi: false, rim: null, tension: 0.5 }));
-    S.cel(E(0, 0, 9, 9, 8), SW.bone, { depth: 2, line: 2.6, hi: false, rim: null });
-  }
-  define('storm_whelp', {
-    size: 'l', lw: 3.5,
-    col: { rim: '#a8f4ff', shT: 0.42 },
-    bounds: { w: 290, h: 276, head: { x: -72, y: -250 }, body: { x: 10, y: -90 }, feet: { x: 0, y: 0 }, right: 160 },
-    die: { box: [-170, -280, 160, 6], nx: 13, ny: 15, from: 'out', order: 0.45, shape: 'diamond', kinds: ['spark', 'puff', 'spark', 'shard'], cols: ['#ffe45e', '#dcdcf4', '#5ff5ff', '#3f5fb0'], wind: [0, -12], size: 12, life: 0.6 },
-    parts: {
-      wingF: { box: [-20, -260, 130, -80], pivot: [22, -130], draw(S) { S.g.save(); S.g.translate(22, -130); wingDraw(S, true); S.g.restore(); } },
-      legFF: { box: [-56, -100, 4, 4], pivot: [-6, -90], draw(S) { S.cel(cap(-6, -90, -14, -26, 32, 26), SW.scaleD, { depth: 7, hi: false, rim: null, halftone: { d: 5, alpha: 0.32 } }); S.cel(E(-18, -14, 24, 12, 12), SW.scaleD, { depth: 4, line: 3, hi: false, rim: null }); [-30, -20, -10].forEach((x) => S.cel([[x - 3, -8, 1], [x, 4, 1], [x + 3, -8, 1]], SW.horn, { depth: 1, line: 1.8, tension: 0, hi: false, rim: null, shadow: false })); } },
-      body: {
-        box: [-70, -168, 96, -30], pivot: [12, -88],
-        draw(S) {
-          S.cel(E(12, -90, 72, 62, 20, -0.08), SW.scale, {
-            depth: 22, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 },
-            decor(g) {
-              g.fillStyle = SW.belly; g.beginPath(); g.ellipse(-10, -76, 42, 46, 0.1, 0, TAU); g.fill();
-              for (let i = 0; i < 5; i++) tk.inkPath(g, [[-50, -104 + i * 14], [-10, -98 + i * 14], [32, -104 + i * 14]], { w: 1.8, color: '#c9b078', alpha: 0.8, taper: 0.3 });
-              for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(30 + (i % 3) * 16, -136 + Math.floor(i / 3) * 14, 6, 0.1 * PI, 0.9 * PI); g.lineWidth = 1.8; g.strokeStyle = SW.scaleD; g.stroke(); }
-            },
-          });
-        },
-      },
-      haunch: {
-        box: [10, -110, 100, 4], pivot: [52, -62],
-        draw(S) {
-          S.cel(E(52, -62, 36, 42, 14, -0.2), SW.scaleL, { depth: 10, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel(E(56, -16, 32, 13, 12), SW.scale, { depth: 5, line: 3.2, hi: true, hiW: 1.6, rim: S.c.rim });
-          [44, 56, 68].forEach((x) => S.cel([[x - 3, -10, 1], [x + 1, 2, 1], [x + 4, -10, 1]], SW.horn, { depth: 1, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
-        },
-      },
-      legFN: {
-        box: [-80, -104, -6, 4], pivot: [-32, -90],
-        draw(S) {
-          S.cel(cap(-32, -90, -44, -26, 36, 28), SW.scale, { depth: 8, hi: true, hiW: 2, rim: S.c.rim, halftone: { d: 5, alpha: 0.28 } });
-          S.cel(E(-50, -14, 27, 13, 12), SW.scale, { depth: 5, line: 3.2, hi: true, hiW: 1.6, rim: S.c.rim });
-          [-64, -52, -40].forEach((x) => S.cel([[x - 3, -8, 1], [x, 5, 1], [x + 4, -8, 1]], SW.horn, { depth: 1, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
-        },
-      },
-      spikes: {
-        box: [-40, -214, 100, -110], pivot: [20, -140],
-        draw(S) {
-          [[-14, -146, -0.5, 26], [10, -152, -0.25, 32], [36, -146, 0, 34], [58, -132, 0.3, 30], [76, -114, 0.6, 24]].forEach((sp) => {
-            const x = sp[0], y = sp[1], a = sp[2] - PI / 2, h = sp[3], c = cos(a), s = sin(a), nx = -s, ny = c;
-            S.cel([[x - nx * 9, y - ny * 9, 1], [x + c * h, y + s * h, 1], [x + nx * 9, y + ny * 9, 1]], SW.volt, { depth: 4, line: 3, tension: 0, hi: false, rim: '#ffffff', shadow: '#c89a10' });
-          });
-        },
-      },
-      wingN: { box: [-20, -260, 130, -80], pivot: [6, -134], draw(S) { S.g.save(); S.g.translate(6, -134); wingDraw(S, false); S.g.restore(); } },
-      mane: {
-        box: [-100, -220, 6, -100], pivot: [-52, -150],
-        draw(S) { [[-34, -172, 22], [-16, -148, 24], [-30, -124, 20], [-58, -196, 18], [-8, -192, 15]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[2] * 0.92, i % 2 ? SW.cloud : '#c4c4e8', { depth: 6, line: 3, hi: false, rim: S.c.rim, halftone: { d: 4, alpha: 0.2, color: '#8a8ac8' } })); },
-      },
-      jaw: {
-        box: [-140, -142, -40, -100], pivot: [-58, -128],
-        draw(S) {
-          S.cel([[-58, -132], [-92, -130], [-124, -126, 1], [-122, -114], [-88, -110], [-60, -116]], SW.belly, { depth: 6, line: 3.2, tension: 0.5, hi: true, hiW: 1.4, rim: S.c.rim });
-          [-112, -96, -80].forEach((x, i) => S.cel([[x - 3, -128, 1], [x + 1, -138 - (i % 2) * 2, 1], [x + 5, -128, 1]], '#ffffff', { depth: 1, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
-        },
-      },
-      head: {
-        box: [-140, -226, -20, -96], pivot: [-52, -126],
-        draw(S) {
-          S.cel([[-60, -184, 1], [-56, -208], [-34, -226, 1], [-42, -200], [-44, -180, 1]], SW.horn, { depth: 4, line: 3, tension: 0.4, hi: true, hiW: 1.4, rim: '#ffffff' });
-          S.cel([[-84, -186, 1], [-90, -212], [-108, -224, 1], [-100, -202], [-98, -182, 1]], SW.horn, { depth: 4, line: 3, tension: 0.4, hi: true, hiW: 1.4, rim: '#ffffff' });
-          S.cel(E(-76, -152, 52, 45, 18), SW.scale, { depth: 16, hi: true, hiW: 2.8, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
-          S.cel(E(-112, -140, 26, 20, 14), SW.scaleL, { depth: 7, line: 3.2, hi: true, hiW: 1.6, rim: S.c.rim });
-          S.ell(-124, -148, 3.4, 3, '#1a2a60', { line: 1, shadow: false, rim: null });
-          S.ell(-112, -150, 3, 2.8, '#1a2a60', { line: 1, shadow: false, rim: null });
-          S.cel([[-108, -172], [-84, -178], [-56, -170], [-52, -162], [-80, -164], [-106, -166]], SW.scaleD, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.5 });
-          S.line([[-60, -128], [-80, -124]], { w: 2, color: SW.volt, taper: 0.4 });
-          [[-118, -126], [-102, -124]].forEach((f) => S.cel([[f[0] - 3, f[1], 1], [f[0] + 1, f[1] + 10, 1], [f[0] + 5, f[1], 1]], '#ffffff', { depth: 1, line: 1.8, tension: 0, hi: false, rim: null, shadow: false }));
-        },
-      },
-      cloudC: {
-        box: [-140, -290, -10, -216], pivot: [-76, -240],
-        draw(S) { [[-96, -244, 18], [-76, -252, 22], [-54, -244, 17], [-84, -232, 14], [-64, -232, 15]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[2] * 0.84, i % 2 ? '#6a60a8' : SW.cloudD, { depth: 6, line: 2.8, hi: false, rim: '#a8f4ff', rimW: 1.4, halftone: { d: 4, alpha: 0.3 } })); },
-      },
+  const APL = { x0: -112, x1: 112, y0: -252, y1: -142 };
+  const aplBulbs = (() => {
+    const out = [], ins = 7, w = APL.x1 - APL.x0 - ins * 2, h = APL.y1 - APL.y0 - ins * 2, per = 2 * (w + h), n = 30;
+    for (let i = 0; i < n; i++) {
+      let d = i / n * per, x, y;
+      if (d < w) { x = APL.x0 + ins + d; y = APL.y0 + ins; } else if ((d -= w) < h) { x = APL.x1 - ins; y = APL.y0 + ins + d; } else if ((d -= h) < w) { x = APL.x1 - ins - d; y = APL.y1 - ins; } else { d -= w; x = APL.x0 + ins; y = APL.y1 - ins - d; }
+      out.push([x, y]);
+    }
+    return out;
+  })();
+  const aplArm = (sd) => ({
+    box: [sd < 0 ? -150 : 70, -200, sd < 0 ? -70 : 150, -40], pivot: [sd * 104, -176],
+    draw(S) {
+      const pts = [[sd * 104, -176], [sd * 122, -150], [sd * 124, -112], [sd * 116, -86]];
+      tk.ribbon(S.g, pts, S.c.sleeve, { wMax: 11, w0: 11, w1: 10, profile: () => 1, cap: 'round', shadow: RJ.shade(S.c.sleeve, 0.1), shadowW: 0.4, gloss: false, strands: 0, line: S.L, lineColor: S.lc, light: RJ.lightAngle() });
+      glove(S, sd * 116, -84, PI / 2 - sd * 0.25, 1.15, S.c.glove);
     },
-    chains: {
-      tail: {
-        spine: [[68, -70], [102, -58], [126, -90], [118, -128], [92, -142]], cuts: [0.34, 0.68], reach: 50, overlap: 6,
+  });
+  define('storm_whelp', {
+    size: 'l',
+    col: { frame: '#ff8fa6', panel: '#fff8ec', bulb: '#fff6d0', letter: '#fff6d0', leg: G.chromeL, sleeve: G.lilac, glove: '#ffffff', foot: '#d9d4ea' },
+    real: { frame: '#e8335a', panel: '#ffe9a8', bulb: '#ffd84d', letter: '#ff8a1f', leg: '#ffc94d', sleeve: '#8b4dff', glove: '#ffffff', foot: '#3fcf6a' },
+    bounds: { w: 280, h: 255, head: { x: 0, y: -236 }, body: { x: 0, y: -150 }, feet: { x: 0, y: 0 }, right: 171 },
+    dieBox: [-130, -258, 130, 0],
+    sweep: [-60, -200],
+    hop: 12,
+    parts: {
+      legs: {
+        box: [-100, -150, 100, 4], pivot: [0, -142],
         draw(S) {
-          S.rib([[68, -70], [102, -58], [126, -90], [118, -128], [92, -142]], SW.scale, { wMax: 50, w0: 46, w1: 12, tipPow: 1.1, shadow: SW.scaleD, rim: S.c.rim, rimW: 1.6, line: 3.4, halftone: { d: 5, alpha: 0.3 }, decor(g) { g.fillStyle = SW.belly; g.globalAlpha = 0.6; for (let i = 0; i < 5; i++) { const p = along([[68, -70], [102, -58], [126, -90], [118, -128], [92, -142]], 0.1 + i * 0.16); g.beginPath(); g.ellipse(p.x + p.ty * 12, p.y - p.tx * 12, 5, 8, 0, 0, TAU); g.fill(); } g.globalAlpha = 1; } });
-          // the lightning fin
-          S.cel([[92, -142, 1], [72, -168, 1], [84, -162, 1], [64, -190, 1], [94, -158, 1], [82, -160, 1], [102, -146, 1]], SW.volt, { depth: 4, line: 3, tension: 0, hi: false, rim: '#ffffff', shadow: '#c89a10' });
+          [-1, 1].forEach((sd) => {
+            const xa = sd * 62, xb = sd * 86;
+            S.limb([xa, -146], [xa + sd * 6, -10], 7, S.c.leg); S.limb([xb, -146], [xb + sd * 6, -10], 7, S.c.leg);
+            for (let k = 0; k < 4; k++) { const y0 = -138 + k * 32; RJ.ink(S.g, [[xa + sd * k * 1.5, y0], [xb + sd * (k + 1) * 1.5, y0 + 28]], { w: S.L * 0.9, color: S.lc, taper: 0, wobble: 0 }); RJ.ink(S.g, [[xa + sd * k * 1.5, y0], [xb + sd * (k + 1) * 1.5, y0 + 28]], { w: S.L * 0.45, color: S.c.leg, taper: 0, wobble: 0 }); }
+            S.cel(RR(sd * 74 - 22, -12, 44, 12, 5), S.c.foot, { hi: true });
+          });
+        },
+      },
+      armL: aplArm(-1), armR: aplArm(1),
+      sign: {
+        box: [-118, -258, 118, -136], pivot: [0, -142],
+        draw(S) {
+          S.cel(RR(APL.x0, APL.y0, APL.x1 - APL.x0, APL.y1 - APL.y0, 14), S.c.frame, { hi: '#ffffff', hiW: 3 });
+          S.cel(RR(APL.x0 + 16, APL.y0 + 16, APL.x1 - APL.x0 - 32, APL.y1 - APL.y0 - 32, 8), S.c.panel, { shadow: RJ.shade(S.c.panel, 0.05) });
+          aplBulbs.forEach((b) => { S.g.beginPath(); S.g.arc(b[0], b[1], 4.2, 0, TAU); S.g.fillStyle = S.c.bulb; S.g.fill(); S.g.lineWidth = 1.2; S.g.strokeStyle = S.lc; S.g.stroke(); });
+          // the art word APPLAUSE
+          const g = S.g;
+          g.save(); g.font = '900 27px ' + tk.font.num; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+          g.lineWidth = 6; g.strokeStyle = S.lc; g.strokeText('APPLAUSE', 0, -215);
+          g.fillStyle = S.c.letter; g.fillText('APPLAUSE', 0, -215);
+          g.restore();
         },
       },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.0) * m, fold = clamp(guard + buff * 0.7, 0, 1);
-      const hot = clamp(tele + buff + strike + guard * 0.5 + st.wound * 0.6 + die, 0, 1);
-      const dx = -strike * 52 + hurt * 16 + E0.shake * 1.2 + 4 * tele, dy = -tele * 6 + 4 * fold - wind * 6 + 6 * die;
-      const rot = 0.1 * tele + 0.03 * br - 0.08 * strike + 0.1 * hurt + 0.06 * wind;
-      const wr = -0.1 - 0.06 * sin(t * 2.2) * m - 0.6 * tele - 0.4 * wind + 1.5 * fold + 0.4 * hurt + 1.0 * strike;
-      const open = 0.07 + 0.05 * sin(t * 2.6) * m + 0.72 * tele + 0.6 * wind * (1 - strike) + 0.8 * strike * (p > 0.45 ? 1 : 0.5) + 0.4 * buff + 0.4 * hurt + 0.5 * die;
-      const headR = -0.06 * strike - 0.3 * tele * -1 * 0.5 + 0.06 * sin(t * 1.5) * m + 0.15 * hurt - 0.06 * fold;
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const br = sin(t * 1.4) * m;
+      const charge = clamp(0.25 + 0.75 * tele + 0.8 * buff + (atk ? E0.wind * 0.8 : 0), 0, 1);
+      // the slow clap: hands apart, together, apart (always going at rest; one big clap on the attack)
+      const slow = 0.5 - 0.5 * cos(t * TAU / 1.8);
+      const clap = atk ? clamp(E0.strike * 1.3, 0, 1) : (tele > 0 ? 0 : guard > 0 ? 0.2 : slow * 0.85);
+      const dx = -10 * (atk ? E0.strike : 0) + hurt * 14 + E0.shake, dy = 2 * guard - 3 * tele;
       ctx.save();
-      xform(ctx, 12, -90, dx, dy, rot, 1 - 0.04 * fold, 1 - 0.04 * fold);
-      putChain(ctx, st, 'tail', [0.08 * sin(t * 1.8) * m + 0.2 * tele + 0.25 * fold - 0.2 * strike, 0.16 * sin(t * 1.8 - 0.9) * m + 0.2 * fold, 0.24 * sin(t * 1.8 - 1.8) * m + 0.2 * fold]);
-      put(ctx, st, 'wingF', { r: wr * 1.1 - 0.05 });
-      put(ctx, st, 'legFF', { r: 0.03 * br + 0.1 * strike });
-      put(ctx, st, 'body', { sy: 1 + 0.02 * br - 0.03 * tele, sx: 1 + 0.01 * br });
-      put(ctx, st, 'haunch', { r: -0.02 * br });
-      put(ctx, st, 'spikes', { sy: 1 + 0.5 * hot, sx: 1 + 0.2 * hot, r: 0.02 * sin(t * 2.4) * m });
-      put(ctx, st, 'mane', { r: 0.03 * sin(t * 1.9) * m + headR * 0.6, sx: 1 + 0.06 * hot, sy: 1 + 0.06 * hot });
-      put(ctx, st, 'head', {
-        r: headR, y: 2 * tele,
-        pre(c) {
-          if (open > 0.12) {
-            const H = [-56, -128], U = [-124, -138], jx = H[0] - 68 * cos(open) + 6 * sin(open), jy = H[1] + 68 * sin(open) + 6 * cos(open);
-            c.beginPath(); c.moveTo(H[0], H[1] - 8); c.lineTo(U[0], U[1]); c.lineTo(jx, jy - 3); c.lineTo(H[0], H[1] + 6); c.closePath();
-            const gr = c.createLinearGradient(H[0], H[1], U[0], U[1] + 30); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.5, '#a8f4ff'); gr.addColorStop(1, '#3a70c0');
-            c.fillStyle = gr; c.fill();
-            tk.glow(c, -100, -126 + open * 14, 44, SW.cyan, cA(0.3 + 0.6 * clamp(tele + strike + wind, 0, 1)));
-          }
-          put(c, st, 'jaw', { r: -open });
-        },
+      xform(ctx, 0, -142, dx, dy, 0.08 * hurt, 1, 1);
+      put(ctx, st, 'legs', { sx: 1 + 0.02 * guard });
+      const lift = 0.5 * tele;
+      put(ctx, st, 'armL', { r: -1.15 * clap + 0.6 * lift - 0.2 * guard + 0.04 * br });
+      put(ctx, st, 'armR', { r: 1.15 * clap - 0.6 * lift + 0.2 * guard - 0.04 * br });
+      put(ctx, st, 'sign', {
+        r: 0.02 * br + 0.06 * hurt, sy: 1 + 0.02 * buff,
         kids(c) {
-          const ob = blink(t, 'whelp', 4.4) * (1 - 0.4 * hurt);
-          eyeLive(c, -88, -154, 12, 10.4, { open: ob, iris: ['#5ff5ff', '#ffffff'], sclera: '#ffffff', pupil: 'slit', pupilColor: '#0a2a6a', glow: SW.cyan, glowK: 0.8 + 0.2 * hot, glowR: 3, lw: 2.8, rot: -0.15, lidTop: 0.28 + 0.24 * hot, look: [-0.5, 0.1] });
-          eyeLive(c, -60, -156, 9, 8.4, { open: ob, iris: ['#5ff5ff', '#ffffff'], sclera: '#ffffff', pupil: 'slit', pupilColor: '#0a2a6a', glow: SW.cyan, glowK: 0.6 + 0.2 * hot, glowR: 3, lw: 2.4, rot: -0.15, lidTop: 0.28 + 0.24 * hot, look: [-0.5, 0.1] });
+          // the bulbs: a polite chase at rest, brighter with every bit of charge, all blazing on the wind-up
+          const won = st.won;
+          aplBulbs.forEach((b, i) => {
+            const chase = 0.5 + 0.5 * sin(t * 5 - i * 0.7), lit = won ? 0.6 : clamp(0.25 + 0.55 * chase * (1 - tele) + charge * 0.7, 0, 1);
+            tk.glow(c, b[0], b[1], 8 + 8 * lit, won ? '#ffd84d' : '#fff3c0', 0.6 * lit);
+          });
+          if (charge > 0.3 && !won) tk.glow(c, 0, -215, 110, '#fff3c0', 0.35 * charge);
+          face(c, st, 0, -180, { kind: 'round', w: 13, gap: 34, my: 16, sw: 16, iris: ['#6d7196', '#b9bde0'] });
+          crack(c, 64, -246, 34, 'sign', hurt * 1.4);
+          polite(c, st, -86, -236, 6);
         },
       });
-      put(ctx, st, 'legFN', { r: -0.03 * br - 0.9 * strike + 0.3 * wind * (atk ? 1 : 0) });
-      put(ctx, st, 'wingN', { r: wr });
-      // the pocket thundercloud over its head: it drifts and flashes; the horns arc to each other when it is excited
-      {
-        const cy = -12 * tele - 4 * sin(t * 1.6) * m;
-        put(ctx, st, 'cloudC', { x: 0 + 4 * sin(t * 1.1) * m, y: cy, r: 0.03 * sin(t * 1.3) * m, noFlash: true });
-        const fl = flick(t, 4, 7);
-        tk.glow(ctx, -76, -232 + cy, 44 + 20 * hot, SW.cyan, 0.18 + 0.4 * (fl > 0.7 ? 1 : 0) + 0.2 * hot);
-        if (fl > 0.62 - 0.4 * hot) { ctx.save(); zap(ctx, -76 + 8 * sin(t * 3), -232 + cy, -70, -200, t, { seed: 1, w: 2, jag: 8, n: 5, color: '#a8f4ff', core: '#ffffff' }); ctx.restore(); }
-        if (hot > 0.25) { ctx.save(); ctx.globalAlpha = hot; zap(ctx, -46, -212, -100, -216, t, { seed: 5, w: 1.8, jag: 7, n: 5, color: '#ffe45e', core: '#ffffff' }); ctx.restore(); }
-      }
-      // static crawling over the spikes and haunch, denser the angrier it is
-      sparks(ctx, 20, -150, t, 4 + Math.round(8 * hot), 111, { col: SW.volt, speed: 34 + 30 * hot, size: 6, spread: TAU, life: 0.6, alpha: 0.9 });
-      if (fold > 0.05) for (let i = 0; i < 6; i++) { const a = t * 6 + i * TAU / 6, r = 130 * (1 - 0.5 * fold * 0.5); ctx.save(); ctx.globalAlpha = fold; ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, 12 + cos(a) * r * 0.7, -90 + sin(a) * r * 0.5, 12, SW.cyan, 0.9); ctx.restore(); }
-      if (tele > 0.05) { const r = 8 + 30 * tele; tk.glow(ctx, -76, -250 - 6 * tele, r * 2.6, '#ffffff', 0.5 * tele); ctx.beginPath(); ctx.arc(-76, -250 - 6 * tele, r * 0.7, 0, TAU); ctx.fillStyle = '#ffffff'; ctx.globalAlpha = tele; ctx.fill(); ctx.globalAlpha = 1; for (let i = 0; i < 5; i++) { const a = t * 6 + i * 1.3; zap(ctx, -76, -250 - 6 * tele, -76 + cos(a) * (r + 30), -250 - 6 * tele + sin(a) * (r + 30), t, { seed: i, w: 1.8, jag: 6, n: 4, color: '#ffe45e', core: '#ffffff' }); } }
+      // the clap: a burst between the gloves
+      if (clap > 0.92) tk.glow(ctx, 0, -116, 40, '#ffffff', 0.7 * (clap - 0.92) * 12);
       ctx.restore();
       if (atk && p > 0.42 && p < 0.9) {
-        const u = clamp((p - 0.42) / 0.48, 0, 1);
-        ctx.save(); ctx.globalAlpha = cA(1 - u * u);
-        const bx = -128 + dx, by = -132;
-        for (let i = 0; i < 3; i++) zap(ctx, bx, by, bx - 150 - 40 * i, by + (i - 1) * 40, t, { seed: i + 30, w: 3.4 - i * 0.6, jag: 16, n: 8, color: '#5fd0ff', core: '#ffffff' });
-        tk.glow(ctx, bx - 40, by, 50, '#bffcff', 0.6);
-        ctx.restore();
+        const u = (p - 0.42) / 0.48;
+        for (let i = 0; i < 3; i++) { const k = clamp(u * 1.4 - i * 0.15, 0, 1); if (k <= 0) continue; ctx.save(); ctx.globalAlpha = 1 - k; ctx.lineCap = 'round'; ctx.strokeStyle = G.line; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(dx - 20, -120, 30 + 150 * k, PI * 0.8, PI * 1.2); ctx.stroke(); ctx.strokeStyle = '#fff3c0'; ctx.lineWidth = 4; ctx.stroke(); ctx.restore(); }
+        confettiGrid(ctx, [dx - 230, -260, dx - 40, -20], u, true, 'apl');
       }
     },
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // BLACK-BAR INQUISITOR (elite, l): the Blank's hanging judge. A tall black robe under an ivory mantle that is more black bar than paper, a pointed
-  // capirote hood over a blank white porcelain mask whose mouth has been blacked out with a censor bar (Gag Order), two hard gold slits for eyes, a gavel
-  // the size of a mallet and a sentence scroll that unrolls to the floor with its words struck through. Iron chains with open shackles hang from the belt.
-  // A halo of loose black bars circles its head and snaps into a cage when it is about to pass sentence. Accent: cold gold eyes and the hot gold gavel.
+  // MANNEQUIN JUDGE (black_bar_inquisitor, elite, l). Echowake rig: BLACK-BAR INQUISITOR (keeps the seated presence and the gavel strike, now the
+  // buzzer). A smiling porcelain mannequin with a perfect side parting and a pastel suit, seated in a tall judge's chair on chrome wheels behind a
+  // pastel desk, three blank score cards fanned in one hand (stars, never numbers) and a big red buzzer under the other; it never stops smiling.
+  // Always generic: no real judge. Accent: the buzzer red.
   // ---------------------------------------------------------------------------------------------------------------
-  const BI = { robe: '#241c4c', robeL: '#3d3274', robeD: '#130e2c', paper: '#f2f0f6', paperD: '#cfcdd8', bar: '#6e6a7e', gold: '#ffd24a', goldD: '#b8801c', iron: '#575d86', ironD: '#33375a', wood: '#8a5a2a', woodD: '#4e3014', brass: '#e2ae4c', lilac: '#c9b8ff', skin: '#fdf4e6' };
-  function biLink(S, x, y, rot, big) { S.cel(E(x, y, big ? 8 : 6.4, big ? 11 : 9, 10, rot), BI.iron, { depth: 3, line: 2.4, hi: false, rim: S.c.rim, rimW: 1.2, shadow: BI.ironD }); S.ell(x, y, 2.4, 4.4, '#140f2e', { line: 0, hi: false, rim: null, shadow: false }); }
-  function biChainDraw(S, sp) {
-    for (let i = 0; i < 9; i++) { const p = along(sp, 0.04 + i * 0.1); biLink(S, p.x, p.y, Math.atan2(p.ty, p.tx) + (i % 2 ? PI / 2 : 0), false); }
-    const e = along(sp, 0.99);
-    S.cel(E(e.x, e.y + 8, 13, 13, 14), BI.iron, { depth: 4, line: 3, hi: true, hiW: 1.6, rim: S.c.rim });
-    S.ell(e.x, e.y + 8, 6.6, 6.6, '#140f2e', { line: 0, hi: false, rim: null, shadow: false });
-    S.cel({ poly: [[e.x - 5, e.y - 6], [e.x + 6, e.y - 6], [e.x + 4, e.y + 2], [e.x - 4, e.y + 2]] }, BI.ironD, { depth: 1, line: 2, hi: false, rim: null, shadow: false });
-  }
-  const BI_CH1 = [[-40, -112], [-68, -86], [-80, -54], [-70, -24]], BI_CH2 = [[38, -112], [66, -90], [78, -58], [66, -28]];
+  const JDG = { hy: -224 };
   define('black_bar_inquisitor', {
-    size: 'l', lw: 3.4,
-    col: { rim: '#cfcdd8', shT: 0.42 },
-    bounds: { w: 240, h: 287, head: { x: -10, y: -262 }, body: { x: 0, y: -126 }, feet: { x: 0, y: 0 } },
-    die: { box: [-90, -292, 90, 4], nx: 9, ny: 18, from: 'top', order: 0.6, shape: 'strips', kinds: ['bar', 'felt', 'note', 'bar'], cols: ['#6e6a7e', '#f2f0f6', '#ffd24a', '#46425a'], wind: [-8, -12], size: 12, thin: 0.3, life: 0.5 },
+    size: 'l',
+    col: { skin: G.porcelain, hair: '#efe9fb', suit: G.lilac, shirt: '#ffffff', tie: G.mint, chair: '#ddd2f6', desk: G.mint, trim: G.chromeL, card: '#ffffff', star: G.blush, wheel: '#c9c3df' },
+    real: { skin: '#ffd2b4', hair: '#5a3a2a', suit: '#8b4dff', shirt: '#fff8ec', tie: '#3fcf6a', chair: '#ff7eb6', desk: '#2ec4b6', trim: '#ffc94d', card: '#fff8ec', star: '#ff8a1f', wheel: '#5a2f8a' },
+    bounds: { w: 230, h: 258, head: { x: 0, y: -250 }, body: { x: 0, y: -140 }, feet: { x: 0, y: 0 } },
+    dieBox: [-104, -258, 104, 0],
+    sweep: [-50, -200],
+    hop: 12,
     parts: {
-      scroll: {
-        box: [-34, -10, 34, 112], pivot: [0, -2],
+      chair: {
+        box: [-60, -262, 60, 4], pivot: [0, -90],
         draw(S) {
-          S.cel({ poly: [[-22, 2], [22, 0], [24, 92], [14, 98], [4, 90], [-6, 100], [-22, 92]] }, BI.paper, { depth: 6, line: 3, hi: true, hiW: 1.4, rim: S.c.rim, tension: 0.1, halftone: { d: 5, alpha: 0.18, color: '#6e6a7e' } });
-          for (let i = 0; i < 8; i++) stitch(S.g, [[-16, 12 + i * 10], [-16 + 24 * (0.45 + 0.5 * tk.vary('bis', 'w' + i)), 12.4 + i * 10]], { w: 1.6, color: '#6e6a7e', alpha: 0.85 });
-          // the lines bound shut: cloth gags wrapped across the stitching, a gold seal at the foot
-          S.cel({ poly: [[-20, 18], [22, 17], [22, 27], [-20, 28]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false, decor(g) { gagPoly(g, [[-20, 18], [22, 17], [22, 27], [-20, 28]]); } });
-          S.cel({ poly: [[-20, 46], [14, 45], [14, 55], [-20, 56]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false, decor(g) { gagPoly(g, [[-20, 46], [14, 45], [14, 55], [-20, 56]]); } });
-          S.cel({ poly: [[-20, 66], [22, 65], [22, 74], [-20, 75]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false, decor(g) { gagPoly(g, [[-20, 66], [22, 65], [22, 74], [-20, 75]]); } });
-          S.cel(E(0, 88, 8.6, 8.6, 12), BI.gold, { depth: 3, line: 2.6, hi: true, hiW: 1.4, rim: '#fff4c0', shadow: BI.goldD });
-          S.line([[-4, 88], [4, 88]], { w: 2, color: BI.goldD, taper: 0.05, pressure: 'flat' });
-          S.cel(cap(-26, 1, 26, -1, 9, 9), BI.wood, { depth: 3, line: 2.8, hi: true, hiW: 1.2, rim: '#e0b070', tension: 0.5 });
-          S.cel(E(-27, 0, 5.6, 5.6, 8), BI.brass, { depth: 1, line: 2, hi: false, rim: null }); S.cel(E(27, -1, 5.6, 5.6, 8), BI.brass, { depth: 1, line: 2, hi: false, rim: null });
+          // the star base on wheels, the stem, the tall back
+          [[-44, -6], [44, -6], [0, -2]].forEach((w) => { S.limb([0, -22], [w[0], w[1] - 6], 7, S.c.trim); S.ell(w[0], w[1], 7, 6, S.c.wheel, { hi: true }); });
+          S.cel(RR(-5, -92, 10, 72, 4), S.c.trim, { hi: true });
+          S.cel(RR(-50, -258, 100, 150, 30), S.c.chair, { hi: '#ffffff', hiW: 3 });
+          [[-22, -226], [22, -226], [0, -196], [-22, -166], [22, -166]].forEach((b) => S.ell(b[0], b[1], 3, 3, RJ.shade(S.c.chair, 0.12), { shadow: false, line: S.L * 0.5 }));
         },
       },
-      armB: {
-        box: [20, -204, 112, -90], pivot: [42, -178],
+      body: {
+        box: [-44, -206, 44, -100], pivot: [0, -110],
         draw(S) {
-          S.cel([[34, -196], [58, -190], [78, -158], [86, -128, 1], [60, -116, 1], [46, -140], [30, -166]], BI.robe, { depth: 10, tension: 0.6, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
-          S.cel({ poly: [[56, -126], [88, -134], [92, -120], [62, -112]] }, BI.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BI.paperD });
-          S.cel({ poly: [[62, -125], [90, -131], [91, -124], [63, -118]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-          S.cel(E(74, -108, 8.6, 8, 10), BI.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff' });
+          S.cel(sym([[0, -200], [-26, -198], [-38, -186], [-40, -140], [-36, -110], [0, -106]]), S.c.suit, { hi: true });
+          S.cel(sym([[0, -200], [-12, -200], [-6, -160], [0, -150]]), S.c.shirt, { shadow: false, line: S.L * 0.7 });
+          S.cel([[-4, -196], [4, -196], [6, -164], [0, -154], [-6, -164]], S.c.tie, { hi: true, tension: 0.2 });
+          [-1, 1].forEach((sd) => S.cel([[sd * 12, -200], [sd * 26, -196], [sd * 14, -170], [sd * 6, -160]], RJ.shade(S.c.suit, 0.05), { shadow: false, tension: 0.2, line: S.L * 0.7 }));
         },
       },
-      robe: {
-        box: [-94, -214, 96, 4], pivot: [0, -110],
+      head: {
+        box: [-38, -262, 38, -192], pivot: [0, -198],
         draw(S) {
-          const hem = zig(68, -68, -8, 12, 11, 6, 41);
-          const pts = [[-24, -206], [2, -212], [28, -206], [42, -190], [48, -150], [58, -100], [68, -40]].concat(hem).concat([[-66, -42], [-58, -100], [-48, -150], [-42, -190]]);
-          S.cel(pts, BI.robe, {
-            depth: 22, tension: 0.5, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-            decor(g) {
-              g.fillStyle = BI.robeL;
-              [[-34, -170, -48, -20], [-6, -176, -10, -16], [26, -172, 38, -18]].forEach((f) => { g.beginPath(); g.moveTo(f[0], f[1]); g.lineTo(f[0] + 14, f[1] + 4); g.lineTo(f[2] + 18, f[3]); g.lineTo(f[2], f[3]); g.closePath(); g.globalAlpha = 0.5; g.fill(); g.globalAlpha = 1; });
-              for (let i = 0; i < 6; i++) tk.inkPath(g, [[-44 + i * 18, -150], [-50 + i * 20, -30]], { w: 2, color: '#0e0a24', alpha: 0.7, taper: 0.3, wobble: 0.1, seed: i });
-              // the paper hem the Blank has eaten: a white band with black bars
-              g.fillStyle = BI.paper; g.beginPath(); g.moveTo(-90, -24);
-              for (let k = 0; k <= 12; k++) g.lineTo(-90 + k * 15, -24 + (k % 2 ? -5 : 1) + (tk.vary('bihem', 'k' + k) - 0.5) * 3);
-              g.lineTo(100, 8); g.lineTo(-90, 8); g.closePath(); g.fill();
-              [[-56, -14, 30], [-8, -17, 22], [28, -14, 28]].forEach((b) => gag(g, b[0], b[1], b[2], 7));
-              // the belt
-              g.fillStyle = '#0e0a24'; g.beginPath(); g.moveTo(-60, -122); g.lineTo(62, -126); g.lineTo(64, -106); g.lineTo(-64, -102); g.closePath(); g.fill();
-              g.fillStyle = BI.brass; g.fillRect(-26, -120, 18, 14); g.fillStyle = '#0e0a24'; g.fillRect(-21, -116, 8, 6);
-            },
+          S.limb([0, -202], [0, -194], 12, S.c.skin);
+          S.cel(E(0, JDG.hy, 25, 27, 22), S.c.skin, { shadow: RJ.shade(S.c.skin, 0.05) });
+          // the sculpted hair with its perfect side parting
+          S.cel([[-28, -224], [-30, -242], [-18, -254], [6, -256], [26, -246], [30, -228], [26, -224], [20, -238], [4, -244], [-10, -240], [-14, -236], [-22, -232]], S.c.hair, { hi: '#ffffff', hiW: 3, tension: 0.4 });
+          RJ.ink(S.g, [[-12, -252], [-14, -238]], { w: 1.4, color: S.lc, taper: 0.3, wobble: 0, alpha: 0.7 });
+        },
+      },
+      desk: {
+        box: [-96, -134, 96, 2], pivot: [0, -110],
+        draw(S) {
+          [-1, 1].forEach((sd) => S.limb([sd * 72, -60], [sd * 74, -4], 8, S.c.trim));
+          S.cel(RR(-88, -112, 176, 60, 10), S.c.desk, { hi: '#ffffff', hiW: 3, decor(g) { g.strokeStyle = tk.rgba('#ffffff', 0.7); g.lineWidth = 2; g.strokeRect(-74, -100, 148, 36); } });
+          S.cel(RR(-94, -122, 188, 12, 5), S.c.trim, { hi: '#ffffff' });
+        },
+      },
+      buzzer: {
+        box: [-58, -152, -14, -112], pivot: [-36, -120],
+        draw(S) {
+          S.cel(RR(-54, -126, 36, 8, 3), S.c.trim, { hi: true });
+          S.cel(tk.arcPts(-36, -126, 15, 18, PI, TAU, 12), S.real ? '#ff2a4a' : G.accent, { hi: '#ffb3c0', hiW: 3, tension: 0.4 });
+        },
+      },
+      handB: {
+        box: [-64, -170, -6, -118], pivot: [-28, -170],
+        draw(S) { S.limb([-30, -184], [-36, -146], 14, S.c.suit); RJ.hand(S.g, 'open', -36, -144, PI / 2 + 0.1, { skin: S.c.skin, shade: RJ.shade(S.c.skin, 0.06) }); },
+      },
+      cards: {
+        box: [6, -226, 84, -126], pivot: [30, -180],
+        draw(S) {
+          S.limb([30, -184], [40, -150], 14, S.c.suit);
+          [-0.4, 0, 0.4].forEach((a, i) => {
+            S.g.save(); S.g.translate(46, -150); S.g.rotate(a);
+            S.cel(RR(-13, -62, 26, 40, 4), S.c.card, { shadow: RJ.shade(S.c.card, 0.06) });
+            const sx = 0, sy = -42, r = 7;
+            const star = []; for (let k = 0; k < 10; k++) { const aa = -PI / 2 + k * PI / 5, rr = k % 2 ? r * 0.45 : r; star.push([sx + cos(aa) * rr, sy + sin(aa) * rr, 1]); }
+            S.cel(star, i === 1 ? S.c.star : RJ.tint(S.c.star, 0.3), { shadow: false, tension: 0, line: S.L * 0.6 });
+            S.g.restore();
           });
+          RJ.hand(S.g, 'fist', 46, -150, -PI / 2, { skin: S.c.skin, shade: RJ.shade(S.c.skin, 0.06) });
         },
       },
-      tabs: {
-        box: [-44, -112, 44, -10], pivot: [0, -112],
-        draw(S) {
-          [[-34, 44, 0.04], [-14, 52, -0.02], [6, 40, 0.03], [24, 48, -0.04]].forEach((tb, i) => {
-            const x = tb[0], h = tb[1];
-            S.cel({ poly: [[x - 8, -108], [x + 8, -108 + tb[2] * 20], [x + 7, -108 + h], [x - 7, -108 + h + 4]] }, BI.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.1, shadow: BI.paperD });
-            S.cel({ poly: [[x - 8, -108 + h * 0.4], [x + 8, -108 + h * 0.4 + 1], [x + 7, -108 + h * 0.4 + 9], [x - 8, -108 + h * 0.4 + 8]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-          });
-        },
-      },
-      mantle: {
-        box: [-76, -214, 76, -138], pivot: [0, -196],
-        draw(S) {
-          S.cel([[-54, -196], [-34, -210], [0, -214], [34, -210], [54, -196], [58, -172, 1], [46, -152], [30, -162, 1], [16, -146], [0, -160, 1], [-16, -146], [-30, -162, 1], [-46, -152], [-58, -172, 1]], BI.paper, {
-            depth: 14, tension: 0.4, hi: true, hiW: 2.4, rim: S.c.rim, shadow: BI.paperD, halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' },
-            decor(g) {
-              [[-62, -190, 124, 12], [-54, -171, 80, 10]].forEach((b) => gag(g, b[0], b[1], b[2], b[3]));
-              gag(g, 16, -156, 30, 9); quiltDiamonds(g, -50, -206, 100, 28, 12, '#9d99b2', 0.5);
-              for (let i = 0; i < 4; i++) tk.inkPath(g, [[-48 + i * 4, -148 + i * 0], [-30 + i * 4, -150]], { w: 1.4, color: '#8a7aa8', alpha: 0, taper: 0.1 });
-            },
-          });
-          // the clasp, gold, over the chest
-          S.cel(E(-4, -194, 10, 10, 12), BI.gold, { depth: 3, line: 2.8, hi: true, hiW: 1.4, rim: '#fff4c0', shadow: BI.goldD });
-          S.line([[-9, -194], [1, -194]], { w: 2.4, color: BI.goldD, taper: 0.05, pressure: 'flat' });
-        },
-      },
-      bands: {
-        box: [-34, -210, 26, -150], pivot: [-4, -200],
-        draw(S) {
-          [[-18, 0], [6, 1]].forEach((b) => {
-            S.cel({ poly: [[b[0] - 9, -204], [b[0] + 9, -204], [b[0] + 8, -162], [b[0] - 8, -158]] }, BI.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, shadow: BI.paperD });
-            stitch(S.g, [[b[0] - 4, -192], [b[0] + 4, -192]], { color: '#6e6a7e', alpha: 0.9, dash: 2, gap: 1.6 }); stitch(S.g, [[b[0] - 4, -184], [b[0] + 4, -184]], { color: '#6e6a7e', alpha: 0.9, dash: 2, gap: 1.6 });
-          });
-        },
-      },
-      armG: {
-        box: [-122, -204, -16, -66], pivot: [-40, -178],
-        draw(S) {
-          S.cel([[-28, -196], [-54, -192], [-76, -158], [-90, -122, 1], [-62, -104, 1], [-42, -136], [-22, -170]], BI.robe, { depth: 11, tension: 0.6, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
-          S.cel({ poly: [[-94, -126], [-60, -108], [-56, -92], [-92, -112]] }, BI.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BI.paperD });
-          S.cel({ poly: [[-88, -122], [-64, -108], [-62, -101], [-86, -113]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-          S.cel(E(-74, -96, 9, 8.4, 10), BI.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff' });
-        },
-      },
-      gavel: {
-        box: [-44, -126, 44, 22], pivot: [0, 0],
-        draw(S) {
-          S.cel(cap(0, 12, 0, -86, 10, 8), BI.woodD, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#e0b070', tension: 0.5 });
-          // the silent gavel: the wooden head is swaddled in grey cloth, wound round with cord
-          S.cel({ poly: [[-32, -118], [30, -122], [34, -86], [-28, -82]] }, '#9d99b2', { depth: 8, line: 3.4, hi: true, hiW: 2, rim: '#e4e1ee', halftone: { d: 5, alpha: 0.26, color: '#46425a' }, decor(g) { quiltDiamonds(g, -32, -122, 66, 40, 9, '#46425a', 0.5); } });
-          S.cel({ poly: [[-34, -120], [-24, -121], [-22, -84], [-32, -83]] }, '#6e6a7e', { depth: 2, line: 2.4, hi: true, hiW: 1.2, rim: '#cfcdd8', decor(g) { gagPoly(g, [[-34, -120], [-24, -121], [-22, -84], [-32, -83]]); } });
-          S.cel({ poly: [[22, -122], [32, -122], [35, -86], [25, -85]] }, '#6e6a7e', { depth: 2, line: 2.4, hi: false, rim: null, decor(g) { gagPoly(g, [[22, -122], [32, -122], [35, -86], [25, -85]]); } });
-          S.cel(E(0, 14, 7, 7, 8), BI.brass, { depth: 1, line: 2.4, hi: false, rim: null });
-        },
-      },
-      hood: {
-        box: [-60, -304, 56, -186], pivot: [-6, -198],
-        draw(S) {
-          // the capirote: a tall cone with a white paper hem, a black bar around it, then the mask
-          S.cel([[-40, -200], [-38, -226], [-28, -256], [-16, -286, 1], [-5, -284, 1], [12, -254], [26, -226], [34, -200], [-2, -192]], BI.robe, {
-            depth: 14, tension: 0.5, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-            decor(g) { gagPoly(g, [[-30, -252], [22, -246], [24, -234], [-33, -240]]); },
-          });
-          S.cel(E(-6, -222, 25, 30, 18), BI.skin, {
-            depth: 8, line: 3, hi: true, hiW: 2.2, rim: '#ffffff', shadow: '#cfcdd8', halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' },
-            decor(g) { tk.inkPath(g, [[-18, -240], [-12, -232], [-14, -224]], { w: 1.2, color: '#8a7aa8', alpha: 0.8, taper: 0.4 }); tk.inkPath(g, [[8, -204], [4, -210], [8, -216]], { w: 1.2, color: '#8a7aa8', alpha: 0.8, taper: 0.4 }); },
-          });
-          // brow ridge shadow so the slits read as stern
-          S.cel([[-26, -238], [-6, -242], [16, -238], [14, -230], [-6, -234], [-26, -232]], '#c4b4d8', { depth: 1, line: 0, tension: 0.4, hi: false, rim: null, shadow: false });
-          // the gag: a black censor bar across the mouth with white stitches
-          S.cel({ poly: [[-34, -218], [24, -222], [25, -202], [-35, -198]] }, BI.bar, { depth: 2, line: 3.2, hi: false, rim: '#cfcdd8', rimW: 1.2, shadow: '#46425a', decor(g) { gagPoly(g, [[-34, -218], [24, -222], [25, -202], [-35, -198]]); } });
-          for (let i = 0; i < 4; i++) { const x = -24 + i * 14; tk.inkPath(S.g, [[x - 3, -214 - i * 0.3], [x + 3, -206 - i * 0.3]], { w: 1.8, color: '#fff8f0', alpha: 0.85, taper: 0.1, pressure: 'flat', wobble: 0 }); tk.inkPath(S.g, [[x + 3, -214 - i * 0.3], [x - 3, -206 - i * 0.3]], { w: 1.8, color: '#fff8f0', alpha: 0.85, taper: 0.1, pressure: 'flat', wobble: 0 }); }
-        },
-      },
-      tassel: {
-        box: [-34, -306, 18, -240], pivot: [-10, -284],
-        draw(S) {
-          S.cel([[-10, -284, 1], [-18, -272], [-22, -256, 1], [-14, -262], [-8, -272, 1]], BI.paper, { depth: 2, line: 2.4, tension: 0.3, hi: false, rim: null, shadow: BI.paperD });
-          S.cel(E(-9, -286, 4.4, 4.4, 8), BI.gold, { depth: 1, line: 2, hi: false, rim: '#fff4c0', shadow: BI.goldD });
-        },
-      },
-    },
-    chains: {
-      ch1: { spine: BI_CH1, cuts: [0.34, 0.68], reach: 30, overlap: 6, draw(S) { biChainDraw(S, BI_CH1); } },
-      ch2: { spine: BI_CH2, cuts: [0.34, 0.68], reach: 30, overlap: 6, draw(S) { biChainDraw(S, BI_CH2); } },
     },
     rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.6) * m, hot = clamp(tele + buff + strike + guard * 0.5 + st.wound * 0.4, 0, 1);
-      const dx = -strike * 28 + hurt * 14 + E0.shake * 1.2 + 8 * tele - 5 * wind, dy = 3 * tele + 4 * guard + 8 * die + 2 * br;
-      const rot = -0.03 * strike + 0.05 * tele + 0.07 * hurt + 0.01 * br;
-      // arm and gavel angles (world angle of the gavel is chosen, then made relative to the arm)
-      let aS = 0.05 * br, gW = -0.18 + 0.05 * br, aB = -0.04 * br;
-      if (atk) {
-        if (p < 0.3) { const k = sm(p / 0.3); aS = lerp(0, 2.2, k); gW = lerp(-0.18, 0.35, k); }
-        else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aS = lerp(2.2, -0.3, k); gW = lerp(0.35, -2.3, k); }
-        else { const k = sm((p - 0.5) / 0.5); aS = lerp(-0.3, 0.05 * br, k); gW = lerp(-2.3, -0.18, k); }
-      } else if (E0.pose === 'telegraph') { aS = 2.2 * tele + 0.03 * E0.shake; gW = 0.35 * tele - 0.18 * (1 - tele) + 0.03 * E0.shake; aB = -0.5 * tele; }
-      else if (E0.pose === 'block') { aS = 0.8 * guard; gW = -1.2 * guard - 0.18 * (1 - guard); aB = 1.5 * guard; }
-      else if (E0.pose === 'buff') { aS = 1.2 * buff; gW = 0.4 * buff - 0.18; aB = -1.0 * buff; }
-      else if (E0.pose === 'hurt') { aS = 0.4 * hurt; gW = 0.3 * hurt - 0.18; aB = 0.4 * hurt; }
-      else if (die > 0) { aS = 0.5 * die; aB = -0.4 * die; }
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const br = sin(t * 1.3) * m;
+      const raise = clamp((atk ? E0.wind : 0) + tele, 0, 1), slam = atk ? E0.strike : 0;
+      // the chair rolls back on a hit and swivels a touch while it thinks
+      const roll = hurt * 16 + E0.shake * 0.6;
       ctx.save();
-      if (die > 0) ctx.transform(1, 0, 0, 1 - 0.12 * die, 0, -2 * die);
-      xform(ctx, 0, -110, dx, dy, rot, 1, 1 + 0.01 * br);
-      const sway = sin(t * 1.6) * m;
-      putChain(ctx, st, 'ch2', [0.14 * sway - 0.3 * buff, 0.18 * sin(t * 1.6 - 0.9) * m + 0.2 * hurt, 0.2 * sin(t * 1.6 - 1.8) * m + 0.4 * buff * sin(t * 14)]);
-      if (guard < 0.3) put(ctx, st, 'armB', { r: aB });
-      put(ctx, st, 'robe', { sy: 1 + 0.01 * br, r: 0.006 * br });
-      put(ctx, st, 'tabs', { r: 0.05 * sin(t * 1.9 + 1) * m + 0.1 * strike - 0.08 * tele, sy: 1 + 0.02 * sin(t * 2.7) * m });
-      putChain(ctx, st, 'ch1', [0.14 * sin(t * 1.6 + 1) * m + 0.2 * strike + 0.4 * wind - 0.3 * buff, 0.18 * sin(t * 1.6 + 0.1) * m + 0.3 * hurt, 0.2 * sin(t * 1.6 - 0.8) * m + 0.3 * buff * sin(t * 13 + 1)]);
-      put(ctx, st, 'mantle', { sy: 1 + 0.015 * br, r: 0.01 * br, sx: 1 + 0.01 * br });
-      if (guard >= 0.3) put(ctx, st, 'armB', { r: aB });
-      put(ctx, st, 'bands', { r: 0.04 * sin(t * 1.9) * m });
-      // the scroll hangs from the back hand and swings
-      {
-        const hx = 74, hy = -108, ca = cos(aB), sa = sin(aB), px = 42 + (hx - 42) * ca - (hy + 178) * sa, py = -178 + (hx - 42) * sa + (hy + 178) * ca;
-        put(ctx, st, 'scroll', { x: px, y: py, r: 0.1 * sin(t * 1.5) * m + 0.3 * hurt, sy: 1 - 0.06 * guard });
-      }
-      // the arm with the gavel riding on the hand
-      put(ctx, st, 'armG', {
-        r: aS,
-        kids(c) {
-          put(c, st, 'gavel', { x: -74, y: -96, r: gW - aS });
-        },
-      });
-      // gavel head heats up gold
-      {
-        const ang = gW, hx = -40 + (-74 + 40) * cos(aS) - (-96 + 178) * sin(aS), hy = -178 + (-74 + 40) * sin(aS) + (-96 + 178) * cos(aS);
-        const gx = hx + sin(ang) * 102, gy = hy - cos(ang) * 102;
-        if (hot > 0.15) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, gx, gy, 38 + 30 * hot, BI.gold, 0.55 * hot); ctx.restore(); }
-      }
-      put(ctx, st, 'hood', {
-        r: 0.02 * sin(t * 1.1) * m - 0.04 * tele + 0.05 * strike + 0.1 * hurt, y: 2 * tele - 1 * strike,
-        kids(c) {
-          const sweep = 1.5 * sin(t * 0.9) * m, ob = blink(t, 'inq', 5.2) * (1 - 0.5 * hurt), ex = hot > 0.4;
-          eyeLive(c, -17 + sweep, -233, 7.4 + 1.6 * hot, 4.2 + 1.6 * hot, { open: ob, iris: ['#fff2b0', BI.gold], sclera: '#fff8e0', pupil: 'none', glow: BI.gold, glowK: 0.9 + 0.1 * hot, glowR: 3, lw: 2, lidTop: 0.34 + 0.3 * (1 - hot), lidColor: '#1a1430', rot: 0.18 });
-          eyeLive(c, 5 + sweep, -233, 7.4 + 1.6 * hot, 4.2 + 1.6 * hot, { open: ob, iris: ['#fff2b0', BI.gold], sclera: '#fff8e0', pupil: 'none', glow: BI.gold, glowK: 0.9 + 0.1 * hot, glowR: 3, lw: 2, lidTop: 0.34 + 0.3 * (1 - hot), lidColor: '#1a1430', rot: -0.18 });
-          void ex;
-        },
-      });
-      put(ctx, st, 'tassel', { r: 0.2 * sin(t * 2.3) * m + 0.2 * hurt - 0.1 * tele, sy: 1 + 0.04 * sin(t * 3.1) * m });
-      // the halo of loose bars: it spins slowly, speeds up and closes into a cage over the head when the sentence is near
-      {
-        const n = 5, cx = -6, cy = -268, rx = lerp(58, 40, tele) + 6 * buff, ry = lerp(12, 7, tele);
-        const spin = t * (0.5 + 1.2 * hot) + 0.3;
-        const list = [];
-        for (let i = 0; i < n; i++) { const a = spin + i * TAU / n; list.push({ a, z: sin(a), x: cos(a) * rx, y: sin(a) * ry, w: 24 + 16 * hv('bib', 'w' + i), h: 7 + 3 * hv('bib', 'h' + i), r: 0.14 * cos(a * 2 + i) }); }
-        list.sort((a, b) => a.z - b.z);
-        list.forEach((b) => {
-          ctx.save(); ctx.translate(cx + b.x + dx * 0.9, cy + b.y + dy - 4 * tele); ctx.rotate(b.r + 0.4 * tele * b.z);
-          ctx.globalAlpha = (0.55 + 0.45 * (b.z * 0.5 + 0.5)) * (1 - die);
-          gag(ctx, -b.w / 2, -b.h / 2, b.w, b.h);
-          ctx.strokeStyle = tele > 0.4 ? BI.gold : '#8a86c8'; ctx.lineWidth = 1.4; ctx.strokeRect(-b.w / 2, -b.h / 2, b.w, b.h);
-          ctx.restore();
-        });
-        if (tele > 0.3) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, cx + dx, cy + dy, 70, BI.gold, 0.28 * tele); ctx.restore(); }
-      }
-      ctx.restore();
-      // the slam: a shock ring on the floor in front, black bars and paper flying, the gavel dust
-      if (atk && p > 0.48 && p < 0.9) {
-        const u = (p - 0.48) / 0.42;
-        ctx.save(); ctx.translate(-150 + dx, -8); ctx.scale(1, 0.28); ctx.globalAlpha = (1 - u) * 0.95; ctx.strokeStyle = BI.gold; ctx.lineWidth = 7 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, 0, 20 + 100 * ease.outCubic(u), 0, TAU); ctx.stroke(); ctx.restore();
-        for (let i = 0; i < 7; i++) { const fj = fling('biimp' + i, 'b', u, { spread: 160, up: 110, g: 380, bias: -50 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-150 + dx + fj.x, -14 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 3 ? BI.bar : BI.paper; ctx.fillRect(-8, -3, 16, 6); ctx.restore(); }
-        sparks(ctx, -150 + dx, -14, u, 9, 51, { col: '#ffe08a', speed: 80, size: 8, spread: PI, dir: -PI / 2, life: 1, alpha: 1 - u });
-      }
-      if (buff > 0.1) motes(ctx, -6 + dx, -150 + dy, t, 10, 'bibuff', { col: '#ffd24a', size: 2.6, rise: 80, spread: 40, life: 0.9, alpha: buff });
-    },
-  });
-  // ---------------------------------------------------------------------------------------------------------------
-  // BLANK PAGE (minion, s): a sheet that has not decided to be a story yet. Cream paper with a torn left edge, a dog-eared corner, pale ruled lines and one
-  // pink margin rule, two big ink-dot eyes and a tiny mouth: innocent, and it folds both flaps around whoever tries to write on it. Three strips hinged at
-  // the fold lines flutter on their own (idle), close over the front (wrap and block) or spread wide (buff). Accent: the white glow of the Blank and the
-  // pink margin line.
-  // ---------------------------------------------------------------------------------------------------------------
-  const BP = { paper: '#a9a5bd', rule: '#e4e1ee', margin: '#46425a', ink: '#2a2250', glow: '#e8e5f2', lilac: '#cfcdd8' };
-  const BPL = -31, BPR = 33, BPT = -106, BPB = -20;
-  function bpSheet(S) {
-    const g = S.g, L = BPL, R = BPR, T = BPT, B = BPB;
-    const pts = [[L + 3, T + 1, 1], [-12, T - 2], [12, T], [R - 13, T - 1, 1], [R, T + 13, 1], [R + 1, -62], [R - 2, B - 2, 1], [10, B + 3], [-12, B + 1], [L + 4, B - 1, 1],
-      [L - 1, B - 12, 1], [L + 4, B - 24, 1], [L - 2, B - 36, 1], [L + 4, B - 48, 1], [L - 2, B - 60, 1], [L + 3, B - 72, 1], [L - 1, B - 84, 1]];
-    S.cel(pts, BP.paper, {
-      depth: 9, tension: 0.2, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.2, color: '#46425a' },
-      decor(gg) {
-        // a stitched border all the way round the felt patch
-        stitch(gg, [[L + 7, T + 6], [R - 8, T + 5], [R - 5, B - 6], [L + 8, B - 5], [L + 7, T + 6]], { color: BP.rule, alpha: 0.85, w: 1.4, dash: 3, gap: 2.4 });
-        ashFlecks(gg, L + 4, T + 4, R - L - 8, 24, 6, 'bpf', { alpha: 0.7 });
-      },
-    });
-    // the dog-ear: a folded triangle in shade, outlined
-    S.cel({ poly: [[R - 13, T - 1], [R, T + 13], [R - 13, T + 13]] }, '#cfcdd8', { depth: 2, line: 2.4, hi: false, rim: null, shadow: '#6e6a7e' });
-    void g;
-  }
-  function bpStrip(x0, x1) {
-    return (S) => { const g = S.g; g.save(); g.beginPath(); g.rect(x0, BPT - 12, x1 - x0, BPB - BPT + 24); g.clip(); bpSheet(S); g.restore(); };
-  }
-  define('blank_page', {
-    size: 's', lw: 2.8,
-    col: { rim: '#ffffff', shT: 0.3 },
-    bounds: { w: 96, h: 112, head: { x: -4, y: -108 }, body: { x: 0, y: -62 }, feet: { x: 0, y: 0 } },
-    die: { box: [-52, -118, 52, -8], nx: 8, ny: 10, from: 'out', order: 0.5, shape: 'paper', kinds: ['felt', 'cotton', 'felt', 'cotton'], cols: ['#a9a5bd', '#f2f0f6', '#46425a', '#cfcdd8'], wind: [-12, -20], size: 8, thin: 0.3 },
-    parts: {
-      pageL: { box: [-35, -116, -13, -12], pivot: [-13, -62], draw: bpStrip(-35, -12) },
-      pageR: { box: [13, -116, 38, -12], pivot: [13, -62], draw: bpStrip(12, 38) },
-      pageM: { box: [-14, -116, 14, -12], pivot: [0, -62], draw: bpStrip(-13.5, 13.5) },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
-      const bob = sin(t * 1.9) * 5 * m, flut = sin(t * 3.1) * m, wrap = clamp(strike * 1.1 + guard + (E0.pose === 'telegraph' ? tele * 0.55 : 0), 0, 1), spread = buff;
-      const dx = -strike * 44 + hurt * 14 + 3 * tele - 5 * wind, dy = bob - 5 * tele - 4 * wind + 7 * die - 6 * buff;
-      const rot = 0.05 * sin(t * 1.2) * m + 0.16 * hurt - 0.14 * strike + 0.1 * tele - 0.12 * wind;
+      xform(ctx, 0, 0, roll, 0, 0, 1, 1);
+      put(ctx, st, 'chair', { r: 0.01 * br });
       ctx.save();
-      tk.glow(ctx, dx, -62 + dy, 50 + 16 * buff + 10 * tele, BP.glow, 0.28 + 0.3 * buff + 0.2 * tele);
-      xform(ctx, 0, -62, dx, dy, rot, 1 - 0.18 * hurt, 1 + 0.06 * hurt);
-      // the flaps: a flutter, a close over the front (narrow, swing, move in), a spread on a buff
-      const closed = clamp(guard, 0, 1), fl = 0.05 * flut + 0.2 * spread - 0.7 * strike - 0.5 * tele + 0.03 * E0.shake, fr = -0.05 * sin(t * 3.1 + 1.3) * m - 0.2 * spread + 0.5 * strike + 0.5 * tele - 0.03 * E0.shake;
-      const sxL = lerp(1 + 0.3 * strike, -0.9, closed), sxR = lerp(1 + 0.3 * strike, -0.9, closed);
-      if (closed < 0.35) { put(ctx, st, 'pageR', { r: fr, sx: sxR }); put(ctx, st, 'pageL', { r: fl, sx: sxL }); }
-      put(ctx, st, 'pageM', {
-        sy: 1 + 0.015 * sin(t * 2.4) * m,
+      xform(ctx, 0, -110, 0, -2 * br * 0.5 - 2 * raise + 2 * slam, 0.03 * hurt - 0.04 * slam, 1, 1);
+      put(ctx, st, 'body', { sy: 1 + 0.01 * br });
+      put(ctx, st, 'head', {
+        r: 0.03 * br - 0.06 * slam + 0.14 * hurt + 0.04 * tele, y: -1 * br,
         kids(c) {
-          const ob = blink(t, 'bpage', 4.2) * (1 - 0.7 * hurt) * (1 - wrap * 0.7), lk = [-0.9 + 0.4 * sin(t * 0.7) * m, 0.1];
-          const ang = 0.12 * tele + 0.2 * strike;
-          eyeLive(c, -7, -67, 4.8, 6.6 + 1.2 * tele, { open: ob, iris: [BP.ink, '#4a3a86'], sclera: '#ffffff', pupil: 'none', look: lk, glow: BP.glow, glowK: 0.5, glowR: 2.2, lw: 1.8, rot: -ang });
-          eyeLive(c, 7, -67, 4.4, 6.2 + 1.2 * tele, { open: ob, iris: [BP.ink, '#4a3a86'], sclera: '#ffffff', pupil: 'none', look: lk, glow: BP.glow, glowK: 0.5, glowR: 2.2, lw: 1.8, rot: ang });
-          // the mouth is a zipper: a row of tiny teeth across the middle, drawn shut, tugged open a gap when hit
-          c.save();
-          const zy = -50, zl = -12, zr = 12, gap = hurt > 0.3 ? 2 + 3 * hurt : (wrap > 0.4 || tele > 0.4 ? 0 : 0.6 * (0.5 + 0.5 * sin(t * 2.2)) * m);
-          if (gap > 0.5) { c.beginPath(); c.ellipse(0, zy, 7, gap + 0.8, 0, 0, TAU); c.fillStyle = BP.ink; c.fill(); }
-          c.strokeStyle = BP.margin; c.lineWidth = 1.8; c.lineCap = 'butt';
-          c.beginPath(); c.moveTo(zl, zy); c.lineTo(zr, zy); c.stroke();
-          c.strokeStyle = '#f2f0f6'; c.lineWidth = 1.5;
-          c.beginPath();
-          for (let i = 0; i <= 8; i++) { const zx = zl + (zr - zl) * i / 8, up = i % 2 ? -1 : 1; c.moveTo(zx, zy); c.lineTo(zx, zy + up * (2.4 + gap * 0.4)); }
-          c.stroke();
-          c.fillStyle = '#c9893a'; c.strokeStyle = BP.ink; c.lineWidth = 1.2;
-          c.beginPath(); c.rect(zr - 1, zy - 2, 4.4, 4.4); c.fill(); c.stroke();
-          c.restore();
+          face(c, st, 0, JDG.hy + 2, { kind: 'round', w: 12, gap: 20, my: 14, sw: 13, iris: ['#7d6fb0', '#c9b8ff'], look: [-0.5 * raise - 0.3, 0.2] });
+          crack(c, 14, JDG.hy - 22, 30, 'judge', hurt * 1.4);
+          polite(c, st, -18, JDG.hy - 24, 5);
         },
       });
-      if (closed >= 0.35) { put(ctx, st, 'pageR', { r: fr, sx: sxR }); put(ctx, st, 'pageL', { r: fl, sx: sxL }); }
+      // the score cards: lifted high for the Final Score (the buff), fanned in front for the guard
+      put(ctx, st, 'cards', { r: -0.9 * buff - 0.5 * guard + 0.05 * br, y: -10 * buff, x: -20 * guard });
       ctx.restore();
-      // a muffling slash over the target on the strike
-      if (atk && E0.p > 0.46 && E0.p < 0.75) {
-        const u = (E0.p - 0.46) / 0.29;
-        ctx.save(); ctx.globalAlpha = (1 - u) * 0.95;
-        swoosh(ctx, -66 + dx, -62, 54, 14, -0.9, 0.9 + 2.2 * 0, { alpha: 1, fill: '#ffffff', edge: BP.lilac });
-        ctx.restore();
+      put(ctx, st, 'desk', {});
+      const press = slam > 0.5 ? (slam - 0.5) * 2 : 0;
+      put(ctx, st, 'buzzer', { sy: 1 - 0.3 * press });
+      // the buzzer hand: hovering, lifted on the wind-up, SLAM on the strike
+      put(ctx, st, 'handB', { r: -1.1 * raise + 0.25 * slam * (1 - raise) + 0.05 * br, y: -6 * raise + 6 * slam });
+      ctx.restore();
+      // the buzz: a red flash and buzz rings (the one place this Act turns properly saturated)
+      if (!st.won && (press > 0.05 || (atk && p > 0.5 && p < 0.9))) {
+        const u = atk ? clamp((p - 0.45) / 0.45, 0, 1) : 0;
+        tk.glow(ctx, -36 + roll, -136, 50, G.accent, 0.6 * (1 - u));
+        for (let i = 0; i < 3; i++) { const k = clamp(u * 1.3 - i * 0.15, 0, 1); if (k <= 0 || k >= 1) continue; ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = G.accent; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(-36 + roll, -136, 20 + 120 * k, 12 + 60 * k, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
       }
-      if (buff > 0.05) motes(ctx, dx, -40 + dy, t, 8, 'bpbuff', { col: '#ffffff', size: 2.6, rise: 54, spread: 24, life: 0.8, alpha: buff });
-      if (st.wound > 0.3) for (let i = 0; i < 2; i++) { const u = ((t * 0.9 + i * 0.5) % 1 + 1) % 1; ctx.save(); ctx.globalAlpha = (1 - u) * 0.8; ctx.translate(-6 + dx + 14 * i, -26 + dy + u * 24); ctx.rotate(u * 3 + i); ctx.fillStyle = '#f2f0f6'; ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, TAU); ctx.fill(); ctx.restore(); }
+      if (buff > 0.05) foe.sparkles(ctx, 40, -230, [[-20, -20, 7, 0], [30, 0, 6, 0.3], [0, 30, 5, 0.6]], 3, E0.buffP * 2);
     },
   });
 
-  // ---------------------------------------------------------------------------------------------------------------
-  // SPARK MOTE (minion, s): a crumb of storm no bigger than a seed: a hot yellow ball with eight little fins, big shiny eyes, a sprig of cyan arcs and a
-  // thimble of thundercloud to ride on. It hums, jitters and has exactly one thing to say. Idle is a nervous hover; attack is a dash; telegraph swells
-  // and whitens; death is a bang. Accent: electric yellow with cyan arcs.
-  // ---------------------------------------------------------------------------------------------------------------
-  const SM = { core: '#ffe45e', coreD: '#e8a41c', fin: '#ffc92e', white: '#fffbe0', cyan: '#5ff5ff', cloud: '#6a60a8', cloudD: '#3d3478', rim: '#fffbd0' };
-  define('spark_mote', {
-    size: 's', lw: 2.8,
-    col: { rim: '#ffffff', shT: 0.32 },
-    bounds: { w: 92, h: 106, head: { x: -4, y: -100 }, body: { x: 0, y: -62 }, feet: { x: 0, y: 0 } },
-    die: { box: [-50, -112, 50, -8], nx: 7, ny: 9, from: 'out', order: 0.4, shape: 'diamond', kinds: ['spark', 'spark', 'puff', 'shard'], cols: ['#ffe45e', '#fffbe0', '#5ff5ff', '#6a60a8'], wind: [0, -6], size: 9, thin: 0.15, life: 0.55 },
-    parts: {
-      cloud: {
-        box: [-34, -34, 34, 2], pivot: [0, -22],
-        draw(S) { [[-14, -18, 11], [0, -22, 14], [14, -18, 11], [-4, -12, 9], [8, -11, 9]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[2] * 0.86, i % 2 ? SM.cloud : SM.cloudD, { depth: 4, line: 2.4, hi: false, rim: '#a8f4ff', rimW: 1.2, halftone: { d: 4, alpha: 0.3 } })); },
-      },
-      fins: {
-        box: [-44, -108, 44, -16], pivot: [0, -62],
-        draw(S) {
-          for (let i = 0; i < 8; i++) {
-            const a = i * TAU / 8 + 0.2, big = i % 2 === 0, r0 = 16, r1 = big ? 38 : 29, w = big ? 9 : 7, c = cos(a), s = sin(a), nx = -s, ny = c;
-            S.cel([[c * r0 - nx * w, s * r0 - 62 - ny * w, 1], [c * r1, s * r1 - 62, 1], [c * r0 + nx * w, s * r0 - 62 + ny * w, 1]], big ? SM.core : SM.fin, { depth: 3, line: 2.6, tension: 0, hi: false, rim: big ? '#ffffff' : null, shadow: SM.coreD });
-          }
-        },
-      },
-      core: {
-        box: [-30, -92, 30, -32], pivot: [0, -62],
-        draw(S) {
-          S.cel(E(0, -62, 22, 22, 16), SM.core, {
-            depth: 9, hi: true, hiW: 2.4, rim: S.c.rim, shadow: SM.coreD, halftone: { d: 4, alpha: 0.28, color: '#c07810' },
-            decor(g) { g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.ellipse(-8, -72, 7, 4.4, -0.6, 0, TAU); g.fill(); },
-          });
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, hot = clamp(tele + buff + strike + guard * 0.5, 0, 1);
-      const jx = (hv('smj', 'x' + Math.floor(t * 18)) - 0.5) * 3.2 * m * (0.5 + hot), jy = (hv('smj', 'y' + Math.floor(t * 18)) - 0.5) * 3.2 * m * (0.5 + hot);
-      const bob = sin(t * 2.6) * 6 * m + sin(t * 5.3) * 1.5 * m;
-      const dx = -strike * 120 + hurt * 14 + 4 * wind + jx + 3 * E0.shake * 0.3, dy = bob - 4 * tele - 3 * wind + jy + 6 * die - 8 * buff;
-      const sw = 1 + 0.2 * tele + 0.18 * buff + 0.16 * wind + 0.12 * strike - 0.1 * die;
-      ctx.save();
-      // the heat haze: a big soft glow that pulses with the hum
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, -62 + dy, 64 + 30 * hot, SM.core, (0.4 + 0.25 * sin(t * 6) * m + 0.35 * hot) * (1 - die)); ctx.restore();
-      put(ctx, st, 'cloud', { x: dx * 0.6, y: dy * 0.5 + 3 * sin(t * 2.6 + 1) * m, sx: 1 + 0.05 * sin(t * 3) * m - 0.1 * strike, sy: 1 + 0.05 * sin(t * 3 + 1) * m });
-      xform(ctx, 0, -62, dx, dy, 0, sw, sw);
-      put(ctx, st, 'fins', { r: t * 0.7 * m + 0.5 * sin(t * 9) * m * 0.1 + 2.6 * strike + 0.4 * hurt, sx: 1 + 0.06 * sin(t * 12) * m, sy: 1 - 0.06 * sin(t * 12) * m });
-      put(ctx, st, 'core', {
-        sy: 1 + 0.03 * sin(t * 5) * m,
-        kids(c) {
-          const ob = blink(t, 'smote', 2.9) * (1 - 0.6 * hurt), lk = [-0.7 + 0.2 * sin(t * 1.9), 0];
-          eyeLive(c, -8.5, -63, 5.4, 8 + 1.6 * tele, { open: ob, iris: ['#14102e', '#3a2a88'], sclera: '#ffffff', pupil: 'none', look: lk, glow: '#ffffff', glowK: 0.3, glowR: 2, lw: 1.8, lidTop: hot > 0.4 ? 0.28 : 0, rot: -0.15 * hot });
-          eyeLive(c, 7.5, -63, 5, 7.6 + 1.6 * tele, { open: ob, iris: ['#14102e', '#3a2a88'], sclera: '#ffffff', pupil: 'none', look: lk, glow: '#ffffff', glowK: 0.3, glowR: 2, lw: 1.8, lidTop: hot > 0.4 ? 0.28 : 0, rot: 0.15 * hot });
-          if (hurt > 0.25 || strike > 0.3) { c.beginPath(); c.ellipse(-1, -50, 3.6, 4.6, 0, 0, TAU); c.fillStyle = '#14102e'; c.fill(); }
-          else tk.inkPath(c, [[-6, -51], [-1, -47.6], [5, -51]], { w: 1.9, color: '#14102e', taper: 0.3, wobble: 0 });
-        },
-      });
-      ctx.restore();
-      // arcs hopping between the fins, more of them the angrier it is; a long bolt when it dashes
-      ctx.save();
-      const nArc = 2 + Math.round(3 * hot);
-      for (let i = 0; i < nArc; i++) {
-        const a0 = hv('smarc', 'a' + i) * TAU + t * 0.6, r0 = 26, a1 = a0 + 0.9 + 0.5 * hv('smarc', 'b' + i);
-        zap(ctx, dx + cos(a0) * r0, -62 + dy + sin(a0) * r0, dx + cos(a1) * (r0 + 14), -62 + dy + sin(a1) * (r0 + 14), t * (0.4 + 0.2 * i), { seed: 20 + i, w: 1.8, jag: 5, n: 4, color: SM.cyan, core: '#ffffff' });
-      }
-      if (strike > 0.2) for (let i = 0; i < 3; i++) zap(ctx, dx + 20, -62 + dy + (i - 1) * 9, dx + 120 + 30 * i, -62 + dy + (i - 1) * 14, t, { seed: 40 + i, w: 2.4 - i * 0.5, jag: 8, n: 6, color: SM.cyan, core: '#ffffff' });
-      ctx.restore();
-      sparks(ctx, dx, -62 + dy, t, 5 + Math.round(6 * hot), 77, { col: '#fff2a0', speed: 36 + 30 * hot, size: 5, life: 0.5, spread: TAU, alpha: 1 - die });
-      if (die > 0) {
-        const u = die;
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = cA((1 - u) * 0.9); ctx.strokeStyle = SM.white; ctx.lineWidth = 5 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, -62, 12 + 74 * ease.outCubic(u), 0, TAU); ctx.stroke();
-        tk.glow(ctx, 0, -62, 40 + 60 * u, '#ffffff', (1 - u) * 0.9); ctx.restore();
-      }
-    },
-  });
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // TYPO SPRITE (minion, s): a typewriter key that came loose and went wrong: a cream ring of keycap round a dark face glowing with a magenta ":)" that
-  // glitches (an X eye, a flipped mouth, an offset ghost in magenta and cyan) every second or so, on two ink-stained stick legs with a curl of ribbon
-  // for an antenna and a proofreader's caret for a hat. Accent: glitch magenta with a cyan ghost (the same magenta as its summoner, the Margin Imp).
-  // ---------------------------------------------------------------------------------------------------------------
-  const TS = { ring: '#b9b5ca', ringD: '#8e8aa3', brass: '#c9893a', face: '#2a1f4a', faceL: '#4a3a86', mag: '#ff3a8a', magL: '#ff8cc0', cyan: '#5ff5ff', ribbon: '#46425a', ink: '#140f2e' };
-  // the glitch clock: 0 normally, 1 inside a short burst; `k` lets the angry poses force it
-  function glitch(t, force) {
-    const ph = ((t * 0.83 + 0.2) % 1 + 1) % 1, burst = ph > 0.88 ? 1 - Math.abs((ph - 0.94) / 0.06) : 0;
-    return clamp(Math.max(burst, force || 0), 0, 1);
-  }
-  define('typo_sprite', {
-    size: 's', lw: 2.8,
-    col: { rim: '#ffd0e8', shT: 0.34 },
-    bounds: { w: 96, h: 123, head: { x: -4, y: -104 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
-    die: { box: [-52, -112, 52, 0], nx: 8, ny: 10, from: 'top', order: 0.6, shape: 'paper', kinds: ['note', 'felt', 'spark', 'note'], cols: ['#ff3a8a', '#b9b5ca', '#5ff5ff', '#f2f0f6'], wind: [-10, 6], size: 8, thin: 0.25 },
-    parts: {
-      legN: { box: [-24, -34, 4, 4], pivot: [-8, -32], draw(S) { S.line([[-8, -32], [-10, -10]], { w: 4.6, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.cel([[-24, -8], [-4, -10], [2, -2], [-20, 2]], TS.ringD, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: S.c.rim }); S.ell(-8, -4, 2.6, 2, TS.mag, { line: 0, shadow: false, hi: false, rim: null }); } },
-      legF: { box: [-2, -34, 26, 4], pivot: [10, -32], draw(S) { S.line([[10, -32], [12, -10]], { w: 4.2, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.cel([[-2, -8], [18, -10], [24, -2], [2, 2]], TS.ringD, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: null }); } },
-      armN: {
-        box: [-48, -66, -10, -30], pivot: [-24, -52],
-        draw(S) {
-          S.line([[-24, -52], [-36, -46], [-42, -40]], { w: 4.2, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 });
-          S.cel([[-42, -36, 1], [-46, -42], [-40, -48, 1]], TS.mag, { depth: 2, line: 2.2, tension: 0.2, hi: false, rim: null, shadow: '#b0245c' });   // the nib that does the poking
-        },
-      },
-      armF: { box: [8, -66, 40, -30], pivot: [22, -52], draw(S) { S.line([[22, -52], [32, -46], [30, -38]], { w: 3.8, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.ell(30, -37, 3.4, 3.4, TS.ring, { depth: 1, line: 2, hi: false, rim: null }); } },
-      key: {
-        box: [-38, -92, 38, -22], pivot: [0, -57],
-        draw(S) {
-          S.cel(E(0, -57, 31, 31, 18), TS.ring, { depth: 11, hi: true, hiW: 2.4, rim: S.c.rim, shadow: TS.ringD, halftone: { d: 5, alpha: 0.22, color: '#46425a' } });
-          S.cel(E(0, -57, 25.4, 25.4, 18), TS.brass, { depth: 6, line: 2.6, hi: true, hiW: 1.4, rim: '#fff0b0' });
-          S.cel(E(0, -57, 22, 22, 18), TS.face, {
-            depth: 8, line: 2.6, hi: false, rim: S.c.rim, rimW: 1.2, shadow: '#17102e', halftone: { d: 4, alpha: 0.3, color: '#7a5ac0' },
-            decor(g) {
-              g.fillStyle = 'rgba(255,255,255,0.16)'; g.beginPath(); g.ellipse(-8, -68, 9, 4, -0.6, 0, TAU); g.fill();
-              // the grille: concentric rings of tiny holes, like the sound hole of a drum
-              g.fillStyle = 'rgba(10,6,24,0.75)';
-              [[7, 6], [13, 11], [19, 16]].forEach((rg) => { for (let i = 0; i < rg[1]; i++) { const a = i / rg[1] * TAU + rg[0]; g.beginPath(); g.arc(cos(a) * rg[0], -57 + sin(a) * rg[0], 1.15, 0, TAU); g.fill(); } });
-            },
-          });
-        },
-      },
-      ribbon: {
-        box: [-12, -118, 30, -74], pivot: [6, -86],
-        draw(S) {
-          S.rib([[6, -86], [14, -98], [4, -108], [-2, -102], [8, -96]], TS.ribbon, { wMax: 6, w0: 5, w1: 3, line: 2.2, tipPow: 1, shadow: '#0d0a1e', rim: null });
-          S.cel({ poly: [[-3, -112], [7, -122], [17, -112], [13, -112], [7, -117], [1, -112]] }, TS.mag, { depth: 2, line: 2.2, hi: false, rim: '#ffd0e8', shadow: '#b0245c' });
-        },
-      },
-    },
-    rig(ctx, st) {
-      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
-      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, hot = clamp(tele + buff + strike + hurt * 0.6, 0, 1);
-      const gl = glitch(t, hot * 0.9 + 0.8 * hurt);
-      const hop = Math.max(0, sin(t * 3.4)) * 7 * m, br = sin(t * 3.4 - 1.2) * m, hopT = 1 - hop / 7;
-      const gx = gl > 0.3 ? (hv('tsg', 'x' + Math.floor(t * 24)) - 0.5) * 10 * gl : 0;
-      const dx = -strike * 42 + hurt * 14 + 5 * wind + gx, dy = -hop - 6 * tele + 6 * die - 3 * wind;
-      const rot = 0.05 * sin(t * 1.7) * m + 0.2 * hurt - 0.1 * strike + 0.1 * tele;
-      const sq = 1 - 0.08 * hopT * (1 - Math.abs(sin(t * 3.4))) * 0 + 0.0;
-      ctx.save();
-      xform(ctx, 0, -2, dx, 0, 0, 1, 1);
-      put(ctx, st, 'legF', { r: 0.34 * sin(t * 3.4) * m + 0.2 * strike, y: dy * 0.2 });
-      put(ctx, st, 'legN', { r: -0.34 * sin(t * 3.4) * m - 0.2 * strike, y: dy * 0.2 });
-      xform(ctx, 0, -57, 0, dy, rot, sq, 1 - 0.04 * br * 0 + 0.02 * br);
-      // ghosts first: the same key twice, shifted, in cyan and magenta, only inside a glitch
-      if (gl > 0.05) {
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = cA(gl * 0.55);
-        ctx.save(); ctx.translate(-5 * gl, 1.5 * gl); ctx.globalAlpha = cA(gl * 0.6); ctx.fillStyle = TS.cyan; ctx.beginPath(); ctx.arc(0, -57, 29, 0, TAU); ctx.fill(); ctx.restore();
-        ctx.save(); ctx.translate(5 * gl, -1.5 * gl); ctx.fillStyle = TS.mag; ctx.beginPath(); ctx.arc(0, -57, 29, 0, TAU); ctx.fill(); ctx.restore();
-        ctx.restore();
-      }
-      put(ctx, st, 'armF', { r: 0.2 * sin(t * 2.8 + 1) * m + 0.4 * buff + 0.2 * guard, x: 0, y: 0 });
-      put(ctx, st, 'ribbon', { r: 0.14 * sin(t * 2.3) * m - 0.18 * tele + 0.2 * hurt + 0.1 * br, sy: 1 + 0.05 * sin(t * 4.4) * m });
-      put(ctx, st, 'key', {
-        sy: 1 + 0.02 * br, sx: 1 - 0.02 * br + 0.06 * guard,
-        kids(c) {
-          // the face: normally ":)" in glowing magenta; in a glitch an X for an eye, a flipped mouth and a stuttering offset
-          const ob = blink(t, 'typo', 3.4), off = gl > 0.3 ? 2.4 * (hv('tsf', 'o' + Math.floor(t * 20)) - 0.5) : 0, bad = gl > 0.3 || hot > 0.5;
-          c.save(); c.translate(off, 0);
-          tk.glow(c, 0, -58, 30, TS.mag, 0.32 + 0.3 * gl);
-          const lw = 3.2;
-          // eyes
-          if (ob < 0.3) { tk.inkPath(c, [[-14, -61], [-9, -59.4], [-4, -61]], { w: lw, color: TS.magL, taper: 0.3, wobble: 0 }); tk.inkPath(c, [[4, -61], [9, -59.4], [14, -61]], { w: lw, color: TS.magL, taper: 0.3, wobble: 0 }); }
-          else {
-            c.fillStyle = bad ? TS.cyan : TS.magL; c.beginPath(); c.ellipse(-9, -62, 3.6, 5, 0, 0, TAU); c.fill();
-            if (bad) { tk.inkPath(c, [[5, -67], [13, -57]], { w: lw, color: TS.magL, taper: 0.1, pressure: 'flat', wobble: 0 }); tk.inkPath(c, [[13, -67], [5, -57]], { w: lw, color: TS.magL, taper: 0.1, pressure: 'flat', wobble: 0 }); }
-            else { c.beginPath(); c.ellipse(9, -62, 3.6, 5, 0, 0, TAU); c.fill(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(7.8, -63.6, 1.3, 0, TAU); c.fill(); c.beginPath(); c.arc(-10.2, -63.6, 1.3, 0, TAU); c.fill(); }
-          }
-          // mouth
-          if (bad) tk.inkPath(c, [[-9, -46], [-3, -50], [3, -46], [9, -50]], { w: lw, color: TS.magL, taper: 0.25, wobble: 0 });
-          else tk.inkPath(c, [[-9, -50], [-3, -45.4], [3, -45.4], [9, -50]], { w: lw, color: TS.magL, taper: 0.25, wobble: 0 });
-          c.restore();
-          if (gl > 0.3) { c.save(); c.globalAlpha = 0.85; c.fillStyle = TS.cyan; const sy0 = -72 + 22 * hv('tsb', 'y' + Math.floor(t * 20)); c.fillRect(-20, sy0, 40, 2.6); c.restore(); }
-        },
-      });
-      put(ctx, st, 'armN', { r: -0.2 * sin(t * 2.8) * m - 0.9 * wind - 0.2 * tele + 1.6 * strike + 0.4 * hurt + 0.8 * guard });
-      ctx.restore();
-      // ash flecks and the odd glitched note crackling off the drum face, always a few, many when glitching
-      const nL = 2 + Math.round(4 * gl);
-      for (let i = 0; i < nL; i++) {
-        const per = 1.2 + 0.4 * hv('tsl', 'p' + i), u = (((t + hv('tsl', 'o' + i) * per) % per) + per) % per / per, ch = 'xq#@?!%&zt'.charAt(Math.floor(hv('tsl', 'c' + i) * 10));
-        ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 0.9) * (1 - die); ctx.translate(dx + (hv('tsl', 'x' + i) - 0.5) * 60 + sin(u * 4 + i) * 6, -92 + dy - u * 34); ctx.rotate(sin(u * 3 + i) * 0.5);
-        ctx.strokeStyle = i % 2 ? '#f2f0f6' : '#8e8aa3'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-3 - 3 * hv('tsl', 's' + i), 0); ctx.lineTo(3 + 3 * hv('tsl', 's' + i), 1.2 * (hv('tsl', 'c' + i) - 0.5)); ctx.stroke();
-        if (i % 3 === 0) tk.note(ctx, 0, -4, 7, { kind: 'eighth', color: i % 2 ? TS.mag : TS.cyan, alpha: 0.9, line: 1.2 });
-        ctx.restore(); void ch;
-      }
-      if (atk && E0.p > 0.46 && E0.p < 0.8) { const u = (E0.p - 0.46) / 0.34; ctx.save(); ctx.globalAlpha = (1 - u) * 0.9; ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, -70 + dx, -52 + dy, 20 + 24 * u, TS.mag, 0.9); ctx.restore(); tk.sparkle(ctx, -72 + dx, -52 + dy, 12 * (1 - u * 0.4), { color: '#ffd0e8', alpha: 1 - u, rot: u }); }
-    },
-  });
   // ===============================================================================================================
-  // THE CONDUCTOR (boss, xl), three forms in one spec (the id stays boss_editor). Parts and chains of all three forms live in BE_P and BE_C (prefixes p0_ p1_
-  // p2_), each form has its own rig in BE_RIG[phase]; the registered rig dispatches on st.phase.
-  //   phase 0, THE CONDUCTOR: a pale, tall, gaunt figure in a felt-grey formal haori with a stiff white cotton collar, white gloves, a calm noh-smooth face,
-  //     silver hair swept back in a long tail, a stack of folded black fans tied with a red ribbon under one arm and a long white baton (red lacquered tip,
-  //     silver ferrule) in the other hand. Behind him a fan of folded sensu leaves (each painted with a mute gag or a rest) sways like a peacock's tail;
-  //     marks of silence orbit him (quarter rest, fermata, breath mark, whole rest, strike line). Accent: the red baton tip.
-  //   phase 1, THE DAMPER: the haori has split: a hulking giant of charcoal felt (a quilted wrap round his belly with the band text SHH, felt-hammer pauldrons
-  //     and knuckles like piano dampers, bronze ferrules at the knees), the Conductor's head small and furious on top, the haori in rags on his back, cotton
-  //     fluff and quilting stitches flying off him. Accent: furious red eyes in a cracked noh face.
-  //   phase 2, THE HUSH: the Hush itself pouring out of his empty haori: a colossal grey face in a hole in the sky, mouth wide open making no sound, ragged
-  //     lips of grey ash and frayed felt curling back from a violet-black void, eyes and mouth as slits of white light, grey felt gloves clawing in from the
-  //     sides, notes and shrinking sound rings sucked into the mouth, the storm pouring in, and (faint, alpha 0.18, inside the grey) the shaggy silhouette of a
-  //     yamabiko, a mountain imp with long arms, the Hush's folklore shape. Accent: blinding white light with storm cyan.
+  // SIDEKICKS (E3b)
+  // ===============================================================================================================
+  // the idol's hair, shared by Flawless and every Lip-Sync Clone (they are copies of her): a glossy silver-lilac fringe and cap, at scale k
+  function idolHair(S, x, y, k, front) {
+    const P = (pts) => pts.map((p) => [x + p[0] * k, y + p[1] * k].concat(p[2] ? [1] : []));
+    if (!front) S.cel(P(sym([[0, -30], [-24, -26], [-30, -8], [-30, 14], [-22, 22], [-18, 4], [0, -4]])), S.c.hair, { hi: '#ffffff', hiW: 3 * k });
+    else S.cel(P(sym([[0, -31], [-24, -26], [-30, -10], [-24, -6], [-16, -14], [-8, -8], [0, -12]])), S.c.hair, { hi: '#ffffff', hiW: 2.6 * k, tension: 0.4 });
+  }
+  // a mirror-ball mic (Flawless and her clones lip-sync into mirrors), head at (x, y), k scale
+  function mirrorMic(S, x, y, k) {
+    S.cel(RR(x - 3 * k, y + 4 * k, 6 * k, 20 * k, 3 * k), G.chromeL, { hi: true });
+    S.cel(E(x, y, 8 * k, 8 * k, 16), S.c.ball || G.opal, { decor(g) { g.strokeStyle = 'rgba(120,124,156,0.5)'; g.lineWidth = 0.8; for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(x - 9 * k, y + i * 3.2 * k); g.lineTo(x + 9 * k, y + i * 3.2 * k); g.stroke(); g.beginPath(); g.moveTo(x + i * 3.2 * k, y - 9 * k); g.lineTo(x + i * 3.2 * k, y + 9 * k); g.stroke(); } } });
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // LIP-SYNC CLONE (blank_page, minion, s). Echowake rig: BLANK PAGE (keeps the small float). A tiny glossy copy of Flawless, exactly like the
+  // one next to it: the same silver-lilac hair and high ponytail, a pastel chrome dress, a mirror mic held under the Gloss smile, hovering in
+  // perfect time. Accent: the little red star on the dress.
+  // ---------------------------------------------------------------------------------------------------------------
+  define('blank_page', {
+    size: 's',
+    col: { skin: G.porcelain, hair: '#d6c9f6', dress: '#ffd6ea', boot: '#f6f2ff', ball: G.opal },
+    real: { skin: '#ffd2b4', hair: '#6a3a8a', dress: '#ff4f8e', boot: '#ffd84d', ball: '#ffd84d' },
+    bounds: { w: 92, h: 127, head: { x: 0, y: -108 }, body: { x: 0, y: -62 }, feet: { x: 0, y: 0 } },
+    dieBox: [-40, -112, 40, -10],
+    sweep: [-16, -80],
+    hop: 10,
+    parts: {
+      tail: {
+        box: [6, -118, 44, -64], pivot: [14, -104],
+        draw(S) { RJ.lock(S.g, [[14, -104], [30, -112], [38, -94], [32, -72]], S.c.hair, { wMax: 13, w0: 9, w1: 3, line: S.L, lineColor: S.lc }); S.ell(16, -104, 5, 5, S.c.dress, { hi: true }); },
+      },
+      body: {
+        box: [-26, -62, 26, -8], pivot: [0, -40],
+        draw(S) {
+          [-1, 1].forEach((sd) => { S.limb([sd * 6, -30], [sd * 7, -16], 7, S.c.skin); S.cel(RR(sd * 7 - 5, -18, 10, 9, 4), S.c.boot, { hi: true }); });
+          S.cel(sym([[0, -58], [-10, -57], [-12, -46], [-20, -28], [0, -26]]), S.c.dress, { hi: '#ffffff', decor(g) { sequins(g, -20, -58, 40, 14, { d: 5, cols: [RJ.tint(S.c.dress, 0.4)], seed: 2 }); } });
+          const sx = 7, sy = -36, star = [];
+          for (let k = 0; k < 10; k++) { const a = -PI / 2 + k * PI / 5, r = k % 2 ? 1.6 : 3.6; star.push([sx + cos(a) * r, sy + sin(a) * r, 1]); }
+          S.fill(star, S.real ? '#ff2a4a' : G.accent);
+        },
+      },
+      head: {
+        box: [-30, -110, 30, -54], pivot: [0, -58],
+        draw(S) {
+          idolHair(S, 0, -82, 0.82, false);
+          S.cel(E(0, -80, 19, 20, 20), S.c.skin, { shadow: RJ.shade(S.c.skin, 0.05) });
+          idolHair(S, 0, -82, 0.82, true);
+        },
+      },
+      mic: {
+        box: [-16, -70, 16, -36], pivot: [0, -46],
+        draw(S) { [-1, 1].forEach((sd) => S.limb([sd * 10, -47], [sd * 4, -48], 6, S.c.skin)); mirrorMic(S, 0, -54, 0.75); S.blob([{ e: [0, -44, 6, 5] }], S.c.skin); },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack';
+      const fl = sin(t * 2.4) * 4 * m;
+      const lunge = atk ? E0.strike : 0;
+      const dx = -lunge * 20 + hurt * 12 + E0.shake, dy = fl - 6 - 3 * tele + 2 * guard;
+      tk.glow(ctx, 0, -6, 22, st.won ? '#ffd84d' : G.blush, 0.4);
+      ctx.save();
+      xform(ctx, 0, -40, dx, dy, -0.12 * lunge + 0.14 * hurt + 0.05 * sin(t * 2.4) * m * 0, 1, 1);
+      put(ctx, st, 'tail', { r: 0.12 * sin(t * 2.4 + 0.6) * m + 0.4 * tele - 0.3 * lunge });
+      put(ctx, st, 'body', { sy: 1 + 0.02 * sin(t * 2.4) * m });
+      put(ctx, st, 'head', {
+        r: -0.08 * lunge + 0.15 * hurt - 0.06 * tele,
+        kids(c) {
+          face(c, st, 0, -80, { kind: 'round', w: 10, gap: 16, my: 11, sw: 9, iris: ['#7d6fb0', '#c9b8ff'], look: [-0.5, 0] });
+          crack(c, 6, -96, 20, 'clone', hurt * 1.4);
+          polite(c, st, -12, -96, 4);
+        },
+      });
+      // Copy Your Moves: the mic swings out for the slap, up to the face on the wind-up
+      put(ctx, st, 'mic', { r: -0.9 * lunge + 0.3 * guard, y: -4 * tele, x: -6 * lunge });
+      ctx.restore();
+      if (buff > 0.05) foe.sparkles(ctx, 0, -70, [[-26, -20, 4, 0], [24, -26, 4, 0.4]], 3, E0.buffP * 2);
+      if (guard > 0.05) pitchRing(ctx, dx, -60, 40, 48, 2, 10, G.blush, guard, t * 6);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // CONFETTI POPPER (spark_mote, minion, s). Echowake rig: SPARK MOTE (keeps the big eyes and the one-shot burst). A little striped party-popper
+  // cone in lemon, mint and blush with big shiny eyes and the Gloss smile, a frill round its open top with confetti peeking out, and a pull
+  // string with a ring. It has exactly one thing to say, and it says it with perfectly square confetti. Accent: the red pull ring.
+  // ---------------------------------------------------------------------------------------------------------------
+  define('spark_mote', {
+    size: 's',
+    col: { a: G.lemon, b: G.mint, c: G.blush, frill: '#ffffff', string: '#c9cbd6' },
+    real: { a: '#ffd84d', b: '#3fcf6a', c: '#ff6fb5', frill: '#7cc6ff', string: '#8b4dff' },
+    bounds: { w: 92, h: 104, head: { x: 0, y: -100 }, body: { x: 0, y: -60 }, feet: { x: 0, y: 0 } },
+    dieBox: [-40, -100, 40, -10],
+    sweep: [-14, -80],
+    hop: 10,
+    parts: {
+      string: {
+        box: [-8, -30, 8, 2], pivot: [0, -26],
+        draw(S) { S.line([[0, -28], [1, -18], [0, -11]], { w: 1.8, taper: 0 }); S.g.save(); S.g.lineWidth = 2.6; S.g.strokeStyle = S.lc; S.g.beginPath(); S.g.arc(0, -6, 5, 0, TAU); S.g.stroke(); S.g.lineWidth = 1.4; S.g.strokeStyle = S.real ? '#ff2a4a' : G.accent; S.g.stroke(); S.g.restore(); },
+      },
+      cone: {
+        box: [-38, -100, 38, -20], pivot: [0, -24],
+        draw(S) {
+          const cone = [[0, -24, 1], [-30, -86], [-26, -92], [26, -92], [30, -86]];
+          S.cel(cone, S.c.a, { tension: 0.12, hi: '#ffffff', hiW: 3,
+            decor(g) { [S.c.b, S.c.c].forEach((col, i) => { g.fillStyle = col; for (let k = -1; k < 4; k++) { const y0 = -92 + k * 24 + i * 12; g.beginPath(); g.moveTo(-40, y0 + 14); g.lineTo(40, y0 - 4); g.lineTo(40, y0 + 2); g.lineTo(-40, y0 + 20); g.closePath(); g.fill(); } }); } });
+          // confetti peeking out of the top, and the frill
+          [[-14, -98, G.mint], [0, -101, G.blush], [13, -98, G.lilac], [-6, -95, G.lemon], [7, -96, G.mint]].forEach((q, i) => { S.g.save(); S.g.translate(q[0], q[1]); S.g.rotate(0); S.g.fillStyle = S.real ? REAL[i % REAL.length] : q[2]; S.g.fillRect(-3.5, -3.5, 7, 7); S.g.strokeStyle = S.lc; S.g.lineWidth = 1; S.g.strokeRect(-3.5, -3.5, 7, 7); S.g.restore(); });
+          const fr2 = [];
+          for (let i = 0; i <= 12; i++) fr2.push([-30 + i * 5, -90 + (i % 2 ? -5 : 0), 1]);
+          S.cel(fr2.concat([[30, -86, 1], [-30, -86, 1]]), S.c.frill, { shadow: false, tension: 0 });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const bob = Math.abs(sin(t * 3)) * 5 * m;
+      const squash = 0.12 * tele + (atk ? 0.15 * E0.wind : 0), pop = atk ? E0.strike : 0;
+      const dx = hurt * 12 + E0.shake + 6 * pop, dy = -bob + 3 * squash * 20 / 3 + 2 * guard;
+      ctx.save();
+      xform(ctx, 0, -24, dx, dy, 0.25 * pop + 0.18 * hurt - 0.1 * tele, 1 + squash * 0.6 - 0.06 * guard, 1 - squash + 0.04 * pop);
+      put(ctx, st, 'string', { r: 0.2 * sin(t * 3 + 1) * m - 0.3 * pop });
+      put(ctx, st, 'cone', {
+        kids(c) {
+          face(c, st, 0, -66, { kind: 'round', w: 15, gap: 22, my: 16, sw: 12, iris: ['#6d7196', '#b9bde0'], look: [-0.4, 0] });
+          crack(c, 10, -84, 22, 'popper', hurt * 1.4);
+          polite(c, st, -16, -80, 4);
+        },
+      });
+      ctx.restore();
+      // the one-shot burst: perfectly square confetti fanning at the heroes
+      if (atk && p > 0.3) {
+        const u = clamp((p - 0.3) / 0.6, 0, 1);
+        tk.glow(ctx, -20 + dx, -96, 30, '#ffffff', 0.7 * (1 - u));
+        for (let i = 0; i < 16; i++) {
+          const a = PI * 1.15 + (hv('pop', 'a' + i) - 0.5) * 1.1, d = 20 + 120 * u * (0.5 + hv('pop', 'd' + i)), x = -10 + dx + cos(a) * d, y = -96 + sin(a) * d + 50 * u * u;
+          ctx.save(); ctx.globalAlpha = 1 - u * u; ctx.translate(x, y); ctx.rotate((hv('pop', 'r' + i) - 0.5) * 6 * u);
+          ctx.fillStyle = [G.lemon, G.mint, G.blush, G.lilac][i % 4]; ctx.fillRect(-3.5, -3.5, 7, 7); ctx.strokeStyle = G.line; ctx.lineWidth = 1; ctx.strokeRect(-3.5, -3.5, 7, 7); ctx.restore();
+        }
+      }
+      if (buff > 0.05) foe.sparkles(ctx, 0, -60, [[-26, -20, 4, 0], [24, -26, 4, 0.4]], 3, E0.buffP * 2);
+      if (guard > 0.05) pitchRing(ctx, dx, -58, 40, 44, 2, 10, G.lemon, guard, t * 6);
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // PITCH GLITCH (typo_sprite, minion, s). Echowake rig: TYPO SPRITE (keeps the small square body and the glitchy face; the keycap became a pixel
+  // block). A small square pixel block that jitters between two positions, magenta and cyan colour fringing on its edges, square pixel eyes,
+  // the Gloss smile drawn in pixel steps, little pixel feet. Accent: the magenta fringe.
+  // ---------------------------------------------------------------------------------------------------------------
+  define('typo_sprite', {
+    size: 's',
+    col: { block: G.opal, shade: G.lilac, foot: '#d9d4ea', eye: '#5a5f7a' },
+    real: { block: '#7cc6ff', shade: '#3d7bff', foot: '#ffd84d', eye: '#22264a' },
+    bounds: { w: 92, h: 104, head: { x: 0, y: -100 }, body: { x: 0, y: -60 }, feet: { x: 0, y: 0 } },
+    dieBox: [-40, -100, 40, 0],
+    sweep: [-14, -80],
+    hop: 10,
+    film: 0.7,
+    parts: {
+      block: {
+        box: [-38, -98, 38, -12], pivot: [0, -40],
+        draw(S) {
+          [-1, 1].forEach((sd) => S.cel(RR(sd * 13 - 7, -30, 14, 12, 2), S.c.foot, { hi: true, tension: 0 }));
+          const box = RR(-29, -94, 58, 58, 10);
+          if (!S.real) { S.g.save(); S.g.globalAlpha = 0.7; S.g.fillStyle = '#ff4fd8'; S.g.beginPath(); tk.trace(S.g, tk.xf(box, { dx: -4 })); S.g.fill(); S.g.fillStyle = '#4fe3ff'; S.g.beginPath(); tk.trace(S.g, tk.xf(box, { dx: 4 })); S.g.fill(); S.g.restore(); }
+          S.cel(box, S.c.block, { hi: '#ffffff', hiW: 3, decor(g) { g.fillStyle = tk.rgba(S.c.shade, 0.6); g.fillRect(-29, -48, 58, 12); g.fillRect(17, -94, 12, 58); g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(-23, -88, 8, 8); } });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      // the jitter between two positions (faster on the wind-up), a hop in pixel steps
+      const jt = st.won ? 0 : (Math.floor(t * (4 + 10 * tele)) % 2 ? 3 : -3) * (m > 0.5 ? 1 : 0.4);
+      const hop = Math.round(Math.abs(sin(t * 2.6)) * 3 * m) * 2;
+      const poke = atk ? E0.strike : 0;
+      const dx = jt - poke * 22 + hurt * 12 + E0.shake, dy = -hop + 2 * guard - 4 * tele;
+      ctx.save();
+      xform(ctx, 0, -40, dx, dy, 0.18 * hurt - 0.12 * poke, 1 - 0.06 * guard, 1 + 0.04 * buff);
+      put(ctx, st, 'block', {
+        kids(c) {
+          const lc = st.won ? REAL_LINE : G.line;
+          if (st.won) face(c, st, 0, -70, { kind: 'dot', w: 10, gap: 20, my: 16, sw: 14 });
+          else {
+            const open = hurt > 0.45 ? 0.25 : blink(t, 'pitch', 2.8);
+            c.fillStyle = lc;
+            [-1, 1].forEach((sd) => c.fillRect(sd * 10 - 3.5, -74 + (1 - open) * 4, 7, Math.max(1.5, 9 * open)));
+            // the Gloss smile in pixel steps
+            const px = [[-9, -58], [-6, -55], [-3, -54], [0, -54], [3, -54], [6, -55], [9, -58]];
+            px.forEach((q) => c.fillRect(q[0] - 1.6, q[1] - 1.6, 3.2, 3.2));
+          }
+          crack(c, 12, -88, 22, 'glitch', hurt * 1.4);
+          polite(c, st, -16, -84, 4);
+        },
+      });
+      ctx.restore();
+      if ((atk && p > 0.35 && p < 0.9) || tele > 0.3) {
+        const u = atk ? (p - 0.35) / 0.55 : fr(t * 1.5);
+        for (let i = 0; i < 7; i++) { const x = dx - 30 - 90 * u * (0.5 + hv('ptg', 'd' + i)), y = -66 + (hv('ptg', 'y' + i) - 0.5) * 50; ctx.save(); ctx.globalAlpha = (1 - u) * (atk ? 1 : tele); ctx.fillStyle = ['#ff4fd8', '#4fe3ff', '#b6ff4f'][i % 3]; ctx.fillRect(Math.round(x), Math.round(y), 6, 6); ctx.restore(); }
+      }
+      if (buff > 0.05) foe.sparkles(ctx, 0, -60, [[-26, -20, 4, 0], [24, -26, 4, 0.4]], 3, E0.buffP * 2);
+      if (guard > 0.05) pitchRing(ctx, dx, -62, 40, 44, 2, 10, G.lilac, guard, t * 6);
+    },
+  });
+
+  // ===============================================================================================================
+  // FLAWLESS, STAR OF THE PERFECT STAGE (boss_editor, Headliner, xl): E3c. Echowake rig: THE CONDUCTOR (keeps the three-form structure, prefixes p0
+  // p1 p2 with one rig per phase, the slender stance of phase 0, the bulk of phase 1 and the sky-filling face of phase 2). One spec holds the
+  // parts of all three forms; the registered rig dispatches on st.phase (HV_ENEMIES 5.3, bible 2.4 and 2.5).
+  //   phase 0, FLAWLESS: a slender pop idol in pastel chrome, perfectly symmetrical, lip-syncing into a mirror mic held in both hands, a high
+  //     silver-lilac ponytail, a sequin bodice and a flared chrome skirt, white boots, the Gloss smile, a ring of backing light bulbs behind her.
+  //     The telegraph is a hair flip; the attack a perfect pose. Accent: one red star on the bodice.
+  //   phase 1, THE FILTER: the idol's face has folded back into a huge ring-light lens with a soft-focus glow (calm closed eyes and the Gloss smile
+  //     only a faint reflection in the glass), two long selfie-stick arms with phone hands, the body a column of chrome on a flared base, the art
+  //     word FLAWLESS! across a blush band on the chest, little filter chips orbiting. Low on HP, real colour cracks through the chrome.
+  //   phase 2, THE GLOSS: the force itself, a sky-filling smooth oval mirror face in a chrome frame, eyes and an open mouth as calm slits of light
+  //     (no sound), the mirror showing the two heroes as perfect pastel copies with no motion lines, opal drapes and mirror shards drifting round
+  //     it. No darkness, no menace: too clean. Low on HP, the mirror cracks with real colour.
+  //   The win-over of every form ends the same way: left floating is a tiny shy round lens with a nervous smile, the very first little filter,
+  //   and it wobbles a single crooked note before the curtain. Phase 2's win-over first crazes the mirror into soft sparkles.
   // ===============================================================================================================
   const BE_P = {}, BE_C = {}, BE_RIG = [];
-  const BE = {
-    ink: '#140f2e', robe: '#5a566e', robeL: '#7d7993', robeD: '#2e2b3a', skin: '#ebe8f8', skinD: '#b9b3d8', hair: '#f6f2ff', hairD: '#b8b0e0', paper: '#f2f0f6', paperD: '#cfcdd8',
-    red: '#ff2a4a', redD: '#9a1226', redL: '#ff9aa8', lac: '#e8383d', gold: '#e2ae4c', goldD: '#a06f20', bar: '#6e6a7e', lilac: '#c9b8ff', cyan: '#5ff5ff', silver: '#cfd3e8', silverD: '#8a90b0',
+  const BEC = { cy0: -205, R0: 128, hy: -290 };
+  // ---- phase 0: Flawless
+  BE_P.p0_track = {
+    box: [-136, -341, 136, -69], pivot: [0, BEC.cy0], film: false,
+    draw(S) { S.g.save(); S.g.lineWidth = 7; S.g.strokeStyle = tk.rgba(S.lc, 0.55); S.g.beginPath(); S.g.arc(0, BEC.cy0, BEC.R0, 0, TAU); S.g.stroke(); S.g.lineWidth = 3.5; S.g.strokeStyle = S.real ? '#ffc94d' : G.chromeL; S.g.stroke(); S.g.restore(); },
   };
-  // a folded paper sensu leaf with its pivot at the bottom centre (a fan blade: narrow at the hinge, wide and round at the top): kind 'a' carries painted
-  // rests, 'b' a wrapped cloth gag. Fold ribs run up the blade.
-  function bePage(S, kind) {
-    const g = S.g;
-    S.cel([[-6, 2, 1], [6, 2, 1], [24, -46], [38, -90], [30, -106], [0, -112], [-30, -106], [-38, -90], [-24, -46]], BE.paper, {
-      depth: 8, tension: 0.3, hi: true, hiW: 2, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.2, color: '#46425a' },
-      decor(gg) {
-        for (let i = -3; i <= 3; i++) tk.inkPath(gg, [[i * 1.6, -2], [i * 11, -104]], { w: 1.2, color: '#8e8aa3', alpha: 0.75, taper: 0.1, pressure: 'flat', wobble: 0.03 });
-        if (kind === 'a') {
-          // a quarter rest (zigzag), a whole rest (bar under a line) and a fermata arc, painted in dark felt
-          gg.strokeStyle = '#2e2b3a'; gg.lineWidth = 3; gg.lineJoin = 'miter'; gg.lineCap = 'round';
-          gg.beginPath(); gg.moveTo(-8, -92); gg.lineTo(4, -80); gg.lineTo(-6, -68); gg.lineTo(6, -56); gg.lineTo(-2, -48); gg.stroke();
-          gg.beginPath(); gg.moveTo(-20, -34); gg.lineTo(20, -34); gg.stroke(); gg.fillStyle = '#2e2b3a'; gg.fillRect(-9, -33, 18, 5);
-          gg.beginPath(); gg.arc(0, -18, 8, PI, 0); gg.stroke(); gg.beginPath(); gg.arc(0, -16, 1.8, 0, TAU); gg.fill();
-          gg.strokeStyle = BE.red; gg.lineWidth = 2; gg.beginPath(); gg.arc(22, -74, 7, 0, TAU); gg.stroke();
-        } else {
-          gagPoly(gg, [[-34, -82], [34, -86], [34, -70], [-34, -66]]);
-          gagPoly(gg, [[-22, -52], [24, -54], [24, -42], [-22, -40]]);
-          stitch(gg, [[-16, -24], [14, -25]], { color: '#8e8aa3', alpha: 0.9 });
-        }
-      },
-    });
-    S.cel({ poly: [[26, -104], [38, -90], [26, -88]] }, BE.paperD, { depth: 1, line: 2.2, hi: false, rim: null, shadow: '#8e8aa3' });
-    void g;
-  }
-  BE_P.p0_pageA = { box: [-46, -118, 46, 10], pivot: [0, 0], draw(S) { bePage(S, 'a'); } };
-  BE_P.p0_pageB = { box: [-46, -118, 46, 10], pivot: [0, 0], draw(S) { bePage(S, 'b'); } };
-  BE_P.p0_robe = {
-    box: [-92, -262, 94, 4], pivot: [0, -150],
+  BE_P.p0_bulb = {
+    box: [-10, -10, 10, 10], pivot: [0, 0],
+    draw(S) { S.cel(E(0, 0, 8, 8, 14), S.real ? '#ffd84d' : '#fffbe6', { hi: '#ffffff', line: S.L * 0.7 }); },
+  };
+  const p0Leg = (sd) => ({
+    box: [sd < 0 ? -40 : -4, -158, sd < 0 ? 4 : 40, 4], pivot: [sd * 14, -150],
     draw(S) {
-      const hem = zig(70, -70, -8, 14, 11, 6, 61);
-      const pts = [[-16, -254], [2, -258], [18, -254], [38, -240], [46, -206], [40, -158], [52, -100], [68, -40]].concat(hem).concat([[-66, -42], [-50, -100], [-36, -158], [-42, -206], [-38, -240]]);
-      S.cel(pts, BE.robe, {
-        depth: 24, tension: 0.5, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-        decor(g) {
-          g.fillStyle = BE.robeL; g.globalAlpha = 0.5;
-          [[-26, -230, -44, -20], [4, -236, 4, -14], [30, -226, 40, -18]].forEach((f) => { g.beginPath(); g.moveTo(f[0], f[1]); g.lineTo(f[0] + 14, f[1] + 4); g.lineTo(f[2] + 20, f[3]); g.lineTo(f[2], f[3]); g.closePath(); g.fill(); });
-          g.globalAlpha = 1;
-          for (let i = 0; i < 6; i++) tk.inkPath(g, [[-34 + i * 14, -150], [-44 + i * 18, -22]], { w: 2, color: '#2e2b3a', alpha: 0.6, taper: 0.3, wobble: 0.1, seed: i });
-          quiltDiamonds(g, -50, -230, 100, 70, 16, '#8e8aa3', 0.5);
-          // gold thread down the front edge and flecks of frost on the felt: the haori is buried in silence
-          tk.inkPath(g, [[-4, -250], [-6, -150], [-12, -22]], { w: 2.4, color: BE.gold, alpha: 0.9, taper: 0.1, pressure: 'flat', wobble: 0.04 });
-          for (let i = 0; i < 9; i++) { const x = -34 + 70 * tk.vary('bes', 'x' + i), y = -226 + 200 * tk.vary('bes', 'y' + i); g.fillStyle = i % 2 ? 'rgba(242,240,246,0.7)' : 'rgba(142,138,163,0.8)'; g.beginPath(); g.arc(x, y, 1 + 1.4 * tk.vary('bes', 'r' + i), 0, TAU); g.fill(); }
-          // the belt of a cord with a bronze toggle
-          g.fillStyle = '#2e2b3a'; g.beginPath(); g.moveTo(-40, -160); g.lineTo(42, -164); g.lineTo(44, -150); g.lineTo(-42, -146); g.closePath(); g.fill();
-          g.fillStyle = '#c9893a'; g.fillRect(-14, -158, 16, 10);
-          // a frayed wadding hem: the Hush has already begun on him
-          g.fillStyle = BE.paper; g.beginPath(); g.moveTo(-90, -22);
-          for (let k = 0; k <= 12; k++) g.lineTo(-90 + k * 15, -22 + (k % 2 ? -6 : 1) + (tk.vary('behem', 'k' + k) - 0.5) * 3);
-          g.lineTo(100, 8); g.lineTo(-90, 8); g.closePath(); g.fill();
-          [[-50, -14, 26], [-6, -16, 22], [30, -14, 28]].forEach((b) => gag(g, b[0], b[1], b[2], 6));
-        },
-      });
+      S.limb([sd * 14, -152], [sd * 16, -96], 17, S.c.skin);
+      S.cel(sym([[0, -100], [-11, -99], [-12, -60], [-12, -16], [-20, -10], [-21, -2], [0, -1]]).map((p) => [p[0] + sd * 17, p[1]].concat(p[2] ? [1] : [])), S.c.boot, { hi: '#ffffff', hiW: 3 });
+      S.cel(RR(sd * 17 - 12, -104, 24, 8, 4), S.c.chromeT, { hi: true });
+    },
+  });
+  BE_P.p0_legL = p0Leg(-1);
+  BE_P.p0_legR = p0Leg(1);
+  BE_P.p0_torso = {
+    box: [-40, -240, 40, -168], pivot: [0, -176],
+    draw(S) {
+      S.cel(sym([[0, -234], [-26, -232], [-32, -220], [-26, -196], [-22, -176], [0, -174]]), S.c.bodice, { hi: '#ffffff', hiW: 3, decor(g) { sequins(g, -34, -236, 68, 64, { d: 6.5, cols: [S.c.bodice, RJ.tint(S.c.bodice, 0.4), S.c.bodice2], seed: 12 }); } });
+      S.cel(sym([[0, -236], [-16, -236], [-12, -228], [0, -224]]), S.c.skin, { shadow: false, line: S.L * 0.7 });
+      S.cel(RR(-24, -182, 48, 8, 4), S.c.chromeT, { hi: true });
+      const sx = 12, sy = -206, star = [];
+      for (let k = 0; k < 10; k++) { const a = -PI / 2 + k * PI / 5, r = k % 2 ? 2.6 : 6; star.push([sx + cos(a) * r, sy + sin(a) * r, 1]); }
+      S.cel(star, S.real ? '#ff2a4a' : G.accent, { shadow: false, tension: 0, line: S.L * 0.5 });
     },
   };
-  BE_P.p0_strips = {
-    box: [-50, -162, 50, -10], pivot: [0, -158],
+  const p0Arm = (sd) => ({
+    box: [sd < 0 ? -58 : -10, -248, sd < 0 ? 10 : 58, -184], pivot: [sd * 28, -226],
     draw(S) {
-      [[-30, 78, 0.04], [-10, 92, -0.02], [10, 70, 0.03], [30, 84, -0.04]].forEach((tb, i) => {
-        const x = tb[0], h = tb[1];
-        S.cel({ poly: [[x - 8, -154], [x + 8, -154 + tb[2] * 20], [x + 7, -154 + h], [x - 7, -154 + h + 4]] }, BE.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.1, shadow: BE.paperD });
-        for (let k = 0; k < 3; k++) stitch(S.g, [[x - 4, -146 + k * 12 + i], [x + 4, -146 + k * 12 + i]], { color: '#6e6a7e', alpha: 0.9, dash: 2, gap: 1.6 });
-        S.cel({ poly: [[x - 8, -154 + h * 0.55], [x + 8, -154 + h * 0.55 + 1], [x + 8, -154 + h * 0.55 + 8], [x - 8, -154 + h * 0.55 + 7]] }, BE.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false, decor(g) { gagPoly(g, [[x - 8, -154 + h * 0.55], [x + 8, -154 + h * 0.55 + 1], [x + 8, -154 + h * 0.55 + 8], [x - 8, -154 + h * 0.55 + 7]]); } });
-      });
+      S.limb([sd * 28, -226], [sd * 42, -196], 12, S.c.skin);
+      S.limb([sd * 42, -196], [sd * 12, -240], 11, S.c.skin);
+      S.cel(RR(sd * 30 - 7, -224, 14, 9, 4), S.c.chromeT, { hi: true });
+      S.blob([{ e: [sd * 9, -242, 8, 7.5] }], S.c.skin);
     },
+  });
+  BE_P.p0_armL = p0Arm(-1);
+  BE_P.p0_armR = p0Arm(1);
+  BE_P.p0_mic = {
+    box: [-14, -262, 14, -216], pivot: [0, -236],
+    draw(S) { mirrorMic(S, 0, -250, 1.15); },
   };
-  BE_P.p0_cravat = {
-    box: [-36, -262, 30, -184], pivot: [-4, -250],
-    draw(S) {
-      // a stiff high collar, then three layers of pleated white cotton frill down the chest and a red mute-mon brooch
-      S.cel([[-26, -250], [-22, -266], [-8, -270], [-8, -252]], BE.robe, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: S.c.rim });
-      [[-24, 24, -250, -226], [-20, 20, -230, -208], [-15, 15, -212, -190]].forEach((fr, i) => {
-        const pts = [[fr[0] - 4, fr[2]], [fr[1] + 4, fr[2]], [fr[1] + 2, fr[3]]];
-        for (let k = 4; k >= 0; k--) pts.push([lerp(fr[1], fr[0], k / 4) + (k % 2 ? 0 : 0), fr[3] + (k % 2 ? 6 : 0) - 2]);
-        S.cel(pts, BE.paper, { depth: 4, line: 2.8, tension: 0.3, hi: true, hiW: 1.2, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 4, alpha: 0.2, color: '#8e8aa3' } });
-        for (let k = 0; k < 4; k++) tk.inkPath(S.g, [[fr[0] + 6 + k * (fr[1] - fr[0] - 8) / 3, fr[2] + 4], [fr[0] + 6 + k * (fr[1] - fr[0] - 8) / 3 - 1, fr[3] - 2]], { w: 1.2, color: '#8e8aa3', alpha: 0.8, taper: 0.2 });
-      });
-      S.cel(E(-4, -214, 6.6, 6.6, 12), BE.red, { depth: 2, line: 2.4, hi: false, rim: '#ffd0d8', shadow: BE.redD });
-      S.line([[-8.4, -214], [0.4, -214]], { w: 2.2, color: '#ffe8e0', taper: 0.05, pressure: 'flat' });
-    },
-  };
-  // the head: a long pale face turned to the left, with the nose out front and the hair slicked back (the long tail is a chain)
   BE_P.p0_head = {
-    box: [-48, -332, 40, -236], pivot: [-2, -258],
+    box: [-52, -342, 52, -240], pivot: [0, -246],
     draw(S) {
-      S.cel([[22, -300], [30, -284], [26, -266], [14, -252]], BE.skinD, { depth: 1, line: 0, tension: 0.5, hi: false, rim: null, shadow: false });
-      S.cel([[-22, -304], [-6, -314], [14, -306], [23, -286], [20, -266], [10, -250], [-6, -246], [-14, -254], [-23, -266], [-24, -270], [-35, -271, 1], [-27, -279], [-25, -292]], BE.skin, {
-        depth: 11, tension: 0.5, hi: true, hiW: 2.2, rim: '#ffffff', shadow: BE.skinD, halftone: { d: 5, alpha: 0.22, color: '#7a6ac0' },
-        decor(g) {
-          tk.inkPath(g, [[-20, -262], [-12, -259], [-6, -262]], { w: 1.6, color: '#7a6a9a', taper: 0.4 });                  // the thin pressed mouth
-          tk.inkPath(g, [[2, -256], [6, -262], [10, -270]], { w: 1.2, color: '#a898c8', alpha: 0.8, taper: 0.4 });          // a hollow cheek
-          tk.inkPath(g, [[-24, -279], [-18, -277]], { w: 1.4, color: '#a898c8', taper: 0.4 });
-        },
-      });
-      // the ear, then the slicked hair
-      S.cel(E(14, -276, 4.6, 8, 10), BE.skin, { depth: 1, line: 2.4, hi: false, rim: null, shadow: BE.skinD });
-      S.cel([[-22, -302], [-4, -316], [16, -308], [26, -286], [18, -296], [2, -300], [-10, -298]], BE.hair, { depth: 4, line: 3, tension: 0.5, hi: true, hiW: 1.6, rim: S.c.rim, shadow: BE.hairD });
-      tk.inkPath(S.g, [[-14, -306], [0, -310], [12, -304]], { w: 2, color: '#ffffff', alpha: 0.9, taper: 0.4, wobble: 0 });
+      S.limb([0, -254], [0, -240], 13, S.c.skin);
+      idolHair(S, 0, BEC.hy - 2, 1.45, false);
+      S.cel(E(0, BEC.hy, 31, 33, 26), S.c.skin, { shadow: RJ.shade(S.c.skin, 0.05) });
+      idolHair(S, 0, BEC.hy - 2, 1.45, true);
+      S.ell(26, BEC.hy + 10, 4, 4, S.c.bodice2, { hi: true, line: S.L * 0.6 });
     },
   };
-  BE_C.p0_hair = {
-    spine: [[14, -298], [40, -298], [58, -278], [64, -246], [56, -212]], cuts: [0.3, 0.62], reach: 40, overlap: 6,
+  BE_C.p0_tail = {
+    spine: [[14, -328], [42, -344], [70, -334], [86, -306], [88, -270]], cuts: [0.28, 0.55, 0.8], reach: 50, overlap: 5,
     draw(S) {
-      const sp = [[14, -298], [40, -298], [58, -278], [64, -246], [56, -212]];
-      S.rib(sp, BE.hair, { wMax: 15, w0: 11, w1: 2, tipPow: 1.1, shadow: BE.hairD, rim: S.c.rim, rimW: 1.4, line: 3, gloss: true, glossColor: '#ffffff', glossAlpha: 0.9, strands: 3 });
-      S.cel(E(34, -303, 4.6, 8, 8, 0.4), BE.red, { depth: 1, line: 2.4, hi: false, rim: '#ffd0d8', shadow: BE.redD });          // a red ribbon tie
+      RJ.lock(S.g, [[14, -328], [42, -344], [70, -334], [86, -306], [88, -270]], S.c.hair, { wMax: 30, w0: 18, w1: 6, line: S.L, lineColor: S.lc, glossColor: '#ffffff' });
+      S.ell(16, -328, 9, 8, S.c.bodice, { hi: true });
     },
   };
-  BE_P.p0_armF = {
-    box: [-130, -262, -10, -120], pivot: [-38, -238],
+  BE_C.p0_skirt = {
+    spine: [[0, -180], [0, -160], [0, -136]], cuts: [0.5], reach: 70, overlap: 4,
     draw(S) {
-      S.cel([[-26, -250], [-52, -250], [-80, -214], [-100, -168, 1], [-72, -144, 1], [-52, -178], [-26, -214]], BE.robe, { depth: 12, tension: 0.6, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
-      // the cuff: white cotton, stitched
-      S.cel({ poly: [[-104, -172], [-70, -148], [-64, -130], [-102, -150]] }, BE.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BE.paperD, decor(g) { stitch(g, [[-100, -166], [-68, -144]], { color: '#8e8aa3', alpha: 0.9 }); } });
-      // the hand: a white glove, long fingers around the baton
-      S.cel(E(-84, -142, 9.6, 8.6, 10), '#ffffff', { depth: 2, line: 2.6, hi: false, rim: '#ffffff', shadow: BE.paperD });
-      [[-92, -148], [-86, -151], [-80, -150]].forEach((f) => S.line([[f[0], f[1]], [f[0] - 4, f[1] - 6]], { w: 3, color: '#ffffff', taper: 0.3 }));
-      stitch(S.g, [[-88, -146], [-80, -144]], { color: '#8e8aa3', alpha: 0.9, dash: 2, gap: 1.5 });
+      const hem = [];
+      for (let i = 0; i <= 10; i++) hem.push([-62 + i * 12.4, -134 + (i % 2 ? -5 : 2)]);
+      const shape = [[-24, -180], [24, -180], [44, -160], [62, -136]].concat(hem.slice().reverse().slice(1, -1)).concat([[-62, -136], [-44, -160]]);
+      S.chrome(shape, { base: S.real ? '#8b4dff' : G.lilac, horizon: 0.65, tension: 0.3 });
+      S.g.save(); S.g.strokeStyle = tk.rgba(S.lc, 0.35); S.g.lineWidth = 1.2;
+      [-36, -12, 12, 36].forEach((x) => { S.g.beginPath(); S.g.moveTo(x * 0.5, -176); S.g.lineTo(x * 1.4, -138); S.g.stroke(); });
+      S.g.restore();
     },
   };
-  // the baton: a long thin white shaft with a bulb grip wrapped in red lacquer, a silver ferrule and a red lacquered tip; grip point at the origin, tip up
-  BE_P.p0_pen = {
-    box: [-20, -214, 20, 76], pivot: [0, 0],
-    draw(S) {
-      S.cel(cap(0, 62, 0, -170, 6.4, 3.6), '#f8f7fb', { depth: 2, line: 2.8, hi: true, hiW: 1.2, rim: '#ffffff', tension: 0.5, shadow: '#b9b5ca' });
-      S.cel(E(0, 56, 11, 15, 12), BE.lac, { depth: 4, line: 3, hi: true, hiW: 1.8, rim: '#ffb0b8', shadow: BE.redD });
-      S.cel({ poly: [[-6, 38], [6, 38], [6, 44], [-6, 44]] }, BE.silver, { depth: 1, line: 2, hi: false, rim: '#ffffff', shadow: BE.silverD });
-      // the silver ferrule where the white shaft meets the red tip, and the tip itself
-      S.cel({ poly: [[-5, -168], [5, -168], [5, -160], [-5, -160]] }, BE.silver, { depth: 1, line: 2, hi: true, hiW: 1, rim: '#ffffff', shadow: BE.silverD });
-      S.cel([[-4.4, -168, 1], [-4.8, -190], [0, -212, 1], [4.8, -190], [4.4, -168, 1]], BE.lac, { depth: 2, line: 2.8, tension: 0.4, hi: true, hiW: 1.2, rim: '#ffb0b8', shadow: BE.redD });
-    },
-  };
-  BE_P.p0_armB = {
-    box: [4, -262, 104, -120], pivot: [40, -238],
-    draw(S) {
-      S.cel([[30, -250], [56, -246], [82, -208], [92, -170, 1], [56, -150, 1], [44, -184], [28, -216]], BE.robe, { depth: 12, tension: 0.6, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
-      S.cel({ poly: [[56, -156], [92, -174], [98, -160], [62, -142]] }, BE.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BE.paperD, decor(g) { stitch(g, [[60, -151], [94, -167]], { color: '#8e8aa3', alpha: 0.9 }); } });
-      S.cel(E(76, -150, 9, 8, 10), '#ffffff', { depth: 2, line: 2.6, hi: false, rim: '#ffffff', shadow: BE.paperD });
-    },
-  };
-  BE_P.p0_stack = {
-    box: [-46, -50, 46, 50], pivot: [0, 0],
-    draw(S) {
-      // five folded black fans stacked flat, each a closed sensu: a rounded slab with pleat lines
-      for (let i = 0; i < 5; i++) S.cel([[-34 + i * 2, -34 + i * 9], [32 - i, -36 + i * 9 + (i % 2)], [36 - i * 2, -30 + i * 9], [34 - i * 2, -25 + i * 9], [-32 + i, -24 + i * 9], [-37 + i * 2, -30 + i * 9]], i % 2 ? '#46425a' : '#2e2b3a', {
-        depth: 2, line: 2.4, tension: 0.2, hi: false, rim: S.c.rim, shadow: '#14121e',
-        decor(g) { for (let j = -5; j <= 5; j++) tk.inkPath(g, [[j * 6, -34 + i * 9], [j * 6 + 1, -25 + i * 9]], { w: 0.9, color: '#8e8aa3', alpha: 0.6, taper: 0.1, pressure: 'flat' }); },
-      });
-      S.cel({ poly: [[-30, -8], [30, -10], [30, -2], [-30, 0]] }, BE.lac, { depth: 1, line: 2.2, hi: false, rim: null, shadow: BE.redD });      // a red ribbon round the pile
-      S.cel(E(0, -4, 6, 6, 8), BE.gold, { depth: 1, line: 2, hi: false, rim: '#fff0b0', shadow: BE.goldD });
-    },
-  };
-  // a floating mark of silence painted live: kind 0 quarter rest (zigzag), 1 fermata (arc and dot), 2 breath mark (comma), 3 whole rest (bar under a line), 4 strike line
-  function beMark(ctx, kind, x, y, s, rot, col, a) {
-    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = cA(a); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3.4 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    if (kind === 0) { ctx.moveTo(-4 * s, -13 * s); ctx.lineTo(5 * s, -4 * s); ctx.lineTo(-5 * s, 3 * s); ctx.lineTo(4 * s, 11 * s); ctx.quadraticCurveTo(-6 * s, 12 * s, -5 * s, 18 * s); ctx.stroke(); }
-    else if (kind === 1) { ctx.arc(0, 4 * s, 12 * s, PI, 0); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 6 * s, 2.2 * s, 0, TAU); ctx.fill(); }
-    else if (kind === 2) { ctx.moveTo(4 * s, -10 * s); ctx.quadraticCurveTo(10 * s, -4 * s, 2 * s, 12 * s); ctx.stroke(); ctx.beginPath(); ctx.arc(4 * s, -11 * s, 2.4 * s, 0, TAU); ctx.fill(); }
-    else if (kind === 3) { ctx.moveTo(-13 * s, -4 * s); ctx.lineTo(13 * s, -4 * s); ctx.stroke(); ctx.fillRect(-8 * s, -3 * s, 16 * s, 6 * s); }
-    else { ctx.moveTo(-12 * s, 0); ctx.lineTo(12 * s, 0); ctx.stroke(); }
-    ctx.restore();
-  }
   BE_RIG[0] = function (ctx, st) {
-    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 4.0) * m, hot = clamp(tele + buff + strike + guard * 0.4 + st.wound * 0.5, 0, 1);
-    const dx = -strike * 36 + hurt * 14 + E0.shake * 1.2 + 6 * tele - 6 * wind, dy = 3 * tele + 3 * guard + 10 * die + 2 * br;
-    const rot = -0.02 * strike + 0.04 * tele + 0.06 * hurt + 0.008 * br;
-    let aF = 0.05 * br, gW = -0.8 + 0.04 * br, aB = -0.03 * br;
-    if (atk) {
-      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(0, 2.1, k); gW = lerp(-0.8, 0.45, k); }
-      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(2.1, -0.2, k); gW = lerp(0.45, -2.2, k); }
-      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.2, 0.05 * br, k); gW = lerp(-2.2, -0.8, k); }
-    } else if (E0.pose === 'telegraph') { aF = 2.1 * tele + 0.03 * E0.shake; gW = lerp(-0.8, 0.4, tele) + 0.03 * E0.shake; aB = -0.4 * tele; }
-    else if (E0.pose === 'block') { aF = 0.7 * guard; gW = lerp(-0.8, -1.3, guard); aB = 1.5 * guard; }
-    else if (E0.pose === 'buff') { aF = 0.9 * buff; gW = -0.8 + 0.7 * buff; aB = -0.7 * buff; }
-    else if (E0.pose === 'hurt') { aF = 0.4 * hurt; gW = -0.8 + 0.4 * hurt; aB = 0.3 * hurt; }
-    else if (die > 0) { aF = 0.5 * die; aB = -0.4 * die; }
-    // the fan of pages: spread with the mood, each page swaying about the shoulders on its own phase
-    const spread = 1 + 0.18 * tele + 0.3 * buff - 0.25 * guard;
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const br = sin(t * 1.5) * m, beat = Math.abs(sin(t * PI * 1.2)) * m;
+    const pose = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
+    const dx = -12 * pose + hurt * 16 + E0.shake, dy = -beat * 3 + 2 * guard;
+    // the ring of backing light: a perfect chase
+    put(ctx, st, 'p0_track', { a: 0.9 });
+    for (let i = 0; i < 12; i++) {
+      const a = -PI / 2 + i * TAU / 12, x = cos(a) * BEC.R0, y = BEC.cy0 + sin(a) * BEC.R0, lit = st.won ? 0.7 : 0.45 + 0.55 * (0.5 + 0.5 * sin(t * 4 - i * 0.9)) * (1 - tele) + tele;
+      tk.glow(ctx, x, y, 16 + 10 * lit, st.won ? '#ffd84d' : '#fff6d0', 0.55 * lit);
+      put(ctx, st, 'p0_bulb', { x, y });
+    }
     ctx.save();
-    if (die > 0) ctx.transform(1, 0, 0, 1 - 0.1 * die, 0, 0);
-    xform(ctx, 0, -150, dx, dy, rot, 1, 1 + 0.01 * br);
-    {
-      const n = 9;
-      for (let i = 0; i < n; i++) {
-        const u = i / (n - 1) - 0.5, a = u * 2.9 * spread + 0.05 * sin(t * (0.9 + 0.15 * i) + i) * m + 0.08 * hurt * (u > 0 ? 1 : -1), z = 0.88 + 0.12 * Math.abs(Math.cos(i * 1.7));
-        ctx.save(); ctx.translate(4, -206); ctx.rotate(a); ctx.translate(0, -34 * (1 + 0.1 * hot)); ctx.scale(z, z);
-        put(ctx, st, i % 2 ? 'p0_pageB' : 'p0_pageA', { r: 0.03 * sin(t * 1.3 + i * 1.7) * m });
-        ctx.restore();
-      }
-      tk.glow(ctx, 4, -230, 130, BE.lilac, 0.16 + 0.12 * hot);
-      { const gr = ctx.createRadialGradient(-4, -282, 8, -4, -282, 74); gr.addColorStop(0, 'rgba(26,19,64,0.92)'); gr.addColorStop(0.7, 'rgba(26,19,64,0.7)'); gr.addColorStop(1, 'rgba(26,19,64,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(-4, -282, 74, 0, TAU); ctx.fill(); }
-    }
-    putChain(ctx, st, 'p0_hair', [0.1 * sin(t * 1.6) * m + 0.15 * hurt - 0.2 * strike, 0.14 * sin(t * 1.6 - 0.9) * m, 0.2 * sin(t * 1.6 - 1.8) * m + 0.3 * tele * sin(t * 12)], { r: 0.02 * br + 0.06 * tele });
-    if (guard < 0.3) put(ctx, st, 'p0_armB', { r: aB });
-    put(ctx, st, 'p0_robe', { sy: 1 + 0.01 * br, r: 0.005 * br });
-    put(ctx, st, 'p0_strips', { r: 0.05 * sin(t * 1.8 + 1) * m + 0.1 * strike - 0.07 * tele, sy: 1 + 0.02 * sin(t * 2.6) * m });
-    put(ctx, st, 'p0_cravat', { sy: 1 + 0.015 * br, r: 0.01 * br });
-    // the stack held in the back arm, its ribbon trailing
-    {
-      const ca = cos(aB), sa = sin(aB), hx = 76, hy = -150, px = 40 + (hx - 40) * ca - (hy + 238) * sa, py = -238 + (hx - 40) * sa + (hy + 238) * ca;
-      put(ctx, st, 'p0_stack', { x: px - 18 - 40 * guard, y: py + 10 - 40 * guard, r: -0.1 + 0.03 * sin(t * 1.7) * m - 0.2 * guard + 0.2 * hurt });
-    }
-    if (guard >= 0.3) put(ctx, st, 'p0_armB', { r: aB });
+    xform(ctx, 0, -150, dx, dy, 0.1 * pose + 0.06 * wind + 0.1 * hurt, 1, 1);
+    put(ctx, st, 'p0_legL', { r: 0.04 * beat - 0.1 * pose + 0.05 * guard });
+    put(ctx, st, 'p0_legR', { r: -0.04 * beat + 0.08 * pose - 0.05 * guard });
+    // the hair flip (the telegraph): the ponytail whips up and over
+    const flip = tele + 0.6 * buff;
+    const tb = [0.04 * br - 0.5 * flip + 0.15 * hurt + 0.1 * pose, 0.08 * sin(t * 1.5 - 0.7) * m - 0.4 * flip, 0.1 * sin(t * 1.5 - 1.4) * m - 0.3 * flip + 0.15 * wind];
+    putChain(ctx, st, 'p0_tail', tb);
+    putChain(ctx, st, 'p0_skirt', [0.03 * br + 0.06 * hurt - 0.05 * pose, 0.06 * sin(t * 1.5 - 0.6) * m + 0.08 * pose]);
+    put(ctx, st, 'p0_torso', { sy: 1 + 0.01 * br });
+    // the arms: both hands at the mirror mic (symmetric); the perfect pose flings the near arm out at the heroes
+    put(ctx, st, 'p0_armR', { r: 0.03 * br + 0.3 * guard - 0.1 * buff });
+    put(ctx, st, 'p0_mic', { y: -2 * beat, r: 0.04 * hurt, x: 2 * pose });
     put(ctx, st, 'p0_head', {
-      r: 0.02 * sin(t * 1.1) * m - 0.04 * tele + 0.05 * strike + 0.1 * hurt, y: 2 * tele, sx: 1.2, sy: 1.2,
+      r: 0.03 * br + 0.12 * hurt - 0.06 * pose + 0.08 * flip * sin(t * 9), y: -1.5 * beat,
       kids(c) {
-        const ob = blink(t, 'editor', 4.6) * (1 - 0.5 * hurt), look = [-0.6 + 0.3 * sin(t * 0.7) * m, 0.1];
-        // eyes: calm, half-lidded noh slits, pale; the red only comes when he is roused
-        const rouse = clamp(hot * 1.4, 0, 1), irisC = rouse > 0.35 ? ['#ff6a7a', BE.red] : ['#e6e3f4', '#9d99b2'], glowC = rouse > 0.35 ? BE.red : BE.lilac;
-        eyeLive(c, -15, -279, 6.2, 3.4 + 1.8 * hot, { open: ob, iris: irisC, sclera: '#f4f1fa', pupil: 'slit', look, glow: glowC, glowK: 0.3 + 0.6 * hot, glowR: 3, lw: 2, lidTop: 0.5 - 0.3 * hot, lidColor: BE.skinD, rot: 0.12 });
-        eyeLive(c, 3, -280, 5.4, 3.3 + 1.8 * hot, { open: ob, iris: irisC, sclera: '#f4f1fa', pupil: 'slit', look, glow: glowC, glowK: 0.3 + 0.6 * hot, glowR: 3, lw: 2, lidTop: 0.5 - 0.3 * hot, lidColor: BE.skinD, rot: -0.1 });
-        // brows: thin, arched and serene; they lower with the temper
-        tk.inkPath(c, [[-24, -290 + 2 * hot], [-14, -293 + 2 * hot], [-5, -289 + 4 * hot]], { w: 2.4, color: '#6a5a96', taper: 0.4, wobble: 0 });
-        tk.inkPath(c, [[-2, -290 + 4 * hot], [6, -294 + 2 * hot], [14, -289]], { w: 2.4, color: '#6a5a96', taper: 0.4, wobble: 0 });
-        if (hurt > 0.25 || strike > 0.3) { c.fillStyle = BE.ink; c.beginPath(); c.ellipse(-14, -260, 4.4, 3 + 2 * hurt, 0, 0, TAU); c.fill(); }
+        face(c, st, 0, BEC.hy + 2, { kind: 'round', w: 15, gap: 26, my: 19, sw: 13, iris: ['#7d6fb0', '#c9b8ff'], look: [-0.4 * pose - 0.3 * tele, 0] });
+        crack(c, 12, BEC.hy - 28, 34, 'flawless0', hurt * 1.4);
+        polite(c, st, -22, BEC.hy - 24, 6);
       },
     });
-    // the baton on the hand of the front arm, its red tip trailing a little ash
-    put(ctx, st, 'p0_armF', {
-      r: aF,
-      kids(c) { put(c, st, 'p0_pen', { x: -84, y: -142, r: gW - aF }); },
-    });
-    {
-      const ang = gW, hx = -38 + (-84 + 38) * cos(aF) - (-142 + 238) * sin(aF), hy = -238 + (-84 + 38) * sin(aF) + (-142 + 238) * cos(aF);
-      const tx = hx + sin(ang) * 204, ty = hy - cos(ang) * 204;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, tx, ty, 26 + 34 * hot, BE.red, 0.5 + 0.4 * hot); ctx.restore();
-      for (let i = 0; i < 3; i++) { const per = 1.1 + 0.25 * i, u = ((t / per + i * 0.33) % 1 + 1) % 1; ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 1.3) * (1 - die); ctx.strokeStyle = i % 2 ? '#f2f0f6' : '#8e8aa3'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tx + 2 - 4 * i, ty + 6 + u * 70); ctx.lineTo(tx + 5 - 4 * i, ty + 8 + u * 70); ctx.stroke(); ctx.restore(); }
-      if (tele > 0.05 || (atk && p < 0.32)) { const k = tele || sm(p / 0.3); tk.sparkle(ctx, tx, ty - 6, 8 + 16 * k, { color: '#ffd0d8', alpha: 0.9 }); }
-      // the strike: a long red baton sweep across the front, then a splash
-      if (atk && p > 0.44 && p < 0.9) {
-        const u = clamp((p - 0.44) / 0.46, 0, 1);
-        ctx.save(); ctx.globalAlpha = (1 - ease.inQuad(u)) * 0.95;
-        tk.inkPath(ctx, [[-60 + dx, -120 + dy], [-170 + dx, -110], [-300 + dx, -96 + 10 * sin(u * 9)]], { w: 14 * (1 - u * 0.5), color: BE.red, taper: 0.4, wobble: 0.06, pressure: 'mid' });
-        tk.inkPath(ctx, [[-180 + dx, -132], [-300 + dx, -136]], { w: 4, color: '#ffd0d8', taper: 0.4, wobble: 0.1 });
-        ctx.restore();
-        for (let i = 0; i < 8; i++) { const fj = fling('beink' + i, 'b', u, { spread: 220, up: 90, g: 300, bias: -70 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.fillStyle = BE.red; ctx.beginPath(); ctx.arc(-200 + dx + fj.x, -90 + fj.y, 2 + 3 * hv('beink', 's' + i), 0, TAU); ctx.fill(); ctx.restore(); }
-      }
-    }
-    // proofreader's marks orbit him: a slow ring of red glyphs that tightens and speeds up when he is about to strike
-    {
-      const n = 6, spin = t * (0.4 + 0.9 * hot), rx = lerp(120, 96, tele) + 8 * buff;
-      for (let i = 0; i < n; i++) {
-        const a = spin + i * TAU / n, z = sin(a), x = cos(a) * rx - 4, y = -200 + sin(a * 1.0) * 20 + 14 * sin(t * 1.3 + i), s = 0.8 + 0.25 * z;
-        beMark(ctx, i % 5, x + dx, y + dy, s, 0.3 * sin(t * 1.1 + i), z > 0 ? BE.red : '#8a1a34', (0.35 + 0.45 * (z * 0.5 + 0.5)) * (1 - die));
-      }
-    }
+    put(ctx, st, 'p0_armL', { r: -0.03 * br - 2.6 * pose + 0.6 * wind - 0.3 * guard + 0.1 * buff });
     ctx.restore();
-    if (buff > 0.1) motes(ctx, dx, -200 + dy, t, 12, 'bebuff', { col: '#cfcdd8', size: 2.6, rise: 90, spread: 70, life: 0.9, alpha: buff });
-  };
-  // ---- phase 1: THE DAMPER ---------------------------------------------------------------------------------------
-  const BEE = { pink: '#6e6a7e', pinkL: '#9d99b2', pinkD: '#46425a', smudge: '#2e2b3a', blue: '#46425a', white: '#cfcdd8', brass: '#c9893a', steel: '#b8bcd8', steelD: '#6a6e90' };
-  // quilting stitches and a patch of futon diamonds painted into a felt shape (decor): the old graphite smears
-  function eraserDecor(g, x0, y0, x1, y1, seed, n) {
-    for (let i = 0; i < (n || 4); i++) {
-      const x = x0 + (x1 - x0) * tk.vary('eras' + seed, 'x' + i), y = y0 + (y1 - y0) * tk.vary('eras' + seed, 'y' + i);
-      stitch(g, [[x, y], [x + 14 + 10 * tk.vary('eras' + seed, 'l' + i), y + 6 * (tk.vary('eras' + seed, 'a' + i) - 0.5)], [x + 30, y + 3]], { w: 1.6, color: '#e4e1ee', alpha: 0.55, dash: 3.4, gap: 2.8 });
+    // the camera flash of a perfect pose
+    if (atk && p > 0.42 && p < 0.85) {
+      const u = (p - 0.42) / 0.43, hx = -90 + dx, hy = -232;
+      tk.glow(ctx, hx, hy, 70, '#ffffff', 0.8 * (1 - u));
+      ctx.save(); ctx.globalAlpha = 1 - u; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(hx - 200 * (0.3 + u), hy); ctx.lineTo(hx, hy - 4); ctx.lineTo(hx + 10, hy); ctx.lineTo(hx, hy + 4); ctx.closePath(); ctx.fill(); ctx.restore();
+      foe.sparkles(ctx, hx - 60, hy, [[-30, -30, 8, 0], [-60, 20, 6, 0.3], [-10, 30, 5, 0.6]], 3, u * 2);
     }
-    g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip(); quiltDiamonds(g, x0, y0, x1 - x0, y1 - y0, 15, '#2e2b3a', 0.4); g.restore();
-  }
-  function eraserSleeve(S, x0, y0, x1, y1, sk) {
-    S.cel({ poly: [[x0, y0], [x1, y0 + (sk || 0)], [x1, y1 + (sk || 0)], [x0, y1]] }, BEE.white, { depth: 4, line: 3, hi: false, rim: S.c.rim, shadow: '#9d99b2', halftone: { d: 5, alpha: 0.2, color: '#46425a' } });
-    S.cel({ poly: [[x0, y0 + (y1 - y0) * 0.38], [x1, y0 + (y1 - y0) * 0.38 + (sk || 0)], [x1, y0 + (y1 - y0) * 0.62 + (sk || 0)], [x0, y0 + (y1 - y0) * 0.62]] }, BEE.blue, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-  }
-  function eraserLeg(S, cx, flip) {
-    const sg = flip ? -1 : 1;
-    S.cel([[cx - 28, -118], [cx + 28, -120], [cx + 31, -52, 1], [cx + 36, -10, 1], [cx - 36, -8, 1], [cx - 31, -54, 1]], BEE.pink, { depth: 12, tension: 0.3, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 }, decor(g) { eraserDecor(g, cx - 28, -112, cx + 4, -16, cx, 3); } });
-    S.cel({ poly: [[cx - 32, -62], [cx + 32, -62], [cx + 34, -42], [cx - 34, -42]] }, BEE.steel, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#ffffff', shadow: BEE.steelD, decor(g) { for (let k = -3; k <= 3; k++) tk.inkPath(g, [[cx + k * 9, -62], [cx + k * 9, -42]], { w: 1.4, color: BEE.steelD, alpha: 0.8, taper: 0.1, pressure: 'flat' }); } });
-    S.cel({ poly: [[cx - 40, -16], [cx + 40, -16], [cx + 42, 0], [cx - 42, 0]] }, '#5a5a6e', { depth: 2, line: 3, hi: false, rim: S.c.rim, shadow: '#3a3a4e' });     // the worn graphite foot
-    void sg;
-  }
-  BE_P.p1_legN = { box: [-100, -128, 0, 6], pivot: [-44, -112], draw(S) { eraserLeg(S, -44, false); } };
-  BE_P.p1_legF = { box: [-4, -128, 96, 6], pivot: [42, -112], draw(S) { eraserLeg(S, 42, true); } };
-  BE_P.p1_torso = {
-    box: [-112, -276, 114, -104], pivot: [0, -190],
+    if (buff > 0.05) foe.sparkles(ctx, 0, -230, [[-80, -60, 8, 0], [80, -40, 7, 0.3], [-40, 60, 6, 0.6], [60, 70, 6, 0.8]], 3, E0.buffP * 2);
+    if (guard > 0.05) pitchRing(ctx, dx, -190, 90, 150, 3, 18, G.blush, guard, t * 5);
+  };
+
+  // ---- phase 1: the Filter
+  const BF = { ly: -292, lr: 60 };
+  BE_P.p1_base = {
+    box: [-116, -76, 116, 4], pivot: [0, -40],
+    draw(S) { S.chrome(sym([[0, -70], [-66, -70], [-80, -48], [-104, -18], [-112, -4], [-104, 0], [0, 0]]), { horizon: 0.5, base: S.real ? '#8b4dff' : '#e9e3fb' }); S.cel(E(0, -70, 66, 10, 24), S.real ? '#ffc94d' : G.blush, { hi: true }); },
+  };
+  BE_P.p1_column = {
+    box: [-84, -262, 84, -60], pivot: [0, -70],
     draw(S) {
-      S.cel([[-84, -258, 1], [-30, -268], [34, -268], [88, -260, 1], [102, -232, 1], [92, -178], [76, -124, 1], [-66, -122, 1], [-90, -176], [-100, -232, 1]], BEE.pink, {
-        depth: 26, tension: 0.35, hi: true, hiW: 3.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 },
-        decor(g) { eraserDecor(g, -84, -250, -40, -130, 11, 4); eraserDecor(g, 50, -250, 70, -130, 12, 3); tk.inkPath(g, [[62, -262], [56, -240], [66, -224], [58, -208]], { w: 2.4, color: BEE.pinkD, alpha: 0.9, taper: 0.4, wobble: 0.1 }); tk.inkPath(g, [[-70, -236], [-20, -228], [34, -240], [80, -226]], { w: 9, color: BEE.smudge, alpha: 0.22, taper: 0.5, wobble: 0.2 }); tk.inkPath(g, [[-60, -142], [0, -136], [60, -144]], { w: 7, color: BEE.smudge, alpha: 0.2, taper: 0.5, wobble: 0.2 }); tk.inkPath(g, [[-60, -134], [-52, -146], [-58, -158]], { w: 2.2, color: BEE.pinkD, alpha: 0.9, taper: 0.4, wobble: 0.1 }); },
-      });
-      // the quilted wrap round the belly with a dark cord band and the word SHH
-      eraserSleeve(S, -86, -204, 96, -150, 3);
-      S.g.save(); S.g.font = '900 17px ' + tk.font.num; S.g.textAlign = 'center'; S.g.textBaseline = 'middle'; S.g.fillStyle = '#ffffff'; S.g.strokeStyle = BEE.blue;
-      S.g.fillText('SHH', 4, -177); S.g.restore();
-      // chewed bites out of the torso where he has rubbed himself away
-      [[-92, -200], [96, -214], [-70, -134]].forEach((b, i) => S.cel([[b[0] - 7, b[1] - 6, 1], [b[0] + 5, b[1] - 2, 1], [b[0] - 2, b[1] + 8, 1]], '#2e2b3a', { depth: 1, line: 2, tension: 0, hi: false, rim: null, shadow: false }));
+      S.chrome(sym([[0, -250], [-54, -248], [-62, -236], [-56, -150], [-62, -76], [0, -70]]), { horizon: 0.72, base: S.real ? '#6fb8ff' : '#e4dcfa' });
+      S.g.save(); S.g.strokeStyle = tk.rgba(S.lc, 0.28); S.g.lineWidth = 1.6;
+      [-36, -18, 0, 18, 36].forEach((x) => { S.g.beginPath(); S.g.moveTo(x, -170); S.g.lineTo(x * 1.06, -82); S.g.stroke(); });
+      S.g.restore();
+      [-1, 1].forEach((sd) => S.ell(sd * 62, -234, 17, 16, S.real ? '#7cc6ff' : G.chromeL, { hi: '#ffffff' }));
+      S.cel(E(0, -250, 34, 10, 22), S.real ? '#ffc94d' : G.chromeL, { hi: '#ffffff' });
     },
   };
-  function eraserPad(S, cx, sg) {
-    S.cel([[cx - 34, -246, 1], [cx + 32, -252, 1], [cx + 40, -222], [cx + 28, -204, 1], [cx - 34, -208, 1], [cx - 42, -228]], BEE.pink, { depth: 9, tension: 0.3, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 }, decor(g) { eraserDecor(g, cx - 30, -240, cx + 8, -210, cx, 3); } });
-    S.cel([[cx - 24, -264, 1], [cx + 22, -268, 1], [cx + 30, -248, 1], [cx - 28, -246, 1]], BEE.pinkL, { depth: 5, line: 3.2, tension: 0.2, hi: true, hiW: 1.6, rim: S.c.rim, shadow: BEE.pink });
-    S.cel(E(cx + 8 * sg, -236, 4, 4, 8), BEE.brass, { depth: 1, line: 2, hi: false, rim: null });
-  }
-  BE_P.p1_padN = { box: [-146, -278, -50, -194], pivot: [-100, -232], draw(S) { eraserPad(S, -100, -1); } };
-  BE_P.p1_padF = { box: [52, -278, 148, -194], pivot: [100, -232], draw(S) { eraserPad(S, 100, 1); } };
-  function eraserArm(S, sx) {
-    // shoulder to fist: a thick arm and a fist that is one whole eraser block, worn at the knuckles
-    const x = (v) => sx * v;
-    S.cel(cap(x(100), -232, x(122), -150, 58, 52), BEE.pink, { depth: 10, tension: 0.4, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
-    S.cel(cap(x(122), -150, x(130), -84, 54, 50), BEE.pinkL, { depth: 9, tension: 0.4, hi: true, hiW: 2, rim: S.c.rim });
-    S.cel({ poly: [[x(94), -154], [x(150), -158], [x(152), -142], [x(96), -138]] }, BEE.steel, { depth: 2, line: 2.8, hi: false, rim: '#ffffff', shadow: BEE.steelD });
-    const pts = [[x(86), -108, 1], [x(176), -110, 1], [x(186), -84], [x(178), -26, 1], [x(90), -24, 1], [x(80), -64]];
-    S.cel(sx < 0 ? pts.slice().reverse() : pts, BEE.pink, { depth: 14, tension: 0.3, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 }, decor(g) { eraserDecor(g, Math.min(x(90), x(170)), -100, Math.max(x(90), x(170)), -30, 7 + sx, 5); } });
-    S.cel({ poly: [[x(86), -108], [x(176), -110], [x(172), -98], [x(90), -96]] }, BEE.pinkL, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
-    eraserSleeve(S, Math.min(x(88), x(178)), -76, Math.max(x(88), x(178)), -50, 0);
-  }
-  BE_P.p1_armF = { box: [-206, -272, -50, -14], pivot: [-100, -232], draw(S) { eraserArm(S, -1); } };
-  BE_P.p1_armB = { box: [50, -272, 206, -14], pivot: [100, -232], draw(S) { eraserArm(S, 1); } };
-  BE_P.p1_head = { box: BE_P.p0_head.box, pivot: BE_P.p0_head.pivot, draw: BE_P.p0_head.draw };
-  BE_C.p1_cloak = {
-    spine: [[0, -262], [0, -200], [0, -130], [0, -64]], cuts: [0.34, 0.68], reach: 118, overlap: 6,
+  BE_P.p1_band = {
+    box: [-76, -220, 76, -176], pivot: [0, -198],
     draw(S) {
-      const pts = [[-70, -262], [0, -274], [70, -262], [112, -230], [106, -150], [118, -92, 1]].concat(zig(118, -118, -92, 26, 8, 16, 71)).concat([[-106, -150], [-112, -230]]);
-      S.cel(pts, BE.robe, {
-        depth: 22, tension: 0.4, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
-        decor(g) { for (let i = 0; i < 7; i++) tk.inkPath(g, [[-90 + i * 30, -240], [-96 + i * 32, -110]], { w: 2, color: '#2e2b3a', alpha: 0.7, taper: 0.3, wobble: 0.1, seed: i }); g.fillStyle = 'rgba(242,240,246,0.7)'; for (let i = 0; i < 8; i++) { g.beginPath(); g.arc(-96 + 190 * tk.vary('bec', 'x' + i), -250 + 150 * tk.vary('bec', 'y' + i), 1.2 + 1.5 * tk.vary('bec', 'r' + i), 0, TAU); g.fill(); } },
-      });
-    },
-  };
-  BE_RIG[1] = function (ctx, st) {
-    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.2) * m, hot = clamp(tele + buff + strike + guard * 0.3 + st.wound * 0.6, 0, 1);
-    const dx = -strike * 56 + hurt * 18 + E0.shake * 1.3 + 8 * tele - 10 * wind, dy = 5 * tele + 4 * guard + 12 * die + 3 * br * 0.5 - 4 * buff;
-    const rot = -0.05 * strike + 0.05 * tele + 0.06 * hurt + 0.012 * br;
-    let aF = 0.06 * br, aB = -0.06 * br - 0.04;
-    if (atk) {
-      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(0, 2.5, k); aB = lerp(-0.04, -2.2, k); }
-      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(2.5, -0.5, k); aB = lerp(-2.2, 0.3, k); }
-      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.5, 0.06 * br, k); aB = lerp(0.3, -0.04, k); }
-    } else if (E0.pose === 'telegraph') { aF = 2.5 * tele + 0.03 * E0.shake; aB = -2.3 * tele - 0.03 * E0.shake; }
-    else if (E0.pose === 'block') { aF = 1.4 * guard; aB = 1.1 * guard; }
-    else if (E0.pose === 'buff') { aF = 1.5 * buff; aB = -1.5 * buff; }
-    else if (E0.pose === 'hurt') { aF = 0.5 * hurt; aB = -0.3 * hurt; }
-    else if (die > 0) { aF = 0.5 * die; aB = -0.5 * die; }
-    const heave = 1 + 0.018 * br - 0.03 * tele + 0.02 * buff;
-    ctx.save();
-    if (die > 0) ctx.transform(1 + 0.08 * die, 0, 0, 1 - 0.12 * die, -6 * die, 0);
-    { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, -190 + dy, 190, '#9d99b2', (0.12 + 0.25 * hot) * (1 - die)); ctx.restore(); }
-    xform(ctx, 0, -112, dx, dy, rot, 1, 1);
-    putChain(ctx, st, 'p1_cloak', [0.04 * sin(t * 1.4) * m + 0.05 * tele, 0.08 * sin(t * 1.4 - 0.9) * m + 0.1 * hurt, 0.12 * sin(t * 1.4 - 1.8) * m + 0.2 * strike]);
-    put(ctx, st, 'p1_legF', { r: 0.02 * br });
-    put(ctx, st, 'p1_armB', { r: aB });
-    put(ctx, st, 'p1_padF', { r: 0.03 * br + 0.1 * (tele + buff), y: -3 * tele });
-    put(ctx, st, 'p1_torso', { sy: heave, sx: 1 + 0.008 * br });
-    put(ctx, st, 'p1_legN', { r: -0.02 * br });
-    if (guard >= 0.3) put(ctx, st, 'p1_armB', { r: aB });
-    // hair, then the little furious head on the big body (the Editor's own head, scaled up, with its cracked spectacles)
-    ctx.save();
-    ctx.translate(-2, -266); ctx.scale(1.34, 1.34); ctx.translate(2, 258);
-    putChain(ctx, st, 'p0_hair', [-0.1 + 0.2 * sin(t * 4.1) * m * (0.4 + hot) + 0.2 * hurt, 0.3 * sin(t * 4.1 - 0.9) * m * (0.4 + hot), 0.4 * sin(t * 4.1 - 1.8) * m * (0.4 + hot)], { r: -0.3 + 0.1 * tele });
-    ctx.restore();
-    put(ctx, st, 'p1_head', {
-      x: 0, y: -8 + 2 * br, sx: 1.34, sy: 1.34, r: 0.03 * sin(t * 1.2) * m - 0.1 * tele + 0.08 * strike + 0.12 * hurt,
-      kids(c) {
-        const ob = blink(t, 'editor1', 6.2) * (1 - 0.5 * hurt), jaw = clamp(0.25 + 0.75 * (tele + strike * 0.8 + buff + hurt * 0.7), 0, 1);
-        // red furious eyes, big, with a hard angry lid
-        eyeLive(c, -15, -279, 7.4, 5.4 + 1.6 * hot, { open: ob, iris: ['#ff8a96', '#ff1a3a'], sclera: '#fff0f0', pupil: 'dot', pupilColor: '#3a0010', look: [-0.8, 0.1], glow: BE.red, glowK: 0.9 + 0.1 * hot, glowR: 3.4, lw: 2, lidTop: 0.5, lidColor: BE.skinD, rot: 0.34 });
-        eyeLive(c, 3, -280, 6.4, 5.2 + 1.6 * hot, { open: ob, iris: ['#ff8a96', '#ff1a3a'], sclera: '#fff0f0', pupil: 'dot', pupilColor: '#3a0010', look: [-0.8, 0.1], glow: BE.red, glowK: 0.9 + 0.1 * hot, glowR: 3.4, lw: 2, lidTop: 0.5, lidColor: BE.skinD, rot: -0.3 });
-        // the noh face, cracked: hairline cracks fan out across the mask from the left cheek
-        c.save();
-        [[-14, -272, -22, -283], [-14, -272, -8, -266], [-14, -272, -19, -263], [-14, -272, -4, -279], [2, -266, 8, -258]].forEach((q) => tk.inkPath(c, [[q[0], q[1]], [(q[0] + q[2]) / 2 + 2, (q[1] + q[3]) / 2 - 1], [q[2], q[3]]], { w: 1.3, color: '#46425a', alpha: 0.9, taper: 0.4, wobble: 0.1 }));
-        c.restore();
-        // a snarling mouth: the gritted line opens into a roar
-        c.save(); c.fillStyle = '#1a1626'; c.beginPath(); c.ellipse(-12, -260, 7, 2 + 6 * jaw, 0, 0, TAU); c.fill();
-        c.fillStyle = '#ffffff'; c.fillRect(-18, -262 - 2 * jaw, 12, 2.4); c.restore();
-        tk.inkPath(c, [[-26, -292 + 5], [-14, -289 + 5], [-4, -283 + 3]], { w: 3, color: '#4a3a76', taper: 0.4, wobble: 0 });
-        tk.inkPath(c, [[-2, -284 + 3], [8, -289 + 5], [16, -293 + 5]], { w: 3, color: '#4a3a76', taper: 0.4, wobble: 0 });
-      },
-    });
-    if (guard < 0.3) { /* the front arm is always in front of the torso */ }
-    put(ctx, st, 'p1_padN', { r: -0.03 * br - 0.1 * (tele + buff), y: -3 * tele });
-    put(ctx, st, 'p1_armF', { r: aF });
-    ctx.restore();
-    // cotton fluff shedding off him and grey ash smoke: more when he is angry
-    const nc = 6 + Math.round(8 * hot);
-    for (let i = 0; i < nc; i++) {
-      const per = 1.1 + 0.5 * hv('beer', 'p' + i), u = (((t + hv('beer', 'o' + i) * per) % per) + per) % per / per, x = dx + (hv('beer', 'x' + i) - 0.5) * 220, y0 = -240 + 200 * hv('beer', 'y' + i);
-      ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 0.95) * (1 - die); ctx.translate(x + sin(u * 5 + i) * 4, y0 + dy + u * 54); ctx.rotate(u * 6 + i);
-      ctx.fillStyle = i % 3 ? '#f2f0f6' : '#cfcdd8'; ctx.strokeStyle = 'rgba(70,66,90,0.5)'; ctx.lineWidth = 1; const sz = 2.2 + 2.4 * hv('beer', 's' + i); ctx.beginPath(); ctx.arc(0, 0, sz, 0, TAU); ctx.arc(sz * 0.9, -sz * 0.2, sz * 0.7, 0, TAU); ctx.fill(); ctx.restore();
-    }
-    puffs(ctx, -150 + dx, -60 + dy, t, 3, 91, { col: '#8e8aa3', rise: 34, spread: 14, size: 7, life: 1.1, alpha: 0.35 * (1 - die) });
-    // the slam: a pale muffled sweep across the front and a shock ring
-    if (atk && p > 0.46 && p < 0.9) {
-      const u = (p - 0.46) / 0.44;
-      ctx.save(); ctx.translate(-190 + dx, -10); ctx.scale(1, 0.3); ctx.globalAlpha = (1 - u) * 0.95; ctx.strokeStyle = '#cfcdd8'; ctx.lineWidth = 9 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, 0, 30 + 150 * ease.outCubic(u), 0, TAU); ctx.stroke(); ctx.restore();
-      swoosh(ctx, -110 + dx, -110, 150, 44, -0.4, -2.9, { alpha: (1 - u) * 0.85, fill: '#f2f0f6', edge: '#cfcdd8' });
-      for (let i = 0; i < 9; i++) { const fj = fling('beer2' + i, 'b', u, { spread: 220, up: 120, g: 380, bias: -70 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-190 + dx + fj.x, -20 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 2 ? '#cfcdd8' : '#f2f0f6'; ctx.beginPath(); ctx.arc(0, 0, 3.6, 0, TAU); ctx.fill(); ctx.restore(); }
-    }
-    if (buff > 0.1) motes(ctx, dx, -150 + dy, t, 14, 'beebuff', { col: '#cfcdd8', size: 3, rise: 100, spread: 90, life: 0.9, alpha: buff });
-  };
-  // ---- phase 2: THE HUSH -------------------------------------------------------------------------------------
-  const BEB = { void: '#0d0720', voidL: '#3a2272', white: '#ffffff', cyan: '#5ff5ff', lilac: '#c9b8ff', gold: '#e2ae4c', felt: '#8e8aa3', feltL: '#b9b5ca', ash: '#8e8aa3', frost: '#f2f0f6' };
-  const BEB_CY = -196;
-  // the outline of the tear: a face shape (wide brow, narrow chin) with a ragged edge; k scales it, jag roughens it
-  function tearPts(k, jag, seed) {
-    const pts = [], n = 46;
-    for (let i = 0; i < n; i++) {
-      const a = i / n * TAU - PI / 2, s = sin(a), c = cos(a), down = Math.max(0, s);
-      const rx = 100 * k * (1 - 0.4 * Math.pow(down, 1.4)) * (1 + 0.08 * Math.max(0, -s)), ry = 158 * k;
-      const r = 1 + jag * ((i % 2 ? 1 : -0.6) * (0.5 + tk.vary('tear' + seed, 'j' + i)));
-      pts.push([c * rx * r, BEB_CY + s * ry * r, 1]);
-    }
-    return pts;
-  }
-  BE_P.p2_face = {
-    box: [-136, -372, 136, 8], pivot: [0, BEB_CY],
-    draw(S) {
-      const g = S.g, lip = tearPts(1.0, 0.05, 'lip'), hole = tearPts(0.83, 0.07, 'hole');
-      // the lip of the hole: a fringe of grey ash and frayed felt curling back, with its own shadow and loose threads
-      S.cel(lip, BEB.felt, { depth: 18, tension: 0, hi: true, hiW: 3, rim: S.c.rim, shadow: BE.robeD, halftone: { d: 5, alpha: 0.22, color: '#46425a' }, lineColor: BE.ink, decor(gg) { quiltDiamonds(gg, -110, -360, 220, 330, 18, '#46425a', 0.45); ashFlecks(gg, -110, -360, 220, 330, 90, 'lipfleck', { alpha: 0.9, w: 2 }); } });
-      // frayed threads along the torn edge
-      for (let i = 0; i < lip.length; i += 2) { const p = lip[i], a = Math.atan2(p[1] - BEB_CY, p[0]); tk.inkPath(g, [[p[0], p[1]], [p[0] - cos(a) * (8 + 8 * tk.vary('fib', 'a' + i)), p[1] - sin(a) * (8 + 8 * tk.vary('fib', 'a' + i))]], { w: 1.4, color: i % 4 ? '#cfcdd8' : '#f2f0f6', alpha: 0.85, taper: 0.5, wobble: 0.1 }); }
-      // the void: violet-black with a hint of stars, a storm light low in the throat and hairline storm cracks
-      g.save();
-      g.beginPath(); tk.trace(g, hole, 0, 0, 0); g.clip();
-      const gr = g.createRadialGradient(0, BEB_CY - 20, 10, 0, BEB_CY, 150); gr.addColorStop(0, '#4a2a8a'); gr.addColorStop(0.55, '#1c0e3c'); gr.addColorStop(1, '#07030f');
-      g.fillStyle = gr; g.fillRect(-120, -360, 240, 330);
-      for (let i = 0; i < 26; i++) { g.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.5 * tk.vary('vs', 'a' + i)).toFixed(2) + ')'; g.beginPath(); g.arc(-80 + 160 * tk.vary('vs', 'x' + i), -330 + 260 * tk.vary('vs', 'y' + i), 0.8 + 1.2 * tk.vary('vs', 'r' + i), 0, TAU); g.fill(); }
-      tk.halftone(g, -90, -330, 180, 240, { d: 7, r: 1.2, color: '#6a4ac8', alpha: 0.12, force: true });
+      S.cel(RR(-72, -214, 144, 32, 8), S.real ? '#ff4f8e' : G.blush, { hi: '#ffffff', hiW: 2.4 });
+      const g = S.g;
+      g.save(); g.font = '900 23px ' + tk.font.num; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+      g.lineWidth = 5; g.strokeStyle = S.lc; g.strokeText('FLAWLESS!', 0, -197);
+      g.fillStyle = S.real ? '#fff6d0' : '#ffffff'; g.fillText('FLAWLESS!', 0, -197);
       g.restore();
-      tk.inkPath(g, hole.concat([hole[0]]), { w: 3.6, color: BE.ink, closed: true, taper: 0.02, pressure: 'flat', wobble: 0.04, tension: 0 });
-      // a thin white glow along the inside of the lip, the Hush leaking round the edge
-      g.save(); g.globalAlpha = 0.55; tk.inkPath(g, hole.concat([hole[0]]), { w: 1.8, color: '#ffffff', closed: true, taper: 0.02, pressure: 'flat', wobble: 0.04, tension: 0, align: -0.4 }); g.restore();
     },
   };
-  // the Conductor's empty haori under the chin: the Hush pours out of its collar. Felt-grey, broad shoulders that peek out beside the narrowing jaw, white
-  // cotton lapels in a V, a stitched hem, the red mute mon on the breast.
-  BE_P.p2_crack = {
-    box: [-110, -112, 110, 12], pivot: [0, -40],
+  BE_P.p1_ring = {
+    box: [-66, -358, 66, -226], pivot: [0, BF.ly],
+    draw(S) { ringLight(S, 0, BF.ly, BF.lr, { inner: 0.64, leds: 20 }); },
+  };
+  BE_P.p1_lens = {
+    box: [-42, -334, 42, -250], pivot: [0, BF.ly],
     draw(S) {
-      const hem = zig(88, -88, -4, 10, 10, 4, 83);
-      S.cel([[-28, -104, 1], [28, -104, 1], [70, -94], [98, -64], [92, -30]].concat(hem).concat([[-92, -30], [-98, -64], [-70, -94]]), BE.robe, {
-        depth: 12, line: 3.2, tension: 0.35, hi: true, hiW: 2.4, rim: '#cfcdd8', shadow: BE.robeD, halftone: { d: 5, alpha: 0.3 },
-        decor(g) { quiltDiamonds(g, -96, -100, 192, 100, 15, '#cfcdd8', 0.45); stitch(g, [[-84, -10], [84, -10]], { color: '#f2f0f6', alpha: 0.7 }); stitch(g, [[-60, -86], [-70, -20]], { color: '#f2f0f6', alpha: 0.5 }); stitch(g, [[60, -86], [70, -20]], { color: '#f2f0f6', alpha: 0.5 }); },
-      });
-      S.cel([[-34, -60, 1], [-18, -64, 1], [2, -18, 1], [-4, -14, 1]], BE.paper, { depth: 2, line: 2.6, tension: 0.2, hi: false, rim: null, shadow: BE.paperD });
-      S.cel([[34, -60, 1], [18, -64, 1], [-2, -18, 1], [4, -14, 1]], BE.paper, { depth: 2, line: 2.6, tension: 0.2, hi: false, rim: null, shadow: BE.paperD });
-      S.cel(E(0, -26, 7, 7, 12), BE.red, { depth: 1, line: 2, hi: false, rim: null, shadow: BE.redD });
-      S.line([[-5.4, -26], [5.4, -26]], { w: 2.2, color: '#ffe8e0', taper: 0.05, pressure: 'flat' });
+      const g = S.g, r = BF.lr * 0.64;
+      S.cel(E(0, BF.ly, r, r, 26), S.real ? '#7cc6ff' : G.chromeL, { hi: '#ffffff' });
+      S.cel(E(0, BF.ly, r * 0.8, r * 0.8, 24), S.real ? '#2d6fd8' : '#d5ccf2', { shadow: false,
+        decor(gg) {
+          const gr = gg.createRadialGradient(-6, BF.ly - 8, 2, 0, BF.ly, r * 0.8);
+          gr.addColorStop(0, S.real ? '#bfe9ff' : '#ffffff'); gr.addColorStop(0.5, S.real ? '#6fb8ff' : G.lilac); gr.addColorStop(1, S.real ? '#2d4fb0' : '#bfb3e6');
+          gg.fillStyle = gr; gg.fillRect(-r, BF.ly - r, r * 2, r * 2);
+          gg.strokeStyle = 'rgba(255,255,255,0.5)'; gg.lineWidth = 1.2;
+          for (let i = 0; i < 6; i++) { const a = i * TAU / 6; gg.beginPath(); gg.moveTo(cos(a) * r * 0.32, BF.ly + sin(a) * r * 0.32); gg.lineTo(cos(a + 1.2) * r * 0.78, BF.ly + sin(a + 1.2) * r * 0.78); gg.stroke(); }
+        } });
+      g.save(); g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-10, BF.ly - 12, 7, 4, -0.6, 0, TAU); g.fill(); g.restore();
     },
   };
-  BE_P.p2_stripA = {
-    box: [-24, -112, 24, 10], pivot: [0, 0],
+  const p1Arm = (sd) => ({
+    box: [sd < 0 ? -168 : 40, -290, sd < 0 ? -40 : 168, -196], pivot: [sd * 62, -234],
     draw(S) {
-      S.cel([[-11, 2, 1], [11, 0, 1], [13, -30], [9, -62], [16, -88, 1], [2, -100, 1], [-9, -84], [-13, -50], [-10, -24]], BEB.felt, {
-        depth: 7, tension: 0.4, hi: true, hiW: 1.8, rim: S.c.rim, shadow: '#46425a', halftone: { d: 5, alpha: 0.2, color: '#46425a' },
-        decor(g) { for (let i = 0; i < 7; i++) stitch(g, [[-8, -10 - i * 12], [8, -10 - i * 12 - 0.5]], { color: '#e4e1ee', alpha: 0.7, dash: 2.4, gap: 2 }); gag(g, -12, -52, 20, 6); },
-      });
+      S.limb([sd * 62, -234], [sd * 98, -212], 20, S.real ? '#7cc6ff' : G.chromeL);
+      S.ell(sd * 98, -212, 11, 11, S.real ? '#ffc94d' : G.chromeL, { hi: true });
+      S.limb([sd * 98, -212], [sd * 124, -244], 9, S.real ? '#ffc94d' : '#d9dae6');
+      S.limb([sd * 124, -244], [sd * 146, -272], 6, S.real ? '#ffc94d' : '#d9dae6');
+      S.ell(sd * 124, -244, 5, 5, S.real ? '#ff8a1f' : G.chromeL, { line: S.L * 0.6 });
     },
-  };
-  BE_P.p2_stripB = {
-    box: [-22, -84, 22, 10], pivot: [0, 0],
+  });
+  BE_P.p1_armL = p1Arm(-1);
+  BE_P.p1_armR = p1Arm(1);
+  const p1Phone = (sd) => ({
+    box: [sd * 150 - 20, -304, sd * 150 + 20, -252], pivot: [sd * 148, -274],
     draw(S) {
-      S.cel([[-9, 2, 1], [9, 0, 1], [11, -24], [8, -50], [13, -70, 1], [1, -78, 1], [-8, -62], [-11, -36]], BEB.felt, {
-        depth: 6, tension: 0.4, hi: true, hiW: 1.6, rim: S.c.rim, shadow: '#46425a', halftone: { d: 5, alpha: 0.2, color: '#46425a' },
-        decor(g) { for (let i = 0; i < 5; i++) stitch(g, [[-6, -10 - i * 12], [7, -10 - i * 12 - 0.5]], { color: '#e4e1ee', alpha: 0.7, dash: 2.4, gap: 2 }); g.fillStyle = BEB.cyan; g.globalAlpha = 0.6; g.fillRect(-10, -34, 18, 3); g.globalAlpha = 1; },
-      });
+      S.g.save(); S.g.translate(sd * 150, -280); S.g.rotate(sd * 0.5);
+      S.cel(RR(-12, -20, 24, 40, 6), S.real ? '#2d2747' : '#9ea2bb', { hi: true });
+      S.cel(RR(-9, -16, 18, 30, 3), S.real ? '#ffd84d' : G.mint, { shadow: false, line: S.L * 0.5,
+        decor(g) { const gr = g.createLinearGradient(-9, -16, 9, 14); gr.addColorStop(0, S.real ? '#ff8a1f' : G.lilac); gr.addColorStop(1, S.real ? '#ffd84d' : G.blush); g.fillStyle = gr; g.fillRect(-9, -16, 18, 30); } });
+      S.g.restore();
     },
+  });
+  BE_P.p1_phoneL = p1Phone(-1);
+  BE_P.p1_phoneR = p1Phone(1);
+  BE_P.p1_chip = {
+    box: [-9, -9, 9, 9], pivot: [0, 0],
+    draw(S) { S.cel(RR(-7, -7, 14, 14, 4), S.real ? '#ff6fb5' : G.opal, { shadow: false, line: S.L * 0.6, decor(g) { const gr = g.createLinearGradient(-7, -7, 7, 7); gr.addColorStop(0, S.real ? '#ffd84d' : G.lilac); gr.addColorStop(1, S.real ? '#ff6fb5' : G.mint); g.fillStyle = gr; g.fillRect(-7, -7, 14, 14); } }); },
   };
-  // a long arm of grey felt ending in a clawing felt glove; shoulder at the origin, pointing left
-  BE_P.p2_arm = {
-    box: [-216, -52, 14, 52], pivot: [0, 0],
-    draw(S) {
-      S.cel([[8, -16, 1], [-30, -20], [-70, -15], [-110, -20], [-128, -26, 1], [-134, 4, 1], [-112, 18], [-70, 14], [-30, 19], [8, 16, 1]], BEB.felt, {
-        depth: 8, tension: 0.35, hi: true, hiW: 2.2, rim: S.c.rim, shadow: '#46425a', halftone: { d: 5, alpha: 0.22, color: '#46425a' },
-        decor(g) { for (let i = 0; i < 5; i++) stitch(g, [[-10 - i * 24, -8], [-24 - i * 24, 8]], { color: '#e4e1ee', alpha: 0.7 }); gag(g, -92, -6, 30, 8); },
-      });
-      // the palm and four long fingers, a thumb that hooks
-      S.cel([[-124, -30, 1], [-156, -34], [-170, -18, 1], [-172, 6, 1], [-156, 20], [-126, 18, 1]], BEB.feltL, { depth: 6, tension: 0.4, hi: true, hiW: 1.8, rim: S.c.rim, shadow: '#6e6a7e' });
-      [[-30, -208, -34, 0.0], [-12, -214, -14, 0.1], [6, -212, 4, 0.2], [20, -200, 16, 0.3]].forEach((f, i) => {
-        const y0 = f[0], xe = f[1], ye = f[2];
-        S.cel([[-166, y0 - 6, 1], [-190, y0 - 8 + (ye - y0) * 0.3], [xe, ye + (i - 1.5) * 6, 1], [-190, y0 + 6 + (ye - y0) * 0.3], [-166, y0 + 6, 1]], BEB.feltL, { depth: 3, line: 2.8, tension: 0.4, hi: false, rim: S.c.rim, shadow: '#6e6a7e' });
-      });
-      S.cel([[-150, -28, 1], [-166, -48], [-184, -50, 1], [-170, -38], [-158, -24, 1]], BEB.feltL, { depth: 3, line: 2.8, tension: 0.4, hi: false, rim: S.c.rim, shadow: '#6e6a7e' });
-    },
-  };
-  // the snapped baton: two halves of the Conductor's white baton with red lacquered tips, floating over the eyes, bobbing; drawn live so it can float
-  function beSpecs(ctx, x, y, rot, a, hot) {
-    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = cA(a);
-    [-1, 1].forEach((sg) => {
-      ctx.save(); ctx.translate(sg * 70, 6 * sg); ctx.rotate(sg * 1.05); ctx.scale(0.72, 0.72);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = BE.ink; ctx.lineWidth = 8.4; ctx.beginPath(); ctx.moveTo(0, -44); ctx.lineTo(0, 44); ctx.stroke();
-      ctx.strokeStyle = '#f8f7fb'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, -44); ctx.lineTo(0, 44); ctx.stroke();
-      ctx.strokeStyle = BE.lac; ctx.lineWidth = 5.4; ctx.beginPath(); ctx.moveTo(0, -44); ctx.lineTo(0, -28); ctx.stroke();
-      ctx.fillStyle = BE.silver; ctx.fillRect(-3.6, -28, 7.2, 5);
-      ctx.strokeStyle = 'rgba(46,43,58,0.8)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(-3, 44); ctx.lineTo(0, 38); ctx.lineTo(3, 45); ctx.lineTo(0, 50); ctx.stroke();
-      ctx.restore();
+  // the real colour leaking through the Filter's chrome as it loses (hpPct): fixed spots, more of them as the wound grows
+  const WOUND1 = [[-30, -150, 30], [34, -110, 26], [-20, -96, 22], [40, -170, 24], [-44, -230, 20], [20, -320, 24]];
+  BE_RIG[1] = function (ctx, st) {
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const br = sin(t * 1.2) * m;
+    const swipe = atk ? E0.swing : 0, wind = atk ? E0.wind : 0;
+    const dx = -10 * (atk ? E0.strike : 0) + hurt * 14 + E0.shake, dy = 2 * guard;
+    // the soft-focus glow round the lens
+    const soft = st.won ? 0.3 : 0.5 + 0.2 * sin(t * 2) * m + 0.4 * tele + 0.3 * (atk ? E0.strike : 0);
+    ctx.save();
+    xform(ctx, 0, -40, dx, dy, 0.06 * hurt, 1, 1);
+    put(ctx, st, 'p1_base', {});
+    // the selfie sticks: phones held up, swiping on the attack, both high for the telegraph, folded in for a guard
+    const armL = 0.06 * br - 0.5 * tele + 1.1 * swipe - 0.4 * wind + 0.7 * guard + 0.2 * hurt;
+    const armR = -0.06 * br + 0.5 * tele - 0.2 * swipe - 0.7 * guard - 0.15 * hurt;
+    put(ctx, st, 'p1_armR', { r: armR, kids(c) { put(c, st, 'p1_phoneR', { r: 0.1 * sin(t * 2) * m }); } });
+    put(ctx, st, 'p1_column', { sy: 1 + 0.012 * br, kids(c) {
+      // real colour cracks: the Filter is losing its polish
+      WOUND1.forEach((w, i) => { if (st.wound > i / WOUND1.length * 0.9) crack(c, w[0], w[1], w[2], 'bw1' + i, 0.85); });
+      crack(c, -20, -160, 40, 'filterhit', hurt * 1.4);
+    } });
+    put(ctx, st, 'p1_band', { sy: 1 + 0.03 * buff });
+    tk.glow(ctx, 0, BF.ly - 2 * br, 110, '#ffffff', 0.5 * soft);
+    put(ctx, st, 'p1_ring', { y: -2 * br, r: 0.04 * hurt, sx: 1 + 0.04 * tele, sy: 1 + 0.04 * tele });
+    put(ctx, st, 'p1_lens', {
+      y: -2 * br, r: 0.25 * sin(t * 0.7) * m,
+      kids(c) {
+        c.save(); c.globalAlpha = st.won ? 1 : 0.55;
+        face(c, st, 0, BF.ly - 4, { kind: 'round', w: 10, gap: 20, open: st.won ? 1 : 0, per: 99, my: 14, sw: 12 });
+        c.restore();
+        if (st.wound > 0.6) crack(c, 10, BF.ly - 30, 30, 'bw1lens', 0.9);
+      },
     });
-    void hot;
-    ctx.restore();
-  }
-  // a jagged mouth polygon: a white maw with black fangs of void biting into it from the top and the bottom
-  function beMouth(ctx, cx, cy, w, open, t, hot) {
-    const h = 8 + open * 76, n = 9, top = [], bot = [];
-    for (let i = 0; i <= n; i++) { const u = i / n, x = cx + (u - 0.5) * w, bow = 1 - Math.pow(2 * u - 1, 2); top.push([x, cy - h * 0.45 * bow - 3 + (i % 2 ? 5 : -2) + sin(t * 3 + i) * 1.2]); bot.push([x, cy + h * 0.55 * bow + 3 + (i % 2 ? -5 : 2) + sin(t * 2.6 + i * 1.7) * 1.2]); }
-    ctx.save();
-    tk.glow(ctx, cx, cy, w * 0.8, '#ffffff', 0.3 + 0.4 * hot);
-    ctx.beginPath(); ctx.moveTo(top[0][0], top[0][1]); top.forEach((p) => ctx.lineTo(p[0], p[1])); for (let i = n; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]); ctx.closePath();
-    const gr = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.5, '#eae0ff'); gr.addColorStop(1, '#b8a4ff');
-    ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = BE.ink; ctx.stroke();
-    ctx.fillStyle = BEB.void; ctx.strokeStyle = BE.ink; ctx.lineWidth = 1.6;
-    for (let i = 0; i < n; i++) {
-      if (i % 2 === 0) { const a = top[i], b = top[i + 1], mx = (a[0] + b[0]) / 2; ctx.beginPath(); ctx.moveTo(a[0], a[1] - 2); ctx.lineTo(b[0], b[1] - 2); ctx.lineTo(mx, a[1] + 8 + 8 * open); ctx.closePath(); ctx.fill(); }
-      else { const a = bot[i], b = bot[i + 1], mx = (a[0] + b[0]) / 2; ctx.beginPath(); ctx.moveTo(a[0], a[1] + 2); ctx.lineTo(b[0], b[1] + 2); ctx.lineTo(mx, a[1] - 8 - 8 * open); ctx.closePath(); ctx.fill(); }
+    tk.glow(ctx, 0, BF.ly - 2 * br, 46, '#ffffff', 0.35 * soft);
+    put(ctx, st, 'p1_armL', { r: armL, kids(c) { put(c, st, 'p1_phoneL', { r: -0.1 * sin(t * 2) * m }); } });
+    // the filter chips orbit the lens like thumbnails
+    for (let i = 0; i < 8; i++) {
+      const a = t * (0.5 + 0.8 * buff) * m + i * TAU / 8, x = cos(a) * 92, y = BF.ly + sin(a) * 30;
+      put(ctx, st, 'p1_chip', { x, y: y - 2 * br, a: 0.5 + 0.5 * (sin(a) > 0 ? 1 : 0.6) });
     }
+    polite(ctx, st, 40, BF.ly - 40, 8);
     ctx.restore();
-  }
-  // a shaggy outline: an ellipse whose edge is a ring of fur tufts (alternating radius, deterministic)
-  function shaggy(cx, cy, rx, ry, n, tuft, seed, rot) {
-    const pts = [];
-    for (let i = 0; i < n * 2; i++) {
-      const a = i / (n * 2) * TAU + (rot || 0), r = i % 2 ? 1 + tuft * (0.5 + tk.vary('yam' + seed, 'u' + i)) : 1 - tuft * 0.2;
-      pts.push([cx + cos(a) * rx * r, cy + sin(a) * ry * r, 1]);
+    // the swipe: an airbrush arc wiped across the heroes; the lens flashes
+    if (atk && p > 0.36 && p < 0.8) {
+      const u = (p - 0.36) / 0.44;
+      ctx.save(); ctx.globalAlpha = sin(PI * u) * 0.75; ctx.lineCap = 'round';
+      ctx.strokeStyle = G.blush; ctx.lineWidth = 30; ctx.beginPath(); ctx.arc(-60 + dx, -230, 150, PI * (0.9 + 0.3 * u), PI * (1.25 + 0.3 * u)); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 12; ctx.stroke(); ctx.restore();
     }
-    return pts;
-  }
-  // the yamabiko: the faint silhouette of a shaggy mountain imp with long arms, drawn inside the hole of the Hush at alpha 0.18. It sways a little, and the
-  // arms drift. a is the alpha scale (1 = 0.18); clip is done by the caller.
-  function beYamabiko(ctx, t, m, a, hot) {
-    const sw = sin(t * 0.7) * 3 * m, br = sin(t * 1.3) * 2 * m, arm = sin(t * 0.9 + 1) * 5 * m;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = cA(0.18 * a);
-    ctx.fillStyle = '#e6e4f0'; ctx.strokeStyle = '#e6e4f0'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const fillPts = (pts) => { ctx.beginPath(); tk.trace(ctx, pts, 0, 0, 0); ctx.fill(); };
-    ctx.translate(sw, br - 200 + 8); ctx.scale(0.98, 0.98); ctx.translate(0, 200);
-    // body: a hunched shaggy barrel, shoulders high, legs bowed at the bottom
-    fillPts(shaggy(0, -178, 38, 62, 11, 0.22, 'body', 0.3));
-    fillPts([[-26, -128, 1], [-42, -96, 1], [-46, -78, 1], [-26, -76, 1], [-18, -100, 1], [-6, -118, 1]]);
-    fillPts([[26, -128, 1], [42, -96, 1], [46, -78, 1], [26, -76, 1], [18, -100, 1], [6, -118, 1]]);
-    // the head: a big shaggy ball with pricked ears and two short horns, brow low
-    fillPts(shaggy(0, -262, 34, 32, 10, 0.24, 'head', 0));
-    fillPts([[-24, -282, 1], [-42, -318, 1], [-32, -330, 1], [-14, -296, 1]]);
-    fillPts([[24, -282, 1], [42, -318, 1], [32, -330, 1], [14, -296, 1]]);
-    // the long arms: from the shoulders out and down in a hanging curve, ending in three claws each
-    [-1, 1].forEach((sg, i) => {
-      const hx = sg * (72 + arm * sg), hy = -96 + arm * 0.6;
-      ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo(sg * 34, -226); ctx.quadraticCurveTo(sg * 76, -214, sg * 72, -160); ctx.quadraticCurveTo(sg * 70, -124, hx, hy); ctx.stroke();
-      ctx.lineWidth = 7;
-      [[-14, 18], [0, 24], [14, 16]].forEach((c) => { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + sg * c[0] * 0.6 + c[0] * 0.4, hy + c[1]); ctx.stroke(); });
-      void i;
-    });
-    // fur tufts hanging off the arms
-    [-1, 1].forEach((sg) => { for (let k = 0; k < 5; k++) fillPts([[sg * (66 + k * 1.2), -200 + k * 20, 1], [sg * (82 + 2 * k), -194 + k * 20, 1], [sg * (68 + k * 1.2), -186 + k * 20, 1]]); });
-    // a hint of two pale eyes under the brow so the shape reads as a face looking out
-    ctx.globalAlpha = cA(0.2 * a * (0.8 + 0.4 * hot));
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.ellipse(-14, -262, 5, 3, 0.2, 0, TAU); ctx.ellipse(14, -262, 5, 3, -0.2, 0, TAU); ctx.fill();
-    ctx.restore();
-  }
-  // grey mist pouring up out of the empty haori's collar into the chin of the Hush (the Hush is the held silence, and it pours out of him)
-  function beHushPour(ctx, t, m, a, hot) {
-    ctx.save();
-    for (let i = 0; i < 6; i++) {
-      const sx = (i - 2.5) * 12, ph = hv('hushpour', 'p' + i), sway = sin(t * (0.8 + 0.1 * i) + i * 1.7) * 7 * m;
-      ctx.globalAlpha = cA((0.22 + 0.12 * hot) * a * (0.7 + 0.3 * sin(t * 1.6 + i)));
-      tk.inkPath(ctx, [[sx, -34], [sx * 1.6 + sway, -64], [sx * 0.9 - sway * 0.6, -92 - 10 * ph], [sx * 0.4 + sway * 0.5, -122]], { w: 13 + 5 * ph, color: '#cfcdd8', taper: 0.5, pressure: 'mid', wobble: 0.1 });
-    }
-    puffs(ctx, 0, -40, t, 10, 'hushpuff', { col: '#cfcdd8', rise: 72, spread: 26, size: 7, life: 1.6, alpha: 0.4 * a });
-    ctx.restore();
+    if (buff > 0.05) foe.sparkles(ctx, 0, -260, [[-90, -40, 8, 0], [90, -30, 7, 0.3], [0, -90, 8, 0.6]], 3, E0.buffP * 2);
+    if (guard > 0.05) pitchRing(ctx, dx, -200, 120, 150, 3, 20, G.lilac, guard, t * 5);
+  };
+
+  // ---- phase 2: the Gloss
+  const BG2 = { cy: -186, rx: 150, ry: 160 };
+  BE_P.p2_frame = {
+    box: [-158, -354, 158, -18], pivot: [0, BG2.cy],
+    draw(S) {
+      const g = S.g;
+      g.save(); g.beginPath(); g.ellipse(0, BG2.cy, BG2.rx, BG2.ry, 0, 0, TAU); g.moveTo(BG2.rx - 16, BG2.cy); g.ellipse(0, BG2.cy, BG2.rx - 16, BG2.ry - 16, 0, 0, TAU, true);
+      const gr = g.createLinearGradient(0, BG2.cy - BG2.ry, 0, BG2.cy + BG2.ry);
+      gr.addColorStop(0, S.real ? '#ffe9a8' : '#ffffff'); gr.addColorStop(0.5, S.real ? '#ffc94d' : G.chrome); gr.addColorStop(0.52, S.real ? '#ff9a3a' : '#eceef5'); gr.addColorStop(1, S.real ? '#ffc94d' : '#b9bccd');
+      g.fillStyle = gr; g.fill('evenodd');
+      g.lineWidth = S.L; g.strokeStyle = S.lc; g.beginPath(); g.ellipse(0, BG2.cy, BG2.rx, BG2.ry, 0, 0, TAU); g.stroke();
+      g.beginPath(); g.ellipse(0, BG2.cy, BG2.rx - 16, BG2.ry - 16, 0, 0, TAU); g.stroke();
+      g.restore();
+      [[0, BG2.cy - BG2.ry + 8], [0, BG2.cy + BG2.ry - 8], [-BG2.rx + 8, BG2.cy], [BG2.rx - 8, BG2.cy]].forEach((q) => S.ell(q[0], q[1], 8, 8, S.real ? '#ff6fb5' : G.blush, { hi: true, line: S.L * 0.7 }));
+    },
+  };
+  BE_P.p2_mirror = {
+    box: [-136, -332, 136, -40], pivot: [0, BG2.cy],
+    draw(S) { S.mirror(E(0, BG2.cy, BG2.rx - 15, BG2.ry - 15, 40), { streaks: 3 }); },
+  };
+  // the two heroes as perfect pastel copies in the mirror: no outline wobble, no motion lines, the same smile
+  BE_P.p2_copies = {
+    box: [-120, -150, 120, -36], pivot: [0, -90],
+    draw(S) {
+      const g = S.g;
+      const fig = (x, col, hair) => {
+        g.save(); g.globalAlpha = 0.85;
+        RJ.blob(g, [{ a: [x - 7, -66], b: [x - 8, -44], w: 9 }, { a: [x + 7, -66], b: [x + 8, -44], w: 9 }, { e: [x, -80, 16, 20] }, { a: [x - 14, -88], b: [x - 22, -70], w: 8 }, { a: [x + 14, -88], b: [x + 22, -70], w: 8 }], { fill: col, shade: RJ.shade(col, 0.06), ink: '#ffffff', L: 2, lit: 1 });
+        if (hair === 'tail') RJ.blob(g, [{ e: [x, -114, 17, 16] }, { a: [x + 12, -124], b: [x + 26, -106], w: 9 }], { fill: col, shade: RJ.shade(col, 0.06), ink: '#ffffff', L: 2, lit: 1 });
+        else RJ.blob(g, [{ e: [x, -114, 17, 16] }, { a: [x - 4, -130], b: [x + 4, -136], w: 8 }, { a: [x - 10, -128], b: [x - 6, -136], w: 6 }], { fill: col, shade: RJ.shade(col, 0.06), ink: '#ffffff', L: 2, lit: 1 });
+        g.restore();
+        foe.glossSmile(g, x, -110, 8, { color: '#ffffff' });
+      };
+      fig(-84, S.real ? '#ff7fb2' : '#ffd3e6', 'tail');
+      fig(84, S.real ? '#78bd35' : '#d4f2c8', 'mohawk');
+    },
+  };
+  BE_P.p2_shard = {
+    box: [-12, -16, 12, 16], pivot: [0, 0],
+    draw(S) { S.mirror([[0, -14, 1], [10, 0, 1], [0, 14, 1], [-10, 0, 1]], { streaks: 1 }); },
+  };
+  const DRAPE = (sd) => [[sd * 40, -344], [sd * 120, -330], [sd * 168, -270], [sd * 150, -190], [sd * 172, -110], [sd * 158, -36]];
+  const p2Drape = (sd) => ({
+    spine: DRAPE(sd), cuts: [0.32, 0.62], reach: 70, overlap: 5,
+    draw(S) {
+      tk.ribbon(S.g, DRAPE(sd), S.real ? '#ff9fd0' : G.lilac, { wMax: 34, w0: 10, w1: 30, tipPow: 0.7, profile: (u) => 0.3 + 0.7 * Math.pow(u, 0.6), cap: 'round', shadow: S.real ? '#e86fb0' : '#d2c4f2', shadowW: 0.35, gloss: true, glossColor: '#ffffff', glossAlpha: 0.75, strands: 1, line: S.L, lineColor: S.lc, light: RJ.lightAngle(),
+        decor(g) { const gr = g.createLinearGradient(0, -340, 0, -40); gr.addColorStop(0, tk.rgba(S.real ? '#ffd84d' : G.mint, 0.7)); gr.addColorStop(0.5, tk.rgba(S.real ? '#ff6fb5' : G.lilac, 0.3)); gr.addColorStop(1, tk.rgba(S.real ? '#8b4dff' : G.blush, 0.8)); g.fillStyle = gr; g.fillRect(-200, -350, 400, 330); } });
+    },
+  });
+  BE_C.p2_drapeL = p2Drape(-1);
+  BE_C.p2_drapeR = p2Drape(1);
+  // where the mirror cracks with real colour as the Gloss loses (hpPct): more lines the lower it goes
+  const WOUND2 = [[-60, -280, 50], [70, -250, 44], [-90, -170, 40], [40, -140, 46], [-20, -320, 36], [100, -200, 34], [-110, -230, 30], [10, -220, 40]];
+  // a calm slit of light (the Gloss's eyes and its open, silent mouth)
+  function slit(c, x, y, rx, ry, k, col) {
+    tk.glow(c, x, y, rx * 2, col || G.lilac, 0.55 * k);
+    c.save(); c.globalAlpha = c.globalAlpha * cA(0.7 + 0.3 * k);
+    c.beginPath(); c.moveTo(x - rx, y); c.quadraticCurveTo(x, y - ry * 2, x + rx, y); c.quadraticCurveTo(x, y + ry * 2, x - rx, y); c.closePath();
+    c.lineWidth = 5; c.strokeStyle = tk.rgba(G.line, 0.75); c.stroke();
+    c.fillStyle = '#ffffff'; c.fill();
+    c.restore();
+    tk.glow(c, x, y, rx * 0.9, '#ffffff', 0.5 * k);
   }
   BE_RIG[2] = function (ctx, st) {
-    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
-    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.4) * m, hot = clamp(tele + buff + strike + guard * 0.3 + st.wound * 0.6 + die, 0, 1);
-    const hover = sin(t * 1.1) * 7 * m, dx = -strike * 40 + hurt * 18 + E0.shake * 1.3 + 8 * tele - 8 * wind, dy = hover - 5 * tele + 3 * guard + 4 * die - 4 * buff;
-    const rot = -0.03 * strike + 0.03 * tele + 0.05 * hurt + 0.008 * br;
-    const open = clamp(0.3 + 0.1 * sin(t * 1.7) * m + 0.9 * tele + 0.9 * strike + 0.7 * buff + 0.5 * hurt + 0.4 * wind, 0, 1);
-    const sc = (1 + 0.012 * br + 0.04 * buff + 0.03 * tele - 0.03 * guard) * (1 - 0.35 * die);
-    // arms: shoulder pose in rad (positive raises), front and back
-    let aF = -0.45 + 0.06 * sin(t * 1.3) * m, aB = -0.6 + 0.07 * sin(t * 1.3 + 1.1) * m;
-    if (atk) {
-      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(aF, 1.1, k); aB = lerp(aB, 0.8, k); }
-      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(1.1, -0.15, k); aB = lerp(0.8, -0.2, k); }
-      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.15, -0.45, k); aB = lerp(-0.2, -0.6, k); }
-    } else if (E0.pose === 'telegraph') { aF = lerp(aF, 1.1, tele) + 0.03 * E0.shake; aB = lerp(aB, 0.9, tele) - 0.03 * E0.shake; }
-    else if (E0.pose === 'block') { aF = lerp(aF, 0.25, guard); aB = lerp(aB, 0.1, guard); }
-    else if (E0.pose === 'buff') { aF = lerp(aF, 0.7, buff); aB = lerp(aB, 0.5, buff); }
-    else if (E0.pose === 'hurt') { aF = aF - 0.25 * hurt; aB = aB - 0.25 * hurt; }
-    // the blank behind everything: a big pale glow, brighter when hot
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const fl = sin(t * 0.9) * 5 * m, breathe = 1 + 0.012 * sin(t * 1.3) * m;
+    const lean = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
+    const dx = -16 * lean + hurt * 14 + E0.shake, dy = fl - 6 * tele;
+    const sc = breathe + 0.05 * lean + 0.03 * tele - 0.04 * guard;
+    tk.glow(ctx, 0, -40, 180, st.won ? '#ffd84d' : G.lilac, 0.35);
     ctx.save();
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, BEB_CY + dy, 260, '#ffffff', (0.16 + 0.28 * hot + 0.05 * sin(t * 2.3) * m) * (1 - die * 0.6)); tk.glow(ctx, dx, BEB_CY + dy, 190, BEB.lilac, 0.18 + 0.2 * hot); ctx.restore();
-    put(ctx, st, 'p2_crack', { y: 0, sy: 1 + 0.04 * br, sx: 1 + 0.1 * hot });
-    ctx.save();
-    xform(ctx, 0, BEB_CY, dx, dy, rot, sc, sc);
-    // the back arm and the ring of curling strips behind the lip
-    const n = 13;
-    ctx.save();
-    ctx.translate(70, -150);
-    put(ctx, st, 'p2_arm', { r: aB, sx: 0.8, sy: 0.8, a: 0.9, noFlash: false });
-    ctx.restore();
-    for (let i = 0; i < n; i++) {
-      const hj = hv('bestrip', 'j' + i), a = -PI / 2 + (i + 0.5 + (hj - 0.5) * 0.7) / n * TAU, s = sin(a), c = cos(a), down = Math.max(0, s), rxx = 100 * (1 - 0.4 * Math.pow(down, 1.4)) * (1 + 0.08 * Math.max(0, -s)) * 0.98, px = c * rxx, py = BEB_CY + s * 156 * 0.98;
-      if (s > 0.62) continue;                                   // none along the chin, where the crack is
-      const long = hv('bestrip', 'l' + i) > 0.4, k = (0.62 + 0.9 * hv('bestrip', 'k' + i)) * (1 - 0.4 * Math.max(0, -s)), ang = a + PI / 2 + (hv('bestrip', 'a' + i) - 0.5) * 0.9, flare = 0.5 * buff + 0.25 * tele - 0.5 * guard, wob = 0.16 * sin(t * (1.1 + 0.13 * i) + i) * m + 0.08 * hurt * (i % 2 ? 1 : -1);
-      ctx.save(); ctx.translate(px, py); ctx.rotate(ang + wob + (c > 0 ? flare : -flare) * 0.4);
-      put(ctx, st, long ? 'p2_stripA' : 'p2_stripB', { r: 0.14 * sin(t * 1.9 + i * 2) * m + (hv('bestrip', 'c' + i) - 0.5) * 0.5, sy: k * (1 + 0.08 * hot), sx: 0.8 + 0.5 * hv('bestrip', 'w' + i) });
-      ctx.restore();
+    xform(ctx, 0, BG2.cy, dx, dy, 0.05 * hurt - 0.03 * lean, sc, sc);
+    const sw = sin(t * 0.8) * m;
+    putChain(ctx, st, 'p2_drapeL', [0.04 * sw + 0.1 * tele, 0.08 * sin(t * 0.8 - 0.7) * m, 0.1 * sin(t * 0.8 - 1.4) * m]);
+    putChain(ctx, st, 'p2_drapeR', [-0.04 * sw - 0.1 * tele, -0.08 * sin(t * 0.8 - 0.7) * m, -0.1 * sin(t * 0.8 - 1.4) * m]);
+    put(ctx, st, 'p2_mirror', { kids(c) {
+      // the perfect copies, a little brighter when it offers them
+      put(c, st, 'p2_copies', { a: 0.75 + 0.25 * (tele + lean) });
+      WOUND2.forEach((w, i) => { if (st.wound > i / WOUND2.length * 0.95) crack(c, w[0], w[1], w[2], 'bw2' + i, 0.9); });
+      crack(c, 30, -300, 50, 'glosshit', hurt * 1.4);
+      // the face: calm slits of light for eyes, an open slit of a mouth that makes no sound
+      const k = st.won ? 0.6 : 0.6 + 0.2 * sin(t * 1.6) * m + 0.4 * tele + 0.5 * lean;
+      const open = 1 + 0.4 * wind + 0.3 * lean;
+      slit(c, -54, -244, 30, 4 + 2 * tele, k);
+      slit(c, 54, -244, 30, 4 + 2 * tele, k);
+      slit(c, 0, -146, 32, 9 * open, k, G.blush);
+    } });
+    put(ctx, st, 'p2_frame', { kids(c) { polite(c, st, 96, -300, 10); } });
+    // mirror shards drifting round it
+    for (let i = 0; i < 8; i++) {
+      const a = t * (0.3 + 0.6 * buff) * m + i * TAU / 8, x = cos(a) * 190, y = BG2.cy + sin(a) * 120;
+      put(ctx, st, 'p2_shard', { x, y, r: a + t * 0.5 * m, a: 0.7 });
     }
-    put(ctx, st, 'p2_face', { sy: 1 + 0.01 * br, sx: 1 });
-    // inside the grey: the faint yamabiko, clipped to the hole, and the Hush pouring up out of the empty haori
-    ctx.save(); ctx.beginPath(); tk.trace(ctx, tearPts(0.83, 0.07, 'hole'), 0, 0, 0); ctx.clip();
-    beYamabiko(ctx, t, m, 1 - die, hot);
     ctx.restore();
-    beHushPour(ctx, t, m, 1 - die, hot);
-    // the features, live, inside the void
-    {
-      const ob = blink(t, 'blankpage', 5.0) * (1 - 0.4 * hurt), look = -0.35 + 0.1 * sin(t * 0.8) * m;
-      const sq = Math.max(0.12, ob * (1 - 0.3 * (guard))), th = 1 + 0.35 * hot;
-      // eyes: slanted slits of blank light with a tiny dark pupil, and a thin tear trailing from each
-      [[-1, -50, -228, 0.34], [1, 48, -228, -0.34]].forEach((e, i) => {
-        const ex = e[1], ey = e[2], w = 44 * th, h = 18 * th * sq;
-        ctx.save(); ctx.translate(ex, ey); ctx.rotate(e[3] * (1 + 0.5 * hot));
-        tk.glow(ctx, 0, 0, 60, '#ffffff', 0.5 + 0.4 * hot);
-        ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(0, -h * 1.2, w, 0); ctx.quadraticCurveTo(0, h * 1.4, -w, 0); ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = BE.ink; ctx.stroke();
-        if (sq > 0.3) { ctx.fillStyle = '#15082c'; ctx.beginPath(); ctx.ellipse(look * w * 0.6, 0, 4.4, h * 0.85, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(look * w * 0.6 - 1.4, -h * 0.3, 1.4, 0, TAU); ctx.fill(); }
+    // the silent wave: pastel ovals rolling out of the open mouth toward the heroes (Mute the World), gathering in on the telegraph
+    const wk = atk ? Math.max(E0.strike, wind * 0.4) : tele * 0.6;
+    if (wk > 0.03) {
+      for (let i = 0; i < 4; i++) {
+        let u = fr(t * 0.9 + i / 4);
+        if (tele > 0 && !atk) u = 1 - u;
+        ctx.save(); ctx.globalAlpha = sin(PI * u) * wk; ctx.strokeStyle = [G.lilac, G.mint, G.blush, '#ffffff'][i]; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.ellipse(-40 - 160 * u + dx, -150 + dy, 20 + 40 * u, 40 + 80 * u, 0, PI * 0.5, PI * 1.5); ctx.stroke(); ctx.restore();
+      }
+    }
+    if (buff > 0.05) foe.sparkles(ctx, 0, -200, [[-120, -100, 9, 0], [120, -80, 8, 0.3], [0, -170, 9, 0.6], [-60, 80, 7, 0.8]], 3, E0.buffP * 2);
+    if (guard > 0.05) pitchRing(ctx, dx, BG2.cy + dy, 176, 186, 3, 24, G.mint, guard, t * 4);
+  };
+
+  // ---- the win-overs: each form its own way, every one ending with the shy little lens and its one crooked note
+  function shyLens(ctx, q, x, y) {
+    if (q <= 0 || q >= 1) return;
+    const a = q < 0.15 ? q / 0.15 : q > 0.85 ? (1 - q) / 0.15 : 1, wob = sin(q * 40) * 1.2;
+    ctx.save(); ctx.globalAlpha = ctx.globalAlpha * cA(a); ctx.translate(x + wob, y - q * 10);
+    tk.glow(ctx, 0, 0, 44, '#ffd6ea', 0.6);
+    RJ.cel(ctx, E(0, 0, 22, 22, 20), '#e6d9ff', { line: 2.4, lineColor: REAL_LINE, shadow: '#c9b8ff', hi: '#ffffff', wobble: 0 });
+    RJ.cel(ctx, E(0, 0, 14, 14, 18), '#9fd8ff', { line: 1.6, lineColor: REAL_LINE, shadow: '#6fb8ff', wobble: 0 });
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(-5, -6, 4, 2.5, -0.6, 0, TAU); ctx.fill();
+    // two tiny eyes looking up shyly and a small, nervous, wobbly smile; a blush
+    ctx.fillStyle = REAL_LINE;
+    [-6, 6].forEach((ex) => { ctx.beginPath(); ctx.arc(ex, -1, 1.9, 0, TAU); ctx.fill(); });
+    RJ.ink(ctx, [[-5, 5], [-2.5, 6.5], [0, 5.2], [2.5, 6.6], [5, 5]], { w: 1.4, color: REAL_LINE, taper: 0.3, wobble: 0 });
+    ctx.globalAlpha = ctx.globalAlpha * 0.6; ctx.fillStyle = '#ff8d98';
+    [-11, 11].forEach((bx) => { ctx.beginPath(); ctx.ellipse(bx, 4, 3.5, 1.8, 0, 0, TAU); ctx.fill(); });
+    ctx.restore();
+    // the one crooked note, wobbling up
+    if (q > 0.2) {
+      const nq = (q - 0.2) / 0.8;
+      tk.note(ctx, x + 30 + sin(nq * 12) * 4, y - 24 - nq * 40, 15, { kind: 'eighth', color: '#ff6fb5', alpha: a * sin(PI * Math.min(1, nq * 1.15)), rot: 0.42 + 0.18 * sin(nq * 16), line: 1.8 });
+    }
+  }
+  const BE_BOX = [[-140, -340, 140, 0], [-170, -356, 170, 0], [-170, -350, 170, -20]];
+  function bossWinOver(ctx, spec, st) {
+    const ph = clamp(st.phase, 0, 2), p = st.E.die, B = BE_BOX[ph];
+    const base = Object.assign({}, st, { E: poseState('idle', st.t, 0), flash: 0, v: '', won: false });
+    const real = Object.assign({}, base, { v: 'r', won: true });
+    if (ph < 2) {
+      foe.winOver(ctx, null, p, {
+        act: 3, box: B, seed: 41 + ph * 7, hop: ph ? 10 : 16, confetti: 'broken',
+        draw: (g) => BE_RIG[ph](g, real),
+        gloss: (g, S, k) => { g.globalAlpha = g.globalAlpha * cA(k); BE_RIG[ph](g, base); },
+      });
+      if (ph === 1 && p < 0.6) { tk.glow(ctx, 0, BF.ly, 120, '#ffffff', 0.5 * sin(PI * p / 0.6)); }
+    } else {
+      // the mirror crazes (a growing net of real colour), then breaks into soft sparkles and drifts away
+      if (p < 0.62) {
+        const k = clamp(p / 0.4, 0, 1), fade = 1 - clamp((p - 0.35) / 0.27, 0, 1);
+        ctx.save(); ctx.globalAlpha = ctx.globalAlpha * fade;
+        BE_RIG[2](ctx, k > 0.5 ? real : base);
+        ctx.save(); xform(ctx, 0, BG2.cy, 0, 0, 0, 1, 1);
+        WOUND2.forEach((w, i) => crack(ctx, w[0], w[1], w[2] * (0.4 + 0.8 * k), 'craze' + i, clamp(k * 2 - i * 0.15, 0, 1)));
         ctx.restore();
-        tk.inkPath(ctx, [[ex + e[0] * 4, ey + 16], [ex + e[0] * 9, ey + 38], [ex + e[0] * 6, ey + 58]], { w: 2, color: '#ffffff', alpha: 0.7, taper: 0.5, wobble: 0.1 });
-      });
-      // cloth-gag brows, angry, twitching
-      [[-1, -52, -258, 0.4], [1, 48, -258, -0.4]].forEach((b) => {
-        ctx.save(); ctx.translate(b[1], b[2] + 3 * hot); ctx.rotate(b[3] * (1 + 0.35 * hot) + 0.04 * sin(t * 9 + b[0]) * hot); gag(ctx, -32, -6, 64, 12);
-        ctx.strokeStyle = '#cfcdd8'; ctx.lineWidth = 1.2; ctx.strokeRect(-32, -6, 64, 12); ctx.restore();
-      });
-      // the nose: a thin rip of light
-      ctx.save(); ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.moveTo(-2, -204); ctx.lineTo(4, -170); ctx.lineTo(-6, -150); ctx.lineTo(0, -172); ctx.closePath(); ctx.fill(); ctx.restore();
-      // the mouth and the cloth gag that slides across it every so often (and always when he is guarding)
-      beMouth(ctx, 0, -118, 124, open, t, hot);
-      const ph = ((t / 6.5) % 1 + 1) % 1, slide = Math.max(ph < 0.16 ? sin(ph / 0.16 * PI) : 0, guard);
-      if (slide > 0.02) { ctx.save(); ctx.globalAlpha = cA(slide * 1.4); ctx.translate(lerp(-130, 0, ease.outCubic(clamp(slide * 1.3, 0, 1))), -118); gag(ctx, -90, -13, 180, 26); ctx.strokeStyle = '#cfcdd8'; ctx.lineWidth = 1.4; ctx.strokeRect(-90, -13, 180, 26); ctx.restore(); }
-      // the snapped baton floats over the eyes, bobbing and slightly askew
-      beSpecs(ctx, -1 + 2 * sin(t * 0.9) * m, -152 + 5 * sin(t * 1.3 + 1) * m - 6 * tele, 0.06 * sin(t * 0.8) * m + 0.12 * hurt, 0.95 * (1 - die), hot);
-      // notes and small sound rings sucked into the mouth in a spiral, the sound being eaten
-      const nl = 12 + Math.round(6 * hot);
-      for (let i = 0; i < nl; i++) {
-        const per = 1.8 + 0.8 * hv('belet', 'p' + i), u = (((t + hv('belet', 'o' + i) * per) % per) + per) % per / per, a0 = hv('belet', 'a' + i) * TAU, rad = 210 * Math.pow(1 - u, 1.3), ang = a0 + u * 3.4;
-        const x = cos(ang) * rad * 1.1, y = -118 + sin(ang) * rad * 0.8 - 20 * u, fade = cA(sin(u * PI) * 0.95) * (1 - die), sz = (11 + 8 * hv('belet', 's' + i)) * (0.4 + 0.6 * (1 - u));
-        if (fade < 0.03) continue;
-        if (i % 3 === 2) {
-          ctx.save(); ctx.globalAlpha = fade * 0.9; ctx.translate(x, y);
-          [1, 0.62].forEach((k2, r2) => { ctx.globalAlpha = fade * (0.9 - r2 * 0.35); ctx.strokeStyle = i % 2 ? '#ffffff' : BEB.lilac; ctx.lineWidth = 2.2 * (0.5 + 0.5 * (1 - u)); ctx.beginPath(); ctx.arc(0, 0, sz * 0.9 * k2, 0, TAU); ctx.stroke(); });
-          ctx.restore();
-        } else {
-          tk.note(ctx, x, y, sz, { kind: i % 3 ? 'eighth' : 'quarter', color: i % 4 === 0 ? BEB.cyan : '#ffffff', alpha: fade, rot: ang * 0.3 + u * 3, line: 2 });
+        ctx.restore();
+      }
+      if (p > 0.25) {
+        const u = clamp((p - 0.25) / 0.6, 0, 1), rr = tk.rng('bossc', 2);
+        for (let i = 0; i < 26; i++) {
+          const a = rr() * TAU, d = 30 + rr() * 150, sp = 0.5 + rr() * 0.8, x = cos(a) * d * (1 + u * sp), y = BG2.cy + sin(a) * d * 0.9 * (1 + u * sp) - u * 40;
+          tk.sparkle(ctx, x, y, (3 + rr() * 6) * sin(PI * u), { color: [G.lilac, G.mint, G.blush, '#ffffff', REAL[i % REAL.length]][i % 5], alpha: sin(PI * u), glow: 0.4, rot: u * 2 });
         }
       }
-      // storm leaking through the rim: cyan arcs hopping off the edge, many more when he is hurt
-      const nz = 3 + Math.round(5 * hot) + Math.round(3 * st.wound);
-      for (let i = 0; i < nz; i++) {
-        const a = hv('bez', 'a' + i) * TAU + t * 0.1, s = sin(a), c = cos(a), rxx = 100 * (1 - 0.4 * Math.pow(Math.max(0, s), 1.4)) * 0.92, x0 = c * rxx, y0 = BEB_CY + s * 156 * 0.92;
-        zap(ctx, x0, y0, x0 + c * (38 + 40 * hv('bez', 'l' + i)), y0 + s * (38 + 40 * hv('bez', 'l' + i)) + 10, t * (0.5 + 0.2 * (i % 3)), { seed: 60 + i, w: 2.2, jag: 7, n: 5, color: BEB.cyan, core: '#ffffff' });
-      }
-      if (tele > 0.05) {
-        // the maw gathers light: rays and a swelling orb
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        tk.glow(ctx, 0, -118, 50 + 120 * tele, '#ffffff', 0.7 * tele);
-        for (let i = 0; i < 14; i++) { const a = i / 14 * TAU + t * 0.5; ctx.globalAlpha = 0.5 * tele; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cos(a) * 70, -118 + sin(a) * 60); ctx.lineTo(cos(a) * (90 + 120 * tele), -118 + sin(a) * (80 + 100 * tele)); ctx.stroke(); }
-        ctx.restore();
-      }
     }
-    // the front arm over everything
-    ctx.save(); ctx.translate(-70, -118);
-    put(ctx, st, 'p2_arm', { r: aF });
-    ctx.restore();
-    ctx.restore();
-    ctx.restore();
-    // the rip: a long white jagged tear across the front on the strike and a burst of paper
-    if (atk && p > 0.44 && p < 0.9) {
-      const u = clamp((p - 0.44) / 0.46, 0, 1);
-      ctx.save(); ctx.globalAlpha = (1 - ease.inQuad(u)) * 0.95;
-      const pts = []; for (let k = 0; k <= 10; k++) pts.push([-80 + dx - 230 * k / 10, -110 - 20 * sin(k * 1.3) + (k % 2 ? 12 : -12)]);
-      tk.inkPath(ctx, pts, { w: 18 * (1 - u * 0.5), color: '#ffffff', taper: 0.4, wobble: 0.05, pressure: 'mid', tension: 0 });
-      tk.inkPath(ctx, pts, { w: 4, color: BEB.cyan, taper: 0.4, wobble: 0.05, pressure: 'mid', tension: 0, alpha: 0.9 });
-      ctx.restore();
-      for (let i = 0; i < 9; i++) { const fj = fling('bepg' + i, 'b', u, { spread: 240, up: 100, g: 320, bias: -80 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-240 + dx + fj.x, -90 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 3 ? '#fff8f0' : BE.bar; ctx.fillRect(-7, -4, 14, 8); ctx.restore(); }
-    }
-    if (die > 0.2) {
-      // the end of the held breath: the hole flares white and closes into a line
-      const u = clamp((die - 0.2) / 0.8, 0, 1);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, 0, BEB_CY, 120 + 220 * u, '#ffffff', 0.9 * Math.sin(u * PI)); ctx.restore();
-    }
-    if (buff > 0.1) motes(ctx, dx, -100 + dy, t, 14, 'bebbuff', { col: '#ffffff', size: 3, rise: 100, spread: 100, life: 0.9, alpha: buff });
-  };
-  // the registered boss: bounds cover all three forms, the dissolve differs per form, the rig dispatches on the phase
-  const BE_DIE = [
-    { key: 'p0', box: [-150, -340, 110, 4], nx: 11, ny: 18, from: 'top', order: 0.55, shape: 'paper', kinds: ['felt', 'note', 'bar', 'felt'], cols: ['#f2f0f6', '#ff2a4a', '#6e6a7e', '#c9b8ff'], wind: [-10, -10], size: 12, thin: 0.25, life: 0.6 },
-    { key: 'p1', box: [-170, -350, 150, 4], nx: 12, ny: 18, from: 'out', order: 0.5, shape: 'paper', kinds: ['cotton', 'cotton', 'felt', 'cotton'], cols: ['#f2f0f6', '#cfcdd8', '#6e6a7e', '#8e8aa3'], wind: [-6, -8], size: 13, thin: 0.2, life: 0.6 },
-    { key: 'p2', box: [-170, -360, 150, 4], nx: 12, ny: 18, from: 'in', order: 0.35, shape: 'paper', kinds: ['note', 'felt', 'note', 'bar'], cols: ['#ffffff', '#cfcdd8', '#5ff5ff', '#6e6a7e'], wind: [0, -22], size: 14, thin: 0.15, life: 0.6 },
-  ];
+    floorSparkle(ctx, spec, p);
+    if (p > 0.55) shyLens(ctx, (p - 0.55) / 0.45, 0, -190);
+  }
   define('boss_editor', {
-    size: 'xl', lw: 3.8,
-    col: { rim: '#c9b8ff', shT: 0.42 },
-    bounds: { w: 340, h: 352, head: { x: -6, y: -330 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 }, right: 159 },
-    die: (st) => BE_DIE[clamp(st.phase, 0, 2)],
+    size: 'xl',
+    col: { skin: G.porcelain, hair: '#d6c9f6', boot: '#f6f2ff', bodice: '#ffd6ea', bodice2: '#dccdfb', chromeT: '#d9d6ea', ball: G.opal },
+    real: { skin: '#ffd2b4', hair: '#6a3a8a', boot: '#ffd84d', bodice: '#ff4f8e', bodice2: '#8b4dff', chromeT: '#7cc6ff', ball: '#ffd84d' },
+    bounds: { w: 340, h: 364, head: { x: 0, y: -334 }, body: { x: 0, y: -176 }, feet: { x: 0, y: 0 }, right: 170 },
+    sweep: [-60, -240],
     parts: BE_P,
     chains: BE_C,
+    winOver: bossWinOver,
     rig(ctx, st) { const ph = clamp(st.phase, 0, 2); (BE_RIG[ph] || BE_RIG[0])(ctx, st); },
   });
+
   // ===============================================================================================================
   // registration of every spec and the gallery
   // ===============================================================================================================
@@ -3884,69 +2625,51 @@
   ART.enemy.warm3 = warm;
   ART.enemy.ids3 = () => Object.keys(SPECS);
 
-  // workbench: params id (comma list or 'all'), pose (one, or 'all' for a row of every pose), zoom, t, pt, phase, hp
   const KEYPT = { idle: 0, attack: 0.21, hurt: 0.07, block: 0.2, buff: 0.16, die: 0.3, telegraph: 0.6 };
-  // the chapter 3 backdrop for swatches: a crimson storm sky, a citadel silhouette, floating stones, white void tears, an occasional lightning flash
-  function backdrop(ctx, W, H, t, gy, seed) {
-    const u = H / 500;
-    tk.sky(ctx, 0, 0, W, gy, 'crimson');
-    const fl = Math.max(0, sin(t * 0.9 + (seed || 0)) * 6 - 5.2);                    // rare deterministic flashes
-    if (fl > 0) { ctx.fillStyle = 'rgba(255,240,255,' + (fl * 0.35).toFixed(3) + ')'; ctx.fillRect(0, 0, W, gy); }
-    tk.glow(ctx, W * 0.5, gy * 0.92, W * 0.5, '#ff7a5a', 0.28);
-    // white void tears in the sky
-    ctx.fillStyle = 'rgba(255,248,240,0.5)';
-    [[0.14, 0.16, 0.12], [0.76, 0.1, 0.14]].forEach((tr, i) => {
-      const x = W * tr[0], y = gy * tr[1], w = W * tr[2];
-      ctx.beginPath(); ctx.moveTo(x, y);
-      for (let k = 1; k <= 9; k++) ctx.lineTo(x + w * k / 9, y + (k % 2 ? -1 : 1) * (2 + 4 * hv('tear' + i, 'k' + k)) * u);
-      for (let k = 9; k >= 0; k--) ctx.lineTo(x + w * k / 9, y + (k % 2 ? 3 : 0) * u + (1 + 2 * hv('tear' + i, 'j' + k)) * u);
-      ctx.closePath(); ctx.fill();
-    });
-    // the citadel: a wall and three stacked towers, black against the glow, a few lit windows
-    ctx.fillStyle = '#1d0a2c';
-    const cx0 = W * 0.5, base = gy - 24 * u;
-    ctx.fillRect(cx0 - 190 * u, base - 46 * u, 380 * u, 60 * u);
-    for (let k = 0; k < 14; k++) ctx.fillRect(cx0 - 190 * u + k * 27 * u, base - 56 * u, 14 * u, 10 * u);
-    [[-120, 90, 40], [0, 140, 56], [118, 100, 42]].forEach((tw) => {
-      const x = cx0 + tw[0] * u, top = base - tw[1] * u, w = tw[2] * u;
-      ctx.fillRect(x - w / 2, top, w, base - top);
-      for (let k = 0; k < 3; k++) { const ww = w * (1.5 - k * 0.24), yy = top + k * 26 * u; ctx.beginPath(); ctx.moveTo(x - ww / 2, yy + 8 * u); ctx.lineTo(x, yy - 12 * u); ctx.lineTo(x + ww / 2, yy + 8 * u); ctx.closePath(); ctx.fill(); }
-    });
-    ctx.fillStyle = 'rgba(255,170,90,0.9)';
-    for (let k = 0; k < 9; k++) ctx.fillRect(cx0 - 170 * u + k * 42 * u, base - 30 * u + (k % 3) * 5 * u, 3 * u, 4 * u);
-    // floating stones
-    ctx.fillStyle = '#2a1238';
-    [[0.08, 0.3, 20], [0.92, 0.36, 16], [0.62, 0.14, 14]].forEach((sp, i) => {
-      const x = W * sp[0], y = gy * sp[1] + sin(t * 0.6 + i * 2) * 4 * u, r = sp[2] * u;
-      ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y - r * 0.15); ctx.lineTo(x + r * 0.5, y + r * 0.7); ctx.lineTo(x + r * 0.05, y + r * 1.5); ctx.lineTo(x - r * 0.6, y + r * 0.6); ctx.closePath(); ctx.fill();
-    });
-    // the cloud bank
-    for (let i = 0; i < 18; i++) {
-      const cx = W * (i / 17) + sin(t * 0.2 + i) * 6 * u, cy = gy - 10 * u - hv('cl', 'y' + i) * 26 * u, r = (30 + 22 * hv('cl', 'r' + i)) * u;
-      ctx.fillStyle = i % 2 ? '#a02048' : '#c83c50'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+  // the Perfect Stage for swatches: an opal hall with ring lights hanging like halos, a mirror floor with a cheap reflection of the creature, and
+  // confetti that falls in a perfect grid. Pale on purpose: the slate line carries every creature.
+  function stage(ctx, W, H, t, gy, seed) {
+    const sk = ctx.createLinearGradient(0, 0, 0, gy);
+    sk.addColorStop(0, '#d9d1f2'); sk.addColorStop(0.6, '#ece6fa'); sk.addColorStop(1, '#f7f2fc');
+    ctx.fillStyle = sk; ctx.fillRect(0, 0, W, gy);
+    const u = Math.max(0.4, H / 600);
+    // ring lights like halos, in a perfect row
+    const n = Math.max(2, Math.round(W / (220 * u)));
+    for (let i = 0; i < n; i++) {
+      const x = W * (i + 0.5) / n, y = gy * 0.2, r = 18 * u;
+      tk.glow(ctx, x, y, r * 2.2, '#ffffff', 0.22);
+      ctx.save(); ctx.lineWidth = 4 * u; ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(90,95,122,0.35)'; ctx.beginPath(); ctx.arc(x, y, r + 3 * u, 0, TAU); ctx.stroke(); ctx.restore();
     }
-    ctx.fillStyle = '#24102c'; ctx.fillRect(0, gy, W, H - gy);
-    const gg = ctx.createLinearGradient(0, gy - 4, 0, gy + 18);
-    gg.addColorStop(0, 'rgba(255,90,90,0.4)'); gg.addColorStop(1, 'rgba(255,90,90,0)');
-    ctx.fillStyle = gg; ctx.fillRect(0, gy - 4, W, 22);
-    tk.kirakira(ctx, 0, 0, W, gy, t, { n: 10, seed: seed || 4, size: 2.4, color: '#ffe9a8' });
+    confettiGrid(ctx, [0, 0, W, gy * 0.9], fr(t * 0.08 + (seed || 0) * 0.13), false, seed || 1);
+    // the mirror floor
+    const fl = ctx.createLinearGradient(0, gy, 0, H);
+    fl.addColorStop(0, '#e4def4'); fl.addColorStop(1, '#f6f3fc');
+    ctx.fillStyle = fl; ctx.fillRect(0, gy, W, H - gy);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(0, gy, W, Math.max(1, 2 * u));
+    ctx.strokeStyle = 'rgba(90,95,122,0.12)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) { const y = gy + (H - gy) * (i / 4) * (i / 4); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   }
+  const drawWithFloor = (ctx, id, o, gy) => {
+    reflection(ctx, (c) => ART.enemy.draw(c, id, o), gy, 0.16);
+    ART.enemy.draw(ctx, id, o);
+  };
   ART.sheet('enemies3_dev', (canvas, params) => {
-    const ctx = canvas.getContext('2d'), W = params.w, H = params.h, t = num(params.t, 0);
+    const ctx = canvas.getContext('2d'), W = num(params.w, 1600), H = num(params.h, 900), t = num(+params.t, 0);
     const all = params.id === 'all' || params.id === undefined;
-    const ids = all ? Object.keys(SPECS) : String(params.id).split(',');
-    const zoom = num(params.zoom, 1.6), gy = H * 0.9;
-    backdrop(ctx, W, H, t, gy, 3);
+    const ids = (all ? Object.keys(SPECS) : String(params.id).split(',')).filter((id) => SPECS[id]);
+    const zoom = num(+params.zoom, 1.6), gy = H * 0.86, pt = params.pt !== undefined ? num(+params.pt, 0) : undefined, hp = params.hp !== undefined ? num(+params.hp, 1) : undefined;
+    stage(ctx, W, H, t, gy, 3);
+    if (!ids.length) return;
     if (params.pose === 'all') {
       POSES.forEach((pose, i) => {
-        ART.enemy.draw(ctx, ids[0], { x: W * (i + 0.5) / POSES.length, y: gy, s: zoom, pose, t, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: params.phase | 0, hpPct: params.hp });
-        ctx.font = '600 13px system-ui'; ctx.fillStyle = '#c9bff0'; ctx.textAlign = 'center'; ctx.fillText(pose, W * (i + 0.5) / POSES.length, H - 8);
+        drawWithFloor(ctx, ids[0], { x: W * (i + 0.5) / POSES.length, y: gy, s: zoom, pose, t, pt: pt !== undefined ? pt : KEYPT[pose], phase: num(+params.phase, 0) | 0, hpPct: hp }, gy);
+        ctx.font = '600 13px system-ui'; ctx.fillStyle = '#5a5f7a'; ctx.textAlign = 'center'; ctx.fillText(pose, W * (i + 0.5) / POSES.length, H - 8);
       });
     } else {
-      const pose = params.pose || 'idle';
-      ids.forEach((id, i) => ART.enemy.draw(ctx, id, { x: W * (i + 0.5) / ids.length, y: gy, s: zoom, pose, t, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: params.phase | 0, hpPct: params.hp }));
+      const pose = POSES.indexOf(params.pose) >= 0 ? params.pose : 'idle';
+      ids.forEach((id, i) => drawWithFloor(ctx, id, { x: W * (i + 0.5) / ids.length, y: gy, s: zoom, pose, t, pt: pt !== undefined ? pt : KEYPT[pose], phase: num(+params.phase, 0) | 0, hpPct: hp }, gy));
     }
-    tk.paperGrain(ctx, 0, 0, W, H, { alpha: 0.25 });
   });
   // ---------------------------------------------------------------------------------------------------------------
   // gallery sheets
@@ -3954,64 +2677,64 @@
   const NORMALS = ['storm_drone', 'komainu_guardian', 'redaction_knight', 'void_scribe', 'blank_soldier', 'sky_serpent', 'eraser_wraith', 'thunder_crow', 'paper_golem', 'margin_imp'];
   const ELITES = ['censor_golem', 'storm_whelp', 'black_bar_inquisitor'];
   const MINIONS = ['blank_page', 'spark_mote', 'typo_sprite'];
-  const cellBg = (g, w, h, t, seed) => {
-    tk.sky(g, 0, 0, w, h, 'crimson');
-    tk.glow(g, w * 0.5, h * 0.8, h * 0.6, '#ff7a5a', 0.25);
-    const fl = Math.max(0, sin(t * 0.9 + (seed || 0) * 1.7) * 6 - 5.3);
-    if (fl > 0) { g.fillStyle = 'rgba(255,240,255,' + (fl * 0.3).toFixed(3) + ')'; g.fillRect(0, 0, w, h); }
-    g.fillStyle = 'rgba(36,16,44,0.9)'; g.fillRect(0, h * 0.88, w, h * 0.12);
-    tk.kirakira(g, 0, 0, w, h * 0.85, t, { n: 6, seed: (seed || 0) + 3, size: 2, color: '#ffe9a8' });
+  const NAMES = {
+    storm_drone: 'Tuner Drone', komainu_guardian: 'VIP Bouncer', redaction_knight: 'Clapperboard Knight', void_scribe: 'Chrome Siren', blank_soldier: 'Synchro Dancer',
+    sky_serpent: 'Streamer Dragon', eraser_wraith: 'Airbrush Wraith', thunder_crow: 'Ring Light Sentinel', paper_golem: 'Sequin Golem', margin_imp: 'Glitch Gremlin',
+    censor_golem: 'Big Mute Button', storm_whelp: 'Applause Sign', black_bar_inquisitor: 'Mannequin Judge', blank_page: 'Lip-Sync Clone', spark_mote: 'Confetti Popper',
+    typo_sprite: 'Pitch Glitch', boss_editor: 'Flawless',
   };
-  const fitScale = (id, w, h, cap) => { const b = ART.enemy.bounds(id); return Math.min(h * 0.86 / (b.h + 14), w * 0.96 / (b.w + 10), cap || 2); };
+  const cellBg = (g, w, h, t, seed) => stage(g, w, h, t, h * 0.88, seed);
+  const fitScale = (id, w, h, cap) => { const b = ART.enemy.bounds(id); return Math.min(h * 0.84 / (b.h + 14), w * 0.96 / (b.w + 10), cap || 2); };
   const tierOf = (id) => (DATA.enemies && DATA.enemies[id] ? DATA.enemies[id].tier : '');
 
-  // every normal, elite and minion, each in three poses (params.poses = "idle,attack,telegraph" by default), fitted to its cell
+  // every creature, rival and sidekick, each in three poses (params.poses = "idle,attack,telegraph" by default), fitted to its cell
   ART.sheet('enemies3', (canvas, params) => {
-    const t = num(params.t, 0), poses = String(params.poses || 'idle,attack,telegraph').split(',').filter((p) => POSES.indexOf(p) >= 0);
-    const ids = NORMALS.concat(ELITES, MINIONS), np = poses.length || 1;
-    const cells = ids.map((id) => ({ id, label: id + '  (' + tierOf(id) + ')' }));
+    const t = num(+params.t, 0), poses = String(params.poses || 'idle,attack,telegraph').split(',').filter((p) => POSES.indexOf(p) >= 0);
+    const ids = NORMALS.concat(ELITES, MINIONS).filter((id) => SPECS[id]), np = poses.length || 1;
+    const cells = ids.map((id) => ({ id, label: (NAMES[id] || id) + '  (' + id + ', ' + tierOf(id) + ')' }));
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h, i) => {
       cellBg(g, w, h, t, i);
-      const gy = h * 0.9, sc = fitScale(cell.id, w / np, h, 1.7);
-      (poses.length ? poses : ['idle']).forEach((pose, k) => ART.enemy.draw(g, cell.id, { x: w * (k + 0.5) / np, y: gy, s: sc, pose, t: t + i * 0.37, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: 0 }));
-    }, { cols: 4, title: 'Verse III, the Thunderless Citadel: normals, elites, minions (' + poses.join(', ') + ')', gap: 6, labelH: 16 });
+      const gy = h * 0.88, sc = fitScale(cell.id, w / np, h, 1.7);
+      (poses.length ? poses : ['idle']).forEach((pose, k) => drawWithFloor(g, cell.id, { x: w * (k + 0.5) / np, y: gy, s: sc, pose, t: t + i * 0.37, pt: params.pt !== undefined ? num(+params.pt, 0) : KEYPT[pose], phase: 0 }, gy));
+    }, { cols: 4, title: 'Act III, the Perfect Stage: creatures, rivals, sidekicks (' + poses.join(', ') + ')', gap: 6, labelH: 16 });
   });
 
-  // the boss: all three forms large in idle, then every pose of each form underneath
+  // the Headliner: all three forms large in idle, then every pose of each form underneath
   ART.sheet('boss3', (canvas, params) => {
-    const g = canvas.getContext('2d'), W = params.w, H = params.h, t = num(params.t, 0), id = 'boss_editor';
-    const topH = H * 0.56, gy = topH * 0.95, names = ['phase 0: the Conductor', 'phase 1: the Damper', 'phase 2: the Hush'];
-    backdrop(g, W, H, t, gy, 2);
-    const sc = Math.min(topH * 0.9 / 350, W / 3 * 0.9 / 330);
+    const g = canvas.getContext('2d'), W = num(params.w, 1600), H = num(params.h, 900), t = num(+params.t, 0), id = 'boss_editor';
+    const topH = H * 0.56, gy = topH * 0.93, names = ['phase 0: Flawless', 'phase 1: the Filter', 'phase 2: the Gloss'];
+    stage(g, W, H, t, gy, 2);
+    g.font = '700 16px system-ui'; g.fillStyle = '#5a5f7a'; g.textAlign = 'left'; g.fillText('Flawless, all three forms', 10, 20);
+    if (!SPECS[id]) return;
+    const sc = Math.min(topH * 0.86 / 360, W / 3 * 0.9 / 340);
     [0, 1, 2].forEach((ph) => {
       const cx = W * (ph + 0.5) / 3;
-      ART.enemy.draw(g, id, { x: cx, y: gy, s: sc, pose: 'idle', t, pt: 0, phase: ph, hpPct: ph === 2 ? 0.25 : ph === 1 ? 0.5 : 1 });
-      g.font = '700 15px system-ui'; g.fillStyle = '#f3e6c8'; g.textAlign = 'center'; g.fillText(names[ph], cx, topH - 6);
+      drawWithFloor(g, id, { x: cx, y: gy, s: sc, pose: 'idle', t, pt: 0, phase: ph, hpPct: ph === 2 ? 0.25 : ph === 1 ? 0.5 : 1 }, gy);
+      g.font = '700 15px system-ui'; g.fillStyle = '#5a5f7a'; g.textAlign = 'center'; g.fillText(names[ph], cx, topH - 4);
     });
-    const poses = ['attack', 'hurt', 'block', 'buff', 'die', 'telegraph'], bandH = (H - topH) / 3, cw = W / poses.length, s2 = Math.min(bandH * 0.84 / 350, cw * 0.96 / 340);
+    const poses = ['attack', 'hurt', 'block', 'buff', 'die', 'telegraph'], bandH = (H - topH) / 3, cw = W / poses.length, s2 = Math.min(bandH * 0.84 / 360, cw * 0.96 / 340);
     [0, 1, 2].forEach((ph) => poses.forEach((pose, k) => {
       const x = cw * (k + 0.5), y = topH + bandH * ph + bandH * 0.9;
-      g.fillStyle = 'rgba(36,16,44,0.7)'; g.fillRect(cw * k, topH + bandH * ph, cw - 2, bandH - 2);
+      g.fillStyle = 'rgba(228,222,244,0.92)'; g.fillRect(cw * k, topH + bandH * ph, cw - 2, bandH - 2);
       ART.enemy.draw(g, id, { x, y, s: s2, pose, t, pt: KEYPT[pose], phase: ph });
-      g.font = '600 12px system-ui'; g.fillStyle = '#c9bff0'; g.textAlign = 'center'; g.fillText('phase ' + ph + ' ' + pose, x, topH + bandH * (ph + 1) - 4);
+      g.font = '600 12px system-ui'; g.fillStyle = '#5a5f7a'; g.textAlign = 'center'; g.fillText('phase ' + ph + ' ' + pose, x, topH + bandH * (ph + 1) - 4);
     }));
-    tk.paperGrain(g, 0, 0, W, H, { alpha: 0.25 });
   });
 
-  // film strips: two creatures (params.ids), each with an idle loop, an attack and a death across the pose (8 frames each)
+  // film strips: two creatures (params.ids), each with an idle loop, an attack and a win-over across the pose (8 frames each)
   ART.sheet('enemies3_anim', (canvas, params) => {
-    const ids = String(params.ids || 'black_bar_inquisitor,spark_mote').split(',').filter((id) => SPECS[id]).slice(0, 2), n = 8, t0 = num(params.t, 0), cells = [];
+    const ids = String(params.ids || 'black_bar_inquisitor,spark_mote').split(',').filter((id) => SPECS[id]).slice(0, 2), n = 8, t0 = num(+params.t, 0), cells = [];
     ids.forEach((id) => {
-      for (let i = 0; i < n; i++) cells.push({ id, kind: 'idle', i, label: id.split('_')[0] + ' idle ' + (i * 0.3).toFixed(1) + 's' });
+      for (let i = 0; i < n; i++) cells.push({ id, kind: 'idle', i, label: (NAMES[id] || id) + ' idle ' + (i * 0.3).toFixed(1) + 's' });
       for (let i = 0; i < n; i++) cells.push({ id, kind: 'attack', i, label: 'attack ' + Math.round(i / (n - 1) * POSE_MS.attack) + 'ms' });
-      for (let i = 0; i < n; i++) cells.push({ id, kind: 'die', i, label: 'die ' + Math.round(i / (n - 1) * POSE_MS.die) + 'ms' });
+      for (let i = 0; i < n; i++) cells.push({ id, kind: 'die', i, label: 'win-over ' + Math.round(i / (n - 1) * POSE_MS.die) + 'ms' });
     });
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
       cellBg(g, w, h, t0, 2);
       const sc = fitScale(cell.id, w, h, 1.6), u = cell.i / (n - 1);
-      const o = { x: w * 0.5, y: h * 0.9, s: sc, t: t0 + cell.i * (cell.kind === 'idle' ? 0.3 : 0.033) };
+      const o = { x: w * 0.5, y: h * 0.88, s: sc, t: t0 + cell.i * (cell.kind === 'idle' ? 0.3 : 0.033) };
       if (cell.kind === 'idle') ART.enemy.draw(g, cell.id, Object.assign(o, { pose: 'idle', pt: 0 }));
       else ART.enemy.draw(g, cell.id, Object.assign(o, { pose: cell.kind, pt: u * POSE_MS[cell.kind] / 1000 }));
-    }, { cols: n, title: 'Verse III film strips: ' + ids.join(' and ') + ' (idle loop, attack, death)', gap: 4, labelH: 14 });
+    }, { cols: n, title: 'Act III film strips: ' + ids.map((id) => NAMES[id] || id).join(' and ') + ' (idle loop, attack, win-over)', gap: 4, labelH: 14 });
   });
 })();

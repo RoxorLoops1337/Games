@@ -333,9 +333,11 @@ await t.test('the stage fit is fixed at mount: a death or a summon never makes t
 // Measured with an alpha scan of the real sprites in Chromium (aura and shadow left out, 1280 x 720 at s = 1): `reach` is the farthest the picture extends right of the
 // feet in the idle or the held telegraph pose, `top` how high the idle body stands at its first row 16 px wide (thin tips, strings and ornaments excluded). Re-measure
 // both when an enemy's art changes: ART.enemy.bounds must keep covering them (DESIGN 5.9: the stage fit and the intent bubble at top.y - 6 are built on them).
-// (paper_puppet scans 165 and crow_tengu 222, but the art suites cap a minion at 1.4 x 110 = 153 and a medium enemy below 210, so 153 and 209 stand for them.)
-const SCAN_REACH = { bamboo_boar: 159, oni_brute: 155, tengu_duelist: 218, boss_kuzunoha: 272, nure_onna: 156, umibozu: 158, boss_jorogumo: 328, komainu_guardian: 159, sky_serpent: 157, censor_golem: 157, storm_whelp: 172, black_bar_inquisitor: 159, boss_editor: 159 };
-const SCAN_TOP = { kappa: 173, tanuki_bandit: 180, kodama: 123, karakasa: 203, hitodama: 118, oni_cub: 176, crow_tengu: 209, bamboo_sprite: 130, mushroom_folk: 189, bamboo_boar: 290, oni_brute: 307, tengu_duelist: 322, moss_guardian: 344, ember_wisp: 79, leaf_imp: 85, paper_kodama: 109, boss_kuzunoha: 391, chochin: 201, karakuri_puppet: 192, nopperabo: 194, drowned_samurai: 315, koi_spirit: 187, tsukumogami: 197, silk_weaver: 174, nure_onna: 243, rokurokubi: 222, ittan_momen: 198, drowned_general: 352, puppet_master: 293, umibozu: 282, spiderling: 95, paper_puppet: 153, lantern_wisp: 127, boss_jorogumo: 398, storm_drone: 177, komainu_guardian: 276, redaction_knight: 195, void_scribe: 200, blank_soldier: 214, sky_serpent: 296, eraser_wraith: 185, thunder_crow: 188, paper_golem: 251, margin_imp: 231, censor_golem: 297, storm_whelp: 298, black_bar_inquisitor: 309, blank_page: 111, spark_mote: 95, typo_sprite: 123, boss_editor: 349 };
+// Hocus Vocus re-measure (the new art): the entry's own draw at s = 1 (elite scale included) with the shell's shadow, ring and aura left out, pixels with alpha 128 or
+// more, the highest value over an idle cycle (t = 0 to 4.8 s in 0.2 s steps; the telegraph held at pt = 5 s for the reach), boss phase 0.
+// (paper_puppet scans 173 and karakasa 217, but the art suites cap a minion at 1.4 x 110 = 154 and a medium enemy below 210, so 153 and 209 stand for them.)
+const SCAN_REACH = { bamboo_boar: 153, oni_brute: 151, tengu_duelist: 170, boss_kuzunoha: 291, nure_onna: 146, umibozu: 204, boss_jorogumo: 300, komainu_guardian: 104, sky_serpent: 167, censor_golem: 127, storm_whelp: 184, black_bar_inquisitor: 111, boss_editor: 138 };
+const SCAN_TOP = { kappa: 183, tanuki_bandit: 126, kodama: 128, karakasa: 209, hitodama: 133, oni_cub: 167, crow_tengu: 184, bamboo_sprite: 85, mushroom_folk: 181, bamboo_boar: 296, oni_brute: 304, tengu_duelist: 329, moss_guardian: 348, ember_wisp: 89, leaf_imp: 72, paper_kodama: 104, boss_kuzunoha: 388, chochin: 197, karakuri_puppet: 188, nopperabo: 204, drowned_samurai: 321, koi_spirit: 173, tsukumogami: 184, silk_weaver: 180, nure_onna: 245, rokurokubi: 221, ittan_momen: 199, drowned_general: 361, puppet_master: 319, umibozu: 338, spiderling: 88, paper_puppet: 153, lantern_wisp: 131, boss_jorogumo: 418, storm_drone: 162, komainu_guardian: 242, redaction_knight: 190, void_scribe: 191, blank_soldier: 214, sky_serpent: 276, eraser_wraith: 180, thunder_crow: 180, paper_golem: 247, margin_imp: 175, censor_golem: 251, storm_whelp: 275, black_bar_inquisitor: 281, blank_page: 127, spark_mote: 105, typo_sprite: 101, boss_editor: 364 };
 await t.test('every enemy that stands in lane 4 keeps its whole drawn reach on the screen (art scan fixture)', () => {
   const g = fresh();
   Object.keys(SCAN_REACH).forEach((def) => {
@@ -1347,5 +1349,53 @@ await fullFight('Kuzunoha, chapter 1 boss (phase, summons, swaps)', ['boss_kuzun
 await fullFight('Jorogumo, chapter 2 boss (hero down)', ['boss_jorogumo'], 'boss', 2, 5, { expect: ['enemy_phase', 'hero_down', 'hurt'] });
 await fullFight('The Editor, chapter 3 boss, thinned out so every phase shows', ['boss_editor'], 'boss', 3, 6, { delta: { bossHp: -0.88 }, expect: ['enemy_phase', 'end', 'death'] });
 await fullFight('an elite', ['oni_brute'], 'elite', 1, 8, { expect: ['enemy_phase'] });
+
+// The stage furniture of the Hocus Vocus look (turn banners, the headliner banner with its sticker seal, both speech bubbles, the target, hover and warning rings, every mark, the
+// aim arrow open and locked, and the stand-in backdrop and effect painters this boot falls back to) in every state it can be in: three Acts, text size 1.3, reduce motion, low quality.
+await t.test('stage furniture draws cleanly in every state: three Acts, every ring kind and mark, open and locked aim, text size 1.3, reduce motion, low quality', async () => {
+  const cases = [[1, 'boss_kuzunoha', {}], [2, 'boss_jorogumo', { textScale: 1.3 }], [3, 'boss_editor', { reduceMotion: true }], [1, 'boss_kuzunoha', { low: true }], [2, 'boss_jorogumo', { reduceMotion: true, low: true }]];
+  for (const [ch, boss, mode] of cases) {
+    const label = 'Act ' + ch + ' ' + JSON.stringify(mode);
+    const g = realtime();
+    if (mode.textScale) g.UI.opt.textScale = mode.textScale;
+    if (mode.reduceMotion) g.UI.opt.reduceMotion = true;
+    if (mode.low) g.ART.tk.opt.quality = 'low';
+    g.SCENE.mount({ heroes: ['hanae', 'kuro'], enemies: [{ def: boss, lane: 4 }, { def: 'kappa', lane: 1 }, { def: 'oni_cub', lane: 2 }], boss: true, chapter: ch, instant: true });
+    g.SCENE.setViewState('kappa#1', { st: { vulnerable: 2, taunt: 1, stun: 1, bind: 2 }, intent: 'heavy' });          // the warning ring and every mark
+    g.SCENE.setViewState('oni_cub#1', { st: { mark: 1 } });
+    g.SCENE.setViewState('hanae', { st: { vulnerable: 1, taunt: 1 } });
+    g.SCENE.setTargetable(['kappa#1', 'oni_cub#1']); g.SCENE.setHover('enemy', 'oni_cub#1');
+    g.SCENE.aim({ x: 400, y: 600 }, { x: 900, y: 330 }, 'oni_cub#1');
+    g.SCENE.bark('hanae', 'A line long enough to wrap around the bubble a couple of times over.'); g.SCENE.shout('kappa#1', 'Hold still. This will look so much better.');
+    const run = async (ms) => { for (let i = 0; i < Math.ceil(ms / 16); i++) { g.SCENE.update(0.016); if (i % 4 === 0) g.SCENE.draw(g._ctx, i * 0.016); await Promise.resolve(); } };      // a frame in four is drawn
+    g.SCENE.banner('YOUR TURN', 'player'); await run(300);
+    g.SCENE.banner('ENEMY TURN', 'enemy'); await run(300);
+    g.SCENE.banner('BOSS', 'BOSS');
+    await run(3000);                                                                                              // the whole headliner intro: curtains, band, name, seal, foot lights
+    g.SCENE.aim({ x: 400, y: 600 }, { x: 900, y: 330 }, null); await run(200);
+    t.eq(stats(g).banners.length, 0, label + ': the intro ended');
+    t.eq(stats(g).drawErrors, 0, label + ': no guarded draw errors'); t.eq(g._issues.length, 0, label + ': no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3)));
+    t.eq(g._console.error.length, 0, label + ': no console errors'); t.eq(g._console.warn.length, 0, label + ': no console warnings: ' + JSON.stringify(g._console.warn.slice(0, 1)));
+    g.SCENE.unmount();
+  }
+});
+await t.test('the stand-in painters draw cleanly: every Act backdrop (normal and headliner) and every demo beat while the art modules are missing', async () => {
+  const standIns = (g) => { g.ART.has = () => false; g.ART.scene.draw = function () {}; g.ART.fx.names.forEach((n) => { g.ART.fx[n] = function () {}; }); return g; };
+  for (const [ch, boss] of [[1, false], [1, true], [2, false], [2, true], [3, false], [3, true]]) {
+    const g = standIns(realtime());
+    g.SCENE.stage({ noScreen: true, instant: true, chapter: ch, boss, seed: 4 });
+    for (let i = 0; i < 8; i++) { g.SCENE.update(0.016); g.SCENE.draw(g._ctx, i * 0.016); }
+    t.eq(stats(g).sceneId, (boss ? 'boss' : 'ch') + ch, 'Act ' + ch + (boss ? ' headliner' : '') + ': the stand-in backdrop id');
+    t.eq(stats(g).drawErrors, 0, 'Act ' + ch + (boss ? ' headliner' : '') + ': the stand-in backdrop draws'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3)));
+  }
+  const g = standIns(realtime());
+  for (const name of g.SCENE.demo()) {
+    g.SCENE.stage({ noScreen: true, instant: true, chapter: 2, boss: name === 'bossdeath' || name === 'phase' || name === 'boss', seed: 4 });
+    g.SCENE.demo(name);
+    for (let i = 0; i < 64; i++) { g.SCENE.update(0.016); if (i % 5 === 0) g.SCENE.draw(g._ctx, i * 0.016); await Promise.resolve(); }                  // about a second of the beat, a frame in five drawn
+    await runFor(g, 800, { draw: false });
+  }
+  t.eq(stats(g).drawErrors, 0, 'every stand-in effect draws'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3))); t.eq(g._console.error.length, 0, 'no console errors');
+});
 
 h.done();
