@@ -12,9 +12,9 @@
 //
 // ---------------------------------------------------------------------------------------------------------------------------
 // boot(opts): every option
-//   only        [names]  Scripts you need, by base name without js/ or .js ('util', 'art_heroes', 'combat') or as globs ('art*',
+//   only        [names]  Scripts you need, by base name without js/ or .js ('util', 'art_cast', 'combat') or as globs ('art*',
 //                        'screen*', 'data_cards_*', '*'). util and data are ALWAYS added (and never optional), then each layer pulls in what it needs:
-//                        art_* -> art;  combat and map -> every data_* file;  run -> combat map;  meta -> run;  ui -> meta art audio;
+//                        art_* -> art;  audio -> data_samples (the sample manifest);  combat and map -> every data_* file;  run -> combat map;  meta -> run;  ui -> meta art audio;
 //                        scene -> ui art*;  screen_* and tutorial -> ui scene art*;  main -> everything. A name index.html does not
 //                        list, or a glob that matches nothing, throws with the list of valid names. Omit `only` to load everything.
 //   skip        [names]  Leave these out (same name syntax), even when requested or pulled in.
@@ -194,8 +194,9 @@ function depsOf(n) {
   if (n === 'util') return [];
   if (n === 'data') return ['util'];
   if (n === 'art') return ['data'];
-  if (/^art_/.test(n)) return ['art'];
-  if (n === 'audio') return ['data'];
+  if (n === 'art_cast_kit') return ['art'];
+  if (/^art_/.test(n)) return ['art', 'art_cast_kit'];                 // the cast kit (ART.rj, its foe kit too) when the page lists it
+  if (n === 'audio') return ['data', 'data_samples'];            // the owners' sample manifest (DATA.SAMPLES) when the page lists it; audio.js reads it at init
   if (n === 'combat' || n === 'map') return ['data*'];
   if (n === 'run') return ['combat', 'map', 'data*'];
   if (n === 'meta') return ['run', 'data*'];

@@ -15,7 +15,8 @@
 //              are exactly one IIFE; inline scripts are one IIFE; no import/export; no var or function leaking out of a block
 //   layers     a file may only reference namespaces loaded before it (plus GAME.nodeDone/toTitle/enterNode from screens);
 //              logic files never touch the DOM, timers or the presentation namespaces; audio.js never references META
-//   apis       no eval or Function, no network, no alert/confirm/prompt, no document.write, no console but error and warn,
+//   apis       no eval or Function, no network (the one fetch( of the owners' sample loader, in audio.js behind its pragma, is the only
+//              exception), no alert/confirm/prompt, no document.write, no console but error and warn,
 //              no debugger, only window.location (never a bare location), ES2020 syntax only, storage keys start with hv_,
 //              pointer events only (no mouse or touch event names), requestAnimationFrame only in main.js
 //   time       Date.now, new Date() and Date() only in main.js; performance.now only in presentation files
@@ -267,6 +268,22 @@ t.test('no network, workers, modules or dynamic import', () => {
   bad.push(...scan(jsFiles, 'code', /(?<![\w$.])(?:window\s*\.\s*)?(fetch\s*\(|XMLHttpRequest|WebSocket|EventSource|SharedWorker|importScripts|new\s+Worker\b)|\bnavigator\s*\.\s*(sendBeacon|serviceWorker)\b|\bimport\s*\(|\bimport\s*\.\s*meta/g, 'network', 'network, worker or dynamic import (DESIGN section 2: no fetch, no network)'));
   for (const p of pages) for (const s of htmlAssets(read(p)).inline) { const c = stripJs(s.code); if (/\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(c)) bad.push(`${rel(p)}: inline script uses the network`); }
   t.eq(bad.length, 0, fail(bad, 'network'));
+});
+// P8 (HV_ART_AUDIO 11.7 S7): the one allowed exception to "no network" is the owners' sample loader. It lives in audio.js, behind its pragma, and is
+// the game's only fetch( at all. A fixture game (the lib suite's) has no manifest and so may have no loader; the real game's manifest implies one.
+t.test('network: the only fetch( in the game code is the sample loader in audio.js, behind its hygiene-allow(network) pragma', () => {
+  const bad = [], inAudio = [];
+  for (const f of jsFiles) {
+    for (const m of info(f).code.matchAll(/(?<![\w$])fetch\s*\(/g)) {
+      if (base(f) !== 'audio.js') { bad.push(`${at(f, m.index)}: fetch( outside audio.js (only the sample loader of DATA.SAMPLES may fetch; DESIGN section 2)`); continue; }
+      inAudio.push(m.index);
+      if (!allowed(f, m.index, 'network')) bad.push(`${at(f, m.index)}: the sample loader's fetch( needs "hygiene-allow(network): reason" on its line or the line above`);
+    }
+  }
+  const audio = jsFiles.find((f) => base(f) === 'audio.js');
+  if (audio && inAudio.length > 1) bad.push(`${rel(audio)} has ${inAudio.length} fetch( calls: the sample loader has exactly one`);
+  if (audio && exists(path.join(jsDir, 'data_samples.js')) && inAudio.length !== 1) bad.push(`${rel(audio)} has ${inAudio.length} fetch( calls but js/data_samples.js exists: the sample loader needs exactly one`);
+  t.eq(bad.length, 0, fail(bad, 'fetch( calls'));
 });
 t.test('no alert, confirm, prompt or debugger', () => {
   const bad = globalCalls(jsFiles, ['alert', 'confirm', 'prompt'], 'dialogs', 'browser dialog (use UI.modal and overlay confirm)');

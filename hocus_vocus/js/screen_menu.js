@@ -1,24 +1,27 @@
-// Echowake -- menu screens (owner: menu screens engineer). One IIFE that registers into UI: the screens `title`, `heroSelect`,
+// Hocus Vocus: menu screens (owner: menu screens engineer). One IIFE that registers into UI: the screens `title`, `heroSelect`,
 // `library`, `settings`, `howto` and the overlays `pause` and `settings` (replacing UI's basic settings overlay). Styles live in
 // css/menu.css (classes `mn-*`, scoped under .s-NAME and .o-NAME). This header is the contract of record for screen_menu.js.
 //
 // SCREENS (DESIGN 5.11, 6)
-//   title       params none. The big animated scene (ART.scene.draw 'title' plus ART.scene.logo when the art is real, else a fallback
-//               painted here: moon, ridges, a temple bell on a cliff, bamboo, the creeping Hush), a pointer parallax (normalised -1..1,
+//   title       params none. The big animated scene (ART.scene.draw 'title' plus ART.scene.logo(ctx, 640, 150, 540, t) when the art is real,
+//               else a flat fallback painted here: the moon, the three Acts on the horizon, the van, the little round stage and its mic
+//               wrapped in the Gloss until the first win, and the stacked logo in sticker letters), a pointer parallax (normalised -1..1,
 //               passed to the scene as opts.parallaxX), petals and fireflies (x0.3 with reduceMotion), a "Tap to begin" gate while audio
-//               is not running, and the menu plaques: Continue (only when META.hasRun(), with META.runInfo() text), New Journey, Daily Jam
-//               (today's seed, the two daily heroes and the best score), Hall, Settings, How to Play, a credits line, the version and
+//               is not running, and the menu plaques: Continue (only when META.hasRun(), with META.runInfo() text), New Tour, Daily Duet
+//               (today's seed, the two daily heroes and the best score), Tour Bus, Settings, How to Play, a credits line, the version and
 //               a tiny fullscreen button. Keys: C continue, N new, D daily, L library, S settings, H how to play, arrows move focus.
 //   heroSelect  params none. Four portrait cards (animated ART.hero.portrait whose expression follows hover and selection, locked heroes
-//               silhouetted with the unlock hint of their achievement), a detail sheet (blurb, rows, resource, passive, HP, starter deck,
-//               bio), the party stage (chibi sprites, front and back, barks from lore barks_<id>), the swap-order toggle, an Ink Trial
+//               silhouetted with the unlock hint of their achievement), a detail sheet (blurb, rows, resource, passive, the Outfit row
+//               (HV_ART_AUDIO 2.11: Stage clothes and the hero's outfit through UI.outfit; Andy has none), HP, starter deck, bio), the party
+//               stage (chibi sprites on a little round stage, lead and backing, barks from lore barks_<id>), the swap-order toggle, an Encore
 //               stepper (0..META.trialMax with every level's rule listed cumulatively), a seed field, the Daily toggle and Begin.
 //               The FIRST pick is the front hero; a third pick drops the oldest. Begin calls GAME.newRun({heroes, trial, seed?, daily}).
 //               Keys: 1..4 pick, S swap order, Esc back.
 //   library     params {tab?: 'unlocks'|'achievements'|'story'|'bestiary'|'history'}. Unlocks (META.libraryList grid, kind and hero
 //               filters, buy with a stamp animation), Achievements (META.achievements with progress bars, sort), Story (META.storyList,
-//               seen pages replay through the story screen with then -> back here), Bestiary (META.bestiary, unseen as black silhouettes),
-//               History (META.history rows). The Inkstone balance counts up and down. Esc goes back.
+//               seen pages replay through the story screen with then -> back here), Who's Who (META.bestiary as a wall of instant photos;
+//               a creature not met yet is a photo the Gloss got to first: an opalescent blur with a polite smile),
+//               History (META.history rows). The Cheers balance counts up and down. Esc goes back.
 //   settings    params none. One shared form (music, effects, shake, reduce motion, text size, animation speed, damage numbers, colour-blind
 //               aids, quality, hints, fullscreen, restore defaults, clear data with a two-step confirm). Every change applies at once
 //               through UI.setSetting (META.set + save + UI.applySettings).
@@ -148,7 +151,51 @@
   const btn = (label, o) => { const b = UI.btn(label, o); if (o && o.mn) b.classList.add(...o.mn.split(' ')); return b; };
 
   // ================================================================================================================
-  // the atmosphere: petals, gold motes and lantern glows shared by every menu screen
+  // the house look of everything this file paints
+  // ================================================================================================================
+  // the house colours of the painted menus (bible 3.6, HV_ART_AUDIO 1 and 9.1) and the rounded display stack for painted words (no web font)
+  const HV = { pink: '#ff7eb6', pinkL: '#ffc2dc', pinkD: '#c93f78', green: '#3fcf6a', lime: '#c6ff3d', greenD: '#1f7a3a', cream: '#fff8ec', paper: '#fff4e6', line: '#2d170f',
+    gold: '#ffd84d', curtain: '#c8264f', curtainD: '#8f1838', violet: '#a77bff', teal: '#2ec4b6', orange: '#ff9a2e', sky: '#7cc6ff', warm: '#fff4d6' };
+  const GLOSS = ['#f4f1fb', '#e6d9ff', '#d9fff4', '#ffe3f1'];
+  const ROUND = '"Arial Rounded MT Bold", "Nunito", "Quicksand", "Varela Round", "Trebuchet MS", Arial, "Liberation Sans", system-ui, sans-serif';
+  const rgba = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + clamp(a, 0, 1).toFixed(3) + ')'; };
+  // a 4-point sparkle (the magic of the house style), a 5-point star path, a rounded rectangle path
+  function spark(g, x, y, r, col, a, rot) {
+    if (!(r > 0.2) || !(a > 0.01)) return;
+    g.save(); g.globalAlpha *= clamp(a, 0, 1); g.translate(x, y); g.rotate(rot || 0);
+    g.beginPath();
+    for (let i = 0; i < 4; i++) { const an = i * Math.PI / 2; g.quadraticCurveTo(Math.cos(an + Math.PI / 4) * r * 0.16, Math.sin(an + Math.PI / 4) * r * 0.16, Math.cos(an + Math.PI / 2) * r, Math.sin(an + Math.PI / 2) * r); }
+    g.closePath(); g.fillStyle = col; g.fill();
+    g.restore();
+  }
+  function starPath(g, x, y, r, rot) {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * 0.48 : r, an = (rot || 0) - Math.PI / 2 + i * Math.PI / 5; if (i) g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); else g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); }
+    g.closePath();
+  }
+  function rrect(g, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  // a word in sticker letters: a soft drop shadow, a thick warm outline, a cream inner rim, a two-tone fill (the lighter band on top)
+  function stickerWord(g, text, x, y, size, top, base, o) {
+    o = o || {};
+    g.save();
+    g.translate(x, y); g.rotate(o.rot || 0);
+    g.font = '900 ' + size + 'px ' + ROUND; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.miterLimit = 2;
+    const str = String(text);
+    g.fillStyle = 'rgba(20,10,40,0.45)'; g.strokeStyle = 'rgba(20,10,40,0.45)'; g.lineWidth = size * 0.26;
+    g.strokeText(str, -size * 0.05, size * 0.07); g.fillText(str, -size * 0.05, size * 0.07);
+    g.strokeStyle = HV.line; g.lineWidth = size * 0.26; g.strokeText(str, 0, 0);
+    g.strokeStyle = HV.cream; g.lineWidth = size * 0.11; g.strokeText(str, 0, 0);
+    const gr = g.createLinearGradient(0, -size * 0.42, 0, size * 0.42);
+    gr.addColorStop(0, top); gr.addColorStop(0.42, top); gr.addColorStop(0.46, base); gr.addColorStop(1, base);
+    g.fillStyle = gr; g.fillText(str, 0, 0);
+    g.restore();
+  }
+
+  // ================================================================================================================
+  // the atmosphere: cherry petals and green and cream sparkle motes shared by every menu screen
   // ================================================================================================================
   const PETAL_COLS = ['#ffc2dc', '#ff9cc6', '#fff4f8', '#ffb3d4'];
   function makeAtmos(kind, seed) {
@@ -179,7 +226,7 @@
         for (let i = 0; i < n; i++) {
           const p = ps[i];
           const x = p.x + (shiftX || 0) * p.z * 0.6, y = p.y;
-          if (p.mote) tk.sparkle(ctx, x, y, p.sz * 0.75, { color: tint || tk.pal.gold2, alpha: 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2 + p.ph)), glow: 0.35, rot: p.rot * 0.2 });
+          if (p.mote) tk.sparkle(ctx, x, y, p.sz * 0.75, { color: tint || (i % 2 ? HV.lime : HV.cream), alpha: 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2 + p.ph)), glow: 0.35, rot: p.rot * 0.2 });
           else tk.petal(ctx, x, y, p.sz, p.rot + Math.sin(t * 1.3 + p.ph) * 0.5, 0.55 + 0.35 * p.z * 0.5, p.col);
         }
       },
@@ -187,63 +234,84 @@
   }
 
   // ================================================================================================================
-  // backdrops for the non-title screens: a cached night sprite plus live glows, so each frame is one drawImage and a few sprites
+  // backdrops for the non-title screens (HV_ART_AUDIO 3.4): the deep indigo night with soft spotlights from the two top corners, bokeh, a faint
+  // stage floor at the bottom, drifting petals and sparkles. A cached sprite plus a few live glows, so each frame is one drawImage and a few sprites.
+  // Each variant shifts the spotlight colours: hero select pink and green (the duo), the Tour Bus teal and violet with a string of fairy lights,
+  // the paper screens (settings, How to Play) pink and violet.
   // ================================================================================================================
+  const BG_LOOK = {
+    hero: { a: HV.pink, b: HV.green, floor: '#3b2a7a', bokeh: [HV.pink, HV.green, HV.cream] },
+    library: { a: HV.teal, b: HV.violet, floor: '#2e2166', bokeh: [HV.teal, HV.violet, HV.gold], lights: true },
+    paper: { a: HV.pink, b: HV.violet, floor: '#3b2a7a', bokeh: [HV.pink, HV.violet, HV.cream] },
+  };
+  const FAIRY = (() => { const out = []; for (let i = 0; i <= 26; i++) { const u = i / 26; out.push([20 + u * 1240, 34 + Math.sin(u * Math.PI * 3) * 16 + 18]); } return out; })();
   function bgSprite(variant) {
     if (typeof ART === 'undefined' || !ART.sprite || !T()) return null;
-    return art(() => ART.sprite('menu|bg|' + variant, 1280, 720, (g, w, h) => {
+    const L = BG_LOOK[variant] || BG_LOOK.hero;
+    return art(() => ART.sprite('menu|bg2|' + variant, 1280, 720, (g, w, h) => {
       const tk = T();
       const gr = g.createLinearGradient(0, 0, 0, h);
-      gr.addColorStop(0, '#0a0819'); gr.addColorStop(0.55, '#171040'); gr.addColorStop(1, variant === 'library' ? '#2e2166' : '#3b2a7a');
+      gr.addColorStop(0, '#070516'); gr.addColorStop(0.55, '#171040'); gr.addColorStop(1, L.floor);
       g.fillStyle = gr; g.fillRect(0, 0, w, h);
-      const r = U.rng(U.hash('menu-bg', variant));
-      if (variant === 'library') {
-        // rows of hanging bells far behind the page: a cord, a bell silhouette and a gold lip on each
-        for (let row = 0; row < 4; row++) {
-          const y = 150 + row * 138;
-          let x = 10 + r() * 20;
-          while (x < w + 10) {
-            const bw = 16 + r() * 22, bh = bw * (1.0 + r() * 0.35), hue = r(), cord = 18 + r() * 34;
-            g.fillStyle = hue < 0.5 ? 'rgba(59,42,122,0.42)' : hue < 0.8 ? 'rgba(91,63,168,0.30)' : 'rgba(176,36,92,0.26)';
-            g.fillRect(x - 0.8, y - cord - bh, 1.6, cord);
-            g.beginPath(); g.moveTo(x - bw * 0.5, y); g.quadraticCurveTo(x - bw * 0.46, y - bh * 0.7, x - bw * 0.2, y - bh); g.lineTo(x + bw * 0.2, y - bh);
-            g.quadraticCurveTo(x + bw * 0.46, y - bh * 0.7, x + bw * 0.5, y); g.closePath(); g.fill();
-            g.fillStyle = 'rgba(245,201,106,0.22)'; g.fillRect(x - bw * 0.5, y - 3, bw, 2); g.fillRect(x - bw * 0.36, y - bh * 0.55, bw * 0.72, 1);
-            x += bw + 14 + r() * 26;
-          }
-          g.fillStyle = 'rgba(20,15,46,0.85)'; g.fillRect(0, y, w, 10);
-          g.fillStyle = 'rgba(245,201,106,0.25)'; g.fillRect(0, y, w, 2);
-        }
-      } else {
-        // seigaiha waves along the foot and a pale enso ghost
-        g.strokeStyle = 'rgba(245,201,106,0.10)'; g.lineWidth = 1.4;
-        for (let row = 0; row < 5; row++) {
-          for (let col = -1; col < 22; col++) {
-            const cx = col * 64 + (row % 2 ? 32 : 0), cy = 700 - row * 22;
-            for (let k = 3; k >= 1; k--) { g.beginPath(); g.arc(cx, cy, k * 10, Math.PI, 0); g.stroke(); }
-          }
-        }
+      tk.stars(g, 0, 0, w, h * 0.62, 0, { n: 80, seed: variant.length + 5 });
+      const r = U.rng(U.hash('menu-bg2', variant));
+      // two soft spotlight cones from the top corners, crossing over the middle of the floor
+      g.save(); g.globalCompositeOperation = 'lighter';
+      [[70, L.a, 760], [1210, L.b, 520]].forEach((c) => {
+        g.beginPath(); g.moveTo(c[0] - 26, -10); g.lineTo(c[0] + 26, -10); g.lineTo(c[2] + 250, h); g.lineTo(c[2] - 250, h); g.closePath();
+        const cg = g.createLinearGradient(c[0], 0, c[2], h); cg.addColorStop(0, rgba(c[1], 0.2)); cg.addColorStop(0.7, rgba(c[1], 0.06)); cg.addColorStop(1, rgba(c[1], 0));
+        g.fillStyle = cg; g.fill();
+      });
+      // bokeh: soft discs of stage light far behind everything
+      for (let i = 0; i < 26; i++) {
+        const x = r() * w, y = 60 + r() * h * 0.7, rr = 10 + r() * 34, col = L.bokeh[i % L.bokeh.length];
+        const bg = g.createRadialGradient(x, y, 0, x, y, rr); bg.addColorStop(0, rgba(col, 0.1 + r() * 0.08)); bg.addColorStop(0.7, rgba(col, 0.05)); bg.addColorStop(1, rgba(col, 0));
+        g.fillStyle = bg; g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
       }
-      tk.vignette(g, w, h, { color: '#07051a', alpha: 0.65, inner: 0.35 });
+      g.restore();
+      // a faint stage floor along the bottom: a wide lip with boards and a cream edge, lit where the cones land
+      g.beginPath(); g.ellipse(w / 2, h + 150, w * 0.78, 250, 0, Math.PI, 0); g.closePath();
+      const fl = g.createLinearGradient(0, h - 100, 0, h); fl.addColorStop(0, 'rgba(59,42,122,0.55)'); fl.addColorStop(1, 'rgba(20,15,46,0.85)');
+      g.fillStyle = fl; g.fill();
+      g.strokeStyle = 'rgba(255,248,236,0.18)'; g.lineWidth = 3; g.stroke();
+      g.save(); g.beginPath(); g.ellipse(w / 2, h + 150, w * 0.78, 250, 0, Math.PI, 0); g.clip();
+      g.strokeStyle = 'rgba(7,5,26,0.25)'; g.lineWidth = 1.5;
+      for (let k = 1; k < 5; k++) { g.beginPath(); g.ellipse(w / 2, h + 150, w * 0.78 - k * 40, 250 - k * 16, 0, Math.PI, 0); g.stroke(); }
+      g.restore();
+      if (L.lights) {
+        // a string of fairy lights along the top: the Tour Bus at night
+        g.strokeStyle = 'rgba(45,23,15,0.9)'; g.lineWidth = 2; g.beginPath(); FAIRY.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke();
+      }
+      tk.vignette(g, w, h, { color: '#07051a', alpha: 0.6, inner: 0.38 });
     }), 'bg');
   }
 
-  const LANTERNS = [[110, 120], [1170, 96], [640, 40], [70, 560], [1210, 600]];
+  const BULBS = [HV.pink, HV.gold, HV.green, HV.sky, HV.violet];
   function drawBackdrop(ctx, t, variant, atmos, o) {
     o = o || {};
     const tk = T();
+    const L = BG_LOOK[variant] || BG_LOOK.hero;
     const spr = bgSprite(variant);
     if (spr) safe(() => ctx.drawImage(spr, 0, 0, 1280, 720));
     else { ctx.fillStyle = '#12102e'; ctx.fillRect(0, 0, 1280, 720); }
     if (!tk) return;
     if (o.tint) {
       const pulse = reduce() ? 0.8 : 0.85 + 0.15 * Math.sin(t * 0.9);
-      tk.glow(ctx, o.tx === undefined ? 380 : o.tx, o.ty === undefined ? 300 : o.ty, o.tr || 420, o.tint, 0.32 * pulse);
+      tk.glow(ctx, o.tx === undefined ? 380 : o.tx, o.ty === undefined ? 300 : o.ty, o.tr || 420, o.tint, 0.28 * pulse);
     }
-    if (variant === 'library') {
-      LANTERNS.forEach((p, i) => { const fl = reduce() ? 1 : 0.8 + 0.2 * Math.sin(t * (2.1 + i * 0.37) + i); tk.glow(ctx, p[0], p[1], 170 * fl, '#ff9a2e', 0.2 * fl); });
+    // the spotlight lamps in the two top corners breathe softly
+    const br = reduce() ? 0.85 : 0.75 + 0.25 * Math.sin(t * 0.7);
+    tk.glow(ctx, 70, 0, 150 * br, L.a, 0.3 * br); tk.glow(ctx, 1210, 0, 150 * br, L.b, 0.3 * br);
+    if (L.lights) {
+      FAIRY.forEach((p, i) => {
+        if (i % 2) return;
+        const fl = reduce() ? 1 : 0.7 + 0.3 * Math.sin(t * (1.6 + (i % 5) * 0.3) + i);
+        const col = BULBS[(i / 2) % BULBS.length];
+        tk.glow(ctx, p[0], p[1] + 5, 22 * fl, col, 0.5 * fl);
+        ctx.beginPath(); ctx.arc(p[0], p[1] + 5, 3.4, 0, TAU); ctx.fillStyle = col; ctx.fill();
+      });
     }
-    if (!reduce()) tk.mist(ctx, 0, 380, 1280, 340, t, { n: 4, seed: 11, color: '#a9c4ff', alpha: 0.05, speed: 8 });
+    if (!reduce()) tk.mist(ctx, 0, 420, 1280, 300, t, { n: 4, seed: 11, color: '#c9b8ff', alpha: 0.04, speed: 8 });
     if (atmos) atmos.draw(ctx, t, o.shiftX || 0, o.motes);
   }
 
@@ -287,175 +355,221 @@
   }
 
   // ================================================================================================================
-  // TITLE: the fallback scene (used until art_scenes.js paints the real one), the logo, the plaques
+  // TITLE: the fallback scene (used only when art_scenes.js cannot paint the real one), the logo fallback, the plaques
   // ================================================================================================================
   const TM = 50;                                            // parallax margin baked into the fallback sprites
   // real art declares itself (ART.declare('scene', ids)); until then the placeholder or a half-written scene must not reach the player
   const sceneIsReal = () => typeof ART !== 'undefined' && !!ART.scene && typeof ART.scene.draw === 'function'
     && (safe(() => ART.has('scene', 'title'), false) || (Array.isArray(ART.scene.ids) && ART.scene.ids.indexOf('title') >= 0));
 
-  const BELL = { x: 520, y: 548 };                          // the fallback bell: its mouth sits on the cliff top, rings and notes rise from here
 
+  // the fallback title: a flat version of the real one (HV_ART_AUDIO 3.2): the indigo night with the big cream moon, the three Acts on the horizon,
+  // a cherry hill and the tour van, the little round stage with its curtains and fairy lights, and the vintage mic at the centre, wrapped in the
+  // Gloss until the first win. Everything sits in x 370 to 910, clear of the menu column (x 998).
   function titleSprites() {
     if (typeof ART === 'undefined' || !ART.sprite || !T()) return null;
     const W = 1280 + TM * 2, H = 720 + TM * 2, spr = {};
-    const mkSprite = (name, fn) => { spr[name] = art(() => ART.sprite('menu|title|' + name, W, H, (g) => { g.translate(TM, TM); fn(g); }), 'title-' + name); };
-    mkSprite('sky', (g) => {
-      const tk = T();
+    const mkSprite = (name, fn) => { spr[name] = art(() => ART.sprite('menu|title2|' + name, W, H, (g) => { g.translate(TM, TM); fn(g, T()); }), 'title-' + name); };
+    mkSprite('sky', (g, tk) => {
       const gr = g.createLinearGradient(0, -TM, 0, 720 + TM);
-      gr.addColorStop(0, '#070616'); gr.addColorStop(0.5, '#1a1340'); gr.addColorStop(0.85, '#4a2f8a'); gr.addColorStop(1, '#8a4f9a');
+      gr.addColorStop(0, '#070516'); gr.addColorStop(0.55, '#2b1f6e'); gr.addColorStop(0.8, '#59399a'); gr.addColorStop(1, '#3b2a7a');
       g.fillStyle = gr; g.fillRect(-TM, -TM, W, H);
-      tk.moon(g, 905, 190, 122, { glow: 0.8, seed: 3, color: '#eadfc4' });
-      const r = U.rng(31);
-      for (let i = 0; i < 7; i++) {
-        const cx = r() * 1280, cy = 90 + r() * 300, rx = 120 + r() * 200, ry = 7 + r() * 9;
-        g.fillStyle = 'rgba(122,107,255,' + (0.10 + r() * 0.12).toFixed(2) + ')';
-        g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); g.fill();
-      }
+      tk.stars(g, -TM, -TM, W, 520, 0, { n: 140, seed: 4 });
+      tk.glow(g, 470, 150, 260, HV.warm, 0.22);
+      g.beginPath(); g.arc(470, 150, 96, 0, TAU); g.fillStyle = '#fff2c4'; g.fill();
+      g.beginPath(); g.arc(486, 136, 84, 0, TAU); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fill();
+      [[440, 128, 14], [500, 182, 10], [452, 190, 7], [512, 120, 6]].forEach((c) => { g.beginPath(); g.arc(c[0], c[1], c[2], 0, TAU); g.fillStyle = 'rgba(214,190,140,0.35)'; g.fill(); });
     });
     mkSprite('far', (g) => {
-      const ridge = (base, amp, col, seed, step) => {
-        const r = U.rng(seed);
-        g.beginPath(); g.moveTo(-TM, 720 + TM);
-        for (let x = -TM; x <= 1280 + TM; x += step) g.lineTo(x, base + Math.sin(x * 0.006 + seed) * amp + (r() - 0.5) * amp * 0.6);
-        g.lineTo(1280 + TM, 720 + TM); g.closePath(); g.fillStyle = col; g.fill();
-      };
-      ridge(452, 50, 'rgba(70,48,140,0.9)', 5, 26);
-      ridge(512, 36, 'rgba(34,24,88,0.96)', 9, 22);
-      // a far torii and a pagoda on the ridges
-      g.fillStyle = 'rgba(20,14,56,0.95)';
-      g.fillRect(190, 462, 6, 40); g.fillRect(238, 462, 6, 40); g.fillRect(180, 458, 74, 6); g.fillRect(186, 470, 62, 4);
-      g.fillRect(1010, 470, 22, 46); g.beginPath(); g.moveTo(996, 470); g.lineTo(1021, 452); g.lineTo(1046, 470); g.closePath(); g.fill();
-      g.beginPath(); g.moveTo(1002, 490); g.lineTo(1021, 476); g.lineTo(1040, 490); g.closePath(); g.fill();
+      const r = U.rng(51);
+      // the sea under the horizon
+      const sea = g.createLinearGradient(0, 470, 0, 720 + TM); sea.addColorStop(0, '#3b2a7a'); sea.addColorStop(1, '#140f3a');
+      g.fillStyle = sea; g.fillRect(-TM, 470, W, 300);
+      // Blossom Bay: candy houses climbing a hill on the left, lit windows
+      g.beginPath(); g.moveTo(-TM, 500); g.quadraticCurveTo(120, 380, 330, 478); g.lineTo(330, 520); g.lineTo(-TM, 520); g.closePath(); g.fillStyle = '#2a1d5e'; g.fill();
+      const HOUSE = ['#e8553f', '#8fe3c0', '#ffd84d', '#7cc6ff', '#ff9fc6'];
+      for (let i = 0; i < 9; i++) {
+        const x = -20 + i * 36 + r() * 8, base = 500 - Math.sin(i / 8 * Math.PI) * 70, hw = 26 + r() * 10, hh = 26 + r() * 18;
+        g.fillStyle = rgba(HOUSE[i % HOUSE.length], 0.55); g.fillRect(x, base - hh, hw, hh);
+        g.beginPath(); g.moveTo(x - 3, base - hh); g.lineTo(x + hw / 2, base - hh - 14); g.lineTo(x + hw + 3, base - hh); g.closePath(); g.fillStyle = 'rgba(42,29,94,0.85)'; g.fill();
+        g.fillStyle = 'rgba(255,233,168,0.85)'; g.fillRect(x + 6, base - hh + 8, 6, 7); if (r() < 0.6) g.fillRect(x + hw - 12, base - hh + 8, 6, 7);
+      }
+      // Scrollopolis: phone towers with little glowing screens on the right
+      const SCREEN = ['#3d7bff', '#3ff0ff', '#ff6fb5'];
+      for (let i = 0; i < 6; i++) {
+        const x = 930 + i * 52 + r() * 10, tw = 34 + r() * 10, th = 120 + r() * 120;
+        rrect(g, x, 500 - th, tw, th, 7); g.fillStyle = '#1c1846'; g.fill();
+        for (let k = 0; k < 5; k++) { g.fillStyle = rgba(SCREEN[(i + k) % 3], 0.5 + r() * 0.3); g.fillRect(x + 6, 500 - th + 10 + k * 20, tw - 12, 12); }
+      }
+      g.strokeStyle = 'rgba(63,240,255,0.25)'; g.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(930 + i * 60, 420 - i * 20); g.quadraticCurveTo(1010 + i * 50, 470, 1090 + i * 40, 400 - i * 12); g.stroke(); }
+      // the Perfect Stage: a faint opalescent ring of light floating far above the sea
+      g.save(); g.translate(640, 258); g.scale(1, 0.24);
+      const ring = g.createLinearGradient(-90, 0, 90, 0); GLOSS.forEach((c, i) => ring.addColorStop(i / 3, rgba(c, 0.55)));
+      g.beginPath(); g.arc(0, 0, 90, 0, TAU); g.strokeStyle = ring; g.lineWidth = 14; g.stroke(); g.restore();
     });
     mkSprite('mid', (g) => {
-      const tk = T();
-      const cliff = [[110, 740], [160, 650], [236, 596], [330, 570], [520, 560], [712, 568], [800, 606], [872, 670], [940, 740]];
-      g.beginPath(); cliff.forEach((p, i) => { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath();
-      const cg = g.createLinearGradient(0, 560, 0, 740); cg.addColorStop(0, '#2a2068'); cg.addColorStop(1, '#0a0820');
-      g.fillStyle = cg; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.stroke();
-      const r = U.rng(21);
-      g.strokeStyle = 'rgba(95,245,255,0.22)'; g.lineWidth = 1.4;
-      for (let i = 0; i < 26; i++) { const x = 240 + r() * 560, y = 566 + r() * 12; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 6, y - 5 - r() * 7); g.stroke(); }
-      // a great temple bell (bonsho) hanging in a torii frame on the cliff
-      g.fillStyle = '#5d0f1c'; g.strokeStyle = '#140f2e'; g.lineWidth = 3;
-      g.fillRect(396, 398, 14, 170); g.strokeRect(396, 398, 14, 170); g.fillRect(630, 398, 14, 170); g.strokeRect(630, 398, 14, 170);
-      g.fillRect(376, 380, 288, 18); g.strokeRect(376, 380, 288, 18); g.fillRect(392, 412, 256, 10); g.strokeRect(392, 412, 256, 10);
-      g.fillStyle = '#140f2e'; g.fillRect(518, 422, 4, 22);
-      g.beginPath(); g.moveTo(474, 548); g.quadraticCurveTo(478, 494, 500, 470); g.quadraticCurveTo(506, 458, 508, 446); g.lineTo(532, 446); g.quadraticCurveTo(534, 458, 540, 470);
-      g.quadraticCurveTo(562, 494, 566, 548); g.closePath();
-      const bg = g.createLinearGradient(474, 0, 566, 0); bg.addColorStop(0, '#6b5224'); bg.addColorStop(0.45, '#c9a24c'); bg.addColorStop(1, '#5a4320');
-      g.fillStyle = bg; g.fill(); g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.stroke();
-      g.fillStyle = 'rgba(20,15,46,0.5)'; g.fillRect(477, 526, 86, 4); g.fillRect(482, 506, 76, 3);
-      g.fillStyle = 'rgba(95,245,255,0.3)'; g.fillRect(500, 474, 4, 46);
-      // the striking log on its cords
-      g.strokeStyle = '#140f2e'; g.lineWidth = 2; g.beginPath(); g.moveTo(440, 422); g.lineTo(440, 500); g.moveTo(462, 422); g.lineTo(462, 500); g.stroke();
-      g.fillStyle = '#6b3a1e'; g.fillRect(428, 500, 44, 10); g.strokeRect(428, 500, 44, 10);
+      // a gentle hill of cherry trees at the left
+      g.beginPath(); g.moveTo(-TM, 560); g.quadraticCurveTo(150, 470, 420, 560); g.lineTo(420, 720 + TM); g.lineTo(-TM, 720 + TM); g.closePath(); g.fillStyle = '#21184e'; g.fill();
+      const r = U.rng(61);
+      [[60, 500, 1], [150, 486, 1.15], [250, 510, 0.9]].forEach((tr) => {
+        g.fillStyle = '#3a2350'; g.fillRect(tr[0] - 5 * tr[2], tr[1] - 6, 10 * tr[2], 60);
+        for (let k = 0; k < 7; k++) { g.beginPath(); g.arc(tr[0] + (r() - 0.5) * 70 * tr[2], tr[1] - 30 * tr[2] + (r() - 0.5) * 40 * tr[2], (22 + r() * 12) * tr[2], 0, TAU); g.fillStyle = k % 3 ? '#ff9fc6' : '#ffc2dc'; g.fill(); }
+      });
+      // the tour van at x 300 to 380 with Jordan's poster in its window
+      rrect(g, 296, 506, 88, 44, 12); g.fillStyle = HV.cream; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+      g.fillStyle = HV.teal; g.fillRect(298, 532, 84, 7);
+      rrect(g, 306, 512, 26, 16, 4); g.fillStyle = '#7cc6ff'; g.fill(); g.stroke();
+      rrect(g, 340, 512, 24, 16, 3); g.fillStyle = HV.paper; g.fill(); g.stroke();
+      starPath(g, 352, 520, 5, 0); g.fillStyle = HV.gold; g.fill();
+      [318, 364].forEach((x) => { g.beginPath(); g.arc(x, 552, 8, 0, TAU); g.fillStyle = HV.line; g.fill(); g.beginPath(); g.arc(x, 552, 3, 0, TAU); g.fillStyle = '#c9cbd6'; g.fill(); });
+      // bunting from the van roof to a lamppost
+      g.fillStyle = '#3a2f6e'; g.fillRect(414, 456, 5, 100);
+      g.beginPath(); g.arc(416, 452, 8, 0, TAU); g.fillStyle = '#ffe9a8'; g.fill();
+      const FLAG = [HV.pink, HV.green, HV.gold, HV.sky, HV.violet];
+      for (let i = 0; i < 6; i++) {
+        const u = (i + 0.5) / 6, x = 370 + u * 44, y = 506 + Math.sin(u * Math.PI) * 10 - u * 50;
+        g.beginPath(); g.moveTo(x - 4, y); g.lineTo(x + 4, y); g.lineTo(x, y + 9); g.closePath(); g.fillStyle = FLAG[i % FLAG.length]; g.fill();
+      }
     });
-    mkSprite('bam', (g) => {
-      const r = U.rng(51);
-      const stalk = (x, w, top) => {
-        g.fillStyle = '#07051a'; g.fillRect(x, top, w, 720 + TM - top);
-        g.fillStyle = 'rgba(95,245,255,0.20)'; g.fillRect(x + w - 2.2, top, 2.2, 720 + TM - top);
-        g.fillStyle = 'rgba(58,40,120,0.75)';
-        for (let y = top + 40 + r() * 30; y < 720 + TM; y += 80 + r() * 30) g.fillRect(x - 1.5, y, w + 3, 4.5);
-        for (let y = top + 70 + r() * 50; y < 560; y += 120 + r() * 60) {
-          const dir = r() < 0.5 ? -1 : 1;
-          for (let k = 0; k < 3; k++) { g.save(); g.translate(x + w / 2, y); g.rotate(dir * (0.5 + k * 0.42) - Math.PI / 2 * 0.15); g.fillStyle = '#07051a'; g.beginPath(); g.ellipse(dir * 26, 0, 30, 5.2, 0, 0, TAU); g.fill(); g.restore(); }
-        }
-      };
-      [-14, 34, 92, 148].forEach((x, i) => stalk(x, 16 + (i % 2) * 6, -TM + r() * 120));
-      [1116, 1170, 1226, 1284].forEach((x, i) => stalk(x, 18 - (i % 2) * 4, -TM + r() * 140));
+    mkSprite('stage', (g) => {
+      // red curtains at both sides from y 296: each drape hangs in folds, is tied back at y 470 so its inner edge sweeps out to the floor
+      [[370, 430, 1], [910, 850, -1]].forEach((c) => {
+        const xo = c[0], xi = c[1], d = c[2];
+        g.beginPath(); g.moveTo(xo, 296); g.lineTo(xi, 296);
+        g.bezierCurveTo(xi + d * 6, 380, xi - d * 26, 440, xi - d * 34, 470);
+        g.bezierCurveTo(xi - d * 22, 500, xi + d * 2, 540, xi + d * 6, 562);
+        g.lineTo(xo, 562); g.closePath();
+        const cg = g.createLinearGradient(Math.min(xo, xi), 0, Math.max(xo, xi), 0);
+        for (let k = 0; k <= 4; k++) { cg.addColorStop(k / 4, k % 2 ? HV.curtainD : HV.curtain); if (k < 4) cg.addColorStop((k + 0.5) / 4, '#e2416a'); }
+        g.fillStyle = cg; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+        g.beginPath(); g.ellipse(xi - d * 30, 470, 14, 7, d * 0.3, 0, TAU); g.fillStyle = HV.gold; g.fill(); g.lineWidth = 2; g.stroke();
+      });
+      // the valance: a scalloped band across the top of the stage opening
+      g.beginPath(); g.moveTo(364, 286); g.lineTo(916, 286); g.lineTo(916, 304);
+      for (let x = 916; x > 364; x -= 46) g.quadraticCurveTo(x - 23, 326, Math.max(364, x - 46), 304);
+      g.closePath(); g.fillStyle = HV.curtain; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+      // the round stage: a cream lip under a warm boards top (top y 530, lip down to y 566, x 430 to 850)
+      g.beginPath(); g.ellipse(640, 540, 214, 30, 0, 0, Math.PI); g.lineTo(426, 556); g.ellipse(640, 556, 214, 30, 0, Math.PI, 0, true); g.closePath();
+      g.fillStyle = HV.paper; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+      for (let k = 0; k < 12; k++) { const a = Math.PI * (k + 0.5) / 12; g.beginPath(); g.arc(640 - Math.cos(a) * 200, 548 + Math.sin(a) * 26, 3.2, 0, TAU); g.fillStyle = '#ffe9a8'; g.fill(); }
+      g.beginPath(); g.ellipse(640, 540, 214, 30, 0, 0, TAU);
+      const top = g.createLinearGradient(0, 510, 0, 570); top.addColorStop(0, '#7a3d8f'); top.addColorStop(1, '#4b2470');
+      g.fillStyle = top; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+      g.beginPath(); g.ellipse(640, 536, 150, 16, 0, 0, TAU); g.fillStyle = 'rgba(255,244,214,0.16)'; g.fill();
+      // a string of fairy lights across the top
+      g.strokeStyle = 'rgba(45,23,15,0.9)'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(430, 314); g.quadraticCurveTo(640, 344, 850, 314); g.stroke();
+      for (let k = 1; k < 14; k++) { const u = k / 14, x = 430 + 420 * u, y = 314 + 30 * 2 * u * (1 - u) + 3; g.beginPath(); g.arc(x, y + 3, 4, 0, TAU); g.fillStyle = [HV.pink, HV.gold, HV.green, HV.sky][k % 4]; g.fill(); }
+      // the mic stand: a round foot, a chrome pole and the vintage mic head at y 390
+      g.beginPath(); g.ellipse(640, 532, 30, 7, 0, 0, TAU); g.fillStyle = '#2b2a3a'; g.fill(); g.strokeStyle = HV.line; g.lineWidth = 2.5; g.stroke();
+      const pole = g.createLinearGradient(634, 0, 646, 0); pole.addColorStop(0, '#8d8fa0'); pole.addColorStop(0.5, '#f1f2f8'); pole.addColorStop(1, '#8d8fa0');
+      g.fillStyle = pole; g.fillRect(636, 410, 8, 122); g.strokeRect(636, 410, 8, 122);
+      rrect(g, 618, 352, 44, 64, 20);
+      const head = g.createLinearGradient(618, 0, 662, 0); head.addColorStop(0, '#9da0b2'); head.addColorStop(0.45, '#f4f5fa'); head.addColorStop(1, '#8d8fa0');
+      g.fillStyle = head; g.fill(); g.lineWidth = 3; g.strokeStyle = HV.line; g.stroke();
+      g.strokeStyle = 'rgba(45,23,15,0.35)'; g.lineWidth = 1.4;
+      for (let k = 0; k < 6; k++) { g.beginPath(); g.moveTo(622, 362 + k * 9); g.lineTo(658, 362 + k * 9); g.stroke(); }
+      g.fillStyle = HV.pink; g.fillRect(620, 396, 40, 6);
     });
-    mkSprite('hush', (g) => {
-      const r = U.rng(77);
-      const edge = (right) => {
-        g.beginPath(); g.moveTo(right ? 1280 + TM : -TM, -TM);
-        for (let y = -TM; y < 720 + TM; y += 10 + r() * 16) g.lineTo(right ? 1280 - (16 + r() * 44 + Math.sin(y * 0.011) * 22) : 16 + r() * 44 + Math.sin(y * 0.011 + 2) * 22, y);
-        g.lineTo(right ? 1280 + TM : -TM, 720 + TM); g.closePath();
-        g.fillStyle = 'rgba(142,138,163,0.16)'; g.fill(); g.strokeStyle = 'rgba(190,186,210,0.30)'; g.lineWidth = 2; g.stroke();
-      };
-      edge(true); edge(false);
-      g.fillStyle = 'rgba(142,138,163,0.12)'; g.beginPath(); g.moveTo(-TM, -TM); g.lineTo(300, -TM);
-      for (let x = 300; x > -TM; x -= 14 + r() * 12) g.lineTo(x, 40 + r() * 70 + (x / 300) * 40);
-      g.closePath(); g.fill();
+    mkSprite('gloss', (g) => {
+      // the Gloss creeping in from the four corners: airbrushed opalescent blobs, perfectly still, no outline
+      [[-TM, -TM, 0], [1280 + TM, -TM, 1], [-TM, 720 + TM, 2], [1280 + TM, 720 + TM, 3]].forEach((c) => {
+        const gr = g.createRadialGradient(c[0], c[1], 10, c[0], c[1], 260);
+        gr.addColorStop(0, rgba(GLOSS[c[2]], 0.5)); gr.addColorStop(0.55, rgba(GLOSS[(c[2] + 1) % 4], 0.22)); gr.addColorStop(1, 'rgba(244,241,251,0)');
+        g.fillStyle = gr; g.fillRect(c[0] - 280, c[1] - 280, 560, 560);
+      });
     });
     return spr;
   }
 
+  const MIC = { x: 640, y: 390 };                            // the fallback mic head: rings, notes and hearts rise from here
   function drawTitleFallback(ctx, t, S) {
     const tk = T();
+    if (!S.spr) S.spr = titleSprites();                      // a real scene that failed hands over to the fallback, which bakes its sprites now
     const W = 1280 + TM * 2, H = 720 + TM * 2;
     const k = reduce() ? 0 : 1;
     const layer = (name, depth, lift) => { const s = S.spr && S.spr[name]; if (s) safe(() => ctx.drawImage(s, -TM - S.px * depth * k, -TM - S.py * depth * 0.6 * k + (lift || 0), W, H)); };
     if (!S.spr || !S.spr.sky) { ctx.fillStyle = '#12102e'; ctx.fillRect(0, 0, 1280, 720); }
-    layer('sky', 5);
+    layer('sky', 3);
     if (tk) {
-      const pulse = 0.5 + 0.5 * Math.sin(t * 0.7);
-      tk.stars(ctx, 0, 0, 1280, 470, t, { n: 90, seed: 4 });
-      tk.glow(ctx, 905 - S.px * 5 * k, 190, 320 + pulse * 26, '#ffe9a8', 0.22 + 0.08 * pulse);
+      tk.stars(ctx, 0, 0, 1280, 460, t, { n: 50, seed: 8 });
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.6);
+      tk.glow(ctx, 470 - S.px * 3 * k, 150, 230 + pulse * 20, HV.warm, 0.14 + 0.06 * pulse);
     }
-    layer('far', 11);
-    if (tk && !reduce()) tk.mist(ctx, 0, 430, 1280, 200, t, { n: 4, seed: 7, color: '#a9c4ff', alpha: 0.10, speed: 12 });
-    layer('mid', 20);
+    layer('far', 5);
+    layer('mid', 18);
+    // stage light: two soft cones from the top onto the stage, dust motes in them
     if (tk) {
-      const bx = BELL.x - S.px * 20 * k, by = BELL.y - S.py * 12 * k;
-      const breathe = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.3);
-      tk.glow(ctx, bx, by - 60, 220 * breathe, '#ffe9a8', 0.2 * breathe);
-      tk.glow(ctx, bx, by - 24, 90, '#fff4d6', 0.1);
-      // sound rings pulsing out of the bell's mouth
-      ctx.save();
-      for (let i = 0; i < (reduce() ? 1 : 3); i++) {
-        const ph = ((t * 0.28 + i / 3) % 1 + 1) % 1;
-        ctx.globalAlpha = (1 - ph) * 0.55; ctx.strokeStyle = tk.pal.cyan; ctx.lineWidth = 2.4;
-        ctx.beginPath(); ctx.ellipse(bx, by - 30, 48 + ph * 120, 30 + ph * 90, 0, 0, TAU); ctx.stroke();
-      }
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      [[520, HV.pink], [760, HV.green]].forEach((c, i) => {
+        const sway = reduce() ? 0 : Math.sin(t * 0.4 + i * 2) * 12;
+        ctx.beginPath(); ctx.moveTo(c[0] - 14, 300); ctx.lineTo(c[0] + 14, 300); ctx.lineTo(640 + sway + 150, 548); ctx.lineTo(640 + sway - 150, 548); ctx.closePath();
+        const cg = ctx.createLinearGradient(0, 300, 0, 548); cg.addColorStop(0, rgba(c[1], 0.22)); cg.addColorStop(1, rgba(c[1], 0.03));
+        ctx.fillStyle = cg; ctx.fill();
+      });
       ctx.restore();
-      // notes rising off the bell, one by one
-      const nW = reduce() ? 3 : 10;
-      for (let i = 0; i < nW; i++) {
-        const ph = ((t * 0.11 + i / nW) % 1 + 1) % 1;
-        const x = bx + Math.sin(i * 7.1 + t * 0.4) * (60 + ph * 70), y = by - 14 - ph * 290;
-        tk.sparkle(ctx, x, y, 2 + (i % 3), { color: i % 2 ? tk.pal.gold2 : tk.pal.cyan, alpha: Math.sin(Math.PI * ph) * 0.9, glow: 0.5, rot: i });
-      }
-      // fireflies over the grass
-      for (let i = 0; i < (reduce() ? 3 : 9); i++) {
-        const fx = 120 + ((i * 137) % 1040) + Math.sin(t * 0.5 + i * 2.3) * 26, fy = 540 + ((i * 53) % 130) + Math.cos(t * 0.7 + i) * 16;
-        tk.glow(ctx, fx - S.px * 22 * k, fy, 7 + 3 * Math.sin(t * 2.4 + i), '#e8ff8a', 0.55 + 0.3 * Math.sin(t * 2 + i * 1.7));
+    }
+    layer('stage', 10);
+    if (tk) {
+      const mx = MIC.x - S.px * 10 * k, my = MIC.y - S.py * 6 * k;
+      if (!S.won) {
+        // shrink-wrapped in the Gloss: an opalescent film over the mic and its stand, a diagonal highlight sweep, a polite smile sparkle
+        ctx.save();
+        rrect(ctx, mx - 30, my - 46, 60, 186, 28);
+        const fg = ctx.createLinearGradient(mx - 30, my - 46, mx + 30, my + 140);
+        GLOSS.forEach((c, i) => fg.addColorStop(i / 3, rgba(c, 0.62)));
+        ctx.fillStyle = fg; ctx.fill();
+        ctx.clip();
+        const sw = ((t * 0.22) % 1.4) - 0.2;
+        ctx.globalAlpha = 0.55; ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.moveTo(mx - 40, my - 60 + sw * 240); ctx.lineTo(mx + 40, my - 100 + sw * 240); ctx.lineTo(mx + 40, my - 84 + sw * 240); ctx.lineTo(mx - 40, my - 44 + sw * 240); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.save(); ctx.strokeStyle = 'rgba(201,203,214,0.9)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(mx, my + 2, 8, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke(); ctx.restore();
+        spark(ctx, mx + 20, my - 34, 7, '#ffffff', 0.5 + 0.5 * Math.sin(t * 2.1), 0);
+        // every 10.5 s a ring leaves the wrapped mic and breaks into soft pastel blobs at r 160 (muffled)
+        const ph = ((t / 10.5) % 1 + 1) % 1, rr = 30 + ph * 150;
+        if (ph < 0.8) tk.soundRings(ctx, mx, my, rr, { n: 1, color: '#e6d9ff', alpha: (1 - ph / 0.8) * 0.6, lw: 3 });
+        else for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ctx.beginPath(); ctx.arc(mx + Math.cos(a) * 160, my + Math.sin(a) * 160 * 0.8, 6 + 4 * (ph - 0.8) * 5, 0, TAU); ctx.fillStyle = rgba(GLOSS[i % 4], (1 - ph) * 3); ctx.fill(); }
+      } else {
+        // live: no wrap, a warm glow, a whole ring to r 260, and notes and hearts rising
+        tk.glow(ctx, mx, my, 120, HV.warm, 0.35);
+        for (let i = 0; i < (reduce() ? 1 : 2); i++) { const ph = ((t / 3.5 + i / 2) % 1 + 1) % 1; tk.soundRings(ctx, mx, my, 30 + ph * 230, { n: 1, color: HV.warm, alpha: (1 - ph) * 0.7, lw: 3 }); }
+        const nW = reduce() ? 3 : 8;
+        for (let i = 0; i < nW; i++) {
+          const ph = ((t * 0.12 + i / nW) % 1 + 1) % 1, x = mx + Math.sin(i * 7.1 + t * 0.5) * (40 + ph * 60), y = my - 30 - ph * 200, a = Math.sin(Math.PI * ph);
+          if (i % 3 === 2) { ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.fillStyle = HV.pink; ctx.beginPath(); ctx.moveTo(0, 5); ctx.bezierCurveTo(-9, -2, -5, -10, 0, -4); ctx.bezierCurveTo(5, -10, 9, -2, 0, 5); ctx.fill(); ctx.restore(); }
+          else tk.note(ctx, x, y, 9, { color: i % 2 ? HV.cream : HV.lime, alpha: a, kind: i % 2 ? 'eighth' : 'beamed' });
+        }
       }
     }
-    if (k) { ctx.save(); ctx.translate(640, 760); ctx.rotate(Math.sin(t * 0.55) * 0.0035); ctx.translate(-640, -760); layer('bam', 44); ctx.restore(); } else layer('bam', 0);
-    ctx.save(); ctx.globalAlpha = reduce() ? 0.9 : 0.72 + 0.2 * Math.sin(t * 0.45); layer('hush', 8); ctx.restore();
-    if (tk) tk.vignette(ctx, 1280, 720, { color: '#07051a', alpha: 0.6, inner: 0.42 });
+    ctx.save(); ctx.globalAlpha = S.won ? 0.5 : 0.9; layer('gloss', 0); ctx.restore();
+    if (tk) tk.vignette(ctx, 1280, 720, { color: '#07051a', alpha: 0.5, inner: 0.45 });
   }
 
+  // the logo when ART.scene.logo is missing or throws: HOCUS over VOCUS in sticker letters (pink, green), the mic-wand with its gold star
+  // crossing behind and a few sparkles. Centred on (cx, cy), w wide, about 0.4 w tall, like the real one.
   function drawLogoFallback(ctx, cx, cy, w, t) {
-    const tk = T();
-    if (!tk) return;
-    const family = tk.font.display;
     ctx.save();
-    ctx.font = '900 100px ' + family;
-    const m = safe(() => ctx.measureText('ECHOWAKE').width, 0) || 600;
+    ctx.font = '900 100px ' + ROUND;
+    const m = safe(() => ctx.measureText('HOCUS').width, 0) || 360;
     ctx.restore();
-    const size = clamp(w / m * 100, 60, 190);
-    tk.glow(ctx, cx, cy, w * 0.55, '#7a6bff', 0.3);
-    tk.glow(ctx, cx - w * 0.18, cy - size * 0.1, w * 0.3, '#ff7eb6', 0.16);
-    tk.inkText(ctx, 'ECHOWAKE', cx, cy, size, { family, weight: 900, skew: -0.06, grad: [tk.pal.white, tk.pal.gold], stroke: tk.pal.ink, strokeW: size * 0.13, shadow: '#3b2a7a', shadowOff: size * 0.05 });
-    const r = U.rng(9);
-    ctx.save();
-    for (let i = 0; i < 5; i++) {
-      const x = cx - w * 0.4 + (i + 0.5) * (w * 0.8 / 5) + (r() - 0.5) * 30;
-      const len = 10 + r() * 22 + (reduce() ? 0 : Math.sin(t * 2.4 + i * 1.9) * 7);
-      const y0 = cy + size * 0.27;
-      ctx.fillStyle = tk.pal.ink; ctx.fillRect(x - 4, y0, 8, len);
-      ctx.fillStyle = 'rgba(95,245,255,0.7)'; ctx.fillRect(x - 2, y0 + 2, 4, Math.max(2, len - 4));
-    }
-    // the hanko seal stamped beside the last letter
-    ctx.translate(cx + w * 0.5 + 6, cy - size * 0.04); ctx.rotate(-0.07);
-    ctx.fillStyle = '#e8383d'; ctx.fillRect(-23, -23, 46, 46);
-    ctx.strokeStyle = 'rgba(255,248,240,0.9)'; ctx.lineWidth = 2; ctx.strokeRect(-19, -19, 38, 38);
-    ctx.strokeStyle = '#fff8f0'; ctx.fillStyle = '#fff8f0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, TAU); ctx.stroke();   // an echo ping: dot and ring
+    const size = clamp((w * 0.78) / m * 100, 24, 220);
+    const dy = w * 0.095, bob = (i) => (reduce() ? 0 : Math.sin(t * TAU / 0.8 + i * 0.9) * 2);
+    // the mic-wand behind both words, lower left to upper right
+    const ax = cx - w * 0.44, ay = cy + w * 0.17, bx = cx + w * 0.4, by = cy - w * 0.16;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = HV.line; ctx.lineWidth = w * 0.05; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#1d1a2c'; ctx.lineWidth = w * 0.032; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    const bandX = ax + (bx - ax) * 0.84, bandY = ay + (by - ay) * 0.84;
+    ctx.strokeStyle = HV.pink; ctx.lineWidth = w * 0.034; ctx.beginPath(); ctx.moveTo(bandX, bandY); ctx.lineTo(bandX + (bx - ax) * 0.05, bandY + (by - ay) * 0.05); ctx.stroke();
+    starPath(ctx, bx + w * 0.02, by - w * 0.01, w * 0.07, 0.2); ctx.fillStyle = HV.gold; ctx.fill(); ctx.lineWidth = w * 0.012; ctx.strokeStyle = HV.line; ctx.stroke();
     ctx.restore();
+    stickerWord(ctx, 'HOCUS', cx - w * 0.02, cy - dy + bob(0), size, HV.pinkL, HV.pink, { rot: -0.03 });
+    stickerWord(ctx, 'VOCUS', cx + w * 0.03, cy + dy + bob(1), size, HV.lime, HV.green, { rot: 0.03 });
+    const tw = (i) => 0.5 + 0.5 * Math.sin(t * 1.7 + i * 2.1);
+    [[cx + w * 0.47, cy - w * 0.2, 0.03], [cx - w * 0.46, cy - w * 0.12, 0.022], [cx + w * 0.36, cy + w * 0.19, 0.018], [cx - w * 0.3, cy + w * 0.2, 0.014]].forEach((s, i) => spark(ctx, s[0], s[1], w * s[2], i % 2 ? HV.lime : HV.cream, reduce() ? 0.8 : 0.35 + 0.65 * tw(i), 0));
   }
 
   // ---- the plaques
@@ -583,11 +697,12 @@
         // parallaxX is a camera offset in STAGE PX (art_scenes.js clamps it to +-90): the pointer at the right edge pans the camera right
         const ok = art(() => ART.scene.draw(ctx, 'title', 1280, 720, t, { particles: reduce() ? 0.3 : 1, parallaxX: reduce() ? 0 : S.px * 70, rung: S.won }), 'scene-title');
         if (ok === false || ok === undefined) S.real = false;              // a scene that fails once falls back for good (the fallback paints over it)
-        else if (!art(() => { ART.scene.logo(ctx, 640, 176, 760, t); return true; }, 'scene-logo')) drawLogoFallback(ctx, 640, 172, 780, t);
+        // the logo spans y 42 to 258 (HV_ART_AUDIO 3.1); the tagline (.mn-tag, top 262 px) sits right under it
+        else if (!art(() => { ART.scene.logo(ctx, 640, 150, 540, t); return true; }, 'scene-logo')) drawLogoFallback(ctx, 640, 150, 540, t);
       } else {
         drawTitleFallback(ctx, t, S);
         S.atmos.draw(ctx, t, -S.px * 30);
-        drawLogoFallback(ctx, 640, 172, 780, t);
+        drawLogoFallback(ctx, 640, 150, 540, t);
       }
     },
     onKey(e) {
@@ -669,6 +784,50 @@
   const heroLocked = (id) => !heroUnlocked(id) && !(HS && HS.daily);
   const BANTER = ['start', 'kill', 'swap', 'win', 'hurt', 'down'];
 
+  // The Outfit row of the detail sheet (HV_ART_AUDIO 2.11, bible 7.1): two swatch buttons, Stage clothes and the hero's outfit, each a 56 px
+  // medallion in that outfit. The outfit stays locked (dimmed, a padlock, the unlock line) until its Sticker is done. A pick goes through
+  // UI.outfit (the one owner of hv_skins_v1), plays ui_toggle, and ART draws the new outfit at once: the portrait, the stage and the head
+  // medallion (onPick). Both swatches are buttons in tab order with aria-pressed. Andy has no outfit, so no row (null).
+  function outfitRow(id, onPick) {
+    const od = DATA.outfits && Object.prototype.hasOwnProperty.call(DATA.outfits, id) ? DATA.outfits[id] : null;
+    if (!od || !UI.outfit) return null;
+    const sw = {};
+    const lockLine = mk('p', { class: 'mn-d-olock', text: 'Win 3 tours with ' + heroName(id) + ' to unlock.' });
+    const swatch = (skin, label) => {
+      const b = mk('button', { type: 'button', class: 'mn-sw', dataset: { skin, sfx: QUIET }, 'aria-pressed': 'false' },
+        mk('span', { class: 'mn-sw-face', 'aria-hidden': 'true' }, UI.medallion(id, 56, skin)), mk('span', { class: 'mn-sw-name', text: label }));
+      b.addEventListener('click', () => pick(skin));
+      sw[skin] = b;
+      return b;
+    };
+    const row = mk('div', { class: 'mn-d-line mn-d-outfit', role: 'group', 'aria-label': 'Outfit' },
+      mk('span', { class: 'mn-d-oico', 'aria-hidden': 'true' }),
+      mk('div', { class: 'mn-d-obody' }, mk('b', { text: 'Outfit' }), mk('div', { class: 'mn-sws' }, swatch('stage', 'Stage clothes'), swatch('skin', od.name)), lockLine));
+    const sync = () => {
+      const open = !!safe(() => UI.outfit.unlocked(id), false), now = safe(() => UI.outfit.of(id), 'stage');
+      ['stage', 'skin'].forEach((k) => {
+        const b = sw[k], locked = k === 'skin' && !open;
+        b.classList.toggle('on', now === k);
+        b.setAttribute('aria-pressed', now === k ? 'true' : 'false');
+        b.classList.toggle('locked', locked);
+        if (locked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+        b.setAttribute('aria-label', (k === 'stage' ? 'Stage clothes' : od.name) + (locked ? ', locked' : ''));
+      });
+      lockLine.hidden = open;
+      row.classList.toggle('open', open);
+    };
+    function pick(skin) {
+      if (skin === 'skin' && !safe(() => UI.outfit.unlocked(id), false)) return;     // locked: the swatch is aria-disabled, so UI's click delegate already says no (ui_error and a shake)
+      safe(() => UI.outfit.set(id, skin));
+      sfx('ui_toggle');
+      sync();
+      if (onPick) safe(onPick);
+    }
+    row.rbSync = sync;
+    sync();
+    return row;
+  }
+
   function buildDetail(id) {
     const h = DATA.heroes[id];
     const locked = heroLocked(id);
@@ -696,6 +855,8 @@
     const res = DATA.statuses[h.res];
     add(box, mk('div', { class: 'mn-d-line' }, UI.status(h.res, undefined, { size: 'md' }), mk('div', {}, mk('b', { text: (res ? res.name : cap(h.res)) + ' (resource)' }), mk('span', { text: res ? res.text : '' }))));
     (h.passives || []).forEach((p) => add(box, mk('div', { class: 'mn-d-line' }, UI.hanko('P', { size: 'sm', label: 'Passive' }), mk('div', {}, mk('b', { text: p.name + ' (passive)' }), mk('span', { text: safe(() => DATA.hookText(p), '') })))));
+    const outfit = outfitRow(id, () => { clear(medal).appendChild(UI.medallion(id, 64)); });
+    if (outfit) { add(box, outfit); box.rbSync = outfit.rbSync; }
     const deck = mk('div', { class: 'mn-d-deck' });
     starterCounts(id).forEach((c) => {
       const card = UI.card(previewInst(c.id), { size: 'deck', class: 'mn-cs', tip: false, showGems: true });
@@ -902,6 +1063,7 @@
         if (S.shown === want && S.detailBody.firstChild) return;
         S.shown = want;
         if (!S.cache[want]) S.cache[want] = buildDetail(want);
+        else if (S.cache[want].rbSync) S.cache[want].rbSync();        // the outfit swatches read the store and the Stickers again
         clear(S.detailBody).appendChild(S.cache[want]);
         S.cache[want].classList.remove('swap'); void S.cache[want].offsetWidth; S.cache[want].classList.add('swap');
         S.detailBody.scrollTop = 0;
@@ -1054,22 +1216,33 @@
       pg.addColorStop(0, 'rgba(13,11,30,0.30)'); pg.addColorStop(1, 'rgba(13,11,30,0.68)');
       ctx.fillStyle = pg; ctx.fillRect(B.x, B.y, B.w, B.h);
       ctx.beginPath(); ctx.rect(B.x, B.y, B.w, B.h); ctx.clip();
-      if (tk) {
-        const g2 = S.chosen.length ? DATA.heroes[S.chosen[S.chosen.length - 1]].color : '#5b3fa8';
-        tk.glow(ctx, PARTY_CX, 560, 260, g2, 0.16);
-      }
-      ctx.save(); ctx.translate(PARTY_CX, 660); ctx.scale(1, 0.12);
-      const fg = ctx.createRadialGradient(0, 0, 10, 0, 0, 200);
-      fg.addColorStop(0, 'rgba(243,230,200,0.38)'); fg.addColorStop(0.55, 'rgba(122,107,255,0.18)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(0, 0, 200, 0, TAU); ctx.fill();
+      const g2 = S.chosen.length ? DATA.heroes[S.chosen[S.chosen.length - 1]].color : HV.violet;
+      if (tk) tk.glow(ctx, PARTY_CX, 560, 260, g2, 0.14);
+      // a little round stage under the pair (the title's stage in small): boards, a cream lip with bulbs, and a soft spotlight cone in the
+      // colour of the last pick falling on it from the top of the frame
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath(); ctx.moveTo(PARTY_CX - 22, B.y); ctx.lineTo(PARTY_CX + 22, B.y); ctx.lineTo(PARTY_CX + 170, 656); ctx.lineTo(PARTY_CX - 170, 656); ctx.closePath();
+      const cone = ctx.createLinearGradient(0, B.y, 0, 656); cone.addColorStop(0, rgba(g2, 0.2)); cone.addColorStop(1, rgba(g2, 0.04));
+      ctx.fillStyle = cone; ctx.fill();
       ctx.restore();
-      // ghost rings for the empty slots
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(PARTY_CX, 668, 180, 26, 0, 0, Math.PI); ctx.lineTo(PARTY_CX - 180, 656); ctx.ellipse(PARTY_CX, 656, 180, 26, 0, Math.PI, 0, true); ctx.closePath();
+      ctx.fillStyle = '#4a2266'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = HV.line; ctx.stroke();         // a deep plum lip, so the slot notes laid over it stay readable
+      for (let k = 0; k < 11; k++) { const a = Math.PI * (k + 0.5) / 11; const on = reduce() ? 1 : 0.6 + 0.4 * Math.sin(t * 2.4 + k * 1.3); ctx.beginPath(); ctx.arc(PARTY_CX - Math.cos(a) * 168, 663 + Math.sin(a) * 23, 2.6, 0, TAU); ctx.fillStyle = rgba('#ffe9a8', on); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(PARTY_CX, 656, 180, 26, 0, 0, TAU);
+      const top = ctx.createLinearGradient(0, 630, 0, 682); top.addColorStop(0, '#6a3584'); top.addColorStop(1, '#3f1f63');
+      ctx.fillStyle = top; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = HV.line; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(PARTY_CX, 656, 176, 24, 0, 0.08 * Math.PI, 0.92 * Math.PI); ctx.strokeStyle = 'rgba(255,248,236,0.55)'; ctx.lineWidth = 2; ctx.stroke();   // the cream lip edge
+      ctx.beginPath(); ctx.ellipse(PARTY_CX, 654, 128, 14, 0, 0, TAU); ctx.fillStyle = rgba(g2, 0.14); ctx.fill();
+      ctx.restore();
+      // ghost rings for the empty slots: a dashed cream ring where a hero will stand
       ['front', 'back'].forEach((row, k) => {
         if (S.chosen[k]) return;
         const sl = SLOT[row];
         ctx.save(); ctx.translate(sl.x, sl.y - 6); ctx.scale(1, 0.2);
-        ctx.strokeStyle = 'rgba(245,201,106,0.45)'; ctx.lineWidth = 3; ctx.setLineDash([12, 9]); ctx.lineDashOffset = -t * 8;
+        ctx.strokeStyle = 'rgba(255,248,236,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([12, 9]); ctx.lineDashOffset = -t * 8;
         ctx.beginPath(); ctx.arc(0, 0, 62 * sl.s, 0, TAU); ctx.stroke(); ctx.restore();
+        spark(ctx, sl.x + 30 * sl.s, sl.y - 40 - 6 * Math.sin(t * 1.4 + k), 6, HV.cream, reduce() ? 0.6 : 0.35 + 0.35 * Math.sin(t * 2 + k * 2), 0);
       });
       // heroes: back one first so the front hero overlaps it
       const order = S.chosen.map((id, i) => ({ id, row: i === 0 ? 'front' : 'back' })).sort((a, b) => (a.row === 'back' ? -1 : 1) - (b.row === 'back' ? -1 : 1));
@@ -1117,7 +1290,6 @@
   const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
   // the Who's Who chips for the enemy tag ids (HV_ENEMIES 8); the ids stay in DATA.LISTS.enemyTags
   const TAG_LABEL = { spirit: 'Sprite', beast: 'Critter', folk: 'Showbiz', undead: 'Faded', construct: 'Gadget', insect: 'Bug', avian: 'Bird', aquatic: 'Seaside', void: 'Glossy' };
-  const CHAPTER_SKY = { 1: 'golden', 2: 'night', 3: 'crimson' };
   const stoneIcon = (size) => UI.icon('stat', 'inkstone', size || 22, {}, 'mn-stone-ico');
   const hpText = (def) => (def && Array.isArray(def.hp) ? (def.hp[0] === def.hp[1] ? String(def.hp[0]) : def.hp[0] + ' to ' + def.hp[1]) : '');
 
@@ -1349,26 +1521,84 @@
     const def = DATA.enemies[id] || DATA.rosterById[id] || {};
     const k = { s: 0.5, m: 0.68, l: 0.84, xl: 0.94 }[def.size || 'm'] || 0.68;
     const bh = (h - 18) * k, bw = bh * 0.72, cx = w / 2, fy = h - 8;
-    g.fillStyle = '#0a0819';
+    g.fillStyle = 'rgba(45,23,15,0.72)';                        // a soft warm shadow on the photo, never a black box
     g.beginPath(); g.ellipse(cx, fy - bh * 0.34, bw / 2, bh * 0.34, 0, 0, TAU); g.fill();
     g.beginPath(); g.arc(cx, fy - bh * 0.8, bh * 0.19, 0, TAU); g.fill();
     if (def.tier === 'elite' || def.tier === 'boss') { g.beginPath(); g.moveTo(cx - bh * 0.17, fy - bh * 0.9); g.lineTo(cx - bh * 0.3, fy - bh * 1.08); g.lineTo(cx - bh * 0.05, fy - bh * 0.97); g.moveTo(cx + bh * 0.17, fy - bh * 0.9); g.lineTo(cx + bh * 0.3, fy - bh * 1.08); g.lineTo(cx + bh * 0.05, fy - bh * 0.97); g.fill(); }
   }
   const enemyHasArt = (id) => !!safe(() => ART.has('enemy', id), false);
+  // The Who's Who is a wall of instant photos (HV_ART_AUDIO 3.4): each creature on a little stage in its Act's light, in a cream frame with a wide
+  // bottom edge, a slight tilt and a strip of tape. A creature not met yet is a photo the Gloss got to first: a soft opalescent blur with one polite
+  // smile and a sparkle, never a black box.
+  const ACT_PHOTO = { 1: ['#ffcf8a', '#ff9fc6', '#2bb3b1'], 2: ['#141a3a', '#3d2a7a', '#3ff0ff'], 3: ['#f4f1fb', '#e6d9ff', '#d9fff4'] };
+  const actOf = (id) => { const d = DATA.enemies[id] || DATA.rosterById[id] || {}; return clamp(d.chapter | 0 || 1, 1, 3); };
+  function photoBack(g, w, h, ch) {
+    const c = ACT_PHOTO[ch] || ACT_PHOTO[1];
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, c[0]); gr.addColorStop(1, c[1]);
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    const sp = g.createRadialGradient(w / 2, h * 0.15, 4, w / 2, h * 0.45, Math.max(w, h) * 0.7);
+    sp.addColorStop(0, 'rgba(255,248,236,0.45)'); sp.addColorStop(1, 'rgba(255,248,236,0)');
+    g.fillStyle = sp; g.fillRect(0, 0, w, h);
+    g.beginPath(); g.ellipse(w / 2, h * 0.93, w * 0.62, h * 0.16, 0, 0, TAU); g.fillStyle = rgba(c[2], ch === 3 ? 0.45 : 0.35); g.fill();
+  }
+  // the Gloss over an unmet creature: its shape smeared soft and pastel, the opal film, a sweep of light, one polite smile and a sparkle
+  function glossBlur(g, id, w, h, fit) {
+    const tmp = typeof ART !== 'undefined' && ART.sprite ? art(() => ART.sprite('menu|gshape|' + id + '|' + w + 'x' + h, w, h, (q) => {
+      if (enemyHasArt(id)) {
+        const b = safe(() => ART.enemy.bounds(id), null) || { w: 120, h: 170 };
+        const s = Math.min((w - fit.padX) / Math.max(1, b.w), (h - fit.padY) / Math.max(1, b.h), fit.max || 9);
+        art(() => ART.enemy.draw(q, id, { x: w / 2, y: h - fit.foot, s, pose: 'idle', t: 0.5 }), 'enemy');
+      } else genericSil(q, id, w, h);
+      q.globalCompositeOperation = 'source-in'; q.fillStyle = '#c9b8ef'; q.fillRect(0, 0, w, h); q.globalCompositeOperation = 'source-over';
+    }), 'gshape') : null;
+    if (tmp) {
+      const k = Math.max(2, w * 0.035);
+      [[0, 0, 0.5], [-k, 0, 0.22], [k, 0, 0.22], [0, -k, 0.22], [0, k, 0.22], [-k * 2, k, 0.1], [k * 2, -k, 0.1]].forEach((o) => safe(() => { g.save(); g.globalAlpha = o[2]; g.drawImage(tmp, o[0], o[1], w, h); g.restore(); }));
+    }
+    const film = g.createLinearGradient(0, 0, w, h);
+    GLOSS.forEach((c, i) => film.addColorStop(i / 3, rgba(c, 0.55)));
+    g.fillStyle = film; g.fillRect(0, 0, w, h);
+    g.save(); g.globalAlpha = 0.5; g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(w * 0.1, h); g.lineTo(w * 0.45, 0); g.lineTo(w * 0.6, 0); g.lineTo(w * 0.25, h); g.closePath(); g.fill(); g.restore();
+    const cx = w / 2, cy = h * 0.52, r = Math.max(3, w * 0.07);
+    g.save(); g.strokeStyle = 'rgba(122,104,170,0.75)'; g.lineWidth = Math.max(1.2, w * 0.018); g.lineCap = 'round';
+    g.beginPath(); g.arc(cx, cy - r * 0.6, r, 0.22 * Math.PI, 0.78 * Math.PI); g.stroke(); g.restore();
+    spark(g, cx + r * 2.2, cy - r * 2.4, r * 0.9, '#ffffff', 0.95, 0);
+  }
   function paintBeast(g, id, w, h, seenIt, t, fit) {
-    if (!seenIt && !enemyHasArt(id)) { genericSil(g, id, w, h); return; }
+    photoBack(g, w, h, actOf(id));
+    if (!seenIt) { glossBlur(g, id, w, h, fit); return; }
+    if (!enemyHasArt(id)) { genericSil(g, id, w, h); return; }
     const b = safe(() => ART.enemy.bounds(id), null) || { w: 120, h: 170 };
     const s = Math.min((w - fit.padX) / Math.max(1, b.w), (h - fit.padY) / Math.max(1, b.h), fit.max || 9);
     art(() => ART.enemy.draw(g, id, { x: w / 2, y: h - fit.foot, s, pose: 'idle', t }), 'enemy');
-    if (!seenIt) { g.globalCompositeOperation = 'source-in'; g.fillStyle = '#0a0819'; g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'source-over'; }
+  }
+  // an instant photo filling a w x h tile: a seeded tilt, the cream frame with its wide bottom, the picture, a strip of tape
+  function photoFrame(g, id, w, h, paint) {
+    const tilt = (U.rng(U.hash('photo', id))() - 0.5) * 0.09;
+    const fw = w - 10, fh = h - 8, px = 5, pt = 5, pb = 15;
+    g.save();
+    g.translate(w / 2, h / 2); g.rotate(tilt); g.translate(-fw / 2, -fh / 2);
+    g.fillStyle = 'rgba(7,5,26,0.45)'; rrect(g, 2, 3, fw, fh, 3); g.fill();
+    g.fillStyle = HV.cream; rrect(g, 0, 0, fw, fh, 3); g.fill();
+    g.lineWidth = 1.2; g.strokeStyle = 'rgba(45,23,15,0.55)'; g.stroke();
+    g.save(); g.beginPath(); g.rect(px, pt, fw - px * 2, fh - pt - pb); g.clip(); g.translate(px, pt);
+    safe(() => paint(g, fw - px * 2, fh - pt - pb));
+    g.restore();
+    g.strokeStyle = 'rgba(45,23,15,0.35)'; g.lineWidth = 1; g.strokeRect(px, pt, fw - px * 2, fh - pt - pb);
+    g.save(); g.translate(fw / 2, 1); g.rotate(-tilt * 2 - 0.04);
+    g.fillStyle = 'rgba(255,248,236,0.72)'; g.fillRect(-15, -5, 30, 10);
+    g.fillStyle = 'rgba(255,126,182,0.28)'; g.fillRect(-15, -5, 30, 3);
+    g.restore();
+    g.restore();
   }
   function beastThumb(id, seenIt, w, h) {
-    return spriteCanvas('menu|beast|' + id + '|' + (seenIt ? 's' : 'u') + '|' + w + 'x' + h, w, h, (g) => paintBeast(g, id, w, h, seenIt, 0.5, { padX: 10, padY: 12, foot: 7 }), 'mn-thumb');
+    return spriteCanvas('menu|photo|' + id + '|' + (seenIt ? 's' : 'u') + '|' + w + 'x' + h, w, h, (g) => photoFrame(g, id, w, h, (q, pw, ph) => paintBeast(q, id, pw, ph, seenIt, 0.5, { padX: 6, padY: 10, foot: 5 })), 'mn-thumb');
   }
-  // the unseen silhouette of the detail view: a static sprite drawn over the sky
+  // the unmet creature of the detail view: a static Gloss photo drawn under the live frame
   function beastDetailSil(id) {
     if (typeof ART === 'undefined' || !ART.sprite) return null;
-    return art(() => ART.sprite('menu|beastsilD|' + id, 340, 250, (g) => paintBeast(g, id, 340, 250, false, 0.5, { padX: 40, padY: 60, foot: 26, max: 1.3 })), 'sil');
+    return art(() => ART.sprite('menu|beastglossD|' + id, 340, 250, (g) => paintBeast(g, id, 340, 250, false, 0.5, { padX: 40, padY: 60, foot: 26, max: 1.3 })), 'sil');
   }
 
   function buildBestiary(S) {
@@ -1435,12 +1665,14 @@
         const g = cv.g;
         g.clearRect(0, 0, 340, 250);
         const tk = T();
-        if (tk) { tk.sky(g, 0, 0, 340, 250, CHAPTER_SKY[d ? d.chapter : 1] || 'night'); g.fillStyle = 'rgba(20,15,46,0.5)'; g.fillRect(0, 200, 340, 50); }
         const b = safe(() => ART.enemy.bounds(cur), null) || { w: 140, h: 200 };
         const s = Math.min(300 / Math.max(1, b.w), 190 / Math.max(1, b.h), 1.3);
         if (d && !(d.seen > 0)) { const sil = beastDetailSil(cur); if (sil) safe(() => g.drawImage(sil, 0, 0, 340, 250)); }
-        else art(() => ART.enemy.draw(g, cur, { x: 170, y: 224, s, pose: 'idle', t }), 'enemy');
-        if (tk) tk.vignette(g, 340, 250, { color: '#07051a', alpha: 0.5, inner: 0.5 });
+        else {
+          photoBack(g, 340, 250, d ? clamp(d.chapter | 0 || 1, 1, 3) : 1);
+          art(() => ART.enemy.draw(g, cur, { x: 170, y: 224, s, pose: 'idle', t }), 'enemy');
+        }
+        if (tk) tk.vignette(g, 340, 250, { color: '#2d170f', alpha: 0.22, inner: 0.6 });
       },
     };
   }
@@ -1642,24 +1874,48 @@
   // HOW TO PLAY: eight illustrated pages, each with a small live diagram (canvas painters and DOM pieces built from real ART and DATA)
   // ================================================================================================================
   const HT_W = 520, HT_H = 380;
-  const fontD = () => (T() ? T().font.display : 'Georgia, serif');
   const fontN = () => (T() ? T().font.num : 'sans-serif');
   const fontU = () => (T() ? T().font.ui : 'sans-serif');
   const partyOf = () => ((mem.party && mem.party.length === 2 ? mem.party : ['hanae', 'kuro']).filter((id) => DATA.heroes[id]));
 
-  // comic lettering on a diagram
+  // sticker lettering on a diagram: rounded heavy letters with the warm outline
   function label(g, text, x, y, size, col, align, stroke) {
     g.save();
-    g.font = '800 ' + size + 'px ' + fontD(); g.textAlign = align || 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-    g.lineWidth = size * 0.3; g.strokeStyle = stroke || '#140f2e'; g.strokeText(text, x, y);
-    g.fillStyle = col || '#f3e6c8'; g.fillText(text, x, y);
+    g.font = '900 ' + size + 'px ' + ROUND; g.textAlign = align || 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.lineWidth = size * 0.3; g.strokeStyle = stroke || HV.line; g.strokeText(text, x, y);
+    g.fillStyle = col || HV.cream; g.fillText(text, x, y);
     g.restore();
   }
-  function illusBg(g, sky) {
-    const tk = T();
-    if (tk) tk.sky(g, 0, 0, HT_W, HT_H, sky || 'night'); else { g.fillStyle = '#1a1340'; g.fillRect(0, 0, HT_W, HT_H); }
+  // the diagram grounds (HV_ART_AUDIO 3.4): 'night' is the indigo stage night with a soft spotlight and a few bokeh; 'paper' is the cream gig poster
+  // (the `paper` scene: card stock with a faint pink and green print grain), so the diagrams read as posters pinned on the Tour Bus wall
+  function illusBgSized(g, w, h, sky) {
+    if (sky === 'paper') {
+      const ok = typeof ART !== 'undefined' && ART.scene && typeof ART.scene.draw === 'function' && art(() => ART.scene.draw(g, 'paper', w, h, 0, { seed: 7, edge: false }) !== false, 'paper');
+      if (!ok) { g.fillStyle = HV.paper; g.fillRect(0, 0, w, h); }
+      return;
+    }
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0d0a26'); gr.addColorStop(0.65, '#2b1f6e'); gr.addColorStop(1, '#3b2a7a');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    const sp = g.createRadialGradient(w * 0.5, -h * 0.1, 10, w * 0.5, h * 0.4, h);
+    sp.addColorStop(0, 'rgba(255,244,214,0.20)'); sp.addColorStop(1, 'rgba(255,244,214,0)');
+    g.fillStyle = sp; g.fillRect(0, 0, w, h);
+    const r = U.rng(U.hash('illus', w, h));
+    for (let i = 0; i < 9; i++) { const x = r() * w, y = r() * h * 0.6, rr = 6 + r() * 16; g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fillStyle = rgba(i % 2 ? HV.pink : HV.green, 0.06 + r() * 0.05); g.fill(); }
   }
-  function illusFg(g, a) { const tk = T(); if (tk) tk.vignette(g, HT_W, HT_H, { color: '#07051a', alpha: a === undefined ? 0.5 : a, inner: 0.45 }); }
+  function illusBg(g, sky) { illusBgSized(g, HT_W, HT_H, sky || 'night'); }
+  function illusFg(g, a) { const tk = T(); if (tk) tk.vignette(g, HT_W, HT_H, { color: '#07051a', alpha: (a === undefined ? 0.5 : a) * 0.7, inner: 0.5 }); }
+  // a mic on a stand, the house prop: a round foot, a chrome pole, a ball grille with a coloured band. (x, y) is the foot centre.
+  function micStand(g, x, y, h, band) {
+    g.save();
+    g.beginPath(); g.ellipse(x, y, h * 0.16, h * 0.04, 0, 0, TAU); g.fillStyle = '#2b2a3a'; g.fill(); g.lineWidth = 2; g.strokeStyle = HV.line; g.stroke();
+    g.fillStyle = '#c9cbd6'; g.fillRect(x - 2.5, y - h * 0.86, 5, h * 0.86); g.strokeRect(x - 2.5, y - h * 0.86, 5, h * 0.86);
+    g.translate(x, y - h * 0.86); g.rotate(-0.35);
+    g.fillStyle = '#1d1a2c'; rrect(g, -4, -h * 0.2, 8, h * 0.2, 3); g.fill(); g.stroke();
+    g.fillStyle = band; g.fillRect(-4, -h * 0.2, 8, 4);
+    g.beginPath(); g.arc(0, -h * 0.25, h * 0.085, 0, TAU); g.fillStyle = '#d7d9e4'; g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(45,23,15,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-h * 0.06, -h * 0.25); g.lineTo(h * 0.06, -h * 0.25); g.moveTo(0, -h * 0.31); g.lineTo(0, -h * 0.19); g.stroke();
+    g.restore();
+  }
   const easeIO = U.ease.inOutQuad;
   const prog = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
 
@@ -1669,11 +1925,12 @@
     return { el: cv.c, update(dt, t) { if (!cv.g) return; cv.g.clearRect(0, 0, HT_W, HT_H); cv.g.save(); art(() => paint(cv.g, t), 'howto'); cv.g.restore(); } };
   }
 
-  // ---- 1. a land without sound
+  // ---- 1. the Soundlands on mute
   function paintBook(g, t) {
     illusBg(g, 'night');
     const tk = T();
-    if (tk) { tk.stars(g, 0, 0, HT_W, 220, t, { n: 46, seed: 2 }); tk.moon(g, 430, 66, 32, { glow: 0.7, seed: 1 }); }
+    if (tk) { tk.stars(g, 0, 0, HT_W, 220, t, { n: 46, seed: 2 }); tk.glow(g, 430, 66, 70, HV.warm, 0.25); }
+    g.beginPath(); g.arc(430, 66, 30, 0, TAU); g.fillStyle = '#fff2c4'; g.fill();
     // a grey, still landscape strip: two ridges and a pale ground band under the path
     const ridge = (base, amp, col, seed) => {
       const r = U.rng(seed);
@@ -1684,30 +1941,35 @@
     ridge(222, 20, 'rgba(96,92,122,0.85)', 3); ridge(262, 16, 'rgba(60,56,88,0.95)', 7);
     g.fillStyle = 'rgba(38,34,62,0.95)'; g.fillRect(0, 310, HT_W, HT_H - 310);
     g.fillStyle = 'rgba(190,186,210,0.18)'; g.fillRect(0, 310, HT_W, 2);
-    if (tk) { const br = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.4); tk.glow(g, 90, 170, 120 * br, '#5ff5ff', 0.22 * br); }
+    if (tk) { const br = reduce() ? 1 : 0.85 + 0.15 * Math.sin(t * 1.4); tk.glow(g, 90, 170, 120 * br, HV.green, 0.22 * br); }
     // the sound path from the heroes to the boss, with the shop, camp and elite stamps on it
     const pts = [[62, 160], [150, 118], [240, 162], [330, 112], [446, 148]];
     const p = (t * 0.16) % 1.25;
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    g.strokeStyle = 'rgba(95,245,255,0.22)'; g.lineWidth = 9; g.beginPath(); pts.forEach((q, i) => { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke();
+    g.strokeStyle = 'rgba(255,248,236,0.18)'; g.lineWidth = 9; g.setLineDash([2, 12]); g.beginPath(); pts.forEach((q, i) => { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke(); g.setLineDash([]);
     const total = pts.length - 1, upto = clamp(p, 0, 1) * total;
-    g.strokeStyle = '#7af7ff'; g.lineWidth = 5; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    const pg = g.createLinearGradient(pts[0][0], 0, pts[4][0], 0); pg.addColorStop(0, HV.pink); pg.addColorStop(1, HV.green);
+    g.strokeStyle = HV.line; g.lineWidth = 9; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 0; i < total; i++) { const k = clamp(upto - i, 0, 1); if (k <= 0) break; g.lineTo(pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k); }
+    g.stroke();
+    g.strokeStyle = pg; g.lineWidth = 5; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
     let head = pts[0];
     for (let i = 0; i < total; i++) { const k = clamp(upto - i, 0, 1); if (k <= 0) break; head = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k]; g.lineTo(head[0], head[1]); }
     g.stroke(); g.restore();
-    if (tk && p < 1.05) tk.sparkle(g, head[0], head[1], 9, { color: tk.pal.gold2, glow: 0.8, rot: t * 2 });
+    if (tk && p < 1.05) { tk.sparkle(g, head[0], head[1], 10, { color: HV.cream, glow: 0.8, rot: t * 2 }); tk.note(g, head[0] + 12, head[1] - 16, 7, { color: HV.lime, alpha: 0.9 }); }
     ['shop', 'camp', 'elite'].forEach((id, i) => art(() => ART.icon.draw(g, 'tile', id, pts[i + 1][0], pts[i + 1][1], 40, {}), 'tile'));
     const pulse = 1 + 0.06 * Math.sin(t * 3);
-    if (tk) tk.glow(g, pts[4][0], pts[4][1], 44 * pulse, '#e8383d', 0.5);
+    if (tk) tk.glow(g, pts[4][0], pts[4][1], 44 * pulse, HV.pink, 0.5);
     art(() => ART.icon.draw(g, 'tile', 'boss', pts[4][0], pts[4][1], 52 * pulse, {}), 'tile');
     partyOf().forEach((id, i) => art(() => ART.hero.medallion(g, id, pts[0][0] - 8 + i * 30, pts[0][1] + 2 - i * 4, 19), 'medal'));
-    // the Hush creeping in from the right as grey mist
+    // the Gloss creeping in from the right: an opalescent pastel film with a highlight sweep, polite and perfectly still
     g.save();
-    const hg = g.createLinearGradient(HT_W * 0.55, 0, HT_W, 0); hg.addColorStop(0, 'rgba(142,138,163,0)'); hg.addColorStop(1, 'rgba(142,138,163,' + (0.34 + (reduce() ? 0 : 0.06 * Math.sin(t * 0.8))).toFixed(2) + ')');
+    const hg = g.createLinearGradient(HT_W * 0.55, 0, HT_W, 0); hg.addColorStop(0, 'rgba(244,241,251,0)'); hg.addColorStop(0.5, rgba(GLOSS[1], 0.18)); hg.addColorStop(1, rgba(GLOSS[2], 0.34 + (reduce() ? 0 : 0.04 * Math.sin(t * 0.8))));
     g.fillStyle = hg; g.fillRect(HT_W * 0.55, 90, HT_W * 0.45, 250);
+    const sw = ((t * 0.12) % 1.6) - 0.3;
+    g.globalAlpha = 0.18; g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(HT_W * (0.6 + sw * 0.4), 340); g.lineTo(HT_W * (0.7 + sw * 0.4), 90); g.lineTo(HT_W * (0.74 + sw * 0.4), 90); g.lineTo(HT_W * (0.64 + sw * 0.4), 340); g.closePath(); g.fill();
     g.restore();
-    if (tk && !reduce()) tk.mist(g, HT_W * 0.4, 130, HT_W * 0.6, 200, t, { n: 3, seed: 5, color: '#a9a6bd', alpha: 0.10, speed: 14 });
-    label(g, '3 acts, 3 headliners', 260, 352, 17, '#ffe9a8');
+    label(g, '3 acts, 3 headliners', 260, 352, 17, HV.pinkL);
     illusFg(g);
   }
 
@@ -1741,11 +2003,11 @@
     // the Ink meter: -1 per hex, +4 from the well
     const ink = clamp(10 - started.filter(Boolean).length + (done[2] ? 4 : 0), 0, 14);
     art(() => ART.icon.draw(g, 'stat', 'ink', 34, 30, 36, {}), 'ink');
-    label(g, ink + ' / 14', 78, 30, 20, '#f3e6c8', 'left');
-    if (started[2] && T0 < bloomAt(2) + 1.2) label(g, '+4', 150, 30 - prog(T0, bloomAt(2), bloomAt(2) + 1.2) * 8, 20, '#8dffc2', 'left');
-    steps.forEach((s, k) => { if (started[k] && k !== 2 && T0 < bloomAt(k) + 0.9) label(g, '-1', 150, 30 + prog(T0, bloomAt(k), bloomAt(k) + 0.9) * 8, 18, '#ff9a9a', 'left'); });
-    label(g, 'unmute, then walk', 260, 352, 17, '#ffe9a8');
-    illusFg(g, 0.4);
+    label(g, ink + ' / 14', 78, 30, 20, HV.cream, 'left');
+    if (started[2] && T0 < bloomAt(2) + 1.2) label(g, '+4', 172, 30 - prog(T0, bloomAt(2), bloomAt(2) + 1.2) * 8, 20, HV.lime, 'left');
+    steps.forEach((s, k) => { if (started[k] && k !== 2 && T0 < bloomAt(k) + 0.9) label(g, '-1', 172, 30 + prog(T0, bloomAt(k), bloomAt(k) + 0.9) * 8, 18, HV.pinkL, 'left'); });
+    label(g, 'unmute, then walk', 260, 352, 17, HV.pink);
+    illusFg(g, 0.12);
   }
 
   // ---- 3. two rows
@@ -1754,8 +2016,14 @@
     const tk = T();
     const party = partyOf();
     const FRONT = { x: 322, y: 292, s: 0.74 }, BACK = { x: 140, y: 284, s: 0.68 };
-    if (tk) { tk.glow(g, 260, 300, 240, '#5b3fa8', 0.25); }
-    g.save(); g.translate(260, 296); g.scale(1, 0.1); g.fillStyle = 'rgba(243,230,200,0.25)'; g.beginPath(); g.arc(0, 0, 250, 0, TAU); g.fill(); g.restore();
+    if (tk) { tk.glow(g, 260, 300, 240, HV.violet, 0.2); }
+    // a little round stage, and the two spots as two mic stands: the lead spot pink at the front, the backing spot green behind
+    g.save();
+    g.beginPath(); g.ellipse(250, 300, 236, 26, 0, 0, Math.PI); g.lineTo(14, 290); g.ellipse(250, 290, 236, 26, 0, Math.PI, 0, true); g.closePath();
+    g.fillStyle = '#4a2266'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = HV.line; g.stroke();
+    g.beginPath(); g.ellipse(250, 290, 236, 26, 0, 0, TAU); g.fillStyle = '#5b2c7a'; g.fill(); g.stroke();
+    g.restore();
+    [[FRONT, HV.pink], [BACK, HV.green]].forEach((m) => { g.beginPath(); g.ellipse(m[0].x, m[0].y, 58, 9, 0, 0, TAU); g.fillStyle = rgba(m[1], 0.32); g.fill(); micStand(g, m[0].x + 52, m[0].y + 2, 96, m[1]); });
     const lt = t + 1.4, n = Math.floor(lt / 7), local = lt % 7;
     const hop = n === 0 ? 1 : prog(local, 0, 0.7);
     const frontHero = party[n % 2 === 0 ? 0 : 1], backHero = party[n % 2 === 0 ? 1 : 0];
@@ -1773,17 +2041,17 @@
     g.fillStyle = '#ff5a5a'; g.beginPath(); g.moveTo(FRONT.x + 36, 214); g.lineTo(FRONT.x + 58, 204); g.lineTo(FRONT.x + 58, 224); g.closePath(); g.fill(); g.restore();
     g.save(); g.globalAlpha = 0.25; g.setLineDash([6, 8]); g.strokeStyle = '#a9c4ff'; g.lineWidth = 3; g.beginPath(); g.moveTo(392, 188); g.quadraticCurveTo(250, 120, BACK.x + 46, 170); g.stroke(); g.restore();
     [backHero, frontHero].forEach((id) => { const p = place(id); art(() => ART.hero.draw(g, id, { x: p.x, y: p.y, s: p.s, pose: hit > 0.3 && hit < 1 && id === frontHero && fade > 0.9 ? 'hurt' : 'idle', t, pt: (at - 0.52) * 3.6 }), 'hero'); });
-    if (hit > 0.1 && fade > 0.05) label(g, '7', FRONT.x + 6 + hit * 6, 150 - hit * 24, 30 + hit * 8, '#ffe45e');
-    if (tk) tk.sparkle(g, BACK.x + 48, 176, 7 + 2 * Math.sin(t * 3), { color: '#a9c4ff', glow: 0.7 });
-    label(g, 'safe', BACK.x + 66, 158, 14, '#cfe0ff');
+    if (hit > 0.1 && fade > 0.05) label(g, '7', FRONT.x + 6 + hit * 6, 150 - hit * 24, 30 + hit * 8, HV.gold);
+    if (tk) tk.sparkle(g, BACK.x + 48, 176, 7 + 2 * Math.sin(t * 3), { color: HV.lime, glow: 0.7 });
+    label(g, 'safe', BACK.x + 66, 158, 14, HV.lime);
     [{ id: frontHero, row: 'front', x: FRONT.x }, { id: backHero, row: 'back', x: BACK.x }].forEach((o) => {
-      label(g, o.row === 'front' ? 'LEAD' : 'BACKING', o.x, 322, 15, o.row === 'front' ? '#ffb3b3' : '#c9c2ff');
-      g.font = '700 12px ' + fontU(); g.textAlign = 'center'; g.fillStyle = '#f3e6c8';
+      label(g, o.row === 'front' ? 'LEAD' : 'BACKING', o.x, 322, 15, o.row === 'front' ? HV.pinkL : HV.lime);
+      g.font = '700 12px ' + fontU(); g.textAlign = 'center'; g.fillStyle = HV.cream;
       g.fillText((DATA.rowText(o.id, o.row) || '').replace(/^(Lead|Backing): /, ''), o.x, 344, 190);
-      g.fillStyle = 'rgba(243,230,200,0.6)'; g.font = 'italic 600 11px ' + fontU();
+      g.fillStyle = 'rgba(255,248,236,0.65)'; g.font = 'italic 600 11px ' + fontU();
       g.fillText(heroName(o.id) + (DATA.heroes[o.id].prefer === o.row ? ' likes it here' : ' prefers ' + rowProse(DATA.heroes[o.id].prefer)), o.x, 362, 190);
     });
-    if (local < 1.6 && n > 0) label(g, 'swap!', 236, 96, 22, '#ffe9a8');
+    if (local < 1.6 && n > 0) label(g, 'swap!', 236, 96, 22, HV.gold);
     illusFg(g);
   }
 
@@ -1798,20 +2066,25 @@
     const def = DATA.cards[cid] || {}, hero = DATA.heroes[def.hero] || { color: '#8a86a8', dark: '#4a4766' };
     const nums = cardNums(cid);
     g.save(); g.translate(x + w / 2, y + h / 2); g.rotate(rot || 0); g.globalAlpha *= alpha === undefined ? 1 : alpha; g.translate(-w / 2, -h / 2);
-    g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(4, 6, w, h);
-    g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
-    g.fillStyle = hero.color; g.fillRect(3, 3, w - 6, h * 0.14);
-    g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, w - 3, h - 3);
-    g.fillStyle = '#fff8f0'; g.font = '800 ' + Math.round(h * 0.075) + 'px ' + fontD(); g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(nums.name, w / 2 + 6, 3 + h * 0.07, w - 30);
-    g.save(); g.translate(6, h * 0.19); g.beginPath(); g.rect(0, 0, w - 12, h * 0.42); g.clip(); art(() => ART.card.draw(g, cid, w - 12, h * 0.42, 0), 'cardart'); g.restore();
-    g.strokeStyle = '#140f2e'; g.lineWidth = 1.6; g.strokeRect(6, h * 0.19, w - 12, h * 0.42);
-    g.fillStyle = '#241a3a'; g.font = '700 ' + Math.round(h * 0.068) + 'px ' + fontU(); g.textBaseline = 'alphabetic';
+    // the card frame of the UI skin (HV_ART_AUDIO 9.2): a deep indigo body, a header band in the hero colour, a cream bevel round the art,
+    // the warm outline, and the cost as a sky-blue Breath puff orb
+    g.fillStyle = 'rgba(0,0,0,0.4)'; rrect(g, 4, 6, w, h, 7); g.fill();
+    rrect(g, 0, 0, w, h, 7); g.fillStyle = '#231a4f'; g.fill();
+    g.save(); rrect(g, 0, 0, w, h, 7); g.clip(); g.fillStyle = hero.color; g.fillRect(0, 0, w, h * 0.16); g.restore();
+    rrect(g, 1.5, 1.5, w - 3, h - 3, 6); g.strokeStyle = HV.line; g.lineWidth = 3; g.stroke();
+    g.fillStyle = HV.line; g.font = '900 ' + Math.round(h * 0.072) + 'px ' + ROUND; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(nums.name, w / 2 + 6, 2 + h * 0.08, w - 30);
+    rrect(g, 4, h * 0.18, w - 8, h * 0.46, 4); g.fillStyle = HV.cream; g.fill();
+    g.save(); g.translate(7, h * 0.18 + 3); g.beginPath(); g.rect(0, 0, w - 14, h * 0.46 - 6); g.clip(); art(() => ART.card.draw(g, cid, w - 14, h * 0.46 - 6, 0), 'cardart'); g.restore();
+    g.strokeStyle = HV.line; g.lineWidth = 1.4; g.strokeRect(7, h * 0.18 + 3, w - 14, h * 0.46 - 6);
+    g.fillStyle = HV.cream; g.font = '700 ' + Math.round(h * 0.068) + 'px ' + fontU(); g.textBaseline = 'alphabetic';
     const words = String(safe(() => DATA.cardPlain(cid), '') || '').split(' '); let line = '', ly = h * 0.72;
     words.forEach((wd) => { const tt = line ? line + ' ' + wd : wd; if (g.measureText(tt).width > w - 14 && line) { g.fillText(line, w / 2, ly); ly += h * 0.085; line = wd; } else line = tt; });
     if (line && ly < h - 4) g.fillText(line, w / 2, ly);
-    g.fillStyle = '#3a2589'; g.beginPath(); g.arc(4, 4, w * 0.13, 0, TAU); g.fill(); g.strokeStyle = '#5ff5ff'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = '#fff8f0'; g.font = '900 ' + Math.round(w * 0.17) + 'px ' + fontN(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(nums.cost), 4, 5);
+    g.beginPath(); g.arc(4, 4, w * 0.13, 0, TAU); g.fillStyle = '#7cc6ff'; g.fill(); g.strokeStyle = HV.cream; g.lineWidth = 2; g.stroke();
+    g.beginPath(); g.arc(4, 4, w * 0.13 + 1.6, 0, TAU); g.strokeStyle = HV.line; g.lineWidth = 1.4; g.stroke();
+    g.beginPath(); g.arc(1, 0, w * 0.04, 0, TAU); g.fillStyle = 'rgba(255,255,255,0.6)'; g.fill();
+    g.fillStyle = HV.line; g.font = '900 ' + Math.round(w * 0.17) + 'px ' + fontN(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(nums.cost), 4, 5);
     g.restore();
   }
   function paintCards(g, t) {
@@ -1829,23 +2102,23 @@
     // hero panel
     art(() => ART.hero.medallion(g, partyOf()[0], 46, 56, 24), 'medal');
     const hp = 60 - (T0 > 8.0 ? 2 : 0) - (T0 > 8.0 ? 0 : 0);
-    g.fillStyle = 'rgba(20,15,46,0.9)'; g.fillRect(78, 46, 120, 14); g.fillStyle = '#e8383d'; g.fillRect(79, 47, 118 * (hp / 60), 12);
-    label(g, 'HP ' + hp, 138, 53, 11, '#fff8f0');
+    g.fillStyle = 'rgba(20,15,46,0.9)'; rrect(g, 78, 46, 120, 14, 7); g.fill(); g.fillStyle = '#ff5fa2'; rrect(g, 79, 47, 118 * (hp / 60), 12, 6); g.fill();
+    label(g, 'HP ' + hp, 138, 53, 11, HV.cream);
     const block = T0 > 3.5 && T0 < 8.0 ? blk1 : T0 >= 8.0 && T0 < 8.4 ? Math.max(0, blk1 - prog(T0, 8.0, 8.4) * blk1) : 0;
     const hid = partyOf()[0];
     let hpose = 'idle', hpt = 0;
     [[1.4, 'attack'], [3.2, 'block'], [5.0, 'attack'], [8.0, 'hurt']].forEach((e) => { if (T0 >= e[0] && T0 < e[0] + 0.7) { hpose = e[1]; hpt = T0 - e[0]; } });
     art(() => ART.hero.draw(g, hid, { x: 92, y: 216, s: 0.46, pose: hpose, t, pt: hpt }), 'hero');
-    if (block > 0.4) { art(() => ART.icon.draw(g, 'stat', 'block', 160, 150, 28, {}), 'block'); label(g, String(Math.round(block)), 182, 150, 18, '#cbe6ff', 'left'); }
+    if (block > 0.4) { art(() => ART.icon.draw(g, 'stat', 'block', 160, 150, 28, {}), 'block'); label(g, String(Math.round(block)), 182, 150, 18, HV.sky, 'left'); }
     // energy orbs
     for (let i = 0; i < 3; i++) { const lit = i < energy; g.save(); g.globalAlpha = lit ? 1 : 0.28; art(() => ART.icon.draw(g, 'stat', 'energy', 264 + i * 42, 52, 38, {}), 'energy'); g.restore(); }
-    label(g, 'Breath', 306, 82, 13, '#c2fbff');
+    label(g, 'Breath', 306, 82, 13, HV.sky);
     // the foe: HP falls, its intent shows, it lunges on its turn
     const foeHp = Math.max(0, 24 - (T0 > 1.7 ? dmg1 : 0) - (T0 > 5.3 ? (cardNums(ids[2] || 'x').dmg || 4) : 0) + (T0 >= 9 ? 0 : 0));
     const lunge = T0 > 7.2 && T0 < 8.3 ? -Math.sin(Math.PI * prog(T0, 7.2, 8.3)) * 70 : 0;
     art(() => ART.enemy.draw(g, 'kappa', { x: 430 + lunge, y: 262, s: 0.82, pose: T0 > 7.3 && T0 < 8.0 ? 'attack' : 'idle', t, pt: T0 - 7.3 }), 'enemy');
-    g.fillStyle = 'rgba(20,15,46,0.9)'; g.fillRect(376, 100, 110, 12); g.fillStyle = '#ff8f80'; g.fillRect(377, 101, 108 * Math.max(0, foeHp) / 24, 10);
-    if (T0 < 7.2 || T0 > 9.0) { g.fillStyle = '#fffaf0'; g.strokeStyle = '#140f2e'; g.lineWidth = 3; g.beginPath(); g.arc(431, 76, 21, 0, TAU); g.fill(); g.stroke(); art(() => ART.icon.draw(g, 'intent', 'attack', 431, 76, 32, { n: 7 }), 'intent'); }
+    g.fillStyle = 'rgba(20,15,46,0.9)'; rrect(g, 376, 100, 110, 12, 6); g.fill(); g.fillStyle = '#ff9a2e'; rrect(g, 377, 101, 108 * Math.max(0, foeHp) / 24, 10, 5); g.fill();
+    if (T0 < 7.2 || T0 > 9.0) { g.fillStyle = HV.cream; g.strokeStyle = HV.line; g.lineWidth = 3; g.beginPath(); g.arc(431, 76, 21, 0, TAU); g.fill(); g.stroke(); art(() => ART.icon.draw(g, 'intent', 'attack', 431, 76, 32, { n: 7 }), 'intent'); }
     // the hand, cards flying out when played
     const fly = [prog(T0, 0.8, 1.7), prog(T0, 2.6, 3.5), prog(T0, 4.4, 5.3)];
     ids.forEach((cid, i) => {
@@ -1859,14 +2132,16 @@
       if (T0 >= 9) { a = back; y = HY + (1 - back) * 40; x = HX[i]; }
       if (a > 0.02) drawMiniCard(g, cid, x, y, cw * (1 - f * 0.4), ch * (1 - f * 0.4), (i - 1) * 0.07 * (1 - f), a);
     });
-    if (T0 > 1.6 && T0 < 2.5) label(g, String(dmg1), 420, 130 - prog(T0, 1.6, 2.5) * 30, 30, '#ffe45e');
-    if (T0 > 3.4 && T0 < 4.3) label(g, '+' + blk1, 130, 130 - prog(T0, 3.4, 4.3) * 20, 24, '#9fd6ff');
-    if (T0 > 8.0 && T0 < 8.9) label(g, '7', 100, 120 - prog(T0, 8.0, 8.9) * 26, 26, '#ff9a9a');
-    // End Turn
-    const press = T0 > 6.3 && T0 < 6.8;
-    g.save(); g.translate(0, press ? 3 : 0); g.fillStyle = '#a91d2c'; g.fillRect(392, 322, 112, 40); g.fillStyle = '#e8383d'; g.fillRect(392, 318 + (press ? 3 : 0), 112, 38); g.strokeStyle = '#ffd980'; g.lineWidth = 2; g.strokeRect(392, 318 + (press ? 3 : 0), 112, 38); g.restore();
-    label(g, 'End Turn', 448, 338 + (press ? 3 : 0), 16, '#fff8f0', 'center', '#5d0f1c');
-    if (tk && T0 > 9 && T0 < 10) label(g, 'new turn: draw 5', 260, 176, 17, '#ffe9a8');
+    if (T0 > 1.6 && T0 < 2.5) label(g, String(dmg1), 420, 130 - prog(T0, 1.6, 2.5) * 30, 30, HV.gold);
+    if (T0 > 3.4 && T0 < 4.3) label(g, '+' + blk1, 130, 130 - prog(T0, 3.4, 4.3) * 20, 24, HV.sky);
+    if (T0 > 8.0 && T0 < 8.9) label(g, '7', 100, 120 - prog(T0, 8.0, 8.9) * 26, 26, HV.pinkL);
+    // End Turn: a candy pink pill with a cream rim and the warm line, sinking 3 px when pressed
+    const press = T0 > 6.3 && T0 < 6.8, py = 318 + (press ? 3 : 0);
+    rrect(g, 392, 321, 112, 40, 20); g.fillStyle = HV.pinkD; g.fill();
+    rrect(g, 392, py, 112, 38, 19); g.fillStyle = HV.pink; g.fill(); g.lineWidth = 2.5; g.strokeStyle = HV.line; g.stroke();
+    rrect(g, 396, py + 4, 104, 30, 15); g.strokeStyle = 'rgba(255,248,236,0.8)'; g.lineWidth = 1.5; g.stroke();
+    label(g, 'End Turn', 448, py + 19, 16, HV.cream, 'center', HV.line);
+    if (tk && T0 > 9 && T0 < 10) label(g, 'new turn: draw 5', 260, 176, 17, HV.pinkL);
     illusFg(g, 0.45);
   }
 
@@ -1883,12 +2158,12 @@
       art(() => ART.enemy.draw(g, 'kappa', { x: 170, y: 176, s: 0.78, pose: info[0] === 'heavy' ? 'telegraph' : 'idle', t }), 'enemy');
       const pop = easeIO(prog(t % 1.7, 0, 0.25));
       g.save(); g.translate(258, 64); g.scale(0.7 + 0.3 * pop, 0.7 + 0.3 * pop);
-      g.fillStyle = '#fffaf0'; g.strokeStyle = '#140f2e'; g.lineWidth = 3.5; g.beginPath(); g.arc(0, 0, 34, 0, TAU); g.fill(); g.stroke();
+      g.fillStyle = HV.cream; g.strokeStyle = HV.line; g.lineWidth = 3.5; g.beginPath(); g.arc(0, 0, 34, 0, TAU); g.fill(); g.stroke();
       g.beginPath(); g.moveTo(-20, 26); g.lineTo(-34, 50); g.lineTo(-4, 34); g.closePath(); g.fill(); g.stroke();
       art(() => ART.icon.draw(g, 'intent', info[0], 0, 0, 52, { n: /attack|multi|heavy/.test(info[0]) ? 7 : undefined }), 'intent');
       g.restore();
-      label(g, info[1], 372, 60, 24, '#ffe9a8'); label(g, info[2], 372, 92, 15, '#f3e6c8');
-      label(g, 'over every enemy', 372, 150, 13, 'rgba(243,230,200,0.7)');
+      label(g, info[1], 372, 60, 24, HV.pinkL); label(g, info[2], 372, 92, 15, HV.cream);
+      label(g, 'over every enemy', 372, 150, 13, 'rgba(255,248,236,0.75)');
     });
     const grid = mk('div', { class: 'mn-legend' });
     INTENT_INFO.forEach((i) => grid.appendChild(mk('div', { class: 'mn-lg' }, UI.icon('intent', i[0], 30, {}), mk('span', {}, mk('b', { text: i[1] }), mk('i', { text: i[2] })))));
@@ -1899,7 +2174,6 @@
     const cv = canvasEl(w, h, 'mn-illus-cv');
     return { el: cv.c, update(dt, t) { if (!cv.g) return; cv.g.clearRect(0, 0, w, h); cv.g.save(); art(() => paint(cv.g, t), 'howto'); cv.g.restore(); } };
   }
-  function illusBgSized(g, w, h, sky) { const tk = T(); if (tk) tk.sky(g, 0, 0, w, h, sky); else { g.fillStyle = '#1a1340'; g.fillRect(0, 0, w, h); } if (tk) tk.vignette(g, w, h, { color: '#07051a', alpha: 0.45, inner: 0.5 }); }
 
   // ---- 6. gems: the same card before and after a gem drops into its slot
   function buildGems() {

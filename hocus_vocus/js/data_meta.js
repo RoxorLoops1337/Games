@@ -1,5 +1,6 @@
 // Hocus Vocus: data_meta.js: Stickers (achievements), Encores, tips and the lore (Tour Diary entries, hero entries and combat barks).
-// Data only (DESIGN 4.10, CONTENT_SPEC 6): one IIFE that registers into DATA.achievements, DATA.trials, DATA.tips and DATA.lore.
+// Data only (DESIGN 4.10, CONTENT_SPEC 6): one IIFE that registers into DATA.achievements, DATA.trials, DATA.tips and DATA.lore,
+// and sets the frozen presentation table DATA.outfits (see OUTFITS below).
 // No functions, no clock, no unseeded randomness, no em or en dashes. Checked by DATA.validate and DATA.audit('meta') and by
 // tests/hocus_vocus_narrative.test.mjs.
 //
@@ -17,6 +18,10 @@
 //
 // TIPS (30, at most 110 characters). Mechanics only, no hand-typed numbers that tuning could change. Tip N keeps the place of the
 //   old tip N, so the per-screen tip pickers (and the How to Play regexes) keep their meaning.
+//
+// OUTFITS (DATA.outfits, bible 7.1, HV_ART_AUDIO 2.11). A plain, frozen presentation table {heroId: {name, sticker}}: the costume a
+//   hero can wear and the Sticker that unlocks it. Read only by ui.js (the viewer's choice, kept in its own key hv_skins_v1) and the
+//   menu and end screens; never by RUN, COMBAT, MAP, META or the bot. Andy (raiga) has no outfit yet.
 //
 // LORE. Tour Diary entries {id, title <= 40, text <= 700}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory,
 //   defeat, hero_<id> x4. Plain paragraphs of prose with no line breaks (the story screen types them out). Shared entries never name
@@ -36,6 +41,13 @@
 //      sing. Flawless turns out to be that first little filter; it sings one real, wobbly note, and the Gloss softens into ordinary
 //      stage shine that makes the lights sparkle. The tour goes on.
 (() => {
+  // ------------------------------------------------------------------ Outfits (presentation only: nothing reads it to play)
+  DATA.outfits = Object.freeze({
+    hanae: Object.freeze({ name: 'Unicorn Onesie', sticker: 'petal_and_steel' }),
+    kuro: Object.freeze({ name: 'Monster Onesie', sticker: 'ink_and_insight' }),
+    suzu: Object.freeze({ name: 'Goat Suit', sticker: 'moonlit_vigil' }),
+  });
+
   // ------------------------------------------------------------------ Stickers (achievements)
   DATA.add('achievements', {
     ch1_clear: { name: 'Mics Returned', text: 'Defeat Kraki, the Karaoke Kraken, and finish the first act.', stat: { k: 'boss1Kills', gte: 1 }, reward: { inkstones: 10 } },

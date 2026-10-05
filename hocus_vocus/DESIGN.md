@@ -125,8 +125,9 @@ js/data_text.js       (DATA+)   text generation: cardHtml, gemText, ...
 js/data_cards_hanae.js  data_cards_kuro.js  data_cards_suzu.js  data_cards_raiga.js  data_cards_shared.js
 js/data_enemies_1.js  data_enemies_2.js  data_enemies_3.js
 js/data_relics.js  data_gems.js  data_events.js  data_meta.js
+js/data_samples.js    (DATA+)   DATA.SAMPLES: the owners' optional recordings, ships empty (read by audio.js; audio/README.md)
 js/art.js             ART       toolkit + style helpers + sprite cache + working placeholders for EVERY ART member
-js/art_heroes.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_cards.js
+js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_cards.js
 js/art_icons.js  art_scenes.js  art_map.js  art_fx.js
 js/audio.js           AUDIO     WebAudio SFX + procedural music
 js/combat.js          COMBAT    combat engine (pure logic, event log)
@@ -857,10 +858,12 @@ screen can be built and tested before the real art lands. Real art files REPLACE
 ART.tk         toolkit (art.js): palette (ART.tk.pal), inkStroke, inkPath, cel fill helpers, halftone, sparkle, eye, hair ribbons, paperGrain, opt {reduceMotion, quality}
 ART.res        backing-store multiplier (= UI.px)      ART.has(kind, id) -> bool (true only for real, non-placeholder art)      ART.sheet(name, fn) registers a gallery sheet into the registry ART.sheets (a plain object {name: fn}, or a Map; gallery.html reads it, sets ART.res and calls ART.sprite.clear(), so art.js keeps those as plain members) and throws on a duplicate name
 ART.sprite(key, w, h, drawFn) -> canvas    // memoised offscreen canvas of (w*ART.res, h*ART.res) with the context pre-scaled: drawFn paints in w x h, callers ctx.drawImage(spr, x, y, w, h); LRU cap 400; ART.sprite.clear()
-ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow})   // origin at feet centre, nominal height 250 * s
-ART.hero.portrait(ctx, heroId, {x, y, w, h, expr, t})   // bust; x,y = top-left; composed for 3:4, other ratios scale to cover and crop keeping the face; expr in LISTS.expressions
-ART.hero.medallion(ctx, heroId, x, y, r)                 // round face icon, x,y = centre
-ART.hero.bounds(heroId) -> {w, h, head:{x,y}, hand:{x,y}, feet:{x,y}, weapon:{x,y}}   ART.hero.poseMs(pose) -> natural length in ms
+ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow, shadow, skin?, gloss?, cache?})   // origin at feet centre, nominal height 250 * s
+ART.hero.portrait(ctx, heroId, {x, y, w, h, expr, t, skin?})   // bust; x,y = top-left; composed for 3:4, other ratios scale to cover and crop keeping the face; expr in LISTS.expressions
+ART.hero.medallion(ctx, heroId, x, y, r, skin?)          // round face icon, x,y = centre
+ART.hero.bounds(heroId) -> {w, h, head:{x,y}, hand:{x,y}, feet:{x,y}, weapon:{x,y}, top}   ART.hero.poseMs(pose) -> natural length in ms
+ART.hero.pointAt keyPt warm audit expressions ids, and (Hocus Vocus P3) outfits(map?) skins(heroId) castId(heroId, skin): art_cast.js, an adapter over
+               the owners' chibi cast kit ART.rj (art_cast_kit.js; it also holds the shared foe kit ART.rj.foe); ART.cast draws Jordan (HV_ART_AUDIO 2)
 ART.enemy.register(id, { draw(ctx, o), bounds:{w,h,head:{x,y},body:{x,y},feet:{x,y}} })   // art_enemies_N.js call this once per id of verse N (the 3 files are disjoint by DATA.enemies[id].chapter)
 ART.enemy.draw(ctx, enemyId, {x, y, s, pose, t, pt, flip, hpPct, phase, alpha, glow})
 ART.enemy.bounds(enemyId) -> same shape as register      ART.enemy.poseMs(pose)
@@ -1177,7 +1180,7 @@ Ownership by wave:
 |---|---|
 | 0 (done by the lead) | `util.js data.js index.html gallery.html DESIGN.md ART_BIBLE.md CONTENT_SPEC.md`, `tests/hocus_vocus_lib.mjs hocus_vocus_all.mjs hocus_vocus_hygiene.test.mjs hocus_vocus_data.test.mjs hocus_vocus_lib.test.mjs` (the last one is the loader's own regression suite), `tools/hocus_vocus/shot.mjs` |
 | 1 logic | `data_text.js combat.js` (one engineer); `map.js`; `run.js meta.js`; `data_cards_hanae.js`; `data_cards_kuro.js`; `data_cards_suzu.js`; `data_cards_raiga.js`; `data_enemies_1.js`; `data_enemies_2.js`; `data_enemies_3.js`; `data_relics.js data_gems.js data_cards_shared.js`; `data_events.js data_meta.js` |
-| 1 presentation | `art.js art_heroes.js` (art director); `audio.js`; `ui.js main.js css/base.css` |
+| 1 presentation | `art.js art_heroes.js` (art director; replaced in Hocus Vocus P3 by `art_cast_kit.js art_cast.js`, the owners' chibi cast); `audio.js`; `ui.js main.js css/base.css` |
 | 2 art | `art_enemies_1.js`; `art_enemies_2.js`; `art_enemies_3.js`; `art_cards.js`; `art_icons.js`; `art_scenes.js art_map.js`; `art_fx.js` |
 | 2 screens | `scene.js`; `screen_combat.js css/combat.css`; `screen_map.js css/map.css`; `screen_menu.js css/menu.css`; `screen_node.js css/node.css`; `screen_end.js css/end.css tutorial.js` |
 | Echo re-theme (2026-10) | see `ECHO_PLAN.md`: player-facing words, art and audio only; every internal id kept (1.1) |

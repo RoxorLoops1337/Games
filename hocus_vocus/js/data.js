@@ -340,7 +340,7 @@ const DATA = (() => {
     },
     kuro: {
       id: 'kuro', name: 'RoxorLoops', title: 'The Beatbox Wizard', prefer: 'back', res: 'sumi',
-      color: '#7a6bff', accent: '#5ff5ff', dark: '#1a1740', maxHp: 68,
+      color: '#3fcf6a', accent: '#c6ff3d', dark: '#0f3a1e', maxHp: 68,
       blurb: 'A beatboxer who plays a whole band with one mouth. He keeps the groove from the back, and his beats get stuck in every enemy\'s head.',
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
       passives: [{ id: 'steady_hand', name: 'In the Pocket', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
@@ -349,7 +349,7 @@ const DATA = (() => {
     },
     suzu: {
       id: 'suzu', name: 'RawClaw', title: 'The Sound Alchemist', prefer: 'back', res: 'ward',
-      color: '#a9c4ff', accent: '#e8424f', dark: '#4a5c9c', maxHp: 68,
+      color: '#a77bff', accent: '#e9ddff', dark: '#3b2470', maxHp: 68,
       blurb: 'The duo\'s producer, a good friend and a beatboxer too. A little reverb, a little delay, a filter here and there, and the whole fight sounds better.',
       rows: { front: { blockAdd: 1, thorns: 2 }, back: { regen: 2 } },
       passives: [{ id: 'moonlit_rite', name: 'Always Rolling', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],

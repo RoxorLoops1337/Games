@@ -411,6 +411,31 @@ await t.test('gameOver: Try Again starts a new run with the same heroes and tria
   await click(g, $(g, '.go-title-btn'));
   t.eq(UI.currentName, 'title', 'Title');
 });
+// P3 3C (bible 7.1, HV_ART_AUDIO 2.11): a Sticker that unlocks an outfit adds a "New outfit: <name>" card in the unlock style, its art the hero
+// portrait in the outfit, smiling. Andy's Sticker unlocks no outfit, so it adds no card.
+await t.test('end screens: the New outfit card follows the Sticker that unlocks it, drawn with the portrait in the outfit', async () => {
+  const P = UI.screens.gameOver._t;
+  const ents = P.unlockEntries({ newAchievements: ['ch1_clear', 'petal_and_steel', 'thunder_and_laughter', 'moonlit_vigil'] }, {});
+  t.eq(ents.map((e) => e.kind).join(','), 'ach,ach,outfit,ach,ach,outfit', 'each outfit card sits right under its Sticker; Andy\'s Sticker has none');
+  const outfits = ents.filter((e) => e.kind === 'outfit');
+  t.deep(outfits.map((e) => e.title), ['New outfit: ' + DATA.outfits.hanae.name, 'New outfit: ' + DATA.outfits.suzu.name], 'titled New outfit: Unicorn Onesie and Goat Suit (bible 7.1)');
+  t.deep(outfits.map((e) => e.id), ['hanae', 'suzu'], 'for Jasmin and RawClaw'); t.ok(outfits.every((e) => e.seal === 'NEW' && /hero select\.$/.test(e.text)), 'a NEW seal and a line that says where to pick it');
+  t.ok(outfits.every((e) => /^[\x20-\x7e]+$/.test(e.text + e.title) && !DASH.test(e.text + e.title)), 'printable ASCII, no dashes');
+  g._run(`globalThis.__portraits = []; (function () { const p = ART.hero.portrait; ART.hero.portrait = function (ctx, id, o) { __portraits.push(id + ':' + (o && o.skin) + ':' + (o && o.expr)); return p.apply(this, arguments); }; })();`);
+  const sm = RUN.summary(LOSE.R);
+  await UI.go('gameOver', { summary: sm, record: { inkstones: 15, newAchievements: ['ink_and_insight'], heroesUnlocked: [] }, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
+  const card = $('.s-gameOver .en-unlock.k-outfit');
+  t.ok(card, 'the game over list shows the outfit card');
+  t.eq(txt(card.querySelector('.en-unlock-t')), 'New outfit: ' + DATA.outfits.kuro.name, 'New outfit: Monster Onesie');
+  t.ok(card.querySelector('.en-unlock-art canvas'), 'with a portrait canvas');
+  t.ok(g._run('__portraits.slice()').indexOf('kuro:skin:smile') >= 0, 'drawn by ART.hero.portrait in the outfit (skin), smiling');
+  t.ok(/\.en-unlock\.k-outfit\s*\{/.test(CSS) && /\.en-unlock-art\s*\{/.test(CSS), 'css: the outfit card and its art have their look in end.css');
+  await UI.go('victory', { summary: Object.assign({}, sm, { victory: true }), record: { inkstones: 15, newAchievements: ['petal_and_steel'], heroesUnlocked: [] }, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
+  await click(g, btnByText(g, /^Skip/)); await settle(g);
+  t.ok(/New outfit: Unicorn Onesie/.test(txt($('.s-victory .vc-newcard'))), 'the victory showcase lists it too');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
 await t.test('gameOver: unlock entries from a record, the achievements, a hero, a trial, and no record', async () => {
   const P = UI.screens.gameOver._t;
   const rec = { inkstones: 33, bonus: 10, total: 120, newAchievements: ['ch1_clear', 'nonexistent_achievement'], newTrial: 2, heroesUnlocked: ['suzu'] };

@@ -1295,6 +1295,103 @@ await t.test('UI.anchorEl finds tutorial anchors by name or selector', async () 
   t.ok(g.UI.anchorEl('hand'), 'by anchor name'); t.ok(g.UI.anchorEl('[data-tut="hand"]'), 'by selector'); t.eq(g.UI.anchorEl('energy'), null, 'null when absent'); t.eq(g.UI.anchorEl(''), null, 'null for empty');
 });
 
+// ==================================================================================================== outfits (HV_ART_AUDIO 2.11, bible 7.1; P3 3C)
+// The viewer's costume per hero lives in its own key hv_skins_v1, read and written by ui.js alone. data_meta.js is left out of this suite, so each
+// boot sets the table it ships (DATA.outfits) and fakes the two ends: META.achievements (the Sticker that unlocks an outfit) and ART.hero.outfits.
+const OUTFITS = { hanae: { name: 'Unicorn Onesie', sticker: 'petal_and_steel' }, kuro: { name: 'Monster Onesie', sticker: 'ink_and_insight' }, suzu: { name: 'Goat Suit', sticker: 'moonlit_vigil' } };
+function outfitBoot(opts = {}, stickers = []) {
+  const g = fresh(opts);
+  g.DATA.outfits = OUTFITS;
+  g._run(`globalThis.__pushed = []; globalThis.__achs = ${JSON.stringify(stickers.map((id) => ({ id, done: true })))};
+    META.achievements = function () { return __achs.slice(); };
+    ART.hero.outfits = function (m) { __pushed.push(JSON.stringify(m)); return m; };
+    ART.hero.medallion = function (ctx, id, x, y, r, skin) { __log.medals.push(id + ':' + skin); };`);
+  g.pushed = () => g._run('__pushed.map(function (s) { return JSON.parse(s); })');
+  return g;
+}
+const STAGE4 = { hanae: 'stage', kuro: 'stage', suzu: 'stage', raiga: 'stage' };
+
+await t.test('outfits: the hv_skins_v1 store keeps only known heroes and the two values, junk and other heroes are ignored, Andy has no outfit', () => {
+  const g = outfitBoot({ store: { hv_skins_v1: JSON.stringify({ hanae: 'skin', kuro: 'fancy', suzu: 7, raiga: 'skin', zed: 'skin', __proto__: { x: 1 } }) } }, ['petal_and_steel', 'ink_and_insight', 'moonlit_vigil']);
+  g.UI.init();
+  t.deep(g.UI.outfit.list(), ['hanae', 'kuro', 'suzu'], 'three heroes have an outfit (DATA.outfits order follows DATA.LISTS.heroIds)');
+  t.deep(g.UI.outfit.effective(), { hanae: 'skin', kuro: 'stage', suzu: 'stage', raiga: 'stage' }, 'only a stored skin with a done Sticker is worn; fancy, 7, Andy and zed are dropped');
+  t.eq(g.UI.outfit.name('kuro'), 'Monster Onesie', 'the outfit name comes from DATA.outfits'); t.eq(g.UI.outfit.name('raiga'), '', 'Andy has none');
+  t.eq(g.UI.outfit.set('raiga', 'skin'), false, 'Andy cannot be given an outfit'); t.eq(g.UI.outfit.set('hanae', 'sparkly'), false, 'an unknown value is refused'); t.eq(g.UI.outfit.set('zed', 'skin'), false, 'an unknown hero is refused');
+  t.deep(g.pushed()[0], { hanae: 'skin', kuro: 'stage', suzu: 'stage', raiga: 'stage' }, 'UI.init hands the effective map to ART.hero.outfits');
+  ['not json{', '["skin","skin"]', 'null', '42', '"skin"', ''].forEach((raw) => {
+    const h = outfitBoot({ store: { hv_skins_v1: raw } }, ['petal_and_steel', 'ink_and_insight', 'moonlit_vigil']);
+    h.UI.init();
+    t.deep(h.UI.outfit.effective(), STAGE4, 'garbled storage (' + JSON.stringify(raw) + ') means stage clothes for everyone');
+    t.eq(errCount(h), 0, 'and no console error');
+  });
+});
+
+await t.test('outfits: a locked outfit is refused and never worn; a Sticker earned later unlocks it (META.bus achievement re-pushes the map)', () => {
+  const g = outfitBoot({ store: { hv_skins_v1: JSON.stringify({ hanae: 'skin' }) } }, []);
+  g.UI.init();
+  t.eq(g.UI.outfit.chosen('hanae'), 'skin', 'the stored choice reads back');
+  t.eq(g.UI.outfit.of('hanae'), 'stage', 'but a locked outfit is never worn: stage clothes'); t.ok(!g.UI.outfit.unlocked('hanae'), 'locked until In Full Bloom is done');
+  t.eq(g.UI.outfit.set('kuro', 'skin'), false, 'picking a locked outfit is refused');
+  t.deep(JSON.parse(g._store.hv_skins_v1), { hanae: 'skin' }, 'and nothing was written');
+  const n = g.pushed().length;
+  g._run('__achs.push({ id: "petal_and_steel", done: true }); META.bus.emit("achievement", { id: "petal_and_steel" });');
+  t.eq(g.pushed().length, n + 1, 'a Sticker earned pushes the map again');
+  t.eq(g.pushed()[n].hanae, 'skin', 'and the stored Unicorn Onesie is worn now');
+  g._run('__achs.push({ id: "ink_and_insight", done: false });');
+  t.ok(!g.UI.outfit.unlocked('kuro'), 'a Sticker that is not done unlocks nothing');
+});
+
+await t.test('outfits: a pick is stored, pushed to ART at once and survives a reload; every screen enters with the current map; medallions follow it', async () => {
+  const g = outfitBoot({}, ['ink_and_insight']);
+  g.UI.init();
+  t.ok(!('hv_skins_v1' in g._store), 'nothing is written until the viewer picks');
+  t.eq(g.UI.outfit.set('kuro', 'skin'), true, 'an unlocked outfit is picked');
+  t.deep(JSON.parse(g._store.hv_skins_v1), { kuro: 'skin' }, 'stored as {heroId: "skin"} in hv_skins_v1');
+  t.eq(g.pushed().pop().kuro, 'skin', 'and pushed to ART.hero.outfits at once');
+  g.UI.medallion('kuro', 30); g.UI.medallion('kuro', 30, 'stage');
+  t.deep(g.log.medals.slice(-2), ['kuro:skin', 'kuro:stage'], 'UI.medallion draws the viewer outfit, or the one it is asked for');
+  g.UI.outfit.set('kuro', 'stage'); g.UI.medallion('kuro', 30);
+  t.eq(g.log.medals[g.log.medals.length - 1], 'kuro:stage', 'a new pick never shows a stale cached face');
+  g.UI.outfit.set('kuro', 'skin');
+  const n = g.pushed().length;
+  g.UI.screens.a = { enter() {} };
+  await g.UI.go('a');
+  t.eq(g.pushed().length, n + 1, 'every screen enters with the map pushed again (a tour may have earned a Sticker)');
+  const h = outfitBoot({ store: { hv_skins_v1: g._store.hv_skins_v1 } }, ['ink_and_insight']);
+  h.UI.init();
+  t.eq(h.UI.outfit.of('kuro'), 'skin', 'a reload wears the stored outfit');
+  t.eq(errCount(g) + errCount(h), 0, 'no console errors');
+});
+
+await t.test('outfits: storage that cannot be read or written means stage clothes and never throws; the pick holds for this visit', () => {
+  ['all', 'access', 'set'].forEach((mode) => {
+    const g = outfitBoot({ failStorage: mode, store: { hv_skins_v1: JSON.stringify({ hanae: 'skin', kuro: 'skin', suzu: 'skin' }) } }, ['petal_and_steel', 'ink_and_insight', 'moonlit_vigil']);
+    let threw = null;
+    try { g.UI.init(); } catch (e) { threw = e; }
+    t.eq(threw, null, mode + ': UI.init does not throw');
+    if (mode !== 'set') t.deep(g.UI.outfit.effective(), STAGE4, mode + ': unreadable storage means stage clothes');
+    let ok = null;
+    try { ok = g.UI.outfit.set('suzu', 'skin'); } catch (e) { ok = e; }
+    t.eq(ok, true, mode + ': a pick does not throw');
+    t.eq(g.UI.outfit.of('suzu'), 'skin', mode + ': and holds for this visit');
+    t.eq(errCount(g), 0, mode + ': no console error');
+  });
+});
+
+await t.test('outfits: nobody but ui.js reads the key; RUN, COMBAT, MAP, META, GAME, DATA and the bot never see an outfit', async () => {
+  const fs = await import('node:fs'), path = await import('node:path'), { DIR, ROOT } = await import('./hocus_vocus_lib.mjs');
+  const logic = ['util', 'data', 'combat', 'map', 'run', 'meta', 'main'].map((f) => path.join(DIR, 'js', f + '.js'));
+  const botDir = path.join(ROOT, 'tools', 'hocus_vocus', 'bot');
+  const bots = [path.join(ROOT, 'tools', 'hocus_vocus', 'bot.mjs')].concat(fs.existsSync(botDir) ? fs.readdirSync(botDir).filter((n) => /\.m?js$/.test(n)).map((n) => path.join(botDir, n)) : []);
+  logic.concat(bots).filter((f) => fs.existsSync(f)).forEach((f) => {
+    const src = fs.readFileSync(f, 'utf8');
+    t.ok(!/hv_skins|outfits?\b/i.test(src), path.basename(f) + ' never names hv_skins_v1 or an outfit');
+  });
+  const js = fs.readdirSync(path.join(DIR, 'js')).filter((n) => /\.js$/.test(n) && n !== 'ui.js');
+  t.deep(js.filter((n) => /['"`]hv_skins_v1['"`]/.test(fs.readFileSync(path.join(DIR, 'js', n), 'utf8'))), [], 'no other file holds the key as a string: ui.js is its only reader and writer');
+});
+
 // ==================================================================================================== smoke against the real modules that exist
 await t.test('smoke: with every real module that exists, the gallery and placeholders open and no console.error comes from the UI', async () => {
   const g = boot({ only: ['ui', 'main'], autoboot: true, search: '?debug=1' });

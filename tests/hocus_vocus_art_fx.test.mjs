@@ -16,7 +16,7 @@ import { boot, harness } from './hocus_vocus_lib.mjs';
 const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 
 const t = harness('hocus_vocus art fx');
-const api = boot({ only: ['util', 'data*', 'art', 'art_heroes', 'art_fx'] });
+const api = boot({ only: ['util', 'data*', 'art', 'art_cast_kit', 'art_cast', 'art_fx'] });
 const { ART, DATA } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art_fx loads without errors: ' + JSON.stringify(api._errors));
@@ -235,11 +235,11 @@ t.test('numberPop: kinds look different, digits pop one after the other', () => 
 });
 
 t.test('sfxText: the text and the angle change the picture', () => {
-  const a = recS('sfxText', { x: 600, y: 300, text: 'ZAN!' }, 0.3), b = recS('sfxText', { x: 600, y: 300, text: 'DON!' }, 0.3);
-  t.ok(a !== b, 'ZAN! and DON! differ');
-  t.ok(a !== recS('sfxText', { x: 600, y: 300, text: 'ZAN!', ang: -0.2 }, 0.3), 'ang tilts it');
-  t.eq(recS('sfxText', { x: 600, y: 300 }, 0.3), a, 'the default text is ZAN!');
-  t.ok(recS('sfxText', { x: 600, y: 300, text: 'ZAN!' }, 0.12) !== recS('sfxText', { x: 600, y: 300, text: 'ZAN!' }, 0.3), 'it animates');
+  const a = recS('sfxText', { x: 600, y: 300, text: 'LA!' }, 0.3), b = recS('sfxText', { x: 600, y: 300, text: 'BOOM!' }, 0.3);
+  t.ok(a !== b, 'LA! and BOOM! differ');
+  t.ok(a !== recS('sfxText', { x: 600, y: 300, text: 'LA!', ang: -0.2 }, 0.3), 'ang tilts it');
+  t.eq(recS('sfxText', { x: 600, y: 300 }, 0.3), a, 'the default text is LA! (the first hit word of bible 4.10)');
+  t.ok(recS('sfxText', { x: 600, y: 300, text: 'LA!' }, 0.12) !== recS('sfxText', { x: 600, y: 300, text: 'LA!' }, 0.3), 'it animates');
 });
 
 t.test('geometry effects follow their end points', () => {

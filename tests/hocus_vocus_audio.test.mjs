@@ -1,8 +1,12 @@
-// Audio suite: js/audio.js. Composition is pure and is checked as music theory (scales, registers, loops, cadences, structure);
-// sfx recipes are checked as plain data; the engine (graph, scheduler, crossfades, ducking, suspend, intensity layers) runs against the
-// loader's recording WebAudio stub with the virtual clock; every voice and recipe is also scheduled into an OfflineAudioContext.
-// What a stub cannot say (how it sounds, how loud it is) is measured in a real browser by an offline render, outside this suite.
-import { boot, harness } from './hocus_vocus_lib.mjs';
+// Audio suite: js/audio.js, the Hocus Vocus band. Composition is pure and is checked as music theory (scales, registers, loops,
+// cadences, structure, the beat grids, the quoted themes, the quant groove); sfx recipes and the per-hero variants are checked as plain
+// data; the engine (graph, scheduler, crossfades, ducking, suspend, intensity layers) runs against the loader's recording WebAudio
+// stub with the virtual clock; every voice and recipe is also scheduled into an OfflineAudioContext; block S drives the owners'
+// sample hook (DATA.SAMPLES) with a spy in place of the network. What a stub cannot say (how it sounds, how loud it is) is measured in
+// a real browser by tools/hocus_vocus/mix.mjs, outside this suite.
+import fs from 'node:fs';
+import path from 'node:path';
+import { boot, harness, DIR, stripJs, lineOf } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus audio');
 const fresh = (opts) => boot({ only: ['audio'], ...(opts || {}) });
@@ -11,9 +15,20 @@ const { AUDIO, DATA } = g;
 const L = DATA.LISTS;
 
 // ------------------------------------------------------------------------------------------------ helpers
-const SCALE = { 'in-sen': [0, 1, 5, 7, 10], yo: [0, 2, 5, 7, 9], 'miyako-bushi': [0, 1, 5, 7, 8] };
+// HV_ART_AUDIO 10.3: diatonic keys for the score, the pentatonic subsets for the melodic reveal
+const SCALE = {
+  major: [0, 2, 4, 5, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], minor: [0, 2, 3, 5, 7, 8, 10],
+  lydian: [0, 2, 4, 6, 7, 9, 11], penta: [0, 2, 4, 7, 9], pentaMinor: [0, 3, 5, 7, 10],
+};
+const SCORE_SCALES = ['major', 'mixolydian', 'dorian', 'minor', 'lydian'];
+const pentaOf = (s) => (s === 'dorian' || s === 'minor' ? SCALE.pentaMinor : SCALE.penta);
+const BAND = ['kick', 'snare', 'hat', 'throat', 'scratch', 'croon', 'choir', 'synth', 'keys', 'ebass', 'glock', 'uke', 'whistle', 'clap', 'pad', 'arp', 'vox', 'crackle'];
+const MONO = ['croon', 'whistle', 'throat'];
+// a test-local fixture: the Echowake instruments the fork removed (HV_ART_AUDIO 10.2), asserted absent
+const GONE = ['koto', 'shamisen', 'biwa', 'shakuhachi', 'taiko', 'hyoshigi', 'rin'];
 const INTENSE = ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final'];   // layered by AUDIO.intensity (fights)
-const WOKEN = ['map1', 'map2', 'map3'];                                                         // layered by AUDIO.awake (the Hush)
+const WOKEN = ['map1', 'map2', 'map3'];                                                         // layered by AUDIO.awake (the map mute)
+const QUANT = ['map3', 'combat3', 'boss3', 'final'];                                            // the Gloss's groove: dead on the grid at drive 0
 const LAYERED = INTENSE.concat(WOKEN);
 const mod = (a, n) => ((a % n) + n) % n;
 const near = (a, b, eps) => Math.abs(a - b) <= eps;
@@ -34,15 +49,17 @@ const barSig = (notes, bar, bpb) => notes.filter((n) => Math.floor(n.t / bpb + 1
 // ------------------------------------------------------------------------------------------------ 1. contract
 t.test('the module loads cleanly and exposes the documented API', () => {
   t.eq(g._errors.length, 0, 'no load errors: ' + JSON.stringify(g._errors));
-  for (const fn of ['init', 'sfx', 'music', 'setVolume', 'volume', 'duck', 'suspend', 'resume', 'intensity', 'list', 'preview', 'compose', 'sfxRecipe', 'graph', 'render', 'renderSfx', 'voice', 'debug']) {
+  for (const fn of ['init', 'sfx', 'music', 'setVolume', 'volume', 'duck', 'suspend', 'resume', 'intensity', 'list', 'preview', 'samples', 'compose', 'sfxRecipe', 'graph', 'render', 'renderSfx', 'voice', 'debug', 'wake', 'awake', 'options', 'hexNote', 'songDegrees', 'wakeDegree']) {
     t.eq(typeof AUDIO[fn], 'function', 'AUDIO.' + fn + ' is a function');
   }
   t.eq(AUDIO.ready, false, 'not ready before init');
   t.eq(AUDIO.current, null, 'no current track before anything is requested');
   t.eq(AUDIO.MUSIC_SCALE, 0.55, 'MUSIC_SCALE is the documented 0.55');
-  for (const v of ['koto', 'shamisen', 'biwa', 'shakuhachi', 'taiko', 'hyoshigi', 'rin', 'pad']) t.ok(AUDIO.VOICES.indexOf(v) >= 0, 'voice ' + v);
-  t.deep(Object.keys(AUDIO.SCALES).sort(), ['in-sen', 'miyako-bushi', 'yo'], 'the three Japanese scales');
+  t.deep(AUDIO.VOICES.slice().sort(), BAND.slice().sort(), 'the band of HV_ART_AUDIO 10.2: the vocal and beatbox voices plus the kept pad, arp, vox and crackle');
+  for (const v of GONE) t.ok(AUDIO.VOICES.indexOf(v) < 0, 'the old instrument ' + v + ' is gone from the fork');
+  t.deep(Object.keys(AUDIO.SCALES).sort(), Object.keys(SCALE).sort(), 'five diatonic scales and the two pentatonic subsets');
   for (const [k, v] of Object.entries(SCALE)) t.deep(AUDIO.SCALES[k], v, 'scale ' + k);
+  t.deep(Object.keys(AUDIO.MOTIFS).sort(), ['andy', 'human', 'jasmin', 'jingle', 'rawclaw'], 'the musical identities of 10.4');
 });
 t.test('list() mirrors the closed lists in DATA.LISTS', () => {
   t.deep(AUDIO.list(), { sfx: L.sfx, music: L.music }, 'list()');
@@ -195,7 +212,7 @@ t.test('every track id composes to a frozen, complete description', () => {
     t.ok(d && d.id === id, id + ' composes');
     t.ok(Object.isFrozen(d) && Object.isFrozen(d.tracks) && Object.isFrozen(d.tracks[0].notes), id + ' is frozen');
     t.ok(d.tempo >= 50 && d.tempo <= 170, id + ' tempo ' + d.tempo);
-    t.ok(SCALE[d.scale], id + ' scale ' + d.scale);
+    t.ok(SCORE_SCALES.indexOf(d.scale) >= 0, id + ' is in a diatonic key: ' + d.scale);
     t.deep(d.scaleIntervals, SCALE[d.scale], id + ' scale intervals');
     t.ok(Number.isInteger(d.tonic) && d.tonic >= 36 && d.tonic <= 64, id + ' tonic ' + d.tonic);
     t.ok(typeof d.key === 'string' && d.key.length >= 1, id + ' key name');
@@ -244,17 +261,18 @@ t.test('every note lies inside its scale, its register and the loop', () => {
     t.eq(bad.length, 0, bad.slice(0, 4).join(' | '));
   }
 });
-t.test('notes are sorted, monophonic instruments never overlap, percussion is tuned to the key', () => {
+t.test('notes are sorted, sung and blown voices never overlap, the beat is tuned to the key', () => {
+  const HITS = { kick: [undefined, 'boots'], snare: ['pf', 'k', 'cats'], hat: [undefined, 'open'], scratch: [undefined], clap: [undefined, 'snap'] };
   for (const id of L.music) {
     const d = descs[id];
     d.tracks.forEach((tr, i) => {
       for (let k = 1; k < tr.notes.length; k++) {
         if (tr.notes[k].t < tr.notes[k - 1].t - 1e-9) { t.ok(false, id + ' track ' + i + ' notes are not sorted'); break; }
-        if (tr.voice === 'shakuhachi' && tr.notes[k].t < tr.notes[k - 1].t + tr.notes[k - 1].dur - 1e-6) { t.ok(false, id + ' track ' + i + ' shakuhachi notes overlap at ' + tr.notes[k].t); break; }
+        if (MONO.indexOf(tr.voice) >= 0 && tr.notes[k].t < tr.notes[k - 1].t + tr.notes[k - 1].dur - 1e-6) { t.ok(false, id + ' track ' + i + ' ' + tr.voice + ' notes overlap at ' + tr.notes[k].t); break; }
       }
-      if (tr.voice === 'taiko') {
-        const okPcs = [mod(d.tonic, 12), mod(d.tonic + 7, 12)];
-        t.ok(tr.notes.every((n) => okPcs.indexOf(mod(n.midi, 12)) >= 0 && (n.hit === 'don' || n.hit === 'ka')), id + ' taiko is tuned to the tonic and fifth with don or ka hits');
+      if (tr.role === 'beat') {
+        t.ok(HITS[tr.voice] !== undefined, id + ' beat track ' + i + ' is a kit voice: ' + tr.voice);
+        t.ok(tr.notes.every((n) => mod(n.midi - d.tonic, 12) === 0 && (HITS[tr.voice] || []).indexOf(n.hit) >= 0), id + ' ' + tr.voice + ' sits on the tonic with its own hits');
       }
     });
   }
@@ -266,39 +284,44 @@ t.test('densities are sane: nothing empty, nothing that would melt a phone', () 
     const total = d.tracks.reduce((s, tr) => s + tr.notes.length, 0), perSec = total / d.seconds;
     t.ok(perSec >= 0.8 && perSec <= 48, id + ' notes per second ' + perSec.toFixed(1));
     for (const tr of d.tracks) {
-      const perBar = tr.notes.length / (tr.section === 'stinger' ? d.introBars : d.loopBars);
+      const perBar = tr.notes.length / (tr.section !== 'loop' ? d.introBars : d.loopBars);
       t.ok(perBar > 0.05 && perBar < 26, id + ' ' + tr.voice + ':' + tr.role + ' notes per bar ' + perBar.toFixed(2));
     }
   }
 });
+// The keys and tempos are HV_ART_AUDIO 10.5's (hero_select and map1 share G major at 100, victory and final D major at 92), so a
+// track's identity is its key, tempo, layering and lead line together, never the tempo alone.
 t.test('every track has its own key, tempo and character', () => {
-  const sig = L.music.map((id) => descs[id].key + descs[id].scale + descs[id].tempo);
-  t.eq(new Set(sig).size, L.music.length, 'no two tracks share key, scale and tempo');
-  t.eq(new Set(L.music.map((id) => descs[id].tempo)).size, L.music.length, 'no two tracks share a tempo');
-  t.eq(new Set(L.music.map((id) => descs[id].scale)).size, 3, 'all three scales are used');
-  t.ok(new Set(L.music.map((id) => descs[id].key)).size >= 8, 'at least 8 different keys');
+  const sig = L.music.map((id) => descs[id].key + descs[id].scale + descs[id].tempo + '/' + descs[id].layers);
+  t.eq(new Set(sig).size, L.music.length, 'no two tracks share key, scale, tempo and layering');
+  t.eq(new Set(L.music.map((id) => descs[id].scale)).size, 5, 'all five diatonic scales are used');
+  t.ok(new Set(L.music.map((id) => descs[id].key + descs[id].scale)).size >= 10, 'at least 10 different keys (tonic and mode)');
   const moods = L.music.map((id) => descs[id].mood);
   t.eq(new Set(moods).size, moods.length, 'moods are distinct');
-  const melodies = new Set();
-  for (const id of L.music) { const m = descs[id].tracks.find((tr) => tr.role === 'melody'); t.ok(!!m, id + ' has a melody'); melodies.add(JSON.stringify(m.notes.map((n) => [n.t, n.midi]))); }
-  t.eq(melodies.size, L.music.length, 'no two tracks share a melody');
-  for (const id of ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final']) t.ok(descs[id].tempo >= 118, id + ' drives at ' + descs[id].tempo + ' bpm');
-  for (const id of ['title', 'hero_select', 'map1', 'map2', 'map3']) t.ok(descs[id].tempo <= 90, id + ' is unhurried');
-  for (const id of ['camp', 'event']) t.ok(descs[id].tempo <= 62, id + ' is quiet');
-  t.eq(descs.camp.beatsPerBar, 3, 'the camp lullaby is in three');
+  const leads = new Set();
+  for (const id of L.music) { const m = descs[id].tracks.find((tr) => tr.role === 'melody' || tr.role === 'theme'); t.ok(!!m, id + ' has a melody or a quoted theme'); leads.add(JSON.stringify(m.notes.map((n) => [n.t, n.midi]))); }
+  t.eq(leads.size, L.music.length, 'no two tracks share a lead line');
+  for (const id of ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3']) t.ok(descs[id].tempo >= 118, id + ' drives at ' + descs[id].tempo + ' bpm');
+  t.ok(descs.final.tempo * 2 >= 118 && descs.final.tracks.some((tr) => tr.role === 'beat' && tr.voice === 'kick'), 'final drives in half time over a beat (' + descs.final.tempo + ' bpm)');
+  const fightMin = Math.min(...['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3'].map((id) => descs[id].tempo));
+  for (const id of ['title', 'hero_select', 'map1', 'map2', 'map3']) t.ok(descs[id].tempo < fightMin, id + ' is slower than every fight (' + descs[id].tempo + ')');
+  t.ok(descs.title.tempo <= 90, 'the title is unhurried');
+  for (const [id, max] of [['camp', 62], ['event', 80], ['defeat', 70]]) t.ok(descs[id].tempo <= max, id + ' is quiet (' + descs[id].tempo + ')');
+  t.eq(descs.camp.beatsPerBar, 3, 'the Green Room lullaby is in three');
 });
 t.test('melodies are composed: motifs return, phrases cadence on the tonic, motion is mostly stepwise', () => {
   for (const id of L.music) {
     const d = descs[id], bpb = d.beatsPerBar;
     d.tracks.filter((tr) => tr.role === 'melody').forEach((tr) => {
-      const secs = tr.section === 'stinger' ? [['stinger', 0, d.introBars]] : [['loop', d.introBars, d.loopBars]];
+      const secs = tr.section !== 'loop' ? [[tr.section, 0, d.introBars]] : [['loop', d.introBars, d.loopBars]];
       for (const [, first, count] of secs) {
         const notes = tr.notes.filter((n) => n.t >= first * bpb - 1e-9 && n.t < (first + count) * bpb - 1e-9);
         const last = notes[notes.length - 1];
         t.eq(mod(last.midi - d.tonic, 12), 0, id + ' melody ends on the tonic');
         t.ok(last.dur >= 1.4, id + ' final note is held (' + last.dur + ' beats)');
-        // motion is measured in steps of the scale (a pentatonic step is 2 to 4 semitones)
-        const deg = (m) => 5 * Math.floor((m - d.tonic) / 12) + d.scaleIntervals.indexOf(mod(m - d.tonic, 12));
+        // motion is measured in steps of the scale (a diatonic step is 1 or 2 semitones)
+        const n7 = d.scaleIntervals.length;
+        const deg = (m) => n7 * Math.floor((m - d.tonic) / 12) + d.scaleIntervals.indexOf(mod(m - d.tonic, 12));
         let steps = 0, repeats = 0, biggest = 0;
         for (let k = 1; k < notes.length; k++) { const iv = Math.abs(deg(notes[k].midi) - deg(notes[k - 1].midi)); if (iv <= 1) steps++; if (iv === 0) repeats++; if (iv > biggest) biggest = iv; }
         const moves = Math.max(1, notes.length - 1);
@@ -334,12 +357,17 @@ t.test('the fight and map tracks are layered, every other track is a single bed'
     t.ok(d.thresholds.every((x, i) => i === 0 || x > d.thresholds[i - 1]) && d.thresholds[3] <= 0.8, id + ' thresholds rise and are reachable: ' + d.thresholds);
     for (let k = 0; k < 4; k++) t.ok(d.tracks.some((tr) => tr.layer === k && tr.notes.length > 4), id + ' has music in layer ' + k);
   }
-  for (const id of ['boss1', 'boss2', 'boss3', 'final']) {
+  for (const id of ['boss1', 'boss2', 'boss3', 'final']) t.ok(descs[id].thresholds[1] < descs.combat1.thresholds[1], id + ' layers in earlier than a normal fight');
+  for (const id of ['boss1', 'boss2', 'boss3']) {
     const base = new Set(descs[id].tracks.filter((tr) => tr.layer === 0).map((tr) => tr.voice));
     t.ok(base.size >= 4, id + ' is already big at intensity 0 (' + base.size + ' instruments)');
-    t.ok(descs[id].thresholds[1] < descs.combat1.thresholds[1], id + ' layers in earlier than a normal fight');
   }
-  t.ok(descs.final.thresholds[3] <= 0.5, 'the final track is fully layered at the intensity of its last phase');
+  // `final` only starts at the Gloss's last form, where the screen sends intensity 0.5 (two Headliner phases at 0.25): every layer is in
+  // there, and layer 0 is the Gloss alone (HV_ART_AUDIO 10.5), the others are the duo and the crowd arriving
+  t.ok(descs.final.thresholds[3] + 0.1 <= 0.5, 'the final track is fully layered at the intensity of its last phase');
+  const gloss = new Set(descs.final.tracks.filter((tr) => tr.layer === 0).map((tr) => tr.voice));
+  t.deep([...gloss].sort(), ['glock', 'pad', 'vox'], 'final layer 0 is the Gloss: a drone, even glock and the robot vox');
+  t.ok(descs.final.tracks.some((tr) => tr.layer === 1 && tr.voice === 'kick') && descs.final.tracks.some((tr) => tr.layer === 2 && tr.role === 'theme' && tr.voice === 'croon') && descs.final.tracks.some((tr) => tr.layer === 3 && tr.role === 'theme' && tr.voice === 'choir'), 'then RoxorLoops (1), Jasmin singing the Human theme (2) and the crowd (3)');
 });
 t.test('victory and defeat are short stingers that fall into a soft loop', () => {
   for (const id of ['victory', 'defeat']) {
@@ -357,13 +385,134 @@ t.test('victory and defeat are short stingers that fall into a soft loop', () =>
   for (const n of stab.notes) (byT[n.t] = byT[n.t] || []).push(n.midi);
   t.ok(Object.values(byT).some((ms) => ms.length === 2 && Math.abs(ms[0] - ms[1]) === 6), 'elite has tritone hits inside its scale');
 });
-t.test('the camp track has a crackle bed and title has a slow grand shakuhachi over a pad', () => {
-  t.ok(descs.camp.tracks.some((tr) => tr.voice === 'crackle' && tr.notes.length > 20), 'camp crackles');
-  const title = descs.title;
-  t.ok(title.tracks.some((tr) => tr.voice === 'shakuhachi' && tr.role === 'melody') && title.tracks.some((tr) => tr.voice === 'pad'), 'title: shakuhachi over pad');
-  t.ok(title.tracks.some((tr) => tr.voice === 'taiko' && tr.notes.length <= 16), 'title: distant, sparse taiko');
-  t.ok(descs.hero_select.tracks.some((tr) => tr.voice === 'koto' && tr.role === 'melody'), 'hero select: warm koto melody');
-  t.ok(descs.shop.tracks.some((tr) => tr.voice === 'shamisen' && tr.role === 'melody'), 'shop: plucked shamisen melody');
+t.test('the camp track has a crackle bed and title has a croon melody over a keys pad', () => {
+  const has = (id, f) => descs[id].tracks.some(f);
+  t.ok(has('camp', (tr) => tr.voice === 'crackle' && tr.notes.length > 20) && has('camp', (tr) => tr.voice === 'crackle' && tr.notes.some((n) => n.hit === 'hiss')), 'the Green Room crackles, and a kettle hisses now and then');
+  t.ok(has('title', (tr) => tr.voice === 'croon' && tr.role === 'melody') && has('title', (tr) => tr.voice === 'keys' && tr.role === 'pad'), 'title: a croon melody over a keys pad');
+  const kick = descs.title.tracks.find((tr) => tr.voice === 'kick');
+  t.ok(kick && kick.notes.every((n) => n.vel <= 0.6), 'title: a soft boom-bap under it');
+  t.ok(has('title', (tr) => tr.voice === 'glock' && tr.role === 'arp'), 'title: Jasmin\'s arpeggio on glock');
+  t.ok(has('hero_select', (tr) => tr.voice === 'whistle' && tr.role === 'melody'), 'hero select: a whistle melody');
+  t.ok(has('hero_select', (tr) => tr.voice === 'ebass' && tr.notes.some((n) => n.hit === 'slap')), 'hero select: Andy\'s riff, slapped');
+  t.ok(has('shop', (tr) => tr.voice === 'whistle' && tr.role === 'melody') && has('shop', (tr) => tr.voice === 'clap' && tr.notes.every((n) => n.hit === 'snap')), 'shop: a whistle melody and finger snaps');
+  t.ok(has('map1', (tr) => tr.voice === 'whistle') && has('map1', (tr) => tr.voice === 'clap'), 'Blossom Bay: a whistled hook and handclaps');
+  t.ok(has('map2', (tr) => tr.role === 'theme' && tr.motif === 'rawclaw' && tr.voice === 'synth'), 'Scrollopolis: RawClaw\'s figure on the synth');
+  for (const id of ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3']) t.ok(['kick', 'throat'].every((v) => has(id, (tr) => tr.voice === v && tr.layer === 0)) || (has(id, (tr) => tr.voice === 'kick' && tr.layer === 0) && has(id, (tr) => tr.role === 'bass' && tr.layer === 0)), id + ': the beatbox kick and a bass in the groove layer');
+  for (const id of L.music) t.ok(!descs[id].tracks.some((tr) => GONE.indexOf(tr.voice) >= 0), id + ' uses only the band');
+});
+t.test('beat grids are 16 steps and expand into one track per voice they use', () => {
+  const VOICE = { B: 'kick', b: 'kick', K: 'snare', k: 'snare', t: 'hat', T: 'hat', s: 'scratch', c: 'clap' };
+  const GRIDS = { bootsCats: ['B.t.K.t.B.t.K.t.', 'B.tBK.t..BtBK.tK'], boomBap: ['B...t.K.b.t.K.t.', 'B..bt.K.b.tBK.t.'], combat: ['B.tkK.tbB.tkK.tk', 'B.tkK.tBb.tkKktk'], crisp: ['B.t.K.t.B.t.K.t.'], shanty: ['B..cB..cB..cBccc'], fourFloor: ['B.t.B.tKB.t.B.tK'] };
+  for (const g2 of Object.values(GRIDS)) for (const bar of g2) t.eq(bar.length, 16, 'a grid bar has 16 steps: ' + bar);
+  // title plays boomBap: kick, snare and hat, one track each, step for step
+  const d = descs.title, bars = d.loopBars, beats = d.tracks.filter((tr) => tr.role === 'beat');
+  t.deep(beats.map((tr) => tr.voice), ['kick', 'snare', 'hat'], 'boomBap expands into kick, snare and hat tracks');
+  for (const tr of beats) {
+    const want = [];
+    for (let b = 0; b < bars; b++) { const bar = GRIDS.boomBap[b % 2]; for (let s = 0; s < 16; s++) if (VOICE[bar[s]] === tr.voice) want.push(b * 4 + s * 0.25); }
+    t.deep(tr.notes.map((n) => n.t), want, 'title ' + tr.voice + ' follows the grid');
+  }
+  t.deep(descs.boss1.tracks.filter((tr) => tr.role === 'beat' && tr.layer === 0).map((tr) => tr.voice), ['kick', 'clap'], 'the shanty is kick and clap');
+  t.ok(descs.combat3.tracks.filter((tr) => tr.role === 'beat' && tr.layer === 0).every((tr) => tr.human === 0), 'the crisp grid is machine tight (human 0)');
+  t.ok(descs.hero_select.tracks.find((tr) => tr.voice === 'kick').notes.some((n) => n.hit === 'boots') && descs.hero_select.tracks.find((tr) => tr.voice === 'snare').notes.some((n) => n.hit === 'cats'), 'boots and cats');
+  for (const id of L.music) for (const tr of descs[id].tracks.filter((x) => x.role === 'beat')) t.ok(tr.notes.every((n) => Math.abs(n.t * 8 - Math.round(n.t * 8)) < 1e-6), id + ' ' + tr.voice + ' sits on the sixteenth grid (or a 32nd off it)');
+});
+t.test('theme tracks play the motif exactly, in the key', () => {
+  const M = AUDIO.MOTIFS;
+  t.deep(M.jasmin.notes.map((x) => x[0]), [0, 2, 4, 7, 9, 7, 4, 2], 'Jasmin\'s theme: up the arpeggio to the tenth and home');
+  t.deep(M.human.notes.map((x) => x[0]), [4, 5, 4, 2, 1, 2, 4, 7, 6, 4], 'the Human theme, an original four-bar tune');
+  t.deep(M.human.notes.map((x) => x[1]), [3, 1, 2, 2, 1, 1, 1, 1, 2, 2], 'in its rhythm: four bars of 4/4');
+  t.deep(M.rawclaw.notes.map((x) => x[0]), [4, 2, 0], 'RawClaw\'s figure');
+  t.deep(M.andy.notes.map((x) => x[0]), [0, null, 0, 7, 6, null, 4, 5], 'Andy\'s riff');
+  let checked = 0;
+  for (const id of L.music) {
+    const d = descs[id], n7 = d.scaleIntervals.length, bpb = d.beatsPerBar;
+    const deg = (m) => n7 * Math.floor((m - d.tonic) / 12) + d.scaleIntervals.indexOf(mod(m - d.tonic, 12));
+    for (const tr of d.tracks.filter((x) => x.role === 'theme')) {
+      const mo = M[tr.motif], played = mo.notes.filter((x) => x[0] != null);
+      t.ok(!!mo, id + ' theme names a motif: ' + tr.motif);
+      // split the track into statements: a statement starts wherever the motif's first degree returns after a full statement
+      const per = played.length, stmts = [];
+      for (let i = 0; i < tr.notes.length; i += per) stmts.push(tr.notes.slice(i, i + per));
+      for (const s of stmts) {
+        const off = deg(s[0].midi) - played[0][0];
+        t.ok(off % n7 === 0, id + ' ' + tr.motif + ' is quoted in the key (octave shift ' + off + ')');
+        const k = s.length;
+        t.deep(s.map((n) => deg(n.midi) - off), played.slice(0, k).map((x) => x[0]), id + ' ' + tr.motif + ' degrees, note for note');
+        const stretch = s.length > 1 ? (s[1].t - s[0].t) / mo.notes[0][1] : 1;
+        let tt = s[0].t, j = 0;
+        for (const x of mo.notes) { if (j >= k) break; if (x[0] != null) { t.near(s[j].t, tt, 1e-6, id + ' ' + tr.motif + ' rhythm at note ' + j); j++; } tt += x[1] * stretch; }
+        checked++;
+      }
+      t.ok(tr.notes.every((n) => n.t + n.dur <= d.beats + 1e-6 && n.t >= (tr.section === 'loop' ? d.introBeats : 0) - 1e-9), id + ' ' + tr.motif + ' stays inside its section (' + bpb + '/4)');
+    }
+  }
+  t.ok(checked >= 14, 'checked ' + checked + ' statements');
+  const fin = descs.final.tracks.find((tr) => tr.role === 'theme' && tr.voice === 'croon');
+  t.eq(fin.notes.length, 40, 'Jasmin sings the Human theme four times in the final loop');
+  const choir = descs.final.tracks.filter((tr) => tr.voice === 'choir');
+  t.deep(choir.map((tr) => tr.role), ['theme', 'theme-harmony'], 'the crowd sings along in unison, then in thirds (a harmony track)');
+  const harm = choir[1].notes, uni = choir[0].notes.filter((n) => n.t >= harm[0].t - 1e-9);
+  t.ok(harm.length === 10 && harm.every((n, i) => { const iv = mod(n.midi - uni[i].midi, 12); return iv === 3 || iv === 4; }), 'the harmony is a diatonic third above the tune');
+  const vic = descs.victory.tracks.filter((tr) => tr.section === 'stinger' && tr.role === 'theme');
+  t.ok(vic.length === 2 && vic.every((tr) => tr.motif === 'human' && tr.notes.length === 4), 'the victory stinger is the Human theme\'s first two bars, sung with the crowd');
+  t.ok(descs.victory.tracks.some((tr) => tr.section === 'loop' && tr.motif === 'jasmin' && tr.voice === 'croon') && descs.defeat.tracks.some((tr) => tr.section === 'loop' && tr.motif === 'jasmin' && tr.voice === 'glock'), 'Jasmin\'s theme closes the victory loop and plays as a music box in the intermission');
+});
+t.test('the Human theme cracks on the high note, and the kick under it lands a 32nd late', () => {
+  const d = descs.final, croon = d.tracks.find((tr) => tr.role === 'theme' && tr.voice === 'croon');
+  const high = croon.notes.filter((n) => n.crack);
+  t.eq(high.length, 4, 'one cracked high note per statement');
+  t.ok(high.every((n) => n.scoop === 40), 'with a 40 cent scoop');
+  const kick = d.tracks.find((tr) => tr.voice === 'kick' && tr.layer === 1);
+  for (const bar of [2, 6, 10, 14]) {
+    const t0 = (d.introBars + bar) * 4;
+    t.ok(kick.notes.some((n) => near(n.t, t0 + 0.125, 1e-6)) && !kick.notes.some((n) => near(n.t, t0, 1e-6)), 'bar ' + (bar + 1) + ' of the loop: the kick is a hair late');
+  }
+  t.ok(d.tracks.filter((tr) => tr.section === 'intro').every((tr) => tr.grid && tr.human === 0), 'the intro is the Gloss: dead on the grid');
+  t.ok(d.tracks.some((tr) => tr.section === 'intro' && tr.voice === 'vox' && tr.notes.every((n) => n.robot)), 'and the Gloss lip-syncs (robot vox)');
+});
+t.test('the quant groove: the Perfect Stage starts dead on the grid and learns to swing', () => {
+  for (const id of L.music) {
+    const q = descs[id].quant;
+    if (QUANT.indexOf(id) < 0) { t.eq(q, null, id + ' has no quant drive'); continue; }
+    t.ok(q && q.swing > 0 && q.swing <= 0.2 && q.human > 0 && q.full > 0 && q.full <= 1, id + ' quant ' + JSON.stringify(q));
+  }
+  t.deep(QUANT.map((id) => descs[id].quant.swing), [0.14, 0.1, 0.06, 0.12], 'swing.to of map3, combat3, boss3 and final (HV_ART_AUDIO 10.5)');
+  const gg = live();
+  const A = gg.AUDIO;
+  A.intensity(0); A.music('combat3'); advance(gg, 300);
+  let dk = A.debug().decks.find((x) => x.id === 'combat3');
+  t.ok(dk.swing === 0 && dk.human === 0, 'combat3 at intensity 0: no swing, no human timing');
+  A.intensity(1);
+  dk = A.debug().decks.find((x) => x.id === 'combat3');
+  t.near(dk.swing, descs.combat3.quant.swing, 1e-9, 'at intensity 1 it reaches swing.to');
+  t.near(dk.human, descs.combat3.quant.human, 1e-9, 'and human.to');
+  A.intensity(0.5);
+  t.near(A.debug().decks.find((x) => x.id === 'combat3').swing, descs.combat3.quant.swing / 2, 1e-9, 'halfway at 0.5');
+  A.awake(0.06); A.music('map3'); advance(gg, 300);
+  dk = A.debug().decks.find((x) => x.id === 'map3' && !x.dying);
+  t.ok(dk.swing === 0 && dk.human === 0, 'map3 while the Act is muted: dead on the grid');
+  A.awake(1);
+  dk = A.debug().decks.find((x) => x.id === 'map3' && !x.dying);
+  t.near(dk.swing, 0.14, 1e-9, 'map3 unmuted: it swings');
+  A.intensity(0.5); A.music('final'); advance(gg, 300);
+  dk = A.debug().decks.find((x) => x.id === 'final' && !x.dying);
+  t.near(dk.swing, 0.12, 1e-9, 'final swings fully from the Gloss\'s last form (intensity 0.5)');
+  A.music('combat1'); advance(gg, 300);
+  dk = A.debug().decks.find((x) => x.id === 'combat1' && !x.dying);
+  t.ok(dk.swing === 0 && dk.human === 1, 'a plain fight keeps its human timing and no swing');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+  // swing moves only the odd sixteenths of a swung deck (by swing of a sixteenth), and never a grid track: an offline render of
+  // four hats at 120 bpm (a sixteenth is 0.125 s) with swing 0.2 at full drive
+  const g3 = fresh(), W = g3._win;
+  g3._run(`globalThis.__bs = []; const cb = OfflineAudioContext.prototype.createBufferSource;
+    OfflineAudioContext.prototype.createBufferSource = function () { const s = cb.call(this); const st = s.start; s.start = function (w) { __bs.push(w); return st.apply(s, arguments); }; return s; };`);
+  const mk = (grid) => ({ id: 'swing-' + grid, tempo: 120, layers: 1, thresholds: [0], drive: 'intensity', hush: null, swing: 0, quant: { swing: 0.2, human: 1, full: 1 }, introBeats: 0, loopBeats: 4, beats: 4, beatsPerBar: 4,
+    tracks: [{ voice: 'hat', role: 'beat', layer: 0, gain: 1, pan: 0, range: [24, 100], human: 0, grid, notes: [0, 0.25, 0.5, 0.75].map((x) => ({ t: x, dur: 0.25, midi: 72, vel: 0.5 })) }] });
+  const starts = (desc, x) => { g3._run('__bs.length = 0'); const off = new W.OfflineAudioContext(2, 44100, 44100); g3.AUDIO.render(off, off.destination, desc, { intensity: x }); return g3._run('__bs').map((v) => Math.round(v * 1000)); };
+  t.deep(starts(mk(false), 1), [0, 150, 250, 400], 'at drive 1 the odd sixteenths are 0.2 of a sixteenth late');
+  t.deep(starts(mk(false), 0), [0, 125, 250, 375], 'at drive 0 they are dead on the grid');
+  t.deep(starts(mk(true), 1), [0, 125, 250, 375], 'a grid track never swings');
 });
 
 // ------------------------------------------------------------------------------------------------ 4. sfx recipes
@@ -371,7 +520,8 @@ const FILTERS = ['lowpass', 'highpass', 'bandpass', 'notch'];
 const WAVES = ['sine', 'triangle', 'square', 'sawtooth'];
 t.test('every sfx id has a valid recipe', () => {
   t.eq(AUDIO.sfxRecipe('nope'), null, 'unknown id gives null');
-  for (const id of L.sfx) {
+  t.eq(AUDIO.sfxRecipe('hit_light.kuro'), null, 'a variant that does not exist gives null');
+  for (const id of L.sfx.concat(AUDIO.VARIANTS)) {
     const r = AUDIO.sfxRecipe(id);
     t.ok(r && r.id === id, id + ' has a recipe');
     t.ok(r.vol > 0 && r.vol <= 1.5, id + ' vol ' + r.vol);
@@ -400,9 +550,30 @@ t.test('recipes are plain data: deterministic, independent copies, all different
   const seen = new Set(L.sfx.map((id) => JSON.stringify(AUDIO.sfxRecipe(id).layers)));
   t.eq(seen.size, L.sfx.length, 'no two sounds share a layer stack');
 });
+t.test('per-hero variants: every key names a sound and a hero, and each one sounds like its hero', () => {
+  const heroes = L.heroIds, bases = ['card_play_attack', 'card_play_skill', 'card_play_power', 'swap', 'hero_down', 'hero_revive'];
+  t.eq(AUDIO.VARIANTS.length, 24, 'six sounds, four heroes');
+  for (const k of AUDIO.VARIANTS) {
+    const [id, hero, extra] = k.split('.');
+    t.ok(L.sfx.indexOf(id) >= 0 && heroes.indexOf(hero) >= 0 && extra === undefined, k + ' names a LISTS.sfx id and a LISTS.heroIds id');
+  }
+  for (const id of bases) for (const h of heroes) t.ok(AUDIO.VARIANTS.indexOf(id + '.' + h) >= 0, id + ' has a ' + h + ' variant');
+  const voices = (k) => AUDIO.sfxRecipe(k).layers.filter((ly) => ly.k === 'voice').map((ly) => ly.v);
+  for (const id of bases) {
+    const r = AUDIO.sfxRecipe(id + '.hanae'), b = AUDIO.sfxRecipe(id);
+    t.ok(r.cd === b.cd && r.pri === b.pri && r.duck === b.duck, id + ' variants keep the base cooldown, priority and duck');
+  }
+  t.ok(['card_play_attack', 'card_play_skill', 'card_play_power', 'swap', 'hero_down', 'hero_revive'].every((id) => voices(id + '.hanae').indexOf('croon') >= 0), 'Jasmin sings every one of hers (croon)');
+  t.ok(['card_play_attack', 'card_play_skill', 'card_play_power', 'swap', 'hero_revive'].every((id) => voices(id + '.kuro').some((v) => ['kick', 'snare', 'hat'].indexOf(v) >= 0)), 'RoxorLoops beatboxes his');
+  t.ok(['card_play_attack', 'card_play_skill', 'card_play_power', 'swap', 'hero_down', 'hero_revive'].every((id) => voices(id + '.raiga').indexOf('ebass') >= 0 || AUDIO.sfxRecipe(id + '.raiga').layers.some((ly) => ly.k === 'osc' && (ly.f2 || ly.f) < 130)), 'Andy plays bass on his');
+  const pew = AUDIO.sfxRecipe('card_play_attack.suzu').layers.find((ly) => ly.v === 'synth');
+  t.ok(pew && pew.hit === 'zap', 'RawClaw\'s attack is a synth pew');
+  const seen = new Set(AUDIO.VARIANTS.map((k) => JSON.stringify(AUDIO.sfxRecipe(k).layers)));
+  t.eq(seen.size, AUDIO.VARIANTS.length, 'no two variants share a layer stack');
+});
 t.test('hits: light, heavy, crit and multi are distinct in build and weight', () => {
   const r = (id) => AUDIO.sfxRecipe(id);
-  const weight = (x) => x.layers.reduce((s, ly) => s + ly.g * Math.min(ly.d, 0.4), 0);
+  const weight = (x) => x.layers.reduce((s, ly) => s + (ly.k === 'voice' ? ly.vel * 0.5 : ly.g) * Math.min(ly.d, 0.4), 0);
   const light = r('hit_light'), heavy = r('hit_heavy'), crit = r('hit_crit'), multi = r('hit_multi');
   t.ok(weight(heavy) > weight(light) * 1.5, 'heavy carries more weight than light');
   t.ok(heavy.duck > light.duck && crit.duck >= heavy.duck, 'heavier hits duck the music more');
@@ -412,21 +583,33 @@ t.test('hits: light, heavy, crit and multi are distinct in build and weight', ()
   t.ok(Math.min(...heavy.layers.filter((ly) => ly.k === 'osc').map((ly) => ly.f2 || ly.f)) < 60, 'heavy drops to a real thump');
   t.ok(heavy.layers.some((ly) => ly.k === 'noise' && ly.ft === 'bandpass' && ly.f >= 1500), 'and has a crack on top so it survives small speakers');
 });
-t.test('elements sound like their element', () => {
+t.test('elements and moments sound like themselves (HV_ART_AUDIO 10.8)', () => {
   const r = (id) => AUDIO.sfxRecipe(id);
-  t.ok(r('flame').layers.filter((ly) => ly.k === 'noise').length >= 6, 'flame is a roar with crackle pops');
-  t.ok(r('ice').layers.filter((ly) => ly.k === 'fm').length >= 3, 'ice is glass tinkles');
-  t.ok(r('zap').layers.some((ly) => ly.w === 'square') && r('zap').layers.some((ly) => ly.w === 'sawtooth' && ly.f2 > ly.f * 4), 'zap is a rising saw with stepped square blips');
-  t.ok(r('poison_tick').layers.filter((ly) => ly.k === 'osc' && ly.f2 > ly.f).length >= 2, 'poison is bubbles that bloop upward');
-  t.ok(r('page_turn').layers.filter((ly) => ly.v === 'hyoshigi').length >= 2, 'a page_turn is two hyoshigi claps: the kamishibai opens');
+  const vs = (id, v) => r(id).layers.filter((ly) => ly.k === 'voice' && ly.v === v);
+  t.ok(r('flame').layers.filter((ly) => ly.k === 'noise').length >= 6 && r('flame').layers.some((ly) => ly.k === 'noise' && ly.ft === 'highpass'), 'Sizzle is a "tssss" with crackle pops');
+  t.ok(r('ice').layers.filter((ly) => ly.k === 'fm').length >= 3 && vs('ice', 'glock').length >= 1, 'ice is a glassy glock TING');
+  t.ok(r('zap').layers.some((ly) => ly.k === 'osc' && ly.vib && ly.f2 < ly.f && ly.f2 < 60) && r('zap').layers.filter((ly) => ly.k === 'noise').length >= 4, 'zap is Andy\'s WOMP: a wobbling sub falling, with a crackle');
+  t.ok(vs('poison_tick', 'vox').length >= 3 && vs('poison_tick', 'vox').every((ly) => ly.vowel === 'a'), 'an Earworm tick is a tiny "na-na-na"');
+  t.ok(r('thorn').layers.some((ly) => ly.k === 'osc' && ly.f >= 2500 && ly.f <= 3000), 'Feedback is a short mic squeal near 2.8 kHz');
+  t.ok(r('page_turn').layers.filter((ly) => ly.k === 'noise').length >= 2 && vs('page_turn', 'snare').some((ly) => ly.hit === 'k'), 'a segue is a camera shutter and a beatboxed click');
   t.ok(r('gold').layers.filter((ly) => ly.k === 'fm').length >= 2, 'coins clink');
   t.ok(r('gem_socket').layers.filter((ly) => ly.k === 'fm').length >= 2 && r('gem_socket').layers.some((ly) => ly.k === 'noise'), 'a gem clicks in and chimes');
-  t.ok(r('relic_get').layers.filter((ly) => ly.k === 'voice' && ly.v === 'koto').length >= 4 && r('relic_get').layers.some((ly) => ly.v === 'rin'), 'a relic is a koto arpeggio with a bell');
-  t.ok(r('level_up').layers.filter((ly) => ly.v === 'koto').length >= 4, 'level up rises');
-  t.ok(r('paint').layers.some((ly) => ly.k === 'noise' && ly.f2 > ly.f) && r('ink_splash').layers.some((ly) => ly.v === 'hyoshigi'), 'a wake breathes open, a find knocks twice');
-  t.ok(r('chest_open').layers.some((ly) => ly.vib) && r('chest_open').layers.filter((ly) => ly.v === 'koto').length >= 3, 'a chest creaks then sparkles');
-  t.ok(r('boss_die').dur >= 2 && r('boss_die').duck >= 1000 && r('boss_intro').duck >= 1000, 'boss moments are big and duck the music');
-  t.ok(r('block_break').layers.some((ly) => ly.k === 'fm') && r('block_break').layers.some((ly) => ly.k === 'noise' && ly.ft === 'highpass'), 'block_break shatters');
+  t.ok(vs('relic_get', 'glock').length >= 4 && vs('relic_get', 'vox').some((ly) => ly.syl === 'tada') && vs('relic_get', 'kick').length >= 1, 'a Charm is a vox ta-da, a glock arpeggio and a kick');
+  t.ok(vs('level_up', 'glock').length >= 4 && vs('level_up', 'vox').length >= 1, 'level up rises on glock with a "yeah"');
+  t.ok(vs('paint', 'vox').length >= 1 && vs('ink_splash', 'clap').filter((ly) => ly.hit === 'snap').length >= 2, 'an unmuted hex is a sung "ta", a find is two finger clicks');
+  const zip = r('chest_open').layers.find((ly) => ly.k === 'noise' && ly.f2 >= ly.f * 2);
+  t.ok(zip && vs('chest_open', 'glock').length >= 3, 'a Gift Box zips open and sparkles');
+  t.ok(r('boss_die').dur >= 2 && r('boss_die').duck >= 1000 && r('boss_intro').duck >= 1000, 'Headliner moments are big and duck the music');
+  t.ok(vs('boss_die', 'choir').length >= 1 && vs('boss_die', 'glock').map((ly) => ly.m).join() === '81,83', 'a Headliner won over: the crowd cheers and the glock plays the Human theme\'s first bar');
+  t.ok(r('boss_intro').layers.filter((ly) => ly.k === 'noise' && ly.ft === 'lowpass').length >= 3, 'Headliner reveal: three stage-light switches');
+  t.ok(vs('phase_change', 'scratch').length >= 1 && vs('phase_change', 'kick').length >= 1, 'a new form: a record scratch and a boom');
+  t.ok(r('block_break').layers.some((ly) => ly.k === 'fm') && r('block_break').layers.some((ly) => ly.k === 'noise' && ly.ft === 'highpass'), 'block_break pops a bubble and sparkles');
+  t.ok(vs('heal', 'choir').length >= 3 && vs('heal', 'glock').length >= 3, 'Warm Tea is a choir "aah" and a glock run');
+  t.ok(vs('buff', 'vox').some((ly) => ly.syl === 'hey'), 'Hype is a rising "hey!"');
+  t.ok(vs('card_play_attack', 'kick').length === 1 && vs('card_play_attack', 'snare').length === 1, 'an Attack is a beatbox "pkah"');
+  t.ok(vs('shuffle', 'scratch').length === 2, 'a reshuffle is a vocal scratch, "wikka wikka"');
+  t.ok(vs('victory', 'croon').map((ly) => ly.m).join() === '69,71', 'the victory sting quotes the Human theme\'s first two notes on croon');
+  for (const id of L.sfx) t.ok(!r(id).layers.some((ly) => GONE.indexOf(ly.v) >= 0), id + ' uses only the band');
 });
 t.test('interface sounds are crisp and soft', () => {
   for (const id of L.sfx.filter((x) => /^ui_/.test(x))) {
@@ -485,6 +668,36 @@ t.test('sfx options: pitch, vol, pan and delay, plus seeded variation', () => {
     const s = startsAfter(n0);
     t.ok(s.length > 0 && Math.min(...s) >= now + secs - 0.001 && Math.min(...s) <= now + secs + 0.02, 'delay ' + delay + ' waits ' + secs + ' s (first start ' + Math.min(...s).toFixed(3) + ' from ' + now.toFixed(3) + ')');
   }
+});
+t.test('AUDIO.sfx(id, {hero}) plays the hero\'s variant, under the base id\'s cooldown', () => {
+  const gg = live();
+  const A = gg.AUDIO, au = gg._audio, W = gg._win;
+  const kinds = ['oscillator', 'bufferSource', 'biquad'];
+  const snap = () => kinds.map((k) => au.created[k] || 0);
+  const delta = (a) => snap().map((v, i) => v - a[i]);
+  const offline = (key) => { const s = snap(); const off = new W.OfflineAudioContext(2, 44100, 44100); A.renderSfx(off, off.destination, key, { pan: 0.3, seed: 3 }); return delta(s); };
+  for (const h of L.heroIds) {
+    gg._advance(400, 20);
+    const s = snap();
+    t.eq(A.sfx('card_play_attack', { hero: h }), true, 'card_play_attack for ' + h);
+    t.deep(delta(s), offline('card_play_attack.' + h), h + ' hears the ' + h + ' variant (same nodes as its recipe)');
+  }
+  gg._advance(400, 20);
+  let s = snap();
+  A.sfx('card_play_attack', { hero: 'nobody' });
+  t.deep(delta(s), offline('card_play_attack'), 'an unknown hero plays the base recipe');
+  gg._advance(400, 20);
+  s = snap();
+  A.sfx('hit_light', { hero: 'kuro' });
+  t.deep(delta(s), offline('hit_light'), 'an id without variants plays its base recipe for any hero');
+  gg._advance(400, 20);
+  t.eq(A.sfx('card_play_attack', { hero: 'kuro' }), true, 'a variant plays');
+  t.eq(A.sfx('card_play_attack', { hero: 'hanae' }), false, 'and the base id\'s cooldown covers every variant');
+  t.eq(A.sfx('card_play_attack'), false, 'and the base itself');
+  t.eq(A.sfx('card_play_attack.kuro'), false, 'a variant key is not an sfx id');
+  gg._advance(8000, 100);
+  t.eq(A.debug().live, 0, 'everything ended');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
 t.test('sfx cooldowns and voice limits keep rapid ids from stacking', () => {
   const gg = live();
@@ -727,15 +940,16 @@ t.test('every sfx recipe and every voice renders offline, also at the edges', ()
   const gg = fresh();
   const A = gg.AUDIO, W = gg._win;
   const off = new W.OfflineAudioContext(2, 44100 * 4, 44100), gr = A.graph(off);
-  for (const id of L.sfx) {
+  for (const id of L.sfx.concat(A.VARIANTS)) {
     const r = A.renderSfx(off, gr.sfx, id, { t0: 0.1, seed: 5 });
     t.ok(r && near(r.end, 0.1 + A.sfxRecipe(id).dur, 0.001), id + ' renders and ends where the recipe says');
   }
   t.eq(A.renderSfx(off, gr.sfx, 'nope'), null, 'unknown sfx renders nothing');
+  const edges = [{ midi: 24, dur: 0.01, vel: 0, r: 0 }, { midi: 60, dur: 0.5, vel: 1, r: 1 }, { midi: 110, dur: 30, vel: 0.5, r: 0.5 }, { midi: 48, dur: 2, vel: 0.3, r: 0.2, hit: 'ka', big: 1, double: 1, bend: 2 },
+    { midi: 40, dur: 0.3, vel: 0.9, r: 0.4, bend: -7, crack: 1, scoop: 40, robot: 1, whisper: 1, vowel: 'oo' }];
+  for (const hit of ['boots', 'pf', 'k', 'cats', 'open', 'snap', 'slap', 'pop', 'pluck', 'zap', 'laser', 'hiss']) edges.push({ midi: 52, dur: 0.4, vel: 0.8, r: 0.6, hit });
   for (const v of A.VOICES) {
-    for (const n of [{ midi: 24, dur: 0.01, vel: 0, r: 0 }, { midi: 60, dur: 0.5, vel: 1, r: 1 }, { midi: 110, dur: 30, vel: 0.5, r: 0.5 }, { midi: 48, dur: 2, vel: 0.3, r: 0.2, hit: 'ka', big: 1, double: 1, bend: 2 }]) {
-      t.eq(A.voice(v, off, gr.music, 0.05, n), true, v + ' renders ' + JSON.stringify(n));
-    }
+    for (const n of edges) t.eq(A.voice(v, off, gr.music, 0.05, n), true, v + ' renders ' + JSON.stringify(n));
   }
   t.eq(A.voice('kazoo', off, gr.music, 0, {}), false, 'unknown voice is refused');
   t.eq(gg._uncaught.length, 0, 'nothing threw');
@@ -746,23 +960,25 @@ t.test('rendering is deterministic: the same description builds the same graph',
   t.eq(count(), count(), 'same number of nodes');
 });
 
-// ------------------------------------------------------------------------------------------------ 7. Echo: the melodic reveal, the Hush, temple bells, the vox voice
+// ------------------------------------------------------------------------------------------------ 7. the melodic reveal, the map mute, the Tea Stall, the vox voice
 const echoInfo = (ch, seed) => ({ chapter: ch, seed, cols: 21, rows: 13 });
 const hexQ = (col, r) => col - Math.floor(r / 2);
-t.test('echo: every hex of a map owns a note in its chapter key, and the tune belongs to the map', () => {
+t.test('reveal: every hex of a map owns a note on the pentatonic subset of its Act key, and the tune belongs to the map', () => {
   const g2 = fresh();
   for (const ch of [1, 2, 3]) {
-    const d = descs['map' + ch], info = echoInfo(ch, 1234);
-    let bad = 0, outside = 0, differ = 0;
+    const d = descs['map' + ch], info = echoInfo(ch, 1234), penta = pentaOf(d.scale);
+    let bad = 0, offPenta = 0, outside = 0, differ = 0;
     for (let r = 0; r <= 12; r++) for (let col = 0; col <= 20; col++) {
       const n = AUDIO.hexNote(hexQ(col, r), r, info), n2 = g2.AUDIO.hexNote(hexQ(col, r), r, info);
       if (!Number.isInteger(n.midi) || SCALE[d.scale].indexOf(mod(n.midi - d.tonic, 12)) < 0) bad++;
+      if (penta.indexOf(mod(n.midi - d.tonic, 12)) < 0) offPenta++;
       if (!(n.deg >= -4 && n.deg <= 9)) outside++;
       if (n.midi !== n2.midi || n.deg !== n2.deg) differ++;
     }
-    t.eq(bad, 0, 'verse ' + ch + ': every hex is a whole note of ' + d.scale + ' in the key of ' + d.id);
-    t.eq(outside, 0, 'verse ' + ch + ': degrees stay in -4..9');
-    t.eq(differ, 0, 'verse ' + ch + ': the same map sounds the same across fresh boots');
+    t.eq(bad, 0, 'Act ' + ch + ': every hex is a whole note of ' + d.scale + ' in the key of ' + d.id);
+    t.eq(offPenta, 0, 'Act ' + ch + ': and of its pentatonic subset, so a wake note can never clash');
+    t.eq(outside, 0, 'Act ' + ch + ': degrees stay in -4..9');
+    t.eq(differ, 0, 'Act ' + ch + ': the same map sounds the same across fresh boots');
   }
   let steps = 0, small = 0, leap = 0, fewDegrees = 0;
   for (let seed = 0; seed < 50; seed++) for (const ch of [1, 2, 3]) {
@@ -778,24 +994,57 @@ t.test('echo: every hex of a map owns a note in its chapter key, and the tune be
   t.ok(cols >= 5, 'seeds 1 and 2 differ in ' + cols + ' columns');
   t.ok(Number.isInteger(AUDIO.hexNote(3, 3).midi) && Number.isInteger(AUDIO.hexNote(-50, 99, { chapter: 9 }).midi), 'missing or wild info never throws');
 });
-t.test('echo: each Song sings its shape', () => {
+t.test('reveal: each Spell sings its shape and its gesture', () => {
   const brushes = Object.keys(DATA.brushes).sort();
   t.deep(Object.keys(AUDIO.SONGS).filter((k) => k !== 'single' && k !== 'step').sort(), brushes, 'SONGS has one entry per DATA.brushes id');
-  t.eq(AUDIO.songDegrees('stroke', 3, 2), null, 'Drum Line: every cell its own note');
-  t.deep(AUDIO.songDegrees('wave', 5, 1), [1, 2, 3, 4, 5], 'Ripple is a rising run');
-  t.deep(AUDIO.songDegrees('fan', 3, 0), [0, 2, 4], 'Shout strums a triad');
-  t.eq(AUDIO.songDegrees('splash', 7, 3)[0], -2, 'Beat Drop: the centre drops an octave');
+  t.eq(AUDIO.songDegrees('stroke', 3, 2), null, 'Boots and Cats: every cell its own note');
+  t.deep(AUDIO.songDegrees('wave', 5, 1), [1, 2, 3, 4, 5], 'Vocal Run is a rising run');
+  t.deep(AUDIO.songDegrees('fan', 3, 0), [0, 2, 4], 'Air Horn strums a triad');
+  t.eq(AUDIO.songDegrees('splash', 7, 3)[0], -2, 'Abracadabass: the centre drops an octave');
   const h = AUDIO.songDegrees('halo', 6, 0);
-  t.ok(h.length === 6 && h.every((x, i) => i === 0 || x > h[i - 1]), 'Chorus rises: ' + h);
-  t.eq(AUDIO.songDegrees('nope', 3, 0), null, 'unknown song is null');
+  t.ok(h.length === 6 && h.every((x, i) => i === 0 || x > h[i - 1]), 'Surround Sound rises: ' + h);
+  t.eq(AUDIO.songDegrees('nope', 3, 0), null, 'unknown Spell is null');
   const info = echoInfo(1, 5);
   t.eq(AUDIO.wakeDegree(4, 4, info), AUDIO.hexNote(4, 4, info).deg, 'without an anchor a cell sings its own hexNote');
   t.eq(AUDIO.wakeDegree(4, 4, Object.assign({}, info, { aq: null, ar: null, song: 'wave', i: 2 })), AUDIO.hexNote(4, 4, info).deg, 'a null anchor is no anchor');
   const root = AUDIO.hexNote(3, 5, info).deg;
-  t.eq(AUDIO.wakeDegree(4, 4, Object.assign({}, info, { aq: 3, ar: 5, song: 'wave', i: 2 })), root + 2, 'with an anchor a Ripple cell sings its place in the run');
-  t.eq(AUDIO.SONGS.single.byVerse.length, 3, 'one voice per verse');
+  t.eq(AUDIO.wakeDegree(4, 4, Object.assign({}, info, { aq: 3, ar: 5, song: 'wave', i: 2 })), root + 2, 'with an anchor a Vocal Run cell sings its place in the run');
+  const S = AUDIO.SONGS;
+  t.deep(S.single.byVerse, ['glock', 'synth', 'glock'], 'one voice per Act: glock (sunny), synth pluck (neon), glock (dry, the Perfect Stage)');
+  t.deep(S.single.echoByVerse, [1, 1, 0.4], 'and the Perfect Stage is the driest');
+  t.deep(S.stroke.kit, ['boots', 'ts', 'cats', 'ts'], 'Boots and Cats speaks the classic pattern');
+  t.ok(S.wave.v === 'croon' && S.wave.dbl === 'glock', 'Vocal Run is sung (croon), doubled softly by glock');
+  t.ok(S.fan.v === 'synth' && S.fan.horn, 'Air Horn: a synth triad and a beatboxed air horn');
+  t.ok(S.splash.v === 'glock' && S.splash.abra, 'Abracadabass: "a-bra-ca", a throat-bass drop, then the ring of glock');
+  t.ok(S.halo.v === 'choir' && S.halo.circle && S.halo.pad, 'Surround Sound: stacked "ooh" voices panned round a circle');
+  t.ok(S.blot.v === 'glock' && S.blot.tada, 'Hocus Focus: a bright ting and a whispered ta-da');
+  t.eq(S.step.v, 'vox', 'a walked hex still hums');
 });
-t.test('echo: a wake note plays live, never before init, muted or suspended, and a storm is capped', () => {
+t.test('reveal: every Spell gesture sings live with its voices', () => {
+  const gg = live();
+  const A = gg.AUDIO, au = gg._audio, info = echoInfo(1, 4);
+  gg._run(`globalThis.__pan = []; const pc = AudioContext.prototype.createStereoPanner; AudioContext.prototype.createStereoPanner = function () { const n = pc.call(this); __pan.push(n); return n; };`);
+  for (let i = 0; i < 6; i++) { gg._advance(400, 20); A.wake(5 + i, 4, Object.assign({ song: 'halo', i, n: 6, aq: 5, ar: 4 }, info)); }
+  const pans = gg._run('__pan').map((p) => Math.round(p.pan.value * 100) / 100).filter((v) => v !== -0.55 && v !== 0.55);
+  t.ok(new Set(pans).size >= 4 && pans.some((v) => v > 0.3) && pans.some((v) => v < -0.3), 'Surround Sound pans its voices round a circle: ' + pans.join(' '));
+  for (const song of brushes()) {
+    gg._advance(1500, 20);
+    const s0 = au.started;
+    t.eq(A.wake(5, 4, Object.assign({ song, i: 0, n: 3, aq: 5, ar: 4 }, info)), true, song + ' sings its first cell');
+    t.ok(au.started - s0 >= 3, song + ' starts a gesture of several sources (' + (au.started - s0) + ')');
+  }
+  A.awake(1);
+  gg._advance(1500, 20);
+  const s1 = au.started; A.wake(6, 4, echoInfo(3, 4)); const act3 = au.started - s1;
+  A.awake(0.06); gg._advance(1500, 20);
+  const s2 = au.started; A.wake(7, 4, echoInfo(3, 4)); const muted = au.started - s2;
+  t.ok(act3 > muted, 'on the Perfect Stage a soft croon doubles the glock once it is more than half unmuted (' + muted + ' then ' + act3 + ' sources)');
+  gg._advance(10000, 100);
+  t.eq(A.debug().live, 0, 'nothing is left ringing');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+  function brushes() { return Object.keys(gg.DATA.brushes); }
+});
+t.test('reveal: a wake note plays live, never before init, muted or suspended, and a storm is capped', () => {
   t.eq(fresh().AUDIO.wake(3, 3, echoInfo(1, 1)), false, 'dropped before init');
   const gg = live();
   const A = gg.AUDIO, au = gg._audio, info = echoInfo(1, 1);
@@ -820,12 +1069,12 @@ t.test('echo: a wake note plays live, never before init, muted or suspended, and
     gg._advance(1500, 20);
     for (let i = 0; i <= 6; i++) A.wake(5 + i, 4, Object.assign({ song, i, n: 7, aq: 5, ar: 4, soft: song === 'step' }, info));
   }
-  t.eq(gg._uncaught.length, 0, 'every Song sings without a throw');
+  t.eq(gg._uncaught.length, 0, 'every Spell sings without a throw');
   gg._advance(10000, 100);
   t.eq(A.debug().live, 0, 'nothing is left ringing');
   t.eq(au.stopped, au.started, 'every source ended');
 });
-t.test('echo: the echo send exists, is fed by wake notes, and is skipped when calm or lite; no delay node still works', () => {
+t.test('reveal: the delay send exists, is fed by wake notes, and is skipped when calm or lite; no delay node still works', () => {
   const gg = live();
   const A = gg.AUDIO, d = A.debug(), gr = d.graph, info = echoInfo(2, 3);
   t.ok(gr.echoIn && gr.echoDelay, 'the echo is built');
@@ -854,87 +1103,93 @@ t.test('echo: the echo send exists, is fed by wake notes, and is skipped when ca
   t.eq(g3.AUDIO.wake(3, 3, info), true, 'and wake notes play dry');
   t.eq(g3._uncaught.length, 0, 'nothing threw');
 });
-t.test('the map sounds are re-voiced for Echo (ids kept)', () => {
+t.test('the map sounds are re-voiced (ids kept)', () => {
   t.eq(L.sfx.length, 73, 'still 73 sound ids');
   for (const id of ['paint', 'ink_splash', 'brush_pick', 'brush_use', 'ink_gain', 'well', 'page_turn']) t.ok(L.sfx.indexOf(id) >= 0 && AUDIO.sfxRecipe(id), id + ' keeps its id and its recipe');
-  t.eq(AUDIO.sfxRecipe('well').tune, 55, 'the temple bell is written in G');
+  t.eq(AUDIO.sfxRecipe('well').tune, 55, 'the Tea Stall is written in G');
   t.eq(AUDIO.sfxRecipe('paint').tune, 0, 'other recipes are never transposed');
-  t.ok(AUDIO.sfxRecipe('brush_pick').layers.filter((ly) => ly.v === 'shakuhachi').length >= 3, 'a Song is learned with a hummed three note motif');
-  t.ok(AUDIO.sfxRecipe('brush_use').layers.some((ly) => ly.v === 'taiko'), 'a Song is sung with a downbeat');
+  const pick = AUDIO.sfxRecipe('brush_pick').layers;
+  t.deep(pick.filter((ly) => ly.v === 'glock').map((ly) => ly.m), [91, 88, 96], 'a Spell is learned with the three-note glock jingle (4, 2, 7 in C)');
+  t.ok(pick.some((ly) => ly.v === 'vox' && ly.whisper), 'over a whispered "ooh"');
+  const use = AUDIO.sfxRecipe('brush_use').layers;
+  t.ok(use.some((ly) => ly.v === 'kick') && use.some((ly) => ly.syl === 'ab') && use.some((ly) => ly.syl === 'ra'), 'a Spell is cast with a sung "abra" and a downbeat kick');
 });
-t.test('the Hush: a map track is muffled, sparse and quiet while the land sleeps, and opens as it wakes', () => {
+t.test('the map mute: a map track is muffled, sparse and quiet while the Act is muted, and opens as it is unmuted', () => {
   for (const id of WOKEN) {
     const h = descs[id].hush;
-    t.eq(descs[id].drive, 'awake', id + ' is driven by the wake level');
-    t.ok(h && h.lo >= 500 && h.lo <= 1000 && h.floor >= 0.75 && h.floor < 1, id + ' hush ' + JSON.stringify(h));
+    t.eq(descs[id].drive, 'awake', id + ' is driven by the unmute level');
+    t.ok(h && h.lo >= 500 && h.lo <= 1000 && h.floor >= 0.75 && h.floor < 1, id + ' mute ' + JSON.stringify(h));
   }
-  t.ok(descs.map3.hush.lo < descs.map1.hush.lo, 'the third verse is the deepest hush');
+  t.ok(descs.map3.hush.lo < descs.map1.hush.lo, 'the Perfect Stage is the most muffled');
   const gg = live();
   const A = gg.AUDIO, au = gg._audio;
   t.eq(A.awake(), 1, 'awake is 1 by default');
-  A.awake(0.06);                                             // wake level 0 whatever the calibration
+  A.awake(0.06);                                             // unmute level 0 whatever the calibration
   A.music('map1');
   advance(gg, 500);
   let deck = A.debug().decks[0];
-  t.deep(deck.target, [1, 0, 0, 0], 'a sleeping land plays the still bed only');
+  t.deep(deck.target, [1, 0, 0, 0], 'a muted Act plays the still bed only');
   t.ok(deck.lp.frequency.value < 1000 && deck.hg.gain.value < 0.9, 'muffled and quiet: ' + deck.lp.frequency.value + ' Hz, gain ' + deck.hg.gain.value);
   const a0 = au.started; advance(gg, 6000); const asleep = au.started - a0;
   A.awake(0.6);
   deck = A.debug().decks[0];
-  t.deep(deck.target, [1, 1, 1, 1], 'an awake land plays the whole band');
+  t.deep(deck.target, [1, 1, 1, 1], 'a live Act plays the whole band');
   t.ok(deck.lp.frequency.value > 12000 && deck.hg.gain.value > 0.99, 'and the filter opens: ' + deck.lp.frequency.value + ' Hz');
   advance(gg, 1000);
   const a1 = au.started; advance(gg, 6000); const woken = au.started - a1;
-  t.ok(woken > asleep * 1.3, 'a sleeping land schedules fewer notes: ' + asleep + ' versus ' + woken);
+  t.ok(woken > asleep * 1.3, 'a muted Act schedules fewer notes: ' + asleep + ' versus ' + woken);
   t.eq(A.intensity(), 0, 'intensity() stays out of it');
   A.intensity(1);
   t.deep(A.debug().decks[0].target, [1, 1, 1, 1], 'intensity does not move a map deck');
   A.awake(0.06);
   A.intensity(1);
-  t.deep(A.debug().decks[0].target, [1, 0, 0, 0], 'even at full intensity a sleeping map stays asleep');
+  t.deep(A.debug().decks[0].target, [1, 0, 0, 0], 'even at full intensity a muted map stays muted');
   A.intensity(0);
   A.music('combat1');
   deck = A.debug().decks.find((x) => x.id === 'combat1');
-  t.ok(!deck.lp && !deck.hg, 'a fight deck has no Hush filter, so a fight is never muffled');
+  t.ok(!deck.lp && !deck.hg, 'a fight deck has no mute filter, so a fight is never muffled');
   t.deep(deck.target, [1, 0, 0, 0], 'a fight starts from its bed');
-  t.eq(A.awake('x'), 1, 'garbage is awake'); t.eq(A.awake(-2), 0, 'clamped low'); t.eq(A.awake(5), 1, 'clamped high');
+  t.eq(A.awake('x'), 1, 'garbage is live'); t.eq(A.awake(-2), 0, 'clamped low'); t.eq(A.awake(5), 1, 'clamped high');
   t.eq(A.awake(), 1, 'awake() reads it back');
   t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
-t.test('the well sound is a temple bell: big, struck, beating, tuned to the map it rings over', () => {
+t.test('the Tea Stall: a cup clink and a gentle kettle whistle, tuned to the map it plays over', () => {
   const r = AUDIO.sfxRecipe('well');
-  const low = r.layers.filter((ly) => ly.k === 'osc' && ly.f < 130 && ly.d >= 2);
-  t.ok(low.length >= 2, 'a long low hum');
-  t.ok(low.some((a) => low.some((b) => a !== b && Math.abs(a.f - b.f) < 1.5 && a.f !== b.f)), 'two hum tones less than 1.5 Hz apart beat like a bonsho');
-  t.ok(r.layers.some((ly) => ly.k === 'fm') && r.layers.some((ly) => ly.k === 'noise' && ly.ft === 'lowpass'), 'inharmonic strike partials and a wooden thud');
+  const whistle = r.layers.filter((ly) => ly.k === 'osc' && ly.f >= 500 && ly.f <= 1200);
+  t.ok(whistle.length === 1 && whistle[0].d >= 1 && whistle[0].vib, 'one long kettle whistle with a wobble');
+  t.ok(r.layers.filter((ly) => ly.k === 'fm').length >= 2, 'a cup clink (two glassy strikes)');
+  t.ok(r.layers.some((ly) => ly.k === 'noise' && ly.q >= 6 && ly.f >= 700 && ly.f <= 900), 'a breathy whistle on the same pitch');
   t.ok(r.duck > 0 && r.tune === 55, 'it ducks the music and is tuned');
   const gg = live();
   const A = gg.AUDIO;
   gg._run(`globalThis.__f = []; const oc = AudioContext.prototype.createOscillator;
     AudioContext.prototype.createOscillator = function () { const o = oc.call(this); const s = o.frequency.setValueAtTime.bind(o.frequency); o.frequency.setValueAtTime = (v, t) => { __f.push(v); return s(v, t); }; return o; };`);
-  const lowest = () => Math.min(...gg._run('__f').filter((f) => f < 150));
+  const kettle = () => gg._run('__f').filter((f) => f >= 450 && f <= 1300)[0];
   const cents = (f, ref) => Math.abs(1200 * Math.log2(f / ref));
+  const near12 = (f, ref) => Math.min(cents(f, ref), cents(f, ref * 2), cents(f, ref / 2));
   A.music('map2'); advance(gg, 300);
   gg._run('__f.length = 0'); A.sfx('well');
-  t.ok(cents(lowest(), 110) <= 20, 'over the key of A the bell hums an A: ' + lowest().toFixed(1) + ' Hz');
+  t.ok(near12(kettle(), 880 * 760 / 784) <= 20, 'over the key of A the kettle sings in A: ' + kettle().toFixed(1) + ' Hz');
   advance(gg, 4000);
   A.music('map1'); advance(gg, 300);
   gg._run('__f.length = 0'); A.sfx('well');
-  t.ok(cents(lowest(), 98) <= 20, 'over the key of G it hums a G: ' + lowest().toFixed(1) + ' Hz');
+  t.ok(near12(kettle(), 760) <= 20, 'over the key of G it sings in G: ' + kettle().toFixed(1) + ' Hz');
   advance(gg, 4000);
   A.music('map3'); advance(gg, 300);
   gg._run('__f.length = 0'); A.sfx('well');
-  t.ok(cents(lowest(), 73.42) <= 20, 'over the key of D it hums a D: ' + lowest().toFixed(1) + ' Hz');
+  t.ok(near12(kettle(), 659.26 * 760 / 784) <= 20, 'over the key of E it sings in E: ' + kettle().toFixed(1) + ' Hz');
   advance(gg, 4000);
   A.music(null, { fade: 0.2 }); advance(gg, 5000);
   gg._run('__f.length = 0'); A.sfx('well');
-  t.ok(cents(lowest(), 98) <= 20, 'with no music it rings as written: ' + lowest().toFixed(1) + ' Hz');
+  t.ok(near12(kettle(), 760) <= 20, 'with no music it plays as written: ' + kettle().toFixed(1) + ' Hz');
 });
-t.test('echo: Song chords never hold a semitone, a tritone or a major seventh', () => {
-  t.deep(Object.keys(AUDIO.CHORD_ROOTS).sort(), ['0,1,5,7,10', '0,1,5,7,8', '0,2,5,7,9'], 'CHORD_ROOTS covers the three scales');
+t.test('reveal: Spell chords never hold a semitone, a tritone or a major seventh', () => {
+  t.deep(Object.keys(AUDIO.CHORD_ROOTS).sort(), ['0,2,4,7,9', '0,3,5,7,10'], 'CHORD_ROOTS covers the two pentatonic scales of the reveal');
+  t.deep(AUDIO.CHORD_ROOTS['0,2,4,7,9'], [0, 1, 2, 3, 4], 'every root of the major pentatonic is consonant');
+  t.deep(AUDIO.CHORD_ROOTS['0,3,5,7,10'], [0, 1, 2, 3, 4], 'and of the minor pentatonic');
   let checked = 0;
   for (const ch of [1, 2, 3]) {
-    const d = descs['map' + ch], sc = d.scaleIntervals;
+    const d = descs['map' + ch], sc = pentaOf(d.scale);
     const midi = (x) => d.tonic + 12 + 12 * Math.floor(x / 5) + sc[mod(x, 5)];
     for (const [song, n] of [['fan', 3], ['splash', 7], ['halo', 6]]) {
       for (let root = -4; root <= 9; root++) {
@@ -942,43 +1197,44 @@ t.test('echo: Song chords never hold a semitone, a tritone or a major seventh', 
         for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) {
           const iv = mod(ms[j] - ms[i], 12);
           checked++;
-          if (iv === 1 || iv === 6 || iv === 11) t.ok(false, `verse ${ch} ${song} root ${root}: notes ${i} and ${j} hold ${iv} semitones`);
+          if (iv === 1 || iv === 6 || iv === 11) t.ok(false, `Act ${ch} ${song} root ${root}: notes ${i} and ${j} hold ${iv} semitones`);
+          if (d.scaleIntervals.indexOf(mod(ms[i] - d.tonic, 12)) < 0) t.ok(false, `Act ${ch} ${song} root ${root}: note ${i} leaves the Act's key`);
         }
       }
     }
   }
   t.ok(checked > 1000, 'checked ' + checked + ' pairs');
 });
-t.test('the Hush is calibrated to real play', () => {
-  // m = 0.19: the median woken share of the map when the greedy bot reaches the keeper (217 boss fights, ch1 0.19, ch2 0.19, ch3 0.20),
-  // measured on 2026-10-04 with: node tools/hocus_vocus/bot.mjs --all-pairs --runs 8 --trial 0,5 --seed 11 --combat greedy --effort fast
-  //   --jobs 1 --quiet --brief --awake-report
+t.test('the map mute is calibrated to real play', () => {
+  // m = 0.19: the median live share of the map when the greedy bot reaches the Headliner (217 Headliner fights, ch1 0.19, ch2 0.19,
+  // ch3 0.20), measured on 2026-10-04 with: node tools/hocus_vocus/bot.mjs --all-pairs --runs 8 --trial 0,5 --seed 11 --combat greedy
+  //   --effort fast --jobs 1 --quiet --brief --awake-report
   // WAKE_SPAN = clamp(m - 0.06, 0.12, 0.44) = 0.13; T3 = clamp((0.6 m - 0.06) / 0.13 - 0.1, 0.15, 0.65) = 0.32;
   // TH_WAKE = [0, round2(0.23 T3), round2(0.62 T3), T3] = [0, 0.07, 0.2, 0.32]
-  t.eq(AUDIO.HUSH.from, 0.06, 'the wake curve starts at 6 percent');
-  t.eq(AUDIO.HUSH.span, 0.13, 'and is full at the median keeper visit (m = 0.19)');
+  t.eq(AUDIO.HUSH.from, 0.06, 'the unmute curve starts at 6 percent');
+  t.eq(AUDIO.HUSH.span, 0.13, 'and is full at the median Headliner visit (m = 0.19)');
   t.deep(AUDIO.HUSH.th, [0, 0.07, 0.2, 0.32], 'the layers come in at 0.07, 0.2 and 0.32');
-  t.deep([descs.map1.hush, descs.map2.hush, descs.map3.hush], [{ lo: 900, floor: 0.85 }, { lo: 750, floor: 0.8 }, { lo: 600, floor: 0.75 }], 'the verse hush values');
+  t.deep([descs.map1.hush, descs.map2.hush, descs.map3.hush], [{ lo: 900, floor: 0.85 }, { lo: 750, floor: 0.8 }, { lo: 600, floor: 0.75 }], 'the Act mute values');
   t.deep(descs.map1.thresholds, AUDIO.HUSH.th, 'the map tracks use the calibrated thresholds');
   const wl = (f) => Math.min(1, Math.max(0, (f - AUDIO.HUSH.from) / AUDIO.HUSH.span));
   t.ok(wl(0.19) === 1 && wl(0.114) >= AUDIO.HUSH.th[3] + 0.1 - 0.01, 'the melody is fully in by 0.6 of the median, the whole bed at the median');
   const gg = live();
   const A = gg.AUDIO;
-  t.eq(A.debug().liftKey, null, 'no map has woken yet');
+  t.eq(A.debug().liftKey, null, 'no map has been unmuted yet');
   A.wake(3, 3, { chapter: 2, seed: 77, cols: 21, rows: 13 });
-  t.eq(A.debug().liftKey, '2|77', 'the first wake of a map is remembered');
+  t.eq(A.debug().liftKey, '2|77', 'the first unmuted hex of a map is remembered');
   gg._advance(1000, 20);
   A.wake(4, 3, { chapter: 2, seed: 77, cols: 21, rows: 13 });
-  t.eq(A.debug().liftKey, '2|77', 'a second wake on the same map leaves it');
+  t.eq(A.debug().liftKey, '2|77', 'a second one on the same map leaves it');
   A.music('map2'); advance(gg, 300);
   A.awake(0.06);
   const lp = A.debug().decks[0].lp, f0 = lp.frequency.value, calls = [], orig = lp.frequency.setTargetAtTime.bind(lp.frequency);
   lp.frequency.setTargetAtTime = (v, tm, tc) => { calls.push(v); return orig(v, tm, tc); };
   A.wake(5, 3, { chapter: 3, seed: 78, cols: 21, rows: 13 });
-  t.eq(A.debug().liftKey, '3|78', 'a new map is a new first wake');
-  t.ok(calls.length === 2 && near(calls[0], f0 * 1.5, 1) && calls[1] === f0, 'which opens the hushed deck to 1.5 times its cut-off and back: ' + f0 + ', ' + calls.join(', '));
+  t.eq(A.debug().liftKey, '3|78', 'a new map is a new first unmute');
+  t.ok(calls.length === 2 && near(calls[0], f0 * 1.5, 1) && calls[1] === f0, 'which opens the muted deck to 1.5 times its cut-off and back: ' + f0 + ', ' + calls.join(', '));
 });
-t.test('the vox voice sings and speaks, and no score uses it', () => {
+t.test('the vox voice sings and speaks the beatbox, and only the Gloss lip-syncs with it in a score', () => {
   const gg = fresh();
   const A = gg.AUDIO, W = gg._win;
   t.ok(A.VOICES.indexOf('vox') >= 0, 'vox is a voice');
@@ -990,20 +1246,248 @@ t.test('the vox voice sings and speaks, and no score uses it', () => {
       return n;
     };`);
   const off = new W.OfflineAudioContext(2, 44100 * 4, 44100), dest = off.destination;
-  for (const vowel of ['a', 'o', 'u', 'e', 'm', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, vowel }), true, 'vowel ' + vowel);
-  for (const syl of ['don', 'ka', 'tsu', 'hey', 'boom', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, syl }), true, 'syllable ' + syl);
+  for (const vowel of ['a', 'o', 'u', 'e', 'm', 'oo', 'ah', 'mm', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, vowel }), true, 'vowel ' + vowel);
+  for (const syl of ['boots', 'cats', 'ts', 'pf', 'k', 'bwaa', 'ab', 'ra', 'ca', 'tada', 'hey', 'boom', 'zzz']) t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.5, vel: 0.7, r: 0.3, syl }), true, 'syllable ' + syl);
   t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 1, vel: 0.7, r: 0.3, vowel: 'a', detune: 8 }), true, 'detune');
+  t.eq(A.voice('vox', off, dest, 0.09, { midi: 62.4, dur: 1, vel: 0.7, r: 0.3, vowel: 'a', robot: 1 }), true, 'robot');
+  t.eq(A.voice('vox', off, dest, 0.09, { midi: 62, dur: 0.4, vel: 0.7, r: 0.3, syl: 'tada', whisper: 1 }), true, 'whisper');
   let envs = 0, bad = 0;
   for (const ev of gg._run('__env')) {
     if (!ev.some((e) => e[0] === 'exponentialRampToValueAtTime' && e[1] === 0.0001)) continue;
     envs++;
     if (!(ev[0][0] === 'setValueAtTime' && ev[0][1] === 0 && ev[0][2] === 0)) bad++;
   }
-  t.ok(envs >= 12, 'checked ' + envs + ' amplitude envelopes');
+  t.ok(envs >= 30, 'checked ' + envs + ' amplitude envelopes');
   t.eq(bad, 0, 'every vox envelope starts at zero: no click');
-  for (const id of L.music) t.ok(!descs[id].tracks.some((tr) => tr.voice === 'vox'), id + ' never uses vox (the wake-note voice)');
-  t.eq(A.SONGS.blot.v, 'vox', 'Hum is a vox'); t.eq(A.SONGS.step.v, 'vox', 'a walked step is a vox');
+  // the robot snaps the pitch and has no vibrato: its first oscillator sits exactly on the tempered note
+  gg._run(`globalThis.__f = []; const oc = AudioContext.prototype.createOscillator;
+    OfflineAudioContext.prototype.createOscillator = function () { const o = oc.call(this); const s = o.frequency.setValueAtTime.bind(o.frequency); o.frequency.setValueAtTime = (v, t) => { __f.push(v); return s(v, t); }; return o; };`);
+  A.voice('vox', off, dest, 0.09, { midi: 62.4, dur: 0.5, vel: 0.7, r: 0.3, vowel: 'a', robot: 1 });
+  const fr = gg._run('__f');
+  t.ok(Math.abs(fr[0] - 293.66) < 0.05 && !fr.some((f) => Math.abs(f - 5.5) < 1e-9), 'the robot is snapped to D and has no vibrato: ' + fr.slice(0, 3).map((f) => f.toFixed(2)).join(' '));
+  const voxTracks = [];
+  for (const id of L.music) for (const tr of descs[id].tracks) if (tr.voice === 'vox') voxTracks.push([id, tr]);
+  t.deep([...new Set(voxTracks.map((x) => x[0]))].sort(), ['boss3', 'final'], 'only Flawless and the Gloss use vox in a score');
+  t.ok(voxTracks.every((x) => x[1].notes.every((n) => n.robot) && x[1].human === 0), 'and it is always the robot lip-sync, machine tight');
+  t.eq(A.SONGS.step.v, 'vox', 'a walked step is a vox');
   t.ok(A.RANGES.vox[0] < A.RANGES.vox[1], 'vox has a range');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+
+// ------------------------------------------------------------------------------------------------ S. the sample hook (HV_ART_AUDIO 11.7)
+// A spy replaces fetch on one boot's page global (the loader's own fetch throws: any unplanned request would fail), Audio is a probe
+// that can play m4a (audio/mp4) only, and DATA.SAMPLES is replaced by a fake manifest before init. Decoded buffers are tagged with the
+// file they came from, so a test can tell a sample from the synth's own noise buffers.
+function sampleBoot(manifest, o) {
+  o = o || {};
+  const gg = fresh();
+  gg._run(`globalThis.__fetches = []; globalThis.__fetchMode = ${JSON.stringify(o.mode || 'ok')}; globalThis.__hold = [];
+    window.fetch = function (url, init) {
+      __fetches.push({ url: String(url), init: init || null });
+      const body = () => { const ab = new ArrayBuffer(64); ab._name = String(url); return Promise.resolve(ab); };
+      if (__fetchMode === 'reject') return Promise.reject(new Error('offline'));
+      if (__fetchMode === '404') return Promise.resolve({ ok: false, status: 404, arrayBuffer: body });
+      if (__fetchMode === 'hold') return new Promise((res) => { __hold.push(() => res({ ok: true, status: 200, arrayBuffer: body })); });
+      return Promise.resolve({ ok: true, status: 200, arrayBuffer: body });
+    };
+    window.Audio = function () { return { canPlayType: (type) => (/mp4/.test(type) ? 'probably' : '') }; };
+    const dec = AudioContext.prototype.decodeAudioData;
+    AudioContext.prototype.decodeAudioData = function (ab, ok, no) {
+      if (__fetchMode === 'baddata') { const e = new Error('cannot decode'); if (typeof no === 'function') queueMicrotask(() => no(e)); return Promise.reject(e); }
+      return dec.call(this, ab).then((b) => { b._name = ab && ab._name; if (typeof ok === 'function') ok(b); return b; });
+    };
+    globalThis.__srcs = []; const cb = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function () { const s = cb.call(this); __srcs.push(s); return s; };`);
+  if (manifest !== undefined) gg._run('DATA.SAMPLES = ' + JSON.stringify(manifest) + ';');
+  return gg;
+}
+const fetches = (gg) => gg._run('__fetches');
+const sampleSrcs = (gg) => gg._run('__srcs').filter((s) => s.buffer && s.buffer._name);
+const warns = (gg) => gg._console.warn.filter((w) => /AUDIO samples/.test(w));
+t.test('S1: the shipped DATA.SAMPLES is valid and empty, and init requests nothing', async () => {
+  const M = DATA.SAMPLES;
+  t.ok(M && typeof M === 'object', 'DATA.SAMPLES exists (js/data_samples.js)');
+  if (!M) return;
+  t.ok(Object.isFrozen(M), 'and is frozen');
+  t.eq(M.version, 1, 'version 1');
+  t.eq(M.base, 'audio/', 'files live in hocus_vocus/audio/');
+  t.deep(M.formats, ['m4a', 'ogg', 'mp3'], 'the format order');
+  t.ok(M.preload === 'idle' && M.maxSeconds === 120 && M.gain === 1, 'idle preload, 120 s budget, unity gain');
+  for (const k of ['sfx', 'spells', 'syllables', 'stingers']) t.deep(M[k], {}, 'the ' + k + ' table ships empty');
+  const gg = sampleBoot();
+  t.eq(gg.AUDIO.init({ force: true }), true, 'init');
+  await gg._tick(5000, 50);
+  t.eq(fetches(gg).length, 0, 'zero requests after init and 5 s');
+  t.deep(gg.AUDIO.samples(), [], 'no sample keys');
+  t.eq(warns(gg).length, 0, 'and no warnings');
+});
+t.test('S2: one listed file is fetched once, after init and the idle delay, from the game\'s own folder', async () => {
+  const gg = sampleBoot({ version: 1, base: 'audio/', formats: ['m4a', 'ogg', 'mp3'], preload: 'idle', maxSeconds: 120, gain: 1, sfx: { hit_light: 'kick' } });
+  await gg._tick(3000, 50);
+  t.eq(fetches(gg).length, 0, 'nothing is fetched before init');
+  gg.AUDIO.init({ force: true });
+  await gg._tick(1000, 50);
+  t.eq(fetches(gg).length, 0, 'nor in the first second after it');
+  await gg._tick(1000, 50);
+  const f = fetches(gg);
+  t.eq(f.length, 1, 'exactly one request after 2 s');
+  t.eq(f[0] && f[0].url, 'audio/kick.m4a', 'to audio/kick.<the playable format>');
+  t.ok(f[0] && f[0].init && f[0].init.credentials === 'same-origin' && f[0].init.cache === 'force-cache', 'same origin, from the HTTP cache when it can');
+  await gg._tick(500, 50);
+  t.deep(gg.AUDIO.samples().map((s) => [s.key, s.state, s.files.join()]), [['sfx:hit_light', 'ready', 'kick']], 'and the key is ready');
+  t.ok(gg.AUDIO.samples()[0].seconds > 0, 'with its decoded length counted');
+  await gg._tick(5000, 100);
+  t.eq(fetches(gg).length, 1, 'never fetched again');
+});
+t.test('S3: while a file loads, the sound plays its synth recipe', async () => {
+  const gg = sampleBoot({ sfx: { hit_light: 'kick' } }, { mode: 'hold' });
+  const A = gg.AUDIO;
+  A.init({ force: true });
+  await gg._tick(2000, 50);
+  t.eq(A.samples()[0].state, 'loading', 'the file is loading');
+  const n0 = gg._run('__srcs').length;
+  t.eq(A.sfx('hit_light'), true, 'hit_light plays');
+  const made = gg._run('__srcs').slice(n0);
+  t.ok(made.length >= 1 && made.every((s) => !(s.buffer && s.buffer._name)), 'its synth recipe (noise only, never a sample buffer)');
+  gg._run('__hold.forEach((f) => f())');
+  await gg._tick(500, 50);
+  t.eq(A.samples()[0].state, 'ready', 'and once it arrives it is ready');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+t.test('S4: a ready sample replaces the synth through the sfx bus at the measured level; cooldown, duck and the hero variant apply', async () => {
+  const gg = sampleBoot({ gain: 1, sfx: { hit_light: { files: ['kick'], vol: 0.5 }, hit_heavy: 'boom', 'hit_heavy.kuro': ['bk_1', 'bk_2'] } });
+  const A = gg.AUDIO;
+  A.init({ force: true });
+  await gg._tick(3000, 50);
+  t.deep(A.samples().map((s) => s.state), ['ready', 'ready', 'ready'], 'all three keys are ready');
+  const gr = A.debug().graph;
+  let n0 = gg._run('__srcs').length;
+  t.eq(A.sfx('hit_light', { vol: 1 }), true, 'hit_light plays');
+  let made = gg._run('__srcs').slice(n0);
+  t.eq(made.length, 1, 'as exactly one buffer source, no synth layers');
+  t.eq(made[0].buffer._name, 'audio/kick.m4a', 'the decoded kick');
+  t.ok(reaches(made[0], gr.sfxBus), 'reaching the sfx bus');
+  const gn = made[0]._out[0], want = AUDIO.sfxRecipe('hit_light').vol * 0.5;
+  t.ok(gn && Math.abs(20 * Math.log10(gn.gain.value / want)) <= 1.25, 'through recipe vol x entry vol x SAMPLES.gain (with the usual 1.2 dB variation): ' + (gn && gn.gain.value.toFixed(3)) + ' vs ' + want.toFixed(3));
+  t.eq(A.sfx('hit_light'), false, 'the base id\'s cooldown still applies');
+  gg._run(`globalThis.__d = 0; const dg = AUDIO.debug().graph.duck.gain, o = dg.setTargetAtTime.bind(dg); dg.setTargetAtTime = (v, a, b) => { __d++; return o(v, a, b); };`);
+  n0 = gg._run('__srcs').length;
+  A.sfx('hit_heavy');
+  made = gg._run('__srcs').slice(n0);
+  t.ok(made.length === 1 && made[0].buffer._name === 'audio/boom.m4a', 'hit_heavy plays its own sample');
+  t.eq(gg._run('__d'), 2, 'and still ducks the music');
+  await gg._tick(300, 50);
+  n0 = gg._run('__srcs').length;
+  A.sfx('hit_heavy', { hero: 'kuro' });
+  A.sfx('hit_heavy', { hero: 'kuro' });
+  made = gg._run('__srcs').slice(n0);
+  t.deep(made.map((s) => s.buffer._name), ['audio/bk_1.m4a', 'audio/bk_2.m4a'], 'the .kuro variant wins with {hero: kuro}, its files in turn (round robin)');
+  n0 = gg._run('__srcs').length;
+  A.sfx('hit_heavy', { hero: 'hanae' });
+  t.eq(gg._run('__srcs').slice(n0).map((s) => s.buffer && s.buffer._name).join(), 'audio/boom.m4a', 'another hero falls back to the base sample');
+  n0 = gg._run('__srcs').length;
+  t.eq(A.preview('hit_heavy', { synth: true }), true, 'preview with {synth: true}');
+  t.ok(gg._run('__srcs').slice(n0).every((s) => !(s.buffer && s.buffer._name)), 'plays the synth recipe for an A/B');
+  n0 = gg._run('__srcs').length;
+  A.preview('hit_heavy');
+  t.eq(gg._run('__srcs').slice(n0).length, 1, 'a plain preview plays the sample');
+  await gg._tick(5000, 100);
+  t.eq(A.debug().live, 0, 'every sample source ended and was counted as one live source');
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+t.test('S5: a rejected fetch, a missing file and a decode error each mark the key failed, warn once and keep the synth', async () => {
+  for (const mode of ['reject', '404', 'baddata']) {
+    const gg = sampleBoot({ sfx: { hit_light: 'kick' } }, { mode });
+    const A = gg.AUDIO;
+    A.init({ force: true });
+    await gg._tick(3000, 50);
+    t.deep(A.samples().map((s) => s.state), ['failed'], mode + ': the key is failed');
+    t.eq(fetches(gg).length, 1, mode + ': m4a was the only playable format, so one request');
+    t.eq(warns(gg).length, 1, mode + ': one warning: ' + warns(gg).join(' | '));
+    const n0 = gg._run('__srcs').length;
+    t.eq(A.sfx('hit_light'), true, mode + ': the sound still plays');
+    t.ok(gg._run('__srcs').slice(n0).every((s) => !(s.buffer && s.buffer._name)), mode + ': as its synth recipe');
+    await gg._tick(5000, 100);
+    t.eq(fetches(gg).length, 1, mode + ': a failed key is never retried this session');
+    t.eq(gg._uncaught.length, 0, mode + ': nothing threw');
+  }
+  // the next playable format is tried before giving up
+  const gg = sampleBoot({ formats: ['m4a', 'ogg'], sfx: { hit_light: 'kick' } }, { mode: '404' });
+  gg._run("window.Audio = function () { return { canPlayType: () => 'maybe' }; };");
+  gg.AUDIO.init({ force: true });
+  await gg._tick(3000, 50);
+  t.deep(fetches(gg).map((f) => f.url), ['audio/kick.m4a', 'audio/kick.ogg'], 'a failed format tries the next one, then fails');
+});
+t.test('S6: validation rejects URLs, folder escapes, spaces, dots, unknown ids and a non-hero suffix', async () => {
+  const gg = sampleBoot({ base: '../up/', sfx: { ui_click: 'http://x/a', ui_hover: '../a', ui_back: '/a', ui_error: 'a b', ui_open: 'a.ogg', nope_sound: 'a', 'hit_light.bob': 'a', 'hit_light.kuro.x': 'a', hit_heavy: 'good_file-2' }, spells: { wave: 'run_up', nope: 'x' }, syllables: { boots: { files: ['bts'], midi: 50 }, la: 'x' }, stingers: { victory: 'cheer', title: 'x' } });
+  const A = gg.AUDIO;
+  t.eq(A.init({ force: true }), true, 'init never throws on a bad manifest');
+  t.deep(A.samples().map((s) => s.key).sort(), ['sfx:hit_heavy', 'spells:wave', 'stingers:victory', 'syllables:boots'], 'only the valid entries remain');
+  t.eq(A.debug().samples.cfg.base, 'audio/', 'a base outside the game folder falls back to audio/');
+  t.eq(warns(gg).length, 12, 'every rejected entry warned once: ' + warns(gg).length);
+  await gg._tick(3000, 50);
+  t.ok(fetches(gg).every((f) => /^audio\/[a-z0-9_-]+\.m4a$/.test(f.url)), 'and every request stays in audio/: ' + fetches(gg).map((f) => f.url).join(' '));
+  t.eq(gg._uncaught.length, 0, 'nothing threw');
+});
+t.test('S7: the only fetch( under hocus_vocus/js is the sample loader\'s, behind its pragma', () => {
+  const dir = path.join(DIR, 'js'), hits = [];
+  for (const f of fs.readdirSync(dir).filter((n) => /\.js$/.test(n))) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8'), code = stripJs(text);
+    for (const m of code.matchAll(/(?<![\w$])fetch\s*\(/g)) hits.push({ f, line: lineOf(text, m.index), text });
+  }
+  t.eq(hits.length, 1, 'one fetch( in the game code: ' + hits.map((h) => h.f + ':' + h.line).join(' '));
+  if (!hits.length) return;
+  const h = hits[0], lines = h.text.split('\n');
+  t.eq(h.f, 'audio.js', 'in audio.js');
+  t.ok(/hygiene-allow\(network\): \S/.test(lines[h.line - 1] + lines[h.line - 2]), 'with the network pragma and its reason');
+  const before = h.text.split('\n').slice(0, h.line).join('\n'), fn = before.lastIndexOf('function ');
+  t.ok(/^function sampleLoad\b/.test(before.slice(fn)), 'inside the sample loader');
+});
+t.test('S8: a headless boot with a plain init() never fetches, whatever the manifest says', async () => {
+  const gg = sampleBoot({ preload: 'idle', sfx: { hit_light: 'kick', ui_click: 'tk' }, stingers: { victory: 'cheer' } });
+  t.eq(gg.AUDIO.init(), false, 'init without force is a no-op headless');
+  for (const id of L.sfx) gg.AUDIO.sfx(id);
+  await gg._tick(5000, 50);
+  t.eq(fetches(gg).length, 0, 'zero requests');
+  t.deep(gg.AUDIO.samples(), [], 'and no sample table');
+  const g2 = sampleBoot({ preload: 'lazy', sfx: { hit_light: 'kick' } });
+  g2.AUDIO.init({ force: true });
+  await g2._tick(3000, 50);
+  t.eq(fetches(g2).length, 0, 'lazy: nothing is requested until a key is used');
+  t.eq(g2.AUDIO.sfx('hit_light'), true, 'its first use plays the synth');
+  await g2._tick(500, 50);
+  t.eq(fetches(g2).length, 1, 'and starts the load');
+  t.eq(g2.AUDIO.samples()[0].state, 'ready', 'so the next play can use it');
+  const g3 = sampleBoot({ sfx: { hit_light: 'kick' } });
+  g3._run("window.location.protocol = 'file:';");
+  g3.AUDIO.init({ force: true });
+  await g3._tick(3000, 50);
+  t.ok(fetches(g3).length === 0 && g3.AUDIO.samples().every((s) => s.state === 'failed'), 'a file:// page never fetches: everything stays synthesised');
+});
+t.test('S9: a recorded syllable is re-pitched within 7 semitones; beyond that the synth sings', async () => {
+  const gg = sampleBoot({ syllables: { boots: { files: ['bts'], midi: 50 }, oo: { files: ['ooh'], midi: 64 } }, spells: { wave: 'run_up' } });
+  const A = gg.AUDIO;
+  A.init({ force: true });
+  await gg._tick(3000, 50);
+  t.deep(A.samples().map((s) => s.state), ['ready', 'ready', 'ready'], 'the syllables and the Spell are ready');
+  const ctx = A.debug().ctx, out = A.debug().graph.sfx;
+  const play = (n) => { const n0 = gg._run('__srcs').length; A.voice('vox', ctx, out, ctx.currentTime + 0.01, Object.assign({ dur: 0.2, vel: 0.7, r: 0.4 }, n)); return gg._run('__srcs').slice(n0); };
+  let made = play({ midi: 55, syl: 'boots' });
+  t.ok(made.length === 1 && made[0].buffer._name === 'audio/bts.m4a' && Math.abs(made[0].playbackRate.value - Math.pow(2, 5 / 12)) < 1e-9, 'five semitones up: the recording, re-pitched by playbackRate');
+  made = play({ midi: 58, syl: 'boots' });
+  t.ok(made.every((s) => !(s.buffer && s.buffer._name)), 'eight semitones up: the synth syllable');
+  made = play({ midi: 61, vowel: 'oo' });
+  t.ok(made.length === 1 && made[0].buffer._name === 'audio/ooh.m4a', 'a vowel recording ("oo") sings the vowel');
+  made = play({ midi: 61, syl: 'cats' });
+  t.ok(made.every((s) => !(s.buffer && s.buffer._name)), 'a syllable nobody recorded stays synthesised');
+  const W = gg._win, off = new W.OfflineAudioContext(2, 44100, 44100);
+  const n0 = gg._run('__srcs').length;
+  A.voice('vox', off, off.destination, 0.01, { midi: 52, dur: 0.2, vel: 0.7, r: 0.4, syl: 'boots' });
+  t.eq(gg._run('__srcs').length, n0, 'an offline render never uses the live recordings');
+  const s0 = gg._run('__srcs').length;
+  A.wake(5, 4, { chapter: 1, seed: 3, cols: 21, rows: 13, song: 'wave', i: 0, n: 5, aq: 5, ar: 4 });
+  const spell = gg._run('__srcs').slice(s0).filter((s) => s.buffer && s.buffer._name);
+  t.deep(spell.map((s) => s.buffer._name), ['audio/run_up.m4a'], 'a recorded Spell replaces the gesture on its first cell (the hex still sings its note)');
   t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
 

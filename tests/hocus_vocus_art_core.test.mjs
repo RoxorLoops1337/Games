@@ -1,4 +1,5 @@
-// ART core: the toolkit (art.js) and the four heroes (art_heroes.js), headless on the strict canvas stub.
+// ART core: the toolkit (art.js) and the four heroes (the chibi cast: art_cast_kit.js and the ART.hero adapter in art_cast.js), headless on the
+// strict canvas stub.
 //
 // What this pins down:
 //   * the ART namespace skeleton exists (every DESIGN 5.6 member, placeholders that never throw) and the palette mirrors the CSS tokens
@@ -7,10 +8,11 @@
 //   * every hero x pose x several t draws without throwing, issues draw calls, stays deterministic and animates
 //   * unknown ids draw placeholders, portraits and medallions cover every expression and ratio, bounds and anchors are sane
 //   * a performance smoke test (the cost per hero draw must stay far below a frame)
+import fs from 'node:fs';
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus art core');
-const api = boot({ only: ['util', 'data', 'art', 'art_heroes'] });
+const api = boot({ only: ['util', 'data', 'art', 'art_cast_kit', 'art_cast'] });
 const { ART, DATA, U } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art files load without errors: ' + JSON.stringify(api._errors));
@@ -89,6 +91,18 @@ t.test('ART.sheet registers, refuses duplicates and bad input', () => {
 t.test('the palette mirrors the ART_BIBLE tokens exactly', () => {
   const want = { ink: '#140f2e', night: '#0d0b1e', indigo: '#1a1340', violet: '#3b2a7a', dusk: '#5b3fa8', paper: '#f3e6c8', paper2: '#e6d3a3', sumi: '#241a3a', gold: '#f5c96a', gold2: '#ffe9a8', vermilion: '#e8383d', sakura: '#ff7eb6', sakura2: '#ffc2dc', jade: '#3fd6b0', azure: '#5fb4ff', cyan: '#5ff5ff', amber: '#ff9a2e', bloodmoon: '#b0245c', ash: '#8a86a8', white: '#fff8f0' };
   Object.keys(want).forEach((k) => t.eq(ART.tk.pal[k], want[k], `pal.${k}`));
+  // the Hocus Vocus skin keys (HV_ART_AUDIO 9.1) are new: every old key above keeps its value, these are only added
+  const skin = { hvPink: '#ff7eb6', hvPinkD: '#c93f78', hvPinkL: '#ffc9de', hvGreen: '#3fcf6a', hvGreenD: '#1f7a3a', hvLime: '#c6ff3d', hvViolet: '#a77bff', hvOrange: '#ff9a2e', hvTeal: '#2ec4b6', hvCream: '#fff4e6', hvLine: '#2d170f', gloss: '#f4f1fb', glossLilac: '#e6d9ff', glossMint: '#d9fff4', glossBlush: '#ffe3f1' };
+  Object.keys(skin).forEach((k) => t.eq(ART.tk.pal[k], skin[k], `pal.${k} (new skin key)`));
+  t.ok(/^#[0-9a-f]{6}$/.test(ART.tk.pal.vox), 'pal.vox is a colour (the light tint of the Vox orb)');
+  // and the mirror is real: css/base.css defines every skin token with the same value (the CSS names are --hv-pink-d for hvPinkD, --gloss-lilac for glossLilac)
+  const css = fs.readFileSync(new URL('../hocus_vocus/css/base.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  Object.keys(skin).forEach((k) => {
+    const name = '--' + k.replace(/([A-Z])/g, (m) => '-' + m.toLowerCase());
+    const m = new RegExp(name.replace(/-/g, '\\-') + '\\s*:\\s*(#[0-9a-fA-F]{6})').exec(css);
+    t.ok(m && m[1].toLowerCase() === skin[k], `${name} in css/base.css equals pal.${k} (${m ? m[1] : 'missing'})`);
+  });
+  t.ok(/--vox\s*:\s*url\("data:image\/svg\+xml,/.test(css), '--vox is an inline SVG in css/base.css');
   L.palettes.forEach((p) => { const f = ART.tk.fam(p); t.ok(f && f.base && f.light && f.dark && f.glow, `family ${p}`); t.ok(f !== ART.tk.fam('ash') || p === 'ash', `family ${p} is its own`); });
   t.eq(ART.tk.fam('no_such'), ART.tk.fam('ash'), 'unknown family falls back to ash');
 });
@@ -336,8 +350,9 @@ t.test('every hero x pose x t draws, issues draw calls and stays clean', () => {
     let threw = null;
     try { ART.hero.draw(ctx, id, { x: 300, y: 500, s: 1, pose, t: tt, pt }); } catch (e) { threw = e; }
     t.ok(!threw, `${id} ${pose} t=${tt} pt=${pt} does not throw ${threw ? threw.message : ''}`);
-    const n = api._counts.drawImage || 0;
-    t.ok(n >= 12, `${id} ${pose} issues sprite draws (${n})`);
+    // the cast draws live paths (HV_ART_AUDIO 2.12: the Echowake heroes blitted 12+ part sprites; a chibi figure fills and strokes its shapes)
+    const paths = (api._counts.fill || 0) + (api._counts.stroke || 0), blits = api._counts.drawImage || 0;
+    t.ok(paths >= 40 || blits >= 1, `${id} ${pose} issues real paths or blits a cached frame (${paths} paths, ${blits} blits)`);
     if (api._issues.length) t.ok(false, `${id} ${pose} t=${tt} pt=${pt} canvas issues: ${issues()}`);
     drawn++;
   }))));
@@ -373,7 +388,7 @@ t.test('hero draw options: flip, alpha, glow, scale, shadow', () => {
   });
   t.eq(issues(), '', 'options are clean');
   const a = call((c) => ART.hero.draw(c, 'hanae', { x: 100, y: 300, t: 1 })), f = call((c) => ART.hero.draw(c, 'hanae', { x: 100, y: 300, t: 1, flip: true }));
-  t.ok(a !== f && f.indexOf('scale(-1.000,1.000)') >= 0, 'flip mirrors with a negative x scale');
+  t.ok(a !== f && /scale\(-(\d+\.\d+),\1\)/.test(f), 'flip mirrors with a negative x scale (the cast scales by s * CAST_K, so any scale(-a,a))');
   const half = call((c) => ART.hero.draw(c, 'hanae', { x: 100, y: 300, t: 1, alpha: 0.4 }));
   t.ok(half.indexOf('=globalAlpha:0.400') >= 0, 'alpha is applied');
   const noSh = call((c) => ART.hero.draw(c, 'hanae', { x: 100, y: 300, t: 1, shadow: false }));
@@ -429,12 +444,12 @@ t.test('hero anchors follow the pose, the scale and the flip', () => {
 });
 t.test('hero.warm pre-bakes sprites and the audit finds no clipped part', () => {
   ART.sprite.clear();
-  HEROES.forEach((id) => { t.ok(ART.hero.warm(id, 1) > 20, `${id} warm bakes 20+ sprites`); });
+  HEROES.forEach((id) => { t.ok(ART.hero.warm(id, 1) >= 12, `${id} warm bakes 12 or more frames`); });
   const cnt = ART.sprite.stats().count;
   clean();
   HEROES.forEach((id) => ART.hero.draw(newCtx(), id, { x: 100, y: 300, s: 1, pose: 'idle', t: 0.5 }));
   t.ok(ART.sprite.stats().count - cnt <= HEROES.length * 12, 'after warm the first frame bakes little more');
-  HEROES.forEach((id) => t.deep(ART.hero.audit(id), [], `${id} no part is clipped by its box`));
+  HEROES.forEach((id) => t.deep(ART.hero.audit(id), [], `${id} no pose of either outfit is clipped by the bake box`));
 });
 t.test('sprite sets stay bounded as scale changes', () => {
   ART.sprite.clear();
@@ -555,7 +570,10 @@ t.test('performance smoke: a hero draw costs a small fraction of a frame', () =>
   for (let i = 0; i < N; i++) HEROES.forEach((id) => { ART.hero.draw(ctx, id, { x: 300, y: 500, s: 1, pose: i % 3 ? 'idle' : 'attack', t: i * 0.016, pt: (i % 26) * 0.016 }); n++; });
   const wall = Date.now() - t0;
   const per = wall / n;
-  t.ok(per < 8, `average hero draw ${per.toFixed(2)} ms on the checking stub (limit 8 ms; real canvases measure about 0.2 ms)`);
+  // The Echowake heroes blitted cached part sprites (about 0.2 ms on a real canvas, limit 8 ms here). The chibi cast draws live paths
+  // (HV_ART_AUDIO 2.8: budget 1.2 ms a figure in a browser, about 0.7 to 0.9 ms on the cast_perf sheet); this stub validates every call, so
+  // one figure costs about 3 to 4 ms here alone and up to about 9 ms under the four-way parallel runner. The limit still catches a runaway.
+  t.ok(per < 16, `average hero draw ${per.toFixed(2)} ms on the checking stub (limit 16 ms; the cast_perf sheet holds the real 1.2 ms budget)`);
   const st = ART.sprite.stats();
   t.ok(st.misses - miss0 < 700, `sprite misses stay bounded (${st.misses - miss0})`);
   const before = st.misses;

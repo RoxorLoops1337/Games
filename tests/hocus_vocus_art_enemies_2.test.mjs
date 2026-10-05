@@ -11,7 +11,7 @@
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus art enemies 2');
-const api = boot({ only: ['util', 'data*', 'art', 'art_enemies_2'] });
+const api = boot({ only: ['util', 'data*', 'art', 'art_cast_kit', 'art_cast', 'art_enemies_2'] });
 const { ART, DATA } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art_enemies_2 loads without errors: ' + JSON.stringify(api._errors));

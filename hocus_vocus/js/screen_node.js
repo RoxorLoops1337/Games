@@ -68,9 +68,10 @@
 // PUBLIC API beyond DESIGN: none exported. Tests reach everything through the DOM and RUN (tests/hocus_vocus_screen_node.test.mjs).
 //
 // DEVIATIONS AND NOTES (also in the final report)
-//   * The painters for the peddler, bonfire, forge, chest, cache and desk are drawn here (ART.tk celFill, glow, sparkle with plain
-//     canvas fallbacks): no scene art existed for them. Only reward and the event plate use ART.scene.draw, and every painter falls
-//     back to plain canvas when the toolkit is missing. Icons come from UI.icon, so real icon art appears without a change here.
+//   * The painters are drawn here in the chibi house style (ART.rj cel helpers when present, the toolkit's, plain canvas last): Jordan's Merch Stall (Jordan is ART.cast's figure),
+//     the Green Room with its kettle, the Studio with its drum pad and drumstick, the Gift Box, the Sparkle Booth, the goodie-bag table and the Detour board's street. Only
+//     reward and the Detour plate use ART.scene.draw, and every painter falls back to plain canvas when the toolkit is missing. Icons come from UI.icon, so real icon art
+//     appears without a change here.
 //   * Boss rewards use a relic page first (RUN offers three), then the card page: the claim happens after both decisions.
 //   * A gem cache that was already taken reopens WITHOUT its tiles (RUN does not remember which gem was taken).
 //   * A long press never also acts. The shop shelf cards use UI.tip.swallowClick on pointerup after their 420 ms peek, the plaques get the same
@@ -888,33 +889,49 @@
   }
 
   function paintTable(ctx) {
-    // a lacquered indigo table in perspective with a gold braid along the far edge, and a pool of lantern light on it. The table is mirrored about the stage
-    // axis (its right side runs off the screen), so the cards and the light sit on it however many are dealt.
+    // the goodie-bag table: a backstage table in perspective under a teal cloth, a cream, pink and green tape along the far edge, a pool of warm light, a striped goodie bag, a
+    // setlist (scribbles only) and a few stickers. The table is mirrored about the stage axis (its right side runs off the screen), so the cards and the light sit on it however many are dealt.
     const ax = rwAxis(), L = 150, B = -50;
     const g1 = ctx.createLinearGradient(0, 400, 0, 720);
-    g1.addColorStop(0, '#2c1f6b'); g1.addColorStop(0.35, '#1d1550'); g1.addColorStop(1, '#0f0b30');
+    g1.addColorStop(0, '#2a8f94'); g1.addColorStop(0.35, '#1f6f76'); g1.addColorStop(1, '#10393f');
     ctx.beginPath(); ctx.moveTo(L, 402); ctx.lineTo(2 * ax - L, 402); ctx.lineTo(2 * ax - B, 720); ctx.lineTo(B, 720); ctx.closePath();
     ctx.fillStyle = g1; ctx.fill();
     ctx.save(); ctx.clip();
-    // seigaiha waves on the cloth
-    ctx.strokeStyle = 'rgba(245,201,106,0.16)'; ctx.lineWidth = 1.4;
+    // a sparkle print on the cloth, in rows that widen toward the viewer
     for (let row = 0; row < 9; row++) {
-      const y = 410 + row * row * 5 + row * 18, rr = 22 + row * 5.5;
-      for (let x = -80; x < 1700; x += rr * 2) {
-        const ox = x + (row % 2 ? rr : 0);
-        for (let k = 3; k >= 1; k--) { ctx.beginPath(); ctx.arc(ox, y + rr * 0.6, rr * k / 3, Math.PI, 0); ctx.stroke(); }
-      }
+      const y = 418 + row * row * 5 + row * 17, sp = 34 + row * 10, s = 2 + row * 0.55;
+      ctx.fillStyle = 'rgba(255,244,230,' + (0.10 + row * 0.012).toFixed(3) + ')';
+      for (let x = -60 + (row % 2) * sp / 2; x < 1700; x += sp) { ctx.beginPath(); for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4 - Math.PI / 2, rr = q % 2 ? s * 0.4 : s; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); }
     }
     const g2 = ctx.createRadialGradient(ax, 560, 20, ax, 560, 520);
-    g2.addColorStop(0, 'rgba(255,214,140,0.32)'); g2.addColorStop(1, 'rgba(255,214,140,0)');
+    g2.addColorStop(0, 'rgba(255,214,140,0.34)'); g2.addColorStop(1, 'rgba(255,214,140,0)');
     ctx.fillStyle = g2; ctx.fillRect(0, 380, 1280, 340);
     ctx.restore();
-    ctx.strokeStyle = '#f5c96a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(L, 402); ctx.lineTo(2 * ax - L, 402); ctx.stroke();
-    ctx.strokeStyle = 'rgba(20,15,46,0.85)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(L - 4, 407); ctx.lineTo(2 * ax - L + 4, 407); ctx.stroke();
-    ctx.strokeStyle = 'rgba(245,201,106,0.45)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(L - 10, 414); ctx.lineTo(2 * ax - L + 10, 414); ctx.stroke();
+    // the tape along the far edge: pink, cream and green washi, with a dark line under it
+    [[402, HV.pink], [407, HV.cream], [412, HV.green]].forEach((s) => { ctx.strokeStyle = s[1]; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(L, s[0]); ctx.lineTo(2 * ax - L, s[0]); ctx.stroke(); });
+    ctx.strokeStyle = 'rgba(45,23,15,0.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L - 4, 399); ctx.lineTo(2 * ax - L + 4, 399); ctx.stroke(); ctx.beginPath(); ctx.moveTo(L - 8, 415); ctx.lineTo(2 * ax - L + 8, 415); ctx.stroke();
+    // the goodie bag at the right end of the table: a striped paper bag, ribbon handles, a heart tag
+    ctx.save(); ctx.translate(1190, 650);
+    ctx.fillStyle = 'rgba(8,24,28,0.5)'; ctx.beginPath(); ctx.ellipse(6, 4, 66, 10, 0, 0, TAU); ctx.fill();
+    inkLine(ctx, [[-26, -112], [-30, -150], [0, -168], [30, -150], [26, -112]], 9, INK, { taper: 0, wobble: 0 }); inkLine(ctx, [[-26, -112], [-30, -150], [0, -168], [30, -150], [26, -112]], 4.4, HV.pink, { taper: 0, wobble: 0 });
+    cel(ctx, { poly: [[-48, -120], [48, -120], [54, 0], [-54, 0]] }, HV.cream, { line: 2.8, depth: 12, tension: 0, shadow: '#efd8bc',
+      decor: (c) => { c.fillStyle = HV.pink; for (let i = -3; i <= 3; i += 2) c.fillRect(i * 16 - 8, -126, 16, 130); } });
+    cel(ctx, { poly: [[-48, -120], [48, -120], [44, -102], [-44, -102]] }, HV.cream, { line: 2.4, depth: 4, tension: 0, shadow: '#efd8bc' });
+    heartAt(ctx, 0, -50, 20, HV.cream, 2.4); heartAt(ctx, 0, -50, 13, HV.red, 2);
+    starAt(ctx, 34, -98, 9, HV.gold, 0.2, 1.8);
+    ctx.restore();
+    // a setlist lying on the cloth, with a pencil
+    ctx.save(); ctx.translate(392, 632); ctx.rotate(-0.09);
+    cel(ctx, R4(-44, -52, 88, 104), HV.cream, { line: 2.2, depth: 6, tension: 0 });
+    for (let k = 0; k < 7; k++) inkLine(ctx, [[-32, -34 + k * 13], [-32 + 24 + ((k * 9) % 34), -34 + k * 13]], 2, k === 0 ? HV.pinkD : 'rgba(45,23,15,0.55)', { taper: 0.3, wobble: 0 });
+    ctx.fillStyle = 'rgba(63,207,106,0.7)'; ctx.fillRect(-14, -60, 30, 14);
+    ctx.restore();
+    inkLine(ctx, [[430, 688], [496, 664]], 9, INK, { taper: 0, wobble: 0 }); inkLine(ctx, [[430, 688], [496, 664]], 5, HV.gold, { taper: 0, wobble: 0 });
+    // stickers: die-cut, a little crooked
+    [[540, 680, 0], [992, 684, 1], [1086, 668, 2], [610, 704, 1], [1130, 700, 0]].forEach((s, i) => {
+      const c = [HV.pink, HV.green, HV.gold, HV.sky, HV.violet][i % 5];
+      if (s[2] === 0) { heartAt(ctx, s[0], s[1], 13, HV.cream, 2); heartAt(ctx, s[0], s[1], 9.5, c, 1.4); } else if (s[2] === 1) { starAt(ctx, s[0], s[1], 16, HV.cream, 0.2 * i, 2); starAt(ctx, s[0], s[1], 12, c, 0.2 * i, 1.4); } else { celOval(ctx, s[0], s[1], 13, 13, HV.cream, { line: 1.8, depth: 3 }); celOval(ctx, s[0], s[1], 9.5, 9.5, c, { line: 1.4, depth: 2 }); }
+    });
   }
 
   function paintRewardBack(ctx, t, S) {
@@ -925,12 +942,12 @@
     ctx.fillStyle = S.boss ? 'rgba(13,11,30,0.5)' : 'rgba(13,11,30,0.66)';
     ctx.fillRect(0, 0, 1280, 720);
     if (S.boss) {
-      // a slow sunburst behind the banner (which is centred on the stage axis, see RW)
+      // a slow sunburst behind the banner (which is centred on the stage axis, see RW), in warm cream and pink
       ctx.save(); ctx.translate(rwAxis(), 96); ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 18; i++) {
-        const a = i / 18 * TAU + t * 0.05; ctx.rotate(0);
+        const a = i / 18 * TAU + t * 0.05;
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 900, a, a + 0.09); ctx.closePath();
-        ctx.fillStyle = 'rgba(255,214,140,0.06)'; ctx.fill();
+        ctx.fillStyle = i % 2 ? 'rgba(255,214,140,0.06)' : 'rgba(255,160,200,0.05)'; ctx.fill();
       }
       ctx.restore();
     }
@@ -945,10 +962,16 @@
     const tk = TK();
     if (tk) {
       safe(() => tk.kirakira(ctx, 0, 0, 1280, 720, t, { n: S.boss ? 46 : 20, seed: 11, size: 3.4, rise: 9 }));
-      if (S.boss || S.elite) for (let i = 0; i < (S.boss ? 16 : 7); i++) {
-        const v = (i * 0.618034) % 1, w = (i * 0.37 + 0.11) % 1;
-        const x = ((v * 1400 + t * (18 + w * 26)) % 1500) - 110, y = ((w * 900 + t * (34 + v * 30)) % 800) - 60;
-        tk.petal(ctx, x, y, 8 + w * 6, t * (0.6 + v) + i, 0.75);
+      // a win brings confetti: small bright squares and strips tumbling down (never in a grid), more for a Headliner
+      if (S.boss || S.elite) {
+        const m = motionK(), cols = [HV.pink, HV.green, HV.gold, HV.sky, HV.cream, HV.violet];
+        for (let i = 0; i < (S.boss ? 30 : 12); i++) {
+          const v = (i * 0.618034) % 1, w = (i * 0.37 + 0.11) % 1;
+          const x = ((v * 1400 + Math.sin(t * 0.8 + i) * 24 * m + t * (10 + w * 14) * m) % 1400) - 60, y = ((w * 900 + t * (40 + v * 36) * m) % 820) - 60;
+          ctx.save(); ctx.translate(x, y); ctx.rotate(t * (0.8 + v) * m + i); ctx.globalAlpha = 0.85; ctx.fillStyle = cols[i % 6];
+          ctx.fillRect(-5, -2.5 - (i % 3), 10, 5 + (i % 3) * 1.4);
+          ctx.restore();
+        }
       }
       safe(() => tk.vignette(ctx, 1280, 720, { color: '#0d0b1e', alpha: 0.6 }));
     }
@@ -1533,66 +1556,62 @@
     return chips;
   }
 
-  // the dusk street behind the kamishibai stage: a violet sky going rose at the roofline, shuttered shopfronts down both edges, paper lanterns on a line,
-  // cobbles under the stage. Most of the middle is hidden by the butai itself, so the street lives at the edges. The baked layer is still; lantern light breathes live.
-  const DESK_LANTERNS = [[22, 214], [58, 292], [1222, 238], [1258, 318], [188, 62], [352, 74], [640, 66], [928, 74], [1092, 62]];
-  function paintDesk(ctx, t, S) {
-    layer(ctx, 'nk:desk', 1280, 720, (g) => {
-      const sky = g.createLinearGradient(0, 0, 0, 600);
-      sky.addColorStop(0, '#0a0820'); sky.addColorStop(0.42, '#1d1550'); sky.addColorStop(0.78, '#4a3490'); sky.addColorStop(1, '#a8527a');
-      g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
-      const r = U.rng(4242);
-      g.fillStyle = 'rgba(255,248,240,0.7)';
-      for (let i = 0; i < 46; i++) { g.globalAlpha = 0.25 + r() * 0.5; g.fillRect(Math.floor(r() * 1280), Math.floor(r() * 300), 2, 2); }
-      g.globalAlpha = 1;
-      // a far roofline of tiled eaves
-      g.fillStyle = '#241a50';
-      g.beginPath(); g.moveTo(0, 560);
-      for (let x = 0; x <= 1280; x += 80) { const hh = 430 + ((x / 80) * 37 % 5) * 14; g.lineTo(x, hh + 26); g.quadraticCurveTo(x + 40, hh - 18, x + 80, hh + 26); }
-      g.lineTo(1280, 560); g.closePath(); g.fill();
-      // shopfronts down both edges: dark timber, a curved eave, a lit paper window and a short noren
-      const shop = (x, w, top, flip) => {
-        g.fillStyle = '#150f34'; g.fillRect(x, top, w, 560 - top);
-        g.fillStyle = '#0b0820'; g.beginPath(); g.moveTo(x - 10, top + 10); g.quadraticCurveTo(x + w / 2, top - 30, x + w + 10, top + 10); g.lineTo(x + w + 10, top + 24); g.lineTo(x - 10, top + 24); g.closePath(); g.fill();
-        g.fillStyle = 'rgba(245,201,106,0.55)'; g.fillRect(x - 10, top + 22, w + 20, 2);
-        const wx = x + (flip ? 12 : w - 56), wy = top + 52;
-        const win = g.createLinearGradient(0, wy, 0, wy + 70); win.addColorStop(0, '#ffd9a0'); win.addColorStop(1, '#ff9a5a');
-        g.fillStyle = win; g.fillRect(wx, wy, 44, 70);
-        g.strokeStyle = '#150f34'; g.lineWidth = 3;
-        g.beginPath(); g.moveTo(wx + 22, wy); g.lineTo(wx + 22, wy + 70); g.moveTo(wx, wy + 35); g.lineTo(wx + 44, wy + 35); g.stroke();
-        g.fillStyle = '#3b2a7a'; for (let i = 0; i < 3; i++) g.fillRect(x + 8 + i * ((w - 16) / 3), 468, (w - 16) / 3 - 4, 70);
-      };
-      shop(-16, 108, 300, true); shop(1188, 108, 330, false);
-      // the street: wet cobbles that hold the lantern light, a kerb line, the stage's own shadow
-      const st = g.createLinearGradient(0, 560, 0, 720); st.addColorStop(0, '#2c1f4e'); st.addColorStop(1, '#0d0a22');
-      g.fillStyle = st; g.fillRect(0, 560, 1280, 160);
-      g.strokeStyle = 'rgba(245,201,106,0.16)'; g.lineWidth = 1;
-      for (let row = 0; row < 6; row++) {
-        const y = 568 + row * row * 2.4 + row * 8, off = row % 2 ? 22 : 0, step = 44 + row * 12;
-        g.beginPath(); g.moveTo(0, y); g.lineTo(1280, y); g.stroke();
-        for (let x = -step + off; x < 1300; x += step) { g.beginPath(); g.moveTo(x, y); g.lineTo(x - 6 - row, y + 14 + row * 3); g.stroke(); }
+  // the dusk street behind the Detour board: a violet sky going peach at the roofline, a skyline of candy-lit windows, a lamppost on the left edge and a tree on the right with
+  // fairy lights strung between them. The board itself covers most of the page, so the street lives at the edges; the baked layer is still and the lights breathe live.
+  const DESK_LIGHTS = [];                      // [x, y, colour]: every bulb of the strings and the lamp, from the baked layer
+  function deskBackdrop(g) {
+    DESK_LIGHTS.length = 0;
+    const r = U.rng(4242);
+    const sky = g.createLinearGradient(0, 0, 0, 640);
+    sky.addColorStop(0, '#120c33'); sky.addColorStop(0.3, '#2d2070'); sky.addColorStop(0.6, '#5b3fa8'); sky.addColorStop(0.84, '#c9709a'); sky.addColorStop(1, '#ffb38a');
+    g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
+    for (let i = 0; i < 56; i++) { g.fillStyle = 'rgba(255,248,236,' + (0.2 + r() * 0.55).toFixed(2) + ')'; g.fillRect(Math.floor(r() * 1280), Math.floor(r() * 300), 2, 2); }
+    // the skyline: candy house fronts gone dusky, each with a few lit windows
+    const fronts = ['#e8553f', '#8fe3c0', HV.gold, HV.sky, HV.pink];
+    for (let x = -20, i = 0; x < 1300; x += 84 + (i % 3) * 14, i++) {
+      const w = 76 + (i % 2) * 18, h = 150 + ((i * 37) % 5) * 26, top = 600 - h, c = U.color.mix(fronts[i % 5], '#2d2070', 0.68);
+      cel(g, R4(x, top, w, h), c, { line: 2, depth: 6, tension: 0, lineColor: 'rgba(45,23,15,0.7)' });
+      cel(g, { poly: [[x - 4, top], [x + w + 4, top], [x + w / 2, top - 22]] }, U.color.mix(c, '#120c33', 0.3), { line: 2, depth: 4, tension: 0, lineColor: 'rgba(45,23,15,0.7)' });
+      for (let wy = top + 22; wy < 570; wy += 38) for (let wx = x + 10; wx < x + w - 16; wx += 28) {
+        if (r() > 0.55) continue;
+        g.fillStyle = r() > 0.5 ? '#ffd9a0' : '#ffc2dc'; g.fillRect(wx, wy, 16, 22); g.strokeStyle = 'rgba(45,23,15,0.7)'; g.lineWidth = 1.6; g.strokeRect(wx, wy, 16, 22);
       }
-      g.fillStyle = 'rgba(245,201,106,0.5)'; g.fillRect(0, 558, 1280, 2);
-      // the lantern line: a sagging cord and paper lanterns with a vermilion band
-      g.strokeStyle = 'rgba(10,8,32,0.9)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 38); g.quadraticCurveTo(640, 98, 1280, 38); g.stroke();
-      DESK_LANTERNS.forEach((p, i) => {
-        const x = p[0], y = p[1], sc = i < 4 ? 1 : 0.8;
-        g.strokeStyle = '#0a0820'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - 30 * sc); g.lineTo(x, y - 18 * sc); g.stroke();
-        g.fillStyle = '#e8583d'; g.beginPath(); g.ellipse(x, y, 15 * sc, 20 * sc, 0, 0, TAU); g.fill();
-        g.lineWidth = 2.4; g.stroke();
-        g.strokeStyle = 'rgba(255,225,160,0.6)'; g.lineWidth = 1.4;
-        for (let k = -1; k <= 1; k++) { g.beginPath(); g.ellipse(x, y, 15 * sc, Math.abs(k) * 6 * sc + 2, 0, 0, TAU); g.stroke(); }
-        g.fillStyle = '#0a0820'; g.fillRect(x - 7 * sc, y - 22 * sc, 14 * sc, 4); g.fillRect(x - 7 * sc, y + 18 * sc, 14 * sc, 4);
-      });
-    });
+    }
+    // the street: wet cobbles, a kerb line
+    const st = g.createLinearGradient(0, 596, 0, 720); st.addColorStop(0, '#3a2a6a'); st.addColorStop(1, '#0d0a22');
+    g.fillStyle = st; g.fillRect(0, 596, 1280, 124);
+    g.strokeStyle = 'rgba(255,207,138,0.14)'; g.lineWidth = 1;
+    for (let row = 0; row < 6; row++) {
+      const y = 606 + row * row * 2.4 + row * 9, off = row % 2 ? 22 : 0, step = 44 + row * 12;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(1280, y); g.stroke();
+      for (let x = -step + off; x < 1300; x += step) { g.beginPath(); g.moveTo(x, y); g.lineTo(x - 6 - row, y + 14 + row * 3); g.stroke(); }
+    }
+    g.fillStyle = HV.cream; g.fillRect(0, 594, 1280, 5); inkLine(g, [[0, 594], [1280, 594]], 2.4, INK, { taper: 0, wobble: 0 }); inkLine(g, [[0, 599], [1280, 599]], 2.4, INK, { taper: 0, wobble: 0 });
+    // the lamppost on the left edge: a pole, a curved arm and a glass lantern
+    cel(g, R4(20, 170, 12, 440), '#3a3448', { line: 2.2, depth: 4, tension: 0, hi: '#615f6d' });
+    cel(g, RR(8, 598, 36, 18, 4), '#3a3448', { line: 2.2, depth: 3 });
+    cel(g, RR(6, 120, 40, 52, 10), '#fff4d6', { line: 2.6, depth: 6, tension: 0.5 });
+    cel(g, [[2, 120, 1], [26, 100], [50, 120, 1]], '#3a3448', { line: 2.4, depth: 3, tension: 0.8 });
+    DESK_LIGHTS.push([26, 146, '#ffcf8a']);
+    // the tree on the right edge: a trunk and a round crown of mint-green puffs
+    cel(g, { poly: [[1244, 600], [1254, 280], [1272, 280], [1282, 600]] }, '#8a5a38', { line: 2.4, depth: 6, tension: 0 });
+    [[1250, 200, 70, '#3fcf6a'], [1190, 250, 52, '#2da656'], [1286, 252, 56, '#2da656'], [1230, 150, 50, '#6fe08a'], [1280, 150, 48, '#3fcf6a']].forEach((c) => celOval(g, c[0], c[1], c[2], c[2] * 0.9, c[3], { line: 2.4, depth: 8 }));
+    // fairy lights: one string from the lamp to the tree, and one along the top edge
+    fairyString(g, 30, 150, 1252, 196, 120, 26, [HV.gold, HV.pink, HV.green, HV.cream, HV.sky], 4.8).forEach((b) => DESK_LIGHTS.push(b));
+    fairyString(g, -6, 38, 1286, 38, 20, 26, [HV.pink, HV.gold, HV.cream, HV.green, HV.sky], 4.8).forEach((b) => DESK_LIGHTS.push(b));
+  }
+  function paintDesk(ctx, t, S) {
+    layer(ctx, 'nk:desk', 1280, 720, deskBackdrop);
+    const m = motionK();
+    DESK_LIGHTS.forEach((b, i) => glow(ctx, b[0], b[1] + (i === 0 ? 0 : 3), i === 0 ? 110 + 8 * Math.sin(t * 2.1) : 17, b[2], i === 0 ? 0.4 : 0.24 + 0.3 * (0.5 + 0.5 * Math.sin(t * (1.1 + (i % 5) * 0.3) * m + i * 2.1))));
     const tk = TK();
     if (tk) {
-      DESK_LANTERNS.forEach((p, i) => glow(ctx, p[0], p[1], (i < 4 ? 120 : 90) + 8 * Math.sin(t * 2.1 + i * 1.7), '#ffb070', 0.3 + 0.06 * Math.sin(t * 3.1 + i * 2.3)));
-      glow(ctx, 640, 380, 560, '#ffd9a0', 0.1 + 0.02 * Math.sin(t * 1.7));
+      glow(ctx, 640, 380, 560, '#ffd9a0', 0.08 + 0.02 * Math.sin(t * 1.7));
       safe(() => tk.kirakira(ctx, 0, 0, 1280, 720, t, { n: 18, seed: 5, size: 3, rise: 7 }));
-      safe(() => tk.mist(ctx, 0, 520, 1280, 200, t, { n: 4, seed: 9, alpha: 0.06, color: '#c9bff0', speed: 6 }));
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.45 }));
+      safe(() => tk.mist(ctx, 0, 520, 1280, 200, t, { n: 4, seed: 9, alpha: 0.06, color: '#e6d9ff', speed: 6 }));
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.4 }));
     }
+    void S;
   }
 
   function enterEvent(S, params, root) {
@@ -2326,19 +2345,33 @@
   }
 
   // ==================================================================================================================
-  // painters. Every page paints its own stage on #view: a cached backdrop layer (ART.sprite) plus a few animated things.
+  // painters. Every page paints its own stage on #view: cached backdrop layers (ART.sprite) plus a few animated things.
   // They only ever read the art toolkit, never a clock: t is the frame clock in seconds.
+  // The look is the chibi house style (HV_ART_AUDIO 1 and 3.4): the warm brown line, flat cel colour with ONE hard shadow from the upper right, candy
+  // colours on the deep indigo night, sparkles and small notes as the magic. Every painter falls back to plain canvas when ART.rj or the toolkit is missing.
+  // Tests record these painters (tests/hocus_vocus_screen_node.test.mjs, "alignment"): the plinths, glows and floor shadows of the Sparkle Booth, the two posts and
+  // planks of the Merch Stall, Jordan's translate, the Studio's first rotate (the drumstick) and its single clip, and the lit pool of the goodie table are pinned.
   // ==================================================================================================================
   const rgba = (hex, a) => U.color.rgba(hex, a);
-  const INK = '#140f2e';
+  const INK = '#2d170f';                      // the chibi line: a warm near-black brown (the kit's RJ.C.ink)
+  const HV = {
+    pink: '#ff7eb6', pinkL: '#ffc2dc', pinkD: '#c93f78', green: '#3fcf6a', greenD: '#1f7a3a', lime: '#c6ff3d', violet: '#a77bff', orange: '#ff9a2e',
+    teal: '#2ec4b6', tealD: '#0d4f4a', tealL: '#e6fffb', cream: '#fff4e6', cream2: '#fff8ec', gold: '#ffd84d', red: '#c8264f', redD: '#8f1838', sky: '#7cc6ff', peach: '#ffb38a', bulb: '#fff4d6',
+  };
+  const motionK = () => (UI.opt && UI.opt.reduceMotion ? 0.3 : 1);
+  const rjk = () => (typeof ART !== 'undefined' && ART && ART.rj) || null;
+  const warm = (hex, dl) => { const rj = rjk(); return rj && isFn(rj.shade) ? rj.shade(hex, dl) : hex; };
+  const R4 = (x, y, w, h) => ({ poly: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]] });
+  const RR = (x, y, w, h, r) => { const tk = TK(); return tk && isFn(tk.rrectPts) ? tk.rrectPts(x, y, w, h, r) : R4(x, y, w, h); };
   function rrPath(g, x, y, w, h, r) {
     r = Math.max(0, Math.min(r, w / 2, h / 2));
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
   }
-  // a cel-shaded polygon or smooth shape through the art toolkit, with a plain fallback
+  // a cel-shaded polygon or smooth shape: the kit's house defaults (warm brown line, warm shadow) when ART.rj is there, the toolkit's otherwise, plain canvas last
   function cel(g, shape, base, o) {
-    const tk = TK();
-    if (tk && isFn(tk.celFill)) { tk.celFill(g, shape, base, o); return; }
+    const tk = TK(), rj = rjk();
+    if (rj && isFn(rj.cel)) { rj.cel(g, shape, base, Object.assign({ line: 2.2 }, o)); return; }
+    if (tk && isFn(tk.celFill)) { tk.celFill(g, shape, base, Object.assign({ line: 2.2, lineColor: INK }, o)); return; }
     g.beginPath();
     const pts = shape.poly || shape;
     pts.forEach((p, i) => { if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]); });
@@ -2346,8 +2379,8 @@
   }
   function celOval(g, cx, cy, rx, ry, base, o) {
     const tk = TK();
-    if (tk && isFn(tk.celEllipse)) { tk.celEllipse(g, cx, cy, rx, ry, base, o); return; }
-    g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); g.fillStyle = base; g.fill(); g.lineWidth = 2; g.strokeStyle = INK; g.stroke();
+    if (tk && isFn(tk.celEllipse)) { tk.celEllipse(g, cx, cy, rx, ry, base, Object.assign({ line: 2.2, lineColor: INK, shadow: warm(base) }, o)); return; }
+    g.beginPath(); g.ellipse(cx, cy, Math.max(0, rx), Math.max(0, ry), 0, 0, TAU); g.fillStyle = base; g.fill(); g.lineWidth = 2; g.strokeStyle = INK; g.stroke();
   }
   function inkLine(g, pts, w, color, o) {
     const tk = TK();
@@ -2355,310 +2388,322 @@
     g.beginPath(); pts.forEach((p, i) => { if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]); });
     g.lineWidth = w; g.strokeStyle = color || INK; g.lineCap = 'round'; g.stroke();
   }
-
-  // ---------------------------------------------------------------- the peddler: a round old merchant under a tower of boxes
-  // Feet at (0, 0), faces right, about 330 px tall with the pack. Body, hat and four faces are baked once (ART.sprite) and moved per frame.
-  const PD_OX = 190, PD_OY = 410;
-  function pdBody(g) {
-    g.translate(PD_OX, PD_OY);
-    const wicker = (ctx) => { ctx.strokeStyle = 'rgba(94,58,22,0.55)'; ctx.lineWidth = 1.6; for (let i = -20; i < 260; i += 12) { ctx.beginPath(); ctx.moveTo(-170, -330 + i); ctx.lineTo(-30, -330 + i + 26); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-30, -330 + i); ctx.lineTo(-170, -330 + i + 26); ctx.stroke(); } };
-    // the pack frame and everything strapped to it
-    cel(g, { poly: [[-156, -300], [-44, -304], [-38, -112], [-152, -106]] }, '#b98a46', { tension: 0.2, line: 3.4, decor: wicker, hi: true });
-    cel(g, { poly: [[-150, -356], [-78, -358], [-76, -300], [-152, -298]] }, '#c8302f', { tension: 0.2, line: 3, decor: (c) => { c.fillStyle = '#f5c96a'; c.fillRect(-152, -334, 80, 7); c.fillRect(-118, -358, 7, 62); } });
-    cel(g, { poly: [[-104, -338], [-36, -326], [-40, -288], [-108, -298]] }, '#2f9c9c', { tension: 0.2, line: 3, decor: (c) => { c.fillStyle = '#f3e6c8'; c.fillRect(-110, -318, 76, 5); } });
-    celOval(g, -112, -378, 36, 28, '#2b3a8f', { line: 3, decor: (c) => { c.fillStyle = 'rgba(243,230,200,0.85)'; for (let i = 0; i < 9; i++) { c.beginPath(); c.arc(-136 + (i % 3) * 24, -392 + Math.floor(i / 3) * 14, 3, 0, TAU); c.fill(); } } });
-    celOval(g, -112, -406, 10, 9, '#2b3a8f', { line: 2.6 });
-    // rope straps over the shoulder
-    inkLine(g, [[-46, -290], [-30, -230], [-24, -170], [-32, -118]], 6, '#e8383d', { taper: 0.05, wobble: 0.05 });
-    inkLine(g, [[-46, -180], [-10, -178], [30, -192]], 5, '#e8383d', { taper: 0.05, wobble: 0.05 });
-    // a little paper lantern and a gourd dangle from the pack
-    inkLine(g, [[-140, -300], [-158, -276]], 2.4, INK, { taper: 0.05 });
-    celOval(g, -160, -252, 15, 20, '#ff8a3a', { line: 2.6, decor: (c) => { c.strokeStyle = 'rgba(93,15,28,0.7)'; c.lineWidth = 1.4; for (let k = -10; k <= 10; k += 5) { c.beginPath(); c.ellipse(-160, -252, Math.abs(k) + 2, 20, 0, 0, TAU); c.stroke(); } } });
-    g.fillStyle = INK; g.fillRect(-171, -274, 22, 5); g.fillRect(-171, -234, 22, 5);
-    celOval(g, -168, -180, 13, 14, '#d0a84c', { line: 2.6 });
-    celOval(g, -168, -200, 8, 9, '#d0a84c', { line: 2.4 });
-    // legs, leggings and straw sandals
-    cel(g, { poly: [[-26, -64], [-6, -64], [-6, -10], [-30, -10]] }, '#20255e', { tension: 0.2, line: 3 });
-    cel(g, { poly: [[8, -64], [30, -64], [32, -10], [10, -10]] }, '#20255e', { tension: 0.2, line: 3 });
-    celOval(g, -18, -6, 22, 9, '#d0a84c', { line: 3 });
-    celOval(g, 24, -6, 22, 9, '#d0a84c', { line: 3 });
-    // the robe: a short indigo kimono, paper-white hem, vermilion obi
-    cel(g, [[-56, -64], [-64, -128], [-46, -184], [0, -204], [48, -184], [66, -128], [58, -64], [0, -50]], '#2f3f9a', { tension: 0.8, line: 3.4, hi: true, rim: '#7f9bff', halftone: true });
-    g.fillStyle = '#f3e6c8'; g.beginPath(); g.moveTo(-57, -70); g.quadraticCurveTo(0, -46, 59, -70); g.lineTo(58, -60); g.quadraticCurveTo(0, -38, -56, -60); g.closePath(); g.fill();
-    cel(g, { poly: [[-62, -132], [64, -132], [64, -110], [-62, -110]] }, '#e8383d', { tension: 0.15, line: 3, hi: true });
-    celOval(g, 62, -121, 11, 13, '#b91f30', { line: 2.6 });
-    celOval(g, -8, -160, 13, 13, '#f3e6c8', { line: 2.4, decor: (c) => { c.strokeStyle = 'rgba(20,15,46,0.7)'; c.lineWidth = 2; c.beginPath(); c.arc(-8, -160, 6, 0, TAU); c.stroke(); } });
-    // white collar V
-    cel(g, { poly: [[-20, -202], [0, -170], [22, -202], [30, -196], [0, -156], [-30, -196]] }, '#f3e6c8', { tension: 0.1, line: 2.6 });
-    // the far sleeve and hand gripping the strap
-    cel(g, [[-52, -180], [-64, -150], [-58, -124], [-40, -128], [-34, -160]], '#3a4cb0', { tension: 0.7, line: 3 });
-    celOval(g, -46, -122, 9, 9, '#f7d9b5', { line: 2.6 });
+  // a sagging cord from (x0, y0) to (x1, y1): the middle hangs `drop` lower
+  const sagPts = (x0, y0, x1, y1, drop, n) => {
+    const p = [];
+    for (let i = 0; i <= n; i++) { const u = i / n; p.push([x0 + (x1 - x0) * u, y0 + (y1 - y0) * u + drop * 4 * u * (1 - u)]); }
+    return p;
+  };
+  function heartAt(g, x, y, s, fill, lw) {
+    g.save(); g.beginPath();
+    g.moveTo(x, y + s * 0.9); g.bezierCurveTo(x - s * 1.5, y - s * 0.2, x - s * 0.7, y - s * 1.2, x, y - s * 0.45); g.bezierCurveTo(x + s * 0.7, y - s * 1.2, x + s * 1.5, y - s * 0.2, x, y + s * 0.9); g.closePath();
+    g.fillStyle = fill; g.fill(); g.lineWidth = lw || 2; g.lineJoin = 'round'; g.strokeStyle = INK; g.stroke(); g.restore();
+  }
+  function starAt(g, x, y, r, fill, rot, lw) {
+    g.save(); g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = (rot || 0) - Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.46 : r; if (i === 0) g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+    g.closePath(); g.fillStyle = fill; g.fill(); g.lineWidth = lw || 2; g.lineJoin = 'round'; g.strokeStyle = INK; g.stroke(); g.restore();
+  }
+  // the owners' RJ monogram (ART.scene.monogram) with a plain split disc when the scene art is missing
+  function monoAt(g, x, y, r) {
+    let ok = false;
+    try { if (typeof ART !== 'undefined' && ART && ART.scene && isFn(ART.scene.monogram)) ok = ART.scene.monogram(g, x, y, r, {}) !== false; } catch (e) { ok = false; }
+    if (ok) return;
+    g.save(); g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
+    g.fillStyle = HV.pink; g.fillRect(x - r, y - r, r * 2, r * 2);
+    g.fillStyle = HV.green; g.beginPath(); g.moveTo(x + r, y - r); g.lineTo(x + r, y + r); g.lineTo(x - r, y + r); g.closePath(); g.fill();
+    g.restore();
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.lineWidth = 2; g.strokeStyle = INK; g.stroke();
+  }
+  // a fairy bulb (socket, glass, catchlight) and a string of them on a sagging wire; the bulbs come back as [x, y, colour] so the live frame can make them glow
+  function bulbDot(g, x, y, r, hex) {
+    g.fillStyle = '#4a3a30'; g.fillRect(x - r * 0.45, y - r * 1.4, r * 0.9, r * 0.8);
+    g.beginPath(); g.ellipse(x, y, r * 0.9, r * 1.1, 0, 0, TAU); g.fillStyle = hex; g.fill(); g.lineWidth = 1.6; g.strokeStyle = INK; g.stroke();
+    g.beginPath(); g.arc(x - r * 0.3, y - r * 0.3, Math.max(0.6, r * 0.22), 0, TAU); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fill();
+  }
+  function fairyString(g, x0, y0, x1, y1, drop, n, cols, r) {
+    inkLine(g, sagPts(x0, y0, x1, y1, drop, 24), 2.2, INK, { taper: 0, wobble: 0 });
+    const out = [];
+    for (let i = 1; i <= n; i++) {
+      const u = i / (n + 1), x = x0 + (x1 - x0) * u, y = y0 + (y1 - y0) * u + drop * 4 * u * (1 - u) + r * 1.5, c = cols[(i - 1) % cols.length];
+      bulbDot(g, x, y, r, c); out.push([x, y, c]);
+    }
+    return out;
   }
 
-  function pdFace(g, mood) {
-    // head centred at (90, 100) in a 180 x 170 sprite
-    const cx = 90, cy = 104;
-    g.translate(0, 0);
-    // ears, then a round face
-    celOval(g, cx - 46, cy + 4, 9, 13, '#f2c9a0', { line: 2.6 });
-    celOval(g, cx + 46, cy + 4, 9, 13, '#f2c9a0', { line: 2.6 });
-    celOval(g, cx, cy, 48, 46, '#f9dcb8', { line: 3.4, hi: true, rim: '#ffe9d0', rimSide: 'light', depth: 9 });
-    // cheeks
-    g.fillStyle = 'rgba(255,126,110,0.5)';
-    g.beginPath(); g.ellipse(cx - 30, cy + 12, 11, 7, 0, 0, TAU); g.fill();
-    g.beginPath(); g.ellipse(cx + 30, cy + 12, 11, 7, 0, 0, TAU); g.fill();
-    // white bushy brows
-    const brow = (x, dy, tilt) => cel(g, [[x - 17, cy - 22 + dy + tilt], [x - 3, cy - 30 + dy], [x + 15, cy - 24 + dy - tilt], [x + 4, cy - 19 + dy], [x - 12, cy - 19 + dy + tilt]], '#f4f1ff', { tension: 0.8, line: 2.4, depth: 3 });
-    const sad = mood === 'sad', shock = mood === 'shock', happy = mood === 'happy';
-    brow(cx - 22, sad ? -2 : shock ? -8 : 0, sad ? 4 : 0);
-    brow(cx + 22, sad ? -2 : shock ? -8 : 0, sad ? 4 : 0);
-    // eyes
-    const eye = (x) => {
-      if (shock) { celOval(g, x, cy - 6, 9, 11, '#ffffff', { line: 2.6, shadow: false }); g.fillStyle = INK; g.beginPath(); g.arc(x, cy - 4, 3.6, 0, TAU); g.fill(); return; }
-      if (sad) { inkLine(g, [[x - 10, cy - 6], [x, cy - 1], [x + 10, cy - 8]], 3.4, INK, { taper: 0.2 }); return; }
-      inkLine(g, [[x - 10, cy - 2], [x, cy - 12], [x + 10, cy - 2]], happy ? 4 : 3.4, INK, { taper: 0.25 });
-    };
-    eye(cx - 22); eye(cx + 22);
-    // nose
-    celOval(g, cx, cy + 8, 9, 8, '#f0bb92', { line: 2.4, depth: 3 });
-    // moustache: two long white curls
-    cel(g, [[cx - 4, cy + 16], [cx - 22, cy + 14], [cx - 44, cy + 22], [cx - 52, cy + 38], [cx - 40, cy + 34], [cx - 24, cy + 26], [cx - 4, cy + 26]], '#f6f3ff', { tension: 0.8, line: 2.8, depth: 4 });
-    cel(g, [[cx + 4, cy + 16], [cx + 22, cy + 14], [cx + 44, cy + 22], [cx + 52, cy + 38], [cx + 40, cy + 34], [cx + 24, cy + 26], [cx + 4, cy + 26]], '#f6f3ff', { tension: 0.8, line: 2.8, depth: 4 });
-    // mouth
-    if (happy) { cel(g, [[cx - 12, cy + 28], [cx, cy + 40], [cx + 12, cy + 28], [cx, cy + 30]], '#7d1230', { tension: 0.8, line: 2.6, shadow: false }); }
-    else if (shock) { celOval(g, cx, cy + 34, 6, 8, '#7d1230', { line: 2.6, shadow: false }); }
-    else if (sad) { inkLine(g, [[cx - 9, cy + 36], [cx, cy + 30], [cx + 9, cy + 36]], 3, INK, { taper: 0.3 }); }
-    else { inkLine(g, [[cx - 10, cy + 30], [cx, cy + 36], [cx + 10, cy + 30]], 3, INK, { taper: 0.3 }); }
-    // a grey tuft of hair on top and a topknot
-    cel(g, [[cx - 14, cy - 44], [cx - 6, cy - 62], [cx + 4, cy - 46]], '#e6e2ee', { tension: 0.6, line: 2.4 });
-  }
-
-  function pdHat(g) {
-    // the kasa: a wide straw cone, ribs, dark underside, red cord. Sprite 220 x 100, brim centre (110, 70)
-    const cx = 110, by = 70;
-    g.fillStyle = '#5a4020'; g.beginPath(); g.ellipse(cx, by + 2, 96, 17, 0, 0, TAU); g.fill();
-    cel(g, [[cx - 100, by], [cx - 40, by - 34], [cx, by - 58], [cx + 40, by - 34], [cx + 100, by], [cx + 60, by + 15], [cx, by + 19], [cx - 60, by + 15]], '#e0bf6c', { tension: 0.5, line: 3.4, hi: true, rim: '#fff0b8', rimSide: 'light',
-      decor: (c) => { c.strokeStyle = 'rgba(122,82,26,0.55)'; c.lineWidth = 1.6; for (let i = -6; i <= 6; i++) { c.beginPath(); c.moveTo(cx, by - 58); c.quadraticCurveTo(cx + i * 8, by - 10, cx + i * 17, by + 16); c.stroke(); } c.beginPath(); c.ellipse(cx, by - 12, 50, 8, 0, 0, Math.PI); c.stroke(); } });
-    inkLine(g, [[cx - 62, by + 12], [cx - 58, by + 42], [cx - 46, by + 66]], 3, '#e8383d', { taper: 0.1 });
-    inkLine(g, [[cx + 62, by + 12], [cx + 58, by + 42], [cx + 46, by + 66]], 3, '#e8383d', { taper: 0.1 });
-  }
-
-  const PD_MOODS = ['idle', 'happy', 'sad', 'shock'];
+  // ---------------------------------------------------------------- Jordan, at the Merch Stall
+  // The cast's Jordan (ART.cast, HV_ART_AUDIO 2.10) stands in the peddler slot of SHOP (same x and feet y, so the speech bubble and nameplate laid over him do not move).
+  // The shop's mood words become his: idle waves hello now and then, happy is a cheer, sad an "oops" (never a sad face), shock shows the tablet, a bare stall dozes.
+  const PD_MOODS = ['idle', 'happy', 'sad', 'shock', 'rest'];
+  const JORDAN = { K: 1.3, idle: { pose: 'idle', expr: 'happy' }, happy: { mood: 'buy' }, sad: { mood: 'poor' }, shock: { mood: 'sold' }, rest: { mood: 'empty' } };
   function drawPeddler(ctx, x, y, s, t, mood) {
-    if (typeof ART === 'undefined' || !ART || !isFn(ART.sprite) || !TK()) return;
-    const body = ART.sprite('nk:pd:body', 320, 430, pdBody);
-    const hat = ART.sprite('nk:pd:hat', 220, 100, pdHat);
-    const head = ART.sprite('nk:pd:face:' + mood, 180, 170, (g) => pdFace(g, mood));
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    const breathe = Math.sin(t * 1.7) * 0.012 * m;
-    const bounce = mood === 'happy' ? Math.abs(Math.sin(t * 9)) * 7 * m : mood === 'shock' ? Math.sin(t * 30) * 2 * m : 0;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(s, s);
-    // contact shadow
-    ctx.fillStyle = 'rgba(8,5,24,0.55)'; ctx.beginPath(); ctx.ellipse(-30, 2, 130, 16, 0, 0, TAU); ctx.fill();
-    ctx.save(); ctx.scale(1, 1 + breathe);
-    ART.blit(ctx, body, -PD_OX, -PD_OY - bounce, 320, 430);
-    // head and hat bob together; the head leans a little when he is sad
-    const hy = -232 - bounce + Math.sin(t * 1.7 + 1) * 1.6 * m;
-    const lean = mood === 'sad' ? 0.06 : mood === 'happy' ? Math.sin(t * 9) * 0.03 : Math.sin(t * 0.9) * 0.012;
-    ctx.save(); ctx.translate(12, hy + 20); ctx.rotate(lean); ctx.translate(-12, -(hy + 20));
-    ART.blit(ctx, head, 12 - 90, hy - 100, 180, 170);
-    ART.blit(ctx, hat, 12 - 110, hy - 128, 220, 100);
-    ctx.restore();
-    // the front arm: an open palm with a gold coin that flips and glints
-    const wave = Math.sin(t * 2.1) * 4 * m + (mood === 'happy' ? Math.sin(t * 9) * 8 : 0);
-    ctx.save(); ctx.translate(44, -168 - bounce);
-    cel(ctx, [[-6, -6], [26, 6 + wave * 0.3], [58, -4 + wave * 0.6], [66, 8 + wave * 0.6], [30, 24 + wave * 0.3], [-4, 16]], '#3a4cb0', { tension: 0.7, line: 3, hi: true });
-    celOval(ctx, 68, 2 + wave * 0.6, 11, 10, '#f9dcb8', { line: 2.6 });
-    const flip = Math.cos(t * 3.2), cy0 = -14 + wave * 0.6 - Math.abs(Math.sin(t * 1.6)) * 5;
-    ctx.save(); ctx.translate(70, cy0); ctx.scale(Math.max(0.16, Math.abs(flip)), 1);
-    celOval(ctx, 0, 0, 12, 13, '#f5c96a', { line: 2.4, hi: true });
-    ctx.strokeStyle = 'rgba(122,82,26,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(-3.5, -4, 7, 8);
-    ctx.restore();
-    if (Math.sin(t * 3.2 + 1) > 0.9) sparkleAt(ctx, 82, cy0 - 10, 8, { color: '#fff8f0', alpha: 0.9 });
-    ctx.restore();
-    ctx.restore();
+    if (typeof ART === 'undefined' || !ART || !ART.cast || !isFn(ART.cast.draw)) return;
+    const m = JORDAN[mood] || JORDAN.idle;
+    const o = { x: 0, y: 0, s: (s > 0 ? s : 1) * JORDAN.K, t, pose: m.pose, expr: m.expr, mood: m.mood };
+    if (mood === 'idle' && motionK() === 1) { const u = (((t % 9.5) + 9.5) % 9.5) / 2.4; if (u < 1) o.mix = { pose: 'sing', k: Math.sin(u * Math.PI) * 0.92 }; }
+    ctx.save(); ctx.translate(x, y);
+    ART.cast.draw(ctx, 'jordan', o);
     ctx.restore();
   }
 
-  function hangLantern(ctx, x, y0, len, t, seed, r) {
-    const sway = Math.sin(t * 1.3 + seed) * 0.05 * (UI.opt && UI.opt.reduceMotion ? 0.3 : 1);
-    ctx.save(); ctx.translate(x, y0); ctx.rotate(sway);
-    ctx.strokeStyle = 'rgba(20,15,46,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, len); ctx.stroke();
-    ctx.translate(0, len);
-    const flick = 0.85 + 0.15 * Math.sin(t * 7 + seed * 3) + 0.05 * Math.sin(t * 13 + seed);
-    glow(ctx, 0, r * 0.9, r * 5.2 * flick, '#ff9a2e', 0.5);
-    glow(ctx, 0, r * 0.9, r * 2.6, '#ffe0a0', 0.5);
-    const grad = ctx.createRadialGradient(0, r * 0.9, r * 0.1, 0, r * 0.9, r * 1.3);
-    grad.addColorStop(0, '#fff3c8'); grad.addColorStop(0.5, '#ff9a4a'); grad.addColorStop(1, '#c8302f');
-    ctx.beginPath(); ctx.ellipse(0, r * 0.9, r * 0.8, r * 1.05, 0, 0, TAU); ctx.fillStyle = grad; ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke();
-    ctx.strokeStyle = 'rgba(93,15,28,0.75)'; ctx.lineWidth = 1.4;
-    for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.ellipse(0, r * 0.9, Math.abs(k) * r * 0.32 + 1, r * 1.05, 0, 0, TAU); ctx.stroke(); }
-    ctx.fillStyle = INK; ctx.fillRect(-r * 0.5, -2, r, 6); ctx.fillRect(-r * 0.5, r * 1.85, r, 6);
-    ctx.restore();
-  }
-
+  // ---------------------------------------------------------------- the Merch Stall: a teal canopy with a scalloped fringe, a sticker pegboard wall, two planks of merch
+  // SHOP is the one geometry table (the posts, the two planks, the peddler): the DOM wares are laid over it. The planks are painted with ONE fillRect(postL, y, span, h) each and the posts
+  // with ONE strokeRect(x, 60, postW, 590) each, which is what the alignment test looks for.
+  const SHOP_BULBS = [];
   function shopBackdrop(g) {
     const r = U.rng(4242);
-    const wall = g.createLinearGradient(0, 0, 0, 720);
-    wall.addColorStop(0, '#0d0a26'); wall.addColorStop(0.55, '#1c1450'); wall.addColorStop(1, '#0b0820');
-    g.fillStyle = wall; g.fillRect(0, 0, 1280, 720);
-    // far bokeh lanterns down the alley
-    for (let i = 0; i < 16; i++) { const x = r() * 1280, y = 40 + r() * 260, rad = 16 + r() * 38; g.fillStyle = rgba(r() > 0.4 ? '#ff9a4a' : '#ff7eb6', 0.10 + r() * 0.12); g.beginPath(); g.arc(x, y, rad, 0, TAU); g.fill(); }
-    // the shelving wall behind the wares
-    const pl = SHOP.postL, pw = SHOP.postW, pr = SHOP.postR, span = pr + pw - pl;       // the stall's width, post edge to post edge (962)
-    const back = g.createLinearGradient(pl + 12, 0, 1280, 0);
-    back.addColorStop(0, '#231a52'); back.addColorStop(1, '#171040');
-    g.fillStyle = back; g.fillRect(pl + 10, 70, span - 10, 570);
-    g.strokeStyle = 'rgba(245,201,106,0.10)'; g.lineWidth = 2;
-    for (let x = pl + 22; x < 1280; x += 46) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 640); g.stroke(); }
-    g.fillStyle = 'rgba(10,7,30,0.5)'; g.fillRect(pl + 10, 400, span - 10, 196);
-    // wooden posts
-    const post = (x) => { const pg = g.createLinearGradient(x, 0, x + pw, 0); pg.addColorStop(0, '#4b2e22'); pg.addColorStop(0.4, '#7a4c32'); pg.addColorStop(1, '#2f1c17'); g.fillStyle = pg; g.fillRect(x, 60, pw, 590); g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(x, 60, pw, 590); };
+    const sky = g.createLinearGradient(0, 0, 0, 720);
+    sky.addColorStop(0, '#0c0a2a'); sky.addColorStop(0.5, '#22195e'); sky.addColorStop(0.8, '#3d2a7e'); sky.addColorStop(1, '#2a1d5a');
+    g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
+    for (let i = 0; i < 80; i++) { g.fillStyle = 'rgba(255,248,236,' + (0.2 + r() * 0.6).toFixed(2) + ')'; const sz = r() > 0.9 ? 2.4 : 1.5; g.fillRect(r() * 1280, 60 + r() * 380, sz, sz); }
+    const cols = [HV.pink, HV.green, HV.gold, HV.teal, HV.violet];
+    for (let i = 0; i < 16; i++) { g.fillStyle = rgba(cols[i % 5], 0.08 + r() * 0.1); g.beginPath(); g.arc(r() * 330, 130 + r() * 420, 14 + r() * 32, 0, TAU); g.fill(); }
+    // far festival tents behind the left side, in soft candy colours
+    for (let x = -30, i = 0; x < 340; x += 96 + (i % 2) * 24, i++) {
+      const w = 84 + (i % 3) * 18, h = 54 + (i % 2) * 26, y = 616, c = U.color.mix(cols[i % 5], '#3d2a7e', 0.55);
+      cel(g, { poly: [[x, y], [x + w / 2, y - h], [x + w, y]] }, c, { line: 1.8, depth: 5, tension: 0, lineColor: 'rgba(45,23,15,0.6)' });
+      inkLine(g, [[x + w / 2, y - h], [x + w / 2, y - h - 16]], 1.6, 'rgba(45,23,15,0.6)', { taper: 0, wobble: 0 });
+    }
+    // the ground
+    const fl = g.createLinearGradient(0, 630, 0, 720); fl.addColorStop(0, '#1f4a52'); fl.addColorStop(0.3, '#173a44'); fl.addColorStop(1, '#0a1a24');
+    g.fillStyle = fl; g.fillRect(0, 630, 1280, 90);
+    inkLine(g, [[0, 632], [1280, 632]], 2.4, 'rgba(45,23,15,0.8)', { taper: 0, wobble: 0 });
+    g.strokeStyle = 'rgba(255,207,138,0.07)'; g.lineWidth = 1;
+    for (let i = 0; i < 8; i++) { g.beginPath(); g.moveTo(0, 648 + i * 10); g.lineTo(1280, 648 + i * 10 + 2); g.stroke(); }
+    // the back wall of the stall: a teal pegboard plastered with stickers
+    const pl = SHOP.postL, pw = SHOP.postW, pr = SHOP.postR, span = pr + pw - pl;      // the stall's width, post edge to post edge (962)
+    const wall = g.createLinearGradient(0, 70, 0, 640); wall.addColorStop(0, '#12494b'); wall.addColorStop(1, '#0a2a33');
+    g.fillStyle = wall; g.fillRect(pl + 10, 70, span - 10, 570);
+    g.fillStyle = 'rgba(230,255,251,0.10)';
+    for (let yy = 100, row = 0; yy < 630; yy += 30, row++) for (let xx = pl + 40 + (row % 2) * 15; xx < 1270; xx += 30) { g.beginPath(); g.arc(xx, yy, 2.2, 0, TAU); g.fill(); }
+    g.save(); g.globalAlpha = 0.55;
+    for (let i = 0; i < 22; i++) {
+      const sx = pl + 50 + r() * (span - 80), sy = 100 + r() * 510, k = Math.floor(r() * 3), c = [HV.pink, HV.green, HV.gold, HV.sky, HV.violet][Math.floor(r() * 5)], s = 9 + r() * 6;
+      if (k === 0) { heartAt(g, sx, sy, s + 3, HV.cream, 2); heartAt(g, sx, sy, s, c, 1.4); } else if (k === 1) { starAt(g, sx, sy, s + 5, HV.cream, r(), 2); starAt(g, sx, sy, s + 1, c, r(), 1.4); } else { celOval(g, sx, sy, s + 4, s + 4, HV.cream, { line: 1.6, depth: 2 }); celOval(g, sx, sy, s, s, c, { line: 1.4, depth: 2 }); }
+    }
+    g.restore();
+    g.fillStyle = 'rgba(10,7,30,0.45)'; g.fillRect(pl + 10, 402, span - 10, 14);
+    // the two posts: cream with teal stripes, the hard shadow on the left (the key light is upper right)
+    const post = (x) => {
+      g.save();
+      g.fillStyle = HV.cream; g.fillRect(x, 60, pw, 590);
+      g.beginPath(); g.rect(x, 60, pw, 590); g.clip();
+      g.fillStyle = HV.teal; for (let y = 52; y < 660; y += 34) { g.beginPath(); g.moveTo(x, y); g.lineTo(x + pw, y - 12); g.lineTo(x + pw, y + 4); g.lineTo(x, y + 16); g.closePath(); g.fill(); }
+      g.fillStyle = 'rgba(45,23,15,0.2)'; g.fillRect(x, 60, 7, 590);
+      g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(x + pw - 5, 60, 3, 590);
+      g.restore();
+      g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(x, 60, pw, 590);
+    };
     post(pl); post(pr);
-    // planks (shelves) with a gold-leaf edge
+    // the planks: a wooden lip, a cream front with a pink and a green stripe
     const plank = (y, h) => {
-      const pg = g.createLinearGradient(0, y, 0, y + h); pg.addColorStop(0, '#8a5a38'); pg.addColorStop(0.3, '#5f3b26'); pg.addColorStop(1, '#2d1a14');
+      const pg = g.createLinearGradient(0, y, 0, y + h); pg.addColorStop(0, '#f2c68f'); pg.addColorStop(0.25, '#d8a26a'); pg.addColorStop(1, '#a9703f');
       g.fillStyle = pg; g.fillRect(pl, y, span, h);
-      g.strokeStyle = 'rgba(20,10,8,0.5)'; g.lineWidth = 1;
-      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(pl, y + 6 + i * (h / 4)); g.bezierCurveTo(600, y + 4 + i * (h / 4), 900, y + 9 + i * (h / 4), 1280, y + 6 + i * (h / 4)); g.stroke(); }
-      g.fillStyle = 'rgba(245,201,106,0.9)'; g.fillRect(pl, y, span, 3);
-      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(pl, y + h, span, 10);
+      g.fillStyle = HV.cream; g.fillRect(pl, y + 8, span, h - 8);
+      g.fillStyle = HV.pink; g.fillRect(pl, y + 15, span, 7);
+      g.fillStyle = HV.green; g.fillRect(pl, y + 22, span, 4);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(pl, y + h, span, 9);
+      inkLine(g, [[pl, y + 8], [pl + span, y + 8]], 2, 'rgba(45,23,15,0.7)', { taper: 0, wobble: 0 });
       g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(pl, y, span, h);
     };
     SHOP.planks.forEach((p) => plank(p.y, p.h));
-    // the awning: indigo cloth, gold hem, a row of white crests, a scalloped edge
-    const aw = g.createLinearGradient(0, 0, 0, 96); aw.addColorStop(0, '#141a5a'); aw.addColorStop(1, '#232e86');
-    g.fillStyle = aw; g.fillRect(0, 0, 1280, 78);
-    for (let x = 0; x < 1280; x += 64) { g.fillStyle = (x / 64) % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)'; g.fillRect(x, 0, 64, 78); }
-    g.fillStyle = '#232e86';
-    for (let x = 0; x < 1280; x += 64) { g.beginPath(); g.moveTo(x, 78); g.quadraticCurveTo(x + 32, 118, x + 64, 78); g.closePath(); g.fill(); g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); g.moveTo(x, 78); g.quadraticCurveTo(x + 32, 118, x + 64, 78); g.stroke(); }
-    g.fillStyle = 'rgba(245,201,106,0.9)'; g.fillRect(0, 74, 1280, 4);
-    g.fillStyle = 'rgba(243,230,200,0.9)';
-    for (let x = 32; x < 1280; x += 64) { g.beginPath(); g.arc(x, 92, 7, 0, TAU); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); }
-    // the floor: dark boards
-    const fl = g.createLinearGradient(0, 640, 0, 720); fl.addColorStop(0, '#1a1236'); fl.addColorStop(1, '#0a071c');
-    g.fillStyle = fl; g.fillRect(0, 640, 1280, 80);
-    g.strokeStyle = 'rgba(245,201,106,0.09)'; g.lineWidth = 1;
-    for (let i = 0; i < 9; i++) { g.beginPath(); g.moveTo(0, 646 + i * 9); g.lineTo(1280, 646 + i * 9 + 2); g.stroke(); }
-    g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 638, 1280, 4);
+    // the canopy band over everything: teal and light teal stripes (the fringe is live, see shopFringe)
+    for (let x = 0; x < 1280; x += 64) { g.fillStyle = (x / 64) % 2 ? '#7fe3d8' : HV.teal; g.fillRect(x, 0, 64, 78); }
+    g.fillStyle = 'rgba(13,79,74,0.28)'; g.fillRect(0, 0, 1280, 26);
+    g.fillStyle = '#1d8f84'; g.fillRect(0, 70, 1280, 8);
+    inkLine(g, [[0, 78], [1280, 78]], 3, INK, { taper: 0, wobble: 0 });
+    // the left side, Jordan's: bunting on a cord, a little RJ sign on strings, a round rug
+    const cord = sagPts(-6, 124, 332, 132, 14, 22);
+    inkLine(g, cord, 2.2, INK, { taper: 0, wobble: 0 });
+    const flags = [HV.pink, HV.cream, HV.green, HV.gold, HV.teal, HV.sky];
+    for (let i = 0; i < 9; i++) {
+      const u = (i + 0.5) / 9, x = -6 + 338 * u, y = 124 + 8 * u + 14 * 4 * u * (1 - u);
+      if (i === 4 || i === 6) {
+        // a tee on the line (a peg each side), with a heart or a star on its chest
+        const c = i === 4 ? HV.pink : '#8fe3c0';
+        inkLine(g, [[x - 11, y - 1], [x - 11, y + 4]], 2.4, INK, { taper: 0, wobble: 0 }); inkLine(g, [[x + 11, y - 1], [x + 11, y + 4]], 2.4, INK, { taper: 0, wobble: 0 });
+        cel(g, { poly: [[x - 13, y + 3], [x - 5, y + 7], [x + 5, y + 7], [x + 13, y + 3], [x + 26, y + 14], [x + 20, y + 23], [x + 14, y + 19], [x + 14, y + 46], [x - 14, y + 46], [x - 14, y + 19], [x - 20, y + 23], [x - 26, y + 14]] }, c, { line: 1.8, depth: 5, tension: 0 });
+        if (i === 4) heartAt(g, x, y + 28, 6, HV.cream, 1.4); else starAt(g, x, y + 28, 8, HV.gold, 0, 1.4);
+      } else cel(g, { poly: [[x - 17, y], [x + 17, y], [x, y + 32]] }, flags[i % 6], { line: 1.8, depth: 4, tension: 0 });
+    }
+    inkLine(g, [[48, 129], [62, 168]], 1.8, INK, { taper: 0, wobble: 0 }); inkLine(g, [[76, 130], [62, 168]], 1.8, INK, { taper: 0, wobble: 0 });
+    celOval(g, 62, 198, 33, 33, HV.cream, { line: 2.4, depth: 6 });
+    monoAt(g, 62, 198, 28);
+    celOval(g, 206, 668, 128, 21, HV.cream, { line: 2.4, depth: 6 });
+    g.strokeStyle = HV.pink; g.lineWidth = 4; g.beginPath(); g.ellipse(206, 668, 104, 16, 0, 0, TAU); g.stroke();
+    g.strokeStyle = HV.green; g.lineWidth = 3; g.beginPath(); g.ellipse(206, 668, 82, 12, 0, 0, TAU); g.stroke();
+  }
+  // the fairy lights strung over the canopy (baked: 1280 x 140); SHOP_BULBS keeps where each bulb hangs so the live frame can make them breathe
+  function shopLights(g) {
+    SHOP_BULBS.length = 0;
+    const cols = [HV.gold, HV.pink, HV.green, HV.cream, HV.sky];
+    [[-10, 88, 430, 96], [430, 96, 850, 96], [850, 96, 1290, 88]].forEach((s) => fairyString(g, s[0], s[1], s[2], s[3], 16, 11, cols, 4.6).forEach((b) => SHOP_BULBS.push(b)));
+  }
+  // the scalloped fringe under the canopy: alternating teal and light teal, every scallop swinging a little on its own phase
+  function shopFringe(ctx, t) {
+    const m = motionK();
+    ctx.save(); ctx.lineJoin = 'round';
+    for (let i = 0; i < 20; i++) {
+      const x = i * 64, sw = Math.sin(t * 2.1 + i * 0.7) * 2.6 * m, c = i % 2 ? '#e6fffb' : HV.teal;
+      ctx.beginPath(); ctx.moveTo(x, 77); ctx.lineTo(x + 64, 77); ctx.quadraticCurveTo(x + 64 + sw, 112, x + 32 + sw, 116); ctx.quadraticCurveTo(x + sw, 112, x, 77); ctx.closePath();
+      ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = rgba(warm(c, 0.08), 0.7); ctx.beginPath(); ctx.ellipse(x + 20 + sw, 92, 9, 5, 0, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function paintShop(ctx, t, S) {
     layer(ctx, 'nk:shop:bg', 1280, 720, shopBackdrop);
-    hangLantern(ctx, 380, 100, 24, t, 1, 15);
-    hangLantern(ctx, 780, 100, 20, t, 2.3, 13);
-    hangLantern(ctx, 1170, 100, 26, t, 4.1, 15);
-    hangLantern(ctx, 70, 96, 46, t, 5.7, 20);
-    const mood = S.mood && S.t < S.mood.until ? S.mood.name : 'idle';
+    shopFringe(ctx, t);
+    layer(ctx, 'nk:shop:lights', 1280, 140, shopLights);
+    const m = motionK();
+    SHOP_BULBS.forEach((b, i) => glow(ctx, b[0], b[1] + 3, 17, b[2], 0.26 + 0.3 * (0.5 + 0.5 * Math.sin(t * (1.2 + (i % 4) * 0.35) * m + i * 2.1))));
+    glow(ctx, SHOP.peddler.x, 676, 200, '#ffcf8a', 0.2 + 0.03 * Math.sin(t * 1.5));
+    const mood = S.mood && S.t < S.mood.until ? S.mood.name : (S.saidEmpty ? 'rest' : 'idle');
     drawPeddler(ctx, SHOP.peddler.x, SHOP.peddler.y, 1, t, PD_MOODS.indexOf(mood) >= 0 ? mood : 'idle');
     const tk = TK();
     if (tk) {
-      glow(ctx, 640, 380, 520, '#ff9a4a', 0.08 + 0.02 * Math.sin(t * 2));
       safe(() => tk.kirakira(ctx, 0, 100, 1280, 560, t, { n: 16, seed: 21, size: 2.6, rise: 5 }));
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.5 }));
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.42 }));
     }
   }
 
-  // ---------------------------------------------------------------- camp: a bonfire under a giant sakura, the heroes around it
-  // Anchor points other modules can rely on: the fire's base is CAMP.fire, the heroes' feet are CAMP.heroes[i] (stage px).
+  // ---------------------------------------------------------------- the Green Room: a cosy backstage room, the heroes around a kettle on a hot plate
+  // Anchor points other modules can rely on: the kettle table's feet are CAMP.fire (the floor under it), the heroes' feet are CAMP.heroes[i] (stage px).
   const CAMP = { fire: { x: 890, y: 612 }, heroes: [{ x: 690, y: 650, s: 0.98, flip: false }, { x: 1090, y: 650, s: 0.98, flip: true }] };
   const campFirePos = () => CAMP.fire;
   const campHeroPos = (i) => CAMP.heroes[i] || CAMP.heroes[0];
+  const CAMP_BULBS = [];                       // the mirror's bulbs and the fairy lights: [x, y, colour]; baked with the backdrop, made to breathe live
+  const CAMP_RECORD = { x: 1096, y: 303 };     // the little record player on the shelf (its record is drawn live, it spins)
 
   function campBackdrop(g) {
+    CAMP_BULBS.length = 0;
     const r = U.rng(777);
-    const sky = g.createLinearGradient(0, 0, 0, 640);
-    sky.addColorStop(0, '#070620'); sky.addColorStop(0.5, '#171048'); sky.addColorStop(0.86, '#3a2470'); sky.addColorStop(1, '#5a3a84');
-    g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
-    for (let i = 0; i < 110; i++) { g.fillStyle = 'rgba(255,248,240,' + (0.18 + r() * 0.6).toFixed(2) + ')'; const s = r() > 0.9 ? 2.4 : 1.4; g.fillRect(r() * 1280, r() * 400, s, s); }
-    // the moon
-    glow(g, 1090, 116, 250, '#ffe9a8', 0.45);
-    g.fillStyle = '#fff4d6'; g.beginPath(); g.arc(1090, 116, 50, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(190,170,130,0.32)';
-    [[-14, -10, 11], [16, 8, 14], [-6, 22, 7], [22, -22, 6]].forEach((c) => { g.beginPath(); g.arc(1090 + c[0], 116 + c[1], c[2], 0, TAU); g.fill(); });
-    g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); g.arc(1090, 116, 50, 0, TAU); g.stroke();
-    // far ridges, one shade darker each
-    const ridge = (base, amp, col, seed) => {
-      g.beginPath(); g.moveTo(0, 720);
-      for (let x = 0; x <= 1280; x += 16) g.lineTo(x, base - amp * U.noise.n1(x * 0.0055, seed) - amp * 0.4 * U.noise.n1(x * 0.02, seed + 9));
-      g.lineTo(1280, 720); g.closePath(); g.fillStyle = col; g.fill();
-    };
-    ridge(470, 130, '#231a5e', 3); ridge(520, 100, '#191248', 8); ridge(570, 70, '#100b32', 14);
-    // sakura tree: dim under-canopy, trunk and branches, then the lit canopy of small crisp blossom puffs over a soft glow
-    const blob = (x, y, rad, hex, a) => { const gr = g.createRadialGradient(x, y, rad * 0.1, x, y, rad); gr.addColorStop(0, rgba(hex, a)); gr.addColorStop(1, rgba(hex, 0)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, TAU); g.fill(); };
-    const puff = (x, y, rad, hex, dark) => {
-      g.fillStyle = hex; g.beginPath(); g.arc(x, y, rad, 0, TAU); g.fill();
-      g.fillStyle = dark; g.beginPath(); g.arc(x - rad * 0.18, y + rad * 0.22, rad * 0.86, 0, Math.PI, false); g.fill();
-      g.fillStyle = hex; g.beginPath(); g.arc(x + rad * 0.06, y - rad * 0.06, rad * 0.88, 0, TAU); g.fill();
-    };
-    for (let i = 0; i < 70; i++) blob(700 + r() * 600, 30 + r() * 260, 60 + r() * 50, '#7a3a96', 0.3);
-    const limb = (pts, w, col) => inkLine(g, pts, w, col, { taper: 0.14, pressure: 'flat', wobble: 0.1, seed: pts.length });
-    const wood = '#2a1a3c';
-    limb([[1190, 740], [1190, 580], [1160, 450], [1130, 340], [1080, 250]], 100, wood);
-    limb([[1140, 380], [1040, 320], [920, 290], [800, 240]], 46, wood);
-    limb([[1130, 350], [1200, 300], [1280, 250]], 34, wood);
-    limb([[1110, 290], [1050, 210], [1010, 120], [1020, 20]], 32, wood);
-    limb([[980, 300], [930, 240], [880, 170]], 24, wood);
-    inkLine(g, [[1146, 700], [1146, 580], [1120, 450], [1090, 340]], 6, 'rgba(255,150,80,0.55)', { taper: 0.3, pressure: 'flat', wobble: 0.06 });
-    const pinks = [['#ff9fc8', '#c8508c'], ['#ffc2dc', '#d9749e'], ['#ff7eb6', '#b0245c'], ['#f9a6d0', '#c0508e'], ['#ffd6e8', '#e08ab0']];
-    for (let i = 0; i < 4200; i++) {
-      const a = r() * TAU, d = Math.sqrt(r());
-      const x = 960 + Math.cos(a) * d * 610, y = 140 + Math.sin(a) * d * 195;
-      if (y > 310 || x < 540) continue;
-      const c = pinks[(r() * pinks.length) | 0];
-      puff(x, y, 3.6 + r() * 6.4, c[0], c[1]);
-    }
-    for (let i = 0; i < 90; i++) blob(640 + r() * 640, 20 + r() * 270, 9 + r() * 12, '#fff0f6', 0.7);
-    // the ground, grass silhouettes and fallen petals
-    const gr = g.createLinearGradient(0, 590, 0, 720); gr.addColorStop(0, '#221650'); gr.addColorStop(1, '#0a071c');
-    g.fillStyle = gr; g.fillRect(0, 592, 1280, 130);
-    g.fillStyle = '#0f0a2a';
-    for (let x = -10; x < 1290; x += 9) { const h = 8 + r() * 16; g.beginPath(); g.moveTo(x, 596); g.lineTo(x + 4, 596 - h); g.lineTo(x + 9, 596); g.closePath(); g.fill(); }
-    for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(255,170,206,' + (0.25 + r() * 0.5).toFixed(2) + ')'; g.beginPath(); g.ellipse(600 + r() * 680, 606 + r() * 108, 3 + r() * 3, 1.6 + r() * 1.4, r() * 3, 0, TAU); g.fill(); }
-  }
+    // the wall: teal with soft stripes and tiny cream dots, a wainscot of darker panels under a cream dado rail
+    g.fillStyle = '#1f5f63'; g.fillRect(0, 0, 1280, 600);
+    for (let x = 0; x < 1280; x += 96) { g.fillStyle = 'rgba(255,255,255,0.045)'; g.fillRect(x, 0, 48, 600); }
+    g.fillStyle = 'rgba(255,244,230,0.09)';
+    for (let yy = 40, row = 0; yy < 440; yy += 46, row++) for (let xx = 24 + (row % 2) * 48; xx < 1280; xx += 96) { g.beginPath(); g.arc(xx, yy, 2.4, 0, TAU); g.fill(); }
+    g.fillStyle = '#16484c'; g.fillRect(0, 456, 1280, 140);
+    for (let x = 14; x < 1280; x += 132) { g.strokeStyle = 'rgba(255,244,230,0.14)'; g.lineWidth = 2; rrPath(g, x, 474, 108, 104, 6); g.stroke(); }
+    g.fillStyle = HV.cream; g.fillRect(0, 446, 1280, 10);
+    inkLine(g, [[0, 446], [1280, 446]], 2.4, INK, { taper: 0, wobble: 0 }); inkLine(g, [[0, 456], [1280, 456]], 2.4, INK, { taper: 0, wobble: 0 });
+    // the floor: warm boards with a skirting board, and a round rug under the heroes
+    const fl = g.createLinearGradient(0, 596, 0, 720); fl.addColorStop(0, '#b27547'); fl.addColorStop(0.5, '#8a5a38'); fl.addColorStop(1, '#5a3722');
+    g.fillStyle = fl; g.fillRect(0, 596, 1280, 124);
+    g.strokeStyle = 'rgba(45,23,15,0.4)'; g.lineWidth = 2;
+    [614, 638, 670, 708].forEach((y) => { g.beginPath(); g.moveTo(0, y); g.lineTo(1280, y); g.stroke(); });
+    g.lineWidth = 1.6;
+    for (let i = 0; i < 40; i++) { const y = [596, 614, 638, 670][i % 4], h = [18, 24, 32, 38][i % 4], x = r() * 1280; g.beginPath(); g.moveTo(x, y); g.lineTo(x - 3, y + h); g.stroke(); }
+    g.fillStyle = HV.cream; g.fillRect(0, 586, 1280, 14);
+    inkLine(g, [[0, 586], [1280, 586]], 2.4, INK, { taper: 0, wobble: 0 }); inkLine(g, [[0, 600], [1280, 600]], 2.4, INK, { taper: 0, wobble: 0 });
+    celOval(g, 890, 666, 392, 44, HV.cream, { line: 2.6, depth: 9 });
+    g.strokeStyle = HV.pink; g.lineWidth = 7; g.beginPath(); g.ellipse(890, 666, 338, 36, 0, 0, TAU); g.stroke();
+    g.strokeStyle = HV.green; g.lineWidth = 5; g.beginPath(); g.ellipse(890, 666, 296, 31, 0, 0, TAU); g.stroke();
+    g.strokeStyle = HV.gold; g.lineWidth = 3; g.setLineDash([10, 10]); g.beginPath(); g.ellipse(890, 666, 250, 26, 0, 0, TAU); g.stroke(); g.setLineDash([]);
 
-  function flameShape(g, x, y, w, h, sway) {
-    g.beginPath(); g.moveTo(x - w / 2, y);
-    g.bezierCurveTo(x - w * 0.64, y - h * 0.42, x - w * 0.2 + sway * 0.6, y - h * 0.74, x + sway, y - h);
-    g.bezierCurveTo(x + w * 0.24 + sway * 0.6, y - h * 0.7, x + w * 0.64, y - h * 0.4, x + w / 2, y);
-    g.quadraticCurveTo(x, y + h * 0.1, x - w / 2, y); g.closePath();
-  }
-
-  function paintFire(ctx, t, fx, fy, scale) {
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    const fl = 0.9 + 0.1 * Math.sin(t * 9) + 0.06 * Math.sin(t * 17 + 1);
-    glow(ctx, fx, fy - 50, 440 * fl * scale, '#ff6a2a', 0.26);
-    glow(ctx, fx, fy - 40, 220 * fl * scale, '#ffb050', 0.5);
-    ctx.save(); ctx.translate(fx, fy + 22); ctx.scale(1, 0.22); glow(ctx, 0, 0, 340 * scale, '#ff9a2e', 0.32); ctx.restore();
-    // stones ring and logs
-    for (let i = 0; i < 11; i++) { const a = i / 11 * TAU; celOval(ctx, fx + Math.cos(a) * 62 * scale, fy + 10 + Math.sin(a) * 15 * scale, 13 * scale, 8 * scale, i % 2 ? '#6d6690' : '#8a86a8', { line: 2.4, depth: 3 }); }
-    ctx.save(); ctx.translate(fx, fy + 4); ctx.scale(scale, scale);
-    [[-1, 0.3], [1, -0.3]].forEach((l) => { ctx.save(); ctx.rotate(l[1]); cel(ctx, { poly: [[-70, -10], [70, -10], [72, 8], [-72, 8]] }, '#4a2c1e', { tension: 0.3, line: 3, hi: true, rim: '#ff9a4a', rimSide: 'light' }); ctx.restore(); });
-    ctx.restore();
-    // flame tongues, biggest and reddest first
-    const layers = [['#ff4a2a', 1, 150], ['#ff8a2e', 0.78, 120], ['#ffd45e', 0.54, 86], ['#fff4c8', 0.3, 50]];
-    layers.forEach((L, li) => {
-      for (let k = -1; k <= 1; k++) {
-        const ph = t * (5 + li * 1.4) + k * 2.1 + li;
-        const h = L[2] * scale * (0.86 + 0.16 * Math.sin(ph) * m + (k === 0 ? 0.14 : 0));
-        const sway = Math.sin(ph * 0.8 + 1.3) * 10 * m * (0.5 + li * 0.1);
-        flameShape(ctx, fx + k * 30 * scale, fy - 2, 62 * scale * L[1] + 20, h, sway);
-        ctx.fillStyle = L[0]; ctx.globalAlpha = li === 0 ? 0.92 : 1; ctx.fill(); ctx.globalAlpha = 1;
-        if (li === 0) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(93,15,28,0.75)'; ctx.stroke(); }
-      }
+    // set lists taped to the wall: scribbles only, no words
+    [[606, 178, -0.07, '#fff4e6'], [676, 192, 0.05, '#ffe3f1'], [738, 172, -0.03, '#d9fff4']].forEach((s, i) => {
+      g.save(); g.translate(s[0], s[1]); g.rotate(s[2]);
+      cel(g, R4(0, 0, 58, 86), s[3], { line: 1.8, depth: 4, tension: 0 });
+      for (let k = 0; k < 6; k++) inkLine(g, [[7, 16 + k * 11], [7 + 18 + ((k * 7 + i * 5) % 26), 16 + k * 11]], 1.8, k === 0 ? HV.pinkD : 'rgba(45,23,15,0.55)', { taper: 0.3, wobble: 0 });
+      if (i === 1) starAt(g, 44, 70, 7, HV.gold, 0.2, 1.4);
+      g.fillStyle = i === 1 ? 'rgba(63,207,106,0.65)' : 'rgba(255,126,182,0.65)'; g.fillRect(16, -6, 26, 12);
+      g.restore();
     });
-    // sparks that rise and fade
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 30; i++) {
-      const sp = 0.16 + (i % 7) * 0.035, ph = ((t * sp * m + i * 0.137) % 1 + 1) % 1;
-      const x = fx + Math.sin(t * (1.2 + (i % 5) * 0.3) + i * 2.1) * (14 + ph * 46) + (i % 3 - 1) * 8, y = fy - 60 - ph * (190 + (i % 6) * 34) * scale;
-      ctx.globalAlpha = Math.max(0, 1 - ph) * 0.95; ctx.fillStyle = i % 3 ? '#ffb85a' : '#ffe9a8';
-      const s = (1.2 + (i % 4) * 0.7) * (1 - ph * 0.5);
-      ctx.beginPath(); ctx.arc(x, y, s, 0, TAU); ctx.fill();
+    // the dressing-room mirror ringed by warm bulbs (they breathe live)
+    cel(g, RR(792, 142, 196, 276, 30), HV.cream, { line: 2.8, depth: 7, tension: 0.5 });
+    const gl = g.createLinearGradient(800, 150, 980, 410); gl.addColorStop(0, '#c9fbf5'); gl.addColorStop(0.55, '#7fd3d2'); gl.addColorStop(1, '#4aa8b2');
+    g.beginPath(); tkTrace(g, RR(806, 156, 168, 248, 22)); g.fillStyle = gl; g.fill(); g.lineWidth = 2.4; g.strokeStyle = INK; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.38)'; g.beginPath(); g.moveTo(830, 160); g.lineTo(878, 160); g.lineTo(826, 330); g.lineTo(812, 330); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.22)'; g.beginPath(); g.moveTo(890, 160); g.lineTo(902, 160); g.lineTo(850, 300); g.lineTo(838, 300); g.closePath(); g.fill();
+    const bulbSpots = [];
+    for (let i = 0; i < 6; i++) bulbSpots.push([810 + i * 34, 150]);
+    for (let i = 0; i < 9; i++) bulbSpots.push([980, 168 + i * 29]);
+    for (let i = 0; i < 6; i++) bulbSpots.push([980 - (i + 1) * 31, 410]);
+    for (let i = 0; i < 9; i++) bulbSpots.push([800, 396 - i * 29]);
+    bulbSpots.forEach((b, i) => { bulbDot(g, b[0], b[1] + 2, 5.2, i % 3 === 0 ? HV.gold : HV.bulb); CAMP_BULBS.push([b[0], b[1] + 2, HV.bulb]); });
+    // the fairy-light string across the wall
+    fairyString(g, 574, 92, 1290, 88, 34, 17, [HV.gold, HV.pink, HV.green, HV.cream, HV.sky], 4.6).forEach((b) => CAMP_BULBS.push(b));
+    // a shelf with books, the record player and a cactus
+    cel(g, R4(996, 338, 188, 12), '#d8a26a', { line: 2.2, depth: 3, tension: 0 });
+    [[1010, 350], [1166, 350]].forEach((b) => cel(g, { poly: [[b[0], b[1]], [b[0] + 10, b[1]], [b[0], b[1] + 22]] }, '#8a5a38', { line: 1.8, depth: 2, tension: 0 }));
+    cel(g, R4(1004, 322, 30, 16), HV.pink, { line: 1.8, depth: 3, tension: 0 }); cel(g, R4(1008, 308, 24, 14), HV.green, { line: 1.8, depth: 3, tension: 0 });
+    cel(g, RR(1048, 300, 108, 38, 8), HV.cream, { line: 2.4, depth: 6, tension: 0.4 });
+    cel(g, RR(1156, 316, 20, 22, 4), HV.pink, { line: 1.8, depth: 3 });
+    cel(g, [[1160, 316, 1], [1166, 290], [1172, 316, 1]], '#3fcf6a', { line: 1.8, depth: 3, tension: 0.8 });
+    // the plant: a pink pot and big leaves
+    const leaf = (x, y, len, ang, w, c) => {
+      const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len, nx = -Math.sin(ang) * w, ny = Math.cos(ang) * w, mx = (x + ex) / 2, my = (y + ey) / 2;
+      cel(g, [[x, y, 1], [mx + nx, my + ny], [ex, ey, 1], [mx - nx, my - ny]], c, { line: 2, depth: 4, tension: 0.9 });
+      inkLine(g, [[x, y], [ex, ey]], 1.4, 'rgba(45,23,15,0.5)', { taper: 0.4, wobble: 0 });
+    };
+    [[-2.5, 110, '#2da656'], [-2.1, 130, '#3fcf6a'], [-1.7, 144, '#2da656'], [-1.35, 138, '#3fcf6a'], [-0.95, 120, '#2da656'], [-0.6, 96, '#3fcf6a']].forEach((l) => leaf(646, 548, l[1], l[0], 26, l[2]));
+    cel(g, { poly: [[616, 540], [676, 540], [668, 600], [624, 600]] }, HV.pink, { line: 2.4, depth: 7, tension: 0, decor: (c) => { c.fillStyle = HV.cream; c.fillRect(610, 562, 70, 10); } });
+    celOval(g, 646, 540, 30, 7, '#7a4a2c', { line: 2, depth: 2 });
+    // the sofa with a patchwork throw
+    g.fillStyle = 'rgba(20,10,6,0.32)'; g.beginPath(); g.ellipse(1110, 606, 190, 14, 0, 0, TAU); g.fill();
+    cel(g, RR(944, 444, 346, 104, 30), '#f26b4f', { line: 2.6, depth: 9, tension: 0.5 });
+    cel(g, RR(928, 482, 52, 108, 22), '#e0573c', { line: 2.6, depth: 8, tension: 0.5 });
+    cel(g, RR(962, 518, 330, 66, 20), '#ff8466', { line: 2.6, depth: 8, tension: 0.5 });
+    [[966, 594], [1262, 594]].forEach((f) => cel(g, { poly: [[f[0], f[1]], [f[0] + 18, f[1]], [f[0] + 14, f[1] + 12], [f[0] + 4, f[1] + 12]] }, '#8a5a38', { line: 1.8, depth: 2, tension: 0 }));
+    const quad = [[1058, 470], [1290, 450], [1290, 552], [1086, 566]], pc = [HV.pink, '#8fe3c0', HV.cream, HV.gold, HV.sky, HV.pinkL];
+    const bil = (u, v) => { const a = [quad[0][0] + (quad[1][0] - quad[0][0]) * u, quad[0][1] + (quad[1][1] - quad[0][1]) * u], b = [quad[3][0] + (quad[2][0] - quad[3][0]) * u, quad[3][1] + (quad[2][1] - quad[3][1]) * u]; return [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v]; };
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 5; i++) {
+      g.beginPath(); [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].forEach((q, k) => { const p = bil(q[0] / 5, q[1] / 3); if (k) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); });
+      g.closePath(); g.fillStyle = pc[(i * 2 + j * 3) % 6]; g.fill(); g.lineWidth = 1.4; g.strokeStyle = 'rgba(45,23,15,0.55)'; g.setLineDash([5, 4]); g.stroke(); g.setLineDash([]);
     }
+    g.beginPath(); quad.forEach((p, k) => { if (k) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.lineWidth = 2.6; g.strokeStyle = INK; g.stroke();
+    for (let i = 0; i < 9; i++) { const p = bil(0.08 + i * 0.105, 1); inkLine(g, [[p[0], p[1]], [p[0] - 1, p[1] + 10]], 3, HV.cream, { taper: 0.2, wobble: 0 }); }
+    // the door with a star, at the right edge
+    cel(g, R4(1190, 168, 100, 424), HV.cream, { line: 2.6, depth: 6, tension: 0 });
+    cel(g, R4(1202, 180, 88, 412), HV.pink, { line: 2.4, depth: 8, tension: 0 });
+    g.strokeStyle = 'rgba(45,23,15,0.5)'; g.lineWidth = 2; g.strokeRect(1216, 200, 60, 150); g.strokeRect(1216, 372, 60, 170);
+    celOval(g, 1228, 284, 30, 30, HV.cream, { line: 2.4, depth: 5 });
+    starAt(g, 1228, 284, 24, HV.gold, 0.1, 2.4);
+    celOval(g, 1224, 450, 7, 7, HV.gold, { line: 1.8, depth: 2 });
+  }
+  const tkTrace = (g, shape) => { const tk = TK(); if (tk && isFn(tk.trace)) tk.trace(g, shape); else { const p = shape.poly || shape; p.forEach((q, i) => { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); } };
+
+  // the kettle on its hot plate, on a little round table with a teapot and a bowl of clementines: the Green Room's "fire". The table's feet are at (fx, fy).
+  // The plate's coil glows and the kettle steams; scale grows everything round the feet.
+  function paintFire(ctx, t, fx, fy, scale) {
+    const m = motionK(), sc = scale > 0 ? scale : 1;
+    const pulse = 0.85 + 0.15 * Math.sin(t * 3.1) + 0.05 * Math.sin(t * 7.3);
+    glow(ctx, fx, fy - 90 * sc, 300 * sc, '#ffcf8a', 0.2 * pulse);
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(sc, sc);
+    ctx.fillStyle = 'rgba(20,10,6,0.32)'; ctx.beginPath(); ctx.ellipse(0, 4, 104, 13, 0, 0, TAU); ctx.fill();
+    // legs, then the round top with a cream doily
+    [[-62, -4, -52, -66], [62, -4, 52, -66], [0, 4, 0, -64]].forEach((l) => cel(ctx, { poly: [[l[0] - 6, l[1]], [l[0] + 6, l[1]], [l[2] + 5, l[3]], [l[2] - 5, l[3]]] }, '#8a5a38', { line: 2, depth: 3, tension: 0 }));
+    celOval(ctx, 0, -68, 108, 17, '#d8a26a', { line: 2.4, depth: 6 });
+    celOval(ctx, 0, -71, 90, 13, HV.cream, { line: 1.6, depth: 4 });
+    ctx.strokeStyle = HV.pink; ctx.lineWidth = 2.4; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.ellipse(0, -71, 78, 11, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    // the hot plate with its glowing coil
+    celOval(ctx, -20, -80, 42, 9, '#3a3448', { line: 2.2, depth: 4 });
+    ctx.strokeStyle = 'rgba(255,' + Math.round(110 + 60 * pulse) + ',40,' + (0.55 + 0.4 * pulse).toFixed(2) + ')'; ctx.lineWidth = 3;
+    [30, 20, 10].forEach((rx) => { ctx.beginPath(); ctx.ellipse(-20, -80, rx, rx * 0.2, 0, 0, TAU); ctx.stroke(); });
+    glow(ctx, -20, -82, 60, '#ff7a2a', 0.38 * pulse);
+    // the kettle: a chunky teal body, cream lid knob, a curved spout and a cream handle
+    cel(ctx, [[-52, -86], [-56, -104], [-44, -126], [-20, -134], [4, -126], [14, -104], [10, -86]], HV.teal, { line: 2.4, depth: 9, tension: 0.8, hi: '#9ff0e6', hiW: 3 });
+    cel(ctx, [[-44, -128], [-20, -142], [2, -128], [-20, -122]], HV.tealD, { line: 2.2, depth: 3, tension: 0.8, shadow: false });
+    celOval(ctx, -20, -146, 7, 6, HV.cream, { line: 2, depth: 2 });
+    cel(ctx, [[-50, -98, 1], [-70, -108], [-82, -128], [-74, -132], [-62, -116], [-48, -108, 1]], HV.teal, { line: 2.2, depth: 4, tension: 0.7 });
+    inkLine(ctx, [[8, -116], [30, -122], [34, -102], [14, -94]], 7, INK, { taper: 0, wobble: 0 }); inkLine(ctx, [[8, -116], [30, -122], [34, -102], [14, -94]], 3.4, HV.cream, { taper: 0, wobble: 0 });
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.ellipse(-40, -108, 3.4, 10, 0.2, 0, TAU); ctx.fill();
+    // a pink teapot and a bowl of clementines
+    cel(ctx, [[46, -76], [42, -92], [52, -106], [72, -106], [84, -92], [80, -76]], HV.pink, { line: 2.2, depth: 6, tension: 0.8, hi: HV.pinkL });
+    cel(ctx, [[52, -106], [62, -116], [72, -106]], HV.pinkD, { line: 2, depth: 2, tension: 0.8, shadow: false });
+    inkLine(ctx, [[80, -96], [94, -98], [92, -84], [80, -82]], 5, INK, { taper: 0, wobble: 0 }); inkLine(ctx, [[80, -96], [94, -98], [92, -84], [80, -82]], 2.2, HV.pink, { taper: 0, wobble: 0 });
+    inkLine(ctx, [[44, -88], [34, -98], [38, -100], [48, -94]], 5, INK, { taper: 0, wobble: 0 });
+    cel(ctx, [[-98, -76], [-96, -66], [-80, -62], [-66, -66], [-64, -76]], HV.cream, { line: 2, depth: 4, tension: 0.6 });
+    [[-90, -84], [-78, -86], [-70, -80]].forEach((c, i) => { celOval(ctx, c[0], c[1], 9, 9, HV.orange, { line: 1.8, depth: 3 }); celOval(ctx, c[0] - 2, c[1] - 7, 3, 2, HV.green, { line: 1.2, depth: 0, shadow: false }); void i; });
+    // steam from the spout: soft puffs that rise, widen and fade
+    for (let i = 0; i < 7; i++) {
+      const ph = (((t * 0.32 * m + i / 7) % 1) + 1) % 1, x = -80 - ph * 22 + Math.sin(t * 1.7 + i * 1.9) * 9 * m, y = -132 - ph * 120;
+      ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.62; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, 6 + ph * 15, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -2667,149 +2712,214 @@
     const f = CAMP.fire;
     const R = S.R;
     const pz = S.pose && t < S.pose.until ? S.pose : null;
-    // the fire's glow first so the heroes stand in its light, then heroes, then flames in front of them
-    glow(ctx, f.x, f.y - 60, 480, '#ff7a2a', 0.18 + 0.03 * Math.sin(t * 8));
+    const m = motionK();
+    // the bulbs breathe, and a tiny record spins on the shelf
+    CAMP_BULBS.forEach((b, i) => glow(ctx, b[0], b[1], 15, b[2], 0.2 + 0.26 * (0.5 + 0.5 * Math.sin(t * 1.6 * m + (i % 7) * 0.9))));
+    paintRecord(ctx, t);
+    // the room's warm light first so the heroes stand in it, then heroes, then the kettle table
+    glow(ctx, f.x, f.y - 110, 520, '#ffcf8a', 0.16 + 0.03 * Math.sin(t * 2.2));
     if (typeof ART !== 'undefined' && ART && ART.hero && isFn(ART.hero.draw)) {
       R.heroes.forEach((h, i) => {
         const p = campHeroPos(i);
         safe(() => ART.hero.draw(ctx, h.id, { x: p.x, y: p.y, s: p.s, pose: pz ? pz.name : 'idle', t, pt: pz ? t - pz.t0 : 0, flip: p.flip }));
-        glow(ctx, p.x + (p.flip ? -46 : 46), p.y - 110, 160, '#ff9a2e', 0.13 + 0.03 * Math.sin(t * 8 + i));
+        glow(ctx, p.x + (p.flip ? -46 : 46), p.y - 110, 150, '#ffcf8a', 0.1 + 0.03 * Math.sin(t * 2.2 + i));
       });
     }
     paintFire(ctx, t, f.x, f.y, 1);
     const tk = TK();
     if (tk) {
-      safe(() => tk.kirakira(ctx, 560, 120, 720, 540, t, { n: 16, seed: 3, size: 2.6, rise: 8, color: '#ffb85a' }));
-      for (let i = 0; i < 12; i++) {
-        const v = (i * 0.618034) % 1, w = (i * 0.37 + 0.13) % 1;
-        tk.petal(ctx, ((v * 1500 + t * (14 + w * 22)) % 1500) - 120, ((w * 800 + t * (26 + v * 24)) % 800) - 40, 6 + w * 5, t * (0.5 + v) + i, 0.7);
+      safe(() => tk.kirakira(ctx, 560, 120, 720, 520, t, { n: 16, seed: 3, size: 2.6, rise: 8, color: '#ffe9a8' }));
+      // small cream notes drift up from the kettle
+      for (let i = 0; i < 4; i++) {
+        const ph = (((t * 0.12 * m + i * 0.25) % 1) + 1) % 1;
+        safe(() => tk.note(ctx, f.x - 60 + Math.sin(ph * 9 + i * 2) * 26, f.y - 150 - ph * 190, 7 + i % 2 * 2, { kind: ['eighth', 'beamed', 'quarter', 'eighth'][i], color: i % 2 ? HV.pinkL : HV.cream, alpha: Math.sin(ph * Math.PI) * 0.85, rot: Math.sin(ph * 5 + i) * 0.25, line: 1.6 }));
       }
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.62 }));
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.46 }));
     }
   }
+  // the little record on the shelf's player: a dark disc with a pink label that spins (a bright arc travels round its grooves), and the tonearm resting on it
+  function paintRecord(ctx, t) {
+    const R0 = CAMP_RECORD, a = t * 3.4 * motionK();
+    ctx.save();
+    ctx.fillStyle = '#2a2438'; ctx.beginPath(); ctx.ellipse(R0.x, R0.y, 40, 8.4, 0, 0, TAU); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    [30, 22].forEach((rx) => { ctx.beginPath(); ctx.ellipse(R0.x, R0.y, rx, rx * 0.21, 0, 0, TAU); ctx.stroke(); });
+    ctx.lineWidth = 2.4; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.ellipse(R0.x, R0.y, 34, 7, 0, a, a + 0.8); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(R0.x, R0.y, 34, 7, 0, a + Math.PI, a + Math.PI + 0.5); ctx.stroke();
+    ctx.fillStyle = HV.pink; ctx.beginPath(); ctx.ellipse(R0.x, R0.y, 11, 2.4, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(R0.x, R0.y, 1.4, 0, TAU); ctx.fill();
+    inkLine(ctx, [[R0.x + 46, R0.y - 10], [R0.x + 24, R0.y - 2], [R0.x + 12, R0.y + 2]], 3.4, INK, { taper: 0, wobble: 0 }); inkLine(ctx, [[R0.x + 46, R0.y - 10], [R0.x + 24, R0.y - 2], [R0.x + 12, R0.y + 2]], 1.6, HV.cream, { taper: 0, wobble: 0 });
+    ctx.restore();
+  }
 
-  // small animated pictures for the four camp buttons (224 x 104)
+  // small animated pictures for the four Green Room buttons (224 x 104): a sofa with tea (Rest), a mic in a spotlight (Rehearse), a cut gem (Set Gems), a mic and its sound (Warm Up).
+  // The still parts are baked once (ART.sprite through layer); only the light, steam, rings and notes are drawn per frame.
+  const ciBg = (g, w, h, c0, c1) => { const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, c0); bg.addColorStop(1, c1); g.fillStyle = bg; g.fillRect(0, 0, w, h); };
+  const CI_BULBS = [];
+  function ciRest(g) {
+    ciBg(g, 224, 104, '#12404a', '#25707a');
+    g.fillStyle = HV.cream; g.beginPath(); g.arc(186, 26, 14, 0, TAU); g.fill(); g.fillStyle = '#12404a'; g.beginPath(); g.arc(191, 22, 12, 0, TAU); g.fill();
+    g.lineWidth = 2; g.strokeStyle = INK; g.beginPath(); g.arc(186, 26, 14, 0.9, 5.4); g.stroke();
+    inkLine(g, sagPts(-4, 8, 150, 6, 12, 14), 1.6, INK, { taper: 0, wobble: 0 });
+    CI_BULBS.length = 0;
+    for (let i = 0; i < 7; i++) { const u = (i + 0.5) / 7, bx = -4 + 154 * u, by = 8 - 2 * u + 12 * 4 * u * (1 - u) + 5; bulbDot(g, bx, by, 3.1, [HV.gold, HV.pink, HV.green, HV.cream][i % 4]); CI_BULBS.push([bx, by]); }
+    cel(g, RR(24, 38, 126, 40, 14), '#e0573c', { line: 2, depth: 6, tension: 0.5 });
+    cel(g, RR(14, 58, 146, 26, 12), '#f26b4f', { line: 2, depth: 6, tension: 0.5 });
+    cel(g, { poly: [[52, 60], [150, 56], [152, 78], [60, 82]] }, '#8fe3c0', { line: 1.8, depth: 4, tension: 0, decor: (c) => { c.fillStyle = HV.pink; c.fillRect(70, 52, 14, 34); c.fillRect(98, 52, 14, 34); c.fillRect(126, 52, 14, 34); } });
+    cel(g, RR(30, 42, 36, 28, 10), HV.pinkL, { line: 1.8, depth: 4 }); heartAt(g, 48, 56, 7, HV.pink, 1.6);
+    [[26, 86], [140, 86]].forEach((f) => cel(g, R4(f[0], f[1], 8, 8), '#8a5a38', { line: 1.6, depth: 1, tension: 0 }));
+    cel(g, RR(176, 66, 26, 24, 7), HV.cream, { line: 2, depth: 4 });
+    inkLine(g, [[202, 72], [212, 74], [212, 82], [202, 84]], 5, INK, { taper: 0, wobble: 0 }); inkLine(g, [[202, 72], [212, 74], [212, 82], [202, 84]], 2, HV.cream, { taper: 0, wobble: 0 });
+  }
+  function ciSharpen(g) {
+    ciBg(g, 224, 104, '#2a1a5a', '#6a2a7a');
+    g.fillStyle = 'rgba(255,244,214,0.16)'; g.beginPath(); g.moveTo(98, 0); g.lineTo(126, 0); g.lineTo(176, 96); g.lineTo(48, 96); g.closePath(); g.fill();
+    celOval(g, 112, 94, 62, 9, HV.cream, { line: 2, depth: 3 }); celOval(g, 112, 92, 54, 7, '#5b3fa8', { line: 1.6, depth: 3 });
+    inkLine(g, [[112, 92], [112, 54]], 6, INK, { taper: 0, wobble: 0 }); inkLine(g, [[112, 92], [112, 54]], 2.8, '#c9cbd6', { taper: 0, wobble: 0 });
+    celOval(g, 112, 40, 11, 15, '#2a2438', { line: 2.2, depth: 4, hi: '#615f6d' });
+    for (let k = -1; k <= 1; k++) inkLine(g, [[104, 40 + k * 6], [120, 40 + k * 6]], 1.2, 'rgba(255,255,255,0.35)', { taper: 0, wobble: 0 });
+    cel(g, R4(101, 44, 22, 5), HV.pink, { line: 1.4, depth: 1, tension: 0 });
+    g.save(); g.translate(40, 54); g.rotate(-0.18);
+    cel(g, R4(-20, -30, 40, 58), HV.cream, { line: 2, depth: 5, tension: 0 }); cel(g, R4(-20, -30, 40, 12), HV.pink, { line: 1.6, depth: 1, tension: 0, shadow: false });
+    starAt(g, 0, 4, 9, HV.gold, 0, 1.6);
+    g.restore();
+  }
+  function ciWarm(g) {
+    ciBg(g, 224, 104, '#2a1a5a', '#3a2a8a');
+    const rj = rjk();
+    if (rj && isFn(rj.mic)) rj.mic(g, 128, 40, Math.PI * 0.72, { accent: HV.pink, k: 1.25 });
+    celOval(g, 52, 54, 24, 24, HV.pink, { line: 2.2, depth: 7, hi: HV.pinkL });
+    g.strokeStyle = HV.cream; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(36, 54); g.lineTo(42, 54); g.lineTo(46, 44); g.lineTo(52, 66); g.lineTo(57, 40); g.lineTo(62, 62); g.lineTo(66, 54); g.lineTo(70, 54); g.stroke();
+  }
   function campIcon(g, id, t, w, h, S) {
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    const bg = g.createLinearGradient(0, 0, 0, h);
-    const cols = { rest: ['#1c1656', '#382a80'], sharpen: ['#2a1420', '#5a2a1c'], gems: ['#1b1050', '#3c1f7a'], meditate: ['#0f1444', '#1f3a78'] }[id] || ['#1a1340', '#3b2a7a'];
-    bg.addColorStop(0, cols[0]); bg.addColorStop(1, cols[1]);
-    g.fillStyle = bg; g.fillRect(0, 0, w, h);
-    const tk = TK();
+    const m = motionK(), tk = TK();
     if (id === 'rest') {
-      glow(g, 178, 26, 46, '#ffe9a8', 0.6);
-      g.fillStyle = '#fff4d6'; g.beginPath(); g.arc(178, 26, 15, 0, TAU); g.fill();
-      g.fillStyle = cols[0]; g.beginPath(); g.arc(184, 22, 13, 0, TAU); g.fill();
-      cel(g, { poly: [[24, 84], [30, 66], [150, 62], [172, 84]] }, '#5b3fa8', { tension: 0.5, line: 2.6, hi: true });
-      celOval(g, 44, 62, 20, 11, '#f3e6c8', { line: 2.4 });
-      cel(g, { poly: [[24, 84], [172, 84], [172, 92], [24, 92]] }, '#e8383d', { tension: 0.1, line: 2.4 });
-      for (let i = 0; i < 3; i++) {
-        const ph = ((t * 0.35 * m + i / 3) % 1 + 1) % 1;
-        g.save(); g.globalAlpha = Math.sin(ph * Math.PI); g.font = '900 ' + (14 + i * 4) + 'px ' + (TK() ? TK().font.display : 'serif'); g.fillStyle = '#e6dcff'; g.strokeStyle = INK; g.lineWidth = 3;
-        g.strokeText('z', 84 + i * 22 + ph * 10, 58 - ph * 40); g.fillText('z', 84 + i * 22 + ph * 10, 58 - ph * 40); g.restore();
-      }
-      for (let i = 0; i < 5; i++) { const ph = ((t * 0.3 * m + i * 0.21) % 1 + 1) % 1; sparkleAt(g, 40 + i * 28, 56 - ph * 34, 4 + i % 2 * 2, { color: '#8dffc2', alpha: Math.sin(ph * Math.PI) }); }
+      layer(g, 'nk:ci:rest', w, h, ciRest);
+      glow(g, 186, 26, 44, '#fff4d6', 0.45);
+      CI_BULBS.forEach((b, i) => glow(g, b[0], b[1], 9, HV.cream, 0.25 + 0.25 * Math.sin(t * 1.6 * m + i * 1.7)));
+      for (let i = 0; i < 3; i++) { const ph = (((t * 0.4 * m + i / 3) % 1) + 1) % 1; g.fillStyle = 'rgba(255,255,255,' + (Math.sin(ph * Math.PI) * 0.6).toFixed(2) + ')'; g.beginPath(); g.arc(189 + Math.sin(t * 2 + i * 2) * 3, 62 - ph * 30, 3 + ph * 4, 0, TAU); g.fill(); }
+      if (tk) for (let i = 0; i < 2; i++) { const ph = (((t * 0.22 * m + i * 0.5) % 1) + 1) % 1; safe(() => tk.note(g, 168 + i * 18, 48 - ph * 34, 6, { kind: i ? 'beamed' : 'eighth', color: HV.pinkL, alpha: Math.sin(ph * Math.PI) * 0.85, line: 1.4 })); }
     } else if (id === 'sharpen') {
-      glow(g, 112, 74, 90, '#ff9a4a', 0.28);
-      cel(g, { poly: [[30, 92], [40, 70], [186, 70], [198, 92]] }, '#8a86a8', { tension: 0.2, line: 2.8, hi: true });
-      cel(g, { poly: [[40, 70], [186, 70], [178, 60], [50, 60]] }, '#c4c0d8', { tension: 0.2, line: 2.4 });
-      const off = Math.sin(t * 4.2 * m) * 22;
-      g.save(); g.translate(112 + off, 60); g.rotate(-0.42);
-      cel(g, { poly: [[-90, -2], [60, -8], [96, -1], [60, 6], [-90, 5]] }, '#e6ecff', { tension: 0.1, line: 2.6, hi: true, rim: '#ffffff' });
-      g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(-84, -1, 150, 1.6);
+      layer(g, 'nk:ci:sharpen', w, h, ciSharpen);
+      g.save(); g.lineCap = 'round';
+      for (let i = 0; i < 3; i++) { const q = (((t * 0.55 * m + i / 3) % 1) + 1) % 1, rr = 16 + q * 34; g.strokeStyle = rgba(i % 2 ? HV.cream : HV.pink, 0.8 * (1 - q)); g.lineWidth = 2.4; g.beginPath(); g.arc(112, 38, rr, Math.PI * 1.15, Math.PI * 1.4); g.stroke(); g.beginPath(); g.arc(112, 38, rr, Math.PI * 1.6, Math.PI * 1.85); g.stroke(); }
       g.restore();
-      for (let i = 0; i < 9; i++) {
-        const ph = ((t * 1.7 * m + i * 0.111) % 1 + 1) % 1, a = -0.9 + (i % 5) * 0.4;
-        g.fillStyle = 'rgba(255,' + (200 + (i % 3) * 20) + ',120,' + (1 - ph).toFixed(2) + ')';
-        g.beginPath(); g.arc(120 + off * 0.4 + Math.cos(a) * ph * 46, 62 - Math.abs(Math.sin(a)) * ph * 40 + ph * ph * 30, 2.2 * (1 - ph) + 0.6, 0, TAU); g.fill();
-      }
+      sparkleAt(g, 66, 26, 5 + 2 * Math.sin(t * 4), { color: '#ffffff', alpha: 0.9 });
+      sparkleAt(g, 172, 34, 4, { color: HV.pinkL, alpha: 0.6 + 0.4 * Math.sin(t * 3) });
     } else if (id === 'gems') {
-      const hue = [['#e8383d', '#ff9a9a'], ['#5fb4ff', '#b5dcff'], ['#3fd6b0', '#a5f5dc'], ['#f5c96a', '#ffe9a8']];
+      ciBg(g, w, h, '#1b1050', '#3c1f7a');
+      const hue = [['#ff7eb6', '#ffc2dc'], ['#5fb4ff', '#b5dcff'], ['#3fd6b0', '#a5f5dc'], ['#ffd84d', '#fff0a8']];
       const k = (t * 0.5 * m) % 4, a = hue[Math.floor(k) % 4], b = hue[(Math.floor(k) + 1) % 4], f = k - Math.floor(k);
       const base = U.color.mix(a[0], b[0], f), lite = U.color.mix(a[1], b[1], f);
       glow(g, 112, 54, 80, base, 0.5);
       g.save(); g.translate(112, 54 + Math.sin(t * 1.6 * m) * 3); g.rotate(Math.sin(t * 0.9 * m) * 0.08);
-      cel(g, { poly: [[-34, -6], [-20, -34], [20, -34], [34, -6], [0, 36]] }, base, { tension: 0.1, line: 3.2, hi: lite, rim: lite });
+      cel(g, { poly: [[-34, -6], [-20, -34], [20, -34], [34, -6], [0, 36]] }, base, { line: 2.8, depth: 8, tension: 0, hi: lite, rim: lite });
       g.fillStyle = rgba(lite, 0.75); g.beginPath(); g.moveTo(-20, -34); g.lineTo(-6, -6); g.lineTo(-34, -6); g.closePath(); g.fill();
       g.fillStyle = rgba('#ffffff', 0.3); g.beginPath(); g.moveTo(20, -34); g.lineTo(34, -6); g.lineTo(6, -6); g.closePath(); g.fill();
       g.strokeStyle = rgba(INK, 0.6); g.lineWidth = 1.6; g.beginPath(); g.moveTo(-34, -6); g.lineTo(34, -6); g.moveTo(-6, -6); g.lineTo(0, 36); g.moveTo(6, -6); g.lineTo(0, 36); g.stroke();
       g.restore();
       for (let i = 0; i < 4; i++) sparkleAt(g, 112 + Math.cos(t * 0.8 * m + i * 1.6) * 54, 54 + Math.sin(t * 1.1 * m + i * 1.6) * 30, 5 + (i % 2) * 3, { color: '#ffffff', alpha: 0.5 + 0.5 * Math.sin(t * 3 + i) });
     } else {
-      // meditate: a singing bowl on a cushion above still water, a wooden striker tapping its rim, and sound rings that spread out over the water
-      const wy = 78;
-      g.fillStyle = 'rgba(95,180,255,0.18)'; g.beginPath(); g.ellipse(112, wy, 96, 18, 0, 0, TAU); g.fill();
-      const cyc = (t * 0.45 * m) % 1;
-      for (let i = 0; i < 3; i++) { const ph = ((cyc + i * 0.3) % 1); g.strokeStyle = 'rgba(200,225,255,' + (0.7 * (1 - ph)).toFixed(2) + ')'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(112, wy + 2, 10 + ph * 80, 3 + ph * 14, 0, 0, TAU); g.stroke(); }
-      celOval(g, 112, wy - 6, 26, 7, '#8a2a3a', { line: 2.2, depth: 2 });
-      cel(g, { poly: [[82, wy - 40], [86, wy - 24], [98, wy - 12], [126, wy - 12], [138, wy - 24], [142, wy - 40]] }, '#c9893a', { tension: 0.5, line: 2.6, hi: true, rim: '#ffe9a8' });
-      celOval(g, 112, wy - 40, 30, 7.5, '#e0a850', { line: 2.4 });
-      g.fillStyle = '#4a2412'; g.beginPath(); g.ellipse(112, wy - 39, 24, 5, 0, 0, TAU); g.fill();
-      // the striker swings in, touches the rim at the top of each cycle, and the bowl answers with two arcs on each side
-      const hit = cyc < 0.16 ? 1 - cyc / 0.16 : 0;
-      g.save(); g.translate(148, wy - 58 + hit * 18); g.rotate(-0.5 - (1 - hit) * 0.1);
-      cel(g, { poly: [[-3, -3], [34, -2], [34, 2], [-3, 3]] }, '#a8743c', { tension: 0.1, line: 2 });
-      celOval(g, -4, 0, 6, 6, '#e8383d', { line: 2 });
+      layer(g, 'nk:ci:warm', w, h, ciWarm);
+      g.save(); g.lineCap = 'round';
+      for (let i = 0; i < 3; i++) { const q = (((t * 0.5 * m + i / 3) % 1) + 1) % 1, rr = 22 + q * 40; g.strokeStyle = rgba(i % 2 ? HV.cream : HV.pink, 0.85 * (1 - q)); g.lineWidth = 2.6; g.beginPath(); g.arc(128, 40, rr, Math.PI * 1.25, Math.PI * 1.75); g.stroke(); g.beginPath(); g.arc(128, 40, rr, Math.PI * 0.25, Math.PI * 0.75); g.stroke(); }
       g.restore();
-      const ring = cyc < 0.7 ? cyc / 0.7 : 1;
-      for (let i = 0; i < 2; i++) {
-        const q = Math.min(1, ring + i * 0.0) - i * 0.22; if (q <= 0) continue;
-        g.strokeStyle = 'rgba(95,245,255,' + (0.8 * (1 - q)).toFixed(2) + ')'; g.lineWidth = 2; g.lineCap = 'round';
-        const rr = 34 + q * 28;
-        g.beginPath(); g.arc(112, wy - 40, rr, Math.PI * 1.1, Math.PI * 1.32); g.stroke();
-        g.beginPath(); g.arc(112, wy - 40, rr, Math.PI * 1.68, Math.PI * 1.9); g.stroke();
-      }
-      if (tk) sparkleAt(g, 112 + Math.sin(t * 1.2) * 30, 30 + Math.cos(t * 0.9) * 8, 4, { color: '#5ff5ff', alpha: 0.7 });
+      if (tk) for (let i = 0; i < 3; i++) { const ph = (((t * 0.28 * m + i / 3) % 1) + 1) % 1; safe(() => tk.note(g, 170 + i * 14 + Math.sin(ph * 7 + i) * 6, 84 - ph * 70, 7, { kind: ['eighth', 'beamed', 'quarter'][i], color: [HV.gold, HV.pinkL, HV.cream][i], alpha: Math.sin(ph * Math.PI) * 0.9, line: 1.5 })); }
+      sparkleAt(g, 78, 24, 5 + 2 * Math.sin(t * 3.4), { color: '#ffffff', alpha: 0.85 });
     }
     void S;
   }
 
-  // ---------------------------------------------------------------- forge: a smithy, a furnace, an anvil with a tuning fork, a hammer
-  // Anchors: the anvil face is at FORGE.hit, the hammer pivots at FORGE.pivot (stage px).
-  // rest and restUp are the hammer's idle angles (radians, see drawHammer): hung at an angle while two plaques are up, and standing nearly upright behind the After card
-  // while the before and after page is open, so the head never sits on the Strike! button (the first keyframe of a blow is whichever rest it starts from)
-  // cardsEnd: the two mode cards end at y 458 and the before and after cards at 452 or more (taller on a phone), and the hammer's base sits at the pivot, 12 to 18 px below them: until the first blow
-  // (nothing has to swing yet) the hammer is painted only above y 446, so the base never pokes out from under a card (a stub of handle showed under the After card and the Cut Gems plaque)
+  // ---------------------------------------------------------------- the Studio: a mixing desk, a mic in a pop filter, an ON AIR light, a big drum pad and a drumstick
+  // Anchors: the drum pad's face is at FORGE.hit, the drumstick pivots at FORGE.pivot (stage px).
+  // rest and restUp are the stick's idle angles (radians, see drawHammer): hung at an angle while two plaques are up, and standing nearly upright behind the After card
+  // while the before and after page is open, so the stick never sits on the Hit it! button (the first keyframe of a blow is whichever rest it starts from)
+  // cardsEnd: the two mode cards end at y 458 and the before and after cards at 452 or more (taller on a phone), and the stick's base sits at the pivot, 12 to 18 px below them: until the first blow
+  // (nothing has to swing yet) the stick is painted only above y 446, so the base never pokes out from under a card
+  // The alignment tests read this painter: the stick's rotate must be the FIRST rotate call and its cut the only rect(0, 0, 1280, y) and the only extra clip, so the backdrop and
+  // everything before drawHammer never rotates, and nothing that depends on the strike may clip or use the cel helpers.
   const FORGE = { hit: { x: 640, y: 538 }, pivot: { x: 850, y: 470 }, arm: 205, rest: -0.95, restUp: -1.5, cardsEnd: 446 };
+  const FORGE_LAMP = { x: 168, y: 140 };        // the ON AIR light's centre (the lamp and its word are live, the housing is baked)
+  const FORGE_WOOFERS = [{ x: 1130, y: 340, r: 56 }, { x: 1130, y: 548, r: 68 }];
 
   function forgeBackdrop(g) {
     const r = U.rng(31337);
-    g.fillStyle = '#0c0920'; g.fillRect(0, 0, 1280, 720);
-    // stone blocks
-    for (let row = 0; row < 15; row++) {
-      const y = row * 46 - 8, off = row % 2 ? 46 : 0;
-      for (let x = -92 + off; x < 1300; x += 92) {
-        const sh = 18 + Math.floor(r() * 14);
-        g.fillStyle = 'rgb(' + sh + ',' + (sh - 2) + ',' + (sh + 26) + ')'; g.fillRect(x + 2, y + 2, 88, 42);
-        g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(x + 2, y + 2, 88, 3);
-        g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + 2, y + 40, 88, 4);
+    const wall = g.createLinearGradient(0, 0, 0, 720); wall.addColorStop(0, '#1a1346'); wall.addColorStop(1, '#0e0a28');
+    g.fillStyle = wall; g.fillRect(0, 0, 1280, 720);
+    // acoustic foam: square tiles with a pyramid on each (the top and right faces catch the light), in three muted candy colours
+    const foam = (x0, y0, cols, rows, size, pal) => {
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const x = x0 + i * size, y = y0 + j * size, c = pal[(i + j * 2) % pal.length], cx = x + size / 2, cy = y + size / 2;
+        g.fillStyle = c; g.fillRect(x, y, size, size);
+        g.fillStyle = U.color.mix(c, '#ffffff', 0.3); g.beginPath(); g.moveTo(x, y); g.lineTo(x + size, y); g.lineTo(cx, cy); g.closePath(); g.fill();
+        g.fillStyle = U.color.mix(c, '#ffffff', 0.14); g.beginPath(); g.moveTo(x + size, y); g.lineTo(x + size, y + size); g.lineTo(cx, cy); g.closePath(); g.fill();
+        g.fillStyle = U.color.mix(c, '#000000', 0.34); g.beginPath(); g.moveTo(x, y + size); g.lineTo(x + size, y + size); g.lineTo(cx, cy); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(45,23,15,0.5)'; g.lineWidth = 1.4; g.strokeRect(x, y, size, size);
       }
-    }
-    // the furnace with its arched mouth and chimney
-    cel(g, { poly: [[70, 660], [80, 300], [160, 240], [310, 240], [390, 300], [400, 660]] }, '#2b2450', { tension: 0.3, line: 4, hi: true, rim: '#ff8a3a' });
-    cel(g, { poly: [[210, 250], [260, 250], [270, 30], [200, 30]] }, '#2b2450', { tension: 0.2, line: 4 });
-    const mouth = g.createLinearGradient(0, 360, 0, 660); mouth.addColorStop(0, '#5a1408'); mouth.addColorStop(0.5, '#e8541a'); mouth.addColorStop(1, '#ffb030');
-    g.beginPath(); g.moveTo(148, 660); g.lineTo(148, 470); g.quadraticCurveTo(148, 352, 235, 352); g.quadraticCurveTo(322, 352, 322, 470); g.lineTo(322, 660); g.closePath();
-    g.fillStyle = mouth; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
-    g.fillStyle = 'rgba(20,10,8,0.55)'; for (let i = 0; i < 4; i++) g.fillRect(166 + i * 36, 560, 22, 100);
-    // hanging tools and a shelf of little bronze bowls on the right
-    for (let i = 0; i < 6; i++) { const x = 940 + i * 48; inkLine(g, [[x, 80], [x + 4, 150 + (i % 3) * 20]], 5, '#8a86a8', { taper: 0.05 }); cel(g, { poly: [[x - 8, 150 + (i % 3) * 20], [x + 12, 150 + (i % 3) * 20], [x + 14, 190 + (i % 3) * 20], [x - 10, 190 + (i % 3) * 20]] }, '#4a4863', { tension: 0.2, line: 2.4 }); }
-    g.fillStyle = '#4b2e22'; g.fillRect(900, 360, 300, 16); g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(900, 360, 300, 16);
-    for (let i = 0; i < 5; i++) celOval(g, 930 + i * 56, 348, 20, 12, i % 2 ? '#8a5a24' : '#c9893a', { line: 2.6, hi: true, rim: '#ffe9a8' });
-    // floor
-    const fl = g.createLinearGradient(0, 640, 0, 720); fl.addColorStop(0, '#1d1436'); fl.addColorStop(1, '#0a071c');
+    };
+    foam(18, 92, 5, 6, 54, ['#b24f8a', '#6a4ab8', '#b24f8a', '#2f8f96']);
+    foam(986, 92, 5, 5, 54, ['#2f8f96', '#6a4ab8', '#2f8f96', '#b24f8a']);
+    for (let i = 0; i < 6; i++) { const x = 350 + r() * 580, y = 450 + r() * 70; starAt(g, x, y, 5 + r() * 4, [HV.pink, HV.gold, HV.green][i % 3], r(), 1.4); }
+    // headphones on hooks above the speakers
+    [[1048, 156, HV.pink], [1122, 168, HV.green], [1196, 154, HV.violet]].forEach((h) => {
+      inkLine(g, [[h[0], 102], [h[0], 130]], 2.4, INK, { taper: 0, wobble: 0 });
+      g.strokeStyle = INK; g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.arc(h[0], h[1] - 2, 27, Math.PI * 1.02, Math.PI * 1.98); g.stroke();
+      g.strokeStyle = h[2]; g.lineWidth = 3.6; g.beginPath(); g.arc(h[0], h[1] - 2, 27, Math.PI * 1.02, Math.PI * 1.98); g.stroke();
+      celOval(g, h[0] - 27, h[1] + 8, 13, 17, h[2], { line: 2.2, depth: 4 }); celOval(g, h[0] + 27, h[1] + 8, 13, 17, h[2], { line: 2.2, depth: 4 });
+    });
+    // the ON AIR housing (the lamp and its word are live)
+    cel(g, RR(78, 100, 180, 82, 16), '#2a2438', { line: 3, depth: 8, tension: 0.5 });
+    g.strokeStyle = HV.cream; g.lineWidth = 2.4; rrPath(g, 86, 108, 164, 66, 11); g.stroke();
+    inkLine(g, [[120, 82], [120, 100]], 3, INK, { taper: 0, wobble: 0 }); inkLine(g, [[216, 82], [216, 100]], 3, INK, { taper: 0, wobble: 0 });
+    // the floor and a low round riser under the drum
+    const fl = g.createLinearGradient(0, 648, 0, 720); fl.addColorStop(0, '#2a1d5a'); fl.addColorStop(1, '#0a071c');
     g.fillStyle = fl; g.fillRect(0, 648, 1280, 72);
-    g.strokeStyle = 'rgba(255,140,60,0.10)'; g.lineWidth = 1;
-    for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(0, 656 + i * 12); g.lineTo(1280, 656 + i * 12); g.stroke(); }
-    // the wooden stump and the anvil
-    cel(g, { poly: [[540, 600], [740, 600], [752, 700], [528, 700]] }, '#5a3a26', { tension: 0.2, line: 4, hi: true, rim: '#ff8a3a' });
-    cel(g, [[500, 556], [560, 536], [770, 534], [786, 554], [736, 566], [724, 602], [772, 622], [776, 646], [512, 646], [512, 620], [562, 602], [556, 568]], '#565478', { tension: 0.3, line: 4.4, hi: true, rim: '#ff8a3a', rimSide: 'light', halftone: true });
-    g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(560, 538, 200, 4);
-    // a tuning fork standing on the anvil face: a short stem, a U and two silver tines (the idle glint and the sound arcs are live, in paintForge)
-    const fork = (w, col) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(646, 536); g.lineTo(646, 512); g.moveTo(632, 462); g.lineTo(632, 496); g.quadraticCurveTo(632, 512, 646, 512); g.quadraticCurveTo(660, 512, 660, 496); g.lineTo(660, 462); g.stroke(); };
-    fork(11, INK); fork(6, '#e6ecff');
-    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(630, 466); g.lineTo(630, 494); g.moveTo(644, 530); g.lineTo(644, 516); g.stroke();
-    g.fillStyle = '#f5c96a'; g.fillRect(639, 522, 14, 5); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(639, 522, 14, 5);
+    inkLine(g, [[0, 650], [1280, 650]], 2.6, 'rgba(45,23,15,0.8)', { taper: 0, wobble: 0 });
+    g.strokeStyle = 'rgba(255,126,182,0.10)'; g.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(0, 658 + i * 12); g.lineTo(1280, 658 + i * 12); g.stroke(); }
+    celOval(g, 640, 692, 270, 24, '#3d2a7e', { line: 2.6, depth: 6 });
+    g.strokeStyle = HV.pink; g.lineWidth = 3; g.beginPath(); g.ellipse(640, 692, 246, 20, 0, 0, TAU); g.stroke();
+    // the big drum pad: stand legs, a cream body with a pink and green zigzag, a chrome hoop, a dark pad with a target ring
+    [[560, 628, 506, 698], [720, 628, 774, 698], [640, 636, 640, 706]].forEach((l) => { inkLine(g, [[l[0], l[1]], [l[2], l[3]]], 11, INK, { taper: 0, wobble: 0 }); inkLine(g, [[l[0], l[1]], [l[2], l[3]]], 6, '#c9cbd6', { taper: 0, wobble: 0 }); });
+    const hx = FORGE.hit.x, hy = FORGE.hit.y;
+    cel(g, [[hx - 152, hy, 1], [hx - 148, hy + 90, 1], [hx - 80, hy + 112], [hx, hy + 118], [hx + 80, hy + 112], [hx + 148, hy + 90, 1], [hx + 152, hy, 1]], HV.cream, { line: 2.8, depth: 14, tension: 0.7,
+      decor: (c) => {
+        c.fillStyle = HV.pink; c.beginPath(); c.moveTo(hx - 160, hy + 36); for (let k = 0; k <= 16; k++) c.lineTo(hx - 160 + k * 20, hy + (k % 2 ? 62 : 36)); c.lineTo(hx + 160, hy + 78); c.lineTo(hx - 160, hy + 78); c.closePath(); c.fill();
+        c.fillStyle = HV.green; c.fillRect(hx - 160, hy + 82, 320, 12);
+      } });
+    for (let k = -3; k <= 3; k++) cel(g, R4(hx + k * 44 - 5, hy + 8, 10, 22), '#c9cbd6', { line: 1.8, depth: 3, tension: 0 });
+    celOval(g, hx, hy, 154, 28, '#c9cbd6', { line: 2.8, depth: 6 });
+    celOval(g, hx, hy + 1, 142, 23, '#2a2438', { line: 2.4, depth: 7, shadow: '#1a1426' });
+    g.strokeStyle = HV.pink; g.lineWidth = 3.4; g.beginPath(); g.ellipse(hx, hy + 1, 104, 16, 0, 0, TAU); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; g.beginPath(); g.ellipse(hx, hy + 1, 130, 20, 0, Math.PI * 1.06, Math.PI * 1.4); g.stroke();
+    g.fillStyle = HV.pink; g.beginPath(); g.ellipse(hx, hy + 1, 7, 1.8, 0, 0, TAU); g.fill();
+    // the mixing desk on the left: a teal front, a sloped panel with faders and knobs
+    cel(g, { poly: [[44, 592], [336, 592], [330, 652], [50, 652]] }, HV.teal, { line: 2.8, depth: 9, tension: 0, hi: '#8ff0e4' });
+    g.fillStyle = HV.cream; g.fillRect(52, 612, 276, 8); g.fillStyle = HV.pink; g.fillRect(52, 620, 276, 6);
+    cel(g, { poly: [[62, 534], [322, 522], [336, 592], [44, 592]] }, '#2b2650', { line: 2.8, depth: 8, tension: 0 });
+    for (let i = 0; i < 8; i++) {
+      const x = 80 + i * 32, c = [HV.pink, HV.green, HV.gold, HV.cream, HV.lime, HV.violet, HV.pink, HV.green][i];
+      celOval(g, x, 543, 7, 4.4, c, { line: 1.6, depth: 1 }); inkLine(g, [[x, 543], [x + 2, 540]], 1.4, INK, { taper: 0, wobble: 0 });
+      cel(g, R4(x - 3, 556, 6, 30), '#14102c', { line: 1.4, depth: 0, tension: 0, shadow: false });
+      cel(g, RR(x - 9, 560 + (i * 11) % 18, 18, 9, 3), c, { line: 1.8, depth: 2 });
+    }
+    // the mic stand with its boom, the mic and a round pop filter
+    celOval(g, 176, 646, 44, 9, '#3a3448', { line: 2.4, depth: 4 });
+    inkLine(g, [[176, 640], [176, 392]], 9, INK, { taper: 0, wobble: 0 }); inkLine(g, [[176, 640], [176, 392]], 4.4, '#c9cbd6', { taper: 0, wobble: 0 });
+    inkLine(g, [[176, 392], [250, 346]], 9, INK, { taper: 0, wobble: 0 }); inkLine(g, [[176, 392], [250, 346]], 4.4, '#c9cbd6', { taper: 0, wobble: 0 });
+    celOval(g, 176, 392, 9, 9, HV.pink, { line: 2.2, depth: 3 });
+    cel(g, RR(236, 316, 34, 62, 14), '#2a2438', { line: 2.6, depth: 5, tension: 0.6, hi: '#615f6d' });
+    for (let k = 0; k < 5; k++) inkLine(g, [[240, 326 + k * 10], [266, 326 + k * 10]], 1.4, 'rgba(255,255,255,0.35)', { taper: 0, wobble: 0 });
+    celOval(g, 296, 347, 10, 42, 'rgba(255,255,255,0.1)', { line: 3, depth: 0, shadow: false, lineColor: HV.lime });
+    g.strokeStyle = 'rgba(198,255,61,0.4)'; g.lineWidth = 1.2;
+    for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(296 - 9 * Math.sqrt(1 - Math.pow(k / 3.5, 2)), 347 + k * 11); g.lineTo(296 + 9 * Math.sqrt(1 - Math.pow(k / 3.5, 2)), 347 + k * 11); g.stroke(); }
+    // the two speakers on the right: cabinets (the cones are live)
+    cel(g, RR(1030, 190, 200, 232, 16), '#2b2650', { line: 3, depth: 10, tension: 0.4 });
+    cel(g, RR(1010, 440, 240, 206, 16), '#2b2650', { line: 3, depth: 10, tension: 0.4 });
+    g.strokeStyle = HV.cream; g.lineWidth = 2.2; rrPath(g, 1038, 198, 184, 216, 11); g.stroke(); rrPath(g, 1018, 448, 224, 190, 11); g.stroke();
+    celOval(g, 1130, 238, 24, 24, '#c9cbd6', { line: 2.2, depth: 4 }); celOval(g, 1130, 238, 15, 15, '#14102c', { line: 1.8, depth: 3 });
+    FORGE_WOOFERS.forEach((w) => celOval(g, w.x, w.y, w.r + 8, w.r + 8, '#c9cbd6', { line: 2.6, depth: 6 }));
   }
 
   const HAMMER_KEYS = [[0, null], [0.19, 0.26], [0.33, -0.3], [0.52, 0.26], [0.64, -0.14], [0.84, 0.26], [1.35, null]];     // null: the rest angle the blow starts from and settles to
@@ -2824,27 +2934,51 @@
     return key(HAMMER_KEYS.length - 1);
   }
 
+  // the drumstick: a tapered wooden stick with pink and green grip tape at the hand end and a round bead at the tip, hinged at FORGE.pivot (its +x runs from the hand to the bead)
   function drawHammer(ctx, ang) {
     const P = FORGE.pivot;
     ctx.save(); ctx.translate(P.x, P.y); ctx.rotate(Math.atan2(Math.sin(ang), -Math.cos(ang)));
-    cel(ctx, { poly: [[0, -9], [172, -7], [172, 7], [0, 9]] }, '#a06a3a', { tension: 0.15, line: 3.2, hi: true, rim: '#ffd08a', rimSide: 'light' });
-    ctx.fillStyle = '#e8383d'; for (let i = 0; i < 4; i++) ctx.fillRect(10 + i * 12, -9, 6, 18);
-    cel(ctx, { poly: [[166, -30], [240, -34], [244, 34], [166, 30]] }, '#6a6890', { tension: 0.2, line: 3.6, hi: true, rim: '#ff8a3a', rimSide: 'light' });
-    ctx.fillStyle = 'rgba(245,201,106,0.9)'; ctx.fillRect(200, -34, 5, 68);
+    cel(ctx, { poly: [[-16, -9], [90, -8], [214, -5.4], [214, 5.4], [90, 8], [-16, 9]] }, '#e6b57a', { line: 2.8, depth: 4, tension: 0, hi: '#ffe0b0', hiW: 2 });
+    cel(ctx, { poly: [[-16, -9], [74, -8], [74, 8], [-16, 9]] }, HV.pink, { line: 2.4, depth: 3, tension: 0, hi: HV.pinkL, hiW: 2 });
+    ctx.fillStyle = HV.green; for (let i = 0; i < 3; i++) ctx.fillRect(2 + i * 22, -7.4, 8, 14.8);
+    inkLine(ctx, [[74, -8], [74, 8]], 2.4, INK, { taper: 0, wobble: 0 });
+    celOval(ctx, 226, 0, 17, 15, '#f2c994', { line: 2.8, depth: 5, hi: '#fff0d4', hiW: 2.4 });
     ctx.restore();
   }
 
   function paintForge(ctx, t, S) {
     layer(ctx, 'nk:forge:bg', 1280, 720, forgeBackdrop);
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    const fl = 0.9 + 0.1 * Math.sin(t * 8) + 0.05 * Math.sin(t * 15);
-    glow(ctx, 235, 540, 360 * fl, '#ff6a1a', 0.36);
-    glow(ctx, 235, 560, 170, '#ffc060', 0.5);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 18; i++) { const ph = ((t * 0.22 * m + i * 0.171) % 1 + 1) % 1; ctx.globalAlpha = (1 - ph) * 0.9; ctx.fillStyle = i % 2 ? '#ffb85a' : '#ff7a2a'; ctx.beginPath(); ctx.arc(200 + (i * 37) % 70 + Math.sin(t * 2 + i) * 14, 470 - ph * 260, 1.6 + (i % 3) * 0.8, 0, TAU); ctx.fill(); }
-    ctx.restore();
-    // hammer: hangs and sways until a strike starts
+    const m = motionK();
     const tt = S.strike ? t - S.strike.t0 : -1;
+    // one envelope for the whole room: how recently a blow landed (1 on the hit, falling to 0 over 0.45 s)
+    let env = 0;
+    if (tt >= 0) HIT_TIMES.forEach((ht) => { const age = tt - ht; if (age >= 0 && age < 0.45) env = Math.max(env, 1 - age / 0.45); });
+    // the pad's glow, and the notes' warm light
+    const hx = FORGE.hit.x, hy = FORGE.hit.y;
+    glow(ctx, hx, hy - 10, 300 + 70 * env, HV.pink, 0.1 + 0.05 * Math.sin(t * 2.2) + 0.3 * env);
+    glow(ctx, 168, 300, 240, '#ffcf8a', 0.08);
+    // the woofers thump with the blows
+    FORGE_WOOFERS.forEach((w) => {
+      const k = 1 + 0.06 * env;
+      celOval(ctx, w.x, w.y, w.r * k, w.r * k, '#1c1636', { line: 2.4, depth: 7 });
+      celOval(ctx, w.x - 3, w.y - 3, w.r * 0.42 * k, w.r * 0.42 * k, HV.pink, { line: 2, depth: 4, hi: HV.pinkL });
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(w.x, w.y, Math.max(1, w.r * 0.74 * k), 0, TAU); ctx.stroke();
+    });
+    // the ON AIR light: switched on for the strike
+    const on = S.strike && tt < 2.6;
+    const lit = on ? 0.85 + 0.15 * Math.sin(t * 12) : 0;
+    ctx.save();
+    ctx.fillStyle = on ? rgba('#ff3d5e', 0.9 + 0.1 * lit) : '#4a1a2c'; ctx.beginPath(); rrPath(ctx, 90, 112, 156, 58, 9); ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 34px ' + (TK() ? TK().font.display : 'sans-serif');
+    ctx.fillStyle = on ? '#fff4e6' : '#7a3a4a'; ctx.fillText('ON AIR', FORGE_LAMP.x, FORGE_LAMP.y + 1);
+    ctx.restore();
+    if (on) glow(ctx, FORGE_LAMP.x, FORGE_LAMP.y, 150, '#ff3d5e', 0.5 * lit);
+    // the desk's level meter bounces (and jumps on a blow)
+    for (let i = 0; i < 5; i++) {
+      const h = 4 + (0.5 + 0.5 * Math.sin(t * (3 + i * 0.7) + i * 1.7)) * 8 * m + env * 12, x = 286 + i * 8;
+      ctx.fillStyle = i < 3 ? HV.green : i < 4 ? HV.gold : HV.pink; ctx.fillRect(x, 580 - h, 5, h);
+    }
+    // the stick: hangs and sways until a strike starts
     const wantRest = S.phase ? FORGE.restUp : FORGE.rest;
     S.restAng = S.restAng === undefined ? wantRest : S.restAng + (wantRest - S.restAng) * clamp((t - (S.restT === undefined ? t : S.restT)) * 7, 0, 1);
     S.restT = t;
@@ -2853,195 +2987,301 @@
     if (idle) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 1280, FORGE.cardsEnd); ctx.clip(); }
     drawHammer(ctx, ang);
     if (idle) ctx.restore();
-    // sparks at every hit
+    // every blow: the pad's face flashes, sound rings spread over it and cream sparkles fly up
     if (S.strike) {
-      const H = FORGE.hit;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
       HIT_TIMES.forEach((ht, k) => {
         const age = tt - ht;
-        if (age < 0 || age > 0.75) return;
-        const rr = U.rng(U.hash('sparks', k));
-        const n = k === 0 ? 34 : 18;
-        for (let i = 0; i < n; i++) {
-          const a = -Math.PI * (0.05 + rr() * 0.9), v = 160 + rr() * 380 * (k === 0 ? 1 : 0.6);
-          const x = H.x + Math.cos(a) * v * age, y = H.y - 8 + Math.sin(a) * v * age + 900 * age * age * 0.5;
-          ctx.globalAlpha = Math.max(0, 1 - age / 0.75); ctx.fillStyle = rr() > 0.5 ? '#ffe9a8' : '#ff9a3a';
-          ctx.beginPath(); ctx.arc(x, y, 1.4 + rr() * 2, 0, TAU); ctx.fill();
+        if (age < 0 || age > 0.8) return;
+        const fade = 1 - age / 0.8, rc = [HV.pink, HV.cream, HV.green][k % 3];
+        ctx.fillStyle = rgba('#fff4e6', 0.5 * Math.max(0, 1 - age / 0.12)); ctx.beginPath(); ctx.ellipse(hx, hy + 1, 140, 22, 0, 0, TAU); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          const q = age - i * 0.1; if (q <= 0) continue;
+          const rx = 24 + q * 250;
+          ctx.strokeStyle = rgba(i === 1 ? HV.cream : rc, Math.max(0, 0.9 * (1 - q / 0.7))); ctx.lineWidth = 4 - i; ctx.beginPath(); ctx.ellipse(hx, hy - 4, rx, rx * 0.16, 0, 0, TAU); ctx.stroke();
         }
-        glow(ctx, H.x, H.y - 10, 200 * (1 - age / 0.75), '#ffd080', 0.6 * (1 - age / 0.75));
+        const rr = U.rng(U.hash('sparks', k)), n = k === 0 ? 14 : 8;
+        for (let i = 0; i < n; i++) {
+          const a = -Math.PI * (0.08 + rr() * 0.84), v = 150 + rr() * 300 * (k === 0 ? 1 : 0.65);
+          const x = hx + Math.cos(a) * v * age, y = hy - 8 + Math.sin(a) * v * age + 700 * age * age * 0.5;
+          sparkleAt(ctx, x, y, 3 + rr() * 5 * fade, { color: rr() > 0.5 ? '#fff4e6' : rc, alpha: fade, glow: 0.3 });
+        }
+        glow(ctx, hx, hy - 10, 210 * fade, '#ffd9ec', 0.5 * fade);
+      });
+    }
+    // the pad hums when nothing is happening: a note floats up now and then
+    const tk = TK();
+    if (tk) {
+      for (let i = 0; i < 3; i++) {
+        const ph = (((t * 0.1 * m + i / 3) % 1) + 1) % 1;
+        safe(() => tk.note(ctx, hx + 70 + Math.sin(ph * 8 + i * 2.1) * 30 - i * 60, hy - 30 - ph * 80, 7 + (i % 2) * 2, { kind: ['eighth', 'beamed', 'quarter'][i], color: i % 2 ? HV.pinkL : HV.cream, alpha: Math.sin(ph * Math.PI) * 0.7, rot: Math.sin(ph * 6 + i) * 0.2, line: 1.5 }));
+      }
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.5 }));
+    }
+    if (S.flashT !== undefined) { const fa = Math.max(0, 1 - (t - S.flashT) / 0.55); if (fa > 0) { ctx.fillStyle = 'rgba(255,240,220,' + (fa * 0.4).toFixed(3) + ')'; ctx.fillRect(0, 0, 1280, 720); } }
+  }
+
+  // the two Studio plaques (260 x 130): a drumstick hitting the pad with a card waiting (Rehearse a Card), a cut gem (Set Gems)
+  function ciUp(g) {
+    ciBg(g, 260, 130, '#2a1a5a', '#6a2a7a');
+    g.fillStyle = 'rgba(255,244,214,0.14)'; g.beginPath(); g.moveTo(130, 0); g.lineTo(170, 0); g.lineTo(224, 126); g.lineTo(76, 126); g.closePath(); g.fill();
+    cel(g, [[88, 106, 1], [92, 124], [150, 130], [208, 124], [212, 106, 1]], HV.cream, { line: 2.2, depth: 9, tension: 0.7, decor: (c) => { c.fillStyle = HV.pink; c.fillRect(80, 112, 140, 8); c.fillStyle = HV.green; c.fillRect(80, 120, 140, 6); } });
+    celOval(g, 150, 104, 62, 12, '#c9cbd6', { line: 2.2, depth: 4 });
+    celOval(g, 150, 105, 56, 9, '#2a2438', { line: 2, depth: 4, shadow: '#1a1426' });
+    g.strokeStyle = HV.pink; g.lineWidth = 2; g.beginPath(); g.ellipse(150, 105, 40, 6, 0, 0, TAU); g.stroke();
+    g.save(); g.translate(40, 70); g.rotate(-0.2);
+    cel(g, R4(-24, -38, 48, 72), HV.cream, { line: 2.2, depth: 6, tension: 0 }); cel(g, R4(-24, -38, 48, 14), HV.pink, { line: 1.8, depth: 1, tension: 0, shadow: false });
+    starAt(g, 0, 4, 11, HV.gold, 0, 1.8);
+    g.restore();
+  }
+  function forgeIcon(g, kind, t, w, h) {
+    const m = motionK();
+    if (kind === 'up') {
+      layer(g, 'nk:fi:up', w, h, ciUp);
+      // the stick swings down onto the pad (the same beat as the real strike), a ring spreads over the pad and cream sparkles fly
+      const c = (((t * 0.9 * m) % 1) + 1) % 1;
+      const ang = c < 0.4 ? -0.9 + (c / 0.4) * 1.16 : -0.9 + 1.16 * (1 - (c - 0.4) / 0.6);
+      g.save(); g.translate(244, 78); g.rotate(Math.atan2(Math.sin(ang), -Math.cos(ang))); g.scale(0.42, 0.42);
+      g.beginPath(); g.moveTo(-16, -9); g.lineTo(90, -8); g.lineTo(214, -5.4); g.lineTo(214, 5.4); g.lineTo(90, 8); g.lineTo(-16, 9); g.closePath(); g.fillStyle = '#e6b57a'; g.fill(); g.lineWidth = 6; g.lineJoin = 'round'; g.strokeStyle = INK; g.stroke();
+      g.fillStyle = HV.pink; g.fillRect(-14, -8, 86, 16);
+      g.beginPath(); g.arc(226, 0, 16, 0, TAU); g.fillStyle = '#f2c994'; g.fill(); g.stroke();
+      g.restore();
+      if (c > 0.36 && c < 0.78) {
+        const age = (c - 0.36) / 0.42, rx = 12 + age * 70;
+        g.strokeStyle = rgba(HV.pink, 0.9 * (1 - age)); g.lineWidth = 2.4; g.beginPath(); g.ellipse(150, 102, rx, rx * 0.17, 0, 0, TAU); g.stroke();
+        for (let i = 0; i < 6; i++) { const a = -Math.PI * (0.15 + (i % 5) * 0.17); sparkleAt(g, 150 + Math.cos(a) * age * 54, 98 + Math.sin(a) * age * 50 + age * age * 22, 3 + (i % 3), { color: i % 2 ? '#fff4e6' : HV.pinkL, alpha: 1 - age, glow: 0.2 }); }
+      }
+      sparkleAt(g, 70, 28, 5 + 2 * Math.sin(t * 4), { color: '#ffffff', alpha: 0.9 });
+    } else {
+      ciBg(g, w, h, '#1b1050', '#3c1f7a');
+      g.save(); g.translate((w - 224) / 2, (h - 104) / 2);
+      campIcon(g, 'gems', t, 224, 104);
+      g.restore();
+    }
+  }
+
+  // ---------------------------------------------------------------- the Gift Box: a box in the act's colour with a big ribbon bow and a heart tag, on a small round stage
+  // The box opens when it is told to: the bow unties (the ribbon ends fly), the lid pops up and lands beside the box, confetti and a "ta-da" sparkle burst out. Timings are the old chest's:
+  // p runs 0 to 1 over 0.85 s (out-cubic) after the tap, and the confetti plays on for about three seconds from the moment of the tap.
+  const CHEST = { x: 640, y: 622 };
+  const GIFT_ACT = { 1: { box: '#2bb3b1', rib: '#ff9fc6', acc: '#fff4e6' }, 2: { box: '#3d7bff', rib: '#ff6fb5', acc: '#3ff0ff' }, 3: { box: '#e6d9ff', rib: '#d9fff4', acc: '#ff8fb8' } };
+  const giftAct = (S) => GIFT_ACT[clamp((S && S.R && S.R.chapter) | 0, 1, 3)] || GIFT_ACT[1];
+  const GIFT_BULBS = [];
+  function chestBackdrop(g) {
+    GIFT_BULBS.length = 0;
+    const r = U.rng(90210);
+    const night = g.createLinearGradient(0, 0, 0, 720); night.addColorStop(0, '#120c33'); night.addColorStop(0.6, '#2a1a62'); night.addColorStop(1, '#14102c');
+    g.fillStyle = night; g.fillRect(0, 0, 1280, 720);
+    for (let i = 0; i < 70; i++) { g.fillStyle = 'rgba(255,248,236,' + (0.2 + r() * 0.55).toFixed(2) + ')'; const sz = r() > 0.9 ? 2.4 : 1.5; g.fillRect(r() * 1280, 70 + r() * 400, sz, sz); }
+    // the spotlight cone on the stage
+    const cone = g.createLinearGradient(0, 0, 0, 650); cone.addColorStop(0, 'rgba(255,244,214,0.30)'); cone.addColorStop(1, 'rgba(255,244,214,0.04)');
+    g.fillStyle = cone; g.beginPath(); g.moveTo(600, 0); g.lineTo(680, 0); g.lineTo(980, 650); g.lineTo(300, 650); g.closePath(); g.fill();
+    // the curtains at both sides, gathered and tied back, with a swag along the top
+    const curtain = (flip) => {
+      const X = (x) => (flip ? 1280 - x : x);
+      g.save();
+      g.beginPath(); g.moveTo(X(0), 0); g.lineTo(X(236), 0); g.bezierCurveTo(X(250), 160, X(190), 300, X(172), 430); g.bezierCurveTo(X(150), 520, X(110), 600, X(0), 646); g.closePath();
+      const cg = g.createLinearGradient(X(0), 0, X(240), 0); cg.addColorStop(0, '#8f1838'); cg.addColorStop(0.5, '#c8264f'); cg.addColorStop(1, '#a31d42');
+      g.fillStyle = cg; g.fill(); g.clip();
+      for (let k = 0; k < 9; k++) { const x0 = k * 30; g.fillStyle = k % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(40,5,20,0.20)'; g.beginPath(); g.moveTo(X(x0), 0); g.lineTo(X(x0 + 18), 0); g.lineTo(X(x0 + 6 + k * 3), 650); g.lineTo(X(x0 - 8 + k * 3), 650); g.closePath(); g.fill(); }
+      g.restore();
+      g.beginPath(); g.moveTo(X(0), 0); g.lineTo(X(236), 0); g.bezierCurveTo(X(250), 160, X(190), 300, X(172), 430); g.bezierCurveTo(X(150), 520, X(110), 600, X(0), 646); g.lineWidth = 3; g.strokeStyle = INK; g.stroke();
+      inkLine(g, [[X(176), 420], [X(236), 452], [X(256), 500]], 9, INK, { taper: 0, wobble: 0 }); inkLine(g, [[X(176), 420], [X(236), 452], [X(256), 500]], 5, HV.gold, { taper: 0, wobble: 0 });
+      celOval(g, X(262), 512, 10, 16, HV.gold, { line: 2, depth: 3 });
+      // the swag at the top of the curtain
+      cel(g, [[X(-10), -6, 1], [X(250), -6, 1], [X(262), 52], [X(200), 74], [X(130), 62], [X(60), 80], [X(-10), 56, 1]], '#c8264f', { line: 2.6, depth: 8, tension: 0.7 });
+    };
+    curtain(false); curtain(true);
+    // the stage: a cream lip, a violet top with a pink ring, a dark floor round it
+    const fl = g.createLinearGradient(0, 640, 0, 720); fl.addColorStop(0, '#2a1a5a'); fl.addColorStop(1, '#0a071c');
+    g.fillStyle = fl; g.fillRect(0, 640, 1280, 80);
+    inkLine(g, [[0, 642], [1280, 642]], 2.4, 'rgba(45,23,15,0.8)', { taper: 0, wobble: 0 });
+    celOval(g, 640, 654, 340, 46, HV.cream, { line: 2.8, depth: 9 });
+    celOval(g, 640, 648, 322, 38, '#5b3fa8', { line: 2.4, depth: 9 });
+    g.strokeStyle = HV.pink; g.lineWidth = 3.4; g.beginPath(); g.ellipse(640, 649, 282, 32, 0, 0, TAU); g.stroke();
+    g.strokeStyle = 'rgba(255,244,230,0.5)'; g.lineWidth = 1.6; g.setLineDash([8, 8]); g.beginPath(); g.ellipse(640, 649, 240, 27, 0, 0, TAU); g.stroke(); g.setLineDash([]);
+    // a few confetti pieces left on the stage from the last party
+    for (let i = 0; i < 14; i++) { const a = r() * TAU, d = Math.sqrt(r()), x = 640 + Math.cos(a) * d * 280, y = 649 + Math.sin(a) * d * 28; g.fillStyle = [HV.pink, HV.green, HV.gold, HV.sky][i % 4]; g.fillRect(x, y, 6, 3); }
+    // fairy lights across the top between the curtains
+    fairyString(g, 262, 54, 1018, 54, 44, 17, [HV.gold, HV.pink, HV.green, HV.cream, HV.sky], 4.8).forEach((b) => GIFT_BULBS.push(b));
+  }
+
+  function giftBow(g, rib, ribD) {
+    const loop = (sx) => {
+      cel(g, [[0, 0, 1], [sx * 18, -30], [sx * 52, -44], [sx * 78, -26], [sx * 70, 2], [sx * 38, 8], [0, 0, 1]], rib, { line: 2.4, depth: 7, tension: 0.8, hi: true });
+      inkLine(g, [[sx * 12, -4], [sx * 36, -22], [sx * 58, -22]], 2, ribD, { taper: 0.5, wobble: 0 });
+    };
+    loop(-1); loop(1);
+    celOval(g, 0, 2, 16, 14, rib, { line: 2.6, depth: 5, hi: true });
+    inkLine(g, [[-5, -3], [5, 8]], 2, ribD, { taper: 0.4, wobble: 0 });
+  }
+  function giftTail(g, rib) {
+    cel(g, { poly: [[-10, 0], [10, 0], [13, 70], [0, 56], [-13, 70]] }, rib, { line: 2.4, depth: 5, tension: 0, hi: true });
+  }
+  const GIFT_CONFETTI = (() => {
+    const r = U.rng(4711), out = [];
+    for (let i = 0; i < 46; i++) out.push({ a: -Math.PI * (0.12 + r() * 0.76), v: 260 + r() * 520, s: 4 + r() * 6, c: [HV.pink, HV.green, HV.gold, HV.sky, HV.cream, HV.violet][i % 6], k: i % 3, spin: (r() - 0.5) * 14, sw: r() * 6 });
+    return out;
+  })();
+  // (x, y) is the middle of the box's feet; p is how far open it is, t the frame clock, age the seconds since the tap (huge when it was opened long ago)
+  function drawChest(ctx, x, y, p, t, act, age) {
+    const A = act || GIFT_ACT[1], m = motionK();
+    const ribD = warm(A.rib, 0.16), boxD = warm(A.box);
+    const hop = p === 0 && m === 1 ? Math.max(0, Math.sin((((t % 4.2) + 4.2) % 4.2) / 0.55 * Math.PI)) : 0;
+    ctx.save(); ctx.translate(x, y - 16 * hop);
+    ctx.fillStyle = 'rgba(8,4,24,0.5)'; ctx.beginPath(); ctx.ellipse(0, 6 + 16 * hop, 188 - 10 * hop, 18 - 3 * hop, 0, 0, TAU); ctx.fill();
+    ctx.scale(1 + 0.04 * hop, 1 - 0.05 * hop);
+    // the inside of the box shows once the lid is off: a dark opening and a warm light that grows
+    if (p > 0.02) {
+      ctx.save(); ctx.globalAlpha = Math.min(1, p * 3);
+      celOval(ctx, 0, -84, 132, 16, '#1a0f2e', { line: 2.4, depth: 0, shadow: false });
+      const ig = ctx.createRadialGradient(0, -86, 4, 0, -86, 150); ig.addColorStop(0, '#fffbe0'); ig.addColorStop(0.45, 'rgba(255,224,120,0.75)'); ig.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = ig; ctx.beginPath(); ctx.ellipse(0, -86, 128, 14 + 6 * p, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    // the body: the act's colour, a ribbon down the middle, little cream stars all over
+    cel(ctx, { poly: [[-140, -84], [140, -84], [146, 0], [-146, 0]] }, A.box, { line: 2.8, depth: 14, tension: 0, hi: true, shadow: boxD,
+      decor: (c) => {
+        c.fillStyle = A.rib; c.fillRect(-23, -90, 46, 94); c.fillStyle = ribD; c.fillRect(-23, -90, 7, 94);
+        c.fillStyle = 'rgba(255,244,230,0.55)';
+        for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { const sx = (i < 2 ? -112 + i * 44 : 52 + (i - 2) * 44) + (j % 2) * 14, sy = -64 + j * 26; c.beginPath(); for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4 - Math.PI / 2, rr = q % 2 ? 2.4 : 6.4; c.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } c.closePath(); c.fill(); }
+      } });
+    inkLine(ctx, [[-23, -84], [-23, 0]], 1.8, 'rgba(45,23,15,0.6)', { taper: 0, wobble: 0 }); inkLine(ctx, [[23, -84], [23, 0]], 1.8, 'rgba(45,23,15,0.6)', { taper: 0, wobble: 0 });
+    if (p > 0.3) glow(ctx, 0, -84, 200 * p, '#ffe9a8', 0.28 * p);
+    // the lid: a wider slab with a ribbon across it. It pops up, tumbles and lands to the right of the box.
+    const q = clamp(p, 0, 1);
+    const lx = q * 300, ly = -102 + (-20 + 102) * q - 150 * Math.sin(Math.PI * q), lr = -1.0 * Math.sin(Math.PI * q) + 0.05 * q;
+    ctx.save(); ctx.translate(lx, ly); ctx.rotate(lr);
+    cel(ctx, RR(-154, -22, 308, 44, 8), A.box, { line: 2.8, depth: 9, tension: 0.4, hi: true, shadow: boxD, decor: (c) => { c.fillStyle = A.rib; c.fillRect(-23, -26, 46, 52); c.fillStyle = ribD; c.fillRect(-23, -26, 7, 52); } });
+    inkLine(ctx, [[-23, -22], [-23, 22]], 1.8, 'rgba(45,23,15,0.6)', { taper: 0, wobble: 0 }); inkLine(ctx, [[23, -22], [23, 22]], 1.8, 'rgba(45,23,15,0.6)', { taper: 0, wobble: 0 });
+    // the bow rides on the lid until it is untied
+    if (q < 0.34) {
+      const k = 1 - q / 0.34;
+      ctx.save(); ctx.translate(0, -24); ctx.globalAlpha = k; ctx.scale(0.6 + 0.4 * k, 0.6 + 0.4 * k);
+      if (m === 1 && p === 0) ctx.rotate(Math.sin(t * 1.4) * 0.025);
+      giftBow(ctx, A.rib, ribD);
+      ctx.save(); ctx.translate(-6, 6); ctx.rotate(0.12); giftTail(ctx, A.rib); ctx.restore();
+      ctx.save(); ctx.translate(8, 6); ctx.rotate(-0.16); giftTail(ctx, A.rib); ctx.restore();
+      ctx.restore();
+      // the heart tag on its string
+      ctx.save(); ctx.globalAlpha = k;
+      inkLine(ctx, [[10, -22], [44, -4], [56, 14]], 1.8, INK, { taper: 0, wobble: 0 });
+      ctx.translate(56, 30 + (p === 0 && m === 1 ? Math.sin(t * 1.8) * 1.5 : 0)); ctx.rotate(0.18);
+      cel(ctx, R4(-17, -18, 34, 36), HV.cream, { line: 2, depth: 4, tension: 0 });
+      heartAt(ctx, 0, -1, 9, HV.pink, 1.8);
+      ctx.restore();
+    }
+    ctx.restore();
+    // the untied ribbon ends fly out and land on the stage on either side
+    if (q >= 0.12) {
+      const u = clamp((q - 0.12) / 0.88, 0, 1);
+      [[-1, -196, 0.5], [1, 168, -0.4]].forEach((e) => {
+        const ex = e[0] * (14 + (Math.abs(e[1]) - 14) * u), ey = -126 + (-8 + 126) * u * u - 120 * Math.sin(Math.PI * u), er = e[0] * (-0.3 - 4.6 * u) + e[2] * u;
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate(er); ctx.globalAlpha = 1; giftTail(ctx, A.rib); ctx.restore();
+      });
+    }
+    ctx.restore();
+    // confetti and the ta-da: from the opening, from the tap on
+    if (age >= 0 && age < 3.4) {
+      ctx.save(); ctx.translate(x, y - 90);
+      GIFT_CONFETTI.forEach((c, i) => {
+        const a = age - 0.04 * (i % 5); if (a <= 0) return;
+        const px = Math.cos(c.a) * c.v * a + Math.sin(a * 3 + c.sw) * 14 * m, py = Math.sin(c.a) * c.v * a + 620 * a * a * 0.5 - 60 * Math.min(a, 0.3) * 0;
+        if (py > 100) return;
+        ctx.globalAlpha = clamp(1.3 - a / 3.0, 0, 1); ctx.fillStyle = c.c;
+        if (c.k === 0) ctx.fillRect(px - c.s / 2, py - c.s / 4 + Math.sin(a * c.spin) * 2, c.s, c.s / 2); else if (c.k === 1) { ctx.beginPath(); ctx.arc(px, py, c.s * 0.38, 0, TAU); ctx.fill(); } else { ctx.beginPath(); ctx.moveTo(px, py - c.s * 0.5); ctx.lineTo(px + c.s * 0.5, py + c.s * 0.4); ctx.lineTo(px - c.s * 0.5, py + c.s * 0.4); ctx.closePath(); ctx.fill(); }
       });
       ctx.restore();
+      if (age > 0.1 && age < 1.2) {
+        const k = Math.sin(clamp((age - 0.1) / 1.1, 0, 1) * Math.PI);
+        sparkleAt(ctx, x, y - 190, 20 + 56 * k, { color: '#ffffff', alpha: k, glow: 0.8, rot: age * 0.6 });
+        sparkleAt(ctx, x - 92, y - 164, 8 + 18 * k, { color: HV.pinkL, alpha: k, glow: 0.5, rot: -age });
+        sparkleAt(ctx, x + 96, y - 176, 8 + 20 * k, { color: HV.gold, alpha: k, glow: 0.5, rot: age });
+      }
     }
-    // the fork hums: two sound arcs on each side of the tines, and an idle glint on the tips
-    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 2;
-    for (let i = 0; i < 2; i++) { const q = ((t * 0.5 * m + i * 0.5) % 1 + 1) % 1; ctx.strokeStyle = 'rgba(95,245,255,' + (0.7 * (1 - q)).toFixed(2) + ')'; const rr = 16 + q * 26; ctx.beginPath(); ctx.arc(646, 480, rr, Math.PI * 1.1, Math.PI * 1.34); ctx.stroke(); ctx.beginPath(); ctx.arc(646, 480, rr, Math.PI * 1.66, Math.PI * 1.9); ctx.stroke(); }
-    ctx.restore();
-    sparkleAt(ctx, 646 + Math.sin(t * 0.7) * 14, 464, 5 + 2 * Math.sin(t * 3), { color: '#ffe9a8', alpha: 0.5 + 0.4 * Math.sin(t * 2.4) });
-    const tk = TK();
-    if (tk) safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.62 }));
-    if (S.flashT !== undefined) { const fa = Math.max(0, 1 - (t - S.flashT) / 0.55); if (fa > 0) { ctx.fillStyle = 'rgba(255,240,200,' + (fa * 0.55).toFixed(3) + ')'; ctx.fillRect(0, 0, 1280, 720); } }
-  }
-
-  function forgeIcon(g, kind, t, w, h) {
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    const bg = g.createLinearGradient(0, 0, 0, h);
-    if (kind === 'up') { bg.addColorStop(0, '#2a1420'); bg.addColorStop(1, '#5a2a1c'); } else { bg.addColorStop(0, '#1b1050'); bg.addColorStop(1, '#3c1f7a'); }
-    g.fillStyle = bg; g.fillRect(0, 0, w, h);
-    if (kind === 'up') {
-      glow(g, 130, 90, 120, '#ff8a3a', 0.35);
-      cel(g, [[70, 96], [92, 86], [180, 86], [190, 94], [172, 100], [166, 118], [192, 124], [70, 124], [90, 118], [96, 100]], '#565478', { tension: 0.3, line: 3, hi: true, rim: '#ff8a3a' });
-      const c = ((t * 0.9 * m) % 1 + 1) % 1;
-      const ang = c < 0.4 ? -0.9 + (c / 0.4) * 1.16 : -0.9 + 1.16 * (1 - (c - 0.4) / 0.6);
-      g.save(); g.translate(210, 40); g.rotate(Math.atan2(Math.sin(ang), -Math.cos(ang))); g.scale(0.55, 0.55);
-      cel(g, { poly: [[0, -9], [172, -7], [172, 7], [0, 9]] }, '#a06a3a', { tension: 0.15, line: 3.6 });
-      cel(g, { poly: [[166, -30], [240, -34], [244, 34], [166, 30]] }, '#6a6890', { tension: 0.2, line: 4 });
-      g.restore();
-      if (c > 0.36 && c < 0.7) for (let i = 0; i < 10; i++) { const a = -Math.PI * (0.1 + (i % 5) * 0.2), d = (c - 0.36) * 120; g.fillStyle = 'rgba(255,220,140,' + (1 - (c - 0.36) / 0.34).toFixed(2) + ')'; g.beginPath(); g.arc(128 + Math.cos(a) * d, 84 + Math.sin(a) * d, 2, 0, TAU); g.fill(); }
-      // a tiny card being improved
-      g.save(); g.translate(46, 44); g.rotate(-0.16); cel(g, { poly: [[0, 0], [38, 0], [38, 54], [0, 54]] }, '#f3e6c8', { tension: 0.12, line: 2.6 }); g.fillStyle = '#e8383d'; g.fillRect(4, 4, 30, 8); g.restore();
-      sparkleAt(g, 78, 34, 5 + 2 * Math.sin(t * 4), { color: '#ffe9a8', alpha: 0.9 });
-    } else {
-      const cols = ['#e8383d', '#5fb4ff', '#3fd6b0', '#f5c96a'];
-      const k = (t * 0.4 * m) % 4, a = cols[Math.floor(k) % 4], b = cols[(Math.floor(k) + 1) % 4];
-      const base = U.color.mix(a, b, k - Math.floor(k));
-      glow(g, 130, 66, 100, base, 0.45);
-      g.save(); g.translate(130, 66 + Math.sin(t * 1.5 * m) * 3);
-      cel(g, { poly: [[-36, -8], [-22, -38], [22, -38], [36, -8], [0, 42]] }, base, { tension: 0.1, line: 3.4, hi: true, rim: '#ffffff' });
-      g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.moveTo(-22, -38); g.lineTo(-6, -8); g.lineTo(-36, -8); g.closePath(); g.fill();
-      g.strokeStyle = rgba(INK, 0.55); g.lineWidth = 1.6; g.beginPath(); g.moveTo(-36, -8); g.lineTo(36, -8); g.moveTo(-6, -8); g.lineTo(0, 42); g.moveTo(6, -8); g.lineTo(0, 42); g.stroke();
-      g.restore();
-      g.save(); g.translate(196, 30); g.rotate(-0.7 + Math.sin(t * 6 * m) * 0.12); cel(g, { poly: [[0, -3], [46, -3], [54, 0], [46, 3], [0, 3]] }, '#c4c0d8', { tension: 0.1, line: 2.4 }); g.restore();
-      for (let i = 0; i < 4; i++) sparkleAt(g, 130 + Math.cos(t * 0.9 * m + i * 1.6) * 62, 66 + Math.sin(t * 1.2 * m + i * 1.6) * 34, 5 + (i % 2) * 3, { color: '#ffffff', alpha: 0.5 + 0.5 * Math.sin(t * 3 + i) });
-    }
-  }
-
-  // ---------------------------------------------------------------- chest: a dark hall, a chest whose lid swings up, light and coins
-  const CHEST = { x: 640, y: 622 };
-  function chestBackdrop(g) {
-    const r = U.rng(90210);
-    const wall = g.createLinearGradient(0, 0, 0, 720); wall.addColorStop(0, '#07051a'); wall.addColorStop(0.6, '#171043'); wall.addColorStop(1, '#0a0722');
-    g.fillStyle = wall; g.fillRect(0, 0, 1280, 720);
-    const pillar = (x, w) => {
-      const pg = g.createLinearGradient(x, 0, x + w, 0); pg.addColorStop(0, '#120c33'); pg.addColorStop(0.35, '#2e2470'); pg.addColorStop(1, '#0e0a2a');
-      g.fillStyle = pg; g.fillRect(x, 0, w, 650); g.strokeStyle = INK; g.lineWidth = 4; g.strokeRect(x, -4, w, 654);
-      g.fillStyle = 'rgba(245,201,106,0.5)'; g.fillRect(x - 10, 60, w + 20, 10); g.fillRect(x - 10, 590, w + 20, 10);
-      g.strokeStyle = 'rgba(245,201,106,0.16)'; g.lineWidth = 2; for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(x + 14 + k * (w / 4), 80); g.lineTo(x + 14 + k * (w / 4), 580); g.stroke(); }
-    };
-    pillar(120, 90); pillar(1070, 90); pillar(430, 60); pillar(790, 60);
-    g.fillStyle = 'rgba(8,5,26,0.45)'; g.fillRect(400, 0, 480, 650);
-    // floor tiles in perspective
-    const fl = g.createLinearGradient(0, 650, 0, 720); fl.addColorStop(0, '#1b1342'); fl.addColorStop(1, '#0a071e');
-    g.fillStyle = fl; g.fillRect(0, 650, 1280, 70);
-    g.strokeStyle = 'rgba(245,201,106,0.12)'; g.lineWidth = 1.4;
-    for (let i = -8; i <= 8; i++) { g.beginPath(); g.moveTo(640 + i * 40, 650); g.lineTo(640 + i * 120, 720); g.stroke(); }
-    for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(0, 662 + k * k * 4 + k * 6); g.lineTo(1280, 662 + k * k * 4 + k * 6); g.stroke(); }
-    // rune ring on the floor
-    g.strokeStyle = 'rgba(245,201,106,0.38)'; g.lineWidth = 2.4; g.beginPath(); g.ellipse(640, 672, 300, 34, 0, 0, TAU); g.stroke();
-    g.beginPath(); g.ellipse(640, 672, 250, 26, 0, 0, TAU); g.stroke();
-    for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; g.beginPath(); g.moveTo(640 + Math.cos(a) * 250, 672 + Math.sin(a) * 26); g.lineTo(640 + Math.cos(a) * 300, 672 + Math.sin(a) * 34); g.stroke(); }
-    // dust
-    for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(255,233,168,' + (0.05 + r() * 0.1).toFixed(2) + ')'; g.beginPath(); g.arc(r() * 1280, r() * 640, 1 + r() * 2, 0, TAU); g.fill(); }
-  }
-
-  function drawChest(ctx, x, y, p, t) {
-    const H = 118;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = 'rgba(4,2,14,0.65)'; ctx.beginPath(); ctx.ellipse(0, 4, 196, 20, 0, 0, TAU); ctx.fill();
-    const wood = '#6b3f2a', woodLt = '#8a5236', gold = '#f5c96a';
-    // interior glow and gold heap once the lid is moving
-    if (p > 0) {
-      ctx.save(); ctx.globalAlpha = Math.min(1, p * 2);
-      ctx.beginPath(); ctx.ellipse(0, -H + 2, 138, 12 + 14 * p, 0, 0, TAU); ctx.fillStyle = '#1a0d08'; ctx.fill();
-      const ig = ctx.createRadialGradient(0, -H, 6, 0, -H, 140); ig.addColorStop(0, '#fff6c8'); ig.addColorStop(0.5, '#ffc84a'); ig.addColorStop(1, 'rgba(255,140,40,0)');
-      ctx.fillStyle = ig; ctx.beginPath(); ctx.ellipse(0, -H, 138, 12 + 14 * p, 0, 0, TAU); ctx.fill();
-      for (let i = 0; i < 14; i++) { const cx = -110 + i * 17, cy = -H - 4 - (i % 3) * 5 * p; ctx.fillStyle = i % 4 === 0 ? '#ff9ac8' : i % 4 === 1 ? '#8dd9ff' : gold; ctx.beginPath(); ctx.ellipse(cx, cy, 8, 5 + 3 * p, 0, 0, TAU); ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(122,82,26,0.8)'; ctx.stroke(); }
-      ctx.restore();
-    }
-    // the lid: a dome seen from the front, folding back and up behind the chest as it opens
-    if (p < 0.5) {
-      const k = 1 - 1.3 * p, up = p * 36;
-      ctx.save(); ctx.translate(0, -H - up); ctx.scale(1, k);
-      cel(ctx, [[-152, 0], [-148, -46], [-104, -84], [0, -98], [104, -84], [148, -46], [152, 0], [0, 6]], '#7a4a30', { tension: 0.6, line: 4, hi: true, rim: '#ffb070', rimSide: 'light',
-        decor: (c) => { c.fillStyle = gold; c.fillRect(-100, -100, 14, 104); c.fillRect(86, -100, 14, 104); c.strokeStyle = 'rgba(20,10,8,0.5)'; c.lineWidth = 1.6; for (let i = 0; i < 5; i++) { c.beginPath(); c.moveTo(-150, -i * 18 - 4); c.lineTo(150, -i * 18 - 4); c.stroke(); } } });
-      ctx.restore();
-    } else {
-      const hgt = 34 + (p - 0.5) * 2 * 70;
-      ctx.save(); ctx.translate(0, -H - 22 - (p - 0.5) * 20);
-      cel(ctx, { poly: [[-146, 0], [-138, -hgt], [138, -hgt], [146, 0]] }, '#3a2118', { tension: 0.2, line: 4, hi: true, rim: '#ffb070',
-        decor: (c) => { c.fillStyle = 'rgba(255,200,90,0.35)'; c.fillRect(-146, -hgt, 292, hgt); c.fillStyle = gold; c.fillRect(-100, -hgt, 12, hgt); c.fillRect(88, -hgt, 12, hgt); } });
-      ctx.restore();
-    }
-    // the body
-    cel(ctx, { poly: [[-152, -H], [152, -H], [158, 0], [-158, 0]] }, wood, { tension: 0.2, line: 4, hi: true, rim: '#ffb070', rimSide: 'light',
-      decor: (c) => { c.strokeStyle = 'rgba(20,10,8,0.45)'; c.lineWidth = 1.8; for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(-160, -H + i * 30); c.lineTo(160, -H + i * 30); c.stroke(); } c.fillStyle = woodLt; c.fillRect(-160, -H, 320, 5); c.fillStyle = gold; c.fillRect(-160, -H + 44, 320, 15); c.fillRect(-126, -H, 14, H); c.fillRect(112, -H, 14, H); } });
-    celOval(ctx, 0, -H + 42, 20, 22, gold, { line: 3.4, hi: true });
-    ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, -H + 38, 5, 6, 0, 0, TAU); ctx.fill(); ctx.fillRect(-2.5, -H + 38, 5, 16);
-    [[-152, -H], [152, -H], [-158, 0], [158, 0]].forEach((c) => celOval(ctx, c[0], c[1] + (c[1] ? -8 : 8), 8, 8, gold, { line: 2.4 }));
-    ctx.restore();
   }
 
   function paintChest(ctx, t, S) {
     layer(ctx, 'nk:chest:bg', 1280, 720, chestBackdrop);
     const c = S.chest || { state: 'closed', t0: -10 };
     const p = c.state === 'open' ? 1 : c.state === 'opening' ? U.ease.outCubic(clamp((t - c.t0) / 0.85, 0, 1)) : 0;
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    // the pulse of a closed chest: a golden seam breathing
-    glow(ctx, CHEST.x, CHEST.y - 60, 300 + 240 * p, '#ffd070', 0.16 + 0.1 * p + (p === 0 ? 0.05 * Math.sin(t * 2.4) : 0));
+    const age = c.state === 'closed' ? -1 : t - c.t0;
+    const m = motionK(), A = giftAct(S);
+    GIFT_BULBS.forEach((b, i) => glow(ctx, b[0], b[1] + 3, 17, b[2], 0.26 + 0.3 * (0.5 + 0.5 * Math.sin(t * (1.2 + (i % 4) * 0.35) * m + i * 2.1))));
+    // the pulse of a closed box: a warm light round it; once open the light grows
+    glow(ctx, CHEST.x, CHEST.y - 70, 320 + 220 * p, '#ffe0b0', 0.16 + 0.1 * p + (p === 0 ? 0.04 * Math.sin(t * 2.4) : 0));
     if (p > 0) {
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(CHEST.x, CHEST.y - 118);
-      for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + (i - 6.5) * 0.15 + Math.sin(t * 0.4 + i) * 0.02; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.03) * 620, Math.sin(a - 0.03) * 620); ctx.lineTo(Math.cos(a + 0.03) * 620, Math.sin(a + 0.03) * 620); ctx.closePath(); ctx.fillStyle = 'rgba(255,225,150,' + (0.11 * p * (0.6 + 0.4 * Math.sin(t * 2 + i))).toFixed(3) + ')'; ctx.fill(); }
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(CHEST.x, CHEST.y - 100);
+      for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + (i - 6.5) * 0.15 + Math.sin(t * 0.4 + i) * 0.02; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.03) * 620, Math.sin(a - 0.03) * 620); ctx.lineTo(Math.cos(a + 0.03) * 620, Math.sin(a + 0.03) * 620); ctx.closePath(); ctx.fillStyle = 'rgba(255,236,190,' + (0.11 * p * (0.6 + 0.4 * Math.sin(t * 2 + i))).toFixed(3) + ')'; ctx.fill(); }
       ctx.restore();
     }
-    drawChest(ctx, CHEST.x, CHEST.y, p, t);
+    drawChest(ctx, CHEST.x, CHEST.y, p, t, A, age);
     const tk = TK();
     if (tk) {
-      if (p > 0.2) for (let i = 0; i < 16; i++) { const ph = ((t * 0.35 * m + i * 0.0625) % 1 + 1) % 1; sparkleAt(ctx, CHEST.x + Math.sin(i * 2.3 + t) * (30 + ph * 150), CHEST.y - 130 - ph * 420, 3 + (i % 3) * 2, { color: i % 3 ? '#ffe9a8' : '#ffffff', alpha: Math.sin(ph * Math.PI) * p }); }
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.6 }));
+      if (p > 0.2) for (let i = 0; i < 16; i++) { const ph = (((t * 0.35 * m + i * 0.0625) % 1) + 1) % 1; sparkleAt(ctx, CHEST.x + Math.sin(i * 2.3 + t) * (30 + ph * 150), CHEST.y - 130 - ph * 420, 3 + (i % 3) * 2, { color: i % 3 ? '#ffe9a8' : '#ffffff', alpha: Math.sin(ph * Math.PI) * p }); }
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.5 }));
     }
   }
 
-  // ---------------------------------------------------------------- gem cache: a crystal hollow with three velvet plinths
+  // ---------------------------------------------------------------- the Sparkle Booth: a little photo booth, a bulb frame, three cushions on pedestals, a glow under each gem
+  // The plinths, the floor shadows and the three glows are where CACHE says (the DOM gem columns read the same table): the alignment test counts exactly three plinth tops
+  // (celOval x, plinthY, 82, 20), three floor shadows (ellipse x, 668, 110, 16) and three tk.glow calls, so the bulbs' light is drawn without tk.glow (see softDot).
+  const CACHE_BULBS = [];
   function cacheBackdrop(g) {
+    CACHE_BULBS.length = 0;
     const r = U.rng(5150);
-    const bgc = g.createRadialGradient(640, 300, 40, 640, 380, 900); bgc.addColorStop(0, '#2a1d6a'); bgc.addColorStop(0.55, '#150f40'); bgc.addColorStop(1, '#070518');
+    const bgc = g.createRadialGradient(640, 330, 40, 640, 400, 900); bgc.addColorStop(0, '#4a1f6e'); bgc.addColorStop(0.55, '#2a1250'); bgc.addColorStop(1, '#10082a');
     g.fillStyle = bgc; g.fillRect(0, 0, 1280, 720);
-    // stalactites
-    g.fillStyle = '#0d0a2a';
-    for (let x = -20; x < 1300; x += 44) { const hgt = 40 + r() * 90; g.beginPath(); g.moveTo(x, -4); g.lineTo(x + 40, -4); g.lineTo(x + 20 + (r() - 0.5) * 10, hgt); g.closePath(); g.fill(); g.strokeStyle = 'rgba(122,107,255,0.25)'; g.lineWidth = 2; g.stroke(); }
-    // crystal clusters left and right
-    const cluster = (cx, cy, n, hue) => {
-      for (let i = 0; i < n; i++) {
-        const a = -Math.PI / 2 + (i - n / 2) * 0.28 + (r() - 0.5) * 0.2, len = 90 + r() * 130, w = 18 + r() * 20;
-        const tx = cx + Math.cos(a) * len, ty = cy + Math.sin(a) * len;
-        const px = -Math.sin(a) * w / 2, py = Math.cos(a) * w / 2;
-        cel(g, { poly: [[cx - px, cy - py], [cx + px, cy + py], [tx + px * 0.4, ty + py * 0.4], [tx + Math.cos(a) * 16, ty + Math.sin(a) * 16], [tx - px * 0.4, ty - py * 0.4]] }, hue[i % hue.length], { tension: 0.1, line: 3, hi: true, rim: '#ffffff', rimAlpha: 0.7 });
-      }
-    };
-    cluster(120, 700, 8, ['#7a6bff', '#5ff5ff', '#b28cff']);
-    cluster(1170, 700, 8, ['#ff7eb6', '#7a6bff', '#5fb4ff']);
-    cluster(40, 360, 5, ['#3fd6b0', '#5ff5ff']);
-    cluster(1250, 380, 5, ['#f5c96a', '#ffb070']);
-    // floor and three plinths
-    const fl = g.createLinearGradient(0, 600, 0, 720); fl.addColorStop(0, '#19123a'); fl.addColorStop(1, '#080619');
+    // the booth curtain: deep violet with gathered folds
+    g.save();
+    g.beginPath(); g.rect(64, 100, 1152, 510); g.clip();
+    for (let k = 0; k < 24; k++) { const x0 = 64 + k * 48; g.fillStyle = k % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(10,2,30,0.28)'; g.beginPath(); g.moveTo(x0, 100); g.lineTo(x0 + 30, 100); g.lineTo(x0 + 22 + (k % 3) * 4, 610); g.lineTo(x0 - 8, 610); g.closePath(); g.fill(); }
+    g.restore();
+    // a few tiny stars on the curtain
+    for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(255,244,230,' + (0.15 + r() * 0.3).toFixed(2) + ')'; g.fillRect(70 + r() * 1140, 130 + r() * 470, 2, 2); }
+    // the canopy: pink and cream stripes with a scalloped edge
+    for (let x = 60; x < 1220; x += 56) { g.fillStyle = ((x - 60) / 56) % 2 ? HV.cream : HV.pink; g.fillRect(x, 56, 56, 40); }
+    g.fillStyle = 'rgba(45,23,15,0.16)'; g.fillRect(60, 56, 1160, 12);
+    for (let x = 60, i = 0; x < 1220; x += 56, i++) { g.beginPath(); g.moveTo(x, 95); g.lineTo(x + 56, 95); g.quadraticCurveTo(x + 56, 112, x + 28, 114); g.quadraticCurveTo(x, 112, x, 95); g.closePath(); g.fillStyle = i % 2 ? HV.cream : HV.pink; g.fill(); g.lineWidth = 2.4; g.strokeStyle = INK; g.stroke(); }
+    inkLine(g, [[60, 56], [1220, 56]], 3, INK, { taper: 0, wobble: 0 });
+    // the lightbulb frame: along the canopy edge and down both sides
+    const cols = [HV.gold, HV.pink, HV.cream, HV.green, HV.sky];
+    for (let i = 0; i < 28; i++) { const x = 78 + i * 42.4, y = 121; bulbDot(g, x, y, 5.2, cols[i % 5]); CACHE_BULBS.push([x, y, cols[i % 5]]); }
+    for (let i = 0; i < 11; i++) { const y = 150 + i * 42; bulbDot(g, 66, y, 5.2, cols[i % 5]); CACHE_BULBS.push([66, y, cols[i % 5]]); bulbDot(g, 1214, y, 5.2, cols[(i + 2) % 5]); CACHE_BULBS.push([1214, y, cols[(i + 2) % 5]]); }
+    // the stage floor with a cream lip, three floor shadows and three pedestals with cushions
+    const fl = g.createLinearGradient(0, 606, 0, 720); fl.addColorStop(0, '#2a1654'); fl.addColorStop(1, '#0a0620');
     g.fillStyle = fl; g.fillRect(0, 606, 1280, 114);
+    g.fillStyle = HV.cream; g.fillRect(0, 604, 1280, 6); inkLine(g, [[0, 604], [1280, 604]], 2.4, INK, { taper: 0, wobble: 0 }); inkLine(g, [[0, 610], [1280, 610]], 2.4, INK, { taper: 0, wobble: 0 });
+    g.strokeStyle = 'rgba(255,126,182,0.12)'; g.lineWidth = 1; for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(0, 626 + i * 20); g.lineTo(1280, 626 + i * 20); g.stroke(); }
     const py = CACHE.plinthY;
-    [0, 1, 2].map(cacheX).forEach((x) => {
+    [0, 1, 2].map(cacheX).forEach((x, i) => {
       g.fillStyle = 'rgba(0,0,0,0.5)'; g.beginPath(); g.ellipse(x, 668, 110, 16, 0, 0, TAU); g.fill();
-      cel(g, { poly: [[x - 84, 660], [x - 70, py], [x + 70, py], [x + 84, 660]] }, '#3a3268', { tension: 0.15, line: 3.6, hi: true, rim: '#7a6bff', rimSide: 'light' });
-      celOval(g, x, py, 82, 20, '#4a4088', { line: 3.4, hi: true });
-      celOval(g, x, py - 5, 58, 12, '#8a1f3c', { line: 2.6, hi: true, rim: '#ff7eb6' });
-      g.strokeStyle = 'rgba(245,201,106,0.55)'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, py - 5, 66, 15, 0, 0, TAU); g.stroke();
+      cel(g, { poly: [[x - 84, 660], [x - 70, py], [x + 70, py], [x + 84, 660]] }, HV.cream, { line: 3, depth: 14, tension: 0.1,
+        decor: (c) => { c.fillStyle = [HV.pink, HV.green, HV.gold][i]; c.fillRect(x - 90, py + 38, 180, 22); c.fillStyle = HV.violet; c.fillRect(x - 90, py + 60, 180, 6); } });
+      celOval(g, x, py, 82, 20, '#c9cbd6', { line: 3.2, depth: 6 });
+      celOval(g, x, py - 5, 62, 13.5, [HV.pink, '#8fe3c0', HV.gold][i], { line: 2.6, depth: 5, hi: true });
+      celOval(g, x, py - 12, 5, 2.4, HV.cream, { line: 1.6, depth: 1 });
+      g.strokeStyle = 'rgba(255,244,230,0.7)'; g.lineWidth = 1.8; g.setLineDash([6, 5]); g.beginPath(); g.ellipse(x, py - 5, 55, 11.4, 0, 0, TAU); g.stroke(); g.setLineDash([]);
     });
+  }
+  // a soft light dot without tk.glow (a radial gradient filled in additive blend)
+  function softDot(ctx, x, y, r, hex, a) {
+    if (!(r > 0.5) || !(a > 0.01)) return;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, rgba(hex, Math.min(1, a))); gr.addColorStop(1, rgba(hex, 0));
+    ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.restore();
   }
   function paintCache(ctx, t, S) {
     layer(ctx, 'nk:cache:bg', 1280, 720, cacheBackdrop);
-    const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    ['#7a6bff', '#5ff5ff', '#ff7eb6'].forEach((c, i) => glow(ctx, cacheX(i), CACHE.glowY, 220 + 20 * Math.sin(t * 1.3 + i), c, 0.16 + 0.05 * Math.sin(t * 2 + i)));
+    const m = motionK();
+    // the bulbs chase along the frame
+    CACHE_BULBS.forEach((b, i) => softDot(ctx, b[0], b[1], 17, b[2], 0.14 + 0.4 * Math.max(0, Math.sin(t * 3.4 * m - i * 0.45))));
+    [HV.pink, '#7cc6ff', HV.gold].forEach((c, i) => glow(ctx, cacheX(i), CACHE.glowY, 220 + 20 * Math.sin(t * 1.3 + i), c, 0.18 + 0.05 * Math.sin(t * 2 + i)));
     const tk = TK();
     if (tk) {
-      safe(() => tk.mist(ctx, 0, 380, 1280, 340, t, { n: 5, seed: 12, alpha: 0.08, color: '#b9a8ff', speed: 7 }));
-      for (let i = 0; i < 26; i++) { const v = (i * 0.618034) % 1, w = (i * 0.318 + 0.1) % 1; sparkleAt(ctx, 60 + v * 1160, 60 + ((w * 600 + t * 6 * m * (0.4 + v)) % 560), 2.5 + w * 4, { color: i % 2 ? '#e6dcff' : '#8fe6ff', alpha: 0.3 + 0.6 * Math.abs(Math.sin(t * (0.8 + v) + i)) }); }
-      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.6 }));
+      safe(() => tk.mist(ctx, 0, 380, 1280, 340, t, { n: 5, seed: 12, alpha: 0.07, color: '#e6d9ff', speed: 7 }));
+      for (let i = 0; i < 26; i++) { const v = (i * 0.618034) % 1, w = (i * 0.318 + 0.1) % 1; sparkleAt(ctx, 90 + v * 1100, 150 + ((w * 440 + t * 6 * m * (0.4 + v)) % 430), 2.5 + w * 4, { color: i % 2 ? '#fff4e6' : '#ffc2dc', alpha: 0.3 + 0.6 * Math.abs(Math.sin(t * (0.8 + v) + i)) }); }
+      safe(() => tk.vignette(ctx, 1280, 720, { alpha: 0.5 }));
     }
     void S;
   }

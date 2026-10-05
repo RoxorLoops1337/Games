@@ -647,8 +647,9 @@
     try { fn(); return true; } catch (e) { s.artBad[label] = true; warnOnce('ART.map ' + label, e); return false; }
   }
 
-  const FALLBACK = { fog: '#efe3c4', edge: '#dccca0', known: '#ddcba0', block: '#2a1f44', painted: '#cfdcaa', hover: 'rgba(255,233,168,0.4)', target: 'rgba(255,126,182,0.35)', path: 'rgba(255,184,64,0.35)' };
-  const TILE_COL = { start: '#f6cf7c', enemy: '#e8605a', elite: '#a3204c', boss: '#2c1c58', chest: '#f2bc45', shop: '#e9a13a', camp: '#ff8a55', event: '#9b6be4', well: '#4aa4ee', brush: '#2fbdb5', gemcache: '#4bcf78', forge: '#c9452b' };
+  // the plain stand-ins for ART.map: the muted Gloss is opal, the live ground is candy (the same colours as ART.map's table)
+  const FALLBACK = { fog: '#ece9f4', edge: '#ffd0e6', known: '#e6d9ff', block: '#d9d2ef', painted: '#f6d9a6', hover: 'rgba(255,248,236,0.4)', target: 'rgba(63,214,176,0.35)', path: 'rgba(255,126,182,0.35)' };
+  const TILE_COL = { start: '#ffd84d', enemy: '#e8553f', elite: '#ff4fa0', boss: '#ffd84d', chest: '#ff7eb6', shop: '#2ec4b6', camp: '#3fcf6a', event: '#a77bff', well: '#8fe3c0', brush: '#7cc6ff', gemcache: '#c49bff', forge: '#ff9a2e' };
 
   function hexPath(ctx, x, y, size) {
     ctx.beginPath();
@@ -664,10 +665,10 @@
     hexPath(ctx, x, y, size * 0.97);
     ctx.fillStyle = kind === 'painted' ? (TILE_COL[tile] || FALLBACK.painted) : (FALLBACK[kind] || FALLBACK.fog);
     ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(20,15,46,0.55)'; ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = kind === 'painted' ? 'rgba(45,23,15,0.7)' : 'rgba(150,140,185,0.6)'; ctx.stroke();
   }
 
-  const HOPT = { tile: 'empty', seed: 0, done: false, t: 0, near: false };
+  const HOPT = { tile: 'empty', seed: 0, done: false, t: 0, near: false, chapter: 1 };
   function drawHex(s, ctx, kind, x, y, size, tile, seed, done, t, near) {
     if (amHas('hex') && !s.artBad.hex) {
       HOPT.tile = tile || 'empty'; HOPT.seed = seed || 0; HOPT.done = !!done; HOPT.t = t; HOPT.near = !!near;
@@ -698,33 +699,39 @@
     if (dash) ctx.setLineDash([]);
   }
 
-  // the foreboding of the boss hex: a dark halo that breathes, a vermilion ring, ink motes rising off the page
+  // the Headliner's hex is lit like a show marquee: a soft golden halo that breathes, a warm pink glow, a cream dashed ring that crawls round,
+  // twelve cream and pink bulbs on a ring round the tile with a light chasing through them, and gold sparkles drifting up (the candy map look)
   function drawBossGlow(s, ctx, sx, sy, size, t) {
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.6), mo = (ART && ART.tk && isFn(ART.tk.motion)) ? ART.tk.motion() : 1;
     guard(s, 'bossglow', () => {
-      ART.tk.glow(ctx, sx, sy, size * (2.9 + 0.4 * pulse * mo), '#1c0f3c', 0.6 + 0.14 * pulse, false);
-      ART.tk.glow(ctx, sx, sy, size * (1.15 + 0.2 * pulse * mo), '#e8383d', 0.16 + 0.1 * pulse, false);
+      ART.tk.glow(ctx, sx, sy, size * (2.4 + 0.3 * pulse * mo), '#ffc94d', 0.55 + 0.15 * pulse, false);
+      ART.tk.glow(ctx, sx, sy, size * (1.25 + 0.2 * pulse * mo), '#ff7eb6', 0.3 + 0.1 * pulse, false);
     });
     ctx.save();
-    ctx.globalAlpha = 0.5 + 0.35 * pulse;
-    ringHex(ctx, sx, sy, size * (1.12 + 0.05 * pulse * mo), '#b0245c', Math.max(1.5, size * 0.05), [size * 0.3, size * 0.16], -t * size * 0.2 * mo);
+    ctx.globalAlpha = 0.6 + 0.3 * pulse;
+    ringHex(ctx, sx, sy, size * (1.12 + 0.05 * pulse * mo), '#fff4e6', Math.max(1.5, size * 0.05), [size * 0.3, size * 0.16], -t * size * 0.2 * mo);
     ctx.restore();
-    if (!lowQ()) {                                                // slow tendrils of ink reaching out from the hex
+    if (!lowQ()) {                                                // the marquee bulbs: on the corners and the edge middles of a hex ring round the tile
       ctx.save();
-      ctx.lineCap = 'round';
-      for (let i = 0; i < 9; i++) {
-        const a = i * Math.PI * 2 / 9 + t * 0.1 * mo + Math.sin(t * 0.5 + i) * 0.1 * mo, len = size * (1.9 + 0.5 * Math.sin(t * 0.9 + i * 1.7) * mo);
-        const x0 = sx + Math.cos(a) * size * 1.0, y0 = sy + Math.sin(a) * size * 1.0, x1 = sx + Math.cos(a + 0.35) * len, y1 = sy + Math.sin(a + 0.35) * len;
-        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(sx + Math.cos(a - 0.25) * len * 0.62, sy + Math.sin(a - 0.25) * len * 0.62, x1, y1);
-        ctx.lineWidth = Math.max(1.2, size * 0.075); ctx.strokeStyle = 'rgba(28,15,60,' + (0.34 + 0.14 * pulse).toFixed(3) + ')'; ctx.stroke();
+      const R = size * 1.34, br = Math.max(1.6, size * 0.1), lit = (t * 4 * mo) % 12;
+      ringHex(ctx, sx, sy, R / 0.98, 'rgba(255,126,182,0.75)', Math.max(1.2, size * 0.045));   // the sign's rail the bulbs sit on
+      for (let i = 0; i < 12; i++) {
+        const k = i >> 1, a0 = (60 * k - 30) * Math.PI / 180, a1 = (60 * (k + 1) - 30) * Math.PI / 180;
+        const x = i & 1 ? sx + (Math.cos(a0) + Math.cos(a1)) * R * 0.5 : sx + Math.cos(a0) * R, y = i & 1 ? sy + (Math.sin(a0) + Math.sin(a1)) * R * 0.5 : sy + Math.sin(a0) * R;
+        const d = Math.min(Math.abs(i - lit), 12 - Math.abs(i - lit)), on = Math.max(0, 1 - d / 2.5);
+        if (on > 0) { ctx.beginPath(); ctx.arc(x, y, br * 2.3, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,233,168,' + (0.5 * on).toFixed(3) + ')'; ctx.globalAlpha = 1; ctx.fill(); }
+        ctx.beginPath(); ctx.arc(x, y, br * (1 + 0.25 * on), 0, Math.PI * 2);
+        ctx.fillStyle = i & 1 ? '#ff9ac8' : '#fff4e6'; ctx.globalAlpha = 0.72 + 0.28 * on; ctx.fill();
+        ctx.lineWidth = Math.max(1, size * 0.03); ctx.strokeStyle = '#2d170f'; ctx.stroke();
+        if (on > 0.3) { ctx.beginPath(); ctx.arc(x - br * 0.3, y - br * 0.3, br * 0.35, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill(); }
       }
       ctx.restore();
     }
-    if (mo >= 1 && !lowQ()) {
+    if (mo >= 1 && !lowQ()) {                                     // gold sparkles drifting up off the stage
       for (let i = 0; i < 4; i++) {
         const ph = (t * 0.22 + i * 0.25) % 1, a = Math.sin(Math.PI * ph);
         ctx.beginPath(); ctx.arc(sx + Math.sin(t * 0.8 + i * 2.1) * size * 0.5, sy + size * 0.5 - ph * size * 1.8, Math.max(1, size * 0.07 * (1 - ph * 0.5)), 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(28,15,60,' + (0.55 * a).toFixed(3) + ')'; ctx.fill();
+        ctx.fillStyle = (i & 1 ? 'rgba(255,154,200,' : 'rgba(255,216,77,') + (0.75 * a).toFixed(3) + ')'; ctx.fill();
       }
     }
   }
@@ -827,8 +834,10 @@
 
   function drawWorld(s, ctx, t) {
     const c = s.cam, z = c.z, size = HEX * z, w = s.win;
+    const act = (s.M && s.M.chapter) || (s.R && s.R.chapter) || 1;          // the Act picks the ground tone and the doodles (ART.map opts.chapter)
+    HOPT.chapter = act;
     // the paper
-    if (!(amHas('paper') && guard(s, 'paper', () => ART.map.paper(ctx, 1280, 720, c.x, c.y, z, { t })))) {
+    if (!(amHas('paper') && guard(s, 'paper', () => ART.map.paper(ctx, 1280, 720, c.x, c.y, z, { t, chapter: act })))) {
       ctx.fillStyle = '#f3e6c8'; ctx.fillRect(0, 0, 1280, 720);
     }
     ctx.save();
@@ -2097,7 +2106,7 @@
     if (MEMO.runId === R.id && (R.stats.mercy | 0) > MEMO.mercy) UI.toast('A passer-by hums along: 1 Vox.', 'good');
     MEMO.runId = R.id; MEMO.mercy = R.stats.mercy | 0;
     drainPending(s);
-    safe(() => { if (AM() && isFn(AM().warm) && !headless()) AM().warm(HEX * s.cam.z, { ms: 24 }); });
+    safe(() => { if (AM() && isFn(AM().warm) && !headless()) AM().warm(HEX * s.cam.z, { ms: 24, chapter: R.chapter }); });
     s.infoDirty = true;
     flushInfo(s);
     UI.announce('Act ' + (R.chapter || 1) + ', ' + chapterTitle(R.chapter || 1) + '. ' + R.ink + ' Vox. ' + MAP.progress(M).pct + ' percent live.');
@@ -2228,19 +2237,19 @@
       const p = at(cell[0], cell[1]);
       hexPath(g, p.x, p.y, size * 0.94);
       const isAnchor = cell[0] === sh.anchor[0] && cell[1] === sh.anchor[1];
-      g.fillStyle = (sh.painted && (isAnchor || cell[0] < 0)) ? 'rgba(207,220,170,0.9)' : 'rgba(255,248,230,0.55)';
-      g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(90,70,40,0.4)'; g.stroke();
+      g.fillStyle = (sh.painted && (isAnchor || cell[0] < 0)) ? 'rgba(246,217,166,0.95)' : 'rgba(236,233,244,0.85)';
+      g.fill(); g.lineWidth = 1; g.strokeStyle = (sh.painted && (isAnchor || cell[0] < 0)) ? 'rgba(45,23,15,0.55)' : 'rgba(150,140,185,0.6)'; g.stroke();
     });
     sh.cells.forEach((cell) => {
       const p = at(cell[0], cell[1]);
       hexPath(g, p.x, p.y, size * 0.94);
-      g.fillStyle = 'rgba(47,189,181,0.62)'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#0c5058'; g.stroke();
+      g.fillStyle = 'rgba(63,214,176,0.62)'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#0f7d63'; g.stroke();
     });
     const a = at(sh.anchor[0], sh.anchor[1]);
-    g.beginPath(); g.arc(a.x, a.y, size * 0.34, 0, Math.PI * 2); g.lineWidth = 2.4; g.strokeStyle = '#140f2e'; g.stroke(); g.lineWidth = 1.2; g.strokeStyle = '#f5c96a'; g.stroke();
+    g.beginPath(); g.arc(a.x, a.y, size * 0.34, 0, Math.PI * 2); g.lineWidth = 2.4; g.strokeStyle = '#2d170f'; g.stroke(); g.lineWidth = 1.2; g.strokeStyle = '#ffd84d'; g.stroke();
     if (sh.party) {
       const pp = at(sh.party[0], sh.party[1]);
-      g.beginPath(); g.arc(pp.x, pp.y, size * 0.3, 0, Math.PI * 2); g.fillStyle = '#7a6bff'; g.fill(); g.lineWidth = 1.6; g.strokeStyle = '#140f2e'; g.stroke();
+      g.beginPath(); g.arc(pp.x, pp.y, size * 0.3, 0, Math.PI * 2); g.fillStyle = '#ff7eb6'; g.fill(); g.lineWidth = 1.6; g.strokeStyle = '#2d170f'; g.stroke();
     }
     return c;
   }

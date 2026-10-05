@@ -16,7 +16,7 @@ const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 const t = harness('hocus_vocus art cards');
 // ART_CARDS_TIMING=1 prints how long each test takes (the suite draws a lot: keep an eye on it)
 const T = (name, fn) => t.test(name, () => { const t0 = Date.now(); fn(); if (process.env.ART_CARDS_TIMING) console.log(String(Date.now() - t0).padStart(6), 'ms', name.slice(0, 90)); });
-const api = boot({ only: ['util', 'data*', 'art', 'art_heroes', 'art_cards'] });
+const api = boot({ only: ['util', 'data*', 'art', 'art_cast_kit', 'art_cast', 'art_cards'] });
 const { ART, DATA, U } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art_cards loads without errors: ' + JSON.stringify(api._errors));
