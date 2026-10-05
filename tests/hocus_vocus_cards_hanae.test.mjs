@@ -1,4 +1,4 @@
-// Hanae's card set (hocus_vocus/js/data_cards_hanae.js): quotas, rules, budget bands, and (when the engine exists) real plays.
+// Jasmin's card set (hocus_vocus/js/data_cards_hanae.js): quotas, rules, budget bands, and (when the engine exists) real plays.
 //
 // Layers of checking, cheapest first:
 //   1. DATA.validate('cards', {hero:'hanae'}) has no errors and no warnings, and DATA.audit has no lines.
@@ -9,7 +9,7 @@
 //      against a reference state, prices what the card produces in "points" (1 point = 1 damage or 1 Block) and subtracts the
 //      resources it spends (Bloom, Block). It is a rough ruler, not the engine: it exists so a card cannot sneak far outside the
 //      power guidance of CONTENT_SPEC section 3. Exchange rates (the PT table) and the reference state (REF) are documented below.
-//      A card is scored in the front row (weight 0.7, Hanae's home) and the back row (weight 0.3), then compared with a band:
+//      A card is scored in the front row (weight 0.7, Jasmin's home) and the back row (weight 0.3), then compared with a band:
 //        cost 0        net points in [2, 7.5]         (exhaust cards [2, 11], because they are one shot)
 //        cost 1        net points in [4.5, 10.5]
 //        cost 2, 3, X  net points per Energy in [4.5, 9.5]   (X is priced at X = 2)
@@ -19,7 +19,7 @@
 //   4. When hocus_vocus/js/data_text.js exists: every card, base and upgraded, produces non-empty rules text through
 //      DATA.cardPlain with no undefined, NaN or [object] in it, and stays under 110 characters.
 //   5. When combat.js exists too: every card plays in a synthetic fight in both rows without throwing, and a handful of
-//      scenarios check the rules the cards lean on (Bloom spending, first card of the turn, temporary Might, onDamaged and
+//      scenarios check the rules the cards lean on (Bloom spending, first card of the turn, temporary Volume, onDamaged and
 //      onSwap hooks). Set RB_STRICT=1 to make a missing or broken engine a failure instead of a skip.
 // Set RB_TABLE=1 to print the budget table.
 import fs from 'node:fs';
@@ -109,11 +109,11 @@ t.test('every archetype has an engine and a finisher (the design promise)', () =
   ['hanae_blossom_burst', 'hanae_full_bloom', 'hanae_bloom_tide', 'hanae_thousand_petals', 'hanae_sakura_blizzard'].forEach((id) => {
     has1(id); t.ok(allOps(byId(id)).some((o) => o.consume === 'bloom' || (o.consume && o.consume.s === 'bloom') || o.op === 'removeStatus' && o.s === 'bloom'), id + ' spends Bloom');
   });
-  // Flurry: hit count scaling, Might, Mark
+  // Vocal runs: hit count scaling, Volume, Tag
   ['hanae_rising_gale', 'hanae_whirling_petals', 'hanae_cyclone_cut', 'hanae_hundred_cuts'].forEach((id) => t.ok(allOps(byId(id)).some((o) => o.op === 'dmg' && o.hits !== undefined), id + ' is a multi-hit card'));
   t.ok(allOps(byId('hanae_flurry_stance')).concat(allOps(byId('hanae_keen_edge')), allOps(byId('hanae_blade_dance'))).some((o) => o.s === 'might' || o.s === 'ritual'), 'Might sources exist');
   t.ok(allOps(byId('hanae_petal_mark')).some((o) => o.s === 'mark'), 'Mark exists');
-  // Riposte: Block and Dodge into damage, damage when hit
+  // Soft counter: Block and Shimmy into damage, damage when hit
   t.ok(allOps(byId('hanae_riposte')).some((o) => o.op === 'dmg' && o.n && o.n.per === 'block'), 'Riposte turns Block into damage');
   t.ok(allOps(byId('hanae_flowing_counter')).some((o) => o.op === 'dmg' && o.n && o.n.s === 'dodge'), 'Flowing Counter turns Dodge into damage');
   t.ok(allOps(byId('hanae_bending_willow')).some((o) => o.op === 'hook' && o.on === 'onDamaged'), 'Bending Willow fires when hit');
@@ -194,17 +194,17 @@ t.test('every playable card has an upgrade that changes something', () => {
 
 // ---------------------------------------------------------------------------------------------- the budget ruler
 const ENEMIES = 2, AOE = 1.8, TURNS = 4, FRONT_BONUS = 2, ENERGY = 7;
-// points per stack for statuses, and per unit for other effects. 1 point = 1 damage or 1 Block. A stack of Dodge is a whole hit
-// prevented (about 8 points at chapter 1 and 2 hit sizes, and it never expires), a Dodge that is taken back next turn is worth 5.5.
-// Might for one turn is worth 1.6 a stack, not the 2.5 it was priced at first: the balance bot measured every temporary Might card (Blade Duet, Flurry
-// Stance, Blessed Blade, Rousing Roar) at or below zero lift, because Might only pays on the two or three hits left in the turn once the card is paid for.
+// points per stack for statuses, and per unit for other effects. 1 point = 1 damage or 1 Block. A stack of Shimmy is a whole hit
+// prevented (about 8 points at Act 1 and 2 hit sizes, and it never expires), a Shimmy that is taken back next turn is worth 5.5.
+// Volume for one turn is worth 1.6 a stack, not the 2.5 it was priced at first: the balance bot measured every temporary Volume card (Calling of the Moon, Lean In,
+// Push the Fader, Bass Boost) at or below zero lift, because Volume only pays on the two or three hits left in the turn once the card is paid for.
 const PT = { bloom: 2, dodge: 8, dodgeTemp: 5.5, might: 6, mightTemp: 1.6, bulwark: 4, ritual: 20, plating: 4, thorns: 3, regen: 2, taunt: 2, vulnerable: 4, weak: 3, frail: 1.5, poison: 2.5, burn: 2, stun: 8, mark: 2.5, bind: 0, sumi: 2, ward: 2, charge: 2 };
 const PRICE = { draw: 3.5, energy: 6.5, heal: 0.8, swap: 1.2, add: 3, revive: 12, pickDiscard: 1, pickExhaust: 1.5, pickUpgrade: 4, pickToHand: 3.5, pickRetain: 1, pickCopy: 5 };
 // the reference state a card is priced in: mid fight, a partly built turn
 const REF = { bloom: 3, block: 2, allyBlock: 5, handSize: 3, drawPile: 12, discardPile: 6, exhaustPile: 1, cardsPlayed: 2, attacksPlayed: 1, skillsPlayed: 1, energy: 1, hp: 50, missingHp: 15, allyMissingHp: 15, enemies: ENEMIES, kills: 0, turn: 3, gems: 0, damageTaken: 6, hitsTaken: 1, targetBlock: 0, picked: 1, X: 2, debuffs: 0 };
 const clone = (S) => Object.assign({}, S, { st: Object.assign({}, S.st), allySt: Object.assign({}, S.allySt) });
 // Payoff cards are priced in the state they are built for, not in the generic REF (a finisher is clunky without its setup, by design):
-// Thousand Petals after banking 5 Bloom, Sakura Blizzard with 4, Mirror Edge behind 9 Block (Parry and Sway: at 1 Energy it leaves two Energy of Block cards).
+// The High Note after banking 5 Bloom, Blossom Blizzard with 4, Mirror Ball behind 9 Block (Soft Shield and Gentle Sway: at 1 Energy it leaves two Energy of Block cards).
 const SETUP = { hanae_thousand_petals: { bloom: 5 }, hanae_sakura_blizzard: { bloom: 4 }, hanae_mirror_edge: { block: 9 } };
 const fresh = (row, setup) => {
   const S = { row, block: REF.block, allyBlock: REF.allyBlock, st: { bloom: REF.bloom }, allySt: {}, X: REF.X, cardsPlayed: REF.cardsPlayed, attacksPlayed: REF.attacksPlayed };
@@ -403,8 +403,8 @@ t.test('rules text: non-empty, clean and under 110 characters for every card, ba
 });
 
 // ---------------------------------------------------------------------------------------------- the real engine
-// Every expected number below is derived by hand from DESIGN.md 4.2 to 4.4 (Hanae in front: +2 damage per hit, in back: +1 Block
-// on her cards; hook damage has no row or Might bonus; Blade Flow adds 1 Bloom after the first Attack of a turn).
+// Every expected number below is derived by hand from DESIGN.md 4.2 to 4.4 (Jasmin in front: +2 damage per hit, in back: +1 Block
+// on her cards; hook damage has no row or Volume bonus; Every Note Blooms adds 1 Bloom after the first Attack of a turn).
 const wantEngine = has('data_text.js') && has('combat.js');
 let eng = null, engErr = null;
 if (wantEngine) {
@@ -480,79 +480,79 @@ if (!eng) {
   });
 
   // ---- Bloom builders and sinks
-  t.test('engine: Petal Step steps forward for free and gives Bloom and Block', () => {
+  t.test('engine: Take the Lead steps forward for free and gives Bloom and Block', () => {
     const C = fight(['hanae_petal_step'].concat(FILL));
     t.eq(hanae(C).row, 'front', 'Hanae leads'); play(C, 'hanae_petal_step');
     t.eq(hanae(C).row, 'front', 'from the front it does not push her out'); t.eq(ally(C).row, 'back', 'or her partner in'); t.eq(st(hanae(C), 'bloom'), 1, 'Bloom gained'); t.eq(hanae(C).block, 3, 'Block gained');
     t.eq(C.energy, C.maxEnergy, 'it costs nothing');
     const B = fight(['hanae_petal_step'].concat(FILL), { back: true }); play(B, 'hanae_petal_step'); t.eq(hanae(B).row, 'front', 'from the back it steps forward'); t.eq(hanae(B).block, 3, 'Block 3 (front row, no bonus)');
   });
-  t.test('engine: Petal Flick and Twin Petals build Bloom, Blade Flow adds 1 after the first Attack', () => {
+  t.test('engine: Little Trill and Sweet Thirds build Bloom, Every Note Blooms adds 1 after the first Attack', () => {
     const A = fight(['hanae_petal_flick'].concat(FILL)); t.eq(dealt(A, 'hanae_petal_flick'), 2 + 2, 'Flick: 2 + 2 in front'); t.eq(st(hanae(A), 'bloom'), 2, 'card 1 + Blade Flow 1');
     const B = fight(['hanae_twin_petals'].concat(FILL)); t.eq(dealt(B, 'hanae_twin_petals'), 2 * (2 + 2), 'Twin: two hits of 2 + 2'); t.eq(st(hanae(B), 'bloom'), 2, 'front rider 1 + Blade Flow 1');
     const K = fight(['hanae_twin_petals'].concat(FILL), { back: true }); t.eq(dealt(K, 'hanae_twin_petals'), 2 * 2, 'in the back: no row bonus'); t.eq(st(hanae(K), 'bloom'), 1, 'and no front rider, only Blade Flow');
   });
-  t.test('engine: Blossom Burst spends up to 3 Bloom, Thousand Petals spends all', () => {
+  t.test('engine: Blossom Pop spends up to 3 Bloom, The High Note spends all', () => {
     const A = fight(['hanae_blossom_burst'].concat(FILL)); t.eq(dealt(A, 'hanae_blossom_burst', (C) => { hanae(C).st.bloom = 5; }), 3 + 3 * 3 + 2, '3 + 3 per Bloom spent (3 of 5) + 2'); t.eq(st(hanae(A), 'bloom'), 2 + 1, '2 left, then Blade Flow');
     const B = fight(['hanae_thousand_petals'].concat(FILL)); t.eq(dealt(B, 'hanae_thousand_petals', (C) => { hanae(C).st.bloom = 5; }), 5 * 5 + 2, '5 per Bloom + 2'); t.eq(st(hanae(B), 'bloom'), 1, 'all spent, then Blade Flow pays 1');
     const Z = fight(['hanae_thousand_petals'].concat(FILL)); t.eq(dealt(Z, 'hanae_thousand_petals'), 2, 'with no Bloom it is just the row bonus');
   });
-  t.test('engine: Full Bloom shields both heroes, Bloom Tide turns 3 Bloom into 2 Energy', () => {
+  t.test('engine: Blossom Blanket shields both heroes, Blossom Breath turns 3 Bloom into 2 Energy', () => {
     const F = fight(['hanae_full_bloom'].concat(FILL)); hanae(F).st.bloom = 4; play(F, 'hanae_full_bloom');
     t.eq(st(hanae(F), 'bloom'), 0, 'all Bloom spent'); F.heroes.forEach((h) => t.ok(h.block >= 8, h.id + ' has Block ' + h.block));
     const C = fight(['hanae_bloom_tide'].concat(FILL)); hanae(C).st.bloom = 3; const e = C.energy; play(C, 'hanae_bloom_tide');
     t.eq(st(hanae(C), 'bloom'), 0, 'Bloom paid'); t.eq(C.energy, e + 2, 'two Energy back'); t.ok(C.exhaust.some((c) => c.id === 'hanae_bloom_tide'), 'and it exhausts');
     const N = fight(['hanae_bloom_tide'].concat(FILL, ['hanae_slash', 'hanae_slash', 'hanae_parry'])); ensureInHand(N, 'hanae_bloom_tide'); hanae(N).st.bloom = 2; const e2 = N.energy, h2 = N.hand.length; play(N, 'hanae_bloom_tide'); t.eq(N.energy, e2, 'with too little Bloom no Energy comes back'); t.eq(st(hanae(N), 'bloom'), 2, 'and no Bloom is spent'); t.eq(N.hand.length, h2 - 1 + 1, 'but it still draws a card: never a dead card');
   });
-  t.test('engine: Sakura Blizzard hits every enemy once per Energy with damage equal to Bloom', () => {
+  t.test('engine: Blossom Blizzard hits every enemy once per Energy with damage equal to Bloom', () => {
     const C = fight(['hanae_sakura_blizzard'].concat(FILL), { enemies: [DUMMY, DUMMY] }); hanae(C).st.bloom = 4;
     const b = C.enemies.map((e) => e.hp); play(C, 'hanae_sakura_blizzard');
     C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 3 * (1 + 4 + 2), 'enemy ' + i + ': 3 volleys of 1 + 4 Bloom + 2'));
     t.eq(st(hanae(C), 'bloom'), 1, 'Bloom spent, then Blade Flow');
   });
-  t.test('engine: Spring Vow is innate, Thousand Petals is retained', () => {
+  t.test('engine: Bud by Bud is innate, The High Note is retained', () => {
     const deck = ['hanae_spring_vow'].concat(Array(12).fill('hanae_slash'));
     for (let seed = 1; seed <= 6; seed++) t.ok(!!handOf(fight(deck, { seed }), 'hanae_spring_vow'), 'seed ' + seed + ': Spring Vow is in the opening hand');
     const R = fight(['hanae_thousand_petals'].concat(FILL)); R.endTurn(); t.ok(!!handOf(R, 'hanae_thousand_petals'), 'Thousand Petals stayed in hand through the end of turn');
   });
-  t.test('engine: Spring Vow and Blossom Field work on the turn edges', () => {
+  t.test('engine: Bud by Bud and Cherry Lane work on the turn edges', () => {
     const S = fight(['hanae_spring_vow'].concat(FILL)); play(S, 'hanae_spring_vow'); t.eq(st(hanae(S), 'bloom'), 0, 'nothing yet'); S.endTurn(); t.eq(st(hanae(S), 'bloom'), 1, 'Bloom at the start of the next turn');
     const F = fight(['hanae_blossom_field'].concat(FILL)); hanae(F).st.bloom = 4; play(F, 'hanae_blossom_field'); t.eq(hanae(F).block, 5, 'the meadow shields her with 5 Block at once'); const b = hpSum(F); F.endTurn();
     t.eq(b - hpSum(F), 4, 'the field cuts for the Bloom it holds, without spending it'); t.eq(st(hanae(F), 'bloom'), 4, 'Bloom is kept');
   });
 
   // ---- Flurry
-  t.test('engine: Rising Gale hits once per card played, Whirling Petals once per Energy', () => {
+  t.test('engine: Climbing Scale hits once per card played, Arabic Impro once per Energy', () => {
     const C = fight(['hanae_rising_gale'].concat(FILL)); play(C, 'hanae_parry'); play(C, 'hanae_parry'); const b = hpSum(C); play(C, 'hanae_rising_gale');
     t.eq(b - hpSum(C), 2 * (2 + 2), 'two hits of 2 + 2 after two cards');
     const F = fight(['hanae_rising_gale'].concat(FILL)); t.eq(dealt(F, 'hanae_rising_gale'), 0, 'as the first card it does nothing');
     const W = fight(['hanae_whirling_petals'].concat(FILL)); t.eq(dealt(W, 'hanae_whirling_petals'), 3 * (4 + 2), 'X = 3: three hits of 4 + 2'); t.eq(W.energy, 0, 'X spends everything');
     const Z = fight(['hanae_whirling_petals'].concat(FILL)); Z.energy = 0; t.eq(dealt(Z, 'hanae_whirling_petals'), 0, 'X = 0 is legal and does nothing');
   });
-  t.test('engine: Flurry Stance gives temporary Might, Keen Edge gives permanent Might', () => {
+  t.test('engine: Lean In gives temporary Volume, Find Your Voice gives permanent Volume', () => {
     const C = fight(['hanae_flurry_stance'].concat(FILL)); play(C, 'hanae_flurry_stance');
     t.eq(st(hanae(C), 'might'), 2, 'Might 2 now'); C.endTurn(); t.eq(st(hanae(C), 'might'), 0, 'gone next turn');
     const K = fight(['hanae_keen_edge'].concat(FILL)); play(K, 'hanae_keen_edge'); K.endTurn(); t.eq(st(hanae(K), 'might'), 1, 'Keen Edge stays'); t.ok(K.exhaust.some((c) => c.id === 'hanae_keen_edge'), 'and exhausts');
   });
-  t.test('engine: Petal Mark adds 3 damage to each of the next 3 hits', () => {
+  t.test('engine: Corsage adds 3 damage to each of the next 3 hits', () => {
     const C = fight(['hanae_petal_mark'].concat(FILL)); play(C, 'hanae_petal_mark'); t.eq(st(C.enemies[0], 'mark'), 3, 'Mark 3 on the target');
     const b = hpSum(C); play(C, 'hanae_slash'); t.eq(b - hpSum(C), 6 + 2 + 3, 'Slash 6 + 2 + Mark 3'); t.eq(st(C.enemies[0], 'mark'), 2, 'one Mark stack spent');
   });
-  t.test('engine: Cyclone Cut and Hundred Cuts count every hit', () => {
+  t.test('engine: Petal Twirl and Melisma count every hit', () => {
     const C = fight(['hanae_cyclone_cut'].concat(FILL), { enemies: [DUMMY, DUMMY] }); const b = C.enemies.map((e) => e.hp); play(C, 'hanae_cyclone_cut');
     C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 2 * (2 + 2), 'enemy ' + i + ' takes two hits of 2 + 2'));
     const H = fight(['hanae_hundred_cuts'].concat(FILL)); t.eq(dealt(H, 'hanae_hundred_cuts'), 9 * (1 + 2), 'nine hits of 1 + 2'); t.eq(H.energy, 0, 'a whole turn');
     const M = fight(['hanae_hundred_cuts'].concat(FILL)); t.eq(dealt(M, 'hanae_hundred_cuts', (X) => { hanae(X).st.might = 2; }), 9 * (1 + 2 + 2), 'every hit carries Might');
     const U = fight([{ id: 'hanae_hundred_cuts', up: 1 }].concat(FILL)); t.eq(dealt(U, 'hanae_hundred_cuts'), 9 * (1 + 2), 'the upgrade keeps the nine hits'); t.eq(U.energy, U.maxEnergy - 2, 'and costs 2 instead of 3');
   });
-  t.test('engine: Blade Dance grows Might every turn, Blade Duet lends Might to both heroes for one turn', () => {
+  t.test('engine: Slow Swell grows Volume every turn, Calling of the Moon lends Volume to both heroes for one turn', () => {
     const C = fight(['hanae_blade_dance'].concat(FILL)); play(C, 'hanae_blade_dance'); t.eq(st(hanae(C), 'ritual'), 1, 'Ritual 1'); C.endTurn(); t.eq(st(hanae(C), 'might'), 1, 'Might 1 at the start of next turn');
     const D2 = fight(['hanae_blade_duet'].concat(FILL, ['hanae_slash', 'hanae_slash', 'hanae_slash'])); ensureInHand(D2, 'hanae_blade_duet'); const dh = D2.hand.length; play(D2, 'hanae_blade_duet');
     D2.heroes.forEach((h) => t.eq(st(h, 'might'), 2, h.id + ' has Might 2')); t.eq(D2.hand.length, dh - 1 + 1, 'and one card was drawn'); t.eq(D2.energy, D2.maxEnergy - 1, 'for one Energy'); D2.endTurn(); D2.heroes.forEach((h) => t.eq(st(h, 'might'), 0, h.id + ' gave it back'));
   });
 
-  // ---- Riposte
-  t.test('engine: Riposte hits for its Block, Sway lends Dodge for one enemy phase, Flowing Counter hits per Dodge', () => {
+  // ---- Sing It Back
+  t.test('engine: Sing It Back hits for its Block, Gentle Sway lends Shimmy for one enemy phase, Slippery Riff hits per Shimmy', () => {
     const R = fight(['hanae_riposte'].concat(FILL)); play(R, 'hanae_parry'); const b = hpSum(R); play(R, 'hanae_riposte');
     t.eq(b - hpSum(R), 5 + 3 + 2, 'Block 8 becomes 8 damage, +2 in front'); t.eq(hanae(R).block, 8, 'and the Block stays');
     const S = fight(['hanae_sway'].concat(FILL)); play(S, 'hanae_sway'); t.eq(hanae(S).block, 4, 'Block 4'); t.eq(st(hanae(S), 'dodge'), 1, 'Dodge 1');
@@ -563,43 +563,43 @@ if (!eng) {
     const K = fight(['hanae_flowing_counter'].concat(FILL), { back: true }); play(K, 'hanae_flowing_counter'); K.endTurn(); t.eq(st(hanae(K), 'dodge'), 0, 'and taken back next turn');
     const C = fight(['hanae_flowing_counter'].concat(FILL)); t.eq(dealt(C, 'hanae_flowing_counter', (X) => { hanae(X).st.dodge = 2; }), 3 * 3 + 2, 'three Dodge: 9 + 2');
   });
-  t.test('engine: Bending Willow answers the attacker when Hanae is hit, and Swallow Reversal pays for the damage she took', () => {
+  t.test('engine: Bend the Note answers the attacker when Jasmin is hit, and Answer Phrase pays for the damage she took', () => {
     const C = fight(['hanae_bending_willow'].concat(FILL)); play(C, 'hanae_bending_willow'); t.eq(hanae(C).block, 4, 'it braces her with 4 Block at once'); const b = hpSum(C); C.endTurn();
     t.eq(b - hpSum(C), 2, 'the dummy took 2 for hitting her'); t.eq(st(hanae(C), 'bloom'), 1, 'and she gained Bloom');
     const W = fight(['hanae_swallow_reversal'].concat(FILL)); W.endTurn(); const lost = D.heroes.hanae.maxHp - hanae(W).hp;
     t.eq(lost, 4, 'the dummy tapped her for 4'); const b2 = hpSum(W); play(W, 'hanae_swallow_reversal'); t.eq(b2 - hpSum(W), 2 + lost + 2, 'Swallow Reversal: 2 + damage taken + 2');
   });
-  t.test('engine: Mirror Edge turns all her Block into damage for every enemy', () => {
+  t.test('engine: Mirror Ball turns all her Block into damage for every enemy', () => {
     const C = fight(['hanae_mirror_edge'].concat(FILL), { enemies: [DUMMY, DUMMY] }); hanae(C).block = 12; const b = C.enemies.map((e) => e.hp); play(C, 'hanae_mirror_edge');
     C.enemies.forEach((e, i) => t.eq(b[i] - e.hp, 12 + 2, 'enemy ' + i + ' takes 12 + 2')); t.eq(hanae(C).block, 0, 'the Block is gone'); t.eq(C.energy, C.maxEnergy - 1, 'for one Energy');
     const K = fight(['hanae_mirror_edge'].concat(FILL), { enemies: [DUMMY] }); hanae(K).block = 40; t.eq(dealt(K, 'hanae_mirror_edge'), 20 + 2, 'a wall of Block is capped at 20 (+2 in front)');
     const U = fight([{ id: 'hanae_mirror_edge', up: 1 }].concat(FILL), { enemies: [DUMMY] }); hanae(U).block = 10; t.eq(dealt(U, 'hanae_mirror_edge'), 2 + 10 + 2, 'the upgrade adds a flat 2');
   });
-  t.test('engine: Borrowed Shield reads the ally, Petal Veil shields both heroes', () => {
+  t.test('engine: Sing Along reads the ally, Petal Curtain shields both heroes', () => {
     const C = fight(['hanae_borrowed_shield'].concat(FILL)); ally(C).block = 5; play(C, 'hanae_borrowed_shield'); t.eq(hanae(C).block, 3 + 5, 'Block 3 plus the ally\'s 5');
     const V = fight(['hanae_petal_veil'].concat(FILL)); play(V, 'hanae_petal_veil'); V.heroes.forEach((h) => t.eq(h.block, 3, h.id + ' gains 3')); t.eq(st(hanae(V), 'bloom'), 1, 'and Hanae blooms');
   });
 
   // ---- rows, swaps and the first card of a turn
-  t.test('engine: Iai Draw is huge only as the first card of the turn', () => {
+  t.test('engine: Out of Nowhere is huge only as the first card of the turn', () => {
     const A = fight(['hanae_iai_draw', 'hanae_flurry_stance'].concat(FILL)); t.eq(dealt(A, 'hanae_iai_draw'), 12 + 2, 'first card: 12 + 2'); t.ok(A.exhaust.some((c) => c.id === 'hanae_iai_draw'), 'it exhausts');
     const B = fight(['hanae_iai_draw', 'hanae_flurry_stance'].concat(FILL)); play(B, 'hanae_flurry_stance'); const b = hpSum(B); play(B, 'hanae_iai_draw');
     t.eq(b - hpSum(B), 4 + 2 + 2, 'second card: 4 + row 2 + Might 2');
     const R = fight(['hanae_iai_draw'].concat(FILL)); R.endTurn(); t.ok(!!handOf(R, 'hanae_iai_draw'), 'it is back in hand next turn');
     const K = fight(['hanae_iai_draw'].concat(FILL)); K.endTurn(); t.ok(K.discard.every((c) => c.id !== 'hanae_iai_draw') || !!handOf(K, 'hanae_iai_draw'), 'retain kept it');
   });
-  t.test('engine: Folding Screen blooms only in the back row', () => {
+  t.test('engine: Oohs and Aahs blooms only in the back row', () => {
     const B = fight(['hanae_folding_screen'].concat(FILL), { back: true }); play(B, 'hanae_folding_screen'); t.eq(hanae(B).block, 5 + 1, 'Block 5 + 1 in the back'); t.eq(st(hanae(B), 'bloom'), 2, '2 Bloom');
     const F = fight(['hanae_folding_screen'].concat(FILL)); play(F, 'hanae_folding_screen'); t.eq(hanae(F).block, 5, 'Block 5 in front'); t.eq(st(hanae(F), 'bloom'), 0, 'no Bloom');
   });
-  t.test('engine: Crescent Step steps forward and cuts, Hit and Vanish cuts and steps back', () => {
+  t.test('engine: Centre Stage steps forward and cuts, Curtsy and Go cuts and steps back', () => {
     const A = fight(['hanae_crescent_step'].concat(FILL), { back: true }); t.eq(dealt(A, 'hanae_crescent_step'), 5 + 2, 'from the back: swaps first, then cuts with +2'); t.eq(hanae(A).row, 'front', 'now in front'); t.eq(st(hanae(A), 'bloom'), 2, 'front rider + Blade Flow');
     const B = fight(['hanae_crescent_step'].concat(FILL)); t.eq(dealt(B, 'hanae_crescent_step'), 5 + 2, 'from the front: no swap, same cut'); t.eq(hanae(B).row, 'front', 'still in front'); t.eq(st(hanae(B), 'bloom'), 2, 'same Bloom');
     const C = fight(['hanae_hit_and_vanish'].concat(FILL)); C.energy = 3; t.eq(dealt(C, 'hanae_hit_and_vanish'), 6 + 2, 'cuts from the front first: 6 + 2'); t.eq(hanae(C).row, 'back', 'then steps out'); t.eq(ally(C).row, 'front', 'and her partner takes the front');
     C.heroes.forEach((h) => t.ok(h.block >= 3, h.id + ' gained Block ' + h.block));
     const D2 = fight(['hanae_hit_and_vanish'].concat(FILL), { back: true }); play(D2, 'hanae_hit_and_vanish'); t.eq(hanae(D2).row, 'front', 'from the back she ends in front'); t.eq(D2.heroes.reduce((s, h) => s + h.block, 0), 0, 'and nobody gains the back row Block');
   });
-  t.test('engine: Waltz of Steps pays for a swap from either row, once a turn', () => {
+  t.test('engine: Stage Waltz pays for a swap from either row, once a turn', () => {
     const C = fight(['hanae_waltz_of_steps'].concat(FILL)); C.energy = 5; play(C, 'hanae_waltz_of_steps'); t.eq(hanae(C).block, 0, 'the base card does nothing until a swap'); const b0 = st(hanae(C), 'bloom'), k0 = hanae(C).block;
     C.swap(); t.eq(st(hanae(C), 'bloom') - b0, 1, 'front to back: 1 Bloom'); t.eq(hanae(C).block - k0, 4, 'and 4 Block');
     C.swap(); t.eq(st(hanae(C), 'bloom') - b0, 1, 'the second swap this turn pays nothing (limit 1)');
@@ -607,7 +607,7 @@ if (!eng) {
     t.eq(st(hanae(C), 'bloom') - b1, 1, 'next turn it pays again'); t.eq(hanae(C).block, 4, 'Block again');
     const U = fight([{ id: 'hanae_waltz_of_steps', up: 1 }].concat(FILL)); U.energy = 5; play(U, 'hanae_waltz_of_steps'); t.eq(hanae(U).block, 6, 'upgraded: the dance gives 6 Block at once'); const ub = st(hanae(U), 'bloom'); U.swap(); t.eq(st(hanae(U), 'bloom') - ub, 2, 'and 2 Bloom a swap');
   });
-  t.test('engine: Petal Trail sheds petals on every enemy for each Attack, up to twice a turn', () => {
+  t.test('engine: Shimmer Trail sheds petals on every enemy for each Attack, up to twice a turn', () => {
     const C = fight(['hanae_petal_trail', 'hanae_slash', 'hanae_slash', 'hanae_slash', 'hanae_slash'], { enemies: [DUMMY, DUMMY] }); C.energy = 5; play(C, 'hanae_petal_trail'); const b = C.enemies.map((e) => e.hp);
     play(C, 'hanae_slash'); t.eq(b[0] - C.enemies[0].hp + (b[1] - C.enemies[1].hp), 8 + 2 + 2, 'Slash 8 on one enemy, 2 petals on both');
     play(C, 'hanae_slash'); play(C, 'hanae_slash'); const total = (b[0] - C.enemies[0].hp) + (b[1] - C.enemies[1].hp);
@@ -615,7 +615,7 @@ if (!eng) {
   });
   // a partner's own attack, taken from the partner's starter deck when that file exists (any hero id works: the check is a difference between two fights)
   const partnerAttack = ['kuro', 'suzu', 'raiga'].map((h) => ({ h, id: D.heroes[h].starter[0] })).find((x) => D.cards[x.id] && D.cards[x.id].type === 'attack');
-  t.test('engine: Petal Trail and Petal Mark reward the partner\'s attacks too', () => {
+  t.test('engine: Shimmer Trail and Corsage reward the partner\'s attacks too', () => {
     if (!partnerAttack) { console.log('  note: no partner attack card exists yet, partner checks skipped'); return; }
     const run = (extra, before) => {
       const C = fight([partnerAttack.id].concat(extra, FILL.slice(0, 3)), { partner: partnerAttack.h, enemies: [DUMMY, DUMMY] }); C.energy = 5;
@@ -629,7 +629,7 @@ if (!eng) {
     const baseM = run(['hanae_petal_mark'], null), withMark = run(['hanae_petal_mark'], ['hanae_petal_mark']);
     t.eq(withMark[0] - baseM[0], 3, 'Petal Mark: the partner\'s first hit carries +3');
   });
-  t.test('engine: Whetstone upgrades a card in hand, Sakura Sort cycles a card', () => {
+  t.test('engine: Run It Again upgrades a card in hand, La La La cycles a card', () => {
     const W = fight(['hanae_whetstone'].concat(FILL)); play(W, 'hanae_whetstone');
     t.ok(W.hand.some((c) => c.up), 'a card in hand was upgraded'); t.eq(st(hanae(W), 'bloom'), 2, 'and Hanae gained 2 Bloom');
     const S = fight(['hanae_sakura_sort'].concat(FILL, ['hanae_slash', 'hanae_slash', 'hanae_parry'])); ensureInHand(S, 'hanae_sakura_sort'); t.ok(S.draw.length >= 2, 'there is something to draw'); const h0 = S.hand.length; play(S, 'hanae_sakura_sort');

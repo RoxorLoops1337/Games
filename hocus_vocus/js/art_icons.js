@@ -763,7 +763,7 @@
   };
 
   // ---------------------------------------------------------------------------------------------------------------
-  // BRUSH (a Spell): a picture of the shape the Spell paints, on a mini pointy-top hex grid (the map's own geometry, DESIGN 4.8)
+  // `brush` (a Spell): a picture of the shape the Spell unmutes, on a mini pointy-top hex grid (the map's own geometry, DESIGN 4.8)
   // ---------------------------------------------------------------------------------------------------------------
   const SQ3 = sqrt(3);
   const hexPts = (cx, cy, s) => { const o = []; for (let i = 0; i < 6; i++) { const a = PI / 6 + i * PI / 3; o.push([cx + cos(a) * s, cy + sin(a) * s]); } return o; };
@@ -1295,7 +1295,7 @@
     S.glow(0, -20, 30, '#ff5a5a', 0.4);
     S.text('ON AIR', 0, -19.5, S.d ? 12 : 13, { fill: CREAM });
   };
-  // Blur: a soft opalescent hole in the page, airbrushed, never scary (the one tile that is not a recolourable sticker)
+  // Blur: a soft opalescent hole in the map, airbrushed, never scary (the one tile that is not a recolourable sticker)
   function blurSpec() {
     return {
       key: 'tile|block', glow: '#e6d9ff',
@@ -2209,7 +2209,7 @@
     }, { title: 'ART.icon gems: 5 cuts x 4 colours x 3 tiers, and empty sockets (note pink, shield blue, leaf green, star gold, ring rainbow)', cols: params.cols || 8, aspect: 1.35, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
 
-  // icons_ui: intents, stats, brushes, card types and rows on one sheet (params: cols, size, bg=paper, kinds=intent,stat)
+  // icons_ui: intents, stats, Spells, card types and rows on one sheet (params: cols, size, bg=paper, kinds=intent,stat)
   ART.sheet('icons_ui', (canvas, params) => {
     const kinds = typeof params.kinds === 'string' ? params.kinds.split(',') : ['intent', 'stat', 'brush', 'type', 'row'];
     const cells = [];

@@ -8,7 +8,7 @@
 //   story         A Tour Diary entry. ART.scene.draw of the page's scene (intro title, chN ch1..3, victory, defeat, hero pages camp), the party's bust
 //                 portraits as tilted instant photo stickers (cream frame, tape, a strip in the hero colour), a cream gig-poster page with a pink and
 //                 green print stripe and two strips of tape, a kicker, the entry title, a row of stage bulbs either side of a sparkle, a round sticker
-//                 seal that stamps down, the first letter on a pink sticker and the text typed at 30 characters per second (a caret blinks at the pen).
+//                 seal that stamps down, the first letter on a pink sticker and the text typed at 30 characters per second (a caret blinks at the end).
 //                 A tap on the page, Enter, Space or Right completes the text, the next one turns the page (UI.go(then, {transition:'page'}), or
 //                 UI.back() with no `then`); Skip, Esc or S turn it at once. Every shown page marks META.markLore(id). reduceMotion types instantly.
 //   chapterClear  After a Headliner (Acts I and II): the Act's scene with the duo cheering, the Act number on a big round pink and green sticker,
@@ -19,12 +19,14 @@
 //   gameOver      The defeat page: the `defeat` scene under a Gloss sheen that lifts, the duo losing their voice at the stage edge and standing up
 //                 again as the curtain twitches (STAND_AT), the `defeat` entry, the score broken down line by line (RUN.score's own terms, counting
 //                 up) with the total, the Cheers META.recordRun paid, Stickers, outfits, heroes and Encores newly unlocked, a recap of the deck and
-//                 Charms (tap to open the deck or Charm viewer), a tip, Try Again (same heroes, same Encore, GAME.newRun) and Title.
+//                 Charms (tap to open the deck or Charm viewer), a tip, Try Again (same heroes, same Encore, GAME.newRun) and Title, and under
+//                 them a slim ghost row with Share and Follow the duo (never Support: a lost tour is no time to ask).
 //   victory       The grand ending in three beats: the `victory` entry typed over the dawn stage, a curtain call of all four heroes with a line each,
 //                 then the showcase: the score breakdown and tour stats counting up, Cheers, Stickers, unlocks (RawClaw, Andy, the next Encore, a
 //                 New outfit card), a share card drawn on a canvas (the duo card: the split pink and green ground, the logo, the duo cheering in
-//                 their outfits, the score, the RJ monogram and the handle) with Copy summary and Save card, and Continue to Title. Petals and
-//                 confetti fall throughout. Skip jumps to the showcase.
+//                 their outfits, the score, the RJ monogram and the handle) with Copy summary, Save card and Share, a slim follow row under the
+//                 Newly Unlocked card (the handle line, Follow the duo, and Support the duo once DATA.LINKS.support is set), and Continue to Title. The
+//                 cast phase ends with one plain credit line and has no buttons for the duo. Petals and confetti fall throughout. Skip jumps to the showcase.
 //   Big text (textScale above 1.1) adds class ts-big to the screen root: fewer ornaments, one column of tiles, taller story page.
 //   Every screen: tap the backdrop to finish the animations at once; the buttons never wait for them. Counters, typewriter, staggers and the sequences
 //   run on the frame clock (update(dt)), so GAME.debug.tick drives them exactly; with window.__HEADLESS or reduceMotion every sequence is flushed
@@ -208,7 +210,7 @@
     if (S.root) S.root.classList.add('en-settled');
   }
   const instant = () => headless() || reduced();
-  // keep the pen in view while the page types itself. The unwritten rest of the text is already laid out (invisible), so scrolling to the bottom of the
+  // keep the caret in view while the page types itself. The unwritten rest of the text is already laid out (invisible), so scrolling to the bottom of the
   // box threw the drop cap and the first lines off the top at once; scroll only as far as the caret needs, and not at all while it is on screen.
   function followPen(bodyEl) {
     const caret = bodyEl.querySelector ? bodyEl.querySelector('.tw-caret') : null;
@@ -223,7 +225,7 @@
   // restart the run the instant the defeat page opens): keys wake up 0.7 s in. Clicks and taps are never held back.
   const armed = (S) => headless() || S.t >= 0.7;
 
-  // typewriter: types `text` into el at cps characters per second, with a blinking caret at the pen. tw.complete() finishes it; tw.then(fn)
+  // typewriter: types `text` into el at cps characters per second, with a blinking caret at the end. tw.complete() finishes it; tw.then(fn)
   // runs when it is done (at once if it already is). Instant headless and under reduced motion.
   function typewriter(S, el, text, o) {
     o = o || {};
@@ -362,6 +364,26 @@
     S.root.appendChild(el);
     return el;
   }
+  // ---- follow the duo and Share (HV_STORY 5.4): small pieces for the victory showcase and the game over page. The panel, the sheet and Share itself live in
+  // ui.js (UI.followSheet, UI.share); every call is guarded, nothing is fetched or stored, and a link opens only on a tap, in a new tab.
+  const HANDLE_LINE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+  const supportUrl = () => { const v = safe(() => DATA.LINKS.support, ''); const u = typeof v === 'string' ? v.trim() : ''; return /^https?:\/{2}/i.test(u) ? u : ''; };      // only a web address is ever linked (ui.js does the same)
+  const openFollowSheet = () => { if (isFn(UI.followSheet)) safe(() => UI.followSheet()); };
+  const doShare = () => { if (isFn(UI.share)) safe(() => UI.share()); };
+  function shareBtn(o) {
+    const b = UI.btn('Share', Object.assign({ onclick: doShare }, o));
+    b.setAttribute('aria-label', 'Share Hocus Vocus');
+    return b;
+  }
+  const followBtn = (o) => UI.btn('Follow the duo', Object.assign({ onclick: openFollowSheet }, o));
+  // Support the duo: an anchor to DATA.LINKS.support (HV_STORY 5.5), or null while the owners' URL is empty. The victory showcase is the only caller: never game over.
+  function supportBtn(cls) {
+    const url = supportUrl();
+    if (!url) return null;
+    return mk('a', { class: 'btn btn-primary btn-sm ' + (cls || ''), href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Support the duo, opens in a new tab' },
+      UI.icon('relic', 'heart', 20, {}, 'btn-ico'), mk('span', { class: 'btn-label', text: 'Support the duo' }), mk('i', { class: 'btn-shine', 'aria-hidden': 'true' }));
+  }
+
   function noRunPage(S, what) {
     S.root.appendChild(mk('div', { class: 'en-none' }, UI.panel({ kind: 'paper', torn: true, title: 'Nothing here yet' },
       mk('p', { class: 'en-none-text', text: what || 'There is no tour to show here.' }),
@@ -656,7 +678,7 @@
   }
 
   // ==================================================================================================================
-  // CHAPTER CLEAR
+  // ACT CLEAR (`chapterClear`)
   // ==================================================================================================================
   // what RUN.chapterEnd did to each hero, as a plan for the animation (RUN has already applied it: R.heroes holds the AFTER values)
   function healPlan(R, params) {
@@ -917,7 +939,7 @@
   }
 
   function tapRecap(S, sm, R) {
-    // a compact recap: a fan of the deck (tap to open it) and the treasures (tap to read them)
+    // a compact recap: a fan of the deck (tap to open it) and the Charms (tap to read them)
     const deck = (R && Array.isArray(R.deck)) ? R.deck : [];
     const relics = (sm.relics && sm.relics.length ? sm.relics : (R && R.relics) || []).slice();
     const fan = mk('div', { class: 'go-fan', role: 'group', 'aria-label': 'Deck' });
@@ -969,7 +991,7 @@
         mk('h1', { class: 'go-title', text: lore ? lore.title : 'The Show Must Go On' }),
         mk('p', { class: 'go-fell', text: 'Curtain fell in Act ' + U.roman(ch) + (chTitle ? ': ' + chTitle : '') + (sm.trial ? '  |  Encore ' + sm.trial : '') + (sm.daily ? '  |  Daily Duet' : '') })));
 
-      // ---- left: the fallen, and what the tale kept
+      // ---- left: the fallen, and what the tour kept
       // the party fell: RUN keeps the last HP of a lost fight, but the page shows them as they ended, at 0
       const fallen = mk('div', { class: 'go-fallen' }, ...(sm.heroes || []).map((h) => UI.heroBadge(h.id, { size: 'md', hp: 0, maxHp: h.maxHp | 0 })));
       root.appendChild(mk('div', { class: 'go-left' }, fallen, tapRecap(S, sm, R)));
@@ -981,11 +1003,17 @@
       again.classList.add('go-again');
       const title = UI.btn('Title', { kind: 'secondary', size: 'lg', onclick: () => toTitle(S) });
       title.classList.add('go-title-btn');
+      // a slim ghost row under Try Again and Title (HV_STORY 5.4): Share and Follow the duo, never Support (a lost tour is no time to ask, principle 3)
+      const share = shareBtn({ kind: 'ghost', size: 'sm' });
+      share.classList.add('go-share');
+      const follow = followBtn({ kind: 'ghost', size: 'sm' });
+      follow.classList.add('go-follow-btn');
       root.appendChild(mk('div', { class: 'go-mid' }, loreCard,
         tip ? mk('p', { class: 'go-tip' }, UI.hanko('TIP', { size: 'sm' }), mk('span', { text: tip })) : null,
-        mk('div', { class: 'go-btns' }, again, title)));
+        mk('div', { class: 'go-btns' }, again, title),
+        mk('div', { class: 'go-follow' }, share, follow)));
 
-      // ---- right: the score ledger, then Inkstones and what is new
+      // ---- right: the score ledger, then Cheers and what is new
       const led = ledger(S, sm, R, { delay: 1000, seal: 'FIN' });
       const scoreCard = lacquerSplit('go-score', 'Final Score', [led.list], led.total);
       const stones = mk('div', { class: 'go-stones' });
@@ -1156,8 +1184,8 @@
         const px = -130 + (CAST_X[i] + 130) * ease.outCubic(k);
         const arrived = k >= 1;
         const pose = !arrived ? 'walk' : inParty ? 'cheer' : 'idle';
-        artHero(ctx, id, { x: px, y: 578, s: inParty ? 1.0 : 0.94, pose, t, pt: Math.max(0, pt - t0 - travel), alpha: 1 });
-        if (arrived && pt - t0 - travel < 0.7 && typeof ART !== 'undefined' && ART && ART.fx && isFn(ART.fx.sparkle)) safe(() => ART.fx.sparkle(ctx, { x: px, y: 452, s: 1.8, seed: i + 3, color: DATA.heroes[id] ? DATA.heroes[id].color : HV.cream }, (pt - t0 - travel) / 0.7));
+        artHero(ctx, id, { x: px, y: 556, s: inParty ? 1.0 : 0.94, pose, t, pt: Math.max(0, pt - t0 - travel), alpha: 1 });          // 22 px higher than the boxes' old top: they moved up to leave the credit line a strip below them
+        if (arrived && pt - t0 - travel < 0.7 && typeof ART !== 'undefined' && ART && ART.fx && isFn(ART.fx.sparkle)) safe(() => ART.fx.sparkle(ctx, { x: px, y: 430, s: 1.8, seed: i + 3, color: DATA.heroes[id] ? DATA.heroes[id].color : HV.cream }, (pt - t0 - travel) / 0.7));
       });
     }
   }
@@ -1209,8 +1237,10 @@
     go.classList.add('vc-cast-go');
     const skip = UI.btn('Skip', { kind: 'ghost', onclick: () => gotoPhase(S, 'show') });
     skip.classList.add('vc-cast-skip');
-    root.appendChild(head); root.appendChild(caps); root.appendChild(go); root.appendChild(skip);
-    x.nodes.push(head, caps, go, skip);
+    // the closing credit (HV_STORY 3.5): one small plain line under the four curtain lines, no buttons and no links here (the follow row belongs to the showcase)
+    const credit = mk('p', { class: 'vc-credit', text: HANDLE_LINE });
+    root.appendChild(head); root.appendChild(caps); root.appendChild(credit); root.appendChild(go); root.appendChild(skip);
+    x.nodes.push(head, caps, credit, go, skip);
     atPhase(S, (0.4 + 3 * 1.05 + 1.6) * 1000, () => root.classList.add('vc-cast-done'));
     snd('page_turn');
   }
@@ -1232,9 +1262,11 @@
     copy.classList.add('vc-copy');
     const save = UI.btn('Save card', { kind: 'secondary', onclick: () => saveCard(S, canvas) });
     save.classList.add('vc-save');
-    const cardWrap = mk('div', { class: 'vc-cardwrap' }, canvas, mk('div', { class: 'vc-cardbtns' }, copy, save));
+    const share = shareBtn({ kind: 'secondary' });
+    share.classList.add('vc-share');
+    const cardWrap = mk('div', { class: 'vc-cardwrap' }, canvas, mk('div', { class: 'vc-cardbtns' }, copy, save, share));
 
-    // inkstones (beside Continue) and what is new
+    // Cheers (beside Continue) and what is new
     const foot = mk('div', { class: 'vc-foot' });
     const list = mk('div', { class: 'en-unlocks' });
     if (rec) {
@@ -1271,7 +1303,10 @@
     go.classList.add('vc-go');
     foot.appendChild(go);
     const right = mk('div', { class: 'vc-right' }, scoreCard, statRow, foot);
-    const left = mk('div', { class: 'vc-left' }, cardWrap, stonesCard);
+    // under the Newly Unlocked card, a slim row (HV_STORY 5.4): the handle line, Follow the duo (opens the sheet) and, once the owners set a URL, Support the duo
+    const followRow = mk('div', { class: 'vc-follow' }, mk('p', { class: 'vc-follow-line', text: HANDLE_LINE }),
+      mk('div', { class: 'vc-follow-btns' }, followBtn({ kind: 'ghost', size: 'sm', class: 'vc-follow-btn' }), supportBtn('vc-support')));
+    const left = mk('div', { class: 'vc-left' }, cardWrap, stonesCard, followRow);
     root.appendChild(head); root.appendChild(left); root.appendChild(right);
     x.nodes.push(head, left, right);
     snd('level_up');

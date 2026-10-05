@@ -1,4 +1,4 @@
-// Treasure: the 66 relics (js/data_relics.js), the 24 gems (js/data_gems.js) and the 12 junk cards (js/data_cards_shared.js).
+// Charms: the 66 relics (js/data_relics.js), the 24 gems (js/data_gems.js) and the 12 junk cards (js/data_cards_shared.js).
 //
 //   node tests/hocus_vocus_treasure.test.mjs
 //
@@ -17,13 +17,13 @@
 //   7 engine      when js/combat.js exists: every gem played in a real combat, every junk card in a real combat, every combat hook
 //                 relic fired through a swapping bot in four scenarios with its effect events checked, a kitchen sink fight with all
 //                 relics, mods and rows reaching the engine. Skipped (with a note) while the engine files are missing.
-//   8 run hooks   when js/run.js and js/map.js exist: pickup, chapter start, paint, rest, shop and fight won hooks through RUN.
+//   8 run hooks   when js/run.js and js/map.js exist: pickup, Act start, paint, rest, shop and fight won hooks through RUN.
 //
 // ROUGH VALUE MODEL (block 4). Points are "damage equivalents" for one play of the card the gem sits on:
 //   flat damage 1.3 per point (a card averages a bit more than one hit), Block 1, healing 1.4 per HP (HP lasts across fights; a gem with both
 //   flat Block and flat heal counts the better of the two), an extra
-//   hit 6, one Energy 8 (cost -1 is worth 6.5: it is ignored on 0 cost and X cards), a card drawn 3.5, Might 4, Thorns 2.5, Dodge 3.5,
-//   Ritual 7, gold 0.7, Ink 3, a pick from the discard pile 5, a resource point 3 (a list of conditions counts as its best branch), Retain 2.5, losing Exhaust 3, Poison 1.8; a splash
+//   hit 6, one Energy 8 (cost -1 is worth 6.5: it is ignored on 0 cost and X cards), a card drawn 3.5, Volume 4, Feedback 2.5, Shimmy 3.5,
+//   Crescendo 7, gold 0.7, Vox 3, a pick from the discard pile 5, a resource point 3 (a list of conditions counts as its best branch), Hold 2.5, losing Fade 3, Earworm 1.8; a splash
 //   op counts x1.8 (two victims), Block for both heroes x2, life steal adds 0.7 per point; a row gated gem is worth 75 percent of its raw value.
 //   BANDS: tier 1 in [2, 5.5], tier 2 in [5, 10.5], tier 3 in [6.5, 16]; per colour the tier means must climb by at least 1.4 a tier.
 //   The model is deliberately crude: it exists to catch a typo that makes a gem twice as strong or a tier that is not an upgrade.
@@ -424,7 +424,7 @@ t.test('gem power ladder: tier 1 is a solid small bonus, tier 2 a real upgrade, 
     t.ok(mean(vs[2]) - mean(vs[1]) >= 1.4, `${c}: tier 3 mean ${mean(vs[2]).toFixed(1)} beats tier 2 mean ${mean(vs[1]).toFixed(1)} by at least 1.4`);
     t.ok(Math.min(...vs[2]) > Math.max(...vs[0]), `${c}: the weakest tier 3 gem out-values the best tier 1 gem`);
   });
-  // tier 3 changes what a card is for: an fx group, a cost cut, Energy, a Ritual or a paired row effect, never just a bigger number
+  // tier 3 changes what a card is for: an fx group, a cost cut, Energy, a Crescendo or a paired row effect, never just a bigger number
   gems.filter((g) => g.tier === 3).forEach((g) => t.ok(g.mod.fx || g.mod.cost || g.mod.energy || (g.mod.status && g.mod.status.n >= 3) || (g.mod.status && g.mod.status.s === 'ritual') || (g.mod.hits && g.mod.cond) || (g.mod.draw && g.mod.status), `${g.id}: a tier 3 gem changes the card's role`));
   gems.filter((g) => g.tier === 1).forEach((g) => t.ok(Object.keys(g.mod).length <= 2 && !g.mod.cost, `${g.id}: a tier 1 gem is one plain bonus`));
 });
@@ -445,7 +445,7 @@ t.test('gem text: generated text is readable for every gem, and a hand written t
 });
 
 // ================================================================================================ 5 gems on cards
-// Probe cards (added after the validator tests above ran): one per card type, a free card, an X card, an Exhaust card.
+// Probe cards (added after the validator tests above ran): one per card type, a free card, an X card, an Fade card.
 const PROBE = (hero, over) => Object.assign({ hero, type: 'attack', rarity: 'common', cost: 1, kw: [], slots: ['any'], art: { m: 'slash', c: 'rose' }, fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }], up: { fx: [{ op: 'dmg', n: 9, tgt: 'enemy' }] } }, over);
 function addProbes(D, hero) {
   const defs = {};
@@ -921,14 +921,14 @@ if (RB) {
     { const R = NEW(); RUN.addRelic(R, 'paper_umbrella'); t.eq(R.deck.length, 10, 'a mod relic changes nothing on pickup'); t.eq(RUN.mods(R).startBlock, 1, 'paper_umbrella is in the run mods'); }
   });
 
-  t.test('run hooks: onChapterStart relics fire when a chapter starts, not before', () => {
+  t.test('run hooks: onChapterStart relics fire when an Act starts, not before', () => {
     const control = NEW(); RUN.startChapter(control, 2);
     { const R = NEW(); const p0 = paintedN(R); RUN.addRelic(R, 'brass_lantern'); t.eq(paintedN(R), p0, 'brass_lantern: nothing on pickup'); RUN.startChapter(R, 2); t.eq(paintedN(R) - paintedN(control), 2, 'brass_lantern: 2 hexes painted for free when the chapter opens'); t.eq(R.ink, control.ink, 'brass_lantern: and they cost no Ink'); }
     { const R = NEW(); RUN.addRelic(R, 'sable_brush'); t.eq(R.brushes.length, 1, 'sable_brush: nothing on pickup'); RUN.startChapter(R, 2); t.eq(R.brushes.length, 2, 'sable_brush: a Brush at chapter start'); RUN.startChapter(R, 3); t.eq(R.brushes.length, 3, 'sable_brush: and again every chapter'); }
     { const R = NEW(); RUN.addRelic(R, 'sable_brush'); RUN.addRelic(R, 'brass_lantern'); const r = RUN.startChapter(R, 2); t.ok(r.log.filter((x) => x.op === 'relic').length === 2, 'both chapter hooks report'); }
   });
 
-  t.test('run hooks: onPaint relics refund Ink on every Nth hex, counted over the whole run', () => {
+  t.test('run hooks: onPaint relics refund Vox on every Nth hex, counted over the whole run', () => {
     { const R = NEW(); RUN.addRelic(R, 'pilgrim_compass'); const ink0 = R.ink; for (let i = 0; i < 4; i++) t.ok(paintOne(R).ok, `paint ${i + 1}`); t.eq(R.ink, ink0 - 4, 'pilgrim_compass: no refund on the first 4'); paintOne(R); t.eq(R.ink, ink0 - 5 + 1, 'pilgrim_compass: the 5th hex refunds 1 Ink'); for (let i = 0; i < 5; i++) paintOne(R); t.eq(R.ink, ink0 - 10 + 2, 'pilgrim_compass: and the 10th'); }
     { const R = NEW(); RUN.addRelic(R, 'plum_pendant'); const ink0 = R.ink; for (let i = 0; i < 6; i++) paintOne(R); t.eq(R.ink, ink0 - 6 + 2, 'plum_pendant: every 3rd hex refunds 1 Ink'); RUN.startChapter(R, 2); const ink1 = R.ink; paintOne(R); paintOne(R); paintOne(R); t.eq(R.ink, ink1 - 3 + 1, 'plum_pendant: the count carries over into the next chapter (6 painted, the 9th refunds)'); }
     { const R = NEW(); RUN.addRelic(R, 'plum_pendant'); RUN.addRelic(R, 'pilgrim_compass'); const ink0 = R.ink; for (let i = 0; i < 15; i++) paintOne(R); t.eq(R.ink, ink0 - 15 + 5 + 3, 'both refunds stack (15 hexes: 5 and 3)'); }

@@ -40,7 +40,7 @@
 //   ART.scene.lastError -> string | null  the message of the last caught drawing error (tests assert it stays null)
 //   ART.scene.DESIGN = {w: 1280, h: 720, ground: 520}
 //   Gallery sheets: `scenes` (all of them small, in a grid), `scene_<id>` for every id (large; params guides=1 draws the ground line and HUD
-//   zones, actors=1 stands the heroes and a chapter's enemies on their marks, px=N sets parallaxX, particles=N, rung=1), `logo` (the stacked logo,
+//   zones, actors=1 stands the heroes and an Act's enemies on their marks, px=N sets parallaxX, particles=N, rung=1), `logo` (the stacked logo,
 //   the RJ monogram at five sizes, the one-line logo on a poster, small logos over one loop), `title_anim` (a film strip of the title over t).
 //
 // HOW IT IS BUILT
@@ -203,9 +203,9 @@
     let a = L.alpha === undefined ? 1 : (typeof L.alpha === 'function' ? L.alpha(T) : L.alpha);
     if (!(a > 0.003)) return;
     const spr = layerSprite(L, rr, T);
-    const rot = L.rot ? L.rot(T) : 0;                              // a layer may swing about a pivot (the title bell)
+    const rot = L.rot ? L.rot(T) : 0;                              // a layer may swing about a pivot
     if (rot) { const px = L.pivot[0] - T.par * f, py = L.pivot[1]; ctx.save(); ctx.translate(px, py); ctx.rotate(rot); ctx.translate(-px, -py); }
-    let y = rr.y + (L.bob ? Math.sin(T.tt * L.bob[1] + (L.bob[2] || 0)) * L.bob[0] : 0) + (L.dy ? num(L.dy(T), 0) : 0);   // dy(T): a layer may hop (the treasure box)
+    let y = rr.y + (L.bob ? Math.sin(T.tt * L.bob[1] + (L.bob[2] || 0)) * L.bob[0] : 0) + (L.dy ? num(L.dy(T), 0) : 0);   // dy(T): a layer may hop (the Gift Box)
     const op = L.add ? 'lighter' : L.op;
     if (op) { ctx.save(); ctx.globalCompositeOperation = op; }
     if (L.scroll) {
@@ -259,7 +259,7 @@
 
 
   // ---------------------------------------------------------------------------------------------------------------
-  // scenery painters: bamboo, leaves, clouds, torii, grass. Design space, cel-shaded with the house ink line where they are near.
+  // scenery painters: `bamboo`, leaves, clouds, `torii`, grass. Design space, cel-shaded with the house ink line where they are near.
   // ---------------------------------------------------------------------------------------------------------------
   // y of a polyline ridge at x (linear interpolation)
   function ridgeY(pts, x) {
@@ -377,7 +377,7 @@
     }
   }
 
-  // a torii gate: x centre, y ground, s width. Vermilion pillars, black kasagi. o.col base colour, o.alpha, o.line
+  // a `torii` gate: x centre, y ground, s width. Vermilion pillars, black kasagi. o.col base colour, o.alpha, o.line
   function torii(g, x, y, s, o) {
     o = o || {};
     const col = o.col || '#e8383d', sh = o.shade || shd(col), w = s, h = s * 0.86, pw = s * 0.075, ga = g.globalAlpha;
@@ -602,7 +602,7 @@
     }, { q: 0.5, add: true, fx: true, alpha: (T) => a * (1 + 0.25 * Math.sin(T.tt * 0.6 + (o.phase || 0))) });
   }
 
-  // A hard ink frame: dry-brush strokes along the four edges, ink splashes in the corners and a soft radial vignette. For the boss scenes.
+  // `inkFrame`: a hard ink frame, dry-brush strokes along the four edges, ink splashes in the corners and a soft radial vignette. For the boss scenes.
   function inkFrame(name, o) {
     o = o || {};
     return layer(name, full(0), 0, (g) => {
@@ -619,7 +619,7 @@
       g.restore();
     }, { q: 0.55 });
   }
-  // colour grade for a boss scene: a multiply layer (dark, tinted), radial speed lines behind the boss lane, rising embers, and the ink frame
+  // colour grade for a boss scene: a multiply layer (dark, tinted), radial speed lines behind the boss lane, rising embers, and the `inkFrame`
   function bossOverlay(sk, o) {
     const cx = o.cx || 1100, cy = o.cy || 330;
     return [

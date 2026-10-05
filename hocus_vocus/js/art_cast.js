@@ -1,5 +1,5 @@
-// Hocus Vocus: the chibi cast (ART.rj figures), the ART.hero adapter and ART.cast. Loaded after art_cast_kit.js, in the slot the Echowake
-// heroes held (before art_enemies_1.js). Ported from the owners' approved drawings in tools/hocus_vocus/rj_art/ (roxor.js, jasmin.js, crew.js).
+// Hocus Vocus: the chibi cast (ART.rj figures), the ART.hero adapter and ART.cast. Loaded after art_cast_kit.js, in the slot the original
+// hero art held (before art_enemies_1.js). Ported from the owners' approved drawings in tools/hocus_vocus/rj_art/ (roxor.js, jasmin.js, crew.js).
 //
 // THE FIGURES (cast ids; HV_ART_AUDIO 2.4)
 //   roxor, roxor_monster      RoxorLoops (hero kuro): stage clothes and the Monster Onesie (hood eyes and horns, bible 7.1)
@@ -11,7 +11,7 @@
 //   2.5); a figure without a table falls back (RJ.FALLBACK). Each figure block keeps its palette object at the top, so a correction is a
 //   colour or a shape swap, not a rewrite.
 //
-// THE ART.hero CONTRACT (DESIGN 5.6, HV_ART_AUDIO 2.3: every call site of the Echowake heroes keeps working)
+// THE ART.hero CONTRACT (DESIGN 5.6, HV_ART_AUDIO 2.3: every call site of the original hero art keeps working)
 //   ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow, shadow, skin?, gloss?, cache?, expr?})
 //        (x, y) is the feet centre, nominal height 250 * s (hair may rise above: bounds.top), faces right, flip mirrors. pose is one of
 //        LISTS.poses; pt (seconds since the pose began) drives the one-shot timelines below and holds the last key; t (absolute seconds) drives
@@ -2102,7 +2102,7 @@
   castJasmin();
   castCrew();
   // =====================================================================================================================================
-  // THE ART.hero ADAPTER (HV_ART_AUDIO 2.3): the Echowake hero contract (every member, every call site unchanged), drawn with the cast
+  // THE ART.hero ADAPTER (HV_ART_AUDIO 2.3): the original hero contract (every member, every call site unchanged), drawn with the cast
   // =====================================================================================================================================
   const tk = ART.tk;
   const TAU = Math.PI * 2, PI = Math.PI;

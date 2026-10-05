@@ -3,7 +3,7 @@
    and rarity, gem sockets, the Breath puff orb, stat pills, toasts, modals, overlays, form controls, the rotate panel and the
    reduced-motion, colorblind and low-quality overrides. Everything is CSS and inline SVG data URIs: no external assets.
    The look (HV_ART_AUDIO 9): candy pink and green stickers on the deep indigo night, a warm brown chibi outline, cream rims.
-   Every old token (the Echowake names) stays defined with its old value because other stylesheets and the palette mirror in
+   Every inherited token (the names the fork started with) stays defined with its original value because other stylesheets and the palette mirror in
    js/art.js read them; the hv* and gloss* tokens below are the new skin and are the ones the components use.
    Other screens' stylesheets (menu, map, combat, node, end) build on the classes and custom properties defined here.
 
@@ -588,6 +588,69 @@ body.low #stage::after, body.low #wrap::before { display: none; }
 body.low .shine::after, body.low .c-costfx, body.low .relic::after { animation: none; }
 body.low .overlay { backdrop-filter: none; }
 body.low .card.up > .c-in { filter: none; }
+
+/* ------------------------------------------------------------------------------------------------ follow the duo (HV_STORY 5; UI.followPanel)
+   The links are text pills with a small dot that alternates Jasmin pink and RoxorLoops green (no platform logos). Share is an ordinary .btn, Support the duo
+   is a primary .btn pill with the heart. Every control keeps the --hit target and an 8 stage px gap. The anchors take pointer events themselves because the
+   screen layers do not (only buttons and panels do, DESIGN 5.8). Modes: .hv-sheet (inside the modal), .hv-tab (the Tour Bus), .hv-strip and .hv-gameover (slim rows). */
+.hv-follow { --hv-cols: 3; display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0; text-align: center; pointer-events: auto; }
+.hv-follow.hv-tab { --hv-cols: 5; gap: 12px; }
+.hv-follow a { text-decoration: none; pointer-events: auto; }
+.hv-follow-h { margin: 0; font: 800 calc(22px * var(--ts)) / 1.15 var(--font-display); letter-spacing: .06em; color: var(--hv-pink-l); text-shadow: 0 2px 0 var(--ink); }
+.panel.p-paper .hv-follow-h { color: var(--hv-pink-dd); text-shadow: none; }
+.hv-duo { display: block; margin: 0 auto; }
+.hv-duo-faces { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.hv-handle { margin: 0; font: 600 calc(15px * var(--ts)) / 1.4 var(--font-ui); }
+.hv-about-short { display: none; margin: 0; font: italic 500 calc(14px * var(--ts)) / 1.4 var(--font-display); opacity: .85; }
+.hv-nolinks { margin: 0; font: italic 600 calc(15px * var(--ts)) / 1.4 var(--font-display); opacity: .85; }
+.hv-links { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 8px; width: 100%; margin: 0; padding: 0; }
+.hv-link {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .55em; flex: 0 1 calc((100% - (var(--hv-cols) - 1) * 8px) / var(--hv-cols));
+  min-width: var(--hit); min-height: var(--hit); padding: .35em 1em; margin: 0; box-sizing: border-box;
+  font: 800 calc(16px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .04em; white-space: nowrap; color: var(--hv-line); cursor: pointer;
+  background: var(--hv-cream-bg); border: 2.5px solid var(--hv-line); border-radius: 999px;
+  box-shadow: inset 0 0 0 2px #fff, var(--hv-sticker); transition: transform .12s var(--ease-out), box-shadow .12s, filter .12s;
+}
+.hv-link:hover { transform: translateY(-2px); filter: brightness(1.04); }
+.hv-link:active { transform: translateY(3px); filter: brightness(.97); transition-duration: .04s; box-shadow: inset 0 0 0 2px #fff, 0 0 0 var(--hv-line), 0 2px 4px rgba(10, 6, 30, .4); }
+.hv-dot { flex: none; width: .8em; height: .8em; border-radius: 50%; border: 2px solid var(--hv-line); background: var(--hv-pink); box-shadow: inset 0 -2px 0 rgba(45, 23, 15, .2); }
+.hv-dot.is-green { background: var(--hv-green); }
+.hv-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+a.btn.hv-support { text-decoration: none; }
+.hv-support-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.hv-support-line { margin: 0; font: 600 calc(15px * var(--ts)) / 1.4 var(--font-ui); }
+.hv-about { max-width: 760px; margin: 4px 0 0; font: 500 calc(16px * var(--ts)) / 1.5 var(--font-ui); text-align: left; }
+.hv-jordan { margin: 0; font: italic 500 calc(13px * var(--ts)) / 1.4 var(--font-display); opacity: .75; }
+/* the Tour Bus tab on a wide stage: the portrait on the left, the words beside it, then the pills (5 wide), Share and Support underneath; the DOM order (and so the focus order) is unchanged */
+.hv-follow.hv-tab { display: grid; grid-template-columns: 340px minmax(0, 1fr); align-items: center; column-gap: 24px; row-gap: 8px; text-align: left; }
+.hv-tab > .hv-duo { grid-column: 1; grid-row: 1 / span 4; justify-self: center; }
+.hv-tab > .hv-follow-h { grid-column: 2; grid-row: 1; align-self: end; }
+.hv-tab > .hv-handle { grid-column: 2; grid-row: 2; }
+.hv-tab > .hv-about { grid-column: 2; grid-row: 3; max-width: none; margin: 0; }
+.hv-tab > .hv-jordan { grid-column: 2; grid-row: 4; align-self: start; }
+.hv-tab > .hv-links, .hv-tab > .hv-nolinks { grid-column: 1 / -1; grid-row: 5; }
+.hv-tab > .hv-nolinks { text-align: center; }
+.hv-tab > .hv-acts { grid-column: 1 / -1; grid-row: 6; justify-self: center; }
+.hv-tab > .hv-support-wrap { grid-column: 1 / -1; grid-row: 7; justify-self: center; }
+.hv-follow.hv-strip, .hv-follow.hv-gameover { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px 12px; }
+.hv-strip .hv-follow-h, .hv-gameover .hv-follow-h { font-size: calc(17px * var(--ts)); }
+.hv-strip .hv-handle, .hv-gameover .hv-handle { font-size: calc(14px * var(--ts)); }
+.hv-strip .hv-links, .hv-gameover .hv-links { width: auto; }
+.hv-strip .hv-link, .hv-gameover .hv-link { flex: 0 0 auto; font-size: calc(14px * var(--ts)); padding: .3em .9em; }
+#stage.compact .hv-link { font-size: max(calc(16px * var(--ts)), var(--fs9)); }
+#stage.compact .hv-strip .hv-link, #stage.compact .hv-gameover .hv-link { font-size: max(calc(14px * var(--ts)), var(--fs9)); }
+#stage.compact .hv-handle, #stage.compact .hv-support-line, #stage.compact .hv-nolinks { font-size: max(calc(14px * var(--ts)), var(--fs8)); }
+#stage.compact .hv-jordan, #stage.compact .hv-about-short { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
+/* a portrait phone ("Play anyway", the stage near 0.3): two columns of pills, the one-line about under the portrait, and --hit capped like the menu screens so nothing is pushed off the page */
+@media (orientation: portrait) and (max-width: 500px) {
+  .hv-follow, .hv-follow.hv-tab { --hv-cols: 2; --hit: 58px; }
+  .hv-follow.hv-tab { display: flex; text-align: center; }
+  .hv-tab > .hv-jordan { order: 99; }
+  .hv-tab > .hv-about { text-align: left; }
+  .hv-about-short { display: block; }
+  .hv-duo:not(.hv-duo-faces) { width: auto !important; height: 88px !important; }   /* the portrait keeps its proportions but gives the room to the buttons */
+  .hv-strip .hv-link, .hv-gameover .hv-link { flex: 0 0 auto; }
+}
 
 /* ------------------------------------------------------------------------------------------------ placeholder screens, pause panel and the debug gallery (main.js) */
 .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; text-align: center; }

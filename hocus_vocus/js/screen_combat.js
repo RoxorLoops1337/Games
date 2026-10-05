@@ -1,10 +1,10 @@
-// Echowake: the combat screen (owner: combat screen engineer). DESIGN 5.8 (card interaction, HUD zones), 5.9 (the presentation pipeline) and
+// Hocus Vocus: the combat screen (owner: combat screen engineer). DESIGN 5.8 (card interaction, HUD zones), 5.9 (the presentation pipeline) and
 // ART_BIBLE 8 (HUD look). This header is the contract of record for js/screen_combat.js; the look lives in css/combat.css (every rule is .cm / .cm-*).
 //
 // ENTRY   UI.screens.combat, params {node, R}. GAME passes both (R defaults to UI.run, node to R.node; `debug` is set by GAME.debug.open). enter builds
-//   COMBAT.create(RUN.combatInit(R, node)), the DOM inside `root`, mounts SCENE, waits a beat for the ink transition, then drains C.start(). The screen
-//   is entered through the ink bloom (`transition: 'ink'`, which prints a tip). Music: combat<chapter>, elite, boss<chapter>, and `final` when the
-//   Editor enters its last phase; AUDIO.intensity(clamp(fallen share + 0.25 per boss phase)) after every batch, reset to 0 at leave.
+//   COMBAT.create(RUN.combatInit(R, node)), the DOM inside `root`, mounts SCENE, waits a beat for the sparkle swirl, then drains C.start(). The screen
+//   is entered through the sparkle swirl (`transition: 'ink'`, which prints a tip). Music: combat<chapter>, elite, boss<chapter>, and `final` when
+//   Flawless (`boss_editor`) enters its last phase; AUDIO.intensity(clamp(fallen share + 0.25 per boss phase)) after every batch, reset to 0 at leave.
 //
 // THE PIPELINE (5.9). Every C action (play, swap, endTurn, resolvePick) returns events; they go into ONE FIFO and are drained one by one:
 //   applyEvent(vm, evt) (pure, uses only what the event carries) -> the affected DOM -> await SCENE.play(evt) (its gate). While draining nothing reads
@@ -16,8 +16,8 @@
 //   fast-forwards (SCENE.flush and SCENE.play gates skipped for the rest of that drain), a watchdog frees a SCENE beat stuck for 6 s of frames,
 //   unmount mid-drain is safe (UI.live checks after every await, leave resolves every waiter), and a throwing SCENE never bricks the fight.
 //
-// WHAT THE SCREEN DRAWS (DOM): top bar (relic strip with tooltips, gold and ink counters, turn label, speed toggle, menu), two hero panels (medallion,
-//   HP bar with an ink-splash lag, Block chip, up to 6 status chips then +N, FRONT/BACK tag with the row bonus, danger vignette), the Swap seal (FREE or its
+// WHAT THE SCREEN DRAWS (DOM): top bar (relic strip with tooltips, gold and Vox counters, turn label, speed toggle, menu), two hero panels (medallion,
+//   HP bar with a trailing lag, Block chip, up to 6 status chips then +N, LEAD/BACKING tag with the spot bonus, danger vignette), the Swap seal (FREE or its
 //   cost, Bind lock), enemy overlays placed once per frame from SCENE.anchor (HP bar 14 px under the feet, Block chip, status chips, intent bubble with
 //   the icon, C.intent number (NxM for multi-hits), applied statuses, summons, cards added, gold stolen, targeted heroes, a tooltip that explains the whole
 //   move, a Stunned bubble and stars, a focusable hit area with the enemy's aria-label), the hand fan (hover lift, rise on select with the big
@@ -25,7 +25,7 @@
 //   deck viewer), Exhausted and Powers chips, the End Turn plaque (glows when nothing is playable, off during the enemy phase), turn banners, the pick
 //   prompt and the victory and defeat cards. Canvas actors, VFX, damage numbers, target rings, the aim arrow, barks and all combat SFX are SCENE's.
 //   Ownership choices made with SCENE: the screen draws the turn banners (SCENE only does with mount({banners:true})); a boss reveal is SCENE.banner(name,
-//   'BOSS') (a champion or a page without SCENE gets a DOM plate); an enemy `say` is left to SCENE.shout when SCENE has it, else a DOM bubble.
+//   'BOSS') (a Rival or a screen without SCENE gets a DOM plate); an enemy `say` is left to SCENE.shout when SCENE has it, else a DOM bubble.
 //   Without SCENE.mount and SCENE.play (missing or broken file) a small built-in stage keeps the fight playable (fallbackScene).
 //
 // INPUT. Tap a card: select (it rises to y 420, the preview opens, SCENE.setTargetable lights the legal targets, every target shows its C.preview number).
@@ -33,7 +33,7 @@
 //   a MOUSE (or keyboard click) plays on the first click (hover already showed the card), while a finger or pen only lifts it on the first tap (the rules
 //   text of a card at rest is below a phone's bottom edge) and plays on a second tap on the card, a tap on the enemy, or a drag released above y 430.
 //   Drag: more than 8 px starts it; no-target cards play when released above y 430, targeting cards aim (SCENE.aim) and play on the enemy they
-//   are released on, anything else returns. Tap empty stage or Esc deselects. Illegal plays: a toast with the reason ("Not enough Energy", "<Hero> is
+//   are released on, anything else returns. Tap empty stage or Esc deselects. Illegal plays: a toast with the reason ("Not enough Breath", "<Hero> is
 //   down", "<Hero> is stunned"...), ui_error and a shake, engine untouched. Keys: 1..9 and 0 select, Left and Right walk cards then targets, Enter plays,
 //   E ends the turn, S swaps, D and G open the piles, Z toggles animation speed, Esc puts a card back (else UI opens the pause menu). Tab walks heroes,
 //   enemies (line order), hand, piles, End Turn. A live region line is written per drained batch.
@@ -92,7 +92,7 @@
   // four chips or three and a +N (122 px); the last lane is only 125 px from its neighbour, so it gets one chip less (106 px and 94 px). The +N chip says
   // how many are hidden and a tap on the foe lists them all.
   // The relic strip has RELIC_SLOTS places (x 12 to 334, 40 px icons 7 px apart, ending 26 px before the gold counter at 360): a bigger purse shows
-  // RELIC_SLOTS - 1 treasures and the +N chip in the last place, so the chip can never reach the counters (finding 18).
+  // RELIC_SLOTS - 1 Charms and the +N chip in the last place, so the chip can never reach the counters (finding 18).
   const HERO_CHIPS = 6, RELIC_SLOTS = 7, ENEMY_CHIPS = { desk: 5, compact: 4 };
   const ROW_CHIP = { desk: { d: 21, more: 31, gap: 4, dig: 3.5 }, compact: { d: 24, more: 38, gap: 4, dig: 5.4 } };   // mirrors combat.css (.en-st .status --d, .cm-more with a one digit count, .cm-st gap, the .n count's overhang)
   const LANE_GAP = [145, 145, 145, 125];                                                          // distance from lane k to lane k+1 (LANE_X)
@@ -354,7 +354,7 @@
 
   function statusLabel(id) { return DATA.statuses[id] ? DATA.statuses[id].name : String(id); }
 
-  // one line per event that matters to a listener; a batch joins them ("Kappa uses Mud Slap. Kappa hits Hanae for 5.")
+  // one line per event that matters to a listener; a batch joins them ("Fussy Foghorn uses Prim Honk. Fussy Foghorn hits Jasmin for 5.")
   function describe(vm, e) {
     const nm = (ref) => { const u = unitOf(vm, ref); return u ? u.name : ref && ref.id ? ref.id : 'Someone'; };
     switch (e.type) {
@@ -396,7 +396,7 @@
 
   // ==================================================================================================================
   // FALLBACK STAGE. SCENE (js/scene.js) is written by another engineer against DESIGN 5.9. If it is missing or broken this small
-  // stand-in keeps the fight playable and readable: it draws the chapter backdrop, the heroes and enemies at the LAYOUT positions in
+  // stand-in keeps the fight playable and readable: it draws the Act backdrop, the heroes and enemies at the LAYOUT positions in
   // their poses, damage numbers, target rings, the aim arrow and barks, and it keeps the same beat gates as the contract so the drain
   // loop behaves identically. It is deliberately plain: real VFX are SCENE's job. It only talks to ART through documented calls.
   // ==================================================================================================================
@@ -617,7 +617,7 @@
     return { el, lag, fill, txt, pct: undefined, hp: undefined };
   }
 
-  // the fill jumps, the ink-splash lag trails behind on damage (CSS delay) and follows at once on healing
+  // the fill jumps, the lag trail follows behind on damage (CSS delay) and follows at once on healing
   function setBar(b, hp, max, animate) {
     const pct = max > 0 ? clamp((hp / max) * 100, 0, 100) : 0;
     const prev = b.pct;
@@ -787,7 +787,7 @@
     else if (cs.reason === 'energy') reason = 'Not enough Breath to swap';
     else if (cs.reason === 'phase') reason = 'Wait for your turn';
     else if (cs.reason === 'pending') reason = 'Finish your choice first';
-    // "disabled" is for a reason the player can read (Bind, one hero standing, no Energy, not your turn, a pending pick): UI.setDisabled, which the
+    // "disabled" is for a reason the player can read (Tangled, one hero standing, no Breath, not your turn, a pending pick): UI.setDisabled, which the
     // tutorial also reads to decide whether a swap hint teaches a move that exists. A beat that is merely animating dims the seal (class busy) and a tap
     // on it fast-forwards (swapClicked), but it is not a refusal, so a hint raised at the start of the turn is not dropped while the cards are still dealt.
     UI.setDisabled(s.el, !cs.ok, reason || 'Wait a moment');
@@ -1218,7 +1218,7 @@
     t.el.classList.toggle('over', vm.phase === 'over');
   }
 
-  // a brush-stroke plaque that sweeps through the middle: YOUR TURN, ENEMY TURN
+  // a plaque that sweeps through the middle: YOUR TURN, ENEMY TURN
   function banner(text, cls, ms) {
     const b = S.ui.banner;
     b.textContent = '';
@@ -2119,7 +2119,7 @@
     root.classList.add('cm');
     root.style.setProperty('--dock-cy', DOCK_CY + 'px');
 
-    // ---- top bar (y 0..56): relic strip left, gold and ink, the turn label in the centre, speed and menu on the right
+    // ---- top bar (y 0..56): relic strip left, gold and Vox, the turn label in the centre, speed and menu on the right
     const top = mk('div', { class: 'cm-top' });
     u.relics = tut(mk('div', { class: 'cm-relics', role: 'list', 'aria-label': 'Charms' }), 'relics');
     const ids = (R.relics || []).filter((id) => DATA.relics[id]);
@@ -2196,7 +2196,7 @@
   }
 
   // The boss reveal is SCENE's own banner (name, title, impact frame, the boss rising to its buff pose): the screen asks for it and waits for it.
-  // Without the real SCENE, and for champions (SCENE has no banner for them), a DOM plate does the same job. Returns how long to wait, in ms.
+  // Without the real SCENE, and for Rivals (SCENE has no banner for them), a DOM plate does the same job. Returns how long to wait, in ms.
   function showReveal(me) {
     const C = me.C;
     const boss = C.enemies.find((e) => e.tier === 'boss') || C.enemies.find((e) => e.tier === 'elite') || C.enemies[0];
@@ -2225,7 +2225,7 @@
 
   async function runIntro(me) {
     const C = me.C, debug = !!(me.params && me.params.debug);
-    if (!debug) await wait(me, 420);                       // let the ink transition settle before the first beat
+    if (!debug) await wait(me, 420);                       // let the sparkle swirl settle before the first beat
     if (S !== me || !me.live()) return;
     if (C.tier === 'boss' || C.tier === 'elite') {
       const ms = showReveal(me);

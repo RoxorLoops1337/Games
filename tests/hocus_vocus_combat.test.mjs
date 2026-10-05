@@ -2549,7 +2549,7 @@ t.test('real content: every enemy and every encounter fights to a finish under t
   const groups = [];
   enemyIds.forEach((id) => groups.push({ label: 'solo ' + id, enemies: [id], tier: D.enemies[id].tier === 'minion' ? 'normal' : D.enemies[id].tier, chapter: D.enemies[id].chapter }));
   const enc = D.encounters || {};
-  // a chapter's entry per tier is a list of groups { id, enemies }; a boss entry is just the boss enemy id (covered as a solo fight above)
+  // an Act's entry per tier is a list of groups { id, enemies }; a boss entry is just the boss enemy id (covered as a solo fight above)
   Object.keys(enc).forEach((ch) => Object.keys(enc[ch] || {}).forEach((tier) => { if (Array.isArray(enc[ch][tier])) enc[ch][tier].forEach((g) => { if (g && (g.enemies || []).length && g.enemies.every((e) => D.enemies[e])) groups.push({ label: `ch${ch} ${tier} ${g.id}`, enemies: g.enemies, tier, chapter: +ch }); }); }));
   const problems = []; let wins = 0, losses = 0, capped = 0, runs = 0, intents = 0;
   groups.forEach((g) => {

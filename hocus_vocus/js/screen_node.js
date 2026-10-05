@@ -1,4 +1,4 @@
-// Echowake: node screens (owner: node screens engineer). One IIFE that registers into UI: the screens `reward`, `shop`, `event`,
+// Hocus Vocus: node screens (owner: node screens engineer). One IIFE that registers into UI: the screens `reward`, `shop`, `event`,
 // `camp`, `forge`, `chest`, `gemcache` and the overlays `deck` (replacing the basic viewer of ui.js) and `cardPick`. Styles live in
 // css/node.css (classes nk-* shared, rw-* reward, sh-* shop, ev-* event, cp-* camp, fg-* forge, ch-* chest, gc-* gem cache, dk-* deck
 // overlay, pk-* card pick, all scoped under .s-NAME or .o-NAME). This header is the contract of record for screen_node.js.
@@ -6,25 +6,25 @@
 // SCREENS (DESIGN 5.11, 6). Every screen takes params {node, R}; reward takes {rewards, source, node, R} exactly as GAME.enterNode
 // passes them. R falls back to UI.run and node to R.node. Every stateful action goes through RUN, and every page ends in GAME.nodeDone()
 // (the ONLY GAME calls in this file besides GAME.enterNode for a fight an event starts, and UI.toTitle on the "no run" page).
-//   reward    Ledger of what was simply earned (gold, ink, max HP, a gem, a brush) that counts up, three cards dealt face down then flipped,
+//   reward    Ledger of what was simply earned (gold, Vox, max HP, a gem, a Spell) that counts up, three cards dealt face down then flipped,
 //             pick one (or Skip: needs a second tap), a relic panel for an elite (take or leave it), a relic page of three for a boss
 //             and then the card page. RUN.claim is single-shot, so the page collects every decision and claims ONCE, when all are made
 //             (rewards.claimed). Number keys pick a card. Continue calls GAME.nodeDone.
-//   shop      A peddler with a speech bubble and moods (hello, buy, poor, sold, leave, empty), a shelf of cards (price tags, sale
-//             stickers, SOLD stamps) and plaques for gems, relics and a brush, card removal (deck overlay, remove mode, rising price)
+//   shop      Jordan with a speech bubble and moods (hello, buy, poor, sold, leave, empty), a shelf of cards (price tags, sale
+//             stickers, SOLD stamps) and plaques for gems, relics and a Spell, card removal (deck overlay, remove mode, rising price)
 //             and free gem cutting. Buys go through RUN.shopBuy and RUN.shopRemove. Keys 1..5 buy the n-th card.
-//   event     A storybook page: plate (ART.scene.draw of the event's scene), typewriter text (tap or Enter completes it), the choices
+//   event     A Detour board: plate (ART.scene.draw of the event's scene), typewriter text (tap or Enter completes it), the choices
 //             revealed after the text with locks and reasons, then the outcome text with a chip per change (a tap or Enter finishes that text too), and
 //             Continue (it takes the focus; Enter or Space press it). A gamble that ends in a fight hands the real combat node to GAME.enterNode.
-//             Keys 1..9 choose the n-th VISIBLE choice, and only once the choices are up. A missing fable shows a blank page with a way on.
+//             Keys 1..9 choose the n-th VISIBLE choice, and only once the choices are up. A missing Detour shows an empty board with a way on.
 //   camp      A bonfire scene, four tiles (Rest with the exact heal previewed, Sharpen, Cut Gems, Meditate), a fire meter for the actions
 //             left (min(3, mods.campActions + flags.extraCampActions)), DONE/OPEN/EMBERS badges, hero poses. Keys 1..4. "Break camp"
 //             asks a second time when nothing was used. Cut Gems stays open all visit.
 //   forge     Two plaques, Sharpen a Card (deck overlay in upgrade mode, then before and after on the anvil, then Strike: three hammer
 //             blows, sparks, RUN.forgeAction) or Cut Gems (socket overlay through onSocket, as often as you like). One upgrade OR gem
 //             cutting per visit. Keys 1 and 2.
-//   chest     A shut chest (tap it, press the button, or Enter), the lid lifts, the gold counts up, and the loot is a relic (Take the
-//             treasure or Just the gold), a choice of three gems, or only gold. RUN.take.
+//   chest     A shut gift box (tap it, press the button, or Enter), the lid lifts, the gold counts up, and the loot is a Charm (Take the
+//             Charm or Just the gold), a choice of three gems, or only gold. RUN.take.
 //   gemcache  Three gems on offer, tap to weigh one (how many cards it fits), Take this gem (RUN.take), then optionally "Set it in a card
 //             now" (socket overlay with the gem preselected). Keys 1..3.
 //
@@ -56,12 +56,12 @@
 // by the overlay's dead flag. reduceMotion: count-ups, the typewriter and the stagger are instant, pauses shrink to 120 ms, sparks drop
 // to three, ripples and fly-to-deck are off, painter sway is scaled by 0.3.
 //
-// DATA-TUT ANCHORS on every screen: `deck` (the Deck button), `relics` (the Treasures button), `ink` (the Ink stat). Music tracks:
+// DATA-TUT ANCHORS on every screen: `deck` (the Deck button), `relics` (the Charms button), `ink` (the Vox stat). Music tracks:
 // reward, shop, event, camp (also forge), reward (chest), event (gem cache).
 //
 // GEOMETRY. Where the painted art and the DOM laid over it must agree, ONE table feeds both, so they cannot drift apart: CACHE (the gem cache's plinths, glows and columns),
 // RW (the reward page's card stage: the cards, the hint, the Skip and Continue foot, the banner and the pool of lantern light on the painted table all centre on its axis, x 796)
-// and SHOP (the posts, the two planks and the peddler). enterGemCache, enterReward and enterShop write them to custom properties on the page (--gx0 --gp --gcw --gtop --gh --gy;
+// and SHOP (the posts, the two planks and Jordan). enterGemCache, enterReward and enterShop write them to custom properties on the page (--gx0 --gp --gcw --gtop --gh --gy;
 // --rw-x --rw-w; --sh-l --sh-w --sh-px --sh-y1 --sh-h1 --sh-y2 --sh-h2) and css/node.css places the DOM from those. The camp's left column is --cp-l and --cp-w in css only (no art
 // depends on it). tests/hocus_vocus_screen_node.test.mjs records what the painters draw and checks the page's properties against it.
 //
@@ -78,7 +78,7 @@
 //     from UI.tip.attach; the peek thresholds (220 ms hover, 420 ms hold) are FIXED, never wait(), which shrinks to 120 ms under Reduce motion.
 //   * The deck overlay keeps its confirm row (.dk-confirm) outside the scrolling .dk-detail so a mandatory picker's button is always on screen
 //     (css/node.css, compact rules shrink the big card); the pick and remove notes ride beside the card.
-//   * The elite treasure box answers once: Take it and Leave it are disabled at once and the frame leaves (.taken, .gone). A card offer a fable
+//   * The elite Charm box answers once: Take it and Leave it are disabled at once and the frame leaves (.taken, .gone). A card offer a Detour
 //     raises is not dismissible (Skip is the way out). A net gold loss on the reward ledger reads "Gold lost -6".
 
 (() => {
@@ -241,7 +241,7 @@
     }
   }
 
-  // a ring of ink that spreads from a point (confirmation flourish)
+  // a ring that spreads from a point (confirmation flourish)
   function ripple(S, x, y, kind) {
     if (!S.fx || S.dead || reduced()) return;
     const el = mk('i', { class: 'nk-ripple k-' + (kind || 'gold') });
@@ -307,7 +307,7 @@
   }
 
   // ==================================================================================================================
-  // the top bar every node page shares: heroes with HP, gold, Ink, brushes, the Deck and Treasures buttons (menu button on the right)
+  // the top bar every node page shares: heroes with HP, gold, Vox, Spells, the Deck and Charms buttons (menu button on the right)
   // ==================================================================================================================
   function chrome(S, o) {
     o = o || {};
@@ -879,7 +879,7 @@
     ];
   }
 
-  // send an element's picture flying to another element (cards into the deck button, relics into the treasure button)
+  // send an element's picture flying to another element (cards into the deck button, relics into the Charms button)
   function flyTo(S, el, target, done) {
     if (!el || !target) { if (done) done(); return; }
     const a = stageRect(el), b = stageRect(target);
@@ -952,7 +952,7 @@
       ctx.restore();
     }
     layer(ctx, 'nk:reward:table', 1280, 720, (g) => paintTable(g));
-    // the heroes cheer in the corner (an elite's treasure panel needs that corner, so they sit those out)
+    // the heroes cheer in the corner (an elite's Charm panel needs that corner, so they sit those out)
     if (!S.elite && S.R && typeof ART !== 'undefined' && ART && ART.hero && isFn(ART.hero.draw)) {
       S.R.heroes.forEach((h, i) => {
         const c = ((t + i * 0.45) % 4.4 + 4.4) % 4.4, cheer = c < 0.95;
@@ -1159,7 +1159,7 @@
         el.classList.add('pick');
       }
       (all || []).forEach((o) => { if (o !== el) o.classList.add('gone'); });
-      // the elite's Take it and Leave it are answered: dead buttons under an empty frame must not linger until Continue (the frame itself leaves once the treasure has flown)
+      // the elite's Take it and Leave it are answered: dead buttons under an empty frame must not linger until Continue (the frame itself leaves once the Charm has flown)
       const box = wrap.querySelector('.rw-relicbox');
       if (box) { box.classList.add('taken'); box.querySelectorAll('.rw-acts button').forEach((b) => { b.disabled = true; b.tabIndex = -1; }); }
       UI.after(wait(620), () => {
@@ -1170,7 +1170,7 @@
           if (box) box.classList.add('gone');
           const relBtn = S.chrome.el.querySelector('.nk-relbtn');
           UI.pulse(relBtn);
-          if (relBtn && relBtn.rbSet && R.relics.indexOf(id) < 0) relBtn.rbSet({ label: '' + (R.relics.length + 1) });     // the claim comes after the card pick: show the treasure counted now
+          if (relBtn && relBtn.rbSet && R.relics.indexOf(id) < 0) relBtn.rbSet({ label: '' + (R.relics.length + 1) });     // the claim comes after the card pick: show the Charm counted now
           if (isBoss && need.card && dec.card === undefined) showCardsPage(); else maybeClaim();
         });
       });
@@ -1190,12 +1190,12 @@
       take.addEventListener('click', () => relicChoice(id, take, []));
       const leave = UI.btn('Leave it', { kind: 'ghost', size: 'sm', onclick: relicLeave });
       const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A charm, waiting here' }), take, mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
-      if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a brush above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
-      if (rows.length >= 4) ledger.classList.add('tall');      // gold, ink, a gem AND a brush: even the desktop stage needs the slim box
+      if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a Spell above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
+      if (rows.length >= 4) ledger.classList.add('tall');      // gold, Vox, a gem AND a Spell: even the desktop stage needs the slim box
       if (rows.length >= 2 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
       ledger.appendChild(box);
       box.classList.add('rise'); box.style.setProperty('--i', '4');
-      // the last resort when a long treasure text still outgrows the ledger (the css above is tuned for phones and text 1.3): scroll the ledger to the box so Take it and Leave it are on screen
+      // the last resort when a long Charm text still outgrows the ledger (the css above is tuned for phones and text 1.3): scroll the ledger to the box so Take it and Leave it are on screen
       // (never by a hair: a few stray pixels would only slide the first ledger row under the top edge, so the scroll waits until the box really is cut off)
       UI.after(wait(300), () => { if (S.alive()) safe(() => { if (ledger.scrollHeight > ledger.clientHeight + 40) ledger.scrollTop = ledger.scrollHeight; }); });
     }
@@ -1248,7 +1248,7 @@
   }
 
   // ==================================================================================================================
-  // screen: shop (a lantern-lit peddler stall)
+  // screen: shop (a lantern-lit merch stall)
   // ==================================================================================================================
   const PEDDLER = {
     hello: ['Fresh merch! I made a sticker of your face. It is very flattering.', 'Tote bag? It has a picture of a tote bag on it.', 'Everything here is one of a kind. I made two.', 'Welcome back! I redesigned everything since you got here.'],
@@ -1262,7 +1262,7 @@
     idle: ['Psst. The blue gems are the sensible ones.', 'A charm is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of new merch.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
   };
 
-  // The stall's geometry: the painted posts, planks and peddler (shopBackdrop, paintShop) and the DOM wares, nameplate and speech tail all read this one table. enterShop
+  // The stall's geometry: the painted posts, planks and Jordan (shopBackdrop, paintShop) and the DOM wares, nameplate and speech tail all read this one table. enterShop
   // writes it to --sh-* on the page and css/node.css places everything from those, so the rows can never drift off the opening between the posts again.
   // The opening is the gap between the posts (postL + postW .. postR, centred on x 799); both shelves of wares are centred in it; the price tags centre on the planks.
   const SHOP = { postL: 318, postR: 1254, postW: 26, planks: [{ y: 366, h: 36 }, { y: 596, h: 34 }], peddler: { x: 206, y: 664 } };
@@ -1288,7 +1288,7 @@
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
 
-    // ---- the peddler talks
+    // ---- Jordan talks
     const bubbleText = mk('p', { class: 'sh-say' });
     const bubble = mk('div', { class: 'sh-bubble', role: 'status' }, bubbleText, mk('i', { class: 'sh-tail', 'aria-hidden': 'true' }));
     wrap.appendChild(bubble);
@@ -1323,7 +1323,7 @@
     const stampEl = () => mk('i', { class: 'sh-stamp', 'aria-hidden': 'true', text: 'SOLD' });
 
     // a shelf card is 168 px wide (about 90 px on a phone), too small to read the rules, and one tap buys it: hover (mouse) or a 0.4 s press (touch) shows it BIG
-    // on the left, over the peddler; the tap that ends a long press never buys (UI.tip.swallowClick, the same rule UI.tip.attach applies to the plaques).
+    // on the left, over Jordan; the tap that ends a long press never buys (UI.tip.swallowClick, the same rule UI.tip.attach applies to the plaques).
     // The thresholds are FIXED: they must not go through wait(), which shrinks to 120 ms under Reduce motion and made ordinary 130 ms taps count as long presses.
     // Nothing here changes the plain click.
     const PEEK_HOVER_MS = 220, PEEK_HOLD_MS = 420;
@@ -1453,7 +1453,7 @@
         return;
       }
       snd('buy'); snd('gold');
-      peekHide();                                  // the big card of a ware that is now SOLD must not stay over the peddler until the pointer leaves
+      peekHide();                                  // the big card of a ware that is now SOLD must not stay over Jordan until the pointer leaves
       const r = stageRect(entry.slot);
       flyCoins(S.chrome.gold, entry.slot, 6);
       burst(S, r.cx, r.cy, { kind: 'gold', n: 18, spread: 110 });
@@ -1503,7 +1503,7 @@
       UI.overlay.open('deck', { mode: 'socket', title: 'Set Gems (free)' }).then(() => { S.busy = false; if (S.alive()) { S.chrome.sync(false); refresh(); } });
     }
 
-    // hooks that fired when the stall opened (a treasure paid out, say)
+    // hooks that fired when the stall opened (a Charm paid out, say)
     (node && node.hookLog || []).forEach((l) => { if (l && l.text) UI.toast(l.text, 'good'); });
     refresh();
     say('hello');
@@ -1517,7 +1517,7 @@
   }
 
   // ==================================================================================================================
-  // screen: event (a fable, told as a storybook page)
+  // screen: event (a Detour, told on the Detour board)
   // ==================================================================================================================
   // One chip per thing an outcome changed, read from the log lines RUN.applyOps and RUN.resolvePending return.
   function outcomeChips(log) {
@@ -1527,7 +1527,7 @@
     (log || []).forEach((l, at) => {
       if (!l || !l.op) return;
       const has = (id) => !!DATA.cards[id];
-      // a fixed treasure the party already carries is NOT gained: no treasure chip (the gold it turns into has its own chip right behind it; with none, say so plainly)
+      // a fixed Charm the party already carries is NOT gained: no Charm chip (the gold it turns into has its own chip right behind it; with none, say so plainly)
       if (l.op === 'addRelic' && /already owned/i.test(l.text || '')) {
         const next = log[at + 1];
         if (!(next && next.op === 'gold' && next.n)) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text));
@@ -1643,7 +1643,7 @@
     const more = mk('i', { class: 'ev-more', 'aria-hidden': 'true', text: 'More' });
     const book = mk('div', { class: 'ev-book' }, left, mk('i', { class: 'ev-gutter', 'aria-hidden': 'true' }), right, mk('i', { class: 'ev-ribbon', 'aria-hidden': 'true' }), more);
     wrap.appendChild(book);
-    // a long fable (four choices, or big text on a phone) scrolls inside its page: a small "More" tab says so while there is page below the fold
+    // a long Detour (four choices, or big text on a phone) scrolls inside its page: a small "More" tab says so while there is page below the fold
     let moreAcc = 0;
     const updateMore = () => safe(() => { book.classList.toggle('more', right.scrollHeight - right.clientHeight - right.scrollTop > 6); });
     right.addEventListener('scroll', updateMore);
@@ -1657,7 +1657,7 @@
       b.classList.add('rise');
       // keyboard and screen readers land on the way on (Enter or Space then press it); preventScroll so the page does not jump
       safe(() => { if (b.focus) b.focus({ preventScroll: true }); });
-      // a long fable with a title on two lines, a card chip and a big font fills the page: bring the button into view instead of leaving it under the page edge
+      // a long Detour with a title on two lines, a card chip and a big font fills the page: bring the button into view instead of leaving it under the page edge
       UI.after(wait(80), () => { if (!S.dead) safe(() => { if (right.scrollHeight > right.clientHeight + 1) { if (isFn(right.scrollTo)) right.scrollTo({ top: right.scrollHeight, behavior: reduced() ? 'auto' : 'smooth' }); else right.scrollTop = right.scrollHeight; } }); });
       return b;
     };
@@ -1690,7 +1690,7 @@
       outEl.appendChild(outText);
       outEl.appendChild(gains);
       const tw = typewriter(S, outText, res && res.text ? res.text : 'The tour has already moved on.', { cps: 70 });
-      S.tw = tw; S.outTw = tw;                                                  // Enter or Space completes it, like the fable
+      S.tw = tw; S.outTw = tw;                                                  // Enter or Space completes it, like the Detour text
       // a tap anywhere on the page (not on a button) finishes the outcome text at once, and the way on follows after a short beat instead of 2 to 4 seconds
       right.addEventListener('click', (e) => { if (!tw.done && !(e.target.closest && e.target.closest('button'))) { tw.skipped = true; tw.complete(); } });
       if (res && res.applied) addChips(res.applied);
@@ -1728,7 +1728,7 @@
       showOutcome(i, res);
     }
 
-    // ---- the fable, then its choices
+    // ---- the Detour, then its choices
     const list = safe(() => RUN.eventChoices(R, ev), []) || [];
     let shownN = 0;       // the number on a choice (and its key) follows the VISIBLE order: a hero-only choice that is hidden leaves no gap (1 and 2, never 1 and 4)
     list.forEach((ch) => {
@@ -1975,7 +1975,7 @@
   }
 
   // ==================================================================================================================
-  // screen: forge (the Inkstone Forge: one upgrade, or gem cutting)
+  // screen: forge (the Studio: one upgrade, or setting gems)
   // ==================================================================================================================
   function enterForge(S, params, root) {
     const R = S.R;
@@ -2432,7 +2432,7 @@
   }
 
   // ---------------------------------------------------------------- Jordan, at the Merch Stall
-  // The cast's Jordan (ART.cast, HV_ART_AUDIO 2.10) stands in the peddler slot of SHOP (same x and feet y, so the speech bubble and nameplate laid over him do not move).
+  // The cast's Jordan (ART.cast, HV_ART_AUDIO 2.10) stands in the shopkeeper slot of SHOP (same x and feet y, so the speech bubble and nameplate laid over him do not move).
   // The shop's mood words become his: idle waves hello now and then, happy is a cheer, sad an "oops" (never a sad face), shock shows the tablet, a bare stall dozes.
   const PD_MOODS = ['idle', 'happy', 'sad', 'shock', 'rest'];
   const JORDAN = { K: 1.3, idle: { pose: 'idle', expr: 'happy' }, happy: { mood: 'buy' }, sad: { mood: 'poor' }, shock: { mood: 'sold' }, rest: { mood: 'empty' } };
@@ -2447,7 +2447,7 @@
   }
 
   // ---------------------------------------------------------------- the Merch Stall: a teal canopy with a scalloped fringe, a sticker pegboard wall, two planks of merch
-  // SHOP is the one geometry table (the posts, the two planks, the peddler): the DOM wares are laid over it. The planks are painted with ONE fillRect(postL, y, span, h) each and the posts
+  // SHOP is the one geometry table (the posts, the two planks, Jordan): the DOM wares are laid over it. The planks are painted with ONE fillRect(postL, y, span, h) each and the posts
   // with ONE strokeRect(x, 60, postW, 590) each, which is what the alignment test looks for.
   const SHOP_BULBS = [];
   function shopBackdrop(g) {
@@ -3303,7 +3303,7 @@
         if (!S || S.dead) return;
         S.t = t;
         if (S.tickers.length) {
-          // a ticker may add tickers (a line of the peddler starts a typewriter): they land in the fresh array and survive the pass
+          // a ticker may add tickers (a line of Jordan's starts a typewriter): they land in the fresh array and survive the pass
           const running = S.tickers; S.tickers = [];
           S.tickers = running.filter((fn) => { try { return !fn(dt, t); } catch (e) { warnOnce('ticker', e); return false; } }).concat(S.tickers);
         }

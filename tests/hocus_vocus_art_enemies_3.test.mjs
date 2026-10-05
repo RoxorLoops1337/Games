@@ -1,7 +1,7 @@
-// ART for chapter 3 (art_enemies_3.js): the 17 creatures of the Crimson Sky Citadel, headless on the strict canvas stub.
+// ART for Act 3 (art_enemies_3.js): the 17 creatures of the Perfect Stage, headless on the strict canvas stub.
 //
 // What this pins down:
-//   * exactly the 17 roster ids of chapter 3 are registered as real art, with sane bounds for their size class, and nothing else
+//   * exactly the 17 roster ids of Act 3 are registered as real art, with sane bounds for their size class, and nothing else
 //   * every id x every enemy pose x several t and pt values draws without throwing, issues draw calls, is clean on the strict stub (no non-finite
 //     numbers, no negative radii, balanced save and restore) and never leaves the canvas state unbalanced
 //   * the art lives: idle changes with t, each pose differs from idle, a death ends with nothing drawn, every phase of the boss draws
@@ -46,13 +46,13 @@ const KEYPT = { idle: 0, attack: 0.21, hurt: 0.07, block: 0.2, buff: 0.16, die: 
 const drawAt = (ctx, id, o) => ART.enemy.draw(ctx, id, Object.assign({ x: 400, y: 520, s: 1, pose: 'idle', t: 0, pt: 0, phase: 0, hpPct: 1 }, o));
 
 // ------------------------------------------------------------------ registry
-t.test('the roster of chapter 3 has 17 ids: 10 normals, 3 elites, 3 minions, 1 boss', () => {
+t.test('the roster of Act 3 has 17 ids: 10 normals, 3 elites, 3 minions, 1 boss', () => {
   t.eq(ROSTER.length, 17, 'seventeen ids in DATA.ROSTER[3]');
   const tiers = {};
   DATA.ROSTER[3].forEach((r) => { tiers[r.tier] = (tiers[r.tier] || 0) + 1; });
   t.deep(tiers, { normal: 10, elite: 3, minion: 3, boss: 1 }, 'tier counts');
 });
-t.test('every id of chapter 3 is real art and nothing else is registered here', () => {
+t.test('every id of Act 3 is real art and nothing else is registered here', () => {
   ROSTER.forEach((id) => t.ok(ART.has('enemy', id), `ART.has('enemy', '${id}')`));
   const mine = ART.enemy.ids3();
   t.deep(mine.slice().sort(), ROSTER.slice().sort(), 'ART.enemy.ids3() is exactly the chapter 3 roster');

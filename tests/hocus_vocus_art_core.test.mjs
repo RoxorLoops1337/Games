@@ -350,7 +350,7 @@ t.test('every hero x pose x t draws, issues draw calls and stays clean', () => {
     let threw = null;
     try { ART.hero.draw(ctx, id, { x: 300, y: 500, s: 1, pose, t: tt, pt }); } catch (e) { threw = e; }
     t.ok(!threw, `${id} ${pose} t=${tt} pt=${pt} does not throw ${threw ? threw.message : ''}`);
-    // the cast draws live paths (HV_ART_AUDIO 2.12: the Echowake heroes blitted 12+ part sprites; a chibi figure fills and strokes its shapes)
+    // the cast draws live paths (HV_ART_AUDIO 2.12: the original heroes blitted 12+ part sprites; a chibi figure fills and strokes its shapes)
     const paths = (api._counts.fill || 0) + (api._counts.stroke || 0), blits = api._counts.drawImage || 0;
     t.ok(paths >= 40 || blits >= 1, `${id} ${pose} issues real paths or blits a cached frame (${paths} paths, ${blits} blits)`);
     if (api._issues.length) t.ok(false, `${id} ${pose} t=${tt} pt=${pt} canvas issues: ${issues()}`);
@@ -570,7 +570,7 @@ t.test('performance smoke: a hero draw costs a small fraction of a frame', () =>
   for (let i = 0; i < N; i++) HEROES.forEach((id) => { ART.hero.draw(ctx, id, { x: 300, y: 500, s: 1, pose: i % 3 ? 'idle' : 'attack', t: i * 0.016, pt: (i % 26) * 0.016 }); n++; });
   const wall = Date.now() - t0;
   const per = wall / n;
-  // The Echowake heroes blitted cached part sprites (about 0.2 ms on a real canvas, limit 8 ms here). The chibi cast draws live paths
+  // The original heroes blitted cached part sprites (about 0.2 ms on a real canvas, limit 8 ms here). The chibi cast draws live paths
   // (HV_ART_AUDIO 2.8: budget 1.2 ms a figure in a browser, about 0.7 to 0.9 ms on the cast_perf sheet); this stub validates every call, so
   // one figure costs about 3 to 4 ms here alone and up to about 9 ms under the four-way parallel runner. The limit still catches a runaway.
   t.ok(per < 16, `average hero draw ${per.toFixed(2)} ms on the checking stub (limit 16 ms; the cast_perf sheet holds the real 1.2 ms budget)`);

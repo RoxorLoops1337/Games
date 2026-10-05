@@ -13,7 +13,7 @@
 //
 // CONTRACT (DESIGN 5.6, unchanged). draw(ctx, o) receives the context ALREADY translated to the feet centre and scaled; it paints around (0, 0), y
 // negative up, facing LEFT. o = {s, pose, t, pt, hpPct, phase, glow, flip}. t is absolute seconds (loops), pt seconds since the pose began (one-shot
-// poses). Poses are LISTS.enemyPoses: idle attack hurt block buff die telegraph, with the Echowake timings (POSE_MS below). Elite ornament, the aura
+// poses). Poses are LISTS.enemyPoses: idle attack hurt block buff die telegraph, with the original timings (POSE_MS below). Elite ornament, the aura
 // ring and the ground shadow are drawn by ART.enemy.draw: nothing here duplicates them. Every id is deterministic (no clock, never the banned random
 // call), never throws for odd input, and keeps save and restore balanced.
 //
@@ -49,7 +49,7 @@
 //   Gallery sheets: enemies3 (Act III, the Perfect Stage: every creature, rival and sidekick in several poses), boss3 (Flawless, all three forms:
 //   each form large, then every pose), enemies3_anim (film strips of two creatures), enemies3_dev (params id[,id]|all pose|all zoom t pt phase hp).
 //
-// RIG MAP (HV_ENEMIES 4.5): each creature keeps the motion of the Echowake rig it started from, named in its header below.
+// RIG MAP (HV_ENEMIES 4.5): each creature keeps the motion of the original rig it started from, named in its header below.
 (() => {
   'use strict';
   const tk = ART.tk, RJ = ART.rj, foe = RJ && RJ.foe;
@@ -474,7 +474,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // the shared pose state (the Echowake timings, unchanged)
+  // the shared pose state (the original timings, unchanged)
   // ---------------------------------------------------------------------------------------------------------------
   // attack: 0..0.3 anticipation (wind rises, swing dips to -0.5), 0.3..0.5 strike (swing reaches 1 at p = 0.5), then recovery
   // hurt: recoil spike then settle;  block: guard rises fast and holds;  buff: a pulse;  die: 0..1 win-over;  telegraph: wind-up ramps to 1 and holds
@@ -599,7 +599,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // TUNER DRONE (storm_drone, normal, m). Echowake rig: STORM DRONE (keeps the hover bob, the rotors and the triple jab timing). A hovering
+  // TUNER DRONE (storm_drone, normal, m). Original rig (keeps the hover bob, the rotors and the triple jab timing). A hovering
   // chrome disc whose face is a tuner: a needle that always swings to the exact centre, two little eyes either side of its pivot and the Gloss
   // smile under it, four little propellers, tuning pegs for ears, a tuning fork hanging under it and a mint status light on top. Its lightning
   // became perfectly regular pitch lines. Accent: the red needle.
@@ -717,7 +717,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // VIP BOUNCER (komainu_guardian, normal, l). Echowake rig: KOMAINU GUARDIAN (keeps the plinth, the braced stance and the pounce arc). A stocky
+  // VIP BOUNCER (komainu_guardian, normal, l). Original rig (keeps the plinth, the braced stance and the pounce arc). A stocky
   // polished brass rope post come alive on a round podium: a big brass ball finial for a head in chrome sunglasses with an earpiece coil, the
   // Gloss smile, a plum rope looped round the post as its two arms with brass snap clips for hands. It folds its arms on the guard, leaps off
   // the podium on the pounce, and slides its shades down for the VIP Glare. Accent: the plum rope.
@@ -831,7 +831,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // CLAPPERBOARD KNIGHT (redaction_knight, normal, m). Echowake rig: REDACTION KNIGHT (keeps the knight body and the cleave swings; the black bars
+  // CLAPPERBOARD KNIGHT (redaction_knight, normal, m). Original rig (keeps the knight body and the cleave swings; the black bars
   // became clapperboard stripes, the face bar a snapping clapper visor). A chibi knight in pastel chrome: a round helmet whose visor is a striped
   // clapper stick that snaps shut over the eyes on every take, a little slate board under the face window with the Gloss smile chalked on it,
   // striped pauldrons, a clapper-stick blade and a lilac megaphone for a shield. Accent: the red recording light on the helmet.
@@ -916,7 +916,7 @@
       const strike = atk ? E0.strike : 0;
       const dx = -strike * 24 + hurt * 16 + E0.shake * 1.2 + 3 * tele;
       const rot = 0.06 * tele - 0.08 * strike + 0.12 * hurt;
-      // the blade arm: raise on the wind-up, chop on the strike (the Echowake cleave timing)
+      // the blade arm: raise on the wind-up, chop on the strike (the original cleave timing)
       let A = 0.04 * br, W = 0.25;
       if (atk) {
         if (p < 0.3) { const k = sm(p / 0.3); A = -1.8 * k; W = lerp(0.25, -0.9, k); } else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); A = lerp(-1.8, 0.5, k); W = lerp(-0.9, -2.0, k); } else { const k = sm((p - 0.5) / 0.5); A = lerp(0.5, 0.04, k); W = lerp(-2.0, 0.25, k); }
@@ -965,7 +965,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // CHROME SIREN (void_scribe, normal, m). Echowake rig: VOID SCRIBE (keeps the float and the robe hem). A floating chrome singer in a long lilac
+  // CHROME SIREN (void_scribe, normal, m). Original rig (keeps the float and the robe hem). A floating chrome singer in a long lilac
   // gown whose hem ends in a flat, perfectly regular soundwave, a perfectly smooth face with serene closed eyes, a sleek mint-chrome bob, both
   // hands holding a mirror-ball mic to its lips and a halo of little tuning sliders that it keeps perfectly level. It croons in flat, evenly
   // spaced rings. Accent: the one pink slider knob in the middle.
@@ -1087,7 +1087,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // SYNCHRO DANCER (blank_soldier, normal, m). Echowake rig: BLANK SOLDIER (keeps the in-step march, now a synchronised dance step on the shared
+  // SYNCHRO DANCER (blank_soldier, normal, m). Original rig (keeps the in-step march, now a synchronised dance step on the shared
   // clock so every dancer on stage moves as one, and the rank spacing). A smooth porcelain mannequin dancer with ball joints, a glossy lilac bob,
   // a blush sequin leotard and jazz hands, the fixed Gloss smile. Accent: a tiny red heart sequin on the leotard.
   // ---------------------------------------------------------------------------------------------------------------
@@ -1175,7 +1175,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // STREAMER DRAGON (sky_serpent, normal, l). Echowake rig: SKY SERPENT (keeps the coil chain and the back-row strike). A long dragon of pastel
+  // STREAMER DRAGON (sky_serpent, normal, l). Original rig (keeps the coil chain and the back-row strike). A long dragon of pastel
   // party streamers in a perfectly repeating mint, blush, lilac and lemon pattern, coiled on the stage and rising in an S; its head is a confetti
   // cannon with a big Gloss grin along the barrel, curly ribbon whiskers and a tiny party hat. Accent: the red ring round the muzzle.
   // ---------------------------------------------------------------------------------------------------------------
@@ -1290,7 +1290,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // AIRBRUSH WRAITH (eraser_wraith, normal, m). Echowake rig: ERASER WRAITH (keeps the soft half-there edge and the pressing hand). A hovering
+  // AIRBRUSH WRAITH (eraser_wraith, normal, m). Original rig (keeps the soft half-there edge and the pressing hand). A hovering
   // soft-focus figure with an airbrushed halo for an edge, a smooth porcelain face with sleepy eyes and the Gloss smile, one hand an airbrush
   // nozzle puffing pastel mist, the other a soft open palm that smooths. Accent: the red ring on the nozzle.
   // ---------------------------------------------------------------------------------------------------------------
@@ -1373,7 +1373,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // RING LIGHT SENTINEL (thunder_crow, normal, m). Echowake rig: THUNDER CROW (keeps the dive and the perch timing). A big white ring light with a
+  // RING LIGHT SENTINEL (thunder_crow, normal, m). Original rig (keeps the dive and the perch timing). A big white ring light with a
   // tiny pair of stern eyes and the Gloss smile floating in its hollow middle, on a folding chrome tripod that tucks up when it dives; lens
   // flares on every flash. Accent: the lemon flare.
   // ---------------------------------------------------------------------------------------------------------------
@@ -1453,7 +1453,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // SEQUIN GOLEM (paper_golem, normal, l). Echowake rig: PAPER GOLEM (keeps the giant body, the pad-up and the slam; the paper facets became sequin
+  // SEQUIN GOLEM (paper_golem, normal, l). Original rig (keeps the giant body, the pad-up and the slam; the paper facets became sequin
   // panels). A huge round giant stitched from stage costumes, every sequin perfectly in line in a lilac to blush to silver gradient, a sequinned
   // mask of a face with the Gloss smile, big mitten fists and stubby legs. Sequins flick off when it is hurt and pile back on when it sequins up
   // (its Sequins status, drawn literally). Accent: one red sequin heart on the chest.
@@ -1551,7 +1551,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // GLITCH GREMLIN (margin_imp, normal, m). Echowake rig: MARGIN IMP (keeps the shaky line idea, now a pixel jitter, and the summon pose; the
+  // GLITCH GREMLIN (margin_imp, normal, m). Original rig (keeps the shaky line idea, now a pixel jitter, and the summon pose; the
   // horns became headphone cups). A small magenta gremlin drawn in a jittery line with cyan and lime fringes that keeps slipping a pixel
   // sideways, big chrome headphone cups with lime cushions, a clipboard of wobbles held in both hands, little glitch blocks fizzing off its
   // edges. Accent: the gremlin's magenta itself.
@@ -1657,7 +1657,7 @@
   // RIVALS (E3b)
   // ===============================================================================================================
   // ---------------------------------------------------------------------------------------------------------------
-  // BIG MUTE BUTTON (censor_golem, elite, l). Echowake rig: CENSOR GOLEM (keeps the stamp arm and its raise-then-press timing; the cabinet became a
+  // BIG MUTE BUTTON (censor_golem, elite, l). Original rig (keeps the stamp arm and its raise-then-press timing; the cabinet became a
   // round button). A giant blush push button on a chrome rim with stubby legs: its face is a big crossed-out speaker icon with two little eyes
   // above it and the Gloss smile under it; one arm is a chrome piston ending in a padded plunger that rises on the quiet turn and presses down on
   // the heavy one; a soft click light on the rim. Accent: the red slash across the speaker.
@@ -1751,7 +1751,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // APPLAUSE SIGN (storm_whelp, elite, l). Echowake rig: STORM DRAGON WHELP (keeps the charge glow that grows with each stack and the clap that spends
+  // APPLAUSE SIGN (storm_whelp, elite, l). Original rig (keeps the charge glow that grows with each stack and the clap that spends
   // it). A big marquee box on chrome scaffold legs with the word APPLAUSE (one of the four art words) across its cream panel in bulb-white
   // letters, a ring of light bulbs round the frame, a little face under the word, and two noodle arms in cartoon white gloves for slow claps.
   // The bulbs chase and brighten as it charges. Accent: the marquee red.
@@ -1851,7 +1851,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // MANNEQUIN JUDGE (black_bar_inquisitor, elite, l). Echowake rig: BLACK-BAR INQUISITOR (keeps the seated presence and the gavel strike, now the
+  // MANNEQUIN JUDGE (black_bar_inquisitor, elite, l). Original rig (keeps the seated presence and the gavel strike, now the
   // buzzer). A smiling porcelain mannequin with a perfect side parting and a pastel suit, seated in a tall judge's chair on chrome wheels behind a
   // pastel desk, three blank score cards fanned in one hand (stars, never numbers) and a big red buzzer under the other; it never stops smiling.
   // Always generic: no real judge. Accent: the buzzer red.
@@ -1985,7 +1985,7 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // LIP-SYNC CLONE (blank_page, minion, s). Echowake rig: BLANK PAGE (keeps the small float). A tiny glossy copy of Flawless, exactly like the
+  // LIP-SYNC CLONE (blank_page, minion, s). Original rig (keeps the small float). A tiny glossy copy of Flawless, exactly like the
   // one next to it: the same silver-lilac hair and high ponytail, a pastel chrome dress, a mirror mic held under the Gloss smile, hovering in
   // perfect time. Accent: the little red star on the dress.
   // ---------------------------------------------------------------------------------------------------------------
@@ -2052,7 +2052,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // CONFETTI POPPER (spark_mote, minion, s). Echowake rig: SPARK MOTE (keeps the big eyes and the one-shot burst). A little striped party-popper
+  // CONFETTI POPPER (spark_mote, minion, s). Original rig (keeps the big eyes and the one-shot burst). A little striped party-popper
   // cone in lemon, mint and blush with big shiny eyes and the Gloss smile, a frill round its open top with confetti peeking out, and a pull
   // string with a ring. It has exactly one thing to say, and it says it with perfectly square confetti. Accent: the red pull ring.
   // ---------------------------------------------------------------------------------------------------------------
@@ -2115,7 +2115,7 @@
   });
 
   // ---------------------------------------------------------------------------------------------------------------
-  // PITCH GLITCH (typo_sprite, minion, s). Echowake rig: TYPO SPRITE (keeps the small square body and the glitchy face; the keycap became a pixel
+  // PITCH GLITCH (typo_sprite, minion, s). Original rig (keeps the small square body and the glitchy face; the keycap became a pixel
   // block). A small square pixel block that jitters between two positions, magenta and cyan colour fringing on its edges, square pixel eyes,
   // the Gloss smile drawn in pixel steps, little pixel feet. Accent: the magenta fringe.
   // ---------------------------------------------------------------------------------------------------------------
@@ -2175,7 +2175,7 @@
   });
 
   // ===============================================================================================================
-  // FLAWLESS, STAR OF THE PERFECT STAGE (boss_editor, Headliner, xl): E3c. Echowake rig: THE CONDUCTOR (keeps the three-form structure, prefixes p0
+  // FLAWLESS, STAR OF THE PERFECT STAGE (boss_editor, Headliner, xl): E3c. Original rig (keeps the three-form structure, prefixes p0
   // p1 p2 with one rig per phase, the slender stance of phase 0, the bulk of phase 1 and the sky-filling face of phase 2). One spec holds the
   // parts of all three forms; the registered rig dispatches on st.phase (HV_ENEMIES 5.3, bible 2.4 and 2.5).
   //   phase 0, FLAWLESS: a slender pop idol in pastel chrome, perfectly symmetrical, lip-syncing into a mirror mic held in both hands, a high

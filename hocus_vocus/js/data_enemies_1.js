@@ -1,4 +1,4 @@
-// Hocus Vocus: Act I roster (chapter 1): Blossom Bay, a sunny harbour town and its Snack Pier, where the Gloss is only starting (the
+// Hocus Vocus: Act I roster (`chapter` 1): Blossom Bay, a sunny harbour town and its Snack Pier, where the Gloss is only starting (the
 // teaching act). Content only: one IIFE that registers 10 Creatures (normal), 3 Rivals (elite), 3 Sidekicks (minion) and the Headliner
 // (boss) into DATA.enemies, then the act's encounter pools into DATA.encounters[1]. No functions in the data, no random calls, no dashes.
 // Every name, title, move name, bark, phase line, lore line and tag is copied from hocus_vocus/plan/HV_ENEMIES.md section 2; ids, numbers,
@@ -37,7 +37,7 @@
 // the biggest round is 24 in the first form and 30 in the second). A group's summed average round damage (DATA.audit's metric: the seq
 // or weighted average of dmg n * hits per enemy, Sidekicks free) stays under 16 for normal groups and 22 for Rivals. Pairs and swarms
 // carry 8 or more; solos with a guard turn cannot (a solo kappa is 4.3) and are the gentle openers. Summoners keep at most 2 living
-// summons. Reference results with the real engine and the greedy bot (hanae and kuro, 40 seeds), starter deck / a developed deck:
+// summons. Reference results with the real engine and the greedy bot (Jasmin and RoxorLoops, `hanae` and `kuro`, 40 seeds), starter deck / a developed deck:
 //   normal groups 1.9 to 4.6 turns, HP lost 2 to 26 (pooled 3.2 turns and about 11 HP with the developed deck, solos about 2.1 turns)
 //   Rivals 6.3 / 5.1 (bandstand), 6.4 / 5.1 (jukebox), 7.6 / 6.1 (heron) turns; 50 / 33, 44 / 28, 58 / 38 HP lost
 //   Headliner 16 / 10.8 turns, 107 / 63 HP lost, won 84 percent / 100 percent

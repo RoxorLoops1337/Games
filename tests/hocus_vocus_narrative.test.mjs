@@ -1,13 +1,13 @@
-// NARRATIVE: the fables (data_events.js) and the meta content (data_meta.js): achievements, Tempo Trials, tips, lore and barks.
+// NARRATIVE: the Detours (data_events.js) and the meta content (data_meta.js): achievements, Encores, tips, lore and barks.
 //
 // Three layers, each honest about what it can and cannot see:
 //   1. STRUCTURE   what DATA.validate and DATA.audit assert, repeated here so a regression names this suite, plus every rule of
 //                  CONTENT_SPEC 6 that the validator cannot express (safe choice, `once` only for lasting change, fixed ids only,
-//                  fights only from the event's own chapter, no dead or unreachable flags, run-op and req coverage, text hygiene).
-//   2. MEANING     the Tempo Trial staircase gets a difficulty score and must never drop; every trial's text must quote its own numbers;
+//                  fights only from the event's own Act, no dead or unreachable flags, run-op and req coverage, text hygiene).
+//   2. MEANING     the Encore staircase gets a difficulty score and must never drop; every trial's text must quote its own numbers;
 //                  achievements must read stats that COMBAT, RUN or META really write; barks must sound like their hero.
 //   3. INTEGRATION when the real RUN, MAP and META exist (they do once their files are written) every outcome of every choice is
-//                  replayed through RUN.applyOps, every fable is proven reachable through RUN.pickEvent, and every achievement is
+//                  replayed through RUN.applyOps, every Detour is proven reachable through RUN.pickEvent, and every achievement is
 //                  unlocked through META.check. When a peer module is missing the layer says so and skips, it never fails for it.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,7 +63,7 @@ t.test('strict validation finds nothing wrong with our content (peer files that 
   t.deep(real, [], 'no strict errors that are ours');
 });
 
-t.test('event counts: 10 per chapter and 10 for any chapter at least, ids unique and snake_case', () => {
+t.test('event counts: 10 per Act and 10 for any Act at least, ids unique and snake_case', () => {
   t.ok(evs.length >= 40, `at least 40 fables (have ${evs.length})`);
   [1, 2, 3].forEach((ch) => t.ok(evs.filter((e) => chapterOf(e) === ch).length >= 10, `chapter ${ch} has at least 10 fables`));
   t.ok(evs.filter((e) => !e.chapters).length >= 10, 'at least 10 fables for any chapter');
@@ -127,7 +127,7 @@ t.test('once only where the change lasts, and at most 60 percent of events', () 
   evs.filter((e) => e.when && (e.when.hero || e.when.flag)).forEach((e) => t.ok(e.once, `${e.id}: a story beat gated by a hero or flag is once`));
 });
 
-t.test('fixed ids only: relics, curses, brushes, enemies and no private card or gem ids', () => {
+t.test('fixed ids only: relics, curses, Spells, enemies and no private card or gem ids', () => {
   const relicIds = Object.keys(DATA.FIXED.relics);
   walkRun((x, e) => {
     if (x.op === 'addRelic' && x.id) t.ok(relicIds.indexOf(x.id) >= 0, `${e.id}: addRelic ${x.id} is a fixed relic`);
@@ -143,7 +143,7 @@ t.test('fixed ids only: relics, curses, brushes, enemies and no private card or 
   });
 });
 
-t.test('fights: real roster enemies of the event chapter, no bosses, none in any-chapter events, sane sizes and tiers', () => {
+t.test('fights: real roster enemies of the event Act, no bosses, none in any-Act events, sane sizes and tiers', () => {
   let fights = 0;
   walkRun((x, e) => {
     if (x.op !== 'fight') return;
@@ -204,7 +204,7 @@ t.test('costs are honest: a certain price is shown, backed by a req, and every c
   }));
 });
 
-t.test('numbers stay inside the economy: damage, gold, max HP, painting and Ink are bounded', () => {
+t.test('numbers stay inside the economy: damage, gold, max HP, unmuting and Vox are bounded', () => {
   walkRun((x, e) => {
     if (x.op === 'hurt') { if (x.n !== undefined) t.ok(x.n >= 3 && x.n <= 12, `${e.id}: hurt ${x.n} is a bruise, not a death sentence`); else t.ok(x.pct <= 0.15, `${e.id}: hurt pct ${x.pct}`); }
     if (x.op === 'gold' && x.n > 0) t.ok(x.n <= 150, `${e.id}: gold gain ${x.n}`);
@@ -221,7 +221,7 @@ t.test('numbers stay inside the economy: damage, gold, max HP, painting and Ink 
   t.ok(g.every(({ o }) => A(o.ops).length <= 3), 'no outcome stacks more than three ops');
 });
 
-t.test('flags: every flag read is set somewhere, every flag set is read, and the fox path climbs through the chapters', () => {
+t.test('flags: every flag read is set somewhere, every flag set is read, and the fox path climbs through the Acts', () => {
   const setBy = {}, readBy = {};
   walkRun((x, e) => { if (x.op === 'flag') (setBy[x.k] = setBy[x.k] || []).push(e); });
   evs.forEach((e) => {
@@ -246,7 +246,7 @@ t.test('flags: every flag read is set somewhere, every flag set is read, and the
   t.ok(evs.some((e) => e.choices.some((c) => c.req && c.req.relic === 'fox_mask')), 'and a later fable rewards wearing it');
 });
 
-t.test('relic-gated fables: silver_bell merchant, jade_door, brass_lantern, and the peddler sells the lamp', () => {
+t.test('relic-gated Detours: silver_bell merchant, jade_door, brass_lantern, and Jordan sells the lamp', () => {
   const bell = evs.filter((e) => e.choices.some((c) => c.req && c.req.relic === 'silver_bell'));
   t.ok(bell.length >= 1, 'a choice needs silver_bell');
   bell.forEach((e) => { t.eq(e.art.scene, 'shop', `${e.id}: the bell merchant sits in the shop scene`); t.ok(e.choices.some((c) => c.cost && c.req && c.req.gold), `${e.id}: it is a real merchant with prices`); });
@@ -266,7 +266,7 @@ t.test('relic-gated fables: silver_bell merchant, jade_door, brass_lantern, and 
   }
 });
 
-t.test('hero moments: one gated fable per hero, a hero choice for every hero, and voices that fit', () => {
+t.test('hero moments: one gated Detour per hero, a hero choice for every hero, and voices that fit', () => {
   const moment = (h) => evs.filter((e) => e.when && e.when.hero === h);
   const nameOf = (h) => DATA.heroes[h].name;                                   // the player reads the DATA name (Jasmin), never the id (hanae)
   L.heroIds.forEach((h) => {
@@ -293,7 +293,7 @@ t.test('hero moments: one gated fable per hero, a hero choice for every hero, an
   });
 });
 
-t.test('scenes suit the event: shops for merchants, defeat for the Hush, boss scenes for dread', () => {
+t.test('scenes suit the event: shops for merchants, defeat for the Gloss, boss scenes for dread', () => {
   const scenes = new Set(evs.map((e) => e.art.scene));
   ['ch1', 'ch2', 'ch3', 'shop', 'event', 'camp', 'paper', 'treasure', 'defeat', 'boss3'].forEach((s) => t.ok(scenes.has(s), `scene ${s} is used`));
   evs.filter((e) => chapterOf(e) >= 1).forEach((e) => t.ok(['ch' + chapterOf(e), 'shop', 'event', 'camp', 'paper', 'defeat', 'boss' + chapterOf(e), 'treasure'].indexOf(e.art.scene) >= 0, `${e.id}: scene ${e.art.scene} does not belong to another chapter`));
@@ -382,7 +382,7 @@ t.test('achievement thresholds are reachable in principle: the stat is written b
   t.ok(achs.filter((a) => L.statMax.indexOf(a.stat.k) >= 0).every((a) => a.stat.gte <= { maxHit: 100, maxTurnDamage: 300, maxDeck: 60, trialBest: 10 }[a.stat.k]), 'max-key thresholds are bests, not totals');
 });
 
-t.test('achievements really unlock through META.check, pay their Inkstones and unlock the heroes', () => {
+t.test('achievements really unlock through META.check, pay their Cheers and unlock the heroes', () => {
   if (!haveMeta) { t.ok(true, 'META not available, skipped'); return; }
   let unlocked = 0;
   achs.forEach((a) => {
@@ -412,7 +412,7 @@ const HARM = { enemyHp: 40, eliteHp: 12, bossHp: 25, enemyDmg: 60, goldMul: -12,
 const score = (mods) => Object.keys(mods).reduce((s, k) => s + HARM[k] * mods[k], 0);
 const cumulative = (n) => { const sum = {}; trials.filter((x) => x.level <= n).forEach((x) => Object.keys(x.mods).forEach((k) => { sum[k] = (sum[k] || 0) + x.mods[k]; })); return sum; };
 
-t.test('Tempo Trials: ten levels, ids and names, own increments, distinct headlines, every trial mod used', () => {
+t.test('Encores: ten levels, ids and names, own increments, distinct headlines, every trial mod used', () => {
   t.eq(trials.length, 10, 'ten trials');
   t.deep(trials.map((x) => x.level), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'levels 1 to 10');
   trials.forEach((x) => {
@@ -428,7 +428,7 @@ t.test('Tempo Trials: ten levels, ids and names, own increments, distinct headli
   L.trialMods.forEach((k) => t.ok(used.has(k), `trial mod ${k} appears in some level`));
 });
 
-t.test('Tempo Trials get monotonically harder, and the last one is punishing but fair', () => {
+t.test('Encores get monotonically harder, and the last one is punishing but fair', () => {
   let prev = 0;
   const incs = [];
   trials.forEach((x) => {
@@ -448,7 +448,7 @@ t.test('Tempo Trials get monotonically harder, and the last one is punishing but
   t.ok(score(cumulative(10)) < 100, 'and the total stays fair');
 });
 
-t.test('Tempo Trials fold into fair final numbers and never break the Ink budget', () => {
+t.test('Encores fold into fair final numbers and never break the Vox budget', () => {
   const E = DATA.ECONOMY;
   trials.forEach((x) => {
     const deltas = DATA.trialDeltas(x.level), want = cumulative(x.level);
@@ -587,7 +587,7 @@ t.test('barks: five lines for each of start, hurt, kill, down, win and swap, at 
   t.ok(barks.every((b) => Object.values(b.lines).flat().every((s) => /[.!?]$/.test(s) || /\.\.\.$/.test(s))), 'every bark ends with punctuation');
 });
 
-t.test('the Library lists every story page and no bark set', () => {
+t.test('the Tour Bus lists every Diary entry and no bark set', () => {
   if (!haveMeta || !META.storyList) { t.ok(true, 'META not available, skipped'); return; }
   const list = META.storyList().map((s) => s.id).sort();
   t.deep(list, stories.map((s) => s.id).sort(), 'storyList is every lore id except barks');
@@ -618,7 +618,7 @@ function richRun(e, seed) {
   R.flags.fox_spared = 1; R.flags.fox_bond = 1;
   return R;
 }
-// RUN locks a choice whose every outcome can only do nothing (a fixed treasure already owned, a curse to remove with none in the deck): these loops want the
+// RUN locks a choice whose every outcome can only do nothing (a fixed Charm already owned, a curse to remove with none in the deck): these loops want the
 // choice open, so they make it meaningful first. The locks themselves are tested in their own test below.
 function liveFor(R, c) {
   c.out.forEach((o) => A(o.ops).forEach((x) => {
@@ -659,7 +659,7 @@ t.test('integration: every outcome of every choice applies cleanly through RUN.a
     replayed++;
     t.ok(res && Array.isArray(res.log) && Array.isArray(res.pending), `${w}: returns a log and pending list`);
     const ops = A(o.ops);
-    const relicy = ops.some((x) => x.op === 'addRelic');                       // a relic's onPickup hook may legitimately move gold, Ink, brushes or the deck
+    const relicy = ops.some((x) => x.op === 'addRelic');                       // a relic's onPickup hook may legitimately move gold, Vox, Spells or the deck
     const fight = ops.find((x) => x.op === 'fight');
     if (fight) {
       fights++;
@@ -693,7 +693,7 @@ t.test('integration: every outcome of every choice applies cleanly through RUN.a
   t.ok(fights >= 6, `replayed ${fights} fights`);
 });
 
-t.test('integration: relic outcomes hand over a real relic on a fresh run, so the rarity pools the fables draw from are never empty', () => {
+t.test('integration: relic outcomes hand over a real relic on a fresh run, so the rarity pools the Detours draw from are never empty', () => {
   if (!haveRun || !Object.keys(DATA.relics).length) { t.ok(true, 'RUN or the relic file is not available, skipped'); return; }
   let checked = 0;
   evs.forEach((e) => e.choices.forEach((c, ci) => c.out.forEach((o, oi) => {
@@ -716,7 +716,7 @@ t.test('integration: relic outcomes hand over a real relic on a fresh run, so th
   t.ok(again.log.length === 1 && again.log[0].id === standIn[0] && /^Found /.test(again.log[0].text), 'and the log names the relic that really arrived');
 });
 
-t.test('integration: a choice that can only do nothing is locked with a reason (the fixed treasure owned, no curse to remove, nothing to sharpen), and a fable never locks itself', () => {
+t.test('integration: a choice that can only do nothing is locked with a reason (the fixed Charm owned, no curse to remove, nothing to sharpen), and a Detour never locks itself', () => {
   if (!haveRun) { t.ok(true, 'RUN or MAP not available, skipped'); return; }
   const dead = (e, over) => { const R = richRun(e, 7); R.gold = 400; R.flags = { fox_spared: 1, fox_bond: 1 }; R.deck = R.deck.filter((c) => !(DATA.cards[c.id] && DATA.cards[c.id].hero === 'curse')); R.deck.forEach((c) => { if (DATA.cards[c.id] && DATA.cards[c.id].up) c.up = 1; }); Object.assign(R, over || {}); return R; };
   const row = (id, ci, R) => RUN.eventChoices(R, DATA.events[id])[ci];
@@ -733,7 +733,7 @@ t.test('integration: a choice that can only do nothing is locked with a reason (
   const refused = RUN.eventChoose(chosen, DATA.events.void_tear, 1); t.ok(!refused.ok && /no curse/i.test(refused.reason) && chosen.node.chosen === null, 'eventChoose refuses a locked choice and changes nothing');
   // a gamble with one live outcome stays open (the koi might give a gem)
   const koi = dead(DATA.events.koi_wishing_pond); koi.chapter = 2; t.eq(row('koi_wishing_pond', 0, koi).ok, true, 'a wish with another outcome that can happen is not locked');
-  // the worst hand for every fable: broke, every fixed treasure owned, no curse, every card sharp. Something is still open, and every lock says why.
+  // the worst hand for every Detour: broke, every fixed Charm owned, no curse, every card sharp. Something is still open, and every lock says why.
   let worst = 0;
   evs.forEach((e) => {
     const R = dead(e); R.gold = 0; R.heroes.forEach((h) => { h.hp = h.maxHp; });
@@ -742,7 +742,7 @@ t.test('integration: a choice that can only do nothing is locked with a reason (
     rows.forEach((x) => { if (!x.ok && !x.hidden) { worst++; t.ok(typeof x.reason === 'string' && x.reason.length > 4, `${e.id}[${x.index}]: the lock says why (${x.reason})`); } });
   });
   t.ok(worst > 10, 'many choices lock in the worst hand (' + worst + ')');
-  // hand-made fable: every choice dead is lifted
+  // hand-made Detour: every choice dead is lifted
   const all = { id: 'allDead', title: 'x', choices: [{ label: 'a', out: [{ w: 1, text: 't', ops: [{ op: 'removeCard', filter: { type: 'curse' } }] }] }, { label: 'b', out: [{ w: 1, text: 'u', ops: [{ op: 'upgradeCard' }] }] }] };
   const D = dead(DATA.events.void_tear); D.deck.forEach((c) => { c.up = 1; }); t.deep(RUN.eventChoices(D, all).map((x) => x.ok), [true, true], 'a fable whose every choice is dead locks none of them');
 });
@@ -754,7 +754,7 @@ t.test('integration: RUN.eventChoose runs each choice end to end with seeded, de
     e.choices.forEach((c, ci) => {
       const R = clone(R0);
       R.relics = R0.relics.slice();                                              // deserialize drops relic ids nobody has defined yet
-      if (c.req && c.req.chapter) R.chapter = c.req.chapter;                     // a chapter-gated choice is only offered in that chapter
+      if (c.req && c.req.chapter) R.chapter = c.req.chapter;                     // an Act-gated choice is only offered in that Act
       liveFor(R, c);
       R.node = { kind: 'event', tile: { q: R.map.start.q, r: R.map.start.r }, event: e.id, chosen: null };
       const st = RUN.eventChoices(R, e);
@@ -771,7 +771,7 @@ t.test('integration: RUN.eventChoose runs each choice end to end with seeded, de
       if (!(c.req && c.req.chapter)) return;
       [1, 2, 3].forEach((ch) => { const X = clone(R0); X.relics = R0.relics.slice(); X.chapter = ch; t.eq(RUN.eventChoices(X, e)[ci].ok, ch === c.req.chapter, `${e.id}[${ci}]: the chapter gate opens in chapter ${c.req.chapter} only (tested in ${ch})`); });
     });
-    // a broke, healthy, empty-handed party in the wrong chapter still has the safe choice
+    // a broke, healthy, empty-handed party in the wrong Act still has the safe choice
     const B = clone(R0);
     B.gold = 0; B.relics = []; B.flags = {}; B.chapter = chapterOf(e) || 1; B.heroes.forEach((h) => { h.hp = h.maxHp; });
     const bst = RUN.eventChoices(B, e);
@@ -795,7 +795,7 @@ t.test('integration: RUN.eventChoose runs each choice end to end with seeded, de
   t.eq(fights + free, 400, 'and always resolves');
 });
 
-t.test('integration: RUN.pickEvent can reach every fable, and never offers one it should not', () => {
+t.test('integration: RUN.pickEvent can reach every Detour, and never offers one it should not', () => {
   if (!haveRun) { t.ok(true, 'RUN or MAP not available, skipped'); return; }
   const tiles = []; for (let q = 0; q < 24; q++) for (let r = 0; r < 20; r++) tiles.push({ q, r });
   const sweeps = {};

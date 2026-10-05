@@ -767,7 +767,7 @@ await t.test('piles: draw and discard open the deck viewer with their contents (
   t.eq(errs(g), 0, 'no console errors');
 });
 
-await t.test('relic strip: treasures with tooltips, a +N chip past seven places, and a flash when a relic hook runs', async () => {
+await t.test('relic strip: Charms with tooltips, a +N chip past seven places, and a flash when a relic hook runs', async () => {
   const g = fresh();
   const many = Object.keys(g.DATA.relics).slice(0, 11);
   const { st } = await enter(g, { enemies: ['kappa'], relics: many });
@@ -1550,7 +1550,7 @@ await t.test('finding 22: on a phone an intent bubble that reaches the speed or 
   t.eq(errs(g) + errs(g2), 0, 'no console errors');
 });
 
-await t.test('finding 18: with exactly seven treasures all seven show, with eight there are six and a +2 chip, and the chip ends clear of the counters', async () => {
+await t.test('finding 18: with exactly seven Charms all seven show, with eight there are six and a +2 chip, and the chip ends clear of the counters', async () => {
   const g = fresh();
   const all = Object.keys(g.DATA.relics);
   await enter(g, { enemies: ['kappa'], relics: all.slice(0, 7) });

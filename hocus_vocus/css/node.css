@@ -103,7 +103,7 @@
 .rw-relicbox { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 14px 12px 14px; border-radius: 16px; background: var(--nk-stripe) 0 0 / 100% 3px no-repeat, var(--nk-panel); box-shadow: var(--nk-rim), 0 3px 0 var(--nk-line), 0 12px 20px rgba(0, 0, 0, .55); transition: opacity .35s, transform .4s var(--ease-back); }
 .rw-relicbox.gone { opacity: 0; transform: translateY(20px) scale(.94); pointer-events: none; }
 .rw-relicbox.taken .rw-acts, .rw-relicbox.taken .rw-h3 { visibility: hidden; }
-/* .rise (base.css) fills forwards, so its last keyframe (opacity 1) would beat every .gone rule on an element that rose in: a treasure that was left or taken, a boss treasure that was passed over */
+/* .rise (base.css) fills forwards, so its last keyframe (opacity 1) would beat every .gone rule on an element that rose in: a Charm that was left or taken, a Headliner Charm that was passed over */
 .rise.gone { animation: none; }
 .rw-relic { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px; border: 0; border-radius: 12px; background: radial-gradient(circle at 50% 30%, rgba(255, 126, 182, .2), transparent 70%); cursor: pointer; color: inherit; font: inherit; }
 .rw-relic:hover { filter: brightness(1.12); } .rw-relic.pick { animation: nkPick .6s var(--ease-back) both; }
@@ -148,7 +148,7 @@
 .rw-ped .rl-name { font-size: calc(24px * var(--ts) * var(--nkc, 1)); }
 
 /* ------------------------------------------------------------------------------------------------ shop: Jordan's Merch Stall */
-/* the shop is placed from one table in screen_node.js (SHOP): --sh-l and --sh-w are the opening between the two painted posts, --sh-px the peddler's x, --sh-y1 and --sh-y2 the planks (--sh-h1 and --sh-h2 their heights) */
+/* the shop is placed from one table in screen_node.js (SHOP): --sh-l and --sh-w are the opening between the two painted posts, --sh-px Jordan's x, --sh-y1 and --sh-y2 the planks (--sh-h1 and --sh-h2 their heights) */
 .sh-sign { position: absolute; left: var(--sh-px, 206px); bottom: 14px; z-index: 3; transform: translateX(-50%); }
 .sh-sign .nk-banner span { font-size: calc(19px * var(--ts) * var(--nkc, 1)); padding: .3em 1.8em .36em; }
 .sh-bubble { position: absolute; left: calc(var(--sh-px, 206px) - 110px); bottom: 440px; z-index: 4; width: 236px; padding: 12px 16px 14px; border-radius: 18px 22px 18px 24px / 20px 16px 22px 16px; color: var(--ink); background: var(--nk-cream); border: 3px solid var(--nk-line); box-shadow: 0 5px 0 var(--nk-line), 0 14px 22px rgba(0, 0, 0, .5); pointer-events: none; }
@@ -199,7 +199,7 @@
 /* ------------------------------------------------------------------------------------------------ event: the Detour board */
 /* The Detour screen is a board on the road: a deep indigo stage panel (.ev-book) with a cream hairline and a pink to green stripe along its top. On the left (.ev-page.left) the scene plate (.ev-plate) is a big
    instant photo clipped to a string of fairy lights; on the right (.ev-page.right) the story is a cream gig poster with printed edges and two strips of tape, and the choices (.ev-choice) are ticket stubs with a
-   perforation and a notch. (.ev-gutter and .ev-ribbon, the old spine and bookmark, stay hidden.) The picture changes only by the pages arriving, never by a card sliding or flipping. 1136 x 592 stays exactly as it was. */
+   perforation and a notch. (.ev-gutter and .ev-ribbon, the old spine and ribbon, stay hidden.) The picture changes only by the pages arriving, never by a card sliding or flipping. 1136 x 592 stays exactly as it was. */
 .ev-book { position: absolute; left: 72px; top: 84px; width: 1136px; height: 592px; display: flex; z-index: 2; filter: drop-shadow(0 18px 24px rgba(0, 0, 0, .65)); }
 .ev-book::before { content: ""; position: absolute; inset: -16px -18px -20px; z-index: -2; border-radius: 26px;
   background: var(--nk-stripe) 0 0 / 100% 7px no-repeat, radial-gradient(90% 70% at 30% 0%, #35247a, transparent 70%), linear-gradient(170deg, #2a1d5a 0%, #150e36 82%);
@@ -222,7 +222,7 @@
 .ev-page.right::after { right: -22px; transform: rotate(38deg); background: rgba(63, 207, 106, .55); }
 /* no centre spine: the stage panel's rim and the poster's own edge meet with nothing between them */
 .ev-gutter { display: none; }
-.ev-ribbon { display: none; }   /* no hanging bookmark cord on the board */
+.ev-ribbon { display: none; }   /* no hanging ribbon cord on the board */
 /* the instant photo: a cream card with a thick bottom strip, hanging from a wooden peg on the string; the canvas inside stays 460 x 352 */
 .ev-plate { position: relative; width: 480px; height: 428px; padding: 10px 10px 66px; border-radius: 6px; background: var(--nk-cream); border: 2px solid var(--nk-line); box-shadow: 0 8px 0 rgba(20, 10, 40, .5), 0 14px 18px rgba(0, 0, 0, .5); transform: rotate(-.6deg); }
 .ev-plate::before { content: ""; position: absolute; left: 50%; top: -46px; width: 20px; height: 52px; margin-left: -10px; border: 2px solid var(--nk-line); border-radius: 5px; z-index: 4; pointer-events: none;
@@ -545,7 +545,7 @@ body.low .rw-burst, body.low .nk-ripple { display: none; }
 body.low .ev-book { filter: none; }
 body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--nk-line)); }
 #stage.compact .nk-sub { display: none; }
-/* the phone top bar: its Deck and Treasures buttons are 44 css px tall (81 stage px at 844x390, 88 at 740x360), taller than the 78 px bar, and the menu button is 84 to 91 wide plus its gap, so the content row is --hit tall and 104 px stay clear on the right (the Treasures button used to run 11 px under the menu button and 3 px below the bar) */
+/* the phone top bar: its Deck and Charms buttons are 44 css px tall (81 stage px at 844x390, 88 at 740x360), taller than the 78 px bar, and the menu button is 84 to 91 wide plus its gap, so the content row is --hit tall and 104 px stay clear on the right (the Treasures button used to run 11 px under the menu button and 3 px below the bar) */
 #stage.compact .nk-top { height: calc(var(--hit) + 14px); padding: 0 104px 14px 14px; }
 /* the reward banner sits under that taller bar on a phone */
 #stage.compact .rw-wrap .nk-titlebox { top: 98px; }
@@ -564,14 +564,14 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--nk-line)); }
 #stage.compact .rw-relicbox .rl-flavor, .rw-ledger.dense .rw-relicbox .rl-flavor, .rw-ledger.tall .rw-relicbox .rl-flavor, .rw-ledger.snug .rw-relicbox .rl-flavor, #stage.compact .rw-ped .rl-flavor { display: none; }
 #stage.compact .rw-relic, .rw-ledger.dense .rw-relic, .rw-ledger.tall .rw-relic { padding: 4px; gap: 2px; }
 #stage.compact .rw-relic .ico, .rw-ledger.dense .rw-relic .ico, .rw-ledger.tall .rw-relic .ico { width: 60px; height: 60px; }
-/* text scale above 1 with a gem or a brush row above the relic box (desktop): tighter rows, a smaller icon and a little more height so Take it and Leave it stay on the stage */
+/* text scale above 1 with a gem or a Spell row above the relic box (desktop): tighter rows, a smaller icon and a little more height so Take it and Leave it stay on the stage */
 .rw-ledger.snug { top: 158px; max-height: 556px; }
 .rw-ledger.snug .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
 .rw-ledger.snug .rw-relic .ico { width: 52px; height: 52px; }
 .rw-ledger.snug .rl-text { font-size: calc(15px * min(var(--ts), 1.15) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense { top: 74px; max-height: 640px; }
 #stage.compact .rw-ledger.dense .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
-/* the dense ledger holds up to four rows AND the treasure box: at text 1.3 every label wrapped to two lines and the box ran off the stage, so labels and values do not grow with --ts here */
+/* the dense ledger holds up to four rows AND the Charm box: at text 1.3 every label wrapped to two lines and the box ran off the stage, so labels and values do not grow with --ts here */
 #stage.compact .rw-ledger.dense .nk-row-lab { font-size: calc(17px * min(var(--ts), 1) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense .nk-row-val { font-size: calc(27px * min(var(--ts), 1) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense .nk-row.bonus .nk-row-val { font-size: calc(15px * min(var(--ts), 1) * var(--nkc, 1)); }
@@ -579,11 +579,11 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--nk-line)); }
 #stage.compact .rw-ledger.dense .rl-text { font-size: calc(15px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense .rw-relic .ico { width: 46px; height: 46px; }
 #stage.compact .rw-ledger.dense .rw-relicbox { padding: 6px 8px 8px; gap: 2px; margin-top: 2px; }
-/* gold, ink, a gem AND a brush above the box: every row gives back a few px so the box's bottom frame is not cut off by the ledger's edge (the box would run 9 px over at 1280x720, 10 px on a phone at text 1.3) */
+/* gold, Vox, a gem AND a Spell above the box: every row gives back a few px so the box's bottom frame is not cut off by the ledger's edge (the box would run 9 px over at 1280x720, 10 px on a phone at text 1.3) */
 .rw-ledger.tall .nk-row { margin-bottom: 7px; }
 #stage.compact .rw-ledger.tall .nk-row { margin-bottom: 3px; }
 #stage.compact .rw-ledger.tall .rw-relicbox { padding: 5px 8px 6px; }
-/* a gem or brush row names its prize at a smaller size so even "Mirrorlake Aquamarine" takes two lines inside the 44 px row, and every row of the ledger stays one height */
+/* a gem or Spell row names its prize at a smaller size so even "Mirrorlake Aquamarine" takes two lines inside the 44 px row, and every row of the ledger stays one height */
 #stage.compact .rw-ledger.dense .nk-row.bonus .nk-row-lab { font-size: calc(13.5px * min(var(--ts), 1) * var(--nkc, 1)); line-height: 1.05; }
 #stage.compact .rw-ledger.dense .nk-row.bonus .nk-row-val { letter-spacing: .04em; }
 #stage.compact .cp-grid { top: 140px; max-height: 470px; gap: 12px 16px; }
@@ -625,7 +625,7 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--nk-line)); }
 #stage.compact .sh-tag s { font-size: calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .sh-tag.free b { letter-spacing: .04em; }
 #stage.compact .sh-name.sh-long { font-size: calc(14px * min(var(--ts), 1) * var(--nkc, 1) * .74); letter-spacing: -.01em; }   /* a long word shrinks to fit the 109 px plaque instead of breaking mid-word */
-/* the fable page on a phone: choices are real touch targets (at least 40 css px, a wider gap between them) and the page gives back padding to pay for it; what still does not fit scrolls, and says so */
+/* the Detour page on a phone: choices are real touch targets (at least 40 css px, a wider gap between them) and the page gives back padding to pay for it; what still does not fit scrolls, and says so */
 #stage.compact .ev-page.right { padding-top: 20px; padding-bottom: 14px; }
 #stage.compact .ev-title { margin-bottom: 4px; }
 #stage.compact .ev-text, #stage.compact .ev-result { margin: 8px 0 10px; }

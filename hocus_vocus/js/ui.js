@@ -55,6 +55,13 @@
 //   UI.outfit.list() -> hero ids that have an outfit   .name(id) -> 'Unicorn Onesie' | ''   .unlocked(id) -> bool   .chosen(id) -> the stored 'skin' | 'stage'
 //   .of(id) / .effective() -> what is drawn: 'skin' only when stored 'skin' AND unlocked   .set(id, 'skin' | 'stage') -> bool (a locked outfit is refused)
 //   .push() -> the effective map handed to ART.hero.outfits(map): at UI.init, before every screen enters, after every set, and on META.bus 'achievement'
+// FOLLOW      (HV_STORY 5, bible 7.2; no network, nothing stored) the duo's links, Share and Support. The URLs are DATA.LINKS (an empty one is not rendered).
+//   UI.followPanel(mode, {supportLine}?) -> el   mode 'sheet' | 'tab' | 'strip' | 'gameover': heading, the duo waving (sheet and tab), the handle line, one real <a class="hv-link"
+//     target="_blank" rel="noopener noreferrer"> per non-empty URL (a pink or green dot, aria "<label>: RoxorLoops and Jasmin, opens in a new tab"), the no-links line (sheet and tab, only
+//     when all five are empty), Share, Support the duo (an <a class="btn btn-primary hv-support"> only when DATA.LINKS.support is set, never in 'gameover'); 'tab' adds the about text, the
+//     support line (above Support) and Jordan's line; {supportLine: true} adds the support line to any other mode.   UI.followSheet() opens that panel in UI.modal.
+//   UI.share() Share: navigator.share when present (an AbortError is silent, any other rejection falls back to the clipboard), else the clipboard: SHARE_TEXT + ' ' + UI.shareUrl() and a toast.
+//   UI.shareUrl() DATA.LINKS.game or origin + pathname (never the query or hash).   UI.followText the frozen follow strings (heading, handleLine, aboutText, shortAbout, creditsLine, ...).
 // UI.bus = U.bus() emits 'screen' {name, params} after every enter and 'overlay' {name, open}. ART, AUDIO, META and SCENE are only ever reached through typeof checks,
 // so every component works with any of them missing (placeholder painters, silent audio); a throwing ART call is caught and warned once.
 const UI = (() => {
@@ -956,7 +963,7 @@ const UI = (() => {
     return off;
   }
 
-  const FOCUSABLE = 'button:not([disabled]), [role=button], [tabindex="0"], input:not([disabled]), select:not([disabled])';
+  const FOCUSABLE = 'button:not([disabled]), a[href], [role=button], [tabindex="0"], input:not([disabled]), select:not([disabled])';
 
   function focusMove(dir, root) {
     root = root || (S.overlays.length ? S.overlays[S.overlays.length - 1].root : layers.screens);
@@ -1471,7 +1478,7 @@ const UI = (() => {
     const st = S.stage;
     let lastHover = null, lastHoverAt = -1e9, kwHold = 0;
     st.addEventListener('click', (e) => {
-      const b = e.target && e.target.closest ? e.target.closest('button, [role=button]') : null;
+      const b = e.target && e.target.closest ? e.target.closest('button, [role=button], a.hv-link, a.hv-support') : null;   // the follow anchors click like buttons
       if (!b || !st.contains(b)) return;
       if (b.getAttribute('aria-disabled') === 'true') { sfx('ui_error'); shake(b); return; }
       if (b.dataset && b.dataset.sfx === 'none') return;
@@ -2150,6 +2157,129 @@ const UI = (() => {
   };
 
   // ==================================================================================================================
+  // follow the duo, Share and Support (HV_STORY 5, bible 7.2). No network: the links are plain anchors the player taps (a new tab, never
+  // intercepted or counted), Share uses the device's own share sheet or the clipboard, and nothing is stored. The owners' URLs are
+  // DATA.LINKS; a button whose URL is empty is not rendered, so today's build shows the handle line and Share only.
+  // ==================================================================================================================
+  const LINK_ORDER = [['website', 'Website'], ['youtube', 'YouTube'], ['facebook', 'Facebook'], ['tiktok', 'TikTok'], ['instagram', 'Instagram']];
+  const SHARE_TITLE = 'HOCUS VOCUS: A Vocal Magic Adventure';
+  const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+  const linksCfg = () => (typeof DATA !== 'undefined' && DATA.LINKS) || {};
+  const handleOf = () => (typeof linksCfg().handle === 'string' && linksCfg().handle) || '@roxorloopsandjasmin';
+  // every follow string (HV_STORY 5.3 and 6), exposed as UI.followText so the menus and the end screens print the same words
+  const FOLLOW_TEXT = Object.freeze({
+    heading: 'Follow the duo', share: 'Share', shareAria: 'Share Hocus Vocus', support: 'Support the duo', close: 'Close',
+    copied: 'Copied. Go on, show someone.', failed: 'Could not copy here. The address bar has the link.',
+    supportLine: 'Enjoying the tour? The real duo would love your support.',
+    jordanLine: 'Jordan made these buttons. Press them gently.',
+    creditsLine: 'Drawn in code, sung with heart. No two tours alike.',
+    aboutText: "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.",
+    shortAbout: 'A card adventure made for RoxorLoops and Jasmin. Beatboxing and vocal magic, drawn in code.',
+    get handleLine() { return 'Made for RoxorLoops and Jasmin. Find them as ' + handleOf() + '.'; },
+    get noLinks() { return 'Links are on their way. For now, look for ' + handleOf() + '.'; },
+  });
+  const FOLLOW_MODES = ['sheet', 'tab', 'strip', 'gameover'];
+
+  // the address Share hands out: the owners' public address, else this page without its query or hash (a seed is never shared by accident)
+  function shareUrl() { const g = linksCfg().game; return (typeof g === 'string' && g) || (window.location.origin + window.location.pathname); }
+  function copyShare() {
+    const text = SHARE_TEXT + ' ' + shareUrl();
+    const bad = () => toast(FOLLOW_TEXT.failed, 'warn');
+    try { navigator.clipboard.writeText(text).then(() => toast(FOLLOW_TEXT.copied, 'good'), bad); } catch (e) { bad(); }
+  }
+  // runs only inside a tap handler. The share sheet closing (AbortError) is silent; any other refusal falls back to the clipboard.
+  function shareNow() {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        const p = navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: shareUrl() });
+        if (p && typeof p.catch === 'function') p.catch((e) => { if (!e || e.name !== 'AbortError') copyShare(); });
+        return;
+      }
+    } catch (e) { /* a refused or missing share sheet falls through to the clipboard */ }
+    copyShare();
+  }
+
+  // only a web address is ever linked (a stray scheme such as javascript: in the config is ignored)
+  const linkUrl = (v) => { const u = typeof v === 'string' ? v.trim() : ''; return /^https?:\/\/\S/i.test(u) ? u : ''; };
+  function followLinks(L) {
+    const wrap = mk('div', { class: 'hv-links' });
+    let n = 0;
+    LINK_ORDER.forEach((pair) => {
+      const url = linkUrl(L[pair[0]]);
+      if (!url) return;
+      wrap.appendChild(mk('a', { class: 'hv-link', href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': pair[1] + ': RoxorLoops and Jasmin, opens in a new tab' },
+        mk('i', { class: 'hv-dot ' + (n % 2 ? 'is-green' : 'is-pink'), 'aria-hidden': 'true' }), mk('span', { class: 'hv-link-l', text: pair[1] })));
+      n++;
+    });
+    return n ? wrap : null;
+  }
+
+  // the duo waving: Jasmin (hero hanae) and RoxorLoops (hero kuro) in the outfits the viewer chose, drawn once with ART.hero.draw (the cheer pose
+  // holds its last key). Without the art (or if it will not draw) two round faces stand in, so the panel never breaks.
+  function duoNode(w, h, sc) {
+    const names = (id) => (DATA.heroes[id] && DATA.heroes[id].name) || id;
+    const label = names('hanae') + ' and ' + names('kuro') + ' waving';
+    const ar = AR();
+    if (ar && ar.hero && isFn(ar.hero, 'draw')) {
+      const c = mk('canvas', { class: 'hv-duo', width: Math.max(1, Math.round(w * S.px)), height: Math.max(1, Math.round(h * S.px)), style: { width: w + 'px', height: h + 'px' }, role: 'img', 'aria-label': label });
+      const drawn = safe(() => {
+        const g = c.getContext('2d');
+        g.setTransform(S.px, 0, 0, S.px, 0, 0);
+        [['hanae', 0.33, false], ['kuro', 0.67, true]].forEach((o) => {
+          ar.hero.draw(g, o[0], { x: w * o[1], y: h - 8, s: sc, pose: 'cheer', pt: 0.6, t: 0.4, flip: o[2], skin: safe(() => outfitApi.of(o[0]), 'stage') });
+        });
+        return true;
+      }, false);
+      if (drawn) return c;
+    }
+    return mk('div', { class: 'hv-duo hv-duo-faces', role: 'img', 'aria-label': label }, medalCanvas('hanae', 64), medalCanvas('kuro', 64));
+  }
+
+  // UI.followPanel(mode, {supportLine}?): the whole follow block for a surface, built fresh on every call (see the header)
+  function followPanel(mode, opts) {
+    mode = FOLLOW_MODES.indexOf(mode) >= 0 ? mode : 'sheet';
+    opts = opts || {};
+    const L = linksCfg(), T = FOLLOW_TEXT;
+    const slim = mode === 'strip' || mode === 'gameover';
+    const root = mk('div', { class: 'hv-follow hv-' + mode, role: 'group', 'aria-label': T.heading, dataset: { mode } });
+    // the sheet's modal title is the visible heading, so here it stays for screen readers only
+    root.appendChild(mk('h3', { class: 'hv-follow-h' + (mode === 'sheet' ? ' sr-only' : ''), text: T.heading }));
+    if (mode === 'sheet') root.appendChild(duoNode(300, 168, 0.54));
+    else if (mode === 'tab') root.appendChild(duoNode(340, 190, 0.66));
+    root.appendChild(mk('p', { class: 'hv-handle', text: T.handleLine }));
+    if (mode === 'sheet') root.appendChild(mk('p', { class: 'hv-about-short', text: T.shortAbout }));
+    // the tab reads heading, handle, about, Jordan, then the controls (the CSS grid puts the words beside the portrait); the pills stay first in the focus order
+    if (mode === 'tab') root.appendChild(mk('p', { class: 'hv-about', text: T.aboutText }));
+    if (mode === 'tab') root.appendChild(mk('p', { class: 'hv-jordan', text: T.jordanLine }));
+    const links = followLinks(L);
+    if (links) root.appendChild(links);
+    else if (!slim) root.appendChild(mk('p', { class: 'hv-nolinks', text: T.noLinks }));
+    const acts = mk('div', { class: 'hv-acts' });
+    const shareBtn = btn(T.share, { kind: mode === 'gameover' ? 'ghost' : 'secondary', size: slim ? 'sm' : undefined, class: 'hv-share', onclick: () => shareNow() });
+    shareBtn.setAttribute('aria-label', T.shareAria);
+    acts.appendChild(shareBtn);
+    const supportUrl = mode === 'gameover' ? '' : linkUrl(L.support);
+    const support = supportUrl ? mk('a', { class: 'btn btn-primary hv-support' + (slim ? ' btn-sm' : ''), href: supportUrl, target: '_blank', rel: 'noopener noreferrer', 'aria-label': T.support + ', opens in a new tab' },
+      iconCanvas('relic', 'heart', slim ? 18 : 22, {}, 'btn-ico'), mk('span', { class: 'btn-label', text: T.support }), mk('i', { class: 'btn-shine', 'aria-hidden': 'true' })) : null;
+    // the support line only makes sense above a Support button, so it is never printed without one
+    const supportLine = support && (mode === 'tab' || opts.supportLine) ? mk('p', { class: 'hv-support-line', text: T.supportLine }) : null;
+    if (mode === 'tab') {
+      root.appendChild(acts);
+      if (support) root.appendChild(mk('div', { class: 'hv-support-wrap' }, supportLine, support));
+    } else {
+      if (supportLine) root.appendChild(supportLine);
+      if (support) acts.appendChild(support);
+      root.appendChild(acts);
+    }
+    return root;
+  }
+
+  // one call for the title footer, the end screens and anything else that wants the sheet: the panel in the shared modal (Esc and Close dismiss it)
+  function followSheet() {
+    return api.modal({ title: FOLLOW_TEXT.heading, body: followPanel('sheet'), buttons: [{ label: FOLLOW_TEXT.close, kind: 'secondary' }] });
+  }
+
+  // ==================================================================================================================
   // public API
   // ==================================================================================================================
   const api = {
@@ -2170,6 +2300,7 @@ const UI = (() => {
     card, cardUpdate, cardBack, relic, gem, status, heroBadge, stat, btn, setDisabled, panel, hanko, divider, bar, tabs, seg, toggle, slider, settingsPanel,
     icon: iconCanvas, medallion: medalCanvas, outfit: outfitApi, vars, el: mk, esc: U.esc, plain: plainOf, resolveCard, kwInfo,
     tip, fail, toTitle,
+    share: shareNow, shareUrl, followPanel, followSheet, followText: FOLLOW_TEXT,
     setRun(R) { S.run = R; return R; },
     get run() { return S.run; },
     get time() { return S.clock.t; },

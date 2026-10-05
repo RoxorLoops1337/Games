@@ -2,7 +2,7 @@
 //
 // What this pins down:
 //   * the contract of DESIGN 5.6: ART.has is true for every status, relic (all 58 LISTS.relicIcons motifs and every DATA.relics id), gem and
-//     empty socket, tile, intent, stat, brush, card type, row and motif; ART.icon.ids(kind) lists them; ART.icon.kinds equals LISTS.iconKinds
+//     empty socket, tile, intent, stat, Spell, card type, row and motif; ART.icon.ids(kind) lists them; ART.icon.kinds equals LISTS.iconKinds
 //   * every id of every kind draws at the sizes the UI really uses (and at hostile ones), static and animated, with every opts flag, without
 //     a throw or a canvas issue, balanced save and restore, and blits ONE cached sprite at the right place and scale
 //   * unknown kinds and ids, and hostile arguments, draw a sealed "?" token or a dot instead of throwing
@@ -512,7 +512,7 @@ t.test('stats: lit and empty states for ink, hp and energy; the others are alway
   ['gold', 'brush', 'inkstone', 'block'].forEach((id) => t.ok(bodyOf('stat', id, 48, { on: false }).length > 100, `${id} still draws with on false`));
 });
 
-t.test('brushes: each brush id paints the shape it paints on a mini hex grid, different from the others', () => {
+t.test('Spells: each Spell id paints the shape it paints on a mini hex grid, different from the others', () => {
   const sigs = new Set();
   Object.keys(DATA.brushes).forEach((id) => {
     const b = bodyOf('brush', id, 64, {});

@@ -1,11 +1,11 @@
-// MAP: the hex page (DESIGN 4.8 and 5.3). Generation rules over 300 seeds x 3 chapters, brush geometry against an independent
-// reference for every brush x direction x many anchors, painting and walking semantics on hand-built pages, pixel round trips,
+// MAP: the hex map (DESIGN 4.8 and 5.3). Generation rules over 300 seeds x 3 Acts, Spell geometry against an independent
+// reference for every Spell x direction x many anchors, unmuting and walking semantics on hand-built maps, pixel round trips,
 // saves and determinism. Every check below re-derives its answer with its own small BFS and hex math instead of asking MAP.
 //
 // The suite boots map.js alone on a bare DATA (`skip: data_*`) so a broken content file elsewhere can never fail it; the encounter
 // section installs its own fake pools with DATA.addEncounters, and the last section replays a few maps against whatever real content
 // files exist. It prints one ASCII map and the generator statistics (not asserted) so a human can eyeball them.
-// MAP_TEST_SEEDS=N (default 300) changes how many seeds per chapter the generation rules run over: a soak run of 2000 takes a few minutes.
+// MAP_TEST_SEEDS=N (default 300) changes how many seeds per Act the generation rules run over: a soak run of 2000 takes a few minutes.
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus map');
@@ -29,7 +29,7 @@ const expectedCount = (type, nonBlock, ch) => {
   if (type === 'elite' && ch === 3) c = Math.min(E.countMax.elite, c + 1);
   return c;
 };
-// fewest paints from the painted set to the target over hidden non-block tiles (Infinity when cut off), boss included
+// fewest paints from the unmuted set to the target over hidden non-block tiles (Infinity when cut off), boss included
 function paintCost(M, target) {
   const dist = new Map(), queue = [];
   all(M).forEach((tl) => { if (tl.type !== 'block' && !tl.painted && nbrs(M, tl).some((n) => n.painted)) { dist.set(key(tl.q, tl.r), 1); queue.push(tl); } });
@@ -51,7 +51,7 @@ function flood(M, sources) {
   return dist;
 }
 const ringOf = (M) => all(M).filter((tl) => tl.type !== 'block' && hex(M.start, tl) <= EM.startRing);
-// blank page builder for hand-checked semantics: every tile empty and hidden
+// blank map builder for hand-checked semantics: every tile empty and hidden
 function blank(cols, rows) {
   const M = { v: 1, chapter: 1, seed: 0, cols, rows, tiles: {}, start: null, boss: null, pos: null };
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const q = c - Math.floor(r / 2); M.tiles[key(q, r)] = { q, r, type: 'empty', painted: false, known: false, done: false, diff: 0, content: {} }; }
@@ -157,7 +157,7 @@ t.test('pixel helpers: geometry, exact round trip for every tile, jitter inside 
 });
 
 // ================================================================== generation
-t.test('shape of a generated page (900 maps)', () => {
+t.test('shape of a generated map (900 maps)', () => {
   rule('layout, columns, types, flags', (M, ch) => {
     if (M.v !== 1 || M.chapter !== ch || M.cols !== 21 || M.rows !== 13) return 'header';
     if (Object.keys(M.tiles).length !== 273) return 'tile count';
@@ -194,7 +194,7 @@ t.test('shape of a generated page (900 maps)', () => {
   t.ok(starts.size >= 4 && bosses.size >= 4, 'start and boss rows vary (' + [...starts].sort() + ' / ' + [...bosses].sort() + ')');
   t.ok([...starts].concat([...bosses]).every((r) => r >= 3 && r <= 9), 'start and boss stay near the middle rows');
 });
-t.test('counts follow DATA.tileCount (plus one elite in chapter 3), Void share 8 to 16 percent, clustered', () => {
+t.test('counts follow DATA.tileCount (plus one elite in Act 3), Void share 8 to 16 percent, clustered', () => {
   rule('tile counts', (M, ch) => {
     const nonBlock = all(M).filter((x) => x.type !== 'block').length;
     for (const type of Object.keys(E.dist)) {
@@ -304,13 +304,13 @@ t.test('the spine is a real cheapest route; wells sit on it and beside it', () =
     if (sp.some((x) => x.type === 'elite')) return 'elite on the route';
   });
 });
-t.test('spine ignores painted flags and solve tracks them', () => {
+t.test('spine ignores unmuted flags and solve tracks them', () => {
   const fresh = MAP.generate({ chapter: 2, seed: 61 }), played = playedPage(61, 2, 80);
   t.deep(MAP.spine(played), MAP.spine(fresh), 'the spine of a half painted page is the spine of the fresh page');
   t.eq(MAP.spine(fresh).length, MAP.solve(fresh).minInk, 'on a fresh page it is exactly minInk cells long');
   t.ok(MAP.solve(played).minInk < MAP.solve(fresh).minInk || MAP.solve(played).minInk === 0, 'while solve shrinks as the page is painted');
 });
-t.test('placement rules: elites, camps, shops, chests, forges, gem caches, brush racks', () => {
+t.test('placement rules: elites, camps, shops, chests, forges, gem caches, Buskers', () => {
   const minPair = (M, type) => { const a = all(M).filter((x) => x.type === type); let m = 99; for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) m = Math.min(m, hex(a[i], a[j])); return m; };
   rule('elites never within 3 hexes of the start or boss, spread apart', (M) => {
     for (const e of all(M).filter((x) => x.type === 'elite')) if (hex(M.start, e) < 4 || hex(M.boss, e) < 4) return 'elite too close ' + key(e.q, e.r);
@@ -382,7 +382,7 @@ t.test('the audit passes on every fresh map and catches planted defects', () => 
   t.ok(plant((M) => { all(M).forEach((x) => { if (x.type === 'block') x.type = 'empty'; }); }).length > 0, 'no Void at all');
   t.ok(plant((M) => { all(M).find((x) => x.type === 'elite').type = 'empty'; all(M).find((x) => x.type === 'empty' && hex(M.start, x) === 4).type = 'elite'; }).length > 0, 'an elite too close to the start');
 });
-t.test('determinism: same arguments same page, different seeds and chapters differ, no hidden state', () => {
+t.test('determinism: same arguments same map, different seeds and Acts differ, no hidden state', () => {
   for (const ch of CHAPTERS) for (let s = 1; s <= 40; s++) {
     const seed = s * 7919 + ch * 104729, a = JSON.stringify(MAP.generate({ chapter: ch, seed })), b = JSON.stringify(MAP.generate({ seed, chapter: ch }));
     t.ok(a === b, `ch${ch} seed ${seed} regenerates identically`);
@@ -413,7 +413,7 @@ t.test('retries: an impossible solve range falls back to the safe layout in boun
   t.eq(MAP.audit(MAP.generate({ chapter: 1, seed: 99 })).length, 0, 'the default range is restored');
   const safeLayouts = new Set(); EM.solve = { min: 40, max: 50 }; for (let s = 1; s <= 12; s++) safeLayouts.add(all(MAP.generate({ chapter: 2, seed: s })).map((x) => x.type).join('')); EM.solve = JSON.parse(saved);
   t.eq(safeLayouts.size, 12, 'safe pages still differ by seed');
-  // the safe layout is a valid page on its own: connected, cheapest route inside the real range, counts right, and it never needs a retry to be right
+  // the safe layout is a valid map on its own: connected, cheapest route inside the real range, counts right, and it never needs a retry to be right
   EM.solve = { min: 40, max: 50 };
   const safeMaps = []; for (const ch of CHAPTERS) for (let s = 1; s <= 40; s++) safeMaps.push({ ch, seed: s * 31 + ch, M: MAP.generate({ chapter: ch, seed: s * 31 + ch }) });
   EM.solve = JSON.parse(saved);
@@ -427,7 +427,7 @@ t.test('retries: an impossible solve range falls back to the safe layout in boun
     const share = all(M).filter((x) => x.type === 'block').length / 273; if (share < 0.08 || share > 0.16) return 'void share ' + share;
     if (M.attempts !== 41) return 'attempts ' + M.attempts;
   }, safeMaps);
-  // retry semantics: a page that needed a second candidate IS the first candidate of seed U.hash(seed, 'retry', 1)
+  // retry semantics: a map that needed a second candidate IS the first candidate of seed U.hash(seed, 'retry', 1)
   const retried = MAPS.filter((m) => m.M.attempts === 2);
   t.ok(retried.length > 0, 'some pages needed a retry (' + retried.length + ')');
   retried.forEach((m) => {
@@ -467,7 +467,7 @@ t.test('save round trip', () => {
   const extra = MAP.serialize(base); extra.note = 'kept'; t.eq(MAP.deserialize(extra).note, 'kept', 'unknown top-level fields survive');
 });
 
-// ================================================================== brushes
+// ================================================================== Spells
 // independent reference implementation of DESIGN 4.8
 function refBrush(M, id, q, r, dir) {
   const b = DATA.brushes[id], o = T(M, q, r), mod = (d) => ((d % 6) + 6) % 6;
@@ -483,14 +483,14 @@ function refBrush(M, id, q, r, dir) {
   cs = originOk ? cs.filter((c) => free(c[0], c[1])) : [];
   return { ok: originOk && cs.length > 0, cells: cs };
 }
-// a half-painted real page: some hexes painted by chains and by a brush, so hidden, painted and Void tiles all sit next to each other
+// a half-unmuted real map: some hexes unmuted by chains and by a Spell, so hidden, unmuted and Void tiles all sit next to each other
 function playedPage(seed, ch, paints) {
   const M = MAP.generate({ chapter: ch, seed });
   const rng = U.rng(seed);
   for (let i = 0; i < paints; i++) { const f = MAP.frontier(M); if (!f.length) break; const p = f[Math.floor(rng() * f.length)]; MAP.paint(M, p.q, p.r); }
   return M;
 }
-t.test('brush kinds in DATA.brushes are exactly the geometries implemented', () => {
+t.test('Spell kinds in DATA.brushes are exactly the geometries implemented', () => {
   const ids = Object.keys(DATA.brushes);
   t.ok(ids.length >= 6, 'six brushes'); t.deep(ids.map((i) => DATA.brushes[i].kind).sort(), ['blob', 'dot', 'fan', 'line', 'line', 'ring'], 'kinds: line x2, fan, blob, ring, dot');
   t.deep(ids.filter((i) => DATA.brushes[i].kind === 'line').map((i) => DATA.brushes[i].len).sort(), [3, 5], 'stroke 3 and wave 5');
@@ -499,14 +499,14 @@ t.test('brush kinds in DATA.brushes are exactly the geometries implemented', () 
   t.deep(MAP.brushCells(M, 'nope', 5, 5, 0), [], 'no cells for an unknown id');
   DATA.LISTS.brushKinds.forEach((k) => t.ok(ids.some((i) => DATA.brushes[i].kind === k), 'a brush of kind ' + k));
 });
-t.test('brush geometry by hand: one painted hex in the middle of a blank page', () => {
+t.test('Spell geometry by hand: one unmuted hex in the middle of a blank map', () => {
   const M = blank(15, 11), P = cr(M, 7, 5); setPainted(M, [P]); M.pos = { q: P.q, r: P.r };
   const at = (k, d) => [P.q + DIRS[d][0] * k, P.r + DIRS[d][1] * k];
   for (let d = 0; d < 6; d++) {
     t.deep(MAP.brushCells(M, 'stroke', P.q, P.r, d), [1, 2, 3].map((k) => at(k, d)), 'stroke dir ' + d + ': three hexes nearest first');
     t.deep(MAP.brushCells(M, 'wave', P.q, P.r, d), [1, 2, 3, 4, 5].map((k) => at(k, d)), 'wave dir ' + d + ': five hexes');
     t.deep(MAP.brushCells(M, 'fan', P.q, P.r, d), [-1, 0, 1].map((k) => at(1, (d + k + 6) % 6)), 'fan dir ' + d + ': neighbours dir-1, dir, dir+1');
-    // splash: anchor is the neighbour in direction d, hidden and touching the painted hex
+    // splash: anchor is the neighbour in direction d, hidden and touching the unmuted hex
     const A = at(1, d), sp = MAP.brushCells(M, 'splash', A[0], A[1], 0);
     t.eq(sp.length, 6, 'splash next to one painted hex paints 6 (its 7 cells minus the painted one)'); t.deep(sp[0], A, 'splash starts on the anchor');
     t.ok(!cells(sp).includes(key(P.q, P.r)), 'splash never repaints');
@@ -518,7 +518,7 @@ t.test('brush geometry by hand: one painted hex in the middle of a blank page', 
   t.deep(MAP.canBrush(M, 'blot', at(3, 2)[0], at(3, 2)[1], 0), { ok: true }, 'blot does not need to touch painted ground');
   t.deep(MAP.canBrush(M, 'blot', P.q, P.r, 0), { ok: false, reason: 'origin', need: 'hidden-near' }, 'blot on a painted hex');
 });
-t.test('brush rules: origin rules, reasons, direction handling', () => {
+t.test('Spell rules: origin rules, reasons, direction handling', () => {
   const M = blank(15, 11), P = cr(M, 7, 5), H = cr(M, 3, 3); setPainted(M, [P]); M.pos = { q: P.q, r: P.r };
   t.deep(MAP.canBrush(M, 'stroke', H.q, H.r, 0), { ok: false, reason: 'origin', need: 'painted' }, 'a line must start on a painted hex');
   t.deep(MAP.canBrush(M, 'fan', H.q, H.r, 0), { ok: false, reason: 'origin', need: 'painted' }, 'a fan must start on a painted hex');
@@ -531,7 +531,7 @@ t.test('brush rules: origin rules, reasons, direction handling', () => {
   t.deep(MAP.brushCells(M, 'stroke', P.q, P.r, 6), MAP.brushCells(M, 'stroke', P.q, P.r, 0), 'directions wrap mod 6'); t.deep(MAP.brushCells(M, 'stroke', P.q, P.r, -1), MAP.brushCells(M, 'stroke', P.q, P.r, 5), 'negative directions wrap');
   const A = cr(M, 8, 5); M.tiles[key(A.q, A.r)].type = 'block';
   t.deep(MAP.canBrush(M, 'splash', A.q, A.r, 0), { ok: false, reason: 'void' }, 'splash on Void'); t.deep(MAP.canBrush(M, 'blot', A.q, A.r, 0), { ok: false, reason: 'void' }, 'blot on Void');
-  // Void and painted hexes are skipped without stopping a line; the page edge is too
+  // Void and unmuted hexes are skipped without stopping a line; the map edge is too
   const L = blank(9, 7), O = cr(L, 1, 3); setPainted(L, [O]); L.pos = { q: O.q, r: O.r };
   cr(L, 3, 3).type = 'block'; setPainted(L, [cr(L, 4, 3)]);
   t.deep(MAP.brushCells(L, 'wave', O.q, O.r, 0), [cr(L, 2, 3), cr(L, 5, 3), cr(L, 6, 3)].map((x) => [x.q, x.r]), 'wave E over a Void hex and a painted hex: cells 1, 4 and 5 paint, 2 (Void) and 3 (painted) are skipped and the line goes on (RULE: skipped, not stopped)');
@@ -545,7 +545,7 @@ t.test('brush rules: origin rules, reasons, direction handling', () => {
   t.deep(MAP.brushCells(L, 'halo', corner.q, corner.r, 0), [[corner.q + 1, 0], [corner.q, 1]], 'a halo in the page corner (row 0, column 0) paints the 2 neighbours that exist: E and SE');
   t.deep(MAP.brushCells(L, 'fan', corner.q, corner.r, 2), [], 'a fan aimed NW off the page paints nothing');
   t.deep(MAP.brushCells(L, 'fan', corner.q, corner.r, 1), [[corner.q + 1, 0]], 'a fan aimed NE keeps only its E hex');
-  // a brush whose cells are all already painted is not ok
+  // a Spell whose cells are all already unmuted is not ok
   const R = blank(7, 5), C = cr(R, 3, 2); setPainted(R, [C].concat(DIRS.map((d) => T(R, C.q + d[0], C.r + d[1]))));
   t.deep(MAP.canBrush(R, 'halo', C.q, C.r, 0), { ok: false, reason: 'nothing' }, 'halo with nothing new');
   t.deep(MAP.applyBrush(R, 'halo', C.q, C.r, 0), [], 'applyBrush returns [] when not ok');
@@ -558,7 +558,7 @@ t.test('applyBrush paints exactly brushCells and returns those tiles', () => {
   t.eq(all(M).filter((x) => x.painted).length, 1 + want.length, 'nothing else changed'); t.ok(!cr(M, 9, 5).painted, 'Void never painted by a brush');
   t.eq(MAP.canBrush(M, 'wave', P.q, P.r, 0).ok, false, 'the same brush finds nothing new the second time'); t.deep(MAP.applyBrush(M, 'wave', P.q, P.r, 0), [], 'so applying again does nothing');
 });
-t.test('brush geometry against the reference: every brush x every direction x many anchors on played pages', () => {
+t.test('Spell geometry against the reference: every Spell x every direction x many anchors on played maps', () => {
   let checked = 0, bad = [];
   const pages = [playedPage(11, 1, 0), playedPage(12, 2, 15), playedPage(13, 3, 45), playedPage(14, 1, 90), playedPage(15, 2, 140)];
   for (const M of pages) {
@@ -576,7 +576,7 @@ t.test('brush geometry against the reference: every brush x every direction x ma
   }
   t.ok(bad.length === 0, `${checked} brush placements agree with the reference: ${bad.slice(0, 3).join(' | ')}`);
   t.ok(checked > 10000, 'a thorough sweep (' + checked + ' placements)');
-  // applying on a live page: the painted set grows by exactly the promised cells and canPaint agrees afterwards
+  // applying on a live map: the unmuted set grows by exactly the promised cells and canPaint agrees afterwards
   const M = pages[3], anchors = MAP.brushAnchors(M, 'splash');
   t.ok(anchors.length > 0 && anchors.every((a) => refBrush(M, 'splash', a.q, a.r, 0).ok), 'brushAnchors lists exactly the legal splash anchors');
   const all6 = MAP.brushAnchors(M, 'wave'); t.ok(all6.every((a) => a.dirs.length > 0 && a.dirs.every((d) => refBrush(M, 'wave', a.q, a.r, d).ok)), 'wave anchors carry working directions');
@@ -586,7 +586,7 @@ t.test('brush geometry against the reference: every brush x every direction x ma
   t.eq(all(M).filter((x) => x.painted).length, before + cellsWanted.length, 'painted count grew by the promised cells'); t.eq(tilesPainted.length, cellsWanted.length, 'and the return value matches');
   t.ok(cellsWanted.every((c) => MAP.canPaint(M, c[0], c[1]).reason === 'painted'), 'they now read as painted');
 });
-t.test('brushes on fresh generated pages: the start ring gives every brush somewhere to go', () => {
+t.test('Spells on fresh generated maps: the start ring gives every Spell somewhere to go', () => {
   let bad = 0;
   MAPS.slice(0, 120).forEach((m) => {
     const M = m.M;
@@ -597,7 +597,7 @@ t.test('brushes on fresh generated pages: the start ring gives every brush somew
   t.eq(bad, 0, 'brushes always have a legal anchor on a fresh page');
 });
 
-// ================================================================== painting, chains, solve
+// ================================================================== unmuting, chains, solve
 t.test('canPaint reasons and paint semantics', () => {
   const M = playedPage(21, 1, 0), s = M.start;
   t.deep(MAP.canPaint(M, 999, 999), { ok: false, reason: 'off' }, 'off the page');
@@ -612,7 +612,7 @@ t.test('canPaint reasons and paint semantics', () => {
   t.eq(MAP.paint(M, far.q, far.r) === far, true, 'paint is low level: it does not check adjacency (canPaint and pathToPaint do)'); far.painted = false; far.known = false;
   t.ok(MAP.canPaint(M, pick.q, pick.r).reason === 'painted', 'now painted');
 });
-t.test('pathToPaint: the cheapest chain, in painting order, against an independent BFS', () => {
+t.test('pathToPaint: the cheapest chain, in unmuting order, against an independent BFS', () => {
   let bad = [], checked = 0;
   [playedPage(31, 1, 0), playedPage(32, 2, 30), playedPage(33, 3, 70)].forEach((M) => {
     all(M).forEach((tl, i) => {
@@ -628,12 +628,12 @@ t.test('pathToPaint: the cheapest chain, in painting order, against an independe
     });
   });
   t.ok(bad.length === 0, `pathToPaint over ${checked} targets: ${bad.slice(0, 3).join(' | ')}`); t.ok(checked > 200, 'enough targets checked (' + checked + ')');
-  // painting the chain in order is always legal, ends painted, costs exactly `cost`, and solve drops by the chain's share
+  // unmuting the chain in order is always legal, ends unmuted, costs exactly `cost`, and solve drops by the chain's share
   const M = playedPage(34, 1, 10), boss = T(M, M.boss.q, M.boss.r), before = MAP.solve(M).minInk, res = MAP.pathToPaint(M, boss.q, boss.r);
   t.eq(res.cost, before, 'solve.minInk is the boss chain cost');
   res.path.forEach((c, k) => { t.ok(MAP.canPaint(M, c[0], c[1]).ok, 'chain cell ' + k + ' is paintable when its turn comes'); MAP.paint(M, c[0], c[1]); t.eq(MAP.solve(M).minInk, before - k - 1, 'solve drops by one per chain cell'); });
   t.ok(boss.painted, 'the boss ended up painted'); t.deep(MAP.solve(M), { ok: true, minInk: 0, path: [] }, 'solve once the boss is painted'); t.eq(MAP.pathToPaint(M, boss.q, boss.r), null, 'no path to a painted tile');
-  // straightness: on an open page a chain along a row is a straight line, and along a diagonal too
+  // straightness: on an open map a chain along a row is a straight line, and along a diagonal too
   const B = blank(21, 9), S = cr(B, 1, 4); setPainted(B, [S]);
   const row = MAP.pathToPaint(B, cr(B, 12, 4).q, 4); t.ok(row.path.every((c) => c[1] === 4) && row.cost === 11, 'along a row the chain is straight');
   const diag = MAP.pathToPaint(B, cr(B, 8, 1).q, 1); t.eq(diag.cost, hex(S, cr(B, 8, 1)), 'a diagonal target costs its hex distance');
@@ -655,7 +655,7 @@ t.test('pathToPaint: the cheapest chain, in painting order, against an independe
 });
 
 // ================================================================== walking
-t.test('canMove, move, walkPath on a hand-built page', () => {
+t.test('canMove, move, walkPath on a hand-built map', () => {
   const M = blank(11, 5), row = (c) => cr(M, c, 2);
   M.start = { q: row(0).q, r: 2 }; M.boss = { q: row(10).q, r: 2 };
   for (let c = 0; c <= 6; c++) setPainted(M, [row(c)]);
@@ -696,7 +696,7 @@ t.test('reachable, unresolved and progress', () => {
   const M = playedPage(41, 1, 0);
   const reach = MAP.reachable(M);
   t.eq(reach.size, all(M).filter((x) => x.painted).length, 'the start ring is one connected painted area'); t.ok(reach.has(key(M.pos.q, M.pos.r)), 'includes pos');
-  // an island painted by a blot is not reachable from pos until it is connected
+  // an island unmuted by a blot is not reachable from pos until it is connected
   const spot = all(M).find((x) => x.type === 'empty' && !x.painted && hex(M.pos, x) === 4 && MAP.canBrush(M, 'blot', x.q, x.r, 0).ok);
   t.ok(!!spot, 'a spot for a blot four hexes out'); MAP.applyBrush(M, 'blot', spot.q, spot.r, 0);
   t.ok(spot.painted && !MAP.reachable(M).has(key(spot.q, spot.r)), 'a painted island is not reachable over painted ground');
@@ -705,7 +705,7 @@ t.test('reachable, unresolved and progress', () => {
   while (st.length) { const c = st.pop(); nbrs(M2, c).forEach((n) => { if (n.painted && n.type !== 'block' && !brute.has(key(n.q, n.r))) { brute.add(key(n.q, n.r)); st.push(n); } }); }
   t.deep([...MAP.reachable(M2)].sort(), [...brute].sort(), 'reachable equals an independent flood fill');
   M2.pos = { q: -999, r: -999 }; t.eq(MAP.reachable(M2).size, 0, 'no reachable tiles when pos is off the page');
-  // unresolved: painted, not done, content, reachable
+  // unresolved: unmuted, not done, content, reachable
   const N = playedPage(43, 1, 40); const list = MAP.unresolved(N), reachN = MAP.reachable(N);
   t.deep(list.map((x) => key(x.q, x.r)), all(N).filter((x) => reachN.has(key(x.q, x.r)) && !x.done && !['empty', 'start', 'block'].includes(x.type)).map((x) => key(x.q, x.r)), 'unresolved matches its definition');
   list.forEach((x) => { x.done = true; }); t.eq(MAP.unresolved(N).length, 0, 'nothing unresolved once everything reachable is done');
@@ -738,7 +738,7 @@ t.test('walkPath detour cap: a huge detour is not worth it, the party fights ins
   t.ok(only && only.length > 12 && only[only.length - 1][0] === L(8, 6).q, 'when it is the only way the long route is walked (' + (only && only.length) + ' steps)');
   enemy.painted = true;
 });
-t.test('voidEdge: the holes next to painted ground', () => {
+t.test('voidEdge: the holes next to unmuted ground', () => {
   const M = MAP.generate({ chapter: 1, seed: 4 });
   t.eq(MAP.voidEdge(M).length, 0, 'no Void touches the start ring on a fresh page');
   const frontier = () => MAP.frontier(M);
@@ -747,7 +747,7 @@ t.test('voidEdge: the holes next to painted ground', () => {
   t.ok(edge.length > 0, 'after painting outward some Void is visible'); t.deep(edge.map((x) => key(x.q, x.r)), want.map((x) => key(x.q, x.r)), 'exactly the Void tiles touching a painted hex');
   t.ok(edge.every((x) => !x.known && !x.painted), 'Void stays unknown and unpainted');
 });
-t.test('guards: pages without pos or boss do not throw', () => {
+t.test('guards: maps without pos or boss do not throw', () => {
   const M = blank(15, 9), P = cr(M, 4, 4); setPainted(M, [P]); M.start = { q: P.q, r: 4 };
   delete M.pos;
   t.deep(MAP.canBrush(M, 'blot', cr(M, 7, 4).q, 4, 0), { ok: true }, 'a blot falls back to the start when pos is missing');
@@ -756,7 +756,7 @@ t.test('guards: pages without pos or boss do not throw', () => {
   delete M.start; t.deep(MAP.canBrush(M, 'blot', cr(M, 5, 4).q, 4, 0), { ok: false, reason: 'origin', need: 'hidden-near' }, 'with neither pos nor start a blot is refused, not thrown');
   t.deep(MAP.solve(M), { ok: false, minInk: Infinity, path: [] }, 'solve without a boss');
 });
-t.test('junk arguments never throw and never change the page', () => {
+t.test('junk arguments never throw and never change the map', () => {
   const M = playedPage(51, 2, 30), snap = JSON.stringify(M);
   const junk = [undefined, null, NaN, Infinity, -Infinity, 'x', '3,4', {}, [], -1, 1e9, 0.5, true, () => 1];
   const brushes = ['nope', undefined, null, 'toString', '__proto__', 'constructor', 'hasOwnProperty', 7, {}];
@@ -831,7 +831,7 @@ t.test('encounter pools: picked from tile.diff, weighted, varied, layout never d
   // near the start only the easy groups are eligible
   const M = withPools.MAP.generate({ chapter: 1, seed: 5 }); const early = Object.values(M.tiles).filter((x) => x.type === 'enemy' && x.diff < 0.1);
   t.ok(early.every((x) => D2.groupById(x.content.enc).min === 0), 'a tile at diff < 0.1 only gets min 0 groups');
-  // a chapter with no pools (or only a boss) leaves enc undefined and never throws
+  // an Act with no pools (or only a boss) leaves enc undefined and never throws
   const M4 = withPools.MAP.generate({ chapter: 4, seed: 1 }); t.ok(Object.values(M4.tiles).every((x) => x.content.enc === undefined), 'chapter 4 has no pools: no enc');
   // elite pool empty, normal pool present
   const half = boot({ only: ['map'], skip: ['data_*'] }); half.DATA.addEncounters(1, { normal: [{ id: 'ch1_solo', enemies: ['x'], w: 1, min: 0.9 }] });
@@ -857,7 +857,7 @@ t.test('replay against whatever real content exists', () => {
 });
 
 // ================================================================== human eyeball (printed, not asserted)
-t.test('print one page and the generator statistics', () => {
+t.test('print one map and the generator statistics', () => {
   const M = MAP.generate({ chapter: 1, seed: 20260929 });
   console.log(`\nchapter 1 seed 20260929  minInk ${MAP.solve(M).minInk}  attempts ${M.attempts}  Void ${all(M).filter((x) => x.type === 'block').length}/273\n`);
   console.log(MAP.ascii(M, { spine: true })); console.log('\n' + MAP.LEGEND + '\n');

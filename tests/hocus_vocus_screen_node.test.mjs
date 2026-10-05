@@ -174,7 +174,7 @@ await t.test('reward: Skip needs a second tap (confirm nudge), claims no card, a
   t.ok($$(g, '.rw-slot.gone').length === node.rewards.cards.length, 'the offers fade away');
 });
 
-await t.test('reward (elite): the relic is take-it-or-leave-it, both decisions gate the claim; gem and brush drops are always taken', async () => {
+await t.test('reward (elite): the relic is take-it-or-leave-it, both decisions gate the claim; gem and Spell drops are always taken', async () => {
   let gotGem = 0, gotBrush = 0, tookRelic = 0, leftRelic = 0;
   for (const seed of SEEDS) {
     const g = fresh({ seed }); const R = mkRun(g, { seed });
@@ -201,7 +201,7 @@ await t.test('reward (elite): the relic is take-it-or-leave-it, both decisions g
   t.ok(gotGem + gotBrush > 0, 'some elite dropped a gem or a brush across the seeds (' + gotGem + ' gems, ' + gotBrush + ' brushes)');
 });
 
-await t.test('reward (elite): once the treasure is taken or left, the empty frame and its Take it / Leave it buttons are gone (no dead buttons until Continue), and the counter shows the treasure', async () => {
+await t.test('reward (elite): once the Charm is taken or left, the empty frame and its Take it / Leave it buttons are gone (no dead buttons until Continue), and the counter shows the Charm', async () => {
   for (const take of [true, false]) {
     const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8 });
     const node = await openReward(g, R, 'elite');
@@ -261,7 +261,7 @@ await t.test('reward: gold the thieves took is a net loss shown as "Gold lost -6
   }
 });
 
-await t.test('reward (boss): the relic page comes first with three treasures, then the card page; the claim happens after both', async () => {
+await t.test('reward (boss): the relic page comes first with three Charms, then the card page; the claim happens after both', async () => {
   for (const seed of [1, 2, 3, 4]) {
     const g = fresh({ seed }); const R = mkRun(g, { seed });
     const node = await openReward(g, R, 'boss');
@@ -323,7 +323,7 @@ await t.test('reward: pending choices raised by hooks are answered on the screen
   t.ok(!g.UI.overlay.has('deck'), 'the overlay closed');
 });
 
-await t.test('reward: the number keys pick a card, and a gem and brush drop are shown as bonus rows that turn into "added"', async () => {
+await t.test('reward: the number keys pick a card, and a gem and Spell drop are shown as bonus rows that turn into "added"', async () => {
   const g = fresh(); const R = mkRun(g);
   const node = winFight(g, R, 'enemy');
   node.rewards.gems = ['ember_ruby']; node.rewards.brush = 'fan';
@@ -517,7 +517,7 @@ await t.test('shop (realtime): a stale long press never swallows a later mouse o
   t.eq(errs(g), 0, 'no console errors');
 });
 
-await t.test('shop: a purse too thin refuses (no state change, a toast, a sad peddler) and poor wares are marked', async () => {
+await t.test('shop: a purse too thin refuses (no state change, a toast, a sad Jordan) and poor wares are marked', async () => {
   const g = fresh({ seed: 3 }); const R = mkRun(g, { seed: 3, gold: 5 });
   const node = nodeAt(g, R, 'shop', { shop: { seed: 5 } });
   await open(g, 'shop', R, node);
@@ -611,7 +611,7 @@ await t.test('shop: sold out shows a badge; a saved half-bought shop comes back 
   t.ok(errs(g) === 0, 'entering with a shop-entry relic is clean');
 });
 
-await t.test('shop: the peddler talks (hello, buy, poor, sold, leave) and idles; his mood changes on the frame clock', async () => {
+await t.test('shop: Jordan talks (hello, buy, poor, sold, leave) and idles; his mood changes on the frame clock', async () => {
   const g = fresh({ seed: 10 }); const R = mkRun(g, { seed: 10, gold: 60 });
   const node = nodeAt(g, R, 'shop', { shop: { seed: 8 } });
   await open(g, 'shop', R, node);
@@ -682,7 +682,7 @@ async function answerOverlays(g, R) {
 }
 
 
-await t.test('event: every fable, every choice, played on the real screen: text, locks, outcome, gains, pending choices, fights and Continue', async () => {
+await t.test('event: every Detour, every choice, played on the real screen: text, locks, outcome, gains, pending choices, fights and Continue', async () => {
   const g = fresh({ seed: 3 });
   const defs = Object.values(g.DATA.events);
   await settle(g);
@@ -755,10 +755,10 @@ await t.test('event: every fable, every choice, played on the real screen: text,
   t.ok(fights >= 1 && pendings > 3, 'fights (' + fights + ') and pending card choices (' + pendings + ') were both exercised; locked choices: ' + locked);
 });
 
-await t.test('event: a treasure chip is drawn only for a treasure the party really gained (an owned fixed relic is no "gain", whatever the stand-in rules do)', async () => {
+await t.test('event: a Charm chip is drawn only for a Charm the party really gained (an owned fixed relic is no "gain", whatever the stand-in rules do)', async () => {
   for (const owned of ['one', 'all']) {
     const g = fresh({ seed: 31 });
-    // RUN locks a choice whose fixed treasure is already carried, unless a card grower comes first in its ops (then the ops run), so this fable starts with a card: the 'Already owned.' log reaches the page
+    // RUN locks a choice whose fixed Charm is already carried, unless a card grower comes first in its ops (then the ops run), so this Detour starts with a card: the 'Already owned.' log reaches the page
     g.DATA.events.t_owned = { id: 't_owned', title: 'The Same Lamp Twice', art: { scene: 'shop' }, chapters: [1], text: 'He sells you a lamp.', choices: [
       { label: 'Buy the lamp', cost: '60 gold', out: [{ w: 1, text: 'He hands it over.', ops: [{ op: 'gold', n: -60 }, { op: 'addCard', pool: 'party', rarity: 'common' }, { op: 'addRelic', id: 'brass_lantern' }] }] },
       { label: 'Walk on', out: [{ w: 1, text: 'You leave.', ops: [] }] }] };
@@ -779,7 +779,7 @@ await t.test('event: a treasure chip is drawn only for a treasure the party real
   }
 });
 
-await t.test('event: the card offered by a fable is not forfeited by a stray tap on the backdrop or by Esc; Skip is the way out', async () => {
+await t.test('event: the card offered by a Detour is not forfeited by a stray tap on the backdrop or by Esc; Skip is the way out', async () => {
   const g = fresh({ seed: 33 });
   const R = mkRun(g, { seed: 33, gold: 300 });
   g.RUN.startChapter(R, 2);
@@ -817,7 +817,7 @@ let evClock = 5000;
 async function frames(g, n) { for (let i = 0; i < n; i++) { evClock += 16; g.UI.frame(evClock); await settle(g); } }
 
 await t.test('event (keyboard and touch flow): digits wait for the choices, numbers follow the visible order, a tap or Enter skips the outcome text, Continue takes focus and Enter, and answered choices leave the Tab order', async () => {
-  // L33: a digit pressed while the fable is still being written must not commit a choice nobody has seen
+  // L33: a digit pressed while the Detour is still being written must not commit a choice nobody has seen
   const g = fresh({ seed: 41 }); const R = mkRun(g, { seed: 41, gold: 300 });
   const node = nodeAt(g, R, 'event', { id: 'kappa_toll' });
   await settle(g);
@@ -894,7 +894,7 @@ await t.test('event: requirements lock a choice with the reason, and the heroes 
   t.ok($$(g, '.ev-choice').some((b) => KURO_MENU.test(txt(b)) && b.querySelector('.ico')), 'and shown with his face when he is');
 });
 
-await t.test('event: the typewriter writes on the frame clock, tap or Enter completes it, and the choices wait for the end of the fable', async () => {
+await t.test('event: the typewriter writes on the frame clock, tap or Enter completes it, and the choices wait for the end of the Detour', async () => {
   const g = fresh({ seed: 14 }); const R = mkRun(g, { seed: 14 });
   const node = nodeAt(g, R, 'event', { id: 'kappa_toll' });
   await settle(g);
@@ -951,7 +951,7 @@ await t.test('event: a saved page reopens with the choice already made (no secon
   t.ok(node3, 'a hero event node');
 });
 
-await t.test('event: the blank page (no such fable) still offers a way on', async () => {
+await t.test('event: the blank page (no such Detour) still offers a way on', async () => {
   const g = fresh({ seed: 18 }); const R = mkRun(g, { seed: 18 });
   R.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'no_such_fable', chosen: null };
   await g.UI.go('event', { node: R.node, R }, { force: true, transition: 'none' }); await settle(g);
@@ -1044,7 +1044,7 @@ await t.test('camp: Sharpen upgrades the chosen card through the deck picker wit
   t.ok(!g.UI.overlay.has('deck'), 'and it does not open a picker');
 });
 
-await t.test('camp: Meditate pays Ink and a brush; Cut Gems stays open all visit and only counts once a gem is set; extra actions come from relics', async () => {
+await t.test('camp: Warm Up pays Vox and a Spell; Set Gems stays open all visit and only counts once a gem is set; extra actions come from relics', async () => {
   const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5, gems: ['ember_ruby', 'keepsake_peridot'] });
   R.ink = 3;
   const node = nodeAt(g, R, 'camp', {});
@@ -1232,7 +1232,7 @@ await t.test('forge: the hammer, the sparks and the flash paint through the whol
 // ==================================================================================================== chest
 const chestRow = (g) => txt($(g, '.ch-loot .nk-row.k-gold .nk-row-val'));
 
-await t.test('chest with a relic (twelve seeds): closed, opened by the button, the gold counts up, take the treasure or just the gold', async () => {
+await t.test('chest with a relic (twelve seeds): closed, opened by the button, the gold counts up, take the Charm or just the gold', async () => {
   let took = 0, left = 0;
   for (const seed of SEEDS) {
     const g = fresh({ seed }); const R = mkRun(g, { seed });
@@ -2044,7 +2044,7 @@ await t.test('cleanup: a pending choice interrupted by leaving does not stay hal
   t.eq(errs(g), 0, 'no console errors');
 });
 
-await t.test('bus and anchors: every screen announces itself, marks the tutorial anchors, keeps the Deck and Treasures buttons working and has a real button for every action', async () => {
+await t.test('bus and anchors: every screen announces itself, marks the tutorial anchors, keeps the Deck and Charms buttons working and has a real button for every action', async () => {
   const g = await freshS({ seed: 23 }); const R = mkRun(g, { seed: 23, gems: ['ember_ruby'], gold: 300 });
   const seen = [];
   g.UI.bus.on('screen', (e) => seen.push(e.name));
@@ -2324,7 +2324,7 @@ await t.test('top bar: every medallion, chip and button shares the menu button\'
   t.ok(/#stage\.compact \.nk-top\s*\{[^}]*height:\s*calc\(var\(--hit\) \+ 14px\)[^}]*padding:\s*0 104px 14px 14px/.test(CSS), 'css: on a phone the row is --hit tall (the buttons are 44 css px) with 104 px clear on the right for the menu button');
 });
 
-await t.test('shop: both rows of wares are centred in the opening between the painted posts, the tags sit on the planks, the nameplate stands under the peddler (SHOP)', async () => {
+await t.test('shop: both rows of wares are centred in the opening between the painted posts, the tags sit on the planks, the nameplate stands under Jordan (SHOP)', async () => {
   const g = await freshS({ seed: 6 }); const R = mkRun(g, { seed: 6, gold: 999 });
   const node = nodeAt(g, R, 'shop', { shop: { seed: 6 } }); await open(g, 'shop', R, node);
   const wrap = $(g, '.sh-wrap');
@@ -2506,7 +2506,7 @@ await t.test('the exit controls share one right edge on a phone (the shop button
 // ==================================================================================================== Hocus Vocus copy (P2 2D)
 // What the player reads on every node page in the Hocus Vocus words: HV_UI_COPY section 2.9 and bible 4.1, 4.4 and 5.6. The older tests above pin the
 // strings they already checked; these pin the rows that nothing else reads (the sign, the services, the banners, the labels, the display words of ids).
-await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter and Set gems, gems read pink, Charms read Merch charm or Headliner charm, brushes read Spell', async () => {
+await t.test('copy (shop): Jordan\'s Merch Stall, his greeting pool, Declutter and Set gems, gems read pink, Charms read Merch charm or Headliner charm, Spell plaques read Spell', async () => {
   let gems = 0, relics = 0, brushes = 0;
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const g = fresh({ seed }); const R = mkRun(g, { seed, gold: 999 });

@@ -3,7 +3,9 @@
 // The modules other engineers write at the same time (art, audio, meta, run, combat, map, the data_* content files) are LEFT OUT of the
 // sandbox with `skip`, and small fakes are installed into the page instead, so this suite tests ui.js and main.js and nothing else.
 // A last section boots against whatever real modules exist as a smoke test that only asserts UI-side behaviour (no console.error).
-import { boot, harness } from './hocus_vocus_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus ui');
 // DATA-owned names are read from DATA of the same boot (the re-theme renames them); this escapes one for a RegExp
@@ -1081,7 +1083,7 @@ await t.test('GAME.enterNode routes every node kind; instants only toast; saves 
   t.eq(g.UI.currentName, 'map', 'unknown kind: back to the map with a warning'); t.ok(g._console.warn.some((w) => /unknown node kind/.test(w)), 'warned');
 });
 
-await t.test('GAME.nodeDone: back to the map, or the chapter flow: chapterClear, then story and map; the last boss is victory', async () => {
+await t.test('GAME.nodeDone: back to the map, or the Act flow: chapterClear, then story and map; the last boss is victory', async () => {
   const g = fresh({ autoboot: true });
   await g._tick(100);
   g.DATA.add('lore', { ch2_intro: { title: 'Two', text: 'Canals.' }, ch3_intro: { title: 'Three', text: 'Storm.' } });
@@ -1094,7 +1096,7 @@ await t.test('GAME.nodeDone: back to the map, or the chapter flow: chapterClear,
   g.GAME.nodeDone();
   await g._tick(200);
   t.eq(g.UI.currentName, 'map', 'a finished node returns to the map'); t.eq(R.node, null, 'RUN.finishNode cleared the node');
-  // boss of chapter 1
+  // boss of Act 1
   g._run('__log.chapterEnded = true; __log.next = 2');
   R.node = { kind: 'reward', rewards: { gold: 1, cards: [] }, source: 'boss' };
   g.GAME.nodeDone();
@@ -1390,6 +1392,246 @@ await t.test('outfits: nobody but ui.js reads the key; RUN, COMBAT, MAP, META, G
   });
   const js = fs.readdirSync(path.join(DIR, 'js')).filter((n) => /\.js$/.test(n) && n !== 'ui.js');
   t.deep(js.filter((n) => /['"`]hv_skins_v1['"`]/.test(fs.readFileSync(path.join(DIR, 'js', n), 'utf8'))), [], 'no other file holds the key as a string: ui.js is its only reader and writer');
+});
+
+// ==================================================================================================== follow the duo, Share and Support (HV_STORY 5; P9 9A)
+// DATA.LINKS ships with every URL empty and is frozen, so a test swaps in its own frozen copy. The panel is built fresh on every call, reads
+// DATA.LINKS at that moment and fetches nothing; Share runs only from a tap and stores nothing.
+const HANDLE_LINE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+const NO_LINKS = 'Links are on their way. For now, look for @roxorloopsandjasmin.';
+const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+const SHARE_TITLE = 'HOCUS VOCUS: A Vocal Magic Adventure';
+const COPIED = 'Copied. Go on, show someone.', FAILED = 'Could not copy here. The address bar has the link.';
+const ABOUT = "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.";
+// every test starts from a blank config (the owners will fill the shipped one in), then adds only the URLs it is about
+const BLANK = { handle: '@roxorloopsandjasmin', website: '', youtube: '', facebook: '', tiktok: '', instagram: '', support: '', game: '' };
+const setLinks = (g, o) => g._run(`DATA.LINKS = Object.freeze(${JSON.stringify(Object.assign({}, BLANK, o))});`);
+const mount = (g, mode, o) => { const el = g.UI.followPanel(mode, o); $(g, '#screens').appendChild(el); return el; };
+const toastsOf = (g) => $$(g, '#toasts .toast').map((e) => e.textContent);
+
+await t.test('follow: with every URL empty a panel shows the handle line, the no-links line and Share, and renders no link and no Support; DATA.LINKS ships frozen with the exact keys', () => {
+  const g = fresh();
+  const L = g.DATA.LINKS;
+  t.deep(Object.keys(L), ['handle', 'website', 'youtube', 'facebook', 'tiktok', 'instagram', 'support', 'game'], 'the exact keys');
+  t.eq(L.handle, '@roxorloopsandjasmin', 'the handle'); t.ok(Object.isFrozen(L), 'frozen');
+  setLinks(g, {});
+  ['sheet', 'tab', 'strip', 'gameover'].forEach((mode) => {
+    const el = mount(g, mode);
+    t.ok(el.classList.contains('hv-follow') && el.classList.contains('hv-' + mode), mode + ': class');
+    t.eq(el.querySelectorAll('a.hv-link').length, 0, mode + ': no a.hv-link while every URL is empty');
+    t.eq(el.querySelectorAll('a').length, 0, mode + ': no anchor at all (Support is hidden too)');
+    t.eq(el.querySelector('.hv-handle').textContent, HANDLE_LINE, mode + ': the handle line');
+    t.eq(el.querySelector('.hv-follow-h').textContent, 'Follow the duo', mode + ': the heading');
+    const share = el.querySelector('button.hv-share');
+    t.ok(share && /^Share$/.test(share.textContent.replace(/\s+/g, '')), mode + ': a Share button');
+    t.eq(share.getAttribute('aria-label'), 'Share Hocus Vocus', mode + ': Share aria label');
+    t.ok(!el.querySelector('.hv-support') && !el.querySelector('.hv-support-line'), mode + ': no Support and no support line');
+  });
+  ['sheet', 'tab'].forEach((mode) => { const n = mount(g, mode).querySelector('.hv-nolinks'); t.ok(n && n.textContent === NO_LINKS, mode + ': the no-links line'); });
+  ['strip', 'gameover'].forEach((mode) => t.ok(!mount(g, mode).querySelector('.hv-nolinks'), mode + ': the slim rows keep to the handle line'));
+  t.eq(mount(g, 'sheet').querySelector('.hv-follow-h').className.indexOf('sr-only') >= 0, true, 'the sheet heading is for screen readers (the modal title is the visible one)');
+  t.eq(mount(g, 'nonsense').getAttribute('data-mode'), 'sheet', 'an unknown mode is the sheet');
+});
+
+await t.test('follow: one URL set gives exactly one a[target=_blank][rel~=noopener] with that href, a label and the aria text, and the no-links line goes away', () => {
+  const g = fresh();
+  setLinks(g, { youtube: 'https://example.org/yt?x=1' });
+  ['sheet', 'tab', 'strip', 'gameover'].forEach((mode) => {
+    const el = mount(g, mode);
+    const a = el.querySelectorAll('a[target="_blank"][rel~="noopener"]');
+    t.eq(a.length, 1, mode + ': exactly one new-tab anchor');
+    t.eq(a[0].getAttribute('href'), 'https://example.org/yt?x=1', mode + ': the href as configured');
+    t.ok(a[0].classList.contains('hv-link') && a[0].getAttribute('rel').split(/\s+/).indexOf('noreferrer') >= 0, mode + ': class and rel noopener noreferrer');
+    t.eq(a[0].querySelector('.hv-link-l').textContent, 'YouTube', mode + ': the label');
+    t.eq(a[0].getAttribute('aria-label'), 'YouTube: RoxorLoops and Jasmin, opens in a new tab', mode + ': the aria label');
+    t.ok(a[0].querySelector('.hv-dot').classList.contains('is-pink'), mode + ': the first dot is Jasmin pink');
+    t.ok(!el.querySelector('.hv-nolinks'), mode + ': the no-links line is gone');
+  });
+});
+
+await t.test('follow: all five in the fixed order, dots alternate pink and green, junk and blank URLs are not rendered, a set Support alone keeps the no-links line', () => {
+  const g = fresh();
+  setLinks(g, { website: 'https://example.org/', youtube: 'https://example.org/y', facebook: 'https://example.org/f', tiktok: 'https://example.org/t', instagram: 'https://example.org/i' });
+  const a = Array.from(mount(g, 'tab').querySelectorAll('a.hv-link'));
+  t.deep(a.map((x) => x.querySelector('.hv-link-l').textContent), ['Website', 'YouTube', 'Facebook', 'TikTok', 'Instagram'], 'the order of the five labels');
+  t.deep(a.map((x) => x.querySelector('.hv-dot').classList.contains('is-green') ? 'green' : 'pink'), ['pink', 'green', 'pink', 'green', 'pink'], 'the dots alternate Jasmin pink and RoxorLoops green');
+  t.ok(a.every((x) => x.getAttribute('target') === '_blank' && x.getAttribute('rel') === 'noopener noreferrer'), 'every anchor opens in a new tab with noopener noreferrer');
+  t.ok(a.every((x) => x.getAttribute('aria-label') === x.querySelector('.hv-link-l').textContent + ': RoxorLoops and Jasmin, opens in a new tab'), 'every aria label follows the pattern');
+  setLinks(g, { website: '   ', youtube: 'javascript:alert(1)', facebook: '', tiktok: 'ftp://example.org/', instagram: 'https://example.org/i' });
+  const b = Array.from(mount(g, 'sheet').querySelectorAll('a.hv-link'));
+  t.deep(b.map((x) => x.querySelector('.hv-link-l').textContent), ['Instagram'], 'blank, a stray scheme and a non-web address are skipped');
+  t.ok(b[0].querySelector('.hv-dot').classList.contains('is-pink'), 'dots alternate over the rendered pills, not the slots');
+  setLinks(g, { website: '', instagram: '', support: 'https://example.org/s' });
+  const c = mount(g, 'sheet');
+  t.ok(c.querySelector('.hv-nolinks') && c.querySelectorAll('a.hv-link').length === 0, 'the no-links line is about the five link URLs only');
+});
+
+await t.test('follow: Support is a primary heart pill only when its URL is set, never in the game over mode; the support line sits above it in the tab (and by request elsewhere)', () => {
+  const g = fresh();
+  setLinks(g, { support: 'https://example.org/support' });
+  ['sheet', 'tab', 'strip'].forEach((mode) => {
+    const el = mount(g, mode);
+    const a = el.querySelectorAll('a.hv-support');
+    t.eq(a.length, 1, mode + ': one Support anchor');
+    t.eq(a[0].getAttribute('href'), 'https://example.org/support', mode + ': its href'); t.eq(a[0].getAttribute('target'), '_blank', mode + ': new tab'); t.ok(/noopener/.test(a[0].getAttribute('rel')), mode + ': noopener');
+    t.eq(a[0].getAttribute('aria-label'), 'Support the duo, opens in a new tab', mode + ': aria label');
+    t.ok(a[0].classList.contains('btn') && a[0].classList.contains('btn-primary'), mode + ': a primary pill');
+    t.ok(a[0].querySelector('canvas.ico') && /Support the duo/.test(a[0].textContent), mode + ': the heart icon and the label');
+    t.eq(el.querySelectorAll('a.hv-link').length, 0, mode + ': Support is not one of the five links');
+  });
+  const tab = mount(g, 'tab');
+  const line = tab.querySelector('.hv-support-line');
+  t.eq(line.textContent, 'Enjoying the tour? The real duo would love your support.', 'the support line');
+  t.ok(line.nextElementSibling === tab.querySelector('a.hv-support'), 'the line sits right above the Support button');
+  t.ok(!mount(g, 'strip').querySelector('.hv-support-line'), 'a strip has no support line by default');
+  t.ok(mount(g, 'strip', { supportLine: true }).querySelector('.hv-support-line'), 'the strip prints it on request (the settings About row)');
+  t.ok(!mount(g, 'sheet').querySelector('.hv-support-line'), 'the sheet does not');
+  const over = mount(g, 'gameover');
+  t.ok(!over.querySelector('.hv-support') && !over.querySelector('.hv-support-line'), 'game over never shows Support, even when it is set');
+  t.ok(!mount(g, 'gameover', { supportLine: true }).querySelector('.hv-support-line'), 'and not its line either');
+  setLinks(g, { support: '' });
+  t.ok(!mount(g, 'tab').querySelector('.hv-support-line'), 'the support line is never printed without a Support button');
+});
+
+await t.test('follow: the Tour Bus tab adds the about text and Jordan, the sheet carries the one-line about, and the exact strings are on UI.followText', () => {
+  const g = fresh();
+  setLinks(g, {});
+  const tab = mount(g, 'tab');
+  t.eq(tab.querySelector('.hv-about').textContent, ABOUT, 'the about text, exact');
+  t.eq(tab.querySelector('.hv-jordan').textContent, 'Jordan made these buttons. Press them gently.', "Jordan's line");
+  t.ok(!mount(g, 'sheet').querySelector('.hv-about') && !mount(g, 'strip').querySelector('.hv-about'), 'only the tab has the long about text');
+  t.eq(mount(g, 'sheet').querySelector('.hv-about-short').textContent, 'A card adventure made for RoxorLoops and Jasmin. Beatboxing and vocal magic, drawn in code.', 'the sheet carries the one-line about (shown on a portrait phone)');
+  const T = g.UI.followText;
+  t.ok(Object.isFrozen(T), 'UI.followText is frozen');
+  t.eq(T.heading, 'Follow the duo', 'heading'); t.eq(T.handleLine, HANDLE_LINE, 'handleLine'); t.eq(T.noLinks, NO_LINKS, 'noLinks'); t.eq(T.aboutText, ABOUT, 'aboutText');
+  t.eq(T.creditsLine, 'Drawn in code, sung with heart. No two tours alike.', 'creditsLine'); t.eq(T.share, 'Share', 'share'); t.eq(T.support, 'Support the duo', 'support');
+  t.eq(T.copied, COPIED, 'copied'); t.eq(T.failed, FAILED, 'failed');
+  setLinks(g, { handle: '@someone_else' });
+  t.eq(g.UI.followText.handleLine, 'Made for RoxorLoops and Jasmin. Find them as @someone_else.', 'the handle line follows DATA.LINKS.handle');
+  g._run('DATA.LINKS = undefined');
+  t.eq(mount(g, 'sheet').querySelector('.hv-handle').textContent, HANDLE_LINE, 'a missing config still renders, with the shipped handle');
+});
+
+await t.test('follow: every control is a real a or button with a name, a click on a link plays the button sound, and nothing is stored or fetched', () => {
+  const g = fresh({ autoboot: true });
+  setLinks(g, { website: 'https://example.org/', support: 'https://example.org/s' });
+  const store0 = JSON.stringify(Object.keys(g._store).sort());
+  const el = mount(g, 'tab');
+  const controls = Array.from(el.querySelectorAll('a, button'));
+  t.ok(controls.length >= 3 && controls.every((c) => (c.localName === 'a' && c.getAttribute('href')) || c.localName === 'button'), 'only real anchors (with an href) and buttons');
+  t.ok(controls.every((c) => (c.getAttribute('aria-label') || c.textContent || '').trim().length > 0), 'every control has a name');
+  t.ok(!el.querySelector('[role=button]') && !el.querySelector('[onclick]'), 'no fake buttons');
+  g.log.sfx.length = 0;
+  g._click(el.querySelector('a.hv-link'));
+  t.ok(g.log.sfx.indexOf('ui_click') >= 0, 'a link click plays the shared ui_click');
+  g.log.sfx.length = 0;
+  g._click(el.querySelector('a.hv-support'));
+  t.ok(g.log.sfx.indexOf('ui_click') >= 0, 'so does Support');
+  t.eq(JSON.stringify(Object.keys(g._store).sort()), store0, 'building the panel and tapping stores nothing');
+  t.eq(g._navigations.length, 0, 'the game never navigates its own tab');
+});
+
+await t.test('follow: Share without navigator.share writes SHARE_TEXT, a space and the page address (no query, no hash) to the clipboard and toasts', async () => {
+  const g = fresh({ search: '?seed=777&debug=1', hash: '#x' });
+  setLinks(g, {});
+  t.eq(g._run('typeof navigator.share'), 'undefined', 'the sandbox has no share sheet');
+  const url = 'http://localhost/hocus_vocus/index.html';
+  t.eq(g.UI.shareUrl(), url, 'the share address is origin + pathname');
+  const share = mount(g, 'sheet').querySelector('button.hv-share');
+  share.click();
+  await g._settle();
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + url, 'exactly the share text, a space, and the address');
+  t.deep(toastsOf(g), [COPIED], 'the copied toast');
+  t.ok($(g, '#toasts .toast').classList.contains('tk-good'), 'a good toast');
+  setLinks(g, { game: 'https://example.org/play/' });
+  g.UI.share(); await g._settle();
+  t.eq(g._clipboard, SHARE_TEXT + ' https://example.org/play/', 'DATA.LINKS.game wins when it is set');
+  t.eq(g.UI.shareUrl(), 'https://example.org/play/', 'shareUrl reads it');
+});
+
+await t.test('follow: a clipboard that refuses, throws or is missing toasts the failure and the game carries on', async () => {
+  const g = fresh();
+  g._run("navigator.clipboard = { writeText: function () { return Promise.reject(new Error('denied')); } };");
+  g.UI.share(); await g._settle();
+  t.deep(toastsOf(g), [FAILED], 'a rejected write');
+  t.ok($(g, '#toasts .toast').classList.contains('tk-warn'), 'a warning toast');
+  g._run("navigator.clipboard = { writeText: function () { throw new Error('boom'); } };");
+  g.UI.share(); await g._settle();
+  t.eq(toastsOf(g).filter((x) => x === FAILED).length, 2, 'a throwing write');
+  g._run('navigator.clipboard = undefined;');
+  g.UI.share(); await g._settle();
+  t.eq(toastsOf(g).filter((x) => x === FAILED).length, 3, 'no clipboard at all');
+  t.eq(errCount(g), 0, 'no console.error');
+});
+
+await t.test('follow: navigator.share gets {title, text, url}; an AbortError is silent, another rejection (or a throw) falls back to the clipboard', async () => {
+  const g = fresh();
+  setLinks(g, {});
+  g._run(`globalThis.__shares = []; globalThis.__shareMode = 'ok';
+    navigator.share = function (d) { __shares.push(d); if (__shareMode === 'throw') throw new TypeError('no activation'); if (__shareMode === 'abort') return Promise.reject(Object.assign(new Error('closed'), { name: 'AbortError' })); if (__shareMode === 'other') return Promise.reject(Object.assign(new Error('nope'), { name: 'NotAllowedError' })); if (__shareMode === 'plain') return undefined; return Promise.resolve(); };`);
+  const url = 'http://localhost/hocus_vocus/index.html';
+  const run = async (mode) => { g._run(`__shareMode = '${mode}'`); g._doc.getElementById('toasts').innerHTML = ''; g.UI.share(); await g._settle(); };
+  await run('ok');
+  t.deep(g._run('__shares.map(function (d) { return JSON.stringify(d); })'), [JSON.stringify({ title: SHARE_TITLE, text: SHARE_TEXT, url })], 'the share sheet gets the title, the text and the address');
+  t.deep(toastsOf(g), [], 'a shared page needs no toast'); t.eq(g._clipboard, '', 'and no clipboard write');
+  await run('abort');
+  t.deep(toastsOf(g), [], 'an AbortError (the player closed the sheet) makes no toast'); t.eq(g._clipboard, '', 'and no clipboard write');
+  await run('plain');
+  t.deep(toastsOf(g), [], 'a share that returns nothing counts as handed over');
+  await run('other');
+  t.deep(toastsOf(g), [COPIED], 'any other rejection falls back to the clipboard'); t.eq(g._clipboard, SHARE_TEXT + ' ' + url, 'with the text and the address');
+  g._run("navigator.clipboard.writeText('')"); await g._settle();
+  await run('throw');
+  t.deep(toastsOf(g), [COPIED], 'a synchronous throw falls back too'); t.eq(g._clipboard, SHARE_TEXT + ' ' + url, 'same text');
+  t.eq(g._run('__shares.length'), 5, 'one share call per tap');
+  t.eq(errCount(g), 0, 'no console.error');
+});
+
+await t.test('follow: the Share button runs Share (a tap), and followSheet opens the panel in the shared modal with a Close button that Esc also reaches', async () => {
+  const g = fresh();
+  setLinks(g, {});
+  const close = g.UI.followSheet();
+  t.eq(typeof close, 'function', 'returns the modal close function');
+  const box = $(g, '.o-modal');
+  t.eq(box.querySelector('.p-title').textContent, 'Follow the duo', 'the modal title is the heading');
+  t.ok(box.querySelector('.hv-follow.hv-sheet'), 'the sheet panel is the body');
+  const btns = Array.from(box.querySelectorAll('.m-btns .btn'));
+  t.deep(btns.map((b) => b.textContent.trim()), ['Close'], 'one Close button'); t.ok(btns[0].hasAttribute('data-autofocus'), 'Close takes focus');
+  t.ok(box.querySelector('.hv-handle') && box.querySelector('.hv-nolinks'), 'the handle line and the no-links line');
+  box.querySelector('button.hv-share').click(); await g._settle();
+  t.eq(g._clipboard, SHARE_TEXT + ' http://localhost/hocus_vocus/index.html', 'the Share button in the sheet shares');
+  g._key('Escape'); t.eq(g.UI.overlay.count(), 0, 'Esc closes the sheet');
+  g.UI.followSheet(); $(g, '.o-modal .m-btns .btn').click(); t.eq(g.UI.overlay.count(), 0, 'Close closes it');
+  g.UI.followSheet(); close(); g.UI.overlay.closeAll(); t.eq(g.UI.overlay.count(), 0, 'and the returned function is safe to call late');
+  t.eq(errCount(g), 0, 'no console.error');
+});
+
+await t.test('follow: the duo is drawn with ART.hero (Jasmin and RoxorLoops waving, the chosen outfits) and degrades to two round faces without it', () => {
+  const g = outfitBoot({}, ['petal_and_steel']);
+  g._run(`globalThis.__duo = []; ART.hero.draw = function (ctx, id, o) { __duo.push({ id: id, pose: o.pose, skin: o.skin, flip: !!o.flip, s: o.s }); };`);
+  const el = mount(g, 'sheet');
+  const c = el.querySelector('canvas.hv-duo');
+  t.ok(c && c.getAttribute('role') === 'img' && c.getAttribute('aria-label') === 'Jasmin and RoxorLoops waving', 'a canvas with a text alternative');
+  const drawn = g._run('__duo.slice()');
+  t.deep(drawn.map((d) => d.id), ['hanae', 'kuro'], 'Jasmin then RoxorLoops'); t.ok(drawn.every((d) => d.pose === 'cheer'), 'waving (the cheer pose)');
+  t.deep(drawn.map((d) => d.flip), [false, true], 'they face each other'); t.deep(drawn.map((d) => d.skin), ['stage', 'stage'], 'stage clothes by default');
+  g.UI.outfit.set('hanae', 'skin'); g._run('__duo.length = 0');
+  mount(g, 'tab');
+  t.deep(g._run('__duo.map(function (d) { return d.id + ":" + d.skin; })'), ['hanae:skin', 'kuro:stage'], 'the outfit the viewer chose is the one drawn');
+  t.ok(!mount(g, 'strip').querySelector('canvas.hv-duo') && !mount(g, 'gameover').querySelector('canvas.hv-duo'), 'the slim rows have no portrait');
+  g._run('ART.hero.draw = function () { throw new Error("art broke"); }');
+  const f = mount(g, 'sheet');
+  t.ok(!f.querySelector('canvas.hv-duo') && f.querySelector('.hv-duo-faces') && f.querySelectorAll('.hv-duo-faces canvas').length === 2, 'a throwing draw leaves two round faces');
+  const g2 = fresh();
+  t.ok(g2._run('typeof ART.hero.draw') === 'undefined' && mount(g2, 'tab').querySelectorAll('.hv-duo-faces canvas').length === 2, 'no ART.hero.draw at all: two round faces');
+  g2._run('globalThis.ART = undefined'); t.ok(mount(g2, 'sheet').querySelector('.hv-duo-faces'), 'no ART at all: still renders');
+  t.eq(errCount(g) + errCount(g2), 0, 'no console.error');
+});
+
+await t.test('follow: the platform names live in the LINK_ORDER line of ui.js and nowhere else in it', () => {
+  const lines = fs.readFileSync(path.join(DIR, 'js', 'ui.js'), 'utf8').split('\n').filter((l) => /YouTube|Facebook|TikTok|Instagram/.test(l));
+  t.eq(lines.length, 1, 'exactly one line names the platforms');
+  t.ok(/const LINK_ORDER = \[\['website', 'Website'\], \['youtube', 'YouTube'\], \['facebook', 'Facebook'\], \['tiktok', 'TikTok'\], \['instagram', 'Instagram'\]\];/.test(lines[0]), 'and it is LINK_ORDER, in the fixed order');
 });
 
 // ==================================================================================================== smoke against the real modules that exist

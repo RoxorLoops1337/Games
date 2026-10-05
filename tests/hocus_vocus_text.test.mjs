@@ -1175,7 +1175,7 @@ t.test('card text: numbers inside a hook are not given the hero\'s row, Might or
   t.deep(nums(H(plain, HANAE_UNIT({ might: 3 }))).map((x) => x[0]), [7, 3], 'while a card\'s own damage does take Might and the row');
 });
 
-t.test('enemy text: an enemy move reads from the enemy\'s side (the bestiary prints DATA.opsText(move.fx))', () => {
+t.test('enemy text: an enemy move reads from the enemy\'s side (the Who\'s Who prints DATA.opsText(move.fx))', () => {
   const foe = W.enemy({ name: 'Cat', moves: {
     a: { name: 'Claw', kind: 'attack', fx: [dmg(5), st('vulnerable', 1, { tgt: 'front' })] },
     b: { name: 'Pounce', kind: 'multi', fx: [dmg(3, { hits: 3, tgt: 'random' })] },

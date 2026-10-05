@@ -2,7 +2,7 @@
 //
 // RUN is written against the MAP contract (DESIGN 5.3) and never touches COMBAT, so this suite boots run.js alone
 // (`skip` keeps every real content file, combat.js and map.js out) and installs (1) a small but faithful fake MAP: odd-r hex
-// grid, start ring, brushes, cheapest-chain painting, serialise; (2) a synthetic "universe" of cards, relics, gems, events,
+// grid, start ring, Spells, cheapest-chain unmuting, serialise; (2) a synthetic "universe" of cards, relics, gems, events,
 // encounters and trials it fully controls; (3) a hand-made finished-combat object with C.summary() and C.front().
 // If the real map.js exists, the last section replays the flows against it (`realMap` below).
 import fs from 'node:fs';
@@ -230,7 +230,7 @@ function fakeC(over) {
   return { tier: over.tier, summary: () => s, front: () => ({ id: over.frontId || heroes[0].id }) };
 }
 // paint a chain to `tile` and step onto it. Every other tile is pre-resolved so the walk crosses no node; `before` runs right
-// before the final step (set Ink there); returns what the last step gave
+// before the final step (set Vox there); returns what the last step gave
 function walkTo(R, tile, before) {
   Object.keys(R.map.tiles).forEach((k) => { const x = R.map.tiles[k]; if (x !== tile) x.done = true; });
   R.node = null;
@@ -385,7 +385,7 @@ t.test('relic mods are additive and read live: RUN.mods(R)', () => {
   const t10 = NEW({ trial: 10 }); t10.relics.push('t_gold');
   t.near(RUN.mods(t10).goldMul, 1.15, 1e-9, 'trial -10% plus relic +25% add: 1 - 0.1 + 0.25');
 });
-t.test('gaining a relic recomputes inkMax; startInk applies when a chapter starts', () => {
+t.test('gaining a relic recomputes inkMax; startInk applies when an Act starts', () => {
   const R = NEW();
   t.eq(RUN.addRelic(R, 't_inkmax').ok, true, 'gained'); t.eq(R.inkMax, E.inkMax + 2, 'inkMax follows the relic');
   R.ink = 16; R.relics.pop(); RUN.addRelic(R, 't_c0');
@@ -405,7 +405,7 @@ t.test('gaining a relic recomputes inkMax; startInk applies when a chapter start
   t.eq(cap.ink, E.inkMax, 'startInk is capped by inkMax');
 });
 
-t.test('the chapter map: generated per chapter from R.seed, replaced by startChapter', () => {
+t.test('the Act map: generated per Act from R.seed, replaced by startChapter', () => {
   const R = NEW({ seed: 31 });
   const seed1 = R.map.seed;
   t.eq(seed1, U.hash(31, 'ch1', 'map'), 'map seed is U.hash(R.seed, ch1, map)');
@@ -415,8 +415,8 @@ t.test('the chapter map: generated per chapter from R.seed, replaced by startCha
   t.deep(R.map.pos, R.map.start, 'the party starts on the bookmark');
 });
 
-// ================================================================================================ painting and brushes
-t.test('paint: one adjacent hex costs one Ink and reveals it', () => {
+// ================================================================================================ unmuting and Spells
+t.test('paint: one adjacent hex costs one Vox and reveals it', () => {
   const R = NEW();
   const e = hiddenEdge(R);
   const pre = RUN.paintPreview(R, e.q, e.r);
@@ -460,7 +460,7 @@ t.test('paint: reasons for a refusal, and the busy and done guards', () => {
   t.eq(RUN.paint(R, e.q, e.r).reason, 'done', 'no painting after the run ended');
   t.deep(RUN.paintPreview(R, 999, 999).path, [], 'the preview never returns null');
 });
-t.test('brushes: each kind paints its shape, spends the brush and counts', () => {
+t.test('Spells: each kind paints its shape, spends the Spell and counts', () => {
   const R = NEW();
   R.brushes = ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot'];
   const seen = {};
@@ -480,7 +480,7 @@ t.test('brushes: each kind paints its shape, spends the brush and counts', () =>
   t.eq(R.stats.brushesUsed, 6, 'brushesUsed');
   t.ok(seen.wave >= seen.stroke - 0 && seen.splash >= 1 && seen.blot === 1, 'shapes are sane: ' + J(seen));
 });
-t.test('brushes: one instance is spent, refusals leave everything alone', () => {
+t.test('Spells: one instance is spent, refusals leave everything alone', () => {
   const R = NEW();
   R.brushes = ['stroke', 'stroke'];
   let hit = null;
@@ -527,7 +527,7 @@ t.test('step: a well gives wellInk (mods and content), caps at inkMax, and is do
   const T = NEW({ trial: 10 });
   t.eq(enter(T, 'well', null, () => { T.ink = 2; }).gained, E.wellInk, 'trials that leave wellInk alone leave the well alone');
 });
-t.test('step: a brush rack gives its brush and is done', () => {
+t.test('step: a Busker gives its Spell and is done', () => {
   const R = NEW();
   const b = enter(R, 'brush', (x) => { x.content = { id: 'halo' }; });
   t.eq(b.kind, 'brush', 'Instant'); t.eq(b.id, 'halo', 'id'); t.eq(b.done, true, 'done'); t.ok(R.brushes.indexOf('halo') >= 0, 'in the tray'); t.eq(R.node, null, 'no node');
@@ -593,15 +593,15 @@ t.test('encounters: content.enc wins, otherwise the picker is seeded, weighted a
   t.eq(repeats, 0, 'the last encounter is never drawn again straight away');
   t.eq(NEW({ seed: 1 }).lastEnc, null, 'lastEnc starts null');
 });
-t.test('encounters: R.lastEnc is remembered per chapter', () => {
+t.test('encounters: R.lastEnc is remembered per Act', () => {
   const R = NEW({ seed: 6 });
   const n = enter(R, 'enemy');
   t.eq(R.lastEnc, n.enc, 'remembered'); RUN.startChapter(R, 2); t.eq(R.lastEnc, null, 'a new chapter forgets');
 });
 
-// ================================================================================================ the Ink mercy rule
+// ================================================================================================ the Vox mercy rule
 function calm(R) { Object.keys(R.map.tiles).forEach((k) => { R.map.tiles[k].done = true; }); R.node = null; }
-t.test('mercy: stranded means no Ink, no brush and nothing unresolved reachable', () => {
+t.test('mercy: stranded means no Vox, no Spell and nothing unresolved reachable', () => {
   const R = NEW();
   calm(R); R.ink = 0; R.brushes = [];
   t.eq(RUN.checkStranded(R), true, 'stranded -> mercy'); t.eq(R.ink, E.paintCost, 'exactly paintCost Ink'); t.eq(R.stats.mercy, 1, 'stat');
@@ -616,7 +616,7 @@ t.test('mercy: stranded means no Ink, no brush and nothing unresolved reachable'
   t.eq(RUN.checkStranded(R), false, 'standing on an unresolved tile is not stranded');
   R.map.pos = R.map.start;
 });
-t.test('mercy: an unresolved painted tile only counts when it can be reached over painted ground', () => {
+t.test('mercy: an unresolved unmuted tile only counts when it can be reached over unmuted ground', () => {
   const R = NEW();
   calm(R); R.ink = 0; R.brushes = [];
   const island = Object.keys(R.map.tiles).map((k) => R.map.tiles[k]).find((x) => !x.painted && x.type === 'empty' && MAP.dist(x.q, x.r, R.map.start.q, R.map.start.r) > 4);
@@ -643,7 +643,7 @@ t.test('mercy: void tiles and empty tiles never count, a pending node blocks the
   R.node = null; R.done = true;
   t.eq(RUN.checkStranded(R), false, 'never after the run ended');
 });
-t.test('mercy: painting the last useful hex hands back one Ink; it can repeat', () => {
+t.test('mercy: unmuting the last useful hex hands back one Vox; it can repeat', () => {
   const R = NEW();
   calm(R); R.brushes = [];
   const e = hiddenEdge(R);
@@ -654,7 +654,7 @@ t.test('mercy: painting the last useful hex hands back one Ink; it can repeat', 
   t.eq(RUN.paint(R, next[0], next[1]).mercy, true, 'and again on the next hex'); t.eq(R.stats.mercy, 2, 'twice');
   t.ok(R.log.some((l) => /Vox/.test(l.msg)), 'the log remembers');
 });
-t.test('mercy: finishing a node and the brush rack also run the check', () => {
+t.test('mercy: finishing a node and the Busker also run the check', () => {
   const R = NEW({ seed: 21 });
   R.ink = 0; R.brushes = [];
   const camp = tiles(R, 'camp')[0];
@@ -733,7 +733,7 @@ t.test('combatDone: gold by tier, goldMul, thief loot and the extra gold ops', (
   const earned = NEW(); fight(earned, 'normal', 3, { gold: 5 });
   t.ok(earned.stats.goldEarned >= 5 + E.gold.normal[0], 'goldEarned counts the pouch too');
 });
-t.test('combatDone: Ink from kills (+1 normal, +2 elite, none for minions and bosses) and from ink ops', () => {
+t.test('combatDone: Vox from kills (+1 normal, +2 elite, none for minions and bosses) and from ink ops', () => {
   const R = NEW(); R.ink = 3;
   const rw = fight(R, 'normal', 1, { stats: { kills: [{ def: 'kappa', tier: 'normal', by: 'card' }, { def: 'oni_brute', tier: 'elite', by: 'card' }, { def: 'leaf_imp', tier: 'minion', by: 'poison' }, { def: 'boss_x', tier: 'boss', by: 'card' }] }, ink: 2 });
   t.eq(R.ink, 3 + 1 + 2 + 0 + 0 + 2, 'kill Ink plus ink ops'); t.eq(rw.ink, 1 + 2 + 2, 'Rewards.ink is the total: 1 + 2 + 0 + 0 + the ink ops'); t.eq(rw.ink, 5, 'five');
@@ -885,7 +885,7 @@ t.test('card offers: a drained rarity falls back instead of returning nothing', 
   t.eq(rc.cards.length, 0, 'with nothing unlocked the offer is empty (and the screen shows only Continue)'); t.eq(C.rareOffset, 0, 'an empty offer does not bump the pity counter');
 });
 
-// ================================================================================================ relic, gem and brush rewards
+// ================================================================================================ relic, gem and Spell rewards
 t.test('elite reward: one relic (never boss or shop rarity), unowned, unlocked, for this party', () => {
   const rar = { common: 0, uncommon: 0, rare: 0 };
   for (let i = 0; i < 500; i++) {
@@ -902,7 +902,7 @@ t.test('elite reward: one relic (never boss or shop rarity), unowned, unlocked, 
   t.near(rar.common / n, 0.5, 0.06, 'weights 50/40/10: common ' + rar.common / n); t.near(rar.rare / n, 0.1, 0.05, 'rare ' + rar.rare / n);
   t.eq(fight(NEW(), 'normal', 1).relics.length, 0, 'a normal fight offers no relic');
 });
-t.test('boss reward: a rare card set, three boss relics to choose from, a gem, no brush', () => {
+t.test('boss reward: a rare card set, three boss relics to choose from, a gem, no Spell', () => {
   const R = NEW({ seed: 3 });
   const rw = fight(R, 'boss', 1);
   t.eq(rw.boss, true, 'boss flag'); t.ok(rw.cards.length === 3 && rw.cards.every((id) => DATA.cards[id].rarity === 'rare'), 'three rares');
@@ -919,7 +919,7 @@ t.test('boss reward: a rare card set, three boss relics to choose from, a gem, n
   const seen = {}; for (let i = 0; i < 200; i++) fight(NEW({ seed: i }), 'boss', i).relics.forEach((id) => { seen[id] = 1; });
   t.eq(Object.keys(seen).length, 8, 'across seeds every boss relic turns up');
 });
-t.test('gem and brush drops: elites sometimes, event fights always brush, gems match the chapter table', () => {
+t.test('gem and Spell drops: elites sometimes, event fights always Spell, gems match the Act table', () => {
   let gem = 0, brush = 0;
   for (let i = 0; i < 600; i++) { const rw = fight(NEW({ seed: 6000 + i }), 'elite', i); gem += rw.gems.length; brush += rw.brush ? 1 : 0; if (rw.brush) t.ok(DATA.brushes[rw.brush], 'a real brush'); if (rw.gems[0]) t.ok(DATA.gems[rw.gems[0]], 'a real gem'); }
   t.near(gem / 600, 0.4, 0.07, 'elite gem chance ' + gem / 600); t.near(brush / 600, 0.5, 0.07, 'elite brush chance ' + brush / 600);
@@ -934,7 +934,7 @@ t.test('gem and brush drops: elites sometimes, event fights always brush, gems m
   for (let i = 0; i < 400; i++) { const R = NEW({ seed: i, unlocked: null }); RUN.startChapter(R, 3); const rw = fight(R, 'boss', i); t3[DATA.gems[rw.gems[0]].tier]++; }
   t.ok(t3[3] > t3[1], 'chapter 3 leans on tier 3: ' + J(t3));
 });
-t.test('rewards:false gives no gold, cards, relics, gems or brush, but the fight itself still counts', () => {
+t.test('rewards:false gives no gold, cards, relics, gems or Spell, but the fight itself still counts', () => {
   const R = NEW({ seed: 4 }); const g = R.gold; R.ink = 2;
   const rw = fight(R, 'elite', 1, { stats: { kills: [{ def: 'kappa', tier: 'normal', by: 'card' }] } }, { rewards: false });
   t.eq(rw.gold, 0, 'no gold'); t.deep(rw.cards, [], 'no cards'); t.deep(rw.relics, [], 'no relics'); t.deep(rw.gems, [], 'no gems'); t.eq(rw.brush, null, 'no brush'); t.eq(R.gold, g, 'gold untouched');
@@ -957,7 +957,7 @@ t.test('combatDone fires onFightWon before rolling rewards, filtered by tier', (
 });
 
 // ================================================================================================ claim
-t.test('claim: card, relic, gem, brush, each optional, nothing applied on a bad choice', () => {
+t.test('claim: card, relic, gem, Spell, each optional, nothing applied on a bad choice', () => {
   const R = NEW({ seed: 9 });
   const rw = fight(R, 'elite', 1);
   const card = rw.cards[0], relic = rw.relics[0];
@@ -991,7 +991,7 @@ t.test('claim: a relic with an onPickup hook reports its log and pending choices
   RUN.claim(R3, { cards: [], relics: ['t_pickrelic'], gems: [], brush: null, claimed: false }, { relic: 't_pickrelic' });
   t.deep(R3.relics, ['t_pickrelic', 't_pickup'], 'a pickup hook can hand out another relic, whose own hook then runs'); t.eq(R3.gold, E.startGold + 10, 'nested onPickup fired');
 });
-t.test('finishNode after a reward: tile done, node cleared, boss rewards flag the chapter', () => {
+t.test('finishNode after a reward: tile done, node cleared, boss rewards flag the Act', () => {
   const R = NEW({ seed: 8 });
   const node = enter(R, 'enemy');
   const rw = RUN.combatDone(R, fakeC({}));
@@ -1061,7 +1061,7 @@ t.test('gem cache: choose one of three, or none', () => {
 
 // ================================================================================================ shop
 const shopOf = (R, seed, mutate) => enter(R, 'shop', (x) => { x.content = { shop: { seed } }; if (mutate) mutate(x); });
-t.test('shop: five cards, two gems, three relics, one brush, removal, keys and one sale', () => {
+t.test('shop: five cards, two gems, three relics, one Spell, removal, keys and one sale', () => {
   const R = NEW({ seed: 4 });
   const node = shopOf(R, 555);
   const items = node.stock.items;
@@ -1229,7 +1229,7 @@ function evWorld(events) {
   return A;
 }
 const evTile = (R) => R.map.tiles[MAP.key(R.map.start.q, R.map.start.r)];
-t.test('pickEvent: chapter, when (flag, relic, hero) and once all filter the pool', () => {
+t.test('pickEvent: Act, when (flag, relic, hero) and once all filter the pool', () => {
   const A = evWorld({ any: mkEv('any'), c1: mkEv('c1', { chapters: [1] }), c2: mkEv('c2', { chapters: [2, 3] }), flag: mkEv('flag', { when: { flag: 'fox_spared' } }), bell: mkEv('bell', { when: { relic: 'silver_bell' } }), hanae: mkEv('hanae', { when: { hero: 'hanae' } }), kuro: mkEv('kuro', { when: { hero: 'kuro' } }) });
   const pool = (R) => { const seen = new Set(); for (let i = 0; i < 200; i++) seen.add(A.RUN.pickEvent(R, { q: i, r: 0 })); return [...seen].sort(); };
   const R = A.RUN.newRun({ heroes: ['hanae', 'suzu'], seed: 1, unlocked: ALL });
@@ -1271,7 +1271,7 @@ t.test('pickEvent: weighted by w, seeded per tile, deterministic', () => {
   const at = A2.RUN.pickEvent(T, { q: 5, r: 5 }); T.seen.events.push('x', 'y');
   t.ok(at !== undefined, 'a pick exists');
 });
-t.test('a fable tile: the event node, seen list, stat, preset ids and the empty fallback', () => {
+t.test('a Detour tile: the event node, seen list, stat, preset ids and the empty fallback', () => {
   const A = evWorld({ a: mkEv('a'), b: mkEv('b') });
   const R = A.RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 3, unlocked: ALL });
   const tile = Object.keys(R.map.tiles).map((k) => R.map.tiles[k]).find((x) => x.type === 'event' && A.MAP.pathToPaint(R.map, x.q, x.r));
@@ -1325,7 +1325,7 @@ t.test('event requirements: every req key, and a failed hero requirement hides t
   const bad = A.RUN.eventChoose(R, ev, 0);
   t.eq(bad.ok, false, 'a failed req refuses the choice'); t.eq(J(A.RUN.serialize(R)), snap, 'and changes nothing'); t.eq(A.RUN.eventChoose(R, ev, 9).reason, 'choice', 'no such choice'); t.eq(R.node.chosen, null, 'still open');
 });
-t.test('locked choices say what is missing (relic by name, chapter, hp, flag hint)', () => {
+t.test('locked choices say what is missing (relic by name, Act, hp, flag hint)', () => {
   const ev = mkEv('rs', { choices: [
     { label: 'relic', req: { relic: 'silver_bell' }, out: [{ w: 1, text: 'a', ops: [] }] }, { label: 'chapter', req: { chapter: 3 }, out: [{ w: 1, text: 'b', ops: [] }] }, { label: 'hpPct', req: { hpPct: 0.8 }, out: [{ w: 1, text: 'c', ops: [] }] },
     { label: 'hpBelow', req: { hpBelow: 0.4 }, out: [{ w: 1, text: 'd', ops: [] }] }, { label: 'fox', req: { flag: 'fox_spared' }, out: [{ w: 1, text: 'e', ops: [] }] }, { label: 'other', req: { flag: 'zzz' }, out: [{ w: 1, text: 'f', ops: [] }] },
@@ -1340,7 +1340,7 @@ t.test('locked choices say what is missing (relic by name, chapter, hp, flag hin
   why.forEach((w, i) => { if (!rows[i].ok) t.ok(!/^(Not yet|Wrong chapter|Needs a treasure|Party too hurt|Nobody is hurt enough)$/.test(w), 'no vague reason: ' + w); });
   R.heroes[0].hp = A.DATA.heroes.hanae.maxHp; R.heroes[1].hp = A.DATA.heroes.kuro.maxHp; t.ok(/hero below 40%/.test(A.RUN.eventChoices(R, ev)[3].reason), 'at full health the hurt bar says why: ' + A.RUN.eventChoices(R, ev)[3].reason);
 });
-t.test('choices that can only do nothing are locked with a reason: no curse to remove, nothing to sharpen, a fixed treasure already owned', () => {
+t.test('choices that can only do nothing are locked with a reason: no curse to remove, nothing to sharpen, a fixed Charm already owned', () => {
   const curse = { op: 'removeCard', filter: { type: 'curse' } };
   const ev = mkEv('dead', { choices: [
     { label: 'regret', out: [{ w: 1, text: 'a', ops: [curse, { op: 'ink', n: 2 }] }] },
@@ -1364,13 +1364,13 @@ t.test('choices that can only do nothing are locked with a reason: no curse to r
   const stats = J(A.RUN.serialize(R)); R.deck[0].up = 1; R.node = { kind: 'event', tile: { q: 0, r: 0 }, event: 'dead', chosen: null }; const snap = J(A.RUN.serialize(R));
   const bad = A.RUN.eventChoose(R, ev, 0); t.eq(bad.ok, false, 'choosing a locked choice is refused'); t.ok(/no curse/i.test(bad.reason), 'with the reason'); t.eq(J(A.RUN.serialize(R)), snap, 'and costs nothing'); t.eq(R.node.chosen, null, 'the fable stays open');
   t.eq(A.RUN.eventChoose(R, ev, 7).ok, true, 'a plain choice still goes through');
-  // a fable never locks itself: when every choice is a dead end the locks are lifted
+  // a Detour never locks itself: when every choice is a dead end the locks are lifted
   const all = mkEv('alldead', { choices: [{ label: 'a', out: [{ w: 1, text: 'a', ops: [curse] }] }, { label: 'b', out: [{ w: 1, text: 'b', ops: [{ op: 'upgradeCard' }] }] }] });
   const W = eventRun({ alldead: all }); W.R.deck.forEach((c) => { c.up = 1; }); t.deep(W.A.RUN.eventChoices(W.R, all).map((x) => x.ok), [true, true], 'nothing else is open, so nothing is locked');
   const some = mkEv('somedead', { choices: [{ label: 'a', out: [{ w: 1, text: 'a', ops: [curse] }] }, { label: 'b', req: { gold: 999 }, out: [{ w: 1, text: 'b', ops: [] }] }] });
   const V = eventRun({ somedead: some }); V.R.gold = 0; t.deep(V.A.RUN.eventChoices(V.R, some).map((x) => x.ok), [true, false], 'the dead end is the only open choice (the gold gate is locked): it is lifted too');
 });
-t.test('newRun: a nonce gives every tale its own id; without one equal inputs give equal ids', () => {
+t.test('newRun: a nonce gives every tour its own id; without one equal inputs give equal ids', () => {
   const mk = (extra) => RUN.newRun(Object.assign({ heroes: ['hanae', 'kuro'], seed: 5, unlocked: ALL }, extra || {}));
   t.eq(mk().id, mk().id, 'no nonce: deterministic'); t.ok(mk({ nonce: 1 }).id !== mk({ nonce: 2 }).id, 'different nonces differ'); t.eq(mk({ nonce: 7 }).id, mk({ nonce: 7 }).id, 'the same nonce is the same id'); t.ok(mk({ nonce: 1 }).id !== mk().id, 'a nonce changes the id'); t.ok(/^rb[0-9a-z]+$/.test(mk({ nonce: 3 }).id), 'same shape');
   t.eq(mk({ daily: true, seed: 20260101 }).id === mk({ daily: true, seed: 20260101, nonce: 9 }).id, false, 'a daily replay with a nonce is its own tale');
@@ -1642,7 +1642,7 @@ t.test('applyOps without an rng is still deterministic for a run', () => {
 });
 
 // ================================================================================================ relic hooks
-t.test('hooks: onChapterStart, once per run and every trigger vs every chapter', () => {
+t.test('hooks: onChapterStart, once per run and every trigger vs every Act', () => {
   const R = NEW(); R.relics.push('t_chapter', 't_once');
   const g = R.gold;
   RUN.startChapter(R, 2);
@@ -1651,7 +1651,7 @@ t.test('hooks: onChapterStart, once per run and every trigger vs every chapter',
   const r = RUN.hook(R, 'onChapterStart', {}); t.deep(Object.keys(r).sort(), ['log', 'pending'], 'RUN.hook returns {log, pending}'); t.ok(r.log.some((x) => x.op === 'relic' && x.id === 't_chapter'), 'the log names the relic');
   const seen = NEW(); RUN.addRelic(seen, 't_chapter'); seen.gold = 0; RUN.startChapter(seen, 2); t.eq(seen.gold, 3, 'a relic gained mid-run works from the next chapter');
 });
-t.test('hooks: every N counts triggers per run, limit N is per chapter', () => {
+t.test('hooks: every N counts triggers per run, limit N is per Act', () => {
   const R = NEW({ seed: 3 }); R.relics.push('t_paint3'); R.ink = 0;
   const chain = MAP.pathToPaint(R.map, R.map.boss.q, R.map.boss.r).path;
   R.ink = 6; chain.slice(0, 6).forEach((c) => RUN.paint(R, c[0], c[1]));
@@ -1666,7 +1666,7 @@ t.test('hooks: every N counts triggers per run, limit N is per chapter', () => {
   MAP.pathToPaint(L2.map, L2.map.boss.q, L2.map.boss.r).path.slice(0, 5).forEach((c) => RUN.paint(L2, c[0], c[1]));
   t.eq(L2.gold, g2 + 2, 'a new chapter resets the limit');
 });
-t.test('hooks: onPaint fires for every hex however it was painted (Ink, chain, brush, paint op)', () => {
+t.test('hooks: onPaint fires for every hex however it was unmuted (Vox, chain, Spell, paint op)', () => {
   const R = NEW({ seed: 3 }); R.relics.push('t_paintlim'); R.relics.push('t_paint3'); R.ink = 10;
   const g = R.gold;
   const boss = R.map.boss; const chain = MAP.pathToPaint(R.map, boss.q, boss.r).path;
@@ -1748,7 +1748,7 @@ t.test('camp: sharpen upgrades one chosen card, and only a valid card uses the a
   t.eq(RUN.campAction(S, 'sharpen', S.deck[0].uid).reason, 'card', 'an upgraded card cannot be sharpened again'); t.eq(RUN.campAction(S, 'sharpen', { uid: S.deck[1].uid }).ok, true, 'an {uid} object works too');
   const C = NEW(); C.deck.push({ uid: 900, id: 'curse_regret', up: 0, gems: [] }); enter(C, 'camp'); t.eq(RUN.campAction(C, 'sharpen', 900).reason, 'card', 'a curse cannot be sharpened');
 });
-t.test('camp: meditate gives campInk Ink (capped) and one random brush, seeded by the tile', () => {
+t.test('camp: meditate gives campInk Vox (capped) and one random Spell, seeded by the tile', () => {
   const R = NEW(); enter(R, 'camp', null, () => { R.ink = 3; });
   const m = RUN.campAction(R, 'meditate');
   t.eq(m.ok, true, 'meditated'); t.eq(R.ink, 3 + E.campInk, 'campInk'); t.eq(m.ink, E.campInk, 'reported'); t.ok(DATA.brushes[m.brush], 'a real brush'); t.ok(R.brushes.indexOf(m.brush) >= 0, 'in the tray'); t.eq(R.brushes.length, 2, 'stroke plus the new one');
@@ -1820,8 +1820,8 @@ t.test('deck: addCard, removeCard, upgradeCard keep instances well formed', () =
   t.eq(RUN.removeCard(R, u.uid).gems.length, 2, 'removing a fully socketed card'); t.deep(R.gems.sort(), ['blue_g0', 'red_g0', 'red_g2'], 'every gem returned');
 });
 
-// ================================================================================================ chapter end
-t.test('chapterEnd: +8 max HP, then 30% heal (healMul), the next map, Ink top-up, hooks', () => {
+// ================================================================================================ Act end
+t.test('chapterEnd: +8 max HP, then 30% heal (healMul), the next map, Vox top-up, hooks', () => {
   const R = NEW({ seed: 5 }); R.heroes[0].hp = 20; R.heroes[1].hp = KU; R.ink = 2; R.chapterCleared = true;
   R.relics.push('t_chapter');
   const g = R.gold;
@@ -1834,7 +1834,7 @@ t.test('chapterEnd: +8 max HP, then 30% heal (healMul), the next map, Ink top-up
   const hi = NEW(); hi.ink = 13; RUN.chapterEnd(hi); t.eq(hi.ink, 13, 'more Ink than startInk is kept');
   const two = NEW({ seed: 5 }); RUN.chapterEnd(two); const three = RUN.chapterEnd(two); t.eq(three.next, 3, 'and on to chapter 3'); t.eq(two.heroes[0].maxHp, HA + 16, 'another +8'); t.eq(two.chapter, 3, 'chapter 3');
 });
-t.test('chapterEnd after the chapter 3 boss: victory, no heal, no max HP', () => {
+t.test('chapterEnd after the Act 3 boss: victory, no heal, no max HP', () => {
   const R = NEW({ seed: 5 }); RUN.startChapter(R, 3); R.heroes[0].hp = 10; R.chapterCleared = true; R.stats.bossKills = 3;
   const res = RUN.chapterEnd(R);
   t.eq(res.next, 'victory', 'victory'); t.deep(res.healed, [], 'no healing'); t.eq(res.maxHp, 0, 'no max HP'); t.eq(R.heroes[0].maxHp, HA, 'max HP unchanged'); t.eq(R.heroes[0].hp, 10, 'hp unchanged');
@@ -1887,7 +1887,7 @@ t.test('serialize: plain JSON, pure, includes the map and the uid counter', () =
   t.eq(canon(back), before, 'a fresh run round trips exactly'); t.eq(back.uid, undefined, 'the uid field is bookkeeping, not part of R');
   t.ok(back.map !== R.map && back.deck !== R.deck, 'a distinct object graph');
 });
-t.test('deserialize keeps duplicate gems and duplicate brushes (they are counts, not sets)', () => {
+t.test('deserialize keeps duplicate gems and duplicate Spells (they are counts, not sets)', () => {
   const R = NEW({ seed: 9 }); R.gems = ['red_g0', 'red_g0', 'blue_g1', 'red_g0']; R.brushes = ['stroke', 'stroke', 'halo'];
   const back = roundTrip(R);
   t.deep(back.gems, ['red_g0', 'red_g0', 'blue_g1', 'red_g0'], 'three copies of one gem survive a save'); t.deep(back.brushes, ['stroke', 'stroke', 'halo'], 'two Long Strokes survive');
@@ -1935,7 +1935,7 @@ t.test('every node kind survives a save', () => {
   const P = NEW({ seed: 15 }); RUN.applyOps(P, [{ op: 'removeCard' }, { op: 'cardReward' }]); t.eq(canon(roundTrip(P)), canon(P), 'pending choices restored'); const back = roundTrip(P);
   t.eq(RUN.resolvePending(back, back.pending[0].id, [back.deck[0].uid]).ok, true, 'and still answerable after a reload');
 });
-t.test('a reload at an event replays the same fable and the same outcome', () => {
+t.test('a reload at an event replays the same Detour and the same outcome', () => {
   const A = fresh(); const R = A.RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 33, unlocked: ALL });
   const tile = Object.keys(R.map.tiles).map((k) => R.map.tiles[k]).find((x) => x.type === 'event' && A.MAP.pathToPaint(R.map, x.q, x.r));
   Object.keys(R.map.tiles).forEach((k) => { if (R.map.tiles[k] !== tile) R.map.tiles[k].done = true; });
@@ -2195,7 +2195,7 @@ if (realMap) {
     t.eq(canon(runBot(A, 4, { max: 4000 }).R), canon(runBot(B, 4, { max: 4000 }).R), 'same seed, same run');
     t.eq(canon(runBot(real(), 4, { max: 4000, reload: true }).R), canon(runBot(real(), 4, { max: 4000 }).R), 'reload after every action changes nothing');
   });
-  t.test('real MAP: chapter maps come from the documented seed and mercy keeps runs solvable', () => {
+  t.test('real MAP: Act maps come from the documented seed and mercy keeps runs solvable', () => {
     const A = real(); const R = A.RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 77, unlocked: ALL });
     t.eq(R.map.seed, A.U.hash(77, 'ch1', 'map'), 'map seed'); A.RUN.startChapter(R, 2); t.eq(R.map.chapter, 2, 'chapter 2 map');
     const q = A.MAP.solve ? A.MAP.solve(R.map) : null; if (q) t.ok(q.ok, 'solvable');
@@ -2287,7 +2287,7 @@ if (realC && realC.COMBAT && typeof realC.COMBAT.simulate === 'function') {
     const a = A.COMBAT.simulate(A.RUN.combatInit(R, node)), b = A.COMBAT.simulate(A.RUN.combatInit(R, node));
     t.eq(J(a.stats) + a.result, J(b.stats) + b.result, 'the same options replay the same fight'); t.ok(a.result === 'win' || a.result === 'lose', 'simulate finishes: ' + a.result);
   });
-  t.test('real COMBAT summaries are digested: HP, revive, stats, Ink from kills, rewards', () => {
+  t.test('real COMBAT summaries are digested: HP, revive, stats, Vox from kills, rewards', () => {
     const A = realC; let wins = 0, losses = 0;
     for (let seed = 1; seed <= 14; seed++) {
       const R = A.RUN.newRun({ heroes: P2, seed, unlocked: ALL });
@@ -2307,7 +2307,7 @@ if (realC && realC.COMBAT && typeof realC.COMBAT.simulate === 'function') {
     }
     t.ok(wins >= 8, 'the greedy bot beats most chapter 1 groups with a starter deck: ' + wins + ' wins, ' + losses + ' losses');
   });
-  t.test('real COMBAT: whole runs through chapters 1 and 2 keep every invariant, replay exactly, and survive reloads', () => {
+  t.test('real COMBAT: whole runs through Acts 1 and 2 keep every invariant, replay exactly, and survive reloads', () => {
     const A = realC; let fights = 0, wins = 0; const reached = new Set();
     for (let seed = 1; seed <= 4; seed++) {
       const r = runBot(A, seed, { real: A, pair: P2, stopAt: 3, max: 3000, roundTrip: seed === 1 });

@@ -1,4 +1,4 @@
-// Menu screens suite: title, heroSelect, library (five tabs), settings (screen and overlay), howto and the pause overlay (js/screen_menu.js).
+// Menu screens suite: title, heroSelect, library (six tabs), settings (screen and overlay), howto and the pause overlay (js/screen_menu.js).
 //
 // Boots the REAL modules (util, data, art, audio, meta, run, combat, map, ui, scene, screen_menu, main) and leaves out only the other screen
 // files, so main.js supplies its placeholder map, story and node screens. Every scenario builds realistic state with the real META and RUN,
@@ -79,9 +79,11 @@ await t.test('title: the tap gate, the plaques without a saved run, and the firs
   t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'no Continue without a saved run: New Tour, Daily Duet, Tour Bus, Settings, How to Play');
   t.eq($$(g, '.s-title h1.sr-only').length, 1, 'a real h1 names the game for screen readers');
   t.ok(/v\d/.test($(g, '.mn-ver').textContent), 'the version is shown'); t.ok($(g, '.mn-credits').textContent.length > 10, 'a credits line is shown');
+  t.ok($(g, '.mn-foot').hasAttribute('inert') && $(g, '.mn-menu').hasAttribute('inert'), 'the footer buttons are inert under the gate like the plaques: Tab cannot reach them');
   g._click('.mn-gate');
   await settle(g);
   t.ok(!g.UI.screens.title.state().gated, 'a tap dismisses the gate');
+  t.ok(!$(g, '.mn-foot').hasAttribute('inert') && !$(g, '.mn-menu').hasAttribute('inert'), 'and the footer wakes with the menu');
   t.ok(!$(g, '.mn-title').classList.contains('gated'), 'the menu is revealed');
   t.ok($$(g, '.mn-plaque').every((b) => b.classList.contains('rise')), 'the plaques rise in one after another');
   t.deep($$(g, '.mn-plaque').map((b) => b.style.getPropertyValue('--i')), ['1', '2', '3', '4', '5'], 'each plaque has its own stagger index');
@@ -492,7 +494,7 @@ await t.test('heroSelect: Begin passes heroes, trial and seed to GAME.newRun; th
   g._click('.mn-dice'); await settle(g);
   t.ok(/^\d{3,6}$/.test($(g, '.mn-seed').value), 'the dice roll a numeric seed: ' + $(g, '.mn-seed').value);
   t.eq(g.UI.screens.heroSelect.state().seed, Number($(g, '.mn-seed').value), 'and the field is what state reports');
-  // a saved tale asks first
+  // a saved tour asks first
   saveRun(g);
   g._flush(1500);
   g._click($(g, '.mn-begin')); await settle(g);
@@ -502,7 +504,7 @@ await t.test('heroSelect: Begin passes heroes, trial and seed to GAME.newRun; th
   t.eq(calls.length, 5, 'Start fresh starts the run');
 });
 
-await t.test('heroSelect: really beginning a tale creates the run through RUN and leaves for the story', async () => {
+await t.test('heroSelect: really beginning a tour creates the run through RUN and leaves for the story', async () => {
   const g = fresh();
   await go(g, 'heroSelect');
   g._click(card(g, 'kuro')); g._click(card(g, 'hanae')); await settle(g);
@@ -562,17 +564,18 @@ await t.test('heroSelect: leave cleans up, canvases draw, and every control has 
 });
 
 
-// ==================================================================================================== LIBRARY
+// ==================================================================================================== THE TOUR BUS (library)
 const pane = (g) => $(g, '.mn-tabpane:not([hidden])');
 const segBtn = (g, label) => $$(g, '.mn-tabpane:not([hidden]) .seg-b').find((b) => b.textContent === label);
 const tabBtn = (g, id) => $(g, '.tab[data-id=' + id + ']');
 const visibleItems = (g) => $$(g, '.mn-item').filter((i) => !i.hidden);
 
-await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembered tab', async () => {
+await t.test('Tour Bus: tabs, the Cheers balance, key shortcuts and the remembered tab', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library');
-  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history'], 'the five tabs of DESIGN 5.11');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'the five tabs of DESIGN 5.11 and the sixth, follow (HV_STORY 5.3)');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), Array.from(g.DATA.LISTS.libraryTabs), 'the tab strip follows DATA.LISTS.libraryTabs, in order');
   t.eq(g.UI.screens.library.state().tab, 'unlocks', 'opens on Unlocks');
   t.eq($(g, '.mn-stones .stat .val').textContent, '200', 'the Inkstone balance is META.inkstones');
   t.eq($$(g, '.mn-tabpane').length, 1, 'panes are built lazily: only the open tab exists');
@@ -584,6 +587,14 @@ await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembe
   t.eq(g.UI.screens.library.state().tab, 'bestiary', 'key 4 opens the Bestiary');
   g._key('1'); await settle(g);
   t.eq(g.UI.screens.library.state().tab, 'unlocks', 'key 1 opens Unlocks');
+  ['achievements', 'story', 'bestiary', 'history', 'follow'].forEach((id) => {
+    g._key(String(['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'].indexOf(id) + 1));
+    t.eq(g.UI.screens.library.state().tab, id, 'key ' + (['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'].indexOf(id) + 1) + ' opens ' + id);
+  });
+  await settle(g);
+  g._key('7'); g._key('0'); g._key('F6');
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'keys 7, 0 and F6 change nothing: the tabs run 1 to 6');
+  g._key('1'); await settle(g);
   await go(g, 'library', { tab: 'history' });
   t.eq(g.UI.screens.library.state().tab, 'history', 'params.tab picks the tab');
   await go(g, 'library', { tab: 'nonsense' });
@@ -596,7 +607,7 @@ await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembe
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('library unlocks: every locked def is listed, with kind and hero filters and the empty states', async () => {
+await t.test('Tour Bus unlocks: every locked def is listed, with kind and hero filters and the empty states', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library');
@@ -641,7 +652,7 @@ await t.test('library unlocks: every locked def is listed, with kind and hero fi
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library unlocks: buying spends Inkstones, stamps the tile, and the sound and toast come once from GAME', async () => {
+await t.test('Tour Bus unlocks: buying spends Cheers, stamps the tile, and the sound and toast come once from GAME', async () => {
   const g = fresh();
   seedProfile(g, { stones: 200 });
   await go(g, 'library');
@@ -689,7 +700,7 @@ await t.test('library unlocks: buying spends Inkstones, stamps the tile, and the
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('library unlocks: Affordable first reorders, and reduce motion skips the sparks', async () => {
+await t.test('Tour Bus unlocks: Affordable first reorders, and reduce motion skips the sparks', async () => {
   const g = fresh();
   seedProfile(g, { stones: 100 });
   await go(g, 'library');
@@ -711,7 +722,7 @@ await t.test('library unlocks: Affordable first reorders, and reduce motion skip
   t.ok($(g, '.mn-item[data-id=' + cheap.id + ']').classList.contains('owned'), 'the tile still changes state');
 });
 
-await t.test('library achievements: 32 rows with progress from META.stat, done styling, rewards and sorting', async () => {
+await t.test('Tour Bus Stickers: 32 rows with progress from META.stat, done styling, rewards and sorting', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'achievements' });
@@ -746,7 +757,7 @@ await t.test('library achievements: 32 rows with progress from META.stat, done s
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library story: seen pages replay through the story screen and come back here; unseen ones stay "???"', async () => {
+await t.test('Tour Bus Diary: seen entries replay through the story screen and come back here; unseen ones stay "???"', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'story' });
@@ -777,7 +788,7 @@ await t.test('library story: seen pages replay through the story screen and come
   t.eq($$(g2, '.mn-st.seen').length, 0, 'a fresh profile has read nothing'); t.ok($$(g2, '.mn-st-title').every((x) => x.textContent === '???'), 'every title is hidden');
 });
 
-await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and moves for the met, without spoilers', async () => {
+await t.test('Tour Bus Who\'s Who: silhouettes for the unmet, lore, HP, kills and moves for the met, without spoilers', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'bestiary' });
@@ -817,7 +828,7 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library history: newest runs first with heroes, score, chapter, trial, daily and outcome; an empty state otherwise', async () => {
+await t.test('Tour Bus history: newest runs first with heroes, score, Act, trial, daily and outcome; an empty state otherwise', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'history' });
@@ -840,7 +851,7 @@ await t.test('library history: newest runs first with heroes, score, chapter, tr
   t.eq($$(g2, '.mn-hist').length, 0, 'and no rows');
 });
 
-await t.test('library: leaves cleanly, every control is named, canvases draw without issues', async () => {
+await t.test('Tour Bus: leaves cleanly, every control is named, canvases draw without issues', async () => {
   const g = fresh();
   seedProfile(g);
   await settle(g); g._click('.mn-gate'); await settle(g);
@@ -872,7 +883,8 @@ await t.test('settings screen: five groups, every control shows the saved value,
   const P = g.META.profile;
   Object.assign(P.settings, { musicVol: 0.35, sfxVol: 0.6, shake: 0.5, reduceMotion: true, textScale: 1.15, fastAnim: 2, damageNumbers: false, colorblind: true, quality: 'low', hints: false });
   await go(g, 'title'); await go(g, 'settings');
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data'], 'five groups');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'five groups and the About group last (HV_WORLD_DATA 11)');
+  t.eq($$(g, '.mn-set-group').pop().querySelector('.mn-set-h').textContent, 'About', 'About is the last group in the document order too');
   t.eq($$(g, '.s-settings h1, .s-settings .panel-title, .s-settings .panel h2').length > 0, true, 'a titled panel');
   t.eq(slid(g, 'musicVol').value, '0.35', 'music volume shows 0.35'); t.eq(row(g, 'musicVol').querySelector('.s-val').textContent, '35%', 'as 35%');
   t.eq(slid(g, 'sfxVol').value, '0.6', 'effects volume shows 0.6'); t.eq(row(g, 'shake').querySelector('.s-val').textContent, '50%', 'shake 50%');
@@ -980,7 +992,7 @@ await t.test('settings: Restore defaults resets every setting, rebuilds the form
   t.eq(g.META.inkstones, 0, 'progress is untouched');
 });
 
-await t.test('settings: Clear saved data asks twice, keeps the settings, erases progress and the saved tale', async () => {
+await t.test('settings: Clear saved data asks twice, keeps the settings, erases progress and the saved tour', async () => {
   const g = fresh();
   seedProfile(g); saveRun(g); g.META.set('textScale', 1.15); g.META.set('musicVol', 0.4);
   await go(g, 'settings');
@@ -1236,7 +1248,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: the run card follows the run (daily tag, treasures, brushes, different seed different tip)', async () => {
+await t.test('pause: the run card follows the run (daily tag, Charms, Spells, different seed different tip)', async () => {
   const g = fresh();
   const R = await startRun(g, { heroes: ['kuro', 'suzu'], seed: 77 });
   R.daily = true; R.gold = 123; R.ink = 4;
@@ -1315,7 +1327,7 @@ await t.test('pause: the diagrams inside the overlay are driven by the frame clo
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: Abandon tour asks first, records the run as abandoned, pays Inkstones and returns to the title', async () => {
+await t.test('pause: Abandon tour asks first, records the run as abandoned, pays Cheers and returns to the title', async () => {
   const g = fresh();
   const R = await startRun(g, { trial: 1 });
   await openPause(g);
@@ -1335,7 +1347,7 @@ await t.test('pause: Abandon tour asks first, records the run as abandoned, pays
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: Save and quit saves the tale, closes everything and lets the title Continue it', async () => {
+await t.test('pause: Save and quit saves the tour, closes everything and lets the title Continue it', async () => {
   const g = fresh();
   const R = await startRun(g);
   R.gold = 321;
@@ -1490,7 +1502,7 @@ await t.test('title: Enter on the "Tap to begin" gate is swallowed, so the brows
   t.ok(again !== undefined, 'Tab on the gate is left alone');
 });
 
-await t.test('title and hero select follow the date when left open across midnight, and a click that crosses it shows the new tale first (L26)', async () => {
+await t.test('title and hero select follow the date when left open across midnight, and a click that crosses it shows the new tour first (L26)', async () => {
   const epoch = new Date(2026, 8, 29, 23, 59, 50).getTime();         // 10 s before local midnight
   const key0 = 20260929, key1 = 20260930;
   const g = fresh({ epoch });
@@ -1692,7 +1704,7 @@ await t.test('heroSelect: the card row, the detail sheet and the party stage sha
   t.eq((front + back) / 2, px(decl(party, 'width')) / 2, 'the pair is centred on the party frame (labels at ' + back + ' and ' + front + ' of 400)');
   t.eq(front - back, 150, 'the slots keep their 150 px spacing');
   t.ok(!rules.some((r) => /\.mn-slot\.(front|back)$/.test(r.sel) && /left\s*:/.test(r.body)), 'css: the label x comes from SLOT in screen_menu.js, not from a second copy in the stylesheet');
-  // the Inkstone pill is the same size on hero select and in the library
+  // the Cheers pill is the same size on hero select and in the Tour Bus
   const hsPill = $(g, '.mn-stones .stat').className;
   await go(g, 'library'); const libPill = $(g, '.mn-stones .stat').className;
   t.ok(/sz-lg/.test(hsPill) && hsPill === libPill, 'the Inkstone pill is the same size on both screens (' + hsPill + ' / ' + libPill + ')');
@@ -1737,7 +1749,7 @@ await t.test('css: heroSelect, library, settings and howto share ONE header (Bac
   t.ok(decl(rule(rules, '.compact .mn-tabs'), 'top').indexOf('var(--bar-cy)') >= 0, 'phone library tabs sit under the ribbon (they follow --bar-cy)');
 });
 
-await t.test('howto (screen and overlay): the dots sit on the page axis, the diagram frame is centred on its page, and a phone gives Back, the book and the buttons a --hit row each', async () => {
+await t.test('howto (screen and overlay): the dots sit on the page axis, the diagram frame is centred on its page, and a phone gives Back, the screen and the buttons a --hit row each', async () => {
   const rules = cssRules();
   const nav = rule(rules, '.mn-ht-nav');
   t.ok(decl(nav, 'display') === 'grid' && /^1fr auto 1fr$/.test(decl(nav, 'grid-template-columns')), 'css: the nav is a 1fr auto 1fr grid, so the dots are centred whatever Previous and Next weigh');
@@ -1772,12 +1784,12 @@ await t.test('howto (screen and overlay): the dots sit on the page axis, the dia
   t.ok(decl(hb, 'top') === 'calc(var(--hit) / 2)' && /translate\(-50%,\s*-50%\)/.test(decl(hb, 'transform')), 'css: the overlay ribbon shares Back\'s centre line (--hit / 2)');
 });
 
-await t.test('title: the menu column starts clear of the painted bell (its frame, ink line, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
+await t.test('title: the menu column starts clear of the title stage (its box, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
   const rules = cssRules();
   const menu = rule(rules, '.s-title .mn-menu');
   const left = px(decl(menu, 'left')), width = px(decl(menu, 'width'));
   // the centrepiece's box comes from the art itself (ART.scene.info('title').focus = { x0, x1, y0, y1, k }: its bounding box in stage px
-  // including the ink line and gold fittings, and its layer parallax factor), so repainting it shows up here without reading art source
+  // including its outline and the mic stand, and its layer parallax factor), so repainting it shows up here without reading art source
   const g0 = fresh({});
   const info = g0.ART && g0.ART.scene && typeof g0.ART.scene.info === 'function' ? g0.ART.scene.info('title') : null;
   const f = info && info.focus;
@@ -1810,7 +1822,7 @@ await t.test('title: the Larger text size marks the title root so the narrow col
   t.ok(!$(g, '.s-title').classList.contains('ts-big'), 'and not at Normal');
 });
 
-await t.test('library and pause: tiles of one row are one width, the unlock footers are as wide as their cards, and the run card shares one left edge', () => {
+await t.test('Tour Bus and pause: tiles of one row are one width, the unlock footers are as wide as their cards, and the run card shares one left edge', () => {
   const rules = cssRules();
   const sum = rule(rules, '.mn-hist-sum');
   t.ok(decl(sum, 'display') === 'grid' && decl(sum, 'grid-auto-columns') === '1fr' && decl(sum, 'width') === 'max-content', 'css: the four history tiles share one column width (the widest sets it)');
@@ -1826,7 +1838,7 @@ await t.test('library and pause: tiles of one row are one width, the unlock foot
   const relics = rule(rules, '.mn-p-relics'); t.ok(/padding\s*:\s*8px 0 4px/.test(relics.body), 'css: the treasure strip has no side padding either');
 });
 
-await t.test('library history: the four summary tiles render (the grid keeps them in one row)', async () => {
+await t.test('Tour Bus history: the four summary tiles render (the grid keeps them in one row)', async () => {
   const g = fresh(); seedProfile(g);
   await go(g, 'library', { tab: 'history' });
   t.eq($$(g, '.mn-hist-sum span').length, 4, 'four tiles');
@@ -1909,6 +1921,151 @@ await t.test('copy: the title, bible 5.1 (plaques, tagline, credits, h1, the Enc
   t.eq(errors(g), 0, 'no console errors');
 });
 
+// ==================================================================================================== FOLLOW THE DUO (P9, HV_STORY 5 and 6)
+// The panel, the sheet and Share are ui.js's (its own suite pins them); these checks pin where screen_menu.js places them.
+const CREDITS = 'Drawn in code, sung with heart. No two tours alike.';
+const HANDLE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+const ABOUT = "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.";
+const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+const BLANK_LINKS = { handle: '@roxorloopsandjasmin', website: '', youtube: '', facebook: '', tiktok: '', instagram: '', support: '', game: '' };
+const setLinks = (g, o) => g._run(`DATA.LINKS = Object.freeze(${JSON.stringify(Object.assign({}, BLANK_LINKS, o))});`);
+
+await t.test('follow the duo: the title footer is the credits line, Follow the duo, Share and (only with a URL) Support the duo, with the version last', async () => {
+  const g = fresh();
+  await go(g, 'title'); g._click('.mn-gate'); await settle(g);
+  const foot = $(g, '.mn-foot');
+  t.deep(Array.from(foot.children).map((c) => c.className.split(' ')[0]), ['mn-credits', 'mn-foot-btns', 'mn-ver'], 'the footer reads credits, buttons, version: the version stays last');
+  t.eq($(g, '.mn-credits').textContent, CREDITS, 'the credits line on the left (HV_STORY 6)');
+  t.deep($$(g, '.mn-foot-btns > *').map((b) => b.textContent.trim()), ['Follow the duo', 'Share'], 'Follow the duo and Share; Support the duo is not rendered while DATA.LINKS.support is empty');
+  t.eq($$(g, '.mn-foot a').length, 0, 'no anchor at all without a URL: today the footer links nowhere');
+  t.ok($$(g, '.mn-foot-btns button').every((b) => b.getAttribute('type') === 'button' && b.classList.contains('btn') && b.classList.contains('mn-foot-btn')), 'real buttons in the shared button styling (each --hit tall through .btn)');
+  t.eq($(g, '.mn-foot [data-act=share]').getAttribute('aria-label'), 'Share Hocus Vocus', 'Share names the game for screen readers');
+  t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'the footer buttons are not menu plaques: the five plaques and their keys are unchanged');
+  // Follow the duo opens the sheet through UI.followSheet
+  g._click('.mn-foot [data-act=follow]'); await settle(g);
+  t.ok(g.UI.overlay.has('modal'), 'Follow the duo opens the sheet');
+  t.eq($(g, '.o-modal .p-title').textContent, 'Follow the duo', 'titled Follow the duo');
+  t.ok($(g, '.o-modal .hv-follow.hv-sheet'), 'with the sheet panel'); t.ok($(g, '.o-modal .hv-handle').textContent === HANDLE, 'and the handle line');
+  t.eq($$(g, '.o-modal a.hv-link').length, 0, 'no link pill while every URL is empty');
+  g._click($$(g, '.o-modal .btn').find((b) => b.textContent.trim() === 'Close')); await settle(g);
+  t.ok(!g.UI.overlay.has('modal'), 'Close closes it');
+  // Share goes to the clipboard here (no share sheet in the sandbox)
+  g._click('.mn-foot [data-act=share]'); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share writes the share text, a space and the page address');
+  t.ok(toasts(g).indexOf('Copied. Go on, show someone.') >= 0, 'and says so: ' + toasts(g).join(' | '));
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('follow the duo: Support the duo appears in the footer only once DATA.LINKS.support is a web address, as a new-tab anchor, and never fetches or navigates', async () => {
+  const g = fresh();
+  setLinks(g, { support: 'https://example.invalid/support' });
+  await go(g, 'title'); g._click('.mn-gate'); await settle(g);
+  t.deep($$(g, '.mn-foot-btns > *').map((b) => b.textContent.trim()), ['Follow the duo', 'Share', 'Support the duo'], 'Follow the duo, Share, Support the duo, in that order');
+  const a = $(g, '.mn-foot a[data-act=support]');
+  t.ok(a && a.localName === 'a', 'Support the duo is an anchor');
+  t.eq(a.getAttribute('href'), 'https://example.invalid/support', 'to the owners URL'); t.eq(a.getAttribute('target'), '_blank', 'in a new tab');
+  t.ok(/\bnoopener\b/.test(a.getAttribute('rel')) && /\bnoreferrer\b/.test(a.getAttribute('rel')), 'rel noopener noreferrer');
+  t.eq(a.getAttribute('aria-label'), 'Support the duo, opens in a new tab', 'named for screen readers');
+  t.ok(a.classList.contains('mn-foot-opt'), 'and marked optional, so a portrait phone drops it (the sheet keeps it)');
+  t.ok(a.classList.contains('btn-primary'), 'a primary pill');
+  const store0 = JSON.stringify(Object.keys(g._store).sort());
+  g._click(a); await settle(g);
+  t.eq(g._navigations.length, 0, 'a tap leaves the navigation to the browser: the game never changes its own tab');
+  t.eq(JSON.stringify(Object.keys(g._store).sort()), store0, 'nothing was stored');
+  setLinks(g, { support: 'javascript:alert(1)' });
+  await go(g, 'library'); await go(g, 'title'); await settle(g);
+  t.eq($$(g, '.mn-foot a').length, 0, 'a value that is not a web address is no link (the footer drops it)');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('follow the duo: the footer css (one row wide, credits above and two buttons on a portrait phone, a screen px floor on phones)', () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const one = (sel) => rules.find((r) => r.sel === sel);
+  t.ok(one('.s-title .mn-foot') && /pointer-events\s*:\s*none/.test(one('.s-title .mn-foot').body), 'the footer strip stays click-through');
+  t.ok(one('.s-title .mn-foot-btn') && /pointer-events\s*:\s*auto/.test(one('.s-title .mn-foot-btn').body), 'its buttons take clicks themselves (an anchor does not by default)');
+  t.ok(/flex-wrap\s*:\s*wrap/.test(one('.s-title .mn-foot').body), 'the row wraps instead of overlapping at Larger text');
+  t.ok(/orientation\s*:\s*portrait\)\s*and\s*\(max-width\s*:\s*500px\)\s*\{/.test(css), 'the narrow rules sit in the existing portrait phone query');
+  const tail = css.slice(css.indexOf('@media (orientation: portrait) and (max-width: 500px)'));
+  t.ok(/\.s-title \.mn-foot-opt\s*\{[^}]*display\s*:\s*none/.test(tail), 'there Support the duo is hidden (only Follow the duo and Share show)');
+  t.ok(/\.s-title \.mn-credits\s*\{[^}]*flex\s*:\s*1 0 100%/.test(tail), 'and the credits line takes the whole row above the buttons');
+  t.ok(/\.s-title \.mn-foot\s*\{[^}]*--hit\s*:\s*58px/.test(tail), 'with the 58 px hit cap every other portrait menu screen uses');
+  t.ok(rules.some((r) => /\.compact \.s-title \.mn-foot/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'on a phone the footer keeps 8 screen px');
+});
+
+await t.test('follow the duo: the sixth Tour Bus tab is the panel at full size with the about text, the no-links line and Jordan, and a URL adds a pill', async () => {
+  const g = fresh();
+  await go(g, 'library', { tab: 'follow' });
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'params.tab opens the follow tab');
+  t.eq(tabBtn(g, 'follow').textContent.trim(), 'Follow the duo', 'its label'); t.ok($(g, '.tab[data-id=follow] .mn-tab-ico'), 'with a motif icon like the others');
+  const p = pane(g);
+  t.eq(p.dataset.tab, 'follow', 'the visible pane is the follow pane');
+  const panel = p.querySelector('.hv-follow.hv-tab');
+  t.ok(panel, 'UI.followPanel(tab) is the body');
+  t.eq(panel.querySelector('.hv-handle').textContent, HANDLE, 'the handle line');
+  t.eq(panel.querySelector('.hv-about').textContent, ABOUT, 'the about text');
+  t.eq(panel.querySelector('.hv-jordan').textContent, 'Jordan made these buttons. Press them gently.', "and Jordan's line");
+  t.eq(panel.querySelector('.hv-nolinks').textContent, 'Links are on their way. For now, look for @roxorloopsandjasmin.', 'the no-links line while every URL is empty');
+  t.eq($$(g, '.mn-follow a').length, 0, 'no link and no Support while every URL is empty');
+  t.eq(panel.querySelector('button.hv-share').textContent.trim(), 'Share', 'Share is there');
+  t.ok(!p.querySelector('.hv-support-line'), 'and no support line without a Support button');
+  g._click(panel.querySelector('button.hv-share')); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share on the tab shares');
+  g._key('1'); await settle(g); g._key('6'); await settle(g);
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'key 6 comes back to it'); t.eq($$(g, '.mn-tabpane:not([hidden])').length, 1, 'with one pane showing');
+  t.deep(g.UI.screens.library.state().built.slice().sort(), ['follow', 'unlocks'], 'built lazily, like the other tabs: only the two that were opened');
+  // with the owners URLs set: one pill per URL in the fixed order, and the support button with its line
+  const g2 = fresh();
+  setLinks(g2, { youtube: 'https://example.invalid/yt', website: 'https://example.invalid/', support: 'https://example.invalid/s' });
+  await go(g2, 'library'); g2._key('6'); await settle(g2);
+  t.deep($$(g2, '.mn-follow a.hv-link').map((a) => a.textContent.trim()), ['Website', 'YouTube'], 'a pill for each URL that is set, Website first');
+  t.ok($$(g2, '.mn-follow a.hv-link').every((a) => a.getAttribute('target') === '_blank' && /noopener/.test(a.getAttribute('rel'))), 'each opens in a new tab');
+  t.eq($(g2, '.mn-follow .hv-support .btn-label').textContent, 'Support the duo', 'Support the duo shows');
+  t.eq($(g2, '.mn-follow .hv-support-line').textContent, 'Enjoying the tour? The real duo would love your support.', 'under its support line');
+  t.ok(!$(g2, '.mn-follow .hv-nolinks'), 'and the no-links line is gone');
+  t.eq(errors(g), 0, 'no console errors'); t.eq(errors(g2), 0, 'and none on the second page');
+});
+
+await t.test('follow the duo: the settings About group is the last group on the screen and in the pause overlay, reads DATA.LINKS and fetches nothing', async () => {
+  const g = fresh();
+  await go(g, 'settings');
+  const groups = $$(g, '.mn-set-group');
+  const about = groups[groups.length - 1];
+  t.eq(about.querySelector('.mn-set-h').textContent, 'About', 'the last group is About');
+  t.eq(groups.length, 6, 'the sixth group');
+  t.ok(about.classList.contains('mn-set-about') && about.parentNode === $(g, '.mn-set'), 'full width under the two columns, as the last child of the form');
+  t.eq(about.querySelector('.mn-set-abouttext').textContent, ABOUT, 'the about text');
+  const strip = about.querySelector('.hv-follow.hv-strip');
+  t.ok(strip, 'the Follow the duo row is the strip panel');
+  t.eq(strip.querySelector('.hv-follow-h').textContent, 'Follow the duo', 'headed Follow the duo'); t.eq(strip.querySelector('.hv-handle').textContent, HANDLE, 'with the handle line');
+  t.eq(strip.querySelector('button.hv-share').textContent.trim(), 'Share', 'and Share');
+  t.eq(about.querySelectorAll('a').length, 0, 'no link and no Support while every URL is empty');
+  t.eq(about.querySelector('.mn-set-ver').textContent, 'Version 1.0', 'Version and the number, below the row');
+  t.deep(Array.from(about.children).map((c) => c.className.split(' ')[0]), ['mn-set-h', 'mn-set-abouttext', 'mn-set-follow', 'mn-set-ver'], 'in the order heading, about text, follow row, version');
+  g._click(strip.querySelector('button.hv-share')); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share works from settings');
+  // reachable from pause too (the same form in the overlay)
+  const g2 = fresh();
+  await startRun(g2); await openPause(g2);
+  g2._click(pbtn(g2, 'settings')); await settle(g2);
+  const ogroups = $$(g2, '.o-settings .mn-set-group');
+  t.eq(ogroups[ogroups.length - 1].querySelector('.mn-set-h').textContent, 'About', 'the pause overlay form ends with About');
+  t.ok($(g2, '.o-settings .mn-set-about .hv-follow.hv-strip'), 'with the strip');
+  t.eq($(g2, '.o-settings .mn-set-ver').textContent, 'Version 1.0', 'and the version');
+  // with URLs set: pills and Support, with the support line above it
+  const g3 = fresh();
+  setLinks(g3, { tiktok: 'https://example.invalid/t', instagram: 'https://example.invalid/i', support: 'https://example.invalid/s' });
+  await go(g3, 'settings');
+  t.deep($$(g3, '.mn-set-about a.hv-link').map((a) => a.textContent.trim()), ['TikTok', 'Instagram'], 'a pill for each URL that is set');
+  t.eq($(g3, '.mn-set-about .hv-support .btn-label').textContent, 'Support the duo', 'Support the duo');
+  t.eq($(g3, '.mn-set-about .hv-support-line').textContent, 'Enjoying the tour? The real duo would love your support.', 'under the support line (settings print it above Support)');
+  t.eq(g3._navigations.length, 0, 'nothing navigated');
+  // restoring defaults rebuilds the form: About survives it
+  g3._click($(g3, '.mn-set-row[data-setting=defaults] .btn')); await settle(g3);
+  t.eq($$(g3, '.mn-set-group').pop().querySelector('.mn-set-h').textContent, 'About', 'About is still last after Restore defaults rebuilt the form');
+  t.eq(errors(g), 0, 'no console errors'); t.eq(errors(g2), 0, 'none in the overlay'); t.eq(errors(g3), 0, 'and none with URLs');
+});
+
 await t.test('copy: the hero select, bible 5.2 (heading, slots, Encore stepper, Daily Duet, Begin, the locked hero, bio pronouns, spot words)', async () => {
   const g = fresh(); seedProfile(g, { trialBest: 2 });
   await go(g, 'heroSelect');
@@ -1969,8 +2126,8 @@ await t.test('copy: the Tour Bus unlocks tab, HV_WORLD_DATA 10.1 and 10.2 (banne
   const g = fresh(); seedProfile(g);
   await go(g, 'library');
   t.eq($(g, '.mn-lib-top .mn-banner').textContent, 'The Tour Bus', 'the banner'); t.eq($(g, '.mn-stones').getAttribute('aria-label'), 'Cheers', 'the balance is Cheers');
-  t.deep($$(g, '.tab').map((b) => b.textContent.trim()), ['Unlocks', 'Stickers', 'Diary', "Who's Who", 'Past Tours'], 'the five tab names');
-  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history'], 'on the same ids');
+  t.deep($$(g, '.tab').map((b) => b.textContent.trim()), ['Unlocks', 'Stickers', 'Diary', "Who's Who", 'Past Tours', 'Follow the duo'], 'the six tab names (HV_WORLD_DATA 10.1, HV_STORY 5.3)');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'on the same ids');
   t.deep($$(g, '.mn-tabpane:not([hidden]) .seg-b').map((b) => b.textContent), ['All', 'Cards', 'Charms', 'Gems'], 'the kind filter');
   t.deep($$(g, '.mn-sec-h > span').map((e) => e.textContent), ['Cards', 'Charms', 'Gems'], 'the section headings');
   // Charm tiles: rarity word + " charm" + " for Hero", then the flavour line in italics from DATA
@@ -2069,7 +2226,7 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
   seedProfile(g); saveRun(g);
   await go(g, 'settings');
   const hint = (key) => ($(g, '.mn-set-row[data-setting=' + key + '] .mn-set-hint') || { textContent: '' }).textContent;
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent).slice(0, 5), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data'], 'the group headings');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'the group headings, About last');
   t.eq(hint('hints'), 'Short tips during your first tour', 'the Hints hint'); t.eq(hint('shake'), 'Try it: this line shakes as you drag', 'the shake hint');
   t.eq(hint('clear'), 'Erases unlocks, stickers, past tours and your saved tour. Asks twice.', 'the clear data hint');
   t.eq($(g, '.mn-sample').textContent, 'A soft note, a late kick, and the whole street starts to sing along.', 'the text size sample');

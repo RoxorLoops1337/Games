@@ -7,8 +7,8 @@
 //   * Every event has at least one SAFE choice: no `cost`, and no `hurt`, `addCurse`, `fight`, negative gold or negative max HP
 //     in any of its outcomes (the audit checks this). Gambles have several weighted outcomes, costs carry a display `cost`
 //     and the outcome carries the matching negative op (`cost` is display text only, the engine never deducts it).
-//   * Fights use `enemies:[ids]` from the fixed roster and only enemies of the event's own chapter (any-chapter events have
-//     no fights, because their difficulty could not follow the act). Fight choices say so in their label.
+//   * Fights use `enemies:[ids]` from the fixed roster and only enemies of the event's own Act (events for any Act have
+//     no fights, because their difficulty could not follow the Act). Fight choices say so in their label.
 //   * Relics are referenced only by the fixed ids brass_lantern, fox_mask, silver_bell, jade_key (CONTENT_SPEC 2), everything
 //     else by `rarity`. Curses only by the fixed curse_* ids. No card, gem or relic id outside those.
 //   * Choices gated by `req.hero` are hidden when that hero is not in the party, so every event keeps two visible choices

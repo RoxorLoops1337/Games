@@ -251,6 +251,83 @@ await t.test('play() plays exactly the mapped sounds for every event of a record
   t.eq(bad, 0, 'the sounds of ' + total + ' events match the map');
   t.ok(sawHit > 5, 'the fight contained hits');
 });
+await t.test('hero voices (HV_ART_AUDIO 10.8): opts.hero rides on the sounds that belong to one hero, never on an enemy sound or an element layer', () => {
+  const g = fresh();
+  const heroIds = g.DATA.LISTS.heroIds;
+  t.deep(heroIds, ['hanae', 'kuro', 'suzu', 'raiga'], 'the internal hero ids (Jasmin, RoxorLoops, RawClaw, Andy)');
+  const list = (e) => g.SCENE.sfxForEvent(e).map((x) => [x[0], x[1] && x[1].hero ? x[1].hero : null]);
+  const card = (id) => ({ uid: 1, id, up: 0, gems: [] });
+  const H = (o) => ({ type: 'hit', src: null, dst: ref('enemy', 'e#1'), amount: 5, blocked: 0, raw: 5, crit: false, hits: 1, index: 0, element: 'slash', ...o });
+  heroIds.forEach((h) => {
+    ['attack', 'skill', 'power'].forEach((ty) => {
+      const def = Object.values(g.DATA.cards).find((c) => c.hero === h && c.type === ty && c.rarity !== 'token');
+      if (!def) return;
+      const id = 'card_play_' + ty;
+      t.deep(list({ type: 'play', card: card(def.id), hero: h }), [[id, h]], h + ' ' + ty + ': the playing hero voices the card');
+      t.deep(list({ type: 'play', card: card(def.id) }), [[id, h]], h + ' ' + ty + ': without the event field the card\'s own hero does');
+    });
+    t.deep(list({ type: 'swap', front: h, back: 'x' }), [['swap', h]], h + ': the new lead sings the swap');
+    t.deep(list({ type: 'hero_down', hero: h }), [['hero_down', h]], h + ': hero_down');
+    t.deep(list({ type: 'hero_revive', hero: h }), [['hero_revive', h]], h + ': hero_revive');
+    const dst = ref('hero', h);
+    t.deep(list(H({ dst })), [['hit_light', h], ['slash', null]], h + ': a hit landing on the hero wears the hero, its element layer does not');
+    t.deep(list(H({ dst, amount: 20, crit: true })), [['hit_crit', h], ['slash', null], ['thud', h]], h + ': a crit and the heavy thud');
+    t.deep(list(H({ dst, amount: 0, blocked: 6 })), [['block_hit', h]], h + ': a blocked hit');
+    t.deep(list({ type: 'immune', dst }), [['block_hit', h]], h + ': immune');
+    t.deep(list({ type: 'block', dst, amount: 5 }), [['block_gain', h]], h + ': block_gain');
+    t.deep(list({ type: 'block_lost', dst, cause: 'hit' }), [['block_break', h]], h + ': block_break');
+    t.deep(list({ type: 'heal', dst, amount: 4 }), [['heal', h]], h + ': heal');
+    t.deep(list({ type: 'dodge', dst }), [['dodge', h]], h + ': dodge');
+  });
+  // what never gets a voice: enemies, missing ids, unknown strings, ticks, statuses, the stingers
+  const edst = ref('enemy', 'kappa#1');
+  t.deep(list(H({ src: ref('hero', 'hanae'), dst: edst, amount: 20 })), [['hit_heavy', null], ['slash', null]], 'a hero hitting an enemy: the impact is the enemy\'s, the card play carried the voice');
+  t.deep(list(H({ dst: edst, amount: 0, blocked: 6 })), [['block_hit', null]], 'an enemy\'s Block');
+  t.deep(list({ type: 'block', dst: edst, amount: 5 }), [['block_gain', null]], 'enemy block_gain');
+  t.deep(list({ type: 'heal', dst: edst, amount: 4 }), [['heal', null]], 'enemy heal');
+  t.deep(list({ type: 'swap' }), [['swap', null]], 'a swap event without a lead');
+  t.deep(list({ type: 'swap', front: 'nobody' }), [['swap', null]], 'an unknown lead');
+  t.deep(list({ type: 'hero_down', hero: 'constructor' }), [['hero_down', null]], 'an inherited property name is not a hero');
+  t.deep(list({ type: 'hero_down' }), [['hero_down', null]], 'hero_down without an id');
+  t.deep(list({ type: 'hurt', cause: 'poison', amount: 2, dst: ref('hero', 'hanae') }), [['poison_tick', null]], 'a poison tick has no voice');
+  t.deep(list({ type: 'status', s: 'might', delta: 2, dst: ref('hero', 'hanae') }), [['buff', null]], 'a status has no voice');
+  t.deep(list({ type: 'end', result: 'win' }), [['victory', null]], 'the stingers have no voice');
+  t.eq(g.SCENE.sfxForEvent({ type: 'swap' })[0].length, 1, 'with no voice the entry is exactly [id], as before');
+  t.eq(g.SCENE.sfxForEvent({ type: 'hit', dst: ref('hero', 'hanae'), amount: 5, element: 'ice' })[1][1].vol, 0.6, 'and the element layer keeps its volume option');
+  const o = g.SCENE.sfxForEvent(H({ dst: ref('hero', 'kuro'), amount: 0, blocked: 3 }));
+  const again = g.SCENE.sfxForEvent(H({ dst: ref('hero', 'kuro'), amount: 0, blocked: 3 }));
+  t.deep(o, again, 'the map is pure: the same event gives the same list');
+  const imm = g.SCENE.sfxForEvent({ type: 'immune', dst: ref('hero', 'kuro') });
+  t.eq(imm[0][1].vol, 0.6, 'immune keeps its quieter volume next to the hero option');
+});
+await t.test('hero voices reach AUDIO.sfx with the pan, in a recorded fight, and a missing AUDIO.sfx or hero option is harmless', async () => {
+  const g = fresh();
+  const fight = recordedFight(g, ['kappa', 'oni_cub', 'crow_tengu'], 'normal', 1, 21);
+  let plays = 0, hits = 0, bad = 0;
+  fight.events.forEach((e) => {
+    const l = g.SCENE.sfxForEvent(e);
+    if (e.type === 'play') { plays++; if (!(l[0][1] && l[0][1].hero === e.hero)) bad++; }
+    if (e.type === 'hit' && e.dst.kind === 'hero') { hits++; if (!(l[0][1] && l[0][1].hero === e.dst.id)) bad++; }
+    if (e.type === 'hit' && e.dst.kind === 'enemy' && l.some((x) => x[1] && x[1].hero)) bad++;
+  });
+  t.ok(plays > 3, 'the fight played cards (' + plays + ')');
+  t.eq(bad, 0, 'every card play wears its hero and every hit on a hero wears that hero (' + hits + ' hits on heroes), no hit on an enemy does');
+  mountSynthetic(g, ['kappa']);
+  g.sfx.length = 0;
+  await g.SCENE.play({ type: 'hero_down', hero: 'kuro' });
+  const hd = g.sfx.find((x) => x[0] === 'hero_down');
+  t.ok(hd && hd[1] && hd[1].hero === 'kuro', 'play() hands the hero to AUDIO.sfx');
+  t.ok(hd && typeof hd[1].pan === 'number', 'next to the stage pan');
+  g.sfx.length = 0;
+  await g.SCENE.play({ type: 'swap', front: 'kuro', back: 'hanae', cost: 0, forced: false });
+  const sw = g.sfx.find((x) => x[0] === 'swap');
+  t.ok(sw && sw[1] && sw[1].hero === 'kuro', 'the swap carries the new lead');
+  g.AUDIO.sfx = undefined;
+  await g.SCENE.play({ type: 'hero_revive', hero: 'kuro', hp: 5 });
+  await g.SCENE.play({ type: 'swap', front: 'hanae', back: 'kuro', cost: 0, forced: false });
+  t.eq(stats(g).drawErrors, 0, 'a missing AUDIO.sfx is silent and harmless');
+  t.ok(g._console.error.length === 0, 'no console error');
+});
 await t.test('a throwing AUDIO.sfx never breaks play()', async () => {
   const g = fresh();
   g.AUDIO.sfx = () => { throw new Error('speaker on fire'); };

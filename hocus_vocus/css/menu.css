@@ -1,7 +1,7 @@
 /* Hocus Vocus: menu screens stylesheet (owner: menu screens engineer): title, hero select, library, settings, how to play, and the pause and
    settings overlays. Everything is namespaced: shared pieces use the `mn-` prefix, screen pieces sit under .s-title .s-heroSelect .s-library
    .s-settings .s-howto and overlay pieces under .o-pause .o-settings. It builds on the tokens and components of base.css (panels, .btn,
-   hanko, brush dividers, --ts for the text size setting, --hit for touch targets) and adds no external assets: data-URI SVG only.
+   `.hanko`, stripe dividers (`.brush-div`), --ts for the text size setting, --hit for touch targets) and adds no external assets: data-URI SVG only.
    Text sizes always multiply by var(--ts); nothing with a fixed height holds text, so textScale 1.3 never clips (long lists scroll). */
 
 /* ------------------------------------------------------------------------------------------------ shared bits */
@@ -23,7 +23,7 @@
   font: 800 calc(19px * var(--ts)) var(--font-display); letter-spacing: .22em; text-indent: .22em; text-transform: lowercase; color: #fff8ec;
   text-shadow: 0 2px 0 #2d170f, 1px 0 0 #2d170f, -1px 0 0 #2d170f, 0 -1px 0 #2d170f, 0 0 12px rgba(7, 5, 26, .95), -6px 0 18px rgba(255, 126, 182, .55), 6px 0 18px rgba(63, 207, 106, .5);   /* text-indent = the trailing letter-spacing: the visible words, not the box, sit on the logo axis */
 }
-/* the painted bell and its torii frame (art_scenes.js; the frame's box is ART.scene.info('title').focus) stay within x 292..988 and the pointer parallax moves them up to 7 px (layer factor 0.1 x the 70 px camera offset): the column starts at x 998, clear of the frame and its ink line (990 + 7), so no plaque covers the bell; its right edge stays 14 px from the stage edge like the full-screen button, which makes it 268 px wide */
+/* the title stage, mic and duo (art_scenes.js; their box is ART.scene.info('title').focus) stay within x 360..920 and the pointer parallax moves them up to 7 px (layer factor 0.1 x the 70 px camera offset): the column starts at x 998, clear of the stage (920 + 7), so no plaque covers the duo; its right edge stays 14 px from the stage edge like the full-screen button, which makes it 268 px wide */
 .s-title .mn-menu { position: absolute; left: 998px; top: calc(272px - (var(--ts) - 1) * 85px); width: 268px; display: flex; flex-direction: column; gap: 8px; isolation: isolate; pointer-events: none; }
 .s-title .mn-menu::before { content: ""; position: absolute; z-index: -1; inset: -34px -40px -30px -8px; border-radius: 40%; background: radial-gradient(closest-side, rgba(7, 5, 26, .78), rgba(7, 5, 26, .38) 62%, transparent); pointer-events: none; }
 .mn-plaque {
@@ -50,7 +50,14 @@
 .mn-p-meds .ico { border-radius: 50%; box-shadow: 0 0 0 2px var(--ink), 0 0 0 3.5px var(--hv-lime, #c6ff3d); margin-left: 5px; flex: none; }
 .mn-plaque.rise { animation: rise .45s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
 .mn-plaque.breathe.rise { animation: rise .45s var(--ease-out) both, breathe 2.4s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 70ms), 1s; }
-.s-title .mn-foot { position: absolute; left: 22px; right: 22px; bottom: 11px; display: flex; justify-content: space-between; gap: 20px; pointer-events: none; font: 600 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .08em; color: rgba(243, 230, 200, .72); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); }
+.s-title .mn-foot { position: absolute; left: 22px; right: 22px; bottom: 11px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; pointer-events: none; font: 600 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .08em; color: rgba(243, 230, 200, .72); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); }
+/* the footer (HV_STORY 5.4): credits left, then the follow buttons, the version last. One row on a wide stage; when the row does not fit (Larger text) the credits wrap above. The buttons are --hit tall (base.css .btn) and take pointer events on their own, the strip itself stays click-through */
+.s-title .mn-credits { margin-right: auto; }
+.s-title .mn-foot-btns { display: flex; align-items: center; gap: 8px; }
+.s-title .mn-foot-btn { pointer-events: auto; text-decoration: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); letter-spacing: .05em; }
+.s-title .mn-foot a.btn-primary { text-shadow: 0 1px 0 rgba(255, 255, 255, .5); }
+.s-title .mn-ver { letter-spacing: .08em; }
+.s-title.ts-big .mn-ver { margin-right: 270px; }   /* Larger text with a saved tour: the menu column reaches y 712, so the buttons and the version keep left of its x 998 edge (the row wraps under the credits when it must) */
 .s-title .mn-gated-hide, .s-title .gated .mn-menu, .s-title .gated .mn-foot { opacity: 0; }
 .mn-fs { position: absolute; right: 14px; top: 14px; display: grid; place-items: center; width: var(--hit); height: var(--hit); padding: 0; border: 0; border-radius: 10px; cursor: pointer; background: rgba(20, 15, 46, .5); box-shadow: inset 0 0 0 1.5px rgba(255, 201, 222, .55); transition: transform .12s, background .12s; }
 .mn-fs:hover { transform: translateY(-2px); background: rgba(59, 42, 122, .7); }
@@ -77,7 +84,7 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
 /* phone landscape (#stage.compact): the three small buttons share one row so the column still fits, and hit targets grow with --hit */
 .compact .s-title .mn-slims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .compact .s-title .mn-slims .mn-plaque { min-width: 0; padding: .2em .3em; justify-content: center; }
-.compact .s-title .mn-slims .mn-plaque::before { display: none; }   /* the column right of the painted bell is 268 px: each of the three buttons is 84 px, and a whole word ("Settings") matters more than the gold diamond */
+.compact .s-title .mn-slims .mn-plaque::before { display: none; }   /* the column right of the title stage is 268 px: each of the three buttons is 84 px, and a whole word ("Settings") matters more than the gold diamond */
 .compact .s-title .mn-slims .mn-p-main { font-size: max(calc(14px * var(--ts)), var(--fs9)); letter-spacing: 0; white-space: normal; text-align: center; overflow-wrap: anywhere; }
 /* the stage is drawn at about half size on a phone: sublines, credits and the gate hint keep 8 screen px, labels 9 (--fs8, --fs9 in base.css) */
 .compact .mn-p-sub, .compact .s-title .mn-foot, .compact .mn-gate-sub { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
@@ -88,14 +95,14 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
    detail sheet 770,84 480 x 622 (top follows the cards). The portraits and chibis are painted on #view under these boxes. */
 .s-heroSelect .mn-hs { position: absolute; inset: 0; }
 .s-heroSelect .mn-cards { display: contents; }
-/* ONE header for heroSelect, library, settings and howto: Back, the ribbon and the Inkstone pill share one centre line (--bar-cy), so the bar does not jump when you navigate.
+/* ONE header for heroSelect, library, settings and howto: Back, the ribbon and the Cheers pill share one centre line (--bar-cy), so the bar does not jump when you navigate.
    On a phone the bar is exactly one --hit tall and flush with the top edge: Back (a --hit square) fills it, so nothing has to be pinned and the ribbon and pill centre on Back. */
 .s-heroSelect, .s-library, .s-settings, .s-howto { --bar-top: 10px; --bar-h: 60px; --bar-cy: calc(var(--bar-top) + var(--bar-h) / 2); }
 .compact .s-heroSelect, .compact .s-library, .compact .s-settings, .compact .s-howto { --bar-top: 0px; --bar-h: var(--hit); }
 .mn-hs-top, .mn-lib-top, .mn-set-top { position: absolute; left: 20px; right: 20px; top: var(--bar-top); height: var(--bar-h); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
 .mn-hs-top .mn-banner, .mn-lib-top .mn-banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 .mn-ht-banner { position: absolute; left: 50%; top: var(--bar-cy); transform: translate(-50%, -50%); pointer-events: none; }
-/* the ribbon grows with the text size only up to 1.12x: at Larger it would otherwise reach the library tabs and the lifted hero cards below the bar */
+/* the ribbon grows with the text size only up to 1.12x: at Larger it would otherwise reach the Tour Bus tabs (`library`) and the lifted hero cards below the bar */
 .mn-hs-top .mn-banner span, .mn-lib-top .mn-banner span, .mn-ht-banner span { font-size: calc(23px * min(var(--ts), 1.12)); padding: .3em 2.4em .36em; }
 .compact .mn-hs-top .mn-banner span, .compact .mn-lib-top .mn-banner span, .compact .mn-ht-banner span { padding-top: .12em; padding-bottom: .16em; }
 .mn-back { pointer-events: auto; }
@@ -124,7 +131,7 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
 .mn-hc-badge { position: absolute; z-index: 3; left: 4px; top: 4px; opacity: 0; transform: scale(2.4) rotate(-16deg); transition: opacity .16s, transform .26s var(--ease-back); pointer-events: none; font-size: calc(13px * var(--ts)); padding: 0 .6em; }
 .mn-hc-badge.show { opacity: 1; transform: rotate(-6deg) scale(1); }
 .mn-hc-lock { position: absolute; left: 50%; top: 96px; width: 52px; height: 52px; margin-left: -26px; pointer-events: none; filter: drop-shadow(0 0 10px rgba(255, 201, 222, .7)); background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3' fill='none' stroke='%23fff8ec' stroke-width='2.6'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2.5' fill='%23fff8ec' stroke='%232d170f' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='16' r='1.7' fill='%232d170f'/%3E%3C/svg%3E"); animation: mnFloat 3s ease-in-out infinite; }
-.mn-hcard:not(.locked) .mn-hc-lock { display: none; }   /* the Daily Tale hands every hero out: the class (screen_menu.js heroLocked) follows it, so no padlock sits on a face the canvas paints unlocked */
+.mn-hcard:not(.locked) .mn-hc-lock { display: none; }   /* the Daily Duet hands every hero out: the class (screen_menu.js heroLocked) follows it, so no padlock sits on a face the canvas paints unlocked */
 .mn-hcard.locked .mn-hc-plate { filter: grayscale(.85) brightness(.7); }
 body.reduce-motion .mn-hc-lock { animation: none; }
 .mn-hcard.fixed:not(.on) { filter: grayscale(.7) brightness(.7); }
@@ -223,7 +230,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .compact .mn-sw { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
 .compact .mn-d-olock { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 
-/* trial, seed and begin */
+/* Encore, seed and begin */
 .mn-launch { position: absolute; left: 442px; top: 356px; width: 296px; height: 350px; }
 .mn-launch.panel { display: block; }
 .mn-launch .p-body { height: 100%; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; overflow-y: auto; overflow-x: hidden; }
@@ -267,7 +274,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .mn-begin { width: 100%; }
 .s-heroSelect.is-daily .mn-launch .mn-seed { opacity: .65; }
 
-/* phone landscape: the header sits at the very top and is exactly one --hit tall (see --bar-h above), the hero row drops under it (HC.yCompact in screen_menu.js) and the trial pips go */
+/* phone landscape: the header sits at the very top and is exactly one --hit tall (see --bar-h above), the hero row drops under it (HC.yCompact in screen_menu.js) and the Encore pips go */
 .compact .mn-hs-top, .compact .mn-lib-top { z-index: 3; }
 .compact .mn-pips, .compact .mn-daily-txt i, .ts-big .mn-pips { display: none; }
 /* Larger text on a desktop: the newest rule is what the rules list is for, so the generic sub-line goes, the gaps and the Begin plaque tighten, and the list gets about 20 px more (C1) */
@@ -275,7 +282,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .ts-big .mn-launch .p-body { gap: 6px; }
 .ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .02em; }   /* the label is 27 px here: 'Start the Tour' (14 letters, 215.5 px) and 'Start Daily Duet' (16 letters, 241.7 px) both fit the 259 px of the button at .02em, with 16 px or more each side instead of touching the gold border; 'Start the Daily Duet' (20 letters, 294 px) would not, which is why the Daily label is the short form */
 .compact .mn-launch .p-body { gap: 5px; padding: 6px 14px 8px; }
-/* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the trial name sits between the arrows
+/* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the Encore name sits between the arrows
    and the newest rule is written out in full under them, never clipped: the trailing words are the penalty (C1). The panel body scrolls, and Begin stays pinned. */
 .compact .mn-launch { width: 376px; }
 .compact .mn-detail.panel-wrap { left: 836px; width: 414px; }
@@ -299,7 +306,7 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .compact .mn-d-sec h4 { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 .compact .mn-dc-n { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 
-/* ------------------------------------------------------------------------------------------------ library */
+/* ------------------------------------------------------------------------------------------------ the Tour Bus (`library`) */
 .s-library .mn-lib { position: absolute; inset: 0; }
 .mn-tabs { position: absolute; left: 30px; top: 76px; gap: 4px; z-index: 3; }
 .mn-tabs .tab { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 1.15em; border: 2px solid rgba(255, 201, 222, .3); border-bottom: 0; border-radius: 11px 11px 0 0; background: rgba(20, 15, 46, .72); font-size: calc(17px * var(--ts)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); transition: transform .12s, background .15s; }
@@ -361,7 +368,7 @@ body.reduce-motion .mn-item.afford.k-card::before { animation: none; }
 .mn-burst { position: absolute; left: 50%; top: 46%; width: 150px; height: 150px; border-radius: 50%; pointer-events: none; z-index: 8; background: repeating-conic-gradient(from 0deg, rgba(255, 248, 236, .9) 0 6deg, transparent 6deg 22deg); -webkit-mask: radial-gradient(circle, transparent 20%, #000 22%, #000 55%, transparent 72%); mask: radial-gradient(circle, transparent 20%, #000 22%, #000 55%, transparent 72%); animation: mnBurst .9s ease-out both; }
 .mn-spk { position: absolute; z-index: 9; width: 12px; height: 12px; margin: -6px 0 0 -6px; pointer-events: none; background: radial-gradient(circle, #fff 0 16%, var(--hv-pink-l, #ffc9de) 17% 40%, transparent 42%); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: mnSpark .85s ease-out both; }
 
-/* treasure and gem tiles: paper plaques */
+/* Charm and gem tiles: cream plaques */
 .mn-item.k-relic, .mn-item.k-gem { width: auto; align-items: stretch; padding: 12px 14px 8px; border-radius: 10px; color: var(--ink); background: var(--hv-cream, #fff4e6); border: 3px solid rgba(45, 23, 15, .5); box-shadow: 0 6px 14px rgba(0, 0, 0, .45), inset 0 0 26px rgba(255, 126, 182, .16); transition: filter .3s, transform .15s var(--ease-out); }
 .mn-item.k-relic:not(.owned), .mn-item.k-gem:not(.owned) { filter: saturate(.6) brightness(.9); }
 .mn-item.k-relic.afford, .mn-item.k-gem.afford { border-color: var(--hv-green, #3fcf6a); box-shadow: 0 6px 14px rgba(0, 0, 0, .45), 0 0 0 2px rgba(255, 201, 222, .8), 0 0 18px rgba(255, 201, 222, .5); filter: none; }
@@ -394,7 +401,7 @@ body.reduce-motion .mn-item.afford.k-card::before { animation: none; }
 .mn-ach-rew b { color: var(--ink); }
 .mn-ach.done .mn-ach-rew { opacity: .6; }
 
-/* ballads: the setlist */
+/* Tour Diary entries: the contents list */
 .mn-pane.mn-story { padding-top: 20px; }
 .mn-storypage { max-width: 780px; margin: 0 auto; padding: 24px 46px 30px; border-radius: 8px; color: var(--ink); background: var(--hv-cream, #fff4e6); border: 2px solid rgba(45, 23, 15, .5); box-shadow: 0 10px 24px rgba(0, 0, 0, .55), inset 0 0 50px rgba(255, 126, 182, .18); }
 .mn-st-head { margin: 0; text-align: center; font: 800 calc(32px * var(--ts)) var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
@@ -470,13 +477,19 @@ body.reduce-motion .mn-hist { animation: none; }
 .mn-hist-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 100%; padding: 20px; text-align: center; }
 .mn-hist-empty h3 { margin: 10px 0 0; font: 800 calc(24px * var(--ts)) var(--font-display); color: var(--hv-pink-l, #ffc9de); }
 .mn-hist-empty p { margin: 0; max-width: 460px; font: italic 600 calc(15px * var(--ts)) / 1.5 var(--font-display); color: var(--paper2); }
-.mn-emptybook { display: block; width: 96px; height: 96px; background: linear-gradient(100deg, #8d8fa0, #f1f2f8 45%, #8d8fa0);   /* an empty bell: a gold bonsho silhouette with no clapper */
+.mn-emptybook { display: block; width: 96px; height: 96px; background: linear-gradient(100deg, #8d8fa0, #f1f2f8 45%, #8d8fa0);   /* an empty bell: a bell silhouette with no clapper */
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cpath d='M44 6h8v10c0 3 6 8 10 22 4 14 9 22 14 34H20c5-12 10-20 14-34 4-14 10-19 10-22z M26 78h44v6H26z'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cpath d='M44 6h8v10c0 3 6 8 10 22 4 14 9 22 14 34H20c5-12 10-20 14-34 4-14 10-19 10-22z M26 78h44v6H26z'/%3E%3C/svg%3E") center / contain no-repeat;
   animation: mnFloat 3.4s ease-in-out infinite; }
 body.reduce-motion .mn-emptybook { animation: none; }
 
-/* the Library and Settings copy a phone player reads: counts, hints and tile text keep 8 screen px (the lists scroll, so a bigger line costs nothing) */
+/* follow the duo: the sixth Tour Bus tab. UI.followPanel('tab') (ui.js, styled in base.css) is the whole body, centred in the pane */
+.mn-pane.mn-follow { display: flex; flex-direction: column; align-items: center; padding-top: 18px; }
+.mn-fl-main { width: 100%; max-width: 900px; }
+.mn-fl-handle { margin: 0; text-align: center; font: italic 600 calc(16px * var(--ts)) / 1.5 var(--font-display); color: var(--paper); }
+.compact .mn-fl-handle { font-size: max(calc(16px * var(--ts)), var(--fs8)); }
+
+/* the Tour Bus and Settings copy a phone player reads: counts, hints and tile text keep 8 screen px (the lists scroll, so a bigger line costs nothing) */
 .compact .mn-set-hint, .compact .mn-sec-n, .compact .mn-tile-txt em, .compact .mn-ach-num, .compact .mn-filter-label { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 .compact .mn-count, .compact .mn-tile-txt p, .compact .mn-ach-text { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
 .compact .mn-tabs { left: 104px; top: calc(var(--bar-cy) + 26px); }   /* under the ribbon (half its height + the 4 px the active tab rises) */
@@ -508,6 +521,13 @@ body.reduce-motion .mn-emptybook { animation: none; }
 .mn-glyphs { display: flex; gap: 12px; padding: 4px 4px 8px; }
 .mn-glyphs .gem { margin-bottom: 0; }
 .mn-set-done { margin-top: 10px; }
+/* the About group runs the full width under the two columns: the about text, the follow strip from ui.js and the version */
+.mn-set-about { margin: 6px 0 0; padding-top: 4px; border-top: 1px dashed rgba(20, 15, 46, .22); }
+.mn-set-abouttext { margin: 4px 0 8px; font: italic 600 calc(14px * var(--ts)) / 1.5 var(--font-display); color: var(--ink-soft); text-wrap: pretty; }
+.mn-set-follow { display: flex; flex-direction: column; align-items: stretch; margin: 2px 0 8px; }
+.mn-set-handle { margin: 0; font: 600 calc(13px * var(--ts)) / 1.4 var(--font-ui); color: var(--ink-soft); }
+.mn-set-ver { margin: 0 0 4px; text-align: right; font: 700 calc(12px * var(--ts)) var(--font-num); letter-spacing: .06em; color: var(--ink-soft); opacity: .7; }
+.compact .mn-set-abouttext, .compact .mn-set-handle, .compact .mn-set-ver { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
 .s-settings .mn-setscreen { position: absolute; inset: 0; }
 .mn-set-wrap.panel-wrap { position: absolute; left: 130px; top: 62px; width: 1020px; display: block; }
 .mn-set-wrap .panel { display: flex; flex-direction: column; max-height: 630px; }
@@ -560,7 +580,7 @@ body.reduce-motion .mn-pg.turn-next, body.reduce-motion .mn-pg.turn-prev { anima
 /* phone landscape: Back, the screen and the page buttons each get a full --hit row (the buttons grow with --hit, so the screen makes room instead of being overlapped) */
 .ts-big .mn-ht-nav { bottom: 14px; }   /* Larger text makes the buttons 69 px tall: they would touch the screen edge at the usual 26 px */
 .compact .mn-book { top: calc(var(--hit) + 8px); height: calc(694px - 2 * var(--hit)); }   /* 10 px (stage) between the screen and the buttons: its own ring (3 ink + 2 gold) is 5 of them */
-.compact .mn-ht-nav { bottom: 8px; }   /* AFTER .ts-big above and the same specificity, so Larger text on a phone keeps the 8 px: the buttons are --hit tall there at every text size, and 14 px pushed them 2 px into the book */
+.compact .mn-ht-nav { bottom: 8px; }   /* AFTER .ts-big above and the same specificity, so Larger text on a phone keeps the 8 px: the buttons are --hit tall there at every text size, and 14 px pushed them 2 px into the screen */
 .mn-ht-nav .btn { pointer-events: auto; min-width: 150px; }
 .mn-dots { display: flex; pointer-events: none; }
 .mn-dot { display: grid; place-items: center; width: var(--hit); height: var(--hit); padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; }
@@ -655,4 +675,9 @@ body.reduce-motion .mn-tl-ico, body.reduce-motion .mn-tl { animation: none; }
 @media (orientation: portrait) and (max-width: 500px) {
   .s-heroSelect, .s-library, .s-settings, .s-howto, .o-pause, .o-settings { --hit: 58px; }
   .s-heroSelect .mn-swap { padding: 0 .5em; }
+  /* the title footer on a portrait phone (HV_STORY 5.6): the credits line moves above, only Follow the duo and Share stay (the sheet holds the rest), the version last */
+  .s-title .mn-foot { --hit: 58px; right: 300px; }   /* ends left of the menu column (x 998), which fills the height of this tiny stage */
+  .s-title .mn-credits { flex: 1 0 100%; margin-right: 0; text-align: center; }
+  .s-title .mn-foot-btns { flex: 1; justify-content: center; }
+  .s-title .mn-foot-opt { display: none; }
 }

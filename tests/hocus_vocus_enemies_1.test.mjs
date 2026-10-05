@@ -1,16 +1,16 @@
-// Chapter 1 roster (js/data_enemies_1.js): the Whispering Bamboo Grove.
+// Act 1 roster (js/data_enemies_1.js): Blossom Bay.
 //
 // What this suite proves, in order:
 //   contract   DATA.validate('enemies', {chapter:1}) and DATA.audit('enemies', {chapter:1}) are clean (zero errors, zero warnings,
 //              zero audit AND guide lines); the roster is exactly CONTENT_SPEC 4.1 (ids, names, tiers, sizes, boss title); lore, tags
 //   bands      HP, per-hit and per-move damage, Block, heal, Thorns, Plating and status magnitudes stay inside CONTENT_SPEC 4.2,
 //              computed from the fx ops (no hand-typed numbers)
-//   roles      every enemy shows the role CONTENT_SPEC 4.1 gives it, and the chapter covers every mechanic of CONTENT_SPEC 4.3
-//   encounters groups reference real chapter 1 enemies, ids are unique, sizes, the min spread, the group budget, elite and boss pools
+//   roles      every enemy shows the role CONTENT_SPEC 4.1 gives it, and the Act covers every mechanic of CONTENT_SPEC 4.3
+//   encounters groups reference real Act 1 enemies, ids are unique, sizes, the min spread, the group budget, elite and boss pools
 //   ai         every move, every rule and every phase ai is REACHABLE (a random explorer over every AI condition), phases are ordered
 //   fights     an enemy-side fight simulator (below) drives every group, elite and the boss against abstract party profiles: every move
 //              executes, phases and summons behave, gold is stolen and returned, fights end, and fight length and damage land in band
-//   engine     when js/combat.js and the Hanae and Kuro card files exist, every group is fought through COMBAT.simulate with real starter
+//   engine     when js/combat.js and the Jasmin and RoxorLoops card files exist, every group is fought through COMBAT.simulate with real starter
 //              and developed decks and the greedy bot (fight length, cost, every move used, phases, summon caps, the thief, intent text,
 //              trial factors); skipped with a note otherwise
 //
@@ -75,7 +75,7 @@ const selfBuff = (o, s) => o.s === s && (o.tgt === undefined || o.tgt === 'self'
 // =====================================================================================================================
 // 1. contract
 // =====================================================================================================================
-t.test('validate and audit are completely clean for chapter 1', () => {
+t.test('validate and audit are completely clean for Act 1', () => {
   const v = DATA.validate('enemies', { chapter: 1 });
   t.eq(v.errors.length, 0, 'zero validation errors: ' + v.errors.join('; '));
   t.eq(v.warnings.length, 0, 'zero validation warnings: ' + v.warnings.join('; '));
@@ -97,7 +97,7 @@ t.test('the roster is exactly CONTENT_SPEC 4.1: ids, names, tiers, sizes, boss t
   t.eq(E.boss_kuzunoha.name, DATA.rosterById.boss_kuzunoha.name, 'boss name');
 });
 
-t.test('every enemy has bestiary lore in voice (1 to 2 sentences) and honest tags', () => {
+t.test('every enemy has Who\'s Who lore in voice (1 to 2 sentences) and honest tags', () => {
   const seenLore = new Set();
   ch1.forEach((e) => {
     t.ok(typeof e.lore === 'string' && e.lore.length >= 60 && e.lore.length <= 260, `${e.id} lore length ${e.lore && e.lore.length}`);
@@ -112,7 +112,7 @@ t.test('every enemy has bestiary lore in voice (1 to 2 sentences) and honest tag
   t.ok(E.hitodama.tags.indexOf('spirit') >= 0 && E.tanuki_bandit.tags.indexOf('beast') >= 0 && E.kappa.tags.indexOf('aquatic') >= 0 && E.crow_tengu.tags.indexOf('avian') >= 0, 'tags fit the creatures');
 });
 
-t.test('every move has a readable name, an honest kind and only plain numbers (chapter 1 uses no value expressions)', () => {
+t.test('every move has a readable name, an honest kind and only plain numbers (Act 1 uses no value expressions)', () => {
   const names = new Set();
   ch1.forEach((e) => moveList(e).forEach((m) => {
     const w = `${e.id}.${m.key}`;
@@ -136,7 +136,7 @@ t.test('every move has a readable name, an honest kind and only plain numbers (c
 // =====================================================================================================================
 // 2. bands (CONTENT_SPEC 4.2, machine copy DATA.GUIDE)
 // =====================================================================================================================
-t.test('HP stays inside the chapter 1 band of its tier and the rolled range is narrow enough to read', () => {
+t.test('HP stays inside the Act 1 band of its tier and the rolled range is narrow enough to read', () => {
   ch1.forEach((e) => {
     const g1 = GUIDE.hp[1][e.tier];
     t.ok(e.hp[0] >= g1[0] && e.hp[1] <= g1[1], `${e.id} hp ${e.hp} inside ${g1}`);
@@ -254,7 +254,7 @@ t.test('tanuki_bandit: steals gold up front, hits, then flees with it', () => {
   t.ok(dmgInfo(e.moves[s[0]]).perHit <= 5, 'the snatch itself hits lightly: the gold is the threat');
 });
 
-t.test('kodama: rattles both heroes lightly and calls a Leaf Imp', () => {
+t.test('kodama: rattles both heroes lightly and calls a Kazoo Imp', () => {
   const e = E.kodama;
   t.ok(hasMove(e, (m, ops) => ops.some((o) => o.op === 'dmg' && o.tgt === 'both' && o.n <= 4)), 'a light hit on both heroes');
   const call = moveList(e).find((m) => moveOps(m).some((o) => o.op === 'summon'));
@@ -313,7 +313,7 @@ t.test('mushroom_folk: poisons the front hero and grows Thorns', () => {
   t.ok(e.immune.indexOf('poison') >= 0, 'spores do not poison spores');
 });
 
-t.test('bamboo_boar: gains Plating, winds up (telegraph), then one heavy gore', () => {
+t.test('bamboo_boar: gains Sequins, winds up (telegraph), then one heavy roll', () => {
   const e = E.bamboo_boar;
   t.ok((e.start || []).some((o) => selfBuff(o, 'plating')), 'Plating from the start');
   t.deep(seqOf(e).map((k) => kindOf(e, k)), ['buff', 'heavy', 'attack'], 'bristle, then the telegraphed gore, then a barge');
@@ -366,7 +366,7 @@ t.test('minions: ember_wisp burns once then fizzles, leaf_imp pokes, paper_kodam
   t.ok(hasMove(p, (m, ops) => m.kind === 'debuff' && ops.some((o) => o.op === 'add' && o.card === 'status_blot')), 'paper kodama adds blot cards');
 });
 
-t.test('boss_kuzunoha: ink strikes and paper kodama, then all nine tails at once', () => {
+t.test('boss_kuzunoha (Kraki): mic slams and Mic Squeals, then every voice at once', () => {
   const b = E.boss_kuzunoha;
   t.ok(b.ai.open && b.ai.open.length >= 1 && kindOf(b, b.ai.open[0]) === 'summon', 'the opening is the paper fold');
   t.ok(moveOps(b.moves[b.ai.open[0]]).every((o) => o.enemy === 'paper_kodama' && o.n === 2), 'two paper kodama');
@@ -630,7 +630,7 @@ t.test('phases are sorted by descending at, carry say lines, and replace the ai 
 const isDur = (s) => DATA.statuses[s] && DATA.statuses[s].stack === 'dur';
 const PARTY = [{ id: 'hanae', hp: 76 }, { id: 'kuro', hp: 60 }];
 // abstract parties: dpt is raw damage per turn spread over `hits` card hits, blk is Block for the front hero (half for the back hero)
-// Calibrated against COMBAT.simulate with real Hanae and Kuro decks (a starter deck deals 15 to 17 per turn, a developed one 20 or more,
+// Calibrated against COMBAT.simulate with real Jasmin and RoxorLoops decks (a starter deck deals 15 to 17 per turn, a developed one 20 or more,
 // and the greedy bot Blocks what the intents threaten). dpt is damage per turn and blk Block for the front hero; hits is how many attack
 // cards land (Thorns and Dodge count per hit). `focus:'smart'` kills a minion that dies to one hit (at most 2 a turn) and then the boss.
 const PROFILES = {
@@ -1177,10 +1177,10 @@ t.test('content is plain JSON data, the simulator is deterministic, and every HP
 });
 
 // =====================================================================================================================
-// 7. the real engine (when js/combat.js and the Hanae and Kuro card files exist): every group through COMBAT.simulate
+// 7. the real engine (when js/combat.js and the Jasmin and RoxorLoops card files exist): every group through COMBAT.simulate
 // =====================================================================================================================
 // The independent simulator above proves the data is self-consistent; this section proves it against the engine the game ships.
-// Two real decks: `starter` (the ten starter cards of Hanae and Kuro) and `decent` (the starters with three of five upgraded per
+// Two real decks: `starter` (the ten starter cards of Jasmin and RoxorLoops) and `decent` (the starters with three of five upgraded per
 // hero, plus two cheap common attacks and two cheap common skills per hero, chosen by id so the deck never depends on a hand edit).
 // The bot is COMBAT.greedyPolicy, so these are the very numbers the balance wave will start from. Coverage runs use a `chip` policy:
 // Block with every skill, one attack a turn at the weakest enemy, heroes with 999 HP, so every enemy gets to use its whole move set.
@@ -1359,7 +1359,7 @@ else {
       t.eq(st('hitodama').dodge, 1, 'hitodama starts with Dodge 1'); t.eq(st('oni_cub').ritual, 1, 'the cub starts with Ritual 1');
       t.eq(st('bamboo_boar').plating, 3, 'the boar starts with Plating 3'); t.deep([st('moss_guardian').plating, st('moss_guardian').thorns], [3, 2], 'the guardian starts with Plating 3 and Thorns 2');
       t.eq(st('mushroom_folk').thorns, undefined, 'the mushroom has no Thorns until it grows its cap');
-      // find a real Kuro card that applies a status to one enemy and play it on the immune creature
+      // find a real RoxorLoops card that applies a status to one enemy and play it on the immune creature
       const applier = (s2) => Object.values(D2.cards).find((c) => c.hero === 'kuro' && c.type !== 'power' && typeof c.cost === 'number' && c.cost <= 1 && D2.cardOps(c.id).some((o) => o.op === 'status' && o.s === s2 && (o.tgt === undefined || o.tgt === 'enemy')));
       [['burn', 'hitodama'], ['burn', 'ember_wisp'], ['poison', 'mushroom_folk']].forEach(([status, target]) => {
         const card = applier(status);
@@ -1373,7 +1373,7 @@ else {
       });
     });
 
-    t.test('engine: Ink Trial factors scale these enemies (HP rounds, damage floors per hit) without breaking any move', () => {
+    t.test('engine: Encore factors scale these enemies (HP rounds, damage floors per hit) without breaking any move', () => {
       const scaled = (ids, mods) => COMBAT.simulate({ heroes: heroesAt(999), frontIdx: 0, deck: decentDeck(), enemies: ids, tier: tierOf(ids), chapter: 1, seed: 5, mods: Object.assign(D2.foldMods([]), mods), relics: [], gold: 60, maxTurns: 40 }, chipPolicy());
       const hp0 = scaled(['boss_kuzunoha'], {}).C.enemies[0].maxHp, hp1 = scaled(['boss_kuzunoha'], { bossHp: 1.5 }).C.enemies[0].maxHp;
       t.eq(hp1, Math.round(hp0 / 1 * 1.5), 'bossHp 1.5 multiplies the rolled HP');

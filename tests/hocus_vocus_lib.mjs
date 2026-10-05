@@ -1,4 +1,4 @@
-// Headless loader and shared test toolkit for the Inkwoven suites. This header is the record of every option and helper.
+// Headless loader and shared test toolkit for the Hocus Vocus suites. This header is the record of every option and helper.
 //
 // boot() evaluates the game's classic scripts IN ORDER, each in its own guarded step, inside ONE shared vm context that behaves
 // like a browser page (top-level const and let are shared between scripts exactly as between classic scripts), against a stubbed

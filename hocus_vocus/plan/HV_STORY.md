@@ -333,7 +333,7 @@ the screens) or the one-namespace-per-file rule. `HV_WORLD_DATA.md` section 11 (
 ```js
   // The duo's links. The owners fill in the URLs; an empty string hides that button. Opened only on a tap, in a new tab; never fetched.
   // When a URL is filled in, its line needs the pragma, for example:
-  //   website: 'https://example.org/',  // hygiene-allow(network): the duo's own link, opened only on a tap, never fetched
+  //   website: 'https://example.org/',  // hygiene-allow(network): owner link, opened only on a tap, never fetched
   DATA.LINKS = Object.freeze({
     handle: '@roxorloopsandjasmin',
     website: '',

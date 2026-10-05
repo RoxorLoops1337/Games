@@ -1,5 +1,5 @@
-// Echowake: MAP: the hex page. Generation, painting, brushes, walking, pixel helpers, saves.
-// Pure logic: no DOM, no clock, no Math.random. Everything is a pure function of its arguments and the seed.
+// Hocus Vocus: MAP: the hex map. Generation, unmuting (`paint`), Spells (`brush`), walking, pixel helpers, saves.
+// Pure logic: no DOM, no clock, no banned random call. Everything is a pure function of its arguments and the seed.
 // This header is the contract of record for RUN and the map screen (DESIGN.md 4.8 and 5.3 say the same thing shorter).
 //
 // COORDINATES
@@ -19,36 +19,36 @@
 //   attempts = how many candidate maps the generator built (1 = the first seed was fine, see GENERATION RULES).
 //   content by type (a fresh object per tile, plain JSON):
 //     enemy  {tier:'normal', enc?}      elite {tier:'elite', enc?}     enc is a DATA.encounters group id and is present only when the
-//                                       chapter has encounter pools (picked from tile.diff, weighted by w, varied across the map);
+//                                       Act has encounter pools (picked from tile.diff, weighted by w, varied across the map);
 //                                       otherwise RUN chooses the group when the tile is entered.
-//     boss {}  camp {}  forge {}  gemcache {}  empty {}  start {}  block {}  event {} (RUN picks the fable when the tile is entered)
+//     boss {}  camp {}  forge {}  gemcache {}  empty {}  start {}  block {}  event {} (RUN picks the Detour (`fable`) when the tile is entered)
 //     chest  {gold, relic, gems}        gold 45..75, relic = 'common'|'uncommon'|'rare' or null, gems = bool, exactly one of relic and gems
-//     brush  {id}                       a DATA.brushes id
+//     brush  {id}                       a DATA.brushes id (a Spell; the tile is the Busker)
 //     well   {ink}                      ECONOMY.wellInk
 //     shop   {seed, shop:{seed}}        seed is an integer; written twice because DESIGN 5.3 lists {seed} while 4.9 and RUN read content.shop.seed
 //
 // GENERATION RULES (MAP.generate)
-//   * A 21 x 13 page, the start in column startCol (1) and the boss in column bossCol (19), both in rows 4..8 (so |dr| <= 4, inside the
+//   * A 21 x 13 map, the start in column startCol (1) and the boss in column bossCol (19), both in rows 4..8 (so |dr| <= 4, inside the
 //     documented |dr| <= 6). The start ring (every tile within startRing = 2 of the start) is painted and empty, the start tile is 'start'.
-//   * Void ('block'): about blockFrac (12 percent, chapter 3 gets +3 points, never above 16 percent, never below 8) in blots, ridges, lakes
+//   * Void ('block', the Blur to the player): about blockFrac (12 percent, Act 3 gets +3 points, never above 16 percent, never below 8) in blots, ridges, lakes
 //     and rivers with fords, never a lone tile, never within 3 hexes of the start, never cutting the map: every non-block tile is
 //     connected to the start, so no landmark or content tile can be unreachable. The boss keeps at least 3 non-block neighbours.
 //   * Solvability: MAP.solve(fresh map).minInk lies in ECONOMY.map.solve.min..max (16..22). The cheapest routes are not single file (a
 //     corridor-width gate) and the Void comes in at most 10 masses of at least 3 tiles on average, none over 34. Candidates that fail
-//     are re-rolled with seed U.hash(seed, 'retry', k), k = 1, 2, ... up to 40 tries (about 3 percent of pages need a second one); if all
+//     are re-rolled with seed U.hash(seed, 'retry', k), k = 1, 2, ... up to 40 tries (about 3 percent of maps need a second one); if all
 //     fail a deterministic "safe" layout (Void kept away from the straight line between start and boss) is returned.
 //     M.attempts = the number of candidates built (41 means the safe layout).
-//   * Counts: the number of tiles of each type is DATA.tileCount(type, nonBlock) (MAP.tileTarget adds the chapter 3 rule: one extra elite).
+//   * Counts: the number of tiles of each type is DATA.tileCount(type, nonBlock) (MAP.tileTarget adds the Act 3 rule: one extra elite).
 //   * Placement, in this order. Elites: never within 3 hexes of the start or boss, at least 5 apart when possible, alternating near the
-//     route and away from it, none ON the route. Wells: three sit ON the cheapest route at positions the starting Ink can pay for (so a
+//     route and away from it, none ON the route. Wells: three sit ON the cheapest route at positions the starting Vox can pay for (so a
 //     pure rush is solvable on wells alone). Camps and shops: spread out, one of each near the middle of the route, plus a camp shortly
 //     before the boss and an early shop. Chests: about 60 percent of elites guard a chest within 2 hexes, the rest are spread and prefer
 //     to sit off the route. Forges and gem caches: spread. The remaining wells: pairs on each side of the route within 3 hexes of it
-//     (side = left or right of the direction of travel, so north or south of an eastward route), then scattered singles. Brush racks:
+//     (side = left or right of the direction of travel, so north or south of an eastward route), then scattered singles. Buskers (`brush` tiles):
 //     one early, the rest spread. Events fill in. Enemies thicken around the cheapest route (at most 7 stand ON it).
 //   * Encounter groups (when pools exist) are chosen per tile with their own seeded streams, so the LAYOUT never depends on which content
-//     files are loaded. The chapter number only changes the seed stream (and the two chapter 3 rules above). Generation uses only
-//     + - * / and sqrt (no exp, hypot, sin or cos), so a seed gives the same page in every browser.
+//     files are loaded. The Act number only changes the seed stream (and the two Act 3 rules above). Generation uses only
+//     + - * / and sqrt (no exp, hypot, sin or cos), so a seed gives the same map in every browser.
 //
 // PUBLIC API (every function is pure except paint, applyBrush and move, which mutate M)
 //   Basics
@@ -59,11 +59,11 @@
 //     MAP.dist(aq, ar, bq, br) -> int      hex distance
 //     MAP.direction(dirIdx) -> [dq, dr]    any integer, wrapped mod 6
 //     MAP.dirOf(M, q, r, tq, tr) -> 0..5   the direction whose pixel angle is nearest to the target hex (0 when the target is the origin;
-//                                          an exact 30 degree tie goes to the counter-clockwise neighbour). For aiming a brush by drag.
+//                                          an exact 30 degree tie goes to the counter-clockwise neighbour). For aiming a Spell by drag.
 //     MAP.hexRing(q, r, radius) -> [[q,r]]   the cells at exactly that distance, SW corner first, going E, NE, NW, W, SW, SE (radius 0
 //                                          is the centre; not clipped to the page; [] for a negative, NaN or absurd (> 200) radius)
 //     MAP.hexRange(q, r, radius) -> [[q,r]]  centre then rings 1..radius (same limits)
-//     MAP.tileTarget(type, nonBlock, chapter) -> int   expected tile count (DATA.tileCount plus the chapter 3 extra elite)
+//     MAP.tileTarget(type, nonBlock, chapter) -> int   expected tile count (DATA.tileCount plus the Act 3 extra elite)
 //     MAP.LEGEND                           the glyph legend string MAP.ascii prints under a picture
 //   Generation
 //     MAP.generate({chapter, seed}) -> M   pure: the same arguments always give the same JSON. chapter defaults to 1, seed to 0.
@@ -77,7 +77,7 @@
 //     MAP.progress(M) -> {painted, total, pct, frac}   over non-block tiles; pct is an integer 0..100, frac is 0..1
 //   Painting
 //     MAP.canPaint(M, q, r) -> {ok, reason?}   reasons: 'off' (no such tile), 'void' (block), 'painted', 'far' (touches nothing painted)
-//     MAP.paint(M, q, r) -> T | null       low level: marks painted and known, no Ink and no adjacency check; null for off-map, block
+//     MAP.paint(M, q, r) -> T | null       low level: marks painted and known, no Vox and no adjacency check; null for off-map, block
 //                                          or already painted (so callers can count the non-null results)
 //     MAP.pathToPaint(M, q, r) -> {path:[[q,r]...], cost} | null   the cheapest chain of hidden non-block hexes from the painted area to
 //                                          the target, in painting order (first cell touches painted ground, last cell is the target),
@@ -88,21 +88,21 @@
 //     MAP.spine(M) -> [[q, r]]             the canonical cheapest route of a FRESH map (ignores painted flags, treats every tile within
 //                                          startRing of M.start as painted): the straightest chain from the ring edge to the boss,
 //                                          minInk cells long, boss last. Content placement is keyed to it; a tutorial can point along it.
-//   Brushes (DATA.brushes, geometry exactly as DESIGN 4.8)
+//   Spells (DATA.brushes, geometry exactly as DESIGN 4.8)
 //     MAP.canBrush(M, id, q, r, dir) -> {ok, reason?, need?}   ok iff the origin rule holds and at least one cell is new.
 //         reasons: 'brush' (unknown id) 'off' (no such tile) 'dir' (line and fan need an integer direction) 'origin' (origin rule failed,
 //         need says what it wants: 'painted' | 'hidden-adjacent' | 'hidden-near') 'void' (blob or dot anchored on Void) 'nothing'.
 //     MAP.brushCells(M, id, q, r, dir) -> [[q, r]]   only hexes that would newly paint: they exist, are unpainted and are not block.
-//         Other cells are skipped WITHOUT stopping the brush (RULE: a line passes over Void, painted hexes and the page edge without
+//         Other cells are skipped WITHOUT stopping the Spell (RULE: a line passes over Void, painted hexes and the map edge without
 //         painting them, and still covers k = 1..len). [] when not ok.
 //         line (stroke 3, wave 5)  anchor painted; cells anchor + k * DIRS[dir], k = 1..len, nearest first
 //         fan                      anchor painted; the neighbours in directions dir-1, dir, dir+1 (mod 6), in that order
 //         blob (splash)            anchor hidden, non-block and touching painted ground; the anchor first, then its 6 neighbours
 //         ring (halo)              anchor painted; its 6 neighbours in DIRS order
 //         dot (blot)               anchor hidden, non-block, dist(M.pos, anchor) <= 4 (touching painted ground is not required)
-//     MAP.applyBrush(M, id, q, r, dir) -> [T]   paints exactly brushCells and returns those tiles ([] when not ok). No Ink or brush
+//     MAP.applyBrush(M, id, q, r, dir) -> [T]   paints exactly brushCells and returns those tiles ([] when not ok). No Vox or Spell
 //         accounting: RUN owns that.
-//     MAP.brushAnchors(M, id) -> [{q, r, dirs}]   every anchor where the brush would paint something and the direction indices that work
+//     MAP.brushAnchors(M, id) -> [{q, r, dirs}]   every anchor where the Spell would unmute something and the direction indices that work
 //         (kinds that ignore dir list [0]); for highlighting legal anchors.
 //   Walking
 //     MAP.canMove(M, q, r) -> bool         painted, non-block and adjacent to M.pos
@@ -116,7 +116,7 @@
 //   Pixels (size defaults to ECONOMY.map.hexSize)
 //     MAP.toPixel(q, r, size) -> {x, y}    the hex centre           MAP.fromPixel(x, y, size) -> {q, r}   cube rounding, exact inverse
 //                                          (fromPixel returns the nearest hex even off the page: check MAP.tile(M, q, r) before using it)
-//     MAP.corners(x, y, size) -> [{x, y} x6]                        MAP.bounds(M, size) -> {x0, y0, x1, y1}  the whole page, every hex outline
+//     MAP.corners(x, y, size) -> [{x, y} x6]                        MAP.bounds(M, size) -> {x0, y0, x1, y1}  the whole map, every hex outline
 //   Saves
 //     MAP.serialize(M) -> plain JSON object (a deep copy, version field v, painted, known and done preserved, no functions)
 //     MAP.deserialize(o) -> M | null       null unless o.v === 1 and the tile set is complete and typed; normalises every flag
@@ -129,7 +129,7 @@ const MAP = (() => {
   const SQ3 = Math.sqrt(3);
   const DIRS = Object.freeze([[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]].map((d) => Object.freeze(d)));
   const MAX_ATTEMPTS = 40;
-  const MAX_RADIUS = 200;                          // hexRing and hexRange refuse anything bigger (the page is at most 99 wide)
+  const MAX_RADIUS = 200;                          // hexRing and hexRange refuse anything bigger (the map is at most 99 wide)
   const NO_CONTENT = { empty: 1, start: 1, block: 1 };
   const BLOCK_FLOOR = 0.08, BLOCK_CEIL = 0.16;
   const AXES = [[1, 0], [0.5, SQ3 / 2], [-0.5, SQ3 / 2]];          // stretch directions for elongated blots (exact vectors, no sin or cos)
@@ -142,7 +142,7 @@ const MAP = (() => {
   const GLYPH = { start: 'S', empty: '.', block: '#', enemy: 'e', elite: 'E', boss: 'B', chest: 'c', shop: '$', camp: '^', event: '?', well: '~', brush: 'b', gemcache: 'g', forge: 'f' };
 
   // Generation uses only + - * / and sqrt, which every engine rounds identically (Math.exp, hypot, sin and cos may differ in the last bit
-  // between browsers, and one flipped comparison would make the same Daily Tale seed produce two different pages).
+  // between browsers, and one flipped comparison would make the same Daily Duet seed produce two different maps).
   const hyp = (x, y) => Math.sqrt(x * x + y * y);
   const eco = () => DATA.ECONOMY;
   const em = () => DATA.ECONOMY.map;
@@ -205,7 +205,7 @@ const MAP = (() => {
     return { x0: -w / 2, y0: -s, x1: w * (M.cols - 1) + w / 2 + (M.rows > 1 ? w / 2 : 0), y1: 1.5 * s * (M.rows - 1) + s };
   }
 
-  // ------------------------------------------------------------------ grid model (index space, cached per page size)
+  // ------------------------------------------------------------------ grid model (index space, cached per map size)
   const MODELS = {};
   function model(cols, rows) {
     const id = cols + 'x' + rows;
@@ -229,7 +229,7 @@ const MAP = (() => {
       nbDir[i] = DIRS.map((d) => index(Q[i] + d[0], R[i] + d[1]));
       nb[i] = nbDir[i].filter((j) => j >= 0);
     }
-    let D = null;                                                      // all-pairs hex distances (generation hammers dist), small pages only
+    let D = null;                                                      // all-pairs hex distances (generation hammers dist), small maps only
     if (n <= 1024) {
       D = new Uint8Array(n * n);
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) D[i * n + j] = dist(Q[i], R[i], Q[j], R[j]);
@@ -421,7 +421,7 @@ const MAP = (() => {
     return route.spine.map((i) => [g.Q[i], g.R[i]]);
   }
 
-  // ------------------------------------------------------------------ brushes
+  // ------------------------------------------------------------------ Spells (brushes)
   function brushPlan(M, id, q, r, dir) {
     const fail = (reason, need) => (need ? { ok: false, reason, need, cells: [] } : { ok: false, reason, cells: [] });
     const b = DATA.brushes[id];
@@ -559,7 +559,7 @@ const MAP = (() => {
     return out;
   }
 
-  // How the Void clumps: number of separate masses and the size of the biggest (the gate keeps pages readable, never salt and pepper)
+  // How the Void clumps: number of separate masses and the size of the biggest (the gate keeps maps readable, never salt and pepper)
   function voidMasses(g, blocked) {
     const seen = new Uint8Array(g.n);
     let count = 0, biggest = 0;
@@ -607,7 +607,7 @@ const MAP = (() => {
       return true;
     }
 
-    // a meandering line of Void from a page edge, one tile per row, drifting half a column left or right each step
+    // a meandering line of Void from a map edge, one tile per row, drifting half a column left or right each step
     function riverCells(o) {
       const step = o.fromTop ? 1 : -1;
       let r = o.fromTop ? 0 : g.rows - 1;
@@ -729,7 +729,7 @@ const MAP = (() => {
     const counts = {};
     Object.keys(E.dist).forEach((t) => { counts[t] = tileTarget(t, nonBlock, chapter); });
 
-    // measures: distance from the start and boss, progress along the page, and where each tile sits relative to the cheapest route
+    // measures: distance from the start and boss, progress along the map, and where each tile sits relative to the cheapest route
     // prog = share of the straight distance start -> boss; rprog = how far along the cheapest route the nearest route tile is (they differ on detours)
     // side = which side of the route's direction of travel the tile lies on (-1 north of an eastward route, +1 south, 0 when within 1.4 of the line);
     // sideOff = how far off the line it is in hex-width units, so a fallback can ask for a weaker side
@@ -764,7 +764,7 @@ const MAP = (() => {
 
     // Best-candidate placement. spec: {sep, against:[types], filter(i) or [filter(i), ...], score(i), noise}. The separation relaxes one
     // step at a time when it cannot be met, a list of filters is tried in order, and the filter is dropped as a last resort, so a
-    // placement only fails when the page is full.
+    // placement only fails when the map is full.
     function place(type, count, specOf) {
       const out = [];
       for (let k = 0; k < count; k++) {
@@ -795,7 +795,7 @@ const MAP = (() => {
     const near = (target, wgt) => (i) => -(wgt || 4) * Math.abs(prog[i] - target);
     const nearR = (target, wgt) => (i) => -(wgt || 4) * Math.abs(rprog[i] - target);
 
-    // elites: spread along the page, alternating near the route and away from it, never near the start or the boss
+    // elites: spread along the map, alternating near the route and away from it, never near the start or the boss
     const nE = counts.elite;
     place('elite', nE, (k) => {
       const tp = 0.22 + 0.62 * (k + 0.5) / Math.max(1, nE), onRoute = k % 2 === 0, want = k % 2 === 0 ? -1 : 1;
@@ -806,7 +806,7 @@ const MAP = (() => {
       };
     });
 
-    // wells on the route itself, at positions the Ink can pay for, so a pure rush is solvable on wells alone
+    // wells on the route itself, at positions the Vox can pay for, so a pure rush is solvable on wells alone
     const WELLS = em().wells, ranges = [[3, 7], [8, 12], [13, 16]];
     const nW = counts.well, onRoute = Math.min(WELLS.count, ranges.length, nW), L = sp.length;
     let lastPos = 0;
@@ -857,11 +857,11 @@ const MAP = (() => {
       }
     }
     place('well', remaining, { sep: 3, noise: 1, score: (i) => -0.3 * Math.abs(dSp[i] - 3.5) + spreadOf(['well'], 6)(i) * 0.4 });
-    // brush racks: one early, one within reach of the start, the rest spread
+    // Buskers (`brush` tiles): one early, one within reach of the start, the rest spread
     place('brush', Math.min(1, counts.brush), { filter: (i) => prog[i] <= 0.42 && dSp[i] <= 4, score: (i) => near(0.22, 2)(i) });
     place('brush', Math.max(0, counts.brush - 1), { sep: 5, score: (i) => spreadOf(['brush'], 9)(i) });
     place('event', counts.event, { sep: 2, noise: 1, score: () => 0 });
-    // enemies thicken around the cheapest route so a rush means fights, and thin out toward the page edges (at most ENEMY_ROUTE_CAP on the route)
+    // enemies thicken around the cheapest route so a rush means fights, and thin out toward the map edges (at most ENEMY_ROUTE_CAP on the route)
     let cand = [], wts = [], wsum = 0;
     for (let i = 0; i < n; i++) {
       if (used[i]) continue;
@@ -945,7 +945,7 @@ const MAP = (() => {
         diff: clamp(Math.round(dist(startQ, startR, q, r) / total * 100) / 100, 0, 1), content,
       };
     }
-    // encounter groups, when the chapter has pools: own stream per tile, varied across the page, layout never depends on them
+    // encounter groups, when the Act has pools: own stream per tile, varied across the map, layout never depends on them
     const pools = DATA.encounters && DATA.encounters[chapter];
     if (pools) {
       const usedEnc = {};
