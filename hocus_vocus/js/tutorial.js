@@ -52,7 +52,7 @@
     relics: { title: 'Charms', anchor: ['relics'], at: { x: 120, y: 660 }, side: 'top', scope: ['map'], ttl: 14000,
       text: 'Charms bend the rules for the rest of the tour. Tap here any time to read what yours do.' },
     // ---- combat
-    energy: { title: 'Breath', anchor: ['energy'], at: { x: 70, y: 650 }, side: 'top', scope: ['combat'], ttl: 14000,
+    energy: { title: 'Breath', anchor: ['energy'], at: { x: 70, y: 650 }, side: 'top', dock: { x: 420, bottom: 520 }, scope: ['combat'], ttl: 14000,
       text: 'You get 3 Breath each turn, and a card\'s cost is the number in its corner orb. Whatever you do not spend is gone when the turn ends.' },
     hand: { title: 'Play a card', after: 'energy', anchor: ['hand'], at: { x: 611, y: 620 }, side: 'top', scope: ['combat'], completeOn: ['combat:play'], ttl: 24000,
       text: 'Tap a card to lift it, then tap it again, or drag it upward, to play it. Attacks also ask you to tap an enemy.' },
@@ -182,14 +182,17 @@
     }
     const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
     let x, y, tail;
-    if (side === 'top' || side === 'bottom') {
+    if (def.dock) {
+      // a card parked on the sea between the heroes and the enemies (the Breath tip: above the orb it covered the heroes' legs); it has no tail, the spotlight ring still marks the orb
+      x = clamp(def.dock.x, 8, Math.max(8, W - w - 8)); y = clamp(def.dock.bottom - hh, 8, Math.max(8, H - hh - 8)); tail = 40; side = 'dock';
+    } else if (side === 'top' || side === 'bottom') {
       x = clamp(cx - w / 2, 8, Math.max(8, W - w - 8)); y = side === 'top' ? rect.y0 - hh - gap : rect.y1 + gap;
       y = clamp(y, 8, Math.max(8, H - hh - 8)); tail = clamp(cx - x, 26, Math.max(26, w - 26));
     } else {
       y = clamp(cy - hh / 2, 8, Math.max(8, H - hh - 8)); x = side === 'left' ? rect.x0 - w - gap : rect.x1 + gap;
       x = clamp(x, 8, Math.max(8, W - w - 8)); tail = clamp(cy - y, 26, Math.max(26, hh - 26));
     }
-    node.classList.remove('tut-top', 'tut-bottom', 'tut-left', 'tut-right');
+    node.classList.remove('tut-top', 'tut-bottom', 'tut-left', 'tut-right', 'tut-dock');
     node.classList.add('tut-' + side);
     node.style.left = Math.round(x) + 'px'; node.style.top = Math.round(y) + 'px';
     node.style.setProperty('--tail', Math.round(tail) + 'px');

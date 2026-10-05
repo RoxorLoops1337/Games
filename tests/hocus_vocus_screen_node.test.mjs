@@ -2661,4 +2661,10 @@ await t.test('copy (chest and booth gems, the deck overlay): a chest gem reads "
 });
 
 
+await t.test('css (reward): the reward cards keep their joke line at 8 screen px on a phone', () => {
+  const m = /#stage\.compact \.rw-cards \.c-flavor \{([^}]*)\}/.exec(CSS);
+  t.ok(m && /max\(calc\(var\(--u\) \* 5\.2 \* var\(--ts\)\), var\(--fs8\)\)/.test(m[1]), 'the flavour line of a reward card is never under 8 screen px');
+  t.ok(!/#stage\.compact (\.sh-|\.dk-)[^{]*\.c-flavor/.test(CSS), 'the shop and deck card faces are left as designed');
+});
+
 await t.done();

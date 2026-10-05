@@ -112,6 +112,7 @@
 .rw-cards.many { top: 20px; flex-wrap: wrap; gap: 14px 16px; max-height: 440px; overflow-y: auto; align-content: flex-start; pointer-events: auto; }
 .rw-cards.fit { flex-wrap: nowrap; gap: 14px; overflow: visible; }
 .rw-cards.fit .card { --cw: var(--rwcw, 138px); }
+#stage.compact .rw-cards .c-flavor { font-size: max(calc(var(--u) * 5.2 * var(--ts)), var(--fs8)); }   /* the reward cards' joke line was 6.8 screen px on a phone; the card faces on the shop, hero select and in the hand stay as designed */
 .rw-slot { animation: nkDeal .85s var(--ease-back) both; animation-delay: calc(.45s + var(--i, 0) * .17s); transform: rotate(var(--rot, 0deg)) translateY(var(--lift, 0px)); }
 .rw-lift { position: relative; transition: transform .28s var(--ease-back), opacity .35s; }
 .rw-slot:hover .rw-lift, .rw-slot:focus-within .rw-lift { transform: rotate(calc(var(--rot, 0deg) * -1)) translateY(-14px) scale(1.045); z-index: 4; }

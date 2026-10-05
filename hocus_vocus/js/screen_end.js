@@ -809,7 +809,7 @@
         mk('p', { class: 'cc-kicker', text: 'END OF ACT ' + (numberWord[ch] || ch) }),
         mk('h1', { class: 'cc-title', text: title }),
         mk('i', { class: 'cc-flourish', 'aria-hidden': 'true' }, mk('b'), mk('b'), mk('b')),
-        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + bossDef.title : '') + ', sings along' }) : null);
+        bossDef ? mk('p', { class: 'cc-boss', text: bossDef.name + (bossDef.title ? ', ' + String(bossDef.title).replace(/^The /, 'the ') : '') + ', sings along' }) : null);   // the bible writes "Kraki, the Karaoke Kraken" in a sentence: only the title card keeps the capital
       root.appendChild(banner);
       if (unlockedHero) {
         const card = mk('div', { class: 'cc-newhero', role: 'status', 'aria-label': heroName(unlockedHero) + ' joins the tour!' },
