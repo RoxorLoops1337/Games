@@ -6,7 +6,7 @@
 //   2. NAMES        no two cards, relics, gems or enemies share a display name; every id referenced anywhere exists
 //   3. ART IDS      every card, relic, gem, enemy and event names a motif, palette, icon, cut or scene that exists
 //   4. ENEMIES      every move is reachable, every referenced move exists, every roster id is placed in an encounter, and every
-//                   enemy move reads right in the bestiary (enemy side) and in its intent (C.intent through a real combat)
+//                   enemy move reads right in the Who's Who (enemy side) and in its intent (C.intent through a real combat)
 //   5. POOLS        every reward pool is non-empty for every hero and rarity (with and without locked content)
 //   6. TEXT         every card (both ranks, both rows, every gem) has clean text inside the limits; keyword spelling is uniform;
 //                   hero:'any' hooks say "either hero"; every data-kw resolves in the glossary
@@ -72,7 +72,7 @@ t.test('display names: unique inside each registry, and no card, relic, gem or e
   });
   Object.keys(all).filter((k) => all[k].length > 1).forEach((k) => t.ok(KNOWN_CLASHES.indexOf(k) >= 0, `"${k}" is shared by ${all[k].join(' and ')}: rename one`));
   KNOWN_CLASHES.forEach((k) => t.ok(all[k] && all[k].length > 1, `known clash "${k}" still exists (remove it from KNOWN_CLASHES once fixed)`));
-  // the other registries a player reads names from: titles, trial and achievement names, heroes, brushes
+  // the other registries a player reads names from: titles, trial and achievement names, heroes, Spells
   const others = { event: values(DATA.events).map((e) => [e.id, e.title]), achievement: Object.keys(DATA.achievements).map((i) => [i, DATA.achievements[i].name]), trial: values(DATA.trials).map((x) => [x.id, x.name]), brush: values(DATA.brushes).map((b) => [b.id, b.name]) };
   Object.keys(others).forEach((kind) => { const seen = {}; others[kind].forEach(([id, name]) => { t.ok(!seen[norm(name)], `${kind}s: "${name}" is used twice`); seen[norm(name)] = id; }); });
   const moveNames = {};
@@ -173,7 +173,7 @@ t.test('enemy AI: every referenced move exists, every defined move can be chosen
   t.eq(values(DATA.enemies).length, DATA.ROSTER[1].length + DATA.ROSTER[2].length + DATA.ROSTER[3].length, 'the roster and the registry are the same size');
 });
 
-t.test('enemy moves read from the enemy side in the bestiary (DATA.opsText of move.fx) and say who gets what', () => {
+t.test('enemy moves read from the enemy side in the Who\'s Who (DATA.opsText of move.fx) and say who gets what', () => {
   const bad = [];
   values(DATA.enemies).forEach((e) => {
     Object.keys(e.moves).forEach((m) => {
@@ -226,7 +226,7 @@ t.test('intent text: every move of every enemy reads well in a real combat, and 
 });
 
 // =================================================================================================== 5. reward pools
-t.test('every reward pool is non-empty for every hero and rarity, with and without the Library unlocked', () => {
+t.test('every reward pool is non-empty for every hero and rarity, with and without the Tour Bus unlocked', () => {
   const none = { card: [], relic: [], gem: [] };
   [undefined, none].forEach((unl) => {
     const label = unl ? 'nothing unlocked' : 'everything unlocked';
@@ -348,7 +348,7 @@ t.test('every card with every compatible gem: no exceptions, no debris, and the 
   });
 });
 
-t.test('hook damage in card text is not inflated by the hero row or Might, and hook Block gets no row bonus', () => {
+t.test('hook damage in card text is not inflated by the hero row or Volume, and hook Block gets no row bonus', () => {
   values(DATA.cards).forEach((c) => {
     if (c.hero !== 'hanae') return;
     const hooks = [];
@@ -363,7 +363,7 @@ t.test('hook damage in card text is not inflated by the hero row or Might, and h
   });
 });
 
-t.test('relic, status, row, keyword and brush text: spelling, limits, no dashes', () => {
+t.test('relic, status, row, keyword and Spell text: spelling, limits, no dashes', () => {
   const bad = [];
   values(DATA.relics).forEach((r) => {
     if (r.text.length > 90) bad.push(`${r.id}: ${r.text.length} characters`);
@@ -434,8 +434,8 @@ const getCard = (C, id) => { const c = [].concat(C.hand, C.draw, C.discard, C.ex
 const playId = (C, id) => { const c = getCard(C, id); return C.play(c.uid, C.needsTarget(c.uid) ? C.enemies[0].id : undefined); };
 const evs = (ev, type) => ev.filter((e) => e.type === type);
 
-t.test('rules lawyer: steps, swaps and "Now Front" read exactly as the engine plays them', () => {
-  // Petal Step: "Move to the lead. Gain 1 Bloom and 3 Block."
+t.test('rules lawyer: steps, swaps and "Now Lead" read exactly as the engine plays them', () => {
+  // Take the Lead: "Move to the lead. Gain 1 Bloom and 3 Block."
   t.eq(DATA.cardPlain('hanae_petal_step'), 'Move to the lead. Gain 1 Bloom and 3 Block.', 'the text');
   let C = lawyer(['hanae', 'kuro'], 1, ['hanae_petal_step']);
   let ev = playId(C, 'hanae_petal_step');
@@ -445,7 +445,7 @@ t.test('rules lawyer: steps, swaps and "Now Front" read exactly as the engine pl
   ev = playId(C, 'hanae_petal_step');
   t.eq(evs(ev, 'swap').length, 0, 'from the front row she never swaps');
   t.eq(C.heroes[0].st.bloom, 1, 'and the Bloom comes either way');
-  // Hit and Vanish: "Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block." (4 with her back row bonus)
+  // Curtsy and Go: "Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block." (4 with her back row bonus)
   t.eq(DATA.cardPlain('hanae_hit_and_vanish'), 'Deal 6 damage. Swap spots. Now Backing: both heroes gain 3 Block.', 'the text');
   C = lawyer(['hanae', 'kuro'], 0, ['hanae_hit_and_vanish']);
   ev = playId(C, 'hanae_hit_and_vanish');
@@ -455,7 +455,7 @@ t.test('rules lawyer: steps, swaps and "Now Front" read exactly as the engine pl
   ev = playId(C, 'hanae_hit_and_vanish');
   t.eq(C.front().id, 'hanae', 'from the back she ends in the front');
   t.eq(evs(ev, 'block').length, 0, 'and nobody gains Block (not now back)');
-  // Kagura Step, Tiger and Crane, Flip the Page: the rows are the rows AFTER the swap
+  // Crossfade, Shuffle Step, Pass the Mic: the rows are the rows AFTER the swap
   C = lawyer(['suzu', 'hanae'], 0, ['suzu_kagura_step']);
   playId(C, 'suzu_kagura_step');
   t.eq(C.back().id, 'suzu', 'Kagura Step from the front: Suzu ends in the back, so the heal branch runs (no Taunt)');
@@ -477,26 +477,26 @@ t.test('rules lawyer: "until the end of this turn", "until your next turn", doub
   const ev = C.endTurn();
   t.ok(evs(ev, 'dodge').length === 1, 'the Dodge dodged the enemy phase hit ("until your next turn")');
   t.ok(!C.heroes[0].st.dodge, 'and is gone when the next turn starts');
-  // Rot Script: "Double the target's Poison (adds at most 10)"
+  // Double Time: "Double the target's Earworm (adds at most 10)"
   [[7, 14], [14, 24]].forEach(([from, to]) => {
     C = lawyer(['kuro', 'hanae'], 1, ['kuro_rot_script']);
     C.enemies[0].st.poison = from;
     playId(C, 'kuro_rot_script');
     t.eq(C.enemies[0].st.poison, to, `Rot Script on ${from} Poison leaves ${to}`);
   });
-  // Waiting Storm: "The next time you are hit, apply 1 Stun to the attacker" (even a blocked hit)
+  // Bass Trap: "The next time you are hit, apply 1 Starstruck to the attacker" (even a blocked hit)
   C = lawyer(['raiga', 'hanae'], 0, ['raiga_waiting_storm'], { enemy: 'qa_hitter' });
   playId(C, 'raiga_waiting_storm');
   C.endTurn();
   t.eq(C.enemies[0].st.stun, 1, 'the attacker is Stunned after hitting Raiga');
-  // Yata Mirror: "Double your Thorns"
+  // Double Tracking: "Double your Feedback"
   C = lawyer(['suzu', 'hanae'], 1, ['suzu_stone_lion']);
   playId(C, 'suzu_stone_lion');
   t.eq(C.heroes[0].st.thorns, 1, 'Stone Lion gives 1 Thorns (she is in the back row, which grants none)');
 });
 
 t.test('rules lawyer: hooks hear exactly who the text says', () => {
-  // Petal Trail: either hero's Attacks, flat 2 damage with no Might or row bonus
+  // Shimmer Trail: either hero's Attacks, flat 2 damage with no Volume or row bonus
   let C = lawyer(['hanae', 'kuro'], 0, ['hanae_petal_trail', 'kuro_ink_bolt']);
   playId(C, 'hanae_petal_trail');
   C.heroes[0].st.might = 4;
@@ -504,8 +504,8 @@ t.test('rules lawyer: hooks hear exactly who the text says', () => {
   const trail = evs(ev, 'hit').filter((e) => e.src === null || e.src === undefined);
   t.eq(trail.length, 1, "Kuro's Attack triggers Petal Trail (either hero)");
   t.eq(trail[0] && trail[0].raw, 2, 'for exactly 2 (hook damage has no attacker: no Might, no row bonus)');
-  // a Hanae-only hook does not hear Kuro: Bending Willow-like "you are hit" is the owner only (checked through Storm Born style passives)
-  // Waltz of Steps: either hero's swap; Swaying Bells and Scene Change likewise
+  // a Jasmin-only hook does not hear RoxorLoops: Bend the Note-like "you are hit" is the owner only (checked through Bass Face style passives)
+  // Stage Waltz: either hero's swap; Ping Pong Delay and Back and Forth likewise
   C = lawyer(['hanae', 'kuro'], 1, ['hanae_waltz_of_steps']);
   playId(C, 'hanae_waltz_of_steps');
   C.swap();
@@ -514,7 +514,7 @@ t.test('rules lawyer: hooks hear exactly who the text says', () => {
   playId(C, 'kuro_scene_change');
   const sw = C.swap();
   t.ok(evs(sw, 'draw').length === 1 && C.unit('kuro').st.sumi === 1, 'Scene Change draws and gains Sumi on either hero\'s swap');
-  // Guardian Kami: "The next time a hero falls, revive that hero with 40% HP and both heroes gain 8 Block" (the ally AND Suzu herself)
+  // Voice Memo: "The next time a hero falls, revive that hero with 40% HP and both heroes gain 8 Block" (the ally AND RawClaw herself)
   [['a hit on the back hero', 'qa_brute_back', 'hanae'], ['a hit on Suzu herself', 'qa_brute_front', 'suzu']].forEach(([label, enemy, who]) => {
     C = lawyer(['suzu', 'hanae'], 0, ['suzu_guardian_kami'], { enemy });
     playId(C, 'suzu_guardian_kami');
@@ -820,13 +820,13 @@ t.test('the hard achievements are reachable: a constructed combat reaches maxHit
     return C;
   };
   const grab = (C, id) => { const c = [].concat(C.hand, C.draw, C.discard).find((x) => x.id === id); if (C.hand.indexOf(c) < 0) { [C.draw, C.discard].forEach((p) => { const i = p.indexOf(c); if (i >= 0) p.splice(i, 1); }); C.hand.push(c); } return c; };
-  // a hit for 50: Nightshade Verdict, 10 Poison and a Vulnerable target
+  // a hit for 50: Chart Topper, 10 Earworm and an Exposed target
   let C = mk(['kuro', 'hanae'], ['kuro_nightshade_verdict'], ['qa_tank'], 1);
   C.enemies[0].st.poison = 10; C.enemies[0].st.vulnerable = 2;
   C.play(grab(C, 'kuro_nightshade_verdict').uid, C.enemies[0].id);
   C.endTurn();
   t.ok(C.stats.maxHit >= need('maxHit'), `Nightshade Verdict on 10 Poison hits for ${C.stats.maxHit} (needs ${need('maxHit')})`);
-  // a turn for 100: Thousand Thunders at 6 Charge into four Vulnerable enemies
+  // a turn for 100: Thunder From Below at 6 Rumble into four Exposed enemies
   C = mk(['raiga', 'hanae'], ['raiga_thousand_thunders'], ['qa_wall', 'qa_wall', 'qa_wall', 'qa_wall'], 2);
   C.heroes[0].st.charge = 6; C.enemies.forEach((e) => { e.st.vulnerable = 2; });
   C.play(grab(C, 'raiga_thousand_thunders').uid);
@@ -839,7 +839,7 @@ t.test('the hard achievements are reachable: a constructed combat reaches maxHit
   t.ok(C.stats.zeroCostTurns >= 1, 'three cost 0 cards in one turn count a zeroCostTurn');
 });
 
-t.test('Ink Trials: each text quotes its own mods, the staircase never gets easier, and the numbers match', () => {
+t.test('Encores: each text quotes its own mods, the staircase never gets easier, and the numbers match', () => {
   const trials = values(DATA.trials).sort((a, b) => a.level - b.level);
   t.eq(trials.length, 10, 'ten trials');
   trials.forEach((tr, i) => {

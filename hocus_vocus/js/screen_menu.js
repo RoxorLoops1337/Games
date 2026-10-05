@@ -8,34 +8,35 @@
 //               wrapped in the Gloss until the first win, and the stacked logo in sticker letters), a pointer parallax (normalised -1..1,
 //               passed to the scene as opts.parallaxX), petals and fireflies (x0.3 with reduceMotion), a "Tap to begin" gate while audio
 //               is not running, and the menu plaques: Continue (only when META.hasRun(), with META.runInfo() text), New Tour, Daily Duet
-//               (today's seed, the two daily heroes and the best score), Tour Bus, Settings, How to Play, a credits line, the version and
-//               a tiny fullscreen button. Keys: C continue, N new, D daily, L library, S settings, H how to play, arrows move focus.
+//               (today's seed, the two daily heroes and the best score), Tour Bus, Settings, How to Play, a footer (the credits line, then
+//               Follow the duo, Share and Support the duo once DATA.LINKS.support is set, the version last) and a tiny fullscreen button. Keys: C continue, N new, D daily, L Tour Bus (`library`), S settings, H how to play, arrows move focus.
 //   heroSelect  params none. Four portrait cards (animated ART.hero.portrait whose expression follows hover and selection, locked heroes
 //               silhouetted with the unlock hint of their achievement), a detail sheet (blurb, rows, resource, passive, the Outfit row
 //               (HV_ART_AUDIO 2.11: Stage clothes and the hero's outfit through UI.outfit; Andy has none), HP, starter deck, bio), the party
 //               stage (chibi sprites on a little round stage, lead and backing, barks from lore barks_<id>), the swap-order toggle, an Encore
 //               stepper (0..META.trialMax with every level's rule listed cumulatively), a seed field, the Daily toggle and Begin.
-//               The FIRST pick is the front hero; a third pick drops the oldest. Begin calls GAME.newRun({heroes, trial, seed?, daily}).
+//               The FIRST pick is the lead hero; a third pick drops the oldest. Begin calls GAME.newRun({heroes, trial, seed?, daily}).
 //               Keys: 1..4 pick, S swap order, Esc back.
-//   library     params {tab?: 'unlocks'|'achievements'|'story'|'bestiary'|'history'}. Unlocks (META.libraryList grid, kind and hero
-//               filters, buy with a stamp animation), Achievements (META.achievements with progress bars, sort), Story (META.storyList,
-//               seen pages replay through the story screen with then -> back here), Who's Who (META.bestiary as a wall of instant photos;
+//   library     the Tour Bus. params {tab?: 'unlocks'|'achievements'|'story'|'bestiary'|'history'|'follow'}. Unlocks (META.libraryList grid, kind and hero
+//               filters, buy with a stamp animation), Stickers (META.achievements with progress bars, sort), Diary (META.storyList,
+//               seen entries replay through the story screen with then -> back here), Who's Who (META.bestiary as a wall of instant photos;
 //               a creature not met yet is a photo the Gloss got to first: an opalescent blur with a polite smile),
-//               History (META.history rows). The Cheers balance counts up and down. Esc goes back.
+//               History (META.history rows), Follow the duo (the sixth tab: UI.followPanel('tab'), which carries the about text and Jordan's line). Keys 1 to 6
+//               switch tabs. The Cheers balance counts up and down. Esc goes back.
 //   settings    params none. One shared form (music, effects, shake, reduce motion, text size, animation speed, damage numbers, colour-blind
-//               aids, quality, hints, fullscreen, restore defaults, clear data with a two-step confirm). Every change applies at once
-//               through UI.setSetting (META.set + save + UI.applySettings).
+//               aids, quality, hints, fullscreen, restore defaults, clear data with a two-step confirm, and a last About group: the about text,
+//               the follow strip from ui.js and the version). Every change applies at once through UI.setSetting (META.set + save + UI.applySettings).
 //   howto       params none. Eight illustrated pages with small live diagrams, dots, swipe, arrow keys.
 // OVERLAYS
-//   pause       Resume, Deck, Treasures, Settings, How to play (an in-place sub view of the same overlay), Abandon run (GAME.abandon opens
+//   pause       Resume, Deck, Charms, Settings, How to play (an in-place sub view of the same overlay), Abandon run (GAME.abandon opens
 //               the confirm), Save and quit, a run strip and a tip. Without a run: Resume, Settings, How to play, Back to title.
-//               Keys inside it: R resume, D deck, T treasures, S settings, H how to play, Esc (closes, or leaves How to play).
+//               Keys inside it: R resume, D deck, T Charms, S settings, H how to play, Esc (closes, or leaves How to play).
 //   settings    the same form as the screen, in a torn paper panel (clear data is hidden while a run is active).
 //
 // PUBLIC API beyond DESIGN: every screen object also has state() for tests and tools: title.state() -> {gated, hasRun, seed, best, px,
 //   particles, ...}, heroSelect.state() -> {chosen, trial, daily, focus, seed}, library.state() -> {tab, filter, built},
 //   settings.state() -> {form}, howto.state() -> {page, pages, id}. All return null once the screen has been left.
-//   Module memory (not saved anywhere): the last party, trial and library tab survive going back and forth within one page session.
+//   Module memory (not saved anywhere): the last party, Encore (`trial`) and Tour Bus tab survive going back and forth within one page session.
 //
 // DEVIATIONS AND NOTES (also in the final report)
 //   * Screens may only call GAME.nodeDone, toTitle and enterNode (hygiene, DESIGN 2), but starting, continuing and abandoning a run
@@ -44,7 +45,7 @@
 //   * The Daily seed shown on the title is META.dailySeed(new Date(performance.timeOrigin + performance.now())): screens may not read
 //     the clock, GAME.newRun does the real read (both agree except in the seconds around midnight).
 //   * ART.scene.draw opts.parallaxX is a camera offset in STAGE PX (art_scenes.js clamps it to +-90): the pointer position times 70.
-//   * The unlock sfx and the "Unlocked: X" toast come from GAME (it alone subscribes to META.bus, DESIGN 5.10); the Library adds a
+//   * The unlock sfx and the "Unlocked: X" toast come from GAME (it alone subscribes to META.bus, DESIGN 5.10); the Tour Bus adds a
 //     stamp accent sound (card_pick, relic_get or gem_get) so a purchase never double-plays `unlock`.
 //   * No timers other than UI.after and the frame clock (update(dt, t)) are used, so GAME.debug.tick is exact. Overlays get no update()
 //     from UI, so a diagram inside the pause overlay is driven by a chain of one second UI.tween calls (driveOverlay).
@@ -60,11 +61,17 @@
   const TAU = Math.PI * 2;
   const VERSION = '1.0';
   const HEROES = DATA.LISTS.heroIds;
+  // The social strings of HV_STORY 5.3 and 6. The panel itself (pills, Share, the sheet) is UI.followPanel, UI.share and UI.followSheet in ui.js; this
+  // file only places them (title footer, the sixth Tour Bus tab, the settings About group) and never fetches anything.
+  const CREDITS_LINE = 'Drawn in code, sung with heart. No two tours alike.';
+  const HANDLE_LINE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+  const ABOUT_TEXT = "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.";
 
   // ================================================================================================================
   // small helpers
   // ================================================================================================================
   const safe = (fn, dflt) => { try { return fn(); } catch (e) { return dflt; } };
+  const isFn = (f) => typeof f === 'function';
   const warned = {};
   const warnOnce = (key, msg, e) => {
     if (warned[key]) return;
@@ -140,7 +147,7 @@
     return o.c;
   }
 
-  // the text of a brush-lettered banner ribbon (vermilion torn ribbon, same look as a panel title)
+  // the text of a banner ribbon (the candy-green ribbon, same look as a panel title)
   const banner = (text, cls) => mk('h2', { class: 'p-title mn-banner' + (cls ? ' ' + cls : '') }, mk('span', { text }));
 
   // DOM helper to append many kids (arrays, nodes, strings, null)
@@ -149,6 +156,23 @@
 
   // a lit button: UI.btn plus our class
   const btn = (label, o) => { const b = UI.btn(label, o); if (o && o.mn) b.classList.add(...o.mn.split(' ')); return b; };
+
+  // the duo's links (HV_STORY 5): DATA.LINKS is read, never fetched; an empty URL hides its button, and every call into ui.js is guarded
+  const supportUrl = () => { const v = safe(() => DATA.LINKS.support, ''); const u = typeof v === 'string' ? v.trim() : ''; return /^https?:\/{2}/i.test(u) ? u : ''; };      // only a web address is ever linked (ui.js does the same)
+  const openFollowSheet = () => { if (isFn(UI.followSheet)) safe(() => UI.followSheet()); };
+  const doShare = () => { if (isFn(UI.share)) safe(() => UI.share()); };
+  // Follow the duo and Share as small ghost pills (the title footer and nothing else: every other surface asks UI.followPanel)
+  const followButton = (cls) => { const b = btn('Follow the duo', { kind: 'ghost', size: 'sm', class: cls, onclick: openFollowSheet }); b.dataset.act = 'follow'; return b; };
+  const shareButton = (cls) => { const b = btn('Share', { kind: 'ghost', size: 'sm', class: cls, onclick: doShare }); b.setAttribute('aria-label', 'Share Hocus Vocus'); b.dataset.act = 'share'; return b; };
+  // Support the duo: an anchor to DATA.LINKS.support in a new tab (a primary pill with the heart), or null while the URL is empty
+  function supportButton(cls) {
+    const url = supportUrl();
+    if (!url) return null;
+    const a = mk('a', { class: 'btn btn-primary btn-sm ' + (cls || ''), href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Support the duo, opens in a new tab' },
+      UI.icon('relic', 'heart', 20, {}, 'btn-ico'), mk('span', { class: 'btn-label', text: 'Support the duo' }), mk('i', { class: 'btn-shine', 'aria-hidden': 'true' }));
+    a.dataset.act = 'support';
+    return a;
+  }
 
   // ================================================================================================================
   // the house look of everything this file paints
@@ -598,7 +622,6 @@
       const played = seed ? !!safe(() => META.dailyPlayed(today()), false) : false;
       const real = sceneIsReal();
       const gateOn = !mem.gateDone && !(typeof AUDIO !== 'undefined' && AUDIO && AUDIO.ready);
-      const isFn = (f) => typeof f === 'function';
       const won = isFn(typeof META !== 'undefined' && META && META.trialMax) ? safe(() => META.trialMax() > 0, false) : false;   // true exactly when the profile has a win: the title clears its threads (ART never reads META)
       const S = TS = { root, off, hasRun, won, info, seed, best, played, dHeroes, real, gateOn, px: 0, py: 0, tpx: 0, tpy: 0, atmos: makeAtmos('title', 1), spr: real ? null : titleSprites(), items: [], gate: null, fs: null };
 
@@ -641,7 +664,11 @@
       items.forEach((b) => (b.classList.contains('mn-slim') ? slims : menu).appendChild(b));
       menu.appendChild(slims);
 
-      const foot = mk('div', { class: 'mn-foot' }, mk('span', { class: 'mn-credits', text: 'Drawn in code, sung with heart. No two tours alike.' }), mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
+      // the footer (HV_STORY 5.4, 5.6): the credits line on the left, then Follow the duo, Share and (once the owners set a URL) Support the duo, the version last.
+      // On a narrow portrait stage menu.css moves the credits line above and keeps only Follow the duo and Share (.mn-foot-opt hides Support there).
+      const foot = mk('div', { class: 'mn-foot' + (hasRun ? ' has-run' : '') }, mk('span', { class: 'mn-credits', text: CREDITS_LINE }),
+        mk('div', { class: 'mn-foot-btns' }, followButton('mn-foot-btn'), shareButton('mn-foot-btn'), supportButton('mn-foot-btn mn-foot-opt')),
+        mk('span', { class: 'mn-ver', text: 'v' + VERSION }));
       const fs = fsSupported() ? mk('button', { type: 'button', class: 'mn-fs', 'aria-label': 'Toggle full screen', title: 'Full screen' }, mk('i', { class: 'mn-fs-ico' })) : null;
       if (fs) {
         fs.addEventListener('click', () => { toggleFullscreen(); });
@@ -656,12 +683,12 @@
       root.classList.toggle('ts-big', bigText());
       add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Hocus Vocus, a vocal magic adventure' }), tag, menu, foot, fs, gate));
       S.wrap = root.firstChild;
-      if (gateOn) menu.setAttribute('inert', '');                // Tab must not reach the plaques hidden under the gate
+      if (gateOn) { menu.setAttribute('inert', ''); foot.setAttribute('inert', ''); }               // Tab must not reach the plaques or the footer buttons hidden under the gate
 
       const dismiss = () => {
         if (!S.gate || S.gateDone) return;
         S.gateDone = true; mem.gateDone = true;
-        menu.removeAttribute('inert');
+        menu.removeAttribute('inert'); foot.removeAttribute('inert');
         if (typeof AUDIO !== 'undefined' && AUDIO) { safe(() => AUDIO.init()); safe(() => AUDIO.resume()); }
         S.gate.classList.add('out');
         S.wrap.classList.remove('gated');
@@ -890,7 +917,7 @@
       // ---- header
       const back = btn('Back', { kind: 'ghost', size: 'sm', onclick: () => UI.back(), sfx: 'ui_back' });
       back.classList.add('mn-back');
-      const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });        // the same size as the Library's pill, so it does not jump when you navigate
+      const stones = UI.stat('inkstone', safe(() => META.inkstones, 0) || 0, { size: 'lg' });        // the same size as the Tour Bus pill, so it does not jump when you navigate
       const top = mk('header', { class: 'mn-hs-top' }, back, banner('Pick your duo'), mk('div', { class: 'mn-stones', 'aria-label': 'Cheers' }, stones));
 
       // ---- hero cards
@@ -1276,7 +1303,7 @@
   };
 
   // ================================================================================================================
-  // LIBRARY
+  // THE TOUR BUS (`library`)
   // ================================================================================================================
   const LIB_TABS = [
     { id: 'unlocks', label: 'Unlocks', icon: 'key' },
@@ -1284,6 +1311,7 @@
     { id: 'story', label: 'Diary', icon: 'bell' },
     { id: 'bestiary', label: "Who's Who", icon: 'mask' },
     { id: 'history', label: 'Past Tours', icon: 'lantern' },
+    { id: 'follow', label: 'Follow the duo', icon: 'bloom' },      // the sixth tab, key 6 (HV_STORY 5.3): the duo's links, Share and the about text; it builds only when opened
   ];
   const TIER_NAME = { minion: 'Sidekick', normal: 'Creature', elite: 'Rival', boss: 'Headliner' };
   const KIND_NAME = { card: 'Card', relic: 'Charm', gem: 'Gem' };
@@ -1515,7 +1543,7 @@
     return { el: pane };
   }
 
-  // ---- Bestiary
+  // ---- Who's Who (`bestiary`)
   // a generic creature shadow for art that is still a placeholder, so an unseen entry never shows a black box
   function genericSil(g, id, w, h) {
     const def = DATA.enemies[id] || DATA.rosterById[id] || {};
@@ -1710,6 +1738,15 @@
     return { el: pane };
   }
 
+  // the sixth tab: UI.followPanel('tab') is the whole body (heading, the duo waving, the handle line, the link pills, Share, Support the duo when set, the
+  // about text and Jordan's line, or the no-links line while every URL is empty). Nothing is fetched or stored: the pills are plain anchors that open in a new tab.
+  function buildFollow() {
+    const pane = mk('div', { class: 'mn-pane mn-follow' });
+    const panel = isFn(UI.followPanel) ? safe(() => UI.followPanel('tab'), null) : null;
+    pane.appendChild(mk('div', { class: 'mn-fl-main' }, panel || mk('p', { class: 'mn-fl-handle', text: HANDLE_LINE })));
+    return { el: pane };
+  }
+
   const library = {
     enter(params, root) {
       const want = params && params.tab;
@@ -1725,7 +1762,7 @@
       const body = mk('div', { class: 'mn-lib-body' });
       add(root, mk('div', { class: 'mn-lib' }, top, tabs, body));
       S.tabs = tabs; S.body = body;
-      const builders = { unlocks: buildUnlocks, achievements: buildAchievements, story: buildStory, bestiary: buildBestiary, history: buildHistory };
+      const builders = { unlocks: buildUnlocks, achievements: buildAchievements, story: buildStory, bestiary: buildBestiary, history: buildHistory, follow: buildFollow };
       function show(id, sound) {
         if (!builders[id]) return;
         S.tab = id; mem.libTab = id;
@@ -1762,7 +1799,7 @@
     onKey(e) {
       const S = LB;
       if (!S || e.ctrlKey || e.metaKey || e.altKey) return false;
-      if (e.key >= '1' && e.key <= '5') { S.show(LIB_TABS[Number(e.key) - 1].id, true); return true; }
+      if (/^[1-6]$/.test(e.key) && LIB_TABS[Number(e.key) - 1]) { S.show(LIB_TABS[Number(e.key) - 1].id, true); return true; }
       if (e.key === 'Escape') { UI.back(); return true; }
       return false;
     },
@@ -1835,6 +1872,13 @@
       mk('div', { class: 'mn-set-col' },
         group('Display', row('textScale', 'Text size', tsSeg), mk('div', { class: 'mn-set-note' }, sample), row('colorblind', 'Colour-blind aids', cb, 'Patterns, and bigger glyphs on gems'), mk('div', { class: 'mn-set-note' }, glyphs), row('quality', 'Quality', qSeg, 'Auto lowers effects if the game slows down')),
         group('Screen and data', row('fullscreen', 'Full screen', fsBtn), row('defaults', 'Defaults', defBtn), dataRow))));
+    // the last group, full width under the two columns (HV_STORY 5.3 and 6, HV_WORLD_DATA 11): the about text, the follow strip from ui.js (the link pills for
+    // every URL that is set, Share, Support the duo when set, the handle line) and the version. It reads DATA.LINKS and fetches nothing.
+    const strip = isFn(UI.followPanel) ? safe(() => UI.followPanel('strip', { supportLine: true }), null) : null;
+    root.appendChild(mk('section', { class: 'mn-set-group mn-set-about' }, mk('h3', { class: 'mn-set-h' }, mk('span', { text: 'About' })),
+      mk('p', { class: 'mn-set-abouttext', text: ABOUT_TEXT }),
+      mk('div', { class: 'mn-set-follow' }, strip || mk('p', { class: 'mn-set-handle', text: HANDLE_LINE })),
+      mk('p', { class: 'mn-set-ver', text: 'Version ' + VERSION })));
     function rebuild() { const parent = root.parentNode; if (!parent) return; const next = settingsForm(mode); parent.replaceChild(next, root); }
     return root;
   }
@@ -1987,7 +2031,7 @@
     const stateOf = (c, r) => { const k = steps.findIndex((s) => s.c === c && s.r === r); if (c <= 1) return { kind: 'painted', tile: c === 0 && r === 2 ? 'start' : 'empty' }; if (k >= 0 && T0 >= bloomAt(k) + 0.28) return { kind: 'painted', tile: steps[k].tile }; if (c === 6 && r === 2) return { kind: 'known', tile: 'boss' }; return { kind: 'fog', tile: 'empty' }; };
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const p = pos(c, r), st = stateOf(c, r); art(() => ART.map.hex(g, st.kind, p.x, p.y, size, { tile: st.tile, seed: U.hash(c, r), done: false, t }), 'hex'); }
     steps.forEach((s, k) => { if (T0 >= S0 + k * DT && T0 < bloomAt(k) + 0.6) { const p = pos(s.c, s.r); const b = prog(T0, bloomAt(k), bloomAt(k) + 0.6); if (b > 0) art(() => ART.map.paintBloom(g, p.x, p.y, size, b), 'bloom'); else art(() => ART.map.hex(g, 'target', p.x, p.y, size, { t }), 'hex'); } });
-    // the brush travelling to the next hex, then the party walking after it
+    // the Spell travelling to the next hex, then the party walking after it
     let cur = pos(0, 2);
     let from = pos(1, 2);
     steps.forEach((s, k) => {
@@ -2000,7 +2044,7 @@
     steps.forEach((s, k) => { const w0 = bloomAt(k) + 0.6, p1 = pos(s.c, s.r); if (T0 >= w0) { const e = easeIO(prog(T0, w0, w0 + 0.4)); tokenAt = { x: prev.x + (p1.x - prev.x) * e, y: prev.y + (p1.y - prev.y) * e }; } prev = p1; });
     const moving = steps.some((s, k) => T0 >= bloomAt(k) + 0.6 && T0 < bloomAt(k) + 1.0);
     art(() => ART.map.token(g, partyOf(), tokenAt.x, tokenAt.y - 4, t, moving), 'token');
-    // the Ink meter: -1 per hex, +4 from the well
+    // the Vox meter: -1 per hex, +4 from the tea stall
     const ink = clamp(10 - started.filter(Boolean).length + (done[2] ? 4 : 0), 0, 14);
     art(() => ART.icon.draw(g, 'stat', 'ink', 34, 30, 36, {}), 'ink');
     label(g, ink + ' / 14', 78, 30, 20, HV.cream, 'left');
@@ -2298,7 +2342,7 @@
       next.rbSet({ label: i === HOWTO.length - 1 ? 'Done' : 'Next' });
       if (!first && !silent) { sfx('page_turn'); UI.announce(pg.title); }
     }
-    // swipe: a horizontal drag across the book turns the page
+    // swipe: a horizontal drag across the screen turns the page
     let down = null;
     book.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     book.addEventListener('pointerup', (e) => { if (!down) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; down = null; if (Math.abs(dx) > 70 * (UI.scale || 1) && Math.abs(dy) < 60 * (UI.scale || 1)) go(H.page + (dx < 0 ? 1 : -1)); });
@@ -2342,7 +2386,7 @@
   };
 
   // ================================================================================================================
-  // PAUSE: Resume, Deck, Treasures, Settings, How to play (a sub view of this overlay), Abandon, Save and quit
+  // PAUSE: Resume, Deck, Charms, Settings, How to play (a sub view of this overlay), Abandon, Save and quit
   // ================================================================================================================
   let PS = null;
 

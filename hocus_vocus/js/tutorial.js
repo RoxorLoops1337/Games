@@ -1,4 +1,4 @@
-// Echowake: the first-run hints (owner: story and endings engineer). One IIFE that registers UI.tutorial. DESIGN 5.8 (UI.bus and tutorial hooks).
+// Hocus Vocus: the first-run hints (owner: story and endings engineer). One IIFE that registers UI.tutorial. DESIGN 5.8 (UI.bus and tutorial hooks).
 // It ONLY listens to UI.bus ('screen', 'overlay', 'combat:*', 'map:*') and draws hint bubbles into #tips (UI.layers.tips), pointing at the stable
 // anchors the screens mark with data-tut (UI.anchorEl). It never mutates another screen and never takes or blocks input: the bubble and its spotlight
 // ring are pointer-transparent except for two small buttons ("Got it", "Hide hints"), and every hint shows once.

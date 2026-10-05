@@ -1,4 +1,4 @@
-// META: the profile, settings, run save, stats, achievements, Inkstones, the Library, bestiary, story and history (DESIGN 4.10, 5.5).
+// META: the profile, settings, run save, stats, achievements (Stickers), Cheers, the Tour Bus, the Who's Who, the Tour Diary and history (DESIGN 4.10, 5.5).
 //
 // The suite boots meta.js with util, data and run.js only (`skip` keeps every real content file, combat.js and map.js out), installs a
 // tiny stand-in for MAP (RUN only needs generate, serialize and deserialize here) and a synthetic universe, and drives the real RUN
@@ -192,7 +192,7 @@ t.test('heroes unlock through achievements, mid-run and for good', () => {
   R.stats.boss2Kills = 1; A.META.check(R); t.eq(A.META.isUnlocked('hero', 'raiga'), true, 'chapter 2 opens Raiga'); t.deep(unlocks, ['hero:suzu', 'hero:raiga'], 'events');
   const B = fresh({ store: { hv_profile_v1: J({ v: 1, ach: { ch1_clear: 5 } }) } }); B.META.load(); t.eq(B.META.isUnlocked('hero', 'suzu'), true, 'an old profile with the achievement but no hero list still counts');
 });
-t.test('achievements(): the Library tab rows, with live progress', () => {
+t.test('achievements(): the Tour Bus tab rows, with live progress', () => {
   const A = fresh(); A.META.load(); A.META.track('kills', 4); A.META.track('maxHit', 25); A.META.check(null, 77);
   const rows = A.META.achievements();
   t.eq(rows.length, Object.keys(DATA.achievements).length, 'one row per achievement'); t.deep(Object.keys(rows[0]).sort(), ['done', 'gte', 'id', 'k', 'name', 'progress', 'reward', 'text', 'ts', 'value'], 'fields');
@@ -200,7 +200,7 @@ t.test('achievements(): the Library tab rows, with live progress', () => {
   t.eq(kills.value, 4, 'value'); t.eq(kills.progress, 0.4, 'progress is value over gte'); t.eq(kills.done, false, 'not done'); t.eq(kills.ts, null, 'no timestamp'); t.eq(hit.done, true, 'done'); t.eq(hit.progress, 1, 'progress capped at 1'); t.eq(hit.ts, 77, 'timestamp'); t.deep(hit.reward, { inkstones: 5 }, 'reward'); t.eq(boss.reward, null, 'no reward');
 });
 
-// ================================================================================================ unlocks and the Library
+// ================================================================================================ unlocks and the Tour Bus
 t.test('isUnlocked and unlockedSet: only defs with locked:true need buying', () => {
   const A = fresh(); A.META.load();
   t.eq(A.META.isUnlocked('card', 'hanae_c0'), true, 'a plain card'); t.eq(A.META.isUnlocked('card', 'hanae_u0'), false, 'a locked card'); t.eq(A.META.isUnlocked('relic', 'm_free'), true, 'plain relic'); t.eq(A.META.isUnlocked('relic', 'm_u'), false, 'locked relic'); t.eq(A.META.isUnlocked('gem', 'm_g1'), true, 'tier 1 gem'); t.eq(A.META.isUnlocked('gem', 'm_g2'), false, 'locked gem');
@@ -235,7 +235,7 @@ t.test('buy: funds, ownership, unknown ids; unlocks feed RUN.newRun and the pool
   const fund = fresh(); fund.META.load(); fund.META.profile.inkstones = E.library.gem[3]; t.eq(fund.META.buy('gem', 'm_g3').ok, true, 'exact funds'); t.eq(fund.META.inkstones, 0, 'to zero');
 });
 
-// ================================================================================================ Ink Trials
+// ================================================================================================ Encores
 t.test('trialMax: trial N + 1 opens after a win at N, capped at 10, and nothing before the first win', () => {
   const A = fresh(); A.META.load();
   t.eq(A.META.trialMax(), 0, 'no wins: only trial 0'); A.META.profile.stats.trialBest = 3; t.eq(A.META.trialMax(), 0, 'trialBest alone is not a win');
@@ -246,7 +246,7 @@ t.test('trialMax: trial N + 1 opens after a win at N, capped at 10, and nothing 
 });
 
 // ================================================================================================ recordRun
-t.test('recordRun pays Inkstones by the documented formula: win, loss, abandon', () => {
+t.test('recordRun pays Cheers by the documented formula: win, loss, abandon', () => {
   const S = E.inkstones;
   const A = fresh(); A.META.load();
   const R = mkRun(A, { trialSet: 3, stats: { bossKills: 2, boss1Kills: 1, boss2Kills: 1 }, chapter: 3 });
@@ -275,7 +275,7 @@ t.test('recordRun merges stats (sums and max keys) and counts runs, wins, deaths
   const D = fresh(); D.META.load(); D.META.recordRun(mkRun(D, {}), 'abandon', 1); t.eq(D.META.stat('runs'), 1, 'an abandoned run is a run'); t.eq(D.META.stat('deaths'), 0, 'but not a death'); t.eq(D.META.stat('wins'), 0, 'nor a win');
   const T = fresh(); T.META.load(); T.META.recordRun(mkRun(T, { victory: true, trialSet: 4 }), 'win', 1); t.eq(T.META.stat('trialBest'), 4, 'trialBest is the highest trial WON'); T.META.recordRun(mkRun(T, { victory: true, trialSet: 2, seed: 2 }), 'win', 2); t.eq(T.META.stat('trialBest'), 4, 'a lower win never lowers it'); T.META.recordRun(mkRun(T, { trialSet: 9, seed: 3 }), 'lose', 3); t.eq(T.META.stat('trialBest'), 4, 'a loss at trial 9 does not count'); t.eq(T.META.trialMax(), 5, 'trial 5 is the next');
 });
-t.test('recordRun: bestiary kills, history rows, and paying out only once', () => {
+t.test('recordRun: Who\'s Who kills, history rows, and paying out only once', () => {
   const A = fresh(); A.META.load(); A.META.seen('kappa');
   const R = mkRun(A, { foes: { kappa: 3, oni_brute: 1 }, victory: true, chapter: 2 });
   const res = A.META.recordRun(R, 'win', 4242);
@@ -289,7 +289,7 @@ t.test('recordRun: bestiary kills, history rows, and paying out only once', () =
   t.eq(JSON.parse(A._store.hv_profile_v1).history.length, 20, 'saved');
   const O = fresh(); O.META.load(); const guess = mkRun(O, { victory: true }); O.META.recordRun(guess, 'sideways', 1); t.eq(O.META.history[0].outcome, 'win', 'a junk outcome falls back to R.victory'); t.eq(O.META.recordRun(null, 'win', 1).inkstones, 0, 'no run, no payout');
 });
-t.test('recordRun reports new achievements, hero unlocks, the new trial and bonus Inkstones', () => {
+t.test('recordRun reports new achievements, hero unlocks, the new trial and bonus Cheers', () => {
   const A = fresh(); A.META.load();
   const R = mkRun(A, { heroes: ['hanae', 'kuro'], victory: true, deckSize: 10, stats: { bossKills: 1, boss1Kills: 1, kills: 12, maxHit: 30 } });
   const seen = []; A.META.bus.on('achievement', (e) => seen.push(e.id)); const unlocks = []; A.META.bus.on('unlock', (e) => unlocks.push(e.kind + ':' + e.id));
@@ -301,7 +301,7 @@ t.test('recordRun reports new achievements, hero unlocks, the new trial and bonu
   const R3 = mkRun(A, { victory: true, seed: 3, trialSet: 1, stats: {} }); t.eq(A.META.recordRun(R3, 'win', 99).newTrial, 2, 'a win at trial 1 opens trial 2'); t.ok(A.META.profile.ach.trial1 !== undefined, 'the trial achievement (trialBest gte 1) fired');
   const mid = fresh(); mid.META.load(); const midRun = mkRun(mid, { stats: { boss1Kills: 1, bossKills: 1 } }); mid.META.check(midRun, 5); const after = mid.META.recordRun(midRun, 'lose', 6); t.ok(after.newAchievements.indexOf('ch1_clear') < 0, 'an achievement unlocked mid-run is not announced again at the end'); t.deep(after.heroesUnlocked, [], 'nor a hero');
 });
-t.test('daily runs write only dailyRuns, half-rate Inkstones, daily.last, their history row and the bestiary', () => {
+t.test('daily runs write only dailyRuns, half-rate Cheers, daily.last, their history row and the Who\'s Who', () => {
   const A = fresh(); A.META.load(); A.META.track('kills', 3);
   const R = mkRun(A, { daily: true, seed: 20260317, victory: true, foes: { kappa: 2 }, deckSize: 9, curses: 1, stats: { kills: 20, bossKills: 1, boss1Kills: 1, hexesPainted: 50, maxHit: 40 } });
   const before = canon(A.META.profile.stats);
@@ -347,8 +347,8 @@ t.test('settings and profile survive alongside a run save (independent keys)', (
   const A = fresh(); A.META.load(); A.META.set('sfxVol', 0.1); A.META.saveRun(mkRun(A)); t.deep(Object.keys(A._store).sort(), ['hv_profile_v1', 'hv_run_v1'], 'the two documented keys and nothing else'); A.META.clearRun(); t.eq(JSON.parse(A._store.hv_profile_v1).settings.sfxVol, 0.1, 'clearing the run leaves the profile');
 });
 
-// ================================================================================================ bestiary, story, tutorial, daily, reset
-t.test('bestiary and seen', () => {
+// ================================================================================================ Who's Who, story, tutorial, daily, reset
+t.test('Who\'s Who and seen', () => {
   const A = fresh(); A.META.load();
   t.eq(A.META.seen('kappa'), 1, 'first sighting'); t.eq(A.META.seen('kappa'), 2, 'counts'); t.eq(A.META.seen(5), 0, 'junk id ignored'); t.eq(JSON.parse(A._store.hv_profile_v1).seen.kappa, 2, 'every sighting is saved at once');
   A.META.profile.kills.kappa = 4;
@@ -419,7 +419,7 @@ t.test('tabs: counters add up, bests take the larger, lists and flags union, set
   const x = fresh({ store: { hv_profile_v1: J({ v: 1, futureThing: { a: 1 }, other: 2 }) } }); x.META.load(); const y = fresh({ store: Object.assign({}, x._store) }); y.META.load(); x.META.set('hints', false); y.META.profile.other = 3; sync(x, y); y.META.set('musicVol', 0.4);
   const f = JSON.parse(y._store.hv_profile_v1); t.deep(f.futureThing, { a: 1 }, 'fields of a newer build ride along'); t.eq(f.other, 3, 'a field this tab changed wins'); t.eq(f.settings.hints, false, 'and the other tab\'s setting too');
 });
-t.test('tabs: Inkstone spending is never undone, and a stale tab cannot spend what is gone', () => {
+t.test('tabs: Cheers spending is never undone, and a stale tab cannot spend what is gone', () => {
   const [A, B] = tabs({ hv_profile_v1: J({ v: 1, inkstones: 500 }) });
   const list = A.META.libraryList(); const first = list[0], second = list.find((x) => x.id !== first.id && x.kind === first.kind) || list[1];
   t.eq(A.META.buy(first.kind, first.id).ok, true, 'A buys ' + first.id);

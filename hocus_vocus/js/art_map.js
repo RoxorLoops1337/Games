@@ -1338,7 +1338,7 @@
   const pxOf = (q, r, size) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r });
   const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
   const hexDist = (aq, ar, bq, br) => (Math.abs(aq - bq) + Math.abs(ar - br) + Math.abs(aq + ar - bq - br)) / 2;
-  // page = {tiles:[T], at(q, r), pos:{q, r}, path:[[q, r]] (a route), brush:[[q, r]] (brush cells), hover:{q, r}}
+  // page = {tiles:[T], at(q, r), pos:{q, r}, path:[[q, r]] (a route), brush:[[q, r]] (Spell cells), hover:{q, r}}
   function fallbackPage() {
     const cols = 21, rows = 13, r = R('samplepage'), tiles = {}, list = [];
     const key = (q, rr) => q + ',' + rr;
@@ -1367,7 +1367,7 @@
     if (lastP) Mp.pos = { q: lastP[0], r: lastP[1] };
     const nxt = m.solve(Mp);
     const fr2 = m.frontier(Mp);
-    // a line brush ('stroke') starts on a painted hex near the party and runs into the fog (DESIGN 4.8), away from the previewed route
+    // a line Spell ('stroke') starts on a live hex near the party and runs into the fog (DESIGN 4.8), away from the previewed route
     let brush = [], bestScore = -1e9;
     const onRoute = (q, r) => (nxt.path || []).slice(0, 4).some((c) => c[0] === q && c[1] === r);
     m.painted(Mp).forEach((T) => {

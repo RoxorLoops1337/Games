@@ -1,4 +1,4 @@
-// ART.map: the map page of Hocus Vocus, the muted Gloss and the live candy hexes (js/art_map.js), headless on the strict canvas stub.
+// ART.map: the map of Hocus Vocus, the muted Gloss and the live candy hexes (js/art_map.js), headless on the strict canvas stub.
 //
 // What this pins down:
 //   * every DATA.LISTS.mapKinds id has real art (ART.has), the extras (frame, paper, route, brushPreview, fogEdge, token, paintBloom) exist, the
@@ -12,7 +12,7 @@
 //     flip, one hero, none), route, brushPreview (the union outline of a flower of seven hexes has 18 outer sides and 24 inner ones), fogEdge (one strip
 //     per masked side), paper (deterministic, moves with the camera, bounded work at every zoom), frame (a window of at least 1180 x 640 on 1280 x 720)
 //   * reduce motion and low quality still draw cleanly, and reduce motion freezes what should freeze
-//   * the gallery sheets render (the page sheet with and without MAP), and a performance smoke test: a full page of hexes stays far below 4 ms
+//   * the gallery sheets render (the map sheet with and without MAP), and a performance smoke test: a full map of hexes stays far below 4 ms
 //   * the Hocus Vocus look (HV_ART_AUDIO 7): the Act (opts.chapter 1 to 3) picks the live ground of bare Path hexes, the paper and the touches near the
 //     party, muted ground stays perfectly still while live hexes near the party move, the tour poster frame chases its marquee bulbs, the token ring
 //     wears the leader's colour, the reveal is a film peeling back with sparkles riding the front
@@ -128,7 +128,7 @@ t.test('unknown kinds and tiles, and hostile numbers, never throw and still draw
   M.hex(ctx, 'fog', 0, 0, 46); M.hex(ctx, 'fog', 0, 0, 46, null);
   t.eq(issues(), '', 'no canvas issues from bad input');
 });
-t.test('ground is the walkable pale wash and block-tile painted hexes fall back to the void', () => {
+t.test('ground is the walkable pale wash and block-tile unmuted hexes fall back to the void', () => {
   const g = record((c) => M.hex(c, 'ground', 0, 0, 46, { tile: 'enemy', seed: 2 })), p = record((c) => M.hex(c, 'painted', 0, 0, 46, { tile: 'empty', seed: 2 }));
   t.deep(drawImages(g).map((a) => a.slice(1)), drawImages(p).map((a) => a.slice(1)), 'ground equals painted empty, whatever tile is passed');
   const b = record((c) => M.hex(c, 'painted', 0, 0, 46, { tile: 'block', seed: 2 })), v = record((c) => M.hex(c, 'block', 0, 0, 46, { seed: 2 }));
@@ -308,7 +308,7 @@ t.test('route: dabs along the path, an end ring and a cost pill; affordable or n
   t.eq(issues(), '', 'no canvas issues');
 });
 
-// ------------------------------------------------------------------ brush preview
+// ------------------------------------------------------------------ Spell preview
 t.test('brushEdges: a lone hex has six outer sides; a flower of seven has 18 outer and 24 inner; a line of three has 14 outer and 4 inner', () => {
   const size = 46, st = size * Math.sqrt(3);
   const one = M.brushEdges([[0, 0]], size); t.eq(one.outer.length, 6, 'one hex, six outer'); t.eq(one.inner.length, 0, 'no inner sides');
@@ -376,7 +376,7 @@ t.test('paper: draws at every camera and zoom without issues, deterministically,
   t.eq(a, record((c) => M.paper(c, 1280, 720, 800, 400, 1, { t: 99 })).log.join('|'), 'the paper does not animate');
   t.eq(balance((c) => M.paper(c, 1280, 720, 100, 100, 0.7))[2], 0, 'balanced');
 });
-t.test('paper work is bounded at every zoom, and doodles show in the margins as well as over the page', () => {
+t.test('paper work is bounded at every zoom, and doodles show in the margins as well as over the map', () => {
   const work = (x, y, z) => record((c) => M.paper(c, 1280, 720, x, y, z)).calls.filter((c) => c.name === 'drawImage').length;
   [0.2, 0.3, 0.6, 1, 2, 6].forEach((z) => t.ok(work(800, 400, z) < 400, `zoom ${z}: ${work(800, 400, z)} blits`));
   const noDoodles = record((c) => M.paper(c, 1280, 720, 800, 400, 0.6, { doodles: false })).calls.filter((c) => c.name === 'drawImage').length;
@@ -433,7 +433,7 @@ t.test('reduce motion and low quality still draw every piece cleanly', () => {
 });
 
 // ------------------------------------------------------------------ sheets
-t.test('every map gallery sheet renders (the page sheet falls back to a private page headless) and none leaves a canvas issue', async () => {
+t.test('every map gallery sheet renders (the map sheet falls back to a private map headless) and none leaves a canvas issue', async () => {
   clean();
   for (const name of ['map_kinds', 'map_page', 'map_frame', 'map_bloom', 'map_token', 'map_paper']) {
     const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
@@ -443,7 +443,7 @@ t.test('every map gallery sheet renders (the page sheet falls back to a private 
   }
   t.eq(issues(), '', 'no canvas issues from any sheet');
 });
-t.test('the page sheet also renders a page built with MAP.generate', async () => {
+t.test('the map sheet also renders a map built with MAP.generate', async () => {
   const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
   t.ok(!!MAP, 'MAP is loaded in this suite');
   const before = api._counts.drawImage || 0;
@@ -453,7 +453,7 @@ t.test('the page sheet also renders a page built with MAP.generate', async () =>
   t.eq(issues(), '', 'no canvas issues');
 });
 
-// ------------------------------------------------------------------ a real page, and performance
+// ------------------------------------------------------------------ a real map, and performance
 function pageHexes(chapter, seed, paintedFrac) {
   const Mp = MAP.generate({ chapter, seed });
   const sol = MAP.solve(Mp);
@@ -480,7 +480,7 @@ function drawMapScreen(ctx, Mp, size, tt, camX, camY) {
   M.frame(ctx, 1280, 720, tt);
   return drawn;
 }
-t.test('a real page draws at every chapter, seed and zoom from 0.6 to 2.0 without issues', () => {
+t.test('a real map draws at every Act, seed and zoom from 0.6 to 2.0 without issues', () => {
   clean();
   const ctx = newCtx();
   [1, 2, 3].forEach((ch) => [7, 20260101].forEach((seed) => [0.6, 1, 1.5, 2].forEach((z) => {
@@ -513,7 +513,7 @@ t.test('performance smoke: a full screen of about 120 visible hexes with fog edg
   for (let i = 0; i < 5; i++) drawMapScreen(ctx, Mp, 46, 3 + i, 800, 450);
   t.eq(stats().misses, before, 'no baking once warm');
 });
-t.test('sprite memory of a whole page stays modest: under 12 million pixels at zoom 2 and a 2x display', () => {
+t.test('sprite memory of a whole map stays modest: under 12 million pixels at zoom 2 and a 2x display', () => {
   ART.sprite.clear();
   const prevRes = ART.res; ART.res = 2;
   const Mp = pageHexes(1, 20260101, 0.9), ctx = newCtx();
@@ -629,7 +629,7 @@ t.test('spotted landmarks are drawn as one ghost sprite each under the film', ()
   t.eq(drawImages(r).length, 6, 'one sprite per landmark');
   t.eq(issues(), '', 'no canvas issues');
 });
-t.test('every Hocus Vocus sheet renders: the Path ground in every Act, the doodle sheet, a page in each Act', async () => {
+t.test('every Hocus Vocus sheet renders: the Path ground in every Act, the doodle sheet, a map in each Act', async () => {
   clean();
   for (const [name, params] of [['map_kinds', {}], ['map_doodles', {}], ['map_paper', { chapter: 3 }], ['map_page', { chapter: 1 }], ['map_page', { chapter: 2 }], ['map_page', { chapter: 3 }], ['map_frame', { chapter: 2, guides: 1 }]]) {
     const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;

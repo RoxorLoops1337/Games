@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Screenshot and QA driver for Echowake (headless Chromium through playwright-core).
+// Screenshot and QA driver for Hocus Vocus (headless Chromium through playwright-core).
 //
 //   node tools/hocus_vocus/shot.mjs --sheet fx --out /tmp/fx.png                       one gallery sheet, PNG is exactly w x h (1600x900)
 //   node tools/hocus_vocus/shot.mjs --url "hocus_vocus/gallery.html?sheet=heroes&w=1200&h=700&scale=2" --out h.png

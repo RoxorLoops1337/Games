@@ -1,4 +1,4 @@
-// Kuro, the Inkweaver: the card set in js/data_cards_kuro.js.
+// RoxorLoops, the Beatbox Wizard: the card set in js/data_cards_kuro.js.
 //
 //   node tests/hocus_vocus_cards_kuro.test.mjs
 //
@@ -6,19 +6,19 @@
 //   1 structure   registry, validator (zero errors and warnings), audit (zero lines), ids, names, upgrades, keywords
 //   2 CONTENT_SPEC section 3: counts (3/14/12/8), the mix rules, slots and colours, locks, art pairs, flavour, rules text
 //   3 design      the three archetypes each have applicators, payoffs and an engine; the row and ally rules the set promises
-//   4 numbers     what the V expressions actually evaluate to (First Stroke, Rot Script, Slow Match, ...) at explicit states
+//   4 numbers     what the V expressions actually evaluate to (Drop the Beat, Double Time, Slow Jam, ...) at explicit states
 //   5 budget      ROUGH VALUE MODEL (documented below): every card and every upgrade must sit in its cost band
 //   6 engine      when js/combat.js and js/data_text.js exist: every card, base and upgraded, in both rows and in an empty and a
 //                 loaded state, plays in a synthetic combat without throwing; text through DATA.cardPlain is clean; random
 //                 playouts of the whole set keep the piles honest. Skipped (with a note) while the engine files are missing.
 //
-// ROUGH VALUE MODEL (block 5). Points are "damage equivalents" for a card as written (no row bonus, no Might):
+// ROUGH VALUE MODEL (block 5). Points are "damage equivalents" for a card as written (no row bonus, no Volume):
 //   damage 1 per point per hit (+1.2 for every extra hit: each hit also carries the +2 back-row bonus), Block 1 per point,
-//   Poison 1.8 per stack, Burn 1.5, Weak 2.5 (+1.2 per extra stack), Vulnerable 3.5 (+1.5), draw 3.5, Energy 6, Sumi gained 2.5
-//   (Sumi spent costs 1.2 per stack, so a spell that eats Sumi is judged on the net), Dodge 3, HP lost 1.2 per point, a swap 1,
+//   Earworm 1.8 per stack, Sizzle 1.5, Muffled 2.5 (+1.2 per extra stack), Exposed 3.5 (+1.5), draw 3.5, Energy 6, Groove gained 2.5
+//   (Groove spent costs 1.2 per stack, so a spell that eats Groove is judged on the net), Shimmy 3, HP lost 1.2 per point, a swap 1,
 //   a pick by kind (copy 5.5, tutor 3 + 0.3 per card seen, cycle -1 per card and so on), heal 0.7, hits on all enemies x1.8
-//   (two targets), block for both heroes x1.6, "others" x1.0. A V expression is read at TYPICAL counts (Sumi 2.5, or 4 when the
-//   card spends them all; Poison on the target 4, Burn 3, debuffs 2, turn 3, picked cards 1.5 or 75 percent of an optional n).
+//   (two targets), block for both heroes x1.6, "others" x1.0. A V expression is read at TYPICAL counts (Groove 2.5, or 4 when the
+//   card spends them all; Earworm on the target 4, Sizzle 3, debuffs 2, turn 3, picked cards 1.5 or 75 percent of an optional n).
 //   `cond` is weighted by how often the branch is live (front row 40 percent, back row 70, else 50). A hook is worth its body
 //   times the triggers in a typical fight (turn hooks 3.5, Skill or Attack plays 4.5 or 3, kills 2.5, swaps 2.5, exhausts 3),
 //   times 0.8 because it pays later; `once` is one trigger, `limit` caps triggers at 3.5 per turn-limit, `every` divides.
@@ -61,7 +61,7 @@ const words = (s) => s.trim().split(/\s+/);
 const isDot = (s) => s === 'poison' || s === 'burn';
 const DASH = new RegExp('[' + String.fromCharCode(0x2014, 0x2013) + ']');
 
-t.test('loading: only Kuro cards are registered and the file loads without errors', () => {
+t.test('loading: only RoxorLoops cards are registered and the file loads without errors', () => {
   t.eq(api._errors.length, 0, 'no load errors: ' + JSON.stringify(api._errors));
   t.ok(ids.length > 0, 'cards registered');
   t.eq(cards.length, Object.keys(DATA.cards).length, 'this file defines only Kuro cards (no curse, status or other hero cards)');
@@ -82,7 +82,7 @@ t.test('hero facts the numbers were written against still hold (if these change,
 });
 
 // ------------------------------------------------------------------------------------------------ 1 structure
-t.test('DATA.validate: zero errors and zero warnings for the Kuro cards', () => {
+t.test('DATA.validate: zero errors and zero warnings for the RoxorLoops cards', () => {
   const v = DATA.validate('cards', { hero: 'kuro' });
   t.eq(v.errors.length, 0, 'errors: ' + v.errors.join(' | '));
   t.eq(v.warnings.length, 0, 'warnings: ' + v.warnings.join(' | '));
@@ -91,7 +91,7 @@ t.test('DATA.validate: zero errors and zero warnings for the Kuro cards', () => 
   t.ok(v.counts.cards >= ids.length, 'the validator counted the cards');
 });
 
-t.test('DATA.audit: no audit lines and no guide lines for Kuro', () => {
+t.test('DATA.audit: no audit lines and no guide lines for RoxorLoops', () => {
   const lines = DATA.audit('cards', { hero: 'kuro' });
   t.eq(lines.filter((l) => /^audit/.test(l)).length, 0, 'audit: ' + lines.join(' | '));
   t.eq(lines.filter((l) => /^guide/.test(l)).length, 0, 'guide: ' + lines.join(' | '));
@@ -316,7 +316,7 @@ const blight = cards.filter((c) => status(c, ['poison', 'burn']));
 const sumi = cards.filter((c) => status(c, ['sumi']) || flatOps(c.fx).some((o) => spent(o) === 'sumi'));
 const scribe = cards.filter((c) => flatOps(c.fx).some((o) => ['pick', 'draw', 'energy', 'swap'].indexOf(o.op) >= 0) || (c.kw || []).some((k) => ['retain', 'innate', 'exhaust'].indexOf(k) >= 0));
 
-t.test('archetypes: Blight, Sumi and Scribe each have 8 or more cards, several bridge two, and the plain cards stay a minority', () => {
+t.test('archetypes: Stuck in your head, Big drops and Remix each have 8 or more cards, several bridge two, and the plain cards stay a minority', () => {
   t.ok(blight.length >= 8, 'Blight cards: ' + blight.map((c) => c.id).join(', '));
   t.ok(sumi.length >= 8, 'Sumi cards: ' + sumi.map((c) => c.id).join(', '));
   t.ok(scribe.length >= 8, 'Scribe cards: ' + scribe.map((c) => c.id).join(', '));
@@ -327,7 +327,7 @@ t.test('archetypes: Blight, Sumi and Scribe each have 8 or more cards, several b
   ['kuro_ink_bolt', 'kuro_ink_ward'].forEach((id) => t.ok(basics.some((c) => c.id === id), id + ' is a plain starter'));
 });
 
-t.test('Blight: applicators, a multiplier, a spread, cash-ins, an engine power and an X finisher', () => {
+t.test('Stuck in your head: applicators, a multiplier, a spread, cash-ins, an engine power and an X finisher', () => {
   const poisonApply = cards.filter((c) => anyOp(c, (o) => o.op === 'status' && o.s === 'poison' && o.n > 0));
   const burnApply = cards.filter((c) => anyOp(c, (o) => o.op === 'status' && o.s === 'burn'));
   t.ok(poisonApply.length >= 4, 'Poison applicators: ' + poisonApply.map((c) => c.id).join(', '));
@@ -345,7 +345,7 @@ t.test('Blight: applicators, a multiplier, a spread, cash-ins, an engine power a
   t.ok(cards.some((c) => anyOp(c, (o) => o.op === 'status' && ['weak', 'vulnerable'].indexOf(o.s) >= 0)), 'Weak or Vulnerable are available to feed the debuff count');
   t.ok(cards.some((c) => anyOp(c, (o) => o.op === 'hook' && o.on === 'onKill' && flatOps(o.fx).some((x) => x.s === 'burn'))), 'a kill chain that spreads Burn');
 });
-t.test('Sumi: generators, sinks of every shape, an engine, a defensive sink and a finisher that spends all', () => {
+t.test('Big drops: generators, sinks of every shape, an engine, a defensive sink and a finisher that spends all', () => {
   const gain = cards.filter((c) => anyOp(c, (o) => o.op === 'status' && o.s === 'sumi' && (typeof o.n === 'object' || o.n > 0)));
   const sinks = cards.filter((c) => anyOp(c, (o) => spent(o) === 'sumi'));
   t.ok(gain.length >= 6, 'Sumi generators: ' + gain.map((c) => c.id).join(', '));
@@ -367,7 +367,7 @@ t.test('Sumi: generators, sinks of every shape, an engine, a defensive sink and 
   })));
 });
 
-t.test('Scribe: cycling, a tutor, copying, exhaust fuel, retain, the Energy trick paid in HP, and a swap that draws', () => {
+t.test('Remix: cycling, a tutor, copying, exhaust fuel, retain, the Energy trick paid in HP, and a swap that draws', () => {
   t.ok(cards.some((c) => anyOp(c, (o) => o.op === 'energy' && o.n > 0)), 'an Energy card');
   const oil = cards.find((c) => anyOp(c, (o) => o.op === 'energy' && o.n > 0));
   t.ok(anyOp(oil, (o) => o.op === 'hurt') && (oil.kw || []).indexOf('exhaust') >= 0 && oil.cost === 0, 'the Energy card is free, one shot and costs HP (a real drawback)');
@@ -422,7 +422,7 @@ const opOf = (id, pred, up) => flatOps(fxOf(DATA.cards[id], up)).find(pred);
 const table = (id, pred, field, states, up) => states.map((s) => evalV(opOf(id, pred, up)[field], s));
 const sumiStates = (list) => list.map((n) => ({ self: { sumi: n } }));
 
-t.test('numbers: Sumi sinks scale as written (First Stroke, Ink Flood, Shelter Script, Rain of Strokes, Grand Flourish, Sanctum)', () => {
+t.test('numbers: Groove sinks scale as written (Drop the Beat, Throat Bass, Got Your Back, Snare Roll, Wait For It, Imperfect Harmony)', () => {
   const dmg = (o) => o.op === 'dmg', blk = (o) => o.op === 'block';
   t.deep(table('kuro_first_stroke', dmg, 'n', sumiStates([0, 1, 2, 3, 4])), [4, 7, 10, 10, 10], 'First Stroke: 4, +3 per Sumi, two at most');
   t.deep(table('kuro_first_stroke', dmg, 'n', sumiStates([0, 1, 2, 3]), true), [5, 9, 13, 13], 'First Stroke+: 5, +4 per Sumi');
@@ -449,7 +449,7 @@ t.test('numbers: Sumi sinks scale as written (First Stroke, Ink Flood, Shelter S
   t.deep(cards.filter((c) => anyOp(c, (o) => o.op === 'dmg' && o.n === 0)).map((c) => c.id), [], 'no card deals a flat zero');
 });
 
-t.test('numbers: Blight multipliers and cash-ins (Rot Script, Nightshade, Inkblot Verdict, Slow Match, Inferno)', () => {
+t.test('numbers: Stuck in your head multipliers and cash-ins (Double Time, Chart Topper, Scratch Combo, Slow Jam, Monster Solo)', () => {
   const stat = (o) => o.op === 'status', dmg = (o) => o.op === 'dmg';
   const tgtPoison = (list) => list.map((p) => ({ target: { poison: p } }));
   t.deep(table('kuro_rot_script', stat, 'n', tgtPoison([0, 3, 4, 10, 20])), [0, 3, 4, 10, 10], 'Rot Script doubles Poison, adding at most 10');
@@ -473,7 +473,7 @@ t.test('numbers: Blight multipliers and cash-ins (Rot Script, Nightshade, Inkblo
   t.ok(rep(false).do.every((o) => o.tgt === 'all'), 'every Inferno op hits all enemies');
 });
 
-t.test('numbers: Scribe cards (Strikethrough, Redraft, Midnight Oil, Flip the Page, Rot Script cap)', () => {
+t.test('numbers: Remix cards (Sample Chop, Flip It, Second Wind, Pass the Mic, Double Time cap)', () => {
   const picked = (list) => list.map((n) => ({ picked: n }));
   const blk = (o) => o.op === 'block', st = (o) => o.op === 'status' && o.s === 'sumi', dr = (o) => o.op === 'draw';
   t.deep(table('kuro_strikethrough', blk, 'n', picked([0, 1, 2, 3])), [0, 3, 6, 9], 'Strikethrough: 3 Block per card exhausted');
@@ -535,7 +535,7 @@ const TYPICAL_STATUS = { sumi: 2.5, poison: 4, burn: 3, might: 2, thorns: 2, bul
 const TGT_MUL = { all: 1.8, both: 1.6 };
 const ENEMY_TGT = ['enemy', 'all', 'random', 'lowest', 'others'];
 const RATE = { poison: 1.8, burn: 1.5, mark: 3, stun: 6 };
-// A stack of Dodge is 6 points (it was 3): it cancels a whole hit of any size and stacks across turns. The balance bot measured Ghost Ink (2 Dodge for
+// A stack of Shimmy is 6 points (it was 3): it cancels a whole hit of any size and stacks across turns. The balance bot measured Dance Break (2 Shimmy for
 // 1 Energy) as the strongest common in the game, which the old price of 3 a stack had put in the bottom half of its band.
 const SELF_RATE = { sumi: 2.5, might: 3, dodge: 6, thorns: 1.5, bulwark: 4, regen: 2, taunt: 2 };
 const HOOK_T = { turnStart: 3.5, turnEnd: 3.5, onPlay: 4, onDamaged: 3, onKill: 2.5, onSwap: 2.5, onExhaust: 3, onShuffle: 1.5, combatStart: 1, onHeroDown: 0.3 };
@@ -811,7 +811,7 @@ function engineSuite(g) {
     KURO.forEach((c) => t.eq(D.targetMode(inst(c.id, 0)), flatOps(c.fx).some((o) => (o.op === 'dmg' && (!o.tgt || o.tgt === 'enemy')) || (['enemy', 'others'].indexOf(o.tgt) >= 0) || vObjects([o]).some((v) => v.who === 'target')) ? 'enemy' : 'none', `${c.id}: the targeting mode follows the ops`));
   });
 
-  t.test('engine: pick cards ask for the player and take the answer (Skim, Redraft, Strikethrough, Second Edition)', () => {
+  t.test('engine: pick cards ask for the player and take the answer (Crate Digging, Flip It, Sample Chop, Loop Station)', () => {
     ['kuro_skim_the_scroll', 'kuro_redraft', 'kuro_strikethrough', 'kuro_second_edition'].forEach((id) => {
       const test = inst(id, 0);
       const C = create([test].concat(FILLERS.map((x) => inst(x, 0))), false, 11);
@@ -835,7 +835,7 @@ function engineSuite(g) {
     });
   });
 
-  t.test('engine: rules the set relies on (Sumi from the passive, Rot Script doubling, Ink Cloak in front, powers keep their hooks)', () => {
+  t.test('engine: rules the set relies on (Groove from the passive, Double Time doubling, Beat Box in front, powers keep their hooks)', () => {
     const play = (id, up, kuroFront, setup) => {
       const test = inst(id, up);
       const C = create([test].concat(FILLERS.map((x) => inst(x, 0))), kuroFront, 5);
@@ -906,7 +906,7 @@ function engineSuite(g) {
   const hitsOn = (ev) => ev.filter((e) => e.type === 'hit');
   const chooseAll = (C, n) => { const p = C.pending; const ids = p.uids.slice(0, n === undefined ? Math.min(p.n, p.uids.length) : Math.min(n, p.uids.length)); return C.resolvePick(ids); };
 
-  t.test('engine: Sumi spenders and their numbers (First Stroke, Ink Flood, Rain of Strokes, Shelter Script, Sanctum, Grand Flourish)', () => {
+  t.test('engine: Groove spenders and their numbers (Drop the Beat, Throat Bass, Snare Roll, Got Your Back, Imperfect Harmony, Wait For It)', () => {
     let { C, cards: cs } = scenario(['kuro_ink_flood'], { sumi: 3 });
     kuroPlay(C, cs[0]);
     t.ok(C.enemies.every((e) => lost(e) === 4 + 2 * 3 + 2), 'Ink Flood at 3 Sumi hits every enemy for 10 plus the +2 back row bonus');
@@ -947,7 +947,7 @@ function engineSuite(g) {
     t.eq(lost(C.enemies[0]), 4 + 3 + 2, 'First Stroke at 1 Sumi: 7 plus the row bonus');
   });
 
-  t.test('engine: Blight numbers (poison, burn, debuff and turn scaling, ordering)', () => {
+  t.test('engine: Stuck in your head numbers (poison, burn, debuff and turn scaling, ordering)', () => {
     let { C, cards: cs } = scenario(['kuro_blinding_blot'], { enemies: 1 });
     kuroPlay(C, cs[0]);
     t.eq(lost(C.enemies[0]), Math.floor((3 + 2) * 1.5), 'Blinding Blot applies Vulnerable first, so its own hit is boosted (5 x 1.5)');
@@ -1006,7 +1006,7 @@ function engineSuite(g) {
     t.ok(C.enemies.every((e) => lost(e) === 5 + 2 && e.st.burn === 1), 'Inkfall Inferno+ at X = 1: (5 + 2) and Burn 1');
   });
 
-  t.test('engine: powers and hooks (Creeping Ink, Plague Garden, Epilogue Flame, Scene Change, Well of Ink, Ink Reservoir, Second Edition)', () => {
+  t.test('engine: powers and hooks (Word of Mouth, On Repeat, Crowd Goes Wild, Back and Forth, Heartbeat, Layer Upon Layer, Loop Station)', () => {
     let { C, cards: cs } = scenario(['kuro_creeping_ink', 'kuro_redraft', 'kuro_redraft', 'kuro_redraft'], { enemies: 3, seed: 5 });
     kuroPlay(C, cs[0]);
     const poisonTotal = () => C.enemies.reduce((sum, e) => sum + (e.st.poison || 0), 0);
@@ -1072,7 +1072,7 @@ function engineSuite(g) {
     t.eq(kuroOf(C).st.sumi, 2, 'and every turn after');
   });
 
-  t.test('engine: Scribe cards (Redraft, Skim the Scroll, Strikethrough, Midnight Oil, Flip the Page, retain, Ink Flick)', () => {
+  t.test('engine: Remix cards (Flip It, Crate Digging, Sample Chop, Second Wind, Pass the Mic, retain, Rimshot)', () => {
     let { C, cards: cs } = scenario(['kuro_redraft'], { seed: 4 });
     kuroPlay(C, cs[0]);
     t.ok(C.pending && C.pending.optional && C.pending.n === 2, 'Redraft: an optional pick of up to 2');
@@ -1152,7 +1152,7 @@ function engineSuite(g) {
     t.eq(lost(C.enemies[0]), 2 + 2, 'first in the turn it is only 2 (plus the row bonus)');
   });
 
-  t.test('engine: defence and ally cards (Ink Cloak, Shared Umbrella, Ghost Ink, Scene Change with a forced swap)', () => {
+  t.test('engine: defence and ally cards (Beat Box, Shoulder to Shoulder, Dance Break, Back and Forth with a forced swap)', () => {
     let { C, cards: cs } = scenario(['kuro_shared_umbrella']);
     kuroPlay(C, cs[0]);
     t.deep(C.heroes.map((h) => h.block), [4, 4], 'Shared Umbrella: 4 Block for both heroes');

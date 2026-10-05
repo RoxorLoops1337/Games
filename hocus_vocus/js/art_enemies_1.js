@@ -637,12 +637,12 @@
   }
 
   // ===============================================================================================================
-  // THE CREATURES (one block each; the Echowake rig each one keeps is named in its header, HV_ENEMIES 2.5)
+  // THE CREATURES (one block each; the original rig each one keeps is named in its header, HV_ENEMIES 2.5)
   // ===============================================================================================================
   // ---------------------------------------------------------------------------------------------------------------
   // kappa: the FUSSY FOGHORN (Creature, m). A squat brass foghorn on two stubby legs: the flared bell is its face with a perfect round O of a
   // mouth, a navy sailor cap, mint paint flaking off the brass, rope-coil arms, the coiled horn pipe on its back. Gloss patch: the tank's left
-  // side, airbrushed flat. Keeps the KAPPA rig: the squat biped, the slap and guard arm swings, the dish glow now the "puff back up" rings.
+  // side, airbrushed flat. Keeps its original rig: the squat biped, the slap and guard arm swings, the dish glow now the "puff back up" rings.
   // ---------------------------------------------------------------------------------------------------------------
   const FH = { brass: '#f2b63c', mint: '#8fe3c0', rope: '#efcf8f', cap: '#34407e', capDk: '#262f63', boot: '#34407e', throat: '#5a2638' };
   const FH_TANK = [[-22, -100], [24, -100], [33, -88], [34, -46], [26, -32], [-24, -32], [-32, -46], [-31, -88]];
@@ -767,7 +767,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // tanuki_bandit: the COIN CRAB (Creature, m). A wide orange crab with eyes on stalks and a smug grin, a stolen busker's cap jammed on sideways,
   // coins spilling from a cloth pouch it hugs in one pincer, six quick sideways legs. Gloss patch: a smooth pastel panel on the shell. Keeps the
-  // TANUKI BANDIT rig: the coin sack prop and its spill, the swing arm (now the big pincer) and the dash.
+  // Original rig: the coin sack prop and its spill, the swing arm (now the big pincer) and the dash.
   // ---------------------------------------------------------------------------------------------------------------
   const CC = { body: '#ff8a3d', belly: '#ffe2b0', cap: '#2bb3b1', capDk: '#1d8a88', pouch: '#f3dcae', coin: C1.lemon };
   const CC_SHELL = [[-52, -66], [-44, -88], [-20, -100], [10, -102], [36, -94], [52, -74], [50, -50], [36, -36], [0, -32], [-36, -36], [-52, -50]];
@@ -879,7 +879,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // kodama: the TUNING FORKLING (Creature, s). A silver tuning fork no taller than a teacup, standing on its stem: the two prongs are its ears, a
   // round face sits on the knob between them, stubby feet, vibration lines shimmering off it while it hums. Gloss patch: on the stem. Keeps the
-  // KODAMA rig: the small size, the rattle shake (now a hum) and the summon pose.
+  // Original rig: the small size, the rattle shake (now a hum) and the summon pose.
   // ---------------------------------------------------------------------------------------------------------------
   const TF = { silver: '#e3e9f4', steel: '#9fb3d6', shoe: C1.sky };
   define({
@@ -959,7 +959,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // karakasa: the SQUEEZEBOX (Creature, m). A tomato-red accordion on one stocky leg in a rubber-soled boot: the pleated bellows are its body, a
   // grin of piano keys, two strap arms, gold buttons round its eyes; the bellows stretch on the hop and slam shut on the guard. Gloss patch: the
-  // end of the top board. Keeps the KARAKASA rig: the one-leg hop and the snap-shut guard (the umbrella closing is now the bellows squeezing).
+  // end of the top board. Keeps its original rig: the one-leg hop and the snap-shut guard (the umbrella closing is now the bellows squeezing).
   // ---------------------------------------------------------------------------------------------------------------
   const SQ = { red: '#e8553f', pleat: '#b9392b', cream: '#fff1d6', gold: C1.lemon, strap: '#3b5bb5', boot: C1.sky, sole: '#34407e' };
   const SQ_BOARD = rrectPts(-46, -176, 96, 58, 16);
@@ -1073,7 +1073,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // hitodama: the HOT CHILLI (Creature, s). A glossy red chilli from the noodle cart standing on its tip, a curly green stalk like a cowlick, big
-  // shiny eyes, tiny hopping feet, a wobbling cartoon heat haze above it. Gloss patch: a smooth pastel panel low on its skin. Keeps the HITODAMA
+  // shiny eyes, tiny hopping feet, a wobbling cartoon heat haze above it. Gloss patch: a smooth pastel panel low on its skin. Keeps its original
   // rig: the six-frame flip-book (now the heat haze over the stalk at 9 fps) and the flicking tail chain (now the curly stalk).
   // ---------------------------------------------------------------------------------------------------------------
   const HC = { red: '#ec3b2f', foot: '#b8322a', leaf: '#4caf50', stalk: '#3f8f3a' };
@@ -1137,7 +1137,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // oni_cub: the JITTERBUG (Creature, m). A wobbly lilac jelly-bug of stage fright with knocking knees, two trembling antennae, a too-big bow tie,
-  // one sweat drop and a crumpled song sheet clutched in both hands. Gloss patch: a smooth pastel panel on its back. Keeps the ONI CUB rig: the
+  // one sweat drop and a crumpled song sheet clutched in both hands. Gloss patch: a smooth pastel panel on its back. Keeps its original rig: the
   // small biped, the pulse (now the sweat drop) and the tantrum shake (now the jitters).
   // ---------------------------------------------------------------------------------------------------------------
   const JB = { lilac: '#c9a8ff', light: '#e6d8ff', bow: '#ff5c93', sheet: '#fff8ec', tip: C1.lemon, sweat: C1.mint };
@@ -1236,7 +1236,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // crow_tengu: the PITCH-PERFECT GULL (Creature, m). A sleek white harbour gull with a chrome Gloss sheen on its head, a tiny headset mic, its beak
-  // open mid-note in a perfectly round O, wings flung wide for the dive. Gloss patch: the chrome crown. Keeps the CROW TENGU rig: the two wings,
+  // open mid-note in a perfectly round O, wings flung wide for the dive. Gloss patch: the chrome crown. Keeps its original rig: the two wings,
   // the peck (beak and jaw), the dive and the swap.
   // ---------------------------------------------------------------------------------------------------------------
   const GU = { white: '#fbfaf6', slate: '#8f9cc0', slateDk: '#6b789e', tip: '#3a4366', beak: '#ffa53d', leg: '#ff9a6b', set: '#3b4fa0' };
@@ -1328,7 +1328,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // bamboo_sprite: the PEA POD (Creature, s). A curved green pod standing on two stubby stalk legs, split open along the top to show three round
-  // pea faces singing in close harmony; they pop peas out like tiny cannons. Gloss patch: on the front lip of the pod. Keeps the BAMBOO SPRITE
+  // pea faces singing in close harmony; they pop peas out like tiny cannons. Gloss patch: on the front lip of the pod. Keeps its original
   // rig: the small pack-friendly body, the two swinging arms (now curly tendrils) and the flurry (now the pea volley).
   // ---------------------------------------------------------------------------------------------------------------
   const PP = { pod: '#4fb34a', podDk: '#3d9440', inner: '#c9f29a', pea: '#8fdc4f', leg: '#3d9440' };
@@ -1405,7 +1405,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // mushroom_folk: the JINGLE MACHINE (Creature, m). A lemon-yellow seaside vending machine on stubby legs, a glowing window full of fruit cans
   // and smoothie bottles, a coin-slot mouth, a speaker grille puffing out little floating jingle notes; a layer of bubble wrap appears on its
-  // guard and buff. Gloss patch: the lower side panel. Keeps the MUSHROOM FOLK rig: the swaying cap (now the sign header with the face), the live
+  // guard and buff. Gloss patch: the lower side panel. Keeps its original rig: the swaying cap (now the sign header with the face), the live
   // spore puffs (now jingle notes) and the thickening cap (now the bubble wrap).
   // ---------------------------------------------------------------------------------------------------------------
   const JM = { body: C1.lemon, panel: C1.sky, button: '#ff4d6d', glass: '#fff1c4', leg: '#34407e', mitt: C1.sky };
@@ -1498,7 +1498,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // bamboo_boar: the RUNAWAY MELON (Creature, l). A prize watermelon off the Snack Pier on stubby legs, with a determined frown, a blue first-prize
   // rosette pinned on and grass stains; its rind turns glossy and sparkly as Sequins stack, and it tips forward and rolls on the heavy. Gloss
-  // patch: a smooth pastel panel high on its back. Keeps the BAMBOO BOAR rig: the charger's wind-up and the plate layers (now the rind sparkle).
+  // patch: a smooth pastel panel high on its back. Keeps its original rig: the charger's wind-up and the plate layers (now the rind sparkle).
   // ---------------------------------------------------------------------------------------------------------------
   const RM = { rind: '#2f8f4e', stripe: '#9be060', legN: '#3fa05a', legF: '#2a6a3e', shoe: C1.cream, rosette: '#3d7bff', stem: '#6a8a2a' };
   const RM_SHAPE = ell(0, -108, 116, 96, 32);
@@ -1589,7 +1589,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // oni_brute: the ONE-HIT JUKEBOX (Rival, l). A big chrome-and-walnut jukebox on short sturdy legs, swinging a mic stand like a club, glowing tube
   // lights in sunset colours, the tone arm as a frowning eyebrow and a coin slot for a nose. Below half HP (phase 1) its tubes flash red and its
-  // record spins faster. Gloss patch: the front glass over the record. Keeps the ONI BRUTE rig: the big body, the two club swings, the rage phase.
+  // record spins faster. Gloss patch: the front glass over the record. Keeps its original rig: the big body, the two club swings, the rage phase.
   // ---------------------------------------------------------------------------------------------------------------
   const JK = { wood: '#b0693c', woodDk: '#8a4a2a', chrome: '#dfe4ee', glove: '#fff8ec', vinyl: '#2a2440', label: '#ff6f8f', gold: C1.lemon };
   const jkTube = (v) => (v === 'r' ? ['#ff8a3d', '#ff3b4a', '#d81e4a'] : ['#ffd84d', '#ff9a3d', '#ff6fa3']);
@@ -1725,7 +1725,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // tengu_duelist: the DANCE-OFF HERON (Rival, l). A tall slate-blue heron in a small top hat and a bow tie, wings folded like a tailcoat, very long
   // legs ending in shiny tap shoes, a silver-tipped cane instead of a sword, a pink carnation; he bows on the telegraph and taps on the strike.
-  // Gloss patch: one side of the top hat gone smooth and pastel. Keeps the TENGU DUELIST rig: the bow, the lunge with the long reach, the tailcoat
+  // Gloss patch: one side of the top hat gone smooth and pastel. Keeps its original rig: the bow, the lunge with the long reach, the tailcoat
   // chains, the swaying crest and the blade glow (now the cane tip, flaring below half HP).
   // ---------------------------------------------------------------------------------------------------------------
   const HR = { slate: '#7a90c4', slateDk: '#5f73a6', white: '#fbfaf6', beak: '#ffb84d', leg: '#e0b45a', shoe: '#2a2f52', tap: '#dfe4ee', hat: '#2f3a7a', band: '#ff7eb6', bow: C1.tomato, cane: '#34407e', glove: '#fff8ec' };
@@ -1847,7 +1847,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // moss_guardian: the OLD BANDSTAND (Rival, l). The harbour's oldest bandstand, walking on four column legs: a striped roof like a hat with a gull
   // weathervane, bunting draped in loops, ivy and blossom vines, fairy lights that brighten as its Sequins grow, kazoos peeking out of the rafters,
-  // old speakers for fists that squeal when hit. Gloss patch: a panel of the deck front. Keeps the MOSS GUARDIAN rig: the slow two-fist slam, the
+  // old speakers for fists that squeal when hit. Gloss patch: a panel of the deck front. Keeps its original rig: the slow two-fist slam, the
   // streamers (now bunting) and the shake-loose summon (kazoos out of the rafters).
   // ---------------------------------------------------------------------------------------------------------------
   const BS = { green: '#2f8a5f', greenDk: '#22694a', cream: '#fff1d6', roof: '#2f8a5f', ivy: '#5fbf4a', bloom: '#ff9fc6', spk: '#b0693c', cone: '#4a4466' };
@@ -1949,7 +1949,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // ember_wisp: the CHILLI FLAKE (Sidekick, s). A tiny red flake that jumped off a hot chilli to see the show: two dot eyes and a flicker of
-  // cartoon flame on top, bouncing. Gloss patch: one smooth pastel corner. Keeps the EMBER WISP rig: the six-frame flame flip-book (recoloured
+  // cartoon flame on top, bouncing. Gloss patch: one smooth pastel corner. Keeps its original rig: the six-frame flame flip-book (recoloured
   // and small, now on top of the flake) and the airborne bounce.
   // ---------------------------------------------------------------------------------------------------------------
   const CF = { red: '#ec3b2f', seed: '#fff1c4' };
@@ -1994,7 +1994,7 @@
 
   // ---------------------------------------------------------------------------------------------------------------
   // leaf_imp: the KAZOO IMP (Sidekick, s). A little lemon-yellow plastic kazoo on stick legs, the buzzing end as a mouth, a red cap, forever running
-  // in place. Gloss patch: the narrow end of the tube. Keeps the LEAF IMP rig: the run cycle and the poke.
+  // in place. Gloss patch: the narrow end of the tube. Keeps its original rig: the run cycle and the poke.
   // ---------------------------------------------------------------------------------------------------------------
   const KZ = { body: C1.lemon, cap: '#e8553f', leg: NAVY, shoe: '#ff6f8f' };
   const KZ_TUBE = [[-36, -60, 1], [-36, -34, 1], [-12, -37], [26, -42], [34, -46], [26, -52], [-12, -57]];
@@ -2055,7 +2055,7 @@
   // ---------------------------------------------------------------------------------------------------------------
   // paper_kodama: the MIC SQUEAL (Sidekick, s). A tiny shrieking creature born where Kraki's stolen mics touch the speakers: a round teal mic grille
   // with bug eyes and a mouth stretched wide in a squeal, a coiled cable tail, jagged pink squeal lines and a pastel Gloss sheen leaking from its
-  // grille. Gloss patch: the top of the grille. Keeps the PAPER KODAMA rig: the floating hollow doll (now a mic) and the leaking-mist effect (now
+  // grille. Gloss patch: the top of the grille. Keeps its original rig: the floating hollow doll (now a mic) and the leaking-mist effect (now
   // squeal lines and pastel Gloss wisps).
   // ---------------------------------------------------------------------------------------------------------------
   const MS = { grille: '#2bb3b1', mesh: '#7fe0d8', handle: '#3b3f5c', ring: '#dfe4ee', cable: '#3b3f5c' };
@@ -2130,7 +2130,7 @@
   //   phase 1, Unmasked: the mask split into two halves drifting apart with warm light between, the arms opened into a peacock wheel of mics with
   //   three turning sound rings behind, her real colours brighter, her eyes shining (excited and a little scared, never angry).
   // Poses: telegraph lifts the biggest mic arm like a conductor's hand; attack swings it down; block curls every arm into a dome; buff flares the
-  // mics outward; the win-over drops the mask into the water as sparkles and she waves every arm. Keeps the KUZUNOHA rig: the tail chains (now the
+  // mics outward; the win-over drops the mask into the water as sparkles and she waves every arm. Keeps its original rig: the tail chains (now the
   // eight arm chains), the floating mask and its phase 1 split, the captured-sound bubbles, the phase 1 wheel and its sound rings.
   // ---------------------------------------------------------------------------------------------------------------
   const KR = { pink: '#ff8fc8', pinkP1: '#ff79bd', belly: '#ffd0e6', teal: '#2bb3b1', tealP1: '#35d0c4', sucker: '#fff0f6', mic: C1.lemon, micDk: '#2a2f52', cable: '#34407e', water: '#2bb3b1', foam: '#e8fffb' };

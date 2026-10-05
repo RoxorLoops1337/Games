@@ -1,4 +1,4 @@
-// Chapter 2 roster suite (hocus_vocus/js/data_enemies_2.js): the Sunken Lantern City.
+// Act 2 roster suite (hocus_vocus/js/data_enemies_2.js): Scrollopolis.
 //
 //   node tests/hocus_vocus_enemies_2.test.mjs                        run the suite
 //   RB_ENEMIES2_REPORT=1 node tests/hocus_vocus_enemies_2.test.mjs   also print the balance tables (every group, elite and the boss)
@@ -16,8 +16,8 @@
 //                  Grasp, Embrace and Web read the silk on their victim), determinism, trial mods.
 //
 // The synthetic decks live in this file (hanae and kuro from DATA.heroes with their real rows), built from the CONTENT_SPEC 3 power guidance
-// at three power levels that grow the way a chapter 2 deck grows. The suite boots WITHOUT any peer content file (cards, relics, gems, events,
-// chapter 1 and 3 enemies) so nobody else's balance work can move these numbers. The two status cards enemies add (blot, tangle) are defined
+// at three power levels that grow the way an Act 2 deck grows. The suite boots WITHOUT any peer content file (cards, relics, gems, events,
+// Act 1 and 3 enemies) so nobody else's balance work can move these numbers. The two status cards enemies add (blot, tangle) are defined
 // here exactly as CONTENT_SPEC section 2 says, because data_cards_shared.js is not loaded.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -113,7 +113,7 @@ function reach(ai) {
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. structure
 // ---------------------------------------------------------------------------------------------------------------------
-t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, art ids', () => {
+t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, Act, art ids', () => {
   t.eq(roster.length, 17, 'chapter 2 roster has 17 entries');
   t.deep(ids.slice().sort(), roster.map((r) => r.id).sort(), 'defined ids equal the roster ids (no more, no fewer)');
   roster.forEach((r) => {
@@ -128,7 +128,7 @@ t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, 
   t.eq(E(boss).title, DATA.rosterById[boss].title, 'boss title');
 });
 
-t.test('DATA.validate and DATA.audit are clean for chapter 2 (errors, warnings, audit lines, guide lines)', () => {
+t.test('DATA.validate and DATA.audit are clean for Act 2 (errors, warnings, audit lines, guide lines)', () => {
   const v = DATA.validate('enemies', { chapter: CH });
   t.eq(v.errors.length, 0, 'validate errors: ' + v.errors.join(' | '));
   t.eq(v.warnings.length, 0, 'validate warnings: ' + v.warnings.join(' | '));
@@ -147,7 +147,7 @@ t.test('content is plain data: JSON round trip, no functions, no dashes, no forb
   t.ok(!DASH.test(JSON.stringify(DATA.encounters[CH])), 'encounters have no dashes');
 });
 
-t.test('lore and copy: bestiary voice, length limits, tags, move names and barks', () => {
+t.test('lore and copy: Who\'s Who voice, length limits, tags, move names and barks', () => {
   ids.forEach((id) => {
     const e = E(id);
     t.ok(e.lore.length >= 60 && e.lore.length <= 260, `${id} lore length ${e.lore.length}`);
@@ -489,7 +489,7 @@ t.test('every normal enemy appears in enough groups; big groups are gated to the
   t.ok(pair('silk_weaver', 'nure_onna'), 'silk and poison, the last group of the page');
 });
 
-t.test('group budgets: the audit average stays inside the chapter 2 rails', () => {
+t.test('group budgets: the audit average stays inside the Act 2 rails', () => {
   const B = G.budget[CH];
   const sumOf = (g) => groupEnemies(g).filter((e) => e.tier !== 'minion').reduce((s, e) => s + auditAvg(e), 0);
   groups.normal.forEach((g) => {
@@ -553,8 +553,8 @@ const acts = (r) => r.s.C.events.filter((e) => e.type === 'enemy_act');
 const IDLE = () => ({ heroes: [{ id: 'hanae', hp: 900, maxHp: 900 }, { id: 'kuro', hp: 900, maxHp: 900 }], deck: [{ uid: 1, id: 'kuro_zz_insight', up: 0, gems: [null] }], maxTurns: 14 });
 const idleFight = (enemyIds, seed) => engineFight(enemyIds, seed, 'mid', fightTier(enemyIds), undefined, IDLE());
 
-// A player who knows the chapter: cuts the silk with the tangle card when a finisher that grows with Bind is coming, and swaps a
-// debuffed front hero out of the way of a Grasp. Everything else is the default greedy bot.
+// A player who knows the Act: plays the tangle card when a finisher that grows with Tangled is coming, and swaps a
+// debuffed lead hero out of the way of the Big Squeeze. Everything else is the default greedy bot.
 const cutPolicy = (C) => {
   if (C.phase === 'player' && !C.pending) {
     const fin = C.enemies.some((e) => !e.down && e.intent && (e.intent.move === 'embrace' || e.intent.move === 'web'));
@@ -655,7 +655,7 @@ t.test('engine: every fight ends with a win or a loss, never a stall', () => {
   eMany([boss], 'early', 'boss', 6).forEach((r) => t.ok(r.result === 'win' || r.result === 'lose', 'a weak deck still reaches a result against the boss'));
 });
 
-t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that grow through the chapter', () => {
+t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that grow through the Act', () => {
   if (!HAVE_ENGINE) return skipNote();
   const norm = groups.normal.map((g) => ({ g, rs: eMany(g.enemies, lvlOfGroup(g), 'normal', 30) }));
   const avgTurns = mean(norm, (x) => mean(x.rs, (r) => r.turns));
@@ -664,7 +664,7 @@ t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that
     const turns = mean(x.rs, (r) => r.turns), lost = mean(x.rs, (r) => r.hpLost);
     t.ok(turns >= 1.8 && turns <= 6.6, `${x.g.id} lasts ${turns.toFixed(1)} turns (1.8..6.6)`);
     t.ok(winRate(x.rs) >= 0.9, `${x.g.id} is winnable (${(winRate(x.rs) * 100).toFixed(0)} percent)`);
-    t.ok(lost <= (x.g.min >= 0.5 ? 76 : 46), `${x.g.id} costs ${lost.toFixed(0)} HP on average`);   // balance report 1: chapter 2 normals were retuned up by about a fifth (was 66 and 42)
+    t.ok(lost <= (x.g.min >= 0.5 ? 76 : 46), `${x.g.id} costs ${lost.toFixed(0)} HP on average`);   // balance report 1: Act 2 normals were retuned up by about a fifth (was 66 and 42)
   });
   const avgLost = mean(norm, (x) => mean(x.rs, (r) => r.hpLost));
   t.ok(avgLost >= 8 && avgLost <= 38, `a normal group costs ${avgLost.toFixed(0)} HP on average (8..38)`);
@@ -675,7 +675,7 @@ t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that
     const turns = mean(x.rs, (r) => r.turns), lost = mean(x.rs, (r) => r.hpLost);
     t.ok(turns >= 4.5 && turns <= 9.4, `${x.g.id} lasts ${turns.toFixed(1)} turns (4.5..9.4)`);   // elites were retuned up on purpose (HP near the band top, hits about x1.3): was 8.2
     t.ok(winRate(x.rs) >= 0.9, `${x.g.id} is winnable`);
-    t.ok(lost >= 25 && lost <= 100, `${x.g.id} costs ${lost.toFixed(0)} HP (25..100)`);   // these synthetic decks are far weaker than a real chapter 2 party (the balance bot measures about 18 percent of party HP per elite fight): was 72
+    t.ok(lost >= 25 && lost <= 100, `${x.g.id} costs ${lost.toFixed(0)} HP (25..100)`);   // these synthetic decks are far weaker than a real Act 2 party (the balance bot measures about 18 percent of party HP per elite fight): was 72
   });
   const avgElite = mean(el, (x) => mean(x.rs, (r) => r.turns));
   t.ok(avgElite >= 5 && avgElite <= 8.8, `elites average ${avgElite.toFixed(2)} turns (5..8.8)`);
@@ -764,7 +764,7 @@ t.test('engine: phases fire when HP crosses the line (boss form 2 stat swing and
     t.ok(!!atk, 'an attack is in hand');
     return C.play(atk.uid, u.id);
   };
-  // Jorogumo: below half she drops the kimono: Plating gone, Might up, intent re-rolled at once to the Spin
+  // Scrollspinner: below half she drops the gown: Sequins gone, Volume up, intent re-rolled at once to Spin the Feed
   let C = start([boss], 'boss', BOSS_LEVEL);
   let u = C.enemies[0];
   t.eq(u.st.plating, 4, 'form 1 wears the kimono (Plating 4)');
@@ -859,7 +859,7 @@ t.test('engine: designed counter-play works for real (Grasp reads debuffs, stun 
   t.ok(hit && hit.raw === shown, `the first hit (${hit && hit.raw}) equals the telegraphed number (${shown})`);
 });
 
-t.test('engine: knowing the chapter pays (cutting the silk, swapping out of the Grasp, killing the lantern, ending the tide early)', () => {
+t.test('engine: knowing the Act pays (playing the tangle card in time, swapping out of the Big Squeeze, a Flamebait beside the Unskippable Ad, ending the Doomscroll Moth early)', () => {
   if (!HAVE_ENGINE) return skipNote();
   const greedy = eMany([boss], BOSS_LEVEL, 'boss', 50), cut = eMany([boss], BOSS_LEVEL, 'boss', 50, cutPolicy);
   t.ok(mean(cut, (r) => r.hpLost) <= mean(greedy, (r) => r.hpLost) - 8, `cutting the silk saves HP against the boss (${mean(cut, (r) => r.hpLost).toFixed(0)} vs ${mean(greedy, (r) => r.hpLost).toFixed(0)})`);

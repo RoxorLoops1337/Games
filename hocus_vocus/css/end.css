@@ -1,6 +1,6 @@
-/* Hocus Vocus: end.css: the story page, the chapter clear, the defeat and victory screens, and the first-run hint bubbles (owner: story and
-   endings engineer). Builds on base.css. Every selector is namespaced: .s-story .s-chapterClear .s-gameOver .s-victory for the screens
-   (parts: .en- shared, .st- story, .cc- chapter clear, .go- game over, .vc- victory) and .tut- for the tutorial bubbles in #tips.
+/* Hocus Vocus: end.css: the story page, the Act clear (`chapterClear`), the defeat and victory screens, and the first-run hint bubbles (owner: story and
+   endings engineer). Builds on base.css. Every selector is namespaced: .s-story `.s-chapterClear` .s-gameOver .s-victory for the screens
+   (parts: .en- shared, .st- story, .cc- Act clear, .go- game over, .vc- victory) and .tut- for the tutorial bubbles in #tips.
    Entrances are CSS animations driven by --i (stagger index), so they replay identically under GAME.debug.tick. reduce-motion swaps them
    for no animation at all (the end state is simply there); textScale grows type through var(--ts) and lets boxes scroll rather than clip. */
 
@@ -28,7 +28,7 @@
 @keyframes enFall { from { translate: 0 -60px; } to { translate: 0 790px; } }
 @keyframes enSway { from { transform: translateX(calc(var(--sway) * -1)) rotate(-30deg); } to { transform: translateX(var(--sway)) rotate(var(--rot)); } }
 
-/* cards (panels) used on the chapter and ending screens */
+/* cards (panels) used on the Act clear and ending screens */
 .en-card { pointer-events: auto; display: flex; flex-direction: column; min-height: 0; }
 .en-card > .p-body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 16px 20px 16px; }
 .en-card > .p-title { display: none; }
@@ -132,7 +132,7 @@
 .go-stone-n { font: 900 calc(34px * var(--ts)) / 1 var(--font-num); color: #d8d6ea; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 rgba(20, 15, 46, .6), 0 0 18px rgba(184, 170, 255, .6); }
 .go-stone-sub { margin: 2px 0 0; font: italic 500 calc(12px * var(--ts)) var(--font-display); color: var(--paper2); opacity: .8; }
 
-/* ------------------------------------------------------------------------------------------------ CHAPTER CLEAR */
+/* ------------------------------------------------------------------------------------------------ ACT CLEAR (.cc-) */
 /* The three panels end 12 px above the Continue button. The button is 56 px tall, or --hit (44 screen px) on a phone, or its own size at Larger text (a .btn-lg is 21 px x --ts
    at 1.15 line height and .62em padding top and bottom, plus its 2 px borders: 50.2 x --ts + 4, which is 69.2 px at 1.3 and was 13 px more than the 56 the panels left it), and sits --foot-b above the stage floor, so the
    panels end --foot-b + --foot-h + 12 up from it (80 px on a desktop stage). On a phone the extra height is taken from the TOP of the panels (--cc-lift), not
@@ -170,7 +170,7 @@
 .cc-chip.on { opacity: 1; transform: none; }
 .cc-extra { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 2px solid rgba(255, 201, 222, .3); }
 .cc-boons .en-scroll-body.more { -webkit-mask: none; mask: none; }   /* the totals row below is pinned, so the fade would only dim it */
-.cc-boons .cc-extra { position: sticky; bottom: -2px; z-index: 2; flex-wrap: nowrap; gap: 8px; padding: 4px 4px 2px; margin-top: 4px; background: rgba(22, 16, 52, .97); }   /* 14/14, TREASURES n and the icons stay on one pinned line; the heroes above scroll */
+.cc-boons .cc-extra { position: sticky; bottom: -2px; z-index: 2; flex-wrap: nowrap; gap: 8px; padding: 4px 4px 2px; margin-top: 4px; background: rgba(22, 16, 52, .97); }   /* 14/14, CHARMS n and the icons stay on one pinned line; the heroes above scroll */
 .cc-boons .cc-relics { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
 .cc-boons .cc-relics > * { flex: none; }
 .cc-boons .cc-rel-lab { flex: none; white-space: nowrap; }
@@ -192,7 +192,7 @@
 .go-fallen { display: flex; justify-content: space-between; gap: 12px; animation: enRise .6s var(--ease-out) 1.2s both; }
 .go-fallen .badge { filter: drop-shadow(0 4px 6px rgba(20, 15, 46, .5)); }
 .go-recap { height: auto; flex: none; }
-/* The recap is a two column grid: what was kept (the fan, the treasures) and, in the narrow column, the two buttons that open them. The column is as wide as the wider
+/* The recap is a two column grid: what was kept (the fan, the Charms) and, in the narrow column, the two buttons that open them. The column is as wide as the wider
    button and both stretch to it, so the two buttons share their left and right edges, and the fan gives way (min-width 0, a tighter overlap) instead of pushing a
    button out of the panel. The buttons stop growing past text size 1.12, like the ledger rows, so the narrow column never takes the fan's room. */
 .go-recap > .p-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; padding: 14px 16px 12px; }
@@ -213,6 +213,9 @@
 .go-tip .hanko, .cc-tip .hanko { flex: none; -webkit-text-stroke: 0; }
 .go-btns { display: flex; align-items: center; justify-content: space-between; gap: 14px; pointer-events: none; }
 .go-btns .btn { pointer-events: auto; }
+/* the slim ghost row under Try Again and Title: Share and Follow the duo (never Support) */
+.go-follow { flex: none; display: flex; align-items: center; justify-content: center; gap: 12px; pointer-events: none; animation: enRise .6s var(--ease-out) 1.7s both; }
+.go-follow .btn { pointer-events: auto; }
 .go-right { position: absolute; left: 860px; right: 24px; top: 24px; bottom: 16px; z-index: 3; display: flex; flex-direction: column; gap: 24px; pointer-events: none; }
 .go-right > .panel { min-height: 0; animation: enRise .6s var(--ease-out) both; }
 .go-score { flex: 0 1 auto; } .go-stonescard { flex: 1; animation-delay: .15s; }
@@ -225,7 +228,7 @@
 .vc-cast-kicker { margin: 0; font: 800 calc(14px * var(--ts)) / 1 var(--font-ui); letter-spacing: .5em; color: var(--hv-pink-l, #ffc9de); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(13, 11, 30, .9); animation: enRise .6s var(--ease-out) both; }
 .vc-cast-title { margin: 8px 0 0; font: 800 calc(40px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .03em; color: var(--white); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 rgba(20, 15, 46, .55), 0 0 30px rgba(255, 201, 106, .7); animation: enPop .7s var(--ease-back) .15s both; }
 .vc-cast-head .st-flourish { width: 520px; }
-.vc-caps { position: absolute; left: 0; right: 0; bottom: 6px; height: 132px; z-index: 4; pointer-events: none; }
+.vc-caps { position: absolute; left: 0; right: 0; bottom: 26px; height: 132px; z-index: 4; pointer-events: none; }          /* 26 px, not 6: the closing credit line (.vc-credit) takes the strip under the four boxes */
 .vc-cap { position: absolute; left: calc(var(--x) - 126px); bottom: 0; width: 252px; height: 130px; padding: 8px 12px 10px; text-align: center; border-radius: 12px; border-top: 4px solid var(--hc); background: rgba(13, 11, 30, .72);
   box-shadow: 0 8px 18px rgba(0, 0, 0, .5); opacity: 0; transform: translateY(16px); transition: opacity .5s, transform .6s var(--ease-out); }
 .vc-cap.show { opacity: 1; transform: none; }
@@ -233,6 +236,9 @@
 .vc-cap-title { display: block; margin-bottom: 4px; font: italic 600 calc(12px * var(--ts)) var(--font-display); color: var(--paper2); }
 .vc-cap-line { margin: 0; font: 500 calc(12.5px * var(--ts)) / 1.35 var(--font-display); color: var(--paper); }
 .vc-cap.party .vc-cap-name::after { content: " *"; color: var(--hv-pink-l, #ffc9de); }
+/* the closing credit: one small plain line under the four curtain lines, shown with the Continue button */
+.vc-credit { position: absolute; left: 0; right: 0; bottom: 6px; z-index: 4; margin: 0; text-align: center; pointer-events: none; font: italic 600 calc(12px * var(--ts)) / 1.2 var(--font-display); letter-spacing: .03em; color: var(--paper); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); opacity: 0; transition: opacity .6s ease .2s; }
+.vc-cast-done .vc-credit { opacity: .92; }
 .vc-cast-go { position: absolute; right: 28px; top: 28px; z-index: 5; visibility: hidden; }
 .vc-cast-go, .vc-cast-skip { height: max(56px, var(--hit)); }          /* Skip (a small ghost) and Continue (a large primary) had different heights and so different centres */
 .vc-cast-done .vc-cast-go { visibility: visible; animation: enPop .5s var(--ease-back) both, breathe 2.4s ease-in-out .6s infinite; }
@@ -243,15 +249,22 @@
 .vc-left { position: absolute; left: 36px; top: 100px; bottom: 14px; width: var(--vc-col); z-index: 3; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .vc-cardwrap { flex: none; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .vc-card { display: block; width: 100%; height: auto; border-radius: 13px; transform: rotate(-.8deg); box-shadow: 0 14px 30px rgba(0, 0, 0, .65); animation: enPop .7s var(--ease-back) .3s both; pointer-events: auto; }
-.vc-cardbtns { display: flex; gap: 12px; margin-top: 4px; pointer-events: auto; }
+.vc-cardbtns { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 4px; pointer-events: auto; }
 .vc-newcard { flex: 1; min-height: 0; margin-top: 8px; animation: enRise .6s var(--ease-out) 1s both; }
+/* the follow row under the Newly Unlocked card (HV_STORY 5.4): the handle line, Follow the duo, Support the duo when the owners set a URL */
+.vc-follow { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 0 2px; pointer-events: none; animation: enRise .6s var(--ease-out) 1.3s both; }
+.ts-big .vc-cardbtns .btn { font-size: calc(17px * min(var(--ts), 1.12)); }          /* Larger text: Copy summary, Save card and Share stay on one row (the Newly Unlocked card below keeps its height) */
+.compact .vc-card { width: 70%; align-self: center; }          /* a phone makes every button --hit (81 stage px) tall: the share card gives up 99 px so the Newly Unlocked card keeps about 160 beside the follow row */
+.vc-follow-line { flex: 1 1 230px; margin: 0; font: italic 600 calc(12px * var(--ts)) / 1.35 var(--font-display); color: var(--paper); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); }
+.vc-follow-btns { display: flex; align-items: center; gap: 8px; }
+.vc-follow a.btn { pointer-events: auto; text-decoration: none; }
 .vc-right { position: absolute; right: 36px; top: 100px; bottom: 14px; width: var(--vc-col); z-index: 3; display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
 .vc-score { flex: 1; min-height: 0; animation: enRise .6s var(--ease-out) .4s both; }
 .vc-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; pointer-events: none; }
 .vc-tiles .en-tile { grid-template-columns: auto; grid-template-rows: auto auto auto; justify-items: center; padding: 6px 4px; text-align: center; background: rgba(13, 11, 30, .72); }
 .vc-tiles .en-tile-ico { grid-row: auto; }
 .vc-tiles .en-num { font-size: calc(20px * var(--ts)); }
-.vc-go { flex: none; margin-left: auto; }          /* on the right of the column even when the Inkstones chip beside it is empty (a run that was not recorded) */
+.vc-go { flex: none; margin-left: auto; }          /* on the right of the column even when the Cheers chip beside it is empty (a run that was not recorded) */
 .vc-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: none; }
 .vc-stone { display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 10px; border-radius: 99px; background: rgba(13, 11, 30, .78); box-shadow: inset 0 0 0 2px rgba(255, 201, 222, .6); min-height: 56px; }
 .vc-stone:empty { display: none; }
@@ -288,8 +301,8 @@ body.reduce-motion .fl-r, body.reduce-motion .fl-m, body.reduce-motion .st-done 
 body.reduce-motion .st-seal { opacity: 1; animation: none; }
 body.reduce-motion .cc-kicker, body.reduce-motion .cc-title, body.reduce-motion .cc-boss, body.reduce-motion .cc-flourish b, body.reduce-motion .cc-hero, body.reduce-motion .cc-cols > .panel, body.reduce-motion .en-row.show, body.reduce-motion .en-unlock,
 body.reduce-motion .go-kicker, body.reduce-motion .go-title, body.reduce-motion .go-fell, body.reduce-motion .go-fallen, body.reduce-motion .go-lore, body.reduce-motion .go-tip, body.reduce-motion .go-right > .panel,
-body.reduce-motion .vc-cast-kicker, body.reduce-motion .vc-cast-title, body.reduce-motion .vc-card, body.reduce-motion .vc-newcard, body.reduce-motion .vc-score, body.reduce-motion .vc-cast-done .vc-cast-go { animation: none; }
-body.reduce-motion .cc-newhero, body.reduce-motion .vc-cap, body.reduce-motion .cc-chip, body.reduce-motion .go-fan .card { transition: none; }
+body.reduce-motion .vc-cast-kicker, body.reduce-motion .vc-cast-title, body.reduce-motion .vc-card, body.reduce-motion .vc-newcard, body.reduce-motion .vc-score, body.reduce-motion .vc-follow, body.reduce-motion .go-follow, body.reduce-motion .vc-cast-done .vc-cast-go { animation: none; }
+body.reduce-motion .cc-newhero, body.reduce-motion .vc-cap, body.reduce-motion .vc-credit, body.reduce-motion .cc-chip, body.reduce-motion .go-fan .card { transition: none; }
 body.reduce-motion .en-row.wait { opacity: 1; }
 body.reduce-motion .en-petals { display: none; }
 body.low .en-petal { animation-duration: calc(var(--d) * 1.5), 3s; }

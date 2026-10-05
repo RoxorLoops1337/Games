@@ -1,4 +1,4 @@
-// Echowake: GAME: boot, the single frame loop, run flow and routing, and the debug hooks (owner: UI core).
+// Hocus Vocus: GAME: boot, the single frame loop, run flow and routing, and the debug hooks (owner: UI core).
 //
 // PUBLIC API (DESIGN 5.10)
 //   GAME.boot()                       META.load, UI.init, UI.applySettings, URL params, META.bus toasts, the rAF loop, UI.go(goto or 'title').
@@ -7,15 +7,15 @@
 //   GAME.state = { R, pendingChapter, lastCombat, ended }     R is the current run (also UI.run, and params.R of every routed screen)
 //   GAME.params                       parsed URL params: debug goto seed freeze ticks notutorial perf and opts (what ?goto screens receive)
 //   GAME.newRun({heroes, trial, seed, daily}) -> R      builds the run with META.unlockedSet() and a clock nonce (so the run id is its own), saves it, routes to the
-//                                      intro story and map. A tale that was still saved is paid out as abandoned first (the half share, like Abandon).
+//                                      intro story and map. A tour that was still saved is paid out as abandoned first (the half share, like Abandon).
 //   GAME.continueRun() -> Promise      META.loadRun; a saved node is re-entered (a saved combat restarts with the same seed), a save taken between the boss reward
-//                                      and chapterEnd (R.chapterCleared) goes through the chapter flow, else the map
+//                                      and chapterEnd (R.chapterCleared) goes through the Act flow, else the map
 //   GAME.enterNode(node) -> Promise    routes a RUN node to its screen after META.saveRun; Instants {kind:'well'|'brush'} only toast and save;
 //                                      {kind:'defeat'} and {kind:'victory'} end the run. A combat node calls META.seen once per enemy id, the first time it is
 //                                      entered (node.met rides along in the save, so Continue does not count the same fight again).
 //   Several tabs: boot listens to the window 'storage' event and to the tab becoming visible and calls META.refresh (the merge lives in META).
-//   GAME.nodeDone() -> Promise         RUN.finishNode, META.saveRun, then the map, or the chapter flow (chapterClear, or victory after chapter 3);
-//                                      called again from chapterClear it moves on to the next chapter's intro story and map
+//   GAME.nodeDone() -> Promise         RUN.finishNode, META.saveRun, then the map, or the Act flow (`chapterClear`, or victory after Act 3);
+//                                      called again from `chapterClear` it moves on to the next Act's intro story and map
 //   GAME.defeat() / GAME.victory()     end the run once: META.recordRun, META.clearRun, then the gameOver or victory screen (idempotent per run)
 //   GAME.abandon() -> Promise<bool>    confirm overlay, then recordRun('abandon') and back to the title
 //   GAME.toTitle()                     closes overlays, saves an unfinished run, goes to the title
@@ -28,7 +28,7 @@
 //   * combat: the screen creates COMBAT from RUN.combatInit(R, node). On a win it calls RUN.combatDone(R, C) then GAME.enterNode(R.node) (the reward
 //     node). It emits UI.bus 'combat:end' {result}: on 'lose' GAME records the run at once and routes to gameOver after 1.6 s unless the screen already did.
 //   * reward, shop, event, camp, forge, chest, gemcache call GAME.nodeDone() when finished.
-//   * chapterClear may call GAME.nodeDone() to continue, or route to the story itself; both work.
+//   * `chapterClear` may call GAME.nodeDone() to continue, or route to the story itself; both work.
 //   * The debug tools reach into a screen through the screen object: `UI.current.debug` (an object or a function returning
 //     {C, vm, fire, play, endTurn, swap, setHp, setStatus, pick, win}) backs GAME.debug.combat(), and `UI.current.debugSetup({hand, statuses, turn})`
 //     is called after GAME.debug.open('combat', ...) has entered the screen.
@@ -99,7 +99,7 @@ const GAME = (() => {
       state.saveWarned = true;
       UI.toast('Progress cannot be saved in this browser', 'warn', { persist: true, id: 'nosave' });
     }
-    if (ok && state.paidWarned !== R.id && safe(() => m.runPaid(R.id), false)) {      // another tab already ended this very tale
+    if (ok && state.paidWarned !== R.id && safe(() => m.runPaid(R.id), false)) {      // another tab already ended this very tour
       state.paidWarned = R.id;
       UI.toast('This tour already ended in another window. Nothing more will be kept.', 'warn', { id: 'paid' });
     }
@@ -123,7 +123,7 @@ const GAME = (() => {
   // ==================================================================================================================
   // the run flow (DESIGN 6)
   // ==================================================================================================================
-  // Beginning anew over a saved tale ends that tale like Abandon does: the half share of Inkstones and its stats and bestiary count, instead of vanishing.
+  // Beginning anew over a saved tour ends that tour like Abandon does: the half share of Cheers and its stats and Who's Who count, instead of vanishing.
   function payOffSavedRun() {
     const meta = ns.META();
     if (!meta || typeof meta.loadRun !== 'function') return;
@@ -178,7 +178,7 @@ const GAME = (() => {
     else { const b = DATA.brushes[node.id]; UI.toast('You learn a Spell' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
   }
 
-  // The bestiary writes a page for every creature the party stands in front of, not only the ones it kills. node.met is saved with the node, so
+  // The Who's Who (`bestiary`) writes an entry for every creature the party stands in front of, not only the ones it kills. node.met is saved with the node, so
   // Continue re-entering the same fight (a fight is restarted, never resumed) does not meet them twice.
   function meetFoes(node) {
     if (!node || node.met) return;
@@ -202,7 +202,7 @@ const GAME = (() => {
     return goMap();
   }
 
-  // after a boss: heal and grow (RUN.chapterEnd), check achievements, then chapterClear, or victory after chapter 3
+  // after a boss: heal and grow (RUN.chapterEnd), check Stickers, then `chapterClear`, or victory after Act 3
   function chapterFlow(R) {
     const cleared = R.chapter;
     const ce = call('RUN', 'chapterEnd', R) || null;
@@ -219,7 +219,7 @@ const GAME = (() => {
     const R = state.R;
     if (!R) { console.warn('[game] nodeDone with no run'); return toTitle(); }
     if (state.lastCombat === 'lose' && (!R.node || R.node.kind === 'combat')) return defeat();
-    if (state.pendingChapter) {                                       // called from chapterClear: on to the next chapter's story and map
+    if (state.pendingChapter) {                                       // called from `chapterClear`: on to the next Act's story and map
       const pc = state.pendingChapter;
       state.pendingChapter = null;
       return routeTo(storyChain(['ch' + pc.next + '_intro'], { name: 'map', params: { R } }));
@@ -238,7 +238,7 @@ const GAME = (() => {
     if (state.ended && state.ended.R === R) return state.ended;
     R.done = true; R.victory = outcome === 'win';
     const rec = call('META', 'recordRun', R, outcome, Date.now()) || null;
-    call('META', 'clearRun', R.id);                                    // by id: never delete the saved tale another tab began meanwhile
+    call('META', 'clearRun', R.id);                                    // by id: never delete the saved tour another tab began meanwhile
     const summary = call('RUN', 'summary', R) || { score: 0, victory: outcome === 'win', chapter: R.chapter, heroes: R.heroes, gold: R.gold, deckSize: (R.deck || []).length, relics: R.relics || [] };
     summary.record = rec;
     summary.outcome = outcome;
@@ -713,7 +713,7 @@ const GAME = (() => {
     };
   }
 
-  // pause: Resume, Deck, Treasures, Settings, How to play, Abandon run, Save and quit (DESIGN 5.11)
+  // pause: Resume, Deck, Charms, Settings, How to play, Abandon run, Save and quit (DESIGN 5.11)
   function pauseOverlay() {
     return {
       open(p, root, close) {

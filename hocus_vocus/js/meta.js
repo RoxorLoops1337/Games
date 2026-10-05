@@ -1,5 +1,5 @@
-// Echowake: META: everything that lives ACROSS runs (DESIGN 4.10, 5.5). Profile, settings, run save, stats, achievements,
-// Inkstones, the Library, bestiary, story and history. No DOM, no clock (callers pass `now` and `date`); the only browser
+// Hocus Vocus: META: everything that lives ACROSS runs (DESIGN 4.10, 5.5). Profile, settings, run save, stats, Stickers (`achievements`),
+// Cheers (`inkstones`), the Tour Bus (`library`), the Who's Who (`bestiary`), the Tour Diary (`story`) and history. No DOM, no clock (callers pass `now` and `date`); the only browser
 // API used is window.localStorage, always inside try/catch. This header is the contract of record for GAME and the screens.
 //
 // STORAGE (keys never change): profile in 'hv_profile_v1', current run in 'hv_run_v1'. A corrupt profile is kept under
@@ -31,21 +31,21 @@
 //              runInfo() -> {chapter, ink, heroes[ids], trial, daily, text:'Act 2, Vox 5, Jasmin and RoxorLoops'} | null
 //   Stats      track(stat, n=1) -> new value (sum, or max for LISTS.statMax; unknown keys ignored)  stat(k) -> number  mergeStats(dst, src)
 //   Feats      check(R?, now?) -> [newly unlocked achievement ids], each id only ever once. Reads profile.stats plus the live R.stats
-//              (never merges them), and R.deck for maxDeck / curseCards, so GAME can call it at every chapterClear and Suzu and Raiga
-//              unlock mid-run. Pays the reward Inkstones, unlocks heroes (DATA.heroes[..].unlock.ach), emits on bus, saves.
-//              achievements() -> [{id,name,text,k,gte,value,progress 0..1,done,ts,reward}] for the Library tab
+//              (never merges them), and R.deck for maxDeck / curseCards, so GAME can call it at every `chapterClear` and RawClaw and Andy
+//              unlock mid-run. Pays the reward Cheers, unlocks heroes (DATA.heroes[..].unlock.ach), emits on bus, saves.
+//              achievements() -> [{id,name,text,k,gte,value,progress 0..1,done,ts,reward}] for the Stickers tab
 //   Unlocks    isUnlocked(kind, id) kind 'hero'|'card'|'relic'|'gem'|'trial'  unlockedSet() -> {card[],relic[],gem[]} (what GAME passes to RUN.newRun)
 //              libraryList() -> [{kind,id,cost,unlocked,affordable,name,rarity,hero}] for every def with locked:true (prices: ECONOMY.library)
 //              buy(kind, id) -> {ok, reason:'unknown'|'owned'|'funds', cost}     inkstones (getter)
-//              trialMax() -> highest selectable Ink Trial: wins > 0 ? min(10, trialBest + 1) : 0
+//              trialMax() -> highest selectable Encore (`trial`): wins > 0 ? min(10, trialBest + 1) : 0
 //   Run end    recordRun(R, 'win'|'lose'|'abandon', now) -> {inkstones (this run's payout), bonus (achievement rewards), total, newAchievements[],
 //              newTrial (new trialMax or null), heroesUnlocked[]}. Pays out once per run (sets R.recorded).
 //              A run id that is already in profile.paid or history pays nothing (R.recorded is set, the result is all zeros).
-//              Inkstones = floor((4 * chaptersCleared + (win ? 15 : 0) + 3 * trial + floor(score / 60)) * (daily ? 0.5 : 1) * (abandon ? 0.5 : 1)),
+//              Cheers (`inkstones`) = floor((4 * chaptersCleared + (win ? 15 : 0) + 3 * trial + floor(score / 60)) * (daily ? 0.5 : 1) * (abandon ? 0.5 : 1)),
 //              chaptersCleared = R.stats.bossKills, score = RUN.score(R), constants in ECONOMY.inkstones. A normal run merges R.stats
 //              and adds runs, wins or deaths, winsHanae..., smallDeckWins (win with at most 15 cards), maxDeck and curseCards (deck at the
-//              end), trialBest (on a win) and the per-enemy kills (R.foes). A DAILY run writes only dailyRuns, the half-rate Inkstones,
-//              daily.last, its history row and its per-enemy kills (the bestiary has no daily exception).
+//              end), trialBest (on a win) and the per-enemy kills (R.foes). A DAILY run writes only dailyRuns, the half-rate Cheers,
+//              daily.last, its history row and its per-enemy kills (the Who's Who has no daily exception).
 //   Codex      seen(enemyId) (GAME calls it once per enemy id when a fight node is entered; saves at once)  bestiary() -> [{id,seen,kills,chapter,tier}]  history (getter)
 //              loreSeen(id)  markLore(id)  storyList() -> [{id,seen,title}] (every lore id except barks_*)
 //   Misc       dailySeed(date) -> YYYYMMDD int  dailyPlayed(date) -> bool  tutorial(flag) -> bool  setTutorial(flag, v=true)
@@ -285,7 +285,7 @@ const META = (() => {
     if (raw === null) return { raw: null, o: null };
     try { return { raw, o: JSON.parse(raw) }; } catch (e) { return { raw, o: null }; }
   }
-  // Remove the saved run, unless it is a different run than `id` (another tab may have started a new tale since).
+  // Remove the saved run, unless it is a different run than `id` (another tab may have started a new tour since).
   function dropRun(id) {
     const { raw, o } = parseRun();
     if (raw === null) return;
@@ -411,7 +411,7 @@ const META = (() => {
     return P.stats.wins > 0 ? Math.min(10, (P.stats.trialBest | 0) + 1) : 0;
   }
 
-  // ---------------------------------------------------------------- the Library
+  // ---------------------------------------------------------------- the Tour Bus (`library`)
   const REG = () => ({ card: DATA.cards, relic: DATA.relics, gem: DATA.gems });
   function libCost(kind, def) {
     const lib = DATA.ECONOMY.library[kind] || {};
@@ -502,7 +502,7 @@ const META = (() => {
       P.stats.maxDeck = Math.max(P.stats.maxDeck, R.deck.length);
       P.stats.curseCards += curseCount(R);
     }
-    Object.keys(R.foes || {}).forEach((id) => {                        // the bestiary records every run, daily ones too
+    Object.keys(R.foes || {}).forEach((id) => {                        // the Who's Who (`bestiary`) records every run, daily ones too
       P.kills[id] = (P.kills[id] || 0) + (R.foes[id] | 0);
       P.seen[id] = Math.max(P.seen[id] || 0, 1);
     });

@@ -1,4 +1,4 @@
-// Echowake: shared utilities. Loaded first; every other module may use U.
+// Hocus Vocus: shared utilities. Loaded first; every other module may use U.
 // Pure helpers only: no game state. DOM helpers touch `document` lazily.
 const U = (() => {
   // mulberry32: small, fast, identical everywhere. The closure state is a single

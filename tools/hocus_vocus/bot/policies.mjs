@@ -1,7 +1,7 @@
-// Echowake balance bot: run-level decision policies (draft, relics, gems, shop, camp, forge, events, pending choices).
+// Hocus Vocus balance bot: run-level decision policies (draft, relics, gems, shop, camp, forge, events, pending choices).
 //
 // Everything is priced in "HP-equivalents" so very different things can be compared: one HP is 1, one point of damage or Block
-// on a card is worth roughly 6 HP-equivalents over a run when it is a permanent upgrade of a card that is played often, one Ink is
+// on a card is worth roughly 6 HP-equivalents over a run when it is a permanent upgrade of a card that is played often, one Vox is
 // about 4, one gold about 0.3. The numbers are in the tables below and nowhere else.
 import { isNum, isObj, asList } from './game.mjs';
 import { archetypeOf } from './archetypes.mjs';
@@ -411,8 +411,8 @@ export function createPolicies(G, V, cfg) {
   }
   // buys what is worth its price, removes junk, cuts gems. Returns a log of purchases.
   // Gold is worth nothing once the run is over, so a human buys more freely the later it is and the more gold is piling up: the bar
-  // (utility per gold) falls with the chapter and with the size of the purse. Chapter 1 keeps the full bar (saving for a better shop is
-  // right early), chapter 3 buys anything that helps.
+  // (utility per gold) falls with the Act and with the size of the purse. Act 1 keeps the full bar (saving for a better shop is
+  // right early), Act 3 buys anything that helps.
   function spendBar(R, base) {
     const chap = R.chapter >= 3 ? 0.3 : R.chapter === 2 ? 0.6 : 1;
     const purse = R.gold >= 260 ? 0.4 : R.gold >= 180 ? 0.65 : 1;

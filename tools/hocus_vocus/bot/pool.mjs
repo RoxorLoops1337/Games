@@ -1,4 +1,4 @@
-// Echowake balance bot: runs a list of run configs, in this process (jobs <= 1) or across worker threads. Results come back in
+// Hocus Vocus balance bot: runs a list of run configs, in this process (jobs <= 1) or across worker threads. Results come back in
 // the order of the task list whatever the number of workers, and a run is a pure function of its config, so any job count gives the
 // same records.
 import os from 'node:os';

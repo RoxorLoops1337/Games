@@ -1,8 +1,10 @@
-// Echowake: ART: the art director's toolkit and the ART namespace skeleton. Every art file builds on this one.
+// Hocus Vocus: ART: the art director's toolkit and the ART namespace skeleton. Every art file builds on this one.
 //
-// STYLE ("Sumi-Shonen", ART_BIBLE.md is the law): a calligraphic ink line in deep indigo, base colour + ONE hard shadow shape + a thin lit-side
-// highlight + a backlight rim on the shadow edge + optional halftone dots in the shadow, anime gloss on hair and metal, sparkle stars and gold
-// flecks for magic, washi grain over everything. The default key light comes from the upper right (ART.tk.light), so shadows fall to the lower left.
+// STYLE (ART_BIBLE.md is the law): the house look is the owners' chibi style, a chunky warm-brown outline, flat candy colour + ONE hard shadow
+// shape + a thin lit-side highlight, sparkle stars and little music notes. The cast kit (art_cast_kit.js) wraps this toolkit in those chibi defaults.
+// The toolkit itself keeps its whole original helper set (the variable-width `inkPath` line, `celFill` with a backlight rim and optional halftone
+// dots, anime gloss on hair and metal, the washi grain), so any art file can still reach for it. The default key light comes from the upper right
+// (ART.tk.light), so shadows fall to the lower left.
 // Read this header as the manual: every function a Wave 2 artist needs is here, with its options. Colours passed to helpers that DERIVE other
 // colours (celFill, ribbon, glow, sparkle...) must be hex strings ('#ff7eb6'); plain fillStyle strings are fine anywhere else.
 //
@@ -10,7 +12,7 @@
 // placeholder (a labelled coloured box, never throws, safe with the no-op context, safe for unknown ids).
 //   ART.res                 backing-store multiplier (UI sets it to UI.px; the gallery sets it and calls ART.sprite.clear())
 //   ART.has(kind, id)       true only for REAL art. Art files mark theirs with ART.declare(kind, id | [ids]); ART.enemy.register declares 'enemy' ids
-//   ART.declare(kind, ids)  kinds: hero enemy motif relic status tile intent gem brush stat type row scene fx (any string works)
+//   ART.declare(kind, ids)  kinds: hero enemy motif relic status tile intent gem `brush` stat type row scene fx (any string works)
 //   ART.sheet(name, fn)     register a gallery sheet fn(canvas, params) into ART.sheets (a plain object); throws on a duplicate name. params.w and
 //                           params.h are logical px, params.t is the animation argument (seconds, except ART.fx sheets: progress 0..1)
 //   ART.sheetGrid(canvas, params, cells, drawCell, opts)   labelled contact-sheet grid, see below
@@ -81,7 +83,7 @@
 //                mist(ctx, x, y, w, h, t, {n seed color alpha speed}) stars(ctx, x, y, w, h, t, {n seed color}) moon(ctx, x, y, r, {glow phase color seed})
 //   Utilities    lin(ctx, x0, y0, x1, y1, stops) rad(ctx, x0, y0, r0, x1, y1, r1, stops) withAlpha(ctx, a, fn) flipX(ctx, x, fn) clamp lerp num smoothstep
 //   Every drawing function absorbs NaN and Infinity, never throws for odd input, and leaves save/restore balanced. Nothing here reads a clock or
-//   Math.random: animation takes a `t` you pass in, and lines never move unless you give them one.
+//   the banned random call: animation takes a `t` you pass in, and lines never move unless you give them one.
 //
 // GALLERY GRID. ART.sheetGrid(canvas, params, cells, drawCell, opts)
 //   cells       array of strings or {label, ...anything}      drawCell(ctx, cell, w, h, i, {col, row, x, y, cw, ch}): the context is clipped to the cell
@@ -1792,7 +1794,7 @@ const ART = (() => {
         g.beginPath(); traceShape(g, sh); g.fillStyle = '#ffd889'; g.fill();
         inkBleed(g, sh, { w: 6 });
         inkBlot(g, w * 0.72, h * 0.3, 20, { seed: 3, drips: 3 });
-        inkText(g, 'ZAN!', w * 0.5, h * 0.78, Math.min(w * 0.3, 54), { fill: pal.white, shadow: pal.vermilion, rot: -0.08 });
+        inkText(g, 'LA!', w * 0.5, h * 0.78, Math.min(w * 0.3, 54), { fill: pal.white, shadow: pal.vermilion, rot: -0.08 });
       } },
       { label: 'ease curves (outBack, outElastic, snap, spring)', fn(g, w, h) {
         g.fillStyle = pal.indigo; g.fillRect(0, 0, w, h);

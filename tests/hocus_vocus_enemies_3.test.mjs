@@ -1,4 +1,4 @@
-// Chapter 3 roster suite (hocus_vocus/js/data_enemies_3.js): the Crimson Sky Citadel.
+// Act 3 roster suite (hocus_vocus/js/data_enemies_3.js): the Perfect Stage.
 //
 //   node tests/hocus_vocus_enemies_3.test.mjs                         run the suite
 //   RB_ENEMIES3_REPORT=1 node tests/hocus_vocus_enemies_3.test.mjs    also print the balance tables (every group, elite and the boss)
@@ -18,9 +18,9 @@
 //                  Bind then Stun then Verdict, the Charge clock, and the boss: Proofread then Red Pen, Clean Slate, Unwrite reading its minions)
 //
 // The synthetic decks live in this file: hanae and kuro from DATA.heroes with their real rows, cards built from the CONTENT_SPEC 3 power
-// guidance and grown through the chapter with upgrades and gems (three power levels, plus a boss deck that carries a boss relic worth +1 Energy
-// and a curse as its drawback, because a run that reaches the chapter 3 boss owns two boss relics). Their power is part of the contract and is
-// measured here (a training dummy that never hits back). The suite boots WITHOUT any peer content file (cards, relics, gems, events, chapter 1
+// guidance and grown through the Act with upgrades and gems (three power levels, plus a boss deck that carries a boss relic worth +1 Energy
+// and a curse as its drawback, because a run that reaches the Act 3 boss owns two boss relics). Their power is part of the contract and is
+// measured here (a training dummy that never hits back). The suite boots WITHOUT any peer content file (cards, relics, gems, events, Act 1
 // and 2 enemies) so nobody else's balance work can move these numbers. The six junk cards enemies add are defined here exactly as CONTENT_SPEC
 // section 2 says, because data_cards_shared.js is not loaded. If the balance wave retunes decks or HP, read these bands first.
 import fs from 'node:fs';
@@ -121,7 +121,7 @@ const aiCond = (c, w) => {
   return true;
 };
 // Enumerate abstract worlds and report which moves an AI object can choose, and whether each rule can fire unshadowed. A hero status is either
-// absent or plentiful (5), which satisfies every threshold this chapter uses.
+// absent or plentiful (5), which satisfies every threshold this Act uses.
 function reach(ai) {
   const rules = ai.rules || [];
   const keys = [...new Set(rules.filter((r) => r.if.heroStatus).map((r) => r.if.heroStatus.s))];
@@ -143,7 +143,7 @@ function reach(ai) {
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. structure
 // ---------------------------------------------------------------------------------------------------------------------
-t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, art ids', () => {
+t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, Act, art ids', () => {
   t.eq(roster.length, 17, 'chapter 3 roster has 17 entries');
   t.deep(ids.slice().sort(), roster.map((r) => r.id).sort(), 'defined ids equal the roster ids (no more, no fewer)');
   roster.forEach((r) => {
@@ -160,7 +160,7 @@ t.test('the fixed roster is defined exactly: ids, names, tiers, sizes, chapter, 
   t.eq(DATA.FIXED.bosses[CH], boss, 'the chapter boss id is the fixed one');
 });
 
-t.test('DATA.validate and DATA.audit are clean for chapter 3 (errors, warnings, audit lines, guide lines)', () => {
+t.test('DATA.validate and DATA.audit are clean for Act 3 (errors, warnings, audit lines, guide lines)', () => {
   const v = DATA.validate('enemies', { chapter: CH });
   t.eq(v.errors.length, 0, 'validate errors: ' + v.errors.join(' | '));
   t.eq(v.warnings.length, 0, 'validate warnings: ' + v.warnings.join(' | '));
@@ -179,7 +179,7 @@ t.test('content is plain data: JSON round trip, no functions, no dashes, no forb
   allGroups.forEach((g) => t.ok(!DASH.test(JSON.stringify(g)), `${g.id} has no dash`));
 });
 
-t.test('lore and copy: bestiary voice, length limits, tags, move names and barks', () => {
+t.test('lore and copy: Who\'s Who voice, length limits, tags, move names and barks', () => {
   const sentences = (s) => s.split(/(?<=[.!?])\s+/).filter(Boolean).length;
   ids.forEach((id) => {
     const e = E(id);
@@ -304,7 +304,7 @@ t.test('intent kinds are honest and specific', () => {
     if (m.kind === 'buff') t.ok(ops.indexOf('dmg') < 0 && ops.indexOf('status') >= 0, `${w} buff deals no damage`);
     t.ok(m.kind !== 'none' && m.kind !== 'special' && m.kind !== 'flee', `${w} uses a plain intent kind`);
   }));
-  // the chapter mixes intent kinds: every non-minion roster line shows at least two different kinds
+  // the Act mixes intent kinds: every non-minion roster line shows at least two different kinds
   ids.filter((id) => E(id).tier !== 'minion').forEach((id) => t.ok(new Set(movesOf(E(id)).map((m) => m.kind)).size >= 2, `${id} mixes at least two intent kinds`));
   t.ok(new Set(ids.flatMap((id) => movesOf(E(id)).map((m) => m.kind))).size >= 7, 'the chapter uses at least seven of the intent kinds');
 });
@@ -537,7 +537,7 @@ t.test('every normal enemy appears in enough groups; big groups are gated to the
   t.ok(groups.normal.some((g) => g.enemies.indexOf('margin_imp') >= 0 && g.enemies.length === 2), 'the imp is met early in a pair');
 });
 
-t.test('group budgets: the audit average and an effective average stay inside the chapter 3 rails', () => {
+t.test('group budgets: the audit average and an effective average stay inside the Act 3 rails', () => {
   const [nLo, nHi] = G.budget[CH].normal, [eLo, eHi] = G.budget[CH].elite;
   const audit = (g) => groupEnemies(g).filter((e) => e.tier !== 'minion').reduce((s, e) => s + auditAvg(e), 0);
   const eff = (g) => groupEnemies(g).filter((e) => e.tier !== 'minion').reduce((s, e) => s + effAvg(e, g.enemies.length), 0);
@@ -549,7 +549,7 @@ t.test('group budgets: the audit average and an effective average stay inside th
     t.ok(audit(g) <= eHi, `${g.id} audit average ${audit(g).toFixed(1)} <= ${eHi}`);
     t.ok(eff(g) <= eHi + 8, `${g.id} effective average ${eff(g).toFixed(1)} <= ${eHi + 8}`);
   });
-  // the chapter as a whole sits in the lower half of the budget: real fights measure much less than the arithmetic (Block, deaths, minions)
+  // the Act as a whole sits in the lower half of the budget: real fights measure much less than the arithmetic (Block, deaths, minions)
   t.ok(mean(groups.normal, eff) >= nLo * 0.55 && mean(groups.normal, eff) <= (nLo + nHi) / 2 + 4, `normal groups average ${mean(groups.normal, eff).toFixed(1)} effective (rail ${nLo} to ${nHi})`);
   t.ok(mean(groups.elite, eff) >= eLo * 0.5 && mean(groups.elite, eff) <= eHi, `elites average ${mean(groups.elite, eff).toFixed(1)} effective (rail ${eLo} to ${eHi})`);
   // and difficulty ramps with min: late groups deal more than early groups
@@ -560,7 +560,7 @@ t.test('group budgets: the audit average and an effective average stay inside th
 // ---------------------------------------------------------------------------------------------------------------------
 // 5. engine: real COMBAT fights (COMBAT.simulate with the default greedy bot) against synthetic decks
 // ---------------------------------------------------------------------------------------------------------------------
-const PARTY_HP = [92, 76];                       // chapter 3 max HP of hanae and kuro: base 76 and 60 plus 8 for each of the two chapters cleared
+const PARTY_HP = [92, 76];                       // Act 3 max HP of hanae and kuro: base 76 and 60 plus 8 for each of the two Acts cleared
 let deckFor = null;
 if (HAVE_ENGINE && typeof COMBAT !== 'undefined') {
   const card = (id, hero, type, cost, fx, upfx, slot) => DATA.add('cards', { [id]: { id, name: id, hero, type, rarity: 'common', cost, fx, up: { fx: upfx }, kw: [], slots: [slot || (type === 'attack' ? 'red' : 'blue')], art: { m: 'slash', c: 'rose' } } });
@@ -605,7 +605,7 @@ if (HAVE_ENGINE && typeof COMBAT !== 'undefined') {
     late: ['hanae_zz_flurry', 'hanae_zz_flurry', 'hanae_zz_flurry', 'kuro_zz_venom', 'hanae_zz_rare', 'hanae_zz_focus', 'hanae_zz_focus', 'kuro_zz_rare', 'kuro_zz_bolt'],
   };
   const UPFRAC = { early: 0.4, mid: 0.65, late: 0.95 }, GEMFRAC = { early: 0.3, mid: 0.5, late: 0.75 }, GEMTIER = { early: 1, mid: 2, late: 3 };
-  // early = the deck you walk into chapter 3 with, mid = a page later, late = a deck that has cut its gems and found its rares,
+  // early = the deck you walk into Act 3 with, mid = a page later, late = a deck that has cut its gems and found its rares,
   // boss = the late deck plus a boss relic that grants +1 Energy and pays for it with a curse in the deck
   deckFor = (level) => {
     const base = level === 'boss' ? 'late' : level;
@@ -765,7 +765,7 @@ const normStats = HAVE_ENGINE ? groups.normal.map((g) => ({ g, rs: eMany(g.enemi
 const eliteStats = HAVE_ENGINE ? groups.elite.map((g) => ({ g, rs: eMany(g.enemies, 'mid', 30) })) : [];
 const bossStats = HAVE_ENGINE ? { boss: eMany([boss], 'boss', 100), late: eMany([boss], 'late', 80), mid: eMany([boss], 'mid', 80) } : null;
 
-t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that grow through the chapter', () => {
+t.test('engine: bands hold in real fights (turns, HP lost, wins) with decks that grow through the Act', () => {
   if (!HAVE_ENGINE) return skipNote();
   const avgTurns = mean(normStats, (x) => mean(x.rs, (r) => r.turns));
   t.ok(avgTurns >= 3.2 && avgTurns <= 5.4, `normal groups average ${avgTurns.toFixed(2)} turns (3.2..5.4)`);
@@ -830,9 +830,9 @@ function driveBoss() {
   step(C, 3);                                             // handout, proofread, pen
   b.hp = Math.floor(b.maxHp * 0.7);                       // above the 0.66 line, below 0.8: the footnote rule is armed
   for (let i = 0; i < 7; i++) { cull(C); step(C); }       // strike, footnote, margin (own turn 5 with no pages)
-  cross(C, b, 0.66);                                      // the Eraser: clean first
+  cross(C, b, 0.66);                                      // the Filter: clean first
   for (let i = 0; i < 8; i++) { cull(C); step(C); }       // rub, swipe, smudge and a typo sprite call at own turn 4 or 8
-  cross(C, b, 0.33);                                      // the Blank Page: unwrite first
+  cross(C, b, 0.33);                                      // the Gloss: unwrite first
   for (let i = 0; i < 3; i++) { cull(C); step(C); }
   cull(C); step(C, 2);                                    // tear, gape, the recurring unwrite
   b.hp = Math.floor(b.maxHp * 0.1); cull(C); step(C, 3);  // the last word
@@ -958,7 +958,7 @@ t.test('engine: void_scribe erases every buff, adds blots, and reads Might', () 
   const C = scenario(['void_scribe']);
   const s = C.enemies[0];
   t.eq(s.intent.move, 'erase', 'it opens by erasing the margin, telegraphed on turn 1');
-  s._move = 'ink';                                           // let the first action be the ink, so the rule (not the sequence) has to choose the erase
+  s._move = 'ink';                                           // let the first action be Smooth Croon, so the rule (not the sequence) has to choose Pitch Correction
   C.heroes[0].st.might = 3; C.heroes[1].st.thorns = 2; C.heroes[1].st.dodge = 1; C.heroes[0].st.bloom = 2;
   step(C);
   t.eq(s.intent.move, 'erase', 'a hero with Might 2 or more draws the erase early');
@@ -971,7 +971,7 @@ t.test('engine: void_scribe erases every buff, adds blots, and reads Might', () 
   const blotsAfter = [...C.draw, ...C.discard, ...C.hand, ...C.exhaust].filter((c) => c.id === 'status_blot').length;
   t.ok(blotsAfter >= blotsBefore + 2, `it added blot cards (${blotsBefore} to ${blotsAfter})`);
   t.eq(s.intent.move, 'ink', 'and with the Might gone it goes back to its sequence (a rule-chosen erase does not advance the cursor)');
-  // without Might it follows its sequence: erase, ink, blot out
+  // without Volume it follows its sequence: Pitch Correction, Smooth Croon, Robo Wail
   const C2 = scenario(['void_scribe']);
   const order = [];
   for (let i = 0; i < 3; i++) { order.push(C2.enemies[0].intent.move); step(C2); }
@@ -1256,7 +1256,7 @@ t.test('engine: the minions do exactly what their lore says', () => {
   t.eq(T.heroes[0].hp, 900 - 5, 'the poke is 5');
 });
 
-t.test('engine: the small chapter 3 rules: knight leaves a last bar, drone overclocks, knight blacks out, redaction and static cards', () => {
+t.test('engine: the small Act 3 rules: knight leaves a last bar, drone overclocks, knight blacks out, redaction and static cards', () => {
   if (!HAVE_ENGINE) return skipNote();
   const K = scenario(['redaction_knight']);
   const kn = K.enemies[0];
@@ -1364,7 +1364,7 @@ t.test('engine: the Editor, form by form: Proofread then Red Pen (swap the Vulne
   t.ok(rh && rh.blocked === 0 && rh.amount === 31, 'it pierces: 31 damage through 20 Block, and the Block stays');
   t.eq(b2.intent.move, 'swipe', 'then the swipe');
 
-  // form 3: the Blank Page
+  // form 3: the Gloss
   const C3 = scenario([boss]);
   const b3 = C3.enemies[0];
   step(C3, 1);                                               // the pages arrive; no Proofread yet, so no Vulnerable muddies the numbers

@@ -1,4 +1,4 @@
-// Echowake: text generation and card resolution. An extension of DATA (one IIFE, no top-level names).
+// Hocus Vocus: text generation and card resolution. An extension of DATA (one IIFE, no top-level names).
 //
 // Everything the player reads about rules is produced here from the ops themselves, so numbers can never drift from
 // behaviour. All functions are pure, DOM-free and deterministic. HTML output uses only two kinds of markup:
@@ -33,9 +33,9 @@
 //   DATA.cardPlain(inst | id, ctx?)    the same text without markup (tests, aria labels)
 //   DATA.opsText(ops, ctx?)            plain text for an op list (card, hook, hand, gem and run ops). The move, start, phase and hook fx
 //                                      arrays of registered ENEMIES are recognised by identity and read from the enemy's side
-//                                      ("Deal 5 damage and apply 1 Exposed to the lead hero."), so the bestiary needs no flag;
+//                                      ("Deal 5 damage and apply 1 Exposed to the lead hero."), so the Who's Who needs no flag;
 //                                      ctx.enemy forces the enemy side for any other list.
-//   DATA.moveText(move)                the bestiary sentence for one enemy move (opsText of its fx with the enemy side forced)
+//   DATA.moveText(move)                the Who's Who sentence for one enemy move (opsText of its fx with the enemy side forced)
 //   DATA.hookText(hook, ctx?)          plain sentence for one hook {on, fx, filter?, limit?, once?, every?}; run hooks and enemy hooks too.
 //                                      A hook inside a CARD (an owned hook) says "you" for its own hero and "either hero" when
 //                                      filter.hero is 'any'; a relic or passive (a party hook) keeps the plain "you".
@@ -55,7 +55,7 @@
 // deal 3 more damage.", leading keywords (Opener, Hold, One Take, Unplayable) come first and Fade comes last.
 // A hook op reads "Whenever you play a Skill, gain 1 Groove." / "At the start of your turn, ..." / "Next turn: gain 2 Breath."
 //
-// Editor's rules (what the generator does so a card never has to): gains of different kinds share a sentence ("Gain 5 Block and 1
+// House rules (what the generator does so a card never has to): gains of different kinds share a sentence ("Gain 5 Block and 1
 // Spotlight."); a status taken back by a once-hook reads "until the end of this turn" or "until your next turn"; a swap that only happens
 // from one spot reads "Move to the lead."; row bonuses after a swap read "Now Lead:"; "Spend up to 3 Groove. Deal 4 damage to all
 // enemies, plus 2 for each Groove spent." keeps the target next to "damage"; doubling reads "Double the target's Earworm (adds at most
@@ -1191,7 +1191,7 @@
       return f ? plainOf(sentence(f.h)) : '';
     });
   }
-  // one enemy move as the bestiary prints it: "Deal 5 damage and apply 1 Exposed to the lead hero."
+  // one enemy move as the Who's Who prints it: "Deal 5 damage and apply 1 Exposed to the lead hero."
   function moveText(m) { return m && Array.isArray(m.fx) ? opsText(m.fx, { enemy: true }) : ''; }
 
   // ---- gems ----

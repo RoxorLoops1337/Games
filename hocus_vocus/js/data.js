@@ -1,16 +1,17 @@
-// Echowake data core: registries, closed vocabularies, statuses, keywords,
-// economy, heroes, brushes, tiles, the fixed roster, quotas, and the validator.
+// Hocus Vocus data core: registries, closed vocabularies, statuses, keywords,
+// economy, heroes, Spells (`brushes`), tiles, the fixed roster, quotas, and the validator.
 //
 // This file is the machine-readable half of the contract (DESIGN.md is the human
 // half, CONTENT_SPEC.md says how much and how strong). Content files
 // (data_cards_*.js, data_enemies_*.js, ...) are IIFEs that register into the
 // registries below with DATA.add(kind, defs). Nothing here touches the DOM, the
-// clock or Math.random. No em or en dashes.
+// clock or the banned random call. No em or en dashes.
 //
 // PUBLIC API
 //   Registries   DATA.cards gems relics enemies events achievements trials tips lore
 //                DATA.encounters {1|2|3: {normal:[group], elite:[group], boss:'id'}}
 //                DATA.heroes brushes tiles statuses keywords ECONOMY SETTINGS LISTS
+//                DATA.LINKS (frozen: handle website youtube facebook tiktok instagram support game; empty URL = no button, HV_STORY 5.2)
 //                DATA.ROSTER {1|2|3: [{id,name,title?,tier,size,role,chapter}]}, DATA.rosterById
 //                DATA.FIXED (ids other modules depend on), DATA.QUOTA, DATA.GUIDE
 //                DATA.COLOUR_NAME {colour id: display word} (red reads pink, any reads rainbow)
@@ -29,13 +30,13 @@
 //   Checking     validate(only?, opt?) -> {errors, warnings, counts}
 //                  opt.strict  also check every cross-file reference and that fixed content exists
 //                  opt.hero    limit the card check to one hero id (or 'shared' for curse/status cards)
-//                  opt.chapter limit the enemy check to one chapter
+//                  opt.chapter limit the enemy check to one Act
 //                audit(kind?, opt?) -> [string]   quota and guideline breaks ('audit ...' hard, 'guide ...' soft)
 //
 // RUN OPS (events and run hooks). Unknown fields are validator errors. `who` (heal hurt maxHp) is
 // 'both' (default) | 'front' | 'lowest' | 'random' | a hero id of the party.
 //   gold {n | pct}            n may be negative (a cost, floors at 0); pct is a fraction of current gold, floored
-//   ink {n | pct}             result clamped to 0..inkMax; pct is a fraction of inkMax
+//   ink {n | pct}             Vox: result clamped to 0..inkMax; pct is a fraction of inkMax
 //   heal {n | pct, who?}      pct is a fraction of that hero's maxHp; scaled by mods.healMul
 //   hurt {n | pct, who?}      never kills: leaves at least 1 HP
 //   maxHp {n, who?}           raises max and current HP by n; negative n lowers max, never below 1
@@ -44,7 +45,7 @@
 //                             default: the player picks in the deck overlay (a `pending` entry); random:true uses the RNG.
 //                             transformCard yields a random card of the same hero and rarity
 //   addRelic {id | rarity}    rarity draws an unowned, unlocked relic     addGem {id | color?, tier?}
-//   addBrush {id}             a brush id or 'random'                      addCurse {id?, n?=1} a curse_* id, omitted = random
+//   addBrush {id}             a Spell id or 'random'                      addCurse {id?, n?=1} a curse_* id, omitted = random
 //   fight {enc | enemies:[ids], tier?='normal'|'elite', rewards?=true, win?:[run ops]}   LAST op of its outcome
 //   flag {k, v?=1}            R.flags[k] = v            paint {n}   paints n hexes free along the cheapest chain to the boss
 //   cardReward {rarity?, hero?, n?=3}   a skippable card pick like a combat reward
@@ -149,7 +150,7 @@ const DATA = (() => {
     screens: ['title', 'heroSelect', 'library', 'settings', 'howto', 'story', 'map', 'combat', 'reward', 'shop', 'event', 'camp', 'forge', 'chest',
       'gemcache', 'chapterClear', 'gameOver', 'victory'],
     overlays: ['deck', 'pause', 'settings', 'relics', 'legend', 'cardPick', 'confirm', 'modal'],
-    libraryTabs: ['unlocks', 'achievements', 'story', 'bestiary', 'history'],
+    libraryTabs: ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'],   // follow (the sixth Tour Bus tab, key 6) is appended LAST (HV_STORY 5.3)
 
     // presentation vocab (art and audio agents implement exactly these)
     scenes: ['title', 'ch1', 'ch2', 'ch3', 'boss1', 'boss2', 'boss3', 'camp', 'shop', 'event', 'treasure', 'victory', 'defeat', 'paper'],
@@ -188,6 +189,24 @@ const DATA = (() => {
     music: ['title', 'hero_select', 'map1', 'map2', 'map3', 'combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final',
       'shop', 'camp', 'event', 'reward', 'victory', 'defeat'],
   };
+
+  // ------------------------------------------------------------------
+  // The duo's links (HV_STORY 5.2, bible 7.2). It lives here because DATA loads first, so every screen and ui.js can read it.
+  // The owners fill in the URLs; an empty string hides that button. Opened only on a tap, in a new tab; never fetched.
+  // When a URL is filled in, its line needs the pragma, for example:
+  //   website: 'https://example.org/',  // hygiene-allow(network): owner link, opened only on a tap, never fetched
+  // The keys are exactly handle website youtube facebook tiktok instagram support game (the hygiene suite pins them).
+  // ------------------------------------------------------------------
+  const LINKS = Object.freeze({
+    handle: '@roxorloopsandjasmin',
+    website: '',
+    youtube: '',
+    facebook: '',
+    tiktok: '',
+    instagram: '',
+    support: '',
+    game: '',   // the public game address used by Share; empty means the current page address without query or hash
+  });
 
   // ------------------------------------------------------------------
   // Statuses. Semantics are implemented by COMBAT (DESIGN 4.2); text is what the UI shows.
@@ -270,7 +289,7 @@ const DATA = (() => {
     dist: { enemy: 0.22, elite: 0.022, chest: 0.03, shop: 0.02, camp: 0.025, event: 0.09, well: 0.05, brush: 0.025, gemcache: 0.02, forge: 0.015 },
     countMin: { elite: 3, chest: 3, shop: 2, camp: 3, event: 8, well: 6, brush: 2, gemcache: 2, forge: 2 },
     countMax: { elite: 7, chest: 10, shop: 6, camp: 8, event: 26, well: 16, brush: 8, gemcache: 6, forge: 6 },
-    // Library (Inkstone prices) and Inkstone payout per run (META.recordRun, DESIGN 4.10).
+    // The Tour Bus (`library`: Cheers prices) and the Cheers payout per run (`inkstones`; META.recordRun, DESIGN 4.10).
     library: { card: { uncommon: 60, rare: 120 }, relic: { common: 40, uncommon: 70, rare: 110, boss: 110, shop: 90 }, gem: { 2: 80, 3: 140 } },
     inkstones: { perChapter: 4, win: 15, perTrial: 3, scoreDiv: 60, dailyMul: 0.5, abandonMul: 0.5 },
     // RUN.score(R) = max(0, chapter*chaptersCleared + boss*bossKills + elite*elites + floor(gold/goldDiv) + maxHp*sum(maxHp)
@@ -293,7 +312,7 @@ const DATA = (() => {
   };
 
   // ------------------------------------------------------------------
-  // Brushes: one-use map tools. MAP.brushCells implements the geometry (DESIGN 4.8).
+  // Spells (`brushes`): one-use map tools. MAP.brushCells implements the geometry (DESIGN 4.8).
   // ------------------------------------------------------------------
   const brushes = {
     stroke: { id: 'stroke', name: 'Boots and Cats', kind: 'line', len: 3, text: 'Unmute 3 hexes in a straight line, starting next to any live hex.' },
@@ -368,8 +387,8 @@ const DATA = (() => {
   };
 
   // ------------------------------------------------------------------
-  // The fixed roster (CONTENT_SPEC 4 is the human copy). Ids, tiers, sizes and chapters are LAW:
-  // data_enemies_N.js defines exactly its chapter's ids and art_enemies_N.js draws exactly them.
+  // The fixed roster (CONTENT_SPEC 4 is the human copy). Ids, tiers, sizes and Acts are LAW:
+  // data_enemies_N.js defines exactly its Act's ids and art_enemies_N.js draws exactly them.
   // Entry: [id, name, size, role]. Bosses also carry a title.
   // ------------------------------------------------------------------
   const ROSTER_SRC = {
@@ -501,7 +520,7 @@ const DATA = (() => {
   // agents can never silently shadow each other.
   // ------------------------------------------------------------------
   const REG = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
-  const D = { LISTS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
+  const D = { LISTS, LINKS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
   // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
   D.COLOUR_NAME = { red: 'pink', blue: 'blue', green: 'green', gold: 'gold', any: 'rainbow' };

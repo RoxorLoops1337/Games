@@ -24,7 +24,7 @@ const SCORE_SCALES = ['major', 'mixolydian', 'dorian', 'minor', 'lydian'];
 const pentaOf = (s) => (s === 'dorian' || s === 'minor' ? SCALE.pentaMinor : SCALE.penta);
 const BAND = ['kick', 'snare', 'hat', 'throat', 'scratch', 'croon', 'choir', 'synth', 'keys', 'ebass', 'glock', 'uke', 'whistle', 'clap', 'pad', 'arp', 'vox', 'crackle'];
 const MONO = ['croon', 'whistle', 'throat'];
-// a test-local fixture: the Echowake instruments the fork removed (HV_ART_AUDIO 10.2), asserted absent
+// a test-local fixture: the instruments the fork removed (HV_ART_AUDIO 10.2), asserted absent
 const GONE = ['koto', 'shamisen', 'biwa', 'shakuhachi', 'taiko', 'hyoshigi', 'rin'];
 const INTENSE = ['combat1', 'combat2', 'combat3', 'elite', 'boss1', 'boss2', 'boss3', 'final'];   // layered by AUDIO.intensity (fights)
 const WOKEN = ['map1', 'map2', 'map3'];                                                         // layered by AUDIO.awake (the map mute)

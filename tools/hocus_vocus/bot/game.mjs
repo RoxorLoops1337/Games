@@ -1,4 +1,4 @@
-// Echowake balance bot: game loader and small shared helpers.
+// Hocus Vocus balance bot: game loader and small shared helpers.
 //
 // loadGame() boots the real RUN / COMBAT / MAP / META scripts (plus every data file) in the headless sandbox from
 // tests/hocus_vocus_lib.mjs, once per process, and returns { U, DATA, COMBAT, MAP, RUN, META }. No DOM is touched.

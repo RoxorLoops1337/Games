@@ -1,4 +1,4 @@
-// Map screen suite (js/screen_map.js, css/map.css): the page you colour in. Paint, chains, brushes, walking, instants, the camera, the HUD,
+// Map screen suite (js/screen_map.js, css/map.css): the map you unmute. Unmuting, chains, Spells, walking, instants, the camera, the HUD,
 // the relics and legend overlays, empty states, cleanup, performance and a soak that paints and walks to the boss on many seeds.
 //
 // Everything runs against the REAL modules (MAP, RUN, META, UI, ART, AUDIO, GAME) in the headless loader, with runs built from real seeds. The
@@ -63,7 +63,7 @@ async function open(g, R) {
   return $(g, '.s-map');
 }
 
-// the whole page in view (the fit view: the largest zoom at which no hex is under the HUD, placed where it is clear), so every hex has a stage
+// the whole map in view (the fit view: the largest zoom at which no hex is under the HUD, placed where it is clear), so every hex has a stage
 // position inside the window (the real default camera follows the party)
 function fitCam(g) {
   const s = st(g);
@@ -107,7 +107,7 @@ function paintType(g, R, type) {
   if (!res.ok) { R.ink = 99; g.RUN.paint(R, T.q, T.r); }
   return T;
 }
-// a run whose whole page is painted
+// a run whose whole map is unmuted
 function fullyPainted(g, R) { Object.values(R.map.tiles).forEach((T) => { if (T.type !== 'block') { T.painted = true; T.known = true; } }); }
 const SEEDS = [1, 2, 3, 5, 8, 13, 21, 34];
 
@@ -150,8 +150,8 @@ await t.test('source rules: every sound id, overlay name, bus event and tutorial
   t.ok(/translate:/.test(CSS) && !/transform:\s*translate\(-50%/.test(CSS), 'motion uses individual transform properties so nothing fights a transform');
 });
 
-// ==================================================================================================== the page and its HUD
-await t.test('enter: the HUD, the data-tut anchors, the chapter title, music, and a clean console', async () => {
+// ==================================================================================================== the map and its HUD
+await t.test('enter: the HUD, the data-tut anchors, the Act title, music, and a clean console', async () => {
   const g = fresh(); const R = mkRun(g, { relics: ['brass_lantern', 'fox_mask'] });
   const root = await open(g, R);
   t.ok(root, 'the map screen is up');
@@ -199,8 +199,8 @@ await t.test('empty states: no run, a run without a map, and the way back', asyn
   t.eq(errs(g), 0, 'no errors in the empty states');
 });
 
-// ==================================================================================================== painting
-await t.test('tap a fogged hex next to the page: RUN.paint for 1 Ink, the tile is revealed, the bus and the meter agree', async () => {
+// ==================================================================================================== unmuting
+await t.test('tap a fogged hex next to the map: RUN.paint for 1 Vox, the tile is revealed, the bus and the meter agree', async () => {
   for (const seed of SEEDS) {
     const g = fresh({ seed }); const R = mkRun(g, { seed, ink: 9 });
     await open(g, R); fitCam(g);
@@ -264,7 +264,7 @@ await t.test('tapping elsewhere or pressing Esc drops a chain preview; a differe
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('not enough Ink: the meter shakes, a toast says how much is missing, nothing changes, no event', async () => {
+await t.test('not enough Vox: the meter shakes, a toast says how much is missing, nothing changes, no event', async () => {
   const g = fresh(); const R = mkRun(g, { ink: 0 });
   await open(g, R); fitCam(g);
   const T = frontier(g, R).filter((x) => x.type !== 'block')[0];
@@ -288,7 +288,7 @@ await t.test('not enough Ink: the meter shakes, a toast says how much is missing
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('the Void and the page edge answer with a toast and change nothing; a hover over fog shows the price', async () => {
+await t.test('the Void and the map edge answer with a toast and change nothing; a hover over fog shows the price', async () => {
   const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8 });
   await open(g, R); fitCam(g);
   const v = Object.values(R.map.tiles).find((T) => T.type === 'block');
@@ -312,7 +312,7 @@ await t.test('the Void and the page edge answer with a toast and change nothing;
 
 await t.test('map:paint fires per action, the mercy rule surfaces as a toast, and the Book lends exactly one drop', async () => {
   const g = fresh({ seed: 3 }); const R = mkRun(g, { seed: 3, ink: 1, brushes: [] });
-  // mark everything painted as done so nothing unresolved is reachable: the next paint strands the party
+  // mark everything unmuted as done so nothing unresolved is reachable: the next paint strands the party
   Object.values(R.map.tiles).forEach((T) => { if (T.painted) T.done = true; });
   await open(g, R); fitCam(g);
   const T = frontier(g, R).find((x) => x.type === 'empty');
@@ -327,13 +327,13 @@ await t.test('map:paint fires per action, the mercy rule surfaces as a toast, an
   t.eq(errs(g), 0, 'clean');
 });
 
-// ==================================================================================================== brushes
+// ==================================================================================================== Spells
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const chip = (g) => $(g, '.mp-chip');
 const modeBar = (g) => $(g, '.mp-mode');
 const cellsKey = (cells) => JSON.stringify(cells.map((c) => c[0] + ',' + c[1]).sort());
 
-await t.test('every brush through the screen: chip, glowing anchors, hover preview, aim, apply paints exactly MAP.brushCells and uses the brush up', async () => {
+await t.test('every Spell through the screen: chip, glowing anchors, hover preview, aim, apply paints exactly MAP.brushCells and uses the Spell up', async () => {
   for (const id of ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot']) {
     for (const seed of [2, 9]) {
       const g = fresh({ seed }); const R = mkRun(g, { seed, brushes: [id], ink: 4 });
@@ -389,7 +389,7 @@ await t.test('every brush through the screen: chip, glowing anchors, hover previ
   }
 });
 
-await t.test('brush mode: touch needs the confirming tap, Esc backs out one level at a time, right click cancels, the Paint button applies', async () => {
+await t.test('Spell mode: touch needs the confirming tap, Esc backs out one level at a time, right click cancels, the Cast button applies', async () => {
   const g = fresh({ seed: 4 }); const R = mkRun(g, { seed: 4, brushes: ['splash', 'fan', 'fan'] });
   await open(g, R); fitCam(g);
   t.eq($$(g, '.mp-chip').length, 2, 'one chip per kind');
@@ -419,7 +419,7 @@ await t.test('brush mode: touch needs the confirming tap, Esc backs out one leve
   await clickHex(g, a.q, a.r, { pointerType: 'touch' });
   await clickHex(g, a.q, a.r, { pointerType: 'touch' });
   t.ok(exp.every((c) => tileOf(g, R, c[0], c[1]).painted) && R.brushes.indexOf('splash') < 0, 'the second tap paints');
-  // the Paint button for a fan: anchor, aim by tapping a neighbour, press Paint
+  // the Cast button for a fan: anchor, aim by tapping a neighbour, press Cast
   g._click($(g, '.mp-chip[data-id="fan"]')); await settle(g);
   const fa = [...st(g).brush.anchors.values()].find((x) => x.dirs.length > 1 && g.MAP.tile(R.map, x.q + DIRS[x.dirs[1]][0], x.r + DIRS[x.dirs[1]][1]));
   await clickHex(g, fa.q, fa.r, { pointerType: 'touch' });
@@ -436,7 +436,7 @@ await t.test('brush mode: touch needs the confirming tap, Esc backs out one leve
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('brush mode: an invalid start refuses with a hint, keys B and 1 to 9 pick brushes, an empty tray and a brush with no room say so', async () => {
+await t.test('Spell mode: an invalid start refuses with a hint, keys B and 1 to 9 pick Spells, an empty tray and a Spell with no room say so', async () => {
   const g = fresh({ seed: 6 }); const R = mkRun(g, { seed: 6, brushes: ['stroke', 'halo'] });
   await open(g, R); fitCam(g);
   await press(g, 'b');
@@ -467,7 +467,7 @@ await t.test('brush mode: an invalid start refuses with a hint, keys B and 1 to 
 });
 
 // ==================================================================================================== walking, instants, nodes
-// retype a painted tile near the party into `type` (content given) so a real RUN.step on it makes the real node
+// retype an unmuted tile near the party into `type` (content given) so a real RUN.step on it makes the real node
 function plant(g, R, type, content, minDist = 1, maxDist = 2) {
   const M = R.map, pos = M.pos;
   const T = Object.values(M.tiles).find((x) => x.painted && x.type === 'empty' && !(x.q === pos.q && x.r === pos.r) && g.MAP.dist(pos.q, pos.r, x.q, x.r) >= minDist && g.MAP.dist(pos.q, pos.r, x.q, x.r) <= maxDist);
@@ -475,7 +475,7 @@ function plant(g, R, type, content, minDist = 1, maxDist = 2) {
   return T;
 }
 
-await t.test('walking: tap painted ground and the party goes there; the bus, RUN.pos and the sounds agree; a tap on the party hex does nothing', async () => {
+await t.test('walking: tap unmuted ground and the party goes there; the bus, RUN.pos and the sounds agree; a tap on the party hex does nothing', async () => {
   for (const seed of SEEDS) {
     const g = fresh({ seed }); const R = mkRun(g, { seed });
     await open(g, R); fitCam(g);
@@ -497,7 +497,7 @@ await t.test('walking: tap painted ground and the party goes there; the bus, RUN
   }
 });
 
-await t.test('walking stops on the first unresolved tile and triggers it: a fight goes to GAME.enterNode with the real node, and the page then ignores taps', async () => {
+await t.test('walking stops on the first unresolved tile and triggers it: a fight goes to GAME.enterNode with the real node, and the map then ignores taps', async () => {
   for (const kind of ['enemy', 'elite']) {
     const g = fresh({ seed: 7 }); const R = mkRun(g, { seed: 7 });
     const T = plant(g, R, kind, {}, 2, 2);
@@ -521,7 +521,7 @@ await t.test('walking stops on the first unresolved tile and triggers it: a figh
 await t.test('the walk goes around trouble when it can and stops on it when it must; a far target behind a fight ends at the fight', async () => {
   const g = fresh({ seed: 11 }); const R = mkRun(g, { seed: 11 });
   const M = R.map, pos = M.pos;
-  // a corridor: every painted tile except a line of three east of the party becomes Void is too invasive, so test the rule through MAP itself
+  // a corridor: every unmuted tile except a line of three east of the party becomes Void is too invasive, so test the rule through MAP itself
   const T1 = plant(g, R, 'enemy', {}, 1, 1);
   const far = Object.values(M.tiles).find((x) => x.painted && x.type === 'empty' && g.MAP.dist(pos.q, pos.r, x.q, x.r) === 2 && g.MAP.dist(T1.q, T1.r, x.q, x.r) === 1);
   await open(g, R); fitCam(g);
@@ -533,7 +533,7 @@ await t.test('the walk goes around trouble when it can and stops on it when it m
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('instants: a well pours its Ink into the meter, a brush rack drops the brush into the tray, both end the walk and go through GAME.enterNode', async () => {
+await t.test('instants: a well pours its Vox into the meter, a Busker drops the Spell into the tray, both end the walk and go through GAME.enterNode', async () => {
   for (const seed of [1, 5, 9]) {
     const g = fresh({ seed }); const R = mkRun(g, { seed, ink: 3 });
     const W = plant(g, R, 'well', { ink: 4 }, 2, 2);
@@ -559,10 +559,10 @@ await t.test('instants: a well pours its Ink into the meter, a brush rack drops 
   }
 });
 
-await t.test('a fable with nothing left to tell resolves as an instant and the screen shows its toast', async () => {
+await t.test('a Detour with nothing left to tell resolves as an instant and the screen shows its toast', async () => {
   const g = fresh({ seed: 12 }); const R = mkRun(g, { seed: 12 });
   g.DATA.LISTS.chapters.forEach(() => {});
-  R.seen.events = Object.keys(g.DATA.events);                      // every fable already told
+  R.seen.events = Object.keys(g.DATA.events);                      // every Detour already told
   const E = plant(g, R, 'event', {}, 1, 2);
   g.DATA.events && Object.values(g.DATA.events).forEach((e) => { e.__once = e.once; e.once = true; });
   await open(g, R); fitCam(g);
@@ -612,7 +612,7 @@ const wheelAtStage = (g, x, y, dy) => wheel(g, g.UI.ox + x * g.UI.scale, g.UI.oy
 const camOf = (g) => md(g).cam();
 const worldAt = (c, x, y) => ({ x: c.x + (x - 640) / c.z, y: c.y + (y - 360) / c.z });
 
-await t.test('camera: starts on the party, drag pans with the page under the finger, glides on, and clamps to the page', async () => {
+await t.test('camera: starts on the party, drag pans with the map under the finger, glides on, and clamps to the map', async () => {
   const g = fresh(); const R = mkRun(g);
   await open(g, R);
   const c0 = camOf(g);
@@ -629,7 +629,7 @@ await t.test('camera: starts on the party, drag pans with the page under the fin
   const p = md(g).screenOf(R.map.pos.q, R.map.pos.r);
   g._pointer('pointerdown', view(g), { x: p.x, y: p.y, id: 3 }); g._pointer('pointermove', view(g), { x: p.x + 3, y: p.y + 2, id: 3 }); g._pointer('pointerup', view(g), { x: p.x + 3, y: p.y + 2, id: 3 });
   t.near(camOf(g).x, c1.x, 1e-6, 'a 3 px wobble does not pan');
-  // inertia: the page keeps gliding after the finger leaves, then stops
+  // inertia: the map keeps gliding after the finger leaves, then stops
   const before = camOf(g).x;
   g._drag(view(g), [900, 400], [700, 400], 6);
   const afterUp = camOf(g).x;
@@ -639,8 +639,8 @@ await t.test('camera: starts on the party, drag pans with the page under the fin
   const rest = camOf(g).x;
   for (let i = 0; i < 10; i++) g._raf(16);
   t.near(camOf(g).x, rest, 1e-6, 'and comes to rest');
-  // clamp: shove the page far in every direction and look at the limits
-  // (the limits are where the padded page edge reaches the edge of the clamp box: the HUD free box plus the fit, DESIGN 4.8; they used to be the window)
+  // clamp: shove the map far in every direction and look at the limits
+  // (the limits are where the padded map edge reaches the edge of the clamp box: the HUD free box plus the fit, DESIGN 4.8; they used to be the window)
   const s = st(g), z = camOf(g).z, B = s.box;
   for (let i = 0; i < 25; i++) g._drag(view(g), [100, 360], [1200, 360], 4);
   for (let i = 0; i < 400; i++) g._raf(16);
@@ -715,7 +715,7 @@ await t.test('camera: the wheel zooms about the pointer inside the limits, two f
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('camera: a small screen starts closer; hexAt maps the stage to the hex under it and nothing outside the page window', async () => {
+await t.test('camera: a small screen starts closer; hexAt maps the stage to the hex under it and nothing outside the map window', async () => {
   const g = fresh({ viewport: { w: 844, h: 390 }, touch: true }); const R = mkRun(g);
   g._resize(844, 390);
   await open(g, R);
@@ -730,9 +730,9 @@ await t.test('camera: a small screen starts closer; hexAt maps the stage to the 
 });
 
 // ==================================================================================================== the camera and the HUD footprint
-// The HUD lies over the page. The camera measures its REAL rectangles (stage px) and keeps the page clear of them: the fit view, the minimum zoom, the pan
+// The HUD lies over the map. The camera measures its REAL rectangles (stage px) and keeps the map clear of them: the fit view, the minimum zoom, the pan
 // range and the follow all work with what the HUD leaves free (DESIGN 4.8). The headless DOM has no layout, so the suite gives each piece the rectangle
-// it has in real Chromium (one brush, two treasures) through `_rect`, or measures nothing at all to see the fixed fallback.
+// it has in real Chromium (one Spell, two Charms) through `_rect`, or measures nothing at all to see the fixed fallback.
 const HUD_SEL = { party: '.mp-party', ink: '.mp-ink', banner: '.mp-banner', gold: '.mp-gold', menu: '.menu-btn', deck: '.mp-t-deck', legend: '.mp-t-legend', fit: '.mp-t-fit', zin: '.mp-t-zin', zout: '.mp-t-zout', tray: '.mp-tray', info: '.mp-info', relics: '.mp-relics', mode: '.mp-mode' };
 const HUD_WIDE = { party: [14, 9, 312, 75], ink: [14, 84, 374, 138], banner: [419, 2, 861, 86], gold: [1134, 14, 1196, 48], menu: [1211, -1, 1269, 57], deck: [1208, 74, 1268, 134], legend: [1205, 143, 1268, 203],
   fit: [1208, 212, 1268, 272], zin: [1202, 281, 1268, 341], zout: [1191, 350, 1268, 410], tray: [567, 605, 714, 710], info: [946, 589, 1268, 708], relics: [14, 642, 139, 708] };
@@ -761,7 +761,7 @@ function hexHits(cx, cy, r, R) {
   }
   return true;
 }
-// the hexes of the page that touch any rectangle (the camera as it stands), and those outside the page window
+// the hexes of the map that touch any rectangle (the camera as it stands), and those outside the map window
 function underHud(g, rects, hexes) {
   const s = st(g), z = s.cam.z, out = [];
   (hexes || Object.values(s.M.tiles)).forEach((T) => {
@@ -778,7 +778,7 @@ function outsideWindow(g) {
     return p.x - h < w.x || p.x + h > w.x + w.w || p.y - r < w.y || p.y + r > w.y + w.h;
   });
 }
-const oldFitZ = (s) => Math.max(0.25, Math.min(1, Math.min(s.win.w / (s.world.x1 - s.world.x0 + 160), s.win.h / (s.world.y1 - s.world.y0 + 160))));   // what Fit used to be: the page plus padding in the window, HUD ignored
+const oldFitZ = (s) => Math.max(0.25, Math.min(1, Math.min(s.win.w / (s.world.x1 - s.world.x0 + 160), s.win.h / (s.world.y1 - s.world.y0 + 160))));   // what Fit used to be: the map plus padding in the window, HUD ignored
 const hudRects = (g, measure) => md(g).hud(measure).rects.map((r) => ({ k: r.k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }));
 async function pressFit(g) { g._doc.activeElement && g._doc.activeElement.blur && g._doc.activeElement.blur(); await press(g, 'f'); }
 
@@ -883,7 +883,7 @@ await t.test('fit: a hidden piece covers nothing, and the translate of the entra
   t.eq(errs(g) + errs(g2), 0, 'clean');
 });
 
-await t.test('pan: at every zoom each corner tile can be dragged clear of the HUD, and the page cannot be lost off screen', async () => {
+await t.test('pan: at every zoom each corner tile can be dragged clear of the HUD, and the map cannot be lost off screen', async () => {
   for (const lay of [{ tab: HUD_WIDE, vp: null }, { tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
     const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
     if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
@@ -911,14 +911,14 @@ await t.test('pan: at every zoom each corner tile can be dragged clear of the HU
         }
         t.ok(clear > 0, where + ' z ' + zz.toFixed(3) + ' ' + name + ': the tile can be dragged clear of the HUD (' + clear + ' of ' + tried + ' places are reachable and free)');
       }
-      // lost off screen: shove the camera to the extremes, the page must stay in the window
+      // lost off screen: shove the camera to the extremes, the map must stay in the window
       [[-1e6, -1e6], [1e6, -1e6], [-1e6, 1e6], [1e6, 1e6]].forEach(([dx, dy]) => {
         const c = md(g).clamp(dx, dy, zz);
         const inWin = tiles.filter((e) => { const px = 640 + (e.x - c.x) * c.z, py = 360 + (e.y - c.y) * c.z; return px > w.x && px < w.x + w.w && py > w.y && py < w.y + w.h; });
         t.ok(inWin.length > 0, where + ' z ' + zz.toFixed(3) + ' shoved to (' + Math.sign(dx) + ',' + Math.sign(dy) + '): the page is still on screen (' + inWin.length + ' hexes)');
       });
     }
-    // and the extremes put the page edge on the free box, not on the window: the edge tiles can be taken clear of the pieces at the window sides
+    // and the extremes put the map edge on the free box, not on the window: the edge tiles can be taken clear of the pieces at the window sides
     const c = md(g).clamp(-1e6, 0, 1), z1 = 1;
     t.ok(640 + (corners.left.x - c.x) * z1 - 46 >= hud.free.x0 - 1e-6 || hud.free.x0 === s.win.x, where + ': dragging the page far right, its left edge stops at the free box');
     t.eq(errs(g), 0, 'clean');
@@ -943,7 +943,7 @@ await t.test('pan: drag, wheel about the pointer and the keyboard cursor still w
   g._click($(g, '.mp-t-zin')); await settle(g);
   t.near(camOf(g).z, 1.3, 1e-9, 'Zoom in multiplies by 1.3');
   t.near(worldAt(camOf(g), mid.x, mid.y).x, wm0.x, 1e-6, 'about the middle of the free box (x)'); t.near(worldAt(camOf(g), mid.x, mid.y).y, wm0.y, 1e-6, 'and y');
-  // the keyboard cursor: Q E A D Z C walk it and the page comes along when it nears the HUD free edge
+  // the keyboard cursor: Q E A D Z C walk it and the map comes along when it nears the HUD free edge
   s.cam.z = 1; s.tz = 1; s.follow = false;
   await press(g, 'Enter');
   for (let i = 0; i < 24; i++) await press(g, 'd');
@@ -974,7 +974,7 @@ await t.test('follow: the party and its neighbours are never under a HUD piece a
       t.eq(hit.length, 0, (lay.vp ? 'phone' : 'desktop') + ' party at ' + T.q + ',' + T.r + ': it and its neighbours are clear' + (hit.length ? ' ' + JSON.stringify(hit) : ''));
     }
     t.ok(checked > 100, 'many hexes were checked (' + checked + ')');
-    // the party starts in the middle of the free box when the page lets it
+    // the party starts in the middle of the free box when the map lets it
     const mid = { x: (s.free.x0 + s.free.x1) / 2, y: (s.free.y0 + s.free.y1) / 2 };
     const centre = tiles.reduce((a, b) => (Math.hypot(b.q - 9, b.r - 6) < Math.hypot(a.q - 9, a.r - 6) ? b : a));
     M.pos = { q: centre.q, r: centre.r }; s.follow = true; await g._tick(2500);
@@ -984,7 +984,7 @@ await t.test('follow: the party and its neighbours are never under a HUD piece a
   }
 });
 
-await t.test('layout changes: a bigger tray, a new brush and a new window size re-fit the camera (and a camera on the fit follows the new fit)', async () => {
+await t.test('layout changes: a bigger tray, a new Spell and a new window size re-fit the camera (and a camera on the fit follows the new fit)', async () => {
   const g = fresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke'] });
   await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
   const v0 = md(g).hud().ver, z0 = md(g).hud().fit.z;
@@ -1004,7 +1004,7 @@ await t.test('layout changes: a bigger tray, a new brush and a new window size r
   s.follow = false; s.cam.z = 1.4; s.tz = 1.4; s.cam.x = 900; s.cam.y = 400;
   layOut(g, tall); await g._tick(400);
   t.near(camOf(g).z, 1.4, 1e-9, 'a zoomed-in camera keeps its zoom'); t.ok(!camOf(g).fitted, 'and stays off the fit');
-  // a brush gained: the tray is rebuilt and the footprint measured again at once (the next frame, not the next poll)
+  // a Spell gained: the tray is rebuilt and the footprint measured again at once (the next frame, not the next poll)
   layOut(g, HUD_WIDE); await g._tick(400);
   const ver = md(g).hud().ver;
   $(g, '.mp-tray')._rect = { left: 477, top: 605, width: 340, height: 105 };
@@ -1022,12 +1022,12 @@ await t.test('layout changes: a bigger tray, a new brush and a new window size r
   t.eq(errs(g), 0, 'clean');
 });
 
-// the real rectangles of the layouts the follow-up audits found failing (measured in Chromium): no brush (a slim tray strip), and the Larger text size (a wider, taller info chip)
+// the real rectangles of the layouts the follow-up audits found failing (measured in Chromium): no Spell (a slim tray strip), and the Larger text size (a wider, taller info chip)
 const HUD_WIDE_0 = Object.assign({}, HUD_WIDE, { tray: [475, 651, 805, 710], relics: [14, 642, 158, 708] });
 const HUD_WIDE_13 = Object.assign({}, HUD_WIDE, { banner: [405, 2, 875, 97], tray: [433, 646, 847, 710], info: [893, 564, 1268, 708], relics: [14, 642, 176, 708] });
-const BAR_WIDE = [340, 2, 940, 74], BAR_COMPACT = [447, 2, 833, 99];     // the brush mode bar where it hangs (the chapter banner's slot at the top)
+const BAR_WIDE = [340, 2, 940, 74], BAR_COMPACT = [447, 2, 833, 99];     // the Spell mode bar where it hangs (the Act banner's slot at the top)
 
-// Can the page be panned, inside the real clamp range, so that this tile's hex (its bounding box, 0.75 px of overlap forgiven) is clear of every piece? Exact: the
+// Can the map be panned, inside the real clamp range, so that this tile's hex (its bounding box, 0.75 px of overlap forgiven) is clear of every piece? Exact: the
 // reachable screen positions of a tile are a rectangle, and a free position, when there is one, has its x and y on the edge of a piece grown by the hex.
 function tileReachable(e, rng, z, rects) {
   const SQ = Math.sqrt(3), r = 46 * z * (e.T.type === 'boss' ? 1.2 : 1), hw = SQ / 2 * r, PEN = 0.75;
@@ -1086,14 +1086,14 @@ await t.test('pan: at EVERY zoom above the minimum (1.005 x zMin to the maximum 
   t.ok(oldBad > 0, 'and the sweep has teeth: the old rule fails it (' + oldBad + ' tile and zoom pairs)');
 });
 
-await t.test('pan: a wheel zoom in from Fit keeps the point under the pointer fixed, near the right of the page too (the old clamp pulled the page 118 px on the first notch)', async () => {
+await t.test('pan: a wheel zoom in from Fit keeps the point under the pointer fixed, near the right of the map too (the old clamp pulled the map 118 px on the first notch)', async () => {
   for (const lay of [{ tab: HUD_WIDE_0, vp: null }, { tab: HUD_WIDE_13, vp: null }, { tab: HUD_COMPACT, vp: { w: 844, h: 390 } }]) {
     for (const chapter of [1, 2, 3]) {
       const g = lay.vp ? fresh({ viewport: lay.vp, touch: true }) : fresh();
       if (lay.vp) g._resize(lay.vp.w, lay.vp.h);
       await open(g, mkRun(g, { seed: 7, chapter, brushes: ['stroke'] })); layOut(g, lay.tab); await g._tick(400);
       const hud = md(g).hud(), s = st(g);
-      // a pointer on the page (its screen box at the fit) at the right, the left, the top, the bottom and the middle
+      // a pointer on the map (its screen box at the fit) at the right, the left, the top, the bottom and the middle
       const px = (wx) => 640 + (wx - hud.fit.x) * hud.fit.z, py = (wy) => 360 + (wy - hud.fit.y) * hud.fit.z;
       const W = s.world, pts = [[px(W.x1 - 40), py((W.y0 + W.y1) / 2)], [px(W.x0 + 40), py((W.y0 + W.y1) / 2)], [px((W.x0 + W.x1) / 2), py(W.y0 + 40)], [px((W.x0 + W.x1) / 2), py(W.y1 - 40)], [px((W.x0 + W.x1) / 2), py((W.y0 + W.y1) / 2)], [px(W.x1 - 40), py(W.y1 - 40)]];
       for (const [x, y] of pts) {
@@ -1112,7 +1112,7 @@ await t.test('pan: a wheel zoom in from Fit keeps the point under the pointer fi
   }
 });
 
-await t.test('brush mode bar: it is part of the HUD footprint only while a brush is armed, the fit is solved again when it comes and goes and returns to the same fit, and a camera on the fit follows', async () => {
+await t.test('Spell mode bar: it is part of the HUD footprint only while a Spell is armed, the fit is solved again when it comes and goes and returns to the same fit, and a camera on the fit follows', async () => {
   const g = fresh(); const R = mkRun(g, { seed: 3, brushes: ['stroke', 'fan'] });
   await open(g, R); layOut(g, HUD_WIDE); await g._tick(400);
   const h0 = md(g).hud(); t.eq(h0.rects.length, 13, 'unarmed: the bar covers nothing'); t.ok(!h0.rects.some((r) => r.k === 'mode'), 'it is not in the footprint');
@@ -1128,7 +1128,7 @@ await t.test('brush mode bar: it is part of the HUD footprint only while a brush
   t.ok(h1.ver > v0 && h1.rects.length === 14 && bar && bar.live && bar.x0 === 340 && bar.y1 === 74, 'armed: the next frame measures the bar into the footprint (version ' + v0 + ' to ' + h1.ver + ')');
   t.ok(h1.fit.z >= h0.fit.z * 0.97, 'a bar in the banner\'s slot costs the page next to nothing (' + h0.fit.z.toFixed(4) + ' to ' + h1.fit.z.toFixed(4) + ')');
   t.eq(underHud(g, hudRects(g)).length, 0, 'and the fit is clear of every piece, the bar included');
-  // a bar that grew (a long line of text at some size) pushes the fit, the camera on the fit moves with it, and putting the brush away restores the old fit exactly
+  // a bar that grew (a long line of text at some size) pushes the fit, the camera on the fit moves with it, and putting the Spell away restores the old fit exactly
   layOut(g, Object.assign({}, HUD_WIDE, { mode: [300, 2, 980, 300] })); await g._tick(400);
   const h2 = md(g).hud();
   t.ok(h2.fit.z < h0.fit.z - 0.01, 'a tall bar shrinks the fit (' + h0.fit.z.toFixed(3) + ' to ' + h2.fit.z.toFixed(3) + ')');
@@ -1141,19 +1141,19 @@ await t.test('brush mode bar: it is part of the HUD footprint only while a brush
   t.ok(h3.ver > v2 && h3.rects.length === 13, 'put away: the next frame measures the bar out of the footprint');
   t.near(h3.fit.z, h0.fit.z, 1e-12, 'back to the same fit zoom'); t.near(h3.fit.x, h0.fit.x, 1e-9, 'and placement'); t.near(h3.fit.y, h0.fit.y, 1e-9, 'exactly');
   t.ok(camOf(g).fitted && Math.abs(camOf(g).z - h0.fit.z) < 1e-9, 'the camera is on the normal fit again');
-  // zoomed in, the camera is only clamped, never yanked, when a brush comes and goes
+  // zoomed in, the camera is only clamped, never yanked, when a Spell comes and goes
   {
     const s = st(g); s.follow = false; s.fitted = false; s.cam.z = 1.2; s.tz = 1.2; s.cam.x = 900; s.cam.y = 400;
     layOut(g, Object.assign({}, HUD_WIDE, { mode: [300, 2, 980, 300] })); g._click($$(g, '.mp-chip')[1]); await settle(g); await g._tick(400);
     t.near(camOf(g).z, 1.2, 1e-9, 'a zoomed in camera keeps its zoom when the brush is armed'); t.ok(!camOf(g).fitted, 'and stays off the fit');
   }
-  // switching from one brush to another keeps the bar up and the footprint as it is
+  // switching from one Spell to another keeps the bar up and the footprint as it is
   const v4 = md(g).hud().ver; await press(g, 'b'); await g._tick(400);
   t.ok(!modeBar(g).hidden && md(g).hud().rects.length === 14 && md(g).hud().ver >= v4, 'B switches brush: the bar stays in the footprint');
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('css: the brush mode bar hangs from the top in the banner slot, clear of the party plate, the tray and the info chip, with a fixed size; the info chip stops short of the full brush tray at every text size', () => {
+await t.test('css: the Spell mode bar hangs from the top in the banner slot, clear of the party plate, the tray and the info chip, with a fixed size; the info chip stops short of the full Spell tray at every text size', () => {
   const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
   const rule = (sel) => Array.from(css.matchAll(new RegExp('(?:^|\\})\\s*' + sel.replace(/[.#]/g, '\\$&') + '\\s*\\{([^}]*)\\}', 'g'))).map((m) => m[1]).join(' ');     // every rule of exactly this selector
   const bar = rule('.mp-mode');
@@ -1189,7 +1189,7 @@ await t.test('info chip copy: the walk hint and the resting hint come in shorter
     const rest = txt($(g, '.mp-info'));
     t.ok(/walk/.test(rest) && /unmute/i.test(rest), tier.name + ': the resting chip says to paint fog and walk on painted ground (' + rest.slice(0, 80) + ')');
     t.ok(tier.vp ? /ground to walk\./.test(txt($(g, '.mp-info-act'))) : /tap live ground to walk\./.test(txt($(g, '.mp-info-text'))), tier.name + ': and the whole sentence is there');
-    // every hex of a fully painted page, then of the unpainted one with the party's Ink low: the longest action line of each kind
+    // every hex of a fully unmuted map, then of the muted one with the party's Vox low: the longest action line of each kind
     fullyPainted(g, R); st(g).infoKey = ''; fitCam(g);
     let longest = 0, longestTxt = '', walks = new Set();
     for (const T of Object.values(R.map.tiles).filter((x) => x.type !== 'block')) {
@@ -1213,7 +1213,7 @@ await t.test('realtime: the camera on the fit glides to a fit that moved, whiche
   await open(g, R); layOut(g, HUD_WIDE); await g._tick(4500);
   await pressFit(g); await g._tick(2500);
   t.ok(camOf(g).fitted, 'on the fit');
-  const small = Object.assign({}, HUD_WIDE, { tray: [475, 651, 805, 710], relics: [14, 642, 158, 708] });         // the last brush used: the tray is a slim strip, the fit grows
+  const small = Object.assign({}, HUD_WIDE, { tray: [475, 651, 805, 710], relics: [14, 642, 158, 708] });         // the last Spell used: the tray is a slim strip, the fit grows
   const frames = (n) => { const out = []; for (let i = 0; i < n; i++) { g._raf(16); out.push(camOf(g)); } return out; };
   const c0 = camOf(g);
   layOut(g, small);
@@ -1269,7 +1269,7 @@ await t.test('first fit: the slide-in of the HUD is measured out of every piece,
   layOut(g, shifted); await g._tick(400);
   const d1 = md(g).hud().rects.find((r) => r.k === 'deck'), z1 = md(g).hud().fit;
   t.near(d1.y0, d0.y0, 0.5, 'the Deck button is measured where it rests, not where its sliding column puts it'); t.near(z1.z, z0.z, 1e-9, 'so the fit does not move'); t.near(z1.x, z0.x, 1e-6, 'in x'); t.near(z1.y, z0.y, 1e-6, 'and y');
-  // the chip is filled before it is measured, in the source and in the page
+  // the chip is filled before it is measured, in the source and in the map
   const enter = /function enter\(params, root\) \{[\s\S]*?\n  \}\n/.exec(SRC)[0];
   t.ok(enter.indexOf('flushInfo(s)') > 0 && enter.indexOf('flushInfo(s)') < enter.indexOf('relayout(s, true)'), 'enter fills the info chip before the first fit is solved');
   t.ok(/\S/.test(txt($(g, '.mp-info-name'))), 'the chip has its text');
@@ -1306,7 +1306,7 @@ await t.test('css: the hex info chip has a fixed size (clamped text, a name on o
   t.ok(/getBoundingClientRect/.test(SRC) && /FALLBACK_HUD/.test(SRC) && /solveFit/.test(SRC), 'the module measures the DOM and keeps a fallback table');
 });
 
-await t.test('a phone shows fewer charm icons so the strip never slides under the brush tray; the +N chip carries the rest', async () => {
+await t.test('a phone shows fewer charm icons so the strip never slides under the Spell tray; the +N chip carries the rest', async () => {
   const ids = Object.keys(fresh().DATA.relics).slice(0, 8);
   const g = fresh({ viewport: { w: 844, h: 390 }, touch: true });
   const R = mkRun(g, { relics: ids, brushes: ['stroke', 'wave', 'fan'] });
@@ -1325,7 +1325,7 @@ await t.test('a phone shows fewer charm icons so the strip never slides under th
   await open(g3, R3);
   t.eq($$(g3, '.mp-relics .relic').length, 6, 'a full-size screen keeps six');
   t.eq(txt($(g3, '.mp-relic-more')), '+2', 'and +2');
-  // a desktop tray with all six brush kinds starts at x 372, where a six icon strip (x 14 to 394) would slide under it
+  // a desktop tray with all six Spell kinds starts at x 372, where a six icon strip (x 14 to 394) would slide under it
   const g4 = fresh();
   const R4 = mkRun(g4, { relics: ids, brushes: ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot'] });
   await open(g4, R4);
@@ -1365,7 +1365,7 @@ await t.test('keyboard: Q E A D Z C move a hex cursor (announced), Enter paints 
   const ink0 = R.ink;
   await press(g, 'Enter');
   t.ok(T.painted && R.ink === ink0 - 1, 'Enter paints the cursor hex');
-  // Space walks to a painted hex
+  // Space walks to an unmuted hex
   const W = Object.values(M.tiles).find((x) => x.painted && x.type === 'empty' && g.MAP.dist(M.pos.q, M.pos.r, x.q, x.r) === 2);
   st(g).cursor = { q: W.q, r: W.r };
   await press(g, ' ');
@@ -1430,7 +1430,7 @@ await t.test('relics overlay: every charm with art, text and where it came from,
   t.eq(errs(g) + errs(g2), 0, 'clean');
 });
 
-await t.test('legend overlay: tiles, brushes drawn on hexes, controls, and the glossary of words', async () => {
+await t.test('legend overlay: tiles, Spells drawn on hexes, controls, and the glossary of words', async () => {
   const g = fresh(); const R = mkRun(g, { brushes: ['stroke', 'stroke', 'fan'] });
   await open(g, R);
   g._click($(g, '.mp-t-legend')); await settle(g);
@@ -1466,7 +1466,7 @@ await t.test('legend overlay: tiles, brushes drawn on hexes, controls, and the g
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('while an overlay is open the page ignores taps, wheel and keys; closing it gives the page back', async () => {
+await t.test('while an overlay is open the map ignores taps, wheel and keys; closing it gives the map back', async () => {
   const g = fresh({ seed: 3 }); const R = mkRun(g, { seed: 3 });
   await open(g, R); fitCam(g);
   const T = frontier(g, R).filter((x) => x.type !== 'block')[0];
@@ -1489,7 +1489,7 @@ await t.test('leaving: DOM, key listeners and canvas handlers are gone; re-enter
   await open(g, R); fitCam(g);
   const T = frontier(g, R).filter((x) => x.type !== 'block')[0];
   await clickHex(g, T.q, T.r);                                  // a reveal and a hover are in flight
-  g._click($(g, '.mp-chip')); await settle(g);                    // brush mode on
+  g._click($(g, '.mp-chip')); await settle(g);                    // Spell mode on
   g._run('UI.tip.hide()');
   await g.UI.go('title', null, { force: true, transition: 'none' }); await settle(g);
   t.ok(!$(g, '.s-map') && !$(g, '.mp-hud'), 'the screen DOM is gone');
@@ -1509,7 +1509,7 @@ await t.test('leaving: DOM, key listeners and canvas handlers are gone; re-enter
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('a saved run restores to the same page: serialize, deserialize, open', async () => {
+await t.test('a saved run restores to the same map: serialize, deserialize, open', async () => {
   const g = fresh({ seed: 21 }); const R = mkRun(g, { seed: 21, ink: 12 });
   await open(g, R); fitCam(g);
   const f = farFog(g, R, 2, 4);
@@ -1530,7 +1530,7 @@ await t.test('a saved run restores to the same page: serialize, deserialize, ope
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('performance: a fully painted 21 x 13 page draws in a few ms of script time per frame, with culling and no per-frame sprite baking', async () => {
+await t.test('performance: a fully unmuted 21 x 13 map draws in a few ms of script time per frame, with culling and no per-frame sprite baking', async () => {
   const g = fresh(); const R = mkRun(g);
   fullyPainted(g, R);
   await open(g, R); fitCam(g);
@@ -1554,7 +1554,7 @@ await t.test('performance: a fully painted 21 x 13 page draws in a few ms of scr
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('a missing or throwing ART.map never breaks the page: fallbacks draw, taps still work', async () => {
+await t.test('a missing or throwing ART.map never breaks the map: fallbacks draw, taps still work', async () => {
   const g = fresh({ seed: 4 }); const R = mkRun(g, { seed: 4 });
   g._run('ART.map.hex = function () { throw new Error("boom"); }; ART.map.paper = function () { throw new Error("boom2"); }; delete ART.map.fogEdge; delete ART.map.route; delete ART.map.frame; delete ART.map.edgeMasks; delete ART.map.frameInner;');
   await open(g, R); fitCam(g);
@@ -1682,7 +1682,7 @@ await t.test('realtime: speed setting and reduceMotion change the pace of a walk
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('realtime: a well sends drops flying into the meter and the meter fills when they land; a brush rack sends the brush to its chip', async () => {
+await t.test('realtime: a well sends drops flying into the meter and the meter fills when they land; a Busker sends the Spell to its chip', async () => {
   const g = await rt({ seed: 1 }); const R = mkRun(g, { seed: 1, ink: 3 });
   const W = plant(g, R, 'well', { ink: 4 }, 2, 2);
   const B = plant(g, R, 'brush', { id: 'halo' }, 1, 2);
@@ -1707,7 +1707,7 @@ await t.test('realtime: a well sends drops flying into the meter and the meter f
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('realtime: the chapter intro plays once per chapter (title, brush stroke, swoop from the whole page), never twice, and is a fade under reduced motion', async () => {
+await t.test('realtime: the Act intro plays once per Act (title, stripe underline, swoop from the whole map), never twice, and is a fade under reduced motion', async () => {
   const g = await rt({ seed: 9 }); const R = mkRun(g, { seed: 9 });
   await open(g, R);
   t.ok($(g, '.mp-intro') && /Act I/.test(txt($(g, '.mp-intro'))) && txt($(g, '.mp-intro-t')).indexOf(g.DATA.lore.ch1_intro.title) >= 0, 'the first visit shows the chapter title');
@@ -1732,7 +1732,7 @@ await t.test('realtime: the chapter intro plays once per chapter (title, brush s
   t.eq(errs(g) + errs(g2), 0, 'clean');
 });
 
-await t.test('realtime: a node that never opens is retried once and then the page is free again', async () => {
+await t.test('realtime: a node that never opens is retried once and then the map is free again', async () => {
   const g = await rt({ seed: 7 }); const R = mkRun(g, { seed: 7 });
   const T = plant(g, R, 'enemy', {}, 2, 2);
   await open(g, R); fitCam(g); await g._tick(4000);
@@ -1793,7 +1793,7 @@ await t.test('input: pointercancel frees a stuck pointer, contextmenu is swallow
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('input: a keyboard cursor aims a locked brush and Enter applies it; the cursor keeps moving the preview in a plain brush', async () => {
+await t.test('input: a keyboard cursor aims a locked Spell and Enter applies it; the cursor keeps moving the preview in a plain Spell', async () => {
   const g = fresh({ seed: 12 }); const R = mkRun(g, { seed: 12, brushes: ['fan', 'splash'] });
   await open(g, R); fitCam(g);
   await press(g, '1');
@@ -1813,7 +1813,7 @@ await t.test('input: a keyboard cursor aims a locked brush and Enter applies it;
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('pending choices left by RUN are answered with a safe default so the page can never soft lock', async () => {
+await t.test('pending choices left by RUN are answered with a safe default so the map can never soft lock', async () => {
   const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5 });
   const deck0 = R.deck.length;
   const res = g.RUN.applyOps(R, [{ op: 'removeCard', n: 1 }], {});
@@ -1851,7 +1851,7 @@ await t.test('the hex anchor sits on the first hex of the cheapest chain to the 
   const cx = parseFloat(a.style.left) + parseFloat(a.style.width) / 2, cy = parseFloat(a.style.top) + parseFloat(a.style.height) / 2;
   t.near(cx, p.x, 1.5, 'centred on that hex (x)'); t.near(cy, p.y, 1.5, 'and y');
   t.ok(parseFloat(a.style.width) > 20, 'sized like a hex on screen');
-  // right after painting it the anchor marks the hex that was just painted (that is what the `walk` hint points at) ...
+  // right after unmuting it the anchor marks the hex that was just unmuted (that is what the `walk` hint points at) ...
   await clickHex(g, cell[0], cell[1]);
   for (let i = 0; i < 8; i++) g._raf(16);
   const next = g.MAP.solve(R.map).path[0];
@@ -1874,8 +1874,8 @@ await t.test('the hex anchor sits on the first hex of the cheapest chain to the 
   t.eq(errs(g), 0, 'clean');
 });
 
-// ==================================================================================================== the soak: paint a chain to the boss and walk there, on many seeds in all three chapters
-await t.test('soak: on 8 seeds in each chapter the screen paints the cheapest chain to the boss, walks, resolves what it meets, re-enters the page, and ends on the boss node', async () => {
+// ==================================================================================================== the soak: paint a chain to the boss and walk there, on many seeds in all three Acts
+await t.test('soak: on 8 seeds in each Act the screen paints the cheapest chain to the boss, walks, resolves what it meets, re-enters the map, and ends on the boss node', async () => {
   const listeners0 = {};
   const summary = [];
   for (const chapter of [1, 2, 3]) {
@@ -1912,7 +1912,7 @@ await t.test('soak: on 8 seeds in each chapter the screen paints the cheapest ch
             const n = ent[ent.length - 1];
             if (n.done) instants++;
             else if (n.kind === 'combat' && n.tier === 'boss') bossNode = n;
-            else { nodes++; g.RUN.finishNode(R); await open(g, R); }       // a fight, shop or fable resolved elsewhere: come back to the page
+            else { nodes++; g.RUN.finishNode(R); await open(g, R); }       // a fight, shop or Detour resolved elsewhere: come back to the map
           } else if (JSON.stringify(R.map.pos) === before) { t.ok(false, 'ch' + chapter + ' seed ' + seed + ': the walk toward the boss made no progress'); break; }
         }
         if (R.ink < 0 || R.ink > R.inkMax) { t.ok(false, 'Ink out of range ' + R.ink); break; }
@@ -1973,7 +1973,7 @@ await t.test('stress: 600 seeded random actions (taps anywhere, keys, wheel, dra
   }
 });
 
-// ==================================================================================================== Echo: every woken hex sings, the Hush follows the land
+// ==================================================================================================== Audio: every unmuted hex sings, the Gloss follows the live ground
 const chipOf = (g) => $(g, '.mp-chip');
 async function singSong(g, R, id) {
   g._click(chipOf(g)); await settle(g);
@@ -2045,7 +2045,7 @@ await t.test('realtime echo: a chain sings its hexes in path order and holds the
   t.eq(errs(g), 0, 'clean');
 });
 
-await t.test('realtime echo: a Song sings every cell it wakes with its own gesture (brush_use, no extra paint)', async () => {
+await t.test('realtime audio: a Spell sings every cell it unmutes with its own gesture (brush_use, no extra paint)', async () => {
   for (const id of ['fan', 'splash']) {
     const g = await rt({ seed: 4 }); const R = mkRun(g, { seed: 4, brushes: [id], ink: 4 });
     await open(g, R); fitCam(g);
@@ -2063,7 +2063,7 @@ await t.test('realtime echo: a Song sings every cell it wakes with its own gestu
   }
 });
 
-await t.test('echo: the Hush follows the painted share (AUDIO.awake from the progress meter)', async () => {
+await t.test('audio: the Gloss follows the unmuted share (AUDIO.awake from the progress meter)', async () => {
   const g = fresh({ seed: 5 }); const R = mkRun(g, { seed: 5, ink: 9 });
   await open(g, R); fitCam(g);
   const a0 = awakes(g).slice();
@@ -2074,6 +2074,98 @@ await t.test('echo: the Hush follows the painted share (AUDIO.awake from the pro
   const a1 = awakes(g);
   t.near(a1[a1.length - 1], g.MAP.progress(R.map).frac, 1e-9, 'and follows a paint');
   t.ok(a1[a1.length - 1] > a0[a0.length - 1], 'it grew');
+});
+
+// ---- P8 8C: the audio anchors of the new band (HV_ART_AUDIO 10.3, 10.6, 10.7). Presentation only: none of these touch a map, a RUN call or a random draw.
+const SPELL_CHAPTER = { stroke: 1, wave: 2, fan: 3, splash: 1, halo: 2, blot: 3 };
+await t.test('P8 echo: every Spell sings through AUDIO.wake with its id, its anchor and its place in the cast, in every Act (the first cell carries the gesture)', async () => {
+  for (const id of ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot']) {
+    const g = await rt({ seed: 4 }); const R = mkRun(g, { seed: 4, chapter: SPELL_CHAPTER[id], brushes: [id], ink: 4 });
+    await open(g, R); fitCam(g);
+    await g._tick(4000);
+    g._run("globalThis.__wakeFull = []; { const o = AUDIO.wake; AUDIO.wake = function (q, r, x) { __wakeFull.push(JSON.parse(JSON.stringify([q, r, x || null]))); return o ? o.call(AUDIO, q, r, x) : false; }; }");
+    const s0 = sfx(g).length, before = g.MAP.progress(R.map).painted;
+    const pick = await singSong(g, R, id);
+    await g._tick(3000);
+    const painted = g.MAP.progress(R.map).painted - before, M = R.map;
+    const calls = g._run('__wakeFull').filter((c) => !(c[2] && c[2].soft));
+    const tag = id + ' (Act ' + M.chapter + ')';
+    t.eq(M.chapter, SPELL_CHAPTER[id], tag + ': the run is in the Act asked for');
+    t.ok(painted > 0 && calls.length === painted, tag + ': one wake per unmuted hex (' + painted + ')');
+    t.ok(calls.every((c) => c[2].song === id), tag + ': every call names the Spell');
+    t.deep(calls.map((c) => c[2].i), calls.map((c, k) => k), tag + ': i counts the cast from 0, so the first cell is the one that carries the gesture');
+    t.ok(calls.every((c) => c[2].n === calls.length), tag + ': n is the size of the cast');
+    t.ok(calls.every((c) => c[2].aq === pick.a.q && c[2].ar === pick.a.r), tag + ': every call carries the anchor hex');
+    t.deep(calls.map((c) => c[2].last ? 1 : 0), calls.map((c, k) => (k === calls.length - 1 ? 1 : 0)), tag + ': only the last cell is the held one');
+    const dist = calls.map((c) => g.MAP.dist(pick.a.q, pick.a.r, c[0], c[1]));
+    t.ok(dist.every((d, k) => k === 0 || d >= dist[k - 1]), tag + ': the cells sing nearest the anchor first');
+    t.ok(calls.every((c) => c[2].chapter === M.chapter && c[2].seed === M.seed && c[2].cols === M.cols && c[2].rows === M.rows), tag + ': the map\'s own chapter, seed, cols and rows ride along (the tune is the map\'s)');
+    t.ok(calls.every((c) => typeof c[2].pan === 'number' && Math.abs(c[2].pan) <= 0.5), tag + ': panned with the hex\'s place on the stage');
+    t.ok(calls.every((c) => Number.isInteger(g.AUDIO.wakeDegree(c[0], c[1], c[2]))), tag + ': the degree the call will sing is a whole scale step');
+    t.ok(sfx(g).slice(s0).indexOf('brush_use') >= 0, tag + ': brush_use plays with the cast');
+    t.eq(errs(g), 0, tag + ': clean');
+  }
+});
+
+await t.test('P8 Act III swing: every Act\'s map track is driven by AUDIO.awake, and an Act III map feeds it as the land is unmuted', async () => {
+  const g = fresh({ seed: 5 });
+  [1, 2, 3].forEach((ch) => {
+    const id = g.UI.screens.map.music({ R: { chapter: ch } }), d = g.AUDIO.compose(id);
+    t.ok(d && d.drive === 'awake', 'Act ' + ch + ': ' + id + ' follows AUDIO.awake');
+  });
+  const q3 = g.AUDIO.compose('map3').quant;
+  t.ok(q3 && q3.swing > 0 && q3.human > 0, 'the Perfect Stage map track also carries the quant drive: dead on the grid with nothing unmuted, swinging as the land goes live');
+  const R = mkRun(g, { seed: 5, chapter: 3, ink: 9 });
+  await open(g, R); fitCam(g);
+  t.eq(R.map.chapter, 3, 'an Act III map');
+  const a0 = awakes(g).slice();
+  t.ok(a0.length > 0, 'AUDIO.awake was told on enter');
+  t.near(a0[a0.length - 1], g.MAP.progress(R.map).frac, 1e-9, 'with the live share of the page');
+  const T = frontier(g, R).filter((x) => x.type !== 'block')[0];
+  await clickHex(g, T.q, T.r); await settle(g); await g._tick(100);
+  const a1 = awakes(g);
+  t.near(a1[a1.length - 1], g.MAP.progress(R.map).frac, 1e-9, 'and follows a paint');
+  t.ok(a1[a1.length - 1] > a0[a0.length - 1], 'it grew');
+  t.ok(a1.every((f) => typeof f === 'number' && f >= 0 && f <= 1), 'always a share between 0 and 1');
+  fullyPainted(g, R);
+  await g.UI.go('map', { R }, { force: true, transition: 'none' }); await settle(g);
+  t.eq(awakes(g)[awakes(g).length - 1], 1, 'a fully unmuted Act III page tells it 1 (the band is fully live)');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('P8 source rule: every AUDIO call in the map screen is guarded by isFn and wrapped in safe, so a missing or throwing AUDIO leaves the map playing silently', () => {
+  const code = SRC.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');                 // the comment lines talk about AUDIO calls too
+  const names = new Set([...code.matchAll(/\bAUDIO\.(\w+)\(/g)].map((m) => m[1]));
+  ['sfx', 'wake', 'wakeDegree', 'awake'].forEach((n) => t.ok(names.has(n), 'the screen calls AUDIO.' + n));
+  for (const m of code.matchAll(/\bAUDIO\.(\w+)\(/g)) {
+    const at = m.index, win = code.slice(Math.max(0, at - 1800), at);
+    t.ok(win.indexOf('isFn(AUDIO.' + m[1] + ')') >= 0, 'AUDIO.' + m[1] + ' at ' + at + ' is behind isFn(AUDIO.' + m[1] + ')');
+    t.ok(win.lastIndexOf('safe(') >= 0, 'AUDIO.' + m[1] + ' at ' + at + ' is inside safe(');
+  }
+});
+
+await t.test('P8 realtime: with AUDIO.sfx, wake, wakeDegree and awake missing or throwing, a chain, a Spell and a walk still play out, silently and clean', async () => {
+  for (const mode of ['missing', 'throwing']) {
+    const g = await rt({ seed: 6 }); const R = mkRun(g, { seed: 6, brushes: ['fan'], ink: 14 });
+    await open(g, R); fitCam(g);
+    await g._tick(4000);
+    g._run(mode === 'missing'
+      ? "AUDIO.sfx = undefined; AUDIO.wake = undefined; AUDIO.wakeDegree = undefined; AUDIO.awake = undefined;"
+      : "{ const boom = () => { throw new Error('speaker on fire'); }; AUDIO.sfx = boom; AUDIO.wake = boom; AUDIO.wakeDegree = boom; AUDIO.awake = boom; }");
+    const f = farFog(g, R, 3, 5), p0 = g.MAP.progress(R.map).painted;
+    t.ok(!!f, mode + ': a chain exists');
+    await clickHex(g, f.T.q, f.T.r); await clickHex(g, f.T.q, f.T.r);
+    await g._tick(f.pre.path.length * 130 + 400);
+    const p1 = g.MAP.progress(R.map).painted;
+    t.ok(p1 - p0 === f.pre.path.length, mode + ': the chain was still unmuted (' + (p1 - p0) + ' hexes)');
+    await singSong(g, R, 'fan');
+    await g._tick(3000);
+    t.ok(g.MAP.progress(R.map).painted > p1, mode + ': and so was the Spell');
+    const far = Object.values(R.map.tiles).filter((T) => T.painted && T.type === 'empty' && !(T.q === R.map.pos.q && T.r === R.map.pos.r)).map((T) => ({ T, p: g.MAP.walkPath(R.map, T.q, T.r) })).filter((x) => x.p && x.p.length >= 3)[0];
+    if (far) { const at0 = { q: R.map.pos.q, r: R.map.pos.r }; await clickHex(g, far.T.q, far.T.r); await g._tick(far.p.length * 400 + 400); t.ok(R.map.pos.q !== at0.q || R.map.pos.r !== at0.r, mode + ': the party walked (a walk may stop short on content)'); }
+    t.eq(errs(g), 0, mode + ': no console errors');
+    t.eq(g._run('window.__errors.length'), 0, mode + ': no UI errors');
+  }
 });
 
 await t.done();

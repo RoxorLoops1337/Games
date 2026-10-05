@@ -35,7 +35,7 @@
 // EXTRAS BEYOND DESIGN (all optional for callers)
 //   SCENE.autoBanners(on?)              read or set the opt-in above at run time
 //   SCENE.gateMs(evt, prev, next?, lookahead?) -> ms     the pure gate table (DESIGN 5.9 item 5), used by play() and by the suite
-//   SCENE.sfxForEvent(evt) -> [[id, opts?]]              the pure SFX map (DESIGN 5.9 item 7), used by play() and by the suite
+//   SCENE.sfxForEvent(evt) -> [[id, opts?]]              the pure SFX map (DESIGN 5.9 item 7), used by play() and by the suite; opts.hero names the hero voice (see SFX below)
 //   SCENE.actorInfo(kind, id) -> snapshot | null         pose, hp, block, st, down, row, lane, phase, x, y, offsets (for tests and tooling)
 //   SCENE.stats() -> {mounted, at, particles, fx, numbers, timers, gates, banners, bubbles, shake, freeze, speed, fit, aim, ...}   SCENE.signature() -> int (a hash of the visible state)
 //   SCENE.shout(unitId, text)           lilac starburst enemy speech bubble (raised for enemy_act.say and enemy_phase.say)
@@ -47,7 +47,7 @@
 // LAYOUT (stage px)    ground y 520; front hero (330, 520, s 1), back hero (170, 508, s 0.94); enemy lanes x = [560, 705, 850, 995, 1120], lane 4 nearest the right edge.
 //   Lanes are FIXED for the whole fight (a unit never changes lane, a dead unit leaves its lane empty until a summon takes it). Draw order: by ground y, then x,
 //   with an attacker or a hopping hero lifted above the rest. `anchor` is the actor bounds rect scaled from ART.*.bounds, `head` and `feet` inside it.
-//   STAGE FIT: when an enemy's art reaches past the right screen edge from its lane (ART.enemy.bounds `right`: an xl boss's tails and wings, the tengu's wing, the
+//   STAGE FIT: when an enemy's art reaches past the right screen edge from its lane (ART.enemy.bounds `right`: an xl boss's tails and wings, the `crow_tengu` gull's wing, the
 //   boss and elite ground ring), the whole enemy line slides left by that overhang plus 10 px at mount (never more than 240). Gaps between lanes are unchanged, so
 //   screen_combat's bar widths and chip caps (which only use lane DISTANCES) stay right, and SCENE.anchor already reports the shifted positions. stats().fit is the shift.
 //
@@ -65,6 +65,11 @@
 // SFX: SCENE plays every combat sound through AUDIO.sfx, following the map of DESIGN 5.9 item 7 exactly (SCENE.sfxForEvent is that map). Extras beyond the map, all
 //   quiet and documented: `hurt` ticks (poison_tick, flame, hit_light), `immune` (block_hit), the `end` stingers (victory, defeat), `boss_intro` with the AUTOMATIC boss
 //   intro only, and staggered repeats of card_draw for multi-card draws (at most 4, delay 55 ms each). Hit sounds pan with the stage x of the target.
+//   THE HERO VOICE (HV_ART_AUDIO 10.8): a sound that belongs to one hero carries `{hero: id}` in its option object, and AUDIO.sfx plays that hero's variant (`id.hero`) when
+//   one exists (else the base recipe, or the owners' recording of the variant). The voices: a card play wears the hero who played it (the card's hero), a swap the new lead, hero_down
+//   and hero_revive the hero; a hit, a blocked hit or a thud landing ON a hero, block_gain, block_break, heal and dodge wear that hero. Hero ids are the internal ones (hanae is
+//   Jasmin, kuro RoxorLoops, suzu RawClaw, raiga Andy). An enemy, a missing id or an unknown string adds no `hero` key at all, and the element layers never carry one, so the
+//   base sound plays exactly as it did before. It is data only: nothing here changes a gate, a draw or a random stream.
 //
 // SETTINGS: UI.opt.reduceMotion (and ART.tk.opt.reduceMotion) turns off shake, zoom, impact frames, chromatic split, full-screen speed lines and flashes (a 60 ms tint replaces
 //   a flash), zeroes the parallax, cuts particles to x0.3 and drops the entrance slides. UI.opt.shake scales shake, UI.opt.damageNumbers hides numbers, UI.opt.textScale
@@ -159,7 +164,7 @@ const SCENE = (() => {
     lilac: '#e6d9ff', gold: '#ffd84d', orange: '#ff9a2e', teal: '#2ec4b6', sky: '#7cc6ff', night: '#150e36', indigo: '#2a1d5a', curtain: '#c8264f', curtainD: '#8f1838', curtainL: '#e8466f' };
   const HV_FONT = '"Arial Rounded MT Bold", "Nunito", "Quicksand", "Varela Round", "Trebuchet MS", system-ui, sans-serif';
   const BULBS = [HV.pink, HV.gold, HV.green, HV.sky];            // the stage bulb colours, in marquee order
-  // buff and status colours for auras, pops and glows (HV_ART_AUDIO 6.1: the resources match their heroes, bloom pink, sumi green, ward violet, charge orange)
+  // buff and status colours for auras, pops and glows (HV_ART_AUDIO 6.1: the resources match their heroes, bloom pink, `sumi` (Groove) green, ward violet, charge orange)
   const ST_COL = { might: '#ff7a3a', bulwark: '#5fb4ff', regen: '#7dffb0', thorns: '#c6ff3d', dodge: '#5ff5ff', taunt: '#ffd84d', ritual: '#c49bff', plating: '#d9d4ff', bloom: '#ff7eb6', sumi: '#3fcf6a', ward: '#a77bff',
     charge: '#ff9a2e', vulnerable: '#ff5a7a', weak: '#9a96b8', frail: '#c4a0ff', poison: '#7cf2c8', burn: '#ff8a3d', stun: '#ffd84d', bind: '#b9a6ff', mark: '#ffd84d' };
   // the look of each Act's win-over and victory confetti (HV_ENEMIES 6.4): I petals and bunting flags, II hearts and dimming pixels, III square confetti out of the grid
@@ -324,7 +329,7 @@ const SCENE = (() => {
     return S.bcache[key] || (S.bcache[key] = normBounds(a.kind, a.def));
   }
 
-  // STAGE FIT. An enemy whose picture reaches past the right screen edge from its lane (an xl boss's tails and wings, the tengu's wing, the boss ring) is not
+  // STAGE FIT. An enemy whose picture reaches past the right screen edge from its lane (an xl boss's tails and wings, the `crow_tengu` gull's wing, the boss ring) is not
   // cropped: the WHOLE enemy line slides left by the worst overhang (`bounds.right` is the visible reach right of the feet, art plus ring, see ART.enemy.bounds)
   // plus EDGE_PAD. Every enemy moves by the same amount, so the gaps between lanes stay exactly what screen_combat's bar and chip caps assume, and the
   // shift is fixed at mount (a dead unit never makes the line jump). The nominal lanes in SCENE.LAYOUT stay the DESIGN 5.9 numbers. SCENE.stats().fit reports it.
@@ -999,31 +1004,45 @@ const SCENE = (() => {
     cardCache.set(key, c);
     return c;
   }
-  // The DESIGN 5.9 item 7 map, plus the documented extras. Returns [[id, opts?], ...]
+  // The hero whose voice a sound wears (HV_ART_AUDIO 10.8): the id when it names one of the DATA heroes, else null (an enemy, a missing id and an unknown string are all null).
+  const heroVoice = (id) => (typeof id === 'string' && DATA.heroes && Object.prototype.hasOwnProperty.call(DATA.heroes, id) ? id : null);
+  // the hero a hit, a block or a heal lands ON (null for an enemy or a missing ref)
+  const heroDst = (e) => (e && e.dst && e.dst.kind === 'hero' ? heroVoice(e.dst.id) : null);
+  // an entry [id, opts?] with the hero option added when there is a voice to give; with none the entry is returned untouched, exactly as before
+  function voiced(entry, id) {
+    const h = heroVoice(id);
+    if (h) entry[1] = Object.assign({}, entry[1], { hero: h });
+    return entry;
+  }
+  // The DESIGN 5.9 item 7 map, plus the documented extras. Returns [[id, opts?], ...]; hero sounds carry opts.hero (see THE HERO VOICE in the header)
   function sfxForEvent(e) {
     const out = [];
     if (!e) return out;
     switch (e.type) {
-      case 'play': { const t = cardInfo(e.card).type; out.push([t === 'attack' ? 'card_play_attack' : t === 'power' ? 'card_play_power' : 'card_play_skill']); break; }
+      case 'play': {
+        const t = cardInfo(e.card).type, def = DATA.cards && e.card ? DATA.cards[e.card.id] : null;
+        out.push(voiced([t === 'attack' ? 'card_play_attack' : t === 'power' ? 'card_play_power' : 'card_play_skill'], heroVoice(e.hero) || heroVoice(def && def.hero)));
+        break;
+      }
       case 'hit': {
-        const amount = fin(e.amount, 0), blocked = fin(e.blocked, 0), el = ELEMENT_SFX[e.element] ? e.element : 'slash';
-        if (amount <= 0 && blocked > 0) out.push(['block_hit']);
-        else out.push([e.crit ? 'hit_crit' : fin(e.hits, 1) > 1 ? 'hit_multi' : amount >= 15 ? 'hit_heavy' : 'hit_light']);
+        const amount = fin(e.amount, 0), blocked = fin(e.blocked, 0), el = ELEMENT_SFX[e.element] ? e.element : 'slash', hd = heroDst(e);
+        if (amount <= 0 && blocked > 0) out.push(voiced(['block_hit'], hd));
+        else out.push(voiced([e.crit ? 'hit_crit' : fin(e.hits, 1) > 1 ? 'hit_multi' : amount >= 15 ? 'hit_heavy' : 'hit_light'], hd));
         if (amount > 0) {
           out.push([ELEMENT_SFX[el], { vol: 0.6 }]);
-          if (e.dst && e.dst.kind === 'hero' && amount >= 15) out.push(['thud']);
+          if (e.dst && e.dst.kind === 'hero' && amount >= 15) out.push(voiced(['thud'], hd));
         }
         break;
       }
-      case 'block_lost': if (e.cause === 'hit') out.push(['block_break']); break;
-      case 'block': out.push(['block_gain']); break;
-      case 'heal': out.push(['heal']); break;
+      case 'block_lost': if (e.cause === 'hit') out.push(voiced(['block_break'], heroDst(e))); break;
+      case 'block': out.push(voiced(['block_gain'], heroDst(e))); break;
+      case 'heal': out.push(voiced(['heal'], heroDst(e))); break;
       case 'hurt': if (fin(e.amount, 0) > 0) out.push(e.cause === 'poison' ? ['poison_tick'] : e.cause === 'burn' ? ['flame', { vol: 0.55 }] : ['hit_light', { vol: 0.7 }]); break;
       case 'status': if (fin(e.delta, 0) > 0) out.push([e.s === 'stun' ? 'stun' : statusKind(e.s) === 'debuff' ? 'debuff' : 'buff']); break;
-      case 'immune': out.push(['block_hit', { vol: 0.6 }]); break;
-      case 'dodge': out.push(['dodge']); break;
+      case 'immune': out.push(voiced(['block_hit', { vol: 0.6 }], heroDst(e))); break;
+      case 'dodge': out.push(voiced(['dodge'], heroDst(e))); break;
       case 'thorns': out.push(['thorn']); break;
-      case 'swap': out.push(['swap']); break;
+      case 'swap': out.push(voiced(['swap'], e.front)); break;
       case 'draw': { const n = max(1, min(4, (e.cards && e.cards.length) || 0)); for (let i = 0; i < n; i++) out.push(i ? ['card_draw', { delay: 55 * i }] : ['card_draw']); break; }
       case 'shuffle': out.push(['shuffle']); break;
       case 'discard': out.push(['card_discard']); break;
@@ -1031,8 +1050,8 @@ const SCENE = (() => {
       case 'energy': if (fin(e.delta, 0) > 0) out.push(['energy_gain']); break;
       case 'turn_start': out.push([e.who === 'player' ? 'turn_start' : 'enemy_turn']); break;
       case 'death': out.push([e.tier === 'boss' ? 'boss_die' : 'enemy_die']); break;
-      case 'hero_down': out.push(['hero_down']); break;
-      case 'hero_revive': out.push(['hero_revive']); break;
+      case 'hero_down': out.push(voiced(['hero_down'], e.hero)); break;
+      case 'hero_revive': out.push(voiced(['hero_revive'], e.hero)); break;
       case 'enemy_phase': out.push(['phase_change']); break;
       case 'summon': out.push(['debuff']); break;
       case 'end': out.push([e.result === 'win' ? 'victory' : 'defeat']); break;

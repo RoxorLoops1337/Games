@@ -324,7 +324,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 1: sung arcs, beams and petals (slash cross_slash thrust crescent iai petals bloom petal_storm)
+  // GROUP 1: sung arcs, beams and petals (motif ids `slash` `cross_slash` `thrust` `crescent` `iai` `petals` `bloom` `petal_storm`)
   // ===============================================================================================================
   // a loose cherry petal at (x, y), length len, rotated, in a colour (the hand-painted sticker petal)
   function loosePetal(S, x, y, len, rot, col, sx) {
@@ -504,7 +504,7 @@
   };
 
   // ===============================================================================================================
-  // GROUP 2: guards and lights (wind shield barrier talisman lotus moon sun star)
+  // GROUP 2: guards and lights (motif ids `wind` `shield` `barrier` `talisman` `lotus` `moon` `sun` `star`)
   // ===============================================================================================================
   // sparkles in one line: [x, y, r, colour, detailOnly]
   const sprk = (S, list) => list.forEach((p, i) => { if (!p[4] || S.d) S.spark(p[0], p[1], S.d ? p[2] : p[2] * 1.1, { color: p[3] || '#ffffff', rot: 0.25 * i, alpha: S.tw(i + (S.seed % 3)) }); });
@@ -669,7 +669,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 3: energy (lightning thunder_fist chain_lightning fire flame_orb ice ink_splash ink_wave)
+  // GROUP 3: energy (motif ids `lightning` `thunder_fist` `chain_lightning` `fire` `flame_orb` `ice` `ink_splash` `ink_wave`)
   // ===============================================================================================================
   const SKIN = '#ffd3b0', SKINS = '#f0a485';
   // a comic hit word from the bible's list, drawn big at card detail only (never at icon size)
@@ -826,7 +826,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 4: stage things (brush_stroke calligraphy scroll eye mask fan bell lantern)
+  // GROUP 4: stage things (motif ids `brush_stroke` `calligraphy` `scroll` `eye` `mask` `fan` `bell` `lantern`)
   // ===============================================================================================================
   const WOOD = '#d99a5b', WOODS = '#b27238', DARKGREY = '#3b3856', DARKGREY2 = '#26233c';
   // a stroked ellipse ring with the brown underlay (a flat sound ring seen in perspective)
@@ -1001,7 +1001,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 5: gear and gadgets (koi dragon tiger crane fox web thorns poison_bloom)
+  // GROUP 5: gear and gadgets (motif ids `koi` `dragon` `tiger` `crane` `fox` `web` `thorns` `poison_bloom`)
   // ===============================================================================================================
   // a soap bubble: a thin outlined disc with a shine
   const bubble = (S, x, y, r, col, a) => { S.circle(x, y, r, col || '#ffffff', 0.22 * (a === undefined ? 1 : a)); S.ring(x, y, r, 1.3, LN, 0.9 * (a === undefined ? 1 : a)); S.ring(x, y, r - 1.2, 0.9, col || '#ffffff', 0.9 * (a === undefined ? 1 : a)); S.shine(x - r * 0.35, y - r * 0.4, r * 0.28, r * 0.15, -0.7, 0.9 * (a === undefined ? 1 : a)); };
@@ -1187,7 +1187,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 6: stage magic (skull heal_light spirit_orb torii mirror sword_rain meteor wave)
+  // GROUP 6: stage magic (motif ids `skull` `heal_light` `spirit_orb` `torii` `mirror` `sword_rain` `meteor` `wave`)
   // ===============================================================================================================
   // a crescent polygon (open toward +x): outer circle Ro at (cx, cy), inner circle ri shifted by d
   function moonPoly(cx, cy, Ro, d, ri) {
@@ -1375,7 +1375,7 @@
 
 
   // ===============================================================================================================
-  // GROUP 7: moves and magic (tornado quake fist kick arrow coin key book quill void sigil)
+  // GROUP 7: moves and magic (motif ids `tornado` `quake` `fist` `kick` `arrow` `coin` `key` `book` `quill` `void` `sigil`)
   // ===============================================================================================================
   M.tornado = (S) => {
     const { f } = S, g = S.g;

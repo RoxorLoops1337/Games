@@ -1,61 +1,61 @@
-// Echowake: the map screen (owner: map screen engineer). One IIFE that registers UI.screens.map and the overlays `relics` (replacing the
-// basic version of ui.js) and `legend` (the page legend, tiles, brushes, controls and the glossary of words). Styles live in css/map.css
+// Hocus Vocus: the map screen (owner: map screen engineer). One IIFE that registers UI.screens.map and the overlays `relics` (replacing the
+// basic version of ui.js) and `legend` (the map legend, tiles, Spells, controls and the glossary of words). Styles live in css/map.css
 // (classes mp-* for the screen, .o-relics and .o-legend overlays). This header is the contract of record for screen_map.js.
 //
-// THE PAGE (DESIGN 4.8, 5.3, 5.4, 5.11, 6; ART_BIBLE 6 and 8). Params {R}: R falls back to UI.run. The world is R.map, drawn on #view by
-// screen.draw through ART.map (paper, hex kinds, fog edge, route, brush preview, bloom, token, frame; every call is guarded and has a plain
-// fallback, so a missing or throwing art file never breaks the page). All logic goes through RUN and MAP: RUN.paint, RUN.paintPreview,
+// THE MAP (DESIGN 4.8, 5.3, 5.4, 5.11, 6; ART_BIBLE 6 and 8). Params {R}: R falls back to UI.run. The world is R.map, drawn on #view by
+// screen.draw through ART.map (ground, hex kinds, fog edge, route, Spell preview, bloom, token, frame; every call is guarded and has a plain
+// fallback, so a missing or throwing art file never breaks the map). All logic goes through RUN and MAP: RUN.paint, RUN.paintPreview,
 // RUN.useBrush, RUN.step, MAP.walkPath, MAP.brushAnchors, MAP.brushCells, MAP.dirOf, MAP.progress. The screen never marks a tile itself.
 //
 // INTERACTIONS (pointer events only, mouse, touch and pen share one path)
 //   pan       drag (more than 9 px) with inertia; wheel zooms around the pointer; two fingers pinch and pan; keyboard arrows pan (Shift x3),
-//             + and - zoom, F fits the whole page (again: back to following the party). The camera clamps to the page (zoom aware, and it knows
+//             + and - zoom, F fits the whole map (again: back to following the party). The camera clamps to the map (zoom aware, and it knows
 //             where the HUD is, see THE HUD AND THE CAMERA) and follows the party token while it walks. The buttons on the right do the same for
 //             touch: Deck, Legend, Fit, Zoom in, Zoom out.
-//   fog       tap a fogged hex next to the painted page: RUN.paint for 1 Ink (bloom, ink sound, content pop). Tap a far fogged hex: the cheapest
-//             chain is previewed (RUN.paintPreview) with its Ink cost pill, a second tap on the same hex paints the whole chain in sequence.
-//             Not enough Ink: the meter shakes, a toast says how much is missing and nothing changes. The Void and blank edges say so.
-//   walk      tap a painted hex: MAP.walkPath, the token walks it step by step (RUN.step at each arrival), footsteps, camera follows, and it
-//             stops on the first unresolved tile: a fight, shop, fable... goes to GAME.enterNode after a short beat (the boss gets a long one);
-//             a well pours its Ink into the meter, a brush rack drops the brush into the tray, both are instant and the walk ends there.
-//   brushes   the tray (bottom centre) holds one chip per brush kind. A chip (or B, or the keys 1 to 9) enters brush mode: the legal anchors
-//             glow, hovering (or moving the keyboard cursor) shows the hexes the brush would paint as a wet shape. Line and fan brushes lock an
+//   fog       tap a muted hex next to live ground: RUN.paint for 1 Vox (bloom, `ink_splash` sound, content pop). Tap a far muted hex: the cheapest
+//             chain is previewed (RUN.paintPreview) with its Vox cost pill, a second tap on the same hex unmutes the whole chain in sequence.
+//             Not enough Vox: the meter shakes, a toast says how much is missing and nothing changes. The Blur (Void) and the map edge say so.
+//   walk      tap a live hex: MAP.walkPath, the token walks it step by step (RUN.step at each arrival), footsteps, camera follows, and it
+//             stops on the first unresolved tile: a fight, shop, Detour (`fable`)... goes to GAME.enterNode after a short beat (the boss gets a long one);
+//             a tea stall (`well`) pours its Vox into the meter, a Busker (`brush` tile) drops the Spell into the tray, both are instant and the walk ends there.
+//   Spells    the tray (bottom centre) holds one chip per Spell kind. A chip (or B, or the keys 1 to 9) enters Spell mode: the legal anchors
+//             glow, hovering (or moving the keyboard cursor) shows the hexes the Spell would unmute as a wet shape. Line and fan Spells lock an
 //             anchor first and then aim: the direction follows the pointer (MAP.dirOf) or the neighbour hex you tap; tap the aimed direction,
-//             press Enter or the Paint button to apply (RUN.useBrush). Touch always needs the extra confirming tap. Esc or right click backs out.
+//             press Enter or the Cast button to apply (RUN.useBrush). Touch always needs the extra confirming tap. Esc or right click backs out.
 //   keyboard  Q E A D Z C move the hex cursor (NW NE W E SW SE), Enter or Space activates it like a tap, Esc cancels a chain preview or
-//             a brush, B opens the brush tray, everything on the HUD is a real button. The cursor and every action are announced with UI.announce.
+//             a Spell, B opens the Spell tray, everything on the HUD is a real button. The cursor and every action are announced with UI.announce.
 //
-// HUD (DOM over the canvas): hero badges with HP (top left), the Ink meter of drops (below them), the chapter banner and a progress meter
-// (MAP.progress) at the top, gold and the menu button (top right), the tool column (Deck, Legend, Fit, Zoom), the treasure strip (bottom left,
-// opens the `relics` overlay), the brush tray, a hex info chip (bottom right) that names what the pointer or cursor is on and what a
-// tap would cost, and, while a brush is armed, the brush mode bar (top centre, in the chapter banner's slot: the brush, a line of help, Paint and Cancel). The chapter intro flourish (title, brush stroke, a swoop from the whole page down to the party) plays once per chapter.
+// HUD (DOM over the canvas): hero badges with HP (top left), the Vox meter of drops (below them), the Act banner and a progress meter
+// (MAP.progress) at the top, gold and the menu button (top right), the tool column (Deck, Legend, Fit, Zoom), the Charm strip (bottom left,
+// opens the `relics` overlay), the Spell tray, a hex info chip (bottom right) that names what the pointer or cursor is on and what a
+// tap would cost, and, while a Spell is armed, the Spell mode bar (top centre, in the Act banner's slot: the Spell, a line of help, Cast and Cancel). The Act intro flourish (title, a stripe underline (`.mp-intro-brush`), a swoop from the whole map down to the party) plays once per Act.
 //
-// THE HUD AND THE CAMERA. The HUD lies over the page, so the camera never works with the whole window but with what the HUD leaves free. It measures the
-//           real rectangle of every piece (party, Ink, banner, gold, menu button, the five tools, tray, info chip, treasure strip, and the brush mode bar while a
-//           brush is armed) in stage px, so the compact phone layout, the text size and the number of brushes and treasures are all accounted for, re-measures
+// THE HUD AND THE CAMERA. The HUD lies over the map, so the camera never works with the whole window but with what the HUD leaves free. It measures the
+//           real rectangle of every piece (party, Vox, banner, gold, menu button, the five tools, tray, info chip, Charm strip, and the Spell mode bar while a
+//           Spell is armed) in stage px, so the compact phone layout, the text size and the number of Spells and Charms are all accounted for, re-measures
 //           when any of them moves (a rectangle is taken at rest: the slide-in of the entrance and a hover lift are measured out, ancestors included), and falls
 //           back to a fixed table (FALLBACK_HUD) for a piece it cannot measure (headless pages). From the rectangles it derives
 //             free  the biggest box clear of every piece: the party, a cursor or a fresh tile is centred on its middle (not the window's), the zoom buttons
 //                   turn about it;
 //             fit   the largest zoom, and the placement, at which no hex (boss ring included) touches a piece (6 px of air) or leaves the window: a search
 //                   over zoom and offset (solveFit), about a millisecond, run when the HUD changes and never per frame. zMin IS this zoom, so Fit, the opening
-//                   swoop and the minimum zoom (wheel, pinch, Zoom out) all show the whole page with nothing under the HUD, and at the minimum the camera
+//                   swoop and the minimum zoom (wheel, pinch, Zoom out) all show the whole map with nothing under the HUD, and at the minimum the camera
 //                   sits on the fit;
-//             box   where the edges of the padded page may travel (the clamp): the free box, so at every zoom above the minimum any tile can be dragged into
-//                   ground the HUD leaves free and the page cannot be lost. The page edge may rest inside the box by the gap the fit itself has at its sides
-//                   (s.slack, fading out between 1.6 and 2 x zMin, so the default zoom has none), which keeps a wheel zoom about a pointer over the page anchored when it starts on the fit.
+//             box   where the edges of the padded map may travel (the clamp): the free box, so at every zoom above the minimum any tile can be dragged into
+//                   ground the HUD leaves free and the map cannot be lost. The map edge may rest inside the box by the gap the fit itself has at its sides
+//                   (s.slack, fading out between 1.6 and 2 x zMin, so the default zoom has none), which keeps a wheel zoom about a pointer over the map anchored when it starts on the fit.
 //           The info chip and the mode bar have a fixed size (clamped text) so their footprint does not change with the hex under the pointer or what the bar
-//           says. The bar hangs from the top in the chapter banner's slot (the banner fades while it is up); arming or putting away a brush measures the HUD
+//           says. The bar hangs from the top in the Act banner's slot (the banner fades while it is up); arming or putting away a Spell measures the HUD
 //           again, and a camera on the fit glides to the new fit (it glides to any fit that moved: it is never clamped onto it first).
 //
-// OVERLAYS  relics {relics?: [ids]}: every treasure of the run sorted by rarity, with art, text, rarity and where it came from (the chapter of
-//           RUN's "Found X" log line, or its source by rarity). legend: tabs Map (every tile), Brushes (each shape drawn on hexes), Controls,
+// OVERLAYS  relics {relics?: [ids]}: every Charm of the run sorted by rarity, with art, text, rarity and where it came from (the Act of
+//           RUN's "Found X" log line, or its source by rarity). legend: tabs Map (every tile), Spells (each shape drawn on hexes), Controls,
 //           Words (the glossary of statuses and keywords that the basic legend of ui.js showed).
 //
-// UI.bus: map:paint {q, r, cost} once per paint action (q, r is the tapped target, cost the whole Ink), map:brush {id} when a brush is applied,
-// map:walk {q, r} when a walk starts (the real destination: the walk may stop short on unresolved content). Anchors (data-tut): ink, hex (an
-// invisible box: the first hex of the cheapest chain toward the boss, which is what the `paint` hint points at; right after a paint or a brush it
-// moves to the hex that was just painted, which is what the `walk` hint points at, and goes back to the chain once a walk starts), brushes, deck, relics.
+// UI.bus: map:paint {q, r, cost} once per unmute action (q, r is the tapped target, cost the whole Vox), map:brush {id} when a Spell is cast,
+// map:walk {q, r} when a walk starts (the real destination: the walk may stop short on unresolved content). Anchors (data-tut): `ink` (the Vox meter), hex (an
+// invisible box: the first hex of the cheapest chain toward the boss, which is what the `paint` hint points at; right after an unmute or a Spell it
+// moves to the hex that was just unmuted, which is what the `walk` hint points at, and goes back to the chain once a walk starts), `brushes` (the Spell tray), deck, relics.
 //
 // TIME. Animation runs on update(dt) (the frame clock), so GAME.debug.tick is exact. With window.__HEADLESS every animation is skipped and
 // every walk, bloom and beat completes at once, so suites read final states. reduceMotion: no intro swoop, no petals, no particles, walks
@@ -67,14 +67,20 @@
 // (tests/hocus_vocus_screen_map.test.mjs). CSS classes: mp-* the screen, mr-* the relics overlay, lg-* the legend (rl-* belongs to node.css).
 //
 // CLOSED LIST IDS USED. Sounds: ui_click ui_back ui_error ui_open ui_hover paint ink_splash ink_gain brush_use step reveal_landmark boss_intro page_turn.
-// AUDIO.wake (one note per woken hex, with a rising note mark), AUDIO.wakeDegree (the mark's height and the bloom's note), AUDIO.awake (the Hush), each optional at call time.
+// AUDIO.wake (one note per unmuted hex, with a rising note mark), AUDIO.wakeDegree (the mark's height and the bloom's note), AUDIO.awake (the Gloss's mute on the map track), each optional at call time.
+// AUDIO ANCHORS (HV_ART_AUDIO 10.3, 10.6, 10.7). All presentation: every AUDIO call is behind isFn and inside safe, so a missing or throwing AUDIO leaves the map playing silently.
+//   * Each unmuted hex sings through AUDIO.wake(q, r, {chapter, seed, cols, rows, pan, ...}): the Act's hidden tune, one note per hex. A chain adds {i, n, last}; the last hex holds the cadence.
+//   * A Spell adds {song: the DATA.brushes id, i, n, aq, ar (the anchor hex), last}. The cells sing nearest the anchor first, so cell i === 0 is the one that carries the Spell's gesture
+//     (Boots and Cats spoken on the kit, the Vocal Run, the Air Horn, Abracadabass, Surround Sound, Hocus Focus). A walk adds {soft: true}: the hummed step.
+//   * AUDIO.awake(MAP.progress(M).frac) on entering the map and after every change of the live count. The map tracks (map1 to map3) are muted by the Gloss until the map goes live, and
+//     map3, the Perfect Stage, also starts dead on the grid and swings as it is unmuted (the quant drive of AUDIO.compose('map3'), HV_ART_AUDIO 10.3). Fights are not driven from here.
 // Overlays opened: deck (mode view), relics, legend. Bus: map:paint map:brush map:walk. Art: ART.map paper hex fogEdge edgeMasks route brushPreview
 // paintBloom token frame frameInner warm, ART.fx inkSplash ring sparkle, ART.icon tile, ART.tk glow petal. Each is optional at call time.
 //
 // DEVIATIONS AND NOTES (also in the final report)
-//   * GAME.enterNode(instant) toasts "The well refills your Ink" and plays the pickup sound itself; the screen adds the pour and the tray pop.
-//     For a fable with nothing left to tell RUN says so in instant.toast, which the screen shows as a second toast.
-//   * Anything RUN leaves in R.pending after a paint or brush hook (no relic does that today) is answered with a safe default so the page can
+//   * GAME.enterNode(instant) toasts "The tea is warm: N Vox." and plays the pickup sound itself; the screen adds the pour and the tray pop.
+//     For a Detour (`fable`) with nothing left to tell RUN says so in instant.toast, which the screen shows as a second toast.
+//   * Anything RUN leaves in R.pending after an unmute or Spell hook (no Charm does that today) is answered with a safe default so the map can
 //     never soft lock: optional ops are skipped, deck ops take the first cards, a card reward the first offer.
 (() => {
   'use strict';
@@ -86,7 +92,7 @@
   const reduced = () => !!(UI.opt && UI.opt.reduceMotion);
   const lowQ = () => !!(UI.opt && UI.opt.quality === 'low');
   const snd = (id) => { safe(() => { if (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.sfx)) AUDIO.sfx(id); }); };
-  // Echo: one woken hex sings its note (AUDIO.wake), panned with its place on the stage. Every call leaves a rising note mark (also with sound off).
+  // Note: one unmuted hex sings its note (AUDIO.wake), panned with its place on the stage. Every call leaves a rising note mark (also with sound off).
   const echoInfo = (s) => ({ chapter: s.M.chapter, seed: s.M.seed, cols: s.M.cols, rows: s.M.rows });
   const wakeDeg = (s, q, r, o) => safe(() => (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.wakeDegree) ? AUDIO.wakeDegree(q, r, Object.assign(echoInfo(s), o || {})) | 0 : 0), 0);
   const noteOf = (deg) => ((deg % 7) + 7) % 7;
@@ -122,7 +128,7 @@
   // ==================================================================================================================
   const HEX = (DATA.ECONOMY.map && DATA.ECONOMY.map.hexSize) || 46;      // world hex size: MAP.toPixel(q, r, HEX), ART.map sizes are HEX * zoom
   const SQ3 = Math.sqrt(3);
-  const DEF_WIN = { x: 44, y: 36, w: 1192, h: 648 };                    // the page window inside the book frame (ART.map.frameInner)
+  const DEF_WIN = { x: 44, y: 36, w: 1192, h: 648 };                    // the map window inside the frame (ART.map.frameInner)
   const CX = 640, CY = 360;                                              // the window is centred on the stage
   const PAD = 80;                                                        // world padding around the page the camera may show
   const SLACK_FULL = 1.6, SLACK_END = 2;                                 // the fit's side gaps stay allowed up to 1.6 x zMin and are gone by 2 x zMin (about the default zoom)
@@ -148,7 +154,7 @@
   const MEMO = { id: '', runId: '', chapter: 0, mercy: 0 };                         // what the last visit already showed
   // Where each HUD piece sits when its rectangle cannot be measured (a headless page, a piece not built yet): [x0, y0, x1, y1] in stage px, taken from the
   // real layout at 1280x720 and at the compact phone layout. The measured rectangle always wins; this only keeps the fit and the clamp sensible.
-  // `mode` is the brush mode bar: transient, it only counts while a brush is armed (it hangs from the top, in the slot of the chapter banner, which fades while it is up)
+  // `mode` is the Spell mode bar: transient, it only counts while a Spell is armed (it hangs from the top, in the slot of the Act banner, which fades while it is up)
   const HUD_KEYS = ['party', 'ink', 'banner', 'gold', 'menu', 'deck', 'legend', 'fit', 'zin', 'zout', 'tray', 'info', 'relics', 'mode'];
   const FALLBACK_HUD = {
     wide: { party: [14, 9, 312, 75], ink: [14, 84, 374, 138], banner: [419, 2, 861, 86], gold: [1134, 14, 1196, 48], menu: [1211, 0, 1269, 57],
@@ -205,8 +211,8 @@
   // geometry and camera. World px at HEX 46 (MAP.toPixel); screen = centre + (world - cam) * zoom
   //
   // The lacquer HUD lies over the page, so the camera works with the part of the stage the HUD leaves free, not with the whole window:
-  //   * relayout measures the REAL rectangle of every HUD piece (stage px, so the compact phone layout, the text size and the number of brushes or
-  //     treasures are all accounted for) and keeps them in s.hudRects; a piece that cannot be measured (a headless page) falls back to FALLBACK_HUD.
+  //   * relayout measures the REAL rectangle of every HUD piece (stage px, so the compact phone layout, the text size and the number of Spells or
+  //     Charms are all accounted for) and keeps them in s.hudRects; a piece that cannot be measured (a headless page) falls back to FALLBACK_HUD.
   //   * s.free is the biggest box the window keeps clear of every piece (each piece counted against the window side it hangs from): the middle of it is
   //     where the camera centres the party, a keyboard cursor or a tile that just popped, and it is the pivot of the zoom buttons.
   //   * s.fit is the fit view: solveFit finds the largest zoom, and the place for the page, at which no hex (boss ring included) touches any piece.
@@ -250,7 +256,7 @@
   function measureHud(s) {
     const els = hudEls(s), fb = isCompact() ? FALLBACK_HUD.compact : FALLBACK_HUD.wide, out = [];
     HUD_KEYS.forEach((k) => {
-      if (k === 'mode' && !(els.mode && !els.mode.hidden)) return;       // the brush mode bar covers something only while a brush is armed
+      if (k === 'mode' && !(els.mode && !els.mode.hidden)) return;       // the Spell mode bar covers something only while a Spell is armed
       const el = els[k], r = restRect(el, s.root);
       if (r) { if (r.x1 - r.x0 > 0.5 && r.y1 - r.y0 > 0.5) out.push({ k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, live: true }); }   // a zero box (display none) covers nothing
       else out.push({ k, x0: fb[k][0], y0: fb[k][1], x1: fb[k][2], y1: fb[k][3], live: false });
@@ -266,7 +272,7 @@
     return true;
   }
 
-  // the box the window keeps clear: every piece counts against the window side it is nearest to (the Ink plate hangs from the top, the tool column from the right)
+  // the box the window keeps clear: every piece counts against the window side it is nearest to (the Vox plate hangs from the top, the tool column from the right)
   function freeBoxOf(win, rects) {
     const ins = { t: 0, b: 0, l: 0, r: 0 };
     rects.forEach((q) => {
@@ -402,7 +408,7 @@
     relayout(s, true);                                             // the fallback rectangles until the HUD exists
   }
 
-  // the HUD moved (a resize, a new text size, a brush or a treasure gained, a brush armed or put away, gold with another digit): keep the camera valid and, on the fit,
+  // the HUD moved (a resize, a new text size, a Spell or a Charm gained, a Spell armed or put away, gold with another digit): keep the camera valid and, on the fit,
   // on the new fit. A camera on the fit glides to it whichever way the fit moved: the camera is not clamped first, so a fit that grew (the HUD shrank) does not pop.
   function applyLayout(s) {
     const c = s.cam, f = s.fit;
@@ -772,7 +778,7 @@
     });
   }
 
-  // an arrow chevron beside the anchor of a directional brush: the chosen direction is bigger and gold, the others wait as white arrows
+  // an arrow chevron beside the anchor of a directional Spell: the chosen direction is bigger and gold, the others wait as white arrows
   function drawHandles(s, ctx, sx, sy, size, t) {
     const b = s.brush;
     for (let d = 0; d < 6; d++) {
@@ -879,7 +885,7 @@
       if (T.known) { drawHex(s, ctx, 'known', sx, sy, size, T.type, e.seed, false, t); if (T.type === 'boss') boss = { sx, sy }; continue; }
       drawHex(s, ctx, s.touch.has(e.k) ? 'edge' : 'fog', sx, sy, size, null, e.seed, false, t);
     }
-    // the soft rim where painted ground meets blank paper or Void
+    // the soft rim where live ground meets the blank edge or Void
     if (s.edge.length && amHas('fogEdge')) {
       const cells = s.edgeDraw || (s.edgeDraw = []);
       let n = 0;
@@ -908,12 +914,12 @@
     }
   }
 
-  // hover, cursor, chain, walk preview, brush anchors and preview
+  // hover, cursor, chain, walk preview, Spell anchors and preview
   function drawOverlays(s, ctx, size, t) {
     const c = s.cam, M = s.M;
     const scr = (q, r) => { const p = worldOf(q, r); return { x: wx2sx(c, p.x), y: wy2sy(c, p.y) }; };
     const onScreen = (p) => p.x > s.win.x - size && p.x < s.win.x + s.win.w + size && p.y > s.win.y - size && p.y < s.win.y + s.win.h + size;
-    // legal brush anchors
+    // legal Spell anchors
     if (s.brush && s.brush.anchors) {
       const b = s.brush, pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
       b.anchors.forEach((a) => {
@@ -959,7 +965,7 @@
         }
       }
     }
-    // the brush
+    // the Spell
     if (s.brush) {
       const b = s.brush;
       if (b.anchor) {
@@ -993,7 +999,7 @@
     return n;
   }
 
-  // ---- the Ink meter: a row of drops that fill with a pour and spill with a drip
+  // ---- the Vox meter: a row of drops that fill with a pour and spill with a drip
   function makeInk(s) {
     const row = mk('span', { class: 'mp-drops', 'aria-hidden': 'true' });
     const num = mk('b', { class: 'mp-ink-n' });
@@ -1029,7 +1035,7 @@
     return m;
   }
 
-  // ---- the brush tray: one chip per brush kind
+  // ---- the Spell tray: one chip per Spell kind
   function brushCounts(R) {
     const counts = {}, order = [];
     R.brushes.forEach((id) => { if (!counts[id]) { counts[id] = 0; order.push(id); } counts[id]++; });
@@ -1055,11 +1061,11 @@
     s.hudDirty = true;
   }
 
-  // ---- the treasure strip
+  // ---- the Charm strip
   const RELIC_SHOWN = 6;
-  // On a phone every icon is a 44 px touch target and the brush tray (centred, one chip per brush kind) leaves less room on the left: fewer icons, and the "+N" chip
+  // On a phone every icon is a 44 px touch target and the Spell tray (centred, one chip per Spell kind) leaves less room on the left: fewer icons, and the "+N" chip
   // carries the rest to the full list, so the strip never slides under the tray.
-  // On a desktop the strip is six icons wide (x 14 to 394 with its "+N") and a tray holding all six brush kinds starts at x 372: five icons then (L2).
+  // On a desktop the strip is six icons wide (x 14 to 394 with its "+N") and a tray holding all six Spell kinds starts at x 372: five icons then (L2).
   function relicShown(R) {
     const st = document.getElementById('stage');
     const six = brushCounts(R).order.length >= 6;
@@ -1090,12 +1096,12 @@
   function buildHud(s, root) {
     const R = s.R, H = s.hud;
     const hud = mk('div', { class: 'mp-hud' });
-    // party and Ink
+    // party and Vox
     H.badges = R.heroes.map((h) => UI.heroBadge(h.id, { size: 'sm', hp: h.hp, maxHp: h.maxHp, class: 'mp-hero' }));
     H.party = mk('div', { class: 'mp-party' }, ...H.badges);
     H.inkMeter = makeInk(s);
     H.inkMeter.onbuild = () => { s.hudDirty = true; };
-    // banner: chapter, title written with a brush, and how much of the page is painted
+    // banner: Act, title, and how much of the map is live
     H.chapterN = mk('span', { class: 'mp-ch', text: 'Act ' + U.roman(R.chapter || 1) });
     H.title = mk('h1', { class: 'mp-title', text: chapterTitle(R.chapter || 1) });
     H.progFill = mk('i', { class: 'mp-prog-fill' });
@@ -1114,7 +1120,7 @@
     H.zoomIn = tool('Zoom in', 'zin', () => zoomStep(s, 1.3), 'Zoom in. The wheel and two fingers work too.', '+');
     H.zoomOut = tool('Zoom out', 'zout', () => zoomStep(s, 1 / 1.3), 'Zoom out.', '-');
     H.tools = mk('div', { class: 'mp-tools' }, H.deckBtn, H.legendBtn, H.fitBtn, H.zoomIn, H.zoomOut);
-    // treasures and brushes
+    // Charms and Spells
     H.relics = mk('div', { class: 'mp-relics' });
     tut(H.relics, 'relics');
     H.chips = mk('div', { class: 'mp-chips' });
@@ -1126,7 +1132,7 @@
     H.infoText = mk('p', { class: 'mp-info-text' });
     H.infoAct = mk('p', { class: 'mp-info-act' });
     H.info = mk('div', { class: 'mp-info', 'aria-hidden': 'true' }, H.infoIco, mk('div', { class: 'mp-info-txt' }, H.infoName, H.infoText, H.infoAct));
-    // brush mode bar
+    // Spell mode bar
     H.modeName = mk('b', { class: 'mp-mode-name' });
     H.modeText = mk('span', { class: 'mp-mode-text' });
     H.modeIco = mk('span', { class: 'mp-mode-ico', 'aria-hidden': 'true' });
@@ -1303,7 +1309,7 @@
 
   function shakeInk(s) { if (s.hud.inkMeter) UI.shake(s.hud.inkMeter.root); }
 
-  // the Book lends a drop when the party is stranded (RUN.checkStranded): compare R.stats.mercy before and after any RUN call that can trigger it
+  // a passer-by hums along when the party is stranded (RUN.checkStranded): compare R.stats.mercy before and after any RUN call that can trigger it
   function checkMercy(s, before) {
     const n = s.R.stats.mercy | 0;
     if (n > before) {
@@ -1364,7 +1370,7 @@
     return null;
   }
 
-  // tiles: the T objects RUN just painted, in painting order. from: the world point the first drop of ink comes from
+  // tiles: the T objects RUN just unmuted, in unmuting order. from: the world point the first drop of Vox comes from
   function startReveals(s, tiles, from, gap, song, anchor) {
     if (!tiles.length) return;
     if (headless()) { rebuildVisual(s); s.infoKey = ''; return; }
@@ -1447,7 +1453,7 @@
   }
 
   // ==================================================================================================================
-  // brushes
+  // Spells (brushes)
   // ==================================================================================================================
   const ORIGIN_HINT = { painted: () => 'Start from a live hex.', 'hidden-adjacent': () => say('Start from a muted hex beside the live ground.', 'Start beside the live ground.'), 'hidden-near': () => say('Start from a muted hex within 4 hexes of the party.', 'Start within 4 hexes of the party.') };
   const originHint = (can) => (can && can.need && ORIGIN_HINT[can.need] ? ORIGIN_HINT[can.need]() : '');
@@ -1479,7 +1485,7 @@
     paintBrushBar(s);
     updateBrushPreview(s);
     markChips(s);
-    s.hud.root.classList.add('brushing');                       // the mode bar takes the chapter banner's slot at the top
+    s.hud.root.classList.add('brushing');                       // the mode bar takes the Act banner's slot at the top
     s.hudDirty = true;                                          // and it is part of the HUD footprint while it is up: the fit is solved again (the camera on the fit glides to it)
     refreshInfo(s, true);
     UI.announce(def.name + ' ready. ' + def.text);
@@ -1530,7 +1536,7 @@
     H.apply.rbSet({ label: b.anchor && b.valid ? 'Cast ' + b.preview.length : 'Cast' });
   }
 
-  // a locked directional brush faces the pointer (or the keyboard cursor): MAP.dirOf from the anchor to the hex it is on
+  // a locked directional Spell faces the pointer (or the keyboard cursor): MAP.dirOf from the anchor to the hex it is on
   function aimBrush(s) {
     const b = s.brush;
     if (!b || !b.anchor || !b.dirKind || s.mode === 'touch') return;
@@ -1635,7 +1641,7 @@
     s.infoKey = ''; s.infoDirty = true;
   }
 
-  // Esc and the right button: back out one level (a locked anchor, then the brush, then a chain preview)
+  // Esc and the right button: back out one level (a locked anchor, then the Spell, then a chain preview)
   function cancelModes(s, sound) {
     if (s.brush) {
       if (s.brush.anchor) { s.brush.anchor = null; updateBrushPreview(s); s.infoKey = ''; s.infoDirty = true; if (sound) snd('ui_back'); return true; }
@@ -1714,7 +1720,7 @@
     if (res.done) instantArrive(s, res, q, r); else nodeArrive(s, res, q, r);
   }
 
-  // a well or a brush rack: already applied by RUN.step, so the screen only shows it and lets GAME save and toast
+  // a tea stall or a Busker: already applied by RUN.step, so the screen only shows it and lets GAME save and toast
   function instantArrive(s, res, q, r) {
     const p = screenOf(s, q, r), H = s.hud;
     if (res.kind === 'well') {
@@ -1734,7 +1740,7 @@
       addFx(s, 'sparkle', p.wx, p.wy, 700, { sc: 1.2 });
       addPop(s, q, r, '#2fbdb5', 'brush');
       UI.floatText(p.x, p.y - 28, brushDef(res.id).name, 'heal');
-      syncHud(s, true);                                             // the tray now holds the new chip: the brush flies to it and the chip waits for it
+      syncHud(s, true);                                             // the tray now holds the new chip: the Spell flies to it and the chip waits for it
       const chipEl = H.chipEls && H.chipEls[res.id];
       if (chipEl && !headless()) {
         const land = flyTo(s, 'brush', p.x, p.y - 10, chipEl, 160, UI.icon('brush', res.id, 40, {}, 'mp-fly-ico'));
@@ -1999,7 +2005,7 @@
     const key = s.ver + ':' + s.M.pos.q + ',' + s.M.pos.r;
     if (s.anchorKey !== key) {
       s.anchorKey = key;
-      // after a paint or a brush the anchor marks the painted hex to walk onto; before that, and again after the first walk, the next hex of the cheapest chain to paint
+      // after an unmute or a Spell the anchor marks the live hex to walk onto; before that, and again after the first walk, the next hex of the cheapest chain to unmute
       const wt = s.walkCell && s.M.tiles[MAP.key(s.walkCell[0], s.walkCell[1])];
       const sol = wt && wt.painted ? null : safe(() => MAP.solve(s.M), null);
       const cell = wt && wt.painted ? s.walkCell : sol && sol.path && sol.path.length ? sol.path[0] : [s.M.boss.q, s.M.boss.r];
@@ -2080,7 +2086,7 @@
     relayout(s, true);                                             // the HUD is in the page now: its real rectangles decide the fit
     rebuildVisual(s);
     initPetals(s);
-    // the camera: a swoop from the whole page down to the party on the first visit to a chapter, else straight to the party
+    // the camera: a swoop from the whole map down to the party on the first visit to an Act, else straight to the party
     const first = MEMO.id !== R.id || MEMO.chapter !== R.chapter;
     MEMO.id = R.id; MEMO.chapter = R.chapter;
     s.cam.z = clamp(defaultZoom(), s.zMin, ZMAX); s.tz = s.cam.z;
@@ -2144,7 +2150,7 @@
   };
 
   // ==================================================================================================================
-  // overlay: relics (every treasure of the run)
+  // overlay: relics (every Charm of the run)
   // ==================================================================================================================
   function relicSource(R, id) {
     const d = DATA.relics[id] || {};
@@ -2192,7 +2198,7 @@
   };
 
   // ==================================================================================================================
-  // overlay: legend (tiles, brushes, controls, words)
+  // overlay: legend (tiles, Spells, controls, words)
   // ==================================================================================================================
   function miniHex(kind, tile, done, size, px) {
     const w = Math.round(size * 2.1), h = Math.round(size * 2.2);
@@ -2206,7 +2212,7 @@
     return c;
   }
 
-  // the cells a brush paints, relative to its anchor, for a fresh direction 0 (east)
+  // the cells a Spell unmutes, relative to its anchor, for a fresh direction 0 (east)
   function brushShape(def) {
     switch (def.kind) {
       case 'line': { const cells = []; for (let k = 1; k <= (def.len || 3); k++) cells.push([k, 0]); return { anchor: [0, 0], painted: true, cells }; }

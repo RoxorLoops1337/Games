@@ -3,7 +3,7 @@
 //
 //   * every run finishes (win or lose) with no exception, no stall and well inside the global step cap;
 //   * the same options give byte-identical run records, in this process and through the worker pool, in any job count;
-//   * economy and state invariants hold (gold, Ink, HP, deck, chapter counters);
+//   * economy and state invariants hold (gold, Vox, HP, deck, Act counters);
 //   * the report builder produces sane numbers, flags and both renderings;
 //   * the search combat bot loses less HP than COMBAT.greedyPolicy on a fixed set of fights, and plans without seeing the order of its draw pile;
 //   * long jobs survive a kill: --stream appends finished runs, --resume skips them, --from rebuilds a report from the file;

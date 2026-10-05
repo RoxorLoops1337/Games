@@ -1,4 +1,4 @@
-// Echowake: RUN: everything that lives for ONE run. DOM-free, clock-free, deterministic (DESIGN 4.7-4.10, 5.4).
+// Hocus Vocus: RUN: everything that lives for ONE run. DOM-free, clock-free, deterministic (DESIGN 4.7-4.10, 5.4).
 // This header is the contract of record for the screen and GAME engineers. Plain data in, plain data out.
 //
 // RANDOMNESS. R stores no RNG state. Every roll builds U.rng(U.hash(R.seed, kind, R.chapter, q, r, extra)) for its own
@@ -17,25 +17,25 @@
 //   seen{events[]} foes{enemyId:kills} log[{ch,msg}] done victory chapterCleared recorded, plus bookkeeping hk pendSeq opsN lastEnc.
 //   done/victory: a combat was lost, or the chapter 3 boss fell (chapterEnd). chapterCleared: a boss reward was finished and
 //   chapterEnd has not run yet (a save taken in that gap must route to chapterClear, not to the map). recorded: set by
-//   META.recordRun so a run pays out once. foes: per-enemy kill counts for the bestiary. pending: choices that wait for the
-//   player (from ops, hooks or fight wins). A gem or brush appears once per copy in R.gems and R.brushes.
+//   META.recordRun so a run pays out once. foes: per-enemy kill counts for the Who's Who. pending: choices that wait for the
+//   player (from ops, hooks or fight wins). A gem or Spell appears once per copy in R.gems and R.brushes.
 //
 // PUBLIC API (every function returns plain data; a refusal is {ok:false, reason} and changes nothing)
 //   Setup    newRun({heroes:[idA,idB], trial=0, seed, daily=false, unlocked, nonce}) -> R (throws on a bad party)   dailyHeroes(seed) -> [idA,idB]
-//            R.id comes from seed, trial, daily, heroes and `nonce`: GAME passes a clock-derived nonce so every tale has its own id (META pays
+//            R.id comes from seed, trial, daily, heroes and `nonce`: GAME passes a clock-derived nonce so every tour has its own id (META pays
 //            a run id once). Without a nonce equal inputs give equal ids, which keeps tests and the balance bot deterministic.
 //            startChapter(R, n) -> {ok, chapter, log, pending}   mods(R) -> the final flat mods (DATA.modsFor(R.relics, R.mods))
 //   Map      paint(R,q,r) -> {ok, tiles, cost, log, pending, mercy} | {ok:false, tiles:[], reason: done|busy|nomap|off|void|painted|unreachable|ink}
 //            paintPreview(R,q,r) -> {ok, path:[[q,r]], cost, affordable, reason?}   useBrush(R, brushId, q, r, dir) -> {ok, tiles, log, pending, mercy}
 //            | reason done|busy|nobrush|nothing|<MAP.canBrush reason>     canStep(R,q,r) -> bool
 //            step(R,q,r) -> Node | Instant | null. null: the move was illegal (R.map.pos unchanged) or nothing waits on that tile.
-//            Instant = {kind:'well', tile, gained (what fitted), amount (nominal), done:true} | {kind:'brush', tile, id, done:true}. A fable tile with
+//            Instant = {kind:'well', tile, gained (what fitted), amount (nominal), done:true} | {kind:'brush', tile, id, done:true}. A Detour (`fable`) tile with
 //            no eligible event resolves as {kind:'well', gained:1, fallback:'event', toast, done:true}. Instants are already applied and the tile is done.
-//            Mercy: compare R.stats.mercy before and after a call to show the "the land hums back one Echo" toast (paint and useBrush also say mercy:true).
+//            Mercy: compare R.stats.mercy before and after a call to show the "A passer-by hums along: 1 Vox." toast (paint and useBrush also say mercy:true).
 //   Combat   combatInit(R, node) -> the options for COMBAT.create (deck, heroes and mods are copies)
 //            combatDone(R, C) -> Rewards | null. null: C is not over (nothing changed), or the party fell (then R.done is true). A repeat call for the
 //            same fight returns the same Rewards and changes nothing. Applies HP (downed heroes revive at mods.reviveFrac of max HP, at least 1),
-//            max HP gains, who leads, stats, kill Ink, gold, hooks, and rolls the rewards once; R.node becomes {kind:'reward', tile, rewards, source}.
+//            max HP gains, who leads, stats, kill Vox, gold, hooks, and rolls the rewards once; R.node becomes {kind:'reward', tile, rewards, source}.
 //            claim(R, rewards, {card, relic, gem, takeBrush}) -> {ok, log, pending} | reason claimed|card|relic|owned|gem|brush (nothing applied)
 //   Nodes    take(R, node, {relic:bool, gem:id|null}) -> {ok, gold?, relic?, gem?, log, pending} | reason taken|relic|gem|kind   (chest and gem cache)
 //            shopBuy(R, stock, key) -> {ok, pending, log} | reason nokey|sold|gold|owned      shopRemove(R, stock, uid) -> {ok, price} | reason nostock|card|gold
@@ -48,15 +48,15 @@
 //            success counts as the action, more cuts stay allowed all visit; {leave:true}: ends a session, which also counts as the action)
 //            forgeAction(R, 'upgrade' (arg uid) | 'gems' (as above)) one upgrade OR gem cutting; unused forges stay on the map while something is usable
 //            finishNode(R) -> {chapterEnded}: marks the tile done, clears R.node and R.pending, runs the mercy check. A boss reward sets R.chapterCleared.
-//            chapterEnd(R) -> {next:2|3|'victory', healed:[{id,n,hp,maxHp}], maxHp:8, log, pending}: +8 max HP, 30% heal (healMul), the next map, Ink
-//            top-up, onChapterStart hooks. After the chapter 3 boss: next 'victory', R.done and R.victory, no heal.
-//            checkStranded(R) -> bool (grants the Ink mercy, see DESIGN 4.8)
+//            chapterEnd(R) -> {next:2|3|'victory', healed:[{id,n,hp,maxHp}], maxHp:8, log, pending}: +8 max HP, 30% heal (healMul), the next map, Vox
+//            top-up, onChapterStart hooks. After the Act 3 boss: next 'victory', R.done and R.victory, no heal.
+//            checkStranded(R) -> bool (grants the Vox mercy, see DESIGN 4.8)
 //   Ops      applyOps(R, ops, ctx) -> {log, pending, fight}: ctx {rng, key, tile, fight:false}. log lines are {op, text, ...}; text '' means "silent".
 //            resolvePending(R, id, choice) -> {ok, log} | reason unknown|required|choice. Pending = {id, op, n, pick:'choose', filter, offers?}: deck ops
 //            (removeCard upgradeCard transformCard duplicateCard) want an array of exactly min(n, candidates) uids, cardReward a card id from offers or null.
 //            hook(R, name, ctx) -> {log, pending}   addRelic(R, id) -> {ok, id, log, pending} | reason unknown|owned (runs that relic's onPickup).
 //            The addRelic OP with a fixed id the party owns gives a same-rarity relic instead, or (none left) logs 'Already owned.' and pays 40% of its shop price.
-//            Any choice raised anywhere (a shop entry hook, a chapter start hook, a fight win) waits in R.pending: screens check it after every call.
+//            Any choice raised anywhere (a shop entry hook, an Act start hook, a fight win) waits in R.pending: screens check it after every call.
 //   Deck     addCard(R,id,{up,gems}) removeCard(R,uid) (gems return to R.gems) upgradeCard(R,uid) upgradable(R,filter) -> [uid]
 //            socket(R, uid, slot, gemId) -> {ok, replaced} | reason card|slot|gem|color|same (replacing destroys the old gem; there is no unsocket)
 //            forgeUsable(R) -> bool
@@ -70,7 +70,7 @@
 //             removePrice}, hookLog} | 'event' {event, chosen} | 'camp' {used[]} | 'forge' {used: null|'upgrade'|'gems'} | 'chest' {loot:{gold, relic, gems[]},
 //             taken} | 'gemcache' {offers[], taken}. Shop items: {key, kind:'card'|'gem'|'relic'|'brush', id, price, sale, sold, was?}.
 //
-// Dials data.js has no home for live below as constants: gem tier weights per chapter, elite gem and brush drop chances, brush weights.
+// Dials data.js has no home for live below as constants: gem tier weights per Act, elite gem and Spell drop chances, Spell weights.
 // Deviations from the task text, all following DESIGN: no unsocket and no maxHpPct (both removed in the revised design), unlock filtering
 // through R.unlocked instead of a META call (RUN never calls META), events are weighted by w (not a bare seeded shuffle).
 const RUN = (() => {
@@ -78,14 +78,14 @@ const RUN = (() => {
   const E = () => DATA.ECONOMY;
   const L = () => DATA.LISTS;
 
-  // Dials data.js has no home for: weights for tiers 1,2,3 by chapter (gems from chests, caches, shops, drops).
+  // Dials data.js has no home for: weights for tiers 1,2,3 by Act (gems from chests, caches, shops, drops).
   const GEM_TIERS = { 1: [60, 35, 5], 2: [30, 50, 20], 3: [10, 45, 45] };
   const DROP = { eliteGem: 0.4, bossGems: 1, eliteBrush: 0.5 };
   const BRUSH_W = { stroke: 26, fan: 22, splash: 16, halo: 16, blot: 12, wave: 8 };
   const RARITIES = ['common', 'uncommon', 'rare'];
   const CAMP_ACTIONS = ['rest', 'sharpen', 'gems', 'meditate'];
   const LOG_MAX = 80;
-  const OWNED_RELIC_GOLD = 0.4;                                      // a fixed treasure the party already owns turns into this share of its shop price
+  const OWNED_RELIC_GOLD = 0.4;                                      // a fixed Charm the party already owns turns into this share of its shop price
 
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -267,7 +267,7 @@ const RUN = (() => {
     }
     return order;
   }
-  // n distinct gems, tier by chapter weights, preferring colours not yet in the offer.
+  // n distinct gems, tier by Act weights, preferring colours not yet in the offer.
   function rollGems(R, rng, n, filter) {
     const out = [];
     for (let i = 0; i < n; i++) {
@@ -436,7 +436,7 @@ const RUN = (() => {
       }
       if (!id) { out.log.push({ op: 'addRelic', text: 'No charm to find.' }); return; }
       if (DATA.relics[id] && R.relics.indexOf(id) >= 0) {
-        // A fixed treasure the party already carries (a peddler's lamp, the fox's mask): never "paid, got nothing". A stand-in of the same
+        // A fixed Charm the party already carries (`brass_lantern`, `fox_mask`): never "paid, got nothing". A stand-in of the same
         // rarity takes its place; with none left, the log says it is already owned and a share of its shop price comes back as gold.
         const alt = relicCandidates(R, DATA.relics[id].rarity);
         if (alt.length) id = ctx.rng.pick(alt).id;
@@ -579,7 +579,7 @@ const RUN = (() => {
         if (h.once && st.once) return;
         st.n += 1;                                                   // every counts triggers per run
         if (h.every && st.n % h.every !== 0) return;
-        if (h.limit && st.ch >= h.limit) return;                     // limit is per chapter
+        if (h.limit && st.ch >= h.limit) return;                     // limit is per Act
         st.ch += 1;
         if (h.once) st.once = 1;
         hookGuard[gkey] = true;
@@ -608,7 +608,7 @@ const RUN = (() => {
     return { ok: true, id, log: h.log, pending: h.pending };
   }
 
-  // ---------------------------------------------------------------- new run and chapters
+  // ---------------------------------------------------------------- new run and Acts
   function dailyHeroes(seed) {
     return U.rng(U.hash(seed, 'daily', 'heroes')).shuffle(L().heroIds).slice(0, 2);
   }
@@ -652,13 +652,13 @@ const RUN = (() => {
     Object.keys(R.hk).forEach((k) => { R.hk[k].ch = 0; });
     const m = mods(R);
     R.inkMax = m.inkMax;
-    R.ink = Math.min(m.inkMax, Math.max(R.ink, m.startInk));       // chapter 1: startInk; later chapters top up to it
+    R.ink = Math.min(m.inkMax, Math.max(R.ink, m.startInk));       // Act 1: startInk; later Acts top up to it
     note(R, `Act ${n} begins.`);
     const h = hook(R, 'onChapterStart', {});
     return { ok: true, chapter: n, log: h.log, pending: h.pending };
   }
 
-  // ---------------------------------------------------------------- painting, brushes, mercy
+  // ---------------------------------------------------------------- unmuting (`paint`), Spells (`brush`), mercy
   function paintPreview(R, q, r) {
     const none = (reason) => ({ ok: false, path: [], cost: 0, affordable: false, reason });
     if (!R.map) return none('nomap');
@@ -712,7 +712,7 @@ const RUN = (() => {
     res.mercy = checkStranded(R);
     return res;
   }
-  // Mercy rule (4.8): out of Ink and brushes with nothing unresolved reachable over painted ground -> exactly paintCost Ink.
+  // Mercy rule (4.8): out of Vox and Spells with nothing unresolved reachable over live ground -> exactly paintCost Vox.
   function unresolvedReachable(R) {
     const M = R.map;
     const seen = {};
@@ -846,7 +846,7 @@ const RUN = (() => {
     if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Act ${req.chapter} only` };
     return { ok: true };
   }
-  // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed treasure
+  // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed Charm
   // the party already carries. A choice whose every outcome holds one is locked with the reason, rather than taking the player's gold or HP for nothing.
   const DEAD_DECK_TEXT = { removeCard: 'No card to remove', upgradeCard: 'Nothing left to rehearse', transformCard: 'Nothing to transform', duplicateCard: 'Nothing to copy' };
   const DECK_GROWERS = ['addCard', 'addCurse', 'cardReward'];             // ops after one of these depend on cards it adds: not judged
@@ -880,7 +880,7 @@ const RUN = (() => {
     if (when.hero !== undefined && partyIds(R).indexOf(when.hero) < 0) return false;
     return true;
   }
-  // Fable tile: allowed here and now, weighted by w, preferring unseen; once events never repeat; null when nothing qualifies.
+  // Detour (`fable`) tile: allowed here and now, weighted by w, preferring unseen; once events never repeat; null when nothing qualifies.
   function pickEvent(R, tile) {
     const seen = R.seen.events;
     const ok = Object.keys(DATA.events).map((id) => DATA.events[id]).filter((e) => e && (!e.chapters || e.chapters.indexOf(R.chapter) >= 0) && eventWhen(R, e.when) && !(e.once && seen.indexOf(e.id) >= 0));
@@ -897,7 +897,7 @@ const RUN = (() => {
       const s = eventReq(R, c.req);
       return { index: i, label: c.label, cost: c.cost || null, ok: !!s.ok, hidden: !!s.hidden, reason: s.reason || null, dead: s.ok ? choiceDead(R, c) : null };
     });
-    // a fable never locks itself: the dead-end locks only apply while some other choice stays open
+    // a Detour never locks itself: the dead-end locks only apply while some other choice stays open
     const lock = rows.some((r) => r.ok && !r.dead);
     return rows.map((r) => { const dead = lock ? r.dead : null; return { index: r.index, label: r.label, cost: r.cost, ok: r.ok && !dead, hidden: r.hidden, reason: dead || r.reason }; });
   }
@@ -1243,7 +1243,7 @@ const RUN = (() => {
     return res;
   }
 
-  // ---------------------------------------------------------------- finishing nodes and chapters
+  // ---------------------------------------------------------------- finishing nodes and Acts
   function finishNode(R) {
     const node = R.node;
     if (!node) return { chapterEnded: false };
