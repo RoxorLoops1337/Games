@@ -72,6 +72,9 @@
   const list = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
   const fl = (x) => Math.floor(x + 1e-9);
   const stName = (s) => (ST[s] ? ST[s].name : String(s));
+  // a status whose name reads as a plural ("Sequins") shows its singular next to a count of exactly 1: "gain 1 Sequin"
+  const ST_SINGULAR = { plating: 'Sequin' };
+  const stNameN = (s, n) => (isNum(n) && Math.abs(n) === 1 && ST_SINGULAR[s] ? ST_SINGULAR[s] : stName(s));
   const HERO_NAME = (id) => (D.heroes[id] ? D.heroes[id].name : String(id));
 
   // ------------------------------------------------------------------------------------------------
@@ -219,6 +222,7 @@
   // ------------------------------------------------------------------------------------------------
   const KW = (word, key) => `<span class="kw" data-kw="${key}">${word}</span>`;
   const KS = (s) => KW(stName(s), s);
+  const KSN = (s, n) => KW(stNameN(s, n), s);
   const NUM = (v, cls) => `<span class="num${cls ? ' ' + cls : ''}">${v}</span>`;
   const capHtml = (h) => h.replace(/^((?:<[^>]*>)*)([a-z])/, (m, tags, c) => tags + c.toUpperCase());
   const plainOf = (h) => h.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
@@ -692,7 +696,7 @@
     if (cons.pre) out.push({ h: cons.pre, k: 'consume' });
     const plainPos = isNum(n) && n > 0 && !cons.pre && !cons.post;
     if (plainPos) {
-      const item = `${NUM(n, clsOf(n, n, refN))} ${KS(op.s)}`;
+      const item = `${NUM(n, clsOf(n, n, refN))} ${KSN(op.s, n)}`;
       if (S.temps && S.temps.get(op) && !enemy) {
         // "gain 2 Volume this turn": the status plus the hook that takes it back (see tempPairs)
         out.push({ h: `${GAIN(tgt, item)} ${S.temps.get(op) === 'next' ? 'until your next turn' : 'until the end of this turn'}`, k: 'temp' });
@@ -726,10 +730,10 @@
       const whoTxt = enemy || isTarget(n.who) ? "the target's" : n.who === 'ally' ? "your ally's" : 'your';
       h = `double ${whoTxt} ${KS(op.s)}${capTxt}`;
     } else if (isNum(n) && n < 0) {
-      const item = `${NUM(-n)} ${KS(op.s)}`;
+      const item = `${NUM(-n)} ${KSN(op.s, n)}`;
       h = enemy ? `remove ${item} from ${enemyObj(tgt, S)}` : LOSE(tgt, item);
     } else {
-      const A = amt(n, KS(op.s), { ref: refN, refV: refVOf(S, op, 'n'), spent });
+      const A = amt(n, KSN(op.s, n), { ref: refN, refV: refVOf(S, op, 'n'), spent });
       h = enemy ? `apply ${A}${enemySuffix(tgt, S)}` : GAIN(tgt, A);
     }
     out.push({ h, k: 'statusx' });
@@ -744,8 +748,8 @@
     const from = enemy ? enemyObj(tgt, S) : HERO_FROM(tgt);
     if (s === 'debuffs' || s === 'buffs') return { h: !enemy && tgt === 'self' ? `remove all ${s}` : `remove all ${s} from ${from}`, k: 'remove' };
     const nTxt = op.n === undefined ? 'all' : amt(op.n, '', {});
-    if (!enemy && tgt === 'self') return { h: `lose ${nTxt} ${KS(s)}`, k: 'remove' };
-    return { h: `remove ${nTxt === 'all' ? '' : nTxt + ' '}${KS(s)} from ${from}`, k: 'remove' };
+    if (!enemy && tgt === 'self') return { h: `lose ${nTxt} ${KSN(s, op.n)}`, k: 'remove' };
+    return { h: `remove ${nTxt === 'all' ? '' : nTxt + ' '}${KSN(s, op.n)} from ${from}`, k: 'remove' };
   }
 
   function pickFrag(op) {
@@ -891,7 +895,7 @@
       case 'status': {
         const tgt = op.tgt || (D.isDebuff(op.s) ? 'front' : 'self');
         const n = op.n;
-        const item = isNum(n) ? `${NUM(Math.abs(n))} ${KS(op.s)}` : amt(n, KS(op.s), {});
+        const item = isNum(n) ? `${NUM(Math.abs(n))} ${KSN(op.s, n)}` : amt(n, KS(op.s), {});
         if (E_HERO[tgt]) {
           if (isNum(n) && n < 0) return [{ h: `remove ${item} from ${E_HERO[tgt]}`, k: 'eremove' }];
           const etgt = E_HERO[tgt];
@@ -922,8 +926,8 @@
       case 'removeStatus': {
         const s = op.s;
         const tgt = op.tgt || ((s === 'debuffs' || D.isDebuff(s)) ? 'self' : 'front');
-        const word = s === 'buffs' || s === 'debuffs' ? `all ${s}` : `${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`;
-        if (tgt === 'self') return [{ h: s === 'buffs' || s === 'debuffs' ? `remove ${word} from itself` : `lose ${op.n === undefined ? 'all ' : ''}${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`, k: 'eremove' }];
+        const word = s === 'buffs' || s === 'debuffs' ? `all ${s}` : `${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KSN(s, op.n)}`;
+        if (tgt === 'self') return [{ h: s === 'buffs' || s === 'debuffs' ? `remove ${word} from itself` : `lose ${op.n === undefined ? 'all ' : ''}${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KSN(s, op.n)}`, k: 'eremove' }];
         const etgt = E_HERO[tgt] || E_SIDE[tgt] || 'the lead hero';
         // consecutive removals from the same side share one sentence: "Remove Bloom, Groove, Reverb and Rumble from both heroes."
         if (prev && prev.k === 'eremoveh' && prev.etgt === etgt) { prev.items.push(word); prev.h = `remove ${joinAnd(prev.items)} from ${etgt}`; return { merged: true }; }
@@ -1053,7 +1057,7 @@
       const enemy = isEnemyTgt(tgt);
       const sameTgt = prev.mk === `${enemy ? 'e' : 'h'}|${tgt}` || (prev.gain && prev.gain.key === tgt && !enemy);
       if (isNum(t.n) && t.n > 0 && t.consume === undefined && sameTgt && prev.ss && prev.ss[prev.ss.length - 1] === t.s) {
-        const item = `${NUM(t.n, clsOf(t.n, t.n, noNeg(refOf(S, t, 'n', 0))))} more ${KS(t.s)}`;
+        const item = `${NUM(t.n, clsOf(t.n, t.n, noNeg(refOf(S, t, 'n', 0))))} more ${KSN(t.s, t.n)}`;
         const inner = enemy ? `apply ${item}${enemySuffix(tgt, S)}` : GAIN(tgt, item);
         const ld = rowOnly ? lead(c.row) : `if ${condPhrases(c, S).join(' and ')}, `;
         return [{ h: ld + inner, k: 'statusx' }];
@@ -1293,7 +1297,7 @@
     if (it.block && blockSide) others.push({ who: SIDE_WORD[blockSide], what: `${it.block} Block` });
     const byDest = [];   // [dest, [items]] in first-seen order
     list(it.statuses).forEach((st) => {
-      const item = `${st.n} ${stName(st.s)}`;
+      const item = `${st.n} ${stNameN(st.s, st.n)}`;
       if (st.to === 'self') {
         if (sides && sides.status[st.s]) others.push({ who: SIDE_WORD[sides.status[st.s]], what: item });
         else own.push(item);

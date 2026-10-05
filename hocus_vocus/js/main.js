@@ -769,14 +769,14 @@ const GAME = (() => {
           col('curse', c1(curse, {})), col('X cost', c1(x, {})), col('status', c1(status, {}))));
       },
       controls(w) {
-        const pan = UI.panel({ kind: 'paper', torn: true, title: 'Paper panel' }, mk('div', { class: 'col gap-s' },
+        const pan = UI.panel({ kind: 'paper', torn: true, title: 'Light panel' }, mk('div', { class: 'col gap-s' },
           mk('div', { class: 'row gap' }, UI.btn('Primary', { kind: 'primary', size: 'lg', key: 'E' }), UI.btn('Secondary', { kind: 'secondary', size: 'lg' }), UI.btn('Ghost', { kind: 'ghost', size: 'lg' })),
           mk('div', { class: 'row gap' }, UI.btn('Small', { kind: 'primary', size: 'sm' }), UI.btn('Disabled', { kind: 'primary', disabled: true, reason: 'Not enough gold' }), UI.btn('Danger', { kind: 'primary', danger: true }), UI.btn('Breathing', { kind: 'primary', breathe: true })),
           UI.divider(), mk('div', { class: 'row gap' }, UI.hanko('!'), UI.hanko('New'), UI.hanko('Rare', { size: 'lg' })),
           mk('div', { class: 'row gap' }, UI.seg([{ value: 1, label: 'Normal' }, { value: 2, label: 'Large' }], { value: 1 }), UI.toggle({ value: true }), UI.toggle({ value: false })),
           UI.slider({ value: 0.6 })));
-        const dark = UI.panel({ kind: 'dark', gold: true, title: 'Lacquer panel' }, mk('div', { class: 'col gap-s' },
-          UI.tabs([{ id: 'a', label: 'Unlocks' }, { id: 'b', label: 'Story' }, { id: 'c', label: "Who's Who" }], { value: 'a' }),
+        const dark = UI.panel({ kind: 'dark', gold: true, title: 'Dark panel' }, mk('div', { class: 'col gap-s' },
+          UI.tabs([{ id: 'a', label: 'Unlocks' }, { id: 'b', label: 'Diary' }, { id: 'c', label: "Who's Who" }], { value: 'a' }),
           UI.bar(48, 76, 'hp'), UI.bar(9, 14, 'ink'), UI.bar(120, 260, 'boss'),
           mk('div', { class: 'row gap' }, UI.stat('gold', 137), UI.stat('ink', 9, { max: 14 }), UI.stat('hp', 48, { max: 76 })),
           mk('div', { class: 'row gap' }, UI.btn('Secondary', { kind: 'secondary' }), UI.btn('Ghost', { kind: 'ghost' }))));

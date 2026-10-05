@@ -277,6 +277,25 @@ T('the hero silhouette appears exactly on cards whose art.hero is true', () => {
   } finally { ART.hero.draw = real; }
 });
 
+T('the hero sticker keeps its highest hair (mohawk, ponytail, quiff) clear of the top edge of the card window', () => {
+  // P11 D9: the figure used to stand so high that the hair touched or crossed the top edge; the feet now sit low enough for bounds.top
+  const real = ART.hero.draw; let seen = null; ART.hero.draw = (ctx, id, o) => { seen = { id, y: o.y, s: o.s }; return real(ctx, id, o); };
+  try {
+    let n = 0;
+    CARDS.filter((c) => c.art && c.art.hero && c.hero && HEROES.includes(c.hero)).forEach((c) => {
+      const top = -ART.hero.bounds(c.hero).top;
+      [0, 1].forEach((up) => [58, 116, 170, 300].forEach((VW) => {
+        const Ly = ART.card._layout(c.id, up, VW);
+        t.ok(Ly.hy - top * Ly.hs >= 5, `${c.id} (up ${up}, window ${VW}): hair top at ${(Ly.hy - top * Ly.hs).toFixed(1)} virtual px`); n++;
+      }));
+      ART.sprite.clear(); seen = null;
+      ART.card.draw(newCtx(), c.id, 170, 116);
+      t.ok(seen && seen.id === c.hero && seen.y - top * seen.s >= 5, `${c.id}: the real draw call stands the figure at y ${seen && seen.y.toFixed(1)}, scale ${seen && seen.s.toFixed(2)}`);
+    });
+    t.ok(n >= 240, `checked ${n} layouts`);
+  } finally { ART.hero.draw = real; }
+});
+
 T('hero poses fit the card: attacks attack, guards block, the rest cast', () => {
   const poses = {};
   CARDS.filter((c) => c.art && c.art.hero).forEach((c) => { const sp = ART.card._spec(c.id, 0); poses[sp.pose] = (poses[sp.pose] || 0) + 1; if (c.type === 'attack') t.eq(sp.pose, 'attack', c.id + ' attacks'); });

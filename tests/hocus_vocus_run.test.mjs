@@ -1568,8 +1568,8 @@ t.test('op addRelic: by id or rarity, owned and empty cases, hero relics only wi
   t.ok(!seen.has('t_hanae') && !seen.has('t_kuro'), 'a hero relic needs its hero'); t.ok(seen.size > 4, 'variety: ' + seen.size);
   const locked = new Set(); for (let s = 0; s < 200; s++) { const x = NEW({ seed: s }); ops(x, [{ op: 'addRelic', rarity: 'uncommon' }], { rng: U.rng(s) }); locked.add(x.relics[0]); }
   t.ok(!locked.has('t_locked'), 'a locked relic is not drawn until owned');
-  const E2 = NEW(); DATA.relicPool('shop').forEach((x) => E2.relics.push(x.id)); r = ops(E2, [{ op: 'addRelic', rarity: 'shop' }]); t.ok(/No charm/.test(r.log[0].text), 'nothing left: says so'); t.eq(E2.relics.length, 4, 'nothing added');
-  t.eq(ops(NEW(), [{ op: 'addRelic', id: 'ghost' }]).log[0].text, 'No charm to find.', 'an unknown id is refused, and does not claim a relic');
+  const E2 = NEW(); DATA.relicPool('shop').forEach((x) => E2.relics.push(x.id)); r = ops(E2, [{ op: 'addRelic', rarity: 'shop' }]); t.ok(/No Charm/.test(r.log[0].text), 'nothing left: says so'); t.eq(E2.relics.length, 4, 'nothing added');
+  t.eq(ops(NEW(), [{ op: 'addRelic', id: 'ghost' }]).log[0].text, 'No Charm to find.', 'an unknown id is refused, and does not claim a relic');
   const F = NEW(); DATA.relicPool('shop').forEach((x) => F.relics.push(x.id)); const shopId = F.relics[0], g0 = F.gold, f0 = F.relics.length;
   r = ops(F, [{ op: 'addRelic', id: shopId }]); const pay = Math.round(E.price.relic.shop * 0.4);
   t.eq(F.relics.length, f0, 'owned and nothing of its rarity left: no relic'); t.eq(r.log[0].text, 'Already owned.', 'the first line says it is already owned'); t.eq(r.log[0].id, shopId, 'with the id (so a screen can tell what was refused)'); t.eq(r.log[1].op, 'gold', 'then pays gold instead'); t.eq(r.log[1].n, pay, 'its gold entry carries the amount'); t.eq(F.gold, g0 + pay, '40% of the shop price (' + pay + ')'); t.ok(/already carry/.test(r.log[1].text) && new RegExp(String(pay)).test(r.log[1].text), 'and says so truthfully: ' + r.log[1].text); t.eq(F.stats.goldEarned >= pay, true, 'counted as gold earned');

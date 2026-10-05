@@ -76,7 +76,7 @@
     camp: { title: 'A green room', at: { x: 640, y: 120 }, side: 'bottom', scope: ['camp'], ttl: 18000,
       text: 'Rest to heal, Rehearse a card, Set gems, or Warm Up for Vox and a Spell. You only get so many, so pick what the tour needs.' },
     shop: { title: 'Jordan\'s merch stall', at: { x: 640, y: 120 }, side: 'bottom', scope: ['shop'], ttl: 18000,
-      text: 'Cards, gems, charms and a Spell are for sale. Paying Jordan to declutter a weak card is often the best buy on the stall.' },
+      text: 'Cards, gems, Charms and a Spell are for sale. Paying Jordan to declutter a weak card is often the best buy on the stall.' },
     event: { title: 'A detour', at: { x: 640, y: 120 }, side: 'bottom', scope: ['event'], ttl: 18000,
       text: 'A detour is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.' },
     gems: { title: 'Gems', anchor: ['.c-sock', 'deck'], at: { x: 640, y: 120 }, side: 'bottom', scope: ['map', 'reward', 'camp', 'forge', 'shop', 'gemcache'], ttl: 20000,

@@ -1864,12 +1864,16 @@
   }
 
   // where everything sits in the virtual window
+  const HERO_TOP_GAP = 6;                                         // virtual px between the top edge of the window and the highest hair of a hero sticker
   function layoutFor(sp, VW) {
     const L = { VW };
     if (sp.hero) {
-      L.hs = 0.45 + 0.11 * sp.v('hs');
+      L.hs = 0.39 + 0.06 * sp.v('hs');
       L.hx = VW / 2 + sp.side * VW * (0.27 + 0.03 * sp.v('hx'));
-      L.hy = 38 + 6 * sp.v('hy') + 186 * L.hs;
+      // the feet sit low enough that the tallest hair (a mohawk, a ponytail, the Andy quiff) clears the top edge of the window by HERO_TOP_GAP
+      // virtual px (the cream sticker edge adds 2.4 more); the hero's own bounds.top is the highest point of its silhouette at s = 1
+      const bt = ART.hero && ART.hero.bounds ? ART.hero.bounds(sp.hero) : null, top = bt && bt.top < 0 ? -bt.top : 300;
+      L.hy = max(38 + 6 * sp.v('hy') + 186 * L.hs, HERO_TOP_GAP + top * L.hs + 3 * sp.v('hy'));
       L.hflip = sp.side > 0;
       L.mx = VW / 2 - sp.side * VW * 0.2 + sp.ox * 0.4;
     } else L.mx = VW / 2 + sp.ox;
@@ -2196,6 +2200,7 @@
   };
   ART.card.motifIds = () => Object.keys(M).filter((k) => k.charAt(0) !== '_');
   ART.card._M = M; ART.card._motif = drawMotif; ART.card._spec = (id, up) => specOf(cardRef({ id, up }));
+  ART.card._layout = (id, up, VW) => layoutFor(specOf(cardRef({ id, up })), VW || 170 * VH / 116);
   ART.declare('motif', ART.card.motifIds());
   ART.declare('card', Object.keys(DATA.cards || {}));
 

@@ -1203,7 +1203,9 @@ t.test('enemy text: an enemy move reads from the enemy\'s side (the Who\'s Who p
   t.eq(M('j'), 'Remove all buffs, Bloom and Groove from both heroes. Lose all Feedback. Remove all debuffs from itself.', 'removals');
   t.eq(D.opsText(e.start), 'Gain 3 Sequins and 2 Feedback.', 'start ops');
   t.eq(D.hookText(e.hooks[0]), 'When it is defeated, deal 4 damage to the lead hero.', 'an onDeath hook');
-  t.eq(D.hookText(e.hooks[1]), 'Once per turn, when it is hurt, lose 1 Sequins.', 'an onHurt hook');
+  t.eq(D.hookText(e.hooks[1]), 'Once per turn, when it is hurt, lose 1 Sequin.', 'an onHurt hook (a count of exactly 1 reads "1 Sequin", the singular of the plural-looking status name, F1 fix C7)');
+  t.eq(D.opsText([st('plating', 1), st('thorns', 1)], { enemy: true }), 'Gain 1 Sequin and 1 Feedback.', 'a self gain of 1 Sequins reads singular, Feedback is untouched (More Bunting)');
+  t.eq(D.opsText([st('plating', 2), st('thorns', 1)], { enemy: true }), 'Gain 2 Sequins and 1 Feedback.', 'and 2 or more keeps the plural');
   t.eq(D.opsText(e.phases[0].fx), 'Gain 1 Volume and 12 Block.', 'a phase');
   t.eq(D.moveText(e.moves.a), 'Deal 5 damage and apply 1 Exposed to the lead hero.', 'moveText is opsText with the enemy side forced');
   t.eq(D.opsText([dmg(5)]), 'Deal 5 damage.', 'a card op list is still a card op list');

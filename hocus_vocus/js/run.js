@@ -434,7 +434,7 @@ const RUN = (() => {
         const c = relicCandidates(R, o.rarity);
         id = c.length ? ctx.rng.pick(c).id : null;
       }
-      if (!id) { out.log.push({ op: 'addRelic', text: 'No charm to find.' }); return; }
+      if (!id) { out.log.push({ op: 'addRelic', text: 'No Charm to find.' }); return; }
       if (DATA.relics[id] && R.relics.indexOf(id) >= 0) {
         // A fixed Charm the party already carries (`brass_lantern`, `fox_mask`): never "paid, got nothing". A stand-in of the same
         // rarity takes its place; with none left, the log says it is already owned and a share of its shop price comes back as gold.
@@ -449,7 +449,7 @@ const RUN = (() => {
         }
       }
       const res = gainRelic(R, id);
-      if (!res.ok) { out.log.push({ op: 'addRelic', text: 'No charm to find.' }); return; }
+      if (!res.ok) { out.log.push({ op: 'addRelic', text: 'No Charm to find.' }); return; }
       out.log.push({ op: 'addRelic', id, text: `Found ${relicName(id)}.` });
       res.log.forEach((x) => out.log.push(x));
       res.pending.forEach((p) => out.pending.push(p));

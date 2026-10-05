@@ -6,7 +6,7 @@
 //        rectangle (0, 0, w, h) of the current transform. t is ABSOLUTE SECONDS and drives every loop (mist, lanterns, fire, petals, lightning).
 //        The scenes are composed on the 1280 x 720 stage and scaled to COVER any other size (uniform scale, centred crop), so 16:9 fits exactly.
 //        `paper` is the exception: it is a texture that fills any w x h at 1:1.
-//        opts (all optional):  particles  number 0..2 (default 1), the multiplier for drifting petals, leaves, sparks, fireflies (0 = none);
+//        opts (all optional):  particles  number 0..2 (default 1), the multiplier for drifting petals, leaves and fireflies (0 = none);
 //                                          `false` means 0 and `true` means 1. ART.tk.opt.reduceMotion multiplies it by 0.3 on top.
 //                              parallaxX   camera offset in STAGE PX (clamped to +-90): positive moves the camera right, so near layers slide left.
 //                                          Far layers move about 5% of it, mid layers 30%, foreground 100%, the ground plane never moves.
@@ -44,8 +44,8 @@
 //   the RJ monogram at five sizes, the one-line logo on a poster, small logos over one loop), `title_anim` (a film strip of the title over t).
 //
 // HOW IT IS BUILT
-//   A scene is an ordered list of items. A LAYER is painted ONCE into a cached ART.sprite (only as large as it needs to be: an edge cluster of
-//   bamboo is a 300 px sprite, not a full screen) at the backing scale of the draw size, then composited every frame with a parallax offset that is
+//   A scene is an ordered list of items. A LAYER is painted ONCE into a cached ART.sprite (only as large as it needs to be: a lamp post at
+//   the edge is a 300 px sprite, not a full screen) at the backing scale of the draw size, then composited every frame with a parallax offset that is
 //   snapped to whole device pixels (an aligned blit is a plain copy, a fractional one is resampled, which is slow on a CPU canvas). Layers may also
 //   scroll (seamless mist, clouds), be drawn additively (god rays) or with multiply (the boss colour grade), breathe in alpha, or be baked at a lower
 //   resolution when they are soft anyway. The washi grain is baked into the big painted layers (source-atop), so no full-screen grain pass runs per
@@ -65,7 +65,6 @@
   const A = (hex, a) => tk.rgba(hex, a);                         // '#rrggbb' + alpha -> rgba() string (cached)
   const mixc = (a, b, k) => U.color.mix(a, b, clamp(k, 0, 1));
   const lite = (a, k) => U.color.lighten(a, k);
-  const dark = (a, k) => U.color.darken(a, k);
   const shd = (a, k) => tk.shade(a, k);
   const R = (...k) => tk.rng('scn', ...k);                       // seeded stream
   const nz = (x, y, sd, oct) => U.noise.fbm(x, y, sd, oct || 3); // smooth 0..0.875
@@ -115,14 +114,6 @@
   }
   function disc(g, x, y, r, fill) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fillStyle = fill; g.fill(); }
   function ellip(g, x, y, rx, ry, fill, rot) { g.beginPath(); g.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot || 0, 0, TAU); g.fillStyle = fill; g.fill(); }
-  // seamless soft mist bands for a strip of width w: blobs are drawn three times so the strip tiles horizontally
-  function mistPaint(g, w, h, color, seed, n) {
-    const r = R('mist', seed);
-    for (let i = 0; i < n; i++) {
-      const cx = r() * w, cy = h * (0.3 + 0.45 * r()), rx = w * (0.09 + 0.16 * r()), ry = h * (0.2 + 0.3 * r()), a = 0.45 + 0.55 * r();
-      for (let k = -1; k <= 1; k++) blob(g, cx + k * w, cy, rx, ry, color, a);
-    }
-  }
   // 4-point sparkle drawn as a plain filled star (cheap, no glow), for baked layers
   function star4(g, x, y, r, fill, rot) {
     g.save(); g.translate(x, y); g.rotate(rot || 0);
@@ -259,86 +250,14 @@
 
 
   // ---------------------------------------------------------------------------------------------------------------
-  // scenery painters: `bamboo`, leaves, clouds, `torii`, grass. Design space, cel-shaded with the house ink line where they are near.
+  // scenery painters: ridge heights, ink stems and grass tufts. Design space.
   // ---------------------------------------------------------------------------------------------------------------
   // y of a polyline ridge at x (linear interpolation)
   function ridgeY(pts, x) {
     for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) { const a = pts[i - 1], b = pts[i], k = (x - a[0]) / (b[0] - a[0] || 1); return lerp(a[1], b[1], k); }
     return pts[pts.length - 1][1];
   }
-  // A bamboo stalk from y0 (top) to y1 (bottom) centred on x, width w. o: base shade hi rim node line lean seed gap alpha
-  function stalk(g, x, y0, y1, w, o) {
-    o = o || {};
-    const sd = o.seed === undefined ? Math.round(x * 7 + y0) : o.seed;
-    const r = R('stalk', sd);
-    const n = Math.max(3, Math.ceil((y1 - y0) / 24)), lean = o.lean || 0;
-    const Lp = [], Rp = [], Cp = [];
-    for (let i = 0; i <= n; i++) {
-      const u = i / n, y = lerp(y0, y1, u);
-      const cx = x + lean * (u - 0.5) + (nz(y * 0.011, x * 0.05, 5) - 0.4) * w * 0.4;
-      const ww = w * (0.82 + 0.18 * u);
-      Cp.push(cx); Lp.push([cx - ww / 2, y]); Rp.push([cx + ww / 2, y]);
-    }
-    const at = (y) => { const u = clamp((y - y0) / (y1 - y0 || 1), 0, 1) * n, i = Math.min(n - 1, Math.floor(u)), k = u - i; return { cx: lerp(Cp[i], Cp[i + 1], k), w: lerp(Rp[i][0] - Lp[i][0], Rp[i + 1][0] - Lp[i + 1][0], k) }; };
-    const ga = g.globalAlpha;
-    if (o.alpha !== undefined) g.globalAlpha = ga * cA(o.alpha);
-    const rp = Rp.slice().reverse();
-    fillPoly(g, Lp.concat(rp), o.base || '#6f9a5a');
-    const mixP = (k) => Lp.map((p, i) => [lerp(p[0], Rp[i][0], k), p[1]]);
-    if (o.shade) {
-      const sh = Lp.concat(mixP(0.46).reverse());
-      fillPoly(g, sh, o.shade);
-      if (o.halftone && !tk.lowQ()) { g.save(); poly(g, sh); g.clip(); tk.halftone(g, x - w, y0, w * 2, y1 - y0, { d: 5, r: 1.3, color: o.halftone, alpha: 0.5, force: true }); g.restore(); }
-    }
-    if (o.hi) { const a = mixP(0.72), b = mixP(0.88); fillPoly(g, a.concat(b.reverse()), o.hi); }
-    if (o.rim) { const a = mixP(0.93); fillPoly(g, a.concat(rp.slice()), o.rim); }
-    // nodes: a dark band, a light lip under it, and a little stub on alternating sides
-    const gap = o.gap || 84;
-    let ny = y0 + r() * gap;
-    let side = r() < 0.5 ? -1 : 1;
-    while (ny < y1 - 4) {
-      const p = at(ny), hw = p.w / 2 + 1.6;
-      const skew = (r() - 0.5) * 2.2;
-      fillPoly(g, [[p.cx - hw, ny - 2.6 + skew], [p.cx + hw, ny - 2.6 - skew], [p.cx + hw, ny + 2.2 - skew], [p.cx - hw, ny + 2.2 + skew]], o.node || (o.shade ? mixc(o.shade, '#140f2e', 0.35) : '#2a3f2a'));
-      if (o.hi) fillPoly(g, [[p.cx - hw * 0.3, ny + 2.4], [p.cx + hw, ny + 2.2 - skew], [p.cx + hw, ny + 4 - skew], [p.cx - hw * 0.3, ny + 4.2]], A(o.hi, 0.7));
-      if (w > 14) { ellip(g, p.cx + side * hw * 0.9, ny - 1, w * 0.13, w * 0.07, o.node || '#2a3f2a', side * 0.5); side = -side; }
-      ny += gap * (0.75 + 0.5 * r());
-    }
-    if (o.line) {
-      tk.inkPath(g, Lp, { w: o.line, color: o.lineColor || pal.ink, taper: 0.02, seed: sd, wobble: 0.1 });
-      tk.inkPath(g, Rp, { w: o.line * 0.8, color: o.lineColor || pal.ink, taper: 0.02, seed: sd + 3, wobble: 0.1 });
-    }
-    g.globalAlpha = ga;
-  }
-  // a clump of stalks leaning slightly apart. o as stalk plus n, spread
-  function clump(g, x, y0, y1, w, o) {
-    const r = R('clump', o.seed === undefined ? Math.round(x) : o.seed), n = o.n || 3, sp = o.spread || w * 1.5;
-    const list = [];
-    for (let i = 0; i < n; i++) list.push({ dx: (i - (n - 1) / 2) * sp * (0.7 + 0.6 * r()) + (r() - 0.5) * w, w: w * (0.65 + 0.5 * r()), top: y0 - r() * 30, lean: (r() - 0.5) * w * 1.6 });
-    list.sort((a, b) => a.w - b.w);
-    list.forEach((s, i) => stalk(g, x + s.dx, s.top, y1, s.w, Object.assign({}, o, { seed: (o.seed || 0) * 17 + i + Math.round(x), lean: s.lean })));
-  }
 
-  // a bamboo leaf blade, root at (x, y), angle in radians (0 = pointing right), length len, half width wid
-  function blade(g, x, y, ang, len, wid, base, o) {
-    o = o || {};
-    g.save(); g.translate(x, y); g.rotate(ang);
-    const shape = [[0, 0, 1], [len * 0.3, -wid * 0.92], [len * 0.72, -wid * 0.55], [len, 0, 1], [len * 0.64, wid * 0.7], [len * 0.28, wid * 0.78]];
-    tk.celFill(g, shape, base, { line: o.line === undefined ? 1.7 : o.line, lineColor: o.lineColor, depth: wid * 0.7, rim: o.rim, rimW: o.rimW || 1.4, rimAlpha: 1, hi: false, tension: 0.7, light: (o.light === undefined ? tk.light : o.light) - ang, shadow: o.shadow, align: 0.4 });
-    if (len > 26 && o.vein !== false) { g.globalAlpha = 0.55; tk.inkStroke(g, len * 0.08, 0, len * 0.9, 0, { w: 0.9, color: o.veinColor || pal.ink, taper: 0.3, wobble: 0 }); g.globalAlpha = 1; }
-    g.restore();
-  }
-  // a fan of leaf blades from a point: o.dir (mean angle), o.spread, o.n, o.len, o.wid, base/shadow/rim/line colours
-  function leafFan(g, x, y, o) {
-    const r = R('fan', o.seed === undefined ? Math.round(x * 3 + y) : o.seed), n = o.n || 9;
-    const list = [];
-    for (let i = 0; i < n; i++) {
-      const u = n > 1 ? i / (n - 1) : 0.5;
-      list.push({ a: (o.dir || 0) + (u - 0.5) * (o.spread || 2) + (r() - 0.5) * 0.28, l: (o.len || 80) * (0.62 + 0.55 * r()), w: (o.wid || 9) * (0.75 + 0.5 * r()), d: r() });
-    }
-    list.sort((p, q) => p.d - q.d);
-    list.forEach((b, i) => blade(g, x, y, b.a, b.l, b.w, i % 3 === 0 && o.base2 ? o.base2 : o.base, { line: o.line, lineColor: o.lineColor, rim: o.rim, shadow: o.shadow, vein: o.vein }));
-  }
   // a stem (ribbon-like tapering stroke) drawn as ink: pts [[x,y]...]
   function branch(g, pts, w, col, o) {
     o = o || {};
@@ -347,62 +266,6 @@
     if (o.hi) tk.inkPath(g, pts.map((p) => [p[0] + w * 0.18, p[1] - w * 0.1]), { w: w * 0.28, color: o.hi, taper: 0.3, taperStart: 0.05, wobble: 0.05, pressure: 'head', seed: (o.seed || 1) + 2, alpha: 0.9 });
   }
 
-  // a cel-shaded cumulus mound: three rows of puffs (big at the base, small on top), each puff cel-shaded with its own lit rim.
-  // cx, cy centre of the base; w, h size; o: base shade lit line seed flatY light
-  function cloud(g, cx, cy, w, h, o) {
-    o = o || {};
-    const r = R('cloud', o.seed || 0), puffs = [], rows = 3;
-    for (let row = 0; row < rows; row++) {
-      const k = row / (rows - 1), rw = w * (1 - 0.46 * k), n = Math.max(2, Math.round(rw / (52 - 12 * k))), ry = cy - k * h * 0.46;
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.5 + (r() - 0.5) * 0.6) / n, hump = Math.pow(Math.sin(PI * clamp(u, 0.02, 0.98)), 0.6);
-        puffs.push({ x: cx - rw / 2 + u * rw, y: ry - hump * h * 0.12 * r() + (r() - 0.5) * h * 0.06, r: h * (0.2 + 0.24 * hump * (0.55 + 0.45 * r())) * (1 - 0.22 * k), row });
-      }
-    }
-    g.save();
-    if (o.flat !== false) { g.beginPath(); g.rect(cx - w, cy - h * 3, w * 2, h * 3 + h * (o.flatY === undefined ? 0.28 : o.flatY)); g.clip(); }
-    puffs.forEach((p) => tk.celCircle(g, p.x, p.y, p.r, o.base || '#ffe9c8', { line: o.line || false, lineColor: o.lineColor, depth: p.r * 0.4, shadow: o.shade, rim: o.lit, rimSide: 'light', rimW: Math.max(1.4, p.r * 0.08), rimAlpha: 0.9, hi: false, light: o.light === undefined ? tk.light : o.light }));
-    g.restore();
-  }
-
-  // a wispy horizontal cloud streak (tapered ink-wash ribbon, soft edges): cx, cy, w, h
-  function streak(g, cx, cy, w, h, col, a, seed) {
-    const r = R('streak', seed || 0);
-    for (let i = 0; i < 5; i++) {
-      const k = i / 4, ww = w * (1 - 0.2 * k + 0.1 * r()), yy = cy + (k - 0.5) * h * 0.9 + (r() - 0.5) * 4;
-      g.save(); g.translate(cx + (r() - 0.5) * w * 0.1, yy); g.scale(1, (h * 0.22) / (ww * 0.5));
-      const gr = g.createRadialGradient(0, 0, 0, 0, 0, ww * 0.5);
-      gr.addColorStop(0, A(col, a * (0.5 + 0.5 * r()))); gr.addColorStop(0.7, A(col, a * 0.35)); gr.addColorStop(1, A(col, 0));
-      g.fillStyle = gr; g.beginPath(); g.arc(0, 0, ww * 0.5, 0, TAU); g.fill(); g.restore();
-    }
-  }
-
-  // a `torii` gate: x centre, y ground, s width. Vermilion pillars, black kasagi. o.col base colour, o.alpha, o.line
-  function torii(g, x, y, s, o) {
-    o = o || {};
-    const col = o.col || '#e8383d', sh = o.shade || shd(col), w = s, h = s * 0.86, pw = s * 0.075, ga = g.globalAlpha;
-    if (o.alpha !== undefined) g.globalAlpha = ga * cA(o.alpha);
-    const px = [x - w * 0.34, x + w * 0.34];
-    px.forEach((cx) => {
-      fillPoly(g, [[cx - pw * 0.55, y], [cx - pw * 0.5, y - h * 0.94], [cx + pw * 0.5, y - h * 0.94], [cx + pw * 0.55, y]], col);
-      fillPoly(g, [[cx - pw * 0.55, y], [cx - pw * 0.5, y - h * 0.94], [cx - pw * 0.05, y - h * 0.94], [cx - pw * 0.02, y]], sh);
-      fillPoly(g, [[cx - pw * 0.9, y - h * 0.02], [cx + pw * 0.9, y - h * 0.02], [cx + pw * 0.8, y + h * 0.03], [cx - pw * 0.8, y + h * 0.03]], '#241a3a');
-    });
-    // nuki (tie beam), shimaki and the curved black kasagi
-    fillPoly(g, [[x - w * 0.46, y - h * 0.7], [x + w * 0.46, y - h * 0.7], [x + w * 0.46, y - h * 0.63], [x - w * 0.46, y - h * 0.63]], col);
-    fillPoly(g, [[x - w * 0.46, y - h * 0.66], [x + w * 0.46, y - h * 0.66], [x + w * 0.46, y - h * 0.63], [x - w * 0.46, y - h * 0.63]], sh);
-    fillPoly(g, [[x - w * 0.5, y - h * 0.9], [x + w * 0.5, y - h * 0.9], [x + w * 0.5, y - h * 0.83], [x - w * 0.5, y - h * 0.83]], '#241a3a');
-    g.beginPath();
-    g.moveTo(x - w * 0.66, y - h * 1.03);
-    g.quadraticCurveTo(x - w * 0.34, y - h * 0.94, x, y - h * 0.955);
-    g.quadraticCurveTo(x + w * 0.34, y - h * 0.94, x + w * 0.66, y - h * 1.03);
-    g.lineTo(x + w * 0.6, y - h * 0.9);
-    g.quadraticCurveTo(x + w * 0.34, y - h * 0.86, x, y - h * 0.87);
-    g.quadraticCurveTo(x - w * 0.34, y - h * 0.86, x - w * 0.6, y - h * 0.9);
-    g.closePath(); g.fillStyle = '#1b1230'; g.fill();
-    if (o.line) { const lw = o.line; tk.inkPath(g, [[x - w * 0.66, y - h * 1.03], [x, y - h * 0.955], [x + w * 0.66, y - h * 1.03]], { w: lw, color: '#0d0b1e', taper: 0.1, wobble: 0.05 }); }
-    g.globalAlpha = ga;
-  }
 
   // a tuft of grass blades: base point (x, y), height h, n blades
   function grass(g, x, y, h, n, col, sd, lean) {
@@ -417,115 +280,10 @@
     }
     g.fill();
   }
-  // a small tumbling leaf lying on the ground (flat ellipse-ish blade)
-  function litter(g, x, y, s, ang, base, line) {
-    g.save(); g.translate(x, y); g.rotate(ang);
-    tk.celFill(g, [[-s, 0, 1], [-s * 0.3, -s * 0.24], [s * 0.4, -s * 0.2], [s, 0, 1], [s * 0.3, s * 0.22], [-s * 0.4, s * 0.2]], base, { line: line === undefined ? 1.2 : line, depth: s * 0.22, hi: false, tension: 0.6, light: tk.light - ang });
-    g.restore();
-  }
-  // soft cast shadows and light pools helpers
-  function lightPool(g, x, y, rx, ry, col, a) { blob(g, x, y, rx, ry, col, a); }
-
-  // An elongated anime stratus band: a cel-shaded lens with puffs along its top, a lit upper-right edge and a hard shadow underneath.
-  // cx, cy centre; w, h size; o: base shade lit seed n (lenses) lean
-  function cloudBand(g, cx, cy, w, h, o) {
-    o = o || {};
-    const r = R('band', o.seed || 0), n = o.n || 3;
-    for (let i = 0; i < n; i++) {
-      const k = i / Math.max(1, n - 1), ww = w * (1 - 0.3 * k + 0.12 * (r() - 0.5)), hh = h * (0.5 + 0.5 * (1 - k)), x = cx + (r() - 0.5) * w * 0.16 + (o.lean || 0) * k, y = cy + (k - 0.35) * h * 0.85;
-      tk.celFill(g, [[x - ww / 2, y, 1], [x - ww * 0.32, y - hh * 0.4], [x + ww * 0.24, y - hh * 0.36], [x + ww / 2, y, 1], [x + ww * 0.3, y + hh * 0.24], [x - ww * 0.28, y + hh * 0.26]], o.base || '#ffcfae', { line: false, depth: hh * 0.3, shadow: o.shade, hi: false, tension: 0.85, light: -0.55 });
-      const pn = o.puffs === false ? 0 : 2 + Math.floor(ww / 90);
-      for (let j = 0; j < pn; j++) {
-        const u = (j + 0.5 + (r() - 0.5) * 0.5) / pn, px = x - ww * 0.36 + u * ww * 0.72, pr = hh * (0.32 + 0.3 * r()) * Math.sin(PI * (0.15 + 0.7 * u));
-        tk.celCircle(g, px, y - hh * 0.3 - pr * 0.25, pr, o.base || '#ffcfae', { line: false, depth: pr * 0.4, shadow: o.shade, rim: o.lit, rimSide: 'light', rimW: Math.max(1.4, pr * 0.1), rimAlpha: 0.95, hi: false, light: -0.55 });
-      }
-    }
-  }
 
 
   // ---------------------------------------------------------------------------------------------------------------
-  // props shared by several scenes: sakura flowers, pagodas, stone lanterns, paper lanterns
-  // ---------------------------------------------------------------------------------------------------------------
-  // a five-petal sakura blossom: r = flower radius, base petal colour, mid centre colour
-  function flower(g, x, y, r, rot, base, o) {
-    o = o || {};
-    g.save(); g.translate(x, y); g.rotate(rot);
-    const ink = A(o.line || '#8a2456', 0.75);
-    for (let k = 0; k < 5; k++) {
-      const a = (k / 5) * TAU;
-      g.save(); g.rotate(a); g.translate(0, -r * 0.5);
-      g.beginPath(); g.ellipse(0, 0, r * 0.46, r * 0.58, 0, 0, TAU);
-      g.fillStyle = base; g.fill();
-      g.beginPath(); g.ellipse(r * 0.12, r * 0.12, r * 0.4, r * 0.5, 0, 0, TAU);          // hard cel shadow crescent toward the centre
-      g.save(); g.clip(); g.beginPath(); g.rect(-r, -r, r * 2, r * 2); g.ellipse(-r * 0.1, -r * 0.14, r * 0.46, r * 0.58, 0, 0, TAU); g.fillStyle = o.shade || shd(base, 0.12); g.fill('evenodd'); g.restore();
-      g.lineWidth = Math.max(0.7, r * 0.09); g.strokeStyle = ink; g.beginPath(); g.ellipse(0, 0, r * 0.46, r * 0.58, 0, 0, TAU); g.stroke();
-      g.restore();
-    }
-    disc(g, 0, 0, r * 0.2, o.mid || '#ff5a9a');
-    g.strokeStyle = A('#ffe9a8', 0.9); g.lineWidth = Math.max(0.6, r * 0.06);
-    g.beginPath(); for (let k = 0; k < 5; k++) { const a = k * 1.26 + 0.3; g.moveTo(0, 0); g.lineTo(Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); } g.stroke();
-    g.restore();
-  }
-  // a cluster of blossoms and buds around a point (deterministic by seed)
-  function blossomCluster(g, x, y, spread, n, seed, o) {
-    o = o || {};
-    const r = R('blossom', seed), cols = o.cols || ['#ffc6de', '#ffb0d0', '#ffd8e8', '#ff9fc4'];
-    for (let i = 0; i < n; i++) {
-      const a = r() * TAU, d = Math.sqrt(r()) * spread, sz = (o.size || 9) * (0.7 + 0.6 * r());
-      flower(g, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, sz, r() * TAU, cols[Math.floor(r() * cols.length)], o);
-    }
-  }
-
-  // a five-tier pagoda silhouette: x centre, y ground, s total height; col body colour; lit window colour (or null)
-  function pagoda(g, x, y, s, col, lit) {
-    const tiers = 5, th = s / (tiers + 0.9);
-    for (let i = 0; i < tiers; i++) {
-      const w = s * (0.3 - i * 0.04), yb = y - i * th;
-      fillPoly(g, [[x - w * 0.6, yb], [x + w * 0.6, yb], [x + w * 0.6, yb - th * 0.7], [x - w * 0.6, yb - th * 0.7]], col);
-      if (lit) { g.fillStyle = lit; g.fillRect(x - w * 0.16, yb - th * 0.52, w * 0.32, th * 0.3); }
-      fillPoly(g, [[x - w * 1.28, yb - th * 0.78], [x - w * 0.78, yb - th * 0.6], [x - w * 0.32, yb - th * 0.7 - th * 0.34], [x + w * 0.32, yb - th * 0.7 - th * 0.34], [x + w * 0.78, yb - th * 0.6], [x + w * 1.28, yb - th * 0.78], [x + w * 0.62, yb - th * 0.5], [x - w * 0.62, yb - th * 0.5]], col);
-    }
-    const top = y - tiers * th - th * 0.3;
-    g.strokeStyle = col; g.lineWidth = Math.max(1.2, s * 0.012); g.beginPath(); g.moveTo(x, top); g.lineTo(x, top - s * 0.18); g.stroke();
-    for (let k = 0; k < 4; k++) { g.beginPath(); g.ellipse(x, top - s * (0.03 + k * 0.03), s * (0.03 - k * 0.005), s * 0.008, 0, 0, TAU); g.stroke(); }
-  }
-
-  // a stone garden lantern (toro): x centre, y ground, s height. glow(ctx) can be drawn live over its firebox: the firebox centre is returned.
-  function toro(g, x, y, s, o) {
-    o = o || {};
-    const stone = o.stone || '#6c6a8a', sh = o.shade || shd(stone, 0.3), rim = o.rim || '#c8c4ff', w = s * 0.5;
-    const cel = (pts, base) => tk.celFill(g, pts, base, { line: Math.max(1.4, s * 0.03), lineColor: o.lineColor || '#140f2e', depth: s * 0.05, shadow: sh, rim, rimSide: 'light', rimW: Math.max(1, s * 0.02), rimAlpha: 0.7, hi: false, tension: 0.15, align: 0.4 });
-    cel([[x - w * 0.5, y], [x + w * 0.5, y], [x + w * 0.42, y - s * 0.09], [x - w * 0.42, y - s * 0.09]], stone);                 // base slab
-    cel([[x - w * 0.16, y - s * 0.09], [x + w * 0.16, y - s * 0.09], [x + w * 0.13, y - s * 0.4], [x - w * 0.13, y - s * 0.4]], stone);  // pillar
-    cel([[x - w * 0.5, y - s * 0.4], [x + w * 0.5, y - s * 0.4], [x + w * 0.42, y - s * 0.47], [x - w * 0.42, y - s * 0.47]], stone);   // saucer
-    const fy = y - s * 0.47;
-    cel([[x - w * 0.32, fy], [x + w * 0.32, fy], [x + w * 0.32, fy - s * 0.24], [x - w * 0.32, fy - s * 0.24]], mixc(stone, '#241a3a', 0.25));   // firebox
-    g.fillStyle = o.fire || '#ffb84a'; g.fillRect(x - w * 0.17, fy - s * 0.2, w * 0.34, s * 0.16);
-    g.strokeStyle = A('#140f2e', 0.8); g.lineWidth = Math.max(1, s * 0.018); g.beginPath(); g.moveTo(x, fy - s * 0.2); g.lineTo(x, fy - s * 0.04); g.stroke();
-    cel([[x - w * 0.64, fy - s * 0.24], [x + w * 0.64, fy - s * 0.24], [x + w * 0.2, fy - s * 0.4], [x - w * 0.2, fy - s * 0.4]], stone);    // roof
-    cel([[x - w * 0.1, fy - s * 0.4], [x + w * 0.1, fy - s * 0.4], [x + w * 0.07, fy - s * 0.5], [x - w * 0.07, fy - s * 0.5]], stone);    // finial
-    return { x, y: fy - s * 0.12, r: s * 0.3 };
-  }
-
-  // a hanging paper lantern (chochin): x, y = the top of the lantern, r = radius, col base colour. Static art; the glow is live.
-  function chochin(g, x, y, r, col, o) {
-    o = o || {};
-    const h = r * 1.5, dk = shd(col, 0.3);
-    tk.inkStroke(g, x, y - r * 0.9, x, y, { w: Math.max(1.2, r * 0.1), color: pal.ink, taper: 0.05, wobble: 0 });
-    tk.celFill(g, tk.ellipsePts(x, y + h / 2, r, h / 2, 16), col, { line: Math.max(1.6, r * 0.13), depth: r * 0.42, shadow: dk, rim: o.rim || lite(col, 0.55), rimSide: 'light', rimW: Math.max(1.2, r * 0.11), rimAlpha: 0.85, hi: false, decor: (gg) => {
-      gg.strokeStyle = A(mixc(col, '#140f2e', 0.55), 0.75); gg.lineWidth = Math.max(0.9, r * 0.06);
-      for (let i = 1; i < 6; i++) { const yy = y + h * i / 6, k = Math.sin(PI * i / 6); gg.beginPath(); gg.ellipse(x, yy, r * k, r * 0.18, 0, 0, PI); gg.stroke(); }
-      if (o.mark) { gg.fillStyle = A(o.mark, 0.85); gg.beginPath(); gg.ellipse(x, y + h / 2, r * 0.3, r * 0.42, 0, 0, TAU); gg.fill(); }
-    } });
-    fillPoly(g, [[x - r * 0.42, y - r * 0.05], [x + r * 0.42, y - r * 0.05], [x + r * 0.34, y + r * 0.16], [x - r * 0.34, y + r * 0.16]], '#241a3a');
-    fillPoly(g, [[x - r * 0.34, y + h - r * 0.14], [x + r * 0.34, y + h - r * 0.14], [x + r * 0.42, y + h + r * 0.06], [x - r * 0.42, y + h + r * 0.06]], '#241a3a');
-    tk.inkStroke(g, x, y + h + r * 0.06, x, y + h + r * 0.06 + r * 0.7, { w: Math.max(1, r * 0.08), color: '#e8383d', taper: 0.3, wobble: 0.1 });
-    return { x, y: y + h / 2, r };
-  }
-
-
-  // ---------------------------------------------------------------------------------------------------------------
-  // shared scene pieces: haze bands, the soft vignette + HUD shade layer, paper grain, swaying sprites
+  // shared scene pieces: haze bands, the soft vignette + HUD shade layer, god rays, water reflections
   // ---------------------------------------------------------------------------------------------------------------
   const X0 = -PAR - 8, XW = DW + 2 * PAR + 16;                   // a horizontal span that also covers the parallax pad of a layer
   function haze(g, y0, y1, col, aTop, aBot) { fillRectG(g, X0, y0, XW, y1 - y0, [[0, A(col, aTop)], [1, A(col, aBot)]]); }
@@ -552,22 +310,6 @@
   }
   const grain = () => null;                                        // kept so scenes read the same: the grain is baked into the big layers (layerSprite)
 
-  // A sprite that hangs from a pivot and sways. spriteFn() -> canvas of logical size w x h; (x, y) top-left in design space, (px, py) the pivot inside
-  // the sprite, amp radians, freq Hz, f parallax factor.
-  function swayer(f, spriteFn, x, y, w, h, px, py, amp, freq, ph) {
-    return anim((ctx, T) => {
-      ctx.save();
-      ctx.translate(x + px - T.par * f, y + py);
-      ctx.rotate(Math.sin(T.tt * freq * TAU + ph) * amp * (T.mot < 1 ? 0.4 : 1));
-      ART.blit(ctx, spriteFn(), -px, -py, w, h);
-      ctx.restore();
-    });
-  }
-  // a scrolling seamless mist strip layer. y, h in design px; color hex; a base alpha; speed px/s; f parallax; seed
-  function mistLayer(name, y, h, color, a, speed, f, seed, o) {
-    o = o || {};
-    return layer(name, { x: 0, y, w: DW, h }, f, (g) => { mistPaint(g, DW, h, color, seed, o.n || 12); }, { scroll: speed, alpha: o.breathe ? (T) => a * (1 + o.breathe * Math.sin(T.tt * 0.3 + seed)) : a, bob: o.bob, q: 0.5, fx: true });
-  }
   // Soft god-ray layer: shafts fan out from (sx, sy) at the given angles (degrees, canvas orientation), additive. Each shaft is three nested
   // triangles (feathered edges) that fade in away from the source, so there is never a hard starburst point.
   function raysLayer(name, sx, sy, angles, widthDeg, color, a, o) {
@@ -591,48 +333,6 @@
     }, { q: 0.4, add: true, fx: true, alpha: (T) => a * (1 + (o.pulse === undefined ? 0.2 : o.pulse) * Math.sin(T.tt * 0.45 + (o.phase || 0))) });
   }
 
-  // Lens-flare bokeh: soft translucent discs with a slightly brighter rim, additive. pts [[x, y, r], ...]
-  function bokehLayer(name, pts, color, a, o) {
-    o = o || {};
-    return layer(name, full(0), 0, (g) => {
-      pts.forEach((p, i) => {
-        disc(g, p[0], p[1], p[2], A(color, 0.55 * (0.6 + 0.4 * ((i * 5) % 3) / 2)));
-        g.beginPath(); g.arc(p[0], p[1], p[2], 0, TAU); g.lineWidth = Math.max(1.2, p[2] * 0.06); g.strokeStyle = A(lite(color, 0.5), 0.8); g.stroke();
-      });
-    }, { q: 0.5, add: true, fx: true, alpha: (T) => a * (1 + 0.25 * Math.sin(T.tt * 0.6 + (o.phase || 0))) });
-  }
-
-  // `inkFrame`: a hard ink frame, dry-brush strokes along the four edges, ink splashes in the corners and a soft radial vignette. For the boss scenes.
-  function inkFrame(name, o) {
-    o = o || {};
-    return layer(name, full(0), 0, (g) => {
-      const col = o.color || '#0a0410', th = o.th || 40, a = o.alpha === undefined ? 0.92 : o.alpha;
-      const edges = [[[-30, th * 0.1], [DW * 0.3, th * 0.3], [DW * 0.7, th * 0.05], [DW + 30, th * 0.2]], [[-30, DH - th * 0.1], [DW * 0.4, DH - th * 0.25], [DW * 0.75, DH - th * 0.05], [DW + 30, DH - th * 0.2]],
-        [[th * 0.1, -30], [th * 0.3, DH * 0.4], [th * 0.05, DH * 0.75], [th * 0.2, DH + 30]], [[DW - th * 0.1, -30], [DW - th * 0.25, DH * 0.35], [DW - th * 0.05, DH * 0.7], [DW - th * 0.2, DH + 30]]];
-      edges.forEach((e, i) => tk.inkPath(g, e, { w: th * 2, color: A(col, a), taper: 0, pressure: 'flat', wobble: 0.5, freq: 0.03, seed: (o.seed || 1) * 7 + i, step: 6 }));
-      const r = R('inkframe', o.seed || 1);
-      [[0, 0], [DW, 0], [0, DH], [DW, DH]].forEach((c, i) => tk.inkBlot(g, c[0], c[1], 90 + r() * 40, { seed: (o.seed || 1) + i, color: col, drips: i < 2 ? 4 : 0, jag: 0.35 }));
-      g.save(); g.translate(DW / 2, DH / 2); g.scale(1, 0.74);
-      const gr = g.createRadialGradient(0, 0, DW * 0.3, 0, 0, DW * 0.7);
-      gr.addColorStop(0, A(col, 0)); gr.addColorStop(1, A(col, o.soft === undefined ? 0.6 : o.soft));
-      g.fillStyle = gr; g.fillRect(-DW, -DH, DW * 2, DH * 2);
-      g.restore();
-    }, { q: 0.55 });
-  }
-  // colour grade for a boss scene: a multiply layer (dark, tinted), radial speed lines behind the boss lane, rising embers, and the `inkFrame`
-  function bossOverlay(sk, o) {
-    const cx = o.cx || 1100, cy = o.cy || 330;
-    return [
-      layer(sk + 'grade', full(0), 0, (g) => {
-        fillRectG(g, 0, 0, DW, DH, [[0, o.top || '#5a3a70'], [0.55, o.mid || '#9a7a94'], [0.8, '#ffffff'], [1, '#ffffff']]);
-      }, { q: 0.3, op: 'multiply', alpha: o.grade === undefined ? 0.85 : o.grade }),
-      layer(sk + 'speed', full(0), 0, (g) => { tk.speedLines(g, cx, cy, { n: 70, seed: o.seed || 3, r0: 150, r1: 1000, color: o.line || '#ffb070', alpha: 0.5, w: 7 }); },
-        { q: 0.5, add: true, alpha: (T) => (o.speed === undefined ? 0.16 : o.speed) * (0.7 + 0.3 * Math.sin(T.tt * 1.3)) }),
-      anim((ctx, T) => {
-        drift(ctx, T, { key: sk + 'embers', n: o.embers || 34, sprs: [emberSpr(o.ember || '#ff8a3a'), emberSpr(o.ember2 || '#ffb060')], area: { x: 0, y: 60, w: DW, h: 640 }, vx: 10, vy: -34, sway: 26, size: [7, 16], aspect: 1, alpha: [0.5, 1], add: true, wob: 0 });
-      }),
-    ];
-  }
 
   // Water reflection of a baked layer: the layer's sprite is mirrored about y = mirrorY into `depth` px of water, cut into thin strips that
   // wobble sideways (more with distance), then faded. squash < 1 compresses the reflection. alpha is the strength.
@@ -660,7 +360,7 @@
 
 
   // ---------------------------------------------------------------------------------------------------------------
-  // particles: drifting sprites (petals, leaves, charms, ash), fireflies, sparks. Parameters come from cached per-index sets.
+  // particles: drifting sprites (petals and leaves), twinkling stars and fireflies. Parameters come from cached per-index sets.
   // ---------------------------------------------------------------------------------------------------------------
   const mkSpr = (key, w, h, fn) => ART.sprite('sc|' + key, w, h, fn);       // fixed-size sprite, independent of the scene scale
 
@@ -681,22 +381,6 @@
       g.translate(4, 10);
       tk.celFill(g, [[0, 0, 1], [10, -6.5], [26, -5], [40, 0, 1], [26, 5.5], [10, 6.2]], base, { line: 1.5, lineColor: mixc(shd(base), pal.ink, 0.4), depth: 3, hi: false, tension: 0.7, shadow: shd(base, 0.25) });
       g.globalAlpha = 0.6; tk.inkStroke(g, 3, 0, 36, 0, { w: 0.9, color: pal.ink, taper: 0.3, wobble: 0 });
-    });
-  }
-  function charmSpr(variant) {                                             // a paper ofuda talisman: cream strip, vermilion seal marks
-    return mkSpr('charm|' + variant, 28, 44, (g) => {
-      g.translate(14, 22);
-      tk.celFill(g, [[-9, -18, 1], [9, -18, 1], [9, 18, 1], [-9, 18, 1]], '#f3e6c8', { line: 1.8, depth: 4, hi: false, tension: 0.05, shadow: '#cdb98f' });
-      g.fillStyle = '#e8383d';
-      for (let i = 0; i < 4; i++) { const y = -13 + i * 7 + (variant % 2) * 1.5; g.fillRect(-4.5 + (i % 2) * 1.5, y, 7 - (i % 3) * 1.2, 2.2); }
-      g.beginPath(); g.arc(0, 12, 3.4, 0, TAU); g.strokeStyle = '#e8383d'; g.lineWidth = 1.6; g.stroke();
-    });
-  }
-  function emberSpr(hex) {
-    return mkSpr('ember|' + hex, 16, 16, (g) => {
-      const gr = g.createRadialGradient(8, 8, 0, 8, 8, 8);
-      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.25, A(lite(hex, 0.5), 1)); gr.addColorStop(0.6, A(hex, 0.5)); gr.addColorStop(1, A(hex, 0));
-      g.fillStyle = gr; g.fillRect(0, 0, 16, 16);
     });
   }
 
@@ -760,24 +444,6 @@
       const al = 0.2 + 0.8 * b;
       glowAt(ctx, x, y, (cfg.size || 12) * p.sz * (0.7 + 0.5 * b), col, 0.8 * al);
       glowAt(ctx, x, y, (cfg.size || 12) * p.sz * 0.28, cfg.core || '#ffffff', al);
-    }
-    ctx.restore();
-  }
-
-  // Rising sparks / embers from a source. cfg: key, n, x, y (source), spread (px), rise (px/s), life (s), color, size, wind (px/s)
-  function sparks(ctx, T, cfg) {
-    const n = Math.round(cfg.n * T.pf);
-    if (n <= 0) return;
-    const P = pset('spark|' + cfg.key, cfg.n, (r) => ({ ph: r(), dx: (r() - 0.5) * 2, sp: 0.6 + r() * 0.8, sz: 0.5 + r() * 0.9, fq: 1 + r() * 2.5, ph2: r() * TAU }));
-    const life = cfg.life || 3;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < n; i++) {
-      const p = P[i], u = ((T.tt / life * p.sp + p.ph) % 1 + 1) % 1;
-      const x = cfg.x + p.dx * (cfg.spread || 14) * (0.3 + u) + Math.sin(T.tt * p.fq + p.ph2) * 6 * u + (cfg.wind || 0) * u * life;
-      const y = cfg.y - u * (cfg.rise || 160) * p.sp;
-      const a = Math.pow(1 - u, 1.4) * ss(0, 0.06, u);
-      const hex = u < 0.4 ? (cfg.hot || '#fff0b0') : (cfg.color || '#ff9a2e');
-      glowAt(ctx, x, y, (cfg.size || 6) * p.sz * (1 - 0.5 * u), hex, a);
     }
     ctx.restore();
   }

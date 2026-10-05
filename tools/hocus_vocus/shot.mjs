@@ -7,10 +7,11 @@
 //   node tools/hocus_vocus/shot.mjs --url hocus_vocus/index.html --js "GAME.debug.open('combat',{enemies:['kappa']})" --frames 75 --out c.png
 //   node tools/hocus_vocus/shot.mjs --url hocus_vocus/index.html --viewports 1280x720,390x844,844x390 --out /tmp/title.png     writes title_1280x720.png ...
 //   node tools/hocus_vocus/shot.mjs --url hocus_vocus/index.html --steps steps.json --frames 30
+//   node tools/hocus_vocus/shot.mjs --list-sheets                                       print every gallery sheet name (no page needs to be named)
 //   node tools/hocus_vocus/shot.mjs --diff before.png after.png [--threshold 4] [--diff-out d.png] [--max-diff 0.5]
 //
 // TARGET
-//   --url U          repo-relative path, absolute path, or http(s)/file URL (default hocus_vocus/index.html). Query kept.
+//   --url U          repo-relative path, absolute path, or http(s)/file URL (default hocus_vocus/index.html; hocus_vocus/gallery.html with --list-sheets). Query kept.
 //   --sheet a,b      shorthand for hocus_vocus/gallery.html?sheet=a,b (several sheets stack)
 //   --param k=v      extra query parameter (repeatable). Gallery pages get nav=0&label=0 so the PNG is exactly the sheet.
 //   --no-debug       the game page gets ?debug=1 by default (mirrors GAME, RUN, COMBAT on window; GAME.debug always exists)
@@ -44,7 +45,9 @@
 //   --baseline P     compare the capture (--out) with a baseline PNG (same exit rule)     --threshold N  per-channel tolerance (default 0)
 //   --diff-out F     write a highlight image of the differing pixels                       --max-diff PCT   percentage that is still acceptable
 // OUTPUT
-//   --logs           print every console message      --strict   missing resources (404s) are errors      --no-fail   always exit 0      --list-sheets
+//   --logs           print every console message      --strict   missing resources (404s) are errors      --no-fail   always exit 0
+//   --list-sheets    print the names of the gallery sheets (sheets -> [...]). Sheets live on hocus_vocus/gallery.html, so with no --url or
+//                    --sheet that page is opened, and from any other page (the game, say) the names are read from the gallery instead.
 // EXIT CODE  0 clean, 1 the page threw / a sheet failed / the game reported an error / a diff exceeded --max-diff, 2 the tool could not run.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -137,7 +140,8 @@ function toUrl(u) {
   if (!fs.existsSync(file) && fs.existsSync(path.resolve(p))) file = path.resolve(p);
   return pathToFileURL(file).href + (q ? '?' + q : '');
 }
-let target = args.sheet ? 'hocus_vocus/gallery.html?sheet=' + encodeURIComponent(args.sheet).replace(/%2C/g, ',') : (args.url || 'hocus_vocus/index.html');
+const GALLERY = 'hocus_vocus/gallery.html';
+let target = args.sheet ? GALLERY + '?sheet=' + encodeURIComponent(args.sheet).replace(/%2C/g, ',') : (args.url || (args['list-sheets'] ? GALLERY : 'hocus_vocus/index.html'));
 for (const kv of args.param || []) target += (target.includes('?') ? '&' : '?') + kv;
 const isGallery = /gallery\.html/.test(target);
 const pathPart = target.split('?')[0].split('#')[0];
@@ -271,7 +275,19 @@ async function runViewport(browser, vp) {
     if (args['fake-clock']) await page.clock.runFor(100); else await page.waitForTimeout(100);
   }
   if (!ready) { const st = await collect(); add('not-ready', `${isGallery ? 'window.__sheetReady' : isGame ? 'window.__booted' : 'document.readyState'} was still not true after ${READY_TIMEOUT} ms` + (st.missing.length ? `; not found: ${st.missing.slice(0, 5).join(', ')}` : '') + (isGame ? (await page.evaluate(() => { const b = document.getElementById('boot'); return b ? '; #boot says: ' + b.textContent.trim().slice(0, 160) : ''; }).catch(() => '')) : '')); }
-  if (args['list-sheets']) await evalJs('typeof sheetNames === "function" ? sheetNames() : []', 'sheets');
+  if (args['list-sheets']) {
+    // the sheet registry is the gallery page's: from any other page (the game, a custom url) read it from the gallery in a second page
+    let names = await page.evaluate('typeof sheetNames === "function" ? sheetNames() : []').catch(() => []);
+    if (!Array.isArray(names) || !names.length) {
+      const gp = await context.newPage();
+      try {
+        await gp.goto(toUrl(GALLERY + '?nav=0&label=0'), { waitUntil: 'load', timeout: READY_TIMEOUT });
+        names = await gp.evaluate('typeof sheetNames === "function" ? sheetNames() : []');
+      } catch (e) { add('list-sheets', `could not read the sheet names from ${GALLERY}: ${String(e.message || e).split('\n')[0]}`); names = []; }
+      await gp.close().catch(() => {});
+    }
+    console.log('sheets -> ' + JSON.stringify(names));
+  }
   await settle(null, globalFrames !== null ? 0 : (args.wait !== undefined ? +args.wait : isGallery ? 100 : 600));
   if (args.js) { await evalJs(args.js, 'js'); await settle(null, args.wait !== undefined ? +args.wait : isGallery ? 100 : 600); }
 

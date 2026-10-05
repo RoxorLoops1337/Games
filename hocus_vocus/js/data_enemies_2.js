@@ -52,11 +52,11 @@
 //                    Sizzle proof.
 //   boss_jorogumo    Scrollspinner, Queen of the Feed. Form 1, the Avatar (Sequins 4, the perfect filter): Hatch Botlings (2
 //                    Botlings), Keep Scrolling (Tangled 1 on both heroes and a status_tangle card on top of the draw pile), then Big
-//                    Squeeze (heavy, lead) which reads the Tangled on its victim: 12 untangled, 20 tangled. Selfie Flurry and Air Kiss
+//                    Squeeze (heavy, lead) which reads the Tangled on its victim: 12 untangled, 20 tangled. Selfie Flurry and Blown Filter
 //                    (backing spot Earworm) between, Keep Scrolling again on turns 6 and 10, One More Bot when the brood is gone.
 //                    Below half HP she drops the filter (Sequins gone, Volume 2, say line) and re-rolls at once to Form 2, the Spinner:
 //                    Spin the Feed (Tangled 2 on both, another status_tangle card), World Wide Web (heavy on BOTH heroes, 7
-//                    untangled, 12 with Tangled 2), Eight-Leg Swipe, Air Kiss, and a once-only Refresh Frenzy below 20 percent.
+//                    untangled, 12 with Tangled 2), Eight-Leg Swipe, Blown Filter, and a once-only Refresh Frenzy below 20 percent.
 //                    The lesson never changes: the Feed is the setup, the finisher scales with it, and status_tangle (Untangle, 1
 //                    Breath) cuts it.
 //
@@ -375,7 +375,7 @@
         hatch: { name: 'One More Bot', kind: 'summon', say: 'One more for the feed, little one.', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
         snare: { name: 'Keep Scrolling', kind: 'debuff', say: 'Stay, sweetie. Nobody leaves the feed.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
         embrace: { name: 'Big Squeeze', kind: 'heavy', say: 'Group hug! Nobody scrolls alone.', fx: [{ op: 'dmg', n: { base: 13, per: 'status', s: 'bind', who: 'target', mul: 9, cap: 22 }, tgt: 'front' }] },
-        kiss: { name: 'Air Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
+        kiss: { name: 'Blown Filter', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
         fan: { name: 'Selfie Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'random' }] },
         // form 2: the Spinner
         legs: { name: 'Eight-Leg Swipe', kind: 'multi', say: 'Swipe. Swipe. SWIPE.', fx: [{ op: 'dmg', n: 4, hits: 4, tgt: 'random' }] },

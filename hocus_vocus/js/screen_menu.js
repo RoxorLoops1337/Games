@@ -114,7 +114,8 @@
   // display words for ids the screens print (bible 4.1): a row id is never shown through cap(), and "her" belongs to Jasmin alone
   const ROW_WORD = { front: 'Lead', back: 'Backing' };
   const rowWord = (row) => ROW_WORD[row] || String(row);
-  const rowProse = (row) => (row === 'front' ? 'the lead' : 'backing');
+  const rowProse = (row) => (row === 'front' ? 'the lead spot' : 'the backing spot');            // the stage illustration's sentence
+  const rowShort = (row) => (row === 'front' ? 'lead' : 'backing');                              // the hero select slot caption: one short line in a 150 px slot, never a wrapped one
   const poss = (id) => (id === 'hanae' ? 'her' : 'his');
   const colourWord = (c) => (DATA.COLOUR_NAME && DATA.COLOUR_NAME[c]) || c;
   const statusWord = (id, dflt) => (DATA.statuses && DATA.statuses[id] && DATA.statuses[id].name) || dflt;
@@ -1115,11 +1116,13 @@
           const el = S.labels[row];
           el.classList.toggle('empty', !id);
           const note = el.querySelector('.mn-slot-note');
-          if (!id) { note.textContent = 'empty'; return; }
+          el.setAttribute('role', 'group');
+          if (!id) { note.textContent = 'empty'; el.setAttribute('aria-label', rowWord(row) + ': empty.'); return; }
           const h = DATA.heroes[id];
           const fits = h.prefer === row;
           el.classList.toggle('fits', fits);
-          note.textContent = h.name + (fits ? ': in ' + poss(id) + ' element' : ': prefers ' + rowProse(h.prefer));
+          note.textContent = fits ? 'In ' + poss(id) + ' element' : 'Prefers ' + rowShort(h.prefer);       // no name: it would wrap in the slot; the group label below says who
+          el.setAttribute('aria-label', rowWord(row) + ': ' + h.name + '. ' + note.textContent + '.');
         });
         S.empty.hidden = n === 2;
         S.swapBtn.classList.toggle('dim', n < 2 || S.daily);
@@ -1384,7 +1387,7 @@
       } else if (e.kind === 'relic') {
         const d = DATA.relics[e.id] || {};
         art = mk('div', { class: 'mn-tile-body' }, mk('div', { class: 'mn-tile-ico' }, UI.relic(e.id, { size: 'lg', tip: false })),
-          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: (RARITY_NAME[d.rarity] || cap(d.rarity || '')) + ' charm' + (d.hero ? ' for ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' }),
+          mk('div', { class: 'mn-tile-txt' }, mk('b', { text: d.name || e.id }), mk('em', { text: (RARITY_NAME[d.rarity] || cap(d.rarity || '')) + ' Charm' + (d.hero ? ' for ' + heroName(d.hero) : '') }), mk('p', { text: safe(() => DATA.relicText(e.id), d.text) || '' }),
           d.flavor ? mk('p', { class: 'mn-tile-flavor', text: d.flavor }) : null));
       } else {
         const d = DATA.gems[e.id] || {};
@@ -1672,7 +1675,7 @@
       if (known) (def.tags || []).forEach((tg) => chips.appendChild(mk('span', { class: 'mn-tag-chip soft', text: TAG_LABEL[tg] || cap(tg) })));
       add(detail, mk('div', { class: 'mn-bd-art' }, cv.c), head, chips);
       if (!known) { add(detail, mk('p', { class: 'mn-bd-unknown', text: 'A shape behind the Gloss. Meet this creature in a fight and its photo goes on the wall.' })); return; }
-      add(detail, mk('div', { class: 'mn-bd-stats' }, mk('span', {}, mk('b', { text: hpText(def) }), mk('i', { text: 'HP with no encore' })), mk('span', {}, mk('b', { text: String(d.kills) }), mk('i', { text: 'defeated' })), mk('span', {}, mk('b', { text: String(d.seen) }), mk('i', { text: 'met' }))));
+      add(detail, mk('div', { class: 'mn-bd-stats' }, mk('span', {}, mk('b', { text: hpText(def) }), mk('i', { text: 'HP with no encore' })), mk('span', {}, mk('b', { text: String(d.kills) }), mk('i', { text: 'won over' })), mk('span', {}, mk('b', { text: String(d.seen) }), mk('i', { text: 'met' }))));
       add(detail, mk('p', { class: 'mn-bd-lore', text: def.lore || '' }));
       const moves = mk('ul', { class: 'mn-moves' });
       Object.keys(def.moves || {}).forEach((k) => {
@@ -2265,7 +2268,7 @@
     { id: 'book', tip: /both heroes lose their voice/, title: 'A World on Mute', kicker: 'Two heroes, three acts, one Gloss to sing through.', build: () => paintedCanvas(paintBook), rules: [
       'You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.',
       "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.",
-      'Every tour is a new one: a different map, different cards, different charms. Win or lose, you earn Cheers to unlock more.'] },
+      'Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.'] },
     { id: 'map', tip: /^Unmuting a hex costs Vox/, title: 'Unmute the Soundlands', kicker: 'The Soundlands are on mute. Your Vox turns them back on.', build: () => paintedCanvas(paintMapDiagram), rules: [
       'Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.',
       'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.',
@@ -2287,11 +2290,11 @@
       'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.',
       'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.'] },
     { id: 'places', tip: /A detour is a choice/, title: 'Green Rooms, Stalls and Detours', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
-      "Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems and charms, and declutter your deck.",
+      "Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.",
       'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.',
-      'Rivals guard charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.'] },
+      'Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.'] },
     { id: 'after', title: 'After the Tour', kicker: 'Every tour leaves something behind.', build: buildAfter, extra: 'keys', rules: [
-      'You earn Cheers after every tour. Spend them on the Tour Bus on new cards, charms and gems.',
+      'You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.',
       'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.',
       'Keys, if you play with a keyboard, are listed below. Everything also works by touch.'] },
   ];
@@ -2424,7 +2427,7 @@
           mk('div', { class: 'mn-p-chips' }, chip('Act ' + (run.chapter || 1)), trial > 0 ? chip('Encore ' + roman(trial)) : null, run.daily ? chip('Daily Duet') : null),
           heroes,
           mk('div', { class: 'mn-p-stats' }, UI.stat('gold', run.gold || 0, { size: 'sm' }), UI.stat('ink', run.ink || 0, { size: 'sm', max: run.inkMax }), (run.brushes || []).length ? UI.stat('brush', run.brushes.length, { size: 'sm' }) : null),
-          mk('div', { class: 'mn-p-relics', 'aria-label': 'Charms' }, (run.relics || []).length ? (run.relics || []).slice(0, 10).map((id) => UI.relic(id, { size: 'sm' })) : mk('span', { class: 'mn-p-none', text: 'No charms yet' })));
+          mk('div', { class: 'mn-p-relics', 'aria-label': 'Charms' }, (run.relics || []).length ? (run.relics || []).slice(0, 10).map((id) => UI.relic(id, { size: 'sm' })) : mk('span', { class: 'mn-p-none', text: 'No Charms yet' })));
       }
 
       function buildMenu() {
@@ -2433,7 +2436,7 @@
         list.push(it('primary', 'Resume', { act: 'resume', breathe: true, sfx: QUIET, extra: mk('kbd', { class: 'btn-key', text: 'Esc', 'aria-hidden': 'true' }), onclick: () => { sfx('ui_close'); close(); } }));
         if (run) {
           list.push(it('secondary', 'Deck', { act: 'deck', sfx: 'ui_open', extra: UI.hanko(String((run.deck || []).length), { size: 'sm', label: (run.deck || []).length + ' cards' }), onclick: () => UI.overlay.open('deck', { mode: 'view' }) }));
-          list.push(it('secondary', 'Charms', { act: 'relics', sfx: 'ui_open', extra: UI.hanko(String((run.relics || []).length), { size: 'sm', label: (run.relics || []).length + ' charms' }), onclick: () => UI.overlay.open('relics', {}) }));
+          list.push(it('secondary', 'Charms', { act: 'relics', sfx: 'ui_open', extra: UI.hanko(String((run.relics || []).length), { size: 'sm', label: (run.relics || []).length + ' Charms' }), onclick: () => UI.overlay.open('relics', {}) }));
         }
         list.push(it('secondary', 'Settings', { act: 'settings', sfx: 'ui_open', onclick: () => UI.overlay.open('settings') }));
         list.push(it('secondary', 'How to play', { act: 'howto', sfx: 'page_turn', onclick: () => showHowto() }));

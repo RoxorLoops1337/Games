@@ -242,7 +242,11 @@ beatboxed click). The ids are never shown to the player and the theme guard allo
   never a surname), Jordan and `@roxorloopsandjasmin`; no real judges, presenters, shows, venues, cities or platforms (the link labels of
   `LINK_ORDER` in `ui.js` are the only platform words in the game); nothing about accounting, bookings or paperwork; no animal products in names,
   art, food or materials; food is plant-based and never remarked on; nobody dies; the Gloss is polite and never evil; Jasmin never belts and
-  RoxorLoops is never "a looper"; no romance between characters; no lyric of any real song. The theme and hygiene suites enforce what a script can.
+  RoxorLoops is never "a looper"; no romance between characters; no lyric of any real song. The theme and hygiene suites enforce what a script
+  can: check 13 of the theme suite keeps each owner nod (bible 2.9) to exactly one place, bans "looper", "looping duo" and the romance words,
+  and keeps Jasmin's own text (hero entry, cards, rules, outfit, barks) free of belt, shout, scream, roar, yell and bellow (three gag sentences
+  that say she does not belt are exact allowlist entries). A lyric of a real song cannot be told from any other line by a script, so that one
+  rule stays a reviewer item.
 - **Ownership:** each file has exactly one owner (section 9). Never edit a file you do not own.
   If you need a change elsewhere, work around it or record it in your final report.
 - **Performance:** 60 fps target on a mid laptop, budget in section 5.8. Cache sprites in offscreen canvases

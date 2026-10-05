@@ -2130,7 +2130,7 @@ const UI = (() => {
           const d = DATA.relics[id] || { name: id, text: '' };
           grid.appendChild(mk('div', { class: 'relic-row' }, relic(id, { size: 'lg', tip: false }), mk('div', {}, mk('b', { text: d.name }), mk('p', { text: typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), d.text) : d.text }))));
         });
-        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No charms yet. Rivals, gift boxes and merch stalls hold them.' }));
+        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No Charms yet. Rivals, gift boxes and merch stalls hold them.' }));
         root.appendChild(panel({ kind: 'dark', title: 'Charms', class: 'relics-panel' }, grid, mk('div', { class: 'row center' }, btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }))));
       },
     },

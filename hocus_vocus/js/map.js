@@ -138,7 +138,7 @@ const MAP = (() => {
   const ENEMY_ROUTE_CAP = 7;                      // at most this many enemies on the cheapest route (a rush is a slog, never a wall)
   const DETOUR_CAP = 8;                           // walkPath goes around unresolved tiles only when that costs at most this many extra steps
   const WIDTH_GATE = 2.4;                       // corridor width gate: near-cheapest tiles per paint of the cheapest route
-  const LEGEND = 'S start  B boss  # void  : painted  . path  e enemy  E elite  c chest  $ shop  ^ camp  ? fable  ~ well  b brush  g gem cache  f forge  * route';
+  const LEGEND = 'S soundcheck  B headliner  # blur  : painted  . path  e face-off  E rival  c gift box  $ merch  ^ green room  ? detour  ~ tea stall  b busker  g sparkle booth  f studio  * route';
   const GLYPH = { start: 'S', empty: '.', block: '#', enemy: 'e', elite: 'E', boss: 'B', chest: 'c', shop: '$', camp: '^', event: '?', well: '~', brush: 'b', gemcache: 'g', forge: 'f' };
 
   // Generation uses only + - * / and sqrt, which every engine rounds identically (Math.exp, hypot, sin and cos may differ in the last bit
