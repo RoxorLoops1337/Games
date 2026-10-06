@@ -40,6 +40,7 @@
     poly(pts, c) { this.n.poly(pts.map((q) => [q[0] * K, q[1] * K]), c); return this; }
     outline(f, d) { this.n.outline(f, d); return this; }
     tint(c, k) { this.n.tint(c, k); return this; }
+    fill(c) { this.n.fill(c); return this; }
   }
 
   /* ================================================================ painting helpers */
@@ -299,8 +300,8 @@
   /* ================================================================ icons */
   const ICON_NAMES = ['energy', 'food', 'mood', 'cash', 'fans', 'level', 'mus', 'tech', 'ori', 'show', 'lock', 'check', 'cross', 'heart', 'star', 'note', 'mic', 'hat', 'glasses', 'shirt', 'pants', 'shoe', 'sleep', 'eat', 'train', 'busk', 'battle', 'shop', 'home', 'park', 'bar', 'studio', 'gear', 'sound', 'mute', 'back', 'left', 'right', 'coin', 'trophy', 'clock', 'sun', 'moon', 'dice', 'shuffle', 'camera', 'palette', 'wand'];
   // bevel: 1px light on top/left silhouette edges, 1px shade on bottom/right, then a coloured outline
-  function fin(p, noOutline) {
-    const w = p.w, h = p.h, src = p.data.slice(), a = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src[(y * w + x) * 4 + 3]);
+  function fin(z, noOutline) {
+    const p = gr(z), w = p.w, h = p.h, src = p.data.slice(), a = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src[(y * w + x) * 4 + 3]);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (a(x, y) < 128) continue;
       const i = (y * w + x) * 4, c = [src[i], src[i + 1], src[i + 2]];
@@ -309,11 +310,11 @@
     }
     if (!noOutline) p.outline((c) => mix(darken(c, 0.45), '#2c1d4d', 0.5));
   }
-  const K = '#43296f', WH = '#fffaf0';
+  const KK = '#43296f', WH = '#fffaf0';
   const ICON_DRAW = {
     energy: (p) => { p.poly([[8, 1], [1.5, 7], [5, 7], [4, 11], [10.5, 4.5], [7, 4.5], [9.5, 1]], '#ffd23f'); fin(p); p.px(7, 2, WH); p.px(6, 3, '#fff0c9'); },
     food: (p) => { p.ellipse(4, 6.5, 2.6, 3.2, '#ff4f5e'); p.ellipse(7, 6.5, 2.6, 3.2, '#ff4f5e'); p.poly([[6, 4], [7, 1], [10, 1], [10, 3], [8, 4]], '#4fbf6f'); fin(p); p.px(6, 2, '#6f3d2b'); p.px(3, 5, WH); },
-    mood: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffd23f'); fin(p); p.px(4, 4, K); p.px(7, 4, K); p.px(4, 5, K); p.px(7, 5, K); p.px(3, 7, K); p.px(8, 7, K); p.rect(4, 8, 4, 1, K); p.px(2, 6, '#ff9a4a'); p.px(9, 6, '#ff9a4a'); },
+    mood: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffd23f'); fin(p); p.px(4, 4, KK); p.px(7, 4, KK); p.px(4, 5, KK); p.px(7, 5, KK); p.px(3, 7, KK); p.px(8, 7, KK); p.rect(4, 8, 4, 1, KK); p.px(2, 6, '#ff9a4a'); p.px(9, 6, '#ff9a4a'); },
     cash: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffbe55'); fin(p); p.ellipse(5.5, 5.5, 3, 3, '#d4a017'); p.px(5, 2, '#8a5a1c'); p.px(6, 2, '#8a5a1c'); p.rect(5, 3, 3, 1, '#fff0c9'); p.px(4, 4, '#fff0c9'); p.rect(5, 5, 2, 1, '#fff0c9'); p.px(7, 6, '#fff0c9'); p.rect(4, 7, 3, 1, '#fff0c9'); p.px(5, 9, '#8a5a1c'); p.px(6, 9, '#8a5a1c'); },
     fans: (p) => { p.ellipse(2.5, 6, 1.7, 1.7, '#a86bff'); p.ellipse(8.5, 6, 1.7, 1.7, '#a86bff'); p.ellipse(2.5, 9.5, 2, 1.2, '#a86bff'); p.ellipse(8.5, 9.5, 2, 1.2, '#a86bff'); p.ellipse(5.5, 4, 2.3, 2.3, '#ff6bb5'); p.ellipse(5.5, 8.5, 3.3, 2, '#ff6bb5'); fin(p); p.px(4, 3, WH); },
     level: (p) => { p.poly([[5.5, 0.5], [10, 2.5], [10, 7], [5.5, 10.5], [1, 7], [1, 2.5]], '#2ee6ff'); fin(p, true); p.outline((c) => mix(darken(c, 0.5), '#2c1d4d', 0.5)); p.line(3, 6, 5, 4, WH); p.line(7, 6, 5, 4, WH); p.line(3, 8, 5, 6, '#e8fbff'); p.line(7, 8, 5, 6, '#e8fbff'); },
@@ -321,7 +322,7 @@
     tech: (p) => { gearShape(p, '#9fb2d8', 5.5, 5.5, 4.5, 3.4, 8); fin(p); p.ellipse(5.5, 5.5, 1.5, 1.5, '#3a2a63'); p.px(5, 5, '#2ee6ff'); p.px(6, 5, '#2ee6ff'); },
     ori: (p) => { p.ellipse(5.5, 4.5, 3.5, 3.5, '#ffe14d'); p.rect(4, 7, 4, 3, '#a7a3c4'); fin(p); p.hline(4, 8, 4, '#6a6788'); p.px(4, 3, WH); p.px(5, 4, '#ff9a4a'); p.px(6, 5, '#ff9a4a'); p.px(7, 4, '#ff9a4a'); },
     show: (p) => { p.poly([[1, 3], [3.5, 6], [5.5, 2], [7.5, 6], [10, 3], [9.5, 9.5], [1.5, 9.5]], '#ffd23f'); fin(p); p.px(2, 8, '#ff3ea5'); p.px(5, 8, '#2ee6ff'); p.px(8, 8, '#ff3ea5'); p.px(5, 3, WH); },
-    lock: (p) => { p.rect(2, 5, 8, 6, '#ffbe55'); p.rect(3, 1, 6, 5, '#a7a3c4'); p.rect(5, 3, 2, 4, '#6a6788'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.px(5, 7, K); p.px(6, 7, K); p.px(5, 8, K); p.px(6, 8, K); p.px(5, 9, K); },
+    lock: (p) => { p.rect(2, 5, 8, 6, '#ffbe55'); p.rect(3, 1, 6, 5, '#a7a3c4'); p.rect(5, 3, 2, 4, '#6a6788'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.px(5, 7, KK); p.px(6, 7, KK); p.px(5, 8, KK); p.px(6, 8, KK); p.px(5, 9, KK); },
     check: (p) => { p.line(2, 6, 4, 8, '#4fdf6f', 2); p.line(4, 8, 9, 2, '#4fdf6f', 2); fin(p); },
     cross: (p) => { p.line(2, 2, 9, 9, '#ff4f5e', 2); p.line(9, 2, 2, 9, '#ff4f5e', 2); fin(p); },
     heart: (p) => { heartShape(p, '#ff4f6e', 5.5, 5.5, 4.6); fin(p); p.px(3, 3, WH); p.px(2, 4, '#ffd0dc'); },
@@ -330,7 +331,7 @@
     mic: (p) => { p.ellipse(5.5, 3.5, 3, 3.2, '#c7bfd8'); p.rect(4, 6, 4, 1, '#8a87a8'); p.poly([[4, 7], [8, 7], [7, 11], [5, 11]], '#46405e'); fin(p); p.hline(3, 3, 5, '#6a6788'); p.px(4, 2, WH); p.px(7, 5, '#6a6788'); },
     hat: (p) => { p.ellipse(5, 5.5, 4, 3.5, '#3a5fcd'); p.rect(1, 7, 10, 2, '#3a5fcd'); p.rect(6, 8, 5, 2, '#2c4aa0'); fin(p); p.px(3, 3, '#9fc2ff'); p.px(5, 1, '#ff3ea5'); },
     glasses: (p) => { p.rect(1, 3, 4, 4, '#2c1d4d'); p.rect(7, 3, 4, 4, '#2c1d4d'); p.rect(5, 3, 2, 1, '#2c1d4d'); fin(p); p.px(2, 4, '#2ee6ff'); p.px(3, 5, '#7fb2ff'); p.px(8, 4, '#2ee6ff'); p.px(9, 5, '#7fb2ff'); },
-    shirt: (p) => { p.poly([[4, 1], [8, 1], [11, 3.5], [9.5, 6], [8, 5], [8, 10], [4, 10], [4, 5], [2.5, 6], [1, 3.5]], '#ff6b6b'); fin(p); p.px(5, 1, K); p.px(6, 2, K); p.px(7, 1, K); p.px(5, 6, WH); p.px(6, 6, WH); },
+    shirt: (p) => { p.poly([[4, 1], [8, 1], [11, 3.5], [9.5, 6], [8, 5], [8, 10], [4, 10], [4, 5], [2.5, 6], [1, 3.5]], '#ff6b6b'); fin(p); p.px(5, 1, KK); p.px(6, 2, KK); p.px(7, 1, KK); p.px(5, 6, WH); p.px(6, 6, WH); },
     pants: (p) => { p.poly([[2, 1], [10, 1], [10, 11], [7, 11], [6, 5], [5, 11], [2, 11]], '#3a5fcd'); fin(p); p.hline(2, 2, 8, '#2c4aa0'); p.px(5, 3, '#ffd23f'); p.px(4, 7, '#7fa2ff'); },
     shoe: (p) => { p.poly([[1, 3], [4, 3], [5, 5], [9, 6], [11, 8], [11, 10], [1, 10]], '#ff3ea5'); fin(p); p.hline(1, 9, 10, WH); p.px(5, 4, WH); p.px(4, 6, WH); p.px(2, 4, '#ffb0dd'); },
     sleep: (p) => { p.ellipse(4.5, 6.5, 3.8, 3.8, '#ffe14d'); cut(p, 6.5, 5.5, 3.2, 3.2); fin(p); p.rect(6, 1, 5, 1, '#a86bff'); p.px(10, 2, '#a86bff'); p.px(9, 3, '#a86bff'); p.px(8, 4, '#a86bff'); p.rect(7, 5, 4, 1, '#a86bff'); },
@@ -338,11 +339,11 @@
     train: (p) => { p.rect(0 + 1, 3, 2, 5, '#9fb2d8'); p.rect(3, 4, 1, 3, '#6a6788'); p.rect(4, 5, 4, 1, '#c7bfd8'); p.rect(8, 4, 1, 3, '#6a6788'); p.rect(9, 3, 2, 5, '#9fb2d8'); fin(p); p.px(1, 4, WH); p.px(9, 4, WH); },
     busk: (p) => { p.ellipse(3.5, 8.5, 2.8, 2.4, '#c9783c'); p.ellipse(5, 6.5, 2.2, 2, '#c9783c'); p.line(6, 5, 10, 1, '#6f3d2b', 2); fin(p); p.px(3, 8, '#43296f'); p.px(4, 8, '#43296f'); p.px(3, 7, '#ffbe55'); p.px(9, 0, '#ffe14d'); },
     battle: (p) => { p.line(2, 9, 8, 3, '#c7bfd8', 2); p.line(9, 9, 3, 3, '#c7bfd8', 2); p.ellipse(8.5, 2.5, 1.8, 1.8, '#ff3ea5'); p.ellipse(2.5, 2.5, 1.8, 1.8, '#2ee6ff'); fin(p); },
-    shop: (p) => { p.rect(2, 4, 8, 7, '#ffbe55'); p.rect(4, 1, 1, 3, '#a7a3c4'); p.rect(7, 1, 1, 3, '#a7a3c4'); p.hline(4, 1, 4, '#a7a3c4'); fin(p); p.px(5, 6, K); p.px(6, 6, K); p.px(5, 7, '#ff3ea5'); p.px(6, 7, '#ff3ea5'); p.px(3, 5, WH); },
+    shop: (p) => { p.rect(2, 4, 8, 7, '#ffbe55'); p.rect(4, 1, 1, 3, '#a7a3c4'); p.rect(7, 1, 1, 3, '#a7a3c4'); p.hline(4, 1, 4, '#a7a3c4'); fin(p); p.px(5, 6, KK); p.px(6, 6, KK); p.px(5, 7, '#ff3ea5'); p.px(6, 7, '#ff3ea5'); p.px(3, 5, WH); },
     home: (p) => { p.poly([[5.5, 0.5], [11, 5.5], [1, 5.5]], '#ff6b6b'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.rect(5, 7, 2, 4, '#6a3b8f'); p.px(3, 6, '#7fb2ff'); p.px(8, 6, '#7fb2ff'); },
     park: (p) => { p.ellipse(5.5, 4, 4, 3.4, '#3f9b5a'); p.ellipse(4, 3.5, 2.5, 2, '#4fbf6f'); p.rect(5, 7, 2, 4, '#8a5a3c'); fin(p); p.px(3, 2, '#9ff0a0'); },
     bar: (p) => { p.poly([[1, 1], [11, 1], [6.5, 6], [6.5, 9], [4.5, 9], [4.5, 6]], '#ff3ea5'); p.rect(3, 10, 6, 1, '#ff3ea5'); fin(p); p.px(5, 2, WH); p.px(9, 0, '#9dff4a'); },
-    studio: (p) => { p.ring(5.5, 5.5, 4.5, 4.5, '#a7a3c4'); p.ring(5.5, 5.5, 3.5, 3.5, '#a7a3c4'); for (let y = 6; y < 12; y++) for (let x = 0; x < 12; x++) p.data[(y * 12 + x) * 4 + 3] = 0; p.rect(1, 6, 3, 5, '#2ee6ff'); p.rect(8, 6, 3, 5, '#2ee6ff'); fin(p); p.px(2, 7, WH); p.px(9, 7, WH); },
+    studio: (p) => { p.ring(5.5, 5.5, 4.5, 4.5, '#a7a3c4'); p.ring(5.5, 5.5, 3.5, 3.5, '#a7a3c4'); { const n = gr(p); for (let y = 8; y < 16; y++) for (let x = 0; x < 16; x++) n.data[(y * 16 + x) * 4 + 3] = 0; } p.rect(1, 6, 3, 5, '#2ee6ff'); p.rect(8, 6, 3, 5, '#2ee6ff'); fin(p); p.px(2, 7, WH); p.px(9, 7, WH); },
     gear: (p) => { gearShape(p, '#c7bfd8', 5.5, 5.5, 5, 3.6, 8); fin(p); p.ellipse(5.5, 5.5, 1.4, 1.4, '#46405e'); },
     sound: (p) => { p.poly([[1, 4], [4, 4], [7, 1], [7, 10], [4, 7], [1, 7]], '#c7bfd8'); fin(p); p.px(9, 4, '#2ee6ff'); p.px(10, 3, '#2ee6ff'); p.px(10, 7, '#2ee6ff'); p.px(9, 6, '#2ee6ff'); p.vline(10, 4, 3, '#2ee6ff'); },
     mute: (p) => { p.poly([[0, 4], [3, 4], [6, 1], [6, 10], [3, 7], [0, 7]], '#8a87a8'); fin(p); p.line(8, 3, 11, 8, '#ff4f5e'); p.line(11, 3, 8, 8, '#ff4f5e'); },
@@ -351,7 +352,7 @@
     right: (p) => { p.poly([[2, 1], [2, 10], [8, 5.5]], '#fff0c9'); fin(p); },
     coin: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffd23f'); fin(p); p.ring(5.5, 5.5, 3, 3, '#d4a017'); p.rect(5, 4, 2, 4, '#fff0c9'); p.px(5, 4, '#fff0c9'); },
     trophy: (p) => { p.poly([[2, 1], [9, 1], [8.5, 5], [7, 7], [4, 7], [2.5, 5]], '#ffd23f'); p.rect(0, 2, 2, 3, '#ffd23f'); p.rect(9, 2, 2, 3, '#ffd23f'); p.rect(5, 7, 1, 2, '#d4a017'); p.rect(3, 9, 5, 2, '#ffbe55'); fin(p); p.px(3, 2, WH); p.vline(3, 3, 2, '#fff0c9'); },
-    clock: (p) => { p.ellipse(5.5, 5.5, 4.6, 4.6, '#fff0c9'); fin(p); p.ring(5.5, 5.5, 4, 4, '#a86bff'); p.vline(5, 3, 3, K); p.hline(5, 5, 3, K); p.px(5, 1, '#a86bff'); },
+    clock: (p) => { p.ellipse(5.5, 5.5, 4.6, 4.6, '#fff0c9'); fin(p); p.ring(5.5, 5.5, 4, 4, '#a86bff'); p.vline(5, 3, 3, KK); p.hline(5, 5, 3, KK); p.px(5, 1, '#a86bff'); },
     sun: (p) => { p.ellipse(5.5, 5.5, 3, 3, '#ffd23f'); for (const [x, y] of [[5, 0], [5, 10], [0, 5], [10, 5], [1, 1], [9, 1], [1, 9], [9, 9]]) p.px(x + 0.4, y + 0.4, '#ffbe55'); p.px(6, 0, '#ffbe55'); p.px(6, 10, '#ffbe55'); p.px(0, 6, '#ffbe55'); p.px(10, 6, '#ffbe55'); p.px(4, 4, WH); p.px(3, 3, '#fff0c9'); fin(p, true); },
     moon: (p) => { p.ellipse(5, 5.5, 4.5, 4.8, '#ffe9a8'); cut(p, 7.5, 4.5, 3.8, 3.8); p.px(8, 8, '#ffe9a8'); fin(p); p.px(3, 5, '#fff'); p.px(9, 2, '#fff0c9'); },
     dice: (p) => { p.rect(1, 1, 10, 10, '#fffaf0'); fin(p); for (const [x, y] of [[3, 3], [8, 3], [5, 6], [3, 8], [8, 8]]) p.rect(x, y, 2, 2, '#ff3ea5'); },
@@ -377,9 +378,9 @@
   World.icon = function (name) {
     if (_icons[name]) return _icons[name];
     const fn = ICON_DRAW[name];
-    const pxs = new Pix(12, 12);
+    const pxs = new Z(12, 12);
     if (fn) fn(pxs); else { pxs.rect(2, 2, 8, 8, '#ff3ea5'); fin(pxs); }
-    return (_icons[name] = pxs);
+    return (_icons[name] = pxs.n);
   };
   World.iconNames = ICON_NAMES;
 
@@ -423,7 +424,7 @@
     }
   }
   function citySky(P, X, Y, w, h, night, rr, neonCols) {
-    const p = new Pix(w, h), x = 0, y = 0;
+    const p = new Z(w, h), x = 0, y = 0;
     if (!night) {   // low amber sunset
       band(p, x, y, w, h, '#7a4aa8', '#ffbe55', 7);
       p.ellipse(x + w * 0.62, y + h - 14, 7, 7, '#fff0c9'); p.ellipse(x + w * 0.62, y + h - 14, 5, 5, '#ffe9a8');
@@ -446,7 +447,7 @@
       }
     }
     if (night && neonCols) neonCols.forEach((c, i) => { p.rect(x + 6 + i * 20, y + h - 30 - i * 6, 8, 2, c.c); });
-    P.blit(p, X, Y);
+    gr(P).blit(p.n, sc(X), sc(Y));
   }
   function venetian(p, x, y, w, h, c) {
     const R = rp(c);
@@ -552,7 +553,6 @@
     // screen painted in the emissive pass (below)
     // desk lamp-less; headphones hanging off the monitor
     p.ring(246.5, 134, 6, 8, '#2c2748'); p.ring(246.5, 134, 5, 7, '#3a3560');
-    for (let y = 141; y < 150; y++) for (let x = 238; x < 256; x++) if (p.get(x, y)[0] === 44 && p.get(x, y)[1] === 39) p.px(x, y, '#7a4a92'), p.px(x, y, '#7a4a92');
     p.rect(240, 138, 5, 9, '#ff3ea5'); p.rect(240, 138, 1, 9, '#ff8ac8'); p.rect(248, 138, 5, 9, '#ff3ea5'); p.rect(252, 138, 1, 9, '#a0205a'); p.rect(241, 146, 3, 1, '#a0205a');
     // condenser mic on boom arm + pop filter
     p.rect(178, 156, 14, 4, '#2c2748'); p.rect(184, 128, 2, 29, '#8a87a8'); p.line(185, 130, 197, 126, '#8a87a8');
