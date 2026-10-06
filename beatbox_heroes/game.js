@@ -92,6 +92,8 @@
         item('fans', 'GET FANS', 'Play open mics at the BAR (Tue to Thu evening). Fans unlock showcases, shades and hats.'),
         item('battle', 'WIN BATTLES', 'Saturday is battle night at the BAR. Before each round pick a style (BOOM beats HATS beats RIM beats SNARE beats BOOM). Five judges vote. Beat all 7 opponents, then enter the World Cup.'),
         item('busk', 'THE RHYTHM GAME', 'Notes fall down 4 lanes: B (kick), T (hat), K (snare), Pf. Tap the lane when a note reaches the line, or press D F J K. Easy sets are mostly B t K t.'),
+        item('mic', 'MIC MODE AND RECORDING', 'In any rhythm set press MIC and beatbox into your microphone. In the Sound Lab recorder you can record your own B, T, K and Pf sounds, which also train the detector.'),
+        item('note', 'SONGS, CREW, STREAMS', 'Make beats in the Beat Maker and RELEASE them as songs (fans for 7 days). Recruit crew at the bar. Go live from your desk at home.'),
         item('energy', 'ENERGY, FOOD, MOOD', 'Every activity costs energy and time. Eat at home or the juice bar. Nap or sleep at HOME (sleep after 20:00). You pass out at 02:00.'),
         item('train', 'TRAIN SKILLS', 'At HOME in the vocal booth, or at the Sound Lab. Musicality helps timing, Technicality is skill, Originality wins judges and fans, Showmanship earns tips.'),
         item('hat', 'STYLE', 'Change your look in the wardrobe at HOME. Buy items in the Thrift Shop. Level up and win achievements to unlock more.')),
@@ -168,14 +170,15 @@
   };
 
   /* ----------------------------------------------------------- game start */
+  G.loadSamples = () => { try { if (BBH.Samples) Promise.resolve(BBH.Samples.init(G.slot)).then(() => BBH.Samples.applyToAudio(G.slot)).catch(() => {}); } catch (e) { /* ignore */ } };
   G.startSlot = function (slot, ch) {                             // load/continue
-    G.slot = slot; G.setChar(ch); E.applyAudioSettings();
+    G.slot = slot; G.setChar(ch); E.applyAudioSettings(); G.loadSamples();
     if (!ch.flags.intro) { E.go('intro', { next: 'continue' }); return; }
     G.resume();
   };
   G.resume = function () { const p = G.ch.place; if (p && p !== 'street' && Core.PLACES[p]) E.go('place', { id: p }); else E.go('street'); };
   G.newGame = function (slot, look) {
-    const ch = Core.newChar(look); ch.created = Date.now(); G.slot = slot; G.setChar(ch); G.flush(); E.go('intro', { next: 'new' });
+    const ch = Core.newChar(look); ch.created = Date.now(); G.slot = slot; G.setChar(ch); G.flush(); try { BBH.Samples && BBH.Samples.removeAll && BBH.Samples.removeAll(slot); } catch (e) { /* ignore */ } G.loadSamples(); E.go('intro', { next: 'new' });
   };
 
   /* ---------------------------------------------------------------- boot */

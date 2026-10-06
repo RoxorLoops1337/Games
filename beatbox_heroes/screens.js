@@ -94,7 +94,7 @@
         el.addEventListener('click', () => {
           E.sfx('click');
           if (ch) {
-            E.modal({ title: ch.name.toUpperCase(), body: h('div.ts.ctr', null, 'Level ' + ch.level + ', day ' + ch.day), top: '170px', buttons: [{ label: 'PLAY', cls: 'gold', fn: () => G.startSlot(i, ch) }, { label: 'DELETE', cls: 'red', fn: () => E.modal({ title: 'DELETE?', body: 'This hero will be gone for good.', buttons: [{ label: 'KEEP' }, { label: 'DELETE', cls: 'red', fn: () => { Core.Save.remove(E.store, i); E.go('slots', { mode: this.mode }, { nofade: true }); } }] }) }, { label: 'BACK' }] });
+            E.modal({ title: ch.name.toUpperCase(), body: h('div.ts.ctr', null, 'Level ' + ch.level + ', day ' + ch.day), top: '170px', buttons: [{ label: 'PLAY', cls: 'gold', fn: () => G.startSlot(i, ch) }, { label: 'DELETE', cls: 'red', fn: () => E.modal({ title: 'DELETE?', body: 'This hero will be gone for good.', buttons: [{ label: 'KEEP' }, { label: 'DELETE', cls: 'red', fn: () => { Core.Save.remove(E.store, i); try { BBH.Samples && BBH.Samples.removeAll && BBH.Samples.removeAll(i); } catch (e) { /* ignore */ } E.go('slots', { mode: this.mode }, { nofade: true }); } }] }) }, { label: 'BACK' }] });
           } else E.go('creator', { mode: 'new', slot: i });
         });
         return el;

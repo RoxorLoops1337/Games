@@ -117,6 +117,39 @@
     bar: { name: 'The Bar', open: 18, close: 26, fromDay: 2 },   // 26 = 02:00
   };
 
+  /* ------------------------------------------- songs, crew, coaching (from Beatbox Story) */
+  const SONG_DECAY = [0.32, 0.24, 0.18, 0.12, 0.08, 0.04, 0.02];                    // a released song pays fans for 7 days (sums to 1.00)
+  const MAX_ACTIVE_SONGS = 3;                                                       // stops release-spam fan farming
+  const SEQ_STEPS = 16, SEQ_SLOTS = 4;
+  const emptyPattern = (i) => ({ name: 'Beat ' + (i + 1), bpm: 100, steps: [0, 1, 2, 3].map(() => new Array(SEQ_STEPS).fill(0)) });
+  const patternHits = (p) => (p && p.steps ? p.steps.reduce((a, row) => a + row.filter(Boolean).length, 0) : 0);
+  // creativity 0..1: variety of sounds used and how full the pattern is, with a bonus for off-beat hits
+  function patternScore(p) {
+    if (!p || !p.steps) return 0; const used = p.steps.filter((r) => r.some(Boolean)).length, cells = patternHits(p);
+    const off = p.steps.reduce((a, r) => a + r.filter((v, i) => v && i % 4 !== 0).length, 0);
+    return clamp(Math.min(1, used / 4) * 0.4 + Math.min(1, cells / 24) * 0.4 + Math.min(1, off / 8) * 0.2, 0, 1);
+  }
+  const CREW = [
+    { id: 'jaxx', name: 'JAXX', blurb: 'Local cypher regular. Loves a four-on-the-floor.', cost: 80, minFans: 25, dailyCash: 6, dailyFans: 1, look: { name: 'Jaxx', body: 'boy', skin: '#d4a87a', hair: { style: 'cornrows', color: '#3a2410' }, top: { id: 'jersey', color: '#a04040', color2: '#f7f2e8' }, bottom: { id: 'sweatpants', color: '#34303f' }, shoes: { id: 'fatlaces', color: '#f7f2e8' }, hat: { id: 'none' }, acc: { hand: { id: 'none_hand' } } } },
+    { id: 'noor', name: 'NOOR', blurb: 'Tutorial nerd with a sharp ear.', cost: 200, minFans: 75, dailyCash: 12, dailyFans: 2, look: { name: 'Noor', body: 'girl', skin: '#c08070', hair: { style: 'bob', color: '#5a2010' }, glasses: { id: 'nerd', color: '#17141f' }, top: { id: 'windbreaker', color: '#5a7050', color2: '#f7f2e8' }, bottom: { id: 'techpants', color: '#34303f' }, shoes: { id: 'retro', color: '#f7f2e8' }, hat: { id: 'none' }, acc: { hand: { id: 'none_hand' } } } },
+    { id: 'duot', name: 'DUO-T', blurb: 'Twin brothers. One mic, two voices.', cost: 400, minFans: 200, dailyCash: 22, dailyFans: 4, look: { name: 'Duo-T', body: 'boy', skin: '#a87844', hair: { style: 'hightop', color: '#1a1a2e' }, top: { id: 'bomber', color: '#7a5a30', color2: '#d4a017' }, bottom: { id: 'camo', color: '#34303f' }, shoes: { id: 'timbs', color: '#b98b5e' }, hat: { id: 'none' }, acc: { hand: { id: 'none_hand' } } } },
+    { id: 'glaze', name: 'GLAZE', blurb: 'Producer and hat specialist. Ex radio host.', cost: 800, minFans: 500, dailyCash: 38, dailyFans: 7, look: { name: 'Glaze', body: 'neutral', skin: '#e0b890', hair: { style: 'waves', color: '#dadada' }, top: { id: 'denimjacket', color: '#3a5a6a' }, bottom: { id: 'jeans', color: '#17141f' }, shoes: { id: 'sneakers', color: '#f7f2e8' }, hat: { id: 'fitted', color: '#17141f' }, acc: { hand: { id: 'none_hand' } } } },
+    { id: 'miro', name: 'MIRO', blurb: 'Choir-trained ringer with perfect pitch.', cost: 1500, minFans: 1200, dailyCash: 60, dailyFans: 12, look: { name: 'Miro', body: 'girl', skin: '#d4a87a', hair: { style: 'long', color: '#7a3a20' }, top: { id: 'kimono', color: '#a06090' }, bottom: { id: 'leggings', color: '#17141f' }, shoes: { id: 'platform', color: '#a06090' }, hat: { id: 'none' }, acc: { hand: { id: 'none_hand' } } } },
+  ];
+  const COACH_LINES = [
+    "First time I battled was '92. Lost ugly. Cried in the bathroom. Came back the next week.",
+    'Every kid who comes through here thinks they invented the bass kick.',
+    'I made it to the world finals once. Three times, actually. Never won.',
+    'Your tongue knows more than your brain. Trust it.',
+    "It is not the win. It is that you fought for it. Nobody remembers second place except second place.",
+    'I had a daughter. She would be your age now.',
+    'She did not beatbox. She liked the violin. Fancy that.',
+    'You can hear when somebody is afraid of the mic. You can hear when they are not. That is the only difference.',
+    'There is no secret. There are just hours, and somebody who will sit in the room with you while you do them.',
+    'Do not end up like me, kid. Find someone to come home to.',
+  ];
+  const COACH_FEE = 50, COACH_COOLDOWN = 3, STREAM_MIN_FANS = 20;
+
   /* ---------------------------------------------------------- achievements */
   // check(ch) -> true when earned. `reward` is flavour text (cosmetics hook in via catalog `ach` unlocks).
   const ACHIEVEMENTS = [
@@ -139,6 +172,12 @@
     { id: 'rent4', name: 'Responsible Adult', desc: 'Pay rent four times.', check: (c) => c.n.rentPaid >= 4 },
     { id: 'stylist', name: 'Fashion Victim', desc: 'Unlock 15 cosmetics.', check: (c) => Object.keys(c.owned).length >= 15 },
     { id: 'ladder', name: 'Top of the Ladder', desc: 'Beat all seven opponents.', check: (c) => OPPONENTS.every((o) => c.beat[o.id]) },
+    { id: 'firstsong', name: 'Record Deal', desc: 'Release your first song.', check: (c) => c.n.songs >= 1 },
+    { id: 'crew3', name: 'Squad Goals', desc: 'Recruit three crew members.', check: (c) => (c.crew || []).length >= 3 },
+    { id: 'streamer', name: 'Going Live', desc: 'Do your first livestream.', check: (c) => c.n.streams >= 1 },
+    { id: 'runner', name: 'Morning Runner', desc: 'Go for 5 runs in the park.', check: (c) => c.n.runs >= 5 },
+    { id: 'recorder', name: 'In Your Own Voice', desc: 'Record your own drum sounds in the Sound Lab.', check: (c) => c.n.recorded >= 1 },
+    { id: 'tuned', name: 'Pitch Perfect', desc: 'Finish 5 pitch tuner sessions.', check: (c) => c.n.tunes >= 5 },
     { id: 'worldcup', name: 'World Cup Champion', desc: 'Win the Beatbox Heroes World Cup.', check: (c) => !!c.flags.worldcup },
   ];
 
@@ -217,8 +256,8 @@
       energy: CFG.startEnergy, maxEnergy: CFG.startEnergy, hunger: 70, mood: 60, cash: CFG.startCash, fans: 0,
       xp: 0, level: 1, stats: { mus: 3, tech: 3, ori: 3, show: 3 },
       owned: {}, ach: {}, beat: {}, flags: {}, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
-      affinity: {}, seen: {}, history: [],
-      n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0 },
+      affinity: {}, seen: {}, history: [], songs: [], crew: [], patterns: [0, 1, 2, 3].map((i) => emptyPattern(i)), patIdx: 0,
+      n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0 },
       created: 0,
     };
     sweepUnlocks(ch);
@@ -296,6 +335,16 @@
     // passive income: fans stream your tracks
     const stream = Math.floor(ch.fans / 40);
     if (stream > 0) { ch.cash += stream; lines.push('Streams paid $' + stream + '.'); }
+    // song royalties (7-day fade) and crew daily yield
+    if (ch.songs && ch.songs.length) {
+      const ts = ch.stats.mus + ch.stats.tech + ch.stats.ori + ch.stats.show; let sf = 0;
+      ch.songs = ch.songs.map((sg) => { const age = ch.day - sg.releasedDay; if (age <= 0 || age > SONG_DECAY.length) return sg; const pool = Math.max(5, Math.floor(ts / 4 + sg.activeCells * 1.5)); const earned = Math.round(pool * SONG_DECAY[age - 1]); sf += earned; return Object.assign({}, sg, { lifetimeFans: (sg.lifetimeFans || 0) + earned }); });
+      if (sf > 0) { ch.fans += sf; lines.push('Your songs earned ' + sf + ' new fans overnight.'); }
+    }
+    if (ch.crew && ch.crew.length) {
+      let cc = 0, cf = 0; for (const m of ch.crew) { const npc = CREW.find((x) => x.id === m.id); if (npc) { cc += npc.dailyCash; cf += npc.dailyFans; m.lifetimeCash = (m.lifetimeCash || 0) + npc.dailyCash; m.lifetimeFans = (m.lifetimeFans || 0) + npc.dailyFans; } }
+      ch.cash += cc; ch.fans += cf; lines.push('Your crew brought in $' + cc + ' and ' + cf + ' fans.');
+    }
     // rent when waking into Sunday
     if (dow(ch.day) === 6) {
       if (ch.cash >= CFG.rent + ch.rentDebt) { ch.cash -= CFG.rent + ch.rentDebt; ch.n.rentPaid++; lines.push('Rent paid: $' + (CFG.rent + ch.rentDebt) + '.'); ch.rentDebt = 0; }
@@ -542,6 +591,67 @@
         break;
       }
       case 'at': ch.place = a.to; break;
+      case 'run': {                                                // a.q 0..1 (time in the target zone), a.goodBars
+        if (ch.energy < 14) { toast('Too tired to run.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        const q = clamp(a.q || 0, 0, 1), gb = a.goodBars || 0, gain = Math.floor(gb / 3);
+        ch.n.runs++; ch.mood += 5 + Math.round(q * 4); gainXp(ch, 6 + 8 * q, fx); bumpStat(ch, 'tech', 0.1 + 0.2 * q);
+        if (gain) { ch.maxEnergy = Math.min(140, ch.maxEnergy + gain); toast('Stamina up: max energy +' + gain, 'good'); }
+        spend(ch, 60, 14, fx, rng); fx.push({ t: 'sfx', name: 'confirm' });
+        break;
+      }
+      case 'tune': {                                               // pitch tuner session, a.q 0..1 (time in tune)
+        if (ch.energy < 10) { toast('Too tired to sing.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        const q = clamp(a.q || 0, 0, 1), gain = (0.4 + 1.3 * q) * (1 - ch.stats.mus / 120) * 1.1;
+        bumpStat(ch, 'mus', gain); ch.n.tunes++; ch.mood += 2; gainXp(ch, 10 + 10 * q, fx); spend(ch, 60, 10, fx, rng);
+        fx.push({ t: 'sfx', name: 'confirm' }); toast('Musicality +' + gain.toFixed(1), 'good');
+        break;
+      }
+      case 'seqsave': {                                            // a.slot, a.pattern
+        const i = clamp(a.slot | 0, 0, SEQ_SLOTS - 1); ch.patterns[i] = a.pattern; ch.patIdx = i; break;
+      }
+      case 'seqtrain': {                                           // a.score 0..1 = patternScore of the pattern you built
+        if (ch.energy < 10) { toast('Too tired to make beats.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        const q = clamp(a.score || 0, 0, 1), gain = (0.3 + 1.4 * q) * (1 - ch.stats.ori / 120) * (a.studio ? 1.3 : 1);
+        bumpStat(ch, 'ori', gain); ch.n.seqs++; gainXp(ch, 8 + 10 * q, fx); spend(ch, 60, 10, fx, rng);
+        fx.push({ t: 'sfx', name: 'confirm' }); toast('Originality +' + gain.toFixed(1), 'good');
+        break;
+      }
+      case 'release': {                                            // a.slot, a.name
+        const pat = ch.patterns[clamp(a.slot | 0, 0, SEQ_SLOTS - 1)], hits = patternHits(pat);
+        const active = ch.songs.filter((sg) => ch.day - sg.releasedDay < SONG_DECAY.length).length;
+        if (hits < 4) { toast('Too sparse: at least 4 hits to release.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (active >= MAX_ACTIVE_SONGS) { toast('You already have ' + MAX_ACTIVE_SONGS + ' songs earning. Wait for one to fade.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        const nm = String(a.name || pat.name || 'Track ' + (ch.songs.length + 1)).slice(0, 24);
+        ch.songs.push({ id: 'song' + ch.day + '_' + ch.songs.length, name: nm, releasedDay: ch.day, activeCells: hits, lifetimeFans: 0, quality: +patternScore(pat).toFixed(2) });
+        ch.n.songs++; ch.mood += 6; gainXp(ch, 12, fx); fx.push({ t: 'sfx', name: 'unlock' }); toast('Released "' + nm + '". Fans start tomorrow.', 'good');
+        break;
+      }
+      case 'recruit': {
+        const m = CREW.find((x) => x.id === a.id); if (!m || ch.crew.some((x) => x.id === m.id)) break;
+        if (ch.fans < m.minFans) { toast(m.name + ' needs ' + m.minFans + ' fans first.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.cash < m.cost) { toast('You need $' + m.cost + ' to recruit ' + m.name + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash -= m.cost; ch.n.spent += m.cost; ch.crew.push({ id: m.id, joinedDay: ch.day, lifetimeCash: 0, lifetimeFans: 0 });
+        fx.push({ t: 'sfx', name: 'unlock' }); toast(m.name + ' joined your crew!', 'good');
+        break;
+      }
+      case 'stream': {
+        if (ch.fans < STREAM_MIN_FANS) { toast('You need ' + STREAM_MIN_FANS + ' fans to go live.', 'warn'); break; }
+        if (ch.flags.streamDay === ch.day) { toast('You already streamed today.', 'warn'); break; }
+        if (ch.energy < 15) { toast('Too tired to stream.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        const skill = ch.stats.mus + ch.stats.tech + ch.stats.ori + ch.stats.show, cap = Math.max(8, Math.floor(ch.fans * 0.15)), sk = Math.min(1.5, 0.5 + skill / 80);
+        const viewers = Math.floor((10 + rng() * cap) * sk), tips = Math.floor(viewers * (0.3 + rng() * 0.4)), fg = Math.floor(viewers / 6);
+        ch.cash += tips; ch.fans += fg; ch.mood += 4; ch.flags.streamDay = ch.day; ch.flags.lastViewers = viewers; ch.n.streams++; gainXp(ch, 6, fx);
+        spend(ch, 60, 15, fx, rng); fx.push({ t: 'sfx', name: 'crowd_cheer' }); toast('Stream done: ' + viewers + ' viewers, $' + tips + ' tips, +' + fg + ' fans.', 'good');
+        break;
+      }
+      case 'coach': {                                              // paid private coaching with BeeAmGee: +1 skill
+        if (ch.cash < COACH_FEE) { toast('Private coaching costs $' + COACH_FEE + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.flags.proCoachDay !== undefined && ch.day - ch.flags.proCoachDay < COACH_COOLDOWN) { toast('BeeAmGee is busy. Come back in ' + (COACH_COOLDOWN - (ch.day - ch.flags.proCoachDay)) + ' day(s).', 'warn'); break; }
+        ch.cash -= COACH_FEE; ch.n.spent += COACH_FEE; ch.flags.proCoachDay = ch.day; bumpStat(ch, a.stat, 1); ch.n.coaches++; gainXp(ch, 14, fx);
+        spend(ch, 90, 8, fx, rng); fx.push({ t: 'sfx', name: 'levelup' }, { t: 'coachLine', text: COACH_LINES[Math.min(COACH_LINES.length - 1, ch.n.coaches - 1)] }); toast(STAT_NAMES[a.stat] + ' +1', 'good');
+        break;
+      }
+      case 'recorded': ch.n.recorded = (ch.n.recorded || 0) + (a.n || 1); break;
       case 'job': {
         const j = JOBS.find((x) => x.id === a.job); if (!j) break;
         if (ch.energy < j.energy) { toast('Too tired for a shift.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
@@ -572,6 +682,7 @@
     const fresh = newChar(raw.look || CAT.DEFAULT_LOOK);
     const ch = Object.assign({}, fresh, raw);
     ch.n = Object.assign({}, fresh.n, raw.n || {}); ch.stats = Object.assign({}, fresh.stats, raw.stats || {});
+    ch.songs = raw.songs || []; ch.crew = raw.crew || []; ch.patterns = (raw.patterns && raw.patterns.length === SEQ_SLOTS) ? raw.patterns : fresh.patterns;
     ch.dev = raw.dev || {}; ch.owned = raw.owned || {}; ch.ach = raw.ach || {}; ch.beat = raw.beat || {}; ch.flags = raw.flags || {}; ch.affinity = raw.affinity || {};
     ch.v = CFG.version; return ch;
   }
@@ -629,7 +740,7 @@
 
   Object.assign(BBH, {
     Core: {
-      CFG, DAYS, STYLES, STYLE_BEATS, styleMul, opponentStyle, styleChart, JOBS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
+      CFG, SONG_DECAY, MAX_ACTIVE_SONGS, SEQ_STEPS, SEQ_SLOTS, emptyPattern, patternHits, patternScore, CREW, COACH_LINES, COACH_FEE, COACH_COOLDOWN, STREAM_MIN_FANS, DAYS, STYLES, STYLE_BEATS, styleMul, opponentStyle, styleChart, JOBS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
       dow, dayName, clock, hourOf, phase, nightness, barProgramme, canEnter,
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
       windows, judgeHit, HIT_SCORE, makeChart, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,

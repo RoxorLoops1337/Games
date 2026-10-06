@@ -49,9 +49,30 @@
       this.ui = h('div.nopt', { style: { position: 'absolute', inset: 0, zIndex: 5 } });
       this.ui.appendChild(E.btn('EXIT', '', () => this.confirmExit(), { position: 'absolute', left: '4px', top: '4px', width: '36px', padding: '3px 2px', fontSize: '5px' }));
       E.add(this.ui);
+      if (BBH.Mic && BBH.Mic.open) {
+        this.micBtn = E.btn(E.settings.mic ? 'MIC ON' : 'MIC OFF', E.settings.mic ? 'green' : '', () => this.toggleMic(), { position: 'absolute', right: '4px', top: '4px', width: '46px', padding: '3px 2px', fontSize: '5px' });
+        this.ui.appendChild(this.micBtn); if (E.settings.mic) this.startMic();
+      }
       this.startRound();
     },
-    leave() { try { E.A().groove.stop(); } catch (e) { /* ignore */ } },
+    leave() { try { E.A().groove.stop(); } catch (e) { /* ignore */ } this.stopMic(); },
+    // MIC MODE: beatbox into the microphone. Each detected sound hits the lane it was classified as (your own recordings train the classifier).
+    toggleMic() { E.settings.mic = !E.settings.mic; E.saveSettings(); this.micBtn.textContent = E.settings.mic ? 'MIC ON' : 'MIC OFF'; this.micBtn.className = 'btn ' + (E.settings.mic ? 'green' : ''); if (E.settings.mic) this.startMic(); else this.stopMic(); },
+    async startMic() {
+      try {
+        const o = await BBH.Mic.open(); if (!o.ok) { E.settings.mic = false; this.micBtn.textContent = 'MIC OFF'; this.micBtn.className = 'btn'; E.toast('Mic: ' + (o.error || 'unavailable') + '. Using taps.', 'warn'); return; }
+        let prof = null; try { const by = {}; for (let l = 0; l < 4; l++) { const sm = await BBH.Samples.get(G.slot || 1, l); if (sm) by[l] = sm.f32 || sm.data; } if (Object.keys(by).length) prof = BBH.Mic.makeClassifier(BBH.Mic.trainFromSamples(by, BBH.Mic.sampleRate() || 44100)); } catch (e) { prof = null; }
+        this.stopL = BBH.Mic.listen((ev) => this.micHit(ev), prof ? { classifier: prof } : undefined); E.toast('Mic mode: beatbox into your mic!', 'good');
+      } catch (e) { E.toast('Mic mode failed. Using taps.', 'warn'); }
+    },
+    stopMic() { try { if (this.stopL) this.stopL(); this.stopL = null; if (BBH.Mic && BBH.Mic.close) BBH.Mic.close(); } catch (e) { /* ignore */ } },
+    micHit(ev) {
+      if (this.state !== 'play' && this.state !== 'count') return; let lane = ev.lane;
+      if (this.state === 'play' && (ev.confidence === undefined || ev.confidence < 0.5)) {      // unsure: take the lane of the nearest unhit note
+        const T = this.songT(); let best = null, bd = 1e9; for (const n of this.notes) { if (n.state) continue; const d = Math.abs(T - n.beat * this.spb); if (d < bd) { bd = d; best = n; } } if (best && bd < 0.2) lane = best.lane;
+      }
+      this.press(lane, { silent: true, shift: 0.04 });
+    },
     visibility(vis) { if (!vis && this.state === 'play' && !this.reallyDone) { this.reallyDone = true; E.toast('Set interrupted.', 'warn'); setTimeout(() => this.abort(), 50); } },
     confirmExit() { if (this.state === 'result' || this.reallyDone) return; E.modal({ title: 'LEAVE?', body: 'You will lose this set (no rewards, no time spent).', buttons: [{ label: 'STAY' }, { label: 'LEAVE', cls: 'red', fn: () => this.abort() }] }); },
     abort() { this.reallyDone = true; try { E.A().groove.stop(); } catch (e) { /* ignore */ } if (this.a.onAbort) this.a.onAbort(); },
@@ -92,12 +113,12 @@
     },
 
     /* ----------------------------------------------------------- input */
-    press(lane) {
-      if (this.state !== 'play' && this.state !== 'count') return;
+    press(lane, o) {
+      o = o || {}; if (this.state !== 'play' && this.state !== 'count') return;
       this.pressed[lane] = true; this.padFlash[lane] = 1;
-      try { E.A().drum(lane, { vel: 0.9 }); } catch (e) { /* ignore */ }
+      if (!o.silent) { try { E.A().drum(lane, { vel: 0.9 }); } catch (e) { /* ignore */ } }
       if (this.state !== 'play') return;
-      const T = this.songT() + this.offset, w = this.win; let best = null, bd = 1e9;
+      const T = this.songT() + this.offset - (o.shift || 0), w = this.win; let best = null, bd = 1e9;
       for (const n of this.notes) { if (n.state || n.lane !== lane) continue; const d = (T - n.beat * this.spb) * 1000; if (Math.abs(d) < bd) { bd = Math.abs(d); best = { n, d }; } }
       if (!best || bd > w.good + 20) { this.ghost(lane); return; }
       const grade = Core.judgeHit(best.d, w); best.n.state = grade === 'miss' ? 3 : grade === 'perfect' ? 1 : 2; this.hit(lane, grade, best.d);

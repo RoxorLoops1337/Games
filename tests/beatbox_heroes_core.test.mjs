@@ -24,7 +24,7 @@ const rng = BBH.rng(7);
   for (const s of CAT.SKINS) ok(/^#[0-9a-f]{6}$/i.test(s.color), 'skin colour is hex: ' + s.id);
   ok(CAT.ACC_SLOTS.every((s) => CAT.ACCESSORIES.some((a) => a.slot === s && a.id === 'none_' + s)), 'every accessory slot has a none option');
   // every achievement id used by the catalog is earnable, every opponent is reachable
-  ok(Core.ACHIEVEMENTS.length === 20, '20 achievements');
+  ok(Core.ACHIEVEMENTS.length === 26, '26 achievements');
 }
 
 /* ---- time */
@@ -189,7 +189,7 @@ const rng = BBH.rng(7);
 /* ---- dev */
 {
   let ch = Core.newChar(); ch = Core.dev(ch, { k: 'day', v: 9 }).char; eq(ch.day, 9, 'dev day runs rollovers up to 9'); ok(ch.n.nights >= 8, 'rollovers really ran');
-  ch = Core.dev(ch, { k: 'cash', v: 1000 }).char; ok(ch.cash >= 1000, 'dev cash'); ch = Core.dev(ch, { k: 'unlockAch' }).char; ok(Object.keys(ch.ach).length === 20, 'dev unlock all achievements');
+  ch = Core.dev(ch, { k: 'cash', v: 1000 }).char; ok(ch.cash >= 1000, 'dev cash'); ch = Core.dev(ch, { k: 'unlockAch' }).char; ok(Object.keys(ch.ach).length === Core.ACHIEVEMENTS.length, 'dev unlock all achievements');
   ch = Core.dev(ch, { k: 'level', v: 12 }).char; eq(ch.level, 12, 'dev level');
 }
 
@@ -232,5 +232,36 @@ const rng = BBH.rng(7);
   c.energy = 5; r = Core.apply(c, { t: 'job', job: 'dishes' }, rng); eq(r.char.cash, c.cash, 'too tired for a shift');
   c = Core.newChar(); r = Core.apply(c, { t: 'tape' }, rng); ok(r.char.mood > c.mood && r.char.stats.ori > c.stats.ori, 'a VHS tape lifts mood and Originality');
   r = Core.apply(r.char, { t: 'tape' }, rng); ok(r.fx.some((f) => f.t === 'toast'), 'only one tape a day');
+}
+/* ---- Beatbox Story features: run, tuner, sequencer, songs, crew, stream, coaching */
+{
+  let c = Core.newChar(); c.minutes = 200;
+  let r = Core.apply(c, { t: 'run', q: 0.9, goodBars: 6 }, rng); ok(r.char.maxEnergy === c.maxEnergy + 2 && r.char.n.runs === 1 && r.char.minutes > c.minutes, 'a good run adds max energy (every 3 good bars)');
+  r = Core.apply(c, { t: 'tune', q: 1 }, rng); ok(r.char.stats.mus > c.stats.mus, 'pitch tuner trains Musicality');
+  const pat = Core.emptyPattern(0); pat.steps[0][0] = 1; pat.steps[0][8] = 1; pat.steps[2][4] = 1; pat.steps[1][3] = 1; pat.steps[1][7] = 1;
+  ok(Core.patternHits(pat) === 5 && Core.patternScore(pat) > 0.3 && Core.patternScore(Core.emptyPattern(1)) === 0, 'pattern scoring');
+  r = Core.apply(c, { t: 'seqsave', slot: 1, pattern: pat }, rng); eq(Core.patternHits(r.char.patterns[1]), 5, 'pattern saved in its slot');
+  r = Core.apply(r.char, { t: 'seqtrain', score: Core.patternScore(pat) }, rng); ok(r.char.stats.ori > c.stats.ori, 'sequencer trains Originality');
+  // songs: release, royalties over 7 days summing to 1.00, cap on active songs
+  ok(Math.abs(Core.SONG_DECAY.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'song decay sums to 1');
+  let s = Core.apply(Core.apply(c, { t: 'seqsave', slot: 0, pattern: pat }, rng).char, { t: 'release', slot: 0, name: 'First Beat' }, rng).char;
+  eq(s.songs.length, 1, 'song released'); ok(s.ach.firstsong, 'first song achievement');
+  let fans0 = s.fans; for (let i = 0; i < 8; i++) { s.minutes = 1000; s = Core.apply(s, { t: 'sleep' }, rng).char; }
+  ok(s.fans > fans0 + 5 && s.songs[0].lifetimeFans > 0, 'a song earns fans overnight');
+  const earned = s.songs[0].lifetimeFans; for (let i = 0; i < 3; i++) { s.minutes = 1000; s = Core.apply(s, { t: 'sleep' }, rng).char; } eq(s.songs[0].lifetimeFans, earned, 'a song stops paying after 7 days');
+  let q = Core.newChar(); q = Core.apply(Core.apply(q, { t: 'seqsave', slot: 0, pattern: pat }, rng).char, { t: 'release', slot: 0 }, rng).char;
+  for (let i = 0; i < 4; i++) q = Core.apply(q, { t: 'release', slot: 0, name: 'S' + i }, rng).char; eq(q.songs.length, Core.MAX_ACTIVE_SONGS, 'only 3 songs can earn at once');
+  const sparse = Core.apply(Core.newChar(), { t: 'release', slot: 3 }, rng); eq(sparse.char.songs.length, 0, 'a sparse pattern cannot be released');
+  // crew
+  let k = Core.newChar(); k.cash = 500; k.fans = 30; k = Core.apply(k, { t: 'recruit', id: 'jaxx' }, rng).char; eq(k.crew.length, 1, 'recruit Jaxx'); eq(k.cash, 420, 'Jaxx costs $80');
+  const poor = Core.apply(Core.newChar(), { t: 'recruit', id: 'noor' }, rng); eq(poor.char.crew.length, 0, 'Noor needs fans and cash');
+  const cash0 = k.cash; k.minutes = 1000; k = Core.apply(k, { t: 'sleep' }, rng).char; ok(k.cash >= cash0 + 6, 'crew pays daily');
+  // stream
+  let t = Core.newChar(); t.fans = 100; t.minutes = 300; r = Core.apply(t, { t: 'stream' }, BBH.rng(5)); ok(r.char.cash > t.cash && r.char.ach.streamer, 'streaming pays and earns Going Live');
+  r = Core.apply(r.char, { t: 'stream' }, rng); ok(r.fx.some((f) => f.t === 'toast'), 'one stream a day'); ok(Core.apply(Core.newChar(), { t: 'stream' }, rng).char.n.streams === 0, 'streaming needs 20 fans');
+  // coaching
+  let cc = Core.newChar(); cc.cash = 200; cc.minutes = 300; cc = Core.apply(cc, { t: 'coach', stat: 'tech' }, rng); ok(cc.char.stats.tech >= 4 && cc.char.cash === 150 && cc.fx.some((f) => f.t === 'coachLine'), 'coaching: +1 skill, $50, story line');
+  r = Core.apply(cc.char, { t: 'coach', stat: 'mus' }, rng); eq(r.char.stats.mus, cc.char.stats.mus, 'coaching has a 3 day cooldown');
+  ok(Core.CREW.length === 5 && Core.COACH_LINES.length === 10, 'five crew, ten story lines');
 }
 done();
