@@ -1697,4 +1697,17 @@ t.ok(true, '30s mixed simulation with draws did not throw');
   t.ok(true, 'records + milestones pages draw headless');
 }
 
+// ---- UI polish: every menu draws headless, with the shared header + close button ----
+{
+  KS.S.started = true; KS.S.t = 60;
+  const flags = Object.keys(KS.S).filter(k => /^show[A-Z]/.test(k) && typeof KS.S[k] === 'boolean');
+  t.ok(flags.length >= 10, 'found the menu flags (' + flags.length + ')');
+  let ok = true;
+  for (const f of flags) { for (const k of flags) KS.S[k] = false; KS.S[f] = true; try { KS.draw(); } catch (e) { ok = false; console.log('menu draw failed', f, e.message); } }
+  for (const k of flags) KS.S[k] = false;
+  t.ok(ok, 'all menus draw without throwing');
+  KS.S.cards = [{ id: 'swift', ic: '👟', name: 'Test', d: 'a card' }]; KS.draw(); KS.S.cards = null;
+  t.ok(true, 'level-up cards draw headless');
+}
+
 t.done();
