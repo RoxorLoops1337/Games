@@ -87,9 +87,10 @@ function paintProp(type, v, B) {
     }
   }
 }
-const PROP_D = { tree: 118, rock: 56, bush: 64, flower: 54 };
+const PROP_D = { tree: 92, rock: 50, bush: 58, flower: 50 };
 function drawProp(p, B, bi) {
   const key = 'pr_' + bi + '_' + p.t + '_' + p.v, d = PROP_D[p.t] * p.s;
   const c = sprite(key, 128, () => { ctx.scale(0.95, 0.95); paintProp(p.t, p.v, B); });
+  if (p.t === 'tree' || p.t === 'rock' || p.t === 'bush') { ctx.fillStyle = 'rgba(40,20,80,0.2)'; ctx.beginPath(); ctx.ellipse(p.x + d * 0.06, p.y + d * 0.04, d * (p.t === 'tree' ? 0.26 : 0.34), d * 0.08, 0, 0, TAU); ctx.fill(); }
   if (c) ctx.drawImage(c, p.x - d / 2, p.y - d * (p.t === 'tree' ? 0.78 : 0.62), d, d);
 }

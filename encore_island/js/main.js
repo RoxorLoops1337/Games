@@ -1,12 +1,14 @@
 'use strict';
 // Encore Island — boot, camera, main draw, game loop, autosave. Exposes window.EI for tests.
-let cvs = null;
+let cvs = null, sclBase = 1;
+const ZOOM = { k: 1 };
 function resize() {
   dpr = Math.min(2, window.devicePixelRatio || 1); vw = window.innerWidth; vh = window.innerHeight;
   cvs.width = Math.round(vw * dpr); cvs.height = Math.round(vh * dpr); cvs.style.width = vw + 'px'; cvs.style.height = vh + 'px';
-  scl = clamp(Math.min(vw, vh) / 620, 0.62, 1.45);
+  sclBase = clamp(Math.min(vw / 620, vh / 880), 0.5, 1.45); scl = sclBase * ZOOM.k;
 }
 function updateCamera(dt) {
+  const inHub = landAt(S.player.x, S.player.y, S.lands.length) <= 0; ZOOM.k += ((inHub ? 0.8 : 1) - ZOOM.k) * Math.min(1, dt * 3); scl = sclBase * ZOOM.k;
   const p = S.player, tx = p.x + p.vx * 0.28, ty = p.y + p.vy * 0.2 - 30;
   if (!CAM.init) { CAM.x = tx; CAM.y = ty; CAM.init = true; }
   const k = Math.min(1, dt * 5.5); CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;
@@ -26,8 +28,10 @@ function draw(dt) {
   const oy = vh * 0.46; ctx.translate(vw / 2 + sx, oy + sy); ctx.scale(scl, scl); ctx.translate(-CAM.x, -CAM.y);
   vL = CAM.x - vw / 2 / scl - 120; vR = CAM.x + vw / 2 / scl + 120; vT = CAM.y - oy / scl - 120; vB = CAM.y + (vh - oy) / scl + 120;
   drawWorld(); ctx.restore();
+  if (S.settings.particles) drawPetals();
   drawVignette();
   if (!S.started) { drawTitle(); return; }
+  if (S.cards) S.sheet = null;
   drawHudTop(); drawSheet(); drawHudBottom(); drawModal();
 }
 function frame(ts) {

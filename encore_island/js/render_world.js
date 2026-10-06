@@ -67,10 +67,46 @@ function drawMist(kn) {
   ctx.save(); ctx.translate(g.x, g.y - 20 + Math.sin(S.t * 1.6) * 5); drawIcon('lock', 0, 0, 90); ctx.restore();
   labelPill(B.name, g.x, g.y + 60, '#ffffff', '#d8c8ff', 15);
 }
-const HUBDECOR = (function () { const r = mkRng(77), out = []; for (let i = 0; i < 26; i++) { const a = i / 26 * TAU + r() * 0.2, rr0 = HUB.r * (0.93 + r() * 0.06), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0; out.push({ t: i % 5 === 0 ? 'bush' : 'tree', x, y, s: 1 + r() * 0.5, v: (r() * 3) | 0 }); } out.sort((p, q) => p.y - q.y); return out; })();
+const HUBDECOR = (function () {
+  const r = mkRng(77), out = [];
+  for (let i = 0; i < 44; i++) {
+    const a = i / 44 * TAU + r() * 0.1, rr0 = radiusAt(HUB_GEO, a) * (0.935 + r() * 0.045), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0, bush = i % 4 === 0;
+    let ok = true; for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < 125) ok = false;
+    if (ok) out.push({ t: bush ? 'bush' : 'tree', x, y, s: bush ? 1.1 : 0.78 + r() * 0.3, v: (r() * 3) | 0 }); else r();
+  }
+  out.sort((p, q) => p.y - q.y); return out;
+})();
+// ---- hub lamp posts: warm lanterns ringing the plaza, pulsing on the beat ----
+const HUBLAMPS = (function () {
+  const out = [], R = HUB.r * 0.8, gates = [];
+  for (let k = 1; k <= 40; k++) if (geoOf(k).parent === 0) gates.push(unlockSpot(k));
+  for (let i = 0; i < 18; i++) {
+    const a = i / 18 * TAU + 0.12, x = Math.cos(a) * R, y = Math.sin(a) * R; let ok = true;
+    for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < 108) ok = false;
+    for (const gt of gates) if (Math.hypot(x - gt.x, y - gt.y) < 105) ok = false;
+    if (ok) out.push({ x, y, ph: i * 0.7 });
+  }
+  return out;
+})();
+function paintLamp() {
+  const LN = HV.line;
+  ctx.fillStyle = LN; rr(-6, -4, 12, 58, 4); ctx.fill(); ctx.fillStyle = '#8a6cc8'; rr(-3.5, -2, 7, 54, 3); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-2.5, 0, 2, 50);
+  ctx.fillStyle = LN; ctx.beginPath(); ctx.ellipse(0, 54, 15, 7, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#6a4aa8'; ctx.beginPath(); ctx.ellipse(0, 53, 12, 5, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = LN; rr(-13, -34, 26, 34, 9); ctx.fill();
+  const g = ctx.createLinearGradient(0, -31, 0, -3); g.addColorStop(0, '#fff6c0'); g.addColorStop(1, '#ffb640'); ctx.fillStyle = g; rr(-10, -31, 20, 28, 7); ctx.fill();
+  ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(0, -17, 5, 0, TAU); ctx.fill(); glossE(-4, -25, 3, 6, 0.2, 0.7);
+  ctx.fillStyle = LN; ctx.beginPath(); ctx.moveTo(-16, -33); ctx.lineTo(0, -48); ctx.lineTo(16, -33); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.moveTo(-12, -35); ctx.lineTo(0, -44); ctx.lineTo(12, -35); ctx.closePath(); ctx.fill();
+}
+function drawLamp(l) {
+  const c = sprite('lamp', 128, () => { ctx.scale(1, 1); ctx.translate(0, -8); paintLamp(); });
+  const pu = 0.65 + 0.35 * Math.max(0, 1 - (beatNow() % 1) * 2.5) + Math.sin(S.t * 3 + l.ph) * 0.06;
+  ctx.fillStyle = 'rgba(40,20,80,0.2)'; ctx.beginPath(); ctx.ellipse(l.x + 4, l.y + 6, 18, 6, 0, 0, TAU); ctx.fill();
+  if (c) ctx.drawImage(c, l.x - 56, l.y - 122, 112, 112); else { ctx.save(); ctx.translate(l.x, l.y - 40); paintLamp(); ctx.restore(); }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(l.x, l.y - 84, 2, l.x, l.y - 84, 80); gl.addColorStop(0, 'rgba(255,214,120,' + (0.5 * pu) + ')'); gl.addColorStop(1, 'rgba(255,214,120,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(l.x, l.y - 84, 80, 0, TAU); ctx.fill(); ctx.restore();
+}
 function drawHubFloor() {
   const g = HUB_GEO, B = BIOMES[0];
-  const rad = HUB.r * 0.84;
+  const rad = HUB.r * 0.88;
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(0, 0, rad + 8, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff1d6'; ctx.beginPath(); ctx.arc(0, 0, rad, 0, TAU); ctx.fill();
   const cp = groundPat('plaza', ['#fff1d6', '#fff1d6'], '#efd6ae', null, 'cobble');
@@ -84,6 +120,9 @@ function drawHubFloor() {
   ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.ellipse(sx, sy - 3, 92, 31, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = 'rgba(255,126,182,0.22)'; ctx.beginPath(); ctx.ellipse(sx, sy - 3, 74, 24, 0, 0, TAU); ctx.fill();
   const beat = (beatNow() % 1), pu = Math.max(0, 1 - beat * 3);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; // sweeping spotlight beams
+  for (let i = 0; i < 3; i++) { const sw = Math.sin(S.t * 0.9 + i * 2.1) * 46, bx = sx + (i - 1) * 62; ctx.fillStyle = ['rgba(255,150,200,0.10)', 'rgba(150,240,190,0.09)', 'rgba(190,160,255,0.10)'][i]; ctx.beginPath(); ctx.moveTo(bx - 6, sy - 150); ctx.lineTo(bx + 6, sy - 150); ctx.lineTo(bx + sw + 34, sy - 3); ctx.lineTo(bx + sw - 34, sy - 3); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
   ctx.strokeStyle = 'rgba(255,126,182,' + (0.35 + 0.5 * pu) + ')'; ctx.lineWidth = 3 + 3 * pu; ctx.beginPath(); ctx.ellipse(sx, sy - 3, 92 + 6 * pu, 31 + 2 * pu, 0, 0, TAU); ctx.stroke();
 }
 function drawHubSign() { // "ENCORE ISLAND" marquee arch behind the stage

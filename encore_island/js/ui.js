@@ -16,7 +16,7 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const top = Math.round(vh * 0.13) + slide, bot = vh - DOCK_H - 14, x = 8, w = vw - 16, h = bot - top;
+  const top = Math.round(vh * 0.13) + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
   ctx.fillStyle = HV.line; rr(x - 3, top - 3, w + 6, h + 6, 24); ctx.fill();
@@ -42,13 +42,19 @@ function stepper(x, y, val, minus, plus) {
   const b = (bx, lab, act, on) => { cbtn(bx, y, 34, 30, on, on ? (lab === '+' ? 'go' : 'violet') : 'off'); ctx.fillStyle = '#fff'; ctx.font = font(20); ctx.textAlign = 'center'; ctx.fillText(lab, bx + 17, y + 22); if (on) chit(bx, y, 34, 30, act); };
   b(x, '−', minus, true); ctx.fillStyle = '#fff'; ctx.font = font(18); ctx.textAlign = 'center'; ctx.fillText(val, x + 54, y + 22); b(x + 76, '+', plus, true);
 }
+// centred "[icon] text" with the pair measured, so the icon never lands on the number
+function iconText(cx, y, draw, txt, col, sz) {
+  ctx.font = font(sz); const tw = ctx.measureText(txt).width, iw = sz + 10, x0 = cx - (tw + iw) / 2;
+  draw(x0 + iw / 2, y - sz * 0.35, sz + 4); ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(txt, x0 + iw, y); ctx.textAlign = 'center';
+}
+const coinDraw = (x, y, sz) => drawIcon('coin', x, y, sz + 6);
 const SHEET_DRAW = {
   town(cw) {
     let y = 4; const cap = popCap(), n = S.pop.length;
     rowCard(y, 56, cw); drawIcon('home', 30, y + 28, 36); ctx.fillStyle = '#fff'; ctx.font = font(15); ctx.textAlign = 'left'; ctx.fillText('Fans  ' + n + ' / ' + cap + ' beds', 56, y + 24); ctx.fillStyle = '#cfc6ee'; ctx.font = font(11, false); ctx.fillText('Cottages ' + S.houses + '/' + HOUSE_MAX + '  ·  +' + BEDS_PER_LAND + ' beds per land', 56, y + 42); y += 66;
     const bw = (cw - 14) / 2, canR = n < cap && S.wallet >= recruitCost(), canH = S.houses < HOUSE_MAX && S.wallet >= houseCost(S.houses);
-    cbtn(2, y, bw, 50, canR, 'go'); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'center'; ctx.fillText('RECRUIT FAN', 2 + bw / 2, y + 21); drawIcon('coin', bw / 2 - 18, y + 36, 18); ctx.fillStyle = canR ? '#fff' : '#cfc6ee'; ctx.fillText(fmt(recruitCost()), bw / 2 + 6, y + 41); chit(2, y, bw, 50, recruit);
-    cbtn(12 + bw, y, bw, 50, canH, 'gold'); ctx.fillStyle = canH ? '#3a2410' : '#cfc6ee'; ctx.fillText(S.houses >= HOUSE_MAX ? 'VILLAGE FULL' : 'BUILD COTTAGE', 12 + bw + bw / 2, y + 21); if (S.houses < HOUSE_MAX) { drawIcon('coin', 12 + bw + bw / 2 - 28, y + 36, 18); ctx.fillText(fmt(houseCost(S.houses)) + '  (+4 beds)', 12 + bw + bw / 2 + 12, y + 41); chit(12 + bw, y, bw, 50, buyHouse); } y += 62;
+    cbtn(2, y, bw, 50, canR, 'go'); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'center'; ctx.fillText('RECRUIT FAN', 2 + bw / 2, y + 21); iconText(2 + bw / 2, y + 41, coinDraw, fmt(recruitCost()), canR ? '#fff' : '#cfc6ee', 14); chit(2, y, bw, 50, recruit);
+    cbtn(12 + bw, y, bw, 50, canH, 'gold'); ctx.fillStyle = canH ? '#3a2410' : '#cfc6ee'; ctx.fillText(S.houses >= HOUSE_MAX ? 'VILLAGE FULL' : 'BUILD COTTAGE', 12 + bw + bw / 2, y + 21); if (S.houses < HOUSE_MAX) { iconText(12 + bw + bw / 2, y + 41, coinDraw, fmt(houseCost(S.houses)) + ' · +4 beds', canH ? '#3a2410' : '#cfc6ee', 13); chit(12 + bw, y, bw, 50, buyHouse); } y += 62;
     y = section(y, 'Jobs');
     const jobs = [['gather', 'Collectors', 'They haul loot to the stall and sell it for you.', 'cap'], ['fight', 'Fighters', 'They follow you and sing along with notes.', 'dmg']];
     for (const [role, name, desc, icon] of jobs) { rowCard(y, 66, cw); drawIcon(icon, 30, y + 33, 38); ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(name, 56, y + 24); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); wrapText(desc, 56, y + 40, cw - 220, 12);
@@ -70,7 +76,7 @@ const SHEET_DRAW = {
   },
   critters(cw) {
     let y = 4; const hatch = eggCost(S.stats.hatches), can = S.gems >= hatch;
-    cbtn(2, y, cw - 4, 50, can, 'go'); drawIcon('egg', 36, y + 25, 36); ctx.fillStyle = '#fff'; ctx.font = font(16); ctx.textAlign = 'center'; ctx.fillText('HATCH A CRITTER', cw / 2 + 12, y + 22); drawGemIcon(cw / 2 - 12, y + 38, 0.8); ctx.fillStyle = can ? '#fff' : '#cfc6ee'; ctx.font = font(14); ctx.fillText(hatch, cw / 2 + 8, y + 42); chit(2, y, cw - 4, 50, hatchEgg); y += 60;
+    cbtn(2, y, cw - 4, 50, can, 'go'); drawIcon('egg', 36, y + 25, 36); ctx.fillStyle = '#fff'; ctx.font = font(16); ctx.textAlign = 'center'; ctx.fillText('HATCH A CRITTER', cw / 2 + 12, y + 22); iconText(cw / 2 + 12, y + 42, (gx, gy) => drawGemIcon(gx, gy + 4, 0.8), String(hatch), can ? '#fff' : '#cfc6ee', 14); chit(2, y, cw - 4, 50, hatchEgg); y += 60;
     const ap = activePet(); if (ap) { rowCard(y, 52, cw); artDraw(ap.art, 'idle', (S.t * 4) | 0, 34, y + 46, 0.34, false); ctx.fillStyle = '#ffd84d'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(ap.name + '  Lv' + petLvl(ap.id), 66, y + 22); ctx.fillStyle = '#cfc6ee'; ctx.font = font(11, false); ctx.fillText(ap.desc + '  ·  tap its button for a power move', 66, y + 40); y += 62; }
     const cols = 3, w = (cw - 4 - 8 * (cols - 1)) / cols; y = section(y, 'Collection ' + petsOwned() + '/' + PETS.length + '  (+' + petsOwned() * 2 + '% coins)');
     PETS.forEach((p, i) => { const x = 2 + (i % cols) * (w + 8), yy = y + Math.floor(i / cols) * 108, lv = petLvl(p.id), act = S.activePet === p.id; card(x, yy, w, 100, 12);
@@ -82,7 +88,7 @@ const SHEET_DRAW = {
   goals(cw, sh) { return SHEET_DRAW[sh.tab === 'miles' ? 'miles' : sh.tab === 'records' ? 'records' : sh.tab === 'dex' ? 'dex' : 'quests'](cw); },
   quests(cw) {
     let y = 4; if (S.streak > 0) { rowCard(y, 34, cw); ctx.fillStyle = '#ffd84d'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText('Daily streak: ' + S.streak + ' day' + (S.streak > 1 ? 's' : ''), 14, y + 22); y += 42; }
-    const draw = (q) => { rowCard(y, 62, cw); drawIcon(q.done ? 'tick' : 'scroll', 28, y + 31, 34); ctx.fillStyle = q.done ? '#9af0b4' : '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(questName(q), 54, y + 22); gbar(54, y + 32, cw - 150, 10, q.prog / q.goal, '#c6ffa0', '#3fcf6a'); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10); ctx.fillText(fmt(q.prog) + ' / ' + fmt(q.goal), 54, y + 56); drawIcon('coin', cw - 78, y + 31, 22); ctx.fillStyle = '#ffd94a'; ctx.font = font(12); ctx.fillText(fmt(q.reward) + (q.gems ? ' +gem' : ''), cw - 64, y + 36); y += 70; };
+    const draw = (q) => { rowCard(y, 62, cw); drawIcon(q.done ? 'tick' : 'scroll', 28, y + 31, 34); ctx.fillStyle = q.done ? '#9af0b4' : '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(questName(q), 54, y + 22); gbar(54, y + 32, cw - 150, 10, q.prog / q.goal, '#c6ffa0', '#3fcf6a'); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10); ctx.fillText(fmt(q.prog) + ' / ' + fmt(q.goal), 54, y + 56); ctx.font = font(13); const rt = fmt(q.reward), rw = ctx.measureText(rt).width; ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'right'; ctx.fillText(rt, cw - 14, y + 28); drawIcon('coin', cw - 14 - rw - 13, y + 23, 22); if (q.gems) { ctx.font = font(11); ctx.fillStyle = '#6ee0d8'; ctx.fillText('+ gem', cw - 14, y + 46); } ctx.textAlign = 'left'; y += 70; };
     y = section(y, 'Today'); S.dailies.forEach(draw); y = section(y + 6, 'Island quests'); S.quests.forEach(draw); return y + 6;
   },
   miles(cw) {
