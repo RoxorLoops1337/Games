@@ -226,6 +226,7 @@
       rows.push(S.row(Core.STAT_NAMES[st].toUpperCase() + '  ' + lvl, where === 'studio' ? 'Studio session  $' + Core.STUDIO_FEE + '  x1.4 gains' : 'Practice drill at home', G.ch.energy < 12 ? 'dis' : '',
         () => { S.closeSheet(); startTraining(S, st, where); }));
     }
+    for (const b of (G.labRows ? G.labRows(S, where) : [])) rows.push(b);
     rows.push(S.row('QUICK PRACTICE', 'Skip the drill: small gain in a random skill', '', () => { S.closeSheet(); const st = Core.STATS[Math.floor(Math.random() * 4)]; G.do({ t: 'train', stat: st, q: 0.4, where }); }));
     return rows;
   }
@@ -274,6 +275,8 @@
         const ch = G.ch;
         S.sheet('DESK', [h('div.ts', null, G.goal(ch)),
           S.row('SKILLS', Core.STATS.map((st) => Core.STAT_NAMES[st].slice(0, 4) + ' ' + Math.floor(ch.stats[st])).join('  '), '', () => { S.closeSheet(); G.openStats(); }),
+          S.row('GO LIVE  60 min', ch.fans < Core.STREAM_MIN_FANS ? 'Needs ' + Core.STREAM_MIN_FANS + ' fans.' : ch.flags.streamDay === ch.day ? 'You already streamed today.' : 'Stream to your fans for tips. Once a day.', ch.fans >= Core.STREAM_MIN_FANS && ch.flags.streamDay !== ch.day && ch.energy >= 15 ? 'pink' : 'dis', () => { S.closeSheet(); G.goLive(); }),
+          S.row('MY SONGS  ' + ch.songs.length, 'Released songs and their earnings.', '', () => G.openSongs()),
           S.row('HOW TO PLAY', 'Goals, rules and controls.', 'cyan', () => { S.closeSheet(); G.openHelp(); }),
           S.row('QUICK PRACTICE', 'No mini-game: a small random skill gain.', ch.energy < 12 ? 'dis' : '', () => { S.closeSheet(); G.do({ t: 'train', stat: Core.STATS[Math.floor(Math.random() * 4)], q: 0.4, where: 'home' }); })]);
       },
@@ -299,6 +302,8 @@
       bench(S) {
         S.sheet('BENCH', [
           S.row('REST  30 min', 'Mood +8. Watch the clouds.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
+          S.row('GO FOR A RUN  60 min', 'Alternate left and right taps. Builds stamina (max energy).', G.ch.energy < 14 ? 'dis' : 'cyan', () => { if (G.ch.energy < 14) { E.toast('Too tired to run.', 'warn'); return; } S.closeSheet(); E.go('run', { back: { scene: 'place', args: { id: 'park' } } }); }),
+          S.row('PRIVATE COACHING  $' + Core.COACH_FEE, 'BeeAmGee teaches you one skill point.', 'gold', () => { S.closeSheet(); G.openCoaching(S); }),
           jobRow(S, 'flyers'),
           S.row('TALK TO BEEAMGEE', 'Advice from the old guard.', '', () => { S.closeSheet(); E.dialog([{ who: 'beeamgee', text: tip('beeamgee') }]); }),
           S.row('FREE LESSON', G.ch.flags.coachDay === G.ch.day ? 'Come back tomorrow.' : 'Pick a skill. Once a day. 45 min.', G.ch.flags.coachDay === G.ch.day ? 'dis' : 'cyan', () => {
@@ -313,7 +318,7 @@
       mic(S) { S.sheet('SOUND LAB: TRAIN', trainRows(S, 'studio')); },
       mixer(S) {
         const ids = [['title', 'Neon City'], ['creator', 'Mirror Room'], ['street', 'Night Walk'], ['home', 'Warm Blanket'], ['park', 'Pigeon Pluck'], ['shop', 'Thrift Jazz'], ['bar', 'Smoky Funk'], ['studio', 'Clean Pads'], ['battle', 'Break Point'], ['intro', 'Pink Slip']];
-        S.sheet('JUKEBOX', ids.map(([id, name]) => S.row(name.toUpperCase(), 'Tap to play', '', () => { E.music(id); })).concat([S.row('BACK TO STUDIO TRACK', '', 'gold', () => E.music('studio'))]), { maxH: '260px' });
+        S.sheet('SOUND LAB', G.labRows(S, 'studio').concat([S.row('JUKEBOX', 'Listen to the game music.', '', () => { S.closeSheet(); S.sheet('JUKEBOX', ids.map(([id, name]) => S.row(name.toUpperCase(), 'Tap to play', '', () => { E.music(id); })).concat([S.row('BACK TO STUDIO TRACK', '', 'gold', () => E.music('studio'))]), { maxH: '260px' }); })]), { maxH: '300px' });
       },
     },
     bar: {
@@ -336,7 +341,7 @@
         S.sheet('THE STAGE', rows, { maxH: '300px' });
       },
       counter(S) {
-        S.sheet('JUICE BAR', foodRows(S, false).concat([jobRow(S, 'dishes'), S.row('CHAT WITH ROHZEL', '', '', () => { S.closeSheet(); E.dialog([{ who: 'rohzel', text: tip('rohzel') }]); })]), { maxH: '300px' });
+        S.sheet('JUICE BAR', foodRows(S, false).concat([S.row('YOUR CREW  ' + G.ch.crew.length + '/' + Core.CREW.length, 'Recruit helpers who earn you cash and fans every day.', 'gold', () => G.openCrew()), jobRow(S, 'dishes'), S.row('CHAT WITH ROHZEL', '', '', () => { S.closeSheet(); E.dialog([{ who: 'rohzel', text: tip('rohzel') }]); })]), { maxH: '300px' });
       },
     },
   };

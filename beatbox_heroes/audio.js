@@ -781,6 +781,35 @@
     }
     const BBKIT = kitOf('bb');
     const LANE_KEYS = ['k', 'h', 's', 'c'];
+    /* recorded samples (player's own voice) replace the synth voice of a lane */
+    const SAMPLES = [null, null, null, null];
+    function setSample(lane, f32, sampleRate) {
+      lane = Math.floor(num(lane, -1));
+      if (lane < 0 || lane > 3 || !f32 || !(f32.length > 0)) return false;
+      const rate = clamp(num(sampleRate, 44100), 8000, 96000);
+      SAMPLES[lane] = { f32: f32 instanceof Float32Array ? f32 : Float32Array.from(f32), rate, buf: null, bufCtx: null };
+      return true;
+    }
+    function clearSample(lane) { lane = Math.floor(num(lane, -1)); if (lane < 0 || lane > 3) return false; SAMPLES[lane] = null; return true; }
+    function hasSample(lane) { lane = Math.floor(num(lane, -1)); return lane >= 0 && lane <= 3 && !!SAMPLES[lane]; }
+    function samplePlay(S, lane, t, velRaw, pm) {
+      if (S.bufCtx !== ctx || !S.buf) {
+        const b = ctx.createBuffer(1, S.f32.length, S.rate);
+        const ch = b.getChannelData(0);
+        ch.set(S.f32);
+        S.buf = b; S.bufCtx = ctx;
+      }
+      const src = ctx.createBufferSource(); src.buffer = S.buf;
+      const hum = 1 + (Math.random() - 0.5) * 0.04;
+      try { src.playbackRate.value = pm * hum; } catch (e) { /* ignore */ }
+      const g = mkGain(clamp(velRaw * (0.94 + Math.random() * 0.06), 0, 1) * 0.9);
+      src.connect(g); g.connect(G.DRUM.bus);
+      voices++;
+      src.onended = () => { voices = Math.max(0, voices - 1); try { g.disconnect(); } catch (e) { /* ignore */ } };
+      src.start(t);
+      if (LOG) LOG.push({ k: 'drum', lane, t, vel: velRaw, sample: true });
+      return true;
+    }
     function drum(lane, opts) {
       opts = opts || {};
       lane = Math.floor(num(lane, -1));
@@ -788,6 +817,7 @@
       if (!ensure() || !running() || muted || voices > 260) { if (usable() && !running()) tryResume(); return false; }
       try {
         const vel = Math.pow(clamp(num(opts.vel, 0.9), 0, 1), 1.35), t = Math.max(num(opts.when, 0), ctx.currentTime), pm = clamp(num(opts.pitch, 1), 0.25, 4);
+        if (SAMPLES[lane]) return samplePlay(SAMPLES[lane], lane, t, clamp(num(opts.vel, 0.9), 0, 1), pm);
         RND = Math.random;
         let key = LANE_KEYS[lane];
         if (lane === 1 && opts.open) key = 'o';
@@ -1181,7 +1211,7 @@
     grooveApi.start = function (o) { if (groove) { const T = groove; groove = null; try { disposeBus(T, 0.05); } catch (e) { /* ignore */ } } return _gs(o); };
 
     return {
-      unlock, setMuted, setVolume, now, sfx, drum, music, groove: grooveApi,
+      unlock, setMuted, setVolume, now, sfx, drum, setSample, clearSample, hasSample, music, groove: grooveApi,
       get log() { return LOG; },
       get muted() { return muted; },
       get volume() { return { music: vol.music, sfx: vol.sfx }; },
@@ -1212,6 +1242,9 @@
     now: () => inst().now(),
     sfx: (n, o) => inst().sfx(n, o),
     drum: (l, o) => inst().drum(l, o),
+    setSample: (l, f, r) => inst().setSample(l, f, r),
+    clearSample: (l) => inst().clearSample(l),
+    hasSample: (l) => inst().hasSample(l),
     music: {
       play: (id, o) => inst().music.play(id, o), stop: (f) => inst().music.stop(f), current: () => inst().music.current(),
       beat: () => inst().music.beat(), bpm: () => inst().music.bpm(), ids: MUSIC_IDS.slice(),

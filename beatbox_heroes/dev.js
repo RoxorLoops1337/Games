@@ -43,6 +43,8 @@
     Core.OPPONENTS.forEach((o) => b(g, 'VS ' + o.name.split(' ')[0].toUpperCase(), () => { close(); E.go('rhythm', { mode: 'battle', opp: o, stage: ['pink', 'cyan', 'lime', 'gold'][o.style % 4], onDone: () => E.go('street'), onAbort: () => E.go('street') }); }, 'pink'));
     Core.FINALS.forEach((o) => b(g, o.name.split(' ')[0].toUpperCase() + ' FINAL', () => { close(); E.go('rhythm', { mode: 'battle', opp: o, stage: 'gold', onDone: () => E.go('street'), onAbort: () => E.go('street') }); }, 'pink'));
     [['EASY', 0.2, 88], ['MEDIUM', 0.5, 100], ['HARD', 0.8, 120], ['INSANE', 1, 140]].forEach(([l, d, bpm]) => b(g, 'RHYTHM ' + l, () => { close(); E.go('rhythm', { mode: 'practice', title: 'TEST ' + l, bpm, bars: 8, difficulty: d, style: 1, stage: 'cyan', onDone: (res) => { G.showResult({ kind: 'test', res, rw: Core.reward('practice', res, G.ch) }, () => E.go('street')); }, onAbort: () => E.go('street') }); }));
+    sec('MINI GAMES'); g = grid();
+    b(g, 'RUN', () => { close(); E.go('run', { back: { scene: 'street' } }); }); b(g, 'TUNER', () => { close(); E.go('tuner', { back: { scene: 'street' } }); }); b(g, 'BEAT MAKER', () => { close(); E.go('seq', { back: { scene: 'street' } }); }); b(g, 'RECORDER', () => { close(); E.go('studio', { back: { scene: 'street' } }); }); b(g, 'CREW', () => { close(); G.openCrew(); }); b(g, 'SONGS', () => { close(); G.openSongs(); });
     sec('AUDIO'); g = grid();
     MUSIC.forEach((m) => b(g, '♪ ' + m.toUpperCase(), () => E.music(m), 'cyan')); b(g, 'STOP MUSIC', () => { try { E.A().music.stop(0.3); } catch (e) { /* ignore */ } });
     const g2 = grid(); SFX.forEach((s) => b(g2, s, () => E.sfx(s)));
