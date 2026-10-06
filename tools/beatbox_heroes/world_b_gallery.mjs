@@ -14,7 +14,7 @@ const out = process.argv[2] || '/tmp/world_b_out', scale = +(process.argv[3] || 
 fs.mkdirSync(out, { recursive: true });
 const get = (id, v) => (World.scene ? World.scene(id, v) : World.builders[id](v));
 const LIST = [['home', 'day'], ['home', 'night'], ['shop', 'day'], ['shop', 'night'], ['studio', 'day'], ['studio', 'night'], ['bar', 'night'],
-  ['stage', 'pink'], ['stage', 'cyan'], ['stage', 'lime'], ['stage', 'gold'], ['creator', null]];
+  ['stage', 'pink'], ['stage', 'cyan'], ['stage', 'lime'], ['stage', 'gold'], ['creator', null], ['hoodmap', 'day'], ['hoodmap', 'dusk'], ['hoodmap', 'night']];
 for (const [id, v] of LIST) {
   if (only && only !== id) continue;
   const t = Date.now(); const s = get(id, v); const ms = Date.now() - t;

@@ -248,8 +248,8 @@
   E.dialog = function (lines, onDone) {
     let i = 0, shown = 0, timer = null, full = '';
     const box = h('div.panel.sheet', { style: { height: '86px', zIndex: 50, padding: '6px' } });
-    const portrait = h('div', { style: { position: 'absolute', left: '6px', top: '-26px', width: '56px', height: '56px', background: 'var(--n0)', boxShadow: '0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink)' } });
-    const nameEl = h('div.tp.gold', { style: { position: 'absolute', left: '68px', top: '-9px', background: 'var(--n2)', padding: '2px 4px', boxShadow: '0 0 0 1px var(--ink)' } });
+    const portrait = h('div', { style: { position: 'absolute', left: '6px', top: '-40px', width: '72px', height: '72px', background: 'var(--n0)', boxShadow: '0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink)' } });
+    const nameEl = h('div.tp.gold', { style: { position: 'absolute', left: '86px', top: '-9px', background: 'var(--n2)', padding: '2px 4px', boxShadow: '0 0 0 1px var(--ink)' } });
     const textEl = h('div.t', { style: { position: 'absolute', left: '8px', right: '8px', top: '34px', height: '48px', overflow: 'hidden', fontSize: '8px', lineHeight: '10px' } });
     const hint = h('div.tp.blink', { style: { position: 'absolute', right: '6px', bottom: '3px', color: 'var(--gold2)' } }, '>');
     box.append(portrait, nameEl, textEl, hint);
@@ -334,6 +334,21 @@
       if (o.flip) { c.translate(dx + w, dy); c.scale(-1, 1); c.drawImage(cv, 0, 0, w, hh); } else c.drawImage(cv, dx, dy, w, hh); c.restore(); }
     if (o.a !== undefined && o.a < 1) c.restore();
     return sp;
+  };
+
+  // VHS tape look (VHS Story homage): rolling tracking band, noise flecks, PLAY label and a counting timecode
+  E.vhs = function (c, t, o) {
+    if (c.L) c = c.real; o = o || {}; const hh = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+    c.save();
+    const by = ((t / 14) % (H + 90)) - 45; c.globalAlpha = 0.07; c.fillStyle = '#ffffff'; c.fillRect(0, by, W, 9); c.globalAlpha = 0.12; c.fillRect(0, by + 9, W, 1);
+    c.globalAlpha = 0.18; for (let i = 0; i < 26; i++) { const k = Math.floor(t / 70) * 31 + i; c.fillRect(Math.floor(hh(k) * W), Math.floor(hh(k + 7) * H), 2 + Math.floor(hh(k + 3) * 14), 1); }
+    c.globalAlpha = 1; if (hh(Math.floor(t / 90)) > 0.92) { c.globalAlpha = 0.16; c.fillStyle = '#ff2f4f'; c.fillRect(0, Math.floor(hh(Math.floor(t / 90) + 1) * H), W, 2); c.globalAlpha = 1; }
+    c.restore();
+    if (o.label !== false) {
+      E.txt(c, o.label || 'PLAY >', 12, 12, { color: '#ffffff', outline: '#120d1f' });
+      const sec = Math.floor(t / 1000) % 60, mm = Math.floor(t / 60000) % 60; E.txt(c, '00:' + String(mm).padStart(2, '0') + ':' + String(sec).padStart(2, '0'), W - 12, 12, { align: 'r', color: '#ffffff' });
+      if (Math.floor(t / 600) % 2) E.txt(c, 'SP', W - 12, H - 22, { align: 'r', color: '#ffffff' });
+    }
   };
   E.beat = () => { try { return E.A().music.beat() || 0; } catch (e) { return 0; } };
 

@@ -66,16 +66,37 @@
   /* ---------------------------------------------------------------- goals */
   G.goal = function (ch) {
     const n = ch.n, nextOpp = Core.OPPONENTS.find((o) => !ch.beat[o.id]);
-    if (ch.hunger < 22) return 'Hungry. Eat something in your kitchen.';
-    if (ch.energy < 22) return 'Exhausted. Nap or sleep at home.';
-    if (!n.busks) return 'Goal: busk in the park for cash and fans.';
-    if (ch.day < 2) return 'Goal: save energy. Sleep after 20:00.';
-    if (!n.openMics) return 'Goal: play an open mic at the bar (Tue-Thu, from 18:00).';
-    if (n.trains < 2) return 'Goal: train a skill at the desk at home.';
-    if (ch.fans < 50 || n.openMics < 5) return 'Goal: 50 fans + 5 open mics unlocks Friday showcases.';
-    if (nextOpp) return 'Goal: win Saturday battle night vs ' + nextOpp.name + '.';
-    if (!ch.flags.worldcup) return 'Goal: enter the World Cup at the bar on Saturday.';
-    return 'You are the champion. Collect every cosmetic!';
+    if (ch.hunger < 22) return 'You are hungry. Go HOME and eat in the kitchen.';
+    if (ch.energy < 22) return 'You are exhausted. Go HOME and nap or sleep.';
+    if (!n.busks) return 'Next: go to the PARK and busk (play beats for tip money and fans).';
+    if (ch.day < 2) return 'Next: it is getting late. Go HOME and sleep after 20:00.';
+    if (!n.openMics) return 'Next: play an open mic at the BAR (Tue to Thu, after 18:00).';
+    if (n.trains < 2) return 'Next: train a skill. Go HOME to the vocal booth, or the Sound Lab.';
+    if (ch.fans < 50 || n.openMics < 5) return 'Next: reach 50 fans and 5 open mics to unlock Friday showcases.';
+    if (nextOpp) return 'Next: win Saturday battle night at the BAR against ' + nextOpp.name + '.';
+    if (!ch.flags.worldcup) return 'Next: enter the World Cup at the BAR on Saturday.';
+    return 'You are the champion! Collect every cosmetic.';
+  };
+
+  /* ------------------------------------------------------------ how to play */
+  G.openHelp = function (onClose) {
+    const veil = h('div.full', { style: { background: 'rgba(10,6,24,.85)', zIndex: 65 } });
+    const close = () => { veil.remove(); box.remove(); onClose && onClose(); };
+    const item = (icon, title, text) => h('div.row', { style: { alignItems: 'flex-start', gap: '6px', padding: '4px 0', borderBottom: '1px solid #34235a' } }, E.iconEl(icon, 2, { flex: 'none' }),
+      h('div.col.grow', { style: { gap: '2px' } }, h('div.tp.gold', null, title), h('div.ts', { style: { color: '#e6dcff' } }, text)));
+    const box = h('div.panel.pop', { style: { left: '8px', right: '8px', top: '38px', bottom: '34px', zIndex: 66, padding: '6px', display: 'flex', flexDirection: 'column' } },
+      h('div.h1.ctr', { style: { marginBottom: '4px' } }, 'HOW TO PLAY'),
+      h('div.scroll.grow', null,
+        item('trophy', 'THE GOAL', 'You are a beatboxer who lost their job. Earn money and fans, win beatbox battles, and become World Cup champion.'),
+        item('coin', 'EARN MONEY', 'Busk in the PARK for tips. Odd jobs (flyers, shelves, dishes) pay a safe wage. Pay $' + Core.CFG.rent + ' rent every Sunday.'),
+        item('fans', 'GET FANS', 'Play open mics at the BAR (Tue to Thu evening). Fans unlock showcases, shades and hats.'),
+        item('battle', 'WIN BATTLES', 'Saturday is battle night at the BAR. Before each round pick a style (BOOM beats HATS beats RIM beats SNARE beats BOOM). Five judges vote. Beat all 7 opponents, then enter the World Cup.'),
+        item('busk', 'THE RHYTHM GAME', 'Notes fall down 4 lanes: B (kick), T (hat), K (snare), Pf. Tap the lane when a note reaches the line, or press D F J K. Easy sets are mostly B t K t.'),
+        item('energy', 'ENERGY, FOOD, MOOD', 'Every activity costs energy and time. Eat at home or the juice bar. Nap or sleep at HOME (sleep after 20:00). You pass out at 02:00.'),
+        item('train', 'TRAIN SKILLS', 'At HOME in the vocal booth, or at the Sound Lab. Musicality helps timing, Technicality is skill, Originality wins judges and fans, Showmanship earns tips.'),
+        item('hat', 'STYLE', 'Change your look in the wardrobe at HOME. Buy items in the Thrift Shop. Level up and win achievements to unlock more.')),
+      h('div.vgap'), E.btn('GOT IT', 'gold', close));
+    veil.addEventListener('click', () => {}); E.ui.append(veil, box);
   };
 
   /* ------------------------------------------------------------- the menu */
@@ -89,6 +110,7 @@
       h('div.col', null,
         E.btn('RESUME', 'gold', close),
         E.btn('WARDROBE' + (atHome ? '' : ' (HOME)'), atHome ? 'pink' : 'dis', () => { close(); E.go('creator', { mode: 'wardrobe', back: E.sceneName === 'place' ? { scene: 'place', args: { id: G.ch.place } } : { scene: E.sceneName } }); }),
+        E.btn('HOW TO PLAY', 'cyan', () => { close(); G.openHelp(); }),
         E.btn('SKILLS & STATS', '', () => { close(); G.openStats(); }),
         E.btn('ACHIEVEMENTS', '', () => { close(); G.openAchievements(); }),
         E.btn('SETTINGS', '', () => { close(); G.openSettings(); }),

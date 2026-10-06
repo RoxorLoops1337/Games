@@ -1,17 +1,20 @@
 // Character renderer suite: every catalog id draws, poses, determinism, anchors, colours, speed.
 import { ok, eq, between, done, load } from './beatbox_heroes_lib.mjs';
-const BBH = load('pix', 'catalog', 'chars_body', 'chars_hair', 'chars_gear', 'chars_acc', 'chars');
+const BBH = load('pix', 'catalog', 'chars_body', 'chars_hair', 'chars_gear', 'chars_acc', 'chars_side', 'chars_side2', 'chars');
 const { CATALOG: CAT, Chars, Pix } = BBH;
 const W = 58, H = 85;
 const L0 = () => Chars.fix({});
 const mod = (f, base) => { const L = JSON.parse(JSON.stringify(base || Chars.fix({}))); f(L); return L; };
-const hash = (L, pose = 'idle', frame = 0) => Chars.render(L, pose, 0, { frame, blink: false }).hash();
+let POSE = 'idle';
+const hash = (L, pose = POSE, frame = 0) => Chars.render(L, pose, 0, { frame, blink: false }).hash();
 const noBlackPixels = (p) => { const d = p.data; for (let i = 0; i < d.length; i += 4) if (d[i + 3] && d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 0) return false; return true; };
 
 eq(Chars.W, W, 'W'); eq(Chars.H, H, 'H');
 for (const p of ['idle', 'walk', 'beatbox', 'dance', 'cheer', 'sad', 'sit', 'point', 'battle', 'finisher', 'hit']) ok(Chars.POSES[p], 'pose ' + p);
 
-// 1. every id in every group renders and changes the picture
+// 1. every id in every group renders and changes the picture (front pose, then the profile pose)
+for (const VIEW of ['idle', 'idleside']) {
+POSE = VIEW;
 const baseHash = hash(L0());
 const bare = (L) => { L.hat.id = 'none'; L.hair.style = 'bald'; };
 const setters = {
@@ -33,8 +36,8 @@ for (const g of Object.keys(CAT.GROUPS)) {
       if (g === 'hairStyle' || g === 'hat') { L.hair.color = '#a5502a'; }
       h = hash(L);
       const p = Chars.render(Chars.fix(L), 'idle', 0, { frame: 0 });
-      ok(p.w === W && p.h === H, `${g}:${it.id} size`);
-    } catch (e) { ok(false, `${g}:${it.id} threw ${e.message}`); }
+      ok(p.w === W && p.h === H, `${VIEW} ${g}:${it.id} size`);
+    } catch (e) { ok(false, `${VIEW} ${g}:${it.id} threw ${e.message}`); }
     seen.set(it.id, h);
   }
   // every id must differ from every other id in the group, except where two ids are legitimately identical
@@ -42,14 +45,16 @@ for (const g of Object.keys(CAT.GROUPS)) {
   const vals = [...seen.values()];
   const dup = vals.filter((v, i) => vals.indexOf(v) !== i);
   const okDup = g === 'acc' ? 0 : 0;
-  ok(dup.length <= okDup, `group ${g}: ids that draw identically (${[...seen].filter(([k, v]) => vals.indexOf(v) !== vals.lastIndexOf(v)).map((a) => a[0]).join(',')})`);
+  ok(dup.length <= okDup, `${VIEW} group ${g}: ids that draw identically (${[...seen].filter(([k, v]) => vals.indexOf(v) !== vals.lastIndexOf(v)).map((a) => a[0]).join(',')})`);
 }
 // 'none' baselines: each non-none id differs from none/plain
-for (const g of ['hat', 'glasses']) for (const it of CAT.GROUPS[g]) if (it.id !== 'none') ok(hash(mod((x) => { x[g].id = it.id; })) !== hash(mod((x) => { x[g].id = 'none'; })), `${g}:${it.id} differs from none`);
-for (const it of CAT.ACCESSORIES) if (it.id.indexOf('none_') !== 0) ok(hash(mod((x) => { x.acc[it.slot] = { id: it.id, color: '#2ee6ff' }; })) !== hash(mod((x) => { x.acc[it.slot] = { id: 'none_' + it.slot, color: '#2ee6ff' }; })), `acc:${it.id} differs from none`);
+for (const g of ['hat', 'glasses']) for (const it of CAT.GROUPS[g]) if (it.id !== 'none') ok(hash(mod((x) => { x[g].id = it.id; })) !== hash(mod((x) => { x[g].id = 'none'; })), `${VIEW} ${g}:${it.id} differs from none`);
+for (const it of CAT.ACCESSORIES) if (it.id.indexOf('none_') !== 0) ok(hash(mod((x) => { x.acc[it.slot] = { id: it.id, color: '#2ee6ff' }; })) !== hash(mod((x) => { x.acc[it.slot] = { id: 'none_' + it.slot, color: '#2ee6ff' }; })), `${VIEW} acc:${it.id} differs from none`);
 const BARE = mod(bare);
-for (const it of CAT.MARKS) ok(hash(mod((x) => { x.marks = [it.id]; }, BARE)) !== hash(BARE), `mark ${it.id} visible`);
-for (const it of CAT.FACIAL) if (it.id !== 'none') ok(hash(mod((x) => { x.facial = it.id; }, BARE)) !== hash(BARE), `facial ${it.id} visible`);
+for (const it of CAT.MARKS) ok(hash(mod((x) => { x.marks = [it.id]; }, BARE)) !== hash(BARE), `${VIEW} mark ${it.id} visible`);
+for (const it of CAT.FACIAL) if (it.id !== 'none') ok(hash(mod((x) => { x.facial = it.id; }, BARE)) !== hash(BARE), `${VIEW} facial ${it.id} visible`);
+}
+POSE = 'idle';
 
 // 2. poses and frames
 for (const [pn, def] of Object.entries(Chars.POSES)) {
@@ -72,6 +77,44 @@ for (const [pn, def] of Object.entries(Chars.POSES)) {
 {
   const p = Chars.render(L0(), 'idle', 0, { frame: 0 }), b = p.bounds();
   between(b.y + b.h, 83, 85, 'feet reach the bottom'); between(b.x + b.w / 2, 26, 31, 'centred');
+}
+// side views: the cycle really moves, the hero faces right, every pose is deterministic and mirrors
+{
+  const L = L0();
+  const hs = new Set(); for (let f = 0; f < Chars.POSES.walkside.frames; f++) hs.add(Chars.render(L, 'walkside', 0, { frame: f, blink: false }).hash());
+  eq(hs.size, Chars.POSES.walkside.frames, 'all six walkside frames differ');
+  eq(Chars.POSES.walkside.frames, 6, 'walkside has 6 frames'); eq(Chars.POSES.walkside.fps, 10, 'walkside fps'); eq(Chars.POSES.idleside.frames, 2, 'idleside frames');
+  ok(Chars.POSES.beatboxside.frames >= 2 && Chars.POSES.beatboxside.frames <= 4, 'beatboxside frames');
+  // legs scissor: the feet are further apart in a contact frame than in a passing frame
+  const spread = (f) => { const p = Chars.render(L, 'walkside', 0, { frame: f, blink: false }); let lo = 999, hi = -1; for (let y = 76; y < 84; y++) for (let x = 0; x < 58; x++) if (p.alphaAt(x, y) > 200) { if (x < lo) lo = x; if (x > hi) hi = x; } return hi - lo; };
+  ok(spread(0) > spread(2) + 3, 'walk legs scissor');
+  for (const pn of ['walkside', 'idleside', 'beatboxside']) {
+    const a = Chars.render(L, pn, 0, { frame: 0, blink: false }), b = Chars.render(L, pn, 0, { frame: 0, blink: false, flip: true });
+    ok(a.hash() !== b.hash(), pn + ' flips'); eq(a.hash(), Chars.render(JSON.parse(JSON.stringify(L)), pn, 0, { frame: 0, blink: false }).hash(), pn + ' deterministic');
+    // the face points right: more skin-coloured mass right of the centre line than left at head height
+    const bd = a.bounds(); ok(bd.x >= 0 && bd.x + bd.w <= 58, pn + ' inside the sprite');
+    for (let f = 0; f < Chars.POSES[pn].frames; f++) for (const body of ['boy', 'girl', 'neutral']) {
+      const p = Chars.render(mod((x) => { x.body = body; }), pn, 0, { frame: f, blink: false }), bb = p.bounds();
+      ok(bb.y + bb.h >= 83 && bb.y + bb.h <= 85, `${pn}/${f}/${body} feet on the ground`);
+    }
+  }
+  const bb = Chars.anchors(L, 'beatboxside', 0); ok(Math.hypot(bb.mouth.x - bb.handR.x, bb.mouth.y - bb.handR.y) < 11, 'beatboxside hand is at the mouth');
+  const ws = Chars.anchors(L, 'walkside', 2); ok(ws.mouth.x > ws.head.x, 'side mouth is in front of the head centre');
+}
+// side views: every catalog id in moving poses never throws, never paints pure black, keeps the feet on the ground
+{
+  const setters2 = { hairStyle: (L, id) => { L.hair.style = id; }, top: (L, id) => { L.top.id = id; }, bottom: (L, id) => { L.bottom.id = id; }, shoes: (L, id) => { L.shoes.id = id; }, hat: (L, id) => { L.hat.id = id; }, glasses: (L, id) => { L.glasses.id = id; }, acc: (L, id, it) => { L.acc[it.slot] = { id, color: '#2ee6ff' }; }, facial: (L, id) => { L.facial = id; }, marks: (L, id) => { L.marks = [id]; }, eyeStyle: (L, id) => { L.eyes.style = id; } };
+  for (const g of Object.keys(setters2)) for (const it of CAT.GROUPS[g]) {
+    for (const [pn, f] of [['walkside', 3], ['beatboxside', 1]]) {
+      try {
+        const body = ['boy', 'girl', 'neutral'][(it.id.length + f) % 3];
+        const p = Chars.render(mod((x) => { x.body = body; setters2[g](x, it.id, it); }), pn, 0, { frame: f, blink: false });
+        ok(p.w === W && p.h === H && p.countOpaque() > 500 && noBlackPixels(p), `${pn} ${g}:${it.id} renders cleanly`);
+      } catch (e) { ok(false, `${pn} ${g}:${it.id} threw ${e.message}`); }
+    }
+  }
+  const rng2 = BBH.rng(2024);
+  for (let i = 0; i < 80; i++) { const r = Chars.random(rng2); for (const pn of ['walkside', 'idleside', 'beatboxside']) { const p = Chars.render(r, pn, 0, { frame: i % Chars.POSES[pn].frames, blink: i % 3 === 0 }); ok(p.countOpaque() > 500 && noBlackPixels(p), `random #${i} ${pn}`); } }
 }
 // 3. determinism
 for (const pn of ['idle', 'beatbox', 'dance']) eq(hash(L0(), pn, 1), hash(JSON.parse(JSON.stringify(L0())), pn, 1), 'deterministic ' + pn);
