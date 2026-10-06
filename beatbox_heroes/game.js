@@ -170,7 +170,7 @@
   };
 
   /* ----------------------------------------------------------- game start */
-  G.loadSamples = () => { try { if (BBH.Samples && BBH.Samples.applyToAudio) BBH.Samples.applyToAudio(G.slot); } catch (e) { /* ignore */ } };
+  G.loadSamples = () => { try { if (BBH.Samples) Promise.resolve(BBH.Samples.init(G.slot)).then(() => BBH.Samples.applyToAudio(G.slot)).catch(() => {}); } catch (e) { /* ignore */ } };
   G.startSlot = function (slot, ch) {                             // load/continue
     G.slot = slot; G.setChar(ch); E.applyAudioSettings(); G.loadSamples();
     if (!ch.flags.intro) { E.go('intro', { next: 'continue' }); return; }

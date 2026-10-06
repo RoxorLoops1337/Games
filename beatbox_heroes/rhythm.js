@@ -61,8 +61,8 @@
     async startMic() {
       try {
         const o = await BBH.Mic.open(); if (!o.ok) { E.settings.mic = false; this.micBtn.textContent = 'MIC OFF'; this.micBtn.className = 'btn'; E.toast('Mic: ' + (o.error || 'unavailable') + '. Using taps.', 'warn'); return; }
-        let prof = null; try { const by = {}; for (let l = 0; l < 4; l++) { const sm = await BBH.Samples.get(G.slot || 1, l); if (sm) by[l] = sm.f32 || sm.data; } if (Object.keys(by).length) prof = BBH.Mic.trainFromSamples(by, 44100); } catch (e) { prof = null; }
-        this.stopL = BBH.Mic.listen((ev) => this.micHit(ev), prof ? { profiles: prof } : undefined); E.toast('Mic mode: beatbox into your mic!', 'good');
+        let prof = null; try { const by = {}; for (let l = 0; l < 4; l++) { const sm = await BBH.Samples.get(G.slot || 1, l); if (sm) by[l] = sm.f32 || sm.data; } if (Object.keys(by).length) prof = BBH.Mic.makeClassifier(BBH.Mic.trainFromSamples(by, BBH.Mic.sampleRate() || 44100)); } catch (e) { prof = null; }
+        this.stopL = BBH.Mic.listen((ev) => this.micHit(ev), prof ? { classifier: prof } : undefined); E.toast('Mic mode: beatbox into your mic!', 'good');
       } catch (e) { E.toast('Mic mode failed. Using taps.', 'warn'); }
     },
     stopMic() { try { if (this.stopL) this.stopL(); this.stopL = null; if (BBH.Mic && BBH.Mic.close) BBH.Mic.close(); } catch (e) { /* ignore */ } },

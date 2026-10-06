@@ -58,7 +58,7 @@
     "test:colony": "node tests/pixel_colony.test.mjs",
     "test:rogue_book": "node tests/rogue_book_all.mjs",
     "test:hocus_vocus": "node tests/hocus_vocus_all.mjs",
-    "test:heroes": "node tests/beatbox_heroes_core.test.mjs && node tests/beatbox_heroes_chars.test.mjs && node tests/beatbox_heroes_world_a.test.mjs && node tests/beatbox_heroes_world_b.test.mjs && node tests/beatbox_heroes_audio.test.mjs && node tests/beatbox_heroes_browser.test.mjs"
+    "test:heroes": "node tests/beatbox_heroes_core.test.mjs && node tests/beatbox_heroes_chars.test.mjs && node tests/beatbox_heroes_world_a.test.mjs && node tests/beatbox_heroes_world_b.test.mjs && node tests/beatbox_heroes_audio.test.mjs && node tests/beatbox_heroes_mic.test.mjs && node tests/beatbox_heroes_browser.test.mjs && node tests/beatbox_heroes_minigames.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

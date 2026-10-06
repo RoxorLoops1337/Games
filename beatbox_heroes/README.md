@@ -26,7 +26,7 @@ style, and climb the ladder to the Beatbox Heroes World Cup.
 * **Bar programme**: Tue to Thu open mic, Fri paid showcase (50 fans + 5 open mics), Sat battle night (7 opponents + the World Cup), Sun karaoke.
 * **Needs**: energy, hunger, mood. Sleep after 20:00, nap earlier. Rent is $60 every Sunday. You pass out at 02:00.
 * **Skills**: Musicality (wider timing), Technicality, Originality (fans, judges), Showmanship (tips, fans).
-* **Progress**: 30 levels, 20 achievements, 5 judges (Tek, Mel, Origi, Showtime, Wildcard) who each favour a skill.
+* **Progress**: 30 levels, 26 achievements, 5 judges (Tek, Mel, Origi, Showtime, Wildcard) who each favour a skill.
 * Saves: 3 slots in `localStorage` (`bbh:slot1..3`), autosave (leading + trailing 2 s, flushed when the page hides).
 
 ## Developer menu
@@ -51,7 +51,15 @@ Every action goes through `Core.dev` / `Core.apply`, the same reducer the game u
 
 Design notes and module contracts: `DESIGN.md`. Tests: `tests/beatbox_heroes_*.test.mjs` (`npm run test:heroes`).
 
-## Not yet built (from the rebuild handover)
+## Mini games and systems (ported from Beatbox Story)
 
-Mic beatbox detection and pitch tuner, Sound Studio sample recording, the sequencer and songs, crew, livestream, sponsors,
-the festival story arc, tour, and the long flashback/dream story scenes. The core loop, creator, shop, battles and world are in.
+* **Rhythm game** with standard beatbox patterns (easy is mostly B t K t), battle style orders (BOOM > HATS > RIM > SNARE > BOOM) and **MIC MODE**: beatbox into your microphone and each detected sound hits its lane.
+* **Run tracker** (park): alternate left and right taps to stay in the green zone. Every 3 good bars adds +1 max energy.
+* **Pitch Tuner** (vocal booth or Sound Lab): sing the target notes into your mic (pitch detection), or play ear training without a mic. Trains Musicality.
+* **Beat Maker** (16 step sequencer, 4 slots): build patterns, train Originality, and RELEASE songs that pay fans for 7 days (3 at a time).
+* **Sound Recorder** (Sound Lab): record your own B, T, K and Pf sounds. They replace the synth drums everywhere and train the mic detector. Stored per save slot in IndexedDB.
+* **Crew** (bar counter), **Livestream** (desk at home), **private coaching** with BeeAmGee, odd jobs, beatbox tapes on the couch, a hood map and a full flat.
+
+## Still to come
+
+The long story arc (festival path, flashbacks, dreams), tour, sponsors, and Beatbox Hero lesson mode.

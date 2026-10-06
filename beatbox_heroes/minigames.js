@@ -72,7 +72,7 @@
       if (sc) for (const l of sc.layers) { const w = l.pix.w, off = Math.floor((this.scroll * (0.3 + l.speed * 0.7)) % w); l.pix.draw(real, -off, 0); l.pix.draw(real, w - off, 0); }
       real.fillStyle = 'rgba(14,9,30,.35)'; real.fillRect(0, 0, E.W, E.H);
       const fy = sc ? sc.floorY : 549, step = this.bar > 5 ? 'walkside' : 'idleside', pose = BBH.Chars.POSES[step] ? step : 'idle';
-      E.hero(real, this.look, this.bar > 5 ? (BBH.Chars.POSES.walkside ? 'walkside' : 'walk') : 'idle', 160, fy, { scale: 1, t: E.t * (0.6 + this.bar / 50) });
+      E.hero(real, this.look, this.bar > 5 ? (BBH.Chars.POSES.walkside ? 'walkside' : 'walk') : 'idle', 180, fy, { scale: 1, t: E.t * (0.6 + this.bar / 50) });
       void pose;
       // meter
       const mx = 296, my = 130, mh = 300, zone = this.bar >= RUN.HI ? 'burn' : this.bar >= RUN.LO ? 'target' : 'slow';
@@ -85,9 +85,9 @@
       const prog = (this.blocksDone + this.blockT / RUN.BLOCK) / RUN.BLOCKS; c.fillStyle = PAL.ink; c.fillRect(12, 92, 150, 7); c.fillStyle = PAL.neonLime; c.fillRect(13, 93, Math.round(148 * prog), 5);
       // pads
       for (const side of ['L', 'R']) { const x = side === 'L' ? 12 : 138, f = this.flash && this.flash.side === side ? (this.flash.ok ? 1 : -1) : 0, lit = f === 1;
-        c.fillStyle = PAL.ink; c.fillRect(x - 1, 391, 122, 82); c.fillStyle = f === -1 ? '#8f1d3a' : lit ? '#b5f6ff' : '#2a8aa6'; c.fillRect(x, 392, 120, 80); c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(x + 1, 393, 118, 2); c.fillStyle = '#0f5266'; c.fillRect(x, 464, 120, 8);
-        E.txt(c, side === 'L' ? 'LEFT' : 'RIGHT', x + 60, 420, { align: 'c', color: PAL.ink, scale: 2, outline: lit ? '#fff' : '#7cf0ff' }); E.txt(c, side === 'L' ? 'A' : 'D', x + 60, 446, { align: 'c', color: PAL.ink, outline: null }); }
-      if (this.last === null) E.txt(c, 'TAP LEFT, THEN RIGHT, THEN LEFT...', 135, 360, { align: 'c', color: PAL.cream, a: 0.6 + 0.4 * Math.sin(E.t / 200) });
+        c.fillStyle = PAL.ink; c.fillRect(x - 1, 423, 122, 50); c.fillStyle = f === -1 ? '#8f1d3a' : lit ? '#b5f6ff' : '#2a8aa6'; c.fillRect(x, 424, 120, 48); c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(x + 1, 425, 118, 2); c.fillStyle = '#0f5266'; c.fillRect(x, 466, 120, 6);
+        E.txt(c, side === 'L' ? 'LEFT' : 'RIGHT', x + 60, 436, { align: 'c', color: PAL.ink, scale: 2, outline: lit ? '#fff' : '#7cf0ff' }); E.txt(c, side === 'L' ? 'A' : 'D', x + 60, 458, { align: 'c', color: PAL.ink, outline: null }); }
+      if (this.last === null) E.txt(c, 'TAP LEFT, THEN RIGHT, THEN LEFT...', 135, 110, { align: 'c', color: PAL.cream, a: 0.6 + 0.4 * Math.sin(E.t / 200) });
     },
   };
 
@@ -246,7 +246,7 @@
           h('div.row', { style: { justifyContent: 'space-between' } }, h('div.h2', { style: { color: ln[2] } }, ln[0] + '  ' + ln[1]), h('div.tp', { style: { color: st === 'rec' ? '#ff7b8e' : mine ? '#7be08f' : PAL.fog } }, st === 'rec' ? 'RECORDING...' : st === 'wait' ? 'MAKE THE SOUND NOW' : mine ? 'YOUR SOUND' : 'DEFAULT')),
           h('div.row', { style: { marginTop: '4px' } }, E.btn('REC', 'red', () => this.record(i), { flex: 1, padding: '4px 0 5px' }), E.btn('PLAY', '', () => { try { E.A().drum(i, { vel: 1 }); } catch (e) { /* ignore */ } }, { flex: 1, padding: '4px 0 5px' }), E.btn('RESET', mine ? '' : 'dis', () => this.reset(i), { flex: 1, padding: '4px 0 5px' })));
       });
-      this.ui = h('div', { style: { position: 'absolute', left: '6px', right: '6px', top: '76px', bottom: '8px', zIndex: 15, display: 'flex', flexDirection: 'column', gap: '4px' } },
+      this.ui = h('div', { style: { position: 'absolute', left: '6px', right: '6px', top: '90px', bottom: '8px', zIndex: 15, display: 'flex', flexDirection: 'column', gap: '4px' } },
         h('div.ts.ctr', null, MicOK() ? 'Press REC, then make the sound into your mic. It stops by itself when you go quiet.' : 'Microphone recording is not supported in this browser.'), cards,
         h('div.row', null, E.btn(this.test ? 'STOP TEST' : 'TEST MIC MODE', this.test ? 'red' : 'cyan', () => this.toggleTest(), { flex: 2 }), E.btn('BACK', '', () => back(this.a.back), { flex: 1 })));
       E.add(this.ui); void slot;
@@ -264,10 +264,10 @@
     async toggleTest() {
       if (this.test) { this.stopTest(); this.build(); return; } if (!MicOK()) { E.toast('No microphone support here.', 'warn'); return; }
       const o = await BBH.Mic.open(); if (!o.ok) { E.toast('Mic: ' + (o.error || 'unavailable'), 'warn'); return; }
-      try { const prof = await this.profiles(); this.stopL = BBH.Mic.listen((ev) => { this.detLane = ev.lane; this.detT = 400; E.burst(180, 330, 6, { color: LANES[ev.lane][2], speed: 70, up: 30 }); try { E.A().drum(ev.lane, { vel: 0.8 }); } catch (e) { /* ignore */ } }, prof ? { profiles: prof } : undefined); } catch (e) { E.toast('Could not start the detector.', 'warn'); return; }
+      try { const prof = await this.profiles(); this.stopL = BBH.Mic.listen((ev) => { this.detLane = ev.lane; this.detT = 400; E.burst(180, 330, 6, { color: LANES[ev.lane][2], speed: 70, up: 30 }); try { E.A().drum(ev.lane, { vel: 0.8 }); } catch (e) { /* ignore */ } }, prof ? { classifier: prof } : undefined); } catch (e) { E.toast('Could not start the detector.', 'warn'); return; }
       this.test = true; this.build();
     },
-    async profiles() { try { const by = {}; for (let l = 0; l < 4; l++) { const s = await BBH.Samples.get(G.slot || 1, l); if (s) by[l] = s.f32 || s.data; } return Object.keys(by).length ? BBH.Mic.trainFromSamples(by, 44100) : null; } catch (e) { return null; } },
+    async profiles() { try { const by = {}; for (let l = 0; l < 4; l++) { const s = await BBH.Samples.get(G.slot || 1, l); if (s) by[l] = s.f32 || s.data; } return Object.keys(by).length ? BBH.Mic.makeClassifier(BBH.Mic.trainFromSamples(by, BBH.Mic.sampleRate() || 44100)) : null; } catch (e) { return null; } },
     stopTest() { this.test = false; try { this.stopL && this.stopL(); BBH.Mic.close(); } catch (e) { /* ignore */ } },
     update(dt) { this.detT = Math.max(0, this.detT - dt); },
     draw(real, c) {
