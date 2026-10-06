@@ -36,7 +36,7 @@ function sprite(key, size, paint) {
       const g = c.getContext('2d'); if (!g || !g.beginPath) throw new Error('no 2d');
       const old = ctx; ctx = g;
       try { g.translate(size / 2, size / 2); paint(); } finally { ctx = old; }
-    } catch (e) { sprOK = false; c = null; }
+    } catch (e) { console.warn("sprite fail " + key + ": " + e.message); c = null; }
     SPR.set(key, c);
   }
   return c;

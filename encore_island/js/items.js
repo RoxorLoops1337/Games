@@ -3,8 +3,6 @@
 // Every item is painted once at 128px in the Hocus Vocus sticker style (warm outline, lit gradient, gloss, sparkle),
 // cached as an offscreen sprite, and blitted at any size. Headless/no-canvas falls back to painting directly.
 const ILN = '#2d170f';
-function hexRgbI(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
-function mixc(a, b, t) { const A = hexRgbI(a), B = hexRgbI(b); return 'rgb(' + Math.round(A[0] + (B[0] - A[0]) * t) + ',' + Math.round(A[1] + (B[1] - A[1]) * t) + ',' + Math.round(A[2] + (B[2] - A[2]) * t) + ')'; }
 // lit vertical gradient from a base colour
 function litGrad(c, y0, y1, hi, lo) {
   const g = ctx.createLinearGradient(0, y0, 0, y1);

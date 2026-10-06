@@ -65,9 +65,12 @@ function drawGuide() {
   const g = guideTarget(); if (!g || S.sheet || S.modal) return;
   const dx = g.x - CAM.x, dy = g.y - CAM.y;
   if (dx * dx + dy * dy < 200 * 200) return;
-  const a = Math.atan2(dy, dx), rad = Math.min(vw, vh) * 0.34, ax = vw / 2 + Math.cos(a) * rad, ay = vh * 0.46 + Math.sin(a) * rad, pu = 1 + Math.sin(S.t * 6) * 0.12;
+  const a = Math.atan2(dy, dx), cx0 = vw / 2, cy0 = vh * 0.46, ca = Math.cos(a), sa = Math.sin(a), pu = 1 + Math.sin(S.t * 6) * 0.12;
+  const bx = vw / 2 - 30; // ray -> inset safe rect (clear of the HUD and the dock)
+  const tx = Math.abs(ca) > 1e-4 ? bx / Math.abs(ca) : 1e9, ty = sa < 0 ? (Math.abs(sa) > 1e-4 ? (cy0 - 215 + 0) / Math.abs(sa) : 1e9) : (Math.abs(sa) > 1e-4 ? (vh - DOCK_H - 150 - cy0) / sa : 1e9);
+  const tt = Math.min(tx, ty), ax = cx0 + ca * tt, ay = cy0 + sa * tt;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pu, pu); ctx.lineJoin = 'round'; ctx.strokeStyle = HV.line; ctx.lineWidth = 5; ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.moveTo(17, 0); ctx.lineTo(-8, -12); ctx.lineTo(-3, 0); ctx.lineTo(-8, 12); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
-  labelPill(g.label, ax, ay + 30, '#ffe98a', '#f0b422', 11);
+  labelPill(g.label, vw / 2, 128, '#ffe98a', '#f0b422', 12);
 }
 function drawCombo() {
   if (S.combo < 3) return;
@@ -91,7 +94,7 @@ const DOCK = [['town', 'home', 'Town'], ['heroes', 'mic', 'Heroes'], ['goals', '
 function dockPips() { return { town: S.pop.length < popCap() && S.wallet >= recruitCost(), heroes: S.gems >= eggCost(S.stats.hatches), goals: S.dailies.concat(S.quests).some(q => q.done && false) || S.dailies.some(q => !q.done) && false, perks: S.crowns > 0, more: loginReady() || S.gems >= SPIN_COST }; }
 const DOCK_H = 62;
 function drawDock() {
-  const y = vh - DOCK_H - 6, x = 8, w = vw - 16, pips = dockPips();
+  const y = vh - DOCK_H - 6, w = Math.min(vw - 16, 520), x = (vw - w) / 2, pips = dockPips();
   plaque(x, y, w, DOCK_H, 18); const bw = w / DOCK.length;
   DOCK.forEach(([id, icon, label], i) => {
     const bx = x + i * bw, on = S.sheet && S.sheet.id === id;
@@ -118,6 +121,7 @@ function drawActionButtons(baseY) {
     artDraw(ap.art, 'idle', (S.t * 4) | 0, px, py + 20, 0.3, false); ctx.fillStyle = '#fff4e6'; ctx.font = font(8); ctx.textAlign = 'center'; ctx.fillText(pr2 ? 'READY' : Math.ceil(S.petCd) + 's', px, py + 25); if (pr2) hitRect(px - pr, py - pr, pr * 2, pr * 2, petAbility); }
 }
 function drawToasts() {
+  if (S.sheet || S.modal || S.cards) return;
   let ty = Math.max(150, vh * 0.2);
   for (const to of S.toasts.slice(0, 2)) {
     const a = Math.min(1, 4 * Math.min(to.t, 3 - to.t)), slide = (1 - Math.min(1, to.t * 5)) * 30; ctx.globalAlpha = Math.max(0, a); ctx.font = font(13);
@@ -128,11 +132,11 @@ function drawToasts() {
 }
 function drawCardsDraft() {
   if (!S.cards) return;
-  const sg = ctx.createLinearGradient(0, vh - 250, 0, vh); sg.addColorStop(0, 'rgba(30,16,70,0)'); sg.addColorStop(0.35, 'rgba(30,16,70,0.8)'); sg.addColorStop(1, 'rgba(30,16,70,0.94)'); ctx.fillStyle = sg; ctx.fillRect(0, vh - 250, vw, 250);
-  const bw = 210, by0 = vh - 226; pill(vw / 2 - bw / 2, by0, bw, 30, '#ffe98a', '#f0b422'); ctx.fillStyle = '#3a2410'; ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillText('LEVEL ' + S.level + '!  pick one', vw / 2, by0 + 20);
+  ctx.fillStyle = 'rgba(24,12,60,0.62)'; ctx.fillRect(0, 0, vw, vh);
+  const ch0 = 150, base = Math.round(vh * 0.5 - (ch0 + 56) / 2), bw = 210, by0 = base; pill(vw / 2 - bw / 2, by0, bw, 30, '#ffe98a', '#f0b422'); ctx.fillStyle = '#3a2410'; ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillText('LEVEL ' + S.level + '!  pick one', vw / 2, by0 + 20);
   const n = S.cards.length, cw = Math.min(124, (vw - 36) / n - 8), gap = 8, x0 = (vw - (n * cw + (n - 1) * gap)) / 2;
   for (let i = 0; i < n; i++) {
-    const c = S.cards[i], cx = x0 + i * (cw + gap), ch = 150, cy = vh - 186 + Math.sin(S.t * 3 + i * 1.3) * 2;
+    const c = S.cards[i], cx = x0 + i * (cw + gap), ch = ch0, cy = base + 46 + Math.sin(S.t * 3 + i * 1.3) * 2;
     card(cx, cy, cw, ch, 14);
     const hg = ctx.createLinearGradient(0, cy, 0, cy + 46); hg.addColorStop(0, '#c6a8ff'); hg.addColorStop(1, '#8a5cf0'); ctx.save(); rr(cx, cy, cw, ch, 14); ctx.clip(); ctx.fillStyle = hg; ctx.fillRect(cx, cy, cw, 48); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(cx, cy, cw, 12); ctx.restore();
     disc(cx + cw / 2, cy + 32, 24, '#fff8f0', '#ffd9ea'); drawIcon(c.icon, cx + cw / 2, cy + 32, 34);
@@ -161,7 +165,7 @@ function drawTitle() {
 }
 function drawHudTop() {
   if (!S.started) return;
-  drawPlayerCard(); drawRankPill(); drawMinimap(); drawCombo();
+  drawPlayerCard(); drawRankPill(); drawMinimap(); if (!S.sheet && !S.modal) drawCombo();
   if (!S.sheet && !S.modal) drawGuide();
 }
 function drawHudBottom() {

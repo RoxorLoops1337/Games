@@ -146,11 +146,12 @@ function drawWorld() {
   const add = (y, f) => A.push({ y, f });
   if (landVisible(HUB_GEO)) {
     add(SELL.y + 30, drawStall); add(VAULT.y + 30, drawVault); add(MONU.y + 30, drawMonument); add(FORGE.y + 40, drawForgeArea);
+    for (const l of HUBLAMPS) if (vis(l.x, l.y, 90)) add(l.y, () => drawLamp(l));
     for (const d of HUBDECOR) if (vis(d.x, d.y, 80)) add(d.y, () => drawProp(d, BIOMES[0], 0));
   }
   for (const z of lands) if (landVisible(z.g)) {
     const bi = (z.k - 1) % 8, B = BIOMES[bi];
-    for (const d of z.g.decor) if (vis(d.x, d.y, 80)) add(d.y, () => drawProp(d, B, bi));
+    for (const d of decorOf(z.g)) if (vis(d.x, d.y, 80)) add(d.y, () => drawProp(d, B, bi));
     for (const tw of z.towers) add(tw.y + 30, () => drawTower(tw));
   }
   for (const it of S.items) if (vis(it.x, it.y, 60)) add(it.y, () => drawItemWorld(it));
@@ -161,4 +162,15 @@ function drawWorld() {
   add(S.comp.y, drawCompanion); add(S.player.y, drawHero);
   A.sort((a, b) => a.y - b.y); for (const a of A) a.f();
   drawShots(); drawFly(); drawFx(); drawFloats();
+}
+
+// drifting petals/leaves in screen space — pure ambience, biome tinted
+function drawPetals() {
+  const kk = nearestLandIdx(CAM.x, CAM.y), B = kk === 0 ? BIOMES[0] : biomeOf(kk), cols = [B.flowers[1], B.flowers[2], B.tree[0], '#ffffff'];
+  ctx.save();
+  for (let i = 0; i < 16; i++) {
+    const ph = (S.t * (0.045 + (i % 5) * 0.008) + i * 0.137) % 1, x = vw * (((i * 0.6180339) % 1) + 0.06 * Math.sin(S.t * 0.7 + i)) - ph * 60 + 30, y = -20 + ph * (vh + 40), rot = S.t * 1.3 + i;
+    ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.55; ctx.fillStyle = cols[i % 4]; ctx.save(); ctx.translate(((x % vw) + vw) % vw, y); ctx.rotate(rot); ctx.scale(1, 0.55 + 0.45 * Math.sin(S.t * 2 + i)); ctx.beginPath(); ctx.ellipse(0, 0, 6, 3.2, 0, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  ctx.restore();
 }
