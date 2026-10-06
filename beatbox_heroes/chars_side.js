@@ -131,7 +131,7 @@
   }
 
   /* ----------------------------------------------------------------- head */
-  const FACE_PTS = [[22, 12], [27.6, 13.2], [29.3, 15.6], [29.9, 17.6], [29.6, 19.0], [30.0, 19.9], [31.7, 22.2], [30.4, 23.3], [30.0, 24.2], [30.6, 24.9], [30.1, 26.0], [29.5, 26.8], [29.3, 28.3], [27.8, 29.6], [22.5, 29.4], [17.5, 26.5], [15.5, 21], [22, 17]];
+  const FACE_PTS = [[22, 12], [27.6, 13.2], [29.3, 15.6], [29.9, 17.6], [29.6, 19.0], [30.0, 19.9], [32.2, 22.3], [30.5, 23.5], [30.0, 24.2], [30.6, 24.9], [30.1, 26.0], [29.5, 26.8], [29.3, 28.3], [27.8, 29.6], [22.5, 29.4], [17.5, 26.5], [15.5, 21], [22, 17]];
   const FACEWIN = [[28.6, 13.4], [31.2, 14.6], [33.5, 21], [32, 31], [23.6, 31], [23.8, 17.6], [25.2, 15.4]];
   const HAIRLINE = [[33, 4], [29.4, 12.8], [27.4, 14.3], [24.6, 15.0], [22.4, 16.0], [21.6, 19.0], [21.2, 22.4], [19.4, 22.0], [18.0, 24.2], [16.2, 25.2], [10, 27], [8, 4]];
   function headLocal(S) {
@@ -151,7 +151,7 @@
     // forehead and cheekbone light, jaw shade
     const hl = M().ellipse(27.3, 15.4, 1.6, 1.3).shiftN(0, oy).and(hm); hl.each((x, y) => P.px(x, y, K.r.light));
     const ck = M().ellipse(26.0, 22.6, 1.6, 1.1).shiftN(0, oy).and(hm); ck.each((x, y) => { if ((x + y) & 1) P.px(x, y, K.r.light); });
-    const jw = hm.clone().and(M().fn(0, 27.2, 44, 31, () => true).shiftN(0, oy)); jw.each((x, y) => { if (((x + y) & 1) === 0) P.px(x, y, K.r.shade); });
+    if (GR.k > 1.8) { const jw = hm.clone().and(M().fn(0, 27.2, 44, 31, () => true).shiftN(0, oy)); jw.each((x, y) => { if (((x + y) & 1) === 0) P.px(x, y, K.r.shade); }); }
     // ear
     const ear = M().ellipse(19.7, 20.6, 1.7, 2.6).shiftN(0, oy); sh(P, ear, K.r, { cap: 2 });
     D.px(19.6, 20.4, K.r.shade); D.px(19.2, 21.6, K.r.deep); D.px(19.8, 19.2, K.r.light);
@@ -275,7 +275,7 @@
     const put = (mk, c, a) => mk.each((x, y) => P.px(x, y + oy, c, a));
     if (has('freckles')) { const fc = K.dark ? mix(K.r.light, '#e0a070', 0.3) : mix(K.r.deep, '#a05030', 0.45); for (const [x, y] of [[25.5, 22.0], [27.0, 22.8], [28.6, 21.8], [26.2, 24.0], [28.0, 24.1], [24.6, 23.2], [30.0, 21.0]]) D.px(x, y, fc); }
     if (has('blush')) put(M().ellipse(25.4, 23.6, 2.3, 1.2), K.blush, 170);
-    if (has('beauty')) D.px(28.6, 27.2, K.dark ? '#120d1f' : '#3a2230');
+    if (has('beauty')) { D.px(26.8, 27.6, K.dark ? '#120d1f' : '#3a2230'); D.px(27.2, 27.8, K.dark ? '#120d1f' : '#3a2230'); }
     if (has('scar')) { const sc = K.dark ? '#b88a80' : '#e8a0a0'; D.poly([[27.0, 15.6], [27.6, 17.4], [28.4, 19.4], [28.8, 22.4]], sc, Math.max(2, GR.t)); D.hl(26.4, 29.0, 18.0, '#fff0e8'); D.hl(26.8, 29.2, 20.6, '#fff0e8'); }
     if (has('bandaid')) { put(M().poly([[24.2, 23.0], [28.6, 21.6], [29.2, 23.2], [24.8, 24.6]]), '#f2c9a0'); put(M().poly([[25.8, 22.6], [27.2, 22.1], [27.6, 23.4], [26.2, 23.9]]), '#e0b080'); D.poly([[24.2, 23.0], [24.8, 24.6]], '#d8a070'); D.poly([[28.6, 21.6], [29.2, 23.2]], '#d8a070'); }
     if (has('starpaint')) { const sx = 25.2, sy = 22.4; put(M().fn(sx - 2.2, sy - 2.2, sx + 2.2, sy + 2.2, (x, y) => { const dx = x - sx, dy = y - sy, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx) + Math.PI / 2, s = ((a % (2 * Math.PI / 5)) + 2 * Math.PI / 5) % (2 * Math.PI / 5) - Math.PI / 5; return r <= 0.7 + 1.4 * Math.max(0, 1 - Math.abs(s) / (Math.PI / 5) * 1.05); }), '#2ee6ff'); D.px(sx, sy, '#e8ffff'); }
@@ -414,7 +414,8 @@
     const c = { hm: headLocal(X.S), S: X.S }, res = (STYS[X.L.hair.style] || STYS.crop)(c), z = HATZ[X.hatId];
     if (z) {
       const kill = M().poly([[4, 0], [40, 0], [40, z[0] - 0.2], [31, z[0]], [10, z[1]], [4, z[1] + 0.2]]);
-      const cut = (op) => { op.m = op.m.clone().sub(kill); return op; };
+      const lim = headLocal(X.S).growD(3.4);
+      const cut = (op) => { op.m = op.m.clone().sub(kill); if (op.big || op.tex === 'curl') op.m.and(lim); return op; };
       res.front = res.front.map(cut).filter((o) => o.m.bounds());
       if (X.hatId === 'hood') res.back = [];
     }

@@ -184,8 +184,8 @@
   function anchors(look, pose, frame) {
     const L = fix(look), pn = Kit.POSES[pose] ? pose : 'idle';
     if (Side.isSide(pn)) return onGrid(W, H, () => {
-      const S = Side.skelSide(L.body, pn, frame || 0, {}), oy = Kit.ny(S.dyB), hand = (sd) => ({ x: Math.round(Kit.X(S.arms[sd].ha[0])), y: Math.round(Kit.Y(S.arms[sd].ha[1])) });
-      return { mouth: { x: Math.round(Kit.X(29.6)), y: Math.round(Kit.Y(25.8)) + oy }, head: { x: Math.round(Kit.X(21)), y: Math.round(Kit.Y(19.2)) + oy }, top: { x: Math.round(Kit.X(20)), y: Math.round(Kit.Y(11)) + oy }, handL: hand('F'), handR: hand('N'), feet: { x: 29, y: H - 1 } };
+      const S = Side.skelSide(L.body, pn, frame || 0, {}), oy = Kit.ny(S.dyB), hand = (sd) => ({ x: Math.round(Kit.X(S.arms[sd].ha[0])) + 1, y: Math.round(Kit.Y(S.arms[sd].ha[1])) });
+      return { mouth: { x: Math.round(Kit.X(29.6)) + 1, y: Math.round(Kit.Y(25.8)) + oy }, head: { x: Math.round(Kit.X(21)) + 1, y: Math.round(Kit.Y(19.2)) + oy }, top: { x: Math.round(Kit.X(20)) + 1, y: Math.round(Kit.Y(11)) + oy }, handL: hand('F'), handR: hand('N'), feet: { x: 29, y: H - 1 } };
     });
     return onGrid(W, H, () => {
       const S = Kit.skeleton(L.body, pn, frame || 0, {}), f = Kit.faceCtx(S), ax = (W - 1) / 2 + f.ox;

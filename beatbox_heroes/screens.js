@@ -87,7 +87,7 @@
       const saves = Core.Save.list(E.store);
       const card = (i) => {
         const ch = saves[i - 1];
-        const left = ch ? E.pixEl(BBH.Chars.portrait(BBH.Chars.fix(ch.look), 'happy'), 1) : h('div', { style: { width: '56px', height: '56px', background: 'var(--n0)', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, E.iconEl('star', 2, { opacity: 0.3 }));
+        const left = ch ? E.pixEl(BBH.Chars.portrait(BBH.Chars.fix(ch.look), 'happy'), 1) : h('div', { style: { width: '72px', height: '72px', background: 'var(--n0)', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, E.iconEl('star', 2, { opacity: 0.3 }));
         const info = ch ? h('div.col.grow', { style: { gap: '3px' } }, h('div.h2', null, ch.name), h('div.ts', null, 'Level ' + ch.level + '  Day ' + ch.day), h('div.ts', null, '$' + ch.cash + '  ' + ch.fans + ' fans'), h('div.ts', null, Object.keys(ch.ach).length + '/20 achievements'))
           : h('div.col.grow', null, h('div.h2', { style: { color: 'var(--cream)' } }, 'EMPTY SLOT'), h('div.ts', null, 'Create a new hero'));
         const el = h('div.panel', { style: { position: 'relative', height: '70px', padding: '7px', cursor: 'pointer' } }, h('div.row', { style: { gap: '8px' } }, left, info));

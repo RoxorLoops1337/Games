@@ -248,8 +248,8 @@
   E.dialog = function (lines, onDone) {
     let i = 0, shown = 0, timer = null, full = '';
     const box = h('div.panel.sheet', { style: { height: '86px', zIndex: 50, padding: '6px' } });
-    const portrait = h('div', { style: { position: 'absolute', left: '6px', top: '-26px', width: '56px', height: '56px', background: 'var(--n0)', boxShadow: '0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink)' } });
-    const nameEl = h('div.tp.gold', { style: { position: 'absolute', left: '68px', top: '-9px', background: 'var(--n2)', padding: '2px 4px', boxShadow: '0 0 0 1px var(--ink)' } });
+    const portrait = h('div', { style: { position: 'absolute', left: '6px', top: '-40px', width: '72px', height: '72px', background: 'var(--n0)', boxShadow: '0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink)' } });
+    const nameEl = h('div.tp.gold', { style: { position: 'absolute', left: '86px', top: '-9px', background: 'var(--n2)', padding: '2px 4px', boxShadow: '0 0 0 1px var(--ink)' } });
     const textEl = h('div.t', { style: { position: 'absolute', left: '8px', right: '8px', top: '34px', height: '48px', overflow: 'hidden', fontSize: '8px', lineHeight: '10px' } });
     const hint = h('div.tp.blink', { style: { position: 'absolute', right: '6px', bottom: '3px', color: 'var(--gold2)' } }, '>');
     box.append(portrait, nameEl, textEl, hint);

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..', '..', 'beatbox_heroes');
-for (const n of ['pix', 'catalog', 'chars_body', 'chars_hair', 'chars_gear', 'chars_acc', 'chars']) require(path.join(root, n + '.js'));
+for (const n of ['pix', 'catalog', 'chars_body', 'chars_hair', 'chars_gear', 'chars_acc', 'chars_side', 'chars_side2', 'chars']) require(path.join(root, n + '.js'));
 const BBH = globalThis.BBH, { Pix, CATALOG: CAT, Chars } = BBH;
 const out = process.argv[2] || '/tmp/chars_out';
 const only = process.argv.slice(3);
@@ -81,4 +81,39 @@ row('marks', ids(CAT.MARKS), (L, id) => { L.marks = [id]; L.hair.style = 'fade';
   for (const l of looks) for (const p of ['idle', 'beatbox', 'dance']) list.push(draw(Chars.fix(l), p, p === 'idle' ? 0 : 1));
   save('street', list, 6, 3);
   save('street_portraits', looks.map((l) => Chars.portrait(Chars.fix(l), 'happy')), 8, 3);
+}
+
+// ---- profile (side) views: sheets named side_*
+{
+  const dsd = (L, pose, f) => Chars.render(L, pose, 0, { frame: f || 0, blink: false });
+  const sp = (name, list, f, cols, scale, pose) => save(name, list.map((id, i) => dsd(mod({}, (L) => { plain(L); L.body = BODIES[i % 3]; f(L, id, i); }), pose || 'idleside')), cols, scale);
+  // every side pose frame, 3 bodies
+  {
+    const list = [];
+    for (const b of BODIES) for (const p of ['walkside', 'idleside', 'beatboxside']) for (let f = 0; f < Chars.POSES[p].frames; f++) list.push(dsd(mod({}, (L) => { L.body = b; }), p, f));
+    save('side_poses', list, 12, 3);
+  }
+  sp('side_hair', ids(CAT.HAIR_STYLES), (L, id, i) => { const cols = ['#2a2024', '#a5502a', '#dcbc6a', '#ff3ea5', '#2ee6ff', '#5a3520']; L.hair.style = id; L.hair.color = cols[i % cols.length]; L.top.id = 'tee'; }, 9, 3);
+  save('side_hats', ids(CAT.HATS).map((id, i) => dsd(mod({}, (L) => { L.hat.id = id; L.hat.color = OC[(i * 5 + 1) % 24]; L.hair.style = ids(CAT.HAIR_STYLES)[(i * 3) % CAT.HAIR_STYLES.length]; L.body = BODIES[i % 3]; }), 'idleside')), 9, 3);
+  sp('side_tops', ids(CAT.TOPS), (L, id, i) => { L.top.id = id; L.top.color = OC[(i * 5) % 24]; L.top.color2 = OC[(i * 7 + 3) % 24]; L.bottom.id = 'jeans'; L.shoes.id = 'sneakers'; }, 9, 4, 'walkside');
+  sp('side_bottoms', ids(CAT.BOTTOMS), (L, id, i) => { L.bottom.id = id; L.bottom.color = OC[(i * 5 + 2) % 24]; L.top.id = 'tee'; L.shoes.id = 'sneakers'; }, 8, 4, 'walkside');
+  sp('side_shoes', ids(CAT.SHOES), (L, id, i) => { L.shoes.id = id; L.shoes.color = OC[(i * 5 + 1) % 24]; L.bottom.id = 'jeans'; L.top.id = 'tee'; }, 9, 4, 'walkside');
+  sp('side_glasses', ids(CAT.GLASSES), (L, id, i) => { L.glasses.id = id; L.glasses.color = ['#17141f', '#ff3ea5', '#d4a017', '#2ee6ff'][i % 4]; L.top.id = 'tee'; }, 9, 4);
+  save('side_acc', ids(CAT.ACCESSORIES).map((id, i) => dsd(mod({}, (L) => { plain(L); const a = CAT.ACCESSORIES[i]; L.acc[a.slot] = { id, color: OC[(i * 5 + 4) % 24] }; L.body = BODIES[i % 3]; L.top.id = 'tee'; }), 'idleside')), 11, 4);
+  sp('side_marks', ids(CAT.MARKS).concat(ids(CAT.FACIAL).slice(1)), (L, id) => { if (CAT.FACIAL.find((x) => x.id === id)) L.facial = id; else L.marks = [id]; L.hair.style = 'fade'; }, 9, 4);
+  {
+    const looks = [
+      { body: 'boy', skin: '#8d5a36', hair: { style: 'hightop', color: '#1a1420' }, hat: { id: 'none' }, top: { id: 'bomber', color: '#17141f', color2: '#e63946' }, bottom: { id: 'techpants', color: '#34303f' }, shoes: { id: 'retro', color: '#e63946' }, glasses: { id: 'chromeshield' }, acc: { neck: { id: 'cubanchain', color: '#e8b923' }, ears: { id: 'iced' }, wrist: { id: 'icedwatch' }, hand: { id: 'none_hand' } } },
+      { body: 'girl', skin: '#5e3823', hair: { style: 'cornrows', color: '#1a1420' }, hat: { id: 'none' }, top: { id: 'jersey', color: '#ff3ea5', color2: '#f7f2e8' }, bottom: { id: 'camo', color: '#2f5d3a' }, shoes: { id: 'fatlaces', color: '#f7f2e8' }, glasses: { id: 'gold_round' }, acc: { neck: { id: 'dogtags' }, ears: { id: 'hoops', color: '#e8b923' }, wrist: { id: 'stackedbands' } }, marks: ['goldgrill'] },
+      { body: 'neutral', skin: '#c68b5e', hair: { style: 'dreadbun', color: '#3b2418' }, hat: { id: 'none' }, top: { id: 'denimjacket', color: '#3a5fcd', color2: '#f7f2e8' }, bottom: { id: 'ripped', color: '#3a5fcd' }, shoes: { id: 'timbs', color: '#d4a017' }, glasses: { id: 'oversized' }, acc: { back: { id: 'crossbody', color: '#17141f' } } },
+      { body: 'boy', skin: '#fde7d9', hair: { style: 'fadewave', color: '#dcbc6a' }, hat: { id: 'trucker', color: '#ff6b35' }, top: { id: 'windbreaker', color: '#2a9d8f', color2: '#ffb703' }, bottom: { id: 'sweatpants', color: '#6b6b80' }, shoes: { id: 'slides', color: '#17141f' } },
+      { body: 'girl', skin: '#f2c4ae', hair: { style: 'twists', color: '#ff3ea5' }, hat: { id: 'durag', color: '#7b4fe0' }, top: { id: 'puffvest', color: '#17141f', color2: '#e63946' }, bottom: { id: 'jeans', color: '#34303f' }, shoes: { id: 'hightops', color: '#ff3ea5' } },
+      { body: 'neutral', skin: '#2b1b16', hair: { style: 'afro', color: '#1a1420' }, hat: { id: 'bucketfur', color: '#ffb703' }, top: { id: 'hoodiebig', color: '#7b4fe0', color2: '#f7f2e8' }, bottom: { id: 'sweatpants', color: '#17141f' }, shoes: { id: 'retro', color: '#2ee6ff' } },
+      { body: 'boy', skin: '#d9a46e', hair: { style: 'twists', color: '#2a2024' }, hat: { id: 'fitted', color: '#e63946' }, top: { id: 'oversized', color: '#f7f2e8', color2: '#17141f' }, bottom: { id: 'camo', color: '#34303f' }, shoes: { id: 'retro', color: '#f7f2e8' }, acc: { neck: { id: 'cubanchain', color: '#e8b923' }, hand: { id: 'mic' } } },
+      { body: 'girl', skin: '#a56c3f', hair: { style: 'long', color: '#2a2024' }, hat: { id: 'hood', color: '#17141f' }, top: { id: 'hoodiebig', color: '#17141f', color2: '#ff3ea5' }, bottom: { id: 'techpants', color: '#17141f' }, shoes: { id: 'fatlaces', color: '#ff3ea5' }, glasses: { id: 'neonbar', color: '#2ee6ff' } },
+    ];
+    const list = [];
+    for (const l of looks) for (const [p, f] of [['walkside', 0], ['walkside', 3], ['beatboxside', 1]]) list.push(dsd(Chars.fix(l), p, f));
+    save('side_street', list, 6, 3);
+  }
 }

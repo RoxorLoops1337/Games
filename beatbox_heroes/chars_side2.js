@@ -30,7 +30,7 @@
   const bandLine = (o, zf, zb, c, th) => o.D.line(30.6, zf, 9.4, zb, c, th);
 
   HATP.cap = () => {
-    const dome = ellM(19.6, 18.2, 10.2, 9.0).and(above(16.4, 19.2)), brim = polyM([[29.6, 15.8], [36.0, 17.4], [36.4, 19.0], [29.4, 18.0]]);
+    const dome = ellM(19.6, 18.2, 10.2, 9.0).and(above(16.4, 19.2)), brim = polyM([[29.4, 15.6], [37.0, 17.2], [37.4, 19.4], [29.2, 18.6]]);
     return {
       m: dome.clone().or(brim),
       draw(P, o) {
@@ -75,7 +75,7 @@
     };
   };
   HATP.fitted = () => {
-    const dome = ellM(19.6, 17.8, 10.3, 9.2).and(above(16.4, 19.2)), brim = polyM([[29.6, 15.8], [37.2, 16.8], [37.4, 18.4], [29.4, 17.8]]);
+    const dome = ellM(19.6, 17.8, 10.3, 9.2).and(above(16.4, 19.2)), brim = polyM([[29.4, 15.6], [38.0, 16.8], [38.2, 18.8], [29.2, 18.4]]);
     return {
       m: dome.clone().or(brim),
       draw(P, o) {
@@ -87,7 +87,7 @@
         bandLine(o, 16.6, 19.4, rp.deep);
         sh(P, SH(brim, o), rp, { cap: 2, hi: true });
         D.poly([[29.8, 17.9], [37.2, 18.3]], rp.deep);
-        SH(ellM(34.4, 17.2, 1.5, 0.7), o).each((x, y) => P.px(x, y, '#c9f0ff')); D.px(34.0, 17.0, '#ffffff');
+        SH(ellM(33.6, 17.4, 1.6, 0.6), o).each((x, y) => P.px(x, y, '#c9f0ff')); D.px(33.2, 17.3, '#ffffff'); D.px(34.4, 17.4, '#ff9ad0');
       },
     };
   };
@@ -516,7 +516,7 @@
       case 'jersey': {
         put(edge(body, 1, 0), r2.base); put(edge(body, 0, 1).and(body), r2.base); collar(r2.base);
         bodyEach((x, y, u, v) => { if (v > 2 && (Math.floor(v * 1.05) % 2 === 0) && (x & 1)) P.px(x, y, rp.shade); });
-        const cs = Math.max(1, Math.round(GR.k * 0.8)), gw = 4 * cs, x0 = Math.round(X(c0(6) - 3)), yy = Math.round(Y(y0 + 5));
+        const cs = Math.max(1, Math.round(GR.k * 0.8)), gw = 4 * cs, x0 = Math.round(Kit.X(c0(6) - 3)), yy = Math.round(Kit.Y(y0 + 5));
         for (let pass = 0; pass < 2; pass++) ['2', '3'].forEach((ch, n) => { const g = DIG[ch]; for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (g[j][i] === '1') { const bx = x0 + n * gw + i * cs, by = yy + j * cs; if (pass === 0) P.rect(bx - 1, by - 1, cs + 2, cs + 2, rp.deep); else P.rect(bx, by, cs, cs, L.top.color2); } });
         D.hl(be(14) + 0.4, fe(14) - 0.4, y0 + 14.4, r2.base);
         break;
@@ -835,7 +835,7 @@
     const P = X.P, S = X.S, D = X.D0, y0 = S.hipY - 15, rp = ramp(a.color);
     const p = (t) => chainPath(S, t);
     switch (a.id) {
-      case 'chain': { for (let t = 0; t <= 1.001; t += 0.06) { const q = p(t); D.px(q[0], q[1], t * 14 % 2 < 1 ? rp.hi : rp.base); } const q = p(1); D.px(q[0], q[1] + 0.8, rp.hi); D.px(q[0], q[1] + 1.6, rp.light); D.px(q[0] - 0.4, q[1] + 2.4, rp.base); break; }
+      case 'chain': { for (let t = 0; t <= 1.001; t += 0.06) { const q = p(t); D.px(q[0], q[1], t * 14 % 2 < 1 ? rp.hi : rp.base); D.px(q[0] + 0.8, q[1], rp.shade); } const q = p(1); D.px(q[0], q[1] + 0.8, rp.hi); D.px(q[0], q[1] + 1.6, rp.light); D.px(q[0] - 0.4, q[1] + 2.4, rp.base); break; }
       case 'cubanchain': {
         const gold = ramp(mix(a.color, '#e8b923', 0.5)); let i = 0;
         for (let t = 0; t <= 1.001; t += 0.07) { const q = p(t), horiz = (i++ & 1) === 0, m = horiz ? ellM(q[0], q[1], 1.15, 0.8) : ellM(q[0], q[1], 0.8, 1.15); sh(P, m, gold, { cap: 2, hi: true }); if (i % 3 === 0) D.px(q[0] - 0.3, q[1] - 0.3, '#ffffff'); }
@@ -844,7 +844,7 @@
         break;
       }
       case 'dogtags': {
-        for (let t = 0; t <= 1.001; t += 0.05) { const q = p(t); D.px(q[0], q[1], t * 20 % 2 < 1 ? '#e6edf8' : '#8a96b0'); }
+        for (let t = 0; t <= 1.001; t += 0.05) { const q = p(t); D.px(q[0], q[1], t * 20 % 2 < 1 ? '#e6edf8' : '#8a96b0'); D.px(q[0] + 0.8, q[1], '#6a7690'); }
         const metal = ramp(a.color), q = p(1);
         for (const [dx, dy, ar] of [[-0.4, 1.8, 0], [0.6, 2.8, 0.2]]) { const t2 = rr(q[0] + dx, q[1] + dy + 1.6, 1.0, 2.2, 0.6); sh(P, t2, metal, { cap: 2, hi: true }); D.hl(q[0] + dx - 0.6, q[0] + dx + 0.6, q[1] + dy + 1.2, metal.deep, 1); }
         break;
@@ -899,10 +899,13 @@
         break;
       }
       case 'wings': {
-        const g = ramp(a.color), flap = S.pose === 'walkside' ? Math.sin(S.frame * 1.05) * 1.2 : 0, wm = M();
-        for (let i = 0; i < 6; i++) { const len = 15 - i * 1.6; wm.capsule(17.4, y0 + 4 + i * 1.1, 17.4 - Math.cos(0.55 + i * 0.3) * len, y0 + 4 + i * 1.1 - Math.sin(0.55 + i * 0.3 + 0.35) * len * 0.55 - 4 + i * 2 - flap, 1.5, 0.6); }
-        wm.or(polyM([[18, y0 + 2], [11, y0 - 7 - flap], [5.4, y0 - 4 - flap], [11.4, y0 + 6]])).clipY(0, 62);
-        sh(P, wm, g, { cap: 4, hi: true }); wm.each((x, y) => { if (hash(x, y) < 0.07) P.px(x, y, g.hi); });
+        const g = ramp(a.color), flap = S.pose === 'walkside' ? Math.sin(S.frame * 1.05) * 1.4 : 0, wm = M();
+        // a fan of feathers sweeping up and back from the shoulder blade
+        [[2.75, 15.5], [2.45, 15], [2.15, 13.4], [1.85, 11.4], [1.55, 9]].forEach(([ang, len], i) => { const bx = 17.6, by = y0 + 4.4 + i * 0.5; wm.capsule(bx, by, bx + Math.cos(ang) * len, by + Math.sin(ang) * len * -1 * -1 - flap * (i + 1) * 0.3, 1.9, 0.6); });
+        wm.or(polyM([[18.4, y0 + 2], [11, y0 - 5 - flap], [5.4, y0 - 2.5 - flap], [4.6, y0 + 2], [10, y0 + 9], [16.4, y0 + 8]])).clipY(0, 62);
+        sh(P, wm, g, { cap: 4, hi: true });
+        wm.each((x, y) => { if (hash(x, y) < 0.07) P.px(x, y, g.hi); });
+        D.line(17.4, y0 + 4.4, 7, y0 - 2 - flap, g.deep); D.line(17.4, y0 + 5.4, 6.2, y0 + 2 - flap, g.deep); D.line(17.4, y0 + 6.4, 6.4, y0 + 6 - flap, g.deep);
         edge(wm, 0, 1).each((x, y) => { if ((x + y) & 1) P.add(x, y + 1, a.color, 120); });
         wm.growD(1.4).each((x, y) => { if (!wm.get(x, y) && ((x + y) & 1) && P.alphaAt(x, y) < 10) P.px(x, y, a.color, 70); });
         break;
@@ -1011,8 +1014,10 @@
     SD.hairFrontS(X_); hatS(X_); glassesS(X_); earsS(X_);
     // 4. near arm over everything
     armS(X_, 'N'); heldS(X_);
-    P.outline((c) => o.outline(c));
-    return { pix: P, S };
+    // centre the torso on the sprite's mirror axis so a flipped (left-facing) sprite keeps the same feet position
+    const Q = new Pix(GR.W, GR.H); Q.blit(P, 1, 0);
+    Q.outline((c) => o.outline(c));
+    return { pix: Q, S };
   }
 
   Object.assign(BBH.CharsSide, { drawSide, HATP, TOPSPEC, BOTS, hatBuild });
