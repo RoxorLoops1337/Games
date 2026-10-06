@@ -47,6 +47,7 @@ const STATIC_PATHS = [
   'chase_hq',
   'messenger',
   'kingshot_endless',
+  'encore_island',
   'headliner',
   'horde_runner',
   'spijker_master',
