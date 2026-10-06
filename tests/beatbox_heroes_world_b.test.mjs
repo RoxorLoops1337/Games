@@ -5,8 +5,8 @@ const { World, Pix } = BBH;
 const get = (id, v) => World.builders[id](v);
 
 const SPECS = [
-  ['home', 'day', ['bed', 'desk', 'kitchen', 'wardrobe', 'door'], ['stand', 'bed', 'desk', 'kitchen', 'wardrobe', 'foxy']],
-  ['home', 'night', ['bed', 'desk', 'kitchen', 'wardrobe', 'door'], ['stand', 'bed', 'desk', 'kitchen', 'wardrobe', 'foxy']],
+  ['home', 'day', ['bed', 'desk', 'booth', 'kitchen', 'couch', 'wardrobe', 'door'], ['stand', 'bed', 'desk', 'booth', 'kitchen', 'couch', 'wardrobe', 'foxy']],
+  ['home', 'night', ['bed', 'desk', 'booth', 'kitchen', 'couch', 'wardrobe', 'door'], ['stand', 'bed', 'desk', 'booth', 'kitchen', 'couch', 'wardrobe', 'foxy']],
   ['shop', 'day', ['hats', 'racks', 'counter', 'mirror', 'door'], ['stand', 'clerk']],
   ['shop', 'night', ['hats', 'racks', 'counter', 'mirror', 'door'], ['stand', 'clerk']],
   ['studio', 'day', ['mic', 'mixer', 'door'], ['stand']],
@@ -17,6 +17,9 @@ const SPECS = [
   ['stage', 'lime', [], ['player', 'opponent', 'judge1', 'judge2', 'judge3']],
   ['stage', 'gold', [], ['player', 'opponent', 'judge1', 'judge2', 'judge3']],
   ['creator', null, [], ['hero']],
+  ['hoodmap', 'day', ['home', 'park', 'shop', 'studio', 'bar'], ['home', 'park', 'shop', 'studio', 'bar']],
+  ['hoodmap', 'dusk', ['home', 'park', 'shop', 'studio', 'bar'], ['home', 'park', 'shop', 'studio', 'bar']],
+  ['hoodmap', 'night', ['home', 'park', 'shop', 'studio', 'bar'], ['home', 'park', 'shop', 'studio', 'bar']],
 ];
 
 const hashes = {};
@@ -76,6 +79,25 @@ ok(get('home', 'day') === get('home', 'day'), 'scene cache returns the same obje
   ok(get('studio', 'day').layers[0].pix.hash() !== get('studio', 'night').layers[0].pix.hash(), 'studio day != night');
 }
 
+// home nav graph: nodes inside the scene, every spot is a node, edges valid, graph connected
+for (const v of ['day', 'night']) {
+  const s = get('home', v), nav = s.nav, name = 'home:' + v + ' nav';
+  ok(nav && nav.nodes && Array.isArray(nav.edges), name + ' exists');
+  for (const k of Object.keys(nav.nodes)) { const n = nav.nodes[k]; ok(n.x >= 0 && n.x < 360 && n.y >= 0 && n.y < 640, name + ' node inside ' + k); }
+  for (const k of Object.keys(s.spots)) { ok(!!nav.nodes[k], name + ' has node for spot ' + k); if (nav.nodes[k]) eq(nav.nodes[k], s.spots[k], name + ' node equals spot ' + k); }
+  for (const [a, b] of nav.edges) ok(nav.nodes[a] && nav.nodes[b] && a !== b, name + ' edge valid ' + a + '-' + b);
+  const adj = {}; for (const k in nav.nodes) adj[k] = [];
+  for (const [a, b] of nav.edges) { adj[a].push(b); adj[b].push(a); }
+  const seen = new Set(), st = [Object.keys(nav.nodes)[0]];
+  while (st.length) { const c = st.pop(); if (seen.has(c)) continue; seen.add(c); for (const n of adj[c]) st.push(n); }
+  eq(seen.size, Object.keys(nav.nodes).length, name + ' connected');
+  for (const [a, b] of nav.edges) ok(Math.hypot(nav.nodes[a].x - nav.nodes[b].x, nav.nodes[a].y - nav.nodes[b].y) < 260, name + ' edge not absurdly long');
+}
+// hoodmap variants differ
+{
+  const hs = ['day', 'dusk', 'night'].map((v) => get('hoodmap', v).layers[0].pix.hash());
+  eq(new Set(hs).size, 3, 'hoodmap variants differ');
+}
 // icons
 const ICONS = 'energy food mood cash fans level mus tech ori show lock check cross heart star note mic hat glasses shirt pants shoe sleep eat train busk battle shop home park bar studio gear sound mute back left right coin trophy clock sun moon dice shuffle camera palette wand'.split(' ');
 for (const n of ICONS) {
