@@ -965,7 +965,7 @@ KS.hurtEnemy(che, 300, true);
 const critFloat = KS.S.floats[KS.S.floats.length - 1];
 t.ok(critFloat && critFloat.crit === true, 'a critical hit is flagged on its damage float');
 t.ok(critFloat.big === true && critFloat.color === '#ff8a3c', 'crit combat text is bigger and orange');
-t.ok(KS.S.parts.length === partsBefore, 'hurtEnemy itself adds no crit sparks (those come from the arrow hit, deterministically)');
+t.ok(KS.S.parts.length - partsBefore <= 4, 'hurtEnemy adds at most a few hit sparks (drawn from the isolated visual RNG stream)');
 KS.draw(); // crit float + pop renders without throwing
 KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
 
