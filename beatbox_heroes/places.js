@@ -33,7 +33,7 @@
       this.hx = door.x + (door.w || 48) / 2; this.target = null; this.queue = null; this.dir = 1; this.cam = Math.max(0, Math.min(SW - E.W, this.hx - E.W / 2)); this.moving = false; this.steam = 0;
       this.weather = G.ch.day % 5 === 0 ? 'rain' : null; this.look = BBH.Chars.fix(G.ch.look);
       E.music('street'); this.build(); this.fromPlace = from;
-      if (a.tutorial) E.dialog([{ who: 'foxy', mood: 'happy', text: "you're doing the thing. the beatbox thing. good. it beats the email thing." }, { who: 'foxy', text: 'tap a door to walk there. the park is open all day. busk for cash and fans.' }, { who: 'foxy', text: "keep an eye on energy, hunger and mood up top. and don't forget rent on sunday. $" + Core.CFG.rent + '.' }]);
+      if (a.tutorial) E.dialog([{ who: 'foxy', mood: 'happy', text: 'Welcome to the neighbourhood! You just lost your job, so here is how we fix that.' }, { who: 'foxy', text: 'Tap a door to walk there. The PARK is open all day. Go busk: play beats for tip money and fans.' }, { who: 'foxy', text: 'Watch the bars at the top: energy, hunger and mood. And rent is $' + Core.CFG.rent + ' every Sunday, so earn some cash.' }], () => G.openHelp());
     },
     build() {
       E.clearUI(); E.add(E.makeHud(G));
@@ -88,30 +88,30 @@
         const dx = d.x + (d.w || 64) / 2 - this.cam; if (dx < -20 || dx > E.W + 20) continue; const ok = Core.canEnter(G.ch, d.id);
         if (!ok.ok) E.icon('lock').draw(c, dx - 8, (d.y || 330) - 20); else if (this.goalDoor() === d.id) { c.save(); c.translate(Math.round(dx), (d.y || 330) - 12 + Math.round(Math.sin(E.t / 200) * 4)); c.rotate(Math.PI / 2); E.icon('right').draw(c, -8, -8); c.restore(); }
       }
-      E.hero(c, this.look, this.moving ? 'walk' : 'idle', this.hx - this.cam, this.floorY, { flip: this.dir < 0, t: this.moving ? E.t : E.t * 0.6 });
+      E.hero(c, this.look, this.moving ? (BBH.Chars.POSES.walkside ? 'walkside' : 'walk') : 'idle', this.hx - this.cam, this.floorY, { flip: this.dir < 0, t: this.moving ? E.t : E.t * 0.6 });
       if (sc && sc.fg) sc.fg.draw(c, -Math.round(this.cam), 0);
       if (this.weather === 'rain' || n > 0.6) E.rain(c, E.t, { n: this.weather === 'rain' ? 80 : 14, color: 'rgba(170,200,255,.32)' });
       // night tint
       if (n > 0.02) { c.fillStyle = 'rgba(20,10,60,' + (n * 0.12) + ')'; c.fillRect(0, 0, E.W, E.H); }
     },
     goalDoor() {
-      const ch = G.ch, g = G.goal(ch).toLowerCase();
-      return /park/.test(g) ? 'park' : /kitchen|nap|sleep/.test(g) ? 'home' : /bar|open mic|battle|world cup|showcase/.test(g) ? 'bar' : /desk|train/.test(g) ? 'home' : null;
+      const g = G.goal(G.ch).toLowerCase();
+      return /\bpark\b/.test(g) ? 'park' : /\bbar\b/.test(g) ? 'bar' : /\bhome\b/.test(g) ? 'home' : null;
     },
   };
 
   /* ---------------------------------------------------------------- places */
-  const SPOT_FOR = { bed: 'bed', desk: 'desk', kitchen: 'kitchen', wardrobe: 'wardrobe', spot: 'busk', bench: 'bench', stage: 'stage', counter: 'rohzel', mic: 'stand', mixer: 'stand', hats: 'stand', racks: 'stand', mirror: 'stand', door: 'stand', gate: 'stand' };
+  const SPOT_FOR = { booth: 'booth', couch: 'couch', bed: 'bed', desk: 'desk', kitchen: 'kitchen', wardrobe: 'wardrobe', spot: 'busk', bench: 'bench', stage: 'stage', counter: 'rohzel', mic: 'stand', mixer: 'stand', hats: 'stand', racks: 'stand', mirror: 'stand', door: 'stand', gate: 'stand' };
 
   E.scenes.place = {
     enter(a) {
       this.id = a.id; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.walkQueue = null; this.dir = 1; this.moving = false;
       const go = () => {
         this.v = variantFor(this.id, G.ch); this.sc = world(this.id, this.v);
-        const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 180, y: 533 }; this.hx = st.x; this.hy = st.y; this.tx = st.x; this.ty = st.y;
+        const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 180, y: 533 }; this.hx = st.x; this.hy = st.y; this.path = [];
         E.music(this.id); this.build(); this.firstVisit();
       };
-      if (G.pendingMorning) { E.clearUI(); G.showMorning(() => { E.fadeTo(0, 400); go(); }); this.sc = world('home', 'day'); this.v = 'day'; this.hx = 180; this.hy = 533; this.tx = this.hx; this.ty = this.hy; } else go();
+      if (G.pendingMorning) { E.clearUI(); G.showMorning(() => { E.fadeTo(0, 400); go(); }); this.sc = world('home', 'day'); this.v = 'day'; this.hx = 180; this.hy = 533; this.path = []; } else go();
     },
     leave() { this.closeSheet(); },
     build() {
@@ -122,11 +122,11 @@
     leave2() { this.closeSheet(); if (this.id === 'home' && false) return; G.leavePlace(); },
     firstVisit() {
       const f = G.ch.flags, key = 'visited_' + this.id; if (f[key]) return; G.do({ t: 'flag', k: key });
-      const lines = { home: [{ who: 'foxy', text: 'welcome home, hero. bed is for sleeping, desk is for practising, kitchen is for not starving.' }],
-        park: [{ who: 'beeamgee', text: 'ah. the one with the chest-beats. i am beeamgee. sit. play. i will heckle gently.' }],
-        shop: [{ name: 'Clerk', look: CLERK, text: 'everything here was loved by someone else first. buy what makes you feel like a main character.' }],
-        studio: [{ name: 'Sound Lab', text: 'the booth is cheap and the foam is old. your tone will thank you.' }],
-        bar: [{ who: 'rohzel', text: "rohzel. i run the room. tuesday to thursday open mic, friday showcase, saturday battles. don't be boring." }] }[this.id];
+      const lines = { home: [{ who: 'foxy', text: 'This is our flat. Sleep in the bedroom, eat in the kitchen, and practise in the vocal booth to train your skills.' }],
+        park: [{ who: 'beeamgee', text: 'I am BeeAmGee. I teach beatboxing. Tap the busking spot to play a set for tips. Sit with me on the bench for a free lesson.' }],
+        shop: [{ name: 'Clerk', look: CLERK, text: 'Welcome to the Thrift Shop. Buy clothes, hats and shades with your cash. Tap an item to try it on first.' }],
+        studio: [{ name: 'Sound Lab', text: 'The Sound Lab costs $' + Core.STUDIO_FEE + ' per session, but you train faster here than at home. The jukebox plays the game music.' }],
+        bar: [{ who: 'rohzel', text: 'I am Rohzel and I run the bar. Tue to Thu: open mic. Friday: paid showcase. Saturday: battles. Sunday: karaoke. Monday: closed.' }] }[this.id];
       if (lines) E.dialog(lines);
     },
     // ------------------------------------------------------------ sheets
@@ -142,16 +142,36 @@
       if (type !== 'down' || y < k(62)) return;
       const hs = ((this.sc && this.sc.hotspots) || []).find((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
       if (hs) { this.walkTo(hs.id); return; }
-      const sc = this.sc && this.sc.spots; if (sc && y > k(300)) { this.tx = x; this.ty = Math.max((this.sc.floorY || y) - 53, Math.min(y, k(462))); this.walkQueue = null; }
+      const sc = this.sc && this.sc.spots; if (sc && y > k(300) && !(this.sc && this.sc.nav)) { this.path = [{ x, y: Math.max((this.sc.floorY || y) - 53, Math.min(y, k(462))) }]; this.walkQueue = null; }
     },
     walkTo(hid) {
-      this.closeSheet(); const sp = (this.sc.spots || {})[SPOT_FOR[hid] || 'stand'] || { x: 180, y: 533 }; this.tx = sp.x; this.ty = sp.y; this.walkQueue = hid;
+      this.closeSheet(); const spots = this.sc.spots || {}, name = SPOT_FOR[hid] || 'stand', sp = spots[name] || spots.stand || { x: 180, y: 533 };
+      this.path = this.route(sp, name); this.walkQueue = hid;
+    },
+    // walk along the scene's nav graph (rooms joined by doorways) when it has one, else straight
+    route(target, name) {
+      const nav = this.sc && this.sc.nav; if (!nav || !nav.nodes) return [{ x: target.x, y: target.y }];
+      const nodes = nav.nodes, near = (p) => { let b = null, bd = 1e9; for (const k of Object.keys(nodes)) { const d = Math.hypot(nodes[k].x - p.x, nodes[k].y - p.y); if (d < bd) { bd = d; b = k; } } return b; };
+      const from = near({ x: this.hx, y: this.hy }), to = nodes[name] ? name : near(target);
+      const adj = {}; for (const [a, b] of nav.edges || []) { (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); }
+      const prev = { [from]: null }, q = [from];
+      while (q.length) { const u = q.shift(); if (u === to) break; for (const v of adj[u] || []) if (!(v in prev)) { prev[v] = u; q.push(v); } }
+      const out = []; let u = to; if (!(to in prev)) return [{ x: target.x, y: target.y }];
+      while (u) { out.unshift({ x: nodes[u].x, y: nodes[u].y }); u = prev[u]; }
+      out.push({ x: target.x, y: target.y }); return out;
     },
     update(dt) {
-      const s = dt / 1000; this.moving = false;
-      const dx = this.tx - this.hx, dy = this.ty - this.hy, d = Math.hypot(dx, dy), step = 133 * s;
-      if (d > 1) { if (d <= step) { this.hx = this.tx; this.hy = this.ty; } else { this.hx += dx / d * step; this.hy += dy / d * step; } this.moving = true; if (Math.abs(dx) > 1) this.dir = Math.sign(dx); }
-      else if (this.walkQueue) { const q = this.walkQueue; this.walkQueue = null; this.activate(q); }
+      const s = dt / 1000; this.moving = false; this.vx = 0; this.vy = 0;
+      if (this.path && this.path.length) {
+        const p = this.path[0], dx = p.x - this.hx, dy = p.y - this.hy, d = Math.hypot(dx, dy), step = 133 * s;
+        if (d <= step) { this.hx = p.x; this.hy = p.y; this.path.shift(); }
+        else { this.hx += dx / d * step; this.hy += dy / d * step; this.moving = true; this.vx = dx; this.vy = dy; if (Math.abs(dx) > 1) this.dir = Math.sign(dx); }
+      } else if (this.walkQueue) { const q = this.walkQueue; this.walkQueue = null; this.activate(q); }
+    },
+    heroPose() {
+      if (!this.moving) return this.sheetEl && this.id === 'park' && this.sitting ? 'sit' : 'idle';
+      const side = BBH.Chars.POSES.walkside && Math.abs(this.vx) >= Math.abs(this.vy) * 0.7;
+      return side ? 'walkside' : 'walk';
     },
     draw(c) {
       const sc = this.sc; c.fillStyle = PAL.night1; c.fillRect(0, 0, E.W, E.H);
@@ -160,7 +180,7 @@
       if (sc) for (const l of sc.lights || []) { const fl = l.flicker ? 0.8 + 0.2 * Math.sin(E.t / 100 + l.x) : 1; E.drawGlow(c, l.x, l.y, l.r, l.color, (l.a === undefined ? 0.5 : l.a) * fl * (this.v === 'day' && (l.kind === 'window') ? 0.5 : 1)); }
       // NPCs
       for (const np of this.npcs()) E.hero(c, np.look, np.pose || 'idle', np.x, np.y, { flip: np.flip, t: E.t + np.x * 9 });
-      E.hero(c, this.look, this.moving ? 'walk' : (this.sheetEl && this.id === 'park' && this.sitting ? 'sit' : 'idle'), this.hx, this.hy, { flip: this.dir < 0, t: E.t });
+      E.hero(c, this.look, this.heroPose(), this.hx, this.hy, { flip: this.dir < 0, t: E.t });
       if (sc && sc.fg) sc.fg.draw(c, 0, 0);
       // tappable hotspot hints (soft pulse on the ones you can use)
       if (sc) for (const hs of sc.hotspots || []) { if (hs.id === 'door' || hs.id === 'gate') continue; const p = 0.5 + 0.5 * Math.sin(E.t / 380 + hs.x); const cx = hs.x + hs.w / 2, cy = hs.y - 2; E.icon('star').draw(c, Math.round(cx - 8), Math.round(cy - 16 - p * 3)); }
@@ -249,7 +269,19 @@
           }),
         ]);
       },
-      desk(S) { S.sheet('DESK: TRAIN', trainRows(S, 'home')); },
+      desk(S) {
+        const ch = G.ch;
+        S.sheet('DESK', [h('div.ts', null, G.goal(ch)),
+          S.row('SKILLS', Core.STATS.map((st) => Core.STAT_NAMES[st].slice(0, 4) + ' ' + Math.floor(ch.stats[st])).join('  '), '', () => { S.closeSheet(); G.openStats(); }),
+          S.row('HOW TO PLAY', 'Goals, rules and controls.', 'cyan', () => { S.closeSheet(); G.openHelp(); }),
+          S.row('QUICK PRACTICE', 'No mini-game: a small random skill gain.', ch.energy < 12 ? 'dis' : '', () => { S.closeSheet(); G.do({ t: 'train', stat: Core.STATS[Math.floor(Math.random() * 4)], q: 0.4, where: 'home' }); })]);
+      },
+      booth(S) { S.sheet('VOCAL BOOTH: TRAIN', trainRows(S, 'home')); },
+      couch(S) {
+        S.sheet('COUCH', [
+          S.row('REST  30 min', 'Mood +8. Put your feet up.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
+          S.row('TALK TO FOXY', 'Tips and advice.', '', () => { S.closeSheet(); E.dialog([{ who: 'foxy', text: tip('foxy') }]); })]);
+      },
       kitchen(S) { S.eatMenu(true); },
       wardrobe(S) { E.go('creator', { mode: 'wardrobe', back: { scene: 'place', args: { id: 'home' } } }); },
     },
@@ -258,8 +290,8 @@
         const lvl = G.ch.level;
         S.sheet('BUSKING SPOT', [
           h('div.ts', null, 'Play a set for the passers-by. Better timing means more tips and fans.'),
-          S.row('BUSK  60 min', 'Easy tempo. Cash and a few fans.', G.ch.energy < 14 ? 'dis' : 'gold', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.3 + Math.min(0.35, lvl * 0.02), style: 0, stage: 'cyan' }); }),
-          S.row('BUSK HARD  60 min', 'Faster, denser. Bigger rewards for a clean run.', G.ch.energy < 14 ? 'dis' : 'pink', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING+', sub: 'show them what you got', bpm: 108 + Math.min(14, lvl), bars: 8, difficulty: 0.55 + Math.min(0.3, lvl * 0.02), style: 1, stage: 'pink' }); }),
+          S.row('BUSK  60 min', 'The classic B t K t groove. Cash and a few fans.', G.ch.energy < 14 ? 'dis' : 'gold', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.2 + Math.min(0.12, lvl * 0.008), style: 0, stage: 'cyan' }); }),
+          S.row('BUSK HARD  60 min', 'Faster eighth-note grooves. Bigger rewards for a clean run.', G.ch.energy < 14 ? 'dis' : 'pink', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING+', sub: 'show them what you got', bpm: 108 + Math.min(14, lvl), bars: 8, difficulty: 0.55 + Math.min(0.3, lvl * 0.02), style: 1, stage: 'pink' }); }),
         ]);
       },
       bench(S) {
@@ -369,4 +401,60 @@
       E.hero(c, BBH.Chars.fix(this.shop.look), 'idle', 180, k(250), { scale: 2, t: E.t });
     }
   };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ------------------------------------------------------------------ hood map */
+// An overhead map of the neighbourhood (inspired by Beatbox Story): tap a place to see if it is open and travel there.
+(function (root) {
+  'use strict';
+  const BBH = root.BBH, E = BBH.E, Core = BBH.Core, PAL = BBH.PAL, G = BBH.G, h = E.h;
+  const NAMES = { home: 'HOME', park: 'PARK', shop: 'THRIFT SHOP', studio: 'SOUND LAB', bar: 'THE BAR' };
+  const INFO = { home: 'Sleep, eat, train in the vocal booth, change clothes.', park: 'Busk for tips and fans. Meet BeeAmGee.', shop: 'Buy clothes, hats and shades.', studio: 'Train faster for $' + Core.STUDIO_FEE + '. Jukebox.', bar: 'Open mic, showcase, battles, karaoke.' };
+  const vs = (ch) => { const n = Core.nightness(ch.minutes); return n < 0.25 ? ['day', null, 0] : n < 0.5 ? ['day', 'dusk', (n - 0.25) / 0.25] : n < 0.8 ? ['dusk', 'night', (n - 0.5) / 0.3] : ['night', null, 0]; };
+  E.scenes.map = {
+    enter() {
+      const [a, b, m] = vs(G.ch); this.a = a; this.b = b; this.mix = m; this.scA = this.load(a); this.scB = b ? this.load(b) : null; this.sel = null;
+      if (!this.scA) { E.go('street'); return; }
+      E.music('street'); this.build();
+    },
+    load(v) { try { return BBH.World.scene('hoodmap', v); } catch (e) { return null; } },
+    build() {
+      E.clearUI(); E.add(E.makeHud(G));
+      E.add(E.btn('BACK', '', () => G.resume(), { position: 'absolute', left: '4px', top: '43px', width: '44px', height: '17px', padding: '5px 0', fontSize: '5px' }));
+      E.add(h('div.tp', { style: { position: 'absolute', left: '52px', right: '4px', top: '43px', padding: '3px 4px', background: 'rgba(18,13,31,.82)', color: PAL.cream, fontSize: '5px', lineHeight: '7px', boxShadow: '0 0 0 1px var(--ink)' } }, 'TAP A PLACE TO TRAVEL'));
+      this.card = null;
+    },
+    showCard(id) {
+      this.sel = id; if (this.card) this.card.remove();
+      const ok = Core.canEnter(G.ch, id), here = G.ch.place === id;
+      this.card = h('div.panel.sheet.pop', { style: { padding: '8px', zIndex: 15 } },
+        h('div.row', { style: { justifyContent: 'space-between' } }, h('div.h2', null, NAMES[id]), h('div.tp', { style: { color: ok.ok ? '#7be08f' : '#ff7b8e' } }, ok.ok ? 'OPEN' : 'CLOSED')),
+        h('div.ts', { style: { margin: '4px 0 6px' } }, ok.ok ? INFO[id] : ok.reason),
+        E.btn(here ? 'ENTER' : 'GO THERE', ok.ok ? 'gold' : 'dis', () => { if (here && G.ch.place !== 'street') G.goPlace(id); else G.enterPlace(id); }));
+      E.add(this.card); E.sfx('click');
+    },
+    pointer(type, x, y) {
+      if (type !== 'down') return; const hs = ((this.scA && this.scA.hotspots) || []).find((q) => x >= q.x - 6 && x <= q.x + q.w + 6 && y >= q.y - 6 && y <= q.y + q.h + 6);
+      if (hs) this.showCard(hs.id);
+    },
+    draw(c) {
+      const draw1 = (sc, a) => { if (!sc) return; c.save(); c.globalAlpha = a; for (const l of sc.layers) l.pix.draw(c, 0, 0); c.restore(); };
+      draw1(this.scA, 1); if (this.scB) draw1(this.scB, this.mix);
+      const sc = this.scB && this.mix > 0.5 ? this.scB : this.scA, n = Core.nightness(G.ch.minutes);
+      for (const l of (sc && sc.lights) || []) { const on = l.kind === 'window' ? Math.max(0, (n - 0.3) * 1.5) : n; if (on > 0.02) E.drawGlow(c, l.x, l.y, l.r, l.color, (l.a === undefined ? 0.5 : l.a) * on * (l.flicker ? 0.8 + 0.2 * Math.sin(E.t / 90 + l.x) : 1)); }
+      // pins
+      for (const hs of (this.scA && this.scA.hotspots) || []) {
+        const sp = (this.scA.spots || {})[hs.id] || { x: hs.x + hs.w / 2, y: hs.y }, ok = Core.canEnter(G.ch, hs.id).ok, bob = Math.round(Math.sin(E.t / 260 + hs.x) * 3), sel = this.sel === hs.id;
+        c.save(); c.translate(sp.x, sp.y - 26 + bob); c.fillStyle = PAL.ink; c.fillRect(-14, -9, 28, 20); c.fillStyle = sel ? PAL.gold : ok ? '#7b4fe0' : '#5a3a4a'; c.fillRect(-13, -8, 26, 18); c.restore();
+        E.icon(hs.id).draw(c, sp.x - 8, sp.y - 26 + bob - 6); if (!ok) E.icon('lock').draw(c, sp.x + 4, sp.y - 26 + bob - 12);
+        E.txt(c, NAMES[hs.id], sp.x, sp.y - 8 + bob, { align: 'c', color: sel ? PAL.gold : PAL.cream });
+        if (G.ch.place === hs.id) E.txt(c, 'YOU ARE HERE', sp.x, sp.y + 4, { align: 'c', color: PAL.neonLime });
+      }
+      if (n > 0.6) E.rain(c, E.t, { n: 12, color: 'rgba(170,200,255,.2)' });
+    },
+  };
+  // a MAP button on the street and in every place (added after the scenes exist)
+  const sBuild = E.scenes.street.build, pBuild = E.scenes.place.build;
+  E.scenes.street.build = function () { sBuild.call(this); E.add(E.btn('MAP', 'cyan', () => E.go('map'), { position: 'absolute', right: '30px', top: '43px', width: '30px', height: '17px', padding: '5px 0', fontSize: '5px' })); const g = this.goalEl; if (g) g.style.right = '64px'; };
+  E.scenes.place.build = function () { pBuild.call(this); E.add(E.btn('MAP', 'cyan', () => { this.closeSheet(); E.go('map'); }, { position: 'absolute', left: '52px', top: '43px', width: '30px', height: '17px', padding: '5px 0', fontSize: '5px' })); };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -314,24 +314,35 @@
   const windows = (stats) => ({ perfect: 70 + Math.min(40, stats.mus * 0.5), good: 135 + Math.min(60, stats.mus * 0.7) });
   function judgeHit(deltaMs, win) { const d = Math.abs(deltaMs); return d <= win.perfect ? 'perfect' : d <= win.good ? 'good' : 'miss'; }
   const HIT_SCORE = { perfect: 100, good: 60, miss: 0 };
-  // Build a note chart. returns [{ beat, lane }] with beat in beats (0.5 granularity); deterministic per seed.
+  // Build a note chart out of STANDARD BEATBOX PATTERNS (B = kick, T = hat "t", K = snare "k", P = Pf).
+  // Easy charts are mostly the classic "B t K t" (bars of four quarter notes), with a "B B K t" or "B t K B" variation
+  // near the end. Medium and hard move to eighth-note grooves, and hard adds Pf and fills. Deterministic per seed.
+  const LANE = { B: 0, T: 1, K: 2, P: 3, '.': -1 };
+  const Q = (str) => str.split('').map((ch, i) => ({ beat: i, lane: LANE[ch] }));            // 4 quarter notes
+  const E8 = (str) => str.split('').map((ch, i) => ({ beat: i * 0.5, lane: LANE[ch] }));      // 8 eighth notes
+  const PAT = {
+    basic: Q('BTKT'),
+    easyEnd: [Q('BBKT'), Q('BTKB')],
+    mid: [E8('BTKTBBKT'), E8('B.KTBBK.'), E8('BTKTB.KT'), E8('BBKTBTKT'), E8('B.KTBKKT')],
+    midEnd: [E8('BTKTBBKT'), E8('BBKBBTKT')],
+    hard: [E8('BTKPBTKP'), E8('BBKTBKPT'), E8('BTKTBBKP'), E8('BPKTBPKT'), E8('BBKKBTKP'), E8('BTKBBTKT')],
+    hardFill: [E8('BBKKPPKK'), E8('BKBKPKPK'), E8('BTKPKPKP')],
+  };
   function makeChart(seed, o) {
     const r = BBH.rng(seed), notes = [], bars = o.bars || 8, diff = clamp(o.difficulty === undefined ? 0.5 : o.difficulty, 0, 1);
-    const pat = [[0, 2], [0, 1, 2, 1], [0, 1, 2, 3], [0, 3, 2, 3]];
-    let last = -1;
     for (let bar = 0; bar < bars; bar++) {
-      const base = pat[r.int(pat.length)];
-      for (let i = 0; i < 8; i++) {                                // eighth-note slots per 4/4 bar
-        const beat = bar * 4 + i * 0.5, strong = i % 2 === 0;
-        const p = strong ? 0.45 + diff * 0.5 : 0.08 + diff * 0.5;
-        if (bar === 0 && i < 2) continue;                          // breathing room at the start
-        if (r() < p) {
-          let lane = i === 0 ? 0 : i === 4 ? 2 : base[r.int(base.length)];
-          if (diff > 0.55 && r() < diff * 0.3) lane = r.int(4);
-          if (lane === last && r() < 0.5) lane = (lane + 1 + r.int(3)) % 4;
-          notes.push({ beat, lane }); last = lane;
-        }
+      const toEnd = bars - 1 - bar;                              // 0 = last bar
+      let pat;
+      if (diff < 0.35) {                                         // EASY: B t K t, variations near the end
+        pat = toEnd <= 1 && bars >= 4 && (toEnd === 0 || r() < 0.6) ? r.pick(PAT.easyEnd) : PAT.basic;
+      } else if (diff < 0.7) {                                   // MEDIUM: quarter notes and eighth grooves
+        pat = toEnd === 0 && bars >= 4 ? r.pick(PAT.midEnd) : r() < 0.7 - (diff - 0.35) ? PAT.basic : r.pick(PAT.mid);
+        if (bar === 0) pat = PAT.basic;
+      } else {                                                   // HARD: dense grooves, Pf, fills
+        pat = toEnd === 0 && bars >= 4 ? r.pick(PAT.hardFill) : r() < 0.25 ? r.pick(PAT.mid) : r.pick(PAT.hard);
+        if (bar === 0) pat = r.pick(PAT.mid);
       }
+      for (const n of pat) if (n.lane >= 0) notes.push({ beat: bar * 4 + n.beat, lane: n.lane });
     }
     return notes;
   }

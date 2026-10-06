@@ -313,16 +313,18 @@
           const d = Math.hypot(u * 0.85, (v - HY + 1.0 - 2) * 1.2), q = (d * 1.55) % 1;
           if (q < 0.26) return rp.deep; if (q > 0.74 && mid) return rp.light; break;
         }
+        case 'rowsP': { const per = Math.max(3, Math.round(2.3 * k)), q = (((y - sy) % per) + per) % per, s2 = Math.floor((x - sx) / 5); if (q === 0) return rp.deep; if (q === 1 && (s2 & 1)) return rp.light; if (q === 2 && !(s2 & 1) && mid) return rp.shade; break; }
+        case 'ringP': { const d = Math.hypot((u + CX - 20.5) * 0.9, (v - 12.5) * 1.2), q = (d * 1.55) % 1; if (q < 0.26) return rp.deep; if (q > 0.74 && mid) return rp.light; break; }
         case 'twist': { const q = (u * 0.9 + v * 1.5 + 60) % 2.0; if (q < 0.55) return rp.deep; if (q > 1.5) return rp.light; break; }
       }
       return null;
     };
     const tmp = new BBH.Pix(P.w, P.h);
-    shade(tmp, m, rp, { cap: op.big ? 5 : 4, hi: true, bias: op.bias || 0, tip, fn: fnBase });
+    shade(tmp, m, rp, { cap: op.big ? 5 : 4, hi: true, bias: op.bias || 0, tip, fn: fnBase, dir: op.dir });
     if ((op.tex === 'curl' || op.tex === 'twist') && op.bumps) {
       op.bumps.forEach((bp) => {
         const bm = bump(bp[0], bp[1], bp[2]).shift(dx, dy).and(m);
-        shade(tmp, bm, rp, { cap: 3, hi: true, tip, fn: op.tex === 'twist' ? (x, y, i) => fnBase(x, y, i) : undefined });
+        shade(tmp, bm, rp, { cap: 3, hi: true, tip, dir: op.dir, fn: op.tex === 'twist' ? (x, y, i) => fnBase(x, y, i) : undefined });
       });
     }
     if (op.plait) m.each((x, y) => { const v = lv(y), u = lu(x); const a = Math.floor(v / 1.5) & 1; const fr = ((u * 1.0) % 1 + 1) % 1; if ((a ? fr < 0.5 : fr >= 0.5)) tmp.px(x, y, rp.shade); });
@@ -870,6 +872,6 @@
     if (X._hat && X._hat.drawBack) X._hat.drawBack(X.P, hatCtx(X));
   }
 
-  Object.assign(BBH, { CharsHair: { hatInfo, back, front, hatShadow, hat, STY, HAT, R } });
+  Object.assign(BBH, { CharsHair: { hatInfo, back, front, hatShadow, hat, STY, HAT, R, paintOp, hash, TIE_COL } });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.CharsHair;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -107,17 +107,18 @@
 
   /* ----------------------------------------------------------------- intro */
   const INTRO = [
-    "tuesday, 5:12 pm. the email said 'restructuring'. you had a mug, a plant and forty dollars.",
-    "you walked home in the rain. you didn't feel like crying, so you tapped a beat on your chest instead.",
-    "foxy opened the door before you found your key. 'you're back early.' 'i'm back permanently.'",
-    "'rent is sunday,' foxy said. 'you have a mouth that makes drums. we can work with that.'",
-    "that night you made your first real beat. three seconds long. awful. you did it again.",
-    "next morning, an old man with a boombox watched you busk. 'again,' said beeamgee. 'but with your whole body this time.'",
+    "Tuesday, 5:12 pm. You work in an office. Today your boss says: 'You are fired.' You leave with a box, a plant and $40.",
+    "You walk home in the rain. You have one special skill: you are a beatboxer. You make drum sounds with your mouth.",
+    "You live with your roommate Foxy. Rent is $60 every Sunday. You are out of work, so you need money fast.",
+    "Foxy has an idea: 'Go busk in the park. Play beats for the people walking by. Tips pay rent, and every listener can become a fan.'",
+    "That night you practise your first beats. They are bad. But the better your timing, the more money and fans you earn.",
+    "The next day in the park, an old beatboxer called BeeAmGee watches you. He offers to coach you for free.",
+    "Your plan: busk in the park, play open mics at the bar, win beatbox battles, and enter the Beatbox Heroes World Cup.",
   ];
   scene('intro', {
     enter(a) {
       this.next = a.next; this.i = -1; this.plates = []; this.fadeIn = 0; this.finished = false;
-      for (let i = 1; i <= 6; i++) this.plates.push(safeScene('intro' + i));
+      for (let i = 1; i <= 6; i++) this.plates.push(safeScene('intro' + i)); this.plates.push(this.plates[5]);
       E.music('intro');
       this.box = h('div.panel', { style: { left: '8px', right: '8px', bottom: '14px', height: '120px', padding: '10px', zIndex: 10 } });
       this.txt = h('div.t', { style: { fontSize: '8px', lineHeight: '12px', height: '84px', overflow: 'hidden', color: PAL.cream } });
@@ -132,7 +133,7 @@
       if (this.finished) return;
       if (this.typing && this.shown < this.full.length) { this.shown = this.full.length; this.txt.textContent = this.full; clearInterval(this.timer); this.typing = false; return; }
       this.i++; if (this.i >= INTRO.length) { this.end(); return; }
-      E.sfx('click'); this.prev = this.i > 0 ? this.plates[this.i - 1] : null; this.fadeIn = 0;
+      E.sfx('click'); this.prev = this.i > 0 ? this.plates[this.i - 1] : null; this.fadeIn = this.plates[this.i] === this.prev ? 1 : 0;
       this.full = INTRO[this.i]; this.shown = 0; this.typing = true; clearInterval(this.timer);
       this.timer = setInterval(() => { this.shown++; this.txt.textContent = this.full.slice(0, this.shown); if (this.shown % 3 === 1) E.sfx('click', { quiet: true, pitch: 1.5 }); if (this.shown >= this.full.length) { clearInterval(this.timer); this.typing = false; } }, 28);
     },
@@ -150,7 +151,7 @@
     leave() { clearInterval(this.timer); },
     draw(c) {
       c.fillStyle = PAL.ink; c.fillRect(0, 0, E.W, E.H);
-      if (this.card) { this.cardT += E.dt; const lg = BBH.World.logo(); c.fillStyle = PAL.night0; c.fillRect(0, 0, E.W, E.H); E.drawGlow(c, CX, k(220), 170, PAL.neonViolet, 0.25); lg.draw(c, Math.round((E.W - lg.w) / 2), k(170)); E.txt(c, 'STREETS. STAGES. A WORLD CUP.', CX, k(170) + lg.h + 16, { align: 'c', color: PAL.cream }); return; }
+      if (this.card) { this.cardT += E.dt; const lg = BBH.World.logo(); c.fillStyle = PAL.night0; c.fillRect(0, 0, E.W, E.H); E.drawGlow(c, CX, k(220), 170, PAL.neonViolet, 0.25); lg.draw(c, Math.round((E.W - lg.w) / 2), k(170)); E.txt(c, 'BUSK. BATTLE. BECOME CHAMPION.', CX, k(170) + lg.h + 16, { align: 'c', color: PAL.cream }); return; }
       this.fadeIn = Math.min(1, this.fadeIn + E.dt / 900);
       const y = k(56), PH = 360, plate = this.plates[Math.max(0, this.i)], prev = this.prev;
       c.fillStyle = PAL.night0; c.fillRect(0, y - 8, E.W, PH + 16);
