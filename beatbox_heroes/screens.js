@@ -160,7 +160,7 @@
       // letterbox bars and rain
       c.fillStyle = PAL.ink; c.fillRect(0, y - 8, E.W, 8); c.fillRect(0, y + PH, E.W, 8);
       c.save(); c.beginPath(); c.rect(0, y, E.W, PH); c.clip(); c.translate(0, y); if (this.i === 1 || this.i === 0) E.rain(c, E.t, { n: 90, h: PH, color: 'rgba(170,200,255,.4)' }); c.restore();
-      E.txt(c, (Math.max(0, this.i) + 1) + '/' + INTRO.length, 12, k(24), { color: PAL.fog });
+      E.txt(c, (Math.max(0, this.i) + 1) + '/' + INTRO.length, 12, k(24), { color: PAL.fog }); E.vhs(c, E.t, { label: 'PLAY >' });
     },
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -6,6 +6,8 @@
 //     chars_hair.js   hair styles (back + front layers) and hats
 //     chars_gear.js   tops, bottoms, shoes, arms (skin + sleeves + hands)
 //     chars_acc.js    glasses and accessories (neck, ears, back, hand, wrist)
+//     chars_side.js   profile views (walkside, idleside, beatboxside): skeleton, body, head, hair
+//     chars_side2.js  profile clothes, hats, glasses, shoes, accessories + drawSide
 //     chars.js        this file: composition + API (must be last)
 // Each file guards its own dependencies with require() in node, so loading just chars.js also works there.
 (function (root) {
@@ -18,9 +20,11 @@
     if (!BBH.CharsHair) require('./chars_hair.js');
     if (!BBH.CharsGear) require('./chars_gear.js');
     if (!BBH.CharsAcc) require('./chars_acc.js');
+    if (!BBH.CharsSide) require('./chars_side.js');
+    if (!BBH.CharsSide || !BBH.CharsSide.drawSide) require('./chars_side2.js');
   }
   const { Pix, PAL, ramp, mix, C } = BBH;
-  const Kit = BBH.CharsKit, CAT = BBH.CATALOG, Hair = BBH.CharsHair, Gear = BBH.CharsGear, Acc = BBH.CharsAcc;
+  const Kit = BBH.CharsKit, CAT = BBH.CATALOG, Hair = BBH.CharsHair, Gear = BBH.CharsGear, Acc = BBH.CharsAcc, Side = BBH.CharsSide;
   const W = 58, H = 85;                     // sprite grid (design units are 44x64, rasterised natively)
   const PW = 96, PH = 140;                  // portrait grid: about 2.2x design, cropped to 72x72
   const GR = Kit.GR;
@@ -116,6 +120,7 @@
 
   function draw(L, pose, frame, o) {
     o = o || {};
+    if (Side.isSide(pose)) return Side.drawSide(L, pose, frame, Object.assign({ outline: (c) => outlineCol(c) }, o));
     const S = Kit.skeleton(L.body, pose, frame, { blink: o.blink, mood: o.mood });
     const B = Kit.bodyMasks(S), K = Kit.skinCols(L.skin);
     const P = new Pix(GR.W, GR.H);
@@ -178,6 +183,10 @@
 
   function anchors(look, pose, frame) {
     const L = fix(look), pn = Kit.POSES[pose] ? pose : 'idle';
+    if (Side.isSide(pn)) return onGrid(W, H, () => {
+      const S = Side.skelSide(L.body, pn, frame || 0, {}), oy = Kit.ny(S.dyB), hand = (sd) => ({ x: Math.round(Kit.X(S.arms[sd].ha[0])), y: Math.round(Kit.Y(S.arms[sd].ha[1])) });
+      return { mouth: { x: Math.round(Kit.X(29.6)), y: Math.round(Kit.Y(25.8)) + oy }, head: { x: Math.round(Kit.X(21)), y: Math.round(Kit.Y(19.2)) + oy }, top: { x: Math.round(Kit.X(20)), y: Math.round(Kit.Y(11)) + oy }, handL: hand('F'), handR: hand('N'), feet: { x: 29, y: H - 1 } };
+    });
     return onGrid(W, H, () => {
       const S = Kit.skeleton(L.body, pn, frame || 0, {}), f = Kit.faceCtx(S), ax = (W - 1) / 2 + f.ox;
       const hand = (side) => ({ x: Math.round(Kit.X(S.arms[side].ha[0])), y: Math.round(Kit.Y(S.arms[side].ha[1])) });

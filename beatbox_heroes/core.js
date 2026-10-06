@@ -56,6 +56,24 @@
   };
   const ROMANCE = ['luca', 'mira', 'sky', 'pascal', 'jin', 'roo'];
 
+  // Battle STYLES (VHS Story style orders): rock-paper-scissors. Pick a style each round; it reshapes your chart and the
+  // judges score the exchange: beating the opponent's style is worth +14%, losing to it -10%.
+  const STYLES = [
+    { id: 'boom', name: 'BOOM', lane: 0, desc: 'More heavy kicks' },
+    { id: 'hats', name: 'HATS', lane: 1, desc: 'More fast hats' },
+    { id: 'rim', name: 'RIM', lane: 3, desc: 'More Pf and rim hits' },
+    { id: 'snare', name: 'SNARE', lane: 2, desc: 'More sharp snares' },
+  ];
+  const STYLE_BEATS = { boom: 'hats', hats: 'rim', rim: 'snare', snare: 'boom' };      // key beats value
+  const styleMul = (mine, theirs) => (!mine || !theirs ? 1 : STYLE_BEATS[mine] === theirs ? 1.14 : STYLE_BEATS[theirs] === mine ? 0.9 : 1);
+  const opponentStyle = (opp, rng) => { const fav = opp.fav || STYLES.map((x) => x.id); return rng() < 0.7 ? fav[Math.floor(rng() * fav.length)] : STYLES[Math.floor(rng() * 4)].id; };
+  // bend a chart towards a style: about a third of the notes move to the style's lane
+  function styleChart(notes, style, seed) {
+    const st = STYLES.find((x) => x.id === style); if (!st) return notes;
+    const r = BBH.rng((seed || 1) + 91);
+    return notes.map((n, i) => (i % 3 === 1 || r() < 0.12 ? { beat: n.beat, lane: st.lane } : n));
+  }
+
   const JUDGES = [
     { id: 'tek', name: 'Tek', likes: 'tech', quip: 'Clean. Precise. Boring? Maybe not.' },
     { id: 'mel', name: 'Mel', likes: 'mus', quip: 'I felt the groove in my ribs.' },
@@ -66,19 +84,19 @@
 
   // The ladder. skill: how good their rounds are (0..1). bpm/style: what the groove is like.
   const OPPONENTS = [
-    { id: 'tick', name: 'Lil Tick', tier: 1, level: 1, skill: 0.50, bpm: 92, style: 0, traits: { tech: 0.4, mus: 0.3, ori: 0.2, show: 0.3 }, taunt: 'You call that a hi-hat? I have seen cats with more tss.', defeat: 'Okay okay. The cat can tss.', look: { name: 'Lil Tick', body: 'boy', skin: '#d2a06f', hair: { style: 'hightop', color: '#8dff4a' }, top: { id: 'jersey', color: '#ff6b35', color2: '#17141f' }, bottom: { id: 'camo', color: '#34303f' }, shoes: { id: 'fatlaces', color: '#f7f2e8' }, hat: { id: 'none' } } },
-    { id: 'moe', name: 'Mouthpiece Moe', tier: 2, level: 3, skill: 0.58, bpm: 98, style: 1, traits: { tech: 0.5, mus: 0.5, ori: 0.3, show: 0.5 }, taunt: 'Moe talks. Moe wins. Moe talks about winning.', defeat: 'Moe has no words. Write that down.', look: { name: 'Moe', body: 'boy', skin: '#6f3d2b', hair: { style: 'afro', color: '#1a1420' }, glasses: { id: 'oversized', color: '#17141f' }, top: { id: 'bomber', color: '#3a5fcd', color2: '#f7f2e8' }, bottom: { id: 'sweatpants', color: '#17141f' }, shoes: { id: 'retro', color: '#e63946' }, hat: { id: 'none' } } },
-    { id: 'kat', name: 'Kat Cadence', tier: 3, level: 5, skill: 0.65, bpm: 104, style: 2, traits: { tech: 0.6, mus: 0.7, ori: 0.5, show: 0.6 }, taunt: 'Nine lives, nine breaks. Pick one to lose to.', defeat: 'That was one life. I have eight.', look: { name: 'Kat', body: 'girl', skin: '#f0be9b', hair: { style: 'pigtails', color: '#ff3ea5' }, hat: { id: 'catears', color: '#17141f' }, top: { id: 'croptop', color: '#17141f' }, bottom: { id: 'skirt', color: '#7b4fe0' }, shoes: { id: 'platform', color: '#ff3ea5' } } },
-    { id: 'doc', name: 'Dr. Bassline', tier: 4, level: 8, skill: 0.72, bpm: 110, style: 3, traits: { tech: 0.9, mus: 0.6, ori: 0.5, show: 0.4 }, taunt: 'My prescription: sit down and listen to a real low end.', defeat: 'The patient is... better than expected.', look: { name: 'Doc', body: 'neutral', skin: '#e6bb8a', hair: { style: 'buzz', color: '#b9b9c8' }, glasses: { id: 'nerd', color: '#17141f' }, top: { id: 'hawaiian', color: '#2a9d8f' }, bottom: { id: 'slacks', color: '#6b6b80' }, shoes: { id: 'loafers', color: '#7a4a2a' }, acc: { neck: { id: 'hpneck', color: '#6b6b80' } } } },
-    { id: 'hexx', name: 'Hexx', tier: 5, level: 11, skill: 0.78, bpm: 116, style: 0, traits: { tech: 0.7, mus: 0.6, ori: 0.95, show: 0.7 }, taunt: 'I sank three crews before breakfast. Yours is next.', defeat: 'The sea takes me. For now.', look: { name: 'Hexx', body: 'girl', skin: '#a15f3d', hair: { style: 'long', color: '#9b5cff' }, hat: { id: 'pirate', color: '#17141f' }, top: { id: 'kimono', color: '#7d1f3f' }, bottom: { id: 'leggings', color: '#17141f' }, shoes: { id: 'combat', color: '#17141f' }, glasses: { id: 'eyepatch', color: '#17141f' } } },
-    { id: 'pigpen', name: 'Pig Pen', tier: 6, level: 14, skill: 0.84, bpm: 122, style: 1, traits: { tech: 0.85, mus: 0.8, ori: 0.6, show: 0.9 }, taunt: 'Rookie of the year? More like rookie of the minute.', defeat: 'Fine. You are real. Do not tell anyone I said that.', look: null },
-    { id: 'vox', name: 'Vox Prime', tier: 7, level: 17, skill: 0.90, bpm: 128, style: 2, traits: { tech: 0.95, mus: 0.9, ori: 0.8, show: 0.85 }, taunt: 'Last year I won with my mouth closed. Do the math.', defeat: 'Impossible. Do it again.', look: { name: 'Vox', body: 'boy', skin: '#33201a', hair: { style: 'fadewave', color: '#1a1420' }, glasses: { id: 'chromeshield', color: '#c9d3e6' }, top: { id: 'bomber', color: '#17141f', color2: '#d4a017' }, bottom: { id: 'techpants', color: '#17141f' }, shoes: { id: 'retro', color: '#d4a017' }, hat: { id: 'none' }, acc: { neck: { id: 'cubanchain', color: '#d4a017' }, ears: { id: 'iced', color: '#e8f4ff' } } } },
+    { id: 'tick', fav: ['hats', 'rim'], name: 'Lil Tick', tier: 1, level: 1, skill: 0.50, bpm: 92, style: 0, traits: { tech: 0.4, mus: 0.3, ori: 0.2, show: 0.3 }, taunt: 'You call that a hi-hat? I have seen cats with more tss.', defeat: 'Okay okay. The cat can tss.', look: { name: 'Lil Tick', body: 'boy', skin: '#d2a06f', hair: { style: 'hightop', color: '#8dff4a' }, top: { id: 'jersey', color: '#ff6b35', color2: '#17141f' }, bottom: { id: 'camo', color: '#34303f' }, shoes: { id: 'fatlaces', color: '#f7f2e8' }, hat: { id: 'none' } } },
+    { id: 'moe', fav: ['boom', 'snare'], name: 'Mouthpiece Moe', tier: 2, level: 3, skill: 0.58, bpm: 98, style: 1, traits: { tech: 0.5, mus: 0.5, ori: 0.3, show: 0.5 }, taunt: 'Moe talks. Moe wins. Moe talks about winning.', defeat: 'Moe has no words. Write that down.', look: { name: 'Moe', body: 'boy', skin: '#6f3d2b', hair: { style: 'afro', color: '#1a1420' }, glasses: { id: 'oversized', color: '#17141f' }, top: { id: 'bomber', color: '#3a5fcd', color2: '#f7f2e8' }, bottom: { id: 'sweatpants', color: '#17141f' }, shoes: { id: 'retro', color: '#e63946' }, hat: { id: 'none' } } },
+    { id: 'kat', fav: ['rim', 'hats'], name: 'Kat Cadence', tier: 3, level: 5, skill: 0.65, bpm: 104, style: 2, traits: { tech: 0.6, mus: 0.7, ori: 0.5, show: 0.6 }, taunt: 'Nine lives, nine breaks. Pick one to lose to.', defeat: 'That was one life. I have eight.', look: { name: 'Kat', body: 'girl', skin: '#f0be9b', hair: { style: 'pigtails', color: '#ff3ea5' }, hat: { id: 'catears', color: '#17141f' }, top: { id: 'croptop', color: '#17141f' }, bottom: { id: 'skirt', color: '#7b4fe0' }, shoes: { id: 'platform', color: '#ff3ea5' } } },
+    { id: 'doc', fav: ['snare', 'boom'], name: 'Dr. Bassline', tier: 4, level: 8, skill: 0.72, bpm: 110, style: 3, traits: { tech: 0.9, mus: 0.6, ori: 0.5, show: 0.4 }, taunt: 'My prescription: sit down and listen to a real low end.', defeat: 'The patient is... better than expected.', look: { name: 'Doc', body: 'neutral', skin: '#e6bb8a', hair: { style: 'buzz', color: '#b9b9c8' }, glasses: { id: 'nerd', color: '#17141f' }, top: { id: 'hawaiian', color: '#2a9d8f' }, bottom: { id: 'slacks', color: '#6b6b80' }, shoes: { id: 'loafers', color: '#7a4a2a' }, acc: { neck: { id: 'hpneck', color: '#6b6b80' } } } },
+    { id: 'hexx', fav: ['rim', 'snare'], name: 'Hexx', tier: 5, level: 11, skill: 0.78, bpm: 116, style: 0, traits: { tech: 0.7, mus: 0.6, ori: 0.95, show: 0.7 }, taunt: 'I sank three crews before breakfast. Yours is next.', defeat: 'The sea takes me. For now.', look: { name: 'Hexx', body: 'girl', skin: '#a15f3d', hair: { style: 'long', color: '#9b5cff' }, hat: { id: 'pirate', color: '#17141f' }, top: { id: 'kimono', color: '#7d1f3f' }, bottom: { id: 'leggings', color: '#17141f' }, shoes: { id: 'combat', color: '#17141f' }, glasses: { id: 'eyepatch', color: '#17141f' } } },
+    { id: 'pigpen', fav: ['boom', 'hats'], name: 'Pig Pen', tier: 6, level: 14, skill: 0.84, bpm: 122, style: 1, traits: { tech: 0.85, mus: 0.8, ori: 0.6, show: 0.9 }, taunt: 'Rookie of the year? More like rookie of the minute.', defeat: 'Fine. You are real. Do not tell anyone I said that.', look: null },
+    { id: 'vox', fav: ['hats', 'snare'], name: 'Vox Prime', tier: 7, level: 17, skill: 0.90, bpm: 128, style: 2, traits: { tech: 0.95, mus: 0.9, ori: 0.8, show: 0.85 }, taunt: 'Last year I won with my mouth closed. Do the math.', defeat: 'Impossible. Do it again.', look: { name: 'Vox', body: 'boy', skin: '#33201a', hair: { style: 'fadewave', color: '#1a1420' }, glasses: { id: 'chromeshield', color: '#c9d3e6' }, top: { id: 'bomber', color: '#17141f', color2: '#d4a017' }, bottom: { id: 'techpants', color: '#17141f' }, shoes: { id: 'retro', color: '#d4a017' }, hat: { id: 'none' }, acc: { neck: { id: 'cubanchain', color: '#d4a017' }, ears: { id: 'iced', color: '#e8f4ff' } } } },
   ];
   OPPONENTS[5].look = NPCS.pigpen.look;
   const FINALS = [   // the Beatbox Heroes World Cup: three rounds of the bracket, no cooldown between
-    { id: 'wc1', name: 'Hexx (Rematch)', tier: 5, skill: 0.84, bpm: 120, style: 0, traits: OPPONENTS[4].traits, look: OPPONENTS[4].look, taunt: 'The tide came back.' },
-    { id: 'wc2', name: 'Pig Pen (Finals)', tier: 6, skill: 0.89, bpm: 126, style: 1, traits: OPPONENTS[5].traits, look: OPPONENTS[5].look, taunt: 'One more time. For the trophy.' },
-    { id: 'wc3', name: 'Penny', tier: 8, skill: 0.94, bpm: 132, style: 3, traits: { tech: 1, mus: 1, ori: 0.9, show: 1 }, look: NPCS.penny.look, taunt: 'Welcome to the top. It is lonely and very loud.' },
+    { id: 'wc1', fav: ['rim', 'snare'], name: 'Hexx (Rematch)', tier: 5, skill: 0.84, bpm: 120, style: 0, traits: OPPONENTS[4].traits, look: OPPONENTS[4].look, taunt: 'The tide came back.' },
+    { id: 'wc2', fav: ['boom', 'hats'], name: 'Pig Pen (Finals)', tier: 6, skill: 0.89, bpm: 126, style: 1, traits: OPPONENTS[5].traits, look: OPPONENTS[5].look, taunt: 'One more time. For the trophy.' },
+    { id: 'wc3', fav: ['hats', 'boom', 'snare'], name: 'Penny', tier: 8, skill: 0.94, bpm: 132, style: 3, traits: { tech: 1, mus: 1, ori: 0.9, show: 1 }, look: NPCS.penny.look, taunt: 'Welcome to the top. It is lonely and very loud.' },
   ];
 
   const FOODS = [
@@ -369,16 +387,18 @@
     const bias = judge.likes ? (opp.traits[judge.likes] * 100 - 20) / 120 : (rng() - 0.5) * 0.3;
     return q * (1 + bias) + (rng() - 0.5) * 0.06;
   }
-  // rounds: [{ q: playerQuality 0..1 }]. Returns per-judge votes + totals.
-  function resolveBattle(ch, opp, rounds, rng) {
+  // rounds: [{ q: playerQuality 0..1, style?: 'boom'|... }]; oppStyles: the opponent's style for each round (picked if omitted)
+  function resolveBattle(ch, opp, rounds, rng, oppStyles) {
+    const oS = rounds.map((_, i) => (oppStyles && oppStyles[i]) || opponentStyle(opp, rng));
+    const mul = rounds.map((r, i) => styleMul(r.style, oS[i]));
     const oppRounds = rounds.map((_, i) => opponentRound(opp, i, rng));
     const votes = JUDGES.map((j) => {
       let p = 0, o = 0;
-      rounds.forEach((r, i) => { p += judgeScore(j, r.q, ch.stats, rng); o += oppJudgeScore(opp, j, oppRounds[i], rng); });
+      rounds.forEach((r, i) => { p += judgeScore(j, Math.min(1.2, r.q * mul[i]), ch.stats, rng); o += oppJudgeScore(opp, j, Math.min(1.2, oppRounds[i] * (mul[i] === 1.14 ? 0.95 : mul[i] === 0.9 ? 1.06 : 1)), rng); });
       return { judge: j.id, name: j.name, player: +p.toFixed(3), opp: +o.toFixed(3), forPlayer: p > o };
     });
     const forPlayer = votes.filter((v) => v.forPlayer).length;
-    return { votes, forPlayer, win: forPlayer >= 3, oppRounds };
+    return { votes, forPlayer, win: forPlayer >= 3, oppRounds, oppStyles: oS, mul };
   }
 
   /* ----------------------------------------------------------- rewards */
@@ -394,6 +414,12 @@
     }
   }
   const STUDIO_FEE = 15;
+  // Odd jobs (VHS Story style part-time work): safe money when busking is not paying yet.
+  const JOBS = [
+    { id: 'flyers', place: 'park', name: 'Hand out flyers', minutes: 90, energy: 14, cash: 14, fans: 2, text: 'You hand out flyers for a local gig. A few people ask who you are.' },
+    { id: 'shelves', place: 'shop', name: 'Stock shelves', minutes: 120, energy: 16, cash: 20, fans: 0, text: 'You sort donated clothes into racks. Boring, but the clerk pays cash.' },
+    { id: 'dishes', place: 'bar', name: 'Wash dishes', minutes: 120, energy: 18, cash: 24, fans: 1, text: 'Rohzel pays you cash to wash glasses. You hum beats the whole time.' },
+  ];
 
   /* ----------------------------------------------------------- mingling */
   const MINGLE = [
@@ -468,7 +494,7 @@
       }
       case 'battle': {                                             // a.opp (id or object), a.rounds [{q}], a.final
         const opp = typeof a.opp === 'string' ? OPPONENTS.find((o) => o.id === a.opp) : a.opp;
-        const out = resolveBattle(ch, opp, a.rounds, rng);
+        const out = resolveBattle(ch, opp, a.rounds, rng, a.oppStyles);
         const tier = opp.tier;
         if (!a.final) ch.lastBattleDay = ch.day;
         ch.n.perfects += a.perfects || 0; ch.n.bestCombo = Math.max(ch.n.bestCombo, a.bestCombo || 0);
@@ -516,6 +542,19 @@
         break;
       }
       case 'at': ch.place = a.to; break;
+      case 'job': {
+        const j = JOBS.find((x) => x.id === a.job); if (!j) break;
+        if (ch.energy < j.energy) { toast('Too tired for a shift.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash += j.cash; ch.fans += j.fans; ch.n.jobs = (ch.n.jobs || 0) + 1; ch.mood -= 2;
+        spend(ch, j.minutes, j.energy, fx, rng); fx.push({ t: 'sfx', name: 'coin' }); toast(j.text + ' +$' + j.cash, 'good');
+        break;
+      }
+      case 'tape': {                                               // watch a beatbox VHS tape on the couch
+        if (ch.flags.tapeDay === ch.day) { toast('You already watched a tape today.', 'warn'); break; }
+        ch.flags.tapeDay = ch.day; ch.mood += 8; bumpStat(ch, 'ori', 0.35); gainXp(ch, 6, fx);
+        spend(ch, 60, 2, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }); toast('You watch an old battle tape. Originality up.', 'good');
+        break;
+      }
       case 'flag': ch.flags[a.k] = a.v === undefined ? 1 : a.v; break;
       case 'rename': ch.name = a.name; ch.look.name = a.name; break;
       case 'wait': spend(ch, a.minutes || 30, 0, fx, rng); break;
@@ -590,7 +629,7 @@
 
   Object.assign(BBH, {
     Core: {
-      CFG, DAYS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
+      CFG, DAYS, STYLES, STYLE_BEATS, styleMul, opponentStyle, styleChart, JOBS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
       dow, dayName, clock, hourOf, phase, nightness, barProgramme, canEnter,
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
       windows, judgeHit, HIT_SCORE, makeChart, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,

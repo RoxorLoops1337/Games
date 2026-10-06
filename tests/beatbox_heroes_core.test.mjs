@@ -210,4 +210,27 @@ const rng = BBH.rng(7);
   for (const o of Core.OPPONENTS.concat(Core.FINALS)) chk(o.look, o.id);
   eq(Core.OPPONENTS.length, 7, 'seven opponents');
 }
+/* ---- VHS Story ideas: style orders, odd jobs, tapes */
+{
+  eq(Core.STYLES.length, 4, 'four battle styles');
+  ok(Core.STYLES.every((st) => Core.STYLE_BEATS[st.id] && Core.STYLES.some((x) => x.id === Core.STYLE_BEATS[st.id])), 'every style beats exactly one other');
+  ok(Core.styleMul('boom', 'hats') > 1 && Core.styleMul('hats', 'boom') < 1 && Core.styleMul('boom', 'rim') === 1 && Core.styleMul(undefined, 'boom') === 1, 'style multipliers follow rock paper scissors');
+  const ch = Core.newChar(); ch.stats = { mus: 40, tech: 40, ori: 40, show: 40 }; const opp = Core.OPPONENTS[2];
+  let w1 = 0, w2 = 0;
+  for (let i = 0; i < 300; i++) {
+    const counter = Core.STYLE_BEATS.hats;                                                                       // hats beats this style, so it loses
+    const good = Core.resolveBattle(ch, opp, [{ q: 0.6, style: 'boom' }, { q: 0.6, style: 'boom' }, { q: 0.6, style: 'boom' }], BBH.rng(i), ['hats', 'hats', 'hats']);
+    const bad = Core.resolveBattle(ch, opp, [{ q: 0.6, style: counter }, { q: 0.6, style: counter }, { q: 0.6, style: counter }], BBH.rng(i), ['hats', 'hats', 'hats']);
+    if (good.win) w1++; if (bad.win) w2++;
+  }
+  ok(w1 > w2, 'winning the style exchange wins more battles (' + w1 + ' vs ' + w2 + ')');
+  ok(Core.OPPONENTS.every((o) => Array.isArray(o.fav) && o.fav.length >= 2), 'every opponent has favourite styles');
+  const notes = Core.makeChart(5, { bars: 8, difficulty: 0.2 }), sc = Core.styleChart(notes, 'boom', 5);
+  ok(sc.length === notes.length && sc.filter((n) => n.lane === 0).length > notes.filter((n) => n.lane === 0).length, 'a boom chart has more kicks');
+  let c = Core.newChar(); c.minutes = 200;
+  let r = Core.apply(c, { t: 'job', job: 'flyers' }, rng); ok(r.char.cash === c.cash + 14 && r.char.minutes > c.minutes && r.char.energy < c.energy, 'a job pays cash and costs time and energy');
+  c.energy = 5; r = Core.apply(c, { t: 'job', job: 'dishes' }, rng); eq(r.char.cash, c.cash, 'too tired for a shift');
+  c = Core.newChar(); r = Core.apply(c, { t: 'tape' }, rng); ok(r.char.mood > c.mood && r.char.stats.ori > c.stats.ori, 'a VHS tape lifts mood and Originality');
+  r = Core.apply(r.char, { t: 'tape' }, rng); ok(r.fx.some((f) => f.t === 'toast'), 'only one tape a day');
+}
 done();

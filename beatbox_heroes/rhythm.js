@@ -44,7 +44,7 @@
       try { this.bg = BBH.World.scene('stage', stg); } catch (e) { this.bg = null; }
       this.fallMs = 1500 - Math.min(300, (a.bpm || 100) * 2); this.win = Core.windows(this.stats); this.offset = (E.settings.offset || 0) / 1000;
       this.padFlash = [0, 0, 0, 0]; this.pops = []; this.hype = 0; this.pressed = [false, false, false, false]; this.finished = false;
-      this.shakeBeat = 0; this.rings = []; this.reallyDone = false;
+      this.shakeBeat = 0; this.rings = []; this.reallyDone = false; this.score = 0; this.combo = 0; this.hits = []; this.notes = []; this.oppStyles = []; this.myStyle = null; this.oppStyleNow = null;
       E.music('battle', { fade: 0.5 }); try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }
       this.ui = h('div.nopt', { style: { position: 'absolute', inset: 0, zIndex: 5 } });
       this.ui.appendChild(E.btn('EXIT', '', () => this.confirmExit(), { position: 'absolute', left: '4px', top: '4px', width: '36px', padding: '3px 2px', fontSize: '5px' }));
@@ -57,9 +57,25 @@
     abort() { this.reallyDone = true; try { E.A().groove.stop(); } catch (e) { /* ignore */ } if (this.a.onAbort) this.a.onAbort(); },
 
     /* ---------------------------------------------------------- rounds */
-    startRound() {
-      const a = this.a, bars = this.battle ? 4 : (a.bars || 8);
-      this.chart = Core.makeChart((a.seed || Date.now() & 0xffff) + this.round * 977, { bars, difficulty: this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty) });
+    startRound() { if (this.battle) this.beginPick(); else this.beginRound(); },
+    // VHS Story style orders: before each battle round pick a fighting style (rock paper scissors)
+    beginPick() {
+      this.state = this.round === 0 ? 'vs' : 'pick'; this.stateT = 0; this.vsT = 0; this.oppStyleNow = Core.opponentStyle(this.opp, Math.random);
+      if (this.state === 'vs') { E.sfx('whoosh'); E.music('battle', { fade: 0.3 }); } else this.showPicker();
+    },
+    showPicker() {
+      this.state = 'pick'; if (this.pickEl) this.pickEl.remove();
+      const opp = this.opp, favs = (opp.fav || []).map((f) => f.toUpperCase()).join(' + ');
+      const btns = Core.STYLES.map((st) => { const b = E.btn('', '', () => this.chooseStyle(st.id), { textAlign: 'left', padding: '5px 6px 6px' }); b.appendChild(h('div.col', { style: { gap: '2px' } }, h('div', null, st.name + '  (beats ' + Core.STYLE_BEATS[st.id].toUpperCase() + ')'), h('div', { style: { fontFamily: "'Silkscreen'", fontSize: '8px', color: '#d9c9ff' } }, st.desc + ' in your chart'))); return b; });
+      this.pickEl = h('div.panel.sheet.pop', { style: { padding: '8px', zIndex: 30 } }, h('div.h2', null, 'ROUND ' + (this.round + 1) + ': CHOOSE A STYLE'),
+        h('div.ts', { style: { margin: '3px 0 5px' } }, opp.name + ' likes ' + favs + '. Beat their style for a bonus.'), h('div.col', null, btns), h('div.tp', { style: { marginTop: '5px', color: PAL.fog, fontSize: '5px' } }, 'BOOM > HATS > RIM > SNARE > BOOM'));
+      E.add(this.pickEl);
+    },
+    chooseStyle(id) { this.myStyle = id; if (this.pickEl) { this.pickEl.remove(); this.pickEl = null; } E.sfx('confirm'); this.beginRound(); },
+    beginRound() {
+      const a = this.a, bars = this.battle ? 4 : (a.bars || 8), seed = (a.seed || Date.now() & 0xffff) + this.round * 977;
+      this.chart = Core.makeChart(seed, { bars, difficulty: this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty) });
+      if (this.battle && this.myStyle) this.chart = Core.styleChart(this.chart, this.myStyle, seed);
       const bpm = this.battle ? this.opp.bpm : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm;
       this.hits = []; this.notes = this.chart.map((n) => ({ lane: n.lane, beat: n.beat + 4, state: 0 })); this.combo = 0; this.maxCombo = 0; this.state = 'count'; this.roundStart = E.t;
       this.endBeat = (bars * 4 + 4) + 2; this.score = 0; this.pops.length = 0; this.stateT = 0;
@@ -119,6 +135,8 @@
       if (this.banner) { this.banner.t += dt; if (this.banner.t > 2200) this.banner = null; }
       if (this.reallyDone) return;
       const st = this.state;
+      if (st === 'vs') { this.vsT += dt; if (this.vsT > 2800) this.showPicker(); return; }
+      if (st === 'pick') return;
       if (st === 'count' || st === 'play') {
         const T = this.songT();
         // count-in sfx on each beat before the chart starts
@@ -134,7 +152,7 @@
       const sum = Core.summarize(this.hits, this.chart.length, this.maxCombo); this.sum = sum;
       this.tot.perfects += sum.perfect; this.tot.bestCombo = Math.max(this.tot.bestCombo, sum.bestCombo); sum.perfectLane.forEach((v, i) => { this.tot.lane[i] += v; });
       try { E.A().groove.stop(); } catch (e) { /* ignore */ }
-      const q = sum.accuracy * 0.8 + Math.min(1, sum.bestCombo / Math.max(8, this.chart.length * 0.7)) * 0.2; this.roundQ.push({ q: Math.min(1, q) });
+      const q = sum.accuracy * 0.8 + Math.min(1, sum.bestCombo / Math.max(8, this.chart.length * 0.7)) * 0.2; this.roundQ.push({ q: Math.min(1, q), style: this.myStyle }); this.oppStyles.push(this.oppStyleNow);
       if (!this.battle) { this.state = 'result'; this.reallyDone = true; setTimeout(() => this.a.onDone && this.a.onDone(sum), 700); this.endFlash(sum); return; }
       this.startOpp();
     },
@@ -147,7 +165,7 @@
       const ch = Core.makeChart(4242 + this.round * 31 + this.opp.tier, { bars: 2, difficulty: 0.3 + this.opp.skill * 0.5 });
       this.oppNotes = ch.map((n) => ({ lane: n.lane, t: 1.2 + n.beat * (60 / this.opp.bpm), hit: Math.random() < q, done: false }));
       this.oppEnd = 1.2 + 8 * (60 / this.opp.bpm) + 1.0; this.oppMeter = 0;
-      this.oppT0 = this.now(); this.banner = { text: this.opp.name.toUpperCase(), t: 0, sub: 'answers back...' };
+      this.oppT0 = this.now(); const m = Core.styleMul(this.myStyle, this.oppStyleNow); this.banner = { text: this.opp.name.toUpperCase(), t: 0, sub: (this.myStyle || '').toUpperCase() + ' vs ' + (this.oppStyleNow || '').toUpperCase() + (m > 1 ? ': YOU WIN THE STYLE CLASH' : m < 1 ? ': THEY WIN THE STYLE CLASH' : ': EVEN') };
       try { E.A().groove.start({ bpm: this.opp.bpm, style: this.opp.style, bars: 5 }); } catch (e) { /* ignore */ }
     },
     updateOpp(dt) {
@@ -167,7 +185,7 @@
     /* ------------------------------------------------------- judging */
     startJudge() {
       this.state = 'judge'; this.stateT = 0; this.reveal = -1; this.tally = { you: 0, opp: 0 };
-      const a = this.a, action = { t: 'battle', opp: a.finalOpp || this.opp, rounds: this.roundQ, perfects: this.tot.perfects, bestCombo: this.tot.bestCombo, perfectLane: this.tot.lane, final: a.final || null };
+      const a = this.a, action = { t: 'battle', opp: a.finalOpp || this.opp, rounds: this.roundQ, oppStyles: this.oppStyles, perfects: this.tot.perfects, bestCombo: this.tot.bestCombo, perfectLane: this.tot.lane, final: a.final || null };
       this.held = G.doHold(action); this.verdict = this.held.fx.find((f) => f.t === 'battleResult'); this.votes = this.verdict.out.votes;
       this.banner = { text: 'THE JUDGES', t: 0, sub: 'five votes decide it' }; E.music('creator', { fade: 0.6 });
     },
@@ -250,6 +268,21 @@
       if (this.state === 'count') { const T = this.songT(), n = Math.max(0, 3 - Math.floor(T / this.spb)); if (T > 0 && n > 0 && this.state === 'count') E.txt(c, String(n), 135, 300, { align: 'c', color: PAL.neonCyan, scale: 4 }); if (this.round === 0 && this.a.tip !== false && !G.ch.flags.rhythmTip) E.txt(c, 'TAP THE LANE AS NOTES HIT THE LINE', 135, 300 + 40, { align: 'c', color: PAL.cream }); }
       if (this.endText) { this.endText.t += E.dt; E.txt(c, this.endText.text, 135, 250, { align: 'c', color: PAL.gold, scale: 3, a: Math.min(1, this.endText.t / 150) }); }
       if (this.state === 'judge') this.drawJudge(c);
+      if (this.battle && (this.state === 'play' || this.state === 'count') && this.myStyle) E.txt(c, 'STYLE: ' + this.myStyle.toUpperCase(), 46, 24, { color: PAL.gold });
+      if (this.state === 'vs') this.drawVs(real, c);
+    },
+    drawVs(real, c) {
+      const t = this.vsT, k = Math.min(1, t / 350), W2 = E.W, H2 = E.H;
+      real.save(); real.fillStyle = '#120d1f'; real.fillRect(0, 0, W2, H2);
+      real.fillStyle = '#7d1450'; real.beginPath(); real.moveTo(0, 0); real.lineTo(W2 * 0.62, 0); real.lineTo(W2 * 0.38, H2); real.lineTo(0, H2); real.closePath(); real.fill();
+      real.fillStyle = '#0e5266'; real.beginPath(); real.moveTo(W2 * 0.62, 0); real.lineTo(W2, 0); real.lineTo(W2, H2); real.lineTo(W2 * 0.38, H2); real.closePath(); real.fill(); real.restore();
+      const slide = (1 - k) * 260;
+      E.hero(real, this.look, 'battle', E.W * 0.28 - slide, E.H * 0.62, { scale: 3, t: E.t });
+      E.hero(real, this.oppLook || this.look, 'battle', E.W * 0.74 + slide, E.H * 0.62, { scale: 3, flip: true, t: E.t });
+      E.txt(real, G.ch.name.toUpperCase().slice(0, 12), E.W * 0.26, E.H * 0.7, { align: 'c', color: PAL.neonCyan, scale: 2 }); E.txt(real, this.opp.name.toUpperCase().slice(0, 14), E.W * 0.74, E.H * 0.7 + 22, { align: 'c', color: PAL.neonPink, scale: 2 });
+      const sc = 5 + (t < 500 ? Math.round((500 - t) / 120) : 0); E.txt(real, 'VS', E.W / 2, E.H * 0.1, { align: 'c', color: PAL.gold, scale: sc, shadow: PAL.ink });
+      E.txt(real, 'BEATBOX BATTLE  -  5 JUDGES  -  3 ROUNDS', E.W / 2, E.H * 0.86, { align: 'c', color: PAL.cream });
+      E.vhs(real, E.t, { label: 'PLAY >' });
     },
     drawJudge(c) {
       c.fillStyle = 'rgba(14,9,30,.78)'; c.fillRect(0, 210, 270, 270);

@@ -335,6 +335,21 @@
     if (o.a !== undefined && o.a < 1) c.restore();
     return sp;
   };
+
+  // VHS tape look (VHS Story homage): rolling tracking band, noise flecks, PLAY label and a counting timecode
+  E.vhs = function (c, t, o) {
+    if (c.L) c = c.real; o = o || {}; const hh = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+    c.save();
+    const by = ((t / 14) % (H + 90)) - 45; c.globalAlpha = 0.07; c.fillStyle = '#ffffff'; c.fillRect(0, by, W, 9); c.globalAlpha = 0.12; c.fillRect(0, by + 9, W, 1);
+    c.globalAlpha = 0.18; for (let i = 0; i < 26; i++) { const k = Math.floor(t / 70) * 31 + i; c.fillRect(Math.floor(hh(k) * W), Math.floor(hh(k + 7) * H), 2 + Math.floor(hh(k + 3) * 14), 1); }
+    c.globalAlpha = 1; if (hh(Math.floor(t / 90)) > 0.92) { c.globalAlpha = 0.16; c.fillStyle = '#ff2f4f'; c.fillRect(0, Math.floor(hh(Math.floor(t / 90) + 1) * H), W, 2); c.globalAlpha = 1; }
+    c.restore();
+    if (o.label !== false) {
+      E.txt(c, o.label || 'PLAY >', 12, 12, { color: '#ffffff', outline: '#120d1f' });
+      const sec = Math.floor(t / 1000) % 60, mm = Math.floor(t / 60000) % 60; E.txt(c, '00:' + String(mm).padStart(2, '0') + ':' + String(sec).padStart(2, '0'), W - 12, 12, { align: 'r', color: '#ffffff' });
+      if (Math.floor(t / 600) % 2) E.txt(c, 'SP', W - 12, H - 22, { align: 'r', color: '#ffffff' });
+    }
+  };
   E.beat = () => { try { return E.A().music.beat() || 0; } catch (e) { return 0; } };
 
   BBH.E = E; E.W = W; E.H = H;

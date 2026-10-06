@@ -323,8 +323,7 @@
   STYS.fade = (c) => { const top = ellM(22.2, 11.0, 8.8, 3.4).or(ellM(23.6, 12.2, 7, 2.6)).sub(M().poly(FACEWIN)); const sides = capP(c, 0).sub(top); return { back: [], front: [C_(sides, { buzz: true, fade: true }), C_(top, { tex: 'v', sheen: true })] }; };
   STYS.waves = (c) => { const m = capP(c, 2).or(M().poly([[12, 19], [10.4, 24], [12.4, 28.4], [17.6, 28.6], [18.4, 22.6]])); m.or(ellM(22.5, 21.6, 1.6, 3)); return { back: [], front: [C_(m, { tex: 'wave', sheen: true })] }; };
   STYS.curly = (c) => {
-    const m = capP(c, 1.5), bumps = [];
-    for (let i = 0; i <= 8; i++) { const a = -0.35 + (i / 8) * (Math.PI * 1.15); bumps.push([19.4 - Math.cos(a) * 9.8 * -1 * -1 * -1 * -1 + 0, 17.2 - Math.sin(a) * 9.6, 3.2]); }
+    const m = capP(c, 1.5);
     const pts = []; for (let i = 0; i <= 8; i++) { const a = (-0.25 + (i / 8) * 3.6); pts.push([19.8 + Math.cos(a) * 9.6, 17.4 - Math.sin(a) * 9.4, 3.2]); }
     const bm = M(); pts.forEach((b) => bm.or(bumpM(b[0], b[1], b[2]))); bm.sub(M().poly(FACEWIN)).clipY(0, 27);
     return { back: [], front: [C_(m.or(bm), { tex: 'curl', bumps: pts })] };

@@ -14,6 +14,7 @@
     beeamgee: ['Again. But with your whole body this time.', 'Musicality widens your timing. Showmanship fills the tip jar.', 'Originality wins judges over. Technique wins rounds. Both win battles.', 'I busked before you were born. Stay curious, kid.', 'Do not chase fans. Chase the feeling. The fans follow.'],
     rohzel: ['Open mics Tuesday to Thursday. Friday is the paid showcase. Saturday: battles.', 'Fifty fans and five open mics and I will book you for a Friday.', 'Karaoke Sunday is for fun. Even champions sing badly on Sundays.', 'The green juice is on the house if you win tonight.', 'Pig Pen? Do not engage. Beat him on stage instead.'],
   };
+  const jobRow = (S, id) => { const j = Core.JOBS.find((x) => x.id === id); return S.row(('ODD JOB: ' + j.name).toUpperCase() + '  ' + j.minutes + ' min', 'Safe pay: $' + j.cash + (j.fans ? ' and ' + j.fans + ' fans' : '') + '. Costs ' + j.energy + ' energy.', G.ch.energy < j.energy ? 'dis' : 'green', () => { S.closeSheet(); G.do({ t: 'job', job: id }); }); };
   const tip = (who) => { const arr = TIPS[who], k = 'tip_' + who, i = (G.ch.flags[k] || 0) % arr.length; G.do({ t: 'flag', k, v: i + 1 }); return arr[i]; };
 
   const variantFor = (id, ch) => {
@@ -280,6 +281,7 @@
       couch(S) {
         S.sheet('COUCH', [
           S.row('REST  30 min', 'Mood +8. Put your feet up.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
+          S.row('WATCH A BEATBOX TAPE  60 min', G.ch.flags.tapeDay === G.ch.day ? 'Already watched one today.' : 'An old VHS battle tape. Mood +8, Originality up. Once a day.', G.ch.flags.tapeDay === G.ch.day ? 'dis' : 'cyan', () => { S.closeSheet(); G.do({ t: 'tape' }); }),
           S.row('TALK TO FOXY', 'Tips and advice.', '', () => { S.closeSheet(); E.dialog([{ who: 'foxy', text: tip('foxy') }]); })]);
       },
       kitchen(S) { S.eatMenu(true); },
@@ -297,6 +299,7 @@
       bench(S) {
         S.sheet('BENCH', [
           S.row('REST  30 min', 'Mood +8. Watch the clouds.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
+          jobRow(S, 'flyers'),
           S.row('TALK TO BEEAMGEE', 'Advice from the old guard.', '', () => { S.closeSheet(); E.dialog([{ who: 'beeamgee', text: tip('beeamgee') }]); }),
           S.row('FREE LESSON', G.ch.flags.coachDay === G.ch.day ? 'Come back tomorrow.' : 'Pick a skill. Once a day. 45 min.', G.ch.flags.coachDay === G.ch.day ? 'dis' : 'cyan', () => {
             if (G.ch.flags.coachDay === G.ch.day) return;
@@ -305,7 +308,7 @@
         ]);
       },
     },
-    shop: { hats: (S) => G.openShop(S, 'hat'), racks: (S) => G.openShop(S, 'top'), mirror: (S) => G.openShop(S, 'glasses'), counter: (S) => { S.sheet('COUNTER', [S.row('BROWSE THE SHOP', 'Hats, shades, jackets and more.', 'gold', () => G.openShop(S, 'top')), S.row('CHAT', 'Ask the clerk about stock.', '', () => { S.closeSheet(); E.dialog([{ name: 'Clerk', look: CLERK, text: ['new stock appears as you level up. the gold stuff is not for sale. it is earned.', 'shades are twenty bucks. confidence is free.', 'we got a cape in the back. it is not for sale yet. you are not ready.'][Math.floor(Math.random() * 3)] }]); })]); } },
+    shop: { hats: (S) => G.openShop(S, 'hat'), racks: (S) => G.openShop(S, 'top'), mirror: (S) => G.openShop(S, 'glasses'), counter: (S) => { S.sheet('COUNTER', [jobRow(S, 'shelves'), S.row('BROWSE THE SHOP', 'Hats, shades, jackets and more.', 'gold', () => G.openShop(S, 'top')), S.row('CHAT', 'Ask the clerk about stock.', '', () => { S.closeSheet(); E.dialog([{ name: 'Clerk', look: CLERK, text: ['new stock appears as you level up. the gold stuff is not for sale. it is earned.', 'shades are twenty bucks. confidence is free.', 'we got a cape in the back. it is not for sale yet. you are not ready.'][Math.floor(Math.random() * 3)] }]); })]); } },
     studio: {
       mic(S) { S.sheet('SOUND LAB: TRAIN', trainRows(S, 'studio')); },
       mixer(S) {
@@ -333,7 +336,7 @@
         S.sheet('THE STAGE', rows, { maxH: '300px' });
       },
       counter(S) {
-        S.sheet('JUICE BAR', foodRows(S, false).concat([S.row('CHAT WITH ROHZEL', '', '', () => { S.closeSheet(); E.dialog([{ who: 'rohzel', text: tip('rohzel') }]); })]), { maxH: '300px' });
+        S.sheet('JUICE BAR', foodRows(S, false).concat([jobRow(S, 'dishes'), S.row('CHAT WITH ROHZEL', '', '', () => { S.closeSheet(); E.dialog([{ who: 'rohzel', text: tip('rohzel') }]); })]), { maxH: '300px' });
       },
     },
   };
