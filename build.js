@@ -78,6 +78,7 @@ const STATIC_PATHS = [
   'claw_crawl',
   'rogue_book',
   'hocus_vocus',
+  'beatbox_heroes',
   'pixel_colony',
   'tools',
 ];

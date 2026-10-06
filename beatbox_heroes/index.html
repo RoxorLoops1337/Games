@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#120d1f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Beatbox Heroes</title>
+<style>
+@font-face { font-family: 'Press Start 2P'; src: url('fonts/PressStart2P.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Silkscreen'; src: url('fonts/Silkscreen.ttf') format('truetype'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'Silkscreen'; src: url('fonts/Silkscreen-Bold.ttf') format('truetype'); font-weight: 700; font-display: block; }
+:root { --ink:#120d1f; --n0:#171027; --n1:#1f1536; --n2:#2c1d4d; --vio:#43296f; --vio2:#5b3a93; --dusk:#6a3b8f; --gold:#D4A017; --gold2:#ffd35c; --cream:#fff0c9;
+        --pink:#ff3ea5; --cyan:#2ee6ff; --lime:#9dff4a; --red:#ff2f4f; --amber:#ffbe55; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; overscroll-behavior: none; touch-action: none; }
+body { font-family: 'Silkscreen', 'Press Start 2P', monospace; color: var(--cream); user-select: none; -webkit-user-select: none; }
+#stage { position: absolute; left: 0; top: 0; width: 270px; height: 480px; transform-origin: 0 0; overflow: hidden; background: var(--ink); }
+#cv { position: absolute; left: 0; top: 0; width: 270px; height: 480px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -moz-crisp-edges; }
+#ui { position: absolute; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+#ui .nopt { pointer-events: none; }
+#ui .nopt > * { pointer-events: auto; }
+#fatal { position: absolute; inset: 0; display: none; background: #120d1f; color: #ff8a8a; padding: 20px; font: 10px monospace; white-space: pre-wrap; z-index: 99; pointer-events: auto; }
+
+/* ---- pixel UI kit (authored in the 270x480 logical space; #stage is scaled with transform) */
+.panel { background: var(--n1); color: var(--cream); padding: 6px; position: absolute;
+  box-shadow: 0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink), inset 0 0 0 1px #34235a; }
+.panel.flat { box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 1px #34235a; }
+.sheet { left: 0; right: 0; bottom: 0; border-radius: 0; box-shadow: 0 -1px 0 0 var(--ink), 0 -2px 0 0 var(--dusk), 0 -3px 0 0 var(--ink), inset 0 0 0 1px #34235a; }
+.h1 { font: 10px 'Press Start 2P'; color: var(--gold2); text-shadow: 1px 1px 0 var(--ink); letter-spacing: 0; line-height: 12px; }
+.h2 { font: 8px 'Press Start 2P'; color: var(--cyan); text-shadow: 1px 1px 0 var(--ink); line-height: 10px; }
+.t { font: 8px/10px 'Silkscreen', monospace; text-shadow: 1px 1px 0 var(--ink); }
+.ts { font: 8px/9px 'Silkscreen', monospace; color: #b9a8e0; text-shadow: 1px 1px 0 var(--ink); }
+.tp { font: 6px/8px 'Press Start 2P', monospace; text-shadow: 1px 1px 0 var(--ink); }
+.btn { font: 7px/9px 'Press Start 2P', monospace; color: var(--cream); background: var(--vio); padding: 5px 6px 6px; text-align: center; cursor: pointer; position: relative;
+  box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 var(--vio2), inset 0 -2px 0 #2c1d4d; text-shadow: 1px 1px 0 var(--ink); }
+.btn:active, .btn.on { transform: translateY(1px); box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 #2c1d4d, inset 0 -1px 0 var(--vio2); }
+.btn.gold { background: #b8860b; color: #fff7d6; box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 var(--gold2), inset 0 -2px 0 #7a5806; }
+.btn.pink { background: #c4247a; box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 #ff7bc4, inset 0 -2px 0 #7d1450; }
+.btn.cyan { background: #1a8aa6; box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 #7cf0ff, inset 0 -2px 0 #0e5266; color: #eaffff; }
+.btn.green { background: #2f8a4a; box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 #7be08f, inset 0 -2px 0 #1b5230; }
+.btn.red { background: #b3243c; box-shadow: 0 0 0 1px var(--ink), inset 0 2px 0 #ff7b8e, inset 0 -2px 0 #6e1424; }
+.btn.dis { filter: grayscale(.9) brightness(.7); cursor: default; }
+.btn.big { font-size: 9px; padding: 8px 8px 9px; }
+.row { display: flex; gap: 4px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 4px; }
+.grow { flex: 1; min-width: 0; }
+.tabs { display: flex; gap: 2px; }
+.tab { flex: 1; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--n2); cursor: pointer; position: relative;
+  box-shadow: 0 0 0 1px var(--ink), inset 0 1px 0 #4a3380; }
+.tab.on { background: var(--dusk); box-shadow: 0 0 0 1px var(--ink), inset 0 1px 0 #a070d8; }
+.tab canvas { image-rendering: pixelated; }
+.tile { position: relative; width: 32px; height: 32px; background: var(--n0); cursor: pointer; flex: none; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 1px #34235a; }
+.tile.on { background: #3a2a60; box-shadow: 0 0 0 1px var(--gold2), 0 0 0 2px var(--ink), inset 0 0 0 1px var(--gold); }
+.tile canvas { image-rendering: pixelated; }
+.tile.lock canvas { opacity: .35; filter: grayscale(1); }
+.tile .lk { position: absolute; right: 1px; bottom: 1px; }
+.tile .pr { position: absolute; left: 0; right: 0; bottom: -1px; font: 5px/6px 'Press Start 2P'; color: var(--gold2); text-align: center; text-shadow: 1px 1px 0 var(--ink); }
+.grid { display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; }
+.sw { width: 16px; height: 16px; cursor: pointer; flex: none; box-shadow: 0 0 0 1px var(--ink); position: relative; }
+.sw.on { box-shadow: 0 0 0 1px var(--ink), 0 0 0 2px var(--cream), 0 0 0 3px var(--ink); z-index: 2; }
+.sw.lock::after { content: ''; position: absolute; inset: 0; background: rgba(18,13,31,.6); }
+.scroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.scroll::-webkit-scrollbar { display: none; }
+.bar { height: 6px; background: var(--ink); position: relative; box-shadow: 0 0 0 1px #34235a; }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; display: block; }
+.chip { display: inline-flex; align-items: center; gap: 2px; font: 6px/8px 'Press Start 2P'; }
+input[type=text] { font: 8px 'Press Start 2P'; color: var(--cream); background: var(--n0); border: 0; outline: 0; padding: 4px; width: 100%;
+  box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 1px #4a3380; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; background: transparent; margin: 0; touch-action: none; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; background: var(--track, #34235a); box-shadow: 0 0 0 1px var(--ink); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 12px; margin-top: -3px; background: var(--cream); box-shadow: 0 0 0 1px var(--ink), inset 0 -2px 0 #b9a8e0; }
+input[type=range]::-moz-range-track { height: 6px; background: var(--track, #34235a); box-shadow: 0 0 0 1px var(--ink); }
+input[type=range]::-moz-range-thumb { width: 8px; height: 12px; border: 0; border-radius: 0; background: var(--cream); box-shadow: 0 0 0 1px var(--ink); }
+input[type=color] { -webkit-appearance: none; border: 0; padding: 0; width: 16px; height: 16px; background: none; cursor: pointer; box-shadow: 0 0 0 1px var(--ink); }
+input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } input[type=color]::-webkit-color-swatch { border: 0; }
+.toast { position: absolute; left: 12px; right: 12px; padding: 5px 6px; font: 8px/10px 'Silkscreen'; text-align: center; background: #2c1d4d; color: var(--cream);
+  box-shadow: 0 0 0 1px var(--ink), 0 0 0 2px var(--dusk), 0 0 0 3px var(--ink); animation: toastin .2s steps(4) both; pointer-events: none !important; text-shadow: 1px 1px 0 var(--ink); }
+.toast.good { background: #1f5a38; box-shadow: 0 0 0 1px var(--ink), 0 0 0 2px #5fe08a, 0 0 0 3px var(--ink); }
+.toast.warn { background: #6a2a30; box-shadow: 0 0 0 1px var(--ink), 0 0 0 2px #ff7b8e, 0 0 0 3px var(--ink); }
+@keyframes toastin { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes bob { 50% { transform: translateY(-2px); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.blink { animation: blink 1s steps(2) infinite; } .bob { animation: bob .8s steps(2) infinite; } .pop { animation: pop .35s steps(5) both; } .fadein { animation: fadein .4s steps(6) both; }
+.ctr { text-align: center; } .gold { color: var(--gold2); } .cyan { color: var(--cyan); } .pink { color: var(--pink); } .lime { color: var(--lime); } .red { color: #ff7b8e; } .dim { opacity: .55; }
+.full { position: absolute; inset: 0; }
+.vgap { height: 4px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="270" height="480"></canvas>
+  <div id="ui"></div>
+  <div id="fatal"></div>
+</div>
+<script src="pix.js"></script>
+<script src="font.js"></script>
+<script src="catalog.js"></script>
+<script src="chars_body.js"></script>
+<script src="chars_hair.js"></script>
+<script src="chars_gear.js"></script>
+<script src="chars.js"></script>
+<script src="world_a.js"></script>
+<script src="world_b.js"></script>
+<script src="audio.js"></script>
+<script src="core.js"></script>
+<script src="engine.js"></script>
+<script src="screens.js"></script>
+<script src="creator.js"></script>
+<script src="places.js"></script>
+<script src="rhythm.js"></script>
+<script src="dev.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
