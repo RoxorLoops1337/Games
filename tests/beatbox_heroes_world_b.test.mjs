@@ -26,27 +26,27 @@ for (const [id, v, hots, spots] of SPECS) {
   const s = get(id, v);
   const ms = Date.now() - t0;
   ok(ms < 1500, `${name} builds quickly (${ms}ms)`);
-  eq(s.w, 270, name + ' w'); eq(s.h, 480, name + ' h');
+  eq(s.w, 360, name + ' w'); eq(s.h, 640, name + ' h');
   eq(s.id, id, name + ' id'); eq(s.variant || null, v, name + ' variant');
   ok(s.layers && s.layers.length === 1 && s.layers[0].pix instanceof Pix && s.layers[0].speed === 1, name + ' single layer');
   const p = s.layers[0].pix;
-  eq(p.w, 270, name + ' pix w'); eq(p.h, 480, name + ' pix h');
-  ok(s.fg === null || (s.fg instanceof Pix && s.fg.w === 270 && s.fg.h === 480), name + ' fg shape');
-  between(s.floorY, 200, 470, name + ' floorY');
+  eq(p.w, 360, name + ' pix w'); eq(p.h, 640, name + ' pix h');
+  ok(s.fg === null || (s.fg instanceof Pix && s.fg.w === 360 && s.fg.h === 640), name + ' fg shape');
+  between(s.floorY, 260, 620, name + ' floorY');
   for (const h of hots) {
     const hs = s.hotspots.find((q) => q.id === h);
     ok(!!hs, name + ' hotspot ' + h);
-    if (hs) ok(hs.x >= 0 && hs.y >= 0 && hs.w > 4 && hs.h > 4 && hs.x + hs.w <= 270 && hs.y + hs.h <= 480 && typeof hs.label === 'string', name + ' hotspot rect ' + h);
+    if (hs) ok(hs.x >= 0 && hs.y >= 0 && hs.w > 4 && hs.h > 4 && hs.x + hs.w <= 360 && hs.y + hs.h <= 640 && typeof hs.label === 'string', name + ' hotspot rect ' + h);
   }
-  for (const h of s.hotspots) ok(h.x >= 0 && h.y >= 0 && h.x + h.w <= 270 && h.y + h.h <= 480, name + ' hotspot inside ' + h.id);
+  for (const h of s.hotspots) ok(h.x >= 0 && h.y >= 0 && h.x + h.w <= 360 && h.y + h.h <= 640, name + ' hotspot inside ' + h.id);
   for (const sp of spots) {
     const q = s.spots[sp];
     ok(!!q, name + ' spot ' + sp);
-    if (q) ok(q.x >= 0 && q.x < 270 && q.y > 100 && q.y < 480, name + ' spot in range ' + sp);
+    if (q) ok(q.x >= 0 && q.x < 360 && q.y > 130 && q.y < 640, name + ' spot in range ' + sp);
   }
   ok(Array.isArray(s.lights) && s.lights.length >= 1, name + ' lights');
-  for (const l of s.lights) ok(l.x >= 0 && l.x <= 270 && l.y >= 0 && l.y <= 480 && l.r > 0 && l.a > 0 && /^#/.test(l.color) && ['window', 'lamp', 'neon', 'screen', 'fire'].includes(l.kind), name + ' light ' + l.kind);
-  ok(p.countOpaque() / (270 * 480) >= 0.7, name + ' opaque ratio');
+  for (const l of s.lights) ok(l.x >= 0 && l.x <= 360 && l.y >= 0 && l.y <= 640 && l.r > 0 && l.a > 0 && /^#/.test(l.color) && ['window', 'lamp', 'neon', 'screen', 'fire'].includes(l.kind), name + ' light ' + l.kind);
+  ok(p.countOpaque() / (360 * 640) >= 0.7, name + ' opaque ratio');
   let black = 0; const d = p.data;
   for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 0) black++;
   eq(black, 0, name + ' no pure black pixels');
@@ -80,8 +80,8 @@ ok(get('home', 'day') === get('home', 'day'), 'scene cache returns the same obje
 const ICONS = 'energy food mood cash fans level mus tech ori show lock check cross heart star note mic hat glasses shirt pants shoe sleep eat train busk battle shop home park bar studio gear sound mute back left right coin trophy clock sun moon dice shuffle camera palette wand'.split(' ');
 for (const n of ICONS) {
   const ic = World.icon(n);
-  ok(ic instanceof Pix && ic.w === 12 && ic.h === 12, 'icon ' + n + ' is 12x12');
-  ok(ic.countOpaque() > 12, 'icon ' + n + ' has pixels (' + ic.countOpaque() + ')');
+  ok(ic instanceof Pix && ic.w === 16 && ic.h === 16, 'icon ' + n + ' is 16x16');
+  ok(ic.countOpaque() > 20, 'icon ' + n + ' has pixels (' + ic.countOpaque() + ')');
   ok(World.icon(n) === ic, 'icon ' + n + ' cached');
   let black = 0; for (let i = 0; i < ic.data.length; i += 4) if (ic.data[i + 3] > 0 && ic.data[i] + ic.data[i + 1] + ic.data[i + 2] === 0) black++;
   eq(black, 0, 'icon ' + n + ' has no pure black');
@@ -94,6 +94,6 @@ for (const n of ['note', 'note2', 'star', 'heart', 'spark', 'puff', 'drop']) { c
   const ring = World.fx('ring'); ok(Array.isArray(ring) && ring.length === 3 && ring.every((q) => q instanceof Pix), 'fx ring frames');
   ok(ring[0].w < ring[1].w && ring[1].w < ring[2].w, 'ring frames grow');
   const coin = World.fx('coin'); ok(Array.isArray(coin) && coin.length === 4 && coin.every((q) => q instanceof Pix && q.countOpaque() > 3), 'fx coin spin');
-  const conf = World.fx('confetti'); ok(Array.isArray(conf) && conf.length === 4 && conf.every((q) => q instanceof Pix && q.w === 2 && q.h === 3), 'fx confetti 2x3');
+  const conf = World.fx('confetti'); ok(Array.isArray(conf) && conf.length === 4 && conf.every((q) => q instanceof Pix && q.w === 3 && q.h === 4), 'fx confetti 3x4');
 }
 done();
