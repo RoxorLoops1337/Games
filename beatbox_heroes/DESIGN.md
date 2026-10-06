@@ -1,7 +1,7 @@
 # Beatbox Heroes: design and module contracts
 
 A portrait 16-bit neon-noir life-sim about a young beatboxer. Vanilla JS, no framework, no build step
-(the folder is copied to `dist/` as-is). Logical screen **270 x 480** (9:16), scaled by an integer factor
+(the folder is copied to `dist/` as-is). Logical screen **360 x 640** (9:16), scaled by an integer factor
 with `image-rendering: pixelated`. Everything is painted into software pixel buffers (`Pix`, see `pix.js`),
 so art runs identically in the browser and in node tests and can be written to PNG for review.
 

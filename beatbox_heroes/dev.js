@@ -48,7 +48,7 @@
     const g2 = grid(); SFX.forEach((s) => b(g2, s, () => E.sfx(s)));
     sec('VISUALS'); g = grid();
     b(g, 'FPS ' + (E.showFps ? 'ON' : 'OFF'), () => { E.showFps = !E.showFps; });
-    b(g, 'CAST GALLERY', () => { close(); G.castGallery(); }); b(g, 'PARTY BURST', () => { E.burst(135, 200, 60, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime], speed: 120, up: 80, life: 1200 }); E.flash('#fff', 200); E.shake(4, 300); });
+    b(g, 'CAST GALLERY', () => { close(); G.castGallery(); }); b(g, 'PARTY BURST', () => { E.burst(180, 267, 60, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime], speed: 120, up: 80, life: 1200 }); E.flash('#fff', 200); E.shake(4, 300); });
     b(g, 'TEST BANNER', () => { E.banner('achievement', 'Test Banner', 'Looks good?', E.icon('trophy')); }); b(g, 'TEST LEVELUP', () => { E.banner('levelup', 'Level 99', 'Wow.', E.icon('level')); });
     sec('SAVE'); g = grid();
     b(g, 'EXPORT TO CLIPBOARD', () => { const s = JSON.stringify(G.ch); try { navigator.clipboard.writeText(s); E.toast('Copied ' + s.length + ' bytes', 'good'); } catch (e) { E.toast('Clipboard blocked', 'warn'); } });

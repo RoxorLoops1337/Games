@@ -1,5 +1,5 @@
 // Writes PNG review images of every World A scene/variant.  Usage: node tools/beatbox_heroes/world_a_gallery.mjs /tmp/world_a_out [filter] [scale]
-// For each scene: <name>.png (composite, parallax scrolled to 0/270/540 side by side for street), <name>_dbg.png (hotspots, spots, lights).
+// For each scene: <name>.png (composite, parallax scrolled to 0/360/720 side by side for street), <name>_dbg.png (hotspots, spots, lights).
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ const out = process.argv[2] || '/tmp/world_a_out', filter = process.argv[3] || '
 fs.mkdirSync(out, { recursive: true });
 
 function compose(sc, cam) {
-  const view = new Pix(270, sc.h > 480 ? 480 : sc.h);
+  const view = new Pix(360, sc.h);
   for (const L of sc.layers) view.blit(L.pix, -Math.round(cam * L.speed), 0);
   return view;
 }
@@ -33,9 +33,9 @@ for (const [id, v] of list) {
   const name = id + (v ? '_' + v : '');
   if (filter && !name.includes(filter)) continue;
   const t0 = Date.now(); const sc = World.scene(id, v); const ms = Date.now() - t0;
-  if (sc.w > 270) {
-    const parts = [0, 270, 540].map((c) => { const v2 = compose(sc, c); if (sc.fg) v2.blit(sc.fg, -c, 0); return v2; });
-    const wide = new Pix(270 * 3 + 4, parts[0].h); wide.fill('#ff00ff'); parts.forEach((p, i) => wide.blit(p, i * 272, 0));
+  if (sc.w > 360) {
+    const parts = [0, 360, 720].map((c) => { const v2 = compose(sc, c); if (sc.fg) v2.blit(sc.fg, -c, 0); return v2; });
+    const wide = new Pix(360 * 3 + 4, parts[0].h); wide.fill('#ff00ff'); parts.forEach((p, i) => wide.blit(p, i * 362, 0));
     write(name, wide);
     // flat 810 view of the near layer over the mid layer (no parallax), for checking the door layout
     const flat = new Pix(sc.w, sc.h); for (const L of sc.layers) flat.blit(L.pix, L.speed === 1 ? 0 : 0, 0); if (sc.fg) flat.blit(sc.fg, 0, 0);

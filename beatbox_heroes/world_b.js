@@ -12,46 +12,88 @@
   const World = BBH.World || (BBH.World = {});
   World.builders = World.builders || {};
   World.cache = World.cache || {};
-  const W = 270, H = 480;
+  // Scenes are DESIGNED on a 270x480 grid (W,H) and PAINTED natively at 360x640 (x4/3): the Z wrapper maps design
+  // coordinates to native pixels (rect/ellipse/poly/line edges are re-rasterised at the finer grid, never resampled),
+  // and detail layers (grain, dithers, glows, text, outlines) are drawn directly in native pixels.
+  const W = 270, H = 480, K = 4 / 3, NW = 360, NH = 640;
+  const sc = (v) => Math.round(v * K);
+  const cxy = (v) => Math.round((v + 0.5) * K - 0.5);                // pixel index -> native pixel index
+  class Z {
+    constructor(lw, lh, pix) { this.lw = lw; this.lh = lh; this.n = pix || new Pix(sc(lw), sc(lh)); }
+    get w() { return this.lw; } get h() { return this.lh; }
+    px(x, y, c, a) { this.n.px(sc(x), sc(y), c, a); return this; }
+    add(x, y, c, a) { this.n.add(sc(x), sc(y), c, a); return this; }
+    rectc(x, y, w, h, c) { const x0 = sc(x), y0 = sc(y); this.n.rect(x0, y0, sc(x + w) - x0, sc(y + h) - y0, c); return this; }
+    cov(x, y, c, a) { const x0 = sc(x), y0 = sc(y), x1 = sc(x + 1), y1 = sc(y + 1); for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) this.n.px(i, j, c, a); return this; }
+    rect(x, y, w, h, c, rep) {
+      const x0 = sc(x), y0 = sc(y); let ww = sc(x + w) - x0, hh = sc(y + h) - y0;
+      if (Math.round(w) === 1) ww = 1; if (Math.round(h) === 1) hh = 1;
+      this.n.rect(x0, y0, ww, hh, c, rep); return this;
+    }
+    hline(x, y, w, c) { return this.rect(x, y, w, 1, c); }
+    vline(x, y, h, c) { return this.rect(x, y, 1, h, c); }
+    frame(x, y, w, h, c) { const x0 = sc(x), y0 = sc(y); this.n.frame(x0, y0, sc(x + w) - x0, sc(y + h) - y0, c); return this; }
+    line(x0, y0, x1, y1, c, t) { this.n.line(cxy(x0), cxy(y0), cxy(x1), cxy(y1), c, t > 1 ? Math.round(t * K) : 1); return this; }
+    ellipse(cx, cy, rx, ry, c) { this.n.ellipse((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, c); return this; }
+    shadedEllipse(cx, cy, rx, ry, rp2, lx, ly) { this.n.shadedEllipse((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, rp2, lx, ly); return this; }
+    ring(cx, cy, rx, ry, c) { this.n.ring((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, c); return this; }
+    poly(pts, c) { this.n.poly(pts.map((q) => [q[0] * K, q[1] * K]), c); return this; }
+    outline(f, d) { this.n.outline(f, d); return this; }
+    tint(c, k) { this.n.tint(c, k); return this; }
+    fill(c) { this.n.fill(c); return this; }
+  }
 
   /* ================================================================ painting helpers */
   const BAY = [0, 2, 3, 1];
   const bay = (x, y) => BAY[(x & 1) | ((y & 1) << 1)];
   const lerp = (a, b, t) => a + (b - a) * t;
   const rp = (c) => ramp(c);
+  const gr = (p) => p.n || p;                                          // native Pix behind a Z (or the Pix itself)
 
-  // quantised, dithered intensity 0..1 in 4 steps
+  // quantised, dithered intensity 0..1 in 4 steps (native pixel coordinates)
   function dq(v, x, y) {
     if (v <= 0) return 0; if (v >= 1) return 1;
     const s = v * 3, b = Math.floor(s);
     return (b + ((s - b) * 4 > bay(x, y) ? 1 : 0)) / 3;
   }
-  // checker/bayer dithered rectangle: level 0..4
+  // bayer dithered rectangle, level 0..4 (design coords)
   function dfill(p, x, y, w, h, c, lvl) {
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (bay(x + i, y + j) < lvl) p.px(x + i, y + j, c);
+    const n = gr(p), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) if (bay(i, j) < lvl) n.px(i, j, c);
   }
-  // additive radial glow (dithered falloff)
+  // sprinkled single-pixel speckle texture (native density): colours array, density 0..1
+  function grain(p, x, y, w, h, cols, dens, seed) {
+    const n = gr(p), r = rng((seed || 1) * 977 + sc(x) * 31 + sc(y)), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    const cnt = Math.floor((x1 - x0) * (y1 - y0) * dens);
+    for (let i = 0; i < cnt; i++) n.px(x0 + Math.floor(r() * (x1 - x0)), y0 + Math.floor(r() * (y1 - y0)), cols[Math.floor(r() * cols.length)]);
+  }
+  // short horizontal wood-grain / scratch streaks
+  function streaks(p, x, y, w, h, cols, count, maxLen, seed) {
+    const n = gr(p), r = rng((seed || 1) * 613 + sc(x) * 17 + sc(y)), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    for (let i = 0; i < count; i++) { const sx = x0 + Math.floor(r() * (x1 - x0)), sy = y0 + Math.floor(r() * (y1 - y0)), L = 2 + Math.floor(r() * maxLen); n.rect(sx, sy, Math.min(L, x1 - sx), 1, cols[Math.floor(r() * cols.length)]); }
+  }
+  // additive radial glow (dithered falloff), design coords
   function glow(p, cx, cy, r, color, a, ry) {
     a = a === undefined ? 1 : a; ry = ry || r;
-    const k = C(color);
-    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
-      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
-      const d = Math.hypot((x - cx) / r, (y - cy) / ry); if (d >= 1) continue;
+    const n = gr(p), k = C(color), X = cx * K, Y = cy * K, RX = r * K, RY = ry * K;
+    for (let y = Math.max(0, Math.floor(Y - RY)); y <= Math.min(n.h - 1, Math.ceil(Y + RY)); y++) for (let x = Math.max(0, Math.floor(X - RX)); x <= Math.min(n.w - 1, Math.ceil(X + RX)); x++) {
+      const d = Math.hypot((x - X) / RX, (y - Y) / RY); if (d >= 1) continue;
       const v = dq((1 - d) * (1 - d) * 1.15 * a, x, y);
-      if (v > 0) p.add(x, y, k, 255 * v * 0.55);
+      if (v > 0) n.add(x, y, k, 255 * v * 0.55);
     }
   }
-  // additive light cone from (x0,y0,w0) down/up to (x1,y1,w1)
+  // additive light cone from (x0,y0,w0) to (x1,y1,w1), design coords
   function beam(p, x0, y0, w0, x1, y1, w1, color, a) {
-    a = a === undefined ? 1 : a; const k = C(color);
+    a = a === undefined ? 1 : a; const n = gr(p), k = C(color);
+    x0 *= K; y0 *= K; w0 *= K; x1 *= K; y1 *= K; w1 *= K;
     const ya = Math.floor(Math.min(y0, y1)), yb = Math.ceil(Math.max(y0, y1));
-    for (let y = Math.max(0, ya); y <= Math.min(p.h - 1, yb); y++) {
+    for (let y = Math.max(0, ya); y <= Math.min(n.h - 1, yb); y++) {
       const t = (y - y0) / ((y1 - y0) || 1), cx = lerp(x0, x1, t), hw = lerp(w0, w1, t) / 2;
       for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
-        if (x < 0 || x >= p.w) continue;
+        if (x < 0 || x >= n.w) continue;
         const e = 1 - Math.abs(x - cx) / (hw + 0.5); if (e <= 0) continue;
         const v = dq(Math.sqrt(e) * (1 - t * 0.65) * a, x, y);
-        if (v > 0) p.add(x, y, k, 255 * v * 0.42);
+        if (v > 0) n.add(x, y, k, 255 * v * 0.42);
       }
     }
   }
@@ -66,70 +108,66 @@
     }
     return p;
   }
-  function shadowRect(p, x, y, w, h, c, a) { p.rect(x, y, w, h, c || '#120d1f', a === undefined ? 90 : a); }
-  // tinted additive rectangle patch (light spill)
-  function wash(p, x, y, w, h, c, a) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.add(x + i, y + j, c, a); }
-  // text drawn into a pix with optional shadow
-  function txt(p, s, x, y, col, o) { Font.draw(p, s, x, y, col, o); }
-  // neon sign painted straight into the scene: core, light core line, additive dithered halo
+  // additive horizontal/vertical strip (neon tube light), design coords
+  function addStrip(p, x, y, w, h, c, a) { const n = gr(p), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h); for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) n.add(i, j, c, a); }
+  // text is always drawn in native pixels (5x7 font): design coords for the origin
+  const TSP = (scale) => ((scale || 1) === 1 ? 2 : 4);
+  function txt(p, s, x, y, col, o) { o = o || {}; Font.draw(gr(p), s, sc(x), sc(y), col, Object.assign({ spacing: TSP(o.scale) }, o)); }
+  const tw = (s, scale) => Font.width(String(s), scale || 1, TSP(scale)) / K;       // text width in design units
+  // neon sign painted straight into the scene: core, light core line, additive dithered halo (native)
   function neon(p, s, cx, cy, color, scale, o) {
-    o = o || {}; scale = scale || 1; const w = Font.width(s, scale, 1), h = 7 * scale;
-    const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
-    const m = new Pix(w + 12, h + 12); Font.draw(m, s, 6, 6, '#fff', { scale });
-    // halo
+    o = o || {}; scale = scale || 1; const n = gr(p), sp = TSP(scale), w = Font.width(s, scale, sp), h = 7 * scale;
+    const x = Math.round(cx * K - w / 2), y = Math.round(cy * K - h / 2), P = 7;
+    const m = new Pix(w + P * 2, h + P * 2); Font.draw(m, s, P, P, '#fff', { scale, spacing: sp });
+    const R = rp(color), hal = o.halo === undefined ? 1 : o.halo;
     for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
       if (m.alphaAt(i, j) > 0) continue;
       let best = 9;
-      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { if (m.alphaAt(i + dx, j + dy) > 0) { const d = Math.max(Math.abs(dx), Math.abs(dy)); if (d < best) best = d; } }
-      if (best <= 4) { const v = dq((1 - (best - 1) / 4) * 0.8 * (o.halo === undefined ? 1 : o.halo), i, j); if (v > 0) p.add(x - 6 + i, y - 6 + j, color, 255 * v * 0.5); }
+      for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) { if (m.alphaAt(i + dx, j + dy) > 0) { const d = Math.max(Math.abs(dx), Math.abs(dy)); if (d < best) best = d; } }
+      if (best <= 5) { const v = dq((1 - (best - 1) / 5) * 0.8 * hal, i, j); if (v > 0) n.add(x - P + i, y - P + j, color, 255 * v * 0.5); }
     }
-    const R = rp(color);
     for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
       if (m.alphaAt(i, j) === 0) continue;
       const lit = m.alphaAt(i - 1, j) === 0 || m.alphaAt(i, j - 1) === 0;
-      p.px(x - 6 + i, y - 6 + j, scale > 1 ? (lit ? R.hi : R.light) : R.hi);
+      n.px(x - P + i, y - P + j, scale > 1 ? (lit ? R.hi : R.light) : R.hi);
     }
-    if (scale > 1) for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) if (m.alphaAt(i, j) && m.alphaAt(i - 1, j) && m.alphaAt(i + 1, j) && m.alphaAt(i, j - 1) && m.alphaAt(i, j + 1)) p.px(x - 6 + i, y - 6 + j, '#fffaf0');
+    if (scale > 1) for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) if (m.alphaAt(i, j) && m.alphaAt(i - 1, j) && m.alphaAt(i + 1, j) && m.alphaAt(i, j - 1) && m.alphaAt(i, j + 1)) n.px(x - P + i, y - P + j, '#fffaf0');
     return { x, y, w, h };
   }
-  // unlit tube sign (day): dull coloured letters
-  function tube(p, s, cx, cy, color, scale) {
-    const w = Font.width(s, scale || 1, 1), x = Math.round(cx - w / 2), y = Math.round(cy - 3.5 * (scale || 1));
-    Font.draw(p, s, x, y, mix(color, '#43296f', 0.45), { scale: scale || 1 });
-  }
   // final safety: nothing pure black
-  function noBlack(p) {
-    const d = p.data;
+  function noBlack(n) {
+    const d = n.data;
     for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; if (d[i] < 14) d[i] = 14; if (d[i + 1] < 10) d[i + 1] = 10; if (d[i + 2] < 24) d[i + 2] = 24; }
-    p._dirty = true; return p;
+    n._dirty = true; return n;
   }
-  // night / day grading of everything painted so far
-  function grade(p, c, k) { p.tint(c, k); }
-  // soft shadow blob under objects
-  function contact(p, cx, y, rx, a) { for (let i = -rx; i <= rx; i++) p.px(cx + i, y, '#120d1f', (a || 70) * (1 - Math.abs(i) / (rx + 1))); }
-  // a thin vertical gradient made of dithered bands between two colours
+  // a vertical gradient made of dithered bands between two colours
   function band(p, x, y, w, h, c1, c2, steps) {
     steps = steps || 5;
     for (let s = 0; s < steps; s++) {
       const y0 = y + Math.floor(h * s / steps), y1 = y + Math.floor(h * (s + 1) / steps);
-      p.rect(x, y0, w, y1 - y0, mix(c1, c2, s / (steps - 1)));
-      if (s < steps - 1) dfill(p, x, y1 - 1, w, 1, mix(c1, c2, (s + 1) / (steps - 1)), 2);
+      p.rectc(x, y0, w, y1 - y0, mix(c1, c2, s / (steps - 1)));
+      if (s < steps - 1) dfill(p, x, y1 - 1, w, 1.5, mix(c1, c2, (s + 1) / (steps - 1)), 2);
     }
   }
-  function cut(p, cx, cy, rx, ry) {   // erase an ellipse (alpha 0)
-    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-      const nx = (x - cx) / (rx + 0.5), ny = (y - cy) / (ry + 0.5);
-      if (nx * nx + ny * ny <= 1 && p.inb(x, y)) p.data[(y * p.w + x) * 4 + 3] = 0;
+  function cut(p, cx, cy, rx, ry) {   // erase an ellipse (alpha 0), design coords
+    const n = gr(p), X = (cx + 0.5) * K - 0.5, Y = (cy + 0.5) * K - 0.5, RX = (rx + 0.5) * K - 0.5, RY = (ry + 0.5) * K - 0.5;
+    for (let y = Math.floor(Y - RY); y <= Math.ceil(Y + RY); y++) for (let x = Math.floor(X - RX); x <= Math.ceil(X + RX); x++) {
+      const nx = (x - X) / (RX + 0.5), ny = (y - Y) / (RY + 0.5);
+      if (nx * nx + ny * ny <= 1 && n.inb(x, y)) n.data[(y * n.w + x) * 4 + 3] = 0;
     }
   }
-  function mk(w, h, fn) { const p = new Pix(w, h); fn(p); return p; }
+  function mk(w, h, fn) { const z = new Z(w, h); fn(z); return z.n; }
 
   function scene(id, variant, p, extra) {
-    noBlack(p);
-    return Object.assign({
-      id, variant: variant || null, w: W, h: H, layers: [{ pix: p, speed: 1 }], fg: null,
-      floorY: 440, spots: {}, hotspots: [], lights: [], anim: [],
-    }, extra);
+    const n = gr(p); noBlack(n);
+    const S = (v) => Math.round(v * K);
+    const e = Object.assign({ floorY: 440, spots: {}, hotspots: [], lights: [], anim: [] }, extra);
+    if (e.fg) { e.fg = gr(e.fg); }
+    const spots = {}; for (const k in e.spots) spots[k] = { x: S(e.spots[k].x), y: S(e.spots[k].y) };
+    const hotspots = e.hotspots.map((h) => { const x0 = S(h.x), y0 = S(h.y); return { id: h.id, label: h.label, x: x0, y: y0, w: Math.min(NW, S(h.x + h.w)) - x0, h: Math.min(NH, S(h.y + h.h)) - y0 }; });
+    const lights = e.lights.map((l) => Object.assign({}, l, { x: S(l.x), y: S(l.y), r: S(l.r) }));
+    const anim = e.anim.map((a) => { const o = Object.assign({}, a); for (const k of ['x', 'y', 'w', 'h']) if (o[k] !== undefined) o[k] = S(o[k]); return o; });
+    return { id, variant: variant || null, w: NW, h: NH, layers: [{ pix: n, speed: 1 }], fg: e.fg || null, floorY: S(e.floorY), spots, hotspots, lights, anim };
   }
   const _bcache = {};
   function reg(id, fn) {
@@ -163,8 +201,8 @@
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, w * 0.33, w * 0.33, R2.base);
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, w * 0.2, w * 0.2, bg.deep);
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, 1, 1, R2.hi);
-      txt(p, 'BEAT', x + Math.round((w - Font.width('BEAT')) / 2), y + h - 17, '#fffaf0');
-      txt(p, 'BOX', x + Math.round((w - Font.width('BOX')) / 2), y + h - 9, R2.hi);
+      txt(p, 'BEAT', x + Math.round((w - tw('BEAT')) / 2), y + h - 17, '#fffaf0');
+      txt(p, 'BOX', x + Math.round((w - tw('BOX')) / 2), y + h - 9, R2.hi);
     } else if (kind === 'bass') {
       p.rect(x + 2, y + 2, w - 4, 1, R2.base);
       txt(p, 'DROP', x + Math.round((w - 20) / 2), y + 5, '#fffaf0');
@@ -262,8 +300,8 @@
   /* ================================================================ icons */
   const ICON_NAMES = ['energy', 'food', 'mood', 'cash', 'fans', 'level', 'mus', 'tech', 'ori', 'show', 'lock', 'check', 'cross', 'heart', 'star', 'note', 'mic', 'hat', 'glasses', 'shirt', 'pants', 'shoe', 'sleep', 'eat', 'train', 'busk', 'battle', 'shop', 'home', 'park', 'bar', 'studio', 'gear', 'sound', 'mute', 'back', 'left', 'right', 'coin', 'trophy', 'clock', 'sun', 'moon', 'dice', 'shuffle', 'camera', 'palette', 'wand'];
   // bevel: 1px light on top/left silhouette edges, 1px shade on bottom/right, then a coloured outline
-  function fin(p, noOutline) {
-    const w = p.w, h = p.h, src = p.data.slice(), a = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src[(y * w + x) * 4 + 3]);
+  function fin(z, noOutline) {
+    const p = gr(z), w = p.w, h = p.h, src = p.data.slice(), a = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src[(y * w + x) * 4 + 3]);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (a(x, y) < 128) continue;
       const i = (y * w + x) * 4, c = [src[i], src[i + 1], src[i + 2]];
@@ -272,28 +310,28 @@
     }
     if (!noOutline) p.outline((c) => mix(darken(c, 0.45), '#2c1d4d', 0.5));
   }
-  const K = '#43296f', WH = '#fffaf0';
+  const KK = '#43296f', WH = '#fffaf0';
   const ICON_DRAW = {
     energy: (p) => { p.poly([[8, 1], [1.5, 7], [5, 7], [4, 11], [10.5, 4.5], [7, 4.5], [9.5, 1]], '#ffd23f'); fin(p); p.px(7, 2, WH); p.px(6, 3, '#fff0c9'); },
     food: (p) => { p.ellipse(4, 6.5, 2.6, 3.2, '#ff4f5e'); p.ellipse(7, 6.5, 2.6, 3.2, '#ff4f5e'); p.poly([[6, 4], [7, 1], [10, 1], [10, 3], [8, 4]], '#4fbf6f'); fin(p); p.px(6, 2, '#6f3d2b'); p.px(3, 5, WH); },
-    mood: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffd23f'); fin(p); p.px(4, 4, K); p.px(7, 4, K); p.px(4, 5, K); p.px(7, 5, K); p.px(3, 7, K); p.px(8, 7, K); p.rect(4, 8, 4, 1, K); p.px(2, 6, '#ff9a4a'); p.px(9, 6, '#ff9a4a'); },
-    cash: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffbe55'); fin(p); p.ellipse(5.5, 5.5, 3, 3, '#d4a017'); p.px(5, 2, '#8a5a1c'); p.px(6, 2, '#8a5a1c'); p.rect(5, 3, 3, 1, '#fff0c9'); p.px(4, 4, '#fff0c9'); p.rect(5, 5, 2, 1, '#fff0c9'); p.px(7, 6, '#fff0c9'); p.rect(4, 7, 3, 1, '#fff0c9'); p.px(5, 9, '#8a5a1c'); p.px(6, 9, '#8a5a1c'); },
-    fans: (p) => { p.ellipse(2.5, 6, 1.7, 1.7, '#a86bff'); p.ellipse(8.5, 6, 1.7, 1.7, '#a86bff'); p.ellipse(2.5, 9.5, 2, 1.2, '#a86bff'); p.ellipse(8.5, 9.5, 2, 1.2, '#a86bff'); p.ellipse(5.5, 4, 2.3, 2.3, '#ff6bb5'); p.ellipse(5.5, 8.5, 3.3, 2, '#ff6bb5'); fin(p); p.px(4, 3, WH); },
-    level: (p) => { p.poly([[5.5, 0.5], [10, 2.5], [10, 7], [5.5, 10.5], [1, 7], [1, 2.5]], '#2ee6ff'); fin(p, true); p.outline((c) => mix(darken(c, 0.5), '#2c1d4d', 0.5)); p.line(3, 6, 5, 4, WH); p.line(7, 6, 5, 4, WH); p.line(3, 8, 5, 6, '#e8fbff'); p.line(7, 8, 5, 6, '#e8fbff'); },
+    mood: (p) => { const n = gr(p); n.ellipse(7.5, 7.5, 6.6, 6.6, '#ffd23f'); fin(p); n.ellipse(6, 5, 3, 2, '#fff0a8'); n.rect(5, 5, 2, 3, KK); n.rect(10, 5, 2, 3, KK); n.px(5, 5, '#8a6aff'); n.px(10, 5, '#8a6aff'); n.px(4, 9, KK); n.px(11, 9, KK); n.rect(5, 10, 6, 1, KK); n.rect(6, 11, 4, 1, KK); n.px(3, 8, '#ff8a6b'); n.px(12, 8, '#ff8a6b'); n.px(3, 9, '#ff8a6b'); n.px(12, 9, '#ff8a6b'); },
+    cash: (p) => { const n = gr(p); n.ellipse(7.5, 7.5, 6.6, 6.6, '#ffbe55'); fin(p); n.ring(7.5, 7.5, 5, 5, '#d4a017'); n.ring(7.5, 7.5, 4, 4, '#e8a21c'); Font.draw(n, '$', 5, 4, '#7a4a14'); Font.draw(n, '$', 5, 3, '#fff0c9'); Font.draw(n, '$', 5, 4, '#8a5a1c'); n.px(3, 3, WH); n.px(4, 2, WH); },
+    fans: (p) => { const n = gr(p); for (const [x, y, c, r] of [[3.5, 5.5, '#a86bff', 2.2], [12, 5.5, '#a86bff', 2.2]]) { n.ellipse(x, y, r, r, c); n.ellipse(x, y + 5.5, 3, 2.4, c); } n.ellipse(7.8, 5, 2.9, 2.9, '#ff6bb5'); n.ellipse(7.8, 11.5, 4.6, 3.2, '#ff6bb5'); fin(p); n.px(6, 3, WH); n.px(7, 3, WH); n.px(6, 11, '#ffc0e0'); n.px(5, 12, '#ffc0e0'); n.rect(12, 1, 1, 3, '#ffe14d'); n.rect(11, 2, 3, 1, '#ffe14d'); },
+    level: (p) => { const n = gr(p); n.poly([[8, 0.5], [14, 3], [14, 9], [8, 15], [2, 9], [2, 3]], '#2ee6ff'); fin(p); n.line(5, 8, 8, 5, WH); n.line(8, 5, 11, 8, WH); n.line(5, 9, 8, 6, WH); n.line(8, 6, 11, 9, WH); n.line(5, 11, 8, 8, '#b8f6ff'); n.line(8, 8, 11, 11, '#b8f6ff'); n.px(4, 3, WH); n.px(3, 4, '#b8f6ff'); },
     mus: (p) => { p.ellipse(4, 8.5, 2.5, 2, '#2ee6ff'); p.rect(6, 1, 2, 8, '#2ee6ff'); p.poly([[8, 1], [11, 3], [11, 6], [8, 4]], '#2ee6ff'); fin(p); p.px(3, 8, WH); },
-    tech: (p) => { gearShape(p, '#9fb2d8', 5.5, 5.5, 4.5, 3.4, 8); fin(p); p.ellipse(5.5, 5.5, 1.5, 1.5, '#3a2a63'); p.px(5, 5, '#2ee6ff'); p.px(6, 5, '#2ee6ff'); },
+    tech: (p) => { const n = gr(p); n.rect(3, 3, 10, 10, '#8a87a8'); for (let i = 0; i < 4; i++) { n.rect(1, 4 + i * 2.5 | 0, 2, 1, '#c7bfd8'); n.rect(13, 4 + i * 2.5 | 0, 2, 1, '#c7bfd8'); n.rect(4 + i * 2.5 | 0, 1, 1, 2, '#c7bfd8'); n.rect(4 + i * 2.5 | 0, 13, 1, 2, '#c7bfd8'); } fin(p); n.rect(5, 5, 6, 6, '#2c2748'); n.rect(6, 6, 4, 4, '#2ee6ff'); n.px(6, 6, WH); n.px(7, 7, '#b8f6ff'); n.px(4, 4, '#c7bfd8'); n.px(3, 3, '#e8e4f6'); },
     ori: (p) => { p.ellipse(5.5, 4.5, 3.5, 3.5, '#ffe14d'); p.rect(4, 7, 4, 3, '#a7a3c4'); fin(p); p.hline(4, 8, 4, '#6a6788'); p.px(4, 3, WH); p.px(5, 4, '#ff9a4a'); p.px(6, 5, '#ff9a4a'); p.px(7, 4, '#ff9a4a'); },
     show: (p) => { p.poly([[1, 3], [3.5, 6], [5.5, 2], [7.5, 6], [10, 3], [9.5, 9.5], [1.5, 9.5]], '#ffd23f'); fin(p); p.px(2, 8, '#ff3ea5'); p.px(5, 8, '#2ee6ff'); p.px(8, 8, '#ff3ea5'); p.px(5, 3, WH); },
-    lock: (p) => { p.rect(2, 5, 8, 6, '#ffbe55'); p.rect(3, 1, 6, 5, '#a7a3c4'); p.rect(5, 3, 2, 4, '#6a6788'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.px(5, 7, K); p.px(6, 7, K); p.px(5, 8, K); p.px(6, 8, K); p.px(5, 9, K); },
+    lock: (p) => { p.rect(2, 5, 8, 6, '#ffbe55'); p.rect(3, 1, 6, 5, '#a7a3c4'); p.rect(5, 3, 2, 4, '#6a6788'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.px(5, 7, KK); p.px(6, 7, KK); p.px(5, 8, KK); p.px(6, 8, KK); p.px(5, 9, KK); },
     check: (p) => { p.line(2, 6, 4, 8, '#4fdf6f', 2); p.line(4, 8, 9, 2, '#4fdf6f', 2); fin(p); },
     cross: (p) => { p.line(2, 2, 9, 9, '#ff4f5e', 2); p.line(9, 2, 2, 9, '#ff4f5e', 2); fin(p); },
-    heart: (p) => { heartShape(p, '#ff4f6e', 5.5, 5.5, 4.6); fin(p); p.px(3, 3, WH); p.px(2, 4, '#ffd0dc'); },
+    heart: (p) => { const n = gr(p); n.ellipse(5, 5.5, 3.8, 3.8, '#ff4f6e'); n.ellipse(10.5, 5.5, 3.8, 3.8, '#ff4f6e'); n.poly([[1.2, 7], [14.3, 7], [7.8, 14.5]], '#ff4f6e'); fin(p); n.px(3, 3, WH); n.px(4, 3, WH); n.px(3, 4, '#ffd0dc'); n.px(2, 5, '#ffd0dc'); },
     star: (p) => { starShape(p, '#ffd23f', 5.5, 5.8, 5.2, 2.3); fin(p); p.px(5, 3, WH); },
     note: (p) => { p.ellipse(3, 8.5, 2, 1.6, '#ff3ea5'); p.ellipse(8, 7.5, 2, 1.6, '#ff3ea5'); p.rect(4, 2, 1, 7, '#ff3ea5'); p.rect(9, 1, 1, 7, '#ff3ea5'); p.rect(4, 1, 6, 2, '#ff3ea5'); fin(p); p.px(2, 8, WH); },
     mic: (p) => { p.ellipse(5.5, 3.5, 3, 3.2, '#c7bfd8'); p.rect(4, 6, 4, 1, '#8a87a8'); p.poly([[4, 7], [8, 7], [7, 11], [5, 11]], '#46405e'); fin(p); p.hline(3, 3, 5, '#6a6788'); p.px(4, 2, WH); p.px(7, 5, '#6a6788'); },
     hat: (p) => { p.ellipse(5, 5.5, 4, 3.5, '#3a5fcd'); p.rect(1, 7, 10, 2, '#3a5fcd'); p.rect(6, 8, 5, 2, '#2c4aa0'); fin(p); p.px(3, 3, '#9fc2ff'); p.px(5, 1, '#ff3ea5'); },
     glasses: (p) => { p.rect(1, 3, 4, 4, '#2c1d4d'); p.rect(7, 3, 4, 4, '#2c1d4d'); p.rect(5, 3, 2, 1, '#2c1d4d'); fin(p); p.px(2, 4, '#2ee6ff'); p.px(3, 5, '#7fb2ff'); p.px(8, 4, '#2ee6ff'); p.px(9, 5, '#7fb2ff'); },
-    shirt: (p) => { p.poly([[4, 1], [8, 1], [11, 3.5], [9.5, 6], [8, 5], [8, 10], [4, 10], [4, 5], [2.5, 6], [1, 3.5]], '#ff6b6b'); fin(p); p.px(5, 1, K); p.px(6, 2, K); p.px(7, 1, K); p.px(5, 6, WH); p.px(6, 6, WH); },
+    shirt: (p) => { p.poly([[4, 1], [8, 1], [11, 3.5], [9.5, 6], [8, 5], [8, 10], [4, 10], [4, 5], [2.5, 6], [1, 3.5]], '#ff6b6b'); fin(p); p.px(5, 1, KK); p.px(6, 2, KK); p.px(7, 1, KK); p.px(5, 6, WH); p.px(6, 6, WH); },
     pants: (p) => { p.poly([[2, 1], [10, 1], [10, 11], [7, 11], [6, 5], [5, 11], [2, 11]], '#3a5fcd'); fin(p); p.hline(2, 2, 8, '#2c4aa0'); p.px(5, 3, '#ffd23f'); p.px(4, 7, '#7fa2ff'); },
     shoe: (p) => { p.poly([[1, 3], [4, 3], [5, 5], [9, 6], [11, 8], [11, 10], [1, 10]], '#ff3ea5'); fin(p); p.hline(1, 9, 10, WH); p.px(5, 4, WH); p.px(4, 6, WH); p.px(2, 4, '#ffb0dd'); },
     sleep: (p) => { p.ellipse(4.5, 6.5, 3.8, 3.8, '#ffe14d'); cut(p, 6.5, 5.5, 3.2, 3.2); fin(p); p.rect(6, 1, 5, 1, '#a86bff'); p.px(10, 2, '#a86bff'); p.px(9, 3, '#a86bff'); p.px(8, 4, '#a86bff'); p.rect(7, 5, 4, 1, '#a86bff'); },
@@ -301,12 +339,12 @@
     train: (p) => { p.rect(0 + 1, 3, 2, 5, '#9fb2d8'); p.rect(3, 4, 1, 3, '#6a6788'); p.rect(4, 5, 4, 1, '#c7bfd8'); p.rect(8, 4, 1, 3, '#6a6788'); p.rect(9, 3, 2, 5, '#9fb2d8'); fin(p); p.px(1, 4, WH); p.px(9, 4, WH); },
     busk: (p) => { p.ellipse(3.5, 8.5, 2.8, 2.4, '#c9783c'); p.ellipse(5, 6.5, 2.2, 2, '#c9783c'); p.line(6, 5, 10, 1, '#6f3d2b', 2); fin(p); p.px(3, 8, '#43296f'); p.px(4, 8, '#43296f'); p.px(3, 7, '#ffbe55'); p.px(9, 0, '#ffe14d'); },
     battle: (p) => { p.line(2, 9, 8, 3, '#c7bfd8', 2); p.line(9, 9, 3, 3, '#c7bfd8', 2); p.ellipse(8.5, 2.5, 1.8, 1.8, '#ff3ea5'); p.ellipse(2.5, 2.5, 1.8, 1.8, '#2ee6ff'); fin(p); },
-    shop: (p) => { p.rect(2, 4, 8, 7, '#ffbe55'); p.rect(4, 1, 1, 3, '#a7a3c4'); p.rect(7, 1, 1, 3, '#a7a3c4'); p.hline(4, 1, 4, '#a7a3c4'); fin(p); p.px(5, 6, K); p.px(6, 6, K); p.px(5, 7, '#ff3ea5'); p.px(6, 7, '#ff3ea5'); p.px(3, 5, WH); },
+    shop: (p) => { p.rect(2, 4, 8, 7, '#ffbe55'); p.rect(4, 1, 1, 3, '#a7a3c4'); p.rect(7, 1, 1, 3, '#a7a3c4'); p.hline(4, 1, 4, '#a7a3c4'); fin(p); p.px(5, 6, KK); p.px(6, 6, KK); p.px(5, 7, '#ff3ea5'); p.px(6, 7, '#ff3ea5'); p.px(3, 5, WH); },
     home: (p) => { p.poly([[5.5, 0.5], [11, 5.5], [1, 5.5]], '#ff6b6b'); p.rect(2, 5, 8, 6, '#ffbe55'); fin(p); p.rect(5, 7, 2, 4, '#6a3b8f'); p.px(3, 6, '#7fb2ff'); p.px(8, 6, '#7fb2ff'); },
     park: (p) => { p.ellipse(5.5, 4, 4, 3.4, '#3f9b5a'); p.ellipse(4, 3.5, 2.5, 2, '#4fbf6f'); p.rect(5, 7, 2, 4, '#8a5a3c'); fin(p); p.px(3, 2, '#9ff0a0'); },
     bar: (p) => { p.poly([[1, 1], [11, 1], [6.5, 6], [6.5, 9], [4.5, 9], [4.5, 6]], '#ff3ea5'); p.rect(3, 10, 6, 1, '#ff3ea5'); fin(p); p.px(5, 2, WH); p.px(9, 0, '#9dff4a'); },
-    studio: (p) => { p.ring(5.5, 5.5, 4.5, 4.5, '#a7a3c4'); p.ring(5.5, 5.5, 3.5, 3.5, '#a7a3c4'); for (let y = 6; y < 12; y++) for (let x = 0; x < 12; x++) p.data[(y * 12 + x) * 4 + 3] = 0; p.rect(1, 6, 3, 5, '#2ee6ff'); p.rect(8, 6, 3, 5, '#2ee6ff'); fin(p); p.px(2, 7, WH); p.px(9, 7, WH); },
-    gear: (p) => { gearShape(p, '#c7bfd8', 5.5, 5.5, 5, 3.6, 8); fin(p); p.ellipse(5.5, 5.5, 1.4, 1.4, '#46405e'); },
+    studio: (p) => { p.ring(5.5, 5.5, 4.5, 4.5, '#a7a3c4'); p.ring(5.5, 5.5, 3.5, 3.5, '#a7a3c4'); { const n = gr(p); for (let y = 8; y < 16; y++) for (let x = 0; x < 16; x++) n.data[(y * 16 + x) * 4 + 3] = 0; } p.rect(1, 6, 3, 5, '#2ee6ff'); p.rect(8, 6, 3, 5, '#2ee6ff'); fin(p); p.px(2, 7, WH); p.px(9, 7, WH); },
+    gear: (p) => { const n = gr(p); n.ellipse(7.5, 7.5, 4.8, 4.8, '#c7bfd8'); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; n.rect(Math.round(7.5 + Math.cos(a) * 5.6 - 1), Math.round(7.5 + Math.sin(a) * 5.6 - 1), 3, 3, '#c7bfd8'); } fin(p); n.ellipse(7.5, 7.5, 2.2, 2.2, '#46405e'); n.px(6, 6, '#6a6788'); n.px(4, 4, WH); n.px(3, 6, '#e8e4f6'); },
     sound: (p) => { p.poly([[1, 4], [4, 4], [7, 1], [7, 10], [4, 7], [1, 7]], '#c7bfd8'); fin(p); p.px(9, 4, '#2ee6ff'); p.px(10, 3, '#2ee6ff'); p.px(10, 7, '#2ee6ff'); p.px(9, 6, '#2ee6ff'); p.vline(10, 4, 3, '#2ee6ff'); },
     mute: (p) => { p.poly([[0, 4], [3, 4], [6, 1], [6, 10], [3, 7], [0, 7]], '#8a87a8'); fin(p); p.line(8, 3, 11, 8, '#ff4f5e'); p.line(11, 3, 8, 8, '#ff4f5e'); },
     back: (p) => { p.poly([[1, 4.5], [4.5, 1], [4.5, 3.5], [8, 3.5], [10.5, 6], [10.5, 10], [8.5, 10], [8.5, 7], [7, 5.5], [4.5, 5.5], [4.5, 8]], '#fff0c9'); fin(p); },
@@ -314,11 +352,11 @@
     right: (p) => { p.poly([[2, 1], [2, 10], [8, 5.5]], '#fff0c9'); fin(p); },
     coin: (p) => { p.ellipse(5.5, 5.5, 4.5, 4.5, '#ffd23f'); fin(p); p.ring(5.5, 5.5, 3, 3, '#d4a017'); p.rect(5, 4, 2, 4, '#fff0c9'); p.px(5, 4, '#fff0c9'); },
     trophy: (p) => { p.poly([[2, 1], [9, 1], [8.5, 5], [7, 7], [4, 7], [2.5, 5]], '#ffd23f'); p.rect(0, 2, 2, 3, '#ffd23f'); p.rect(9, 2, 2, 3, '#ffd23f'); p.rect(5, 7, 1, 2, '#d4a017'); p.rect(3, 9, 5, 2, '#ffbe55'); fin(p); p.px(3, 2, WH); p.vline(3, 3, 2, '#fff0c9'); },
-    clock: (p) => { p.ellipse(5.5, 5.5, 4.6, 4.6, '#fff0c9'); fin(p); p.ring(5.5, 5.5, 4, 4, '#a86bff'); p.vline(5, 3, 3, K); p.hline(5, 5, 3, K); p.px(5, 1, '#a86bff'); },
+    clock: (p) => { p.ellipse(5.5, 5.5, 4.6, 4.6, '#fff0c9'); fin(p); p.ring(5.5, 5.5, 4, 4, '#a86bff'); p.vline(5, 3, 3, KK); p.hline(5, 5, 3, KK); p.px(5, 1, '#a86bff'); },
     sun: (p) => { p.ellipse(5.5, 5.5, 3, 3, '#ffd23f'); for (const [x, y] of [[5, 0], [5, 10], [0, 5], [10, 5], [1, 1], [9, 1], [1, 9], [9, 9]]) p.px(x + 0.4, y + 0.4, '#ffbe55'); p.px(6, 0, '#ffbe55'); p.px(6, 10, '#ffbe55'); p.px(0, 6, '#ffbe55'); p.px(10, 6, '#ffbe55'); p.px(4, 4, WH); p.px(3, 3, '#fff0c9'); fin(p, true); },
     moon: (p) => { p.ellipse(5, 5.5, 4.5, 4.8, '#ffe9a8'); cut(p, 7.5, 4.5, 3.8, 3.8); p.px(8, 8, '#ffe9a8'); fin(p); p.px(3, 5, '#fff'); p.px(9, 2, '#fff0c9'); },
     dice: (p) => { p.rect(1, 1, 10, 10, '#fffaf0'); fin(p); for (const [x, y] of [[3, 3], [8, 3], [5, 6], [3, 8], [8, 8]]) p.rect(x, y, 2, 2, '#ff3ea5'); },
-    shuffle: (p) => { p.line(1, 3, 3, 3, '#2ee6ff'); p.line(3, 3, 7, 8, '#2ee6ff', 2); p.line(1, 9, 3, 9, '#2ee6ff'); p.line(3, 9, 7, 4, '#2ee6ff', 2); p.poly([[7, 7], [11, 8.5], [7, 11]], '#2ee6ff'); p.poly([[7, 1], [11, 2.5], [7, 5]], '#2ee6ff'); fin(p); },
+    shuffle: (p) => { const n = gr(p); n.rect(1, 4, 9, 2, '#2ee6ff'); n.poly([[9, 1.5], [14.5, 5], [9, 8.5]], '#2ee6ff'); n.rect(6, 10, 9, 2, '#2ee6ff'); n.poly([[7, 7.5], [1.5, 11], [7, 14.5]], '#2ee6ff'); fin(p); n.px(2, 4, WH); n.px(7, 10, WH); },
     camera: (p) => { p.rect(1, 3, 10, 7, '#8a87a8'); p.rect(3, 1, 4, 2, '#8a87a8'); fin(p); p.ellipse(5.5, 6.5, 2.2, 2.2, '#2c1d4d'); p.ellipse(5.5, 6.5, 1, 1, '#2ee6ff'); p.px(9, 4, '#ff3ea5'); p.px(4, 5, WH); },
     palette: (p) => { p.ellipse(5.5, 5.5, 5, 4.2, '#d9a46e'); cut(p, 8, 7.5, 1.5, 1.2); fin(p); p.px(3, 4, '#ff3ea5'); p.px(5, 2, '#2ee6ff'); p.px(8, 3, '#ffe14d'); p.px(2, 6, '#9dff4a'); p.px(4, 8, '#a86bff'); },
     wand: (p) => { p.line(1, 10, 8, 3, '#6a3b8f', 2); p.px(8, 3, '#fff0c9'); starShape(p, '#ffe14d', 8.5, 2.8, 2.8, 1.2); fin(p); p.px(2, 7, '#ffe14d'); p.px(10, 7, '#ff3ea5'); p.px(4, 1, '#2ee6ff'); },
@@ -340,9 +378,9 @@
   World.icon = function (name) {
     if (_icons[name]) return _icons[name];
     const fn = ICON_DRAW[name];
-    const pxs = new Pix(12, 12);
+    const pxs = new Z(12, 12);
     if (fn) fn(pxs); else { pxs.rect(2, 2, 8, 8, '#ff3ea5'); fin(pxs); }
-    return (_icons[name] = pxs);
+    return (_icons[name] = pxs.n);
   };
   World.iconNames = ICON_NAMES;
 
@@ -377,16 +415,19 @@
       for (let k = 0; k < 3; k++) { const gx = x + Math.floor(rr() * w), gy = y + j + 1 + Math.floor(rr() * (plankH - 2)); p.hline(gx, gy, 3 + Math.floor(rr() * 6), R.light); }
     }
     p.rect(x, y, w, 2, R.deep);
+    streaks(p, x, y, w, h, [R.light, R.shade], Math.floor(w * h / 40), 9, 21); grain(p, x, y, w, h, [R.hi, R.deep], 0.006, 22);
+    for (let j = 0; j < h; j += plankH) for (let k = 0; k < 2; k++) { const nx = x + Math.floor(rr() * w); p.px(nx, y + j + 2, R.deep); p.px(nx + 1, y + j + 2, R.light); }
   }
-  function vignette(p, x, y, w, h, strength) {   // dithered dark corners, cool violet
-    const s = strength || 1;
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      const dx = Math.abs(i - w / 2) / (w / 2), dy = Math.abs(j - h / 2) / (h / 2), d = Math.max(0, Math.pow(Math.max(dx, dy), 3) * 0.75 + (dx * dx + dy * dy) * 0.18 - 0.1);
-      const v = dq(d * s, x + i, y + j); if (v > 0) p.px(x + i, y + j, '#1a1033', 110 * v);
+  function vignette(p, x, y, w, h, strength) {   // dithered dark corners, cool violet (native loop)
+    const n = gr(p), s = strength || 1, x0 = sc(x), y0 = sc(y), nw = sc(w), nh = sc(h);
+    for (let j = 0; j < nh; j++) for (let i = 0; i < nw; i++) {
+      const dx = Math.abs(i - nw / 2) / (nw / 2), dy = Math.abs(j - nh / 2) / (nh / 2), d = Math.max(0, Math.pow(Math.max(dx, dy), 3) * 0.75 + (dx * dx + dy * dy) * 0.18 - 0.16);
+      if (d * s < 0.1) continue;
+      const v = dq(d * s, x0 + i, y0 + j); if (v > 0) n.px(x0 + i, y0 + j, '#1a1033', 110 * v);
     }
   }
   function citySky(P, X, Y, w, h, night, rr, neonCols) {
-    const p = new Pix(w, h), x = 0, y = 0;
+    const p = new Z(w, h), x = 0, y = 0;
     if (!night) {   // low amber sunset
       band(p, x, y, w, h, '#7a4aa8', '#ffbe55', 7);
       p.ellipse(x + w * 0.62, y + h - 14, 7, 7, '#fff0c9'); p.ellipse(x + w * 0.62, y + h - 14, 5, 5, '#ffe9a8');
@@ -409,7 +450,7 @@
       }
     }
     if (night && neonCols) neonCols.forEach((c, i) => { p.rect(x + 6 + i * 20, y + h - 30 - i * 6, 8, 2, c.c); });
-    P.blit(p, X, Y);
+    gr(P).blit(p.n, sc(X), sc(Y));
   }
   function venetian(p, x, y, w, h, c) {
     const R = rp(c);
@@ -423,14 +464,47 @@
     dfill(p, x, y + h - 12, w, 12, night ? '#2a2a5a' : '#8aa8d0', 2);
   }
 
+  /* ---------------------------------------------------------------- extra detail props */
+  function books(p, x, y, n, rr, maxH) {          // a run of book spines standing on y; returns end x
+    const cs = ['#ff3ea5', '#2ee6ff', '#ffbe55', '#9dff4a', '#a86bff', '#ff6b6b', '#3a5fcd', '#fff0c9'];
+    let cx = x;
+    for (let i = 0; i < n; i++) {
+      const bw = 2 + Math.floor(rr() * 3), bh = maxH - 4 + Math.floor(rr() * 6), c = cs[Math.floor(rr() * cs.length)], R = rp(c);
+      p.rect(cx, y - bh, bw, bh, R.base); p.rect(cx, y - bh, 1, bh, R.light); p.rect(cx + bw - 1, y - bh, 1, bh, R.shade);
+      p.rect(cx, y - bh + 2, bw, 1, R.hi); p.rect(cx, y - 3, bw, 1, R.deep);
+      cx += bw;
+    }
+    return cx;
+  }
+  function sneaker(p, x, y, c, flip) {             // x,y = left-bottom, ~14 wide
+    const R = rp(c), d = flip ? -1 : 1, X = (dx) => (flip ? x + 13 - dx : x + dx);
+    p.rect(Math.min(X(0), X(13)), y - 2, 14, 2, '#fffaf0'); p.rect(Math.min(X(0), X(13)), y, 14, 1, '#a7a3c4');
+    p.poly([[X(1), y - 2], [X(1), y - 7], [X(5), y - 8], [X(8), y - 5], [X(13), y - 4], [X(13), y - 2]], R.base);
+    p.px(X(4), y - 7, R.hi); p.px(X(6), y - 6, '#fffaf0'); p.px(X(7), y - 5, '#fffaf0'); p.px(X(9), y - 4, '#fffaf0');
+    p.rect(Math.min(X(1), X(3)), y - 6, 2, 3, R.shade);
+  }
+  function laser(p, x0, y0, x1, y1, color, a) {      // additive 1px native line (design coords)
+    const n = gr(p), ax = x0 * K, ay = y0 * K, bx = x1 * K, by = y1 * K, L = Math.ceil(Math.hypot(bx - ax, by - ay));
+    for (let i = 0; i <= L; i++) { const t = i / L, x = Math.round(ax + (bx - ax) * t), y = Math.round(ay + (by - ay) * t); n.add(x, y, color, 200 * (1 - t * 0.5) * a); n.add(x + 1, y, color, 50 * a); }
+  }
+  function reflect(p, cx, y0, y1, hw, color, a, stripe) {   // soft vertical light streak on a glossy floor (native loop)
+    const n = gr(p), Y0 = sc(y0), Y1 = sc(y1), X0 = sc(cx - hw), X1 = sc(cx + hw), CX = cx * K, HW = hw * K;
+    for (let y = Y0; y < Y1; y++) { const f = 1 - (y - Y0) / (Y1 - Y0); for (let x = X0; x <= X1; x++) { const v = dq(f * a * (1 - Math.abs(x - CX) / HW) * (y % stripe ? 1 : 0.2), x, y); if (v > 0) n.add(x, y, typeof color === 'function' ? color(x, y) : color, 255 * v * 0.3); } }
+  }
+  function sparkle4(p, x, y, c) { const n = gr(p), X = sc(x), Y = sc(y); n.add(X, Y, '#ffffff', 255); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) n.add(X + dx, Y + dy, c, 200); n.add(X + 2, Y, c, 90); n.add(X - 2, Y, c, 90); n.add(X, Y + 2, c, 90); n.add(X, Y - 2, c, 90); }
+  function addDust(p, x, y, w, h, count, seed, col) { const n = gr(p), r = rng(seed), x0 = sc(x), y0 = sc(y), nw = sc(w), nh = sc(h); for (let i = 0; i < count; i++) n.add(x0 + Math.floor(r() * nw), y0 + Math.floor(r() * nh), col || '#fff0c9', 80 + Math.floor(r() * 160)); }
+
   /* ================================================================ HOME */
   reg('home', (variant) => {
-    const night = variant === 'night', rr = rng(1701), p = new Pix(W, H);
+    const night = variant === 'night', rr = rng(1701), p = new Z(W, H);
     p.fill('#2c1d4d');
     // ---- bedroom wall + floor
     p.rect(0, 0, W, 206, night ? '#6b3f86' : '#7c4a92');
     for (let x = 0; x < W; x += 12) { p.rect(x, 0, 6, 206, night ? '#744492' : '#8654a0'); dfill(p, x + 6, 0, 1, 206, '#5a3374', 2); }
     for (let y = 8; y < 200; y += 14) for (let x = (y % 28 ? 3 : 9); x < W; x += 12) p.px(x, y, '#9a62b4');
+    grain(p, 0, 0, W, 198, ['#5a3374', '#9a62b4', '#6a3f86', '#8654a0'], 0.05, 1);
+    for (let y = 10; y < 196; y += 16) for (let x = ((y / 16 | 0) % 2 ? 9 : 3); x < W; x += 12) { p.px(x - 1, y, '#8654a0'); p.px(x + 1, y, '#8654a0'); p.px(x, y - 1, '#8654a0'); p.px(x, y + 1, '#8654a0'); }
+    for (let x = 0; x < W; x += 12) p.rect(x + 6, 0, 1, 198, '#5a3374');
     p.rect(0, 198, W, 8, '#3a2260'); p.rect(0, 198, W, 1, '#6a4a9a'); p.rect(0, 205, W, 1, '#241540');
     floorPlanks(p, 0, 206, W, 30, '#a8683f', rr, 6);
     // rug
@@ -466,7 +540,7 @@
     p.ellipse(214, 99, 6, 6, '#241a3c'); p.ellipse(214, 99, 2, 2, '#ff3ea5'); p.px(211, 96, '#6a5fa0');   // vinyl leaning
     plant(p, 238, 106, 0.6, rr); p.rect(250, 100, 8, 6, '#2a1a3c'); p.rect(251, 101, 6, 1, '#ffbe55'); p.px(254, 103, '#2ee6ff');   // tiny radio
     // hanging plant trailing from shelf
-    for (let i = 0; i < 14; i++) p.px(262 - (i % 2), 110 + i, i % 3 ? '#2f8f5a' : '#4fbf6f');
+    p.vline(262, 110, 8, '#2f8f5a'); p.vline(261, 116, 8, '#4fbf6f'); p.vline(263, 114, 6, '#2f8f5a');
     // lamp shelf over bed
     p.rect(40, 134, 62, 4, '#6a3f3c'); p.rect(40, 134, 62, 1, '#a8704c');
     box(p, 46, 121, 4, 13, '#ffbe55'); box(p, 51, 124, 3, 10, '#2ee6ff'); box(p, 55, 120, 4, 14, '#ff6b6b');
@@ -515,7 +589,6 @@
     // screen painted in the emissive pass (below)
     // desk lamp-less; headphones hanging off the monitor
     p.ring(246.5, 134, 6, 8, '#2c2748'); p.ring(246.5, 134, 5, 7, '#3a3560');
-    for (let y = 141; y < 150; y++) for (let x = 238; x < 256; x++) if (p.get(x, y)[0] === 44 && p.get(x, y)[1] === 39) p.px(x, y, '#7a4a92'), p.px(x, y, '#7a4a92');
     p.rect(240, 138, 5, 9, '#ff3ea5'); p.rect(240, 138, 1, 9, '#ff8ac8'); p.rect(248, 138, 5, 9, '#ff3ea5'); p.rect(252, 138, 1, 9, '#a0205a'); p.rect(241, 146, 3, 1, '#a0205a');
     // condenser mic on boom arm + pop filter
     p.rect(178, 156, 14, 4, '#2c2748'); p.rect(184, 128, 2, 29, '#8a87a8'); p.line(185, 130, 197, 126, '#8a87a8');
@@ -528,6 +601,27 @@
     // beanbag chair silhouette next to desk is skipped; floor items
     p.rect(264, 195, 6, 12, '#2c2748');
 
+    // ---- bedroom detail pass
+    { const rd = rng(88);
+      books(p, 58, 134, 4, rd, 11); p.ellipse(96, 133, 3, 1, '#2a1a3c');
+      // photo string with clothes pegs
+      p.line(14, 30, 98, 36, '#2a1a3c');
+      [['#ff8ac8', 22, 31], ['#6fcf6f', 40, 32], ['#7fb2ff', 58, 33], ['#ffbe55', 76, 34]].forEach(([c, x, y], i) => { p.rect(x, y, 9, 11, '#fffaf0'); p.rect(x + 1, y + 1, 7, 7, c); p.px(x + 3, y + 3, '#fffaf0'); p.rect(x + 2, y + 6, 5, 2, mix(c, '#2a1a3c', 0.4)); p.rect(x + 3, y - 1, 3, 2, '#c98a5a'); });
+      // desk props
+      box(p, 244, 153, 12, 7, '#ff6b6b'); p.rect(246, 155, 8, 1, '#fff0c9'); cup(p, 258, 160, '#2ee6ff', 5, 6); p.px(257, 152, '#ffe14d'); p.px(259, 153, '#ff3ea5'); p.px(260, 152, '#9dff4a');
+      p.rect(194, 119, 4, 4, '#ffe14d'); p.rect(237, 119, 4, 4, '#ff8ac8'); p.px(195, 120, '#a02a58'); p.px(238, 120, '#a02a58');
+      for (let r = 0; r < 2; r++) for (let k = 0; k < 15; k++) p.px(189 + k * 2, 157.5 + r, k % 5 === 2 ? '#ff3ea5' : '#8a87a8');
+      streaks(p, 168, 160, 96, 6, ['#a8704c', '#7a4a30'], 12, 8, 4); streaks(p, 228, 166, 36, 40, ['#9a6a44', '#6a3a28'], 10, 8, 5);
+      // blanket weave + stitching
+      dfill(p, 44, 176, 58, 22, '#a02a58', 1); for (let x = 46; x < 100; x += 6) p.px(x, 198, '#ff8aa8');
+      p.line(18, 172, 34, 172, '#fffaf0'); p.line(20, 175, 32, 175, '#e6dcf4');
+      // shadows under furniture
+      p.rect(8, 206, 100, 2, '#241540', 120); p.rect(170, 206, 96, 2, '#241540', 120);
+      streaks(p, 8, 150, 6, 56, ['#9a6a4c', '#5a3a2a'], 6, 5, 6);
+      // plant by the bed
+      plant(p, 112, 214, 0.9, rng(14));
+      addDust(p, 90, 110, 70, 90, 28, 41);
+    }
     // ---- string lights
     const bulbsA = stringLights(p, 4, 8, 134, 12, 12, ['#ffbe55', '#ff3ea5', '#2ee6ff', '#9dff4a'], 9, rr);
     const bulbsB = stringLights(p, 134, 12, 266, 8, 11, ['#ff3ea5', '#ffe14d', '#2ee6ff', '#ffbe55'], 9, rr);
@@ -540,6 +634,7 @@
     // rug
     p.ellipse(130, 462, 64, 10, '#2a1a5a'); p.ellipse(130, 462, 59, 8, '#ff3ea5'); p.ellipse(130, 462, 50, 6.5, '#2ee6ff'); p.ellipse(130, 462, 41, 5, '#ffbe55'); p.ellipse(130, 462, 30, 3.5, '#43296f');
     for (let i = -60; i <= 60; i += 3) p.px(130 + i, 462 + Math.round(Math.sqrt(Math.max(0, 1 - (i / 64) ** 2)) * 10), '#fff0c9');
+    grain(p, 0, 250, W, 182, ['#38727e', '#5aa0a4', '#2f6a74'], 0.04, 2);
     // kitchen window
     p.rect(58, 262, 40, 52, '#3a2038'); p.rect(59, 263, 38, 50, '#e8c9a0');
     p.rect(54, 312, 48, 4, '#e8c9a0'); p.rect(54, 312, 48, 1, '#fff0c9'); p.rect(54, 315, 48, 1, '#8a5a3c');
@@ -594,6 +689,26 @@
     p.rect(200, 436, 8, 4, '#ff3ea5'); p.rect(200, 436, 8, 1, '#ffb0dd');
     // hanging plant + bike? string: little hanging bulbs in kitchen
     for (let i = 0; i < 9; i++) p.px(10 + i * 4, 252 + Math.round(Math.sin(i / 8 * Math.PI) * 5), '#2a1a3c');
+    { const rd = rng(99);
+      streaks(p, 8, 296, 38, 142, ['#c4f4e4', '#8fd8c4'], 14, 8, 7);
+      streaks(p, 46, 378, 84, 54, ['#d89a62', '#a8703c'], 22, 10, 8); streaks(p, 142, 328, 46, 108, ['#9a5a3c', '#6a3028'], 20, 9, 9); streaks(p, 206, 308, 52, 130, ['#d85a88', '#a83a64'], 20, 9, 10);
+      for (let x = 46; x < 130; x += 8) p.px(x + 4, 319, '#ffffff');
+      // bananas in the bowl
+      p.line(96, 358, 108, 352, '#ffe14d', 2); p.line(98, 360, 110, 354, '#e8c43a'); p.px(95, 357, '#6f3d2b'); p.px(110, 352, '#6f3d2b');
+      // utensil rail
+      p.rect(104, 326, 24, 1, '#8a87a8'); for (const [ux, uc] of [[108, '#c7bfd8'], [114, '#ffbe55'], [121, '#c7bfd8']]) { p.vline(ux, 327, 12, uc); p.ellipse(ux, 341, 2, 2, uc); }
+      // herbs and a cutting board
+      p.rect(112, 360, 14, 3, '#c98a5a'); p.px(114, 359, '#ff9a4a'); p.px(115, 359, '#ff9a4a'); p.px(118, 359, '#6fcf6f'); p.px(119, 359, '#6fcf6f');
+      // fridge shopping list + more magnets
+      p.rect(28, 350, 10, 12, '#fffaf0'); for (let k = 0; k < 4; k++) p.hline(29, 352 + k * 2, 7 - (k % 2) * 2, '#6a5fa0'); p.px(33, 349, '#ff3ea5');
+      // rug fringe
+      for (let i = -62; i <= 62; i += 3) { const yy = 462 + Math.round(Math.sqrt(Math.max(0, 1 - (i / 66) ** 2)) * 10.5); p.px(130 + i, yy + 1, '#fff0c9'); }
+      // door details
+      p.hline(214, 330, 36, '#8a2a50'); p.px(244, 392, '#ffe9a8'); p.vline(210, 330, 20, '#c7bfd8'); p.rect(246, 350, 4, 2, '#ffe9a8');
+      // wall plate / light switch
+      p.rect(196, 392, 4, 6, '#fff0c9'); p.px(197, 394, '#8a87a8'); p.px(198, 394, '#8a87a8');
+      addDust(p, 56, 262, 60, 60, 20, 42);
+    }
     // lower vignette
     vignette(p, 0, 248, W, 192, 0.8);
     vignette(p, 0, 0, W, 236, 0.9);
@@ -666,13 +781,14 @@
       y += hh; hh += 1; row++;
     }
     p.rect(0, y0, W, 2, R.deep);
+    streaks(p, 0, y0, W, y1 - y0, [R.light, R.shade], Math.floor(W * (y1 - y0) / 40), 10, 23); grain(p, 0, y0, W, y1 - y0, [R.hi, R.deep], 0.006, 24);
   }
   function mannequinHead(p, x, y, c) {
     p.rect(x - 1, y + 9, 3, 6, '#8a87a8'); p.rect(x - 4, y + 14, 9, 2, '#8a87a8');
     p.ellipse(x, y + 4, 4, 5, '#e6b79a'); p.poly([[x - 5, y + 2], [x + 5, y + 2], [x + 6, y + 12], [x + 3, y + 10], [x - 3, y + 10], [x - 6, y + 12]], c); p.ellipse(x, y + 1, 5, 3, c); p.px(x - 2, y + 5, '#2a1a3c'); p.px(x + 2, y + 5, '#2a1a3c'); p.px(x, y + 8, '#c9577f');
   }
   reg('shop', (variant) => {
-    const night = variant === 'night', rr = rng(2202), p = new Pix(W, H), fg = new Pix(W, H);
+    const night = variant === 'night', rr = rng(2202), p = new Z(W, H), fg = new Z(W, H);
     // wall: teal wallpaper with a brick wainscot
     p.fill('#2a2a52'); p.rect(0, 0, W, 300, night ? '#4a4890' : '#5a58a8');
     for (let x = 0; x < W; x += 16) { p.rect(x, 0, 8, 300, night ? '#524f9a' : '#6664b6'); }
@@ -681,6 +797,9 @@
     p.rect(0, 232, W, 70, '#8a3f3f');
     for (let y = 232, r = 0; y < 300; y += 7, r++) { p.rect(0, y, W, 1, '#5b2a35'); for (let x = (r % 2) * 9; x < W; x += 18) p.rect(x, y, 1, 7, '#5b2a35'); for (let k = 0; k < 8; k++) p.rect(Math.floor(rr() * W), y + 1 + Math.floor(rr() * 5), 6, 1, '#b4604a'); }
     p.rect(0, 230, W, 3, '#2a1a3c'); p.rect(0, 230, W, 1, '#8a5a6c');
+    grain(p, 0, 12, W, 218, ['#4a4890', '#7a76c8', '#3a3878', '#6664b6'], 0.03, 3);
+    for (let y = 14; y < 228; y += 16) for (let x = ((y / 16 | 0) % 2 ? 10 : 2); x < W; x += 16) { p.px(x - 1, y, '#7a76c8'); p.px(x + 1, y, '#7a76c8'); p.px(x, y - 1, '#7a76c8'); p.px(x, y + 1, '#7a76c8'); }
+    streaks(p, 0, 232, W, 68, ['#b4604a', '#7a3438', '#c97a5a'], 90, 7, 4);
     perspFloor(p, 300, H, '#a8683f', rr);
     // ceiling beam + pendant lamps
     p.rect(0, 0, W, 12, '#2a1a3c'); p.rect(0, 10, W, 2, '#4a2a4c'); p.rect(0, 0, W, 1, '#6a4a6c');
@@ -741,13 +860,31 @@
     fg.rect(222, 316, 34, 14, '#46405e'); fg.rect(222, 316, 34, 1, '#8a87a8'); fg.rect(226, 304, 18, 12, '#2a2548'); fg.rect(228, 306, 14, 8, '#9dff4a'); txt(fg, '9.5', 229, 307, '#1a3a1a');
     for (let i = 0; i < 6; i++) fg.rect(226 + i * 5, 320, 3, 2, ['#ff3ea5', '#2ee6ff', '#ffe14d'][i % 3]);
     fg.rect(222, 328, 34, 2, '#241a3c');
+    fg.rect(249, 300, 5, 9, '#fffaf0'); fg.px(250, 302, '#8a87a8'); fg.px(251, 304, '#8a87a8'); fg.rect(144, 322, 5, 8, '#c98a5a'); fg.rect(144, 322, 5, 1, '#e8b07a');
+    streaks(fg, 142, 336, 128, 62, ['#c4885a', '#8a5a3c'], 24, 9, 31);
     fg.rect(150, 318, 10, 12, '#fff0c9'); fg.rect(150, 318, 10, 2, '#ffbe55'); fg.rect(152, 322, 6, 2, '#d6446f');             // paper bag
     fg.rect(166, 326, 10, 4, '#c7bfd8'); fg.rect(169, 322, 4, 4, '#ffd23f'); fg.rect(170, 322, 2, 1, '#fff');                   // bell
     fg.rect(184, 312, 30, 18, '#3a5fcd'); fg.rect(184, 312, 30, 2, '#7a9aff'); fg.rect(184, 320, 30, 1, '#2c4aa0'); fg.rect(188, 306, 22, 6, '#ff6b6b'); fg.rect(188, 306, 22, 1, '#ffa09a');   // folded stack
     // shop sign + string of little flags above counter hang in the bg
+    const fairy = stringLights(p, 158, 22, 262, 22, 7, ['#ffbe55', '#ff3ea5', '#2ee6ff'], 9, rr);
     for (let i = 0; i < 16; i++) { const fx = 146 + i * 8, fy = 218 + Math.round(Math.sin(i / 15 * Math.PI) * 6); p.poly([[fx, fy], [fx + 6, fy], [fx + 3, fy + 6]], cols[(i * 2) % 10]); }
     p.line(146, 217, 270, 217, '#18122c'); 
-    // vignette
+    // ---- detail pass
+    { const rd = rng(33);
+      p.rect(58, 358, 84, 4, '#5a3a3c'); p.rect(58, 358, 84, 1, '#a8704c'); sneaker(p, 62, 358, '#ff3ea5'); sneaker(p, 80, 358, '#2ee6ff', true); sneaker(p, 100, 358, '#ffe14d'); sneaker(p, 120, 358, '#9dff4a', true);
+      for (let i = 0; i < 9; i++) { p.px(66 + i * 9 + 3, 214 + (i % 2) * 3, '#fffaf0'); if (i % 3 === 0) dfill(p, 66 + i * 9 - 4, 212, 8, 18, '#fff0c9', 1); }
+      for (let i = 0; i < 9; i++) p.px(66 + i * 9, 209, '#ffffff');
+      // hat wall details: pegs and tags
+      for (let k = 0; k < 12; k++) { const cx = 176 + (k % 4) * 26, cy = 56 + Math.floor(k / 4) * 38; p.px(cx - 8, cy - 2, '#8a87a8'); p.px(cx + 8, cy - 2, '#8a87a8'); }
+      // shades case reflections
+      for (let i = 0; i < 4; i++) p.line(166 + i * 26, 204, 176 + i * 26, 170, '#6a6598');
+      // mirror frame detail
+      p.vline(8, 154, 160, '#e8b07a'); p.px(26, 154, '#fff0c9'); p.px(30, 154, '#fff0c9');
+      // floor plant + umbrella stand by the mirror
+      p.rect(2, 392, 14, 26, '#5a3a3c'); p.rect(2, 392, 14, 2, '#c98a5a'); p.line(6, 390, 4, 360, '#2ee6ff', 2); p.line(11, 390, 12, 352, '#ff3ea5', 2);
+      addDust(p, 40, 80, 100, 220, 30, 17);
+    }
+    // ---- vignette
     vignette(p, 0, 12, W, 300, 0.7);
     vignette(p, 0, 300, W, 180, 0.8);
 
@@ -767,7 +904,8 @@
     p.line(60, 52, 60, 66, '#18122c'); p.line(106, 52, 106, 66, '#18122c');
     p.rect(54, 66, 58, 22, night ? '#2a1a3c' : '#43296f'); p.rect(55, 67, 56, 20, '#1a1033');
     if (night) { neon(p, 'OPEN', 83, 77, '#ff3ea5', 2); p.rect(55, 67, 56, 1, '#ff3ea5'); p.rect(55, 86, 56, 1, '#ff3ea5'); }
-    else { Font.draw(p, 'OPEN', 83 - Font.width('OPEN', 2, 1) / 2, 70, '#a8456f', { scale: 2 }); p.rect(55, 67, 56, 1, '#8a3a6a'); p.rect(55, 86, 56, 1, '#8a3a6a'); }
+    else { txt(p, 'OPEN', 83 - tw('OPEN', 2) / 2, 70, '#a8456f', { scale: 2 }); p.rect(55, 67, 56, 1, '#8a3a6a'); p.rect(55, 86, 56, 1, '#8a3a6a'); }
+    paintBulbs(p, fairy, true);
     // pendant lamp glows
     for (const lx of [92, 206]) { p.rect(lx - 4, 34, 8, 3, '#fff0c9'); glow(p, lx, 46, night ? 54 : 34, '#ffbe55', night ? 1 : 0.6, night ? 50 : 30); }
     if (night) { glow(p, 210, 100, 70, '#ffbe55', 0.4, 60); glow(p, 100, 220, 70, '#ffbe55', 0.3, 40); }
@@ -809,11 +947,12 @@
     p.ellipse(cx, y + h * 0.22, w * 0.12, w * 0.12, '#18122c'); p.ellipse(cx, y + h * 0.22, w * 0.05, w * 0.05, '#8a87a8'); p.px(x + w - 4, y + h - 3, '#9dff4a');
   }
   reg('studio', (variant) => {
-    const night = variant === 'night', rr = rng(3303), p = new Pix(W, H);
+    const night = variant === 'night', rr = rng(3303), p = new Z(W, H);
     p.fill('#241540');
     // wall of foam panels
     const pc = ['#3a2f5c', '#43296f', '#2f3a6a', '#3a2f5c', '#6a3b8f', '#1f5a6a', '#3a2f5c'];
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) foamPanel(p, c * 36 - 3, 12 + r * 36, 36, 36, pc[(r * 3 + c * 5 + (r > 4 ? 2 : 0)) % pc.length], 6);
+    grain(p, 0, 12, W, 288, ['#1c1038', '#6a5fa0', '#241540'], 0.045, 5);
     // ceiling and beam
     p.rect(0, 0, W, 12, '#18122c'); p.rect(0, 10, W, 2, '#3a2f5c');
     // floor
@@ -880,6 +1019,26 @@
    
     // ---- ON AIR box (emissive painted later), frame now
     p.rect(180, 36, 76, 28, '#18122c'); p.rect(182, 38, 72, 24, '#2a0a14'); p.frame(180, 36, 76, 28, '#4a3a6c');
+    { const rd = rng(55);
+      // guitar on the wall
+      p.rect(147, 98, 5, 32, '#6f3d2b'); p.rect(147, 98, 1, 32, '#a8704c'); p.rect(145, 86, 9, 13, '#3a2038');
+      for (let i = 0; i < 3; i++) { p.px(144, 88 + i * 3, '#c7bfd8'); p.px(154, 88 + i * 3, '#c7bfd8'); }
+      p.ellipse(149.5, 142, 11, 11, '#c9783c'); p.ellipse(149.5, 128, 8, 8, '#c9783c'); p.ellipse(146, 138, 5, 6, '#e8a86a');
+      p.ellipse(149.5, 138, 4, 4, '#18122c'); p.ring(149.5, 138, 5, 5, '#6f3d2b'); p.rect(144, 150, 11, 2, '#3a2038');
+      for (const dx of [-1, 0, 1, 2]) p.vline(148 + dx, 100, 51, '#c7bfd8');
+      // rack unit with LEDs
+      for (let k = 0; k < 3; k++) { p.rect(196, 78 + k * 12, 54, 10, '#2c2748'); p.rect(196, 78 + k * 12, 54, 1, '#6a6598'); p.rect(196, 87 + k * 12, 54, 1, '#18122c'); for (let i = 0; i < 6; i++) { p.ellipse(204 + i * 6, 83 + k * 12, 1.5, 1.5, '#8a87a8'); p.px(204 + i * 6, 82 + k * 12, '#fff'); } for (let i = 0; i < 8; i++) p.px(238 + (i % 4) * 2, 81 + k * 12 + (i > 3 ? 3 : 0), ['#9dff4a', '#ff6b6b', '#ffbe55', '#2ee6ff'][(i + k) % 4]); }
+      cable(p, [[200, 120], [196, 190], [190, 262], [192, 300]], '#18122c'); cable(p, [[246, 120], [250, 200], [252, 262]], '#2a1a5a');
+      // knobs on the mixer
+      for (let i = 0; i < 10; i++) { p.px(188 + i * 6, 327.4, '#c7bfd8'); p.px(189 + i * 6, 327.4, '#6a6598'); }
+      // sofa weave and wall frames above it
+      dfill(p, 14, 346, 70, 26, '#1f6a76', 1); dfill(p, 2, 318, 94, 14, '#1f6a76', 1);
+      poster(p, 62, 208, 18, 26, 'wave', '#2a1a5a', '#2ee6ff'); poster(p, 86, 214, 20, 20, 'record', '#6a3b8f', '#ffbe55');
+      // mug, notebook and cables on the side table
+      p.rect(103, 336, 8, 4, '#d6446f'); p.rect(103, 336, 8, 1, '#ff8aa8');
+      p.rect(0, 296, W, 2, '#241a3c', 100);
+      addDust(p, 20, 40, 220, 250, 36, 18);
+    }
     vignette(p, 0, 12, W, 290, 0.8); vignette(p, 0, 300, W, 180, 0.9);
     // ======= grade + emissive
     if (night) p.tint('#7b6fc6', 0.88);
@@ -916,12 +1075,13 @@
   });
 
   /* ================================================================ BAR */
-  function haze(p, y0, y1, color, k, rr) {      // dithered smoke bands
-    const ph = rr() * 6;
-    for (let y = y0; y < y1; y++) for (let x = 0; x < p.w; x++) {
-      const w = Math.sin(x * 0.045 + y * 0.07 + ph) * 0.5 + Math.sin(x * 0.11 - y * 0.05 + ph * 2) * 0.3 + 0.5;
-      const edge = Math.sin((y - y0) / (y1 - y0) * Math.PI);
-      const v = dq(w * edge * k, x, y); if (v > 0) p.add(x, y, color, 255 * v * 0.3);
+  function haze(p, y0, y1, color, k, rr) {      // dithered smoke bands (native loop)
+    const n = gr(p), ph = rr() * 6, Y0 = sc(y0), Y1 = sc(y1);
+    for (let y = Y0; y < Y1; y++) for (let x = 0; x < n.w; x++) {
+      const lx = x / K, ly = y / K;
+      const w = Math.sin(lx * 0.045 + ly * 0.07 + ph) * 0.5 + Math.sin(lx * 0.11 - ly * 0.05 + ph * 2) * 0.3 + 0.5;
+      const edge = Math.sin((y - Y0) / (Y1 - Y0) * Math.PI);
+      const v = dq(w * edge * k, x, y); if (v > 0) n.add(x, y, color, 255 * v * 0.3);
     }
   }
   function barStool(p, x, y, c) {     // x centre, y = seat top
@@ -943,12 +1103,13 @@
     p.px(x - 4, y - 11, rim); p.px(x - 3, y - 14, rim); p.px(x - 8, y - 1, rim); p.px(x - 7, y - 3, rim);
   }
   reg('bar', () => {
-    const rr = rng(4404), p = new Pix(W, H), fg = new Pix(W, H);
+    const rr = rng(4404), p = new Z(W, H), fg = new Z(W, H);
     p.fill('#150f26');
     // brick back wall
     p.rect(0, 0, W, 272, '#3a1d2e');
     for (let y = 0, r = 0; y < 272; y += 8, r++) { p.rect(0, y, W, 1, '#24121f'); for (let x = (r % 2) * 10; x < W; x += 20) p.rect(x, y, 1, 8, '#24121f'); for (let k = 0; k < 7; k++) p.rect(Math.floor(rr() * W), y + 2 + Math.floor(rr() * 5), 5 + Math.floor(rr() * 6), 1, rr() < 0.5 ? '#5b2a35' : '#2f1828'); }
     p.rect(0, 0, W, 14, '#150f26');
+    grain(p, 0, 14, W, 258, ['#5b2a35', '#24121f', '#8a3f3f', '#6a3a4a'], 0.06, 7);
     // floor
     const fl = rp('#33224e'); p.rect(0, 272, W, 208, fl.base);
     for (let y = 272, hh = 7, r = 0; y < H; y += hh, hh++, r++) { p.rect(0, y, W, 1, fl.deep); for (let x = (r % 2) * 20; x < W; x += 40 + hh) p.rect(x, y, 1, hh, fl.deep); for (let k = 0; k < 3; k++) p.hline(Math.floor(rr() * W), y + 2, 5 + Math.floor(rr() * 8), fl.shade); }
@@ -995,6 +1156,7 @@
     p.rect(236, 150, 34, 122, '#18122c'); p.rect(238, 152, 30, 120, '#3a5fcd'); p.rect(238, 152, 2, 120, '#7a9aff'); p.rect(266, 152, 2, 120, '#2c4aa0');
     p.rect(242, 160, 22, 40, '#241a3c'); p.rect(243, 161, 20, 38, '#6a3b8f'); dfill(p, 243, 161, 20, 20, '#a86bff', 2); p.rect(242, 220, 22, 44, '#2c4aa0'); p.rect(260, 214, 4, 10, '#c7bfd8');
     // ---- crowd (backs of heads, warm rim)
+    crowd(p, 300, 20, 136, rng(53), '#100a20', '#7a4a9a', 0.85, false);
     crowd(p, 316, 6, 140, rng(51), '#150f26', '#ffbe55', 1, true);
     crowd(p, 342, 0, 118, rng(52), '#1a1230', '#ff6bb5', 1.15, false);
     // standing silhouettes near the counter
@@ -1020,6 +1182,18 @@
     fruit(fg, 170, 247, 3, '#ff4f5e'); fruit(fg, 167, 250, 3, '#ff9a4a');
     // foreground crowd heads in the corners (depth)
     crowd(fg, 478, -4, 26, rng(61), '#120d1f', '#ffbe55', 1.8, false);
+    { const rd = rng(66);
+      poster(p, 240, 26, 26, 32, 'face', '#5a2a4a', '#ffbe55'); poster(p, 242, 66, 22, 24, 'record', '#2a1a5a', '#2ee6ff');
+      cable(p, [[96, 251], [102, 255], [110, 252], [112, 248]], '#0e0a1c');
+      for (let i = 0; i < 5; i++) { p.px(8 + i * 26, 236, '#ffbe55'); p.px(9 + i * 26, 236, '#fff0c9'); }
+      streaks(p, 2, 238, 136, 14, ['#a8704c', '#4a2a2c'], 20, 9, 3);
+      // stickers on the counter front are in fg; brass rail on the floor along the bar
+      const bb = stringLights(p, 138, 10, 232, 12, 5, ['#ffbe55', '#fff0c9', '#ff9a4a'], 7, rd);
+      paintBulbs(p, bb, true);
+      addDust(p, 10, 100, 240, 180, 40, 19, '#ffd7a0');
+    }
+    for (let i = 0; i < 6; i++) { fg.rect(146 + i * 15, 276 + (i % 2) * 3, 5, 4, ['#ff3ea5', '#2ee6ff', '#ffe14d', '#9dff4a', '#a86bff', '#ff6b6b'][i]); }
+    streaks(fg, 136, 262, 96, 68, ['#8a4a5c', '#4a2038'], 22, 9, 30);
     // neon reflections on the floor (additive streaks) + smoke
     // ======= emissive: neon signs, light cones, haze
     haze(p, 150, 290, '#a86bff', 0.8, rr); haze(p, 270, 400, '#ff3ea5', 0.45, rr);
@@ -1031,11 +1205,11 @@
     // pink neon tube art over the door-side wall: a mic outline
     // chalkboard warm lamp pools + counter underglow
     glow(p, 186, 60, 60, '#ffbe55', 0.55, 40); glow(p, 186, 190, 70, '#ffbe55', 0.5, 50); glow(p, 253, 124, 34, '#9dff4a', 0.4, 20);
-    fg.rect(136, 328, 96, 1, '#2ee6ff'); for (let i = 0; i < 96; i++) fg.add(136 + i, 329, '#2ee6ff', 120);
+    fg.rect(136, 328, 96, 1, '#2ee6ff'); addStrip(fg, 136, 329, 96, 1.5, '#2ee6ff', 120);
     glow(p, 186, 320, 70, '#2ee6ff', 0.4, 24);
     glow(p, 253, 150, 36, '#ff2f4f', 0.7, 28);
     // floor reflections
-    for (const [cx, c, w] of [[71, '#2ee6ff', 40], [186, '#ff3ea5', 36], [100, '#ffbe55', 30], [26, '#ff3ea5', 20]]) for (let y = 276; y < 372; y += 1) { const f = 1 - (y - 276) / 96; for (let x = cx - w / 2; x < cx + w / 2; x++) { const v = dq(f * 0.5 * (1 - Math.abs(x - cx) / (w / 2)) * (y % 5 ? 1 : 0.2), x, y); if (v > 0) p.add(x, y, c, 255 * v * 0.3); } }
+    for (const [cx, c, w] of [[71, '#2ee6ff', 40], [186, '#ff3ea5', 36], [100, '#ffbe55', 30], [26, '#ff3ea5', 20]]) reflect(p, cx, 276, 372, w / 2, c, 0.5, 5);
     // table candles glow
     glow(p, 44, 384, 26, '#ffbe55', 0.8, 14); glow(p, 226, 406, 26, '#ffbe55', 0.8, 14);
     vignette(p, 0, 0, W, H, 1.1);
@@ -1085,7 +1259,7 @@
     }
   }
   reg('stage', (variant) => {
-    const V = STAGE_V[variant] || STAGE_V.pink, rr = rng(V.seed * 101), p = new Pix(W, H), fg = new Pix(W, H);
+    const V = STAGE_V[variant] || STAGE_V.pink, rr = rng(V.seed * 101), p = new Z(W, H), fg = new Z(W, H);
     band(p, 0, 0, W, 300, V.top, V.bot, 9);
     // back wall panels
     for (let x = 0; x < W; x += 30) { p.rect(x, 0, 1, 300, mix(V.bot, '#000000', 0.35)); dfill(p, x + 1, 0, 1, 300, mix(V.bot, V.b, 0.2), 1); }
@@ -1125,11 +1299,11 @@
     haze(p, 60, 300, V.b, 0.55, rr); haze(p, 290, 420, V.a, 0.35, rr);
     // light pools on the floor + reflections
     glow(p, 84, 376, 50, V.a, 0.55, 12); glow(p, 186, 376, 50, V.b, 0.55, 12); glow(p, 135, 345, 70, V.a, 0.25, 14);
-    for (const [cx, c] of [[30, V.b], [76, V.a], [200, V.b], [240, V.a]]) for (let y = 304; y < 410; y++) { const f = 1 - (y - 304) / 106; for (let x = cx - 9; x <= cx + 9; x++) { const v = dq(f * 0.35 * (1 - Math.abs(x - cx) / 9) * (y % 4 ? 1 : 0.1), x, y); if (v > 0) p.add(x, y, c, 255 * v * 0.28); } }
+    for (const [cx, c] of [[30, V.b], [76, V.a], [200, V.b], [240, V.a]]) reflect(p, cx, 304, 410, 9, c, 0.35, 4);
     // edge neon strip glow
-    for (let x = 0; x < W; x++) { p.add(x, 411, V.a, 130); p.add(x, 410, V.a, 50); p.add(x, 424 + (x % 2), V.a, 30); }
+    addStrip(p, 0, 410.5, W, 1.5, V.a, 130); addStrip(p, 0, 409.5, W, 1, V.a, 50); addStrip(p, 0, 424, W, 1, V.a, 30);
     // top glow behind truss
-    for (let y = 0; y < 28; y++) for (let x = 0; x < W; x++) { const v = dq((1 - y / 28) * 0.35, x, y); if (v > 0) p.add(x, y, V.b, 255 * v * 0.25); }
+    { const nn = gr(p); for (let y = 0; y < sc(28); y++) for (let x = 0; x < nn.w; x++) { const v = dq((1 - y / sc(28)) * 0.35, x, y); if (v > 0) nn.add(x, y, V.b, 255 * v * 0.25); } }
     // ---- judges table (foreground occluder) at the upper right
     const tb = rp('#3a2f5c');
     fg.rect(160, 238, 96, 6, tb.light); fg.rect(160, 238, 96, 1, lighten(V.a, 0.4)); fg.rect(160, 244, 96, 20, tb.base); fg.rect(160, 244, 96, 2, tb.shade);
@@ -1143,6 +1317,13 @@
     const bodyC = '#0b0716';
     crowd(p, 466, 2, W, rng(V.seed + 70), '#150c28', V.b, 1.25, true);
     crowd(fg, 492, -4, W, rng(V.seed + 90), bodyC, V.a, 1.9, true);
+    // lasers, confetti and sparkles
+    { const rd = rng(V.seed + 5);
+      for (let i = 0; i < 5; i++) { laser(p, 22, 40, -10 + i * 14, 150 + i * 14, i % 2 ? V.a : V.b, 0.6); laser(p, 248, 40, 280 - i * 14, 150 + i * 14, i % 2 ? V.b : V.a, 0.6); }
+      for (let i = 0; i < 40; i++) { const nn = gr(p), cx0 = sc(8 + rd() * 254), cy0 = sc(60 + rd() * 340); nn.rect(cx0, cy0, 2, 3, [V.a, V.b, '#fff0c9', '#ffe14d'][i % 4], false); }
+      for (let i = 0; i < 6; i++) sparkle4(p, 20 + rd() * 230, 110 + rd() * 220, V.a);
+      txt(p, 'BEAT BATTLE', 135 - tw('BEAT BATTLE', 2) / 2, 74, mix(V.bot, V.a, 0.32), { scale: 2 });
+    }
     // phones / glowsticks in the crowd
     for (let i = 0; i < 9; i++) { const gx = 10 + Math.floor(rr() * 250), gy = 420 + Math.floor(rr() * 20); p.rect(gx, gy, 2, 5, i % 2 ? V.a : '#fff0c9'); glow(p, gx, gy + 2, 6, i % 2 ? V.a : '#fff0c9', 0.5); }
     vignette(p, 0, 0, W, H, 0.75);
@@ -1160,7 +1341,7 @@
 
   /* ================================================================ CREATOR */
   reg('creator', () => {
-    const rr = rng(6606), p = new Pix(W, H);
+    const rr = rng(6606), p = new Z(W, H);
     band(p, 0, 0, W, 336, '#120a28', '#2c1650', 9);
     // wall panels / brick hints
     for (let y = 14; y < 336; y += 14) { p.rect(0, y, W, 1, '#1c1038'); for (let x = ((y / 14) % 2) * 18; x < W; x += 36) p.rect(x, y, 1, 14, '#1c1038'); }
@@ -1168,9 +1349,9 @@
     poster(p, 8, 40, 30, 44, 'beat', '#2a1a5a', '#a02a78'); poster(p, 44, 54, 24, 30, 'wave', '#1f3a6a', '#2a8aa0'); poster(p, 14, 94, 22, 22, 'record', '#3a2a6a', '#b4804c');
     poster(p, 232, 36, 30, 40, 'bass', '#7a2a4a', '#b49a3c'); poster(p, 204, 50, 22, 28, 'face', '#9a6a3c', '#2a1a5a'); poster(p, 236, 84, 22, 22, 'record', '#2a1a5a', '#2a8aa0');
     // darken them a bit so the wall stays calm
-    for (const [x, y, w, h] of [[8, 40, 66, 80], [204, 36, 62, 74]]) for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.px(x + i, y + j, '#120a28', 70);
+    for (const [x, y, w, h] of [[8, 40, 66, 80], [204, 36, 62, 74]]) p.rect(x, y, w, h, '#120a2846');
     // graffiti: tags + arrows + stars in low-contrast spray colours
-    const sp = (x, y, s, c) => { Font.draw(p, s, x, y, mix(c, '#2c1650', 0.8), { scale: 2 }); Font.draw(p, s, x - 1, y - 1, mix(c, '#2c1650', 0.62), { scale: 2 }); };
+    const sp = (x, y, s, c) => { txt(p, s, x, y, mix(c, '#2c1650', 0.8), { scale: 2 }); txt(p, s, x - 1, y - 1, mix(c, '#2c1650', 0.62), { scale: 2 }); };
     sp(10, 140, 'FLOW', '#ff3ea5'); sp(206, 128, 'BBH', '#2ee6ff'); sp(14, 190, 'SPIN', '#9dff4a'); sp(200, 176, 'BEATS', '#ffe14d');
     p.line(14, 166, 60, 168, '#6a2a7a'); p.line(60, 168, 54, 163, '#6a2a7a'); p.line(60, 168, 54, 172, '#6a2a7a');
     for (const [x, y] of [[70, 150], [196, 156], [40, 230], [236, 220]]) { p.vline(x, y - 3, 7, '#8a4a9a'); p.hline(x - 3, y, 7, '#8a4a9a'); p.px(x, y, '#c9a8e0'); }
@@ -1202,26 +1383,36 @@
     glow(p, cx, cy + 6, 96, '#ff3ea5', 0.3, 20); glow(p, cx, cy + 14, 60, '#2ee6ff', 0.2, 10);
     for (const [x, c] of [[cx - 74, '#2ee6ff'], [cx + 74, '#ff3ea5'], [cx, '#ffe14d']]) glow(p, x, cy + 8, 14, c, 0.5, 6);
     // floor reflection of the glowing disc + streaks
-    for (let y = cy + 20; y < cy + 74; y++) { const f = 1 - (y - cy - 20) / 54; for (let x = cx - 70; x <= cx + 70; x++) { const v = dq(f * 0.4 * (1 - Math.abs(x - cx) / 74) * (y % 4 ? 1 : 0.15), x, y); if (v > 0) p.add(x, y, (x + y) % 9 < 4 ? '#ff3ea5' : '#2ee6ff', 255 * v * 0.3); } }
+    reflect(p, cx, cy + 20, cy + 74, 74, (x, y) => ((x + y) % 9 < 4 ? '#ff3ea5' : '#2ee6ff'), 0.4, 4);
     // ---- turntable platform
     p.ellipse(cx, cy + 10, 78, 18, '#0a0716');                                     // contact shadow
     p.ellipse(cx, cy + 6, 74, 17, '#2c2748'); p.rect(cx - 74, cy - 1, 149, 7, '#2c2748');
     p.ellipse(cx, cy + 6, 74, 17, '#241f40');
     // side wall of the platform (cylinder) with lit LED ring
-    for (let x = cx - 74; x <= cx + 74; x++) { const t = (x - cx) / 75, hh = Math.sqrt(Math.max(0, 1 - t * t)) * 17; p.rect(x, Math.round(cy + hh - 1), 1, 8, t < -0.2 ? '#46405e' : t < 0.4 ? '#2c2748' : '#1c1838'); p.px(x, Math.round(cy + hh + 6), '#120d1f'); }
+    { const nn = gr(p); for (let X = sc(cx - 74); X <= sc(cx + 74); X++) { const t = (X / K - cx) / 75, hh = Math.sqrt(Math.max(0, 1 - t * t)) * 17, Y0 = Math.round((cy + hh - 1) * K); nn.rect(X, Y0, 1, sc(8), t < -0.2 ? '#46405e' : t < 0.4 ? '#2c2748' : '#1c1838'); nn.px(X, Y0 + sc(8) - 1, '#120d1f'); } }
     for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2, bx = cx + Math.cos(a) * 73, by = cy + 2 + Math.sin(a) * 16 + 3; if (Math.sin(a) > -0.1) { p.rect(bx - 1, by, 3, 2, i % 3 === 0 ? '#2ee6ff' : i % 3 === 1 ? '#ff3ea5' : '#ffe14d'); } }
     p.ellipse(cx, cy, 72, 16, '#3a3560'); p.ellipse(cx, cy, 70, 15, '#18122c');
     // vinyl grooves
     for (let k = 0; k < 7; k++) { const rx = 68 - k * 8, ry = 14.2 - k * 1.8; if (ry > 1) p.ring(cx, cy, rx, ry, k % 2 ? '#241a44' : '#2c2056'); }
     p.ellipse(cx, cy, 14, 3.4, '#a02a78'); p.ellipse(cx, cy, 12, 2.8, '#ff3ea5'); p.ellipse(cx, cy, 4, 1.2, '#fff0c9'); p.px(cx, cy, '#18122c');
     // highlight arc on the vinyl (light from the upper left)
-    for (let a = 3.3; a < 4.5; a += 0.03) p.px(cx + Math.cos(a) * 60, cy + Math.sin(a) * 11.6, '#6a5fa0');
+    for (let a = 3.3; a < 4.5; a += 0.012) p.px(cx + Math.cos(a) * 60, cy + Math.sin(a) * 11.6, '#6a5fa0');
     // arm of the turntable at the right edge (decor)
     p.line(cx + 62, cy - 4, cx + 40, cy + 1, '#8a87a8'); p.rect(cx + 60, cy - 7, 6, 5, '#46405e');
     // platform rim light on top
-    for (let a2 = 0; a2 < 6.3; a2 += 0.05) { const bx = cx + Math.cos(a2) * 72, by = cy + Math.sin(a2) * 16; p.add(bx, by, a2 > 3.1 ? '#2ee6ff' : '#ff3ea5', 90); }
+    for (let a2 = 0; a2 < 6.3; a2 += 0.02) { const bx = cx + Math.cos(a2) * 72, by = cy + Math.sin(a2) * 16; p.add(bx, by, a2 > 3.1 ? '#2ee6ff' : '#ff3ea5', 90); }
     // dust
     for (let i = 0; i < 46; i++) { const x = 30 + Math.floor(rr() * 210), y = 40 + Math.floor(rr() * 360); p.add(x, y, i % 3 ? '#fff0c9' : '#b8f6ff', 90 + Math.floor(rr() * 140)); if (i % 7 === 0) { p.add(x + 1, y, '#fff0c9', 60); p.add(x, y + 1, '#fff0c9', 60); } }
+    { const rd = rng(77);
+      // record shelves on both flanks
+      for (const sx of [8, 206]) { p.rect(sx, 240, 56, 3, '#4a2a4c'); p.rect(sx, 240, 56, 1, '#8a5a8c'); let cx = sx + 2; for (let i = 0; i < 9; i++) { const c = ['#a02a78', '#2a8aa0', '#b49a3c', '#6a3b8f', '#3a5fcd'][i % 5]; p.rect(cx, 240 - 22 + (i % 3), 4, 22 - (i % 3), mix(c, '#120a28', 0.35)); p.rect(cx, 240 - 22 + (i % 3), 1, 22 - (i % 3), mix(c, '#fff0c9', 0.2)); cx += 5; } }
+      // dim neon arcs
+      p.ring(-6, 262, 40, 70, '#7a2a8a'); p.ring(276, 262, 40, 70, '#2a7a9a'); glow(p, 34, 262, 20, '#ff3ea5', 0.25, 60); glow(p, 236, 262, 20, '#2ee6ff', 0.25, 60);
+      for (let i = 0; i < 7; i++) sparkle4(p, 24 + rd() * 220, 60 + rd() * 300, i % 2 ? '#ff8ac8' : '#8af0ff');
+      grain(p, 0, 338, W, 142, ['#2c1a50', '#4a2a7a'], 0.02, 9);
+      // floor cables to the platform
+      cable(p, [[44, 396], [70, 410], [100, 414], [120, 410]], '#0e0a1c'); cable(p, [[226, 392], [200, 408], [170, 412], [152, 408]], '#0e0a1c');
+    }
     vignette(p, 0, 0, W, H, 0.9);
     return scene('creator', null, p, {
       floorY: cy,

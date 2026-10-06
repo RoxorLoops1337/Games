@@ -5,10 +5,10 @@
   'use strict';
   const BBH = root.BBH;
   const { Pix, PAL, Font, Core, CATALOG } = BBH;
-  const W = 270, H = 480;
+  const W = 360, H = 640, UW = 270, UH = 480, K = W / UW;   // canvas grid 360x640; DOM UI is authored in 270x480 CSS units
   const $ = (id) => document.getElementById(id);
 
-  const E = BBH.Eng = { W, H, scenes: {}, scene: null, sceneName: '', t: 0, dt: 0, S: 1, particles: [], paused: false, frame: 0 };
+  const E = BBH.Eng = { W, H, UW, UH, K, scenes: {}, scene: null, sceneName: '', t: 0, dt: 0, S: 1, particles: [], paused: false, frame: 0 };
 
   /* ---------------------------------------------------------------- storage */
   const mem = {};
@@ -36,12 +36,32 @@
   ctx.imageSmoothingEnabled = false;
   function resize() {
     const vw = root.innerWidth, vh = root.innerHeight, dpr = root.devicePixelRatio || 1;
-    let s = Math.min(vw / W, vh / H);
-    if (s * dpr >= 1) s = Math.floor(s * dpr) / dpr;           // integer device pixels per logical pixel = crisp
+    let n = Math.min(vw * dpr / W, vh * dpr / H);              // device pixels per canvas pixel
+    if (n >= 2) n = Math.floor(n);                              // integer = crisp (below 2x, fractional so the game still fills the screen)
+    const s = n * K / dpr;                                    // stage scale (stage is 270x480 css units, canvas is 360 px across it)
     E.S = s; stage.style.transform = 'scale(' + s + ')';
-    stage.style.left = Math.floor((vw - W * s) / 2) + 'px'; stage.style.top = Math.floor((vh - H * s) / 2) + 'px';
+    stage.style.left = Math.floor((vw - UW * s) / 2) + 'px'; stage.style.top = Math.floor((vh - UH * s) / 2) + 'px';
   }
   root.addEventListener('resize', resize); resize();
+
+  /* ------------------------------------------- layout-space context wrapper */
+  // Scenes with hand-placed drawing (the rhythm game) think in the old 270x480 layout space. LCtx scales POSITIONS
+  // (and rect/ellipse/gradient geometry) by K with edge snapping, but leaves sprite and text sizes native, so everything
+  // stays on the 360x640 pixel grid. Native drawing uses the real context (L.real).
+  class LCtx {
+    constructor(real) { this.real = real; this.L = true; }
+    px(x) { return Math.round(x * K); } py(y) { return Math.round(y * K); }
+    save() { this.real.save(); } restore() { this.real.restore(); } beginPath() { this.real.beginPath(); } stroke() { this.real.stroke(); } fill() { this.real.fill(); } closePath() { this.real.closePath(); }
+    fillRect(x, y, w, h) { const x0 = this.px(x), y0 = this.py(y); this.real.fillRect(x0, y0, Math.max(1, this.px(x + w) - x0), Math.max(1, this.py(y + h) - y0)); }
+    moveTo(x, y) { this.real.moveTo(x * K, y * K); } lineTo(x, y) { this.real.lineTo(x * K, y * K); }
+    ellipse(x, y, rx, ry, a, s, e) { this.real.ellipse(x * K, y * K, rx * K, ry * K, a, s, e); }
+    createLinearGradient(a, b, c2, d) { return this.real.createLinearGradient(a * K, b * K, c2 * K, d * K); }
+    drawImage(img, x, y, w, h) { if (w === undefined) this.real.drawImage(img, this.px(x), this.py(y)); else this.real.drawImage(img, this.px(x), this.py(y), w, h); }
+    translate(x, y) { this.real.translate(x * K, y * K); }
+    burst(x, y, n, o) { o = Object.assign({}, o); if (o.speed) o.speed *= K; E.burst(x * K, y * K, n, o); }
+  }
+  ['fillStyle', 'strokeStyle', 'globalAlpha', 'globalCompositeOperation', 'lineWidth'].forEach((p) => Object.defineProperty(LCtx.prototype, p, { get() { return this.real[p]; }, set(v) { this.real[p] = v; } }));
+  const LC = E.Lctx = new LCtx(ctx);
 
   /* ------------------------------------------------------------------ input */
   const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; };
@@ -60,6 +80,7 @@
   /* ------------------------------------------------------------ text, glow */
   const txtCache = new Map();
   E.txt = function (c, str, x, y, o) {
+    if (c.L) { x = c.px(x); y = c.py(y); c = c.real; }
     o = o || {}; str = String(str);
     const key = str + '|' + (o.color || '#fff') + '|' + (o.scale || 1) + '|' + (o.outline || '') + '|' + (o.shadow || '');
     let p = txtCache.get(key);
@@ -83,7 +104,7 @@
     }
     glows.set(key, p); return p;
   };
-  E.drawGlow = (c, x, y, r, color, a) => { const g = E.glow(r, color); c.save(); c.globalCompositeOperation = 'lighter'; if (a !== undefined) c.globalAlpha = a; c.drawImage(g.canvas(), Math.round(x - r), Math.round(y - r)); c.restore(); };
+  E.drawGlow = (c, x, y, r, color, a) => { if (c.L) { x *= K; y *= K; r *= K; c = c.real; } const g = E.glow(r, color); c.save(); c.globalCompositeOperation = 'lighter'; if (a !== undefined) c.globalAlpha = a; c.drawImage(g.canvas(), Math.round(x - r), Math.round(y - r)); c.restore(); };
   // vignette + faint scanlines, built once
   const overlay = new Pix(W, H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -156,7 +177,7 @@
         ctx.save();
         if (shakeT > 0) { shakeT -= dt; const a = shakeAmt * Math.max(0, shakeT / 150 > 1 ? 1 : shakeT / 150); ctx.translate(Math.round((Math.random() - 0.5) * 2 * a), Math.round((Math.random() - 0.5) * 2 * a)); if (shakeT <= 0) shakeAmt = 0; }
         ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, W, H);
-        if (E.scene && E.scene.draw) E.scene.draw(ctx);
+        if (E.scene && E.scene.draw) E.scene.draw(ctx, LC);
         drawParticles(ctx);
         ctx.restore();
         if (E.scene && E.scene.drawTop) E.scene.drawTop(ctx);
@@ -219,7 +240,7 @@
       b.pix ? h('div', { style: { display: 'flex', justifyContent: 'center', marginBottom: '3px' } }, E.pixEl(b.pix, b.pix.w > 30 ? 1 : 2)) : null,
       h('div.h2', { style: { color: 'var(--cream)' } }, b.title), b.sub ? h('div.ts', { style: { marginTop: '3px' } }, b.sub) : null);
     ui.appendChild(el);
-    E.burst(135, 80, 22, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime, '#fff'], speed: 90, up: 30 });
+    E.burst(180, 107, 22, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime, '#fff'], speed: 90, up: 30 });
     setTimeout(() => { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(() => { el.remove(); nextBanner(); }, 260); }, 2400);
   }
 
@@ -286,6 +307,7 @@
   /* --------------------------------------------------------- draw helpers */
   // deterministic rain streaks (no state): density drops over the screen, wind in px/s
   E.rain = function (c, t, o) {
+    if (c.L) c = c.real;
     o = o || {}; const n = o.n || 60, vy = o.vy || 260, vx = o.vx || -50, len = o.len || 4, w = o.w || W, h2 = o.h || H;
     c.save(); c.fillStyle = o.color || 'rgba(170,200,255,0.45)';
     for (let i = 0; i < n; i++) {
@@ -296,13 +318,15 @@
   };
   // soft contact shadow under a character (feet centre x,y)
   E.shadow = function (c, x, y, w, a) {
-    c.save(); c.fillStyle = 'rgba(10,6,24,' + (a === undefined ? 0.45 : a) + ')'; w = w || 26;
+    if (c.L) { x = c.px(x); y = c.py(y); w = (w || 26) * K; c = c.real; }
+    c.save(); c.fillStyle = 'rgba(10,6,24,' + (a === undefined ? 0.45 : a) + ')'; w = w || 34;
     c.fillRect(Math.round(x - w / 2 + 2), Math.round(y - 2), w - 4, 1); c.fillRect(Math.round(x - w / 2), Math.round(y - 1), w, 2); c.fillRect(Math.round(x - w / 2 + 2), Math.round(y + 1), w - 4, 1); c.restore();
   };
   // draw a character with feet at (x,y). o: {flip, scale, shadow, frame}
   E.hero = function (c, look, pose, x, y, o) {
+    if (c.L) { x = c.px(x); y = c.py(y); c = c.real; }
     o = o || {}; const C = BBH.Chars, sp = C.render(look, pose, o.t === undefined ? E.t : o.t, { frame: o.frame, flip: false }), sc = o.scale || 1;
-    if (o.shadow !== false) E.shadow(c, x, y, 26 * sc, o.shadowA);
+    if (o.shadow !== false) E.shadow(c, x, y, 34 * sc, o.shadowA);
     const cv = sp.canvas();
     if (o.a !== undefined && o.a < 1) { c.save(); c.globalAlpha = o.a; }
     if (sc === 1) sp.draw(c, x - (sp.w >> 1), y - sp.h + 1, { flip: o.flip });

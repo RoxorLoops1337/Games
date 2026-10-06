@@ -1,6 +1,6 @@
 # Beatbox Heroes
 
-A 16-bit neon-noir beatbox life-sim for phones (portrait, 270x480 logical pixels, integer scaled).
+A 16-bit neon-noir beatbox life-sim for phones (portrait, 360x640 logical pixels, integer scaled).
 Play: `https://games-71g.pages.dev/beatbox_heroes/`
 
 You were laid off on a Tuesday. You have a roommate (Foxy), rent on Sunday, $40, and a mouth that makes drums.
@@ -11,7 +11,7 @@ style, and climb the ladder to the Beatbox Heroes World Cup.
 
 * Three bodies (boy, girl, neutral), mix any look with any body.
 * 40 natural skin presets, a Light / Warmth / Richness fine tuner, fantasy tones (neon, chrome, gold) and an any-colour wheel (level 8).
-* 22 hair styles, 28 hair colours, dyed tips, any colour from level 8.
+* 27 hair styles, 28 hair colours, dyed tips, any colour from level 8.
 * 8 eye styles, 10 eye colours, brows, facial hair, face marks (freckles, blush, scars, war paint...).
 * 20 tops, 12 bottoms, 9 shoes: every colour, with a free colour picker and an accent colour.
 * 20 hats, 15 pairs of glasses (shades, aviators, the 8-bit "Deal With It" pixel shades, VR visor...), 25 accessories in 5 slots.

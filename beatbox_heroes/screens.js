@@ -3,7 +3,7 @@
   'use strict';
   const BBH = root.BBH, E = BBH.E, Core = BBH.Core, CAT = BBH.CATALOG, PAL = BBH.PAL;
   const G = BBH.G = BBH.G || {};
-  const h = E.h;
+  const h = E.h, K = E.K, k = (n) => Math.round(n * K), CX = E.W / 2;
 
   const scene = (name, def) => { E.scenes[name] = def; return def; };
   const safeScene = (id, v) => { try { return BBH.World.scene(id, v); } catch (e) { console.warn('scene ' + id, e); return null; } };
@@ -25,11 +25,11 @@
       setTimeout(step, 60);
     },
     draw(c) {
-      c.fillStyle = PAL.night0; c.fillRect(0, 0, 270, 480);
-      E.txt(c, 'BEATBOX HEROES', 135, 200, { align: 'c', color: PAL.gold, scale: 2, shadow: PAL.ink });
-      c.fillStyle = PAL.ink; c.fillRect(55, 262, 160, 8); c.fillStyle = PAL.neonPink; c.fillRect(56, 263, Math.round(158 * this.p), 6);
-      c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(56, 263, Math.round(158 * this.p), 1);
-      E.txt(c, 'LOADING ' + this.msg, 135, 278, { align: 'c', color: PAL.fog });
+      c.fillStyle = PAL.night0; c.fillRect(0, 0, E.W, E.H);
+      E.txt(c, 'BEATBOX HEROES', CX, k(200), { align: 'c', color: PAL.gold, scale: 2, shadow: PAL.ink });
+      c.fillStyle = PAL.ink; c.fillRect(k(55), k(262), k(160), 10); c.fillStyle = PAL.neonPink; c.fillRect(k(55) + 1, k(262) + 1, Math.round((k(160) - 2) * this.p), 8);
+      c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(k(55) + 1, k(262) + 1, Math.round((k(160) - 2) * this.p), 1);
+      E.txt(c, 'LOADING ' + this.msg, CX, k(282), { align: 'c', color: PAL.fog });
     },
   });
 
@@ -39,7 +39,7 @@
     let hero = null;
     try { const l = Core.Save.list(E.store).filter(Boolean).sort((a, b) => (b.created || 0) - (a.created || 0))[0]; if (l) hero = l.look; } catch (e) { /* ignore */ }
     if (!hero) hero = BBH.Chars.random(BBH.rng(Date.now() % 9999));
-    return [{ look: BBH.Chars.fix(NPC('foxy')), x: 74, pose: 'dance', dy: 6, flip: false }, { look: BBH.Chars.fix(hero), x: 135, pose: 'beatbox', dy: 0 }, { look: BBH.Chars.fix(NPC('beeamgee')), x: 196, pose: 'idle', dy: 6, flip: true }];
+    return [{ look: BBH.Chars.fix(NPC('foxy')), x: k(74), pose: 'dance', dy: 8, flip: false }, { look: BBH.Chars.fix(hero), x: k(135), pose: 'beatbox', dy: 0 }, { look: BBH.Chars.fix(NPC('beeamgee')), x: k(196), pose: 'idle', dy: 8, flip: true }];
   };
   const NPC = (id) => Core.NPCS[id].look;
 
@@ -65,18 +65,18 @@
     },
     draw(c) {
       const t = E.t;
-      if (this.bg) this.bg.layers[0].pix.draw(c, 0, 0); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480); }
+      if (this.bg) this.bg.layers[0].pix.draw(c, 0, 0); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, E.W, E.H); }
       const beat = E.beat(), pulse = 0.5 + 0.5 * Math.cos((beat % 1) * Math.PI * 2);
       // neon flicker glows from the scene's lights
       if (this.bg) for (const l of this.bg.lights || []) { const fl = l.flicker ? 0.75 + 0.25 * Math.sin(t / 90 + l.x) * (Math.sin(t / 700 + l.y) > 0.7 ? 0.2 : 1) : 1; E.drawGlow(c, l.x, l.y, l.r, l.color, (l.a === undefined ? 0.6 : l.a) * fl); }
       // the street party
-      for (const m of this.cast) E.hero(c, m.look, m.pose, m.x, 392 + m.dy, { flip: m.flip, t: t + m.x * 7 });
+      for (const m of this.cast) E.hero(c, m.look, m.pose, m.x, k(392) + m.dy, { flip: m.flip, t: t + m.x * 7 });
       E.rain(c, t, { n: 90, color: 'rgba(160,190,255,.35)' });
       // logo drops in with a bounce and breathes with the beat
       this.drop = Math.min(1, this.drop + E.dt / 800);
-      const e = this.drop, bounce = e < 1 ? -Math.abs(Math.cos(e * 7)) * (1 - e) * 28 : 0, y = Math.round(-70 + 120 * Math.min(1, e * 1.6) + bounce + (e >= 1 ? Math.sin(t / 600) * 1.5 : 0));
-      if (this.logo) { const lx = Math.round((270 - this.logo.w) / 2); E.drawGlow(c, 135, y + this.logo.h / 2, 120, PAL.neonViolet, 0.18 + pulse * 0.12); this.logo.draw(c, lx, y); }
-      if (this.state === 'menu') E.txt(c, 'A BEATBOX LIFE-SIM', 135, y + (this.logo ? this.logo.h : 60) + 4, { align: 'c', color: PAL.fog });
+      const e = this.drop, bounce = e < 1 ? -Math.abs(Math.cos(e * 7)) * (1 - e) * 38 : 0, y = Math.round(-95 + 160 * Math.min(1, e * 1.6) + bounce + (e >= 1 ? Math.sin(t / 600) * 2 : 0));
+      if (this.logo) { const lx = Math.round((E.W - this.logo.w) / 2); E.drawGlow(c, CX, y + this.logo.h / 2, 160, PAL.neonViolet, 0.18 + pulse * 0.12); this.logo.draw(c, lx, y); }
+      if (this.state === 'menu') E.txt(c, 'A BEATBOX LIFE-SIM', CX, y + (this.logo ? this.logo.h : 60) + 4, { align: 'c', color: PAL.fog });
     },
   });
 
@@ -102,7 +102,7 @@
       E.add(h('div.col', { style: { position: 'absolute', left: '12px', right: '12px', top: '70px', gap: '10px' } }, h('div.h1.ctr', null, this.mode === 'new' ? 'CHOOSE A SLOT' : 'SELECT HERO'), card(1), card(2), card(3)));
       E.add(E.btn('BACK', '', () => E.go('title'), { position: 'absolute', left: '12px', bottom: '12px', width: '60px' }));
     },
-    draw(c) { c.fillStyle = PAL.night0; c.fillRect(0, 0, 270, 480); if (this.bg) { c.globalAlpha = 0.5; this.bg.layers[0].pix.draw(c, 0, 0); c.globalAlpha = 1; } c.fillStyle = 'rgba(18,13,31,.6)'; c.fillRect(0, 0, 270, 480); E.rain(c, E.t, { n: 40 }); },
+    draw(c) { c.fillStyle = PAL.night0; c.fillRect(0, 0, E.W, E.H); if (this.bg) { c.globalAlpha = 0.5; this.bg.layers[0].pix.draw(c, 0, 0); c.globalAlpha = 1; } c.fillStyle = 'rgba(18,13,31,.6)'; c.fillRect(0, 0, E.W, E.H); E.rain(c, E.t, { n: 40 }); },
   });
 
   /* ----------------------------------------------------------------- intro */
@@ -149,17 +149,17 @@
     },
     leave() { clearInterval(this.timer); },
     draw(c) {
-      c.fillStyle = PAL.ink; c.fillRect(0, 0, 270, 480);
-      if (this.card) { this.cardT += E.dt; const lg = BBH.World.logo(); c.fillStyle = PAL.night0; c.fillRect(0, 0, 270, 480); E.drawGlow(c, 135, 220, 130, PAL.neonViolet, 0.25); lg.draw(c, Math.round((270 - lg.w) / 2), 170); E.txt(c, 'STREETS. STAGES. A WORLD CUP.', 135, 170 + lg.h + 12, { align: 'c', color: PAL.cream }); return; }
+      c.fillStyle = PAL.ink; c.fillRect(0, 0, E.W, E.H);
+      if (this.card) { this.cardT += E.dt; const lg = BBH.World.logo(); c.fillStyle = PAL.night0; c.fillRect(0, 0, E.W, E.H); E.drawGlow(c, CX, k(220), 170, PAL.neonViolet, 0.25); lg.draw(c, Math.round((E.W - lg.w) / 2), k(170)); E.txt(c, 'STREETS. STAGES. A WORLD CUP.', CX, k(170) + lg.h + 16, { align: 'c', color: PAL.cream }); return; }
       this.fadeIn = Math.min(1, this.fadeIn + E.dt / 900);
-      const y = 56, plate = this.plates[Math.max(0, this.i)], prev = this.prev;
-      c.fillStyle = PAL.night0; c.fillRect(0, y - 6, 270, 282);
+      const y = k(56), PH = 360, plate = this.plates[Math.max(0, this.i)], prev = this.prev;
+      c.fillStyle = PAL.night0; c.fillRect(0, y - 8, E.W, PH + 16);
       if (prev && this.fadeIn < 1) prev.layers[0].pix.draw(c, 0, y);
       if (plate) { c.save(); c.globalAlpha = this.fadeIn; plate.layers[0].pix.draw(c, 0, y); c.restore(); for (const l of plate.lights || []) E.drawGlow(c, l.x, l.y + y, l.r, l.color, (l.a || 0.5) * this.fadeIn * (l.flicker ? 0.8 + 0.2 * Math.sin(E.t / 110 + l.x) : 1)); }
       // letterbox bars and rain
-      c.fillStyle = PAL.ink; c.fillRect(0, y - 6, 270, 6); c.fillRect(0, y + 270, 270, 6);
-      c.save(); c.beginPath(); c.rect(0, y, 270, 270); c.clip(); c.translate(0, y); if (this.i === 1 || this.i === 0) E.rain(c, E.t, { n: 70, h: 270, color: 'rgba(170,200,255,.4)' }); c.restore();
-      E.txt(c, (Math.max(0, this.i) + 1) + '/' + INTRO.length, 12, 24, { color: PAL.fog });
+      c.fillStyle = PAL.ink; c.fillRect(0, y - 8, E.W, 8); c.fillRect(0, y + PH, E.W, 8);
+      c.save(); c.beginPath(); c.rect(0, y, E.W, PH); c.clip(); c.translate(0, y); if (this.i === 1 || this.i === 0) E.rain(c, E.t, { n: 90, h: PH, color: 'rgba(170,200,255,.4)' }); c.restore();
+      E.txt(c, (Math.max(0, this.i) + 1) + '/' + INTRO.length, 12, k(24), { color: PAL.fog });
     },
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -77,6 +77,8 @@
     { id: 'fade', name: 'High Fade', unlock: lvl(2) },
     { id: 'spiky', name: 'Spikes', unlock: lvl(6) },
     { id: 'flame', name: 'Flame Hair', unlock: ach('firstbattle') },
+    { id: 'cornrows', name: 'Cornrows', unlock: F }, { id: 'hightop', name: 'High-Top Fade', unlock: F }, { id: 'twists', name: 'Short Twists', unlock: F },
+    { id: 'dreadbun', name: 'Dread Bun', unlock: shop(45, 3) }, { id: 'fadewave', name: 'Wave Fade', unlock: shop(40, 2) },
   ];
   // natural + dyed colours. Dyes unlock gradually (the picker also allows any colour once `rainbow` is earned).
   const HAIR_COLORS = [
@@ -111,6 +113,7 @@
     { id: 'freckles', name: 'Freckles', unlock: F }, { id: 'blush', name: 'Blush', unlock: F }, { id: 'beauty', name: 'Beauty Mark', unlock: F },
     { id: 'scar', name: 'Scar', unlock: lvl(2) }, { id: 'bandaid', name: 'Band-Aid', unlock: lvl(3) }, { id: 'starpaint', name: 'Star Paint', unlock: lvl(4) },
     { id: 'tear', name: 'Tear Tattoo', unlock: lvl(5) }, { id: 'warpaint', name: 'War Paint', unlock: fans(150) },
+    { id: 'goldgrill', name: 'Gold Grill', unlock: fans(400) }, { id: 'eyebrowslit', name: 'Brow Slit', unlock: lvl(3) },
   ];
 
   /* --------------------------------------------------------------- clothes */
@@ -126,6 +129,9 @@
     { id: 'tux', name: 'Tux Jacket', unlock: shop(140, 6) }, { id: 'poncho', name: 'Poncho', unlock: shop(75, 3) },
     { id: 'bbhtee', name: 'Heroes Tee', unlock: ach('firstbusk') }, { id: 'stagesuit', name: 'Stage Suit', unlock: ach('showcase') },
     { id: 'champ', name: 'Champion Robe', unlock: ach('worldcup') },
+    { id: 'oversized', name: 'Oversized Tee', unlock: F }, { id: 'hoodiebig', name: 'Big Hoodie', unlock: F }, { id: 'jersey', name: 'Hoops Jersey', unlock: ach('firstbattle') },
+    { id: 'bomber', name: 'Satin Bomber', unlock: fans(100) }, { id: 'denimjacket', name: 'Denim Jacket', unlock: shop(70, 3) },
+    { id: 'windbreaker', name: 'Windbreaker', unlock: shop(55, 2) }, { id: 'puffvest', name: 'Puffer Vest', unlock: shop(80, 4) },
   ];
   const BOTTOMS = [
     { id: 'jeans', name: 'Jeans', unlock: F }, { id: 'cargo', name: 'Cargo Pants', unlock: F }, { id: 'shorts', name: 'Shorts', unlock: F },
@@ -133,12 +139,16 @@
     { id: 'leggings', name: 'Leggings', unlock: shop(30, 1) }, { id: 'trackpants', name: 'Track Pants', unlock: shop(40, 1) },
     { id: 'kilt', name: 'Plaid Kilt', unlock: shop(45, 3) }, { id: 'slacks', name: 'Slacks', unlock: shop(55, 4) },
     { id: 'flares', name: 'Flares', unlock: shop(50, 5) }, { id: 'goldpants', name: 'Gold Pants', unlock: ach('worldcup') },
+    { id: 'sweatpants', name: 'Sweatpants', unlock: F }, { id: 'camo', name: 'Camo Cargos', unlock: F },
+    { id: 'ripped', name: 'Ripped Baggies', unlock: shop(45, 2) }, { id: 'techpants', name: 'Tech Pants', unlock: shop(60, 3) },
   ];
   const SHOES = [
     { id: 'sneakers', name: 'Sneakers', unlock: F }, { id: 'hightops', name: 'High Tops', unlock: F }, { id: 'boots', name: 'Boots', unlock: F },
     { id: 'sandals', name: 'Sandals', unlock: F }, { id: 'skate', name: 'Skate Shoes', unlock: shop(35, 1) }, { id: 'platform', name: 'Platforms', unlock: shop(60, 3) },
     { id: 'loafers', name: 'Loafers', unlock: shop(45, 4) }, { id: 'combat', name: 'Combat Boots', unlock: shop(55, 2) },
     { id: 'goldkicks', name: 'Golden Kicks', unlock: ach('rhythmking') },
+    { id: 'retro', name: 'Retro Hi-Tops', unlock: F }, { id: 'slides', name: 'Slides + Socks', unlock: F },
+    { id: 'fatlaces', name: 'Fat Laces', unlock: shop(40, 2) }, { id: 'timbs', name: 'Work Boots', unlock: shop(75, 3) },
   ];
 
   /* -------------------------------------------------------------- headwear */
@@ -153,6 +163,8 @@
     { id: 'halo', name: 'Halo', unlock: ach('allsounds') }, { id: 'visor', name: 'Neon Visor Cap', unlock: fans(300) },
     { id: 'chef', name: 'Chef Hat', unlock: ach('cooked') }, { id: 'wizard', name: 'Wizard Hat', unlock: lvl(12) },
     { id: 'pirate', name: 'Pirate Hat', unlock: beat('hexx') }, { id: 'headphonehat', name: 'Fluffy Earmuffs', unlock: shop(30, 2) },
+    { id: 'durag', name: 'Durag', unlock: F }, { id: 'fitted', name: 'Fitted Cap', unlock: F }, { id: 'trucker', name: 'Trucker Cap', unlock: shop(30, 1) },
+    { id: 'hood', name: 'Hood Up', unlock: shop(40, 2) }, { id: 'bucketfur', name: 'Fuzzy Bucket', unlock: shop(60, 4) },
   ];
   const GLASSES = [
     { id: 'none', name: 'None', unlock: F },
@@ -163,6 +175,8 @@
     { id: 'pixel', name: 'Deal With It', unlock: ach('firstbattle') }, { id: 'monocle', name: 'Monocle', unlock: shop(70, 5) },
     { id: 'goggles', name: 'Steam Goggles', unlock: lvl(7) }, { id: 'vr', name: 'VR Visor', unlock: fans(500) },
     { id: 'neonbar', name: 'Neon Bar Shades', unlock: ach('streak10') }, { id: 'eyepatch', name: 'Eyepatch', unlock: lvl(5) },
+    { id: 'chromeshield', name: 'Chrome Shield', unlock: ach('streak10') }, { id: 'oversized', name: 'Oversized Shades', unlock: shop(30, 1) },
+    { id: 'gold_round', name: 'Gold Rounds', unlock: shop(55, 3) },
   ];
   const ACCESSORIES = [                                 // each has a `slot`; one accessory per slot
     { id: 'none_neck', slot: 'neck', name: 'No Neckwear', unlock: F }, { id: 'chain', slot: 'neck', name: 'Gold Chain', unlock: shop(40, 2) },
@@ -180,6 +194,9 @@
     { id: 'boombox', slot: 'hand', name: 'Boombox', unlock: shop(90, 3) },
     { id: 'none_wrist', slot: 'wrist', name: 'No Wristwear', unlock: F }, { id: 'wristband', slot: 'wrist', name: 'Wristbands', unlock: F },
     { id: 'watch', slot: 'wrist', name: 'Watch', unlock: shop(30, 2) }, { id: 'bracelets', slot: 'wrist', name: 'Bracelets', unlock: shop(25, 1) },
+    { id: 'cubanchain', slot: 'neck', name: 'Cuban Chain', unlock: shop(80, 3) }, { id: 'dogtags', slot: 'neck', name: 'Dog Tags', unlock: F },
+    { id: 'iced', slot: 'ears', name: 'Iced Studs', unlock: shop(90, 4) }, { id: 'crossbody', slot: 'back', name: 'Crossbody Bag', unlock: shop(50, 2) },
+    { id: 'icedwatch', slot: 'wrist', name: 'Iced Watch', unlock: shop(100, 5) }, { id: 'stackedbands', slot: 'wrist', name: 'Stacked Bands', unlock: F },
   ];
   const ACC_SLOTS = ['neck', 'ears', 'back', 'hand', 'wrist'];
 
@@ -192,12 +209,12 @@
   /* ---------------------------------------------------------------- default */
   const DEFAULT_LOOK = {
     name: 'Hero', body: 'neutral', skin: '#c68b5e',
-    hair: { style: 'crop', color: '#2a2024', tip: null },
+    hair: { style: 'twists', color: '#2a2024', tip: null },
     eyes: { style: 'round', color: '#4a2c1a' }, brows: 'soft', facial: 'none', marks: [],
-    top: { id: 'hoodie', color: '#e63946', color2: '#f7f2e8' },
-    bottom: { id: 'jeans', color: '#3a5fcd' }, shoes: { id: 'sneakers', color: '#f7f2e8' },
-    hat: { id: 'cap', color: '#17141f' }, glasses: { id: 'none', color: '#17141f' },
-    acc: { neck: { id: 'none_neck', color: '#d4a017' }, ears: { id: 'none_ears', color: '#d4a017' }, back: { id: 'none_back', color: '#6b6b80' },
+    top: { id: 'oversized', color: '#f4e04d', color2: '#e63946' },
+    bottom: { id: 'camo', color: '#2f5d3a' }, shoes: { id: 'retro', color: '#f7f2e8' },
+    hat: { id: 'fitted', color: '#17141f' }, glasses: { id: 'none', color: '#17141f' },
+    acc: { neck: { id: 'dogtags', color: '#c9d3e6' }, ears: { id: 'none_ears', color: '#d4a017' }, back: { id: 'none_back', color: '#6b6b80' },
       hand: { id: 'mic', color: '#6b6b80' }, wrist: { id: 'none_wrist', color: '#2ee6ff' } },
   };
 

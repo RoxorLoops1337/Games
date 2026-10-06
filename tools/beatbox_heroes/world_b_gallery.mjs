@@ -35,10 +35,10 @@ for (const [id, v] of LIST) {
 }
 if (!only || only === 'icons') {
   const ic = World.iconNames.map((n) => World.icon(n));
-  fs.writeFileSync(path.join(out, 'icons.png'), Pix.sheet(ic, 10, 3, '#2c1d4d').png(8));
+  fs.writeFileSync(path.join(out, 'icons.png'), Pix.sheet(ic, 10, 3, '#2c1d4d').png(6));
 }
 if (!only || only === 'fx') {
   const list = [];
   for (const n of ['note', 'note2', 'star', 'heart', 'spark', 'ring', 'coin', 'confetti', 'puff', 'drop']) { const f = World.fx(n); (Array.isArray(f) ? f : [f]).forEach((x) => list.push(x)); }
-  fs.writeFileSync(path.join(out, 'fx.png'), Pix.sheet(list, 8, 3, '#2c1d4d').png(8));
+  fs.writeFileSync(path.join(out, 'fx.png'), Pix.sheet(list, 8, 3, '#2c1d4d').png(6));
 }
