@@ -211,7 +211,7 @@
     name: 'Hero', body: 'neutral', skin: '#c68b5e',
     hair: { style: 'twists', color: '#2a2024', tip: null },
     eyes: { style: 'round', color: '#4a2c1a' }, brows: 'soft', facial: 'none', marks: [],
-    top: { id: 'oversized', color: '#f4e04d', color2: '#17141f' },
+    top: { id: 'oversized', color: '#f4e04d', color2: '#e63946' },
     bottom: { id: 'camo', color: '#2f5d3a' }, shoes: { id: 'retro', color: '#f7f2e8' },
     hat: { id: 'fitted', color: '#17141f' }, glasses: { id: 'none', color: '#17141f' },
     acc: { neck: { id: 'dogtags', color: '#c9d3e6' }, ears: { id: 'none_ears', color: '#d4a017' }, back: { id: 'none_back', color: '#6b6b80' },

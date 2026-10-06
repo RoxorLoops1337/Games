@@ -17,7 +17,7 @@
   E.scenes.creator = {
     enter(a) {
       this.mode = a.mode || 'new'; this.slot = a.slot || 1; this.back = a.back || null;
-      this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 180, y: 536 }; this.dy = sp0.y - k(296); this.spot = { x: sp0.x, y: k(296) };
+      this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 180, y: 536 }; this.dy = sp0.y - k(280); this.spot = { x: sp0.x, y: k(280) };
       this.look = C().fix(this.mode === 'wardrobe' ? G.ch.look : (G.draft || CAT.DEFAULT_LOOK));
       if (this.mode === 'new' && !G.draft) this.look.name = '';
       this.ch = this.mode === 'wardrobe' ? G.ch : Core.newChar(this.look);
@@ -29,7 +29,7 @@
     isOpen(group, id) { return Core.isUnlocked(this.ch, group, id); },
     changed(sparkle) {
       this.hop = 1; E.sfx('equip');
-      if (sparkle !== false) { const sp = E.fxSprite('spark'); E.burst(this.spot.x, this.spot.y - 160, 10, { colors: [PAL.neonCyan, PAL.neonPink, PAL.gold, '#fff'], speed: 70, up: 20, gravity: 60, spr: Array.isArray(sp) ? null : sp, life: 500 }); }
+      if (sparkle !== false) { const sp = E.fxSprite('spark'); E.burst(this.spot.x, this.spot.y - 120, 10, { colors: [PAL.neonCyan, PAL.neonPink, PAL.gold, '#fff'], speed: 70, up: 20, gravity: 60, spr: Array.isArray(sp) ? null : sp, life: 500 }); }
     },
     // ----------------------------------------------------------------- UI
     build() {
@@ -223,13 +223,13 @@
       const hop = -Math.abs(Math.sin(this.hop * Math.PI)) * 10 * this.hop, sx = this.spot.x, sy = this.spot.y;
       // beam of light behind the hero
       c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.07 + 0.02 * Math.sin(t / 500); c.fillStyle = '#9b7bff'; c.beginPath(); c.moveTo(sx - 30, 0); c.lineTo(sx + 30, 0); c.lineTo(sx + 120, sy); c.lineTo(sx - 120, sy); c.closePath(); c.fill(); c.restore();
-      for (const r of this.rings) { const kk = r.age / 700; c.save(); c.globalAlpha = 1 - kk; c.strokeStyle = [PAL.neonCyan, PAL.neonYellow, PAL.neonLime, PAL.neonPink][Math.floor(r.age / 175) % 4]; c.lineWidth = 2; c.beginPath(); c.ellipse(sx, sy - 250, 40 + kk * 120, 30 + kk * 82, 0, 0, 7); c.stroke(); c.restore(); }
-      E.hero(c, this.look, this.pose, sx, sy + hop, { scale: 4, shadow: false, t });
-      E.shadow(c, sx, sy + 2, 132, 0.4);
+      for (const r of this.rings) { const kk = r.age / 700; c.save(); c.globalAlpha = 1 - kk; c.strokeStyle = [PAL.neonCyan, PAL.neonYellow, PAL.neonLime, PAL.neonPink][Math.floor(r.age / 175) % 4]; c.lineWidth = 2; c.beginPath(); c.ellipse(sx, sy - 190, 34 + kk * 100, 26 + kk * 70, 0, 0, 7); c.stroke(); c.restore(); }
+      E.hero(c, this.look, this.pose, sx, sy + hop, { scale: 3, shadow: false, t });
+      E.shadow(c, sx, sy + 2, 100, 0.4);
       // sparkles
-      for (let i = 0; i < 6; i++) { const a = t / 1400 + i * 1.05, rr = 95 + (i % 3) * 18; const px = sx + Math.cos(a) * rr, py = sy - 175 + Math.sin(a * 1.3) * 120; const tw = (Math.sin(t / 200 + i * 2) + 1) / 2; if (tw > 0.55) { c.fillStyle = i % 2 ? PAL.neonCyan : PAL.neonPink; c.fillRect(Math.round(px), Math.round(py), 1, 1); c.fillRect(Math.round(px) - 1, Math.round(py), 3, 1); c.fillRect(Math.round(px), Math.round(py) - 1, 1, 3); } }
+      for (let i = 0; i < 6; i++) { const a = t / 1400 + i * 1.05, rr = 95 + (i % 3) * 18; const px = sx + Math.cos(a) * rr, py = sy - 130 + Math.sin(a * 1.3) * 100; const tw = (Math.sin(t / 200 + i * 2) + 1) / 2; if (tw > 0.55) { c.fillStyle = i % 2 ? PAL.neonCyan : PAL.neonPink; c.fillRect(Math.round(px), Math.round(py), 1, 1); c.fillRect(Math.round(px) - 1, Math.round(py), 3, 1); c.fillRect(Math.round(px), Math.round(py) - 1, 1, 3); } }
       const pv = Object.keys(this.previewing).filter((k) => { const [g, id] = k.split(':'); return !this.isOpen(g, id) && this.isWorn(g, id); });
-      if (pv.length) E.txt(c, 'PREVIEW: LOCKED ITEMS WORN', E.W / 2, k(296), { align: 'c', color: PAL.gold, a: 0.6 + 0.4 * Math.sin(t / 250) });
+      if (pv.length) E.txt(c, 'PREVIEW: LOCKED ITEMS WORN', E.W / 2, k(280), { align: 'c', color: PAL.gold, a: 0.6 + 0.4 * Math.sin(t / 250) });
     },
     isWorn(g, id) {
       const L = this.look;

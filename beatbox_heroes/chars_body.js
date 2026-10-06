@@ -24,8 +24,12 @@
     GR.W = W; GR.H = H; GR.kx = W / DW; GR.ky = H / DH; GR.k = (GR.kx + GR.ky) / 2;
     GR.t = Math.max(1, Math.round(GR.k * 0.72));
   }
-  const X = (x) => (x + 0.5) * GR.kx - 0.5, Y = (y) => (y + 0.5) * GR.ky - 0.5;       // design pixel centre -> native centre
-  const iX = (n) => (n + 0.5) / GR.kx - 0.5, iY = (n) => (n + 0.5) / GR.ky - 0.5;     // native -> design
+  // `yo` is a design-y origin: the face code works in head-relative rows (v = 0 is the head top row), so it runs
+  // inside withOrigin(HY, ...) and every mapping below honours it.
+  let yo = 0;
+  const withOrigin = (o, fn) => { const old = yo; yo = o; try { return fn(); } finally { yo = old; } };
+  const X = (x) => (x + 0.5) * GR.kx - 0.5, Y = (y) => (y + yo + 0.5) * GR.ky - 0.5;  // design pixel centre -> native centre
+  const iX = (n) => (n + 0.5) / GR.kx - 0.5, iY = (n) => (n + 0.5) / GR.ky - 0.5 - yo;  // native -> design
   const nx = (dx) => Math.round(dx * GR.kx), ny = (dy) => Math.round(dy * GR.ky);       // design offset -> native offset
   const T0 = 29;                                                                       // torso row 0 (design y)
 
@@ -38,7 +42,7 @@
     clone() { const m = new Mask(); m.d.set(this.d); return m; }
     // native bounding box covering a design box
     static box(x0, y0, x1, y1) {
-      return [Math.max(0, Math.floor((x0 + 0.5) * GR.kx) - 1), Math.max(0, Math.floor((y0 + 0.5) * GR.ky) - 1), Math.min(GR.W - 1, Math.ceil((x1 + 0.5) * GR.kx) + 1), Math.min(GR.H - 1, Math.ceil((y1 + 0.5) * GR.ky) + 1)];
+      return [Math.max(0, Math.floor((x0 + 0.5) * GR.kx) - 1), Math.max(0, Math.floor((y0 + yo + 0.5) * GR.ky) - 1), Math.min(GR.W - 1, Math.ceil((x1 + 0.5) * GR.kx) + 1), Math.min(GR.H - 1, Math.ceil((y1 + yo + 0.5) * GR.ky) + 1)];
     }
     // arbitrary analytic shape: f(x, y) gets DESIGN coordinates of each native pixel centre
     fn(x0, y0, x1, y1, f) {
@@ -48,7 +52,7 @@
     }
     // design pixel rectangle (covers design pixels x..x+w-1, y..y+h-1)
     rect(x, y, w, h) {
-      const x0 = Math.round(x * GR.kx), x1 = Math.round((x + w) * GR.kx) - 1, y0 = Math.round(y * GR.ky), y1 = Math.round((y + h) * GR.ky) - 1;
+      const x0 = Math.round(x * GR.kx), x1 = Math.round((x + w) * GR.kx) - 1, y0 = Math.round((y + yo) * GR.ky), y1 = Math.round((y + yo + h) * GR.ky) - 1;
       for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) this.set(i, j);
       return this;
     }
@@ -107,7 +111,7 @@
     and(o) { for (let i = 0; i < this.d.length; i++) if (!o.d[i]) this.d[i] = 0; return this; }
     // keep design rows y0..y1 (inclusive)
     clipY(y0, y1) {
-      const a = Math.round(y0 * GR.ky), b = Math.round((y1 + 1) * GR.ky) - 1;
+      const a = Math.round((y0 + yo) * GR.ky), b = Math.round((y1 + yo + 1) * GR.ky) - 1;
       for (let y = 0; y < this.h; y++) if (y < a || y > b) for (let x = 0; x < this.w; x++) this.d[y * this.w + x] = 0;
       return this;
     }
@@ -150,7 +154,7 @@
     }
     poly(pts, c, th) { for (let i = 0; i + 1 < pts.length; i++) this.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], c, th); return this; }
     rect(x, y, w, h, c) {
-      const x0 = Math.round(x * GR.kx) + this.ox, x1 = Math.round((x + w) * GR.kx) + this.ox, y0 = Math.round(y * GR.ky) + this.oy, y1 = Math.round((y + h) * GR.ky) + this.oy;
+      const x0 = Math.round(x * GR.kx) + this.ox, x1 = Math.round((x + w) * GR.kx) + this.ox, y0 = Math.round((y + yo) * GR.ky) + this.oy, y1 = Math.round((y + h + yo) * GR.ky) + this.oy;
       this.P.rect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), c); return this;
     }
     get(x, y) { return this.P.get(Math.round(X(x)) + this.ox, Math.round(Y(y)) + this.oy); }
@@ -276,7 +280,7 @@
       { dy: 0, tx: -1, hd: [0, 1], L: [3, 3, 5, 8], R: [2, 4, 3, 9], mouth: 'open', eyes: 'hurt', brow: 'sad' },
     ],
   };
-  const FOOT_Y = 58;
+  const FOOT_Y = 57;
   function skeleton(body, pose, frame, opts) {
     const G = GEO[body] || GEO.neutral, tbl = FR[pose] || FR.idle, f = tbl[((frame % tbl.length) + tbl.length) % tbl.length];
     opts = opts || {};
@@ -338,14 +342,32 @@
   function headMask(S, local) {
     const G = S.G, hws = G.head.slice();
     if (S.face.puff) for (let i = 11; i <= 15; i++) hws[i] += 1;
-    return local ? M().rows(HY, hws, CX) : M().rows(Math.round(S.head.y), hws, S.head.x);
+    return local ? M().rows(HY - yo, hws, CX) : M().rows(Math.round(S.head.y), hws, S.head.x);
   }
 
   /* ------------------------------------------------------------ skin colours */
+  // Skin gets its own softer ramp: shadows turn rosy/violet instead of orange, lights stay warm and clean.
+  function skinRamp(skin) {
+    const [h, s, l] = toHsl(skin), vio = '#5a3a8a';
+    const sh = Math.max(l * 0.6, l - (0.13 + 0.07 * l)), dp = Math.max(l * 0.42, l - (0.23 + 0.11 * l));
+    return {
+      deep: mix(BBH.hsl(h - 10, s * 0.75, dp), vio, 0.16),
+      shade: mix(BBH.hsl(h - 6, s * 0.8, sh), vio, 0.08),
+      base: BBH.hex(skin),
+      light: BBH.hsl(h + 3, s * 0.92, l + (1 - l) * 0.23),
+      hi: BBH.hsl(h + 5, s * 0.8, l + (1 - l) * 0.45),
+    };
+  }
+  // ramp that keeps light colours (white, cream, blonde, pastels) clean: their shadows go cool violet, not brown
+  function softRamp(c) {
+    const r = ramp(c), l = toHsl(c)[2]; if (l < 0.6) return r;
+    const k = Math.min(1, (l - 0.6) / 0.3);
+    return { hi: r.hi, light: r.light, base: r.base, shade: mix(r.shade, '#8a7abc', 0.38 * k), deep: mix(r.deep, '#4a3a80', 0.5 * k) };
+  }
   function skinCols(skin) {
-    const r = ramp(skin), [h, s, l] = toHsl(skin);
+    const r = skinRamp(skin), [h, s, l] = toHsl(skin);
     const dark = l < 0.3, light = l > 0.78;
-    const lid = dark ? PAL.ink : mix(r.deep, PAL.ink, light ? 0.62 : 0.72);
+    const lid = dark ? PAL.ink : mix(r.deep, PAL.ink, light ? 0.55 : 0.68);
     const lipBase = mix(r.base, '#c0446a', dark ? 0.35 : light ? 0.45 : 0.4);
     return {
       r, lid, dark, light, l,
@@ -361,9 +383,9 @@
   // Everything on the face is built in LOCAL design coordinates (head top row HY, axis CX), then painted with the
   // pose's head offset. u = design px from the axis, v = design row.
   const EYE = {
-    round: { rw: 2.3, rh: 2.8, ri: 1.6 }, sharp: { rw: 2.55, rh: 2.2, ri: 1.45, tilt: -0.35, lash: 1 }, sleepy: { rw: 2.4, rh: 2.3, ri: 1.6, lid: 0.42 },
-    wide: { rw: 2.5, rh: 3.3, ri: 2.0, big: 1 }, lashes: { rw: 2.3, rh: 2.8, ri: 1.6, lash: 3 }, cat: { rw: 2.6, rh: 2.3, ri: 1.55, tilt: 0.55, lash: 2, slit: 1 },
-    happy: { rw: 2.4, rh: 2.4, ri: 1.5 }, star: { rw: 2.5, rh: 3.0, ri: 1.7, star: 1 },
+    round: { rw: 2.45, rh: 2.35, ri: 1.72 }, sharp: { rw: 2.7, rh: 2.15, ri: 1.55, tilt: -0.35, lash: 1 }, sleepy: { rw: 2.55, rh: 2.2, ri: 1.7, lid: 0.42 },
+    wide: { rw: 2.6, rh: 3.1, ri: 2.1, big: 1 }, lashes: { rw: 2.45, rh: 2.35, ri: 1.72, lash: 3 }, cat: { rw: 2.8, rh: 2.2, ri: 1.6, tilt: 0.55, lash: 2, slit: 1 },
+    happy: { rw: 2.4, rh: 2.4, ri: 1.5 }, star: { rw: 2.6, rh: 2.8, ri: 1.8, star: 1 },
   };
   const FACE = { eyeU: 5.0, eyeV: 9.8 };
 
@@ -411,7 +433,7 @@
     // whites
     open.each((x, y) => { const yy = iY(y); P.px(x + sh, y + sv, yy < ecy - rh + 1.05 + (lidCut ? rh * 2 * lidCut : 0) ? K.whiteSh : K.white); });
     // iris
-    const icx = cx + (-sd) * 0.0, icy = ecy + 0.25 + (down ? 0.55 : 0), ri = st.ri;
+    const icx = cx + (-sd) * 0.0, icy = ecy - 0.05 + (down ? 0.6 : 0), ri = st.ri;
     const irisM = M().fn(icx - ri - 1, icy - ri - 1, icx + ri + 1, icy + ri + 1, (x, y) => {
       const a = (x - icx) / (st.slit ? ri * 0.82 : ri), b = (y - icy) / (ri * (st.slit ? 1.18 : 1.0)); return a * a + b * b <= 1;
     }).and(open);
@@ -430,12 +452,12 @@
       D.px(icx, icy, '#fff7b0');
     } else {
       // pupil
-      const pm = M().fn(icx - 1.2, icy - 1.5, icx + 1.2, icy + 1.5, (x, y) => ((x - icx) / (st.slit ? 0.3 : 0.78)) ** 2 + ((y - (icy - 0.1)) / (st.slit ? 1.35 : 0.82)) ** 2 <= 1).and(open);
+      const pm = M().fn(icx - 1.2, icy - 1.5, icx + 1.2, icy + 1.5, (x, y) => ((x - icx) / (st.slit ? 0.3 : 0.85)) ** 2 + ((y - (icy + 0.05)) / (st.slit ? 1.4 : 0.9)) ** 2 <= 1).and(open);
       pm.each((x, y) => P.px(x + sh, y + sv, pup));
       // main highlight (upper left of the iris) and a tiny bounce light
-      D.px(icx - 0.55, icy - 0.7, '#ffffff');
-      if (kk > 1.8 || big) { D.px(icx + 0.75, icy + 0.8, '#fff0f8'); }
-      if (kk > 1.8) { D.px(icx - 0.55, icy - 0.0, '#ffffff'); }
+      D.px(icx - 0.75, icy - 0.8, '#ffffff');
+      if (kk > 1.8 || big) { D.px(icx + 0.85, icy + 0.9, '#fff0f8'); }
+      if (kk > 1.8) { D.px(icx - 0.75, icy - 0.1, '#ffffff'); D.px(icx - 0.05, icy - 0.8, '#ffffff'); }
     }
     // lid line (upper edge of the open eye) + lower lid hint
     const topEdge = M(); open.each((x, y) => { let free = true; for (let q = 1; q <= lw; q++) if (open.get(x, y - q)) { free = false; break; } if (free) topEdge.set(x, y); });
@@ -444,8 +466,7 @@
     const corner = M(); topEdge.each((x, y) => { const u = (iX(x) - cx) * sd; if (u > rw * 0.35) corner.set(x, y - 1); });
     putMask(corner, K.lid);
     if (lidCut) { const lm = sock.clone().and(M().fn(cx - 4, ecy - 4, cx + 4, lidY, () => true)); lm.each((x, y) => P.px(x + sh, y + sv, K.r.shade)); }
-    const low = M(); sock.each((x, y) => { if (!sock.get(x, y + 1)) low.set(x, y + 1); }); low.sub(sock);
-    low.each((x, y) => { if (P.alphaAt(x + sh, y + sv) > 200) P.px(x + sh, y + sv, K.sock, 150); });
+    
     // lashes / wings
     const lash = st.lash || 0, ox0 = cx + sd * (rw - 0.3), oy0 = ecy - rh * 0.55 + tilt * sd * -0.3;
     if (lash >= 1) D.line(ox0, oy0, ox0 + sd * 1.7, oy0 - 1.0, K.lid);
@@ -458,8 +479,8 @@
     drawEye(P, D, -1, S, look, K, f); drawEye(P, D, 1, S, look, K, f);
   }
 
-  function drawBrows(P, S, look, hairR) {
-    const id = look.brows; if (id === 'none') return;
+  function drawBrows(P, S, look, hairR, K) {
+    const id = look.brows; if (id === 'none' && look.marks.indexOf('eyebrowslit') < 0) return;
     const { D } = loc(P, S);
     const tilt = S.face.brow === 'angry' ? [0.4, 0, -0.5, -1.3] : S.face.brow === 'sad' ? [-0.9, -0.3, 0.5, 1.4] : S.face.brow === 'up' ? [-0.6, -1.1, -1.1, -0.6] : [0, 0, 0, 0];
     const SH = {
@@ -467,6 +488,7 @@
       arched: [[-2.6, 1.0], [-1.0, -0.2], [0.8, -0.7], [2.7, 0.6]], thin: [[-2.2, 0.6], [-0.7, 0], [1.2, 0], [2.4, 0.3]],
       thick: [[-2.7, 0.9], [-0.9, 0], [1.4, -0.1], [2.8, 0.4]],
     }[id];
+    if (id === 'none') return;
     const th = id === 'thick' ? Math.max(2, Math.round(GR.k * 1.45)) : id === 'thin' ? 1 : GR.t;
     const base = 6.2, col = hairR.shade, hi = hairR.base;
     for (const sd of [-1, 1]) {
@@ -475,21 +497,26 @@
       // pts run outer -> inner for sd = -1 (outer is -u). For sd=+1 outer is +u: the same list mirrored already.
       D.poly(pts, col, th);
       if (th >= 2) D.poly(pts.map((p) => [p[0], p[1] - 0.45]), hi, 1);
+      if (sd === -1 && K && look.marks.indexOf('eyebrowslit') >= 0) {
+        // shaved slit through the outer part of the left brow
+        D.line(ex - 0.9, base + 1.9 + tilt[1], ex + 0.5, base - 1.9 + tilt[1], K.r.base, Math.max(2, Math.round(GR.k * 1.2)));
+        D.px(ex - 0.2, base + 0.1 + tilt[1], K.r.light);
+      }
     }
   }
 
   function drawNose(P, S, K) {
     const { D } = loc(P, S);
-    D.px(CX + 0.6, 12.9, K.r.shade); D.px(CX - 0.6, 12.9, mix(K.r.shade, K.r.base, 0.4));
+    D.px(CX + 0.6, 12.5, K.r.shade); D.px(CX - 0.6, 12.5, mix(K.r.shade, K.r.base, 0.4));
     if (K.l > 0.25) { D.px(CX - 0.7, 11.6, K.r.light); D.px(CX - 0.7, 12.3, K.r.light); }
-    D.px(CX + 0.6, 13.7, mix(K.r.shade, K.r.deep, 0.3), 120);
+    
     if (GR.k > 1.8) { D.px(CX - 1.5, 12.8, K.r.shade); D.px(CX + 1.7, 12.8, K.r.shade); }
   }
 
   // mouth: lines and filled shapes in local design coordinates
   function drawMouth(P, S, look, K) {
-    const { D, f } = loc(P, S), m = S.face.mouth, v = 14.5, dk = K.mouth, lip = K.lip;
-    const tooth = '#fffaf2', tg = '#ff6f8f', put = (mk, c) => mk.each((x, y) => P.px(x + f.ox, y + f.oy, c));
+    const { D, f } = loc(P, S), m = S.face.mouth, v = 14.2, dk = K.mouth, lip = K.lip;
+    const gold = look.marks.indexOf('goldgrill') >= 0, tooth = gold ? '#ffd23f' : '#fffaf2', tg = '#ff6f8f', put = (mk, c) => mk.each((x, y) => P.px(x + f.ox, y + f.oy, c));
     const cc = CX;
     const smileCurve = (w, dep, c) => { const pts = []; for (let i = 0; i <= 8; i++) { const u = -w + (2 * w * i) / 8; pts.push([cc + u, v + dep * (1 - (u / w) ** 2) ]); } D.poly(pts, c); };
     const openMouth = (rx, ry, teeth, tongue, lipRing) => {
@@ -529,6 +556,11 @@
       case 'shout': openMouth(3.0, 2.35, 1.0, 1, true); break;
       default: smileCurve(2.5, 0.9, dk);
     }
+    if (gold && ['smile', 'smirk', 'closed', 'puff', 'sad', 'o'].indexOf(m) >= 0) {
+      // a flash of gold teeth under the lip line
+      const gy = m === 'closed' ? v + 1.1 : m === 'o' ? v + 1.6 : m === 'smirk' ? v + 1.3 : v + 1.5;
+      D.hl(cc - 1.7, cc + 1.7, gy, '#ffd23f'); D.px(cc - 0.9, gy, '#fff4a0'); D.px(cc + 1.0, gy + 0.2, '#c98f1a');
+    }
   }
 
   // face marks keep their own colours
@@ -543,7 +575,7 @@
     if (has('beauty')) { D.px(c + 4.2, 15.4, K.dark ? '#120d1f' : '#3a2230'); }
     if (has('scar')) {
       const sc = K.dark ? '#b88a80' : '#e8a0a0';
-      D.poly([[c + 4.6, 6.8], [c + 5.4, 8.4], [c + 6.0, 10.2], [c + 6.8, 11.8]], sc);
+      D.poly([[c + 4.6, 6.6], [c + 5.4, 8.4], [c + 6.0, 10.2], [c + 6.8, 12.2]], sc, Math.max(2, GR.t));
       for (const q of [8.0, 10.0]) D.hl(c + 3.8 + (q - 8) * 0.2, c + 6.9 + (q - 8) * 0.2, q + 0.1, '#fff0e8');
     }
     if (has('bandaid')) {
@@ -575,7 +607,7 @@
     const { D, f } = loc(P, S), c = CX, hm = headMask(S, true);
     const put = (mk, col, a) => mk.each((x, y) => P.px(x + f.ox, y + f.oy, col, a));
     if (id === 'stubble') {
-      const jaw = hm.clone().and(M().fn(0, HY + 12.2, 44, 40, () => true));
+      const jaw = hm.clone().and(M().fn(0, 12.2, 44, 40, () => true));
       jaw.each((x, y) => { const v = iY(y); if (v < 14.5 && Math.abs(iX(x) - c) < 3.4) return; if (((x * 7 + y * 11) % 5) < 2) P.px(x + f.ox, y + f.oy, hairR.shade, 190); });
       return;
     }
@@ -601,7 +633,7 @@
     // mouth hole
     bm.sub(M().fn(c - 3.6, 14.0, c + 3.6, 16.3, (x, y) => { const u = (x - c) / 3.5; return u * u + ((y - 15.2) / 1.5) ** 2 <= 1; }));
     bm.sub(M().rect(Math.round(c - 3), 12, 6, 2));
-    if (id === 'longbeard') bm.or(M().rows(HY + 18, [5, 5.2, 5, 4.6, 4, 3.4, 2.6, 1.6]).and(M().rect(0, 0, 44, 40)));
+    if (id === 'longbeard') bm.or(M().rows(18, [5, 5.2, 5, 4.6, 4, 3.4, 2.6, 1.6]));
     const bmN = bm.shiftN(f.ox, f.oy);
     shade(P, bmN, hairR, { cap: 3, hi: true, ctx: bmN });
     bm.each((x, y) => { if (iY(y) > 15.5 && ((x * 5 + y * 3) % 7 === 0)) P.px(x + f.ox, y + f.oy, hairR.shade); if (iY(y) > 15.5 && ((x * 3 + y * 7) % 11 === 0)) P.px(x + f.ox, y + f.oy, hairR.light); });
@@ -619,31 +651,33 @@
     shade(P, B.arm[side], K.r, { cap: 3 });
     shade(P, B.hand[side], K.r, { cap: 3 });
   }
+  const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) % 1000 / 1000; };
   function drawHeadSkin(P, S, look, K) {
     const hm = headMask(S), f = faceCtx(S), hy = Math.round(S.head.y), D = new Painter(P).shiftN(f.ox, f.oy);
     // ears first (the head covers their inner part)
     for (const sg of [-1, 1]) {
       const ear = M().ellipse(CX + sg * 10.4, HY + 10.2, 1.55, 2.4).shiftN(f.ox, f.oy);
       shade(P, ear, K.r, { cap: 2 });
-      D.px(CX + sg * 10.5, HY + 10.4, K.r.deep); D.px(CX + sg * 10.5, HY + 9.4, K.r.shade);
+      D.px(CX + sg * 10.4, HY + 10.6, K.r.shade); D.px(CX + sg * 10.4, HY + 9.6, K.r.light);
     }
     // neck, shadowed under the chin
     const nk = M().rows(HY + 15, [S.G.neck, S.G.neck, S.G.neck, S.G.neck, S.G.neck]).shiftN(f.ox, f.oy);
     flat(P, nk, K.r.shade);
     nk.each((x, y) => { const v = iY(y - f.oy); if (v >= HY + 17.2) P.px(x, y, mix(K.r.shade, K.r.deep, 0.5)); else if (v >= HY + 15.9 && ((x + y) & 1)) P.px(x, y, mix(K.r.shade, K.r.deep, 0.35)); });
-    shade(P, hm, K.r, { cap: 4, hi: false, dither: true });
+    shade(P, hm, K.r, { cap: 4, hi: K.dark });
     // cheek and forehead light, jaw shadow
-    const hl = M().ellipse(CX - 4.2, HY + 4.2, 2.4, 1.3).shiftN(f.ox, f.oy).and(hm); hl.each((x, y) => P.px(x, y, K.r.light, 190));
-    const ck = M().ellipse(CX - 5.6, HY + 12.0, 1.7, 1.0).shiftN(f.ox, f.oy).and(hm); ck.each((x, y) => P.px(x, y, K.r.light, 140));
-    const jw = hm.clone().and(M().fn(0, HY + 15.6, 44, HY + 19, () => true)); jw.each((x, y) => { if ((x + y) & 1) P.px(x, y, K.r.shade, 150); });
+    const hl = M().ellipse(CX - 4.2, HY + 4.2, 2.4, 1.3).shiftN(f.ox, f.oy).and(hm); hl.each((x, y) => P.px(x, y, K.r.light));
+    const ck = M().ellipse(CX - 5.6, HY + 11.8, 1.7, 1.0).shiftN(f.ox, f.oy).and(hm); ck.each((x, y) => { if ((x + y) & 1) P.px(x, y, K.r.light); });
+    if (GR.k > 1.8) { const jw = hm.clone().and(M().fn(0, HY + 16.4, 44, HY + 19, () => true)); jw.each((x, y) => { if (((x + y) & 1) === 0) P.px(x, y, K.r.shade); }); }
     return hm;
   }
 
+  const faceWrap = (fn) => (...a) => withOrigin(HY, () => fn(...a));
   Object.assign(BBH, {
     CharsKit: {
       DW, DH, CX, HY, T0, GR, setGrid, X, Y, iX, iY, nx, ny, GEO, POSES, FR, FOOT_Y, Mask, M, Painter, shade, flat, darkenAt, ring, edge, mirX,
-      skeleton, bodyMasks, armMask, legMask, hipMask, torsoMask, headMask, faceCtx, skinCols,
-      drawEyes, drawBrows, drawMouth, drawNose, drawMarks, drawFacial, drawLegs, drawTorsoSkin, drawArmSkin, drawHeadSkin,
+      skeleton, bodyMasks, armMask, legMask, hipMask, torsoMask, headMask, faceCtx, skinCols, softRamp, skinRamp,
+      drawEyes: faceWrap(drawEyes), drawBrows: faceWrap(drawBrows), drawMouth: faceWrap(drawMouth), drawNose: faceWrap(drawNose), drawMarks: faceWrap(drawMarks), drawFacial: faceWrap(drawFacial), withOrigin, drawLegs, drawTorsoSkin, drawArmSkin, drawHeadSkin,
     },
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.CharsKit;

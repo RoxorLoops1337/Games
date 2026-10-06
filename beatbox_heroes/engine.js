@@ -37,8 +37,8 @@
   function resize() {
     const vw = root.innerWidth, vh = root.innerHeight, dpr = root.devicePixelRatio || 1;
     let n = Math.min(vw * dpr / W, vh * dpr / H);              // device pixels per canvas pixel
-    if (n >= 1) n = Math.floor(n);                              // integer = crisp
-    const s = n / (dpr * K);                                    // stage scale (stage is 270x480 css units, canvas is 360 px across it)
+    if (n >= 2) n = Math.floor(n);                              // integer = crisp (below 2x, fractional so the game still fills the screen)
+    const s = n * K / dpr;                                    // stage scale (stage is 270x480 css units, canvas is 360 px across it)
     E.S = s; stage.style.transform = 'scale(' + s + ')';
     stage.style.left = Math.floor((vw - UW * s) / 2) + 'px'; stage.style.top = Math.floor((vh - UH * s) / 2) + 'px';
   }
