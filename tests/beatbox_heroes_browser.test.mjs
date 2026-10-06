@@ -25,7 +25,7 @@ const sleep = (ms) => page.waitForTimeout(ms);
 const scene = () => page.evaluate(() => BBH.E.sceneName);
 const click = async (x, y) => { const b = await page.locator('#cv').boundingBox(); await page.mouse.click(b.x + x / 270 * b.width, b.y + y / 480 * b.height); };
 const clickText = async (txt) => { const loc = page.locator('#ui .btn', { hasText: txt }).first(); await loc.click({ timeout: 4000 }); };
-const canvasVaried = () => page.evaluate(() => { const c = document.getElementById('cv').getContext('2d').getImageData(0, 0, 270, 480).data, s = new Set(); for (let i = 0; i < c.length; i += 4 * 97) s.add(c[i] + ',' + c[i + 1] + ',' + c[i + 2]); return s.size; });
+const canvasVaried = () => page.evaluate(() => { const c = document.getElementById('cv').getContext('2d').getImageData(0, 0, 360, 640).data, s = new Set(); for (let i = 0; i < c.length; i += 4 * 97) s.add(c[i] + ',' + c[i + 1] + ',' + c[i + 2]); return s.size; });
 const dismiss = async () => { for (let i = 0; i < 20 && (await page.locator('#ui .full').count()) > 0; i++) { await click(135, 200); await sleep(150); } };
 const waitScene = async (name, ms = 8000) => { const t = Date.now(); while (Date.now() - t < ms) { if ((await scene()) === name) return true; await sleep(100); } return false; };
 

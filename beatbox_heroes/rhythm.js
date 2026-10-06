@@ -4,7 +4,7 @@
   'use strict';
   const BBH = root.BBH, E = BBH.E, Core = BBH.Core, PAL = BBH.PAL;
   const G = BBH.G = BBH.G || {};
-  const h = E.h;
+  const h = E.h, L = E.Lctx, K = E.K;
 
   const LANES = [
     { name: 'B', color: '#ff4f6a', dark: '#8f1d3a', hi: '#ffb0bd', keys: ['KeyD', 'ArrowLeft', 'Digit1'] },
@@ -86,7 +86,7 @@
       if (!best || bd > w.good + 20) { this.ghost(lane); return; }
       const grade = Core.judgeHit(best.d, w); best.n.state = grade === 'miss' ? 3 : grade === 'perfect' ? 1 : 2; this.hit(lane, grade, best.d);
     },
-    ghost(lane) { E.burst(X0 + lane * LW + 30, HIT_Y + 2, 3, { color: LANES[lane].color, speed: 25, gravity: 0, life: 200 }); },
+    ghost(lane) { L.burst(X0 + lane * LW + 30, HIT_Y + 2, 3, { color: LANES[lane].color, speed: 25, gravity: 0, life: 200 }); },
     hit(lane, grade, d) {
       this.hits.push({ lane, grade });
       if (grade === 'miss') { this.breakCombo(); this.pop('MISS', grade); return; }
@@ -94,7 +94,7 @@
       const pts = Core.HIT_SCORE[grade] * (1 + this.combo / 100); this.score += pts; this.hype = Math.min(1, this.hype + (grade === 'perfect' ? 0.045 : 0.025));
       const cx = X0 + lane * LW + 30;
       this.pop(grade === 'perfect' ? 'PERFECT' : 'GOOD', grade);
-      E.burst(cx, HIT_Y, grade === 'perfect' ? 14 : 7, { colors: [LANES[lane].color, LANES[lane].hi, '#fff'], speed: 80, up: 40, life: 450 });
+      L.burst(cx, HIT_Y, grade === 'perfect' ? 14 : 7, { colors: [LANES[lane].color, LANES[lane].hi, '#fff'], speed: 80, up: 40, life: 450 });
       if (grade === 'perfect') { E.shake(1, 80); this.rings.push({ age: 0, c: LANES[lane].color }); }
       if (this.combo > 0 && this.combo % 10 === 0) { E.sfx('combo'); E.flash(LANES[lane].color, 120); this.pop(this.combo + ' COMBO', 'perfect', true); try { E.A().groove.setIntensity(Math.min(1, this.combo / 40)); } catch (e) { /* ignore */ } }
     },
@@ -102,6 +102,7 @@
     pop(text, grade, big) { this.pops.push({ text, grade, age: 0, big: !!big, x: 135 + (Math.random() - 0.5) * (big ? 0 : 50), y: big ? 300 : 340 }); if (this.pops.length > 6) this.pops.shift(); },
     pointer(type, x, y) {
       if (type !== 'down') return;
+      x /= K; y /= K;
       if (y < TOP_Y - 30) return;
       const lane = Math.floor((x - X0) / LW); if (lane >= 0 && lane < 4) this.press(lane);
     },
@@ -152,7 +153,7 @@
     updateOpp(dt) {
       const T = this.now() - this.oppT0;
       for (const n of this.oppNotes) if (!n.done && T >= n.t) {
-        n.done = true; if (n.hit) { this.oppHits++; this.padFlash[n.lane] = 1; try { E.A().drum(n.lane, { vel: 0.8 }); } catch (e) { /* ignore */ } E.burst(X0 + n.lane * LW + 30, HIT_Y, 6, { color: PAL.neonPink, speed: 60, up: 30, life: 350 }); this.rings.push({ age: 0, c: PAL.neonPink }); } else this.oppMiss++;
+        n.done = true; if (n.hit) { this.oppHits++; this.padFlash[n.lane] = 1; try { E.A().drum(n.lane, { vel: 0.8 }); } catch (e) { /* ignore */ } L.burst(X0 + n.lane * LW + 30, HIT_Y, 6, { color: PAL.neonPink, speed: 60, up: 30, life: 350 }); this.rings.push({ age: 0, c: PAL.neonPink }); } else this.oppMiss++;
       }
       this.oppMeter = Math.min(this.oppQ, this.oppMeter + dt / 2400 * this.oppQ);
       if (T > this.oppEnd) {
@@ -172,13 +173,13 @@
     },
     updateJudge() {
       const per = 1100, idx = Math.floor((this.stateT - 900) / per);
-      if (idx > this.reveal && idx < 5) { this.reveal = idx; const v = this.votes[idx]; if (v.forPlayer) this.tally.you++; else this.tally.opp++; E.sfx(v.forPlayer ? 'hit_perfect' : 'miss'); E.burst(30 + idx * 52 + 22, 330, 10, { color: v.forPlayer ? PAL.neonCyan : PAL.neonPink, speed: 60, up: 30 }); E.shake(1.5, 100); }
+      if (idx > this.reveal && idx < 5) { this.reveal = idx; const v = this.votes[idx]; if (v.forPlayer) this.tally.you++; else this.tally.opp++; E.sfx(v.forPlayer ? 'hit_perfect' : 'miss'); L.burst(30 + idx * 52 + 22, 330, 10, { color: v.forPlayer ? PAL.neonCyan : PAL.neonPink, speed: 60, up: 30 }); E.shake(1.5, 100); }
       if (this.reveal >= 4 && this.stateT > 900 + 5 * per + 700 && !this.verdictShown) this.showVerdict();
     },
     showVerdict() {
       this.verdictShown = true; const out = this.verdict.out, win = out.win; this.reallyDone = true;
       E.sfx(win ? 'win' : 'lose'); E.flash(win ? '#fff0c9' : '#ff2f4f', 260); E.shake(4, 300);
-      if (win) E.burst(135, 200, 60, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime, '#fff'], speed: 130, up: 90, gravity: 140, life: 1400 });
+      if (win) L.burst(135, 200, 60, { colors: [PAL.gold, PAL.neonPink, PAL.neonCyan, PAL.neonLime, '#fff'], speed: 130, up: 90, gravity: 140, life: 1400 });
       const rw = this.verdict.rw, opp = this.opp;
       const box = h('div.panel.pop', { style: { left: '16px', right: '16px', top: '120px', padding: '10px', zIndex: 30, textAlign: 'center' } },
         h('div.h1', { style: { fontSize: '14px', lineHeight: '18px', color: win ? 'var(--gold2)' : '#ff7b8e' } }, win ? 'VICTORY!' : 'DEFEAT'), h('div.ts', { style: { margin: '4px 0' } }, out.forPlayer + ' of 5 judges voted for you'),
@@ -189,10 +190,10 @@
     },
 
     /* ------------------------------------------------------------ draw */
-    draw(c) {
+    draw(real, c) {
       const t = E.t, beat = E.beat();
-      if (this.bg) this.bg.layers[0].pix.draw(c, 0, 0); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480); }
-      for (const l of (this.bg && this.bg.lights) || []) E.drawGlow(c, l.x, l.y, l.r, l.color, (l.a || 0.5) * (0.5 + this.hype * 0.8 + 0.2 * Math.cos((beat % 1) * 6.28)));
+      if (this.bg) this.bg.layers[0].pix.draw(real, 0, 0); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480); }
+      for (const l of (this.bg && this.bg.lights) || []) E.drawGlow(real, l.x, l.y, l.r, l.color, (l.a || 0.5) * (0.5 + this.hype * 0.8 + 0.2 * Math.cos((beat % 1) * 6.28)));
       // dim the playfield so notes read
       { const g = c.createLinearGradient(0, 190, 0, 250); g.addColorStop(0, 'rgba(14,9,30,0)'); g.addColorStop(1, 'rgba(14,9,30,0.66)'); c.fillStyle = g; c.fillRect(0, 190, 270, 60); c.fillStyle = 'rgba(14,9,30,0.66)'; c.fillRect(0, 250, 270, 230); }
       // performers
@@ -284,7 +285,7 @@
       h('div.row', { style: { justifyContent: 'center', margin: '8px 0 6px', gap: '8px', flexWrap: 'wrap' } }, rw.cash ? h('div.chip.gold', null, E.iconEl('coin', 1), '+$' + rw.cash) : null, rw.fans ? h('div.chip.cyan', null, E.iconEl('fans', 1), '+' + rw.fans) : null, h('div.chip.lime', null, E.iconEl('level', 1), '+' + rw.xp + ' XP')),
       E.btn('CONTINUE', 'gold big', () => { box.remove(); then && then(); }));
     E.add(box); E.sfx(rk === 'S' || rk === 'A' ? 'levelup' : 'confirm');
-    if (rk === 'S') E.burst(135, 130, 40, { colors: [PAL.gold, '#fff', PAL.neonPink], speed: 110, up: 70, gravity: 120, life: 1200 });
+    if (rk === 'S') L.burst(135, 130, 40, { colors: [PAL.gold, '#fff', PAL.neonPink], speed: 110, up: 70, gravity: 120, life: 1200 });
   };
   // After any time-spending action: play held fx; if the day rolled over show the morning, else go back.
   G.finishActivity = function (held, back) {

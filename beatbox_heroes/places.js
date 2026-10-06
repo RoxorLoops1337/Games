@@ -5,7 +5,7 @@
   const BBH = root.BBH, E = BBH.E, Core = BBH.Core, CAT = BBH.CATALOG, PAL = BBH.PAL;
   const G = BBH.G = BBH.G || {};
   const h = E.h;
-  const SW = 810;
+  const SW = 1080, K = E.K, k = (n) => Math.round(n * K);
   const world = (id, v) => { try { return BBH.World.scene(id, v); } catch (e) { console.warn('scene ' + id + '/' + v, e); return null; } };
 
   const CLERK = { name: 'Clerk', body: 'girl', skin: '#d9a46e', hair: { style: 'buns', color: '#7b3a22' }, top: { id: 'hawaiian', color: '#ff6b35' }, bottom: { id: 'skirt', color: '#2a9d8f' }, shoes: { id: 'hightops', color: '#f7f2e8' }, glasses: { id: 'round', color: '#d4a017' } };
@@ -28,9 +28,9 @@
     enter(a) {
       this.vs = { day: world('street', 'day'), dusk: world('street', 'dusk'), night: world('street', 'night') };
       const any = this.vs.night || this.vs.day; this.doors = ((any && any.hotspots) || []).filter((x) => x.id !== 'home' || true);
-      this.floorY = (any && any.floorY) || 412; const from = a.from || (G.ch.place && G.ch.place !== 'street' ? G.ch.place : 'home');
-      const door = this.doors.find((d) => d.id === from) || this.doors[1] || { x: 225, w: 48 };
-      this.hx = door.x + (door.w || 48) / 2; this.target = null; this.queue = null; this.dir = 1; this.cam = Math.max(0, Math.min(SW - 270, this.hx - 135)); this.moving = false; this.steam = 0;
+      this.floorY = (any && any.floorY) || 549; const from = a.from || (G.ch.place && G.ch.place !== 'street' ? G.ch.place : 'home');
+      const door = this.doors.find((d) => d.id === from) || this.doors[1] || { x: 300, w: 64 };
+      this.hx = door.x + (door.w || 48) / 2; this.target = null; this.queue = null; this.dir = 1; this.cam = Math.max(0, Math.min(SW - E.W, this.hx - E.W / 2)); this.moving = false; this.steam = 0;
       this.weather = G.ch.day % 5 === 0 ? 'rain' : null; this.look = BBH.Chars.fix(G.ch.look);
       E.music('street'); this.build(); this.fromPlace = from;
       if (a.tutorial) E.dialog([{ who: 'foxy', mood: 'happy', text: "you're doing the thing. the beatbox thing. good. it beats the email thing." }, { who: 'foxy', text: 'tap a door to walk there. the park is open all day. busk for cash and fans.' }, { who: 'foxy', text: "keep an eye on energy, hunger and mood up top. and don't forget rent on sunday. $" + Core.CFG.rent + '.' }]);
@@ -50,24 +50,24 @@
     goDoor(id) {
       const d = this.doors.find((x) => x.id === id); if (!d) return;
       const ok = Core.canEnter(G.ch, id); if (!ok.ok) { E.toast(ok.reason, 'warn'); E.sfx('error'); return; }
-      this.target = d.x + (d.w || 48) / 2; this.queue = id;
+      this.target = d.x + (d.w || 64) / 2; this.queue = id;
     },
     pointer(type, x, y) {
-      if (type !== 'down' || y < 60 || y > 448) return;
+      if (type !== 'down' || y < k(60) || y > k(448)) return;
       const wx = this.cam + x;
-      const door = this.doors.find((d) => wx >= d.x - 10 && wx <= d.x + (d.w || 48) + 10 && y > (d.y || 250) - 20 && y < this.floorY + 20);
+      const door = this.doors.find((d) => wx >= d.x - 14 && wx <= d.x + (d.w || 64) + 14 && y > (d.y || 330) - 26 && y < this.floorY + 26);
       if (door) { this.goDoor(door.id); return; }
       this.target = Math.max(20, Math.min(SW - 20, wx)); this.queue = null;
     },
     update(dt) {
       const s = dt / 1000; this.moving = false;
       if (this.target !== null) {
-        const d = this.target - this.hx, step = 84 * s;
+        const d = this.target - this.hx, step = 112 * s;
         if (Math.abs(d) <= step) { this.hx = this.target; this.target = null; if (this.queue) { const q = this.queue; this.queue = null; G.enterPlace(q); } }
         else { this.hx += Math.sign(d) * step; this.dir = Math.sign(d); this.moving = true; }
       }
-      const want = Math.max(0, Math.min(SW - 270, this.hx - 135)); this.cam += (want - this.cam) * Math.min(1, s * 6);
-      this.steam += dt; if (this.steam > 900) { this.steam = 0; const sp = E.fxSprite('puff'); if (sp && !Array.isArray(sp)) E.spawn({ x: 160 - this.cam, y: this.floorY - 4, vx: 6, vy: -22, ay: 0, life: 1800, spr: sp, fade: true }); }
+      const want = Math.max(0, Math.min(SW - E.W, this.hx - E.W / 2)); this.cam += (want - this.cam) * Math.min(1, s * 6);
+      this.steam += dt; if (this.steam > 900) { this.steam = 0; const sp = E.fxSprite('puff'); if (sp && !Array.isArray(sp)) E.spawn({ x: 213 - this.cam, y: this.floorY - 5, vx: 6, vy: -22, ay: 0, life: 1800, spr: sp, fade: true }); }
       if (this.t % 1000 < dt && this.goalEl) this.goalEl.textContent = G.goal(G.ch).toUpperCase();
     },
     draw(c) {
@@ -75,24 +75,24 @@
       let a = V.day, b = null, mix = 0;
       if (n < 0.02) { a = V.day; } else if (n < 0.5) { a = V.day; b = V.dusk; mix = n / 0.5; } else if (n < 0.98) { a = V.dusk; b = V.night; mix = (n - 0.5) / 0.48; } else { a = V.night; }
       const drawVar = (sc, alpha) => { if (!sc) return; c.save(); if (alpha < 1) c.globalAlpha = alpha; for (const l of sc.layers) l.pix.draw(c, -Math.round(this.cam * l.speed), 0); c.restore(); };
-      c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480); drawVar(a, 1); if (b) drawVar(b, mix);
+      c.fillStyle = PAL.night1; c.fillRect(0, 0, E.W, E.H); drawVar(a, 1); if (b) drawVar(b, mix);
       const sc = b && mix > 0.5 ? b : a;
       // additive lights (windows and lamps glow more at night)
       for (const l of ((sc || {}).lights || [])) {
         const on = l.kind === 'window' ? Math.max(0, (n - 0.35) * 1.5) : l.kind === 'lamp' ? Math.min(1, n * 1.4) : l.kind === 'neon' ? Math.min(1, 0.3 + n) : n;
         if (on <= 0.02) continue; const fl = l.flicker ? 0.8 + 0.2 * Math.sin(E.t / 90 + l.x * 3) * (Math.sin(E.t / 800 + l.x) > 0.8 ? 0.3 : 1) : 1;
-        const x = l.x - this.cam; if (x < -l.r || x > 270 + l.r) continue; E.drawGlow(c, x, l.y, l.r, l.color, (l.a === undefined ? 0.5 : l.a) * on * fl);
+        const x = l.x - this.cam; if (x < -l.r || x > E.W + l.r) continue; E.drawGlow(c, x, l.y, l.r, l.color, (l.a === undefined ? 0.5 : l.a) * on * fl);
       }
       // doors: bobbing arrow on the goal door, lock on closed ones
       for (const d of this.doors) {
-        const dx = d.x + (d.w || 48) / 2 - this.cam; if (dx < -20 || dx > 290) continue; const ok = Core.canEnter(G.ch, d.id);
-        if (!ok.ok) E.icon('lock').draw(c, dx - 6, (d.y || 330) - 14); else if (this.goalDoor() === d.id) { c.save(); c.translate(Math.round(dx), (d.y || 330) - 10 + Math.round(Math.sin(E.t / 200) * 3)); c.rotate(Math.PI / 2); E.icon('right').draw(c, -6, -6); c.restore(); }
+        const dx = d.x + (d.w || 64) / 2 - this.cam; if (dx < -20 || dx > E.W + 20) continue; const ok = Core.canEnter(G.ch, d.id);
+        if (!ok.ok) E.icon('lock').draw(c, dx - 8, (d.y || 330) - 20); else if (this.goalDoor() === d.id) { c.save(); c.translate(Math.round(dx), (d.y || 330) - 12 + Math.round(Math.sin(E.t / 200) * 4)); c.rotate(Math.PI / 2); E.icon('right').draw(c, -8, -8); c.restore(); }
       }
       E.hero(c, this.look, this.moving ? 'walk' : 'idle', this.hx - this.cam, this.floorY, { flip: this.dir < 0, t: this.moving ? E.t : E.t * 0.6 });
       if (sc && sc.fg) sc.fg.draw(c, -Math.round(this.cam), 0);
       if (this.weather === 'rain' || n > 0.6) E.rain(c, E.t, { n: this.weather === 'rain' ? 80 : 14, color: 'rgba(170,200,255,.32)' });
       // night tint
-      if (n > 0.02) { c.fillStyle = 'rgba(20,10,60,' + (n * 0.12) + ')'; c.fillRect(0, 0, 270, 480); }
+      if (n > 0.02) { c.fillStyle = 'rgba(20,10,60,' + (n * 0.12) + ')'; c.fillRect(0, 0, E.W, E.H); }
     },
     goalDoor() {
       const ch = G.ch, g = G.goal(ch).toLowerCase();
@@ -108,10 +108,10 @@
       this.id = a.id; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.walkQueue = null; this.dir = 1; this.moving = false;
       const go = () => {
         this.v = variantFor(this.id, G.ch); this.sc = world(this.id, this.v);
-        const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 135, y: 400 }; this.hx = st.x; this.hy = st.y; this.tx = st.x; this.ty = st.y;
+        const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 180, y: 533 }; this.hx = st.x; this.hy = st.y; this.tx = st.x; this.ty = st.y;
         E.music(this.id); this.build(); this.firstVisit();
       };
-      if (G.pendingMorning) { E.clearUI(); G.showMorning(() => { E.fadeTo(0, 400); go(); }); this.sc = world('home', 'day'); this.v = 'day'; this.hx = 135; this.hy = 400; this.tx = this.hx; this.ty = this.hy; } else go();
+      if (G.pendingMorning) { E.clearUI(); G.showMorning(() => { E.fadeTo(0, 400); go(); }); this.sc = world('home', 'day'); this.v = 'day'; this.hx = 180; this.hy = 533; this.tx = this.hx; this.ty = this.hy; } else go();
     },
     leave() { this.closeSheet(); },
     build() {
@@ -139,22 +139,22 @@
     },
     row(label, sub, cls, fn) { return E.btn('', cls || '', fn, { textAlign: 'left', padding: '5px 6px 6px' }).appendChild(h('div.col', { style: { gap: '2px' } }, h('div', null, label), sub ? h('div.ts', { style: { fontFamily: "'Silkscreen'", fontSize: '8px', color: '#d9c9ff' } }, sub) : null)).parentNode; },
     pointer(type, x, y) {
-      if (type !== 'down' || y < 62) return;
+      if (type !== 'down' || y < k(62)) return;
       const hs = ((this.sc && this.sc.hotspots) || []).find((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
       if (hs) { this.walkTo(hs.id); return; }
-      const sc = this.sc && this.sc.spots; if (sc && y > 300) { this.tx = x; this.ty = Math.max(this.sc.floorY - 40 || y - 4, Math.min(y, 462)); this.walkQueue = null; }
+      const sc = this.sc && this.sc.spots; if (sc && y > k(300)) { this.tx = x; this.ty = Math.max((this.sc.floorY || y) - 53, Math.min(y, k(462))); this.walkQueue = null; }
     },
     walkTo(hid) {
-      this.closeSheet(); const sp = (this.sc.spots || {})[SPOT_FOR[hid] || 'stand'] || { x: 135, y: 400 }; this.tx = sp.x; this.ty = sp.y; this.walkQueue = hid;
+      this.closeSheet(); const sp = (this.sc.spots || {})[SPOT_FOR[hid] || 'stand'] || { x: 180, y: 533 }; this.tx = sp.x; this.ty = sp.y; this.walkQueue = hid;
     },
     update(dt) {
       const s = dt / 1000; this.moving = false;
-      const dx = this.tx - this.hx, dy = this.ty - this.hy, d = Math.hypot(dx, dy), step = 100 * s;
+      const dx = this.tx - this.hx, dy = this.ty - this.hy, d = Math.hypot(dx, dy), step = 133 * s;
       if (d > 1) { if (d <= step) { this.hx = this.tx; this.hy = this.ty; } else { this.hx += dx / d * step; this.hy += dy / d * step; } this.moving = true; if (Math.abs(dx) > 1) this.dir = Math.sign(dx); }
       else if (this.walkQueue) { const q = this.walkQueue; this.walkQueue = null; this.activate(q); }
     },
     draw(c) {
-      const sc = this.sc; c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480);
+      const sc = this.sc; c.fillStyle = PAL.night1; c.fillRect(0, 0, E.W, E.H);
       if (sc) for (const l of sc.layers) l.pix.draw(c, 0, 0);
       const n = Core.nightness(G.ch.minutes);
       if (sc) for (const l of sc.lights || []) { const fl = l.flicker ? 0.8 + 0.2 * Math.sin(E.t / 100 + l.x) : 1; E.drawGlow(c, l.x, l.y, l.r, l.color, (l.a === undefined ? 0.5 : l.a) * fl * (this.v === 'day' && (l.kind === 'window') ? 0.5 : 1)); }
@@ -163,7 +163,7 @@
       E.hero(c, this.look, this.moving ? 'walk' : (this.sheetEl && this.id === 'park' && this.sitting ? 'sit' : 'idle'), this.hx, this.hy, { flip: this.dir < 0, t: E.t });
       if (sc && sc.fg) sc.fg.draw(c, 0, 0);
       // tappable hotspot hints (soft pulse on the ones you can use)
-      if (sc) for (const hs of sc.hotspots || []) { if (hs.id === 'door' || hs.id === 'gate') continue; const p = 0.5 + 0.5 * Math.sin(E.t / 380 + hs.x); const cx = hs.x + hs.w / 2, cy = hs.y - 2; E.icon('star').draw(c, Math.round(cx - 6), Math.round(cy - 12 - p * 2)); }
+      if (sc) for (const hs of sc.hotspots || []) { if (hs.id === 'door' || hs.id === 'gate') continue; const p = 0.5 + 0.5 * Math.sin(E.t / 380 + hs.x); const cx = hs.x + hs.w / 2, cy = hs.y - 2; E.icon('star').draw(c, Math.round(cx - 8), Math.round(cy - 16 - p * 3)); }
       if (this.id === 'park' && n > 0.7) E.rain(c, E.t, { n: 10, color: 'rgba(170,200,255,.25)' });
     },
     npcs() {
@@ -178,7 +178,7 @@
     regulars() {
       if (this._reg && this._regDay === G.ch.day) return this._reg; this._regDay = G.ch.day;
       const pool = Core.ROMANCE.slice(), r = BBH.rng(G.ch.day * 31 + 7), picks = []; while (picks.length < 3) picks.push(pool.splice(r.int(pool.length), 1)[0]);
-      const xs = [52, 112, 214]; const ys = [((this.sc.spots || {}).stand || { y: 430 }).y + 8, ((this.sc.spots || {}).stand || { y: 430 }).y - 6, ((this.sc.spots || {}).stand || { y: 430 }).y + 8];
+      const xs = [70, 150, 285], sy0 = ((this.sc.spots || {}).stand || { y: 573 }).y; const ys = [sy0 + 10, sy0 - 8, sy0 + 10];
       this._reg = picks.map((id, i) => ({ look: BBH.Chars.fix(Core.NPCS[id].look), x: xs[i], y: ys[i], id, pose: 'idle', flip: i === 2 })); return this._reg;
     },
 
@@ -309,9 +309,9 @@
   const basePointer = E.scenes.place.pointer;
   E.scenes.place.pointer = function (type, x, y) {
     if (type === 'down' && this.id === 'bar') {
-      for (const r of this.regulars()) if (Math.abs(x - r.x) < 16 && y > r.y - 62 && y < r.y + 4) { this.walkTo('stage'); this.walkQueue = null; this.mingleMenu(r.id); return; }
+      for (const r of this.regulars()) if (Math.abs(x - r.x) < 22 && y > r.y - 84 && y < r.y + 6) { this.walkTo('stage'); this.walkQueue = null; this.mingleMenu(r.id); return; }
     }
-    if (type === 'down' && this.id === 'home') { const f = this.npcs().find((n) => n.id === 'foxy'); if (f && Math.abs(x - f.x) < 16 && y > f.y - 62 && y < f.y + 4) { E.dialog([{ who: 'foxy', text: tip('foxy') }]); return; } }
+    if (type === 'down' && this.id === 'home') { const f = this.npcs().find((n) => n.id === 'foxy'); if (f && Math.abs(x - f.x) < 22 && y > f.y - 84 && y < f.y + 6) { E.dialog([{ who: 'foxy', text: tip('foxy') }]); return; } }
     basePointer.call(this, type, x, y);
   };
   E.scenes.place.mingleMenu = function (who) {
@@ -340,7 +340,7 @@
         const owned = Core.isUnlocked(G.ch, st.tab, it.id), stock = it.unlock.t !== 'shop' || G.ch.level >= it.unlock.lvl || owned;
         let pix = null; try { pix = BBH.Chars.thumb(st.tab, it.id, st.look); } catch (e) { pix = null; }
         const tile = h('div.tile' + (st.sel === it.id ? '.on' : '') + (stock ? '' : '.lock'), null, pix ? E.pixEl(pix, 1) : h('div.tp', null, '?'), owned ? h('div.lk', null, E.iconEl('check', 1)) : null, !owned && it.unlock.t === 'shop' ? h('div.pr', null, '$' + it.unlock.price) : null);
-        tile.addEventListener('click', () => { st.sel = it.id; tryOn(st.tab, it.id); E.sfx('equip'); E.burst(135, 130, 8, { colors: [PAL.neonCyan, PAL.gold], speed: 50, gravity: 20, life: 400 }); render(); });
+        tile.addEventListener('click', () => { st.sel = it.id; tryOn(st.tab, it.id); E.sfx('equip'); E.burst(180, 173, 8, { colors: [PAL.neonCyan, PAL.gold], speed: 65, gravity: 20, life: 400 }); render(); });
         grid.appendChild(tile);
       }
       if (!items.length) grid.appendChild(h('div.ts', null, 'Nothing here yet. Level up for new stock.'));
@@ -364,9 +364,9 @@
   E.scenes.place.draw = function (c) {
     baseDraw.call(this, c);
     if (this.shop && this.shop.el.isConnected) {      // big try-on preview with a spotlight
-      c.save(); c.fillStyle = 'rgba(14,9,30,.55)'; c.fillRect(0, 62, 270, 190); c.restore();
-      E.drawGlow(c, 135, 160, 70, PAL.neonViolet, 0.25);
-      E.hero(c, BBH.Chars.fix(this.shop.look), 'idle', 135, 232, { scale: 2, t: E.t });
+      c.save(); c.fillStyle = 'rgba(14,9,30,.55)'; c.fillRect(0, k(62), E.W, k(190)); c.restore();
+      E.drawGlow(c, 180, 213, 95, PAL.neonViolet, 0.25);
+      E.hero(c, BBH.Chars.fix(this.shop.look), 'idle', 180, k(250), { scale: 2, t: E.t });
     }
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

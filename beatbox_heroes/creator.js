@@ -5,7 +5,7 @@
   'use strict';
   const BBH = root.BBH, E = BBH.E, Core = BBH.Core, CAT = BBH.CATALOG, PAL = BBH.PAL;
   const G = BBH.G = BBH.G || {};
-  const h = E.h, C = () => BBH.Chars;
+  const h = E.h, C = () => BBH.Chars, K = E.K, k = (n) => Math.round(n * K);
 
   const POSES = ['idle', 'beatbox', 'dance', 'cheer', 'point', 'battle'];
   const TABS = [
@@ -17,7 +17,7 @@
   E.scenes.creator = {
     enter(a) {
       this.mode = a.mode || 'new'; this.slot = a.slot || 1; this.back = a.back || null;
-      this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 135, y: 402 }; this.dy = sp0.y - 296; this.spot = { x: sp0.x, y: 296 };
+      this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 180, y: 536 }; this.dy = sp0.y - k(296); this.spot = { x: sp0.x, y: k(296) };
       this.look = C().fix(this.mode === 'wardrobe' ? G.ch.look : (G.draft || CAT.DEFAULT_LOOK));
       if (this.mode === 'new' && !G.draft) this.look.name = '';
       this.ch = this.mode === 'wardrobe' ? G.ch : Core.newChar(this.look);
@@ -29,7 +29,7 @@
     isOpen(group, id) { return Core.isUnlocked(this.ch, group, id); },
     changed(sparkle) {
       this.hop = 1; E.sfx('equip');
-      if (sparkle !== false) { const sp = E.fxSprite('spark'); E.burst(this.spot.x, this.spot.y - 120, 10, { colors: [PAL.neonCyan, PAL.neonPink, PAL.gold, '#fff'], speed: 70, up: 20, gravity: 60, spr: Array.isArray(sp) ? null : sp, life: 500 }); }
+      if (sparkle !== false) { const sp = E.fxSprite('spark'); E.burst(this.spot.x, this.spot.y - 160, 10, { colors: [PAL.neonCyan, PAL.neonPink, PAL.gold, '#fff'], speed: 70, up: 20, gravity: 60, spr: Array.isArray(sp) ? null : sp, life: 500 }); }
     },
     // ----------------------------------------------------------------- UI
     build() {
@@ -212,24 +212,24 @@
       for (const r of this.rings) r.age += dt; this.rings = this.rings.filter((r) => r.age < 700);
     },
     pointer(type, x, y) {
-      if (type !== 'down' || y > 300) return;
+      if (type !== 'down' || y > k(300)) return;
       const i = (POSES.indexOf(this.pose) + 1) % POSES.length; this.pose = POSES[i]; this.hop = 1; E.sfx('hit_good'); E.burst(x, y, 6, { color: PAL.neonCyan, speed: 40, gravity: 0, life: 300 });
       if (this.tab === 'body') this.renderTab(true);
     },
     draw(c) {
       const t = E.t;
-      if (this.bg) this.bg.layers[0].pix.draw(c, 0, -this.dy); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, 270, 480); }
+      if (this.bg) this.bg.layers[0].pix.draw(c, 0, -this.dy); else { c.fillStyle = PAL.night1; c.fillRect(0, 0, E.W, E.H); }
       for (const l of (this.bg && this.bg.lights) || []) E.drawGlow(c, l.x, l.y - this.dy, l.r, l.color, (l.a || 0.5) * (l.flicker ? 0.85 + 0.15 * Math.sin(t / 130 + l.x) : 1));
       const hop = -Math.abs(Math.sin(this.hop * Math.PI)) * 10 * this.hop, sx = this.spot.x, sy = this.spot.y;
       // beam of light behind the hero
-      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.07 + 0.02 * Math.sin(t / 500); c.fillStyle = '#9b7bff'; c.beginPath(); c.moveTo(sx - 22, 0); c.lineTo(sx + 22, 0); c.lineTo(sx + 90, sy); c.lineTo(sx - 90, sy); c.closePath(); c.fill(); c.restore();
-      for (const r of this.rings) { const k = r.age / 700; c.save(); c.globalAlpha = 1 - k; c.strokeStyle = [PAL.neonCyan, PAL.neonYellow, PAL.neonLime, PAL.neonPink][Math.floor(r.age / 175) % 4]; c.lineWidth = 2; c.beginPath(); c.ellipse(sx, sy - 190, 30 + k * 90, 22 + k * 62, 0, 0, 7); c.stroke(); c.restore(); }
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.07 + 0.02 * Math.sin(t / 500); c.fillStyle = '#9b7bff'; c.beginPath(); c.moveTo(sx - 30, 0); c.lineTo(sx + 30, 0); c.lineTo(sx + 120, sy); c.lineTo(sx - 120, sy); c.closePath(); c.fill(); c.restore();
+      for (const r of this.rings) { const kk = r.age / 700; c.save(); c.globalAlpha = 1 - kk; c.strokeStyle = [PAL.neonCyan, PAL.neonYellow, PAL.neonLime, PAL.neonPink][Math.floor(r.age / 175) % 4]; c.lineWidth = 2; c.beginPath(); c.ellipse(sx, sy - 250, 40 + kk * 120, 30 + kk * 82, 0, 0, 7); c.stroke(); c.restore(); }
       E.hero(c, this.look, this.pose, sx, sy + hop, { scale: 4, shadow: false, t });
-      E.shadow(c, sx, sy + 2, 100, 0.4);
+      E.shadow(c, sx, sy + 2, 132, 0.4);
       // sparkles
-      for (let i = 0; i < 6; i++) { const a = t / 1400 + i * 1.05, rr = 70 + (i % 3) * 14; const px = sx + Math.cos(a) * rr, py = sy - 130 + Math.sin(a * 1.3) * 90; const tw = (Math.sin(t / 200 + i * 2) + 1) / 2; if (tw > 0.55) { c.fillStyle = i % 2 ? PAL.neonCyan : PAL.neonPink; c.fillRect(Math.round(px), Math.round(py), 1, 1); c.fillRect(Math.round(px) - 1, Math.round(py), 3, 1); c.fillRect(Math.round(px), Math.round(py) - 1, 1, 3); } }
+      for (let i = 0; i < 6; i++) { const a = t / 1400 + i * 1.05, rr = 95 + (i % 3) * 18; const px = sx + Math.cos(a) * rr, py = sy - 175 + Math.sin(a * 1.3) * 120; const tw = (Math.sin(t / 200 + i * 2) + 1) / 2; if (tw > 0.55) { c.fillStyle = i % 2 ? PAL.neonCyan : PAL.neonPink; c.fillRect(Math.round(px), Math.round(py), 1, 1); c.fillRect(Math.round(px) - 1, Math.round(py), 3, 1); c.fillRect(Math.round(px), Math.round(py) - 1, 1, 3); } }
       const pv = Object.keys(this.previewing).filter((k) => { const [g, id] = k.split(':'); return !this.isOpen(g, id) && this.isWorn(g, id); });
-      if (pv.length) E.txt(c, 'PREVIEW: LOCKED ITEMS WORN', 135, 296, { align: 'c', color: PAL.gold, a: 0.6 + 0.4 * Math.sin(t / 250) });
+      if (pv.length) E.txt(c, 'PREVIEW: LOCKED ITEMS WORN', E.W / 2, k(296), { align: 'c', color: PAL.gold, a: 0.6 + 0.4 * Math.sin(t / 250) });
     },
     isWorn(g, id) {
       const L = this.look;

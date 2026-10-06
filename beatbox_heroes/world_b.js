@@ -12,46 +12,87 @@
   const World = BBH.World || (BBH.World = {});
   World.builders = World.builders || {};
   World.cache = World.cache || {};
-  const W = 270, H = 480;
+  // Scenes are DESIGNED on a 270x480 grid (W,H) and PAINTED natively at 360x640 (x4/3): the Z wrapper maps design
+  // coordinates to native pixels (rect/ellipse/poly/line edges are re-rasterised at the finer grid, never resampled),
+  // and detail layers (grain, dithers, glows, text, outlines) are drawn directly in native pixels.
+  const W = 270, H = 480, K = 4 / 3, NW = 360, NH = 640;
+  const sc = (v) => Math.round(v * K);
+  const cxy = (v) => Math.round((v + 0.5) * K - 0.5);                // pixel index -> native pixel index
+  class Z {
+    constructor(lw, lh, pix) { this.lw = lw; this.lh = lh; this.n = pix || new Pix(sc(lw), sc(lh)); }
+    get w() { return this.lw; } get h() { return this.lh; }
+    px(x, y, c, a) { this.n.px(sc(x), sc(y), c, a); return this; }
+    add(x, y, c, a) { this.n.add(sc(x), sc(y), c, a); return this; }
+    rectc(x, y, w, h, c) { const x0 = sc(x), y0 = sc(y); this.n.rect(x0, y0, sc(x + w) - x0, sc(y + h) - y0, c); return this; }
+    cov(x, y, c, a) { const x0 = sc(x), y0 = sc(y), x1 = sc(x + 1), y1 = sc(y + 1); for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) this.n.px(i, j, c, a); return this; }
+    rect(x, y, w, h, c, rep) {
+      const x0 = sc(x), y0 = sc(y); let ww = sc(x + w) - x0, hh = sc(y + h) - y0;
+      if (Math.round(w) === 1) ww = 1; if (Math.round(h) === 1) hh = 1;
+      this.n.rect(x0, y0, ww, hh, c, rep); return this;
+    }
+    hline(x, y, w, c) { return this.rect(x, y, w, 1, c); }
+    vline(x, y, h, c) { return this.rect(x, y, 1, h, c); }
+    frame(x, y, w, h, c) { const x0 = sc(x), y0 = sc(y); this.n.frame(x0, y0, sc(x + w) - x0, sc(y + h) - y0, c); return this; }
+    line(x0, y0, x1, y1, c, t) { this.n.line(cxy(x0), cxy(y0), cxy(x1), cxy(y1), c, t > 1 ? Math.round(t * K) : 1); return this; }
+    ellipse(cx, cy, rx, ry, c) { this.n.ellipse((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, c); return this; }
+    shadedEllipse(cx, cy, rx, ry, rp2, lx, ly) { this.n.shadedEllipse((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, rp2, lx, ly); return this; }
+    ring(cx, cy, rx, ry, c) { this.n.ring((cx + 0.5) * K - 0.5, (cy + 0.5) * K - 0.5, (rx + 0.5) * K - 0.5, (ry + 0.5) * K - 0.5, c); return this; }
+    poly(pts, c) { this.n.poly(pts.map((q) => [q[0] * K, q[1] * K]), c); return this; }
+    outline(f, d) { this.n.outline(f, d); return this; }
+    tint(c, k) { this.n.tint(c, k); return this; }
+  }
 
   /* ================================================================ painting helpers */
   const BAY = [0, 2, 3, 1];
   const bay = (x, y) => BAY[(x & 1) | ((y & 1) << 1)];
   const lerp = (a, b, t) => a + (b - a) * t;
   const rp = (c) => ramp(c);
+  const gr = (p) => p.n || p;                                          // native Pix behind a Z (or the Pix itself)
 
-  // quantised, dithered intensity 0..1 in 4 steps
+  // quantised, dithered intensity 0..1 in 4 steps (native pixel coordinates)
   function dq(v, x, y) {
     if (v <= 0) return 0; if (v >= 1) return 1;
     const s = v * 3, b = Math.floor(s);
     return (b + ((s - b) * 4 > bay(x, y) ? 1 : 0)) / 3;
   }
-  // checker/bayer dithered rectangle: level 0..4
+  // bayer dithered rectangle, level 0..4 (design coords)
   function dfill(p, x, y, w, h, c, lvl) {
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (bay(x + i, y + j) < lvl) p.px(x + i, y + j, c);
+    const n = gr(p), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) if (bay(i, j) < lvl) n.px(i, j, c);
   }
-  // additive radial glow (dithered falloff)
+  // sprinkled single-pixel speckle texture (native density): colours array, density 0..1
+  function grain(p, x, y, w, h, cols, dens, seed) {
+    const n = gr(p), r = rng((seed || 1) * 977 + sc(x) * 31 + sc(y)), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    const cnt = Math.floor((x1 - x0) * (y1 - y0) * dens);
+    for (let i = 0; i < cnt; i++) n.px(x0 + Math.floor(r() * (x1 - x0)), y0 + Math.floor(r() * (y1 - y0)), cols[Math.floor(r() * cols.length)]);
+  }
+  // short horizontal wood-grain / scratch streaks
+  function streaks(p, x, y, w, h, cols, count, maxLen, seed) {
+    const n = gr(p), r = rng((seed || 1) * 613 + sc(x) * 17 + sc(y)), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h);
+    for (let i = 0; i < count; i++) { const sx = x0 + Math.floor(r() * (x1 - x0)), sy = y0 + Math.floor(r() * (y1 - y0)), L = 2 + Math.floor(r() * maxLen); n.rect(sx, sy, Math.min(L, x1 - sx), 1, cols[Math.floor(r() * cols.length)]); }
+  }
+  // additive radial glow (dithered falloff), design coords
   function glow(p, cx, cy, r, color, a, ry) {
     a = a === undefined ? 1 : a; ry = ry || r;
-    const k = C(color);
-    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
-      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
-      const d = Math.hypot((x - cx) / r, (y - cy) / ry); if (d >= 1) continue;
+    const n = gr(p), k = C(color), X = cx * K, Y = cy * K, RX = r * K, RY = ry * K;
+    for (let y = Math.max(0, Math.floor(Y - RY)); y <= Math.min(n.h - 1, Math.ceil(Y + RY)); y++) for (let x = Math.max(0, Math.floor(X - RX)); x <= Math.min(n.w - 1, Math.ceil(X + RX)); x++) {
+      const d = Math.hypot((x - X) / RX, (y - Y) / RY); if (d >= 1) continue;
       const v = dq((1 - d) * (1 - d) * 1.15 * a, x, y);
-      if (v > 0) p.add(x, y, k, 255 * v * 0.55);
+      if (v > 0) n.add(x, y, k, 255 * v * 0.55);
     }
   }
-  // additive light cone from (x0,y0,w0) down/up to (x1,y1,w1)
+  // additive light cone from (x0,y0,w0) to (x1,y1,w1), design coords
   function beam(p, x0, y0, w0, x1, y1, w1, color, a) {
-    a = a === undefined ? 1 : a; const k = C(color);
+    a = a === undefined ? 1 : a; const n = gr(p), k = C(color);
+    x0 *= K; y0 *= K; w0 *= K; x1 *= K; y1 *= K; w1 *= K;
     const ya = Math.floor(Math.min(y0, y1)), yb = Math.ceil(Math.max(y0, y1));
-    for (let y = Math.max(0, ya); y <= Math.min(p.h - 1, yb); y++) {
+    for (let y = Math.max(0, ya); y <= Math.min(n.h - 1, yb); y++) {
       const t = (y - y0) / ((y1 - y0) || 1), cx = lerp(x0, x1, t), hw = lerp(w0, w1, t) / 2;
       for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
-        if (x < 0 || x >= p.w) continue;
+        if (x < 0 || x >= n.w) continue;
         const e = 1 - Math.abs(x - cx) / (hw + 0.5); if (e <= 0) continue;
         const v = dq(Math.sqrt(e) * (1 - t * 0.65) * a, x, y);
-        if (v > 0) p.add(x, y, k, 255 * v * 0.42);
+        if (v > 0) n.add(x, y, k, 255 * v * 0.42);
       }
     }
   }
@@ -66,70 +107,66 @@
     }
     return p;
   }
-  function shadowRect(p, x, y, w, h, c, a) { p.rect(x, y, w, h, c || '#120d1f', a === undefined ? 90 : a); }
-  // tinted additive rectangle patch (light spill)
-  function wash(p, x, y, w, h, c, a) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.add(x + i, y + j, c, a); }
-  // text drawn into a pix with optional shadow
-  function txt(p, s, x, y, col, o) { Font.draw(p, s, x, y, col, o); }
-  // neon sign painted straight into the scene: core, light core line, additive dithered halo
+  // additive horizontal/vertical strip (neon tube light), design coords
+  function addStrip(p, x, y, w, h, c, a) { const n = gr(p), x0 = sc(x), y0 = sc(y), x1 = sc(x + w), y1 = sc(y + h); for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) n.add(i, j, c, a); }
+  // text is always drawn in native pixels (5x7 font): design coords for the origin
+  const TSP = (scale) => ((scale || 1) === 1 ? 2 : 5);
+  function txt(p, s, x, y, col, o) { o = o || {}; Font.draw(gr(p), s, sc(x), sc(y), col, Object.assign({ spacing: TSP(o.scale) }, o)); }
+  const tw = (s, scale) => Font.width(String(s), scale || 1, TSP(scale)) / K;       // text width in design units
+  // neon sign painted straight into the scene: core, light core line, additive dithered halo (native)
   function neon(p, s, cx, cy, color, scale, o) {
-    o = o || {}; scale = scale || 1; const w = Font.width(s, scale, 1), h = 7 * scale;
-    const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
-    const m = new Pix(w + 12, h + 12); Font.draw(m, s, 6, 6, '#fff', { scale });
-    // halo
+    o = o || {}; scale = scale || 1; const n = gr(p), sp = TSP(scale), w = Font.width(s, scale, sp), h = 7 * scale;
+    const x = Math.round(cx * K - w / 2), y = Math.round(cy * K - h / 2), P = 7;
+    const m = new Pix(w + P * 2, h + P * 2); Font.draw(m, s, P, P, '#fff', { scale, spacing: sp });
+    const R = rp(color), hal = o.halo === undefined ? 1 : o.halo;
     for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
       if (m.alphaAt(i, j) > 0) continue;
       let best = 9;
-      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { if (m.alphaAt(i + dx, j + dy) > 0) { const d = Math.max(Math.abs(dx), Math.abs(dy)); if (d < best) best = d; } }
-      if (best <= 4) { const v = dq((1 - (best - 1) / 4) * 0.8 * (o.halo === undefined ? 1 : o.halo), i, j); if (v > 0) p.add(x - 6 + i, y - 6 + j, color, 255 * v * 0.5); }
+      for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) { if (m.alphaAt(i + dx, j + dy) > 0) { const d = Math.max(Math.abs(dx), Math.abs(dy)); if (d < best) best = d; } }
+      if (best <= 5) { const v = dq((1 - (best - 1) / 5) * 0.8 * hal, i, j); if (v > 0) n.add(x - P + i, y - P + j, color, 255 * v * 0.5); }
     }
-    const R = rp(color);
     for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
       if (m.alphaAt(i, j) === 0) continue;
       const lit = m.alphaAt(i - 1, j) === 0 || m.alphaAt(i, j - 1) === 0;
-      p.px(x - 6 + i, y - 6 + j, scale > 1 ? (lit ? R.hi : R.light) : R.hi);
+      n.px(x - P + i, y - P + j, scale > 1 ? (lit ? R.hi : R.light) : R.hi);
     }
-    if (scale > 1) for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) if (m.alphaAt(i, j) && m.alphaAt(i - 1, j) && m.alphaAt(i + 1, j) && m.alphaAt(i, j - 1) && m.alphaAt(i, j + 1)) p.px(x - 6 + i, y - 6 + j, '#fffaf0');
+    if (scale > 1) for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) if (m.alphaAt(i, j) && m.alphaAt(i - 1, j) && m.alphaAt(i + 1, j) && m.alphaAt(i, j - 1) && m.alphaAt(i, j + 1)) n.px(x - P + i, y - P + j, '#fffaf0');
     return { x, y, w, h };
   }
-  // unlit tube sign (day): dull coloured letters
-  function tube(p, s, cx, cy, color, scale) {
-    const w = Font.width(s, scale || 1, 1), x = Math.round(cx - w / 2), y = Math.round(cy - 3.5 * (scale || 1));
-    Font.draw(p, s, x, y, mix(color, '#43296f', 0.45), { scale: scale || 1 });
-  }
   // final safety: nothing pure black
-  function noBlack(p) {
-    const d = p.data;
+  function noBlack(n) {
+    const d = n.data;
     for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; if (d[i] < 14) d[i] = 14; if (d[i + 1] < 10) d[i + 1] = 10; if (d[i + 2] < 24) d[i + 2] = 24; }
-    p._dirty = true; return p;
+    n._dirty = true; return n;
   }
-  // night / day grading of everything painted so far
-  function grade(p, c, k) { p.tint(c, k); }
-  // soft shadow blob under objects
-  function contact(p, cx, y, rx, a) { for (let i = -rx; i <= rx; i++) p.px(cx + i, y, '#120d1f', (a || 70) * (1 - Math.abs(i) / (rx + 1))); }
-  // a thin vertical gradient made of dithered bands between two colours
+  // a vertical gradient made of dithered bands between two colours
   function band(p, x, y, w, h, c1, c2, steps) {
     steps = steps || 5;
     for (let s = 0; s < steps; s++) {
       const y0 = y + Math.floor(h * s / steps), y1 = y + Math.floor(h * (s + 1) / steps);
-      p.rect(x, y0, w, y1 - y0, mix(c1, c2, s / (steps - 1)));
-      if (s < steps - 1) dfill(p, x, y1 - 1, w, 1, mix(c1, c2, (s + 1) / (steps - 1)), 2);
+      p.rectc(x, y0, w, y1 - y0, mix(c1, c2, s / (steps - 1)));
+      if (s < steps - 1) dfill(p, x, y1 - 1, w, 1.5, mix(c1, c2, (s + 1) / (steps - 1)), 2);
     }
   }
-  function cut(p, cx, cy, rx, ry) {   // erase an ellipse (alpha 0)
-    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-      const nx = (x - cx) / (rx + 0.5), ny = (y - cy) / (ry + 0.5);
-      if (nx * nx + ny * ny <= 1 && p.inb(x, y)) p.data[(y * p.w + x) * 4 + 3] = 0;
+  function cut(p, cx, cy, rx, ry) {   // erase an ellipse (alpha 0), design coords
+    const n = gr(p), X = (cx + 0.5) * K - 0.5, Y = (cy + 0.5) * K - 0.5, RX = (rx + 0.5) * K - 0.5, RY = (ry + 0.5) * K - 0.5;
+    for (let y = Math.floor(Y - RY); y <= Math.ceil(Y + RY); y++) for (let x = Math.floor(X - RX); x <= Math.ceil(X + RX); x++) {
+      const nx = (x - X) / (RX + 0.5), ny = (y - Y) / (RY + 0.5);
+      if (nx * nx + ny * ny <= 1 && n.inb(x, y)) n.data[(y * n.w + x) * 4 + 3] = 0;
     }
   }
-  function mk(w, h, fn) { const p = new Pix(w, h); fn(p); return p; }
+  function mk(w, h, fn) { const z = new Z(w, h); fn(z); return z.n; }
 
   function scene(id, variant, p, extra) {
-    noBlack(p);
-    return Object.assign({
-      id, variant: variant || null, w: W, h: H, layers: [{ pix: p, speed: 1 }], fg: null,
-      floorY: 440, spots: {}, hotspots: [], lights: [], anim: [],
-    }, extra);
+    const n = gr(p); noBlack(n);
+    const S = (v) => Math.round(v * K);
+    const e = Object.assign({ floorY: 440, spots: {}, hotspots: [], lights: [], anim: [] }, extra);
+    if (e.fg) { e.fg = gr(e.fg); }
+    const spots = {}; for (const k in e.spots) spots[k] = { x: S(e.spots[k].x), y: S(e.spots[k].y) };
+    const hotspots = e.hotspots.map((h) => { const x0 = S(h.x), y0 = S(h.y); return { id: h.id, label: h.label, x: x0, y: y0, w: Math.min(NW, S(h.x + h.w)) - x0, h: Math.min(NH, S(h.y + h.h)) - y0 }; });
+    const lights = e.lights.map((l) => Object.assign({}, l, { x: S(l.x), y: S(l.y), r: S(l.r) }));
+    const anim = e.anim.map((a) => { const o = Object.assign({}, a); for (const k of ['x', 'y', 'w', 'h']) if (o[k] !== undefined) o[k] = S(o[k]); return o; });
+    return { id, variant: variant || null, w: NW, h: NH, layers: [{ pix: n, speed: 1 }], fg: e.fg || null, floorY: S(e.floorY), spots, hotspots, lights, anim };
   }
   const _bcache = {};
   function reg(id, fn) {
@@ -163,8 +200,8 @@
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, w * 0.33, w * 0.33, R2.base);
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, w * 0.2, w * 0.2, bg.deep);
       p.ellipse(x + w / 2 - 0.5, y + h * 0.4, 1, 1, R2.hi);
-      txt(p, 'BEAT', x + Math.round((w - Font.width('BEAT')) / 2), y + h - 17, '#fffaf0');
-      txt(p, 'BOX', x + Math.round((w - Font.width('BOX')) / 2), y + h - 9, R2.hi);
+      txt(p, 'BEAT', x + Math.round((w - tw('BEAT')) / 2), y + h - 17, '#fffaf0');
+      txt(p, 'BOX', x + Math.round((w - tw('BOX')) / 2), y + h - 9, R2.hi);
     } else if (kind === 'bass') {
       p.rect(x + 2, y + 2, w - 4, 1, R2.base);
       txt(p, 'DROP', x + Math.round((w - 20) / 2), y + 5, '#fffaf0');
@@ -425,7 +462,7 @@
 
   /* ================================================================ HOME */
   reg('home', (variant) => {
-    const night = variant === 'night', rr = rng(1701), p = new Pix(W, H);
+    const night = variant === 'night', rr = rng(1701), p = new Z(W, H);
     p.fill('#2c1d4d');
     // ---- bedroom wall + floor
     p.rect(0, 0, W, 206, night ? '#6b3f86' : '#7c4a92');
@@ -672,7 +709,7 @@
     p.ellipse(x, y + 4, 4, 5, '#e6b79a'); p.poly([[x - 5, y + 2], [x + 5, y + 2], [x + 6, y + 12], [x + 3, y + 10], [x - 3, y + 10], [x - 6, y + 12]], c); p.ellipse(x, y + 1, 5, 3, c); p.px(x - 2, y + 5, '#2a1a3c'); p.px(x + 2, y + 5, '#2a1a3c'); p.px(x, y + 8, '#c9577f');
   }
   reg('shop', (variant) => {
-    const night = variant === 'night', rr = rng(2202), p = new Pix(W, H), fg = new Pix(W, H);
+    const night = variant === 'night', rr = rng(2202), p = new Z(W, H), fg = new Z(W, H);
     // wall: teal wallpaper with a brick wainscot
     p.fill('#2a2a52'); p.rect(0, 0, W, 300, night ? '#4a4890' : '#5a58a8');
     for (let x = 0; x < W; x += 16) { p.rect(x, 0, 8, 300, night ? '#524f9a' : '#6664b6'); }
@@ -767,7 +804,7 @@
     p.line(60, 52, 60, 66, '#18122c'); p.line(106, 52, 106, 66, '#18122c');
     p.rect(54, 66, 58, 22, night ? '#2a1a3c' : '#43296f'); p.rect(55, 67, 56, 20, '#1a1033');
     if (night) { neon(p, 'OPEN', 83, 77, '#ff3ea5', 2); p.rect(55, 67, 56, 1, '#ff3ea5'); p.rect(55, 86, 56, 1, '#ff3ea5'); }
-    else { Font.draw(p, 'OPEN', 83 - Font.width('OPEN', 2, 1) / 2, 70, '#a8456f', { scale: 2 }); p.rect(55, 67, 56, 1, '#8a3a6a'); p.rect(55, 86, 56, 1, '#8a3a6a'); }
+    else { txt(p, 'OPEN', 83 - tw('OPEN', 2) / 2, 70, '#a8456f', { scale: 2 }); p.rect(55, 67, 56, 1, '#8a3a6a'); p.rect(55, 86, 56, 1, '#8a3a6a'); }
     // pendant lamp glows
     for (const lx of [92, 206]) { p.rect(lx - 4, 34, 8, 3, '#fff0c9'); glow(p, lx, 46, night ? 54 : 34, '#ffbe55', night ? 1 : 0.6, night ? 50 : 30); }
     if (night) { glow(p, 210, 100, 70, '#ffbe55', 0.4, 60); glow(p, 100, 220, 70, '#ffbe55', 0.3, 40); }
@@ -809,7 +846,7 @@
     p.ellipse(cx, y + h * 0.22, w * 0.12, w * 0.12, '#18122c'); p.ellipse(cx, y + h * 0.22, w * 0.05, w * 0.05, '#8a87a8'); p.px(x + w - 4, y + h - 3, '#9dff4a');
   }
   reg('studio', (variant) => {
-    const night = variant === 'night', rr = rng(3303), p = new Pix(W, H);
+    const night = variant === 'night', rr = rng(3303), p = new Z(W, H);
     p.fill('#241540');
     // wall of foam panels
     const pc = ['#3a2f5c', '#43296f', '#2f3a6a', '#3a2f5c', '#6a3b8f', '#1f5a6a', '#3a2f5c'];
@@ -943,7 +980,7 @@
     p.px(x - 4, y - 11, rim); p.px(x - 3, y - 14, rim); p.px(x - 8, y - 1, rim); p.px(x - 7, y - 3, rim);
   }
   reg('bar', () => {
-    const rr = rng(4404), p = new Pix(W, H), fg = new Pix(W, H);
+    const rr = rng(4404), p = new Z(W, H), fg = new Z(W, H);
     p.fill('#150f26');
     // brick back wall
     p.rect(0, 0, W, 272, '#3a1d2e');
@@ -1085,7 +1122,7 @@
     }
   }
   reg('stage', (variant) => {
-    const V = STAGE_V[variant] || STAGE_V.pink, rr = rng(V.seed * 101), p = new Pix(W, H), fg = new Pix(W, H);
+    const V = STAGE_V[variant] || STAGE_V.pink, rr = rng(V.seed * 101), p = new Z(W, H), fg = new Z(W, H);
     band(p, 0, 0, W, 300, V.top, V.bot, 9);
     // back wall panels
     for (let x = 0; x < W; x += 30) { p.rect(x, 0, 1, 300, mix(V.bot, '#000000', 0.35)); dfill(p, x + 1, 0, 1, 300, mix(V.bot, V.b, 0.2), 1); }
@@ -1160,7 +1197,7 @@
 
   /* ================================================================ CREATOR */
   reg('creator', () => {
-    const rr = rng(6606), p = new Pix(W, H);
+    const rr = rng(6606), p = new Z(W, H);
     band(p, 0, 0, W, 336, '#120a28', '#2c1650', 9);
     // wall panels / brick hints
     for (let y = 14; y < 336; y += 14) { p.rect(0, y, W, 1, '#1c1038'); for (let x = ((y / 14) % 2) * 18; x < W; x += 36) p.rect(x, y, 1, 14, '#1c1038'); }
@@ -1170,7 +1207,7 @@
     // darken them a bit so the wall stays calm
     for (const [x, y, w, h] of [[8, 40, 66, 80], [204, 36, 62, 74]]) for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.px(x + i, y + j, '#120a28', 70);
     // graffiti: tags + arrows + stars in low-contrast spray colours
-    const sp = (x, y, s, c) => { Font.draw(p, s, x, y, mix(c, '#2c1650', 0.8), { scale: 2 }); Font.draw(p, s, x - 1, y - 1, mix(c, '#2c1650', 0.62), { scale: 2 }); };
+    const sp = (x, y, s, c) => { txt(p, s, x, y, mix(c, '#2c1650', 0.8), { scale: 2 }); txt(p, s, x - 1, y - 1, mix(c, '#2c1650', 0.62), { scale: 2 }); };
     sp(10, 140, 'FLOW', '#ff3ea5'); sp(206, 128, 'BBH', '#2ee6ff'); sp(14, 190, 'SPIN', '#9dff4a'); sp(200, 176, 'BEATS', '#ffe14d');
     p.line(14, 166, 60, 168, '#6a2a7a'); p.line(60, 168, 54, 163, '#6a2a7a'); p.line(60, 168, 54, 172, '#6a2a7a');
     for (const [x, y] of [[70, 150], [196, 156], [40, 230], [236, 220]]) { p.vline(x, y - 3, 7, '#8a4a9a'); p.hline(x - 3, y, 7, '#8a4a9a'); p.px(x, y, '#c9a8e0'); }

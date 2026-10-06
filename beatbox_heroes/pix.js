@@ -275,6 +275,7 @@
       return this._cv;
     }
     draw(ctx, x, y, o) {                    // draw onto a 2D context at integer coords (optionally flipped)
+      if (ctx.L) { x = ctx.px(x); y = ctx.py(y); ctx = ctx.real; }   // layout-space wrapper (see engine.js): position scaled, size native
       const cv = this.canvas(); o = o || {};
       if (o.flip) { ctx.save(); ctx.translate(Math.round(x) + this.w, Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0); ctx.restore(); }
       else ctx.drawImage(cv, Math.round(x), Math.round(y));
@@ -308,6 +309,6 @@
     return out;
   };
 
-  Object.assign(BBH, { Pix, PAL, C, hex, hsl, toHsl, mix, ramp, lighten, darken, clamp, lerp, rng, hashStr, SCREEN: { W: 270, H: 480 } });
+  Object.assign(BBH, { Pix, PAL, C, hex, hsl, toHsl, mix, ramp, lighten, darken, clamp, lerp, rng, hashStr, SCREEN: { W: 360, H: 640 } });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
