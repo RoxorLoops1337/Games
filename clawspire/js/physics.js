@@ -31,6 +31,7 @@ const PHYS = (() => {
     wakePen: 2.5, wakeV: 70,                   // a sleeper pushed this deep, or hit this fast, wakes
     wallMu: 0.4,
     wallTol: 3,        // a body's EXTENT may sink this far into a side wall before it is pushed back (round 23, stuck prize fix)
+    slopeGuard: true,  // (round 29) a prize never stays under a floor ramp (slopeInside); tests turn it off to compare
     heldDecay: 8,     // b.held counts down this fast per second (2 -> 0 in a quarter second)
     // (round 25) strandWatch's claw zone: a prize still for 3 s with its centre above strandHigh (cabinet y; the
     // rail is at 26, the parked claw's palm at about 50) or its top above strandTop (the rail's underside and its
@@ -620,6 +621,30 @@ const PHYS = (() => {
     const minY = cb.lidY - PH.wallTol;
     if (b.y - up < minY) { b.y = minY + up; if (b.vy < 0) b.vy = 0; }
   }
+  /* (round 29) The floor ramps are thin segments over a hollow wedge. A prize shoved or dragged through
+     one (the magnet's weld, a hard push, a prize dropped back low in a corner) sat in the wedge under the
+     ramp, where no claw reaches it (owner: "those things get so hard stuck"). Any part whose centre is
+     below a ramp lifts the body back out along the ramp's normal until that part rests on it. */
+  function slopeInside(b, cb) {
+    const c = Math.cos(b.a), s = Math.sin(b.a);
+    let moved = false;
+    for (const L of cb.slopes) {
+      let need = 0;
+      for (let i = 0; i < b.parts.length; i++) {
+        const p = b.parts[i], wx = b.x + p.x * c - p.y * s, wy = b.y + p.x * s + p.y * c;
+        if (wx < L.x0 || wx > L.x1) continue;
+        const d = (wx - L.ax) * L.nx + (wy - L.ay) * L.ny;
+        if (d < 0 && p.r + L.r - d > need) need = p.r + L.r - d;
+      }
+      if (need > 0) {
+        b.x += L.nx * need; b.y += L.ny * need;
+        const vn = b.vx * L.nx + b.vy * L.ny;
+        if (vn < 0) { b.vx -= vn * L.nx; b.vy -= vn * L.ny; }
+        moved = true;
+      }
+    }
+    return moved;
+  }
   /* (round 25) A sleeper does not move, collide with the walls or feel
      gravity.  One that slept resting on an awake body (a prize riding the
      claw's load while the claw waits over the chute) stayed asleep in mid-air
@@ -649,7 +674,11 @@ const PHYS = (() => {
     prepContacts(W, h);
     solveContacts(W);
     for (const b of B) {
-      if (b.sl) { if (b.restOn) restLeft(b, W); continue; }
+      if (b.sl) {
+        if (b.restOn) restLeft(b, W);
+        if (cb.slopes && b.y + b.br > cb.slopeTop && slopeInside(b, cb)) wake(b);   // (round 29) one already asleep in a wedge comes out too
+        continue;
+      }
       if (b.type !== 'dynamic' || b.tube) continue;
       const sp = b.vx * b.vx + b.vy * b.vy;
       if (sp > PH.maxV * PH.maxV) { const k = PH.maxV / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
@@ -666,6 +695,7 @@ const PHYS = (() => {
       // the body, and it hangs there at rail height for ever.  Bound the extent too.
       if (b.x + b.br > cb.xMax + 5 + PH.wallTol || b.x - b.br < cb.xMin - 5 - PH.wallTol) wallInside(b, cb);
       if (cb.lidY != null && b.y - b.br < cb.lidY - PH.wallTol) lidInside(b, cb);   // (round 25) ...and the lid
+      if (cb.slopes && b.y + b.br > cb.slopeTop) slopeInside(b, cb);   // (round 29) ...and never under a floor ramp
       if (b.held > 0) b.held -= h * PH.heldDecay;
       if (b.passClaw > 0) b.passClaw -= h;
       if (!W.busy && sp < PH.sleepV * PH.sleepV && Math.abs(b.av) < PH.sleepW && b.held <= 0) {
@@ -810,6 +840,12 @@ const PHYS = (() => {
     }
     W.segs = segs;
     W.clampBox = { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX, trayY: trayY - RIG.floorSink, lidY: RIG.lid + 4 };   // lidY: the lid's underside (round 25)
+    // (round 29) the ramps for slopeInside: each line, its x span and its upward normal (into the bin)
+    if (slopeW > 0 && slopeH > 0 && PH.slopeGuard) {
+      const ramp = (ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy); let nx = dy / l, ny = -dx / l; if (ny > 0) { nx = -nx; ny = -ny; } return { ax, ay, nx, ny, r: 5, x0: Math.min(ax, bx), x1: Math.max(ax, bx) }; };
+      W.clampBox.slopes = [ramp(-4, h - slopeH, slopeW, h + 2), ramp(chuteX - slopeW, h + 2, chuteX - 6, h - slopeH)];
+      W.clampBox.slopeTop = h - slopeH - 2;
+    }
     return {
       segs, bodies: [],
       bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, trayY, slopeW, slopeH },

@@ -1645,6 +1645,14 @@ top of the lift ((1 - hold) x `RIG.magDrop` 0.55, plus the old heavy check again
 Golden Egg, Golden Idol, Golden Dice) stay `metal` for builds and combos but the magnet (and the Electromagnet upgrade) cannot
 lift them; Gary's magnet claw-off counts only magnetic metal.
 
+**Ramp wedges (round 29, owner: "those things get so hard stuck").** The two floor ramps (`slopeL`, `slopeR`) are thin
+segments over a hollow wedge. A prize shoved or dragged through one (the magnet's weld, a hard push, a prize dropped back low
+in a corner) sat in the wedge under the ramp, where no claw reaches. `slopeInside` (physics, on in `physStep` when
+`PH.slopeGuard`) lifts any body with a part centre below a ramp back out along the ramp's normal until that part rests on
+it, killing the inward velocity; a sleeper found there is moved and woken. The cabinet stores the ramps on
+`W.clampBox.slopes` / `slopeTop`. Test: three prizes placed in the wedges stay there with the guard off and are all back
+above the ramps with it on.
+
 Welds (`hand`, `magnet`, `hook`): each stuck body is driven to its spot under
 the hub by a capped velocity weld (`weldK`, `weldV`) and keeps its angle; it
 tears off (a `slip`) when it lags more than `tear` x size + 6 px, and at the

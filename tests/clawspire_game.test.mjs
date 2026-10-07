@@ -2565,6 +2565,7 @@ h.test('claw types: every type delivers in a real grab (steer, drop, deliver)', 
       const x = G.rig.aimAt(type === 'magnet' ? metal : null);
       h.ok(G.steer(x == null ? 200 : x), type + ' steer');
       stepFor(G, 0.8);
+      settle(G, 6);   // ready to drop: a far target takes the carriage longer, and a prize that rolled in late resolves first
       h.ok(G.dropClaw(), type + ' drop');
       let n = 0;
       while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
