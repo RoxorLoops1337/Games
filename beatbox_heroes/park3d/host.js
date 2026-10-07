@@ -81,7 +81,7 @@ export function createHost(target, opts) {
     const mod = await def(); if (tok !== tokenSeq || disposed) return null;
     const create = mod.default || mod.create; if (typeof create !== 'function') throw new Error('world "' + id + '" has no create()');
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 9 / 16, 0.5, 200), wevents = kit.emitter();
-    const ctx = { THREE, kit, PAL, scene, camera, renderer, events: wevents, rng: kit.rng(args.seed || opts.seed || 1337), quality, canvas, worldId: id, sceneName: id, shared, host: api, timeName: String(args.time !== undefined ? args.time : 'dusk'), profile: 'out' };
+    const ctx = { THREE, kit, PAL, scene, camera, renderer, events: wevents, rng: kit.rng(args.seed || opts.seed || 1337), quality, canvas, worldId: id, sceneName: id, shared, host: api, timeName: String(args.time !== undefined ? args.time : 'dusk'), profile: 'out', embedded };
     const rec = [], before = new Set(dom.children), listenTargets = [canvas, window, document];
     let spec = null, w = null;
     try {
