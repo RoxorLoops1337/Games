@@ -20,10 +20,11 @@ const glVaried = (page) => page.evaluate(() => { const gl = document.getElementB
   ok(st.mode === '3d' && st.on === true && st.q === 'low', 'mode 3d, on, quality low from ?q=low');
   ok(st.world === 'title', 'the title world is loaded by boot (got ' + st.world + ')');
   ok(st.bootMs > 0, 'boot time is recorded (' + st.bootMs + ' ms)');
-  // the held E.go('title') replays after the verdict: the 2D boot scene hands over to the title (no 3D sibling exists yet, so mixed mode keeps 2D)
+  // the held E.go('title') replays after the verdict: the 2D boot scene hands over to the title, which is the 3D sibling from scenes_shell.js (SHELL)
   await page.waitForFunction(() => BBH.Eng.sceneName === 'title', null, { timeout: 30000 });
-  const mixed = await page.evaluate(() => ({ r3: document.body.classList.contains('r3'), active: BBH.R3.active, scene2d: BBH.Eng.scene === BBH.Eng.scenes.title }));
-  ok(mixed.scene2d && !mixed.r3 && !mixed.active, 'mixed mode: a scene without a 3D sibling stays 2D (body.r3 off)');
+  await page.waitForFunction(() => BBH.Eng.scene && BBH.Eng.scene.is3d && BBH.R3.world && BBH.R3.world.id === 'title', null, { timeout: 30000 });
+  const mixed = await page.evaluate(() => ({ r3: document.body.classList.contains('r3'), active: BBH.R3.active, sib: BBH.Eng.scene === BBH.Eng.scenes3d.title, boot2d: !!BBH.Eng.scenes.boot && !BBH.Eng.scenes3d.boot }));
+  ok(mixed.sib && mixed.r3 && mixed.active && mixed.boot2d, 'the title is the 3D sibling (body.r3 on), the boot scene has no sibling and stays 2D: ' + JSON.stringify(mixed));
   const v = await glVaried(page);
   ok(v.lit > 500 && v.colours >= 3, 'GL canvas is not blank after the title warm-up (' + v.colours + ' colours, ' + v.lit + ' lit samples, ' + v.w + 'x' + v.h + ')');
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('bbh:r3') || '{}'));
