@@ -4,7 +4,7 @@
 // Look: third-person chase camera on the jogging path at golden hour, endless looping park, a sweet-spot ring under the runner's ideal pace,
 //   milestone gates every 3 good bars with an energy fountain, pigeons that scatter, speed streaks, dust and leaves, lens glare.
 // Test hooks (window.__park.game): start(o), press('L'|'R'), tick(sec), state(), result(), render(), setTime(t), setQuality(q).
-import { THREE } from './kit.js';
+import { THREE, disposeTree } from './kit.js';
 import { createCharacter } from './characters.js';
 import { buildLighting } from './lighting.js';
 import { buildWorld, CH_L } from './mg_run_world.js';
@@ -20,10 +20,15 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, t) => a + 
 const DEFAULT_LOOK = { name: 'Tay', body: 'neutral', skin: '#c68b5e', hair: { style: 'twists', color: '#1a1420' }, hat: { id: 'fitted', color: '#17141f' }, top: { id: 'oversized', color: '#ffd23f', color2: '#e63946' }, bottom: { id: 'camo', color: '#5a6b3a' }, shoes: { id: 'retro', color: '#f7f2e8' } };
 const PACER_LOOK = { name: 'Pace', body: 'neutral', skin: '#8d5a36', hair: { style: 'crop', color: '#17102b' }, top: { id: 'tee', color: '#ff3ea5' }, bottom: { id: 'jeans', color: '#27214a' }, shoes: { id: 'sneakers', color: '#9dff4a' } };
 
-function sfx(name) { try { const A = typeof window !== 'undefined' && window.BBH && window.BBH.Audio; if (A && A.sfx) { A.unlock && A.unlock(); A.sfx(name); } } catch (e) { /* audio must never break the game */ } }
+// plays on the game's shared BBH.Audio context (never creates its own); E.settings.muted silences it, the volume is applied by E.applyAudioSettings
+function playSfx(name, st) { if (st && st.muted) return; try { const A = typeof window !== 'undefined' && window.BBH && window.BBH.Audio; if (A && A.sfx) { A.unlock && A.unlock(); A.sfx(name); } } catch (e) { /* audio must never break the game */ } }
 
 export function createRun(ctx, opts) {
+  // opts (all optional): hud (DOM div), look, time, seed, offsetMs (E.settings.offset, accepted for contract parity: the run has no hit windows, so it is only reported in state()),
+  //   settings (the live E.settings object: muted, reduce), again:false (in the game: no free second run, the card only has DONE), embedded
   opts = opts || {}; const { camera, scene, events } = ctx; let quality = ctx.quality || 'high';
+  const offsetMs = +opts.offsetMs || 0, sfx = (n) => playSfx(n, opts.settings), reduceM = () => (opts.settings && opts.settings.reduce ? 0.2 : 1);
+  let rewards = null, disposed = false;
   const tier = () => (quality === 'low' ? 0 : quality === 'med' ? 1 : 2);
   const group = new THREE.Group(); group.name = 'mg_run'; const root = new THREE.Group(); root.name = 'run_root'; group.add(root);
   ctx.todInit = opts.time !== undefined ? opts.time : 'dusk'; ctx.timeName = String(ctx.todInit);
@@ -45,7 +50,9 @@ export function createRun(ctx, opts) {
   let gatesPassed = 0, holdT = 0, holdV = 0, anchor = 0, startAnchor = 0, vS = 0, vPace = 0, off = 0, offT = 0, doneT = 0, cardT = -1, result = null, kick = 0, stumble = 0, fovPulse = 0, clock = 0, camPhase = 0, leafAcc = 0, gateAcc = 0, W = 540, H = 960, dpr = 1, tClock = 0;
   const RUNNER_X = 0.42, PACER_X = -1.35, RING_LEAD = 1.2;
   const sunScreen = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
-  const hud = createHud(opts.hud, { onTap: (s) => press(s), onQuit: () => events.emit('minigameQuit') }, RUN);
+  const hud = createHud(opts.hud, { onTap: (s) => press(s), onQuit: () => quit(), onStart: () => { if (S.phase === 'ready') startRun(); } }, RUN, { again: opts.again !== false });
+  // leaving: 'quit' {game, finished} (new contract) and 'minigameQuit' (legacy name); the game decides what a quit means from `finished`
+  function quit() { if (disposed) return; events.emit('quit', { game: 'run', finished: S.phase === 'done' }); events.emit('minigameQuit'); }
   function applyYaw() { // line the track up so the low sun sits ahead and slightly to the left (glare, rim light, long shadows towards the camera)
     const st = lighting && lighting.getState(); if (!st) return; const a = Math.atan2(st.sunDir.x, st.sunDir.z); root.rotation.y = a - 0.2; root.updateMatrixWorld(true);
   }
@@ -99,7 +106,7 @@ export function createRun(ctx, opts) {
     if (S.phase === 'run') {
       S.time += dt; S.bar = Math.max(0, S.bar - RUN.DRAIN * dt); S.sum += S.bar; S.n++; if (S.bar > RUN.HI) S.burn++;
       S.blockT += dt; if (S.blockT >= RUN.BLOCK - 1e-9) { S.blockT -= RUN.BLOCK; if (S.blockT < 1e-6) S.blockT = 0; finishBlock(); }
-    } else if (S.phase === 'done') { if (holdT > 0) { holdT -= dt; if (!gates.some((g) => g.userData.active && !g.userData.passed)) holdT = Math.min(holdT, 0.5); } else doneT += dt; if (cardT >= 0) { if (holdT <= 0) cardT += dt; if (cardT > 2.1 && result) { cardT = -1; hud.card(result, () => { startRun(); }, () => events.emit('minigameQuit')); } } }
+    } else if (S.phase === 'done') { if (holdT > 0) { holdT -= dt; if (!gates.some((g) => g.userData.active && !g.userData.passed)) holdT = Math.min(holdT, 0.5); } else doneT += dt; if (cardT >= 0) { if (holdT <= 0) cardT += dt; if (cardT > 2.1 && result) { cardT = -1; hud.card(result, () => { startRun(); }, () => quit()); } } }
     // motion: gait speed follows the cadence bar; the anchor (camera focus) travels at world speed; the runner drifts ahead of / behind the ring with the bar
     const tv = S.phase === 'run' ? vAnim(S.bar) : S.phase === 'done' && holdT > 0 ? holdV : 0; vS += (tv * SCALE - vS) * (1 - Math.exp(-(S.phase === 'done' ? 2.2 : 3.2) * dt)); anchor += vS * dt;
     vPace += ((S.phase === 'run' ? V_REF : 0) - vPace) * (1 - Math.exp(-3 * dt));
@@ -137,20 +144,20 @@ export function createRun(ctx, opts) {
       lx = lerp(lx, fx, orbit); ly = lerp(ly, 2.2, orbit); lz = lerp(lz, rz, orbit);
     }
     toWorld(cx, cy, cz, camTgt); camera.position.copy(camTgt); toWorld(lx, ly, lz, camLook); camera.lookAt(camLook);
-    camera.rotateZ(Math.sin(ph * 0.5) * 0.012 * (0.3 + sf) + stumble * 0.03); // slight roll with the stride
-    const fov = 52 + 12 * sf + 6 * fovPulse - orbit * 6; if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (camInit ? Math.min(1, dt * 7) : 1); camera.updateProjectionMatrix(); }
+    camera.rotateZ((Math.sin(ph * 0.5) * 0.012 * (0.3 + sf) + stumble * 0.03) * reduceM()); // slight roll with the stride
+    const rm = reduceM(), fov = 52 + 12 * sf + 6 * fovPulse * rm - orbit * 6; if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (camInit ? Math.min(1, dt * 7) : 1); camera.updateProjectionMatrix(); }
     camInit = true;
     streaks.update(anchor * 1.0, S.phase === 'run' ? clamp(0.12 + ss(0.35, 0.95, sf) * 0.85 + fovPulse * 0.3, 0, 1) * (tier() === 0 ? 0.7 : 1) : 0);
     // lens glare at the sun disc
     const st = lighting && lighting.getState(); if (st) {
       tmpV.copy(camera.position).addScaledVector(st.sunDir, 200); camera.getWorldDirection(tmpV2); const facing = tmpV2.dot(st.sunDir); sunScreen.copy(tmpV).project(camera);
       const sx = (sunScreen.x * 0.5 + 0.5) * W, sy = (-sunScreen.y * 0.5 + 0.5) * H, edge = Math.max(Math.abs(sunScreen.x), Math.abs(sunScreen.y * 0.8));
-      const a = facing > 0.2 ? ss(1.6, 0.4, edge) * (1 - st.night) * (0.7 + 0.5 * sf) * (0.9 + 0.1 * Math.sin(clock * 3)) : 0; hud.glare(sx, sy, clamp(a * 0.9, 0, 0.95), W / 2, H / 2);
+      const a = facing > 0.2 ? ss(1.6, 0.4, edge) * (1 - st.night) * (0.7 + 0.5 * sf) * (0.9 + 0.1 * Math.sin(clock * 3)) : 0; hud.glare(sx, sy, clamp(a * 0.9, 0, 0.95) * (reduceM() < 1 ? 0.3 : 1), W / 2, H / 2);
     }
   }
   function stateOut() {
     const zone = S.bar >= RUN.HI ? 'burn' : S.bar >= RUN.LO ? 'target' : 'slow';
-    return { phase: S.phase, bar: S.bar, zone, last: S.last, blockT: S.blockT, blockFrac: S.blockT / RUN.BLOCK, blocksDone: S.blocksDone, good: S.good, results: S.results.slice(), taps: S.taps, misses: S.misses, energy: S.energy, burnBars: S.burnBars, time: S.time, distance: Math.round((anchor - startAnchor) * 10) / 10, speed: vS, offset: off, gates: gates.filter((g) => g.userData.active && !g.userData.passed).length, gatesPassed, pigeonsScattered: pigeons.scattered, done: S.phase === 'done', quality, camFov: camera.fov };
+    return { phase: S.phase, bar: S.bar, zone, last: S.last, blockT: S.blockT, blockFrac: S.blockT / RUN.BLOCK, blocksDone: S.blocksDone, good: S.good, results: S.results.slice(), taps: S.taps, misses: S.misses, energy: S.energy, burnBars: S.burnBars, time: S.time, distance: Math.round((anchor - startAnchor) * 10) / 10, speed: vS, offset: off, gates: gates.filter((g) => g.userData.active && !g.userData.passed).length, gatesPassed, pigeonsScattered: pigeons.scattered, done: S.phase === 'done', quality, camFov: camera.fov, offsetMs, rewards, cardOpen: !!(hud.hasCard && hud.hasCard()), startShown: S.phase === 'ready' };
   }
   function advance(dt, full) {
     let left = dt; while (left > 1e-6) { const d = Math.min(1 / 60, left); left -= d; step(d); }
@@ -172,11 +179,21 @@ export function createRun(ctx, opts) {
     setTime(t) { if (lighting) { lighting.setTimeOfDay(t, true); lighting.update(0.016, tClock); applyYaw(); } },
     setQuality(q) { quality = q; ctx.quality = q; if (lighting) lighting.setQuality(q); if (pacer) pacer.object.visible = tier() > 0; if (tier() !== worldTier) { world.dispose(); world = buildWorld(ctx, root, quality); worldTier = tier(); world.setPixelHeight(H * dpr); } },
     start(o) { startRun(o); },
-    press, tick(sec) { advance(sec, false); if (lighting) lighting.update(0.016, tClock); },
+    press, quit, tick(sec) { advance(sec, false); if (lighting) lighting.update(0.016, tClock); },
+    // the game applies the real action (G.doHold) when the run ends and hands the true reward numbers back so the result card shows them:
+    //   rw = { maxEnergy, energy (negative = spent), xp, mood, tech, cash, fans, ... } (any subset, numbers are deltas)
+    setRewards(rw) { rewards = rw || null; hud.setRewards && hud.setRewards(rewards); },
     state: stateOut,
     result() { return result; },
     stats() { return { worldTris: world.stats(), chars: runner ? runner.tris : 0 }; },
-    dispose() { if (typeof window !== 'undefined') window.removeEventListener('keydown', onKey); hud.dispose(); if (lighting && lighting.dispose) lighting.dispose(); if (streaks.mesh.parent) streaks.mesh.parent.remove(streaks.mesh); },
+    // full teardown: listeners, DOM, lighting (post targets, shadow map), every geometry / material / texture of the track, particles, streaks and both characters
+    dispose() {
+      if (disposed) return; disposed = true; if (typeof window !== 'undefined') window.removeEventListener('keydown', onKey); hud.dispose();
+      try { for (const c of [runner, pacer]) if (c) { disposeTree(c.object); c.dispose(); } } catch (e) { /* ignore */ }   // object first: the character's own textures, then its geometry / props
+      try { world.dispose(); } catch (e) { /* ignore */ }
+      try { if (lighting && lighting.dispose) lighting.dispose(); } catch (e) { /* ignore */ }
+      if (streaks.mesh.parent) streaks.mesh.parent.remove(streaks.mesh); disposeTree(streaks.mesh); disposeTree(group); if (group.parent) group.parent.remove(group); scene.remove(camera);
+    },
   };
   advance(0.016, true); void CH_L;
   return api;

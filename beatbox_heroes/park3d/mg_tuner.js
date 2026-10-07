@@ -3,7 +3,7 @@
 //   createTuner(ctx, opts) -> { group, update, render, resize, setLook, setQuality, start, dispose, ...test hooks }
 // TEST HOOKS (window.__park.game): start({range:'higher'|'lower', mode:'mic'|'ear', fake:true}), feedPitch(hz | 0 | null), tick(seconds), state(), result(),
 //   answer(1|-1) / press('higher'|'lower'), manual(bool), ui, logic. Calling tick() switches the sim to manual time (real frames then only animate the view).
-import { THREE } from './kit.js';
+import { THREE, disposeTree } from './kit.js';
 import { createCharacter } from './characters.js';
 import { createPost } from './fx_post.js';
 import { buildSet, BOOTH } from './mg_tuner_set.js';
@@ -18,8 +18,14 @@ const BBH = () => (typeof window !== 'undefined' && window.BBH) || {};
 function studioLook(look) { const l = Object.assign({}, DEFAULT_LOOK, look || {}); l.hat = { id: 'none', color: '#17141f' }; l.acc = Object.assign({}, l.acc || {}, { ears: { id: 'hpears', color: '#ff3ea5' } }); if (l.acc.hand && /mic/.test(l.acc.hand.id || '')) l.acc.hand = { id: 'none_hand' }; return l; }
 
 export function createTuner(ctx, opts) {
+  // opts (all optional): hud (DOM div), look, quality, mode/range/autostart, mus (Musicality stat for the gain preview),
+  //   offsetMs (E.settings.offset: accepted for contract parity, the tuner has no hit windows so it is only reported in state()),
+  //   settings (the live E.settings: voice, muted, sfx, reduce), tone(freq, dur, vol) (the game's E.tone: shared BBH.Audio context, honours mute and sfx volume),
+  //   onVoice(range) (persist the voice range), again:false (in the game the card only has CONTINUE), embedded:true (never open an AudioContext of our own)
   opts = opts || {}; const { renderer, scene, camera } = ctx; let tier = opts.quality || ctx.quality || 'high';
-  const group = new THREE.Group(); group.name = 'tuner';
+  const offsetMs = +opts.offsetMs || 0, cfg = () => opts.settings || {};
+  const group = new THREE.Group(); group.name = 'tuner'; let disposed = false, lastRewards = null;
+  const saved = { exposure: renderer.toneMappingExposure, autoReset: renderer.info.autoReset, bg: scene.background, fog: scene.fog };   // the renderer is shared in the game: put it back on dispose
   scene.background = new THREE.Color('#150f30'); scene.fog = new THREE.Fog('#1a1238', 14, 34); renderer.toneMappingExposure = 1.12; renderer.info.autoReset = false;
   const set = buildSet(ctx, tier), road = buildRoad(ctx, tier), aura = buildAura();
   group.add(set.group, road.group);
@@ -47,14 +53,16 @@ export function createTuner(ctx, opts) {
 
   // ---- audio: plain synth tone (same recipe as the 2D tuner) on the game AudioContext, falling back to our own context
   let ownCtx = null, toneT0 = -9, toneDur = 0;
-  function audioCtx() { const A = BBH().Audio; try { if (A && A.ctx && A.ctx.state !== 'closed') return A.ctx; } catch (e) { /* ignore */ } try { if (!ownCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ownCtx = new AC(); } if (ownCtx && ownCtx.state === 'suspended') ownCtx.resume(); return ownCtx; } catch (e) { return null; } }
+  function audioCtx() { const A = BBH().Audio; try { if (A && A.ctx && A.ctx.state !== 'closed') return A.ctx; } catch (e) { /* ignore */ } if (opts.embedded || opts.tone) return null; try { if (!ownCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ownCtx = new AC(); } if (ownCtx && ownCtx.state === 'suspended') ownCtx.resume(); return ownCtx; } catch (e) { return null; } }
   function tone(freq, dur, vol) {
     toneT0 = simT; toneDur = dur;
-    try { const A = BBH().Audio; A && A.unlock && A.unlock(); const ac = audioCtx(); if (!ac || ac.state !== 'running') return; const o = ac.createOscillator(), o2 = ac.createOscillator(), gn = ac.createGain(), t = ac.currentTime, v = vol || 0.18;
+    if (opts.tone) { try { opts.tone(freq, dur, vol); } catch (e) { /* audio must never break the game */ } return; }
+    if (cfg().muted) return;
+    try { const A = BBH().Audio; A && A.unlock && A.unlock(); const ac = audioCtx(); if (!ac || ac.state !== 'running') return; const o = ac.createOscillator(), o2 = ac.createOscillator(), gn = ac.createGain(), t = ac.currentTime, v = (vol || 0.18) * (cfg().sfx !== undefined ? cfg().sfx : 1);
       o.type = 'triangle'; o2.type = 'sine'; o.frequency.value = freq; o2.frequency.value = freq * 2; gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(v, t + 0.04); gn.gain.setValueAtTime(v, t + dur - 0.08); gn.gain.linearRampToValueAtTime(0, t + dur);
       o.connect(gn); o2.connect(gn); gn.connect(ac.destination); o.start(t); o2.start(t); o.stop(t + dur + 0.02); o2.stop(t + dur + 0.02); } catch (e) { /* audio must never break the game */ }
   }
-  const sfx = (n) => { try { const A = BBH().Audio; A && A.sfx && A.sfx(n); } catch (e) { /* ignore */ } };
+  const sfx = (n) => { if (cfg().muted) return; try { const A = BBH().Audio; A && A.sfx && A.sfx(n); } catch (e) { /* ignore */ } };
 
   // ---- rules
   let simT = 0, cheerT = 0, missT = 0, lastResult = null, lastOpts = { range: 'higher', mode: 'mic' }, fake = null, micOpen = false, opening = false, gen = 0;
@@ -62,7 +70,7 @@ export function createTuner(ctx, opts) {
     tone, round() { /* ui polls state */ }, sing() { sfx('click'); },
     hit() { cheerT = 1.1; punch = 1; aura.boost(1); hero.play('cheer', { duration: 1.0, then: 'idle' }); sfx('hit_perfect'); if (logic.S.streak >= 3) sfx('sparkle'); },
     miss() { missT = 0.9; sfx('miss'); },
-    done(r) { lastResult = r; sfx('levelup'); hero.play(r.accuracy >= 0.8 ? 'dance' : r.accuracy >= 0.5 ? 'cheer' : 'idle', { bpm: 118 }); try { closeMic(); } catch (e) { /* ignore */ } ui.showResult(r, { again: () => start(lastOpts), done: () => { quit(); } }); ctx.events.emit('minigame', { game: 'tuner', result: r }); },
+    done(r) { lastResult = r; lastRewards = null; sfx('levelup'); hero.play(r.accuracy >= 0.8 ? 'dance' : r.accuracy >= 0.5 ? 'cheer' : 'idle', { bpm: 118 }); try { closeMic(); } catch (e) { /* ignore */ } ui.showResult(r, { again: () => start(lastOpts), done: () => { quit(); } }); ctx.events.emit('minigame', { game: 'tuner', result: r }); },
   } });
   const S0 = logic.S;
   function closeMic() { try { const M = BBH().Mic; if (micOpen && M && M.close) M.close(); } catch (e) { /* ignore */ } micOpen = false; }
@@ -89,12 +97,13 @@ export function createTuner(ctx, opts) {
     }
     begin(lastOpts);
   }
-  function quit() { gen++; closeMic(); ctx.events.emit('minigameQuit'); }
-  const ui = createUI(opts.hud || document.body, { back: () => quit(), answer: (d) => answer(d), pick: (o) => start(o) });
+  // leaving: 'quit' {game, finished} (new contract) and 'minigameQuit' (legacy name); the game decides what a quit means from `finished`
+  function quit() { if (disposed) return; gen++; closeMic(); ctx.events.emit('quit', { game: 'tuner', finished: !!lastResult }); ctx.events.emit('minigameQuit'); }
+  const ui = createUI(opts.hud || document.body, { back: () => quit(), answer: (d) => answer(d), pick: (o) => { if (opts.onVoice && o.mode === 'mic') { try { opts.onVoice(o.range); } catch (e) { /* ignore */ } } start(o); } }, { again: opts.again !== false });
   function answer(dir) { return logic.answer(dir); }
   const onKey = (e) => { if (e.key === 'Escape') quit(); else if (e.key === 'ArrowUp' || e.key === 'h') answer(1); else if (e.key === 'ArrowDown' || e.key === 'l') answer(-1); };
   window.addEventListener('keydown', onKey);
-  ui.showPicker();
+  ui.showPicker(cfg().voice || null);
 
   // ---- the sim step (fixed small steps so tick(seconds) is deterministic) and the view update
   let manual = false, vuL = 0, vuR = 0, tmpV = new THREE.Vector3();
@@ -127,12 +136,19 @@ export function createTuner(ctx, opts) {
 
   const api = {
     group, update: updateT, render, resize, setLook, setQuality, start,
-    dispose() { gen++; closeMic(); window.removeEventListener('keydown', onKey); ui.destroy(); post.dispose(); try { if (ownCtx) ownCtx.close(); } catch (e) { /* ignore */ } },
+    setRewards(rw) { lastRewards = rw || null; ui.setRewards(lastRewards); },
+    // full teardown: mic, listeners, DOM, post chain, every geometry / material / texture of the booth, the singer, and the shared renderer state we changed
+    dispose() {
+      if (disposed) return; disposed = true; gen++; closeMic(); window.removeEventListener('keydown', onKey); ui.destroy();
+      try { post.dispose(); } catch (e) { /* ignore */ } try { if (ownCtx) ownCtx.close(); } catch (e) { /* ignore */ }
+      try { disposeTree(hero.object); hero.dispose(); } catch (e) { /* ignore */ } disposeTree(group); if (group.parent) group.parent.remove(group);
+      renderer.toneMappingExposure = saved.exposure; renderer.info.autoReset = saved.autoReset; scene.background = saved.bg; scene.fog = saved.fog;
+    },
     // ---- test hooks
     feedPitch(hz) { fake = hz === null || hz === undefined ? null : { freq: hz > 0 ? hz : 0, clarity: hz > 0 ? 0.95 : 0 }; },
     tick(sec) { manual = true; let rem = Math.max(0, +sec || 0); while (rem > 1e-6) { const d = Math.min(rem, 0.05); step(d); simView += d; view(d, simView); rem -= d; } return S0.phase; },
     manual(v) { manual = v === undefined ? true : !!v; },
-    state() { const o = {}; ['state', 'mode', 'range', 'round', 'rounds', 'score', 'total', 'phase', 'target', 'earA', 'earB', 'hold', 'cents', 'freq', 'streak', 'bestStreak', 'fb', 'inTune'].forEach((k) => { o[k] = S0[k]; }); o.targets = S0.targets.slice(); o.targetHz = S0.mode === 'mic' ? mf(S0.target) : null; o.rt = +S0.rt.toFixed(3); o.quality = tier; o.opening = opening; o.pickerOpen = ui.hasPicker; o.cardOpen = ui.hasCard; o.simT = +simT.toFixed(2); return o; },
+    state() { const o = {}; ['state', 'mode', 'range', 'round', 'rounds', 'score', 'total', 'phase', 'target', 'earA', 'earB', 'hold', 'cents', 'freq', 'streak', 'bestStreak', 'fb', 'inTune'].forEach((k) => { o[k] = S0[k]; }); o.targets = S0.targets.slice(); o.targetHz = S0.mode === 'mic' ? mf(S0.target) : null; o.rt = +S0.rt.toFixed(3); o.quality = tier; o.opening = opening; o.pickerOpen = ui.hasPicker; o.cardOpen = ui.hasCard; o.simT = +simT.toFixed(2); o.offsetMs = offsetMs; o.rewards = lastRewards; o.audioOwn = !!ownCtx; return o; },
     result() { return lastResult; },
     answer, press(x) { return answer(x === 1 || x === 'higher' || x === 'up' || x === 'HIGHER' ? 1 : -1); },
     ui, logic, road, set, aura, hero, post, stats() { return { quality: tier }; },

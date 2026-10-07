@@ -81,7 +81,7 @@ export function buildWorld(ctx, rootGroup, q) {
     lz.forEach((z, i) => { const side = (i + v) & 1 ? 1 : -1; lampPost(props, glow, side * 3.55, z, side); halos.push([side * 3.55 - side * 0.55, 3.5, z]); const s2 = -side; lampPost(props, glow, s2 * 3.55, z + 12 + v * 2, s2); halos.push([s2 * 3.55 - s2 * 0.55, 3.5, z + 12 + v * 2]); });
     [[18 + v * 6, v ? 1 : -1], [42 - v * 8, v ? -1 : 1]].forEach(([z, side]) => bench(props, side * 4.3, z, side));
     // tree rows. Row 1 hugs the lawn edge, row 2 fills the middle ground, row 3 is cheap and far on the hills.
-    const n1 = tier === 0 ? 3 : tier === 1 ? 4 : 5, n2 = tier === 0 ? 3 : tier === 1 ? 5 : 6, n3 = tier === 0 ? 4 : tier === 1 ? 6 : 7;
+    const n1 = tier === 0 ? 3 : tier === 1 ? 4 : 4, n2 = tier === 0 ? 3 : tier === 1 ? 4 : 5, n3 = tier === 0 ? 3 : tier === 1 ? 5 : 6; // high trimmed (was 5/6/7): the track stays under the 80k tri / 60 call budget
     for (const sgn of [-1, 1]) {
       for (let i = 0; i < n1; i++) { const z = (i + 0.5) * (CH_L / n1) + (r() - 0.5) * 3, x = sgn * (5.6 + r() * 3); props.push(place(pickTree(r), x, hillY(x, z), z, r() * 6.28, 0.85 + r() * 0.5)); }
       for (let i = 0; i < n2; i++) { const z = (i + r()) * (CH_L / n2), x = sgn * (10.5 + r() * 10); far.push(place(pickTree(r), x, hillY(x, z), z, r() * 6.28, 1 + r() * 0.6)); }
@@ -113,7 +113,7 @@ export function buildWorld(ctx, rootGroup, q) {
   let lastBase = -1e9;
   return {
     chunks, sky, haloMat, halo,
-    dispose() { chunks.forEach((c) => { rootGroup.remove(c); c.children.forEach((m) => { if (m.geometry && m.geometry !== groundGeo[0] && m.geometry !== groundGeo[1]) m.geometry.dispose(); }); }); groundGeo.forEach((g) => g.dispose()); chunkLayouts.forEach((l) => { l.props.dispose(); }); rootGroup.remove(halo, sky.group); hg.dispose(); sky.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); },
+    dispose() { chunks.forEach((c) => { rootGroup.remove(c); c.children.forEach((m) => { if (m.geometry && m.geometry !== groundGeo[0] && m.geometry !== groundGeo[1]) m.geometry.dispose(); }); }); groundGeo.forEach((g) => g.dispose()); chunkLayouts.forEach((l) => { l.props.dispose(); }); rootGroup.remove(halo, sky.group); hg.dispose(); sky.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); [propMat, groundMat, haloMat].forEach((m) => m.dispose()); [].concat(lib.oak, lib.maple, lib.cherry, lib.pine, lib.cyp, lib.street, lib.bush, [lib.bloomA, lib.bloomB, lib.bloomC]).forEach((g) => g.dispose()); },
     // recycle the ring so the track is endless; z = camera anchor position along the track
     update(z, lampLevel) {
       const base = Math.floor((z - 12) / CH_L);

@@ -78,6 +78,12 @@
     return 'You are the champion! Collect every cosmetic.';
   };
 
+  // the door the current goal points at ('park' | 'bar' | 'home' | null): the 2D street arrow and the 3D goal beacon / nav dock
+  G.goalDoor = function () {
+    const g = G.goal(G.ch).toLowerCase();
+    return /\bpark\b/.test(g) ? 'park' : /\bbar\b/.test(g) ? 'bar' : /\bhome\b/.test(g) ? 'home' : null;
+  };
+
   /* ------------------------------------------------------------ how to play */
   G.openHelp = function (onClose) {
     const veil = h('div.full', { style: { background: 'rgba(10,6,24,.85)', zIndex: 65 } });

@@ -15,6 +15,8 @@
     rohzel: ['Open mics Tuesday to Thursday. Friday is the paid showcase. Saturday: battles.', 'Fifty fans and five open mics and I will book you for a Friday.', 'Karaoke Sunday is for fun. Even champions sing badly on Sundays.', 'The green juice is on the house if you win tonight.', 'Pig Pen? Do not engage. Beat him on stage instead.'],
   };
   const jobRow = (S, id) => { const j = Core.JOBS.find((x) => x.id === id); return S.row(('ODD JOB: ' + j.name).toUpperCase() + '  ' + j.minutes + ' min', 'Safe pay: $' + j.cash + (j.fans ? ' and ' + j.fans + ' fans' : '') + '. Costs ' + j.energy + ' energy.', G.ch.energy < j.energy ? 'dis' : 'green', () => { S.closeSheet(); G.do({ t: 'job', job: id }); }); };
+  // the first-run street dialog (Foxy), shared by the 2D street and its 3D sibling (r3/scenes_world.js)
+  const tutorialLines = () => [{ who: 'foxy', mood: 'happy', text: 'Welcome to the neighbourhood! You just lost your job, so here is how we fix that.' }, { who: 'foxy', text: 'Tap a door to walk there. The PARK is open all day. Go busk: play beats for tip money and fans.' }, { who: 'foxy', text: 'Watch the bars at the top: energy, hunger and mood. And rent is $' + Core.CFG.rent + ' every Sunday, so earn some cash.' }];
   const tip = (who) => { const arr = TIPS[who], k = 'tip_' + who, i = (G.ch.flags[k] || 0) % arr.length; G.do({ t: 'flag', k, v: i + 1 }); return arr[i]; };
 
   const variantFor = (id, ch) => {
@@ -34,7 +36,7 @@
       this.hx = door.x + (door.w || 48) / 2; this.target = null; this.queue = null; this.dir = 1; this.cam = Math.max(0, Math.min(SW - E.W, this.hx - E.W / 2)); this.moving = false; this.steam = 0;
       this.weather = G.ch.day % 5 === 0 ? 'rain' : null; this.look = BBH.Chars.fix(G.ch.look);
       E.music('street'); this.build(); this.fromPlace = from;
-      if (a.tutorial) E.dialog([{ who: 'foxy', mood: 'happy', text: 'Welcome to the neighbourhood! You just lost your job, so here is how we fix that.' }, { who: 'foxy', text: 'Tap a door to walk there. The PARK is open all day. Go busk: play beats for tip money and fans.' }, { who: 'foxy', text: 'Watch the bars at the top: energy, hunger and mood. And rent is $' + Core.CFG.rent + ' every Sunday, so earn some cash.' }], () => G.openHelp());
+      if (a.tutorial) E.dialog(tutorialLines(), () => G.openHelp());
     },
     build() {
       E.clearUI(); E.add(E.makeHud(G));
@@ -95,10 +97,7 @@
       // night tint
       if (n > 0.02) { c.fillStyle = 'rgba(20,10,60,' + (n * 0.12) + ')'; c.fillRect(0, 0, E.W, E.H); }
     },
-    goalDoor() {
-      const g = G.goal(G.ch).toLowerCase();
-      return /\bpark\b/.test(g) ? 'park' : /\bbar\b/.test(g) ? 'bar' : /\bhome\b/.test(g) ? 'home' : null;
-    },
+    goalDoor() { return G.goalDoor(); },
   };
 
   /* ---------------------------------------------------------------- places */
@@ -400,6 +399,8 @@
     // the try-on look is drawn by the scene (so the player sees the preview)
     S.tryLook = st;
   };
+  // handed to the 3D siblings (r3/spotmap.js, r3/scenes_world.js): the real handlers behind every spot, door and NPC tap
+  G.places = { ACTIONS, SPOT_FOR, TIPS, CLERK, STAGE, variantFor, jobRow, tip, tutorialLines, startPerform, startBattle, startTraining };
   const baseDraw = E.scenes.place.draw;
   E.scenes.place.draw = function (c) {
     baseDraw.call(this, c);
