@@ -169,7 +169,9 @@ export class Animator {
       eye.scale.set(1, eyeS, 1); eye.position.set(er[0] + P.eyeX * 0.012, er[1] + P.eyeY * 0.01, er[2]);
       br.position.set(brr[0], brr[1] + P.brow * 0.025, brr[2]); set(br, 0, 0, -s * P.browTilt * 0.5); B['cheek' + k].scale.setScalar(0.8 + P.cheek * 1.15);
     }
-    B.mouth.scale.set(P.mouthW, Math.max(0.05, P.mouthOpen), 1); B.lipS.scale.set(P.mouthW, Math.max(0.001, P.smile), 1); B.lipF.scale.set(P.mouthW, Math.max(0.001, P.frown), 1);
+    const mo = P.mouthOpen < 0.14 ? 0.001 : (P.mouthOpen - 0.1) / 0.9; B.mouth.scale.set(P.mouthW, Math.max(0.001, mo), 1); // a nearly closed mouth is just the lip line, never a second dark slit under it
+     const shut = mo > 0.01 ? Math.max(0, 1 - (P.mouthOpen - 0.12) * 5) : 1; // once the mouth opens, the open shape IS the mouth: fade the closed lip lines out so there is never a second mouth
+    B.lipS.scale.set(P.mouthW, Math.max(0.001, P.smile * shut), 1); B.lipF.scale.set(P.mouthW, Math.max(0.001, P.frown * shut), 1);
     this.springs(dt); this.propFollow_(dt); void T;
   }
   // props: setProp(group) parents the group to the character object; the active clip may place it (this._pp = {p:[x,y,z], r:[rx,ry,rz]}), otherwise it rides the right hand
