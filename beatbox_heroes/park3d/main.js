@@ -44,7 +44,7 @@ async function init(target, opts) {
 
   let last = performance.now(), t = 0, frames = 0, fpsT = 0, fps = 60, running = true, raf = 0;
   function frame(now) {
-    raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt;
     controls.update(dt, t); player.update(dt, t); npcs.forEach((n) => n.update(dt, t)); flora.update(dt, t); if (terrain.update) terrain.update(dt, t); spots.update(dt, t, player.object.position); lighting.update(dt, t);
     if (lighting.render) lighting.render(); else renderer.render(scene, camera);
     frames++; fpsT += dt; if (fpsT >= 0.5) { fps = frames / fpsT; frames = 0; fpsT = 0; }
@@ -53,7 +53,7 @@ async function init(target, opts) {
 
   const api = { ready: true, scene, camera, renderer, player, terrain, spots, lighting, controls, ctx,
     setLook(l) { player.setLook(l); }, setTime(v) { lighting.setTimeOfDay(v); }, setQuality(v) { ctx.quality = v; if (lighting.setQuality) lighting.setQuality(v); resize(); },
-    teleport(id) { const s = spots.spots.find((x) => x.id === id); if (s) { player.object.position.set(s.x + 1.5, 0, s.z + 1.5); } }, activate(id) { spots.activate(id); },
+    teleport(id) { const s = spots.spots.find((x) => x.id === id); if (s) { const px = s.x + 1.5, pz = s.z + 1.5; if (controls && controls.teleportTo) controls.teleportTo(px, pz); else player.object.position.set(px, 0, pz); } }, activate(id) { spots.activate(id); },
     stats() { return { fps: Math.round(fps), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures }; },
     pause(v) { running = !v; }, dispose() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); renderer.dispose(); } };
   window.__park = api; return api;
