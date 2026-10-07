@@ -85,7 +85,7 @@ renderer.domElement.addEventListener('pointerup', endStick); renderer.domElement
 
 // ---- camera rig ----
 const cam = { x: 0, y: 0, z: 0, fov: 40, shotMode: null };
-const camOff = new THREE.Vector3(0, 10.5, 12.5);
+const camOff = new THREE.Vector3(0, 12.5, 11);
 const CAM_PRESETS = {
   hero: [[0, 9.5, 13], [0, 0.8, 0]], wide: [[-2, 26, 30], [-4, 0, 6]], top: [[0, 30, 0.1], [0, 0, 0]], water: [[-14, 2.6, 22], [-4, 1.5, 4]], meadow: [[-12.7, 8, 22], [-12.7, 0.5, 13]],
   stage: [[0, 3.4, 8], [0, 1.4, 0.8]], close: [[1.2, 2.4, 8.4], [-0.2, 1.1, 5.6]],
@@ -96,9 +96,9 @@ function applyCam(dt) {
   const lead = 0.35, tx = P.x + P.vx * lead, tz = P.z + P.vz * lead;
   cam.x = damp(cam.x, tx, 5, dt); cam.z = damp(cam.z, tz, 5, dt);
   const sx = shake > 0 ? (Math.random() - 0.5) * shake * 0.25 : 0, sy = shake > 0 ? (Math.random() - 0.5) * shake * 0.25 : 0;
-  const aspect = innerWidth / innerHeight, zoom = aspect < 0.8 ? 1.22 : 1; // portrait phones sit a little farther back
+  const aspect = innerWidth / innerHeight, zoom = aspect < 0.8 ? 1.75 : aspect < 1.2 ? 1.2 : 1; // portrait phones sit a little farther back
   camera.position.set(cam.x + camOff.x * zoom + sx, camOff.y * zoom + sy, cam.z + camOff.z * zoom);
-  camera.lookAt(cam.x, 0.9, cam.z - 0.5);
+  camera.lookAt(cam.x, 0.9, cam.z - (aspect < 0.8 ? 2.2 : 0.5));
   shake = Math.max(0, shake - dt * 9);
 }
 
