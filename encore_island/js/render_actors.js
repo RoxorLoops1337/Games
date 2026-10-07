@@ -4,7 +4,7 @@ function drawHero() {
   const p = S.player, sk = activeSkin(), nm = sk.art, hk = 0.62;
   const bob = p.moving ? Math.abs(Math.sin(S.t * 12)) * 2 : 0;
   if (sk.glow) { ctx.fillStyle = 'rgba(255,217,74,' + (0.2 + Math.sin(S.t * 3) * 0.07) + ')'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 40, 40, 58, 0, 0, TAU); ctx.fill(); }
-  if (encoreOn()) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(p.x, p.y - 36, 6, p.x, p.y - 36, 84); gl.addColorStop(0, 'rgba(255,126,182,0.55)'); gl.addColorStop(1, 'rgba(255,126,182,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p.x, p.y - 36, 84, 0, TAU); ctx.fill(); ctx.restore(); }
+  if (encoreOn()) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.translate(p.x, p.y - 36); ctx.fillStyle = ggrad(6, 84, '#ff7eb6'); ctx.beginPath(); ctx.arc(0, 0, 84, 0, TAU); ctx.fill(); ctx.translate(-p.x, 36 - p.y); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
   shadow(p.x, p.y + 4, 24, 0.3);
   if (p.invuln > 0 && ((S.t * 14) | 0) % 2) ctx.globalAlpha = 0.5;
   const ult = S.ultCasting > 0, cheer = (p.cheerT || 0) > 0, hur = p.hurtT > 0, atk = p.atkT > 0;
@@ -30,11 +30,11 @@ function drawFoe(e) {
   shadow(e.x, e.y + e.r * 0.78, e.r * 1.05, 0.3);
   if (e.elite) { const gl = 0.4 + Math.sin(S.t * 5) * 0.25; ctx.fillStyle = 'rgba(255,215,90,' + gl * 0.4 + ')'; ctx.beginPath(); ctx.ellipse(e.x, e.y - e.r * 0.8, e.r + 12, e.r * 1.6, 0, 0, TAU); ctx.fill(); }
   if (e.gold) { ctx.fillStyle = 'rgba(255,217,74,0.35)'; ctx.beginPath(); ctx.ellipse(e.x, e.y - e.r * 0.8, e.r * 1.1, e.r * 1.6, 0, 0, TAU); ctx.fill(); }
-  const sq = e.hurt > 0 ? 1 + e.hurt * 1.2 : 1, fy = e.y + e.r * 0.78 - bob * 0.5;
-  ctx.save(); ctx.translate(e.x, fy); ctx.scale(grow / sq, grow * sq); ctx.translate(-e.x, -fy);
+  const sq = e.hurt > 0 ? 1 + e.hurt * 1.2 : 1, fy = e.y + e.r * 0.78 - bob * 0.5, gw = Math.max(0.02, grow), sx = gw / sq, sy = gw * sq;
+  ctx.translate(e.x, fy); ctx.scale(sx, sy); ctx.translate(-e.x, -fy); // squash + spawn pop, undone by hand (no save/restore per foe)
   const anim = e.hurt > 0 ? 'hurt' : e.atkCd > 0.55 ? 'attack' : 'idle', fr = e.hurt > 0 ? 0 : e.atkCd > 0.55 ? (S.t * 8) | 0 : ((S.t * 4 + e.sway) | 0);
   const ok = artDraw(nm, anim, fr, e.x, fy, k, e.face > 0);
-  ctx.restore();
+  ctx.translate(e.x, fy); ctx.scale(1 / sx, 1 / sy); ctx.translate(-e.x, -fy);
   if (!ok) { ctx.fillStyle = foeCol(e.k); ctx.beginPath(); ctx.arc(e.x, e.y - e.r, e.r, 0, TAU); ctx.fill(); }
   if (e.elite) drawIcon('star', e.x, e.y - e.r * 3.9, 24);
   if (e.hp < e.max) { const f = e.hp / e.max, w = e.boss ? 74 : 40, by = e.y - e.r * (e.boss ? 4.2 : 3.6) - bob; ctx.fillStyle = 'rgba(58,26,58,0.8)'; rr(e.x - w / 2 - 1.5, by - 1.5, w + 3, (e.boss ? 9 : 6) + 3, 4); ctx.fill(); ctx.fillStyle = f > 0.4 ? '#7fe36a' : '#ff6a8a'; rr(e.x - w / 2, by, Math.max(3, w * f), e.boss ? 9 : 6, 3); ctx.fill(); }
@@ -56,15 +56,16 @@ function drawItemWorld(it) {
   const col = it.gem ? '#6ee0d8' : it.crown ? '#ffd84d' : METALS[((it.k || 1) - 1) % 8].col;
   shadow(it.x, it.y + 8, air ? 6 : 10 + Math.sin(S.t * 3 + it.x) * 0.8, 0.28);
   if (rar >= 2 && !air) {
-    const bh = 54 + rar * 12, pl = 0.7 + 0.3 * Math.sin(S.t * 4 + it.x), bg = ctx.createLinearGradient(0, it.y - bh, 0, it.y + 6); bg.addColorStop(0, 'rgba(255,255,255,0)'); bg.addColorStop(1, col);
-    ctx.save(); ctx.globalAlpha = 0.34 * pl; ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bg; ctx.beginPath(); ctx.moveTo(it.x - 3, it.y - bh); ctx.lineTo(it.x + 3, it.y - bh); ctx.lineTo(it.x + 10, it.y + 6); ctx.lineTo(it.x - 10, it.y + 6); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 0.5 * pl; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(it.x, it.y + 6, 14 + Math.sin(S.t * 5) * 2, 5, 0, 0, TAU); ctx.stroke(); ctx.restore();
+    const bh = 54 + rar * 12, pl = 0.7 + 0.3 * Math.sin(S.t * 4 + it.x); // light beam over rare loot
+    ctx.globalAlpha = 0.34 * pl; ctx.globalCompositeOperation = 'lighter'; ctx.translate(0, it.y - bh); ctx.fillStyle = vgrad(bh + 6, 'rgba(255,255,255,0)', col);
+    ctx.beginPath(); ctx.moveTo(it.x - 3, 0); ctx.lineTo(it.x + 3, 0); ctx.lineTo(it.x + 10, bh + 6); ctx.lineTo(it.x - 10, bh + 6); ctx.closePath(); ctx.fill(); ctx.translate(0, bh - it.y);
+    ctx.globalAlpha = 0.5 * pl; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(it.x, it.y + 6, 14 + Math.sin(S.t * 5) * 2, 5, 0, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
   let sx = 1, sy = 1, lift = wob;
   if (!air) { const lt = it.t - 0.45; if (lt < 0.22) { const k2 = Math.sin(lt / 0.22 * Math.PI); sx = 1 + 0.28 * k2; sy = 1 - 0.28 * k2; } lift = wob - Math.abs(Math.sin(S.t * 2.6 + it.x)) * (rar > 1 ? 3 : 1.5); }
-  ctx.save(); ctx.translate(it.x, it.y + 8); ctx.scale(sx, sy);
+  ctx.translate(it.x, it.y + 8); ctx.scale(sx, sy); // landing squash, undone by hand
   if (it.gem) drawGemIcon(0, -12 + lift, 1.25); else drawStackEntry(it, 0, -12 + lift, 1.15);
-  ctx.restore();
+  ctx.scale(1 / sx, 1 / sy); ctx.translate(-it.x, -it.y - 8);
   if (rar >= 1 && !air) { const ph = ((S.t * 2 + it.x) % 3) / 0.35; if (ph < 1) spark(it.x + 8, it.y - 16, 5 * Math.sin(ph * Math.PI), 0.9); }
 }
 function drawChest(c) {
@@ -106,11 +107,16 @@ function drawFx() {
   }
   if (S.settings.particles) for (const q of S.parts) {
     if (!vis(q.x, q.y, 20)) continue; ctx.globalAlpha = 1 - q.t / q.dur; ctx.fillStyle = q.color;
-    if (q.star) { const r = q.r * (0.6 + 0.4 * (1 - q.t / q.dur)); ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.t * 6); ctx.beginPath(); ctx.moveTo(0, -r * 1.6); ctx.lineTo(r * 0.4, -r * 0.4); ctx.lineTo(r * 1.6, 0); ctx.lineTo(r * 0.4, r * 0.4); ctx.lineTo(0, r * 1.6); ctx.lineTo(-r * 0.4, r * 0.4); ctx.lineTo(-r * 1.6, 0); ctx.lineTo(-r * 0.4, -r * 0.4); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    if (q.star) { // four-point star, rotated by hand (a save/translate/rotate/restore per particle added up during bursts)
+      const r = q.r * (0.6 + 0.4 * (1 - q.t / q.dur)), ca = Math.cos(q.t * 6), sa = Math.sin(q.t * 6); ctx.beginPath();
+      for (let i = 0; i < 8; i++) { const px = STAR_X[i] * r, py = STAR_Y[i] * r, X = q.x + px * ca - py * sa, Y = q.y + px * sa + py * ca; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }
+      ctx.closePath(); ctx.fill();
+    }
     else if (q.r >= 3) { ctx.beginPath(); ctx.arc(q.x, q.y, q.r * 0.6, 0, TAU); ctx.fill(); } else ctx.fillRect(q.x - q.r / 2, q.y - q.r / 2, q.r, q.r);
   }
   ctx.globalAlpha = 1;
 }
+const STAR_X = [0, 0.4, 1.6, 0.4, 0, -0.4, -1.6, -0.4], STAR_Y = [-1.6, -0.4, 0, 0.4, 1.6, 0.4, 0, -0.4]; // unit star outline
 const HIT_WORDS = ['POW!', 'BAM!', 'ZAP!', 'BOP!'];
 function drawFloats() {
   for (const f of S.floats) {
@@ -173,12 +179,12 @@ function drawWorld() {
 }
 
 // drifting petals/leaves in screen space — pure ambience, biome tinted
+const PETAL_COLS = ['', '', '', '#ffffff'];
 function drawPetals() {
-  const kk = nearestLandIdx(CAM.x, CAM.y), B = kk === 0 ? BIOMES[0] : biomeOf(kk), cols = [B.flowers[1], B.flowers[2], B.tree[0], '#ffffff'];
-  ctx.save();
-  for (let i = 0; i < 16; i++) {
+  const kk = nearestLandIdx(CAM.x, CAM.y), B = kk === 0 ? BIOMES[0] : biomeOf(kk), cols = PETAL_COLS; cols[0] = B.flowers[1]; cols[1] = B.flowers[2]; cols[2] = B.tree[0];
+  for (let i = 0; i < 16; i++) { // ellipse() takes the rotation and the flutter is just a shorter minor axis: no transforms needed
     const ph = (S.t * (0.045 + (i % 5) * 0.008) + i * 0.137) % 1, x = vw * (((i * 0.6180339) % 1) + 0.06 * Math.sin(S.t * 0.7 + i)) - ph * 60 + 30, y = -20 + ph * (vh + 40), rot = S.t * 1.3 + i;
-    ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.55; ctx.fillStyle = cols[i % 4]; ctx.save(); ctx.translate(((x % vw) + vw) % vw, y); ctx.rotate(rot); ctx.scale(1, 0.55 + 0.45 * Math.sin(S.t * 2 + i)); ctx.beginPath(); ctx.ellipse(0, 0, 6, 3.2, 0, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.55; ctx.fillStyle = cols[i % 4]; ctx.beginPath(); ctx.ellipse(((x % vw) + vw) % vw, y, 6, 3.2 * (0.55 + 0.45 * Math.sin(S.t * 2 + i)), rot, 0, TAU); ctx.fill();
   }
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }

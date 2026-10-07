@@ -150,7 +150,6 @@ function paintCoin() {
   shape(() => { for (let i = 0; i < 10; i++) { const r = i % 2 ? 7 : 17, a = -1.5708 + i * 0.6283; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }, '#ffc21a', -17, 17, 4, 0.3, 0.2);
   glossE(-18, -22, 14, 6, -0.6, 0.65); spark(24, 22, 7, 0.8);
 }
-function drawCoinIcon(x, y, s) { drawItem('coin', paintCoin, x, y, s, 24); }
 function drawBarIcon(x, y, s, col, glow) { drawItem('bar' + (col || '#e8b93a') + (glow ? 'g' : ''), () => paintBar(col || '#e8b93a', glow), x, y, s, 32); }
 
 // ---- currency + valuables ----

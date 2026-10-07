@@ -27,7 +27,6 @@ function foeDmg(k) { return Math.ceil(4 * Math.pow(1.55, k - 1)); }
 function towerDmg(k) { return Math.ceil(9 * Math.pow(HP_T, k - 1)); }
 function unlockCost(k) { return Math.min(1e300, Math.ceil(UNLOCK0 * Math.pow(UNLOCK_MUL, k - 1) * Math.pow(1.12, (k - 1) * (k - 2) / 2))); }
 function xpNeed(l) { return Math.ceil(18 * Math.pow(1.28, l - 1)); }
-function houseCost(n) { return Math.ceil(HOUSE0 * Math.pow(HOUSE_MUL, n)); }
 function recruitCostN(n) { return Math.ceil(INHAB0 * Math.pow(INHAB_MUL, n)); }
 function forgeUpCost(l) { return Math.ceil(FORGE_UP0 * Math.pow(FORGE_UP_MUL, l)); }
 function eggCost(h) { return 6 + h * 3; }

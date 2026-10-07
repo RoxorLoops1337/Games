@@ -61,20 +61,21 @@ function dashAbility() {
   starBurst(p.x, p.y - 10, 6, ['#fff4e6', '#c6ffd8'], 160); sfx('dash'); buzz(15);
   return true;
 }
+const IN_RANGE = [], byDist = (a, b) => a.d2 - b.d2; // reused aim list; foes carry their squared distance to the hero on e.d2
 function tickFire(dt) {
   const p = S.player; p.fireCd -= dt;
   if (p.fireCd > 0) return;
-  const range = FIRE_RANGE * (1 + 0.12 * pk('range')), inRange = [];
-  for (const e of S.enemies) if (e.hp > 0) { const d = dist2(e.x, e.y, p.x, p.y); if (d < range * range) inRange.push([d, e]); }
+  const range = FIRE_RANGE * (1 + 0.12 * pk('range')), inRange = IN_RANGE; inRange.length = 0;
+  for (const e of S.enemies) if (e.hp > 0) { const d = dist2(e.x, e.y, p.x, p.y); if (d < range * range) { e.d2 = d; inRange.push(e); } }
   if (!inRange.length) return;
-  inRange.sort((a, b) => a[0] - b[0]);
-  const shots = 1 + pk('multi'), spd = 460 * (1 + 0.18 * pk('velocity'));
+  inRange.sort(byDist);
+  const shots = 1 + pk('multi'), spd = 460 * (1 + 0.18 * pk('velocity')), dmg = pDmg();
   p.fireCd = pRate(); p.atkT = 0.4;
   for (let i = 0; i < shots; i++) {
-    const tgt = inRange[i % inRange.length][1], crit = rnd() < critChance();
-    S.shots.push({ x: p.x + p.face * 10, y: p.y - 42, tgt, dmg: pDmg() * (crit ? critMult() : 1), spd, crit, a: 0, nt: Math.floor(rnd() * 3) });
+    const tgt = inRange[i % inRange.length], crit = rnd() < critChance();
+    S.shots.push({ x: p.x + p.face * 10, y: p.y - 42, tgt, dmg: dmg * (crit ? critMult() : 1), spd, crit, a: 0, nt: Math.floor(rnd() * 3) });
   }
-  p.face = inRange[0][1].x > p.x ? 1 : -1; sfx('shoot');
+  p.face = inRange[0].x > p.x ? 1 : -1; sfx('shoot');
 }
 function tickShots(dt) {
   for (const sh of S.shots) {

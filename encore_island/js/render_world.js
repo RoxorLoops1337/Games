@@ -3,15 +3,32 @@
 let vw = 412, vh = 860, dpr = 1, scl = 1, vL = 0, vR = 0, vT = 0, vB = 0, hits = [];
 const CAM = { x: 0, y: 0, init: false };
 const vis = (x, y, m) => x > vL - m && x < vR + m && y > vT - m && y < vB + m;
-function blobPath(g, sc, dx, dy) {
-  ctx.beginPath(); const n = RAD_N; let px = 0, py = 0, fx = 0, fy = 0;
+// island outline: a smooth blob through the radius samples, built LOCAL to the land centre (callers translate to g.x, g.y first).
+// Outlines never change, so each (land, scale, offset) is baked once into a Path2D; without Path2D (headless tests) the path is built on ctx.
+function blobPathTo(t, g, sc, dy) {
+  const n = RAD_N; let px = 0, py = 0, fx = 0, fy = 0;
   for (let i = 0; i <= n; i++) {
-    const a = (i % n) / n * TAU, r = g.rad[i % n] * sc, x = g.x + dx + Math.cos(a) * r, y = g.y + dy + Math.sin(a) * r;
-    if (i === 0) { ctx.moveTo(x, y); fx = x; fy = y; } else { ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2); }
+    const a = (i % n) / n * TAU, r = g.rad[i % n] * sc, x = Math.cos(a) * r, y = dy + Math.sin(a) * r;
+    if (i === 0) { t.moveTo(x, y); fx = x; fy = y; } else { t.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2); }
     px = x; py = y;
   }
-  ctx.quadraticCurveTo(px, py, (px + fx) / 2, (py + fy) / 2); ctx.closePath();
+  t.quadraticCurveTo(px, py, (px + fx) / 2, (py + fy) / 2); t.closePath();
 }
+function blobPath(g, sc, dy) { ctx.beginPath(); blobPathTo(ctx, g, sc, dy); } // immediate, for the foam rings that breathe
+const HAS_PATH2D = typeof Path2D === 'function', BLOBS = new Map();
+function blob(g, sc, dy) { // the cached Path2D, or null once the path has been built on ctx instead
+  if (!HAS_PATH2D) { blobPath(g, sc, dy); return null; }
+  let m = BLOBS.get(g); if (!m) BLOBS.set(g, m = new Map());
+  const key = dy * 10 + sc; let p = m.get(key); // dy is a whole number of px and sc < 2, so the key is unique
+  if (!p) { p = new Path2D(); blobPathTo(p, g, sc, dy); m.set(key, p); }
+  return p;
+}
+function bFill(g, sc, dy) { const p = blob(g, sc, dy); if (p) ctx.fill(p); else ctx.fill(); }
+function bStroke(g, sc, dy) { const p = blob(g, sc, dy); if (p) ctx.stroke(p); else ctx.stroke(); }
+function bClip(g, sc, dy) { const p = blob(g, sc, dy); if (p) ctx.clip(p); else ctx.clip(); }
+// derived biome colours: mixc/rgba build strings, so do it once per biome
+function biomePal(B) { return B.pal || (B.pal = { cliffDark: mixc(B.cliff, '#1a0a30', 0.35), cliffMid: mixc(B.cliff, B.deep, 0.5), edge: rgba(B.deep, 0.32), mist: rgba(B.g[0], 0.22), portal: mixc(B.deep, '#1a0a30', 0.25) }); }
+const GPK = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7']; // ground pattern keys per biome
 function landVisible(g) { const m = g.r * 1.3 + 60; return g.x + m > vL && g.x - m < vR && g.y + m > vT && g.y - m < vB; }
 const WATER = { key: '', grad: null }; // the sky-to-deep gradient only changes with the biome or the screen height
 function drawWater() {
@@ -27,40 +44,52 @@ function drawWater() {
   }
   ctx.restore();
 }
+function foamRing(g, t, sc, a, w, ph) { const pul = 0.5 + 0.5 * Math.sin(t * 1.4 + ph + g.k); ctx.globalAlpha = a * (0.55 + 0.45 * pul); ctx.lineWidth = w; blobPath(g, sc + pul * 0.012, 8); ctx.stroke(); }
 function drawIslandBase(g, B) { // cliff thickness + animated foam
-  const t = S.t;
-  for (const [off, col] of [[34, mixc(B.cliff, '#1a0a30', 0.35)], [22, B.cliff], [12, mixc(B.cliff, B.deep, 0.5)]]) { ctx.fillStyle = col; blobPath(g, 1, 0, off); ctx.fill(); }
-  ctx.fillStyle = 'rgba(30,10,60,0.18)'; blobPath(g, 1.06, 0, 46); ctx.fill();
-  ctx.save(); ctx.lineJoin = 'round';
-  for (const [sc, a, w, ph] of [[1.045, 0.5, 12, 0], [1.085, 0.28, 8, 1.7]]) { const pul = 0.5 + 0.5 * Math.sin(t * 1.4 + ph + g.k); ctx.globalAlpha = a * (0.55 + 0.45 * pul); ctx.strokeStyle = B.shore; ctx.lineWidth = w; blobPath(g, sc + pul * 0.012, 0, 8); ctx.stroke(); }
-  ctx.restore();
+  const P = biomePal(B);
+  ctx.translate(g.x, g.y);
+  ctx.fillStyle = P.cliffDark; bFill(g, 1, 34); ctx.fillStyle = B.cliff; bFill(g, 1, 22); ctx.fillStyle = P.cliffMid; bFill(g, 1, 12);
+  ctx.fillStyle = 'rgba(30,10,60,0.18)'; bFill(g, 1.06, 46);
+  ctx.lineJoin = 'round'; ctx.strokeStyle = B.shore; // the foam breathes with the beat, so these two stay immediate paths
+  foamRing(g, S.t, 1.045, 0.5, 12, 0); foamRing(g, S.t, 1.085, 0.28, 8, 1.7);
+  ctx.globalAlpha = 1; ctx.lineJoin = 'miter';
+  ctx.translate(-g.x, -g.y);
 }
 function drawIslandTop(g, B, bi, born) {
-  const grow = born === undefined ? 1 : easeBack(clamp((S.t - born) / 1.1, 0, 1));
-  if (grow < 1) { ctx.save(); ctx.translate(g.x, g.y); ctx.scale(Math.max(0.05, grow), Math.max(0.05, grow)); ctx.translate(-g.x, -g.y); }
-  const fill = ctx.createRadialGradient(g.x, g.y - g.r * 0.2, g.r * 0.1, g.x, g.y, g.r * 1.15); fill.addColorStop(0, B.g[0]); fill.addColorStop(1, B.g[1]);
-  ctx.fillStyle = fill; blobPath(g, 1, 0, 0); ctx.fill();
-  const gp = groundPat('b' + bi, B.g, B.tuft, B.flowers, 'grass');
-  ctx.save(); blobPath(g, 1, 0, 0); ctx.clip(); if (gp) { ctx.fillStyle = gp; ctx.fillRect(g.x - g.r * 1.3, g.y - g.r * 1.3, g.r * 2.6, g.r * 2.6); }
-  ctx.strokeStyle = rgba('#ffffff', 0.55); ctx.lineWidth = 10; blobPath(g, 0.985, 0, 0); ctx.stroke(); // sunny rim
-  ctx.strokeStyle = rgba(B.deep, 0.32); ctx.lineWidth = 30; blobPath(g, 1.0, 0, 0); ctx.stroke(); // soft inner edge shade
+  const grow = born === undefined ? 1 : easeBack(clamp((S.t - born) / 1.1, 0, 1)), P = biomePal(B);
+  ctx.save(); ctx.translate(g.x, g.y); if (grow < 1) ctx.scale(Math.max(0.05, grow), Math.max(0.05, grow));
+  if (!g.topGrad) { const f = ctx.createRadialGradient(0, -g.r * 0.2, g.r * 0.1, 0, 0, g.r * 1.15); f.addColorStop(0, B.g[0]); f.addColorStop(1, B.g[1]); g.topGrad = f; } // size and biome are fixed per land
+  ctx.fillStyle = g.topGrad; bFill(g, 1, 0);
+  bClip(g, 1, 0);
+  const gp = groundPat(GPK[bi], B.g, B.tuft, B.flowers, 'grass');
+  if (gp) { ctx.translate(-g.x, -g.y); ctx.fillStyle = gp; ctx.fillRect(g.x - g.r * 1.3, g.y - g.r * 1.3, g.r * 2.6, g.r * 2.6); ctx.translate(g.x, g.y); } // the grass tiles keep their world phase
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 10; bStroke(g, 0.985, 0); // sunny rim
+  ctx.strokeStyle = P.edge; ctx.lineWidth = 30; bStroke(g, 1, 0); // soft inner edge shade
   ctx.restore();
-  if (grow < 1) ctx.restore();
 }
+const DASH_WALK = [14, 22], DASH_NONE = [];
+function walkPath(g) { // the boardwalk polyline, baked once per land (null = built on ctx)
+  const P = g.path;
+  if (!HAS_PATH2D) { ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); for (let i = 1; i < P.length; i++) ctx.lineTo(P[i].x, P[i].y); return null; }
+  if (!g.walk) { const p = new Path2D(); p.moveTo(P[0].x, P[0].y); for (let i = 1; i < P.length; i++) p.lineTo(P[i].x, P[i].y); g.walk = p; }
+  return g.walk;
+}
+function strokeWalk(p, w, col) { ctx.strokeStyle = col; ctx.lineWidth = w; if (p) ctx.stroke(p); else ctx.stroke(); }
 function drawPaths(maxK) {
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (let k = 1; k <= maxK; k++) {
-    const g = geoOf(k), P = g.path; if (!landVisible(g) && !landVisible(geoOf(g.parent))) continue;
-    for (const [w, col] of [[PATH_HALF * 2 + 14, HV.line], [PATH_HALF * 2 + 4, '#c9a878'], [PATH_HALF * 2 - 10, '#f6e7c8']]) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); for (let i = 1; i < P.length; i++) ctx.lineTo(P[i].x, P[i].y); ctx.stroke(); }
-    ctx.strokeStyle = 'rgba(255,126,182,0.35)'; ctx.lineWidth = 6; ctx.setLineDash([14, 22]); ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); for (let i = 1; i < P.length; i++) ctx.lineTo(P[i].x, P[i].y); ctx.stroke(); ctx.setLineDash([]);
+    const g = geoOf(k); if (!landVisible(g) && !landVisible(geoOf(g.parent))) continue;
+    const p = walkPath(g);
+    strokeWalk(p, PATH_HALF * 2 + 14, HV.line); strokeWalk(p, PATH_HALF * 2 + 4, '#c9a878'); strokeWalk(p, PATH_HALF * 2 - 10, '#f6e7c8');
+    ctx.setLineDash(DASH_WALK); strokeWalk(p, 6, 'rgba(255,126,182,0.35)'); ctx.setLineDash(DASH_NONE);
   }
 }
 // mist hiding the next, still-locked island
 function drawMist(kn) {
   const g = geoOf(kn); if (!landVisible(g)) return;
   const B = biomeOf(kn);
-  ctx.fillStyle = rgba(B.g[0], 0.22); blobPath(g, 0.96, 0, 0); ctx.fill();
-  ctx.save(); ctx.fillStyle = rgba('#ffffff', 0.78);
+  ctx.translate(g.x, g.y); ctx.fillStyle = biomePal(B).mist; bFill(g, 0.96, 0); ctx.translate(-g.x, -g.y);
+  ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.78)';
   for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + S.t * 0.07 * (i % 2 ? 1 : -1), r = g.r * (0.18 + 0.5 * hash01(kn * 31 + i)) , bx = g.x + Math.cos(a) * r, by = g.y + Math.sin(a) * r * 0.85 + Math.sin(S.t * 0.6 + i) * 6, br = 70 + 60 * hash01(kn * 17 + i);
     ctx.globalAlpha = 0.5 + 0.3 * hash01(i + kn); ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.fill(); }
   ctx.restore();
@@ -102,7 +131,7 @@ function drawLamp(l) {
   const pu = 0.65 + 0.35 * Math.max(0, 1 - (beatNow() % 1) * 2.5) + Math.sin(S.t * 3 + l.ph) * 0.06;
   ctx.fillStyle = 'rgba(40,20,80,0.2)'; ctx.beginPath(); ctx.ellipse(l.x + 4, l.y + 6, 18, 6, 0, 0, TAU); ctx.fill();
   if (c) ctx.drawImage(c, l.x - 56, l.y - 122, 112, 112); else { ctx.save(); ctx.translate(l.x, l.y - 40); paintLamp(); ctx.restore(); }
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(l.x, l.y - 84, 2, l.x, l.y - 84, 80); gl.addColorStop(0, 'rgba(255,214,120,' + (0.5 * pu) + ')'); gl.addColorStop(1, 'rgba(255,214,120,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(l.x, l.y - 84, 80, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * pu; ctx.translate(l.x, l.y - 84); ctx.fillStyle = ggrad(2, 80, '#ffd678'); ctx.beginPath(); ctx.arc(0, 0, 80, 0, TAU); ctx.fill(); ctx.translate(-l.x, 84 - l.y); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 }
 function drawHubFloor() {
   const g = HUB_GEO, B = BIOMES[0];
@@ -116,7 +145,7 @@ function drawHubFloor() {
   const sx = STAGE.x, sy = STAGE.y + 18;
   ctx.fillStyle = 'rgba(40,20,80,0.25)'; ctx.beginPath(); ctx.ellipse(sx, sy + 14, 120, 42, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.ellipse(sx, sy + 6, 112, 42, 0, 0, TAU); ctx.fill();
-  const sg = ctx.createLinearGradient(0, sy - 30, 0, sy + 40); sg.addColorStop(0, '#ff9ac8'); sg.addColorStop(1, '#d8559a'); ctx.fillStyle = sg; ctx.beginPath(); ctx.ellipse(sx, sy, 106, 38, 0, 0, TAU); ctx.fill();
+  ctx.translate(0, sy - 30); ctx.fillStyle = vgrad(70, '#ff9ac8', '#d8559a'); ctx.beginPath(); ctx.ellipse(sx, 30, 106, 38, 0, 0, TAU); ctx.fill(); ctx.translate(0, 30 - sy);
   ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.ellipse(sx, sy - 3, 92, 31, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = 'rgba(255,126,182,0.22)'; ctx.beginPath(); ctx.ellipse(sx, sy - 3, 74, 24, 0, 0, TAU); ctx.fill();
   const beat = (beatNow() % 1), pu = Math.max(0, 1 - beat * 3);
@@ -130,7 +159,7 @@ function drawHubSign() { // "ENCORE ISLAND" marquee arch behind the stage
   ctx.fillStyle = 'rgba(40,20,80,0.2)'; ctx.beginPath(); ctx.ellipse(x, y + 44, 140, 16, 0, 0, TAU); ctx.fill();
   for (const sd of [-1, 1]) { ctx.fillStyle = HV.line; rr(x + sd * 112 - 6, y - 4, 12, 52, 5); ctx.fill(); ctx.fillStyle = '#ffd84d'; rr(x + sd * 112 - 3.5, y - 2, 7, 48, 3); ctx.fill(); }
   ctx.fillStyle = HV.line; rr(x - 130, y - 54, 260, 62, 16); ctx.fill();
-  const g = ctx.createLinearGradient(0, y - 50, 0, y + 6); g.addColorStop(0, '#6a4cc4'); g.addColorStop(1, '#3a2a8a'); ctx.fillStyle = g; rr(x - 126, y - 50, 252, 54, 13); ctx.fill();
+  ctx.translate(0, y - 50); ctx.fillStyle = vgrad(56, '#6a4cc4', '#3a2a8a'); rr(x - 126, 0, 252, 54, 13); ctx.fill(); ctx.translate(0, 50 - y);
   for (let i = 0; i < 18; i++) { const a = i / 17, lx = x - 114 + a * 228, on = ((S.t * 5) | 0) % 2 === i % 2; ctx.fillStyle = on ? '#fff4c0' : '#ffd84d'; ctx.beginPath(); ctx.arc(lx, y - 44, on ? 3.4 : 2.6, 0, TAU); ctx.arc(lx, y - 2, on ? 3.4 : 2.6, 0, TAU); ctx.fill(); }
   stickerText('ENCORE ISLAND', x, y - 12, 25, '#ffc9de', '#ff5fa6', 0);
 }
@@ -142,10 +171,12 @@ function drawPlate(x, y, r, icon, label, cost, paid, o) {
   const bob = afford && !o.noBob ? Math.sin(S.t * 5 + x) * 2.5 : 0, pul = afford ? 0.5 + 0.5 * Math.sin(S.t * 5 + x * 0.01) : 0;
   shadow(x, y + r * 0.82, r * 0.95, 0.28);
   const cy = y - 6 + bob;
-  if (afford) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(x, cy, r * 0.6, x, cy, r * 1.7); gl.addColorStop(0, 'rgba(255,233,138,' + (0.30 + 0.25 * pul) + ')'); gl.addColorStop(1, 'rgba(255,233,138,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, cy, r * 1.7, 0, TAU); ctx.fill(); ctx.restore(); }
-  ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, cy + 3, r + 6, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgba(255,244,230,0.96)'; ctx.beginPath(); ctx.arc(x, cy, r + 3, 0, TAU); ctx.fill();
-  const gd = ctx.createRadialGradient(x - r * 0.3, cy - r * 0.4, r * 0.1, x, cy, r); gd.addColorStop(0, o.c1 || '#7a5cd8'); gd.addColorStop(1, o.c2 || '#3a2a8a'); ctx.fillStyle = gd; ctx.beginPath(); ctx.arc(x, cy, r - 3, 0, TAU); ctx.fill();
+  ctx.translate(x, cy); // the disc and its glow use cached gradients centred on the origin
+  if (afford) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.30 + 0.25 * pul; ctx.fillStyle = ggrad(r * 0.6, r * 1.7, '#ffe98a'); ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+  ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(0, 3, r + 6, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,244,230,0.96)'; ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, TAU); ctx.fill();
+  ctx.fillStyle = pgrad(r, o.c1 || '#7a5cd8', o.c2 || '#3a2a8a'); ctx.beginPath(); ctx.arc(0, 0, r - 3, 0, TAU); ctx.fill();
+  ctx.translate(-x, -cy);
   ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.ellipse(x, cy - r * 0.5, r * 0.7, r * 0.3, 0, 0, TAU); ctx.fill();
   if (paid > 0 && cost > 0) { ctx.strokeStyle = o.ring || '#9af0b4'; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(x, cy, r + 1, -Math.PI / 2, -Math.PI / 2 + Math.min(1, paid / cost) * TAU); ctx.stroke(); }
   plateIcon(icon, x, cy + 1, r * 1.25);
@@ -158,9 +189,8 @@ function priceTag(v, x, y, gem, afford) {
   const txt = typeof v === 'number' ? fmt(v) : v;
   ctx.font = font(13); const w = ctx.measureText(txt).width + 36, h = 22, bx = x - w / 2, by = y - 16;
   ctx.fillStyle = HV.line; rr(bx - 2, by - 1.5, w + 4, h + 4, 12); ctx.fill();
-  const g = ctx.createLinearGradient(0, by, 0, by + h);
-  if (afford) { g.addColorStop(0, gem ? '#7af0e0' : '#ffe98a'); g.addColorStop(1, gem ? '#27b5a8' : '#f0b422'); } else { g.addColorStop(0, '#e6dcff'); g.addColorStop(1, '#a99ad8'); }
-  ctx.fillStyle = g; rr(bx, by, w, h, 11); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.4)'; rr(bx + 3, by + 2, w - 6, 7, 4); ctx.fill();
+  ctx.translate(0, by); ctx.fillStyle = afford ? (gem ? vgrad(h, '#7af0e0', '#27b5a8') : vgrad(h, '#ffe98a', '#f0b422')) : vgrad(h, '#e6dcff', '#a99ad8');
+  rr(bx, 0, w, h, 11); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.4)'; rr(bx + 3, 2, w - 6, 7, 4); ctx.fill(); ctx.translate(0, -by);
   if (gem) drawGemIcon(bx + 13, by + 11, 0.7); else drawIcon('coin', bx + 13, by + 11, 22);
   ctx.fillStyle = afford ? '#3a2410' : '#5a4a88'; ctx.textAlign = 'left'; ctx.fillText(txt, bx + 25, by + 16); ctx.textAlign = 'center';
 }
@@ -168,7 +198,7 @@ function drawStall() {
   const x = SELL.x, y = SELL.y;
   shadow(x, y + 34, 56, 0.25);
   const jf = (S.t * 0.7 | 0) % 2 ? 0 : 2; if (!artDraw('jordan', 'idle', jf, x, y + 6, 0.38, false)) { ctx.fillStyle = '#e8c49a'; ctx.beginPath(); ctx.arc(x, y - 8, 10, 0, TAU); ctx.fill(); }
-  ctx.fillStyle = HV.line; rr(x - 52, y - 12, 104, 44, 12); ctx.fill(); const cg = ctx.createLinearGradient(0, y - 8, 0, y + 28); cg.addColorStop(0, '#d9a468'); cg.addColorStop(1, '#a8703c'); ctx.fillStyle = cg; rr(x - 49, y - 9, 98, 38, 10); ctx.fill();
+  ctx.fillStyle = HV.line; rr(x - 52, y - 12, 104, 44, 12); ctx.fill(); ctx.translate(0, y - 8); ctx.fillStyle = vgrad(36, '#d9a468', '#a8703c'); rr(x - 49, -1, 98, 38, 10); ctx.fill(); ctx.translate(0, 8 - y);
   ctx.fillStyle = 'rgba(255,255,255,0.25)'; rr(x - 44, y - 7, 88, 8, 4); ctx.fill();
   ctx.fillStyle = HV.line; ctx.fillRect(x - 56, y - 84, 6, 74); ctx.fillRect(x + 50, y - 84, 6, 74); rr(x - 64, y - 104, 128, 28, 12); ctx.fill();
   for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#fff4e6' : HV.pink; const x0 = x - 61 + i * 20.3; ctx.beginPath(); ctx.moveTo(x0, y - 102); ctx.lineTo(x0 + 20.3, y - 102); ctx.lineTo(x0 + 20.3, y - 86); ctx.arc(x0 + 10.15, y - 86, 10.15, 0, Math.PI); ctx.lineTo(x0, y - 102); ctx.fill(); }
@@ -179,7 +209,7 @@ function drawVault() {
   const x = VAULT.x, y = VAULT.y, st = COIN_STACKS(S.pallet);
   shadow(x, y + 36, 66, 0.28);
   ctx.strokeStyle = 'rgba(255,217,74,0.6)'; ctx.lineWidth = 3; ctx.setLineDash([8, 7]); ctx.beginPath(); ctx.arc(x, y, VAULT.r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = HV.line; rr(x - 68, y - 8, 136, 46, 11); ctx.fill(); const cg = ctx.createLinearGradient(0, y - 4, 0, y + 34); cg.addColorStop(0, '#d9a468'); cg.addColorStop(1, '#a8703c'); ctx.fillStyle = cg; rr(x - 65, y - 5, 130, 40, 9); ctx.fill();
+  ctx.fillStyle = HV.line; rr(x - 68, y - 8, 136, 46, 11); ctx.fill(); ctx.translate(0, y - 4); ctx.fillStyle = vgrad(38, '#d9a468', '#a8703c'); rr(x - 65, -1, 130, 40, 9); ctx.fill(); ctx.translate(0, 4 - y);
   ctx.fillStyle = '#ffd84d'; rr(x - 8, y - 5, 16, 40, 3); ctx.fill();
   const paint = (ox, oy, sc) => { for (let i = 0; i < st; i++) { const col = i % 8, row = Math.floor(i / 8), cx2 = ox + (-52 + col * 15 + (row % 2) * 7) * sc, cy2 = oy + (6 - row * 11) * sc, hgt = 2 + (i * 7 + 3) % 5;
     for (let j = 0; j < hgt; j++) { ctx.fillStyle = j % 2 ? '#ffe066' : '#f0b422'; ctx.beginPath(); ctx.ellipse(cx2, cy2 - j * 4 * sc, 7 * sc, 3.4 * sc, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(120,70,10,0.75)'; ctx.lineWidth = 0.9 * sc; ctx.stroke(); if (j === hgt - 1) { ctx.fillStyle = '#fff6c0'; ctx.beginPath(); ctx.ellipse(cx2 - 1.5 * sc, cy2 - j * 4 * sc - 0.6 * sc, 3 * sc, 1.2 * sc, -0.2, 0, TAU); ctx.fill(); } } } };
@@ -195,13 +225,13 @@ function drawForgeBody(x, y, hot) {
   ctx.fillStyle = HV.line; rr(x + 14, y - 88, 36, 12, 5); ctx.fill(); ctx.fillStyle = '#ffc9de'; rr(x + 16, y - 86, 32, 8, 4); ctx.fill();
   for (let i = 0; i < 4; i++) { const ph = (t * 0.45 + i / 4) % 1; ctx.globalAlpha = (1 - ph) * (hot ? 0.7 : 0.25); ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.arc(x + 32 + Math.sin(ph * 7 + i) * 8, y - 92 - ph * 56, 7 + ph * 13, 0, TAU); ctx.fill(); }
   ctx.globalAlpha = 1; ctx.fillStyle = HV.line; rr(x - 52, y - 52, 104, 92, 18); ctx.fill();
-  const bg = ctx.createLinearGradient(0, y - 48, 0, y + 36); bg.addColorStop(0, '#9a7af0'); bg.addColorStop(1, '#5a3fb8'); ctx.fillStyle = bg; rr(x - 48, y - 48, 96, 84, 15); ctx.fill();
+  ctx.translate(0, y - 48); ctx.fillStyle = vgrad(84, '#9a7af0', '#5a3fb8'); rr(x - 48, 0, 96, 84, 15); ctx.fill(); ctx.translate(0, 48 - y);
   ctx.strokeStyle = 'rgba(30,10,80,0.28)'; ctx.lineWidth = 2.5; for (let r = 0; r < 3; r++) { const yy = y - 30 + r * 22; ctx.beginPath(); ctx.moveTo(x - 46, yy); ctx.lineTo(x + 46, yy); ctx.stroke(); for (let c = 0; c < 4; c++) { const xx = x - 36 + c * 24 + (r % 2) * 12; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + 22); ctx.stroke(); } }
   ctx.fillStyle = 'rgba(255,255,255,0.28)'; rr(x - 43, y - 45, 86, 13, 6); ctx.fill();
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.moveTo(x - 31, y + 36); ctx.lineTo(x - 31, y - 4); ctx.arc(x, y - 4, 31, Math.PI, 0); ctx.lineTo(x + 31, y + 36); ctx.closePath(); ctx.fill();
-  const fg = ctx.createLinearGradient(0, y - 34, 0, y + 34); fg.addColorStop(0, '#ff6a2e'); fg.addColorStop(1, hot ? '#ffd84d' : '#a8501e'); ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(x - 26, y + 34); ctx.lineTo(x - 26, y - 4); ctx.arc(x, y - 4, 26, Math.PI, 0); ctx.lineTo(x + 26, y + 34); ctx.closePath(); ctx.fill();
+  ctx.translate(0, y - 34); ctx.fillStyle = vgrad(68, '#ff6a2e', hot ? '#ffd84d' : '#a8501e'); ctx.beginPath(); ctx.moveTo(x - 26, 68); ctx.lineTo(x - 26, 30); ctx.arc(x, 30, 26, Math.PI, 0); ctx.lineTo(x + 26, 68); ctx.closePath(); ctx.fill(); ctx.translate(0, 34 - y);
   for (let i = 0; i < 4; i++) { const fx = x - 18 + i * 12, fh = (16 + 12 * Math.sin(t * 9 + i * 1.7) + (i % 2) * 6) * heat + 6; ctx.fillStyle = i % 2 ? '#ffe98a' : '#ff9a2e'; ctx.beginPath(); ctx.moveTo(fx - 7, y + 34); ctx.quadraticCurveTo(fx - 5, y + 34 - fh * 0.6, fx + Math.sin(t * 7 + i) * 3, y + 34 - fh); ctx.quadraticCurveTo(fx + 5, y + 34 - fh * 0.6, fx + 7, y + 34); ctx.closePath(); ctx.fill(); }
-  if (hot) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(x, y + 10, 4, x, y + 10, 70); gl.addColorStop(0, 'rgba(255,160,60,0.5)'); gl.addColorStop(1, 'rgba(255,160,60,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y + 10, 70, 0, TAU); ctx.fill(); ctx.restore(); }
+  if (hot) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5; ctx.translate(x, y + 10); ctx.fillStyle = ggrad(4, 70, '#ffa03c'); ctx.beginPath(); ctx.arc(0, 0, 70, 0, TAU); ctx.fill(); ctx.translate(-x, -y - 10); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
   for (const [rx, ry] of [[-42, -40], [42, -40], [-42, 28], [42, 28]]) { ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x + rx, y + ry + 1, 5, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff4e6'; ctx.beginPath(); ctx.arc(x + rx, y + ry, 3.4, 0, TAU); ctx.fill(); }
 }
 function drawForgeArea() {
@@ -259,7 +289,7 @@ function drawDen(z) {
   shadow(d.x, d.y + 6, 44, 0.3);
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.ellipse(d.x, d.y, 40, 22, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#4a2f7a'; ctx.beginPath(); ctx.ellipse(d.x, d.y + 1, 34, 17, 0, 0, TAU); ctx.fill();
-  const gl = ctx.createRadialGradient(d.x, d.y, 2, d.x, d.y, 26); gl.addColorStop(0, rgba(foeCol(z.k), 0.55 + 0.25 * pul)); gl.addColorStop(1, rgba(foeCol(z.k), 0)); ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(d.x, d.y, 30, 15, 0, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.55 + 0.25 * pul; ctx.translate(d.x, d.y); ctx.fillStyle = ggrad(2, 26, foeCol(z.k)); ctx.beginPath(); ctx.ellipse(0, 0, 30, 15, 0, 0, TAU); ctx.fill(); ctx.translate(-d.x, -d.y); ctx.globalAlpha = 1;
   ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(d.x, d.y - 2, 24 + pul * 3, 11 + pul * 1.5, 0, 0, TAU); ctx.stroke();
 }
 function drawLandPlates(z) {
@@ -283,15 +313,16 @@ function drawHubPlates() {
 function drawUnlockPlate() { // the portal to the next island: unmistakable — beacon pillar, ripples, banner and a big gold price
   const n = S.lands.length + 1, u = S.unlockPlate; if (!u) return;
   const B = biomeOf(n), rem = Math.max(0, u.cost - u.paid), afford = S.wallet >= rem, t = S.t, r = 58;
-  ctx.save();
   if (vis(u.x, u.y, 200)) {
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffd678';
     const ph = (t * 0.9) % 1; // expanding ripples on the ground
-    for (let i = 0; i < 2; i++) { const q = (ph + i * 0.5) % 1; ctx.strokeStyle = 'rgba(255,214,120,' + (0.5 * (1 - q) * (afford ? 1 : 0.5)) + ')'; ctx.lineWidth = 5 * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(u.x, u.y + 24, 60 + q * 70, 22 + q * 26, 0, 0, TAU); ctx.stroke(); }
-    const bh = afford ? 230 : 150, pg = ctx.createLinearGradient(0, u.y - bh, 0, u.y); pg.addColorStop(0, 'rgba(255,233,138,0)'); pg.addColorStop(1, 'rgba(255,233,138,' + (afford ? 0.42 + 0.14 * Math.sin(t * 5) : 0.2) + ')'); ctx.fillStyle = pg; ctx.beginPath(); ctx.moveTo(u.x - 44, u.y); ctx.lineTo(u.x - 22, u.y - bh); ctx.lineTo(u.x + 22, u.y - bh); ctx.lineTo(u.x + 44, u.y); ctx.closePath(); ctx.fill();
+    for (let i = 0; i < 2; i++) { const q = (ph + i * 0.5) % 1; ctx.globalAlpha = 0.5 * (1 - q) * (afford ? 1 : 0.5); ctx.lineWidth = 5 * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(u.x, u.y + 24, 60 + q * 70, 22 + q * 26, 0, 0, TAU); ctx.stroke(); }
+    const bh = afford ? 230 : 150; // beacon pillar
+    ctx.globalAlpha = afford ? 0.42 + 0.14 * Math.sin(t * 5) : 0.2; ctx.translate(0, u.y - bh); ctx.fillStyle = vgrad(bh, 'rgba(255,233,138,0)', '#ffe98a');
+    ctx.beginPath(); ctx.moveTo(u.x - 44, bh); ctx.lineTo(u.x - 22, 0); ctx.lineTo(u.x + 22, 0); ctx.lineTo(u.x + 44, bh); ctx.closePath(); ctx.fill(); ctx.translate(0, bh - u.y);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
-  ctx.restore();
-  drawPlate(u.x, u.y, r, 'way', '', u.cost, u.paid, { c1: B.g[0], c2: mixc(B.deep, '#1a0a30', 0.25), ring: '#ffe98a' });
+  drawPlate(u.x, u.y, r, 'way', '', u.cost, u.paid, { c1: B.g[0], c2: biomePal(B).portal, ring: '#ffe98a' });
 }
 
 function drawUnlockBanner() { // drawn after the y-sorted actors so trees can never hide it
