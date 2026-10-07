@@ -54,7 +54,7 @@
       if (this.held || !r || !G.ch) return; this.res = r;
       const pre = snap(G.ch); this.held = G.doHold({ t: 'trainGame', stat: 'show', game: 'pose', level: r.level, q: r.q, where: this.a.where === 'studio' ? 'studio' : 'home' }); const post = snap(G.ch);
       const unlocked = this.held.fx.some((f) => f.t === 'levelUp' && f.game === 'pose');
-      this.rw = { show: Math.round((post.show - pre.show) * 100) / 100, xp: Math.round(post.xp - pre.xp), energy: Math.round(post.energy - pre.energy), cash: post.cash - pre.cash, minutes: post.day === pre.day ? post.minutes - pre.minutes : 20, unlocked, level: post.lv };
+      this.rw = { show: post.show - pre.show, xp: Math.round(post.xp - pre.xp), energy: Math.round(post.energy - pre.energy), cash: post.cash - pre.cash, minutes: post.day === pre.day ? post.minutes - pre.minutes : 20, unlocked, level: post.lv };
       safe(() => { if (this.mg.setUnlocked) this.mg.setUnlocked(post.lv); if (this.mg.setRewards) this.mg.setRewards(this.rw); });
     },
     onQuit() {

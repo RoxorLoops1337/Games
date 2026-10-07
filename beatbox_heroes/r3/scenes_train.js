@@ -9,7 +9,7 @@
 //                      Technicality -> E.go('rhythm', {mode:'train', level}), Originality -> E.go('seq', {train:true}), Showmanship -> E.go('pose', {level}).
 //                      A scene that does not exist yet answers with a "coming soon" toast and the IDLE picker. Results go through Core {t:'trainGame'}.
 //                      For rhythm / pose the args also carry onDone(res) / onAbort(): a scene that commits trainGame itself must not call onDone (res.held skips it).
-//       2D: the same menu; PLAY uses the 2D games that exist (singing tuner, rhythm drill for Technicality and Showmanship, the Beat Maker); ear training is 3D only.
+//       2D: the same menu; PLAY uses the 2D games that exist (singing tuner, the old rhythm drill for Technicality and Showmanship, the Beat Maker); ear training is 3D only.
 //   E.scenes3d.ear                  world 'ear' (park3d/mg_ear.js): music off (Audio.gameMode), lesson card, rounds, result -> G.doHold({t:'trainGame', stat:'mus', game:'ear', level, q, where}).
 //   BBH.Train                       test hooks: speed (idle playback multiplier), last (the last idle session: {stat, minutes, ticks, pops, done}), open, idle, stop, ui.
 (function (root) {
@@ -310,7 +310,7 @@
       case 'make': if (!hasScene('seq')) return soon(); return go('seq', { train: true, level, where, place, back });
       case 'beat': {
         if (!hasScene('rhythm')) return soon();
-        if (!Core.BEAT_LEVELS) { if (G.places && G.places.startTraining) { S.closeSheet(); G.places.startTraining(S, 'tech', where); return true; } return soon(); }
+        if (!Core.BEAT_LEVELS || !is3d()) { if (G.places && G.places.startTraining) { S.closeSheet(); M = null; G.places.startTraining(S, 'tech', where); return true; } return soon(); }
         const L = Core.BEAT_LEVELS[level - 1] || {};
         return go('rhythm', { mode: 'train', level, stat, where, place, back, title: 'TECHNICALITY', sub: L.name || 'rhythm training', bpm: L.bpm || 90, bars: 6, stage: 'cyan',
           onDone: (res) => { if (!res || res.held) return; const held = commit(res.q !== undefined ? res.q : res.accuracy); G.finishActivity(held, place); }, onAbort: () => E.go('place', { id: place }) });

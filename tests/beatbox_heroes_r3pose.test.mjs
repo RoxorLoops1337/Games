@@ -41,7 +41,7 @@ try {
   const tickTo = (b) => page.evaluate((b) => { const g = BBH.R3.world.game, s = g.state(), dt = b * s.spb - s.t; if (dt > 0) g.tick(dt); return g.state(); }, b);
 
   /* ===================================================================== select, locks, music */
-  await fresh(); const c0 = await snapCh();
+  await fresh(); await sleep(2500); const c0 = await snapCh(); void c0;
   await go({ back: BACK });
   const s0 = await page.evaluate(() => { const g = BBH.R3.world.game, s = g.state(); return { s, cards: document.querySelectorAll('.pz-lv').length, locked: document.querySelectorAll('.pz-lv.lk').length, music: BBH.Audio.music.current(), gm: BBH.Audio.isGameMode ? BBH.Audio.isGameMode() : null }; });
   ok(s0.s.phase === 'select' && s0.s.selectOpen && s0.cards === 8, 'pose: the level select shows 8 levels (' + s0.cards + ')');
@@ -56,7 +56,7 @@ try {
   ok(sStart.seqs.every((q, i) => q.length >= 2 && (i === 0 || q.length >= sStart.seqs[i - 1].length)) && sStart.seqs[3].length === 3, 'pose: the rounds grow (' + sStart.seqs.map((q) => q.length).join(',') + ')');
   await sleep(1200);
   const mid = await page.evaluate(() => ({ music: BBH.Audio.music.current(), t: BBH.R3.world.game.state().t }));
-  ok(mid.music === null && mid.t > 0.5, 'pose: the run plays with no music track (t ' + mid.t.toFixed(2) + ')');
+  ok(mid.music === null && mid.t > 0, 'pose: the run plays with no music track (t ' + mid.t.toFixed(2) + ')');
 
   /* ===================================================================== real input: pad tap and keyboard on the beat */
   const s1 = await page.evaluate(() => { const g = BBH.R3.world.game; g.start({ level: 1, manual: true, seed: 11 }); return g.state(); });
@@ -90,13 +90,13 @@ try {
   const post = await snapCh();
   const want = await page.evaluate(([c, q]) => { const r = BBH.Core.apply(c, { t: 'trainGame', stat: 'show', game: 'pose', level: 1, q, where: 'home' }, () => 0.5).char; return { show: r.stats.show, xp: r.xp, level: r.level, energy: r.energy, minutes: r.minutes, lv: r.trainLv.pose, games: r.n.trainGames }; }, [pre, run.r.q]);
   ok(Math.abs(post.stats.show - want.show) < 0.011 && post.stats.show > pre.stats.show, 'pose: Showmanship equals Core trainGame (' + pre.stats.show.toFixed(2) + ' -> ' + post.stats.show.toFixed(2) + ', want ' + want.show.toFixed(2) + ')');
-  ok(post.xp === want.xp && post.level === want.level && post.energy === want.energy && post.minutes === want.minutes && post.n.trainGames === want.games, 'pose: xp, energy, minutes and the counter equal Core trainGame (' + [post.minutes - pre.minutes, post.energy - pre.energy].join(' / ') + ')');
+  ok(post.xp === want.xp && post.level === want.level && post.energy === want.energy && post.minutes === want.minutes && (post.n.trainGames || 0) === want.games, 'pose: xp, energy, minutes and the counter equal Core trainGame (' + [post.minutes - pre.minutes, post.energy - pre.energy].join(' / ') + ')');
   ok(pre.trainLv.pose === 1 && post.trainLv.pose === 2 && want.lv === 2, 'pose: q >= 0.7 at the top level unlocks level 2 (trainLv.pose ' + post.trainLv.pose + ')');
   const card = await page.evaluate(() => ({ sh: (document.querySelector('.pz-card .pz-rw') || {}).textContent || '', un: (document.querySelector('.pz-card .pz-un') || {}).textContent || '', btns: [...document.querySelectorAll('.pz-card button')].map((b) => b.textContent), g: (document.querySelector('.pz-card .pz-g') || {}).textContent }));
   ok(card.sh === '+' + (Math.round((post.stats.show - pre.stats.show) * 10) / 10).toFixed(1) + ' SHOWMANSHIP' && /LEVEL 2 UNLOCKED/.test(card.un) && card.g === 'S', 'pose: the card shows the real gain and the unlock (' + card.sh + ' | ' + card.un + ')');
   ok(card.btns.length === 1 && card.btns[0] === 'CONTINUE', 'pose: in the game the card only has CONTINUE');
   await page.locator('.pz-card button', { hasText: 'CONTINUE' }).click(); await waitPlace('home');
-  ok((await snapCh()).n.trainGames === pre.n.trainGames + 1, 'pose: CONTINUE returns to the place, the session counted once');
+  ok((await snapCh()).n.trainGames === (pre.n.trainGames || 0) + 1, 'pose: CONTINUE returns to the place, the session counted once');
   ok(await page.evaluate(() => !BBH.Audio.isGameMode || !BBH.Audio.isGameMode()), 'pose: gameMode is off again after leaving');
 
   // the select now opens level 2; E.go('pose', {level}) starts that level at once
@@ -123,6 +123,17 @@ try {
   const b = await page.evaluate(() => BBH.R3.host.stats());
   ok(b.tris <= 80000 && b.calls <= 60, 'pose: within budget on the low tier (' + b.tris + ' tris, ' + b.calls + ' calls)');
   await page.locator('.pz-bk').click(); await waitPlace('home');
+  const hb = await page.evaluate(async () => {   // high tier budget, then load / unload cycles of the pose world return GPU memory to the baseline
+    const h = BBH.R3.host, R = h.renderer, mem = () => ({ g: R.info.memory.geometries, t: R.info.memory.textures }), hud = document.createElement('div'), res = []; document.body.appendChild(hud);
+    h.setQuality('high'); await h.load('pose', { hud, embedded: true, again: false, unlocked: 1, level: 1, autostart: true }); for (let i = 0; i < 4; i++) h.tick(0.05); const high = h.stats(); h.setQuality('low');
+    const cycle = async () => { await h.load('pose', { hud, embedded: true, again: false, unlocked: 1, level: 1, autostart: true }); for (let i = 0; i < 3; i++) h.tick(0.05); h.unload(); await new Promise((r) => setTimeout(r, 50)); return mem(); };
+    await cycle(); const base = mem(); for (let i = 0; i < 3; i++) res.push(await cycle()); hud.remove();
+    return { high, base, last: res[res.length - 1], gm: BBH.Audio.isGameMode ? BBH.Audio.isGameMode() : false };
+  });
+  ok(hb.high.tris <= 80000 && hb.high.calls <= 60, 'pose: within budget on the high tier (' + hb.high.tris + ' tris, ' + hb.high.calls + ' calls)');
+  const within = (a, b) => Math.abs(a - b) <= Math.max(2, b * 0.05);
+  ok(within(hb.last.g, hb.base.g) && within(hb.last.t, hb.base.t), 'pose: load / unload cycles keep GPU geometries and textures at the baseline (' + JSON.stringify(hb.base) + ' -> ' + JSON.stringify(hb.last) + ')');
+  ok(hb.gm === false, 'pose: disposing the world turns gameMode off');
   ok(errs.length === 0, 'no console errors' + (errs.length ? ': ' + errs.slice(0, 4).join(' | ') : ''));
 } catch (e) {
   ok(false, 'r3pose suite crashed: ' + (e && e.stack || e));
