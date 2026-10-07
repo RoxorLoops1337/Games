@@ -1455,7 +1455,7 @@ const GAME = (() => {
     tri: ['prize_marble', 'crisp_apple', 'glass_bead', 'prize_marble', 'peppermint', 'bubble_flask'],
     scoop: ['prize_marble', 'glass_bead', 'peppermint', 'sour_drop', 'prize_marble', 'glass_bead', 'rusty_sword', 'lucky_penny'],
     hand: ['tower_shield', 'prize_marble', 'crisp_apple', 'war_hammer', 'glass_bead'],
-    magnet: ['rusty_sword', 'lucky_coin', 'iron_nut', 'bubble_flask', 'crisp_apple', 'skeleton_key', 'pot_lid'],
+    magnet: ['rusty_sword', 'spring_coil', 'iron_nut', 'bubble_flask', 'crisp_apple', 'skeleton_key', 'pot_lid'],   // (round 28: a gold coin is not magnetic)
     hook: ['rusty_sword', 'crisp_apple', 'dented_shield', 'prize_marble', 'bubble_flask', 'lucky_coin'],
     // CR8: small light things for the vacuum (and a sword that will not come), pairs for the twins
     vacuum: ['prize_marble', 'glass_bead', 'peppermint', 'lucky_penny', 'sour_drop', 'bouncy_ball', 'rusty_sword', 'prize_marble'],
@@ -1490,7 +1490,7 @@ const GAME = (() => {
     if (r.phase === 'idle' && !r.auto) {
       D.wait -= dt;
       if (D.wait <= 0) {
-        const metal = (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0;
+        const metal = (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0 && !(b.data.def && b.data.def.nomag);
         const pred = D.id === 'magnet' ? metal : D.id === 'hand' ? ((b) => b.m > 10) : null;
         let x = r.aimAt(pred);
         if (x == null) x = r.aimAt(null);

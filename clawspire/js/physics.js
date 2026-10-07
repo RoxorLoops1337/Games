@@ -71,6 +71,9 @@ const PHYS = (() => {
     slipV: 60,
     carryWait: 0.2,        // s over the chute before opening
     magnetR: 110, magnetF: 420,
+    // (round 28) the Magnet Crane's hold fades away from its core: a piece whose nearest edge is magFade px further out holds half as
+    // hard; under magMin it does not stick at all (the chain stops there); a weak piece may drop at the top: (1 - hold) * magDrop
+    magFade: 22, magMin: 0.2, magDrop: 0.55,
     tray: 44,              // the chute has no floor: a hidden tray this far below the cabinet floor catches prizes
     lid: -64,              // the lid segment's y (items may fly a little above the glass)
     clampTop: -50,
@@ -1226,12 +1229,13 @@ const PHYS = (() => {
       }
       emit('lift');
     }
-    const isMetal = (b) => !!(b && b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0);
+    // (round 28) gold, copper and brass (def.nomag: coins, tokens, golden things) are metal for builds but not magnetic
+    const isMetal = (b) => !!(b && b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0 && !(b.data.def && b.data.def.nomag));
     const isStuck = (b) => { for (const sk of K.stuck) if (sk.b === b) return true; return false; };
     /* Weld a body to the claw at its current offset from the hub. */
-    function stick(b) {
+    function stick(b, hold) {
       if (!b || isStuck(b)) return;
-      K.stuck.push({ b, dx: b.x - K.x, dy: b.y - K.y, a: b.a });
+      K.stuck.push({ b, dx: b.x - K.x, dy: b.y - K.y, a: b.a, hold: hold == null ? 1 : hold });
       b.held = 2; b.passClaw = 0; wake(b);
     }
     function unstick(i, drop) {
@@ -1267,7 +1271,7 @@ const PHYS = (() => {
         { const cb = W.clampBox, e = extentX(b), lo = cb.xMin - 5 + PH.wallTol + e.lo, hi = cb.xMax + 5 - PH.wallTol - e.hi;
           if (lo <= hi) tx = clamp(tx, lo, hi); }
         const ex = tx - b.x, ey = ty - b.y, e = Math.hypot(ex, ey);
-        if (e > T.tear * K.s + 6) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); continue; }
+        if (e > T.tear * K.s * (0.35 + 0.65 * sk.hold) + 6) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); continue; }   // (round 28: a weak hold tears sooner)
         let vx = ex * T.weldK / h, vy = ey * T.weldK / h;
         const v = Math.hypot(vx, vy);
         if (v > T.weldV) { vx *= T.weldV / v; vy *= T.weldV / v; }
@@ -1307,12 +1311,19 @@ const PHYS = (() => {
     }
     /* Metal touching the magnet's face sticks; while energising, metal
        touching stuck metal sticks too (it is magnetised). */
+    // (round 28) how hard the magnet holds a body: 1 at the face, halving every magFade px its nearest edge sits further out
+    function magHold(b) {
+      const hr = K.T.hubR * K.s;
+      let gap = Infinity;
+      for (let i = 0; i < b.parts.length; i++) gap = Math.min(gap, Math.hypot(b.px[i] - K.x, b.py[i] - K.y) - b.parts[i].r - hr);
+      return Math.min(1, Math.pow(0.5, Math.max(0, gap - 3) / (RIG.magFade * K.s)));
+    }
     function magnetStick(chain) {
       const hr = K.T.hubR * K.s;
       for (const b of W.bodies) {
         if (b.type !== 'dynamic' || !isMetal(b) || isStuck(b)) continue;
         for (let i = 0; i < b.parts.length; i++) {
-          if (Math.hypot(b.px[i] - K.x, b.py[i] - K.y) < hr + b.parts[i].r + 3) { stick(b); break; }
+          if (Math.hypot(b.px[i] - K.x, b.py[i] - K.y) < hr + b.parts[i].r + 3) { stick(b, 1); break; }
         }
       }
       if (!chain || !K.stuck.length) return;
@@ -1329,7 +1340,9 @@ const PHYS = (() => {
             }
           }
         }
-        if (hit) stick(b);
+        if (!hit) continue;
+        const hd = magHold(b);   // (round 28) magnetised metal holds the next piece weaker the further it is from the core
+        if (hd >= RIG.magMin) stick(b, hd);
       }
     }
     /* At the top of the lift a welded load heavier than the claw can bear
@@ -1338,8 +1351,9 @@ const PHYS = (() => {
       const T = K.T;
       const cap = T.weld === 'metal' ? 14 + 40 * K.grip : T.weld === 'spear' ? 10 + 36 * K.grip : T.weld === 'suck' ? 8 + 30 * K.grip : 18 + 50 * K.grip;
       for (let i = K.stuck.length - 1; i >= 0; i--) {
-        const b = K.stuck[i].b;
-        const p = clamp((b.m - cap) / (cap * 1.5), 0, 0.75);
+        const b = K.stuck[i].b, hd = K.stuck[i].hold == null ? 1 : K.stuck[i].hold, c = cap * hd;
+        // (round 28) a magnet's weakly held outer pieces may let go at the top, heavy or not
+        const p = Math.max(clamp((b.m - c) / (c * 1.5), 0, 0.75), T.weld === 'metal' ? (1 - hd) * RIG.magDrop : 0);
         if (p > 0 && rand() < p) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); }
       }
     }
@@ -1362,7 +1376,7 @@ const PHYS = (() => {
       if (!cfg.magnet || K.T.weld === 'metal' || (K.st !== 'drop' && K.st !== 'close')) return;
       const s = K.s, hx = K.x, hy = K.y + (K.T.weld === 'spear' ? K.T.tip * s : RIG.hingeY * s);
       for (const b of W.bodies) {
-        if (b.type !== 'dynamic' || !b.data || !b.data.tags || b.data.tags.indexOf('metal') < 0) continue;
+        if (b.type !== 'dynamic' || !isMetal(b)) continue;
         const dx = hx - b.x, dy = hy - b.y, d = Math.hypot(dx, dy);
         if (d > RIG.magnetR || d < K.T.hubR * s + b.br - 2) continue;
         const f = RIG.magnetF * h / Math.max(1, d / 40);
