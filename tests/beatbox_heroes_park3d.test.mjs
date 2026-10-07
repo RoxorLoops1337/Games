@@ -39,6 +39,11 @@ const ev = await page.evaluate(() => { const p = window.__park; let got = null; 
 ok(ev === 'busk' || ev === 'none', 'interact does not throw');
 for (const t of ['day', 'night', 'dusk']) { const r = await page.evaluate((t) => { window.__park.setTime(t); return true; }, t); ok(r, 'time ' + t); }
 for (const q of ['low', 'med', 'high']) { const r = await page.evaluate((q) => { window.__park.setQuality(q); return true; }, q); ok(r, 'quality ' + q); }
+// black-frame guard: a GPU that cannot render the HDR/MSAA target must step down the ladder instead of showing black
+await page.evaluate(() => { const l = window.__park.lighting; l.setQuality('high'); l.post._forceBlank(4); });
+await page.waitForFunction(() => window.__park.lighting.stats().rung >= 2, null, { timeout: 90000 });
+const rg = await page.evaluate(() => window.__park.lighting.stats());
+ok(rg.rung === 2 && rg.composer, 'black frames step the post chain down the ladder (rung ' + rg.rung + ')');
 await page.waitForTimeout(500);
 ok(errs.length === 0, 'no page or console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
 await browser.close(); fs.rmSync(tmp, { recursive: true, force: true }); clearTimeout(watchdog);
