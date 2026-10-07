@@ -64,7 +64,6 @@ function rvStartBattle(k) {
   });
   st.battle = { k, band: tk.band, t: RV_BATTLE_T, max: ents.reduce((s, e) => s + e.max, 0), ents };
   float(g.den.x, g.den.y - 110, 'STAGE BATTLE!', B.col, true); sfx('boss', true); shake(12); JUICE.flash = 0.35; ringFx(g.den.x, g.den.y, 260, B.col, 0.6);
-  toast('Stage Battle vs ' + B.name + '! Beat all 3 in 90s', 'trophy', 4);
   return true;
 }
 function rvEndBattle(win, why) {
@@ -411,7 +410,7 @@ function ghDrawDuel() {
   ctx.fillStyle = '#3a2a86'; ctx.fillRect(x + 10, y + 214, w - 20, 40);
   const ua = d.pt - d.ult; if (ua >= 0 && ua < 0.7) { const f = ua / 0.7; ctx.fillStyle = 'rgba(255,240,170,' + (0.5 * (1 - f)) + ')'; ctx.fillRect(x + 10, y + 60, w - 20, 188); ctx.strokeStyle = '#ff9ac8'; ctx.lineWidth = 6 * (1 - f); ctx.beginPath(); ctx.arc(cx + (d.ultSide ? 60 : -60) * sc, y + 190, 30 + f * 200, 0, TAU); ctx.stroke(); }
   const names = [[activeSkin().art, activeSkin().comp, (S.pop[0] && S.pop[0].art) || 'andy'], [skinDef(d.g.s).art, skinDef(d.g.s).comp, 'rawclaw']];
-  const posx = [60, 112, 160], fy = y + 222;
+  const posx = [52, 98, 140], fy = y + 222;
   for (let s = 0; s < 2; s++) for (let i = 2; i >= 0; i--) {
     const dir = s ? 1 : -1, ux = cx + dir * posx[i] * sc, hp = d.hp[s][i], dead = hp <= 0, lunge = clamp(1 - (d.pt - d.atk[s][i]) / 0.25, 0, 1) * -dir * 12 * sc, hurt = d.pt - d.hit[s][i] < 0.2;
     const anim = dead ? 'down' : hurt ? 'hurt' : d.pt - d.atk[s][i] < 0.3 ? 'attack' : 'idle', fr = dead ? 1 : hurt ? 0 : ((d.pt * 8 + i) | 0);
@@ -498,9 +497,9 @@ function rvTab(cw) {
     else y = note(y, cw, 'No rival band is here right now. Hint: they like to move into the land you have visited least recently, about every ' + (st.cd > 120 ? 'few' : 'couple of') + ' minutes of play. Next visit in about ' + Math.max(1, Math.ceil(st.cd / 60)) + ' min.');
   }
   for (const k of tl) {
-    const B = RV_BANDS[st.taken[k].band]; rowCard(y, 88, cw); ctx.fillStyle = B.col; rr(2, y, 6, 88, 3); ctx.fill();
-    B.m.forEach((m, i) => artHead(m.spr, 32 + i * 40, y + 28, 16)); rvT(B.name + ' took ' + biomeOf(k).name, 14, y + 64, 12, '#fff'); ctx.font = font(10, false); ctx.fillStyle = '#cfc6ee'; ctx.textAlign = 'left'; wrapText('Towers there are off and creatures are 40% tougher. Walk onto the glowing Stage Battle pad.', 14, y + 77, cw - 100, 11);
-    if (st.cool[k]) rvT('Rest ' + Math.ceil(st.cool[k]) + 's', cw - 12, y + 24, 11, '#ffb0b0', 'right'); y += 96;
+    const B = RV_BANDS[st.taken[k].band]; rowCard(y, 102, cw); ctx.fillStyle = B.col; rr(2, y, 6, 102, 3); ctx.fill();
+    B.m.forEach((m, i) => artHead(m.spr, 32 + i * 40, y + 28, 16)); rvT(B.name + ' took ' + biomeOf(k).name, 14, y + 64, 12, '#fff'); ctx.font = font(10, false); ctx.fillStyle = '#cfc6ee'; ctx.textAlign = 'left'; wrapText('Towers there are off and creatures are 40% tougher. Walk onto the glowing Stage Battle pad to fight.', 14, y + 80, cw - 30, 12);
+    if (st.cool[k]) rvT('Rest ' + Math.ceil(st.cool[k]) + 's', cw - 12, y + 24, 11, '#ffb0b0', 'right'); y += 110;
   }
   y = section(y + 2, 'The bands');
   RV_BANDS.forEach((B) => {
