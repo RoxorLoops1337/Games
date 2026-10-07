@@ -71,6 +71,7 @@
     "esbuild": "^0.21.4",
     "playwright-core": "^1.62.1",
     "sharp": "^0.34.5",
+    "three": "^0.186.1",
     "typescript": "^6.0.3"
   }
 }

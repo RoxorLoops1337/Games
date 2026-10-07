@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Beatbox Heroes: Park 3D</title>
+<style>
+html,body{margin:0;height:100%;background:#120d1f;overflow:hidden;touch-action:none;font-family:system-ui,sans-serif;color:#fff0c9}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+canvas{height:100%;aspect-ratio:9/16;max-width:100%;display:block;background:#120d1f}
+#hud{position:fixed;left:0;right:0;top:0;padding:8px 10px;display:flex;gap:6px;justify-content:space-between;pointer-events:none;font-size:12px}
+#hud button{pointer-events:auto;background:#43296f;color:#fff0c9;border:0;padding:6px 8px;border-radius:4px;font:inherit}
+#prompt{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:none}
+#prompt button{background:#d4a017;color:#17102b;border:0;padding:12px 22px;border-radius:6px;font:700 15px system-ui;box-shadow:0 3px 0 #7a5806}
+#fps{position:fixed;left:8px;bottom:8px;font:11px monospace;color:#9dff4a;display:none}
+</style></head><body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="hud"><div><button id="tDay">DAY</button> <button id="tDusk">DUSK</button> <button id="tNight">NIGHT</button></div><div><button id="bFps">FPS</button></div></div>
+<div id="prompt"><button id="go">TAP</button></div><div id="fps"></div>
+<script src="park3d.bundle.js"></script>
+<script>
+(async () => {
+  const api = await Park3D.init('#cv', { time: 'dusk', onSpot: (s) => { window.__lastSpot = s; const t = document.getElementById('prompt'); t.firstElementChild.textContent = 'ACTIVATED: ' + s.id.toUpperCase(); } });
+  const sp = (id) => () => api.setTime(id);
+  document.getElementById('tDay').onclick = sp('day'); document.getElementById('tDusk').onclick = sp('dusk'); document.getElementById('tNight').onclick = sp('night');
+  const fps = document.getElementById('fps'); document.getElementById('bFps').onclick = () => { fps.style.display = fps.style.display === 'block' ? 'none' : 'block'; };
+  setInterval(() => { const s = api.stats(); fps.textContent = s.fps + ' fps  ' + s.calls + ' calls  ' + Math.round(s.tris / 1000) + 'k tris'; const n = api.spots.nearest(api.player.object.position), p = document.getElementById('prompt'); if (n) { p.style.display = 'block'; p.firstElementChild.textContent = n.label; p.firstElementChild.onclick = () => api.activate(n.id); } else p.style.display = 'none'; }, 200);
+})();
+</script></body></html>
