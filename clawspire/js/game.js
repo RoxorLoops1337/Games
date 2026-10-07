@@ -164,8 +164,38 @@ const GAME = (() => {
     }
     return c;
   }
+  /* ITX (round 31): DOM item art fills its box (a 24 px coin no longer sits small in an 84 px card window; long
+     items lie on the diagonal), with a floor shadow and a rarity back light at card size (RENDER.itemPortrait).
+     Rare and legendary cards bob, shine and twinkle: polTick redraws those few, unless motion is reduced. */
   function itemCanvas(def, plus, px) {
-    return canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.item) X.RENDER.item(ctx, def, p / 2, p / 2, 0, Math.min(1, (p * 0.8) / shapeLong(def.shape)), { plus }); });
+    const c = canvasEl(px, (ctx, p) => {
+      const R = X.RENDER;
+      if (R && R.itemPortrait) R.itemPortrait(ctx, def, plus, p, undefined, { calm: true });
+      else if (R && R.item) R.item(ctx, def, p / 2, p / 2, 0, Math.min(1, (p * 0.8) / shapeLong(def.shape)), { plus });
+    });
+    itxItemLive(c, def, plus, px);
+    return c;
+  }
+  const ITX_IL = [];
+  const ITX_IL_MAX = 24;
+  function itxItemLive(c, def, plus, px) {
+    if (S.headless || !c || !def || !X.RENDER || !X.RENDER.itemPortraitLive || !X.RENDER.itemPortraitLive(def, px) || feelReduced()) return;
+    if (ITX_IL.length >= ITX_IL_MAX) ITX_IL.shift();
+    ITX_IL.push({ c, def, plus, px });
+  }
+  // polTick's other half: the live item portraits (detached canvases drop out).
+  function itxItemTick() {
+    const R = X.RENDER;
+    if (!ITX_IL.length || !R || !R.itemPortrait) return;
+    const calm = feelReduced();
+    for (let i = ITX_IL.length - 1; i >= 0; i--) {
+      const e = ITX_IL[i];
+      if (e.c.isConnected === false) { ITX_IL.splice(i, 1); continue; }
+      let ctx = null;
+      try { ctx = e.c.getContext('2d'); } catch (err) { ctx = null; }
+      if (!ctx) continue;
+      try { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, e.c.width, e.c.height); ctx.scale(2, 2); R.itemPortrait(ctx, e.def, e.plus, e.px, S.t, { calm }); ctx.setTransform(1, 0, 0, 1, 0, 0); } catch (err) { /* art is optional */ }
+    }
   }
   function relicCanvas(def, px) {
     const c = canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.relicIcon) X.RENDER.relicIcon(ctx, def, p / 2, p / 2, p * 0.8); });
@@ -185,8 +215,9 @@ const GAME = (() => {
   }
   function polTick(real) {
     S.polT = (S.polT || 0) + real;
-    if (S.headless || !POL_RL.length || S.polT < 1 / 30) return;
+    if (S.headless || (!POL_RL.length && !ITX_IL.length) || S.polT < 1 / 30) return;
     S.polT = 0;
+    itxItemTick();   // ITX (round 31): the rare and legendary item portraits
     const R = X.RENDER;
     if (!R || !R.relicLive || !R.relicIcon) return;
     const t = S.t;
@@ -952,6 +983,7 @@ const GAME = (() => {
     m2Leave(S.screen, name);   // M2 (round 18): back home, the hidden run stops let their cards go
     m3Leave(S.screen, name);   // M3 (round 18): an album, a lobby or a run end left behind lets its cards go
     S.screen = name;
+    uixScreen(name);   // UIX (round 31): the room behind the stage follows the screen
     labelZones(name);   // float labels keep out of the marquee and the HUD (CLAW TYPES block)
     S.ui.buttons = [];
     popover(null);
@@ -1593,7 +1625,7 @@ const GAME = (() => {
     for (const id of ids) {
       const s = st[id];
       const k = h('div', 'm1StK');
-      k.appendChild(h('span', 'ic', s.icon || ''));
+      k.appendChild(stxIconEl(id, s.icon || ''));   // (UIX round 31: the drawn glyph)
       k.appendChild(h('b', null, s.name || id));
       list.appendChild(k);
       list.appendChild(h('div', 'm1StV', s.text || ''));
@@ -3761,7 +3793,7 @@ const GAME = (() => {
     if (vl.length) into.push(h('div', 'tag cyan m3VltTag', `Unlocked in the Prize Vault: ${vl.join(', ')}!`));
     for (const c of kids) {
       const cls = String(c.className || '');
-      if (c.tagName === 'H1' || /\b(scoreBox|loopEnd|mEnd)\b/.test(cls)) continue;
+      if (c.tagName === 'H1' || /\b(scoreBox|loopEnd|mEnd|uixEnd)\b/.test(cls)) continue;   // (UIX round 31: the run-end picture stays up)
       if (!sub && /\bsub\b/.test(cls)) { sub = true; continue; }
       if (/\bhisHofTag\b/.test(cls) && box) {   // the Hall of Fame place rides on the score as a tag
         const row = Array.from(box.children || []).find((x) => /\bsm\b/.test(String(x.className || '')));
@@ -3852,7 +3884,10 @@ const GAME = (() => {
     lootMapChip(l2);   // banked capsules, waiting to be cracked
     secHeadChip(l2);   // the golden keys counter (SECRET)
     seaHeadChip(l2);   // the season's currency (SEASON)
-    l2.appendChild(h('div', 'hint', hintTxt));
+    const hint = h('div', 'hint', hintTxt);
+    // UIX (round 31): a narrow phone clamps the line to two rows; a tap opens the rest over the map, a second closes it
+    hint.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); try { hint.classList.toggle('uixOpen'); } catch (e) { /* stub */ } };
+    l2.appendChild(hint);
     const gear = btn('⚙', () => accOpen(), 'sm ghost accGear');   // the Settings panel (ACCESS block)
     gear.title = 'Settings';
     gear.setAttribute('aria-label', 'Settings');
@@ -4241,7 +4276,8 @@ const GAME = (() => {
     const fight = S.screen === 'fight';
     const area = fight ? { x: 0, y: 72, w: W, h: 268 } : MAP_AREA;
     const biome = (run.map && run.map.biome) || ({ 1: 'cellar', 2: 'foundry', 3: 'vault' })[run.act] || 'cellar';
-    const kind = AMB_KIND[biome] || 0;
+    // (MPX round 31: in an act 1 fight the fireflies give way to dust motes drifting in the lamp light, kind 4)
+    const kind = fight && !(AMB_KIND[biome] || 0) ? 4 : AMB_KIND[biome] || 0;
     const r = S.ambR || (S.ambR = U.rng(7071));
     let A = S.amb;
     if (!A) { A = S.amb = []; for (let i = 0; i < AMB_N; i++) A.push({ x: 0, y: 0, vx: 0, vy: 0, ph: 0, life: 0 }); }
@@ -4254,13 +4290,14 @@ const GAME = (() => {
       if (m.life <= 0) {
         m.x = area.x + r() * area.w; m.ph = r() * 6.28; m.life = 4 + r() * 6;
         if (kind === 0) { m.y = area.y + r() * area.h; m.vx = (r() - 0.5) * 14; m.vy = (r() - 0.5) * 10; }
+        else if (kind === 4) { m.y = area.y + r() * area.h; m.vx = (r() - 0.5) * 7; m.vy = -1.5 - r() * 4; }
         else if (kind === 1 || kind === 3) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }   // (DEP: bubbles rise like embers)
         else { m.y = area.y + r() * area.h * 0.5; m.vx = 6 + r() * 10; m.vy = 16 + r() * 22; }
         m.max = m.life;
       }
       m.life -= dt; m.ph += dt;
-      m.x += (m.vx + (kind === 0 ? Math.sin(m.ph * 1.3) * 12 : kind === 2 ? Math.sin(m.ph * 2) * 8 : Math.sin(m.ph * 3) * 6)) * dt;
-      m.y += (m.vy + (kind === 0 ? Math.cos(m.ph * 0.9) * 8 : 0)) * dt;
+      m.x += (m.vx + (kind === 0 ? Math.sin(m.ph * 1.3) * 12 : kind === 2 ? Math.sin(m.ph * 2) * 8 : kind === 4 ? Math.sin(m.ph * 0.7) * 4 : Math.sin(m.ph * 3) * 6)) * dt;
+      m.y += (m.vy + (kind === 0 ? Math.cos(m.ph * 0.9) * 8 : kind === 4 ? Math.cos(m.ph * 0.5) * 3 : 0)) * dt;
       if (m.y < area.y - 10 || m.y > area.y + area.h + 10 || m.x < area.x - 10 || m.x > area.x + area.w + 10) m.life = 0;
     }
   }
@@ -4268,15 +4305,15 @@ const GAME = (() => {
     const A = S.amb, R = X.RENDER;
     if (!A) return;
     const kind = S.ambKind || 0;
-    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : kind === 3 ? '#bff8ff' : '#ffffff';
-    const sp = R && R.glowSprite && kind !== 3 ? R.glowSprite(col, 10) : null;
+    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : kind === 3 ? '#bff8ff' : kind === 4 ? '#ffe0b0' : '#ffffff';
+    const sp = R && R.glowSprite && kind !== 3 && kind !== 4 ? R.glowSprite(col, 10) : null;
     ctx.save();
-    ctx.globalCompositeOperation = kind >= 2 ? 'source-over' : 'lighter';
+    ctx.globalCompositeOperation = kind >= 2 && kind !== 4 ? 'source-over' : 'lighter';
     if (kind === 3) { ctx.strokeStyle = col; ctx.lineWidth = 1.2; }   // (DEP: a bubble is a ring with a glint)
     for (const m of A) {
       if (m.life <= 0) continue;
       const u = m.life / (m.max || 1), fade = Math.min(1, u * 3, (1 - u) * 4);
-      const blink = kind === 0 ? 0.35 + 0.65 * Math.max(0, Math.sin(m.ph * 2.2)) : 1;
+      const blink = kind === 0 ? 0.35 + 0.65 * Math.max(0, Math.sin(m.ph * 2.2)) : kind === 4 ? 0.3 + 0.25 * Math.sin(m.ph * 1.7) : 1;
       ctx.globalAlpha = fade * blink * (kind === 2 ? 0.8 : 0.9);
       if (sp && kind !== 2) { try { ctx.drawImage(sp, m.x - 10, m.y - 10, 20, 20); } catch (e) { /* stub */ } }
       ctx.fillStyle = col;
@@ -5389,8 +5426,49 @@ const GAME = (() => {
   // Intent bubble anchor (its tip): just above the head, clamped under the top bar.
   function intentY(p) { return Math.max(ARENA.y0 + 40, p.y - p.h - 12); }
   function anim(idx) {
-    const a = FS.anim[idx] || (FS.anim[idx] = { hurt: 0, attack: 0, dead: 0 });
+    const a = FS.anim[idx] || (FS.anim[idx] = { hurt: 0, attack: 0, dead: 0, hk: 99, hf: 99, hc: 0, kn: 0, cast: 0, castK: '' });
     return a;
+  }
+  /* ENA (round 31, artist A): the enemy's animation clocks for RENDER.enemy.
+     hk / hf: seconds since the last hit (hk is held by a hit stop, so the
+     impact pose freezes with the physics; hf, the white flash's, is not);
+     hc: that hit was a crit; kn: its knockback; cast / castK: the acting
+     enemy's buff, debuff, block or bin-trick pulse. A strike that lands on
+     the player gets an impact frame on the HUD (a short hit stop inside the
+     MIX budget, a ring and sparks on the HP stat, a kick toward it). */
+  const ENA_K = { atkStop: 0.05, hsK: 0.15, deadRate: 1.25, recoil: 12 };
+  function enaRecoil(hk) { return hk < 0.045 ? U.ease.outCubic(hk / 0.045) : Math.exp(-(hk - 0.045) * 9); }
+  function enaImpact(i) {
+    if (!F || !FS || S.headless) return;
+    const e = F.enemies[i];
+    if (!e) return;
+    const hp = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y), col = (e.def && e.def.color) || '#ff2e30';
+    if (fx().impact) fx().impact(hp.x, hp.y, col, { r: 54, power: 1.1 });   // (CBX's impact preset: an impact ring, sparks, a light puff)
+    else fx().ring(hp.x, hp.y, col, { r0: 8, r1: 54, w: 6, life: 0.3 });
+    fx().emit('sparks', hp.x, hp.y, { col: '#fff6c0', dir: Math.PI * 0.8, spread: 1.6, power: 1.2 });
+    fx().kick(-4, 3);
+    if (!fx().reduced) FS.hitStop = Math.max(FS.hitStop, ENA_K.atkStop);
+  }
+  // The acting enemy's move, read off its queued events: a non-attack gets a cast pulse.
+  function enaCastOf(i) {
+    let k = '';
+    for (let j = 0; j < FS.queue.length && j < 48; j++) {
+      const ev = FS.queue[j] && FS.queue[j].ev;
+      if (!ev) continue;
+      if (ev.t === 'intent' && ev.idx === i) break;
+      if (ev.t === 'dmg' && ev.who === 'p') { k = ''; break; }
+      if (k) continue;
+      if (ev.t === 'status' && ev.who === 'p' && ev.v > 0) k = 'debuff';
+      else if ((ev.t === 'status' || ev.t === 'heal') && ev.who === 'e' && ev.idx === i && !(ev.v < 0)) k = 'buff';
+      else if (ev.t === 'block' && ev.who === 'e' && ev.idx === i) k = 'block';
+      else if (typeof ev.t === 'string' && (ev.t.slice(0, 3) === 'bin' || ev.t === 'boss' || ev.t === 'summon')) k = 'trick';
+    }
+    if (k) { const a = anim(i); a.cast = 1; a.castK = k; }
+  }
+  // A boss or elite's finale cracks it open while the blasts chain (0..1).
+  function enaCrack(i) {
+    const fin = FS && FS.bs && FS.bs.fin;
+    return fin && fin.idx === i && fin.P && fin.P.span > 0 ? U.clamp(fin.t / fin.P.span, 0, 1) : 0;
   }
   // The ghost chunk of an enemy hp bar: it holds, then drains to the real hp.
   function ghostOf(idx) {
@@ -6960,14 +7038,25 @@ const GAME = (() => {
   }
   // The finale's screen layers: the whiteout goes under the particles (confetti
   // and coins fly over it), the title card over them, across the cabinet.
-  const FINV = { white: 0, card: -1, boss: false, title: '', sub: '', color: '', reduced: false, now: 0, y: 560 };
+  const FINV = { white: 0, card: -1, boss: false, title: '', sub: '', color: '', reduced: false, now: 0, y: 560, dark: 0, flash: 0, rays: 0, bx: 0, by: 0, br: 0 };
   function finLayer(ctx, t, top) {
     if (S.screen !== 'fight' || !FS || !FS.bs || !FS.bs.fin || !X.RENDER || !X.RENDER.finale) return;
     const fin = FS.bs.fin, P = fin.P;
-    let wh = 0;
-    if (!top && P.white > 0) { const u = fin.t - P.white; wh = u < 0 ? 0 : u < 0.1 ? u / 0.1 : u < 0.3 ? 1 : Math.max(0, 1 - (u - 0.3) / 0.7); if (fx().reduced) wh *= 0.3; wh = accWhite(wh); }   // ACCESS: reduced flashing caps the whiteout
-    FINV.white = wh; FINV.card = top && P.card >= 0 && fin.t >= P.card ? fin.t - P.card : -1;
-    if (FINV.white <= 0 && FINV.card < 0) return;
+    /* ENA (round 31): no whiteout. While the blasts chain the screen darkens
+       around the cracking body (the slow-mo beat) and light leaks out of it;
+       the pop is a colour flash of two frames (0.6 at most, capped by reduced
+       flashing), then the dark lifts. */
+    FINV.white = 0; FINV.dark = 0; FINV.flash = 0; FINV.rays = 0;
+    if (!top) {
+      const pop = P.white > 0 ? P.white : P.span, u = fin.t - pop;
+      const dk = fin.t < pop ? U.clamp(fin.t / 0.25, 0, 1) : Math.max(0, 1 - u / 0.6);
+      FINV.dark = dk * (fin.boss ? 0.55 : 0.38) * (fin.kind === 'mid' ? 0.75 : 1);
+      FINV.rays = fin.t < pop + 0.15 ? U.clamp(fin.t / pop, 0, 1) : Math.max(0, 1 - (u - 0.15) / 0.4);
+      if (u >= 0 && (fin.enaFl | 0) < 2) { fin.enaFl = (fin.enaFl | 0) + 1; FINV.flash = accWhite(fx().reduced ? 0.15 : 0.45); }   // ACCESS: reduced flashing caps it (0.45: the last blast's own fx flash lands on top)
+      FINV.bx = fin.x; FINV.by = fin.y - fin.h * 0.5; FINV.br = Math.max(fin.w, fin.h) * 0.62;
+    }
+    FINV.card = top && P.card >= 0 && fin.t >= P.card ? fin.t - P.card : -1;
+    if (FINV.dark <= 0 && FINV.flash <= 0 && FINV.rays <= 0 && FINV.card < 0) return;
     FINV.boss = fin.boss; FINV.title = fin.boss ? 'BOSS DEFEATED' : 'ELITE DOWN'; FINV.sub = fin.sub; FINV.color = fin.boss ? '#ffc94d' : fin.col;
     FINV.reduced = !!fx().reduced; FINV.now = t;
     X.RENDER.finale(ctx, W, H, FINV);
@@ -7168,6 +7257,14 @@ const GAME = (() => {
     th.x = v * v * th.x0 + 2 * v * u * th.cx + u * u * th.x1;
     th.y = v * v * th.y0 + 2 * v * u * th.cy + u * u * th.y1;
   }
+  // (round 31) Where a throw was at its own time u (the afterimages and the stretch read it); one scratch point, read at once.
+  const CBX_TP = { x: 0, y: 0 };
+  function cbxThrowAt(th, u) {
+    const e = U.ease.inOut(U.clamp(u, 0, 1)), v = 1 - e;
+    CBX_TP.x = v * v * th.x0 + 2 * v * e * th.cx + e * e * th.x1;
+    CBX_TP.y = v * v * th.y0 + 2 * v * e * th.cy + e * e * th.y1;
+    return CBX_TP;
+  }
   // The landing: a ring in the item's rarity colour and a burst by kind.
   function landThrow(th) {
     const d = th.def, tags = d.tags || [], x = th.x1, y = th.y1;
@@ -7200,9 +7297,10 @@ const GAME = (() => {
     FS.delivered++;
     S.run.delivered++;
     duoNetDeliver(inst);   // DUO NET (round 15): the watching phone sees it fly into this player's tray
-    fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
+    // (round 31) the delivery pop: gold sparks and twinkles up out of the well, an impact ring (RENDER.fx 'deliver')
+    fx().emit('deliver', pos.x, pos.y);
     fx().trail(pos.x, pos.y, '#ffc94d');
-    fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
+    fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 50, w: 5, life: 0.4, style: 'impact' });
     FS.chuteFlash = 0.35;
     if (!evoDeliver(inst, pos)) throwItem(inst, pos);   // an evolution throws it after its ceremony (EVOLVE)
     const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) + cupCW() * 0.5;   // (round 29) CUP
@@ -7225,9 +7323,14 @@ const GAME = (() => {
       // ROUND 22: the JACKPOT is a stamp on the row and a small burst at the chute, not a banner and confetti over it
       rr2Stamp('JACKPOT!', '#ffc94d');
       snd('jackpot'); haptic('jackpot');
-      fx().burst(chuteMid, CAB.y + CAB.h - 40, '#ffc94d', fx().reduced ? 6 : 16);
-      fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 0.8, power: 1.0, dir: -Math.PI / 2 - 0.3 });
-      fx().shake(3);
+      // (round 31) the jackpot has weight: a beat of hit stop, a coin geyser out of the well with confetti
+      // ribbons and twinkles (RENDER.fx 'jackpot'), the cabinet's lamp, bed rim and a gold rim round the frame
+      // flare (FS.cbxJack, read by drawFight), a soft gold flash (reduced flashing caps it)
+      fx().emit('jackpot', chuteMid, CAB.y + CAB.h - 34, { dir: -Math.PI / 2 - 0.3 });
+      fx().ring(chuteMid, CAB.y + CAB.h - 34, '#ffc94d', { r0: 10, r1: 120, w: 8, life: 0.55, style: 'impact' });
+      FS.hitStop = Math.max(FS.hitStop, 0.1);
+      if (!fx().reduced) fx().flash('#ffc94d', 0.14);
+      fx().shake(4);
     } else if (FS.delivered === 3) {
       banner('JACKPOT', 'jackpot', 1.4);
       snd('jackpot'); haptic('jackpot');
@@ -7240,6 +7343,7 @@ const GAME = (() => {
     }
     if (FS.delivered === 3) {
       FS.party = 2.2; FS.marquee = 'JACKPOT!';
+      FS.cbxJack = S.t;   // (round 31) the cabinet's jackpot light (drawFight: the lamp, the bed rim, the gold frame rim)
       S.run.jackpots++; S.meta.stats.jackpots++;
       clawCelebrate();   // the claw twirls (CLAW TYPES block)
     }
@@ -7844,11 +7948,18 @@ const GAME = (() => {
       if (!FS) return;
     }
     // Animation timers.
+    // ENA (round 31): the acting enemy's cast pulse starts as its turn comes up
+    if (FS.enemyTurn) { if (FS.actor !== FS.enaAct) { FS.enaAct = FS.actor; if (FS.actor >= 0) enaCastOf(FS.actor); } } else FS.enaAct = -1;
     for (const k in FS.anim) {
       const a = FS.anim[k];
+      // ENA: a fresh hit (hurt just set to 1) restarts the hit clocks; the hit stop holds the pose
+      if (a.hurt >= 1) { a.hk = 0; a.hf = 0; a.hc = a.knock > 1.2 ? 1 : 0; a.kn = a.knock || 0; }
+      else { if (a.hk != null && a.hk < 9) a.hk += stop ? dt * ENA_K.hsK : dt; if (a.hf != null && a.hf < 9) a.hf += dt; }
+      if (a.attack >= 1 && !(a.dead > 0)) enaImpact(+k);
+      if (a.cast > 0) a.cast = Math.max(0, a.cast - dt * 2);
       if (a.hurt > 0) a.hurt = Math.max(0, a.hurt - dt * 4);
       if (a.attack > 0) a.attack = Math.max(0, a.attack - dt * 2.5);
-      if (a.dead > 0 && a.dead < 1) a.dead = Math.min(1, a.dead + dt * 1.6);
+      if (a.dead > 0 && a.dead < 1) a.dead = Math.min(1, a.dead + dt * ENA_K.deadRate);   // (ENA: 0.8 s, room for the anticipation and the prize burst)
       if (a.knock > 0) a.knock = Math.max(0, a.knock - dt * 5);
       if (a.barFlash > 0) a.barFlash = Math.max(0, a.barFlash - dt * 4);
       if (a.barShake > 0) a.barShake = Math.max(0, a.barShake - dt * 3);
@@ -7936,11 +8047,11 @@ const GAME = (() => {
   }
   function itemCard(def, plus, o) {
     o = o || {};
-    const card = h('div', 'card rr-' + (def.rarity || 'c') + (o.cls ? ' ' + o.cls : ''));
+    const card = h('div', 'card uixCard rr-' + (def.rarity || 'c') + (o.cls ? ' ' + o.cls : ''));   // (UIX round 31: uixCard, the art-first layout)
     if (o.deal != null) dealIn(card, o.deal);
     card.appendChild(h('div', 'rar ' + (def.rarity || 'c'), RARITY_NAME[def.rarity] || ''));
     if (o.count > 1) card.appendChild(h('div', 'cnt', 'x' + o.count));
-    card.appendChild(itemCanvas(def, plus, 84));
+    card.appendChild(uixArt(def, plus));   // UIX (round 31): the item is the hero, big in a lit art window
     card.appendChild(h('div', 'name', itemName(def, plus)));
     card.appendChild(h('div', 'text', itemText(def, plus)));
     const kw = kwChips(def);
@@ -8501,14 +8612,17 @@ const GAME = (() => {
     const rg = R.rgba || ((c) => c);
     try {
       const g = ctx.createRadialGradient(C.x, y, 10, C.x, y, len);
-      g.addColorStop(0, rg(burst ? '#ffffff' : col, burst ? 0.34 : 0.16 + tier * 0.05));
-      g.addColorStop(0.5, rg(col, burst ? 0.16 : 0.06 + tier * 0.03));
+      // ITX (round 31): once the prize card is up the rays settle (tier colour, not white), so a legendary no
+      // longer washes the whole screen grey behind its card; the burst itself keeps its white core.
+      const done = C.phase === 'done';
+      g.addColorStop(0, rg(burst && !done ? '#ffffff' : col, burst ? (done ? 0.2 : 0.3) : 0.16 + tier * 0.05));
+      g.addColorStop(0.5, rg(col, burst ? (done ? 0.08 : 0.14) : 0.06 + tier * 0.03));
       g.addColorStop(1, rg(col, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
       for (let i = 0; i < n; i++) {
         const a = rot + i * Math.PI * 2 / n;
-        ctx.moveTo(C.x, y); ctx.arc(C.x, y, len, a, a + Math.PI / n * 0.8); ctx.closePath();
+        ctx.moveTo(C.x, y); ctx.arc(C.x, y, len, a, a + Math.PI / n * (done ? 0.55 : 0.8)); ctx.closePath();
       }
       ctx.fill();
       if (tier >= 3) {
@@ -12552,8 +12666,10 @@ const GAME = (() => {
     const sec = h('div', 'cards two');
     if (shop.relic) {
       const def = relicDef(shop.relic.id);
-      const card = h('div', 'card rr-' + (def.rarity || 'c') + (shop.relic.sold ? ' sold' : ''));
-      card.appendChild(relicCanvas(def, 64));
+      const card = h('div', 'card uixCard rr-' + (def.rarity || 'c') + (shop.relic.sold ? ' sold' : ''));
+      const art = h('div', 'uixArt uixRelic');   // UIX (round 31): the medallion big in the art window too
+      art.appendChild(relicCanvas(def, 80));
+      card.appendChild(art);
       card.appendChild(h('div', 'name', def.name));
       card.appendChild(h('div', 'text', def.text || ''));
       const kw = kwChips(def);
@@ -14870,6 +14986,7 @@ const GAME = (() => {
     else {
       b.appendChild(h('h1', null, 'Turned into a prize'));
       b.appendChild(h('div', 'sub', `Killed by ${run.killer || 'the Clawspire'} in act ${run.act}. The Prize Master adds you to the shelf.`));
+      uixEndArt(b, 'loss', run);   // UIX (round 31): sealed in a capsule, set on the shelf
       const sc = endlessScore(run, false);   // the run score, recorded before the run-end stickers are listed (ENDLESS block)
       endlessScorePanel(b, sc);
       metaEndPanel(b, metaRunEnd(false));   // daily score, stickers this run (META block)
@@ -14903,6 +15020,7 @@ const GAME = (() => {
     clear(b);
     b.appendChild(h('h1', null, secWinTitle() || 'The Prize Master falls'));   // (SECRET: the true ending)
     b.appendChild(h('div', 'sub', secWinSub() || 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
+    uixEndArt(b, 'win', run);   // UIX (round 31): on top of the prize pile, the Prize Master's hat rolling away
     const sc = endlessScore(run, true);   // the run score, recorded before the run-end stickers are listed (ENDLESS block)
     endlessScorePanel(b, sc);
     const ec = endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
@@ -14945,9 +15063,7 @@ const GAME = (() => {
       if (hs && hs.classList) { hs.classList[hp > 0 && pct < 30 ? 'add' : 'remove']('low'); hs.classList[block > 0 ? 'add' : 'remove']('shielded'); }
       if (force) {
         const pc = $('portrait');
-        if (pc && X.RENDER && X.RENDER.portrait) {
-          try { const c = pc.getContext('2d'); if (c) { c.clearRect(0, 0, 108, 108); X.RENDER.portrait(c, run.char, 54, 54, 96, S.t); } } catch (e) { /* optional */ }
-        }
+        if (pc && X.RENDER && X.RENDER.portrait) uixHudFace(true);   // UIX (round 31): the face blinks, winces, worries (uixTick)
         if (pc) pc.onclick = () => popover(`<b>${(charDef(run.char) || {}).name || run.char}</b><br>${hp}/${max} hp` + (block ? `, ${block} block` : '') + `<br>Claw: ${clawFor().grabs} grabs, width ${U.fmt(clawFor().width)}, grip ${U.fmt(clawFor().grip)}, ${clawFor().prongs} prongs` + cupClawLine(), 60, 70);   // (round 29) CUP: the coil's rank, the chute's width
       }
     }
@@ -14990,6 +15106,112 @@ const GAME = (() => {
     }
     rskHud(force);   // (round 30) RESTOCK: the "↻ N" hint chip by the GRABS pill (hidden outside a fight)
   }
+
+  /* ================= UIX (round 31, artist E: UI, HUD and characters) =================
+     DESIGN.md "Art pass (round 31)". The room behind the stage (index.html #uixRoom, styled by #wrap[data-scr]),
+     the HUD portrait's life (a blink, a wince when you are hit, a worried face under 30% hp), the big item art in
+     the reward, shop and forge cards, and the run-end pictures (RENDER.uix.runEnd, animated in, then idling). */
+  const UIX = { hud: '', hp: null, hurtT: 0, end: null };
+  function uixScreen(name) {
+    try { const w = $('wrap'); if (w && w.setAttribute) w.setAttribute('data-scr', name); } catch (e) { /* stub */ }
+    if (name !== 'win' && name !== 'gameover') UIX.end = null;
+    if (name !== 'fight' && name !== 'map') UIX.hp = null;
+  }
+  function uixVitals() {
+    const run = S.run;
+    if (!run) return null;
+    const lag = F && FS && (FS.queue.length || FS.enemyTurn);
+    return { hp: F ? (lag ? FS.shown.p.hp : F.player.hp) : run.hp, max: F ? F.player.maxHp : run.maxHp };
+  }
+  // The HUD portrait: redrawn only when its face changes (open, shut, hurt, worried).
+  function uixHudFace(force) {
+    const run = S.run, pc = $('portrait'), R = X.RENDER;
+    if (!run || !pc || !R || !R.portrait) return;
+    const v = uixVitals() || { hp: 1, max: 1 };
+    const mood = UIX.hurtT > 0 ? 'hurt' : v.hp > 0 && v.hp / Math.max(1, v.max) < 0.3 ? 'sad' : '';
+    let eye = 'open';
+    try { if (R.uix && R.uix.faceState) eye = R.uix.faceState(run.char, S.t, mood ? { mood } : null).eye; } catch (e) { /* open */ }
+    const key = run.char + '|' + eye + '|' + mood;
+    if (!force && key === UIX.hud) return;
+    UIX.hud = key;
+    try { const c = pc.getContext('2d'); if (c) { c.clearRect(0, 0, 108, 108); R.portrait(c, run.char, 54, 54, 96, S.t, mood ? { mood } : null); } } catch (e) { /* optional */ }
+  }
+  function uixTick(real) {
+    if (S.headless) return;
+    if (UIX.hurtT > 0) UIX.hurtT -= real;
+    if (S.run && (S.screen === 'fight' || S.screen === 'map')) {
+      const v = uixVitals();
+      if (v && UIX.hp != null && S.screen === 'fight' && v.hp < UIX.hp - 0.01) { UIX.hurtT = 0.55; replay($('portrait'), 'uixOuch'); uixChunk(UIX.hp, v.hp, v.max); }
+      UIX.hp = v ? v.hp : null;
+      uixHudFace(false);
+    }
+    if (UIX.end) uixEndTick(real);
+  }
+  // The hp lost breaks off the bar's end as a chunk that tumbles away (not in calm: the ghost drain is enough).
+  function uixChunk(from, to, max) {
+    const hs = $('hpStat'), bar = hs && hs.querySelector ? hs.querySelector('.hpbar') : null;
+    if (!bar || mixCalm() || !(max > 0)) return;
+    try {
+      const a = U.clamp(to / max, 0, 1), b = U.clamp(from / max, 0, 1);
+      if (b - a < 0.004) return;
+      const w = bar.clientWidth || 0, x0 = bar.offsetLeft || 0;
+      const el = h('i', 'uixChunk');
+      el.style.left = (x0 + 2 + a * (w - 4)).toFixed(1) + 'px';
+      el.style.width = Math.max(3, (b - a) * (w - 4)).toFixed(1) + 'px';
+      hs.appendChild(el);
+      setTimeout(() => { try { el.remove(); } catch (e) { /* gone */ } }, 750);
+    } catch (e) { /* layout only */ }
+  }
+  // A card's art window: the item fitted to the window (small prizes scale up), drawn once.
+  function uixArt(def, plus) {
+    const box = h('div', 'uixArt');
+    if (S.headless) { box.appendChild(itemCanvas(def, plus, 84)); return box; }
+    const L = Math.max(10, shapeLong(def.shape));
+    box.appendChild(canvasEl(96, (ctx, p) => { if (X.RENDER && X.RENDER.item) X.RENDER.item(ctx, def, p / 2, p / 2, 0, Math.min(3.2, (p * 0.72) / L), { plus }); }));
+    return box;
+  }
+  /* The run-end picture: a 540 x 230 canvas under the title. kind 'win': the crawler lands on a pile of the run's
+     own prizes, the Prize Master's top hat rolls away, confetti; 'loss': the claw sets the crawler, sealed in a
+     capsule, on the prize shelf. 2.4 s of entrance, then an idle loop at 30 fps while the screen is up. */
+  function uixEndArt(b, kind, run) {
+    if (!b || !run) return null;
+    const box = h('div', 'uixEnd ' + kind);
+    const c = document.createElement('canvas');
+    c.className = 'uixEndCv';
+    const q = S.headless ? 1 : Math.min(2, Math.max(1, (S.px || 1)));
+    c.width = Math.round(540 * q); c.height = Math.round(230 * q);
+    box.appendChild(c);
+    b.appendChild(box);
+    const RW = { c: 0, u: 1, r: 2, l: 3 };
+    const items = (run.bin || []).map((it) => ({ def: itemDef(it.id), plus: it.plus })).filter((x) => x.def && x.def.shape)
+      .sort((a, b2) => (RW[b2.def.rarity] || 0) - (RW[a.def.rarity] || 0)).slice(0, 11);
+    UIX.end = { c, q, kind, char: run.char, items, t: 0, acc: 1, calm: mixCalm(), killer: run.killer || '' };
+    uixEndDraw();
+    return box;
+  }
+  function uixEndDraw() {
+    const E = UIX.end, R = X.RENDER;
+    if (!E || !R || !R.uix || !R.uix.runEnd) return;
+    let ctx = null;
+    try { ctx = E.c.getContext && E.c.getContext('2d'); } catch (e) { ctx = null; }
+    if (!ctx) return;
+    try {
+      ctx.setTransform(E.q, 0, 0, E.q, 0, 0);
+      R.uix.runEnd(ctx, 540, 230, { kind: E.kind, char: E.char, items: E.items, t: E.calm ? 9 : E.t, now: S.t, calm: E.calm });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } catch (e) { /* art is optional */ }
+  }
+  function uixEndTick(real) {
+    const E = UIX.end;
+    if (!E || E.c.isConnected === false) { UIX.end = null; return; }
+    if (!S.hisRecap) E.t += real;   // the death recap's card covers it at first: the entrance waits for that to go
+    E.acc += real;
+    if (E.calm && E.t > 0.1) return;
+    if (E.acc < 1 / 30) return;
+    E.acc = 0;
+    uixEndDraw();
+  }
+  // ================= /UIX
 
   /* ================= HUD (round 15): the top bar's chips, the relic overflow =================
      DESIGN.md "HUD and title menu polish (round 15)". The markup (index.html #top) is the portrait,
@@ -15283,7 +15505,19 @@ const GAME = (() => {
   function stxIconEl(id, icon) {
     const im = X.ART && X.ART.get ? (() => { try { return X.ART.get('status', id); } catch (e) { return null; } })() : null;
     if (im && im.src && (im.naturalWidth || im.width)) { const i = document.createElement('img'); i.className = 'ic'; i.src = im.src; i.alt = ''; return i; }
+    const url = uixStUrl(id);   // UIX (round 31): the drawn glyph, the emoji only when there is none
+    if (url) { const i = document.createElement('img'); i.className = 'ic uixIc'; i.src = url; i.alt = ''; return i; }
     return h('span', 'ic', icon || '?');
+  }
+  // UIX (round 31): a status's drawn glyph as a data URL (null headless or without a canvas: the emoji stays).
+  function uixStUrl(id) {
+    if (S.headless) return null;
+    try { const U2 = X.RENDER && X.RENDER.uix; return U2 && U2.statusUrl ? U2.statusUrl(id) : null; } catch (e) { return null; }
+  }
+  // The same glyph inline in a popover's HTML.
+  function uixStHtml(id, icon) {
+    const url = uixStUrl(id);
+    return url ? `<img class="ic uixIc" src="${url}" alt="">` : (icon || '');
   }
   // One chip; d: the change since the strip last drew (it pops, floats +N / -N; a debuff landing flashes red).
   function stxChip(s, d, calm) {
@@ -15347,7 +15581,7 @@ const GAME = (() => {
   }
   // The popover card of one status (a tap on its chip).
   function stxTipHtml(I) {
-    return `<div class="stxTip ${STX_CLS[I.kind]}"><div class="stxTh"><span class="ic">${I.icon}</span><b>${I.name} ${I.n}</b><span class="stxTag">${I.tag}</span></div>` +
+    return `<div class="stxTip ${STX_CLS[I.kind]}"><div class="stxTh"><span class="ic">${uixStHtml(I.id, I.icon)}</span><b>${I.name} ${I.n}</b><span class="stxTag">${I.tag}</span></div>` +
       `<div class="stxWhat">${I.what}</div>${I.end ? `<div class="stxEnd">${I.end}</div>` : ''}</div>`;
   }
   function stxTip(id, el) {
@@ -15494,7 +15728,7 @@ const GAME = (() => {
     const p = enemyPos(best);
     // every status in words (the chips under it may be cut to one row with a "+N")
     const SD = tbl('STATUS'), sts = [];
-    for (const id in e.status) if (e.status[id] > 0) sts.push(`${(SD[id] && SD[id].icon) || ''}${(SD[id] && SD[id].name) || id} ${e.status[id]}`);
+    for (const id in e.status) if (e.status[id] > 0) sts.push(`${uixStHtml(id, (SD[id] && SD[id].icon) || '')}${(SD[id] && SD[id].name) || id} ${e.status[id]}`);   // (UIX round 31: the drawn glyph)
     // the affix badges in words too (the Elite affixes tip points here)
     const AF = tbl('AFFIXES'), afx = (e.affix || []).map((id) => (AF[id] ? `${AF[id].icon || ''}<b>${AF[id].name || id}</b>: ${AF[id].text || ''}` : id));
     popover(`<b>${e.def.name}</b> ${e.hp}/${e.maxHp}${e.block ? ' +' + e.block + ' block' : ''}<br>${txt}${sts.length ? '<br>' + sts.join(', ') : ''}${afx.length ? '<br>' + afx.join('<br>') : ''}${e.def.desc ? '<br><i>' + e.def.desc + '</i>' : ''}`, p.x, p.y + 26);
@@ -15663,6 +15897,18 @@ const GAME = (() => {
      frames, so a pan, a zoom or a walk paints live exactly as before. Any other transform on the canvas (a
      shake, the zoom punch, photo mode) paints live too. Returns false when the caller must paint the ground. */
   const MGL = { cv: null, g: null, key: '', cand: '', n: 0, ix: 0, iy: 0, P: null };
+  /* MPX (round 31 art pass): the board's thickness and drop shadow under the hexes in view (RENDER.mpxSkirt),
+     painted before the ground so only the board's lower rim shows; baked with the still ground in MGL. */
+  const MPXS = { xs: new Float32Array(0), ys: new Float32Array(0) };
+  function mpxMapSkirt(ctx, P, z, ox, oy, size, x0, x1, y0, y1, st) {
+    const R = X.RENDER;
+    if (!R || !R.mpxSkirt || !P || !P.items) return;
+    const N = P.items.length;
+    if (MPXS.xs.length < N) { MPXS.xs = new Float32Array(N); MPXS.ys = new Float32Array(N); }
+    let n = 0;
+    for (const it of P.items) { const x = it.wx * z + ox, y = it.wy * z + oy; if (x < x0 || x > x1 || y < y0 || y > y1) continue; MPXS.xs[n] = x; MPXS.ys[n] = y; n++; }
+    if (n) R.mpxSkirt(ctx, MPXS.xs, MPXS.ys, n, size, st.orient === 'v', P.biome);
+  }
   function mapGroundFree() { if (MGL.cv) { MGL.cv.width = MGL.cv.height = 0; } MGL.cv = MGL.g = MGL.P = null; MGL.key = MGL.cand = ''; MGL.n = 0; }
   function mapGround(ctx, P, A, z, ox, oy, size, x0, x1, y0, y1, st) {
     const R = X.RENDER;
@@ -15689,6 +15935,7 @@ const GAME = (() => {
         g.setTransform(px, 0, 0, px, -ix, -iy);
         g.save();
         g.beginPath(); g.rect(A.x, A.y, A.w, A.h); g.clip();
+        mpxMapSkirt(g, P, z, ox, oy, size, x0, x1, y0, y1, st);   // MPX (round 31): the board's thickness, under the ground
         for (const it of P.items) {
           const x = it.wx * z + ox, y = it.wy * z + oy;
           if (x < x0 || x > x1 || y < y0 || y > y1) continue;
@@ -15712,6 +15959,38 @@ const GAME = (() => {
       R.terrainHex(ctx, x, y, size, it.t, st);
     }
     return true;
+  }
+  /* MPX (round 31 art pass): the map token's state, cosmetic only (the hop's lift and timing are ACCESS's
+     accHopInfo): which way it faces, how far up it is, the landing squash and dust after the last hop, and an
+     idle shuffle every few seconds that turns it round every other time. Reduced motion: none of it. */
+  const MPXT = { dir: 1, hopping: false, landAt: -9, idleAt: 0, idleN: 0, flipped: true, tk: { dir: 1, air: 0, land: 1, idle: 0, calm: false, lift: 0 } };
+  function mpxTokState(t) {
+    const tk = MPXT.tk, w = S.walk, M = S.run && S.run.map;
+    const calm = accCalm(), info = accHopInfo();
+    tk.calm = calm;
+    if (w && w.from && M) {
+      const a = hexToStage(w.from.q, w.from.r), b = hexToStage(M.pos.q, M.pos.r);
+      if (Math.abs(b.x - a.x) > 1) MPXT.dir = b.x > a.x ? 1 : -1;
+    }
+    if (info) {
+      MPXT.hopping = true;
+      tk.air = info.e > 0.12 && info.e < 0.88 ? Math.sin(Math.PI * (info.e - 0.12) / 0.76) : 0;
+      tk.lift = info.lift || 0;
+      MPXT.idleAt = t;
+    } else {
+      tk.air = 0; tk.lift = 0;
+      if (MPXT.hopping) { MPXT.hopping = false; if (!calm) MPXT.landAt = t; MPXT.idleAt = t; }
+    }
+    tk.land = calm ? 1 : U.clamp((t - MPXT.landAt) / 0.32, 0, 1);
+    tk.idle = 0;
+    if (!calm && !info && tk.land >= 1) {
+      if (t - MPXT.idleAt > 3.6 || t < MPXT.idleAt) { MPXT.idleAt = t; MPXT.idleN++; MPXT.flipped = false; }
+      const iu = (t - MPXT.idleAt) / 0.3;
+      if (iu < 1) tk.idle = iu;
+      if (iu >= 0.5 && !MPXT.flipped) { MPXT.flipped = true; if (MPXT.idleN % 2 === 0) MPXT.dir = -MPXT.dir; }
+    }
+    tk.dir = MPXT.dir;
+    return tk;
   }
   function drawMap(ctx, t) {
     const R = X.RENDER, run = S.run, M = run && run.map;
@@ -15743,7 +16022,9 @@ const GAME = (() => {
     accMapPunch(ctx, A);   // ACCESS (round 6): the zoom punch toward a hex just lit (a draw transform, inside the area)
     // Pass 1: the ground (water, fords, land) under every hex in view.
     st.t = t; st.orient = L.orient; st.biome = P.biome; st.ink = M.ink;
-    if (!mapGround(ctx, P, A, z, ox, oy, size, x0, x1, y0, y1, st)) for (const it of P.items) {   // (PERF round 24: the still ground from its layer)
+    const groundLive = !mapGround(ctx, P, A, z, ox, oy, size, x0, x1, y0, y1, st);   // (PERF round 24: the still ground from its layer)
+    if (groundLive) mpxMapSkirt(ctx, P, z, ox, oy, size, x0, x1, y0, y1, st);   // MPX (round 31): the board's thickness
+    if (groundLive) for (const it of P.items) {
       const x = it.wx * z + ox, y = it.wy * z + oy;
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       st.fill = it.fill; st.seed = it.seed;
@@ -15797,7 +16078,7 @@ const GAME = (() => {
       R.mapRoad(ctx, rp, size, t);
     }
     // The start-boss axis shows through the dark so the direction is obvious.
-    if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
+    if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat, P.biome); }   // (MPX round 31: fog drifts over the dark)
     if (R && R.best && !secIn(run) && !depIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // (DEP: no aurora under water)   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
@@ -15810,11 +16091,19 @@ const GAME = (() => {
     ghoMapDraw(ctx, t, size, z, ox, oy);   // RUSH (round 10): the ghost of your best attempt today, GHOST PASSED!
     vaultTrailDraw(ctx, t, z, ox, oy, size);   // the Prize Vault trail behind the crawler (VAULT block)
     const meXY = wxy || curXY;
+    // MPX (round 31): the crawler's token is one bobblehead standee (no more medallion over a body): its shadow
+    // stays on the ground while the hop lifts it, it squashes on landing with a puff of dust, faces where it walks
+    const tk = meXY && R && R.mpxToken ? mpxTokState(t) : null;
+    if (tk && R.mpxTokenShadow) R.mpxTokenShadow(ctx, meXY.x, meXY.y, size, tk);
     const hop = meXY ? accHopBegin(ctx, meXY, size) : false;   // ACCESS (round 6): the crawler hops hex to hex
-    if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
-    if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
+    if (tk) R.mpxToken(ctx, run.char, meXY.x, meXY.y, size, t, tk);
+    else {
+      if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
+      if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
+    }
     if (meXY) petMapDraw(ctx, meXY.x, meXY.y, size, t);   // the pet on its bed (PETS block)
     if (hop) ctx.restore();
+    if (tk && tk.land < 1 && R.mpxTokenDust) R.mpxTokenDust(ctx, meXY.x, meXY.y, size, (t - MPXT.landAt) / 0.45);
     if (pv && R && R.mapPath) {
       if (pv.tool) {
         // the flare: a line from the player through the hexes it would light
@@ -15845,7 +16134,8 @@ const GAME = (() => {
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
-  const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0, enraged: false, rage: 0, chomp: 0, spit: 0 };
+  const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0, enraged: false, rage: 0, chomp: 0, spit: 0,
+    hk: 99, hf: 99, hcrit: 0, cast: 0, castK: '', crack: 0, aimX: -300, aimY: 60, seed: 0 };   // (ENA round 31: the animation clocks)
   const HPO = { ghost: 0, flash: 0, shield: 0 };
   const PIPO = { maxW: 300, center: true, rows: 1 };
   const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0, t: 0, idle: 0, mood: '', blink: 0, look: 0, chase: 0, lucky: 0, pull: [], pullN: 0, cupFl: 0 };   // (round 29) CUP: cupFl, the coil's field-line flare
@@ -15876,13 +16166,17 @@ const GAME = (() => {
       const pendingDeath = !e.alive && !a.dead;
       if (!e.alive && a.dead >= 1) return;
       const live = e.alive || pendingDeath;
-      // knockback away from the player (+x), a summon grows in
-      const kx = (a.knock > 0 ? U.ease.outCubic(Math.min(1, a.knock)) * 14 : 0);
+      // knockback away from the player (+x): an eased recoil off the hit clock (ENA), a summon grows in
+      const kx = a.hk != null && a.hk < 0.7 && a.kn > 0 ? enaRecoil(a.hk) * ENA_K.recoil * Math.min(1.6, a.kn) * (fx().reduced ? 0.5 : 1) : 0;
       const ex = p.x + kx + famShakeX(i, t);   // (FAMILY: the choir's globes shake together)
       const sc = p.scale * (a.spawn > 0 ? 1 - a.spawn * 0.7 + Math.sin(a.spawn * Math.PI) * 0.15 : 1);
       EST.hurt = a.hurt; EST.attack = a.attack; EST.dead = live ? 0 : a.dead;
       EST.frozen = !!(e.status.freeze); EST.poisoned = !!(e.status.poison); EST.burning = !!(e.status.burn); EST.chilled = !!(e.status.chill);
       EST.windup = a.windV || 0;
+      // ENA (round 31): the hit clocks, the cast pulse, a finale's cracks, where the player is (a ranged strike's beam)
+      EST.hk = a.hk != null ? a.hk : 99; EST.hf = a.hf != null ? a.hf : 99; EST.hcrit = a.hc || 0;
+      EST.cast = a.cast || 0; EST.castK = a.castK || ''; EST.crack = live ? 0 : enaCrack(i);
+      EST.aimX = PLAYER_FX.x - ex; EST.aimY = PLAYER_FX.y - p.y + 40; EST.seed = i;
       bestEst(EST, e, i);   // hp and slot for the idle life (BESTIARY)
       if (i === F.target && e.alive) {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
@@ -15920,7 +16214,11 @@ const GAME = (() => {
     famArenaFront(ctx, t);   // the Crescendo staff, notes and snow, the angry choir, the family plate (FAMILY)
     // The rig.
     const cfg = { w: CAB.w, h: CAB.h, chuteW: cupCW(), dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW(), claw: clawFor() };   // (round 29) CUP: the run's chute
-    const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t, party: Math.min(1, FS.party), marquee: FS.marquee };
+    // (round 31) the cabinet's lights answer events: a deliver (the chute flash) and a jackpot (FS.cbxJack, set in deliver) brighten the
+    // top lamp and the bed's rim; a jackpot also runs a gold rim round the frame
+    const jk = FS.cbxJack != null ? t - FS.cbxJack : 9;
+    const cabLit = Math.max(FS.chuteFlash > 0 ? Math.min(1, FS.chuteFlash / 0.35) : 0, jk >= 0 && jk < 1.2 ? 1 - jk / 1.2 : 0);
+    const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t, party: Math.min(1, FS.party), marquee: FS.marquee, lit: cabLit, rim: jk >= 0 && jk < 1.4 ? 1 - jk / 1.4 : 0 };
     const split = R && R.cabinetBack && R.cabinetFront;
     bossCabSt(cabSt);   // the red alarm, the Hoard's lean (boss arena)
     if (split) R.cabinetBack(ctx, CAB.x, CAB.y, cfg, cabSt);
@@ -15948,15 +16246,16 @@ const GAME = (() => {
       const x = CAB.x + b.x, y = CAB.y + b.y;
       const rar = b.data.def.rarity;
       // rarity: a soft outline glow for uncommon and up (legendary pulses)
-      let glowC = inChute ? 1 : (held ? '#2ee6d6' : 0), glowA = null;
+      let glowC = inChute ? 1 : 0, glowA = null;
       if (!glowC && RC && RARE_A[rar] && !inst.frozen) { glowC = RC[rar]; glowA = rar === 'l' ? RARE_A.l + Math.sin(t * 4 + b.x * 0.05) * 0.2 : RARE_A[rar]; }
+      if (held && !glowC) { glowC = '#ffffff'; glowA = 0.3; }   // (round 31) a held prize keeps its own colours: a soft white key light, not a cyan wash
       // material looks: magic hovers, rubber stretches along its flight,
       // food wobbles, melting ice is drawn at its shrunken size
       const d = b.data, mat = d.mat, ms = FS.mst[inst.uid];
       const yy = mat && mat.traits.magic && !held ? y - 2 - Math.sin(t * 2.4 + (d.seed || 0)) * 2.2 : y;
       const melt = (ms && ms.melt < 1 && !inst.frozen ? ms.melt : 1) * mutScaleK() * (b.tubeK || 1);   // Tiny / Giant Items (ENDLESS block); CR8: shrunk in the vacuum's canister
       let mag = 0;
-      if (pullOn && mat && mat.traits.metal) {
+      if (pullOn && mat && mat.traits.metal && !held) {   // (round 31) a held prize keeps its colours (the magnet's arcs still reach it)
         const dx = b.x - FS.rig.x, dy = b.y - FS.rig.y;
         if (dx * dx + dy * dy < MAG_R2) { mag = 1; if (CLAWJ.pullN < CLAWJ.pull.length) { const pp = CLAWJ.pull[CLAWJ.pullN++]; pp.x = b.x; pp.y = b.y; } }
       }
@@ -15981,6 +16280,7 @@ const GAME = (() => {
       if (fxOn) R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'front');
       if (d.fc) cabFaceDraw(ctx, b, x, yy, t);   // CAB (round 16): a rare prize's face
       if (xf) ctx.restore();
+      if (held && R && R.cbx && R.cbx.held) R.cbx.held(ctx, x, yy, b.br || 16, t, b.x * 0.013);   // (round 31) a lit rim and two sparkles on what the claw holds
       if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, yy, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
     }
     // lit fuse countdowns sit over the whole pile so they are never hidden
@@ -15996,8 +16296,11 @@ const GAME = (() => {
     techDrawIn(ctx, t);   // TECH (round 17): the Laser Sight's aim
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW());   // (round 29) CUP
-      ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
-      ctx.fillRect(cx, CAB.y, cupCW(), CAB.h);
+      if (R && R.cbx && R.cbx.chuteLight) R.cbx.chuteLight(ctx, cx, CAB.y, cupCW(), CAB.h, Math.min(1, FS.chuteFlash / 0.35));   // (round 31) a shaft of gold light rising out of the well
+      else {
+        ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
+        ctx.fillRect(cx, CAB.y, cupCW(), CAB.h);
+      }
     }
     cupDrawIn(ctx, t);   // (round 29) CUP: the bell after an upgrade: the chute glows wider, the magnet's field lines flare
     const cj = FS.claw;
@@ -16038,7 +16341,23 @@ const GAME = (() => {
     for (const th of FS.throws) {
       if (th.landed) continue;
       const u = Math.min(1, th.t), sc = (th.rr2 ? 1.75 : 1.25) + Math.sin(u * Math.PI) * (th.rr2 ? 0.8 : 0.6);   // (ROUND 22: a card off the row flies big)
-      if (R && R.item) R.item(ctx, th.def, th.x, th.y, u * th.spin, sc, { plus: th.inst.plus, glow: (RC && RC[th.def.rarity]) || '#ffc94d', glowA: 0.8 });
+      if (!R || !R.item) continue;
+      const gc = (RC && RC[th.def.rarity]) || '#ffc94d';
+      // (round 31) a smear of two afterimages behind it, and a stretch along its flight (a squash as it lands)
+      const calm = !!fx().reduced;
+      if (!calm && u > 0.06 && u < 0.97) {
+        for (let k = 2; k >= 1; k--) {
+          const p = cbxThrowAt(th, u - k * 0.045);
+          R.item(ctx, th.def, p.x, p.y, (u - k * 0.045) * th.spin, sc * (1 - k * 0.06), { plus: th.inst.plus, alpha: 0.32 - k * 0.1 });
+        }
+      }
+      const q = cbxThrowAt(th, Math.max(0, u - 0.02)), vx = th.x - q.x, vy = th.y - q.y, sp = Math.hypot(vx, vy);
+      const st = calm ? 0 : U.clamp(sp / 26, 0, 1) * 0.22 * Math.sin(Math.min(1, u * 1.2) * Math.PI), land = calm || u < 0.88 ? 0 : (u - 0.88) / 0.12;
+      ctx.save(); ctx.translate(th.x, th.y);
+      if (st > 0.01) { const va = Math.atan2(vy, vx); ctx.rotate(va); ctx.scale(1 + st, 1 - st * 0.6); ctx.rotate(-va); }
+      if (land > 0) ctx.scale(1 + Math.sin(land * Math.PI) * 0.18, 1 - Math.sin(land * Math.PI) * 0.14);
+      R.item(ctx, th.def, 0, 0, u * th.spin, sc, { plus: th.inst.plus, glow: gc, glowA: 0.8 });
+      ctx.restore();
     }
   }
 
@@ -16629,6 +16948,7 @@ const GAME = (() => {
     evoTickAll(real);    // EVOLVE (round 7): the evolution ceremony, the pet synergy badge
     trdTick(real);       // TRD (round 14): the Trading Post's haggle
     mixTick(real);      // MIX (round 10): the screen entrances come off, the run-end numbers count up
+    uixTick(real);      // UIX (round 31): the HUD face, the run-end picture
     loreTick(real);      // LORE (round 9): new Codex pages, the act intro card, landmark bubbles, the board, the live pictures
     rushTick(real); ghoTick(real);   // RUSH (round 10): the slam, the fight's clock; the ghost race's clock, chip and GHOST PASSED!
     schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
@@ -21085,7 +21405,8 @@ const GAME = (() => {
     reel.className = 'rrReel';
     const px = cv && cv.tagName === 'CANVAS' && cv.width > 0 ? cv.width : el.classList && el.classList.contains && el.classList.contains('slot') ? 128 : 168;
     reel.width = px; reel.height = px;
-    try { if (cv && cv.parentNode === el) el.insertBefore(reel, cv); else el.appendChild(reel); } catch (e) { /* stub */ }
+    const at = cv && cv.parentNode && cv.parentNode !== el && cv.parentNode.parentNode === el ? cv.parentNode : cv;   // (UIX round 31: the art window around a card's canvas)
+    try { if (at && at.parentNode === el) el.insertBefore(reel, at); else el.appendChild(reel); } catch (e) { /* stub */ }
     S.rr.els[i] = el; S.rr.reels[i] = reel;
   }
   // The reels' prizes: a few of the act's items, the same every pull of a shop.
