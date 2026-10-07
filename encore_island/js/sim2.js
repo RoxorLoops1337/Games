@@ -129,7 +129,7 @@ function tickSell(dt) {
     }
   } else p.sellAcc = 0;
 }
-function sellToVault(e) { const v = entryVal(e); S.pallet += v; S.stats.earned += v; S.stats.sold++; questEvent('sell', 1); questEvent('earn', v); flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { dur: 0.34, arc: 70 }); puff(VAULT.x, VAULT.y - 30, '#ffd94a', 1, true); }
+function sellToVault(e, mul) { const v = Math.ceil(entryVal(e) * (mul || 1)); S.pallet += v; S.stats.earned += v; S.stats.sold++; questEvent('sell', 1); questEvent('earn', v); flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { dur: 0.34, arc: 70 }); puff(VAULT.x, VAULT.y - 30, '#ffd94a', 1, true); }
 function tickForge(dt) {
   const f = S.forge, p = S.player; if (!f) return;
   if (dist2(p.x, p.y, FORGE.x, FORGE.y) < FORGE.r * FORGE.r && f.queue.length < forgeQ()) {
@@ -343,7 +343,7 @@ function tickTowers(dt) {
   }
 }
 // ---- fans: collectors haul loot to the stall, fighters follow the hero and join the fight ----
-function mkFan(role) { return { x: STAGE.x + (vrnd() - 0.5) * 80, y: STAGE.y + 40, role, state: 'seek', carry: [], ph: vrnd() * 6.28, cd: 0, route: null, face: 1, mv: 0, art: ['rawclaw', 'roxor', 'andy', 'jasmin_unicorn', 'rawclaw_goat', 'roxor_monster'][(S.pop.length + (vrnd() * 6 | 0)) % 6] }; }
+function mkFan(role) { return { id: S.fanSeq++, lvl: 0, x: STAGE.x + (vrnd() - 0.5) * 80, y: STAGE.y + 40, role, state: 'seek', carry: [], ph: vrnd() * 6.28, cd: 0, route: null, face: 1, mv: 0, art: ['rawclaw', 'roxor', 'andy', 'jasmin_unicorn', 'rawclaw_goat', 'roxor_monster'][(S.pop.length + (vrnd() * 6 | 0)) % 6] }; }
 function stepToward(f, tx, ty, spd, dt) { const dx = tx - f.x, dy = ty - f.y, dl = Math.hypot(dx, dy) || 1; if (dl < 2) return dl; const m = Math.min(dl, spd * dt); f.x += dx / dl * m; f.y += dy / dl * m; f.face = dx > 0 ? 1 : -1; f.mv = 0.15; return dl; }
 function walkRoute(f, tx, ty, spd, dt) { // follow boardwalk waypoints toward (tx,ty); returns remaining distance to the final target
   if (!f.route || f.routeKey !== Math.round(tx) + ',' + Math.round(ty)) { f.route = routeBetween(f.x, f.y, tx, ty); f.routeKey = Math.round(tx) + ',' + Math.round(ty); }
@@ -357,13 +357,13 @@ function tickFans(dt) {
     f.mv = Math.max(0, f.mv - dt);
     if (f.role === 'fight') {
       const ang = f.ph + S.t * 0.4, ox = p.x + Math.cos(ang) * 90, oy = p.y + Math.sin(ang) * 60;
-      const dl = Math.hypot(ox - f.x, oy - f.y); if (dl > 40) stepToward(f, ox, oy, INHAB_SPD * (dl > 300 ? 3 : 1), dt);
+      const dl = Math.hypot(ox - f.x, oy - f.y); if (dl > 40) stepToward(f, ox, oy, fanSpeed() * (dl > 300 ? 3 : 1), dt);
       if (dl > 900) { f.x = p.x; f.y = p.y; }
       f.cd -= dt;
       if (f.cd <= 0) {
-        let best = null, bd = FIGHTER_RANGE * FIGHTER_RANGE;
+        let best = null, bd = fanRangeOf() * fanRangeOf();
         for (const e of S.enemies) { if (e.hp <= 0) continue; const d = dist2(e.x, e.y, f.x, f.y); if (d < bd) { bd = d; best = e; } }
-        if (best) { f.cd = FIGHTER_RATE; f.face = best.x > f.x ? 1 : -1; f.atkT = 0.3; S.shots.push({ x: f.x, y: f.y - 24, tgt: best, dmg: fighterDmg(), spd: 430, a: 0, ally: true, nt: Math.floor(vrnd() * 3) }); }
+        if (best) { f.cd = fanRateOf(f); f.face = best.x > f.x ? 1 : -1; f.atkT = 0.3; S.shots.push({ x: f.x, y: f.y - 24, tgt: best, dmg: fanDmgOf(f), spd: 430, a: 0, ally: true, nt: Math.floor(vrnd() * 3) }); }
       }
       f.atkT = Math.max(0, (f.atkT || 0) - dt);
     } else {
@@ -374,11 +374,11 @@ function tickFans(dt) {
           let bd = 1e12; for (const i2 of S.items) { if (i2.dead || i2.gem || i2.t < 0.6) continue; const d = dist2(i2.x, i2.y, f.x, f.y); if (d < bd) { bd = d; it = i2; } }
           f.tgt = it; f.scan = 0.25 + vrnd() * 0.2;
         }
-        if (!it) { if (f.carry.length) f.state = 'sell'; else { const dl = Math.hypot(STAGE.x - f.x, STAGE.y + 70 - f.y); if (dl > 120) walkRoute(f, STAGE.x + (f.ph % 1) * 60 - 30, STAGE.y + 70, INHAB_SPD * 0.7, dt); } }
-        else { const dl = walkRoute(f, it.x, it.y, INHAB_SPD, dt); if (dl < 26 && it.t > 0.6 && !it.dead) { it.dead = true; f.tgt = null; f.carry.push(cloneEntry(it)); f.route = null; if (f.carry.length >= PORTER_CAP) f.state = 'sell'; } }
+        if (!it) { if (f.carry.length) f.state = 'sell'; else { const dl = Math.hypot(STAGE.x - f.x, STAGE.y + 70 - f.y); if (dl > 120) walkRoute(f, STAGE.x + (f.ph % 1) * 60 - 30, STAGE.y + 70, fanSpeed() * 0.7, dt); } }
+        else { const dl = walkRoute(f, it.x, it.y, fanSpeed(), dt); if (dl < 26 && it.t > 0.6 && !it.dead) { it.dead = true; f.tgt = null; f.carry.push(cloneEntry(it)); f.route = null; if (f.carry.length >= fanCarryCap(f)) f.state = 'sell'; } }
       } else {
-        const dl = walkRoute(f, SELL.x + 10, SELL.y + 40, INHAB_SPD, dt);
-        if (dl < 46) { f.cd -= dt; if (f.cd <= 0 && f.carry.length) { f.cd = 0.12; sellToVault(f.carry.pop()); sfx('sell', false, 1.2); } if (!f.carry.length) { f.state = 'seek'; f.route = null; } }
+        const dl = walkRoute(f, SELL.x + 10, SELL.y + 40, fanSpeed(), dt);
+        if (dl < 46) { f.cd -= dt; if (f.cd <= 0 && f.carry.length) { f.cd = 0.12; sellToVault(f.carry.pop(), merchMul()); sfx('sell', false, 1.2); } if (!f.carry.length) { f.state = 'seek'; f.route = null; } }
       }
     }
   }

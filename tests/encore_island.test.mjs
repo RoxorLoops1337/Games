@@ -91,4 +91,21 @@ for (const id of ['heroes', 'goals', 'perks', 'more']) { EI.openSheet(id); for (
 EI.S.modal = { id: 'wheel' }; EI.draw(0.016); EI.S.modal = { id: 'daily' }; EI.draw(0.016); EI.S.modal = null;
 t.ok(S.unlockPlate !== undefined, 'unlock plate state exists');
 
+// ---- town: buildings, fan training, persistence ----
+EI.initGame(true); S = EI.S; S.started = true; EI.addLand(); EI.addLand(); S.wallet = 1e9;
+const T = EI.TOWN; t.ok(T.length >= 9, 'town has many buildings (' + T.length + ')');
+t.ok(EI.recruitCost() >= 1500, 'first recruit is no longer cheap (' + EI.recruitCost() + ')');
+S.houses = 3; EI.recruit(); EI.recruit(); const f0 = S.pop[0]; f0.role = 'gather'; S.pop[1].role = 'fight';
+const cap0 = EI.fanCarryCap(f0), dmg0 = EI.fanDmgOf(S.pop[1]), tier0 = EI.townTierIdx();
+const shed = EI.TOWN_BY.shed, w0 = S.wallet, c0 = EI.townCost(shed); t.ok(EI.buyTown('shed') && S.wallet === w0 - c0, 'buying a building spends its cost');
+t.ok(EI.townCost(shed) > c0 * 2, 'next level costs much more'); t.ok(EI.fanCarryCap(f0) === cap0 + 2, 'Loot Shed raises carry');
+EI.buyTown('yard'); t.ok(EI.fanDmgOf(S.pop[1]) > dmg0 * 1.1, 'Rehearsal Studio raises fighter damage');
+t.ok(S.lands.length === 3 && !EI.buyTown('snack'), 'locked building (needs land 4) refuses'); EI.addLand(); t.ok(EI.buyTown('snack'), 'unlocks with more lands'); t.ok(EI.buyTown('club'), 'Fan Club buys at land 3+');
+const tc = EI.fanTrainCost(f0); t.ok(EI.trainFan(f0) && f0.lvl === 1, 'training a fan levels it'); t.ok(EI.fanCarryCap(f0) === cap0 + 3, 'trained collector carries more');
+while (EI.trainFan(f0)); t.ok(f0.lvl === EI.fanMaxLvl(), 'fan level capped by the Academy (' + f0.lvl + ')'); EI.buyTown('academy'); t.ok(EI.fanMaxLvl() === 5 && EI.trainFan(f0), 'Academy raises the cap');
+S.wallet = 0; t.ok(!EI.buyTown('track') && !EI.trainFan(S.pop[1]), 'cannot buy without coins'); S.wallet = 1e9;
+for (let i = 0; i < 5; i++) EI.buyTown('merch'); t.ok(EI.townTierIdx() >= tier0, 'town tier is tracked');
+EI.save(); const lv = f0.lvl, shedLv = S.town.shed; EI.initGame(true); t.ok(EI.S.town.shed === shedLv && EI.S.pop.some(f => f.lvl === lv), 'town + fan levels survive save/load');
+for (const tab of ['crew', 'build']) { EI.openSheet('town', tab); for (let i = 0; i < 3; i++) EI.draw(0.016); t.ok(EI.S.sheet.tab === tab, 'town ' + tab + ' tab draws'); }
+
 t.done();

@@ -18,7 +18,7 @@ function newState() {
     xp: 0, level: 1, perks: {}, cards: null, pendingLevels: 0, ult: 0, ultCasting: 0,
     forge: null, forgePlate: { paid: 0, cost: Math.ceil(260), built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
     waygate: false, wayPlate: { paid: 0, cost: 400, built: false },
-    pop: [], houses: 0, prestT: 0,
+    pop: [], houses: 0, town: {}, fanSeq: 0, prestT: 0,
     pets: {}, activePet: null, petCd: 0,
     skins: { owned: { jasmin: true }, active: 'jasmin' }, cperks: {},
     chest: null, chestCd: CHEST_CD * 0.5, bossesSeen: {}, bestiary: {},
@@ -45,14 +45,14 @@ const activeSkin = () => skinDef(S.skins.active);
 const skinOwned = (id) => !!S.skins.owned[id];
 const cap = () => CAP0 + CAP_UP * S.up.cap + 2 * pk('cap');
 const encoreOn = () => S.encoreT > 0;
-function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1); }
+function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1) * clubMul(); }
 function landOfHero() { return landAt(S.player.x, S.player.y, S.lands.length); }
 function pRate() {
   const z = S.lands[landOfHero() - 1];
   return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (1 + cperkBonus('rate')) / (encoreOn() ? 1.7 : 1);
 }
 const pickR = () => PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet'));
-function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (encoreOn() ? 2 : 1) * (S.goldRushT > 0 ? 3 : 1); }
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (encoreOn() ? 2 : 1) * (S.goldRushT > 0 ? 3 : 1) * townTierMul(); }
 const critChance = () => 0.10 * S.gemUp.crit + 0.06 * pk('crit');
 const critMult = () => 3 + 0.6 * pk('critdmg');
 const pMaxHp = () => Math.ceil((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns * 0) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')));

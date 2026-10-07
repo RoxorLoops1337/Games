@@ -107,7 +107,7 @@ function drawGroove(y) {
   if (enc) { for (let i = 0; i < 3; i++) spark(x + w * (0.2 + 0.3 * i) + Math.sin(S.t * 3 + i) * 8, y - 5 - Math.abs(Math.sin(S.t * 4 + i)) * 6, 6, 0.9); }
 }
 const DOCK = [['town', 'home', 'Town'], ['heroes', 'mic', 'Heroes'], ['goals', 'trophy', 'Goals'], ['perks', 'crown', 'Perks'], ['more', 'menu', 'More']];
-function dockPips() { return { town: S.pop.length < popCap() && S.wallet >= recruitCost(), heroes: S.gems >= eggCost(S.stats.hatches), goals: S.dailies.concat(S.quests).some(q => q.done && false) || S.dailies.some(q => !q.done) && false, perks: S.crowns > 0, more: loginReady() || S.gems >= SPIN_COST }; }
+function dockPips() { return { town: (S.pop.length < popCap() && S.wallet >= recruitCost()) || TOWN.some(canTown), heroes: S.gems >= eggCost(S.stats.hatches), goals: S.dailies.concat(S.quests).some(q => q.done && false) || S.dailies.some(q => !q.done) && false, perks: S.crowns > 0, more: loginReady() || S.gems >= SPIN_COST }; }
 const DOCK_H = 74;
 const DOCK_COL = { town: ['#ffa8cf', '#e0488f'], heroes: ['#b99cff', '#6a3fd8'], goals: ['#ffe27a', '#e8921e'], perks: ['#8ef0e4', '#1f9a98'], more: ['#9ec4ff', '#4a6fd8'] };
 // the main menu: a bright cream bar with five big colour-coded buttons so it always stands out from the world
