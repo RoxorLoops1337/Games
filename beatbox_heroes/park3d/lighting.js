@@ -6,8 +6,8 @@
 // HOOKS for others: materials with userData.todTint = "body" (colour multiplier follows the time of day) or "lit" (window layer, dim by day, hot at night); meshes named skyline / skyline_windows get it automatically.
 //   Also: give an emissive material `material.userData.nightGlow = maxEmissiveIntensity` (windows, neon signs) and it is driven 0..max by the time of day.
 // ctx.events emits 'timeofday' with the shared state object {night, lamp, windows, neon, ...} while it changes.
-import { THREE } from './kit.js';
-import { buildVFX } from './fx_vfx.js';
+import { THREE, box, merged, flatMat, mesh } from './kit.js';
+import { buildVFX, interiorSource, LIGHT_KIND } from './fx_vfx.js';
 import { createPost } from './fx_post.js';
 
 const C = (h) => new THREE.Color(h);
@@ -23,15 +23,33 @@ const KF = [
     zen: C('#1b1950'), up: C('#2f2b74'), mid: C('#5c3b88'), glow: C('#7f78d8'), disc: C('#e2e8ff'), discSize: 0.03, discI: 1.1, glowI: 0.5, streak: 0.0, stars: 1, lamp: 1.0, neon: 1.0, stage: 1.0, windows: 1.0, ray: 0.035, fly: 1.0, dust: 0.25, lampLight: 14,
     bloom: 0.7, bloomThr: 0.9, vig: 0.6, sat: 1.1, skyTint: C('#4f4a92'), gShadow: C('#d8d0ff'), gHigh: C('#ffe4d0') },
 ];
-const NUM = [], COL = [];
-for (const k in KF[0]) (typeof KF[0][k] === 'number' ? NUM : COL).push(k);
+
+// INTERIOR keyframes (terrain.interior): same keys as the park plus window/practical-light levels. az is an offset from the mean window azimuth (so the key always enters through the windows).
+// The sky dome is hidden; fog is off; `fog` is the backdrop colour seen through windows and around the dollhouse; zen/mid are the pane gradient (top/bottom).
+const KFI = [
+  { elev: 54, az: 0, sunI: 3.0, sunCol: C('#fff1d6'), hemiI: 1.75, hemiSky: C('#c3d3ff'), hemiGround: C('#d8ae82'), rimI: 0.45, rimCol: C('#9b86ff'), fogNear: 400, fogFar: 800, fog: C('#4f8df5'), exposure: 0.96,
+    zen: C('#6fa4ec'), up: C('#82abe8'), mid: C('#cfe3fb'), glow: C('#ffe9c0'), disc: C('#fff3d0'), discSize: 0.034, discI: 1.0, glowI: 0.5, streak: 0.0, stars: 0, lamp: 0.2, neon: 0.35, stage: 0.5, windows: 0.12, ray: 0.55, fly: 0.0, dust: 1.0, lampLight: 0,
+    bloom: 0.2, bloomThr: 1.05, vig: 0.35, sat: 1.08, skyTint: C('#d4dfff'), gShadow: C('#ece4ff'), gHigh: C('#fff4e0'),
+    tilt: 0.5, lvLamp: 0.3, lvNeon: 0.4, lvTv: 0.55, lvFridge: 0.5, patch: 0.9, paneA: 0.62, moteBase: 0.2, ptI: 0.45, moon: 0 },
+  { elev: 30, az: 22, sunI: 2.3, sunCol: C('#ffb36e'), hemiI: 2.35, hemiSky: C('#ac96ee'), hemiGround: C('#cc8e68'), rimI: 0.75, rimCol: C('#a07bff'), fogNear: 400, fogFar: 800, fog: C('#6c4585'), exposure: 1.02,
+    zen: C('#5b4fb0'), up: C('#9a66a8'), mid: C('#ff9c6e'), glow: C('#ffb067'), disc: C('#ffe2a8'), discSize: 0.045, discI: 1.4, glowI: 1.0, streak: 0.7, stars: 0.1, lamp: 0.85, neon: 0.8, stage: 0.8, windows: 0.8, ray: 0.6, fly: 0.0, dust: 1.0, lampLight: 10,
+    bloom: 0.38, bloomThr: 1.0, vig: 0.5, sat: 1.1, skyTint: C('#ffe9f2'), gShadow: C('#e0ccff'), gHigh: C('#fff0dc'),
+    tilt: 0.55, lvLamp: 0.9, lvNeon: 0.85, lvTv: 0.9, lvFridge: 0.55, patch: 0.8, paneA: 0.45, moteBase: 0.3, ptI: 1.0, moon: 0 },
+  { elev: 52, az: -28, sunI: 1.35, sunCol: C('#7f98ff'), hemiI: 1.6, hemiSky: C('#5a5cc8'), hemiGround: C('#6a4a8a'), rimI: 0.6, rimCol: C('#b06bff'), fogNear: 400, fogFar: 800, fog: C('#15153d'), exposure: 1.18,
+    zen: C('#101650'), up: C('#2f2b74'), mid: C('#2b3b8c'), glow: C('#7f78d8'), disc: C('#e2e8ff'), discSize: 0.03, discI: 1.1, glowI: 0.5, streak: 0.0, stars: 1, lamp: 1.0, neon: 1.0, stage: 1.0, windows: 1.0, ray: 0.5, fly: 0.0, dust: 0.6, lampLight: 14,
+    bloom: 0.6, bloomThr: 0.86, vig: 0.62, sat: 1.12, skyTint: C('#4f4a92'), gShadow: C('#d4ccff'), gHigh: C('#ffe4d0'),
+    tilt: 0.55, lvLamp: 1.0, lvNeon: 1.0, lvTv: 1.0, lvFridge: 0.6, patch: 1.0, paneA: 0.55, moteBase: 0.3, ptI: 1.1, moon: 1 },
+];
+const keysOf = (kf) => { const N = [], Cc = []; for (const k in kf[0]) (typeof kf[0][k] === 'number' ? N : Cc).push(k); return { N, C: Cc }; };
 const ss = (f) => f * f * (3 - 2 * f);
 const TIER = { low: { shadow: 512, lights: 1 }, med: { shadow: 1024, lights: 2 }, high: { shadow: 2048, lights: 3 } };
+const TIER_IN = { low: { shadow: 512, lights: 1 }, med: { shadow: 1024, lights: 2 }, high: { shadow: 2048, lights: 3 } };
 
 export function buildLighting(ctx, terrain) {
-  const { renderer, scene, camera } = ctx; const anchors = terrain.anchors || {};
+  const { renderer, scene, camera } = ctx; const anchors = terrain.anchors || {}; const IN = terrain.interior === true;
+  const KS = IN ? KFI : KF, { N: NUM, C: COL } = keysOf(KS); const TR = IN ? TIER_IN : TIER;
   const group = new THREE.Group(); group.name = 'lighting';
-  const S = { sunDir: new THREE.Vector3(), sunCol: new THREE.Color(), tod: 0.5, night: 0, lamp: 0, neon: 0, stage: 0, windows: 0, ray: 0, fly: 0, dust: 0, bloom: 0.3, bloomThr: 1.25, vig: 0.5, sat: 1.1, gShadow: new THREE.Color(), gHigh: new THREE.Color() };
+  const S = { sunDir: new THREE.Vector3(), sunCol: new THREE.Color(), tod: 0.5, night: 0, lamp: 0, neon: 0, stage: 0, windows: 0, ray: 0, fly: 0, dust: 0, bloom: 0.3, bloomThr: 1.25, vig: 0.5, sat: 1.1, gShadow: new THREE.Color(), gHigh: new THREE.Color(), tilt: 1, lv: new THREE.Vector4(), shaftCol: new THREE.Color(), paneTop: new THREE.Color(), paneBot: new THREE.Color(), shaft: 0, patch: 0, paneA: 0.3, moteBase: 0.2, elev: 0.8, interior: IN };
   const cur = {}; NUM.forEach((k) => { cur[k] = 0; }); COL.forEach((k) => { cur[k] = new THREE.Color(); });
   const fog = new THREE.Fog('#e49fb2', 14, 80); scene.fog = fog; scene.background = new THREE.Color('#e49fb2');
   renderer.info.autoReset = false;
@@ -42,8 +60,17 @@ export function buildLighting(ctx, terrain) {
   const hemi = new THREE.HemisphereLight('#9a8ee0', '#c47c58', 1.9); group.add(hemi);
   const rim = new THREE.DirectionalLight('#ff8fb0', 1.1); rim.castShadow = false; group.add(rim, rim.target);
   const vfx = buildVFX(ctx, terrain, S); group.add(vfx.group);
+  // ---------- interior: azimuth from the windows, one fitted shadow map, up to 3 real practical lights near the player ----------
+  const inWin = IN ? vfx.windowList : [], inLights = IN ? vfx.lightList : []; let azW = 45 * Math.PI / 180; const ptSlots = [];
+  if (IN) {
+    if (inWin.length) { let mx = 0, mz = 0; inWin.forEach((w) => { mx += w.nx; mz += w.nz; }); if (Math.hypot(mx, mz) > 0.05) azW = Math.atan2(-mx, -mz); }
+    const b = terrain.bounds || { minX: -7.5, maxX: 7.5, minZ: -5.5, maxZ: 5.5 }, R = Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 0.4, cxm = (b.minX + b.maxX) / 2, czm = (b.minZ + b.maxZ) / 2;
+    sh.camera.left = -R; sh.camera.right = R; sh.camera.top = R; sh.camera.bottom = -R; sh.camera.near = 1; sh.camera.far = 60 + R; sh.camera.updateProjectionMatrix(); sh.radius = 4; sh.normalBias = 0.035; sh.bias = -0.0004; S.inCtr = new THREE.Vector3(cxm, 0, czm);
+    for (let i = 0; i < 3; i++) { const p = new THREE.PointLight('#ffcf8a', 0, 9, 2); group.add(p); ptSlots.push({ p, idx: -1, w: 0 }); }
+    if (vfx.fixtures) group.add(buildTestRoom(terrain, inWin)); // stub flat: stand-in room so the light can be developed alone
+  }
   const lampLights = []; // up to 3 real point lights on the lamps nearest the plaza (fountain), no shadows
-  { const f = anchors.fountain || { x: 0, z: 0 }; const L = vfx.lamps.slice().sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z)).slice(0, 3);
+  if (!IN) { const f = anchors.fountain || { x: 0, z: 0 }; const L = vfx.lamps.slice().sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z)).slice(0, 3);
     L.forEach((l) => { const p = new THREE.PointLight('#ffc46b', 0, 11, 2); p.position.set(l.x, l.y - 0.3, l.z); group.add(p); lampLights.push(p); }); }
 
   // ---------- sky dome (1 draw call, follows the camera, drawn at the far plane) ----------
@@ -71,7 +98,7 @@ export function buildLighting(ctx, terrain) {
   const scanCb = (o) => { const m = o.material; if (m && !Array.isArray(m) && (o.name === 'skyline' || o.name === 'skyline_windows' || (o.name === 'clouds' && m.isMeshBasicMaterial)) && tintMats.indexOf(m) < 0) { m.userData.todTint = o.name === 'skyline_windows' ? 'lit' : 'body'; tintMats.push(m); } if (m && !Array.isArray(m) && m.userData && m.userData.todTint && tintMats.indexOf(m) < 0) tintMats.push(m); if (m && !Array.isArray(m) && m.userData && m.userData.nightGlow !== undefined && winMats.indexOf(m) < 0) winMats.push(m); };
 
   function sample(v) { // v in 0..1 -> fills cur
-    const i = v < 0.5 ? 0 : 1, f = ss(Math.min(1, Math.max(0, (v - i * 0.5) * 2))), A = KF[i], B = KF[i + 1];
+    const i = v < 0.5 ? 0 : 1, f = ss(Math.min(1, Math.max(0, (v - i * 0.5) * 2))), A = KS[i], B = KS[i + 1];
     for (let n = 0; n < NUM.length; n++) { const k = NUM[n]; cur[k] = A[k] + (B[k] - A[k]) * f; }
     for (let n = 0; n < COL.length; n++) { const k = COL[n]; cur[k].copy(A[k]).lerp(B[k], f); }
   }
@@ -84,9 +111,27 @@ export function buildLighting(ctx, terrain) {
     rim.color.copy(cur.rimCol); rim.intensity = cur.rimI; rim.position.set(-S.sunDir.x, 0.35, -S.sunDir.z).normalize().multiplyScalar(30); // from the camera side, low, opposite the key
     fog.color.copy(cur.fog); fog.near = cur.fogNear; fog.far = cur.fogFar; scene.background.copy(cur.fog); renderer.toneMappingExposure = cur.exposure;
     skyU.uDisc.value = cur.discSize; skyU.uDiscI.value = cur.discI; skyU.uGlowI.value = cur.glowI; skyU.uStreak.value = cur.streak; skyU.uStars.value = cur.stars;
-    for (let i = 0; i < lampLights.length; i++) { const on = i < TIER[q].lights; lampLights[i].intensity = on ? cur.lampLight * (0.35 + 0.65 * cur.lamp) * (0.97 + 0.03 * Math.sin(S.t * 8 + i)) : 0; }
+    for (let i = 0; i < lampLights.length; i++) { const on = i < TR[q].lights; lampLights[i].intensity = on ? cur.lampLight * (0.35 + 0.65 * cur.lamp) * (0.97 + 0.03 * Math.sin(S.t * 8 + i)) : 0; }
     for (let i = 0; i < tintMats.length; i++) { const m = tintMats[i]; if (m.userData.todTint === 'lit') { const k = 0.5 + 0.9 * S.windows; m.color.setRGB(k, k, k); } else m.color.copy(cur.skyTint); }
     for (let i = 0; i < winMats.length; i++) { const m = winMats[i]; if ('emissiveIntensity' in m) m.emissiveIntensity = m.userData.nightGlow * S.windows; }
+    if (IN) applyInterior();
+  }
+  // interior overrides, applied after the shared state: key azimuth follows the windows, practical-light levels, window tint
+  const RIMDIR = new THREE.Vector3(0.55, 0.5, 0.75).normalize();
+  function applyInterior() {
+    const e = cur.elev * Math.PI / 180, a = azW + cur.az * Math.PI / 180, ce = Math.cos(e); S.elev = e;
+    S.sunDir.set(-Math.sin(a) * ce, Math.sin(e), -Math.cos(a) * ce).normalize();
+    S.shaft = cur.ray; S.patch = cur.patch; S.paneA = cur.paneA; S.moteBase = cur.moteBase; S.tilt = cur.tilt; S.lv.set(cur.lvLamp, cur.lvNeon, cur.lvTv, cur.lvFridge);
+    S.shaftCol.copy(cur.sunCol).multiplyScalar(0.62); S.paneTop.copy(cur.zen); S.paneBot.copy(cur.mid); sky.visible = false;
+  }
+  const KIND_LV = ['lvLamp', 'lvNeon', 'lvTv', 'lvFridge'], tmpCol = new THREE.Color();
+  function updatePractical(dt, t, p) { // choose up to N nearest lights, fade slots in and out so nothing pops
+    const n = Math.min(ptSlots.length, TR[q].lights), cand = inLights.map((l, i) => ({ i, d: Math.hypot(l.x - p.x, l.z - p.z) - (l.r || 6) * 0.15 })).sort((x, y) => x.d - y.d).slice(0, n), want = {}; cand.forEach((c) => { want[c.i] = 1; });
+    ptSlots.forEach((sl, k) => { if (sl.idx >= 0 && !want[sl.idx]) { sl.w -= dt * 3; if (sl.w <= 0) { sl.w = 0; sl.idx = -1; } } else if (sl.idx >= 0) sl.w = Math.min(1, sl.w + dt * 3);
+      if (k >= n && sl.idx >= 0) sl.w = Math.max(0, sl.w - dt * 6); });
+    for (let c = 0; c < cand.length; c++) { const id = cand[c].i; if (ptSlots.some((sl) => sl.idx === id)) continue; const sl = ptSlots.find((x) => x.idx < 0); if (!sl) break; sl.idx = id; sl.w = 0; const l = inLights[id]; sl.p.position.set(l.x, l.y, l.z); sl.p.color.set(l.color || '#ffcf8a'); sl.p.distance = (l.r || 6) * 1.5; }
+    ptSlots.forEach((sl) => { if (sl.idx < 0) { sl.p.intensity = 0; return; } const l = inLights[sl.idx], kd = LIGHT_KIND[l.kind || 'lamp'] || 0, lv = cur[KIND_LV[kd]], ph = sl.idx * 3.7, fl = l.flicker !== undefined ? l.flicker : (kd === 2 ? 0.45 : kd === 1 ? 0.1 : 0.04);
+      const nz = Math.sin(t * 13 + ph) * 0.5 + Math.sin(t * 29 + ph * 1.7) * 0.3 + (kd === 2 ? Math.sin(t * 47 + ph) * 0.3 : 0); sl.p.intensity = 6.5 * cur.ptI * (l.i === undefined ? 1 : l.i) * lv * sl.w * Math.max(0.2, 1 + fl * nz); });
   }
   S.t = 0;
   const api = {
@@ -97,9 +142,9 @@ export function buildLighting(ctx, terrain) {
     follow(o) { followObj = o || null; },
     setMusic(on) { vfx.setMusic(on); },
     setQuality(v) {
-      if (!TIER[v]) return; q = v; vfx.setQuality(v); post.setQuality(v);
-      const t = TIER[v]; if (sh.mapSize.x !== t.shadow) { sh.mapSize.set(t.shadow, t.shadow); if (sh.map) { sh.map.dispose(); sh.map = null; } } texel = 30 / t.shadow;
-      lampLights.forEach((p, i) => { p.visible = i < t.lights; }); applyState();
+      if (!TR[v]) return; q = v; vfx.setQuality(v); post.setQuality(v);
+      const t = TR[v]; if (sh.mapSize.x !== t.shadow) { sh.mapSize.set(t.shadow, t.shadow); if (sh.map) { sh.map.dispose(); sh.map = null; } } texel = 30 / t.shadow;
+      if (!IN) lampLights.forEach((p, i) => { p.visible = i < t.lights; }); applyState();
     },
     resize(w, h, dpr) { W = w; H = h; post.resize(w, h, dpr); vfx.setPixelHeight(h * dpr); },
     update(dt, t) {
@@ -112,9 +157,10 @@ export function buildLighting(ctx, terrain) {
       // sun shadow camera: centre on the target, snapped to shadow-texel steps in light space so the shadows do not shimmer when the target moves
       const d = S.sunDir; tmpA.crossVectors(UP, d).normalize(); tmpB.crossVectors(d, tmpA); // light-space x and y axes
       const px = Math.round(tmpA.dot(fpos) / texel) * texel, py = Math.round(tmpB.dot(fpos) / texel) * texel, pz = d.dot(fpos);
-      tmpC.set(0, 0, 0).addScaledVector(tmpA, px).addScaledVector(tmpB, py).addScaledVector(d, pz); sun.target.position.copy(tmpC); sun.position.copy(tmpC).addScaledVector(d, 55);
-      rim.target.position.copy(fpos); rim.position.add(fpos);
-      sky.position.copy(camera.position);
+      if (IN) { sun.target.position.copy(S.inCtr); sun.position.copy(S.inCtr).addScaledVector(d, 40); rim.target.position.copy(S.inCtr); rim.position.copy(S.inCtr).addScaledVector(RIMDIR, 30); updatePractical(dt, t, fpos); }
+      else { tmpC.set(0, 0, 0).addScaledVector(tmpA, px).addScaledVector(tmpB, py).addScaledVector(d, pz); sun.target.position.copy(tmpC); sun.position.copy(tmpC).addScaledVector(d, 55);
+      rim.target.position.copy(fpos); rim.position.add(fpos); }
+      sky.position.copy(camera.position); if (IN) sky.visible = false;
       vfx.update(dt, t, fpos.x, fpos.z); post.update(t);
       evAcc += dt; if (evAcc > 0.1 && Math.abs(tTarget - tCur) > 0.001 && ctx.events) { evAcc = 0; ctx.events.emit('timeofday', S); }
       const now = performance.now(); if (now - winScan > 2000) { winScan = now; scene.traverse(scanCb); }
@@ -127,4 +173,15 @@ export function buildLighting(ctx, terrain) {
   };
   api.setQuality(q); api.setTimeOfDay(ctx.todInit !== undefined ? ctx.todInit : 'dusk', true);
   return api;
+}
+
+// Stand-in room (only used while the flat module is an empty stub): floor, two walls with window holes, a couch, a table.
+function buildTestRoom(terrain, wins) {
+  const g = new THREE.Group(); g.name = 'testroom'; const parts = [], H = 2.8, y0 = 1.0, y1 = 2.4, T = 0.2;
+  parts.push(box(15, 0.1, 11, '#b98a5e', 0, -0.05, 0));
+  const wall = (alongX, fixed, min, max, holes) => { let cur = min; holes.sort((a, b) => a - b); const seg = (a, b, y, h) => { if (b - a < 0.01) return; parts.push(alongX ? box(b - a, h, T, '#e8d9c4', (a + b) / 2, y + h / 2, fixed) : box(T, h, b - a, '#e8d9c4', fixed, y + h / 2, (a + b) / 2)); };
+    seg(min, max, 0, y0); seg(min, max, y1, H - y1); holes.forEach((c) => { seg(cur, c - 0.9, y0, y1 - y0); cur = c + 0.9; }); seg(cur, max, y0, y1 - y0); };
+  wall(true, -5.5, -7.5, 7.5, wins.filter((w) => w.nz < -0.5).map((w) => w.x)); wall(false, -7.5, -5.5, 5.5, wins.filter((w) => w.nx < -0.5).map((w) => w.z));
+  parts.push(box(2.4, 0.5, 1.0, '#7a5ca8', -3.2, 0.25, 2.2), box(2.4, 0.5, 0.25, '#6a4c98', -3.2, 0.75, 2.65), box(1.2, 0.4, 0.7, '#8a5a3a', -3.2, 0.2, 0.6), box(1.6, 0.9, 0.5, '#2a2a3a', -6.9, 0.45, 0.6), box(0.9, 1.9, 0.8, '#d8dde6', 5.2, 0.95, -5.0), box(1.4, 0.7, 0.7, '#6a8a6a', 5.0, 0.35, 3.2), box(0.2, 0.7, 0.2, '#ffe0a0', -3.2, 0.7, 0.6));
+  const m = mesh(merged(parts), flatMat()); g.add(m); return g;
 }

@@ -52,6 +52,29 @@ export function createNPC(ctx, id, opts) {
       origUpdate(dt, t); t0 += dt; const beat = (t0 * c.music.bpm) / 60, k = c.music.bpm ? Math.exp(-((beat % 1) * 5)) : 0, bx = c.boombox;
       bx.scale.set(1 + 0.02 * k, 1 - 0.015 * k, 1 + 0.02 * k); bx.userData.glow.visible = !c.music.bpm || (beat * 2) % 1 < 0.9;
     };
+  } else if (id === 'foxy' && opts.flat !== false && ctx && ctx.sceneName === 'flat') {
+    flatFoxy(c, ctx, origPlay, origUpdate);
   } else if (HOME[id]) { c.place(HOME[id][0], HOME[id][1], HOME[id][2]); }
   return c;
+}
+
+// Foxy in the flat: sits on the couch (head nodding to a beat) in the evening, potters about the kitchen (idle, then a stirring talk loop) by day.
+// bindFlat(terrain, playerObject) reads terrain.anchors.foxy {x,z,rot,seatY?} (couch) and optional anchors.foxyKitchen {x,z,rot}; ctx.events 'time' flips the schedule.
+// Tapping her is handled by controls.js, which emits ctx.events 'npc' {id:'foxy'}.
+function flatFoxy(c, ctx, origPlay, origUpdate) {
+  const S = { mode: '', phase: 0, timer: 0, A: null, who: null, tod: 0.5 };
+  const couch = () => (S.A && S.A.foxy) || { x: -4, z: -0.5, rot: 0 };
+  const kitchen = () => { const A = S.A || {}; if (A.foxyKitchen) return A.foxyKitchen; const k = A.kitchenSpot; return k ? { x: k.x - 0.9, z: k.z + 0.1, rot: (k.rot || 0) + 0.4 } : { x: 3, z: -3.6, rot: 3.14 }; };
+  function setMode(m) {
+    if (m === S.mode) return; S.mode = m; S.timer = 0; S.phase = 0;
+    if (m === 'couch') { const a = couch(), seat = a.seatY === undefined ? 0.46 : a.seatY; c.place(a.x, a.z, a.rot || 0, seat, 0); origPlay('sit', { seat, bpm: 84, amp: 0.55, slump: 1.1, armBack: true }); }
+    else { const a = kitchen(); c.place(a.x, a.z, a.rot || 0, undefined, 0); origPlay('idle', {}); }
+  }
+  c.bindFlat = (terrain, player) => { S.A = (terrain && terrain.anchors) || {}; S.who = player || null; S.mode = ''; setMode(S.tod >= 0.4 ? 'couch' : 'kitchen'); return c; };
+  c.setTime = (v) => { const n = v === 'day' ? 0 : v === 'dusk' ? 0.5 : v === 'night' ? 1 : Math.min(1, Math.max(0, +v || 0)); S.tod = n; if (S.A) setMode(n >= 0.4 ? 'couch' : 'kitchen'); };
+  c.mode = () => S.mode; c.tapRadius = 0.9;
+  c.update = (dt, t) => {
+    origUpdate(dt, t); if (S.mode === 'kitchen') { S.timer += dt; const dur = S.phase ? 3.2 : 5; if (S.timer > dur) { S.timer = 0; S.phase = S.phase ? 0 : 1; origPlay(S.phase ? 'talk' : 'idle', {}); } c.object.rotation.y = (kitchen().rot || 0) + (S.phase ? Math.sin(t * 3.4) * 0.08 : 0); }
+    if (S.who) { const p = S.who.position, o = c.object.position; c.lookAt(Math.hypot(p.x - o.x, p.z - o.z) < 4.5 ? S.who.position : null); }
+  };
 }

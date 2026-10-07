@@ -1,6 +1,7 @@
 // Park3D entry. Builds renderer, scene, camera and the modules below, runs the loop, exposes window.Park3D for the game and for tests.
-//   Park3D.init(canvasOrSelector, { look, quality, time, seed, onSpot }) -> Promise<api>
-//   api: { setLook(look), setTime(t), setQuality(q), teleport(spotId), activate(id), player, scene, camera, renderer, stats(), dispose(), ready:true }
+//   Park3D.init(canvasOrSelector, { scene:'park'|'flat', look, quality, time, seed, onSpot({id,scene}), onNpc({id}) }) -> Promise<api>   (scene also from ?scene=flat)
+//   api: { sceneName, setLook(look), setTime(t), setQuality(q), teleport(spotId), activate(id), talk(npcId), npcs, player, scene, camera, renderer, stats(), dispose(), ready:true }
+//   events on ctx.events: 'spot' {id, scene}, 'spotDone', 'npc' {id}, 'time' (name). The game bridge answers a spot by emitting 'spotDone' (api.done(id)).
 import * as THREE from 'three';
 import * as kit from './kit.js';
 import { PAL } from './palette.js';
@@ -26,7 +27,7 @@ async function init(target, opts) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(38, 9 / 16, 0.5, 200);
   const events = kit.emitter(); const ctx = { THREE, kit, PAL, scene, camera, renderer, events, rng: kit.rng(opts.seed || 1337), quality: q, canvas };
-  let sceneName = opts.scene; if (!sceneName) { try { sceneName = new URLSearchParams(location.search).get('scene'); } catch (e) { /* ignore */ } } sceneName = sceneName === 'flat' ? 'flat' : 'park'; ctx.sceneName = sceneName;
+  let sceneName = opts.scene; if (!sceneName) { try { sceneName = new URLSearchParams(location.search).get('scene'); } catch (e) { /* ignore */ } } sceneName = sceneName === 'flat' ? 'flat' : 'park'; ctx.sceneName = sceneName; if (sceneName === 'flat') ctx.todInit = opts.time !== undefined ? opts.time : 'dusk'; ctx.timeName = String(opts.time !== undefined ? opts.time : 'dusk');
   const terrain = safe('terrain', () => (sceneName === 'flat' ? buildFlat(ctx) : buildTerrain(ctx)), { group: new THREE.Group(), bounds: { minX: -17, maxX: 17, minZ: -27, maxZ: 27 }, blocked: () => false, anchors: { start: { x: 0, z: 10, rot: Math.PI }, buskSpot: { x: 8, z: -8, rot: 0 }, bench: { x: -9, z: -4, rot: 0 }, gate: { x: 0, z: 26, rot: 0 }, runStart: { x: 12, z: 14, rot: 0 }, fountain: { x: 0, z: 0, rot: 0 }, graffiti: { x: 0, z: -26, rot: 0 }, flyers: { x: 4, z: 22, rot: 0 }, lamps: [] } });
   scene.add(terrain.group);
   const flora = sceneName === 'flat' ? { group: new THREE.Group(), update: NOP } : safe('flora', () => buildFlora(ctx, terrain), { group: new THREE.Group(), update: NOP }); scene.add(flora.group);
@@ -34,9 +35,11 @@ async function init(target, opts) {
   const spots = safe('spots', () => buildSpots(ctx, terrain), { group: new THREE.Group(), spots: [], update: NOP, nearest: () => null, activate: NOP }); scene.add(spots.group);
   const player = safe('characters', () => createCharacter(ctx, opts.look || DEFAULT_LOOK), { object: new THREE.Group(), setLook: NOP, play: NOP, update: NOP, anchors: {}, height: 1.6 }); scene.add(player.object);
   const npcs = (sceneName === 'flat' ? ['foxy'] : ['beeamgee']).map((id) => { const n = safe('npc ' + id, () => createNPC(ctx, id), { object: new THREE.Group(), update: NOP }); scene.add(n.object); return n; });
-  const controls = safe('controls', () => createControls(ctx, { player, terrain, spots, dom: canvas.parentElement || document.body }), { update: NOP });
+  ctx.npcs = npcs; npcs.forEach((n) => { if (n.bindFlat) safe('npc bind', () => n.bindFlat(terrain, player.object)); });
+  const controls = safe('controls', () => createControls(ctx, { player, terrain, spots, npcs, dom: canvas.parentElement || document.body }), { update: NOP });
   if (opts.onSpot) events.on('spot', opts.onSpot);
-  if (opts.time !== undefined && lighting.setTimeOfDay) lighting.setTimeOfDay(opts.time);
+  if (opts.onNpc) events.on('npc', opts.onNpc);
+  if (opts.time !== undefined && lighting.setTimeOfDay) { lighting.setTimeOfDay(opts.time); npcs.forEach((n) => n.setTime && n.setTime(opts.time)); }
 
   function resize() {
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, ctx.quality === 'high' ? 2 : 1.5);
@@ -53,9 +56,9 @@ async function init(target, opts) {
   }
   raf = requestAnimationFrame(frame);
 
-  const api = { ready: true, scene, camera, renderer, player, terrain, spots, lighting, controls, ctx,
-    setLook(l) { player.setLook(l); }, setTime(v) { lighting.setTimeOfDay(v); }, setQuality(v) { ctx.quality = v; if (lighting.setQuality) lighting.setQuality(v); resize(); },
-    teleport(id) { const s = spots.spots.find((x) => x.id === id); if (s) { const px = s.x + 1.5, pz = s.z + 1.5; if (controls && controls.teleportTo) controls.teleportTo(px, pz); else player.object.position.set(px, 0, pz); } }, activate(id) { spots.activate(id); },
+  const api = { ready: true, sceneName, npcs, scene, camera, renderer, player, terrain, spots, lighting, controls, ctx,
+    setLook(l) { player.setLook(l); }, setTime(v) { lighting.setTimeOfDay(v); ctx.timeName = String(v); npcs.forEach((n) => n.setTime && n.setTime(v)); events.emit('time', v); }, setQuality(v) { ctx.quality = v; if (lighting.setQuality) lighting.setQuality(v); resize(); },
+    teleport(id) { const s = spots.spots.find((x) => x.id === id); if (s) { const ind = !!terrain.interior, px = ind ? s.x : s.x + 1.5, pz = ind ? s.z : s.z + 1.5; if (controls && controls.teleportTo) controls.teleportTo(px, pz); else player.object.position.set(px, 0, pz); } }, activate(id) { spots.activate(id); }, done(id) { events.emit('spotDone', { id }); }, talk(id) { return controls.talkTo ? controls.talkTo(id) : false; },
     stats() { return { fps: Math.round(fps), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures }; },
     pause(v) { running = !v; }, dispose() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); renderer.dispose(); } };
   window.__park = api; return api;

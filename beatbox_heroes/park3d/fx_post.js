@@ -87,6 +87,7 @@ export function createPost(ctx, S) {
     resize(w, h, dpr) { W = w; H = h; DPR = dpr; applySize(); },
     update(t) {
       if (bloom) { bloom.strength = S.bloom; bloom.threshold = rung >= 2 ? Math.min(S.bloomThr, 0.88) : S.bloomThr; bloom.radius = 0.3; }
+      if (tiltH) { const k = (S.tilt === undefined ? 1 : S.tilt) * DPR; tiltH.uniforms.uAmount.value = tiltV.uniforms.uAmount.value = k; } // interiors use a gentler tilt-shift
       if (grade) { const u = grade.uniforms; u.uTime.value = t; u.uVig.value = S.vig; u.uSat.value = S.sat; u.uShadow.value.copy(S.gShadow); u.uHigh.value.copy(S.gHigh); u.uGrain.value = tier === 'high' ? 0.035 : 0.028; }
     },
     render() {
