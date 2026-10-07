@@ -48,7 +48,7 @@ export function createFx(ctx, q, camera) {
   // a firework: shell rises, then a big coloured sphere with a sparkly tail
   const shells = [];
   function firework(x, y, z, palette) { shells.push({ x, y: 0.2, z, ty: y, vy: 15, hex: palette || ['#ff3ea5', '#ffd23f', '#2ee6ff'], t: 0 }); }
-  function popFirework(s) { const base = s.hex[(R() * s.hex.length) | 0]; burst(s.x, s.y, s.z, q === 'low' ? 22 : 44, { colors: [base, '#fff2dc', base, s.hex[(R() * s.hex.length) | 0]], speed: 5.5, life: 1.5, size: 0.42, grav: 2.4, drag: 1.6, sphere: true }); }
+  function popFirework(s) { const base = s.hex[(R() * s.hex.length) | 0]; burst(s.x, s.y, s.z, q === 'low' ? 22 : 44, { colors: [base, base, '#fff2dc', s.hex[(R() * s.hex.length) | 0]], speed: 6.2, life: 1.7, size: 0.8, grav: 2.2, drag: 1.5, sphere: true }); }
   // rings on the ground
   const RG = []; for (let i = 0; i < NR; i++) RG.push({ on: false, age: 0, x: 0, z: 0, r: 0, g: 0, b: 0, max: 1.6 });
   let rc = 0;

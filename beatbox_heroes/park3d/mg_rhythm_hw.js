@@ -4,23 +4,23 @@ import { THREE, canvasTex } from './kit.js';
 import { glowSheet } from './mg_rhythm_fx.js';
 
 export const LANES = [
-  { name: 'B', color: '#ff4f8b', hi: '#ffc2d8', dark: '#8a1f4d', keys: ['KeyD', 'ArrowLeft', 'Digit1'], seg: 6, drum: 'kick' },
-  { name: 'T', color: '#ffd23f', hi: '#fff3b0', dark: '#a06a08', keys: ['KeyF', 'ArrowDown', 'Digit2'], seg: 3, drum: 'hat' },
-  { name: 'K', color: '#35f2e0', hi: '#c4fff8', dark: '#0f6a85', keys: ['KeyJ', 'ArrowUp', 'Digit3'], seg: 4, drum: 'snare' },
-  { name: 'Pf', color: '#a86bff', hi: '#e6d2ff', dark: '#4b2a96', keys: ['KeyK', 'ArrowRight', 'Digit4'], seg: 4, diamond: true, drum: 'snare' },
+  { name: 'B', color: '#ff4f8b', hi: '#ffc2d8', dark: '#8a1f4d', gem: ['#ff1f86', '#ff7ab8', '#6e0a45'], keys: ['KeyD', 'ArrowLeft', 'Digit1'], seg: 6, drum: 'kick' },
+  { name: 'T', color: '#ffd23f', hi: '#fff3b0', dark: '#a06a08', gem: ['#ffbd00', '#ffe27a', '#8a4a00'], keys: ['KeyF', 'ArrowDown', 'Digit2'], seg: 3, drum: 'hat' },
+  { name: 'K', color: '#35f2e0', hi: '#c4fff8', dark: '#0f6a85', gem: ['#00b4ff', '#7fdcff', '#00306e'], keys: ['KeyJ', 'ArrowUp', 'Digit3'], seg: 4, drum: 'snare' },
+  { name: 'Pf', color: '#a86bff', hi: '#e6d2ff', dark: '#4b2a96', gem: ['#8a3dff', '#c8a8ff', '#340f8a'], keys: ['KeyK', 'ArrowRight', 'Digit4'], seg: 4, diamond: true, drum: 'snare' },
 ];
 export const LW = 1.06, HIT_Z = 2.2, SPAWN_Z = -9.2, NEAR_Z = 4.4, FAR_Z = -10.3, GEM_Y = 0.3;
 export const laneX = (i) => (i - 1.5) * LW;
 
 const C = (h) => new THREE.Color(h);
 function paintFaces(geo, L, rnd) {
-  const g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position, n = p.count, a = new Float32Array(n * 3), cm = C(L.color), ch = C(L.hi), cd = C(L.dark), t = new THREE.Color(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), N = new THREE.Vector3();
+  const g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position, n = p.count, a = new Float32Array(n * 3), cm = C(L.gem[0]), ch = C(L.gem[1]), cd = C(L.gem[2]), t = new THREE.Color(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), N = new THREE.Vector3();
   for (let i = 0; i < n; i += 3) {
     A.fromBufferAttribute(p, i); B.fromBufferAttribute(p, i + 1); D.fromBufferAttribute(p, i + 2); N.subVectors(D, B).cross(A.sub(B)).normalize();
-    const up = N.y, side = N.x * 0.55 + N.z * 0.6; if (up > 0.85) t.copy(cm).lerp(ch, 0.3).multiplyScalar(1.05); else { const k = Math.max(0, Math.min(1, 0.45 + up * 0.55 + side * 0.4 + (rnd() - 0.5) * 0.3)); t.copy(cd).lerp(cm, k); if (up > 0.2) t.lerp(ch, (up - 0.2) * 0.28); }
+    const up = N.y, side = N.x * 0.55 + N.z * 0.6; if (up > 0.85) t.copy(cm).lerp(ch, 0.18); else { const k = Math.max(0, Math.min(1, 0.45 + up * 0.55 + side * 0.4 + (rnd() - 0.5) * 0.3)); t.copy(cd).lerp(cm, k); if (up > 0.2) t.lerp(ch, (up - 0.2) * 0.28); }
     for (let k = 0; k < 3; k++) { a[(i + k) * 3] = t.r; a[(i + k) * 3 + 1] = t.g; a[(i + k) * 3 + 2] = t.b; }
   }
-  for (let i = 0; i < a.length; i++) a[i] *= 0.78; g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
+  const gain = { 0: 1.0, 1: 0.95, 2: 1.28, 3: 1.12 }[LANES.indexOf(L)] || 1; for (let i = 0; i < a.length; i++) a[i] *= gain; g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
 }
 // chunky faceted gem: crown (flat table) + pavilion, silhouette differs per lane (hex, triangle, square, diamond)
 export function gemGeo(i, rnd) {
@@ -66,7 +66,7 @@ export function buildHighway(ctx, q) {
     const seg = L.seg, x = laneX(i), rg = new THREE.RingGeometry(0.34, 0.56, seg === 3 ? 3 : seg, 1); rg.rotateX(-Math.PI / 2);
     const m = new THREE.Matrix4(); if (!L.diamond && seg === 4) { m.makeRotationY(Math.PI / 4); rg.applyMatrix4(m); } if (seg === 3) { m.makeRotationY(Math.PI / 2); rg.applyMatrix4(m); } if (seg === 6) { m.makeRotationY(Math.PI / 6); rg.applyMatrix4(m); }
     if (L.diamond) { m.makeScale(0.82, 1, 1.4); rg.applyMatrix4(m); }
-    rg.translate(x, 0.13, HIT_Z); const c = C(L.color).multiplyScalar(1.3), n = rg.attributes.position.count, a = new Float32Array(n * 3); for (let j = 0; j < n; j++) { a[j * 3] = c.r; a[j * 3 + 1] = c.g; a[j * 3 + 2] = c.b; } rg.setAttribute('color', new THREE.BufferAttribute(a, 3)); rg.deleteAttribute('uv'); rg.deleteAttribute('normal'); parts.push(rg.index ? rg.toNonIndexed() : rg);
+    rg.translate(x, 0.13, HIT_Z); const c = C(L.gem[0]).multiplyScalar(1.15), n = rg.attributes.position.count, a = new Float32Array(n * 3); for (let j = 0; j < n; j++) { a[j * 3] = c.r; a[j * 3 + 1] = c.g; a[j * 3 + 2] = c.b; } rg.setAttribute('color', new THREE.BufferAttribute(a, 3)); rg.deleteAttribute('uv'); rg.deleteAttribute('normal'); parts.push(rg.index ? rg.toNonIndexed() : rg);
   });
   add(LW * 4, 0.025, 0.07, 0, 0.125, HIT_Z, '#fff4d6', 1.6); // the hit line itself
   let tot = 0; parts.forEach((g) => { tot += g.attributes.position.count; }); const pos = new Float32Array(tot * 3), col = new Float32Array(tot * 3); let o = 0; parts.forEach((g) => { pos.set(g.attributes.position.array, o * 3); col.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; });

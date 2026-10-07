@@ -121,10 +121,13 @@ export function buildWorld(ctx, q) {
   [-3.3, -2.0, 2.0, 3.3].forEach((x) => { poles.cyl(0.16, 0.22, 0.34, 6, x, 4.13, ST.front - 0.2, '#2b2438', { tint: 0.03 }); });
   // ---------------- spot beams (additive cones, vertex alpha via colour) ----------------
   const beamMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide }); beamMat.forceSinglePass = true;
-  const mkBeam = (hex, len, rad) => { const g = new THREE.ConeGeometry(rad, len, 10, 1, true); g.translate(0, -len / 2, 0); const p = g.attributes.position, a = new Float32Array(p.count * 3), c = C(hex); for (let i = 0; i < p.count; i++) { const k = 1 - Math.min(1, Math.max(0, -p.getY(i) / len)); const f = 0.02 + 0.22 * k * k; a[i * 3] = c.r * f; a[i * 3 + 1] = c.g * f; a[i * 3 + 2] = c.b * f; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g; };
+  const mkBeam = (hex, len, rad) => { // two nested cones (bright core, dim wide skirt) so the beam edge is soft
+    const one = (r, gain) => { const g = new THREE.ConeGeometry(r, len, 10, 1, true); g.translate(0, -len / 2, 0); const p = g.attributes.position, a = new Float32Array(p.count * 3), c = C(hex); for (let i = 0; i < p.count; i++) { const k = 1 - Math.min(1, Math.max(0, -p.getY(i) / len)); const f = (0.02 + 0.2 * k * k) * gain; a[i * 3] = c.r * f; a[i * 3 + 1] = c.g * f; a[i * 3 + 2] = c.b * f; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g; };
+    const A = one(rad, 0.7), B = one(rad * 0.55, 1.1), tot = A.attributes.position.count + B.attributes.position.count, pos = new Float32Array(tot * 3), col = new Float32Array(tot * 3); pos.set(A.attributes.position.array, 0); col.set(A.attributes.color.array, 0); pos.set(B.attributes.position.array, A.attributes.position.count * 3); col.set(B.attributes.color.array, A.attributes.position.count * 3);
+    const g = new THREE.BufferGeometry(); g.setIndex([...Array.from(A.index.array), ...Array.from(B.index.array).map((v) => v + A.attributes.position.count)]); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; };
   const beams = [];
   [[-3.3, '#ff3ea5', 0], [3.3, '#35f2e0', 0], [-2.0, '#ffd27a', 1], [2.0, '#a86bff', 1]].forEach(([x, hex, hi], i) => {
-    const pivot = new THREE.Object3D(); pivot.position.set(x, 3.96, ST.front - 0.2); const m = new THREE.Mesh(mkBeam(hex, 5.4, 0.8), ((mm) => { mm.forceSinglePass = true; return mm; })(beamMat.clone())); m.frustumCulled = false; m.renderOrder = 8; pivot.add(m); group.add(pivot); beams.push({ pivot, mesh: m, hi, base: x, ph: i * 1.7 });
+    const pivot = new THREE.Object3D(); pivot.position.set(x, 3.96, ST.front - 0.2); const m = new THREE.Mesh(mkBeam(hex, 5.4, 0.95), ((mm) => { mm.forceSinglePass = true; return mm; })(beamMat.clone())); m.frustumCulled = false; m.renderOrder = 8; pivot.add(m); group.add(pivot); beams.push({ pivot, mesh: m, hi, base: x, ph: i * 1.7 });
   });
   if (q === 'low') { beams.splice(2); }
 
@@ -166,7 +169,7 @@ export function buildWorld(ctx, q) {
     for (let i = 0; i < baseCols.length; i++) { const tw = 0.85 + 0.15 * Math.sin(t * 3 + i * 1.7); tc.copy(baseCols[i]).multiplyScalar(lvl * tw * 0.6); halos.setColorAt(i, tc); }
     halos.instanceColor.needsUpdate = true;
     // beams: base pair always on, second pair joins above 35% energy, they sweep faster as the crowd heats up
-    beams.forEach((b, i) => { const on = b.hi ? Math.max(0, (E - 0.3) / 0.4) : 0.45 + 0.5 * E; const sw = Math.sin(t * (0.9 + E * 1.6) + b.ph) * (b.hi ? 0.55 : 0.12); b.pivot.rotation.set(0.3 + 0.0, 0, 0); b.pivot.lookAt(new THREE.Vector3(b.base * 0.95 + sw * 1.4, 0.5, ST.z + 1.2 + (b.hi ? 0.4 : 0))); b.pivot.rotateX(Math.PI / 2 * 0); b.mesh.material.opacity = Math.min(1, on * (0.75 + 0.35 * pulse)); b.mesh.visible = b.mesh.material.opacity > 0.02; });
+    beams.forEach((b, i) => { const on = b.hi ? Math.max(0, (E - 0.3) / 0.4) : 0.45 + 0.5 * E; const sw = Math.sin(t * (0.9 + E * 1.6) + b.ph) * (b.hi ? 0.55 : 0.12); b.pivot.lookAt(new THREE.Vector3(b.base * 0.95 + sw * 1.4, 0.5, ST.z + 1.2 + (b.hi ? 0.4 : 0))); b.mesh.material.opacity = Math.min(1, on * (0.75 + 0.35 * pulse)); b.mesh.visible = b.mesh.material.opacity > 0.02; });
     pig.update(dt, t, E, v.flee);
   }
   // beams point their -Y axis (cone tip at origin, body toward -Y) at the target: lookAt aims +Z, so pre-rotate once
@@ -181,10 +184,10 @@ function buildPigeons(q, R) {
   const sph = (rad, sx, sy, sz, x, y, z, hex) => { const g = new THREE.IcosahedronGeometry(rad, 0); g.scale(sx, sy, sz); g.translate(x, y, z); body.add(g, hex, 0.06, R); };
   sph(0.1, 1, 0.9, 1.45, 0, 0.17, 0, gray); sph(0.062, 1, 1, 1, 0, 0.27, 0.12, neck); sph(0.05, 1, 1, 1, 0, 0.31, 0.17, gray); body.box(0.025, 0.02, 0.05, 0, 0.3, 0.23, '#e0a050', { tint: 0 }); body.box(0.07, 0.02, 0.14, 0, 0.17, -0.17, dk, { tint: 0.03, rx: 0.3 });
   body.box(0.012, 0.09, 0.012, 0.03, 0.045, 0, '#d98a8a', { tint: 0 }); body.box(0.012, 0.09, 0.012, -0.03, 0.045, 0, '#d98a8a', { tint: 0 });
-  const wg = new THREE.BoxGeometry(0.2, 0.018, 0.2); wg.translate(0.1, 0, 0); wing.add(wg, dk, 0.05, R);
+  const wg = new THREE.BoxGeometry(0.34, 0.022, 0.27); wg.translate(0.17, 0, 0); wing.add(wg, dk, 0.05, R);
   const bm = new THREE.InstancedMesh(body.geo(), flatMat(), n), wm = new THREE.InstancedMesh(wing.geo(), flatMat({ side: THREE.DoubleSide }), n * 2);
   bm.castShadow = q !== 'low'; bm.frustumCulled = false; wm.frustumCulled = false; group.add(bm, wm);
-  const homes = [[-4.3, -9.1], [4.4, -9.3], [-5.4, -7.3], [5.5, -7.0], [-3.7, -10.9], [3.9, -11.0]].slice(0, n), P = homes.map((h, i) => ({ hx: h[0], hz: h[1], x: h[0], z: h[1], y: 0, ph: R() * 6, fly: 0, ret: 0, spd: 0.8 + R(), dir: R() * 6.28, peck: R() * 4 }));
+  const homes = [[-3.9, -10.9, 0.6], [3.8, -10.8, 0.6], [-2.95, -8.4, 0], [2.95, -8.0, 0], [-2.2, -10.5, 0.6], [2.4, -10.45, 0.6]].slice(0, n), P = homes.map((h, i) => ({ hx: h[0], hz: h[1], hy: h[2], x: h[0], z: h[1], y: 0, ph: R() * 6, fly: 0, ret: 0, spd: 0.8 + R(), dir: R() * 6.28, peck: R() * 4 }));
   const o = new THREE.Object3D(), wo = new THREE.Object3D();
   function update(dt, t, E, flee) {
     for (let i = 0; i < n; i++) {
@@ -195,7 +198,7 @@ function buildPigeons(q, R) {
       const flying = p.fly > 0 || p.ret > 0 && p.y > 0.02;
       const peck = flying ? 0 : Math.max(0, Math.sin(t * 5 * p.spd + p.ph)) * (Math.sin(t * 0.7 + p.peck) > 0.3 ? 0.6 : 0), hop = flying ? 0 : Math.max(0, Math.sin(t * (2 + E * 3) + p.ph * 2)) * 0.02 * (E > 0.3 ? 1 : 0.2);
       const yaw = flying ? Math.atan2(p.vx || 0, p.vz || -1) + (p.ret > 0 ? 3.14 : 0) : p.dir + Math.sin(t * 0.3 + p.ph) * 0.3;
-      o.position.set(p.x, p.y + (p.y > 0 || p.fly > 0 ? 0 : 0) + hop + (p.y > 0 ? 0 : 0) + (p.y <= 0.001 ? 0 : 0) + (p.hy || 0), p.z); o.position.y += (p.y > 0.001 ? 0.0 : 0.0) + 0.0; o.rotation.set(peck * 0.9 - (flying ? 0.35 : 0), yaw, 0); o.scale.setScalar(1.9); o.updateMatrix(); bm.setMatrixAt(i, o.matrix);
+      o.position.set(p.x, p.y + hop + (p.hy || 0), p.z); o.rotation.set(peck * 0.9 - (flying ? 0.35 : 0), yaw, 0); o.scale.setScalar(1.9); o.updateMatrix(); bm.setMatrixAt(i, o.matrix);
       const flap = flying ? Math.sin(t * 28 + p.ph) * 0.9 : 0.05;
       [1, -1].forEach((s, k) => { wo.position.copy(o.position); wo.position.y += 0.19 * 1.9; wo.rotation.set(0, yaw, 0); wo.updateMatrix(); const mm = wo.matrix.clone(); const w2 = new THREE.Matrix4().makeRotationZ(s * (flying ? flap : 0.5)).multiply(new THREE.Matrix4().makeScale(s * 1.9, 1.9, 1.9)); wm.setMatrixAt(i * 2 + k, mm.multiply(w2)); });
     }

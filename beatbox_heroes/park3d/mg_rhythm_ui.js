@@ -118,7 +118,7 @@ export function buildUI(hud, api) {
     resize(w, h) { u = w / 540; root.style.setProperty('--u', u + 'px'); },
     setScore(v) { U.score.textContent = String(Math.round(v)); },
     setCombo(n, bump) { U.combo.classList.toggle('on', n >= 2); if (n >= 2) { U.combo.firstChild.nodeValue = n; if (bump) { U.combo.classList.remove('bump'); void U.combo.offsetWidth; U.combo.classList.add('bump'); } } },
-    setEnergy(e) { U.fill.style.width = Math.round(e * 100) + '%'; U.meter.querySelectorAll('.lab').forEach((l) => l.classList.toggle('on', e >= +l.dataset.p)); },
+    setEnergy(e) { const k = Math.round(e * 100); if (k === U.lastE) return; U.lastE = k; U.fill.style.width = k + '%'; if (!U.labs) U.labs = [...U.meter.querySelectorAll('.lab')]; U.labs.forEach((l) => l.classList.toggle('on', e >= +l.dataset.p)); },
     pop(text, grade, x, y, big) { if (popsN > 7) return; popsN++; const p = el('div', 'pop ' + grade + (big ? ' big' : ''), text); p.style.left = x + 'px'; p.style.top = y + 'px'; U.pops.appendChild(p); setTimeout(() => { p.remove(); popsN--; }, 760); },
     countdown(txt) { U.count.textContent = txt; U.count.classList.remove('on'); void U.count.offsetWidth; U.count.classList.add('on'); },
     toast(msg, ms) { U.toast.textContent = msg; U.toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => U.toast.classList.remove('on'), ms || 2000); },
