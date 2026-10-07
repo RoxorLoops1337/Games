@@ -157,7 +157,7 @@ export async function probeRun(env, o) {
     const R = BBH.R3, h = R.host; if (!R.active || !h || !h.world) return null; const g = document.getElementById('gl'), c = document.createElement('canvas'); c.width = 12; c.height = 20; const x = c.getContext('2d');
     const lum = () => { x.fillStyle = '#120d1f'; x.fillRect(0, 0, 12, 20); x.drawImage(g, 0, 0, 12, 20); const d = x.getImageData(0, 0, 12, 20).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; return s / (d.length / 4); };
     const base = lum(); R.resize(); const same = lum(); const b = R._.S.box; h.resize(b.w - 8, b.h - 8); const changed = lum(); R.resize(); const back = lum();
-    return { base: Math.round(base), same: Math.round(same), changed: Math.round(changed), back: Math.round(back), cleared: [same, changed, back].filter((v) => v < 12 && base >= 12).length };
+    return { base: Math.round(base), same: Math.round(same), changed: Math.round(changed), back: Math.round(back), cleared: [same, changed, back].filter((v) => v < 30 && base >= 40).length };
   }).catch(() => null);
   await sleep(300);
   const bf = await page.evaluate(() => { window.__BF.stop(); const B = window.__BF; return { n: B.n, dark: B.dark, long: B.long, covered: B.covered, worlds: B.worlds, rung: BBH.R3.host && BBH.R3.host.shared.post ? BBH.R3.host.shared.post.stats : null, status: BBH.R3.status }; });

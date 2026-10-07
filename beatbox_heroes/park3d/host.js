@@ -13,6 +13,11 @@
 //     setSpotState(id, {locked, reason, goal, badge}), activate(id), teleport(id), talk(npcId), setQuality(q), stats(), pause(b), dispose() }
 //   The thin pass-throughs call lighting / controls / spots / npcs / the world module when THEY implement the method and silently do nothing otherwise, so missing methods never throw.
 // WORLD MODULE CONTRACT: see worlds.js. ctx.shared = { post, shadowMap }: created ONCE per host. post stays null until fx_post.js exports createSharedPost(renderer) (LIGHT), then it is passed on.
+// PERF (stability + phones): resize() only touches the drawing buffer on a real size / DPR change and redraws at once (setSize clears the canvas); load() yields a frame between import,
+//   build and first frame and compiles the new world's materials with renderer.compileAsync (KHR_parallel_shader_compile) before the warm frame; the old world's last frame stays on the
+//   canvas until then. host.drawn = frames drawn by the current world (R3.reveal lifts the fade at 2). Adaptive DPR: 20 of 30 frames over 28 ms (45 on low) -> -0.25, ~10 calm s -> +0.25,
+//   never above the tier cap, never below 1 (host._frameMs = the real frame interval, set by the embedder). Shadow map: every 2nd frame in interiors and on med/low. host.prefetch(ids).
+//   ?perf=0 turns all of this off for A/B runs (tools/beatbox_heroes/blackframes.mjs --extra '&perf=0'), ?adaptive=0 only the DPR adaption. ctx.postRung of a world -> shared post floor.
 // Disposal: scene graph through kit.disposeTree (geometries, materials, textures, canvas textures, shadow maps), lighting.dispose() (post targets), renderer.renderLists.dispose(),
 //   every window/document/canvas listener and DOM node added while building (controls, ui3d have no dispose) is removed. Resources flagged userData.persist (shared character materials) survive.
 import * as THREE from 'three';
