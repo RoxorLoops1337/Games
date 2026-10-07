@@ -3,6 +3,7 @@
 //     setPads(moves, live), flashPad(id, ok), showSelect(levels, unlocked, pick), hideSelect(), card(res, rw, buttons), hideCard(), hasCard(), resize(w,h), dispose() }
 //   cb = { onMove(id), onQuit(), onPick(level), onAgain(), onLevels(), onContinue() }
 import { MOVES, MOVE_IDS } from './mg_pose_moves.js';
+import { actButtons } from './mg_acts.js';
 
 // bold line icons (64 x 64), drawn with currentColor
 const ICON = {
@@ -166,8 +167,8 @@ export function createPoseUI(host, cb, o) {
     },
     hideSelect() { if (sheet && sheet.parentNode) sheet.parentNode.removeChild(sheet); sheet = null; },
     selectOpen: () => !!sheet,
-    // ---- result card. buttons: [['CONTINUE', fn, 'alt'?], ...]
-    card(res, rw, buttons) {
+    // ---- result card. buttons: [['CONTINUE', fn, 'alt'?], ...], or the game's acts (mg_acts.js) with go(act) = the card's CONTINUE path
+    card(res, rw, buttons, acts, go) {
       api.hideCard(); const col = { S: '#ffd23f', A: '#7dff6a', B: '#2ee6ff', C: '#fff6e8', D: '#ff7b8e' }[res.grade] || '#fff6e8';
       const c = el('div', 'pz-card');
       const chips = [['COOL', res.cool, '#7dff6a'], ['GOOD', res.good, '#2ee6ff'], ['BAD', res.bad, '#ffb03a'], ['MISS', res.miss + res.wrong, '#ff7b8e']].map((x) => '<span class="pz-c" style="background:' + x[2] + '">' + x[0] + ' ' + x[1] + '</span>').join('');
@@ -176,7 +177,7 @@ export function createPoseUI(host, cb, o) {
         '<div class="pz-row">' + chips + '</div>' + (res.lost ? '<div class="pz-lost">The crowd booed you off. Keep the order and stay on the beat!</div>' : '') +
         (show !== null ? '<div class="pz-rw sh">+' + (Math.round(show * 10) / 10).toFixed(1) + ' SHOWMANSHIP</div>' : '') + (xp !== null || (rw && rw.minutes) ? '<div class="pz-rw2">' + (xp !== null ? '+' + Math.round(xp) + ' XP' : '') + (rw && rw.energy ? '   ' + Math.round(rw.energy) + ' ENERGY' : '') + '</div>' : '') +
         (res.unlocked ? '<div class="pz-un">LEVEL ' + res.unlocked + ' UNLOCKED!</div>' : !res.passed && res.level < 8 ? '<div class="pz-rw2" style="margin-top:8px">Score 70% to unlock level ' + (res.level + 1) + '</div>' : '');
-      const bt = el('div', 'pz-btns'); (buttons || []).forEach((b) => { const x = el('button', 'pz-btn' + (b[2] ? ' ' + b[2] : ''), b[0]); x.addEventListener('click', (e) => { e.preventDefault(); b[1](); }); bt.appendChild(x); }); c.appendChild(bt);
+      const bt = el('div', 'pz-btns'); if (acts && acts.length) { bt.style.flexWrap = 'wrap'; actButtons(c.ownerDocument || document, bt, acts, { row: false, cls: 'pz-btn', alt: 'alt', go }); bt.querySelectorAll('.pz-btn').forEach((x) => { x.style.flex = x.dataset.act === 'continue' ? '1 1 100%' : '1 1 40%'; }); } else (buttons || []).forEach((b) => { const x = el('button', 'pz-btn' + (b[2] ? ' ' + b[2] : ''), b[0]); x.addEventListener('click', (e) => { e.preventDefault(); b[1](); }); bt.appendChild(x); }); c.appendChild(bt);
       root.appendChild(c); cardEl = c; pads.style.display = 'none'; strip.style.display = 'none';
     },
     hideCard() { if (cardEl && cardEl.parentNode) cardEl.parentNode.removeChild(cardEl); cardEl = null; },

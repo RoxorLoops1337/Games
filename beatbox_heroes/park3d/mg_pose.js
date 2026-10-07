@@ -13,6 +13,7 @@ import { THREE, rng as mkRng } from './kit.js';
 import { MOVES, MOVE_IDS, KEYMAP, performMove } from './mg_pose_moves.js';
 import { createPoseUI, LEVEL_NAMES } from './mg_pose_ui.js';
 import { buildPoseStage, COACH_X, HERO_X, STAGE_H, SCALE } from './mg_pose_stage.js';
+import { gameActs } from './mg_acts.js';
 
 export const POSE = { COOL: 0.08, GOOD: 0.16, WIN_MAX: 0.3, WIN_SPB: 0.45, ROUNDS: 4, REVEAL_UPTO: 2, UNLOCK_Q: 0.7, HYPE0: 0.55,
   PTS: { cool: 1, good: 0.75, bad: 0.4, miss: 0, wrong: 0 }, HYPE: { cool: 0.05, good: 0.035, bad: -0.03, miss: -0.12, wrong: -0.2, early: -0.02, perfect: 0.08 } };
@@ -196,6 +197,7 @@ export function createPose(ctx, opts) {
     if (S.cardShown || !S.result) return; S.cardShown = true; const r = S.result;
     const btns = opts.again === false ? [['CONTINUE', () => quit()]] : [['AGAIN', () => start({ level: r.level, retry: (S.presses % 97) + 1 })], ['LEVELS', () => select(), 'alt']];
     if (opts.again !== false && r.unlocked) btns.unshift(['NEXT', () => start({ level: r.unlocked })]);
+    const acts = gameActs(opts); if (acts) { ui.card(r, S.rewards, null, acts, () => quit()); return; }   // the game: AGAIN / BACK / CONTINUE, all through quit() (the scene reads the choice)
     ui.card(r, S.rewards, btns);
   }
 

@@ -25,10 +25,10 @@ export const PAL = {
 
 export function makeStore() {
   const S = {
-    B: new Buf({ rng: rng(201) }), GLOW: new Buf({ rng: rng(202) }), DEC: new Buf({ uv: true }), SIGN: new Buf({ uv: true }), FX: new Buf({ uv: true }), FXP: new Buf({ uv: true }), PUD: new Buf({ alpha: true }),
+    B: new Buf({ rng: rng(201) }), GLOW: new Buf({ rng: rng(202) }), DEC: new Buf({ uv: true }), SIGN: new Buf({ uv: true }), FX: new Buf({ uv: true }), FXP: new Buf({ uv: true }), PUD: new Buf({ alpha: true }), BF: new Buf({ rng: rng(203) }),
     hit: makeCollider(), R: rng(77), atlas: null, sections: {}, lamps: [], lights: [], neons: [], reflect: [],
   };
-  S.bufs = [S.B, S.GLOW, S.DEC, S.SIGN, S.FX, S.FXP, S.PUD]; S.names = ['B', 'GLOW', 'DEC', 'SIGN', 'FX', 'FXP', 'PUD'];
+  S.bufs = [S.B, S.GLOW, S.DEC, S.SIGN, S.FX, S.FXP, S.PUD, S.BF]; S.names = ['B', 'GLOW', 'DEC', 'SIGN', 'FX', 'FXP', 'PUD', 'BF'];
   // record every vertex the callback adds to any store under `name` (several calls with one name accumulate)
   S.section = (name, fn) => {
     const a = S.bufs.map((b) => b.p.length / 3); fn(S);
@@ -61,7 +61,8 @@ export function makeStore() {
   // upright quad facing +z
   S.wall = (buf, cx, cy, cz, w, h, c0, c1) => buf.quad([cx - w / 2, cy - h / 2, cz], [cx + w / 2, cy - h / 2, cz], [cx + w / 2, cy + h / 2, cz], [cx - w / 2, cy + h / 2, cz], c0, c0, c1 || c0, c1 || c0);
   // flat ground quad (facing up) between x0..x1, z0..z1 at height y
-  S.floor = (buf, x0, x1, z0, z1, y, c) => buf.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], c);
+  // flat floors (ground, road, sidewalk, plazas) never need to CAST: in the casting store they shadowed themselves and threw big square dark patches that followed the shadow camera down the street
+  S.floor = (buf, x0, x1, z0, z1, y, c) => (buf === S.B && S.BF ? S.BF : buf).quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], c);
   return S;
 }
 

@@ -37,7 +37,7 @@
       a = a || {}; this.a = a; this.mode = a.mode || 'perform'; this.battle = this.mode === 'battle'; this.opp = a.opp || null; this.mg = null; this.ctl = null; this.then = null; this.held = null; this.verdict = null; this.rw = null; this.dead = false; this.done = false; this.cd = false; this.qd = false; this.lastPhase = ''; this.unsub = [];   // the scene object is reused: reset every flag
       const mode = this.battle ? 'battle' : this.mode, venue = venueFor(a, mode), ch = G.ch;
       try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }                                    // music off: mg_rhythm keeps it off (gameMode) until leave()
-      this.train = this.mode === 'train'; this.heldT = null; this.back = a.back || a.place || (ch && ch.place) || 'studio';
+      this.train = this.mode === 'train'; this.heldT = null; this.back = (a.back && a.back.args && a.back.args.id) || (typeof a.back === 'string' ? a.back : null) || a.place || (ch && ch.place) || 'studio';
       try { E.unlockAudio(); } catch (e) { /* ignore */ }
       this.hud = document.createElement('div'); this.hud.id = 'r3rhythm'; this.hud.style.cssText = 'position:fixed;top:0;z-index:5;pointer-events:none;overflow:hidden';
       this.place = () => { const gl = document.getElementById('glwrap'); if (gl && this.hud) { this.hud.style.left = gl.style.left || '0px'; this.hud.style.width = gl.style.width || '100%'; this.hud.style.height = gl.style.height || '100%'; } };
@@ -48,6 +48,7 @@
         offsetMs: E.settings.offset || 0, reduce: !!E.settings.reduce, mic: !!E.settings.mic, onMic: (on) => { E.settings.mic = !!on; try { E.saveSettings(); } catch (e) { /* ignore */ } },
         time: Core.nightness(ch.minutes), tip: a.tip !== false && !(ch.flags && ch.flags.rhythmTip) && !this.battle,
         onContinue: (info) => self.cont(info), resolveBattle: (p) => self.resolve(p),
+        acts: () => (G.retActs && !self.train ? G.retActs({ only: !!a.final }) : null),       // AGAIN / BACK / CONTINUE on the result and verdict cards (activity.js)
       });
       if (this.train) Object.assign(args, { title: a.title || 'RHYTHM TRAINING', sub: a.sub || 'level ' + (a.level || ((ch.trainLv && ch.trainLv.beat) || 1)), tip: false, progress: this.progress() });
       return R3.load('rhythm', args).then((w) => {
@@ -94,6 +95,7 @@
     cont(info) {
       if (this.dead || this.cd) return;
       if (this.train && info && info.train) {
+        if (info.act === 'menu') { if (G.retMode) G.retMode('menu'); info = Object.assign({}, info, { act: 'continue' }); }   // BACK: the training menu that launched it
         if (info.act !== 'continue') { if (this.flushTrain()) { try { if (this.mg) this.mg.setTrainProgress(this.progress()); } catch (e) { /* ignore */ } return true; } }
         this.cd = true; const h = this.heldT || { play() {} }; this.heldT = null;
         if (this.a.onExit) this.a.onExit(h); else if (G.pendingMorning) { try { h.play({ morning: (f) => { G.pendingMorning = f; } }); } catch (e) { /* ignore */ } E.go('place', { id: 'home', morningFirst: true }); } else G.finishActivity(h, this.back);

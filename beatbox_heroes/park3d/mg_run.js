@@ -50,7 +50,7 @@ export function createRun(ctx, opts) {
   let gatesPassed = 0, holdT = 0, holdV = 0, anchor = 0, startAnchor = 0, vS = 0, vPace = 0, off = 0, offT = 0, doneT = 0, cardT = -1, result = null, kick = 0, stumble = 0, fovPulse = 0, clock = 0, camPhase = 0, leafAcc = 0, gateAcc = 0, W = 540, H = 960, dpr = 1, tClock = 0;
   const RUNNER_X = 0.42, PACER_X = -1.35, RING_LEAD = 1.2;
   const sunScreen = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
-  const hud = createHud(opts.hud, { onTap: (s) => press(s), onQuit: () => quit(), onStart: () => { if (S.phase === 'ready') startRun(); } }, RUN, { again: opts.again !== false });
+  const hud = createHud(opts.hud, { onTap: (s) => press(s), onQuit: () => quit(), onStart: () => { if (S.phase === 'ready') startRun(); } }, RUN, { again: opts.again !== false, acts: opts.acts });
   // leaving: 'quit' {game, finished} (new contract) and 'minigameQuit' (legacy name); the game decides what a quit means from `finished`
   function quit() { if (disposed) return; events.emit('quit', { game: 'run', finished: S.phase === 'done' }); events.emit('minigameQuit'); }
   function applyYaw() { // line the track up so the low sun sits ahead and slightly to the left (glare, rim light, long shadows towards the camera)

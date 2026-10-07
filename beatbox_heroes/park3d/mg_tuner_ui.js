@@ -1,5 +1,6 @@
 // TUNER UI (Tuner Artist): the DOM layer over the 3D booth. Touch first: thumb sized buttons, safe-area aware. Range picker, HUD, ear training buttons, result card.
 import { RANGES, midiName } from './mg_tuner_logic.js';
+import { actButtons, gameActs } from './mg_acts.js';
 
 const CSS = `
 .tn{position:absolute;inset:0;overflow:hidden;pointer-events:none;font-family:"Trebuchet MS",system-ui,-apple-system,sans-serif;color:#fff6e8;container-type:size;-webkit-tap-highlight-color:transparent;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
@@ -17,6 +18,8 @@ const CSS = `
 .tn-call{position:absolute;left:0;right:0;top:calc(66px + var(--st));text-align:center;opacity:0;transition:opacity .2s}
 .tn-call.on{opacity:1}
 .tn-note{display:inline-block;min-width:112px;padding:2px 18px 4px;border-radius:18px;background:rgba(23,16,43,.62);font-weight:900;font-size:44px;line-height:1.1;letter-spacing:.04em;color:#2ee6ff;text-shadow:0 0 18px rgba(46,230,255,.8),0 3px 0 #0e0a1e;box-shadow:inset 0 0 0 2px rgba(46,230,255,.35)}
+.tn button.tn-listen{margin-top:8px;min-height:44px;padding:0 18px;border-radius:16px;background:rgba(46,230,255,.18);box-shadow:inset 0 0 0 2px rgba(46,230,255,.55);font-weight:900;font-size:13px;letter-spacing:.12em;color:#bff7ff}
+.tn button.tn-listen:active{transform:translateY(2px)}
 .tn-say{margin-top:4px;font-weight:900;font-size:15px;letter-spacing:.14em;color:#fff6e8;text-shadow:0 2px 0 #0e0a1e,0 0 10px rgba(255,210,63,.6)}
 .tn-meter{position:absolute;left:24px;right:24px;bottom:calc(26px + var(--sb));opacity:0;transition:opacity .2s;display:flex;flex-direction:column;gap:6px;align-items:center}
 .tn-meter.on{opacity:1}
@@ -74,7 +77,8 @@ export function createUI(hud, H, uopt) {
   const el = (tag, cls, html, par) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; (par || root).appendChild(e); return e; };
   const top = el('div', 'tn-top'); const back = el('button', 'tn-chip tn-back', 'BACK', top); back.setAttribute('aria-label', 'Back'); back.onclick = () => H.back && H.back();
   el('div', 'tn-grow', '', top); const roundC = el('div', 'tn-chip', 'NOTE <b>0</b>/8', top), scoreC = el('div', 'tn-chip', 'SCORE <b>0</b>', top), streakC = el('div', 'tn-chip tn-streak off', 'x<b>0</b>', top);
-  const call = el('div', 'tn-call'), noteEl = el('div', 'tn-note', 'C4', call), sayEl = el('div', 'tn-say', 'LISTEN...', call);
+  const call = el('div', 'tn-call'), noteEl = el('div', 'tn-note', 'C4', call), sayEl = el('div', 'tn-say', 'LISTEN...', call), listenB = el('button', 'tn-listen', 'LISTEN AGAIN', call);
+  listenB.setAttribute('data-act', 'listen'); listenB.setAttribute('aria-label', 'Listen to the note again'); listenB.onclick = () => H.listen && H.listen();
   const fb = el('div', 'tn-fb', '');
   const meter = el('div', 'tn-meter'), gauge = el('div', 'tn-gauge', '<div class="tn-zone"></div><div class="tn-mid"></div>', meter), mark = el('div', 'tn-mark', '', gauge);
   const lbl = el('div', 'tn-lbl', '<span>FLAT</span><span>SHARP</span>', meter), cents = el('div', 'tn-cents', '', meter), hold = el('div', 'tn-hold', '<i></i>', meter), holdI = hold.firstChild;
@@ -104,8 +108,8 @@ export function createUI(hud, H, uopt) {
     if (S.streak !== lastStreak) { streakC.classList.toggle('off', S.streak < 2); streakC.innerHTML = 'x<b>' + S.streak + '</b> STREAK'; if (S.streak > lastStreak) { streakC.classList.add('pop'); setTimeout(() => streakC.classList.remove('pop'), 160); } lastStreak = S.streak; }
     call.classList.toggle('on', playing);
     const mic = S.mode === 'mic';
-    if (mic) { noteEl.style.display = ''; noteEl.textContent = midiName(S.target); sayEl.textContent = S.phase === 'ref' ? 'LISTEN...' : S.phase === 'sing' ? (S.cents === null ? 'SING IT!' : 'HOLD IT!') : ''; }
-    else { noteEl.style.display = 'none'; sayEl.textContent = S.phase === 'earA' ? 'NOTE 1' : S.phase === 'earB' ? 'NOTE 2' : S.phase === 'ask' ? 'WAS THE SECOND NOTE...' : ''; }
+    if (mic) { noteEl.style.display = ''; noteEl.textContent = midiName(S.target); sayEl.textContent = S.phase === 'count' ? 'GET READY...' : S.phase === 'ref' ? 'LISTEN...' : S.phase === 'sing' ? (S.cents === null ? 'SING IT!' : 'HOLD IT!') : ''; listenB.style.display = playing && (S.phase === 'sing' || S.phase === 'ref') ? '' : 'none'; }
+    else { listenB.style.display = 'none'; noteEl.style.display = 'none'; sayEl.textContent = S.phase === 'earA' ? 'NOTE 1' : S.phase === 'earB' ? 'NOTE 2' : S.phase === 'ask' ? 'WAS THE SECOND NOTE...' : ''; }
     meter.classList.toggle('on', playing && mic && S.phase === 'sing');
     if (playing && mic) {
       if (S.cents === null) { mark.style.opacity = 0; cents.textContent = S.phase === 'sing' ? 'WAITING FOR YOUR VOICE...' : ''; }
@@ -121,7 +125,8 @@ export function createUI(hud, H, uopt) {
     const dots = r.log.map((l) => '<i class="' + (l.ok ? 'ok' : '') + '"></i>').join(''), chips = [];
     if (w) { if (w.xp) chips.push('+' + Math.round(w.xp) + ' XP'); if (w.energy) chips.push(Math.round(w.energy) + ' ENERGY'); if (w.mood) chips.push('+' + Math.round(w.mood) + ' MOOD'); }
     card.innerHTML = '<h2>TUNER RESULT</h2><div class="big">' + r.score + ' / ' + r.rounds + '</div><div class="tn-grade">' + r.grade + '</div><div class="tn-dots">' + dots + '</div><div class="tn-rows"><div class="tn-row"><span>Mode</span><span>' + r.mode + '</span></div><div class="tn-row"><span>Quality</span><span style="color:#ffd23f">' + r.qualityPct + '%</span></div><div class="tn-row"><span>Best streak</span><span>' + r.bestStreak + '</span></div>' + (r.modeId === 'mic' ? '<div class="tn-row"><span>Time in tune</span><span>' + (r.inTuneMs / 1000).toFixed(1) + ' s</span></div>' : '') + '<div class="tn-row"><span>Musicality</span><span class="tn-mus" style="color:#9dff4a">+' + (Math.round(mus * 10) / 10).toFixed(1) + '</span></div></div>' + (chips.length ? '<div class="tn-rw">' + chips.join('   ') + '</div>' : '') + '<div class="tn-btns"></div>';
-    const bt = card.querySelector('.tn-btns'); if (uopt.again !== false) { const b1 = el('button', 'tn-btn alt', 'AGAIN', bt); b1.onclick = () => hh.again(); } const b2 = el('button', 'tn-btn', 'CONTINUE', bt); b2.onclick = () => hh.done();
+    const bt = card.querySelector('.tn-btns'), acts = gameActs(uopt); if (acts) { bt.style.flexWrap = 'wrap'; actButtons(doc, bt, acts, { row: false, cls: 'tn-btn', alt: 'alt', go: () => hh.done() }); bt.querySelectorAll('.tn-btn').forEach((b) => { b.style.flex = b.dataset.act === 'continue' ? '1 1 100%' : '1 1 40%'; if (b.dataset.act !== 'continue') { b.style.fontSize = '14px'; b.style.whiteSpace = 'nowrap'; } }); return; }
+    if (uopt.again !== false) { const b1 = el('button', 'tn-btn alt', 'AGAIN', bt); b1.onclick = () => hh.again(); } const b2 = el('button', 'tn-btn', 'CONTINUE', bt); b2.onclick = () => hh.done();
   }
   function showResult(r, hh) {
     clearOverlays(); ask.classList.remove('on'); meter.classList.remove('on'); call.classList.remove('on');

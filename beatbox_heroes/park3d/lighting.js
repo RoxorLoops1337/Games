@@ -175,7 +175,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     S.haze = 0.85 * pc + 0.5 * pt; S.beams = pc + 0.9 * pt; S.beamMode = pt > pc ? 1 : 0; S.spark = pc;
   }
   function applyState() {
-    const e = cur.elev * Math.PI / 180, a = cur.az * Math.PI / 180, ce = Math.cos(e);
+    const e = cur.elev * Math.PI / 180, a = (cur.az + ((!IN && terrain && terrain.sunAzOffset) || 0)) * Math.PI / 180, ce = Math.cos(e);   // terrain.sunAzOffset (deg): a world can turn the sun, e.g. the street keeps it on the camera side
     S.sunDir.set(-Math.sin(a) * ce, Math.sin(e), -Math.cos(a) * ce).normalize(); S.sunCol.copy(cur.sunCol);
     S.tod = tCur; S.night = Math.max(0, (tEffLast - 0.5) * 2); S.lamp = cur.lamp; S.neon = cur.neon; S.stage = cur.stage; S.windows = cur.windows; S.ray = cur.ray; S.fly = cur.fly; S.dust = cur.dust;
     S.bloom = cur.bloom; S.bloomThr = cur.bloomThr; S.vig = cur.vig; S.sat = cur.sat; S.gShadow.copy(cur.gShadow); S.gHigh.copy(cur.gHigh);

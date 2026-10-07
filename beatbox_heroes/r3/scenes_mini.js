@@ -4,7 +4,7 @@
 //   run     world 'run'    the park jog in 3D. Result -> G.doHold({t:'run', q, goodBars}) exactly like the 2D scene, rewards read back from the new save and shown on the card
 //                          (mini.setRewards), CONTINUE -> G.finishActivity(held, 'park'). QUIT before the end -> back to the place (nothing spent), like 2D.
 //   tuner   world 'tuner'  the vocal booth in 3D, HIGHER / LOWER voice (saved in E.settings.voice) and EAR training. Result -> G.doHold({t:'tune', q}), CONTINUE -> G.finishActivity(held, place).
-//                          Music OFF while it runs (Audio.gameMode). From the training menu (args.train = {level, where}, r3/scenes_train.js) the result is G.doHold({t:'trainGame', stat:'mus', game:'tune', level, q, where}).
+//                          Music OFF while it runs (Audio.gameMode); every round counts in, then plays the target note through E.note (BBH.Audio.note, keys), LISTEN AGAIN replays it. From the training menu (args.train = {level, where}, r3/scenes_train.js) the result is G.doHold({t:'trainGame', stat:'mus', game:'tune', level, q, where}).
 //   seq     world 'lab'    Beat Maker: the 2D DOM tool (pattern tabs, BPM, PLAY, RELEASE...) over the 3D Sound Lab with the camera on the desk; the 16 x 4 grid is a DOM grid here
 //   studio  world 'lab'    Sound Recorder: the 2D DOM tool over the lab, camera on the booth, the hero at the mic; every Core.SOUNDS entry is a row (locked ones greyed), recordings go to IndexedDB through BBH.Samples keyed by sound id.
 // The mini games get the SHARED audio (BBH.Audio, E.tone), E.settings (offset, muted, sfx, reduce, voice) and never open an AudioContext of their own.
@@ -42,7 +42,7 @@
         this.a = a || {}; this.held = null; this.gone = false; this.mg = null; this.w = null; this.res = null; this.pre = null;
         if (cfg.gameMode) gameMode(true); else E.music(cfg.music);         // the singing game runs with the music OFF (Audio.gameMode, TRAINING_PLAN)
         this.ov = overlay();
-        const args = Object.assign({ hud: this.ov, look: G.ch && G.ch.look, time: nightN(), offsetMs: E.settings.offset | 0, settings: E.settings, embedded: true, again: false }, cfg.args ? cfg.args.call(this) : {});
+        const args = Object.assign({ hud: this.ov, look: G.ch && G.ch.look, time: nightN(), offsetMs: E.settings.offset | 0, settings: E.settings, embedded: true, again: false, acts: () => (G.retActs ? G.retActs() : null) }, cfg.args ? cfg.args.call(this) : {});   // acts: AGAIN / BACK / CONTINUE on the card (activity.js)
         return R3.load(name, args).then((w) => {
           if (E.scene !== this || !w) return; this.w = w; this.mg = w.game || null; if (!this.mg) return;
           w.events.on('minigame', (r) => { if (!this.gone && E.scene === this) safe(() => this.onResult(r && r.result ? r.result : r)); });   // listeners die with the world (new emitter per load)
@@ -84,7 +84,7 @@
   /* ================================================================ TUNER */
   E.scenes3d.tuner = Object.assign(miniScene('tuner', {
     music: 'studio', home: 'place', gameMode: true,
-    args() { return { mus: G.ch.stats.mus, tone: (f, d, v) => E.tone && E.tone(f, d, v), onVoice: (r) => { E.settings.voice = r; try { E.saveSettings(); } catch (e) { /* ignore */ } } }; },
+    args() { return { mus: G.ch.stats.mus, note: (m, d) => E.note && E.note(m, d), tone: (f, d, v) => E.tone && E.tone(f, d, v), onVoice: (r) => { E.settings.voice = r; try { E.saveSettings(); } catch (e) { /* ignore */ } } }; },
     finish() { G.finishActivity(this.held, this.a.place || 'home'); },
     leave() { try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } },
   }), {

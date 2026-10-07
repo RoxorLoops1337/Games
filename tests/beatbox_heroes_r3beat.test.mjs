@@ -98,7 +98,7 @@ try {
   ok(got.best && got.best[1] === tr.result.grade, 'best grade of level 1 saved: ' + JSON.stringify(got.best));
   const card = await page.evaluate(() => { const c = document.querySelector('#r3rhythm .tr'), rw = document.querySelector('#r3rhythm .tr .rw'); return { txt: c ? c.innerText.replace(/\s+/g, ' ') : '', xp: rw ? +rw.dataset.xp : -1, acts: [...document.querySelectorAll('#r3rhythm .tr button')].map((b) => b.dataset.act) }; });
   ok(/LEVEL 2 UNLOCKED/.test(card.txt) && new RegExp('\\+' + exp.gain.toFixed(1) + ' TECH').test(card.txt) && card.xp === exp.xp - ch0.xp && /NEXT UP/.test(card.txt), 'the card: LEVEL 2 UNLOCKED, +' + exp.gain.toFixed(1) + ' TECH, +' + card.xp + ' XP and the next tip');
-  ok(card.acts.join() === 'next,levels,again,continue', 'card offers NEXT LEVEL, LEVELS, PLAY AGAIN, CONTINUE: ' + card.acts.join());
+  ok(card.acts.join() === 'next,levels,again,menu,continue', 'card offers NEXT LEVEL, LEVELS, PLAY AGAIN, BACK (training menu), CONTINUE: ' + card.acts.join());
   await page.locator('#r3rhythm .tr button[data-act="next"]').click(); await sleep(300);
   const t2 = await audio(page);
   ok(t2.st.phase === 'count' && t2.st.train.level === 2 && t2.st.bpm === 84 && t2.st.audio.metro.bpm === 84 && t2.st.train.unlocked === 2, 'NEXT LEVEL starts level 2 (84 bpm, metronome 84)');

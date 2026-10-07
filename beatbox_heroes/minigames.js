@@ -13,20 +13,23 @@
   const sheetBtn = (label, sub, cls, fn) => { const b = E.btn('', cls || '', fn, { textAlign: 'left', padding: '5px 6px 6px' }); b.appendChild(h('div.col', { style: { gap: '2px' } }, h('div', null, label), sub ? h('div', { style: { fontFamily: "'Silkscreen'", fontSize: '8px', color: '#d9c9ff' } }, sub) : null)); return b; };
   const back = (to) => { if (to && to.scene === 'place') E.go('place', to.args); else E.go((to && to.scene) || 'street'); };
 
-  // a plain synth tone for the tuner (respects mute)
-  E.tone = function (freq, dur, vol) {
+  // the tuner's reference notes: BBH.Audio.note (keys timbre) on the shared game AudioContext. It honours mute and the SFX volume and is not touched by
+  // Audio.gameMode (that only stops the scene music). E.note(midi, dur, o) -> { t0, end } | false; E.tone(freq, dur, vol) is the old Hz entry point (3D tuner, ear fallback).
+  E.note = function (midi, dur, o) {
     try {
-      const A = BBH.Audio; if (E.settings.muted || !A) return; A.unlock && A.unlock(); const ac = A.ctx; if (!ac || ac.state !== 'running') return;
-      const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
-      o.type = 'triangle'; o2.type = 'sine'; o.frequency.value = freq; o2.frequency.value = freq * 2; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime((vol || 0.18) * E.settings.sfx, t + 0.04); g.gain.setValueAtTime((vol || 0.18) * E.settings.sfx, t + dur - 0.08); g.gain.linearRampToValueAtTime(0, t + dur);
-      o.connect(g); o2.connect(g); g.connect(ac.destination); o.start(t); o2.start(t); o.stop(t + dur + 0.02); o2.stop(t + dur + 0.02);
-    } catch (e) { /* audio must never break the game */ }
+      const A = BBH.Audio; if (E.settings.muted || !A || !A.note) return false; try { E.unlockAudio(); } catch (e) { /* ignore */ } if (A.unlock) A.unlock();
+      return A.note(midi, dur || 1, Object.assign({ timbre: 'keys', vel: 0.85 }, o || {}));
+    } catch (e) { return false; }   // audio must never break the game
+  };
+  E.tone = function (freq, dur, vol) {
+    if (!(freq > 0)) return false; let m = 69 + 12 * Math.log2(freq / 440); if (Math.abs(m - Math.round(m)) < 0.02) m = Math.round(m);
+    return E.note(m, dur, { vel: Math.max(0.5, Math.min(1, (vol || 0.18) / 0.18 * 0.85)) });
   };
 
   function resultCard(title, rows, then) {
     const box = h('div.panel.pop', { style: { left: '16px', right: '16px', top: '110px', padding: '10px', zIndex: 30, textAlign: 'center' } },
       h('div.h1', null, title), h('div.col', { style: { gap: '4px', margin: '8px 0' } }, rows.map((r) => h('div.row', { style: { justifyContent: 'space-between' } }, h('div.ts', null, r[0]), h('div.t', { style: { color: r[2] || 'var(--cream)' } }, r[1])))),
-      E.btn('CONTINUE', 'gold big', () => { box.remove(); then && then(); }));
+      G.retRow2d ? G.retRow2d(() => { box.remove(); then && then(); }) : E.btn('CONTINUE', 'gold big', () => { box.remove(); then && then(); }));   // activity.js: AGAIN / BACK / CONTINUE
     E.add(box); E.sfx('levelup'); return box;
   }
 
@@ -95,12 +98,13 @@
   const RANGES = { higher: { name: 'HIGHER VOICE', desc: 'Soprano, alto, kids', roots: [60, 62, 64, 65, 67, 69, 71, 72] }, lower: { name: 'LOWER VOICE', desc: 'Tenor, baritone, bass', roots: [48, 50, 52, 53, 55, 57, 59, 60] } };
   const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const mf = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const TUNE_COUNT = 900;   // ms of count-in before each reference note (singing mode)
   E.scenes.tuner = {
     enter(a) {
-      this.a = a; this.state = 'start'; this.round = 0; this.rounds = 8; this.score = 0; this.inTune = 0; this.total = 0; this.mode = null; this.cents = null; this.freq = 0; this.hold = 0; this.done = false;
-      this.look = BBH.Chars.fix(G.ch.look); E.music('studio'); E.add(E.makeHud(G)); this.startUI();
+      this.a = a; this.listenEl = null; this.askEl = null; this.state = 'start'; this.round = 0; this.rounds = 8; this.score = 0; this.inTune = 0; this.total = 0; this.mode = null; this.cents = null; this.freq = 0; this.hold = 0; this.done = false;
+      this.look = BBH.Chars.fix(G.ch.look); SND.quiet(true); E.add(E.makeHud(G)); this.startUI();   // music OFF (Audio.gameMode): you must hear the note
     },
-    leave() { try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } },
+    leave() { try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } SND.quiet(false); },
     startUI() {
       const range = E.settings.voice || null;
       const box = h('div.panel.pop', { style: { left: '12px', right: '12px', top: '70px', padding: '8px', zIndex: 20 } },
@@ -122,8 +126,15 @@
     nextRound() {
       if (this.round >= this.rounds) { this.finish(); return; }
       this.round++; this.hold = 0; this.rt = 0; this.got = false; this.cents = null;
-      if (this.mode === 'mic') { const roots = RANGES[E.settings.voice || 'higher'].roots; this.target = roots[Math.floor(Math.random() * roots.length)]; this.phase = 'ref'; E.tone(mf(this.target), 1.1); }
-      else { const base = 55 + Math.floor(Math.random() * 12), diff = [1, 2, 3, 5, 7][Math.floor(Math.random() * 5)] * (Math.random() < 0.5 ? 1 : -1); this.earA = base; this.earB = base + diff; this.phase = 'earA'; E.tone(mf(base), 0.7); setTimeout(() => { if (!this.done) { this.phase = 'earB'; E.tone(mf(this.earB), 0.7); } }, 900); setTimeout(() => { if (!this.done) this.phase = 'ask'; this.askUI(); }, 1700); }
+      if (this.mode === 'mic') { const roots = RANGES[E.settings.voice || 'higher'].roots; this.target = roots[Math.floor(Math.random() * roots.length)]; this.phase = 'count'; this.listenUI(); }   // count-in, then the note (update), then SING IT
+      else { const base = 55 + Math.floor(Math.random() * 12), diff = [1, 2, 3, 5, 7][Math.floor(Math.random() * 5)] * (Math.random() < 0.5 ? 1 : -1); this.earA = base; this.earB = base + diff; this.phase = 'earA'; E.note(base, 0.7); setTimeout(() => { if (!this.done) { this.phase = 'earB'; E.note(this.earB, 0.7); } }, 900); setTimeout(() => { if (!this.done) this.phase = 'ask'; this.askUI(); }, 1700); }
+    },
+    // hear the target note again (LISTEN): any time during the round, the sing window starts over after it
+    listen() { if (this.mode !== 'mic' || this.state !== 'play' || this.phase === 'fb' || this.phase === 'count') return false; this.phase = 'ref'; this.rt = 0; this.hold = 0; this.playRef(); return true; },
+    playRef() { this.refAt = E.t; E.note(this.target, 1.1); },
+    listenUI() {
+      if (this.listenEl) return;
+      this.listenEl = E.btn('LISTEN', 'cyan', () => this.listen(), { position: 'absolute', left: '12px', right: '12px', bottom: '14px', zIndex: 10 }); this.listenEl.setAttribute('data-act', 'listen'); E.add(this.listenEl);
     },
     askUI() {
       if (this.askEl) this.askEl.remove();
@@ -137,6 +148,7 @@
     },
     update(dt) {
       if (this.state !== 'play' || this.mode !== 'mic') return; this.rt += dt;
+      if (this.phase === 'count') { if (this.rt >= TUNE_COUNT) { this.phase = 'ref'; this.rt = 0; this.playRef(); } return; }
       if (this.phase === 'ref' && this.rt > 1300) { this.phase = 'sing'; this.rt = 0; }
       else if (this.phase === 'sing') {
         let p = null; try { p = BBH.Mic.pitchNow(); } catch (e) { p = null; }
@@ -146,7 +158,7 @@
       }
     },
     finish() {
-      if (this.done) return; this.done = true; try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ }
+      if (this.done) return; this.done = true; try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } if (this.listenEl) { this.listenEl.remove(); this.listenEl = null; }
       const acc = this.score / this.rounds, q = this.mode === 'mic' ? Math.min(1, acc * 0.85 + Math.min(0.15, this.inTune / (this.rounds * 3000) * 0.15)) : acc * 0.7;
       const held = G.doHold({ t: 'tune', q }); resultCard('TUNER RESULT', [['Notes', this.score + ' / ' + this.rounds, 'var(--gold2)'], ['Mode', this.mode === 'mic' ? 'Singing' : 'Ear training'], ['Quality', Math.round(q * 100) + '%']], () => G.finishActivity(held, this.a.place || 'home'));
     },
@@ -156,7 +168,7 @@
       E.txt(c, 'NOTE ' + Math.min(this.round, this.rounds) + '/' + this.rounds, 12, 66, { color: PAL.gold }); E.txt(c, 'SCORE ' + this.score, 258, 66, { align: 'r', color: PAL.cream });
       if (this.mode === 'mic') {
         const nm = NOTE[this.target % 12] + (Math.floor(this.target / 12) - 1);
-        E.txt(c, nm, 135, 130, { align: 'c', color: PAL.neonCyan, scale: 5, shadow: PAL.ink }); E.txt(c, this.phase === 'ref' ? 'LISTEN...' : this.phase === 'sing' ? 'SING IT!' : '', 135, 175, { align: 'c', color: PAL.cream, scale: 2 });
+        E.txt(c, nm, 135, 130, { align: 'c', color: PAL.neonCyan, scale: 5, shadow: PAL.ink }); E.txt(c, this.phase === 'count' ? 'GET READY ' + Math.max(1, Math.ceil((TUNE_COUNT - this.rt) / 300)) : this.phase === 'ref' ? 'LISTEN...' : this.phase === 'sing' ? 'SING IT!' : '', 135, 175, { align: 'c', color: PAL.cream, scale: 2 });
         // gauge: -100..+100 cents
         const gx = 25, gw = 220, gy = 260; c.fillStyle = PAL.ink; c.fillRect(gx - 1, gy - 1, gw + 2, 22); c.fillStyle = '#34235a'; c.fillRect(gx, gy, gw, 20); c.fillStyle = 'rgba(80,230,120,.5)'; c.fillRect(gx + gw / 2 - gw / 4, gy, gw / 2, 20); c.fillStyle = '#fff'; c.fillRect(gx + gw / 2 - 1, gy - 6, 2, 32);
         if (this.cents !== null) { const cx = gx + gw / 2 + Math.max(-1, Math.min(1, this.cents / 100)) * gw / 2; c.fillStyle = Math.abs(this.cents) < 50 ? PAL.neonLime : PAL.coral; c.fillRect(cx - 3, gy - 4, 6, 28); E.txt(c, (this.cents > 0 ? '+' : '') + Math.round(this.cents) + ' CENTS', 135, gy + 32, { align: 'c', color: PAL.cream }); } else E.txt(c, this.phase === 'sing' ? 'WAITING FOR YOUR VOICE...' : '', 135, gy + 32, { align: 'c', color: PAL.fog });

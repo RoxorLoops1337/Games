@@ -1,5 +1,6 @@
 // RUN mini game DOM HUD: block progress, cadence meter with the green zone, big tap pads, hints, milestone toast, lens glare and the result card.
 // The HUD never owns game state: mg_run.js calls hud.set(state) every frame and the pads call back hud.onTap(side).
+import { actButtons, gameActs } from './mg_acts.js';
 const CSS = `
 .mgr{position:absolute;inset:0;pointer-events:none;font-family:"Trebuchet MS",system-ui,sans-serif;color:#fff0c9;overflow:hidden}
 .mgr *{box-sizing:border-box}
@@ -111,7 +112,8 @@ export function createHud(host, cb, C, hopt) {
       const row = (a, v, c) => { const r = h('div', 'r'); r.append(h('span', '', a), Object.assign(h('span', '', v), { style: 'color:' + c })); b.appendChild(r); };
       row('DISTANCE', Math.round(res.distance) + ' m', '#fff0c9'); row('GOOD BARS', res.good + ' / ' + C.BLOCKS, '#ffe14d'); row('MAX ENERGY', '+' + (rw && rw.maxEnergy !== undefined ? rw.maxEnergy : res.energy), '#9dff4a'); row('PACE', Math.round(res.q * 100) + '%', '#2ee6ff');
       const rb = h('div', 'rwd'); rb.dataset.rewards = '1'; b.appendChild(rb); shown = { res, rb, b };
-      const bt = h('div', 'btns'); const d = h('button', '', 'CONTINUE'); d.onclick = onDone; if (hopt.again !== false) { const a = h('button', 'sec', 'RUN AGAIN'); a.onclick = onAgain; bt.append(a); } bt.append(d); b.appendChild(bt); card.appendChild(b); void card.offsetWidth; card.classList.add('on'); fillRewards();
+      const bt = h('div', 'btns'), acts = gameActs(hopt); if (acts) { bt.style.flexWrap = 'wrap'; actButtons(bt.ownerDocument || document, bt, acts, { row: false, cls: '', alt: 'sec', go: () => onDone() }); bt.querySelectorAll('button').forEach((x) => { x.style.flex = x.dataset.act === 'continue' ? '1 1 100%' : '1 1 40%'; }); b.appendChild(bt); card.appendChild(b); void card.offsetWidth; card.classList.add('on'); fillRewards(); return; }
+      const d = h('button', '', 'CONTINUE'); d.onclick = onDone; if (hopt.again !== false) { const a = h('button', 'sec', 'RUN AGAIN'); a.onclick = onAgain; bt.append(a); } bt.append(d); b.appendChild(bt); card.appendChild(b); void card.offsetWidth; card.classList.add('on'); fillRewards();
     },
     setRewards(r) { rw = r || null; fillRewards(); },
     hasCard() { return card.style.display !== 'none' && card.classList.contains('on'); },

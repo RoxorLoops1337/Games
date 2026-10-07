@@ -280,10 +280,12 @@ export function buildFillers(S) {
   block(S, 46, 62, 9.0, 9, cr('#7a6a9a'), { courses: [4.2], plinth: 0.9, roof: cr('#3a2f50') }); windowGrid(S, [48, 51, 54, 57, 60], [6.0], 1.2, 1.5, 0.5, {});
   // west end: a tall block behind the park wall
   block(S, -62, -46, 14.0, 9, cr('#8a5a6a'), { courses: [4.2, 7.4, 10.4], plinth: 0.9, roof: cr('#3a2f50') }); windowGrid(S, [-60, -57, -54, -51, -48], [6.0, 9.0, 12.0], 1.2, 1.6, 0.5, {});
-  // far side of the road (only seen from a fly-over): low blocks facing the street
+  // far side of the road (only seen from a fly-over): low blocks facing the street. They are behind the camera, so they must NOT cast shadows:
+  // with the sun on the camera side they threw a big square shadow over the road and the sidewalk with no visible cause (BF = the non-casting store).
+  const F = S.BF || B;
   for (let i = 0; i < 6; i++) {
     const x = -44 + i * 15, w = 12 + (i % 2) * 2, h = 6 + (i % 3) * 2.5, zf = 13.2; const col0 = [cr('#7a6a9a'), cr('#9a6a7a'), cr('#6a7aa0')][i % 3];
-    B.box(x, 0, zf + 4.5, w, h, 9, col0, { base: 0.4, top: mix(col0, PAL.ink, 0.5) });
-    for (let k = 0; k < 4; k++) for (let j = 0; j < 2; j++) { const lit = R() < 0.55; (lit ? S.GLOW : B).quad([x - w / 2 + 1 + k * (w - 2) / 4 + 0.6, 2.5 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4, 2.5 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4, 3.8 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4 + 0.6, 3.8 + j * 2.6, zf - 0.02], lit ? WINCOL[(R() * 6) | 0] : PAL.glassD); }
+    F.box(x, 0, zf + 4.5, w, h, 9, col0, { base: 0.4, top: mix(col0, PAL.ink, 0.5) });
+    for (let k = 0; k < 4; k++) for (let j = 0; j < 2; j++) { const lit = R() < 0.55; (lit ? S.GLOW : F).quad([x - w / 2 + 1 + k * (w - 2) / 4 + 0.6, 2.5 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4, 2.5 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4, 3.8 + j * 2.6, zf - 0.02], [x - w / 2 + 1 + k * (w - 2) / 4 + 0.6, 3.8 + j * 2.6, zf - 0.02], lit ? WINCOL[(R() * 6) | 0] : PAL.glassD); }
   }
 }
