@@ -153,7 +153,7 @@ function buyCperk(id) { const p = CPERKS.find(c => c.id === id), lv = cpk(id); i
 function prestige() {
   const gain = crownsToGain(), keep = {};
   for (const k of ['crowns', 'prestiges', 'gems', 'pets', 'activePet', 'skins', 'cperks', 'stats', 'ach', 'bestiary', 'login', 'settings', 'dailies', 'quests', 'streak', 'dayKey', 'comboBest', 'bpm', 'rankIdx']) keep[k] = S[k];
-  const t = S.t; S = newState(); Object.assign(S, keep); S.t = t; S.started = true;
+  const kf = featsKeep(); fEmit('prestige'); const t = S.t; S = newState(); Object.assign(S, keep); featsAfterTour(kf); S.t = t; S.started = true;
   S.crowns += gain; S.prestiges++; addLand(); S.player.x = STAGE.x; S.player.y = STAGE.y; S.player.maxHp = pMaxHp(); S.player.hp = S.player.maxHp;
   S.toasts.push({ txt: 'ENCORE TOUR! +' + gain + ' crowns', t: 0, ic: 'crown' }); JUICE.flash = 0.9; shake(14); sfx('win', true); buzz([60, 40, 100]); starBurst(STAGE.x, STAGE.y - 40, 40, ['#ffe98a', '#ff9ac8', '#9af0b4', '#c6a8ff'], 460); save();
 }
@@ -163,7 +163,7 @@ function serialize() {
     ver: 1, savedAt: Date.now(), wallet: S.wallet, pallet: S.pallet, gems: S.gems, crowns: S.crowns, prestiges: S.prestiges, up: S.up, upPaid: S.upPaid, gemUp: S.gemUp, gemPaid: S.gemPaid, unlockPaid: S.unlockPaid,
     lands: S.lands.map(z => ({ k: z.k, plates: z.plates.map(p => ({ id: p.id, paid: p.paid, lvl: p.lvl, built: p.built, cost: p.cost })), hordeLvl: z.hordeLvl })),
     forgePlate: S.forgePlate, forgeUpPlate: S.forgeUpPlate, forgeLvl: S.forgeLvl, forge: S.forge, waygate: S.waygate, wayPlate: S.wayPlate, houses: S.houses,
-    pop: S.pop.map(f => ({ role: f.role, art: f.art, lvl: f.lvl || 0, id: f.id })), town: S.town, fanSeq: S.fanSeq, pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
+    feat: S.feat, pop: S.pop.map(f => ({ role: f.role, art: f.art, lvl: f.lvl || 0, id: f.id, spec: f.spec || null })), town: S.town, fanSeq: S.fanSeq, pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
     bestiary: S.bestiary, login: S.login, dailies: S.dailies, quests: S.quests, streak: S.streak, dayKey: S.dayKey, ach: S.ach, stats: S.stats, settings: S.settings, comboBest: S.comboBest, rankIdx: S.rankIdx || 0,
     player: { x: S.player.x, y: S.player.y, hp: S.player.hp, helmets: S.player.helmets, deaths: S.player.deaths },
   };
@@ -181,7 +181,8 @@ function applySave(d) {
   }
   if (!S.lands.length) addLand();
   S.town = d.town || {}; S.fanSeq = d.fanSeq || 0;
-  S.pop = (d.pop || []).map(p => { const f = mkFan(p.role); f.art = p.art || f.art; f.lvl = p.lvl || 0; if (p.id !== undefined) f.id = p.id; return f; });
+  S.pop = (d.pop || []).map(p => { const f = mkFan(p.role); f.art = p.art || f.art; f.lvl = p.lvl || 0; f.spec = p.spec || null; if (p.id !== undefined) f.id = p.id; return f; });
+  S.feat = d.feat || {}; featsLoaded();
   S.fanSeq = Math.max(S.fanSeq, ...S.pop.map(f => f.id + 1), 0);
   if (d.player) { const p = S.player; p.hp = d.player.hp; p.deaths = d.player.deaths || 0; p.helmets = d.player.helmets || []; if (walkable(d.player.x, d.player.y, S.lands.length)) { p.x = d.player.x; p.y = d.player.y; } }
   S.player.maxHp = pMaxHp(); S.player.hp = Math.min(S.player.hp || S.player.maxHp, S.player.maxHp);
@@ -192,9 +193,9 @@ function applySave(d) {
   }
 }
 function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; applySave(JSON.parse(raw)); return true; } catch (e) { return false; } }
-function resetAll() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } S = newState(); addLand(); ensureQuests(); checkDay(); }
+function resetAll() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } S = newState(); featsInit(); addLand(); ensureQuests(); checkDay(); }
 function initGame(loadExisting) {
-  S = newState(); addLand();
+  S = newState(); featsInit(); addLand();
   if (loadExisting) loadSave();
   S.player.maxHp = pMaxHp(); if (!S.player.hp) S.player.hp = S.player.maxHp;
   checkDay(); ensureQuests(); S.rankIdx = S.rankIdx || heroRankIdx();

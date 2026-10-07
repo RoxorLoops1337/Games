@@ -5,7 +5,7 @@ const SHEETS = {
   goals: { title: 'Goals', icon: 'trophy', tabs: [['quests', 'Quests'], ['miles', 'Milestones'], ['records', 'Records'], ['dex', 'Creatures']] },
   perks: { title: 'Perks', icon: 'crown', tabs: null }, more: { title: 'More', icon: 'menu', tabs: null },
 };
-function openSheet(id, tab) { const d = SHEETS[id]; S.modal = null; S.sheet = { id, tab: tab || (d.tabs ? d.tabs[0][0] : null), scroll: 0, vel: 0, max: 0, openT: 0 }; }
+function openSheet(id, tab) { const d = SHEETS[id], tb = sheetTabs(id); S.modal = null; S.sheet = { id, tab: tab || (tb ? tb[0][0] : null), scroll: 0, vel: 0, max: 0, openT: 0 }; }
 function closeSheet() { S.sheet = null; }
 let SR = { x: 0, y: 0, w: 0, h: 0 }; // content region of the open sheet
 function chit(x, y, w, h, act) { // hit in content space (scrolls with the sheet)
@@ -16,7 +16,7 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = SHEETS[sh.id].tabs ? 104 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
+  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = sheetTabs(sh.id) ? 70 + 34 * Math.ceil(sheetTabs(sh.id).length / 4) + 4 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
   const top = bot0 - fitH + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
@@ -27,10 +27,15 @@ function drawSheet() {
   disc(x + w - 28, top + 28, 16, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w - 34, top + 22); ctx.lineTo(x + w - 22, top + 34); ctx.moveTo(x + w - 22, top + 22); ctx.lineTo(x + w - 34, top + 34); ctx.stroke(); ctx.lineCap = 'butt';
   hitRect(x + w - 50, top + 6, 44, 44, closeSheet);
   let cy = top + 58;
-  if (d.tabs) { const tw = (w - 24) / d.tabs.length; d.tabs.forEach(([id, label], i) => { const tx = x + 12 + i * tw, on = sh.tab === id; pill(tx + 2, cy, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, cy + 19); hitRect(tx, cy, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); }); cy += 38; }
+  const tabs = sheetTabs(sh.id);
+  if (tabs) { // up to 4 tabs per row; extra tabs wrap onto a second row
+    const per = Math.min(4, tabs.length), rows = Math.ceil(tabs.length / per), tw = (w - 24) / per;
+    tabs.forEach(([id, label], i) => { const r = Math.floor(i / per), c = i % per, tx = x + 12 + c * tw, ty = cy + r * 34, on = sh.tab === id; pill(tx + 2, ty, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, ty + 19); hitRect(tx, ty, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); });
+    cy += rows * 34 + 4;
+  }
   SR = { x: x + 8, y: cy, w: w - 16, h: bot - cy - 8 };
   ctx.save(); rr(SR.x, SR.y, SR.w, SR.h, 12); ctx.clip(); ctx.translate(SR.x, SR.y - sh.scroll);
-  const H = SHEET_DRAW[sh.id](SR.w, sh); ctx.restore();
+  const ext = extTab(sh.id, sh.tab), H = ext ? ext.draw(SR.w, sh) : SHEET_DRAW[sh.id](SR.w, sh); ctx.restore();
   sh.H = H; sh.max = Math.max(0, H - SR.h + 6);
   if (!sh.drag) { sh.scroll = clamp(sh.scroll + sh.vel, 0, sh.max); sh.vel *= 0.92; if (Math.abs(sh.vel) < 0.3) sh.vel = 0; } sh.scroll = clamp(sh.scroll, 0, sh.max);
   if (sh.max > 0) { const bh = Math.max(24, SR.h * SR.h / (H + 6)), by = SR.y + (SR.h - bh) * (sh.scroll / sh.max); ctx.fillStyle = 'rgba(255,255,255,0.35)'; rr(SR.x + SR.w - 4, by, 4, bh, 2); ctx.fill(); }
