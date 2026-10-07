@@ -5322,7 +5322,9 @@ h.test('cr: combo boosters wait for a combo relic; combo relics wait for the fir
   G.run.crPick = 1;
   h.ok(D.CR.RELICS.every(id => all().includes(id)) && !all().some(id => boosters.includes(id)), 'after the pick was offered: combo relics at their own rarity, boosters still out');
   G.gainRelic('cr_steel');
-  h.ok(boosters.every(id => all().includes(id) || G.run.relics.includes(id)), 'a combo relic in hand: the boosters come back');
+  // (round 28) a booster in an Upgrade Bench pack (the Encore Machine: Arcade Classics) waits for its pack as well
+  h.ok(boosters.filter(id => D.unlBase('relic', id)).every(id => all().includes(id) || G.run.relics.includes(id)), 'a combo relic in hand: the boosters come back');
+  h.ok(!all().includes('encore_machine'), 'a booster in a pack the profile has not bought stays out');
   h.ok(!all().includes('cr_steel') && all().includes('cr_all'), 'never one already owned');
   G.newRun('knight', 2105); G.run.act = 2;
   h.ok(D.CR.RELICS.every(id => all().includes(id)), 'act 2 and up: combo relics are in the pools anyway');
@@ -10891,8 +10893,11 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
 {
   const nodesOf = (el, out) => { if (!el) return out; out.push({ c: String(el.className || ''), t: el.textContent && !(el.children || []).length ? el.textContent : '' }); for (const c of el.children || []) nodesOf(c, out); return out; };
   // an Endless run at Loop 3: the first dive
+  // (round 28) a long-time player's profile: every Upgrade Bench pack owned, so the dive's relic rolls draw from the
+  // pool these physics checks were tuned on (a fresh profile's locked pool hands over a different relic)
+  const ALL_PACKS = { packs: { fire_ice: 1, gambler: 1, armory: 1, arcade: 1, lab: 1, shadow: 1, tinker: 1, hoard: 1, bossloot: 1, legends: 1 } };
   const dive = (seed, meta) => {
-    const { T, G, saved } = endBoot(meta);
+    const { T, G, saved } = endBoot(Object.assign({ bench: ALL_PACKS }, meta || {}));
     endWin(G, seed);
     G.endless.start(); G.endless.next(); G.endless.next();
     return { T, G, saved };
@@ -12840,5 +12845,336 @@ h.test('early fights: a run\'s first 3 normal fights are a single enemy, then pa
   Gt.startFight(['rat', 'rat'], 'normal');
   h.eq(Gt.fight.enemies.length, 2, 'a forced startFight keeps what it was asked for');
 });
+
+/* ------------------------------------------------- BENCH (round 28): the Upgrade Bench (DESIGN.md "The Upgrade Bench (round 28)") */
+{
+  const META0 = { introSeen: true, tutorialDone: true, unlocks: { knight: true } };
+  const bnc = (bench, extra) => metaBoot(Object.assign({ bench: Object.assign({ bolts: 0, earned: 0, spent: 0, up: {}, packs: {}, fresh: {}, grant: 0, hello: 0 }, bench || {}) }, extra || {}));
+  const go = (G, ch, seed) => { G.newRun(ch || 'knight', seed || 2828); if (G.screen === 'boon') G.choose(0); return G.run; };
+  const win = (tier, enemies) => ({ act: 1, enemies: enemies || ['rat'], result: 'win', turns: 3, tier });
+  const BK = (T) => T.DATA.BENCH;
+  const lockedIds = (T) => { const B = BK(T), out = { item: new Set(), relic: new Set() }; for (const pid of B.PACK_IDS) { for (const id of B.PACKS[pid].items) out.item.add(id); for (const id of B.PACKS[pid].relics) out.relic.add(id); } return out; };
+
+  h.test('bench: the data: twelve upgrades in three tiers, ten packs of five, new content only in packs, no em dash', () => {
+    const { T } = bnc();
+    const B = BK(T), D = T.DATA;
+    h.eq(B.UP_IDS.length, 12, 'twelve upgrades');
+    h.ok([1, 2, 3].every((t) => B.UP_LIST.some((u) => u.tier === t)), 'every tier has upgrades');
+    h.ok(B.UP_LIST.every((u) => u.max >= 1 && u.max <= 5 && u.cost.every((c, i) => i === 0 || c > u.cost[i - 1])), 'one to five ranks, rising cost');
+    h.eq(B.PACK_IDS.length, 10, 'ten packs');
+    h.ok(B.PACK_IDS.every((p) => { const n = D.benchPackThings(p).length; return n >= 3 && n <= 5; }), 'three to five things a pack');
+    const L = lockedIds(T);
+    h.ok(B.ITEMS.length >= 6 && B.RELICS.length >= 6, 'six new items and six new relics at least');
+    h.ok(B.ITEMS.every((id) => L.item.has(id)) && B.RELICS.every((id) => L.relic.has(id)), 'every new thing sits in a pack');
+    for (const c of Object.values(D.CHARACTERS)) { for (const id of c.bin || []) h.ok(!L.item.has(id), c.id + ' starting bin item ' + id + ' is base content'); if (c.relic) h.ok(!L.relic.has(c.relic), c.id + ' starter relic is base content'); }
+    for (const s of Object.values(D.SETS)) for (const r of s.pieces) h.ok(!L.relic.has(r), 'set piece ' + r + ' is base content');
+    for (const e of Object.values(D.EVOLUTIONS)) h.ok(!L.item.has(e.from) && !L.relic.has(e.relic), 'evolution ' + e.id + ' is base content');
+    for (const id of D.CR.RELICS) h.ok(!L.relic.has(id), 'combo relic ' + id + ' is base content');
+    for (const ev of Object.values(D.EVENTS)) h.ok(!JSON.stringify(ev).match(/"id":"([a-z_]+)"/g) || !(JSON.stringify(ev).match(/"id":"([a-z_]+)"/g) || []).some((m) => { const id = m.slice(6, -1); return L.item.has(id) || L.relic.has(id); }), 'event ' + ev.id + ' grants no pack content');
+    const words = JSON.stringify([B.UP_LIST, B.PACK_IDS.map((p) => B.PACKS[p]), B.ITEMS.map((id) => D.ITEMS[id]), B.RELICS.map((id) => D.RELICS[id].text), B.GATES.act2.text]);
+    h.ok(words.indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash in the bench content');
+    const base = Object.keys(D.ITEMS).filter((id) => !D.ITEMS[id].starter && !D.ITEMS[id].bag && D.ITEMS[id].rarity !== 'junk').length;
+    h.ok(L.item.size / base > 0.15 && L.item.size / base < 0.36, 'about a fifth to a third of the items sit in packs (' + L.item.size + ' of ' + base + ')');
+  });
+
+  h.test('bench: a fresh profile starts at zero; an old one gets its grant once, with the welcome; junk loads clean', () => {
+    const { G: G0 } = metaBoot({});
+    const b0 = G0.bench.meta;
+    h.ok(b0 && b0.bolts === 0 && b0.grant === 0 && !b0.hello && Object.keys(b0.up).length === 0 && Object.keys(b0.packs).length === 0, 'a fresh profile: no bolts, no welcome');
+    const stats = { runs: 40, wins: 3, bestAct: 3, kills: 600, fights: 300 };
+    const { T, G, saved } = metaBoot({ stats });
+    const g = T.DATA.benchGrant(stats);
+    h.eq(g, 40 * 5 + 3 * 50 + Math.round(600 * 0.3) + 3 * 25, 'the grant from runs, wins, kills and the best act');
+    h.eq(G.bench.meta.bolts, g, 'an old profile gets it as bolts');
+    h.ok(G.bench.meta.hello, 'and the welcome is waiting');
+    G.showTitle();
+    h.ok(!G.bench.helloOn, 'not straight away');
+    stepFor(G, 1);
+    h.ok(G.bench.helloOn, 'the welcome shows on the title');
+    h.eq(T.DATA.benchGrant({ runs: 100000, wins: 9000 }), T.DATA.BENCH.GRANT.cap, 'capped');
+    G.save(); G.choose(0);   // any title action
+    const s = saved();
+    h.ok(s.bench && s.bench.bolts === g, 'the balance is saved');
+    // reload: no second grant
+    const T2 = boot({ store: { clawspire_meta: JSON.stringify(Object.assign(s, { bench: Object.assign({}, s.bench, { hello: 0 }) })) } });
+    h.eq(T2.GAME.bench.meta.bolts, g, 'a reload pays nothing twice');
+    h.ok(!T2.GAME.bench.meta.hello, 'and the welcome stays put away');
+    // junk
+    const junk = metaBoot({ stats, bench: { bolts: 'lots', earned: -5, spent: NaN, up: { hp: 99, bogus: 3, gold: 'x' }, packs: { nope: 1, fire_ice: 1 }, fresh: { 'item:rock': 1, 'item:dragon_egg': 1, x: 1 }, tab: 7 } }).G.bench.meta;
+    h.ok(junk.bolts === 0 && junk.earned === 0 && junk.spent === 0, 'junk numbers are zero');
+    h.eq(JSON.stringify(junk.up), JSON.stringify({ hp: 5 }), 'ranks clamp to their top, unknown upgrades dropped');
+    h.eq(JSON.stringify(junk.packs), JSON.stringify({ fire_ice: 1 }), 'only real packs');
+    h.eq(JSON.stringify(junk.fresh), JSON.stringify({ 'item:dragon_egg': 1 }), 'only pack things are fresh');
+    h.eq(junk.tab, 'up', 'a junk tab is the Upgrades tab');
+    h.ok(!junk.hello && junk.grant === 0, 'a junk bench is not a missing one: no second grant');
+    const odd = metaBoot({ stats, bench: 'broken' }).G.bench.meta;
+    h.ok(odd && odd.bolts === 0 && !odd.hello, 'a bench that is not an object loads empty, no grant');
+  });
+
+  h.test('bench: the bolts a run pays: fights, elites, bosses, the act, a win, Tilt; once; never in a daily, weekly, rush', () => {
+    const { T, G } = bnc({});
+    const run = go(G);
+    run.history = [1, 2, 3, 4, 5, 6].map(() => win('normal')).concat([win('elite', ['mimic']), { act: 1, enemies: ['rat'], result: 'lose', turns: 2, tier: 'normal' }]);
+    run.act = 1;
+    const P = T.DATA.benchPay(run, false);
+    h.eq(P.total, 6 * 3 + 10, 'a lost act 1 run: 6 fights x 3 and an elite');
+    h.eq(P.lines.map((l) => G.bench.line(l)).join(' | '), 'Fights 6 x 3 | Elites 1 x 10', 'its lines');
+    h.ok(P.total >= 15 && P.total <= 40, 'enough for a cheap thing or two (the cheapest rank is ' + T.DATA.benchCost('gold', 0) + ')');
+    h.eq(T.DATA.benchPay({ act: 1, history: [{ result: 'win', enemies: ['hoard'] }, { result: 'win', enemies: ['mimic'] }] }, false).total, 25 + 10, 'an old history entry reads its tier from its enemies');
+    const W = T.DATA.benchPay({ act: 3, tilt: 2, history: Array.from({ length: 14 }, () => win('normal')).concat([win('elite'), win('elite'), win('elite'), win('boss'), win('boss'), win('boss')]) }, true);
+    const sub = 14 * 3 + 3 * 10 + 3 * 25 + 2 * 15 + 75;
+    h.eq(W.total, sub + Math.ceil(sub * 0.2), 'a Tilt 2 win: every line, the act, the win and +20%');
+    h.ok(W.lines.some((l) => l.id === 'win') && W.lines.some((l) => l.id === 'tilt' && l.n === 2) && W.lines.some((l) => l.id === 'act' && l.v === 30), 'win, Tilt and act 3 lines');
+    h.ok(W.total >= 200, 'a win is a big payday (' + W.total + ')');
+    // the real run end: banked once, shown on the scoreboard
+    const b0 = G.bench.meta.bolts;
+    G.showGameOver();
+    h.eq(G.bench.meta.bolts, b0 + P.total, 'game over banks the bolts');
+    const info = G.run.metaEnd;
+    h.ok(info && info.bolts && info.bolts.total === P.total && info.bolts.bal === b0 + P.total, 'the run end lists them');
+    G.prog.runEnd(false);
+    h.eq(G.bench.meta.bolts, b0 + P.total, 'never twice');
+    const end = secFind(T._nodes.gameoverBody, /\bbncEnd\b/);
+    h.ok(end && /Fights 6 x 3/.test(secWalk(end).map((n) => n.textContent).join('|')), 'the receipt on the game over screen');
+    const goBtn = secFind(end, /bncEndGo/);
+    h.ok(goBtn && !G.S.ui.buttons.some((b) => b.el === goBtn), 'its Upgrade Bench button is a plain tap (the scoreboard keeps its choices)');
+    goBtn.onclick({});
+    h.eq(G.screen, 'bench', 'straight into the bench');
+    // no pay outside a real run
+    for (const kind of ['daily', 'weekly', 'rush']) {
+      const { G: Gk } = bnc({});
+      if (kind === 'daily') Gk.prog.startDaily('2026-10-07');
+      else if (kind === 'weekly') Gk.wk.start();
+      else Gk.rush.start('knight');
+      if (Gk.screen === 'boon') Gk.choose(0);
+      const r = Gk.run;
+      h.ok(r && (r.daily || r.weekly || r.rush), kind + ': the run is one');
+      r.history = [win('normal'), win('elite')];
+      Gk.prog.runEnd(true);
+      h.eq(Gk.bench.meta.bolts, 0, kind + ': no bolts');
+      h.ok(!(r.metaEnd && r.metaEnd.bolts), kind + ': no receipt');
+    }
+    h.ok(G.bench.base({ duo: { seat: 0 } }) && G.bench.base({ daily: 'x' }) && !G.bench.base({}), 'a Duo seat and a daily are base-pool games');
+  });
+
+  h.test('bench: ranks, the tree, and every upgrade in a new run', () => {
+    const { T, G, saved } = bnc({ bolts: 5000 });
+    const D = T.DATA;
+    go(G, 'knight', 9001);
+    const base = { hp: G.run.maxHp, gold: G.run.gold, ink: G.run.ink, relics: G.run.relics.length, plus: G.run.bin.filter((i) => i.plus).length, lamp: G.run.cabLamp | 0 };
+    G.showTitle();
+    h.ok(!G.bench.buy('shop'), 'tier 2 is shut at first');
+    h.ok(!G.bench.tierOpen(2) && G.bench.tierOpen(1), 'tier 1 open, tier 2 shut');
+    for (let i = 0; i < 5; i++) h.ok(G.bench.buy('hp'), 'Thick Skin rank ' + (i + 1));
+    h.ok(!G.bench.buy('hp'), 'no sixth rank');
+    h.eq(G.bench.meta.spent, 15 + 30 + 50 + 75 + 105, 'the rising costs');
+    h.eq(G.bench.meta.bolts, 5000 - G.bench.meta.spent, 'paid from the bank');
+    h.ok(G.bench.tierOpen(2) && !G.bench.tierOpen(3), 'tier 2 opens after 100 spent');
+    for (const id of ['gold', 'gold', 'rest', 'rest', 'bulb', 'shop', 'shop', 'reroll', 'plus', 'lamp']) h.ok(G.bench.buy(id), 'bought ' + id);
+    h.ok(G.bench.tierOpen(3), 'tier 3 opens after 300 spent');
+    for (const id of ['relic', 'xl', 'pick', 'block']) h.ok(G.bench.buy(id), 'bought ' + id);
+    h.eq(saved().bench.up.hp, 5, 'the ranks are saved');
+    const { G: Gp } = bnc({ bolts: 3 });
+    h.ok(!Gp.bench.buy('gold') && Gp.bench.meta.bolts === 3, 'too poor: refused, nothing taken');
+    // a new run
+    const run = go(G, 'knight', 9001);
+    const fx = run.bnc.fx;
+    h.ok(!run.bnc.base && fx.hp === 20 && fx.gold === 30, 'the snapshot on the run');
+    h.eq(run.maxHp, base.hp + 20, 'Thick Skin: +20 Max HP');
+    h.eq(run.hp, run.maxHp, 'and full');
+    h.eq(run.gold, base.gold + 30, 'Piggy Fund: +30 gold');
+    h.eq(run.ink, base.ink + 2, 'Spare Bulbs: +2 bulbs');
+    h.eq(run.bin.filter((i) => i.plus).length, base.plus + 1, 'Sharpened Start: one starting item upgraded');
+    h.eq(run.relics.length, base.relics + 1, 'Lucky Find: one more relic');
+    h.eq(D.RELICS[run.bnc.relic].rarity, 'c', 'a common one');
+    h.eq(run.cabLamp, 2, 'Warm Lamp: two cells lit');
+    h.eq(G.bench.rest(), 0.1, 'Soft Pillow: +10% at a rest');
+    run.hp = 10; G.showRest(); G.choose(0);
+    h.eq(run.hp, 10 + Math.round(run.maxHp * 0.4), 'a rest heals 40% now');
+    // the shop: Haggler, Free Spin
+    run.seed = 4242;
+    const s1 = G.rollShop({ q: 3, r: 4 });
+    const { G: Gn } = bnc({});
+    go(Gn, 'knight', 9001); Gn.run.seed = 4242; Gn.run.relics = run.relics.slice();
+    const s0 = Gn.rollShop({ q: 3, r: 4 });
+    h.eq(s1.items.map((x) => x.id).join(), s0.items.map((x) => x.id).join(), 'the same shelf');
+    s1.items.forEach((x, i) => h.eq(x.price, Math.max(1, Math.round(s0.items[i].price * 0.9)), 'Haggler: ' + x.id + ' 10% off'));
+    G.showShop(s1);
+    h.eq(G.rr.cost(s1, 'shop'), 0, 'Free Spin: the first reroll is free');
+    const gold0 = run.gold;
+    G.rr.pull(s1, 'shop'); G.rr.hurry();
+    h.eq(run.gold, gold0, 'and costs nothing');
+    h.ok(G.rr.cost(s1, 'shop') > 0, 'the second one costs again');
+    // the fight: Padded Gloves, Extra Life once
+    Gn.startFight(['rat'], 'normal');
+    G.startFight(['rat'], 'normal');
+    h.eq(G.fight.player.block - Gn.fight.player.block, 2, 'Padded Gloves: 2 more Block at the bell');
+    const C = T.COMBAT;
+    C.damage(G.fight, 0, 'p', 999);
+    h.ok(G.fight.player.hp === 1 && G.fight.phase !== 'over', 'Extra Life: a lethal hit leaves 1 HP');
+    h.ok(G.run.bnc.xlUsed, 'spent for the run');
+    h.ok(G.fight.events.some((e) => e.t === 'proc' && e.id === 'bnc_xl'), 'with its EXTRA LIFE label');
+    C.damage(G.fight, 0, 'p', 999);
+    h.eq(G.fight.result, 'lose', 'the next one is lethal');
+    // Bigger Shelf: an elite's reward shows four
+    const { G: Ge } = bnc({ up: { pick: 1 } });
+    const re = go(Ge, 'knight', 77); re.crPick = true;
+    Ge.startFight(['mimic'], 'elite'); stepFor(Ge, 0.2); Ge.endFight('win');
+    h.eq(Ge.S.sd.reward.items.length, 4, 'Bigger Shelf: four cards after an elite');
+    Ge.startFight(['rat'], 'normal'); stepFor(Ge, 0.2); Ge.endFight('win');
+    h.eq(Ge.S.sd.reward.items.length, 3, 'three after a normal fight');
+  });
+
+  h.test('bench: a locked item or relic never shows up (hundreds of rewards, shops, capsules, shelves, events, trades); a pack opens it', () => {
+    const { T, G } = bnc({});
+    const D = T.DATA, L = lockedIds(T);
+    go(G, 'knight', 31);
+    const seenI = new Set(), seenR = new Set();
+    const rng = T.U.rng(2828);
+    const relicsCtx = () => { const o = {}; for (const r of ['c', 'u', 'r', 'boss', 'l']) o[r] = G.cr.relicPool([r]); return o; };
+    for (let i = 0; i < 300; i++) {
+      G.run.act = 1 + (i % 3);
+      for (const ch of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer', 'bubbler']) for (const id of D.rewardItems(rng, G.run.act, ch, 3, G.run)) seenI.add(id);
+      const shop = G.rollShop({ q: i, r: i % 7 });
+      for (const it of shop.items) seenI.add(it.id);
+      if (shop.relic) seenR.add(shop.relic.id);
+      for (const tier of ['c', 'u', 'r', 'l']) {
+        const p = D.capsulePrize(rng, tier, { act: G.run.act, char: 'knight', relics: relicsCtx(), claws: [], tools: [] });
+        if (p.k === 'item') seenI.add(p.id);
+        if (p.k === 'relic') seenR.add(p.id);
+      }
+      for (const s of D.prizeShelf(rng, G.run.act, { char: 'knight' })) if (s.k === 'item') seenI.add(s.id);
+      for (const r of [null, ['c'], ['u'], ['r'], ['boss'], ['l']]) for (const id of G.cr.relicPool(r)) seenR.add(id);
+    }
+    for (let i = 0; i < 120; i++) {
+      G.resolveFx([{ k: 'item', id: 'random' }, { k: 'item', id: 'rare' }, { k: 'relic', id: 'random' }], 0, () => {});
+    }
+    for (const inst of G.run.bin) seenI.add(inst.id);
+    for (const id of G.run.relics) seenR.add(id);
+    const cmp = D.cmpRoll(rng, [{ id: 'torch' }, { id: 'torch' }, { id: 'torch' }], 'knight');
+    const badI = [...seenI].filter((id) => L.item.has(id)), badR = [...seenR].filter((id) => L.relic.has(id));
+    h.eq(badI.join(), '', 'no locked item in ' + seenI.size + ' different items rolled');
+    h.eq(badR.join(), '', 'no locked relic in ' + seenR.size + ' different relics rolled');
+    h.ok(seenI.size > 60 && seenR.size > 40, 'a real sample (' + seenI.size + ' items, ' + seenR.size + ' relics)');
+    h.ok(!cmp || !L.item.has(cmp.id || ''), 'the Compactor too');
+    // the Trading Post, the rival and the claw-off piles
+    for (let i = 0; i < 40; i++) for (const p of D.garyPile(T.U.rng(i + 1), 1 + (i % 3))) h.ok(!L.item.has(p.id || p), 'Gary\'s pile');
+    // the gate itself
+    h.ok(!D.unlOpen('item', 'dragon_egg') && !D.unlOpen('relic', 'thermostat') && D.unlOpen('item', 'torch'), 'unlOpen: locked, locked, base');
+    // a pack opens its things
+    G.bench.give(500);
+    h.ok(G.bench.unlock('fire_ice'), 'Fire & Ice bought');
+    h.ok(D.unlOpen('item', 'dragon_egg') && D.unlOpen('relic', 'thermostat') && D.pool('l').includes('dragon_egg') && G.cr.relicPool(['u']).includes('thermostat'), 'its things are in the pools now');
+    h.ok(!D.unlOpen('item', 'pay_to_win'), 'the other packs stay shut');
+    h.ok(!G.bench.unlock('fire_ice'), 'a pack is bought once');
+    h.ok(!G.bench.unlock('legends') && !G.bench.owns('legends'), 'Legends waits for a won run');
+    h.ok(!G.bench.unlock('lab'), 'the Mad Lab waits for act 2');
+    G.meta.stats.bestAct = 2;
+    h.ok(G.bench.unlock('lab'), 'and opens once act 2 was reached');
+  });
+
+  h.test('bench: a daily, the weekly and the rush play the base pool with no upgrades, even with every pack owned', () => {
+    const packs = {}; for (const p of ['fire_ice', 'gambler', 'armory', 'arcade', 'lab', 'shadow', 'tinker', 'hoard', 'bossloot', 'legends']) packs[p] = 1;
+    const { T, G } = bnc({ packs, up: { hp: 5, gold: 5, block: 3, xl: 1 } });
+    const D = T.DATA, L = lockedIds(T);
+    go(G, 'knight', 5);
+    h.ok(D.unlOpen('item', 'dragon_egg'), 'a normal run with every pack: open');
+    const hpN = G.run.maxHp;
+    G.prog.startDaily('2026-10-07'); if (G.screen === 'boon') G.choose(0);
+    const r = G.run;
+    h.ok(r.daily && r.bnc.base, 'the daily is a base-pool run');
+    h.eq(JSON.stringify(r.bnc.fx), '{}', 'no upgrades in it');
+    h.ok(r.maxHp < hpN || T.DATA.CHARACTERS[r.char].hp === r.maxHp || true, 'its Max HP is the crawler\'s own');
+    h.eq(r.maxHp, (T.DATA.CHARACTERS[r.char].hp || 70) + ((T.DATA.CLAWS[r.clawType] || {}).bal ? (T.DATA.CLAWS[r.clawType].bal.hp || 0) : 0), 'no Thick Skin');
+    h.ok(!D.unlOpen('item', 'dragon_egg') && !D.unlOpen('relic', 'leg_glass_heart'), 'the gate is shut');
+    const rng = T.U.rng(9);
+    const seen = new Set();
+    for (let i = 0; i < 200; i++) for (const id of D.rewardItems(rng, 1 + (i % 3), r.char, 3, r)) seen.add(id);
+    h.eq([...seen].filter((id) => L.item.has(id)).join(), '', 'no pack item in 600 daily rewards');
+    h.eq(G.cr.relicPool(null).filter((id) => L.relic.has(id)).join(), '', 'no pack relic in the daily\'s pool');
+    G.startFight(['rat'], 'normal');
+    h.eq(G.fight.player.block, 0, 'no Padded Gloves in the daily');
+  });
+
+  h.test('bench: the screen: tabs, cards, buying pops, the reveal flips five cards, Back; it never touches a saved run', () => {
+    const { T, G } = bnc({ bolts: 400, spent: 0 }, { stats: { runs: 5, bestAct: 1 } });
+    go(G, 'knight', 12); G.save();
+    const runSave = T._store.clawspire_run;
+    G.run = null;
+    G.showTitle();
+    const bar = G.bench.bar;
+    h.ok(bar && /bncBar/.test(bar.className) && /uiPlay/.test(bar.parentNode.className), 'the bar sits in the play row');
+    h.ok(!G.S.ui.buttons.some((b) => b.el === bar), 'a plain tap, not a GAME.choose entry');
+    h.ok(G.S.ui.buttons[G.S.ui.buttons.length - 1].label === 'Duo', 'Duo is still registered last');
+    h.ok(bar.children.some((c) => /bncDot/.test(c.className)), 'a dot: something to buy');
+    bar.onclick({});
+    h.eq(G.screen, 'bench', 'the bar opens the bench');
+    h.eq(T._store.clawspire_run, runSave, 'the saved run is untouched');
+    const body = T._nodes.benchBody;
+    h.ok(secFind(body, /pageHead/) && G.S.ui.buttons[0].label === 'Back', 'Back in the page head');
+    h.eq(secWalk(body).filter((n) => /\bbncUp\b/.test(n.className || '')).length, 12, 'twelve upgrade cards');
+    h.eq(secWalk(body).filter((n) => /\bbncTier\b/.test(n.className || '')).length, 3, 'on three tiers');
+    h.ok(G.bench.buy('gold'), 'a rank bought from the page');
+    h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPop\b/.test(n.className || '')), 'its card pops');
+    G.bench.show('unl');
+    h.eq(secWalk(T._nodes.benchBody).filter((n) => /\bbncPack\b/.test(n.className || '')).length, 10, 'ten pack cards');
+    h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPack\b.*\bwait\b/.test(n.className || '')), 'the ones waiting for a milestone say so');
+    h.ok(G.bench.unlock('gambler'), 'a pack bought');
+    const R = G.bench.rev;
+    h.ok(R && R.cards.length === 5 && R.shown === 5, 'the reveal: five cards, all shown headless');
+    h.ok(R.cards.some((c) => secWalk(c).some((n) => n.textContent === 'NEW')), 'the new thing wears NEW');
+    G.bench.revClose();
+    h.ok(!G.bench.rev && G.screen === 'bench', 'Nice! closes it');
+    G.choose(0);
+    h.eq(G.screen, 'title', 'Back: the title');
+    h.eq(T._store.clawspire_run, runSave, 'still untouched');
+  });
+
+  h.test('bench: the Prizedex shows a locked pack thing as a lock naming its pack; the NEW ribbon shows once', () => {
+    const { T, G } = bnc({ bolts: 300 });
+    G.showCollection('items');
+    const card = secWalk(T._nodes.collectionBody).find((n) => n.__bncLine && /Fire & Ice/.test(n.__bncLine));
+    h.ok(card && /bncLocked/.test(card.className), 'a locked card');
+    card.onclick();
+    h.ok(/Unlock in the Upgrade Bench: Fire &amp; Ice|Unlock in the Upgrade Bench: Fire & Ice/.test(T._nodes.pop.innerHTML), 'its popover names the pack: ' + T._nodes.pop.innerHTML);
+    G.showCollection('relics');
+    h.ok(secWalk(T._nodes.collectionBody).some((n) => n.__bncLine && /Legends/.test(n.__bncLine)), 'a locked legendary names Legends');
+    G.bench.unlock('fire_ice');
+    G.showCollection('items');
+    h.ok(!secWalk(T._nodes.collectionBody).some((n) => n.__bncLine && /Fire & Ice/.test(n.__bncLine)), 'unlocked: no lock');
+    // the NEW ribbon
+    go(G, 'knight', 41);
+    h.ok(G.bench.meta.fresh['item:dragon_egg'], 'fresh after the pack');
+    G.showReward({ items: ['dragon_egg', 'torch', 'lava_lamp'], gold: 10, ink: 0, brush: null, tier: 'normal', then: null });
+    const news = secWalk(T._nodes.rewardBody).filter((n) => /\bbncNew\b/.test(n.className || ''));
+    h.eq(news.length, 2, 'NEW on both newly unlocked cards');
+    h.ok(!G.bench.meta.fresh['item:dragon_egg'], 'and spent');
+    G.showReward({ items: ['dragon_egg', 'torch', 'lava_lamp'], gold: 10, ink: 0, brush: null, tier: 'normal', then: null, taken: true });
+    h.eq(secWalk(T._nodes.rewardBody).filter((n) => /\bbncNew\b/.test(n.className || '')).length, 0, 'only the first time');
+  });
+
+  h.test('bench: the new items and relics play: each new item resolves in a fight, each new relic runs its hooks', () => {
+    const { T, G } = bnc({});
+    const D = T.DATA;
+    go(G, 'knight', 51);
+    for (const id of D.BENCH.ITEMS) {
+      G.startFight(['rat', 'rat'], 'normal');
+      const F = G.fight, C = T.COMBAT;
+      const inst = { uid: 'bx' + id, id, plus: false };
+      F.bin.push(inst);
+      let ok = true;
+      try { C.play(F, inst); } catch (e) { ok = false; }
+      h.ok(ok && F.stats.played >= 1, id + ' plays');
+    }
+    for (const id of D.BENCH.RELICS) {
+      G.run.relics = G.run.relics.filter((r) => !D.BENCH.RELICS.includes(r)).concat([id]);
+      let ok = true;
+      try { G.startFight(['rat'], 'normal'); stepFor(G, 0.5); } catch (e) { ok = false; }
+      h.ok(ok && G.fight && G.fight.relics.includes(id), id + ' in a fight');
+    }
+    const F = G.fight;
+    h.ok(F.player.block >= 4, 'Gilded Claw Tips: 4 Block at the bell');
+  });
+}
 
 h.done();

@@ -637,6 +637,7 @@ const GAME = (() => {
           depMetaFix(S.meta, o);   // DEP (round 15): the Neon Depths' dives and Drowned Jukeboxes
           cabMetaFix(S.meta, o);   // CAB (round 16): the Jackpot Lamp's tip seen, fevers and PERFECT grabs
           gachaMetaFix(S.meta, o);   // GACHA (round 17): the Capsule Minis, the daily capsule's streak
+          bncMetaFix(S.meta, o);   // BENCH (round 28): bolts, upgrades, packs (an old profile's one-time grant)
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -645,6 +646,7 @@ const GAME = (() => {
     feelFix(S.meta);
     vaultFix(S.meta);   // defaults, sticker prizes, and the equipped cosmetics to the renderer (VAULT block)
     stoMetaFix(S.meta);   // Grabby Gary's record and the stories told, defaulted for a new profile (STORY)
+    bncMetaFix(S.meta);   // BENCH (round 28): the Upgrade Bench's fields, defaulted for a new profile
     if (fx()) fx().reduced = !S.meta.settings.shake;
     applyCalm();
     accApply();   // the accessibility settings, volumes and palettes (ACCESS block)
@@ -802,6 +804,7 @@ const GAME = (() => {
     F = null; FS = null;
     if (c.relic) gainRelic(c.relic);
     crNewRun(run, charId);   // CR (round 21): Lucky Lou and Ms. Bubbles start with their combo family's relic
+    bncNewRun(run);   // BENCH (round 28): the upgrades' snapshot and the run's start (Max HP, gold, bulbs, a relic...)
     newMap(run);
     S.meta.stats.runs++;
     saveMeta();
@@ -894,6 +897,7 @@ const GAME = (() => {
       const r = tbl('RELICS')[id];
       if (own.indexOf(id) >= 0) continue;
       if (r.starter) continue;
+      if (!bncOpen('relic', id)) continue;   // BENCH (round 28): a pack the profile has not unlocked
       if (D().crPoolOk && !D().crPoolOk(id, S.run)) continue;   // (CR round 21: combo boosters wait for a combo relic; combo relics for the first elite)
       if (!rarities && r.rarity === 'l') continue;   // (LEG: a legendary only when asked for by name)
       if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
@@ -914,7 +918,7 @@ const GAME = (() => {
     let ids = [];
     if (D().rewardItems) { try { ids = D().rewardItems(rng, run.act, run.char, n, run) || []; } catch (e) { ids = []; } }
     if (!ids.length) {
-      const all = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk');
+      const all = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk' && bncOpen('item', id));   // (BENCH round 28)
       ids = rng.shuffle(all).slice(0, n);
     }
     ids = seaRewardItems(ids);   // a seasonal item now and then (SEASON block)
@@ -973,7 +977,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly', 'rushmenu', 'school'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run) (RUSH: nor the rush menu) (SCHOOL: nor Claw School)
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly', 'rushmenu', 'school', 'bench'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run) (RUSH: nor the rush menu) (SCHOOL: nor Claw School)
   }
 
   // ---- title
@@ -1065,6 +1069,7 @@ const GAME = (() => {
       play.appendChild(mb);
       uiSheet(scr, 'modes', 'Play modes', modes, ['uiI-wk', 'uiI-rush', 'uiI-duo']);
     }
+    bncTitle(play);   // BENCH (round 28): the Upgrade Bench, a bar under the daily run and the modes
     if (play.children && play.children.length) m.appendChild(play);
     // the tiles
     const tiles = h('div', 'uiTiles');
@@ -1455,7 +1460,7 @@ const GAME = (() => {
     tri: ['prize_marble', 'crisp_apple', 'glass_bead', 'prize_marble', 'peppermint', 'bubble_flask'],
     scoop: ['prize_marble', 'glass_bead', 'peppermint', 'sour_drop', 'prize_marble', 'glass_bead', 'rusty_sword', 'lucky_penny'],
     hand: ['tower_shield', 'prize_marble', 'crisp_apple', 'war_hammer', 'glass_bead'],
-    magnet: ['rusty_sword', 'lucky_coin', 'iron_nut', 'bubble_flask', 'crisp_apple', 'skeleton_key', 'pot_lid'],
+    magnet: ['rusty_sword', 'spring_coil', 'iron_nut', 'bubble_flask', 'crisp_apple', 'skeleton_key', 'pot_lid'],   // (round 28: a gold coin is not magnetic)
     hook: ['rusty_sword', 'crisp_apple', 'dented_shield', 'prize_marble', 'bubble_flask', 'lucky_coin'],
     // CR8: small light things for the vacuum (and a sword that will not come), pairs for the twins
     vacuum: ['prize_marble', 'glass_bead', 'peppermint', 'lucky_penny', 'sour_drop', 'bouncy_ball', 'rusty_sword', 'prize_marble'],
@@ -1490,7 +1495,7 @@ const GAME = (() => {
     if (r.phase === 'idle' && !r.auto) {
       D.wait -= dt;
       if (D.wait <= 0) {
-        const metal = (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0;
+        const metal = (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0 && !(b.data.def && b.data.def.nomag);
         const pred = D.id === 'magnet' ? metal : D.id === 'hand' ? ((b) => b.m > 10) : null;
         let x = r.aimAt(pred);
         if (x == null) x = r.aimAt(null);
@@ -1660,11 +1665,13 @@ const GAME = (() => {
   }
   // A new act's bulbs come in dimmer (Dim Marquee).
   function metaActStart(run) {
+    bncActStart(run);   // BENCH (round 28): Spare Bulbs, the Warm Lamp, Free Spin's rerolls again
     const m = tiltRun();
     if (m && m.bulbs > 0) addInk(-Math.min(m.bulbs, Math.max(0, run.ink - 1)));
   }
   // Price Hike: every price on the shelf goes up.
   function metaShop(shop) {
+    bncShop(shop);   // BENCH (round 28): Haggler
     const m = tiltRun();
     if (!m || !(m.shop > 0) || !shop) return shop;
     const up = (p) => Math.round(p * (1 + m.shop));
@@ -1672,7 +1679,7 @@ const GAME = (() => {
     if (shop.relic) shop.relic.price = up(shop.relic.price);
     return shop;
   }
-  const metaRest = () => { const m = tiltRun(); return m && m.rest > 0 ? m.rest : 0.3; };
+  const metaRest = () => { const m = tiltRun(); return (m && m.rest > 0 ? m.rest : 0.3) + bncRest(); };   // (BENCH round 28: Soft Pillow)
   // Cheap Plastic: a capsule's tiers drop one step (a boss capsule is never
   // common, the pity lift and the counter's fixed tiers are left alone).
   const CAP_ORDER = ['c', 'u', 'r', 'l'];
@@ -1787,6 +1794,7 @@ const GAME = (() => {
     }
     wkRunEnd(run, !!won, info);   // LORE: the weekly challenge's score, best and medal
     ghoRunEnd(run, !!won, info);   // RUSH (round 10): the ghost race's result, and maybe a new ghost
+    bncRunEnd(run, !!won, info);   // BENCH (round 28): the run's bolts
     run.metaEnd = info;
     if (won) achRun('win');
     achRun('end');
@@ -1944,6 +1952,7 @@ const GAME = (() => {
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
     if (ok && m.dexNew[tab + ':' + id]) card.appendChild(h('div', 'newb', 'NEW!'));
     card.onclick = () => popover(ok ? `<b>${def.name}</b><br>${text}` : `<b>???</b><br>${hintTxt}`, 270, 300);
+    bncDexCard(card, tab, id, ok);   // BENCH (round 28): a pack not yet unlocked is a lock that names its pack
     // (M3 round 18: the album is calm; the holo shine stays on the reward and shop cards)
     return card;
   }
@@ -2218,6 +2227,7 @@ const GAME = (() => {
     }
     wkEndPanel(box, info);   // LORE: the weekly challenge's score and medal
     ghoEndPanel(box, info);   // RUSH (round 10): you against your ghost
+    bncEndPanel(box, info);   // BENCH (round 28): the bolts earned, line by line, and the way to the bench
     if (info.stickers && info.stickers.length) {
       box.appendChild(h('h3', null, 'Stickers this run'));
       const row = h('div', 'stRow');
@@ -7614,7 +7624,7 @@ const GAME = (() => {
       if (F.gain.ink) addInk(F.gain.ink);
     }
     run.hp = U.clamp(run.hp, 0, run.maxHp);
-    run.history.push({ act: run.act, enemies: F.enemies.map((e) => e.id), result, turns: F.turn });
+    run.history.push({ act: run.act, enemies: F.enemies.map((e) => e.id), result, turns: F.turn, tier: FS.tier });   // (BENCH round 28: the tier pays bolts)
     const tier = FS.tier;
     const then = FS.then;
     depFightEnd(result);   // DEP (round 15): a Drowned Jukebox unplugged counts (before the sticker checks)
@@ -7648,7 +7658,7 @@ const GAME = (() => {
     const ink = tier === 'elite' ? (econ.eliteInk || 1) : (tier === 'normal' && rng() < (econ.fightInkChance || 0) ? 1 : 0);
     // A beaten elite (a tower keeper too) sometimes hands over a tool.
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
-    const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
+    const reward = { items: rollItems(rng, bncPickN(tier)), gold, ink, brush, tier, then };   // (BENCH round 28: Bigger Shelf)
     crEliteOffer(reward);   // CR (round 21): the run's first elite hands over a pick of three combo relics
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
@@ -7891,7 +7901,7 @@ const GAME = (() => {
     b.appendChild(capBox);
     const sub = h('div', 'sub', 'Pick one item for your bin.');
     b.appendChild(sub);
-    const cards = h('div', 'cards');
+    const cards = h('div', 'cards' + (rw.items.length === 4 ? ' n4' : ''));   // (BENCH round 28: Bigger Shelf's four, two by two)
     const cardEls = [];
     rw.items.forEach((id, i) => {
       const def = itemDef(id);
@@ -7922,6 +7932,7 @@ const GAME = (() => {
     const kw = kwChips(def);
     if (kw) card.appendChild(kw);
     evoCardTag(card, def, plus);   // EVOLVE: the EVOLVED badge, or "Evolves with" once the recipe is known
+    bncNewTag(card, 'item', def.id);   // BENCH (round 28): NEW, the first time a newly unlocked item shows up
     if (o.price != null) card.appendChild(h('div', 'price', o.sold ? 'SOLD' : o.price + ' gold'));
     if (o.sold && o.price != null) card.appendChild(h('div', 'stamp' + (o.justSold ? ' slam' : ''), 'SOLD'));
     if (plus) card.appendChild(h('div', 'plus' + (plus === 2 ? ' plus2' : ''), plus === 2 ? 'PLUS 2' : 'PLUS'));   // (round 21: the Compactor's second merge)
@@ -8068,6 +8079,7 @@ const GAME = (() => {
       const kw = kwChips(def);
       if (kw) card.appendChild(kw);
       setTagOn(card, td.relic);   // "2/3 Poisoner's Kit" (SETS block)
+      bncNewTag(card, 'relic', td.relic);   // BENCH (round 28): NEW
       holoOn(card, def.rarity);   // HOLO (round 9)
       b.appendChild(card);
       if (!S.headless) setTimeout(() => snd('relic'), 120);
@@ -9220,7 +9232,7 @@ const GAME = (() => {
     const ids = [];
     for (const inst of (S.run && S.run.bin) || []) if (itemDef(inst.id).rarity !== 'junk' && ids.indexOf(inst.id) < 0) ids.push(inst.id);
     const pool = rng.shuffle(ids);
-    const fill = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity === 'c');
+    const fill = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity === 'c' && bncOpen('item', id));   // (BENCH round 28)
     while (pool.length < 3) pool.push(fill.length ? rng.pick(fill) : 'sword');
     A.items = pool.slice(0, 3);
     A.strips = [0, 1, 2].map(() => rng.shuffle(REEL.slice()));
@@ -12526,6 +12538,7 @@ const GAME = (() => {
       const kw = kwChips(def);
       if (kw) card.appendChild(kw);
       if (!shop.relic.sold) setTagOn(card, shop.relic.id);   // the set it belongs to (SETS block)
+      if (!shop.relic.sold) bncNewTag(card, 'relic', shop.relic.id);   // BENCH (round 28): NEW
       card.appendChild(h('div', 'price', shop.relic.sold ? 'SOLD' : shop.relic.price + ' gold'));
       if (shop.relic.sold) card.appendChild(h('div', 'stamp' + (sold === 'relic' ? ' slam' : ''), 'SOLD'));
       const fn = () => {
@@ -14698,7 +14711,7 @@ const GAME = (() => {
             const rng = rngFor('eventitem');
             let pool = [];
             if (D().pool) { try { pool = D().pool(id === 'rare' ? 'r' : D().rollRarity ? D().rollRarity(rng, run.act) : 'c', run.char) || []; } catch (e) { pool = []; } }
-            if (!pool.length) pool = Object.keys(tbl('ITEMS')).filter((x) => itemDef(x).rarity !== 'junk');
+            if (!pool.length) pool = Object.keys(tbl('ITEMS')).filter((x) => itemDef(x).rarity !== 'junk' && bncOpen('item', x));   // (BENCH round 28)
             id = pool.length ? rng.pick(pool) : null;
           }
           if (id) { addItem(id, !!f.plus); toast(`${itemDef(id).name} added.`); snd('buy'); }
@@ -16594,6 +16607,7 @@ const GAME = (() => {
     rushTick(real); ghoTick(real);   // RUSH (round 10): the slam, the fight's clock; the ghost race's clock, chip and GHOST PASSED!
     schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
     duoTick(real);   // DUO (round 11): the coin, the countdown, the claw-off, co-op's pass
+    bncTick(real);   // BENCH (round 28): the bolts' count-up, a pack's reveal, the welcome on the title
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     rr2Flush();   // ROUND 22: a toast held back while the resolve row was busy speaks now, one at a time
     if (S.screen === 'map') {
@@ -18584,7 +18598,7 @@ const GAME = (() => {
     const bd = Cb.bounds, chuteX = bd.chuteX || CAB.w - CAB.chuteW;
     G.W = Wd; G.C = Cb;
     G.rig = P.clawRig(Wd, Object.assign({ cabinet: Cb, homeX: chuteX * 0.5, chuteX: chuteX + CAB.chuteW * 0.5, railY: 26, type: runClawType(), rand: U.rng(((c.seed ^ 0x6a11) >>> 0) || 1) }, stoPlayerClaw()));
-    G.pile = D().garyPile ? D().garyPile(U.rng((c.seed >>> 0) || 1), run.act) : [];
+    G.pile = D().garyPile ? D().garyPile(U.rng((c.seed >>> 0) || 1), run.act, { need: runClawType() === 'magnet' ? 'metal' : null }) : [];   // (round 28: a magnet gets metal to lift)
     const taken = {};
     for (const d of c.live.drops) for (const i of d.got || []) taken[i] = 1;
     const rng = U.rng((((c.seed >>> 0) ^ 0x5eed) + c.live.drops.length) >>> 0 || 1);
@@ -20980,6 +20994,7 @@ const GAME = (() => {
   function rrCost(shop, kind) {
     if (!shop) return 0;
     if (kind === 'counter') return RR.tix + RR.tixStep * Math.max(0, shop.ctrN | 0);
+    if (bncRrFree()) return 0;   // BENCH (round 28): Free Spin
     const m = tiltRun(), base = RR.gold + RR.goldStep * Math.max(0, shop.rrN | 0);
     return m && m.shop > 0 ? Math.round(base * (1 + m.shop)) : base;
   }
@@ -21012,6 +21027,7 @@ const GAME = (() => {
       return false;
     }
     if (ctr) addTickets(-cost); else addGold(-cost);
+    if (!ctr && cost === 0) bncRrUse();   // BENCH (round 28): a free spin spent
     const n = (ctr ? shop.ctrN | 0 : shop.rrN | 0) + 1;
     if (ctr) { shop.ctrN = n; shop.counter = rrShelf(shop, kind, n); }
     else { shop.rrN = n; shop.items = rrShelf(shop, kind, n); }
@@ -21048,7 +21064,7 @@ const GAME = (() => {
   // The reels' prizes: a few of the act's items, the same every pull of a shop.
   function rrPool() {
     if (S.rrPool && S.rrPool.act === (S.run && S.run.act)) return S.rrPool.defs;
-    const ids = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk');
+    const ids = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk' && bncOpen('item', id));   // (BENCH round 28)
     const rng = U.rng(U.hashStr('rr:pool:' + ((S.run && S.run.act) || 1)));
     const defs = rng.shuffle(ids).slice(0, 12).map((id) => itemDef(id));
     S.rrPool = { act: S.run && S.run.act, defs };
@@ -29081,6 +29097,480 @@ const GAME = (() => {
   }
   // ================================================================ /RROW
 
+  // ================================================================ BENCH (round 28): the Upgrade Bench
+  /* DESIGN.md "The Upgrade Bench (round 28)". Bolts (meta.bench.bolts) come from every real run's end
+     (bncRunEnd, through DATA.benchPay: never a daily, weekly, Boss Rush, Duo or practice game). The title's play
+     row has one bar into the bench (screen 'bench', never saved, never touches the run save): two tabs,
+     Upgrades (ranked, three tiers that open as bolts are spent) and Unlocks (packs of items and relics: the reveal
+     flips their cards in). The gate (bncGate, installed into DATA.unlGate) keeps a pack's things out of every
+     random pool until the profile owns it, and every pack's things out of a base-pool game (daily, weekly, rush,
+     Duo). A run snapshots the upgrade numbers on run.bnc at newRun ({v, base, fx, xlUsed, rr}); COMBAT reads
+     run.bnc for Padded Gloves and Extra Life, the hooks below for the rest. One-line hooks: loadMeta, newRun,
+     metaActStart, metaShop, metaRest, rrCost / rrPull, endFight (the reward's size, the fight's tier on its history),
+     metaRunEnd, metaEndPanel, relicPool / rollItems and three direct item lists, itemCard / the treasure and shop
+     relic cards (the NEW ribbon), dexCard (the lock), uiTitleTidy (the bar), setScreen (no save), update. */
+  const BNC_K = { hello: 0.6, count: 0.9, flip: 0.28, confetti: 28, news: { reward: 1, shop: 1, treasure: 1, counter: 1, capsule: 1, event: 1, trade: 1, parts: 1 } };
+  const BKD = () => D().BENCH || null;
+  SCREENS.push('bench');
+  M3_BODY.bench = 'benchBody';   // M3: a page left behind lets its cards go
+  if (D().unlGate) D().unlGate((kind, id, pid) => bncGate(kind, id, pid));
+  // The profile's bench, defaults for every field; o: the raw stored profile (a profile without a bench gets its
+  // one-time grant from its lifetime stats here, once: the field is saved from then on).
+  function bncMetaFix(m, o) {
+    if (!m) return m;
+    const B0 = BKD();
+    const had = o !== undefined ? (o && typeof o === 'object' ? o.bench : undefined) : m.bench;
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+    const src = obj(had) || {};
+    const n = (v) => Math.max(0, Math.floor(+v) || 0);
+    const b = { bolts: n(src.bolts), earned: n(src.earned), spent: n(src.spent), runs: n(src.runs), last: n(src.last), grant: n(src.grant),
+      hello: src.hello ? 1 : 0, tab: src.tab === 'unl' ? 'unl' : 'up', up: {}, packs: {}, fresh: {} };
+    if (B0) {
+      for (const id in obj(src.up) || {}) { const u = B0.UP[id], r = n(src.up[id]); if (u && r > 0) b.up[id] = Math.min(u.max, r); }
+      for (const id in obj(src.packs) || {}) if (B0.PACKS[id] && src.packs[id]) b.packs[id] = 1;
+      for (const k in obj(src.fresh) || {}) { const [kind, id] = String(k).split(':'); if ((kind === 'item' || kind === 'relic') && D().unlPack && D().unlPack(kind, id)) b.fresh[k] = 1; }
+    }
+    if (had == null && D().benchGrant) {
+      const g = D().benchGrant(m.stats);
+      if (g > 0) { b.bolts += g; b.earned += g; b.grant = g; b.hello = 1; }
+    }
+    m.bench = b;
+    return m;
+  }
+  const bncM = () => { if (!S.meta) return null; if (!S.meta.bench || typeof S.meta.bench !== 'object') bncMetaFix(S.meta); return S.meta.bench; };
+  const bncOwns = (pid) => { const b = bncM(); return !!(b && b.packs[pid]); };
+  const bncRank = (id) => { const b = bncM(); return b ? b.up[id] | 0 : 0; };
+  // A base-pool game: the same pool for everyone (a daily, the weekly, a Boss Rush, a Duo seat), no upgrades.
+  const bncBase = (run) => !!(run && (run.daily || run.weekly || run.rush || run.duo || (run.bnc && run.bnc.base)));
+  // The gate DATA.unlOpen asks for a pack's item or relic: a duel and a base-pool game never, else the packs owned.
+  function bncGate(kind, id, pid) {
+    if (S.duo || bncBase(S.run)) return false;
+    return bncOwns(pid);
+  }
+  const bncOpen = (kind, id) => (D().unlOpen ? D().unlOpen(kind, id) : true);
+  // The run's upgrade numbers (null: an old save, a base-pool game).
+  const bncRunFx = (run) => { const B = run && run.bnc; return B && !B.base && B.fx ? B.fx : null; };
+  // newRun: the snapshot, then the start: Max HP, gold, bulbs, the lamp, upgraded starters, a common relic.
+  function bncNewRun(run) {
+    const B0 = BKD();
+    if (!B0 || !run) return null;
+    const base = bncBase(run), b = bncM();
+    const fx = base || !b || !D().benchFx ? {} : D().benchFx(b.up);
+    run.bnc = { v: 1, base, fx, xlUsed: false, rr: 0 };
+    if (base) return run.bnc;
+    if (fx.hp > 0) { run.maxHp += fx.hp; run.hp += fx.hp; }
+    if (fx.gold > 0) run.gold += fx.gold;
+    if (fx.bulb > 0) run.ink += fx.bulb;
+    if (fx.lamp > 0) run.cabLamp = Math.max(run.cabLamp | 0, fx.lamp);
+    const rng = U.rng(U.hashStr(run.seed + ':bnc'));   // its own stream: every other roll of the run stays put
+    if (fx.plus > 0) {
+      const cand = rng.shuffle(run.bin.filter((i) => !i.plus && itemDef(i.id).plus && itemDef(i.id).rarity !== 'junk'));
+      for (const inst of cand.slice(0, fx.plus)) inst.plus = true;
+    }
+    if (fx.relic > 0) {
+      const pool = relicPool(['c']);
+      if (pool.length) { const id = rng.pick(pool); gainRelic(id); run.bnc.relic = id; }
+    }
+    return run.bnc;
+  }
+  // metaActStart: a new act (or Endless loop): Spare Bulbs, the Warm Lamp, the free rerolls again.
+  function bncActStart(run) {
+    const fx = bncRunFx(run);
+    if (!fx) return;
+    if (fx.bulb > 0) addInk(fx.bulb);
+    if (fx.lamp > 0) run.cabLamp = Math.max(run.cabLamp | 0, fx.lamp);
+    run.bnc.rr = 0;
+  }
+  // metaShop: Haggler takes its percent off the shelf and the relic.
+  function bncShop(shop) {
+    const fx = bncRunFx(S.run);
+    if (!fx || !(fx.shop > 0) || !shop) return shop;
+    const k = 1 - Math.min(0.5, fx.shop / 100), down = (p) => Math.max(1, Math.round(p * k));
+    for (const it of shop.items || []) it.price = down(it.price);
+    if (shop.relic) shop.relic.price = down(shop.relic.price);
+    return shop;
+  }
+  const bncRest = () => { const fx = bncRunFx(S.run); return fx && fx.rest > 0 ? fx.rest / 100 : 0; };
+  // Free Spin: the act's free shop rerolls left.
+  const bncRrFree = () => { const fx = bncRunFx(S.run); return !!(fx && fx.reroll > (S.run.bnc.rr | 0)); };
+  function bncRrUse() { if (bncRrFree()) S.run.bnc.rr = (S.run.bnc.rr | 0) + 1; }
+  // Bigger Shelf: an elite's or a boss's reward shows one more item.
+  const bncPickN = (tier) => { const fx = bncRunFx(S.run); return 3 + (fx && fx.pick > 0 && (tier === 'elite' || tier === 'boss') ? fx.pick : 0); };
+
+  // ---- the run end: the payout, once (metaRunEnd is once a run), shown on the scoreboard with its lines
+  function bncRunEnd(run, won, info) {
+    if (!run || !info || bncBase(run) || !D().benchPay) return null;
+    const b = bncM();
+    if (!b) return null;
+    const P = D().benchPay(run, won);
+    b.bolts += P.total; b.earned += P.total; b.runs++; b.last = P.total;
+    info.bolts = { lines: P.lines, total: P.total, bal: b.bolts };
+    return info.bolts;
+  }
+  // The words of a payout line ("Fights 6 x 3", "Act 2 reached", "Tilt 3 bonus").
+  function bncLine(l) {
+    if (l.id === 'fights' || l.id === 'elites' || l.id === 'bosses') return `${l.label} ${l.n} x ${l.per}`;
+    if (l.id === 'act') return `Act ${l.n} reached`;
+    if (l.id === 'tilt') return `Tilt ${l.n} bonus`;
+    return l.label;
+  }
+  function bncEndPanel(box, info) {
+    const P = info && info.bolts;
+    if (!box || !P) return null;
+    const card = h('div', 'bncEnd');
+    const top = h('div', 'bncEndTop');
+    top.appendChild(h('span', 'bncEndK', 'Bolts earned'));
+    const num = h('b', 'bncEndN', '+' + P.total);
+    top.appendChild(num);
+    card.appendChild(top);
+    const list = h('div', 'bncEndL');
+    P.lines.forEach((l, i) => {
+      const row = h('div', 'bncEndRow');
+      try { row.style.animationDelay = (0.25 + i * 0.12).toFixed(2) + 's'; } catch (e) { /* stub */ }
+      row.appendChild(h('span', null, bncLine(l)));
+      row.appendChild(h('b', null, '+' + l.v));
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    const foot = h('div', 'bncEndF');
+    foot.appendChild(h('span', 'bncEndBal', `${P.bal} bolts in the bank`));
+    // a plain tap (never a GAME.choose entry: the scoreboard's own choices keep their indices)
+    const go = h('button', 'btn sm bncEndGo', 'Upgrade Bench');
+    go.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); S.run = null; save(); showBench(); };
+    foot.appendChild(go);
+    card.appendChild(foot);
+    box.appendChild(card);
+    S.bncCount = { el: num, to: P.total, t: 0, on: !S.headless && P.total > 1 && !mixCalm() };
+    if (S.bncCount.on) num.textContent = '+0';
+    return card;
+  }
+
+  // ---- the title: one bar under the daily run and the modes (a plain tap, like the group tiles)
+  function bncTitle(play) {
+    const B0 = BKD(), b = bncM();
+    if (!play || !B0 || !b) return null;
+    const bar = h('button', 'btn bncBar');
+    bar.appendChild(h('span', 'bncBarI', B0.ICON));
+    bar.appendChild(h('span', 'bncBarT', 'Upgrade Bench'));
+    const pill = h('span', 'bncBarP');
+    pill.appendChild(h('span', 'bncBarN', String(b.bolts)));
+    pill.appendChild(h('span', 'bncBarU', 'bolts'));
+    bar.appendChild(pill);
+    const n = bncAffordable();
+    if (n > 0) { const d = h('i', 'vdot bncDot'); try { d.setAttribute('aria-label', i18nTr('Something to buy')); } catch (e) { /* stub */ } bar.appendChild(d); }   // a calm dot: something to buy
+    bar.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); showBench(); };
+    play.appendChild(bar);
+    S.bncBar = bar;
+    return bar;
+  }
+  // What the bolts in the bank can buy right now (the bar's dot, the tabs' dots).
+  function bncAffordable(which) {
+    const B0 = BKD(), b = bncM();
+    if (!B0 || !b) return 0;
+    let n = 0;
+    if (which !== 'unl') for (const id of B0.UP_IDS) { const c = D().benchCost(id, b.up[id] | 0); if (c != null && c <= b.bolts && bncTierOpen(B0.UP[id].tier)) n++; }
+    if (which !== 'up') for (const pid of B0.PACK_IDS) if (!b.packs[pid] && B0.PACKS[pid].cost <= b.bolts && D().benchGateOk(pid, S.meta.stats)) n++;
+    return n;
+  }
+  const bncTierOpen = (tier) => { const b = bncM(); return !!(b && D().benchTierOpen && D().benchTierOpen(tier, b.spent)); };
+
+  // ---- the page (screen 'bench'): Back, the title, the bolts; the tabs; the upgrades' tiers or the packs
+  function showBench(tab) {
+    const B0 = BKD(), b = bncM();
+    if (!B0 || !b) { showTitle(); return; }
+    if (tab === 'up' || tab === 'unl') b.tab = tab;
+    setScreen('bench');
+    const body = $('benchBody');
+    clear(body);
+    m3Page('bench', body, true);   // a solid page (ds-opaque), the body a full-height column
+    const back = btn('Back', () => bncLeave(), 'ghost sm');
+    const pill = h('div', 'dsPill bncPill');
+    pill.appendChild(h('span', 'bncPillI', B0.ICON));
+    pill.appendChild(h('b', 'bncPillN', String(b.bolts)));
+    body.appendChild(h('div', 'sub bncSub', 'Bolts come from every run you finish. Spend them on upgrades for every run to come, or unlock new prizes.'));
+    const seg = h('div', 'm3Seg bncTabs');
+    for (const [id, label] of [['up', 'Upgrades'], ['unl', 'Unlocks']]) {
+      const t = h('button', 'btn sm bncTab' + (b.tab === id ? ' on' : ''), label);
+      const k = bncAffordable(id);
+      if (k > 0) t.appendChild(h('i', 'dot', String(k)));
+      t.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); if (b.tab === id) return; snd('click'); b.tab = id; saveMeta(); showBench(); };
+      seg.appendChild(t);
+    }
+    body.appendChild(seg);
+    const list = h('div', 'bncList ' + (b.tab === 'up' ? 'bncUps' : 'bncPacks'));
+    if (b.tab === 'up') bncUpList(list); else bncPackList(list);
+    body.appendChild(list);
+    m3Head(body, back, 'Upgrade Bench', pill);
+    S.bnc = { tab: b.tab, list, pill };
+    return body;
+  }
+  function bncLeave() { S.bncRev = null; showTitle(); }
+  // The Upgrades tab: three tiers on a rail, two cards a row.
+  function bncUpList(list) {
+    const B0 = BKD(), b = bncM();
+    for (const tier of [1, 2, 3]) {
+      const open = bncTierOpen(tier), need = B0.TIERS[tier - 1];
+      const sec = h('div', 'bncTier' + (open ? ' open' : ' shut'));
+      const hd = h('div', 'bncTierH');
+      hd.appendChild(h('span', 'bncNode', String(tier)));
+      hd.appendChild(h('span', 'dsSec', `Tier ${tier}`));
+      if (!open) {
+        hd.appendChild(h('span', 'bncTierL', `🔒 Spend ${need - b.spent} more bolts to open`));
+        sec.appendChild(hd);
+        sec.appendChild(metaBar(b.spent, need, `${b.spent} / ${need}`, 'bncBarM'));
+      } else sec.appendChild(hd);
+      const grid = h('div', 'bncGrid');
+      for (const u of B0.UP_LIST) if (u.tier === tier) grid.appendChild(bncUpCard(u, open));
+      sec.appendChild(grid);
+      list.appendChild(sec);
+    }
+  }
+  function bncUpCard(u, open) {
+    const b = bncM(), r = b.up[u.id] | 0, cost = D().benchCost(u.id, r);
+    const card = h('div', 'card bncUp' + (r >= u.max ? ' max' : '') + (open ? '' : ' shut') + (S.bncPop === u.id ? ' bncPop' : ''));
+    try { card.setAttribute('data-u', u.id); } catch (e) { /* stub */ }
+    const top = h('div', 'bncUpTop');
+    top.appendChild(h('span', 'bncUpI', u.icon));
+    top.appendChild(h('span', 'name', u.name));
+    card.appendChild(top);
+    card.appendChild(h('div', 'text', u.text));
+    const pips = h('div', 'bncPips');
+    for (let i = 0; i < u.max; i++) pips.appendChild(h('i', i < r ? 'on' : null));
+    card.appendChild(pips);
+    const now = h('div', 'bncNow');
+    if (r > 0) now.appendChild(h('span', 'bncNowV', D().benchVal(u.id, r)));
+    if (r < u.max) now.appendChild(h('span', 'bncNext', (r > 0 ? 'Next: ' : '') + D().benchVal(u.id, r + 1)));
+    card.appendChild(now);
+    let bt;
+    if (cost == null) bt = h('div', 'tag lime bncMax', 'MAX');
+    else {
+      bt = h('button', 'btn sm bncBuy' + (open && b.bolts >= cost ? ' ok' : ''), `${BKD().ICON} ${cost}`);
+      bt.disabled = !open || b.bolts < cost;
+      bt.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); bncBuyUp(u.id); };
+    }
+    card.appendChild(bt);
+    return card;
+  }
+  // Buys the next rank of an upgrade -> true, or a toast saying why not.
+  function bncBuyUp(id) {
+    const B0 = BKD(), b = bncM(), u = B0 && B0.UP[id];
+    if (!u || !b) return false;
+    const r = b.up[id] | 0, cost = D().benchCost(id, r);
+    if (cost == null) { toast('Already at the top rank.'); return false; }
+    if (!bncTierOpen(u.tier)) { toast(`Spend ${B0.TIERS[u.tier - 1] - b.spent} more bolts to open tier ${u.tier}.`); snd('click'); return false; }
+    if (b.bolts < cost) { toast(`Not enough bolts: ${cost} needed.`); snd('click'); return false; }
+    b.bolts -= cost; b.spent += cost; b.up[id] = r + 1;
+    saveMeta();
+    snd('upgrade'); snd('coinIn', { pitch: 1.3 }); haptic('tap');
+    S.bncPop = id;   // its card is built popping (a new element: the CSS animation plays once)
+    if (S.screen === 'bench') showBench('up');
+    S.bncPop = null;
+    return true;
+  }
+  // The Unlocks tab: one card a pack: its icon and colour edge, its line, five thumbnails, the price or what it waits for.
+  function bncPackList(list) {
+    const B0 = BKD();
+    for (const pid of B0.PACK_IDS) list.appendChild(bncPackCard(B0.PACKS[pid]));
+  }
+  function bncThumb(t, px) {
+    const el = h('button', 'bncTh' + (t.bench ? ' nw' : ''));
+    el.appendChild(t.kind === 'item' ? itemCanvas(itemDef(t.id), false, px) : relicCanvas(relicDef(t.id), px));
+    if (t.bench) el.appendChild(h('i', 'bncStar', '✦'));
+    el.onclick = (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      const def = t.kind === 'item' ? itemDef(t.id) : relicDef(t.id);
+      const txt = t.kind === 'item' ? itemText(def, false) : def.text || '';
+      popover(`<b>${i18nTr(def.name)}</b><br>${i18nTr(t.kind === 'item' ? 'Item' : 'Relic')}${t.bench ? ' · ' + i18nTr('New in the Spire') : ''}<br>${txt}`, 270, 300);
+    };
+    return el;
+  }
+  function bncPackCard(p) {
+    const b = bncM(), own = !!b.packs[p.id], gate = D().benchGateOk(p.id, S.meta.stats);
+    const card = h('div', 'card bncPack' + (own ? ' own' : '') + (gate ? '' : ' wait'));
+    try { card.style.setProperty('--pc', p.color); card.setAttribute('data-p', p.id); } catch (e) { /* stub */ }
+    const top = h('div', 'bncPackTop');
+    top.appendChild(h('span', 'bncPackI', p.icon));
+    const nm = h('div', 'bncPackN');
+    nm.appendChild(h('div', 'name', p.name));
+    nm.appendChild(h('div', 'text', p.tag));
+    top.appendChild(nm);
+    card.appendChild(top);
+    const row = h('div', 'bncThs');
+    for (const t of D().benchPackThings(p.id)) row.appendChild(bncThumb(t, 40));
+    card.appendChild(row);
+    const foot = h('div', 'bncPackF');
+    if (own) foot.appendChild(h('span', 'tag lime', 'Unlocked'));
+    else {
+      foot.appendChild(h('span', 'bncPackW', gate ? `${D().benchPackThings(p.id).length} prizes join the pools` : '🔒 ' + BKD().GATES[p.gate].text));
+      const bt = h('button', 'btn sm bncBuy' + (gate && b.bolts >= p.cost ? ' ok' : ''), `${BKD().ICON} ${p.cost}`);
+      bt.disabled = !gate || b.bolts < p.cost;
+      bt.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); bncBuyPack(p.id); };
+      foot.appendChild(bt);
+    }
+    card.appendChild(foot);
+    return card;
+  }
+  // Buys a pack -> true (then the reveal), or a toast saying why not.
+  function bncBuyPack(pid) {
+    const B0 = BKD(), b = bncM(), p = B0 && B0.PACKS[pid];
+    if (!p || !b) return false;
+    if (b.packs[pid]) { toast('You own this pack already.'); return false; }
+    if (!D().benchGateOk(pid, S.meta.stats)) { toast(B0.GATES[p.gate].text); snd('click'); return false; }
+    if (b.bolts < p.cost) { toast(`Not enough bolts: ${p.cost} needed.`); snd('click'); return false; }
+    b.bolts -= p.cost; b.spent += p.cost; b.packs[pid] = 1;
+    for (const t of D().benchPackThings(pid)) b.fresh[t.kind + ':' + t.id] = 1;
+    saveMeta();
+    if (S.screen === 'bench') { showBench('unl'); bncReveal(pid); }
+    return true;
+  }
+  /* The pack's reveal: a dimmed layer over the page, the pack's name, its five cards face down, flipping one by
+     one (a card flip each, the last one a fanfare), paper confetti; Nice! closes it. Headless they all show at once. */
+  function bncReveal(pid) {
+    const p = BKD().PACKS[pid], scr = $('scr-bench');
+    if (!p || !scr) return null;
+    const things = D().benchPackThings(pid);
+    const wrap = h('div', 'bncRev');
+    try { wrap.style.setProperty('--pc', p.color); } catch (e) { /* stub */ }
+    const panel = h('div', 'bncRevP');
+    panel.appendChild(h('div', 'bncRevK', 'Pack unlocked'));
+    panel.appendChild(h('div', 'bncRevN', `${p.icon} ${i18nTr(p.name)}`));
+    const grid = h('div', 'bncRevG');
+    const cards = things.map((t) => {
+      const def = t.kind === 'item' ? itemDef(t.id) : relicDef(t.id);
+      const c = h('div', 'bncRevC down rr-' + (def.rarity === 'boss' ? 'l' : def.rarity || 'c'));
+      const face = h('div', 'bncRevF');
+      face.appendChild(t.kind === 'item' ? itemCanvas(def, false, 64) : relicCanvas(def, 64));
+      face.appendChild(h('div', 'name', def.name));
+      face.appendChild(h('div', 'bncRevT', t.kind === 'item' ? 'Item' : 'Relic'));
+      if (t.bench) face.appendChild(h('div', 'bncRevNew', 'NEW'));
+      c.appendChild(face);
+      c.appendChild(h('div', 'bncRevB', BKD().ICON));
+      grid.appendChild(c);
+      return c;
+    });
+    panel.appendChild(grid);
+    panel.appendChild(h('div', 'sub bncRevS', 'They can turn up in your runs from now on: rewards, shops, capsules and more.'));
+    const ok = h('button', 'btn pri bncRevOk', 'Nice!');
+    ok.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); bncRevClose(); };
+    panel.appendChild(ok);
+    wrap.appendChild(panel);
+    scr.appendChild(wrap);
+    const R = S.bncRev = { pid, el: wrap, cards, shown: 0, t: 0, done: false };
+    snd('vaultBuy'); haptic('win');
+    bncConfetti(wrap);
+    if (S.headless || mixCalm()) { for (const c of cards) c.classList.remove('down'); R.shown = cards.length; R.done = true; snd('tiltUp'); }
+    return R;
+  }
+  function bncRevClose() {
+    const R = S.bncRev;
+    if (!R) return false;
+    try { R.el.remove(); } catch (e) { if (R.el.parentNode) R.el.parentNode.removeChild(R.el); }
+    S.bncRev = null;
+    if (S.screen === 'bench') showBench('unl');
+    return true;
+  }
+  // A burst of paper confetti over a DOM layer (calm: none).
+  function bncConfetti(el) {
+    if (S.headless || mixCalm() || !el) return 0;
+    const cols = ['#ff4f9a', '#35e0d2', '#ffcc55', '#a6ff5e', '#b08cff'];
+    for (let i = 0; i < BNC_K.confetti; i++) {
+      const c = h('i', 'bncConf');
+      const a = (i / BNC_K.confetti) * Math.PI * 2, d = 120 + (i * 37) % 140;
+      try { c.style.setProperty('--dx', Math.round(Math.cos(a) * d) + 'px'); c.style.setProperty('--dy', Math.round(Math.sin(a) * d * 0.8 - 60) + 'px'); c.style.background = cols[i % cols.length]; c.style.animationDelay = ((i % 5) * 0.03).toFixed(2) + 's'; } catch (e) { /* stub */ }
+      el.appendChild(c);
+      setTimeout(() => { try { c.remove(); } catch (e) { /* gone */ } }, 1600);
+    }
+    return BNC_K.confetti;
+  }
+
+  // ---- an old profile's welcome: once, on the title, after the attract mode
+  function bncHello() {
+    const b = bncM(), scr = $('scr-title');
+    if (!b || !b.hello || !scr || S.bncHello) return null;
+    const sh = dsSheet(scr, 'Upgrade Bench', () => { b.hello = 0; saveMeta(); try { sh.wrap.remove(); } catch (e) { /* gone */ } S.bncHello = null; });
+    sh.wrap.className += ' bncHello';
+    sh.body.appendChild(h('div', 'bncHelloI', BKD().ICON));
+    sh.body.appendChild(h('div', 'bncHelloT', 'The Upgrade Bench is open!'));
+    sh.body.appendChild(h('div', 'sub', `You found ${b.grant} bolts from your past runs. Spend them on upgrades and unlock new prizes.`));
+    const go = h('button', 'btn pri', 'Take a look');
+    go.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); sh.close(); showBench(); };
+    const later = h('button', 'btn ghost', 'Later');
+    later.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); sh.close(); };
+    const row = h('div', 'bncHelloR');
+    row.appendChild(later); row.appendChild(go);
+    sh.body.appendChild(row);
+    sh.open();
+    S.bncHello = sh;
+    snd('discover');
+    return sh;
+  }
+
+  // ---- the NEW ribbon: the first time a newly unlocked thing shows up on a card in a run
+  function bncNewTag(card, kind, id) {
+    const b = S.meta && S.meta.bench, k = kind + ':' + id;
+    if (!card || !b || !b.fresh || !b.fresh[k] || !S.run || bncBase(S.run) || !BNC_K.news[S.screen]) return false;
+    delete b.fresh[k];
+    saveMeta();
+    card.appendChild(h('div', 'bncNew', 'NEW'));
+    uiCls(card, 'bncFresh');
+    return true;
+  }
+  // ---- the Prizedex: a pack's thing the profile has not unlocked is a lock that names its pack
+  function bncDexCard(card, tab, id, ok) {
+    if (!card || (tab !== 'items' && tab !== 'relics') || !D().unlPack) return false;
+    const kind = tab === 'items' ? 'item' : 'relic', pid = D().unlPack(kind, id);
+    if (!pid || bncOwns(pid)) return false;
+    const p = BKD().PACKS[pid], def = kind === 'item' ? itemDef(id) : relicDef(id);
+    uiCls(card, 'bncLocked');
+    card.appendChild(h('div', 'bncLockI', '🔒'));
+    card.appendChild(h('div', 'bncLockT', p.name));   // the pack (the popover says where)
+    const line = `Unlock in the Upgrade Bench: ${p.name}`;
+    card.onclick = () => popover(`<b>${ok ? i18nTr(def.name) : '🔒'}</b><br>${i18nTr(line)}`, 270, 300);
+    card.__bncLine = line;
+    return true;
+  }
+
+  // ---- per frame: the scoreboard's count-up, the reveal's flips, the welcome on the title
+  function bncTick(dt) {
+    const C = S.bncCount;
+    if (C && C.on && S.screen !== 'gameover' && S.screen !== 'win') C.on = false;   // left the scoreboard: the number stands as it is
+    if (C && C.on && !(S.screen === 'gameover' && S.hisRecap)) {   // (the game over counts once its recap is put away)
+      C.t += dt;
+      const k = U.clamp((C.t - 0.2) / BNC_K.count, 0, 1), v = Math.round(C.to * (1 - Math.pow(1 - k, 3)));
+      try { C.el.textContent = '+' + v; } catch (e) { /* stub */ }
+      if ((C.tk = (C.tk || 0) - dt) <= 0 && k > 0 && k < 1) { C.tk = 0.08; snd('tick', { pitch: 0.9 + k * 0.7, vol: 0.6 }); }
+      if (k >= 1) { C.on = false; snd('coinIn', { pitch: 1.2 }); }
+    }
+    const R = S.bncRev;
+    if (R && !R.done) {
+      R.t += dt;
+      const want = Math.min(R.cards.length, Math.floor((R.t - 0.35) / BNC_K.flip) + 1);
+      while (R.shown < want) {
+        const c = R.cards[R.shown++];
+        try { c.classList.remove('down'); c.classList.add('flip'); } catch (e) { /* stub */ }
+        snd('cardFlip', { pitch: 1 + R.shown * 0.08 });
+      }
+      if (R.shown >= R.cards.length) { R.done = true; setTimeout(() => snd('tiltUp', { pitch: 1.1 }), 180); }
+    }
+    if (S.screen === 'title' && !S.attract && S.meta && S.meta.bench && S.meta.bench.hello && !S.bncHello) {
+      S.bncHT = (S.bncHT || 0) + dt;
+      if (S.bncHT >= BNC_K.hello) bncHello();
+    } else if (S.screen !== 'title') S.bncHT = 0;
+  }
+
+  // GAME.bench: the tests and the screenshot drivers
+  function BNC_API() {
+    return {
+      K: BNC_K, show: showBench, leave: bncLeave, buy: bncBuyUp, unlock: bncBuyPack, owns: bncOwns, rank: bncRank, tierOpen: bncTierOpen,
+      affordable: bncAffordable, gate: bncGate, base: bncBase, open: bncOpen, fix: bncMetaFix, hello: bncHello, reveal: bncReveal, revClose: bncRevClose,
+      newRun: bncNewRun, runFx: () => bncRunFx(S.run), pickN: bncPickN, rest: bncRest, rrFree: bncRrFree, line: bncLine, tick: bncTick,
+      give: (n) => { const b = bncM(); if (b) { b.bolts = Math.max(0, b.bolts + (n | 0)); saveMeta(); } return b ? b.bolts : 0; },
+      get meta() { return bncM(); }, get ui() { return S.bnc || null; }, get rev() { return S.bncRev || null; }, get helloOn() { return !!S.bncHello; },
+      get count() { return S.bncCount || null; }, get bar() { return S.bncBar || null; },
+    };
+  }
+  // ================================================================ /BENCH
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -29332,6 +29822,8 @@ const GAME = (() => {
     qa17: QA17_API(),
     // STX (round 26): the status strip under the top bar (DESIGN.md "The status strip (round 26)")
     stx: STX_API(),
+    // BENCH (round 28): bolts, upgrades and unlock packs (DESIGN.md "The Upgrade Bench (round 28)")
+    bench: BNC_API(), showBench,
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

@@ -538,6 +538,7 @@ const COMBAT = (() => {
     api.startTurn(F);
     if (num(mods.startStr, 0)) api.status(F, F.player, 'str', mods.startStr);
     if (num(mods.startBlock, 0)) gainBlock(F, F.player, mods.startBlock);
+    bncFight(F, run);   // BENCH (round 28): the Upgrade Bench's Padded Gloves, the run's Extra Life
     hook(F, 'onFightStart');
     checkOver(F);
     return F;
@@ -602,6 +603,7 @@ const COMBAT = (() => {
     if (isPlayer(F, tgt)) {
       F.stats.dmgTaken += amt;
       if (amt > 0) hook(F, 'onHurt', amt);
+      if (tgt.hp <= 0) bncSave(F, tgt);   // BENCH (round 28): Extra Life, once a run
       checkOver(F);
     } else {
       if (src === F.player && amt > 0) { F.stats.dmgDealt += amt; hook(F, 'onDmgDealt', tgt, amt); }
@@ -3647,6 +3649,29 @@ const COMBAT = (() => {
   };
   api.techOf = (F) => (F ? F.tech || null : null);
   /* ================= /TECH ================= */
+
+  /* ================= BENCH (round 28: the Upgrade Bench, DESIGN.md "The Upgrade Bench (round 28)") =================
+     The game snapshots the profile's upgrade numbers on run.bnc at a new run ({fx: {block, xl, ...}, xlUsed});
+     a run without it (an old save, a daily, a Duo seat) reads nothing here, so every such fight is the old one.
+     F.bnc is the run's own object, so Extra Life spent here is spent for the run. */
+  function bncFight(F, run) {
+    const B = run && run.bnc && typeof run.bnc === 'object' ? run.bnc : null;
+    F.bnc = B;
+    const blk = B && B.fx ? Math.max(0, num(B.fx.block, 0) | 0) : 0;
+    if (blk > 0) gainBlock(F, F.player, blk);
+  }
+  // A hit that would knock the player out: Extra Life (once a run) leaves them at 1 HP.
+  function bncSave(F, p) {
+    const B = F.bnc;
+    if (!B || !B.fx || !(num(B.fx.xl, 0) > 0) || B.xlUsed || p.hp > 0) return false;
+    B.xlUsed = true;
+    p.hp = 1;
+    emit(F, { t: 'heal', who: whoOf(F, p), idx: idxOf(F, p), amt: 1 });   // the shown hp climbs back to 1 with it
+    emit(F, { t: 'proc', src: 'bench', id: 'bnc_xl', name: 'Extra Life', icon: '\u{1F579}\uFE0F', color: '#ffb347', text: 'EXTRA LIFE', who: 'player', idx: -1 });
+    log(F, 'Extra Life: still standing at 1 HP.');
+    return true;
+  }
+  /* ================= /BENCH ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

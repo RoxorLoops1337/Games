@@ -1636,6 +1636,15 @@ come from `autoSteer`.
 | `magnet` | a red electromagnet drum on the cable, hazard band, coil face | no prongs, a hub disc r 24; a field pulls metal (`fieldR` 118, `fieldF` 2600 px/s^2) while dropping, energising (0.4 s) and the first 0.3 s of the lift; every metal part touching the face sticks (and metal touching stuck metal while energising); non-metal slides off the housing; drops everything on release | metal builds / anything not metal |
 | `hook` | a barbed harpoon on a rope | no claw segments at all (the rope passes through the pile); drops x2.1; the first item part the barb (3 px x size, +3 with the third prong) enters is speared and welded; the rope drags it up through the pile | sniping one item fast / heavy things tear off |
 
+**Magnet hold (round 28, owner: "you pull the whole bin").** The magnet used to hold every link of a metal chain at full
+strength, so on a metal-heavy bin one drop lifted nearly everything (30 piece metal heap: 28 stuck per drop). Now each stuck
+piece has a hold: 1 at the face, halving every `RIG.magFade` (22) px its nearest edge sits further out; a chained piece under
+`RIG.magMin` (0.2) does not stick. A weak hold tears sooner on a swing (tear limit x (0.35 + 0.65 hold)) and may let go at the
+top of the lift ((1 - hold) x `RIG.magDrop` 0.55, plus the old heavy check against cap x hold). Same heap: about 8 stuck and
+4 delivered per drop. Gold, copper and brass (`def.nomag`: Lucky Coin, Lucky Penny, Arcade Token, Midas Coin, Hoard Coin,
+Golden Egg, Golden Idol, Golden Dice) stay `metal` for builds and combos but the magnet (and the Electromagnet upgrade) cannot
+lift them; Gary's magnet claw-off counts only magnetic metal.
+
 Welds (`hand`, `magnet`, `hook`): each stuck body is driven to its spot under
 the hub by a capped velocity weld (`weldK`, `weldV`) and keeps its angle; it
 tears off (a `slip`) when it lags more than `tear` x size + 6 px, and at the
@@ -8351,3 +8360,158 @@ statuses, three enemies, duo co-op. Scratchpad `r26status/` (`shots.mjs`, `base.
 ## Gentle start (round 27)
 
 A run's first 3 normal fights in act 1 are a single enemy (the lead one of the pack). The rule is `earlySolo(ids, tier)` in game.js, applied where an encounter is chosen: a fight tile, a roaming monster, an event fight. `startFight` itself is untouched, so a forced fight keeps what it was asked for. Elites, bosses and later acts are unchanged. Dial: `EARLY_SOLO = 3`.
+
+## The Upgrade Bench (round 28)
+
+Owner request: "more unlockable stuff rogue like after a run that you can make yourself stronger or unlock cool good
+stuff and new relics and items". Until now the meta layer was cosmetic (Tilt, the Prizedex, stickers, the Prize
+Vault). The Upgrade Bench adds permanent power and content unlocks as one system: a run pays **bolts** (🔩), the bench
+sells ranked **upgrades** (three tiers) and **unlock packs** (themed bundles of items and relics). Vault tickets stay
+cosmetic only. Data in `data.js` (the BENCH block, `DATA.BENCH`), the flow in `game.js` (the BENCH block after RROW,
+`GAME.bench`), two rules in `combat.js` (the BENCH block), the look in `index.html` (`<style id="bench-css">`,
+`#scr-bench`), the Dutch in `lang_nl2.js` ("BENCH (round 28)").
+
+### Bolts
+
+`DATA.benchPay(run, won)` -> `{lines: [{id, label, n, per, v}], total}`, paid once at the run end (`metaRunEnd`
+calls `bncRunEnd`, guarded by `run.metaEnd`): every fight won by its tier (`run.history`, which now stores `tier`;
+older entries read their enemies' tier), the act reached past the first, a win, then a Tilt bonus on the lot.
+
+| line | bolts |
+| --- | --- |
+| a normal fight won | 3 each |
+| an elite won (tower keepers too) | 10 each |
+| a boss won | 25 each |
+| act reached | 15 per act past the first (act 2: 15, act 3: 30) |
+| run won | 75 |
+| Tilt | +10% of the subtotal per level (rounded up) |
+
+A lost act 1 run (5 or 6 fights, maybe an elite) pays 15 to 30: one or two cheap ranks. A win pays about 250.
+**Never paid:** a daily, the weekly, a Boss Rush, a Duo seat (co-op or versus: no run end at all), practice / Claw
+School (no run), an Endless loop's end (the win already paid). The scoreboard (game over and win) shows the receipt
+in its news (`.bncEnd`: the total counting up after the death recap is put away, each line, the bank's balance) and
+an **Upgrade Bench** plain-tap button (never a `GAME.choose` entry: the scoreboard's indices hold) that ends the run
+like Back to title / Cash out and opens the bench.
+
+### Old profiles
+
+A profile saved before round 28 has no `bench` field. On its first load `bncMetaFix` grants
+`DATA.benchGrant(stats)` = runs x 5 + wins x 50 + kills x 0.3 + best act x 25, capped at 2500 (the owner's 100 runs,
+15 wins and 1500 kills: 1775, most of the packs and some upgrades), saves it and raises a one-time welcome sheet on the
+title once the attract mode is gone ("The Upgrade Bench is open! You found N bolts from your past runs", Take a look /
+Later). A `bench` field that is junk (not an object) loads empty and never grants again.
+
+### The upgrades (`DATA.BENCH.UP_LIST`, `benchCost`, `benchFx`)
+
+A tier opens once that many bolts were spent at the bench (upgrades and packs): tier 1 at 0, tier 2 at 100, tier 3
+at 300 (`BENCH.TIERS`, `benchTierOpen`). A new run snapshots the numbers on `run.bnc.fx` (`bncNewRun`), so a later
+purchase never changes a run in progress.
+
+| tier | upgrade | per rank | ranks | costs | hook |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Thick Skin | +4 Max HP | 5 | 15, 30, 50, 75, 105 | `bncNewRun` |
+| 1 | Piggy Fund | +15 starting gold | 5 | 12, 25, 40, 60, 85 | `bncNewRun` |
+| 1 | Soft Pillow | rests heal +5% of Max HP | 3 | 20, 40, 70 | `metaRest` + `bncRest` |
+| 1 | Spare Bulbs | +2 bulbs at every act start | 3 | 25, 50, 85 | `bncNewRun`, `metaActStart` |
+| 2 | Haggler | shop items and the relic -5% | 4 | 30, 55, 85, 120 | `metaShop` + `bncShop` (the reroll's shelf too) |
+| 2 | Free Spin | free shop rerolls per act | 2 | 40, 90 | `rrCost` / `rrPull` (`run.bnc.rr`, reset each act) |
+| 2 | Sharpened Start | starting items upgraded (+), seeded | 2 | 50, 110 | `bncNewRun` |
+| 2 | Warm Lamp | the Jackpot Lamp starts every act with 2 cells lit | 3 | 30, 60, 100 | `run.cabLamp` |
+| 3 | Lucky Find | a random common relic at the start | 1 | 150 | `bncNewRun` (its own seeded stream) |
+| 3 | Extra Life | once a run, a lethal hit leaves you at 1 HP | 1 | 200 | combat.js `bncSave` (`run.bnc.xlUsed`) |
+| 3 | Bigger Shelf | elite and boss rewards show 4 items (2 by 2) | 1 | 120 | `endFight` `bncPickN` |
+| 3 | Padded Gloves | +2 Block at every fight's bell | 3 | 60, 110, 170 | combat.js `bncFight` |
+
+Everything: 2352 bolts. The bench's upgrades never apply in a base-pool game (`run.bnc.base`, `fx {}`). The upgrade
+rolls (Sharpened Start, Lucky Find) use `seed:bnc`, so every other roll of the run is the one it was.
+
+### The packs (`DATA.BENCH.PACKS`) and what is locked
+
+Ten packs of five, 940 bolts in all. NEW marks the content that exists only through the bench.
+
+| pack | cost | milestone | items | relics |
+| --- | --- | --- | --- | --- |
+| Fire & Ice | 50 | | Dragon Egg (l), Inferno Scroll, Blizzard Orb, **Lava Lamp** (NEW, u) | **Thermostat** (NEW, u) |
+| Gambler's Kit | 60 | | Pay to Win, Hot Potato | Wheel of Fortune, Rabbit's Foot, **Tip Jar** (NEW, u) |
+| Knight's Armory | 60 | | Family Anvil (l), War Horn, Magnetite, **Jousting Lance** (NEW, r, Knight) | Gym Membership |
+| Arcade Classics | 100 | | | Jackpot Bell, Encore Machine, Cracked Hourglass, Egg Timer, **Pinball Bumper** (NEW, r) |
+| Mad Lab | 70 | reach act 2 | Plague Orb, Rot Catalyst, Bottled Blaze, **Witch's Brew** (NEW, r, Alchemist) | Heartburn |
+| Shadow Market | 70 | reach act 2 | Thief's Ring, Vampire Fang, **Neon Katana** (NEW, r) | Vampire Dentures, **Bounty Poster** (NEW, u) |
+| Tinker Box | 80 | reach act 2 | Tesla Coil, Mech Arm, Bubble Bath | Fridge Magnet, **Live Wire** (NEW, u) |
+| Treasure Hoard | 90 | reach act 2 | Spare Heart, Golden Idol, **Piggy Hammer** (NEW, c) | Piggy Bank, Golden Ticket |
+| Boss Loot | 140 | reach act 3 | **Title Belt** (NEW, r) | Third Hand, Golden Crane (boss), Feast Table, **Gilded Claw Tips** (NEW, boss) |
+| Legends | 220 | win a run | **Confetti Cannon** (NEW, l) | Infinite Coin Slot, Alpha Collar, Glass Heart, Giant Slayer's Crown (l) |
+
+New content: Lava Lamp (2 Burn and 2 Chill to ALL), Jousting Lance (14 and 4 Block), Witch's Brew (3 Poison and 3
+Burn to ALL, exhaust), Neon Katana (5 x2 and 2 Bleed), Piggy Hammer (6 and 5 gold), Title Belt (2 Strength and 8
+Block, exhaust), Confetti Cannon (3 to ALL x4); Thermostat (2 Burn and 2 Chill on every enemy at the bell), Tip Jar
+(gold gained in a fight zaps a random enemy for 3), Bounty Poster (3 gold a kill), Live Wire (a metal item played zaps
+a random enemy for 2), Pinball Bumper (an empty grab hits ALL for 3), Gilded Claw Tips (rubber tips, grip +15%, 4
+Block at the bell). Art: the items use existing art keys in their own colours, the relics an emoji medallion; Dutch
+names and texts; every one has its Prizedex card.
+
+**Locked existing content (37 of 231):** 18 of 113 pool items and 19 of 118 pool relics (16%), chosen among the
+flashier and stronger: 26 of the 75 rare, legendary and boss entries (35%) against 11 of the 156 commons and
+uncommons. Never a starter, a crawler's starting kit, a Boss Rush kit, a story's, an event's or the tutorial's fixed
+grant, a set piece, an evolution's item or relic, a combo relic, a Tech relic or item, or a crawler's only legendary
+item (Aegis, Philosopher's Stone, Wishing Star, Golden Dice, Mech Core stay open). The packs keep shared metal items
+of every rarity in the base pool (the magnet claw-off). The round asked for 25 to 35% of the existing content with 8
+to 10 packs of 3 to 5 things: with 13 new things in 50 slots that is 37 existing entries, 16% of all items and relics;
+the share is 35% where it matters (the rare, legendary and boss tiers).
+
+### The gate (one filter)
+
+`DATA.unlOpen(kind, id)`: base content is always open; a pack's thing asks the gate the game installs with
+`DATA.unlGate(fn)` (`bncGate`): shut in a Duo game (`S.duo`) and in a base-pool run (`run.daily`, `run.weekly`,
+`run.rush`, `run.duo`, `run.bnc.base`), else open when the profile owns the pack. No gate (the DATA-only suites, the
+balance bots): the full pool. Routed through it: data.js `pool()` (so `rewardItems`, `capsulePrize` items,
+`prizeShelf`, `secShopStock`, `cmpRoll`, `garyPile`, `duoPile`, the Trading Post's swaps and bundles, the winter gift
+pool, the story's vending pool) and `relicPool()`; game.js `relicPool()` (so `rollRelic`: rewards, shops, treasures,
+towers, the boss relic and `legBossRelic`, the Back Room's legendary, event relics, the boon draft, capsule relics via
+`capCtx`, the Trading Post's relics, the rush draft), the `rollItems` fallback, the event item fallback, the lucky
+slots' filler reels and the shop reroll's reel pictures. `rushKit`'s fallback for a crawler without a kit reads
+`unlBase` (the rush plays the base pool). A run saved before round 28 (no `run.bnc`) plays with the profile's packs
+and no upgrades.
+
+### The screen (`showBench`, screen `bench`)
+
+The title's play row gets one bar under Daily and Modes: "🔩 Upgrade Bench · N bolts" with a calm dot when something
+is affordable (a plain tap like the group tiles, so every title `GAME.choose` index and Duo-last hold); the title's
+rows are a little tighter (60 px tiles, 8 px gaps) so NEW RUN keeps clear of the tower. The page is its own calm family
+on ds-css: a faint blueprint grid on `--bg`, steel cards, brass (`--bolt #ffb347`) for bolts and the buy buttons, a
+`.pageHead` (Back, UPGRADE BENCH, the bolts pill), one line, a segmented Upgrades / Unlocks row (dots count what is
+affordable). Upgrades hang off a rail of three numbered nodes (a shut tier shows "Spend N more bolts to open" and a
+bar), two cards a row: icon, name, line, rank pips, the value now and next, the price (44 px). Packs are one card each
+(their colour a 4 px left edge): icon, name, line, five 52 px thumbnails (a brass star on the new ones; a tap explains
+it), the milestone or "5 prizes join the pools" and the price. A rank bought pops its card once; a pack bought opens the
+reveal: a dimmed layer, PACK UNLOCKED, the five cards face down flipping in one by one (`cardFlip`, a fanfare), paper
+confetti (DOM, none under `.calm`), Nice!. The page is `ds-opaque`, never saved, never touches a saved run
+(`setScreen` skips `save()` for it), and `m3Leave` lets its cards go.
+
+**NEW ribbon.** A pack's things are `meta.bench.fresh` until they first show on a reward, shop, treasure, counter,
+capsule, event, trade or spare-parts card in a run (`bncNewTag` from `itemCard` and the treasure and shop relic cards):
+a brass NEW ribbon, once.
+
+**Prizedex.** A pack's item or relic the profile has not unlocked is a lock card naming its pack; a tap says "Unlock
+in the Upgrade Bench: <pack>".
+
+### Save fields
+
+Meta `bench` (`bncMetaFix` repairs every field): `bolts, earned, spent, runs, last, grant, hello, tab, up {id: rank},
+packs {id: 1}, fresh {'item:id' | 'relic:id': 1}`. Run `bnc {v, base, fx, xlUsed, rr, relic?}`; `history[]` entries
+gain `tier`. No key was renamed.
+
+### API and tests
+
+`GAME.bench = {K, show, leave, buy, unlock, owns, rank, tierOpen, affordable, gate, base, open, fix, hello, reveal,
+revClose, newRun, runFx, pickN, rest, rrFree, line, tick, give, meta, ui, rev, helloOn, count, bar}`, `GAME.showBench`.
+`DATA.BENCH`, `unlPack, unlBase, unlOpen, unlGate, benchPay, benchGrant, benchCost, benchFx, benchVal, benchTierOpen,
+benchGateOk, benchPackThings`. Tests: data ("bench:": the tables, the gate over every pool function and 1200 rewards
+and 200 capsules, the payout, the grant), game ("bench:": the content rules, defaults, the grant once and junk, the
+payout and its receipt, never in a daily / weekly / rush, every upgrade in a new run, Extra Life once, the tree, 300
+rounds of rewards, shops, capsules, shelves, events and piles with no locked thing, a pack opening its things, the
+daily's base pool with every pack owned, the screen and the reveal, the saved run untouched, the Prizedex lock, the
+NEW ribbon once, the new items and relics in a fight), i18n ("bench:": every line in Dutch, the screens show no
+English). Two older tests moved with the pools: the combo booster test expects a booster in a pack (the Encore
+Machine) to wait for it, and the Neon Depths dive test plays a profile that owns every pack (its physics checks were
+tuned on the full relic pool). Screenshots: scratchpad `r28bench/shots.mjs` (`r28_*`).
