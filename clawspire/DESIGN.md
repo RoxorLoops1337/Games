@@ -1636,6 +1636,15 @@ come from `autoSteer`.
 | `magnet` | a red electromagnet drum on the cable, hazard band, coil face | no prongs, a hub disc r 24; a field pulls metal (`fieldR` 118, `fieldF` 2600 px/s^2) while dropping, energising (0.4 s) and the first 0.3 s of the lift; every metal part touching the face sticks (and metal touching stuck metal while energising); non-metal slides off the housing; drops everything on release | metal builds / anything not metal |
 | `hook` | a barbed harpoon on a rope | no claw segments at all (the rope passes through the pile); drops x2.1; the first item part the barb (3 px x size, +3 with the third prong) enters is speared and welded; the rope drags it up through the pile | sniping one item fast / heavy things tear off |
 
+**Magnet hold (round 28, owner: "you pull the whole bin").** The magnet used to hold every link of a metal chain at full
+strength, so on a metal-heavy bin one drop lifted nearly everything (30 piece metal heap: 28 stuck per drop). Now each stuck
+piece has a hold: 1 at the face, halving every `RIG.magFade` (22) px its nearest edge sits further out; a chained piece under
+`RIG.magMin` (0.2) does not stick. A weak hold tears sooner on a swing (tear limit x (0.35 + 0.65 hold)) and may let go at the
+top of the lift ((1 - hold) x `RIG.magDrop` 0.55, plus the old heavy check against cap x hold). Same heap: about 8 stuck and
+4 delivered per drop. Gold, copper and brass (`def.nomag`: Lucky Coin, Lucky Penny, Arcade Token, Midas Coin, Hoard Coin,
+Golden Egg, Golden Idol, Golden Dice) stay `metal` for builds and combos but the magnet (and the Electromagnet upgrade) cannot
+lift them; Gary's magnet claw-off counts only magnetic metal.
+
 Welds (`hand`, `magnet`, `hook`): each stuck body is driven to its spot under
 the hub by a capped velocity weld (`weldK`, `weldV`) and keeps its angle; it
 tears off (a `slip`) when it lags more than `tear` x size + 6 px, and at the

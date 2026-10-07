@@ -5126,6 +5126,8 @@ const DATA = (() => {
      claw). The profile remembers him (meta.gary: met, offs, wins, losses,
      duels, beat): his taunts follow the record and he buys new gear every
      time you beat him. */
+  // (round 28) gold, copper and brass: metal for every build and combo, but the Magnet Crane (and the Electromagnet) cannot lift them
+  for (const id of ['lucky_coin', 'lucky_penny', 'arcade_token', 'midas_coin', 'hoardcoin', 'golden_egg', 'golden_idol', 'golden_dice']) if (ITEMS[id]) ITEMS[id].nomag = true;
   const GARY = {
     gear: ['Rookie Cap', 'Pro Shades', 'Gold Chain', 'Champion Jacket', 'Turbo Claw'],
     drops: 3,
@@ -5182,7 +5184,7 @@ const DATA = (() => {
     // so a claw that only lifts metal always has something to grab (owner: "there was nothing iron in it")
     const need = opt && opt.need;
     if (need) {
-      const has = (id) => !!(ITEMS[id] && (ITEMS[id].tags || []).indexOf(need) >= 0);
+      const has = (id) => !!(ITEMS[id] && (ITEMS[id].tags || []).indexOf(need) >= 0 && !(need === 'metal' && ITEMS[id].nomag));   // (a gold coin is no use to a magnet)
       const want = Math.ceil(out.length * (GARY.needFrac || 0.6));
       let n = out.filter((p) => has(p.id)).length;
       for (const r of ['c', 'u', 'r', 'l']) {

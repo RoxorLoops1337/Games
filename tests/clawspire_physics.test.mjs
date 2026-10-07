@@ -764,6 +764,43 @@ h.test('magnet crane: only lifts metal, and it lifts metal', () => {
   h.ok(metal >= 2, `the magnet delivers metal from a mixed pile (${metal})`);
 });
 
+// (round 28) owner: "with the magnet you kind of pull the whole bin". The hold now fades away from the core, and gold is not magnetic.
+h.test('magnet crane: the hold fades with distance (no whole-bin clumps), gold coins never stick', () => {
+  const heap = () => { const a = []; for (let i = 0; i < 30; i++) a.push([i % 3 ? 'ball' : 'sword', 40 + (i % 10) * 34, 120 + Math.floor(i / 10) * 36, METAL]); return a; };
+  const grab = (x, seed) => {
+    const { W, C } = typeWorld(heap(), 2);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(seed) });
+    R.setTarget(x);
+    for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let most = 0, holds = [];
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) {
+      R.update(DT); W.step(DT);
+      most = Math.max(most, R.stuck().length);
+    }
+    return { most, got: items(W).filter(b => C.inChute(b)).length };
+  };
+  const K = PHYS.RIG, keep = { f: K.magFade, d: K.magDrop };
+  let newMost = 0, newGot = 0, oldMost = 0, oldGot = 0;
+  for (const [x, sd] of [[120, 3], [200, 4], [280, 5]]) { const r = grab(x, sd); newMost += r.most; newGot += r.got; }
+  K.magFade = 1e9; K.magDrop = 0;   // the old magnet: every link of the chain held at full strength
+  try { for (const [x, sd] of [[120, 3], [200, 4], [280, 5]]) { const r = grab(x, sd); oldMost += r.most; oldGot += r.got; } } finally { K.magFade = keep.f; K.magDrop = keep.d; }
+  console.log(`  magnet on a metal heap, 3 drops: stuck at once ${newMost} (old chain ${oldMost}), delivered ${newGot} (old ${oldGot})`);
+  h.ok(newGot >= 2, `the magnet still delivers metal from a metal heap (${newGot})`);
+  h.ok(newMost < oldMost && newGot < oldGot, `the fading hold carries less than the old chain (stuck ${newMost} vs ${oldMost}, delivered ${newGot} vs ${oldGot})`);
+  // a gold coin (def.nomag) right under the magnet never sticks; it is still 'metal' for builds
+  const coins = [];
+  for (let i = 0; i < 8; i++) coins.push(['ball', 150 + (i % 4) * 30, 240 + Math.floor(i / 4) * 30, { tags: ['metal'], def: { nomag: true } }]);
+  const { W, C } = typeWorld(coins);
+  const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(9) });
+  R.setTarget(195);
+  for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+  R.drop();
+  let stuck = 0;
+  for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); stuck = Math.max(stuck, R.stuck().length); }
+  h.eq(stuck, 0, 'gold coins do not stick to the magnet');
+});
+
 h.test('scoop: lifts a handful of small things at once; a sword tips out', () => {
   let best = 0, total = 0;
   for (const x of [170, 200, 230]) {
