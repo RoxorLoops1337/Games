@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Heroes preview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#cffff0;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }</script>
+</head><body>
+<script type="module">
+// Jasmin + RoxorLoops only. ?who=j|r|both  &view=front|close|game|side|back|three  &pose=idle|walk|sing|attack|carry|hurt  &t=seconds  &cam=x,y,z &look=x,y,z &fov=
+import * as THREE from 'three';
+import { makeJasmin, makeRoxor } from './js/characters.js';
+const q = new URLSearchParams(location.search);
+const who = q.get('who') || 'both', view = q.get('view') || 'front', pose = q.get('pose') || 'idle';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcffff0);
+scene.add(new THREE.HemisphereLight(0xe2ecff, 0xffc4de, 1.75));
+const sun = new THREE.DirectionalLight(0xffe0b4, 2.7); sun.position.set(3, 8, 7);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 30 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.ShadowMaterial({ color: 0x3a8a8a, opacity: 0.35 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const list = [];
+let jas = null, rox = null;
+if (who === 'j' || who === 'both') { jas = makeJasmin(); jas.group.position.set(who === 'both' ? -0.7 : 0, 0, 0); scene.add(jas.group); list.push(jas); }
+if (who === 'r' || who === 'both') { rox = makeRoxor(); rox.group.position.set(who === 'both' ? 0.7 : 0, 0, 0); scene.add(rox.group); list.push(rox); }
+if (pose === 'carry' && rox) rox.setCarry(12);
+const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 30), innerWidth / innerHeight, 0.1, 100);
+const V = {
+  front: [[0, 0.95, 5.6], [0, 0.88, 0]], full: [[0, 0.9, 4.1], [0, 0.88, 0]], bust: [[0, 1.3, 3.0], [0, 1.2, 0]], face: [[0, 1.32, 2.3], [0, 1.27, 0]], close: [[0, 1.45, 2.0], [0, 1.4, 0]], game: [[0, 4.1, 5.0], [0, 0.8, 0]],
+  side: [[5.2, 1.0, 0.3], [0, 0.88, 0]], back: [[0, 1.0, -5.6], [0, 0.88, 0]], three: [[2.6, 1.3, 4.6], [0, 0.88, 0]],
+};
+const [cp, lk] = V[view] || V.front;
+const c0 = q.get('cam') ? q.get('cam').split(',').map(Number) : cp, l0 = q.get('look') ? q.get('look').split(',').map(Number) : lk;
+const off = who === 'both' ? 0 : 0;
+cam.position.set(c0[0] + off, c0[1], c0[2]); cam.lookAt(l0[0], l0[1], l0[2]);
+const fixedT = q.get('t') ? parseFloat(q.get('t')) : null;
+const steps = +(q.get('steps') || 0); // simulate N frames @30fps before the first render (deterministic poses despite slow software GL)
+const st0 = () => ({ speed: pose === 'walk' || pose === 'carry' ? 1 : 0, singing: pose === 'sing', carry: pose === 'carry' ? 12 : 0, hurt: pose === 'hurt' ? 0.8 : 0 });
+let simT = 0; for (let i = 0; i < steps; i++) { simT += 1 / 30; for (const c of list) c.update(1 / 30, simT, st0()); }
+if (steps && pose === 'attack') list.forEach((c) => c.attack());
+const clock = new THREE.Clock(); let T = 0;
+function frame() {
+  const dt = steps ? 0 : Math.min(clock.getDelta(), 0.05); T += dt;
+  const t = steps ? simT : (fixedT ?? T);
+  const st = { speed: pose === 'walk' || pose === 'carry' ? 1 : 0, singing: pose === 'sing', carry: pose === 'carry' ? 12 : 0, hurt: pose === 'hurt' ? 0.8 : 0 };
+  for (const c of list) c.update(steps ? 1e-6 : dt, t, st);
+  if (pose === 'attack' && !frame.did) { frame.did = true; list.forEach((c) => c.attack()); }
+  renderer.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+window.__list = list; window.__ready = true; window.__info = () => renderer.info.render;
+window.__attackAll = () => list.forEach((c) => c.attack());
+frame();
+</script></body></html>
