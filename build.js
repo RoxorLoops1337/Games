@@ -91,6 +91,10 @@ const BUNDLES = [
     outfile: path.join(DIST, 'beatbox_story', 'beatbox-story.bundle.js'),
   },
   {
+    entryPoints: [path.join('beatbox_heroes', 'park3d', 'main.js')],
+    outfile: path.join(DIST, 'beatbox_heroes', 'park3d.bundle.js'),
+  },
+  {
     entryPoints: [path.join('verb_collector', 'main.tsx')],
     outfile: path.join(DIST, 'verb_collector', 'verb-collector.bundle.js'),
   },
