@@ -45,7 +45,7 @@
 
   /* ------------------------------------------------------------------ CSS (real px via --q = 1 px in #ui units, so the same rules work in 2D and 3D) */
   const CSS = `
-.trn{--q:1px;display:flex;flex-direction:column;gap:calc(var(--q)*10);font-family:var(--f3,'Trebuchet MS',system-ui,sans-serif);color:#fff6e8;padding-bottom:calc(var(--q)*4)}
+.trn{--q:1px;display:flex;flex-direction:column;gap:calc(var(--q)*8);font-family:var(--f3,'Trebuchet MS',system-ui,sans-serif);color:#fff6e8;padding-bottom:calc(var(--q)*4)}
 .trn *{box-sizing:border-box}
 .trn button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .trn button:focus-visible{outline:calc(var(--q)*3) solid #2ee6ff;outline-offset:calc(var(--q)*2)}
@@ -54,15 +54,15 @@
 .trn .sk{position:relative;display:flex;flex-direction:column;align-items:center;gap:calc(var(--q)*1);padding:calc(var(--q)*6) calc(var(--q)*2) calc(var(--q)*6);border-radius:calc(var(--q)*14);background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 calc(var(--q)*1.5) rgba(255,255,255,.12);transition:transform .08s,background .15s}
 .trn .sk svg{width:calc(var(--q)*20);height:calc(var(--q)*20)}
 .trn .sk b{font-size:calc(var(--q)*12);letter-spacing:.08em}
-.trn .sk i{font-style:normal;font-weight:700;font-size:calc(var(--q)*20);line-height:1}
+.trn .sk i{font-style:normal;font-weight:700;font-size:calc(var(--q)*19);line-height:1}
 .trn .sk u{display:block;width:80%;height:calc(var(--q)*4);border-radius:9px;background:rgba(0,0,0,.35);overflow:hidden}.trn .sk u s{display:block;height:100%;background:var(--c)}
 .trn .sk.on{background:color-mix(in srgb,var(--c) 26%,transparent);box-shadow:inset 0 0 0 calc(var(--q)*2.5) var(--c),0 0 calc(var(--q)*14) color-mix(in srgb,var(--c) 45%,transparent)}
 .trn .sk:active{transform:scale(.96)}
 .trn .duo{display:grid;grid-template-columns:1fr 1fr;gap:calc(var(--q)*10)}
-.trn .big{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--q)*6);min-height:calc(var(--q)*124);padding:calc(var(--q)*11) calc(var(--q)*12) calc(var(--q)*12);border-radius:calc(var(--q)*20);text-align:left;transition:transform .08s}
+.trn .big{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--q)*6);min-height:calc(var(--q)*100);padding:calc(var(--q)*9) calc(var(--q)*11) calc(var(--q)*10);border-radius:calc(var(--q)*20);text-align:left;transition:transform .08s}
 .trn .big:active{transform:translateY(calc(var(--q)*3))}
-.trn .big .ic{flex:none;width:calc(var(--q)*40);height:calc(var(--q)*40);border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.5)}
-.trn .big .ic svg{width:calc(var(--q)*26);height:calc(var(--q)*26)}
+.trn .big .ic{flex:none;width:calc(var(--q)*34);height:calc(var(--q)*34);border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.5)}
+.trn .big .ic svg{width:calc(var(--q)*22);height:calc(var(--q)*22)}
 .trn .big .tx{min-width:0}
 .trn .big .tx b{display:block;font-weight:700;font-size:calc(var(--q)*20);letter-spacing:.06em;line-height:1.05}
 .trn .big .tx span{display:block;margin-top:calc(var(--q)*3);font-weight:500;font-size:calc(var(--q)*13);line-height:1.25;opacity:.88}
@@ -153,9 +153,9 @@
     const st = M.stat, game = GAME[st], tooTired = G.ch.energy < 6;
     const studio = M.where === 'studio';
     const duo = h('div.duo'); r.appendChild(duo);
-    duo.appendChild(btn('big idle' + (tooTired ? ' dis' : ''), '<span class="ic">' + icon('clock', 28) + '</span><span class="tx"><b>IDLE</b><span>' + IDLE_BLURB[st] + '. 15 min to 4 h, no input.</span></span>', () => { sfx('click'); M.view = 'idle'; render(); }, { 'data-act': 'idle' }));
+    duo.appendChild(btn('big idle' + (tooTired ? ' dis' : ''), '<span class="ic">' + icon('clock', 28) + '</span><span class="tx"><b>IDLE</b><span>' + IDLE_BLURB[st] + '.<br>15 min to 4 h.</span></span>', () => { sfx('click'); M.view = 'idle'; render(); }, { 'data-act': 'idle' }));
     const lv = trainLv(game), soon = !playable(st);
-    duo.appendChild(btn('big play' + (soon ? ' dis' : ''), '<span class="ic">' + icon(st === 'mus' ? 'note' : st === 'tech' ? 'mic' : st === 'ori' ? 'sound' : 'star', 28) + '</span><span class="tx"><b>PLAY</b><span>' + PLAY_BLURB[st] + '. ' + (soon ? 'Coming soon.' : 'Level ' + lv + ' unlocked.') + '</span></span><span class="tag">x' + (CFG().playMul || 2) + ' GAINS</span>', () => { sfx('click'); if (soon) { E.toast(GAME_NAME[game] + ' is coming soon. Try IDLE training.', 'info'); M.view = 'idle'; render(); return; } M.view = 'play'; M.game = null; M.level = 0; render(); }, { 'data-act': 'play' }));
+    duo.appendChild(btn('big play' + (soon ? ' dis' : ''), '<span class="ic">' + icon(st === 'mus' ? 'note' : st === 'tech' ? 'mic' : st === 'ori' ? 'sound' : 'star', 28) + '</span><span class="tx"><b>PLAY</b><span>' + PLAY_BLURB[st] + '.<br>' + (soon ? 'Coming soon.' : 'Level ' + lv + ' open.') + '</span></span><span class="tag">x' + (CFG().playMul || 2) + ' GAINS</span>', () => { sfx('click'); if (soon) { E.toast(GAME_NAME[game] + ' is coming soon. Try IDLE training.', 'info'); M.view = 'idle'; render(); return; } M.view = 'play'; M.game = null; M.level = 0; render(); }, { 'data-act': 'play' }));
     r.appendChild(h('div.note', null, studio ? 'Sound Lab: x1.4 gains, $' + Core.STUDIO_FEE + ' per session.' : 'Tip: PLAY gives about twice the gain in less time.'));
     const tools = (G.labRows ? safe(() => G.labRows(M.S, M.where)) || [] : []).filter((b) => !/PITCH TUNER|BEAT MAKER/.test(b.textContent || ''));
     if (tools.length) { const t = h('div.tools'); for (const b of tools) { const le = b.querySelector('.col > div'), lab = ((le && le.textContent) || b.textContent || '').trim(); t.appendChild(btn('', lab, () => b.click())); } r.appendChild(h('div.lbl', null, 'Tools')); r.appendChild(t); }
@@ -260,7 +260,7 @@
     const R = RUN, f = R.ticks[R.done]; R.done++; R.gain += f.gain;
     const step = CFG().idleMinStep || 15, ePer = (CFG().energyPerHour || 12) * step / 60;
     const gt = '+' + (f.gain >= 0.095 ? f1(f.gain) : f.gain.toFixed(2)), p = h('div.trn-pop', { 'data-text': gt + ' ' + NAME(R.stat).toUpperCase() }, h('b', null, gt), h('i', null, NAME(R.stat).toUpperCase()));
-    p.style.setProperty('--c', COL[R.stat]); p.style.setProperty('--q', qpx()); p.style.marginLeft = [-46, 40, -10, 52, -54, 8][R.done % 6] / Math.max(0.2, E.S || 1) + 'px'; p.style.animationDuration = Math.max(0.5, 1.25 / Math.max(1, T.speed || 1)).toFixed(2) + 's';
+    p.style.setProperty('--c', COL[R.stat]); p.style.setProperty('--q', qpx()); p.style.marginLeft = (R.done % 2 ? -72 : 72) / Math.max(0.2, E.S || 1) + 'px'; p.style.marginTop = ((R.done % 4) < 2 ? 0 : -14) / Math.max(0.2, E.S || 1) + 'px'; p.style.animationDuration = Math.max(0.5, 1.25 / Math.max(1, T.speed || 1)).toFixed(2) + 's';
     R.popBox.appendChild(p); R.pops++; setTimeout(() => p.remove(), 1300);
     R.el.v.textContent = '+' + f1(R.gain); R.el.v.classList.add('pop'); setTimeout(() => R.el.v && R.el.v.classList.remove('pop'), 130);
     const en = R.e0 - ePer * R.done; R.el.en.textContent = Math.max(0, Math.round(en));

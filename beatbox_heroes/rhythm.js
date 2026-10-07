@@ -18,7 +18,7 @@
   // MUSIC OFF (TRAINING_PLAN): no scene music, no backing groove. A soft shaker metronome on the chart clock (Audio.gameMode, else a local fallback), aligned to the offset setting.
   const metro = { iv: 0, start(bpm, lead) {
     this.stop(); const A = E.A(), n = A.now ? A.now() : 0, spb = 60 / bpm, off = (E.settings.offset || 0) / 1000; if (!(n > 0)) return null; const t0 = n + (lead === undefined ? 0.2 : lead);
-    if (A.gameMode) { try { A.gameMode(true, { metronome: bpm, t0: t0 - off, offsetMs: E.settings.offset || 0 }); } catch (e) { /* ignore */ } return { t0, spb }; }
+    if (A.gameMode) { try { A.gameMode(true, { metronome: bpm, start: t0 - off }); } catch (e) { /* ignore */ } return { t0, spb }; }
     let k = Math.ceil((n - t0 + off) / spb); const pump = () => { const now = A.now(); while (t0 + k * spb - off < now + 0.12) { const w = Math.max(now, t0 + k * spb - off), acc = ((k % 4) + 4) % 4 === 0; k++; try { if (A.shaker) A.shaker(acc, { when: w }); else A.drum(1, { when: w, vel: acc ? 0.3 : 0.17, pitch: 1.7 }); } catch (e) { /* ignore */ } } };
     pump(); this.iv = setInterval(pump, 30); return { t0, spb };
   }, stop() { clearInterval(this.iv); this.iv = 0; try { const A = E.A(); if (A.gameMode) A.gameMode(true, { metronome: 0 }); } catch (e) { /* ignore */ } },

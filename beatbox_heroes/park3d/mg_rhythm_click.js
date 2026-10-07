@@ -2,7 +2,7 @@
 // (accent on 1), aligned to the chart clock and the player's offset setting, plus the beatbox sounds of whoever is playing.
 //   const click = createClick();  click.musicOff();  const g = click.start({ bpm, t0?, offsetMs, lead });  ...  click.stop();  click.musicOn();
 //   start() returns { t0, spb } like the old groove.start() so the chart can run on the audio clock (t0 null when the audio clock is not running).
-//   Uses BBH.Audio.gameMode(on, { metronome: bpm, t0, offsetMs }) when audio.js has it; otherwise a local fallback: the scene music is held off
+//   Uses BBH.Audio.gameMode(on, { metronome: bpm, start }) when audio.js has it (start = audio time of beat 0 minus the offset); otherwise a local fallback: the scene music is held off
 //   (music.play is parked until musicOn) and the ticks are scheduled on the audio clock with Audio.shaker(accent, { when }) or a quiet hat.
 const BBH = () => (typeof window !== 'undefined' && window.BBH) || {};
 const A = () => BBH().Audio || null;
@@ -28,7 +28,7 @@ export function createClick() {
     const now = a ? (safe(() => a.now()) || 0) : 0, t0 = now > 0 ? (o.t0 !== undefined ? o.t0 : now + (o.lead === undefined ? 0.2 : o.lead)) : null;
     metro = { bpm, spb, t0, off, next: t0 === null ? 0 : Math.ceil((now - t0 + off) / spb - 1e-6), via: hasGM() ? 'gameMode' : 'fallback', on: true };
     if (!held) musicOff();
-    if (hasGM()) safe(() => a.gameMode(true, { metronome: bpm, t0: t0 === null ? undefined : t0 - off, offsetMs: o.offsetMs || 0 }));
+    if (hasGM()) safe(() => a.gameMode(true, t0 === null ? { metronome: bpm } : { metronome: bpm, start: t0 - off }));         // audio.js: start = audio time of beat 0
     else if (t0 !== null) { pump(); timer = setInterval(pump, 30); }
     return { t0, spb };
   }

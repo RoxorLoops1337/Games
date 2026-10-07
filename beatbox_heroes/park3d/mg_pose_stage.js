@@ -21,7 +21,7 @@ const SHOTS = {
   hero: { p: [0.45, 2.25, 8.6], l: [0.62, 1.3, 0], fov: 38 },             // hero on the right third, your callout and judgement on the left
   duo: { p: [0, 2.5, 11.2], l: [0, 1.35, 0], fov: 40 },
   wide: { p: [0, 3.6, 15.5], l: [0, 1.5, 0], fov: 42 },
-  hype: { p: [2.1, 1.2, 7.6], l: [0.85, 1.8, 0], fov: 44 },               // low hero angle for a perfect round
+  hype: { p: [2.2, 1.35, 4.6], l: [1.05, 2.0, 0], fov: 50 },               // low hero angle for a perfect round
   sel: { p: [-3.2, 3.1, 12.5], l: [0, 2.2, 0], fov: 44 },
   result: { p: [1.0, 2.6, 9.5], l: [1.1, 0.55, 0], fov: 40 },             // hero in the top half, the card in the bottom half
 };
@@ -44,7 +44,7 @@ export function buildPoseStage(ctx, opts) {
   // two flank blocks leave the sight lines of the close shots clear, a back row behind the close-shot cameras fills the bottom of the wide shot
   let front = null; const nF = tier === 0 ? 10 : tier === 1 ? 16 : 24;
   try {
-    const R = rng(31), pos = []; for (let i = 0; i < nF; i++) { const back = i % 4 === 3, side = i % 2 ? 1 : -1; const x = back ? (R() - 0.5) * 6.4 : side * (1.75 + R() * 2.7), z = back ? 9.6 + R() * 2.2 : 3.4 + R() * 3.2; pos.push([x, z, Math.atan2(-x * 0.6, -z) + (R() - 0.5) * 0.3]); }
+    const R = rng(31), pos = []; for (let i = 0; i < nF; i++) { const back = i % 4 === 3, side = i % 2 ? 1 : -1; const x = back ? (R() - 0.5) * 6.4 : side * (1.75 + R() * 2.7), z = back ? 9.6 + R() * 2.2 : 4.5 + R() * 2.8; pos.push([x, z, Math.atan2(-x * 0.6, -z) + (R() - 0.5) * 0.3]); }
     front = createCrowd(ctx, nF, { positions: pos, seed: 31, energy: 0.4, bpm: 96 }); group.add(front.object);
   } catch (e) { console.error('[pose] crowd failed: ' + e); }
   // ---------------------------------------------------------------- characters
@@ -69,6 +69,7 @@ export function buildPoseStage(ctx, opts) {
   // ---------------------------------------------------------------- LED wall
   let ledKey = '';
   function led(lines, o) { const k = JSON.stringify(lines); if (k === ledKey || !venue || !venue.led) return; ledKey = k; try { venue.led.text(lines, Object.assign({ bg: ['#3a1466', '#120a2c'], rays: ['rgba(255,220,120,0.10)', 'rgba(255,255,255,0)'] }, o || {})); } catch (e) { /* ignore */ } }
+  if (venue && venue.led && venue.led.mat) venue.led.mat.color.setScalar(0.72);       // the wall is backdrop here: the HUD carries the words
   led([{ t: 'SHOWTIME', c: '#ffd23f', k: 1.1 }, { t: 'COPY THE COACH', c: '#ff9ab8', k: 0.45 }]);
 
   // ---------------------------------------------------------------- per frame
@@ -96,7 +97,7 @@ export function buildPoseStage(ctx, opts) {
   function shotPose(name, T, out) {
     const s = SHOTS[name], push = 1 - Math.exp(-T * 0.35), orbit = name === 'result' || name === 'sel' ? T : 0;
     let px = s.p[0], py = s.p[1], pz = s.p[2];
-    if (orbit) { const a = Math.sin(orbit * 0.22) * 0.35, dx = px - s.l[0], dz = pz - s.l[2]; px = s.l[0] + dx * Math.cos(a) - dz * Math.sin(a); pz = s.l[2] + dx * Math.sin(a) + dz * Math.cos(a); }
+    if (orbit) { const a = Math.sin(orbit * 0.22) * 0.12, dx = px - s.l[0], dz = pz - s.l[2]; px = s.l[0] + dx * Math.cos(a) - dz * Math.sin(a); pz = s.l[2] + dx * Math.sin(a) + dz * Math.cos(a); }
     else { const dx = s.l[0] - px, dz = s.l[2] - pz; px += dx * 0.07 * push; pz += dz * 0.07 * push; }
     out.p.set(px, py, pz); out.l.set(s.l[0], s.l[1], s.l[2]); out.fov = s.fov; return out;
   }

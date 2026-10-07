@@ -242,17 +242,18 @@ export function createPose(ctx, opts) {
 
   const api = {
     group,
-    update(dt) { if (disposed) return; dt = Math.min(dt || 0, 0.1); if (!S.manual || S.phase !== 'run') { let d = dt; const now = audioNow(); if (S.phase === 'run' && now > 0 && S.aLast > 0 && now > S.aLast) d = Math.min(0.1, now - S.aLast); S.aLast = now; advance(d); } else S.aLast = 0; vis(dt); },
+    // manual (tests, screenshots): the run and every animation advance only through tick(), so a state and a frame are deterministic
+    update(dt) { if (disposed) return; dt = Math.min(dt || 0, 0.1); if (S.manual && S.phase === 'run') { S.aLast = 0; return; } let d = dt; const now = audioNow(); if (S.phase === 'run' && now > 0 && S.aLast > 0 && now > S.aLast) d = Math.min(0.1, now - S.aLast); S.aLast = now; advance(d); vis(dt); },
     render() { stage.render(); },
     resize(w, h, dpr) { W = w; H = h; stage.resize(w, h, dpr); ui.resize(w, h); },
     setLook(l) { stage.setLook(l); },
     start, press: (m) => press(m), select, quit, back,
-    tick(sec) { advance(sec || 0); vis(Math.min(sec || 0, 0.05)); },
+    tick(sec) { let left = Math.max(0, sec || 0); do { const d = Math.min(0.05, left); advance(d); vis(d); left -= d; } while (left > 1e-7); },
     bot(o) { S.bot = normBot(o); return S.bot; },
     state: stateOut, result: () => S.result,
     setRewards(rw) { S.rewards = rw || null; if (S.cardShown && S.result) { S.cardShown = false; showCard(); } },
     setUnlocked(n) { S.unlocked = clamp(n | 0 || 1, 1, LV.length); if (S.result && S.result.unlocked && S.unlocked < S.result.unlocked) S.result.unlocked = 0; if (ui.selectOpen()) ui.showSelect(LV, S.unlocked, S.level); },
-    stats() { return stage.stats(); },
+    stats() { return stage.stats(); }, cut: (n) => stage.cut(n, { force: true }),
     levels: () => LV.map((L) => Object.assign({}, L)), POSE,
     dispose() {
       if (disposed) return; disposed = true; if (typeof window !== 'undefined') window.removeEventListener('keydown', onKey);

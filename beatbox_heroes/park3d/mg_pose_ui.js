@@ -27,7 +27,7 @@ const CSS = `
 .pz{position:absolute;inset:0;pointer-events:none;overflow:hidden;font-family:Fredoka,"Trebuchet MS",system-ui,sans-serif;color:#fff6e8;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;--k:1}
 .pz *{box-sizing:border-box}
 .pz .pz-tx{text-shadow:0 2px 0 #17102b,0 0 10px rgba(23,16,43,.85)}
-.pz .pz-top{position:absolute;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:8px}
+.pz .pz-top{position:absolute;z-index:6;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:8px}
 .pz .pz-bk{pointer-events:auto;width:44px;height:44px;border-radius:14px;border:2px solid rgba(255,246,232,.35);background:rgba(23,16,43,.62);color:#fff6e8;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .pz .pz-ttl{flex:1;text-align:center;line-height:1}
 .pz .pz-ttl b{display:block;font-size:17px;font-weight:700;letter-spacing:.08em}
@@ -50,7 +50,7 @@ const CSS = `
 .pz .pz-ban i{display:block;margin-top:6px;font-style:normal;font-size:13px;font-weight:700;letter-spacing:.16em}
 .pz .pz-ban.go{animation:pzBan var(--d,1.2s) ease both}
 @keyframes pzBan{0%{opacity:0;transform:translateY(14px) scale(.8)}12%{opacity:1;transform:translateY(0) scale(1.06)}22%{transform:scale(1)}82%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
-.pz .pz-jd{position:absolute;width:56%;top:56%;text-align:center;font-size:34px;font-weight:700;letter-spacing:.05em;opacity:0;-webkit-text-stroke:2px #17102b;paint-order:stroke fill}
+.pz .pz-jd{position:absolute;width:56%;top:57%;text-align:center;font-size:30px;white-space:nowrap;font-weight:700;letter-spacing:.05em;opacity:0;-webkit-text-stroke:2px #17102b;paint-order:stroke fill}
 .pz .pz-jd.L{left:0}.pz .pz-jd.R{right:0}.pz .pz-jd.C{left:22%}
 .pz .pz-jd.go{animation:pzJd .55s cubic-bezier(.2,1.5,.4,1) both}
 @keyframes pzJd{0%{opacity:0;transform:scale(1.6)}20%{opacity:1;transform:scale(.95)}35%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-16px)}}
@@ -69,7 +69,7 @@ const CSS = `
 .pz .pz-pad.ok{animation:pzOk .3s}.pz .pz-pad.no{animation:pzNo .3s}
 @keyframes pzOk{0%{filter:brightness(2)}100%{filter:none}}
 @keyframes pzNo{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-.pz .pz-sheet{position:absolute;inset:0;pointer-events:auto;background:radial-gradient(ellipse at 50% 20%,rgba(60,30,110,.55),rgba(14,9,30,.86));display:flex;flex-direction:column;align-items:center;padding:calc(64px + env(safe-area-inset-top,0px)) 14px 14px;overflow-y:auto}
+.pz .pz-sheet{position:absolute;inset:0;z-index:5;pointer-events:auto;background:radial-gradient(ellipse at 50% 20%,rgba(60,30,110,.55),rgba(14,9,30,.86));display:flex;flex-direction:column;align-items:center;padding:calc(64px + env(safe-area-inset-top,0px)) 14px 14px;overflow-y:auto}
 .pz .pz-sheet h1{margin:0;font-size:30px;font-weight:700;letter-spacing:.06em;color:#ffd23f;-webkit-text-stroke:1.5px #17102b;paint-order:stroke fill}
 .pz .pz-sheet p{margin:4px 0 12px;font-size:13px;font-weight:500;text-align:center;color:#e8dcff;max-width:300px}
 .pz .pz-lvls{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%;max-width:400px}
@@ -135,7 +135,7 @@ export function createPoseUI(host, cb, o) {
       const M = MOVES[id]; if (!M) return; call.className = 'pz-call ' + (side || 'C'); call.innerHTML = '<div class="pz-ic" style="background:' + M.color + ';color:' + M.color + '">' + iconSvg(id, 64, 8) + '</div><div class="pz-wd" style="color:' + M.color + '">' + M.word + '!</div>' + (who ? '<div class="pz-who tx">' + who + '</div>' : '');
       restart(call, 'go');
     },
-    banner(text, sub, color, ms) { ban.innerHTML = '<b style="color:' + (color || '#fff6e8') + '">' + text + '</b>' + (sub ? '<i style="color:' + (color || '#ffd23f') + '">' + sub + '</i>' : ''); ban.style.setProperty('--d', ((ms || 1200) / 1000) + 's'); restart(ban, 'go'); },
+    banner(text, sub, color, ms) { call.classList.remove('go'); ban.innerHTML = '<b style="color:' + (color || '#fff6e8') + '">' + text + '</b>' + (sub ? '<i style="color:' + (color || '#ffd23f') + '">' + sub + '</i>' : ''); ban.style.setProperty('--d', ((ms || 1200) / 1000) + 's'); restart(ban, 'go'); },
     judge(g, txt, side) { const G = GRADE[g] || [String(g).toUpperCase(), '#fff6e8']; jd.className = 'pz-jd ' + (side || 'C'); jd.textContent = txt || G[0]; jd.style.color = G[1]; restart(jd, 'go'); if (g === 'miss' || g === 'wrong') { flash.style.setProperty('--fc', 'rgba(255,60,100,.5)'); flash.style.transition = 'none'; flash.style.opacity = '1'; void flash.offsetWidth; flash.style.transition = 'opacity .45s'; flash.style.opacity = '0'; } },
     flashColor(c) { flash.style.setProperty('--fc', c); flash.style.transition = 'none'; flash.style.opacity = '1'; void flash.offsetWidth; flash.style.transition = 'opacity .6s'; flash.style.opacity = '0'; },
     // slots: [{move, grade|null}], cursor index (-1 none), reveal: true = show the icons, false = '?' until judged

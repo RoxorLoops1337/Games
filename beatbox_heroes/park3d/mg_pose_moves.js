@@ -53,8 +53,9 @@ CL.pz_duck = function (P, c) {
   const t = c.t, k = hit(t, 0.08), w = Math.exp(-Math.max(0, t - 0.08) * 8) * k;
   P.hipsY = -0.25 * k - 0.02 * w; P.hipsZ = -0.04 * k; P.hipsRX = 0.32 * k; P.spineRX = 0.16 * k; P.chestRX = 0.08 * k; P.neckRX = -0.12 * k; P.headRX = -0.06 * k; P.sq = -0.05 * w;
   stance(P, lerp(0.12, 0.2, k), lerp(0.2, 0.55, k));
-  P.aWL = P.aWR = 1; P.aXL = -0.05; P.aXR = 0.05; P.aYL = lerp(0.7, 0.9, k); P.aYR = lerp(0.7, 0.86, k); P.aZL = P.aZR = lerp(0.18, 0.36, k); P.pXL = 1; P.pXR = -1; P.pYL = P.pYR = -0.7; P.pZL = P.pZR = 0;
-  P.shrug = 1.2 * k; face(P, 0.45, 0.6, 0.6); P.eyeH = 1 - 0.45 * k; P.frown = 0.3 * k;
+  P.aWL = P.aWR = 1; P.aXL = lerp(0.27, 0.25, k); P.aXR = -lerp(0.27, 0.25, k); P.aYL = P.aYR = lerp(0.7, 0.9, k); P.aZL = P.aZR = lerp(0.16, 0.3, k); P.pXL = 1; P.pXR = -1; P.pYL = P.pYR = -0.8; P.pZL = P.pZR = -0.2;
+  P.hWL = P.hWR = k; P.hXL = 0.2; P.hXR = -0.2; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.25;          // palms up either side of the face: 'whoa, duck!'
+  P.shrug = 1.4 * k; face(P, 0.55, 0.7, 0.5); P.eyeH = 1.1; P.frown = 0.2 * k; P.browTilt = 0.5 * k;
 };
 
 // ----- jump: quick crouch, a star jump (feet tucked, arms in a V), squash on landing. c.st.air (0..1) is read by rootMotion for the shadow / dust

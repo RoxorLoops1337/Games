@@ -4,6 +4,7 @@
 //   run     world 'run'    the park jog in 3D. Result -> G.doHold({t:'run', q, goodBars}) exactly like the 2D scene, rewards read back from the new save and shown on the card
 //                          (mini.setRewards), CONTINUE -> G.finishActivity(held, 'park'). QUIT before the end -> back to the place (nothing spent), like 2D.
 //   tuner   world 'tuner'  the vocal booth in 3D, HIGHER / LOWER voice (saved in E.settings.voice) and EAR training. Result -> G.doHold({t:'tune', q}), CONTINUE -> G.finishActivity(held, place).
+//                          Music OFF while it runs (Audio.gameMode). From the training menu (args.train = {level, where}, r3/scenes_train.js) the result is G.doHold({t:'trainGame', stat:'mus', game:'tune', level, q, where}).
 //   seq     world 'lab'    Beat Maker: the 2D DOM tool (pattern tabs, BPM, PLAY, RELEASE...) over the 3D Sound Lab with the camera on the desk; the 16 x 4 grid is a DOM grid here
 //   studio  world 'lab'    Sound Recorder: the 2D DOM tool over the lab, camera on the booth, the hero at the mic; every Core.SOUNDS entry is a row (locked ones greyed), recordings go to IndexedDB through BBH.Samples keyed by sound id.
 // The mini games get the SHARED audio (BBH.Audio, E.tone), E.settings (offset, muted, sfx, reduce, voice) and never open an AudioContext of their own.

@@ -14,7 +14,7 @@ import { boot, seed, goScene, sceneReady, adv, until, sleep, sheetTitle, ctl } f
 const watchdog = setTimeout(() => { console.error('FAIL: r3train suite hung'); process.exit(1); }, 540000);
 const env = await r3env('beatbox_heroes_r3train');
 const SHOTS = process.env.BBH_SHOTS || '';
-const shot = async (page, name) => { if (!SHOTS) return; try { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name) }); } catch (e) { console.log('shot failed ' + name + ': ' + e.message); } };
+const shot = async (page, name, ms) => { if (!SHOTS) return; await sleep(ms === undefined ? 1200 : ms); try { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name) }); } catch (e) { console.log('shot failed ' + name + ': ' + e.message); } };
 const allSounds = (page) => page.evaluate(() => { const ch = BBH.Core.clone(BBH.G.ch); if (BBH.Core.SOUNDS) ch.sounds = BBH.Core.SOUNDS.map((x) => x.id); BBH.G.setChar(ch); });   // no NEW SOUND popups over the training screens
 const click = (page, sel) => page.evaluate((s) => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
 
@@ -44,11 +44,11 @@ try {
   ok(await page.evaluate(() => document.querySelectorAll('.trn .chip[data-min]').length === 6 && /\+\d/.test(document.querySelector('.trn .chip[data-min="60"]').textContent)), 'idle: six durations (15 min to 4 h), each with its gain');
   await click(page, '.trn .chip[data-min="60"]'); await sleep(150);
   const pre = await page.evaluate(() => { const ch = BBH.G.ch, r = BBH.Core.apply(ch, { t: 'trainIdle', stat: 'mus', minutes: 60, where: 'home' }, () => 0.5).char; return { min: ch.minutes, mus: ch.stats.mus, en: ch.energy, xmus: r.stats.mus, xmin: r.minutes, xen: r.energy }; });
-  await page.evaluate(() => { BBH.Train.speed = 2.5; });
+  await page.evaluate(() => { BBH.Train.speed = 1; });
   await click(page, '.trn [data-act=start-idle]');
   ok(await until(page, () => BBH.Train.last && BBH.Train.last.pops >= 2, null, 30000), 'idle: the pops tick up one by one');
   const mid = await page.evaluate(() => ({ pops: document.querySelectorAll('.trn-pop').length, txt: (document.querySelector('.trn-pop') || { dataset: {} }).dataset.text || '', clk: (document.querySelector('.trn .clk') || {}).textContent, hudMin: BBH.G.ch.minutes }));
-  await shot(page, 'train_idle.png');
+  await shot(page, 'train_idle.png', 250);
   ok(/^\+\d\.\d+ MUSICALITY$/.test(mid.txt), 'idle: a pop reads like "+0.2 MUSICALITY" (' + mid.txt + ')');
   ok(/^1[34]:\d\d$/.test(mid.clk) && mid.clk !== '13:00' && mid.hudMin === pre.min, 'idle: the shown clock runs fast (' + mid.clk + ') while the save waits for the commit');
   ok(await until(page, () => BBH.Train.last && !!BBH.Train.last.summary && !!document.querySelector('.trn .done'), null, 40000), 'idle: the session ends on a summary card');
@@ -121,6 +121,22 @@ try {
   ok(await page.evaluate(() => BBH.R3.world.game.state().level === 2 && /LEVEL 2/.test(document.querySelector('.er-card .kick').textContent)), 'ear: level 2 shows its own lesson');
   await click(page, '.er-back'); ok(await sceneReady(page, 'place', 'flat'), 'ear: BACK before the end returns without spending anything');
   ok(await page.evaluate((m) => BBH.G.ch.minutes === m, a1.min), 'ear: quitting spent no time');
+
+  /* ------------------------------------------------------------------ PLAY: singing (the tuner) through trainGame */
+  await page.evaluate(() => BBH.R3.world.activate('booth')); await until(page, () => !!document.querySelector('.trn [data-act=play]'), null, 30000);
+  await click(page, '.trn .sk[data-stat=mus]'); await sleep(100); await click(page, '.trn [data-act=play]'); await sleep(150); await click(page, '.trn [data-game=tune]'); await sleep(150);
+  const tg0 = await page.evaluate(() => ({ n: BBH.G.ch.n.trainGames || 0, tunes: BBH.G.ch.n.tunes, gm: window.__calls.gameMode.length }));
+  await click(page, '.trn [data-act=start-play]');
+  ok(await sceneReady(page, 'tuner', 'tuner'), 'singing: SINGING starts the 3D tuner');
+  ok(await page.evaluate((n) => window.__calls.gameMode.length > n && window.__calls.gameMode[window.__calls.gameMode.length - 1] === true, tg0.gm), 'singing: the music is off (Audio.gameMode(true))');
+  const tr = await page.evaluate(() => {
+    const g = BBH.R3.world.game; g.start({ range: 'higher', mode: 'mic', fake: true, manual: true });
+    for (let n = 0; n < 4000 && g.state().state !== 'done'; n++) { const s = g.state(); if (s.phase === 'sing') g.feedPitch(440 * Math.pow(2, (s.target - 69) / 12)); else g.feedPitch(0); g.tick(0.1); }
+    g.feedPitch(null); for (let i = 0; i < 6; i++) g.tick(0.1); return { r: g.result(), n: BBH.G.ch.n.trainGames || 0, tunes: BBH.G.ch.n.tunes, lv: BBH.G.ch.trainLv.tune };
+  });
+  ok(tr.r && tr.r.score === 8 && tr.n === tg0.n + 1 && tr.tunes === tg0.tunes + 1 && tr.lv === 2, 'singing: the result goes through Core trainGame (game "tune", level 2 unlocked)');
+  await page.locator('.tn-btn', { hasText: 'CONTINUE' }).click();
+  ok(await sceneReady(page, 'place', 'flat'), 'singing: CONTINUE returns to the flat');
 
   ok(errs.length === 0, 'no page or console errors' + (errs.length ? ': ' + errs.slice(0, 4).join(' | ') : ''));
 

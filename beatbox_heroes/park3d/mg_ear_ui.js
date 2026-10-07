@@ -47,12 +47,13 @@ const CSS = `
 .er-card h1{margin:2px 0 6px;font-weight:700;font-size:25px;line-height:1.1;color:#ffd23f;text-shadow:0 3px 0 #6b3d00}
 .er-card p{margin:0 0 10px;font-weight:500;font-size:15px;line-height:1.38;color:#f1e9ff}
 .er-exs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.er-ex{flex:1 1 calc(50% - 8px);min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;padding:5px 10px;border-radius:16px;text-align:left;background:rgba(46,230,255,.12);box-shadow:inset 0 0 0 2px rgba(46,230,255,.35);font-weight:700;font-size:15px;letter-spacing:.03em;color:#e9fdff;transition:transform .08s,background .15s}
+.er-ex{flex:1 1 calc(50% - 8px);min-width:0;display:flex;align-items:center;gap:8px;min-height:48px;padding:5px 8px 5px 6px;border-radius:16px;text-align:left;background:rgba(46,230,255,.12);box-shadow:inset 0 0 0 2px rgba(46,230,255,.35);font-weight:700;font-size:15px;letter-spacing:.03em;color:#e9fdff;transition:transform .08s,background .15s}
 .er-ex:active{transform:scale(.98)}
 .er-ex.on{background:rgba(46,230,255,.32)}
 .er-ex .pl{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding-left:4px;background:#2ee6ff;color:#0f2a3a}
 .er-ex .pl i{border-left-width:11px;border-top-width:7px;border-bottom-width:7px}
-.er-ex .tx{flex:1;min-width:0;font-size:14px;line-height:1.15}
+.er-ex .tx{flex:1;min-width:0;font-size:15px;line-height:1.15}
+.er-hear{margin:0 0 6px;font-weight:700;font-size:11px;letter-spacing:.18em;color:#8ff3ff}
 .er-ex .tx small{display:block;font-size:11px;letter-spacing:.14em;color:#8ff3ff;font-weight:700;opacity:.8}
 .er-dots{flex:none;position:relative;width:46px;height:30px}
 .er-dots u{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffd23f;box-shadow:0 0 8px #ffd23f}
@@ -102,10 +103,10 @@ export function createUI(hud, H) {
   function showLesson(L, o) {
     clearCard(); o = o || {}; pad.classList.remove('on'); askEl.classList.remove('on'); fb.classList.remove('on');
     const ls = L.lesson || { title: L.name, text: L.ask, examples: [] };
-    card = el('div', 'er-card er-lesson', '<div class="kick">LEVEL ' + L.level + ' LESSON</div><h1>' + esc(ls.title) + '</h1><p>' + esc(ls.text) + '</p><div class="er-exs"></div><div class="er-btns"></div>');
+    card = el('div', 'er-card er-lesson', '<div class="kick">LEVEL ' + L.level + ' LESSON</div><h1>' + esc(ls.title) + '</h1><p>' + esc(ls.text) + '</p><div class="er-hear">TAP TO HEAR AN EXAMPLE</div><div class="er-exs"></div><div class="er-btns"></div>');
     const exs = card.querySelector('.er-exs');
     (ls.examples || []).forEach((ex, i) => {
-      const b = el('button', 'er-ex', '<span class="pl"><i></i></span><span class="tx"><small>PLAY EXAMPLE</small>' + esc(ex.label) + '</span>' + dots(ex.notes, ex.chord), exs);
+      const b = el('button', 'er-ex', '<span class="pl"><i></i></span><span class="tx">' + esc(ex.label) + '</span>' + dots(ex.notes, ex.chord), exs);
       b.onclick = () => { if (exOn) exOn.classList.remove('on'); exOn = b; b.classList.add('on'); const d = H.example ? H.example(i) : 1; setTimeout(() => { if (exOn === b) { b.classList.remove('on'); exOn = null; } }, Math.max(400, (d || 1) * 1000)); };
     });
     const go = el('button', 'er-go', 'START  ' + (L.rounds || 8) + ' ROUNDS', card.querySelector('.er-btns')); go.onclick = () => H.start && H.start();

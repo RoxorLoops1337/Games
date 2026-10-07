@@ -22,7 +22,7 @@ export function trainChart(L, bars) { const out = []; for (let b = 0; b < (bars 
 const CSS = `
 .rh.train .meter{opacity:0}
 .rh.train .combo{top:calc(236*var(--u))}
-.rh .ps{position:absolute;left:calc(16*var(--u));right:calc(16*var(--u));top:calc(62*var(--u));text-align:center;opacity:0;transform:translateY(calc(-8*var(--u)));transition:opacity .25s,transform .25s}
+.rh .ps{position:absolute;left:calc(16*var(--u));right:calc(16*var(--u));top:calc(60*var(--u));padding:calc(8*var(--u)) 0 calc(10*var(--u));border-radius:calc(18*var(--u));background:linear-gradient(rgba(23,16,43,.72),rgba(23,16,43,.42));text-align:center;opacity:0;transform:translateY(calc(-8*var(--u)));transition:opacity .25s,transform .25s}
 .rh .ps.on{opacity:1;transform:none}
 .rh .ps .lbl{display:inline-block;padding:calc(3*var(--u)) calc(12*var(--u));border-radius:calc(10*var(--u));background:#ffe14d;color:#17102b;font-weight:900;font-size:calc(12*var(--u));letter-spacing:.24em;box-shadow:0 calc(3*var(--u)) 0 #17102b}
 .rh .ps .lbl.you{background:linear-gradient(#7af0ff,#27c8bb)}
