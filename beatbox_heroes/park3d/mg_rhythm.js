@@ -196,7 +196,7 @@ export function createRhythm(ctx, opts) {
   function fovFor(aspect) { return clamp(2 * Math.atan(Math.tan(27 * Math.PI / 180) * (0.5625 / Math.max(0.3, aspect))) * 180 / Math.PI, 38, 72); }
   function updateCamera(dt, t, E) {
     const want = S.phase === 'count' || S.phase === 'play' || S.phase === 'between' ? 1 : 0; S.camK += (want - S.camK) * (1 - Math.exp(-dt * 2.2)); const k = S.camK * S.camK * (3 - 2 * S.camK), sw = 0.4 + E * 0.6;
-    const orbit = S.phase === 'result' ? 1 : 0, ox = Math.sin(t * 0.18) * (orbit ? 3.2 : 4.6), oy = (orbit ? 2.5 : 3.6) + Math.sin(t * 0.23) * 0.25, oz = orbit ? -3.8 : 3.4;
+    const orbit = S.phase === 'result' ? 1 : 0, ox = Math.sin(t * 0.18) * (orbit ? 3.2 : 4.6), oy = (orbit ? 2.5 : 3.9) + Math.sin(t * 0.23) * 0.25, oz = orbit ? -3.8 : 6.0;
     camPos.set(lerp(ox, camBase.x + Math.sin(t * 0.45) * 0.38 * sw, k), lerp(oy, camBase.y + Math.sin(t * 0.33) * 0.14 * sw, k), lerp(oz, camBase.z - S.punch * 0.35, k));
     camLook.set(lerp(0, camAim.x + Math.sin(t * 0.5 + 1) * 0.22 * sw, k), lerp(2.0, camAim.y, k), lerp(STAGE.z, camAim.z, k));
     if (S.shake) { camPos.x += (Math.random() - 0.5) * S.shake * 0.25; camPos.y += (Math.random() - 0.5) * S.shake * 0.2; }
@@ -207,7 +207,7 @@ export function createRhythm(ctx, opts) {
   // ------------------------------------------------------------------ public surface
   let acc = 0;
   function update(dt, t) { if (disposed) return; dt = Math.min(dt, 0.05); if (!S.manual) sim(dt); vis(dt); }
-  function render() { const S2 = lighting.state; S2.bloom += 0.1 * S.energy + 0.12 * Math.exp(-(S.beatSeen < 0 ? 1 : 0)) * 0 + 0.1 * S.punch; lighting.post.update(time); lighting.render(); }
+  function render() { const S2 = lighting.state; S2.gHigh.set('#fff8ee'); S2.gShadow.set('#f0eaff'); S2.sat = 1.3; S2.bloom += 0.1 * S.energy + 0.12 * Math.exp(-(S.beatSeen < 0 ? 1 : 0)) * 0 + 0.1 * S.punch; lighting.post.update(time); lighting.render(); }
   function tick(sec) {
     S.manual = true; const n = Math.max(1, Math.round(sec * 120)), h = sec / n; for (let i = 0; i < n; i++) { sim(h); acc += h; if (acc >= 1 / 30) { vis(acc); acc = 0; } } if (acc > 0) { vis(acc); acc = 0; } S.ticks++;
     return state();
