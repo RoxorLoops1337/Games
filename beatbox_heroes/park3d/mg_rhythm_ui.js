@@ -3,7 +3,7 @@
 import { LANES } from './mg_rhythm_hw.js';
 
 const CSS = `
-.rh{position:absolute;inset:0;pointer-events:none;font-family:"Trebuchet MS",system-ui,sans-serif;color:#fff2dc;--u:1px;overflow:hidden;-webkit-tap-highlight-color:transparent}
+.rh{position:absolute;inset:0;pointer-events:none;font-family:var(--f3,"Trebuchet MS",system-ui,sans-serif);color:#fff2dc;--u:1px;overflow:hidden;-webkit-tap-highlight-color:transparent}
 .rh *{box-sizing:border-box;pointer-events:none}
 .rh button,.rh .pad,.rh .card,.rh .chip{pointer-events:auto;touch-action:none;font-family:inherit}
 .rh .top{position:absolute;left:calc(12*var(--u));right:calc(12*var(--u));top:calc(10*var(--u));display:flex;align-items:flex-start;justify-content:space-between;gap:calc(8*var(--u))}

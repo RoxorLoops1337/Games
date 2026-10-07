@@ -172,7 +172,7 @@ export function createRhythm(ctx, opts) {
     ui.toast(clashLine(Core, S.myStyle, S.oppStyleNow), 2800); mood('neutral');
     if (!S.manual) { try { const a = A(); if (a) a.groove.start({ bpm: opp.bpm || 100, style: opp.style || 0, bars: 5 }); } catch (e) { /* ignore */ } }
     try { perf.play('idle', {}); } catch (e) { /* ignore */ } if (oppChar) { try { oppChar.setMood('angry'); } catch (e) { /* ignore */ } }
-    dir.play([shot('oppClose', 0.8, 2.6, 0.5), shot('over', 1.4, 0, 0.5)]);
+    dir.play([shot('oppClose', 0.8, 2.3, 0.5)], { clearAtEnd: true });                // then the play camera: the rival's ghost notes run down the highway
   }
   function updateOpp(dt) {
     S.oppT += dt; const T = S.oppT;
@@ -346,7 +346,7 @@ export function createRhythm(ctx, opts) {
   // camera: attract/result cam orbits the stage, play cam sits behind and above the highway with a gentle sway and a kick zoom on the beat. The director (VS whip, judges, verdict) overrides it and eases back.
   function fovFor(aspect) { return clamp(2 * Math.atan(Math.tan(27 * Math.PI / 180) * (0.5625 / Math.max(0.3, aspect))) * 180 / Math.PI, 38, 72); }
   function updateCamera(dt, t, E) {
-    const want = S.phase === 'count' || S.phase === 'play' || S.phase === 'between' ? 1 : 0; S.camK += (want - S.camK) * (1 - Math.exp(-dt * 2.2)); const k = S.camK * S.camK * (3 - 2 * S.camK), sw = 0.4 + E * 0.6;
+    const want = S.phase === 'count' || S.phase === 'play' || S.phase === 'between' || S.phase === 'opp' ? 1 : 0; S.camK += (want - S.camK) * (1 - Math.exp(-dt * 2.2)); const k = S.camK * S.camK * (3 - 2 * S.camK), sw = 0.4 + E * 0.6;
     const orbit = S.phase === 'result' ? 1 : 0, ox = Math.sin(t * 0.18) * (orbit ? 3.6 : 4.6), oy = (orbit ? 3.2 : 3.9) + Math.sin(t * 0.23) * 0.25, oz = orbit ? 3.2 : 6.0;
     camPos.set(lerp(ox, camBase.x + Math.sin(t * 0.45) * 0.38 * sw, k), lerp(oy, camBase.y + Math.sin(t * 0.33) * 0.14 * sw, k), lerp(oz, camBase.z - S.punch * 0.35, k));
     camLook.set(lerp(0, camAim.x + Math.sin(t * 0.5 + 1) * 0.22 * sw, k), lerp(orbit ? -1.5 : 2.0, camAim.y, k), lerp(orbit ? -11 : STAGE.z, camAim.z, k));

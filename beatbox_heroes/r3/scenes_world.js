@@ -105,30 +105,37 @@
     },
     leave() { this.closeSheet(); this.dropShop(); this.unbindGl(); this.unmountHud(); this.w = null; this.activeSpot = null; },
     build() {
-      E.clearUI(); this.sheetEl = null;
+      E.clearUI(); this.sheetEl = null; this._chromeOpen = false;
       this.mountHud({ nav: false, goal: true, menu: true, map: true, onMap: () => { this.closeSheet(); E.go('map'); } });
       if (this.hud) this.addLeave(() => this.leave2());
     },
     leave2() { const id = this.id; this.closeSheet(); G.do({ t: 'at', to: 'street' }); E.go('street', { from: id }); },   // like G.leavePlace, but the street knows which door you came out of
     // ---- sheets: the 2D sheet plus the camera inset, so the player stays visible above it
-    sheet(title, kids, o) { const el = PL.sheet.call(this, title, kids, o); safe(() => hooks.sheetOpen && hooks.sheetOpen(el)); return el; },
-    closeSheet() { const had = !!this.sheetEl; PL.closeSheet.call(this); if (had) safe(() => hooks.sheetClose && hooks.sheetClose()); },
+    sheet(title, kids, o) { const el = PL.sheet.call(this, title, kids, o); this.chrome(true); safe(() => hooks.sheetOpen && hooks.sheetOpen(el)); return el; },
+    closeSheet() { const had = !!this.sheetEl; PL.closeSheet.call(this); if (had) { safe(() => hooks.sheetClose && hooks.sheetClose()); if (!this._try) this.chrome(false); } },
+    // while a sheet or the shop panel covers half the screen the goal chip steps aside, so the world keeps as much room as possible above it
+    chrome(open) {
+      const h = this.hud; if (!h || open === !!this._chromeOpen) return; this._chromeOpen = open;
+      if (open) h.setGoal(''); else { h.setGoal(null); h.update(G.ch); }
+    },
     // ---- shop try-on: S.shop.look is mirrored live to the 3D player, the camera frames the mirror
     tryOn() {
       const sh = this.shop, open = !!(sh && sh.el && sh.el.isConnected), w = this.w;
       if (open) {
         if (!this._try) {
-          this._try = { k: '' };
+          this._try = { k: '' }; this.chrome(true);
           // the try-on stage is the mirror platform: from the hats / racks / counter spots the player is moved there first (a jump cut under the open panel), then the camera frames it
           safe(() => { const m = w.spots && w.spots.byId && w.spots.byId.mirror, c = w.controls, st = c && c.state && c.state(); if (m && st && Math.hypot(st.x - m.x, st.z - m.z) > 1.3) c.teleportTo(m.x, m.z); });
-          safe(() => w.focus('mirror')); safe(() => hooks.sheetOpen && hooks.sheetOpen(sh.el));
+          // the camera comes round to the FRONT of the player (a 3/4 view), so the shirt and the hat you are trying on are what you see
+          safe(() => { const hd = w.controls.state().heading || 0; w.focus('mirror', { yaw: Math.round(hd * 180 / Math.PI + 50) }); });
+          safe(() => hooks.sheetOpen && hooks.sheetOpen(sh.el));
         }
         const k = JSON.stringify(sh.look); if (k !== this._try.k) { this._try.k = k; safe(() => w.setLook(sh.look)); }
       } else if (this._try) this.dropShop();
     },
     dropShop() {
       if (this.shop && this.shop.el && this.shop.el.isConnected) this.shop.el.remove(); this.shop = null;
-      if (this._try) { this._try = null; const w = this.w; if (w) { safe(() => w.setLook(G.ch.look)); safe(() => w.release()); } safe(() => hooks.sheetClose && hooks.sheetClose()); }
+      if (this._try) { this._try = null; this.chrome(false); const w = this.w; if (w) { safe(() => w.setLook(G.ch.look)); safe(() => w.release()); } safe(() => hooks.sheetClose && hooks.sheetClose()); }
     },
     // ---- keep the world in step with the save: Foxy's schedule, the goal beacon, the bar chalkboard (the world re-reads the clock itself)
     sync() {
