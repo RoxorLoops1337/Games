@@ -108,7 +108,7 @@ function tickItems(dt) {
       float(p.x, p.y - 70, '+1', '#6ee0d8', true); sfx('gem', true, chainPitch());
     } else if (room) {
       it.dead = true; p.helmets.push(cloneEntry(it));
-      flyTo('item', it.x, it.y, p.x, p.y - 34, { entry: it, dur: 0.2, arc: 18 }); sfx('pick', false, chainPitch());
+      flyTo('item', it.x, it.y, S.comp.x, S.comp.y - 36, { entry: it, dur: 0.2, arc: 18 }); sfx('pick', false, chainPitch());
       if (p.helmets.length >= cap()) float(p.x, p.y - 90, 'FULL! Go sell', '#ffd94a', true);
     }
   }
@@ -123,7 +123,7 @@ function tickSell(dt) {
       p.sellAcc -= 1; const e = p.helmets.pop(), v = entryVal(e);
       S.pallet += v; S.stats.sold++; S.stats.earned += v; questEvent('sell', 1); questEvent('earn', v);
       float(SELL.x + 36, SELL.y - 60, '+' + fmt(v), '#ffd94a', !!e.crown);
-      flyTo('item', p.x, p.y - 40, SELL.x, SELL.y - 24, { entry: e, dur: 0.26, arc: 44 });
+      flyTo('item', S.comp.x, S.comp.y - 40, SELL.x, SELL.y - 24, { entry: e, dur: 0.26, arc: 44 });
       flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { delay: 0.2, dur: 0.34, arc: 70 });
       puff(VAULT.x, VAULT.y - 30, '#ffd94a', 3, true); sfx('sell', false, chainPitch());
     }
@@ -138,7 +138,7 @@ function tickForge(dt) {
       p.forgeAcc -= 1; let idx = -1;
       for (let i = p.helmets.length - 1; i >= 0; i--) if (entryRes(p.helmets[i]) === 'helm') { idx = i; break; }
       if (idx < 0) break;
-      const e = p.helmets.splice(idx, 1)[0]; f.queue.push(e.k); sfx('smelt'); flyTo('item', p.x, p.y - 40, FORGE.x, FORGE.y - 10, { entry: e, dur: 0.24, arc: 30 });
+      const e = p.helmets.splice(idx, 1)[0]; f.queue.push(e.k); sfx('smelt'); flyTo('item', S.comp.x, S.comp.y - 40, FORGE.x, FORGE.y - 10, { entry: e, dur: 0.24, arc: 30 });
     }
   }
   if (f.queue.length && f.tray.length < trayMax()) {
@@ -147,7 +147,7 @@ function tickForge(dt) {
   }
   if (dist2(p.x, p.y, TRAY.x, TRAY.y) < TRAY.r * TRAY.r && f.tray.length && p.helmets.length < cap()) {
     p.forgeAcc += dt * SELL_RATE; // reuse accumulator for collecting
-    while (p.forgeAcc >= 1 && f.tray.length && p.helmets.length < cap()) { p.forgeAcc -= 1; const k = f.tray.pop(); p.helmets.push({ k, bar: true, crown: false }); sfx('pick', false, chainPitch()); flyTo('item', TRAY.x, TRAY.y - 10, p.x, p.y - 38, { entry: { k, bar: true }, dur: 0.22 }); }
+    while (p.forgeAcc >= 1 && f.tray.length && p.helmets.length < cap()) { p.forgeAcc -= 1; const k = f.tray.pop(); p.helmets.push({ k, bar: true, crown: false }); sfx('pick', false, chainPitch()); flyTo('item', TRAY.x, TRAY.y - 10, S.comp.x, S.comp.y - 38, { entry: { k, bar: true }, dur: 0.22 }); }
   }
 }
 function tickVault(dt) {
