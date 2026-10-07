@@ -801,6 +801,35 @@ h.test('magnet crane: the hold fades with distance (no whole-bin clumps), gold c
   h.eq(stuck, 0, 'gold coins do not stick to the magnet');
 });
 
+// (round 29) owner: prizes "get so hard stuck" in the bottom corners. The floor ramps are thin lines over a
+// hollow wedge; a prize pushed through one sat in the wedge where no claw reaches. slopeInside lifts it out.
+h.test('floor ramps: a prize under a ramp comes back out onto it (awake or asleep), never stays in the wedge', () => {
+  const slopeWorld = () => {
+    const W = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 });
+    const C = PHYS.cabinet(W, { w: 480, h: 390, chuteW: 64, dividerH: 0.45, slopeW: 110, slopeH: 55 });
+    return { W, C };
+  };
+  // below each ramp's line: the left wedge's corner, and the right one next to the divider
+  const underL = (b) => b.x < 110 && (b.y - (390 - 55)) * 114 - (b.x + 4) * 57 > 0;
+  const underR = (b, cx) => b.x > cx - 110 && b.x < cx - 6 && (b.y - (390 + 2)) * 104 + (b.x - (cx - 110)) * 57 > 0;
+  const trial = (guard) => {
+    const keep = PHYS.PH.slopeGuard;
+    PHYS.PH.slopeGuard = guard;
+    try {
+      const { W, C } = slopeWorld();
+      const cx = C.bounds.chuteX;
+      const a = spawn(W, ITEM.shield({}), 22, 376), b = spawn(W, ITEM.ball({}), cx - 26, 372), c = spawn(W, ITEM.marble({}), 40, 380);
+      c.sl = true; c.vx = c.vy = 0;   // one already asleep down there
+      settle(W, 2);
+      return { stuck: [underL(a), underR(b, cx), underL(c)].filter(Boolean).length, ok: inside(W, C) && !anyNaN(W) };
+    } finally { PHYS.PH.slopeGuard = keep; }
+  };
+  const off = trial(false), on = trial(true);
+  h.ok(off.stuck >= 2, `without the guard the wedge keeps them (${off.stuck} of 3 stuck): the bug`);
+  h.eq(on.stuck, 0, 'with the guard every prize is back above the ramps');
+  h.ok(on.ok, 'inside the glass, no NaN');
+});
+
 h.test('scoop: lifts a handful of small things at once; a sword tips out', () => {
   let best = 0, total = 0;
   for (const x of [170, 200, 230]) {
