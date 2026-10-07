@@ -76,7 +76,7 @@ export function createEar(ctx, opts) {
     const A = BBH().Audio || {}; let via = 'tone';
     try {
       if (chord && notes.length >= 3 && A.chord) { A.chord(notes, CHORD_DUR); via = 'chord'; }
-      else if (notes.length === 2 && A.interval) { A.interval(notes[0], notes[1], { melodic: !chord }); via = 'interval'; }
+      else if (notes.length === 2 && A.interval) { A.interval(notes[0], notes[1], chord ? { melodic: false, dur: CHORD_DUR / 1.4, timbre: 'keys' } : { melodic: true, harmonic: false, dur: NOTE_DUR, gap: NOTE_GAP - NOTE_DUR, timbre: 'keys' }); via = 'interval'; }   // melodic only: the two notes one after the other, in step with the gems
       else if (chord && A.chord) { A.chord(notes, CHORD_DUR); via = 'chord'; }
       else if (A.note) { notes.forEach((m, i) => later(() => { try { A.note(m, chord ? CHORD_DUR : NOTE_DUR, { timbre: 'keys' }); } catch (e) { /* ignore */ } }, chord ? 0 : i * NOTE_GAP * 1000)); via = 'note'; }
       else notes.forEach((m, i) => later(() => toneM(m, chord ? CHORD_DUR : NOTE_DUR), chord ? 0 : i * NOTE_GAP * 1000));
