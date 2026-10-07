@@ -302,7 +302,7 @@
   }
 
   // ---------- UI helpers ----------
-  const info = (id, x, y) => { if (typeof tutInfoButtonSheet === 'function') { try { tutInfoButtonSheet(id, x, y); } catch (e) { /* optional */ } } };
+  const info = (id, x, y) => { if (typeof tutInfoButtonSheet === 'function') { try { tutInfoButtonSheet(x, y, id, 22); } catch (e) { /* optional */ } } };
   function bigBtn(x, y, w, h, kind, on, top, cost, act) {
     cbtn(x, y, w, h, on, on ? kind : 'off'); ctx.textAlign = 'center'; ctx.fillStyle = on ? (kind === 'gold' ? '#3a2410' : '#fff') : '#cfc6ee'; ctx.font = font(10); ctx.fillText(top, x + w / 2, y + (cost === null ? h / 2 + 4 : 15));
     if (cost !== null) iconText(x + w / 2, y + h - 7, coinDraw, fmt(cost), on ? (kind === 'gold' ? '#3a2410' : '#fff') : '#cfc6ee', 11);
@@ -324,7 +324,7 @@
     let y = 4;
     const f0 = PICK !== null ? fanById(PICK) : null; if (PICK !== null && !f0) PICK = null;
     if (f0) return pickerView(cw, sh, f0, y);
-    y = section(y, 'Careers  ·  special jobs for trained fans'); info('crew_careers', cw - 22, y - 18);
+    y = section(y, 'Careers  ·  special jobs for trained fans'); info('crew_careers', cw - 22, y - 12);
     y = note(y, cw, 'Train a fan to level 3 in the Crew tab, then give them a career. Each career has its own bonus. You can change a career later for a higher price.');
     const L = bonusLines();
     rowCard(y, 22 + Math.max(1, L.length) * 16, cw); ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.textAlign = 'left'; ctx.fillText('ACTIVE BONUSES', 14, y + 17);
@@ -371,7 +371,7 @@
   }
   function districtsTab(cw, sh) {
     let y = 4; const tier = townTierIdx();
-    y = section(y, 'Districts  ·  grow your town'); info('crew_districts', cw - 22, y - 18);
+    y = section(y, 'Districts  ·  grow your town'); info('crew_districts', cw - 22, y - 12);
     y = note(y, cw, 'Reach new town sizes to open districts. Each one is a building on the plaza you can tap.');
     // MARKET
     const d0 = DISTRICTS[0], d1 = DISTRICTS[1], d2 = DISTRICTS[2];
@@ -464,8 +464,8 @@
     tutAdd({ id: 'crew_effect', order: 3040, when: () => S.pop.some(specOk), title: 'Your career fan is working!', text: 'Look for the small badge next to the fan. Open Town, Careers any time to see all your active bonuses.', icon: 'heart', target: () => { const f = S.pop.find(specOk); return f ? { x: f.x, y: f.y - 30 } : null; } });
   }
   if (typeof tutHelp === 'function') {
-    tutHelp('crew_careers', 'Careers', 'A fan at level 3 can get a career for coins. Roadie: carries 6 more and walks faster. Manager: sells all loot at once for 25% more. Scout: every 90 seconds finds a coin purse and secrets. Bodyguard: pulls enemies toward itself and you take 8% less damage each. Drummer: fighters nearby fire 25% faster.', 'star');
-    tutHelp('crew_districts', 'Districts', 'Grow your town to open districts. Market (Village): each level gives more coins, and the Hot Item helmet sells for double. Arena (Town): fight 5 waves once a day for prizes. Studio (City): record tracks for lasting bonuses, even while you are away.', 'home');
+    tutHelp('crew_careers', 'Careers', 'A fan at level 3 can get a career for coins. Roadie: carries 6 more and walks faster. Manager: sells all loot at once for 25% more. Scout: every 90 seconds finds a coin purse and secrets. Bodyguard: pulls enemies toward itself and you take 8% less damage each. Drummer: fighters nearby fire 25% faster.', 'star', 'Town');
+    tutHelp('crew_districts', 'Districts', 'Grow your town to open districts. Market (Village): each level gives more coins, and the Hot Item helmet sells for double. Arena (Town): fight 5 waves once a day for prizes. Studio (City): record tracks for lasting bonuses, even while you are away.', 'home', 'Town');
   }
 
   // ---------- feature registration ----------

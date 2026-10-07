@@ -78,6 +78,7 @@ function guideTarget() {
   return null;
 }
 function drawGuide() {
+  if (typeof TCO !== 'undefined' && TCO.cur) return; // a coach card has its own arrow
   const g = guideTarget(); if (!g || S.sheet || S.modal) return;
   const dx = g.x - CAM.x, dy = g.y - CAM.y;
   if (dx * dx + dy * dy < 200 * 200) return;

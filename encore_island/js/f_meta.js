@@ -121,6 +121,7 @@ function seasTab(cw) {
 
 regFeature({
   id: 'seasons', keep: true,
+  api: { SEASONS, seasonOfDate, seasCur, seasKey, seasRec, seasGoal, seasAdd, seasClaim, seasDaysLeft, seasReady, seasReward },
   init(st) { if (st.force === undefined) st.force = null; if (!st.rec) st.rec = {}; if (st.off === undefined) st.off = false; if (st.lastEarned === undefined) st.lastEarned = S.stats ? S.stats.earned : 0; if (!st.fakeNow) st.fakeNow = 0; if (S.stats && st.lastEarned > S.stats.earned) st.lastEarned = S.stats.earned; seasRec(); },
   tick() { const st = S.feat.seasons, e = S.stats.earned; if (e > st.lastEarned) { seasAdd('earn', e - st.lastEarned); } st.lastEarned = e; },
   drawWorld() { seasDrawFx(); },
@@ -206,13 +207,15 @@ function chalFinish(why) {
   if (newBest) st.best[bk] = { score, stars: Math.max(stars, prev.stars) }; else if (stars > prev.stars) prev.stars = stars;
   const full = chalPrize(mode, Math.max(stars, paid)), had = chalPrize(mode, paid), rw = { gems: Math.max(0, full.gems - had.gems), coins: Math.max(0, full.coins - had.coins), scrap: Math.max(0, full.scrap - had.scrap) };
   if (stars > paid) st.paid[bk] = stars; else rw.gems = rw.coins = rw.scrap = 0;
-  if (rw.gems) { S.gems += rw.gems; S.stats.gemsFound += rw.gems; } if (rw.coins) S.wallet += rw.coins; if (rw.scrap && typeof gearAddScrap === 'function') gearAddScrap(rw.scrap); else rw.scrap = typeof gearAddScrap === 'function' ? rw.scrap : 0;
+  if (rw.gems) { S.gems += rw.gems; S.stats.gemsFound += rw.gems; } if (rw.coins) S.wallet += rw.coins; if (rw.scrap && !chalScrap(rw.scrap)) rw.scrap = 0;
   st.paid = chalTrim(st.paid); st.best = chalTrim(st.best);
   st.hist.push({ mode, key, score, stars, ts: metaNow().getTime() }); st.hist.sort((a, b) => b.score - a.score); st.hist.length = Math.min(5, st.hist.length);
   st.result = { mode, key, rules: rules.map(r => r.name), score, stars, best: Math.max(prev.score, score), newBest, rw, why, kills: CHAL.kills, combo: CHAL.combo, th };
   if (stars) { sfx('win', true); JUICE.flash = 0.4; starBurst(p.x, p.y - 40, 24, ['#ffe98a', '#ff9ac8', '#9af0b4'], 340); } else sfx('hurt');
   fEmit('challenge', { mode, stars, score, key }); save(); return st.result;
 }
+function chalHasScrap() { return typeof gearAddScrap === 'function' || !!(S.feat.gear && typeof S.feat.gear.scrap === 'number'); }
+function chalScrap(n) { if (typeof gearAddScrap === 'function') { gearAddScrap(n); return true; } const G = S.feat.gear; if (G && typeof G.scrap === 'number') { G.scrap += n; return true; } return false; }
 function chalTrim(o) { const ks = Object.keys(o); if (ks.length > 40) { ks.sort(); for (let i = 0; i < ks.length - 40; i++) delete o[ks[i]]; } return o; }
 function chalAbort() { return chalFinish('abort'); }
 function chalDraw() { // HUD pill under the rank pill + result card
@@ -251,7 +254,7 @@ function chalCard(cw, y, mode) {
   rules.forEach((r, i) => { const b0 = y + 56 + i * 44; ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.fillText(r.name, 14, b0 + 8); ctx.fillStyle = '#e6dcff'; ctx.font = font(10, false); wrapText(r.desc, 14, b0 + 22, cw - 40, 12); });
   const yy = y + 56 + rules.length * 44 + 2; ctx.textAlign = 'left'; ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText('Stars at ' + th.map(fmt).join(' / ') + ' pts', 14, yy + 8);
   ctx.fillStyle = '#ffd94a'; ctx.fillText(best ? 'Best ' + fmt(best.score) + ' pts' : 'Not played yet', 14, yy + 22); metaStars(cw - 54, yy + 14, best ? best.stars : 0, 18, 22);
-  const pz = chalPrize(mode, 3); ctx.fillStyle = '#6ee0d8'; ctx.fillText('Prize up to ' + pz.gems + ' gems + ' + fmt(pz.coins) + ' coins' + (typeof gearAddScrap === 'function' ? ' + ' + pz.scrap + ' scrap' : '') + (paid ? '   (claimed ' + paid + ' star' + (paid > 1 ? 's' : '') + ')' : ''), 14, yy + 38);
+  const pz = chalPrize(mode, 3); ctx.fillStyle = '#6ee0d8'; ctx.fillText('Prize up to ' + pz.gems + ' gems + ' + fmt(pz.coins) + ' coins' + (chalHasScrap() ? ' + ' + pz.scrap + ' scrap' : '') + (paid ? '   (claimed ' + paid + ' star' + (paid > 1 ? 's' : '') + ')' : ''), 14, yy + 38);
   const by = y + h - 50, on = !CHAL.on && !st.result; cbtn(10, by, cw - 20, 42, on, wk ? 'violet' : 'go'); ctx.fillStyle = '#fff'; ctx.font = font(15); ctx.textAlign = 'center'; ctx.fillText(CHAL.on ? 'Run in progress…' : 'START', cw / 2, by + 27); if (on) chit(10, by, cw - 20, 42, () => chalStart(mode));
   return y + h + 8;
 }
@@ -266,6 +269,7 @@ function chalTab(cw) {
 }
 regFeature({
   id: 'challenge', keep: true,
+  api: { CHAL, CHAL_RULES, chalStart, chalFinish, chalAbort, chalRules, chalKey, chalScore, chalThresholds, chalPrize, chalReset },
   init(st) { if (!st.best) st.best = {}; if (!st.paid) st.paid = {}; if (!st.hist) st.hist = []; if (st.active === undefined) st.active = false; if (st.snap === undefined) st.snap = null; if (st.result === undefined) st.result = null; },
   tick(dt) {
     const st = S.feat.challenge;
@@ -385,6 +389,7 @@ function bookTab(cw) {
 }
 regFeature({
   id: 'book', keep: true,
+  api: { BK, BOOK_PAGES, bkRefresh, bkClaim, bkBuild, bkReached, bkNewCount },
   init(st) { if (!st.sp) st.sp = {}; if (!st.boss) st.boss = {}; if (!st.helm) st.helm = {}; if (!st.gear) st.gear = {}; if (!st.claimed) st.claimed = {}; if (!st.known) st.known = {}; if (st.ready === undefined) st.ready = false; BK.pages = null; if (S.bestiary) { for (let f = 0; f < 8; f++) if (S.bestiary[f] && S.bestiary[f].k > 0) st.sp[f] = 1; } },
   onLoad() { bkRefresh(); }, onTour() { bkRefresh(); },
   tick(dt) {

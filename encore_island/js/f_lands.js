@@ -258,7 +258,7 @@ function ldBossDraw(e) {
   const D = LD_VAR[e.variant]; if (!D || !vis(e.x, e.y, 200)) return; const t = S.t, cy = e.y - e.r * 1.4, R = e.r * 2.6;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const gl = ctx.createRadialGradient(e.x, cy, e.r * 0.4, e.x, cy, R * (1 + 0.06 * Math.sin(t * 5))); const c = e.variant === 'enrage' && e.enr ? '#ff3a2a' : D.col;
-  gl.addColorStop(0, 'rgba(0,0,0,0)'); gl.addColorStop(0.7, mixc(c, '#000000', 0.45)); gl.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = e.variant === 'enrage' ? (e.enr ? 0.85 : 0.35) : 0.6; ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(e.x, cy, R * 1.1, 0, TAU); ctx.fill(); ctx.restore();
+  gl.addColorStop(0, 'rgba(0,0,0,0)'); gl.addColorStop(0.7, mixc(c, '#000000', 0.45)); gl.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = e.variant === 'enrage' ? (e.enr ? 0.7 : 0.3) : 0.45; ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(e.x, cy, R * 1.1, 0, TAU); ctx.fill(); ctx.restore();
   ctx.save(); ctx.strokeStyle = D.col; ctx.lineWidth = 3; ctx.globalAlpha = 0.6 + 0.3 * Math.sin(t * 4); ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, e.r * 1.5, e.r * 0.55, 0, 0, TAU); ctx.stroke(); ctx.restore();
   if (e.variant === 'shield' && e.shield > 0) {
     ctx.save(); ctx.globalAlpha = 0.28 + 0.12 * Math.sin(t * 6); ctx.fillStyle = '#8fe8ff'; ctx.beginPath(); ctx.arc(e.x, cy, e.r * 1.9, 0, TAU); ctx.fill(); ctx.globalAlpha = 0.9; ctx.strokeStyle = '#d6f8ff'; ctx.lineWidth = 3.5; ctx.stroke(); ctx.restore();
@@ -335,14 +335,14 @@ regFeature({
           ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh);
           ctx.globalCompositeOperation = 'lighter'; const wg = ctx.createRadialGradient(sx, sy - 20, 4, sx, sy - 20, R); wg.addColorStop(0, 'rgba(255,220,140,' + 0.22 * LD.dk + ')'); wg.addColorStop(1, 'rgba(255,220,140,0)'); ctx.fillStyle = wg; ctx.fillRect(0, 0, vw, vh);
         }
-        if (LD.tint > 0.01) { const tg = ctx.createLinearGradient(0, 0, 0, vh); tg.addColorStop(0, 'rgba(255,214,90,' + 0.26 * LD.tint + ')'); tg.addColorStop(1, 'rgba(255,190,70,' + 0.08 * LD.tint + ')'); ctx.fillStyle = tg; ctx.fillRect(0, 0, vw, vh); }
+        if (LD.tint > 0.01) { const tg = ctx.createLinearGradient(0, 0, 0, vh); tg.addColorStop(0, 'rgba(255,214,90,' + 0.34 * LD.tint + ')'); tg.addColorStop(1, 'rgba(255,190,70,' + 0.08 * LD.tint + ')'); ctx.fillStyle = tg; ctx.fillRect(0, 0, vw, vh); }
         ctx.restore();
       }
     } catch (err) { if (LD.strict) throw err; }
   },
   drawHud() {
     const st = fs('lands'), ev = st.ev; if (!ev || S.sheet || S.modal || S.cards) { LD.chip = null; return; }
-    const D = LD_EV[ev.type], x = 8, y = 128, w = 168, h = 44, left = Math.max(0, ev.dur - ev.t), f = left / ev.dur, g = geoOf(ev.k), pu = 0.5 + 0.5 * Math.sin(S.t * 5);
+    const D = LD_EV[ev.type], x = 8, y = 198, w = 168, h = 44, left = Math.max(0, ev.dur - ev.t), f = left / ev.dur, g = geoOf(ev.k), pu = 0.5 + 0.5 * Math.sin(S.t * 5);
     plaque(x, y, w, h, 14); ctx.strokeStyle = D.col; ctx.globalAlpha = 0.5 + 0.4 * pu; ctx.lineWidth = 1.6; rr(x, y, w, h, 14); ctx.stroke(); ctx.globalAlpha = 1;
     const cx = x + 25, cy = y + h / 2; disc(cx, cy, 15, D.col, D.col2); ldGlyph(ev.type, cx, cy, 24);
     ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(cx, cy, 19.5, 0, TAU); ctx.stroke(); ctx.strokeStyle = '#fff4c0'; ctx.beginPath(); ctx.arc(cx, cy, 19.5, -Math.PI / 2, -Math.PI / 2 + f * TAU); ctx.stroke();
@@ -389,7 +389,7 @@ regFeature({
 });
 
 // ---------------------------------------------------------------- the Lands tab
-function ldInfo(id, cw, y) { if (typeof tutInfoButtonSheet === 'function') { try { tutInfoButtonSheet(cw - 24, y + 11, id, 26); } catch (err) { /* optional */ } } }
+function ldInfo(id, cw, y) { if (typeof tutInfoButtonSheet === 'function') { try { tutInfoButtonSheet(cw - 26, y + 8, id, 22); } catch (err) { /* optional */ } } }
 function ldSec(y, cw, txt, help) { y = section(y, txt); ldInfo(help, cw, y - 22); return y; }
 function ldTab(cw, sh) {
   const st = fs('lands'), bv = fs('bossvar'), ev = st.ev; let y = 4;
