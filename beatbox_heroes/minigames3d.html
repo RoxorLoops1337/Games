@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#120d1f"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Beatbox Heroes: Minigames 3D</title>
+<style>
+html,body{margin:0;height:100%;background:#120d1f;overflow:hidden;touch-action:none;overscroll-behavior:none;font-family:"Trebuchet MS",system-ui,sans-serif;color:#fff0c9;-webkit-user-select:none;user-select:none}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#app{position:relative;height:100%;aspect-ratio:9/16;max-width:100%;overflow:hidden;background:#120d1f}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#hud{position:absolute;inset:0;pointer-events:none;z-index:3}
+#hud *{pointer-events:auto}
+#boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#120d1f;font-weight:800;letter-spacing:.12em;color:#ffd27a;transition:opacity .5s;z-index:5;pointer-events:none}
+#boot.off{opacity:0}
+</style></head><body>
+<div id="stage"><div id="app"><canvas id="cv"></canvas><div id="hud"></div><div id="boot">BEATBOX HEROES</div></div></div>
+<!-- the real game scripts give the mini games the true rules (Core), sound (Audio) and microphone (Mic) -->
+<script src="pix.js"></script><script src="font.js"></script><script src="catalog.js"></script>
+<script src="audio.js"></script><script src="mic.js"></script><script src="samples.js"></script><script src="core.js"></script>
+<script src="park3d.bundle.js"></script>
+<script>
+(async () => {
+  // ?game=rhythm|run|tuner  &t=day|dusk|night  &q=low|med|high.  DOM HUD goes into #hud. Results arrive as events 'minigame'.
+  const qs = new URLSearchParams(location.search);
+  const api = await Park3D.init('#cv', { scene: qs.get('game') || 'rhythm', time: qs.get('t') || 'dusk', quality: qs.get('q') || undefined, hud: document.getElementById('hud'), onResult: (r) => { window.__lastResult = r; console.log('minigame result', JSON.stringify(r)); } });
+  const boot = document.getElementById('boot'); boot.classList.add('off'); setTimeout(() => boot.remove(), 600);
+})();
+</script></body></html>

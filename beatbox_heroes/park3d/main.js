@@ -8,6 +8,7 @@ import { PAL } from './palette.js';
 import { buildTerrain } from './terrain.js';
 import { buildFlora } from './flora.js';
 import { buildFlat } from './flat.js';
+import { MINIS } from './mg_index.js';
 import { createCharacter, createNPC } from './characters.js';
 import { buildLighting } from './lighting.js';
 import { buildSpots } from './spots.js';
@@ -19,6 +20,19 @@ const DEFAULT_LOOK = { name: 'Tay', body: 'neutral', skin: '#c68b5e', hair: { st
 function safe(name, fn, fallback) { try { return fn(); } catch (e) { console.error('[park3d] ' + name + ' failed: ' + (e && e.stack || e)); return fallback; } }
 const NOP = () => {};
 
+// Mini game path: the game owns its scene, camera and (optionally) its own render(); main only runs the loop and the DPR/size handling.
+function initMini(name, ctx, opts, canvas, renderer, scene, camera, events) {
+  const mg = safe('mini ' + name, () => MINIS[name](ctx, opts), { group: new THREE.Group(), update: NOP });
+  scene.add(mg.group); if (opts.onResult) events.on('minigame', opts.onResult);
+  let last = performance.now(), t = 0, running = true, raf = 0;
+  function resize() { const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 2); renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (mg.resize) mg.resize(w, h, dpr); }
+  window.addEventListener('resize', resize); resize();
+  function frame(now) { raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt; mg.update(dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); }
+  raf = requestAnimationFrame(frame);
+  const api = { ready: true, mini: true, sceneName: name, game: mg, scene, camera, renderer, ctx, events, setLook(l) { if (mg.setLook) mg.setLook(l); }, start(o) { if (mg.start) mg.start(o); }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; }, pause(v) { running = !v; }, dispose() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); if (mg.dispose) mg.dispose(); renderer.dispose(); } };
+  window.__park = api; return api;
+}
+
 async function init(target, opts) {
   opts = opts || {};
   const canvas = typeof target === 'string' ? document.querySelector(target) : target;
@@ -27,7 +41,8 @@ async function init(target, opts) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(38, 9 / 16, 0.5, 200);
   const events = kit.emitter(); const ctx = { THREE, kit, PAL, scene, camera, renderer, events, rng: kit.rng(opts.seed || 1337), quality: q, canvas };
-  let sceneName = opts.scene; if (!sceneName) { try { sceneName = new URLSearchParams(location.search).get('scene'); } catch (e) { /* ignore */ } } sceneName = sceneName === 'flat' ? 'flat' : 'park'; ctx.sceneName = sceneName; if (sceneName === 'flat') ctx.todInit = opts.time !== undefined ? opts.time : 'dusk'; ctx.timeName = String(opts.time !== undefined ? opts.time : 'dusk');
+  let sceneName = opts.scene; if (!sceneName) { try { sceneName = new URLSearchParams(location.search).get('scene'); } catch (e) { /* ignore */ } } sceneName = sceneName === 'flat' ? 'flat' : MINIS[sceneName] ? sceneName : 'park'; ctx.sceneName = sceneName;
+  if (MINIS[sceneName]) return initMini(sceneName, ctx, opts, canvas, renderer, scene, camera, events); if (sceneName === 'flat') ctx.todInit = opts.time !== undefined ? opts.time : 'dusk'; ctx.timeName = String(opts.time !== undefined ? opts.time : 'dusk');
   const terrain = safe('terrain', () => (sceneName === 'flat' ? buildFlat(ctx) : buildTerrain(ctx)), { group: new THREE.Group(), bounds: { minX: -17, maxX: 17, minZ: -27, maxZ: 27 }, blocked: () => false, anchors: { start: { x: 0, z: 10, rot: Math.PI }, buskSpot: { x: 8, z: -8, rot: 0 }, bench: { x: -9, z: -4, rot: 0 }, gate: { x: 0, z: 26, rot: 0 }, runStart: { x: 12, z: 14, rot: 0 }, fountain: { x: 0, z: 0, rot: 0 }, graffiti: { x: 0, z: -26, rot: 0 }, flyers: { x: 4, z: 22, rot: 0 }, lamps: [] } });
   scene.add(terrain.group);
   const flora = sceneName === 'flat' ? { group: new THREE.Group(), update: NOP } : safe('flora', () => buildFlora(ctx, terrain), { group: new THREE.Group(), update: NOP }); scene.add(flora.group);
