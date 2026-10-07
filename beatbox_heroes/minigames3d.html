@@ -21,7 +21,7 @@ html,body{margin:0;height:100%;background:#120d1f;overflow:hidden;touch-action:n
 (async () => {
   // ?game=rhythm|run|tuner  &t=day|dusk|night  &q=low|med|high.  DOM HUD goes into #hud. Results arrive as events 'minigame'.
   const qs = new URLSearchParams(location.search);
-  const api = await Park3D.init('#cv', { scene: qs.get('game') || 'rhythm', time: qs.get('t') || 'dusk', quality: qs.get('q') || undefined, hud: document.getElementById('hud'), onResult: (r) => { window.__lastResult = r; console.log('minigame result', JSON.stringify(r)); } });
+  let api; try { api = await Park3D.init('#cv', { scene: qs.get('game') || 'rhythm', time: qs.get('t') || 'dusk', quality: qs.get('q') || undefined, hud: document.getElementById('hud'), onResult: (r) => { window.__lastResult = r; console.log('minigame result', JSON.stringify(r)); } }); } catch (e) { const b = document.getElementById('boot'); b.style.cssText += ';flex-direction:column;gap:12px;text-align:center;padding:20px;font-size:14px'; b.textContent = 'Could not start: ' + (e && e.message || e) + '. '; const a = document.createElement('a'); a.href = '?game=' + (qs.get('game') || 'rhythm') + '&q=low'; a.textContent = 'Retry in low quality'; a.style.color = '#ffc65c'; a.style.pointerEvents = 'auto'; b.appendChild(a); return; }
   const boot = document.getElementById('boot'); boot.classList.add('off'); setTimeout(() => boot.remove(), 600);
 })();
 </script></body></html>

@@ -22,12 +22,29 @@ const NOP = () => {};
 
 // Mini game path: the game owns its scene, camera and (optionally) its own render(); main only runs the loop and the DPR/size handling.
 function initMini(name, ctx, opts, canvas, renderer, scene, camera, events) {
-  const mg = safe('mini ' + name, () => MINIS[name](ctx, opts), { group: new THREE.Group(), update: NOP });
+  // never leave a silent black screen: a failed game shows the reason and a one-tap retry in low quality
+  const hud = opts.hud; let bannerShown = false;
+  const banner = (msg) => {
+    try { console.error('[park3d] ' + msg); } catch (e) { /* ignore */ }
+    if (!hud || bannerShown) return; bannerShown = true;
+    const d = document.createElement('div'); d.style.cssText = 'position:absolute;left:12px;right:12px;top:30%;padding:14px;border-radius:14px;background:#2a1b4dee;color:#fff0c9;font:600 14px/1.4 system-ui,sans-serif;z-index:20;pointer-events:auto;text-align:center';
+    const b = document.createElement('button'); b.textContent = 'RETRY IN LOW QUALITY'; b.style.cssText = 'margin-top:10px;padding:10px 16px;border:0;border-radius:12px;background:#ffc65c;color:#2b1a00;font:800 14px system-ui,sans-serif';
+    b.onclick = () => { const u = new URL(location.href); u.searchParams.set('q', 'low'); location.replace(u.href); };
+    d.textContent = msg.slice(0, 220); d.appendChild(document.createElement('br')); d.appendChild(b); hud.appendChild(d);
+  };
+  let mg; try { mg = MINIS[name](ctx, opts); } catch (e) { banner('This game could not start: ' + (e && e.message || e)); mg = { group: new THREE.Group(), update: NOP }; }
   scene.add(mg.group); if (opts.onResult) events.on('minigame', opts.onResult);
-  let last = performance.now(), t = 0, running = true, raf = 0;
-  function resize() { const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 2); renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (mg.resize) mg.resize(w, h, dpr); }
-  window.addEventListener('resize', resize); resize();
-  function frame(now) { raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt; mg.update(dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); }
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); banner('The phone ran out of graphics memory.'); if (ctx.quality !== 'low') { const u = new URL(location.href); u.searchParams.set('q', 'low'); setTimeout(() => location.replace(u.href), 400); } });
+  let last = performance.now(), t = 0, running = true, raf = 0, fails = 0;
+  function resize() { const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, ctx.quality === 'high' ? 2 : ctx.quality === 'med' ? 1.5 : 1.25); renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (mg.resize) mg.resize(w, h, dpr); }
+  window.addEventListener('resize', resize); try { resize(); } catch (e) { banner('Resize failed: ' + (e && e.message || e)); }
+  function frame(now) {
+    raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt;
+    try { mg.update(dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); fails = 0; } catch (e) {
+      if (++fails === 3) banner('Draw error: ' + (e && e.message || e));
+      try { renderer.render(scene, camera); } catch (e2) { /* ignore */ }
+    }
+  }
   raf = requestAnimationFrame(frame);
   const api = { ready: true, mini: true, sceneName: name, game: mg, scene, camera, renderer, ctx, events, setLook(l) { if (mg.setLook) mg.setLook(l); }, start(o) { if (mg.start) mg.start(o); }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; }, pause(v) { running = !v; }, dispose() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); if (mg.dispose) mg.dispose(); renderer.dispose(); } };
   window.__park = api; return api;
