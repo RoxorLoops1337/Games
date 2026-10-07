@@ -49,23 +49,26 @@ const CSS = `
 .tn-row span:first-child{color:#b9aee6}
 .tn-dots{display:flex;gap:5px;justify-content:center;margin:2px 0 6px}.tn-dots i{width:20px;height:20px;border-radius:7px;background:#ff3e86;display:block;box-shadow:0 0 8px rgba(255,62,134,.6)}.tn-dots i.ok{background:#5dff7a;box-shadow:0 0 8px rgba(93,255,122,.7)}
 .tn-btns{display:flex;gap:10px}
-.tn-btn{flex:1;min-height:56px;padding:0 10px;border-radius:18px;font-weight:900;font-size:16px;letter-spacing:.08em;color:#2a1648;background:linear-gradient(#ffd23f,#f0a21a);box-shadow:0 4px 0 #8a5a00,0 6px 14px rgba(10,5,30,.5);transition:transform .08s}
-.tn-btn:active{transform:translateY(3px)}
-.tn-btn.alt{background:linear-gradient(#cfc2ff,#8d7ad8);box-shadow:0 4px 0 #4c3d8f,0 6px 14px rgba(10,5,30,.5)}
+.tn button.tn-btn{flex:1;min-height:56px;padding:0 10px;border-radius:18px;font-weight:900;font-size:16px;letter-spacing:.08em;color:#2a1648;background:linear-gradient(#ffd23f,#f0a21a);box-shadow:0 4px 0 #8a5a00,0 6px 14px rgba(10,5,30,.5);transition:transform .08s}
+.tn button.tn-btn:active{transform:translateY(3px)}
+.tn button.tn-btn.alt{background:linear-gradient(#cfc2ff,#8d7ad8);box-shadow:0 4px 0 #4c3d8f,0 6px 14px rgba(10,5,30,.5)}
 .tn-pick{position:absolute;left:14px;right:14px;bottom:calc(18px + var(--sb));display:flex;flex-direction:column;gap:9px;pointer-events:none}
 .tn-pick .ttl{text-align:center;margin-bottom:2px}
 .tn-pick .ttl b{display:block;font-size:30px;font-weight:900;letter-spacing:.1em;color:#fff6e8;text-shadow:0 3px 0 #0e0a1e,0 0 22px rgba(255,62,165,.8)}
 .tn-pick .ttl span{display:block;margin:6px auto 0;max-width:300px;font-size:13px;font-weight:700;line-height:1.35;color:#e6dcff;text-shadow:0 2px 0 #0e0a1e}
-.tn-opt{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:64px;padding:8px 18px;border-radius:20px;text-align:left;font-weight:900;font-size:19px;letter-spacing:.07em;color:#1a0f33;box-shadow:0 5px 0 rgba(0,0,0,.35),0 8px 18px rgba(10,5,30,.5);transition:transform .08s}
-.tn-opt:active{transform:translateY(4px) scale(.98)}
-.tn-opt small{font-size:11px;letter-spacing:.06em;font-weight:700;opacity:.75}
-.tn-opt.hi{background:linear-gradient(#ffe97a,#ffb62e)}.tn-opt.lo{background:linear-gradient(#a9c6ff,#6d8cf0)}.tn-opt.ear{background:linear-gradient(#8ff3ff,#35c3e6)}
-.tn-pick .tn-btn{min-height:46px;flex:none}
+.tn button.tn-opt{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:64px;padding:8px 18px;border-radius:20px;text-align:left;font-weight:900;font-size:19px;letter-spacing:.07em;color:#1a0f33;box-shadow:0 5px 0 rgba(0,0,0,.35),0 8px 18px rgba(10,5,30,.5);transition:transform .08s}
+.tn button.tn-opt:active{transform:translateY(4px) scale(.98)}
+.tn button.tn-opt small{font-size:11px;letter-spacing:.06em;font-weight:700;opacity:.75}
+.tn button.tn-opt.hi{background:linear-gradient(#ffe97a,#ffb62e)}.tn-opt.lo{background:linear-gradient(#a9c6ff,#6d8cf0)}.tn-opt.ear{background:linear-gradient(#8ff3ff,#35c3e6)}
+.tn-pick button.tn-btn{min-height:46px;flex:none}
+.tn-opt.sel{outline:3px solid #fff6e8;outline-offset:2px}
+.tn-rw{margin-top:-6px;margin-bottom:10px;font-weight:800;font-size:12px;letter-spacing:.08em;color:#ffd23f}
 @media (max-height:620px){.tn-note{font-size:34px}.tn-opt{min-height:52px}}
 @media (prefers-reduced-motion:reduce){.tn-fb.go,.tn-card{animation-duration:.01s}}
 `;
 
-export function createUI(hud, H) {
+export function createUI(hud, H, uopt) {
+  uopt = uopt || {}; let rw = null, curR = null;
   const doc = hud.ownerDocument, root = doc.createElement('div'); root.className = 'tn';
   const st = doc.createElement('style'); st.textContent = CSS; root.appendChild(st);
   const el = (tag, cls, html, par) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; (par || root).appendChild(e); return e; };
@@ -80,14 +83,14 @@ export function createUI(hud, H) {
   let pick = null, card = null, lastRound = -1, lastScore = -1, lastStreak = -1, fbKey = null;
   hud.appendChild(root);
 
-  function clearOverlays() { if (pick) { pick.remove(); pick = null; } if (card) { card.remove(); card = null; } }
-  function showPicker() {
+  function clearOverlays() { if (pick) { pick.remove(); pick = null; } if (card) { card.remove(); card = null; } curR = null; }
+  function showPicker(voice) {
     clearOverlays(); setPlayVisible(false);
     pick = el('div', 'tn-pick', '');
     const t = el('div', 'ttl', '<b>PITCH TUNER</b><span>Listen to the note, then sing it into your microphone. Stay in tune to score. No mic? Try ear training.</span>', pick);
     void t; const mk = (cls, name, sub, fn) => { const b = el('button', 'tn-opt ' + cls, name + '<small>' + sub + '</small>', pick); b.onclick = fn; return b; };
-    mk('hi', RANGES.higher.name, RANGES.higher.desc, () => H.pick && H.pick({ range: 'higher', mode: 'mic' }));
-    mk('lo', RANGES.lower.name, RANGES.lower.desc, () => H.pick && H.pick({ range: 'lower', mode: 'mic' }));
+    mk('hi' + (voice === 'higher' ? ' sel' : ''), RANGES.higher.name, RANGES.higher.desc, () => H.pick && H.pick({ range: 'higher', mode: 'mic' }));
+    mk('lo' + (voice === 'lower' ? ' sel' : ''), RANGES.lower.name, RANGES.lower.desc, () => H.pick && H.pick({ range: 'lower', mode: 'mic' }));
     mk('ear', 'EAR TRAINING', 'No mic needed. Is the second note higher or lower?', () => H.pick && H.pick({ range: 'higher', mode: 'ear' }));
   }
   function setPlayVisible(v) { [roundC, scoreC, streakC].forEach((e) => { e.style.visibility = v ? 'visible' : 'hidden'; }); }
@@ -113,12 +116,18 @@ export function createUI(hud, H) {
     const key = S.fb ? S.round + S.fb : null; if (key !== fbKey) { fbKey = key; if (S.fb) flash(S.fb, S.fbOk ? '#9dff4a' : '#ff6b8a'); }
     void extra;
   }
+  function drawCard() {
+    if (!card || !curR) return; const r = curR.r, hh = curR.hh, w = rw, mus = w && w.mus !== undefined ? w.mus : r.musGain;
+    const dots = r.log.map((l) => '<i class="' + (l.ok ? 'ok' : '') + '"></i>').join(''), chips = [];
+    if (w) { if (w.xp) chips.push('+' + Math.round(w.xp) + ' XP'); if (w.energy) chips.push(Math.round(w.energy) + ' ENERGY'); if (w.mood) chips.push('+' + Math.round(w.mood) + ' MOOD'); }
+    card.innerHTML = '<h2>TUNER RESULT</h2><div class="big">' + r.score + ' / ' + r.rounds + '</div><div class="tn-grade">' + r.grade + '</div><div class="tn-dots">' + dots + '</div><div class="tn-rows"><div class="tn-row"><span>Mode</span><span>' + r.mode + '</span></div><div class="tn-row"><span>Quality</span><span style="color:#ffd23f">' + r.qualityPct + '%</span></div><div class="tn-row"><span>Best streak</span><span>' + r.bestStreak + '</span></div>' + (r.modeId === 'mic' ? '<div class="tn-row"><span>Time in tune</span><span>' + (r.inTuneMs / 1000).toFixed(1) + ' s</span></div>' : '') + '<div class="tn-row"><span>Musicality</span><span class="tn-mus" style="color:#9dff4a">+' + (Math.round(mus * 10) / 10).toFixed(1) + '</span></div></div>' + (chips.length ? '<div class="tn-rw">' + chips.join('   ') + '</div>' : '') + '<div class="tn-btns"></div>';
+    const bt = card.querySelector('.tn-btns'); if (uopt.again !== false) { const b1 = el('button', 'tn-btn alt', 'AGAIN', bt); b1.onclick = () => hh.again(); } const b2 = el('button', 'tn-btn', 'CONTINUE', bt); b2.onclick = () => hh.done();
+  }
   function showResult(r, hh) {
     clearOverlays(); ask.classList.remove('on'); meter.classList.remove('on'); call.classList.remove('on');
-    card = el('div', 'tn-card', '');
-    const dots = r.log.map((l) => '<i class="' + (l.ok ? 'ok' : '') + '"></i>').join('');
-    card.innerHTML = '<h2>TUNER RESULT</h2><div class="big">' + r.score + ' / ' + r.rounds + '</div><div class="tn-grade">' + r.grade + '</div><div class="tn-dots">' + dots + '</div><div class="tn-rows"><div class="tn-row"><span>Mode</span><span>' + r.mode + '</span></div><div class="tn-row"><span>Quality</span><span style="color:#ffd23f">' + r.qualityPct + '%</span></div><div class="tn-row"><span>Best streak</span><span>' + r.bestStreak + '</span></div>' + (r.modeId === 'mic' ? '<div class="tn-row"><span>Time in tune</span><span>' + (r.inTuneMs / 1000).toFixed(1) + ' s</span></div>' : '') + '<div class="tn-row"><span>Musicality</span><span style="color:#9dff4a">+' + r.musGain.toFixed(1) + '</span></div></div><div class="tn-btns"></div>';
-    const bt = card.querySelector('.tn-btns'); const b1 = el('button', 'tn-btn alt', 'AGAIN', bt), b2 = el('button', 'tn-btn', 'CONTINUE', bt); b1.onclick = () => hh.again(); b2.onclick = () => hh.done();
+    card = el('div', 'tn-card', ''); rw = null; curR = { r, hh }; drawCard();
   }
-  return { root, update, showPicker, hidePicker, showResult, flash, clearOverlays, destroy() { root.remove(); }, get hasCard() { return !!card; }, get hasPicker() { return !!pick; }, buttons: { hi: bHi, lo: bLo, back } };
+  // the real numbers from the game (G.doHold): { mus, xp, energy, mood }; redraws the open card
+  function setRewards(r) { rw = r || null; drawCard(); }
+  return { root, update, showPicker, hidePicker, showResult, setRewards, flash, clearOverlays, destroy() { clearOverlays(); root.remove(); }, get hasCard() { return !!card; }, get hasPicker() { return !!pick; }, buttons: { hi: bHi, lo: bLo, back } };
 }

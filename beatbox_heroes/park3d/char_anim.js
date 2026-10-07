@@ -10,11 +10,11 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, t) => a + 
 const mod = (a, n) => ((a % n) + n) % n;
 
 const SCAL = ['hipsX', 'hipsY', 'hipsZ', 'hipsRX', 'hipsRY', 'hipsRZ', 'spineRX', 'spineRY', 'spineRZ', 'chestRX', 'chestRY', 'chestRZ', 'neckRX', 'neckRY', 'neckRZ', 'headRX', 'headRY', 'headRZ', 'sq',
-  'mouthOpen', 'mouthW', 'cheek', 'blink', 'eyeX', 'eyeY', 'brow', 'browTilt', 'shrug'];
+  'mouthOpen', 'mouthW', 'cheek', 'blink', 'eyeX', 'eyeY', 'brow', 'browTilt', 'shrug', 'smile', 'frown', 'eyeH'];
 const LIMB_FK = ['shRX', 'shRY', 'shRZ', 'elRX', 'wrRX', 'wrRZ', 'thRX', 'thRZ', 'knRX', 'anRX'];
 const IKG = [['aW', ['aX', 'aY', 'aZ', 'pX', 'pY', 'pZ']], ['hW', ['hX', 'hY', 'hZ']], ['lW', ['lX', 'lY', 'lZ', 'fP', 'fY']]];
 function mkPose() {
-  const p = {}; SCAL.forEach((k) => { p[k] = 0; }); p.mouthW = 1;
+  const p = {}; SCAL.forEach((k) => { p[k] = 0; }); p.mouthW = 1; p.smile = 1; p.eyeH = 1;
   ['L', 'R'].forEach((s) => {
     LIMB_FK.forEach((k) => { p[k + s] = 0; });
     p['aW' + s] = 0; p['aX' + s] = 0; p['aY' + s] = 0.8; p['aZ' + s] = 0.1; p['pX' + s] = 0; p['pY' + s] = -1; p['pZ' + s] = -0.3;
@@ -38,6 +38,16 @@ function blendPose(a, b, f, out) {
   return out;
 }
 
+// face moods: numeric targets blended into every clip by the life layer. brow/browTilt/smile/frown/open/w/eyeH/cheek are face channels, hx/hz/nx add head and neck pose, sh shoulders.
+// browTilt > 0 lifts the inner ends (sad), < 0 drops them (angry).
+export const MOODS = {
+  neutral: { brow: 0, tilt: 0, smile: 1, frown: 0, open: 0, w: 1, eyeH: 1, cheek: 0, hx: 0, nx: 0, hz: 0, sh: 0 },
+  happy: { brow: 0.4, tilt: 0.1, smile: 1.5, frown: 0, open: 0.4, w: 1.2, eyeH: 0.82, cheek: 0.45, hx: -0.05, nx: 0, hz: 0.04, sh: 0.3 },
+  sad: { brow: 0.1, tilt: 1.15, smile: 0.001, frown: 1.25, open: 0.04, w: 0.9, eyeH: 0.86, cheek: 0, hx: 0.08, nx: 0.05, hz: 0.06, sh: -0.6 },
+  angry: { brow: -0.7, tilt: -1.25, smile: 0.001, frown: 0.85, open: 0.12, w: 1.05, eyeH: 0.74, cheek: 0, hx: 0.12, nx: 0.06, hz: 0, sh: 0.4 },
+  shout: { brow: 0.55, tilt: -0.55, smile: 0.001, frown: 0, open: 1.0, w: 1.05, eyeH: 0.66, cheek: 0.25, hx: -0.14, nx: 0.0, hz: 0, sh: 0.5 },
+};
+export const MOOD_NAMES = Object.keys(MOODS);
 export class Animator {
   constructor(api, rig, THREE) {
     const T = THREE; this.api = api; this.rig = rig; this.T = T; this.B = rig.map; this.t = 0; this.clip = 'idle'; this.opts = { speed: 0, bpm: 100 };
@@ -47,7 +57,7 @@ export class Animator {
     this.e = new T.Euler(0, 0, 0, 'YXZ'); this.down = new T.Vector3(0, -1, 0);
     this.life = { blinkT: 1.5, blink: 0, gaze: [0, 0], gazeT: 0, shift: 0, shiftT: 3, shiftTarget: 0 };
     this.sp = {}; this.vs = 0; this.accel = 0; this.sqS = { x: 0, v: 0 }; this.leanS = { x: 0, v: 0 };
-    this.lookT = null; this.lookW = 0; this.lookYaw = 0; this.lookPitch = 0; this.once = null; this.hits = { k: 0, s: 0, h: 0 };
+    this.mood = 'neutral'; this.mc = Object.assign({}, MOODS.neutral); this.lookT = null; this.lookW = 0; this.lookYaw = 0; this.lookPitch = 0; this.once = null; this.hits = { k: 0, s: 0, h: 0 };
     this.mouthRig = new T.Vector3(0, 1.1, 0.34); this.prevPos = {}; this.prevVel = {}; this.accW = {}; this.ikR = { qU: new T.Quaternion(), qL: new T.Quaternion() };
     this._a = new T.Vector3(); this._d = new T.Vector3(); this._p = new T.Vector3(); this._e = new T.Vector3(); this._du = new T.Vector3(); this._dl = new T.Vector3(); this._qa = new T.Quaternion(); this._raw = new T.Vector3(); this._acc = {};
   }
@@ -62,10 +72,13 @@ export class Animator {
   // play(clip, opts): the same clip only updates opts (cheap, call every frame).
   // opts: speed (walk/run m/s), bpm, phase, amp, external (beatbox driven by hit()), seat, slump, armBack, drowsy (sit), fade, duration + then
   play(clip, opts) {
-    if (!CL[clip]) clip = 'idle'; opts = opts || {}; const same = clip === this.clip && this.cur;
+    if (!CL[clip]) clip = 'idle'; opts = opts || {}; const spec = CL[clip], same = clip === this.clip && this.cur && !(spec.restart && opts.restart !== false && !opts.keep);
     Object.assign(this.opts, opts);
     if (!same) { this.prev = this.cur; this.fade = this.prev ? 0 : 1; this.fadeDur = opts.fade === undefined ? (clip === 'sit' || this.clip === 'sit' ? 0.4 : 0.15) : Math.max(0.001, opts.fade); this.clip = clip; this.cur = { name: clip, t: 0, st: {} }; }
-    this.once = opts.duration ? { left: opts.duration, then: opts.then || 'idle' } : null; return this;
+    if (opts.duration) this.once = { left: opts.duration, then: opts.then || 'idle' };
+    else if (spec.dur && (!same || !this.once)) this.once = { left: spec.dur, then: opts.then || spec.then || 'idle' };      // one-shot clips (hit) return on their own
+    else if (!spec.dur) this.once = null;
+    return this;
   }
   hit(kind, s) { const k = kind === 'kick' || kind === 'k' ? 'k' : kind === 'snare' || kind === 's' ? 's' : 'h'; this.hits[k] = Math.max(this.hits[k], s === undefined ? 1 : s); }
   setLookAt(p) { this.lookT = p || null; }
@@ -73,7 +86,7 @@ export class Animator {
   update(dt, t) {
     dt = clamp(dt, 0, 0.05); this.t += dt; const o = this.opts; if (!this.cur) return;
     if (this.once) { this.once.left -= dt; if (this.once.left <= 0) { const th = this.once.then; this.once = null; this.play(th, {}); } }
-    const target = this.clip === 'walk' || this.clip === 'run' ? o.speed || 0 : 0, vp = this.vs;
+    const target = MOVING[this.clip] ? o.speed || 0 : 0, vp = this.vs;
     this.vs += (target - this.vs) * (1 - Math.exp(-12 * dt)); this.accel += ((this.vs - vp) / Math.max(dt, 1e-3) - this.accel) * (1 - Math.exp(-14 * dt));
     if (vp < 0.35 && this.vs >= 0.35 && target > 0.6) this.sqS.v -= 0.9;           // anticipation crouch on starts
     if (vp > 0.9 && this.vs <= 0.9 && target < 0.4) this.sqS.v -= 1.5;             // brake squash on stops
@@ -93,6 +106,12 @@ export class Animator {
     P.elRXR += (h === 'mic' ? 0.75 : 0.25) * free; P.shRXR += (h === 'mic' ? 0.32 : 0.1) * free; P.wrRXR += (h === 'mic' ? 0.55 : 0.0) * free; P.shRZR += 0.0 * k;
   }
 
+  // setMood(name, instant): fades the face (and a little head pose) to a mood
+  setMood(name, instant) { if (!MOODS[name]) name = 'neutral'; this.mood = name; if (instant) Object.assign(this.mc, MOODS[name]); return this; }
+  mood_(P, dt) {
+    const m = this.mc, t = MOODS[this.mood], k = 1 - Math.exp(-11 * dt); for (const key in t) m[key] += (t[key] - m[key]) * k;
+    P.brow += m.brow; P.browTilt += m.tilt; P.smile *= m.smile; P.frown += m.frown; P.mouthOpen += m.open; P.mouthW *= m.w; P.eyeH *= m.eyeH; P.cheek += m.cheek; P.headRX += m.hx; P.neckRX += m.nx; P.headRZ += m.hz; P.shrug += m.sh;
+  }
   // life layer on top of every clip: blink, gaze saccades, look-at, start/stop squash
   life_(P, dt) {
     const L = this.life;
@@ -105,7 +124,7 @@ export class Animator {
       this.lookYaw += (yaw - this.lookYaw) * k; this.lookPitch += (pitch - this.lookPitch) * k; this.lookW += (1 - this.lookW) * (1 - Math.exp(-5 * dt));
     } else this.lookW += (0 - this.lookW) * (1 - Math.exp(-5 * dt));
     P.headRY += this.lookYaw * 0.55 * this.lookW; P.neckRY += this.lookYaw * 0.35 * this.lookW; P.headRX += this.lookPitch * 0.7 * this.lookW; P.eyeX += this.lookYaw * 0.8 * this.lookW;
-    P.sq += this.sqS.x; P.hipsRX += this.leanS.x;
+    this.mood_(P, dt); P.sq += this.sqS.x; P.hipsRX += this.leanS.x;
   }
 
   apply(P, dt) {
@@ -144,15 +163,25 @@ export class Animator {
       sh.position.y = sh.userData.rest[1] + P.shrug * 0.02;
     }
     // face
-    const eyeS = Math.max(0.06, 1 - clamp(P.blink, 0, 1) * 0.92);
+    const eyeS = Math.max(0.06, 1 - clamp(P.blink, 0, 1) * 0.92) * clamp(P.eyeH, 0.2, 1.2);
     for (let si = 0; si < 2; si++) {
       const k = si ? 'R' : 'L', s = si ? -1 : 1, eye = B['eye' + k], er = eye.userData.rest, br = B['brow' + k], brr = br.userData.rest;
       eye.scale.set(1, eyeS, 1); eye.position.set(er[0] + P.eyeX * 0.012, er[1] + P.eyeY * 0.01, er[2]);
       br.position.set(brr[0], brr[1] + P.brow * 0.025, brr[2]); set(br, 0, 0, -s * P.browTilt * 0.5); B['cheek' + k].scale.setScalar(0.8 + P.cheek * 1.15);
     }
-    B.mouth.scale.set(P.mouthW, Math.max(0.05, P.mouthOpen), 1);
-    this.springs(dt); void T;
+    B.mouth.scale.set(P.mouthW, Math.max(0.05, P.mouthOpen), 1); B.lipS.scale.set(P.mouthW, Math.max(0.001, P.smile), 1); B.lipF.scale.set(P.mouthW, Math.max(0.001, P.frown), 1);
+    this.springs(dt); this.propFollow_(dt); void T;
   }
+  // props: setProp(group) parents the group to the character object; the active clip may place it (this._pp = {p:[x,y,z], r:[rx,ry,rz]}), otherwise it rides the right hand
+  propFollow_(dt) {
+    const g = this.prop; if (!g) return; const pp = this._pp, B = this.B, k = 1 - Math.exp(-20 * dt), o = this.api.object;
+    let tx, ty, tz, rx = 0, ry = 0, rz = 0;
+    if (pp && this.clip === pp.clip) { tx = pp.p[0]; ty = pp.p[1]; tz = pp.p[2]; rx = pp.r[0]; ry = pp.r[1]; rz = pp.r[2]; }
+    else { const v = this.v[0]; B.wrR.getWorldPosition(v); o.worldToLocal(v); tx = v.x - 0.01; ty = v.y - 0.02 + 0.1; tz = v.z + 0.08; rx = -0.3; }
+    if (!this._pInit) { g.position.set(tx, ty, tz); g.rotation.set(rx, ry, rz); this._pInit = true; return; }
+    g.position.x += (tx - g.position.x) * k; g.position.y += (ty - g.position.y) * k; g.position.z += (tz - g.position.z) * k; g.rotation.x += (rx - g.rotation.x) * k; g.rotation.y += (ry - g.rotation.y) * k; g.rotation.z += (rz - g.rotation.z) * k;
+  }
+  setProp(g) { if (this.prop && this.prop.parent) this.prop.parent.remove(this.prop); this.prop = g || null; this._pInit = false; if (g) this.api.object.add(g); return this; }
 
   // two-bone IK in the parent frame of the upper bone. tgt: Vector3 in that frame, pole: bend direction hint in that frame. writes out.qU, out.qL (local rotations).
   // The lower bone is a pure hinge about local X; the upper bone's local frame is built from the hinge axis, so it never flips when a limb straightens or points up.
@@ -191,6 +220,7 @@ export class Animator {
 // ======================================================================== CLIPS
 const CL = {};
 Animator.prototype.CL = CL;
+const MOVING = { walk: 1, run: 1, walkside: 1, hold: 1 };
 const stance = (P, w, yaw) => { P.lWL = P.lWR = 1; P.lXL = w; P.lXR = -w; P.lYL = P.lYR = 0.085; P.lZL = P.lZR = 0; P.fYL = yaw; P.fYR = -yaw; };
 const relaxArms = (P, t) => { P.shRZL = P.shRZR = 0.1; P.elRXL = P.elRXR = 0.14; P.shRXL = 0.04 * S(t * 1.1); P.shRXR = 0.04 * S(t * 1.1 + 2); P.wrRXL = P.wrRXR = 0.1; };
 
@@ -309,3 +339,5 @@ CL.talk = function (P, c, dt, o) {
   P.aWR = 1; P.aXR = -0.25 - 0.08 * S(t * 3.4); P.aYR = 0.86 + 0.14 * gr + 0.04 * S(t * 6.5); P.aZR = 0.22 + 0.08 * gr; P.pXR = -0.8; P.pYR = -1; P.pZR = -0.2; P.hWR = 0.6; P.hXR = -0.3; P.hYR = 0.5; P.hZR = 0.8 + 0.3 * S(t * 3);
   P.aWL = 0.8 * sm((S(t * 0.7 + 2) - 0.0) / 0.5 + 0.5); P.aXL = 0.26; P.aYL = 0.8 + 0.1 * gl; P.aZL = 0.2 + 0.05 * gl; P.pXL = 0.8; P.pYL = -1; P.pZL = -0.3; P.hWL = 0;
 };
+
+export { CL, KEYS, blendPose, reset, mkPose, stance, relaxArms, gait, beatClock, beatEnv, sm, mod, clamp, lerp };

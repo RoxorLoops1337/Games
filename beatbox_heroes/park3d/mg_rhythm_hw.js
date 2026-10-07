@@ -84,7 +84,7 @@ export function buildHighway(ctx, q) {
   const beams = glowSheet(4, 'beam', 1, 1); group.add(beams);
 
   const dummy = new THREE.Object3D(), tc = new THREE.Color(), cMiss = new THREE.Color(0.32, 0.3, 0.4), cWhite = new THREE.Color(1, 1, 1), m4 = new THREE.Matrix4(), zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
-  const laneC = LANES.map((L) => C(L.color)); let beatsApproach = 2.4, nHalo = 0;
+  const laneC = LANES.map((L) => C(L.color)), cOpp = C('#ff3ea5'); let beatsApproach = 2.4, nHalo = 0;
   function setApproach(approach, spb) {
     beatsApproach = approach / spb; const a = uv.array; // v = beats from the hit line / 4 (one texture = a 4 beat period); u across lanes
     const zOf = [FAR_Z, FAR_Z, NEAR_Z, NEAR_Z]; for (let k = 0; k < uv.count; k++) { const z = zOf[k]; a[k * 2 + 1] = ((HIT_Z - z) / (HIT_Z - SPAWN_Z)) * beatsApproach / 4; } uv.needsUpdate = true;
@@ -99,8 +99,8 @@ export function buildHighway(ctx, q) {
       if (dt > ap * 1.001 || dt < -0.55) continue; const z = HIT_Z - dt / ap * span, L = n.lane; if (cnt[L] >= NG) continue;
       const miss = n.state === 3, pop = Math.min(1, (ap - dt) / (ap * 0.1)), fade = miss ? Math.max(0, 1 + dt / 0.5) : 1, s = 1.18 * (0.55 + 0.45 * pop) * (1 - (1 - fade) * 0.4) * (1 + (!miss && dt < 0.12 && dt > -0.1 ? 0.12 : 0));
       dummy.position.set(laneX(L), GEM_Y + (miss ? 0 : Math.sin(g.t * 3 + n.id) * 0.03), z); dummy.rotation.set(0.0, g.t * 1.2 + n.id * 0.9, 0); dummy.scale.set(s, s * (miss ? 0.6 : 1), s); dummy.updateMatrix();
-      const idx = cnt[L]++; gems[L].setMatrixAt(idx, dummy.matrix); gems[L].setColorAt(idx, miss ? cMiss : cWhite);
-      if (!miss && nHalo < NG * 4) { const hs = (2.1 + (dt < 0.3 && dt > -0.1 ? 0.4 : 0)) * pop; m4.makeScale(hs, hs, hs); m4.setPosition(laneX(L), -z, 0.14); halos.setMatrixAt(nHalo, m4); const k = 0.55 * pop; tc.copy(laneC[L]).multiplyScalar(k); halos.setColorAt(nHalo, tc); nHalo++; }
+      const idx = cnt[L]++; gems[L].setMatrixAt(idx, dummy.matrix); gems[L].setColorAt(idx, miss ? cMiss : n.tint || cWhite);   // n.tint: the rival's notes in a battle turn are drawn tinted
+      if (!miss && nHalo < NG * 4) { const hs = (2.1 + (dt < 0.3 && dt > -0.1 ? 0.4 : 0)) * pop; m4.makeScale(hs, hs, hs); m4.setPosition(laneX(L), -z, 0.14); halos.setMatrixAt(nHalo, m4); const k = 0.55 * pop; tc.copy(n.tint ? cOpp : laneC[L]).multiplyScalar(k); halos.setColorAt(nHalo, tc); nHalo++; }
     }
     for (let L = 0; L < 4; L++) { gems[L].count = cnt[L]; gems[L].instanceMatrix.needsUpdate = true; if (gems[L].instanceColor) gems[L].instanceColor.needsUpdate = true; }
     for (let k = nHalo; k < NG * 4; k++) { halos.setMatrixAt(k, zeroM); tc.setRGB(0, 0, 0); halos.setColorAt(k, tc); if (k > nHalo + 3) break; } // clear a few trailing slots (older ones are always zeroed by the loop above)

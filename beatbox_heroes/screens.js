@@ -34,19 +34,24 @@
   });
 
   /* ----------------------------------------------------------------- title */
-  const cast = () => {
-    // the street party at the bottom of the title: your last hero (or a random one) with friends
+  // your newest save's look, else a random one (the 2D street party and the 3D title stage both use it)
+  const heroLook = () => {
     let hero = null;
     try { const l = Core.Save.list(E.store).filter(Boolean).sort((a, b) => (b.created || 0) - (a.created || 0))[0]; if (l) hero = l.look; } catch (e) { /* ignore */ }
-    if (!hero) hero = BBH.Chars.random(BBH.rng(Date.now() % 9999));
+    return hero || BBH.Chars.random(BBH.rng(Date.now() % 9999));
+  };
+  G.heroLook = heroLook;
+  const cast = () => {
+    // the street party at the bottom of the title: your last hero (or a random one) with friends
+    const hero = heroLook();
     return [{ look: BBH.Chars.fix(NPC('foxy')), x: k(74), pose: 'dance', dy: 8, flip: false }, { look: BBH.Chars.fix(hero), x: k(135), pose: 'beatbox', dy: 0 }, { look: BBH.Chars.fix(NPC('beeamgee')), x: k(196), pose: 'idle', dy: 8, flip: true }];
   };
   const NPC = (id) => Core.NPCS[id].look;
 
   scene('title', {
-    enter() {
-      this.bg = safeScene('title'); this.logo = BBH.World.logo(); this.state = 'tap'; this.cast = cast(); this.drop = 0;
-      this.build = () => {
+    enter() { this.bg = safeScene('title'); this.logo = BBH.World.logo(); this.state = 'tap'; this.cast = cast(); this.drop = 0; this.build(); },
+    build() {                                  // the DOM of the title (TAP TO START, then CONTINUE / NEW GAME / SETTINGS / SOUND); the 3D sibling reuses it
+      {
         E.clearUI();
         if (this.state === 'tap') {
           const veil = h('div.full', { style: { zIndex: 5 } }, h('div.tp.blink', { style: { position: 'absolute', left: 0, right: 0, bottom: '64px', textAlign: 'center', color: 'var(--cream)', fontSize: '8px' } }, 'TAP TO START'));
@@ -60,8 +65,7 @@
           h('div.row', null, E.btn('SETTINGS', 'grow', () => G.openSettings()), E.btn(E.settings.muted ? 'SOUND OFF' : 'SOUND ON', 'grow', function () { E.settings.muted = !E.settings.muted; E.applyAudioSettings(); E.saveSettings(); this.textContent = E.settings.muted ? 'SOUND OFF' : 'SOUND ON'; })));
         E.add(col);
         E.add(h('div.tp.dim', { style: { position: 'absolute', left: 0, right: 0, bottom: '6px', textAlign: 'center', color: PAL.fog, fontSize: '5px' } }, 'ROXORLOOPS & JASMIN'));
-      };
-      this.build();
+      }
     },
     draw(c) {
       const t = E.t;
@@ -82,8 +86,8 @@
 
   /* ----------------------------------------------------------------- slots */
   scene('slots', {
-    enter(a) {
-      this.mode = a.mode || 'continue'; this.bg = safeScene('title');
+    enter(a) { this.mode = a.mode || 'continue'; this.bg = safeScene('title'); this.build(); },
+    build() {                                  // the DOM of the slot picker (cards, delete modal, BACK); the 3D sibling reuses it
       const saves = Core.Save.list(E.store);
       const card = (i) => {
         const ch = saves[i - 1];

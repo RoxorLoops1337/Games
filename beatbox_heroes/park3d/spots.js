@@ -1,6 +1,9 @@
 // SPOTS module (Gameplay Engineer). Activity spots in the park with glowing world markers, floating icons, proximity prompts. CONTRACT:
 //   buildSpots(ctx, terrain) -> { group, spots:[{id,label,icon,x,z,radius,release,color,cine}], update(dt,t,playerPos), nearest(playerPos)->spot|null, activate(id) }
 //   Flat (interior) scene: terrain.spotDefs [{id,anchor,label,color,color2,cine,icon}] replaces the park list, ring radius 1.1, icons hover lower. Park ids: busk (crate stage: play a set), bench (rest + talk to BeeAmGee + lesson), run (jog loop start), flyers (gate corner: odd job), gate (leave to the street)
+//   PORT (WP P4): terrain.spotDefs for EVERY world (park DEFS stay the fallback; an explicit [] = no spots). Def fields: id, anchor | x,z, label, icon, color, color2, cine, kind ('door': walking into the ring activates at once, no prompt button),
+//   ring (visual radius), radius (enter), release, iconY, iconK, pillar. setSpotState(id,{locked,reason,goal,badge}) (padlock + grey icon + dim ring; gold light beam + bobbing arrow; red dot or 1-2 char text), getSpotState(id), api.canFire() gate set by controls.
+//   Glyph ids: busk bench run flyers gate booth couch bed desk kitchen wardrobe door map hats racks mirror counter mic mixer stage stool (unknown = star). Events: 'spot' {id,scene,kind,locked,reason}; doors also emit 'door' {id,...} just before 'spot'.
 //   activate(id) emits ctx.events 'spot' with {id, scene}. The game bridge (main.js) maps these onto the real game actions; controls.js listens to the same event for the
 //   short cinematic (lock input, ease camera, face the spot, play a clip) and unlocks on ctx.events 'spotDone'.
 // Look: a pooled glow ring on the ground (additive, pulsing), a slowly rotating dashed outer ring, tiny rising sparkles, and a bobbing billboard icon + label.
@@ -107,19 +110,109 @@ function glyph(g, id, S) {
     g.beginPath(); g.arc(-12, 4, 5, 0, 7); g.fillStyle = '#ffe14d'; g.fill(); g.stroke();
     g.fillStyle = '#17102b'; g.fillRect(-36, -40, 26, 6);
     g.beginPath(); g.moveTo(8, -12); g.lineTo(34, -12); g.lineTo(34, -30); g.lineTo(64, 0); g.lineTo(34, 30); g.lineTo(34, 12); g.lineTo(8, 12); g.closePath(); g.fillStyle = '#9dff4a'; g.fill(); g.stroke();
+  } else if (id === 'map') { // folded street map with a dashed route and a pin
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.fillStyle = '#fff6e8'; g.beginPath(); g.moveTo(-58, -34); g.lineTo(-20, -46); g.lineTo(20, -34); g.lineTo(58, -46); g.lineTo(58, 38); g.lineTo(20, 50); g.lineTo(-20, 38); g.lineTo(-58, 50); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#bfeeff'; g.beginPath(); g.moveTo(-20, -46); g.lineTo(20, -34); g.lineTo(20, 50); g.lineTo(-20, 38); g.closePath(); g.fill(); g.lineWidth = 4; g.stroke();
+    g.strokeStyle = '#ff3ea5'; g.lineWidth = 6; g.setLineDash([9, 9]); g.beginPath(); g.moveTo(-46, 30); g.lineTo(-24, 10); g.lineTo(8, 22); g.lineTo(30, -2); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = INK; g.lineWidth = 5; g.fillStyle = '#ff3a3a'; g.beginPath(); g.moveTo(40, 6); g.quadraticCurveTo(22, -12, 26, -26); g.arc(40, -26, 14, Math.PI, 0); g.quadraticCurveTo(58, -12, 40, 6); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.arc(40, -26, 5, 0, 7); g.fillStyle = '#fff6e8'; g.fill();
+  } else if (id === 'hats') { // snapback cap with a button and a price tag
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.fillStyle = '#ff3ea5'; g.beginPath(); g.moveTo(-46, 12); g.quadraticCurveTo(-48, -50, 0, -50); g.quadraticCurveTo(48, -50, 46, 12); g.closePath(); g.fill(); g.stroke();
+    g.lineWidth = 3; g.beginPath(); g.moveTo(0, -50); g.lineTo(0, 12); g.moveTo(-22, -44); g.quadraticCurveTo(-26, -16, -24, 12); g.moveTo(22, -44); g.quadraticCurveTo(26, -16, 24, 12); g.stroke();
+    g.lineWidth = 5; g.fillStyle = '#ffe14d'; g.beginPath(); g.moveTo(-52, 8); g.lineTo(46, 8); g.quadraticCurveTo(80, 12, 72, 28); g.quadraticCurveTo(30, 36, -52, 24); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.arc(0, -52, 7, 0, 7); g.fillStyle = '#ffe14d'; g.fill(); g.stroke();
+    g.save(); g.rotate(-0.25); g.fillStyle = '#fff6e8'; rr(g, -62, 24, 26, 28, 5); g.fill(); g.lineWidth = 4; g.stroke(); g.fillStyle = INK; g.fillRect(-56, 34, 14, 4); g.fillRect(-56, 42, 9, 4); g.restore();
+  } else if (id === 'racks') { // clothes rail with three tees
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.strokeStyle = INK; g.lineWidth = 12; g.beginPath(); g.moveTo(-58, -40); g.lineTo(58, -40); g.moveTo(-50, -40); g.lineTo(-58, 54); g.moveTo(50, -40); g.lineTo(58, 54); g.stroke();
+    g.strokeStyle = '#c9b6e8'; g.lineWidth = 5; g.beginPath(); g.moveTo(-58, -40); g.lineTo(58, -40); g.moveTo(-50, -40); g.lineTo(-58, 54); g.moveTo(50, -40); g.lineTo(58, 54); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 5; const tees = [[-36, '#ff3ea5'], [0, '#2ee6ff'], [36, '#ffe14d']];
+    tees.forEach(([x, c], k) => { g.fillStyle = c; g.beginPath(); g.moveTo(x - 20, -26 + k % 2 * 4); g.lineTo(x - 8, -34); g.lineTo(x + 8, -34); g.lineTo(x + 20, -26 + k % 2 * 4); g.lineTo(x + 15, -8); g.lineTo(x + 10, -12); g.lineTo(x + 10, 22); g.lineTo(x - 10, 22); g.lineTo(x - 10, -12); g.lineTo(x - 15, -8); g.closePath(); g.fill(); g.stroke(); });
+  } else if (id === 'mirror') { // standing oval mirror with a sparkle
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.lineWidth = 11; g.beginPath(); g.moveTo(-14, 36); g.lineTo(-34, 62); g.moveTo(14, 36); g.lineTo(34, 62); g.stroke(); g.strokeStyle = '#a8693b'; g.lineWidth = 5; g.beginPath(); g.moveTo(-14, 36); g.lineTo(-34, 62); g.moveTo(14, 36); g.lineTo(34, 62); g.stroke();
+    g.strokeStyle = INK; g.fillStyle = '#a8693b'; g.beginPath(); g.ellipse(0, -8, 36, 54, 0, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = '#bfeeff'; g.beginPath(); g.ellipse(0, -8, 26, 44, 0, 0, 7); g.fill(); g.lineWidth = 3; g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 6; g.beginPath(); g.moveTo(-14, -34); g.lineTo(-4, -46); g.moveTo(-16, -14); g.lineTo(6, -42); g.stroke();
+    g.fillStyle = '#ffe14d'; g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.moveTo(44, -50); g.lineTo(48, -40); g.lineTo(58, -36); g.lineTo(48, -32); g.lineTo(44, -22); g.lineTo(40, -32); g.lineTo(30, -36); g.lineTo(40, -40); g.closePath(); g.fill(); g.stroke();
+  } else if (id === 'counter') { // counter with a register and a juice glass
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.fillStyle = '#6a4230'; rr(g, -58, 12, 116, 44, 6); g.fill(); g.stroke();
+    g.fillStyle = '#c07f48'; rr(g, -64, 2, 128, 16, 5); g.fill(); g.stroke();
+    g.fillStyle = '#c9b6e8'; rr(g, -54, -22, 50, 26, 5); g.fill(); g.stroke();
+    g.fillStyle = '#2ee6ff'; rr(g, -48, -44, 38, 20, 4); g.fill(); g.lineWidth = 4; g.stroke();
+    g.fillStyle = INK; for (let i = 0; i < 3; i++) g.fillRect(-46 + i * 14, -12, 8, 6);
+    g.lineWidth = 5; g.fillStyle = 'rgba(255,246,232,.85)'; g.beginPath(); g.moveTo(16, -34); g.lineTo(52, -34); g.lineTo(46, 2); g.lineTo(22, 2); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#9dff4a'; g.beginPath(); g.moveTo(18, -20); g.lineTo(50, -20); g.lineTo(46, 0); g.lineTo(22, 0); g.closePath(); g.fill();
+    g.strokeStyle = '#ff3ea5'; g.lineWidth = 6; g.beginPath(); g.moveTo(36, -22); g.lineTo(42, -52); g.stroke();
+  } else if (id === 'mic') { // studio condenser mic in a cradle with a pop filter
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.lineWidth = 11; g.beginPath(); g.moveTo(0, 22); g.lineTo(0, 52); g.stroke(); g.strokeStyle = '#c9b6e8'; g.lineWidth = 5; g.beginPath(); g.moveTo(0, 22); g.lineTo(0, 52); g.stroke();
+    g.strokeStyle = INK; g.fillStyle = '#c9b6e8'; g.beginPath(); g.ellipse(0, 56, 34, 9, 0, 0, 7); g.fill(); g.stroke();
+    g.lineWidth = 10; g.beginPath(); g.arc(0, -4, 30, 0.25, Math.PI - 0.25); g.stroke(); g.strokeStyle = '#ffe14d'; g.lineWidth = 4; g.beginPath(); g.arc(0, -4, 30, 0.25, Math.PI - 0.25); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 5; g.fillStyle = '#7b4fe0'; g.beginPath(); g.ellipse(0, -18, 21, 34, 0, 0, 7); g.fill(); g.stroke();
+    g.save(); g.beginPath(); g.ellipse(0, -18, 21, 34, 0, 0, 7); g.clip(); g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 3; for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(-26, -18 + i * 10); g.lineTo(26, -18 + i * 10); g.stroke(); } g.restore();
+    g.strokeStyle = '#2ee6ff'; g.lineWidth = 6; g.fillStyle = 'rgba(46,230,255,.18)'; g.beginPath(); g.arc(42, -20, 20, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.arc(-44, -46, 9, 0, 7); g.fillStyle = '#ff3a3a'; g.fill(); g.strokeStyle = INK; g.lineWidth = 4; g.stroke();
+  } else if (id === 'mixer') { // mixing desk with faders and meters
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.fillStyle = '#3a2760'; rr(g, -62, -34, 124, 82, 10); g.fill(); g.stroke();
+    const cols = ['#ff3ea5', '#2ee6ff', '#ffe14d', '#9dff4a', '#a86bff'], hs = [3, 5, 2, 4, 3];
+    for (let i = 0; i < 5; i++) { const x = -42 + i * 21; for (let k = 0; k < 4; k++) { g.fillStyle = k < hs[i] ? (k > 2 ? '#ff3a3a' : k > 1 ? '#ffe14d' : '#9dff4a') : 'rgba(255,255,255,.18)'; g.fillRect(x - 6, -26 + (3 - k) * 7, 12, 5); }
+      g.fillStyle = INK; rr(g, x - 3, 4, 6, 38, 3); g.fill(); const ky = 8 + (i * 13) % 24; g.fillStyle = cols[i]; rr(g, x - 10, ky, 20, 12, 4); g.fill(); g.lineWidth = 3; g.stroke(); }
+  } else if (id === 'stage') { // little stage: curtains, spot cone, mic stand
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.fillStyle = 'rgba(255,225,77,.5)'; g.beginPath(); g.moveTo(-8, -58); g.lineTo(8, -58); g.lineTo(44, 28); g.lineTo(-44, 28); g.closePath(); g.fill();
+    g.fillStyle = '#e63946'; g.beginPath(); g.moveTo(-64, -58); g.lineTo(-26, -58); g.quadraticCurveTo(-40, -14, -28, 28); g.lineTo(-64, 28); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(64, -58); g.lineTo(26, -58); g.quadraticCurveTo(40, -14, 28, 28); g.lineTo(64, 28); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#6a4230'; g.beginPath(); g.moveTo(-66, 28); g.lineTo(66, 28); g.lineTo(54, 54); g.lineTo(-54, 54); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#c07f48'; rr(g, -68, 20, 136, 12, 3); g.fill(); g.stroke();
+    g.lineWidth = 6; g.beginPath(); g.moveTo(0, -6); g.lineTo(0, 20); g.stroke(); g.lineWidth = 5; g.fillStyle = '#ff3ea5'; g.beginPath(); g.arc(0, -16, 12, 0, 7); g.fill(); g.stroke();
+  } else if (id === 'stool') { // bar stool
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.lineWidth = 13; g.beginPath(); g.moveTo(-6, -2); g.lineTo(-34, 54); g.moveTo(6, -2); g.lineTo(34, 54); g.moveTo(0, -2); g.lineTo(0, 52); g.stroke();
+    g.strokeStyle = '#c9b6e8'; g.lineWidth = 6; g.beginPath(); g.moveTo(-6, -2); g.lineTo(-34, 54); g.moveTo(6, -2); g.lineTo(34, 54); g.moveTo(0, -2); g.lineTo(0, 52); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 5; g.fillStyle = '#b52a35'; g.beginPath(); g.moveTo(-42, -28); g.lineTo(-42, -12); g.quadraticCurveTo(0, 8, 42, -12); g.lineTo(42, -28); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#e63946'; g.beginPath(); g.ellipse(0, -28, 42, 15, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 4; g.beginPath(); g.ellipse(0, -30, 26, 8, 0, Math.PI * 1.05, Math.PI * 1.7); g.stroke();
+    g.strokeStyle = '#ffe14d'; g.lineWidth = 5; g.beginPath(); g.ellipse(0, 30, 24, 7, 0, 0, 7); g.stroke();
+  } else { // unknown id: a neon star, so a missing glyph is still readable
+    g.lineWidth = 5; g.strokeStyle = INK; g.fillStyle = '#ffe14d'; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 26 : 58; g[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke();
   }
   g.restore();
 }
-// badge = dark disc with a neon rim and the glyph in it. Used for the world icon atlas and the DOM prompt button.
-export function drawBadge(g, id, color, S) {
-  g.save(); g.translate(S / 2, S / 2); const R = S * 0.46;
-  g.beginPath(); g.arc(0, 0, R, 0, 7); const gr = g.createRadialGradient(0, -R * 0.3, R * 0.1, 0, 0, R); gr.addColorStop(0, '#4a2f7a'); gr.addColorStop(1, '#201438'); g.fillStyle = gr; g.fill();
-  g.lineWidth = S * 0.05; g.strokeStyle = color; g.stroke(); g.lineWidth = S * 0.012; g.strokeStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(0, 0, R - S * 0.035, 0, 7); g.stroke();
-  glyph(g, id, S * 0.8); g.restore();
+// ---------- state decorations (shared extras atlas: lock chip, goal arrow, badge dot) ----------
+export function drawLockChip(g, S) { // red-rimmed dark disc with a golden padlock
+  g.save(); g.translate(S / 2, S / 2); g.scale(S / 128, S / 128); g.lineJoin = 'round'; g.lineCap = 'round';
+  g.beginPath(); g.arc(0, 0, 58, 0, 7); g.fillStyle = '#17102b'; g.fill(); g.lineWidth = 8; g.strokeStyle = '#ff5a5a'; g.stroke();
+  g.strokeStyle = '#17102b'; g.lineWidth = 17; g.beginPath(); g.arc(0, -8, 19, Math.PI, 0); g.lineTo(19, 4); g.moveTo(-19, -8); g.lineTo(-19, 4); g.stroke();
+  g.strokeStyle = '#fff6e8'; g.lineWidth = 8; g.beginPath(); g.arc(0, -8, 19, Math.PI, 0); g.lineTo(19, 4); g.moveTo(-19, -8); g.lineTo(-19, 4); g.stroke();
+  g.fillStyle = '#ffd23f'; rr(g, -29, 2, 58, 42, 9); g.fill(); g.lineWidth = 6; g.strokeStyle = '#17102b'; g.stroke();
+  g.fillStyle = '#17102b'; g.beginPath(); g.arc(0, 18, 7, 0, 7); g.fill(); g.fillRect(-3.5, 18, 7, 14);
+  g.restore();
 }
-export function spotGlyphCanvas(id, color, S) { const c = document.createElement('canvas'); c.width = c.height = S; drawBadge(c.getContext('2d'), id, color, S); return c; }
+function drawArrow(g, S) { // bold down arrow
+  g.save(); g.translate(S / 2, S / 2); g.scale(S / 128, S / 128); g.lineJoin = 'round'; g.beginPath(); g.moveTo(-17, -54); g.lineTo(17, -54); g.lineTo(17, -10); g.lineTo(44, -10); g.lineTo(0, 52); g.lineTo(-44, -10); g.lineTo(-17, -10); g.closePath();
+  g.fillStyle = '#ffe14d'; g.fill(); g.lineWidth = 10; g.strokeStyle = '#17102b'; g.stroke(); g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(-9, -46, 8, 34); g.restore();
+}
+function drawDot(g, S, text) { g.save(); g.translate(S / 2, S / 2); g.beginPath(); g.arc(0, 0, S * 0.44, 0, 7); g.fillStyle = '#ff3a3a'; g.fill(); g.lineWidth = S * 0.09; g.strokeStyle = '#fff6e8'; g.stroke();
+  if (text) { g.fillStyle = '#fff6e8'; g.font = '900 ' + Math.round(S * (String(text).length > 1 ? 0.46 : 0.6)) + 'px system-ui, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(text), 0, S * 0.04); } g.restore(); }
+// badge = dark disc with a neon rim and the glyph in it. Used for the world icon atlas and the DOM prompt button. opts.locked greys it and adds the padlock.
+export function drawBadge(g, id, color, S, opts) {
+  const lk = !!(opts && opts.locked); g.save(); g.translate(S / 2, S / 2); const R = S * 0.46;
+  g.beginPath(); g.arc(0, 0, R, 0, 7); const gr = g.createRadialGradient(0, -R * 0.3, R * 0.1, 0, 0, R); gr.addColorStop(0, '#4a2f7a'); gr.addColorStop(1, '#201438'); g.fillStyle = gr; g.fill();
+  g.lineWidth = S * 0.05; g.strokeStyle = lk ? '#8a8499' : color; g.stroke(); g.lineWidth = S * 0.012; g.strokeStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(0, 0, R - S * 0.035, 0, 7); g.stroke();
+  if (lk) g.globalAlpha = 0.5; glyph(g, id, S * 0.8); g.globalAlpha = 1;
+  if (lk) { const cs = S * 0.42; g.save(); g.translate(R * 0.55 - cs / 2, R * 0.55 - cs / 2); drawLockChip(g, cs); g.restore(); }
+  g.restore();
+}
+export function spotGlyphCanvas(id, color, S, opts) { const c = document.createElement('canvas'); c.width = c.height = S; drawBadge(c.getContext('2d'), id, color, S, opts); return c; }
 export const SPOT_DEFS = DEFS;
+export const SPOT_GLYPHS = ['busk', 'bench', 'run', 'flyers', 'gate', 'booth', 'couch', 'bed', 'desk', 'kitchen', 'wardrobe', 'door', 'map', 'hats', 'racks', 'mirror', 'counter', 'mic', 'mixer', 'stage', 'stool'];
 const INDOOR = { enter: 1.15, release: 1.75, ring: 1.1, iconY: 2.55, iconK: 0.78, pillar: 2.6 };
+const GOLD = '#ffe14d', GREY = '#8a8499';
 
 // soft additive sparkle points (also used by controls.js for the route dots). Per-point size/alpha/colour, no texture.
 export function makeSparkles(THREE_, n, base) {
@@ -132,9 +225,13 @@ export function makeSparkles(THREE_, n, base) {
 export function updateSparkScale(pts, renderer, camera) { const h = renderer.domElement.height || 800; pts.material.uniforms.uScale.value = h * 0.5 / Math.tan(camera.fov * Math.PI / 360); }
 
 export function buildSpots(ctx, terrain) {
-  const THREE_ = THREE, group = new THREE_.Group(); group.name = 'spots';
-  const defs = (terrain && terrain.spotDefs && terrain.spotDefs.length ? terrain.spotDefs : DEFS), IN = !!(terrain && terrain.interior);
-  const ENTER = IN ? INDOOR.enter : ENTER_R, RELEASE = IN ? INDOOR.release : RELEASE_R, RING = IN ? INDOOR.ring : RING_R, ICON_Y = IN ? INDOOR.iconY : 3.9, ICON_K = IN ? INDOOR.iconK : 1, RK = RING / RING_R;
+  const THREE_ = THREE, group = new THREE_.Group(), events = ctx.events; group.name = 'spots';
+  const sd = terrain && terrain.spotDefs, defs = (Array.isArray(sd) && sd.length ? sd : Array.isArray(sd) ? [] : DEFS).filter((d) => d && d.id), IN = !!(terrain && terrain.interior), N = defs.length;
+  const base = IN ? INDOOR : { enter: ENTER_R, release: RELEASE_R, ring: RING_R, iconY: 3.9, iconK: 1, pillar: 4.4 };
+  // per-def metrics: ring (visual radius), radius (enter), release, iconY, iconK, pillar height, kind ('door' = walking into the ring activates)
+  const ring0 = (d) => (d.ring !== undefined ? d.ring : d.ringR !== undefined ? d.ringR : base.ring);
+  const api = { group, spots: [], canFire: () => true, update() {}, nearest: () => null, activate(id) { events.emit('spot', { id, scene: ctx.sceneName || 'park' }); }, refresh() {}, setSpotState: () => false, getSpotState: () => null, ENTER_R: base.enter, RELEASE_R: base.release };
+  if (!N) return api; // a world without spots is fine: nothing to draw, nothing to throw
   // ----- fx atlas (512x256): cell A = glow pool + ring, cell B = dashed ring -----
   const fx = document.createElement('canvas'); fx.width = 512; fx.height = 256; const g = fx.getContext('2d');
   { const cx = 128, cy = 128, H = 124; // cell A
@@ -143,63 +240,106 @@ export function buildSpots(ctx, terrain) {
     // inner faint tick marks for a UI-hologram feel
     g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 2; for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * H * 0.62, cy + Math.sin(a) * H * 0.62); g.lineTo(cx + Math.cos(a) * H * 0.7, cy + Math.sin(a) * H * 0.7); g.stroke(); }
     // cell B dashed ring
-    const bx = 384; g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 10; g.lineCap = 'round'; const N = 14; for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = a0 + Math.PI * 2 / N * 0.55; g.beginPath(); g.arc(bx, cy, 112, a0, a1); g.stroke(); }
+    const bx = 384; g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 10; g.lineCap = 'round'; const NN = 14; for (let i = 0; i < NN; i++) { const a0 = i / NN * Math.PI * 2, a1 = a0 + Math.PI * 2 / NN * 0.55; g.beginPath(); g.arc(bx, cy, 112, a0, a1); g.stroke(); }
   }
   const fxTex = new THREE_.CanvasTexture(fx); fxTex.colorSpace = THREE_.SRGBColorSpace; fxTex.anisotropy = 4;
   const cellGeo = (u0, u1) => { const p = new THREE_.PlaneGeometry(1, 1); p.rotateX(-Math.PI / 2); const uv = p.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), uv.getY(i)); return p; };
   const ringGeo = cellGeo(0, 0.5), dashGeo = cellGeo(0.5, 1);
-  const ringSize = RING * 2 / 0.9 * (124 / 128) * 1.0; // ring peak sits at 0.88 of the cell half size
-  // ----- icon atlas: 5 cells of 192 x 256 -----
-  const IW = 192, IH = 256; const ic = document.createElement('canvas'); ic.width = IW * defs.length; ic.height = IH; const ig = ic.getContext('2d');
-  defs.forEach((d, i) => { ig.save(); ig.translate(i * IW, 0); ig.drawImage(spotGlyphCanvas(d.icon || d.id, d.color, 192), 0, 0);
-    ig.font = '800 40px system-ui, Arial, sans-serif'; ig.textAlign = 'center'; ig.textBaseline = 'middle'; ig.lineJoin = 'round'; ig.lineWidth = 11; ig.strokeStyle = '#17102b'; ig.strokeText(d.label, IW / 2, 222); ig.fillStyle = '#fff6e8'; ig.fillText(d.label, IW / 2, 222); ig.restore(); });
+  // ----- icon atlas: a grid of 192 x 256 cells (8 per row) -----
+  const IW = 192, IH = 256, COLS = Math.min(N, 8), ROWS = Math.ceil(N / COLS), ic = document.createElement('canvas'); ic.width = IW * COLS; ic.height = IH * ROWS; const ig = ic.getContext('2d');
+  defs.forEach((d, i) => { ig.save(); ig.translate((i % COLS) * IW, Math.floor(i / COLS) * IH); ig.drawImage(spotGlyphCanvas(d.icon || d.id, d.color || '#ff3ea5', 192), 0, 0);
+    ig.font = '800 40px system-ui, Arial, sans-serif'; ig.textAlign = 'center'; ig.textBaseline = 'middle'; ig.lineJoin = 'round'; ig.lineWidth = 11; ig.strokeStyle = '#17102b'; const lb = String(d.label || d.id).toUpperCase(); ig.strokeText(lb, IW / 2, 222, 184); ig.fillStyle = '#fff6e8'; ig.fillText(lb, IW / 2, 222, 184); ig.restore(); });
   const iconTex = new THREE_.CanvasTexture(ic); iconTex.colorSpace = THREE_.SRGBColorSpace; iconTex.anisotropy = 4;
-  const sparks = makeSparkles(THREE_, defs.length * 9, 1.0); group.add(sparks);
+  const sparks = makeSparkles(THREE_, N * 9, 1.0); group.add(sparks);
 
+  // lazily created decorations (lock chip, goal arrow, badge, beam) share one small atlas
+  let xTex = null, xGeo = {};
+  function xAtlas() { if (xTex) return xTex; const c = document.createElement('canvas'); c.width = 384; c.height = 128; const q = c.getContext('2d'); [drawLockChip, drawArrow, drawDot].forEach((fn, k) => { q.save(); q.translate(k * 128, 0); fn(q, 128); q.restore(); }); xTex = new THREE_.CanvasTexture(c); xTex.colorSpace = THREE_.SRGBColorSpace; xTex.anisotropy = 4; return xTex; }
+  function xPlane(cell, size, order) { const pg = new THREE_.PlaneGeometry(size, size), uv = pg.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, (cell + uv.getX(k)) / 3, uv.getY(k)); const m = new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({ map: xAtlas(), transparent: true, depthWrite: false, depthTest: false, toneMapped: false, fog: false, alphaTest: 0.02 })); m.renderOrder = order; m.castShadow = false; m.visible = false; return m; }
+
+  const byId = {};
   const spots = defs.map((d, i) => {
-    const col = new THREE_.Color(d.color);
-    const root = new THREE_.Group(); root.visible = false; group.add(root);
+    const col = new THREE_.Color(d.color || '#ff3ea5'), ringR = ring0(d), radius = d.radius !== undefined ? d.radius : ringR + 0.05, release = d.release !== undefined ? d.release : radius + 0.6, iconK = d.iconK !== undefined ? d.iconK : base.iconK, iconY = d.iconY !== undefined ? d.iconY : base.iconY;
+    const ringSize = ringR * 2 / 0.9 * (124 / 128), root = new THREE_.Group(); root.visible = false; group.add(root);
     const mk = (geo, size, order, gain) => { const m = new THREE_.Mesh(geo, new THREE_.MeshBasicMaterial({ map: fxTex, color: col.clone().multiplyScalar(gain), transparent: true, depthWrite: false, blending: THREE_.AdditiveBlending, toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); m.scale.set(size, 1, size); m.position.y = 0.1; m.renderOrder = order; m.castShadow = false; m.receiveShadow = false; root.add(m); return m; };
     const ring = mk(ringGeo, ringSize, 2, 1.7), dash = mk(dashGeo, ringSize * 1.02, 3, 1.9); dash.position.y = 0.12;
-    const pg = new THREE_.PlaneGeometry(1.5 * ICON_K, 2.0 * ICON_K); const uv = pg.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, (i + uv.getX(k)) / defs.length, uv.getY(k));
-    const icon = new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({ map: iconTex, transparent: true, depthWrite: false, toneMapped: false, fog: false, alphaTest: 0.02 })); icon.renderOrder = 6; icon.castShadow = false; root.add(icon);
-    return { id: d.id, label: d.label, icon: d.icon || d.id, color: d.color, color2: d.color2, cine: d.cine, anchor: d.anchor, x: 0, z: 0, rot: 0, iconY: ICON_Y, radius: ENTER, release: RELEASE, near: false, glow: 0, pop: 0, i, root, ring, dash, iconMesh: icon, seed: Math.random() * 6.28, placed: false };
+    const pg = new THREE_.PlaneGeometry(1.5 * iconK, 2.0 * iconK); const uv = pg.attributes.uv, cx = i % COLS, cy = Math.floor(i / COLS); for (let k = 0; k < uv.count; k++) uv.setXY(k, (cx + uv.getX(k)) / COLS, 1 - (cy + 1) / ROWS + uv.getY(k) / ROWS);
+    const iconG = new THREE_.Group(); root.add(iconG);
+    const icon = new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({ map: iconTex, transparent: true, depthWrite: false, toneMapped: false, fog: false, alphaTest: 0.02 })); icon.renderOrder = 6; icon.castShadow = false; iconG.add(icon);
+    const s = { id: d.id, label: d.label || d.id, icon: d.icon || d.id, kind: d.kind || '', color: d.color || '#ff3ea5', color2: d.color2, cine: d.cine, anchor: d.anchor, def: d, x: 0, z: 0, rot: 0, iconY, iconK, ringR, radius, release, pr: ringR * 0.92, ph: d.pillar !== undefined ? d.pillar : base.pillar, ringSize, rk: ringR / RING_R,
+      near: false, armed: false, glow: 0, pop: 0, i, root, iconG, ring, dash, iconMesh: icon, seed: Math.random() * 6.28, placed: false, locked: false, reason: '', goal: false, badge: false, ex: null, col: col.clone(), baseCol: col };
+    byId[s.id] = s; return s;
   });
-  const sCol = spots.map((s) => new THREE_.Color(s.color));
-  const sp = { life: new Float32Array(spots.length * 9), ang: new Float32Array(spots.length * 9), rad: new Float32Array(spots.length * 9) };
-  for (let k = 0; k < sp.life.length; k++) { sp.life[k] = Math.random(); sp.ang[k] = Math.random() * 6.28; sp.rad[k] = (0.3 + Math.random() * 1.2) * RK; }
+  const sp = { life: new Float32Array(N * 9), ang: new Float32Array(N * 9), rad: new Float32Array(N * 9) };
+  for (let k = 0; k < sp.life.length; k++) { sp.life[k] = Math.random(); sp.ang[k] = Math.random() * 6.28; sp.rad[k] = (0.3 + Math.random() * 1.2) * spots[Math.floor(k / 9)].rk; }
 
-  // light pillars: ONE merged additive mesh for all spots (vertex colour fades to black at the top = invisible when additive)
-  const SEG = 18, PH = IN ? INDOOR.pillar : 4.4, PR = RING * 0.92, VPS = SEG * 6, pg2 = new THREE_.BufferGeometry(), pPos = new Float32Array(spots.length * VPS * 3), pCol = new Float32Array(spots.length * VPS * 3), pBase = [];
-  for (let k = 0; k < SEG; k++) { const a0 = k / SEG * 6.2832, a1 = (k + 1) / SEG * 6.2832, c0 = Math.cos(a0) * PR, s0 = Math.sin(a0) * PR, c1 = Math.cos(a1) * PR, s1 = Math.sin(a1) * PR; pBase.push([c0, 0.06, s0, 1], [c1, 0.06, s1, 1], [c1, PH, s1, 0], [c0, 0.06, s0, 1], [c1, PH, s1, 0], [c0, PH, s0, 0]); }
-  spots.forEach((s, si) => { const c = sCol[si]; pBase.forEach((v, vi) => { const o = (si * VPS + vi) * 3, f = v[3] * (IN ? 0.2 : 0.34); pCol[o] = c.r * f; pCol[o + 1] = c.g * f; pCol[o + 2] = c.b * f; }); });
-  pg2.setAttribute('position', new THREE_.BufferAttribute(pPos, 3)); pg2.setAttribute('color', new THREE_.BufferAttribute(pCol, 3));
+  // light pillars: ONE merged additive mesh for all spots (vertex colour fades to black at the top = invisible when additive); unit radius, scaled per spot
+  const SEG = 18, VPS = SEG * 6, pg2 = new THREE_.BufferGeometry(), pPos = new Float32Array(N * VPS * 3), pCol = new Float32Array(N * VPS * 3), pBase = [];
+  for (let k = 0; k < SEG; k++) { const a0 = k / SEG * 6.2832, a1 = (k + 1) / SEG * 6.2832, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1); pBase.push([c0, 0.06, s0, 1], [c1, 0.06, s1, 1], [c1, 1, s1, 0], [c0, 0.06, s0, 1], [c1, 1, s1, 0], [c0, 1, s0, 0]); }
+  function paintPillar(s) { const c = s.col, f0 = (IN ? 0.2 : 0.34) * (s.locked ? 0.3 : s.goal ? 1.5 : 1); pBase.forEach((v, vi) => { const o = (s.i * VPS + vi) * 3, f = v[3] * f0; pCol[o] = c.r * f; pCol[o + 1] = c.g * f; pCol[o + 2] = c.b * f; }); pg2.attributes.color.needsUpdate = true; }
+  pg2.setAttribute('position', new THREE_.BufferAttribute(pPos, 3)); pg2.setAttribute('color', new THREE_.BufferAttribute(pCol, 3)); spots.forEach(paintPillar);
   const pillar = new THREE_.Mesh(pg2, new THREE_.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE_.AdditiveBlending, depthWrite: false, side: THREE_.DoubleSide, toneMapped: false, fog: false })); pillar.frustumCulled = false; pillar.renderOrder = 1; group.add(pillar);
-  function placePillar(s) { const o0 = s.i * VPS * 3, y = s.root.position.y; pBase.forEach((v, vi) => { const o = o0 + vi * 3; pPos[o] = s.x + v[0]; pPos[o + 1] = y + v[1]; pPos[o + 2] = s.z + v[2]; }); pg2.attributes.position.needsUpdate = true; }
-  function place(s) { const AN = terrain && terrain.anchors, a = AN && (AN[s.anchor] || AN[s.id]); if (!a) { s.root.visible = false; return; } if (s.placed && a.x === s.x && a.z === s.z) return; s.x = a.x; s.z = a.z; s.rot = a.rot || 0; s.placed = true; s.root.visible = true; s.root.position.set(s.x, terrain.heightAt ? terrain.heightAt(s.x, s.z) : 0, s.z); placePillar(s); }
-  function refresh(p) { if (!p) return; for (const s of spots) { place(s); if (!s.placed) continue; const d = Math.hypot(p.x - s.x, p.z - s.z); if (!s.near && d < s.radius) s.near = true; else if (s.near && d > s.release) s.near = false; } }
-  function nearest(p) { refresh(p); let best = null, bd = 1e9; for (const s of spots) if (s.near) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < bd) { bd = d; best = s; } } return best; }
-  function activate(id) { ctx.events.emit('spot', { id, scene: ctx.sceneName || 'park' }); }
+  function placePillar(s) { const o0 = s.i * VPS * 3, y = s.root.position.y; pBase.forEach((v, vi) => { const o = o0 + vi * 3; pPos[o] = s.x + v[0] * s.pr; pPos[o + 1] = y + v[1] * (v[3] ? 1 : s.ph); pPos[o + 2] = s.z + v[2] * s.pr; }); pg2.attributes.position.needsUpdate = true; }
+  function place(s) {
+    const d = s.def, AN = terrain && terrain.anchors, a = (d.x !== undefined && d.z !== undefined ? d : null) || (AN && (AN[s.anchor] || AN[s.id])); if (!a || !isFinite(a.x) || !isFinite(a.z)) { s.root.visible = false; s.placed = false; return; }
+    if (s.placed && a.x === s.x && a.z === s.z) return; s.x = a.x; s.z = a.z; s.rot = a.rot || 0; s.placed = true; s.root.visible = true; s.root.position.set(s.x, terrain && terrain.heightAt ? terrain.heightAt(s.x, s.z) || 0 : 0, s.z); placePillar(s);
+  }
+  function fire(s) { const e = { id: s.id, scene: ctx.sceneName || 'park', kind: s.kind, locked: !!s.locked, reason: s.reason || '' }; if (s.kind === 'door') events.emit('door', e); events.emit('spot', e); }
+  function refresh(p) {
+    if (!p) return; const can = !api.canFire || api.canFire();
+    for (const s of spots) { place(s); if (!s.placed) continue; const d = Math.hypot(p.x - s.x, p.z - s.z); if (!s.near && d < s.radius) s.near = true; else if (s.near && d > s.release) s.near = false;
+      if (s.kind === 'door') { if (d > s.release) s.armed = true; else if (s.armed && d < s.radius && can) { s.armed = false; fire(s); } } }
+  }
+  function nearest(p) { refresh(p); let best = null, bd = 1e9; for (const s of spots) if (s.near && s.kind !== 'door') { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < bd) { bd = d; best = s; } } return best; }
+  function activate(id) { const s = byId[id]; if (s) { if (s.kind === 'door') s.armed = false; fire(s); } else events.emit('spot', { id, scene: ctx.sceneName || 'park' }); }
+
+  // ----- states: locked (grey icon, padlock, dim ring, dim pillar), goal (light beam + bobbing arrow), badge (dot or short text) -----
+  const tmpC = new THREE_.Color();
+  function beam(s) {
+    const H = 16, mkB = (r0, r1, a) => { const geo = new THREE_.CylinderGeometry(r1, r0, H, 20, 1, true); geo.translate(0, H / 2, 0); const n = geo.attributes.position.count, cols = new Float32Array(n * 3); for (let k = 0; k < n; k++) { const f = 1 - geo.attributes.position.getY(k) / H; cols[k * 3] = cols[k * 3 + 1] = cols[k * 3 + 2] = f * f * a; } geo.setAttribute('color', new THREE_.BufferAttribute(cols, 3));
+      const m = new THREE_.Mesh(geo, new THREE_.MeshBasicMaterial({ vertexColors: true, color: new THREE_.Color(GOLD), transparent: true, blending: THREE_.AdditiveBlending, depthWrite: false, side: THREE_.DoubleSide, toneMapped: false, fog: false })); m.renderOrder = 1; m.frustumCulled = false; return m; };
+    const b = new THREE_.Group(); b.add(mkB(s.ringR * 0.5, s.ringR * 0.34, 0.26), mkB(s.ringR * 0.16, s.ringR * 0.1, 0.5)); b.position.y = 0.08; b.visible = false; s.root.add(b); return b;
+  }
+  function ensure(s) {
+    if (s.ex) return s.ex; const k = s.iconK, e = { lock: xPlane(0, 0.78 * k, 7), arrow: xPlane(1, 0.78 * k, 8), dot: xPlane(2, 0.4 * k, 7), beam: beam(s), dotTex: null };
+    e.lock.position.set(0.5 * k, -0.18 * k, 0.01); e.dot.position.set(0.55 * k, 0.8 * k, 0.01); e.arrow.position.set(0, 1.42 * k, 0.01); s.iconG.add(e.lock, e.dot, e.arrow); s.ex = e; return e;
+  }
+  function badgeTex(text, color) { const c = document.createElement('canvas'); c.width = c.height = 64; const q = c.getContext('2d'); drawDot(q, 64, text); if (color) { q.globalCompositeOperation = 'source-atop'; } const t = new THREE_.CanvasTexture(c); t.colorSpace = THREE_.SRGBColorSpace; return t; }
+  function applyState(s) {
+    const need = s.locked || s.goal || s.badge; if (!need && !s.ex) { s.col.copy(s.baseCol); s.icon_dim = 0; s.iconMesh.material.color.setRGB(1, 1, 1); paintPillar(s); return; }
+    const e = ensure(s); e.lock.visible = s.locked; e.arrow.visible = s.goal; e.beam.visible = s.goal; e.dot.visible = !!s.badge;
+    if (s.badge) { const b = s.badge, isColor = typeof b === 'string' && /^(#|rgb)/.test(b), txt = (typeof b === 'string' && !isColor) || typeof b === 'number' ? String(b).slice(0, 2) : ''; const m = e.dot.material;
+      if (txt) { if (e.dotTex) e.dotTex.dispose(); e.dotTex = badgeTex(txt); m.map = e.dotTex; m.color.set(0xffffff); e.dot.geometry.attributes.uv.array.set([0, 1, 1, 1, 0, 0, 1, 0]); e.dot.geometry.attributes.uv.needsUpdate = true; e.dot.scale.setScalar(1.15); }
+      else { m.map = xAtlas(); const uv = e.dot.geometry.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, (2 + (k % 2)) / 3, k < 2 ? 1 : 0); uv.needsUpdate = true; if (isColor) m.color.set(b); else m.color.set(0xffffff); e.dot.scale.setScalar(1); } m.needsUpdate = true; }
+    s.col.copy(s.locked ? tmpC.set(GREY) : s.baseCol); s.iconMesh.material.color.setRGB(s.locked ? 0.5 : 1, s.locked ? 0.5 : 1, s.locked ? 0.55 : 1); paintPillar(s);
+    const gain = s.locked ? 0.55 : 1, rc = s.col; s.ring.material.color.copy(rc).multiplyScalar(1.7 * gain); s.dash.material.color.copy(s.goal && !s.locked ? tmpC.set(GOLD) : rc).multiplyScalar(1.9 * gain);
+  }
+  function setSpotState(id, st) {
+    const s = byId[id]; if (!s) return false; st = st || {}; if ('locked' in st) s.locked = !!st.locked; if ('reason' in st) s.reason = st.reason || ''; if ('goal' in st) s.goal = !!st.goal; if ('badge' in st) s.badge = st.badge === undefined || st.badge === null ? false : st.badge; if (st.locked === false && !('reason' in st)) s.reason = '';
+    applyState(s); return true;
+  }
+  function getSpotState(id) { const s = byId[id]; return s ? { locked: s.locked, reason: s.reason, goal: s.goal, badge: s.badge } : null; }
 
   const ease = (a, b, k) => a + (b - a) * k;
   function update(dt, t, p) {
     refresh(p); const cam = ctx.camera, pa = sparks.geometry.attributes; updateSparkScale(sparks, ctx.renderer, cam);
     for (const s of spots) {
       if (!s.placed) continue; const on = s.near ? 1 : 0; s.glow = ease(s.glow, on, 1 - Math.exp(-6 * dt)); s.pop = ease(s.pop, on, 1 - Math.exp(-9 * dt));
-      const pulse = Math.sin(t * Math.PI * 2 * (1.2 + s.glow * 0.8) + s.seed), sc = 1 + 0.035 * pulse + 0.05 * s.glow;
-      s.ring.scale.set(ringSize * sc, 1, ringSize * sc); s.ring.material.opacity = 0.72 + 0.18 * pulse + 0.25 * s.glow; s.dash.rotation.y = -t * (0.35 + s.glow * 0.5) + s.seed; s.dash.material.opacity = 0.55 + 0.3 * s.glow;
-      const bob = Math.sin(t * Math.PI * 2 * 0.8 + s.seed) * 0.1; s.iconMesh.position.set(0, s.iconY + bob + s.pop * 0.15, 0); const k = 1 + 0.28 * s.pop; s.iconMesh.scale.set(k, k, 1); s.iconMesh.quaternion.copy(cam.quaternion); s.iconMesh.parent.updateWorldMatrix(true, false);
-      // billboard: cancel the parent rotation (root is only translated, so copying the camera quaternion is enough)
+      const lk = s.locked ? 0.4 : 1, pulse = Math.sin(t * Math.PI * 2 * (1.2 + s.glow * 0.8 + (s.goal ? 0.6 : 0)) + s.seed), sc = 1 + 0.035 * pulse + 0.05 * s.glow + (s.goal ? 0.05 * (1 + pulse) : 0);
+      s.ring.scale.set(s.ringSize * sc, 1, s.ringSize * sc); s.ring.material.opacity = (0.72 + 0.18 * pulse + 0.25 * s.glow) * lk; s.dash.rotation.y = -t * (0.35 + s.glow * 0.5 + (s.goal ? 0.5 : 0)) + s.seed; s.dash.material.opacity = (0.55 + 0.3 * s.glow) * lk;
+      const bob = Math.sin(t * Math.PI * 2 * 0.8 + s.seed) * 0.1; s.iconG.position.set(0, s.iconY + bob + s.pop * 0.15, 0); const k = 1 + 0.28 * s.pop; s.iconG.scale.set(k, k, 1); s.iconG.quaternion.copy(cam.quaternion);
+      const e = s.ex; if (e) { if (s.goal) { e.arrow.position.y = (1.42 + 0.12 * Math.sin(t * 6.5 + s.seed)) * s.iconK; const bm = 0.8 + 0.2 * Math.sin(t * 3 + s.seed); e.beam.children.forEach((c, ci) => { c.material.opacity = bm * (ci ? 1 : 0.9); }); } if (s.badge && e.dot.visible) { const bp = 1 + 0.1 * Math.sin(t * 5 + s.seed); e.dot.scale.setScalar((e.dotTex ? 1.15 : 1) * bp); } }
     }
     for (let k = 0; k < sp.life.length; k++) {
       const si = Math.floor(k / 9), s = spots[si]; if (!s.placed) { pa.aAlpha.array[k] = 0; continue; }
-      sp.life[k] += dt * (0.4 + 0.3 * s.glow); if (sp.life[k] > 1) { sp.life[k] -= 1; sp.ang[k] = Math.random() * 6.28; sp.rad[k] = (0.25 + Math.random() * 1.25) * RK; }
-      const l = sp.life[k], r = sp.rad[k] * (1 - 0.15 * l), a = sp.ang[k] + l * 0.8; const c = sCol[si];
+      sp.life[k] += dt * (0.4 + 0.3 * s.glow); if (sp.life[k] > 1) { sp.life[k] -= 1; sp.ang[k] = Math.random() * 6.28; sp.rad[k] = (0.25 + Math.random() * 1.25) * s.rk; }
+      const l = sp.life[k], r = sp.rad[k] * (1 - 0.15 * l), a = sp.ang[k] + l * 0.8; const c = s.col, lk = s.locked ? 0.25 : 1;
       pa.position.setXYZ(k, s.x + Math.cos(a) * r, 0.15 + l * (IN ? 1.4 : 2.0), s.z + Math.sin(a) * r); pa.aColor.setXYZ(k, c.r * 0.7 + 0.3, c.g * 0.7 + 0.3, c.b * 0.7 + 0.3);
-      pa.aSize.array[k] = 0.16 + 0.12 * (1 - l) + 0.06 * s.glow; pa.aAlpha.array[k] = Math.sin(l * Math.PI) * (0.55 + 0.45 * s.glow);
+      pa.aSize.array[k] = 0.16 + 0.12 * (1 - l) + 0.06 * s.glow; pa.aAlpha.array[k] = Math.sin(l * Math.PI) * (0.55 + 0.45 * s.glow) * lk;
     }
     pa.position.needsUpdate = pa.aColor.needsUpdate = pa.aSize.needsUpdate = pa.aAlpha.needsUpdate = true;
   }
   spots.forEach(place);
-  return { group, spots, update, nearest, activate, refresh, ENTER_R: ENTER, RELEASE_R: RELEASE };
+  Object.assign(api, { spots, update, nearest, activate, refresh, setSpotState, getSpotState, byId, ENTER_R: base.enter, RELEASE_R: base.release });
+  return api;
 }

@@ -1,6 +1,6 @@
 // Busking rhythm game: the crowd. A few real park characters close to the highway (they pick clips from the crowd energy and join in one by one),
 // plus a block of instanced low-poly spectators (torso, head, hair, arms, glow sticks = 5 draw calls) that sway, clap and wave glow sticks as combo rises.
-import { THREE, flatMat, rng } from './kit.js';
+import { THREE, flatMat, rng, disposeTree } from './kit.js';
 import { createNPC } from './characters.js';
 import { STAGE } from './mg_rhythm_world.js';
 
@@ -64,5 +64,5 @@ export function buildCrowd(ctx, q, look) {
       c.update(dt, t);
     });
   }
-  return { group, update, near, spectators: P.length, setQuality() {}, dispose() { near.forEach((c) => c.dispose && c.dispose()); } };
+  return { group, update, near, spectators: P.length, setQuality() {}, dispose() { near.forEach((c) => { try { disposeTree(c.object); } catch (e) { /* ignore */ } if (c.dispose) c.dispose(); }); } };       // the tree first: character.dispose() detaches the object, which would hide its skeleton (bone texture) from disposeTree
 }
