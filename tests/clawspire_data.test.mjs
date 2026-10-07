@@ -602,8 +602,12 @@ t.test('events', () => {
     }
   }
   t.ok(conds >= 5, `several conditional choices [${conds}]`);
-  // Claw upgrades come from bosses and towers only, never from events.
-  for (const id of ids) for (const c of EVENTS[id].choices) t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
+  // Claw upgrades come from bosses and towers only, never from events. (round 29) CUP: the Coil Winder (cup: true, a
+  // Magnet Crane run only, placed by game.js) is the one event that winds the magnet's coil, and only that part.
+  for (const id of ids) for (const c of EVENTS[id].choices) {
+    if (EVENTS[id].cup) { t.ok(c.fx.every(f => f.k !== 'claw' || (f.u === 'coil' && CLAW_UPGRADES.coil.cup)), `event ${id}: only Coil Winding`); continue; }
+    t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
+  }
   t.ok(DATA.ECONOMY.trickle === 2 && DATA.ECONOMY.binFloor === 6, 'bin trickle 2, floor 6');
   // gold costs are gated by a gold condition
   for (const id of ids) for (const c of EVENTS[id].choices) {
@@ -631,7 +635,42 @@ t.test('claw upgrades', () => {
     const exp = { grabs: ['grabs', 5], width: ['width', 1.54], grip: ['grip', 2.05], speed: ['speed', 1.6], prongs: ['prongs', 3], rubber: ['rubber', 1], magnet: ['magnet', 1] }[id];
     t.near(claw[exp[0]], exp[1], 1e-9, `${W}: final ${exp[0]}`);
   }
-  t.eq(Object.keys(CLAW_UPGRADES).length, 7, 'exactly the 7 upgrades');
+  t.eq(Object.keys(CLAW_UPGRADES).filter(id => !CLAW_UPGRADES[id].cup).length, 7, 'exactly the 7 common upgrades');
+  t.eq(Object.keys(CLAW_UPGRADES).length, 9, 'and the 2 of round 29 (CUP)');
+});
+
+// (round 29) CUP: Coil Winding and Wider Chute (DESIGN.md "Magnet power and a wider chute (round 29)")
+t.test('cup: the coil and chute parts, and the Coil Winder event', () => {
+  const need = { coil: { max: 3, field: 'coil', only: 'magnet' }, chute: { max: 4, field: 'chute', only: undefined } };
+  const ids = Object.keys(CLAW_UPGRADES);
+  t.eq(ids.slice(0, 7).join(','), 'grabs,width,grip,speed,prongs,rubber,magnet', 'the old seven keep their order (the common rolls are unchanged)');
+  for (const id in need) {
+    const u = CLAW_UPGRADES[id], W = `upgrade ${id}`, n = need[id];
+    t.ok(!!u, `${W} exists`);
+    if (!u) continue;
+    t.eq(u.id, id, `${W}: key`);
+    t.eq(u.cup, true, `${W}: cup (kept out of the common rolls)`);
+    t.eq(u.max, n.max, `${W}: max ${n.max}`);
+    t.eq(u.only, n.only, `${W}: fits ${n.only || 'every claw'}`);
+    t.eq(u.rank, n.field, `${W}: the rank lives on claw.${n.field}`);
+    t.ok(isNum(u.cost) && u.cost >= 20 && u.cost <= 160, `${W}: cost`);
+    t.ok(typeof u.name === 'string' && u.name && typeof u.icon === 'string' && u.icon && typeof u.text === 'string' && u.text.length > 10, `${W}: labels`);
+    t.ok(u.text.indexOf(String.fromCharCode(0x2014)) < 0 && u.name.indexOf(String.fromCharCode(0x2014)) < 0, `${W}: no em dash`);
+    const claw = { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
+    for (let i = 0; i < u.max; i++) { t.ok(u.apply(claw) === true, `${W}: apply #${i + 1}`); t.eq(claw[n.field], i + 1, `${W}: rank ${i + 1}`); t.eq(claw.ups[id], i + 1, `${W}: ups.${id}`); }
+    const snap = JSON.stringify(claw);
+    t.ok(u.apply(claw) === false, `${W}: refused past max`);
+    t.eq(JSON.stringify(claw), snap, `${W}: no change past max`);
+    t.eq([claw.grabs, claw.width, claw.grip, claw.speed, claw.prongs, claw.rubber, claw.magnet].join(','), '3,1,1,1,2,0,0', `${W}: touches nothing else`);
+  }
+  t.ok(Object.keys(CLAW_UPGRADES).every(id => CLAW_UPGRADES.chute.cost <= CLAW_UPGRADES[id].cost), 'the chute is the cheapest part (tiny steps; Rocco fits it for 30 + 10 a rank)');
+  // the event
+  const ev = EVENTS.coil_winder;
+  t.ok(ev && ev.cup === true && ev.title && ev.text && ev.art, 'the Coil Winder: cup, title, text, art');
+  t.ok(ev.choices.length === 3 && ev.choices.filter(c => c.fx.some(f => f.k === 'claw' && f.u === 'coil')).length === 2, 'two ways to wind the coil, one to walk away');
+  const paid = ev.choices.find(c => c.fx.some(f => f.k === 'gold' && f.v < 0));
+  t.ok(paid && paid.cond && paid.cond({ gold: 44 }) === false && paid.cond({ gold: 45 }) === true, 'the copper costs 45 gold, gated');
+  t.ok(Object.keys(EVENTS).filter(id => EVENTS[id].cup).join(',') === 'coil_winder', 'the only cup event');
 });
 
 // ------------------------------------------------------------------ tools

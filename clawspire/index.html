@@ -3365,6 +3365,123 @@ html[class*="txt-"] #benchBody{zoom:var(--accK)}
 .cards.n4{grid-template-columns:repeat(2,1fr)}
 /* ================= /BENCH ================= */
 </style>
+<style id="gtu-css">
+/* ================= GUIDE (round 29): the guided first run =================
+   DESIGN.md "The guided first run (round 29)". The coach card on the map (#gtuCard: the tip card look, an info
+   edge, top or bottom so it never covers what it points at), the pointer (#gtuRing round a hex or the bulbs pill,
+   #gtuArrow bobbing over it), the inline line on the capsule, event and reward pages (.gtuLine), the fight coach
+   wearing the same kicker and Skip (#coach.gtuOn), the title's offer sheet and the Help card. Calm and reduced
+   motion: a still highlight, no bob, no pulse. */
+#gtuCard{position:absolute;left:16px;right:16px;top:auto;bottom:24px;z-index:43;display:none;flex-direction:column;gap:var(--s2);
+  padding:14px 16px 10px;border-radius:var(--r-card);background:var(--surface);border:1.5px solid var(--line-strong);
+  border-left:4px solid var(--info);box-shadow:0 12px 30px rgba(0,0,0,.6);pointer-events:auto;color:var(--text)}
+#gtuCard.top{top:184px;bottom:auto}
+#gtuCard.show{display:flex;animation:gtuIn .32s cubic-bezier(.2,1.3,.4,1) both}
+.gtuK{font-size:var(--fs-xs);font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--info)}
+#gtuCard .gtuT{font-size:var(--fs-m);font-weight:800;line-height:1.3}
+#gtuCard .gtuH{font-size:24px;font-weight:900;line-height:1.15;color:var(--reward)}
+#gtuCard .gtuL{display:flex;gap:10px;align-items:flex-start;font-size:17px;line-height:1.3;font-weight:700}
+#gtuCard .gtuL i{font-style:normal;flex:0 0 26px;text-align:center}
+.gtuRow{display:flex;gap:var(--s2);align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.gtuRow .btn{min-height:44px}
+.gtuRow .gtuSkip{margin-right:auto}
+#gtuRing{position:absolute;z-index:41;display:none;pointer-events:none;border-radius:50%;border:4px solid var(--reward);
+  box-shadow:0 0 0 3px rgba(18,9,31,.75),0 0 22px rgba(255,204,85,.75),inset 0 0 18px rgba(255,204,85,.35);animation:gtuPulse 1.1s ease-in-out infinite}
+#gtuRing.pill{border-radius:999px}
+#gtuArrow{position:absolute;z-index:41;display:none;width:36px;height:46px;pointer-events:none;animation:gtuBob .7s ease-in-out infinite alternate}
+#gtuArrow::before{content:"";position:absolute;left:11px;top:0;width:14px;height:22px;border-radius:4px 4px 0 0;background:var(--reward);
+  box-shadow:0 0 0 2px #12091f}
+#gtuArrow::after{content:"";position:absolute;left:0;top:20px;width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;
+  border-top:24px solid var(--reward);filter:drop-shadow(0 2px 0 #12091f) drop-shadow(0 0 6px rgba(255,204,85,.8))}
+#gtuArrow.up{animation-name:gtuBobUp}
+#gtuArrow.up::before{top:24px;border-radius:0 0 4px 4px}
+#gtuArrow.up::after{top:2px;border-top:0;border-bottom:24px solid var(--reward)}
+#gtuRing.show,#gtuArrow.show{display:block}
+@keyframes gtuIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes gtuPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.75}}
+@keyframes gtuBob{from{transform:translateY(-6px)}to{transform:translateY(4px)}}
+@keyframes gtuBobUp{from{transform:translateY(6px)}to{transform:translateY(-4px)}}
+.calm #gtuCard.show,.calm #gtuRing,.calm #gtuArrow{animation:none!important}
+@media (prefers-reduced-motion:reduce){#gtuCard.show,#gtuRing,#gtuArrow{animation:none!important}}
+/* the inline line on a page (the capsule, an event, the reward) */
+.gtuLine{display:flex;flex-direction:column;gap:6px;padding:10px 12px 8px;border-radius:var(--r-card);background:var(--surface-2);
+  border:1.5px solid var(--line-strong);border-left:4px solid var(--info);text-align:left;align-self:stretch}
+.gtuLine .gtuT{font-size:17px;font-weight:800;line-height:1.3;color:var(--text)}
+.gtuLine .gtuRow{justify-content:flex-start}
+#capsuleBody .gtuLine{margin:10px 16px 0}
+/* the fight coach on a guided run: the same kicker, a Skip beside Next */
+#coach.gtuOn{border-left:4px solid var(--info)}
+#coach .gtuK{display:none}
+#coach.gtuOn .gtuK{display:block}
+#coach .gtuSkip{display:none;margin-right:auto}
+#coach.gtuOn .gtuSkip{display:inline-flex}
+#coach.gtuOn .row{display:flex;gap:var(--s2);align-items:center;justify-content:flex-end}
+/* the title's offer (an old profile, once) and the Help card */
+.gtuOfferI{font-size:44px;text-align:center;line-height:1}
+.gtuOfferT{font-size:var(--fs-m);font-weight:900;text-align:center;color:var(--text)}
+.gtuOfferR{display:flex;gap:var(--s2);justify-content:flex-end;margin-top:var(--s3)}
+.gtuOfferR .btn{flex:1}
+.gtuHelp{border-left:4px solid var(--info)}
+.gtuHelp .btn{margin-top:var(--s2);width:100%}
+/* ================= /GUIDE ================= */
+</style>
+<style id="cup-css">
+/* ================= CUP (round 29): magnet power and a wider chute =================
+   DESIGN.md "Magnet power and a wider chute (round 29)": the part cards (rank, now and next, pips), the elite's bonus
+   card, the upgrade burst, the Trading Post's chute fitting, the bin's claw tags. */
+.card.cupCard{position:relative;border-color:#ffb347;box-shadow:0 0 16px rgba(255,179,71,.28),inset 0 0 22px rgba(255,179,71,.06)}
+.card.cupCard.cup-coil{border-color:#2ee6d6;box-shadow:0 0 18px rgba(46,230,214,.32),inset 0 0 22px rgba(46,230,214,.07)}
+.card.cupCard .cupRib{color:#12091f;background:#ffb347;border-radius:7px;padding:1px 8px;align-self:center;font-weight:900;letter-spacing:.08em}
+.card.cupCard.cup-coil .cupRib{background:#2ee6d6}
+.card.cupCard .cupIc{font-size:40px;line-height:1.1;text-align:center}
+.card.cupCard .name{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+.card.cupCard .cupRk{font-size:13px;font-weight:900;color:#12091f;background:#ffb347;border-radius:6px;padding:0 6px;line-height:1.35}
+.card.cupCard.cup-coil .cupRk{background:#2ee6d6}
+.card.cupCard .cupNext{display:flex;flex-direction:column;gap:1px;font-size:12px;font-weight:800;color:#ffe2b8;text-align:center;line-height:1.25}
+.card.cupCard.cup-coil .cupNext{color:#bffcff}
+.card.cupCard .cupPips{display:flex;gap:4px;justify-content:center;margin-top:3px}
+.card.cupCard .cupPips i{width:12px;height:6px;border-radius:3px;background:rgba(255,255,255,.14)}
+.card.cupCard .cupPips i.on{background:#ffb347}
+.card.cupCard .cupPips i.nx{background:#fff2c0;box-shadow:0 0 8px #ffb347;animation:cupPip 0.9s ease-in-out infinite alternate}
+.card.cupCard.cup-coil .cupPips i.on{background:#2ee6d6}
+.card.cupCard.cup-coil .cupPips i.nx{background:#d8fffb;box-shadow:0 0 8px #2ee6d6}
+@keyframes cupPip{from{opacity:.55}to{opacity:1}}
+.card.cupElite{animation:cupElite 1.6s ease-in-out infinite alternate}
+@keyframes cupElite{from{box-shadow:0 0 10px rgba(46,230,214,.25)}to{box-shadow:0 0 26px rgba(46,230,214,.6)}}
+/* the moment: an icon pops in the middle of the screen in a ring of sparks */
+.cupBurst{position:absolute;left:50%;top:42%;z-index:60;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;
+  padding:34px 54px;border-radius:50%;background:radial-gradient(closest-side,rgba(18,9,31,.94) 0,rgba(18,9,31,.88) 62%,rgba(18,9,31,0) 100%);
+  animation:cupBurst 1.7s cubic-bezier(.2,1.4,.4,1) forwards}
+.cupBurst .cupBIc{font-size:64px;line-height:1;filter:drop-shadow(0 0 14px #ffb347)}
+.cupBurst.cupB-coil .cupBIc{filter:drop-shadow(0 0 16px #2ee6d6)}
+.cupBurst .cupBT{font-size:20px;font-weight:900;color:#fff;text-shadow:0 2px 0 #12091f,0 0 12px #ffb347;letter-spacing:.04em}
+.cupBurst.cupB-coil .cupBT{text-shadow:0 2px 0 #12091f,0 0 12px #2ee6d6}
+.cupBurst .cupBR{font-size:14px;font-weight:900;color:#12091f;background:#ffb347;border-radius:8px;padding:1px 10px}
+.cupBurst.cupB-coil .cupBR{background:#2ee6d6}
+.cupBurst .cupSpark{position:absolute;left:50%;top:66px;width:4px;height:14px;margin-left:-2px;border-radius:2px;background:#fff6c0;box-shadow:0 0 6px #ffb347;
+  transform:rotate(var(--a)) translateY(0);opacity:0;animation:cupSpark .7s ease-out forwards}
+.cupBurst.cupB-coil .cupSpark{background:#d8fffb;box-shadow:0 0 6px #2ee6d6}
+@keyframes cupBurst{0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}26%{transform:translate(-50%,-50%) scale(1)}
+  80%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-62%) scale(.96)}}
+@keyframes cupSpark{0%{opacity:1;transform:rotate(var(--a)) translateY(-10px)}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(-1 * var(--d)))}}
+.calm .cupBurst{animation-duration:1.2s}
+.calm .cupBurst .cupSpark{display:none}
+.calm .card.cupElite,.calm .card.cupCard .cupPips i.nx{animation:none}
+/* the Trading Post's chute fitting: one slim row */
+.trdOffer.cupTrd{background:linear-gradient(180deg,#2e1d0a,#1a0f06)}
+.cupTrdRow{justify-content:space-between;gap:10px}
+.cupTrdIc{font-size:30px;line-height:1}
+.cupTrdTx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;align-items:flex-start;text-align:left}
+.cupTrdTx .trdRule,.cupTrdTx .trdNm{text-align:left}
+.cupTrd .trdGo{flex:0 0 auto;font-size:16px;padding:8px 14px;white-space:nowrap}
+.cupTrd .trdRule{white-space:nowrap}
+/* the bin's claw tags */
+.cupTags{flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;margin:2px 0 6px}
+.cupTagK{font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--dim,#9a8fb8);text-transform:uppercase}
+.tag.cupTag{border-color:#ffb347;color:#ffe2b8}
+.tag.cupTag.cupT-coil{border-color:#2ee6d6;color:#bffcff}
+/* ================= /CUP ================= */
+</style>
 </head>
 <body>
 <div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
@@ -3460,6 +3577,9 @@ html[class*="txt-"] #benchBody{zoom:var(--accK)}
   <div id="combo"><div class="cburst"></div><div class="cn" id="comboName"></div><div class="ct" id="comboText"></div></div>
 
   <div id="coach" class="panel"><div class="t" id="coachTxt"></div><div class="row"><button id="coachBtn" class="btn go sm">Got it</button></div><div class="arrow"></div></div>
+  <!-- GUIDE (round 29): the guided first run's coach card and its pointer -->
+  <div id="gtuRing" aria-hidden="true"></div><div id="gtuArrow" aria-hidden="true"></div>
+  <div id="gtuCard" role="dialog" aria-live="polite"></div>
   <div id="pop" class="panel"></div>
   <div id="toast"></div>
   <!-- FEEL: the tip card (one at a time, a tap puts it away) -->

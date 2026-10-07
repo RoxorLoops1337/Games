@@ -585,7 +585,7 @@ const MAP = (() => {
         break;
       case 'event':
         if (typeof DATA !== 'undefined' && DATA && DATA.EVENTS) {
-          const ids = Object.keys(DATA.EVENTS);
+          const ids = Object.keys(DATA.EVENTS).filter((id) => !DATA.EVENTS[id].cup);   // (round 29) CUP: the Coil Winder is game.js's to place
           // Avoid repeating an event on the same map while fresh ones remain.
           const fresh = ids.filter((id) => !used[id]);
           const id = fresh.length ? crng.pick(fresh) : (ids.length ? crng.pick(ids) : null);
@@ -606,7 +606,7 @@ const MAP = (() => {
     if (k === 'gold') return { k, n: TOWER_GOLD };
     if (k === 'brush') return { k, id: crng.pick(toolIds()) };
     let ups = FALLBACK_UPGRADES;
-    if (typeof DATA !== 'undefined' && DATA && DATA.CLAW_UPGRADES && Object.keys(DATA.CLAW_UPGRADES).length) ups = Object.keys(DATA.CLAW_UPGRADES);
+    if (typeof DATA !== 'undefined' && DATA && DATA.CLAW_UPGRADES && Object.keys(DATA.CLAW_UPGRADES).length) ups = Object.keys(DATA.CLAW_UPGRADES).filter((id) => !DATA.CLAW_UPGRADES[id].cup);   // (round 29) CUP: never a tower's bonus
     return { k, u: crng.pick(ups) };
   }
 

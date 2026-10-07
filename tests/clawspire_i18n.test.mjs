@@ -1121,4 +1121,87 @@ h.test('bench: every line of the Upgrade Bench has its Dutch (upgrades, packs, t
   I18N.set('en');
 });
 
+// (round 29) CUP: magnet power and a wider chute (DESIGN.md "Magnet power and a wider chute (round 29)")
+h.test('cup: Coil Winding, Wider Chute and the Coil Winder speak Dutch: the cards, the burst, the fitting, the tags, the event', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N, DATA } = T;
+  I18N.set('nl');
+  const ui = I18N.table('nl').ui;
+  const need = ['MAGNET PART', 'ELITE BONUS', 'CHUTE FITTING', 'FITTED', 'Fit for {n} gold','Chute {n} → {n2} px', 'Hold {n} → {n2} px', 'Field +{n}% → +{n2}%', 'Drop {n}% → {n2}%',
+    'Face lock: what touches the face never tears off.', 'Coil rank {n} of {n2}', 'Chute {n} px', 'CHUTE {n} PX', 'COIL I', 'COIL II', 'COIL III',
+    'Pick one item for your bin, or wind the magnet tighter.', 'Claw parts'];
+  for (const id of ['coil', 'chute']) need.push(DATA.CLAW_UPGRADES[id].name, DATA.CLAW_UPGRADES[id].text);
+  const ev = DATA.EVENTS.coil_winder;
+  need.push(ev.title, ev.text);
+  for (const c of ev.choices) { need.push(c.txt); if (c.sub) need.push(c.sub); }
+  for (const k of need) h.ok(typeof ui[k] === 'string' && ui[k].length > 0 && ui[k] !== k, 'Dutch for "' + k + '"');
+  h.eq(I18N.tr('Hold 27 → 32 px'), 'Houvast 27 → 32 px', 'a card line');
+  h.eq(I18N.tr('Chute 69 px'), 'Goot 69 px', 'the burst line');
+  h.eq(I18N.tr('Coil Winding'), 'Spoelwikkeling', 'the name');
+  // the screens: no CUP word left in English
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.claws.pick('magnet'); G.newRun('knight', 2929); if (G.screen === 'boon') G.choose(0);
+    G.showForge();
+    G.choose(G.S.ui.buttons.findIndex((b) => /Coil Winding/.test(b.label)));
+    G.applyClawUpgrade('chute');
+    G.showEvent({ id: 'coil_winder' });
+    G.openBin({ mode: 'view' });
+    const tile = Object.values(G.run.map.tiles).find((t) => t.type === 'trader');
+    if (tile) { G.run.gold = 200; G.enterTile(tile); }
+    G.startFight(T.DATA.ENCOUNTERS[1].elite[0], 'elite'); stepFor(G, 0.3); G.endFight('win');
+    G.startFight(['slime'], 'normal', { seed: 3 }); stepFor(G, 0.5); G.draw();
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'the forge, the event, the bin, the Trading Post, the elite reward and the fight render in Dutch');
+  const left = [...seen].filter((x) => { const [a, b] = x.split('=>'); return a === b && /coil|chute|magnet part|elite bonus|fitting|fitted|hold |field |drop |face lock|claw parts|winder|copper/i.test(a); });
+  h.eq(left.length, 0, 'no CUP words left in English: ' + left.slice(0, 4).join(' | '));
+  I18N.set('en');
+});
+
+h.test('guide (round 29): every line of the guided first run has its Dutch (the map card, the inline lines, the coach kicker, the offer, Help), and the run shows it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true }) } });
+  const { GAME: G, I18N } = T;
+  I18N.set('nl');
+  const ui = I18N.table('nl').ui;
+  const need = Object.values(G.guide.LINES).concat(['Guide {n} of {n2}', 'Skip tutorial', 'Next', 'Let\'s go!', 'Guided first run', 'New: a guided first run',
+    'A coach walks you through the map: a chest, an event, then your first fight. Try it?', 'Not now', 'Try it',
+    'New to the Spire? A coach walks you through a chest, an event and your first fight.', 'Play the guided run']);
+  for (const k of need) h.ok(typeof ui[k] === 'string' && ui[k].length > 0 && ui[k] !== k, 'Dutch for "' + k + '"');
+  for (const k of Object.values(G.guide.LINES)) h.ok(k.length <= 90, 'short in English (' + k.length + '): ' + k);
+  h.eq(I18N.tr('Guide 3 of 8'), 'Rondleiding 3 van 8', 'the kicker');
+  // drive the guide in Dutch: nothing of it left in English
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.guide.force = true;
+    G.newRun('knight', 2929);
+    const step = () => { for (let i = 0; i < 6; i++) G.update(1 / 60); };
+    step(); G.guide.next(); step(); G.guide.next(); step();
+    const p = G.run.gtu.t;
+    G.enterTile(T.MAP.tileAt(G.run.map, p.chest[0], p.chest[1]));
+    for (let i = 0; i < 14 && G.loot.cap && G.loot.cap.phase !== 'done'; i++) { G.loot.capsuleTap(); for (let j = 0; j < 6; j++) G.update(1 / 60); }
+    for (let j = 0; j < 50; j++) G.update(1 / 60);
+    G.toMap(); step();
+    G.enterTile(T.MAP.tileAt(G.run.map, p.event[0], p.event[1]));
+    G.choose(2); step(); step();
+    G.guide.next(); step();
+    G.enterTile(T.MAP.tileAt(G.run.map, p.fight[0], p.fight[1]));
+    G.S.coachStep = -1; G.endFight('win'); for (let j = 0; j < 12; j++) G.update(1 / 60);
+    G.choose(0); step();
+    G.showHelp('title');
+    G.guide.meta.offer = 1; G.showTitle(); G.guide.offer();
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'the guided run, Help and the offer render in Dutch');
+  h.ok(G.guide.log.includes('end') && G.guide.log.includes('prize') && G.guide.log.includes('relic'), 'every kind of line was shown: ' + G.guide.log.join(','));
+  const mine = new Set(need.concat(['Guide 1 of 8', 'Guide 8 of 8']));
+  const left = [...seen].filter((x) => { const [a, b] = x.split('=>'); return a === b && (mine.has(a) || /^Guide \d/.test(a)); });
+  h.eq(left.length, 0, 'no guide words left in English: ' + left.slice(0, 4).join(' | '));
+  I18N.set('en');
+});
+
 h.done();

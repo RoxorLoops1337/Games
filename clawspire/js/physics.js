@@ -75,7 +75,8 @@ const PHYS = (() => {
     // (round 28) the Magnet Crane's hold fades away from its core: a piece whose nearest edge is magFade px further out holds half as
     // hard; under magMin it does not stick at all (the chain stops there); a weak piece may drop at the top: (1 - hold) * magDrop
     magFade: 22, magMin: 0.2, magDrop: 0.55,
-    tray: 44,              // the chute has no floor: a hidden tray this far below the cabinet floor catches prizes
+    // (round 29) CUP: the Coil Winding ranks (cfg.coil 0..3) read COIL below; rank 0 is the numbers above, bit for bit
+    tray: 44,             // the chute has no floor: a hidden tray this far below the cabinet floor catches prizes
     lid: -64,              // the lid segment's y (items may fly a little above the glass)
     clampTop: -50,
     floorSink: 3,          // an item's centre may sink to this far above the floor surface (the thinnest items, r 4, still touch it)
@@ -83,6 +84,13 @@ const PHYS = (() => {
   };
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   let nextId = 1;
+  // ---- (round 29) CUP: Coil Winding, the Magnet Crane's own ranked upgrade (DESIGN.md "Magnet power and a wider chute").
+  // Read by the rig as cfg.coil (0..3), never by changing RIG: the hold halves every RIG.magFade + fadeAdd px (22, 27, 32,
+  // 38), the field reaches and pulls field x rank more (+10% a rank), a weak piece's drop chance at the top of the lift is
+  // RIG.magDrop x dropK (0.55, 0.49, 0.43, 0.37), and from faceLock on a piece on the face (hold 1) skips the heavy tear roll.
+  const COIL = { max: 3, fadeAdd: [0, 5, 10, 16], dropK: [1, 0.89, 0.78, 0.67], field: 0.1, faceLock: 3 };
+  const coilOf = (v) => clamp(Math.round(+v || 0), 0, COIL.max);
+  // ---- /CUP
 
   // ---- claw types ----------------------------------------------------------
   // Every claw type is the same rig and phase machine with its own geometry
@@ -869,6 +877,7 @@ const PHYS = (() => {
       prongs: o.prongs === 3 ? 3 : 2, width: o.width == null ? 1 : o.width,
       grip: o.grip == null ? 1 : o.grip, speed: o.speed == null ? 1 : o.speed,
       rubber: o.rubber ? 1 : 0, magnet: o.magnet ? 1 : 0, grease: o.grease ? 1 : 0,
+      coil: coilOf(o.coil),   // (round 29) CUP: the Magnet Crane's Coil Winding rank (0 on every other claw's rig too; only the magnet reads it)
     };
     const rand = o.rand || (() => 0.5);
     const railY = o.railY == null ? 26 : o.railY;
@@ -1334,8 +1343,9 @@ const PHYS = (() => {
     /* The electromagnet crane's field: metal in range leaps toward the face. */
     function field(h) {
       const T = K.T, s = K.s;
-      const R0 = T.fieldR * (0.8 + 0.2 * cfg.width) * (cfg.prongs === 3 ? 1.25 : 1);
-      const F0 = T.fieldF * (0.6 + 0.8 * K.grip) * (cfg.magnet ? 1.4 : 1);
+      const ck = 1 + COIL.field * cfg.coil;   // (round 29) CUP: +10% reach and pull a Coil Winding rank
+      const R0 = T.fieldR * (0.8 + 0.2 * cfg.width) * (cfg.prongs === 3 ? 1.25 : 1) * ck;
+      const F0 = T.fieldF * (0.6 + 0.8 * K.grip) * (cfg.magnet ? 1.4 : 1) * ck;
       const fx = K.x, fy = K.y + T.hubR * s * 0.6;
       for (const b of W.bodies) {
         if (b.type !== 'dynamic' || !isMetal(b) || isStuck(b)) continue;
@@ -1352,7 +1362,7 @@ const PHYS = (() => {
       const hr = K.T.hubR * K.s;
       let gap = Infinity;
       for (let i = 0; i < b.parts.length; i++) gap = Math.min(gap, Math.hypot(b.px[i] - K.x, b.py[i] - K.y) - b.parts[i].r - hr);
-      return Math.min(1, Math.pow(0.5, Math.max(0, gap - 3) / (RIG.magFade * K.s)));
+      return Math.min(1, Math.pow(0.5, Math.max(0, gap - 3) / ((RIG.magFade + COIL.fadeAdd[cfg.coil]) * K.s)));   // (round 29) CUP: a Coil Winding rank reaches further
     }
     function magnetStick(chain) {
       const hr = K.T.hubR * K.s;
@@ -1388,8 +1398,9 @@ const PHYS = (() => {
       const cap = T.weld === 'metal' ? 14 + 40 * K.grip : T.weld === 'spear' ? 10 + 36 * K.grip : T.weld === 'suck' ? 8 + 30 * K.grip : 18 + 50 * K.grip;
       for (let i = K.stuck.length - 1; i >= 0; i--) {
         const b = K.stuck[i].b, hd = K.stuck[i].hold == null ? 1 : K.stuck[i].hold, c = cap * hd;
+        if (T.weld === 'metal' && cfg.coil >= COIL.faceLock && hd >= 1) continue;   // (round 29) CUP: Coil Winding 3 locks what sits on the face
         // (round 28) a magnet's weakly held outer pieces may let go at the top, heavy or not
-        const p = Math.max(clamp((b.m - c) / (c * 1.5), 0, 0.75), T.weld === 'metal' ? (1 - hd) * RIG.magDrop : 0);
+        const p = Math.max(clamp((b.m - c) / (c * 1.5), 0, 0.75), T.weld === 'metal' ? (1 - hd) * RIG.magDrop * COIL.dropK[cfg.coil] : 0);   // (round 29) CUP: less with each rank
         if (p > 0 && rand() < p) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); }
       }
     }
@@ -1667,6 +1678,7 @@ const PHYS = (() => {
       if (c.speed != null) cfg.speed = c.speed;
       if (c.magnet != null) cfg.magnet = c.magnet ? 1 : 0;
       if (c.grease != null) cfg.grease = c.grease ? 1 : 0;
+      if (c.coil != null) cfg.coil = coilOf(c.coil);   // (round 29) CUP
       refresh();
       if (K.T.twin && K.st === 'idle' && !K.tw.x[0] && !K.tw.x[1]) { K.tw.x[0] = -K.T.twin.sep * K.s; K.tw.x[1] = K.T.twin.sep * K.s; }
       mirror();
@@ -1816,6 +1828,7 @@ const PHYS = (() => {
 
   return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H,
     strandWatch,
+    COIL,   // (round 29) CUP: the Coil Winding ranks
     MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop, CLAW_TYPES, clawPose,
     rosFloat, rosBounce, rosFlood };   // ROS (round 10)
 })();
