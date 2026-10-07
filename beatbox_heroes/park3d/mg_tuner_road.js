@@ -73,6 +73,7 @@ export function buildRoad(ctx, tier) {
   const orbMat = new THREE.MeshBasicMaterial({ color: COL.ghost.clone(), toneMapped: false }), orb = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), orbMat); orb.position.set(nowX, cy, 0.34); g.add(orb);
   const backMat = new THREE.MeshBasicMaterial({ color: C('#0b0722'), transparent: true, opacity: 0.6, depthWrite: false }), back = new THREE.Mesh(new THREE.CircleGeometry(1, 18), backMat); back.position.set(nowX, cy, 0.27); g.add(back);
   const haloMat = additive(COL.ghost.clone(), { opacity: 0.3, map: glowTex() }), halo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), haloMat); halo.position.set(nowX, cy, 0.3); g.add(halo);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: C('#ffffff').multiplyScalar(2.6), toneMapped: false })); core.position.set(nowX, cy, 0.4); g.add(core);
   const orbLight = new THREE.PointLight('#8dff5a', 0, 3.2, 1.8); orbLight.position.set(nowX, cy, 0.9); if (!lowQ) g.add(orbLight);
   const NT = lowQ ? 14 : 26, trail = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ toneMapped: false }), NT); trail.frustumCulled = false; trail.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(trail);
   const th = []; for (let i = 0; i < NT; i++) th.push({ y: cy, c: new THREE.Color(), on: 0 }); let tAcc = 0; const TRAIL_T = 0.05, TRAIL_V = 1.45;
@@ -137,9 +138,9 @@ export function buildRoad(ctx, tier) {
     const ghost = !voiced, wob = voiced ? Math.sin(t * 22) * Math.min(1, abs / 150) * 0.03 : 0;
     const target = mic && playing ? (ghost ? tmpC.copy(COL.ghost) : errColor(abs, tmpC)) : tmpC.copy(COL.ghost);
     orbMat.color.lerp(target, 1 - Math.exp(-dt * 14)); haloMat.color.copy(orbMat.color);
-    const inT = voiced && abs < 50, sz = voiced ? 0.1 + 0.16 * clamp(abs / 150, 0, 1) + (inT ? 0.02 * Math.sin(t * 18) : 0) : (mic && playing && S.phase === 'sing' ? 0.09 : 0.07 + 0.012 * Math.sin(t * 4));
+    const inT = voiced && abs < 50, sz = voiced ? 0.13 + 0.15 * clamp(abs / 150, 0, 1) + (inT ? 0.02 * Math.sin(t * 18) : 0) : (mic && playing && S.phase === 'sing' ? 0.09 : 0.07 + 0.012 * Math.sin(t * 4));
     orb.scale.setScalar(sz + (V.level || 0) * (voiced ? 0.05 : 0)); orb.position.set(nowX + wob, orbY, 0.34); orb.rotation.y += dt * 2; orb.rotation.x += dt * 1.3;
-    back.position.set(nowX, orbY, 0.27); back.scale.setScalar(sz * 1.5 + 0.02); backMat.opacity = voiced ? 0.55 : 0.2; halo.position.set(nowX, orbY, 0.3); halo.scale.setScalar(sz * (inT ? 3.4 : 2.8) + 0.04 * Math.sin(t * 9)); haloMat.opacity = voiced ? (inT ? 0.8 : 0.6) : 0.25;
+    core.position.set(nowX + wob, orbY, 0.4); core.scale.setScalar(voiced ? sz * 0.42 : 0.0001); core.rotation.y = t * 3; back.position.set(nowX, orbY, 0.27); back.scale.setScalar(sz * 1.5 + 0.02); backMat.opacity = voiced ? 0.55 : 0.2; halo.position.set(nowX, orbY, 0.3); halo.scale.setScalar(sz * (inT ? 3.4 : 2.8) + 0.04 * Math.sin(t * 9)); haloMat.opacity = voiced ? (inT ? 0.5 : 0.45) : 0.22;
     orbLight.position.set(nowX, orbY, 0.9); orbLight.color.copy(orbMat.color).multiplyScalar(0.5); orbLight.intensity = voiced ? 5 + (inT ? 3 : 0) : 0.4;
     // trail
     tAcc += dt; while (tAcc >= TRAIL_T) { tAcc -= TRAIL_T; for (let i = NT - 1; i > 0; i--) { th[i].y = th[i - 1].y; th[i].on = th[i - 1].on; th[i].c.copy(th[i - 1].c); } th[0].y = orbY; th[0].on = voiced ? 1 : 0; th[0].c.copy(orbMat.color); }

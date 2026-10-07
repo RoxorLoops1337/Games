@@ -36,7 +36,7 @@ export function createTuner(ctx, opts) {
   const post = createPost(ctx, S); post.setQuality(tier);
 
   // ---- camera: portrait, a touch of sway, a push on hits
-  const CAMS = { play: { fov: 52, pos: new THREE.Vector3(0, 2.3, 5.6), look: new THREE.Vector3(0, 1.95, 0) }, menu: { fov: 50, pos: new THREE.Vector3(0.8, 1.3, 4.4), look: new THREE.Vector3(0.1, 0.62, 0.3) }, result: { fov: 50, pos: new THREE.Vector3(0.7, 1.15, 4.2), look: new THREE.Vector3(0.1, 0.12, 0.3) } };
+  const CAMS = { play: { fov: 52, pos: new THREE.Vector3(0, 2.3, 5.6), look: new THREE.Vector3(0, 1.95, 0) }, menu: { fov: 50, pos: new THREE.Vector3(0.8, 1.3, 4.4), look: new THREE.Vector3(0.1, 0.62, 0.3) }, result: { fov: 50, pos: new THREE.Vector3(0.7, 1.2, 5.0), look: new THREE.Vector3(0.1, 0.12, 0.3) } };
   const cam = { fov: 52, pos: CAMS.play.pos.clone(), look: CAMS.play.look.clone() }; let punch = 0, push = 0, W = 540, Hh = 960, camMix = 1;
   function fitCamera(t, dt) {
     const want = ui.hasCard ? 'result' : ui.hasPicker ? 'menu' : 'play', T = CAMS[want], k0 = 1 - Math.exp(-(dt === undefined ? 1 : dt) * 3.2);

@@ -10,7 +10,7 @@ export function buildAura() {
   const g = new THREE.Group(); g.name = 'aura';
   const ringMat = additive(C('#2ee6ff'), { opacity: 0 }), ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 28), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; g.add(ring);
   const ring2Mat = additive(C('#2ee6ff'), { opacity: 0 }), ring2 = new THREE.Mesh(new THREE.RingGeometry(0.9, 0.94, 28), ring2Mat); ring2.rotation.x = -Math.PI / 2; ring2.position.y = 0.065; g.add(ring2);
-  const colMat = additive(C('#2ee6ff'), { opacity: 0, side: THREE.BackSide }), col = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.78, 3.2, 20, 1, true), colMat); col.position.y = 1.6; g.add(col);
+  const colMat = additive(C('#2ee6ff'), { opacity: 0, side: THREE.BackSide }), col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2.1, 20, 1, true), colMat); col.position.y = 1.05; g.add(col);
   const NSt = 8, stars = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ toneMapped: false }), NSt); stars.frustumCulled = false; g.add(stars);
   const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), cc = new THREE.Color(); let lvl = 0, amt = 0, boost = 0;
   const api = {
