@@ -173,7 +173,7 @@ function buildInteriorVFX(ctx, terrain, S) {
   const KS = { lamp: 1.35, neon: 1.1, tv: 1.7, fridge: 0.8 }, KI = { lamp: 1.15, neon: 1.1, tv: 0.9, fridge: 0.55 };
   L.forEach((l, i) => { const k = l.kind || 'lamp', kd = LIGHT_KIND[k] === undefined ? 0 : LIGHT_KIND[k], col = new THREE.Color(l.color || '#ffcf8a'), ph = (i * 0.6180339) % 1, fl = l.flicker !== undefined ? l.flicker : (k === 'tv' ? 0.45 : k === 'neon' ? 0.12 : 0.05), it = l.i === undefined ? 1 : l.i;
     cards.push([l.x, l.y, l.z, KS[k] * (0.8 + 0.12 * Math.min(l.r || 6, 8) / 4), KI[k] * it, ph, kd, col.r, col.g, col.b, 0, fl]);
-    if (l.y > 0.35) cards.push([l.x, 0.035, l.z, Math.min(3.4, (l.r || 6) * 0.45), 0.2 * it * (k === 'fridge' ? 0.5 : 1), ph, kd, col.r, col.g, col.b, 1, fl * 0.7]); });
+    if (l.y > 0.35) cards.push([l.x, 0.08, l.z, Math.min(3.4, (l.r || 6) * 0.45), 0.2 * it * (k === 'fridge' ? 0.5 : 1), ph, kd, col.r, col.g, col.b, 1, fl * 0.7]); });
   const nC = Math.max(1, cards.length), cpos = new Float32Array(nC * 3), cdat = new Float32Array(nC * 4), ccol = new Float32Array(nC * 3), cflg = new Float32Array(nC * 2);
   cards.forEach((q, i) => { cpos.set([q[0], q[1], q[2]], i * 3); cdat.set([q[3], q[4], q[5], q[6]], i * 4); ccol.set([q[7], q[8], q[9]], i * 3); cflg.set([q[10], q[11]], i * 2); });
   const cardMat = new THREE.ShaderMaterial(additive({ uniforms: U, vertexShader: `
@@ -199,7 +199,7 @@ function buildInteriorVFX(ctx, terrain, S) {
     attribute vec4 iA; attribute vec4 iB; attribute float aK; uniform float uSE, uCE; varying float vT, vX, vK, vPh; varying vec2 vUv;
     void main(){ vK = aK; vPh = iB.w; vec3 c = iA.xyz; vec3 d = normalize(vec3(-iB.x * uCE, -uSE, -iB.y * uCE)); vec3 P;
       if (aK < 0.5) { float len = c.y / max(0.2, -d.y); P = c + d * (position.y * len); vec3 V = normalize(cameraPosition - P); vec3 side = normalize(cross(d, V)); P += side * position.x * iA.w * 0.5 * (0.85 + 0.35 * position.y); vT = position.y; vX = position.x; vUv = vec2(0.0); }
-      else { vec3 tg = vec3(-iB.y, 0.0, iB.x); vec3 q = c + tg * position.x * iA.w + vec3(0.0, (position.y - 0.5) * iB.z, 0.0); P = q + d * (q.y / max(0.2, -d.y)); P.y = 0.04; vUv = vec2(position.x + 0.5, position.y); vT = 0.0; vX = 0.0; }
+      else { vec3 tg = vec3(-iB.y, 0.0, iB.x); vec3 q = c + tg * position.x * iA.w + vec3(0.0, (position.y - 0.5) * iB.z, 0.0); P = q + d * (q.y / max(0.2, -d.y)); P.y = 0.09; vUv = vec2(position.x + 0.5, position.y); vT = 0.0; vX = 0.0; }
       gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0); }`,
   fragmentShader: `uniform float uTime, uShaft, uPatch, uGain; uniform vec3 uShaftCol; varying float vT, vX, vK, vPh; varying vec2 vUv;
     void main(){ float a;

@@ -42,7 +42,7 @@ function softDisc(buf, x, y, z, rx, rz, a, ry) {
 export function glowLambert(nightGlow) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: 0xffffff, emissiveIntensity: nightGlow });
   m.userData.nightGlow = nightGlow;
-  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance = vColor.rgb * emissiveIntensity;'); };
+  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance = vColor.rgb * emissive;'); };
   m.customProgramCacheKey = () => 'flatglow';
   return m;
 }

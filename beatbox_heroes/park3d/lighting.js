@@ -21,23 +21,23 @@ const KF = [
     bloom: 0.3, bloomThr: 1.25, vig: 0.55, sat: 1.22, skyTint: C('#ffe9f2'), gShadow: C('#dccbff'), gHigh: C('#fff3e6') },
   { elev: 36, az: 15, sunI: 0.95, sunCol: C('#8fa4ff'), hemiI: 1.9, hemiSky: C('#6460c4'), hemiGround: C('#6a52a0'), rimI: 0.9, rimCol: C('#ff5fb0'), fogNear: 12, fogFar: 70, fog: C('#41366f'), exposure: 1.22,
     zen: C('#1b1950'), up: C('#2f2b74'), mid: C('#5c3b88'), glow: C('#7f78d8'), disc: C('#e2e8ff'), discSize: 0.03, discI: 1.1, glowI: 0.5, streak: 0.0, stars: 1, lamp: 1.0, neon: 1.0, stage: 1.0, windows: 1.0, ray: 0.035, fly: 1.0, dust: 0.25, lampLight: 14,
-    bloom: 0.7, bloomThr: 0.9, vig: 0.6, sat: 1.1, skyTint: C('#4f4a92'), gShadow: C('#d8d0ff'), gHigh: C('#ffe4d0') },
+    bloom: 0.7, bloomThr: 0.9, vig: 0.6, sat: 1.1, skyTint: C('#37337a'), gShadow: C('#d8d0ff'), gHigh: C('#ffe4d0') },
 ];
 
 // INTERIOR keyframes (terrain.interior): same keys as the park plus window/practical-light levels. az is an offset from the mean window azimuth (so the key always enters through the windows).
 // The sky dome is hidden; fog is off; `fog` is the backdrop colour seen through windows and around the dollhouse; zen/mid are the pane gradient (top/bottom).
 const KFI = [
-  { elev: 54, az: 0, sunI: 3.0, sunCol: C('#fff1d6'), hemiI: 1.75, hemiSky: C('#c3d3ff'), hemiGround: C('#d8ae82'), rimI: 0.45, rimCol: C('#9b86ff'), fogNear: 400, fogFar: 800, fog: C('#4f8df5'), exposure: 0.96,
+  { elev: 56, az: 0, sunI: 3.4, sunCol: C('#fff1d6'), hemiI: 2.7, hemiSky: C('#c3d3ff'), hemiGround: C('#d8ae82'), rimI: 1.0, rimCol: C('#b7a6ff'), fogNear: 400, fogFar: 800, fog: C('#4f8df5'), exposure: 0.96,
     zen: C('#6fa4ec'), up: C('#82abe8'), mid: C('#cfe3fb'), glow: C('#ffe9c0'), disc: C('#fff3d0'), discSize: 0.034, discI: 1.0, glowI: 0.5, streak: 0.0, stars: 0, lamp: 0.2, neon: 0.35, stage: 0.5, windows: 0.12, ray: 0.55, fly: 0.0, dust: 1.0, lampLight: 0,
-    bloom: 0.2, bloomThr: 1.05, vig: 0.35, sat: 1.08, skyTint: C('#d4dfff'), gShadow: C('#ece4ff'), gHigh: C('#fff4e0'),
+    bloom: 0.16, bloomThr: 1.15, vig: 0.35, sat: 1.08, skyTint: C('#f0f4ff'), gShadow: C('#ece4ff'), gHigh: C('#fff4e0'),
     tilt: 0.5, lvLamp: 0.3, lvNeon: 0.4, lvTv: 0.55, lvFridge: 0.5, patch: 0.9, paneA: 0.62, moteBase: 0.2, ptI: 0.45, moon: 0 },
-  { elev: 30, az: 22, sunI: 2.3, sunCol: C('#ffb36e'), hemiI: 2.35, hemiSky: C('#ac96ee'), hemiGround: C('#cc8e68'), rimI: 0.75, rimCol: C('#a07bff'), fogNear: 400, fogFar: 800, fog: C('#6c4585'), exposure: 1.02,
+  { elev: 30, az: 22, sunI: 2.3, sunCol: C('#ffb36e'), hemiI: 2.35, hemiSky: C('#ac96ee'), hemiGround: C('#cc8e68'), rimI: 1.2, rimCol: C('#b08cff'), fogNear: 400, fogFar: 800, fog: C('#6c4585'), exposure: 1.02,
     zen: C('#5b4fb0'), up: C('#9a66a8'), mid: C('#ff9c6e'), glow: C('#ffb067'), disc: C('#ffe2a8'), discSize: 0.045, discI: 1.4, glowI: 1.0, streak: 0.7, stars: 0.1, lamp: 0.85, neon: 0.8, stage: 0.8, windows: 0.8, ray: 0.6, fly: 0.0, dust: 1.0, lampLight: 10,
-    bloom: 0.38, bloomThr: 1.0, vig: 0.5, sat: 1.1, skyTint: C('#ffe9f2'), gShadow: C('#e0ccff'), gHigh: C('#fff0dc'),
+    bloom: 0.26, bloomThr: 1.12, vig: 0.5, sat: 1.1, skyTint: C('#ffd6c4'), gShadow: C('#e0ccff'), gHigh: C('#fff0dc'),
     tilt: 0.55, lvLamp: 0.9, lvNeon: 0.85, lvTv: 0.9, lvFridge: 0.55, patch: 0.8, paneA: 0.45, moteBase: 0.3, ptI: 1.0, moon: 0 },
-  { elev: 52, az: -28, sunI: 1.35, sunCol: C('#7f98ff'), hemiI: 1.6, hemiSky: C('#5a5cc8'), hemiGround: C('#6a4a8a'), rimI: 0.6, rimCol: C('#b06bff'), fogNear: 400, fogFar: 800, fog: C('#15153d'), exposure: 1.18,
+  { elev: 52, az: -28, sunI: 1.35, sunCol: C('#7f98ff'), hemiI: 1.6, hemiSky: C('#5a5cc8'), hemiGround: C('#6a4a8a'), rimI: 1.0, rimCol: C('#a07cff'), fogNear: 400, fogFar: 800, fog: C('#15153d'), exposure: 1.18,
     zen: C('#101650'), up: C('#2f2b74'), mid: C('#2b3b8c'), glow: C('#7f78d8'), disc: C('#e2e8ff'), discSize: 0.03, discI: 1.1, glowI: 0.5, streak: 0.0, stars: 1, lamp: 1.0, neon: 1.0, stage: 1.0, windows: 1.0, ray: 0.5, fly: 0.0, dust: 0.6, lampLight: 14,
-    bloom: 0.6, bloomThr: 0.86, vig: 0.62, sat: 1.12, skyTint: C('#4f4a92'), gShadow: C('#d4ccff'), gHigh: C('#ffe4d0'),
+    bloom: 0.42, bloomThr: 1.0, vig: 0.62, sat: 1.12, skyTint: C('#37337a'), gShadow: C('#d4ccff'), gHigh: C('#ffe4d0'),
     tilt: 0.55, lvLamp: 1.0, lvNeon: 1.0, lvTv: 1.0, lvFridge: 0.6, patch: 1.0, paneA: 0.55, moteBase: 0.3, ptI: 1.1, moon: 1 },
 ];
 const keysOf = (kf) => { const N = [], Cc = []; for (const k in kf[0]) (typeof kf[0][k] === 'number' ? N : Cc).push(k); return { N, C: Cc }; };
@@ -112,7 +112,7 @@ export function buildLighting(ctx, terrain) {
     fog.color.copy(cur.fog); fog.near = cur.fogNear; fog.far = cur.fogFar; scene.background.copy(cur.fog); renderer.toneMappingExposure = cur.exposure;
     skyU.uDisc.value = cur.discSize; skyU.uDiscI.value = cur.discI; skyU.uGlowI.value = cur.glowI; skyU.uStreak.value = cur.streak; skyU.uStars.value = cur.stars;
     for (let i = 0; i < lampLights.length; i++) { const on = i < TR[q].lights; lampLights[i].intensity = on ? cur.lampLight * (0.35 + 0.65 * cur.lamp) * (0.97 + 0.03 * Math.sin(S.t * 8 + i)) : 0; }
-    for (let i = 0; i < tintMats.length; i++) { const m = tintMats[i]; if (m.userData.todTint === 'lit') { const k = 0.5 + 0.9 * S.windows; m.color.setRGB(k, k, k); } else m.color.copy(cur.skyTint); }
+    for (let i = 0; i < tintMats.length; i++) { const m = tintMats[i]; if (m.userData.todTint === 'lit') { const k = IN ? 0.1 + 0.46 * S.windows : 0.5 + 0.9 * S.windows; m.color.setRGB(k, k, k); } else m.color.copy(cur.skyTint); }
     for (let i = 0; i < winMats.length; i++) { const m = winMats[i]; if ('emissiveIntensity' in m) m.emissiveIntensity = m.userData.nightGlow * S.windows; }
     if (IN) applyInterior();
   }
@@ -168,7 +168,7 @@ export function buildLighting(ctx, terrain) {
     post,
     render() { post.render(); },
     getState() { return S; }, debug() { return { tint: tintMats.length, win: winMats.length, winScan }; },
-    stats() { return { sceneCalls: post.stats.sceneCalls, sceneTris: post.stats.sceneTris, totalCalls: post.stats.totalCalls, composer: post.active, rung: post.stats.rung, quality: q, vfxDraws: 5 + 1 }; },
+    stats() { return { sceneCalls: post.stats.sceneCalls, sceneTris: post.stats.sceneTris, totalCalls: post.stats.totalCalls, composer: post.active, rung: post.stats.rung, quality: q, vfxDraws: IN ? 5 : 5 + 1 }; },
     dispose() { post.dispose(); },
   };
   api.setQuality(q); api.setTimeOfDay(ctx.todInit !== undefined ? ctx.todInit : 'dusk', true);
