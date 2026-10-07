@@ -14,10 +14,6 @@ function drawHero() {
   const sq = 1 + Math.sin(beatNow() * TAU) * 0.012;
   if (!artDraw(nm, anim, fr, p.x, p.y + 4 - bob, hk, p.face < 0)) { ctx.fillStyle = '#ff9ac8'; rr(p.x - 11, p.y - 40, 22, 40, 8); ctx.fill(); }
   ctx.globalAlpha = 1;
-  // loot stack on the back
-  const lean = -p.face * 15;
-  for (let i = 0; i < p.helmets.length; i++) { const sway = Math.sin(S.t * 5 + i * 0.8) * (0.5 + i * 0.4) * (p.moving ? 1.6 : 0.6); drawStackEntry(p.helmets[i], p.x + lean + sway, p.y - 44 - bob - i * 9, 1.12); }
-  if (p.helmets.length) labelPill(p.helmets.length + '/' + cap(), p.x + lean, p.y - 58 - bob - p.helmets.length * 9, p.helmets.length >= cap() ? '#ffe98a' : '#ffffff', p.helmets.length >= cap() ? '#f0b422' : '#dccaff', 11);
   const fm = flowMul(); if (S.flowKey !== null && fm >= 2) { const pu = 1 + Math.sin(S.t * 10) * 0.1; ctx.save(); ctx.translate(p.x + 34, p.y - 56 - bob); ctx.scale(pu, pu); ctx.fillStyle = '#ffd94a'; ctx.font = font(15); ctx.textAlign = 'left'; ctx.fillText('x' + fmt(Math.round(fm)), 0, 0); ctx.restore(); }
 }
 function drawCompanion() {
@@ -25,6 +21,10 @@ function drawCompanion() {
   shadow(c.x, c.y + 4, 20, 0.28);
   const anim = (c.drop || 0) > 0 ? 'attack' : (c.mv || 0) > 0 ? 'walk' : 'idle', fr = (c.drop || 0) > 0 ? Math.min(3, ((0.35 - c.drop) * 11) | 0) : (c.mv || 0) > 0 ? (S.t * 12) | 0 : (S.t * 5 + 2) | 0;
   artDraw(nm, anim, fr, c.x, c.y + 4 - bob, 0.54, c.face < 0);
+  // RoxorLoops hauls the loot: the stack rides on the companion's back (Jasmin just sings and fights)
+  const lean = -c.face * 15;
+  for (let i = 0; i < S.player.helmets.length; i++) { const sway = Math.sin(S.t * 5 + i * 0.8) * (0.5 + i * 0.4) * (((c.mv || 0) > 0) ? 1.6 : 0.6); drawStackEntry(S.player.helmets[i], c.x + lean + sway, c.y - 40 - bob - i * 9, 1.0); }
+  if (S.player.helmets.length) labelPill(S.player.helmets.length + '/' + cap(), c.x + lean, c.y - 54 - bob - S.player.helmets.length * 9, S.player.helmets.length >= cap() ? '#ffe98a' : '#ffffff', S.player.helmets.length >= cap() ? '#f0b422' : '#dccaff', 11);
 }
 function drawFoe(e) {
   const k = e.r * (e.boss ? 4.4 : 5.2) / (e.boss ? 178 : 128), nm = foeArtName(e.k, e.boss), bob = Math.abs(Math.sin(S.t * 7 + e.sway)) * 2.2;
