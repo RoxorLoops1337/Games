@@ -2084,6 +2084,17 @@ const DATA = (() => {
       text: 'Grippy rubber prong tips. Round things stop squirting out.', apply: upgrade('rubber', 1, c => { c.rubber = 1; }) },
     magnet: { id: 'magnet', name: 'Electromagnet', icon: '🧲', max: 1, cost: 90,
       text: 'The palm pulls nearby metal items in while it drops.', apply: upgrade('magnet', 1, c => { c.magnet = 1; }) },
+    // ---- (round 29) CUP: magnet power and a wider chute (DESIGN.md "Magnet power and a wider chute (round 29)").
+    // cup: true keeps them out of every common roll (towers, capsules, the boss's random three, the Boss Rush draft, the
+    // map's tower bonus), so no older seed changes; game.js offers them on their own occasions (the CUP block).
+    // only: the claw type a part fits (the Magnet Crane's Coil Winding); rank: the claw field the rank is kept in.
+    coil: { id: 'coil', name: 'Coil Winding', icon: '🌀', max: 3, cost: 120, cup: true, only: 'magnet', rank: 'coil',
+      text: 'Magnet Crane only. More copper on the coil: a longer hold, a stronger field, fewer drops.',
+      apply: upgrade('coil', 3, c => { c.coil = (c.coil || 0) + 1; }) },
+    chute: { id: 'chute', name: 'Wider Chute', icon: '📥', max: 4, cost: 50, cup: true, rank: 'chute',
+      text: 'The prize chute opens 5 px wider. A little more falls in.',
+      apply: upgrade('chute', 4, c => { c.chute = (c.chute || 0) + 1; }) },
+    // ---- /CUP
   };
 
   // ------------------------------------------------------------ claw types
@@ -2275,6 +2286,15 @@ const DATA = (() => {
         { txt: 'Pay the toll.', sub: 'Lose 20 gold.', fx: [{ k: 'gold', v: -20 }], cond: hasGold(20) },
         { txt: 'Refuse.', sub: 'Fight the goblin and a friend.', fx: [{ k: 'fight', enc: ['goblin', 'gremlin'] }] },
         { txt: 'Tear down the booth.', sub: 'Lose 7 HP. Gain a Grudge Skull.', fx: [{ k: 'hp', v: -7 }, { k: 'item', id: 'grudge_skull' }] },
+      ] },
+    // (round 29) CUP: the Coil Winder. cup: true keeps it out of the map's event rolls and pickEvent's; game.js
+    // (cupEventPick) swaps it in on an event tile now and then, in a Magnet Crane run only (once an act, Coil Winding < 3).
+    { id: 'coil_winder', title: 'The Coil Winder', art: 'tinker', cup: true,
+      text: 'A little robot with a spool of copper wire sits by a dead cabinet. It looks at your Magnet Crane and its eyes light up. "Nice drum. I can wind it tighter."',
+      choices: [
+        { txt: 'Let it wind the coil.', sub: 'Coil Winding +1. Lose 6 HP (it zaps).', fx: [{ k: 'claw', u: 'coil' }, { k: 'hp', v: -6 }] },
+        { txt: 'Pay it in copper.', sub: 'Lose 45 gold. Coil Winding +1.', fx: [{ k: 'gold', v: -45 }, { k: 'claw', u: 'coil' }], cond: hasGold(45) },
+        LEAVE,
       ] },
   ];
   const EVENTS = {};
@@ -5132,8 +5152,6 @@ const DATA = (() => {
      claw). The profile remembers him (meta.gary: met, offs, wins, losses,
      duels, beat): his taunts follow the record and he buys new gear every
      time you beat him. */
-  // (round 28) gold, copper and brass: metal for every build and combo, but the Magnet Crane (and the Electromagnet) cannot lift them
-  for (const id of ['lucky_coin', 'lucky_penny', 'arcade_token', 'midas_coin', 'hoardcoin', 'golden_egg', 'golden_idol', 'golden_dice']) if (ITEMS[id]) ITEMS[id].nomag = true;
   const GARY = {
     gear: ['Rookie Cap', 'Pro Shades', 'Gold Chain', 'Champion Jacket', 'Turbo Claw'],
     drops: 3,

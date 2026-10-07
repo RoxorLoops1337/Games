@@ -638,6 +638,7 @@ const GAME = (() => {
           cabMetaFix(S.meta, o);   // CAB (round 16): the Jackpot Lamp's tip seen, fevers and PERFECT grabs
           gachaMetaFix(S.meta, o);   // GACHA (round 17): the Capsule Minis, the daily capsule's streak
           bncMetaFix(S.meta, o);   // BENCH (round 28): bolts, upgrades, packs (an old profile's one-time grant)
+          gtuMetaFix(S.meta, o);   // GUIDE (round 29): the guided first run (done, the old profile's offer, a replay asked for)
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -647,6 +648,7 @@ const GAME = (() => {
     vaultFix(S.meta);   // defaults, sticker prizes, and the equipped cosmetics to the renderer (VAULT block)
     stoMetaFix(S.meta);   // Grabby Gary's record and the stories told, defaulted for a new profile (STORY)
     bncMetaFix(S.meta);   // BENCH (round 28): the Upgrade Bench's fields, defaulted for a new profile
+    gtuMetaFix(S.meta);   // GUIDE (round 29): a fresh profile's first run is a guided one
     if (fx()) fx().reduced = !S.meta.settings.shake;
     applyCalm();
     accApply();   // the accessibility settings, volumes and palettes (ACCESS block)
@@ -805,6 +807,7 @@ const GAME = (() => {
     if (c.relic) gainRelic(c.relic);
     crNewRun(run, charId);   // CR (round 21): Lucky Lou and Ms. Bubbles start with their combo family's relic
     bncNewRun(run);   // BENCH (round 28): the upgrades' snapshot and the run's start (Max HP, gold, bulbs, a relic...)
+    gtuNewRun(run);   // GUIDE (round 29): a fresh profile's first run (or a replay) is a guided one
     newMap(run);
     S.meta.stats.runs++;
     saveMeta();
@@ -815,6 +818,7 @@ const GAME = (() => {
     if (!X.MAP) return null;
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act + endlessMapTag(run)));   // a new map every Endless loop (ENDLESS block)
     run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes, biome: depMapBiome(run) });   // (DEP: an Endless dive's flooded map)
+    gtuNewMap(run);   // GUIDE (round 29): the guided run's teaching map (a no-op on every other run)
     secNewMap(run);   // this act's golden key (SECRET)
     seaNewMap(run);   // trick-or-treat doors in season (SEASON)
     stoNewMap(run);   // Grabby Gary's tile, a Card Shark on the hunt (STORY)
@@ -1569,6 +1573,7 @@ const GAME = (() => {
     pg.appendChild(head);
     const body = h('div', 'pageBody m1Help');
     pg.appendChild(body);
+    gtuHelp(body, back);   // GUIDE (round 29): play the guided first run again (from the title)
     let b = null;
     const sec = (title, icon) => { b = h('section', 'm1HelpSec'); const t = h('h3', null, title); if (icon) t.setAttribute('data-ic', icon); b.appendChild(t); body.appendChild(b); return b; };
     sec('The rig', '\u{1F3AE}');
@@ -2406,7 +2411,7 @@ const GAME = (() => {
     if (layer === 'front' && m.dark) mutDark(ctx, t);
   }
   function mutBelt(ctx, t, v) {
-    const x0 = CAB.x, x1 = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW), y = CAB.y + CAB.h - 12;
+    const x0 = CAB.x, x1 = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()), y = CAB.y + CAB.h - 12;   // (round 29) CUP
     ctx.save();
     ctx.fillStyle = '#17111f'; ctx.fillRect(x0, y, x1 - x0, 12);
     ctx.fillStyle = '#2a2233'; ctx.fillRect(x0, y, x1 - x0, 2);
@@ -2448,7 +2453,7 @@ const GAME = (() => {
     const spread = Math.max(40, Math.min(110, (fy - hy) * 0.35));
     ctx.beginPath(); ctx.moveTo(hx - 9, hy + 8); ctx.lineTo(hx + 9, hy + 8); ctx.lineTo(hx + spread, fy + 40); ctx.lineTo(hx - spread, fy + 40); ctx.closePath(); ctx.fill();
     // the chute keeps a faint green exit glow so the goal never gets lost
-    const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW / 2;
+    const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) + cupCW() / 2;   // (round 29) CUP
     const eg = ctx.createRadialGradient(cx, CAB.y + CAB.h - 30, 4, cx, CAB.y + CAB.h - 30, 70);
     eg.addColorStop(0, 'rgba(166,255,94,' + (0.22 + Math.sin(t * 3) * 0.06).toFixed(3) + ')');
     eg.addColorStop(1, 'rgba(166,255,94,0)');
@@ -2621,7 +2626,7 @@ const GAME = (() => {
     newMap(run);
     const id = legBossRelic(rollRelic(rngFor('bossrelic'), ['boss', 'r']));   // (LEG: now and then a legendary)
     const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${depActName(run)}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
-    const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
+    const pick = cupParts(rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3));   // (round 29) CUP: + Coil Winding in a Magnet Crane run
     showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, dep: !!E.dep, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
     return E.loop;
   }
@@ -4450,7 +4455,7 @@ const GAME = (() => {
       }
       case 'event': {
         finish();
-        if (stoEventTile(t)) return;   // a story, or the next part of one (STORY)
+        if (!gtuIs(t, 'event') && stoEventTile(t)) return;   // a story, or the next part of one (STORY) (GUIDE round 29: never on the guide's own event)
         const id = pickEvent(c.event);
         if (id) { showEvent({ id }); return; }
         toast('Whatever was here has moved on.');
@@ -4490,8 +4495,10 @@ const GAME = (() => {
   function pickEvent(preferred) {
     const run = S.run;
     const evs = tbl('EVENTS');
-    const ids = Object.keys(evs);
+    const ids = Object.keys(evs).filter((id) => !evs[id].cup);   // (round 29) CUP: the Coil Winder only comes through cupEventPick
     if (!ids.length) return null;
+    const cw = cupEventPick();   // (round 29) CUP: a Magnet Crane run's rare Coil Winder (its own seeded stream)
+    if (cw) return cw;
     if (preferred && evs[preferred] && !run.seenEvents[preferred]) { run.seenEvents[preferred] = 1; return preferred; }
     const fresh = ids.filter((id) => !run.seenEvents[id]);
     const id = (fresh.length ? rngFor('event').pick(fresh) : rngFor('event').pick(ids));
@@ -4552,6 +4559,7 @@ const GAME = (() => {
     pickGolden();
     cabFightStart();   // CAB (round 16): the Jackpot Lamp comes in from the run
     techFightStart();   // TECH (round 17): Cabinet Tech's numbers, the lamp's oil, an event on turn 1
+    cupFightStart();   // (round 29) CUP: the first bell after a coil or chute upgrade shows it off
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
@@ -4566,7 +4574,7 @@ const GAME = (() => {
     clawTurnStart();   // coin clunk and spin-up (CLAW TYPES block)
     // Opening events of turn 1 (start block, relic text) show right away.
     drainF(PLAY_BEAT);
-    if (!S.meta.tutorialDone) startCoach();
+    if (gtuCoachWant() || !S.meta.tutorialDone) startCoach();   // (GUIDE round 29: a guided run's first fight always gets the coach)
     save();
     return F;
   }
@@ -4575,7 +4583,7 @@ const GAME = (() => {
     const P = X.PHYS;
     if (FS.rig && FS.rig.destroy) { try { FS.rig.destroy(); } catch (e) { /* ignore */ } }
     FS.world = P.world({ gravity: { x: 0, y: GRAVITY }, w: CAB.w, h: CAB.h });
-    FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
+    FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: cupChuteW(), dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });   // (round 29) CUP: the run's chute (64 + 5 a Wider Chute rank)
     buildRig();
     FS.items = [];
     FS.debris = [];
@@ -4587,7 +4595,8 @@ const GAME = (() => {
     const c = clawFor();
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
-      cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
+      cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - cupCW()) * 0.5, chuteX: (b.chuteX || CAB.w - cupCW()) + cupCW() * 0.5,   // (round 29) CUP: the chute's middle, however wide
+      coil: cupCoil(),   // (round 29) CUP: the Magnet Crane's Coil Winding rank (PHYS.COIL)
       railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0) + cabGripAdd(), speed: c.speed * accClawK() * cabSpeedK(), rubber: c.rubber,   // (CAB round 16: a surge, a PERFECT lift)   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       type: runClawType(),
       rand: U.rng(FS.seed ^ 0x1234567),
@@ -4621,7 +4630,7 @@ const GAME = (() => {
     shape = mutShape(shape);   // Tiny / Giant Items (ENDLESS block)
     const r = FS.rng;
     const home = FS.rig ? FS.rig.homeX : CAB.w * 0.5;
-    const binW = (FS.cabinet.bounds.chuteX || CAB.w - CAB.chuteW);
+    const binW = (FS.cabinet.bounds.chuteX || CAB.w - cupCW());   // (round 29) CUP
     let x, y, a;
     if (at) { x = at.x; y = at.y; a = at.a || 0; }
     else {
@@ -5150,7 +5159,7 @@ const GAME = (() => {
     if (ev.k === 'part') {
       T.parts = ev.parts | 0; T.lv = ev.lv | 0; T.need = ev.need | 0;
       // the parts fly from the chute up to the turret
-      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW / 2;
+      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) + cupCW() / 2;   // (round 29) CUP
       for (let i = 0; i < Math.min(3, ev.n | 0); i++) fx().fly(cx, CAB.y + CAB.h - 40, X0, Y0, { kind: 'star', col: '#cfd6df', dur: 0.36 + i * 0.05, delay: i * 0.05, arc: 80, size: 5 });
       fx().text(X0 - 18, Y0 - 34, '+' + (ev.n | 0) + ' PART' + ((ev.n | 0) > 1 ? 'S' : ''), '#ffc94d', { size: 13, life: 0.8 });
       snd('turBuild', { pitch: 0.9 + Math.min(16, T.parts) * 0.03 });
@@ -5313,7 +5322,7 @@ const GAME = (() => {
   }
   // After a grab: a prize the claw let go of over the chute that still ended up in the bin was a near miss.
   function nearMissAfterGrab() {
-    const lim = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW;
+    const lim = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW();   // (round 29) CUP
     for (const b of FS.relCargo) if (FS.items.indexOf(b) >= 0 && b.x < lim) { soClose(CAB.x + b.x, CAB.y + b.y); break; }
     FS.relCargo = [];
   }
@@ -5630,7 +5639,7 @@ const GAME = (() => {
   function hashOf(inst) { return U.hashStr ? U.hashStr(String(inst && inst.uid)) >>> 0 : 7; }
   // Where a returned / dropped item lands: spread over the bin by its uid.
   function landSpot(inst, k) {
-    const binW = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW;
+    const binW = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW();   // (round 29) CUP
     const h = hashOf(inst) + (k || 0) * 97;
     return { x: 50 + (h % 1000) / 1000 * Math.max(20, binW - 100), y: 60 + (h >> 10) % 40 };
   }
@@ -5902,7 +5911,7 @@ const GAME = (() => {
       hookW: null, hookRig: null, sign: '', signCol: '#ffc94d', signK: 0,
     });
   }
-  const binWidth = () => (FS && FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
+  const binWidth = () => (FS && FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW());   // (round 29) CUP
   // The enemy index of a living enemy with this bestiary trick (a move kind, or 'rival'), else -1.
   function bestAlive(k) {
     for (let i = 0; i < F.enemies.length; i++) {
@@ -6407,7 +6416,7 @@ const GAME = (() => {
   const vsT = () => (X.RENDER && X.RENDER.VS) || VS0;
   const tierOf = (e) => (e && e.def && e.def.tier) || 'normal';
   const bigOne = (e) => tierOf(e) === 'boss' || tierOf(e) === 'elite';
-  const binW = () => (FS && FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
+  const binW = () => (FS && FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW());   // (round 29) CUP
   const isHeavy = (b) => !!(b && b.data && (((b.data.tags || []).indexOf('heavy') >= 0) || (b.data.mat && b.data.mat.traits && b.data.mat.traits.heavy)));
   function BS() {
     return FS.bs || (FS.bs = { heatK: 0, snow: 0, snowK: 0, alarmK: 0, ice: null, lid: null, hj: null, hjK: 0, hjX: 0, pour: [], fin: null,
@@ -6611,7 +6620,7 @@ const GAME = (() => {
         bs.snow = Math.min(1, bs.snow + 0.34);
         if (ev.part === 'lid') {
           addLid();
-          const cx = CAB.x + binW() + CAB.chuteW / 2, cy = CAB.y + (FS.cabinet ? FS.cabinet.bounds.dividerTop : 200) - 20;
+          const cx = CAB.x + binW() + cupCW() / 2, cy = CAB.y + (FS.cabinet ? FS.cabinet.bounds.dividerTop : 200) - 20;   // (round 29) CUP
           fx().emit('frost', cx, cy, { n: 1.4 }); fx().ring(cx, cy, '#bfe8ff', { r0: 8, r1: 80, w: 6 });
           fx().text(270, 430, 'CHUTE FROZEN SHUT!', '#8dfff5', { big: true });
         } else {
@@ -6627,7 +6636,7 @@ const GAME = (() => {
         const had = bs.ice;
         removeLid();
         bs.ice = null;
-        if (had) { fx().emit('frost', CAB.x + (had.part === 'lid' ? binW() + CAB.chuteW / 2 : CAB.w / 2), CAB.y + (had.part === 'lid' ? 200 : 26), { n: 0.6 }); fx().text(270, 430, 'THAWED', '#8dfff5'); snd('iceBreak', { vol: 0.5, pitch: 0.8 }); }
+        if (had) { fx().emit('frost', CAB.x + (had.part === 'lid' ? binW() + cupCW() / 2 : CAB.w / 2), CAB.y + (had.part === 'lid' ? 200 : 26), { n: 0.6 }); fx().text(270, 430, 'THAWED', '#8dfff5'); snd('iceBreak', { vol: 0.5, pitch: 0.8 }); }
         break;
       }
       case 'rig': {
@@ -6989,7 +6998,7 @@ const GAME = (() => {
   function clampBinX(x) {
     const c = clawFor();
     const lim = 22 * (c.width || 1) + 40;
-    const binW = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW;
+    const binW = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW();   // (round 29) CUP
     return U.clamp(x, lim, binW - lim);
   }
   function steer(x) {
@@ -7195,7 +7204,7 @@ const GAME = (() => {
     fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
     FS.chuteFlash = 0.35;
     if (!evoDeliver(inst, pos)) throwItem(inst, pos);   // an evolution throws it after its ceremony (EVOLVE)
-    const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
+    const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) + cupCW() * 0.5;   // (round 29) CUP
     // the chip rises just left of the divider so it never sits on the PRIZE lettering
     const quiet = rr2Quiet();   // ROUND 22: the row shows the prize; the cabinet keeps its party small
     if (!quiet) fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
@@ -7254,7 +7263,7 @@ const GAME = (() => {
     const q0 = FS.queue.length;
     enqueue(evs, PLAY_BEAT);
     rrRowPlayed(inst, q0);   // RROW (round 21): its slot shows what it did (and which relics joined in)
-    if (!rrRowOn()) fx().text(CAB.x + CAB.w - CAB.chuteW - 70, CAB.y + CAB.h * 0.3, itemName(def, inst.plus), '#ffc94d');   // (the row names it instead)
+    if (!rrRowOn()) fx().text(CAB.x + CAB.w - cupCW() - 70, CAB.y + CAB.h * 0.3, itemName(def, inst.plus), '#ffc94d');   // (the row names it instead)
   }
   function showTrayChip(def, inst) {
     const tray = $('tray');
@@ -7660,6 +7669,7 @@ const GAME = (() => {
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
     const reward = { items: rollItems(rng, bncPickN(tier)), gold, ink, brush, tier, then };   // (BENCH round 28: Bigger Shelf)
     crEliteOffer(reward);   // CR (round 21): the run's first elite hands over a pick of three combo relics
+    cupEliteOffer(reward);   // (round 29) CUP: a Magnet Crane run's elite offers Coil Winding next to its items, once an act
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
     secFightWin(reward, then);   // ...and maybe the golden key it swallowed (SECRET)
@@ -7864,6 +7874,7 @@ const GAME = (() => {
     if (tx) tx.innerHTML = i18nTr(TUTORIAL[S.coachStep]);
     if (b) { b.textContent = S.coachStep === TUTORIAL.length - 1 ? 'Got it' : 'Next'; b.onclick = () => { snd('click'); coachNext(); }; }
     if (el) el.classList.add('show');
+    gtuCoachDeco();   // GUIDE (round 29): on a guided run the coach wears the guide's kicker and Skip
   }
   function coachNext() {
     S.coachStep++;
@@ -7901,6 +7912,7 @@ const GAME = (() => {
     b.appendChild(capBox);
     const sub = h('div', 'sub', 'Pick one item for your bin.');
     b.appendChild(sub);
+    const gtuL = gtuLine(b, 'prize');   // GUIDE (round 29): the first fight's prize, in words
     const cards = h('div', 'cards' + (rw.items.length === 4 ? ' n4' : ''));   // (BENCH round 28: Bigger Shelf's four, two by two)
     const cardEls = [];
     rw.items.forEach((id, i) => {
@@ -7910,6 +7922,7 @@ const GAME = (() => {
       cardEls.push(card);
       cards.appendChild(card);
     });
+    cupRewardCard(cards, rw, sub);   // (round 29) CUP: the elite's Coil Winding card
     b.appendChild(cards);
     const skip = btn('Skip', () => afterReward(rw), 'ghost');
     m2Stop('reward', b);
@@ -7917,7 +7930,7 @@ const GAME = (() => {
     // capsules sit above the cards (DOM taps, not GAME.choose entries: the
     // cards and Skip keep their indices)
     lootCapSlots(capBox, rw);
-    if (pay) startPayout(pay, rw, [capBox, sub, cards, skip], cardEls);
+    if (pay) startPayout(pay, rw, [capBox, sub, gtuL, cards, skip].filter(Boolean), cardEls);
     save();
   }
   function itemCard(def, plus, o) {
@@ -8012,13 +8025,13 @@ const GAME = (() => {
     const td = { relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${bulbs(START_INK)}. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') };
     // Claw upgrades come from bosses (and tower bonuses) only: the spare
     // parts screen first, then the relic. Everything maxed skips straight on.
-    const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
+    const pick = cupParts(rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3));   // (round 29) CUP: + Coil Winding in a Magnet Crane run
     if (pick.length) showSpareParts({ pick, then: td });
     else showTreasure(td);
   }
   // Claw upgrades not yet maxed (a relic that supplies the part counts).
   function openClawUpgrades() {
-    return Object.keys(tbl('CLAW_UPGRADES')).filter((id) => { const d = tbl('CLAW_UPGRADES')[id]; return !d.max || upgradeCount(id) < d.max; });
+    return Object.keys(tbl('CLAW_UPGRADES')).filter((id) => { const d = tbl('CLAW_UPGRADES')[id]; return !d.cup && (!d.max || upgradeCount(id) < d.max); });   // (round 29) CUP parts have their own occasions
   }
   // A row of claw upgrade cards; onPick(id, def) after a successful apply.
   function clawCards(ids, onPick) {
@@ -8027,6 +8040,7 @@ const GAME = (() => {
     for (const id of ids) {
       const def = tbl('CLAW_UPGRADES')[id];
       if (!def) continue;
+      if (def.cup) { cards.appendChild(cupCard(id, { deal: k++, onPick: () => { if (applyClawUpgrade(id)) { snd('upgrade'); toast(`Claw upgraded: ${def.name}.`); onPick(id, def); } else toast('Cannot apply that.'); } })); continue; }   // (round 29) CUP: its rank, now and next
       const card = h('div', 'card rr-r');
       dealIn(card, k++);
       card.appendChild(h('div', 'big', def.icon || ''));
@@ -8048,7 +8062,7 @@ const GAME = (() => {
     clear(b);
     b.appendChild(h('h1', null, "The Prize Master's spare parts"));
     b.appendChild(h('div', 'sub', 'The boss dropped a box of claw parts. Bolt one on.'));
-    const pick = (sp.pick || []).filter((id) => openClawUpgrades().indexOf(id) >= 0);
+    const pick = (sp.pick || []).filter((id) => openClawUpgrades().indexOf(id) >= 0 || (cupIs(id) && cupCan(id)));   // (round 29) CUP
     const next = () => { S.sd = null; if (sp.then) showTreasure(sp.then); else toMap(); };
     m2Stop('parts', b);
     if (!pick.length) {
@@ -8269,6 +8283,7 @@ const GAME = (() => {
       card.appendChild(btn('Collect', () => collectCapsule(), 'gold'));
       holoOn(card, cap.tier);   // HOLO (round 9): the prize card in its capsule's rarity
       b.appendChild(card);
+      if (C.cd.cap && C.cd.cap.src === 'treasure') gtuLine(b, p.k === 'relic' && !p.fallback ? 'relic' : 'loot');   // GUIDE (round 29): what the chest gave you
     } else {
       const hint = h('div', 'capHint');
       hint.id = 'capHint';
@@ -9891,6 +9906,7 @@ const GAME = (() => {
       els.push(row);
     }
     b.appendChild(box);
+    gtuLine(b, 'after');   // GUIDE (round 29): one line after the choice
     const go = btn('Continue', () => { S.sd = null; S.arcEv = null; toMap(); }, 'pri');
     m2Dock(b, [go]);   // M2 (round 18): Continue in the dock
     const E = S.arcEv;
@@ -10049,7 +10065,7 @@ const GAME = (() => {
     return true;
   }
   function feelTipSafe() {
-    if (!FEEL_TIP_SCREENS[S.screen] || annBlocked()) return false;
+    if (!FEEL_TIP_SCREENS[S.screen] || annBlocked() || gtuBusy()) return false;   // (GUIDE round 29: never over the guide's card)
     if (S.screen === 'fight') {
       if (!F || !FS || FS.done || FS.outro || FS.vs || FS.enemyTurn || FS.grabInFlight || S.coachStep >= 0 || rr2Quiet()) return false;   // (ROUND 22: nor while the resolve row is busy)
       const ph = FS.rig ? FS.rig.phase : 'idle';
@@ -10843,7 +10859,7 @@ const GAME = (() => {
         if (FS.world) FS.world.wakeAll();
         petWake(b);
         // a pounce that throws the item at the chute; the aim gets truer with levels
-        const cx = binWidth() + CAB.chuteW / 2, cy = CAB.h - 70, T = 1.0, g = GRAVITY * (b.gs == null ? 1 : b.gs);
+        const cx = binWidth() + cupCW() / 2, cy = CAB.h - 70, T = 1.0, g = GRAVITY * (b.gs == null ? 1 : b.gs);
         const err = (P.rng() - 0.5) * 2 * 110 / pow;
         b.vx = (cx + err - b.x) / T; b.vy = (cy - b.y) / T - 0.5 * g * T; b.av += 6;
         b.data.petBat = FS.grabN;
@@ -12427,7 +12443,7 @@ const GAME = (() => {
     if (!Q && !e) return;
     if (layer === 'front') secFightTop(ctx, t);
     const b = FS.cabinet && FS.cabinet.bounds;
-    if (b) { SCB.chuteX = b.chuteX; SCB.dividerTop = b.dividerTop; }
+    if (b) { SCB.chuteX = b.chuteX; SCB.chuteW = b.chuteW || CAB.chuteW; SCB.dividerTop = b.dividerTop; }   // (round 29) CUP: the run's chute
     SCS.t = t; SCS.phase = Q ? Math.max(0, Q.phase) : 0; SCS.rail = Q ? Q.railK : 0; SCS.hx = FS.rig ? FS.rig.x : null;
     SHV.hp = F.secShut ? F.secShut.hp : 0; SHV.max = F.secShut ? F.secShut.max : (Q && Q.shutK > 0.01 ? SHV.max : 2); SHV.k = Q ? Q.shutK : 0;
     SCS.grav = Q ? Q.gravK : 0; SCS.crack = Q ? Q.crack : 0; SCS.seed = Q ? Q.seed : 7;
@@ -12484,6 +12500,7 @@ const GAME = (() => {
     const run = S.run;
     const def = tbl('CLAW_UPGRADES')[id];
     if (!def) return false;
+    if (def.cup && !cupCan(id)) return false;   // (round 29) CUP: Coil Winding fits the Magnet Crane only; never in a Duo seat or a rush's chute
     run.claw.ups = run.claw.ups || {};
     if (def.max && upgradeCount(id) >= def.max) return false;
     const before = upgradeCount(id);
@@ -12492,6 +12509,7 @@ const GAME = (() => {
     if (ok === false) return false;
     // data.js counts applications itself; only count here when it did not.
     if (upgradeCount(id) === before) run.claw.ups[id] = before + 1;
+    if (def.cup) cupGot(id);   // (round 29) CUP: the moment (a burst, a crackle, the next bell flares)
     return true;
   }
   function showShop(shop) {
@@ -14627,6 +14645,7 @@ const GAME = (() => {
       } }));
     }
     if (!order.length) cards.appendChild(h('div', 'sub', 'Empty. That is a problem.'));
+    cupBinTags(b, o);   // (round 29) CUP: the claw's parts and their ranks (the bin's view)
     b.appendChild(cards);
     m2Stop('bin', b);
     m2Dock(b, [btn(o.mode === 'view' ? 'Back' : 'Cancel', () => { if (o.back) o.back(); else toMap(); }, 'ghost')]);   // M2 (round 18): the way out in the dock
@@ -14661,6 +14680,7 @@ const GAME = (() => {
     b.appendChild(h('div', 'sub evText', def.text || ''));
     m2Stop('event', b);   // M2 (round 18): the story card
     if (ed.out) { arcEvOutDom(b, ed); save(); return; }
+    gtuLine(b, 'choice');   // GUIDE (round 29): one line on the choices
     const list = h('div', 'list');
     (def.choices || []).forEach((ch, idx) => {
       let ok = true;
@@ -14808,6 +14828,7 @@ const GAME = (() => {
     }
     if (!order.length) cards.appendChild(h('div', 'sub', 'Everything is already upgraded.'));
     evoForgeCards(cards);   // EVOLVE cards for items ready to evolve (EVOLVE block)
+    cupForgeCards(cards);   // (round 29) CUP: Coil Winding (a Magnet Crane run) and Wider Chute, instead of an item
     b.appendChild(cards);
     m2Stop('forge', b);   // M2 (round 18): the workshop, Leave in the dock
     m2Dock(b, [btn('Leave', () => toMap(), 'ghost')]);
@@ -14924,7 +14945,7 @@ const GAME = (() => {
         if (pc && X.RENDER && X.RENDER.portrait) {
           try { const c = pc.getContext('2d'); if (c) { c.clearRect(0, 0, 108, 108); X.RENDER.portrait(c, run.char, 54, 54, 96, S.t); } } catch (e) { /* optional */ }
         }
-        if (pc) pc.onclick = () => popover(`<b>${(charDef(run.char) || {}).name || run.char}</b><br>${hp}/${max} hp` + (block ? `, ${block} block` : '') + `<br>Claw: ${clawFor().grabs} grabs, width ${U.fmt(clawFor().width)}, grip ${U.fmt(clawFor().grip)}, ${clawFor().prongs} prongs`, 60, 70);
+        if (pc) pc.onclick = () => popover(`<b>${(charDef(run.char) || {}).name || run.char}</b><br>${hp}/${max} hp` + (block ? `, ${block} block` : '') + `<br>Claw: ${clawFor().grabs} grabs, width ${U.fmt(clawFor().width)}, grip ${U.fmt(clawFor().grip)}, ${clawFor().prongs} prongs` + cupClawLine(), 60, 70);   // (round 29) CUP: the coil's rank, the chute's width
       }
     }
     lootHud(force);   // the ticket counter
@@ -15823,7 +15844,7 @@ const GAME = (() => {
   const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0, enraged: false, rage: 0, chomp: 0, spit: 0 };
   const HPO = { ghost: 0, flash: 0, shield: 0 };
   const PIPO = { maxW: 300, center: true, rows: 1 };
-  const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0, t: 0, idle: 0, mood: '', blink: 0, look: 0, chase: 0, lucky: 0, pull: [], pullN: 0 };
+  const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0, t: 0, idle: 0, mood: '', blink: 0, look: 0, chase: 0, lucky: 0, pull: [], pullN: 0, cupFl: 0 };   // (round 29) CUP: cupFl, the coil's field-line flare
   for (let i = 0; i < 8; i++) CLAWJ.pull.push({ x: 0, y: 0 });
   // Reused per-item material look (RENDER.itemFx).
   const MST = { mat: null, t: 0, seed: 0, crack: 0, slosh: 0, fuse: 0, golden: false, mag: 0, melt: 0 };
@@ -15894,7 +15915,7 @@ const GAME = (() => {
     stoArenaDraw(ctx, t);   // a friend from a story runs in (STORY)
     famArenaFront(ctx, t);   // the Crescendo staff, notes and snow, the angry choir, the family plate (FAMILY)
     // The rig.
-    const cfg = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW, claw: clawFor() };
+    const cfg = { w: CAB.w, h: CAB.h, chuteW: cupCW(), dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW(), claw: clawFor() };   // (round 29) CUP: the run's chute
     const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t, party: Math.min(1, FS.party), marquee: FS.marquee };
     const split = R && R.cabinetBack && R.cabinetFront;
     bossCabSt(cabSt);   // the red alarm, the Hoard's lean (boss arena)
@@ -15970,10 +15991,11 @@ const GAME = (() => {
     cabDrawIn(ctx, t);   // CAB (round 16): the surge on the rail, the cabinet's coins and capsules
     techDrawIn(ctx, t);   // TECH (round 17): the Laser Sight's aim
     if (FS.chuteFlash > 0) {
-      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
+      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW());   // (round 29) CUP
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
-      ctx.fillRect(cx, CAB.y, CAB.chuteW, CAB.h);
+      ctx.fillRect(cx, CAB.y, cupCW(), CAB.h);
     }
+    cupDrawIn(ctx, t);   // (round 29) CUP: the bell after an upgrade: the chute glows wider, the magnet's field lines flare
     const cj = FS.claw;
     CLAWJ.bend = fx().reduced ? 0 : cj.bend; CLAWJ.squash = cj.sq; CLAWJ.speed = cj.vx; CLAWJ.glow = cj.glow;
     // the claw's character: parked sway, its face (mood, blink, a look where
@@ -16608,6 +16630,7 @@ const GAME = (() => {
     schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
     duoTick(real);   // DUO (round 11): the coin, the countdown, the claw-off, co-op's pass
     bncTick(real);   // BENCH (round 28): the bolts' count-up, a pack's reveal, the welcome on the title
+    gtuTick(real);   // GUIDE (round 29): the guided first run's card and pointer, the title's offer
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     rr2Flush();   // ROUND 22: a toast held back while the resolve row was busy speaks now, one at a time
     if (S.screen === 'map') {
@@ -18112,7 +18135,7 @@ const GAME = (() => {
     const id = pool[Math.floor(rng() * pool.length)];
     const got = X.COMBAT.addTemp(F, id, 1);
     if (!got.length) return null;
-    const x0 = CAB.x + CAB.w - (CAB.chuteW || 64) / 2, y0 = CAB.y + CAB.h - 40;
+    const x0 = CAB.x + CAB.w - cupCW() / 2, y0 = CAB.y + CAB.h - 40;   // (round 29) CUP: the chute's middle
     got.forEach((inst, k) => {
       const spot = { x: Math.max(40, binW() * 0.55), y: 30 };
       try { arcItem(inst, x0, y0, CAB.x + spot.x, CAB.y + spot.y, 0.5, () => { dropIn(inst, spot); snd('winPop', { pitch: 1.2 }); }, 0.15 + k * 0.08); } catch (e) { queueSpawn([inst]); }
@@ -21512,7 +21535,7 @@ const GAME = (() => {
       }
     } else if (ev === 'release') {
       // (the drops are nudged to the chute's middle, so a bubble held off-centre never lands on the divider)
-      const cmid = binWidth() + CAB.chuteW / 2;
+      const cmid = binWidth() + cupCW() / 2;   // (round 29) CUP
       for (const B of R0.bubs) if (B.ph === 'held') { B.ph = 'popped'; B.popT = 0; R0.grab.push(B); rosPopFx(B, 'chute'); for (const b of B.bodies) if (rosLive(b) && !b.tube) { b.vy = Math.max(b.vy, 80); b.vx = U.clamp((cmid - b.x) * 5, -160, 160); b.passClaw = Math.max(b.passClaw || 0, 0.35); } }
       // a glued prize may not let go over the chute: it rides home and drops there
       if (R0.glue.length) {
@@ -21636,7 +21659,7 @@ const GAME = (() => {
     R0.dumpT = ROSK.sweepGap;
     const inst = R0.dump.shift();
     if (!inst || F.bin.indexOf(inst) < 0 || bodyOf(inst)) return;
-    const cb = FS.cabinet ? FS.cabinet.bounds : null, cx = (cb ? cb.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW / 2;
+    const cb = FS.cabinet ? FS.cabinet.bounds : null, cx = (cb ? cb.chuteX : CAB.w - cupCW()) + cupCW() / 2;   // (round 29) CUP
     FS.delivered = 0;
     const b = spawnBody(inst, { x: cx, y: (cb && cb.dividerTop != null ? cb.dividerTop : CAB.h * 0.55) - 24, a: 0 });
     R0.dumpB = b;
@@ -25927,14 +25950,14 @@ const GAME = (() => {
     return Object.assign({}, mat, { traits: Object.assign({}, mat.traits, { glass: true }) });
   }
   function legFxPush(o) { const L = FS.legFx || (FS.legFx = []); L.push(o); if (L.length > LEGG.fxMax) L.shift(); }
-  const legChuteX = () => CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
+  const legChuteX = () => CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) + cupCW() * 0.5;   // (round 29) CUP
   // {t:'leg'} events: a prize bounces back, junk falls into the black hole.
   function legEvent(ev) {
     if (!FS || !ev) return;
     const cx = legChuteX();
     if (ev.k === 'bounce' && ev.inst) {
       if (F.bin.indexOf(ev.inst) < 0 || bodyOf(ev.inst)) return;
-      const bx = (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) - 36;
+      const bx = (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) - 36;   // (round 29) CUP
       const b = spawnBody(ev.inst, { x: bx, y: 70, a: 0.4 });
       if (b) { b.vx = -240 - FS.rng() * 90; b.vy = -60; b.av = -6; b.data.clawG = -1; }
       fx().text(cx - 40, CAB.y + 90, 'BOING!', '#2ee6d6', { size: 18, dy: -30 });
@@ -26380,6 +26403,8 @@ const GAME = (() => {
       if (!st.offers.length) panel.appendChild(h('div', 'trdRule', 'Rocco has nothing you would want today.'));
       const pv = trdPevEl();
       if (pv) panel.appendChild(pv);
+      const cupT = cupTrdEl();   // (round 29) CUP: Rocco fits a wider chute for gold
+      if (cupT) panel.appendChild(cupT);
       dock.appendChild(btn('Leave', () => trdLeave(), 'ghost'));
     }
     b.appendChild(panel); b.appendChild(dock);
@@ -29571,6 +29596,777 @@ const GAME = (() => {
   }
   // ================================================================ /BENCH
 
+  // ================================================================ GUIDE (round 29)
+  /* The guided first run (DESIGN.md "The guided first run (round 29)"). Owner: "before you go to your first fight,
+     first take this chest and this question mark": teach the map strategy (explore and power up, then fight).
+     - Who: a fresh profile's first run (meta.guide.done false). An older profile (the fight coach done, or runs on
+       record) is offered it once on the title; Help plays it again (meta.guide.want). Skip at any step: done.
+     - The teaching map (gtuNewMap, right after MAP.generate, only on a guided run): a chest and a "?" on the start's
+       ring, a shop and a fight one step further, the way to them lit; every other run's map is untouched.
+     - The steps are read off the run (gtuStep: what is done, what was said, whether a fight was fought), so a reload
+       resumes where it was, a player who wanders is re-pointed, and a target that is gone is skipped.
+     - The look: a tip card on the map (top or bottom, never over what it points at), a pulsing ring and a bobbing
+       arrow on the hex (still under calm and reduced motion), an inline line on the capsule, event and reward
+       pages, and the fight coach wearing the same kicker and Skip.
+     - Never in a daily, the weekly, a Boss Rush, Duo, Endless or a dive; headless (the suites) only with GTU.force.
+     Saved: meta `guide {done, offer, want}`; run `gtu {v, t {chest, event, shop, fight}: [q, r], shopK, said, end}`. */
+  const GTU = { force: false, offerAt: 0.9, cardH: 170, gap: 10, pref: ['out_of_order', 'stuffed_adventurer', 'steam_vent'] };
+  const GTU_LINES = {
+    map: 'This is the Clawspire map. Tap a lit tile to walk there.',
+    bulbs: 'Dark tiles cost a bulb to light. Here are your bulbs.',
+    chest: 'Before you fight, get stronger. Open this chest first!',
+    relic: 'Relics are permanent power for this run.',
+    loot: 'This prize goes into your bin, ready for your next fights.',
+    event: 'Now this question mark: a surprise event. Could be a gift, a trade or a gamble.',
+    choice: 'Pick one. The chips show what you give and what you get.',
+    after: 'Events are worth a look: most choices make you stronger.',
+    shop: 'Shops sell prizes for your bin. Drop in when you have gold.',
+    forge: 'The forge upgrades one of your prizes. Worth a visit!',
+    fight: 'Ready? Fights are the crossed swords. Win them for gold and new prizes.',
+    prize: 'Pick a prize: it goes into your bin and you can grab it in the next fights.',
+    endT: 'That is the gist!',
+    end1: 'Explore first and power up, then fight.',
+    end2: 'Elites give relics. The boss waits at the top of the map.',
+    end3: 'After a run, spend your bolts at the Upgrade Bench to get stronger.',
+  };
+  const GTU_END = [['🧭', 'end1'], ['👑', 'end2'], ['🔩', 'end3']];
+  const GTU_ORDER = ['map', 'bulbs', 'chest', 'event', 'shop', 'fight', 'prize', 'end'];
+  const GTU_OF = { relic: 'chest', loot: 'chest', choice: 'event', after: 'event', coach: 'fight', forge: 'shop' };
+  const GTU_BTN = { map: 'Next', bulbs: 'Next', shop: 'Next', end: 'Let\'s go!' };
+  // tiles the teaching map may turn into a chest, a "?", a shop or a fight (the cheapest first)
+  const GTU_FREE = { empty: 0, gem: 1, ink: 1, brush: 1, fight: 2, event: 3, treasure: 3 };
+  const GTX = { log: [] };
+
+  // ---- the profile: done, the old profile's one-time offer, a replay asked for
+  function gtuMetaFix(m, o) {
+    if (!m) return m;
+    const had = o !== undefined ? (o && typeof o === 'object' ? o.guide : undefined) : m.guide;
+    const src = had && typeof had === 'object' && !Array.isArray(had) ? had : null;
+    if (src) m.guide = { done: !!src.done, offer: src.offer ? 1 : 0, want: !!src.want };
+    else {
+      // no record (an older profile, or junk): one that has met the fight coach or played is not forced through it
+      const old = !!(m.tutorialDone || (m.stats && (m.stats.runs | 0) > 0));
+      m.guide = { done: old, offer: old ? 1 : 0, want: false };
+    }
+    return m;
+  }
+  const gtuM = () => { if (!S.meta) return null; if (!S.meta.guide || typeof S.meta.guide !== 'object') gtuMetaFix(S.meta); return S.meta.guide; };
+  const gtuWants = () => { const g = gtuM(); return !!(g && (g.want || !g.done)); };
+  // a run the guide may take: a plain run at its start (never a daily, the weekly, a rush, Duo, Endless or a dive)
+  const gtuRunOk = (run) => !!(run && !run.daily && !run.weekly && !run.rush && !run.duo && !run.endless && !S.duo && (run.act | 0) <= 1 && !(run.fights | 0));
+  // the run under a live guide (null when there is none, it ended or was skipped)
+  const gtuRun = () => { const r = S.run; return r && r.gtu && typeof r.gtu === 'object' && !r.gtu.end && gtuRunOk2(r) ? r : null; };
+  const gtuRunOk2 = (r) => !(r.daily || r.weekly || r.rush || r.duo || r.endless || S.duo);
+  const gtuSaid = (run) => { const g = run.gtu; if (!g.said || typeof g.said !== 'object') g.said = {}; return g.said; };
+
+  // newRun, before the map: a fresh profile's first run (or a replay asked for) is a guided one
+  function gtuNewRun(run) {
+    if (!run || (S.headless && !GTU.force) || !gtuRunOk(run) || !gtuWants()) return null;
+    const g = gtuM();
+    g.want = false;
+    saveMeta();
+    run.gtu = { v: 1, t: {}, shopK: null, said: {}, end: 0, map: 0 };
+    GTX.log.push('start');
+    return run.gtu;
+  }
+
+  // ---- the teaching map: a chest and a "?" next to the start, a shop and a fight one step on, the way lit
+  function gtuNewMap(run) {
+    const g = run && run.gtu, M = run && run.map, MP = X.MAP;
+    if (!g || typeof g !== 'object' || g.end || g.map || !M || !MP || !MP.neighbors || (run.act | 0) !== 1) return null;
+    g.map = 1;
+    const K = MP.key, st = M.start, boss = M.boss;
+    const walk = (t) => !!t && t.terrain === 'land' && t.ground !== 'mountain' && !(MP.roamAt && MP.roamAt(M, t.q, t.r));
+    const toBoss = (q, r) => (MP.hexDist ? MP.hexDist(q, r, boss.q, boss.r) : 0);
+    // the land within two steps of the start, nearest first, then toward the boss (the way the map is read)
+    const dist = {}, par = {}, ring = [];
+    dist[K(st.q, st.r)] = 0;
+    let front = [[st.q, st.r]];
+    for (let d = 1; d <= 2; d++) {
+      const next = [];
+      for (const [q, r] of front) {
+        const nb = MP.neighbors(M, q, r).slice().sort((a, b) => toBoss(a[0], a[1]) - toBoss(b[0], b[1]) || K(a[0], a[1]).localeCompare(K(b[0], b[1])));
+        for (const [nq, nr] of nb) {
+          const k = K(nq, nr), t = M.tiles[k];
+          if (k in dist || !walk(t)) continue;
+          dist[k] = d; par[k] = K(q, r); next.push([nq, nr]); ring.push(t);
+        }
+      }
+      front = next;
+    }
+    const used = {};
+    const kOf = (t) => K(t.q, t.r);
+    const seed = (t, tag) => U.hashStr(run.seed + ':gtu:' + tag + ':' + kOf(t));
+    // an existing tile of the kind first (dmin to dmax steps out), else the cheapest free tile at exactly d
+    const pick = (types, d, dmax, dmin) => {
+      let t = ring.find((x) => !used[kOf(x)] && dist[kOf(x)] <= dmax && dist[kOf(x)] >= (dmin || 1) && types.indexOf(x.type) >= 0);
+      if (!t) {
+        const free = ring.filter((x) => !used[kOf(x)] && dist[kOf(x)] === d && x.type in GTU_FREE && types.indexOf(x.type) < 0);
+        free.sort((a, b) => GTU_FREE[a.type] - GTU_FREE[b.type]);
+        t = free[0] || null;
+      }
+      if (t) used[kOf(t)] = 1;
+      return t;
+    };
+    const set = (t, type, content) => {
+      if (t.type === type) return t;
+      t.type = type; t.content = content; t.done = false;
+      t.known = MP.isLandmark ? MP.isLandmark(t) : false;
+      return t;
+    };
+    const ev = (() => { const E = tbl('EVENTS'); for (const id of GTU.pref) if (E[id]) return id; return null; })();
+    // the chest and the "?" on the start's ring (a step further when the ring is water)
+    let chest = pick(['treasure'], 1, 1) || pick(['treasure'], 2, 2);
+    if (chest) set(chest, 'treasure', { seed: seed(chest, 'chest'), gold: 20, relic: true });
+    let evt = pick(['event'], 1, 1) || pick(['event'], 2, 2);
+    if (evt) set(evt, 'event', { seed: seed(evt, 'event'), event: ev });
+    if (evt && ev && evt.content) evt.content.event = ev;
+    // a shop (or a forge already there) one step on
+    let shop = ring.find((x) => !used[kOf(x)] && (x.type === 'shop' || x.type === 'forge'));
+    if (shop) used[kOf(shop)] = 1;
+    else { shop = pick(['shop'], 2, 2); if (shop) set(shop, 'shop', { seed: seed(shop, 'shop') }); }
+    // the first fight one step on, the easiest of the act; the other fights on the ring go quiet (a gem)
+    let fight = pick(['fight'], 2, 2, 2) || pick(['fight'], 1, 1);
+    const enc = MP.depEncOf ? MP.depEncOf(M, 1) : null;
+    if (fight && fight.type !== 'fight') set(fight, 'fight', { seed: seed(fight, 'fight'), diff: 0, enc: enc && enc.normal && enc.normal.length ? enc.normal[0].slice() : undefined });
+    for (const t of ring) if (dist[kOf(t)] === 1 && t.type === 'fight' && !used[kOf(t)]) set(t, 'gem', { seed: seed(t, 'gem'), gold: 10 });
+    // light them and the way to them
+    const lit = (t) => { let k = kOf(t); while (k && k in dist) { const x = M.tiles[k]; if (x) x.revealed = true; k = par[k]; } };
+    const at = (t) => (t ? [t.q, t.r] : null);
+    for (const t of [chest, evt, shop, fight]) if (t) lit(t);
+    g.t = { chest: at(chest), event: at(evt), shop: at(shop), fight: at(fight) };
+    g.shopK = shop ? shop.type : null;
+    let n = 0; for (const k in M.tiles) { const t = M.tiles[k]; if (t.revealed && t.terrain !== 'sea') n++; }
+    M.revealedCount = n;
+    GTX.log.push('map');
+    return g.t;
+  }
+  // a target tile, while it is still what the guide put there (else null: that step is skipped)
+  function gtuTile(kind) {
+    const run = gtuRun(), g = run && run.gtu, M = run && run.map, p = g && g.t && g.t[kind];
+    if (!Array.isArray(p) || !M || !X.MAP) return null;
+    const t = X.MAP.tileAt(M, p[0], p[1]);
+    const want = kind === 'chest' ? 'treasure' : kind === 'shop' ? (g.shopK || 'shop') : kind;
+    return t && t.type === want ? t : null;
+  }
+  const gtuIs = (t, kind) => { const x = gtuTile(kind); return !!(x && t && x.q === t.q && x.r === t.r); };
+
+  // ---- the step on the map, read off the run
+  function gtuStep() {
+    const run = gtuRun();
+    if (!run) return null;
+    const s = gtuSaid(run);
+    const c = gtuTile('chest'), e = gtuTile('event'), sh = gtuTile('shop');
+    const went = !!((c && c.done) || (e && e.done) || (sh && sh.done) || (run.fights | 0));   // a player who has set off already met the map
+    if (!went && !s.map) return 'map';
+    if (!went && !s.bulbs) return 'bulbs';
+    if (run.fights | 0) return 'end';
+    if (c && !c.done) return 'chest';
+    if (e && !e.done) return 'event';
+    if (sh && !sh.done && !s.shop) return 'shop';
+    return 'fight';
+  }
+  // "Guide 3 of 8": the step's place (the shop counts only when there is one)
+  function gtuNum(step) {
+    const run = S.run, g = run && run.gtu;
+    const list = GTU_ORDER.filter((k) => k !== 'shop' || !!(g && g.t && g.t.shop));
+    const i = list.indexOf(GTU_OF[step] || step);
+    return { i: i < 0 ? 1 : i + 1, n: list.length };
+  }
+  const gtuKick = (step) => { const n = gtuNum(step); return `Guide ${n.i} of ${n.n}`; };
+  const gtuText = (step) => (step === 'shop' && gtuTile('shop') && gtuTile('shop').type === 'forge' ? GTU_LINES.forge : GTU_LINES[step] || '');
+  // the fight step points at the guide's fight, else the nearest lit one
+  function gtuFightTile() {
+    const t = gtuTile('fight');
+    if (t && !t.done) return t;
+    const run = S.run, M = run && run.map;
+    if (!M || !X.MAP) return null;
+    let best = null, bd = 1e9;
+    for (const k in M.tiles) {
+      const x = M.tiles[k];
+      if (x.type !== 'fight' || x.done || !x.revealed) continue;
+      const d = X.MAP.hexDist ? X.MAP.hexDist(M.pos.q, M.pos.r, x.q, x.r) : 1;
+      if (d < bd) { bd = d; best = x; }
+    }
+    return best;
+  }
+
+  // ---- the card and the pointer on the map
+  function gtuEls() {
+    if (S.gtuEl) return S.gtuEl;
+    const card = $('gtuCard');
+    if (!card) return null;
+    card.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); };
+    S.gtuEl = { card, ring: $('gtuRing'), arrow: $('gtuArrow'), key: '', pos: '', step: null };
+    return S.gtuEl;
+  }
+  const gtuLang = () => (typeof I18N !== 'undefined' && I18N && I18N.get ? I18N.get() : 'en');
+  // can the card show on the map now (no act card, board, sheet or photo over it)
+  const gtuMapFree = () => S.screen === 'map' && !S.loreIntro && !S.loreBoard && !S.accOpen && !S.hisPh;
+  function gtuTick(dt) {
+    gtuOfferTick(dt);
+    const E = gtuEls();
+    if (!E) return;
+    const step = gtuRun() && gtuMapFree() ? gtuStep() : null;
+    const key = step ? step + ':' + gtuLang() + ':' + gtuNum(step).n : '';
+    if (key !== E.key) { E.key = key; gtuCard(step); }
+    gtuPlace(step);
+  }
+  function gtuSkipBtn() {
+    const b = h('button', 'btn ghost sm gtuSkip', 'Skip tutorial');
+    b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gtuSkip(); };
+    return b;
+  }
+  function gtuCard(step) {
+    const E = S.gtuEl;
+    if (!E) return;
+    const card = E.card;
+    E.step = step; E.main = null;
+    clear(card);
+    if (!step) { try { card.classList.remove('show'); } catch (e) { /* stub */ } return; }
+    card.appendChild(h('div', 'gtuK', gtuKick(step)));
+    if (step === 'end') {
+      card.appendChild(h('div', 'gtuH', GTU_LINES.endT));
+      for (const [ic, k] of GTU_END) { const l = h('div', 'gtuL'); l.appendChild(h('i', null, ic)); l.appendChild(h('span', null, GTU_LINES[k])); card.appendChild(l); }
+    } else card.appendChild(h('div', 'gtuT', gtuText(step)));
+    const row = h('div', 'gtuRow');
+    row.appendChild(gtuSkipBtn());
+    if (GTU_BTN[step]) {
+      const b = h('button', 'btn sm ' + (step === 'end' ? 'pri' : 'go'), GTU_BTN[step]);
+      b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gtuNext(step); };
+      row.appendChild(b);
+      E.main = b;
+    }
+    card.appendChild(row);
+    replay(card, 'show');
+    snd('discover');
+    // a tip card already up gives way (unmet, back to the front of the queue: it shows once the guide is done)
+    if (FE.cur) { const id = FE.cur.id; feelTipDismiss(true); if (S.meta && S.meta.tips && S.meta.tips[id]) { delete S.meta.tips[id]; saveMeta(); if (FE.q.indexOf(id) < 0) FE.q.unshift(id); } }
+    GTX.log.push(step);
+  }
+  // Next on a card (the map, the bulbs, the shop) or Let's go! on the last one
+  function gtuNext(step) {
+    const run = gtuRun();
+    if (!run) return false;
+    step = step || gtuStep();
+    if (step === 'end') return gtuFinish();
+    if (!GTU_BTN[step]) return false;
+    gtuSaid(run)[step] = 1;
+    save();
+    gtuTick(0);
+    return true;
+  }
+  // a DOM element's box in stage px (the stage is scaled as a whole)
+  function gtuBox(el, fb) {
+    try {
+      const st = $('stage');
+      if (el && st && el.getBoundingClientRect && !S.headless) {
+        const r = el.getBoundingClientRect(), s0 = st.getBoundingClientRect(), k = S.scale || 1;
+        if (r.width > 0) return { x0: (r.left - s0.left) / k, y0: (r.top - s0.top) / k, x1: (r.right - s0.left) / k, y1: (r.bottom - s0.top) / k };
+      }
+    } catch (e) { /* fall through */ }
+    return fb;
+  }
+  // what the step points at: a hex ({hex, x, y, r}) or the bulbs pill ({x0, y0, x1, y1}); null for none
+  function gtuAim(step) {
+    const run = S.run, M = run && run.map;
+    if (!M || !mapLayout()) return null;
+    const hex = (t) => { if (!t) return null; const p = hexToStage(t.q, t.r); return { hex: true, q: t.q, r: t.r, x: p.x, y: p.y, r0: (mapLayout().size || MAP_HEX) * (cam().zoom || 1) }; };
+    if (step === 'map') return hex(M.pos);
+    if (step === 'bulbs') { const hd = $('mapHead'), el = hd && hd.querySelector ? hd.querySelector('.mhInk') : null; return gtuBox(el, { x0: 150, y0: 84, x1: 290, y1: 122 }); }
+    if (step === 'chest' || step === 'event' || step === 'shop') return hex(gtuTile(step));
+    if (step === 'fight') return hex(gtuFightTile());
+    return null;
+  }
+  // places the ring, the arrow and the card: the card goes where it covers neither
+  function gtuPlace(step) {
+    const E = S.gtuEl;
+    if (!E) return null;
+    const a = step && !(S.walk && !S.walk.done) ? gtuAim(step) : null;
+    let ring = null, arrow = null;
+    if (a && a.hex) {
+      const R = a.r0 * 1.05;
+      if (a.x > -R && a.x < W + R && a.y > MAP_AREA.y - R * 0.5 && a.y < H + R) {
+        ring = { l: a.x - R, t: a.y - R, w: R * 2, h: R * 2, pill: false };
+        const up = a.y - R - 50 < MAP_AREA.y;
+        arrow = { l: a.x - 18, t: up ? a.y + R + 4 : a.y - R - 50, up };
+      }
+    } else if (a) {
+      ring = { l: a.x0 - 6, t: a.y0 - 6, w: a.x1 - a.x0 + 12, h: a.y1 - a.y0 + 12, pill: true };
+      arrow = { l: (a.x0 + a.x1) / 2 - 18, t: a.y1 + 10, up: true };
+    }
+    // the card: at the bottom unless the ring or the arrow reaches down there, then up under the map head
+    const ch = (!S.headless && E.card.offsetHeight > 0 && E.card.offsetHeight < 500) ? E.card.offsetHeight : GTU.cardH;
+    const lowTop = H - 24 - ch, highTop = 184, highBot = highTop + ch;
+    let y0 = Infinity, y1 = -Infinity;
+    if (ring) { y0 = Math.min(y0, ring.t); y1 = Math.max(y1, ring.t + ring.h); }
+    if (arrow) { y0 = Math.min(y0, arrow.t); y1 = Math.max(y1, arrow.t + 46); }
+    let top = false;
+    if (ring && y1 + GTU.gap > lowTop) {
+      const overLow = y1 + GTU.gap - lowTop, overHigh = highBot + GTU.gap - y0;
+      top = overHigh <= 0 || overHigh < overLow;
+    }
+    const f = (n) => Math.round(n);
+    const sig = (step || '') + '|' + (ring ? [f(ring.l), f(ring.t), f(ring.w), f(ring.h), ring.pill ? 1 : 0].join(',') : '-') + '|' + (arrow ? [f(arrow.l), f(arrow.t), arrow.up ? 1 : 0].join(',') : '-') + '|' + (top ? 'T' : 'B');
+    E.place = { ring, arrow, top, ch, lowTop, highTop };
+    if (sig === E.pos) return E.place;
+    E.pos = sig;
+    try {
+      if (E.ring) {
+        E.ring.className = ring ? 'show' + (ring.pill ? ' pill' : '') : '';
+        if (ring) Object.assign(E.ring.style, { left: f(ring.l) + 'px', top: f(ring.t) + 'px', width: f(ring.w) + 'px', height: f(ring.h) + 'px' });
+      }
+      if (E.arrow) {
+        E.arrow.className = arrow ? 'show' + (arrow.up ? ' up' : '') : '';
+        if (arrow) Object.assign(E.arrow.style, { left: f(arrow.l) + 'px', top: f(arrow.t) + 'px' });
+      }
+      if (step) E.card.classList[top ? 'add' : 'remove']('top');
+    } catch (e) { /* stub */ }
+    return E.place;
+  }
+  // busy: a live guide speaks off the fight (the map card, the inline lines), so the tip cards wait until it is done
+  const gtuBusy = () => !!(S.screen !== 'fight' && gtuRun());
+
+  // ---- the inline line on a page (the chest's capsule, the event, the first reward)
+  function gtuLine(parent, kind) {
+    const run = gtuRun();
+    if (!run || !parent || !parent.appendChild || !GTU_LINES[kind]) return null;
+    const pre = !(run.fights | 0);
+    if (kind === 'prize' ? pre : !pre) return null;   // the chest and the event before the first fight, the prize after it
+    gtuSaid(run)[kind] = 1;
+    const el = h('div', 'gtuLine');
+    el.appendChild(h('div', 'gtuK', gtuKick(kind)));
+    el.appendChild(h('div', 'gtuT', GTU_LINES[kind]));
+    const row = h('div', 'gtuRow');
+    row.appendChild(gtuSkipBtn());
+    el.appendChild(row);
+    parent.appendChild(el);
+    const L = S.gtuLines || (S.gtuLines = []);
+    L.push(el);
+    if (L.length > 8) L.shift();
+    GTX.log.push(kind);
+    return el;
+  }
+
+  // ---- the first fight: the three-card coach, part of the guide
+  function gtuCoachWant() {
+    const run = gtuRun();
+    if (!run || (run.fights | 0) !== 1) return false;
+    const s = gtuSaid(run);
+    if (s.coach) return false;
+    s.coach = 1;
+    GTX.log.push('coach');
+    return true;
+  }
+  function gtuCoachDeco() {
+    const el = $('coach');
+    if (!el) return null;
+    const on = !!gtuRun() && S.coachStep >= 0;
+    if (on && !S.gtuCoachK) {
+      const k = h('div', 'gtuK', '');
+      try { if (el.insertBefore) el.insertBefore(k, el.firstChild || null); else el.appendChild(k); } catch (e) { el.appendChild(k); }
+      const row = el.querySelector ? el.querySelector('.row') : null, x = gtuSkipBtn();
+      try { if (row && row.insertBefore) row.insertBefore(x, row.firstChild || null); else el.appendChild(x); } catch (e) { el.appendChild(x); }
+      S.gtuCoachK = k; S.gtuCoachX = x;
+    }
+    if (on && S.gtuCoachK) i18nText(S.gtuCoachK, gtuKick('coach'));
+    try { el.classList[on ? 'add' : 'remove']('gtuOn'); } catch (e) { /* stub */ }
+    return on;
+  }
+
+  // ---- the end: done (Let's go!) or skipped (any step)
+  function gtuEnd(how) {
+    const run = S.run, g = gtuM();
+    if (g) { g.done = true; g.want = false; saveMeta(); }
+    if (run && run.gtu && typeof run.gtu === 'object' && !run.gtu.end) run.gtu.end = how;
+    if (S.gtuEl) { S.gtuEl.key = ''; gtuCard(null); gtuPlace(null); }
+    for (const el of S.gtuLines || []) { try { if (el.remove) el.remove(); if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el); } catch (e) { /* gone */ } }
+    S.gtuLines = [];
+    if (['map', 'event', 'reward', 'capsule', 'fight', 'shop', 'forge', 'rest'].indexOf(S.screen) >= 0) save();
+    GTX.log.push(how === 1 ? 'done' : 'skip');
+    return true;
+  }
+  function gtuFinish() {
+    if (!gtuRun()) return false;
+    snd('tiltUp', { pitch: 1.1 });
+    return gtuEnd(1);
+  }
+  function gtuSkip() {
+    if (S.coachStep >= 0 && gtuRun()) { S.coachStep = -1; if (S.meta) S.meta.tutorialDone = true; showCoach(); }
+    gtuEnd(2);
+    gtuCoachDeco();
+    return true;
+  }
+
+  // ---- an older profile's offer (once, on the title), and Help's replay
+  function gtuOfferTick(dt) {
+    const g = S.meta && S.meta.guide;
+    if (S.screen === 'title' && !S.attract && g && g.offer && !S.gtuOffer && !(S.headless && !GTU.force) && !(S.meta.bench && S.meta.bench.hello) && !S.bncHello && !UIT.open) {
+      S.gtuOT = (S.gtuOT || 0) + (dt || 0);
+      if (S.gtuOT >= GTU.offerAt) gtuOffer();
+    } else if (S.screen !== 'title') S.gtuOT = 0;
+  }
+  function gtuOffer() {
+    const g = gtuM(), scr = $('scr-title');
+    if (!g || !g.offer || !scr || S.gtuOffer) return null;
+    g.offer = 0;   // once, whatever the answer
+    saveMeta();
+    const sh = dsSheet(scr, 'Guided first run', () => { try { sh.wrap.remove(); } catch (e) { /* gone */ } S.gtuOffer = null; });
+    sh.wrap.className += ' gtuOfferW';
+    sh.body.appendChild(h('div', 'gtuOfferI', '🧭'));
+    sh.body.appendChild(h('div', 'gtuOfferT', 'New: a guided first run'));
+    sh.body.appendChild(h('div', 'sub', 'A coach walks you through the map: a chest, an event, then your first fight. Try it?'));
+    const later = h('button', 'btn ghost', 'Not now');
+    later.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); sh.close(); };
+    const go = h('button', 'btn pri', 'Try it');
+    go.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gtuReplay(); };
+    const row = h('div', 'gtuOfferR');
+    row.appendChild(later); row.appendChild(go);
+    sh.body.appendChild(row);
+    sh.open();
+    S.gtuOffer = sh;
+    sh.go = go; sh.later = later;
+    snd('discover');
+    GTX.log.push('offer');
+    return sh;
+  }
+  // the next run is a guided one (the offer's Try it, Help's button): straight to character select
+  function gtuReplay() {
+    const g = gtuM();
+    if (!g) return false;
+    g.want = true;
+    saveMeta();
+    if (S.gtuOffer) S.gtuOffer.close();
+    showChars();
+    return true;
+  }
+  function gtuHelp(body, back) {
+    if (!body || !body.appendChild || back === 'map' || !S.meta) return null;
+    const c = h('section', 'm1HelpSec gtuHelp');
+    const t = h('h3', null, 'Guided first run');
+    try { t.setAttribute('data-ic', '🧭'); } catch (e) { /* stub */ }
+    c.appendChild(t);
+    c.appendChild(h('p', null, 'New to the Spire? A coach walks you through a chest, an event and your first fight.'));
+    const b = h('button', 'btn go', 'Play the guided run');
+    b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gtuReplay(); };
+    c.appendChild(b);
+    body.appendChild(c);
+    S.gtuHelpBtn = b;
+    return c;
+  }
+
+  // GAME.guide: the tests and the screenshot drivers
+  function GTU_API() {
+    return {
+      K: GTU, LINES: GTU_LINES, ORDER: GTU_ORDER, fix: gtuMetaFix, wants: gtuWants, runOk: gtuRunOk, newRun: gtuNewRun, newMap: gtuNewMap,
+      tile: gtuTile, step: gtuStep, num: gtuNum, tick: gtuTick, next: gtuNext, skip: gtuSkip, finish: gtuFinish, aim: gtuAim, place: gtuPlace,
+      line: gtuLine, coachWant: gtuCoachWant, offer: gtuOffer, replay: gtuReplay, busy: gtuBusy, log: GTX.log,
+      get force() { return GTU.force; }, set force(v) { GTU.force = !!v; },
+      get meta() { return gtuM(); }, get run() { return gtuRun(); }, get el() { return S.gtuEl || null; }, get offerOn() { return S.gtuOffer || null; },
+      get lines() { return S.gtuLines || []; }, get helpBtn() { return S.gtuHelpBtn || null; }, get coachX() { return S.gtuCoachX || null; },
+    };
+  }
+  // ================================================================ /GUIDE
+
+  // ================================================================ (round 29) CUP: magnet power and a wider chute
+  /* DESIGN.md "Magnet power and a wider chute (round 29)". Two ranked claw parts, DATA.CLAW_UPGRADES coil and chute,
+     both cup: true so the common rolls (towers, capsules, the boss's random three, the Boss Rush draft) never see them
+     and every older seed rolls as before.
+     - Coil Winding (Magnet Crane only, ranks 1..3): the rig reads cfg.coil (PHYS.COIL: the hold reaches further, the
+       field +10% a rank, loose pieces drop less, rank 3 locks the face). Offered only on special occasions: an elite's
+       reward screen (an extra choice card, once an act), the forge, the boss's spare parts box (always in it) and the
+       Coil Winder event (swapped in on an event tile, 30%, once an act).
+     - Wider Chute (every claw, ranks 1..4, +5 px a rank, 64 -> 84): the fight's cabinet is built with cupChuteW(run)
+       and everything in a fight that reads the chute asks cupCW() (the live cabinet's width). Claw School, Duo, Gary's
+       claw-off and the Boss Rush keep CAB.chuteW (64): a rush or Duo run reads rank 0. Offered in the forge (instead of
+       an item upgrade) and at the Trading Post (a gold service, once a visit).
+     The ranks live on run.claw (coil, chute and ups.coil / ups.chute, like every claw part), so the run save keeps them;
+     an old save has neither (rank 0). run.cup {eliteAct, evAct, evN, flare} remembers the occasions. */
+  const CUP = { STEP: 5, CHUTE_MAX: 4, COIL_MAX: 3, EV_P: 0.3, TRD_BASE: 30, TRD_STEP: 10, ROMAN: ['', 'I', 'II', 'III', 'IV'], FLARE: 2.4 };
+  const cupDef = (id) => tbl('CLAW_UPGRADES')[id] || null;
+  const cupIs = (id) => !!(cupDef(id) && cupDef(id).cup);
+  const cupOff = (run) => !run || !!run.duo || !!S.duo;   // a Duo seat's run never has them
+  // the run's occasions (made on first use, so a run that never meets one saves nothing new)
+  function cupRun(run) { run = run || S.run; if (!run) return null; if (!run.cup || typeof run.cup !== 'object') run.cup = {}; return run.cup; }
+  // the ranks the run plays with (0 when the part does not apply)
+  function cupCoil(run) {
+    run = run || S.run;
+    if (cupOff(run) || !run.claw || runClawType(run) !== 'magnet') return 0;
+    return U.clamp(Math.round(+run.claw.coil || 0), 0, CUP.COIL_MAX);
+  }
+  function cupChute(run) {
+    run = run || S.run;
+    if (cupOff(run) || !run.claw || rushOf(run)) return 0;
+    return U.clamp(Math.round(+run.claw.chute || 0), 0, CUP.CHUTE_MAX);
+  }
+  const cupChuteW = (run) => CAB.chuteW + CUP.STEP * cupChute(run);
+  // The chute of the fight on screen: the live cabinet's width (the run's before one is built).
+  function cupCW() { const b = FS && FS.cabinet && FS.cabinet.bounds; return b && b.chuteW > 0 ? b.chuteW : cupChuteW(); }
+  // Can this part be bolted on now? (not maxed, fits the claw, the run plays it)
+  function cupCan(id) {
+    const run = S.run, d = cupDef(id);
+    if (!run || !run.claw || !d || !d.cup || cupOff(run)) return false;
+    if (d.only && runClawType(run) !== d.only) return false;
+    if (id === 'chute' && rushOf(run)) return false;
+    return upgradeCount(id) < (d.max || 1);
+  }
+  const cupRank = (id) => (id === 'coil' ? cupCoil() : id === 'chute' ? cupChute() : 0);
+  // The coil's numbers at rank r (PHYS.COIL): the hold's half distance, the field, a loose piece's drop chance.
+  function cupCoilNums(r) {
+    const P = X.PHYS, K = P && P.COIL, RG = P && P.RIG;
+    if (!K || !RG) return { fade: 22, field: 0, drop: 55 };
+    return { fade: RG.magFade + K.fadeAdd[r], field: Math.round(K.field * r * 100), drop: Math.round(RG.magDrop * K.dropK[r] * 100) };
+  }
+  // The "now -> next" lines of a part's card.
+  function cupLines(id, r) {
+    if (id === 'chute') return [`Chute ${CAB.chuteW + CUP.STEP * r} → ${CAB.chuteW + CUP.STEP * (r + 1)} px`];
+    const a = cupCoilNums(r), b = cupCoilNums(Math.min(CUP.COIL_MAX, r + 1));
+    const out = [`Hold ${a.fade} → ${b.fade} px`, `Field +${a.field}% → +${b.field}%`, `Drop ${a.drop}% → ${b.drop}%`];
+    if (r + 1 >= CUP.COIL_MAX) out.push('Face lock: what touches the face never tears off.');
+    return out;
+  }
+  // A part's card (the reward screen, the forge, the spare parts box): ribbon, icon, name and rank, the text, now -> next, pips.
+  function cupCard(id, o) {
+    o = o || {};
+    const d = cupDef(id), r = upgradeCount(id), max = d.max || 1;
+    const card = h('div', 'card rr-r cupCard cup-' + id + (o.cls ? ' ' + o.cls : ''));
+    if (o.deal != null) dealIn(card, o.deal);
+    card.appendChild(h('div', 'rar cupRib', o.ribbon || (id === 'coil' ? 'MAGNET PART' : 'CLAW PART')));
+    card.appendChild(h('div', 'big cupIc', d.icon || '⚙'));
+    const nm = h('div', 'name');
+    nm.appendChild(h('span', null, d.name));
+    nm.appendChild(h('span', 'cupRk', CUP.ROMAN[Math.min(max, r + 1)] || String(r + 1)));
+    card.appendChild(nm);
+    card.appendChild(h('div', 'text', d.text || ''));
+    const nx = h('div', 'cupNext');
+    for (const l of cupLines(id, r)) nx.appendChild(h('div', null, l));
+    card.appendChild(nx);
+    const pips = h('div', 'cupPips');
+    for (let i = 0; i < max; i++) pips.appendChild(h('i', i < r ? 'on' : i === r ? 'nx' : null));
+    card.appendChild(pips);
+    const fn = () => { if (o.onPick) o.onPick(); };
+    card.onclick = fn;
+    S.ui.buttons.push({ el: card, fn, label: d.name, disabled: !!o.disabled });
+    return card;
+  }
+  // applyClawUpgrade's tail: the moment. A burst over the screen (sparks, the icon, the new rank), a crackle, and the
+  // next fight's bell shows it off (run.cup.flare: the magnet's field lines flare, the chute glows wider).
+  function cupGot(id) {
+    const run = S.run;
+    if (!run || !cupIs(id)) return;
+    const C = cupRun(run);
+    C.flare = Object.assign({}, C.flare && typeof C.flare === 'object' ? C.flare : {}, { [id]: 1 });
+    if (id === 'coil') { snd('secZap', { vol: 0.7 }); snd('magZap', { pitch: 1.2 }); } else snd('clawCoin', { pitch: 0.8 });
+    haptic('clamp');
+    cupBurst(id);
+  }
+  function cupBurst(id) {
+    const st = $('stage'), d = cupDef(id);
+    if (!st || !d) return null;
+    if (S.cupBurst && S.cupBurst.parentNode) S.cupBurst.parentNode.removeChild(S.cupBurst);
+    const el = h('div', 'cupBurst cupB-' + id);
+    el.appendChild(h('div', 'cupBIc', d.icon || '⚙'));
+    el.appendChild(h('div', 'cupBT', d.name));
+    el.appendChild(h('div', 'cupBR', id === 'chute' ? `Chute ${cupChuteW()} px` : `Coil rank ${cupCoil()} of ${CUP.COIL_MAX}`));
+    for (let i = 0; i < 16; i++) {
+      const s = h('i', 'cupSpark');
+      try { s.style.setProperty('--a', (i * 22.5 + (i % 3) * 7) + 'deg'); s.style.setProperty('--d', (60 + (i * 37) % 70) + 'px'); s.style.animationDelay = ((i % 4) * 0.04).toFixed(2) + 's'; } catch (e) { /* stub */ }
+      el.appendChild(s);
+    }
+    st.appendChild(el);
+    S.cupBurst = el;
+    if (!S.headless) setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); if (S.cupBurst === el) S.cupBurst = null; }, 1800);
+    return el;
+  }
+  // ---- the occasions
+  // endFight: an elite hands over a Coil Winding card next to its items, once an act (taken or not).
+  function cupEliteOffer(rw) {
+    const run = S.run;
+    if (!run || !rw || rw.tier !== 'elite' || rushOf(run) || !cupCan('coil')) return;
+    const C = cupRun(run);
+    if (C.eliteAct === run.act) return;
+    C.eliteAct = run.act;
+    rw.cup = { id: 'coil', got: false };
+  }
+  // showReward: the extra choice card (taking it is the pick: no item then).
+  function cupRewardCard(cards, rw, sub) {
+    if (!rw || !rw.cup || rw.cup.got || !cupCan(rw.cup.id)) return null;
+    if (sub) i18nText(sub, 'Pick one item for your bin, or wind the magnet tighter.');
+    const card = cupCard(rw.cup.id, { deal: (rw.items || []).length, ribbon: 'ELITE BONUS', cls: 'cupElite', onPick: () => {
+      if (rw.cup.got) return;
+      if (!applyClawUpgrade(rw.cup.id)) { toast('Cannot apply that.'); return; }
+      rw.cup.got = true;
+      snd('upgrade'); toast(`Claw upgraded: ${cupDef(rw.cup.id).name}.`);
+      afterReward(rw);
+    } });
+    cards.appendChild(card);
+    if (cards.classList && cards.children && cards.children.length === 4) cards.classList.add('n4');
+    return card;
+  }
+  // The boss's spare parts box: Coil Winding is always in it (on top of the random three) while it can go on.
+  function cupParts(pick) {
+    const out = (pick || []).slice();
+    if (cupCan('coil') && out.indexOf('coil') < 0) out.push('coil');
+    return out;
+  }
+  // The forge: the claw parts that fit, free, instead of an item upgrade (the forge does one thing a visit).
+  function cupForgeCards(cards) {
+    if (!cards || !S.run) return;
+    for (const id of ['coil', 'chute']) {
+      if (!cupCan(id)) continue;
+      cards.appendChild(cupCard(id, { cls: 'cupForge', onPick: () => {
+        if (FE.beat) return;
+        if (!applyClawUpgrade(id)) { toast('Cannot apply that.'); return; }
+        snd('upgrade'); toast(`Claw upgraded: ${cupDef(id).name}.`);
+        feelForgeStrike(null);
+        feelLeave('forge', toMap, 1.7);
+      } }));
+    }
+  }
+  // pickEvent: in a Magnet Crane run an event tile is now and then the Coil Winder (its own seeded stream: no other roll moves).
+  function cupEventPick() {
+    const run = S.run;
+    if (!run || !cupCan('coil') || !tbl('EVENTS').coil_winder) return null;
+    const C = cupRun(run);
+    if (C.evAct === run.act) return null;
+    C.evN = (C.evN | 0) + 1;
+    if (U.rng(U.hashStr(run.seed + ':cup:ev:' + run.act + ':' + C.evN))() >= CUP.EV_P) return null;
+    C.evAct = run.act;
+    if (run.seenEvents) run.seenEvents.coil_winder = 1;
+    return 'coil_winder';
+  }
+  // The Trading Post: Rocco fits a wider chute for gold, once a visit.
+  const cupTrdPrice = () => CUP.TRD_BASE + CUP.TRD_STEP * cupChute();
+  function cupTrdEl() {
+    const T = S.trd, run = S.run;
+    if (!T || !T.tile || !run || !cupCan('chute')) return null;
+    const c = T.tile.content || (T.tile.content = {}), done = !!c.cupChute, price = cupTrdPrice(), w = cupChuteW();
+    const card = h('div', 'trdOffer cupTrd' + (done ? ' done' : ''));
+    try { card.style.setProperty('--tc', '#ffb347'); } catch (e) { /* stub */ }
+    const head = h('div', 'trdHead');
+    head.appendChild(h('span', 'trdKind', 'CHUTE FITTING'));
+    card.appendChild(head);
+    const row = h('div', 'trdRow cupTrdRow');
+    row.appendChild(h('div', 'cupTrdIc', cupDef('chute').icon));
+    const col = h('div', 'cupTrdTx');
+    col.appendChild(h('div', 'trdNm', cupDef('chute').name));
+    col.appendChild(h('div', 'trdRule', `Chute ${w} → ${w + CUP.STEP} px`));
+    row.appendChild(col);
+    const b = btn(done ? 'FITTED' : `Fit for ${price} gold`, () => cupTrdBuy(), 'pri trdGo');
+    const no = done || run.gold < price;
+    if (no) { b.disabled = true; const reg = S.ui.buttons[S.ui.buttons.length - 1]; if (reg && reg.el === b) reg.disabled = true; }
+    row.appendChild(b);
+    card.appendChild(row);
+    return card;
+  }
+  function cupTrdBuy() {
+    const T = S.trd, run = S.run;
+    if (!T || !T.tile || !run || T.phase !== 'idle') return false;
+    const c = T.tile.content || (T.tile.content = {}), price = cupTrdPrice();
+    if (c.cupChute || !cupCan('chute')) return false;
+    if (run.gold < price) { toast('Not enough gold.'); return false; }
+    if (!applyClawUpgrade('chute')) { toast('That part does not fit.'); return false; }
+    run.gold -= price;
+    c.cupChute = 1;
+    snd('buy'); toast(`Claw upgraded: ${cupDef('chute').name}.`);
+    save();
+    trdDom();
+    return true;
+  }
+  // ---- the rank shown: the bin's claw tags, the portrait's claw line
+  // every claw part the run has, with its rank: {id, icon, name, lv ('II', '+10 px' or ''), cup}
+  function cupTagList() {
+    const out = [];
+    if (!S.run || !S.run.claw) return out;
+    for (const id of Object.keys(tbl('CLAW_UPGRADES'))) {
+      const d = cupDef(id), n = upgradeCount(id);
+      if (!n || (id === 'coil' && !cupCoil()) || (id === 'chute' && !cupChute())) continue;
+      const lv = id === 'chute' ? `+${CUP.STEP * cupChute()} px` : (d.max || 1) > 1 ? (CUP.ROMAN[n] || String(n)) : '';
+      out.push({ id, icon: d.icon || '', name: d.name, lv, cup: !!d.cup });
+    }
+    return out;
+  }
+  function cupBinTags(b, o) {
+    if (!b || !S.run || (o && o.mode && o.mode !== 'view')) return null;
+    const list = cupTagList();
+    if (!list.length) return null;
+    const row = h('div', 'row cupTags');
+    row.appendChild(h('span', 'cupTagK', 'Claw parts'));
+    for (const t of list) {
+      const tag = h('span', 'tag ' + (t.cup ? 'cupTag cupT-' + t.id : 'cyan'));
+      tag.appendChild(h('span', null, t.icon + ' ' + t.name));
+      if (t.lv) tag.appendChild(h('b', null, ' ' + t.lv));
+      row.appendChild(tag);
+    }
+    b.appendChild(row);
+    return row;
+  }
+  // the portrait's popover: a line each (their own text nodes, so each translates)
+  function cupClawLine() {
+    let s = '';
+    if (cupCoil()) s += `<br>${cupDef('coil').icon} Coil rank ${cupCoil()} of ${CUP.COIL_MAX}`;
+    if (cupChute()) s += `<br>${cupDef('chute').icon} Chute ${cupChuteW()} px`;
+    return s;
+  }
+  // ---- in the fight: the bell after an upgrade shows it off; the chute glows wider, the field lines flare
+  function cupFightStart() {
+    const run = S.run, C = run && run.cup;
+    if (!FS || !C || !C.flare || typeof C.flare !== 'object') return;
+    const fl = C.flare;
+    C.flare = null;
+    const coil = !!(fl.coil && cupCoil()), chute = !!(fl.chute && cupChute());
+    if (!coil && !chute) return;
+    FS.cupFl = { coil, chute, t0: S.t };
+    const cx = CAB.x + CAB.w - cupCW() - 20;   // over the divider, so the words stay on the glass
+    if (chute) {
+      FS.chuteFlash = 0.35;
+      fx().text(cx, CAB.y + CAB.h - 150, `CHUTE ${cupCW()} PX`, '#ffb347', { size: 15 });
+    }
+    if (coil) {
+      const rig = FS.rig;
+      if (rig) fx().emit('sparks', CAB.x + rig.x, CAB.y + rig.y + 20, { col: '#2ee6d6', n: 1.2, power: 1.2 });
+      fx().text(CAB.x + (rig ? rig.x : CAB.w / 2), CAB.y + 150, `COIL ${CUP.ROMAN[cupCoil()]}`, '#2ee6d6', { size: 16 });   // under the parked drum
+      snd('magZap', { pitch: 1.3 });
+    }
+  }
+  // 0..1 while the bell's flare lasts
+  function cupFlK(k) {
+    const f = FS && FS.cupFl;
+    if (!f || (k && !f[k])) return 0;
+    const u = (S.t - f.t0) / CUP.FLARE;
+    if (u >= 1 || u < 0) { if (u >= 1) FS.cupFl = null; return 0; }
+    return Math.sin(Math.min(1, u * 4) * Math.PI / 2) * (1 - u * u);
+  }
+  function cupDrawIn(ctx, t) {
+    CLAWJ.cupFl = fx().reduced ? Math.min(0.5, cupFlK('coil')) : cupFlK('coil');
+    const k = cupFlK('chute');
+    if (k <= 0 || !FS || !FS.cabinet) return;
+    const b = FS.cabinet.bounds, x0 = CAB.x + b.chuteX, w = b.chuteW;
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t * 40;
+    ctx.strokeRect(x0 + 2, CAB.y + b.dividerTop, w - 4, CAB.h - b.dividerTop - 2);
+    ctx.setLineDash([]);
+    // two arrows on the divider: it moved over
+    ctx.fillStyle = '#ffb347';
+    for (const yy of [b.dividerTop + 40, b.dividerTop + 110]) {
+      const ax = x0 - 4 - Math.sin(t * 8) * 3, ay = CAB.y + yy;
+      ctx.beginPath(); ctx.moveTo(ax - 12, ay); ctx.lineTo(ax, ay - 8); ctx.lineTo(ax, ay + 8); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // GAME.cup: the tests and the screenshot drivers
+  function CUP_API() {
+    return {
+      K: CUP, coil: cupCoil, chute: cupChute, chuteW: cupChuteW, cw: cupCW, can: cupCan, rank: cupRank, lines: cupLines, card: cupCard,
+      got: cupGot, burst: cupBurst, eliteOffer: cupEliteOffer, parts: cupParts, eventPick: cupEventPick, trdPrice: cupTrdPrice, trdBuy: cupTrdBuy,
+      tags: cupTagList, clawLine: cupClawLine, fightStart: cupFightStart, flK: cupFlK, nums: cupCoilNums, pickEvent, open: openClawUpgrades,
+      get burstEl() { return S.cupBurst || null; },
+    };
+  }
+  // ================================================================ /CUP
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -29822,8 +30618,12 @@ const GAME = (() => {
     qa17: QA17_API(),
     // STX (round 26): the status strip under the top bar (DESIGN.md "The status strip (round 26)")
     stx: STX_API(),
+    // (round 29) CUP: magnet power and a wider chute (DESIGN.md "Magnet power and a wider chute (round 29)")
+    cup: CUP_API(),
     // BENCH (round 28): bolts, upgrades and unlock packs (DESIGN.md "The Upgrade Bench (round 28)")
     bench: BNC_API(), showBench,
+    // GUIDE (round 29): the guided first run (DESIGN.md "The guided first run (round 29)")
+    guide: GTU_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

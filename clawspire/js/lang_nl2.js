@@ -1679,3 +1679,73 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /BENCH round 28
+// ---------------------------------------------------------------- GUIDE (round 29): the guided first run
+// DESIGN.md "The guided first run (round 29)": the coach on the map (de rondleiding), its inline lines on the capsule,
+// event and reward pages, the fight coach's kicker and Skip, the title's offer and the Help card. Short, plain words.
+I18N.add('nl', {
+"ui": {
+"This is the Clawspire map. Tap a lit tile to walk there.": "Dit is de kaart van de Clawspire. Tik op een verlicht vakje om erheen te lopen.",
+"Dark tiles cost a bulb to light. Here are your bulbs.": "Een donker vakje verlichten kost een lampje. Hier zie je je lampjes.",
+"Before you fight, get stronger. Open this chest first!": "Word sterker voor je gaat vechten. Open eerst deze kist!",
+"Relics are permanent power for this run.": "Een relikwie geeft je kracht voor de hele run.",
+"This prize goes into your bin, ready for your next fights.": "Deze prijs gaat in je bak, klaar voor je volgende gevechten.",
+"Now this question mark: a surprise event. Could be a gift, a trade or a gamble.": "Nu dit vraagteken: een verrassing. Misschien een cadeau, een ruil of een gok.",
+"Pick one. The chips show what you give and what you get.": "Kies er één. De labels tonen wat je geeft en wat je krijgt.",
+"Events are worth a look: most choices make you stronger.": "Gebeurtenissen lonen: de meeste keuzes maken je sterker.",
+"Shops sell prizes for your bin. Drop in when you have gold.": "Winkels verkopen prijzen voor je bak. Loop binnen als je goud hebt.",
+"The forge upgrades one of your prizes. Worth a visit!": "De smidse maakt een van je prijzen sterker. Zeker een bezoekje waard!",
+"Ready? Fights are the crossed swords. Win them for gold and new prizes.": "Klaar? Gevechten zijn de gekruiste zwaarden. Win ze voor goud en nieuwe prijzen.",
+"Pick a prize: it goes into your bin and you can grab it in the next fights.": "Kies een prijs: die gaat in je bak en je kunt hem pakken in de volgende gevechten.",
+"That is the gist!": "Zo werkt het!",
+"Explore first and power up, then fight.": "Eerst verkennen en sterker worden, dan vechten.",
+"Elites give relics. The boss waits at the top of the map.": "Elites geven relikwieën. De baas wacht bovenaan de kaart.",
+"After a run, spend your bolts at the Upgrade Bench to get stronger.": "Geef na een run je bouten uit aan de Werkbank om sterker te worden.",
+"Guide {n} of {n2}": "Rondleiding {n} van {n2}",
+"Skip tutorial": "Uitleg overslaan",
+"Let's go!": "Aan de slag!",
+"Guided first run": "Eerste run met uitleg",
+"New: a guided first run": "Nieuw: een eerste run met uitleg",
+"A coach walks you through the map: a chest, an event, then your first fight. Try it?": "Een coach neemt je mee over de kaart: een kist, een gebeurtenis en dan je eerste gevecht. Proberen?",
+"Try it": "Proberen",
+"New to the Spire? A coach walks you through a chest, an event and your first fight.": "Nieuw in de Spire? Een coach neemt je mee langs een kist, een gebeurtenis en je eerste gevecht.",
+"Play the guided run": "Speel de run met uitleg"
+}
+});
+// ---------------------------------------------------------------- /GUIDE round 29
+// ---------------------------------------------------------------- CUP (round 29): magnet power and a wider chute
+// DESIGN.md "Magnet power and a wider chute (round 29)": Coil Winding (Spoelwikkeling, the Magnet Crane's own part) and
+// Wider Chute (Bredere Goot): their cards, the elite's bonus card, the burst, the Trading Post's fitting, the bin's
+// claw tags, the portrait's lines, the canvas words and the Coil Winder event (De Spoelwikkelaar).
+I18N.add('nl', {
+"ui": {
+"Coil Winding": "Spoelwikkeling",
+"Wider Chute": "Bredere Goot",
+"Magnet Crane only. More copper on the coil: a longer hold, a stronger field, fewer drops.": "Alleen voor de Magneetkraan. Meer koper op de spoel: langer houvast, een sterker veld, minder vallers.",
+"The prize chute opens 5 px wider. A little more falls in.": "De prijzengoot gaat 5 px wijder open. Er valt net iets meer in.",
+"MAGNET PART": "MAGNEETONDERDEEL",
+"ELITE BONUS": "ELITEBONUS",
+"CHUTE FITTING": "GOOT VERBREDEN",
+"FITTED": "GEPLAATST",
+"Fit for {n} gold": "Voor {n} goud",
+"Chute {n} → {n2} px": "Goot {n} → {n2} px",
+"Hold {n} → {n2} px": "Houvast {n} → {n2} px",
+"Field +{n}% → +{n2}%": "Veld +{n}% → +{n2}%",
+"Drop {n}% → {n2}%": "Valkans {n}% → {n2}%",
+"Face lock: what touches the face never tears off.": "Vaste kern: wat tegen de magneet zit, scheurt nooit meer los.",
+"Coil rank {n} of {n2}": "Spoelrang {n} van {n2}",
+"Chute {n} px": "Goot {n} px",
+"CHUTE {n} PX": "GOOT {n} PX",
+"COIL I": "SPOEL I",
+"COIL II": "SPOEL II",
+"COIL III": "SPOEL III",
+"Pick one item for your bin, or wind the magnet tighter.": "Kies één voorwerp voor je bak, of wikkel de magneet strakker.",
+"Claw parts": "Grijperonderdelen",
+"The Coil Winder": "De Spoelwikkelaar",
+"A little robot with a spool of copper wire sits by a dead cabinet. It looks at your Magnet Crane and its eyes light up. \"Nice drum. I can wind it tighter.\"": "Een robotje met een klos koperdraad zit naast een dode kast. Het kijkt naar je Magneetkraan en zijn ogen lichten op. \"Mooie trommel. Die kan ik strakker wikkelen.\"",
+"Let it wind the coil.": "Laat het de spoel wikkelen.",
+"Coil Winding +1. Lose 6 HP (it zaps).": "Spoelwikkeling +1. Verlies 6 HP (het vonkt).",
+"Pay it in copper.": "Betaal het in koper.",
+"Lose 45 gold. Coil Winding +1.": "Verlies 45 goud. Spoelwikkeling +1."
+}
+});
+// ---------------------------------------------------------------- /CUP round 29

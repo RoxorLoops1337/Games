@@ -346,7 +346,9 @@ DATA.CLAW_UPGRADES[id] = { id, name, icon, text, max /*times applicable*/, cost 
 // claw config object: { grabs:3, width:1, grip:1, speed:1, prongs:2, rubber:0, magnet:0 }
 ```
 Required: `grabs` (+1, max 2), `width` (+0.18, max 3), `grip` (+0.35, max 3), `speed` (+0.3, max 2),
-`prongs` (2→3, max 1), `rubber` (max 1), `magnet` (max 1).
+`prongs` (2→3, max 1), `rubber` (max 1), `magnet` (max 1). Round 29 adds two `cup: true` parts with their own
+occasions (`coil`: Coil Winding, the Magnet Crane only (`only: 'magnet'`), max 3, `claw.coil`; `chute`: Wider Chute,
+max 4, `claw.chute`); see "Magnet power and a wider chute (round 29)".
 
 ```js
 DATA.TOOLS[id] = { id, name, icon, text, kind: 'line'|'ring'|'patch' }   // flare, lantern, kite; MAP does the geometry by kind. DATA.BRUSHES === DATA.TOOLS (old name)
@@ -1641,9 +1643,8 @@ strength, so on a metal-heavy bin one drop lifted nearly everything (30 piece me
 piece has a hold: 1 at the face, halving every `RIG.magFade` (22) px its nearest edge sits further out; a chained piece under
 `RIG.magMin` (0.2) does not stick. A weak hold tears sooner on a swing (tear limit x (0.35 + 0.65 hold)) and may let go at the
 top of the lift ((1 - hold) x `RIG.magDrop` 0.55, plus the old heavy check against cap x hold). Same heap: about 8 stuck and
-4 delivered per drop. Gold, copper and brass (`def.nomag`: Lucky Coin, Lucky Penny, Arcade Token, Midas Coin, Hoard Coin,
-Golden Egg, Golden Idol, Golden Dice) stay `metal` for builds and combos but the magnet (and the Electromagnet upgrade) cannot
-lift them; Gary's magnet claw-off counts only magnetic metal.
+4 delivered per drop. (Round 29: coins and golden things are magnetic again, the owner wants them on the magnet. The
+`def.nomag` flag stays supported by physics, `isMetal`, the demo aim and Gary's magnet pile, but no item sets it.)
 
 **Ramp wedges (round 29, owner: "those things get so hard stuck").** The two floor ramps (`slopeL`, `slopeR`) are thin
 segments over a hollow wedge. A prize shoved or dragged through one (the magnet's weld, a hard push, a prize dropped back low
@@ -8523,3 +8524,191 @@ NEW ribbon once, the new items and relics in a fight), i18n ("bench:": every lin
 English). Two older tests moved with the pools: the combo booster test expects a booster in a pack (the Encore
 Machine) to wait for it, and the Neon Depths dive test plays a profile that owns every pack (its physics checks were
 tuned on the full relic pool). Screenshots: scratchpad `r28bench/shots.mjs` (`r28_*`).
+
+## Magnet power and a wider chute (round 29)
+
+Owner: "the magnet should be able to upgrade at special occasions through the run" and "the width of the prize chute
+should be upgradable with tiny amounts". Two ranked claw parts in `DATA.CLAW_UPGRADES`, both `cup: true`: the common
+rolls (`openClawUpgrades`, so capsules, the boss's random three and the Boss Rush draft; the map's tower bonus; the
+map's and `pickEvent`'s event rolls) skip `cup` entries, so every older seed rolls exactly as before. Code: physics.js
+(`PHYS.COIL`, `cfg.coil`), data.js (the two parts, the `coil_winder` event), map.js (two filters), game.js (the CUP
+block before `state()`, `GAME.cup`), render.js (the drum's windings, the field flare), index.html (`<style
+id="cup-css">`), lang_nl2.js (the CUP block).
+
+### Coil Winding (`coil`, Magnet Crane only, ranks 1 to 3)
+
+The rig reads `cfg.coil` (0..3, `clawRig({coil})`, `setConfig({coil})`); the shared `RIG` numbers never change and
+rank 0 is the round 28 magnet bit for bit.
+
+| rank | hold halves every (`magFade` + `fadeAdd`) | field reach and pull | a loose piece's drop at the top (`magDrop` x `dropK`) | face |
+| --- | --- | --- | --- | --- |
+| 0 | 22 px | x1.0 | 0.55 | the heavy roll as ever |
+| 1 | 27 px | x1.1 | 0.49 | |
+| 2 | 32 px | x1.2 | 0.43 | |
+| 3 | 38 px | x1.3 | 0.37 | locked: a piece on the face (hold 1) skips the heavy tear roll |
+
+`magMin` (0.2) stays: a further piece still does not stick. Measured (physics suite, a 30 piece metal heap, 6 drops,
+grip 1.6): stuck at once 51 / 63 / 65 / 83 for ranks 0 to 3 against 163 for the old whole-bin chain, delivered
+31 / 37 / 37 / 42 (old 62). A heavy metal tower on a weak magnet (grip 0.75, 12 grabs): 3 slips at rank 0, none at 3.
+
+Offered only on special occasions, never in a common roll:
+- **An elite's reward**: `cupEliteOffer` (endFight, after the combo relic's offer) puts `rw.cup` on the act's first
+  elite reward: an extra choice card after the items (ribbon ELITE BONUS, cyan glow); taking it is the pick (no item
+  then), Skip stays last. Once an act (`run.cup.eliteAct`), taken or not; saved with the reward (a reload keeps it).
+- **The forge**: a Coil Winding card after the item and EVOLVE cards, free, instead of an item upgrade (the visit).
+- **The boss's spare parts box** (and an Endless loop's): `cupParts` adds Coil Winding to the random three.
+- **The Coil Winder** (`EVENTS.coil_winder`, `cup: true`, art `tinker`): "Let it wind the coil" (Coil Winding +1, lose
+  6 HP), "Pay it in copper" (lose 45 gold, gated), Walk away. `cupEventPick` (first thing in `pickEvent`) swaps it in
+  on an event tile with chance 0.3, once an act, on its own seeded stream (`seed:cup:ev:act:n`, never `rngFor`, so no
+  other roll of the run moves).
+All four need `cupCan('coil')`: a Magnet Crane run (`runClawType`), rank under 3, not a Duo seat. `applyClawUpgrade`
+refuses a `cup` part that does not fit (a classic claw gets nothing; a tower or capsule never rolls one anyway).
+
+### Wider Chute (`chute`, every claw, ranks 1 to 4)
+
++5 px a rank: 64, 69, 74, 79, 84 (`cupChuteW(run) = CAB.chuteW + 5 x rank`). Offered in the forge (a card, free,
+instead of an item upgrade) and at the Trading Post: Rocco's CHUTE FITTING row under the trades, 30 + 10 x rank gold
+(30, 40, 50, 60), once a visit (`tile.content.cupChute`). `cost` 50 (the cheapest part; the shop never sells parts).
+
+The fight's cabinet is built with the run's width (`buildWorld`), and everything in a fight that reads the chute asks
+`cupCW()` (the live cabinet's `bounds.chuteW`): physics (the divider, the right ramp and its `slopeInside` guard, the
+floor clamp and `strandWatch`'s bin edge all follow `chuteX = w - chuteW`), the rig (`buildRig`: home at the bin's
+middle, the carry target at the chute's middle), the render config (`cfg.chuteW`, `cfg.chuteX`: the chute column,
+the divider, the PRIZE label, the cached back layer keys on it), the Back Room's `SCB.chuteW`, and the call sites in
+`mutBelt`, `mutDark` (Blackout's chute glow), `cr8TurretEv` (parts fly from the chute), `nearMissAfterGrab`, `landSpot`,
+`binWidth`, `binW`, the ice lid (`frost`), `clampBinX`, the delivery's `chuteMid`, the item name text, the pet's toss
+to the chute, `winGift`, the resolve row's `cmid`, the chute coin `cx`, `legChuteX` and the black hole's `bx`.
+**Left at 64 on purpose:** Claw School and the Practice Cabinet (`schBuild`, `SCH_CFG`), Duo (co-op seats read rank 0;
+the versus claw-off's own cabinet, `DUO_CFG`), Gary's claw-off (`stoOffStart`, `STO_CFG`; its player rig gets no
+coil either) and the Boss Rush (a rush run reads rank 0 and cannot take the part), plus the picker's demo cabinet
+and the intro.
+
+Safety: the physics suite checks the divider, the right ramp (it still meets the divider: its high end at
+`chuteX - 6`), the clamp, `inChute` and the rig for every width; 48 prizes slipping near the mouth land in the chute
+22 / 27 / 35 times at 64 / 74 / 84 px; marbles dropped on the divider's cap roll off; the round 23 stress (12 drops,
+2 seeds, classic, magnet at coil 3, hand, scoop, hook, twin) at 84 px leaves nothing NaN, outside the glass, hanging
+or on the divider. The game suite plays 6 real drops for the same claws at 84 px.
+
+### The moment and where the rank shows
+
+`applyClawUpgrade` calls `cupGot` for a `cup` part: a DOM burst over the screen (`.cupBurst`: the icon pops in a ring
+of 16 sparks, the name, "Coil rank N of 3" or "Chute N px"; calm keeps it without sparks), a crackle (`secZap` and
+`magZap`, or the coin clunk for the chute), a buzz, and `run.cup.flare` for the next fight's bell (`cupFightStart`):
+the chute's dashed gold outline and two arrows on the divider, "CHUTE N PX"; the magnet's field lines flare out of
+the drum for 2.4 s (`J.cupFl`, dashed cyan dipole loops, arcs, a glow), "COIL II", sparks. The rank shows on the drum
+(one copper winding round it a rank, glowing when live), on the part cards (a rank badge, "now -> next" lines: Hold,
+Field, Drop and the face lock; Chute; pips), in the bin's view (a "Claw parts" tag row with every part and its rank)
+and in the portrait's popover (a line each: "Coil rank N of 3", "Chute N px").
+
+### Save fields, API, tests
+
+Run `claw.coil`, `claw.chute` (and `claw.ups.coil`, `claw.ups.chute` like every part), `cup {eliteAct, evAct, evN,
+flare}`; a reward may carry `cup {id, got}`; a trader tile `content.cupChute`. An old save has none of them: rank 0, a
+64 px chute, both parts still to come. No key was renamed. `GAME.cup = {K, coil, chute, chuteW, cw, can, rank, lines,
+card, got, burst, eliteOffer, parts, eventPick, trdPrice, trdBuy, tags, clawLine, fightStart, flK, nums, pickEvent,
+open, burstEl}`, `PHYS.COIL`. Tests ("cup:"): physics (the ranks' numbers, rank 0 bit for bit, the heap per rank
+against the old chain, the field's reach, the face lock, the geometry for every width, the mouth, the divider's cap,
+the 84 px stress), data (the parts, their order, the event, the cup-only event), game (only in magnet runs and only on
+the occasions, once an act, the reload, the forge, the box, the Coil Winder's rarity, the Trading Post, save and
+reload and an old save, the cabinet / render config / rig for every rank, the bell's flare, a coil 3 grab into an
+84 px chute, 6 claws x 6 drops at 84 px, School / Duo / Gary / Rush at 64, the tags and lines), i18n (every line in
+Dutch, the screens show none in English). Screenshots: scratchpad `r29cup/shots.mjs` (`r29cup_*`).
+
+## The guided first run (round 29)
+
+Owner request: "Create a tutorial for the game that is easy to follow and explains like before you go to your first
+fight, first take this chest and this question mark... To teach the player to first upgrade themselves before fights."
+Until now a newcomer met only the three-card fight coach and the tip cards; nothing taught the map strategy (explore
+and power up, then fight). The flow lives in `game.js` (the GUIDE block after BENCH, `GAME.guide`), one-line hooks in
+`loadMeta`, `newRun`, `newMap`, `showHelp`, `showCoach`, `startFight`, `enterTile` (the event case), `showEvent`,
+`arcEvOutDom`, `showReward`, `capDom`, `feelTipSafe` and `update`; the look in `index.html` (`<style id="gtu-css">`,
+`#gtuCard`, `#gtuRing`, `#gtuArrow` beside `#coach`); the Dutch in `lang_nl2.js` ("GUIDE (round 29)").
+
+### Who gets it
+
+- **A fresh profile's first run** (`meta.guide.done` false). Its first plain run is guided: never a daily, the weekly,
+  a Boss Rush, a Duo seat, Endless or a dive (`gtuRunOk`), and a newcomer who starts a daily first is still owed it.
+- **Older profiles** (no `guide` record, and the fight coach done or runs on record) are not forced through it. They
+  are offered it once on the title (a calm `.sheet` after the attract mode and after the bench's welcome: "New: a
+  guided first run", Not now / Try it); saved as offered the moment it shows. Try it opens character select and the
+  next run is guided (`meta.guide.want`).
+- **Replay:** How it works (Help, from the title) opens with a "Guided first run" card and a "Play the guided run"
+  button (plain taps, never `GAME.choose` entries, so every index holds).
+- **Skip:** a ghost "Skip tutorial" on every card and line and on the fight coach. Skipping is done for good.
+- Headless (the suites) the guide only arms with `GAME.guide.force`, so every older test plays the run it always did.
+
+### The teaching map (`gtuNewMap`)
+
+Right after `MAP.generate`, on a guided run only, before the later placements (golden key, doors, Gary, lore, the
+Trading Post). A breadth-first walk over land within two steps of the start (no sea, ford or mountain, no roaming
+monster), nearest first, then toward the boss:
+- the **chest** (a treasure: 20 gold and a relic capsule) on the start's ring: an existing one, else the cheapest
+  tile turned into one (empty, then a pickup, then a fight);
+- the **"?"** on the ring too, set to the teaching event *Out of Order* (a gamble, a trade, a pass; never a story);
+- a **shop** one step further (or a shop or forge already within two);
+- the **first fight** one step further (the act's easiest encounter, a single enemy anyway by the gentle start);
+  any other fight on the ring becomes a gem, so the first fight is never the obvious first tap;
+- all four and the way to them lit. Water on the ring pushes a target a step out; nothing found is simply absent.
+
+Over seeds 1 to 40: the chest and the "?" are always on the ring, the fight within two, a shop on 36+ maps, the boss
+reachable. Every other run's map is the one it was: three seeds are pinned to fingerprints taken before this round,
+and a guided map is identical to the plain one past two steps from the start.
+
+### The steps (the exact English)
+
+Read off the run every frame (`gtuStep`: what is done, what was said, whether a fight was fought), so a reload
+resumes where it was, a target that is gone is skipped, and a player who wanders is re-pointed. "Guide n of 8" on
+each (7 with no shop).
+
+| # | where | line | pointer | moves on |
+| --- | --- | --- | --- | --- |
+| 1 | map | This is the Clawspire map. Tap a lit tile to walk there. | the player's hex | Next |
+| 2 | map | Dark tiles cost a bulb to light. Here are your bulbs. | the bulbs pill (arrow up) | Next |
+| 3 | map | Before you fight, get stronger. Open this chest first! | the chest | the chest opened |
+| | capsule | Relics are permanent power for this run. (an item: This prize goes into your bin, ready for your next fights.) | inline | Collect |
+| 4 | map | Now this question mark: a surprise event. Could be a gift, a trade or a gamble. | the "?" | the event |
+| | event | Pick one. The chips show what you give and what you get. | inline, above the choices | a choice |
+| | outcome | Events are worth a look: most choices make you stronger. | inline | Continue |
+| 5 | map | Shops sell prizes for your bin. Drop in when you have gold. (a forge: The forge upgrades one of your prizes. Worth a visit!) | the shop | Next (optional) |
+| 6 | map | Ready? Fights are the crossed swords. Win them for gold and new prizes. | the fight (else the nearest lit one) | a fight |
+| | fight | the three fight coach cards as they were (steer, drop, the chute), wearing "Guide 6 of 8" and Skip tutorial | the coach's own arrow | Next, Got it |
+| 7 | reward | Pick a prize: it goes into your bin and you can grab it in the next fights. | inline, under "Pick one item" | a pick |
+| 8 | map | That is the gist! / Explore first and power up, then fight. / Elites give relics. The boss waits at the top of the map. / After a run, spend your bolts at the Upgrade Bench to get stronger. | none | Let's go! (done) |
+
+A player who takes the "?" first is pointed back at the chest; one who walks into any fight first gets the coach, and
+after it the closing card (the pre-fight steps are over). The first fight of a guided run always gets the coach, also
+on a replay (`said.coach`, so a reload never counts it twice; an unread coach shows again like any newcomer's).
+
+### The look
+
+- **The card** (`#gtuCard`): the tip card's family on ds-css (surface, a 4 px info edge, radius 12), the kicker in
+  `--fs-xs` caps, the line in `--fs-m`, Skip as a ghost `.sm` at the left, Next (`.go`) or Let's go! (`.pri`, the
+  screen's one glow) at the right, all 44 px. Full width at the bottom of the map, moved up under the map head when
+  the ring or the arrow would reach it (`gtuPlace`), so it never covers what it points at.
+- **The pointer:** a gold ring round the hex (a pill round the bulbs) pulsing, a gold arrow bobbing over it (under it,
+  pointing up, when there is no room above). Hidden mid-walk and off screen; it follows the camera every frame.
+  Calm (`html.calm`) and `prefers-reduced-motion`: a still ring and arrow, the card without its rise.
+- **Inline lines** (`.gtuLine`): the same edge and kicker inside the page's flow (the capsule under its title, the
+  event above its choices, the reward under "Pick one item" and inside the payout's wait), so they cover nothing.
+- **The fight coach** gets the kicker and Skip (`#coach.gtuOn`); its words and order are unchanged.
+- **Tip cards** wait while the guide is live off the fight (`gtuBusy`); one already up when the map card arrives goes
+  back to the front of the queue unmet, and shows once the guide is done. Nothing else is paused: the map, the camera
+  and every screen keep their input.
+- Checked at 390 x 844 and 360 x 780 (English and Dutch) and in calm: no text under 13 px, no button under 44 px, no
+  card over its ring or arrow, nothing off the stage.
+
+### Save fields, API, tests
+
+Meta `guide {done, offer, want}` (`gtuMetaFix` from `loadMeta`: junk or a missing record reads the profile; a fresh one
+is a newcomer). Run `gtu {v, t {chest, event, shop, fight}: [q, r] or null, shopK, said {}, end (0, 1 done, 2
+skipped), map}`, only on a guided run. No key was renamed; old profiles and saves load.
+
+`GAME.guide = {K, LINES, ORDER, fix, wants, runOk, newRun, newMap, tile, step, num, tick, next, skip, finish, aim,
+place, line, coachWant, offer, replay, busy, log, force, meta, run, el, offerOn, lines, helpBtn, coachX}`.
+Tests: game ("guide:": who gets it (fresh, old, junk, corrupt, headless), the offer once, Try it, Not now, the bench
+welcome first, Help's replay; the teaching map over 40 seeds; normal maps pinned as before and a guided map equal past
+two steps; the whole guide driven through the game; Skip at seven points; reloads on the map, the event, the fight
+and the reward, an old save; a missing chest and shop skipped, the "?" first re-pointed, a fight first; never in a
+daily, the weekly, a rush, Duo or Endless; the tip cards wait and come back), i18n ("guide (round 29)": every line in
+Dutch, under 90 characters in English, the guided run shows no English). Screenshots: scratchpad
+`r29guide/shots.mjs` (`r29_*`).
