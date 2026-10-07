@@ -32,6 +32,7 @@ function initMini(name, ctx, opts, canvas, renderer, scene, camera, events) {
     b.onclick = () => { const u = new URL(location.href); u.searchParams.set('q', 'low'); location.replace(u.href); };
     d.textContent = msg.slice(0, 220); d.appendChild(document.createElement('br')); d.appendChild(b); hud.appendChild(d);
   };
+  if (name === 'rhythm') ctx.postRung = 2; // the busking stage stacks a lot of additive glow: 8-bit post avoids half-float overflow (black screen on some GPUs). ?rung=0..3 overrides
   let mg; try { mg = MINIS[name](ctx, opts); } catch (e) { banner('This game could not start: ' + (e && e.message || e)); mg = { group: new THREE.Group(), update: NOP }; }
   scene.add(mg.group); if (opts.onResult) events.on('minigame', opts.onResult);
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); banner('The phone ran out of graphics memory.'); if (ctx.quality !== 'low') { const u = new URL(location.href); u.searchParams.set('q', 'low'); setTimeout(() => location.replace(u.href), 400); } });

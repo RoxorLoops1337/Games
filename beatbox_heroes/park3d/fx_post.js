@@ -36,7 +36,8 @@ export function createPost(ctx, S) {
   // Fallback ladder for GPUs (many phones) that cannot render to half-float or multisampled targets: those show a black frame.
   // rung 0 = HDR half-float + MSAA, 1 = half-float no MSAA, 2 = 8-bit no MSAA, 3 = no composer (same as low).
   let rung = 0, frames = 0, blankRun = 0, forceBlank = 0; const px4 = new Uint8Array(4);
-  (function pickStartRung() { try { const x = renderer.extensions; if (!x.has('EXT_color_buffer_float')) rung = x.has('EXT_color_buffer_half_float') ? 1 : 2; } catch (e) { rung = 2; } })();
+  (function pickStartRung() { try { const r = parseInt(new URLSearchParams(location.search).get('rung'), 10); if (r >= 0 && r <= 3) { rung = r; return; } } catch (e) { /* ignore */ } if (ctx.postRung > 0) rung = ctx.postRung; try { const x = renderer.extensions; if (!x.has('EXT_color_buffer_float')) rung = Math.max(rung, x.has('EXT_color_buffer_half_float') ? 1 : 2); } catch (e) { rung = 2; } })();
+  stats.rung = rung;
 
   function makeOverlay() {
     if (overlay || typeof document === 'undefined' || !ctx.canvas || !ctx.canvas.parentElement) return;
