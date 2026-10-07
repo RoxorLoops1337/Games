@@ -237,7 +237,7 @@ function hitAt(x, y) { for (let i = hits.length - 1; i >= 0; i--) { const h = hi
 function onDown(ev) {
   ev.preventDefault(); if (typeof AUDIO !== 'undefined') { AUDIO.init(); if (S.settings.music !== false) AUDIO.musicStart(); applyAudioSettings(); }
   const p = pointerXY(ev);
-  if (!S.started) { S.started = true; sfx('unlock', true); S.toasts.push({ txt: 'Walk onto glowing plates to spend coins!', t: 0, ic: 'star' }); return; }
+  if (!S.started) { S.started = true; sfx('unlock', true); return; } // the tutorial (js/tutorial.js) greets the player
   PT.down = true; PT.id = ev.pointerId; PT.x = PT.sx = p.x; PT.y = PT.sy = p.y; PT.moved = 0; PT.lastY = p.y; PT.vel = 0;
   if (S.sheet || S.modal) { PT.inSheet = true; if (S.sheet) { S.sheet.drag = false; S.sheet.vel = 0; } return; }
   PT.inSheet = false;
