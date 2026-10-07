@@ -161,6 +161,7 @@ function drawWorld() {
   if (S.chest && vis(S.chest.x, S.chest.y, 80)) add(S.chest.y, () => drawChest(S.chest));
   add(S.comp.y, drawCompanion); add(S.player.y, drawHero);
   A.sort((a, b) => a.y - b.y); for (const a of A) a.f();
+  drawUnlockBanner();
   drawShots(); drawFly(); drawFx(); drawFloats();
 }
 
