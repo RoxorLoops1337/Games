@@ -14,7 +14,7 @@ export const Z0 = -3.6; // the building line: every facade's front plane
 export const SIDE_TOP = 0.14; // height of the sidewalk above the road
 
 export const NEON = { pink: [3.2, 0.5, 1.6], cyan: [0.5, 2.6, 3.0], yellow: [3.2, 2.5, 0.5], green: [1.0, 2.8, 0.8], red: [3.2, 0.45, 0.4], violet: [1.9, 0.9, 3.4], warm: [3.0, 2.0, 0.85], white: [2.8, 2.5, 2.2], orange: [3.2, 1.5, 0.4] };
-export const WINCOL = [[3.0, 2.0, 0.8], [3.2, 1.7, 0.7], [2.8, 2.2, 1.2], [3.2, 1.2, 0.8], [2.2, 2.4, 3.0], [3.0, 1.0, 1.9]];
+export const WINCOL = [[3.0, 2.0, 0.8], [3.2, 1.7, 0.7], [2.8, 2.2, 1.2], [3.2, 1.2, 0.8], [2.2, 2.4, 3.0], [3.0, 1.0, 1.9]].map((c) => [c[0] * 0.72, c[1] * 0.72, c[2] * 0.72]);
 
 export const PAL = {
   ink: col('#2b2438'), inkL: col('#3f3857'), steel: col('#8d8aa8'), steelD: col('#5e5a7a'), iron: col('#3a3550'), stone: col('#b9afb8'), stoneD: col('#8d8397'),
@@ -44,7 +44,7 @@ export function makeStore() {
   S.sign = (name, cx, cy, cz, w, h, ry, tint, rx) => S.sprite(S.SIGN, name, cx, cy, cz, w, h, ry, tint, rx);
   // additive halo: round glow facing +z (ry turns it) or lying on the ground (flat = true). colour = [r,g,b] (additive strength)
   S.halo = (cx, cy, cz, w, h, color, o) => {
-    o = o || {}; const r = o.streak ? [0.5, 0, 1, 1] : [0, 0, 0.5, 1], fx = S.FX; color = [color[0] * 0.55, color[1] * 0.55, color[2] * 0.55];
+    o = o || {}; const r = o.streak ? [0.5, 0, 1, 1] : [0, 0, 0.5, 1], fx = S.FX; color = [color[0] * 0.46, color[1] * 0.46, color[2] * 0.46];
     if (o.flat) { fx.push(cx, cy, cz, o.ry || 0, 1, 0, 0); fx.uquad([-w / 2, 0, h / 2], [w / 2, 0, h / 2], [w / 2, 0, -h / 2], [-w / 2, 0, -h / 2], r[0], r[1], r[2], r[3], color); fx.pop(); }
     else { fx.push(cx, cy, cz, o.ry || 0, 1, 0, 0); fx.uquad([-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0], r[0], r[1], r[2], r[3], color); fx.pop(); }
   };

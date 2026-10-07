@@ -1,7 +1,7 @@
 // Bar decor (Stage and Club Artist INT-B): round tables with stools, the velvet banquette under the chalkboard, jukebox, gig posters, dartboard, plants, sandwich board, OPEN sign,
 // the glowing dance-floor tiles (two meshes so the beat can chase them), the chalkboard and the programme banner quads (live canvas), the disco ball.
 import { THREE, flatMat } from './kit.js';
-import { Buf, col, mix, mul, aoTint, bar, K, PINKN, CYANN, GOLDN, VIOLETN, WARMS, LIMEN, ORANGEN, P } from './venue_kit.js';
+import { Buf, col, mix, mul, aoTint, bar, cylT, K, PINKN, CYANN, GOLDN, VIOLETN, WARMS, LIMEN, ORANGEN, P } from './venue_kit.js';
 import { plant } from './flat_kit.js';
 import { BAR } from './bar_shell.js';
 import { drawChalkboard, drawBanner } from './bar_atlas.js';
@@ -35,7 +35,7 @@ export function buildDecor(S) {
     B.lathe([[0.22, 0, K.steelD], [0.04, 0.05, K.steel], [0.04, 0.46, K.steelL], [0.3, 0.48, K.woodL], [0.0, 0.5, K.wood]], 8, cx, 0, z + 0.85, {}); S.hit.circle(cx, z + 0.85, 0.36); }
   // ---------------------------------------------------------------- jukebox (north wall, between the chalkboard and the stage)
   { const jx = -0.15, jz = -4.62, JW = 0.95;
-    B.box(jx, 0, jz, JW, 1.05, 0.56, K.velvetD, { base: 0.3, tint: 0.04 }); B.cyl(jx, 1.05, jz - 0.28, JW * 0.5, JW * 0.5, 0.56, 10, mix(K.velvetD, K.plum, 0.4), { rx: Math.PI / 2 });
+    B.box(jx, 0, jz, JW, 1.05, 0.56, K.velvetD, { base: 0.3, tint: 0.04 }); cylT(B, jx, 1.05, jz - 0.28, JW * 0.5, JW * 0.5, 0.56, 10, mix(K.velvetD, K.plum, 0.4), { rx: Math.PI / 2 });
     B.box(jx, 0, jz + 0.28, JW + 0.04, 0.12, 0.04, K.gold, { base: 0 });
     S.decal('jukebox', jx, 0.78, jz + 0.29, 0.82, 1.22, 0, 0, [1.1, 1.1, 1.1]);
     [-1, 1].forEach((s) => GL.box(jx + s * (JW / 2 - 0.02), 0.1, jz + 0.29, 0.035, 1.3, 0.025, s < 0 ? PINKN : CYANN, { base: 0, tint: 0 }));

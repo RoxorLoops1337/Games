@@ -8,24 +8,24 @@ import { THREE, flatMat } from './kit.js';
 import { makeStore, makeToggler, glowMaterial, decalMaterial, signMaterial, haloMaterial, puddleMaterial, SIDE_TOP as G, Z0 } from './street_kit.js';
 import { makeStreetAtlas } from './street_atlas.js';
 import { DOORS, MAPSPOT, buildPark, buildHome, buildShop, buildStudio, buildBar, buildAlleys, buildFillers } from './street_row.js';
-import { buildGround, buildLamps, buildCars, buildCart, buildBusStop, buildFurniture, buildPuddles, buildCat, VENTS } from './street_props.js';
+import { buildGround, buildLamps, buildCars, buildCart, buildBusStop, buildFurniture, buildPuddles, buildCat, buildBunting, buildMats, buildTraffic, VENTS } from './street_props.js';
 import { buildSkyline } from './flora_sky.js';
 import { buildLife } from './flora_life.js';
 
-const BOUNCER = { name: 'Rex', body: 'boy', skin: '#8d5a36', hair: { style: 'bald', color: '#1a1420' }, eyes: { style: 'sharp', color: '#1c1620' }, facial: 'stubble', glasses: { id: 'shades', color: '#17141f' }, top: { id: 'turtleneck', color: '#17141f' }, bottom: { id: 'techpants', color: '#17141f' }, shoes: { id: 'timbs', color: '#17141f' }, hat: { id: 'none' }, acc: { neck: { id: 'cubanchain', color: '#d4a017' } } };
-const BOUNCER_AT = { x: 31.6, z: -2.55, rot: 0.2 };
+const BOUNCER = { name: 'Rex', body: 'boy', skin: '#6b4026', hair: { style: 'bald', color: '#1a1420' }, eyes: { style: 'sharp', color: '#1c1620' }, facial: 'stubble', glasses: { id: 'shades', color: '#17141f' }, top: { id: 'turtleneck', color: '#17141f' }, bottom: { id: 'techpants', color: '#17141f' }, shoes: { id: 'timbs', color: '#17141f' }, hat: { id: 'none' }, acc: { neck: { id: 'cubanchain', color: '#d4a017' } } };
+const BOUNCER_AT = { x: 31.6, z: -2.55, rot: 0.2 }, FOXY_AT = { x: -13.3, z: -0.6, rot: 0.6 }; // Foxy waits at the home stoop for the first-run dialog (args.foxy)
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 function guard(name, fn) { try { fn(); } catch (e) { console.error('[street] ' + name + ' failed: ' + (e && e.stack || e)); } }
 
 export default function create(ctx, args) {
-  args = args || {};
+  args = args || {}; const t0 = performance.now();
   const group = new THREE.Group(); group.name = 'street';
   const S = makeStore(); S.atlas = makeStreetAtlas();
   guard('ground', () => buildGround(S)); guard('park', () => buildPark(S)); guard('home', () => buildHome(S)); guard('shop', () => buildShop(S)); guard('studio', () => buildStudio(S)); guard('bar', () => buildBar(S));
   guard('alleys', () => buildAlleys(S)); guard('fillers', () => buildFillers(S)); guard('lamps', () => buildLamps(S)); guard('cars', () => buildCars(S)); guard('cart', () => buildCart(S)); guard('busstop', () => buildBusStop(S));
-  guard('furniture', () => buildFurniture(S)); guard('puddles', () => buildPuddles(S));
+  guard('furniture', () => buildFurniture(S)); guard('puddles', () => buildPuddles(S)); guard('bunting', () => buildBunting(S)); guard('mats', () => buildMats(S));
 
   // ---- merge the stores into seven meshes
   const geos = {}, meshes = {}, add = (key, buf, mat, o) => { o = o || {}; if (!buf.p.length) return null; const geo = buf.geometry(false); geos[key] = geo; const m = new THREE.Mesh(geo, mat); m.name = 'street_' + key.toLowerCase(); m.castShadow = !!o.cast; m.receiveShadow = o.receive !== false; m.frustumCulled = false; if (o.order) m.renderOrder = o.order; group.add(m); meshes[key] = m; return m; };
@@ -40,15 +40,20 @@ export default function create(ctx, args) {
   // ---- live things
   const cat = buildCat(-33.3, 1.5, Z0 - 0.4, -0.25); group.add(cat.group);
   const recLens = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 0), new THREE.MeshBasicMaterial({ color: '#ff3a30', toneMapped: false })); recLens.position.set(DOORS.studio.x, G + 2.7, Z0 + 0.4); recLens.name = 'rec_lamp'; group.add(recLens);
-  const puffs = VENTS.length * 6, steamMat = new THREE.MeshLambertMaterial({ color: '#efe7f8', transparent: true, opacity: 0.5, depthWrite: false, flatShading: true });
-  const steam = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), steamMat, puffs); steam.frustumCulled = false; steam.renderOrder = 8; steam.name = 'steam'; group.add(steam);
+  let traffic = null; guard('traffic', () => { traffic = buildTraffic(S.atlas.glow); group.add(traffic.group); });
+  const NP = 8, puffs = VENTS.length * NP, steamMat = new THREE.MeshBasicMaterial({ color: '#f4eefc', transparent: true, opacity: 0.3, depthWrite: false });
+  const steam = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 1), steamMat, puffs); steam.frustumCulled = false; steam.renderOrder = 8; steam.name = 'steam'; group.add(steam);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
 
   // ---- skyline + pigeons
   let sky = null; guard('skyline', () => { sky = buildSkyline(ctx, { minX: -35, maxX: 35, minZ: -4, maxZ: 8 }, ctx.kit.rng(31337), null); group.add(sky.group); });
-  const hit = S.hit;
+  const hit = S.hit; let buildMs = 0;
   const heightAt = (x, z) => (z < 3.0 ? G : z < 3.4 ? G * (1 - smooth(3.0, 3.4, z)) : 0);
-  const blocked = (x, z) => z < -3.0 || z > 8.0 || x < -34.3 || x > 34.3 || hit.test(x, z);
+  // The frontage band z < 0.3 is only walkable in the bay in front of each door: A* routes between far doors along the kerb side, so walking past a door never runs through
+  // its (walk-in-to-enter) ring by accident. Bays are x ranges around each door.
+  const BAYS = [[-30.4, -27.6], [-16.1, -13.9], [-1.1, 1.1], [11.9, 14.1], [25.4, 28.6]];
+  const inBay = (x) => { for (let i = 0; i < BAYS.length; i++) if (x > BAYS[i][0] && x < BAYS[i][1]) return true; return false; };
+  const blocked = (x, z) => z < -3.0 || z > 8.0 || x < -34.3 || x > 34.3 || (z < 0.3 && !inBay(x)) || hit.test(x, z);
   const free = (x, z) => z > -2.6 && z < 2.6 && x > -33 && x < 33 && !hit.test(x, z);
   let life = null; guard('pigeons', () => { life = buildLife(ctx, { pigeonHomes: [{ x: -21, z: 0.5, n: 3 }, { x: 4, z: 1.2, n: 3 }, { x: 22, z: 0.4, n: 3 }] }, free, [], heightAt); });
   const flora = { group: life ? life.group : new THREE.Group(), update: (dt, t) => { if (life) life.update(dt, t); }, stats: {} };
@@ -64,7 +69,7 @@ export default function create(ctx, args) {
     // lighting reads these: lamps for the glow cards and cones; graffiti and busk anchors parked far away because the street draws its own neon halos
     anchors: { start, lamps: S.lamps.slice(), graffiti: { x: 0, z: -90 }, buskSpot: { x: 0, z: -90 }, fountain: { x: 6, z: 2 }, gate: { x: -28, z: 3, rot: 0 }, door: { x: from.x, z: from.z }, bouncer: BOUNCER_AT },
     doors: DOORS, map: MAPSPOT, state: (id) => (tog.get('closed_' + id) ? 'closed' : 'open'),
-    stats() { let tris = 0; for (const k in geos) tris += geos[k].attributes.position.count / 3; return { tris: Math.round(tris), parts: Object.keys(geos).length, skyline: sky ? { buildings: sky.buildings } : null }; },
+    stats() { let tris = 0; for (const k in geos) tris += geos[k].attributes.position.count / 3; return { tris: Math.round(tris), parts: Object.keys(geos).length, buildMs: Math.round(buildMs), skyline: sky ? { buildings: sky.buildings } : null }; },
   };
   hit.circle(BOUNCER_AT.x, BOUNCER_AT.z, 0.45);
 
@@ -81,7 +86,7 @@ export default function create(ctx, args) {
   const state = () => { const w = ctx.host && ctx.host.world; return w && w.lighting && w.lighting.getState ? w.lighting.getState() : null; };
   terrain.update = (dt, t) => {
     tLast = t; const st = state(), neon = st ? st.neon : 0.7, night = st ? st.night : 0.5, rain = st ? st.rain || 0 : 0;
-    if (!placedNpc && ctx.npcs && ctx.npcs.length) { placedNpc = true; const n = ctx.npcs[0]; if (n && n.place) { n.place(BOUNCER_AT.x, BOUNCER_AT.z, BOUNCER_AT.rot); if (n.play) n.play('idle'); } }
+    if (!placedNpc && ctx.npcs && ctx.npcs.length) { placedNpc = true; for (const n of ctx.npcs) { const at = n.id === 'bouncer' ? BOUNCER_AT : n.id === 'foxy' ? FOXY_AT : null; if (at && n.place) { n.place(at.x, at.z, at.rot); if (n.play) n.play('idle'); } } }
     // neon buzz: now and then the big signs dip for a few frames
     const f = Math.sin(t * 47.0) * Math.sin(t * 3.7); flick = f > 0.93 ? 0.55 : 1;
     mats.FX.color.setScalar((0.03 + 0.62 * clamp(neon, 0, 1)) * flick * (1 + 0.04 * Math.sin(t * 9)));
@@ -89,16 +94,17 @@ export default function create(ctx, args) {
     mats.PUD.opacity = clamp(0.22 + rain * 0.7 + night * 0.12, 0, 1);
     // REC lamp blink (1.1 Hz), brighter at night
     recLens.material.color.setRGB(1, 0.16, 0.12).multiplyScalar(((t * 1.1) % 1) < 0.55 ? 1.3 + night * 2.4 : 0.22);
-    cat.update(t);
-    for (let v = 0; v < VENTS.length; v++) for (let k = 0; k < 6; k++) {
-      const ph = ((t * 0.3 + k / 6 + v * 0.37) % 1), vt = VENTS[v], sc = (0.22 + ph * 0.8) * (1 - smooth(0.7, 1, ph)) * (0.7 + 0.3 * Math.sin(v * 3 + k));
-      _p.set(vt.x + Math.sin(ph * 5 + k * 1.7 + v) * 0.22 * ph, vt.y + 0.1 + ph * 2.7, vt.z + Math.cos(ph * 4 + k * 2.1) * 0.18 * ph); _q.setFromEuler(_e.set(k, ph * 3, 0)); _s.setScalar(Math.max(0.001, sc)); steam.setMatrixAt(v * 6 + k, _m.compose(_p, _q, _s));
+    cat.update(t); if (traffic) traffic.update(t, night);
+    for (let v = 0; v < VENTS.length; v++) for (let k = 0; k < NP; k++) {
+      const ph = ((t * 0.26 + k / NP + v * 0.37) % 1), vt = VENTS[v], sc = (0.16 + ph * 0.95) * (1 - smooth(0.65, 1, ph)) * (0.75 + 0.25 * Math.sin(v * 3 + k * 2));
+      _p.set(vt.x + Math.sin(ph * 6 + k * 1.7 + v) * 0.2 * ph + ph * ph * 1.3, vt.y + 0.1 + ph * 2.4, vt.z + Math.cos(ph * 5 + k * 2.1) * 0.22 * ph + ph * 0.4); _q.setFromEuler(_e.set(k, ph * 3, 0)); _s.set(sc * 1.15, sc, sc); steam.setMatrixAt(v * NP + k, _m.compose(_p, _q, _s));
     }
-    steam.instanceMatrix.needsUpdate = true; steamMat.opacity = 0.5 - 0.15 * night + 0.1 * rain;
+    steam.instanceMatrix.needsUpdate = true; steamMat.opacity = 0.3 - 0.06 * night + 0.06 * rain;
   };
 
+  buildMs = performance.now() - t0;
   return {
-    terrain, flora, npcSpecs: [{ id: 'bouncer', look: BOUNCER }], profile: 'out',
+    terrain, flora, npcSpecs: args.foxy ? [{ id: 'bouncer', look: BOUNCER }, { id: 'foxy' }] : [{ id: 'bouncer', look: BOUNCER }], profile: 'out',
     setSpotState(id, st) { if (!st || !DOORS[id]) return; if ('locked' in st) setDoor(id, !!st.locked); },
     setWeather() { /* lighting drives rain; puddles read its state each frame */ },
     dispose() { /* the host frees the scene graph; nothing external to release */ },

@@ -18,11 +18,11 @@ export const WORLDS = {
   creator: () => import('./w_creator.js'),
   street: () => import('./street.js'),
   shop: () => import('./shop_world.js'),
-  lab: () => import('./world_stub.js'),
+  lab: () => import('./lab_world.js'),
   bar: () => import('./world_bar.js'),
-  hood: () => import('./world_stub.js'),
+  hood: () => import('./w_hood.js'),
   office: () => import('./world_stub.js'),
-  arena: () => import('./world_stub.js'),
+  arena: () => import('./world_arena.js'),
 };
 export const WORLD_IDS = Object.keys(WORLDS);
 export const MINI_IDS = ['rhythm', 'run', 'tuner'];

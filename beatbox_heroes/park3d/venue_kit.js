@@ -6,6 +6,7 @@
 //   stageDeck(B, o) deck with front lip, rim light glow strip and step blocks
 // All colours are linear [r,g,b] arrays (flat_kit col()). Glow colours may exceed 1 (bloom).
 import { THREE, flatMat, mergeGeometries } from './kit.js';
+import { wallFace as _wallFace, vnoise as _vnoise, fbm as _fbm } from './flat_kit.js';
 import { Buf, col, mix, mul, aoTint, bar, glowLambert, makeStore, P, WARM, WARMS, PINKN, CYANN, REDN, GREENN, WHITEN, YELN } from './flat_kit.js';
 export { THREE, Buf, col, mix, mul, aoTint, bar, glowLambert, makeStore, P, WARM, WARMS, PINKN, CYANN, REDN, GREENN, WHITEN, YELN };
 
@@ -32,6 +33,8 @@ export function meshesFromStore(S, group, o) {
   return R;
 }
 
+// Buf.cyl / Buf.lathe ignore tilt: this one revolves a prism about a tilted axis (rx, rz radians; the base sits at cx, y0, cz). rx = PI/2 lays the cylinder along +z.
+export function cylT(B, cx, y0, cz, rb, rt, h, seg, color, o) { o = o || {}; B.push(cx, y0, cz, o.ry || 0, 1, o.rx || 0, o.rz || 0); B.cyl(0, 0, 0, rb, rt, h, seg, color, { base: o.base, tint: o.tint, rot: o.rot }); B.pop(); }
 // ------------------------------------------------------------------ small parts
 // square truss between two points: 4 chords, zig-zag diagonals on the two sides and the top
 export function truss(B, a, b, s, color, dcolor, step) {
@@ -86,13 +89,13 @@ export function guitar(B, x, y0, z, ry, lean, color) {
 
 // velvet stage curtain: vertical folds between x0..x1, y0..y1 at depth z (facing +z). o: {folds, depth, a, b (colours), fringe, valance}
 export function curtain(B, o) {
-  const { x0, x1, y0, y1, z } = o, n = Math.max(2, Math.round((x1 - x0) / (o.fw || 0.22))), A = o.a || K.velvet, Bc = o.b || K.velvetD, dep = o.depth || 0.16, rows = 4, R = o.rand || Math.random;
+  const { x0, x1, y0, y1, z } = o, KK = o.k || 1, n = Math.max(2, Math.round((x1 - x0) / (o.fw || 0.22))), A = o.a || K.velvet, Bc = o.b || K.velvetD, dep = o.depth || 0.16, rows = 4, R = o.rand || Math.random;
   const zz = (i) => z + dep * (i % 2 ? 1 : 0) * (0.85 + 0.15 * Math.sin(i * 1.7));
   for (let i = 0; i < n; i++) {
     const xa = x0 + (x1 - x0) * i / n, xb = x0 + (x1 - x0) * (i + 1) / n, za = zz(i), zb = zz(i + 1), peak = i % 2 ? 0 : 1; // folds: even edges recessed
     for (let j = 0; j < rows; j++) {
       const ya = y0 + (y1 - y0) * j / rows, yb = y0 + (y1 - y0) * (j + 1) / rows, ka = peak ? 1.0 : 0.62, kb = peak ? 0.62 : 1.0, ta = 0.7 + 0.3 * sm(0, 1, j / rows), tb = 0.7 + 0.3 * sm(0, 1, (j + 1) / rows);
-      const c = (k, t) => mul(mix(Bc, A, k), t * (0.95 + R() * 0.08));
+      const c = (k, t) => mul(mix(Bc, A, k), KK * t * (0.95 + R() * 0.08));
       B.quad([xa, ya, za], [xb, ya, zb], [xb, yb, zb], [xa, yb, za], c(ka, ta), c(kb, ta), c(kb, tb), c(ka, tb));
     }
   }
@@ -117,16 +120,22 @@ export function stageDeck(B, GL, o) {
   const { x0, x1, z0, z1, h } = o, w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, c = o.color || K.deck;
   B.box(cx, 0, cz, w, h, d, mul(c, 0.9), { base: 0.35, tint: 0.03, top: c });
   // planks on the deck top (subtle stripes)
-  const np = Math.round(w / 0.5); for (let i = 0; i < np; i++) { const xa = x0 + w * i / np + 0.01, xb = x0 + w * (i + 1) / np - 0.01, k = 0.94 + 0.1 * ((i * 7) % 5) / 5; B.quad([xa, h + 0.002, z0 + 0.02], [xa, h + 0.002, z1 - 0.02], [xb, h + 0.002, z1 - 0.02], [xb, h + 0.002, z0 + 0.02], mul(K.deckL, k)); }
+  const np = Math.round(w / 0.5), TB = o.litTop || B, TK = o.litTop ? (o.litK || 0.5) : 1; for (let i = 0; i < np; i++) { const xa = x0 + w * i / np + 0.01, xb = x0 + w * (i + 1) / np - 0.01, k = (0.94 + 0.1 * ((i * 7) % 5) / 5) * TK; TB.quad([xa, h + 0.002, z0 + 0.02], [xa, h + 0.002, z1 - 0.02], [xb, h + 0.002, z1 - 0.02], [xb, h + 0.002, z0 + 0.02], mul(K.deckL, k)); }
   // gaffer-tape marks and front lip
   B.box(cx, h, z1 - 0.04, w, 0.04, 0.08, K.deckL, { base: 0 });
-  const seg = o.segments || 8; for (let i = 0; i < seg; i++) { const xa = x0 + 0.05 + (w - 0.1) * i / seg, xb = x0 + 0.05 + (w - 0.1) * (i + 1) / seg - 0.04, g = (o.glow || [PINKN, CYANN])[i % 2]; GL.quad([xa, h * 0.35, z1 + 0.006], [xb, h * 0.35, z1 + 0.006], [xb, h * 0.75, z1 + 0.006], [xa, h * 0.75, z1 + 0.006], g); }
+  const seg = o.segments || 8, gk = o.glowK || 1; for (let i = 0; i < seg; i++) { const xa = x0 + 0.05 + (w - 0.1) * i / seg, xb = x0 + 0.05 + (w - 0.1) * (i + 1) / seg - 0.04, g = mul((o.glow || [PINKN, CYANN])[i % 2], gk); GL.quad([xa, h * 0.35, z1 + 0.006], [xb, h * 0.35, z1 + 0.006], [xb, h * 0.62, z1 + 0.006], [xa, h * 0.62, z1 + 0.006], g); }
 }
 // stair block: n steps rising toward -z (from z1 down to the deck). o: {x, w, z, h, n}
 export function steps(B, x, w, zFront, h, n, color) {
   for (let i = 0; i < n; i++) { const hh = h * (i + 1) / n, d = 0.3; B.box(x, 0, zFront - d * i - d / 2, w, hh, d, color || K.deckL, { base: 0.3, tint: 0.03 }); }
 }
 
+// soft coloured light pool on the floor (alpha vertex colours in the S.SOFT store): lifts the dark club floor under stage lights and pendants
+export function lightPool(SOFT, x, y, z, rx, rz, hex, a, ry) {
+  const c = col(hex), seg = 16, c0 = c.concat([a]), c1 = c.concat([a * 0.55]), c2 = c.concat([0]), cs = Math.cos(ry || 0), sn = Math.sin(ry || 0);
+  const p = (k, f) => { const t = (k / seg) * Math.PI * 2, lx = Math.cos(t) * rx * f, lz = Math.sin(t) * rz * f; return [x + lx * cs - lz * sn, y, z + lx * sn + lz * cs]; };
+  for (let k = 0; k < seg; k++) { SOFT.tri([x, y, z], p(k + 1, 0.55), p(k, 0.55), c0, c1, c1); SOFT.quad(p(k, 0.55), p(k + 1, 0.55), p(k + 1, 1), p(k, 1), c1, c1, c2, c2); }
+}
 // ------------------------------------------------------------------ LED wall: a canvas texture on a plane (always lit, blooms)
 export function makeLed(w, h, res) {
   res = res || 128; const cw = Math.round(res * w), ch = Math.round(res * h), cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const g = cv.getContext('2d');
@@ -155,3 +164,34 @@ export const FONT = '"Arial Black", Impact, "Trebuchet MS", system-ui, sans-seri
 
 // the stats of a store, for the budget line in the header of each world
 export function storeTris(S) { return (S.B.p.length + S.GLOW.p.length + S.SCR.p.length + S.DEC.p.length + S.SOFT.p.length + S.GLASS.p.length) / 9; }
+
+// ------------------------------------------------------------------ big wall faces for the rhythm venues
+// brick wall with a painted wainscot: a -> b along the wall, nrm = inward normal, h = height. o: {wain (m), step, rowH, base (wainscot colour), hole}
+export function brickFace(B, a, b, nrm, h, o) {
+  o = o || {}; const wain = o.wain === undefined ? 1.2 : o.wain, rowH = o.rowH || 0.3, L = Math.hypot(b[0] - a[0], b[1] - a[1]), wc = o.base || K.tealD, ws = o.seed || 3;
+  const vb = [0.12, wain, wain + 0.1]; for (let v = wain + 0.1 + rowH; v < h; v += rowH) vb.push(+v.toFixed(3));
+  const cf = (u, v, uc, vc) => {
+    let c; if (vc < 0.12) c = K.cream; else if (vc < wain) c = mul(mix(wc, K.teal, 0.3 + 0.15 * Math.sin(uc * 2.2)), 0.9 + 0.1 * (Math.floor(uc / 0.5) % 2)); else if (vc < wain + 0.1) c = K.creamD;
+    else { const row = Math.floor(vc / rowH), pick = (((Math.floor((uc + (row % 2 ? 0.25 : 0)) / 0.5) * 7 + row * 13 + ws) % 4) + 4) % 4; c = mix(mix(K.brickD, K.brick, 0.6), K.brickL, [0, 0.2, 0.4, 0.1][pick]); c = mul(c, 0.94 + 0.1 * _vnoise(uc * 1.3, vc * 1.3, 4 + ws)); }
+    const k = 0.4 * (1 - sm(0, 0.5, v)) * (vc < 0.2 ? 0.3 : 1) + 0.3 * sm(h - 0.9, h, v) + 0.3 * (1 - sm(0, 0.6, u)) + 0.3 * (1 - sm(0, 0.6, L - u)) + 0.1 * sm(0.35, 0.8, _fbm(uc * 0.9, vc * 0.9, 8 + ws));
+    return aoTint(c, Math.min(0.8, k));
+  };
+  _wallFace(B, a, b, nrm, h, cf, { stepU: o.step || 0.5, vBreaks: vb, holes: o.holes });
+}
+// dark wood plank floor patch (lit store). x0..x1, z0..z1, plank length ~1.8, row 0.28
+export function plankFloor(B, x0, x1, z0, z1, pal, rnd, darken) {
+  pal = pal || [col('#6a4450'), col('#5a3a48'), col('#764c58'), col('#52303f')]; darken = darken || 1;
+  for (let z = z0; z < z1 - 0.01; z += 0.3) { const zb = Math.min(z1, z + 0.3 - 0.012); let x = x0 - rnd() * 1.4; while (x < x1) { const len = 1.6 + rnd() * 2.2, xa = Math.max(x0, x), xb = Math.min(x1, x + len - 0.012); x += len; if (xb - xa < 0.05) continue; const base = mix(pal[(rnd() * pal.length) | 0], pal[(rnd() * pal.length) | 0], rnd()), k = (0.94 + rnd() * 0.12) * darken; const c = mul(base, k); B.quad([xa, 0, z], [xa, 0, zb], [xb, 0, zb], [xb, 0, z], c); } }
+}
+// a row of hanging bulbs along a sagging line from a to b ([x,y,z]); bulbs in the glow store, wire in the lit store
+export function stringLights(B, GL, a, b, n, sag, glow, colors) {
+  const at = (u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u - sag * 4 * u * (1 - u), a[2] + (b[2] - a[2]) * u];
+  let prev = at(0); for (let i = 1; i <= n; i++) { const p = at(i / n); bar(B, prev, p, 0.012, 0.012, K.ink); prev = p; }
+  for (let i = 0; i < n; i++) { const p = at((i + 0.5) / n), c = colors ? colors[i % colors.length] : glow; GL.box(p[0], p[1] - 0.13, p[2], 0.07, 0.1, 0.07, c, { base: 0, tint: 0 }); B.box(p[0], p[1] - 0.04, p[2], 0.03, 0.05, 0.03, K.ink, { base: 0, tint: 0 }); }
+}
+// round candle table with 2 stools (lit store + glow candle). returns nothing
+export function candleTable(B, GL, x, z, ry) {
+  B.lathe([[0.3, 0, K.steelD], [0.05, 0.06, K.steel], [0.045, 0.76, K.steelL], [0.46, 0.78, K.woodL], [0.48, 0.82, K.wood], [0, 0.82, mix(K.wood, K.cream, 0.2)]], 10, x, 0, z, {});
+  B.lathe([[0.03, 0, K.cream], [0.035, 0.07, K.creamD], [0, 0.08, K.cream]], 6, x + 0.1, 0.82, z, {}); GL.lathe([[0.014, 0.08, [3.2, 2.5, 0.5]], [0, 0.12, [3.2, 2.5, 0.5]]], 5, x + 0.1, 0.82, z, {});
+  [[-0.8, 0.1], [0.8, -0.1]].forEach(([dx, dz]) => { const c = Math.cos(ry || 0), s = Math.sin(ry || 0), sx = x + dx * c + dz * s, sz = z - dx * s + dz * c; B.lathe([[0.2, 0, K.steelD], [0.05, 0.05, K.steel], [0.04, 0.58, K.steelL], [0.22, 0.6, K.plumD], [0.2, 0.7, K.plumL], [0, 0.71, K.plumL]], 9, sx, 0, sz, {}); });
+}

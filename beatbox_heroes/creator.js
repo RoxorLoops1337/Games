@@ -15,9 +15,11 @@
   const SKIN_UI_LEVEL = Core.CFG.cosmeticAnyColourLevel;
 
   E.scenes.creator = {
+    POSES,
+    bgInit() { this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 180, y: 536 }; this.dy = sp0.y - k(280); this.spot = { x: sp0.x, y: k(280) }; },   // the 2D painted stage (the 3D sibling replaces it)
     enter(a) {
       this.mode = a.mode || 'new'; this.slot = a.slot || 1; this.back = a.back || null;
-      this.bg = BBH.World.scene('creator'); const sp0 = (this.bg && this.bg.spots && this.bg.spots.hero) || { x: 180, y: 536 }; this.dy = sp0.y - k(280); this.spot = { x: sp0.x, y: k(280) };
+      this.bgInit();
       this.look = C().fix(this.mode === 'wardrobe' ? G.ch.look : (G.draft || CAT.DEFAULT_LOOK));
       if (this.mode === 'new' && !G.draft) this.look.name = '';
       this.ch = this.mode === 'wardrobe' ? G.ch : Core.newChar(this.look);

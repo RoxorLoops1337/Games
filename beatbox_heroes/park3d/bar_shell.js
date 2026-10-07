@@ -70,8 +70,8 @@ export function buildShell(S) {
   B.quad([6.28, LOW, 5.28], [6.28, LOW, 5.0], [6.0, LOW, 5.0], [6.0, LOW, 5.28], K.woodL);
   // end caps of the tall walls
   B.quad([6.28, -0.55, -5.28], [6.28, H, -5.28], [6.28, H, -5.0], [6.28, -0.55, -5.0], mix(K.creamD, col('#6a4a8a'), 0.2)); B.quad([-6.28, -0.55, 5.28], [-6.28, -0.55, 5.0], [-6.28, H, 5.0], [-6.28, H, 5.28], mix(K.creamD, col('#6a4a8a'), 0.2));
-  // picture rail and crown moulding (north and west)
-  B.box(0, 2.58, -4.93, 12, 0.07, 0.1, K.goldD, { base: 0 }); B.box(-5.93, 2.58, 0, 0.1, 0.07, 10, K.goldD, { base: 0 }); B.box(0, 3.1, -4.9, 12, 0.1, 0.2, K.creamD, { base: 0 }); B.box(-5.9, 3.1, 0, 0.2, 0.1, 10, K.creamD, { base: 0 });
+  // crown moulding (north and west)
+  B.box(0, 3.1, -4.9, 12, 0.1, 0.2, K.creamD, { base: 0 }); B.box(-5.9, 3.1, 0, 0.2, 0.1, 10, K.creamD, { base: 0 });
 
   // ---------------------------------------------------------------- door: frame, half-open leaf, lintel and the sign above (the opening is cut into the low south wall)
   const dxm = (BAR.door.x0 + BAR.door.x1) / 2, dw = BAR.door.x1 - BAR.door.x0, dz = 5.0;
@@ -92,12 +92,12 @@ export function buildRig(S) {
   const ty = 3.0, tz = st.z0 + 0.75, s = 0.28;
   truss(B, [st.x0 + 0.2, ty, tz], [st.x1 - 0.2, ty, tz], s, K.steel, K.steelD, 0.5);
   [st.x0 + 0.2, st.x1 - 0.2].forEach((x) => { truss(B, [x, st.h, tz], [x, ty - s / 2, tz], s * 0.85, K.steel, K.steelD, 0.5); B.box(x, st.h, tz, 0.46, 0.05, 0.46, K.steelD, { base: 0 }); S.hit.circle(x, tz, 0.3); });
-  // disco ball boom (pipe) from the counter beam over the dance floor
-  bar(B, [-4.4, 3.2, 0.2], [3.4, 3.2, 0.2], 0.07, 0.07, K.steelD, { base: 0.1 }); bar(B, [-4.4, 3.04, 0.2], [-4.4, 3.2, 0.2], 0.05, 0.05, K.steelD); B.box(3.4, 3.1, 0.2, 0.2, 0.12, 0.2, K.steel, { base: 0 });
-  bar(B, [3.4, 3.12, 0.2], [3.4, 2.82, 0.2], 0.018, 0.018, K.steelL);
-  S.anchors.discoBall = { x: 3.4, y: 2.55, z: 0.2 }; S.discoPos = { x: 3.4, y: 2.55, z: 0.2 };
+  // disco ball pipe from the north wall over the stage front, thin chain down to the ball (the ball sits just in front of the stage over the first rows of the crowd)
+  bar(B, [3.4, 3.2, -4.92], [3.4, 3.2, -1.5], 0.045, 0.045, K.steelD, { base: 0.1 }); B.box(3.4, 3.1, -1.5, 0.16, 0.1, 0.16, K.steel, { base: 0 });
+  bar(B, [3.4, 3.12, -1.5], [3.4, 2.86, -1.5], 0.016, 0.016, K.steelL);
+  S.anchors.discoBall = { x: 3.4, y: 2.58, z: -1.5 }; S.discoPos = { x: 3.4, y: 2.58, z: -1.5 };
   // par cans on the back truss, aimed forward and down at the stage and the dance floor
   [[1.8, PINKN], [2.9, CYANN], [4.1, PINKN], [5.2, CYANN]].forEach(([x, g], i) => parCan(B, GL, x, ty - 0.2, tz + 0.05, (i % 2 ? -0.12 : 0.12), 0.8, g, 0.1));
-  parCan(B, GL, 3.4, 3.0, 0.2, Math.PI, 0.8, PINKN, 0.1);
-  S.anchors.rig = [{ x: 1.8, y: ty - 0.25, z: tz }, { x: 2.9, y: ty - 0.25, z: tz }, { x: 4.1, y: ty - 0.25, z: tz }, { x: 5.2, y: ty - 0.25, z: tz }, { x: 3.4, y: 3.0, z: 0.2 }, { x: -4.4, y: 3.0, z: -0.6 }];
+  parCan(B, GL, 3.4, 3.0, -1.5, Math.PI, 0.8, PINKN, 0.1);
+  S.anchors.rig = [{ x: 1.8, y: ty - 0.25, z: tz }, { x: 2.9, y: ty - 0.25, z: tz }, { x: 4.1, y: ty - 0.25, z: tz }, { x: 5.2, y: ty - 0.25, z: tz }, { x: 3.4, y: 3.0, z: -1.5 }, { x: -4.4, y: 3.0, z: -0.6 }];
 }

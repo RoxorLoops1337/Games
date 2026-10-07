@@ -115,7 +115,7 @@ export function buildRacks(S) {
 
 // ---------------------------------------------------------------- shades case (glass-top counter with a velvet tray) and a spinner rack
 export function buildShadesCase(S) {
-  const B = S.B, G = S.GLOW, GL = S.GLASS, hit = S.hit, x = -0.55, z = 3.3, W = 1.5, D = 0.55, h = 0.82;
+  const B = S.B, G = S.GLOW, GL = S.GLASS, hit = S.hit, x = 0.55, z = 3.4, W = 1.5, D = 0.55, h = 0.82;
   S.soft(x, z, W / 2 + 0.3, D / 2 + 0.4, 0.4);
   B.box(x, 0, z, W, h, D, P.woodD, { base: 0.3, tint: 0.03, top: P.woodL }); B.box(x, h - 0.06, z, W - 0.12, 0.012, D - 0.12, C('#4a2a5e'), { base: 0, top: C('#6a3a7e') }); // velvet tray
   const lens = [C('#2a2040'), C('#ff7ab0'), C('#35c8e0'), C('#ffd23f')];
@@ -128,7 +128,7 @@ export function buildShadesCase(S) {
   hit.box(x, z, W / 2 + 0.03, D / 2 + 0.03, 0);
   // a card sign and the spinner rack beside it
   S.decal('tag_blank', x - 0.55, h + 0.26, z + 0.23, 0.14, 0.09, 0.0, -0.3, [1, 1, 1]);
-  { const sx = 0.75, sz = 3.15; S.soft(sx, sz, 0.4, 0.4, 0.35); B.cyl(sx, 0, sz, 0.22, 0.22, 0.04, 8, P.ink); B.cyl(sx, 0.04, sz, 0.025, 0.025, 1.45, 6, P.steelL);
+  { const sx = 3.2, sz = 3.5; S.soft(sx, sz, 0.4, 0.4, 0.35); B.cyl(sx, 0, sz, 0.22, 0.22, 0.04, 8, P.ink); B.cyl(sx, 0.04, sz, 0.025, 0.025, 1.45, 6, P.steelL);
     for (let t = 0; t < 3; t++) for (let k = 0; k < 6; k++) { const a = k * 1.0472 + t * 0.5, y = 0.8 + t * 0.26; B.box(sx + Math.cos(a) * 0.17, y - 0.05, sz + Math.sin(a) * 0.17, 0.12, 0.1, 0.01, P.steelD, { base: 0, ry: -a + 1.57 }); shades(B, sx + Math.cos(a) * 0.19, y, sz + Math.sin(a) * 0.19, -a + 1.57, [P.pink, P.cyan, P.yellow, P.ink, P.coral, P.cream][(k + t) % 6], lens[(k + t * 2) % 4], 1.25); }
     B.box(sx, 1.46, sz, 0.1, 0.06, 0.1, P.pink, { base: 0.1, taper: 0.6 }); hit.circle(sx, sz, 0.3); }
 }

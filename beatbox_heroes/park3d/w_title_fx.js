@@ -66,13 +66,13 @@ export function buildRain(n) {
 
 // ------------------------------------------------------------------ steam vents: soft puffs rising from a grate / pipe, tinted by the neon
 export function buildSteam(vents) {
-  const R = rng(5), N = 16, pos = [], ds = [];
+  const R = rng(5), N = 20, pos = [], ds = [];
   vents.forEach(([x, y, z, w], vi) => { for (let i = 0; i < N; i++) { pos.push(x, y, z); ds.push(i / N, R(), w, vi); } });
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('aD', new THREE.Float32BufferAttribute(ds, 4));
   const U = { uTime: { value: 0 }, uScale: { value: 400 }, uBeat: { value: 0 }, uTex: { value: glowTex() }, uA: { value: new THREE.Color('#ff5fb8') }, uB: { value: new THREE.Color('#6fd6ff') } };
   const m = new THREE.Points(geo, new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, fog: false, toneMapped: false,
     vertexShader: 'attribute vec4 aD; uniform float uTime, uScale, uBeat; varying float vA; varying vec3 vT; uniform vec3 uA, uB; void main(){ float age = fract(uTime * 0.16 + aD.x); float k = age; vec3 p = position; p.y += k * (2.4 + aD.z * 0.4); p.x += sin(uTime * 0.7 + aD.y * 20.0 + k * 3.0) * 0.25 * k + (aD.y - 0.5) * 0.3 * k; p.z += cos(uTime * 0.5 + aD.y * 11.0) * 0.18 * k; vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = uScale * (0.35 + k * 1.15) * aD.z / max(0.6, -mv.z); vA = sin(k * 3.14159) * (0.5 + 0.2 * aD.y) * (1.0 + 0.3 * uBeat); vT = mix(uA, uB, aD.w == 0.0 ? 0.0 : 0.5 + 0.5 * sin(aD.w)); }',
-    fragmentShader: 'uniform sampler2D uTex; varying float vA; varying vec3 vT; void main(){ float a = texture2D(uTex, gl_PointCoord).a * vA; gl_FragColor = vec4(mix(vec3(0.68, 0.64, 0.82), vT, 0.55) * 0.9, a * 0.85); }' }));
+    fragmentShader: 'uniform sampler2D uTex; varying float vA; varying vec3 vT; void main(){ float a = texture2D(uTex, gl_PointCoord).a * vA; gl_FragColor = vec4(mix(vec3(0.66, 0.62, 0.84), vT, 0.35) * 0.9, a * 0.55); }' }));
   m.frustumCulled = false; m.renderOrder = 7; m.name = 'title_steam'; return { mesh: m, U };
 }
 

@@ -1,19 +1,20 @@
 // Bar stage (Stage and Club Artist INT-B): the 5 x 2.5 m stage in the right-back corner. Deck with LED front lip, velvet curtains and a gold valance around a framed LED screen
 // (programme, karaoke lyrics), neon proscenium rods, PA stacks, monitors, mic stand, a stool and guitar, a DJ table with a glowing laptop and a LIVE sign.
-import { mix, mul, K, bar, stageDeck, steps, speaker, wedge, micStand, guitar, curtain, makeLed, PINKN, CYANN, GOLDN, VIOLETN, WARMS, GREENN, LIMEN, aoTint } from './venue_kit.js';
+import { mix, mul, K, bar, lightPool, stageDeck, steps, speaker, wedge, micStand, guitar, curtain, makeLed, PINKN, CYANN, GOLDN, VIOLETN, WARMS, GREENN, LIMEN, aoTint } from './venue_kit.js';
 import { BAR } from './bar_shell.js';
 
 export function buildStage(S) {
   const B = S.B, GL = S.GLOW, st = BAR.stage, h = st.h, R = S.rand, cx = (st.x0 + st.x1) / 2, zb = st.z0 + 0.08;
-  stageDeck(B, GL, { x0: st.x0, x1: st.x1, z0: st.z0, z1: st.z1, h, color: mix(K.deckL, K.plumL, 0.45), segments: 10 });
+  stageDeck(B, GL, { x0: st.x0, x1: st.x1, z0: st.z0, z1: st.z1, h, color: mix(K.deckL, K.plumL, 0.45), segments: 10, litTop: GL, litK: 0.6 });
+  lightPool(S.SOFT, cx, h + 0.02, -3.5, 2.5, 1.4, '#ff7ad0', 0.28); lightPool(S.SOFT, cx + 1.4, h + 0.02, -3.3, 1.4, 1.0, '#7af0ff', 0.2); lightPool(S.SOFT, cx, 0.02, st.z1 + 1.2, 2.8, 1.2, '#ff7ad0', 0.18);
   steps(B, cx, 1.1, st.z1, h, 2, K.deckL); S.soft(cx, st.z1 + 0.35, 0.9, 0.5, 0.35);
   // dark runner and a gaffer-taped X where the singer stands
   B.box(cx, h, -3.5, 2.6, 0.012, 1.4, mix(K.deckD, K.velvetD, 0.3), { base: 0, tint: 0.02 }); B.box(cx, h + 0.012, -3.25, 0.5, 0.004, 0.04, K.yellow, { base: 0 });
   // back wall: curtains left and right, framed LED screen in the middle, gold valance on top
   const lcw = 0.95;
-  curtain(B, { x0: st.x0 + 0.04, x1: st.x0 + lcw, y0: h, y1: 3.05, z: zb, depth: 0.2, rand: R, valance: 0 });
-  curtain(B, { x0: st.x1 - lcw, x1: st.x1 - 0.04, y0: h, y1: 3.05, z: zb, depth: 0.2, rand: R, valance: 0 });
-  curtain(B, { x0: st.x0 + 0.04, x1: st.x1 - 0.04, y0: 2.55, y1: 3.12, z: zb, depth: 0.2, rand: R, fringe: false, valance: 0.4, fw: 0.3 });
+  curtain(GL, { x0: st.x0 + 0.04, x1: st.x0 + lcw, y0: h, y1: 3.05, z: zb, depth: 0.2, rand: R, valance: 0, k: 0.62 });
+  curtain(GL, { x0: st.x1 - lcw, x1: st.x1 - 0.04, y0: h, y1: 3.05, z: zb, depth: 0.2, rand: R, valance: 0, k: 0.62 });
+  curtain(GL, { x0: st.x0 + 0.04, x1: st.x1 - 0.04, y0: 2.55, y1: 3.12, z: zb, depth: 0.2, rand: R, fringe: false, valance: 0.4, fw: 0.3, k: 0.62 });
   // dark backdrop behind the screen and its frame
   const sx0 = st.x0 + lcw + 0.1, sx1 = st.x1 - lcw - 0.1, sy0 = 0.85, sy1 = 2.5, scx = (sx0 + sx1) / 2;
   B.box(scx, h, zb + 0.01, sx1 - sx0 + 0.3, 2.65 - h, 0.06, K.deckD, { base: 0.2, tint: 0.02 });

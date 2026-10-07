@@ -14,11 +14,11 @@ const bounce = (x) => { const n = 7.5625, d = 2.75; if (x < 1 / d) return n * x 
 // camera shots: position, look-at, vertical fov at the reference aspect 9:16
 const SHOTS = {
   title: { p: [0.0, 2.1, 5.6], l: [0, 0.75, -3.2], fov: 50 },
-  slots: { p: [0.35, 1.5, 3.0], l: [0.0, 2.05, -2.6], fov: 50 },
+  slots: { p: [0.0, 1.9, 4.0], l: [0.0, 2.6, -3.2], fov: 50 },
 };
 
 export default function create(ctx, args) {
-  args = args || {}; { const tv = args.time === undefined ? 0.85 : args.time; ctx.todInit = tv; }
+  args = args || {}; { const tv = args.time === undefined || args.time === 'night' ? 0.88 : args.time; ctx.todInit = tv; if (args.time === 'night') args.time = tv; }
   ctx.embedded = true;                                   // controls: no debug UI, no intro cinematic
   const low = ctx.quality === 'low', group = new THREE.Group(); group.name = 'title_world';
   const T = { brick: brickTex(), brickG: brickTex(true), mural: muralTex(), bladeL: bladeTex('BEATS', '#2ee6ff', 'LIVE'), bladeR: bladeTex('OPEN', '#ffe14d', 'MIC'), posters: [posterTex(0, '#ff3ea5', '#2ee6ff'), posterTex(1, '#2ee6ff', '#ffe14d'), posterTex(2, '#a86bff', '#ff3ea5'), posterTex(3, '#ffe14d', '#9dff4a')] };
@@ -28,7 +28,7 @@ export default function create(ctx, args) {
   const sign = buildSign(); sign.group.position.set(0, 4.3, -4.7); group.add(sign.group);
   const strings = buildStringLights(); group.add(strings.group);
   const rain = buildRain(low ? 420 : 900); group.add(rain.mesh);
-  const steam = buildSteam([[-1.55, 0.14, 1.0, 0.4], [1.5, 0.14, 0.4, 0.4], [0.1, 0.03, -5.6, 1.5], [-0.9, 0.03, -6.8, 1.3], [-2.3, 3.0, -3.7, 0.55]]); group.add(steam.mesh);
+  const steam = buildSteam([[-1.0, 0.03, -4.4, 1.3], [0.9, 0.03, -5.4, 1.5], [0.1, 0.03, -6.8, 1.6], [-2.3, 3.0, -3.7, 0.55], [2.3, 2.6, -2.6, 0.5]]); group.add(steam.mesh);
   const wet = buildWet(); group.add(wet.mesh);
   const shafts = buildShafts(set.lens); group.add(shafts.group);
   // real point lights (the bricks carry baked neon washes, these light the characters, the stage and the props)
@@ -49,6 +49,8 @@ export default function create(ctx, args) {
     setShot(name, ms) { const s = SHOTS[name]; if (!s) return false; st.shot = name; st.to = s; st.ms = ms === undefined ? 900 : ms; if (st.ms <= 0) { st.cam.p.set(...s.p); st.cam.l.set(...s.l); st.cam.fov = s.fov; } return true; },
     setBpm(b) { if (b > 30 && b < 260) st.bpm = b; }, setPhase(p) { st.phase = p === null || p === undefined ? null : p; },
     pose(who, clip, o) { const w = st.w; if (!w) return false; const c = who === 'hero' || who === 'tay' ? w.player : w.npcs.find((n) => n.id === who); if (!c) return false; c.play(clip, o || { bpm: st.bpm }); return true; },
+    restart() { st.off -= st.t; st.t = 0; return true; },
+    feed(b) { b = +b; if (b > 0 && isFinite(b)) { st.phase = b; } else st.phase = null; },
     skip(sec) { st.off += sec; st.ms = 0; api.setShot(st.shot, 0); return st.off; },
     stats() { return { shot: st.shot, pulse: +st.pulse.toFixed(2), bpm: st.bpm, ready: st.ready }; },
   };
@@ -58,6 +60,7 @@ export default function create(ctx, args) {
     const w = ctx.host && ctx.host.world; if (!w || !w.player) return; st.w = w;
     const hero = w.player, foxy = w.npcs.find((n) => n.id === 'foxy'), bee = w.npcs.find((n) => n.id === 'beeamgee');
     w.lighting && w.lighting.group && w.lighting.group.traverse((o) => { if (o.isHemisphereLight) st.hemi = o; else if (o.isDirectionalLight && o.castShadow === false) st.rim = o; });
+    w.setBeat = (b) => { api.feed(b); };                  // the game feeds E.beat() (absolute beats); lighting only wants a 0..1 pulse, which update() hands it
     if (w.controls && w.controls.setEnabled) w.controls.setEnabled(false);
     if (w.controls && w.controls.teleportTo) w.controls.teleportTo(S.x, S.z + 0.1);
     hero.object.position.set(S.x, S.h, S.z + 0.1); hero.object.rotation.y = 0; hero.play('beatbox', { bpm: st.bpm, amp: 1 }); hero.setMood && hero.setMood('happy', true);
@@ -72,7 +75,7 @@ export default function create(ctx, args) {
     const t = t0 + st.off; st.t = t; if (!st.ready) cast();
     // beat: external pulse when the game feeds it, else an internal clock
     const phase = st.phase !== null ? st.phase : t * st.bpm / 60, frac = phase - Math.floor(phase), internal = Math.exp(-frac * 5);
-    const pulse = t - st.extT < 0.3 ? st.ext : internal; st.pulse = pulse; st.beat = phase;
+    const pulse = internal; st.pulse = pulse; st.beat = phase; if (st.w && st.w.lighting && st.w.lighting.setBeat) st.w.lighting.setBeat(pulse * 0.85);
     // the sign: drops in with a bounce, then sways; marquee chase; brightness on the beat; the 7th letter is a dying tube
     const dk = clamp((t - 0.3) / 1.25, 0, 1), drop = (1 - bounce(dk)) * 7.5;
     sign.pivot.position.y = drop; sign.pivot.rotation.z = Math.sin(t * 0.8) * 0.014 + (1 - dk) * Math.sin(t * 6) * 0.05; sign.pivot.rotation.y = Math.sin(t * 0.5 + 1) * 0.03;
@@ -100,8 +103,8 @@ export default function create(ctx, args) {
   }
   return {
     terrain, flora: { group: new THREE.Group(), update: NOP }, npcSpecs: [{ id: 'foxy', flat: false }, { id: 'beeamgee' }], profile: 'out', camera: { fov: 44, near: 0.3, far: 160 }, update,
-    setBeat(b) { st.ext = clamp(+b || 0, 0, 1); st.extT = st.t; },
+    setBeat(b) { api.feed(b); },
     setLook() { },
-    dispose() { ctx.title = null; },
+    dispose() { try { sign.texA.dispose(); sign.texB.dispose(); } catch (e) { /* ignore */ } ctx.title = null; },
   };
 }

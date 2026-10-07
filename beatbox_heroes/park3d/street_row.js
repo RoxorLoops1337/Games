@@ -78,8 +78,8 @@ export function buildPark(S) {
   const trees = [[-33.5, -7.5], [-25.4, -7], [-31.5, -11], [-26.5, -12], [-36, -10], [-39, -7], [-42, -11], [-34, -15], [-29, -16], [-24, -15], [-38, -16], [-44, -8]];
   trees.forEach(([x, z], i) => {
     const s = 0.9 + (i % 4) * 0.12; B.cyl(x, 0, z, 0.2 * s, 0.14 * s, 2.6 * s, 6, PAL.woodD, { base: 0.3 });
-    B.blob(x, 3.7 * s, z, 1.9 * s, 1.4 * s, 1.9 * s, mix(PAL.leaf[2], PAL.ink, 0.15), mix(PAL.leaf[i % 4], cr('#fff0a0'), 0.18), { detail: 1, jit: 0.5 });
-    B.blob(x + 0.9 * s, 4.9 * s, z - 0.4, 1.2 * s, 1.0 * s, 1.2 * s, PAL.leaf[0], mix(PAL.leaf[3], cr('#ffe48a'), 0.3), { detail: 1, jit: 0.5 });
+    S.GLOW.blob(x, 3.7 * s, z, 1.9 * s, 1.4 * s, 1.9 * s, [0.02, 0.18, 0.12], [0.1 + (i % 3) * 0.03, 0.5, 0.2], { detail: 1, jit: 0.5 }); // canopies are lit from inside: they glow beyond the gate
+    S.GLOW.blob(x + 0.9 * s, 4.9 * s, z - 0.4, 1.2 * s, 1.0 * s, 1.2 * s, [0.05, 0.26, 0.14], [0.36, 0.6, 0.16], { detail: 1, jit: 0.5 });
   });
   S.section('park_glow', () => { // fairy lights and lit leaf patches: the trees glow beyond the gate
     trees.forEach(([x, z], i) => { for (let k = 0; k < 7; k++) { const a = (k + i) * 2.4, r = 0.9 + (k % 3) * 0.5, s = 0.9 + (i % 4) * 0.12; S.GLOW.box(x + Math.cos(a) * r * s, (3.4 + (k % 4) * 0.45) * s, z + Math.sin(a) * r * s, 0.1, 0.1, 0.1, [NEON.warm, NEON.yellow, NEON.green, NEON.warm][k % 4], { base: 0 }); }
@@ -108,10 +108,10 @@ export function buildPark(S) {
 
 // ===================================================================================== HOME STOOP (-22.5 .. -8.5, door -15)
 export function buildHome(S) {
-  const B = S.B, R = S.R, x0 = -22.5, x1 = -8.5, top = 13.2, dx = -15, brick = cr('#93403a');
+  const B = S.B, R = S.R, x0 = -22.5, x1 = -8.5, top = 13.2, dx = -15, brick = cr('#a24a40');
   block(S, x0, x1, top, 9, brick, { courses: [4.45, 7.45, 10.45], plinth: 0.95, roof: cr('#4b3547') });
   for (const cx of [-13.2, -16.8]) B.box(cx, G, Z0 + 0.06, 0.2, 2.9, 0.16, PAL.stone, { base: 0.1 }); // door surround pilasters
-  B.box(dx, G + 2.9, Z0 + 0.12, 3.0, 0.24, 0.34, PAL.stone, { base: 0.05 }); B.pyr(dx, G + 3.12, Z0 + 0.12, 3.0, 0.5, mix(PAL.stone, PAL.cream, 0.3)); // pediment
+  B.box(dx, G + 2.9, Z0 + 0.4, 3.0, 0.14, 0.9, PAL.stone, { base: 0.05, top: mix(PAL.stone, PAL.cream, 0.3) }); for (const sg of [-1, 1]) seg(B, dx + sg * 1.35, G + 2.7, dx + sg * 1.35, G + 2.9, Z0 + 0.8, 0.05, 0.05, PAL.iron); // door canopy and brackets
   B.box(dx, G + 0.5, Z0 + 0.0, 1.5, 2.1, 0.22, cr('#241a33'), { base: 0 }); // door recess
   for (let i = 0; i < 3; i++) { const dep = 1.3 - i * 0.4; B.box(dx, 0, Z0 + dep / 2, 2.6 - i * 0.3, G + 0.17 * (i + 1), dep, mix(PAL.stone, PAL.stoneD, 0.15 + i * 0.12), { base: 0.3 }); }
   B.box(dx, G + 0.52, Z0 + 0.15, 1.3, 2.05, 0.1, cr('#2a8c7a'), { base: 0.1 }); // door leaf
@@ -157,7 +157,7 @@ function mannequin(S, x, z, c1, c2) {
   const B = S.B; B.cyl(x, G + 0.8, z, 0.2, 0.17, 0.05, 8, PAL.iron); B.cyl(x, G + 0.85, z, 0.03, 0.03, 0.55, 5, PAL.iron); B.cyl(x, G + 1.4, z, 0.2, 0.13, 0.6, 7, c1, { base: 0.1 }); B.cyl(x, G + 1.15, z, 0.16, 0.2, 0.26, 7, c2, { base: 0.1 }); B.blob(x, G + 2.13, z, 0.1, 0.12, 0.1, cr('#d9c2b0'), cr('#f1dccb'), { detail: 0, jit: 0.2 });
 }
 export function buildShop(S) {
-  const B = S.B, R = S.R, x0 = -6.5, x1 = 6.5, top = 8.4, base = cr('#3f8088');
+  const B = S.B, R = S.R, x0 = -6.5, x1 = 6.5, top = 8.4, base = cr('#4a929a');
   block(S, x0, x1, top, 8.5, base, { courses: [4.2], plinth: 0.9, plinthColor: cr('#274a56'), roof: cr('#5a4a5a') });
   // storefront: two display windows and a glass door
   for (const wx of [-3.1, 3.1]) {
@@ -196,7 +196,7 @@ export function buildShop(S) {
 
 // ===================================================================================== SOUND LAB (7.7 .. 19.3, door 13)
 export function buildStudio(S) {
-  const B = S.B, R = S.R, x0 = 7.7, x1 = 19.3, top = 10.6, dx = 13, base = cr('#3d4a7e');
+  const B = S.B, R = S.R, x0 = 7.7, x1 = 19.3, top = 10.6, dx = 13, base = cr('#5e70b0');
   block(S, x0, x1, top, 9, base, { courses: [4.2, 7.4], plinth: 1.0, plinthColor: cr('#262a4a'), roof: cr('#2a2640') });
   // foam window (left), steel door, speaker stack and posters (right)
   const fx = 10.2, fw = 3.2, fy = G + 1.95, fh = 1.7; B.box(fx, G + 0.05, Z0 + 0.02, fw + 0.5, fh + 0.8, 0.24, cr('#1d2038'), { base: 0.1 });
@@ -223,8 +223,8 @@ export function buildStudio(S) {
 
 // ===================================================================================== BAR (20.5 .. 34, door 27)
 export function buildBar(S) {
-  const B = S.B, R = S.R, x0 = 20.5, x1 = 34, top = 9.6, dx = 27, base = cr('#3b2a52');
-  block(S, x0, x1, top, 9, base, { courses: [4.0, 7.0], plinth: 1.0, plinthColor: cr('#1c1230'), roof: cr('#241838'), trim: cr('#8a5a8a') });
+  const B = S.B, R = S.R, x0 = 20.5, x1 = 34, top = 9.6, dx = 27, base = cr('#6a4c8e');
+  block(S, x0, x1, top, 9, base, { courses: [4.0, 7.0], plinth: 1.0, plinthColor: cr('#1c1230'), roof: cr('#241838'), trim: cr('#a870a8') });
   // door: double red doors with portholes, set in a pink-lined frame
   B.box(dx, G, Z0 + 0.0, 2.6, 3.1, 0.24, cr('#150d24'), { base: 0.1 }); B.box(dx - 0.55, G + 0.04, Z0 + 0.14, 1.05, 2.55, 0.1, cr('#b8283f'), { base: 0.15 }); B.box(dx + 0.55, G + 0.04, Z0 + 0.14, 1.05, 2.55, 0.1, cr('#b8283f'), { base: 0.15 });
   for (const sx of [-0.55, 0.55]) B.box(dx + sx, G + 1.0, Z0 + 0.2, 0.06, 0.06, 0.4, PAL.steel, { base: 0 });
@@ -232,7 +232,7 @@ export function buildBar(S) {
   for (const wx of [23.4, 30.6]) { B.box(wx, G + 0.0, Z0 + 0.04, 2.9, 0.95, 0.2, cr('#150d24'), { base: 0.2 }); B.box(wx, G + 0.95, Z0 + 0.06, 3.0, 0.1, 0.22, cr('#8a5a8a')); S.wall(B, wx, G + 2.1, Z0 + 0.07, 2.6, 1.8, PAL.glassD, PAL.glassL); }
   // velvet rope
   for (const px of [24.2, 29.8]) { B.cyl(px, G, -2.2, 0.1, 0.07, 0.06, 8, cr('#d4a017')); B.cyl(px, G + 0.06, -2.2, 0.03, 0.03, 0.85, 6, cr('#d4a017')); B.blob(px, G + 0.95, -2.2, 0.07, 0.07, 0.07, cr('#e8c04a'), cr('#fff0a0'), { detail: 0, jit: 0 }); }
-  B.box(26.0, G + 0.62, -2.2, 3.6 - 0.0, 0.06, 0.06, cr('#b8283f'), { base: 0 }); S.hit.circle(24.2, -2.2, 0.2); S.hit.circle(29.8, -2.2, 0.2);
+  B.box(25.1, G + 0.62, -2.2, 1.8, 0.06, 0.06, cr('#b8283f'), { base: 0 }); B.box(28.9, G + 0.62, -2.2, 1.8, 0.06, 0.06, cr('#b8283f'), { base: 0 }); S.hit.circle(24.2, -2.2, 0.2); S.hit.circle(29.8, -2.2, 0.2);
   B.box(31.2, G, -1.7, 0.72, 1.0, 0.1, cr('#2a2a2e'), { base: 0 }); S.dec('menu', 31.2, G + 0.55, -1.64, 0.62, 0.82, 0); S.hit.box(31.2, -1.7, 0.4, 0.15);
   S.section('open_bar', () => {
     for (const wx of [23.4, 30.6]) { S.wall(S.GLOW, wx, G + 2.1, Z0 + 0.06, 2.56, 1.76, [1.8, 0.5, 2.4], [2.6, 0.7, 1.9]); S.halo(wx, G + 2.0, Z0 + 0.9, 5.4, 3.6, [0.55, 0.14, 0.5]); }
