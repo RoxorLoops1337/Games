@@ -282,7 +282,25 @@ function drawHubPlates() {
   if (!S.waygate && S.lands.length >= 2) drawPlate(WAYPLATE.x, WAYPLATE.y, 44, 'way', 'Warp Pads', S.wayPlate.cost, S.wayPlate.paid, { c1: '#5ab8e8', c2: '#2a5a9a', ring: '#b8f4ff' });
   if (S.waygate) drawPad(WAYPAD.x, WAYPAD.y, 'TO NEWEST');
 }
-function drawUnlockPlate() {
-  const n = S.lands.length + 1, u = S.unlockPlate || { x: 0, y: 0, cost: nextUnlockCost(), paid: S.unlockPaid };
-  drawPlate(u.x, u.y, 50, 'way', 'New Land: ' + biomeOf(n).name, u.cost, u.paid, { c1: '#ffb86a', c2: '#c8521e', ring: '#ffe98a', noBob: false });
+function drawUnlockPlate() { // the portal to the next island: unmistakable — beacon pillar, ripples, banner and a big gold price
+  const n = S.lands.length + 1, u = S.unlockPlate; if (!u) return;
+  const B = biomeOf(n), rem = Math.max(0, u.cost - u.paid), afford = S.wallet >= rem, t = S.t, r = 58;
+  ctx.save();
+  if (vis(u.x, u.y, 200)) {
+    ctx.globalCompositeOperation = 'lighter';
+    const ph = (t * 0.9) % 1; // expanding ripples on the ground
+    for (let i = 0; i < 2; i++) { const q = (ph + i * 0.5) % 1; ctx.strokeStyle = 'rgba(255,214,120,' + (0.5 * (1 - q) * (afford ? 1 : 0.5)) + ')'; ctx.lineWidth = 5 * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(u.x, u.y + 24, 60 + q * 70, 22 + q * 26, 0, 0, TAU); ctx.stroke(); }
+    const bh = afford ? 230 : 150, pg = ctx.createLinearGradient(0, u.y - bh, 0, u.y); pg.addColorStop(0, 'rgba(255,233,138,0)'); pg.addColorStop(1, 'rgba(255,233,138,' + (afford ? 0.42 + 0.14 * Math.sin(t * 5) : 0.2) + ')'); ctx.fillStyle = pg; ctx.beginPath(); ctx.moveTo(u.x - 44, u.y); ctx.lineTo(u.x - 22, u.y - bh); ctx.lineTo(u.x + 22, u.y - bh); ctx.lineTo(u.x + 44, u.y); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  drawPlate(u.x, u.y, r, 'way', '', u.cost, u.paid, { c1: B.g[0], c2: mixc(B.deep, '#1a0a30', 0.25), ring: '#ffe98a', noBob: false });
+
+}
+
+function drawUnlockBanner() { // drawn after the y-sorted actors so trees can never hide it
+  const n = S.lands.length + 1, u = S.unlockPlate; if (!u || !vis(u.x, u.y, 120)) return;
+  const B = biomeOf(n), rem = Math.max(0, u.cost - u.paid), afford = S.wallet >= rem, t = S.t, r = 58;
+  const by = u.y - r - 30 + Math.sin(t * 3) * 3;
+  labelPill('NEW LAND · ' + B.name, u.x, by, afford ? '#ffe98a' : '#ffffff', afford ? '#f0b422' : '#dccaff', 13);
+  if (afford) { ctx.save(); ctx.translate(u.x, by - 26 + Math.sin(t * 6) * 4); ctx.fillStyle = HV.line; ctx.beginPath(); ctx.moveTo(-12, -2); ctx.lineTo(12, -2); ctx.lineTo(0, 14); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.lineTo(0, 9); ctx.closePath(); ctx.fill(); ctx.restore(); }
 }

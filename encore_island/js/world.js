@@ -119,7 +119,7 @@ function landPlateDefs(k, g) {
 // where the plate that opens land k+1 sits: inside land k's rim, facing the next land
 function unlockSpot(kNext) {
   const c = geoOf(kNext), par = geoOf(c.parent), base = Math.atan2(c.y - par.y, c.x - par.x);
-  const keep = par.k === 0 ? HUB_KEEP : landPlateDefs(par.k, par).map(p => ({ x: p.x, y: p.y, r: 96 })).concat([landPadSpot(par)].map(p => ({ x: p.x, y: p.y, r: 96 })));
+  const keep = par.k === 0 ? HUB_KEEP : landPlateDefs(par.k, par).map(p => ({ x: p.x, y: p.y, r: 114 })).concat([landPadSpot(par)].map(p => ({ x: p.x, y: p.y, r: 114 })));
   let best = null, bestScore = -1e9;
   for (let i = 0; i < 49; i++) { // fan outwards from the true direction (0, +s, -s, ...) until the spot is clear
     const ang = base + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.1, rr = Math.min(radiusAt(par, ang) - (par.k === 0 ? 55 : 80), 1e9);

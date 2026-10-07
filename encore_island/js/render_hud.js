@@ -23,6 +23,20 @@ function drawPlayerCard() {
   if (S.crowns > 0 || S.prestiges > 0) chip('crown', fmt(S.crowns), '#ffd94a', () => openSheet('perks'), S.crowns > 0);
   leftBottom = cy2 + 34;
 }
+// "NEW LAND" progress chip: always visible, shows how close the next island is; tap to be pointed at its portal
+function drawLandChip() {
+  const u = S.unlockPlate; if (!u || S.sheet || S.modal) return;
+  const left = 196, right = vw - 102; if (right - left < 100) return;
+  const w = clamp(right - left, 100, 176), x = left + (right - left - w) / 2, y = 44, h = 34, rem = Math.max(0, u.cost - u.paid), afford = S.wallet >= rem, f = clamp((S.wallet + u.paid) / u.cost, 0, 1), pu = afford ? 0.5 + 0.5 * Math.sin(S.t * 6) : 0;
+  ctx.fillStyle = HV.line; rr(x - 2, y - 2, w + 4, h + 4, 14); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); if (afford) { g.addColorStop(0, '#ffe98a'); g.addColorStop(1, '#f0a81e'); } else { g.addColorStop(0, '#5a46b8'); g.addColorStop(1, '#33256f'); } ctx.fillStyle = g; rr(x, y, w, h, 12); ctx.fill();
+  if (!afford) { ctx.fillStyle = 'rgba(154,240,180,0.55)'; ctx.save(); rr(x, y, w, h, 12); ctx.clip(); ctx.fillRect(x, y + h - 5, w * f, 5); ctx.restore(); }
+  if (afford) { ctx.strokeStyle = 'rgba(255,255,255,' + (0.4 + 0.5 * pu) + ')'; ctx.lineWidth = 2.5; rr(x, y, w, h, 12); ctx.stroke(); }
+  drawIcon(afford ? 'way' : 'lock', x + 20, y + h / 2, 26);
+  ctx.textAlign = 'left'; ctx.fillStyle = afford ? '#3a2410' : '#fff'; ctx.font = font(12); ctx.fillText(afford ? 'NEW LAND!' : 'New land', x + 38, y + 15);
+  ctx.fillStyle = afford ? '#7a4a10' : '#ffd94a'; ctx.font = font(11); ctx.fillText(afford ? 'tap to find'  : fmt(Math.min(S.wallet, rem)) + ' / ' + fmt(rem), x + 38, y + 28);
+  hitRect(x - 4, y - 4, w + 8, h + 8, () => { S.beaconUntil = S.t + 9; sfx('ui_open'); });
+}
 function drawRankPill() {
   const rk = heroRank(), nx = nextRank(), left = 196, right = vw - 102; if (right - left < 96) return;
   const rw = clamp(right - left, 96, 150), rx = left + (right - left - rw) / 2, ry = 10;
@@ -51,9 +65,11 @@ function guideTarget() {
   const p = S.player;
   if (p.helmets.length >= Math.max(3, cap() * 0.6) || (p.helmets.length && S.pallet <= 0 && S.wallet < 30)) return { x: SELL.x, y: SELL.y, label: 'Sell your loot' };
   if (S.pallet > 0 && (S.pallet >= S.wallet * 0.25 || S.wallet < 40)) return { x: VAULT.x, y: VAULT.y, label: 'Collect coins' };
+  const un = S.unlockPlate;
+  if (un && S.beaconUntil > S.t) return { x: un.x, y: un.y, label: 'New land is here!' };
+  if (un && un.cost - un.paid <= S.wallet) return { x: un.x, y: un.y, label: 'Open a new land!' };
   let best = null, bd = 1e18; const consider = (x, y, rem, label) => { if (rem > 0 && rem <= S.wallet) { const d = dist2(p.x, p.y, x, y); if (d < bd) { bd = d; best = { x, y, label }; } } };
   for (const key in UPG) consider(UPG_POS[key].x, UPG_POS[key].y, upgCost(key, S.up[key]) - S.upPaid[key], 'Upgrade ' + UPG[key].name);
-  const u = S.unlockPlate; if (u) consider(u.x, u.y, u.cost - u.paid, 'Open a new land');
   for (const z of S.lands) for (const pl of z.plates) if (!pl.built) consider(pl.x, pl.y, pl.cost - pl.paid, 'Build ' + pl.name);
   if (best) return best;
   if (S.pallet > 0) return { x: VAULT.x, y: VAULT.y, label: 'Collect coins' };
@@ -70,7 +86,7 @@ function drawGuide() {
   const tx = Math.abs(ca) > 1e-4 ? bx / Math.abs(ca) : 1e9, ty = sa < 0 ? (Math.abs(sa) > 1e-4 ? (cy0 - 215 + 0) / Math.abs(sa) : 1e9) : (Math.abs(sa) > 1e-4 ? (vh - DOCK_H - 150 - cy0) / sa : 1e9);
   const tt = Math.min(tx, ty), ax = cx0 + ca * tt, ay = cy0 + sa * tt;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pu, pu); ctx.lineJoin = 'round'; ctx.strokeStyle = HV.line; ctx.lineWidth = 5; ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.moveTo(17, 0); ctx.lineTo(-8, -12); ctx.lineTo(-3, 0); ctx.lineTo(-8, 12); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
-  labelPill(g.label, vw / 2, 128, '#ffe98a', '#f0b422', 12);
+  labelPill(g.label, clamp(vw / 2 + 24, 90, vw - 90), 104, '#ffe98a', '#f0b422', 12);
 }
 function drawCombo() {
   if (S.combo < 3) return;
@@ -92,17 +108,25 @@ function drawGroove(y) {
 }
 const DOCK = [['town', 'home', 'Town'], ['heroes', 'mic', 'Heroes'], ['goals', 'trophy', 'Goals'], ['perks', 'crown', 'Perks'], ['more', 'menu', 'More']];
 function dockPips() { return { town: S.pop.length < popCap() && S.wallet >= recruitCost(), heroes: S.gems >= eggCost(S.stats.hatches), goals: S.dailies.concat(S.quests).some(q => q.done && false) || S.dailies.some(q => !q.done) && false, perks: S.crowns > 0, more: loginReady() || S.gems >= SPIN_COST }; }
-const DOCK_H = 62;
+const DOCK_H = 74;
+const DOCK_COL = { town: ['#ffa8cf', '#e0488f'], heroes: ['#b99cff', '#6a3fd8'], goals: ['#ffe27a', '#e8921e'], perks: ['#8ef0e4', '#1f9a98'], more: ['#9ec4ff', '#4a6fd8'] };
+// the main menu: a bright cream bar with five big colour-coded buttons so it always stands out from the world
 function drawDock() {
-  const y = vh - DOCK_H - 6, w = Math.min(vw - 16, 520), x = (vw - w) / 2, pips = dockPips();
-  plaque(x, y, w, DOCK_H, 18); const bw = w / DOCK.length;
+  const y = vh - DOCK_H - 6, w = Math.min(vw - 12, 540), x = (vw - w) / 2, pips = dockPips();
+  ctx.fillStyle = 'rgba(40,20,80,0.28)'; rr(x - 2, y + 4, w + 4, DOCK_H + 4, 22); ctx.fill();
+  ctx.fillStyle = HV.line; rr(x - 3, y - 3, w + 6, DOCK_H + 6, 22); ctx.fill();
+  const bg = ctx.createLinearGradient(0, y, 0, y + DOCK_H); bg.addColorStop(0, '#fff8ec'); bg.addColorStop(1, '#ffe2f0'); ctx.fillStyle = bg; rr(x, y, w, DOCK_H, 19); ctx.fill();
+  const bw = w / DOCK.length;
   DOCK.forEach(([id, icon, label], i) => {
-    const bx = x + i * bw, on = S.sheet && S.sheet.id === id;
-    if (on) { pill(bx + 5, y + 5, bw - 10, DOCK_H - 10, '#ffe98a', '#f0b422'); }
-    const bob = on ? -2 : 0; drawIcon(icon, bx + bw / 2, y + 24 + bob, 34);
-    ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillText(label, bx + bw / 2, y + DOCK_H - 9);
-    if (pips[id]) { ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(bx + bw / 2 + 17, y + 12, 7.5, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff4d7a'; ctx.beginPath(); ctx.arc(bx + bw / 2 + 17, y + 12, 5.5 + Math.sin(S.t * 6) * 0.6, 0, TAU); ctx.fill(); }
-    hitRect(bx, y, bw, DOCK_H, () => { if (S.sheet && S.sheet.id === id) closeSheet(); else openSheet(id); sfx('ui_open'); });
+    const bx = x + i * bw, on = S.sheet && S.sheet.id === id, c = DOCK_COL[id], lift = on ? -5 : 0, tx = bx + 4, tw = bw - 8, ty = y + 6 + lift, th = DOCK_H - 12;
+    ctx.fillStyle = HV.line; rr(tx - 2, ty - 2, tw + 4, th + 4 + (on ? 5 : 0), 15); ctx.fill();
+    const g = ctx.createLinearGradient(0, ty, 0, ty + th); g.addColorStop(0, c[0]); g.addColorStop(1, c[1]); ctx.fillStyle = g; rr(tx, ty, tw, th, 13); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,' + (on ? 0.5 : 0.32) + ')'; rr(tx + 3, ty + 3, tw - 6, th * 0.38, 10); ctx.fill();
+    if (on) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; rr(tx, ty, tw, th, 13); ctx.stroke(); }
+    drawIcon(icon, bx + bw / 2, ty + 25, 38);
+    ctx.font = font(12); ctx.textAlign = 'center'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.4; ctx.strokeStyle = 'rgba(45,23,15,0.85)'; ctx.strokeText(label, bx + bw / 2, ty + th - 9); ctx.fillStyle = '#fff'; ctx.fillText(label, bx + bw / 2, ty + th - 9);
+    if (pips[id]) { const px = bx + bw - 12, py = y + 6 + lift; ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(px, py, 9.5, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff3d6e'; ctx.beginPath(); ctx.arc(px, py, 7.5 + Math.sin(S.t * 6) * 0.7, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(px - 1.2, py - 4, 2.4, 5.5); ctx.fillRect(px - 1.2, py + 2.4, 2.4, 2.4); }
+    hitRect(bx, y - 6, bw, DOCK_H + 12, () => { if (S.sheet && S.sheet.id === id) closeSheet(); else openSheet(id); sfx('ui_open'); });
   });
 }
 function drawActionButtons(baseY) {
@@ -165,7 +189,7 @@ function drawTitle() {
 }
 function drawHudTop() {
   if (!S.started) return;
-  drawPlayerCard(); drawRankPill(); drawMinimap(); if (!S.sheet && !S.modal) drawCombo();
+  drawPlayerCard(); drawRankPill(); drawLandChip(); drawMinimap(); if (!S.sheet && !S.modal) drawCombo();
   if (!S.sheet && !S.modal) drawGuide();
 }
 function drawHudBottom() {

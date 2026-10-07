@@ -16,7 +16,8 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const top = Math.round(vh * 0.13) + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
+  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = SHEETS[sh.id].tabs ? 104 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
+  const top = bot0 - fitH + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
   ctx.fillStyle = HV.line; rr(x - 3, top - 3, w + 6, h + 6, 24); ctx.fill();
@@ -30,7 +31,7 @@ function drawSheet() {
   SR = { x: x + 8, y: cy, w: w - 16, h: bot - cy - 8 };
   ctx.save(); rr(SR.x, SR.y, SR.w, SR.h, 12); ctx.clip(); ctx.translate(SR.x, SR.y - sh.scroll);
   const H = SHEET_DRAW[sh.id](SR.w, sh); ctx.restore();
-  sh.max = Math.max(0, H - SR.h + 6);
+  sh.H = H; sh.max = Math.max(0, H - SR.h + 6);
   if (!sh.drag) { sh.scroll = clamp(sh.scroll + sh.vel, 0, sh.max); sh.vel *= 0.92; if (Math.abs(sh.vel) < 0.3) sh.vel = 0; } sh.scroll = clamp(sh.scroll, 0, sh.max);
   if (sh.max > 0) { const bh = Math.max(24, SR.h * SR.h / (H + 6)), by = SR.y + (SR.h - bh) * (sh.scroll / sh.max); ctx.fillStyle = 'rgba(255,255,255,0.35)'; rr(SR.x + SR.w - 4, by, 4, bh, 2); ctx.fill(); }
 }
@@ -189,15 +190,15 @@ function onDown(ev) {
 }
 function onMove(ev) {
   if (!PT.down || (ev.pointerId !== undefined && PT.id !== null && ev.pointerId !== PT.id)) return;
-  const p = pointerXY(ev); PT.moved += Math.abs(p.x - PT.x) + Math.abs(p.y - PT.y);
-  if (PT.inSheet) { if (S.sheet && PT.moved > 10 && PT.sy > SR.y - 4 && PT.sy < SR.y + SR.h) { S.sheet.drag = true; S.sheet.scroll = clamp(S.sheet.scroll - (p.y - PT.lastY), 0, S.sheet.max); S.sheet.vel = -(p.y - PT.lastY) * 0.9; } PT.lastY = p.y; PT.x = p.x; PT.y = p.y; return; }
+  const p = pointerXY(ev); PT.moved = Math.max(PT.moved, Math.hypot(p.x - PT.sx, p.y - PT.sy)); // displacement from the touch-down point, so finger jitter never cancels a tap
+  if (PT.inSheet) { if (S.sheet && PT.moved > 14 && PT.sy > SR.y - 4 && PT.sy < SR.y + SR.h) { S.sheet.drag = true; S.sheet.scroll = clamp(S.sheet.scroll - (p.y - PT.lastY), 0, S.sheet.max); S.sheet.vel = -(p.y - PT.lastY) * 0.9; } PT.lastY = p.y; PT.x = p.x; PT.y = p.y; return; }
   PT.x = p.x; PT.y = p.y; if (!S.stick) return;
   let dx = (p.x - S.stick.ax) / 46, dy = (p.y - S.stick.ay) / 46; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } S.stick.dx = dx; S.stick.dy = dy;
 }
 function onUp(ev) {
   if (!PT.down) { S.stick = null; return; } if (ev.pointerId !== undefined && PT.id !== null && ev.pointerId !== PT.id) return;
   PT.down = false;
-  if (PT.inSheet) { if (S.sheet) S.sheet.drag = false; if (PT.moved < 10) { const h = hitAt(PT.x, PT.y); if (h) h.act(); } PT.inSheet = false; return; }
+  if (PT.inSheet) { if (S.sheet) S.sheet.drag = false; if (PT.moved <= 14) { const h = hitAt(PT.sx, PT.sy); if (h) { sfx('ui_tap'); h.act(); } } PT.inSheet = false; return; }
   S.stick = null;
 }
 const KEYS = {};

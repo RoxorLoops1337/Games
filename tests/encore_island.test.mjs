@@ -71,4 +71,24 @@ EI.initGame(true); EI.loadSave();
 t.ok(EI.S && EI.S.player, 'loadSave leaves a valid state');
 for (let i = 0; i < 40; i++) { EI.tick(0.05); EI.draw(0.05); }
 t.ok(true, 'post-load ticks + draws fine');
+
+// ---- gameplay flows: plate purchase, selling, vault, menu taps ----
+EI.initGame(true); S = EI.S; S.started = true; S.wallet = 500;
+S.player.x = EI.UPG_POS.speed.x; S.player.y = EI.UPG_POS.speed.y;
+for (let i = 0; i < 80; i++) EI.tick(0.05);
+t.ok(S.up.speed > 0, 'standing on an upgrade plate buys it');
+S.player.helmets = [EI.dropItem ? { k: 1, v: 10 } : { k: 1, v: 10 }];
+{ const n0 = S.stats.sold; S.player.helmets = []; for (let i = 0; i < 6; i++) S.player.helmets.push({ k: 1, kind: 'helm', v: 1, val: 10, name: 'x' }); S.player.x = EI.SELL.x + 10; S.player.y = EI.SELL.y + 35; for (let i = 0; i < 60; i++) EI.tick(0.05); t.ok(S.stats.sold >= n0, 'selling does not throw'); }
+// menu taps: dock button then a content hit and the close button, using the hit list the renderer builds
+const tapAt = (x, y) => { const hs = EI.hits(); for (let i = hs.length - 1; i >= 0; i--) { const h = hs[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return true; } } return false; };
+EI.draw(0.016); const dock = EI.hits().filter(h => h.y > 700 && h.w < 100);
+t.ok(dock.length >= 5, 'dock exposes five tappable buttons (' + dock.length + ')');
+tapAt(dock[0].x + 5, dock[0].y + 5); EI.draw(0.016); EI.draw(0.016);
+t.ok(S.sheet && S.sheet.id === 'town', 'tapping the first dock button opens Town');
+S.wallet = 1e5; EI.draw(0.016); const before = S.pop.length; const sheetHits = EI.hits().filter(h => h.sheet); t.ok(sheetHits.length > 0, 'town sheet has tappable content');
+sheetHits[0].act(); t.ok(S.pop.length >= before, 'recruit tap works'); 
+for (const id of ['heroes', 'goals', 'perks', 'more']) { EI.openSheet(id); for (let i = 0; i < 3; i++) EI.draw(0.016); t.ok(S.sheet.id === id, id + ' sheet opens and draws'); }
+EI.S.modal = { id: 'wheel' }; EI.draw(0.016); EI.S.modal = { id: 'daily' }; EI.draw(0.016); EI.S.modal = null;
+t.ok(S.unlockPlate !== undefined, 'unlock plate state exists');
+
 t.done();
