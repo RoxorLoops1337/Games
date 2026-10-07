@@ -731,7 +731,7 @@ else {
         } catch (e) { h.ok(false, `item ${id}${plus ? '+' : ''} threw ${e.stack}`); }
       }
     }
-    const known = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk', 'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again'];
+    const known = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk', 'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again', 'restock', 'back'];   // (round 30: restock, back)
     for (const k of kinds) h.ok(known.includes(k), `item fx kind ${k} is one the engine implements`);
   });
 
@@ -1075,40 +1075,116 @@ else {
       h.ok(!invariants(F, id), `combo ${id} resolves cleanly ${invariants(F, id) || ''}`);
     }
   });
+
+  // (round 30) RESTOCK: the five real relics and the six real items in a fight (DESIGN.md "Restock (round 30)")
+  h.test('restock: every real Restock relic and item in a fight', () => {
+    const swords = (n) => Array.from({ length: n }, () => 'rusty_sword');
+    const fightR = (bin, relics) => C.newFight(mkRun(bin, relics, 1), ['rat'], U.rng(30));
+    const park = (F, n) => { F.used.push(...F.bin.splice(0, n)); F.playedThisTurn = 1; };
+    const refills = (ev) => ev.filter(e => e.t === 'refill');
+    const pump = (F) => { F.enemies[0].hp = F.enemies[0].maxHp = 999; F.player.hp = F.player.maxHp = 999; };
+    // Stock Cart: +1 at the turn start
+    let F = fightR(swords(20), ['stock_cart']); pump(F);
+    park(F, 18);
+    let ev = C.endTurn(F);
+    h.eq(refills(ev)[0].n, 9, 'Stock Cart: 20 owned, 8 + 1');
+    // Wholesale Card: 50%
+    F = fightR(swords(20), ['wholesale_card']); pump(F);
+    park(F, 18);
+    h.eq(refills(C.endTurn(F))[0].n, 10, 'Wholesale Card: 10 of 20');
+    // Lost and Found: the first empty grab of a turn restocks 2, the second does not
+    F = fightR(swords(12), ['lost_found']); pump(F);
+    park(F, 6);
+    C.useGrab(F); ev = C.grabDone(F, 0);
+    h.ok(refills(ev).length === 1 && refills(ev)[0].n === 2 && refills(ev)[0].rsk === 'relic', 'Lost and Found: an empty grab, 2 back');
+    h.ok(ev.some(e => e.t === 'proc' && e.id === 'lost_found'), 'it flashes');
+    C.useGrab(F); ev = C.grabDone(F, 0);
+    h.eq(refills(ev).length, 0, 'once a turn');
+    C.endTurn(F); park(F, 2);
+    C.useGrab(F); ev = C.grabDone(F, 0);
+    h.eq(refills(ev).length, 1, 'and again the next turn');
+    // Prize Hopper: a jackpot (3 prizes) restocks 3
+    F = fightR(swords(14), ['prize_hopper']); pump(F);
+    park(F, 6);
+    C.useGrab(F);
+    for (let i = 0; i < 3; i++) C.play(F, F.bin[0]);
+    ev = C.grabDone(F, 3);
+    h.ok(refills(ev).length === 1 && refills(ev)[0].n === 3, 'Prize Hopper: a jackpot, 3 back');
+    C.useGrab(F); C.play(F, F.bin[0]); ev = C.grabDone(F, 1);
+    h.eq(refills(ev).length, 0, 'a single prize: nothing');
+    // Fresh Stock: a restocked item's next play hits a random enemy for 2
+    F = fightR(swords(10), ['fresh_stock']); pump(F);
+    park(F, 8);
+    C.endTurn(F);
+    const fr = F.bin.find(i => i.rsk);
+    const hp0 = F.enemies[0].hp;
+    ev = C.play(F, fr);
+    h.eq(hp0 - F.enemies[0].hp, C.previewDamage(F, DATA.ITEMS.rusty_sword, false) + 2, 'Fresh Stock: the sword and 2');
+    // the items
+    F = fightR(['coin_return', 'spring_loader', 'boomerang', 'vending_jam', 'bottomless_bag', 'horn_of_plenty'].concat(swords(14)), []); pump(F);
+    F.used.push(...F.bin.splice(6, 12)); F.playedThisTurn = 1;
+    const play = (id) => C.play(F, F.bin.find(i => i.id === id));
+    h.eq(refills(play('coin_return'))[0].n, 2, 'Coin Return: 2');
+    h.eq(refills(play('spring_loader'))[0].n, 2, 'Spring Loader: 2');
+    const g0 = F.player.grabs;
+    h.ok(refills(play('bottomless_bag'))[0].n === 4 && F.player.grabs === g0 + 1, 'Bottomless Bag: 4 and a grab');
+    h.eq(refills(play('vending_jam'))[0].n, 2, 'Vending Jam: 2');
+    const boom = F.bin.find(i => i.id === 'boomerang'), horn = F.bin.find(i => i.id === 'horn_of_plenty');
+    play('boomerang');
+    h.ok(F.bin.includes(boom), 'the Boomerang came back');
+    ev = play('horn_of_plenty');
+    h.ok(F.bin.includes(horn) && refills(ev)[0].n === Math.min(6, F.used.length + refills(ev)[0].n), 'the Horn of Plenty restocks and comes back');
+    h.ok(!invariants(F, 'restock items'), 'clean ' + (invariants(F, 'restock items') || ''));
+  });
 }
 
 h.test('a dry turn (nothing played) pours the used pile back in', () => {
-  const run = { hp: 70, maxHp: 70, act: 1, bin: Array.from({ length: 14 }, () => ({ id: 'sword' })), relics: [], claw: { grabs: 9 } };
+  // (round 30) 30 owned: a turn that played something Restocks 12 (40%); a dry one pours the rest back
+  const run = { hp: 70, maxHp: 70, act: 1, bin: Array.from({ length: 30 }, () => ({ id: 'shield' })), relics: [], claw: { grabs: 9 } };   // (shields: twenty swords would end the fight)
   const F = COMBAT.newFight(run, ['dummy'], U.rng(3));
-  for (let i = 0; i < 6; i++) COMBAT.play(F, F.bin[0]);
-  h.eq(F.used.length, 6, 'six played');
+  for (let i = 0; i < 20; i++) COMBAT.play(F, F.bin[0]);
+  h.eq(F.used.length, 20, 'twenty played');
   COMBAT.endTurn(F);
-  h.eq(F.bin.length, 10, 'a turn that played something only trickles 2 into an 8-item bin');
-  h.eq(F.used.length, 4, 'four still wait');
+  h.eq(F.bin.length, 22, 'a turn that played something Restocks 12 (40% of 30) into a 10-item bin');
+  h.eq(F.used.length, 8, 'eight still wait');
+  h.eq(COMBAT.restockPlan(F).n, 8, 'nothing played yet this turn: the hint says the dry pour brings all 8');
+  h.ok(COMBAT.restockPlan(F).dry, 'and knows it is the dry pour');
   const ev = COMBAT.endTurn(F);
-  h.eq(F.bin.length, 14, 'a dry turn pours everything back');
+  h.eq(F.bin.length, 30, 'a dry turn pours everything back');
   h.eq(F.used.length, 0, 'used emptied');
-  h.ok(ev.some(e => e.t === 'refill'), 'with a refill event');
+  h.ok(ev.some(e => e.t === 'refill' && !e.rsk), 'with a plain refill event (not a Restock)');
 });
 
-// Turn start: the bin is topped up to binFloor from the used pile, then
-// `trickle` more items rain in (random picks), never past MAX_CABINET.
-h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-turn', () => {
+// (round 30) RESTOCK. Turn start: round(40% x owned) used items rain back into
+// the bin (random picks), never fewer than the floor top-up (binFloor), never
+// more than the used pile holds or past MAX_CABINET. (Was the trickle: the
+// floor top-up plus 2.) DESIGN.md "Restock (round 30)".
+h.test('restock: 40% of what you own a turn (20 gives 8, 60 gives 24), the floor, the used pile and cabinet caps, the dry turn, the mid-turn refill', () => {
   const swords = (n) => Array.from({ length: n }, () => 'sword');
   // Park n bin items in the used pile and mark the turn as played (not dry).
   const park = (F, n) => { F.used.push(...F.bin.splice(0, n)); F.playedThisTurn = 1; };
+  // the owner's examples: 20 owned gives 8, 60 owned gives 24
   let F = fight(['dummy'], { bin: swords(20) });
-  park(F, 10);
+  park(F, 18);
+  h.eq(COMBAT.restockOwned(F), 20, '20 owned (bin and used pile)');
+  h.eq(COMBAT.restockPlan(F).n, 8, 'the hint knows the next Restock: 8');
   let ev = COMBAT.endTurn(F);
   let rf = find(ev, 'refill');
   h.eq(rf.length, 1, 'one refill event at turn start');
-  h.eq(rf[0].items.length, 2, 'the trickle is 2 items');
-  h.eq(F.bin.length, 12, 'bin 10 -> 12'); h.eq(F.used.length, 8, 'used 10 -> 8');
-  h.ok(rf[0].items.every(i => F.bin.includes(i) && !F.used.includes(i)), 'the trickled items moved from used to the bin');
+  h.eq(rf[0].items.length, 8, '20 owned: 8 come back');
+  h.ok(rf[0].rsk === 'turn' && rf[0].n === 8 && rf[0].owned === 20, 'a Restock event: rsk turn, n, owned');
+  h.eq(F.bin.length, 10, 'bin 2 -> 10'); h.eq(F.used.length, 10, 'used 18 -> 10');
+  h.ok(rf[0].items.every(i => F.bin.includes(i) && !F.used.includes(i) && i.rsk === 1), 'the restocked items moved from used to the bin, marked');
   F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
-  h.eq(find(ev, 'refill')[0].items.length, 2, 'another 2 the next turn');
-  h.eq(F.bin.length, 14, 'bin 12 -> 14');
-  // random picks: over a few seeds the trickle does not always take the oldest used items
+  h.eq(find(ev, 'refill')[0].items.length, 8, 'another 8 the next turn');
+  h.eq(F.bin.length, 18, 'bin 10 -> 18');
+  F = fight(['dummy'], { bin: swords(60) });
+  h.ok(F.bin.length === COMBAT.MAX_CABINET && F.used.length === 26, '60 owned: 34 in the cabinet, 26 wait');
+  park(F, 30);
+  ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill')[0].items.length, 24, '60 owned: 24 come back');
+  h.eq(F.bin.length, 28, 'bin 4 -> 28'); h.eq(F.used.length, 32, 'used 56 -> 32');
+  // random picks: over a few seeds the Restock does not always take the oldest used items
   let varied = false;
   for (let seed = 1; seed <= 8 && !varied; seed++) {
     const G = fight(['dummy'], { bin: swords(20), seed });
@@ -1117,30 +1193,43 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
     const got = find(COMBAT.endTurn(G), 'refill')[0].items;
     if (got[0] !== order[0] || got[1] !== order[1]) varied = true;
   }
-  h.ok(varied, 'the trickle picks at random from the used pile');
-  // floor: a 2-item bin is topped up to 6, then 2 more
-  F = fight(['dummy'], { bin: swords(20) });
-  park(F, 18);
+  h.ok(varied, 'the Restock picks at random from the used pile');
+  // the floor is the minimum: 10 owned (4 at 40%), a 1-item bin still gets 5 to reach 6
+  F = fight(['dummy'], { bin: swords(10) });
+  park(F, 9);
   ev = COMBAT.endTurn(F);
-  h.eq(find(ev, 'refill')[0].items.length, 6, 'floor top-up 4 plus trickle 2');
-  h.eq(F.bin.length, 8, 'bin 2 -> 8'); h.eq(F.used.length, 12, 'used 18 -> 12');
-  // floor with a short used pile: whatever there is comes back
+  h.eq(find(ev, 'refill')[0].items.length, 5, 'the floor top-up (5) beats 40% of 10 (4)');
+  h.eq(F.bin.length, 6, 'bin 1 -> 6'); h.eq(F.used.length, 4, 'used 9 -> 4');
+  // the used pile caps it: whatever there is comes back
+  F = fight(['dummy'], { bin: swords(20) });
+  park(F, 3);
+  COMBAT.endTurn(F);
+  h.eq(F.bin.length, 20, 'a short used pile (3 of the 8) comes back whole'); h.eq(F.used.length, 0, 'nothing left in used');
   F = fight(['dummy'], { bin: swords(5) });
   park(F, 4);
   COMBAT.endTurn(F);
-  h.eq(F.bin.length, 5, 'a short used pile comes back whole'); h.eq(F.used.length, 0, 'nothing left in used');
-  // cap: a full cabinet takes nothing, one free slot takes one
+  h.eq(F.bin.length, 5, 'a short used pile under the floor comes back whole'); h.eq(F.used.length, 0, 'nothing left in used');
+  // the cabinet caps it: a full cabinet takes nothing, one free slot takes one
   F = fight(['dummy'], { bin: swords(40) });
   h.eq(F.bin.length, COMBAT.MAX_CABINET, 'a 40-item bin fills the cabinet'); h.eq(F.used.length, 6, 'six wait');
   F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
-  h.eq(find(ev, 'refill').length, 0, 'no trickle into a full cabinet'); h.eq(F.bin.length, COMBAT.MAX_CABINET, 'still at the cap');
+  h.eq(find(ev, 'refill').length, 0, 'no Restock into a full cabinet'); h.eq(F.bin.length, COMBAT.MAX_CABINET, 'still at the cap');
   park(F, 1);
+  h.eq(COMBAT.restockPlan(F).n, 1, 'the hint: one slot free, one comes back (40% of 40 is 16)');
   ev = COMBAT.endTurn(F);
   h.eq(find(ev, 'refill')[0].items.length, 1, 'one slot free, one item rains in'); h.eq(F.bin.length, COMBAT.MAX_CABINET, 'never above the cap');
-  // nothing to trickle
+  // owned leaves out enemy junk and temporary copies: 20 swords and 10 rocks still give 8
+  F = fight(['dummy'], { bin: swords(20).concat(Array.from({ length: 10 }, () => 'rock')) });
+  COMBAT.addTemp(F, 'sword', 2);
+  h.eq(COMBAT.restockOwned(F), 20, 'rocks (junk) and temporary copies are not owned');
+  park(F, 28);
+  ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill')[0].items.length, 8, '20 owned: still 8, however much junk the enemies threw in');
+  // nothing to restock
   F = fight(['dummy'], { bin: swords(5) });
   F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
   h.eq(find(ev, 'refill').length, 0, 'no refill event with an empty used pile'); h.eq(F.bin.length, 5, 'bin unchanged');
+  h.eq(COMBAT.restockPlan(F).n, 0, 'and the hint says 0');
   // mid-turn: the last item played pours the used pile back at once
   F = fight(['dummy'], { bin: swords(10), claw: { grabs: 9 } });
   park(F, 8);
@@ -1159,12 +1248,122 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
   }
   h.eq(bare, 0, 'a turn never starts below the floor while used has items');
   // tunable from DATA.ECONOMY
-  STUB.ECONOMY = { trickle: 3, binFloor: 0 };
+  STUB.ECONOMY = { restockPct: 0.25, binFloor: 0 };
   F = fight(['dummy'], { bin: swords(20) });
   park(F, 10);
   COMBAT.endTurn(F);
-  h.eq(F.bin.length, 13, 'ECONOMY.trickle 3 moves 3');
+  h.eq(F.bin.length, 15, 'ECONOMY.restockPct 0.25 moves 5 of 20');
+  STUB.ECONOMY = {};
+  F = fight(['dummy'], { bin: swords(20) });
+  park(F, 18);
+  COMBAT.endTurn(F);
+  h.eq(F.bin.length, 10, 'no restockPct in ECONOMY: the 40% fallback');
   delete STUB.ECONOMY;
+});
+
+// (round 30) RESTOCK: the item effects and the relic dials (stub fixtures; the real relics in part 2 below)
+h.test('restock: the restock fx (mid-turn refill), the back fx (it returns itself), and the relic dials', () => {
+  ITEMS.coinret = { id: 'coinret', name: 'Coin Return', rarity: 'c', tags: ['metal'], target: 'self', fx: [{ k: 'restock', v: 2 }, { k: 'block', v: 2 }], plus: { fx: [{ k: 'restock', v: 3 }, { k: 'block', v: 3 }] } };
+  ITEMS.boomer = { id: 'boomer', name: 'Boomerang', rarity: 'u', tags: ['weapon'], fx: [{ k: 'dmg', v: 6 }, { k: 'back' }] };
+  ITEMS.boomex = { id: 'boomex', name: 'Glass Boomerang', rarity: 'u', tags: ['weapon'], exhaust: true, fx: [{ k: 'dmg', v: 6 }, { k: 'back' }] };
+  ITEMS.plenty = { id: 'plenty', name: 'Horn of Plenty', rarity: 'l', tags: ['magic'], target: 'self', fx: [{ k: 'restock', v: 2 }, { k: 'back' }] };
+  RELICS.cart = { id: 'cart', name: 'Cart', icon: 'C', proc: '+1 RESTOCK', kw: ['restock'], rsk: { add: 1 } };
+  RELICS.whole = { id: 'whole', name: 'Whole', icon: 'W', proc: 'WHOLESALE', kw: ['restock'], rsk: { pct: 0.1 } };
+  RELICS.fresh = { id: 'fresh', name: 'Fresh', icon: 'F', proc: 'FRESH STOCK', kw: ['restock'], rsk: { fresh: 2 } };
+  const swords = (n) => Array.from({ length: n }, () => 'sword');
+  const park = (F, n) => { F.used.push(...F.bin.splice(0, n)); F.playedThisTurn = 1; };
+  try {
+    // restock fx: 2 random used items back into the bin right now, a Restock refill event mid turn
+    let F = fight(['dummy'], { bin: ['coinret'].concat(swords(9)) });
+    park(F, 0); F.used.push(...F.bin.splice(1, 6));
+    const b0 = F.bin.length, u0 = F.used.length;
+    let ev = playId(F, 'coinret');
+    let rf = find(ev, 'refill');
+    h.ok(rf.length === 1 && rf[0].rsk === 'item' && rf[0].n === 2 && rf[0].items.length === 2, 'Coin Return: one Restock refill of 2');
+    h.ok(rf[0].items.every(i => F.bin.includes(i) && i.rsk === 1), 'they are in the bin, marked as restocked');
+    h.eq(F.bin.length, b0 - 1 + 2, 'the bin: the coin left, two came back'); h.eq(F.used.length, u0 - 2 + 1, 'the used pile: two out, the coin in');
+    h.eq(F.player.block, 2, 'and its Block');
+    h.ok(!F.bin.some(i => i.id === 'coinret'), 'it cannot restock itself (it is still in flight)');
+    // the plus restocks 3
+    F = fight(['dummy'], { bin: [{ id: 'coinret', plus: true }].concat(swords(9)) });
+    F.used.push(...F.bin.splice(1, 6));
+    rf = find(playId(F, 'coinret'), 'refill');
+    h.eq(rf[0].n, 3, 'Coin Return+ restocks 3');
+    // an empty used pile: nothing, and it says so
+    F = fight(['dummy'], { bin: ['coinret', 'sword', 'sword'] });
+    ev = playId(F, 'coinret');
+    h.ok(!find(ev, 'refill').length && find(ev, 'text').some(e => e.str === 'NOTHING TO RESTOCK'), 'an empty used pile: NOTHING TO RESTOCK');
+    // the cabinet caps it: a full cabinet has the coin's own slot free, so 1 of the 2 comes back
+    const inCab = (F, id) => { if (!F.bin.some(i => i.id === id)) { const k = F.used.findIndex(i => i.id === id); F.used.push(F.bin.pop()); F.bin.push(F.used.splice(k, 1)[0]); } return F.bin.find(i => i.id === id); };
+    F = fight(['dummy'], { bin: ['coinret'].concat(swords(40)) });
+    h.eq(F.bin.length, COMBAT.MAX_CABINET, 'a full cabinet');
+    ev = COMBAT.play(F, inCab(F, 'coinret'));
+    h.eq(find(ev, 'refill')[0].n, 1, 'only the slot the coin left: 1 back');
+    h.eq(F.bin.length, COMBAT.MAX_CABINET, 'never past MAX_CABINET');
+    // COMBAT.restock (the relics' door): player turn only
+    F = fight(['dummy'], { bin: swords(10) });
+    park(F, 5);
+    ev = COMBAT.restock(F, 3, 'relic');
+    h.ok(find(ev, 'refill').length === 1 && find(ev, 'refill')[0].rsk === 'relic' && F.bin.length === 8, 'COMBAT.restock(F, 3) brings 3 back');
+    // back: it returns itself straight into the bin after it plays
+    F = fight(['dummy'], { bin: ['boomer'].concat(swords(5)) });
+    const hp0 = E0(F).hp, boom = F.bin.find(i => i.id === 'boomer');
+    ev = COMBAT.play(F, boom);
+    h.eq(E0(F).hp, hp0 - 6, 'Boomerang: its damage');
+    h.ok(F.bin.includes(boom) && !F.used.includes(boom), 'and it is back in the bin, not in the used pile');
+    h.ok(find(ev, 'rsk').some(e => e.k === 'back' && e.inst === boom), 'with an rsk back event (the game spawns its body)');
+    ev = COMBAT.play(F, boom);
+    h.ok(F.bin.includes(boom) && E0(F).hp === hp0 - 12, 'grab it again: it hits and comes back again');
+    // an exhausting item that comes back still exhausts (gone is gone)
+    F = fight(['dummy'], { bin: ['boomex'].concat(swords(5)) });
+    const bx = F.bin.find(i => i.id === 'boomex');
+    COMBAT.play(F, bx);
+    h.ok(F.exhausted.includes(bx) && !F.bin.includes(bx), 'an exhausted item stays gone');
+    // a full cabinet (its own Restock filled the slot it left): it waits in the used pile
+    F = fight(['dummy'], { bin: ['plenty'].concat(swords(40)) });
+    const bf = inCab(F, 'plenty');
+    ev = COMBAT.play(F, bf);
+    h.ok(F.used.includes(bf) && F.bin.length === COMBAT.MAX_CABINET && find(ev, 'text').some(e => e.str === 'CABINET FULL'), 'a full cabinet: it waits in the used pile');
+    // again (Encore) replays a Boomerang's hit but never moves it twice
+    F = fight(['dummy'], { bin: ['boomer', 'encore'].concat(swords(4)) });
+    const b2 = F.bin.find(i => i.id === 'boomer');
+    COMBAT.play(F, b2); COMBAT.play(F, F.bin.find(i => i.id === 'encore'));
+    h.ok(F.bin.includes(b2) && !b2.rskBack, 'Encore replays its hit; the Boomerang stays where it came back to');
+    // the Stock Cart's dial: +1 a turn (20 owned: 9), its proc credits it
+    F = fight(['dummy'], { bin: swords(20), relics: ['cart'] });
+    park(F, 18);
+    h.eq(COMBAT.restockPlan(F).n, 9, 'the hint counts the relic: 9');
+    ev = COMBAT.endTurn(F);
+    h.eq(find(ev, 'refill')[0].n, 9, 'Stock Cart: 8 + 1');
+    h.ok(find(ev, 'proc').some(e => e.id === 'cart'), 'and it flashes');
+    // the Wholesale Card: +10% (20 owned: 10)
+    F = fight(['dummy'], { bin: swords(20), relics: ['whole'] });
+    park(F, 18);
+    h.eq(find(COMBAT.endTurn(F), 'refill')[0].n, 10, 'Wholesale Card: 50% of 20');
+    F = fight(['dummy'], { bin: swords(20), relics: ['whole', 'cart'] });
+    park(F, 18);
+    h.eq(find(COMBAT.endTurn(F), 'refill')[0].n, 11, 'both: 50% + 1');
+    // a capped Restock: the relics add nothing, so they stay quiet
+    F = fight(['dummy'], { bin: swords(20), relics: ['cart'] });
+    park(F, 3);
+    ev = COMBAT.endTurn(F);
+    h.ok(find(ev, 'refill')[0].n === 3 && !find(ev, 'proc').some(e => e.id === 'cart'), 'a short used pile: 3 back and no Stock Cart flash');
+    // Fresh Stock: an item Restock brought back hits a random enemy for 2 the next time it plays (once)
+    F = fight(['dummy'], { bin: swords(10), relics: ['fresh'] });
+    park(F, 8);
+    COMBAT.endTurn(F);
+    const fr = F.bin.find(i => i.rsk === 1), plain = F.bin.find(i => !i.rsk);
+    let h0 = E0(F).hp;
+    ev = COMBAT.play(F, fr);
+    h.eq(h0 - E0(F).hp, 6 + 2, 'a restocked sword: 6 and Fresh Stock 2');
+    h.ok(find(ev, 'proc').some(e => e.id === 'fresh') && find(ev, 'dmg').some(e => e.src === 'fresh' && e.amt === 2), 'the 2 is credited to the relic (the resolve row shows it)');
+    h.ok(!fr.rsk, 'the mark is spent');
+    h0 = E0(F).hp;
+    COMBAT.play(F, plain);
+    h.eq(h0 - E0(F).hp, 6, 'an item that was never restocked: just its 6');
+  } finally {
+    delete ITEMS.coinret; delete ITEMS.boomer; delete ITEMS.boomex; delete ITEMS.plenty; delete RELICS.cart; delete RELICS.whole; delete RELICS.fresh;
+  }
 });
 
 // ---------- part 3: the monsters pass (bellies, bin tricks, affixes, phase two) ----------

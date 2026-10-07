@@ -1204,4 +1204,51 @@ h.test('guide (round 29): every line of the guided first run has its Dutch (the 
   I18N.set('en');
 });
 
+// (round 30) RESTOCK (DESIGN.md "Restock (round 30)"): Restock is Aanvullen (REFILL stays BIJVULLEN)
+h.test('restock: the chip, its uitleg, the labels, the tip, the keyword, the six items, the five relics and the Aanvulset speak Dutch', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true }, tips: {} }) } });
+  const { GAME: G, I18N, DATA } = T;
+  I18N.set('nl');
+  const nl = I18N.table('nl'), ui = nl.ui, C = nl.content, R = DATA.RSK;
+  const need = ['RESTOCK +{n}', '+{n} back in the bin', 'BACK IN THE BIN', 'Back in the bin', 'BACK', 'NOTHING TO RESTOCK', 'CABINET FULL', 'Restock',
+    'Restock: {n} items come back next turn', 'Restock: 1 item comes back next turn', 'Next turn {n} items come back from your used pile into the bin.',
+    'Next turn 1 item comes back from your used pile into the bin.', 'You have not played anything this turn: end it now and the whole used pile pours back in.',
+    'That is {n}% of the {n2} items you own, picked at random.', 'That is {n}% of the {n2} items you own, plus {n3} from your relics.', 'Up to {n} could come back, but only {n2} fit: what the used pile holds and the cabinet has room for.', 'Restock items and relics bring more back.',
+    'Restock: at every turn start {n}% of the items you own come back into the bin.'];
+  const tip = G.feel.TIPS.find((d) => d.id === 'restock');
+  need.push(tip.title, tip.text);
+  const P = DATA.BENCH.PACKS[R.PACK];
+  need.push(P.name, P.tag);
+  for (const id of R.RELICS) { const r = DATA.RELICS[id]; need.push(r.proc); h.ok(C.relic[id] && C.relic[id].name && C.relic[id].text && C.relic[id].name !== r.name, 'relic ' + id + ' in Dutch'); }
+  for (const id of R.ITEMS) h.ok(C.item[id] && C.item[id].name && C.item[id].text && C.item[id].name !== DATA.ITEMS[id].name, 'item ' + id + ' in Dutch');
+  h.ok(C.kw.restock && C.kw.restock.label === 'Aanvullen' && C.kw.restock.blurb, 'the keyword chip: Aanvullen');
+  for (const k of need) h.ok(typeof ui[k] === 'string' && ui[k].length > 0 && ui[k] !== k, 'Dutch for "' + k + '"');
+  h.eq(I18N.tr('RESTOCK +8'), 'AANVULLEN +8', 'the turn start label');
+  h.eq(I18N.tr('+2 back in the bin'), '+2 terug in de bak', 'an item\'s label');
+  h.eq(I18N.tr('That is 40% of the 20 items you own, picked at random.'), 'Dat is 40% van de 20 voorwerpen die je hebt, willekeurig gekozen.', 'the uitleg with its numbers');
+  h.eq(I18N.tr('REFILL'), 'BIJVULLEN', 'the dry pour keeps its own word');
+  // the fight: the chip's popover and the labels show no English
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.newRun('knight', 3030); if (G.screen === 'boon') G.choose(0);
+    G.run.bin = Array.from({ length: 20 }, (_, i) => ({ uid: 'n' + i, id: i % 2 ? 'coin_return' : 'boomerang', plus: false }));
+    G.startFight(['dummy'], 'normal');
+    for (const e of G.fight.enemies) e.hp = e.maxHp = 9999;
+    for (let i = 0; i < 60 * 4; i++) G.update(1 / 60);
+    const F = G.fight;
+    for (let i = 0; i < 6; i++) T.COMBAT.play(F, F.bin.find((x) => x.id === 'coin_return'));
+    G.rsk.hud(true); G.rsk.pop();
+    G.endTurn();
+    for (let i = 0; i < 60 * 8; i++) G.update(1 / 60);
+    G.draw();
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'a Restock fight renders in Dutch');
+  const left = [...seen].filter((x) => { const [a, b] = x.split('=>'); return a === b && /restock|back in|come back|used pile|cabinet full/i.test(a); });
+  h.eq(left.length, 0, 'no Restock words left in English: ' + left.slice(0, 4).join(' | '));
+  I18N.set('en');
+});
+
 h.done();

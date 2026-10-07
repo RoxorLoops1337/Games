@@ -23,7 +23,9 @@ const DATA = (() => {
     'raccoon', 'goat', 'magpie'];
   const TAGS = ['metal', 'weapon', 'glass', 'potion', 'heavy', 'light', 'junk', 'magic', 'food', 'tool', 'small'];
   const FX_KINDS = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk',
-    'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again'];
+    'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again',
+    // (round 30) RESTOCK: v items from the used pile back into the bin now; the item itself back into the bin after it plays
+    'restock', 'back'];
   // What dmgPer / blockPer can count. poison and burn read the target's
   // stacks, small the small items in the cabinet, streak the grab streak,
   // gold the gold carried (per 10), luck the player's Luck (it is not spent).
@@ -104,8 +106,10 @@ const DATA = (() => {
     eliteInk: 2,           // bulbs for beating an elite (was 1)
     towerInk: 2,           // bulbs a tower keeper leaves on top of the view and the relic
     eliteToolChance: 0.35, // a beaten elite hands over a tool this often
-    trickle: 2,            // used items that rain back into the bin at every turn start
-    binFloor: 6,           // a bin below this at turn start is topped up from the used pile first (then the trickle)
+    // (round 30) RESTOCK, owner request: every turn start round(restockPct x the items you own) come back from the
+    // used pile (20 owned: 8, 60 owned: 24), capped by the used pile and the cabinet. Was `trickle: 2` (2 a turn).
+    restockPct: 0.4,
+    binFloor: 6,           // a bin below this at turn start always gets at least enough back to reach it
     // BALANCE (round 12, owner request): gold is earned all the time but a good relic takes a few fights and an elite
     goldK: 0.7,            // x the gold a won fight pays (the 10-25 roll, +4 an act, x1.6 elite, x2.5 boss); was 1
     shopK: 1.3,            // x every shop price (items, the relic, a reroll's shelf); Tilt's Price Hike still stacks; was 1
@@ -217,6 +221,9 @@ const DATA = (() => {
   const pay = (v) => ({ k: 'pay', v });
   // Resolve the previous item played this fight again.
   const again = () => ({ k: 'again' });
+  // (round 30) RESTOCK: v random items from the used pile back into the bin now; the item comes straight back itself.
+  const restock = (v) => ({ k: 'restock', v });
+  const back = () => ({ k: 'back' });
 
   // ------------------------------------------------------------------ items
   // Physical feel, by design: long thin things (swords, staffs) twist out of
@@ -2436,9 +2443,11 @@ const DATA = (() => {
     luck: { label: 'Luck', icon: '🍀', color: '#3ddc84', blurb: 'Dice that roll twice, whiffs that pay later and a meter that cashes out on everything.' },
     // round 17 (TECH): the cabinet's own systems (events, the Jackpot Lamp, PERFECT grabs, its coins)
     tech: { label: 'Tech', icon: '\u{1F579}', color: '#ff7ad9', blurb: 'The machine is on your side: PERFECT grabs, cabinet events, LAMP FEVER and the coins it rains.' },
+    // (round 30) RESTOCK: items and relics that send used items back into the bin (a keyword chip, not a combo family)
+    restock: { label: 'Restock', icon: '↻', color: '#5effc8', blurb: 'Send used items back into the bin, so the good stuff is there to grab again.' },
   };
   // Chip order: specific engines first, broad families (glass, metal) last.
-  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'tech', 'jackpot', 'swarm', 'greed', 'luck', 'feast',
+  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'tech', 'restock', 'jackpot', 'swarm', 'greed', 'luck', 'feast',
     'echo', 'glass', 'metal'];
   const TAG_ARCH = { metal: 'metal', small: 'swarm', glass: 'glass', food: 'feast', magic: 'echo', junk: 'junk' };
   const PER_ARCH = { poison: 'poison', burn: 'burn', block: 'fortress', metal: 'metal', junk: 'junk', grabsUsed: 'jackpot',
@@ -2475,6 +2484,7 @@ const DATA = (() => {
         if (f.k === 'gold' || f.k === 'pay') got.add('greed');
         if ((f.k === 'heal' && f.v > 0) || f.k === 'lifesteal' || (f.k === 'maxhp' && f.v > 0)) got.add('feast');
         if (f.k === 'copy' || f.k === 'again') got.add('echo');
+        if (f.k === 'restock' || f.k === 'back') got.add('restock');   // (round 30) RESTOCK
       }
     }
     const explicit = (Array.isArray(def.kw) ? def.kw : []).filter(k => ARCHETYPES[k]);
@@ -7768,7 +7778,92 @@ const DATA = (() => {
     things: benchPackThings, gateOk: benchGateOk };
   // ================================================================ /BENCH
 
+  // ================================================================ (round 30) RESTOCK
+  /* DESIGN.md "Restock (round 30)". The turn-start rule lives in combat.js (the RESTOCK block, ECONOMY.restockPct);
+     here are the content that plays with it. Items: fx restock(v) (v random used items back into the bin now) and
+     back() (the item itself returns to the bin after it plays). Relics: hooks that restock through COMBAT.restock,
+     or `rsk` dials COMBAT reads at the turn start and on a play: {add: +N a turn, pct: +0.1 of what you own,
+     fresh: N damage to a random enemy when an item Restock brought back is played}. Every piece wears the Restock
+     keyword chip (ARCHETYPES.restock). Base pool (every player meets the mechanic, the daily and Duo pools too):
+     Coin Return, Spring Loader, Boomerang, Vending Jam, the Stock Cart and Lost and Found. The Upgrade Bench's
+     Restock Kit (bench: true, only through the pack): Bottomless Bag, Horn of Plenty, the Prize Hopper, the
+     Wholesale Card and Fresh Stock. Art: existing item art keys in the Restock mint, emoji medallions. */
+  const RSK_COL = '#5effc8';
+  const rskBack = (F, v) => { const c = CB(); if (c && c.restock) c.restock(F, v, 'relic'); };
+  const RSK_ITEMS = [
+    { id: 'coin_return', name: 'Coin Return', rarity: 'c', cost: 45,
+      tags: ['metal'], shape: circle(13), density: 2.0, friction: 0.3, restitution: 0.25,
+      color: RSK_COL, color2: '#1f7a5a', art: 'coin', target: 'self',
+      fx: [restock(2), block(2)], plus: { fx: [restock(3), block(3)] },
+      text: 'Restock {v}: {v} used items drop back into the bin. Gain {v2} Block. Press for change.' },
+    { id: 'spring_loader', name: 'Spring Loader', rarity: 'c', cost: 45,
+      tags: ['metal', 'tool'], shape: circle(12), density: 1.1, friction: 0.4, restitution: 0.6,
+      color: RSK_COL, color2: '#ff4f9a', art: 'ring',
+      fx: [dmg(4), restock(2)], plus: { fx: [dmg(6), restock(3)] },
+      text: 'Deal {v} damage and Restock {v2}: used items spring back into the bin.' },
+    { id: 'boomerang', name: 'Boomerang', rarity: 'u', cost: 60,
+      tags: ['weapon'], shape: box(40, 12), density: 0.8, friction: 0.45,
+      color: '#ff8a3d', color2: RSK_COL, art: 'bone',
+      fx: [dmg(6), back()], plus: { fx: [dmg(9), back()] },
+      text: 'Deal {v} damage. Then it flies straight back into the bin, ready to grab again.' },
+    { id: 'vending_jam', name: 'Vending Jam', rarity: 'u', cost: 60,
+      tags: ['metal', 'heavy'], shape: box(28, 38), density: 1.8, friction: 0.55,
+      color: RSK_COL, color2: '#ff4f9a', art: 'slot', target: 'self',
+      fx: [block(5), restock(2)], plus: { fx: [block(7), restock(3)] },
+      text: 'Gain {v} Block and Restock {v2}. Give it a kick and things fall out.' },
+    { id: 'bottomless_bag', name: 'Bottomless Bag', rarity: 'r', cost: 100, bench: true,
+      tags: ['light'], shape: poly([[-17, -3], [-11, -10], [4, -11], [15, -6], [17, 3], [9, 10], [-8, 10], [-16, 5]]), density: 0.8, friction: 0.55,
+      color: '#c8a070', color2: RSK_COL, art: 'potato', target: 'none',
+      fx: [restock(4), grab(1)], plus: { fx: [restock(6), grab(1)] },
+      text: 'Restock {v} and gain {v2} extra grab this turn. There is always something at the bottom.' },
+    { id: 'horn_of_plenty', name: 'Horn of Plenty', rarity: 'l', cost: 130, bench: true,
+      tags: ['magic'], shape: SHAPES.horn, density: 0.9, friction: 0.5,
+      color: '#ffcc55', color2: RSK_COL, art: 'horn', target: 'self',
+      fx: [restock(6), block(4), back()], plus: { fx: [restock(8), block(6), back()] },
+      text: 'Restock {v} and gain {v2} Block. Then it comes back into the bin too. It never runs dry.' },
+  ];
+  for (const d of RSK_ITEMS) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [], kw: ['restock'] }, d);   // the Restock chip first
+    if (def.plus) def.plus = Object.assign({ name: def.name + '+' }, def.plus);
+    if (!ITEMS[def.id]) { ITEM_LIST.push(def); ITEMS[def.id] = def; ITEM_IDS.push(def.id); }
+  }
+  const RSK_RELICS = [
+    { id: 'stock_cart', name: 'Stock Cart', icon: '\u{1F6D2}', rarity: 'c', kw: ['restock'], proc: '+1 RESTOCK',
+      text: 'Restock brings back 1 more item at every turn start.', rsk: { add: 1 } },
+    { id: 'lost_found', name: 'Lost and Found', icon: '\u{1F50D}', rarity: 'u', kw: ['restock'], proc: 'LOST AND FOUND',
+      text: 'Your first empty grab each turn Restocks 2: two used items drop back into the bin.',
+      hooks: { onGrab(F, n) {
+        if (n || !CB()) return;
+        const m = mem(F);
+        if (m.lostFound === F.turn) return;
+        m.lostFound = F.turn;
+        rskBack(F, 2);
+      } } },
+    { id: 'prize_hopper', name: 'Prize Hopper', icon: '\u{1F9FA}', rarity: 'u', kw: ['restock', 'jackpot'], proc: 'HOPPER', bench: true,
+      text: 'Whenever one grab delivers 3 or more prizes, Restock 3.',
+      hooks: { onJackpot(F) { rskBack(F, 3); } } },
+    { id: 'wholesale_card', name: 'Wholesale Card', icon: '\u{1F4B3}', rarity: 'r', kw: ['restock'], proc: 'WHOLESALE', bench: true,
+      text: 'Restock brings back an extra 10% of your items at every turn start.', rsk: { pct: 0.1 } },
+    { id: 'fresh_stock', name: 'Fresh Stock', icon: '\u{1F3F7}️', rarity: 'u', kw: ['restock'], proc: 'FRESH STOCK', bench: true,
+      text: 'When you play an item Restock brought back, it also deals 2 damage to a random enemy.', rsk: { fresh: 2 } },
+  ];
+  for (const r of RSK_RELICS) if (!RELICS[r.id]) { RELIC_LIST.push(r); RELICS[r.id] = r; }
+  // The Upgrade Bench's eleventh pack: the rare and legendary pieces (the commons and uncommons above stay base).
+  const RSK_PACK = BP_('restock', '\u{1F501}', RSK_COL, 'Restock Kit', 'Things that keep coming back.', 60, null,
+    ['bottomless_bag', 'horn_of_plenty'], ['prize_hopper', 'wholesale_card', 'fresh_stock']);
+  if (!BNC_PACKS[RSK_PACK.id]) {
+    RSK_PACK.items = RSK_PACK.items.filter((id) => !!ITEMS[id]); RSK_PACK.relics = RSK_PACK.relics.filter((id) => !!RELICS[id]);
+    BNC_PACK_LIST.push(RSK_PACK); BNC_PACKS[RSK_PACK.id] = RSK_PACK; BNC_PACK_IDS.push(RSK_PACK.id);
+    for (const id of RSK_PACK.items) { UNL.of['item:' + id] = RSK_PACK.id; BENCH.ITEMS.push(id); }
+    for (const id of RSK_PACK.relics) { UNL.of['relic:' + id] = RSK_PACK.id; BENCH.RELICS.push(id); }
+  }
+  const RSK = { COL: RSK_COL, ITEMS: RSK_ITEMS.map((d) => d.id), RELICS: RSK_RELICS.map((r) => r.id), PACK: RSK_PACK.id,
+    BASE_ITEMS: RSK_ITEMS.filter((d) => !d.bench).map((d) => d.id), BASE_RELICS: RSK_RELICS.filter((r) => !r.bench).map((r) => r.id) };
+  // ================================================================ /RESTOCK
+
   return {
+    // (round 30) RESTOCK: the Restock content (DESIGN.md "Restock (round 30)")
+    RSK,
     // BENCH (round 28): bolts, upgrades and unlock packs (DESIGN.md "The Upgrade Bench (round 28)")
     BENCH, unlPack, unlBase, unlOpen, unlGate, benchPay, benchGrant, benchCost, benchFx, benchVal, benchTierOpen, benchGateOk, benchPackThings,
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")

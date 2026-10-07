@@ -3482,6 +3482,25 @@ html[class*="txt-"] #benchBody{zoom:var(--accK)}
 .tag.cupTag.cupT-coil{border-color:#2ee6d6;color:#bffcff}
 /* ================= /CUP ================= */
 </style>
+<style id="rsk-css">
+/* ================= (round 30) RESTOCK =================
+   DESIGN.md "Restock (round 30)": the "↻ N" hint chip left of the GRABS pill (how many items come back next turn; a tap
+   explains it). It fades with the pill under the resolve row and pops when a Restock lands. */
+#rskChip{display:none;align-items:center;gap:5px;height:38px;min-width:58px;padding:0 12px;border-radius:19px;margin-left:auto;
+  background:rgba(18,9,31,.85);border:2px solid rgba(94,255,200,.55);box-shadow:0 2px 8px rgba(0,0,0,.35);color:#5effc8;
+  font-weight:900;pointer-events:auto;cursor:pointer;transition:opacity .2s}
+#rskChip.show{display:flex}
+#rskChip .ic{font-size:20px;line-height:1}
+#rskChip .n{font-size:17px;color:#eafff7}
+#rskChip.zero{border-color:var(--line2);color:var(--dimmer)}
+#rskChip.zero .n{color:var(--dim)}
+#rskChip.show + #grabs{margin-left:0}
+#rskChip.bump{animation:bump .45s cubic-bezier(.2,1.8,.4,1)}
+#playerRow.rrOn #rskChip{opacity:0;pointer-events:none}
+.calm #rskChip.bump{animation:none}
+@media (prefers-reduced-motion:reduce){#rskChip.bump{animation:none}}
+/* ================= /RESTOCK ================= */
+</style>
 </head>
 <body>
 <div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
@@ -3560,6 +3579,8 @@ html[class*="txt-"] #benchBody{zoom:var(--accK)}
 
   <!-- player row: grabs pips, turn banner -->
   <div id="playerRow" class="hud">
+    <!-- (round 30) RESTOCK: "↻ N", how many items come back into the bin next turn (a tap explains) -->
+    <div id="rskChip" role="button" aria-label="Restock"></div>
     <div id="grabs"></div>
     <div id="banner"><span id="bannerTxt"></span></div>
   </div>

@@ -928,6 +928,7 @@ const RENDER = (() => {
       decals = [];
       if (def.rarity !== 'junk' && tags.indexOf('junk') < 0) {
         const want = (d, kw) => { if (ids.indexOf(kw) >= 0 && !(POL_NOT[d] && POL_NOT[d].indexOf(art) >= 0) && decals.indexOf(d) < 0) decals.push(d); };
+        want('loop', 'restock');   // (round 30) RESTOCK: the round arrow stamp
         want('skull', 'poison'); want('flame', 'burn'); want('rime', 'frost'); want('glint', 'glass');
         want('rune', 'echo'); want('pips', 'luck'); want('coin', 'greed');
       }
@@ -1017,6 +1018,9 @@ const RENDER = (() => {
       ctx.beginPath();
       for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3, c = Math.cos(a) * r * 0.6, s2 = Math.sin(a) * r * 0.6; ctx.moveTo(-c, -s2); ctx.lineTo(c, s2); }
       S(ctx, '#ffffff', Math.max(1.1, r * 0.18)); ctx.stroke();
+    } else if (d === 'loop') {   // (round 30) RESTOCK: the round arrow, the Restock family's stamp
+      disc('#0f3b30', '#5effc8');
+      rskArrow(ctx, 0, 0, r * 0.5, '#5effc8');
     }
     ctx.restore();
   }
@@ -7931,6 +7935,8 @@ const RENDER = (() => {
         item(ctx, o.items[1], r * 0.38, 0, 0.5, feelItemK(o.items[1], s * 0.55) * bump, NOEST);
         ctx.beginPath(); star(ctx, 0, -r * 0.1, r * 0.38, 8, 0.5); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
         txt(ctx, '+', 0, -r * 0.08, r * 0.5, INK, true, 'center');
+      } else if (id === 'restock') {
+        rskTipArt(ctx, r, t, o);   // (round 30) RESTOCK: a prize going round the arrow, back into the bin
       } else if (PET_TIPS[id]) {
         petTipArt(ctx, id, r, t);   // PETS (round 5): pets, the pet shop, whack-a-mole, skee-ball
       } else if (id === 'arcade') {
@@ -17800,7 +17806,7 @@ const RENDER = (() => {
      a (the fade), t, reduced, flash, slots}; game.js rrRowTick lays the slots out: {k: 'item' | 'grab',
      st, cx, cy, w, pop, lift}, an item also {def, plus, name, u, fx, fy, pre, res, procs}, a chip {tag,
      label, col, icon, txt, res}. Numbers {d, b, h, s, sv, gr, all, ice}. Never throws. */
-  const RRW_NUM = { d: '#ffffff', b: '#7fe8ff', h: '#a6ff5e', gr: '#ffc94d', ice: '#9fe4ff' };
+  const RRW_NUM = { d: '#ffffff', b: '#7fe8ff', h: '#a6ff5e', gr: '#ffc94d', ice: '#9fe4ff', rs: '#5effc8', bk: '#5effc8' };   // (round 30: rs, bk the Restock mint)
   // s in the current language, cut to maxW px at this size with an ellipsis.
   const RRW_FIT = new Map();
   function rrRowFit(ctx, s, size, maxW) {
@@ -17829,6 +17835,7 @@ const RENDER = (() => {
     else if (k === 'b') IA.shield(ctx, sz * 0.78, sz * 0.9, '#3b6fd6', PAL.gold);
     else if (k === 'h') { const r = sz * 0.42, q = r * 0.36; tone(ctx, c => poly(c, [-q, -r, q, -r, q, -q, r, -q, r, q, q, q, q, r, -q, r, -q, q, -r, q, -r, -q, -q, -q]), accC(PAL.lime), 0, 0, r, { ol: 1.5, dark: -0.3 }); }
     else if (k === 'ice') { F(ctx, '#9fe4ff'); ctx.beginPath(); star(ctx, 0, 0, sz * 0.45, 6, 0.45); ctx.fill(); }
+    else if (k === 'rs' || k === 'bk') rskArrow(ctx, 0, 0, sz * 0.42, '#5effc8');   // (round 30) RESTOCK: the round arrow
     ctx.restore();
   }
   // Up to two number chips from x (centred on y), within maxW; returns the width used.
@@ -17837,6 +17844,8 @@ const RENDER = (() => {
     const list = [];
     if (n.ice) list.push(['ice', i18nTr('THAW')]);
     if (n.d > 0) list.push(['d', String(n.d) + (n.all ? ' ' + i18nTr('ALL') : '')]);
+    if (n.rs > 0) list.push(['rs', '+' + n.rs]);   // (round 30) RESTOCK: ↻ +2, items back in the bin
+    if (n.bk && !(n.rs > 0)) list.push(['bk', i18nTr('BACK')]);   // (round 30) RESTOCK: it came back itself
     if (n.b > 0) list.push(['b', '+' + n.b]);
     if (n.h > 0) list.push(['h', '+' + n.h]);
     if (n.s && n.sv > 0) list.push(['s', '']);
@@ -17899,7 +17908,8 @@ const RENDER = (() => {
           const pn = P.n || {}, num = pn.d ? ' ' + pn.d : pn.b ? ' +' + pn.b : pn.h ? ' +' + pn.h : '';
           const str = (P.icon ? P.icon + ' ' : '') + i18nTr(P.name) + num + (s.procs.length > 1 ? ' +' + (s.procs.length - 1) : '');
           txt(ctx, rrRowFit(ctx, str, 13, tw), tx, cy + 11, 13, accC(P.col || PAL.gold), true, 'left', INK);
-        } else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 13, tw), tx, cy + 11, 13, '#b7a9d9', true, 'left', INK);
+        } else if (done && s.res && (s.res.rs > 0 || s.res.bk) && s.st === 'hit') txt(ctx, rrRowFit(ctx, rskLine(s.res), 13, tw), tx, cy + 11, 13, '#5effc8', true, 'left', INK);   // (round 30) RESTOCK
+        else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 13, tw), tx, cy + 11, 13, '#b7a9d9', true, 'left', INK);
       }
       ctx.globalAlpha = 1;
       return;
@@ -17972,6 +17982,8 @@ const RENDER = (() => {
     const list = [];
     if (n.ice) list.push(['ice', i18nTr('THAW')]);
     if (n.d > 0) list.push(['d', String(n.d) + (n.all ? ' ' + i18nTr('ALL') : '')]);
+    if (n.rs > 0) list.push(['rs', '+' + n.rs]);   // (round 30) RESTOCK: ↻ +2, items back in the bin
+    if (n.bk && !(n.rs > 0)) list.push(['bk', i18nTr('BACK')]);   // (round 30) RESTOCK: it came back itself
     if (n.b > 0) list.push(['b', '+' + n.b]);
     if (n.h > 0) list.push(['h', '+' + n.h]);
     if (n.s && n.sv > 0) list.push(['s', '']);
@@ -18038,7 +18050,8 @@ const RENDER = (() => {
         const pn = P.n || {}, num = pn.d ? ' ' + pn.d : pn.b ? ' +' + pn.b : pn.h ? ' +' + pn.h : '';
         const str = (P.icon ? P.icon + ' ' : '') + i18nTr(P.name) + num + (s.procs.length > 1 ? ' +' + (s.procs.length - 1) : '');
         txt(ctx, rrRowFit(ctx, str, 12, w - 8), 0, y + h - 11, 12, accC(P.col || PAL.gold), true, 'center', INK);
-      } else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 12, w - 8), 0, y + h - 11, 12, done ? RR2_C.dim : RR2_C.name, true, 'center', INK);
+      } else if (done && s.res && (s.res.rs > 0 || s.res.bk) && s.st === 'hit') { const rl = rskLine(s.res), rz = rr2Fs(ctx, rl, 12, 10, w - 8); txt(ctx, rrRowFit(ctx, rl, rz, w - 8), 0, y + h - 11, rz, '#5effc8', true, 'center', INK); }   // (round 30) RESTOCK: +2 back in the bin (shrinks to fit before it cuts)
+      else txt(ctx, rrRowFit(ctx, s.name || def.name || '', 12, w - 8), 0, y + h - 11, 12, done ? RR2_C.dim : RR2_C.name, true, 'center', INK);
     }
     if (done && s.st === 'hit' && !narrow) {   // a small tick: this one has hit
       F(ctx, '#3ddc84'); ctx.beginPath(); ctx.arc(x + w - 11, y + 11, 7, 0, Math.PI * 2); ctx.fill();
@@ -18330,6 +18343,37 @@ const RENDER = (() => {
   }
   const CR_R = { GLYPH: CR_GLYPH, glyph: crGlyph };
   /* ============================================================ /CR */
+
+  /* ============================================================ (round 30) RESTOCK
+     DESIGN.md "Restock (round 30)": the round arrow in front of a resolve row number (↻ +2), the played card's
+     words ("+2 back in the bin", "Back in the bin") and the tip card's picture. Never throws. */
+  // A round arrow of radius r at (x, y): most of a circle and its head (a ↻ that does not depend on a font).
+  function rskArrow(ctx, x, y, r, col) {
+    ctx.save();
+    try {
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(x, y, r, -Math.PI * 0.35, Math.PI * 1.25); S(ctx, INK, Math.max(2, r * 0.55)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, r, -Math.PI * 0.35, Math.PI * 1.25); S(ctx, col, Math.max(1.4, r * 0.32)); ctx.stroke();
+      const a = -Math.PI * 0.35, hx = x + Math.cos(a) * r, hy = y + Math.sin(a) * r, k = r * 0.62;
+      ctx.beginPath(); ctx.moveTo(hx + k * 0.9, hy - k * 0.15); ctx.lineTo(hx - k * 0.2, hy - k * 0.85); ctx.lineTo(hx - k * 0.1, hy + k * 0.55); ctx.closePath();
+      F(ctx, col); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // What a played card says under its number: "+2 back in the bin" (or "Back in the bin" for a Boomerang).
+  function rskLine(n) {
+    if (n && n.rs > 0) return i18nTr('+' + n.rs + ' back in the bin');
+    return i18nTr('Back in the bin');
+  }
+  // The tip card's picture: a prize riding the round arrow from the used pile into the bin.
+  function rskTipArt(ctx, r, t, o) {
+    glow(ctx, 0, 0, r * 1.1, '#5effc8', 0.25);
+    rskArrow(ctx, 0, 0, r * 0.62, '#5effc8');
+    const a = -Math.PI * 0.35 - ((t * 1.6) % 1) * Math.PI * 1.6;
+    if (o && o.item) item(ctx, o.item, Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, a, feelItemK(o.item, r * 0.7), NOEST);
+    txt(ctx, '+2', 0, r * 0.05, r * 0.42, '#5effc8', true, 'center', INK);
+  }
+  /* ============================================================ /RESTOCK */
 
   return {
     // CR (round 21): the combo relics' glyphs

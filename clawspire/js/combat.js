@@ -15,14 +15,15 @@ const COMBAT = (() => {
   // for the physics budget), so both caps grew: 40 -> 48 and 30 -> 34.
   const MAX_ITEMS = 48;      // bin + used cap for junk/copies (physics budget)
   const MAX_CABINET = 34;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
-  // Turn-start trickle (DATA.ECONOMY.trickle / binFloor, these are the
-  // fallbacks): a couple of used items rain back in every turn, and a bin
-  // below the floor is topped up to it first, so the cabinet is never bare
-  // while the used pile holds anything. A turn that played nothing pours the
-  // whole used pile back in: the shower stirs a pile the claw cannot bite
-  // (flat blades and coins on the floor), which otherwise stalls a fight for
-  // dozens of turns.
-  const TRICKLE = 2;
+  // Turn-start Restock (round 30, DATA.ECONOMY.restockPct / binFloor, these
+  // are the fallbacks; see the RESTOCK block): 40% of the items you own rain
+  // back in from the used pile every turn, never fewer than it takes to top a
+  // bin below the floor up to it, so the cabinet is never bare while the used
+  // pile holds anything. A turn that played nothing pours the whole used pile
+  // back in: the shower stirs a pile the claw cannot bite (flat blades and
+  // coins on the floor), which otherwise stalls a fight for dozens of turns.
+  // (Before round 30 it was the trickle: the floor top-up plus 2 a turn.)
+  const RESTOCK_PCT = 0.4;
   const BIN_FLOOR = 6;
   // hp multiplier for an earlier act's normal pulled into a later act (event
   // fights, summons). Tracks the tuned normals: act 2 ~x2.0, act 3 ~x3.2 of
@@ -1678,19 +1679,129 @@ const COMBAT = (() => {
     const e = D().ECONOMY;
     return Math.max(0, Math.round(num(e && e[k], d)));
   }
-  // Turn start: top the bin up to binFloor, plus the trickle on top, picked
-  // at random from the used pile, never past the cabinet cap.
-  function trickle(F) {
-    if (!F.used.length) return null;
-    const want = Math.max(0, econ('binFloor', BIN_FLOOR) - F.bin.length) + econ('trickle', TRICKLE);
-    const n = Math.min(F.used.length, MAX_CABINET - F.bin.length, want);
-    if (n <= 0) return null;
+  // ================================================================ (round 30) RESTOCK
+  /* DESIGN.md "Restock (round 30)". The owner: "the items that replenish after every turn, I think it should be 40%
+     of the items that you have". At a normal turn start (rskTurn) round(restockPct x owned) items come back from
+     the used pile into the bin, picked at random; never fewer than it takes to bring a bin below binFloor up to it;
+     never more than the used pile holds or the cabinet (MAX_CABINET) has room for. A dry turn and an empty bin keep
+     their whole-pile refill (refill above).
+     owned (rskOwned): every real item the player has in this fight, in the bin (a prize held by the claw, or
+     delivered and waiting on the resolve row, is still in F.bin) and in the used pile. Not counted: enemy junk
+     (rocks, slag, lit bombs, eggs, coins: isJunk), temporary copies (inst.temp, gone after the fight) and what is
+     out of the fight for now (exhausted, shattered, stolen, eaten, purged). So "owned" is the run's own bin less
+     what this fight already used up for good, and junk an enemy throws in never grows the Restock.
+     Relics turn it with `rsk` (DATA, the RESTOCK block): add (+N a turn), pct (+0.1 = 50%), fresh (an item Restock
+     brought back hits a random enemy for N on its next play). Items: fx {k: 'restock', v} brings v back right now (a
+     refill event mid turn) and {k: 'back'} sends the item itself straight back into the bin after it plays.
+     Events: {t: 'refill', items, rsk: 'turn' | 'item' | 'relic', n, owned?} (a refill without rsk is the old
+     whole-pile pour) and {t: 'rsk', k: 'back', inst}. An instance Restock brought back carries inst.rsk until it
+     plays (Fresh Stock). COMBAT.restockPlan(F) is the next turn start's count for the HUD's hint chip. */
+  function rskOwned(F) {
+    let n = 0;
+    for (const L of [F.bin, F.used]) for (const i of L || []) if (i && !isJunk(i) && !i.temp) n++;
+    return n;
+  }
+  // The run's Restock relics: {add, pct, fresh, ids: {add: [ids], pct: [ids], fresh: [ids]}}.
+  function rskMods(F) {
+    const m = { add: 0, pct: 0, fresh: 0, ids: { add: [], pct: [], fresh: [] } };
+    for (const id of (F && F.relics) || []) {
+      const r = relicDef(id), k = r && r.rsk;
+      if (!k || typeof k !== 'object') continue;
+      for (const f of ['add', 'pct', 'fresh']) {
+        const v = num(k[f], 0);
+        if (v > 0) { m[f] += v; m.ids[f].push(id); }
+      }
+    }
+    return m;
+  }
+  // The turn start's numbers with the pile as it is now: {owned, pct, base, floor, room, n, n0, mods, dry}.
+  // n0 is the count without the relics (their proc shows only when they added something).
+  function rskPlan(F, dry) {
+    const E = D().ECONOMY || {}, m = rskMods(F);
+    const pct0 = clamp(num(E.restockPct, RESTOCK_PCT), 0, 1), pct = clamp(pct0 + m.pct, 0, 1);
+    const owned = rskOwned(F);
+    const floor = Math.max(0, econ('binFloor', BIN_FLOOR) - F.bin.length);
+    const room = Math.max(0, MAX_CABINET - F.bin.length);
+    const base = Math.round(pct * owned + 1e-9) + Math.round(m.add);
+    const cap = (k) => Math.max(0, Math.min(F.used.length, room, Math.max(k, floor)));
+    const out = { owned, pct, add: Math.round(m.add), base, floor, room, n: cap(base), n0: cap(Math.round(pct0 * owned + 1e-9)), mods: m, dry: !!dry };
+    if (dry) out.n = F.used.length ? Math.min(F.used.length, Math.max(1, room)) : 0;   // the dry pour (refill)
+    return out;
+  }
+  // n random picks from the used pile into the bin, marked as restocked.
+  function rskPull(F, n) {
     const items = [];
-    for (let i = 0; i < n; i++) items.push(F.used.splice(Math.floor(F.rng() * F.used.length), 1)[0]);
+    for (let i = 0; i < n && F.used.length; i++) {
+      const inst = F.used.splice(Math.floor(F.rng() * F.used.length), 1)[0];
+      inst.rsk = 1;
+      items.push(inst);
+    }
     F.bin.push(...items);
-    emit(F, { t: 'refill', items });
+    F.stats.restocked = num(F.stats.restocked, 0) + items.length;
     return items;
   }
+  // Turn start: the Restock (the old trickle's place). The relics that added to it flash.
+  function rskTurn(F) {
+    if (!F.used.length) return null;
+    const P = rskPlan(F, false);
+    if (P.n <= 0) return null;
+    if (P.n > P.n0) for (const id of P.mods.ids.add.concat(P.mods.ids.pct)) emit(F, relicProc(F, id));
+    const items = rskPull(F, P.n);
+    emit(F, { t: 'refill', items, rsk: 'turn', n: items.length, owned: P.owned });
+    return items;
+  }
+  // Mid turn: an item's restock fx or a relic. Returns the items that came back.
+  function rskNow(F, v, why) {
+    const want = Math.max(0, Math.round(num(v, 0)));
+    const n = Math.min(F.used.length, Math.max(0, MAX_CABINET - F.bin.length), want);
+    if (n <= 0) {
+      if (why === 'item' && want > 0) text(F, F.player, F.used.length ? 'CABINET FULL' : 'NOTHING TO RESTOCK');
+      return [];
+    }
+    const items = rskPull(F, n);
+    emit(F, { t: 'refill', items, rsk: why || 'item', n: items.length });
+    return items;
+  }
+  // play(): after the item went to the used pile. A `back` item goes straight back into the bin (an exhausted,
+  // shattered or spaghettified one stays gone); a restocked item's Fresh Stock hit lands.
+  function rskAfterPlay(F, inst) {
+    if (!inst) return;
+    const fresh = !!inst.rsk, back = !!inst.rskBack;
+    delete inst.rsk; delete inst.rskBack;
+    if (fresh && F.phase === 'player') {
+      const m = rskMods(F), foes = alive(F);
+      if (m.fresh > 0 && foes.length) {
+        const id = m.ids.fresh[0], e = foes[Math.floor(F.rng() * foes.length)];
+        emit(F, relicProc(F, id));
+        const mark = F.events.length;
+        api.damage(F, null, e, Math.round(m.fresh));
+        for (let i = mark; i < F.events.length; i++) { const ev = F.events[i]; if (ev && ev.t !== 'proc' && ev.src == null) ev.src = id; }   // the resolve row credits the relic
+      }
+    }
+    if (!back || F.phase === 'over') return;
+    const at = F.used.indexOf(inst);
+    if (at < 0) return;
+    if (F.bin.length >= MAX_CABINET) { text(F, F.player, 'CABINET FULL'); return; }
+    F.used.splice(at, 1);
+    F.bin.push(inst);
+    emit(F, { t: 'rsk', k: 'back', inst });
+  }
+  api.RESTOCK_PCT = RESTOCK_PCT;
+  api.restockOwned = (F) => (F ? rskOwned(F) : 0);
+  // What the next turn start brings back if the turn ended now (the dry pour when nothing was played yet).
+  api.restockPlan = function (F) {
+    if (!F || !Array.isArray(F.bin) || !Array.isArray(F.used)) return { owned: 0, pct: RESTOCK_PCT, base: 0, floor: 0, room: 0, n: 0, n0: 0, dry: false };
+    const P = rskPlan(F, F.phase === 'player' ? !F.playedThisTurn : !!F.dry);
+    delete P.mods;
+    return P;
+  };
+  // A relic (or a test) restocks v now. Player turn only.
+  api.restock = function (F, v, why) {
+    const c = begin(F);
+    if (F && F.phase === 'player') { rskNow(F, v, why || 'relic'); sanitize(F); }
+    return end(F, c);
+  };
+  // ================================================================ /RESTOCK
 
   // Player turn start. newFight runs it for turn 1; endTurn runs it for the
   // next turn. The game never needs to call it itself.
@@ -1722,7 +1833,7 @@ const COMBAT = (() => {
     if (st(p, 'jam') > 0 && p.grabs > 1) { p.grabs--; text(F, p, 'JAMMED'); }
     for (const e of F.enemies) e.gut = 0;
     if (F.dry && F.used.length) refill(F);
-    else trickle(F);
+    else rskTurn(F);   // (round 30) RESTOCK: 40% of what you own comes back (was the trickle)
     F.dry = false;
     hook(F, 'onTurnStart');
     sanitize(F);
@@ -2145,6 +2256,9 @@ const COMBAT = (() => {
         break;
       }
       case 'again': if (!ctx.again) replay(F, ctx); break;
+      // (round 30) RESTOCK: v used items back into the bin now; `back`: this item returns to the bin after it plays
+      case 'restock': rskNow(F, v, 'item'); break;
+      case 'back': if (!ctx.again && !ctx.combo && ctx.inst) ctx.inst.rskBack = 1; break;
       case 'cleanse':
         for (const k of Object.keys(p.status)) if (isDebuff(k)) removeStatus(F, p, k);
         break;
@@ -2249,6 +2363,7 @@ const COMBAT = (() => {
       const gone = exhausts(def, plus) || (glass && num(F.rules.glassBreak, 0) > 0);
       (gone ? F.exhausted : F.used).push(inst);
       legAfterPlay(F, inst);   // the black hole takes it, or it bounces back into the cabinet (LEG block)
+      rskAfterPlay(F, inst);   // (round 30) RESTOCK: a `back` item returns to the bin, Fresh Stock's hit
       if (gone && glass && F.result !== 'lose') {
         F.stats.shattered++;
         itemProc(F, def, 'SHATTER');

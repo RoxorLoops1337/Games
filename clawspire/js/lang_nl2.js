@@ -1749,3 +1749,61 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /CUP round 29
+// ---------------------------------------------------------------- (round 30) RESTOCK
+// DESIGN.md "Restock (round 30)": Restock is Aanvullen (REFILL, the dry pour, stays BIJVULLEN): the turn start's
+// AANVULLEN +N, "+N terug in de bak", the ↻ chip and its uitleg, the tip card, the keyword chip, the six items, the
+// five relics and the Aanvulset (the Upgrade Bench pack).
+I18N.add('nl', {
+"ui": {
+"RESTOCK +{n}": "AANVULLEN +{n}",
+"+{n} back in the bin": "+{n} terug in de bak",
+"BACK IN THE BIN": "TERUG IN DE BAK",
+"Back in the bin": "Terug in de bak",
+"BACK": "TERUG",
+"NOTHING TO RESTOCK": "NIETS OM AAN TE VULLEN",
+"CABINET FULL": "KAST VOL",
+"Restock": "Aanvullen",
+"Restock: {n} items come back next turn": "Aanvullen: volgende beurt komen er {n} voorwerpen terug",
+"Restock: 1 item comes back next turn": "Aanvullen: volgende beurt komt er 1 voorwerp terug",
+"Next turn {n} items come back from your used pile into the bin.": "Volgende beurt komen er {n} voorwerpen van je gebruikte stapel terug in de bak.",
+"Next turn 1 item comes back from your used pile into the bin.": "Volgende beurt komt er 1 voorwerp van je gebruikte stapel terug in de bak.",
+"You have not played anything this turn: end it now and the whole used pile pours back in.": "Je hebt deze beurt nog niets gespeeld: beëindig hem nu en de hele gebruikte stapel stort terug in de bak.",
+"That is {n}% of the {n2} items you own, picked at random.": "Dat is {n}% van de {n2} voorwerpen die je hebt, willekeurig gekozen.",
+"That is {n}% of the {n2} items you own, plus {n3} from your relics.": "Dat is {n}% van de {n2} voorwerpen die je hebt, plus {n3} van je relikwieën.",
+"Up to {n} could come back, but only {n2} fit: what the used pile holds and the cabinet has room for.": "Er konden er {n} terugkomen, maar er passen er maar {n2}: zoveel ligt er op de gebruikte stapel en zoveel past er in de kast.",
+"Restock items and relics bring more back.": "Aanvul-voorwerpen en -relikwieën brengen er meer terug.",
+"Restock: at every turn start {n}% of the items you own come back into the bin.": "Aanvullen: aan het begin van elke beurt komt {n}% van je voorwerpen terug in de bak.",
+"At every turn start, part of your used pile comes back into the bin. Restock items bring more back at once. The ↻ chip shows how many come next.": "Aan het begin van elke beurt komt een deel van je gebruikte stapel terug in de bak. Aanvul-voorwerpen brengen er meteen meer terug. Het ↻-label toont hoeveel er straks komen.",
+"+1 RESTOCK": "+1 AANVULLEN",
+"LOST AND FOUND": "GEVONDEN VOORWERPEN",
+"HOPPER": "TRECHTER",
+"WHOLESALE": "GROOTHANDEL",
+"FRESH STOCK": "VERSE VOORRAAD",
+"Restock Kit": "Aanvulset",
+"Things that keep coming back.": "Dingen die steeds terugkomen."
+},
+"content": {
+"kw": {
+"restock": {
+"label": "Aanvullen",
+"blurb": "Stuur gebruikte voorwerpen terug naar de bak, zodat het goede spul er weer ligt om te pakken."
+}
+},
+"item": {
+"coin_return": { "name": "Muntretour", "text": "Aanvullen {v}: {v} gebruikte voorwerpen vallen terug in de bak. Krijg {v2} Blok. Druk voor wisselgeld." },
+"spring_loader": { "name": "Veerlader", "text": "Doe {v} schade en vul {v2} aan: gebruikte voorwerpen springen terug in de bak." },
+"boomerang": { "name": "Boemerang", "text": "Doe {v} schade. Daarna vliegt hij meteen terug in de bak, klaar om weer te pakken." },
+"vending_jam": { "name": "Vastgelopen Automaat", "text": "Krijg {v} Blok en vul {v2} aan. Geef hem een schop en er valt van alles uit." },
+"bottomless_bag": { "name": "Bodemloze Zak", "text": "Vul {v} aan en krijg deze beurt {v2} extra greep. Onderin zit altijd nog wat." },
+"horn_of_plenty": { "name": "Hoorn des Overvloeds", "text": "Vul {v} aan en krijg {v2} Blok. Daarna komt hij zelf ook terug in de bak. Hij raakt nooit leeg." }
+},
+"relic": {
+"stock_cart": { "name": "Voorraadkar", "text": "Aanvullen brengt aan het begin van elke beurt 1 voorwerp extra terug." },
+"lost_found": { "name": "Gevonden Voorwerpen", "text": "Je eerste lege greep van elke beurt vult 2 aan: twee gebruikte voorwerpen vallen terug in de bak." },
+"prize_hopper": { "name": "Prijzentrechter", "text": "Elke keer dat één greep 3 of meer prijzen oplevert, vul je 3 aan." },
+"wholesale_card": { "name": "Groothandelspas", "text": "Aanvullen brengt aan het begin van elke beurt 10% extra van je voorwerpen terug." },
+"fresh_stock": { "name": "Verse Voorraad", "text": "Speel je een voorwerp dat Aanvullen terugbracht, dan doet het ook 2 schade aan een willekeurige vijand." }
+}
+}
+});
+// ---------------------------------------------------------------- /RESTOCK round 30

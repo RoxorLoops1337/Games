@@ -73,6 +73,10 @@ function value(F, inst, sit) {
       case 'cleanse': util += 3 * sit.debuffs; break;
       case 'poisonAll': for (const e of al) util += (e.status.poison || 0); break;
       case 'junk': util -= 2 * (f.n || 1); break;
+      // (round 30) RESTOCK: items back in the bin are more prizes within reach this turn (worth about a chip each);
+      // an item that comes back itself is a prize you keep
+      case 'restock': util += 1.5 * Math.min(x, F.used.length); break;
+      case 'back': util += 3; break;
       default: break;
     }
   }
@@ -227,6 +231,13 @@ for (const ch of CHARS) {
     return `${t[0]} ${f1(mean(L.map(x => x.turns)))}t ${Math.round(100 * Math.min(...L.map(x => x.win)))}%`;
   }).join(', ')).join(' | ');
   console.log(`  ${ch.padEnd(9)} A1 ${row}`);
+}
+// (round 30) the mean win rate over every encounter of a tier (the line above shows the worst one), and the overall
+// mean, so a rule change (the Restock) can be reported in plain numbers.
+for (const ch of CHARS) {
+  const all = [];
+  const row = [1, 2, 3].map(a => ['normal', 'elite', 'boss'].map(t => { const L = R[ch][a][t]; all.push(...L.map(x => x.win)); return `${t[0]} ${Math.round(100 * mean(L.map(x => x.win)))}%`; }).join(', ')).join(' | ');
+  console.log(`  ${ch.padEnd(9)} mean ${row} | all ${Math.round(100 * mean(all))}%`);
 }
 
 // The owner tunes difficulty by hand with DATA.DIFFICULTY; this suite only

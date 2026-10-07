@@ -12862,7 +12862,7 @@ h.test('early fights: a run\'s first 3 normal fights are a single enemy, then pa
     h.eq(B.UP_IDS.length, 12, 'twelve upgrades');
     h.ok([1, 2, 3].every((t) => B.UP_LIST.some((u) => u.tier === t)), 'every tier has upgrades');
     h.ok(B.UP_LIST.every((u) => u.max >= 1 && u.max <= 5 && u.cost.every((c, i) => i === 0 || c > u.cost[i - 1])), 'one to five ranks, rising cost');
-    h.eq(B.PACK_IDS.length, 10, 'ten packs');
+    h.eq(B.PACK_IDS.length, 11, 'eleven packs (round 30: the Restock Kit)');
     h.ok(B.PACK_IDS.every((p) => { const n = D.benchPackThings(p).length; return n >= 3 && n <= 5; }), 'three to five things a pack');
     const L = lockedIds(T);
     h.ok(B.ITEMS.length >= 6 && B.RELICS.length >= 6, 'six new items and six new relics at least');
@@ -13118,7 +13118,7 @@ h.test('early fights: a run\'s first 3 normal fights are a single enemy, then pa
     h.ok(G.bench.buy('gold'), 'a rank bought from the page');
     h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPop\b/.test(n.className || '')), 'its card pops');
     G.bench.show('unl');
-    h.eq(secWalk(T._nodes.benchBody).filter((n) => /\bbncPack\b/.test(n.className || '')).length, 10, 'ten pack cards');
+    h.eq(secWalk(T._nodes.benchBody).filter((n) => /\bbncPack\b/.test(n.className || '')).length, 11, 'eleven pack cards (round 30: the Restock Kit)');
     h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPack\b.*\bwait\b/.test(n.className || '')), 'the ones waiting for a milestone say so');
     h.ok(G.bench.unlock('gambler'), 'a pack bought');
     const R = G.bench.rev;
@@ -13764,6 +13764,148 @@ h.test('early fights: a run\'s first 3 normal fights are a single enemy, then pa
     h.ok(!G3.feel.cur, 'and waits');
     G3.guide.skip(); stepFor(G3, 2);
     h.ok(G3.feel.cur && G3.feel.cur.id === 'map', 'the guide over: the tip shows');
+  });
+}
+
+/* ------------------------------------------------- (round 30) RESTOCK (DESIGN.md "Restock (round 30)") */
+{
+  // A knight's fight against the dummy (it never touches the bin) with this bin; texts: every floating label's words.
+  const rskBoot = (bin, meta, relics) => {
+    const o = metaBoot(Object.assign({ tips: {} }, meta || {}));
+    const { T, G } = o;
+    G.newRun('knight', 3030);
+    if (G.screen === 'boon') G.choose(0);
+    if (bin) G.run.bin = bin.map((id, i) => ({ uid: 'r' + i, id, plus: false }));
+    if (relics) G.run.relics = relics.slice();
+    G.run.hp = G.run.maxHp = 999;
+    const texts = [], fx = T.RENDER.fx, t0 = fx.text;
+    fx.text = function (x, y, str) { texts.push(String(str)); return t0.apply(this, arguments); };
+    G.startFight(['dummy'], 'normal');
+    for (const e of G.fight.enemies) e.hp = e.maxHp = 9999;   // a long fight: the dummy never falls
+    settle(G, 10);
+    return Object.assign(o, { C: T.COMBAT, texts });
+  };
+  const chipN = (T) => { const el = T._nodes.rskChip; const n = el && (el.children || []).find((c) => /\bn\b/.test(c.className || '')); return n ? +n.textContent : null; };
+  const byId = (a, b) => (a.data.inst.id < b.data.inst.id ? -1 : a.data.inst.id > b.data.inst.id ? 1 : String(a.data.inst.uid) < String(b.data.inst.uid) ? -1 : 1);
+  const fakeGrab = (G, C, bodies) => {
+    C.useGrab(G.fight);
+    const fs = G.fs;
+    fs.grabInFlight = true; fs.grabN++; fs.dropAt = G.S.t; fs.releaseAt = -1; fs.delivered = 0; fs.watch = false; fs.pendingDrop = false;
+    G.playDelivered(bodies);
+  };
+  const swords = (n) => Array.from({ length: n }, () => 'rusty_sword');
+
+  h.test('rsk: the hint chip shows the next Restock (it matches what the turn start brings), the RESTOCK +N label, hidden off the fight', () => {
+    const { T, G, C, texts } = rskBoot(swords(20));
+    const F = G.fight;
+    G.rsk.hud(true);
+    h.ok(/\bshow\b/.test(T._nodes.rskChip.className), 'the chip is up in a fight');
+    h.eq(chipN(T), 0, 'turn 1: nothing used yet, 0 to come back');
+    // play 9 through the row (three grabs of three)
+    for (let g = 0; g < 3; g++) { settle(G, 15); fakeGrab(G, C, itemBodies(G).sort(byId).slice(0, 3)); settle(G, 20); }
+    h.eq(F.used.length, 9, 'nine played');
+    G.rsk.hud(true);
+    const plan = C.restockPlan(F);
+    h.eq(plan.n, 8, '20 owned: 8 come back next turn (40%)');
+    h.eq(chipN(T), 8, 'the chip says 8');
+    h.eq(G.rsk.shown, 8, 'and GAME.rsk.shown agrees');
+    const gw = C.endTurn, seen = [];
+    C.endTurn = function () { const ev = gw.apply(this, arguments); for (const e of ev) if (e.t === 'refill') seen.push(e); return ev; };
+    try { G.endTurn(); settle(G, 30); } finally { C.endTurn = gw; }
+    h.ok(seen.length === 1 && seen[0].rsk === 'turn' && seen[0].n === 8, 'the turn start Restocked exactly the 8 the chip promised');
+    h.ok(texts.includes('RESTOCK +8'), 'a RESTOCK +8 label over the cabinet: ' + texts.filter((s) => /RESTOCK|REFILL/.test(s)).join(' | '));
+    h.ok(G.rsk.last && G.rsk.last.n === 8 && G.rsk.last.why === 'turn', 'GAME.rsk.last knows');
+    stepFor(G, 4);   // the rain drips in from the spawn queue
+    h.eq(G.fs.items.length, F.bin.length, 'one body per bin instance after the rain');
+    // the popover explains it in plain words
+    G.rsk.pop();
+    h.ok(/Restock/.test(G.S.popover.html) && /used pile into the bin/.test(G.S.popover.html), 'a tap on the chip explains: ' + G.S.popover.html.slice(0, 120));
+    // a dry turn: the chip shows the whole pour
+    G.rsk.hud(true);
+    h.ok(C.restockPlan(F).dry && chipN(T) === Math.min(F.used.length, Math.max(1, 34 - F.bin.length)), 'nothing played yet: the chip shows the dry pour (' + chipN(T) + ')');
+    G.endFight('win');
+    G.rsk.hud(true);
+    h.ok(!/\bshow\b/.test(T._nodes.rskChip.className || ''), 'off the fight: the chip is gone');
+  });
+
+  h.test('rsk: a Restock item played through a real grab: the row card reads +N, "+N back in the bin" floats, the tip card comes', () => {
+    // 40 prizes: 34 in the cabinet, 6 wait in the used pile from the start
+    const bin = Array.from({ length: 40 }, (_, i) => (i % 2 ? 'spring_loader' : 'coin_return'));
+    const { G, C, texts } = rskBoot(bin);
+    const F = G.fight;
+    h.eq(F.used.length, 6, 'six wait in the used pile');
+    let hit = null, drops = 0;
+    for (let k = 0; k < 14 && !hit && G.screen === 'fight'; k++) {
+      settle(G, 20);
+      if (F.player.grabs <= 0) { G.endTurn(); settle(G, 30); continue; }
+      const x = G.rig.aimAt(null);
+      G.steer(x == null ? 200 : x); stepFor(G, 0.7);
+      if (!G.dropClaw()) continue;
+      drops++;
+      for (let i = 0; i < 60 * 25 && G.state().grabInFlight; i++) G.update(DT);
+      settle(G, 20);
+      const R = G.row.state;
+      hit = R ? R.slots.find((s) => s.k === 'item' && s.st === 'hit' && s.res && s.res.rs > 0) : null;
+    }
+    h.ok(hit, 'a real grab delivered a Restock item and it played (' + drops + ' drops)');
+    if (hit) {
+      h.ok(hit.pre && hit.pre.rs > 0, 'its card promised the Restock while it waited (↻ +' + (hit.pre && hit.pre.rs) + ')');
+      h.ok(hit.res.rs >= 1 && hit.res.rs <= 3, 'and reads ↻ +' + hit.res.rs + ' once played');
+      h.ok(texts.some((s) => /^\+\d back in the bin$/.test(s)), '"+N back in the bin" floats over the cabinet');
+    }
+    h.ok(G.meta.tips.restock || (G.feel.cur && G.feel.cur.id === 'restock') || G.feel.queue.indexOf('restock') >= 0, 'the Restock tip card is on its way (the first time)');
+    h.ok(G.feel.TIPS.some((d) => d.id === 'restock'), 'it is a tip of its own');
+    G.draw();
+  });
+
+  h.test('rsk: a Boomerang comes back into the cabinet; Lost and Found and a Restock relic popover', () => {
+    const { T, G, C } = rskBoot(['boomerang'].concat(swords(12)), null, ['lost_found']);
+    const F = G.fight;
+    settle(G, 10);
+    const b = itemBodies(G).find((x) => x.data.inst.id === 'boomerang');
+    h.ok(b, 'the Boomerang is in the cabinet');
+    const inst = b.data.inst;
+    fakeGrab(G, C, [b]);
+    settle(G, 20);
+    h.ok(F.bin.includes(inst) && !F.used.includes(inst), 'it played and came back into the bin');
+    h.ok(G.fs.items.some((x) => x.data.inst === inst), 'with a body in the cabinet');
+    const s = G.row.state && G.row.state.slots.find((x) => x.k === 'item' && x.inst === inst);
+    h.ok(s && s.res && s.res.bk && s.res.d > 0, 'its card: the hit and BACK');
+    // Lost and Found: an empty grab restocks 2 (a chip at the end of the row)
+    C.endTurn(F); settle(G, 30);
+    for (let i = 0; i < 5; i++) C.play(F, F.bin.find((x) => x.id === 'rusty_sword'));
+    const u0 = F.used.length;
+    fakeGrab(G, C, []);
+    settle(G, 20);
+    h.eq(u0 - F.used.length, 2, 'Lost and Found: an empty grab brought 2 back');
+    // the relic's popover carries the rule
+    h.ok(/at every turn start 40% of the items you own/.test(G.rsk.popLine(T.DATA.RELICS.stock_cart)), 'a Restock relic\'s popover line says the rule');
+    h.eq(G.rsk.popLine(T.DATA.RELICS.jackpot_bell), '', 'other relics get none');
+  });
+
+  h.test('rsk: save and reload: the Restock Kit stays owned, a run of Restock items loads and fights', () => {
+    const { T, G } = metaBoot({ bench: { bolts: 200, earned: 200, spent: 0, up: {}, packs: {}, fresh: {}, grant: 1, hello: 1 } });
+    h.ok(G.bench.unlock('restock'), 'the Restock Kit can be bought');
+    h.ok(G.bench.owns('restock'), 'owned');
+    G.newRun('knight', 3031);
+    if (G.screen === 'boon') G.choose(0);
+    G.run.bin = G.run.bin.concat([{ uid: 'k1', id: 'coin_return', plus: false }, { uid: 'k2', id: 'horn_of_plenty', plus: true }, { uid: 'k3', id: 'boomerang', plus: false }]);
+    G.run.relics.push('stock_cart');
+    G.startFight(['dummy'], 'normal');
+    settle(G, 10);
+    G.save(); G.saveMeta && G.saveMeta();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    h.ok(G2.bench.owns('restock'), 'the pack survives a reload');
+    h.eq(G2.screen, 'title', 'it boots to the title');
+    const ok = G2.load ? G2.load() : false;
+    h.ok(ok !== false, 'the run loads');
+    h.ok(G2.run && ['coin_return', 'horn_of_plenty', 'boomerang'].every((id) => G2.run.bin.some((i) => i.id === id)) && G2.run.relics.includes('stock_cart'), 'the Restock items and relic are still in the run');
+    settle(G2, 10);
+    if (G2.screen === 'fight') {
+      G2.rsk.hud(true);
+      h.ok(/\bshow\b/.test(T2._nodes.rskChip.className), 'the fight comes back with its chip');
+    }
   });
 }
 
