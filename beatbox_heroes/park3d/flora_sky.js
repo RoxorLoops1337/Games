@@ -29,7 +29,7 @@ function shade(base, nx, ny, nz, y, hz, out) {
   out.lerp(_h, hz); return out;
 }
 
-export function buildSkyline(ctx, bounds, R) {
+export function buildSkyline(ctx, bounds, R, groundAt) {
   const M = new Mesher(), L = new Mesher(), group = new THREE.Group();
   const cx = 0, cz = 0; let nBuild = 0, nLit = 0;
   const tmp = new THREE.Color();
@@ -81,6 +81,15 @@ export function buildSkyline(ctx, bounds, R) {
     f([x0, y, z1], [x1, y, z1], [0, 0.6, 0.8]); f([x1, y, z0], [x0, y, z0], [0, 0.6, -0.8]); f([x1, y, z1], [x1, y, z0], [0.8, 0.6, 0]); f([x0, y, z0], [x0, y, z1], [-0.8, 0.6, 0]);
   }
   function building(side, ai, depthC, wv, hv, layer, k) {
+    const m0 = M.p.length, l0 = L.p.length; buildingInner(side, ai, depthC, wv, hv, layer, k);
+    if (groundAt) { // stand on whatever the terrain artist built outside the park (hills, meadow, street)
+      let bx, bz; const d0 = depthC + 6;
+      if (side === 'N') { bx = ai; bz = -d0; } else if (side === 'S') { bx = ai; bz = d0; } else if (side === 'E') { bx = d0; bz = ai; } else { bx = -d0; bz = ai; }
+      let gy = groundAt(bx, bz); if (gy === null || gy === undefined) gy = 0; gy = Math.max(-0.2, gy) - 0.05;
+      if (Math.abs(gy) > 0.01) { for (let i = m0 + 1; i < M.p.length; i += 3) M.p[i] += gy; for (let i = l0 + 1; i < L.p.length; i += 3) L.p[i] += gy; }
+    }
+  }
+  function buildingInner(side, ai, depthC, wv, hv, layer, k) {
     // side: 'N','S','E','W'; ai: coordinate along the side; depthC: distance of the FRONT face from the park centre
     _h.set(layer.hazeCol); const w = wv, d = R.range(11, 15), h = hv, base = col(R.pick(FACADE)).lerp(col(layer.color), layer.mixc).lerp(col(R() > 0.5 ? '#ffd0b0' : '#9a8cc0'), R() * 0.08);
     base.multiplyScalar(0.86);
@@ -225,16 +234,16 @@ function litTexture() { // 512x256 atlas: top row neon + cafe signs (cells 2 wid
 }
 
 // ---------- ground apron outside the park: sidewalk, road with dashes, far pavement, lilac ground fading into haze, street trees and parked cars ----------
-export function buildStreet(ctx, bounds, R) {
-  const parts = [], B = bounds;
+export function buildStreet(ctx, bounds, R, on) {
+  const parts = [], B = bounds; on = on || { N: true, S: true, E: true, W: true };
   const quad = (x0, z0, x1, z1, y, k00, k10, k11, k01) => { // horizontal quad with a colour per corner (x0z0, x1z0, x1z1, x0z1), normal up
     const g = new THREE.BufferGeometry(); const p = new Float32Array([x0, y, z1, x1, y, z1, x1, y, z0, x0, y, z1, x1, y, z0, x0, y, z0]); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
     const C = [col(k01), col(k11), col(k10), col(k01), col(k10), col(k00)]; const ca = new Float32Array(18); C.forEach((k, i) => { ca[i * 3] = k.r; ca[i * 3 + 1] = k.g; ca[i * 3 + 2] = k.b; }); g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); g.computeVertexNormals(); return g;
   };
   const ring = (i0, i1, y, c0, c1) => { // band from i0 to i1 metres outside the park bounds, colour c0 (inner edge) to c1 (outer edge)
     const xa = B.minX - i1, xb = B.minX - i0, xc = B.maxX + i0, xd = B.maxX + i1, za = B.minZ - i1, zb = B.minZ - i0, zc = B.maxZ + i0, zd = B.maxZ + i1;
-    parts.push(quad(xa, za, xd, zb, y, c1, c1, c0, c0)); parts.push(quad(xa, zc, xd, zd, y, c0, c0, c1, c1));
-    parts.push(quad(xa, zb, xb, zc, y, c1, c0, c0, c1)); parts.push(quad(xc, zb, xd, zc, y, c0, c1, c1, c0));
+    if (on.N) parts.push(quad(xa, za, xd, zb, y, c1, c1, c0, c0)); if (on.S) parts.push(quad(xa, zc, xd, zd, y, c0, c0, c1, c1));
+    if (on.W) parts.push(quad(xa, zb, xb, zc, y, c1, c0, c0, c1)); if (on.E) parts.push(quad(xc, zb, xd, zc, y, c0, c1, c1, c0));
   };
   const y0 = -0.06;
   ring(0.0, 4.0, y0 + 0.03, '#d6b894', '#cfae8c'); // sidewalk
@@ -245,18 +254,18 @@ export function buildStreet(ctx, bounds, R) {
   // lane dashes along the road centre line
   const dash = (x, z, w, d) => parts.push(quad(x - w / 2, z - d / 2, x + w / 2, z + d / 2, y0 + 0.06, '#f3dfb0', '#f3dfb0', '#f3dfb0', '#f3dfb0'));
   const rc = 8.5;
-  for (let x = B.minX - 12; x < B.maxX + 12; x += 3.2) { dash(x, B.minZ - rc, 1.6, 0.18); dash(x, B.maxZ + rc, 1.6, 0.18); }
-  for (let z = B.minZ - 6; z < B.maxZ + 6; z += 3.2) { dash(B.minX - rc, z, 0.18, 1.6); dash(B.maxX + rc, z, 0.18, 1.6); }
+  for (let x = B.minX - 12; x < B.maxX + 12; x += 3.2) { if (on.N) dash(x, B.minZ - rc, 1.6, 0.18); if (on.S) dash(x, B.maxZ + rc, 1.6, 0.18); }
+  for (let z = B.minZ - 6; z < B.maxZ + 6; z += 3.2) { if (on.W) dash(B.minX - rc, z, 0.18, 1.6); if (on.E) dash(B.maxX + rc, z, 0.18, 1.6); }
   // crosswalk at the gate
-  for (let i = -3; i <= 3; i++) dash(i * 0.9, B.maxZ + rc - 2.2, 0.5, 2.6);
+  if (on.S) for (let i = -3; i <= 3; i++) dash(i * 0.9, B.maxZ + rc - 2.2, 0.5, 2.6);
   // far ground: big rings fading to the haze colour
   const far = (i0, i1, c0, c1) => ring(i0, i1, y0 - 0.0 + 0.01, c0, c1); far(17.5, 40, '#9d88aa', '#b49aaa'); far(40, 90, '#b49aaa', '#d4a8a2'); far(90, 400, '#d4a8a2', HAZE);
   // street trees on the inner sidewalk, parked cars on the road edge
   const trees = [], placed = [];
   const tv = [makeStreet(5, 1), makeStreet(6, 1.15), makeStreet(7, 0.9)];
   const put = (x, z) => { const s = 0.9 + R() * 0.35; trees.push(xf(R.pick(tv), { x, y: -0.02, z, ry: R() * 6, s })); };
-  for (let x = B.minX - 3; x <= B.maxX + 3; x += 11) { if (Math.abs(x) > 3.5) put(x + R.range(-0.6, 0.6), B.minZ - 2.2); if (Math.abs(x) > 3.5 || true) put(x + R.range(-0.6, 0.6), B.maxZ + 2.2); }
-  for (let z = B.minZ + 4; z < B.maxZ - 2; z += 11) { put(B.minX - 2.2, z + R.range(-0.5, 0.5)); put(B.maxX + 2.2, z + R.range(-0.5, 0.5)); }
+  for (let x = B.minX - 3; x <= B.maxX + 3; x += 11) { if (on.N) put(x + R.range(-0.6, 0.6), B.minZ - 2.2); if (on.S && Math.abs(x) > 3.5) put(x + R.range(-0.6, 0.6), B.maxZ + 2.2); }
+  for (let z = B.minZ + 4; z < B.maxZ - 2; z += 11) { if (on.W) put(B.minX - 2.2, z + R.range(-0.5, 0.5)); if (on.E) put(B.maxX + 2.2, z + R.range(-0.5, 0.5)); }
   // cars
   const carCols = ['#2ec4b6', '#e9a23b', '#d9534f', '#e8d9c0', '#6b7fd7', '#e870a0'];
   const car = (x, z, ry, c) => {
@@ -266,8 +275,9 @@ export function buildStreet(ctx, bounds, R) {
     for (const sx of [-0.92, 0.92]) for (const sz of [-1.3, 1.3]) { const w = new THREE.CylinderGeometry(0.34, 0.34, 0.25, 6); w.rotateZ(Math.PI / 2); const ng = w.toNonIndexed(); ng.deleteAttribute('uv'); p.push(paintSolid(xf(ng, { x: sx, y: 0.34, z: sz }), '#2b2438', '#3a3550', r)); }
     return xf(merged(p), { x, z, ry });
   };
-  const carPos = [[B.minX - 5.4, -8, 0, 0], [B.minX - 5.4, 4, 0, 3], [B.maxX + 5.4, -14, Math.PI, 1], [B.maxX + 5.4, 10, Math.PI, 4], [-9, B.minZ - 5.4, Math.PI / 2, 5], [11, B.minZ - 5.4, -Math.PI / 2, 2], [-12, B.maxZ + 5.4, Math.PI / 2, 4], [14, B.maxZ + 5.4, -Math.PI / 2, 0]];
-  for (const cp of carPos) trees.push(car(cp[0], cp[1], cp[2], carCols[cp[3]]));
+  const carPos = [[B.minX - 5.4, -8, 0, 0, 'W'], [B.minX - 5.4, 4, 0, 3, 'W'], [B.maxX + 5.4, -14, Math.PI, 1, 'E'], [B.maxX + 5.4, 10, Math.PI, 4, 'E'], [-9, B.minZ - 5.4, Math.PI / 2, 5, 'N'], [11, B.minZ - 5.4, -Math.PI / 2, 2, 'N'], [-12, B.maxZ + 5.4, Math.PI / 2, 4, 'S'], [14, B.maxZ + 5.4, -Math.PI / 2, 0, 'S']];
+  for (const cp of carPos) if (on[cp[4]]) trees.push(car(cp[0], cp[1], cp[2], carCols[cp[3]]));
+  if (!parts.length && !trees.length) return { mesh: null };
   const gs = parts.concat(trees).map((g) => { const n = g.index ? g.toNonIndexed() : g; if (n.attributes.uv) n.deleteAttribute('uv'); return n; });
   const geo = merged(gs); const mesh = new THREE.Mesh(geo, flatMat()); mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = 'street';
   return { mesh };

@@ -39,7 +39,7 @@ export function buildHead(mb, ctx) {
   const sk = ctx.skin, K_h = K('head');
   const cc = (k) => skinShade(sk, 0.62 + k * 0.38);
   const rings = HR.map((r, i) => ({ y: HY + r.y, rx: r.rx, rz: r.rz, cz: r.cz, sk: K_h, c: i === 0 ? cc(0.6) : i === 1 ? cc(0.9) : i === 2 ? lite(sk, 0.02) : i === 3 ? lite(sk, 0.03) : i === HR.length - 1 ? lite(sk, 0.06) : i >= 6 ? lite(sk, 0.05) : lite(sk, 0.025) }));
-  loft(mb, rings, { n: HN, a0: HA0, sq: SQ, caps: 'bt', capTip: [0, HY + HEAD_TOP, -0.035], capCol: lite(sk, 0.05) });
+  loft(mb, rings, { hullHalf: true, hullCaps: 't', n: HN, a0: HA0, sq: SQ, caps: 'bt', capTip: [0, HY + HEAD_TOP, -0.035], capCol: lite(sk, 0.05) });
   // neck
   const nk = (y, r, s) => ({ y, rx: r, rz: r * 0.92, cz: 0.012, sk: s, c: cc(y < 0.9 ? 0.62 : 0.8) });
   loft(mb, [nk(0.86, 0.095, K2('chest', 'neck', 0.4)), nk(HY + 0.01, 0.08, K('neck'))], { n: 6, caps: 'b' });
@@ -96,6 +96,13 @@ export function buildFace(mb, glow, ctx) {
   mb.poly(onFace(mp, 0.0105), '#4a1d2b', K('mouth'), fm.n, { nh: true, flat: true });
   for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI; mt.push([Math.cos(a) * 0.035, my - 0.025 - Math.sin(a) * 0.035]); }
   mb.poly(onFace(mt, 0.0125), '#e0708a', K('mouth'), fm.n, { nh: true, flat: true });
+  // age lines (look.age === 'old'): forehead creases and crow's feet
+  if (look.age === 'old') {
+    const wl = skinShade(sk, 0.7);
+    [0.395, 0.415].forEach((y, i) => faceDecal(mb, [[-0.1 + i * 0.01, y], [0.1 - i * 0.01, y], [0.095 - i * 0.01, y - 0.006], [-0.095 + i * 0.01, y - 0.006]], wl, K('head'), 0.006, true));
+    [1, -1].forEach((s) => [0.0, 0.03].forEach((o) => faceDecal(mb, [[s * 0.205, 0.28 - o], [s * 0.245, 0.285 - o + 0.012], [s * 0.245, 0.279 - o + 0.012], [s * 0.205, 0.274 - o]], wl, K('head'), 0.006, true)));
+    [1, -1].forEach((s) => faceDecal(mb, [[s * 0.1, 0.2], [s * 0.14, 0.17], [s * 0.145, 0.176], [s * 0.105, 0.206]], wl, K('head'), 0.006, true));
+  }
   // marks
   (look.marks || []).forEach((m) => {
     if (m === 'freckles') [[-1, 0.2, 0.17], [-1, 0.24, 0.155], [-1, 0.2, 0.14], [1, 0.2, 0.17], [1, 0.24, 0.155], [1, 0.2, 0.14], [0, 0.0, 0]].forEach(([s, ux, uy], i) => { if (!s) return; const x = s * (0.12 + i * 0.0), y = 0.2; void x; void y; });
@@ -153,7 +160,7 @@ export function buildArms(mb, ctx, d, sleeveEnd) {
   const sk = ctx.skin;
   [1, -1].forEach((s) => {
     const rings = []; ARM_U.forEach((u) => { if (u < sleeveEnd - 0.12) return; const y = armY(u); rings.push({ y, rx: armRad(u), rz: armRad(u) * 0.95, cx: s * d.shX, sk: armSk(s, y), c: u > 0.9 ? skinShade(sk, 0.85) : sk }); });
-    if (rings.length >= 2) loft(mb, rings, { n: 6, caps: sleeveEnd <= 0.02 ? 'b' : '', capColB: sk });
+    if (rings.length >= 2) loft(mb, rings, { hullHalf: rings.length >= 4, n: 6, caps: sleeveEnd <= 0.02 ? 'b' : '', capColB: sk });
     buildHand(mb, ctx, d, s);
   });
 }

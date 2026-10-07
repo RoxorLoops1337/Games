@@ -1,9 +1,9 @@
 // FLORA module (Environment Artist B). Owns: trees (oak, autumn maple, pine, cypress, cherry; merged), bushes, hedges, flower beds, swaying grass tufts, fallen leaves,
 // planters, a low-poly skyline with lit windows, the street apron, drifting clouds, pigeons, butterflies and birds.
-// CONTRACT: buildFlora(ctx, terrain) -> { group, update(dt,t), windows, setLit(k), stats }.
+// CONTRACT: buildFlora(ctx, terrain) -> { group, update(dt,t), windows:{count,material}, stats }. Meshes named skyline, skyline_windows and clouds are tinted by the lighting module (time of day).
 // Sub-modules: flora_trees.js (species), flora_plants.js (undergrowth), flora_sky.js (skyline, street, clouds), flora_life.js (animals), flora_common.js (helpers).
 import { THREE, rng, flatMat, merged } from './kit.js';
-import { xf } from './flora_common.js';
+import { xf, paintSolid, blob } from './flora_common.js';
 import { makeOak, makePine, makeCypress, makeCherry, PALS } from './flora_trees.js';
 import { buildPlants } from './flora_plants.js';
 import { buildSkyline, buildStreet, buildClouds } from './flora_sky.js';
@@ -61,6 +61,9 @@ export function buildFlora(ctx, terrain) {
     const s = t.s * (0.92 + R() * 0.16);
     treeGeos.push(xf(g, { x, y: gy(x, z) - 0.08, z, ry: R() * 6.28, s, rx: (R() - 0.5) * 0.06, rz: (R() - 0.5) * 0.06 })); placed.push({ kind: t.kind, x, z, s });
   }
+  // a lost balloon caught in the maple canopy (storytelling prop)
+  const maple = placed.find((p) => p.kind === 'maple');
+  if (maple) { const bx = maple.x + 1.4 * maple.s, bz = maple.z + 0.6 * maple.s, by = gy(maple.x, maple.z) + 6.9 * maple.s; const bal = paintSolid(xf(blob(0.34, 1, R, 1.15), { x: bx, y: by, z: bz }), '#d63a5a', '#ff7a8a', R, 0.4); const str = new THREE.BufferGeometry(); const sx = bx - 0.5, sz = bz - 0.2; str.setAttribute('position', new THREE.Float32BufferAttribute([bx, by - 0.3, bz, bx + 0.02, by - 0.3, bz, sx, by - 1.3, sz], 3)); const k = new THREE.Color('#f4e4d0'); str.setAttribute('color', new THREE.Float32BufferAttribute([k.r, k.g, k.b, k.r, k.g, k.b, k.r, k.g, k.b], 3)); str.computeVertexNormals(); treeGeos.push(bal, str); }
   const treeMesh = new THREE.Mesh(merged(treeGeos.map((g) => { if (g.attributes.uv) g.deleteAttribute('uv'); return g; })), flatMat()); treeMesh.castShadow = true; treeMesh.receiveShadow = true; treeMesh.name = 'trees'; group.add(treeMesh);
 
   // ---------- undergrowth ----------
@@ -94,8 +97,13 @@ export function buildFlora(ctx, terrain) {
   group.add(plants.group);
 
   // ---------- skyline, street, clouds ----------
-  const sky = buildSkyline(ctx, B, rng(31337)); group.add(sky.group);
-  const street = buildStreet(ctx, B, rng(555)); group.add(street.mesh);
+  // whatever the terrain artist built outside the fence (meadow, hills, a street) is probed with rays: buildings stand on it, and my own street only appears on sides where the terrain left the world empty
+  const rc = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0), tm = []; try { terrain.group.updateMatrixWorld(true); terrain.group.traverse((o) => { if (o.isMesh) tm.push(o); }); } catch (e) { /* no terrain meshes */ }
+  const groundAt = (x, z) => { try { rc.set(new THREE.Vector3(x, 90, z), down); rc.far = 200; const h = rc.intersectObjects(tm, false); return h.length ? h[0].point.y : null; } catch (e) { return null; } };
+  const probe = (x, z) => groundAt(x, z) === null;
+  const sideOn = { N: probe(0, B.minZ - 9) && probe(-8, B.minZ - 9), S: probe(0, B.maxZ + 9) && probe(8, B.maxZ + 9), E: probe(B.maxX + 9, 0) && probe(B.maxX + 9, 10), W: probe(B.minX - 9, 0) && probe(B.minX - 9, 10) };
+  const sky = buildSkyline(ctx, B, rng(31337), groundAt); group.add(sky.group);
+  const street = buildStreet(ctx, B, rng(555), sideOn); if (street.mesh) group.add(street.mesh);
   const clouds = buildClouds(rng(808)); group.add(clouds.mesh);
 
   // ---------- animals ----------
@@ -103,13 +111,11 @@ export function buildFlora(ctx, terrain) {
   const fc = beds.slice(0, 9).map((b, i) => ({ x: b.x, z: b.z, n: 1 + (i % 2) }));
   const life = buildLife(ctx, { pigeonHomes: homes }, free, fc, gy); group.add(life.group);
 
-  let litK = 1;
-  const stats = { ms: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - t0), rejected: rejected.join(' '), trees: placed.length, buildings: sky.buildings, litWindows: sky.litWindows, ...plants.stats, pigeons: life.count.pigeons, air: life.count.air };
-  if (typeof window !== 'undefined') window.__floraStats = stats; window.__life = life; // debug hook for the shot tool
+  const stats = { streetSides: Object.keys(sideOn).filter((k) => sideOn[k]).join(''), ms: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - t0), rejected: rejected.join(' '), trees: placed.length, buildings: sky.buildings, litWindows: sky.litWindows, ...plants.stats, pigeons: life.count.pigeons, air: life.count.air };
+  ctx.flora = { stats, life, sky }; // handy for tests and for the lighting artist (ctx is shared)
   function update(dt, t) {
     plants.update(dt, t); life.update(dt, t);
     clouds.mesh.rotation.y = t * 0.004;
-    sky.litMat.color.setScalar((1.12 + Math.sin(t * 0.7) * 0.03) * litK);
   }
-  return { group, update, windows: { count: sky.litWindows, material: sky.litMat }, setLit(k) { litK = k; }, stats };
+  return { group, update, windows: { count: sky.litWindows, material: sky.litMat }, stats };
 }

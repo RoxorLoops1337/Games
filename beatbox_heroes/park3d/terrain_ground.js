@@ -73,6 +73,7 @@ function grassColor(F, x, z, h) {
   const pd = F.pathDist(x, z), w = F.wear(x, z);
   const worn = Math.max(1 - smooth(0.15, 2.6, pd), w);
   c = mix(c, G.dry, worn * 0.6); c = mix(c, G.dirt, Math.max((1 - smooth(0.0, 1.0, pd)) * 0.7, smooth(0.55, 1.0, w) * 0.85));
+  const stripe = Math.sin((x * 0.62 + z * 0.4) * 1.25) > 0 ? 1.045 : 0.965; c = mul(c, 1 + (stripe - 1) * smooth(1.5, 3.5, pd) * (1 - 0.6 * smooth(0.3, 0.9, w)));
   const ed = Math.min(18 - Math.abs(x), 28 - Math.abs(z)); c = aoTint(c, (1 - smooth(0, 2.6, ed)) * 0.5);
   return c;
 }
@@ -82,7 +83,7 @@ export function buildGroundGeo(F, S) {
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) { const x = vx(i), z = vz(j), h = F.heightAt(x, z); hc.push(h); cc.push(grassColor(F, x, z, h)); }
   const id = (i, j) => j * (nx + 1) + i, P = (i, j) => [vx(i), hc[id(i, j)], vz(j)], C = (i, j) => cc[id(i, j)];
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1), avg = (...q) => [(q[0][0] + q[1][0] + q[2][0]) / 3, (q[0][1] + q[1][1] + q[2][1]) / 3, (q[0][2] + q[1][2] + q[2][2]) / 3], jt = () => 1 + (S.rand() - 0.5) * 0.16;
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1), avg = (...q) => [(q[0][0] + q[1][0] + q[2][0]) / 3, (q[0][1] + q[1][1] + q[2][1]) / 3, (q[0][2] + q[1][2] + q[2][2]) / 3], jt = () => 1 + (S.rand() - 0.5) * 0.13;
     // one flat colour per facet (hand painted look); normal up: (a, d, c, b) order, diagonal alternates
     if ((i + j) % 2) { B.tri(a, d, c, mul(avg(C(i, j), C(i, j + 1), C(i + 1, j + 1)), jt())); B.tri(a, c, b, mul(avg(C(i, j), C(i + 1, j + 1), C(i + 1, j)), jt())); }
     else { B.tri(a, d, b, mul(avg(C(i, j), C(i, j + 1), C(i + 1, j)), jt())); B.tri(b, d, c, mul(avg(C(i + 1, j), C(i, j + 1), C(i + 1, j + 1)), jt())); }
@@ -154,7 +155,7 @@ export function buildFlats(F, S) {
     const seg = 10; for (let k = 0; k < seg; k++) { const a = (k / seg) * 6.2832, b = ((k + 1) / seg) * 6.2832; OV.tri([x, 0.034, z], [x + 0.72 * Math.cos(b), 0.034, z + 0.72 * Math.sin(b)], [x + 0.72 * Math.cos(a), 0.034, z + 0.72 * Math.sin(a)], mul(PAL[k % PAL.length], 0.96)); }
     const seg2 = 24; for (let k = 0; k < seg2; k++) { const a = (k / seg2) * 6.2832, b = ((k + 1) / seg2) * 6.2832; OV.tri([x, 0.031, z], [x + 2.06 * Math.cos(b), 0.031, z + 2.06 * Math.sin(b)], [x + 2.06 * Math.cos(a), 0.031, z + 2.06 * Math.sin(a)], under); } }
   // busking spot: pale lit worn patch (clean ground, radius 2.5), soft dusty rim
-  { const x = 8, z = -8, seg = 28, pale = col('#F0DEBB'), pale2 = col('#E3CC9E'), rim = col('#C9BB84'); const rr = (k, f) => f * (1 + 0.05 * Math.sin(k * 2.3) + 0.04 * Math.sin(k * 5.1 + 1)), p = (k, f) => { const a = (k / seg) * 6.2832; return [x + rr(k, f) * Math.cos(a), 0.036, z + rr(k, f) * Math.sin(a)]; };
+  { const x = 8, z = -8, seg = 28, pale = col('#F0DEBB'), pale2 = col('#E3CC9E'), rim = col('#C9BB84'); const rr = (k, f) => f * (1 + 0.045 * Math.sin(k * 0.45 + 0.7) + 0.035 * Math.sin(k * 0.95 + 2.1)), p = (k, f) => { const a = (k / seg) * 6.2832; return [x + rr(k, f) * Math.cos(a), 0.036, z + rr(k, f) * Math.sin(a)]; };
     for (let k = 0; k < seg; k++) { const n = vnoise(k * 0.7, 3, 4); OV.tri([x, 0.036, z], p(k + 1, 1.2), p(k, 1.2), mul(pale, 1.03)); OV.quad(p(k, 1.2), p(k + 1, 1.2), p(k + 1, 2.1), p(k, 2.1), mul(pale, 0.99), mul(pale, 0.99), mix(pale2, SAND[0], 0.3 + n * 0.3), mix(pale2, SAND[0], 0.3 + n * 0.3)); OV.quad(p(k, 2.1), p(k + 1, 2.1), p(k + 1, 2.7), p(k, 2.7), mix(pale2, SAND[0], 0.3 + n * 0.3), mix(pale2, SAND[0], 0.3 + n * 0.3), mix(rim, G.dry, 0.5 + n * 0.3), mix(rim, G.dry, 0.5 + n * 0.3)); } }
 
   // contact shadows (soft violet blobs) are added by the props; here the street
@@ -197,7 +198,7 @@ export function buildKerbs(F, S) {
         if (F.paths.some((q) => q !== p && distToSamples(mx, mz, q.cv) < q.w / 2 + 0.45) || distToSamples(mx, mz, F.loop) < LOOP_W / 2 + 0.4 || Math.hypot(mx, mz) < PLAZA.r + 0.5 || Math.hypot(mx - 8, mz + 8) < 3.1 || Math.hypot(mx - 4.1, mz - 22.2) < 2.3) continue;
         const ang = Math.atan2(mz, mx), aa = ang < 0 ? ang + 6.2832 : ang; if (aa > APRON.a0 - 0.15 && aa < APRON.a1 + 0.15 && Math.hypot(mx, mz) < APRON.r1 + 0.6) continue;
         const P = (c, u, y) => [c.x + side * c.tz * (off + u) , y, c.z - side * c.tx * (off + u)];
-        const c0 = mix(cols[(R() * 4) | 0], mossy, R() < 0.12 ? 0.35 : 0), hi = mul(c0, 1.08), lo = aoTint(c0, 0.5), g = 0.03; const aT = { x: a.x + a.tx * g, z: a.z + a.tz * g, tx: a.tx, tz: a.tz }, bT = { x: b.x - b.tx * g, z: b.z - b.tz * g, tx: b.tx, tz: b.tz };
+        const c0 = mix(cols[(R() * 4) | 0], mossy, R() < 0.12 ? 0.35 : 0), hi = mul(c0, 1.08), lo = aoTint(c0, 0.22), g = 0.03; const aT = { x: a.x + a.tx * g, z: a.z + a.tz * g, tx: a.tx, tz: a.tz }, bT = { x: b.x - b.tx * g, z: b.z - b.tz * g, tx: b.tx, tz: b.tz };
         // top (normal up) uses a right-hand ordering that depends on the side; flip accordingly
         const top = [P(aT, -hw, h), P(bT, -hw, h), P(bT, hw, h), P(aT, hw, h)];
         if (side > 0) B.quad(top[0], top[1], top[2], top[3], hi); else B.quad(top[3], top[2], top[1], top[0], hi);

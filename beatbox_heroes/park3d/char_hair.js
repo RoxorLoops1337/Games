@@ -75,7 +75,7 @@ export function buildHair(mb, ctx, hatCover) {
     case 'buzz': S({ yb: HL.high, rows: 3, thick: () => 0.012, col: (th, t) => mix(mix(sk, base, 0.7), base, t), sk: () => K_h }); break;
     case 'crop': if (!hatCover) fringe(mb, base, hi, HL.fringe, 6, 0.07, 0.05, 0.85); S({ yb: HL.fringe, rows: 3, thick: (th, t) => 0.028 + 0.025 * Math.sin(t * Math.PI * 0.5) * cov + 0.02 * front(th) * t * cov }); break;
     case 'sidepart': if (!hatCover) { fringe(mb, base, hi, HL.fringe, 5, 0.06, 0.06, 0.8); partLine(mb, 0.09, shade(base, 0.5), 0.066); } S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.03 + 0.03 * Math.sin(t * Math.PI * 0.5) + (th > 0 && th < 1.5 ? 0.035 * t : 0)) * (0.4 + 0.6 * cov) }); break;
-    case 'quiff': S({ yb: HL.high, rows: 5, thick: (th, t) => (0.03 + 0.04 * t + 0.07 * Math.pow(front(th), 2) * t * t) * (0.4 + 0.6 * cov), lift: (th, t) => 0.09 * Math.pow(front(th), 3) * t * t * cov, apexLift: 0.02 }); break;
+    case 'quiff': S({ yb: HL.high, rows: 5, thick: (th, t) => (0.03 + 0.03 * t + 0.05 * Math.pow(front(th), 2) * t * t) * (0.4 + 0.6 * cov), lift: (th, t) => 0.05 * Math.pow(front(th), 2) * t * t * cov, apexLift: 0.0 }); break;
     case 'undercut': S({ yb: (a) => Math.max(HL.high(a), 0.36 + 0.0 * a), rows: 4, thick: (th, t) => (t < 0.35 ? 0.006 : 0.05 + 0.03 * t) * (0.4 + 0.6 * cov), col: (th, t) => (t < 0.3 ? mix(mix(sk, base, 0.5), base, t / 0.3) : colF(th, t)) }); break;
     case 'fade': case 'fadewave': case 'hightop': {
       const tall = style === 'hightop', wave = style === 'fadewave';
@@ -152,7 +152,7 @@ export function buildHair(mb, ctx, hatCover) {
 
 // ------------------------------------------------------------------ hats
 // returns { cover: bool } so hair can tame its volume; hats are built from headShell + plates
-export const HAT_COVER = { fitted: 1, cap: 1, capback: 1, snapback: 1, trucker: 1, beanie: 1, bucket: 1, bucketfur: 1, durag: 1, bandana: 1, beret: 1, fedora: 1, cowboy: 1, tophat: 1, hood: 1, pirate: 1, wizard: 1, chef: 1, visor: 0.5, crown: 0.5, headphonehat: 0.5, catears: 0.5, headband: 0.4, halo: 0, none: 0 };
+export const HAT_COVER = { flatcap: 0.7, ivy: 0.7, fitted: 1, cap: 1, capback: 1, snapback: 1, trucker: 1, beanie: 1, bucket: 1, bucketfur: 1, durag: 1, bandana: 1, beret: 1, fedora: 1, cowboy: 1, tophat: 1, hood: 1, pirate: 1, wizard: 1, chef: 1, visor: 0.5, crown: 0.5, headphonehat: 0.5, catears: 0.5, headband: 0.4, halo: 0, none: 0 };
 // curved plate (brim): outer arc points, flat thick slab. pts [[x,y,z]...] centre line near head, extends outward by w along the horizontal outward dir
 function plate(mb, ring, outRing, colT, colB, sk) {
   const n = ring.length;
@@ -198,6 +198,11 @@ export function buildHat(mb, glow, ctx) {
       const lz = back ? -1 : 1, fz = back ? facePt(0, 0.45).z : facePt(0, 0.45).z; void fz; const ly = HY + 0.5 + vol * 0.2;
       if (id === 'fitted' || id === 'cap' || id === 'capback') { const zf = (back ? -0.0 : 0.0), zz = lz > 0 ? 0.268 : -0.3; const d = [[0, 0.04], [0.026, 0], [0, -0.04], [-0.026, 0]].map(([u, v]) => [u, ly + v, zz + (lz > 0 ? 0.017 - Math.abs(u) * 0.2 : -0.017 + Math.abs(u) * 0.2)]); void zf; mb.poly(d, accent, K_h, [0, 0.25, lz], { nh: true, flat: true }); }
       break;
+    }
+    case 'flatcap': case 'ivy': {
+      headShell(mb, { yb: (a) => 0.405 + 0.03 * Math.cos(a) - 0.04 * (1 - Math.cos(a)) * 0.5, rows: 3, thick: (th, t) => 0.04 + 0.03 * Math.sin(Math.min(1, t * 1.3) * Math.PI * 0.5) + 0.03 * front(th) * t, lift: (th, t) => -0.07 * t * t, col: (th, t, i) => mix(shade(col, 0.82), lite(col, 0.08), t), sk: () => K_h, apexLift: -0.06 });
+      brimTongue(mb, 0.425, 0.05, 0.1, 0, 1.0, 0.012, lite(col, 0.06), shade(col, 0.55), bs, 5);
+      ball(mb, [0, HY + HEAD_TOP + 0.045, -0.035], [0.012, 0.012, 0.012], c2, K_h, { detail: 0 }); break;
     }
     case 'beanie': {
       dome(0.4, (a, t) => 0.055 + 0.02 * Math.sin(t * 3), 5, {});

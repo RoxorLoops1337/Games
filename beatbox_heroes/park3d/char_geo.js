@@ -47,7 +47,7 @@ export function restWorld(d) { const w = {}; boneSpec(d).forEach(([n, p, x, y, z
 // ------------------------------------------------------------------ MeshBuilder
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3();
 export class MB {
-  constructor(seed) { this.P = []; this.Cl = []; this.S = []; this.H = []; this.seed = (seed || 7) >>> 0; }
+  constructor(seed) { this.P = []; this.Cl = []; this.S = []; this.H = []; this.hull = { P: [], Cl: [], S: [] }; this.hm = false; this.seed = (seed || 7) >>> 0; }
   rnd() { this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0; return this.seed / 4294967296; }
   get tris() { return this.H.length; }
   // one triangle. a,b,c = [x,y,z]; ca,cb,cc = Color; sa,sb,sc = [i,j,w]; nh = exclude from outline hull; flat = no baked shading
@@ -55,9 +55,9 @@ export class MB {
     _a.set(a[0], a[1], a[2]); _b.set(b[0], b[1], b[2]); _c.set(c[0], c[1], c[2]);
     _n.crossVectors(_b.sub(_a), _c.sub(_a)); const l = _n.length(); if (l < 1e-9) return; _n.multiplyScalar(1 / l);
     let f = 1; if (!flat) { const k = _n.y * 0.5 + 0.5; f = (1.02 + 0.18 * k) + (this.rnd() - 0.5) * 0.05; }
-    const cols = [ca, cb || ca, cc || ca], pts = [a, b, c], sks = [sa, sb || sa, sc || sa];
-    for (let i = 0; i < 3; i++) { const p = pts[i], q = cols[i], s = sks[i]; this.P.push(p[0], p[1], p[2]); this.Cl.push(Math.min(1.3, q.r * f), Math.min(1.3, q.g * f * (flat ? 1 : 0.995)), Math.min(1.3, q.b * f * (flat ? 1 : 1.02))); this.S.push(s[0], s[1], s[2]); }
-    this.H.push(nh ? 1 : 0);
+    const cols = [ca, cb || ca, cc || ca], pts = [a, b, c], sks = [sa, sb || sa, sc || sa], dst = this.hm ? this.hull : this;
+    for (let i = 0; i < 3; i++) { const p = pts[i], q = cols[i], s = sks[i]; dst.P.push(p[0], p[1], p[2]); dst.Cl.push(Math.min(1.3, q.r * f), Math.min(1.3, q.g * f * (flat ? 1 : 0.995)), Math.min(1.3, q.b * f * (flat ? 1 : 1.02))); dst.S.push(s[0], s[1], s[2]); }
+    if (!this.hm) this.H.push(nh ? 1 : 0);
   }
   // triangle with winding fixed so its normal agrees with hint (a [x,y,z] direction)
   triH(a, b, c, hint, ca, cb, cc, sa, sb, sc, nh, flat) {
@@ -84,7 +84,8 @@ const sgnpow = (s, e) => Math.sign(s) * Math.pow(Math.abs(s), e);
 // Ring loft: the workhorse. rings = [{ y, rx, rz, cx, cz, c, sk, sq, rot }], axis = y (apply o.m to reorient).
 // o: n (sides, default 8), a0 (start angle), caps ('b','t','bt'), capTip ([x,y,z] apex for top cap), m (Matrix4), nh, fc(i,j)=>Color for per-facet colour, sq default squareness exponent
 export function loft(mb, rings, o) {
-  o = o || {}; const n = o.n || 8, a0 = o.a0 === undefined ? Math.PI / n : o.a0, M = o.m || null, ds = rings[rings.length - 1].y < rings[0].y ? -1 : 1, flip = (!!M && M.determinant() < 0) !== (ds < 0), nh = !!o.nh;
+  o = o || {};
+  if (o.hullHalf && !mb.hm && rings.length >= 4) { const sub = rings.filter((r, i) => i === 0 || i === rings.length - 1 || i % 2 === 0); mb.hm = true; loft(mb, sub, Object.assign({}, o, { hullHalf: false, caps: o.hullCaps === undefined ? '' : o.hullCaps, nh: false })); mb.hm = false; o = Object.assign({}, o, { nh: true }); } const n = o.n || 8, a0 = o.a0 === undefined ? Math.PI / n : o.a0, M = o.m || null, ds = rings[rings.length - 1].y < rings[0].y ? -1 : 1, flip = (!!M && M.determinant() < 0) !== (ds < 0), nh = !!o.nh;
   const R = rings.map((r) => {
     const col = C(r.c || '#ff00ff'), e = r.sq || o.sq || 1, pts = [];
     for (let i = 0; i < n; i++) { const th = a0 + (i / n) * Math.PI * 2 + (r.rot || 0); pts.push(xf(M, [(r.cx || 0) + r.rx * sgnpow(Math.sin(th), e), r.y, (r.cz || 0) + r.rz * sgnpow(Math.cos(th), e)])); }
@@ -108,7 +109,7 @@ export function loft(mb, rings, o) {
 const _ico = {};
 function icoPositions(detail) {
   if (_ico[detail]) return _ico[detail];
-  const g = new THREE.IcosahedronGeometry(1, detail).toNonIndexed(), p = g.attributes.position.array; _ico[detail] = Float32Array.from(p); return _ico[detail];
+  let g = new THREE.IcosahedronGeometry(1, detail); if (g.index) g = g.toNonIndexed(); const p = g.attributes.position.array; _ico[detail] = Float32Array.from(p); return _ico[detail];
 }
 const _rm = new THREE.Matrix4(), _re = new THREE.Euler();
 function rotM(r) { _re.set(r[0], r[1], r[2], 'YXZ'); return _rm.makeRotationFromEuler(_re); }
@@ -187,13 +188,21 @@ export function finalize(mbs) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
   g.computeVertexNormals(); g.userData.nh = nh; return g;
 }
-// hull geometry: triangles not flagged nh, with smoothed normals (averaged per unique position) in attribute hullN
-export function makeHull(g) {
-  const nh = g.userData.nh, pos = g.attributes.position.array, col = g.attributes.color.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, nrm = g.attributes.normal.array, map = new Map(), key = (i) => Math.round(pos[i * 3] * 2000) + ',' + Math.round(pos[i * 3 + 1] * 2000) + ',' + Math.round(pos[i * 3 + 2] * 2000);
-  const keep = []; for (let f = 0; f < nh.length; f++) if (!nh[f]) keep.push(f);
-  keep.forEach((f) => { for (let k = 0; k < 3; k++) { const i = f * 3 + k, kk = key(i); let e = map.get(kk); if (!e) { e = [0, 0, 0]; map.set(kk, e); } e[0] += nrm[i * 3]; e[1] += nrm[i * 3 + 1]; e[2] += nrm[i * 3 + 2]; } });
-  const n = keep.length * 3, p2 = new Float32Array(n * 3), c2 = new Float32Array(n * 3), s2 = new Uint16Array(n * 4), w2 = new Float32Array(n * 4), h2 = new Float32Array(n * 3);
-  keep.forEach((f, fi) => { for (let k = 0; k < 3; k++) { const i = f * 3 + k, j = fi * 3 + k; p2.set(pos.subarray(i * 3, i * 3 + 3), j * 3); c2.set(col.subarray(i * 3, i * 3 + 3), j * 3); s2.set(si.subarray(i * 4, i * 4 + 4), j * 4); w2.set(sw.subarray(i * 4, i * 4 + 4), j * 4); const e = map.get(key(i)), l = Math.hypot(e[0], e[1], e[2]) || 1; h2[j * 3] = e[0] / l; h2[j * 3 + 1] = e[1] / l; h2[j * 3 + 2] = e[2] / l; } });
-  const h = new THREE.BufferGeometry(); h.setAttribute('position', new THREE.BufferAttribute(p2, 3)); h.setAttribute('color', new THREE.BufferAttribute(c2, 3)); h.setAttribute('skinIndex', new THREE.BufferAttribute(s2, 4)); h.setAttribute('skinWeight', new THREE.BufferAttribute(w2, 4)); h.setAttribute('hullN', new THREE.BufferAttribute(h2, 3)); h.setAttribute('normal', new THREE.BufferAttribute(h2.slice(), 3));
+// hull geometry: triangles not flagged nh (plus the decimated hull-only triangles), with smoothed normals (averaged per unique position) in attribute hullN
+export function makeHull(g, mbs) {
+  const nh = g.userData.nh, pos = g.attributes.position.array, col = g.attributes.color.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, nrm = g.attributes.normal.array;
+  const P = [], Cl = [], SI = [], SW = [], N = [];
+  for (let f = 0; f < nh.length; f++) if (!nh[f]) for (let k = 0; k < 3; k++) { const i = f * 3 + k; P.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); Cl.push(col[i * 3], col[i * 3 + 1], col[i * 3 + 2]); SI.push(si[i * 4], si[i * 4 + 1], si[i * 4 + 2], si[i * 4 + 3]); SW.push(sw[i * 4], sw[i * 4 + 1], sw[i * 4 + 2], sw[i * 4 + 3]); N.push(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]); }
+  (mbs || []).forEach((m) => { const h = m.hull, nv = h.P.length / 3; for (let f = 0; f < nv; f += 3) { _a.set(h.P[f * 3], h.P[f * 3 + 1], h.P[f * 3 + 2]); _b.set(h.P[f * 3 + 3], h.P[f * 3 + 4], h.P[f * 3 + 5]); _c.set(h.P[f * 3 + 6], h.P[f * 3 + 7], h.P[f * 3 + 8]); _n.crossVectors(_b.sub(_a), _c.sub(_a)).normalize();
+    for (let k = 0; k < 3; k++) { const i = f + k; P.push(h.P[i * 3], h.P[i * 3 + 1], h.P[i * 3 + 2]); Cl.push(h.Cl[i * 3], h.Cl[i * 3 + 1], h.Cl[i * 3 + 2]); const a = h.S[i * 3], b = h.S[i * 3 + 1], w = h.S[i * 3 + 2]; SI.push(a, b, 0, 0); SW.push(1 - w, w, 0, 0); N.push(_n.x, _n.y, _n.z); } } });
+  const nv = P.length / 3, map = new Map(), key = (i) => Math.round(P[i * 3] * 2000) + ',' + Math.round(P[i * 3 + 1] * 2000) + ',' + Math.round(P[i * 3 + 2] * 2000);
+  for (let i = 0; i < nv; i++) { const kk = key(i); let e = map.get(kk); if (!e) { e = [0, 0, 0]; map.set(kk, e); } e[0] += N[i * 3]; e[1] += N[i * 3 + 1]; e[2] += N[i * 3 + 2]; }
+  const h2 = new Float32Array(nv * 3); for (let i = 0; i < nv; i++) { const e = map.get(key(i)), l = Math.hypot(e[0], e[1], e[2]) || 1; h2[i * 3] = e[0] / l; h2[i * 3 + 1] = e[1] / l; h2[i * 3 + 2] = e[2] / l; }
+  const h = new THREE.BufferGeometry(); h.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3)); h.setAttribute('color', new THREE.BufferAttribute(new Float32Array(Cl), 3)); h.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array(SI), 4)); h.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array(SW), 4)); h.setAttribute('hullN', new THREE.BufferAttribute(h2, 3)); h.setAttribute('normal', new THREE.BufferAttribute(h2.slice(), 3));
   return h;
+}
+
+// non-skinned geometry for static props (boombox)
+export function plainGeo(mb) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mb.P), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(mb.Cl), 3)); g.computeVertexNormals(); return g;
 }

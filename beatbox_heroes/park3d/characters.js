@@ -27,6 +27,7 @@ export function normLook(l) {
 
 // ------------------------------------------------------------------ shared materials (one set for every character: recolouring is vertex colours, not materials)
 let MATS = null;
+export function sharedMats() { return mats(); }
 function mats() {
   if (MATS) return MATS;
   const lit = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -79,7 +80,7 @@ export function createCharacter(ctx, look, extra) {
     sf('top', () => buildTop(lit, cx, d)); sf('bottom', () => buildBottom(lit, cx, d)); sf('shoes', () => buildShoes(lit, cx, d));
     sf('hair', () => buildHair(lit, cx, hatCover)); sf('hat', () => buildHat(lit, glow, cx));
     sf('glasses', () => buildGlasses(lit, glow, cx)); sf('acc', () => buildAccessories(lit, glow, cx, api)); api.slotTris = slot;
-    const g = finalize([lit]), gg = finalize([glow]), hg = makeHull(g);
+    const g = finalize([lit]), gg = finalize([glow]), hg = makeHull(g, [lit]);
     [['lit', g], ['glow', gg], ['hull', hg]].forEach(([k, geo]) => { const m = meshes[k]; if (m.geometry) m.geometry.dispose(); m.geometry = geo; m.visible = geo.attributes.position.count > 0; });
     api.tris = (g.attributes.position.count + gg.attributes.position.count + hg.attributes.position.count) / 3; api.triParts = { lit: g.attributes.position.count / 3, glow: gg.attributes.position.count / 3, hull: hg.attributes.position.count / 3 };
     api.draws = 3 - (gg.attributes.position.count ? 0 : 1);

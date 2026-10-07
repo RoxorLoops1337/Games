@@ -19,6 +19,7 @@ export function lampPost(S, x, z, o) {
     B.cyl(0, 0.85, 0, 0.13, 0.13, 0.07, 6, IRON_L, {}); B.cyl(0, 2.5, 0, 0.15, 0.15, 0.06, 6, IRON_L, {});
     B.cyl(0, 2.6, 0, 0.23, 0.2, 0.06, 6, IRON, {});
     [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, b]) => B.box(a * 0.17, 2.66, b * 0.17, 0.045, 0.4, 0.045, IRON, { base: 0 }));
+    if (o.flag) { const fc = o.flag; B.box(0.27, 2.2, 0, 0.5, 0.03, 0.03, IRON, { base: 0 }); B.quad([0.3, 2.14, 0.01], [0.56, 2.14, 0.01], [0.56, 1.62, 0.01], [0.3, 1.62, 0.01], fc); B.quad([0.3, 2.14, -0.01], [0.3, 1.62, -0.01], [0.56, 1.62, -0.01], [0.56, 2.14, -0.01], mul(fc, 0.8)); B.tri([0.3, 1.62, 0.01], [0.56, 1.62, 0.01], [0.43, 1.45, 0.01], mul(fc, 1.1)); B.tri([0.3, 1.62, -0.01], [0.43, 1.45, -0.01], [0.56, 1.62, -0.01], mul(fc, 0.8)); }
     B.pyr(0, 3.06, 0, 0.5, 0.26, IRON); B.blob(0, 3.36, 0, 0.065, 0.065, 0.065, IRON_L, IRON_L, { detail: 0 });
   });
   S.GLOW.box(x, gy + 2.67, z, 0.26, 0.38, 0.26, GLOWC, { base: 0, tint: 0, top: GLOWC, ry: 0 });
@@ -122,7 +123,7 @@ export function placeLamps(S, F) {
   spots.forEach(([x, z]) => {
     if (Math.abs(x) > 15.2 || z > 24.8 || z < -23.2) return; if (placed.some((p) => Math.hypot(p[0] - x, p[1] - z) < 4.5)) return;
     if (S.hit.test(x, z)) return; if (z > 17.5 && Math.abs(x) < 6 && Math.abs(x) > 3.3 && false) return;
-    placed.push([x, z]); lampPost(S, x, z);
+    placed.push([x, z]); lampPost(S, x, z, { flag: [col('#FF4F8B'), col('#29D3C7'), col('#FFD23F'), col('#9B7BFF')][placed.length % 4], ry: (placed.length * 1.7) % 6.28 });
   });
   return placed.length;
 }

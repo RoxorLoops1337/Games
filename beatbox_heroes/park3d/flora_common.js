@@ -69,9 +69,9 @@ export function addSway(mat, opts) {
   const uni = { value: 0 }; mat.userData.sway = uni;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uSwayT = uni;
-    sh.vertexShader = 'uniform float uSwayT;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    sh.vertexShader = 'uniform float uSwayT;\n' + (inst ? '' : 'attribute float aBase;\n') + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       ${inst ? 'vec2 swp = instanceMatrix[3].xz;' : 'vec2 swp = position.xz;'}
-      float swh = ${inst ? 'position.y' : 'max(position.y,0.0)'} / ${hgt.toFixed(3)};
+      float swh = ${inst ? 'position.y' : 'max(position.y - aBase, 0.0)'} / ${hgt.toFixed(3)};
       float swph = swp.x * 0.61 + swp.y * 0.83;
       float swv = (sin(uSwayT * ${freq.toFixed(2)} + swph) * 0.7 + sin(uSwayT * ${(freq * 1.7).toFixed(2)} + swph * 1.9) * 0.3) * ${amp.toFixed(3)} * swh * swh;
       transformed.x += swv; transformed.z += swv * 0.55;`);

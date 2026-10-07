@@ -76,11 +76,11 @@ export class Buf {
   pyr(cx, y0, cz, w, h, color, ry) { const lo = mul(color, 0.92), hi = mul(color, 1.08); return this.lathe([[w * 0.7071, 0, lo], [0, h, hi]], 4, cx, y0, cz, { rot: Math.PI / 4, ry: ry || 0 }); }
   // faceted blob (rocks, bushes, lumps). colour by height: lo at the bottom, hi on top
   blob(cx, cy, cz, rx, ry, rz, lo, hi, o) {
-    o = o || {}; const g = new THREE.IcosahedronGeometry(1, o.detail === undefined ? 1 : o.detail), ng = g.toNonIndexed(), pos = ng.attributes.position, seen = new Map(), j = o.jit === undefined ? 0.2 : o.jit;
+    o = o || {}; const g = new THREE.IcosahedronGeometry(1, o.detail === undefined ? 1 : o.detail), ng = g.index ? g.toNonIndexed() : g, pos = ng.attributes.position, seen = new Map(), j = o.jit === undefined ? 0.2 : o.jit;
     for (let i = 0; i < pos.count; i++) { const key = pos.getX(i).toFixed(3) + pos.getY(i).toFixed(3) + pos.getZ(i).toFixed(3); let d = seen.get(key); if (!d) { d = [(this.r() - 0.5) * j, (this.r() - 0.5) * j, (this.r() - 0.5) * j]; seen.set(key, d); } pos.setXYZ(i, pos.getX(i) + d[0], pos.getY(i) + d[1], pos.getZ(i) + d[2]); }
     this.push(cx, cy, cz, o.ry || 0, 1, o.rx || 0, o.rz || 0);
     for (let i = 0; i < pos.count; i += 3) { const k = 1 + (this.r() - 0.5) * 0.12, pts = [], cs = []; for (let q = 0; q < 3; q++) { const x = pos.getX(i + q), y = pos.getY(i + q), z = pos.getZ(i + q); pts.push([x * rx, y * ry, z * rz]); cs.push(mul(mix(lo, hi, sat((y + 1) / 2)), k)); } this.tri(pts[0], pts[1], pts[2], cs[0], cs[1], cs[2]); }
-    this.pop(); g.dispose(); ng.dispose(); return this;
+    this.pop(); g.dispose(); if (ng !== g) ng.dispose(); return this;
   }
   // flat polygon lying on the ground (counter clockwise seen from above). pts [[x,z],...] fan triangulated
   poly(pts, y, color) { for (let i = 1; i < pts.length - 1; i++) this.tri([pts[0][0], y, pts[0][1]], [pts[i + 1][0], y, pts[i + 1][1]], [pts[i][0], y, pts[i][1]], color); }

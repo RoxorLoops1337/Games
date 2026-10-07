@@ -3,10 +3,10 @@
 import { THREE, rng, jitter, merged } from './kit.js';
 import { xf, paintCanopy, paintSolid, blob } from './flora_common.js';
 
-const OAK = { lo: '#3a8672', mid: '#4fae5a', hi: '#a8e060', glint: '#f0e468' };
-const OAK2 = { lo: '#2f8a76', mid: '#5cb862', hi: '#b8e868', glint: '#f4ec78' };
-const MAPLE = { lo: '#7a2f4e', mid: '#cf5f36', hi: '#f0a040', glint: '#ffd48a' };
-const CHERRY = { lo: '#a8456f', mid: '#e4799c', hi: '#f7b6c8', glint: '#ffe0c4' };
+const OAK = { lo: '#4a9a84', mid: '#4fae5a', hi: '#a8e060', glint: '#f0e468' };
+const OAK2 = { lo: '#4aa08a', mid: '#5cb862', hi: '#b8e868', glint: '#f4ec78' };
+const MAPLE = { lo: '#a04458', mid: '#cf5f36', hi: '#f0a040', glint: '#ffd48a' };
+const CHERRY = { lo: '#c4608c', mid: '#ec82a4', hi: '#f9bccd', glint: '#ffe4cc' };
 const PINE = { lo: '#2c6064', mid: '#3a8a64', hi: '#6cb070', glint: '#b0d878' };
 const STREET = { lo: '#4f6a78', mid: '#6b8c7e', hi: '#a4b88a', glint: '#d8c88a' };
 const TRUNK = ['#4b3547', '#80604a'];

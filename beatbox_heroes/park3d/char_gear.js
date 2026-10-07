@@ -59,18 +59,22 @@ export function buildGlasses(mb, glow, ctx) {
   if (id === 'goggles') tube(mb, [[-0.3, HY + 0.28, 0.08], [-0.31, HY + 0.28, -0.1], [0, HY + 0.3, -0.31], [0.31, HY + 0.28, -0.1], [0.3, HY + 0.28, 0.08]], 0.02, '#6b4a2a', { n: 4, sk: K_h, nh: true });
 }
 
-// ------------------------------------------------------------------ boombox (also used by the NPC prop). c = centre, rot = euler, s = scale
-export function boombox(mb, glow, c, rot, sc, sk, colour) {
-  sc = sc || 1; const M = mat(c, rot), P = (x, y, z) => { const v = [x * sc, y * sc, z * sc]; const m = M.elements; return [m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]]; };
-  const body = C(colour || '#c0392b'), dark = C('#2b2a3f'), sil = C('#c9d3e6');
-  box(mb, c, [0.34 * sc, 0.2 * sc, 0.1 * sc], body, sk, { rot, nh: false });
-  [-1, 1].forEach((s) => { const ctr = P(s * 0.1, -0.015, 0.052); const ring = [], ring2 = []; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; ring.push(P(s * 0.1 + Math.cos(a) * 0.058, -0.015 + Math.sin(a) * 0.058, 0.052)); ring2.push(P(s * 0.1 + Math.cos(a) * 0.04, -0.015 + Math.sin(a) * 0.04, 0.056)); }
-    const hint = new (mat.constructor === Function ? Object : Object)(); void hint; const nrm = [M.elements[8], M.elements[9], M.elements[10]];
-    for (let i = 0; i < 8; i++) { mb.triH(ctr, ring[i], ring[(i + 1) % 8], nrm, dark, sil, sil, sk, sk, sk, true); mb.triH(ring[i], ring2[i], ring2[(i + 1) % 8], nrm, sil, shade(sil, 0.7), shade(sil, 0.7), sk, sk, sk, true); }
-    for (let i = 0; i < 8; i++) mb.triH(P(s * 0.1, -0.015, 0.058), ring2[i], ring2[(i + 1) % 8], nrm, shade(dark, 0.9), dark, dark, sk, sk, sk, true); });
-  mb.poly([P(-0.045, 0.06, 0.051), P(0.045, 0.06, 0.051), P(0.045, 0.085, 0.051), P(-0.045, 0.085, 0.051)], '#e8c36a', sk, [M.elements[8], M.elements[9], M.elements[10]], { flat: true, nh: true });
-  tube(mb, [P(-0.12, 0.1, 0), P(-0.08, 0.15, 0), P(0.08, 0.15, 0), P(0.12, 0.1, 0)], 0.01, sil, { n: 4, sk, nh: true });
-  if (glow) glow.poly([P(0.12, 0.062, 0.051), P(0.15, 0.062, 0.051), P(0.15, 0.08, 0.051), P(0.12, 0.08, 0.051)], C('#9dff4a').multiplyScalar(1.1), sk, [M.elements[8], M.elements[9], M.elements[10]], { flat: true, nh: true });
+// ------------------------------------------------------------------ boombox (hand prop and NPC bench prop). Built around the origin facing +z; c = centre, rot = euler, sc = scale.
+export function boombox(mb, glow, c, rot, sc, sk, colour, parts) {
+  sc = sc || 1; const M = mat(c, rot), E = M.elements, P = (x, y, z) => { const v = [x * sc, y * sc, z * sc]; return [E[0] * v[0] + E[4] * v[1] + E[8] * v[2] + E[12], E[1] * v[0] + E[5] * v[1] + E[9] * v[2] + E[13], E[2] * v[0] + E[6] * v[1] + E[10] * v[2] + E[14]]; };
+  const body = C(colour || '#c0392b'), dark = C('#2b2a3f'), sil = C('#c9d3e6'), nz = [E[8], E[9], E[10]];
+  box(mb, c, [0.36 * sc, 0.21 * sc, 0.11 * sc], body, sk, { rot, col2: lite(body, 0.12) });
+  [-1, 1].forEach((s) => {
+    const ctr = P(s * 0.105, -0.015, 0.058), ring = [], ring2 = [], z2 = parts ? 0.056 : 0.062;
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; ring.push(P(s * 0.105 + Math.cos(a) * 0.06, -0.015 + Math.sin(a) * 0.06, 0.057)); ring2.push(P(s * 0.105 + Math.cos(a) * 0.043, -0.015 + Math.sin(a) * 0.043, z2)); }
+    for (let i = 0; i < 8; i++) { mb.triH(ring[i], ring[(i + 1) % 8], ring2[(i + 1) % 8], nz, sil, sil, shade(sil, 0.7), sk, sk, sk, true); mb.triH(ring[i], ring2[(i + 1) % 8], ring2[i], nz, sil, shade(sil, 0.7), shade(sil, 0.7), sk, sk, sk, true); mb.triH(P(s * 0.105, -0.015, 0.066), ring2[i], ring2[(i + 1) % 8], nz, dark, dark, dark, sk, sk, sk, true); }
+    void ctr;
+  });
+  mb.poly([P(-0.05, 0.045, 0.0565), P(0.05, 0.045, 0.0565), P(0.05, 0.085, 0.0565), P(-0.05, 0.085, 0.0565)], '#e8c36a', sk, nz, { flat: true, nh: true });
+  mb.poly([P(-0.04, 0.052, 0.058), P(0.04, 0.052, 0.058), P(0.04, 0.078, 0.058), P(-0.04, 0.078, 0.058)], '#4a3a30', sk, nz, { flat: true, nh: true });
+  tube(mb, [P(-0.13, 0.105, 0), P(-0.1, 0.16, 0), P(0.1, 0.16, 0), P(0.13, 0.105, 0)], 0.011 * sc, sil, { n: 4, sk, nh: true });
+  tube(mb, [P(0.14, 0.105, -0.03), P(0.26, 0.3, -0.06)], 0.004 * sc, sil, { n: 3, sk, nh: true });
+  if (glow) [[0.12, '#9dff4a'], [0.145, '#ffd23f'], [0.17, '#ff3ea5']].forEach(([x, c2]) => glow.poly([P(x * 0.9 + 0.0, 0.07, 0.0575), P(x * 0.9 + 0.018, 0.07, 0.0575), P(x * 0.9 + 0.018, 0.092, 0.0575), P(x * 0.9, 0.092, 0.0575)].map((p) => p), C(c2).multiplyScalar(1.15), sk, nz, { flat: true, nh: true }));
 }
 
 // ------------------------------------------------------------------ accessories

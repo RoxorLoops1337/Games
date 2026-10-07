@@ -122,7 +122,7 @@ export function buildPlants(ctx, A) {
       if (!A.ok(cx, cz, 0.15)) continue;
       for (let j = 0; j < 3; j++) { // a trio
         const x = cx + R.range(-0.2, 0.2), z = cz + R.range(-0.2, 0.2), h = R.range(0.26, 0.5);
-        flowers.push(xf(flowerGeo(R, c, h), { x, y: A.h(x, z) - 0.02, z, ry: R() * 6, s: R.range(0.85, 1.25), rx: (R() - 0.5) * 0.15, rz: (R() - 0.5) * 0.15 })); fcount++;
+        { const fg = xf(flowerGeo(R, c, h), { x, y: A.h(x, z) - 0.02, z, ry: R() * 6, s: R.range(0.85, 1.25), rx: (R() - 0.5) * 0.15, rz: (R() - 0.5) * 0.15 }); const nb = fg.attributes.position.count, ba = new Float32Array(nb).fill(A.h(x, z) - 0.02); fg.setAttribute('aBase', new THREE.BufferAttribute(ba, 1)); flowers.push(fg); fcount++; }
       }
     }
     decalGeoms.push({ x: bed.x, z: bed.z, y: A.h(bed.x, bed.z), r: bed.r * 1.15, sx: bed.sx || 1, c: '#5a4038', a: 0.4 });
