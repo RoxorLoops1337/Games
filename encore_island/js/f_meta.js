@@ -221,16 +221,15 @@ function chalAbort() { return chalFinish('abort'); }
 function chalDraw() { // HUD pill under the rank pill + result card
   const st = S.feat.challenge;
   if (CHAL.on && !S.sheet) {
-    const left = 196, right = vw - 102; if (right - left >= 100) {
-      const w = clamp(right - left, 120, 214), x = left + (right - left - w) / 2, y = 44, h = 44;
+    const left = 188, right = vw - 96; if (right - left >= 100) {
+      const w = clamp(right - left, 112, 214), x = left + (right - left - w) / 2, y = 44, h = 44, tl = Math.max(0, CHAL.dur - CHAL.t), f = tl / CHAL.dur, tw = w - 44;
       ctx.fillStyle = HV.line; rr(x - 2, y - 2, w + 4, h + 4, 14); ctx.fill(); const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#6a4ad0'); g.addColorStop(1, '#3a2784'); ctx.fillStyle = g; rr(x, y, w, h, 12); ctx.fill();
-      const left_ = Math.max(0, CHAL.dur - CHAL.t), f = left_ / CHAL.dur; ctx.fillStyle = 'rgba(0,0,0,0.3)'; rr(x + 6, y + h - 8, w - 46, 4, 2); ctx.fill(); ctx.fillStyle = f < 0.2 ? '#ff6a5a' : '#9af0b4'; rr(x + 6, y + h - 8, Math.max(2, (w - 46) * f), 4, 2); ctx.fill();
-      ctx.textAlign = 'left'; ctx.fillStyle = '#ffe98a'; ctx.font = font(10); let nm = CHAL.rules.map(r => r.name).join(' + '); while (nm.length > 8 && ctx.measureText(nm).width > w - 52) nm = nm.slice(0, -2); ctx.fillText(nm, x + 8, y + 12);
-      ctx.fillStyle = '#fff'; ctx.font = font(15); ctx.fillText(metaTime(left_), x + 8, y + 30); ctx.font = font(11); ctx.fillStyle = '#ffd94a'; const sc = chalScore(); ctx.fillText(CHAL.goal ? CHAL.kills + '/' + CHAL.goal : fmt(sc) + ' pts', x + 62, y + 30);
-      const th = chalThresholds(CHAL.mode, CHAL.rules); let sn = 0; for (let i = 0; i < 3; i++) if (sc >= th[i]) sn = i + 1; metaStars(x + w - 84, y + 24, sn, 12, 14);
-      const ax = x + w - 36, ay = y + 6; disc(ax + 15, ay + 15, 15, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax + 9, ay + 9); ctx.lineTo(ax + 21, ay + 21); ctx.moveTo(ax + 21, ay + 9); ctx.lineTo(ax + 9, ay + 21); ctx.stroke(); ctx.lineCap = 'butt';
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; rr(x + 6, y + h - 8, w - 12, 4, 2); ctx.fill(); ctx.fillStyle = f < 0.2 ? '#ff6a5a' : '#9af0b4'; rr(x + 6, y + h - 8, Math.max(2, (w - 12) * f), 4, 2); ctx.fill();
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ffe98a'; ctx.font = font(9); let nm = CHAL.rules.map(r => r.name).join(' + '); if (ctx.measureText(nm).width > tw) { nm = CHAL.rules.map(r => r.name.split(' ')[0]).join('+'); } while (nm.length > 4 && ctx.measureText(nm).width > tw) nm = nm.slice(0, -2); ctx.fillText(nm, x + 8, y + 12);
+      const sc = chalScore(), th = chalThresholds(CHAL.mode, CHAL.rules); let sn = 0; for (let i = 0; i < 3; i++) if (sc >= th[i]) sn = i + 1;
+      ctx.fillStyle = '#fff'; ctx.font = font(15); ctx.fillText(metaTime(tl), x + 8, y + 29); const tx2 = x + 12 + ctx.measureText(metaTime(tl)).width; ctx.font = font(10); ctx.fillStyle = sn >= 3 ? '#9af0b4' : '#ffd94a'; ctx.fillText(CHAL.goal ? CHAL.kills + '/' + CHAL.goal : fmt(sc) + (sn ? ' ' + '★'.repeat(sn) : ' pts'), tx2, y + 29);
+      const ax = x + w - 34, ay = y + 5; disc(ax + 14, ay + 14, 14, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax + 9, ay + 9); ctx.lineTo(ax + 19, ay + 19); ctx.moveTo(ax + 19, ay + 9); ctx.lineTo(ax + 9, ay + 19); ctx.stroke(); ctx.lineCap = 'butt';
       hitRect(ax - 4, y - 2, 40, h + 4, chalAbort);
-      if (CHAL.flags.beat) { ctx.fillStyle = '#ff9ac8'; ctx.font = font(9); ctx.textAlign = 'right'; ctx.fillText(CHAL.raw - CHAL.kills > 0 ? 'off-beat ' + (CHAL.raw - CHAL.kills) : '', x + w - 40, y + 12); }
     }
   }
   const r = st.result; if (r && !S.sheet && !S.modal && !S.cards) {
@@ -248,7 +247,7 @@ function chalDraw() { // HUD pill under the rank pill + result card
 }
 function chalCard(cw, y, mode) {
   const st = S.feat.challenge, rules = chalRules(mode), th = chalThresholds(mode, rules), bk = mode + ':' + chalKey(mode), best = st.best[bk], paid = st.paid[bk] || 0, wk = mode === 'weekly';
-  const h = 154 + rules.length * 44; rowCard(y, h, cw); ctx.fillStyle = wk ? 'rgba(167,123,255,0.22)' : 'rgba(255,216,77,0.14)'; rr(2, y, cw - 4, h, 12); ctx.fill();
+  const h = 164 + rules.length * 44; rowCard(y, h, cw); ctx.fillStyle = wk ? 'rgba(167,123,255,0.22)' : 'rgba(255,216,77,0.14)'; rr(2, y, cw - 4, h, 12); ctx.fill();
   drawIcon(wk ? 'crown' : 'trophy', 28, y + 28, 32); ctx.fillStyle = '#ffd84d'; ctx.font = font(16); ctx.textAlign = 'left'; ctx.fillText(wk ? 'Weekly Challenge' : 'Daily Challenge', 52, y + 26);
   ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText('New in ' + (chalReset(mode) > 86400 ? Math.floor(chalReset(mode) / 86400) + 'd ' : '') + Math.floor(chalReset(mode) % 86400 / 3600) + 'h ' + Math.floor(chalReset(mode) % 3600 / 60) + 'm  ·  ' + (wk ? '3.5' : '3') + ' minutes', 52, y + 42);
   rules.forEach((r, i) => { const b0 = y + 56 + i * 44; ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.fillText(r.name, 14, b0 + 8); ctx.fillStyle = '#e6dcff'; ctx.font = font(10, false); wrapText(r.desc, 14, b0 + 22, cw - 40, 12); });

@@ -91,7 +91,7 @@ function rvTick(dt) {
   const st = rvState(); st.clock = (st.clock || 0) + dt;
   const hl = landAt(S.player.x, S.player.y, S.lands.length); if (hl > 0) st.visit[hl] = st.clock;
   for (const k in st.cool) { st.cool[k] -= dt; if (st.cool[k] <= 0) delete st.cool[k]; }
-  if (rvChallengeOn()) return;
+  if (rvChallengeOn()) { if (st.battle) { for (const e of st.battle.ents) e.hp = 0; st.battle = null; } return; }
   const b = st.battle;
   if (b) {
     b.t -= dt; let alive = 0; for (const e of b.ents) if (e.hp > 0) alive++;
@@ -153,9 +153,9 @@ function rvDrawMember(e) {
 }
 function rvDrawBattleHud() {
   const st = rvState(), b = st.battle; if (!b) return;
-  const B = RV_BANDS[b.band], w = Math.min(vw - 24, 300), x = (vw - w) / 2, y = 84; let hp = 0, n = 0; for (const e of b.ents) { if (e.hp > 0) { hp += e.hp; n++; } }
+  const B = RV_BANDS[b.band], w = Math.min(vw - 24, 300), x = (vw - w) / 2, y = typeof leftBottom === 'number' ? leftBottom - 6 : 116; let hp = 0, n = 0; for (const e of b.ents) { if (e.hp > 0) { hp += e.hp; n++; } }
   plaque(x, y, w, 40, 12); rvT(B.name.toUpperCase(), x + 12, y + 17, 12, B.col, 'left'); rvT(n + '/3 left', x + w / 2, y + 17, 11, '#cfc6ee', 'center'); rvT(Math.ceil(Math.max(0, b.t)) + 's', x + w - 12, y + 17, 13, b.t < 15 ? '#ff8a8a' : '#ffe98a', 'right');
-  gbar(x + 10, y + 24, w - 20, 10, hp / b.max, B.col, B.col2);
+  gbar(x + 10, y + 24, w - 20, 10, hp / b.max, B.col, B.col2); if (typeof leftBottom === 'number') leftBottom = y + 46;
 }
 function rvDrawChips() {
   const st = rvState(); let y = typeof leftBottom === 'number' ? leftBottom : 130;
@@ -188,6 +188,7 @@ const acHas = (id) => { const st = S.feat && S.feat.acts; return !!(st && st.vow
 function acBonusPct(ids) { let s = 0; for (const id of ids) { const v = acVowDef(id); if (v) s += v.bonus; } return s; }
 function acBonus(gain, ids) { const pct = acBonusPct(ids); return pct > 0 ? Math.max(1, Math.floor(gain * pct)) : 0; }
 function acInit(st) {
+  rvPatchFoe();
   if (typeof st.act !== 'number') st.act = actNow();
   if (!st.vows || !Array.isArray(st.vows.active) || !Array.isArray(st.vows.pending)) st.vows = { active: [], pending: [] };
   st.vows.active = st.vows.active.filter(id => acVowDef(id)); st.vows.pending = st.vows.pending.filter(id => acVowDef(id));
@@ -264,15 +265,17 @@ function acDrawChip() {
   const w = 108, h = 22; plaque(8, y, w, h, 11); rvT('ACT ' + a, 16, y + 15, 11, acTint(a) || '#ffe98a', 'left'); rvT(acPrefix(a), 56, y + 15, 10, '#cfc6ee', 'left', false);
   hitRect(8, y, w, h, () => openSheet('perks', 'tour')); y += h + 4; if (typeof leftBottom === 'number') leftBottom = y;
 }
-// foe wrapper: act aura behind tinted foes + the rival band members
-if (typeof drawFoe === 'function') {
-  const rvOrigDrawFoe = drawFoe;
+// foe wrapper: act aura behind tinted foes + the rival band members. render_actors.js loads after this file, so the patch is applied lazily (first init/tick).
+let rvPatched = false;
+function rvPatchFoe() {
+  if (rvPatched || typeof drawFoe !== 'function') return; rvPatched = true;
+  const orig = drawFoe;
   drawFoe = function (e) {
     try {
       if (e.rival) { rvDrawMember(e); return; }
       if (e.actTint) { const r = e.r, c = e.actTint, fy = e.y - r * 0.4; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5; const gl = ctx.createRadialGradient(e.x, fy, 2, e.x, fy, r * 1.9); gl.addColorStop(0, c + '88'); gl.addColorStop(1, c + '00'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(e.x, fy, r * 1.9, 0, TAU); ctx.fill(); ctx.restore(); }
     } catch (err) { /* cosmetic only */ }
-    rvOrigDrawFoe(e);
+    orig(e);
   };
 }
 

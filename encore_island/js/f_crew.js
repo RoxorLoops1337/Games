@@ -179,7 +179,7 @@
   }
 
   // ---------- world positions / drawing ----------
-  const MARKET_POS = { x: -370, y: -20 }, ARENA_POS = { x: 385, y: 25 }, STUDIO_POS = { x: -330, y: -225 };
+  const MARKET_POS = { x: -370, y: -20 }, ARENA_POS = { x: 385, y: 25 }, STUDIO_POS = { x: -345, y: -265 };
   for (const p of [MARKET_POS, ARENA_POS, STUDIO_POS]) if (typeof HUB_KEEP !== 'undefined') HUB_KEEP.push({ x: p.x, y: p.y, r: 80 }); // keeps lamps, trees and the next-land plate off them
   const DISTRICTS = [
     { id: 'market', name: 'Market', tier: 1, pos: MARKET_POS, icon: 'coin', col: ['#ffe27a', '#e8921e'], on: () => townTierIdx() >= 1 },
@@ -327,9 +327,9 @@
     y = section(y, 'Careers  ·  special jobs for trained fans'); info('crew_careers', cw - 22, y - 12);
     y = note(y, cw, 'Train a fan to level 3 in the Crew tab, then give them a career. Each career has its own bonus. You can change a career later for a higher price.');
     const L = bonusLines();
-    rowCard(y, 22 + Math.max(1, L.length) * 16, cw); ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.textAlign = 'left'; ctx.fillText('ACTIVE BONUSES', 14, y + 17);
+    rowCard(y, 34 + Math.max(1, L.length) * 16, cw); ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.textAlign = 'left'; ctx.fillText('ACTIVE BONUSES', 14, y + 17);
     ctx.font = font(11, false); ctx.fillStyle = L.length ? '#9af0b4' : '#cfc6ee'; if (!L.length) ctx.fillText('None yet — give a fan a career!', 14, y + 34); else L.forEach((t, i) => ctx.fillText(t, 14, y + 34 + i * 16));
-    y += 30 + Math.max(1, L.length) * 16;
+    y += 42 + Math.max(1, L.length) * 16;
     y = section(y, 'Your fans');
     const el = S.pop.filter(careerEligible);
     if (!el.length) return note(y, cw, S.pop.length ? 'No fan is level 3 yet. Open the Crew tab and press TRAIN on a fan.' : 'No fans yet — recruit one in the Crew tab.') + 2;
@@ -354,8 +354,8 @@
     for (const id of CAREER_IDS) {
       const c = CAREERS[id], row = y, h = 78; y += h + 6; const role = c.role === f.role, cur = f.spec === id, can = role && !cur && S.wallet >= cost;
       rowCard(row, h, cw); ctx.save(); ctx.globalAlpha = role ? 1 : 0.5; disc(32, row + 36, 24, c.col[0], c.col[1]); drawIcon(c.icon, 32, row + 36, 32); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(c.name, 66, row + 20);
-      ctx.fillStyle = c.role === 'fight' ? '#ff9ac8' : '#7fe0d8'; ctx.font = font(10); ctx.fillText(c.role === 'fight' ? 'FIGHTER CAREER' : 'COLLECTOR CAREER', 66 + ctx.measureText(c.name).width * 1.1 + 6, row + 20);
+      ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(c.name, 66, row + 20); const cnw = ctx.measureText(c.name).width;
+      ctx.fillStyle = c.role === 'fight' ? '#ff9ac8' : '#7fe0d8'; ctx.font = font(10); ctx.fillText(c.role === 'fight' ? 'FIGHTER' : 'COLLECTOR', 66 + cnw + 8, row + 20);
       ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); wrapText(c.desc, 66, row + 36, cw - 190, 13);
       const bx = cw - 108, bw = 98;
       if (cur) bigBtn(bx, row + 14, bw, 46, 'off', false, 'CURRENT', null, null);
@@ -379,7 +379,7 @@
     else {
       const m = st().market, lv = m.lvl, can = lv < MARKET_MAX && S.wallet >= marketCost(), h = 148;
       hCard(y, cw, h, d0, true); ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.textAlign = 'right'; ctx.fillText('Level ' + lv + ' / ' + MARKET_MAX, cw - 12, y + 24);
-      ctx.textAlign = 'left'; ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText('Every level makes all coins you earn worth 6% more.', 68, y + 42);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText('Each level makes all coins worth 6% more.', 68, y + 42);
       ctx.fillStyle = '#9af0b4'; ctx.font = font(11); ctx.fillText('Now: +' + Math.round(MARKET_BONUS * lv * 100) + '% coins', 68, y + 58);
       for (let k = 0; k < MARKET_MAX; k++) { ctx.fillStyle = k < lv ? '#ffd94a' : 'rgba(255,255,255,0.15)'; rr(68 + k * 17, y + 64, 14, 7, 3); ctx.fill(); }
       // hot item panel
@@ -414,7 +414,7 @@
     for (let i = 0; i < 9; i++) { ctx.fillStyle = i % 2 ? '#ff7eb6' : '#ffd94a'; ctx.beginPath(); ctx.arc(x + 14 + i * (w - 28) / 8, y + 22 + Math.sin(S.t * 3 + i) * 2, 5, 0, TAU); ctx.fill(); }
     ctx.restore(); ctx.strokeStyle = HV.line; ctx.lineWidth = 2.5; rr(x, y, w, h, 14); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(b.phase === 'over' ? (b.won ? 'VICTORY!' : 'FIGHT OVER') : 'WAVE ' + Math.min(b.wave, ARENA_WAVES) + ' / ' + ARENA_WAVES, x + w / 2, y + 16);
-    const F = b.fighters, E = b.foes, gy = y + 66;
+    const F = b.fighters, E = b.foes, gy = 60;
     for (let i = 0; i < F.length; i++) { const u = F[i], c = i % 2, r = (i / 2) | 0; u.x = 46 + c * 46 - 8 * (r % 2); u.y = gy + r * 34;
       const ax = x + u.x, ay = y + 0 + u.y + 22, alive = u.hp > 0, bob = alive ? Math.sin(S.t * 8 + i) * 1.5 : 0, lunge = u.hit > 0 ? 6 : 0;
       shadow(ax, ay + 2, 13, 0.25); ctx.save(); if (u.hurt > 0) ctx.globalAlpha = 0.6 + 0.4 * Math.sin(S.t * 40); artDraw(u.art, alive ? (u.hit > 0 ? 'attack' : 'walk') : 'down', (S.t * 9 + i) | 0, ax + lunge, ay - bob, 0.27, false, alive ? undefined : 0.45); ctx.restore();
@@ -430,13 +430,13 @@
   }
   let ARMED = -1;
   function studioCard(y, cw, d, sh) {
-    const sl = st().studio.slots, free = STUDIO_SLOTS - sl.length, avail = TRACKS.filter(t => !sl.some(s => s.id === t.id)), h = 62 + sl.length * 46 + (free > 0 ? 24 + avail.length * 50 : 0);
-    hCard(y, cw, h, d, true); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.textAlign = 'left'; ctx.fillText('Record tracks for lasting bonuses. They keep recording while you are away.', 68, y + 42);
-    let yy = y + 56;
+    const sl = st().studio.slots, free = STUDIO_SLOTS - sl.length, avail = TRACKS.filter(t => !sl.some(s => s.id === t.id)), h = 70 + sl.length * 46 + (free > 0 ? 24 + avail.length * 50 : 0);
+    hCard(y, cw, h, d, true); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.textAlign = 'left'; ctx.fillText('Record tracks for lasting bonuses. They keep', 68, y + 40); ctx.fillText('recording while you are away.', 68, y + 53);
+    let yy = y + 64;
     sl.forEach((s, i) => {
       const t = TRACK_BY[s.id], done = slotDone(s), p = slotProg(s) / s.dur; ctx.fillStyle = 'rgba(255,255,255,0.07)'; rr(10, yy, cw - 24, 40, 10); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = font(12); ctx.textAlign = 'left'; ctx.fillText(t.name, 18, yy + 16); ctx.fillStyle = done ? '#9af0b4' : '#ffe98a'; ctx.font = font(10); ctx.fillText(done ? 'ACTIVE  ·  ' + t.desc : 'Recording…  ' + t.desc + ' when done', 18, yy + 30);
-      if (!done) { gbar(18, yy + 33, cw - 150, 5, p, '#c6a8ff', '#6a3fd8'); ctx.fillStyle = '#e6dcff'; ctx.font = font(10); ctx.textAlign = 'right'; ctx.fillText(fmtTime(s.dur - slotProg(s)) + ' left', cw - 92, yy + 16); }
+      if (!done) { gbar(18, yy + 34, cw - 150, 5, p, '#c6a8ff', '#6a3fd8'); ctx.fillStyle = '#e6dcff'; ctx.font = font(10); ctx.textAlign = 'right'; ctx.fillText(fmtTime(s.dur - slotProg(s)) + ' left', cw - 92, yy + 16); }
       const arm = ARMED === i; cbtn(cw - 82, yy + 8, 64, 24, true, arm ? 'red' : 'violet'); ctx.fillStyle = '#fff'; ctx.font = font(9); ctx.textAlign = 'center'; ctx.fillText(arm ? 'TAP AGAIN' : 'SCRAP', cw - 50, yy + 24);
       chit(cw - 82, yy + 8, 64, 24, () => { if (ARMED === i) { scrapTrack(i); ARMED = -1; } else { ARMED = i; sfx('ui_tap'); } });
       yy += 46;
