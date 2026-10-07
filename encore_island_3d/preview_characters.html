@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Characters preview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#8fe3f0;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#2d170f}</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }</script>
+</head><body><div id="i"></div>
+<script type="module">
+import * as THREE from 'three';
+import { makeJasmin, makeRoxor, makeCreature, makeFan } from './js/characters.js';
+const q = new URLSearchParams(location.search);
+const pose = q.get('pose') || 'walk';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbfeaf5); scene.fog = new THREE.Fog(0xbfeaf5, 18, 40);
+const hemi = new THREE.HemisphereLight(0xdff6ff, 0xffd6e8, 1.0); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d0, 2.6); sun.position.set(5, 9, 7);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 6, bottom: -6, near: 1, far: 30 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshStandardMaterial({ color: 0xa4e59c, flatShading: true, roughness: 0.9 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const list = [];
+const add = (c, x, z) => { c.group.position.set(x, 0, z); scene.add(c.group); list.push(c); return c; };
+const jas = add(makeJasmin(), -2.2, 0);
+const rox = add(makeRoxor(), -0.7, 0);
+add(makeCreature('kappa'), 0.9, 0.2); add(makeCreature('oni'), 2.0, 0.2); add(makeCreature('slime'), 3.1, 0.2);
+for (let i = 0; i < 5; i++) add(makeFan(i + 1), -2.0 + i * 1.25, -1.7 - (i % 2) * 0.1);
+if (pose === 'carry') rox.setCarry(12);
+if (q.get('only')) { const k = q.get('only').split(',').map(Number); list.forEach((c, i) => { if (!k.includes(i)) c.group.visible = false; }); }
+const cam = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, 0.1, 100);
+const camq = q.get('cam'); const lookq = q.get('look');
+let target = new THREE.Vector3(0.4, 0.9, -0.4);
+if (pose === 'close') { target.set(-1.5, 1.0, 0); }
+if (lookq) { const [x,y,z]=lookq.split(',').map(Number); target.set(x,y,z); }
+const clock = new THREE.Clock(); let T = 0;
+const fixedT = q.get('t') ? parseFloat(q.get('t')) : null;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05); T += dt;
+  const t = fixedT ?? T;
+  const st = { speed: pose === 'walk' || pose === 'carry' ? 1 : 0, singing: pose === 'sing' || pose === 'close', carry: pose === 'carry' ? 12 : (pose === 'walk' ? 6 : 0), hurt: pose === 'hurt' ? 0.8 : 0 };
+  for (const c of list) c.update(dt, t, st);
+  if (pose === 'attackloop' && Math.floor(T * 1.5) !== frame.last) { frame.last = Math.floor(T * 1.5); list.forEach((c) => c.attack()); }
+  if (camq) { const [x, y, z] = camq.split(',').map(Number); cam.position.set(x, y, z); }
+  else if (pose === 'front') cam.position.set(0.4, 2.8, 7.5);
+  else if (pose === 'close') cam.position.set(-0.6, 1.5, 3.2);
+  else { const a = pose === 'walk' || pose === 'carry' || pose === 'sing' ? 0.0 : 0.0; cam.position.set(0.4 + Math.sin(T * 0.3 + a) * 2, 3.0, 7.8); }
+  cam.lookAt(target); renderer.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+window.__attackAll = () => list.forEach((c) => c.attack());
+window.__ready = true;
+frame();
+window.__info = () => renderer.info.render;
+</script></body></html>

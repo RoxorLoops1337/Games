@@ -1,4 +1,4 @@
-// Echowake: UI core: the stage, the screen manager, overlays, tooltips, input and every shared DOM component (owner: UI core).
+// Hocus Vocus: UI core: the stage, the screen manager, overlays, tooltips, input and every shared DOM component (owner: UI core).
 // This header is the contract of record for ui.js. Styles live in css/base.css (class names below are the ones it defines).
 //
 // STAGE       UI.W UI.H (1280 x 720)   UI.scale UI.px UI.ox UI.oy (live)   UI.layers {view, screens, overlays, over, tips, toasts}   UI.stageEl
@@ -47,8 +47,21 @@
 //     the reason as a toast and ui_error; el.rbSet({label, disabled, reason}))   UI.setDisabled(el, on, reason)
 //   UI.panel({kind:'paper'|'dark', torn, gold, title, class}, ...children) -> el with .body      UI.hanko(text, {size})   UI.divider()   UI.bar(v, max, 'hp'|'ink'|'xp'|'boss')
 //   UI.tabs(items, {value, onchange})   UI.seg(items, {value, onchange})   UI.toggle({value, onchange})   UI.slider({min, max, step, value, onchange, format})   UI.settingsPanel()
-//   UI.icon(kind, id, size, opts) canvas   UI.medallion(heroId, size) canvas   UI.vars(el, {'--x': v}) (setProperty; assigning style['--x'] does nothing in a browser)
-//   UI.resolveCard(inst, ctx)   UI.plain(html)   UI.el = U.el   UI.esc
+//   UI.icon(kind, id, size, opts) canvas   UI.medallion(heroId, size, skin?) canvas (skin 'stage' | 'skin'; default the viewer's outfit)
+//   UI.vars(el, {'--x': v}) (setProperty; assigning style['--x'] does nothing in a browser)   UI.resolveCard(inst, ctx)   UI.plain(html)   UI.el = U.el   UI.esc
+// OUTFITS     (HV_ART_AUDIO 2.11, bible 7.1; presentation only) the viewer's costume per hero, in its own localStorage key 'hv_skins_v1' ({heroId: 'skin' | 'stage'}),
+//   read and written only by ui.js and always inside try/catch: missing, unreadable or garbled storage means stage clothes. Never in the profile or the run;
+//   RUN, COMBAT, MAP, META, the bot and the daily seed never read it. The unlock is the hero's Sticker (DATA.outfits[id].sticker, META.achievements() done).
+//   UI.outfit.list() -> hero ids that have an outfit   .name(id) -> 'Unicorn Onesie' | ''   .unlocked(id) -> bool   .chosen(id) -> the stored 'skin' | 'stage'
+//   .of(id) / .effective() -> what is drawn: 'skin' only when stored 'skin' AND unlocked   .set(id, 'skin' | 'stage') -> bool (a locked outfit is refused)
+//   .push() -> the effective map handed to ART.hero.outfits(map): at UI.init, before every screen enters, after every set, and on META.bus 'achievement'
+// FOLLOW      (HV_STORY 5, bible 7.2; no network, nothing stored) the duo's links, Share and Support. The URLs are DATA.LINKS (an empty one is not rendered).
+//   UI.followPanel(mode, {supportLine}?) -> el   mode 'sheet' | 'tab' | 'strip' | 'gameover': heading, the duo waving (sheet and tab), the handle line, one real <a class="hv-link"
+//     target="_blank" rel="noopener noreferrer"> per non-empty URL (a pink or green dot, aria "<label>: RoxorLoops and Jasmin, opens in a new tab"), the no-links line (sheet and tab, only
+//     when all five are empty), Share, Support the duo (an <a class="btn btn-primary hv-support"> only when DATA.LINKS.support is set, never in 'gameover'); 'tab' adds the about text, the
+//     support line (above Support) and Jordan's line; {supportLine: true} adds the support line to any other mode.   UI.followSheet() opens that panel in UI.modal.
+//   UI.share() Share: navigator.share when present (an AbortError is silent, any other rejection falls back to the clipboard), else the clipboard: SHARE_TEXT + ' ' + UI.shareUrl() and a toast.
+//   UI.shareUrl() DATA.LINKS.game or origin + pathname (never the query or hash).   UI.followText the frozen follow strings (heading, handleLine, aboutText, shortAbout, creditsLine, ...).
 // UI.bus = U.bus() emits 'screen' {name, params} after every enter and 'overlay' {name, open}. ART, AUDIO, META and SCENE are only ever reached through typeof checks,
 // so every component works with any of them missing (placeholder painters, silent audio); a throwing ART call is caught and warned once.
 const UI = (() => {
@@ -108,6 +121,7 @@ const UI = (() => {
     fit: [], srFlip: false, errShown: {}, run: null, hooks: {},
     perf: null, perfAcc: 0, perfFrames: 0, perfLast: 0,
     audioArmed: false, tipTimer: 0,
+    skins: null, outfit: null,                                // the viewer's stored outfit choices (read lazily) and the last effective map pushed to ART
   };
 
   const UI_OPT = { reduceMotion: false, reduceMotionSetting: null, shake: 1, textScale: 1, speed: 1, fastAnim: 0, damageNumbers: true, colorblind: false, quality: 'high', qualitySetting: 'auto' };
@@ -228,7 +242,8 @@ const UI = (() => {
     st.style.setProperty('--scale', String(px2(scale * 10000) / 10000));
     st.classList.toggle('compact', scale < 0.75);
     const dpr = window.devicePixelRatio || 1;
-    const pxNew = clamp(scale * dpr, 1, 2);
+    const touchDev = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const pxNew = clamp(scale * dpr, 1, touchDev ? 1.5 : 2);      // a phone fills fewer pixels per frame, which also keeps the audio thread fed
     if (Math.abs(pxNew - S.px) > 0.001 || S.view.width !== Math.round(W * pxNew)) {
       S.px = pxNew;
       [S.view, S.over].forEach((c) => { c.width = Math.round(W * pxNew); c.height = Math.round(H * pxNew); });
@@ -261,7 +276,20 @@ const UI = (() => {
         if (p && p.then) p.then(lock, () => {}).then(() => {}, () => {}); else lock();
       });
     });
-    const book = mk('div', { class: 'rot-book', 'aria-hidden': 'true' }, mk('i', { class: 'rp rp1' }), mk('i', { class: 'rp rp2' }), mk('i', { class: 'rp rp3' }), mk('i', { class: 'rot-phone' }));
+    // the picture (HV_ART_AUDIO 3.4): a phone turning sideways (.rot-phone, its turn and its frame live in base.css) with a small mic on its screen,
+    // and two sparkles twinkling beside it. Inline SVG with inline positions, so the picture needs no stylesheet of its own; still under reduce motion
+    const still = !!UI_OPT.reduceMotion;
+    const twinkle = (dur, begin) => (still ? '' : '<animate attributeName="opacity" values="1;.25;1" dur="' + dur + 's" begin="' + begin + 's" repeatCount="indefinite"/>');
+    const sparkSvg = (x, y, r, col, dur, begin) => '<svg viewBox="-12 -12 24 24" width="' + r * 2 + '" height="' + r * 2 + '" style="position:absolute;left:' + (x - r) + 'px;top:' + (y - r) + 'px;overflow:visible">'
+      + '<path d="M0 -11C1 -3 3 -1 11 0C3 1 1 3 0 11C-1 3 -3 1 -11 0C-3 -1 -1 -3 0 -11Z" fill="' + col + '" stroke="#2d170f" stroke-width="1.6" stroke-linejoin="round">' + twinkle(dur, begin) + '</path></svg>';
+    const micSvg = '<svg viewBox="0 0 24 24" width="32" height="32" style="position:absolute;left:50%;top:50%;margin:-17px 0 0 -16px">'
+      + '<path d="M12 15.5v4.5M8.5 20.5h7" stroke="#fff8ec" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
+      + '<rect x="9.2" y="9" width="5.6" height="7.4" rx="2" fill="#1d1a2c" stroke="#fff8ec" stroke-width="1.3"/><rect x="9.2" y="10.4" width="5.6" height="1.8" fill="#ff7eb6"/>'
+      + '<circle cx="12" cy="7" r="4.4" fill="#3fcf6a" stroke="#2d170f" stroke-width="1.3"/><circle cx="10.6" cy="5.6" r="1.2" fill="#c6ff3d"/></svg>';
+    const book = mk('div', { class: 'rot-book', 'aria-hidden': 'true' },
+      mk('i', { class: 'rot-phone', html: micSvg }),
+      mk('i', { class: 'rot-spark', html: sparkSvg(124, 38, 17, '#fff8ec', 1.6, 0) }),
+      mk('i', { class: 'rot-spark', html: sparkSvg(146, 104, 11, '#c6ff3d', 1.9, 0.7) }));
     return mk('div', { id: 'rotate', role: 'alertdialog', 'aria-label': 'Turn your device sideways', hidden: true },
       mk('div', { class: 'rot-card' }, book,
         mk('h2', { text: 'Turn your device sideways' }),
@@ -321,6 +349,10 @@ const UI = (() => {
     document.addEventListener('keydown', arm, true);
     document.addEventListener('keydown', onKeyDown);
     installDelegates();
+    // the viewer's outfits reach ART now (META.load ran first in GAME.boot), and again whenever a Sticker is earned (it may unlock one)
+    pushOutfits();
+    const me = ME();
+    if (me && me.bus && isFn(me.bus, 'on')) safe(() => me.bus.on('achievement', () => { pushOutfits(); }));
   }
 
   // ==================================================================================================================
@@ -559,6 +591,7 @@ const UI = (() => {
 
   async function swapTo(name, def, params) {
     leaveCurrent();
+    pushOutfits();                              // every screen enters with the outfits the profile allows right now (a tour may have earned a Sticker)
     const root = mk('div', { class: 'screen s-' + name });
     layers.screens.appendChild(root);
     const rec = { name, def, root, params, epoch: S.epoch, offs: [], dead: {} };
@@ -636,13 +669,17 @@ const UI = (() => {
   }
 
   // ==================================================================================================================
-  // transitions: shoji door slide, sound-ring wipe, fade. Painted on #over, driven by the frame clock.
+  // transitions (HV_ART_AUDIO 3.4, bible 4.1): 'ink' is the sparkle swirl (pink and green sparkles spiral in to the centre while the night closes
+  // in like an iris, then burst back out, ta-da), 'page' is the stage curtain (two red curtains close and open), 'fade' is a fade. The kind ids stay.
+  // Painted on #over, driven by the frame clock.
   // ==================================================================================================================
   const DUR = { fade: [220, 260], ink: [420, 480], page: [340, 380] };
-  const INK_BLOBS = (() => {
-    const r = U.rng(0x1eaf5);
+  const NIGHT = '#0d0b1e', LINE = '#2d170f', CREAM = '#fff8ec', PINK = '#ff7eb6', GREEN = '#3fcf6a';
+  const CURTAIN = '#c8264f', CURTAIN_D = '#8f1838', CURTAIN_L = '#e2416a';
+  const SWIRL = (() => {
+    const r = U.rng(0x5a1b7);
     const out = [];
-    for (let i = 0; i < 12; i++) out.push({ x: 40 + r() * 1200, y: 30 + r() * 660, R: 360 + r() * 260, d: r() * 0.4, s: r() * 6.28 });
+    for (let i = 0; i < 44; i++) out.push({ a: r() * Math.PI * 2, rr: 0.55 + r() * 0.55, s: 7 + r() * 13, d: r() * 0.3, col: i % 3 === 0 ? PINK : i % 3 === 1 ? GREEN : CREAM, spin: (r() - 0.5) * 5 });
     return out;
   })();
 
@@ -674,88 +711,115 @@ const UI = (() => {
     ctx.fillRect(0, 0, W, H);
   }
 
-  function paintInk(ctx, cover, seedShift) {
-    if (cover <= 0.001) return;
-    // sound-ring wipe: each blob centre sends out a night-filled disc with a bright cyan ring edge and two fainter rings trailing inside
-    ctx.strokeStyle = '#5ff5ff';
-    ctx.lineWidth = 3;
-    INK_BLOBS.forEach((b) => {
-      const local = clamp((cover - b.d) / (1 - b.d), 0, 1);
-      const r = b.R * U.ease.outCubic(local);
-      if (r < 2) return;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#0d0b1e';
-      ctx.fill();
-      if (local < 0.98) {
-        ctx.globalAlpha = 0.9 * (1 - local * 0.6);
-        ctx.stroke();
-        ctx.lineWidth = 1.5;
-        for (let k = 1; k <= 2; k++) {
-          const rr = r - k * 26 - seedShift * 2;
-          if (rr < 4) continue;
-          ctx.globalAlpha = 0.5 / k;
-          ctx.strokeStyle = k === 1 ? '#7a6bff' : '#5ff5ff';
-          ctx.beginPath();
-          ctx.arc(b.x, b.y, rr, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#5ff5ff';
-      }
-    });
-    const full = U.smooth((cover - 0.82) / 0.18);
-    if (full > 0) paintFade(ctx, full);
+  // a 4-point sparkle centred on (x, y)
+  function star4(ctx, x, y, r, col, rot, a) {
+    if (!(r > 0.3) || !(a > 0.01)) return;
+    ctx.save();
+    ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.translate(x, y); ctx.rotate(rot || 0);
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) { const an = i * Math.PI / 2; ctx.quadraticCurveTo(Math.cos(an + Math.PI / 4) * r * 0.16, Math.sin(an + Math.PI / 4) * r * 0.16, Math.cos(an + Math.PI / 2) * r, Math.sin(an + Math.PI / 2) * r); }
+    ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    ctx.restore();
   }
 
-  function paintPage(ctx, phase, p) {
-    const e = U.ease.inOutQuad(clamp(p, 0, 1));
-    // shoji door: out, it slides in from the right and covers the screen; in, it slides away to the left. A lacquer frame round rice-paper panes on a 4 x 3 kumiko grid.
-    let x0, x1;
-    if (phase === 'out') { x0 = W * (1 - e); x1 = W + 40; } else { x0 = -40; x1 = W * (1 - e); }
-    if (x1 <= x0 + 1) return;
-    const w = x1 - x0;
+  // 'ink', the sparkle swirl. cover runs 0 (clear) to 1 (the night covers everything). phase 'out': the night closes in as an iris toward the centre,
+  // ringed in pink and green, while the sparkles spiral in after it and gather in a twinkle at the centre. phase 'in': the iris opens from the
+  // centre and the sparkles burst outward, ta-da.
+  function paintInk(ctx, cover, phase) {
+    if (cover <= 0.001) return;
+    const cx = W / 2, cy = H / 2, R = Math.sqrt(cx * cx + cy * cy) + 30;
+    const iris = R * (1 - U.ease.inOutQuad(clamp(cover, 0, 1)));
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, 0, w, H);
-    ctx.clip();
-    ctx.fillStyle = '#1b1430';
-    ctx.fillRect(x0, 0, w, H);
-    // panes are laid out on the door's full width (W + 40) from its moving leading edge, so the grid travels with the door
-    const full = W + 40, left = phase === 'out' ? x0 : x1 - full;
-    const cols = 4, rows = 3, m = 14, pw = (full - m * (cols + 1)) / cols, ph = (H - m * (rows + 1)) / rows;
-    ctx.fillStyle = '#f1eff5';
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) ctx.fillRect(left + m + c * (pw + m), m + r * (ph + m), pw, ph);
-    ctx.strokeStyle = 'rgba(27,20,48,0.35)'; ctx.lineWidth = 1;
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
-      const px = left + m + c * (pw + m), py = m + r * (ph + m);
-      ctx.beginPath();
-      for (let k = 1; k < 3; k++) { ctx.moveTo(px + pw * k / 3, py); ctx.lineTo(px + pw * k / 3, py + ph); ctx.moveTo(px, py + ph * k / 3); ctx.lineTo(px + pw, py + ph * k / 3); }
-      ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, (R + 40 + iris) / 2, 0, Math.PI * 2);
+    ctx.lineWidth = R + 40 - iris; ctx.strokeStyle = NIGHT; ctx.stroke();
+    if (iris > 3) {
+      ctx.lineWidth = 7; ctx.strokeStyle = PINK; ctx.beginPath(); ctx.arc(cx, cy, iris + 3.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 4; ctx.strokeStyle = GREEN; ctx.beginPath(); ctx.arc(cx, cy, iris + 10, 0, Math.PI * 2); ctx.stroke();
+    }
+    SWIRL.forEach((sp) => {
+      let rad, ang, a, size;
+      if (phase === 'out') {
+        const k = clamp((cover - sp.d) / (1 - sp.d), 0, 1);
+        rad = R * sp.rr * (1 - U.ease.inQuad(k)); ang = sp.a + k * 3.4; a = clamp(k * 6, 0, 1) * (rad > 6 ? 1 : 0.4); size = sp.s * (0.45 + 0.55 * (1 - k));
+      } else {
+        const b = clamp(1 - cover, 0, 1);
+        rad = R * sp.rr * U.ease.outCubic(b); ang = sp.a - b * 1.4; a = 1 - U.ease.inQuad(b); size = sp.s * (0.6 + 0.6 * b);
+      }
+      star4(ctx, cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad, size, sp.col, ang + sp.spin * cover, a);
+    });
+    // the gathered twinkle at the centre: it swells as the iris closes and pops when it opens again
+    const glowK = phase === 'out' ? U.ease.inQuad(clamp((cover - 0.6) / 0.4, 0, 1)) : U.ease.outQuad(clamp((cover - 0.55) / 0.45, 0, 1));
+    if (glowK > 0.01) {
+      star4(ctx, cx, cy, 70 * glowK, CREAM, 0.2, glowK);
+      star4(ctx, cx, cy, 34 * glowK, PINK, Math.PI / 4 + 0.2, glowK);
+      star4(ctx, cx + 44 * glowK, cy - 30 * glowK, 18 * glowK, GREEN, 0, glowK);
     }
     ctx.restore();
-    // a shadow on the screen beside the moving edge
-    const edge = phase === 'out' ? x0 : x1;
-    const sx = phase === 'out' ? edge - 40 : edge;
-    const sg = ctx.createLinearGradient(sx, 0, sx + 40, 0);
-    if (phase === 'out') { sg.addColorStop(0, 'rgba(13,11,30,0)'); sg.addColorStop(1, 'rgba(13,11,30,0.5)'); }
-    else { sg.addColorStop(0, 'rgba(13,11,30,0.5)'); sg.addColorStop(1, 'rgba(13,11,30,0)'); }
-    ctx.fillStyle = sg;
-    ctx.fillRect(sx, 0, 40, H);
   }
 
+  // 'page', the stage curtain. closed runs 0 (open) to 1 (the two curtains meet at the centre). Folds are bands of light and shade that gather as
+  // the curtain opens; the inner edge is a soft wave with the warm line; a scalloped valance with cream bobbles drops in along the top.
+  function curtainHalf(ctx, x0, x1, side, closed) {
+    const w = x1 - x0;
+    if (w <= 0.5) return;
+    ctx.save();
+    ctx.beginPath();
+    const edge = side < 0 ? x1 : x0, outer = side < 0 ? x0 - 10 : x1 + 10;
+    ctx.moveTo(outer, -10); ctx.lineTo(edge, -10);
+    for (let y = 0; y <= H + 10; y += 40) ctx.quadraticCurveTo(edge + side * 6, y + 20, edge, y + 40);
+    ctx.lineTo(outer, H + 50); ctx.closePath();
+    const folds = 7 + Math.round(closed * 5), g = ctx.createLinearGradient(x0, 0, x1, 0);
+    for (let i = 0; i <= folds; i++) { const u = i / folds; g.addColorStop(u, i % 2 ? CURTAIN_D : CURTAIN); if (i < folds) g.addColorStop(u + 0.5 / folds, CURTAIN_L); }
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = LINE; ctx.stroke();
+    // shade gathering at the inner edge, a soft shadow under the valance, and the hem: a lighter band along the floor
+    ctx.clip();
+    const sh = ctx.createLinearGradient(edge, 0, edge - side * 70, 0);
+    sh.addColorStop(0, 'rgba(60,8,30,0.4)'); sh.addColorStop(1, 'rgba(60,8,30,0)');
+    ctx.fillStyle = sh; ctx.fillRect(Math.min(x0, x1) - 10, 0, Math.abs(w) + 20, H);
+    const top = ctx.createLinearGradient(0, 0, 0, 120); top.addColorStop(0, 'rgba(40,4,20,0.45)'); top.addColorStop(1, 'rgba(40,4,20,0)');
+    ctx.fillStyle = top; ctx.fillRect(Math.min(x0, x1) - 10, 0, Math.abs(w) + 20, 120);
+    ctx.fillStyle = 'rgba(255,248,236,0.16)'; ctx.fillRect(Math.min(x0, x1) - 10, H - 26, Math.abs(w) + 20, 10);
+    ctx.restore();
+  }
+  function paintPage(ctx, phase, p) {
+    const e = U.ease.inOutQuad(clamp(p, 0, 1));
+    const closed = phase === 'out' ? e : 1 - e;
+    if (closed <= 0.001) return;
+    const half = W / 2 + 6;
+    curtainHalf(ctx, -10, -10 + half * closed + 10, -1, closed);
+    curtainHalf(ctx, W + 10 - half * closed - 10, W + 10, 1, closed);
+    // the valance drops in along the top
+    const vy = -56 + 56 * U.ease.outQuad(clamp(closed * 1.6, 0, 1));
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(0, vy - 10); ctx.lineTo(W, vy - 10); ctx.lineTo(W, vy + 34);
+    for (let x = W; x > 0; x -= 64) ctx.quadraticCurveTo(x - 32, vy + 60, x - 64, vy + 34);
+    ctx.closePath();
+    const vg = ctx.createLinearGradient(0, vy, 0, vy + 56); vg.addColorStop(0, CURTAIN_D); vg.addColorStop(1, CURTAIN);
+    ctx.fillStyle = vg; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = LINE; ctx.stroke();
+    for (let x = W - 32; x > 0; x -= 64) { ctx.beginPath(); ctx.arc(x, vy + 52, 5, 0, Math.PI * 2); ctx.fillStyle = CREAM; ctx.fill(); ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.restore();
+    // a soft shadow where the two curtains meet
+    if (closed > 0.9) { const k = (closed - 0.9) / 0.1; ctx.fillStyle = 'rgba(13,11,30,' + (0.35 * k).toFixed(3) + ')'; ctx.fillRect(W / 2 - 6, 0, 12, H); }
+  }
+
+  // the tip in the middle of an 'ink' transition: Jordan's face, the kicker in candy pink and the line in cream, in the rounded display letters
+  const TIP_FONT = '"Arial Rounded MT Bold", "Nunito", "Quicksand", "Varela Round", "Trebuchet MS", Arial, "Liberation Sans", system-ui, sans-serif';
   function paintTip(ctx, text, alpha) {
     if (!text || alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha = clamp(alpha, 0, 1);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '700 15px Georgia, "Hiragino Mincho ProN", serif';
-    ctx.fillStyle = '#f5c96a';
-    ctx.fillText('A TIP FROM JORDAN', W / 2, 590);
-    ctx.font = 'italic 24px Georgia, "Hiragino Mincho ProN", serif';
-    ctx.fillStyle = '#f3e6c8';
+    ctx.font = '900 15px ' + TIP_FONT;
+    const kick = 'A TIP FROM JORDAN', kw = safe(() => ctx.measureText(kick).width, 160) || 160;
+    const ar = AR();
+    if (ar && ar.cast && isFn(ar.cast, 'medallion')) safe(() => ar.cast.medallion(ctx, 'jordan', W / 2 - kw / 2 - 26, 590, 14));
+    ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = LINE; ctx.strokeText(kick, W / 2, 590);
+    ctx.fillStyle = PINK; ctx.fillText(kick, W / 2, 590);
+    ctx.font = '700 23px ' + TIP_FONT;
+    ctx.fillStyle = CREAM;
     const words = String(text).split(' ');
     const lines = [];
     let line = '';
@@ -782,7 +846,7 @@ const UI = (() => {
     const k = tr.kind;
     const paint = (phase, p) => {
       if (k === 'fade') paintFade(ctx, phase === 'out' ? U.ease.outQuad(p) : 1 - U.ease.outQuad(p));
-      else if (k === 'ink') paintInk(ctx, phase === 'out' ? p : 1 - p, phase === 'out' ? 0 : 3);
+      else if (k === 'ink') paintInk(ctx, phase === 'out' ? p : 1 - p, phase);
       else paintPage(ctx, phase, p);
     };
     if (tr.phase === 'out') {
@@ -792,7 +856,7 @@ const UI = (() => {
         Promise.resolve().then(() => (tr.mid ? tr.mid() : undefined)).then(() => { tr.midDone = true; }, (e) => { logError('transition', e); tr.midDone = true; });
       }
     } else if (tr.phase === 'mid') {
-      paintFade(ctx, 1);
+      if (k === 'page') paintPage(ctx, 'out', 1); else paintFade(ctx, 1);      // the curtain stays closed while the next screen is built
       if (tr.tip) paintTip(ctx, tr.tip, clamp(tr.t / 160, 0, 1));
       if (tr.midDone && tr.t >= tr.hold) { tr.phase = 'in'; tr.t = 0; }
     } else {
@@ -900,7 +964,7 @@ const UI = (() => {
     return off;
   }
 
-  const FOCUSABLE = 'button:not([disabled]), [role=button], [tabindex="0"], input:not([disabled]), select:not([disabled])';
+  const FOCUSABLE = 'button:not([disabled]), a[href], [role=button], [tabindex="0"], input:not([disabled]), select:not([disabled])';
 
   function focusMove(dir, root) {
     root = root || (S.overlays.length ? S.overlays[S.overlays.length - 1].root : layers.screens);
@@ -1066,7 +1130,7 @@ const UI = (() => {
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = fill; ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#140f2e'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '900 ' + Math.round(size * 0.44) + 'px "Trebuchet MS", system-ui, sans-serif';
+    ctx.font = '900 ' + Math.round(size * 0.44) + 'px "Trebuchet MS", Arial, "Liberation Sans", system-ui, sans-serif';
     ctx.fillText(label.toUpperCase(), x, y + size * 0.02);
     if (opts.n !== undefined && opts.n !== null) { ctx.fillStyle = '#fff8f0'; ctx.fillText(String(opts.n), x + r * 0.7, y + r * 0.7); }
     ctx.restore();
@@ -1109,15 +1173,79 @@ const UI = (() => {
     return c;
   }
 
-  // round hero face: ART.hero.medallion (x,y = centre), or a coloured disc with the initial
-  function medalCanvas(heroId, size) {
-    const key = 'medal|' + heroId + '|' + size + '|' + S.px.toFixed(2);
+  // ==================================================================================================================
+  // outfits (HV_ART_AUDIO 2.11, bible 7.1): the viewer's costume per hero. Presentation only. The key hv_skins_v1 is read and written HERE
+  // and nowhere else, always inside try/catch; RUN, COMBAT, MAP, META, the bot and the daily seed never see it, and nothing new goes into
+  // the profile or the run save. The unlock is read from the Sticker at the moment of asking; the effective map goes to ART.hero.outfits.
+  // ==================================================================================================================
+  const SKIN_KEY = 'hv_skins_v1';
+  const ownKey = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const outfitDef = (id) => (typeof DATA !== 'undefined' && DATA.outfits && typeof id === 'string' && ownKey(DATA.outfits, id) ? DATA.outfits[id] : null);
+  const outfitIds = () => DATA.LISTS.heroIds.filter((id) => !!outfitDef(id));
+  const skinStore = () => { try { return window.localStorage || null; } catch (e) { return null; } };
+  // the stored choices, read lazily on first use (never while the scripts load); junk, unknown heroes, Andy and other values are dropped.
+  // Missing, unreadable or garbled storage reads as {} (stage clothes for everyone).
+  function readSkins() {
+    const out = {};
+    let o = null;
+    try { const ls = skinStore(); const raw = ls ? ls.getItem(SKIN_KEY) : null; o = typeof raw === 'string' && raw ? JSON.parse(raw) : null; } catch (e) { o = null; }
+    if (o && typeof o === 'object' && !Array.isArray(o)) outfitIds().forEach((id) => { if (ownKey(o, id) && (o[id] === 'skin' || o[id] === 'stage')) out[id] = o[id]; });
+    return out;
+  }
+  function skins() { if (!S.skins) S.skins = readSkins(); return S.skins; }
+  function stickerList() { const me = ME(); return isFn(me, 'achievements') ? safe(() => me.achievements(), null) : null; }
+  function outfitUnlocked(id, list) {
+    const d = outfitDef(id);
+    if (!d) return false;
+    const achs = list === undefined ? stickerList() : list;
+    return Array.isArray(achs) && achs.some((a) => !!a && a.id === d.sticker && !!a.done);
+  }
+  // 'skin' only when the stored choice is 'skin' AND its Sticker is done; otherwise 'stage'
+  function outfitMap() {
+    const achs = stickerList(), st = skins(), out = {};
+    DATA.LISTS.heroIds.forEach((id) => { out[id] = st[id] === 'skin' && outfitUnlocked(id, achs) ? 'skin' : 'stage'; });
+    return out;
+  }
+  function pushOutfits() {
+    const map = outfitMap();
+    S.outfit = map;
+    const ar = AR();
+    if (ar && ar.hero && isFn(ar.hero, 'outfits')) { try { ar.hero.outfits(Object.assign({}, map)); } catch (e) { warnOnce('outfits', 'ART.hero.outfits threw', e); } }
+    return map;
+  }
+  // store the viewer's pick; a locked outfit is refused (false). A storage that will not write keeps the pick for this visit only.
+  function setOutfit(id, v) {
+    if (!outfitDef(id) || (v !== 'skin' && v !== 'stage')) return false;
+    if (v === 'skin' && !outfitUnlocked(id)) return false;
+    const st = skins();
+    st[id] = v;
+    try { const ls = skinStore(); if (ls) ls.setItem(SKIN_KEY, JSON.stringify(st)); } catch (e) { /* private mode: the pick holds for this visit */ }
+    pushOutfits();
+    return true;
+  }
+  const outfitApi = {
+    key: SKIN_KEY,
+    list: outfitIds,
+    name: (id) => { const d = outfitDef(id); return d ? String(d.name) : ''; },
+    unlocked: (id) => outfitUnlocked(id),
+    chosen: (id) => (skins()[id] === 'skin' ? 'skin' : 'stage'),
+    of: (id) => outfitMap()[id] || 'stage',
+    effective: outfitMap,
+    set: setOutfit,
+    push: pushOutfits,
+  };
+
+  // round hero face: ART.hero.medallion (x,y = centre), or a coloured disc with the initial. `skin` ('stage' or 'skin') picks the outfit; without it
+  // the viewer's outfit is drawn (the cache key carries it, so a new pick never shows a stale face)
+  function medalCanvas(heroId, size, skin) {
+    const sk = skin === 'skin' || skin === 'stage' ? skin : (S.outfit && S.outfit[heroId]) || 'stage';
+    const key = 'medal|' + heroId + '|' + sk + '|' + size + '|' + S.px.toFixed(2);
     let spr = iconCache.get(key);
     if (!spr) {
       const o = offscreen(size, size);
       let ok = false;
       const ar = AR();
-      if (ar && isFn(ar.hero, 'medallion')) { try { ar.hero.medallion(o.g, heroId, size / 2, size / 2, size / 2 - 1); ok = true; } catch (e) { warnOnce('medal', 'ART.hero.medallion threw', e); } }
+      if (ar && isFn(ar.hero, 'medallion')) { try { ar.hero.medallion(o.g, heroId, size / 2, size / 2, size / 2 - 1, sk); ok = true; } catch (e) { warnOnce('medal', 'ART.hero.medallion threw', e); } }
       if (!ok) {
         const h = DATA.heroes[heroId] || { color: '#8a86a8', name: '?' };
         o.g.beginPath(); o.g.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2); o.g.fillStyle = h.color; o.g.fill();
@@ -1351,7 +1479,7 @@ const UI = (() => {
     const st = S.stage;
     let lastHover = null, lastHoverAt = -1e9, kwHold = 0;
     st.addEventListener('click', (e) => {
-      const b = e.target && e.target.closest ? e.target.closest('button, [role=button]') : null;
+      const b = e.target && e.target.closest ? e.target.closest('button, [role=button], a.hv-link, a.hv-support') : null;   // the follow anchors click like buttons
       if (!b || !st.contains(b)) return;
       if (b.getAttribute('aria-disabled') === 'true') { sfx('ui_error'); shake(b); return; }
       if (b.dataset && b.dataset.sfx === 'none') return;
@@ -2003,7 +2131,7 @@ const UI = (() => {
           const d = DATA.relics[id] || { name: id, text: '' };
           grid.appendChild(mk('div', { class: 'relic-row' }, relic(id, { size: 'lg', tip: false }), mk('div', {}, mk('b', { text: d.name }), mk('p', { text: typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), d.text) : d.text }))));
         });
-        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No charms yet. Rivals, gift boxes and merch stalls hold them.' }));
+        if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No Charms yet. Rivals, gift boxes and merch stalls hold them.' }));
         root.appendChild(panel({ kind: 'dark', title: 'Charms', class: 'relics-panel' }, grid, mk('div', { class: 'row center' }, btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }))));
       },
     },
@@ -2030,6 +2158,129 @@ const UI = (() => {
   };
 
   // ==================================================================================================================
+  // follow the duo, Share and Support (HV_STORY 5, bible 7.2). No network: the links are plain anchors the player taps (a new tab, never
+  // intercepted or counted), Share uses the device's own share sheet or the clipboard, and nothing is stored. The owners' URLs are
+  // DATA.LINKS; a button whose URL is empty is not rendered, so today's build shows the handle line and Share only.
+  // ==================================================================================================================
+  const LINK_ORDER = [['website', 'Website'], ['youtube', 'YouTube'], ['facebook', 'Facebook'], ['tiktok', 'TikTok'], ['instagram', 'Instagram']];
+  const SHARE_TITLE = 'HOCUS VOCUS: A Vocal Magic Adventure';
+  const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+  const linksCfg = () => (typeof DATA !== 'undefined' && DATA.LINKS) || {};
+  const handleOf = () => (typeof linksCfg().handle === 'string' && linksCfg().handle) || '@roxorloopsandjasmin';
+  // every follow string (HV_STORY 5.3 and 6), exposed as UI.followText so the menus and the end screens print the same words
+  const FOLLOW_TEXT = Object.freeze({
+    heading: 'Follow the duo', share: 'Share', shareAria: 'Share Hocus Vocus', support: 'Support the duo', close: 'Close',
+    copied: 'Copied. Go on, show someone.', failed: 'Could not copy here. The address bar has the link.',
+    supportLine: 'Enjoying the tour? The real duo would love your support.',
+    jordanLine: 'Jordan made these buttons. Press them gently.',
+    creditsLine: 'Drawn in code, sung with heart. No two tours alike.',
+    aboutText: "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.",
+    shortAbout: 'A card adventure made for RoxorLoops and Jasmin. Beatboxing and vocal magic, drawn in code.',
+    get handleLine() { return 'Made for RoxorLoops and Jasmin. Find them as ' + handleOf() + '.'; },
+    get noLinks() { return 'Links are on their way. For now, look for ' + handleOf() + '.'; },
+  });
+  const FOLLOW_MODES = ['sheet', 'tab', 'strip', 'gameover'];
+
+  // the address Share hands out: the owners' public address, else this page without its query or hash (a seed is never shared by accident)
+  function shareUrl() { const g = linksCfg().game; return (typeof g === 'string' && g) || (window.location.origin + window.location.pathname); }
+  function copyShare() {
+    const text = SHARE_TEXT + ' ' + shareUrl();
+    const bad = () => toast(FOLLOW_TEXT.failed, 'warn');
+    try { navigator.clipboard.writeText(text).then(() => toast(FOLLOW_TEXT.copied, 'good'), bad); } catch (e) { bad(); }
+  }
+  // runs only inside a tap handler. The share sheet closing (AbortError) is silent; any other refusal falls back to the clipboard.
+  function shareNow() {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        const p = navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: shareUrl() });
+        if (p && typeof p.catch === 'function') p.catch((e) => { if (!e || e.name !== 'AbortError') copyShare(); });
+        return;
+      }
+    } catch (e) { /* a refused or missing share sheet falls through to the clipboard */ }
+    copyShare();
+  }
+
+  // only a web address is ever linked (a stray scheme such as javascript: in the config is ignored)
+  const linkUrl = (v) => { const u = typeof v === 'string' ? v.trim() : ''; return /^https?:\/\/\S/i.test(u) ? u : ''; };
+  function followLinks(L) {
+    const wrap = mk('div', { class: 'hv-links' });
+    let n = 0;
+    LINK_ORDER.forEach((pair) => {
+      const url = linkUrl(L[pair[0]]);
+      if (!url) return;
+      wrap.appendChild(mk('a', { class: 'hv-link', href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': pair[1] + ': RoxorLoops and Jasmin, opens in a new tab' },
+        mk('i', { class: 'hv-dot ' + (n % 2 ? 'is-green' : 'is-pink'), 'aria-hidden': 'true' }), mk('span', { class: 'hv-link-l', text: pair[1] })));
+      n++;
+    });
+    return n ? wrap : null;
+  }
+
+  // the duo waving: Jasmin (hero hanae) and RoxorLoops (hero kuro) in the outfits the viewer chose, drawn once with ART.hero.draw (the cheer pose
+  // holds its last key). Without the art (or if it will not draw) two round faces stand in, so the panel never breaks.
+  function duoNode(w, h, sc) {
+    const names = (id) => (DATA.heroes[id] && DATA.heroes[id].name) || id;
+    const label = names('hanae') + ' and ' + names('kuro') + ' waving';
+    const ar = AR();
+    if (ar && ar.hero && isFn(ar.hero, 'draw')) {
+      const c = mk('canvas', { class: 'hv-duo', width: Math.max(1, Math.round(w * S.px)), height: Math.max(1, Math.round(h * S.px)), style: { width: w + 'px', height: h + 'px' }, role: 'img', 'aria-label': label });
+      const drawn = safe(() => {
+        const g = c.getContext('2d');
+        g.setTransform(S.px, 0, 0, S.px, 0, 0);
+        [['hanae', 0.33, false], ['kuro', 0.67, true]].forEach((o) => {
+          ar.hero.draw(g, o[0], { x: w * o[1], y: h - 8, s: sc, pose: 'cheer', pt: 0.6, t: 0.4, flip: o[2], skin: safe(() => outfitApi.of(o[0]), 'stage') });
+        });
+        return true;
+      }, false);
+      if (drawn) return c;
+    }
+    return mk('div', { class: 'hv-duo hv-duo-faces', role: 'img', 'aria-label': label }, medalCanvas('hanae', 64), medalCanvas('kuro', 64));
+  }
+
+  // UI.followPanel(mode, {supportLine}?): the whole follow block for a surface, built fresh on every call (see the header)
+  function followPanel(mode, opts) {
+    mode = FOLLOW_MODES.indexOf(mode) >= 0 ? mode : 'sheet';
+    opts = opts || {};
+    const L = linksCfg(), T = FOLLOW_TEXT;
+    const slim = mode === 'strip' || mode === 'gameover';
+    const root = mk('div', { class: 'hv-follow hv-' + mode, role: 'group', 'aria-label': T.heading, dataset: { mode } });
+    // the sheet's modal title is the visible heading, so here it stays for screen readers only
+    root.appendChild(mk('h3', { class: 'hv-follow-h' + (mode === 'sheet' ? ' sr-only' : ''), text: T.heading }));
+    if (mode === 'sheet') root.appendChild(duoNode(300, 168, 0.54));
+    else if (mode === 'tab') root.appendChild(duoNode(340, 190, 0.66));
+    root.appendChild(mk('p', { class: 'hv-handle', text: T.handleLine }));
+    if (mode === 'sheet') root.appendChild(mk('p', { class: 'hv-about-short', text: T.shortAbout }));
+    // the tab reads heading, handle, about, Jordan, then the controls (the CSS grid puts the words beside the portrait); the pills stay first in the focus order
+    if (mode === 'tab') root.appendChild(mk('p', { class: 'hv-about', text: T.aboutText }));
+    if (mode === 'tab') root.appendChild(mk('p', { class: 'hv-jordan', text: T.jordanLine }));
+    const links = followLinks(L);
+    if (links) root.appendChild(links);
+    else if (!slim) root.appendChild(mk('p', { class: 'hv-nolinks', text: T.noLinks }));
+    const acts = mk('div', { class: 'hv-acts' });
+    const shareBtn = btn(T.share, { kind: mode === 'gameover' ? 'ghost' : 'secondary', size: slim ? 'sm' : undefined, class: 'hv-share', onclick: () => shareNow() });
+    shareBtn.setAttribute('aria-label', T.shareAria);
+    acts.appendChild(shareBtn);
+    const supportUrl = mode === 'gameover' ? '' : linkUrl(L.support);
+    const support = supportUrl ? mk('a', { class: 'btn btn-primary hv-support' + (slim ? ' btn-sm' : ''), href: supportUrl, target: '_blank', rel: 'noopener noreferrer', 'aria-label': T.support + ', opens in a new tab' },
+      iconCanvas('relic', 'heart', slim ? 18 : 22, {}, 'btn-ico'), mk('span', { class: 'btn-label', text: T.support }), mk('i', { class: 'btn-shine', 'aria-hidden': 'true' })) : null;
+    // the support line only makes sense above a Support button, so it is never printed without one
+    const supportLine = support && (mode === 'tab' || opts.supportLine) ? mk('p', { class: 'hv-support-line', text: T.supportLine }) : null;
+    if (mode === 'tab') {
+      root.appendChild(acts);
+      if (support) root.appendChild(mk('div', { class: 'hv-support-wrap' }, supportLine, support));
+    } else {
+      if (supportLine) root.appendChild(supportLine);
+      if (support) acts.appendChild(support);
+      root.appendChild(acts);
+    }
+    return root;
+  }
+
+  // one call for the title footer, the end screens and anything else that wants the sheet: the panel in the shared modal (Esc and Close dismiss it)
+  function followSheet() {
+    return api.modal({ title: FOLLOW_TEXT.heading, body: followPanel('sheet'), buttons: [{ label: FOLLOW_TEXT.close, kind: 'secondary' }] });
+  }
+
+  // ==================================================================================================================
   // public API
   // ==================================================================================================================
   const api = {
@@ -2048,8 +2299,9 @@ const UI = (() => {
     confirm(o) { return overlayOpen('confirm', o || {}); },
     toast, menuButton, announce, anchorEl, floatText, pulse, shake, toStage,
     card, cardUpdate, cardBack, relic, gem, status, heroBadge, stat, btn, setDisabled, panel, hanko, divider, bar, tabs, seg, toggle, slider, settingsPanel,
-    icon: iconCanvas, medallion: medalCanvas, vars, el: mk, esc: U.esc, plain: plainOf, resolveCard, kwInfo,
+    icon: iconCanvas, medallion: medalCanvas, outfit: outfitApi, vars, el: mk, esc: U.esc, plain: plainOf, resolveCard, kwInfo,
     tip, fail, toTitle,
+    share: shareNow, shareUrl, followPanel, followSheet, followText: FOLLOW_TEXT,
     setRun(R) { S.run = R; return R; },
     get run() { return S.run; },
     get time() { return S.clock.t; },

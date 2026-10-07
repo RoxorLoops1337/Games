@@ -1,4 +1,4 @@
-// ART.map: the hand-painted map page (js/art_map.js), headless on the strict canvas stub.
+// ART.map: the map of Hocus Vocus, the muted Gloss and the live candy hexes (js/art_map.js), headless on the strict canvas stub.
 //
 // What this pins down:
 //   * every DATA.LISTS.mapKinds id has real art (ART.has), the extras (frame, paper, route, brushPreview, fogEdge, token, paintBloom) exist, the
@@ -12,13 +12,16 @@
 //     flip, one hero, none), route, brushPreview (the union outline of a flower of seven hexes has 18 outer sides and 24 inner ones), fogEdge (one strip
 //     per masked side), paper (deterministic, moves with the camera, bounded work at every zoom), frame (a window of at least 1180 x 640 on 1280 x 720)
 //   * reduce motion and low quality still draw cleanly, and reduce motion freezes what should freeze
-//   * the gallery sheets render (the page sheet with and without MAP), and a performance smoke test: a full page of hexes stays far below 4 ms
+//   * the gallery sheets render (the map sheet with and without MAP), and a performance smoke test: a full map of hexes stays far below 4 ms
+//   * the Hocus Vocus look (HV_ART_AUDIO 7): the Act (opts.chapter 1 to 3) picks the live ground of bare Path hexes, the paper and the touches near the
+//     party, muted ground stays perfectly still while live hexes near the party move, the tour poster frame chases its marquee bulbs, the token ring
+//     wears the leader's colour, the reveal is a film peeling back with sparkles riding the front
 import { boot, harness } from './hocus_vocus_lib.mjs';
 // Wall-clock budgets are strict with RB_PERF=1 on an idle machine; otherwise 4x slack so a loaded CI box cannot flake the check.
 const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 
 const t = harness('hocus_vocus art map');
-const api = boot({ only: ['util', 'data', 'art', 'art_heroes', 'art_icons', 'art_map', 'map'], continue: true });
+const api = boot({ only: ['util', 'data', 'art', 'art_cast_kit', 'art_cast', 'art_icons', 'art_map', 'map'], continue: true });
 const { ART, DATA, U, MAP } = api;
 const L = DATA.LISTS;
 const errs = (api._errors || []).filter((e) => !/art_icons/.test(e.file || ''));
@@ -125,7 +128,7 @@ t.test('unknown kinds and tiles, and hostile numbers, never throw and still draw
   M.hex(ctx, 'fog', 0, 0, 46); M.hex(ctx, 'fog', 0, 0, 46, null);
   t.eq(issues(), '', 'no canvas issues from bad input');
 });
-t.test('ground is the walkable pale wash and block-tile painted hexes fall back to the void', () => {
+t.test('ground is the walkable pale wash and block-tile unmuted hexes fall back to the void', () => {
   const g = record((c) => M.hex(c, 'ground', 0, 0, 46, { tile: 'enemy', seed: 2 })), p = record((c) => M.hex(c, 'painted', 0, 0, 46, { tile: 'empty', seed: 2 }));
   t.deep(drawImages(g).map((a) => a.slice(1)), drawImages(p).map((a) => a.slice(1)), 'ground equals painted empty, whatever tile is passed');
   const b = record((c) => M.hex(c, 'painted', 0, 0, 46, { tile: 'block', seed: 2 })), v = record((c) => M.hex(c, 'block', 0, 0, 46, { seed: 2 }));
@@ -305,7 +308,7 @@ t.test('route: dabs along the path, an end ring and a cost pill; affordable or n
   t.eq(issues(), '', 'no canvas issues');
 });
 
-// ------------------------------------------------------------------ brush preview
+// ------------------------------------------------------------------ Spell preview
 t.test('brushEdges: a lone hex has six outer sides; a flower of seven has 18 outer and 24 inner; a line of three has 14 outer and 4 inner', () => {
   const size = 46, st = size * Math.sqrt(3);
   const one = M.brushEdges([[0, 0]], size); t.eq(one.outer.length, 6, 'one hex, six outer'); t.eq(one.inner.length, 0, 'no inner sides');
@@ -373,7 +376,7 @@ t.test('paper: draws at every camera and zoom without issues, deterministically,
   t.eq(a, record((c) => M.paper(c, 1280, 720, 800, 400, 1, { t: 99 })).log.join('|'), 'the paper does not animate');
   t.eq(balance((c) => M.paper(c, 1280, 720, 100, 100, 0.7))[2], 0, 'balanced');
 });
-t.test('paper work is bounded at every zoom, and doodles show in the margins as well as over the page', () => {
+t.test('paper work is bounded at every zoom, and doodles show in the margins as well as over the map', () => {
   const work = (x, y, z) => record((c) => M.paper(c, 1280, 720, x, y, z)).calls.filter((c) => c.name === 'drawImage').length;
   [0.2, 0.3, 0.6, 1, 2, 6].forEach((z) => t.ok(work(800, 400, z) < 400, `zoom ${z}: ${work(800, 400, z)} blits`));
   const noDoodles = record((c) => M.paper(c, 1280, 720, 800, 400, 0.6, { doodles: false })).calls.filter((c) => c.name === 'drawImage').length;
@@ -430,7 +433,7 @@ t.test('reduce motion and low quality still draw every piece cleanly', () => {
 });
 
 // ------------------------------------------------------------------ sheets
-t.test('every map gallery sheet renders (the page sheet falls back to a private page headless) and none leaves a canvas issue', async () => {
+t.test('every map gallery sheet renders (the map sheet falls back to a private map headless) and none leaves a canvas issue', async () => {
   clean();
   for (const name of ['map_kinds', 'map_page', 'map_frame', 'map_bloom', 'map_token', 'map_paper']) {
     const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
@@ -440,7 +443,7 @@ t.test('every map gallery sheet renders (the page sheet falls back to a private 
   }
   t.eq(issues(), '', 'no canvas issues from any sheet');
 });
-t.test('the page sheet also renders a page built with MAP.generate', async () => {
+t.test('the map sheet also renders a map built with MAP.generate', async () => {
   const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
   t.ok(!!MAP, 'MAP is loaded in this suite');
   const before = api._counts.drawImage || 0;
@@ -450,7 +453,7 @@ t.test('the page sheet also renders a page built with MAP.generate', async () =>
   t.eq(issues(), '', 'no canvas issues');
 });
 
-// ------------------------------------------------------------------ a real page, and performance
+// ------------------------------------------------------------------ a real map, and performance
 function pageHexes(chapter, seed, paintedFrac) {
   const Mp = MAP.generate({ chapter, seed });
   const sol = MAP.solve(Mp);
@@ -477,7 +480,7 @@ function drawMapScreen(ctx, Mp, size, tt, camX, camY) {
   M.frame(ctx, 1280, 720, tt);
   return drawn;
 }
-t.test('a real page draws at every chapter, seed and zoom from 0.6 to 2.0 without issues', () => {
+t.test('a real map draws at every Act, seed and zoom from 0.6 to 2.0 without issues', () => {
   clean();
   const ctx = newCtx();
   [1, 2, 3].forEach((ch) => [7, 20260101].forEach((seed) => [0.6, 1, 1.5, 2].forEach((z) => {
@@ -510,7 +513,7 @@ t.test('performance smoke: a full screen of about 120 visible hexes with fog edg
   for (let i = 0; i < 5; i++) drawMapScreen(ctx, Mp, 46, 3 + i, 800, 450);
   t.eq(stats().misses, before, 'no baking once warm');
 });
-t.test('sprite memory of a whole page stays modest: under 12 million pixels at zoom 2 and a 2x display', () => {
+t.test('sprite memory of a whole map stays modest: under 12 million pixels at zoom 2 and a 2x display', () => {
   ART.sprite.clear();
   const prevRes = ART.res; ART.res = 2;
   const Mp = pageHexes(1, 20260101, 0.9), ctx = newCtx();
@@ -518,6 +521,124 @@ t.test('sprite memory of a whole page stays modest: under 12 million pixels at z
   const px = stats().pixels;
   ART.res = prevRes; ART.sprite.clear();
   t.ok(px < 12e6, `${(px / 1e6).toFixed(1)} million pixels`);
+});
+
+// ------------------------------------------------------------------ the Hocus Vocus look (HV_ART_AUDIO 7)
+const logOf = (fn) => record(fn).log.join('|');
+t.test('the Act picks the live ground of bare Path hexes and nothing else; unknown Acts clamp to 1 to 3', () => {
+  const ground = (ch) => logOf((c) => M.hex(c, 'painted', 5, 6, 46, { tile: 'empty', seed: 2, chapter: ch }));
+  t.ok(ground(1) !== ground(2) && ground(2) !== ground(3) && ground(1) !== ground(3), 'Path ground differs in the three Acts');
+  t.eq(ground(undefined), ground(1), 'no Act means Act I');
+  t.eq(ground(0), ground(1), 'Act 0 clamps to Act I'); t.eq(ground(9), ground(3), 'Act 9 clamps to Act III'); t.eq(ground(NaN), ground(1), 'NaN is Act I'); t.eq(ground('2'), ground(1), 'a string is Act I');
+  const same = (tile) => logOf((c) => M.hex(c, 'painted', 5, 6, 46, { tile, seed: 2, chapter: 1 })) === logOf((c) => M.hex(c, 'painted', 5, 6, 46, { tile, seed: 2, chapter: 3 }));
+  ['enemy', 'camp', 'boss', 'shop', 'start'].forEach((tile) => t.ok(same(tile), tile + ' looks the same in every Act'));
+  t.eq(logOf((c) => M.hex(c, 'ground', 5, 6, 46, { seed: 2, chapter: 2 })), ground(2), 'the ground kind follows the Act too');
+  t.eq(logOf((c) => M.hex(c, 'fog', 5, 6, 46, { seed: 2, chapter: 1 })), logOf((c) => M.hex(c, 'fog', 5, 6, 46, { seed: 2, chapter: 3 })), 'the muted Gloss is the same in every Act');
+  t.ok(M.washOf('empty').c === '#f6d9a6' && M.washOf('enemy').c === '#e8553f' && M.washOf('block').c === '#e6d9ff', 'the candy table: sand, tomato, Gloss opal');
+});
+t.test('warm(): another Act bakes only its bare ground', () => {
+  ART.sprite.clear();
+  M.warm(46);
+  t.eq(M.warm(46, { chapter: 2 }), 8, 'eight variants of Path ground, nothing else');
+  t.eq(M.warm(46, { chapter: 2 }), 0, 'and then it is cached');
+  t.eq(M.warm(46, { chapter: 3 }), 8, 'Act III likewise');
+});
+t.test('paper: each Act has its own ground and doodle set; an unknown Act is Act I; chunks are cached per Act', () => {
+  const p = (ch) => logOf((c) => M.paper(c, 1280, 720, 800, 400, 1, { chapter: ch }));
+  t.ok(p(1) !== p(2) && p(2) !== p(3) && p(1) !== p(3), 'three Acts, three papers');
+  t.eq(p(undefined), p(1), 'no Act means Act I'); t.eq(p(7), p(3), 'Act 7 clamps to Act III'); t.eq(p(-2), p(1), 'a negative Act is Act I');
+  const wb = M.worldBox();
+  const blits = (ch) => record((c) => M.paper(c, 1280, 720, wb.x0 + (wb.x1 - wb.x0) * 0.15, wb.y0 + (wb.y1 - wb.y0) * 0.86, 1, { chapter: ch })).calls.filter((c) => c.name === 'drawImage').length;
+  const noD = (ch) => record((c) => M.paper(c, 1280, 720, wb.x0 + (wb.x1 - wb.x0) * 0.15, wb.y0 + (wb.y1 - wb.y0) * 0.86, 1, { chapter: ch, doodles: false })).calls.filter((c) => c.name === 'drawImage').length;
+  [1, 2, 3].forEach((ch) => t.ok(blits(ch) > noD(ch), 'Act ' + ch + ': a doodle stands in that corner'));
+  ART.sprite.clear(); const m0 = stats().misses;
+  M.paper(newCtx(), 1280, 720, 800, 400, 1, { chapter: 1 }); const m1 = stats().misses;
+  M.paper(newCtx(), 1280, 720, 800, 400, 1, { chapter: 1 }); t.eq(stats().misses, m1, 'a second Act I paper bakes nothing');
+  M.paper(newCtx(), 1280, 720, 800, 400, 1, { chapter: 2 }); t.ok(stats().misses > m1, 'Act II bakes its own chunks');
+  t.ok(m1 > m0, 'the first paper baked chunks');
+  t.eq(issues(), '', 'no canvas issues');
+});
+t.test('muted ground is perfectly still; live hexes near the party move, the others do not', () => {
+  const log = (kind, o) => logOf((c) => M.hex(c, kind, 5, 6, 46, o));
+  ['fog', 'block', 'known'].forEach((kind) => t.eq(log(kind, { tile: 'boss', seed: 3, t: 0.2 }), log(kind, { tile: 'boss', seed: 3, t: 8.7 }), kind + ' does not move'));
+  [1, 2, 3].forEach((ch) => {
+    const near = (tt) => log('painted', { tile: 'enemy', seed: 5, t: tt, near: true, chapter: ch }), far = (tt) => log('painted', { tile: 'enemy', seed: 5, t: tt, near: false, chapter: ch });
+    t.eq(far(0.3), far(2.9), 'Act ' + ch + ': a live hex away from the party is still');
+    t.ok(near(0.3) !== near(1.1), 'Act ' + ch + ': a live hex near the party moves');
+    t.ok(near(0.3) !== far(0.3), 'Act ' + ch + ': near adds touches');
+  });
+  const n = (ch) => log('painted', { tile: 'enemy', seed: 5, t: 1.3, near: true, chapter: ch });
+  t.ok(n(1) !== n(2) && n(2) !== n(3) && n(1) !== n(3), 'each Act has its own touch (bunting and petals, a tiny screen, fairy bulbs)');
+  ART.tk.opt = { reduceMotion: true, quality: 'high' };
+  t.eq(log('painted', { tile: 'enemy', seed: 5, t: 1.3, near: true, chapter: 1 }), log('painted', { tile: 'enemy', seed: 5, t: 1.3, near: false, chapter: 1 }), 'reduced motion: nothing moves near the party');
+  ART.tk.opt = { reduceMotion: false, quality: 'low' };
+  t.eq(log('painted', { tile: 'enemy', seed: 5, t: 1.3, near: true, chapter: 2 }), log('painted', { tile: 'enemy', seed: 5, t: 1.3, near: false, chapter: 2 }), 'low quality: nothing moves near the party');
+  ART.tk.opt = { reduceMotion: false, quality: 'high' };
+  t.ok(log('painted', { tile: 'camp', seed: 5, t: 0.2 }) !== log('painted', { tile: 'camp', seed: 5, t: 0.9 }), 'the green room still glows and flickers');
+  t.ok(log('painted', { tile: 'boss', seed: 5, t: 0.2 }) !== log('painted', { tile: 'boss', seed: 5, t: 0.9 }), 'the Headliner hex chases its marquee bulbs');
+  t.ok(log('painted', { tile: 'forge', seed: 5, t: 0.2 }) !== log('painted', { tile: 'forge', seed: 5, t: 0.9 }), 'the studio light breathes');
+  t.ok(log('painted', { tile: 'well', seed: 5, t: 0.2 }) !== log('painted', { tile: 'well', seed: 5, t: 0.9 }), 'the tea stall steams');
+  t.eq(issues(), '', 'no canvas issues');
+});
+t.test('the poster frame: marquee bulbs chase along the top margin and stand still under reduced motion', () => {
+  const my = M.frameInner(1280, 720).y, br = Math.max(5, my * 0.34);
+  const bulbs = (tt) => record((c) => M.frame(c, 1280, 720, tt)).calls.filter((c) => c.name === 'drawImage' && Math.abs(c.args[3] - br * 2) < 0.01 && c.args[2] < my).map((c) => Math.round(c.args[1] + c.args[3] / 2));
+  const a = bulbs(0), b = bulbs(0.4), c2 = bulbs(1);
+  t.ok(a.length >= 4 && a.length <= 8, 'about one bulb in five is lit (' + a.length + ')');
+  t.ok(a.join() !== b.join() && b.join() !== c2.join(), 'the lit bulbs move along');
+  t.ok(a.every((x, i) => i === 0 || x > a[i - 1]), 'bulbs are drawn left to right');
+  ART.tk.opt = { reduceMotion: true, quality: 'high' };
+  t.eq(bulbs(0).join(), bulbs(5).join(), 'reduced motion: the pattern stands still');
+  ART.tk.opt = { reduceMotion: false, quality: 'high' };
+  t.eq(M.frameInner(1280, 720).x, 44, 'the window stays exactly 44, 36, 1192, 648'); t.eq(M.frameInner(1280, 720).y, 36); t.eq(M.frameInner(1280, 720).w, 1192); t.eq(M.frameInner(1280, 720).h, 648);
+});
+t.test('the token ring wears the leader colour (and a lone unknown id gets the gold ring)', () => {
+  const ring = (ids) => logOf((c) => M.token(c, ids, 100, 100, 1.2, false));
+  t.ok(ring(['hanae', 'kuro']).indexOf('rgba(255,126,182') >= 0, 'Jasmin leads in pink');
+  t.ok(ring(['kuro', 'hanae']).indexOf('rgba(63,207,106') >= 0, 'RoxorLoops leads in green');
+  t.ok(ring(['suzu']).indexOf('rgba(167,123,255') >= 0, 'RawClaw leads in violet'); t.ok(ring(['raiga']).indexOf('rgba(255,154,46') >= 0, 'Andy leads in orange');
+  t.ok(ring(['nobody']).indexOf('rgba(255,216,77') >= 0, 'an unknown id gets the gold ring');
+  t.ok(!/rgba\(255,126,182/.test(ring(['kuro', 'hanae'])), 'the second hero does not colour the ring');
+  t.eq(count(record((c) => M.token(c, ['hanae', 'kuro'], 0, 0, 1, false, { ring: false })).log, 'setLineDash'), 0, 'ring:false draws no ring');
+});
+t.test('the reveal: the film peels back with pink and green sparkles riding the front, rings escape, a note rises', () => {
+  clean();
+  const mid = record((c) => M.paintBloom(c, 0, 0, 46, 0.3, { tile: 'chest', seed: 2, note: 3 }));
+  t.ok(count(mid.log, 'quadraticCurveTo') >= 9 * 4, 'nine sparkles ride the wavefront (' + count(mid.log, 'quadraticCurveTo') + ' curve segments)');
+  t.ok(mid.log.some((l) => l === '=fillStyle:#ff7eb6') && mid.log.some((l) => l === '=fillStyle:#7dffa0'), 'pink and green sparkles');
+  t.ok(mid.log.some((l) => l.startsWith('=strokeStyle:rgba(251,249,255')), 'the opal lip of the curling film');
+  t.ok(mid.log.some((l) => l === 'clip(evenodd)'), 'the film is drawn outside the wavefront only');
+  const early = record((c) => M.paintBloom(c, 0, 0, 46, 0.1, { tile: 'chest', seed: 2 })), late = record((c) => M.paintBloom(c, 0, 0, 46, 0.95, { tile: 'chest', seed: 2 }));
+  t.ok(count(early.log, 'quadraticCurveTo') > count(late.log, 'quadraticCurveTo'), 'the sparkles are gone when the film has peeled away');
+  t.eq(drawImages(record((c) => M.paintBloom(c, 0, 0, 46, 0.5, { seed: 1 }))).length, 0, 'the neutral bloom still needs no sprite');
+  t.eq(issues(), '', 'no canvas issues');
+});
+t.test('route: cream note heads with a pink outline, a Vox capsule for the cost (pink to mint), red and shaking when unaffordable', () => {
+  const pts = [[0, 0], [80, 20], [160, 0]];
+  const ok = record((c) => M.route(c, pts, 1.1, { cost: 3 })), bad = record((c) => M.route(c, pts, 1.1, { cost: 3, affordable: false }));
+  t.ok(ok.log.some((l) => l.startsWith('=fillStyle:grad')) || ok.calls.some((c) => c.name === 'createLinearGradient'), 'the capsule is a gradient');
+  t.ok(count(ok.log, 'createLinearGradient') >= 2, 'a capsule gradient and the Vox orb gradient');
+  t.ok(bad.log.some((l) => l === '=fillStyle:#e8383d'), 'the unaffordable capsule is red');
+  t.ok(!ok.log.some((l) => l === '=fillStyle:#e8383d'), 'the affordable capsule is not');
+  t.ok(ok.log.some((l) => l === '=strokeStyle:#2d170f'), 'the warm outline of the cast');
+  t.ok(ok.calls.some((c) => c.name === 'fillText' && c.args[0] === '3'), 'the cost is still written');
+});
+t.test('spotted landmarks are drawn as one ghost sprite each under the film', () => {
+  ART.sprite.clear();
+  const r = record((c) => ['boss', 'shop', 'camp', 'forge', 'elite', 'chest'].forEach((tile) => M.hex(c, 'known', 0, 0, 46, { tile, seed: 1 })));
+  t.eq(drawImages(r).length, 6, 'one sprite per landmark');
+  t.eq(issues(), '', 'no canvas issues');
+});
+t.test('every Hocus Vocus sheet renders: the Path ground in every Act, the doodle sheet, a map in each Act', async () => {
+  clean();
+  for (const [name, params] of [['map_kinds', {}], ['map_doodles', {}], ['map_paper', { chapter: 3 }], ['map_page', { chapter: 1 }], ['map_page', { chapter: 2 }], ['map_page', { chapter: 3 }], ['map_frame', { chapter: 2, guides: 1 }]]) {
+    const canvas = doc.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
+    const before = api._counts.drawImage || 0;
+    await ART.sheets[name](canvas, Object.assign({ w: 1600, h: 900, t: 0.7 }, params));
+    t.ok((api._counts.drawImage || 0) > before, `${name} ${JSON.stringify(params)} composited sprites`);
+  }
+  t.ok(typeof ART.sheets.map_doodles === 'function', 'the doodle sheet is registered');
+  t.eq(issues(), '', 'no canvas issues from any sheet');
 });
 
 t.done();

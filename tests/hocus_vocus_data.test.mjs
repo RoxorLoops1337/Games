@@ -36,6 +36,17 @@ t.test('vocabulary sizes the docs quote', () => {
   t.eq(L.heroIds.length, 4, 'heroes');
   t.deep(L.pickPairs.hand, ['discard', 'exhaust', 'retain', 'upgrade', 'copy'], 'hand picks');
 });
+t.test('the Tour Bus list gains follow LAST (P9 9D), and DATA.LINKS is the frozen link config of HV_STORY 5.2', () => {
+  t.deep(L.libraryTabs, ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'six tabs, the sixth appended last (ids only: the labels live in the screen)');
+  const K = D0.LINKS;
+  t.ok(K && typeof K === 'object' && Object.isFrozen(K), 'DATA.LINKS exists and is frozen');
+  t.deep(Object.keys(K), ['handle', 'website', 'youtube', 'facebook', 'tiktok', 'instagram', 'support', 'game'], 'the exact keys, in the documented order');
+  t.eq(K.handle, '@roxorloopsandjasmin', 'the handle');
+  Object.keys(K).forEach((k) => t.eq(typeof K[k], 'string', `LINKS.${k} is a string (an empty one hides its button)`));
+  Object.keys(K).filter((k) => k !== 'handle').forEach((k) => t.ok(K[k] === '' || /^https:\/\/\S+$/.test(K[k]), `LINKS.${k} is empty or an https address`));
+  t.throws(() => { K.website = 'https://example.org/'; }, 'a frozen config cannot be edited at run time');
+  t.ok(D0.LISTS.libraryTabs.indexOf('follow') === D0.LISTS.libraryTabs.length - 1 && D0.LINKS === K, 'LINKS sits on DATA next to LISTS');
+});
 t.test('op contexts are consistent', () => {
   L.hookOps.forEach((o) => t.ok(L.cardOps.indexOf(o) >= 0, `hook op ${o} is also a card op`));
   ['pick', 'repeat', 'swap', 'hook'].forEach((o) => t.ok(L.hookOps.indexOf(o) < 0, `${o} is not a hook op`));
@@ -61,7 +72,7 @@ t.test('DATA.COLOUR_NAME gives every slot colour id a display word (the ids stay
   t.deep(D0.COLOUR_NAME, { red: 'pink', blue: 'blue', green: 'green', gold: 'gold', any: 'rainbow' }, 'the display table');
   L.slotColors.concat(L.gemColors).forEach((c) => t.ok(typeof D0.COLOUR_NAME[c] === 'string' && D0.COLOUR_NAME[c].length > 0, `colour ${c} has a display word`));
 });
-t.test('economy invariants (Ink numbers from the lead)', () => {
+t.test('economy invariants (Vox numbers from the lead)', () => {
   const E = D0.ECONOMY;
   t.eq(E.startInk, 10, 'startInk'); t.eq(E.inkMax, 14, 'inkMax'); t.eq(E.wellInk, 4, 'wellInk');
   t.deep(E.map.solve, { min: 16, max: 22 }, 'solve range');
@@ -604,7 +615,7 @@ function universe(D) {
   junk.curse_regret.hand = { turnEnd: [{ op: 'hurt', n: 2, tgt: 'front' }] };
   D.FIXED.statusCards.forEach((id) => { junk[id] = { name: id, hero: 'status', type: 'status', rarity: 'token', kw: ['unplayable'], fx: [], art: { m: 'void' } }; });
   D.add('cards', junk);
-  // --- enemies: every roster id, with the mechanics each chapter must show
+  // --- enemies: every roster id, with the mechanics each Act must show
   [1, 2, 3].forEach((ch) => {
     const G = D.GUIDE, defs = {};
     const ros = D.ROSTER[ch];
@@ -838,7 +849,7 @@ t.test('CONTENT_SPEC roster and number tables equal the machine copy', () => {
   t.eq(q.events.perChapter * 3 + q.events.any, 40, 'event quota sums to 40');
   t.eq(q.gems.perColor * 4, 24, 'gem quota'); t.eq(q.achievements, 32, 'achievement quota');
 });
-t.test('roster roles that call minions name a minion of their own chapter', () => {
+t.test('roster roles that call minions name a minion of their own Act', () => {
   [1, 2, 3].forEach((ch) => {
     const minions = D0.ROSTER[ch].filter((r) => r.tier === 'minion').map((r) => r.name.toLowerCase());
     D0.ROSTER[ch].filter((r) => /\bcalls?\b/i.test(r.role)).forEach((r) => {
@@ -933,9 +944,12 @@ t.test('index.html: layers, boot watchdog and load order', () => {
   t.ok(/window\.__booted/.test(html) && /Try again/.test(html) && /6000/.test(html), 'watchdog waits for __booted and offers Try again');
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
   t.eq(new Set(scripts).size, scripts.length, 'no script listed twice'); t.eq(scripts[0], 'js/util.js', 'util first'); t.eq(scripts[1], 'js/data.js', 'data second'); t.eq(scripts[scripts.length - 1], 'js/main.js', 'main last');
-  const need = ['data_text', 'data_cards_hanae', 'data_cards_kuro', 'data_cards_suzu', 'data_cards_raiga', 'data_cards_shared', 'data_enemies_1', 'data_enemies_2', 'data_enemies_3', 'data_relics', 'data_gems', 'data_events', 'data_meta', 'art', 'art_heroes', 'art_enemies_1', 'art_enemies_2', 'art_enemies_3', 'art_cards', 'art_icons', 'art_scenes', 'art_map', 'art_fx', 'audio', 'combat', 'map', 'run', 'meta', 'ui', 'scene', 'screen_menu', 'screen_map', 'screen_combat', 'screen_node', 'screen_end', 'tutorial', 'main'];
+  const need = ['data_text', 'data_cards_hanae', 'data_cards_kuro', 'data_cards_suzu', 'data_cards_raiga', 'data_cards_shared', 'data_enemies_1', 'data_enemies_2', 'data_enemies_3', 'data_relics', 'data_gems', 'data_events', 'data_meta', 'data_samples', 'art', 'art_cast_kit', 'art_cast', 'art_enemies_1', 'art_enemies_2', 'art_enemies_3', 'art_cards', 'art_icons', 'art_scenes', 'art_map', 'art_fx', 'audio', 'combat', 'map', 'run', 'meta', 'ui', 'scene', 'screen_menu', 'screen_map', 'screen_combat', 'screen_node', 'screen_end', 'tutorial', 'main'];
   need.forEach((n) => t.ok(scripts.indexOf(`js/${n}.js`) > 1, `${n}.js is listed`));
   const design = read('DESIGN.md');
+  // P8: the owners' sample manifest is a data file: after the last content file, before the first art file, and named in DESIGN section 3
+  t.ok(scripts.indexOf('js/data_samples.js') === scripts.indexOf('js/data_meta.js') + 1 && scripts.indexOf('js/data_samples.js') + 1 === scripts.indexOf('js/art.js'), 'data_samples.js sits right after data_meta.js and right before art.js');
+  t.ok(/^js\/data_samples\.js\s/m.test(design), 'DESIGN section 3 lists js/data_samples.js');
   scripts.forEach((s) => t.ok(design.includes(s.replace(/^js\//, '')) || design.includes(s.replace(/^js\//, '').replace(/\.js$/, '')), `DESIGN lists ${s}`));
 });
 t.test('util: rng streams and date key', () => {

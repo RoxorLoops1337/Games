@@ -1,27 +1,27 @@
-// Inkwoven integration suite, headless: the WHOLE game (every script, index.html's markup) played through real pointer, drag and key events
+// Hocus Vocus integration suite, headless: the WHOLE game (every script, index.html's markup) played through real pointer, drag and key events
 // on the DOM the screens built, on the loader's virtual clock. Nothing here reaches into a screen's internals to make a move; the only
-// back doors are the documented ones of a test harness: tests/hocus_vocus_player.mjs (cfg.cheat tops up Ink, HP and gold so a greedy
-// policy is not stopped by the dice, and unlocks the requested heroes and Ink Trial in the live profile) and, for the defeat scenario,
+// back doors are the documented ones of a test harness: tests/hocus_vocus_player.mjs (cfg.cheat tops up Vox, HP and gold so a greedy
+// policy is not stopped by the dice, and unlocks the requested heroes and Encore in the live profile) and, for the defeat scenario,
 // GAME.debug.combat().setHp.
 //
 //   complete   Three complete runs (title, hero select, story pages, map painting and walking, fights by tap and by drag, rewards, shops,
-//              camps with all their actions, the forge, chests, gem caches, fables, boss fights, chapter clears, chapters 2 and 3, the
+//              camps with all their actions, the forge, chests, gem caches, Detours, boss fights, Act clears, Acts 2 and 3, the
 //              ending) for different hero pairs, one at the default settings, one with a trial level, reduced motion and low quality, one
-//              with Raiga leading Kuro. Each ends on the victory screen and must leave a recorded win, paid Inkstones and a clean run
+//              with Andy leading RoxorLoops. Each ends on the victory screen and must leave a recorded win, paid Cheers and a clean run
 //              slot, with ZERO console errors or warnings, ZERO window.__errors, ZERO canvas issues and zero uncaught exceptions.
-//   pause      The pause overlay (Resume, Deck, Treasures, Settings, How to play) on the map, with Esc and with the menu button.
+//   pause      The pause overlay (Resume, Deck, Charms, Settings, How to play) on the map, with Esc and with the menu button.
 //   save       Save and quit, Continue on the title, and a byte-exact round trip of the run (RUN.serialize) on the map AND in a combat
 //              (a saved fight restarts with the same foes).
 //   defeat     A lost fight records a loss, shows the game over page and Try Again starts a NEW run with the same heroes and trial.
-//   daily      The Daily Tale button and the hero select's Daily switch begin a run with the date's seed and heroes.
-//   menus      Title to Library (every tab), Settings and How to Play with real taps, and back.
+//   daily      The Daily Duet button and the hero select's Daily switch begin a run with the date's seed and heroes.
+//   menus      Title to Tour Bus (every tab), Settings and How to Play with real taps, and back.
 //   combat     A fight played by hand: select by tap, aim by drag, the Swap button, End Turn by key.
-//   library    A profile with a finished tale: the Unlocks tab buys a card with real Inkstones through the Unlock button, and the Story, Bestiary
+//   library    A profile with a finished tour: the Unlocks tab buys a card with real Cheers through the Unlock button, and the Diary, Who's Who
 //              and History tabs show what the profile has seen, met and won.
-//   nosave     Storage that throws (private mode): one persistent "cannot be saved" toast, and the tale carries on (rides on the library words).
+//   nosave     Storage that throws (private mode): one persistent "cannot be saved" toast, and the tour carries on (rides on the library section).
 //   fuzz       Deterministic noise (a xorshift stream, never Math.random): random taps on any button, card or the canvas, random keys, random drags
 //              and window resizes, mixed in with the player's sensible moves for 1000 steps on two seeds. The page must stay clean.
-//   events     EVERY fable and EVERY choice of it played through the real event page (the typewriter, the choice buttons, the outcome, any
+//   events     EVERY Detour and EVERY choice of it played through the real event page (the typewriter, the choice buttons, the outcome, any
 //              card pick it raises, Continue): each must end on the map or, for a gamble that turns into a fight, on the combat screen.
 //   shop       Eight shops, everything on every shelf bought through the real plaques and the Buy button, card removal and gem cutting,
 //              each purchase checked against the gold paid and what the run gained.
@@ -132,16 +132,16 @@ async function completeRun(label, cfg, pageOpts) {
 }
 
 if (want('complete')) {
-  await t.test('complete run 1: Hanae + Kuro, default settings, to the ending', async () => {
+  await t.test('complete run 1: Jasmin + RoxorLoops, default settings, to the ending', async () => {
     await completeRun('run1 hanae+kuro', { heroes: ['hanae', 'kuro'] }, { seed: 7 });
   });
-  await t.test('complete run 2: Suzu + Raiga, Ink Trial 2, reduced motion and low quality, to the ending', async () => {
+  await t.test('complete run 2: RawClaw + Andy, Encore 2, reduced motion and low quality, to the ending', async () => {
     const g = await completeRun('run2 suzu+raiga', { heroes: ['suzu', 'raiga'], trial: 2 }, { seed: 11, store: settingsStore({ quality: 'low', reduceMotion: true }) });
     const row = g.META.history[0];
     t.eq(row && row.trial, 2, 'run2: the history row remembers the Ink Trial');
     t.eq(g.UI.opt.reduceMotion, true, 'run2: reduced motion was honoured all the way through');
   });
-  await t.test('complete run 3: Raiga in front of Kuro, to the ending', async () => {
+  await t.test('complete run 3: Andy in front of RoxorLoops, to the ending', async () => {
     await completeRun('run3 raiga+kuro', { heroes: ['raiga', 'kuro'] }, { seed: 23 });
   });
 }
@@ -157,7 +157,7 @@ async function toMap(seed, cfg) {
 }
 
 if (want('pause')) {
-  await t.test('pause: Esc and the menu button open the pause overlay; Deck, Treasures, Settings and How to play open from it and close again', async () => {
+  await t.test('pause: Esc and the menu button open the pause overlay; Deck, Charms, Settings and How to play open from it and close again', async () => {
     const { g, p } = await toMap(3);
     const { UI } = g;
     t.eq(UI.currentName, 'map', 'pause: on the map');
@@ -266,7 +266,7 @@ if (want('save')) {
 }
 
 if (want('save')) {
-  await t.test('abandon: the pause menu asks twice; Keep playing keeps the tale, Abandon ends it with half the Inkstones', async () => {
+  await t.test('abandon: the pause menu asks twice; Keep playing keeps the tour, Abandon ends it with half the Cheers', async () => {
     const { g, p } = await toMap(41);
     const { UI, GAME, META } = g;
     await p.until(() => p.stats.paints >= 2, { steps: 30 });
@@ -332,7 +332,7 @@ if (want('defeat')) {
 }
 
 if (want('daily')) {
-  await t.test('daily: the Daily Tale plaque and the hero select switch both begin a dated run', async () => {
+  await t.test('daily: the Daily Duet plaque and the hero select switch both begin a dated run', async () => {
     const g = page({ seed: 17 });
     const { UI, GAME, META, RUN, DATA } = g;
     await tick(g, 1500);
@@ -362,7 +362,7 @@ if (want('daily')) {
   });
 }
 
-// ---------------------------------------------------------------------------------------------------- the bestiary, several tabs, Continue and Begin anew
+// ---------------------------------------------------------------------------------------------------- the Who's Who, several tabs, Continue and Begin anew
 // Two pages share one localStorage in a browser; the loader gives each page its own backing object, so `share` copies it across.
 const share = (from, to) => { Object.keys(to._store).forEach((k) => { delete to._store[k]; }); Object.assign(to._store, from._store); };
 // a real combat node on the first free neighbour of the party, made by RUN.step like the map does
@@ -380,7 +380,7 @@ const metOf = (g, ids) => ids.map((id) => g.META.bestiary().find((b) => b.id ===
 const begin = async (g, opts) => { g.GAME.newRun(opts); await tick(g, 1500); };
 
 if (want('tabs')) {
-  await t.test('bestiary: entering a fight meets its creatures once; Continue does not count the fight again; a lost fight leaves them met', async () => {
+  await t.test('Who\'s Who: entering a fight meets its creatures once; Continue does not count the fight again; a lost fight leaves them met', async () => {
     const g = page({ seed: 61 });
     const { GAME, META, UI } = g;
     await tick(g, 800);
@@ -407,7 +407,7 @@ if (want('tabs')) {
     t.ok(tile && /\bseen\b/.test(tile.className), 'bestiary: the Library shows that creature as met [' + (tile && tile.className) + ']');
     clean(g, 'bestiary');
   });
-  await t.test('bestiary: a Daily Tale meets and records its creatures too', async () => {
+  await t.test('Who\'s Who: a Daily Duet meets and records its creatures too', async () => {
     const g = page({ seed: 62 });
     const { GAME, META } = g;
     await tick(g, 800);
@@ -426,7 +426,7 @@ if (want('tabs')) {
     t.eq(META.stat('dailyRuns'), 1, 'daily bestiary: one daily run');
     clean(g, 'daily bestiary');
   });
-  await t.test('continue: a save taken between the boss reward and chapterEnd goes through the chapter flow (chapter 1 to 2, chapter 3 to the victory)', async () => {
+  await t.test('continue: a save taken between the boss reward and chapterEnd goes through the Act flow (Act 1 to 2, Act 3 to the victory)', async () => {
     const g = page({ seed: 63 });
     const { GAME, META, UI, RUN } = g;
     await tick(g, 800);
@@ -456,7 +456,7 @@ if (want('tabs')) {
     t.eq(g3.META.history[0] && g3.META.history[0].outcome, 'win', 'continue: and the win is recorded');
     t.eq(g3.META.hasRun(), false, 'continue: with nothing left in the save slot');
   });
-  await t.test('new tale over a saved tale ends it like Abandon: half the Inkstones, a history row, the ledger; the new tale has its own run id', async () => {
+  await t.test('new tour over a saved tour ends it like Abandon: half the Cheers, a history row, the ledger; the new tour has its own run id', async () => {
     const g = page({ seed: 67 });
     const { GAME, META } = g;
     await tick(g, 800);
@@ -496,7 +496,7 @@ if (want('tabs')) {
     t.eq(C.META.trialMax(), 1, 'tabs: a reload shows the Ink Trial the win opened');
     clean(A, 'tabs A');
   });
-  await t.test('tabs: the storage event folds in what another tab saved, and the stale tab\'s Continue never brings back a paid tale (C10, scenario 2)', async () => {
+  await t.test('tabs: the storage event folds in what another tab saved, and the stale tab\'s Continue never brings back a paid tour (C10, scenario 2)', async () => {
     const A = page({ seed: 81 });
     await tick(A, 800);
     await begin(A, { heroes: ['hanae', 'kuro'], seed: 81 });
@@ -530,13 +530,13 @@ if (want('tabs')) {
 }
 
 if (want('menus')) {
-  await t.test('menus: Library tabs, Settings and How to Play work with real taps', async () => {
+  await t.test('menus: Tour Bus tabs, Settings and How to Play work with real taps', async () => {
     const g = page({ seed: 19 });
     const { UI, META } = g;
     await tick(g, 1500);
     const gate = $(g, '.mn-gate');
     if (gate) await tap(g, gate, 300);
-    // library
+    // library (the Tour Bus)
     await tap(g, $(g, '[data-act=library]'), 1200);
     t.eq(UI.currentName, 'library', 'menus: Library opens');
     const tabs = $$(g, '.s-library [role=tab]');
@@ -650,7 +650,7 @@ if (want('combat')) {
 }
 
 if (want('library')) {
-  await t.test('library: an Unlock button spends Inkstones, and the tabs show the tale that was told', async () => {
+  await t.test('Tour Bus: an Unlock button spends Cheers, and the tabs show the tour that was played', async () => {
     const prof = { v: 1, inkstones: 400, stats: { runs: 1, wins: 1 }, history: [{ id: 'abc', score: 900, heroes: ['hanae', 'kuro'], chapter: 3, outcome: 'win', trial: 0, daily: false, ts: 1767225600000, seed: 5, inkstones: 60 }], story: { intro: true, ch1_intro: true }, seen: { kappa: 3 }, kills: { kappa: 2 } };
     const g = page({ seed: 5, store: { hv_profile_v1: JSON.stringify(prof) } });
     const { UI, META } = g;
@@ -736,7 +736,7 @@ if (want('fuzz')) {
 }
 
 if (want('events')) {
-  await t.test('events: every fable and every choice, played through the real event page', async () => {
+  await t.test('events: every Detour and every choice, played through the real event page', async () => {
     const g = page({ seed: 31 });
     const { UI, GAME, DATA } = g;
     await tick(g, 800);

@@ -1,6 +1,6 @@
-// Hocus Vocus: Act II roster (chapter 2): Scrollopolis, the neon city of screens where it is always 2 am and nobody looks up.
+// Hocus Vocus: Act II roster (`chapter` 2): Scrollopolis, the neon city of screens where it is always 2 am and nobody looks up.
 // Owner: the Act II enemy designer. Pure data: DATA.add('enemies', ...) and DATA.addEncounters(2, ...).
-// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (no encore, chapter 2). No functions, no dashes,
+// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (no encore, `chapter` 2). No functions, no dashes,
 // no randomness of its own. Ids, names, tiers and sizes are the fixed roster (DATA.ROSTER). Nothing here reads a clock or the DOM.
 // Every name, title, move name, bark, phase line, lore line and tag is copied from hocus_vocus/plan/HV_ENEMIES.md section 3; ids, numbers,
 // ops and AI never change for the re-theme. Tags are display only (the Who's Who chips).
@@ -52,11 +52,11 @@
 //                    Sizzle proof.
 //   boss_jorogumo    Scrollspinner, Queen of the Feed. Form 1, the Avatar (Sequins 4, the perfect filter): Hatch Botlings (2
 //                    Botlings), Keep Scrolling (Tangled 1 on both heroes and a status_tangle card on top of the draw pile), then Big
-//                    Squeeze (heavy, lead) which reads the Tangled on its victim: 12 untangled, 20 tangled. Selfie Flurry and Air Kiss
+//                    Squeeze (heavy, lead) which reads the Tangled on its victim: 12 untangled, 20 tangled. Selfie Flurry and Blown Filter
 //                    (backing spot Earworm) between, Keep Scrolling again on turns 6 and 10, One More Bot when the brood is gone.
 //                    Below half HP she drops the filter (Sequins gone, Volume 2, say line) and re-rolls at once to Form 2, the Spinner:
 //                    Spin the Feed (Tangled 2 on both, another status_tangle card), World Wide Web (heavy on BOTH heroes, 7
-//                    untangled, 12 with Tangled 2), Eight-Leg Swipe, Air Kiss, and a once-only Refresh Frenzy below 20 percent.
+//                    untangled, 12 with Tangled 2), Eight-Leg Swipe, Blown Filter, and a once-only Refresh Frenzy below 20 percent.
 //                    The lesson never changes: the Feed is the setup, the finisher scales with it, and status_tangle (Untangle, 1
 //                    Breath) cuts it.
 //
@@ -74,14 +74,14 @@
 // RB_ENEMIES2_REPORT=1 prints the tables; RB_ENEMIES2_TRACE=boss_jorogumo prints one fight turn by turn. Numbers are a first tuning
 // for the balance wave, not gospel.
 //
-// BALANCE PASS 1 (balance bot report 1, about 22,000 runs, greedy party). Chapter 2 was the soft act: its Rivals cost 8 percent of party
+// BALANCE PASS 1 (balance bot report 1, about 22,000 runs, greedy party). Act 2 was the soft act: its Rivals cost 8 percent of party
 // HP per fight (Act I: 14, Act III: 12) and its Headliner 14 percent (Act I Headliner: 22), and the greedy party cleared 82 percent of
-// chapters 1 to 2 where the spec asks for 60 to 80. The pass is shaped, not flat: normals about x1.2 in threat (HP and hits about x1.1
+// Acts 1 to 2 where the spec asks for 60 to 80. The pass is shaped, not flat: normals about x1.2 in threat (HP and hits about x1.1
 // each), Rivals about x1.55 (HP to the top of the band, hits about x1.25 to x1.3), the Headliner HP 240 to 246 up to 258 to 264 with
-// its big hits (embrace, kiss, web) about x1.1. The Headliner is the one knob that moves the chapter clear rate: with its HP at the band
-// top (274 to 280) and the same hits it cost the greedy party 22 percent of attempts (7 before the pass) and chapter 2 sat at 65 percent
+// its big hits (embrace, kiss, web) about x1.1. The Headliner is the one knob that moves the Act clear rate: with its HP at the band
+// top (274 to 280) and the same hits it cost the greedy party 22 percent of attempts (7 before the pass) and Act 2 sat at 65 percent
 // clear; the setting here (HP 258 to 264, same hits) is estimated at about 18 percent of attempts and about 67 percent clear (refights
-// at the recorded entry HP; not run end to end). The knob: one point of Headliner loss rate is about 0.8 points of chapter 2 clear.
+// at the recorded entry HP; not run end to end). The knob: one point of Headliner loss rate is about 0.8 points of Act 2 clear.
 // Inside the normals the spread was evened out by measurement, enemy by enemy and group by group: the soft ones were raised
 // (ittan_momen, tsukumogami, silk_weaver, karakuri_puppet, nopperabo, chochin) and the hard ones trimmed (drowned_samurai HP 46 to 54
 // down to 40 to 46, nure_onna HP 50 to 58 down to 46 to 54 and Coil 15 to 14, Lash 7 to 6; rokurokubi only +1 on the Lunge). The
@@ -375,7 +375,7 @@
         hatch: { name: 'One More Bot', kind: 'summon', say: 'One more for the feed, little one.', fx: [{ op: 'summon', enemy: 'spiderling', n: 1 }] },
         snare: { name: 'Keep Scrolling', kind: 'debuff', say: 'Stay, sweetie. Nobody leaves the feed.', fx: [{ op: 'status', s: 'bind', n: 1, tgt: 'both' }, { op: 'add', card: 'status_tangle', n: 1, to: 'draw', top: true }] },
         embrace: { name: 'Big Squeeze', kind: 'heavy', say: 'Group hug! Nobody scrolls alone.', fx: [{ op: 'dmg', n: { base: 13, per: 'status', s: 'bind', who: 'target', mul: 9, cap: 22 }, tgt: 'front' }] },
-        kiss: { name: 'Air Kiss', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
+        kiss: { name: 'Blown Filter', kind: 'attack', fx: [{ op: 'dmg', n: 12, tgt: 'back', el: 'poison' }, { op: 'status', s: 'poison', n: 3, tgt: 'back' }] },
         fan: { name: 'Selfie Flurry', kind: 'multi', fx: [{ op: 'dmg', n: 5, hits: 3, tgt: 'random' }] },
         // form 2: the Spinner
         legs: { name: 'Eight-Leg Swipe', kind: 'multi', say: 'Swipe. Swipe. SWIPE.', fx: [{ op: 'dmg', n: 4, hits: 4, tgt: 'random' }] },

@@ -1,8 +1,8 @@
-// Inkwoven browser smoke suite: the REAL game in REAL headless Chromium (playwright-core), driven with real mouse, touch and keyboard
+// Hocus Vocus browser smoke suite: the REAL game in REAL headless Chromium (playwright-core), driven with real mouse, touch and keyboard
 // input. The headless suites run the same scripts against a stubbed DOM; this one catches what only a browser shows: CSS that hides or
 // covers a button, a canvas that stays blank, a script that only breaks in a true engine, a viewport that cannot reach Begin.
 //
-//   guided   title (tap to begin) -> New Tale -> pick two heroes -> Begin -> story pages (Skip) -> map: preview and confirm a paint with two
+//   guided   title (tap to begin) -> New Tour -> pick two heroes -> Begin -> story pages (Skip) -> map: preview and confirm a paint with two
 //            clicks, walk onto the painted hex -> a fight (GAME.debug.open): tap an attack, drag a card into the play zone, Swap, End Turn
 //            by key -> the win -> reward card and Continue -> map -> Esc, Save and quit -> title -> Continue -> map again
 //   reward   a tap while the reward cards are still being dealt face down takes nothing, a tap after the flip takes the card

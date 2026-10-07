@@ -88,6 +88,17 @@ t.test('resolveScripts pulls dependencies in load order and rejects typos', () =
   t.throws(() => resolveScripts({ only: ['gone'], dir: missing }), 'listed but missing throws', /does not exist yet/);
   t.deep(resolveScripts({ only: ['g*'], dir: missing }).missing, ['js/gone.js'], 'a glob tolerates files that are not written yet');
 });
+t.test('resolveScripts: art files pull the cast kit when the page lists it', () => {
+  // Hocus Vocus P3: art_cast_kit.js (ART.rj, the cast kit and the foe kit) loads right after art.js; every other art_* file pulls it in
+  const names = ['util', 'data', 'data_text', 'art', 'art_cast_kit', 'art_cast', 'art_enemies_2', 'art_icons', 'audio', 'ui', 'scene', 'screen_menu', 'main'];
+  const dir = fixture(Object.fromEntries(names.map((n) => [n, '/* ' + n + ' */'])));
+  const R = (only) => resolveScripts({ only, dir }).files.map((f) => f.replace(/^js\/|\.js$/g, ''));
+  t.deep(R(['art_cast_kit']), ['util', 'data', 'art', 'art_cast_kit'], 'the kit pulls only art, data and util');
+  t.deep(R(['art_cast']), ['util', 'data', 'art', 'art_cast_kit', 'art_cast'], 'the cast pulls the kit');
+  t.deep(R(['art_enemies_2']), ['util', 'data', 'art', 'art_cast_kit', 'art_enemies_2'], 'an enemy file gets ART.rj.foe without naming the kit');
+  t.deep(R(['art_icons']), ['util', 'data', 'art', 'art_cast_kit', 'art_icons'], 'so does any other art file');
+  t.deep(R(['art']), ['util', 'data', 'art'], 'art.js itself does not pull the kit');
+});
 
 // ---------------------------------------------------------------- boot: isolation of broken files
 t.test('boot evaluates scripts one by one in a shared scope', () => {

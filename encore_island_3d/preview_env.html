@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Env preview</title>
+<style>html,body{margin:0;height:100%;background:#222;overflow:hidden}canvas{display:block}#i{position:fixed;left:6px;top:6px;color:#fff;font:12px monospace;text-shadow:0 1px 2px #000}</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }</script>
+</head><body><div id="i"></div>
+<script type="module">
+import * as THREE from 'three';
+import { buildWorld } from './js/environment.js';
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = parseFloat(q.get('exp') || '1.0');
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 400);
+const world = buildWorld(scene, renderer);
+const P = {
+  hero: [[0, 9, 13], [0, 0, 0]], wide: [[34, 28, 46], [-3, 0, 8]], top: [[0, 42, 0.1], [0, 0, 0]],
+  water: [[26, 1.6, 10], [-4, 3, 8]], boardwalk: [[-2.5, 3.2, 3.2], [-9, 0.3, 10.5]], sunset: [[-20, 3.5, -16], [4, 3, 8]],
+  meadow: [[-6, 6, 22], [-12.7, 0, 13.1]], back: [[0, 6, -16], [0, 1, 0]],
+};
+const c = P[q.get('cam') || 'hero'] || P.hero;
+camera.position.set(...c[0]); camera.lookAt(...c[1]);
+const focus = new THREE.Vector3(0, 0, 2);
+const clock = new THREE.Clock(); let frames = 0; const t0 = parseFloat(q.get('t') || '0');
+function loop() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  world.update(dt, t0 + clock.elapsedTime, focus);
+  renderer.render(scene, camera); frames++;
+  if (frames === 3) {
+    const inf = renderer.info.render;
+    document.getElementById('i').textContent = `tris ${inf.triangles} calls ${inf.calls}`;
+    let st=0; scene.traverse(o=>{ if(o.isMesh||o.isPoints){ const g=o.geometry; const n=g.index?g.index.count/3:g.attributes.position.count/3; st+= o.isPoints?0:n*(o.isInstancedMesh?o.count:1); } });
+    window.__parts=[]; scene.traverse(o=>{ if(o.isMesh){const g=o.geometry; const n=g.index?g.index.count/3:g.attributes.position.count/3; window.__parts.push((o.isInstancedMesh?'I':'M')+' '+Math.round(n*(o.isInstancedMesh?o.count:1))+' '+(o.material.type));}}); window.__parts=window.__parts.join('\n');
+    window.__info = { sceneTris: Math.round(st), tris: inf.triangles, calls: inf.calls, walk: [world.isWalkable(0, 0), world.isWalkable(60, 60), world.isWalkable(-6.9, 8.0), world.isWalkable(-12.7, 13.1), world.isWalkable(-7.5, 3)], spawn: world.spawnPoints.length };
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+</script></body></html>

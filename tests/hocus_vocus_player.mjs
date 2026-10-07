@@ -1,4 +1,4 @@
-// A UI-driven autoplayer for the Inkwoven integration suite (tests/hocus_vocus_game.test.mjs). Not a suite itself.
+// A UI-driven autoplayer for the Hocus Vocus integration suite (tests/hocus_vocus_game.test.mjs). Not a suite itself.
 //
 //   import { boot } from './hocus_vocus_lib.mjs';
 //   import { makePlayer } from './hocus_vocus_player.mjs';
@@ -8,15 +8,15 @@
 //
 // It plays like a person: every action is a REAL pointer, drag or key event on the DOM the screens built (title plates, hero
 // cards, story Skip, map taps on the canvas, combat hand cards, enemy hit areas, pick overlays, reward cards, shop plaques, camp
-// tiles, forge, chest, gem cache, fable choices, pause menu). It never calls a screen's internals. The only things it reaches
-// around the UI for are the DOCUMENTED cheats of a test harness (cfg.cheat): topping up Ink so a chain can be painted, topping up
+// tiles, forge, chest, gem cache, Detour choices, pause menu). It never calls a screen's internals. The only things it reaches
+// around the UI for are the DOCUMENTED cheats of a test harness (cfg.cheat): topping up Vox so a chain can be painted, topping up
 // HP and gold so a long run is not lost by the greedy fight policy. With cheat false it plays on its own wits.
 //
 // API: makePlayer(g, cfg) -> { step(), until(pred, {steps}), log, stats, cfg, shown, last }
-//   cfg: heroes [idA, idB], trial, seed text, daily, cheat (default true), plan (node kinds to visit per chapter, in order),
-//        eventPick (index of the fable choice to take, -1 = last), dragPlays (play no-target cards by dragging), pickBy (a function
+//   cfg: heroes [idA, idB], trial, seed text, daily, cheat (default true), plan (node kinds to visit per Act, in order),
+//        eventPick (index of the Detour choice to take, -1 = last), dragPlays (play no-target cards by dragging), pickBy (a function
 //        (screen, options) -> index for reward cards), maxCombatTurns.
-//   With cheat on it also unlocks the requested heroes and the Ink Trial in the live profile (see the top of makePlayer).
+//   With cheat on it also unlocks the requested heroes and the Encore in the live profile (see the top of makePlayer).
 //   step() does ONE thing for the current screen or overlay and resolves to a short label. Everything is virtual time (g._tick).
 //   shown: Set of screen names and overlay names seen so far.  stats: counters (plays, drags, taps, ...).
 export function makePlayer(g, cfg = {}) {
@@ -28,8 +28,8 @@ export function makePlayer(g, cfg = {}) {
   const log = [];
   const state = { doneKinds: new Set(), chapter: 0, planIdx: 0, visited: {}, fightTurns: 0, lastKey: '', stuck: 0, brushTried: false, campDone: 0, shopBought: 0, evPick: C0.eventPick };
 
-  // The documented cheat for a fresh profile: heroes 3 and 4 and the higher Ink Trials are locked until achievements are earned, so a
-  // test that wants Suzu, Raiga or Trial 5 unlocks them in the live profile first (cfg.cheat only; locked CARDS stay locked).
+  // The documented cheat for a fresh profile: heroes 3 and 4 and the higher Encores are locked until achievements are earned, so a
+  // test that wants RawClaw, Andy or Trial 5 unlocks them in the live profile first (cfg.cheat only; locked CARDS stay locked).
   if (C0.cheat && META && META.profile) {
     try {
       const P = META.profile;
@@ -197,7 +197,7 @@ export function makePlayer(g, cfg = {}) {
       let pv = RUN.paintPreview(r, target.q, target.r);
       if (!pv || !pv.ok) return note('map unreachable ' + tgtKind);
       if (C0.cheat && r.ink < Math.min(pv.cost, r.inkMax || 14)) r.ink = Math.min(r.inkMax || 14, pv.cost + 2);
-      // a chain longer than the Ink pot is painted in stages: aim at the farthest hex of the path we can pay for
+      // a chain longer than the Vox pot is painted in stages: aim at the farthest hex of the path we can pay for
       if (r.ink < pv.cost) {
         const path = pv.path || [];
         let best = null;

@@ -15,7 +15,8 @@
 //              are exactly one IIFE; inline scripts are one IIFE; no import/export; no var or function leaking out of a block
 //   layers     a file may only reference namespaces loaded before it (plus GAME.nodeDone/toTitle/enterNode from screens);
 //              logic files never touch the DOM, timers or the presentation namespaces; audio.js never references META
-//   apis       no eval or Function, no network, no alert/confirm/prompt, no document.write, no console but error and warn,
+//   apis       no eval or Function, no network (the one fetch( of the owners' sample loader, in audio.js behind its pragma, is the only
+//              exception), no alert/confirm/prompt, no document.write, no console but error and warn,
 //              no debugger, only window.location (never a bare location), ES2020 syntax only, storage keys start with hv_,
 //              pointer events only (no mouse or touch event names), requestAnimationFrame only in main.js
 //   time       Date.now, new Date() and Date() only in main.js; performance.now only in presentation files
@@ -268,6 +269,22 @@ t.test('no network, workers, modules or dynamic import', () => {
   for (const p of pages) for (const s of htmlAssets(read(p)).inline) { const c = stripJs(s.code); if (/\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(c)) bad.push(`${rel(p)}: inline script uses the network`); }
   t.eq(bad.length, 0, fail(bad, 'network'));
 });
+// P8 (HV_ART_AUDIO 11.7 S7): the one allowed exception to "no network" is the owners' sample loader. It lives in audio.js, behind its pragma, and is
+// the game's only fetch( at all. A fixture game (the lib suite's) has no manifest and so may have no loader; the real game's manifest implies one.
+t.test('network: the only fetch( in the game code is the sample loader in audio.js, behind its hygiene-allow(network) pragma', () => {
+  const bad = [], inAudio = [];
+  for (const f of jsFiles) {
+    for (const m of info(f).code.matchAll(/(?<![\w$])fetch\s*\(/g)) {
+      if (base(f) !== 'audio.js') { bad.push(`${at(f, m.index)}: fetch( outside audio.js (only the sample loader of DATA.SAMPLES may fetch; DESIGN section 2)`); continue; }
+      inAudio.push(m.index);
+      if (!allowed(f, m.index, 'network')) bad.push(`${at(f, m.index)}: the sample loader's fetch( needs "hygiene-allow(network): reason" on its line or the line above`);
+    }
+  }
+  const audio = jsFiles.find((f) => base(f) === 'audio.js');
+  if (audio && inAudio.length > 1) bad.push(`${rel(audio)} has ${inAudio.length} fetch( calls: the sample loader has exactly one`);
+  if (audio && exists(path.join(jsDir, 'data_samples.js')) && inAudio.length !== 1) bad.push(`${rel(audio)} has ${inAudio.length} fetch( calls but js/data_samples.js exists: the sample loader needs exactly one`);
+  t.eq(bad.length, 0, fail(bad, 'fetch( calls'));
+});
 t.test('no alert, confirm, prompt or debugger', () => {
   const bad = globalCalls(jsFiles, ['alert', 'confirm', 'prompt'], 'dialogs', 'browser dialog (use UI.modal and overlay confirm)');
   bad.push(...scan(jsFiles, 'code', /(?<![\w$.])debugger\b/g, 'debugger', 'debugger statement'));
@@ -450,7 +467,63 @@ t.test('closed lists are lists: non-empty, no duplicates, plain values', () => {
   }
   t.eq(bad.length, 0, fail(bad, 'lists'));
 });
-t.test('heroes, statuses, tiles, brushes and keywords agree with the closed lists', () => {
+// DATA.LINKS (HV_STORY 5.2 and 5.8, bible 7.2): the owners' links. The keys are fixed; a filled-in address is a plain https:// string, sits in the
+// source as one quoted literal on its own line, and that line (or the line above) carries hygiene-allow(network): why. A forgotten pragma also fails
+// the "no external URLs" rule above; this test names the cause and pins the shape. linksProblems is run on the real file and on fixtures below.
+const LINK_KEYS = ['handle', 'website', 'youtube', 'facebook', 'tiktok', 'instagram', 'support', 'game'];
+function linksProblems(srcLines, runtime) {
+  const bad = [];
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return ['DATA.LINKS is not an object'];
+  if (JSON.stringify(Object.keys(runtime)) !== JSON.stringify(LINK_KEYS)) bad.push('DATA.LINKS keys are ' + Object.keys(runtime).join(' ') + ', want ' + LINK_KEYS.join(' '));
+  if (!Object.isFrozen(runtime)) bad.push('DATA.LINKS is not frozen');
+  const start = srcLines.findIndex((l) => /\bLINKS\s*=\s*Object\.freeze\(\{/.test(l));
+  if (start < 0) return bad.concat('no "LINKS = Object.freeze({" block in the source');
+  const seen = [];
+  for (let i = start + 1; i < srcLines.length && !/^\s*\}\)/.test(srcLines[i]); i++) {
+    if (/^\s*\/\//.test(srcLines[i]) || !srcLines[i].trim()) continue;
+    const m = /^\s*([A-Za-z]+)\s*:\s*(['"])(.*?)\2\s*,?\s*(\/\/.*)?$/.exec(srcLines[i]);
+    if (!m) { bad.push(`source line ${i + 1}: "${srcLines[i].trim()}" is not a plain key: 'literal' line`); continue; }
+    seen.push(m[1]);
+    const v = m[3];
+    if (runtime[m[1]] !== v) bad.push(`LINKS.${m[1]}: the source literal and the runtime value differ`);
+    if (m[1] === 'handle') { if (!/^@[A-Za-z0-9_.]+$/.test(v)) bad.push(`LINKS.handle "${v}" is not an @handle`); continue; }
+    if (v === '') continue;
+    if (!/^https:\/\/[^\s'"]+$/.test(v)) bad.push(`LINKS.${m[1]} "${v}" must start with https://`);
+    if (!/hygiene-allow\(network\):\s*\S{4,}/.test(srcLines[i]) && !/hygiene-allow\(network\):\s*\S{4,}/.test(srcLines[i - 1] || '')) bad.push(`LINKS.${m[1]} is filled in but its line (or the line above) has no hygiene-allow(network): reason`);
+  }
+  if (JSON.stringify(seen) !== JSON.stringify(LINK_KEYS)) bad.push('the source block declares ' + seen.join(' ') + ', want ' + LINK_KEYS.join(' '));
+  return bad;
+}
+t.test('DATA.LINKS has exactly the documented keys; a filled-in URL starts https:// and carries hygiene-allow(network) on its line (HV_STORY 5.8)', () => {
+  if (noData) return;
+  const f = path.join(jsDir, 'data.js');
+  if (!exists(f)) return;
+  const bad = linksProblems(info(f).lines, DATA.LINKS);
+  t.eq(bad.length, 0, fail(bad, 'DATA.LINKS'));
+});
+t.test('the DATA.LINKS check itself: a filled-in URL passes with its pragma and fails without one, over http, or with a key missing, added or renamed', () => {
+  const frozen = (o) => Object.freeze(Object.assign({}, o));
+  const base = { handle: '@roxorloopsandjasmin', website: '', youtube: '', facebook: '', tiktok: '', instagram: '', support: '', game: '' };
+  const src = (o, pragma, pre) => ['  const LINKS = Object.freeze({'].concat(Object.keys(o).map((k) => `    ${k}: '${o[k]}',${pragma && o[k] && k !== 'handle' ? '  // hygiene-allow(network): owner link, opened only on a tap' : ''}`)).concat(['  });']);
+  t.deep(linksProblems(src(base, true), frozen(base)), [], 'the shipped shape passes');
+  const one = Object.assign({}, base, { youtube: 'https://example.org/yt' });
+  t.deep(linksProblems(src(one, true), frozen(one)), [], 'one URL with its pragma passes');
+  const above = src(one, false); above.splice(3, 0, '    // hygiene-allow(network): owner link, opened only on a tap');
+  t.deep(linksProblems(above, frozen(one)), [], 'the pragma on the line above passes');
+  t.ok(linksProblems(src(one, false), frozen(one)).some((e) => /no hygiene-allow\(network\)/.test(e)), 'a URL without its pragma fails');
+  const http = Object.assign({}, base, { website: 'http://example.org/' });
+  t.ok(linksProblems(src(http, true), frozen(http)).some((e) => /must start with https/.test(e)), 'http:// fails');
+  const bare = Object.assign({}, base, { website: 'example.org' });
+  t.ok(linksProblems(src(bare, true), frozen(bare)).some((e) => /must start with https/.test(e)), 'a bare host fails');
+  const missing = Object.assign({}, base); delete missing.game;
+  t.ok(linksProblems(src(missing, true), frozen(missing)).some((e) => /keys are/.test(e)), 'a missing key fails');
+  const extra = Object.assign({}, base, { twitter: '' });
+  t.ok(linksProblems(src(extra, true), frozen(extra)).some((e) => /keys are/.test(e)), 'an added key fails');
+  t.ok(linksProblems(src(base, true), Object.assign({}, base)).some((e) => /not frozen/.test(e)), 'an unfrozen config fails');
+  t.ok(linksProblems(src(one, true), frozen(base)).some((e) => /differ/.test(e)), 'a source literal that is not the runtime value fails');
+  t.ok(linksProblems(['  const LINKS = Object.freeze({', "    ...BASE,", '  });'], frozen(base)).length > 0, 'a computed entry fails');
+});
+t.test('heroes, statuses, tiles, Spells and keywords agree with the closed lists', () => {
   if (noData) return;
   const bad = [];
   const has = (list, x, what) => { if (L[list].indexOf(x) < 0) bad.push(`${what} "${x}" is not in LISTS.${list}`); };
@@ -520,7 +593,7 @@ t.test('the fixed roster and fixed ids are consistent and content matches them',
   for (const h of L.heroIds) if (F.lore.indexOf('hero_' + h) < 0 || F.lore.indexOf('barks_' + h) < 0) bad.push(`FIXED.lore lacks hero_${h} or barks_${h}`);
   t.eq(bad.length, 0, fail(bad, 'roster and fixed ids'));
 });
-t.test('every populated registry validates, per hero and per chapter', () => {
+t.test('every populated registry validates, per hero and per Act', () => {
   if (noData) return;
   const bad = [];
   const run = (label, kind, opt) => { const v = DATA.validate(kind, opt); v.errors.forEach((e) => bad.push(`${label}: ${e}`)); };

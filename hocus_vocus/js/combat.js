@@ -1,4 +1,4 @@
-// Echowake: combat rules engine. Pure logic: no DOM, no clock, no Math.random. Deterministic for a given seed.
+// Hocus Vocus: combat rules engine. Pure logic: no DOM, no clock, no banned random call. Deterministic for a given seed.
 //
 // COMBAT.create(opts) -> C. Everything the UI and the tests need is on C. The contract is DESIGN.md 4.1 to 4.7 and 5.2; this
 // header records every public function and the few places where the design left a choice open.
@@ -43,7 +43,7 @@
 //   C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
 //        Downed heroes are reported as down with hp 0: RUN revives them at mods.reviveFrac (COMBAT never does, except through a revive op).
 //        heroes[].maxHp already includes maxHpGain. gold is the NET change of run gold: gold ops, minus gold stolen, plus stolen gold returned by
-//        killing the thief (a fled thief keeps it). ink is the sum of ink ops. Hero Block and statuses are cleared when the combat ends.
+//        killing the thief (a fled thief keeps it). `ink` (Vox) is the sum of the `ink` ops. Hero Block and statuses are cleared when the combat ends.
 //
 // CHOICES THE DESIGN LEFT OPEN (each is covered by a test)
 //   * A win found in the middle of a card (the last enemy died) ends when the card has finished, so `cond lastKill` bonuses still pay out; a loss ends at once.

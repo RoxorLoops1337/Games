@@ -965,7 +965,7 @@ KS.hurtEnemy(che, 300, true);
 const critFloat = KS.S.floats[KS.S.floats.length - 1];
 t.ok(critFloat && critFloat.crit === true, 'a critical hit is flagged on its damage float');
 t.ok(critFloat.big === true && critFloat.color === '#ff8a3c', 'crit combat text is bigger and orange');
-t.ok(KS.S.parts.length === partsBefore, 'hurtEnemy itself adds no crit sparks (those come from the arrow hit, deterministically)');
+t.ok(KS.S.parts.length - partsBefore <= 4, 'hurtEnemy adds at most a few hit sparks (drawn from the isolated visual RNG stream)');
 KS.draw(); // crit float + pop renders without throwing
 KS.S.enemies.length = 0; KS.S.floats.length = 0; KS.S.parts.length = 0;
 
@@ -1673,5 +1673,41 @@ t.ok(KS.gemUpCost('crit', 2) > KS.gemUpCost('crit', 0), 'gem costs grow');
 KS.start();
 for (let i = 0; i < 60 * 30; i++) { KS.tick(1 / 60); if (i % 20 === 0) KS.draw(); }
 t.ok(true, '30s mixed simulation with draws did not throw');
+
+// ---- Hocus Vocus retheme: names, art mapping, baked atlas integrity ----
+{
+  t.ok(KS.FOE_ACT_NAMES.length === 3 && KS.FOE_ACT_NAMES.every(a => a.length === KS.FOE_NAMES.length), 'three acts of eight creatures');
+  t.ok(KS.foeName(1) === 'Fussy Foghorn' && KS.foeName(9) === 'Flamebait' && KS.foeName(17) === 'Tuner Drone', 'foe names follow the Soundlands acts');
+  t.ok(KS.foeName(25) === 'Fussy Foghorn II', 'after three acts the names cycle with a numeral');
+  t.ok(KS.SKINS.every(s => KS.HERO_ART[s.id]), 'every outfit maps to a baked chibi');
+  t.ok(KS.foeArt(1) !== KS.foeArt(9) && KS.foeArt(1, true) !== KS.foeArt(9, true), 'acts use different creature art and bosses');
+  t.ok(KS.artDraw('jasmin', 'idle', 0, 0, 0, 1, false) === false, 'artDraw is a no-op until the atlas has loaded');
+  const here = dirname(fileURLToPath(import.meta.url)), artDir = join(here, '..', 'kingshot_endless', 'art');
+  const atlas = JSON.parse(readFileSync(join(artDir, 'atlas.json'), 'utf8'));
+  const names = [].concat(Object.values(KS.HERO_ART), KS.INHAB_ART, KS.BOSS_ART, ['jordan'], ...KS.FOE_ART);
+  t.ok(names.every(n => atlas.spr[n]), 'every sprite the game asks for is in the atlas');
+  t.ok(Object.values(atlas.spr).every(s => { const sh = atlas.sheets[s.sheet]; return sh && s.x >= 0 && s.y >= 0 && s.x + s.w * s.n <= sh.w && s.y + s.h <= sh.h; }), 'atlas frames sit inside their sheets');
+  t.ok(Object.keys(atlas.sheets).every(n => readFileSync(join(artDir, n + '.webp')).length > 1000), 'every atlas sheet exists on disk');
+  t.ok(KS.HERO_ART.royal && atlas.spr[KS.HERO_ART.royal].anims.walk && atlas.spr[KS.HERO_ART.royal].anims.attack, 'heroes have walk and attack flipbooks');
+  KS.reset && KS.reset();
+  KS.S.started = false; KS.drawTitle(); KS.draw();
+  t.ok(true, 'title card draws headless');
+  KS.S.started = true;
+  KS.S.showStats = true; KS.S.statsTab = 1; KS.draw(); KS.S.statsTab = 0; KS.draw(); KS.S.showStats = false;
+  t.ok(true, 'records + milestones pages draw headless');
+}
+
+// ---- UI polish: every menu draws headless, with the shared header + close button ----
+{
+  KS.S.started = true; KS.S.t = 60;
+  const flags = Object.keys(KS.S).filter(k => /^show[A-Z]/.test(k) && typeof KS.S[k] === 'boolean');
+  t.ok(flags.length >= 10, 'found the menu flags (' + flags.length + ')');
+  let ok = true;
+  for (const f of flags) { for (const k of flags) KS.S[k] = false; KS.S[f] = true; try { KS.draw(); } catch (e) { ok = false; console.log('menu draw failed', f, e.message); } }
+  for (const k of flags) KS.S[k] = false;
+  t.ok(ok, 'all menus draw without throwing');
+  KS.S.cards = [{ id: 'swift', ic: '👟', name: 'Test', d: 'a card' }]; KS.draw(); KS.S.cards = null;
+  t.ok(true, 'level-up cards draw headless');
+}
 
 t.done();

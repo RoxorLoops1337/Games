@@ -47,6 +47,8 @@ const STATIC_PATHS = [
   'chase_hq',
   'messenger',
   'kingshot_endless',
+  'encore_island',
+  'encore_island_3d',
   'headliner',
   'horde_runner',
   'spijker_master',
@@ -78,6 +80,7 @@ const STATIC_PATHS = [
   'claw_crawl',
   'rogue_book',
   'hocus_vocus',
+  'beatbox_heroes',
   'pixel_colony',
   'tools',
 ];
@@ -87,6 +90,10 @@ const BUNDLES = [
   {
     entryPoints: [path.join('beatbox_story', 'main.jsx')],
     outfile: path.join(DIST, 'beatbox_story', 'beatbox-story.bundle.js'),
+  },
+  {
+    entryPoints: [path.join('beatbox_heroes', 'park3d', 'main.js')],
+    outfile: path.join(DIST, 'beatbox_heroes', 'park3d.bundle.js'),
   },
   {
     entryPoints: [path.join('verb_collector', 'main.tsx')],
@@ -287,6 +294,8 @@ const minifyClawspire = () => {
     };
     stamp(distIndexPath);
     stamp(sourceIndexPath);
+    // the Park3D bundle is also loaded by standalone pages (park, flat, mini games): pin their hash too, or phones keep a stale bundle
+    if (bundleBaseName === 'park3d.bundle.js') for (const page of ['park3d.html', 'flat3d.html', 'minigames3d.html']) { stamp(path.join(distGameDir, page)); stamp(path.join(REPO, sourceGameDir, page)); }
     console.log(`hash-stamped    → ${bundleBaseName}?v=${hash}`);
   }
 })().catch((err) => {

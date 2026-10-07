@@ -138,8 +138,8 @@ The generator words of bible 4.9 and HV_HEROES 4.2, plus the defaults of HV_PHAS
 |---|---|---|---|---|
 | 378 | `Gained X Echo.` | `Gained X Vox.` | bible 4.9 | P1 |
 | 378 | `Lost X Echo.` | `Lost X Vox.` | bible 4.9 | P1 |
-| 437 | `No treasure to find.` | `No charm to find.` | new (bible 4.1 Charm) | P1 |
-| 452 | `No treasure to find.` | `No charm to find.` | new (bible 4.1 Charm) | P1 |
+| 437 | `No treasure to find.` | `No Charm to find.` | new (bible 4.1 Charm) | P1 |
+| 452 | `No treasure to find.` | `No Charm to find.` | new (bible 4.1 Charm) | P1 |
 | 472 | `Found the X.` | `Learned X.` | new (bible 4.1: you learn a Spell; Spell names take no article) | P1 |
 | 472 | `No Song to find.` | `No Spell to find.` | bible 4.9 | P1 |
 | 500 | `The land wakes (X).` | `The sound comes back (X).` | bible 4.9 | P1 |
@@ -189,7 +189,7 @@ The generator words of bible 4.9 and HV_HEROES 4.2, plus the defaults of HV_PHAS
 | 1708 | `Earned every journey. Spend them in the Hall of Echoes to unlock new content.` | `Earned after every tour. Spend them on the Tour Bus.` | bible 5.5 | P2 |
 | 1886 | `Colorblind aids` | `Colour-blind aids` (both the label and the aria label) | bible 6.1 H10, HV_WORLD_DATA 11 | P2 |
 | 1894 | `Short tips during your first journey` | `Short tips during your first tour` | HV_WORLD_DATA 11 | P2 |
-| 2002 | `No treasures yet. Elites, chests and shops hold them.` | `No charms yet. Rivals, gift boxes and merch stalls hold them.` | bible 5.6 | P2 |
+| 2002 | `No treasures yet. Elites, chests and shops hold them.` | `No Charms yet. Rivals, gift boxes and merch stalls hold them.` | bible 5.6 | P2 |
 | 2003 | `Treasures` | `Charms` | bible 5.3 | P2 |
 
 ### 2.5 `js/main.js` (P2 2F)
@@ -304,7 +304,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1039 | `Song` | `Spell` (chip tip kind) | bible 4.1 | P2 |
 | 1039 | `Sung once, then it fades.` | `Cast once, then it is gone.` | new | P2 |
 | 1042 | `No Songs. Songbirds and champions teach them.` | `No Spells. Buskers and rivals teach them.` | bible 5.6 | P2 |
-| 1066 | ` more treasures` | ` more charms` | bible 4.1 | P2 |
+| 1066 | ` more treasures` | ` more Charms` | bible 4.1 | P2 |
 | 1067 | `Treasures: none yet` | `Charms: none yet` | bible 4.1 | P2 |
 | 1067 | `Treasures` | `Charms` | bible 4.1 | P2 |
 | 1089 | `Verse ` | `Act ` (banner `.mp-ch`, roman: "Act I") | bible 5.6 | P2 |
@@ -319,7 +319,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1190 | `Teaches the ` | `Teaches ` | new (Spell names take no article) | P2 |
 | 1191 | `Rings back ` | `A warm tea worth ` | new (bible 4.4 Tea Stall) | P2 |
 | 1191 | ` Echo.` | ` Vox.` | bible 4.1 | P2 |
-| 1192 | `Holds a treasure and gold.` | `Holds a charm and gold.` | bible 4.1 | P2 |
+| 1192 | `Holds a treasure and gold.` | `Holds a Charm and gold.` | bible 4.1 | P2 |
 | 1215 | `No awake path leads there.` | `No live path leads there.` | bible 4.1 | P2 |
 | 1221 | `, heard` | `, spotted` (both branches; see budgets) | bible 4.1 | P2 |
 | 1222 | `Silent ground` | `Muted ground` | bible 5.6 | P2 |
@@ -327,7 +327,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1224 | `Tap to wake: ` | `Tap to unmute: ` | bible 4.1 | P2 |
 | 1224 | `Not enough Echo to wake: ` | `Not enough Vox to unmute: ` | bible 4.1 | P2 |
 | 1224 | ` Echo.` | ` Vox.` | bible 4.1 | P2 |
-| 1228 | `Tap twice to wake a chain of ` | `Tap twice to unmute a chain of ` | bible 4.1 | P2 |
+| 1228 | `Tap twice to wake a chain of ` | `Tap twice to unmute a chain of ` (the normal size now ends `... of 12 hexes for 12 Vox.`, not `costs 12`; the short phone and Larger form keeps `costs`) | bible 4.1 | P2 |
 | 1228 | `Too far for your Echo: a chain of ` | `Too far for your Vox: a chain of ` | bible 4.1 | P2 |
 | 1250 | `Wake fog beside the land for ` | `Unmute nearby fog for ` (with the next row: "Unmute nearby fog for 1 Vox, or tap live ground to walk.", 56 characters, was 65) | new | P2 |
 | 1250 | ` Echo, or tap awake ground to walk.` | ` Vox, or tap live ground to walk.` | bible 4.1 | P2 |
@@ -408,8 +408,8 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 2147 | `Found in Verse ` | `Found in Act ` | bible 4.1 | P2 |
 | 2147 | `Carried since the journey began.` | `Carried since the tour began.` | bible 4.1 | P2 |
 | 2166 | `Keeper` | `Headliner` (rarity tag; `cap(d.rarity)` must map `shop` to `Merch`) | HV_WORLD_DATA 14.1 | P2 |
-| 2173 | `No treasures yet. Champions, chests and peddlers hold them.` | `No charms yet. Rivals, gift boxes and merch stalls hold them.` | bible 5.6 | P2 |
-| 2177 | `treasure` | `charm` (the `U.plural` noun of the summary: "5 charms: ...") | bible 4.1 | P2 |
+| 2173 | `No treasures yet. Champions, chests and peddlers hold them.` | `No Charms yet. Rivals, gift boxes and merch stalls hold them.` | bible 5.6 | P2 |
+| 2177 | `treasure` | `Charm` (the `U.plural` noun of the summary: "5 Charms: ...") | bible 4.1 | P2 |
 | 2177 | `counts[r] + ' ' + r` | `counts[r] + ' ' + RARITY_NAME[r].toLowerCase()` ("2 common, 1 headliner, 1 merch"; the rarity ids `boss` and `shop` were printed) | HV_WORLD_DATA 14.1 | P2 |
 | 2180 | `Treasures` | `Charms` | bible 4.1 | P2 |
 | 2248 | `slide the land, with a little glide` | `slide the map, with a little glide` | new | P2 |
@@ -491,7 +491,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 869 | `A new Daily Jam has begun` | `A new Daily Duet has begun` | bible 5.1 | P2 |
 | 911 | `FRONT` | `LEAD` (hero card badge) | bible 5.2 | P2 |
 | 911 | `BACK` | `BACKING` | bible 5.2 | P2 |
-| 926 | `: prefers ` | `: prefers the lead` (or `: prefers backing`: the spot word, never the id `front` or `back`) | new | P2 |
+| 926 | `: prefers ` | the slot caption has no name now (it wrapped in its 150 px slot): `Prefers lead` / `Prefers backing`, or `In his element` / `In her element`; the slot carries `aria-label` `Lead: Jasmin. Prefers backing.` (never the id `front` or `back`) | new | P2 |
 | 933 | `Trial 0` | `No encore` | bible 5.2 | P2 |
 | 933 | `Trial ` | `Encore ` ("Encore V: Harsh Critics") | bible 5.2 | P2 |
 | 936 | `The Daily Jam is always Trial 0.` | `The Daily Duet never has an encore.` | bible 5.2 | P2 |
@@ -512,8 +512,8 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1150 | `Nothing in the Hall matches those filters.` | `Nothing on the bus matches those filters.` | HV_WORLD_DATA 10.2 | P2 |
 | 1154 | `Treasures` | `Charms` | HV_WORLD_DATA 10.2 | P2 |
 | 1177 | `Keeper` | `Headliner` (through `RARITY_NAME`: Common, Uncommon, Rare, Headliner, Merch) | HV_WORLD_DATA 10.2 | P2 |
-| 1177 | ` treasure` | ` charm` | HV_WORLD_DATA 10.2 | P2 |
-| 1177 | ` of ` | ` for ` ("Rare charm for Jasmin") | HV_WORLD_DATA 10.2 | P2 |
+| 1177 | ` treasure` | ` Charm` | HV_WORLD_DATA 10.2 | P2 |
+| 1177 | ` of ` | ` for ` ("Rare Charm for Jasmin") | HV_WORLD_DATA 10.2 | P2 |
 | 1181 | ` gem` | ` gem` (the colour word through `DATA.COLOUR_NAME`: "Tier 2 pink gem") | HV_WORLD_DATA 10.2 | P2 |
 | 1197 | ` more Chimes` | ` more Cheers` | HV_WORLD_DATA 10.2 | P2 |
 | 1199 | ` Chimes. You can afford it.` | ` Cheers. You can afford it.` | HV_WORLD_DATA 10.2 | P2 |
@@ -568,7 +568,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1736 | `wake, then walk` | `unmute, then walk` | new (diagram label) | P2 |
 | 1769 | `FRONT` | `LEAD` (diagram) | bible 5.2 | P2 |
 | 1769 | `BACK` | `BACKING` | bible 5.2 | P2 |
-| 1773 | ` prefers ` | ` prefers the lead` (or ` prefers backing`; the diagram printed the id) | new | P2 |
+| 1773 | ` prefers ` | ` prefers the lead spot` (or ` prefers the backing spot`; the diagram printed the id) | new | P2 |
 | 1831 | `Energy` | `Breath` (diagram) | bible 4.10 | P2 |
 | 1864 | `Heavy` | `Big hit` (intent legend) | bible 4.10 | P2 |
 | 1864 | `Defend` | `Guard` | bible 4.10 | P2 |
@@ -587,7 +587,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1936 | `Two heroes, three verses, one silence to break.` | `Two heroes, three acts, one Gloss to sing through.` | HV_WORLD_DATA 12 | P2 |
 | 1937 | `You lead two heroes across a grey, still land. A yokai called the Hush has eaten every sound.` | `You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.` | HV_WORLD_DATA 12 | P2 |
 | 1938 | `Cross three verses. Each ends with a boss, and the last one guards the Hush itself.` | `Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.` | HV_WORLD_DATA 12 | P2 |
-| 1939 | `Every journey is a new one: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.` | `Every tour is a new one: a different map, different cards, different charms. Win or lose, you earn Cheers to unlock more.` | HV_WORLD_DATA 12 | P2 |
+| 1939 | `Every journey is a new one: a different map, different cards, different treasures. Win or lose, you earn Chimes to unlock more.` | `Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.` | HV_WORLD_DATA 12 | P2 |
 | 1940 | /^Waking a hex costs Echo/ | `/^Unmuting a hex costs Vox/` (HOWTO `map` tip regex) | HV_STORY 4 | P2 |
 | 1940 | `Wake the Land` | `Unmute the Soundlands` | HV_WORLD_DATA 12 | P2 |
 | 1940 | `The land is silent. Your Echo wakes it.` | `The Soundlands are on mute. Your Vox turns them back on.` | HV_WORLD_DATA 12 | P2 |
@@ -612,12 +612,12 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1959 | `Cut gems at camps, forges and shops. Replacing a gem destroys the old one, so choose well.` | `Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.` | HV_WORLD_DATA 12 | P2 |
 | 1960 | /A fable is a choice/ | `/A detour is a choice/` (HOWTO `places` tip regex) | HV_STORY 4 | P2 |
 | 1960 | `Camps, Shops and Fables` | `Green Rooms, Stalls and Detours` | HV_WORLD_DATA 12 | P2 |
-| 1961 | `Camps let you rest, sharpen a card, cut gems or meditate for Echo. Peddlers sell cards, gems, treasures and card removal.` | `Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems and charms, and declutter your deck.` | HV_WORLD_DATA 12 | P2 |
+| 1961 | `Camps let you rest, sharpen a card, cut gems or meditate for Echo. Peddlers sell cards, gems, treasures and card removal.` | `Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.` | HV_WORLD_DATA 12 | P2 |
 | 1962 | `Fables are choices with a safe way, a gamble and often a price. Treasures bend the rules for the whole journey.` | `Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.` | HV_WORLD_DATA 12 | P2 |
-| 1963 | `Champions guard treasure, the forge upgrades a card, and a gem cache lets you pick one gem.` | `Rivals guard charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.` | HV_WORLD_DATA 12 | P2 |
+| 1963 | `Champions guard treasure, the forge upgrades a card, and a gem cache lets you pick one gem.` | `Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.` | HV_WORLD_DATA 12 | P2 |
 | 1964 | `After the Journey` | `After the Tour` | HV_WORLD_DATA 12 | P2 |
 | 1964 | `Every journey leaves something behind.` | `Every tour leaves something behind.` | HV_WORLD_DATA 12 | P2 |
-| 1965 | `You earn Chimes after every journey. Spend them in the Hall of Echoes on new cards, treasures and gems.` | `You earn Cheers after every tour. Spend them on the Tour Bus on new cards, charms and gems.` | HV_WORLD_DATA 12 | P2 |
+| 1965 | `You earn Chimes after every journey. Spend them in the Hall of Echoes on new cards, treasures and gems.` | `You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.` | HV_WORLD_DATA 12 | P2 |
 | 1966 | `Win a journey to open Tempo Trials, stackable challenges. The Daily Jam is the same seed for everyone.` | `Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.` | HV_WORLD_DATA 12 | P2 |
 | 2007 | `Liner note` | `Jordan's tip` | bible 5.1 | P2 |
 | 2089 | `No journey is underway.` | `No tour is on the road.` | bible 5.3 | P2 |
@@ -626,9 +626,9 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 2095 | `Tempo Trial ` | `Encore ` | bible 4.1 | P2 |
 | 2095 | `Daily Jam` | `Daily Duet` | bible 4.1 | P2 |
 | 2098 | `Treasures` | `Charms` | bible 5.3 | P2 |
-| 2098 | `No treasures yet` | `No charms yet` | bible 5.3 | P2 |
+| 2098 | `No treasures yet` | `No Charms yet` | bible 5.3 | P2 |
 | 2107 | `Treasures` | `Charms` | bible 5.3 | P2 |
-| 2107 | ` treasures` | ` charms` | bible 5.3 | P2 |
+| 2107 | ` treasures` | ` Charms` | bible 5.3 | P2 |
 | 2115 | `Abandon journey` | `Abandon tour` | bible 5.3 | P2 |
 | 2127 | `A note from the road` | `A tip from Jordan` | bible 5.3 | P2 |
 | 2144 | `Your journey is saved. See you at the next beat.` | `Your tour is saved. See you at the next beat.` | bible 4.1 | P2 |
@@ -670,16 +670,16 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 856 | `A silence breaks, and stays broken.` | `The mute is off, and it stays off.` | new | P2 |
 | 857 | `A fable ends the way fables do: with a bill.` | `A detour ends the way detours do: with a souvenir.` | new (no admin words, bible 6.1 H4) | P2 |
 | 857 | `The journey goes on, a little richer.` | `The tour goes on, a little richer.` | bible 4.1 | P2 |
-| 867 | `Keeper treasure` | `Headliner charm` | HV_WORLD_DATA 14.1 | P2 |
-| 867 | ` treasure` | ` charm` (through `RARITY_NAME`: "Merch charm" for `shop`) | HV_WORLD_DATA 14.1 | P2 |
+| 867 | `Keeper treasure` | `Headliner Charm` | HV_WORLD_DATA 14.1 | P2 |
+| 867 | ` treasure` | ` Charm` (through `RARITY_NAME`: "Merch Charm" for `shop`) | HV_WORLD_DATA 14.1 | P2 |
 | 961 | ` Falls` | ` Bows Out` ("Kraki Bows Out") | new (bible 1.3 rule 3) | P2 |
 | 976 | `Echo` | `Vox` (read `DATA.keywords.ink.name`) | bible 4.1 | P2 |
 | 981 | `Song` | `Spell` (both: the fallback name and the kind label) | bible 4.1 | P2 |
 | 991 | `The foe left nothing but an echo.` | `The foe left nothing but a squeak.` | bible 4.10 | P2 |
-| 1160 | `A treasure guarded here` | `A charm, waiting here` | bible 5.6 | P2 |
+| 1160 | `A treasure guarded here` | `A Charm, waiting here` | bible 5.6 | P2 |
 | 1171 | `Treasure choices` | `Charm choices` | bible 4.1 | P2 |
-| 1182 | `Choose one treasure. The others fade with the verse.` | `Choose one charm. The others fade with the act.` | bible 4.1 | P2 |
-| 1204 | `Take the treasure, or leave it.` | `Take the charm, or leave it.` | bible 5.6 | P2 |
+| 1182 | `Choose one treasure. The others fade with the verse.` | `Choose one Charm. The others fade with the act.` | bible 4.1 | P2 |
+| 1204 | `Take the treasure, or leave it.` | `Take the Charm, or leave it.` | bible 5.6 | P2 |
 | 1222 | `Welcome, welcome! Mind the lanterns, they bite.` | `Fresh merch! I made a sticker of your face. It is very flattering.` (`PEDDLER.hello`; the pool becomes Jordan's) | bible 3.5 | P2 |
 | 1222 | `Ah, travellers from the quiet roads! Wares for the weary.` | `Tote bag? It has a picture of a tote bag on it.` | bible 3.5 | P2 |
 | 1222 | `Everything here fell off something else. Good as new!` | `Everything here is one of a kind. I made two.` | bible 3.5 | P2 |
@@ -699,13 +699,13 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1228 | `You have cleaned me out! Take a bow. I will take a nap.` | `You have cleaned me out! Time to draw more merch.` | new (Jordan) | P2 |
 | 1229 | `Come again! I will be here. Probably. The Hush is closing in.` | `Come again! I will have new designs by then.` (`PEDDLER.leave`; the third line stays) | new (Jordan) | P2 |
 | 1229 | `Safe roads, traveller. Mind the silence.` | `Safe travels! Wear the merch with pride.` | new (Jordan) | P2 |
-| 1230 | `A relic is forever. A card is a mood.` | `A charm is forever. A card is a mood.` (`PEDDLER.idle`; the other four idle lines stay) | bible 4.1 | P2 |
+| 1230 | `A relic is forever. A card is a mood.` | `A Charm is forever. A card is a mood.` (`PEDDLER.idle`; the other four idle lines stay) | bible 4.1 | P2 |
 | 1230 | `Do you hear that? That is the sound of discounts.` | `Do you hear that? That is the sound of new merch.` | new (Jordan) | P2 |
 | 1263 | `The Peddler` | `Jordan's Merch Stall` | bible 5.6 | P2 |
-| 1288 | `Gems, treasures and services` | `Gems, charms and services` | bible 4.1 | P2 |
+| 1288 | `Gems, treasures and services` | `Gems, Charms and services` | bible 4.1 | P2 |
 | 1348 | `Tier ` | `Tier ` (the gem plaque: `cap(g.color)` becomes the `DATA.COLOUR_NAME` word plus ` gem`: "Tier 2 pink gem") | HV_WORLD_DATA 10.2 | P2 |
-| 1349 | `Rare find` | `Merch charm` (rarity `shop`) | HV_WORLD_DATA 14.1 | P2 |
-| 1349 | `Keeper treasure` | `Headliner charm` | HV_WORLD_DATA 14.1 | P2 |
+| 1349 | `Rare find` | `Merch Charm` (rarity `shop`) | HV_WORLD_DATA 14.1 | P2 |
+| 1349 | `Keeper treasure` | `Headliner Charm` | HV_WORLD_DATA 14.1 | P2 |
 | 1349 | `Keeper` | `Headliner` (tip bubble; `cap(d.rarity)` through `RARITY_NAME`) | HV_WORLD_DATA 14.1 | P2 |
 | 1350 | `Song` | `Spell` | bible 4.1 | P2 |
 | 1354 | `Card removal, ` | `Declutter, ` (aria label) | bible 4.1 | P2 |
@@ -717,7 +717,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1359 | `Cut gems` | `Set gems` | bible 5.6 | P2 |
 | 1369 | `The stall is bare. Nothing to sell today.` | `The stall is bare. Jordan is restocking.` | bible 5.6 | P2 |
 | 1383 | `Card removal, ` | `Declutter, ` | bible 4.1 | P2 |
-| 1418 | `You already own that treasure.` | `You already own that charm.` | bible 4.1 | P2 |
+| 1418 | `You already own that treasure.` | `You already own that Charm.` | bible 4.1 | P2 |
 | 1419 | `The peddler shakes his head.` | `Jordan shakes his head.` | bible 3.5 | P2 |
 | 1448 | `The peddler burns it for good. The price goes up by ` | `Jordan takes it off your hands for good. The price goes up by ` | HV_PHASES P2 2D (suggested) | P2 |
 | 1471 | `Cut Gems (free)` | `Set Gems (free)` | bible 5.6 | P2 |
@@ -797,7 +797,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 2112 | `Open the chest` | `Open the gift` | bible 5.6 | P2 |
 | 2144 | `The chest will not give that up.` | `The gift box will not give that up.` | bible 4.1 | P2 |
 | 2158 | `The chest is empty.` | `The gift box is empty.` | bible 4.1 | P2 |
-| 2178 | `Take the treasure` | `Take the charm` | bible 5.6 | P2 |
+| 2178 | `Take the treasure` | `Take the Charm` | bible 5.6 | P2 |
 | 2185 | `Tier ` | `Tier ` (the same colour word: "Tier 1 blue gem") | HV_WORLD_DATA 10.2 | P2 |
 | 2204 | `The chest is empty. Whatever it held is yours now.` | `The gift box is empty. Whatever it held is yours now.` | bible 4.1 | P2 |
 | 2206 | `An empty chest.` | `An empty gift box.` | bible 4.1 | P2 |
@@ -825,7 +825,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 337 | `Thorns ` | `DATA.statuses.thorns.name + ' '` (Feedback) | hard-coded DATA name | P2 |
 | 338 | `Regen ` | `DATA.statuses.regen.name + ' '` (Warm Tea) | hard-coded DATA name | P2 |
 | 363 | ` is stunned and loses its action.` | ` is starstruck and loses its action.` | bible 4.3 | P2 |
-| 367 | `, a killing blow` | `, a finishing blow` | new (bible 1.3 rule 3) | P2 |
+| 367 | `, a killing blow` | `, and that wins it over` (the screen-reader log; also `<name> dodges.` becomes `<name> shimmies out of it.`) | new (bible 1.3 rule 3) | P2 |
 | 372 | ` is down.` | ` is voiceless.` | bible 4.2 | P2 |
 | 373 | ` stands up with ` | ` finds their voice again with ` | new | P2 |
 | 375 | ` steps to the front, ` | ` takes the lead, ` | bible 4.1 | P2 |
@@ -865,7 +865,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1963 | `Exhausted` | `Faded` | HV_PHASES P1 1A | P2 |
 | 2018 | `Defeat. Both heroes have fallen.` | `Defeat. Both heroes have lost their voices.` | bible 1.3 | P2 |
 | 2123 | `Treasures` | `Charms` | bible 4.1 | P2 |
-| 2132 | ` more treasures` | ` more charms` | bible 4.1 | P2 |
+| 2132 | ` more treasures` | ` more Charms` | bible 4.1 | P2 |
 | 2183 | `Exhausted` | `Faded` | HV_PHASES P1 1A | P2 |
 | 2203 | `Keeper: ` | `Headliner: ` | bible 4.10 | P2 |
 | 2203 | `Champion: ` | `Rival: ` | bible 4.10 | P2 |
@@ -895,7 +895,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 466 | `Tap to listen on` | `Tap to continue` | HV_STORY 3.4 | P2 |
 | 514 | `Verses cleared` | `Acts cleared` | bible 4.1 | P2 |
 | 515 | `Bosses felled` | `Headliners won over` | new (bible 1.3) | P2 |
-| 516 | `Elites defeated` | `Rivals defeated` | bible 4.1 | P2 |
+| 516 | `Elites defeated` | `Rivals won over` (the same word as `Headliners won over`) | bible 4.1 | P2 |
 | 517 | `Gold in the purse` | `Gold in your pocket` | new | P2 |
 | 524 | `Cards sharpened` | `Cards rehearsed` | bible 4.1 | P2 |
 | 533 | `The land's mercy` | `Kind passers-by` | new (bible 4.9 mercy line) | P2 |
@@ -928,9 +928,9 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 782 | `Verse ` | `Act ` | bible 4.1 | P2 |
 | 844 | `The deck was not kept with this journey` | `The deck was not kept with this tour` | bible 4.1 | P2 |
 | 846 | `Treasures` | `Charms` | bible 5.4 | P2 |
-| 849 | `No treasures` | `No charms` | bible 5.4 | P2 |
+| 849 | `No treasures` | `No Charms` | bible 5.4 | P2 |
 | 850 | `Treasures ` | `Charms ` | bible 5.4 | P2 |
-| 850 | `No treasures were found on this journey` | `No charms were found on this tour` | bible 5.4 | P2 |
+| 850 | `No treasures were found on this journey` | `No Charms were found on this tour` | bible 5.4 | P2 |
 | 853 | `What You Carried` | `What Was in the Van` | bible 5.4 | P2 |
 | 880 | `THE SONG FADES` | `THE LIGHTS GO DOWN` | HV_STORY 3.4 | P2 |
 | 881 | `The Hush Returns` | `The Show Must Go On` | HV_STORY 3.4 | P2 |
@@ -956,7 +956,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 1032 | `DAILY JAM` | `DAILY DUET` | bible 4.1 | P2 |
 | 1032 | `TEMPO TRIAL` | `ENCORE` | bible 4.1 | P2 |
 | 1035 | `TREASURES` | `CHARMS` | bible 4.1 | P2 |
-| 1051 | `END` | `BRAVO` (share card seal on a win; `FIN` on a loss stays) | HV_STORY 3.4 | P2 |
+| 1051 | `END` | `BRAVO` (share card seal on a win; the game-over ledger seal `FIN` becomes `PAUSE`, HV_STORY 3.4) | HV_STORY 3.4 | P2 |
 | 1100 | `The Hush Lets Go` | `Human` | bible 5.4 | P2 |
 | 1101 | `The last note rings out, and is left to echo on purpose. The land begins to sing on its own.` | `The whole crowd sings the last line together, and the stage is left open for whoever wants to sing next.` | bible 2.5 | P2 |
 | 1105 | `OUTRO` | `FINALE` | HV_STORY 3.4 | P2 |
@@ -1002,7 +1002,7 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 76 | `A campfire` | `A green room` | bible 5.6 | P2 |
 | 77 | `Rest to heal, Sharpen a card, Cut gems, or Meditate for Echo and a Song. You only get so many, so pick what the journey needs.` | `Rest to heal, Rehearse a card, Set gems, or Warm Up for Vox and a Spell. You only get so many, so pick what the tour needs.` | new | P2 |
 | 78 | `The peddler` | `Jordan's merch stall` | bible 5.6 | P2 |
-| 79 | `Cards, gems, treasures and a Song are for sale. Paying to remove a weak card is often the best buy on the shelf.` | `Cards, gems, charms and a Spell are for sale. Paying Jordan to declutter a weak card is often the best buy on the stall.` | new | P2 |
+| 79 | `Cards, gems, treasures and a Song are for sale. Paying to remove a weak card is often the best buy on the shelf.` | `Cards, gems, Charms and a Spell are for sale. Paying Jordan to declutter a weak card is often the best buy on the stall.` | new | P2 |
 | 80 | `A fable` | `A detour` | bible 5.6 | P2 |
 | 81 | `A fable is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.` | `A detour is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.` | HV_STORY 4 (tip 21) | P2 |
 | 83 | `Gems set into card sockets of their own colour, and a prism socket takes any. Cut them at camps, forges and shops. A new gem replaces the old one for good.` | `Gems set into card sockets of their own colour, and a rainbow socket takes any. Set them at green rooms, studios and merch stalls. A new gem replaces the old one for good.` | new | P2 |
@@ -1041,7 +1041,7 @@ These are added, not swapped. Their words come from the plan files named; nothin
 | `js/screen_end.js` unlock list | `New outfit: ` + skin name | bible 7.1 | P3 (3C) |
 | `js/ui.js` relic tooltip, `js/screen_menu.js` Tour Bus Charm tile, `js/screen_node.js` reward plaque | the Charm flavour line: `DATA.relics[id].flavor` in italics under the rules text when present (no literal) | HV_WORLD_DATA 13 | P2 (2F, 2B, 2D) |
 | `js/screen_menu.js`, `js/screen_combat.js` | `TIER_NAME`: `Sidekick`, `Creature`, `Rival`, `Headliner` | bible 4.10 | P2 |
-| `js/screen_menu.js` (and the same words in `ui.js`, `screen_map.js`, `screen_node.js`) | `RARITY_NAME`: `{ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' }`; Charm subtitle `Rare charm for Jasmin`, `Headliner charm`, `Merch charm` | HV_WORLD_DATA 10.2, 13, 14.1 | P2 |
+| `js/screen_menu.js` (and the same words in `ui.js`, `screen_map.js`, `screen_node.js`) | `RARITY_NAME`: `{ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' }`; Charm subtitle `Rare Charm for Jasmin`, `Headliner Charm`, `Merch Charm` | HV_WORLD_DATA 10.2, 13, 14.1 | P2 |
 | `js/screen_menu.js` Who's Who chips | `TAG_LABEL`: spirit `Sprite`, beast `Critter`, folk `Showbiz`, undead `Faded`, construct `Gadget`, insect `Bug`, avian `Bird`, aquatic `Seaside`, void `Glossy` | HV_ENEMIES 8 | P2 (2B) |
 | every screen that prints a gem colour | `DATA.COLOUR_NAME[color]` (`red` reads `pink`; added to `js/data.js` by P1 1A) | bible 4.1, HV_PHASES P1 1A | P2 |
 | every screen that prints a row id | a row word map `{ front: 'Lead', back: 'Backing' }` (`the lead`, `backing` in prose) | bible 4.1 | P2 |
@@ -1060,7 +1060,7 @@ These are added, not swapped. Their words come from the plan files named; nothin
 
 | Where | Budget | Enforced by | Hocus Vocus copy, measured |
 |---|---|---|---|
-| Map info chip action line (`.mp-info-act`) | 66 characters (normal), 52 (Larger text 1.3), 40 (phone, any size) | `tests/hocus_vocus_screen_map.test.mjs` "info chip copy" (about line 1179) | `Too far for your Vox: a chain of 12 hexes costs 12.` 51 and `Tap twice to unmute a chain of 12 hexes costs 12.` 49 (normal only); `Tap twice: a chain of 12 hexes costs 12.` 40 and `Too far: a chain of 12 hexes costs 12.` 38 (Larger and phone; 40 is exactly the Echowake length); `Unmuting 12 hexes. Tap the aimed direction to apply.` 52 (normal only) and `Unmuting 12 hexes. Tap the arrow again.` 39; `Start from a muted hex within 4 hexes of the party.` 51 and `Start from a muted hex beside the live ground.` 46 (normal only; the short forms are 34 and 29); `Not enough Vox to unmute: 1 Vox.` 32; `No way to reach it through the fog.` 35; `This Spell cannot start from here.` 34 (the plain swap `That is not a place this Spell can start.` is 41 and would break the phone budget). The walk lines are pinned verbatim and do not change. |
+| Map info chip action line (`.mp-info-act`) | 66 characters (normal), 52 (Larger text 1.3), 40 (phone, any size) | `tests/hocus_vocus_screen_map.test.mjs` "info chip copy" (about line 1179) | `Too far for your Vox: a chain of 12 hexes costs 12.` 51 and `Tap twice to unmute a chain of 12 hexes for 12 Vox.` 51 (normal only); `Tap twice: a chain of 12 hexes costs 12.` 40 and `Too far: a chain of 12 hexes costs 12.` 38 (Larger and phone; 40 is exactly the Echowake length); `Unmuting 12 hexes. Tap the aimed direction to apply.` 52 (normal only) and `Unmuting 12 hexes. Tap the arrow again.` 39; `Start from a muted hex within 4 hexes of the party.` 51 and `Start from a muted hex beside the live ground.` 46 (normal only; the short forms are 34 and 29); `Not enough Vox to unmute: 1 Vox.` 32; `No way to reach it through the fog.` 35; `This Spell cannot start from here.` 34 (the plain swap `That is not a place this Spell can start.` is 41 and would break the phone budget). The walk lines are pinned verbatim and do not change. |
 | Map info chip text (two clamped lines) | no longer than today | `css/map.css`, the same test | resting `Unmute nearby fog for 1 Vox, or tap live ground to walk.` 56 (was 65), short 54 (was 54); `No Vox left. Walk to a tea stall, fight, or cast a Spell.` 57 (was 60), short 50 (was 48) |
 | Spell mode bar (two clamped lines) | no longer than today | the same test | `Aim, then tap the arrow again to unmute 12 hexes.` 49 (was 51); `Tap again or press Cast to unmute 12 hexes.` 43 (was 49); `Nothing would unmute that way. Aim elsewhere.` 45 (was 43); `Glowing hexes are places to start. Hover for the shape, tap to cast.` 68 (was 68) |
 | Tutorial hints | title at most 30, text 40 to 230, no dashes | `tests/hocus_vocus_screen_end.test.mjs` 706, 707 | titles 6 to 25 characters; texts 88 to 184 |
@@ -1127,7 +1127,7 @@ and are not repeated here, except where a P0 pin and a copy row share a line.
   (1250); 1190 `/tap awake ground to walk\./` becomes `/tap live ground to walk\./` (1250; the phone form `/ground to walk\./` holds); 1410 the
   boss rarity `'keeper'` becomes `'headliner'` and `shop` reads `merch` (2166); 1411 and 1413 `/Found in Verse (I|II),/` becomes
   `/Found in Act (I|II),/` (2147); 1414 `/keeper/i` and `/peddler/i` become `/headliner/i` and `/merch/i` (2144, 2145); 1415 `/5 treasures/` becomes
-  `/5 charms/` (2177; not in HV_PHASES 9); 1421 `/Treasures/` becomes `/Charms/` (1067); 1423 `/No treasures yet/` becomes `/No charms yet/` (2173);
+  `/5 Charms/` (2177; not in HV_PHASES 9); 1421 `/Treasures/` becomes `/Charms/` (1067); 1423 `/No treasures yet/` becomes `/No Charms yet/` (2173);
   1439 the tabs become `['The Soundlands', 'Spells', 'Controls', 'Words']` (2322); 1446 `/Silent ground/` and `/Heard from afar/` become
   `/Muted ground/` and `/Spotted from afar/` (2256, 2257); 1699 and 1712 `/Verse I/`, `/Verse II/` become `/Act I/`, `/Act II/` (2051); 1770
   `/Woke 1 hex for 1 Echo/` becomes `/Unmuted 1 hex for 1 Vox/` (1431); 1821 and 1824 `/hexes awake/` become `/hexes live/` (1254). The
@@ -1150,7 +1150,7 @@ and are not repeated here, except where a P0 pin and a copy row share a line.
   not in HV_PHASES 9); 1039 `/Every card is already sharp/` becomes `/Every card is already rehearsed/` (1819; not in HV_PHASES 9); 1049
   `/\+4 Echo \(3 to 7\)/` becomes `/\+4 Vox \(3 to 7\)/` (1822); 1198 `/already sharp|Nothing left/` becomes `/already rehearsed|Nothing left/`
   (1990, 1995; not in HV_PHASES 9); 1199 `/no gems/` holds (`You carry no gems to set.`); the seven presses `btnByText(g, /Take the treasure/)` at
-  1245, 1248, 1339, 1354, 1985, 2035 and 2148 become `/Take the charm/` (2178; not in HV_PHASES 9); 1629 the remove note fixture
+  1245, 1248, 1339, 1354, 1985, 2035 and 2148 become `/Take the Charm/` (2178; not in HV_PHASES 9); 1629 the remove note fixture
   `'The peddler burns it for good.'` becomes `'Jordan takes it off your hands for good.'` (1448); 1683 `/Sharpen this card/` becomes
   `/Rehearse this card/` (675; not in HV_PHASES 9); 1693 `/Nothing left to sharpen/` becomes `/Nothing left to rehearse/` (594; not in
   HV_PHASES 9); 2078 `/No journey is underway/` becomes `/No tour is on the road/` (285); 939 `/already moved on/` holds (1664); 2079
@@ -1183,7 +1183,7 @@ and are not repeated here, except where a P0 pin and a copy row share a line.
    one tip of HV_STORY 4, which P2 2A pastes in the same phase.
 6. Engine words that survive (bible 6.4) stay hard-coded: `Block`, `Swap`, `X cost`, `HP`, `gold`. `BOSS` in `scene.js` (891 to 903, 1041, 2295)
    is an internal banner kind that `bossInfo` maps to the Headliner's name; it is never shown.
-7. Developer-only names stay: the `?gallery` component names `Paper panel` and `Lacquer panel` (`main.js` 772, 778), the gallery background
+7. Developer-only names stay: the `?gallery` component names, now `Light panel`, `Dark panel` and the tab `Diary` (`main.js` 772, 778, 779), the gallery background
    option `paper` (`gallery.html` 254), every sfx id (`page_turn`, `well`, ...) and every CSS class (`ev-page`, `st-page`, `mn-p-run`).
 8. The `PEDDLER` constant and its keys (`hello`, `buy`, `poor`, `sold`, `remove`, `cut`, `empty`, `leave`, `idle`) are ids; only the strings become
    Jordan's. The lines that carry no Echowake word stay (`Sold out! Try the one next to it.`, `Steady hands make sparkling cards.`,

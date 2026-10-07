@@ -1,4 +1,4 @@
-// Menu screens suite: title, heroSelect, library (five tabs), settings (screen and overlay), howto and the pause overlay (js/screen_menu.js).
+// Menu screens suite: title, heroSelect, library (six tabs), settings (screen and overlay), howto and the pause overlay (js/screen_menu.js).
 //
 // Boots the REAL modules (util, data, art, audio, meta, run, combat, map, ui, scene, screen_menu, main) and leaves out only the other screen
 // files, so main.js supplies its placeholder map, story and node screens. Every scenario builds realistic state with the real META and RUN,
@@ -79,9 +79,11 @@ await t.test('title: the tap gate, the plaques without a saved run, and the firs
   t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'no Continue without a saved run: New Tour, Daily Duet, Tour Bus, Settings, How to Play');
   t.eq($$(g, '.s-title h1.sr-only').length, 1, 'a real h1 names the game for screen readers');
   t.ok(/v\d/.test($(g, '.mn-ver').textContent), 'the version is shown'); t.ok($(g, '.mn-credits').textContent.length > 10, 'a credits line is shown');
+  t.ok($(g, '.mn-foot').hasAttribute('inert') && $(g, '.mn-menu').hasAttribute('inert'), 'the footer buttons are inert under the gate like the plaques: Tab cannot reach them');
   g._click('.mn-gate');
   await settle(g);
   t.ok(!g.UI.screens.title.state().gated, 'a tap dismisses the gate');
+  t.ok(!$(g, '.mn-foot').hasAttribute('inert') && !$(g, '.mn-menu').hasAttribute('inert'), 'and the footer wakes with the menu');
   t.ok(!$(g, '.mn-title').classList.contains('gated'), 'the menu is revealed');
   t.ok($$(g, '.mn-plaque').every((b) => b.classList.contains('rise')), 'the plaques rise in one after another');
   t.deep($$(g, '.mn-plaque').map((b) => b.style.getPropertyValue('--i')), ['1', '2', '3', '4', '5'], 'each plaque has its own stagger index');
@@ -292,6 +294,69 @@ await t.test('heroSelect: the detail sheet shows blurb, rows, resource, passive,
   t.ok(!g.UI.tip.open, 'and leaving closes it');
 });
 
+// P3 3C (HV_ART_AUDIO 2.11, bible 7.1): the Outfit row of the detail sheet. Locked until the hero's Sticker, then a pick goes to hv_skins_v1 and ART.
+await t.test('heroSelect outfit row: locked then unlocked, aria-pressed, keyboard, the store and ART follow a pick, Andy has no row', async () => {
+  const g = fresh();
+  g.META.profile.unlocked.hero.push('suzu', 'raiga');
+  await go(g, 'heroSelect');
+  hover(g, 'hanae'); await settle(g);
+  const row = () => $(g, '.mn-d-outfit');
+  const said = () => sfxLog(g).filter((id) => id !== 'ui_hover');           // the pointer moving onto a swatch may also play its hover sound
+  const sw = (skin) => $(g, '.mn-d-outfit .mn-sw[data-skin=' + skin + ']');
+  t.ok(row(), 'Jasmin has an Outfit row');
+  t.eq(row().querySelector('b').textContent, 'Outfit', 'labelled Outfit'); t.eq(row().getAttribute('aria-label'), 'Outfit', 'and named for screen readers');
+  const lines = $$(g, '.mn-d .mn-d-line');
+  const at = lines.indexOf(row());
+  t.ok(at > 0 && /passive/.test(lines[at - 1].textContent), 'it comes after the passive lines');
+  const kids = Array.from(row().parentNode.children);
+  t.ok(kids.indexOf(row()) < kids.indexOf($(g, '.mn-d-deck').parentNode), 'and before the starting deck');
+  t.deep($$(g, '.mn-d-outfit .mn-sw-name').map((n) => n.textContent), ['Stage clothes', g.DATA.outfits.hanae.name], 'two swatches: Stage clothes and the outfit name from DATA.outfits');
+  t.ok($$(g, '.mn-d-outfit .mn-sw').every((b) => b.tagName === 'BUTTON' && b.getAttribute('type') === 'button' && !(b.getAttribute('tabindex') === '-1')), 'both swatches are buttons in tab order (the locked one too)');
+  t.ok($$(g, '.mn-d-outfit .mn-sw-face canvas').length === 2, 'each swatch shows a medallion canvas');
+  // locked: Jasmin has not won 3 tours yet
+  t.eq(sw('stage').getAttribute('aria-pressed'), 'true', 'stage clothes are worn'); t.eq(sw('skin').getAttribute('aria-pressed'), 'false', 'the outfit is not');
+  t.ok(sw('skin').classList.contains('locked') && sw('skin').getAttribute('aria-disabled') === 'true', 'the outfit swatch is locked (dimmed, padlock)');
+  t.eq($(g, '.mn-d-olock').textContent, 'Win 3 tours with ' + g.DATA.heroes.hanae.name + ' to unlock.', 'the unlock line (bible 7.1)'); t.ok(!$(g, '.mn-d-olock').hidden, 'shown while locked');
+  g._run('__sfx.length = 0');
+  g._click(sw('skin')); await settle(g);
+  t.deep(said(), ['ui_error'], 'a tap on the locked outfit is a soft no (one ui_error, no click sound)');
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'false', 'nothing changes'); t.ok(!('hv_skins_v1' in g._store), 'nothing is stored');
+  // unlocked: the Sticker In Full Bloom is done
+  g.META.profile.ach[g.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g, 'title'); await go(g, 'heroSelect'); hover(g, 'hanae'); await settle(g);
+  t.ok(!sw('skin').classList.contains('locked') && !sw('skin').hasAttribute('aria-disabled'), 'with the Sticker the outfit unlocks'); t.ok($(g, '.mn-d-olock').hidden, 'and the unlock line goes');
+  const medalBefore = $(g, '.mn-d-medal canvas');
+  g._run('__sfx.length = 0');
+  g._click(sw('skin')); await settle(g);
+  t.deep(said(), ['ui_toggle'], 'a pick plays ui_toggle (and no click sound)');
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'true', 'the outfit is pressed'); t.eq(sw('stage').getAttribute('aria-pressed'), 'false', 'stage clothes are not'); t.ok(sw('skin').classList.contains('on'), 'and wears the hero-colour ring');
+  t.deep(JSON.parse(g._store.hv_skins_v1), { hanae: 'skin' }, 'stored in hv_skins_v1');
+  t.eq(g.ART.hero.outfits().hanae, 'skin', 'ART draws Jasmin in her outfit at once (portrait, stage, title duo)'); t.eq(g.ART.hero.castId('hanae'), 'jasmin_unicorn', 'the unicorn onesie');
+  t.ok($(g, '.mn-d-medal canvas') && $(g, '.mn-d-medal canvas') !== medalBefore, 'the sheet medallion is redrawn in the outfit');
+  t.ok(!g.META.profile.outfits && JSON.stringify(g.META.profile).indexOf('skin') < 0, 'nothing new goes into the profile');
+  // keyboard: focus the stage swatch and press Enter
+  sw('stage').focus(); g._key('Enter'); await settle(g);
+  t.eq(sw('stage').getAttribute('aria-pressed'), 'true', 'Enter on a focused swatch picks it'); t.eq(g.ART.hero.outfits().hanae, 'stage', 'and ART follows');
+  g._click(sw('skin')); await settle(g);
+  // other heroes: RoxorLoops has his own (locked) row; Andy has none
+  hover(g, 'kuro'); await settle(g);
+  t.deep($$(g, '.mn-d-outfit .mn-sw-name').map((n) => n.textContent), ['Stage clothes', g.DATA.outfits.kuro.name], 'RoxorLoops: Stage clothes and the Monster Onesie'); t.ok(sw('skin').classList.contains('locked'), 'still locked');
+  hover(g, 'raiga'); await settle(g);
+  t.eq($(g, '.mn-d-name h3').textContent, g.DATA.heroes.raiga.name, 'Andy\'s sheet'); t.ok(!row(), 'Andy has no Outfit row (bible 7.1)');
+  hover(g, 'hanae'); await settle(g);
+  t.eq(sw('skin').getAttribute('aria-pressed'), 'true', 'back on Jasmin the pick is still shown');
+  // a fresh page with that store wears it; junk in the store means stage clothes
+  const g2 = fresh({ store: { hv_skins_v1: g._store.hv_skins_v1 } });
+  g2.META.profile.ach[g2.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g2, 'heroSelect');
+  t.eq(g2.ART.hero.outfits().hanae, 'skin', 'a reload wears the stored outfit');
+  const g3 = fresh({ store: { hv_skins_v1: '{not json' } });
+  g3.META.profile.ach[g3.DATA.outfits.hanae.sticker] = EPOCH;
+  await go(g3, 'heroSelect');
+  t.eq($(g3, '.mn-d-outfit .mn-sw[data-skin=stage]').getAttribute('aria-pressed'), 'true', 'garbled storage: stage clothes');
+  t.eq(errors(g) + errors(g2) + errors(g3), 0, 'no console errors');
+});
+
 await t.test('heroSelect: pick exactly two (the first is the front hero), swap the order, a third pick drops the oldest', async () => {
   const g = fresh();
   g.META.profile.unlocked.hero.push('suzu');
@@ -306,13 +371,13 @@ await t.test('heroSelect: pick exactly two (the first is the front hero), swap t
   t.ok(card(g, 'hanae').classList.contains('on') && card(g, 'hanae').getAttribute('aria-pressed') === 'true', 'chosen cards are pressed');
   t.ok(!$(g, '.mn-begin').getAttribute('aria-disabled'), 'Begin is ready');
   t.ok($(g, '.mn-party-empty').hidden, 'the empty prompt is gone');
-  t.ok($$(g, '.mn-slot-note').every((n) => /element/.test(n.textContent)), 'both fight in their favourite rows: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
+  t.ok($$(g, '.mn-slot-note').every((n) => /^In (his|her) element$/.test(n.textContent)), 'both fight in their favourite rows: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
   t.ok(g.META.loreSeen('hero_hanae') && g.META.loreSeen('hero_kuro'), 'picking a hero marks their story page as read (the Library lists it)');
   // swap
   g._click('.mn-swap'); await settle(g);
   t.deep(st().chosen, ['kuro', 'hanae'], 'Swap trades the rows');
   t.eq(card(g, 'kuro').querySelector('.mn-hc-badge').textContent, 'LEAD', 'the badges follow');
-  t.ok($$(g, '.mn-slot-note').every((n) => /prefers/.test(n.textContent)), 'both are now out of place and the stage says so: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
+  t.ok($$(g, '.mn-slot-note').every((n) => /^Prefers (lead|backing)$/.test(n.textContent)), 'both are now out of place and the stage says so: ' + $$(g, '.mn-slot-note').map((n) => n.textContent).join(' / '));
   g._key('s'); await settle(g);
   t.deep(st().chosen, ['hanae', 'kuro'], 'the S key swaps too');
   // a third pick
@@ -429,7 +494,7 @@ await t.test('heroSelect: Begin passes heroes, trial and seed to GAME.newRun; th
   g._click('.mn-dice'); await settle(g);
   t.ok(/^\d{3,6}$/.test($(g, '.mn-seed').value), 'the dice roll a numeric seed: ' + $(g, '.mn-seed').value);
   t.eq(g.UI.screens.heroSelect.state().seed, Number($(g, '.mn-seed').value), 'and the field is what state reports');
-  // a saved tale asks first
+  // a saved tour asks first
   saveRun(g);
   g._flush(1500);
   g._click($(g, '.mn-begin')); await settle(g);
@@ -439,7 +504,7 @@ await t.test('heroSelect: Begin passes heroes, trial and seed to GAME.newRun; th
   t.eq(calls.length, 5, 'Start fresh starts the run');
 });
 
-await t.test('heroSelect: really beginning a tale creates the run through RUN and leaves for the story', async () => {
+await t.test('heroSelect: really beginning a tour creates the run through RUN and leaves for the story', async () => {
   const g = fresh();
   await go(g, 'heroSelect');
   g._click(card(g, 'kuro')); g._click(card(g, 'hanae')); await settle(g);
@@ -499,17 +564,18 @@ await t.test('heroSelect: leave cleans up, canvases draw, and every control has 
 });
 
 
-// ==================================================================================================== LIBRARY
+// ==================================================================================================== THE TOUR BUS (library)
 const pane = (g) => $(g, '.mn-tabpane:not([hidden])');
 const segBtn = (g, label) => $$(g, '.mn-tabpane:not([hidden]) .seg-b').find((b) => b.textContent === label);
 const tabBtn = (g, id) => $(g, '.tab[data-id=' + id + ']');
 const visibleItems = (g) => $$(g, '.mn-item').filter((i) => !i.hidden);
 
-await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembered tab', async () => {
+await t.test('Tour Bus: tabs, the Cheers balance, key shortcuts and the remembered tab', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library');
-  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history'], 'the five tabs of DESIGN 5.11');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'the five tabs of DESIGN 5.11 and the sixth, follow (HV_STORY 5.3)');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), Array.from(g.DATA.LISTS.libraryTabs), 'the tab strip follows DATA.LISTS.libraryTabs, in order');
   t.eq(g.UI.screens.library.state().tab, 'unlocks', 'opens on Unlocks');
   t.eq($(g, '.mn-stones .stat .val').textContent, '200', 'the Inkstone balance is META.inkstones');
   t.eq($$(g, '.mn-tabpane').length, 1, 'panes are built lazily: only the open tab exists');
@@ -521,6 +587,14 @@ await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembe
   t.eq(g.UI.screens.library.state().tab, 'bestiary', 'key 4 opens the Bestiary');
   g._key('1'); await settle(g);
   t.eq(g.UI.screens.library.state().tab, 'unlocks', 'key 1 opens Unlocks');
+  ['achievements', 'story', 'bestiary', 'history', 'follow'].forEach((id) => {
+    g._key(String(['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'].indexOf(id) + 1));
+    t.eq(g.UI.screens.library.state().tab, id, 'key ' + (['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'].indexOf(id) + 1) + ' opens ' + id);
+  });
+  await settle(g);
+  g._key('7'); g._key('0'); g._key('F6');
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'keys 7, 0 and F6 change nothing: the tabs run 1 to 6');
+  g._key('1'); await settle(g);
   await go(g, 'library', { tab: 'history' });
   t.eq(g.UI.screens.library.state().tab, 'history', 'params.tab picks the tab');
   await go(g, 'library', { tab: 'nonsense' });
@@ -533,7 +607,7 @@ await t.test('library: tabs, the Inkstone balance, key shortcuts and the remembe
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('library unlocks: every locked def is listed, with kind and hero filters and the empty states', async () => {
+await t.test('Tour Bus unlocks: every locked def is listed, with kind and hero filters and the empty states', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library');
@@ -578,7 +652,7 @@ await t.test('library unlocks: every locked def is listed, with kind and hero fi
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library unlocks: buying spends Inkstones, stamps the tile, and the sound and toast come once from GAME', async () => {
+await t.test('Tour Bus unlocks: buying spends Cheers, stamps the tile, and the sound and toast come once from GAME', async () => {
   const g = fresh();
   seedProfile(g, { stones: 200 });
   await go(g, 'library');
@@ -626,7 +700,7 @@ await t.test('library unlocks: buying spends Inkstones, stamps the tile, and the
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('library unlocks: Affordable first reorders, and reduce motion skips the sparks', async () => {
+await t.test('Tour Bus unlocks: Affordable first reorders, and reduce motion skips the sparks', async () => {
   const g = fresh();
   seedProfile(g, { stones: 100 });
   await go(g, 'library');
@@ -648,7 +722,7 @@ await t.test('library unlocks: Affordable first reorders, and reduce motion skip
   t.ok($(g, '.mn-item[data-id=' + cheap.id + ']').classList.contains('owned'), 'the tile still changes state');
 });
 
-await t.test('library achievements: 32 rows with progress from META.stat, done styling, rewards and sorting', async () => {
+await t.test('Tour Bus Stickers: 32 rows with progress from META.stat, done styling, rewards and sorting', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'achievements' });
@@ -683,7 +757,7 @@ await t.test('library achievements: 32 rows with progress from META.stat, done s
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library story: seen pages replay through the story screen and come back here; unseen ones stay "???"', async () => {
+await t.test('Tour Bus Diary: seen entries replay through the story screen and come back here; unseen ones stay "???"', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'story' });
@@ -714,7 +788,7 @@ await t.test('library story: seen pages replay through the story screen and come
   t.eq($$(g2, '.mn-st.seen').length, 0, 'a fresh profile has read nothing'); t.ok($$(g2, '.mn-st-title').every((x) => x.textContent === '???'), 'every title is hidden');
 });
 
-await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and moves for the met, without spoilers', async () => {
+await t.test('Tour Bus Who\'s Who: silhouettes for the unmet, lore, HP, kills and moves for the met, without spoilers', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'bestiary' });
@@ -754,7 +828,7 @@ await t.test('library bestiary: silhouettes for the unmet, lore, HP, kills and m
   t.eq(errors(g2), 0, 'no console errors');
 });
 
-await t.test('library history: newest runs first with heroes, score, chapter, trial, daily and outcome; an empty state otherwise', async () => {
+await t.test('Tour Bus history: newest runs first with heroes, score, Act, trial, daily and outcome; an empty state otherwise', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'library', { tab: 'history' });
@@ -777,7 +851,7 @@ await t.test('library history: newest runs first with heroes, score, chapter, tr
   t.eq($$(g2, '.mn-hist').length, 0, 'and no rows');
 });
 
-await t.test('library: leaves cleanly, every control is named, canvases draw without issues', async () => {
+await t.test('Tour Bus: leaves cleanly, every control is named, canvases draw without issues', async () => {
   const g = fresh();
   seedProfile(g);
   await settle(g); g._click('.mn-gate'); await settle(g);
@@ -809,7 +883,8 @@ await t.test('settings screen: five groups, every control shows the saved value,
   const P = g.META.profile;
   Object.assign(P.settings, { musicVol: 0.35, sfxVol: 0.6, shake: 0.5, reduceMotion: true, textScale: 1.15, fastAnim: 2, damageNumbers: false, colorblind: true, quality: 'low', hints: false });
   await go(g, 'title'); await go(g, 'settings');
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data'], 'five groups');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'five groups and the About group last (HV_WORLD_DATA 11)');
+  t.eq($$(g, '.mn-set-group').pop().querySelector('.mn-set-h').textContent, 'About', 'About is the last group in the document order too');
   t.eq($$(g, '.s-settings h1, .s-settings .panel-title, .s-settings .panel h2').length > 0, true, 'a titled panel');
   t.eq(slid(g, 'musicVol').value, '0.35', 'music volume shows 0.35'); t.eq(row(g, 'musicVol').querySelector('.s-val').textContent, '35%', 'as 35%');
   t.eq(slid(g, 'sfxVol').value, '0.6', 'effects volume shows 0.6'); t.eq(row(g, 'shake').querySelector('.s-val').textContent, '50%', 'shake 50%');
@@ -917,7 +992,7 @@ await t.test('settings: Restore defaults resets every setting, rebuilds the form
   t.eq(g.META.inkstones, 0, 'progress is untouched');
 });
 
-await t.test('settings: Clear saved data asks twice, keeps the settings, erases progress and the saved tale', async () => {
+await t.test('settings: Clear saved data asks twice, keeps the settings, erases progress and the saved tour', async () => {
   const g = fresh();
   seedProfile(g); saveRun(g); g.META.set('textScale', 1.15); g.META.set('musicVol', 0.4);
   await go(g, 'settings');
@@ -1155,7 +1230,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.deep(acts(g), ['resume', 'deck', 'relics', 'settings', 'howto', 'quit', 'abandon'], 'Resume, Deck, Charms, Settings, How to play, Save and quit, Abandon tour');
   t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Act 1Encore II', 'the run card names the act and the encore');
   t.eq($$(g, '.mn-p-heroes .hero-badge, .mn-p-heroes > *').length, 2, 'two hero badges'); t.ok(new RegExp(esc(g.DATA.heroes.hanae.name)).test($(g, '.mn-p-heroes').textContent + $$(g, '.mn-p-heroes [aria-label]').map((x) => x.getAttribute('aria-label')).join()), 'Hanae is one');
-  t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No charms yet/.test($(g, '.mn-p-relics').textContent), 'no charms yet');
+  t.ok($(g, '.mn-p-stats .stat'), 'gold and ink are shown'); t.ok(/No Charms yet/.test($(g, '.mn-p-relics').textContent), 'no Charms yet');
   t.eq($(g, '[data-act=deck] .hanko').textContent.trim(), String(R.deck.length), 'the Deck plaque counts the deck: ' + R.deck.length);
   t.eq($(g, '[data-act=relics] .hanko').textContent.trim(), '0', 'the Charms plaque counts 0');
   t.ok($(g, '.mn-p-tip') && g.DATA.tips.indexOf($(g, '.mn-p-tip p').textContent) >= 0, 'the tip is one of DATA.tips: ' + $(g, '.mn-p-tip p').textContent);
@@ -1173,7 +1248,7 @@ await t.test('pause: opens from the menu button with the run card, the plaques a
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: the run card follows the run (daily tag, treasures, brushes, different seed different tip)', async () => {
+await t.test('pause: the run card follows the run (daily tag, Charms, Spells, different seed different tip)', async () => {
   const g = fresh();
   const R = await startRun(g, { heroes: ['kuro', 'suzu'], seed: 77 });
   R.daily = true; R.gold = 123; R.ink = 4;
@@ -1252,7 +1327,7 @@ await t.test('pause: the diagrams inside the overlay are driven by the frame clo
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: Abandon tour asks first, records the run as abandoned, pays Inkstones and returns to the title', async () => {
+await t.test('pause: Abandon tour asks first, records the run as abandoned, pays Cheers and returns to the title', async () => {
   const g = fresh();
   const R = await startRun(g, { trial: 1 });
   await openPause(g);
@@ -1272,7 +1347,7 @@ await t.test('pause: Abandon tour asks first, records the run as abandoned, pays
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('pause: Save and quit saves the tale, closes everything and lets the title Continue it', async () => {
+await t.test('pause: Save and quit saves the tour, closes everything and lets the title Continue it', async () => {
   const g = fresh();
   const R = await startRun(g);
   R.gold = 321;
@@ -1427,7 +1502,7 @@ await t.test('title: Enter on the "Tap to begin" gate is swallowed, so the brows
   t.ok(again !== undefined, 'Tab on the gate is left alone');
 });
 
-await t.test('title and hero select follow the date when left open across midnight, and a click that crosses it shows the new tale first (L26)', async () => {
+await t.test('title and hero select follow the date when left open across midnight, and a click that crosses it shows the new tour first (L26)', async () => {
   const epoch = new Date(2026, 8, 29, 23, 59, 50).getTime();         // 10 s before local midnight
   const key0 = 20260929, key1 = 20260930;
   const g = fresh({ epoch });
@@ -1489,6 +1564,17 @@ await t.test('hero select: a speech bubble never covers the Swap pill (it slides
   }
   t.ok(placed >= 10, 'bubbles were shown and checked (' + placed + ' frames)');
   t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('css (menu): the How to Play tip label and page counter keep 8 screen px on a phone, and the Past Tours empty state is a microphone', () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const lab = rules.find((r) => r.sel === '.compact .mn-margin b');
+  t.ok(lab && /max\(calc\(11px \* var\(--ts\)\), var\(--fs8\)\)/.test(lab.body), "Jordan's tip label is lifted to 8 screen px");
+  const no = rules.find((r) => r.sel === '.compact .mn-pg-no');
+  t.ok(no && /max\(calc\(14px \* var\(--ts\)\), var\(--fs8\)\)/.test(no.body), 'and the page counter');
+  const mic = rules.find((r) => r.sel === '.mn-emptybook');
+  t.ok(mic && /repeating-linear-gradient/.test(mic.body) && /mask/.test(mic.body), 'the empty Past Tours picture is a microphone head with a printed grille (a ball, a collar and a handle), not a plain blob');
 });
 
 await t.test('css: a trial rule is never clipped, the phone launch panel is wider, and phone text keeps 8 to 9 screen px (C1, C8)', () => {
@@ -1629,7 +1715,7 @@ await t.test('heroSelect: the card row, the detail sheet and the party stage sha
   t.eq((front + back) / 2, px(decl(party, 'width')) / 2, 'the pair is centred on the party frame (labels at ' + back + ' and ' + front + ' of 400)');
   t.eq(front - back, 150, 'the slots keep their 150 px spacing');
   t.ok(!rules.some((r) => /\.mn-slot\.(front|back)$/.test(r.sel) && /left\s*:/.test(r.body)), 'css: the label x comes from SLOT in screen_menu.js, not from a second copy in the stylesheet');
-  // the Inkstone pill is the same size on hero select and in the library
+  // the Cheers pill is the same size on hero select and in the Tour Bus
   const hsPill = $(g, '.mn-stones .stat').className;
   await go(g, 'library'); const libPill = $(g, '.mn-stones .stat').className;
   t.ok(/sz-lg/.test(hsPill) && hsPill === libPill, 'the Inkstone pill is the same size on both screens (' + hsPill + ' / ' + libPill + ')');
@@ -1674,7 +1760,7 @@ await t.test('css: heroSelect, library, settings and howto share ONE header (Bac
   t.ok(decl(rule(rules, '.compact .mn-tabs'), 'top').indexOf('var(--bar-cy)') >= 0, 'phone library tabs sit under the ribbon (they follow --bar-cy)');
 });
 
-await t.test('howto (screen and overlay): the dots sit on the page axis, the diagram frame is centred on its page, and a phone gives Back, the book and the buttons a --hit row each', async () => {
+await t.test('howto (screen and overlay): the dots sit on the page axis, the diagram frame is centred on its page, and a phone gives Back, the screen and the buttons a --hit row each', async () => {
   const rules = cssRules();
   const nav = rule(rules, '.mn-ht-nav');
   t.ok(decl(nav, 'display') === 'grid' && /^1fr auto 1fr$/.test(decl(nav, 'grid-template-columns')), 'css: the nav is a 1fr auto 1fr grid, so the dots are centred whatever Previous and Next weigh');
@@ -1709,12 +1795,12 @@ await t.test('howto (screen and overlay): the dots sit on the page axis, the dia
   t.ok(decl(hb, 'top') === 'calc(var(--hit) / 2)' && /translate\(-50%,\s*-50%\)/.test(decl(hb, 'transform')), 'css: the overlay ribbon shares Back\'s centre line (--hit / 2)');
 });
 
-await t.test('title: the menu column starts clear of the painted bell (its frame, ink line, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
+await t.test('title: the menu column starts clear of the title stage (its box, pointer parallax), the text under the logo is centred on its glyphs, and the narrow plaques keep their words', () => {
   const rules = cssRules();
   const menu = rule(rules, '.s-title .mn-menu');
   const left = px(decl(menu, 'left')), width = px(decl(menu, 'width'));
   // the centrepiece's box comes from the art itself (ART.scene.info('title').focus = { x0, x1, y0, y1, k }: its bounding box in stage px
-  // including the ink line and gold fittings, and its layer parallax factor), so repainting it shows up here without reading art source
+  // including its outline and the mic stand, and its layer parallax factor), so repainting it shows up here without reading art source
   const g0 = fresh({});
   const info = g0.ART && g0.ART.scene && typeof g0.ART.scene.info === 'function' ? g0.ART.scene.info('title') : null;
   const f = info && info.focus;
@@ -1747,7 +1833,7 @@ await t.test('title: the Larger text size marks the title root so the narrow col
   t.ok(!$(g, '.s-title').classList.contains('ts-big'), 'and not at Normal');
 });
 
-await t.test('library and pause: tiles of one row are one width, the unlock footers are as wide as their cards, and the run card shares one left edge', () => {
+await t.test('Tour Bus and pause: tiles of one row are one width, the unlock footers are as wide as their cards, and the run card shares one left edge', () => {
   const rules = cssRules();
   const sum = rule(rules, '.mn-hist-sum');
   t.ok(decl(sum, 'display') === 'grid' && decl(sum, 'grid-auto-columns') === '1fr' && decl(sum, 'width') === 'max-content', 'css: the four history tiles share one column width (the widest sets it)');
@@ -1763,7 +1849,7 @@ await t.test('library and pause: tiles of one row are one width, the unlock foot
   const relics = rule(rules, '.mn-p-relics'); t.ok(/padding\s*:\s*8px 0 4px/.test(relics.body), 'css: the treasure strip has no side padding either');
 });
 
-await t.test('library history: the four summary tiles render (the grid keeps them in one row)', async () => {
+await t.test('Tour Bus history: the four summary tiles render (the grid keeps them in one row)', async () => {
   const g = fresh(); seedProfile(g);
   await go(g, 'library', { tab: 'history' });
   t.eq($$(g, '.mn-hist-sum span').length, 4, 'four tiles');
@@ -1803,9 +1889,8 @@ await t.test('copy: no Echowake word in any string literal of screen_menu.js (th
     if (tk.t !== 'str' && tk.t !== 'tplHead' && tk.t !== 'tplMid' && tk.t !== 'tplTail') continue;
     if (BAN.test(tk.v)) hits.push(lineOf(src, tk.s) + ': ' + tk.v.slice(0, 70));
   }
-  // P4 (agent 4C) repaints the canvas logo fallback and owns its two ECHOWAKE literals
-  const rest = hits.filter((h) => !/ECHOWAKE/.test(h));
-  t.deep(rest, [], 'no Echowake or Inkwoven word survives in a string: ' + rest.join(' | '));
+  // P4 (agent 4C) repainted the canvas logo fallback: its two ECHOWAKE literals are gone, so no exception is left
+  t.deep(hits, [], 'no Echowake or Inkwoven word survives in a string: ' + hits.join(' | '));
   t.ok(!new RegExp('[' + String.fromCharCode(0x2013, 0x2014) + ']').test(src), 'no em or en dash'); t.ok(!/\t/.test(src), 'no tab indentation');
   t.ok(src.indexOf('Today' + String.fromCharCode(0x2019) + 's') < 0, 'the apostrophes the plan made straight are straight');
 });
@@ -1847,6 +1932,151 @@ await t.test('copy: the title, bible 5.1 (plaques, tagline, credits, h1, the Enc
   t.eq(errors(g), 0, 'no console errors');
 });
 
+// ==================================================================================================== FOLLOW THE DUO (P9, HV_STORY 5 and 6)
+// The panel, the sheet and Share are ui.js's (its own suite pins them); these checks pin where screen_menu.js places them.
+const CREDITS = 'Drawn in code, sung with heart. No two tours alike.';
+const HANDLE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+const ABOUT = "Hocus Vocus is a card adventure made for RoxorLoops and Jasmin, a beatbox and singing duo, starring their friends RawClaw and Andy, with Jordan at the merch stall. Pick two heroes, unmute the Soundlands one hex at a time, and win back a world the Gloss has polished into silence. Every picture is drawn in code and every sound is made right here in your browser, so the game plays the same with or without a connection and never phones home. One day the duo's real beats and voices will move in. Until then, no two tours are alike.";
+const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+const BLANK_LINKS = { handle: '@roxorloopsandjasmin', website: '', youtube: '', facebook: '', tiktok: '', instagram: '', support: '', game: '' };
+const setLinks = (g, o) => g._run(`DATA.LINKS = Object.freeze(${JSON.stringify(Object.assign({}, BLANK_LINKS, o))});`);
+
+await t.test('follow the duo: the title footer is the credits line, Follow the duo, Share and (only with a URL) Support the duo, with the version last', async () => {
+  const g = fresh();
+  await go(g, 'title'); g._click('.mn-gate'); await settle(g);
+  const foot = $(g, '.mn-foot');
+  t.deep(Array.from(foot.children).map((c) => c.className.split(' ')[0]), ['mn-credits', 'mn-foot-btns', 'mn-ver'], 'the footer reads credits, buttons, version: the version stays last');
+  t.eq($(g, '.mn-credits').textContent, CREDITS, 'the credits line on the left (HV_STORY 6)');
+  t.deep($$(g, '.mn-foot-btns > *').map((b) => b.textContent.trim()), ['Follow the duo', 'Share'], 'Follow the duo and Share; Support the duo is not rendered while DATA.LINKS.support is empty');
+  t.eq($$(g, '.mn-foot a').length, 0, 'no anchor at all without a URL: today the footer links nowhere');
+  t.ok($$(g, '.mn-foot-btns button').every((b) => b.getAttribute('type') === 'button' && b.classList.contains('btn') && b.classList.contains('mn-foot-btn')), 'real buttons in the shared button styling (each --hit tall through .btn)');
+  t.eq($(g, '.mn-foot [data-act=share]').getAttribute('aria-label'), 'Share Hocus Vocus', 'Share names the game for screen readers');
+  t.eq($$(g, '.mn-plaque').map((b) => b.dataset.act).join(), 'new,daily,library,settings,howto', 'the footer buttons are not menu plaques: the five plaques and their keys are unchanged');
+  // Follow the duo opens the sheet through UI.followSheet
+  g._click('.mn-foot [data-act=follow]'); await settle(g);
+  t.ok(g.UI.overlay.has('modal'), 'Follow the duo opens the sheet');
+  t.eq($(g, '.o-modal .p-title').textContent, 'Follow the duo', 'titled Follow the duo');
+  t.ok($(g, '.o-modal .hv-follow.hv-sheet'), 'with the sheet panel'); t.ok($(g, '.o-modal .hv-handle').textContent === HANDLE, 'and the handle line');
+  t.eq($$(g, '.o-modal a.hv-link').length, 0, 'no link pill while every URL is empty');
+  g._click($$(g, '.o-modal .btn').find((b) => b.textContent.trim() === 'Close')); await settle(g);
+  t.ok(!g.UI.overlay.has('modal'), 'Close closes it');
+  // Share goes to the clipboard here (no share sheet in the sandbox)
+  g._click('.mn-foot [data-act=share]'); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share writes the share text, a space and the page address');
+  t.ok(toasts(g).indexOf('Copied. Go on, show someone.') >= 0, 'and says so: ' + toasts(g).join(' | '));
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('follow the duo: Support the duo appears in the footer only once DATA.LINKS.support is a web address, as a new-tab anchor, and never fetches or navigates', async () => {
+  const g = fresh();
+  setLinks(g, { support: 'https://example.invalid/support' });
+  await go(g, 'title'); g._click('.mn-gate'); await settle(g);
+  t.deep($$(g, '.mn-foot-btns > *').map((b) => b.textContent.trim()), ['Follow the duo', 'Share', 'Support the duo'], 'Follow the duo, Share, Support the duo, in that order');
+  const a = $(g, '.mn-foot a[data-act=support]');
+  t.ok(a && a.localName === 'a', 'Support the duo is an anchor');
+  t.eq(a.getAttribute('href'), 'https://example.invalid/support', 'to the owners URL'); t.eq(a.getAttribute('target'), '_blank', 'in a new tab');
+  t.ok(/\bnoopener\b/.test(a.getAttribute('rel')) && /\bnoreferrer\b/.test(a.getAttribute('rel')), 'rel noopener noreferrer');
+  t.eq(a.getAttribute('aria-label'), 'Support the duo, opens in a new tab', 'named for screen readers');
+  t.ok(a.classList.contains('mn-foot-opt'), 'and marked optional, so a portrait phone drops it (the sheet keeps it)');
+  t.ok(a.classList.contains('btn-primary'), 'a primary pill');
+  const store0 = JSON.stringify(Object.keys(g._store).sort());
+  g._click(a); await settle(g);
+  t.eq(g._navigations.length, 0, 'a tap leaves the navigation to the browser: the game never changes its own tab');
+  t.eq(JSON.stringify(Object.keys(g._store).sort()), store0, 'nothing was stored');
+  setLinks(g, { support: 'javascript:alert(1)' });
+  await go(g, 'library'); await go(g, 'title'); await settle(g);
+  t.eq($$(g, '.mn-foot a').length, 0, 'a value that is not a web address is no link (the footer drops it)');
+  t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('follow the duo: the footer css (one row wide, credits above and two buttons on a portrait phone, a screen px floor on phones)', () => {
+  const css = fs.readFileSync(path.join(DIR, 'css', 'menu.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const one = (sel) => rules.find((r) => r.sel === sel);
+  t.ok(one('.s-title .mn-foot') && /pointer-events\s*:\s*none/.test(one('.s-title .mn-foot').body), 'the footer strip stays click-through');
+  t.ok(one('.s-title .mn-foot-btn') && /pointer-events\s*:\s*auto/.test(one('.s-title .mn-foot-btn').body), 'its buttons take clicks themselves (an anchor does not by default)');
+  t.ok(/flex-wrap\s*:\s*wrap/.test(one('.s-title .mn-foot').body), 'the row wraps instead of overlapping at Larger text');
+  t.ok(/orientation\s*:\s*portrait\)\s*and\s*\(max-width\s*:\s*500px\)\s*\{/.test(css), 'the narrow rules sit in the existing portrait phone query');
+  const tail = css.slice(css.indexOf('@media (orientation: portrait) and (max-width: 500px)'));
+  t.ok(/\.s-title \.mn-foot-opt\s*\{[^}]*display\s*:\s*none/.test(tail), 'there Support the duo is hidden (only Follow the duo and Share show)');
+  t.ok(/\.s-title \.mn-credits\s*\{[^}]*flex\s*:\s*1 0 100%/.test(tail), 'and the credits line takes the whole row above the buttons');
+  t.ok(/\.s-title \.mn-foot\s*\{[^}]*--hit\s*:\s*58px/.test(tail), 'with the 58 px hit cap every other portrait menu screen uses');
+  t.ok(rules.some((r) => /\.compact \.s-title \.mn-foot/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'on a phone the footer keeps 8 screen px');
+});
+
+await t.test('follow the duo: the sixth Tour Bus tab is the panel at full size with the about text, the no-links line and Jordan, and a URL adds a pill', async () => {
+  const g = fresh();
+  await go(g, 'library', { tab: 'follow' });
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'params.tab opens the follow tab');
+  t.eq(tabBtn(g, 'follow').textContent.trim(), 'Follow the duo', 'its label'); t.ok($(g, '.tab[data-id=follow] .mn-tab-ico'), 'with a motif icon like the others');
+  const p = pane(g);
+  t.eq(p.dataset.tab, 'follow', 'the visible pane is the follow pane');
+  const panel = p.querySelector('.hv-follow.hv-tab');
+  t.ok(panel, 'UI.followPanel(tab) is the body');
+  t.eq(panel.querySelector('.hv-handle').textContent, HANDLE, 'the handle line');
+  t.eq(panel.querySelector('.hv-about').textContent, ABOUT, 'the about text');
+  t.eq(panel.querySelector('.hv-jordan').textContent, 'Jordan made these buttons. Press them gently.', "and Jordan's line");
+  t.eq(panel.querySelector('.hv-nolinks').textContent, 'Links are on their way. For now, look for @roxorloopsandjasmin.', 'the no-links line while every URL is empty');
+  t.eq($$(g, '.mn-follow a').length, 0, 'no link and no Support while every URL is empty');
+  t.eq(panel.querySelector('button.hv-share').textContent.trim(), 'Share', 'Share is there');
+  t.ok(!p.querySelector('.hv-support-line'), 'and no support line without a Support button');
+  g._click(panel.querySelector('button.hv-share')); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share on the tab shares');
+  g._key('1'); await settle(g); g._key('6'); await settle(g);
+  t.eq(g.UI.screens.library.state().tab, 'follow', 'key 6 comes back to it'); t.eq($$(g, '.mn-tabpane:not([hidden])').length, 1, 'with one pane showing');
+  t.deep(g.UI.screens.library.state().built.slice().sort(), ['follow', 'unlocks'], 'built lazily, like the other tabs: only the two that were opened');
+  // with the owners URLs set: one pill per URL in the fixed order, and the support button with its line
+  const g2 = fresh();
+  setLinks(g2, { youtube: 'https://example.invalid/yt', website: 'https://example.invalid/', support: 'https://example.invalid/s' });
+  await go(g2, 'library'); g2._key('6'); await settle(g2);
+  t.deep($$(g2, '.mn-follow a.hv-link').map((a) => a.textContent.trim()), ['Website', 'YouTube'], 'a pill for each URL that is set, Website first');
+  t.ok($$(g2, '.mn-follow a.hv-link').every((a) => a.getAttribute('target') === '_blank' && /noopener/.test(a.getAttribute('rel'))), 'each opens in a new tab');
+  t.eq($(g2, '.mn-follow .hv-support .btn-label').textContent, 'Support the duo', 'Support the duo shows');
+  t.eq($(g2, '.mn-follow .hv-support-line').textContent, 'Enjoying the tour? The real duo would love your support.', 'under its support line');
+  t.ok(!$(g2, '.mn-follow .hv-nolinks'), 'and the no-links line is gone');
+  t.eq(errors(g), 0, 'no console errors'); t.eq(errors(g2), 0, 'and none on the second page');
+});
+
+await t.test('follow the duo: the settings About group is the last group on the screen and in the pause overlay, reads DATA.LINKS and fetches nothing', async () => {
+  const g = fresh();
+  await go(g, 'settings');
+  const groups = $$(g, '.mn-set-group');
+  const about = groups[groups.length - 1];
+  t.eq(about.querySelector('.mn-set-h').textContent, 'About', 'the last group is About');
+  t.eq(groups.length, 6, 'the sixth group');
+  t.ok(about.classList.contains('mn-set-about') && about.parentNode === $(g, '.mn-set'), 'full width under the two columns, as the last child of the form');
+  t.eq(about.querySelector('.mn-set-abouttext').textContent, ABOUT, 'the about text');
+  const strip = about.querySelector('.hv-follow.hv-strip');
+  t.ok(strip, 'the Follow the duo row is the strip panel');
+  t.eq(strip.querySelector('.hv-follow-h').textContent, 'Follow the duo', 'headed Follow the duo'); t.eq(strip.querySelector('.hv-handle').textContent, HANDLE, 'with the handle line');
+  t.eq(strip.querySelector('button.hv-share').textContent.trim(), 'Share', 'and Share');
+  t.eq(about.querySelectorAll('a').length, 0, 'no link and no Support while every URL is empty');
+  t.eq(about.querySelector('.mn-set-ver').textContent, 'Version 1.0', 'Version and the number, below the row');
+  t.deep(Array.from(about.children).map((c) => c.className.split(' ')[0]), ['mn-set-h', 'mn-set-abouttext', 'mn-set-follow', 'mn-set-ver'], 'in the order heading, about text, follow row, version');
+  g._click(strip.querySelector('button.hv-share')); await settle(g);
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share works from settings');
+  // reachable from pause too (the same form in the overlay)
+  const g2 = fresh();
+  await startRun(g2); await openPause(g2);
+  g2._click(pbtn(g2, 'settings')); await settle(g2);
+  const ogroups = $$(g2, '.o-settings .mn-set-group');
+  t.eq(ogroups[ogroups.length - 1].querySelector('.mn-set-h').textContent, 'About', 'the pause overlay form ends with About');
+  t.ok($(g2, '.o-settings .mn-set-about .hv-follow.hv-strip'), 'with the strip');
+  t.eq($(g2, '.o-settings .mn-set-ver').textContent, 'Version 1.0', 'and the version');
+  // with URLs set: pills and Support, with the support line above it
+  const g3 = fresh();
+  setLinks(g3, { tiktok: 'https://example.invalid/t', instagram: 'https://example.invalid/i', support: 'https://example.invalid/s' });
+  await go(g3, 'settings');
+  t.deep($$(g3, '.mn-set-about a.hv-link').map((a) => a.textContent.trim()), ['TikTok', 'Instagram'], 'a pill for each URL that is set');
+  t.eq($(g3, '.mn-set-about .hv-support .btn-label').textContent, 'Support the duo', 'Support the duo');
+  t.eq($(g3, '.mn-set-about .hv-support-line').textContent, 'Enjoying the tour? The real duo would love your support.', 'under the support line (settings print it above Support)');
+  t.eq(g3._navigations.length, 0, 'nothing navigated');
+  // restoring defaults rebuilds the form: About survives it
+  g3._click($(g3, '.mn-set-row[data-setting=defaults] .btn')); await settle(g3);
+  t.eq($$(g3, '.mn-set-group').pop().querySelector('.mn-set-h').textContent, 'About', 'About is still last after Restore defaults rebuilt the form');
+  t.eq(errors(g), 0, 'no console errors'); t.eq(errors(g2), 0, 'none in the overlay'); t.eq(errors(g3), 0, 'and none with URLs');
+});
+
 await t.test('copy: the hero select, bible 5.2 (heading, slots, Encore stepper, Daily Duet, Begin, the locked hero, bio pronouns, spot words)', async () => {
   const g = fresh(); seedProfile(g, { trialBest: 2 });
   await go(g, 'heroSelect');
@@ -1881,9 +2111,10 @@ await t.test('copy: the hero select, bible 5.2 (heading, slots, Encore stepper, 
   g0._click(card(g0, 'hanae')); g0._click(card(g0, 'kuro')); await settle(g0, 1);
   t.eq($$(g0, '.mn-hcard .mn-hc-badge.show').map((b) => b.textContent).join(), 'LEAD,BACKING', 'the badges read LEAD and BACKING');
   t.ok(/Chosen, lead hero\./.test(card(g0, 'hanae').getAttribute('aria-label')) && /Chosen, backing hero\./.test(card(g0, 'kuro').getAttribute('aria-label')), 'and so do the aria labels: ' + card(g0, 'hanae').getAttribute('aria-label'));
-  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['RoxorLoops: in his element', 'Jasmin: in her element'], 'in their favourite spots (the backing slot is first in the DOM), with the right pronoun');
+  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['In his element', 'In her element'], 'in their favourite spots (the backing slot is first in the DOM), with the right pronoun (no hero name: the caption stays one line in its 150 px slot)');
   g0._click('.mn-swap'); await settle(g0, 1);
-  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['Jasmin: prefers the lead', 'RoxorLoops: prefers backing'], 'out of place: prefers the lead, prefers backing, never the ids front or back');
+  t.deep($$(g0, '.mn-slot-note').map((n) => n.textContent), ['Prefers lead', 'Prefers backing'], 'out of place: Prefers lead, Prefers backing (short and symmetric), never the ids front or back');
+  t.deep($$(g0, '.mn-slot').map((n) => n.getAttribute('aria-label')), ['Backing: Jasmin. Prefers lead.', 'Lead: RoxorLoops. Prefers backing.'], 'the caption has no name, so each slot is a group whose label says who it is about');
   g0._click(card(g0, 'suzu')); await settle(g0, 1);
   const lockSpans = $$(g0, '.mn-d-lockhead span');
   t.eq(lockSpans[lockSpans.length - 1].textContent.trim(), 'Not on the tour yet', 'a locked hero is Not on the tour yet');
@@ -1907,17 +2138,17 @@ await t.test('copy: the Tour Bus unlocks tab, HV_WORLD_DATA 10.1 and 10.2 (banne
   const g = fresh(); seedProfile(g);
   await go(g, 'library');
   t.eq($(g, '.mn-lib-top .mn-banner').textContent, 'The Tour Bus', 'the banner'); t.eq($(g, '.mn-stones').getAttribute('aria-label'), 'Cheers', 'the balance is Cheers');
-  t.deep($$(g, '.tab').map((b) => b.textContent.trim()), ['Unlocks', 'Stickers', 'Diary', "Who's Who", 'Past Tours'], 'the five tab names');
-  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history'], 'on the same ids');
+  t.deep($$(g, '.tab').map((b) => b.textContent.trim()), ['Unlocks', 'Stickers', 'Diary', "Who's Who", 'Past Tours', 'Follow the duo'], 'the six tab names (HV_WORLD_DATA 10.1, HV_STORY 5.3)');
+  t.deep($$(g, '.tab').map((b) => b.dataset.id), ['unlocks', 'achievements', 'story', 'bestiary', 'history', 'follow'], 'on the same ids');
   t.deep($$(g, '.mn-tabpane:not([hidden]) .seg-b').map((b) => b.textContent), ['All', 'Cards', 'Charms', 'Gems'], 'the kind filter');
   t.deep($$(g, '.mn-sec-h > span').map((e) => e.textContent), ['Cards', 'Charms', 'Gems'], 'the section headings');
-  // Charm tiles: rarity word + " charm" + " for Hero", then the flavour line in italics from DATA
+  // Charm tiles: rarity word + " Charm" + " for Hero", then the flavour line in italics from DATA
   const RAR = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
   const relicTiles = $$(g, '.mn-item.k-relic');
   t.ok(relicTiles.length > 0, 'there are Charm tiles (' + relicTiles.length + ')');
   relicTiles.forEach((el) => {
     const d = g.DATA.relics[el.dataset.id], txt = el.querySelector('.mn-tile-txt');
-    const want = RAR[d.rarity] + ' charm' + (d.hero ? ' for ' + g.DATA.heroes[d.hero].name : '');
+    const want = RAR[d.rarity] + ' Charm' + (d.hero ? ' for ' + g.DATA.heroes[d.hero].name : '');
     t.eq(txt.querySelector('em').textContent, want, d.name + ' reads ' + want);
     const fl = txt.querySelector('.mn-tile-flavor');
     if (d.flavor) t.ok(fl && fl.textContent === d.flavor && txt.lastChild === fl, d.name + ' shows its flavour line last: ' + d.flavor);
@@ -1977,7 +2208,7 @@ await t.test('copy: the Tour Bus Stickers, Diary, Who\'s Who and Past Tours tabs
     const def = g.DATA.enemies[b.dataset.id] || g.DATA.rosterById[b.dataset.id];
     t.deep($$(g, '.mn-tag-chip.soft').map((c) => c.textContent), (def.tags || []).map((tg) => TAGS[tg]), def.name + ' wears its tag labels: ' + (def.tags || []).join());
   }
-  t.deep($$(g, '.mn-bd-stats i').map((e) => e.textContent), ['HP with no encore', 'defeated', 'met'], 'the stat captions');
+  t.deep($$(g, '.mn-bd-stats i').map((e) => e.textContent), ['HP with no encore', 'won over', 'met'], 'the stat captions');
   const tier = (id) => /, (Sidekick|Creature|Rival|Headliner)\. Won over/.exec($(g, '.mn-beast[data-id=' + id + ']').getAttribute('aria-label'))[1];
   t.deep(['boss_kuzunoha', 'oni_brute', 'kappa'].map(tier), ['Headliner', 'Rival', 'Creature'], 'tiers read Headliner, Rival, Creature');
   g._click($(g, '.mn-beast.unseen')); await settle(g, 1);
@@ -2007,7 +2238,7 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
   seedProfile(g); saveRun(g);
   await go(g, 'settings');
   const hint = (key) => ($(g, '.mn-set-row[data-setting=' + key + '] .mn-set-hint') || { textContent: '' }).textContent;
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent).slice(0, 5), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data'], 'the group headings');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'the group headings, About last');
   t.eq(hint('hints'), 'Short tips during your first tour', 'the Hints hint'); t.eq(hint('shake'), 'Try it: this line shakes as you drag', 'the shake hint');
   t.eq(hint('clear'), 'Erases unlocks, stickers, past tours and your saved tour. Asks twice.', 'the clear data hint');
   t.eq($(g, '.mn-sample').textContent, 'A soft note, a late kick, and the whole street starts to sing along.', 'the text size sample');
@@ -2034,14 +2265,14 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
 
 await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rules, the seven margin notes, the legends, the After page, the diagram lettering)', async () => {
   const HT = [
-    ['A World on Mute', 'Two heroes, three acts, one Gloss to sing through.', ['You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.', "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.", 'Every tour is a new one: a different map, different cards, different charms. Win or lose, you earn Cheers to unlock more.']],
+    ['A World on Mute', 'Two heroes, three acts, one Gloss to sing through.', ['You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.', "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.", 'Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.']],
     ['Unmute the Soundlands', 'The Soundlands are on mute. Your Vox turns them back on.', ['Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.', 'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.', 'Vox comes back from tea stalls, wins and green rooms. One-use Spells unmute whole shapes for free.']],
     ['Two Heroes, Two Spots', 'Who takes the lead matters.', ['The lead hero takes most attacks. The backing hero is safe from most of them.', 'Each hero has a favourite spot and a bonus there. Check it on the hero card.', 'You get one free swap per turn, more cost 1 Breath. If one hero loses their voice, the other steps up.']],
     ['Breath and Cards', 'Three Breath, five cards, one enemy turn.', ['Every card belongs to one hero. Play cards with Breath: you have 3 each turn.', 'Attacks hurt, skills defend or set things up. Block soaks damage until your next turn.', 'End your turn and unplayed cards are discarded while the enemies act. Then you draw 5 more.']],
     ['Read the Intents', 'Every enemy shows what it is about to do.', ['The bubble over an enemy tells you what it will do next: hit, block, jinx, summon.', 'Statuses stack. Exposed takes more damage, Muffled deals less, Earworm ignores Block.', 'Hover or press and hold any icon or underlined word to read what it means.']],
     ['Gems in Slots', 'Set a gem, change the card.', ['Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a rainbow slot takes any.', 'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.', 'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.']],
-    ['Green Rooms, Stalls and Detours', 'The map is full of small choices.', ["Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems and charms, and declutter your deck.", 'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.', 'Rivals guard charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.']],
-    ['After the Tour', 'Every tour leaves something behind.', ['You earn Cheers after every tour. Spend them on the Tour Bus on new cards, charms and gems.', 'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.', 'Keys, if you play with a keyboard, are listed below. Everything also works by touch.']],
+    ['Green Rooms, Stalls and Detours', 'The map is full of small choices.', ["Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.", 'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.', 'Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.']],
+    ['After the Tour', 'Every tour leaves something behind.', ['You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.', 'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.', 'Keys, if you play with a keyboard, are listed below. Everything also works by touch.']],
   ];
   const TIPS = [/both heroes lose their voice/, /^Unmuting a hex costs Vox/, /lead hero takes most/, /Block wears off/, /Enemy intents show/, /Gems only fit slots/, /A detour is a choice/];
   const g = fresh(); seedProfile(g);
@@ -2082,7 +2313,7 @@ await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rul
   const rows = await lettering(2, 800);
   t.ok(rows.has('LEAD') && rows.has('BACKING') && !rows.has('FRONT') && !rows.has('BACK'), 'page 3 labels the spots LEAD and BACKING');
   t.ok(rows.has('Jasmin likes it here') || rows.has('RoxorLoops likes it here'), 'and says who likes it here');
-  t.ok(rows.has('RoxorLoops prefers backing') || rows.has('Jasmin prefers the lead'), 'and who prefers the lead or backing, never the id: ' + [...rows].filter((x) => /prefers/.test(x)).join(' | '));
+  t.ok(rows.has('RoxorLoops prefers the backing spot') || rows.has('Jasmin prefers the lead spot'), 'and who prefers the lead or backing, never the id: ' + [...rows].filter((x) => /prefers/.test(x)).join(' | '));
   t.ok(![...rows].some((x) => /prefers (front|back)$/.test(x)), 'no "prefers front" or "prefers back"');
   const cards = await lettering(3, 40);
   t.ok(cards.has('Breath') && !cards.has('Energy'), 'page 4 captions the orbs Breath');
@@ -2096,8 +2327,8 @@ await t.test('copy: the pause overlay, bible 5.3 (plaques, run card, Charms, the
   await openPause(g);
   t.deep($$(g, '.mn-pause [data-act] .mn-p-main').map((e) => e.textContent), ['Resume', 'Deck', 'Charms', 'Settings', 'How to play', 'Save and quit', 'Abandon tour'], 'the plaques');
   t.eq($(g, '.mn-p-h').textContent, 'Your tour', 'the run card heading'); t.eq($(g, '.mn-p-chips').textContent.replace(/\s+/g, ' ').trim(), 'Act 1Encore II', 'the chips');
-  t.eq($(g, '.mn-p-relics').getAttribute('aria-label'), 'Charms', 'the strip is named Charms'); t.eq($(g, '.mn-p-relics .mn-p-none').textContent, 'No charms yet', 'and empty it says No charms yet');
-  t.eq($(g, '[data-act=relics] .hanko').getAttribute('aria-label'), '0 charms', 'the Charms seal is named 0 charms');
+  t.eq($(g, '.mn-p-relics').getAttribute('aria-label'), 'Charms', 'the strip is named Charms'); t.eq($(g, '.mn-p-relics .mn-p-none').textContent, 'No Charms yet', 'and empty it says No Charms yet');
+  t.eq($(g, '[data-act=relics] .hanko').getAttribute('aria-label'), '0 Charms', 'the Charms seal is named 0 Charms');
   t.eq($(g, '.mn-p-tip b').textContent, 'A tip from Jordan', 'the tip label');
   g.GAME.abandon = undefined;
   g._click(pbtn(g, 'abandon')); await settle(g);

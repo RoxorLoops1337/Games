@@ -1,4 +1,4 @@
-// ART.scene: the full-screen background paintings and the INKWOVEN logo (js/art_scenes.js), headless on the strict canvas stub.
+// ART.scene: the full-screen background paintings and the HOCUS VOCUS logo (js/art_scenes.js), headless on the strict canvas stub.
 //
 // What this pins down:
 //   * every DATA.LISTS.scenes id has real art (ART.has), ART.scene.info tells combat scenes from screen scenes, gallery sheets are registered

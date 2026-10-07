@@ -228,7 +228,9 @@ skills: `cast` or `block`). The 31 cards:
 | Andy (7) | `raiga_jab` Slap Bass, `raiga_static_fist` Thunder Thumb, `raiga_hard_knock` String Pop, `raiga_stilling_palm` Jaw Dropper, `raiga_cornered_tiger` Dig Deep, `raiga_drumroll` Loop Pedal, `raiga_heavens_answer` Octave Down (all attack) |
 
 Acceptance (motifs sheet with `hero=1`): every one of the 31 shows the right figure in stage clothes, mid-strike, with a cream sticker
-edge, readable at 120 px wide, and no two neighbours share a composition.
+edge, readable at 120 px wide, and no two neighbours share a composition. The figure's scale is `hs` 0.39 to 0.45 and its feet stand
+low enough that its highest hair (the mohawk, the ponytail, the quiff: `ART.hero.bounds(id).top`) clears the top edge of the card window by at
+least 6 virtual px of the 116 px window height, at any window width (P11 D9; `tests/hocus_vocus_art_cards.test.mjs` pins it).
 
 ### 2.10 Jordan and `ART.cast`
 
@@ -239,6 +241,9 @@ ids() }`, thin wrappers over the kit with the same sanitising as `ART.hero`. Use
   (same posts, planks and x, so the DOM laid over it does not move), at the peddler's scale, drawn with `ART.cast.draw(ctx, 'jordan', ...)`.
   Moods map to poses: `hello` = `sing` (waving, tablet up, expr `happy`), `buy` = `cheer`, `poor` = `hurt` with expr `shy` (an "oops",
   never sad), `sold` = `attack` (shows the tablet: a big sparkle on the screen), `leave` = `sing`, `empty` = `idle` with expr `sleepy`.
+- Jordan's merch tote stands at his side (the `prop` effect of his rig) with two folded T-shirts tucked in, leaning apart: a violet one with a
+  star print behind a sunny yellow one with a round print, each showing shoulders, two short sleeves and a round neckline (P11 D11: they
+  used to read as a pair of rabbit ears).
 - The tip labels (`Jordan's tip` on the title, `A tip from Jordan` in pause) may show `ART.cast.medallion(ctx, 'jordan', ...)` at r 14
   beside the label (the menu screens owner decides; the art is ready).
 - Detours that feature Jordan (`peddler_silver_bell`, Jordan's New Design) may show him on the Detour board plate as a bust.
@@ -591,7 +596,7 @@ icon id, the second gets a per-relic override (`RELIC_OWN[relicId]`), so all 66 
 | `jar` | `ink_jar` Jar of Giggles | a corked jar of bouncing pink and green sparkles | `apothecary_jar` Post-Show Smoothie: a tall orange smoothie with a stripy straw |
 | `geta` | `dancer_geta` Roller Skates | one pastel roller skate with spinning wheels | |
 | `kasa` | `well_kasa` Tour Kettle | a round kettle with a sticker on it, steam curling | |
-| `incense` | `burnt_offering` Glow Stick | a bent glow stick in pink, glowing softly | |
+| `incense` | `burnt_offering` Glow Stick | a straight, bright lime glow stick: a fat cylinder with a pale glowing core, two cream end caps, a lanyard loop and a soft halo (never bent, never a chevron) | |
 | `mirror` | `facet_lens` Rhinestone Mic | a mic studded with coloured stones, coins bouncing off | `mirror_of_two_faces` Twin Mic Stand: one stand with a pink mic and a green mic on a Y bar |
 | `comb` | `wooden_comb` Mixtape | a cassette with a hand-written label and two spinning reels | |
 | `dice` | `loaded_dice` Lucky Plectrum | a gold plectrum with a four-leaf sparkle | |
@@ -602,7 +607,7 @@ icon id, the second gets a per-relic override (`RELIC_OWN[relicId]`), so all 66 
 | `seal` | `merchants_seal` Sticker Sheet | a sheet of stickers (blossom, smiley, goat, star), one peeling | |
 | `umbrella` | `paper_umbrella` Pop Filter | a round mesh disc on a bendy gooseneck clip | |
 | `charm` | `mizuhiki_cord` Spare Headphones | violet over-ear headphones looped on a hook | |
-| `riceball` | `rice_ball` Warm Oat Bar | a golden oat bar snapped in two, a wisp of warmth | |
+| `riceball` | `rice_ball` Warm Oat Bar | a light golden oat bar with a few oat flecks, half wrapped in a torn teal wrapper with a star on it | |
 | `teacup` | `steaming_teacup` Travel Mug | a lidded travel mug covered in little stickers, a curl of steam | |
 | `koi` | `koi_pouch` Tote Bag | a teal tote bag printed with a tiny tote bag, a gem peeking out | |
 | `feather` | `phoenix_feather` Spare Mic | a second mic with a heart sticker, a small sparkle | |
@@ -611,7 +616,7 @@ icon id, the second gets a per-relic override (`RELIC_OWN[relicId]`), so all 66 
 | `compass` | `pilgrim_compass` Pitch Pipe | a round chrome pitch pipe with a ring of little holes | |
 | `candle` | `remembrance_candle` Fairy Lights | a mic stand wrapped in a string of warm bulbs | |
 | `ribbon` | `branching_bookmark` The Viral Clip | a phone showing a play button, little hearts floating up (no numbers, no logo) | |
-| `sword` | `whetstone` Practice Pad | a round drum practice pad with two crossed sticks | |
+| `sword` | `whetstone` Practice Pad | two crossed wooden drumsticks (a thick butt, a shaft, a small egg-shaped bead on the tip, no blade) over a small round practice pad | |
 | `katana_guard` | `spring_tsuba` Heart Necklace | a fine chain with a small gold heart, a pink glow | `ironclad_tsuba` Flight Case: a black flight case with silver corners and sticker patches |
 | `bow` | `longbow_of_reach` Megaphone | a white and orange megaphone with three sound arcs | |
 | `beads` | `juzu_beads` Heavy Strings | a coiled set of four bass strings in an orange packet | |
@@ -1067,6 +1072,12 @@ against their synth recipe and prints the suggested manifest `vol` (section 11).
 to -28 dBFS RMS in a fight and -28 to -31 in calm scenes, peaks under -3 dBFS, big sfx duck it, the Human theme is clearly the loudest line
 of `final` layer 2.
 
+Two dials in the tool keep that true (both measured, both written only through the MIX block): `AIM_BOOST_DB` gives the Human theme of
+`final` (croon, layer 2) 3 dB over the lead target, so it sits about 5 dB over the throat bass and 6 over the beat (the choir on layer 3
+stays a plain theme, and `theme-harmony` is typed lead); `LOUD_SCORES` (boss1, boss3, map3, shop, title, the scores whose A-weighted
+gated loudness reads low) are fitted 0.6 dB under the loud edge of their window instead of its middle, about 1 dB louder than the rest.
+The window is the cap: a bigger lift of those scores would need their voices, gains or layers changed, not a trim.
+
 ### 10.10 Audio tests that change (`tests/hocus_vocus_audio.test.mjs`)
 
 - Helpers: `SCALE` becomes the seven scales of 10.3; voice and scale lists (lines about 43 and 44) assert the new band and scale names.
@@ -1176,7 +1187,7 @@ true})`, replace `fetch` on that one boot's page global with a recording spy tha
 
 | Test | Asserts |
 |---|---|
-| S1 | the shipped `DATA.SAMPLES` is valid and empty; init on the stub makes zero `fetch` calls |
+| S1 | the shipped `DATA.SAMPLES` is a valid manifest whatever it lists (frozen, version, base, formats, preload, budget, gain, every key and entry), the loader accepts every entry without a warning, and every request stays in `audio/`; with no entries it makes zero `fetch` calls. S1b: an explicitly empty manifest, or one of the wrong shape, requests nothing and never throws. Every other boot of the suite starts from an empty manifest, so the suite does not depend on what the owners list |
 | S2 | with a fake manifest `{sfx: {hit_light: 'kick'}}`, nothing is fetched before init; after init and 2 s of virtual time exactly one fetch to `audio/kick.<format>` |
 | S3 | while loading, `AUDIO.sfx('hit_light')` schedules the synth recipe, never a buffer source |
 | S4 | after the stubbed decode resolves, `AUDIO.sfx('hit_light')` creates one buffer source reaching the sfx bus through the expected gain; cooldown and duck still apply; a `.kuro` variant wins when `{hero: 'kuro'}` is passed |
@@ -1185,13 +1196,16 @@ true})`, replace `fetch` on that one boot's page global with a recording spy tha
 | S7 | hygiene: the only `fetch(` under `hocus_vocus/js` is in audio.js with the pragma, reached only from the sample loader |
 | S8 | a `__HEADLESS` boot with a plain `init()` (no `force`) never fetches, whatever the manifest says |
 | S9 | syllable re-pitching beyond 7 semitones falls back to the synth |
+| S10 | on Quality Low (`AUDIO.options({lite: true})`) the map sings the plain pluck, so Spell and syllable recordings do not play there |
 
 ### 11.8 For the owners (a short `hocus_vocus/audio/README.md`, written in the same phase)
 
 1. Record each sound dry (no reverb), trim the silence at the start, export as `.m4a` (best on iPhone) or `.ogg`, peak at -1 dBFS.
 2. Put the files in `hocus_vocus/audio/`.
 3. List them in `js/data_samples.js`, for example `sfx: { hit_light: 'my_kick' }`; a list of names plays them in turn.
-4. Run `npm run check`, then open the game through a local server and play: anything missing or broken simply stays synthesised.
+4. Run `npm run check` (it stays green with entries: the audio suite judges the manifest's shape, keys and file names, never that it is
+   empty, and never looks for the files; `mix.mjs --samples` reports a missing file), then open the game through a local server and
+   play: anything missing or broken simply stays synthesised.
 5. The full key list (73 sound ids, the variants, the Spells, the syllables, the stingers) is in this plan, 10.7, 10.8 and 11.1.
 
 ## 12. Phases and work split (art and audio)

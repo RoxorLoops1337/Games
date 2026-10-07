@@ -16,7 +16,7 @@ const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 const t = harness('hocus_vocus art cards');
 // ART_CARDS_TIMING=1 prints how long each test takes (the suite draws a lot: keep an eye on it)
 const T = (name, fn) => t.test(name, () => { const t0 = Date.now(); fn(); if (process.env.ART_CARDS_TIMING) console.log(String(Date.now() - t0).padStart(6), 'ms', name.slice(0, 90)); });
-const api = boot({ only: ['util', 'data*', 'art', 'art_heroes', 'art_cards'] });
+const api = boot({ only: ['util', 'data*', 'art', 'art_cast_kit', 'art_cast', 'art_cards'] });
 const { ART, DATA, U } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art_cards loads without errors: ' + JSON.stringify(api._errors));
@@ -274,6 +274,25 @@ T('the hero silhouette appears exactly on cards whose art.hero is true', () => {
       else { without++; t.eq(calls.length, 0, `${c.id} draws no hero`); }
     }
     t.ok(withHero >= 30 && without >= 90, `both kinds exist (${withHero} with a hero, ${without} without)`);
+  } finally { ART.hero.draw = real; }
+});
+
+T('the hero sticker keeps its highest hair (mohawk, ponytail, quiff) clear of the top edge of the card window', () => {
+  // P11 D9: the figure used to stand so high that the hair touched or crossed the top edge; the feet now sit low enough for bounds.top
+  const real = ART.hero.draw; let seen = null; ART.hero.draw = (ctx, id, o) => { seen = { id, y: o.y, s: o.s }; return real(ctx, id, o); };
+  try {
+    let n = 0;
+    CARDS.filter((c) => c.art && c.art.hero && c.hero && HEROES.includes(c.hero)).forEach((c) => {
+      const top = -ART.hero.bounds(c.hero).top;
+      [0, 1].forEach((up) => [58, 116, 170, 300].forEach((VW) => {
+        const Ly = ART.card._layout(c.id, up, VW);
+        t.ok(Ly.hy - top * Ly.hs >= 5, `${c.id} (up ${up}, window ${VW}): hair top at ${(Ly.hy - top * Ly.hs).toFixed(1)} virtual px`); n++;
+      }));
+      ART.sprite.clear(); seen = null;
+      ART.card.draw(newCtx(), c.id, 170, 116);
+      t.ok(seen && seen.id === c.hero && seen.y - top * seen.s >= 5, `${c.id}: the real draw call stands the figure at y ${seen && seen.y.toFixed(1)}, scale ${seen && seen.s.toFixed(2)}`);
+    });
+    t.ok(n >= 240, `checked ${n} layouts`);
   } finally { ART.hero.draw = real; }
 });
 

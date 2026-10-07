@@ -1,4 +1,4 @@
-// Echowake balance bot: worker thread. Receives { id, cfg } messages, plays one run each with the real game scripts (booted once per
+// Hocus Vocus balance bot: worker thread. Receives { id, cfg } messages, plays one run each with the real game scripts (booted once per
 // worker), and answers { id, rec } or { id, error }. See pool.mjs for the other end.
 import { parentPort } from 'node:worker_threads';
 import { loadGame } from './game.mjs';

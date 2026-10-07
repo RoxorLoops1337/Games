@@ -1,10 +1,10 @@
-// Echowake balance bot: the run driver. playRun() plays ONE complete run through the real RUN / COMBAT / MAP APIs and returns a
+// Hocus Vocus balance bot: the run driver. playRun() plays ONE complete run through the real RUN / COMBAT / MAP APIs and returns a
 // plain-JSON record of everything the report needs (fights, picks, deaths, economy, final deck). Deterministic for a seed.
 //
 //   playRun(G, { heroes:[a,b], trial:0, seed:1, unlocked:'all'|'none', style:'normal'|'rush'|'explore'|'max', combat:'ai'|'greedy', draftNoise, maxSteps })
 //
-// The loop is the same one the real game runs: map step (visit, brush, paint, walk) -> node (combat, reward, shop, event, camp, forge,
-// chest, gem cache) -> finishNode -> chapterEnd. A global step cap and per-node stall guards make an infinite loop impossible; hitting
+// The loop is the same one the real game runs: map step (visit, Spell, unmute, walk) -> node (combat, reward, shop, event, camp, forge,
+// chest, gem cache) -> finishNode -> `chapterEnd`. A global step cap and per-node stall guards make an infinite loop impossible; hitting
 // either marks the run result 'stall' so the test suite and the report can see it.
 import { createValuer } from './cardval.mjs';
 import { createCombatAI } from './combat_ai.mjs';
@@ -15,7 +15,7 @@ const STYLE = {
   rush: { fights: [3, 3, 3], extra: 4, eliteMin: 0.9, fightMin: 0.5, brushMin: 2.5 },
   normal: { fights: [6, 6, 6], extra: 12, eliteMin: 0.62, fightMin: 0.42, brushMin: 3.0 },
   explore: { fights: [9, 9, 9], extra: 24, eliteMin: 0.55, fightMin: 0.38, brushMin: 3.5 },
-  // max: paint and fight for as long as the Ink and the party's HP allow (the Ink economy probe: how far can one chapter's Ink go?)
+  // max: unmute and fight for as long as the Vox and the party's HP allow (the Vox economy probe: how far can one Act's Vox go?)
   max: { fights: [99, 99, 99], extra: 99, eliteMin: 0.5, fightMin: 0.35, brushMin: 3.5 },
 };
 
@@ -286,7 +286,7 @@ export function playRun(G, cfg) {
   // ------------------------------------------------------------------ map: analysis helpers
   const key = MAP.key;
   function nbrs(M, t) { return MAP.neighbors(M, t.q, t.r).map((c) => M.tiles[key(c[0], c[1])]).filter((x) => x && x.type !== 'block'); }
-  // 0-1 BFS from the painted ground the party can WALK on (islands painted by a Blot brush or an event are not connected to the party).
+  // 0-1 BFS from the live ground the party can WALK on (islands unmuted by a Hocus Focus Spell or an event are not connected to the party).
   // cost(entering a tile) = 0 if painted (or in extra) else 1. Returns Map key -> dist
   function distFromPainted(M, extra, parents, reachIn) {
     const dist = new Map();
@@ -334,7 +334,7 @@ export function playRun(G, cfg) {
   }
   const bossCost = (M, extra, reach) => { const d = distFromPainted(M, extra, null, reach); const v = d.get(key(M.boss.q, M.boss.r)); return v === undefined ? 99 : v; };
 
-  // ------------------------------------------------------------------ map: brushes
+  // ------------------------------------------------------------------ map: Spells (brushes)
   function tryBrush(inkShort) {
     if (!R.brushes.length) return false;
     const M = R.map;
@@ -343,7 +343,7 @@ export function playRun(G, cfg) {
     const f = distToBoss(M);
     const bossKey = key(M.boss.q, M.boss.r);
     const base = dP.get(bossKey) === undefined ? 99 : dP.get(bossKey);
-    // tiles on some cheapest chain to the boss: a brush that covers them saves Ink one for one
+    // tiles on some cheapest chain to the boss: a Spell that covers them saves Vox one for one
     const onPath = new Set();
     dP.forEach((d, k) => { const x = f.get(k); if (x !== undefined && !M.tiles[k].painted && d + x === base) onPath.add(k); });
     const cands = [];
@@ -524,12 +524,12 @@ export function playRun(G, cfg) {
 
     if (curChapter.base === undefined) curChapter.base = dBoss;
     const reserve = bossReach ? 0 : 1;
-    const budgetHexes = curChapter.base + style.extra - (R.stats.hexesPainted - curChapter.painted0);     // hexes the style allows us to paint this chapter
+    const budgetHexes = curChapter.base + style.extra - (R.stats.hexesPainted - curChapter.painted0);     // hexes the style allows us to unmute this Act
     const surplus = Math.min(R.ink - dBoss - reserve, budgetHexes - dBoss);
     const wantMore = curChapter.fights < style.fights[Math.min(2, R.chapter - 1)];
     const inkShort = R.ink < dBoss && R.brushes.length === 0;
 
-    // 2. a brush that saves Ink or reveals plenty
+    // 2. a Spell that saves Vox or reveals plenty
     if (!bossReach && tryBrush(R.ink < dBoss)) return true;
 
     // 3. boss already painted and the party is hurt: camp first
@@ -537,7 +537,7 @@ export function playRun(G, cfg) {
       if (visitStep({ bossNear: true, forced: false, only: 'camp' })) return true;
     }
 
-    // 4. explore while Ink allows and more fights are wanted (or HP needs a camp)
+    // 4. explore while Vox allows and more fights are wanted (or HP needs a camp)
     const f = distToBoss(M);
     if (surplus >= 1 || (h.avg < 0.6 && surplus >= 0)) {
       let best = null;
@@ -601,13 +601,13 @@ export function playRun(G, cfg) {
       return false;
     }
 
-    // 5. head for the boss: paint the cheapest chain (as far as the Ink goes)
+    // 5. head for the boss: unmute the cheapest chain (as far as the Vox goes)
     if (cfg.trace) cfg.trace.push('  head for boss');
     if (R.ink >= 1) {
       const res = paintTo(M, bossTile, R.ink);
       if (res.ok) return true;
     }
-    // 6. out of Ink: take whatever is reachable (forced), else the mercy rule has already fired or will on the next check
+    // 6. out of Vox: take whatever is reachable (forced), else the mercy rule has already fired or will on the next check
     ctxm.forced = true;
     if (visitStep(ctxm)) { rec.forcedFights += 1; rec.starve += 1; return true; }
     if (RUN.checkStranded(R)) { rec.starve += 1; return true; }

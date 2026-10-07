@@ -1,7 +1,7 @@
-// ART enemies, chapter 1 (js/art_enemies_1.js): the Whispering Bamboo Grove, headless on the strict canvas stub.
+// ART enemies, Act 1 (js/art_enemies_1.js): Blossom Bay, headless on the strict canvas stub.
 //
 // What this pins down:
-//   * every id of the fixed chapter 1 roster (10 normals, 3 elites, 3 minions, the boss) is registered as REAL art (ART.has) with sane bounds
+//   * every id of the fixed Act 1 roster (10 normals, 3 elites, 3 minions, the boss) is registered as REAL art (ART.has) with sane bounds
 //   * every id draws every pose (idle attack hurt block buff die telegraph) at several t and pt values, at several scales, flipped and not,
 //     without throwing and without a single canvas issue (NaN, bad arguments, unbalanced save and restore)
 //   * drawing is deterministic (same arguments, same calls), idle is never static, every pose changes the picture, one-shot poses hold their
@@ -12,7 +12,7 @@
 import { boot, harness } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus art enemies 1');
-const api = boot({ only: ['util', 'data*', 'art', 'art_heroes', 'art_enemies_1'] });
+const api = boot({ only: ['util', 'data*', 'art', 'art_cast_kit', 'art_cast', 'art_enemies_1'] });
 const { ART, DATA } = api;
 const L = DATA.LISTS;
 t.ok(!api._errors || api._errors.length === 0, 'art_enemies_1 loads without errors: ' + JSON.stringify(api._errors));
@@ -47,7 +47,7 @@ const IDS = ROSTER.map((r) => r.id);
 const POSES = L.enemyPoses;
 const BOSS = 'boss_kuzunoha';
 
-t.test('the chapter 1 roster is complete: 10 normals, 3 elites, 3 minions, the boss', () => {
+t.test('the Act 1 roster is complete: 10 normals, 3 elites, 3 minions, the boss', () => {
   t.eq(IDS.length, 17, '17 ids in DATA.ROSTER[1]');
   const by = (tier) => ROSTER.filter((r) => r.tier === tier).length;
   t.eq(by('normal'), 10, '10 normals'); t.eq(by('elite'), 3, '3 elites'); t.eq(by('minion'), 3, '3 minions'); t.eq(by('boss'), 1, 'the boss');

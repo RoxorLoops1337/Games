@@ -1,5 +1,6 @@
 // Hocus Vocus: data_meta.js: Stickers (achievements), Encores, tips and the lore (Tour Diary entries, hero entries and combat barks).
-// Data only (DESIGN 4.10, CONTENT_SPEC 6): one IIFE that registers into DATA.achievements, DATA.trials, DATA.tips and DATA.lore.
+// Data only (DESIGN 4.10, CONTENT_SPEC 6): one IIFE that registers into DATA.achievements, DATA.trials, DATA.tips and DATA.lore,
+// and sets the frozen presentation table DATA.outfits (see OUTFITS below).
 // No functions, no clock, no unseeded randomness, no em or en dashes. Checked by DATA.validate and DATA.audit('meta') and by
 // tests/hocus_vocus_narrative.test.mjs.
 //
@@ -17,6 +18,10 @@
 //
 // TIPS (30, at most 110 characters). Mechanics only, no hand-typed numbers that tuning could change. Tip N keeps the place of the
 //   old tip N, so the per-screen tip pickers (and the How to Play regexes) keep their meaning.
+//
+// OUTFITS (DATA.outfits, bible 7.1, HV_ART_AUDIO 2.11). A plain, frozen presentation table {heroId: {name, sticker}}: the costume a
+//   hero can wear and the Sticker that unlocks it. Read only by ui.js (the viewer's choice, kept in its own key hv_skins_v1) and the
+//   menu and end screens; never by RUN, COMBAT, MAP, META or the bot. Andy (raiga) has no outfit yet.
 //
 // LORE. Tour Diary entries {id, title <= 40, text <= 700}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory,
 //   defeat, hero_<id> x4. Plain paragraphs of prose with no line breaks (the story screen types them out). Shared entries never name
@@ -36,6 +41,13 @@
 //      sing. Flawless turns out to be that first little filter; it sings one real, wobbly note, and the Gloss softens into ordinary
 //      stage shine that makes the lights sparkle. The tour goes on.
 (() => {
+  // ------------------------------------------------------------------ Outfits (presentation only: nothing reads it to play)
+  DATA.outfits = Object.freeze({
+    hanae: Object.freeze({ name: 'Unicorn Onesie', sticker: 'petal_and_steel' }),
+    kuro: Object.freeze({ name: 'Monster Onesie', sticker: 'ink_and_insight' }),
+    suzu: Object.freeze({ name: 'Goat Suit', sticker: 'moonlit_vigil' }),
+  });
+
   // ------------------------------------------------------------------ Stickers (achievements)
   DATA.add('achievements', {
     ch1_clear: { name: 'Mics Returned', text: 'Defeat Kraki, the Karaoke Kraken, and finish the first act.', stat: { k: 'boss1Kills', gte: 1 }, reward: { inkstones: 10 } },
@@ -54,7 +66,7 @@
     cartographer: { name: 'Volume Up', text: 'Unmute 500 hexes across all your tours.', stat: { k: 'hexesPainted', gte: 500 }, reward: { inkstones: 10 } },
     brush_collector: { name: 'Spellcaster', text: 'Cast 25 Spells on the map.', stat: { k: 'brushesUsed', gte: 25 }, reward: { inkstones: 10 } },
     treasure_hunter: { name: 'Unboxing', text: 'Open 25 gift boxes.', stat: { k: 'chestsOpened', gte: 25 }, reward: { inkstones: 10 } },
-    curio_cabinet: { name: 'Charm Bracelet', text: 'Find 50 charms across your tours.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
+    curio_cabinet: { name: 'Charm Bracelet', text: 'Find 50 Charms across your tours.', stat: { k: 'relicsFound', gte: 50 }, reward: { inkstones: 12 } },
     fable_fan: { name: 'Scenic Route', text: 'Take 60 detours. Some of them were even shortcuts.', stat: { k: 'eventsSeen', gte: 60 }, reward: { inkstones: 10 } },
 
     big_spender: { name: 'Merch Legend', text: 'Spend 3000 gold at merch stalls. Jordan sends his regards.', stat: { k: 'goldSpent', gte: 3000 }, reward: { inkstones: 10 } },
@@ -161,7 +173,7 @@
     },
     defeat: {
       title: 'The Show Must Go On',
-      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the kraken keeps the spare mics. Have a sip of water, try a different road, and remember that the show goes on.',
+      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the spare mics are kept. Have a sip of water, try a different road, and remember that the show goes on.',
     },
 
     // ---------------------------------------------------------------- lore: the four hero entries

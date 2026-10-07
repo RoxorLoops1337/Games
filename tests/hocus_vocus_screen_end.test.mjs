@@ -1,6 +1,6 @@
 // Story and endings suite: the screens story, chapterClear, gameOver and victory (js/screen_end.js, css/end.css) and the first-run hints
 // (js/tutorial.js). Everything runs against the REAL modules (RUN, COMBAT, META, UI, ART, AUDIO, GAME and the combat screen) in the headless
-// loader. The run summaries come from simulated runs: a bot plays real COMBAT fights for all three chapters (a win) or loses the first one,
+// loader. The run summaries come from simulated runs: a bot plays real COMBAT fights for all three Acts (a win) or loses the first one,
 // RUN.combatDone / claim / finishNode / chapterEnd move the run exactly as GAME does, and GAME.defeat / GAME.victory / GAME.nodeDone route to
 // the screens with the real summary and the real META.recordRun result. The typewriter and the animation clock are checked in a realtime boot.
 // The `tutorial` section drives a guided beginning through the bus, the placeholder map and the real combat screen and asserts that every hint
@@ -102,7 +102,7 @@ function takeRewards(R) {
   return RUN.finishNode(R);
 }
 
-// a run that clears `chapters` bosses (a win at 3) or dies in chapter `die`
+// a run that clears `chapters` bosses (a win at 3) or dies in Act `die`
 function simulate(seed, heroes, outcome, chapters = 3) {
   const R = RUN.newRun({ heroes, seed, trial: 0 });
   if (!R.map) RUN.startChapter(R, 1);
@@ -204,11 +204,11 @@ await t.test('Hocus Vocus copy: the kickers and seals (HV_STORY 3.4), the curtai
   const won = V.summaryText(Object.assign({ trial: 3 }, base), null, true).split('\n'), lost = V.summaryText(Object.assign({ trial: 0 }, base), null, false).split('\n'), daily = V.summaryText(Object.assign({ daily: true }, base), null, true).split('\n');
   t.eq(won[0], 'HOCUS VOCUS: still human', 'a win shares as still human'); t.eq(lost[0], 'HOCUS VOCUS: intermission in Act 2', 'a loss shares as an intermission');
   t.ok(/ \| Encore 3$/.test(won[1]) && / \| Encore 0$/.test(lost[1]) && / \| Daily Duet 7$/.test(daily[1]), 'the mode reads Encore N, Encore 0 and Daily Duet seed');
-  t.eq(won[2], 'Seed 7 | 20 cards | 1 charm | 2 acts cleared', 'the third line counts cards, charms and acts');
+  t.eq(won[2], 'Seed 7 | 20 cards | 1 Charm | 2 acts cleared', 'the third line counts cards, charms and acts');
   const cards = V.unlockEntries({ heroesUnlocked: ['suzu'], newTrial: 4 }, null);
   t.eq(cards.map((c) => c.seal + ' / ' + c.title).join(' ; '), 'NEW / ' + DATA.heroes.suzu.name + ' joins the tour! ; ENCORE / Encore 4 unlocked', 'the unlock cards');
   t.ok(/^.+\. Waiting on the hero select\.$/.test(cards[0].text) && /A harder encore of the same tour is waiting on the hero select\.$/.test(cards[1].text), 'and their lines');
-  t.eq(V.scoreRows({ stats: { bossKills: 1, elites: 2 }, heroes: [], gold: 10, score: 0 }, null).rows.slice(0, 4).map((r) => r.label).join(' | '), 'Acts cleared | Headliners won over | Rivals defeated | Gold in your pocket', 'the score row labels');
+  t.eq(V.scoreRows({ stats: { bossKills: 1, elites: 2 }, heroes: [], gold: 10, score: 0 }, null).rows.slice(0, 4).map((r) => r.label).join(' | '), 'Acts cleared | Headliners won over | Rivals won over | Gold in your pocket', 'the score row labels');
 });
 await t.test('story: Enter completes then turns the page; Skip, Esc and a tap on the backdrop; no double turn', async () => {
   await UI.go('title', null, { force: true, transition: 'none' }); await settle(g);
@@ -268,10 +268,10 @@ await t.test('the simulation produced a real win and a real defeat', () => {
 });
 
 // ================================================================================================ chapterClear
-// a run frozen right after the chapter 1 boss, exactly what GAME.chapterFlow hands the screen
+// a run frozen right after the Act 1 boss, exactly what GAME.chapterFlow hands the screen
 function chapterOne(seed) {
   // the helper bot is simple: on some seeds (and after every balance pass, different ones) it loses the boss. Try the next seed
-  // until chapter 1 is really cleared, so these screens are always shown a genuine win.
+  // until Act 1 is really cleared, so these screens are always shown a genuine win.
   for (let k = 0; ; k++) {
     const R = RUN.newRun({ heroes: ['hanae', 'kuro'], seed: seed + k, trial: 0 });
     if (!R.map) RUN.startChapter(R, 1);
@@ -286,7 +286,7 @@ function chapterOne(seed) {
     return { R, ce, fin };
   }
 }
-await t.test('chapterClear: the headline, the stats counting from the run, the heal and max HP plan, treasures, Continue', async () => {
+await t.test('chapterClear: the headline, the stats counting from the run, the heal and max HP plan, Charms, Continue', async () => {
   const { R, ce, fin } = chapterOne(31);
   t.ok(fin.chapterEnded, 'the boss ended chapter 1');
   GAME.state.R = R; UI.setRun(R);
@@ -297,6 +297,7 @@ await t.test('chapterClear: the headline, the stats counting from the run, the h
   t.eq(txt($('.cc-title', root)), DATA.lore.ch1_clear.title, 'the lore title is the headline');
   t.eq(txt($('.cc-kicker', root)), 'END OF ACT ONE', 'the kicker');
   t.ok(txt($('.cc-boss', root)).indexOf(DATA.enemies.boss_kuzunoha.name) === 0, 'the boss is named');
+  t.eq(txt($('.cc-boss', root)), 'Kraki, the Karaoke Kraken, sings along', 'the subtitle reads as a sentence (the bible spells it "the Karaoke Kraken", only the title card capitalises The)');
   t.eq(txt($('.cc-lore', root)), DATA.lore.ch1_clear.text, 'the clear lore is in the scroll');
   t.ok(META.loreSeen('ch1_clear'), 'and marked');
   const tiles = Object.fromEntries($$(g, '.en-tile', root).map((el) => [txt($('.en-tile-lab', el)), num(txt($('.en-num', el)))]));
@@ -320,7 +321,7 @@ await t.test('chapterClear: the headline, the stats counting from the run, the h
   await g._tick(500);
   t.eq(errs(g), e0, 'no console errors');
 });
-await t.test('chapterClear: a hero the chapter unlocks gets her own announcement', async () => {
+await t.test('chapterClear: a hero the Act unlocks gets her own announcement', async () => {
   const { R, ce } = chapterOne(33);
   GAME.state.R = R; UI.setRun(R);
   META.check(R, 1);
@@ -329,11 +330,11 @@ await t.test('chapterClear: a hero the chapter unlocks gets her own announcement
   const nh = $(g, '.cc-newhero');
   t.ok(nh && new RegExp(esc(DATA.heroes.suzu.name) + ' joins the tour!').test(txt(nh)), 'the announcement names her'); t.ok(nh.className.indexOf('show') >= 0, 'and is shown');
 });
-await t.test('chapterClear through GAME: nodeDone after the boss routes here, Continue goes on to the chapter 2 story and the map', async () => {
+await t.test('chapterClear through GAME: nodeDone after the boss routes here, Continue goes on to the Act 2 story and the map', async () => {
   const R = RUN.newRun({ heroes: ['kuro', 'hanae'], seed: 41, trial: 0 }); if (!R.map) RUN.startChapter(R, 1);
   GAME.state.R = R; UI.setRun(R);
   simFight(R, 'boss', false);
-  // the reward screen claims, then calls GAME.nodeDone: RUN.finishNode reports the chapter end and GAME routes to chapterClear
+  // the reward screen claims, then calls GAME.nodeDone: RUN.finishNode reports the Act end and GAME routes to chapterClear
   const rw = R.node && R.node.rewards;
   if (rw) RUN.claim(R, rw, { card: null, relic: null, gem: null, takeBrush: false });
   await GAME.nodeDone(); await settle(g);
@@ -369,7 +370,7 @@ function expectRows(root, summary, R) {
   const sum = rows.reduce((a, r) => a + (txt($('.en-row-pts', r)).startsWith('-') ? -1 : 1) * num(txt($('.en-row-pts', r)).replace(/^[+-]/, '')), 0);
   return { rows, sum };
 }
-await t.test('gameOver through GAME.defeat: the breakdown adds up to the real score, Inkstones, recap and heroes', async () => {
+await t.test('gameOver through GAME.defeat: the breakdown adds up to the real score, Cheers, recap and heroes', async () => {
   const R = LOSE.R;
   GAME.state.R = R; UI.setRun(R);
   const e0 = errs(g);
@@ -411,6 +412,73 @@ await t.test('gameOver: Try Again starts a new run with the same heroes and tria
   await click(g, $(g, '.go-title-btn'));
   t.eq(UI.currentName, 'title', 'Title');
 });
+// ---------------------------------------------------------------------------------------------------- follow the duo, Share and Support (P9, HV_STORY 5.4)
+// ui.js owns the panel, the sheet and Share (its own suite pins them); these checks pin where the end screens place them.
+const HANDLE = 'Made for RoxorLoops and Jasmin. Find them as @roxorloopsandjasmin.';
+const SHARE_TEXT = 'I just played HOCUS VOCUS: A Vocal Magic Adventure, with RoxorLoops and Jasmin. Still human.';
+const BLANK_LINKS = { handle: '@roxorloopsandjasmin', website: '', youtube: '', facebook: '', tiktok: '', instagram: '', support: '', game: '' };
+const setLinks = (o) => g._run(`DATA.LINKS = Object.freeze(${JSON.stringify(Object.assign({}, BLANK_LINKS, o))});`);
+const closeSheet = async () => { await click(g, btnByText(g, /^Close$/, $(g, '.o-modal'))); };
+await t.test('gameOver: a slim ghost row under Try Again and Title offers Share and Follow the duo, and never Support (HV_STORY 5.4, principle 3)', async () => {
+  const R = LOSE.R;
+  const e0 = errs(g);
+  await UI.go('gameOver', { summary: RUN.summary(R), R }, { force: true, transition: 'none' }); await settle(g);
+  const root = $(g, '.s-gameOver');
+  const mid = $('.go-mid', root);
+  const kids = Array.from(mid.children).map((c) => c.className.split(' ')[0]);
+  t.ok(kids.indexOf('go-follow') === kids.indexOf('go-btns') + 1, 'the row follows the Try Again and Title buttons: ' + kids.join(','));
+  const row = $('.go-follow', root);
+  t.deep($$(g, 'button', row).map((b) => txt(b)), ['Share', 'Follow the duo'], 'Share and Follow the duo');
+  t.ok($$(g, 'button', row).every((b) => b.classList.contains('btn-ghost') && b.classList.contains('btn-sm')), 'slim ghost buttons, quieter than Try Again');
+  t.eq($('.go-share', root).getAttribute('aria-label'), 'Share Hocus Vocus', 'Share names the game for screen readers');
+  t.deep($$(g, '.go-btns .btn .btn-label', root).map((b) => txt(b)), ['Try Again', 'Title'], 'Try Again and Title stay as they were');
+  t.ok(!/Support the duo/.test(txt(root)), 'no Support the duo on a lost tour'); t.eq($$(g, 'a', root).length, 0, 'and no link at all');
+  await click(g, $('.go-share', root));
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + UI.shareUrl(), 'Share copies the share text and the page address (no share sheet in the sandbox)');
+  await click(g, $('.go-follow-btn', root));
+  t.ok(UI.overlay.has('modal') && $(g, '.o-modal .hv-follow.hv-sheet'), 'Follow the duo opens the sheet');
+  t.eq($$(g, '.o-modal a.hv-support').length, 0, 'and with no URL set the sheet has no Support either');
+  await closeSheet();
+  t.ok(!UI.overlay.has('modal'), 'Close closes it'); t.eq(UI.currentName, 'gameOver', 'the page is still the game over page');
+  // the owners set a Support URL: it shows on the sheet's own terms elsewhere, but never on this page
+  setLinks({ support: 'https://example.invalid/support', website: 'https://example.invalid/' });
+  try {
+    await UI.go('gameOver', { summary: RUN.summary(R), R }, { force: true, transition: 'none' }); await settle(g);
+    const r2 = $(g, '.s-gameOver');
+    t.ok(!/Support the duo/.test(txt(r2)), 'with a Support URL set the game over page still shows no Support the duo');
+    t.eq($$(g, 'a', r2).length, 0, 'and still no anchor');
+    t.deep($$(g, '.go-follow button', r2).map((b) => txt(b)), ['Share', 'Follow the duo'], 'only Share and Follow the duo');
+    await click(g, $('.go-follow-btn', r2));
+    t.eq($$(g, '.o-modal a.hv-support').length, 1, 'the sheet itself is the owners panel and may offer Support (it is the player who asked)');
+    await closeSheet();
+  } finally { setLinks({}); }
+  t.eq(errs(g), e0, 'no console errors');
+});
+// P3 3C (bible 7.1, HV_ART_AUDIO 2.11): a Sticker that unlocks an outfit adds a "New outfit: <name>" card in the unlock style, its art the hero
+// portrait in the outfit, smiling. Andy's Sticker unlocks no outfit, so it adds no card.
+await t.test('end screens: the New outfit card follows the Sticker that unlocks it, drawn with the portrait in the outfit', async () => {
+  const P = UI.screens.gameOver._t;
+  const ents = P.unlockEntries({ newAchievements: ['ch1_clear', 'petal_and_steel', 'thunder_and_laughter', 'moonlit_vigil'] }, {});
+  t.eq(ents.map((e) => e.kind).join(','), 'ach,ach,outfit,ach,ach,outfit', 'each outfit card sits right under its Sticker; Andy\'s Sticker has none');
+  const outfits = ents.filter((e) => e.kind === 'outfit');
+  t.deep(outfits.map((e) => e.title), ['New outfit: ' + DATA.outfits.hanae.name, 'New outfit: ' + DATA.outfits.suzu.name], 'titled New outfit: Unicorn Onesie and Goat Suit (bible 7.1)');
+  t.deep(outfits.map((e) => e.id), ['hanae', 'suzu'], 'for Jasmin and RawClaw'); t.ok(outfits.every((e) => e.seal === 'NEW' && /hero select\.$/.test(e.text)), 'a NEW seal and a line that says where to pick it');
+  t.ok(outfits.every((e) => /^[\x20-\x7e]+$/.test(e.text + e.title) && !DASH.test(e.text + e.title)), 'printable ASCII, no dashes');
+  g._run(`globalThis.__portraits = []; (function () { const p = ART.hero.portrait; ART.hero.portrait = function (ctx, id, o) { __portraits.push(id + ':' + (o && o.skin) + ':' + (o && o.expr)); return p.apply(this, arguments); }; })();`);
+  const sm = RUN.summary(LOSE.R);
+  await UI.go('gameOver', { summary: sm, record: { inkstones: 15, newAchievements: ['ink_and_insight'], heroesUnlocked: [] }, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
+  const card = $('.s-gameOver .en-unlock.k-outfit');
+  t.ok(card, 'the game over list shows the outfit card');
+  t.eq(txt(card.querySelector('.en-unlock-t')), 'New outfit: ' + DATA.outfits.kuro.name, 'New outfit: Monster Onesie');
+  t.ok(card.querySelector('.en-unlock-art canvas'), 'with a portrait canvas');
+  t.ok(g._run('__portraits.slice()').indexOf('kuro:skin:smile') >= 0, 'drawn by ART.hero.portrait in the outfit (skin), smiling');
+  t.ok(/\.en-unlock\.k-outfit\s*\{/.test(CSS) && /\.en-unlock-art\s*\{/.test(CSS), 'css: the outfit card and its art have their look in end.css');
+  await UI.go('victory', { summary: Object.assign({}, sm, { victory: true }), record: { inkstones: 15, newAchievements: ['petal_and_steel'], heroesUnlocked: [] }, R: LOSE.R }, { force: true, transition: 'none' }); await settle(g);
+  await click(g, btnByText(g, /^Skip/)); await settle(g);
+  t.ok(/New outfit: Unicorn Onesie/.test(txt($('.s-victory .vc-newcard'))), 'the victory showcase lists it too');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
 await t.test('gameOver: unlock entries from a record, the achievements, a hero, a trial, and no record', async () => {
   const P = UI.screens.gameOver._t;
   const rec = { inkstones: 33, bonus: 10, total: 120, newAchievements: ['ch1_clear', 'nonexistent_achievement'], newTrial: 2, heroesUnlocked: ['suzu'] };
@@ -439,7 +507,7 @@ await t.test('gameOver: no run, no summary at all still renders and keys work', 
 });
 
 // ================================================================================================ victory
-await t.test('victory through GAME.victory: the three beats, the share card, the summary, Inkstones and Continue', async () => {
+await t.test('victory through GAME.victory: the three beats, the share card, the summary, Cheers and Continue', async () => {
   const R = WIN.R;
   GAME.state.R = R; UI.setRun(R);
   const e0 = errs(g);
@@ -449,12 +517,15 @@ await t.test('victory through GAME.victory: the three beats, the share card, the
   t.eq(txt($('.st-title', root)), DATA.lore.victory.title, 'beat one: the victory page');
   t.eq(txt($('.st-kicker', root)), 'FINALE', 'the victory kicker'); t.eq(txt($('.st-seal', root)), 'BRAVO', 'and its seal'); t.ok(/Tap to continue/.test(txt($('.st-hint', root))), 'with the Hocus Vocus tap prompt');
   t.eq(txt($('.st-typed', root)), DATA.lore.victory.text.slice(1).replace(/\s+/g, ' ').trim(), 'typed in full');
+  t.ok($$(g, 'button, a', root).every((b) => !/Share|Follow the duo|Support the duo/.test(txt(b))), 'the typed epilogue has no follow, share or support button');
   g._key('Enter'); await settle(g);
   t.ok($('.vc-caps', root), 'beat two: the curtain call'); t.eq(txt($('.vc-cast-title', root)), 'Everyone Who Sang Along', 'the cast heading');
   t.eq($$(g, '.vc-cap', root).length, 4, 'four heroes, a line each');
   t.eq($$(g, '.vc-cap.party', root).map((c) => txt($('.vc-cap-name', c)).replace(/ \*$/, '')).join(','), DATA.heroes.hanae.name + ',' + DATA.heroes.kuro.name, 'the party is marked');
   t.ok($$(g, '.vc-cap-line', root).every((l) => txt(l).length > 40), 'every line is written');
   t.deep(UI.screens.victory._t.curtainOrder(['kuro', 'hanae']), ['kuro', 'hanae', 'suzu', 'raiga'], 'the party first, in party order');
+  t.eq(txt($('.vc-credit', root)), HANDLE, 'the cast phase ends with the one plain credit line (HV_STORY 3.5)');
+  t.ok($$(g, 'button, a', root).every((b) => !/Share|Follow the duo|Support the duo/.test(txt(b))) && $$(g, 'a', root).length === 0, 'and no follow, share or support button: the curtain call is for the heroes');
   g._key('Enter'); await settle(g);
   t.ok($('.vc-card', root), 'beat three: the share card canvas'); t.eq(txt($('.vc-kicker', root)), 'FINALE', 'the showcase kicker'); t.eq(txt($('.vc-title', root)), 'Human', 'and heading');
   const sm = RUN.summary(R);
@@ -465,6 +536,21 @@ await t.test('victory through GAME.victory: the three beats, the share card, the
   const tiles = Object.fromEntries($$(g, '.en-tile', root).map((el) => [txt($('.en-tile-lab', el)), num(txt($('.en-num', el)))]));
   t.eq(tiles.Turns, R.stats.turns, 'turns'); t.eq(tiles.Damage, R.stats.damageDealt, 'damage'); t.eq(tiles['Cards played'], R.stats.cardsPlayed, 'cards'); t.eq(tiles.Foes, R.stats.kills, 'foes');
   t.ok($('.en-petals', root) && $$(g, '.en-petal', root).length >= 10, 'confetti of petals');
+  // P9: Share joins Copy summary and Save card, and a slim follow row sits under the Newly Unlocked card
+  t.deep($$(g, '.vc-cardbtns .btn', root).map((b) => txt(b)), ['Copy summary', 'Save card', 'Share'], 'Share joins Copy summary and Save card under the share card');
+  t.eq($('.vc-share', root).getAttribute('aria-label'), 'Share Hocus Vocus', 'Share names the game for screen readers');
+  t.deep(Array.from($('.vc-left', root).children).map((c) => c.className.split(' ')[0]), ['vc-cardwrap', 'panel', 'vc-follow'], 'the follow row is the last thing in the left column, under the Newly Unlocked card');
+  t.ok($('.vc-left', root).children[1].classList.contains('vc-newcard'), 'which is the Newly Unlocked card');
+  const frow = $('.vc-follow', root);
+  t.eq(txt($('.vc-follow-line', frow)), HANDLE, 'the row starts with the handle line');
+  t.deep($$(g, '.vc-follow-btns > *', frow).map((b) => txt(b)), ['Follow the duo'], 'Follow the duo, and no Support the duo while the owners URL is empty');
+  t.eq($$(g, 'a', root).length, 0, 'no anchor on the page without a URL');
+  await click(g, $('.vc-share', root));
+  t.eq(g._clipboard, SHARE_TEXT + ' ' + UI.shareUrl(), 'Share copies the share text and the page address');
+  await click(g, $('.vc-follow-btn', root));
+  t.ok(UI.overlay.has('modal') && $(g, '.o-modal .hv-follow.hv-sheet'), 'Follow the duo opens the sheet');
+  await closeSheet();
+  t.eq(UI.currentName, 'victory', 'closing it leaves the showcase as it was');
   await click(g, $('.vc-copy', root));
   const text = UI.screens.victory._t.summaryText(sm, R, true);
   t.eq(g._clipboard, text, 'Copy summary puts the share text on the clipboard');
@@ -493,12 +579,44 @@ await t.test('victory: Skip jumps to the showcase; Esc too; the share card draws
   g._key('Enter'); await settle(g); t.eq(UI.currentName, 'title', 'Enter on the showcase continues to the title');
 });
 
+await t.test('victory: Support the duo joins the follow row only once DATA.LINKS.support is a web address, as a new-tab anchor, and never in the story or cast beats', async () => {
+  const R = WIN.R;
+  setLinks({ support: 'https://example.invalid/support' });
+  try {
+    await UI.go('victory', { summary: RUN.summary(R), R }, { force: true, transition: 'none' }); await settle(g);
+    const root = $(g, '.s-victory');
+    t.eq($$(g, 'a', root).length, 0, 'the typed epilogue has no anchor');
+    g._key('Enter'); await settle(g);
+    t.ok($('.vc-caps', root), 'the curtain call');
+    t.eq($$(g, 'a', root).length, 0, 'and none on the curtain call either: only the showcase asks');
+    g._key('Enter'); await settle(g);
+    t.ok($('.vc-card', root), 'the showcase');
+    t.deep($$(g, '.vc-follow-btns > *', root).map((b) => txt(b)), ['Follow the duo', 'Support the duo'], 'Follow the duo, then Support the duo');
+    const a = $('.vc-follow a.vc-support', root);
+    t.ok(a && a.localName === 'a', 'Support the duo is an anchor');
+    t.eq(a.getAttribute('href'), 'https://example.invalid/support', 'to the owners URL'); t.eq(a.getAttribute('target'), '_blank', 'in a new tab');
+    t.ok(/\bnoopener\b/.test(a.getAttribute('rel')) && /\bnoreferrer\b/.test(a.getAttribute('rel')), 'rel noopener noreferrer');
+    t.eq(a.getAttribute('aria-label'), 'Support the duo, opens in a new tab', 'named for screen readers');
+    const nav0 = g._navigations.length;
+    await click(g, a);
+    t.eq(g._navigations.length, nav0, 'a tap leaves the navigation to the browser');
+    t.eq(UI.currentName, 'victory', 'the showcase stays put');
+  } finally { setLinks({}); }
+  setLinks({ support: 'javascript:alert(1)' });
+  try {
+    await UI.go('victory', { summary: RUN.summary(R), R }, { force: true, transition: 'none' }); await settle(g);
+    await click(g, btnByText(g, /^Skip/));
+    t.eq($$(g, '.vc-follow a').length, 0, 'a value that is not a web address is no link');
+  } finally { setLinks({}); }
+  g._key('Enter'); await settle(g);
+});
+
 // ================================================================================================ alignment (the overlay lines up with the art and with itself)
 // Headless has no layout, so these read end.css as text and check the placing rules against the numbers the screens use. They guard the sources of truth: a
 // variable the page and its seal share, one height the Continue button and the panels above it are both sized from, one column width for both showcase columns.
 const cssBlock = (sel) => { const m = new RegExp('(?:^|\\n|\\})\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}').exec(CSS.replace(/\/\*[\s\S]*?\*\//g, '')); return m ? m[1] : ''; };
 const cssNum = (block, prop) => { const m = new RegExp('(?:^|[;\\s])' + prop + ':\\s*(-?[\\d.]+)px').exec(block); return m ? +m[1] : NaN; };
-await t.test('finding 33: the chapter clear panels end 12 px above Continue at any hit size, and keep their 244 px', () => {
+await t.test('finding 33: the Act clear panels end 12 px above Continue at any hit size, and keep their 244 px', () => {
   const root = cssBlock('.s-chapterClear'), cols = cssBlock('.cc-cols'), foot = cssBlock('.cc-foot');
   t.ok(/--foot-h:\s*max\(56px,\s*var\(--hit\),\s*calc\(50\.2px\s*\*\s*var\(--ts\)\s*\+\s*4px\)\)/.test(root), 'the Continue row is max(56px, --hit, its own size at the text scale) tall (a phone makes it 81 to 91 px, Larger text 69.2 px)');
   t.ok(/bottom:\s*calc\(var\(--foot-b\)\s*\+\s*var\(--foot-h\)\s*\+\s*12px\)/.test(cols), 'the panels end --foot-b + --foot-h + 12 px above the stage floor');
@@ -584,6 +702,19 @@ await t.test('finding 35: the showcase columns are equal, the page head is centr
   t.ok(/\.vc-card \{[^}]*width:\s*100%[^}]*height:\s*auto/.test(CSS), 'width 100% and height auto');
   t.eq(card.width, Math.round(600 * (UI.px || 1)), 'while the saved image keeps its full 600 px backing store');
   g._key('Enter'); await settle(g);
+});
+await t.test('P9 layout: the credit line has its own strip under the curtain boxes, the follow rows take pointer events themselves, and big text or a phone keep the Newly Unlocked card', () => {
+  const caps = cssBlock('.vc-caps'), credit = cssBlock('.vc-credit');
+  t.ok(cssNum(caps, 'bottom') >= cssNum(credit, 'bottom') + 14, 'the boxes end at least 14 px (one 12 px line) above the credit line: ' + cssNum(caps, 'bottom') + ' over ' + cssNum(credit, 'bottom'));
+  t.ok(/pointer-events:\s*none/.test(credit), 'the credit line is plain text: it never takes a click');
+  t.ok(/opacity:\s*0/.test(credit) && /\.vc-cast-done \.vc-credit \{[^}]*opacity:\s*\.9/.test(CSS), 'it appears with the Continue button, once the four boxes are in');
+  t.ok(/pointer-events:\s*auto/.test(cssBlock('.vc-follow a.btn')), 'the Support anchor takes clicks inside the click-through row (an anchor does not by default)');
+  t.ok(/pointer-events:\s*auto/.test(cssBlock('.go-follow .btn')), 'and so do the game over buttons');
+  t.ok(/flex:\s*none/.test(cssBlock('.vc-follow')), 'the follow row never shrinks, so the Newly Unlocked card (flex 1) gives way, not the buttons');
+  t.ok(/font-size:\s*calc\(17px \* min\(var\(--ts\), 1\.12\)\)/.test(cssBlock('.ts-big .vc-cardbtns .btn')), 'Larger text stops growing Copy summary, Save card and Share past 1.12, so the three share one row');
+  t.ok(/flex-wrap:\s*wrap/.test(cssBlock('.vc-cardbtns')), 'and the row can still wrap rather than clip');
+  t.ok(/width:\s*70%/.test(cssBlock('.compact .vc-card')), 'on a phone the share card gives up height (every button is --hit tall there) so the Newly Unlocked card keeps room');
+  t.ok(/\.vc-card \{[^}]*width:\s*100%/.test(CSS), 'while the desktop card still fills its column');
 });
 await t.test('finding 38 (tutorial.js): an anchor that fills most of the stage is not an anchor', () => {
   t.ok(/const FULL_STAGE = 0\.6;/.test(TUT) && /\* W \* H\) continue;/.test(TUT), 'findAnchor skips an anchor over 60 percent of the stage');
@@ -719,6 +850,26 @@ await t.test('every interactive element is a real button or has a role; images a
   });
 }
 
+// ================================================================================================ phone and Larger text rules (F2b: the 844x390 floors, the ribbons at 1.3, the curtain-call boxes)
+await t.test('css (end): phone text keeps the 8 and 9 screen px floors, the ribbons and curtain-call boxes fit at 1.3', () => {
+  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const find = (re) => rules.find((r) => re.test(r.sel));
+  const kick = find(/^#stage\.compact \.cc-kicker$/);
+  t.ok(kick && /max\(calc\(14px \* var\(--ts\)\), var\(--fs9\)\)/.test(kick.body), 'the END OF ACT kicker keeps 9 screen px on a phone');
+  t.ok(rules.some((r) => /#stage\.compact \.en-tile-lab/.test(r.sel) && /#stage\.compact \.en-row-n/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'the Act-clear tile labels and the game-over counts keep 8 screen px');
+  t.ok(rules.some((r) => /#stage\.compact \.cc-tip \.hanko/.test(r.sel) && /#stage\.compact \.go-tip \.hanko/.test(r.sel) && /font-size\s*:\s*var\(--fs8\)/.test(r.body)), 'the TIP badge keeps 8 screen px');
+  t.ok(rules.some((r) => /#stage\.compact \.go-tip$/.test(r.sel) && /var\(--fs8\)/.test(r.body)), 'and so does the game-over tip line');
+  const kc = find(/^\.cc-kicker$/);
+  t.ok(kc && /color\s*:\s*var\(--white\)/.test(kc.body) && /-webkit-text-stroke\s*:\s*4px var\(--ink\)/.test(kc.body), 'the kicker is white with an ink outline (pale pink on the pale sky of Act I could not be read)');
+  const rib = find(/^\.ts-big \.en-h span$/);
+  t.ok(rib && /padding-left\s*:\s*1em/.test(rib.body) && /letter-spacing\s*:\s*\.06em/.test(rib.body), 'the ribbons tighten at Larger text so "What the Soundlands Give" stays inside its card');
+  const cap = find(/^\.vc-cap$/);
+  t.ok(cap && /min-height\s*:\s*130px/.test(cap.body) && !/(^|[;\s])height\s*:/.test(cap.body), 'a curtain-call box grows upward instead of clipping its line');
+  t.ok(rules.some((r) => r.sel === '.ts-big .vc-cap-line' && /min\(var\(--ts\), 1\.12\)/.test(r.body)), 'and its type stops growing past 1.12 at Larger text');
+  t.ok(/\.tut-dock \.tut-tail \{[^}]*display: none/.test(CSS), 'a docked tip card has no tail');
+});
+
 // ================================================================================================ the tutorial
 const TU = UI.tutorial;
 await t.test('tutorial catalog: every hint is written well and wired to real bus events, anchors and screens', () => {
@@ -764,7 +915,7 @@ await settle(gt);
   });
   await t.test('tutorial: the story chain and the map: paint, ink, walk, tiles, goal, one bubble at a time', async () => {
     const R = G2.newRun({ heroes: ['hanae', 'kuro'], seed: 12, trial: 0 });
-    R.brushes = [];                                   // a clean tray, so the brush hint does not join this part of the sequence
+    R.brushes = [];                                   // a clean tray, so the Spell hint does not join this part of the sequence
     await tick();
     t.eq(U2.currentName, 'story', 'the intro story'); t.eq(tuts().length, 0, 'no hint over a story page');
     gt._key('Enter'); await tick(); gt._key('Enter'); await tick(); gt._key('Enter'); await tick(); gt._key('Enter'); await tick();
@@ -790,7 +941,7 @@ await settle(gt);
     t.eq(cur(), null, 'the queue is empty'); t.eq(tuts().length, 0, 'no bubble left in #tips');
     ['paint', 'ink', 'walk', 'tiles', 'goal'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' shown exactly once'));
   });
-  await t.test('tutorial: events repeated later raise nothing; a brush hint needs a brush and completes on use', async () => {
+  await t.test('tutorial: events repeated later raise nothing; a Spell hint needs a Spell and completes on use', async () => {
     const before = U2.tutorial.shown.length;
     for (let i = 0; i < 4; i++) { U2.bus.emit('map:paint', { q: i, r: 1, cost: 1 }); U2.bus.emit('map:walk', { q: i, r: 1 }); }
     await tick();
@@ -815,6 +966,9 @@ await settle(gt);
     t.eq(U2.currentName, 'combat', 'the real combat screen');
     t.eq(cur(), 'energy', 'energy first'); t.ok($(gt, '#tips .tut-ring'), 'a spotlight ring is drawn around the anchor');
     t.ok(!$(gt, '#tips .tut').closest('.screen'), 'the bubble lives in #tips, not inside the screen');
+    // the Breath card is parked on the sea between the heroes and the enemies: above the orb it covered the heroes' legs
+    t.ok(U2.tutorial.HINTS.energy.dock && U2.tutorial.HINTS.energy.dock.x >= 400 && U2.tutorial.HINTS.energy.dock.bottom <= 540, 'the Breath hint is docked clear of the heroes (x from 400, bottom edge above the hand)');
+    t.ok($(gt, '#tips .tut').classList.contains('tut-dock'), 'and the card wears the dock class (no tail; the spotlight ring marks the orb)');
     // never gates input: the bubble does not capture pointer events (it is pointer-transparent except its buttons)
     t.ok(/\.tut \{[^}]*pointer-events: none/.test(CSS), 'the bubble is pointer-transparent in css');
     const d = G2.debug.combat();

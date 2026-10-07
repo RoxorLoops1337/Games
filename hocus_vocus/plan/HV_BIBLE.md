@@ -528,10 +528,10 @@ Tangled from both heroes", "for each Groove spent", "Apply Tag equal to X". Junk
 | `empty` | Path | **Path** | `Open ground.` | |
 | `block` | Dead Silence | **Blur** | `A patch the Gloss smoothed away. Nothing can cross it.` | an opalescent, blurred-out hole with soft edges |
 | `enemy` | Ambush | **Face-Off** | `A creature of the Gloss blocks the way.` | two crossed mics |
-| `elite` | Champion | **Rival** | `A rival act guarding a charm.` | a star with a frown |
+| `elite` | Champion | **Rival** | `A rival act guarding a Charm.` | a star with a frown |
 | `boss` | Keeper | **Headliner** | `The headliner of this act.` | a big marquee star with light bulbs |
 | `chest` | Treasure | **Gift Box** | `A gift from a fan. Charms, gold or gems.` | a ribboned box with a heart tag |
-| `shop` | Peddler | **Merch Stall** | `Jordan sells cards, charms, gems and a Spell.` | a teal stall with a tote bag and a T-shirt |
+| `shop` | Peddler | **Merch Stall** | `Jordan sells cards, Charms, gems and a Spell.` | a teal stall with a tote bag and a T-shirt |
 | `camp` | Campfire | **Green Room** | `Rest, rehearse or warm up.` | a green backstage tent with a star on the door |
 | `event` | Fable | **Detour** | `Something unexpected is happening.` | a bent arrow sign with a question mark |
 | `well` | Temple Bell | **Tea Stall** | `Sip a warm ginger tea to refill your Vox.` | a steaming cup on a little cart |
@@ -585,7 +585,7 @@ UI must read tile names from `DATA.tiles` (never hard-code them): the forge scre
 | `cartographer` | Cartographer of Echoes | **Volume Up** | `Unmute 500 hexes across all your tours.` |
 | `brush_collector` | Song Collector | **Spellcaster** | `Cast 25 Spells on the map.` |
 | `treasure_hunter` | Treasure Hunter | **Unboxing** | `Open 25 gift boxes.` |
-| `curio_cabinet` | Curio Cabinet | **Charm Bracelet** | `Find 50 charms across your tours.` |
+| `curio_cabinet` | Curio Cabinet | **Charm Bracelet** | `Find 50 Charms across your tours.` |
 | `fable_fan` | Fable Fan | **Scenic Route** | `Take 60 detours. Some of them were even shortcuts.` |
 | `big_spender` | Big Spender | **Merch Legend** | `Spend 3000 gold at merch stalls. Jordan sends his regards.` |
 | `jewellers_eye` | Jeweller's Eye | **Bedazzled** | `Socket 40 gems into your cards.` |
@@ -728,7 +728,7 @@ printable ASCII.
 ### 5.3 Pause
 
 `Resume`, `Deck`, `Charms`, `Settings`, `How to play`, `Save and quit`, `Abandon tour`, `Back to title`. Run strip heading `Your tour`;
-no run `No tour is on the road.`; no charms `No charms yet`; tip label `A tip from Jordan`. Abandon confirm: title `Abandon this tour?`,
+no run `No tour is on the road.`; no charms `No Charms yet`; tip label `A tip from Jordan`. Abandon confirm: title `Abandon this tour?`,
 yes `Abandon tour`, no `Keep touring` (keep the existing body sentence's meaning, reworded with tour words).
 
 ### 5.4 Game over (defeat) and victory
@@ -760,7 +760,7 @@ button `Show everything`; nothing left `The shelves are bare. Nothing is waiting
 not reached yet stay sealed.`; locked toast `You have not reached this entry yet. Keep touring to find it.`; empty `No entries yet.`
 Who's Who: section `Act N: <act name>`, `N of M met`; empty `Nobody in the Who's Who yet. Meet a creature in a fight to add it here.`;
 unknown `A shape behind the Gloss. Meet this creature in a fight and its photo goes on the wall.`; stats `HP with no encore`,
-`defeated`, `met`; `Moves`. Past Tours empty `No tours yet`, `Finish a tour, win or lose, and it will be remembered here: the heroes,
+`won over`, `met`; `Moves`. Past Tours empty `No tours yet`, `Finish a tour, win or lose, and it will be remembered here: the heroes,
 the score, how far you got.` About cards: `Cheers` / `Earned after every tour. Spend them on the Tour Bus.`; `Encores` / `Win a tour to
 unlock the next encore. Each one stacks a new rule.`; `Daily Duet` / `Same heroes and map for everyone, once a day.`
 
@@ -768,12 +768,12 @@ unlock the next encore. Each one stacks a new rule.`; `Daily Duet` / `Same heroe
 
 Map: meter `Vox`, `Vox N of M`; banner `Act I`; progress `N% live`, `N hexes live`; apply `Cast` / `Cast N`; tray `Spells`, empty `No
 Spells. Buskers and rivals teach them.`; fog chip `Muted ground`, `Glossy and quiet. Unmute it to hear what it holds.`; no map `There is
-no map to show. The tour has not started, or it is over.`; charms empty `No charms yet. Rivals, gift boxes and merch stalls hold them.`;
+no map to show. The tour has not started, or it is over.`; charms empty `No Charms yet. Rivals, gift boxes and merch stalls hold them.`;
 controls legend headings `The Soundlands`, `Spells`, `Words`. Shop: title `Jordan's Merch Stall`, services `Declutter` and `Set gems`,
 `Leave the stall`, bare `The stall is bare. Jordan is restocking.`, `SALE`, `SOLD`, `SOLD OUT`, `FREE`. Green room: `Rest` /
 `Put your feet up`, `Rehearse` / `Upgrade a card`, `Set Gems` / `Set gems in cards`, `Warm Up` / `Vox and a Spell`; leave `Back on the
 road`; confirm `Leave without a break?`. Studio: title `The Studio`, button `Hit it!`, leave `Leave the studio`. Gift box: `Open the
-gift`, `Take the charm`, `Take the gem`, `Take the gold`, `Just the gold`, `A charm, waiting here`. Tea stall toast `The tea is warm: N
+gift`, `Take the Charm`, `Take the gem`, `Take the gold`, `Just the gold`, `A Charm, waiting here`. Tea stall toast `The tea is warm: N
 Vox.` Detour: label `Detour`, `You chose: `, leave `On we go`.
 
 Tutorial tone: second person, one idea per hint, a wink in at most every third hint, never a pun in the title. Hint titles (exact, in

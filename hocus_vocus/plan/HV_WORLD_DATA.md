@@ -22,7 +22,7 @@ byte-identical.
 | D1-1 | What a Charm is | something a touring musician would treasure: a stage, studio, merch or voice object, or a snack from the road (bible 7.4) | the Charms read as the crew's own kit, not as relics from a temple |
 | D1-2 | Charm rules text | each `text` is rewritten in the glossary words with every number, status, resource, trigger and target the data uses (the treasure suite's machine summary); one sentence, at most 90 characters, no colon or semicolon inside | the treasure suite checks the sentence against the data; mechanics untouched |
 | D1-3 | Charm flavour | one new line per Charm (at most 80 characters, ends with `.`, `!` or `?`), shown under the rules text in the Charm tooltip, the reward plaque and the Tour Bus tile. It is a new optional DATA field `flavor` on the relic (same spelling as the cards' `flavor`), display only: no logic, bot or save reads it | the owners asked for a flavour line per Charm; the cards already carry `flavor` |
-| D1-4 | Rarity words | common `Common`, uncommon `Uncommon`, rare `Rare`, boss `Headliner`, shop `Merch` (Tour Bus subtitle `Rare charm for Jasmin`, `Headliner charm`, `Merch charm`) | boss Charms come from a Headliner's offer, shop Charms only from Jordan's stall |
+| D1-4 | Rarity words | common `Common`, uncommon `Uncommon`, rare `Rare`, boss `Headliner`, shop `Merch` (Tour Bus subtitle `Rare Charm for Jasmin`, `Headliner Charm`, `Merch Charm`) | boss Charms come from a Headliner's offer, shop Charms only from Jordan's stall |
 | D1-5 | Boss Charms | six glamorous trades from the big stages, each with a real upside and a cost (two of them are Gloss temptations: Pitch Fixer and Glowing Phone) | a Headliner's gift is shiny and costs you something; the Gloss is tempting, never evil |
 | D1-6 | Hero Charms | the three Charms of each hero are pieces of that hero's look or rig (Jasmin's scrunchie, necklace, hoop; RoxorLoops's shoes, tee, green mic; RawClaw's spare headphones, sampler pad, spring reverb; Andy's strings, subwoofer, bass cabinet) | the owners' visual briefs become loot |
 | D1-7 | Owner nods in Charms | The Viral Clip (`branching_bookmark`, binding), a loop gadget (`sands_of_patience`, no hero's prop), five snacks from the road, three skin nods (Cosy Onesie, Unicorn Headband, Goat Mask), the cherry blossom badge (the owners' logo) and Jordan's merch (Tote Bag, Sticker Sheet, Crew Lanyard, Mystery Pin) | owners' brief; bible 2.7 and 2.9 |
@@ -206,7 +206,7 @@ rule; outfits by bible 7.1, read at render time, nothing stored).
 | `cartographer` | Cartographer of Echoes | **Volume Up** | `Unmute 500 hexes across all your tours.` | 10 | |
 | `brush_collector` | Song Collector | **Spellcaster** | `Cast 25 Spells on the map.` | 10 | |
 | `treasure_hunter` | Treasure Hunter | **Unboxing** | `Open 25 gift boxes.` | 10 | |
-| `curio_cabinet` | Curio Cabinet | **Charm Bracelet** | `Find 50 charms across your tours.` | 12 | |
+| `curio_cabinet` | Curio Cabinet | **Charm Bracelet** | `Find 50 Charms across your tours.` | 12 | |
 | `fable_fan` | Fable Fan | **Scenic Route** | `Take 60 detours. Some of them were even shortcuts.` | 10 | |
 | `big_spender` | Big Spender | **Merch Legend** | `Spend 3000 gold at merch stalls. Jordan sends his regards.` | 10 | |
 | `jewellers_eye` | Jeweller's Eye | **Bedazzled** | `Socket 40 gems into your cards.` | 10 | |
@@ -256,10 +256,10 @@ UI reads tile names from `DATA.tiles` (the forge screen title is `'The ' + DATA.
 | `empty` | Path | **Path** | `Open ground.` | plain live ground: cobbles, bunting shadows or screen tiles by Act |
 | `block` | Dead Silence | **Blur** | `A patch the Gloss smoothed away. Nothing can cross it.` | an opalescent, blurred-out hole with soft edges |
 | `enemy` | Ambush | **Face-Off** | `A creature of the Gloss blocks the way.` | two crossed mics |
-| `elite` | Champion | **Rival** | `A rival act guarding a charm.` | a star with a frown |
+| `elite` | Champion | **Rival** | `A rival act guarding a Charm.` | a star with a frown |
 | `boss` | Keeper | **Headliner** | `The headliner of this act.` | a big marquee star with light bulbs |
 | `chest` | Treasure | **Gift Box** | `A gift from a fan. Charms, gold or gems.` | a ribboned box with a heart tag |
-| `shop` | Peddler | **Merch Stall** | `Jordan sells cards, charms, gems and a Spell.` | a teal stall with a tote bag and a T-shirt |
+| `shop` | Peddler | **Merch Stall** | `Jordan sells cards, Charms, gems and a Spell.` | a teal stall with a tote bag and a T-shirt |
 | `camp` | Campfire | **Green Room** | `Rest, rehearse or warm up.` | a green backstage tent with a star on the door |
 | `event` | Fable | **Detour** | `Something unexpected is happening.` | a bent arrow sign with a question mark |
 | `well` | Temple Bell | **Tea Stall** | `Sip a warm ginger tea to refill your Vox.` | a steaming cup on a little cart |
@@ -354,7 +354,7 @@ Bible 5.5 fixed the banner, the tabs and the main empty states; this table compl
 | empty filter | `Nothing in the Hall matches those filters.` + `Show everything` | `Nothing on the bus matches those filters.` + `Show everything` |
 | nothing left | `The shelves are bare. Nothing is waiting to be unlocked yet.` | same (bible 5.5) |
 | stamp | `UNLOCKED` | `UNLOCKED` |
-| Charm tile subtitle | rarity + ` treasure` + (hero ? ` of ` + name) | rarity word (D1-4) + ` charm` + (hero ? ` for ` + name), e.g. `Rare charm for Jasmin`, `Headliner charm`, `Merch charm` |
+| Charm tile subtitle | rarity + ` treasure` + (hero ? ` of ` + name) | rarity word (D1-4) + ` Charm` + (hero ? ` for ` + name), e.g. `Rare Charm for Jasmin`, `Headliner Charm`, `Merch Charm` |
 | gem tile subtitle | `Tier N red gem` | `Tier N pink gem` (colour display name: pink, blue, green, gold) |
 | section counts | `N of M unlocked` | `N of M unlocked` |
 | unlock button | `Unlock` | `Unlock` |
@@ -396,7 +396,7 @@ Bible 5.5 fixed the banner, the tabs and the main empty states; this table compl
 | unseen label | `Not yet met` | `Not yet met` |
 | detail chips | tier + `Verse N` | tier + `Act N` |
 | unknown detail | `A shape in the silence. Meet this creature in a fight and its echo will be kept here.` | `A shape behind the Gloss. Meet this creature in a fight and its photo goes on the wall.` |
-| stats | `HP at Trial 0`, `defeated`, `met` | `HP with no encore`, `defeated`, `met` |
+| stats | `HP at Trial 0`, `defeated`, `met` | `HP with no encore`, `won over`, `met` |
 | moves heading | `Moves` | `Moves` |
 | no notes | `Nothing recorded yet.` | `Nothing on the wall yet.` |
 | empty | `The bestiary is blank. Meet a creature in a fight to record it here.` | `Nobody in the Who's Who yet. Meet a creature in a fight to add it here.` |
@@ -515,7 +515,7 @@ Tests that read the old words and must take the new ones (ids and mechanics in t
 |---|---|---|
 | The 66 Charm names of section 2 | reserved (H16): no card, gem, enemy, Detour title or Spell may reuse one | relic `name` |
 | The 24 gem names of section 3 | reserved the same way | gem `name` |
-| Charm rarity words `Common`, `Uncommon`, `Rare`, `Headliner`, `Merch` | the Charm subtitle (`Rare charm for Jasmin`, `Headliner charm`, `Merch charm`); "charm" is lowercase in that subtitle, like `Tier 2 pink gem` | Tour Bus tiles, reward plaques |
+| Charm rarity words `Common`, `Uncommon`, `Rare`, `Headliner`, `Merch` | the Charm subtitle (`Rare Charm for Jasmin`, `Headliner Charm`, `Merch Charm`); "Charm" is capitalised in that subtitle because it is the game concept (P11 finding C9) | Tour Bus tiles, reward plaques |
 | Charm `flavor` | the new optional flavour line on a relic (display only) | data, tooltip, plaques |
 | Pink stones for the `red` family | rose quartz, spinel, tourmaline, rhodonite, kunzite, morganite | gem names |
 | `Read again` / `Sealed` | Diary row states | Tour Bus |

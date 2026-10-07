@@ -1,7 +1,7 @@
-// Hocus Vocus: Act III roster (chapter 3): The Perfect Stage, the biggest talent show in the world, floating above a sea of phone
+// Hocus Vocus: Act III roster (`chapter` 3): The Perfect Stage, the biggest talent show in the world, floating above a sea of phone
 // lights, where every act is perfect and nobody sings.
 // Owner: the Act III enemy designer. Pure data: DATA.add('enemies', ...) and DATA.addEncounters(3, ...).
-// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (no encore, chapter 3). No functions, no dashes,
+// Schema and AI rules: DESIGN.md 4.5. Numbers: CONTENT_SPEC.md 4.2 (no encore, `chapter` 3). No functions, no dashes,
 // no randomness of its own (never the banned random call). Ids, names, tiers and sizes are the fixed roster (DATA.ROSTER).
 // Every name, title, move name, bark, phase line, lore line and tag is copied from hocus_vocus/plan/HV_ENEMIES.md section 4; ids, numbers,
 // ops and AI never change for the re-theme. Tags are display only (the Who's Who chips).
