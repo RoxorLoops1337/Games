@@ -131,11 +131,11 @@ export function buildAccessories(mb, glow, ctx, api) {
     const id = hd.id, s = -1, x = s * d.shX, wy = W.wrR[1], sk = K('wrR'), cc = C(hd.color && id !== 'mic' ? hd.color : '#6b6b80');
     if (/mic/.test(id)) {
       const gold = id === 'goldmic' ? C('#e8b923') : null, neon = id === 'neonmic';
-      const head = neon ? mix('#2b2a3f', '#2ee6ff', 0.2) : gold || C('#5a566e'), handle = gold ? shade(gold, 0.75) : C('#3a3850'), hy = wy - 0.215;
-      loft(mb, [{ y: wy - 0.05, rx: 0.02, rz: 0.02, cx: x, c: shade(handle, 0.8), sk }, { y: wy - 0.16, rx: 0.024, rz: 0.024, cx: x, c: handle, sk }, { y: hy + 0.05, rx: 0.03, rz: 0.03, cx: x, c: lite(handle, 0.1), sk }], { n: 6, caps: 'b' });
-      ball(mb, [x, hy, 0], [0.05, 0.052, 0.05], head, sk, { detail: 0, col2: lite(head, 0.2) });
-      if (neon) glow.poly([[x - 0.03, hy + 0.02, 0.04], [x + 0.03, hy + 0.02, 0.04], [x + 0.03, hy - 0.01, 0.045], [x - 0.03, hy - 0.01, 0.045]], C('#2ee6ff').multiplyScalar(1.1), sk, [0, 0, 1], { flat: true, nh: true });
-      else loft(mb, [{ y: hy + 0.012, rx: 0.049, rz: 0.049, cx: x, c: lite(handle, 0.35), sk }, { y: hy - 0.008, rx: 0.049, rz: 0.049, cx: x, c: lite(handle, 0.35), sk }], { n: 6, caps: '', nh: true });
+      const head = neon ? mix('#3a3850', '#2ee6ff', 0.25) : gold || C('#aeb4cc'), handle = gold ? shade(gold, 0.75) : C('#3a3850'), hy = wy - 0.2;
+      loft(mb, [{ y: wy - 0.04, rx: 0.019, rz: 0.019, cx: x, c: shade(handle, 0.8), sk }, { y: wy - 0.12, rx: 0.026, rz: 0.026, cx: x, c: handle, sk }, { y: wy - 0.15, rx: 0.03, rz: 0.03, cx: x, c: lite(handle, 0.2), sk }], { n: 6, caps: 'bt' });
+      ball(mb, [x, hy, 0], [0.045, 0.058, 0.045], head, sk, { detail: 0, col2: lite(head, 0.25) });
+      loft(mb, [{ y: hy + 0.012, rx: 0.047, rz: 0.047, cx: x, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }, { y: hy - 0.014, rx: 0.047, rz: 0.047, cx: x, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }], { n: 6, caps: '', nh: true });
+      if (neon) glow.poly([[x - 0.03, hy + 0.03, 0.04], [x + 0.03, hy + 0.03, 0.04], [x + 0.03, hy + 0.012, 0.046], [x - 0.03, hy + 0.012, 0.046]], C('#2ee6ff').multiplyScalar(1.1), sk, [0, 0, 1], { flat: true, nh: true });
     }
     if (id === 'boombox') boombox(mb, glow, [x - 0.02, wy - 0.28, 0.0], [0, Math.PI / 2, 0], 0.9, sk, hd.color || '#c0392b');
   }

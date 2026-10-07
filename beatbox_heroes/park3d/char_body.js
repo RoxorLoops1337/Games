@@ -85,7 +85,7 @@ export function buildFace(mb, glow, ctx) {
       void pt; for (let i = 0; i < 4; i++) { const w = onFace([top[i], top[i + 1], bot[i + 1], bot[i]], 0.011); mb.poly(w, brow, bnn, [0, 0, 1], { nh: true, flat: true }); }
     }
     // cheeks (puff bones)
-    const cb = ctx.rest[s > 0 ? 'cheekL' : 'cheekR']; ball(mb, cb, [0.052, 0.05, 0.05], skinShade(sk, 0.98), K(s > 0 ? 'cheekL' : 'cheekR'), { detail: 0, nh: true });
+    const cb = ctx.rest[s > 0 ? 'cheekL' : 'cheekR']; ball(mb, cb, [0.052, 0.05, 0.05], skinShade(sk, 0.98), K(s > 0 ? 'cheekL' : 'cheekR'), { detail: 0, nh: true, rot: [0.55, 0.6, 0.35] });
     if ((look.marks || []).indexOf('blush') >= 0) faceDecal(mb, ell(0.04, 0.026, 8, s * 0.2, 0.17, 0), mix(sk, '#ff5f8a', 0.45), K('head'), 0.006, true);
   });
   // mouth: closed smile strip (static) + open mouth shape (bone 'mouth' scales it)
@@ -118,34 +118,26 @@ export function buildFace(mb, glow, ctx) {
 
 // ------------------------------------------------------------------ facial hair
 export function buildFacial(mb, ctx) {
-  const f = ctx.look.facial; if (!f || f === 'none') return; const hc = C(ctx.look.hair && ctx.look.hair.color || '#2a2024'), K_h = K('head'), sk = ctx.skin;
-  const bearded = f === 'beard' || f === 'longbeard';
-  if (f === 'stubble') { const col = mix(sk, hc, 0.32); loft(mb, [0.0, 0.07, 0.14, 0.2].map((y, i) => ({ y: HY + y - 0.0, rx: ringAt(y).rx * 1.012, rz: ringAt(y).rz * 1.012, cz: ringAt(y).cz, sk: K_h, c: i === 0 ? shade(col, 0.7) : col })), { n: HN, a0: HA0, sq: SQ, caps: '', flat: false }); }
+  const f = ctx.look.facial; if (!f || f === 'none') return; const hc = C(ctx.look.hair && ctx.look.hair.color || '#2a2024'), K_h = K('head'), sk = ctx.skin, bearded = f === 'beard' || f === 'longbeard', long = f === 'longbeard';
+  if (f === 'stubble') { const col = mix(sk, hc, 0.32); loft(mb, [0.0, 0.07, 0.14, 0.2].map((y, i) => ({ y: HY + y, rx: ringAt(y).rx * 1.012, rz: ringAt(y).rz * 1.012, cz: ringAt(y).cz, sk: K_h, c: i === 0 ? shade(col, 0.7) : col })), { n: HN, a0: HA0, sq: SQ, caps: '' }); }
   if (f === 'mustache' || f === 'goatee' || bearded) {
-    const m = [[0, 0.16], [0.03, 0.152], [0.08, 0.138], [0.05, 0.168]]; void m;
-    [1, -1].forEach((s) => { faceDecal(mb, [[s * 0.004, 0.148], [s * 0.1, 0.133], [s * 0.095, 0.158], [s * 0.004, 0.172]], hc, K_h, 0.014, false, false); });
+    [1, -1].forEach((s) => faceDecal(mb, [[s * 0.004, 0.148], [s * 0.1, 0.133], [s * 0.095, 0.158], [s * 0.004, 0.172]], hc, K_h, 0.014, false, false));
     ball(mb, [0, HY + 0.152, facePt(0, 0.15).z + 0.016], [0.045, 0.014, 0.014], hc, K_h, { detail: 0 });
   }
   if (f === 'goatee') ball(mb, [0, HY + 0.045, facePt(0, 0.05).z + 0.008], [0.04, 0.055, 0.03], hc, K_h, { detail: 0 });
-  if (bearded) {
-    const long = f === 'longbeard', top = [], rows = long ? 6 : 4;
-    // beard shell: wraps jaw (all angles except the mouth wedge) down past the chin; long beard flows down the chest on the spring bone
-    const cols = 12; const rowsY = long ? [0.16, 0.1, 0.03, -0.06, -0.17, -0.27] : [0.17, 0.1, 0.03, -0.04];
-    for (let j = 0; j < rowsY.length - 1; j++) for (let i = 0; i < cols; i++) {
-      const th0 = HA0 + (i / cols) * Math.PI * 2, th1 = HA0 + ((i + 1) / cols) * Math.PI * 2, thm = (th0 + th1) / 2, aF = Math.abs(((thm + Math.PI) % (Math.PI * 2)) - Math.PI);
-      const vtx = (th, jj) => { const y = rowsY[jj], yc = Math.max(y, 0.0), p = headP(th, Math.max(0.01, yc)), sc = 1 + 0.07 + (jj >= 2 ? 0.05 : 0), sagY = y < 0 ? y : 0, ext = Math.max(0, -y) * 0.0; void ext; const tf = long && y < 0 ? 0.95 - (-y) * 0.9 : 1; return [p[0] * sc * tf, HY + y + (jj > 0 ? 0 : 0) + (y > 0 ? 0 : 0) + sagY * 0 + (y < 0 ? 0 : 0), p[2] * sc * tf + (y < 0 ? 0.03 : 0.0) + (y < 0 && long ? 0.04 : 0)]; };
-      // skip the mouth gap: front columns above y=0.1 are left open (mustache covers them)
-      if (aF < 0.7 && j < 1) continue;
-      const rowBone = (jj) => (long && rowsY[jj] < 0 ? K2('beard', 'beard', 0) : K_h);
-      const a = vtx(th0, j), b = vtx(th1, j), c = vtx(th1, j + 1), d = vtx(th0, j + 1);
-      const col0 = mix(hc, lite(hc, 0.3), j / rowsY.length), col1 = mix(hc, lite(hc, 0.3), (j + 1) / rowsY.length);
-      const hint = [(a[0] + b[0]) / 2, 0.05, (a[2] + b[2]) / 2 - 0.0]; const sA = rowBone(j), sB = rowBone(j + 1);
-      mb.triH(a, b, c, hint, col0, col0, col1, sA, sA, sB); mb.triH(a, c, d, hint, col0, col1, col1, sA, sB, sB);
-    }
-    void top;
-    // chin point so the beard has a silhouette
-    const tip = long ? [0, HY - 0.36, 0.2] : [0, HY - 0.07, 0.2]; ball(mb, tip, long ? [0.07, 0.09, 0.05] : [0.06, 0.04, 0.05], mix(hc, lite(hc, 0.3), 0.5), long ? K('beard') : K_h, { detail: 0 });
+  if (!bearded) return;
+  // beard: a shell around the jaw that leaves the mouth open, tucked under the chin; the long beard hangs on the spring bone
+  const cols = HN, rowsY = [0.2, 0.12, 0.05, -0.015], vtx = (th, y) => { const tuck = y < 0.03, p = headP(th, tuck ? 0.03 : y), k = tuck ? 0.86 : 1.07; return [p[0] * k, HY + y, p[2] * k + (tuck ? 0.03 : 0)]; };
+  for (let j = 0; j < rowsY.length - 1; j++) for (let i = 0; i < cols; i++) {
+    const th0 = HA0 + (i / cols) * Math.PI * 2, th1 = HA0 + ((i + 1) / cols) * Math.PI * 2, thm = (th0 + th1) / 2, aF = Math.abs(((thm + Math.PI) % (Math.PI * 2)) - Math.PI);
+    if (aF < 0.75 && j < 1) continue;
+    const a = vtx(th0, rowsY[j]), b = vtx(th1, rowsY[j]), c = vtx(th1, rowsY[j + 1]), d = vtx(th0, rowsY[j + 1]), c0 = mix(hc, lite(hc, 0.3), j / 3), c1 = mix(hc, lite(hc, 0.3), (j + 1) / 3), hint = [(a[0] + b[0]) / 2, 0.1 - (j > 1 ? 0.3 : 0), (a[2] + b[2]) / 2];
+    mb.triH(a, b, c, hint, c0, c0, c1, K_h, K_h, K_h); mb.triH(a, c, d, hint, c0, c1, c1, K_h, K_h, K_h);
   }
+  if (long) {
+    const R = [[0.0, 0.15, 0.11, 0.2], [-0.07, 0.13, 0.09, 0.235], [-0.17, 0.1, 0.07, 0.255], [-0.27, 0.07, 0.05, 0.265], [-0.35, 0.03, 0.025, 0.268]].map(([y, rx, rz, cz], i) => ({ y: HY + y, rx, rz, cz, c: mix(hc, lite(hc, 0.35), i / 4), sk: K2('head', 'beard', clamp(i / 2, 0, 1)) }));
+    loft(mb, R, { n: 6, sq: 0.9, caps: 't', hullHalf: false });
+  } else ball(mb, [0, HY - 0.06, 0.2], [0.06, 0.04, 0.05], mix(hc, lite(hc, 0.3), 0.5), K_h, { detail: 0 });
 }
 
 // ------------------------------------------------------------------ limbs (skin parts that clothing may leave exposed)
@@ -169,7 +161,7 @@ export function buildHand(mb, ctx, d, s) {
   const hr = (dy, rx, rz, cz, c) => ({ y: W - dy * F, rx: rx * F, rz: rz * F, cz: cz * F, cx: x, sk: dy < 0.01 ? K2(side(s, 'el'), side(s, 'wr'), 0.8) : wr, c });
   loft(mb, [hr(0.0, 0.046, 0.042, 0, skinShade(sk, 0.8)), hr(0.03, 0.062, 0.05, 0.004, sk), hr(0.075, 0.068, 0.054, 0.01, lite(sk, 0.03)), hr(0.11, 0.05, 0.04, 0.014, skinShade(sk, 0.92))], { n: 6, caps: 'bt', sq: 0.8, capCol: skinShade(sk, 0.9) });
   ball(mb, [x - s * 0.07, W - 0.075 * F, 0.04], [0.03, 0.045, 0.03], lite(sk, 0.04), wr, { detail: 0, rot: [0.5, 0, s * 0.35], nh: true });
-  [-0.03, 0.0, 0.03].forEach((u) => mb.poly([[x + u * F - 0.004, W - 0.08 * F, 0.07 * F], [x + u * F + 0.004, W - 0.08 * F, 0.07 * F], [x + u * F + 0.004, W - 0.134 * F, 0.058 * F], [x + u * F - 0.004, W - 0.134 * F, 0.058 * F]], skinShade(sk, 0.55), wr, [0, 0, 1], { flat: false, nh: true }));
+  [-0.03, 0.0, 0.03].forEach((u) => mb.poly([[x + u * F - 0.004, W - 0.075 * F, 0.074 * F], [x + u * F + 0.004, W - 0.075 * F, 0.074 * F], [x + u * F + 0.004, W - 0.105 * F, 0.066 * F], [x + u * F - 0.004, W - 0.105 * F, 0.066 * F]], skinShade(sk, 0.72), wr, [0, 0, 1], { flat: false, nh: true }));
 }
 import { mat } from './char_geo.js';
 

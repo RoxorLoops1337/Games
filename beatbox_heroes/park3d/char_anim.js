@@ -64,7 +64,7 @@ export class Animator {
   play(clip, opts) {
     if (!CL[clip]) clip = 'idle'; opts = opts || {}; const same = clip === this.clip && this.cur;
     Object.assign(this.opts, opts);
-    if (!same) { this.prev = this.cur; this.fade = this.prev ? 0 : 1; this.fadeDur = opts.fade === undefined ? 0.15 : Math.max(0.001, opts.fade); this.clip = clip; this.cur = { name: clip, t: 0, st: {} }; }
+    if (!same) { this.prev = this.cur; this.fade = this.prev ? 0 : 1; this.fadeDur = opts.fade === undefined ? (clip === 'sit' || this.clip === 'sit' ? 0.4 : 0.15) : Math.max(0.001, opts.fade); this.clip = clip; this.cur = { name: clip, t: 0, st: {} }; }
     this.once = opts.duration ? { left: opts.duration, then: opts.then || 'idle' } : null; return this;
   }
   hit(kind, s) { const k = kind === 'kick' || kind === 'k' ? 'k' : kind === 'snare' || kind === 's' ? 's' : 'h'; this.hits[k] = Math.max(this.hits[k], s === undefined ? 1 : s); }
@@ -85,7 +85,12 @@ export class Animator {
       this.prev.t += dt; const Bp = reset(this.pB); CL[this.prev.name].call(this, Bp, this.prev, dt, o);
       this.fade = Math.min(1, this.fade + dt / this.fadeDur); blendPose(Bp, A, sm(this.fade), P); if (this.fade >= 1) this.prev = null;
     } else for (let i = 0; i < KEYS.length; i++) P[KEYS[i]] = A[KEYS[i]];
-    this.life_(P, dt); this.apply(P, dt);
+    this.holdPose_(P); this.life_(P, dt); this.apply(P, dt);
+  }
+  // holding a mic or a boombox: the right arm is raised a little when it is not busy with an IK task
+  holdPose_(P) {
+    const h = this.api.holding; if (!h) return; const free = 1 - clamp(P.aWR, 0, 1), k = h === 'mic' ? 1 : 0.5;
+    P.elRXR += (h === 'mic' ? 0.75 : 0.25) * free; P.shRXR += (h === 'mic' ? 0.32 : 0.1) * free; P.wrRXR += (h === 'mic' ? 0.55 : 0.0) * free; P.shRZR += 0.0 * k;
   }
 
   // life layer on top of every clip: blink, gaze saccades, look-at, start/stop squash
@@ -134,7 +139,7 @@ export class Animator {
         v1.set(P['aX' + k], P['aY' + k], P['aZ' + k]).applyMatrix4(mCinv); this.solve(sh, this.armLen, v1, v2.set(P['pX' + k], P['pY' + k], P['pZ' + k]), ik);
         sh.quaternion.slerp(ik.qU, W); el.quaternion.slerp(ik.qL, W);
         const HW = P['hW' + k] * W;
-        if (HW > 0.001) { v3.set(P['hX' + k], P['hY' + k], P['hZ' + k]).normalize(); q5.setFromUnitVectors(this.down, v3); q6.copy(qC).multiply(ik.qU).multiply(ik.qL).invert().multiply(q5); wr.quaternion.slerp(q6, HW); }
+        if (HW > 0.001) { v3.set(P['hX' + k], P['hY' + k], P['hZ' + k]).normalize(); q6.copy(qC).multiply(ik.qU).multiply(ik.qL).invert(); v3.applyQuaternion(q6); q5.setFromUnitVectors(this.down, v3); const ang = 2 * Math.acos(clamp(Math.abs(q5.w), 0, 1)); if (ang > 1.3) { q6.identity().slerp(q5, 1.3 / ang); q5.copy(q6); } wr.quaternion.slerp(q5, HW); }
       }
       sh.position.y = sh.userData.rest[1] + P.shrug * 0.02;
     }
@@ -149,14 +154,18 @@ export class Animator {
     this.springs(dt); void T;
   }
 
-  // two-bone IK in the parent frame of the upper bone. tgt: Vector3 in that frame, pole: bend direction hint in that frame. writes out.qU, out.qL (local rotations)
+  // two-bone IK in the parent frame of the upper bone. tgt: Vector3 in that frame, pole: bend direction hint in that frame. writes out.qU, out.qL (local rotations).
+  // The lower bone is a pure hinge about local X; the upper bone's local frame is built from the hinge axis, so it never flips when a limb straightens or points up.
   solve(up, len, tgt, pole, out) {
-    const a = this._a, d = this._d, p = this._p, el = this._e, du = this._du, dl = this._dl, qa = this._qa, o = up.userData.rest, l1 = len[0], l2 = len[1]; a.set(o[0], o[1], o[2]);
+    const a = this._a, d = this._d, p = this._p, el = this._e, du = this._du, dl = this._dl, o = up.userData.rest, l1 = len[0], l2 = len[1], T = this.T; a.set(o[0], o[1], o[2]);
     d.subVectors(tgt, a); const dist = clamp(d.length(), Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.002); d.normalize();
     const x = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
     p.copy(pole).addScaledVector(d, -pole.dot(d)); if (p.lengthSq() < 1e-6) p.set(0, 0, 1); p.normalize();
     el.copy(a).addScaledVector(d, x).addScaledVector(p, h); du.subVectors(el, a).normalize(); dl.copy(a).addScaledVector(d, dist).sub(el).normalize();
-    out.qU.setFromUnitVectors(this.down, du); qa.setFromUnitVectors(this.down, dl); out.qL.copy(out.qU).invert().multiply(qa);
+    const X = this._X || (this._X = new T.Vector3()), Z = this._Z || (this._Z = new T.Vector3()), Y = this._Y || (this._Y = new T.Vector3()), M = this._M || (this._M = new T.Matrix4());
+    X.crossVectors(p, d).normalize(); Y.copy(du).negate(); Z.crossVectors(X, Y).normalize(); M.makeBasis(X, Y, Z); out.qU.setFromRotationMatrix(M);
+    const cross = this._c || (this._c = new T.Vector3()); cross.crossVectors(du, dl); const theta = Math.atan2(cross.length(), du.dot(dl)), hs = Math.sin(theta / 2);
+    out.qL.set(hs, 0, 0, Math.cos(theta / 2));
   }
 
   // damped springs on the secondary bones, excited by the acceleration of their parent frame
@@ -198,11 +207,11 @@ CL.idle = function (P, c, dt) {
 function gait(P, c, dt, o, rw) {
   const v = Math.max(0, this.vs), S0 = clamp(0.13 + 0.045 * v, 0.13, 0.3), duty = lerp(0.62, 0.38, rw), st = c.st;
   if (st.ph === undefined) st.ph = 0;
-  const rate = (duty * v) / (2 * S0); st.ph = (st.ph + rate * dt) % 1; const ph = st.ph, moving = clamp(v / 0.5, 0, 1), lift = lerp(0.075, 0.2, rw) * clamp(v / 2, 0.4, 1.2);
+  const rate = (duty * v) / (2 * S0); st.ph = (st.ph + rate * dt) % 1; const ph = st.ph, moving = clamp(v / 0.5, 0, 1), lift = lerp(0.07, 0.15, rw) * clamp(v / 2, 0.5, 1.1);
   const foot = (p) => {
     p = mod(p, 1); let z, y, pitch;
     if (p < duty) { const u = p / duty; z = S0 * (1 - 2 * u) * moving; y = 0; pitch = lerp(0.22, -0.5, sm(u * u)); }
-    else { const u = (p - duty) / (1 - duty); z = (-S0 + 2 * S0 * sm(u)) * moving; y = lift * S(PI * u) * moving * (1 + 0.4 * rw); pitch = lerp(-0.5, 0.22, sm(u)) * moving; }
+    else { const u = (p - duty) / (1 - duty); z = (-S0 + 2 * S0 * sm(u)) * moving; y = lift * S(PI * u) * moving; pitch = lerp(-0.5, 0.22, sm(u)) * moving; }
     return { z, ay: 0.085 + y + (pitch < 0 ? -pitch * 0.075 : 0) * moving, pitch };
   };
   const fl = foot(ph), fr = foot(ph + 0.5);
@@ -259,7 +268,7 @@ CL.dance = function (P, c, dt, o) {
 
 // ----- sit: seated pose, relaxed slump, dangling feet. opts: seat (seat height), slump (1 young, 1.4 old), bpm (nod + foot tap), armBack (right arm rests on the bench back), drowsy
 CL.sit = function (P, c, dt, o) {
-  const t = c.t, seat = o.seat === undefined ? 0.42 : o.seat, sl = o.slump === undefined ? 1 : o.slump, bpm = o.bpm || 0, amp = o.amp === undefined ? 1 : o.amp, beat = bpm ? t * bpm / 60 : 0, nod = bpm ? Math.max(0, S(beat * TAU)) * amp : 0, br = S(t * 2.1);
+  const t = c.t, seat = o.seat === undefined ? 0.46 : o.seat, sl = o.slump === undefined ? 1 : o.slump, bpm = o.bpm || 0, amp = o.amp === undefined ? 1 : o.amp, beat = bpm ? t * bpm / 60 : 0, nod = bpm ? Math.max(0, S(beat * TAU)) * amp : 0, br = S(t * 2.1);
   P.hipsY = seat + 0.1 - 0.5; P.hipsZ = -0.03; P.spineRX = 0.18 * sl + br * 0.01; P.chestRX = 0.12 * sl; P.neckRX = -0.16 * sl + nod * 0.05; P.headRX = 0.08 * sl + nod * 0.1; P.headRY = 0.15 * S(t * 0.3) * S(t * 0.11) + (bpm ? 0.05 * S(beat * PI) : 0); P.headRZ = 0.04 * S(t * 0.21);
   const tap = bpm ? Math.max(0, S(beat * TAU * 0.5 + 0.4)) * amp : 0;
   ['L', 'R'].forEach((k, i) => { const sw = bpm ? 0 : S(t * 1.7 + i * 2.4) * 0.12 * (1 + 0.5 * S(t * 0.3)); P['thRX' + k] = 1.4; P['thRZ' + k] = 0.08; P['knRX' + k] = 1.35 + sw - (i ? 0.35 * tap : 0); P['anRX' + k] = -0.25 + sw * 0.5; P['lW' + k] = 0; });
@@ -267,6 +276,12 @@ CL.sit = function (P, c, dt, o) {
   if (bpm) { P.aYL += 0.02 * nod; P.hipsY += 0.004 * nod; }
   if (o.armBack) { P.aXR = -0.3; P.aYR = seat + 0.42; P.aZR = -0.14; P.pXR = -1; P.pYR = -0.3; P.pZR = -0.2; P.chestRY = 0.08; }
   P.mouthOpen = 0.05; P.brow = -0.05; P.blink = Math.max(P.blink, o.drowsy ? 0.45 : 0);
+  if (o.talk) {                                                                   // seated conversation: mouth flaps and one gesturing hand
+    const syl = Math.abs(S(t * 8.3)) * (0.55 + 0.45 * Math.abs(S(t * 2.9))) * (S(t * 1.3 + 0.7) > -0.35 ? 1 : 0.1), gr = 0.5 + 0.5 * S(t * 2.2);
+    P.mouthOpen = 0.08 + 0.85 * syl; P.mouthW = 1 - 0.25 * Math.abs(S(t * 4.1)) * syl; P.brow = 0.2 + 0.3 * Math.max(0, S(t * 1.7)); P.neckRX += 0.05 * syl; P.headRZ += 0.06 * S(t * 1.1);
+    P.aXR = -0.24 - 0.06 * S(t * 3.1); P.aYR = seat + 0.3 + 0.12 * gr; P.aZR = 0.2 + 0.06 * gr; P.pXR = -0.8; P.pYR = -1; P.pZR = -0.2; P.hWR = 0.6; P.hXR = -0.3; P.hYR = 0.5; P.hZR = 0.8;
+  }
+  if (o.wave) { const w = S(t * 9); P.aXR = -0.3 + 0.06 * w; P.aYR = seat + 0.66; P.aZR = 0.1; P.pXR = -1; P.pYR = -0.6; P.pZR = -0.2; P.hWR = 1; P.hXR = -0.15 + 0.5 * w; P.hYR = 1; P.hZR = 0.15; P.mouthOpen = 0.4; P.brow = 0.5; }
 };
 
 // ----- wave: right arm up with a hand wag
@@ -292,5 +307,5 @@ CL.talk = function (P, c, dt, o) {
   P.neckRX += 0.06 * syl; P.headRX += 0.05 * Math.max(0, S(t * 2.6)); P.headRZ += 0.06 * S(t * 1.1); P.chestRY = 0.12 * S(t * 0.8); P.spineRY = 0.05 * S(t * 0.8);
   const gr = 0.5 + 0.5 * S(t * 2.2), gl = 0.5 + 0.5 * S(t * 1.5 + 1.2);
   P.aWR = 1; P.aXR = -0.25 - 0.08 * S(t * 3.4); P.aYR = 0.86 + 0.14 * gr + 0.04 * S(t * 6.5); P.aZR = 0.22 + 0.08 * gr; P.pXR = -0.8; P.pYR = -1; P.pZR = -0.2; P.hWR = 0.6; P.hXR = -0.3; P.hYR = 0.5; P.hZR = 0.8 + 0.3 * S(t * 3);
-  P.aWL = 0.8 * (S(t * 0.7 + 2) > 0.1 ? 1 : 0); P.aXL = 0.26; P.aYL = 0.8 + 0.1 * gl; P.aZL = 0.2 + 0.05 * gl; P.pXL = 0.8; P.pYL = -1; P.pZL = -0.3; P.hWL = 0;
+  P.aWL = 0.8 * sm((S(t * 0.7 + 2) - 0.0) / 0.5 + 0.5); P.aXL = 0.26; P.aYL = 0.8 + 0.1 * gl; P.aZL = 0.2 + 0.05 * gl; P.pXL = 0.8; P.pYL = -1; P.pZL = -0.3; P.hWL = 0;
 };

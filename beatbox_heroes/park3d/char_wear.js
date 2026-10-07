@@ -75,7 +75,7 @@ export function buildTop(mb, ctx, d) {
     const sl = Math.max(spec.sl, f === 'jersey' ? 0.0 : 0), uMax = clamp(sl, 0, 1), rs = (w > 1.3 ? 1.5 : w > 1.1 ? 1.25 : 1.1), loose = spec.drop ? 1.55 : 1;
     if (sl <= 0.02) return;
     const us = [0, 0.12, 0.3, 0.55, 0.8, 1].filter((u) => u <= uMax + 0.001); if (us[us.length - 1] < uMax - 0.01) us.push(uMax);
-    const R = us.map((u, i) => { const y = 0.915 - u * 0.405 + (u === 0 ? 0 : 0), r0 = u === 0 ? 0.55 : 1, r = (armRad(u) + 0.022) * rs * (u > 0.2 ? loose : 1.0) * (long && u > 0.8 ? 0.82 : 1) * (i === us.length - 1 && !long ? 1.05 : 1) * r0; let c = tint(0.7 + u * 0.1); if (spec.sleeve2) c = c2; if (spec.block) c = col; if (i === us.length - 1 && !long) c = spec.rib || f === 'tee' ? shade(c2, 0.95) : shade(col, 0.82); if (i === us.length - 1 && long && (spec.rib || f === 'hoodie' || f === 'sweater' || f === 'jacket')) c = shade(spec.rib ? c2 : col, 0.78); return { y, rx: r, rz: r * 0.95, cx: s * d.shX * (u === 0 ? 0.86 : 1), sk: armSkin(s, Math.min(y, 0.87)), c }; });
+    const R = us.map((u, i) => { const y = 0.915 - u * 0.405 + (u === 0 ? 0 : 0), r0 = u === 0 ? 0.55 : 1, r = (armRad(u) + 0.022) * rs * (u > 0.2 ? loose : 1.0) * (long && u > 0.8 ? 0.82 : 1) * (i === us.length - 1 && !long ? 1.05 : 1) * r0; let c = tint(0.7 + u * 0.1); if (spec.sleeve2) c = c2; if (spec.block) c = col; if (i === us.length - 1 && !long) c = spec.rib || (f === 'tee' && !spec.print) ? shade(c2, 0.95) : shade(col, 0.8); if (i === us.length - 1 && long && (spec.rib || f === 'hoodie' || f === 'sweater' || f === 'jacket')) c = shade(spec.rib ? c2 : col, 0.78); return { y, rx: r, rz: r * 0.95, cx: s * d.shX * (u === 0 ? 0.86 : 1), sk: armSkin(s, Math.min(y, 0.87)), c }; });
     loft(mb, R, { hullHalf: R.length >= 4, n: 6, caps: 'bt', capCol: shade(col, 0.5), capColB: col, fc: spec.stripes ? (i, j) => ((s > 0 ? i === 1 : i === 4) ? c2 : null) : undefined });
   });
   // ----- family details
@@ -112,7 +112,7 @@ function patFC(pat, col, c2, i, j, mb) {
 // ------------------------------------------------------------------ bottoms
 export function buildBottom(mb, ctx, d) {
   const look = ctx.look, id = (look.bottom && look.bottom.id) || 'jeans', spec = BOTTOMS[id] || BOTTOMS.jeans, col = C(look.bottom && look.bottom.color || '#34303f'), sk = ctx.skin;
-  const camoCols = [lite(col, 0.04), shade(col, 0.7), mix(col, '#c9b26a', 0.45), shade(mix(col, '#7a4a2a', 0.55), 0.95)], rr = (i, j) => camoCols[((i * 5 + j * 3 + ((i * j) % 3)) * 7) % 4];
+  const camoCols = [lite(col, 0.02), shade(col, 0.55), lite(mix(col, '#a9b35a', 0.5), 0.0), shade(mix(col, '#5a3a22', 0.6), 0.7)], rr = (i, j) => camoCols[(((i * 7 + j * 3) ^ (i * j + 5)) >>> 0) % 4];
   const f = spec.f, w = spec.w;
   const beltC = shade(col, 0.55);
   // pelvis / waist
@@ -156,8 +156,8 @@ export function buildShoes(mb, ctx, d) {
   const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11, c2 = sh.color2 ? C(sh.color2) : lum > 0.45 ? C('#3a6fd0') : C('#f2e6d0'), f = spec.f;
   const sole = spec.gold ? C('#ffe27a') : f === 'boot' ? C('#4a3a30') : C('#f2e6d0'), body = spec.gold ? C('#ffd23f') : col, sk = ctx.skin;
   [1, -1].forEach((s) => {
-    const an = K(side(s, 'an')), ax = s * d.hipX, plat = spec.plat ? 0.04 : 0, fat = (spec.fat ? 1.1 : 1) * 1.12, SY = 0.034 + plat;
-    const foot = [[0, -0.1], [0.046, -0.085], [0.07, -0.01], [0.075, 0.08], [0.058, 0.165], [0, 0.2], [-0.058, 0.165], [-0.075, 0.08], [-0.07, -0.01], [-0.046, -0.085]].map(([x, z]) => [x * fat, z]);
+    const an = K(side(s, 'an')), ax = s * d.hipX, plat = spec.plat ? 0.045 : 0, fat = (spec.fat ? 1.1 : 1) * 1.14, SY = 0.04 + plat, Z = 1.2, HH = 1.28;
+    const foot = [[0, -0.1], [0.046, -0.085], [0.07, -0.01], [0.075, 0.08], [0.058, 0.165], [0, 0.2], [-0.058, 0.165], [-0.075, 0.08], [-0.07, -0.01], [-0.046, -0.085]].map(([x, z]) => [x * fat, z * Z]);
     if (f === 'sandal') {
       slab(mb, foot, 0, SY * 0.7, ax, shade(sole, 0.95), shade(sole, 0.75), an);
       const R = (z, rx, ry, cy, c) => ({ y: z, rx, rz: ry, cx: ax, cz: -cy, sk: an, c });
@@ -165,18 +165,17 @@ export function buildShoes(mb, ctx, d) {
       box(mb, [ax, SY + 0.045, 0.06], [0.15, 0.014, 0.034], col, an); return;
     }
     slab(mb, foot, 0, SY, ax, shade(sole, 0.95), sole, an);
-    const R = (z, rx, ry, cy, c) => ({ y: z, rx: rx * fat, rz: ry, cx: ax, cz: -(SY + cy), sk: an, c, sq: 0.8 });
+    const R = (z, rx, ry, cy, c) => ({ y: z * Z, rx: rx * fat, rz: ry * HH, cx: ax, cz: -(SY + cy * HH), sk: an, c, sq: 0.8 });
     const loaf = f === 'loafer';
-    const upper = [R(-0.1, 0.044, 0.034, 0.04, shade(body, 0.8)), R(-0.055, 0.062, 0.05, 0.05, shade(body, 0.92)), R(0.02, 0.066, 0.052, 0.052, body), R(0.1, 0.07, 0.044, 0.042, lite(body, 0.04)), R(0.17, 0.056, 0.034, 0.032, lite(body, 0.06))];
+    const upper = [R(-0.1, 0.046, 0.04, 0.04, shade(body, 0.8)), R(-0.055, 0.064, 0.056, 0.05, shade(body, 0.92)), R(0.02, 0.068, 0.056, 0.052, body), R(0.1, 0.073, 0.05, 0.044, lite(body, 0.04)), R(0.17, 0.06, 0.04, 0.034, lite(body, 0.06)), R(0.2, 0.03, 0.026, 0.026, lite(body, 0.08))];
     loft(mb, upper, { hullHalf: true, n: 6, m: mat([0, 0, 0], [Math.PI / 2, 0, 0]), caps: 'bt', sq: 0.8, capCol: lite(body, 0.05) });
     // toe cap and heel tab, side swoosh panel in the accent colour
-    mb.poly([[ax + s * 0.07, SY + 0.075, -0.045], [ax + s * 0.073, SY + 0.052, 0.05], [ax + s * 0.073, SY + 0.02, 0.02], [ax + s * 0.07, SY + 0.03, -0.06]], c2, an, [s, 0, 0], { nh: true, flat: true });
-    mb.poly([[ax - s * 0.07, SY + 0.075, -0.045], [ax - s * 0.073, SY + 0.052, 0.05], [ax - s * 0.073, SY + 0.02, 0.02], [ax - s * 0.07, SY + 0.03, -0.06]], c2, an, [-s, 0, 0], { nh: true, flat: true });
+    [1, -1].forEach((q) => mb.poly([[ax + q * 0.078 * fat, SY + 0.095, -0.06], [ax + q * 0.08 * fat, SY + 0.06, 0.06], [ax + q * 0.08 * fat, SY + 0.022, 0.03], [ax + q * 0.078 * fat, SY + 0.034, -0.08]], c2, an, [q, 0, 0], { nh: true, flat: true }));
     // collar
-    const tall = f === 'boot' ? 0.14 + (spec.tall || 0) : f === 'high' ? 0.09 : 0.0;
+    const tall = f === 'boot' ? 0.16 + (spec.tall || 0) : f === 'high' ? 0.11 : 0.0;
     if (tall > 0) {
-      const top = SY + 0.06 + tall, sr = f === 'boot' ? 0.068 : 0.062;
-      loft(mb, [{ y: SY + 0.04, rx: 0.064, rz: 0.06, cx: ax, cz: 0.0, sk: an, c: shade(body, 0.85) }, { y: SY + 0.1, rx: sr, rz: sr * 0.95, cx: ax, cz: 0, sk: an, c: body }, { y: top - 0.012, rx: sr, rz: sr * 0.96, cx: ax, cz: 0, sk: K2(side(s, 'kn'), side(s, 'an'), 0.6), c: lite(body, 0.05) }, { y: top, rx: sr * 1.1, rz: sr * 1.08, cx: ax, cz: 0, sk: K2(side(s, 'kn'), side(s, 'an'), 0.8), c: f === 'boot' ? shade(body, 0.7) : c2 }], { n: 6, caps: 'b' });
+      const top = SY + 0.06 + tall, sr = f === 'boot' ? 0.074 : 0.068;
+      loft(mb, [{ y: SY + 0.04, rx: 0.07, rz: 0.066, cx: ax, cz: -0.01, sk: an, c: shade(body, 0.85) }, { y: SY + 0.1, rx: sr + 0.006, rz: sr * 0.98, cx: ax, cz: 0, sk: an, c: body }, { y: top - 0.012, rx: sr, rz: sr * 0.96, cx: ax, cz: 0, sk: K2(side(s, 'kn'), side(s, 'an'), 0.6), c: lite(body, 0.05) }, { y: top, rx: sr * 1.1, rz: sr * 1.08, cx: ax, cz: 0, sk: K2(side(s, 'kn'), side(s, 'an'), 0.8), c: f === 'boot' ? shade(body, 0.7) : c2 }], { n: 6, caps: 'b' });
     }
     // laces and tongue
     if (!loaf) { mb.poly([[ax - 0.03, SY + 0.095, 0.0], [ax + 0.03, SY + 0.095, 0.0], [ax + 0.026, SY + 0.062, 0.1], [ax - 0.026, SY + 0.062, 0.1]], spec.lace ? c2 : C('#f2e6d0'), an, [0, 1, 0.3], { nh: true, flat: true }); [0.02, 0.055, 0.085].forEach((z, i) => mb.poly([[ax - 0.032, SY + 0.094 - i * 0.013, z - 0.006], [ax + 0.032, SY + 0.094 - i * 0.013, z - 0.006], [ax + 0.032, SY + 0.094 - i * 0.013, z + 0.006], [ax - 0.032, SY + 0.094 - i * 0.013, z + 0.006]], shade(body, 0.65), an, [0, 1, 0], { nh: true, flat: true })); }

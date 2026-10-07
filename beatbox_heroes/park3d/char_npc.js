@@ -19,6 +19,9 @@ export const NPC_LOOKS = {
   roo: L({ name: 'Roo', body: 'girl', skin: '#a56c3f', hair: { style: 'pigtails', color: '#ff8a2a' }, top: { id: 'varsity', color: '#3a5fcd' }, bottom: { id: 'shorts', color: '#17141f' }, shoes: { id: 'hightops', color: '#ff8a2a' }, hat: { id: 'none' }, acc: { wrist: { id: 'stackedbands', color: '#ff3ea5' } } }),
 };
 
+// default homes (x, z, rotY) so a casual createNPC lands somewhere sensible; call npc.place(x, z, rot) to move
+const HOME = { foxy: [6.2, -4.2, 2.7], rohzel: [-5.5, 7, 1.07] };
+
 // the boombox that sits beside BeeAmGee: separate meshes so the speakers can pump with the beat
 function boomboxProp(colour) {
   const g = new THREE.Group(), M = sharedMats(), lit = new MB(41), glow = new MB(42);
@@ -32,20 +35,23 @@ export function createNPC(ctx, id, opts) {
   opts = opts || {}; const base = NPC_LOOKS[id] || NPC_LOOKS.foxy, look = Object.assign({}, base, opts.look || {});
   if (id === 'beeamgee' && opts.hat === false) look.hat = { id: 'none' };
   const c = createCharacter(ctx, look); c.id = id; c.npcName = look.name;
-  const seat = opts.seat === undefined ? 0.43 : opts.seat; c.seat = seat; c.music = { bpm: 92, level: 0 };
+  const seat = opts.seat === undefined ? 0.46 : opts.seat; c.seat = seat; c.music = { bpm: 92, level: 0 };
   const origUpdate = c.update, origPlay = c.play;
-  c.place = (x, z, rot, seatH) => { c.object.position.set(x, 0, z); c.object.rotation.y = rot || 0; if (seatH !== undefined) { c.seat = seatH; if (c.boombox) c.boombox.position.y = seatH + 0.12; if (id === 'beeamgee') origPlay('sit', { seat: seatH, bpm: c.music.bpm, slump: 1.4 }); } return c; };
+  // place(x, z, rotY, seatHeight, lateral): lateral shifts the character sideways along the bench (character-left = +); the terrain's player spot snaps to the bench centre
+  c.lateral = opts.offset === undefined ? (id === 'beeamgee' ? -0.55 : 0) : opts.offset;
+  c.place = (x, z, rot, seatH, lateral) => { if (lateral !== undefined) c.lateral = lateral; rot = rot || 0; c.object.position.set(x + c.lateral * Math.cos(rot), 0, z - c.lateral * Math.sin(rot)); c.object.rotation.y = rot; if (seatH !== undefined) { c.seat = seatH; if (id === 'beeamgee') origPlay('sit', { seat: seatH, bpm: c.music.bpm, slump: 1.4 }); } return c; };
   c.setMusic = (bpm, level) => { c.music.bpm = bpm || 0; c.music.level = level === undefined ? 1 : level; if (id === 'beeamgee') origPlay('sit', { seat, bpm: c.music.bpm, slump: 1.4, amp: c.music.level }); };
   if (id === 'beeamgee') {
-    c.boombox = boomboxProp('#8d3b2f'); c.boombox.position.set(0.5, seat + 0.12, 0.02); c.boombox.rotation.y = -0.25; c.object.add(c.boombox);
-    c.place(-9, -4, Math.atan2(9, 4), seat);
+    c.boombox = boomboxProp('#8d3b2f'); c.boombox.position.set(-0.8, 0.135, 0.1); c.boombox.rotation.y = 0.3; c.object.add(c.boombox);   // on the ground by the end of the bench
+    c.place(-9, -4, 1.1526, seat);                       // the old bench of the terrain's bench cluster (anchors.bench: x -9, z -4, rot 1.1526, seatY 0.46)
     origPlay('sit', { seat, bpm: c.music.bpm, slump: 1.4 });
-    c.play = (clip, o) => { if (clip === 'idle') clip = 'sit'; origPlay(clip, Object.assign({ seat, slump: 1.4 }, o)); };
+    // BeeAmGee never stands: every clip request becomes a seated variant
+    c.play = (clip, o) => { const base = { seat: c.seat, slump: 1.4, bpm: c.music.bpm, amp: c.music.level }; if (clip === 'talk') origPlay('sit', Object.assign(base, { talk: true, bpm: 0 }, o)); else if (clip === 'wave') origPlay('sit', Object.assign(base, { wave: true }, o)); else origPlay('sit', Object.assign(base, o)); };
     let t0 = 0;
     c.update = (dt, t) => {
       origUpdate(dt, t); t0 += dt; const beat = (t0 * c.music.bpm) / 60, k = c.music.bpm ? Math.exp(-((beat % 1) * 5)) : 0, bx = c.boombox;
       bx.scale.set(1 + 0.02 * k, 1 - 0.015 * k, 1 + 0.02 * k); bx.userData.glow.visible = !c.music.bpm || (beat * 2) % 1 < 0.9;
     };
-  } else if (id === 'rohzel') origPlay('idle', {});
+  } else if (HOME[id]) { c.place(HOME[id][0], HOME[id][1], HOME[id][2]); }
   return c;
 }
