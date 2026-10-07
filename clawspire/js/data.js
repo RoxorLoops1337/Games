@@ -2084,6 +2084,17 @@ const DATA = (() => {
       text: 'Grippy rubber prong tips. Round things stop squirting out.', apply: upgrade('rubber', 1, c => { c.rubber = 1; }) },
     magnet: { id: 'magnet', name: 'Electromagnet', icon: '🧲', max: 1, cost: 90,
       text: 'The palm pulls nearby metal items in while it drops.', apply: upgrade('magnet', 1, c => { c.magnet = 1; }) },
+    // ---- (round 29) CUP: magnet power and a wider chute (DESIGN.md "Magnet power and a wider chute (round 29)").
+    // cup: true keeps them out of every common roll (towers, capsules, the boss's random three, the Boss Rush draft, the
+    // map's tower bonus), so no older seed changes; game.js offers them on their own occasions (the CUP block).
+    // only: the claw type a part fits (the Magnet Crane's Coil Winding); rank: the claw field the rank is kept in.
+    coil: { id: 'coil', name: 'Coil Winding', icon: '🌀', max: 3, cost: 120, cup: true, only: 'magnet', rank: 'coil',
+      text: 'Magnet Crane only. More copper on the coil: a longer hold, a stronger field, fewer drops.',
+      apply: upgrade('coil', 3, c => { c.coil = (c.coil || 0) + 1; }) },
+    chute: { id: 'chute', name: 'Wider Chute', icon: '📥', max: 4, cost: 50, cup: true, rank: 'chute',
+      text: 'The prize chute opens 5 px wider. A little more falls in.',
+      apply: upgrade('chute', 4, c => { c.chute = (c.chute || 0) + 1; }) },
+    // ---- /CUP
   };
 
   // ------------------------------------------------------------ claw types
@@ -2275,6 +2286,15 @@ const DATA = (() => {
         { txt: 'Pay the toll.', sub: 'Lose 20 gold.', fx: [{ k: 'gold', v: -20 }], cond: hasGold(20) },
         { txt: 'Refuse.', sub: 'Fight the goblin and a friend.', fx: [{ k: 'fight', enc: ['goblin', 'gremlin'] }] },
         { txt: 'Tear down the booth.', sub: 'Lose 7 HP. Gain a Grudge Skull.', fx: [{ k: 'hp', v: -7 }, { k: 'item', id: 'grudge_skull' }] },
+      ] },
+    // (round 29) CUP: the Coil Winder. cup: true keeps it out of the map's event rolls and pickEvent's; game.js
+    // (cupEventPick) swaps it in on an event tile now and then, in a Magnet Crane run only (once an act, Coil Winding < 3).
+    { id: 'coil_winder', title: 'The Coil Winder', art: 'tinker', cup: true,
+      text: 'A little robot with a spool of copper wire sits by a dead cabinet. It looks at your Magnet Crane and its eyes light up. "Nice drum. I can wind it tighter."',
+      choices: [
+        { txt: 'Let it wind the coil.', sub: 'Coil Winding +1. Lose 6 HP (it zaps).', fx: [{ k: 'claw', u: 'coil' }, { k: 'hp', v: -6 }] },
+        { txt: 'Pay it in copper.', sub: 'Lose 45 gold. Coil Winding +1.', fx: [{ k: 'gold', v: -45 }, { k: 'claw', u: 'coil' }], cond: hasGold(45) },
+        LEAVE,
       ] },
   ];
   const EVENTS = {};
@@ -2724,12 +2744,17 @@ const DATA = (() => {
   // are left out unless junk is asked for by name. Small fillers and bags
   // are left out too (they come in bags, not as single picks) unless the
   // tags ask for 'small', which lists the fillers themselves.
+  // BENCH (round 28): the unlock packs' index and the game's gate (filled in the BENCH block below; declared
+  // here so pool() and relicPool() can ask unlOpen() whatever runs first)
+  const UNL = { of: {}, gate: null };
   function pool(rarity, char, tags) {
     const wantSmall = !!(tags && tags.indexOf('small') >= 0);
     return ITEM_IDS.filter(id => {
       const d = ITEMS[id];
       if (rarity === 'junk') return d.rarity === 'junk';
       if (d.rarity === 'junk' || d.starter || d.bag) return false;
+      if (!unlOpen('item', id)) return false;   // BENCH (round 28): a pack the profile has not unlocked
+
       if (!wantSmall && d.tags.indexOf('small') >= 0) return false;
       if (rarity && d.rarity !== rarity) return false;
       if (char && d.char && d.char !== char) return false;
@@ -2823,6 +2848,7 @@ const DATA = (() => {
     return Object.keys(RELICS).filter(id => {
       const r = RELICS[id];
       if (r.starter || r.rarity === 'event') return false;
+      if (!unlOpen('relic', id)) return false;   // BENCH (round 28): a pack the profile has not unlocked
       if (!rarity && r.rarity === 'l') return false;   // (LEG: legendaries only come when asked for by name)
       if (rarity && r.rarity !== rarity) return false;
       return ex.indexOf(id) < 0;
@@ -5131,6 +5157,7 @@ const DATA = (() => {
     drops: 3,
     val: { junk: 0, c: 1, u: 2, r: 4, l: 7 },
     pile: { c: 5, u: 3, r: 2, l: 1, junk: 2 },
+    needFrac: 0.6,   // (round 28) a Magnet Crane claw-off: this share of the prizes is metal
     prize: { gold: 30, perAct: 15, lose: 10, tix: 6, loseTix: 2 },
     aim: [34, 28, 22, 17, 12],       // his aim error (px) by gear
     grip: [1.1, 1.18, 1.26, 1.34, 1.42],
@@ -5167,7 +5194,7 @@ const DATA = (() => {
   }
   const garyVal = (def) => (def ? (GARY.val[def.rarity] == null ? 1 : GARY.val[def.rarity]) : 0);
   // The shared bin of a claw-off: [{id, v}], seeded. Every rarity is there, and two rocks.
-  function garyPile(rng, act) {
+  function garyPile(rng, act, opt) {
     const out = [];
     for (const r of ['l', 'r', 'u', 'c']) {
       let ids = pool(r).filter((id) => ITEMS[id] && !ITEMS[id].bag && !ITEMS[id].char);
@@ -5175,6 +5202,26 @@ const DATA = (() => {
       for (let k = 0; k < (GARY.pile[r] | 0) && ids.length; k++) {
         const id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
         out.push({ id, v: garyVal(ITEMS[id]) });
+      }
+    }
+    // (round 28) opt.need 'metal' (a Magnet Crane run): at least GARY.needFrac of the prizes are metal, swapped in at the same rarity,
+    // so a claw that only lifts metal always has something to grab (owner: "there was nothing iron in it")
+    const need = opt && opt.need;
+    if (need) {
+      const has = (id) => !!(ITEMS[id] && (ITEMS[id].tags || []).indexOf(need) >= 0 && !(need === 'metal' && ITEMS[id].nomag));   // (a gold coin is no use to a magnet)
+      const want = Math.ceil(out.length * (GARY.needFrac || 0.6));
+      let n = out.filter((p) => has(p.id)).length;
+      for (const r of ['c', 'u', 'r', 'l']) {
+        if (n >= want) break;
+        const ids = pool(r).filter((id) => has(id) && !ITEMS[id].bag && !ITEMS[id].char);
+        if (!ids.length) continue;
+        for (const p of out) {
+          if (n >= want) break;
+          if (has(p.id) || !ITEMS[p.id] || ITEMS[p.id].rarity !== r) continue;
+          p.id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
+          p.v = garyVal(ITEMS[p.id]);
+          n++;
+        }
       }
     }
     for (let k = 0; k < GARY.pile.junk; k++) out.push({ id: 'rock', v: 0 });
@@ -6112,7 +6159,7 @@ const DATA = (() => {
     let items = k ? k.items.slice() : [];
     if (!k) {
       const RK = { l: 0, r: 1, u: 2 };
-      const own = Object.keys(ITEMS).filter((id) => ITEMS[id].char === charId && RK[ITEMS[id].rarity] != null)
+      const own = Object.keys(ITEMS).filter((id) => ITEMS[id].char === charId && RK[ITEMS[id].rarity] != null && unlBase('item', id))   // (BENCH round 28: the rush plays the base pool)
         .sort((a, b) => (RK[ITEMS[b].rarity] - RK[ITEMS[a].rarity]) || (a < b ? -1 : 1));
       items = own.slice(0, A.n);
       for (const id of A.items) if (items.length < A.n && items.indexOf(id) < 0) items.push(id);
@@ -7505,7 +7552,225 @@ const DATA = (() => {
     famOf: crFamOf, on: crOn, owns: crOwns, boosts: crBoosts, poolOk: crPoolOk, offer: crOffer, relicFor: crRelicFor };
   // ================================================================ /CR
 
+  // ================================================================ BENCH (round 28): the Upgrade Bench
+  /* DESIGN.md "The Upgrade Bench (round 28)". Bolts: a meta currency every real run pays at its end (benchPay),
+     separate from the Prize Vault's tickets. The bench sells ranked upgrades in three tiers (a tier opens once
+     enough bolts were spent there) and unlock packs: themed bundles of items and relics that stay out of every
+     random pool until the profile owns the pack. Pure data and pure functions, with ONE injection point: the
+     gate. unlOpen(kind, id) asks the function the game installs with unlGate(fn) whether a pack's item or relic
+     may show up; with no gate (the DATA-only suites, the balance bots) everything is open, the full pool. The
+     game's gate closes every pack in a daily, weekly, Boss Rush and Duo game (the base pool, the same game for
+     everyone) and the packs the profile has not bought anywhere else. pool() and relicPool() (and so every reward,
+     shop, capsule, counter, Compactor, trade, rival and claw-off roll built on them) ask it; the game's own
+     relicPool() and its few direct lists ask it too. */
+  const BNC_ICON = '\u{1F529}';   // a nut and bolt
+  // The run's payout: per fight won by tier, a step per act reached past the first, a win, and a Tilt bonus on the lot.
+  const BNC_PAY = { normal: 3, elite: 10, boss: 25, act: 15, win: 75, tilt: 0.1 };
+  // An old profile's one-time balance from its lifetime stats (round 28 found the owner with many runs already).
+  const BNC_GRANT = { run: 5, win: 50, kill: 0.3, act: 25, cap: 2500 };
+  // Bolts spent on the bench (upgrades and packs) that open tier 1, 2 and 3 of the upgrades.
+  const BNC_TIERS = [0, 100, 300];
+  // The upgrades: a rank is worth `per` (the value line's {n}), `cost[r]` buys rank r + 1.
+  const BU_ = (id, tier, icon, name, text, val, per, cost) => ({ id, tier, icon, name, text, val, per, max: cost.length, cost });
+  const BNC_UP_LIST = [
+    BU_('hp', 1, '❤️', 'Thick Skin', 'More Max HP at the start of every run.', '+{n} Max HP', 4, [15, 30, 50, 75, 105]),
+    BU_('gold', 1, '\u{1F4B0}', 'Piggy Fund', 'More gold at the start of every run.', '+{n} gold', 15, [12, 25, 40, 60, 85]),
+    BU_('rest', 1, '\u{1F6CF}️', 'Soft Pillow', 'Rests heal more of your Max HP.', '+{n}% healing', 5, [20, 40, 70]),
+    BU_('bulb', 1, '\u{1F4A1}', 'Spare Bulbs', 'More bulbs at the start of every act.', '+{n} bulbs', 2, [25, 50, 85]),
+    BU_('shop', 2, '\u{1F3F7}️', 'Haggler', 'Everything in the shop costs less.', '-{n}% prices', 5, [30, 55, 85, 120]),
+    BU_('reroll', 2, '\u{1F504}', 'Free Spin', 'Free shop rerolls in every act.', '{n} free per act', 1, [40, 90]),
+    BU_('plus', 2, '⚒️', 'Sharpened Start', 'Starting items that begin the run upgraded (+).', '{n} upgraded', 1, [50, 110]),
+    BU_('lamp', 2, '\u{1F3EE}', 'Warm Lamp', 'The Jackpot Lamp starts every act with cells lit.', '{n} cells lit', 2, [30, 60, 100]),
+    BU_('relic', 3, '\u{1F340}', 'Lucky Find', 'Start every run with a random common relic.', 'A free relic', 1, [150]),
+    BU_('xl', 3, '\u{1F579}️', 'Extra Life', 'Once a run, a hit that would knock you out leaves you at 1 HP.', 'Once a run', 1, [200]),
+    BU_('pick', 3, '\u{1F5C3}️', 'Bigger Shelf', 'Elite and boss rewards show one more item to pick from.', '+{n} card', 1, [120]),
+    BU_('block', 3, '\u{1F9E4}', 'Padded Gloves', 'Start every fight with some Block.', '{n} Block', 2, [60, 110, 170]),
+  ];
+  const BNC_UP = {};
+  for (const u of BNC_UP_LIST) BNC_UP[u.id] = u;
+  const BNC_UP_IDS = BNC_UP_LIST.map((u) => u.id);
+  // A rank's value line, or a mods-only number (the game reads benchFx).
+  function benchVal(id, rank) { const u = BNC_UP[id]; return u ? u.val.replace('{n}', String(u.per * Math.max(0, rank | 0))) : ''; }
+
+  // ---- the new content: only ever reached through a pack (bench: the pack's own; the dex and the tests read it)
+  const BNC_ITEMS = [
+    { id: 'lava_lamp', name: 'Lava Lamp', rarity: 'u', cost: 65, bench: true,
+      tags: ['glass', 'light', 'magic'], shape: SHAPES.lantern, density: 1.0, friction: 0.45,
+      color: '#ff6a3d', color2: '#3a1a5a', art: 'lantern', target: 'all',
+      fx: [status('burn', 2, 'all'), status('chill', 2, 'all')], plus: { fx: [status('burn', 3, 'all'), status('chill', 3, 'all')] },
+      text: 'Apply {v} Burn and {v2} Chill to ALL enemies. Groovy, and somehow both.' },
+    { id: 'jousting_lance', name: 'Jousting Lance', rarity: 'r', cost: 100, char: 'knight', bench: true,
+      tags: ['metal', 'weapon', 'heavy'], shape: box(60, 9), density: 1.6, friction: 0.5,
+      color: '#e8d6a8', color2: '#ff4f9a', art: 'sword',
+      fx: [dmg(14), block(4)], plus: { fx: [dmg(19), block(6)] },
+      text: 'Deal {v} damage and gain {v2} Block. Charge!' },
+    { id: 'witch_brew', name: "Witch's Brew", rarity: 'r', cost: 100, char: 'alchemist', bench: true,
+      tags: ['glass', 'potion'], shape: SHAPES.potion, density: 0.9, friction: 0.4,
+      color: '#7dff5e', color2: '#5a1a7a', art: 'potion', target: 'all', exhaust: true,
+      fx: [status('poison', 3, 'all'), status('burn', 3, 'all')], plus: { fx: [status('poison', 4, 'all'), status('burn', 4, 'all')] },
+      text: 'Apply {v} Poison and {v2} Burn to ALL enemies. Double, double.' },
+    { id: 'neon_katana', name: 'Neon Katana', rarity: 'r', cost: 100, bench: true,
+      tags: ['metal', 'weapon', 'light'], shape: box(56, 8), density: 1.1, friction: 0.4,
+      color: '#35e0d2', color2: '#ff4f9a', art: 'sword',
+      fx: [dmg(5, 2), status('bleed', 2)], plus: { fx: [dmg(7, 2), status('bleed', 3)] },
+      text: 'Deal {v} damage {n} times and apply {v2} Bleed. It hums in the dark.' },
+    { id: 'piggy_hammer', name: 'Piggy Hammer', rarity: 'c', cost: 45, bench: true,
+      tags: ['tool', 'weapon'], shape: SHAPES.hammer, density: 1.4, friction: 0.5,
+      color: '#ff9ec7', color2: '#8a5a2b', art: 'hammer',
+      fx: [dmg(6), gold(5)], plus: { fx: [dmg(9), gold(8)] },
+      text: 'Deal {v} damage and gain {v2} gold. Sorry, piggy.' },
+    { id: 'title_belt', name: 'Title Belt', rarity: 'r', cost: 100, bench: true,
+      tags: ['metal', 'heavy'], shape: box(54, 14), density: 1.8, friction: 0.55,
+      color: '#ffcc55', color2: '#b8312f', art: 'chain', target: 'self', exhaust: true,
+      fx: [status('str', 2, 'self'), block(8)], plus: { fx: [status('str', 3, 'self'), block(10)] },
+      text: "Gain {v} Strength and {v2} Block. Still has the champ's name on it." },
+    { id: 'confetti_cannon', name: 'Confetti Cannon', rarity: 'l', cost: 130, bench: true,
+      tags: ['tool', 'weapon', 'heavy'], shape: SHAPES.horn, density: 1.5, friction: 0.5,
+      color: '#ff4f9a', color2: '#ffcc55', art: 'horn', target: 'all',
+      fx: [dmg(3, 4)], plus: { fx: [dmg(4, 4)] },
+      text: 'Deal {v} damage to ALL enemies {n} times. A party popper, military grade.' },
+  ];
+  for (const d of BNC_ITEMS) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [] }, d);
+    if (def.plus) def.plus = Object.assign({ name: def.name + '+' }, def.plus);
+    if (!ITEMS[def.id]) { ITEM_LIST.push(def); ITEMS[def.id] = def; ITEM_IDS.push(def.id); }
+  }
+  const BNC_RELICS = [
+    { id: 'thermostat', name: 'Thermostat', icon: '\u{1F321}️', rarity: 'u', kw: ['burn', 'frost'], proc: 'THERMOSTAT', bench: true,
+      text: 'Start each fight with 2 Burn and 2 Chill on every enemy. Set to "yes".',
+      hooks: { onFightStart(F) { allStatus(F, 'burn', 2); allStatus(F, 'chill', 2); } } },
+    { id: 'tip_jar', name: 'Tip Jar', icon: '\u{1F3FA}', rarity: 'u', kw: ['greed'], proc: 'TIP JAR', bench: true,
+      text: 'Whenever you gain gold in a fight, deal 3 damage to a random enemy.',
+      hooks: { onGold(F) { zap(F, randomFoe(F), 3); } } },
+    { id: 'bounty_poster', name: 'Bounty Poster', icon: '\u{1F4DC}', rarity: 'u', kw: ['greed'], proc: 'BOUNTY', bench: true,
+      text: 'Whenever an enemy dies, gain 3 gold. Wanted: everything.',
+      hooks: { onKill(F) { gainGold(F, 3); } } },
+    { id: 'live_wire', name: 'Live Wire', icon: '\u{1F50C}', rarity: 'u', kw: ['metal'], proc: 'LIVE WIRE', bench: true,
+      text: 'Whenever you play a metal item, deal 2 damage to a random enemy.',
+      hooks: { onPlay(F, inst, def) { if (tagged(def, 'metal')) zap(F, randomFoe(F), 2); } } },
+    { id: 'pinball_bumper', name: 'Pinball Bumper', icon: '\u{1F3B1}', rarity: 'r', kw: ['jackpot'], proc: 'BUMPER', bench: true,
+      text: 'Whenever a grab delivers nothing, deal 3 damage to ALL enemies. Ding ding ding.',
+      hooks: { onGrab(F, n) { if (!n) zapAll(F, 3); } } },
+    { id: 'gilded_tips', name: 'Gilded Claw Tips', icon: '\u{1F485}', rarity: 'boss', kw: ['fortress'], bench: true,
+      text: 'Gold-plated rubber tips: nothing slips as easily, the claw grips 15% harder, and every fight starts with 4 Block.',
+      mods: { rubber: 1, grip: 0.15, startBlock: 4 } },
+  ];
+  for (const r of BNC_RELICS) if (!RELICS[r.id]) { RELIC_LIST.push(r); RELICS[r.id] = r; }
+
+  // ---- the packs: 5 things each (items and relics; bench: the new content), a price and maybe a milestone
+  const BP_ = (id, icon, color, name, tag, cost, gate, items, relics) => ({ id, icon, color, name, tag, cost, gate, items, relics });
+  const BNC_PACK_LIST = [
+    BP_('fire_ice', '\u{1F525}', '#ff8a3d', 'Fire & Ice', 'Burn and Chill for everyone.', 50, null,
+      ['dragon_egg', 'inferno_scroll', 'blizzard_orb', 'lava_lamp'], ['thermostat']),
+    BP_('gambler', '\u{1F3B0}', '#a6ff5e', "Gambler's Kit", 'Luck, gold and a little risk.', 60, null,
+      ['pay_to_win', 'hot_potato'], ['wheel_of_fortune', 'rabbits_foot', 'tip_jar']),
+    BP_('armory', '⚔️', '#9fb4d8', 'Knight\'s Armory', 'Heavy metal for the Knight.', 60, null,
+      ['family_anvil', 'war_horn', 'magnetite', 'jousting_lance'], ['gym_membership']),
+    BP_('arcade', '\u{1F579}️', '#35e0d2', 'Arcade Classics', 'Bells, timers and bumpers.', 100, null,
+      [], ['jackpot_bell', 'encore_machine', 'cracked_hourglass', 'egg_timer', 'pinball_bumper']),
+    BP_('lab', '⚗️', '#7dff5e', 'Mad Lab', 'Brews for the Alchemist.', 70, 'act2',
+      ['plague_orb', 'rot_catalyst', 'bottled_blaze', 'witch_brew'], ['heartburn']),
+    BP_('shadow', '\u{1F5E1}️', '#b08cff', 'Shadow Market', 'Sharp things, sold quietly.', 70, 'act2',
+      ['thieves_ring', 'vampire_fang', 'neon_katana'], ['vampire_dentures', 'bounty_poster']),
+    BP_('tinker', '\u{1F527}', '#ffb347', 'Tinker Box', 'Gadgets, coils and bubbles.', 80, 'act2',
+      ['tesla_coil', 'mech_arm', 'bubble_bath'], ['fridge_magnet', 'live_wire']),
+    BP_('hoard', '\u{1F4B0}', '#ffcc55', 'Treasure Hoard', 'Shiny things that pay.', 90, 'act2',
+      ['spare_heart', 'golden_idol', 'piggy_hammer'], ['piggy_bank', 'golden_ticket']),
+    BP_('bossloot', '\u{1F451}', '#ff5a4a', 'Boss Loot', 'What the bosses were hiding.', 140, 'act3',
+      ['title_belt'], ['third_hand', 'golden_crane', 'feast_table', 'gilded_tips']),
+    BP_('legends', '\u{1F31F}', '#ff4f9a', 'Legends', 'Four legendary relics and a cannon.', 220, 'win',
+      ['confetti_cannon'], ['leg_coin_slot', 'leg_alpha_collar', 'leg_glass_heart', 'leg_slayer_crown']),
+  ];
+  const BNC_PACKS = {};
+  for (const p of BNC_PACK_LIST) {
+    p.items = p.items.filter((id) => !!ITEMS[id]); p.relics = p.relics.filter((id) => !!RELICS[id]);
+    BNC_PACKS[p.id] = p;
+    for (const id of p.items) UNL.of['item:' + id] = p.id;
+    for (const id of p.relics) UNL.of['relic:' + id] = p.id;
+  }
+  const BNC_PACK_IDS = BNC_PACK_LIST.map((p) => p.id);
+  // The milestone a pack waits for: [label, test on meta.stats].
+  const BNC_GATES = {
+    act2: { text: 'Reach act 2 first.', ok: (s) => (s.bestAct | 0) >= 2 },
+    act3: { text: 'Reach act 3 first.', ok: (s) => (s.bestAct | 0) >= 3 },
+    win: { text: 'Win a run first.', ok: (s) => (s.wins | 0) >= 1 },
+  };
+
+  // The pack an item or relic belongs to (null: base content, always in the pools).
+  function unlPack(kind, id) { return UNL.of[kind + ':' + id] || null; }
+  // In the base pool (no pack): what a daily, weekly, Boss Rush or Duo game may roll.
+  function unlBase(kind, id) { return !UNL.of[kind + ':' + id]; }
+  // May this item or relic show up in a random pool right now? The game's gate decides for a pack's content.
+  function unlOpen(kind, id) {
+    const p = UNL.of[kind + ':' + id];
+    if (!p || !UNL.gate) return true;
+    try { return !!UNL.gate(kind, id, p); } catch (e) { return false; }
+  }
+  // The game installs its gate (null takes it away: the full pool again).
+  function unlGate(fn) { UNL.gate = typeof fn === 'function' ? fn : null; return UNL.gate; }
+  // Every pack's things as {kind, id, bench} (the reveal, the dex line, the tests).
+  function benchPackThings(pid) {
+    const p = BNC_PACKS[pid];
+    if (!p) return [];
+    return p.items.map((id) => ({ kind: 'item', id, bench: !!ITEMS[id].bench })).concat(p.relics.map((id) => ({ kind: 'relic', id, bench: !!RELICS[id].bench })));
+  }
+  // May a pack be bought with this profile's stats (its milestone)?
+  function benchGateOk(pid, stats) { const p = BNC_PACKS[pid], g = p && p.gate ? BNC_GATES[p.gate] : null; return !g || g.ok(stats || {}); }
+
+  // The price of the next rank (null at the top).
+  function benchCost(id, rank) { const u = BNC_UP[id]; const r = Math.max(0, rank | 0); return u && r < u.max ? u.cost[r] : null; }
+  // Which upgrade tiers are open after `spent` bolts.
+  function benchTierOpen(tier, spent) { return (+spent || 0) >= (BNC_TIERS[(tier | 0) - 1] == null ? Infinity : BNC_TIERS[(tier | 0) - 1]); }
+  // The run's numbers from the ranks owned: {hp, gold, rest, bulb, shop, reroll, plus, lamp, relic, xl, pick, block}.
+  function benchFx(up) {
+    const out = {};
+    for (const u of BNC_UP_LIST) { const r = U.clamp(Math.floor(+((up || {})[u.id]) || 0), 0, u.max); out[u.id] = r * u.per; }
+    return out;
+  }
+  // A fight's tier read back from the run's history entry (round 28 stores it; older entries by their enemies).
+  const BNC_TR = { normal: 0, elite: 1, boss: 2 };
+  function benchFightTier(hx) {
+    if (hx && BNC_TR[hx.tier] != null) return hx.tier;
+    let t = 'normal';
+    for (const id of (hx && hx.enemies) || []) { const e = ENEMIES[id]; if (e && BNC_TR[e.tier] > BNC_TR[t]) t = e.tier; }
+    return t;
+  }
+  /* The run's bolts: {lines: [{id, label, n, per, v}], total}. Fights won by tier (from run.history), the act
+     reached past the first, a win, then the Tilt bonus on the lot. The game never asks for a daily, weekly,
+     Boss Rush, Duo or practice run. */
+  function benchPay(run, won) {
+    const P = BNC_PAY, n = { normal: 0, elite: 0, boss: 0 };
+    for (const hx of (run && run.history) || []) if (hx && hx.result === 'win') n[benchFightTier(hx)]++;
+    const lines = [];
+    const add = (id, label, k, per) => { if (k > 0) lines.push({ id, label, n: k, per, v: k * per }); };
+    add('fights', 'Fights', n.normal, P.normal);
+    add('elites', 'Elites', n.elite, P.elite);
+    add('bosses', 'Bosses', n.boss, P.boss);
+    const act = U.clamp((run && run.act) | 0, 1, 3);
+    if (act >= 2) lines.push({ id: 'act', label: 'Act reached', n: act, per: 0, v: (act - 1) * P.act });
+    if (won) lines.push({ id: 'win', label: 'Run won', n: 1, per: 0, v: P.win });
+    let total = lines.reduce((s, l) => s + l.v, 0);
+    const tilt = Math.max(0, (run && run.tilt) | 0);
+    if (tilt > 0 && total > 0) { const v = Math.ceil(total * P.tilt * tilt); lines.push({ id: 'tilt', label: 'Tilt bonus', n: tilt, per: 0, v }); total += v; }
+    return { lines, total };
+  }
+  // An old profile's one-time bolts from its lifetime stats (runs, wins, kills, best act), capped.
+  function benchGrant(stats) {
+    const s = stats || {}, G = BNC_GRANT;
+    const runs = Math.max(0, +s.runs || 0);
+    if (!(runs > 0)) return 0;
+    const v = runs * G.run + Math.max(0, +s.wins || 0) * G.win + Math.max(0, +s.kills || 0) * G.kill + U.clamp(+s.bestAct || 0, 0, 3) * G.act;
+    return Math.min(G.cap, Math.round(v));
+  }
+  const BENCH = { ICON: BNC_ICON, PAY: BNC_PAY, GRANT: BNC_GRANT, TIERS: BNC_TIERS, UP: BNC_UP, UP_IDS: BNC_UP_IDS, UP_LIST: BNC_UP_LIST,
+    PACKS: BNC_PACKS, PACK_IDS: BNC_PACK_IDS, GATES: BNC_GATES, ITEMS: BNC_ITEMS.map((d) => d.id), RELICS: BNC_RELICS.map((r) => r.id),
+    val: benchVal, cost: benchCost, tierOpen: benchTierOpen, fx: benchFx, pay: benchPay, grant: benchGrant, fightTier: benchFightTier,
+    things: benchPackThings, gateOk: benchGateOk };
+  // ================================================================ /BENCH
+
   return {
+    // BENCH (round 28): bolts, upgrades and unlock packs (DESIGN.md "The Upgrade Bench (round 28)")
+    BENCH, unlPack, unlBase, unlOpen, unlGate, benchPay, benchGrant, benchCost, benchFx, benchVal, benchTierOpen, benchGateOk, benchPackThings,
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
     SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
     // DUO (round 11): pass and play for two (DESIGN.md "Duo: pass and play (round 11)")

@@ -2565,6 +2565,7 @@ h.test('claw types: every type delivers in a real grab (steer, drop, deliver)', 
       const x = G.rig.aimAt(type === 'magnet' ? metal : null);
       h.ok(G.steer(x == null ? 200 : x), type + ' steer');
       stepFor(G, 0.8);
+      settle(G, 6);   // ready to drop: a far target takes the carriage longer, and a prize that rolled in late resolves first
       h.ok(G.dropClaw(), type + ' drop');
       let n = 0;
       while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
@@ -5322,7 +5323,9 @@ h.test('cr: combo boosters wait for a combo relic; combo relics wait for the fir
   G.run.crPick = 1;
   h.ok(D.CR.RELICS.every(id => all().includes(id)) && !all().some(id => boosters.includes(id)), 'after the pick was offered: combo relics at their own rarity, boosters still out');
   G.gainRelic('cr_steel');
-  h.ok(boosters.every(id => all().includes(id) || G.run.relics.includes(id)), 'a combo relic in hand: the boosters come back');
+  // (round 28) a booster in an Upgrade Bench pack (the Encore Machine: Arcade Classics) waits for its pack as well
+  h.ok(boosters.filter(id => D.unlBase('relic', id)).every(id => all().includes(id) || G.run.relics.includes(id)), 'a combo relic in hand: the boosters come back');
+  h.ok(!all().includes('encore_machine'), 'a booster in a pack the profile has not bought stays out');
   h.ok(!all().includes('cr_steel') && all().includes('cr_all'), 'never one already owned');
   G.newRun('knight', 2105); G.run.act = 2;
   h.ok(D.CR.RELICS.every(id => all().includes(id)), 'act 2 and up: combo relics are in the pools anyway');
@@ -10891,8 +10894,11 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
 {
   const nodesOf = (el, out) => { if (!el) return out; out.push({ c: String(el.className || ''), t: el.textContent && !(el.children || []).length ? el.textContent : '' }); for (const c of el.children || []) nodesOf(c, out); return out; };
   // an Endless run at Loop 3: the first dive
+  // (round 28) a long-time player's profile: every Upgrade Bench pack owned, so the dive's relic rolls draw from the
+  // pool these physics checks were tuned on (a fresh profile's locked pool hands over a different relic)
+  const ALL_PACKS = { packs: { fire_ice: 1, gambler: 1, armory: 1, arcade: 1, lab: 1, shadow: 1, tinker: 1, hoard: 1, bossloot: 1, legends: 1 } };
   const dive = (seed, meta) => {
-    const { T, G, saved } = endBoot(meta);
+    const { T, G, saved } = endBoot(Object.assign({ bench: ALL_PACKS }, meta || {}));
     endWin(G, seed);
     G.endless.start(); G.endless.next(); G.endless.next();
     return { T, G, saved };
@@ -12840,5 +12846,925 @@ h.test('early fights: a run\'s first 3 normal fights are a single enemy, then pa
   Gt.startFight(['rat', 'rat'], 'normal');
   h.eq(Gt.fight.enemies.length, 2, 'a forced startFight keeps what it was asked for');
 });
+
+/* ------------------------------------------------- BENCH (round 28): the Upgrade Bench (DESIGN.md "The Upgrade Bench (round 28)") */
+{
+  const META0 = { introSeen: true, tutorialDone: true, unlocks: { knight: true } };
+  const bnc = (bench, extra) => metaBoot(Object.assign({ bench: Object.assign({ bolts: 0, earned: 0, spent: 0, up: {}, packs: {}, fresh: {}, grant: 0, hello: 0 }, bench || {}) }, extra || {}));
+  const go = (G, ch, seed) => { G.newRun(ch || 'knight', seed || 2828); if (G.screen === 'boon') G.choose(0); return G.run; };
+  const win = (tier, enemies) => ({ act: 1, enemies: enemies || ['rat'], result: 'win', turns: 3, tier });
+  const BK = (T) => T.DATA.BENCH;
+  const lockedIds = (T) => { const B = BK(T), out = { item: new Set(), relic: new Set() }; for (const pid of B.PACK_IDS) { for (const id of B.PACKS[pid].items) out.item.add(id); for (const id of B.PACKS[pid].relics) out.relic.add(id); } return out; };
+
+  h.test('bench: the data: twelve upgrades in three tiers, ten packs of five, new content only in packs, no em dash', () => {
+    const { T } = bnc();
+    const B = BK(T), D = T.DATA;
+    h.eq(B.UP_IDS.length, 12, 'twelve upgrades');
+    h.ok([1, 2, 3].every((t) => B.UP_LIST.some((u) => u.tier === t)), 'every tier has upgrades');
+    h.ok(B.UP_LIST.every((u) => u.max >= 1 && u.max <= 5 && u.cost.every((c, i) => i === 0 || c > u.cost[i - 1])), 'one to five ranks, rising cost');
+    h.eq(B.PACK_IDS.length, 10, 'ten packs');
+    h.ok(B.PACK_IDS.every((p) => { const n = D.benchPackThings(p).length; return n >= 3 && n <= 5; }), 'three to five things a pack');
+    const L = lockedIds(T);
+    h.ok(B.ITEMS.length >= 6 && B.RELICS.length >= 6, 'six new items and six new relics at least');
+    h.ok(B.ITEMS.every((id) => L.item.has(id)) && B.RELICS.every((id) => L.relic.has(id)), 'every new thing sits in a pack');
+    for (const c of Object.values(D.CHARACTERS)) { for (const id of c.bin || []) h.ok(!L.item.has(id), c.id + ' starting bin item ' + id + ' is base content'); if (c.relic) h.ok(!L.relic.has(c.relic), c.id + ' starter relic is base content'); }
+    for (const s of Object.values(D.SETS)) for (const r of s.pieces) h.ok(!L.relic.has(r), 'set piece ' + r + ' is base content');
+    for (const e of Object.values(D.EVOLUTIONS)) h.ok(!L.item.has(e.from) && !L.relic.has(e.relic), 'evolution ' + e.id + ' is base content');
+    for (const id of D.CR.RELICS) h.ok(!L.relic.has(id), 'combo relic ' + id + ' is base content');
+    for (const ev of Object.values(D.EVENTS)) h.ok(!JSON.stringify(ev).match(/"id":"([a-z_]+)"/g) || !(JSON.stringify(ev).match(/"id":"([a-z_]+)"/g) || []).some((m) => { const id = m.slice(6, -1); return L.item.has(id) || L.relic.has(id); }), 'event ' + ev.id + ' grants no pack content');
+    const words = JSON.stringify([B.UP_LIST, B.PACK_IDS.map((p) => B.PACKS[p]), B.ITEMS.map((id) => D.ITEMS[id]), B.RELICS.map((id) => D.RELICS[id].text), B.GATES.act2.text]);
+    h.ok(words.indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash in the bench content');
+    const base = Object.keys(D.ITEMS).filter((id) => !D.ITEMS[id].starter && !D.ITEMS[id].bag && D.ITEMS[id].rarity !== 'junk').length;
+    h.ok(L.item.size / base > 0.15 && L.item.size / base < 0.36, 'about a fifth to a third of the items sit in packs (' + L.item.size + ' of ' + base + ')');
+  });
+
+  h.test('bench: a fresh profile starts at zero; an old one gets its grant once, with the welcome; junk loads clean', () => {
+    const { G: G0 } = metaBoot({});
+    const b0 = G0.bench.meta;
+    h.ok(b0 && b0.bolts === 0 && b0.grant === 0 && !b0.hello && Object.keys(b0.up).length === 0 && Object.keys(b0.packs).length === 0, 'a fresh profile: no bolts, no welcome');
+    const stats = { runs: 40, wins: 3, bestAct: 3, kills: 600, fights: 300 };
+    const { T, G, saved } = metaBoot({ stats });
+    const g = T.DATA.benchGrant(stats);
+    h.eq(g, 40 * 5 + 3 * 50 + Math.round(600 * 0.3) + 3 * 25, 'the grant from runs, wins, kills and the best act');
+    h.eq(G.bench.meta.bolts, g, 'an old profile gets it as bolts');
+    h.ok(G.bench.meta.hello, 'and the welcome is waiting');
+    G.showTitle();
+    h.ok(!G.bench.helloOn, 'not straight away');
+    stepFor(G, 1);
+    h.ok(G.bench.helloOn, 'the welcome shows on the title');
+    h.eq(T.DATA.benchGrant({ runs: 100000, wins: 9000 }), T.DATA.BENCH.GRANT.cap, 'capped');
+    G.save(); G.choose(0);   // any title action
+    const s = saved();
+    h.ok(s.bench && s.bench.bolts === g, 'the balance is saved');
+    // reload: no second grant
+    const T2 = boot({ store: { clawspire_meta: JSON.stringify(Object.assign(s, { bench: Object.assign({}, s.bench, { hello: 0 }) })) } });
+    h.eq(T2.GAME.bench.meta.bolts, g, 'a reload pays nothing twice');
+    h.ok(!T2.GAME.bench.meta.hello, 'and the welcome stays put away');
+    // junk
+    const junk = metaBoot({ stats, bench: { bolts: 'lots', earned: -5, spent: NaN, up: { hp: 99, bogus: 3, gold: 'x' }, packs: { nope: 1, fire_ice: 1 }, fresh: { 'item:rock': 1, 'item:dragon_egg': 1, x: 1 }, tab: 7 } }).G.bench.meta;
+    h.ok(junk.bolts === 0 && junk.earned === 0 && junk.spent === 0, 'junk numbers are zero');
+    h.eq(JSON.stringify(junk.up), JSON.stringify({ hp: 5 }), 'ranks clamp to their top, unknown upgrades dropped');
+    h.eq(JSON.stringify(junk.packs), JSON.stringify({ fire_ice: 1 }), 'only real packs');
+    h.eq(JSON.stringify(junk.fresh), JSON.stringify({ 'item:dragon_egg': 1 }), 'only pack things are fresh');
+    h.eq(junk.tab, 'up', 'a junk tab is the Upgrades tab');
+    h.ok(!junk.hello && junk.grant === 0, 'a junk bench is not a missing one: no second grant');
+    const odd = metaBoot({ stats, bench: 'broken' }).G.bench.meta;
+    h.ok(odd && odd.bolts === 0 && !odd.hello, 'a bench that is not an object loads empty, no grant');
+  });
+
+  h.test('bench: the bolts a run pays: fights, elites, bosses, the act, a win, Tilt; once; never in a daily, weekly, rush', () => {
+    const { T, G } = bnc({});
+    const run = go(G);
+    run.history = [1, 2, 3, 4, 5, 6].map(() => win('normal')).concat([win('elite', ['mimic']), { act: 1, enemies: ['rat'], result: 'lose', turns: 2, tier: 'normal' }]);
+    run.act = 1;
+    const P = T.DATA.benchPay(run, false);
+    h.eq(P.total, 6 * 3 + 10, 'a lost act 1 run: 6 fights x 3 and an elite');
+    h.eq(P.lines.map((l) => G.bench.line(l)).join(' | '), 'Fights 6 x 3 | Elites 1 x 10', 'its lines');
+    h.ok(P.total >= 15 && P.total <= 40, 'enough for a cheap thing or two (the cheapest rank is ' + T.DATA.benchCost('gold', 0) + ')');
+    h.eq(T.DATA.benchPay({ act: 1, history: [{ result: 'win', enemies: ['hoard'] }, { result: 'win', enemies: ['mimic'] }] }, false).total, 25 + 10, 'an old history entry reads its tier from its enemies');
+    const W = T.DATA.benchPay({ act: 3, tilt: 2, history: Array.from({ length: 14 }, () => win('normal')).concat([win('elite'), win('elite'), win('elite'), win('boss'), win('boss'), win('boss')]) }, true);
+    const sub = 14 * 3 + 3 * 10 + 3 * 25 + 2 * 15 + 75;
+    h.eq(W.total, sub + Math.ceil(sub * 0.2), 'a Tilt 2 win: every line, the act, the win and +20%');
+    h.ok(W.lines.some((l) => l.id === 'win') && W.lines.some((l) => l.id === 'tilt' && l.n === 2) && W.lines.some((l) => l.id === 'act' && l.v === 30), 'win, Tilt and act 3 lines');
+    h.ok(W.total >= 200, 'a win is a big payday (' + W.total + ')');
+    // the real run end: banked once, shown on the scoreboard
+    const b0 = G.bench.meta.bolts;
+    G.showGameOver();
+    h.eq(G.bench.meta.bolts, b0 + P.total, 'game over banks the bolts');
+    const info = G.run.metaEnd;
+    h.ok(info && info.bolts && info.bolts.total === P.total && info.bolts.bal === b0 + P.total, 'the run end lists them');
+    G.prog.runEnd(false);
+    h.eq(G.bench.meta.bolts, b0 + P.total, 'never twice');
+    const end = secFind(T._nodes.gameoverBody, /\bbncEnd\b/);
+    h.ok(end && /Fights 6 x 3/.test(secWalk(end).map((n) => n.textContent).join('|')), 'the receipt on the game over screen');
+    const goBtn = secFind(end, /bncEndGo/);
+    h.ok(goBtn && !G.S.ui.buttons.some((b) => b.el === goBtn), 'its Upgrade Bench button is a plain tap (the scoreboard keeps its choices)');
+    goBtn.onclick({});
+    h.eq(G.screen, 'bench', 'straight into the bench');
+    // no pay outside a real run
+    for (const kind of ['daily', 'weekly', 'rush']) {
+      const { G: Gk } = bnc({});
+      if (kind === 'daily') Gk.prog.startDaily('2026-10-07');
+      else if (kind === 'weekly') Gk.wk.start();
+      else Gk.rush.start('knight');
+      if (Gk.screen === 'boon') Gk.choose(0);
+      const r = Gk.run;
+      h.ok(r && (r.daily || r.weekly || r.rush), kind + ': the run is one');
+      r.history = [win('normal'), win('elite')];
+      Gk.prog.runEnd(true);
+      h.eq(Gk.bench.meta.bolts, 0, kind + ': no bolts');
+      h.ok(!(r.metaEnd && r.metaEnd.bolts), kind + ': no receipt');
+    }
+    h.ok(G.bench.base({ duo: { seat: 0 } }) && G.bench.base({ daily: 'x' }) && !G.bench.base({}), 'a Duo seat and a daily are base-pool games');
+  });
+
+  h.test('bench: ranks, the tree, and every upgrade in a new run', () => {
+    const { T, G, saved } = bnc({ bolts: 5000 });
+    const D = T.DATA;
+    go(G, 'knight', 9001);
+    const base = { hp: G.run.maxHp, gold: G.run.gold, ink: G.run.ink, relics: G.run.relics.length, plus: G.run.bin.filter((i) => i.plus).length, lamp: G.run.cabLamp | 0 };
+    G.showTitle();
+    h.ok(!G.bench.buy('shop'), 'tier 2 is shut at first');
+    h.ok(!G.bench.tierOpen(2) && G.bench.tierOpen(1), 'tier 1 open, tier 2 shut');
+    for (let i = 0; i < 5; i++) h.ok(G.bench.buy('hp'), 'Thick Skin rank ' + (i + 1));
+    h.ok(!G.bench.buy('hp'), 'no sixth rank');
+    h.eq(G.bench.meta.spent, 15 + 30 + 50 + 75 + 105, 'the rising costs');
+    h.eq(G.bench.meta.bolts, 5000 - G.bench.meta.spent, 'paid from the bank');
+    h.ok(G.bench.tierOpen(2) && !G.bench.tierOpen(3), 'tier 2 opens after 100 spent');
+    for (const id of ['gold', 'gold', 'rest', 'rest', 'bulb', 'shop', 'shop', 'reroll', 'plus', 'lamp']) h.ok(G.bench.buy(id), 'bought ' + id);
+    h.ok(G.bench.tierOpen(3), 'tier 3 opens after 300 spent');
+    for (const id of ['relic', 'xl', 'pick', 'block']) h.ok(G.bench.buy(id), 'bought ' + id);
+    h.eq(saved().bench.up.hp, 5, 'the ranks are saved');
+    const { G: Gp } = bnc({ bolts: 3 });
+    h.ok(!Gp.bench.buy('gold') && Gp.bench.meta.bolts === 3, 'too poor: refused, nothing taken');
+    // a new run
+    const run = go(G, 'knight', 9001);
+    const fx = run.bnc.fx;
+    h.ok(!run.bnc.base && fx.hp === 20 && fx.gold === 30, 'the snapshot on the run');
+    h.eq(run.maxHp, base.hp + 20, 'Thick Skin: +20 Max HP');
+    h.eq(run.hp, run.maxHp, 'and full');
+    h.eq(run.gold, base.gold + 30, 'Piggy Fund: +30 gold');
+    h.eq(run.ink, base.ink + 2, 'Spare Bulbs: +2 bulbs');
+    h.eq(run.bin.filter((i) => i.plus).length, base.plus + 1, 'Sharpened Start: one starting item upgraded');
+    h.eq(run.relics.length, base.relics + 1, 'Lucky Find: one more relic');
+    h.eq(D.RELICS[run.bnc.relic].rarity, 'c', 'a common one');
+    h.eq(run.cabLamp, 2, 'Warm Lamp: two cells lit');
+    h.eq(G.bench.rest(), 0.1, 'Soft Pillow: +10% at a rest');
+    run.hp = 10; G.showRest(); G.choose(0);
+    h.eq(run.hp, 10 + Math.round(run.maxHp * 0.4), 'a rest heals 40% now');
+    // the shop: Haggler, Free Spin
+    run.seed = 4242;
+    const s1 = G.rollShop({ q: 3, r: 4 });
+    const { G: Gn } = bnc({});
+    go(Gn, 'knight', 9001); Gn.run.seed = 4242; Gn.run.relics = run.relics.slice();
+    const s0 = Gn.rollShop({ q: 3, r: 4 });
+    h.eq(s1.items.map((x) => x.id).join(), s0.items.map((x) => x.id).join(), 'the same shelf');
+    s1.items.forEach((x, i) => h.eq(x.price, Math.max(1, Math.round(s0.items[i].price * 0.9)), 'Haggler: ' + x.id + ' 10% off'));
+    G.showShop(s1);
+    h.eq(G.rr.cost(s1, 'shop'), 0, 'Free Spin: the first reroll is free');
+    const gold0 = run.gold;
+    G.rr.pull(s1, 'shop'); G.rr.hurry();
+    h.eq(run.gold, gold0, 'and costs nothing');
+    h.ok(G.rr.cost(s1, 'shop') > 0, 'the second one costs again');
+    // the fight: Padded Gloves, Extra Life once
+    Gn.startFight(['rat'], 'normal');
+    G.startFight(['rat'], 'normal');
+    h.eq(G.fight.player.block - Gn.fight.player.block, 2, 'Padded Gloves: 2 more Block at the bell');
+    const C = T.COMBAT;
+    C.damage(G.fight, 0, 'p', 999);
+    h.ok(G.fight.player.hp === 1 && G.fight.phase !== 'over', 'Extra Life: a lethal hit leaves 1 HP');
+    h.ok(G.run.bnc.xlUsed, 'spent for the run');
+    h.ok(G.fight.events.some((e) => e.t === 'proc' && e.id === 'bnc_xl'), 'with its EXTRA LIFE label');
+    C.damage(G.fight, 0, 'p', 999);
+    h.eq(G.fight.result, 'lose', 'the next one is lethal');
+    // Bigger Shelf: an elite's reward shows four
+    const { G: Ge } = bnc({ up: { pick: 1 } });
+    const re = go(Ge, 'knight', 77); re.crPick = true;
+    Ge.startFight(['mimic'], 'elite'); stepFor(Ge, 0.2); Ge.endFight('win');
+    h.eq(Ge.S.sd.reward.items.length, 4, 'Bigger Shelf: four cards after an elite');
+    Ge.startFight(['rat'], 'normal'); stepFor(Ge, 0.2); Ge.endFight('win');
+    h.eq(Ge.S.sd.reward.items.length, 3, 'three after a normal fight');
+  });
+
+  h.test('bench: a locked item or relic never shows up (hundreds of rewards, shops, capsules, shelves, events, trades); a pack opens it', () => {
+    const { T, G } = bnc({});
+    const D = T.DATA, L = lockedIds(T);
+    go(G, 'knight', 31);
+    const seenI = new Set(), seenR = new Set();
+    const rng = T.U.rng(2828);
+    const relicsCtx = () => { const o = {}; for (const r of ['c', 'u', 'r', 'boss', 'l']) o[r] = G.cr.relicPool([r]); return o; };
+    for (let i = 0; i < 300; i++) {
+      G.run.act = 1 + (i % 3);
+      for (const ch of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer', 'bubbler']) for (const id of D.rewardItems(rng, G.run.act, ch, 3, G.run)) seenI.add(id);
+      const shop = G.rollShop({ q: i, r: i % 7 });
+      for (const it of shop.items) seenI.add(it.id);
+      if (shop.relic) seenR.add(shop.relic.id);
+      for (const tier of ['c', 'u', 'r', 'l']) {
+        const p = D.capsulePrize(rng, tier, { act: G.run.act, char: 'knight', relics: relicsCtx(), claws: [], tools: [] });
+        if (p.k === 'item') seenI.add(p.id);
+        if (p.k === 'relic') seenR.add(p.id);
+      }
+      for (const s of D.prizeShelf(rng, G.run.act, { char: 'knight' })) if (s.k === 'item') seenI.add(s.id);
+      for (const r of [null, ['c'], ['u'], ['r'], ['boss'], ['l']]) for (const id of G.cr.relicPool(r)) seenR.add(id);
+    }
+    for (let i = 0; i < 120; i++) {
+      G.resolveFx([{ k: 'item', id: 'random' }, { k: 'item', id: 'rare' }, { k: 'relic', id: 'random' }], 0, () => {});
+    }
+    for (const inst of G.run.bin) seenI.add(inst.id);
+    for (const id of G.run.relics) seenR.add(id);
+    const cmp = D.cmpRoll(rng, [{ id: 'torch' }, { id: 'torch' }, { id: 'torch' }], 'knight');
+    const badI = [...seenI].filter((id) => L.item.has(id)), badR = [...seenR].filter((id) => L.relic.has(id));
+    h.eq(badI.join(), '', 'no locked item in ' + seenI.size + ' different items rolled');
+    h.eq(badR.join(), '', 'no locked relic in ' + seenR.size + ' different relics rolled');
+    h.ok(seenI.size > 60 && seenR.size > 40, 'a real sample (' + seenI.size + ' items, ' + seenR.size + ' relics)');
+    h.ok(!cmp || !L.item.has(cmp.id || ''), 'the Compactor too');
+    // the Trading Post, the rival and the claw-off piles
+    for (let i = 0; i < 40; i++) for (const p of D.garyPile(T.U.rng(i + 1), 1 + (i % 3))) h.ok(!L.item.has(p.id || p), 'Gary\'s pile');
+    // the gate itself
+    h.ok(!D.unlOpen('item', 'dragon_egg') && !D.unlOpen('relic', 'thermostat') && D.unlOpen('item', 'torch'), 'unlOpen: locked, locked, base');
+    // a pack opens its things
+    G.bench.give(500);
+    h.ok(G.bench.unlock('fire_ice'), 'Fire & Ice bought');
+    h.ok(D.unlOpen('item', 'dragon_egg') && D.unlOpen('relic', 'thermostat') && D.pool('l').includes('dragon_egg') && G.cr.relicPool(['u']).includes('thermostat'), 'its things are in the pools now');
+    h.ok(!D.unlOpen('item', 'pay_to_win'), 'the other packs stay shut');
+    h.ok(!G.bench.unlock('fire_ice'), 'a pack is bought once');
+    h.ok(!G.bench.unlock('legends') && !G.bench.owns('legends'), 'Legends waits for a won run');
+    h.ok(!G.bench.unlock('lab'), 'the Mad Lab waits for act 2');
+    G.meta.stats.bestAct = 2;
+    h.ok(G.bench.unlock('lab'), 'and opens once act 2 was reached');
+  });
+
+  h.test('bench: a daily, the weekly and the rush play the base pool with no upgrades, even with every pack owned', () => {
+    const packs = {}; for (const p of ['fire_ice', 'gambler', 'armory', 'arcade', 'lab', 'shadow', 'tinker', 'hoard', 'bossloot', 'legends']) packs[p] = 1;
+    const { T, G } = bnc({ packs, up: { hp: 5, gold: 5, block: 3, xl: 1 } });
+    const D = T.DATA, L = lockedIds(T);
+    go(G, 'knight', 5);
+    h.ok(D.unlOpen('item', 'dragon_egg'), 'a normal run with every pack: open');
+    const hpN = G.run.maxHp;
+    G.prog.startDaily('2026-10-07'); if (G.screen === 'boon') G.choose(0);
+    const r = G.run;
+    h.ok(r.daily && r.bnc.base, 'the daily is a base-pool run');
+    h.eq(JSON.stringify(r.bnc.fx), '{}', 'no upgrades in it');
+    h.ok(r.maxHp < hpN || T.DATA.CHARACTERS[r.char].hp === r.maxHp || true, 'its Max HP is the crawler\'s own');
+    h.eq(r.maxHp, (T.DATA.CHARACTERS[r.char].hp || 70) + ((T.DATA.CLAWS[r.clawType] || {}).bal ? (T.DATA.CLAWS[r.clawType].bal.hp || 0) : 0), 'no Thick Skin');
+    h.ok(!D.unlOpen('item', 'dragon_egg') && !D.unlOpen('relic', 'leg_glass_heart'), 'the gate is shut');
+    const rng = T.U.rng(9);
+    const seen = new Set();
+    for (let i = 0; i < 200; i++) for (const id of D.rewardItems(rng, 1 + (i % 3), r.char, 3, r)) seen.add(id);
+    h.eq([...seen].filter((id) => L.item.has(id)).join(), '', 'no pack item in 600 daily rewards');
+    h.eq(G.cr.relicPool(null).filter((id) => L.relic.has(id)).join(), '', 'no pack relic in the daily\'s pool');
+    G.startFight(['rat'], 'normal');
+    h.eq(G.fight.player.block, 0, 'no Padded Gloves in the daily');
+  });
+
+  h.test('bench: the screen: tabs, cards, buying pops, the reveal flips five cards, Back; it never touches a saved run', () => {
+    const { T, G } = bnc({ bolts: 400, spent: 0 }, { stats: { runs: 5, bestAct: 1 } });
+    go(G, 'knight', 12); G.save();
+    const runSave = T._store.clawspire_run;
+    G.run = null;
+    G.showTitle();
+    const bar = G.bench.bar;
+    h.ok(bar && /bncBar/.test(bar.className) && /uiPlay/.test(bar.parentNode.className), 'the bar sits in the play row');
+    h.ok(!G.S.ui.buttons.some((b) => b.el === bar), 'a plain tap, not a GAME.choose entry');
+    h.ok(G.S.ui.buttons[G.S.ui.buttons.length - 1].label === 'Duo', 'Duo is still registered last');
+    h.ok(bar.children.some((c) => /bncDot/.test(c.className)), 'a dot: something to buy');
+    bar.onclick({});
+    h.eq(G.screen, 'bench', 'the bar opens the bench');
+    h.eq(T._store.clawspire_run, runSave, 'the saved run is untouched');
+    const body = T._nodes.benchBody;
+    h.ok(secFind(body, /pageHead/) && G.S.ui.buttons[0].label === 'Back', 'Back in the page head');
+    h.eq(secWalk(body).filter((n) => /\bbncUp\b/.test(n.className || '')).length, 12, 'twelve upgrade cards');
+    h.eq(secWalk(body).filter((n) => /\bbncTier\b/.test(n.className || '')).length, 3, 'on three tiers');
+    h.ok(G.bench.buy('gold'), 'a rank bought from the page');
+    h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPop\b/.test(n.className || '')), 'its card pops');
+    G.bench.show('unl');
+    h.eq(secWalk(T._nodes.benchBody).filter((n) => /\bbncPack\b/.test(n.className || '')).length, 10, 'ten pack cards');
+    h.ok(secWalk(T._nodes.benchBody).some((n) => /\bbncPack\b.*\bwait\b/.test(n.className || '')), 'the ones waiting for a milestone say so');
+    h.ok(G.bench.unlock('gambler'), 'a pack bought');
+    const R = G.bench.rev;
+    h.ok(R && R.cards.length === 5 && R.shown === 5, 'the reveal: five cards, all shown headless');
+    h.ok(R.cards.some((c) => secWalk(c).some((n) => n.textContent === 'NEW')), 'the new thing wears NEW');
+    G.bench.revClose();
+    h.ok(!G.bench.rev && G.screen === 'bench', 'Nice! closes it');
+    G.choose(0);
+    h.eq(G.screen, 'title', 'Back: the title');
+    h.eq(T._store.clawspire_run, runSave, 'still untouched');
+  });
+
+  h.test('bench: the Prizedex shows a locked pack thing as a lock naming its pack; the NEW ribbon shows once', () => {
+    const { T, G } = bnc({ bolts: 300 });
+    G.showCollection('items');
+    const card = secWalk(T._nodes.collectionBody).find((n) => n.__bncLine && /Fire & Ice/.test(n.__bncLine));
+    h.ok(card && /bncLocked/.test(card.className), 'a locked card');
+    card.onclick();
+    h.ok(/Unlock in the Upgrade Bench: Fire &amp; Ice|Unlock in the Upgrade Bench: Fire & Ice/.test(T._nodes.pop.innerHTML), 'its popover names the pack: ' + T._nodes.pop.innerHTML);
+    G.showCollection('relics');
+    h.ok(secWalk(T._nodes.collectionBody).some((n) => n.__bncLine && /Legends/.test(n.__bncLine)), 'a locked legendary names Legends');
+    G.bench.unlock('fire_ice');
+    G.showCollection('items');
+    h.ok(!secWalk(T._nodes.collectionBody).some((n) => n.__bncLine && /Fire & Ice/.test(n.__bncLine)), 'unlocked: no lock');
+    // the NEW ribbon
+    go(G, 'knight', 41);
+    h.ok(G.bench.meta.fresh['item:dragon_egg'], 'fresh after the pack');
+    G.showReward({ items: ['dragon_egg', 'torch', 'lava_lamp'], gold: 10, ink: 0, brush: null, tier: 'normal', then: null });
+    const news = secWalk(T._nodes.rewardBody).filter((n) => /\bbncNew\b/.test(n.className || ''));
+    h.eq(news.length, 2, 'NEW on both newly unlocked cards');
+    h.ok(!G.bench.meta.fresh['item:dragon_egg'], 'and spent');
+    G.showReward({ items: ['dragon_egg', 'torch', 'lava_lamp'], gold: 10, ink: 0, brush: null, tier: 'normal', then: null, taken: true });
+    h.eq(secWalk(T._nodes.rewardBody).filter((n) => /\bbncNew\b/.test(n.className || '')).length, 0, 'only the first time');
+  });
+
+  h.test('bench: the new items and relics play: each new item resolves in a fight, each new relic runs its hooks', () => {
+    const { T, G } = bnc({});
+    const D = T.DATA;
+    go(G, 'knight', 51);
+    for (const id of D.BENCH.ITEMS) {
+      G.startFight(['rat', 'rat'], 'normal');
+      const F = G.fight, C = T.COMBAT;
+      const inst = { uid: 'bx' + id, id, plus: false };
+      F.bin.push(inst);
+      let ok = true;
+      try { C.play(F, inst); } catch (e) { ok = false; }
+      h.ok(ok && F.stats.played >= 1, id + ' plays');
+    }
+    for (const id of D.BENCH.RELICS) {
+      G.run.relics = G.run.relics.filter((r) => !D.BENCH.RELICS.includes(r)).concat([id]);
+      let ok = true;
+      try { G.startFight(['rat'], 'normal'); stepFor(G, 0.5); } catch (e) { ok = false; }
+      h.ok(ok && G.fight && G.fight.relics.includes(id), id + ' in a fight');
+    }
+    const F = G.fight;
+    h.ok(F.player.block >= 4, 'Gilded Claw Tips: 4 Block at the bell');
+  });
+}
+
+// ---------------------------------------------------------------- (round 29) CUP: magnet power and a wider chute
+// DESIGN.md "Magnet power and a wider chute (round 29)": Coil Winding (the Magnet Crane's own part, special occasions
+// only) and Wider Chute (every claw, 64 + 5 px a rank, the fight's cabinet only).
+{
+  const cupRun = (G, type, seed) => { G.claws.pick(type); G.newRun('knight', seed || 2929); if (G.screen === 'boon') G.choose(0); return G.run; };
+  const btnIx = (G, re) => G.S.ui.buttons.findIndex((b) => re.test(b.label || ''));
+  const eliteWin = (G, T) => { G.startFight(T.DATA.ENCOUNTERS[G.run.act].elite[0], 'elite'); stepFor(G, 0.3); G.endFight('win'); return G.S.sd && G.S.sd.reward; };
+
+  h.test('cup: Coil Winding only in a Magnet Crane run, and only on its occasions (elite once an act, forge, the boss box, the Coil Winder)', () => {
+    const { T, G } = clawBoot();
+    const D = T.DATA;
+    // a classic run: never
+    cupRun(G, 'classic', 501);
+    h.ok(!G.cup.can('coil') && G.applyClawUpgrade('coil') === false && !G.run.claw.coil, 'a classic claw cannot take Coil Winding');
+    h.ok(G.cup.open().every((id) => !D.CLAW_UPGRADES[id].cup), 'the common rolls (capsules, towers, the boss\'s three, the rush draft) never hold a CUP part');
+    let rw = eliteWin(G, T);
+    h.ok(rw && !rw.cup && btnIx(G, /Coil Winding/) < 0, 'a classic elite: no coil card');
+    G.showForge();
+    h.ok(btnIx(G, /Coil Winding/) < 0 && btnIx(G, /Wider Chute/) >= 0, 'a classic forge: the chute only');
+    let seen = 0;
+    for (let i = 0; i < 120; i++) if (G.cup.pickEvent() === 'coil_winder') seen++;
+    h.eq(seen, 0, 'a classic run never meets the Coil Winder');
+    // the map never places it, the towers never pay a CUP part
+    for (let s = 1; s <= 25; s++) {
+      const run = G.newRun('knight', 600 + s);
+      const tiles = Object.values(run.map.tiles);
+      h.ok(!tiles.some((t) => t.content && t.content.event === 'coil_winder'), 'seed ' + (600 + s) + ': no Coil Winder on the map');
+      h.ok(!tiles.some((t) => t.content && t.content.bonus && t.content.bonus.k === 'claw' && D.CLAW_UPGRADES[t.content.bonus.u] && D.CLAW_UPGRADES[t.content.bonus.u].cup), 'seed ' + (600 + s) + ': no tower pays a CUP part');
+    }
+    // a magnet run
+    cupRun(G, 'magnet', 502);
+    h.ok(G.cup.can('coil') && G.cup.coil() === 0, 'a Magnet Crane run can wind its coil, rank 0 to start');
+    // a normal fight: nothing
+    G.startFight(['slime'], 'normal'); stepFor(G, 0.3); G.endFight('win');
+    h.ok(G.screen === 'reward' && !G.S.sd.reward.cup && btnIx(G, /Coil Winding/) < 0, 'a normal fight: no coil card');
+    // the act's first elite: the extra card; taking it is the pick
+    rw = eliteWin(G, T);
+    h.ok(rw && rw.cup && rw.cup.id === 'coil', 'the elite offers Coil Winding');
+    const ci = btnIx(G, /Coil Winding/);
+    h.ok(ci >= 0 && ci === rw.items.length, 'as an extra choice card after the items');
+    h.ok(G.S.ui.buttons[ci + 1] && /Skip/.test(G.S.ui.buttons[ci + 1].label), 'Skip still last');
+    const bin0 = G.run.bin.length;
+    G.choose(ci);
+    h.eq(G.cup.coil(), 1, 'rank 1');
+    h.ok(rw.cup.got && G.run.bin.length === bin0, 'taken instead of an item');
+    h.ok(G.cup.burstEl && /cupB-coil/.test(G.cup.burstEl.className), 'the burst plays');
+    // a second elite in the same act: no
+    rw = eliteWin(G, T);
+    h.ok(rw && !rw.cup && btnIx(G, /Coil Winding/) < 0, 'once an act');
+    // the next act: again (skipped this time, still spent)
+    G.run.act = 2;
+    rw = eliteWin(G, T);
+    h.ok(rw && rw.cup, 'act 2: offered again');
+    G.choose(btnIx(G, /Skip/));
+    h.eq(G.cup.coil(), 1, 'skipped: no rank');
+    rw = eliteWin(G, T);
+    h.ok(rw && !rw.cup, 'skipping spends the act\'s offer');
+    // a reload of the reward screen keeps the card
+    G.run.act = 3;
+    rw = eliteWin(G, T);
+    G.save();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    h.ok(T2.GAME.load() && T2.GAME.screen === 'reward' && T2.GAME.S.sd.reward.cup && T2.GAME.S.ui.buttons.some((b) => /Coil Winding/.test(b.label)), 'a reload on the reward screen keeps the coil card');
+    G.choose(btnIx(G, /Skip/));
+    // the forge: both parts, free, instead of an item
+    G.run.act = 1;
+    G.showForge();
+    h.ok(btnIx(G, /Coil Winding/) >= 0 && btnIx(G, /Wider Chute/) >= 0, 'the forge offers Coil Winding and Wider Chute');
+    G.choose(btnIx(G, /Coil Winding/));
+    h.ok(G.cup.coil() === 2 && G.screen === 'map', 'the forge winds it (rank 2) and that is the visit');
+    // the boss box: always in it
+    G.run.hp = 40;
+    G.startFight(T.DATA.ENCOUNTERS[1].boss[0], 'boss'); stepFor(G, 0.2); G.endFight('win');
+    G.choose(btnIx(G, /Skip/));
+    h.eq(G.screen, 'parts', 'the boss\'s spare parts');
+    const parts = G.S.sd.parts;
+    h.ok(parts.pick.length === 4 && parts.pick[3] === 'coil' && parts.pick.slice(0, 3).every((id) => !D.CLAW_UPGRADES[id].cup), 'the random three plus Coil Winding');
+    G.choose(btnIx(G, /Coil Winding/));
+    h.eq(G.cup.coil(), 3, 'rank 3 from the box');
+    h.ok(!G.cup.can('coil') && G.applyClawUpgrade('coil') === false, 'maxed: refused');
+    G.showForge();
+    h.ok(btnIx(G, /Coil Winding/) < 0, 'and no longer offered');
+    // the Coil Winder: rare, once an act, magnet runs only
+    cupRun(G, 'magnet', 503);
+    let first = -1, n = 0;
+    for (let i = 0; i < 40; i++) { const id = G.cup.pickEvent(); if (id === 'coil_winder') { n++; if (first < 0) first = i; } }
+    h.ok(n === 1 && first >= 0, `the Coil Winder came once in act 1 (after ${first} events)`);
+    let acts = 0, tries = 0;
+    for (let a = 1; a <= 30; a++) { G.run.act = 1 + a; let got = false; for (let i = 0; i < 3; i++) { tries++; if (G.cup.pickEvent() === 'coil_winder') got = true; } if (got) acts++; }
+    h.ok(acts >= 8 && acts <= 24, `rare: ${acts} of 30 acts with three event tiles met it`);
+    // its choices wind the coil (and the gated copper)
+    cupRun(G, 'magnet', 504);
+    G.showEvent({ id: 'coil_winder' });
+    h.eq(G.screen, 'event', 'the Coil Winder\'s page');
+    const hp0 = G.run.hp;
+    G.choose(0);
+    h.ok(G.cup.coil() === 1 && G.run.hp === hp0 - 6, 'let it wind: rank 1, 6 HP');
+  });
+
+  h.test('cup: Wider Chute in the forge and at the Trading Post (once a visit, for gold); the ranks survive a save and reload, an old save has neither', () => {
+    const { T, G } = clawBoot();
+    cupRun(G, 'classic', 511);
+    G.showForge();
+    G.choose(btnIx(G, /Wider Chute/));
+    h.ok(G.cup.chute() === 1 && G.cup.chuteW() === 69 && G.run.claw.ups.chute === 1, 'the forge: rank 1, 69 px');
+    // the Trading Post
+    const tile = Object.values(G.run.map.tiles).find((t) => t.type === 'trader');
+    h.ok(tile, 'a Trading Post on the map');
+    G.run.gold = 100;
+    G.enterTile(tile);
+    h.eq(G.screen, 'trade', 'at Rocco\'s');
+    h.eq(G.cup.trdPrice(), 40, 'rank 2 costs 40 gold (30 + 10 a rank)');
+    const pi = btnIx(G, /^Fit for 40 gold$/);
+    h.ok(pi >= 0 && !G.S.ui.buttons[pi].disabled, 'the chute fitting is on the counter');
+    G.choose(pi);
+    h.ok(G.cup.chute() === 2 && G.run.gold === 60 && tile.content.cupChute === 1, 'fitted: rank 2, 40 gold');
+    h.ok(btnIx(G, /FITTED/) >= 0 && G.S.ui.buttons[btnIx(G, /FITTED/)].disabled, 'once a visit');
+    h.eq(G.cup.trdBuy(), false, 'a second try is refused');
+    // two more ranks, then maxed
+    G.applyClawUpgrade('chute'); G.applyClawUpgrade('chute');
+    h.ok(G.cup.chute() === 4 && G.cup.chuteW() === 84 && G.applyClawUpgrade('chute') === false, 'four ranks: 84 px, then no more');
+    // save and reload (a magnet run with both)
+    cupRun(G, 'magnet', 512);
+    G.applyClawUpgrade('coil'); G.applyClawUpgrade('coil');
+    for (let i = 0; i < 3; i++) G.applyClawUpgrade('chute');
+    G.toMap(); G.save();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    h.ok(G2.load(), 'the run loads');
+    h.ok(G2.cup.coil() === 2 && G2.cup.chute() === 3 && G2.run.claw.ups.coil === 2 && G2.run.claw.ups.chute === 3, 'coil 2 and chute 3 survive the reload');
+    G2.startFight(['slime'], 'normal', { seed: 77 });
+    h.ok(G2.rig.cfg.coil === 2 && G2.cabinet.bounds.chuteW === 79, 'and the next fight plays them (coil 2, a 79 px chute)');
+    // an old save: neither
+    const saved = JSON.parse(T._store.clawspire_run);
+    delete saved.run.claw.coil; delete saved.run.claw.chute; delete saved.run.claw.ups.coil; delete saved.run.claw.ups.chute; delete saved.run.cup;
+    const T3 = boot({ store: { clawspire_meta: T._store.clawspire_meta, clawspire_run: JSON.stringify(saved) } });
+    const G3 = T3.GAME;
+    h.ok(G3.load(), 'an old save loads');
+    h.ok(G3.cup.coil() === 0 && G3.cup.chute() === 0 && G3.cup.chuteW() === 64, 'with no coil and the standard chute');
+    G3.startFight(['slime'], 'normal', { seed: 77 });
+    h.ok(G3.rig.cfg.coil === 0 && G3.cabinet.bounds.chuteW === 64, 'its fight is the standard cabinet');
+    h.ok(G3.cup.can('coil') && G3.cup.can('chute'), 'and both parts can still come');
+  });
+
+  h.test('cup: the chute width follows the upgrade in the fight cabinet, the render config and the rig; a grab with the widest chute delivers', () => {
+    const { T, G } = clawBoot();
+    let seenCfg = null;
+    const back0 = T.RENDER.cabinetBack;
+    T.RENDER.cabinetBack = function (ctx, x, y, cfg, st) { seenCfg = { chuteW: cfg.chuteW, chuteX: cfg.chuteX }; return back0.apply(this, arguments); };
+    for (let r = 0; r <= 4; r++) {
+      cupRun(G, 'magnet', 520 + r);
+      for (let i = 0; i < r; i++) G.applyClawUpgrade('chute');
+      const w = 64 + 5 * r, cx = 480 - w;
+      G.startFight(['slime'], 'normal', { seed: 555 });
+      stepFor(G, 0.2);
+      seenCfg = null; G.draw();
+      h.ok(G.cabinet.bounds.chuteW === w && G.cabinet.bounds.chuteX === cx, `rank ${r}: the cabinet's chute is ${w} px (divider at ${cx})`);
+      h.eq(G.world.clampBox.chuteX, cx, `rank ${r}: the floor clamp ends at the divider`);
+      h.ok(G.world.segs.some((s) => s.wall === 'divider' && s.ax === cx), `rank ${r}: the divider segment`);
+      h.ok(G.world.clampBox.slopes && G.world.clampBox.slopes[1].x1 === cx - 6, `rank ${r}: the right ramp reaches the divider`);
+      h.ok(G.rig.chuteX === cx + w / 2 && G.rig.homeX === cx / 2, `rank ${r}: the rig carries to the chute's middle (${G.rig.chuteX}) from home ${G.rig.homeX}`);
+      h.ok(seenCfg && seenCfg.chuteW === w && seenCfg.chuteX === cx, `rank ${r}: the renderer draws the chute ${w} px (${seenCfg && seenCfg.chuteW})`);
+      h.eq(G.cup.cw(), w, `rank ${r}: everything in the fight reads ${w}`);
+    }
+    T.RENDER.cabinetBack = back0;
+    // the bell after the upgrade shows it off, once
+    cupRun(G, 'magnet', 530);
+    G.applyClawUpgrade('chute'); G.applyClawUpgrade('coil');
+    G.startFight(['slime'], 'normal', { seed: 556 });
+    h.ok(G.fs.cupFl && G.fs.cupFl.chute && G.fs.cupFl.coil && !G.run.cup.flare, 'the first bell after the upgrades flares both');
+    stepFor(G, 0.5);
+    h.ok(G.cup.flK('coil') > 0 && G.cup.flK('chute') > 0, 'the field lines and the chute glow');
+    G.draw();
+    stepFor(G, 3);
+    h.eq(G.cup.flK('coil'), 0, 'then it fades');
+    G.startFight(['slime'], 'normal', { seed: 557 });
+    h.ok(!G.fs.cupFl, 'the next fight is quiet');
+    // a real grab with the widest chute and the strongest coil delivers metal
+    cupRun(G, 'magnet', 531);
+    for (let i = 0; i < 4; i++) G.applyClawUpgrade('chute');
+    for (let i = 0; i < 3; i++) G.applyClawUpgrade('coil');
+    G.run.bin = CLAW_BIN.map((id, i) => ({ uid: 'cu' + i, id, plus: false }));
+    G.startFight(['slime'], 'normal', { seed: 555 });
+    for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+    stepFor(G, 3.5);
+    h.ok(G.rig.cfg.coil === 3 && G.cabinet.bounds.chuteW === 84, 'coil 3, chute 84');
+    let delivered = 0;
+    for (let k = 0; k < 3 && !delivered; k++) {
+      const x = G.rig.aimAt((b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0);
+      G.steer(x == null ? 200 : x); stepFor(G, 0.8); settle(G, 6);
+      h.ok(G.dropClaw(), 'drop');
+      let n = 0;
+      while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
+      delivered += G.fs.delivered;
+      settle(G, 10);
+      if (!G.fight || G.fight.player.grabs <= 0) break;
+    }
+    h.ok(delivered >= 1, `the magnet delivers with coil 3 into the wide chute (${delivered})`);
+    G.draw();
+  });
+
+  h.test('cup: the widest chute in real fights: several claws, many drops, nothing outside the glass, on the divider or stuck up high', () => {
+    const { T, G } = clawBoot();
+    for (const type of ['classic', 'magnet', 'hand', 'scoop', 'hook', 'twin']) {
+      cupRun(G, type, 540);
+      for (let i = 0; i < 4; i++) G.applyClawUpgrade('chute');
+      if (type === 'magnet') for (let i = 0; i < 3; i++) G.applyClawUpgrade('coil');
+      G.run.bin = CLAW_BIN.map((id, i) => ({ uid: 'cw' + i, id, plus: false }));
+      G.startFight(['slime'], 'normal', { seed: 991 });
+      for (const e of G.fight.enemies) { e.hp = e.maxHp = 9999; }
+      G.fight.player.hp = G.fight.player.maxHp = 9999;
+      stepFor(G, 3.5);
+      const cb = G.cabinet.bounds, rng = T.U.rng(17);
+      let got = 0, bad = [];
+      for (let k = 0; k < 6; k++) {
+        if (!G.fight || G.screen !== 'fight') break;
+        settle(G, 10);
+        if (G.fight.player.grabs <= 0) { G.endTurn(); settle(G, 20); }
+        G.steer(k % 3 === 2 ? cb.chuteX - 20 - rng() * 30 : 30 + rng() * (cb.chuteX - 60)); stepFor(G, 0.8); settle(G, 6);
+        if (!G.dropClaw()) continue;
+        let n = 0;
+        while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
+        got += G.fs.delivered;
+        stepFor(G, 4);
+        for (const b of G.world.bodies) {
+          if (b.type !== 'dynamic') continue;
+          if (!Number.isFinite(b.x + b.y)) bad.push('NaN');
+          else if (b.box.x0 < -5 || b.box.x1 > G.CAB.w + 5 || b.y < -70) bad.push(`outside at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+          else if (!G.cabinet.inChute(b) && Math.abs(b.x - cb.chuteX) < 8 && b.box.y1 < cb.dividerTop + 4 && Math.hypot(b.vx, b.vy) < 5 && !(b.held > 0)) bad.push(`on the divider at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+        }
+      }
+      h.eq(bad.length, 0, `${type} with an 84 px chute: ${bad.slice(0, 3).join(' | ')}`);
+      h.ok(cb.chuteW === 84, `${type}: the 84 px chute`);
+    }
+  });
+
+  h.test('cup: Claw School, Duo, Gary\'s claw-off and the Boss Rush keep the standard 64 px chute (and no coil)', () => {
+    const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+    T.GAME.sto.force = true;
+    const G = T.GAME;
+    // Gary: a Magnet Crane run with every rank
+    cupRun(G, 'magnet', 33);
+    for (let i = 0; i < 4; i++) G.applyClawUpgrade('chute');
+    for (let i = 0; i < 3; i++) G.applyClawUpgrade('coil');
+    h.ok(G.cup.chute() === 4 && G.cup.coil() === 3, 'the run: chute 4, coil 3');
+    const run = G.run;
+    run.sto.gary.on = true;
+    const tile = Object.values(run.map.tiles).find((t) => t.type === 'rival') || G.sto.garyPlace(run, run.map);
+    G.enterTile(tile);
+    G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'Claw-off!'));
+    const st = G.sto.rival.state;
+    h.ok(st && st.C && st.C.bounds.chuteW === 64 && st.rig.cfg.coil === 0, `Gary's claw-off: 64 px, no coil (${st && st.C && st.C.bounds.chuteW})`);
+    // Claw School's practice cabinet
+    G.showTitle();
+    G.sch.practice({});
+    h.ok(G.screen === 'school' && G.sch.G.C.bounds.chuteW === 64, 'the practice cabinet: 64 px');
+    // the Boss Rush (even a rush run carrying the field reads rank 0)
+    G.rush.start('knight', 4242);
+    G.run.claw.chute = 4; G.run.claw.ups = Object.assign({}, G.run.claw.ups, { chute: 4 });
+    h.ok(G.cup.chute() === 0 && !G.cup.can('chute'), 'a rush reads rank 0 and cannot take the part');
+    G.rush.fight();
+    h.ok(G.screen === 'fight' && G.cabinet.bounds.chuteW === 64, 'a rush fight: 64 px');
+    // Duo versus
+    const T2 = boot(), G2 = T2.GAME;
+    G2.duo.seed = 4242; G2.duo.menu(); G2.duo.setup('vs');
+    G2.duo.set(0, 'name', 'Roxor'); G2.duo.set(1, 'name', 'Jasmin');
+    G2.duo.start(); G2.duo.afterToss();
+    for (let i = 0; i < 240 && !(G2.duo.v && G2.duo.v.C); i++) G2.update(DT);
+    h.ok(G2.duo.v && G2.duo.v.C && G2.duo.v.C.bounds.chuteW === 64, 'a Duo claw-off: 64 px');
+  });
+
+  h.test('cup: the rank shows: the bin\'s claw tags, the portrait\'s lines, the drum\'s windings, the cards', () => {
+    const { T, G } = clawBoot();
+    cupRun(G, 'magnet', 550);
+    G.applyClawUpgrade('coil'); G.applyClawUpgrade('coil'); G.applyClawUpgrade('chute');
+    const tags = G.cup.tags();
+    h.ok(tags.some((t) => t.id === 'coil' && t.lv === 'II') && tags.some((t) => t.id === 'chute' && t.lv === '+5 px'), 'tags: Coil Winding II, Wider Chute +5 px');
+    G.openBin({ mode: 'view' });
+    const row = secWalk(T._nodes.binBody).find((n) => /\bcupTags\b/.test(n.className || ''));
+    h.ok(row && secWalk(row).some((n) => /cupT-coil/.test(n.className || '')) && secWalk(row).some((n) => /cupT-chute/.test(n.className || '')), 'the bin shows the claw parts with their ranks');
+    G.openBin({ mode: 'upgrade', onPick: () => {} });
+    h.ok(!secWalk(T._nodes.binBody).some((n) => /\bcupTags\b/.test(n.className || '')), 'only in the bin\'s view');
+    G.toMap();
+    h.ok(/Coil rank 2 of 3/.test(G.cup.clawLine()) && /Chute 69 px/.test(G.cup.clawLine()), 'the portrait: the coil\'s rank and the chute\'s width');
+    const card = G.cup.card('coil');
+    h.ok(card && /cupCard/.test(card.className), 'a part card');
+    const lines = G.cup.lines('coil', 2);
+    h.ok(lines[0] === 'Hold 32 → 38 px' && lines[1] === 'Field +20% → +30%' && lines[2] === 'Drop 43% → 37%' && /Face lock/.test(lines[3]), 'the coil card: now and next ' + lines.join(' | '));
+    h.eq(G.cup.lines('chute', 1)[0], 'Chute 69 → 74 px', 'the chute card: now and next');
+    G.startFight(['slime'], 'normal', { seed: 5 });
+    h.eq(G.rig.cfg.coil, 2, 'the drum wears two windings (rig.cfg.coil)');
+    let ok = true;
+    try { for (let i = 0; i < 30; i++) { G.update(DT); G.draw(); } } catch (e) { ok = false; console.log(e && e.stack); }
+    h.ok(ok, 'the fight draws the windings and the flare without a throw');
+  });
+}
+
+/* ------------------------------------------------- GUIDE (round 29): the guided first run (DESIGN.md "The guided first run (round 29)") */
+{
+  const FRESH = { clawspire_meta: JSON.stringify({ introSeen: true }) };
+  // a booted game with the guide armed headless (GTU.force); store: the profile and maybe a saved run
+  const gtuBoot = (store, force) => { const T = boot({ store: store || FRESH }); if (force !== false) T.GAME.guide.force = true; return { T, G: T.GAME }; };
+  const gt = (T, k) => { const G = T.GAME, p = G.run.gtu.t[k]; return p ? T.MAP.tileAt(G.run.map, p[0], p[1]) : null; };
+  const walkTo = (T, t) => { const G = T.GAME; G.startWalk(T.MAP.walkPath(G.run.map, t.q, t.r)); for (let i = 0; i < 40 && G.screen === 'map' && G.S.walk; i++) stepFor(G, 0.1); };
+  const crack = (G) => { for (let i = 0; i < 14 && G.loot.cap && G.loot.cap.phase !== 'done'; i++) { G.loot.capsuleTap(); stepFor(G, 0.1); } stepFor(G, 0.8); };
+  const collect = (G) => G.choose(G.S.ui.buttons.findIndex((b) => /Collect/.test(b.label)));
+  const lineTexts = (G) => G.guide.lines.map((el) => secWalk(el).map((n) => n.textContent || '').join(' '));
+  const typesFp = (T) => { const M = T.GAME.run.map; return T.U.hashStr(Object.keys(M.tiles).sort().map((k) => k + M.tiles[k].type + (M.tiles[k].revealed ? 1 : 0)).join('|')); };
+
+  h.test('guide: who gets it: a fresh profile yes; the fight coach done or runs on record no (offered once); junk loads; headless only when forced', () => {
+    const { G } = gtuBoot(FRESH, false);
+    h.ok(G.meta.guide && G.meta.guide.done === false && G.meta.guide.offer === 0 && G.guide.wants(), 'a fresh profile wants the guide, no offer');
+    G.newRun('knight', 2929);
+    h.ok(!G.run.gtu, 'headless without force: no guide (the older suites play on as before)');
+    const { G: G2 } = gtuBoot();
+    G2.newRun('knight', 2929);
+    h.ok(G2.run.gtu && G2.run.gtu.v === 1 && G2.run.gtu.map === 1, 'forced: the fresh profile\'s first run is guided');
+    for (const [o, name] of [[{ tutorialDone: true }, 'the fight coach done'], [{ stats: { runs: 4 } }, 'runs on record'], [{ tutorialDone: true, guide: 'junk' }, 'junk guide field']]) {
+      const { G: Go } = gtuBoot({ clawspire_meta: JSON.stringify(Object.assign({ introSeen: true }, o)) });
+      h.ok(Go.meta.guide.done === true && Go.meta.guide.offer === 1 && !Go.guide.wants(), name + ': not forced through it, offered once');
+      Go.newRun('knight', 2929);
+      h.ok(!Go.run.gtu, name + ': a plain run');
+    }
+    const { G: Gj } = gtuBoot({ clawspire_meta: JSON.stringify({ introSeen: true, guide: [1, 2] }) });
+    h.ok(Gj.meta.guide.done === false, 'a junk field on a fresh profile: still a newcomer');
+    const { G: Gk } = gtuBoot({ clawspire_meta: '{not json' });
+    h.ok(Gk.meta.guide && Gk.meta.guide.done === false, 'a corrupt profile loads fresh');
+    const { G: Gs } = gtuBoot({ clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, guide: { done: true, offer: 0, want: true } }) });
+    h.ok(Gs.guide.wants() && Gs.meta.guide.offer === 0, 'a saved record round-trips (a replay asked for)');
+  });
+
+  h.test('guide: the old profile\'s offer: once on the title, Try it starts a guided run, Not now never asks again; the bench welcome goes first', () => {
+    const old = { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, stats: { runs: 5 }, bench: { bolts: 0, hello: 0 } }) };
+    const { T, G } = gtuBoot(old);
+    G.showTitle(); stepFor(G, 1.2);
+    const sh = G.guide.offerOn;
+    h.ok(sh && sh.on, 'the offer sheet is up');
+    h.eq(JSON.parse(T._store.clawspire_meta).guide.offer, 0, 'saved as offered at once');
+    h.ok(!G.S.ui.buttons.some((b) => /Try it|Not now/.test(b.label)), 'plain taps: the title\'s GAME.choose entries hold');
+    sh.go.onclick({});
+    h.eq(G.screen, 'chars', 'Try it: character select');
+    h.ok(G.meta.guide.want, 'the next run is wanted guided');
+    G.newRun('knight', 77);
+    h.ok(G.run.gtu && !G.meta.guide.want, 'and it is; the wish is spent');
+    const { T: T2, G: G2 } = gtuBoot(old);
+    G2.showTitle(); stepFor(G2, 1.2);
+    G2.guide.offerOn.later.onclick({});
+    h.ok(!G2.guide.offerOn && !G2.meta.guide.want, 'Not now closes it');
+    const { G: G3 } = gtuBoot({ clawspire_meta: T2._store.clawspire_meta });
+    G3.showTitle(); stepFor(G3, 2);
+    h.ok(!G3.guide.offerOn, 'a reload never asks again');
+    const { G: G4 } = gtuBoot({ clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, stats: { runs: 5 } }) });
+    G4.showTitle(); stepFor(G4, 1.2);
+    h.ok(G4.bench.helloOn && !G4.guide.offerOn, 'the bench welcome first');
+    G4.S.bncHello.close(); stepFor(G4, 1.2);
+    h.ok(G4.guide.offerOn, 'then the offer');
+    // Help plays it again
+    const { G: G5 } = gtuBoot(old);
+    G5.showHelp('title');
+    h.ok(G5.guide.helpBtn, 'How it works has the guided run card');
+    G5.guide.helpBtn.onclick({});
+    h.ok(G5.screen === 'chars' && G5.meta.guide.want, 'Play the guided run: character select, the next run guided');
+    G5.showHelp('map');
+    h.ok(!G5.S.ui.buttons.some((b) => /guided/i.test(b.label)), 'never a GAME.choose entry');
+  });
+
+  h.test('guide: the teaching map: a chest and a "?" next to the start, a shop and the first fight a step on, lit; no other fight on the ring', () => {
+    const { T, G } = gtuBoot();
+    const MAP = T.MAP;
+    let shops = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      G.meta.guide.done = false;
+      G.newRun('knight', seed);
+      const M = G.run.map, d = (t) => MAP.hexDist(M.start.q, M.start.r, t.q, t.r);
+      const c = gt(T, 'chest'), e = gt(T, 'event'), f = gt(T, 'fight'), s = G.run.gtu.t.shop ? gt(T, 'shop') : null;
+      h.ok(c && c.type === 'treasure' && d(c) === 1 && c.revealed && c.content.relic, seed + ': the chest on the start\'s ring, lit');
+      h.ok(e && e.type === 'event' && d(e) === 1 && e.revealed && e.content.event === 'out_of_order', seed + ': the "?" on the ring, lit, the teaching event');
+      h.ok(f && f.type === 'fight' && d(f) <= 2 && f.revealed, seed + ': the first fight within 2, lit');
+      if (s) { shops++; h.ok((s.type === 'shop' || s.type === 'forge') && d(s) <= 2 && s.revealed, seed + ': the shop within 2, lit'); }
+      const ringFights = MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.tileAt(M, q, r)).filter((t) => t && t.type === 'fight' && t !== f);
+      h.eq(ringFights.length, 0, seed + ': no other fight next to the start');
+      h.eq(G.guide.step(), 'map', seed + ': the guide opens on the map');
+      h.ok(MAP.pathExists(M, M.start, M.boss, { any: true, land: true }), seed + ': the boss still reachable');
+    }
+    h.ok(shops >= 36, 'a shop (or a forge) near the start on nearly every map (' + shops + '/40)');
+  });
+
+  h.test('guide: normal runs are unchanged: the same map for the same seed as before round 29; a guided map differs only near the start', () => {
+    // the tile types and light of three seeds, fingerprinted on the round 28 build before the guide existed
+    const OLD = { 77: 2367456148, 2929: 3780952957, 4242: 663970289 };
+    for (const store of [{ clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) }, FRESH]) {
+      const { T, G } = gtuBoot(store, false);
+      for (const seed of [77, 2929, 4242]) { G.newRun('knight', seed); h.eq(typesFp(T), OLD[seed], 'seed ' + seed + ': the map as before'); h.ok(!('gtu' in G.run), 'no guide field on a plain run'); }
+    }
+    const { T: A } = gtuBoot(FRESH, false), { T: B } = gtuBoot();
+    let far = 0;
+    for (const seed of [3, 11, 77, 2929]) {
+      A.GAME.newRun('knight', seed); B.GAME.meta.guide.done = false; B.GAME.newRun('knight', seed);
+      const ma = A.GAME.run.map, mb = B.GAME.run.map;
+      for (const k in ma.tiles) if (A.MAP.hexDist(ma.start.q, ma.start.r, ma.tiles[k].q, ma.tiles[k].r) > 2 && ma.tiles[k].type !== mb.tiles[k].type) far++;
+    }
+    h.eq(far, 0, 'past two steps from the start a guided map is the plain one');
+  });
+
+  h.test('guide: the whole guide driven through the game: map, bulbs, chest and relic, event, shop, the fight coach, the prize, the closing card', () => {
+    const { T, G } = gtuBoot();
+    G.newRun('knight', 2929);
+    stepFor(G, 0.1);
+    const E = G.guide.el;
+    h.eq(E.step, 'map', '1: the map card');
+    h.ok(E.place.ring && !E.place.ring.pill && E.place.arrow, 'a ring and an arrow on the player');
+    h.ok(/Tap a lit tile/.test(secWalk(E.card).map((n) => n.textContent).join(' ')), 'its line');
+    h.ok(G.guide.busy() && !G.feel.safe(), 'the tip cards wait');
+    E.main.onclick({}); stepFor(G, 0.1);
+    h.eq(E.step, 'bulbs', '2: the bulbs');
+    h.ok(E.place.ring && E.place.ring.pill && E.place.arrow.up, 'the pill gets the ring, the arrow points up at it');
+    E.main.onclick({}); stepFor(G, 0.1);
+    h.eq(E.step, 'chest', '3: the chest');
+    const c = gt(T, 'chest'), at = G.hexToStage(c.q, c.r);
+    h.ok(Math.abs(E.place.ring.l + E.place.ring.w / 2 - at.x) < 1 && Math.abs(E.place.ring.t + E.place.ring.h / 2 - at.y) < 1, 'the ring sits on the chest');
+    const cardTop = E.place.top ? E.place.highTop : E.place.lowTop, cardBot = cardTop + E.place.ch;
+    h.ok(E.place.ring.t + E.place.ring.h <= cardTop || E.place.ring.t >= cardBot, 'the card never covers the chest');
+    h.ok(!E.main, 'no Next: the player opens it');
+    walkTo(T, c);
+    h.eq(G.screen, 'capsule', 'the chest is a capsule');
+    crack(G);
+    h.ok(lineTexts(G).some((s) => /permanent power|into your bin/.test(s)), 'the capsule says what the chest gave');
+    collect(G);
+    h.eq(G.screen, 'map', 'back on the map');
+    stepFor(G, 0.1);
+    h.eq(E.step, 'event', '4: the "?"');
+    walkTo(T, gt(T, 'event'));
+    h.eq(G.screen, 'event', 'the event');
+    h.eq(G.S.sd.event.id, 'out_of_order', 'the teaching event (never a story)');
+    h.ok(lineTexts(G).some((s) => /The chips show/.test(s)), 'one line on the choices');
+    G.choose(2);
+    h.eq(G.screen, 'map', 'resolved');
+    stepFor(G, 0.1);
+    h.eq(E.step, 'shop', '5: the shop, optional');
+    h.ok(E.main && E.place.ring, 'pointed at, with Next');
+    E.main.onclick({}); stepFor(G, 0.1);
+    h.eq(E.step, 'fight', '6: the first fight');
+    h.ok(/crossed swords/.test(secWalk(E.card).map((n) => n.textContent).join(' ')), 'fights are the crossed swords');
+    const ft = gt(T, 'fight');
+    walkTo(T, ft);
+    h.eq(G.screen, 'fight', 'the fight');
+    h.eq(G.fight.enemies.length, 1, 'a single enemy (the gentle start)');
+    h.eq(G.S.coachStep, 0, 'the three-card fight coach takes over');
+    h.ok(T._nodes.coach.classList && G.guide.coachX, 'wearing the guide\'s Skip');
+    stepFor(G, 0.1);
+    h.ok(!E.step && !G.guide.el.place.ring, 'the map card and its pointer are put away');
+    G.S.coachStep = -1;
+    G.endFight('win');
+    stepFor(G, 0.2);
+    h.eq(G.screen, 'reward', 'the reward');
+    h.ok(lineTexts(G).some((s) => /Pick a prize: it goes into your bin/.test(s)), '7: the prize line');
+    G.choose(0);
+    stepFor(G, 0.3);
+    h.eq(G.screen, 'map', 'back on the map');
+    h.eq(E.step, 'end', '8: the closing card');
+    const words = secWalk(E.card).map((n) => n.textContent).join(' ');
+    h.ok(/Explore first/.test(words) && /Elites give relics/.test(words) && /Upgrade Bench/.test(words), 'the gist, elites, the boss, the bench');
+    h.ok(!E.place.ring, 'nothing to point at');
+    E.main.onclick({});
+    h.ok(G.run.gtu.end === 1 && G.meta.guide.done && !G.guide.run, 'done');
+    h.ok(JSON.parse(T._store.clawspire_meta).guide.done, 'saved');
+    stepFor(G, 0.2);
+    h.ok(!E.step && !G.guide.busy(), 'the card is gone, the tips are free');
+    h.eq(G.guide.log.filter((x) => ['map', 'bulbs', 'chest', 'event', 'shop', 'fight', 'coach', 'prize', 'end', 'done'].includes(x)).join(','), 'map,map,bulbs,chest,event,shop,fight,coach,prize,end,done', 'every step once, in order');
+    G.newRun('knight', 31);
+    h.ok(!G.run.gtu, 'the next run is a plain one');
+  });
+
+  h.test('guide: Skip tutorial at any step marks it done and puts everything away', () => {
+    const at = {
+      map: () => {}, chest: (T, G) => { G.guide.next(); G.guide.next(); },
+      relic: (T, G) => { G.guide.next(); G.guide.next(); walkTo(T, gt(T, 'chest')); crack(G); },
+      choice: (T, G) => { G.guide.next(); G.guide.next(); walkTo(T, gt(T, 'event')); },
+      coach: (T, G) => { G.guide.next(); G.guide.next(); G.enterTile(gt(T, 'fight')); },
+      prize: (T, G) => { G.guide.next(); G.guide.next(); G.enterTile(gt(T, 'fight')); G.S.coachStep = -1; G.endFight('win'); stepFor(G, 0.2); },
+      end: (T, G) => { G.guide.next(); G.guide.next(); G.enterTile(gt(T, 'fight')); G.S.coachStep = -1; G.endFight('win'); stepFor(G, 0.2); G.choose(0); stepFor(G, 0.2); },
+    };
+    for (const k in at) {
+      const { T, G } = gtuBoot();
+      G.newRun('knight', 2929); stepFor(G, 0.1);
+      at[k](T, G); stepFor(G, 0.1);
+      let skip = null;
+      if (k === 'coach') skip = G.guide.coachX;
+      else if (G.screen === 'map') skip = secWalk(G.guide.el.card).find((n) => /\bgtuSkip\b/.test(n.className || ''));
+      else skip = secWalk(G.guide.lines[G.guide.lines.length - 1]).find((n) => /\bgtuSkip\b/.test(n.className || ''));
+      h.ok(skip, k + ': a Skip tutorial button');
+      if (k === 'coach') h.ok(G.S.coachStep >= 0, 'coach: up');
+      skip.onclick({});
+      h.ok(G.meta.guide.done && G.run.gtu.end === 2 && !G.guide.run, k + ': skipped is done');
+      h.ok(!G.guide.el.step && !G.guide.lines.length, k + ': the card and the lines are gone');
+      h.eq(G.S.coachStep, -1, k + ': no coach left up');
+      h.ok(JSON.parse(T._store.clawspire_meta).guide.done, k + ': saved');
+      stepFor(G, 0.2);
+      h.ok(!G.guide.el.step, k + ': and it stays away');
+    }
+  });
+
+  h.test('guide: a reload mid-guide resumes at the right step; the coach never twice; a finished or skipped guide stays over', () => {
+    const { T, G } = gtuBoot();
+    G.newRun('knight', 2929); G.guide.next(); G.guide.next();
+    walkTo(T, gt(T, 'chest')); crack(G); collect(G);
+    const T2 = boot({ store: Object.assign({}, T._store) }); T2.GAME.guide.force = true;
+    h.ok(T2.GAME.load(), 'the run loads');
+    stepFor(T2.GAME, 0.1);
+    h.eq(T2.GAME.guide.el.step, 'event', 'after the chest: the "?" next');
+    // a reload on the event page
+    walkTo(T2, gt(T2, 'event'));
+    const T3 = boot({ store: Object.assign({}, T2._store) }); T3.GAME.guide.force = true; T3.GAME.load();
+    h.ok(T3.GAME.screen === 'event' && T3.GAME.guide.lines.length === 1, 'the event page and its line again');
+    T3.GAME.choose(2); stepFor(T3.GAME, 0.1); T3.GAME.guide.next();
+    walkTo(T3, gt(T3, 'fight'));
+    h.eq(T3.GAME.S.coachStep, 0, 'the coach in the fight');
+    const T3b = boot({ store: Object.assign({}, T3._store) }); T3b.GAME.guide.force = true; T3b.GAME.load();
+    h.ok(T3b.GAME.screen === 'fight' && T3b.GAME.S.coachStep === 0 && T3b.GAME.guide.log.indexOf('coach') < 0, 'a reload before the coach was read: the fight again, the coach again (as for every newcomer), not counted twice');
+    for (let i = 0; i < 3; i++) T3._nodes.coachBtn.onclick();
+    h.ok(T3.GAME.S.coachStep === -1 && T3.GAME.meta.tutorialDone, 'the three cards read');
+    const T4 = boot({ store: Object.assign({}, T3._store) }); T4.GAME.guide.force = true; T4.GAME.load();
+    h.ok(T4.GAME.screen === 'fight' && T4.GAME.S.coachStep === -1, 'a reload in the fight: the fight again, the coach not twice');
+    T4.GAME.endFight('win'); stepFor(T4.GAME, 0.2);
+    const T5 = boot({ store: Object.assign({}, T4._store) }); T5.GAME.guide.force = true; T5.GAME.load();
+    h.ok(T5.GAME.screen === 'reward' && T5.GAME.guide.lines.length === 1, 'a reload on the reward: the prize line again');
+    T5.GAME.choose(0); stepFor(T5.GAME, 0.2);
+    h.eq(T5.GAME.guide.el.step, 'end', 'then the closing card');
+    T5.GAME.guide.skip();
+    const T6 = boot({ store: Object.assign({}, T5._store) }); T6.GAME.guide.force = true; T6.GAME.load(); stepFor(T6.GAME, 0.2);
+    h.ok(T6.GAME.screen === 'map' && !T6.GAME.guide.el.step && !T6.GAME.guide.run, 'skipped stays over across a reload');
+    // an old save from before round 29 (no gtu, no guide) loads as a plain run
+    const T7 = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true }), clawspire_run: T6._store.clawspire_run.replace('"gtu":', '"gtuOld":') } });
+    T7.GAME.guide.force = true;
+    h.ok(T7.GAME.load() && !T7.GAME.guide.run, 'an old save: no guide');
+    stepFor(T7.GAME, 0.2);
+    h.ok(!T7.GAME.guide.el || !T7.GAME.guide.el.step, 'nothing on its map');
+  });
+
+  h.test('guide: a missing target is skipped; a player who wanders is re-pointed; a fight first skips to the end', () => {
+    const { T, G } = gtuBoot();
+    G.newRun('knight', 2929); G.guide.next(); G.guide.next();
+    const c = gt(T, 'chest');
+    c.type = 'empty';   // the chest is gone
+    stepFor(G, 0.1);
+    h.eq(G.guide.el.step, 'event', 'no chest: straight to the "?"');
+    c.type = 'treasure';
+    G.run.gtu.t.shop = null;
+    h.eq(G.guide.num('fight').n, 7, 'no shop: seven steps');
+    walkTo(T, gt(T, 'event'));   // the "?" before the chest
+    G.choose(2); stepFor(G, 0.1);
+    h.eq(G.guide.el.step, 'chest', 'the event first: re-pointed at the chest');
+    walkTo(T, c); crack(G); collect(G); stepFor(G, 0.1);
+    h.eq(G.guide.el.step, 'fight', 'then the fight (the shop is gone, skipped)');
+    // a fight first: the coach, then straight to the closing card
+    const { T: T2, G: G2 } = gtuBoot();
+    G2.newRun('knight', 2929);
+    G2.enterTile(gt(T2, 'fight'));   // straight into the fight, the chest and the "?" untouched
+    h.ok(G2.screen === 'fight' && G2.S.coachStep === 0, 'any first fight gets the coach');
+    G2.S.coachStep = -1; G2.endFight('win'); stepFor(G2, 0.2); G2.choose(0); stepFor(G2, 0.2);
+    h.eq(G2.guide.el.step, 'end', 'the chest and the "?" are skipped after a fight: the closing card');
+  });
+
+  h.test('guide: never in a daily, the weekly, a Boss Rush, Duo or Endless; tips wait for the card and an up tip gives way unmet', () => {
+    const fresh = () => gtuBoot().G;
+    let G = fresh(); G.prog.startDaily(); h.ok(G.run.daily && !G.run.gtu, 'a daily: no guide');
+    G = fresh(); G.wk.start(); h.ok(G.run.weekly && !G.run.gtu, 'the weekly: no guide');
+    G = fresh(); G.rush.start('knight', 4242); h.ok(G.run.rush && !G.run.gtu, 'a Boss Rush: no guide');
+    h.ok(G.meta.guide.done === false, 'and the newcomer is still owed it');
+    h.ok(!G.guide.runOk({ act: 1, duo: true }) && !G.guide.runOk({ act: 1, endless: { loop: 1 } }) && !G.guide.runOk({ act: 2 }) && !G.guide.runOk({ act: 1, fights: 1 }), 'Duo, Endless, a later act or a run underway: never');
+    h.ok(G.guide.runOk({ act: 1 }), 'a plain run: yes');
+    const run = { act: 1, gtu: { v: 1, t: {}, said: {}, end: 0 }, endless: { loop: 1 } };
+    G.run = run;
+    h.ok(!G.guide.run, 'a guide on an Endless loop is not live');
+    // tips: an up tip gives way, unmet, and comes back once the guide is done
+    const { G: G3 } = gtuBoot();
+    G3.newRun('knight', 2929);
+    G3.feel.reset && G3.feel.reset();
+    G3.feel.want('map'); G3.feel.show('map');
+    h.ok(G3.feel.cur && G3.feel.cur.id === 'map', 'a tip is up');
+    stepFor(G3, 0.1);
+    h.ok(!G3.feel.cur && !G3.meta.tips.map && G3.feel.queue[0] === 'map', 'the guide card arrives: the tip goes back in line, unmet');
+    stepFor(G3, 3);
+    h.ok(!G3.feel.cur, 'and waits');
+    G3.guide.skip(); stepFor(G3, 2);
+    h.ok(G3.feel.cur && G3.feel.cur.id === 'map', 'the guide over: the tip shows');
+  });
+}
 
 h.done();

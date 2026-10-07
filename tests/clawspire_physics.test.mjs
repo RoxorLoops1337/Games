@@ -764,6 +764,72 @@ h.test('magnet crane: only lifts metal, and it lifts metal', () => {
   h.ok(metal >= 2, `the magnet delivers metal from a mixed pile (${metal})`);
 });
 
+// (round 28) owner: "with the magnet you kind of pull the whole bin". The hold now fades away from the core, and gold is not magnetic.
+h.test('magnet crane: the hold fades with distance (no whole-bin clumps), gold coins never stick', () => {
+  const heap = () => { const a = []; for (let i = 0; i < 30; i++) a.push([i % 3 ? 'ball' : 'sword', 40 + (i % 10) * 34, 120 + Math.floor(i / 10) * 36, METAL]); return a; };
+  const grab = (x, seed) => {
+    const { W, C } = typeWorld(heap(), 2);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(seed) });
+    R.setTarget(x);
+    for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let most = 0, holds = [];
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) {
+      R.update(DT); W.step(DT);
+      most = Math.max(most, R.stuck().length);
+    }
+    return { most, got: items(W).filter(b => C.inChute(b)).length };
+  };
+  const K = PHYS.RIG, keep = { f: K.magFade, d: K.magDrop };
+  let newMost = 0, newGot = 0, oldMost = 0, oldGot = 0;
+  for (const [x, sd] of [[120, 3], [200, 4], [280, 5]]) { const r = grab(x, sd); newMost += r.most; newGot += r.got; }
+  K.magFade = 1e9; K.magDrop = 0;   // the old magnet: every link of the chain held at full strength
+  try { for (const [x, sd] of [[120, 3], [200, 4], [280, 5]]) { const r = grab(x, sd); oldMost += r.most; oldGot += r.got; } } finally { K.magFade = keep.f; K.magDrop = keep.d; }
+  console.log(`  magnet on a metal heap, 3 drops: stuck at once ${newMost} (old chain ${oldMost}), delivered ${newGot} (old ${oldGot})`);
+  h.ok(newGot >= 2, `the magnet still delivers metal from a metal heap (${newGot})`);
+  h.ok(newMost < oldMost && newGot < oldGot, `the fading hold carries less than the old chain (stuck ${newMost} vs ${oldMost}, delivered ${newGot} vs ${oldGot})`);
+  // a gold coin (def.nomag) right under the magnet never sticks; it is still 'metal' for builds
+  const coins = [];
+  for (let i = 0; i < 8; i++) coins.push(['ball', 150 + (i % 4) * 30, 240 + Math.floor(i / 4) * 30, { tags: ['metal'], def: { nomag: true } }]);
+  const { W, C } = typeWorld(coins);
+  const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(9) });
+  R.setTarget(195);
+  for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+  R.drop();
+  let stuck = 0;
+  for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); stuck = Math.max(stuck, R.stuck().length); }
+  h.eq(stuck, 0, 'gold coins do not stick to the magnet');
+});
+
+// (round 29) owner: prizes "get so hard stuck" in the bottom corners. The floor ramps are thin lines over a
+// hollow wedge; a prize pushed through one sat in the wedge where no claw reaches. slopeInside lifts it out.
+h.test('floor ramps: a prize under a ramp comes back out onto it (awake or asleep), never stays in the wedge', () => {
+  const slopeWorld = () => {
+    const W = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 });
+    const C = PHYS.cabinet(W, { w: 480, h: 390, chuteW: 64, dividerH: 0.45, slopeW: 110, slopeH: 55 });
+    return { W, C };
+  };
+  // below each ramp's line: the left wedge's corner, and the right one next to the divider
+  const underL = (b) => b.x < 110 && (b.y - (390 - 55)) * 114 - (b.x + 4) * 57 > 0;
+  const underR = (b, cx) => b.x > cx - 110 && b.x < cx - 6 && (b.y - (390 + 2)) * 104 + (b.x - (cx - 110)) * 57 > 0;
+  const trial = (guard) => {
+    const keep = PHYS.PH.slopeGuard;
+    PHYS.PH.slopeGuard = guard;
+    try {
+      const { W, C } = slopeWorld();
+      const cx = C.bounds.chuteX;
+      const a = spawn(W, ITEM.shield({}), 22, 376), b = spawn(W, ITEM.ball({}), cx - 26, 372), c = spawn(W, ITEM.marble({}), 40, 380);
+      c.sl = true; c.vx = c.vy = 0;   // one already asleep down there
+      settle(W, 2);
+      return { stuck: [underL(a), underR(b, cx), underL(c)].filter(Boolean).length, ok: inside(W, C) && !anyNaN(W) };
+    } finally { PHYS.PH.slopeGuard = keep; }
+  };
+  const off = trial(false), on = trial(true);
+  h.ok(off.stuck >= 2, `without the guard the wedge keeps them (${off.stuck} of 3 stuck): the bug`);
+  h.eq(on.stuck, 0, 'with the guard every prize is back above the ramps');
+  h.ok(on.ok, 'inside the glass, no NaN');
+});
+
 h.test('scoop: lifts a handful of small things at once; a sword tips out', () => {
   let best = 0, total = 0;
   for (const x of [170, 200, 230]) {
@@ -1422,6 +1488,187 @@ h.test('stuck prize (round 25): every claw type with the Ticklish Claw wiggle, s
   for (const t of TYPES) {
     const bad = stressTickle(t, 25, 8);
     h.eq(bad.length, 0, `${t}: ${bad.slice(0, 2).join(' | ')}`);
+  }
+});
+
+// ---------------------------------------------------------------- (round 29) CUP: magnet power and a wider chute
+// DESIGN.md "Magnet power and a wider chute (round 29)". Coil Winding (cfg.coil 0..3) only reads PHYS.COIL; the chute is
+// whatever chuteW the cabinet is built with (the game passes 64 + 5 a rank of Wider Chute).
+h.test('cup: Coil Winding ranks: rank 0 is the old magnet bit for bit, the config clamps, RIG is never touched', () => {
+  const K = PHYS.COIL, R0 = { f: PHYS.RIG.magFade, d: PHYS.RIG.magDrop, m: PHYS.RIG.magMin };
+  h.eq(K.max, 3, 'three ranks');
+  h.eq(K.fadeAdd[0], 0, 'rank 0 adds nothing to the fade');
+  h.eq(K.dropK[0], 1, 'rank 0 keeps the drop chance');
+  h.eq(K.fadeAdd.map((a) => R0.f + a).join(','), '22,27,32,38', 'the hold halves every 22, 27, 32, 38 px');
+  h.eq(K.dropK.map((k) => Math.round(R0.d * k * 100) / 100).join(','), '0.55,0.49,0.43,0.37', 'a weak piece drops 0.55, 0.49, 0.43, 0.37');
+  const { W, C } = mkWorld();
+  h.eq(PHYS.clawRig(W, { cabinet: C, type: 'magnet' }).cfg.coil, 0, 'no coil is rank 0');
+  const R = PHYS.clawRig(mkWorld().W, { cabinet: C, type: 'magnet', coil: 9 });
+  h.eq(R.cfg.coil, 3, 'clamped to 3');
+  R.setConfig({ coil: 2 }); h.eq(R.cfg.coil, 2, 'setConfig sets the rank');
+  R.setConfig({ coil: -4 }); h.eq(R.cfg.coil, 0, 'and clamps it');
+  // a seeded grab with coil 0 matches one without the field at all
+  const run = (o) => {
+    const { W: W2, C: C2 } = typeWorld([['sword', 200, 372, METAL], ['ball', 240, 372, METAL], ['ball', 160, 372, METAL], ['shield', 280, 372, METAL]]);
+    const Rg = PHYS.clawRig(W2, Object.assign({ cabinet: C2, type: 'magnet', grip: 1.2, rand: U.rng(4) }, o));
+    grab(W2, C2, Rg, 210);
+    return items(W2).map(b => b.x.toFixed(4) + ',' + b.y.toFixed(4)).join('|');
+  };
+  h.eq(run({ coil: 0 }), run({}), 'coil 0 steps exactly like the old magnet');
+  h.eq(PHYS.RIG.magFade + ',' + PHYS.RIG.magDrop + ',' + PHYS.RIG.magMin, R0.f + ',' + R0.d + ',' + R0.m, 'the shared RIG numbers are untouched');
+});
+
+h.test('cup: each Coil Winding rank holds a little more of a metal heap, always far below the old whole-bin chain', () => {
+  const heap = () => { const a = []; for (let i = 0; i < 30; i++) a.push([i % 3 ? 'ball' : 'sword', 40 + (i % 10) * 34, 120 + Math.floor(i / 10) * 36, METAL]); return a; };
+  const drops = [[120, 3], [200, 4], [280, 5], [160, 6], [240, 7], [320, 8]];
+  const heapGrab = (x, seed, coil) => {
+    const { W, C } = typeWorld(heap(), 2);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(seed), coil });
+    R.setTarget(x);
+    for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let most = 0;
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); most = Math.max(most, R.stuck().length); }
+    h.ok(!anyNaN(W) && inside(W, C), `coil ${coil} drop at ${x}: inside, no NaN`);
+    return { most, got: items(W).filter(b => C.inChute(b)).length };
+  };
+  const per = [0, 1, 2, 3].map((coil) => drops.reduce((s, [x, sd]) => { const r = heapGrab(x, sd, coil); s.most += r.most; s.got += r.got; return s; }, { most: 0, got: 0 }));
+  const K = PHYS.RIG, keep = { f: K.magFade, d: K.magDrop };
+  let old = { most: 0, got: 0 };
+  K.magFade = 1e9; K.magDrop = 0;   // the round 27 magnet: every link of the chain at full strength
+  try { old = drops.reduce((s, [x, sd]) => { const r = heapGrab(x, sd, 0); s.most += r.most; s.got += r.got; return s; }, { most: 0, got: 0 }); } finally { K.magFade = keep.f; K.magDrop = keep.d; }
+  console.log(`  coil ranks on a 30 piece metal heap, 6 drops: stuck ${per.map(p => p.most).join(' / ')} (old chain ${old.most}), delivered ${per.map(p => p.got).join(' / ')} (old ${old.got})`);
+  h.ok(per[1].most >= per[0].most && per[2].most >= per[0].most && per[3].most > per[1].most, `the hold reaches further with each rank (stuck ${per.map(p => p.most).join(', ')})`);
+  h.ok(per[3].most > per[0].most * 1.2, `rank 3 holds clearly more than rank 0 (${per[3].most} vs ${per[0].most})`);
+  h.ok(per[3].got >= per[0].got, `rank 3 delivers at least as much (${per[3].got} vs ${per[0].got})`);
+  h.ok(per[3].most < old.most * 0.65, `even rank 3 stays well under the old whole-bin chain (${per[3].most} vs ${old.most})`);
+  h.ok(per[3].got < old.got, `and delivers less than it did (${per[3].got} vs ${old.got})`);
+});
+
+h.test('cup: the field reaches 10% further a rank; rank 3 never tears a piece off the face', () => {
+  // a lone metal ball just outside the rank 0 field reach is pulled in only by the stronger coil
+  const reachOf = (coil) => {
+    const { W, C } = typeWorld([['marble', 300, 380, METAL]]);
+    const b = items(W)[0], x0 = b.x;
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1, rand: U.rng(2), coil });
+    R.setTarget(300 - 128);   // 128 px off: past fieldR x (0.8 + 0.2) = 118 at rank 0 once the drop is low, inside 118 x 1.3 at rank 3
+    for (let i = 0; i < 90; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let moved = 0;
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); moved = Math.max(moved, Math.abs(b.x - x0)); }
+    return moved;
+  };
+  const m0 = reachOf(0), m3 = reachOf(3);
+  h.ok(m3 > m0 + 4, `the rank 3 field tugs a ball the rank 0 field barely reaches (${m0.toFixed(1)} vs ${m3.toFixed(1)} px)`);
+  // a heavy metal tower right under a weak magnet: the heavy roll at the top tears it off now and then, never at rank 3
+  const slips = (coil) => {
+    let n = 0;
+    for (let s = 1; s <= 12; s++) {
+      const { W, C } = typeWorld([['tower', 200, 360, METAL]]);
+      const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 0.75, rand: U.rng(s * 7), coil });
+      const g = grab(W, C, R, 200);
+      n += g.events.filter(e => e === 'slip').length;
+    }
+    return n;
+  };
+  const s0 = slips(0), s3 = slips(3);
+  console.log(`  heavy tower on a weak magnet, 12 grabs: slips rank 0 ${s0}, rank 3 ${s3}`);
+  h.ok(s3 <= s0, `rank 3 lets go of the face piece no more often (${s3} vs ${s0})`);
+});
+
+/* A cabinet like the fight's (ramps, divider at 45%) with a chute chuteW wide. */
+function cupWorld(chuteW) {
+  const W = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 });
+  const C = PHYS.cabinet(W, { w: 480, h: 390, chuteW, dividerH: 0.45, slopeW: 110, slopeH: 55 });
+  return { W, C };
+}
+h.test('cup: a wider chute moves the divider, the right ramp, the clamps and the rig together', () => {
+  for (const cw of [64, 69, 74, 79, 84]) {
+    const { W, C } = cupWorld(cw);
+    const cx = 480 - cw, div = W.segs.find(s => s.wall === 'divider'), slR = W.segs.find(s => s.wall === 'slopeR');
+    h.eq(C.bounds.chuteX, cx, `chute ${cw}: the divider at ${cx}`);
+    h.eq(C.bounds.chuteW, cw, `chute ${cw}: bounds.chuteW`);
+    h.eq(W.clampBox.chuteX, cx, `chute ${cw}: the floor clamp stops at the divider`);
+    const rR = W.clampBox.slopes && W.clampBox.slopes[1];
+    if (PHYS.PH.slopeGuard) h.ok(rR && rR.x1 === cx - 6 && rR.x0 === cx - 110, `chute ${cw}: the right ramp's guard runs to the divider (${rR && rR.x0}..${rR && rR.x1})`);
+    h.ok(div && div.ax === cx && div.bx === cx, `chute ${cw}: the divider segment stands at ${cx}`);
+    h.ok(slR && Math.max(slR.ax, slR.bx) === cx - 6 && Math.min(slR.ax, slR.bx) === cx - 110, `chute ${cw}: the right ramp meets the divider (${slR && slR.ax}..${slR && slR.bx})`);
+    h.ok(C.inChute({ x: cx + 2, y: 380 }) && !C.inChute({ x: cx - 2, y: 380 }), `chute ${cw}: inChute starts at the divider`);
+    const R = PHYS.clawRig(W, { cabinet: C });
+    h.near(R.chuteX, cx + cw / 2, 1e-9, `chute ${cw}: the rig carries to the chute's middle`);
+    h.near(R.homeX, cx / 2, 1e-9, `chute ${cw}: home is the bin's middle`);
+  }
+});
+
+h.test('cup: a wider chute catches more of what slips off near its mouth, and nothing sits on the divider', () => {
+  const SH = ['ball', 'marble', 'sword', 'shield', 'flask', 'axe'];
+  const caught = (cw) => {
+    let n = 0;
+    for (let i = 0; i < 48; i++) {
+      const { W, C } = cupWorld(cw);
+      const rng = U.rng(100 + i);
+      // a prize slipping off the claw on its way over: anywhere from the bin's last 40 px to the old chute's middle
+      const b = spawn(W, ITEM[SH[i % SH.length]]({}), 376 + rng() * 72, 120 + rng() * 40, { angle: rng() * 6.28, data: { tags: [] } });
+      b.vx = (rng() - 0.5) * 160; b.vy = rng() * 60; b.av = (rng() - 0.5) * 6;
+      for (let k = 0; k < 150; k++) { W.step(DT); PHYS.strandWatch(W, DT, {}); }
+      if (C.inChute(b)) n++;
+      h.ok(!anyNaN(W) && inside(W, C), `chute ${cw} drop ${i}: inside, no NaN`);
+      // never left on the divider's cap
+      h.ok(!(Math.abs(b.x - C.bounds.chuteX) < 6 && b.y < C.bounds.dividerTop + 2 && Math.hypot(b.vx, b.vy) < 5), `chute ${cw} drop ${i}: not perched on the divider`);
+    }
+    return n;
+  };
+  const c64 = caught(64), c74 = caught(74), c84 = caught(84);
+  console.log(`  prizes slipping near the chute mouth, 48 each: caught 64 px ${c64}, 74 px ${c74}, 84 px ${c84}`);
+  h.ok(c74 >= c64 && c84 > c64, `a wider chute catches more (${c64} -> ${c74} -> ${c84})`);
+  // balls balanced right on the divider's cap fall off it to one side or the other
+  for (const cw of [64, 84]) {
+    const { W, C } = cupWorld(cw);
+    const bs = [0, 1, 2].map((k) => spawn(W, ITEM.marble({}), C.bounds.chuteX + (k - 1) * 0.5, C.bounds.dividerTop - 12 - k * 30, {}));
+    for (let k = 0; k < 6 * 60; k++) { W.step(DT); PHYS.strandWatch(W, DT, {}); }
+    h.ok(bs.every(b => b.y > C.bounds.dividerTop + 4), `chute ${cw}: marbles dropped on the divider's cap roll off it (${bs.map(b => b.y.toFixed(0)).join(', ')})`);
+  }
+});
+
+/* The round 23 stress (seeded grabs over a metal heap with chute prizes removed) on a cabinet with the widest chute. */
+function cupStress(type, seed, grabs, cw) {
+  const rng = U.rng(seed), bad = [];
+  const { W, C } = cupWorld(cw);
+  const binR = C.bounds.chuteX;
+  const defs = [ITEM.sword({}), ITEM.shield({}), ITEM.ball({}), ITEM.axe({}), ITEM.tower({}), ITEM.marble({})];
+  const put = (i) => spawn(W, defs[i % defs.length], 30 + rng() * (binR - 60), 20 + rng() * 100, { angle: rng() * 6.28, data: { tags: ['metal'] } });
+  for (let i = 0; i < 20; i++) put(i);
+  settle(W, 3);
+  const R = PHYS.clawRig(W, { cabinet: C, type, grip: 1, rand: U.rng(seed + 5), coil: type === 'magnet' ? 3 : 0 });
+  const step = (n) => { for (let i = 0; i < n; i++) { R.update(DT); W.step(DT); PHYS.strandWatch(W, DT, {}); } };
+  let got = 0;
+  for (let g = 0; g < grabs; g++) {
+    R.setTarget(g % 4 === 0 ? binR - 20 - rng() * 40 : rng() * binR);
+    step(90);
+    R.drop();
+    for (let i = 0; i < 2000 && !(i > 30 && R.phase === 'idle'); i++) step(1);
+    step(60);
+    for (const b of items(W)) if (C.inChute(b)) { W.remove(b); put(g); got++; }
+    step(4 * 60);
+    if (anyNaN(W)) bad.push(`${type} seed ${seed} grab ${g}: NaN`);
+    for (const b of items(W)) {
+      const out = b.box.x0 < -4 || b.box.x1 > C.bounds.w + 4 || b.y < -60 || b.y > C.bounds.trayY + 1;
+      const hang = !b.sl && !C.inChute(b) && Math.hypot(b.vx, b.vy) < 5 && b.box.y1 < C.bounds.h - 60 && !W.contactsOf(b).some(c => c.ny > 0.25);
+      const perch = Math.abs(b.x - binR) < 8 && b.box.y1 < C.bounds.dividerTop + 4 && Math.hypot(b.vx, b.vy) < 5;
+      if (out || hang || perch) bad.push(`${type} seed ${seed} grab ${g}: ${out ? 'outside' : hang ? 'awake in the air' : 'on the divider'} at ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
+    }
+  }
+  return { bad, got };
+}
+h.test('cup: the widest chute (84 px), seeded drops for several claw types: no NaN, nothing outside, hanging or on the divider', () => {
+  for (const t of ['classic', 'magnet', 'hand', 'scoop', 'hook', 'twin']) {
+    let got = 0;
+    for (const seed of [1, 2]) {
+      const r = cupStress(t, seed, 12, 84);
+      got += r.got;
+      h.eq(r.bad.length, 0, `${t} seed ${seed} at 84 px: ${r.bad.slice(0, 2).join(' | ')}`);
+    }
+    h.ok(got > 0, `${t}: delivers with the wide chute (${got})`);
   }
 });
 

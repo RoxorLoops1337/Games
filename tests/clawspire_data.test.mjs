@@ -602,8 +602,12 @@ t.test('events', () => {
     }
   }
   t.ok(conds >= 5, `several conditional choices [${conds}]`);
-  // Claw upgrades come from bosses and towers only, never from events.
-  for (const id of ids) for (const c of EVENTS[id].choices) t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
+  // Claw upgrades come from bosses and towers only, never from events. (round 29) CUP: the Coil Winder (cup: true, a
+  // Magnet Crane run only, placed by game.js) is the one event that winds the magnet's coil, and only that part.
+  for (const id of ids) for (const c of EVENTS[id].choices) {
+    if (EVENTS[id].cup) { t.ok(c.fx.every(f => f.k !== 'claw' || (f.u === 'coil' && CLAW_UPGRADES.coil.cup)), `event ${id}: only Coil Winding`); continue; }
+    t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
+  }
   t.ok(DATA.ECONOMY.trickle === 2 && DATA.ECONOMY.binFloor === 6, 'bin trickle 2, floor 6');
   // gold costs are gated by a gold condition
   for (const id of ids) for (const c of EVENTS[id].choices) {
@@ -631,7 +635,42 @@ t.test('claw upgrades', () => {
     const exp = { grabs: ['grabs', 5], width: ['width', 1.54], grip: ['grip', 2.05], speed: ['speed', 1.6], prongs: ['prongs', 3], rubber: ['rubber', 1], magnet: ['magnet', 1] }[id];
     t.near(claw[exp[0]], exp[1], 1e-9, `${W}: final ${exp[0]}`);
   }
-  t.eq(Object.keys(CLAW_UPGRADES).length, 7, 'exactly the 7 upgrades');
+  t.eq(Object.keys(CLAW_UPGRADES).filter(id => !CLAW_UPGRADES[id].cup).length, 7, 'exactly the 7 common upgrades');
+  t.eq(Object.keys(CLAW_UPGRADES).length, 9, 'and the 2 of round 29 (CUP)');
+});
+
+// (round 29) CUP: Coil Winding and Wider Chute (DESIGN.md "Magnet power and a wider chute (round 29)")
+t.test('cup: the coil and chute parts, and the Coil Winder event', () => {
+  const need = { coil: { max: 3, field: 'coil', only: 'magnet' }, chute: { max: 4, field: 'chute', only: undefined } };
+  const ids = Object.keys(CLAW_UPGRADES);
+  t.eq(ids.slice(0, 7).join(','), 'grabs,width,grip,speed,prongs,rubber,magnet', 'the old seven keep their order (the common rolls are unchanged)');
+  for (const id in need) {
+    const u = CLAW_UPGRADES[id], W = `upgrade ${id}`, n = need[id];
+    t.ok(!!u, `${W} exists`);
+    if (!u) continue;
+    t.eq(u.id, id, `${W}: key`);
+    t.eq(u.cup, true, `${W}: cup (kept out of the common rolls)`);
+    t.eq(u.max, n.max, `${W}: max ${n.max}`);
+    t.eq(u.only, n.only, `${W}: fits ${n.only || 'every claw'}`);
+    t.eq(u.rank, n.field, `${W}: the rank lives on claw.${n.field}`);
+    t.ok(isNum(u.cost) && u.cost >= 20 && u.cost <= 160, `${W}: cost`);
+    t.ok(typeof u.name === 'string' && u.name && typeof u.icon === 'string' && u.icon && typeof u.text === 'string' && u.text.length > 10, `${W}: labels`);
+    t.ok(u.text.indexOf(String.fromCharCode(0x2014)) < 0 && u.name.indexOf(String.fromCharCode(0x2014)) < 0, `${W}: no em dash`);
+    const claw = { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
+    for (let i = 0; i < u.max; i++) { t.ok(u.apply(claw) === true, `${W}: apply #${i + 1}`); t.eq(claw[n.field], i + 1, `${W}: rank ${i + 1}`); t.eq(claw.ups[id], i + 1, `${W}: ups.${id}`); }
+    const snap = JSON.stringify(claw);
+    t.ok(u.apply(claw) === false, `${W}: refused past max`);
+    t.eq(JSON.stringify(claw), snap, `${W}: no change past max`);
+    t.eq([claw.grabs, claw.width, claw.grip, claw.speed, claw.prongs, claw.rubber, claw.magnet].join(','), '3,1,1,1,2,0,0', `${W}: touches nothing else`);
+  }
+  t.ok(Object.keys(CLAW_UPGRADES).every(id => CLAW_UPGRADES.chute.cost <= CLAW_UPGRADES[id].cost), 'the chute is the cheapest part (tiny steps; Rocco fits it for 30 + 10 a rank)');
+  // the event
+  const ev = EVENTS.coil_winder;
+  t.ok(ev && ev.cup === true && ev.title && ev.text && ev.art, 'the Coil Winder: cup, title, text, art');
+  t.ok(ev.choices.length === 3 && ev.choices.filter(c => c.fx.some(f => f.k === 'claw' && f.u === 'coil')).length === 2, 'two ways to wind the coil, one to walk away');
+  const paid = ev.choices.find(c => c.fx.some(f => f.k === 'gold' && f.v < 0));
+  t.ok(paid && paid.cond && paid.cond({ gold: 44 }) === false && paid.cond({ gold: 45 }) === true, 'the copper costs 45 gold, gated');
+  t.ok(Object.keys(EVENTS).filter(id => EVENTS[id].cup).join(',') === 'coil_winder', 'the only cup event');
 });
 
 // ------------------------------------------------------------------ tools
@@ -856,7 +895,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id) && !R21_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id) && !R21_RELICS.includes(id) && !DATA.BENCH.RELICS.includes(id));   // (round 28: the bench's own relics have their own test)
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -864,7 +903,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id) && !R17_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id) && !R17_ITEMS.includes(id) && !DATA.BENCH.ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -2457,6 +2496,17 @@ t.test('the rival: gear, taunts, the claw-off pile and its prizes', () => {
   t.ok(pile.length === 13 && by.l === 1 && by.r === 2 && by.u === 3 && by.c === 5 && by.junk === 2, 'the pile: one of every good thing, two rocks ' + JSON.stringify(by));
   t.ok(pile.every(p => p.v === DATA.garyVal(ITEMS[p.id])) && pile.some(p => p.v === 7), 'values by rarity (a legendary is 7)');
   t.eq(JSON.stringify(DATA.garyPile(U.rng(5), 1)), JSON.stringify(pile), 'deterministic by seed');
+  // (round 28) a Magnet Crane claw-off always has metal to lift, at the same rarities
+  const isMetal = (p) => (ITEMS[p.id].tags || []).indexOf('metal') >= 0;
+  let fewest = 99;
+  for (let s = 1; s <= 120; s++) {
+    const mp = DATA.garyPile(U.rng(s), 1, { need: 'metal' });
+    fewest = Math.min(fewest, mp.filter(isMetal).length);
+    const r2 = {};
+    for (const p of mp) r2[p.id === 'rock' ? 'junk' : ITEMS[p.id].rarity] = (r2[p.id === 'rock' ? 'junk' : ITEMS[p.id].rarity] || 0) + 1;
+    if (s === 1) t.ok(mp.length === 13 && r2.l === 1 && r2.r === 2 && r2.u === 3 && r2.c === 5 && r2.junk === 2, 'magnet pile keeps the rarity mix ' + JSON.stringify(r2));
+  }
+  t.ok(fewest >= Math.ceil(11 * DATA.GARY.needFrac), 'a magnet claw-off pile is mostly metal (fewest ' + fewest + ' of 11)');
   const w = DATA.garyPrize(2, 'win'), l = DATA.garyPrize(2, 'lose'), tie = DATA.garyPrize(2, 'tie');
   t.ok(w.gold > tie.gold && tie.gold > l.gold && w.cap && !l.cap && w.tix > l.tix, 'win beats tie beats a loss');
   t.ok(DATA.garyPrize(3, 'win').gold > DATA.garyPrize(1, 'win').gold, 'more gold later in the tower');
@@ -3913,6 +3963,57 @@ t.test('cmp2: plus 2 numbers, names and text', () => {
   t.ok(DATA.cmp2Lv({ plus: 2 }) === 2 && DATA.cmp2Lv({ plus: true }) === 1 && DATA.cmp2Lv({}) === 0, 'levels 0, 1, 2');
   const bribe = DATA.CMP2.fx(ITEMS.bribe);
   t.ok(bribe && bribe[0].v >= 0 && bribe[0].v < ITEMS.bribe.plus.fx[0].v, 'a cost keeps falling, never below 0');
+});
+
+// ---------------------------------------------------------------- BENCH (round 28): bolts, upgrades, packs
+t.test('bench: the upgrades, the packs and their gate, the payout and the grant are pure and well formed', () => {
+  const B = DATA.BENCH;
+  t.ok(B && B.UP_IDS.length === 12 && B.PACK_IDS.length === 10, 'twelve upgrades, ten packs');
+  for (const u of B.UP_LIST) {
+    t.ok(u.name && u.text && u.icon && /\{n\}|^[A-Z]/.test(u.val) && [1, 2, 3].includes(u.tier), u.id + ': name, text, icon, value line, tier');
+    t.ok(u.cost.length === u.max && u.cost.every((c, i) => c > 0 && (!i || c > u.cost[i - 1])), u.id + ': a rising price per rank');
+    t.eq(DATA.benchCost(u.id, u.max), null, u.id + ': nothing past the top');
+  }
+  t.eq(JSON.stringify(DATA.benchFx({ hp: 2, shop: 9, bogus: 4 })).indexOf('bogus'), -1, 'benchFx ignores unknown ranks');
+  t.eq(DATA.benchFx({ hp: 2, shop: 9 }).shop, 20, 'and clamps a rank to its top (4 x 5%)');
+  t.ok(DATA.benchTierOpen(1, 0) && !DATA.benchTierOpen(2, 99) && DATA.benchTierOpen(2, 100) && DATA.benchTierOpen(3, 300), 'tiers open at 0, 100, 300 spent');
+  const all = new Set();
+  for (const pid of B.PACK_IDS) {
+    const p = B.PACKS[pid], th = DATA.benchPackThings(pid);
+    t.ok(p.name && p.tag && p.icon && /^#[0-9a-f]{6}$/i.test(p.color) && p.cost > 0, pid + ': a name, a line, an icon, a colour, a price');
+    t.ok(th.length >= 3 && th.length <= 5, pid + ': three to five things');
+    for (const x of th) { t.ok(!all.has(x.kind + x.id), x.id + ': in one pack only'); all.add(x.kind + x.id); t.eq(DATA.unlPack(x.kind, x.id), pid, x.id + ': knows its pack'); }
+    t.ok(!p.gate || !!B.GATES[p.gate], pid + ': a known milestone');
+  }
+  for (const id of B.ITEMS) t.ok(DATA.ITEMS[id] && DATA.ITEMS[id].bench && DATA.unlPack('item', id), id + ': a new item, only in a pack');
+  for (const id of B.RELICS) t.ok(DATA.RELICS[id] && DATA.RELICS[id].bench && DATA.unlPack('relic', id), id + ': a new relic, only in a pack');
+  t.ok(DATA.unlBase('item', 'torch') && !DATA.unlBase('item', 'dragon_egg'), 'base content and pack content');
+  // the gate: none is the full pool; a shut gate keeps every pack thing out of pool() and relicPool()
+  t.ok(DATA.pool('l').includes('confetti_cannon') && DATA.relicPool('u').includes('thermostat'), 'no gate: the full pool');
+  DATA.unlGate(() => false);
+  try {
+    t.ok(!DATA.pool().some((id) => DATA.unlPack('item', id)) && !['c', 'u', 'r', 'boss', 'l'].some((r) => DATA.relicPool(r).some((id) => DATA.unlPack('relic', id))), 'a shut gate: no pack thing in any pool');
+    const rng = U.rng(28);
+    let bad = 0;
+    for (let i = 0; i < 400; i++) for (const id of DATA.rewardItems(rng, 1 + (i % 3), ['knight', 'alchemist', 'rogue', 'gambler', 'engineer', 'bubbler'][i % 6], 3)) if (DATA.unlPack('item', id)) bad++;
+    t.eq(bad, 0, 'nor in 1200 reward cards');
+    for (let i = 0; i < 200; i++) { const p = DATA.capsulePrize(rng, ['c', 'u', 'r', 'l'][i % 4], { act: 2, char: 'knight', relics: { c: DATA.relicPool('c'), u: DATA.relicPool('u'), r: DATA.relicPool('r'), boss: DATA.relicPool('boss'), l: DATA.relicPool('l') } }); if ((p.k === 'item' || p.k === 'relic') && DATA.unlPack(p.k, p.id)) bad++; }
+    t.eq(bad, 0, 'nor in 200 capsules');
+    const metal = DATA.pool('c').concat(DATA.pool('u'), DATA.pool('r')).filter((id) => DATA.ITEMS[id].tags.includes('metal') && !DATA.ITEMS[id].char);
+    t.ok(metal.length >= 6, 'the base pool keeps shared metal items for a magnet claw-off (' + metal.length + ')');
+    const jam = DATA.unlGate(() => { throw new Error('x'); });
+    t.ok(jam && !DATA.unlOpen('item', 'dragon_egg') && DATA.unlOpen('item', 'torch'), 'a gate that throws keeps the pack shut, base content open');
+  } finally { DATA.unlGate(null); }
+  // the payout
+  const W = (tier, n) => Array.from({ length: n }, () => ({ result: 'win', tier, enemies: [] }));
+  t.eq(DATA.benchPay({ act: 1, history: W('normal', 5) }, false).total, 15, 'five fights in act 1: 15');
+  t.eq(DATA.benchPay({ act: 2, history: W('normal', 5).concat(W('elite', 1), W('boss', 1), [{ result: 'lose', tier: 'boss' }]) }, false).total, 15 + 10 + 25 + 15, 'act 2 with an elite and a boss');
+  const w = DATA.benchPay({ act: 3, tilt: 5, history: W('boss', 3) }, true);
+  t.eq(w.total, 75 + 30 + 75 + Math.ceil(180 * 0.5), 'a Tilt 5 win: +50%');
+  t.eq(DATA.benchPay(null, false).total, 0, 'no run: nothing');
+  t.eq(DATA.benchGrant({}), 0, 'no runs: no grant');
+  t.eq(DATA.benchGrant({ runs: 10, wins: 1, kills: 100, bestAct: 2 }), 50 + 50 + 30 + 50, 'runs, wins, kills, the best act');
+  t.eq(DATA.benchGrant({ runs: 1e9 }), B.GRANT.cap, 'capped');
 });
 
 t.done();

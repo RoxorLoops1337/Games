@@ -2955,6 +2955,16 @@ const RENDER = (() => {
     ctx.beginPath(); ctx.rect(x - w, by, w * 2, bh); S(ctx, INK, 1.5); ctx.stroke();
     // bolts on the dome
     F(ctx, '#ffd0d0'); ctx.beginPath(); circ(ctx, x - w * 0.55, top + r * 0.42, Math.max(1, r * 0.07)); circ(ctx, x + w * 0.55, top + r * 0.42, Math.max(1, r * 0.07)); ctx.fill();
+    // (round 29) CUP: Coil Winding, one copper winding round the drum a rank (above the hazard band); they glow when live
+    const coil = rig.cfg && rig.cfg.coil > 0 ? Math.min(3, rig.cfg.coil | 0) : 0;
+    for (let i = 0; i < coil; i++) {
+      const wy = by - r * (0.075 + i * 0.125), wh = r * 0.105;
+      ctx.beginPath(); rrect(ctx, x - w - 2, wy - wh / 2, w * 2 + 4, wh, wh / 2);
+      F(ctx, f > 0.05 && Math.sin(t * 26 + i * 2.1) > 0.1 ? '#ffe2b0' : '#e08a3c'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+      line(ctx, x - w, wy - wh * 0.18, x + w, wy - wh * 0.18, '#ffd29a', Math.max(0.8, wh * 0.28));
+      ctx.beginPath(); for (let k = -3; k <= 3; k++) { const kx = x + k * w * 0.28; ctx.moveTo(kx - w * 0.04, wy - wh / 2 + 0.5); ctx.lineTo(kx + w * 0.04, wy + wh / 2 - 0.5); }
+      S(ctx, rgba('#5a2a10', 0.8), 0.9); ctx.stroke();
+    }
     // face plate with three copper coil bars; it glows when live
     tone(ctx, q => rrect(q, x - w * 1.08, bot - r * 0.06, w * 2.16, r * 0.34, r * 0.12), '#4a4e58', x, bot + r * 0.1, w, NOSPEC);
     for (let i = -1; i <= 1; i++) {
@@ -2967,6 +2977,23 @@ const RENDER = (() => {
     for (let i = 0; i < nh; i++) arc(ctx, fx0 + (i % 3 - 1) * w * 0.5, fy0, ox + J.hold[i].x, oy + J.hold[i].y, t, i + 1, 0.4 + 0.6 * f);
     const np = Math.min(J.pullN || 0, J.pull ? J.pull.length : 0);
     for (let i = 0; i < np; i++) arc(ctx, fx0, fy0, ox + J.pull[i].x, oy + J.pull[i].y, t, i + 7, 0.25 + 0.5 * f);
+    // (round 29) CUP: the first bell after a Coil Winding rank: the field lines flare out of the drum (J.cupFl 0..1)
+    const fl = U.clamp(J.cupFl || 0, 0, 1);
+    if (fl > 0.01) {
+      glow(ctx, x, y + r * 0.2, r * (2.6 + 2.4 * fl), PAL.cyan, 0.55 * fl);
+      ctx.save();
+      ctx.globalAlpha = fl;
+      ctx.setLineDash([5, 5]); ctx.lineDashOffset = -t * 60;
+      for (const sd of [-1, 1]) {
+        for (let k = 1; k <= 3; k++) {
+          const rx = w * (0.55 + 0.6 * k) * (0.7 + 0.3 * fl), ry = r * (0.55 + 0.45 * k) * (0.7 + 0.3 * fl);
+          ctx.beginPath(); ell(ctx, x + sd * rx, y + r * 0.1, rx, ry);
+          S(ctx, k === 1 ? '#bffcff' : PAL.cyan, 2.2 - k * 0.4); ctx.stroke();
+        }
+      }
+      ctx.restore();
+      for (let i = 0; i < 4; i++) { const a = i * TAU / 4 + t * 3, d = r * (1.6 + 1.4 * fl); arc(ctx, x, y + r * 0.2, x + Math.cos(a) * d, y + r * 0.2 + Math.sin(a) * d * 0.7, t, i + 11, fl); }
+    }
   }
   /* The Harpoon: a steel shaft under the rope's eye with a barbed head.
      A catch (J.hold) gets a little impact star at the barb. */
