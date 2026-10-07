@@ -92,10 +92,10 @@ t.ok(A.songNeed(5) < A.songNeed(1), 'higher level charges faster');
 A.giveSong('thunder'); A.giveSong('cash'); t.ok(st().eqs.every(Boolean), 'three songs equipped');
 A.equipSong('cash', 0); t.ok(st().eqs[0] === 'cash' && st().eqs.filter(x => x === 'cash').length === 1, 'equipSong moves without duplicating');
 st().eqs = ['heart', 'thunder', 'cash']; st().charge = 0; st().nx = 0;
-// cast on the beat: S.t = 0 is exactly on a beat
-S.t = 0; S.player.hp = 10; const need = A.songNeed(5);
-for (let i = 0; i < need; i++) EI.fEmit('kill', { x: 0, y: 0, k: 1, boss: false });
-t.ok(A.pending, 'song queued after N perfect kills');
+// songs charge on PERFECT taps of the BEAT button
+S.player.hp = 10; const need = A.songNeed(5);
+for (let i = 0; i < need; i++) EI.fEmit('beat', { grade: 'perfect', chain: i + 1 });
+t.ok(A.pending, 'song queued after N perfect beat taps');
 const hpBefore = S.player.hp; EI.tick(0.016); t.ok(S.player.hp > hpBefore && !A.pending && st().charge === 0, 'Heart Beat healed and charge reset');
 t.ok(st().nx === 1, 'next song in the cycle is slot 2');
 // off-beat kills do not charge

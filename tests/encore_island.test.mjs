@@ -117,4 +117,17 @@ S.sheet = { id: 'more', tab: null, scroll: 0, vel: 0, max: 0, openT: 1 }; const 
 for (let i = 0; i < 400; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length === 0, 'toasts all clear on their own (' + S.toasts.length + ')');
 S.toasts.length = 0; S.toasts.push({ txt: 'away', t: 0, life: 4.5 }); for (let i = 0; i < 70; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.some(x => x.txt === 'away'), 'long toast outlives a short one'); for (let i = 0; i < 40; i++) (S.cards = null, EI.tick(0.05)); t.ok(!S.toasts.some(x => x.txt === 'away'), 'long toast still expires');
 
+// ---- the BEAT button: timed taps, not auto-kills ----
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); S.sheet = null; S.cards = null; S.hold = false; S.groove = 0; S.beatChain = 0; S.beatLock = 0;
+const beatS = 60 / S.bpm;
+S.t = beatS * 10; t.ok(EI.beatTap() && S.groove >= 1 && S.beatChain === 1 && EI.onBeatNow(), 'a tap exactly on the beat is PERFECT: fills groove, starts the damage boost');
+S.beatLock = 0; S.t = beatS * 10.5; const g0 = S.groove; EI.beatTap(); t.ok(S.beatChain === 0 && S.groove === g0, 'a tap halfway between beats is off-beat: chain resets, no groove');
+S.beatLock = 0; S.t = beatS * 12; EI.beatTap(); const gk = S.groove; S.beatLock = 0; S.t = beatS * 12 + 0.01; EI.beatTap(); t.ok(S.beatLock >= 0 && S.groove >= gk, 'taps never remove groove');
+S.beatBuffT = 0; t.ok(!EI.onBeatNow(), 'boost ends after a few seconds');
+S.groove = 0; const kg = S.groove; EI.killEnemy({ x: 0, y: 0, k: 1, r: 15, boss: false, hp: 0, max: 1 }); t.ok(S.groove > kg && S.groove < 1, 'kills only trickle groove');
+S.groove = 0; S.beatChain = 0; for (let i = 0; i < 12; i++) { S.beatLock = 0; S.t = beatS * (20 + i); EI.beatTap(); } t.ok(S.encoreT > 0, 'a run of perfect taps triggers ENCORE');
+// desktop: menu content must be clickable at wide screen sizes (hit areas are offset by the sheet region)
+EI.openSheet('town', 'build'); EI.draw(0.016); EI.draw(0.016);
+{ const hs = EI.hits().filter(h => h.sheet), win = 400; t.ok(hs.length > 0 && hs.every(h => h.x >= 0), 'sheet hit areas are in screen space'); }
+
 t.done();
