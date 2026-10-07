@@ -24,7 +24,7 @@ export function buildShell(S) {
   const B = S.B, GL = S.GLASS, R = S.rand;
   // ---------------------------------------------------------------- slab, plinth and the building body below the flat
   const slabC = col('#9a8fa8');
-  B.box(0, -0.55, 0, 15.56, 0.55, 11.56, slabC, { base: 0.1, tint: 0.03, top: mix(slabC, P.cream, 0.2), bottom: true });
+  B.box(0, -0.57, 0, 15.56, 0.55, 11.56, slabC, { base: 0.1, tint: 0.03, top: mix(slabC, P.cream, 0.2), bottom: true });
   // lower storey (mist fades to violet): exterior faces of south and east only matter
   const lower = (a, b, nrm) => wallFace(B, a, b, nrm, 3.4, (u, v, uc, vc) => { const brick = P.brick[((Math.floor(uc / 0.5) + Math.floor(vc / 0.5) * 3) % 4 + 4) % 4]; const mist = sm(0.0, 3.4, 3.4 - v) * 0.0; return mix(aoTint(mul(brick, 0.9), 0.35), col('#7a5a96'), 0.18 + 0.55 * (1 - sm(0, 3.4, v))); }, { y0: -3.95, stepU: 0.6, vBreaks: [0.8, 1.6, 2.4] });
   lower([-7.78, 5.78], [7.78, 5.78], [0, 1]); lower([7.78, 5.78], [7.78, -5.78], [1, 0]);
@@ -37,7 +37,7 @@ export function buildShell(S) {
   };
   const grime = (x, z) => { const n = fbm(x * 0.7, z * 0.7, 5); return 1 - 0.14 * sm(0.45, 0.8, n); };
   // underlay (the dark seams between the planks)
-  B.poly([[-7.5, -5.5], [-7.5, 5.5], [7.5, 5.5], [7.5, -5.5]], -0.004, col('#4a3040'));
+  B.poly([[-7.5, -5.5], [7.5, -5.5], [7.5, 5.5], [-7.5, 5.5]], -0.004, col('#2e2036'));
   // planks run east-west, 0.22 wide
   const ROW = 0.22; let zRow = 0;
   for (let z = -5.5; z < 5.5 - 0.01; z += ROW) {
@@ -66,14 +66,14 @@ export function buildShell(S) {
   B.box((KT.x0 + KT.x1) / 2, 0, KT.z1, KT.x1 - KT.x0, 0.02, 0.06, P.woodL, { base: 0 }); B.box(KT.x0, 0, (KT.z0 + KT.z1) / 2, 0.06, 0.02, KT.z1 - KT.z0, P.woodL, { base: 0 });
   // bedroom carpet
   const BR = { x0: -7.5, x1: -3.6, z0: 1.6, z1: 5.5 };
-  patch(BR.x0, BR.z0, BR.x1, BR.z1, 0.022, 0.55, (xa, za, xb, zb, i, j) => { const b = mix(col('#a49cd6'), col('#c4a6d8'), vnoise(i * 0.7, j * 0.7, 3)), c = (x, z) => aoTint(mul(b, grime(x, z)), wallAO(x, z) * 0.9); return [c(xa, za), c(xa, zb), c(xb, zb), c(xb, za)]; }, col('#8a80b8'));
+  patch(BR.x0, BR.z0, BR.x1, BR.z1, 0.022, 0.55, (xa, za, xb, zb, i, j) => { const b = mix(col('#8a82c6'), col('#a88ccc'), vnoise(i * 0.7, j * 0.7, 3)), c = (x, z) => aoTint(mul(b, grime(x, z)), wallAO(x, z) * 0.9); return [c(xa, za), c(xa, zb), c(xb, zb), c(xb, za)]; }, col('#8a80b8'));
   // entry tile (dark slate with cream checker)
   const ET = { x0: 4.15, x1: 7.5, z0: 3.3, z1: 5.5 };
   patch(ET.x0, ET.z0, ET.x1, ET.z1, 0.012, 0.55, (xa, za, xb, zb, i, j) => { const ch = (i + j) % 2 === 0, b = ch ? col('#6a5a82') : col('#c9b79a'), c = (x, z) => aoTint(mul(b, grime(x, z) * 0.98), wallAO(x, z)); return [c(xa, za), c(xa, zb), c(xb, zb), c(xb, za)]; }, P.slabD);
   B.box((ET.x0 + ET.x1) / 2, 0, ET.z0, ET.x1 - ET.x0, 0.02, 0.06, P.woodL, { base: 0 }); B.box(ET.x0, 0, (ET.z0 + ET.z1) / 2, 0.06, 0.02, ET.z1 - ET.z0, P.woodL, { base: 0 });
   // booth floor (ink rubber tiles with a magenta edge)
   const BF = { x0: 5.45, x1: 7.5, z0: -5.5, z1: -3.25 };
-  patch(BF.x0, BF.z0, BF.x1, BF.z1, 0.012, 0.5, (xa, za, xb, zb, i, j) => { const b = (i + j) % 2 ? col('#3b3354') : col('#332c4a'), c = (x, z) => aoTint(b, wallAO(x, z) * 0.6); return [c(xa, za), c(xa, zb), c(xb, zb), c(xb, za)]; }, P.pink);
+  patch(BF.x0, BF.z0, BF.x1, BF.z1, 0.012, 0.5, (xa, za, xb, zb, i, j) => { const b = (i + j) % 2 ? col('#5a4f82') : col('#4b4270'), c = (x, z) => aoTint(b, wallAO(x, z) * 0.6); return [c(xa, za), c(xa, zb), c(xb, zb), c(xb, za)]; }, P.pink);
 
   // ---------------------------------------------------------------- wall colour logic
   const zoneN = (x) => (x < -1.75 ? 'liv' : x < 1.7 ? 'desk' : 'kit');
@@ -168,9 +168,10 @@ export function buildShell(S) {
     B.box(lx, 0.02, lz, dw - 0.03, 2.02, 0.05, col('#3f8f8a'), { ry: lry, base: 0.15 });
     S.leaf = { x: lx, z: lz, ry: lry, dw };
     S.hit.box(lx, lz, 0.1, 0.1, 0);
-    // porch lamp outside (glows at night)
-    const pl = f.pt(dc, -T - 0.06); S.GLOW.box(pl[0] - 0.09, 2.3, pl[1] - 0.09, 0.18, 0.2, 0.18, [3.0, 2.0, 0.9], { base: 0, tint: 0, top: [3.4, 2.4, 1.1] }); B.box(pl[0], 2.5, pl[1], 0.24, 0.05, 0.24, P.ink, { base: 0 }); B.box(pl[0], 2.22, pl[1], 0.24, 0.05, 0.24, P.ink, { base: 0 });
-    S.lights.push({ x: pl[0], y: 2.3, z: pl[1] + 0.1, color: '#ffd9a0', r: 4, i: 0.5, kind: 'lamp' });
+    // porch lantern on a bracket off the lintel (glows at night)
+    const pl = f.pt(dc, -T - 0.34); const lt = f.pt(dc, -T - 0.04); B.box(lt[0], 2.1, lt[1], 0.05, 0.05, 0.4, P.ink, { base: 0, ry: f.ry + Math.PI / 2 }); bar(B, [pl[0], 2.14, pl[1]], [pl[0], 1.98, pl[1]], 0.015, 0.015, P.ink);
+    B.box(pl[0], 1.95, pl[1], 0.2, 0.03, 0.2, P.ink, { base: 0 }); S.GLOW.box(pl[0] - 0.08, 1.8, pl[1] - 0.08, 0.16, 0.16, 0.16, [3.0, 2.0, 0.9], { base: 0, tint: 0, top: [3.4, 2.4, 1.1] }); B.box(pl[0], 1.76, pl[1], 0.2, 0.03, 0.2, P.ink, { base: 0 });
+    S.lights.push({ x: pl[0], y: 1.85, z: pl[1] + 0.2, color: '#ffd9a0', r: 4, i: 0.5, kind: 'lamp' });
     // walkway slab with a yellow safety stripe, railing, a few posts
     const wz0 = 5.78, wz1 = 7.35, wc = col('#8f8499');
     B.box(0, -0.2, (wz0 + wz1) / 2, 15.56, 0.19, wz1 - wz0, wc, { base: 0.15, tint: 0.03, top: mix(wc, P.cream, 0.12) });
@@ -180,8 +181,8 @@ export function buildShell(S) {
 
   // ---------------------------------------------------------------- bedroom half wall (an L, 1.05 high)
   { const hw = col('#8c82bf'), capw = P.woodL, hh = 1.05;
-    B.box(-5.475, 0, 1.6, 4.05, hh, 0.14, hw, { base: 0.3, tint: 0.03, top: capw }); B.box(-3.6, 0, 2.75, 0.14, hh, 2.3, hw, { base: 0.3, tint: 0.03, top: capw });
-    B.box(-5.475, hh, 1.6, 4.1, 0.04, 0.2, capw, { base: 0 }); B.box(-3.6, hh, 2.75, 0.2, 0.04, 2.34, capw, { base: 0 });
-    S.hit.box(-5.475, 1.6, 2.05, 0.1, 0); S.hit.box(-3.6, 2.75, 0.1, 1.2, 0); }
+    B.box(-5.475, 0, 1.6, 4.05, hh, 0.14, hw, { base: 0.3, tint: 0.03, top: capw }); B.box(-3.6, 0, 2.5, 0.14, hh, 1.8, hw, { base: 0.3, tint: 0.03, top: capw });
+    B.box(-5.475, hh, 1.6, 4.1, 0.04, 0.2, capw, { base: 0 }); B.box(-3.6, hh, 2.5, 0.2, 0.04, 1.84, capw, { base: 0 });
+    S.hit.box(-5.475, 1.6, 2.05, 0.1, 0); S.hit.box(-3.6, 2.5, 0.1, 0.9, 0); }
   return { WALLS };
 }

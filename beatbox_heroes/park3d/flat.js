@@ -3,8 +3,9 @@
 //   buildFlat(ctx) -> { group, interior:true, bounds, blocked, heightAt, pathDist, keepout, paths, anchors, spotDefs, camera, lights, windows, outside, update }
 // Layout (metres, +z toward the camera, origin = centre of the living room): see flat_*.js. Geometry goes into a few merged stores (flat_kit.js makeStore):
 //   main (flat shaded vertex colours, casts shadows), glow (night emissive), screens (always-on decals), decals (lit), soft contact blobs, glass.
-import { THREE, flatMat } from './kit.js';
-import { makeStore, glowLambert } from './flat_kit.js';
+import { THREE, flatMat, mergeGeometries } from './kit.js';
+import { makeStore, glowLambert, Buf, col, mix } from './flat_kit.js';
+import { rng } from './kit.js';
 import { makeFlatAtlas } from './flat_atlas.js';
 import { buildShell, WALLS, WINDOWS } from './flat_shell.js';
 import { buildOutside } from './flat_outside.js';
@@ -14,6 +15,12 @@ import { buildBedroom } from './flat_bedroom.js';
 import { buildWork } from './flat_work.js';
 import { buildEntry } from './flat_entry.js';
 
+function makeVinyl() {
+  const B = new Buf({ rng: rng(9) }), ink = col('#2b2438'), inkL = col('#3f3857');
+  B.lathe([[0.14, 0, ink], [0.14, 0.005, inkL], [0.06, 0.005, mix(inkL, ink, 0.5)], [0.055, 0.005, col('#ff4f8b')], [0.012, 0.006, col('#ff9ab8')], [0, 0.006, ink]], 14, 0, 0, 0, { tint: 0.02 });
+  B.box(0.08, 0.004, 0, 0.01, 0.002, 0.04, col('#8d8aa8'), { base: 0 });
+  return B.geometry(false);
+}
 export function buildFlat(ctx) {
   const group = new THREE.Group(); group.name = 'flat';
   const S = makeStore(); S.atlas = makeFlatAtlas(); S.group = group; S.updaters = [];
@@ -22,16 +29,19 @@ export function buildFlat(ctx) {
 
   // ---------------------------------------------------------------- meshes
   const add = (geo, mat, o) => { const m = new THREE.Mesh(geo, mat); m.castShadow = !!(o && o.cast); m.receiveShadow = !(o && o.receive === false); if (o && o.order) m.renderOrder = o.order; if (o && o.name) m.name = o.name; group.add(m); return m; };
-  const main = add(S.B.geometry(true), flatMat(), { cast: true, name: 'flat_main' }); main.frustumCulled = false;
+  const main = add(S.B.geometry(false), flatMat(), { cast: true, name: 'flat_main' }); main.frustumCulled = false;
   const glowMat = glowLambert(1.0); add(S.GLOW.geometry(false), glowMat, { cast: false, name: 'flat_glow' }).frustumCulled = false;
   const decMat = new THREE.MeshLambertMaterial({ map: S.atlas.tex, vertexColors: true, transparent: true, alphaTest: 0.03, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
   add(S.DEC.geometry(false), decMat, { name: 'flat_decals', order: 2 }).frustumCulled = false;
   const scrMat = new THREE.MeshBasicMaterial({ map: S.atlas.tex, vertexColors: true, transparent: true, alphaTest: 0.03, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); scrMat.userData.screen = true;
   add(S.SCR.geometry(false), scrMat, { receive: false, name: 'flat_screens', order: 3 }).frustumCulled = false;
-  add(S.SOFT.geometry(false), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }), { receive: false, order: 1, name: 'flat_soft' }).frustumCulled = false;
-  const glassMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }); glassMat.userData.windowPane = true;
-  add(S.GLASS.geometry(false), glassMat, { receive: false, order: 4, name: 'flat_glass' }).frustumCulled = false;
+  // contact shadows, wall smudges and the window panes share one transparent draw call
+  const softGlass = mergeGeometries([S.SOFT.geometry(false), S.GLASS.geometry(false)]); const sgMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }); sgMat.userData.windowPane = true;
+  add(softGlass, sgMat, { receive: false, order: 4, name: 'flat_soft_glass' }).frustumCulled = false;
   const outside = buildOutside(); group.add(outside);
+  if (S.turntable) { // the record on the deck spins
+    const V = makeVinyl(); const vm = new THREE.Mesh(V, flatMat()); vm.position.set(S.turntable.x, S.turntable.y, S.turntable.z); vm.castShadow = false; vm.name = 'flat_vinyl'; group.add(vm); S.updaters.push((dt) => { vm.rotation.y += dt * 3.5; });
+  }
   (S.extraMeshes || []).forEach((m) => group.add(m));
 
   // ---------------------------------------------------------------- contract

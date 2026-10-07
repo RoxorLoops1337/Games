@@ -122,7 +122,7 @@ export function buildLiving(S) {
     S.soft(cx, cz + 0.1, 0.6, 0.55, 0.4);
     B.box(cx, 0, cz, 0.78, 0.82, 0.6, P.black, { base: 0.35, tint: 0.02, top: P.inkL }); B.box(cx, 0.82, cz, 0.7, 0.62, 0.5, P.black, { base: 0.1, tint: 0.02, top: P.inkL }); B.box(cx, 1.44, cz, 0.62, 0.34, 0.42, P.inkL, { base: 0.1, tint: 0.02 });
     const woofer = (x, y, z, r, c) => { B.push(x, y, z, 0, 1, Math.PI / 2); B.lathe([[r, 0, P.ink], [r * 0.95, 0.012, P.inkL], [r * 0.55, -0.04, mix(P.inkL, c, 0.3)], [r * 0.2, -0.05, c], [0, -0.045, mix(c, P.cream, 0.4)]], 10, 0, 0, 0, {}); B.pop(); };
-    woofer(cx, 0.46, cz + 0.301, 0.25, P.orange); woofer(cx, 0.13, cz + 0.301, 0.0001, P.orange); woofer(cx, 1.13, cz + 0.251, 0.2, P.coral); B.box(cx, 0.86, cz + 0.25, 0.22, 0.035, 0.02, P.steel, { base: 0 });
+    woofer(cx, 0.46, cz + 0.301, 0.25, P.orange); woofer(cx, 1.13, cz + 0.251, 0.2, P.coral); B.box(cx, 0.86, cz + 0.25, 0.22, 0.035, 0.02, P.steel, { base: 0 });
     woofer(cx, 1.61, cz + 0.211, 0.12, P.yellow);
     G.box(cx - 0.33, 0.1, cz + 0.302, 0.03, 0.64, 0.012, PINKN, { base: 0, tint: 0 }); G.box(cx + 0.3, 0.1, cz + 0.302, 0.03, 0.64, 0.012, CYANN, { base: 0, tint: 0 }); // neon edge trim
     S.lights.push({ x: cx, y: 0.9, z: cz + 0.7, color: '#ff3ea5', r: 3.2, i: 0.35, kind: 'neon' });

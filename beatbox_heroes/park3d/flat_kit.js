@@ -9,9 +9,9 @@ const C = (h) => col(h);
 export const P = {
   wood: [C('#b8794a'), C('#a46a3d'), C('#c78c55'), C('#9a6239')], woodD: C('#7a4a32'), woodL: C('#d9a46e'), pine: C('#e0b985'), ply: C('#d8b27c'),
   cream: C('#efe1c4'), creamD: C('#cdb99a'), paper: C('#f5ead2'),
-  plum: C('#7d4f88'), plumD: C('#5a386c'), plumL: C('#98669c'),
-  teal: C('#2f8f93'), tealD: C('#1f6670'), tealL: C('#58b9b2'), sage: C('#9bc18c'), sageD: C('#6f9a72'), mint: C('#8fd6c0'),
-  mustard: C('#dba53f'), mustardD: C('#b07d2c'), coral: C('#e8604a'), coralD: C('#b8403f'), pink: C('#ff4f8b'), pinkL: C('#ff9ab8'), violet: C('#7b5cff'), indigo: C('#5f6fb0'), indigoL: C('#8c96d4'),
+  plum: C('#8f5a98'), plumD: C('#683f7c'), plumL: C('#a874aa'),
+  teal: C('#34a199'), tealD: C('#217a78'), tealL: C('#58b9b2'), sage: C('#9bc18c'), sageD: C('#6f9a72'), mint: C('#8fd6c0'),
+  mustard: C('#dba53f'), mustardD: C('#b07d2c'), coral: C('#e8604a'), coralD: C('#b8403f'), pink: C('#ff4f8b'), pinkL: C('#ff9ab8'), violet: C('#7b5cff'), indigo: C('#6f7fc0'), indigoL: C('#9ca6e0'),
   cyan: C('#35f2e0'), lime: C('#9dff4a'), yellow: C('#ffd23f'), orange: C('#ff8a3d'), ink: C('#2b2438'), inkL: C('#3f3857'), steel: C('#8d8aa8'), steelL: C('#b9b7d0'), steelD: C('#5e5a7a'),
   brick: [C('#b5573f'), C('#a64c3b'), C('#c26a4a'), C('#9a4638')], mortar: C('#d9b79e'), slab: C('#8a7f98'), slabD: C('#5d5470'),
   leaf: [C('#3f9b5a'), C('#58b667'), C('#2f7d4e'), C('#7ac96c')], leafD: C('#24593f'), terracotta: C('#c8704a'), soil: C('#4b3547'),
@@ -28,6 +28,7 @@ export function makeStore() {
   S.soft = (x, z, rx, rz, a, ry, y) => softDisc(S.SOFT, x, (y === undefined ? 0.012 : y), z, rx, rz, a === undefined ? 0.4 : a, ry || 0);
   // decal: quad centred at (x,y,z), facing +z locally; ry turns it. Uses the atlas rect by name. buf: S.DEC (lit) or S.SCR (always on)
   S.decal = (name, x, y, z, w, h, ry, rx, tint, rz, buf) => { const r = S.atlas.rect[name]; if (!r) return; const D = buf || S.DEC; D.push(x, y, z, ry || 0, 1, rx || 0, rz || 0); D.uquad([-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0], r[0], r[1], r[2], r[3], tint || [1, 1, 1]); D.pop(); };
+  S.softOn = (x, y, z, ry, rw, rh, a) => { S.SOFT.push(x, y, z, ry, 1, Math.PI / 2); softDisc(S.SOFT, 0, 0, 0, rw, rh, a, 0); S.SOFT.pop(); };
   S.screen = (name, x, y, z, w, h, ry, rx, tint, rz) => S.decal(name, x, y, z, w, h, ry, rx, tint, rz, S.SCR);
   return S;
 }
@@ -54,14 +55,14 @@ export function bar(B, a, b, w, h, color, o) {
   const yaw = Math.atan2(dx, dz), pitch = -Math.asin(dy / L);
   B.push(cx, cy, cz, yaw, 1, pitch, 0); B.box(0, -h / 2, 0, w, h, L, color, Object.assign({ base: 0 }, o)); B.pop();
 }
-// double-sided folded leaf. base b, direction d, length l, width w
+// double-sided folded leaf with a rounded outline. base b, direction d, length l, width w
 export function leaf(B, b, d, l, w, c1, c2, droop) {
   const dl = Math.hypot(d[0], d[1], d[2]) || 1, ux = d[0] / dl, uy = d[1] / dl, uz = d[2] / dl; droop = droop || 0;
-  const sx = -uz, sz = ux, sl = Math.hypot(sx, sz) || 1, px = (sx / sl) * w / 2, pz = (sz / sl) * w / 2;
-  const tip = [b[0] + ux * l, b[1] + uy * l - droop, b[2] + uz * l], mid = [b[0] + ux * l * 0.45, b[1] + uy * l * 0.45 + 0.02 + w * 0.12, b[2] + uz * l * 0.45];
-  const L = [mid[0] + px, mid[1] - w * 0.14, mid[2] + pz], R = [mid[0] - px, mid[1] - w * 0.14, mid[2] - pz], hi = mul(c1, 1.1);
-  B.tri(b, L, mid, c2, c1, hi); B.tri(b, mid, R, c2, hi, c1); B.tri(mid, L, tip, hi, c1, c1); B.tri(mid, tip, R, hi, c1, c1);
-  B.tri(b, mid, L, c2, c2, c2); B.tri(b, R, mid, c2, c2, c2); B.tri(mid, tip, L, c2, c2, c2); B.tri(mid, R, tip, c2, c2, c2);
+  const sx = -uz, sz = ux, sl = Math.hypot(sx, sz) || 1, px = sx / sl, pz = sz / sl, hi = mul(c1, 1.12), lo = mul(c1, 0.92);
+  const at = (t, s, lift) => [b[0] + ux * l * t + px * w * s, b[1] + uy * l * t - droop * t * t - Math.abs(s) * w * 0.12 + (lift || 0), b[2] + uz * l * t + pz * w * s];
+  const m1 = at(0.32, 0, w * 0.1), m2 = at(0.68, 0, w * 0.08), tip = at(1, 0, 0), L1 = at(0.3, 0.5), L2 = at(0.66, 0.38), R1 = at(0.3, -0.5), R2 = at(0.66, -0.38);
+  const up = [[b, L1, m1], [b, m1, R1], [m1, L1, L2], [m1, L2, m2], [m1, m2, R2], [m1, R2, R1], [m2, L2, tip], [m2, tip, R2]];
+  up.forEach((t) => { B.tri(t[0], t[1], t[2], t[0] === b ? c2 : lo, hi, hi); B.tri(t[0], t[2], t[1], c2, c2, c2); });
 }
 export function pot(B, x, y0, z, r, h, color, soil) {
   const lo = aoTint(color, 0.5), hi = mul(color, 1.08);
@@ -88,7 +89,8 @@ export function plant(S, x, y0, z, kind, s, o) {
   } else if (kind === 'cactus') {
     B.blob(x, top + 0.14 * s, z, 0.1 * s, 0.17 * s, 0.1 * s, P.leafD, P.leaf[2], { detail: 0, jit: 0.06 }); B.blob(x + 0.09 * s, top + 0.16 * s, z, 0.045 * s, 0.07 * s, 0.045 * s, P.leafD, P.leaf[2], { detail: 0, jit: 0.04 }); B.blob(x, top + 0.31 * s, z, 0.03 * s, 0.025 * s, 0.03 * s, P.pinkL, P.pink, { detail: 0, jit: 0.02 });
   } else if (kind === 'trail') {
-    for (let i = 0; i < 9; i++) { const a = i * 0.7, c = P.leaf[i % 3], l = (0.35 + (i % 4) * 0.12) * s; bar(B, [x + Math.cos(a) * 0.12, top, z + Math.sin(a) * 0.12], [x + Math.cos(a) * 0.2, top - l, z + Math.sin(a) * 0.2], 0.012, 0.012, P.leafD); for (let k = 1; k < 3; k++) leaf(B, [x + Math.cos(a) * 0.2, top - l * k / 3, z + Math.sin(a) * 0.2], [Math.cos(a + 1), -0.1, Math.sin(a + 1)], 0.1, 0.1, c, mul(c, 0.5), 0.02); }
+    for (let i = 0; i < 8; i++) { const a = i * 0.8 + 0.3, c = P.leaf[i % 4], l = (0.4 + (i % 4) * 0.14) * s, ox = Math.cos(a) * 0.13 * s, oz = Math.sin(a) * 0.13 * s; bar(B, [x + ox, top, z + oz], [x + ox * 1.6, top - l, z + oz * 1.6], 0.014, 0.014, P.leaf[2]);
+      for (let kk = 0; kk < 4; kk++) { const t = (kk + 0.5) / 4, side = kk % 2 ? 1 : -1; leaf(B, [x + ox * (1 + 0.6 * t), top - l * t, z + oz * (1 + 0.6 * t)], [Math.cos(a + side * 1.2), -0.15, Math.sin(a + side * 1.2)], 0.17 * s, 0.13 * s, c, mul(c, 0.55), 0.02); } }
   }
   return top;
 }

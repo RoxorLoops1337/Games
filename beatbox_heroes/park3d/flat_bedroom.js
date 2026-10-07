@@ -37,14 +37,14 @@ export function buildBedroom(S) {
   }
 
   // ---------------------------------------------------------------- laundry: basket and a pile, plus plants on the half wall and a rag rug
-  { const lx = -4.5, lz = 4.85; S.soft(lx, lz, 0.6, 0.5, 0.4);
+  { const lx = -5.7, lz = 5.0; S.soft(lx, lz, 0.6, 0.5, 0.4);
     B.lathe([[0.22, 0, P.woodD], [0.28, 0.05, P.woodL], [0.3, 0.42, P.pine], [0.28, 0.42, P.woodD], [0.0, 0.3, P.woodD]], 10, lx, 0, lz, {}); for (let k = 0; k < 4; k++) B.box(lx, 0.07 + k * 0.09, lz, 0.6, 0.02, 0.6, P.woodD, { base: 0, ry: 0.78, tint: 0.02 }); // woven bands (approx)
     [[0, 0.46, 0, P.yellow], [0.1, 0.48, 0.07, P.denim], [-0.1, 0.5, 0.0, P.pinkL], [0.04, 0.54, -0.1, P.tealL]].forEach(([dx, y, dz, c]) => B.blob(lx + dx, y, lz + dz, 0.19, 0.1, 0.17, mix(c, P.ink, 0.3), c, { detail: 1, jit: 0.2 }));
     bar(B, [lx + 0.25, 0.5, lz + 0.1], [lx + 0.5, 0.05, lz + 0.35], 0.12, 0.05, P.denimD);
     B.blob(lx + 0.72, 0.1, lz + 0.2, 0.28, 0.1, 0.22, mix(P.coral, P.ink, 0.3), P.coral, { detail: 1, jit: 0.25 }); B.blob(lx + 0.6, 0.14, lz - 0.1, 0.2, 0.09, 0.17, mix(P.cream, P.ink, 0.2), P.cream, { detail: 1, jit: 0.25 }); B.blob(lx + 0.95, 0.07, lz + 0.35, 0.16, 0.06, 0.12, mix(P.violet, P.ink, 0.25), P.violet, { detail: 1, jit: 0.2 }); B.box(lx + 0.5, 0.0, lz + 0.55, 0.12, 0.02, 0.05, P.cream, { base: 0, ry: 0.5 }); B.box(lx + 0.58, 0.0, lz + 0.57, 0.12, 0.02, 0.05, P.pink, { base: 0, ry: 0.2 });
     hit.circle(lx, lz, 0.32); hit.circle(lx + 0.75, lz + 0.15, 0.32); }
   plant(S, -6.3, 1.05, 1.6, 'trail', 0.9, { pot: P.mustard, pr: 0.14, ph: 0.2 }); plant(S, -5.2, 1.05, 1.6, 'fern', 0.8, { pot: P.terracotta, pr: 0.16, ph: 0.22 }); B.box(-4.5, 1.09, 1.6, 0.4, 0.15, 0.1, P.violet, { base: 0, ry: 0.0 }); B.box(-4.45, 1.24, 1.6, 0.28, 0.12, 0.1, P.coral, { base: 0, ry: 0.1 });
-  plant(S, -3.95, 0, 5.05, 'snake', 1.1, { pot: P.cream, pr: 0.2, ph: 0.3 }); hit.circle(-3.95, 5.05, 0.24); S.soft(-3.95, 5.05, 0.4, 0.4, 0.35);
+  plant(S, -7.1, 0, 5.1, 'snake', 1.1, { pot: P.cream, pr: 0.2, ph: 0.3 }); hit.circle(-7.1, 5.1, 0.24); S.soft(-7.1, 5.1, 0.4, 0.4, 0.35);
   S.decal('rug2', -6.0, 0.0235, 4.1, 0.8, 0.8, 0, -Math.PI / 2, [1, 1, 1]);
   B.box(-7.4, 1.9, 4.5, 0.04, 0.34, 0.9, P.woodL, { base: 0.1 }); // wall shelf with books and a plant (west wall)
   B.box(-7.3, 1.9, 4.5, 0.2, 0.03, 0.9, P.woodL, { base: 0 }); S.decal('spines', -7.28, 2.0, 4.5, 0.6, 0.12, Math.PI / 2, 0, [1, 1, 1]); plant(S, -7.3, 1.93, 4.9, 'herb', 0.6, { pot: P.pink, pr: 0.07, ph: 0.09 });

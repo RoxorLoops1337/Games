@@ -51,30 +51,32 @@ export function buildWork(S) {
     B.pop(); hit.circle(cx, cz, 0.34); }
 
   // ---------------------------------------------------------------- vocal booth (north-east corner): foam, mic, OCCUPIED sign
-  { const x0 = 5.45, x1 = 7.5, z0 = -5.5, z1 = -3.3, shell = col2('#3b2f5a'), tall = 2.2, low = 1.2;
+  { const x0 = 5.45, x1 = 7.5, z0 = -5.5, z1 = -3.3, shell = col2('#4a3c78'), tall = 2.2, low = 1.2;
     S.soft(6.5, -4.4, 1.3, 1.3, 0.3);
     B.box((x0 + 0.08), 0, (z0 + z1) / 2, 0.16, tall, z1 - z0, shell, { base: 0.2, tint: 0.03 }); // west wall (full)
     B.box(x0 + 0.08 + 0.0, tall, (z0 + z1) / 2, 0.2, 0.05, z1 - z0 + 0.04, P.pink, { base: 0 }); // top trim
     // front wall with a door gap (x 5.6..6.45), east wall of the booth, both cut low
-    const fz = z1 - 0.07; B.box((6.45 + x1) / 2, 0, fz, x1 - 6.45, low, 0.14, shell, { base: 0.2, tint: 0.03, top: mix(shell, P.pink, 0.4) }); B.box((x0 + 0.16 + 0.0) + 0.0, 0, fz, 0.0001, 0.0001, 0.0001, shell, { base: 0 });
+    G.box(5.68, 2.05, z0 + 0.04, 1.7, 0.03, 0.02, PINKN, { base: 0, tint: 0 }); G.box(x0 + 0.2, 2.05, z0 + 0.1, 0.02, 0.03, 2.0, CYANN, { base: 0, tint: 0 });
+    const fz = z1 - 0.07; B.box((6.45 + x1) / 2, 0, fz, x1 - 6.45, low, 0.14, shell, { base: 0.2, tint: 0.03, top: mix(shell, P.pink, 0.4) });
     B.box(x1 - 0.2, 0, (z0 + z1) / 2 - 0.0, 0.2, low, z1 - z0 - 0.0, shell, { base: 0.2, tint: 0.03, top: mix(shell, P.pink, 0.4) });
-    B.box(5.53 + 0.0, 0, fz, 0.0001, 0.0001, 0.0001, shell, { base: 0 });
     // door frame posts rising above the front wall carry the sign
     B.box(5.68, 0, fz, 0.08, 1.55, 0.14, mix(shell, P.ink, 0.2), { base: 0.1 }); B.box(6.42, 0, fz, 0.08, 1.55, 0.14, mix(shell, P.ink, 0.2), { base: 0.1 });
     B.box(6.05, 1.52, fz, 0.86, 0.34, 0.1, P.ink, { base: 0 }); G.box(6.05 - 0.4, 1.54, fz + 0.056, 0.8, 0.3, 0.012, [2.2, 0.35, 0.3], { base: 0, tint: 0 });
     S.screen('occupied', 6.05, 1.69, fz + 0.064, 0.78, 0.26, 0, 0, [1.4, 1.4, 1.4]); S.lights.push({ x: 6.05, y: 1.65, z: fz + 0.5, color: '#ff4a3a', r: 3.0, i: 0.6, kind: 'neon' });
     G.box(6.0, low, fz + 0.075, 1.5, 0.03, 0.012, PINKN, { base: 0, tint: 0 }); // LED lip
     // foam panels: pyramids on the north wall (facing +z) and the west wall (facing +x)
-    const fc = [col2('#2b2f4a'), col2('#4a3a78'), col2('#2f5d6e'), col2('#3b2f5a')];
+    const fc = [col2('#3a4470'), col2('#5a4a98'), col2('#2f7d86'), col2('#4b3a7a')];
     for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++) { const x = x0 + 0.16 + 0.17 + i * 0.3, y = 0.7 + j * 0.3, c = ((i + j) % 4 === 0 && j > 1) ? col2('#7a2f6e') : fc[(i * 3 + j) % 4]; B.push(x, y, z0 + 0.01, 0, 1, Math.PI / 2); B.pyr(0, 0, 0, 0.28, 0.1, c, 0.0); B.pop(); }
     for (let i = 0; i < 7; i++) for (let j = 0; j < 5; j++) { const z = z0 + 0.17 + i * 0.3, y = 0.7 + j * 0.3, c = ((i * 2 + j) % 5 === 0 && j > 1) ? col2('#7a2f6e') : fc[(i + j * 2) % 4]; B.push(x0 + 0.16, y, z, 0, 1, 0, -Math.PI / 2); B.pyr(0, 0, 0, 0.28, 0.1, c, 0.0); B.pop(); }
-    B.box(6.5, 0.0, z0 + 0.012, 1.7, 0.7, 0.012, mix(shell, P.ink, 0.3), { base: 0.2 }); B.box(x0 + 0.16, 0.0, -4.4, 0.012, 0.7, 2.1, mix(shell, P.ink, 0.3), { base: 0.2 });
+    B.box(6.52, 0.0, z0 + 0.012, 1.9, tall, 0.012, mix(shell, P.ink, 0.25), { base: 0.2 }); B.box(x0 + 0.16, 0.0, -4.4, 0.012, tall, 2.1, mix(shell, P.ink, 0.25), { base: 0.2 });
     // vocal mic on a stand with a pop filter, lyrics stand, stool, towel and water bottle
-    { const mx = 6.85, mz = -4.5; B.cyl(mx, 0.0, mz, 0.2, 0.2, 0.02, 7, P.black); bar(B, [mx, 0.02, mz], [mx, 1.35, mz], 0.025, 0.025, P.steelD); bar(B, [mx, 1.35, mz], [mx - 0.05, 1.5, mz + 0.18], 0.02, 0.02, P.steelD);
-      B.lathe([[0.04, 0, P.ink], [0.05, 0.04, P.ink], [0.05, 0.2, P.mustard], [0.0, 0.21, P.mustardD]], 8, mx - 0.05, 1.42, mz + 0.18, {}); B.push(mx - 0.05, 1.55, mz + 0.32, 0, 1, Math.PI / 2); B.lathe([[0.1, 0, P.black], [0.1, 0.012, P.inkL], [0.0, 0.012, P.inkL]], 10, 0, 0, 0, {}); B.pop();
-      B.cyl(6.1, 0, -4.9, 0.17, 0.2, 0.55, 7, P.coral); B.cyl(6.1, 0.55, -4.9, 0.2, 0.2, 0.04, 7, mix(P.coral, P.cream, 0.3)); B.box(6.1, 0.59, -4.9, 0.3, 0.02, 0.18, P.cream, { base: 0, ry: 0.4 }); // stool and towel
-      B.lathe([[0.04, 0, P.tealL], [0.04, 0.2, P.tealL], [0.02, 0.24, P.ink]], 7, 6.45, 0, -3.65, {});
-      bar(B, [5.95, 0.02, -3.8], [5.95, 1.2, -3.8], 0.02, 0.02, P.steelD); B.box(5.95, 1.1, -3.82, 0.3, 0.2, 0.01, P.cream, { base: 0 }); void mz;
+    { const mx = 6.8, mz = -4.55; B.cyl(mx, 0.0, mz, 0.22, 0.22, 0.03, 8, P.black); bar(B, [mx, 0.03, mz], [mx, 1.3, mz], 0.032, 0.032, P.steelL); bar(B, [mx, 1.3, mz], [mx - 0.05, 1.5, mz + 0.2], 0.026, 0.026, P.steelL);
+      B.lathe([[0.045, 0, P.ink], [0.06, 0.05, P.ink], [0.06, 0.24, P.mustard], [0.05, 0.27, mix(P.mustard, P.cream, 0.4)], [0.0, 0.28, P.cream]], 9, mx - 0.05, 1.46, mz + 0.2, {}); B.push(mx - 0.05, 1.6, mz + 0.36, 0, 1, Math.PI / 2); B.lathe([[0.13, 0, P.ink], [0.135, 0.012, P.inkL], [0.0, 0.012, P.cream]], 12, 0, 0, 0, {}); B.pop();
+      B.cyl(6.0, 0, -4.95, 0.17, 0.2, 0.55, 8, P.coral); B.cyl(6.0, 0.55, -4.95, 0.2, 0.2, 0.05, 8, mix(P.coral, P.cream, 0.3)); B.box(6.0, 0.6, -4.95, 0.34, 0.025, 0.2, P.cream, { base: 0, ry: 0.4 });
+      B.lathe([[0.04, 0, P.tealL], [0.04, 0.2, P.tealL], [0.02, 0.24, P.ink]], 7, 7.1, 0, -3.75, {});
+      bar(B, [6.0, 0.03, -3.85], [6.0, 1.15, -3.85], 0.025, 0.025, P.steelD); B.box(6.0, 1.05, -3.87, 0.34, 0.24, 0.012, P.cream, { base: 0 }); B.box(6.0, 1.0, -3.9, 0.3, 0.015, 0.05, P.steelD, { base: 0 });
+      // headphones on the west foam
+      B.lathe([[0.05, 0, P.pink], [0.05, 0.03, P.pinkL], [0, 0.03, P.pink]], 8, 5.62, 1.3, -4.7, { }); B.lathe([[0.05, 0, P.pink], [0.05, 0.03, P.pinkL], [0, 0.03, P.pink]], 8, 5.62, 1.3, -4.45, {});
       hit.box(6.47, -4.4, 1.03, 1.1, 0); }
     S.lights.push({ x: 6.5, y: 2.0, z: -4.6, color: '#c77dff', r: 3.2, i: 0.5, kind: 'neon' });
     S.anchors.boothSpot = { x: 6.05, z: -2.55, rot: Math.PI };
