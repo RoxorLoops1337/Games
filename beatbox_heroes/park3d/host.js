@@ -123,10 +123,11 @@ export function createHost(target, opts) {
       spec = trackListeners(listenTargets, rec, () => create(ctx, args)); if (spec && typeof spec.then === 'function') spec = await spec;
       if (tok !== tokenSeq || disposed) { safe('stale dispose', () => { if (spec && spec.dispose) spec.dispose(); if (spec && spec.mini && spec.mini.dispose) spec.mini.dispose(); }, null); kit.disposeTree(scene); removeTracked(rec, before); return null; }
       w = trackListeners(listenTargets, rec, () => assemble(id, args, ctx, scene, camera, wevents, spec));
-      if (shared.post && shared.post.setFloor) safe('post floor', () => shared.post.setFloor(ctx.postRung || 0), null);
+      if (shared.post && shared.post.setFloor) safe('post floor', () => shared.post.setFloor(Math.max(/[?&]hdr=1/.test(QS) ? 0 : 2, ctx.postRung || 0)), null);
       camera.aspect = (W || 9) / (H || 16); camera.updateProjectionMatrix();
       await nextFrame();
-      if (tok === tokenSeq && !disposed && PERF && (opts.precompile === true || /[?&]precompile=1/.test(QS))) await precompile(scene, camera);   // opt-in: compileAsync with KHR_parallel_shader_compile left real-GPU desktops on a black scene
+      if (tok === tokenSeq && !disposed && PERF && (opts.precompile === true || /[?&]precompile=1/.test(QS))) await precompile(scene, camera);   // 8-bit post by default: on real GPUs bright additive glow (neon, sparkles, string lights) overflowed the half-float buffer to Inf, the bloom blur spread it as NaN and whole frames flickered black. ?hdr=1 restores HDR.
+      // opt-in: compileAsync with KHR_parallel_shader_compile left real-GPU desktops on a black scene
       if (tok !== tokenSeq || disposed) { w.ready = false; cur = w; w.rec = rec; w.before = before; unloadNow(); return null; }
     } catch (e) { safe('cleanup', () => { if (spec && spec.dispose) spec.dispose(); kit.disposeTree(scene); scene.clear(); removeTracked(rec, before); renderer.renderLists.dispose(); }, null); throw e; }
     w.rec = rec; w.before = before; cur = w; window.__park = w.world; drawn = 0; shadowN = 0; settleN = 0; resize(W || undefined, H || undefined);

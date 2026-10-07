@@ -68,7 +68,7 @@ export function createPost(ctx, S) {
     frames = 0; blankRun = 0; rung = Math.max(base, floor); stats.rung = rung;
     if (q === 'low' || rung >= 3) { active = false; if (overlay) overlay.style.display = 'block'; return; }
     active = true; if (overlay) overlay.style.display = 'none';
-    const rt = new THREE.WebGLRenderTarget(Math.max(2, W * DPR), Math.max(2, H * DPR), { type: rung >= 2 ? THREE.UnsignedByteType : THREE.HalfFloatType, samples: rung === 0 ? (q === 'high' ? 4 : 2) : 0 });
+    const rt = new THREE.WebGLRenderTarget(Math.max(2, W * DPR), Math.max(2, H * DPR), { type: rung >= 2 ? THREE.UnsignedByteType : THREE.HalfFloatType, samples: (rung === 0 || (rung === 2 && base < 2)) ? (q === 'high' ? 4 : 2) : 0 });
     if (!targetOK(rt)) { rt.dispose(); base = rung + 1; try { console.warn('Park3D: post target incomplete on rung ' + rung + ', using rung ' + base); } catch (e) { /* ignore */ } build(q); return; }
     comp = new EffectComposer(renderer, rt); comp.setPixelRatio(DPR); comp.setSize(W, H);
     rp = new RenderPass(scene, camera); const orig = rp.render.bind(rp);
