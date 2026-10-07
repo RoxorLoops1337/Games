@@ -8847,3 +8847,260 @@ Screenshots (390 x 844 English, 360 x 780 Dutch): scratchpad `r30restock/shots.m
 - A played card shows two numbers at most: Coin Return's 2 Block is in the header's total, not on its card.
 - The tip text and the Wholesale Card speak of "an extra 10%"; the popovers read the live `restockPct`, the tip card
   does not quote a percentage.
+
+## Art pass (round 31)
+
+### UI, HUD and characters (artist E, prefix `uix`)
+
+Code: render.js UIX block (after `intent()`, exported as `RENDER.uix`), game.js UIX block (after `refreshHud`),
+index.html `#uixRoom` markup and `<style id="uix-css">`, gallery.html.
+
+- **The room around the machine.** `#uixRoom` sits in `#wrap` under `#stage` (three static layers, no animation): a
+  marquee rail of warm bulbs over the stage (`.uixCeil`, its height is the phone's top band `50vh - 88.89vw`), a dim tile
+  floor in perspective with the cabinet's pink spill (`.uixFloor`), and on the fight (and Claw School) the cabinet's
+  lacquered base with a coin door under the stage (`.uixPlinth`). The map swaps the room for a starry night. `setScreen`
+  stamps `#wrap[data-scr]` (`uixScreen`); `resize()` and the stage math are untouched.
+- **Card art first.** `itemCard` (and the shop's relic card) put the art in a `.uixArt` window: on the reward, shop and
+  forge (`.m2Stop .card.uixCard`) it is a 112 px lit window, the item fitted to ~70 px (small prizes scale up, `uixArt`
+  draws it once at 96 px), a pedestal with a contact shadow, a rarity glow and slow rays (uncommon cyan, rare gold,
+  legendary three-colour), a 2 degree idle sway; elsewhere the window is `display: contents` and the old layouts hold.
+  `btn` ids, labels and `choose` indices are unchanged. The shop's reroll reel steps over the window (`rrReel`).
+- **Intents.** `uixBinIcon` gives each bin trick its own glyph in the intent bubble: shake (the cabinet rattling between
+  motion arcs), grease (an oil drop with a sheen and a drip), fog (a cloud over a pane of glass), junk (a rock dropping
+  into the bin), tilt (the cabinet knocked over with a curved arrow), steal (a glove closing on a coin), freezeItem (a
+  prize locked in an ice cube). Unknown kinds keep the crate.
+- **Status glyphs.** `uixStatusGlyph(ctx, id, x, y, size)` draws every `DATA.STATUS` id (skull, flame, snowflake, ice
+  cube, wilted sword, cracked shield, fist, anger vein, hex nut, clover ...); an unknown id gets a lettered disc. The DOM
+  (the status strip, its list and tip cards, the enemy popover, Help) uses `uixStatusUrl(id)`: one 48 px PNG data URL
+  per id, baked once. Headless, or with no canvas export, the emoji stays (nothing is ever blank). A painted
+  `art/status/<id>.png` still wins. The canvas `statusPips` glyphs are untouched (WS-B).
+- **Crawler faces.** `portrait(ctx, id, x, y, size, t, o)`: o.mood `hurt | happy | sad | blink`. The knight, alchemist,
+  rogue and gambler are drawn by `uixFace` (Sir Grabsworth: visor up, ginger moustache, swaying plume; Mira: a bun with
+  a test tube, eyes behind green goggles; Pip: a peaked hood, a pink lock, a domino mask over gold eyes, a smirk, a
+  flipping coin, a dagger hilt; Lucky Lou as before with a live eye). Mama Mech, Ms. Bubbles and Joy Stick get their
+  lids and mouths from `uixFaceOver`. Each crawler blinks on its own clock (`UIX_BLINK`, never in calm). The unknown
+  fallback keeps the faceless hood.
+- **HUD life.** `uixTick` (from `update`) redraws the HUD portrait only when its face changes: the blink, a wince for
+  0.55 s when the hp drops (the canvas shakes red, `.uixOuch`), a worried face under 30% hp. The lost hp breaks off the
+  bar's end as a chunk that tumbles away (`uixChunk`, not in calm); the fill has a gloss and a slow sheen.
+- **Run end.** `RENDER.uix.runEnd(ctx, 540, 230, {kind, char, items, t, now, calm})` under the title of the win and game
+  over screens (`uixEndArt`, kept out of Run details by `m3Score`): win, the run's rarest prizes drop into a pile, the
+  crawler lands on it (squash, then cheering hops, arms up), the Prize Master's top hat tumbles away, confetti; loss,
+  the claw lowers the crawler sealed in a capsule onto the prize shelf beside the other crawlers, lets go, the capsule
+  wobbles, a ticket tag swings, the lamp flickers. 2.4 s entrance (it waits while the death recap card is up), then 30
+  fps idle while on screen; calm draws the last frame once.
+- **Transitions.** One arcade family: the iris into a fight, the skewed neon swipe between stops, and for menus a
+  shutter (the dark slides off behind a pink and cyan scanline edge, `#wipe.fade`). Reduced motion keeps no wipe.
+- **Map help line.** Two rows on a phone; a tap opens the whole line (`.hint.uixOpen`), a second tap closes it.
+- **gallery.html** is the art team's review page: every DATA item, relic, enemy (7 states), status, intent kind, claw
+  type (on a real `PHYS.clawRig`), cabinet, capsule and mini, VS card, event scene, hex, backdrop, run-end picture and
+  the title, with a play-size / 2x toggle and a dark / light backdrop. Canvases size to their content.
+
+### Enemies and bosses (artist A, prefix `ena`)
+
+Code: render.js ENA block (just before `RENDER.enemy`: `ENA_DEATH`, `ENA_RANGED`, `ENA_FACE`, `ENA_EYES`, `enaBurst`,
+`enaCracks`, `enaOuch`, `enaBrows`, `enaSil`), the rewritten `enemy()` and `lungeCurve`, the new `EA.*` drawings after
+`EA.blob` (`ENA_OWN` maps an enemy id to its own drawing), `finale`, `vsCard`, `bestPose`; game.js ENA block after
+`anim()` (`ENA_K`, `enaImpact`, `enaCastOf`, `enaCrack`, `enaRecoil`), the animation timers, the enemy loop in
+`drawFight` (`EST` gained `hk hf hcrit cast castK crack aimX aimY`) and `finLayer`. Visual only: no combat number, no
+physics shape and no art key changed (the own drawings go through `ENA_OWN`, not a data `look`, because a `look`
+makes the season's party hats skip the enemy).
+
+- **Hit.** A clock per enemy (`anim.hk`, seconds since the hit; `hf` for the flash). Two frames of white, then a pink-red
+  tint that is gone by 260 ms; a squash on contact (1.2 / 0.83) that springs back with an overshoot (a damped cosine);
+  a lean away from the blow and an eased recoil slide (`enaRecoil`, 12 px, 1.6x on a crit); the eyes squeeze shut
+  (`LIFE.blink`) under worried brows (`ENA_EYES`) and three "ouch" ticks pop off the brow. A crit adds a four-ray star
+  behind the body. The hit stop holds the impact pose (`hk` runs at 0.15x while `FS.hitStop` stops the physics), the
+  flash keeps real time. Read off `st.hurt` when a caller passes no clock (gallery, story).
+- **Attack.** Wind-up (`st.windup`): squash down, lean back, a tremble at the top, a red pulse and a glint in the eye.
+  Strike (`st.attack` 1 -> 0, 0.4 s, `lungeCurve`): a 70 ms snap with a stretch, speed lines and a smear ghost, an
+  80 ms impact squash at full reach, an eased return that overshoots a little. Ranged attackers (`ENA_RANGED`) kick back
+  and fire a tapered beam at the player (`st.aimX/aimY`). On the player's side the strike's frame gets `enaImpact`: a
+  50 ms hit stop (inside the MIX budget), a ring and sparks in the enemy's colour on the HP stat and a kick toward it.
+- **Cast.** When an enemy's turn comes up, `enaCastOf` reads its queued events: a debuff on you (it leans in, purple
+  waves), a buff on itself (it puffs up, a ring and rising sparkles), Block (it hunkers, a shield arc) or a bin trick
+  (it reaches down at the cabinet, a dotted arc). An attack keeps the strike.
+- **Death** (`st.dead`, now 0.8 s: `ENA_K.deadRate` 1.25). A 160 ms anticipation (a growing shudder, an inhale squash,
+  a white-hot flicker; steady and dim under reduced flashing), then by family (`ENA_DEATH`): **pop** (slimes,
+  mushrooms, the Hoard: a stretch, a goo burst and a splat), **scrap** (machines, knights, mimics, Glacius: parts and
+  hex nuts, a smoke ring), **poof** (ghosts, mages, cultists, the Prize Master: it stretches up and fades into a puff
+  ring with sparkles), **ko** (beasts and goblins: flung up and back, spinning, dizzy stars, off the floor line).
+  Every family turns into prizes: ticket stubs, spinning coins and confetti (`enaBurst`, deterministic from the seed,
+  no allocation; 60% on Low quality or reduced motion).
+- **Boss finale.** No whiteout. `finLayer` darkens the screen around the body (a soft spotlight, 0.55 at most) while the
+  blasts chain; `enemy()` draws glowing cracks with light leaking through (`st.crack` = the finale's progress) and the
+  body trembles harder; the pop is a tinted flash of two frames at 0.45 (`accWhite` caps it under reduced flashing),
+  rays from the body, then the dark lifts over 0.6 s. The chained blasts no longer re-flash the body.
+- **Own drawings** (were reused): Glacius, the Ice Box (a towering enamel freezer, a crown of icicles, a frosted window
+  face, a door mouth of icicles that breathes cold puffs, coolant hose arms and ice cube fists), Brood Mother (a bloated
+  banded abdomen with three wriggling egg sacs and webbing, eight long jointed legs with knees over the body, an eye
+  cluster, fangs and a tiara), High Cultist (a taller robe with a gold hem, a halo of five floating candles, four arms:
+  two raise candles, two hold out the 11/12 gold punch card, a porcelain mask), The Frozen Knight (a great helm with a
+  T visor and cold eyes, an ice crest, icicled pauldrons, a frayed frosted cape, an ice greatsword planted in front),
+  Rime Cap (snow heaped on the cap, frost spikes, icicles off the rim, cold breath), Hungry Gloop (drippy, see-through,
+  a coin and a fish bone floating inside, a tongue licking its lips), Oil Slick (slumped in a puddle of oil, rainbow
+  sheen, heavy lids, a drip). Slimeling keeps the slime (it is one, fun-sized).
+- **Redraws.** The Smelter (cast-iron pot belly, chimney horns that smoke, a roaring grate mouth with molten drips,
+  coal eyes under a brow plate, a ladle of slag, embers), Lodestone (a horseshoe with a face on its arch, chrome fists,
+  a field crawling between the poles, nuts and bolts orbiting in depth), Ironjaw (a hunched dozer on rolling treads, a
+  steel underbite on a hydraulic ram that sparks, a visor face, a hazard band, the crane claw on its back, a smoking
+  exhaust), the Prize Master (a cape spread wide with a pink lining and a scalloped hem, gold epaulettes, a top hat with
+  a chasing marquee of bulbs, a cane topped with a glowing golden ticket, a claw familiar hovering over his glove).
+- **Idle.** A deeper breath that keeps its volume (2.8%, bosses 4.5%) and a slow weight sway, each enemy on its own
+  phase and rate; the new drawings carry their own secondary motion (breath puffs, drips, candles, smoke, orbits).
+- **VS card.** Halftone dots on the enemy's half, the enemy larger and rim-lit in its colour (`st.sil`: a one-colour pass
+  of the same pose), a wind-up as VS comes down and a lunge on the slam, VS at 80% so the seam shows, the slam's flash
+  two frames and tinted (0.08 under reduced flashing, it was a 0.75 white for 0.18 s), a crown or skull crest stamped
+  over the name.
+- **Frame cost.** Measured on the whole fight frame (Chromium with software raster, 390x844 at DPR 2, median of 90
+  frames, the old `RENDER.enemy` swapped in on the same page): three normals 28.0 ms old, 27.0-28.0 new; Glacius
+  18.9-21.9 old, 19.6-21.1 new; Brood Mother 26.2-29.5 old, 28.1-29.8 new; the Prize Master 19.1-19.5 old, 20.7-23.0
+  new; Ironjaw 31.3-33.5 old, 31.6-33.5 new. Within the run-to-run noise, at most about 5% on a boss. The beats (hit
+  tints, smear, burst) cost only while they play. `RENDER.ena.cache` (off) bakes each enemy into a sprite redrawn on
+  twos; on software raster it was slower (37-52 ms for three normals), so it stays a switch to try on devices.
+
+### Map and backgrounds (WS-D, prefix `mpx`)
+
+- **The fight arenas are painted stage sets** (`render.js` BG block: `bg()` hands the acts to `mpxArena`; the PNG
+  override `art/bg/act<n>.png` still wins). Each act lives in a 540 x 302 design frame (the floor line at 302, scaled
+  to any `w`, `h`) in four depth layers:
+  - **far** (baked): the wall or sky and the receding silhouettes;
+  - **far+** (live): act 2's turning gears and the conveyor's boxes, act 3's aurora (its own baked strip, drawn twice
+    out of phase so it shimmers);
+  - **near** (baked): the props that frame the enemy band at the left and right edges, the floor in one-point
+    perspective (`mpxFloor`), light pools, the vignette;
+  - **near+** (live): the act's neon sign on its board (ARCADE, FOUNDRY, VAULT; its rect still goes to the label
+    zone `Q9A.sign`, right of the INCOMING slot), the lit cabinet's rolling screen and the lamp (act 1), the furnace
+    breathing, steam, the lava thread and the gauge needle (act 2), glints on the crystal tips (act 3).
+  - Act 1, the Damp Arcade's back room: brick, a row of dead cabinets with faintly lit marquees, a hanging lamp (warm,
+    right of centre) against the neon's cool spill (left), a lit cabinet left and a claw machine right, worn checker lino.
+  - Act 2, the Clockwork Foundry: smokestacks, a catwalk and chains far back, a furnace (the key light) left, a pipe
+    bank with a valve and a gauge right, riveted deck plates, one thin lava channel darker than any enemy.
+  - Act 3, the Frozen Penthouse: tall windows on an aurora over a frozen skyline, moonlight shafts, an ice crystal
+    cluster left, a cabinet frozen in a block right, a polished floor that mirrors the windows, snow drifts.
+  - Value plan: the set stays a quarter darker and greyer than the enemies' mid-tones; the props sit at the edges.
+  - Cost: the still layers are baked once per act, design height and device scale (`MPX.L`, at most 4 entries, freed
+    on eviction); per frame a fight draws two blits plus a handful of shapes. The far layers move 40% less than the
+    camera shake (`fx.offset`), which reads as depth on every hit. No `shadowBlur`, no `Math.random`.
+  - Reduced motion: nothing drifts and the shake parallax is off; reduced flashing (`ACC.noFlash`) or reduced motion
+    holds the neon steady.
+- **Seasons layer on top** (`seaSky`): a violet dusk, corner webs and two jack-o'-lanterns on the floor (Halloween,
+  the moon moved clear of the claw machine); a cold wash and frost ferns in the top corners (winter, with its garland,
+  snow and drifts as before).
+- **Fight dust**: in an act 1 fight the ambient fireflies become warm dust motes drifting in the lamp light
+  (`ambientTick` kind 4); act 2 keeps embers, act 3 snow.
+- **The map**:
+  - the ground under the board per act (`mpxMapPaint`, baked in `mpxMapLayer`, one at a time): damp flagstones with
+    moss, puddles with a neon glint and lost tickets and coins (act 1); riveted iron plates with seams glowing from the
+    heat underneath (act 2); a frozen field with cracks, sparkles and ice shards (act 3);
+  - the board's thickness: `mpxSkirt` paints a side wall and a drop shadow under every hex in view before the ground,
+    so only the board's lower rim shows (baked with the still ground in `mapGround`'s layer);
+  - a soft dark plate under every pickup icon on terrain (`mpxPlate`), strongest on snow;
+  - the darkness is 0.86 (was 0.92) so the hidden land's relief shows faintly, and banks of fog drift over it
+    (`mapAxis`, new last argument: the biome; off in light quality);
+  - `BIOME_PAL`: act 2's lava is a dark crust (`sea #6e200b`), the heat only in the ripples and glowing cores; act 3's
+    snow sits at a mid blue-grey value so white chests and scrolls keep their edge.
+- **The crawler's map token** (`mpxToken`, state in `game.js mpxTokState`): one bobblehead standee, the portrait
+  medallion as the head on a small body in the crawler's colour with a claw-cabinet backpack (no more body poking out
+  above a disc). The hop's lift and timing stay ACCESS's (`accHopBegin` / `accHopInfo`); on top of it the legs tuck
+  in the air, the token faces the way it walks, the shadow stays on the ground and shrinks as it rises
+  (`mpxTokenShadow`), the last landing squashes and settles with a bounce and rolls three dust puffs
+  (`mpxTokenDust`), and when idle it breathes and shuffles every 3.6 s, turning round every other time. Reduced motion:
+  none of it. `R.crawler` (intro, the vault trail) is unchanged.
+
+### Items and relics (artist B, prefix `itx`)
+
+- **The readability pass on every item sprite** (`itxPost`, render.js ITX block after `itemArt`). The bin is read at
+  24 to 40 px, so after an item's own drawing the cached sprite gets: a thin white rim just inside its upper-left edge
+  (one key light, upper left, like `tone()`), a soft ink band inside its lower-right edge (the value range), and the
+  rarity ring: an even outline all round (uncommon cyan, rare gold, legendary gold inside pink). The ring replaces the
+  old `polRim` silhouette nudged up-left, which read as print misregistration; `polRim` stays for the live path
+  (headless, a FLAT pass, a scale past the sprite cap). It is compositing of the sprite's own alpha on one scratch
+  canvas (`itxTmp`), done once per sprite build, so the per-frame cost does not change. `RENDER.itx.on = false` turns
+  it off for before / after comparisons (sprites carry it as `sp.xk`, next to the POLISH key `sp.dk`). A PNG override
+  keeps its own look.
+- **Redrawn silhouettes** (inside the same physics boxes; data.js untouched): the starters and the most common
+  prizes. Rusty Sword (bright steel blade with a lit bevel and a fuller, a gold guard as tall as the box, a red leather
+  grip, rust as orange bloom on the lower edge), Dented Shield (steel rim, royal blue field, gold boss, crease and a
+  riveted patch: it read as a rock), Shiv (red rag grip, bright shard), Hex Bolt (brass head, steel shank with bold
+  threads), Tin Plate (bowed plate with a black and orange hazard band), Iron Chain (warm iron with rust specks, a
+  brighter glint per link). Shared drawers that many items use: `IA.torch` (fire is always fire; the stick takes the
+  darker tint, so it is no longer a carrot), `IA.bone` (one inked cartoon bone, not a dumbbell), `IA.whetstone` (a
+  two-grit stone), `IA.feather` (a notched vane that may spill past a very thin box, a quill through it),
+  `IA.cookie` (a folded fortune cookie with a crease and the slip, not a taco), `IA.chain` (brighter glints), and
+  the unknown-key crate shows a "?" instead of a clipped word.
+- **Big card art** (`RENDER.itemPortrait(ctx, def, plus, p, t, o)`, used by `game.js itemCanvas`). DOM item art used
+  to keep its bin size (a 22 px coin in an 84 px card window). Now every item fills the box, long thin items lie on
+  the diagonal, and at card size (p >= 56) there is a floor shadow and a rarity back light: uncommon a cyan glow,
+  rare gold rays, legendary turning rainbow rays (faded radial fills, so no ray ends on the canvas edge). Rare and
+  legendary cards also bob slowly, get a shine sweep over the item's own pixels (source-atop) every 3.4 s and two
+  twinkles; `polTick` redraws only those (`ITX_IL`, at most 24, detached canvases drop out), never under reduced
+  motion (`feelReduced`). The portrait needs a canvas of its own (it composites with source-atop and
+  destination-over). Card layout and size are artist E's.
+- **Drawn relic glyphs** (`ITX_GLYPH`, `itxGlyph`, POLISH block after `polBadge`). Every one of the 138 relics now
+  draws a vector glyph in the medallion instead of an OS emoji (the 19 Tech and combo relics keep `techGlyph` /
+  `crGlyph`). Glyphs are written in unit space (the inner disc is radius 1) with small helpers: `igT` (toned shape
+  with the ink outline), `igU` (an inked union of several parts), `igS` (an inked line), and pictograms `igHand`,
+  `igFlame`, `igFlake`, `igCoin`, `igDie`, `igTicket`, `igHourglass`, `igBottle`, `igJar`, `igCrown`, `igClaw`,
+  `igGear`, `igBolt`, `igArrowArc`, `igBubble`. Glyphs whose function takes `t` animate (a ringing bell, rising
+  bubbles, a turning wheel, a ticking timer); the static ones are drawn once per size into a bitmap
+  (`itxGlyphBitmap`, 240 at most) and blitted. The emoji remains the fallback for any relic without an entry, and
+  `RENDER.itx.glyphs = false` brings the emoji back (comparisons).
+- **Capsules**: once the prize card is up the burst rays settle into the tier colour, narrower and dimmer
+  (`drawCapsule`), the legendary moment's additive rays are softer (`gacha.legend`) and the open capsule's white glow
+  is capped at 0.55, so a legendary no longer greys out the whole screen behind its card.
+- Status glyphs are artist E's (`uixStatusGlyph`); none were added here.
+- Frame cost (swiftshader, median of 6): 20 bin items with their fx 0.39 ms a frame (sprites, unchanged path), 8 HUD
+  relic badges redrawn 0.23 ms (0.14 ms with the emoji), 3 live card portraits 0.6 ms.
+
+### Cabinet, claw and FX (artist C, prefix `cbx`)
+
+Visual only: no physics shape, hitbox, timing or number changed. The chute width still comes from `cfg.chuteW`
+(`cupCW()`), every new drawing honours `fx.reduced` (motion), `ACC.noFlash` (flashing) and `fx.lite` (Quality Low).
+
+- **The cabinet is a lit object** (render.js CABINET, the CBX helpers after `cabinet()`). Everything static is baked
+  into `cabLayer`'s one cached canvas by `cabStatic`: `cbxFrame` (the plain frame's lacquer sheen, a bevel, four
+  screws), `cbxPlate` (the marquee lightbox in the top band; the top row of bulbs, and the Halloween and winter bulb
+  rings, leave it clear via `cbxPlateW`), `cbxWall` (the back wall lit from a lamp under the top frame, an LED strip,
+  a warm light cone down to the bed), `cbxPoster` (the plain cabinet only: a recessed poster panel with a sunburst
+  and a star badge and two shelves of out-of-focus plush, `cbxPlush`, at about 30% value under a depth fog; skins keep
+  their own `vPanel` pattern), `cbxFloor` (the sloped prize bed: perspective seams, the lamp's pool, a lit lip, the
+  shade under the pile; the floor wedges take the same tread) and `cbxChute` (a shaft deepening toward its well, a
+  backlit PRIZE plate, two arrows down, the well with its lip, hazard stripes and a lit far wall). The glass is its
+  own cached layer, `cbxGlass` (tint, edge sheens, two thin reflections, wipe streaks, the bottom reflection), with
+  the old two bands as the no-canvas fallback.
+- **Lights that answer events** (live, one stretched glow sprite each): `cbxLiveLights` (the lamp and the bed rim;
+  `st.lit` 0..1, `st.party`), `cbxMarqueeGlow`, `cbxGlint` (a glint across the glass every 9 s, every 2.5 s in a
+  party), `cbxRim` (a jackpot's gold rim and light chase round the frame, `st.rim`). `drawFight` feeds `lit` from
+  the chute flash and `FS.cbxJack` (set by `deliver` on a jackpot), and `rim` from the same clock.
+- **Held prizes keep their colours**: the cyan wash is gone; a held prize gets a soft white key light, two twinkles
+  (`RENDER.cbx.held`) and is left out of the magnet's metal tint; the claw's tips glow instead.
+- **Claw craft**: prongs are chrome rods in three steps (shadow side, body, hot edge) with glinting rivets; a braided
+  cable; a trolley carriage (`cbxCarriage`: wheels that turn with travel, a lamp that wakes when it moves, a pulley);
+  a ferrule on the head; the hub's hot specular; a rubber glove with a chrome cuff; enamel highlights, copper turns and
+  a field ring on the magnet; glints on the scoop and the harpoon.
+- **Claw motion** (`cbxMotion`, a spring state per rig in a WeakMap, so the rig is never touched; zero when reduced):
+  the carriage rocks against each start and stop and rings out, the cable bows with it (follow through), the hub
+  squashes when the prongs snap shut, a heavy lift hums down the cable (`J.strain`), a release bounces the carriage
+  and the head and twangs the cable (`cbxCable`).
+- **Throws**: two afterimages and a stretch along the flight, a squash as it lands (`drawFight`, `cbxThrowAt`).
+- **RENDER.fx** (all additive, the old presets and calls unchanged): new particle kinds `glow` (a soft sprite light),
+  `ribbon` (curling confetti), `ticket`, `twinkle`; sparks get a white-hot core, stars and twinkles a sprite glow
+  (skipped on lite), coins an edge, a raised ring and a glint, confetti two-tone and fluttering. Rings spread on an
+  out-quart; `ring(..., {style: 'impact'})` adds the impact frame (a white disc for its first frames, dimmed by
+  reduced flashing) and a trailing ring. Numbers pop 0.35 to 1.45 to 0.9 to 1 in the first quarter of their life, then
+  float and ease down as they fade, over a soft drop shadow; a crit slams in on a spinning gold starburst. New
+  presets for everyone: `deliver`, `jackpot`, `coinBurst`, `ticketBurst`, `impact`, `sparkle` (`fx.PRESETS` lists
+  every name), and `fx.impact(x, y, col, {r, power, n})` (ring plus burst).
+- **Deliver and jackpot** (`deliver`): a delivery is the `deliver` preset plus an impact ring and a gold shaft out of
+  the well (`RENDER.cbx.chuteLight`); a jackpot adds a beat of hit stop (0.1 s), a coin geyser with ribbons
+  (`jackpot`), a big impact ring, a soft gold flash (capped by reduced flashing), the lamp and bed rim flare and the
+  gold frame rim.
+- Phone letterbox (artist E's CSS): the cabinet's base reads best continued as a dark lacquered plinth
+  (`#1d1233` to `#0f0a1f`, a 1 px `rgba(255,255,255,0.08)` top edge) with a faint pink floor glow
+  (`rgba(255,46,136,0.12)` radial under the cabinet), and above the stage a deep purple fade from `#1b1030` up to
+  `#0b0616`.
+- Frame cost (swiftshader in Playwright, HEAD against this pass, min of rounds): the whole fight `draw()` 0.77 to
+  0.80 ms idle (+5%), 0.73 to 0.86 ms before vs 0.88 ms after mid-grab (noisy, about +10%); per call, cabinet back
+  and front 0.101 to 0.109 ms (0.111 to 0.133 in a party), the claw 0.053 to 0.089 ms, `fx.draw` with a confetti,
+  coins and crit burst live 0.10 to 0.20 ms (only while particles live).
