@@ -295,7 +295,7 @@ const minifyClawspire = () => {
     stamp(distIndexPath);
     stamp(sourceIndexPath);
     // the Park3D bundle is also loaded by standalone pages (park, flat, mini games): pin their hash too, or phones keep a stale bundle
-    if (bundleBaseName === 'park3d.bundle.js') for (const page of ['park3d.html', 'flat3d.html', 'minigames3d.html']) { stamp(path.join(distGameDir, page)); stamp(path.join(REPO, sourceGameDir, page)); }
+    if (bundleBaseName === 'park3d.bundle.js') for (const page of ['park3d.html', 'flat3d.html', 'minigames3d.html', 'world3d.html']) { stamp(path.join(distGameDir, page)); stamp(path.join(REPO, sourceGameDir, page)); }
     console.log(`hash-stamped    → ${bundleBaseName}?v=${hash}`);
   }
 })().catch((err) => {

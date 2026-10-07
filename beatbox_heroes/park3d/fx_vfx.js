@@ -2,7 +2,7 @@
 // writes a few uniforms per frame, no allocations). Draw calls (all additive or soft alpha, depthWrite off):
 //   1 glow cards (lamp halos + neon + stage glow)   2 lamp cones + ground light pools   3 god rays   4 fireflies and dust motes   5 floating music notes
 // (the sky dome is the 6th call and lives in lighting.js).
-import { THREE } from './kit.js';
+import { THREE, disposeTree } from './kit.js';
 
 const GLSL_OUT = '\n#include <colorspace_fragment>\n';
 function additive(extra) { return Object.assign({ transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide }, extra); }
@@ -33,7 +33,7 @@ export function buildVFX(ctx, terrain, S) {
   if (terrain.interior) return buildInteriorVFX(ctx, terrain, S);
   const group = new THREE.Group(); group.name = 'fx';
   const R = ctx.kit.rng(90210); const a = terrain.anchors || {};
-  const U = { uTime: { value: 0 }, uSunDir: { value: S.sunDir }, uSunCol: { value: S.sunCol }, uLamp: { value: 0 }, uNeon: { value: 0 }, uRay: { value: 0 }, uFly: { value: 0 }, uDust: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uPx: { value: 900 }, uOn: { value: 0 }, uOrigin: { value: new THREE.Vector3(8, 1.3, -8) }, uStage: { value: 0 }, uGain: { value: 1 } };
+  const U = { uTime: { value: 0 }, uSunDir: { value: S.sunDir }, uSunCol: { value: S.sunCol }, uLamp: { value: 0 }, uNeon: { value: 0 }, uRay: { value: 0 }, uFly: { value: 0 }, uDust: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uPx: { value: 900 }, uOn: { value: 0 }, uOrigin: { value: new THREE.Vector3(8, 1.3, -8) }, uStage: { value: 0 }, uGain: { value: 1 }, uWet: { value: 0 } };
   const mats = [];
 
   // ---------- lamp list (terrain.anchors.lamps, else sensible fallback along x=-4 and x=4 every 8 m) ----------
@@ -52,14 +52,14 @@ export function buildVFX(ctx, terrain, S) {
   const cd = new Float32Array(cards.length * 4), cp = new Float32Array(cards.length * 3), cc = new Float32Array(cards.length * 3);
   cards.forEach((q, i) => { cp.set([q[0], q[1], q[2]], i * 3); cd.set([q[3], q[4], q[5], q[6]], i * 4); cc.set([q[7], q[8], q[9]], i * 3); });
   const cardMat = new THREE.ShaderMaterial(additive({ uniforms: U, vertexShader: `
-    attribute vec3 iPos; attribute vec4 iData; attribute vec3 iCol; uniform float uTime, uLamp, uNeon, uStage; varying vec2 vUv; varying vec4 vC;
+    attribute vec3 iPos; attribute vec4 iData; attribute vec3 iCol; uniform float uTime, uLamp, uNeon, uStage, uWet; varying vec2 vUv; varying vec4 vC;
     void main(){ vUv = position.xy * 2.0; float k = iData.w;
       float on = k < 0.5 ? smoothstep(iData.z * 0.6, iData.z * 0.6 + 0.4, uLamp) : (k < 1.5 ? uNeon * (0.8 + 0.2 * sin(uTime * 3.0 + iData.z * 40.0)) : uStage);
       float fl = 1.0 + 0.05 * sin(uTime * 9.0 + iData.z * 40.0) + 0.03 * sin(uTime * 23.0 + iData.z * 13.0);
-      vC = vec4(iCol, iData.y * on * fl); vec4 mv = viewMatrix * vec4(iPos, 1.0); mv.xy += position.xy * iData.x; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `uniform float uGain; varying vec2 vUv; varying vec4 vC;
+      vC = vec4(iCol, iData.y * on * fl); vec4 mv = viewMatrix * vec4(iPos, 1.0); mv.xy += position.xy * iData.x * (1.0 + 0.3 * uWet); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform float uGain, uWet; varying vec2 vUv; varying vec4 vC;
     void main(){ float r2 = dot(vUv, vUv); if (r2 > 1.0 || vC.a < 0.004) discard; float core = exp(-r2 * 16.0), halo = pow(1.0 - r2, 3.0);
-      gl_FragColor = vec4(vC.rgb * (core * 1.2 + halo * 0.45) * vC.a * uGain, 1.0); ${GLSL_OUT} }` }));
+      gl_FragColor = vec4(vC.rgb * (core * 1.2 + halo * (0.45 + 0.6 * uWet)) * vC.a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(cardMat);
   const cardGeo = instanced(new THREE.PlaneGeometry(1, 1), { iPos: { a: cp, n: 3 }, iData: { a: cd, n: 4 }, iCol: { a: cc, n: 3 } }, cards.length);
   const cardMesh = new THREE.Mesh(cardGeo, cardMat); cardMesh.frustumCulled = false; cardMesh.renderOrder = 10; group.add(cardMesh);
@@ -84,8 +84,8 @@ export function buildVFX(ctx, terrain, S) {
       float on = iS.w < 0.5 ? smoothstep(iS.z * 0.6, iS.z * 0.6 + 0.4, uLamp) : uStage; on *= 1.0 + 0.05 * sin(uTime * 9.0 + iS.z * 40.0);
       vC = vec4(iCol, on); vec3 nrm = normalize(vec3(position.x, 0.4, position.z)); vF = aKind > 0.5 ? 1.0 : pow(abs(dot(normalize(cameraPosition - wp), nrm)), 1.4);
       gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
-  fragmentShader: `uniform float uGain; varying float vT; varying float vK; varying vec4 vC; varying float vF; varying float vW;
-    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.7) * 0.32 : pow(1.0 - vT, 1.3) * (vW > 0.5 ? 0.06 : 0.42) * vF; a *= vC.a; if (a < 0.003) discard;
+  fragmentShader: `uniform float uGain, uWet; varying float vT; varying float vK; varying vec4 vC; varying float vF; varying float vW;
+    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.7) * 0.32 * (1.0 + 1.3 * uWet) : pow(1.0 - vT, 1.3) * (vW > 0.5 ? 0.06 : 0.42) * vF; a *= vC.a; if (a < 0.003) discard;
       gl_FragColor = vec4(vC.rgb * a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(coneMat);
   const coneGeo = instanced(coneBase, { iPos: { a: po, n: 3 }, iS: { a: ps, n: 4 }, iCol: { a: pc, n: 3 } }, cones.length);
@@ -131,15 +131,18 @@ export function buildVFX(ctx, terrain, S) {
   // ---------- control ----------
   let musicTarget = 0, tier = 'high';
   const lerpK = (v, to, k) => v + (to - v) * k;
+  // what the wet ground mirrors (fx_weather): lamps, neon strip, busking stage glow. kind 0 lamp, 1 neon, 2 stage; r,g,b already carry the strength
+  const reflectors = []; cards.forEach((q) => { reflectors.push({ x: q[0], y: q[1], z: q[2], kind: q[6], r: q[7], g: q[8], b: q[9], k: q[6] === 0 ? 0.9 : q[6] === 1 ? 0.7 : 0.8 }); });
   return {
-    group, mats, lamps, lampCount: lamps.length,
+    group, mats, lamps, lampCount: lamps.length, reflectors,
+    dispose() { disposeTree(group); },
     setMusic(on) { musicTarget = on ? 1 : 0; },
     setQuality(q) { tier = q; U.uGain.value = q === 'low' ? 0.42 : 1; ptGeo.setDrawRange(0, q === 'high' ? NP : q === 'med' ? 140 : 70); rayGeo.instanceCount = q === 'high' ? NR : q === 'med' ? 5 : 3; noteGeo.instanceCount = q === 'high' ? NN : q === 'med' ? 12 : 8; },
     setPixelHeight(px) { U.uPx.value = px; },
     update(dt, t, cx, cz) {
       U.uTime.value = t; U.uCenter.value.set(cx, 0, cz); const k = 1 - Math.exp(-dt * 3);
       U.uLamp.value = S.lamp; U.uNeon.value = S.neon; U.uRay.value = S.ray; U.uFly.value = S.fly; U.uDust.value = S.dust; U.uStage.value = S.stage;
-      U.uOn.value = lerpK(U.uOn.value, musicTarget, k); notes.visible = U.uOn.value > 0.01;
+      U.uOn.value = lerpK(U.uOn.value, musicTarget, k); notes.visible = U.uOn.value > 0.01; U.uWet.value = S.rain || 0;
     },
   };
 }
@@ -149,9 +152,9 @@ export function buildVFX(ctx, terrain, S) {
 // ======================================================================================================================================
 export const LIGHT_KIND = { lamp: 0, neon: 1, tv: 2, fridge: 3 };
 // the real lights/windows from the flat, or small stand-ins while the flat is still a stub (so the look can be developed on its own)
-export function interiorSource(terrain) {
+export function interiorSource(terrain, allowStub) {
   const lights = (terrain.lights || []).slice(), windows = (terrain.windows || []).slice();
-  if (lights.length || windows.length) return { lights, windows, fixtures: false };
+  if (lights.length || windows.length || allowStub === false) return { lights, windows, fixtures: false };
   return { fixtures: true,
     windows: [{ x: -7.5, y: 1.7, z: -1.2, w: 1.8, h: 1.4, nx: -1, nz: 0 }, { x: -7.5, y: 1.7, z: 2.4, w: 1.8, h: 1.4, nx: -1, nz: 0 }, { x: 1.5, y: 1.7, z: -5.5, w: 2.4, h: 1.4, nx: 0, nz: -1 }],
     lights: [{ x: -3.2, y: 1.25, z: 1.6, color: '#ffcf8a', r: 7, i: 1.0, flicker: 0.1, kind: 'lamp' }, { x: -6.2, y: 0.95, z: 0.6, color: '#7fd6ff', r: 5, i: 0.9, flicker: 0.5, kind: 'tv' },
@@ -160,13 +163,15 @@ export function interiorSource(terrain) {
 
 function buildInteriorVFX(ctx, terrain, S) {
   const group = new THREE.Group(); group.name = 'fx'; const R = ctx.kit.rng(4242); const mats = [];
-  const src = interiorSource(terrain), L = src.lights, Wn = src.windows.slice(0, 6);
+  const src = interiorSource(terrain, S.stubOK !== false), L = src.lights, Wn = src.windows.slice(0, 6);
   const b = terrain.bounds || { minX: -7.5, maxX: 7.5, minZ: -5.5, maxZ: 5.5 };
   const U = { uTime: { value: 0 }, uGain: { value: 1 }, uLv: { value: S.lv }, uShaft: { value: 0 }, uPatch: { value: 0 }, uShaftCol: { value: S.shaftCol }, uSE: { value: 0.8 }, uCE: { value: 0.6 },
     uPaneTop: { value: S.paneTop }, uPaneBot: { value: S.paneBot }, uPaneA: { value: 0.3 }, uNight: { value: 0 }, uDust: { value: 0 }, uMoteBase: { value: 0.2 }, uPx: { value: 900 },
     uCtr: { value: new THREE.Vector3((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2) }, uBox: { value: new THREE.Vector3(b.maxX - b.minX, 3.4, b.maxZ - b.minZ) },
     uWinC: { value: Wn.map((w) => new THREE.Vector4(w.x, w.y, w.z, w.w)).concat(new Array(6).fill(0).map(() => new THREE.Vector4())).slice(0, 6) }, uWinN: { value: Wn.map((w) => new THREE.Vector3(w.nx, w.nz, w.h)).concat(new Array(6).fill(0).map(() => new THREE.Vector3())).slice(0, 6) }, uNW: { value: Wn.length },
-    uOn: { value: 0 }, uOrigin: { value: new THREE.Vector3(0, 1.7, 0) } };
+    uOn: { value: 0 }, uOrigin: { value: new THREE.Vector3(0, 1.7, 0) },
+    uRain: { value: 0 }, uHaze: { value: 0 }, uBeat: { value: 0 }, uBeamAmt: { value: 0 }, uBeamMode: { value: 0 }, uColA: { value: new THREE.Color('#ff3d9a') }, uColB: { value: new THREE.Color('#7a3dff') }, uColK: { value: new THREE.Color('#ffe9c8') },
+    uStageC: { value: new THREE.Vector3() }, uExt: { value: new THREE.Vector2((b.maxX - b.minX) / 2, (b.maxZ - b.minZ) / 2) }, uSpark: { value: 0 }, uBall: { value: new THREE.Vector3() }, uMin: { value: new THREE.Vector3(b.minX + 0.05, 0.03, b.minZ + 0.05) } };
 
   // ---------- 1. glow cards (billboards) + floor light pools, one instanced draw ----------
   const cards = []; // x,y,z, size, intensity, phase, kind, r,g,b, floorFlag, flicker
@@ -214,13 +219,20 @@ function buildInteriorVFX(ctx, terrain, S) {
   const paneMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, uniforms: U, vertexShader: `
     attribute vec4 iA; attribute vec4 iB; varying vec2 vUv; varying float vPh;
     void main(){ vUv = position.xy + 0.5; vPh = iB.w; vec3 tg = vec3(-iB.y, 0.0, iB.x); vec3 P = iA.xyz + tg * position.x * iA.w + vec3(0.0, position.y * iB.z, 0.0); gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0); }`,
-  fragmentShader: `uniform vec3 uPaneTop, uPaneBot; uniform float uPaneA, uNight, uTime, uGain; varying vec2 vUv; varying float vPh;
+  fragmentShader: `uniform vec3 uPaneTop, uPaneBot; uniform float uPaneA, uNight, uTime, uGain, uRain; varying vec2 vUv; varying float vPh;
     float h2(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
     void main(){ vec3 col = mix(uPaneBot, uPaneTop, smoothstep(0.0, 1.0, vUv.y)); float a = uPaneA;
       vec2 g = vec2(vUv.x * 14.0 + vPh * 9.0, vUv.y * 9.0); vec2 id = floor(g); vec2 f = fract(g) - 0.5; float r = h2(id);
       float city = step(0.62, r) * step(vUv.y, 0.4) * smoothstep(0.3, 0.1, length(f)) * (0.7 + 0.3 * sin(uTime * 1.5 + r * 30.0)); col += vec3(1.0, 0.8, 0.45) * city * uNight * 1.3;
       vec2 g2 = vec2(vUv.x * 22.0 + vPh * 5.0, vUv.y * 14.0); vec2 id2 = floor(g2); float r2 = h2(id2 + 7.0); float st = step(0.93, r2) * smoothstep(0.25, 0.0, length(fract(g2) - 0.5)) * smoothstep(0.45, 0.8, vUv.y); col += vec3(0.9, 0.95, 1.0) * st * uNight * 1.2;
-      a = clamp(a + (city + st) * uNight * 0.4, 0.0, 0.85); gl_FragColor = vec4(col * uGain, a); ${GLSL_OUT} }` });
+      a = clamp(a + (city + st) * uNight * 0.4, 0.0, 0.85);
+      if (uRain > 0.01) { // rain outside the glass (thin sheared lines) and beads on it (a few slow trails), the sky gets greyer through uPaneTop / uPaneBot
+        float cl = vUv.x * 30.0 + vPh * 7.0 + vUv.y * 2.4, ci = floor(cl), hh = h2(vec2(ci, 1.7)); float fx = abs(fract(cl) - 0.5);
+        float yy = fract(vUv.y * 0.8 + uTime * (0.55 + hh * 0.9) + hh * 9.0); float line = smoothstep(0.1, 0.0, fx) * smoothstep(0.0, 0.05, yy) * (1.0 - smoothstep(0.05, 0.3, yy)) * step(0.35, h2(vec2(ci, 5.3)));
+        vec2 gu = vec2(vUv.x * 15.0 + vPh * 5.0, vUv.y * 10.0); vec2 id3 = floor(gu); float r3 = h2(id3 + 11.0); vec2 f3 = fract(gu) - 0.5 - (vec2(h2(id3 + 2.0), h2(id3 + 4.0)) - 0.5) * 0.5; f3.y *= 1.25;
+        float bead = step(0.5, r3) * smoothstep(0.19, 0.06, length(f3)); float trail = step(0.82, r3) * smoothstep(0.07, 0.0, abs(f3.x)) * step(0.0, f3.y) * smoothstep(0.5, 0.0, f3.y);
+        col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(0.9, 0.97, 1.08), 0.45 * uRain); col += vec3(0.7, 0.82, 1.0) * (line * 0.5 + bead * 0.38 + trail * 0.16) * uRain; a = clamp(a + (0.18 + line * 0.35 + bead * 0.3 + trail * 0.1) * uRain, 0.0, 0.92); }
+      gl_FragColor = vec4(col * uGain, a); ${GLSL_OUT} }` });
   mats.push(paneMat);
   const paneGeo = instanced(new THREE.PlaneGeometry(1, 1), { iA: { a: wA, n: 4 }, iB: { a: wB, n: 4 } }, Wn.length);
   const paneMesh = new THREE.Mesh(paneGeo, paneMat); paneMesh.frustumCulled = false; paneMesh.renderOrder = 7; paneMesh.visible = Wn.length > 0; group.add(paneMesh);
@@ -243,15 +255,64 @@ function buildInteriorVFX(ctx, terrain, S) {
   // ---------- 5. music notes (rise from the player) ----------
   const { notes, noteGeo, NN } = makeNotes(group, U, mats, R, [new THREE.Color('#ff3d9a'), new THREE.Color('#35f2e0'), new THREE.Color('#ffd23f'), new THREE.Color('#c77dff')]);
 
+  // ---------- 6. club / stage rig: coloured spot beams (cone + floor pool, ONE instanced draw) and disco-ball sparkles (ONE points draw). Hidden (not drawn) until a profile asks for them ----------
+  const NB = 6, anc = terrain.anchors || {}, ceilY = terrain.ceilY || 3.05; const rig = (anc.rig && anc.rig.length ? anc.rig : null);
+  const bA = new Float32Array(NB * 4), bB = new Float32Array(NB * 4);
+  for (let i = 0; i < NB; i++) { const r = rig && rig[i % rig.length]; const x = r ? r.x : b.minX + 1.2 + (i + 0.5) / NB * (b.maxX - b.minX - 2.4), z = r ? r.z : b.minZ + 1.0 + (i % 3) * 1.5, y = r && r.y ? r.y : ceilY;
+    bA.set([x, y, z, (i * 0.381966 + 0.07) % 1], i * 4); bB.set([0.55 + (i % 3) * 0.22, 0.17 + (i % 2) * 0.04, i % 3 === 2 ? 1 : i % 2, 0], i * 4); }
+  const SEGB = 12, bv = [], bt = [], bk = [], bi = []; bv.push(0, 0, 0); bt.push(0); bk.push(0);
+  for (let i = 0; i < SEGB; i++) { const an = (i / SEGB) * Math.PI * 2; bv.push(Math.cos(an), -1, Math.sin(an)); bt.push(1); bk.push(0); }
+  for (let i = 0; i < SEGB; i++) bi.push(0, 1 + i, 1 + ((i + 1) % SEGB));
+  const bdc = bv.length / 3; bv.push(0, -1, 0); bt.push(0); bk.push(1); for (let i = 0; i < SEGB; i++) { const an = (i / SEGB) * Math.PI * 2; bv.push(Math.cos(an), -1, Math.sin(an)); bt.push(1); bk.push(1); }
+  for (let i = 0; i < SEGB; i++) bi.push(bdc, bdc + 1 + i, bdc + 1 + ((i + 1) % SEGB));
+  const beamBase = new THREE.BufferGeometry(); beamBase.setAttribute('position', new THREE.Float32BufferAttribute(bv, 3)); beamBase.setAttribute('aT', new THREE.Float32BufferAttribute(bt, 1)); beamBase.setAttribute('aKind', new THREE.Float32BufferAttribute(bk, 1)); beamBase.setIndex(bi);
+  const beamMat = new THREE.ShaderMaterial(additive({ uniforms: U, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, vertexShader: `
+    attribute vec4 iA; attribute vec4 iB; attribute float aT; attribute float aKind; uniform float uTime, uBeamMode, uBeamAmt, uHaze, uBeat; uniform vec3 uColA, uColB, uColK, uStageC; uniform vec2 uExt; uniform vec3 uCtr;
+    varying float vT; varying float vK; varying vec3 vC; varying float vF;
+    void main(){ vT = aT; vK = aKind; vec3 apex = iA.xyz; float ph = iA.w, sp = iB.x; vec3 T;
+      if (uBeamMode < 0.5) { float a1 = uTime * sp * 0.8 + ph * 6.283, a2 = uTime * sp * 0.57 + ph * 11.0; T = vec3(uCtr.x + cos(a1) * uExt.x * 0.8, 0.0, uCtr.z + sin(a2) * uExt.y * 0.8); }
+      else { T = vec3(uStageC.x + cos(ph * 6.283) * 0.9 + sin(uTime * 0.5 * sp + ph * 9.0) * 0.4, 0.0, uStageC.z + sin(ph * 6.283) * 0.5 + cos(uTime * 0.4 * sp + ph * 7.0) * 0.25); }
+      vec3 dir = T - apex; float len = length(dir); vec3 ax = dir / len; vec3 rf = abs(ax.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0); vec3 u = normalize(cross(ax, rf)); vec3 v = cross(ax, u);
+      float rad = len * iB.y * (1.0 + 0.15 * uBeat); vec3 wp; vF = 1.0;
+      if (aKind < 0.5) { float al = -position.y; wp = apex + ax * (len * al) + (u * position.x + v * position.z) * rad * al; vec3 nrm = normalize(u * position.x + v * position.z - ax * iB.y); vF = pow(abs(dot(normalize(cameraPosition - wp), nrm)), 1.2); }
+      else { vec2 hd = ax.xz; float hl = length(hd); vec2 hdir = hl > 0.001 ? hd / hl : vec2(1.0, 0.0); float el = 1.0 / clamp(-ax.y, 0.35, 1.0); vec2 lp = position.xz * rad * 1.1; float pr = dot(lp, hdir); vec2 q = hdir * pr * el + (lp - hdir * pr); wp = vec3(T.x + q.x, 0.07, T.z + q.y); }
+      vec3 cc = iB.z > 1.5 ? uColK : (iB.z > 0.5 ? uColB : uColA); if (uBeamMode > 0.5 && iB.z < 1.5 && iB.x < 0.7) cc = uColK; vC = cc * uBeamAmt * (1.0 + 0.7 * uHaze) * (1.0 + 0.6 * uBeat);
+      gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
+  fragmentShader: `uniform float uGain; varying float vT; varying float vK; varying vec3 vC; varying float vF;
+    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.4) * 0.55 : pow(1.0 - vT, 1.2) * 0.2 * vF; if (a < 0.003) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
+  mats.push(beamMat);
+  const beamGeo = instanced(beamBase, { iA: { a: bA, n: 4 }, iB: { a: bB, n: 4 } }, NB);
+  const beams = new THREE.Mesh(beamGeo, beamMat); beams.frustumCulled = false; beams.renderOrder = 9; beams.visible = false; beams.name = 'beams'; group.add(beams);
+  const NSP = 72, sA = new Float32Array(NSP * 4), sE = new Float32Array(NSP); for (let i = 0; i < NSP; i++) { sA.set([R(), R(), R(), R()], i * 4); sE[i] = i < 14 ? 1 : 0; }
+  const spGeo = new THREE.BufferGeometry(); spGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NSP * 3), 3)); spGeo.setAttribute('aD', new THREE.BufferAttribute(sA, 4)); spGeo.setAttribute('aE', new THREE.BufferAttribute(sE, 1));
+  const spMat = new THREE.ShaderMaterial(additive({ uniforms: U, vertexShader: `
+    attribute vec4 aD; attribute float aE; uniform float uTime, uPx, uSpark, uBeat; uniform vec3 uBall, uMin, uColA, uColB; varying vec3 vC;
+    void main(){ float az = aD.x * 6.2832 + uTime * 0.38; float dy = -mix(0.1, 0.96, aD.y); float rr = sqrt(1.0 - dy * dy); vec3 dir = vec3(cos(az) * rr, dy, sin(az) * rr); vec3 P;
+      float vis = 1.0; if (aE > 0.5) { P = uBall + normalize(vec3(dir.x, abs(dir.y) * 0.6 - 0.15, dir.z)) * 0.3; vis = 0.8; }
+      else { float tx = dir.x < -0.01 ? (uMin.x - uBall.x) / dir.x : 1e5, tz = dir.z < -0.01 ? (uMin.z - uBall.z) / dir.z : 1e5, ty = (uMin.y - uBall.y) / dir.y; float tt = min(ty, min(tx, tz)); P = uBall + dir * tt; vis = step(tt, 40.0); }
+      float tw = pow(0.5 + 0.5 * sin(uTime * (3.0 + aD.w * 6.0) + aD.w * 40.0), 4.0); vec3 base = mix(vec3(1.0, 0.97, 0.92), mix(uColA, uColB, step(0.5, aD.w)), 0.55 * step(0.35, aD.z));
+      vC = base * (0.35 + tw * 1.4) * uSpark * vis * (1.0 + 0.8 * uBeat); vec4 mv = viewMatrix * vec4(P, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = max(2.0, (5.0 + 9.0 * aD.z) * uPx / 960.0 * (0.6 + tw)); }`,
+  fragmentShader: `uniform float uGain; varying vec3 vC; void main(){ vec2 d = gl_PointCoord - 0.5; float a = exp(-length(d) * 10.0) + (exp(-abs(d.x) * 24.0) * exp(-abs(d.y) * 4.0) + exp(-abs(d.y) * 24.0) * exp(-abs(d.x) * 4.0)) * 0.9; if (a < 0.02) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
+  mats.push(spMat);
+  const sparks = new THREE.Points(spGeo, spMat); sparks.frustumCulled = false; sparks.renderOrder = 12; sparks.visible = false; sparks.name = 'sparkles'; group.add(sparks);
+  const ball = anc.discoBall || { x: (b.minX + b.maxX) / 2, y: ceilY - 0.2, z: (b.minZ + b.maxZ) / 2 }; U.uBall.value.set(ball.x, ball.y, ball.z);
+  const stg = anc.stageCenter || anc.stage || { x: (b.minX + b.maxX) / 2, z: b.minZ + (b.maxZ - b.minZ) * 0.3 }; U.uStageC.value.set(stg.x, 0, stg.z);
+  let beamN = NB, sparkN = NSP;
+
   let musicTarget = 0, tier = 'high'; const lerpK = (v, to, k) => v + (to - v) * k;
   return {
-    group, mats, lamps: [], lampCount: 0, interior: true, lightList: L, fixtures: src.fixtures, windowList: Wn,
+    group, mats, lamps: [], lampCount: 0, interior: true, lightList: L, fixtures: src.fixtures, windowList: Wn, reflectors: [], U, ceilY, rigPos: bA,
+    dispose() { disposeTree(group); },
     setMusic(on) { musicTarget = on ? 1 : 0; },
-    setQuality(q) { tier = q; U.uGain.value = q === 'low' ? 0.5 : 1; ptGeo.setDrawRange(0, q === 'high' ? NP : q === 'med' ? 110 : 60); noteGeo.instanceCount = q === 'high' ? NN : q === 'med' ? 12 : 8; },
+    setQuality(q) { tier = q; U.uGain.value = q === 'low' ? 0.5 : 1; ptGeo.setDrawRange(0, q === 'high' ? NP : q === 'med' ? 110 : 60); noteGeo.instanceCount = q === 'high' ? NN : q === 'med' ? 12 : 8; beamN = q === 'high' ? NB : q === 'med' ? 5 : 3; sparkN = q === 'high' ? NSP : q === 'med' ? 52 : 30; },
     setPixelHeight(px) { U.uPx.value = px; },
     update(dt, t, cx, cz) {
       U.uTime.value = t; U.uShaft.value = S.shaft; U.uPatch.value = S.patch; U.uSE.value = Math.sin(S.elev); U.uCE.value = Math.cos(S.elev); U.uPaneA.value = S.paneA; U.uNight.value = S.night; U.uDust.value = S.dust; U.uMoteBase.value = S.moteBase;
       U.uOrigin.value.set(cx, 1.75, cz); U.uOn.value = lerpK(U.uOn.value, musicTarget, 1 - Math.exp(-dt * 3)); notes.visible = U.uOn.value > 0.01;
+      U.uRain.value = S.rain || 0; U.uHaze.value = S.haze || 0; U.uBeat.value = S.beatFx || 0; U.uBeamAmt.value = S.beams || 0; U.uBeamMode.value = S.beamMode || 0; U.uSpark.value = S.spark || 0;
+      U.uColA.value.copy(S.themeA); U.uColB.value.copy(S.themeB); U.uColK.value.copy(S.keyCol);
+      beams.visible = U.uBeamAmt.value > 0.01; beamGeo.instanceCount = S.beamMode > 0.5 ? Math.min(beamN, 4) : beamN;
+      sparks.visible = U.uSpark.value > 0.01; spGeo.setDrawRange(0, sparkN);
     },
   };
 }

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>r3 UI gallery</title>
+<!-- UI gallery (UI owner): loads the REAL game scripts of index.html (engine, core, screens, creator, places, game ...) with the game loop stubbed,
+     puts body.r3 on and installs the 3D UI (BBH.R3UI.install). ?view=hud|menu|creator|skin|settings|stats|ach|help|shop|sheet|dialog|modal|banner|result|dev|title|slots|all
+     &bg=day|dusk|night  &off=1 (no body.r3: proves the 2D look is untouched)  &low=1 (low needs)  Serve over http (see tools/beatbox_heroes/ui_shot.mjs). -->
+<style id="gal-base">
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0814; }
+#gl { position: fixed; inset: 0; overflow: hidden; }
+#gl i { position: absolute; display: block; }
+.bg-day #gl { background: linear-gradient(#6cbcff 0%, #bfe6ff 38%, #fff1c9 50%, #a4d974 51%, #6cae4a 100%); }
+.bg-dusk #gl { background: linear-gradient(#3b2a6e 0%, #c0517a 38%, #ffb86b 52%, #4a6a3a 53%, #2d4a2a 100%); }
+.bg-night #gl { background: linear-gradient(#0d0a1e 0%, #241a4a 45%, #3a2a66 52%, #1c2a2a 53%, #101818 100%); }
+</style>
+</head>
+<body class="r3 bg-day">
+<div id="gl"></div>
+<div id="stage"><canvas id="cv" width="360" height="640"></canvas><div id="ui"></div><div id="fatal"></div></div>
+<script>
+(async function () {
+  const q = new URLSearchParams(location.search);
+  const bg = q.get('bg') || 'day', view = q.get('view') || 'hud';
+  document.body.className = (q.get('off') ? '' : 'r3 ') + 'bg-' + bg;
+  // backdrop: a fake low-poly scene so the glass has something bright and busy to sit on
+  const gl = document.getElementById('gl'), add = (css) => { const e = document.createElement('i'); e.style.cssText = css; gl.appendChild(e); };
+  const wall = bg === 'night' ? ['#3a2a66', '#4a3580', '#2f2358'] : bg === 'dusk' ? ['#d9825c', '#e8a070', '#b86a6a'] : ['#f5d6a0', '#ffffff', '#e6b86c'];
+  [[2, 28, 22, 24], [26, 22, 18, 30], [46, 30, 26, 22], [74, 18, 20, 34]].forEach((b, i) => add('left:' + b[0] + '%;top:' + (52 - b[3]) + '%;width:' + b[2] + '%;height:' + b[3] + '%;background:' + wall[i % 3] + ';border-radius:4px'));
+  add('left:70%;top:6%;width:70px;height:70px;border-radius:50%;background:' + (bg === 'night' ? '#fff6c0' : '#fffbe0') + ';box-shadow:0 0 90px 30px ' + (bg === 'night' ? 'rgba(255,246,192,.35)' : 'rgba(255,255,255,.9)'));
+  [[12, 58], [60, 62], [84, 57]].forEach((t) => { add('left:' + t[0] + '%;top:' + t[1] + '%;width:10px;height:70px;background:#7a4a2a'); add('left:calc(' + t[0] + '% - 30px);top:calc(' + t[1] + '% - 50px);width:70px;height:70px;border-radius:50%;background:#3fae5a'); });
+  add('left:0;right:0;top:75%;height:9%;background:' + (bg === 'night' ? '#2a2a3a' : '#e4c9a0'));
+
+  // ---- load the real game, exactly the way index.html does
+  const html = await (await fetch('../index.html')).text(), doc = new DOMParser().parseFromString(html, 'text/html');
+  const st = document.createElement('style'); st.id = 'game-css'; st.textContent = doc.querySelector('style').textContent.replace(/url\('fonts\//g, "url('../fonts/"); document.head.appendChild(st);
+  const srcs = [...doc.querySelectorAll('script[src]')].map((s) => s.getAttribute('src'));
+  const load = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.async = false; s.onload = res; s.onerror = () => rej(new Error('load ' + src)); document.body.appendChild(s); });
+  for (const s of srcs) {
+    if (s === 'game.js') { const E = BBH.Eng; E.start = () => {}; E.go = (n) => { E.sceneName = n; }; }   // no loop, no scene switching: the gallery drives the UI by hand
+    await load('../' + s);
+  }
+  window.BBH.R3 = window.BBH.R3 || { status: 'ready', gallery: true };
+  for (const s of ['icons3d.js', 'hud3d.js', 'ui_kit3d.js']) await load(s);
+  try { await load('/__gallery/ui3d_embed.js'); } catch (e) { /* optional: built by tools/beatbox_heroes/ui_shot.mjs */ }
+  if (!q.get('off')) BBH.R3UI.install();
+  await document.fonts.ready;
+
+  const { Core, CATALOG: CAT } = BBH, E = BBH.Eng, G = BBH.G, h = E.h;
+  const ch = Core.newChar(CAT.DEFAULT_LOOK); ch.name = 'Tay'; ch.cash = 1234; ch.fans = 4821; ch.level = 7; ch.xp = 120; ch.day = 3; ch.minutes = bg === 'night' ? 980 : bg === 'dusk' ? 700 : 300; ch.place = 'street';
+  ch.energy = q.get('low') ? 14 : 72; ch.hunger = q.get('low') ? 11 : 58; ch.mood = q.get('low') ? 15 : 83; ch.cash = 1234;
+  G.slot = 0; G.setChar(ch);
+  const place = E.scenes.place, S = place; place.id = 'park'; place.sheetEl = null; E.scene = place;
+  const hud = () => E.add(E.makeHud(G));
+  const V = {
+    hud() { hud(); E.toast('Not enough energy to busk.', 'warn'); E.toast('+$40 tips', 'good'); },
+    hudfull() {
+      const el = BBH.R3UI.hud.create(G, { nav: true, goal: true, menu: true, map: true, onPlace: (id, i) => E.toast(i.locked ? i.reason : 'Walking to ' + id, i.locked ? 'warn' : '') });
+      el.setNav({ show: true, here: 'home', goal: 'park', locked: { bar: 'Closed on Mondays.', shop: 'Opens at 09:00.' } });
+      E.toast('Tap a door to walk there.');
+      if (window.__createUI3D) {
+        const ev = {}; const ctx = { events: { on: (k, f) => { (ev[k] = ev[k] || []).push(f); }, emit: (k, a) => (ev[k] || []).forEach((f) => f(a)) }, quality: 'med' };
+        const near = { id: 'busk', label: 'BUSK', color: '#ffe14d', icon: 'busk' };
+        const ui = window.__createUI3D(ctx, { interact() {}, locked: false, speed: 0 }, { embed: true, dom: document.getElementById('hud3'), spots: { spots: [near], nearest: () => near }, player: { object: { position: { x: 0, z: 0 } } }, terrain: {} });
+        ui.update(0.016, 0); setTimeout(() => ctx.events.emit('stick', { active: true, ox: 80, oy: window.innerHeight * 0.62, kx: 112, ky: window.innerHeight * 0.62 - 26 }), 50);
+      }
+    },
+    menu() { hud(); G.openMenu(); },
+    creator() { E.scene = E.scenes.creator; E.scenes.creator.mode = 'wardrobe'; E.scenes.creator.enter.call(E.scenes.creator, { mode: 'wardrobe' }); E.scenes.creator.tab = 'top'; E.scenes.creator.renderTabs(); E.scenes.creator.renderTab(); },
+    skin() { E.scene = E.scenes.creator; E.scenes.creator.enter.call(E.scenes.creator, { mode: 'wardrobe', tab: 'skin' }); },
+    settings() { G.openSettings(); },
+    stats() { G.openStats(); },
+    ach() { G.openAchievements(); },
+    help() { G.openHelp(); },
+    shop() { hud(); S.closeSheet = S.closeSheet || (() => {}); G.openShop(S, 'top'); },
+    sheet() {
+      hud(); S.sheet('THE PARK', [S.row('BUSK  60 min', 'The classic B t K t groove. Cash and a few fans.', 'gold', () => {}), S.row('BUSK HARD  60 min', 'Faster eighth-note grooves. Bigger rewards for a clean run.', 'pink', () => {}),
+        S.row('ODD JOB: FLYERS  45 min', 'A safe wage for handing out flyers.', '', () => {}), S.row('RUN  30 min', 'Not enough energy.', 'dis', () => {})]);
+    },
+    dialog() { hud(); E.dialog([{ who: 'foxy', mood: 'happy', text: 'Welcome to the neighbourhood! You just lost your job, so here is how we fix that.' }, { who: 'foxy', text: 'Tap a door to walk there. The PARK is open all day.' }], () => {}); },
+    narr() { E.dialog([{ text: 'Tuesday, 5:12 pm. You work in an office. Today your boss says: You are fired.' }], () => {}); },
+    modal() { hud(); E.modal({ title: 'LEAVE?', body: 'You will lose this set (no rewards, no time spent).', buttons: [{ label: 'STAY', cls: 'gold' }, { label: 'LEAVE', cls: 'red' }] }); },
+    banner() { hud(); E.banner('levelup', 'Level 8', 'Max energy up. Keep going.', E.icon('level')); E.banner('achievement', 'First Gig', 'Play your first open mic.', E.icon('trophy')); },
+    result() {
+      G.showResult({ kind: 'busk', res: { rank: 'S', accuracy: 0.94, perfect: 41, good: 9, miss: 2, bestCombo: 33 }, rw: { cash: 62, fans: 18, xp: 40 } }, () => {});
+    },
+    dev() { E.store.setItem('bbh:dev', '1'); G.openDev(); },
+    code() { E.store.removeItem('bbh:dev'); G.openDev(); },
+    title() { E.scene = E.scenes.title; const t = E.scenes.title; t.state = 'menu'; t.logo = null; t.bg = null; t.cast = []; t.drop = 0;
+      const enter = t.enter; try { t.enter.call(t); t.state = 'menu'; t.build(); } catch (e) { console.warn(e); } },
+    slots() { E.scene = E.scenes.slots; try { E.scenes.slots.enter.call(E.scenes.slots, { mode: 'continue' }); } catch (e) { console.warn(e); } },
+    icons() {
+      const box = h('div.panel.pop', { style: { left: '6px', right: '6px', top: '30px', padding: '8px' } }), g = h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' } });
+      BBH.R3Icons.names.forEach((n) => { const c = h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '40px' } }, E.iconEl(n, 2), h('div.ts', { style: { fontSize: '6px' } }, n)); g.appendChild(c); }); box.appendChild(g); E.add(box);
+    },
+    widgets() {
+      const sw = (cols) => h('div.grid', null, cols.map((c, i) => h('div.sw' + (i === 2 ? '.on' : ''), { style: { background: c } })));
+      const box = h('div.panel.pop', { style: { left: '6px', right: '6px', top: '24px', padding: '8px' } },
+        h('div.h1', null, 'WIDGETS'), h('div.h2', null, 'Subheading'), h('div.t', null, 'Body text in the house font for reading.'), h('div.ts', null, 'Small hint text, muted violet.'),
+        h('div.row', null, h('div.tp.gold', null, 'GOLD'), h('div.tp.cyan', null, 'CYAN'), h('div.tp.pink', null, 'PINK'), h('div.tp.lime', null, 'LIME'), h('div.tp.red', null, 'RED')),
+        h('div.row', null, E.btn('DEFAULT', '', null), E.btn('GOLD', 'gold', null), E.btn('PINK', 'pink', null)),
+        h('div.row', null, E.btn('CYAN', 'cyan', null), E.btn('GREEN', 'green', null), E.btn('RED', 'red', null), E.btn('DIS', 'dis', null)),
+        h('div.row', null, E.bar('#ffd23f', 0.7), E.bar('#7be08f', 0.4), E.bar('#ff4f6a', 0.15)),
+        h('div.row', null, h('div.chip.gold', null, E.iconEl('coin', 1), '+$62'), h('div.chip.cyan', null, E.iconEl('fans', 1), '+18'), h('div.chip.lime', null, E.iconEl('level', 1), '+40 XP')),
+        h('input', { type: 'text', placeholder: 'NAME', value: 'Tay' }), h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: 0.6 }), sw(['#f5d0b0', '#e0a070', '#a86a40', '#6a4020', '#3a2010', '#ff3ea5', '#2ee6ff', '#9dff4a']),
+        h('div.tabs', null, ['fans', 'palette', 'wand', 'mood', 'shirt', 'pants'].map((n, i) => h('div.tab' + (i === 1 ? '.on' : ''), null, E.iconEl(n, 1)))));
+      E.add(box);
+    },
+  };
+  window.__view = view; (V[view] || V.hud)();
+  if (q.get('toast')) E.toast(q.get('toast'), q.get('kind') || '');
+  window.__ready = true;
+})().catch((e) => { document.title = 'ERR ' + e.message; console.error(e); window.__err = String(e && e.stack || e); });
+</script>
+</body>
+</html>

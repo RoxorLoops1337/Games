@@ -3,10 +3,13 @@
 // Pieces: top bar (DAY DUSK NIGHT, LOW MED HIGH, FPS), context prompt button (pops in near a spot), dynamic joystick visual, toast line, 90px circular minimap.
 // Demo behaviour: when a spot is activated and nobody else handles it, a toast shows and 'spotDone' is emitted after 2.6 s so control returns.
 // Set window.__PARK_AUTODONE = false when the real game bridge takes over and emits 'spotDone' itself.
+// EMBED MODE (createUI(..., { embed:true })): builds ONLY the context prompt button (.p3-go) and the joystick visual, in the r3 house style
+// (Fredoka, chunky gold, 68 px target, safe-area + HUD dock aware via --h3-dock). No top bar, minimap, hint or demo spot handling;
+// toast() forwards to BBH.Eng.toast, spotDone is emitted by the game bridge. The returned { update, toast, destroy } keeps its shape.
 import { spotGlyphCanvas } from './spots.js';
 
 const CSS = `
-.p3{position:absolute;inset:0;overflow:hidden;pointer-events:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;font-family:"Trebuchet MS",system-ui,-apple-system,sans-serif;color:#fff6e8;--g:16px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
+.p3{position:absolute;inset:0;overflow:hidden;pointer-events:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;font-family:"Fredoka","Trebuchet MS",system-ui,-apple-system,sans-serif;color:#fff6e8;--g:16px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
 .p3 *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
 .p3 button{pointer-events:auto;touch-action:manipulation;cursor:pointer;font:inherit;border:0;color:inherit}
 .p3-bar{position:absolute;left:calc(var(--g) + var(--sl));right:calc(var(--g) + var(--sr));top:calc(8px + var(--st));display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 8px}
@@ -19,7 +22,7 @@ const CSS = `
 .p3-mini canvas{width:90px;height:90px;display:block;border-radius:50%}
 .p3-toast{position:absolute;left:50%;top:calc(60px + var(--st));transform:translate(-50%,-6px);max-width:calc(100% - 150px);padding:8px 14px;border-radius:14px;background:rgba(23,16,43,.78);font-weight:700;font-size:13px;letter-spacing:.02em;text-align:center;opacity:0;transition:opacity .25s,transform .25s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 10px rgba(10,5,30,.4)}
 .p3-toast.on{opacity:1;transform:translate(-50%,0)}
-.p3 .p3-go{position:absolute;right:calc(var(--g) + var(--sr));bottom:calc(30px + var(--sb));display:flex;align-items:center;gap:10px;width:max-content;min-width:164px;white-space:nowrap;justify-content:center;height:68px;padding:0 22px 0 10px;border-radius:34px;font-weight:900;font-size:24px;letter-spacing:.05em;color:#241240;background:linear-gradient(#ffe14d,#ffb32a);box-shadow:0 5px 0 #8a5a00,0 10px 24px rgba(10,5,30,.5),0 0 0 3px rgba(255,255,255,.55);opacity:0;transform:scale(.4) translateY(30px);pointer-events:none;visibility:hidden;transition:opacity .15s,transform .2s,visibility 0s .2s}
+.p3 .p3-go{position:absolute;right:calc(var(--g) + var(--sr));bottom:calc(30px + var(--sb) + var(--h3-dock,0px));display:flex;align-items:center;gap:10px;width:max-content;min-width:164px;white-space:nowrap;justify-content:center;height:68px;padding:0 22px 0 10px;border-radius:34px;font-weight:900;font-size:24px;letter-spacing:.05em;color:#241240;background:linear-gradient(#ffe14d,#ffb32a);box-shadow:0 5px 0 #8a5a00,0 10px 24px rgba(10,5,30,.5),0 0 0 3px rgba(255,255,255,.55);opacity:0;transform:scale(.4) translateY(30px);pointer-events:none;visibility:hidden;transition:opacity .15s,transform .2s,visibility 0s .2s}
 .p3 .p3-go.show{visibility:visible;pointer-events:auto;opacity:1;transform:none;animation:p3pop .42s cubic-bezier(.2,1.5,.4,1) both,p3glow 1.4s ease-in-out .45s infinite;transition:opacity .15s,visibility 0s}
 .p3 .p3-go:active{transform:translateY(4px) scale(.97);box-shadow:0 1px 0 #8a5a00,0 6px 16px rgba(10,5,30,.5),0 0 0 3px rgba(255,255,255,.55)}
 .p3-go canvas{width:50px;height:50px;flex:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
@@ -27,9 +30,9 @@ const CSS = `
 @media (hover:hover) and (pointer:fine){.p3-go small{display:block}}
 @keyframes p3pop{0%{transform:scale(.4) translateY(30px)}60%{transform:scale(1.12) translateY(-4px)}100%{transform:none}}
 @keyframes p3glow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12) drop-shadow(0 0 10px var(--c,#ffe14d))}}
-.p3-stick{position:absolute;left:0;top:0;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;background:radial-gradient(circle,rgba(255,246,232,.10),rgba(255,246,232,.22));box-shadow:inset 0 0 0 3px rgba(255,246,232,.55),0 0 18px rgba(255,225,77,.25);opacity:0;transform:scale(.6);transition:opacity .15s,transform .15s}
+.p3-stick{position:absolute;left:0;top:0;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;background:radial-gradient(circle,rgba(23,16,43,.18),rgba(23,16,43,.45));-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:inset 0 0 0 3px rgba(255,246,232,.6),inset 0 1px 0 rgba(255,255,255,.3),0 0 18px rgba(255,225,77,.3);opacity:0;transform:scale(.6);transition:opacity .15s,transform .15s}
 .p3-stick.on{opacity:1;transform:none}
-.p3-knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6e8,#ffd27a 55%,#e0a43a);box-shadow:0 3px 8px rgba(10,5,30,.5)}
+.p3-knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6e8,#ffe14d 45%,#ffb32a);box-shadow:0 4px 0 #8a5a00,0 8px 14px rgba(10,5,30,.5)}
 .p3-fps{position:absolute;left:calc(var(--g) + var(--sl));bottom:calc(10px + var(--sb));font:11px ui-monospace,monospace;color:#9dff4a;background:rgba(23,16,43,.6);padding:3px 6px;border-radius:6px;display:none}
 .p3-tag{position:absolute;left:calc(var(--g) + var(--sl));top:calc(60px + var(--st));padding:4px 10px;border-radius:10px;background:rgba(23,16,43,.62);font-weight:900;font-size:11px;letter-spacing:.14em;color:#ffd27a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 .p3-hint{position:absolute;left:50%;bottom:calc(120px + var(--sb));transform:translateX(-50%);font-weight:700;font-size:13px;padding:7px 14px;border-radius:14px;background:rgba(23,16,43,.62);white-space:nowrap;opacity:0;transition:opacity .6s}
@@ -37,11 +40,12 @@ const CSS = `
 `;
 
 export function createUI(ctx, ctl, o) {
-  const dom = o.dom || document.body, spots = o.spots, player = o.player, terrain = o.terrain, IN = !!(terrain && terrain.interior);
+  const EMB = !!o.embed, dom = o.dom || document.body, spots = o.spots, player = o.player, terrain = o.terrain, IN = !!(terrain && terrain.interior);
   if (!document.getElementById('p3-style')) { const st = document.createElement('style'); st.id = 'p3-style'; st.textContent = CSS; document.head.appendChild(st); }
   const fixed = dom === document.body; if (!fixed && getComputedStyle(dom).position === 'static') dom.style.position = 'relative';
   const root = document.createElement('div'); root.className = 'p3'; if (fixed) root.style.position = 'fixed'; dom.appendChild(root);
-  const q = (cls, tag, parent) => { const e = document.createElement(tag || 'div'); e.className = cls; (parent || root).appendChild(e); return e; };
+  const stash = document.createElement('div'), KEEP = { 'p3-go': 1, 'p3-stick': 1 };   // embed: everything except the prompt button and joystick is built detached (never shown)
+  const q = (cls, tag, parent) => { const e = document.createElement(tag || 'div'); e.className = cls; (parent || (EMB && !KEEP[cls] && cls !== '' && cls !== 'p3-knob' ? stash : root)).appendChild(e); return e; };
   const park = () => window.__park;
 
   // ----- top bar -----
@@ -58,7 +62,7 @@ export function createUI(ctx, ctl, o) {
   ctx.events.on('stick', (s) => { stick.classList.toggle('on', !!s.active); if (s.active) { stick.style.left = s.ox + 'px'; stick.style.top = s.oy + 'px'; const dx = s.kx - s.ox, dy = s.ky - s.oy, l = Math.hypot(dx, dy), m = Math.min(l, 58) / (l || 1); knob.style.transform = 'translate(' + dx * m + 'px,' + dy * m + 'px)'; } else knob.style.transform = ''; });
 
   // ----- toast + hint -----
-  const toastEl = q('p3-toast'); let toastT = 0; function toast(msg, ms) { toastEl.textContent = msg; toastEl.classList.add('on'); toastT = (ms || 2200) / 1000; }
+  const toastEl = q('p3-toast'); let toastT = 0; function toast(msg, ms) { if (EMB) { try { const E = window.BBH && (window.BBH.Eng || window.BBH.E); if (E && E.toast) E.toast(msg); } catch (e) { /* ignore */ } return; } toastEl.textContent = msg; toastEl.classList.add('on'); toastT = (ms || 2200) / 1000; }
   const hint = q('p3-hint'); hint.textContent = 'Drag to walk  -  tap to go'; let hintT = 0, hintDone = false;
 
   // ----- context button -----
@@ -68,9 +72,9 @@ export function createUI(ctx, ctl, o) {
   function setPrompt(n) { const id = n ? n.id : null; if (id === shownId) return; shownId = id; if (n) { goLabel.textContent = n.label; go.style.setProperty('--c', n.color); const g = goIcon.getContext('2d'); g.clearRect(0, 0, 100, 100); g.drawImage(iconFor(n), 0, 0); go.classList.remove('show'); void go.offsetWidth; go.classList.add('show'); go.setAttribute('aria-label', n.label); go.tabIndex = 0; } else { go.classList.remove('show'); go.tabIndex = -1; } }
 
   // ----- demo spot handling -----
-  ctx.events.on('spot', (e) => { const s = spots && spots.spots.find((x) => x.id === e.id); toast((s ? s.label : e.id.toUpperCase()) + '!', 2400); if (window.__PARK_AUTODONE !== false) setTimeout(() => ctx.events.emit('spotDone', { id: e.id }), 2600); });
+  if (!EMB) ctx.events.on('spot', (e) => { const s = spots && spots.spots.find((x) => x.id === e.id); toast((s ? s.label : e.id.toUpperCase()) + '!', 2400); if (window.__PARK_AUTODONE !== false) setTimeout(() => ctx.events.emit('spotDone', { id: e.id }), 2600); });
 
-  ctx.events.on('npc', (e) => { if (window.__PARK_AUTODONE === false) return; const n = (ctx.npcs || []).find((x) => x.id === (e && e.id)); toast((n && n.npcName ? n.npcName : e.id) + ': yo, what is up?', 2400); });
+  if (!EMB) ctx.events.on('npc', (e) => { if (window.__PARK_AUTODONE === false) return; const n = (ctx.npcs || []).find((x) => x.id === (e && e.id)); toast((n && n.npcName ? n.npcName : e.id) + ': yo, what is up?', 2400); });
 
   // ----- minimap (player-centred, rotated so screen up = camera forward) -----
   const mini = q('p3-mini'), mc = document.createElement('canvas'), DPR = Math.min(2, window.devicePixelRatio || 1); mc.width = mc.height = Math.round(90 * DPR); mini.appendChild(mc); const mg = mc.getContext('2d');
@@ -100,7 +104,8 @@ export function createUI(ctx, ctl, o) {
   // ----- keyboard focus hint: show 'E' only on desktop (css media) -----
   let fpsT = 0, barH = 0, frame = 0;
   function update(dt, t) {
-    frame++; if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('on'); }
+    frame++; if (EMB) { setPrompt(ctl.locked ? null : spots.nearest(player.object.position)); return; }
+    if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('on'); }
     const n = ctl.locked ? null : spots.nearest(player.object.position); setPrompt(n);
     if (!hintDone) { if (!hintT && !ctl.intro) { hintT = 0.001; hint.classList.add('on'); } if (hintT) { hintT += dt; if (hintT > 5 || ctl.speed > 1) { hint.classList.remove('on'); if (hintT > 5.8 || ctl.speed > 1) hintDone = true; } } }
     if ((frame & 1) === 0) { try { drawMini(t); } catch (e) { /* ignore */ } }
