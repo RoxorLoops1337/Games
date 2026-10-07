@@ -171,7 +171,7 @@ export function buildUI(hud, api) {
   const esc = (v) => String(v === undefined || v === null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let rwPending = null;
   function rwHtml(rw) {
-    const chips = []; if (rw.cash) chips.push('<div class="c g">+$' + rw.cash + '</div>'); if (rw.fans) chips.push('<div class="c c">+' + rw.fans + ' FANS</div>'); chips.push('<div class="c l">+' + (rw.xp || 0) + ' XP</div>'); return chips.join('');
+    const chips = []; if (rw.cash) chips.push('<div class="c g">+$' + rw.cash + '</div>'); if (rw.fans) chips.push('<div class="c c">+' + rw.fans + ' FANS</div>'); if (rw.gain) chips.push('<div class="c c">+' + (+rw.gain).toFixed(1) + ' ' + String(rw.stat || 'TECH').toUpperCase() + '</div>'); chips.push('<div class="c l">+' + (rw.xp || 0) + ' XP</div>'); return chips.join('');
   }
   function setRewards(rw) {
     rwPending = rw || null; const box = root.querySelector('.rw'); if (!box || !rw) return; box.innerHTML = rwHtml(rw); box.setAttribute('data-cash', rw.cash || 0); box.setAttribute('data-fans', rw.fans || 0); box.setAttribute('data-xp', rw.xp || 0);

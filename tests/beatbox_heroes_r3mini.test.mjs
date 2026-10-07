@@ -145,8 +145,8 @@ try {
   await fresh(); await page.evaluate(() => { BBH.Mic.open = async () => ({ ok: true }); BBH.Mic.close = () => {}; BBH.Mic.recordSample = async () => ({ ok: true, data: new Float32Array(3000).fill(0.25), sampleRate: 44100 }); BBH.Mic.isOpen = () => false; });
   const r1 = await snapCh();
   await go('studio', { back: { scene: 'place', args: { id: 'studio' } } }, 'lab', 'BBH.Eng.scene.w && BBH.Eng.scene.ui');
-  const st = await page.evaluate(() => ({ cards: document.querySelectorAll('#ui .panel.flat').length, meter: !!BBH.Eng.scene.meter, delegated: BBH.Eng.scene.record === BBH.Eng.scenes.studio.record, rec: BBH.R3.world.terrain.isRec && BBH.R3.world.terrain.isRec() }));
-  ok(st.cards === 4 && st.meter && st.delegated && st.rec === false, 'studio: four sound cards and a level meter over the 3D lab, 2D record / reset code');
+  const st = await page.evaluate(() => ({ cards: document.querySelectorAll('#ui .panel.flat').length, first: (document.querySelector('#ui .panel.flat') || {}).dataset.id, meter: !!BBH.Eng.scene.meter, delegated: BBH.Eng.scene.record === BBH.Eng.scenes.studio.record, rec: BBH.R3.world.terrain.isRec && BBH.R3.world.terrain.isRec() }));
+  ok(st.cards >= 4 && st.first === 'B' && st.meter && st.delegated && st.rec === false, 'studio: a row per sound (B first) and a level meter over the 3D lab, 2D record / reset code');
   await page.locator('#ui .panel.flat').first().locator('.btn', { hasText: 'REC' }).click(); await sleep(1500);
   const rc = await page.evaluate(async () => { const s = await BBH.Samples.get(BBH.G.slot || 1, 0); return { stored: !!s, has: BBH.Audio.hasSample(0), n: BBH.G.ch.n.recorded || 0 }; });
   ok(rc.stored && rc.has && rc.n === r1.rec + 1, 'studio: REC stores the sample in IndexedDB and in BBH.Audio, counts as recorded (state identical to 2D)');

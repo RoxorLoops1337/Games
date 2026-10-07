@@ -15,6 +15,14 @@
   const X0 = 15, LW = 60, HIT_Y = 404, TOP_Y = 200;
   const GRADE_COL = { perfect: PAL.neonYellow, good: PAL.neonCyan, miss: '#ff6b7a' };
   const STAGE_FOR = { 0: 'pink', 1: 'cyan', 2: 'lime', 3: 'gold' };
+  // MUSIC OFF (TRAINING_PLAN): no scene music, no backing groove. A soft shaker metronome on the chart clock (Audio.gameMode, else a local fallback), aligned to the offset setting.
+  const metro = { iv: 0, start(bpm, lead) {
+    this.stop(); const A = E.A(), n = A.now ? A.now() : 0, spb = 60 / bpm, off = (E.settings.offset || 0) / 1000; if (!(n > 0)) return null; const t0 = n + (lead === undefined ? 0.2 : lead);
+    if (A.gameMode) { try { A.gameMode(true, { metronome: bpm, start: t0 - off }); } catch (e) { /* ignore */ } return { t0, spb }; }
+    let k = Math.ceil((n - t0 + off) / spb); const pump = () => { const now = A.now(); while (t0 + k * spb - off < now + 0.12) { const w = Math.max(now, t0 + k * spb - off), acc = ((k % 4) + 4) % 4 === 0; k++; try { if (A.shaker) A.shaker(acc, { when: w }); else A.drum(1, { when: w, vel: acc ? 0.3 : 0.17, pitch: 1.7 }); } catch (e) { /* ignore */ } } };
+    pump(); this.iv = setInterval(pump, 30); return { t0, spb };
+  }, stop() { clearInterval(this.iv); this.iv = 0; try { const A = E.A(); if (A.gameMode) A.gameMode(true, { metronome: 0 }); } catch (e) { /* ignore */ } },
+  game(on) { try { const A = E.A(); if (on) A.music.stop(0.4); if (A.gameMode) A.gameMode(on, { metronome: 0 }); } catch (e) { /* ignore */ } } };
 
   // lane glyph shapes drawn as shape-coded accents (colour-blind friendly)
   function glyph(c, lane, cx, cy, col) {
@@ -45,7 +53,7 @@
       this.fallMs = 1500 - Math.min(300, (a.bpm || 100) * 2); this.win = Core.windows(this.stats); this.offset = (E.settings.offset || 0) / 1000;
       this.padFlash = [0, 0, 0, 0]; this.pops = []; this.hype = 0; this.pressed = [false, false, false, false]; this.finished = false;
       this.shakeBeat = 0; this.rings = []; this.reallyDone = false; this.score = 0; this.combo = 0; this.hits = []; this.notes = []; this.oppStyles = []; this.myStyle = null; this.oppStyleNow = null;
-      E.music('battle', { fade: 0.5 }); try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }
+      metro.game(true);
       this.ui = h('div.nopt', { style: { position: 'absolute', inset: 0, zIndex: 5 } });
       this.ui.appendChild(E.btn('EXIT', '', () => this.confirmExit(), { position: 'absolute', left: '4px', top: '4px', width: '36px', padding: '3px 2px', fontSize: '5px' }));
       E.add(this.ui);
@@ -55,7 +63,7 @@
       }
       this.startRound();
     },
-    leave() { try { E.A().groove.stop(); } catch (e) { /* ignore */ } this.stopMic(); },
+    leave() { metro.stop(); metro.game(false); this.stopMic(); },
     // MIC MODE: beatbox into the microphone. Each detected sound hits the lane it was classified as (your own recordings train the classifier).
     toggleMic() { E.settings.mic = !E.settings.mic; E.saveSettings(); this.micBtn.textContent = E.settings.mic ? 'MIC ON' : 'MIC OFF'; this.micBtn.className = 'btn ' + (E.settings.mic ? 'green' : ''); if (E.settings.mic) this.startMic(); else this.stopMic(); },
     async startMic() {
@@ -75,14 +83,14 @@
     },
     visibility(vis) { if (!vis && this.state === 'play' && !this.reallyDone) { this.reallyDone = true; E.toast('Set interrupted.', 'warn'); setTimeout(() => this.abort(), 50); } },
     confirmExit() { if (this.state === 'result' || this.reallyDone) return; E.modal({ title: 'LEAVE?', body: 'You will lose this set (no rewards, no time spent).', buttons: [{ label: 'STAY' }, { label: 'LEAVE', cls: 'red', fn: () => this.abort() }] }); },
-    abort() { this.reallyDone = true; try { E.A().groove.stop(); } catch (e) { /* ignore */ } if (this.a.onAbort) this.a.onAbort(); },
+    abort() { this.reallyDone = true; metro.stop(); if (this.a.onAbort) this.a.onAbort(); },
 
     /* ---------------------------------------------------------- rounds */
     startRound() { if (this.battle) this.beginPick(); else this.beginRound(); },
     // VHS Story style orders: before each battle round pick a fighting style (rock paper scissors)
     beginPick() {
       this.state = this.round === 0 ? 'vs' : 'pick'; this.stateT = 0; this.vsT = 0; this.oppStyleNow = Core.opponentStyle(this.opp, Math.random);
-      if (this.state === 'vs') { E.sfx('whoosh'); E.music('battle', { fade: 0.3 }); } else this.showPicker();
+      if (this.state === 'vs') { E.sfx('whoosh'); } else this.showPicker();
     },
     showPicker() {
       this.state = 'pick'; if (this.pickEl) this.pickEl.remove();
@@ -100,7 +108,7 @@
       const bpm = this.battle ? this.opp.bpm : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm;
       this.hits = []; this.notes = this.chart.map((n) => ({ lane: n.lane, beat: n.beat + 4, state: 0 })); this.combo = 0; this.maxCombo = 0; this.state = 'count'; this.roundStart = E.t;
       this.endBeat = (bars * 4 + 4) + 2; this.score = 0; this.pops.length = 0; this.stateT = 0;
-      let g = null; try { g = E.A().groove.start({ bpm, style: this.battle ? this.opp.style : (a.style || 0), bars: bars + 3 }); } catch (e) { g = null; }
+      const g = metro.start(bpm);
       this.audioClock = !!(g && typeof g.t0 === 'number' && g.spb); this.t0 = this.audioClock ? g.t0 : null; if (this.audioClock) this.spb = g.spb;
       if (!this.audioClock) { this.t0 = performance.now() / 1000 + 0.4; }
       this.counted = -1; this.build();
@@ -172,7 +180,7 @@
     finishRound() {
       const sum = Core.summarize(this.hits, this.chart.length, this.maxCombo); this.sum = sum;
       this.tot.perfects += sum.perfect; this.tot.bestCombo = Math.max(this.tot.bestCombo, sum.bestCombo); sum.perfectLane.forEach((v, i) => { this.tot.lane[i] += v; });
-      try { E.A().groove.stop(); } catch (e) { /* ignore */ }
+      metro.stop();
       const q = sum.accuracy * 0.8 + Math.min(1, sum.bestCombo / Math.max(8, this.chart.length * 0.7)) * 0.2; this.roundQ.push({ q: Math.min(1, q), style: this.myStyle }); this.oppStyles.push(this.oppStyleNow);
       if (!this.battle) { this.state = 'result'; this.reallyDone = true; setTimeout(() => this.a.onDone && this.a.onDone(sum), 700); this.endFlash(sum); return; }
       this.startOpp();
@@ -187,7 +195,7 @@
       this.oppNotes = ch.map((n) => ({ lane: n.lane, t: 1.2 + n.beat * (60 / this.opp.bpm), hit: Math.random() < q, done: false }));
       this.oppEnd = 1.2 + 8 * (60 / this.opp.bpm) + 1.0; this.oppMeter = 0;
       this.oppT0 = this.now(); const m = Core.styleMul(this.myStyle, this.oppStyleNow); this.banner = { text: this.opp.name.toUpperCase(), t: 0, sub: (this.myStyle || '').toUpperCase() + ' vs ' + (this.oppStyleNow || '').toUpperCase() + (m > 1 ? ': YOU WIN THE STYLE CLASH' : m < 1 ? ': THEY WIN THE STYLE CLASH' : ': EVEN') };
-      try { E.A().groove.start({ bpm: this.opp.bpm, style: this.opp.style, bars: 5 }); } catch (e) { /* ignore */ }
+      metro.start(this.opp.bpm, 1.2);
     },
     updateOpp(dt) {
       const T = this.now() - this.oppT0;
@@ -196,7 +204,7 @@
       }
       this.oppMeter = Math.min(this.oppQ, this.oppMeter + dt / 2400 * this.oppQ);
       if (T > this.oppEnd) {
-        try { E.A().groove.stop(); } catch (e) { /* ignore */ }
+        metro.stop();
         this.oppRoundQ = this.oppRoundQ || []; this.oppRoundQ.push(this.oppQ);
         this.round++;
         if (this.round >= this.roundsTotal) this.startJudge(); else this.startRound();
@@ -208,7 +216,7 @@
       this.state = 'judge'; this.stateT = 0; this.reveal = -1; this.tally = { you: 0, opp: 0 };
       const a = this.a, action = { t: 'battle', opp: a.finalOpp || this.opp, rounds: this.roundQ, oppStyles: this.oppStyles, perfects: this.tot.perfects, bestCombo: this.tot.bestCombo, perfectLane: this.tot.lane, final: a.final || null };
       this.held = G.doHold(action); this.verdict = this.held.fx.find((f) => f.t === 'battleResult'); this.votes = this.verdict.out.votes;
-      this.banner = { text: 'THE JUDGES', t: 0, sub: 'five votes decide it' }; E.music('creator', { fade: 0.6 });
+      this.banner = { text: 'THE JUDGES', t: 0, sub: 'five votes decide it' };
     },
     updateJudge() {
       const per = 1100, idx = Math.floor((this.stateT - 900) / per);

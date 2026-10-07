@@ -4,8 +4,9 @@
 //   run     world 'run'    the park jog in 3D. Result -> G.doHold({t:'run', q, goodBars}) exactly like the 2D scene, rewards read back from the new save and shown on the card
 //                          (mini.setRewards), CONTINUE -> G.finishActivity(held, 'park'). QUIT before the end -> back to the place (nothing spent), like 2D.
 //   tuner   world 'tuner'  the vocal booth in 3D, HIGHER / LOWER voice (saved in E.settings.voice) and EAR training. Result -> G.doHold({t:'tune', q}), CONTINUE -> G.finishActivity(held, place).
+//                          Music OFF while it runs (Audio.gameMode). From the training menu (args.train = {level, where}, r3/scenes_train.js) the result is G.doHold({t:'trainGame', stat:'mus', game:'tune', level, q, where}).
 //   seq     world 'lab'    Beat Maker: the 2D DOM tool (pattern tabs, BPM, PLAY, RELEASE...) over the 3D Sound Lab with the camera on the desk; the 16 x 4 grid is a DOM grid here
-//   studio  world 'lab'    Sound Recorder: the 2D DOM tool over the lab, camera on the booth, the hero at the mic; recordings still go to IndexedDB through BBH.Samples.
+//   studio  world 'lab'    Sound Recorder: the 2D DOM tool over the lab, camera on the booth, the hero at the mic; every Core.SOUNDS entry is a row (locked ones greyed), recordings go to IndexedDB through BBH.Samples keyed by sound id.
 // The mini games get the SHARED audio (BBH.Audio, E.tone), E.settings (offset, muted, sfx, reduce, voice) and never open an AudioContext of their own.
 (function (root) {
   'use strict';
@@ -30,6 +31,7 @@
     return { cash: ch.cash, fans: ch.fans, xp, level: ch.level, energy: ch.energy, maxEnergy: ch.maxEnergy, mood: ch.mood, mus: ch.stats.mus, tech: ch.stats.tech, ori: ch.stats.ori };
   }
   function diff(a, b) { const o = {}; for (const k in b) { const d = b[k] - a[k]; o[k] = Math.round(d * 100) / 100; } return o; }
+  const gameMode = (on) => { try { const A = BBH.Audio; if (A && A.gameMode) A.gameMode(on, { metronome: 0 }); else if (on) E.A().music.stop(0.3); } catch (e) { /* ignore */ } };
   const goBack = (to, dflt) => { if (to && to.scene) E.go(to.scene, to.args); else E.go(dflt || 'street'); };
 
   // shared skeleton for the two 3D-only mini games
@@ -38,7 +40,7 @@
       is3d: true, world: name, name,
       enter(a) {
         this.a = a || {}; this.held = null; this.gone = false; this.mg = null; this.w = null; this.res = null; this.pre = null;
-        E.music(cfg.music);
+        if (cfg.gameMode) gameMode(true); else E.music(cfg.music);         // the singing game runs with the music OFF (Audio.gameMode, TRAINING_PLAN)
         this.ov = overlay();
         const args = Object.assign({ hud: this.ov, look: G.ch && G.ch.look, time: nightN(), offsetMs: E.settings.offset | 0, settings: E.settings, embedded: true, again: false }, cfg.args ? cfg.args.call(this) : {});
         return R3.load(name, args).then((w) => {
@@ -51,6 +53,7 @@
         this.gone = true;
         dropOverlay(this.ov); this.ov = null; this.mg = null; this.w = null;
         if (cfg.leave) safe(() => cfg.leave.call(this));
+        if (cfg.gameMode) gameMode(false);
       },
       update() { /* the world host drives the mini game */ },
       draw() { /* WebGL */ },
@@ -80,14 +83,15 @@
 
   /* ================================================================ TUNER */
   E.scenes3d.tuner = Object.assign(miniScene('tuner', {
-    music: 'studio', home: 'place',
+    music: 'studio', home: 'place', gameMode: true,
     args() { return { mus: G.ch.stats.mus, tone: (f, d, v) => E.tone && E.tone(f, d, v), onVoice: (r) => { E.settings.voice = r; try { E.saveSettings(); } catch (e) { /* ignore */ } } }; },
     finish() { G.finishActivity(this.held, this.a.place || 'home'); },
     leave() { try { BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } },
   }), {
     onResult(r) {
       if (this.held || !r) return;
-      this.res = r; this.commit({ t: 'tune', q: r.q });                            // 2D: G.doHold({ t: 'tune', q })
+      const tr = this.a.train;                                                     // from the training menu (r3/scenes_train.js): x2 gains through Core trainGame
+      this.res = r; this.commit(tr && Core.TRAIN_CFG ? { t: 'trainGame', stat: 'mus', game: 'tune', level: tr.level || 1, q: r.q, where: tr.where === 'studio' ? 'studio' : 'home' } : { t: 'tune', q: r.q });   // 2D: G.doHold({ t: 'tune', q })
     },
   });
 
@@ -121,13 +125,13 @@
   const seqBase = E.scenes.seq;
   if (seqBase) E.scenes3d.seq = Object.assign(Object.create(seqBase), {
     is3d: true, world: 'lab',
-    fit(f) { lab.fit(this, f === undefined ? 0.56 : f); },
+    fit(f) { lab.fit(this, f === undefined ? (this.gridFrac || 0.56) : f); },
     enter(a) {
       this.w = null; this.shown = -1; this.t0 = 0; this.cells = null;
       seqBase.enter.call(this, a);                                    // state, music, HUD, the sheet (our build() below adds the grid), the 25 ms scheduler
       lab.hideHud();
       const me = this; this.obeat = E.beat; E.beat = function () { return me.playing && me.t0 ? me.beatPos() : me.obeat.apply(E, arguments); };   // the lab's VU meters and pads follow the pattern, not the music
-      return lab.stage(this, 'mixer', 'desk', 0.56).then(() => { if (this.w) this.pose(); });
+      return lab.stage(this, 'mixer', 'desk', this.gridFrac || 0.56).then(() => { if (this.w) this.pose(); });
     },
     leave() { if (this.obeat) { E.beat = this.obeat; this.obeat = null; } seqBase.leave.call(this); lab.unstage(this); this.grid = null; this.cells = null; },
     beatPos() { try { return Math.max(0, (E.A().now() - this.t0) * this.pat.bpm / 60); } catch (e) { return 0; } },
@@ -137,22 +141,29 @@
     cellAt() { return null; }, pointer() { /* the grid is DOM here */ }, draw() { /* WebGL */ },
     mkGrid() {
       if (this.grid && this.grid.parentNode) this.grid.parentNode.removeChild(this.grid);
-      const pat = this.pat, wrap = h('div', { style: { position: 'absolute', left: '8px', right: '8px', top: '186px', zIndex: 14, display: 'flex', flexDirection: 'column', gap: '2px' } });
+      // unlocked extra sounds are extra rows (G.snd.patRows): rows shrink a little, then the grid climbs above the sheet and the camera inset follows
+      const pat = this.pat, rows = pat.steps.length, rh = rows <= 4 ? 24 : Math.max(14, Math.floor(110 / rows) - 1);
+      let SH = 480; try { SH = E.stage.getBoundingClientRect().height / (E.S || 1) || 480; } catch (e) { /* ignore */ }
+      const gh = rows * (rh + 1) + 26, top = Math.max(64, Math.min(186, SH - 170 - gh - 6));
+      const wrap = h('div', { style: { position: 'absolute', left: '8px', right: '8px', top: top + 'px', zIndex: 14, display: 'flex', flexDirection: 'column', gap: '2px' } });
+      this.gridFrac = top < 186 ? Math.min(0.8, (SH - top + 8) / SH) : 0.56; if (this.w) this.fit(this.gridFrac);
       const sc = Core.patternScore(pat), bar = h('div', { style: { width: Math.round(sc * 100) + '%', height: '100%', background: '#ff3ea5', borderRadius: '3px' } }), lab2 = h('div.tp', { style: { color: '#fff6e8' } }, 'CREATIVITY ' + Math.round(sc * 100) + '%');
-      const head = h('div.row', { style: { justifyContent: 'space-between', alignItems: 'center', gap: '6px' } }, h('div.tp.gold', null, 'BEAT MAKER'), h('div', { style: { flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(14,9,30,.7)', overflow: 'hidden' } }, bar), lab2);
-      const g = h('div', { style: { display: 'grid', gridTemplateColumns: '14px repeat(16, 1fr)', gridTemplateRows: 'repeat(4, 24px)', gap: '1px', padding: '3px', borderRadius: '8px', background: 'rgba(14,9,30,.72)', boxShadow: '0 0 0 1px rgba(255,246,232,.18)', touchAction: 'none' } });
-      const cells = [];
-      for (let l = 0; l < 4; l++) {
-        g.appendChild(h('div.tp', { style: { color: LANES[l][2], fontSize: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, LANES[l][0]));
+      const head = h('div.row', { style: { justifyContent: 'space-between', alignItems: 'center', gap: '6px' } }, h('div.tp.gold', null, this.a && this.a.train ? 'BEAT MAKER  LV ' + this.level() : 'BEAT MAKER'), h('div', { style: { flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(14,9,30,.7)', overflow: 'hidden' } }, bar), lab2);
+      const S = G.snd;
+      const g = h('div', { style: { display: 'grid', gridTemplateColumns: '18px repeat(16, 1fr)', gridTemplateRows: 'repeat(' + rows + ', ' + rh + 'px)', gap: '1px', padding: '3px', borderRadius: '8px', background: 'rgba(14,9,30,.72)', boxShadow: '0 0 0 1px rgba(255,246,232,.18)', touchAction: 'none' } });
+      const cells = [], colOf = (l) => (S ? S.rowCol(pat, l) : LANES[l][2]);
+      for (let l = 0; l < rows; l++) {
+        const lb = S ? S.rowLabel(pat, l) : LANES[l][0];
+        g.appendChild(h('div.tp', { title: S ? S.title(S.rowId(pat, l)) : '', style: { color: colOf(l), fontSize: lb.length > 2 ? '5px' : '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } }, lb));
         for (let i = 0; i < 16; i++) { const c = h('div', { 'data-l': l, 'data-i': i, style: { borderRadius: '2px' } }); cells.push(c); g.appendChild(c); }
       }
-      const paint = (c) => { const l = +c.dataset.l, i = +c.dataset.i, on = pat.steps[l][i], col = LANES[l][2]; c.style.background = on ? col : (i % 4 === 0 ? '#3a2a60' : '#2a1d4a'); c.style.boxShadow = on ? 'inset 0 3px 0 rgba(255,255,255,.4), inset 0 -5px 0 rgba(0,0,0,.25)' : ''; };
+      const paint = (c) => { const l = +c.dataset.l, i = +c.dataset.i, on = pat.steps[l][i], col = colOf(l); c.style.background = on ? col : (i % 4 === 0 ? '#3a2a60' : '#2a1d4a'); c.style.boxShadow = on ? 'inset 0 3px 0 rgba(255,255,255,.4), inset 0 -5px 0 rgba(0,0,0,.25)' : ''; };
       cells.forEach(paint);
       const score = () => { const s = Core.patternScore(pat); bar.style.width = Math.round(s * 100) + '%'; lab2.textContent = 'CREATIVITY ' + Math.round(s * 100) + '%'; };
       const at = (e) => { const el = document.elementFromPoint(e.clientX, e.clientY); return el && el.dataset && el.dataset.l !== undefined && g.contains(el) ? el : null; };
       const hit = (c) => {                                           // same rule as the 2D pointer(): paint the value picked on the first cell, a drum click on every new hit
         if (!c || this.paint === null) return; const l = +c.dataset.l, i = +c.dataset.i;
-        if (pat.steps[l][i] !== this.paint) { pat.steps[l][i] = this.paint; paint(c); score(); if (this.paint) { try { E.A().drum(l, { vel: 0.8 }); } catch (e) { /* ignore */ } } }
+        if (pat.steps[l][i] !== this.paint) { pat.steps[l][i] = this.paint; paint(c); score(); if (this.paint) { if (G.snd) G.snd.hitRow(pat, l, { vel: 0.8 }); else { try { E.A().drum(l, { vel: 0.8 }); } catch (e) { /* ignore */ } } } }
       };
       g.addEventListener('pointerdown', (e) => { const c = at(e); if (!c) return; e.preventDefault(); try { g.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } E.unlockAudio(); this.paint = pat.steps[+c.dataset.l][+c.dataset.i] ? 0 : 1; hit(c); });
       g.addEventListener('pointermove', (e) => { if (this.paint !== null) hit(at(e)); });
@@ -176,26 +187,21 @@
     enter(a) {
       this.w = null; this.lastRec = null; this.lastClip = '';
       studioBase.enter.call(this, a); lab.hideHud();
-      return lab.stage(this, 'mic', 'booth', 0.5, { dist: 3.0, pitch: 42, yaw: 50 }).then(() => { if (this.w) this.pose(); });
+      return lab.stage(this, 'mic', 'booth', 0.5, { dist: 4.2, pitch: 40, yaw: 50 }).then(() => { if (this.w) this.pose(); });
     },
     leave() { studioBase.leave.call(this); lab.unstage(this); this.meter = null; this.heard = null; },
-    // the 2D tool is one tall column of cards; in 3D the lab needs room, so the same cards (same buttons, same record / reset / test code) sit in a 2 x 2 grid at the bottom
+    // the 2D tool is one tall column of sound rows; in 3D the lab needs room, so the same rows (same REC / SYNTH / MINE / RESET, same record code) scroll in a short list at the bottom
     build() {
-      if (this.ui) this.ui.remove(); const PAL = BBH.PAL;
-      const cards = LANES.map((ln, i) => {
-        const mine = this.has(i), st = this.status[i], sb = { flex: 1, padding: '4px 0 5px', minWidth: 0 };
-        return h('div.panel.flat', { style: { position: 'relative', padding: '3px 4px 4px 6px', borderLeft: '4px solid ' + ln[2], display: 'flex', alignItems: 'center', gap: '4px' } },
-          h('div.col', { style: { gap: '1px', width: '62px', flex: 'none' } }, h('div.h2', { style: { color: ln[2] } }, ln[0] + ' ' + ln[1]), h('div.tp', { style: { color: st === 'rec' ? '#ff7b8e' : mine ? '#7be08f' : PAL.fog, fontSize: '5px' } }, st === 'rec' ? 'RECORDING' : st === 'wait' ? 'SOUND NOW!' : mine ? 'YOUR SOUND' : 'DEFAULT')),
-          E.btn('REC', 'red', () => this.record(i), sb), E.btn('PLAY', '', () => { try { E.A().drum(i, { vel: 1 }); } catch (e) { /* ignore */ } }, sb), E.btn('RESET', mine ? '' : 'dis', () => this.reset(i), sb));
-      });
+      if (this.ui) this.ui.remove(); const all = this.sounds(), open = all.filter((s) => G.snd.on(s.id)).length;
+      const list = h('div.scroll.col', { style: { gap: '3px', maxHeight: '178px', minHeight: 0, paddingBottom: '8px', WebkitMaskImage: 'linear-gradient(#000 86%, transparent)', maskImage: 'linear-gradient(#000 86%, transparent)' } }, all.map((s) => this.row(s, true)));
       const fill = h('div', { style: { width: '0%', height: '100%', borderRadius: '3px', background: '#7b4fe0' } });
       this.heard = h('div.h1', { style: { position: 'absolute', left: 0, right: 0, top: '120px', textAlign: 'center', color: '#fff6e8', zIndex: 14, textShadow: '0 2px 0 #17102b', pointerEvents: 'none' } }, '');
       this.ui = h('div', { style: { position: 'absolute', left: '6px', right: '6px', bottom: '8px', zIndex: 15, display: 'flex', flexDirection: 'column', gap: '4px' } },
-        h('div.row', { style: { alignItems: 'center', gap: '6px' } }, h('div.tp.gold', null, 'SOUND RECORDER'), h('div', { style: { flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(14,9,30,.7)', overflow: 'hidden' } }, fill), h('div.tp', { style: { color: '#b9aee6' } }, 'MIC')),
-        h('div.ts.ctr', { style: { fontSize: '6px' } }, !!(BBH.Mic && BBH.Mic.open) ? 'Press REC, then make the sound into your mic. It stops when you go quiet.' : 'Microphone recording is not supported in this browser.'),
-        h('div.col', { style: { gap: '3px' } }, cards),
+        h('div.row', { style: { alignItems: 'center', gap: '6px' } }, h('div.tp.gold', null, 'SOUND RECORDER'), h('div.tp', { style: { color: '#b9aee6' } }, open + '/' + all.length), h('div', { style: { flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(14,9,30,.7)', overflow: 'hidden' } }, fill), h('div.tp', { style: { color: '#b9aee6' } }, 'MIC')),
+        h('div.ts.ctr', { style: { fontSize: '6px' } }, !!(BBH.Mic && BBH.Mic.open) ? 'REC, then make the sound. SYNTH and MINE play both versions.' : 'Microphone recording is not supported in this browser.'),
+        list,
         h('div.row', null, E.btn(this.test ? 'STOP TEST' : 'TEST MIC MODE', this.test ? 'red' : 'cyan', () => this.toggleTest(), { flex: 2 }), E.btn('BACK', '', () => goBack(this.a.back), { flex: 1 })));
-      E.add(this.ui); E.add(this.heard); this.meter = fill;
+      E.add(this.ui); E.add(this.heard); this.meter = fill; this.list = list; this.scrollFocus();
     },
     pose() { const w = this.w; if (!w || !w.player || !w.player.play) return; const want = this.rec !== null && this.rec !== undefined || (this.test && this.detT > 0) ? 'beatbox' : 'idle'; if (want !== this.lastClip) { this.lastClip = want; safe(() => w.player.play(want, {})); } },
     draw() { /* WebGL */ },

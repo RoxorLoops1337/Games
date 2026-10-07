@@ -1,11 +1,11 @@
 // BUSKING RHYTHM GAME in low-poly 3D (Rhythm Artist). Same rules as the 2D game (beatbox_heroes/rhythm.js): Core.makeChart patterns, Core.windows timing,
-// Core.judgeHit grades, Core.summarize result, BBH.Audio groove + drum sounds, BBH.Mic mic mode, battle style orders. Only the presentation is 3D.
+// Core.judgeHit grades, Core.summarize result, BBH.Audio drum sounds over a soft shaker metronome (music off), BBH.Mic mic mode, battle style orders. Only the presentation is 3D.
 //   createRhythm(ctx, opts) -> { group, update(dt,t), render(), resize(w,h,dpr), setLook(look), start(o), dispose(), press(lane), tick(sec), state(), result(), bot(o), quit() }
 //   opts: { difficulty 0..1, seed, bars, bpm, style, stats {mus..}, look, time, hud, battle|opp, autostart, mic }   start(o) takes the same keys (+ manual:true to freeze real time).
 //   Finishes with ctx.events.emit('minigame', { game:'rhythm', result }) ; the BACK button emits 'minigameQuit'.
 // Files: mg_rhythm.js (this: rules, state, camera, input, loop), mg_rhythm_hw.js (note highway), mg_rhythm_world.js (stage, props, pigeons), mg_rhythm_crowd.js, mg_rhythm_fx.js, mg_rhythm_ui.js.
 // RHYTHM GAME in low-poly 3D (Rhythm Artist, MG-RHYTHM). Same rules as the 2D game (beatbox_heroes/rhythm.js): Core.makeChart patterns, Core.windows timing,
-// Core.judgeHit grades, Core.summarize result, BBH.Audio groove + drum sounds, BBH.Mic mic mode, battle style orders, opponent turn, 5 judges. Only the presentation is 3D.
+// Core.judgeHit grades, Core.summarize result, BBH.Audio drum sounds over a soft shaker metronome (music off), BBH.Mic mic mode, battle style orders, opponent turn, 5 judges. Only the presentation is 3D.
 //   createRhythm(ctx, opts) -> { group, update(dt,t), render(), resize(w,h,dpr), setLook(look), start(o), dispose(), press(lane), tick(sec), state(), result(), bot(o), quit(o), pick(styleId), setRewards(rw), ... }
 //   opts: { difficulty 0..1, seed, bars, bpm, style, stats {mus..}, look, time, hud, battle|opp, autostart, mic }   start(o) takes the same keys (+ manual:true to freeze real time).
 //   GAME CONTRACT (PORT_PLAN 2.11, set by r3/scenes_rhythm.js; the standalone page works without any of these):
@@ -20,6 +20,11 @@
 //   Finishes with ctx.events.emit('minigame', { game:'rhythm', result }) ; the BACK button emits 'minigameQuit' (game mode: after the LEAVE? confirm, or quit({force:true})).
 // Files: mg_rhythm.js (this: rules, state, camera, input, loop), mg_rhythm_hw.js (note highway), mg_rhythm_world.js (stage, props, pigeons), mg_rhythm_crowd.js, mg_rhythm_fx.js, mg_rhythm_ui.js,
 //        mg_rhythm_battle.js (camera director, opponent turn, judge maths) ; venues come from venue.js (INT-B).
+//        mg_rhythm_click.js (MUSIC OFF: no scene music, no backing groove, only a soft shaker metronome at the chart bpm, aligned to offsetMs)
+//        mg_rhythm_train.js (mode 'train': RHYTHM TRAINING, Core.BEAT_LEVELS, level select, LISTEN call + YOUR TURN, training result card)
+//   mode 'train': opts.level (start it, else the level select), opts.progress { unlocked, best:{level:grade} } (setTrainProgress(p) updates it),
+//     result adds { mode:'train', level, levelId, q, passed }; the card acts call opts.onContinue({ train:true, act:'next'|'again'|'levels'|'continue', level, result }),
+//     a false return value stops the game from going on (the scene leaves instead).
 import { THREE, disposeTree } from './kit.js';
 import { createCharacter } from './characters.js';
 import { buildLighting } from './lighting.js';
@@ -30,6 +35,8 @@ import { buildCrowd } from './mg_rhythm_crowd.js';
 import { buildUI } from './mg_rhythm_ui.js';
 import { buildVenue } from './venue.js';
 import { createDirector, buildOppTurn, voteView, clashLine } from './mg_rhythm_battle.js';
+import { createClick } from './mg_rhythm_click.js';
+import { beatLevels, trainChart, buildTrainUI, TRAIN_BARS, UNLOCK_Q } from './mg_rhythm_train.js';
 
 const FALLBACK_LOOK = { name: 'Hero', body: 'neutral', skin: '#c68b5e', hair: { style: 'twists', color: '#2a2024' }, top: { id: 'oversized', color: '#f4e04d', color2: '#e63946' }, bottom: { id: 'camo', color: '#2f5d3a' }, shoes: { id: 'retro', color: '#f7f2e8' }, hat: { id: 'fitted', color: '#17141f' }, acc: { neck: { id: 'dogtags', color: '#c9d3e6' }, hand: { id: 'mic', color: '#6b6b80' } } };
 const TOD = { day: 0, dusk: 0.5, night: 1 };
@@ -91,13 +98,14 @@ export function createRhythm(ctx, opts) {
   const S = { phase: 'idle', T: 0, spb: 0.6, bpm: 100, notes: [], chart: [], hits: [], combo: 0, maxCombo: 0, score: 0, energy: 0, energyShown: 0, press: [0, 0, 0, 0], round: 0, win: Core.windows(opts.stats || { mus: 20 }), approach: 1.43, endBeat: 0, counted: -1, manual: false, audioClock: false, t0: 0, lastA: 0, audioRun: false, cfg: null, result: null, battle: null, myStyle: null, oppStyleNow: null, bot: null, uHit: 0, beatSeen: -1, punch: 0, flee: 0, camK: 0, tPlay: 0, lastEmit: 0, ticks: 0,
     offset: (opts.offsetMs || 0) / 1000, mode: opts.mode || 'perform', vsT: 0, oppT: 0, oppView: [], oppMeter: 0, oppQ: 0, oppEnd: 0, jT: 0, reveal: -1, tally: { you: 0, opp: 0 }, votes: [], verdict: null, verdictShown: false, pickT: 0, stateT: 0 };
   let time = 0, W = 540, H = 960, mic = { on: false, stop: null }, disposed = false, lastTod = todBase;
+  const click = createClick(); click.musicOff();                    // every rhythm game: the scene music is off until dispose
   const A = () => BBH().Audio || null, sfx = (n, o) => { try { const a = A(); if (a) a.sfx(n, o); } catch (e) { /* audio must never break the game */ } };
   const tv = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), dir = createDirector();
   const timers = new Set(), later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); if (!disposed) fn(); }, ms); timers.add(id); return id; };
 
   // ------------------------------------------------------------------ UI
   const api = { press: (l, o) => press(l, o), start: (o) => start(o), quit: (o) => quit(o), toggleMic, hasMic: !!(BBH().Mic && BBH().Mic.open) };
-  const ui = buildUI(hudHost, api); ui.resize(hudHost.clientWidth || 540, hudHost.clientHeight || 960);
+  const ui = buildUI(hudHost, api); ui.resize(hudHost.clientWidth || 540, hudHost.clientHeight || 960); const tui = buildTrainUI(ui);
   function showStartCard() { ui.showStart({ difficulty: opts.difficulty === undefined ? 0.5 : opts.difficulty }); }
   const venueCam = (name) => { const c = venue && venue.cams && venue.cams[name]; if (!c) return null; return { pos: [c.pos[0], c.pos[1] + vy, c.pos[2]], look: [c.look[0], c.look[1] + vy, c.look[2]], fov: c.fov || 0 }; };
   const shot = (name, blend, hold, sway) => { const c = venueCam(name); return c ? { cam: c, blend: blend || 0, hold: hold || 0, sway: sway === undefined ? 0.5 : sway, name } : null; };
@@ -107,14 +115,30 @@ export function createRhythm(ctx, opts) {
   // ------------------------------------------------------------------ rounds
   function defaultSeed(o) { return o.seed !== undefined ? o.seed : (Date.now() & 0xffff); }
   function start(o) {
-    o = Object.assign({}, opts, o || {}); S.cfg = o; S.manual = !!o.manual; S.result = null; S.hits = []; S.round = 0; S.myStyle = null; S.seed0 = defaultSeed(o); ui.clearCard(); ui.hideVs(true); ui.hideJudges(); ui.closeConfirm(); dir.clear(); S.stats = o.stats || { mus: 20 };
+    o = Object.assign({}, opts, o || {}); S.cfg = o; S.manual = !!o.manual; S.result = null; S.hits = []; S.round = 0; S.myStyle = null; S.seed0 = defaultSeed(o); ui.clearCard(); tui.clear(); tui.hidePattern(); ui.hideVs(true); ui.hideJudges(); ui.closeConfirm(); dir.clear(); S.stats = o.stats || { mus: 20 }; S.call = [];
     S.offset = (o.offsetMs || 0) / 1000; S.mode = o.mode || (o.opp || o.battle ? 'battle' : 'perform'); S.verdict = null; S.verdictShown = false; S.votes = []; S.tally = { you: 0, opp: 0 }; S.reveal = -1; S.oppView = []; S.oppStyleNow = null; ui.setBackVisible(true); ui.setMeterName('CROWD'); ui.setHeader([]);
     const opp = o.opp || (o.battle && (o.battle.opp || o.battle)); S.battle = opp && typeof opp === 'object' ? { opp, roundQ: [], oppStyles: [], tot: { perfects: 0, bestCombo: 0, lane: [0, 0, 0, 0], notes: 0, hits: 0, pts: 0, miss: 0, good: 0, perfect: 0 } } : null;
     if (S.battle && isArena && opp !== oppOpt) { try { oppChar = venue.setOpponent(opp) || oppChar; } catch (e) { /* ignore */ } }
     S.win = Core.windows(S.stats); try { const a = A(); if (a && a.unlock) a.unlock(); } catch (e) { /* ignore */ }
     if (o.mic && !mic.on) startMic();
-    if (S.battle) beginVs(); else beginRound();
+    if (S.battle) beginVs(); else if (S.mode === 'train') beginTrainEntry(o); else beginRound();
   }
+  // ---- RHYTHM TRAINING: level select -> LISTEN (the hero plays the pattern once) -> YOUR TURN (count-in) -> 4 bars of gems -> training card
+  function beginTrainEntry(o) {
+    S.levels = beatLevels(Core); S.prog = Object.assign({ unlocked: 1, best: {} }, S.prog || {}, o.progress || {});
+    const lv = o.level | 0; if (lv >= 1 && lv <= S.levels.length && lv <= S.prog.unlocked) beginTrain(lv); else showLevelSelect(lv || S.prog.unlocked);
+  }
+  function showLevelSelect(cur) {
+    click.stop(); S.phase = 'levels'; S.notes = []; S.call = []; ui.setHeader([]); ui.setCombo(0); ui.setBackVisible(true); dir.clear(); mood('neutral'); lighting.setMusic(false);
+    tui.showLevels(S.levels, S.prog, Math.min(cur || 1, S.levels.length), (lv) => beginTrain(lv));
+  }
+  function beginTrain(lv) { S.trainL = S.levels[Math.max(0, Math.min(S.levels.length - 1, lv - 1))]; S.result = null; S.round = 0; S.seed0 = 1000 + lv; ui.setBackVisible(true); tui.clear(); beginRound(); }
+  function trainAct(act) {
+    const L = S.trainL, nx = S.levels[L.level] || null, go = () => { if (act === 'next' && nx && nx.level <= S.prog.unlocked) beginTrain(nx.level); else if (act === 'again') beginTrain(L.level); else if (act === 'levels') showLevelSelect(nx && S.result && S.result.passed ? nx.level : L.level); else doQuit(); };
+    let r = true; if (opts.onContinue) { try { r = opts.onContinue({ train: true, act, level: L.level, result: S.result }); } catch (e) { console.error('[rhythm] train continue ' + e); } }
+    if (act === 'continue') { if (!opts.onContinue) doQuit(); return; } if (r === false) return; go();
+  }
+  function setTrainProgress(p, rw) { if (p) S.prog = Object.assign({ unlocked: 1, best: {} }, S.prog || {}, p); S.trainRw = rw || null; }
   // ---- battle: VS splash (camera whip over the arena, LED wall, DOM names) -> style picker
   function beginVs() {
     const B = S.battle, opp = B.opp; S.phase = 'vs'; S.vsT = 0; S.vsHit = false; S.stateT = 0; sfx('whoosh'); mood('angry'); lighting.setMusic(true);
@@ -133,31 +157,48 @@ export function createRhythm(ctx, opts) {
   }
   function pick(id) { if (S.phase !== 'pick') return false; ui.clearCard(); S.myStyle = id; beginRound(); return true; }
   function beginRound() {
-    const o = S.cfg, B = S.battle, bars = B ? 4 : (o.bars || 8), seed = S.seed0 + S.round * 977, diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : (o.difficulty === undefined ? 0.5 : o.difficulty);
-    let chart = Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
-    const bpm = B ? (B.opp.bpm || 100) : (o.bpm || 100); S.bpm = bpm; S.spb = 60 / bpm; S.chart = chart; ctx.__bpm = bpm; S.hits = []; S.combo = 0; S.maxCombo = 0; S.score = 0; S.counted = -1; S.beatSeen = -1; S.bars = bars; S.seed = seed; S.diff = diff;
+    const o = S.cfg, B = S.battle, TL = S.mode === 'train' ? S.trainL : null, bars = B ? 4 : TL ? TRAIN_BARS : (o.bars || 8), seed = S.seed0 + S.round * 977, diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : TL ? 0.2 + TL.level * 0.08 : (o.difficulty === undefined ? 0.5 : o.difficulty);
+    let chart = TL ? trainChart(TL, bars) : Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
+    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : (o.bpm || 100);
+    S.lead = TL ? 12 : 4; S.cIn = S.lead - 4;                         // training: 4 beats LISTEN count, 4 beats the hero's call, 4 beats YOUR TURN count-in
+    S.bpm = bpm; S.spb = 60 / bpm; S.chart = chart; ctx.__bpm = bpm; S.hits = []; S.combo = 0; S.maxCombo = 0; S.score = 0; S.counted = -1; S.beatSeen = -1; S.bars = bars; S.seed = seed; S.diff = diff;
     S.approach = Math.max(1.3, (1500 - Math.min(300, bpm * 2)) / 1000 * 1.1); S.phase = 'count'; S.press = [0, 0, 0, 0]; S.uHit = 0; S.oppView = []; dir.clear(); ui.setMeterName('CROWD');
-    let g = null; if (!S.manual) { try { const a = A(); g = a && a.groove.start({ bpm, style: B ? B.opp.style : (o.style || 0), bars: bars + 3 }); } catch (e) { g = null; } }
+    const g0 = click.start({ bpm, offsetMs: S.offset * 1000 }), g = S.manual ? null : g0;          // music off: the shaker metronome gives the audio clock (no backing groove)
     S.audioClock = !!(g && typeof g.t0 === 'number' && g.spb); S.audioRun = false; S.lastA = 0; if (S.audioClock) { S.t0 = g.t0; S.spb = g.spb; } S.T = S.audioClock ? 0 : -0.4;
-    S.notes = chart.map((n, i) => ({ id: i, lane: n.lane, beat: n.beat + 4, time: (n.beat + 4) * S.spb, state: 0 })); S.endBeat = bars * 4 + 4 + 2; hw.setApproach(S.approach, S.spb);
+    S.notes = chart.map((n, i) => ({ id: i, lane: n.lane, beat: n.beat + S.lead, time: (n.beat + S.lead) * S.spb, state: 0 })); S.endBeat = bars * 4 + S.lead + 2; hw.setApproach(S.approach, S.spb);
+    S.call = TL ? TL.notes.map((n, i) => ({ id: 8000 + i, lane: n.lane, step: n.step, time: (4 + n.beat) * S.spb, state: 0, done: false, tint: callTint })) : [];
     if (o.bot || S.bot) { planBot(o.bot || S.bot._o); }
     ui.setScore(0); ui.setCombo(0); fx.clear(); lighting.setMusic(true); mood('neutral');
     if (B) { ui.setHeader([{ t: 'ROUND ' + (S.round + 1) + '/3', k: '' }, { t: 'STYLE: ' + String(S.myStyle || '-').toUpperCase(), k: 's' }]); ui.toast((S.round === 0 ? (B.opp.taunt || '') : 'vs ' + (B.opp.name || 'Rival')) || ('ROUND ' + (S.round + 1)), 2200); }
+    else if (TL) { ui.setHeader([]); ui.setMeterName('GROOVE'); tui.showPattern(TL, 'LISTEN'); try { perf.play('beatbox', { bpm, amp: 0.8 }); } catch (e) { /* ignore */ } }
     else { ui.setHeader(o.title ? [{ t: String(o.title).toUpperCase() + (o.sub ? '  -  ' + String(o.sub).toUpperCase() : ''), k: '' }] : []); if (o.tip && S.round === 0) ui.toast('TAP THE LANE AS THE GEMS HIT THE RING', 3200); }
   }
   function finishRound() {
-    const sum = Core.summarize(S.hits, S.chart.length, S.maxCombo); S.sum = sum; try { const a = A(); if (a) a.groove.stop(); } catch (e) { /* ignore */ }
+    const sum = Core.summarize(S.hits, S.chart.length, S.maxCombo); S.sum = sum; click.stop();
     const B = S.battle;
     if (B) {
       const t = B.tot; t.perfects += sum.perfect; t.bestCombo = Math.max(t.bestCombo, sum.bestCombo); sum.perfectLane.forEach((v, i) => { t.lane[i] += v; }); t.notes += S.chart.length; t.perfect += sum.perfect; t.good += sum.good; t.miss += sum.miss; t.pts += sum.perfect * 100 + sum.good * 60; t.score = (t.score || 0) + sum.score;
       const qd = Math.min(1, sum.accuracy * 0.8 + Math.min(1, sum.bestCombo / Math.max(8, S.chart.length * 0.7)) * 0.2); B.roundQ.push({ q: qd, style: S.myStyle }); B.oppStyles.push(S.oppStyleNow);
       startOpp(); return;
     }
+    if (S.mode === 'train') { finishTrain(sum); return; }
     const result = Object.assign({}, sum, { game: 'rhythm', grade: sum.rank, hits: sum.perfect + sum.good, maxCombo: sum.bestCombo, difficulty: S.diff, seed: S.seed, bars: S.bars, bpm: S.bpm, mode: S.mode === 'battle' ? 'perform' : S.mode, liveScore: Math.round(S.score) });
     S.result = result; S.phase = 'result'; S.tPlay = 0; ui.setCombo(0); ui.setHeader([]); dir.clear();
     ui.showResult(result, () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })), { game, label: S.cfg.title, onContinue: (r) => { if (opts.onContinue) opts.onContinue(r); } });
     sfx(result.grade === 'S' || result.grade === 'A' ? 'win' : 'applause'); const hot = result.grade === 'S' || result.grade === 'A'; celebrate(hot);
     lighting.setMusic(false); try { ctx.events.emit('minigame', { game: 'rhythm', result }); } catch (e) { console.error('[rhythm] result handler failed ' + e); }
+  }
+  function finishTrain(sum) {
+    const L = S.trainL, nx = S.levels[L.level] || null, q = sum.accuracy, passed = q >= UNLOCK_Q;
+    const result = Object.assign({}, sum, { game: 'rhythm', grade: sum.rank, hits: sum.perfect + sum.good, maxCombo: sum.bestCombo, bpm: S.bpm, bars: S.bars, mode: 'train', level: L.level, levelId: L.id, name: L.name, q, passed, liveScore: Math.round(S.score) });
+    S.result = result; S.phase = 'result'; S.tPlay = 0; ui.setCombo(0); ui.setHeader([]); dir.clear(); tui.hidePattern();
+    const was = S.prog.unlocked; if (!game && passed && nx && L.level >= was) S.prog.unlocked = L.level + 1;                // standalone: unlock locally (the game: Core trainGame, then setTrainProgress)
+    const rk = 'SABCD', old = S.prog.best[L.level]; if (!game && (!old || rk.indexOf(result.grade) < rk.indexOf(old))) S.prog.best[L.level] = result.grade;
+    sfx(passed ? 'win' : 'applause'); celebrate(result.grade === 'S' || result.grade === 'A'); lighting.setMusic(false);
+    const card = () => tui.showTrainResult(result, { L, next: nx, unlocked: !nx ? false : nx.level <= S.prog.unlocked, game, onAct: trainAct });
+    if (!game) card(); else ui.setBackVisible(false);
+    try { ctx.events.emit('minigame', { game: 'rhythm', result }); } catch (e) { console.error('[rhythm] result handler failed ' + e); }
+    if (game) { card(); if (S.trainRw) ui.setRewards(S.trainRw); }                 // the scene ran trainGame in the handler: the card knows the new unlock and the gain
   }
   function celebrate(hot) {
     fx.confettiBurst(hot ? 90 : 30, 0, 6, STAGE.z + 6, 12, 10); if (venue && venue.cheer) { try { venue.cheer(hot ? 2.5 : 1); } catch (e) { /* ignore */ } } if (venue && venue.pyro && hot) { try { venue.pyro(2); } catch (e) { /* ignore */ } }
@@ -170,7 +211,7 @@ export function createRhythm(ctx, opts) {
     const tint = new THREE.Color(1, 0.62, 0.85); S.oppView = T.notes; S.oppView.forEach((n) => { n.tint = tint; }); S.spb = T.spb; S.bpm = opp.bpm || 100; hw.setApproach(S.approach, S.spb);
     ui.setMeterName('THEM'); ui.setHeader([{ t: 'ROUND ' + (S.round + 1) + '/3', k: '' }, { t: String(opp.name || 'RIVAL').toUpperCase() + "'S TURN", k: 't' }]);
     ui.toast(clashLine(Core, S.myStyle, S.oppStyleNow), 2800); mood('neutral');
-    if (!S.manual) { try { const a = A(); if (a) a.groove.start({ bpm: opp.bpm || 100, style: opp.style || 0, bars: 5 }); } catch (e) { /* ignore */ } }
+    click.start({ bpm: opp.bpm || 100, lead: 1.2, offsetMs: S.offset * 1000 });                                  // the rival beatboxes over the same soft shaker
     try { perf.play('idle', {}); } catch (e) { /* ignore */ } if (oppChar) { try { oppChar.setMood('angry'); } catch (e) { /* ignore */ } }
     dir.play([shot('oppClose', 0.8, 2.3, 0.5)], { clearAtEnd: true });                // then the play camera: the rival's ghost notes run down the highway
   }
@@ -181,7 +222,7 @@ export function createRhythm(ctx, opts) {
     }
     S.oppMeter = Math.min(S.oppQ, S.oppMeter + dt / 2.4 * S.oppQ);
     if (T > S.oppEnd) {
-      try { const a = A(); if (a) a.groove.stop(); } catch (e) { /* ignore */ }
+      click.stop();
       S.round++; S.oppView = []; if (oppChar) { try { oppChar.play('battle', { bpm: S.bpm }); } catch (e) { /* ignore */ } }
       if (S.round >= 3) startJudge(); else beginPick();
     }
@@ -246,7 +287,7 @@ export function createRhythm(ctx, opts) {
     ui.pop(grade === 'perfect' ? 'PERFECT' : 'GOOD', grade, sp[0], sp[1]);
     fx.burst(x, 0.45, HIT_Z, grade === 'perfect' ? 18 : 9, { colors: [L.color, L.hi, '#fff2dc'], speed: grade === 'perfect' ? 3.6 : 2.6, up: 2.4, life: 0.6, size: 0.2, grav: 7 }); fx.ring(x, HIT_Z, L.color, grade === 'perfect' ? 2.1 : 1.5);
     if (grade === 'perfect') S.punch = Math.max(S.punch, 0.45);
-    if (S.combo > 0 && S.combo % 10 === 0) { sfx('combo'); ui.pop(S.combo + ' COMBO', 'perfect', W / 2, H * 0.34, true); S.punch = 1; fx.ring(0, HIT_Z - 0.5, '#fff2dc', 4.5); try { const a = A(); if (a) a.groove.setIntensity(Math.min(1, S.combo / 40)); } catch (e) { /* ignore */ } if (S.energy > 0.45) fx.confettiBurst(24, 0, 6, -6, 9, 8); }
+    if (S.combo > 0 && S.combo % 10 === 0) { sfx('combo'); ui.pop(S.combo + ' COMBO', 'perfect', W / 2, H * 0.34, true); S.punch = 1; fx.ring(0, HIT_Z - 0.5, '#fff2dc', 4.5); if (S.energy > 0.45) fx.confettiBurst(24, 0, 6, -6, 9, 8); }
   }
   function breakCombo() { if (S.combo >= 8) sfx('miss'); S.combo = 0; ui.setCombo(0); S.punch = 0; S.shake = 0.35; }
 
@@ -260,7 +301,7 @@ export function createRhythm(ctx, opts) {
   // like the 2D game: leaving the tab mid set abandons it (no rewards). Standalone: back to the start card. In the game: back to the place.
   function onVis() { if (document.hidden && (S.phase === 'play' || S.phase === 'count' || S.phase === 'opp' || S.phase === 'pick') && !S.manual) { if (game) { ui.toast('Set interrupted.', 1500); later(() => doQuit(), 50); } else abort(); } }
   document.addEventListener('visibilitychange', onVis);
-  function abort() { try { const a = A(); if (a) a.groove.stop(); } catch (e) { /* ignore */ } S.phase = 'idle'; S.bot = null; dir.clear(); ui.hideVs(true); ui.hideJudges(); ui.setHeader([]); lighting.setMusic(false); ui.setCombo(0); S.combo = 0; ui.toast('Set interrupted.', 2200); showStartCard(); }
+  function abort() { click.stop(); S.phase = 'idle'; S.bot = null; dir.clear(); ui.hideVs(true); ui.hideJudges(); ui.setHeader([]); lighting.setMusic(false); ui.setCombo(0); S.combo = 0; ui.toast('Set interrupted.', 2200); showStartCard(); }
 
   // MIC MODE: like the 2D game. Each detected beatbox hit presses the lane it was classified as.
   function toggleMic() { if (mic.on) { stopMic(); if (opts.onMic) opts.onMic(false); } else startMic(true); }
@@ -279,7 +320,7 @@ export function createRhythm(ctx, opts) {
     if (S.phase === 'play' && (ev.confidence === undefined || ev.confidence < 0.5)) { let best = null, bd = 1e9; for (const n of S.notes) { if (n.state) continue; const d = Math.abs(S.T - n.time); if (d < bd) { bd = d; best = n; } } if (best && bd < 0.2) lane = best.lane; }
     press(lane, { silent: true, shift: 0.04 });
   }
-  function doQuit() { stopMic(); try { const a = A(); if (a) a.groove.stop(); } catch (e) { /* ignore */ } try { events.emit('minigameQuit'); } catch (e) { /* ignore */ } }
+  function doQuit() { stopMic(); click.stop(); try { events.emit('minigameQuit'); } catch (e) { /* ignore */ } }
   function quit(o) { o = o || {}; if (game && busy() && !o.force) { ui.confirmLeave({ onLeave: doQuit }); return false; } doQuit(); return true; }
 
   // test bot: plans a press for every note with a gaussian timing error (and picks battle styles by itself)
@@ -300,11 +341,22 @@ export function createRhythm(ctx, opts) {
     S.tPlay += dt;
     if (S.phase === 'count' || S.phase === 'play') {
       const T = S.T, beatNow = Math.floor(T / S.spb);
-      if (S.phase === 'count' && beatNow !== S.counted && beatNow >= 0 && beatNow < 4) { S.counted = beatNow; sfx(beatNow === 3 ? 'go' : 'countdown'); ui.countdown(beatNow === 3 ? 'GO!' : String(3 - beatNow)); }
-      if (T >= 4 * S.spb - 0.02) S.phase = 'play';
+      const cb = beatNow - (S.cIn || 0);
+      if (S.phase === 'count' && beatNow !== S.counted && cb >= 0 && cb < 4) { S.counted = beatNow; sfx(cb === 3 ? 'go' : 'countdown'); ui.countdown(cb === 3 ? 'GO!' : String(3 - cb)); if (S.call.length && cb === 0) tui.patternLabel('YOUR TURN', true); }
+      if (S.call.length) callTick(T);
+      if (T >= (S.lead || 4) * S.spb - 0.02) S.phase = 'play';
       if (S.bot) for (const p of S.bot.plan) { if (p.done || p.at > T) continue; p.done = true; if (!p.skip && !p.n.state) press(p.n.lane, { silent: true, bot: true }); }
       for (const n of S.notes) if (!n.state && (T + S.offset - n.time) * 1000 > S.win.good + 20) { n.state = 3; S.hits.push({ lane: n.lane, grade: 'miss' }); breakCombo(); const sp = project(laneX(n.lane), 0.9, HIT_Z); ui.pop('MISS', 'miss', sp[0], sp[1]); }
       if (T / S.spb > S.endBeat) finishRound();
+    }
+  }
+  // the hero's call in training: every pattern note sounds (the hero's own beatbox voice), lights its lane and its step in the strip
+  const callTint = new THREE.Color(0.75, 1, 0.95);
+  function callTick(T) {
+    for (const n of S.call) if (!n.done && T >= n.time) {
+      n.done = true; n.state = 1; S.press[n.lane] = 1; ui.padFlash(n.lane); performerHit(n.lane); tui.patternStep(n.step);
+      try { const a = A(); if (a && !S.manual) a.drum(n.lane, { vel: 0.85 }); } catch (e) { /* ignore */ }
+      fx.burst(laneX(n.lane), 0.45, HIT_Z, 8, { colors: [LANES[n.lane].color, '#fff2dc'], speed: 2.2, up: 2, life: 0.5, size: 0.18, grav: 7 }); fx.ring(laneX(n.lane), HIT_Z, LANES[n.lane].color, 1.4);
     }
   }
   const camBase = new THREE.Vector3(0, 6.0, 11.4), camAim = new THREE.Vector3(0, 0.5, -7), camFrom = { p: new THREE.Vector3(), l: new THREE.Vector3(), fov: 50 };
@@ -339,14 +391,15 @@ export function createRhythm(ctx, opts) {
     if (inOpp && oppChar) { try { oppChar.play('beatbox', { bpm: S.bpm, phase: beat, amp: 0.7 + 0.3 * E, external: true }); } catch (e) { /* ignore */ } }
     crowd.update(dt, t, E, beat, S.punch);
     if (venue) venue.update(dt, t, { energy: E, beat, spb: S.spb, approach: S.approach, flee: S.flee }); else world.update(dt, t, { energy: E, beat, flee: S.flee });
-    hw.update({ T: inOpp ? S.oppT : playing || S.phase === 'result' ? S.T : t * S.bpm / 60 * S.spb, spb: S.spb, approach: S.approach, notes: inOpp ? S.oppView : playing ? S.notes : [], press: S.press, energy: E, t });
+    hw.update({ T: inOpp ? S.oppT : playing || S.phase === 'result' ? S.T : t * S.bpm / 60 * S.spb, spb: S.spb, approach: S.approach, notes: inOpp ? S.oppView : playing ? (S.call && S.call.length && S.phase === 'count' ? S.call.concat(S.notes) : S.notes) : [], press: S.press, energy: E, t });
+    if (S.mode === 'train' && S.trainL && S.phase === 'play') { const b = S.T / S.spb - S.lead, st = Math.floor((((b % 4) + 4) % 4) * S.trainL.steps / 4 + 0.25); tui.patternStep(st); }
     fx.update(dt, t); ui.setEnergy(E); ui.setHud(S.phase !== 'vs' && S.phase !== 'judge' && S.phase !== 'verdict'); updateCamera(dt, t, E);
     lighting.update(dt, t); if (scene.fog) { scene.fog.near = 34; scene.fog.far = 150; }
   }
   // camera: attract/result cam orbits the stage, play cam sits behind and above the highway with a gentle sway and a kick zoom on the beat. The director (VS whip, judges, verdict) overrides it and eases back.
   function fovFor(aspect) { return clamp(2 * Math.atan(Math.tan(27 * Math.PI / 180) * (0.5625 / Math.max(0.3, aspect))) * 180 / Math.PI, 38, 72); }
   function updateCamera(dt, t, E) {
-    const want = S.phase === 'count' || S.phase === 'play' || S.phase === 'between' || S.phase === 'opp' ? 1 : 0; S.camK += (want - S.camK) * (1 - Math.exp(-dt * 2.2)); const k = S.camK * S.camK * (3 - 2 * S.camK), sw = 0.4 + E * 0.6;
+    const want = S.phase === 'count' && S.call && S.call.length && S.T / S.spb < S.cIn - 0.5 ? 0.3 : S.phase === 'count' || S.phase === 'play' || S.phase === 'between' || S.phase === 'opp' ? 1 : 0;   /* training LISTEN: the camera drifts in on the hero */ S.camK += (want - S.camK) * (1 - Math.exp(-dt * 2.2)); const k = S.camK * S.camK * (3 - 2 * S.camK), sw = 0.4 + E * 0.6;
     const orbit = S.phase === 'result' ? 1 : 0, ox = Math.sin(t * 0.18) * (orbit ? 3.6 : 4.6), oy = (orbit ? 3.2 : 3.9) + Math.sin(t * 0.23) * 0.25, oz = orbit ? 3.2 : 6.0;
     camPos.set(lerp(ox, camBase.x + Math.sin(t * 0.45) * 0.38 * sw, k), lerp(oy, camBase.y + Math.sin(t * 0.33) * 0.14 * sw, k), lerp(oz, camBase.z - S.punch * 0.35, k));
     camLook.set(lerp(0, camAim.x + Math.sin(t * 0.5 + 1) * 0.22 * sw, k), lerp(orbit ? -1.5 : 2.0, camAim.y, k), lerp(orbit ? -11 : STAGE.z, camAim.z, k));
@@ -376,16 +429,16 @@ export function createRhythm(ctx, opts) {
   function state() {
     const T = S.phase === 'opp' ? S.oppT : S.T, up = []; for (const n of S.notes) { if (n.state) continue; const d = (n.time - S.T) * 1000; if (d > -400 && up.length < 8) up.push({ lane: n.lane, dtMs: Math.round(d * 10) / 10, id: n.id }); }
     let p = 0, g = 0, m = 0; S.hits.forEach((h) => { if (h.grade === 'perfect') p++; else if (h.grade === 'good') g++; else m++; });
-    return { phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
+    return { phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, audio: click.state(), train: S.mode === 'train' ? { level: S.trainL ? S.trainL.level : 0, unlocked: S.prog ? S.prog.unlocked : 1, best: Object.assign({}, S.prog ? S.prog.best : {}), lead: S.lead, callDone: (S.call || []).filter((n) => n.done).length, callTotal: (S.call || []).length } : null, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
       battle: S.battle ? { opp: S.battle.opp.name, myStyle: S.myStyle, oppStyle: S.oppStyleNow, oppQ: S.oppQ, oppMeter: S.oppMeter, oppNotes: S.oppView.length, oppHit: S.oppView.filter((n) => n.state === 1).length, reveal: S.reveal, tally: Object.assign({}, S.tally), roundQ: S.battle.roundQ.map((r) => ({ q: r.q, style: r.style })), verdict: S.verdict ? { win: !!S.verdict.win } : null } : null };
   }
   function resize(w, h) { W = w; H = h; ui.resize(w, h); lighting.resize(w, h, Math.min(window.devicePixelRatio || 1, 2)); camera.fov = fovFor(w / h); camera.updateProjectionMatrix(); }
   function dispose() {
-    disposed = true; timers.forEach((id) => clearTimeout(id)); timers.clear(); window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); stopMic(); try { const a = A(); if (a) a.groove.stop(); } catch (e) { /* ignore */ } ui.dispose();
+    disposed = true; timers.forEach((id) => clearTimeout(id)); timers.clear(); window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); stopMic(); click.musicOn(); tui.dispose(); ui.dispose();
     try { if (venue) venue.dispose(); } catch (e) { /* ignore */ } try { lighting.dispose(); } catch (e) { /* ignore */ } try { crowd.dispose(); } catch (e) { /* ignore */ } try { disposeTree(perf.object); perf.dispose(); } catch (e) { /* ignore */ }      // tree first (bone texture), then the character
     try { disposeTree(group); } catch (e) { group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
   }
   camera.fov = fovFor(0.5625); camera.near = 0.5; camera.far = 220; camera.updateProjectionMatrix(); update(0.016, 0.016); if (!game) showStartCard();
   if (opts.autostart || game) { ui.clearCard(); start(opts); }
-  return { group, update, render, resize, setLook(l) { perf.setLook(mkLook(l)); }, start, dispose, press, tick, state, result: () => S.result, bot(b) { S.bot = { _o: b || {} }; if (S.notes.length) planBot(b || {}); return !!S.bot; }, quit, pick, setRewards, perf, crowd, world: world || venue, venue, highway: hw, fx, lighting, ui, S, director: dir, forceEnergy(v) { S.forceEnergy = v; }, cam(p, l, fov) { S.camO = p ? { p, l, fov } : null; } };
+  return { group, update, render, resize, setLook(l) { perf.setLook(mkLook(l)); }, start, dispose, press, tick, state, result: () => S.result, bot(b) { S.bot = { _o: b || {} }; if (S.notes.length) planBot(b || {}); return !!S.bot; }, quit, pick, setRewards, setTrainProgress, levels: () => S.levels || beatLevels(Core), click, perf, crowd, world: world || venue, venue, highway: hw, fx, lighting, ui, S, director: dir, forceEnergy(v) { S.forceEnergy = v; }, cam(p, l, fov) { S.camO = p ? { p, l, fov } : null; } };
 }

@@ -1,6 +1,10 @@
 /* BBH.Audio: the whole Beatbox Heroes soundscape, synthesised with Web Audio (no audio files).
  *
- *   - Mouth-beatbox drum voices (B kick, T hat, K snare, Pf breath-clap), humanised on every hit.
+ *   - Mouth-beatbox drum voices (B kick, T hat, K snare, Pf breath-clap), humanised on every hit, plus the unlockable
+ *     sounds LR lip roll, TB throat bass, IK inward K, CR click roll, ZP zipper, SI siren, WB water drop, RIM rimshot, HUM hum bass
+ *     (drum(id) / beatbox(id); a recorded sample for a lane or id replaces the synth voice).
+ *   - Game mode: scene music off while a mini game runs, a soft shaker metronome on the audio clock, then the scene track comes back.
+ *   - Clean piano-like tones for ear training: note, chord, interval.
  *   - 29 UI / game sfx.
  *   - 12 music tracks composed deterministically in code (chords, bass lines, drum grids, arps, motifs),
  *     scheduled with a 25 ms timer and ~180 ms lookahead, seamless loops, sidechain pump, lo-fi tape touches,
@@ -523,7 +527,7 @@
     copts = copts || {};
     const LOG = copts.log ? [] : null;
     let ctx = null, dead = false, G = null;
-    let muted = false;
+    let muted = false, musMul = 1;
     const vol = { music: 0.8, sfx: 0.9 };
     let pending = null, track = null, groove = null, intensity = 0.6, timer = null;
     const dying = [];
@@ -600,13 +604,14 @@
       G.mRev.connect(G.revIn); G.sRev.connect(G.revIn); G.mDly.connect(G.dlyIn);
       G.SFX = { bus: G.sfx, rev: G.sRev, dly: null };
       G.DRUM = { bus: G.drum, rev: G.sRevD, dly: null };
+      G.TONE = { bus: G.drum, rev: G.sRevD, dly: null };
       G.MUS = { bus: G.mus, rev: G.mRev, dly: G.mDly };
     }
     function applyVol() {
       if (!G) return;
       setp(G.master.gain, muted ? 0 : MASTER);
-      setp(G.mus.gain, vol.music * MUSTRIM); setp(G.sfx.gain, vol.sfx * SFXBOOST); setp(G.drum.gain, vol.sfx); setp(G.sRevD.gain, vol.sfx);
-      setp(G.mRev.gain, vol.music); setp(G.sRev.gain, vol.sfx * SFXBOOST); setp(G.mDly.gain, vol.music);
+      setp(G.mus.gain, vol.music * MUSTRIM * musMul); setp(G.sfx.gain, vol.sfx * SFXBOOST); setp(G.drum.gain, vol.sfx); setp(G.sRevD.gain, vol.sfx);
+      setp(G.mRev.gain, vol.music * musMul); setp(G.sRev.gain, vol.sfx * SFXBOOST); setp(G.mDly.gain, vol.music * musMul);
     }
 
     /* ---- voice plumbing ---- */
@@ -781,18 +786,161 @@
     }
     const BBKIT = kitOf('bb');
     const LANE_KEYS = ['k', 'h', 's', 'c'];
-    /* recorded samples (player's own voice) replace the synth voice of a lane */
-    const SAMPLES = [null, null, null, null];
+
+    /* ---- extra beatbox voices, one per unlockable Core.SOUNDS id ---- */
+    function lipRollV(t, vel, pm, o) { // LR: lips flapping over a low buzz, "brrrrr"
+      const h = hum(1), dur = 0.5 * h.len, mix = mkGain(0), v = vc(mix), end = t + dur + 0.16, f = 88 * pm * h.p;
+      const a = O(v, 'sawtooth', f, t, end);
+      a.frequency.setValueAtTime(f * 1.07, t); a.frequency.exponentialRampToValueAtTime(f * 0.9, t + dur);
+      const lp = biq('lowpass', 1100, 1.4), am = mkGain(0);
+      am.gain.setValueAtTime(0.5, t);
+      const lfo = O(v, 'sine', 29 * pm * h.p, t, end), lg = mkGain(0.5); lfo.connect(lg); lg.connect(am.gain);
+      chain(a, lp, am, mix);
+      const n = N(v, t, dur + 0.15), bp = biq('bandpass', 650, 1.3), ng = mkGain(0.9); chain(n, bp, ng, am);
+      envADSR(mix.gain, t, vel * 0.85, 0.02, 0.1, 0.8, dur, 0.1);
+      route(mix, o, 0.05, 0);
+    }
+    function throatBassV(t, vel, pm, o) { // TB: a gritty hummed bass note from the throat
+      const h = hum(1), dur = 0.6 * h.len, mix = mkGain(0), v = vc(mix), end = t + dur + 0.2, f = 55 * pm * h.p;
+      const vib = O(v, 'sine', 5.5, t, end), vg = mkGain(14); vib.connect(vg);
+      const pre = mkGain(0.5);
+      [['sawtooth', f, 0.8, -6], ['sawtooth', f, 0.8, 6], ['square', f * 0.5, 0.35, 0]].forEach(([w, fr, am, det]) => {
+        const os = O(v, w, fr, t, end); os.detune.value = det; vg.connect(os.detune);
+        os.frequency.setValueAtTime(fr * 1.12, t); os.frequency.exponentialRampToValueAtTime(fr, t + 0.06);
+        const g = mkGain(am); os.connect(g); g.connect(pre);
+      });
+      const drive = satShared(2.6), lp = biq('lowpass', 520, 1.1), form = biq('bandpass', 330, 2.2), fg = mkGain(1.2);
+      chain(pre, drive, lp); drive.connect(form); form.connect(fg);
+      lp.connect(mix); fg.connect(mix);
+      envADSR(mix.gain, t, vel * 0.8, 0.03, 0.12, 0.75, dur, 0.14);
+      route(mix, o, 0.04, 0);
+    }
+    function inwardKV(t, vel, pm, o) { // IK: an inward sucked "k" snare, sharp click then a short in-breath
+      const h = hum(1), mix = mkGain(1), v = vc(mix), len = 0.075 * h.len;
+      const n = N(v, t, len + 0.05), hp = biq('highpass', 2500, 0.7), bp = biq('bandpass', 3200 * pm, 1.0), gn = mkGain(0);
+      bp.frequency.setValueAtTime(3200 * pm, t); bp.frequency.exponentialRampToValueAtTime(7000 * pm, t + 0.07);
+      chain(n, hp, bp, gn);
+      const pk = vel * 2.6;
+      gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(pk * 0.55, t + 0.003); gn.gain.linearRampToValueAtTime(pk, t + 0.03);
+      gn.gain.exponentialRampToValueAtTime(pk * 0.001, t + len); gn.gain.setValueAtTime(0, t + len + 0.002);
+      gn.connect(mix);
+      const n2 = N(v, t, 0.02), hp2 = biq('highpass', 3800, 0.7), gc = mkGain(0); chain(n2, hp2, gc); envAD(gc.gain, t, vel * 0.7, 0.0003, 0.006); gc.connect(mix);
+      const b = O(v, 'triangle', 950 * pm, t, t + 0.05), gb = mkGain(0);
+      b.frequency.setValueAtTime(950 * pm, t); b.frequency.exponentialRampToValueAtTime(520 * pm, t + 0.03);
+      b.connect(gb); envAD(gb.gain, t, vel * 0.18, 0.0006, 0.03); gb.connect(mix);
+      route(mix, o, 0, 0); // dry and tight, unlike the open outward K
+    }
+    function clickRollV(t, vel, pm, o) { // CR: a fast roll of tongue clicks, slowing a little at the end
+      const mix = mkGain(1), v = vc(mix);
+      let x = t;
+      for (let i = 0; i < 9; i++) {
+        const fr = (1500 + rnd() * 260) * pm, a = vel * (1 - i * 0.06);
+        const os = O(v, 'triangle', fr, x, x + 0.03), g = mkGain(0);
+        os.frequency.setValueAtTime(fr, x); os.frequency.exponentialRampToValueAtTime(fr * 0.6, x + 0.01);
+        os.connect(g); envAD(g.gain, x, a * 0.55, 0.0005, 0.011); g.connect(mix);
+        const n = N(v, x, 0.02), bp = biq('bandpass', 2600 * pm, 1.6), gn = mkGain(0);
+        chain(n, bp, gn); envAD(gn.gain, x, a * 0.9, 0.0004, 0.007); gn.connect(mix);
+        x += 0.042 + i * 0.002 + rnd() * 0.004;
+      }
+      route(mix, o, 0.06, 0);
+    }
+    function zipperV(t, vel, pm, o) { // ZP: a buzzing "zzzip" that sweeps up and snaps shut
+      const h = hum(1), dur = 0.22 * h.len, mix = mkGain(1), v = vc(mix);
+      const n = N(v, t, dur + 0.05), bp = biq('bandpass', 1300 * pm, 3), teeth = mkGain(0), env = mkGain(0);
+      bp.frequency.setValueAtTime(1300 * pm, t); bp.frequency.exponentialRampToValueAtTime(6200 * pm, t + dur);
+      teeth.gain.setValueAtTime(0.5, t);
+      const lfo = O(v, 'sine', 95 * pm, t, t + dur + 0.05), lg = mkGain(0.5); lfo.connect(lg); lg.connect(teeth.gain);
+      chain(n, bp, teeth, env);
+      const pk = vel * 3.4;
+      env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(pk * 0.3, t + 0.01); env.gain.linearRampToValueAtTime(pk, t + dur * 0.9);
+      env.gain.linearRampToValueAtTime(0, t + dur); env.connect(mix);
+      const n2 = N(v, t + dur - 0.004, 0.02), hp = biq('highpass', 3000, 0.7), gc = mkGain(0); chain(n2, hp, gc); envAD(gc.gain, t + dur - 0.004, vel * 0.5, 0.0005, 0.01); gc.connect(mix);
+      route(mix, o, 0.06, 0);
+    }
+    function sirenV(t, vel, pm, o) { // SI: a whistled siren, up then down, with a little breath
+      const h = hum(1), dur = 0.7 * h.len, out = mkGain(0), v = vc(out), end = t + dur + 0.16, f = 640 * pm * h.p;
+      const os = O(v, 'triangle', f, t, end), lp = biq('lowpass', 2600, 0.6);
+      os.frequency.setValueAtTime(f, t); os.frequency.exponentialRampToValueAtTime(f * 2, t + dur * 0.5); os.frequency.exponentialRampToValueAtTime(f * 1.3, t + dur);
+      const vib = O(v, 'sine', 6.2, t, end), vg = mkGain(22); vib.connect(vg); vg.connect(os.detune);
+      chain(os, lp, out);
+      const n = N(v, t, dur + 0.15), bp = biq('bandpass', 1800, 0.9), gb = mkGain(0.12); chain(n, bp, gb, out);
+      envADSR(out.gain, t, vel * 0.8, 0.06, 0.1, 0.85, dur, 0.12);
+      route(out, o, 0.15, 0);
+    }
+    function waterDropV(t, vel, pm, o) { // WB: a round "bloop" with the pitch springing up, then a tiny plink
+      const mix = mkGain(1), v = vc(mix);
+      const f = 360 * pm, a = O(v, 'sine', f, t, t + 0.2), g = mkGain(0);
+      a.frequency.setValueAtTime(f, t); a.frequency.exponentialRampToValueAtTime(f * 3.6, t + 0.055);
+      a.connect(g); envAD(g.gain, t, vel * 0.85, 0.003, 0.13); g.connect(mix);
+      const b = O(v, 'sine', f * 5, t + 0.05, t + 0.16), gb = mkGain(0);
+      b.frequency.setValueAtTime(f * 5, t + 0.05); b.frequency.exponentialRampToValueAtTime(f * 6.2, t + 0.08);
+      b.connect(gb); envAD(gb.gain, t + 0.05, vel * 0.16, 0.002, 0.06); gb.connect(mix);
+      const po = O(v, 'sine', 300 * pm, t, t + 0.04), gp = mkGain(0); // lip pop
+      po.frequency.setValueAtTime(300 * pm, t); po.frequency.exponentialRampToValueAtTime(120 * pm, t + 0.02);
+      po.connect(gp); envAD(gp.gain, t, vel * 0.25, 0.001, 0.02); gp.connect(mix);
+      route(mix, o, 0.18, 0);
+    }
+    const RIMKIT = { f: 1900, lv: 1.25 };
+    function rimshotV(t, vel, pm, o) { // RIM: a dry stick-on-rim knock with a tongue click on top
+      const h = hum(1), mix = mkGain(1), v = vc(mix);
+      rimV(t, vel, RIMKIT, { bus: mix, rev: null, dly: null }, pm, h, 0);
+      const b = O(v, 'triangle', 430 * pm * h.p, t, t + 0.06), gb = mkGain(0);
+      b.frequency.setValueAtTime(560 * pm * h.p, t); b.frequency.exponentialRampToValueAtTime(430 * pm * h.p, t + 0.01);
+      b.connect(gb); envAD(gb.gain, t, vel * 0.28, 0.0005, 0.035); gb.connect(mix);
+      const n = N(v, t, 0.03), bp = biq('bandpass', 3400 * pm, 1.4), gn = mkGain(0); chain(n, bp, gn); envAD(gn.gain, t, vel * 1.4, 0.0004, 0.014); gn.connect(mix);
+      mix.gain.value = 1.1;
+      route(mix, o, 0.07, 0);
+    }
+    const HUM_F = 146.83; // D3
+    function humBassV(t, vel, pm, o) { // HUM: a warm hummed "mmm" note, nasal and round (pitch via opts.midi)
+      const h = hum(0.4), dur = 0.55 * h.len, out = mkGain(0), v = vc(out), end = t + dur + 0.2, f = HUM_F * pm;
+      const vib = O(v, 'sine', 5.2, t, end), vg = mkGain(0); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(9, t + 0.25); vib.connect(vg);
+      const pre = mkGain(1);
+      [['sine', 1, 0.8], ['triangle', 1, 0.5], ['sine', 2, 0.18]].forEach(([w, r, am]) => { const os = O(v, w, f * r, t, end); vg.connect(os.detune); const g = mkGain(am); os.connect(g); g.connect(pre); });
+      const lp = biq('lowpass', 900, 0.7), nas = biq('peaking', 1100, 1.5); nas.gain.value = 5;
+      chain(pre, lp, nas, out);
+      envADSR(out.gain, t, vel * 0.55, 0.04, 0.1, 0.85, dur, 0.14);
+      route(out, o, 0.08, 0);
+    }
+    const XVOICE = { HUM: humBassV, LR: lipRollV, TB: throatBassV, IK: inwardKV, CR: clickRollV, ZP: zipperV, SI: sirenV, WB: waterDropV, RIM: rimshotV };
+    const BASE_IDS = ['B', 't', 'K', 'Pf'];
+    const ALIAS = Object.create(null);
+    Object.assign(ALIAS, { b: 0, kick: 0, t: 1, hat: 1, k: 2, snare: 2, pf: 3, p: 3, clap: 3 });
+    /** lane number or sound id -> canonical id ('B','t','K','Pf' for the lanes, 'LR', ... for the rest), or null */
+    function canon(id) {
+      if (typeof id === 'number') { if (!isFinite(id)) return null; const l = Math.floor(id); return l >= 0 && l <= 3 ? BASE_IDS[l] : null; }
+      if (typeof id !== 'string' || !id || id.length > 16) return null;
+      const lo = id.toLowerCase();
+      if (ALIAS[lo] != null) return BASE_IDS[ALIAS[lo]];
+      const up = id.toUpperCase();
+      if (XVOICE[up]) return up;
+      return /^[A-Za-z0-9_]+$/.test(id) ? id : null;
+    }
+    /** a Core.SOUNDS entry with a lane but no synth voice here falls back to that lane's drum voice */
+    function coreLane(key) {
+      try {
+        const S = root.BBH && root.BBH.Core && root.BBH.Core.SOUNDS;
+        if (!Array.isArray(S)) return -1;
+        const e = S.find((s) => s && s.id === key);
+        if (!e || e.lane == null) return -1;
+        const l = typeof e.lane === 'number' ? Math.floor(e.lane) : BASE_IDS.indexOf(canon(String(e.lane)));
+        return l >= 0 && l <= 3 ? l : -1;
+      } catch (e) { return -1; }
+    }
+    function hasVoice(id) { const k = canon(id); return !!k && (BASE_IDS.includes(k) || !!XVOICE[k] || SAMPLES.has(k) || coreLane(k) >= 0); }
+
+    /* recorded samples (player's own voice) replace the synth voice of a lane or sound id */
+    const SAMPLES = new Map();
     function setSample(lane, f32, sampleRate) {
-      lane = Math.floor(num(lane, -1));
-      if (lane < 0 || lane > 3 || !f32 || !(f32.length > 0)) return false;
+      const key = canon(lane);
+      if (!key || !f32 || !(f32.length > 0)) return false;
       const rate = clamp(num(sampleRate, 44100), 8000, 96000);
-      SAMPLES[lane] = { f32: f32 instanceof Float32Array ? f32 : Float32Array.from(f32), rate, buf: null, bufCtx: null };
+      SAMPLES.set(key, { f32: f32 instanceof Float32Array ? f32 : Float32Array.from(f32), rate, buf: null, bufCtx: null });
       return true;
     }
-    function clearSample(lane) { lane = Math.floor(num(lane, -1)); if (lane < 0 || lane > 3) return false; SAMPLES[lane] = null; return true; }
-    function hasSample(lane) { lane = Math.floor(num(lane, -1)); return lane >= 0 && lane <= 3 && !!SAMPLES[lane]; }
-    function samplePlay(S, lane, t, velRaw, pm) {
+    function clearSample(lane) { const key = canon(lane); if (!key) return false; SAMPLES.delete(key); return true; }
+    function hasSample(lane) { const key = canon(lane); return !!key && SAMPLES.has(key); }
+    function samplePlay(S, lane, t, velRaw, pm, id) {
       if (S.bufCtx !== ctx || !S.buf) {
         const b = ctx.createBuffer(1, S.f32.length, S.rate);
         const ch = b.getChannelData(0);
@@ -807,23 +955,180 @@
       voices++;
       src.onended = () => { voices = Math.max(0, voices - 1); try { g.disconnect(); } catch (e) { /* ignore */ } };
       src.start(t);
-      if (LOG) LOG.push({ k: 'drum', lane, t, vel: velRaw, sample: true });
+      if (LOG) LOG.push({ k: 'drum', lane, id, t, vel: velRaw, sample: true });
       return true;
     }
+    /** drum(lane 0..3 | sound id, {vel, pitch, when, open}): the player's beatbox sounds. A recorded sample for that id wins. */
     function drum(lane, opts) {
       opts = opts || {};
-      lane = Math.floor(num(lane, -1));
-      if (lane < 0 || lane > 3) return false;
+      const id = canon(lane);
+      if (!id) return false;
+      let ln = BASE_IDS.indexOf(id);
+      if (ln < 0 && !XVOICE[id] && !SAMPLES.has(id)) { ln = coreLane(id); if (ln < 0) return false; }
       if (!ensure() || !running() || muted || voices > 260) { if (usable() && !running()) tryResume(); return false; }
       try {
-        const vel = Math.pow(clamp(num(opts.vel, 0.9), 0, 1), 1.35), t = Math.max(num(opts.when, 0), ctx.currentTime), pm = clamp(num(opts.pitch, 1), 0.25, 4);
-        if (SAMPLES[lane]) return samplePlay(SAMPLES[lane], lane, t, clamp(num(opts.vel, 0.9), 0, 1), pm);
+        const vel = Math.pow(clamp(num(opts.vel, 0.9), 0, 1), 1.35), t = Math.max(num(opts.when, 0), ctx.currentTime);
+        let pm = clamp(num(opts.pitch, 1), 0.25, 4);
+        const S = SAMPLES.get(id);
+        if (S) return samplePlay(S, ln, t, clamp(num(opts.vel, 0.9), 0, 1), pm, id);
+        if (id === 'HUM' && typeof opts.midi === 'number' && isFinite(opts.midi)) pm = clamp(mtof(clamp(opts.midi, 24, 72)) / HUM_F, 0.25, 4);
         RND = Math.random;
-        let key = LANE_KEYS[lane];
-        if (lane === 1 && opts.open) key = 'o';
-        kitHit(BBKIT, key, t, vel, G.DRUM, pm, 1, 0.07);
-        if (LOG) LOG.push({ k: 'drum', lane, t, vel });
+        if (ln >= 0) {
+          let key = LANE_KEYS[ln];
+          if (ln === 1 && opts.open) key = 'o';
+          kitHit(BBKIT, key, t, vel, G.DRUM, pm, 1, 0.07);
+        } else XVOICE[id](t, clamp(vel, 0, 1), pm, G.DRUM);
+        if (LOG) LOG.push({ k: 'drum', lane: ln, id, t, vel });
         return true;
+      } catch (e) { return false; }
+    }
+
+    /* ================= metronome shaker + ear training tones ================= */
+    function shakerTick(t, accent, vol) { // soft "chk": two bead grains, a brighter and slightly louder accent
+      const g = mkGain(0), v = vc(g);
+      const n = N(v, t, 0.12), hp = biq('highpass', accent ? 4300 : 3300, 0.7), bp = biq('bandpass', accent ? 7800 : 6000, 1.1);
+      chain(n, hp, bp, g);
+      const pk = Math.max((accent ? 0.32 : 0.24) * clamp(vol, 0, 2), 1e-4);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk * 0.5, t + 0.004); g.gain.linearRampToValueAtTime(pk * 0.35, t + 0.009);
+      g.gain.linearRampToValueAtTime(pk, t + 0.016); g.gain.exponentialRampToValueAtTime(pk * 0.04, t + 0.075); g.gain.linearRampToValueAtTime(0, t + 0.095);
+      route(g, G.DRUM, 0.03, 0);
+    }
+    function shaker(accent, opts) {
+      if (accent && typeof accent === 'object') { opts = accent; accent = opts.accent; }
+      opts = opts || {};
+      if (!ensure() || !running() || muted || voices > 260) { if (usable() && !running()) tryResume(); return false; }
+      try {
+        const t = Math.max(num(opts.when, 0), ctx.currentTime);
+        RND = Math.random;
+        shakerTick(t, !!accent, num(opts.vol, 1));
+        if (LOG) LOG.push({ k: 'shaker', t, accent: !!accent });
+        return true;
+      } catch (e) { return false; }
+    }
+    let metro = null; // { bpm, spb, t0, n (next beat index), bpb, vol, last }
+    function metroPump(nowT, horizon) {
+      const M = metro;
+      let guard = 0;
+      while (guard++ < 64) {
+        const t = M.t0 + M.n * M.spb;
+        if (t >= horizon) break;
+        const beat = M.n++;
+        M.last = t;
+        if (t < nowT - 0.05 || muted || !running()) continue;
+        const acc = M.bpb > 0 && beat % M.bpb === 0;
+        try { RND = Math.random; shakerTick(Math.max(t, nowT), acc, M.vol); } catch (e) { /* keep ticking */ }
+        if (LOG) LOG.push({ k: 'metro', t, beat, accent: acc, bpm: M.bpm });
+      }
+    }
+    /**
+     * metronome(bpm, {start, offset, beats, vol}): quarter-note shaker on the audio clock until metronome(0).
+     * start = audio time of beat 0 (may be in the past; ticks then line up with it), offset = seconds from now (default 0.2).
+     * Calling it again while running with only a new bpm keeps going from the next beat at the new tempo.
+     * Returns { t0, spb, bpm } (t0 = audio time of beat 0).
+     */
+    function metronome(bpm, o) {
+      if (bpm && typeof bpm === 'object') { o = bpm; bpm = o.bpm; }
+      o = o || {};
+      bpm = num(bpm, 0);
+      try {
+        if (!(bpm > 0)) { if (metro) { metro = null; if (LOG) LOG.push({ k: 'metro', ev: 'stop', t: now() }); } return { t0: now(), spb: 0, bpm: 0 }; }
+        bpm = clamp(bpm, 20, 300);
+        const spb = 60 / bpm, c = ensure(), tn = c ? ctx.currentTime : 0, old = metro;
+        const bpb = o.beats != null ? clamp(Math.floor(num(o.beats, 4)), 0, 16) : old ? old.bpb : 4;
+        const vol = o.vol != null ? clamp(num(o.vol, 1), 0, 2) : old ? old.vol : 1;
+        let t0, n;
+        if (typeof o.start === 'number' && isFinite(o.start)) { t0 = o.start; n = Math.max(0, Math.ceil((tn - t0) / spb - 1e-9)); }
+        else if (old && o.offset == null) { n = old.n; const next = old.last != null ? Math.max(old.last + spb, tn + 0.02) : old.t0 + old.n * old.spb; t0 = next - n * spb; }
+        else { t0 = tn + clamp(num(o.offset, 0.2), 0, 30); n = 0; }
+        if (old && old.last != null) while (t0 + n * spb < old.last + spb * 0.5) n++; // never double a tick already scheduled
+        metro = { bpm, spb, t0, n, bpb, vol, last: old ? old.last : null };
+        if (LOG) LOG.push({ k: 'metro', ev: 'start', bpm, t0, t: tn });
+        if (c && running()) metroPump(tn, tn + 0.18);
+        startTimer();
+        return { t0, spb, bpm };
+      } catch (e) { return { t0: now(), spb: bpm > 0 ? 60 / bpm : 0, bpm: bpm > 0 ? bpm : 0 }; }
+    }
+    function metronomeInfo() {
+      if (!metro) return { on: false, bpm: 0, spb: 0, t0: 0, beat: 0 };
+      let beat = 0;
+      try { const lat = usable() ? num(ctx.outputLatency, 0) + num(ctx.baseLatency, 0) : 0; beat = (now() - lat - metro.t0) / metro.spb; } catch (e) { beat = 0; }
+      return { on: true, bpm: metro.bpm, spb: metro.spb, t0: metro.t0, beat };
+    }
+
+    /* clean piano-like tones: additive partials, gentle stretch, soft hammer, low-passed so nothing gets harsh */
+    const TIMBRE = {
+      keys: { parts: [[1, 1, 1], [2, 0.38, 0.72], [3, 0.16, 0.55], [4, 0.08, 0.42], [5, 0.035, 0.33], [6, 0.018, 0.27]], B: 0.0001, dec: 1, hammer: 0.035, uni: 0.6, lp: 7, lv: 0.5 },
+      soft: { parts: [[1, 1, 1], [2, 0.16, 0.7], [3, 0.05, 0.5]], B: 0, dec: 1.3, hammer: 0, uni: 0.5, lp: 5, lv: 0.55 },
+      pluck: { parts: [[1, 1, 1], [2, 0.45, 0.5], [3, 0.25, 0.35], [4, 0.12, 0.25]], B: 0.00005, dec: 0.35, hammer: 0.05, uni: 0, lp: 8, lv: 0.5 },
+    };
+    TIMBRE.piano = TIMBRE.keys;
+    function pianoV(t, midi, dur, vel, Tm) {
+      const f = mtof(midi), sr = ctx.sampleRate, rel = 0.16;
+      const out = mkGain(1), v = vc(out), lp = biq('lowpass', Math.min(9000, f * Tm.lp + 600), 0.5);
+      lp.connect(out);
+      const tau = clamp(2.4 * Math.pow(2, -(midi - 60) / 24), 0.45, 4) * Tm.dec, end = t + dur + rel + 0.03;
+      Tm.parts.forEach(([r, amp, dm], k) => {
+        const fk = f * r * Math.sqrt(1 + Tm.B * r * r);
+        if (fk > Math.min(12000, sr * 0.45)) return;
+        const pk = Math.max(vel * Tm.lv * amp, 1e-4), tk = tau * dm, att = k ? 0.003 : 0.005;
+        const g = mkGain(0);
+        const dets = Tm.uni && k < 2 ? [-Tm.uni, Tm.uni] : [0];
+        dets.forEach((d) => { const os = O(v, 'sine', fk, t, end); os.detune.value = d; const gg = mkGain(1 / dets.length); os.connect(gg); gg.connect(g); });
+        const hold = Math.max(pk * Math.exp(-dur / tk), pk * 0.002, 1e-4);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + att);
+        g.gain.exponentialRampToValueAtTime(hold, t + Math.max(dur, att + 0.01));
+        g.gain.exponentialRampToValueAtTime(Math.max(hold * 0.002, 1e-6), t + dur + rel); g.gain.setValueAtTime(0, t + dur + rel + 0.002);
+        g.connect(lp);
+      });
+      if (Tm.hammer) { const n = N(v, t, 0.03), bp = biq('bandpass', Math.min(f * 4, 5000), 0.8), gh = mkGain(0); chain(n, bp, gh); envAD(gh.gain, t, vel * Tm.hammer, 0.001, 0.02); gh.connect(lp); }
+      route(out, G.TONE, 0.12, 0);
+      return t + dur + rel;
+    }
+    function tonesOk() { if (!ensure() || !running() || muted || voices > 300) { if (usable() && !running()) tryResume(); return false; } return true; }
+    const midiOk = (m) => typeof m === 'number' && isFinite(m) && m >= 12 && m <= 120;
+    /** note(midi, dur, {timbre, vel, when}) -> { t0, end } (audio times) or false when silent */
+    function note(midi, dur, o) {
+      o = o || {};
+      if (!midiOk(midi) || !tonesOk()) return false;
+      try {
+        const t = Math.max(num(o.when, 0), ctx.currentTime) + 0.005, d = clamp(num(dur, 0.8), 0.05, 8);
+        const end = pianoV(t, midi, d, clamp(num(o.vel, 0.8), 0, 1), TIMBRE[o.timbre] || TIMBRE.keys);
+        if (LOG) LOG.push({ k: 'tone', midi, t, dur: d });
+        return { t0: t, end };
+      } catch (e) { return false; }
+    }
+    /** chord([midi...], dur, {timbre, vel, when, strum}) -> { t0, end } or false */
+    function chord(notes, dur, o) {
+      o = o || {};
+      const ns = Array.isArray(notes) ? notes.filter(midiOk).slice(0, 6) : [];
+      if (!ns.length || !tonesOk()) return false;
+      try {
+        const t = Math.max(num(o.when, 0), ctx.currentTime) + 0.005, d = clamp(num(dur, 1.2), 0.05, 8), st = clamp(num(o.strum, 0), 0, 0.2);
+        const vel = clamp(num(o.vel, 0.8), 0, 1) / Math.sqrt(ns.length), Tm = TIMBRE[o.timbre] || TIMBRE.keys;
+        let end = t;
+        ns.forEach((m, i) => { const ti = t + i * st; end = Math.max(end, pianoV(ti, m, Math.max(0.05, d - i * st), vel, Tm)); if (LOG) LOG.push({ k: 'tone', midi: m, t: ti, dur: d, chord: true }); });
+        return { t0: t, end };
+      } catch (e) { return false; }
+    }
+    /** interval(a, b, {melodic:true, harmonic:true, dur:0.7, gap:0.12, timbre, vel, when}): a then b, then both together. */
+    function interval(a, b, o) {
+      o = o || {};
+      if (!midiOk(a) || !midiOk(b) || !tonesOk()) return false;
+      try {
+        const d = clamp(num(o.dur, 0.7), 0.1, 4), gap = clamp(num(o.gap, 0.12), 0, 2), step = d + gap;
+        const base = { timbre: o.timbre, vel: o.vel };
+        let t = Math.max(num(o.when, 0), ctx.currentTime) + 0.01;
+        const t0 = t, parts = [];
+        let end = t;
+        if (o.melodic !== false) {
+          const r1 = note(a, d, Object.assign({ when: t }, base)), r2 = note(b, d, Object.assign({ when: t + step }, base));
+          parts.push({ t: r1.t0, notes: [a] }, { t: r2.t0, notes: [b] }); end = r2.end; t += 2 * step;
+        }
+        if (o.harmonic !== false || o.melodic === false) {
+          const r = chord([a, b], d * 1.4, Object.assign({ when: t }, base));
+          parts.push({ t: r.t0, notes: [a, b] }); end = r.end;
+        }
+        return { t0, end, parts };
       } catch (e) { return false; }
     }
 
@@ -1114,8 +1419,9 @@
           if (track.ended) { const T = track; track = null; disposeBus(T, 0.2); if (LOG) LOG.push({ k: 'music', ev: 'end', id: T.id, t: now }); if (T.onend) { try { T.onend(); } catch (e) { /* ignore */ } } }
         }
         if (groove) pump(groove, now, horizon);
+        if (metro) metroPump(now, horizon);
         reap(now);
-        if (!track && !groove && !dying.length) stopTimer();
+        if (!track && !groove && !dying.length && !metro) stopTimer();
       } catch (e) { /* never throw out of the timer */ }
     }
     function startTimer() { if (timer || copts.manual) return; if (typeof setInterval === 'function') timer = setInterval(tick, 25); }
@@ -1147,6 +1453,11 @@
         try {
           const C = typeof id === 'string' && MUSIC_IDS.includes(id) ? composeCached(id) : null;
           if (!C) return false;
+          if (gm.on && !gm.duck && C.loop) { // a game is running: remember the scene track, play it when the game ends
+            gm.want = { id, opts: { fade: opts.fade } };
+            if (LOG) LOG.push({ k: 'music', ev: 'deferred', id, t: now() });
+            return true;
+          }
           if (!ensure()) return false;
           if (!running()) { pending = { id, opts }; tryResume(); return true; }
           if (track && track.id === id && C.loop && !opts.restart) return true;
@@ -1163,6 +1474,7 @@
       },
       stop(fade) {
         pending = null;
+        if (gm.on) gm.want = null;
         try {
           if (!track) return;
           const T = track; track = null;
@@ -1206,12 +1518,59 @@
       },
       setIntensity(v) { intensity = clamp(num(v, 0.6), 0, 1); },
     };
+    /* ================= game mode: scene music off (or ducked) while a mini game runs ================= */
+    const gm = { on: false, prev: null, want: null, duck: 0 };
+    /**
+     * gameMode(true, {metronome: bpm | 0, start, offset, beats, vol, duck: 0, fade}): stops the scene music (duck > 0 keeps it at that
+     * fraction instead), defers scene music requests until the game ends, and optionally runs the shaker metronome.
+     * gameMode(false, {restore: true, fade}): stops the metronome and brings back the scene track (the last one requested, else the one before).
+     * Returns the metronome timing { t0, spb, bpm } (spb 0 without a metronome).
+     */
+    function gameMode(on, o) {
+      o = o || {};
+      try {
+        if (on) {
+          if (!gm.on) {
+            gm.on = true; gm.want = null;
+            const pc = pending && composeCached(pending.id);
+            const cur = track && track.C.loop ? track.id : pc && pc.loop ? pending.id : null;
+            gm.prev = cur ? { id: cur } : null;
+            gm.duck = clamp(num(o.duck, 0), 0, 1);
+            if (gm.duck > 0) { musMul = gm.duck; if (G && usable()) applyVol(); }
+            else {
+              if (pc && pc.loop) pending = null;
+              if (track && track.C.loop) { const T = track; track = null; disposeBus(T, clamp(num(o.fade, 0.35), 0.02, 4)); if (LOG) LOG.push({ k: 'music', ev: 'stop', id: T.id, t: now() }); }
+            }
+            if (LOG) LOG.push({ k: 'game', ev: 'on', prev: cur, t: now() });
+          }
+          if (o.metronome != null) return metronome(num(o.metronome, 0), o);
+          return metro ? { t0: metro.t0, spb: metro.spb, bpm: metro.bpm } : { t0: now(), spb: 0, bpm: 0 };
+        }
+        metronome(0);
+        if (!gm.on) return { t0: now(), spb: 0, bpm: 0 };
+        gm.on = false;
+        if (musMul !== 1) { musMul = 1; if (G && usable()) applyVol(); }
+        const r = o.restore === false ? null : gm.want || gm.prev;
+        gm.want = gm.prev = null; gm.duck = 0;
+        if (LOG) LOG.push({ k: 'game', ev: 'off', restore: r ? r.id : null, t: now() });
+        if (r) {
+          const fade = clamp(num(o.fade != null ? o.fade : r.opts && r.opts.fade, 1.2), 0.02, 8);
+          if (track && !track.C.loop) { // let a result sting finish first
+            const prevEnd = track.onend;
+            track.onend = () => { try { if (prevEnd) prevEnd(); } catch (e) { /* ignore */ } if (!gm.on && !track) music.play(r.id, { fade }); };
+          } else music.play(r.id, { fade });
+        }
+        return { t0: now(), spb: 0, bpm: 0 };
+      } catch (e) { return { t0: now(), spb: 0, bpm: 0 }; }
+    }
+
     // groove.start must replace a running groove cleanly
     const _gs = grooveApi.start;
     grooveApi.start = function (o) { if (groove) { const T = groove; groove = null; try { disposeBus(T, 0.05); } catch (e) { /* ignore */ } } return _gs(o); };
 
     return {
-      unlock, setMuted, setVolume, now, sfx, drum, setSample, clearSample, hasSample, music, groove: grooveApi,
+      unlock, setMuted, setVolume, now, sfx, drum, beatbox: drum, setSample, clearSample, hasSample, hasVoice, music, groove: grooveApi,
+      gameMode, isGameMode: () => gm.on, metronome, metronomeInfo, shaker, note, chord, interval, SOUND_IDS: SOUND_IDS.slice(), TIMBRES: TIMBRE_IDS.slice(),
       get log() { return LOG; },
       get muted() { return muted; },
       get volume() { return { music: vol.music, sfx: vol.sfx }; },
@@ -1219,6 +1578,9 @@
       _tick: tick,
     };
   }
+
+  const SOUND_IDS = ['B', 't', 'K', 'Pf', 'LR', 'TB', 'IK', 'CR', 'ZP', 'SI', 'WB', 'RIM', 'HUM'];
+  const TIMBRE_IDS = ['keys', 'piano', 'soft', 'pluck'];
 
   /* ================================================================== lazy shared instance */
   let shared = null;
@@ -1232,7 +1594,7 @@
     }
     return shared;
   }
-  const Factory = { create, compose: (id) => composeCached(id), composeGroove, MUSIC_IDS, SFX_NAMES: ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'go'], RECIPES };
+  const Factory = { create, compose: (id) => composeCached(id), composeGroove, MUSIC_IDS, SOUND_IDS, TIMBRES: TIMBRE_IDS, SFX_NAMES: ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'go'], RECIPES };
   BBH.AudioFactory = Factory;
   BBH.Audio = {
     create, compose: Factory.compose, composeGroove, MUSIC_IDS, SFX_NAMES: Factory.SFX_NAMES,
@@ -1242,6 +1604,17 @@
     now: () => inst().now(),
     sfx: (n, o) => inst().sfx(n, o),
     drum: (l, o) => inst().drum(l, o),
+    beatbox: (id, o) => inst().drum(id, o),
+    hasVoice: (id) => inst().hasVoice(id),
+    gameMode: (on, o) => inst().gameMode(on, o),
+    isGameMode: () => inst().isGameMode(),
+    metronome: (bpm, o) => inst().metronome(bpm, o),
+    metronomeInfo: () => inst().metronomeInfo(),
+    shaker: (acc, o) => inst().shaker(acc, o),
+    note: (m, d, o) => inst().note(m, d, o),
+    chord: (n, d, o) => inst().chord(n, d, o),
+    interval: (a, b, o) => inst().interval(a, b, o),
+    SOUND_IDS, TIMBRES: TIMBRE_IDS,
     setSample: (l, f, r) => inst().setSample(l, f, r),
     clearSample: (l) => inst().clearSample(l),
     hasSample: (l) => inst().hasSample(l),

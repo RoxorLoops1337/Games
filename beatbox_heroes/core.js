@@ -258,7 +258,7 @@
       owned: {}, ach: {}, beat: {}, flags: {}, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
       affinity: {}, seen: {}, history: [], songs: [], crew: [], patterns: [0, 1, 2, 3].map((i) => emptyPattern(i)), patIdx: 0,
       n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0 },
-      created: 0,
+      created: 0, trainLv: defaultTrainLv(), sounds: START_SOUNDS.slice(),
     };
     sweepUnlocks(ch);
     return ch;
@@ -290,6 +290,7 @@
       if (ul.length) fx.push({ t: 'sfx', name: 'unlock' });
       if (!again) break;
     }
+    for (const snd of sweepSounds(ch)) fx.push({ t: 'soundUnlocked', id: snd.id, name: snd.name }, { t: 'toast', text: 'New sound: ' + snd.name, kind: 'good' }, { t: 'sfx', name: 'unlock' });
   }
 
   /* ---------------------------------------------------------- the clock */
@@ -479,6 +480,144 @@
     { w: 1, text: (n) => n + ' is not in the mood. Awkward silence.', fx: (c) => { c.mood -= 4; }, aff: 0 },
   ];
 
+  /* ------------------------------------------------- training (TRAINING_PLAN section 1) */
+  // Every skill trains two ways: IDLE (the clock runs, points tick up) or PLAY (a mini game: less time, about double the gain).
+  const TRAIN = { mus: { game: 'ear', alt: 'tune' }, tech: { game: 'beat' }, ori: { game: 'make' }, show: { game: 'pose' } };
+  const TRAIN_CFG = {
+    idleRatePerHour: 1.0,                 // stat points per hour of idle practice at stat 0 (scaled by 1 - stat/120)
+    idleMinStep: 15, idleMaxMinutes: 240, playMul: 2,
+    playMinutes: { ear: 20, tune: 20, beat: 20, make: 25, pose: 20 }, levelMax: 8,
+    energyPerHour: 12, xpPerHour: 8, unlockQ: 0.7, studioMul: 1.4,
+  };
+  const TRAIN_GAMES = ['ear', 'beat', 'pose', 'make', 'tune'];
+  const gameStat = (game) => (game === 'tune' ? 'mus' : STATS.find((s) => TRAIN[s].game === game) || null);
+  const levelMul = (l) => 1 + 0.18 * (clamp(Math.floor(l || 1), 1, TRAIN_CFG.levelMax) - 1);
+  // Stat points for `minutes` of idle practice, integrated in 15 minute steps so it is monotonic in time and
+  // diminishing both with the current stat and (gently) within a long session. where === 'studio' adds x1.4.
+  function idleGain(ch, stat, minutes, where) {
+    let s = ch && ch.stats && ch.stats[stat] !== undefined ? ch.stats[stat] : 3, left = Math.max(0, minutes || 0), g = 0;
+    const mul = where === 'studio' ? TRAIN_CFG.studioMul : 1, step = TRAIN_CFG.idleMinStep;
+    while (left > 1e-9) {
+      const m = Math.min(step, left), d = TRAIN_CFG.idleRatePerHour * (m / 60) * Math.max(0, 1 - s / 120) * mul;
+      g += d; s = Math.min(99, s + d); left -= m;
+    }
+    return g;
+  }
+  const playGain = (ch, stat, game, level, q, where) => idleGain(ch, stat, TRAIN_CFG.playMinutes[game] || 20, where) * TRAIN_CFG.playMul * levelMul(level) * (0.4 + 0.6 * clamp(q || 0, 0, 1));
+  const defaultTrainLv = () => ({ ear: 1, beat: 1, pose: 1, make: 1, tune: 1 });
+
+  // EAR TRAINING: eight lessons for total beginners. Notes are MIDI numbers (60 = middle C).
+  const EAR_LEVELS = [
+    { level: 1, id: 'updown', name: 'Up or Down', ask: 'Did the second note go higher or lower?', rounds: 6, choices: ['higher', 'lower'],
+      lesson: { title: 'High and low', text: 'Every note has a height. A bird chirp is high, a tuba is low. You will hear two notes. Does the second one climb up, like going upstairs, or step down? Tip: hum along. If your voice has to go up to match it, the note went up.',
+        examples: [{ label: 'Going up', notes: [60, 67] }, { label: 'Going down', notes: [67, 60] }, { label: 'Tiny step up', notes: [60, 62] }] } },
+    { level: 2, id: 'same', name: 'Same or Different', ask: 'Were the two notes the same or different?', rounds: 6, choices: ['same', 'different'],
+      lesson: { title: 'Twins or strangers', text: 'Sometimes two notes are exactly the same, like the first two notes of "Twinkle Twinkle Little Star". Sometimes they move a tiny bit. Listen for a wobble: if the second note feels even a little higher or lower, it is different.',
+        examples: [{ label: 'Same (Twin, kle)', notes: [60, 60] }, { label: 'Different, a tiny bit', notes: [60, 61] }, { label: 'Different, clearly', notes: [60, 64] }] } },
+    { level: 3, id: 'stepleap', name: 'Step or Leap', ask: 'Was that a small step or a big leap?', rounds: 8, choices: ['step', 'leap'],
+      lesson: { title: 'Walking and jumping', text: 'A step moves to the very next note, like walking. "Mary Had a Little Lamb" is almost all steps. A leap jumps over notes, like the big jump at the start of "Somewhere Over the Rainbow" ("Some-where"). Steps feel smooth, leaps feel like a surprise.',
+        examples: [{ label: 'Step (Ma, ry)', notes: [64, 62] }, { label: 'Leap (Some, where)', notes: [60, 72] }, { label: 'Another leap', notes: [62, 69] }] } },
+    { level: 4, id: 'majmin', name: 'Happy or Sad Chord', ask: 'Did the chord sound happy (major) or sad (minor)?', rounds: 8, choices: ['major', 'minor'],
+      lesson: { title: 'Chords have moods', text: 'A chord is three notes played together. A major chord sounds bright and happy, like a birthday party. A minor chord sounds sad or mysterious, like a rainy movie scene. Only one middle note changes between them, but the whole mood flips.',
+        examples: [{ label: 'Major (happy)', notes: [60, 64, 67], chord: true }, { label: 'Minor (sad)', notes: [60, 63, 67], chord: true }, { label: 'Major, higher up', notes: [65, 69, 72], chord: true }] } },
+    { level: 5, id: 'octfifth', name: 'Octave or Fifth', ask: 'Was that jump an octave or a fifth?', rounds: 8, choices: ['octave', 'fifth'],
+      lesson: { title: 'Two famous jumps', text: 'An octave is the same note, just higher. It sounds hollow and complete, like "Some-where" in "Somewhere Over the Rainbow". A fifth is a strong, open jump, like the first "Twin-kle, twin-kle" in "Twinkle Twinkle Little Star". The octave feels like home again, the fifth feels like a big step up a hill.',
+        examples: [{ label: 'Octave (Some, where)', notes: [60, 72] }, { label: 'Fifth (Twinkle, twinkle)', notes: [60, 67] }, { label: 'Both together', notes: [60, 67, 72], chord: true }] } },
+    { level: 6, id: 'thirds', name: 'Bright or Dark Third', ask: 'Was that a major third (bright) or a minor third (dark)?', rounds: 10, choices: ['major 3rd', 'minor 3rd'],
+      lesson: { title: 'The mood maker', text: 'A third is a small jump that decides if music feels happy or sad. A major third sounds bright and happy, like the start of "Oh When the Saints" ("Oh when"). A minor third sounds darker and a bit sad, like the first two notes of the "Smoke on the Water" riff.',
+        examples: [{ label: 'Major 3rd (Oh, when)', notes: [60, 64] }, { label: 'Minor 3rd (Smoke on the Water)', notes: [67, 70] }, { label: 'Major 3rd, together', notes: [60, 64], chord: true }, { label: 'Minor 3rd, together', notes: [60, 63], chord: true }] } },
+    { level: 7, id: 'fourfifth', name: 'Fourth or Fifth', ask: 'Was that a fourth or a fifth?', rounds: 10, choices: ['4th', '5th'],
+      lesson: { title: 'Wedding or stars', text: 'These two sound alike, so use songs. A fourth is "Here Comes the Bride" ("Here comes"). It sounds like a question being called out. A fifth is "Twinkle Twinkle" (the jump to the second "twinkle"), and it sounds wider and more open, like the Star Wars theme opening.',
+        examples: [{ label: 'Fourth (Here, comes)', notes: [60, 65] }, { label: 'Fifth (Twinkle, twinkle)', notes: [60, 67] }, { label: 'Fourth, then fifth', notes: [62, 67] }] } },
+    { level: 8, id: 'name', name: 'Name That Jump', ask: 'Which jump was that?', rounds: 12, choices: ['minor 3rd', 'major 3rd', '4th', '5th', 'octave'],
+      lesson: { title: 'Your song toolbox', text: 'Now you know five jumps. Match each one to its song: minor 3rd is "Smoke on the Water", major 3rd is "Oh When the Saints", 4th is "Here Comes the Bride", 5th is "Twinkle Twinkle", and the octave is "Somewhere Over the Rainbow". Sing the song in your head and see which fits.',
+        examples: [{ label: 'Minor 3rd', notes: [60, 63] }, { label: 'Major 3rd', notes: [60, 64] }, { label: '4th', notes: [60, 65] }, { label: '5th', notes: [60, 67] }, { label: 'Octave', notes: [60, 72] }] } },
+  ];
+  const EAR_SEMIS = { 'minor 3rd': 3, 'major 3rd': 4, '4th': 5, '5th': 7, fifth: 7, octave: 12 };
+  // One question for an ear level: { notes, chord, answer } (answer is one of the level's choices). Deterministic with a seeded rng.
+  function earQuestion(level, rng) {
+    rng = rng || Math.random; const L = EAR_LEVELS[clamp((level | 0) - 1, 0, EAR_LEVELS.length - 1)];
+    const answer = L.choices[Math.floor(rng() * L.choices.length)], root = 55 + Math.floor(rng() * 10);
+    switch (L.id) {
+      case 'updown': { const d = 2 + Math.floor(rng() * 6); return { notes: answer === 'higher' ? [root, root + d] : [root + d, root], chord: false, answer }; }
+      case 'same': return { notes: [root, answer === 'same' ? root : root + (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 3))], chord: false, answer };
+      case 'stepleap': { const d = answer === 'step' ? 1 + Math.floor(rng() * 2) : 5 + Math.floor(rng() * 8), up = rng() < 0.5; return { notes: up ? [root, root + d] : [root + d, root], chord: false, answer }; }
+      case 'majmin': return { notes: [root, root + (answer === 'major' ? 4 : 3), root + 7], chord: true, answer };
+      default: return { notes: [root, root + EAR_SEMIS[answer]], chord: false, answer };
+    }
+  }
+
+  // RHYTHM TRAINING: real, known beginner beatbox patterns. lanes: one char per step (B kick, t hat, K snare, P pf, . rest).
+  const BEAT_LANE = { B: 0, t: 1, K: 2, P: 3 };
+  const BEAT_LEVELS = [
+    { level: 1, id: 'bootscats', name: 'Boots and Cats', say: 'B t K t', steps: 8, lanes: 'B.t.K.t.', bpm: 80, tip: 'Say "boots and cats and" out loud, then drop the vowels. B is a tiny lip pop, t is a quick tongue tap, K is a sharp "k" at the back of the mouth.' },
+    { level: 2, id: 'bootsti', name: 'Boots Ti Ti', say: 'B t t B K t', steps: 8, lanes: 'BttBK.t.', bpm: 84, tip: '"Boots ti ti boots cats ti". The two quick hats push you into the second kick. Keep them light.' },
+    { level: 3, id: 'eighthhats', name: 'Running Hats', say: 'B t t t K t t t', steps: 8, lanes: 'BtttKttt', bpm: 88, tip: 'Hats on every step, like a ticking clock. Kick and snare just replace a hat. Keep the t tiny so you do not run out of air.' },
+    { level: 4, id: 'boombap', name: 'Boom Bap', say: 'B . t B K . t .', steps: 8, lanes: 'B.tBK.t.', bpm: 90, tip: 'The classic 90s hip hop groove. Lean back on the rests. The kick right before the snare is what makes it bounce.' },
+    { level: 5, id: 'doublekick', name: 'Double Kick', say: 'B t K B B t K t', steps: 8, lanes: 'BtKBBtKt', bpm: 94, tip: 'Two kicks in a row in the middle. Reset your lips quickly between them, like saying "b b".' },
+    { level: 6, id: 'pfclap', name: 'Pf Clap', say: 'B t K t B P K t', steps: 8, lanes: 'BtKtBPKt', bpm: 98, tip: 'Pf is a kick and a hiss together, like a soft clap: press your lips, push air, let it buzz out as "pff".' },
+    { level: 7, id: 'dnb', name: 'Drum and Bass', say: 'B . K . . B K .', steps: 8, lanes: 'B.K..BK.', bpm: 150, tip: 'Fast but sparse. The kick that lands just before the second snare is the famous drum and bass skip. Real DnB runs near 170, we start at 150.' },
+    { level: 8, id: 'doubletime', name: 'Double Time Mix', say: 'B t B t K t B t B B K t P t K t', steps: 16, lanes: 'BtBtKtBtBBKtPtKt', bpm: 92, tip: 'Sixteen steps per bar: everything you learned, twice as busy. Breathe in through the hats and keep the kicks short.' },
+  ];
+  for (const L of BEAT_LEVELS) L.notes = L.lanes.split('').map((c, i) => ({ step: i, beat: i * 4 / L.steps, lane: BEAT_LANE[c] === undefined ? -1 : BEAT_LANE[c] })).filter((n) => n.lane >= 0);
+
+  // SHOWMANSHIP: a pose Simon Says. len grows 3..8, the move pool grows, and the beat speeds up.
+  const POSE_MOVES = ['left', 'right', 'duck', 'jump', 'point', 'spin', 'freeze', 'clap'];
+  const POSE_LEVELS = [3, 3, 4, 5, 5, 6, 7, 8].map((len, i) => ({ level: i + 1, len, moves: POSE_MOVES.slice(0, Math.min(8, 4 + i)), bpm: 90 + i * 6 }));
+
+  // SOUNDS: the beatbox vocabulary. The first four are known from the start, the rest unlock as you progress.
+  // unlock.k: 'start' | 'level' (player level >= v) | 'npc' (met that NPC) | 'win' (v = opponent id, or v = number of battle wins)
+  //           | 'ach' (achievement id) | 'day' (day >= v, optionally `place`). An optional `or` holds an alternative rule.
+  const SOUNDS = [
+    { id: 'B', name: 'Kick', lane: 0, blurb: 'A tiny lip pop, like saying "b" without the voice.', unlock: { k: 'start' } },
+    { id: 't', name: 'Hi-hat', lane: 1, blurb: 'A quick tongue tap behind the teeth: "t".', unlock: { k: 'start' } },
+    { id: 'K', name: 'Snare', lane: 2, blurb: 'A sharp "k" at the back of the mouth.', unlock: { k: 'start' } },
+    { id: 'Pf', name: 'Pf snare', lane: 3, blurb: 'Lips pop and air hisses out: "pff". A soft clap.', unlock: { k: 'start' } },
+    { id: 'RIM', name: 'Rimshot', blurb: 'A clicky tongue pop that sounds like a stick on a drum rim.', unlock: { k: 'level', v: 3 } },
+    { id: 'LR', name: 'Lip roll', blurb: 'Relaxed lips flap like a motorboat. The bass wobble of modern beatbox.', unlock: { k: 'npc', v: 'beeamgee', or: { k: 'level', v: 4 } } },
+    { id: 'TB', name: 'Throat bass', blurb: 'A deep growl from the throat. Feels like a subwoofer.', unlock: { k: 'win', v: 'tick' } },
+    { id: 'CR', name: 'Click roll', blurb: 'The tongue clicks and rattles on the roof of the mouth.', unlock: { k: 'day', v: 4, place: 'studio' } },
+    { id: 'IK', name: 'Inward K', blurb: 'A snare sucked in on the breath, so you never run out of air.', unlock: { k: 'level', v: 6 } },
+    { id: 'WB', name: 'Water drop', blurb: 'A round "bloop" from popping the cheeks. Miro taught you.', unlock: { k: 'npc', v: 'miro' } },
+    { id: 'ZP', name: 'Zipper', blurb: 'A zipping scratch sucked in through the lips.', unlock: { k: 'win', v: 3 } },
+    { id: 'HUM', name: 'Hum bass', blurb: 'Hum a note while you drum. Your first melody.', unlock: { k: 'ach', v: 'tuned' } },
+    { id: 'SI', name: 'Siren', blurb: 'A whistle that slides up and down like a police siren.', unlock: { k: 'level', v: 10 } },
+  ];
+  const START_SOUNDS = SOUNDS.filter((s) => s.unlock.k === 'start').map((s) => s.id);
+  const metNpc = (ch, who) => !!((ch.seen && ch.seen[who]) || (ch.affinity && ch.affinity[who] > 0) || (ch.crew || []).some((m) => m.id === who) || (who === 'beeamgee' && ch.n && ch.n.coaches > 0));
+  function soundRule(ch, u) {
+    if (!u) return false;
+    let met;
+    switch (u.k) {
+      case 'start': met = true; break;
+      case 'level': met = ch.level >= u.v; break;
+      case 'npc': met = metNpc(ch, u.v); break;
+      case 'win': met = typeof u.v === 'string' ? !!(ch.beat && ch.beat[u.v]) : (ch.n && ch.n.battlesWon || 0) >= u.v; break;
+      case 'ach': met = !!(ch.ach && ch.ach[u.v]); break;
+      case 'day': met = ch.day >= u.v && (!u.place || ch.place === u.place); break;
+      default: met = false;
+    }
+    return met || (u.or ? soundRule(ch, u.or) : false);
+  }
+  function soundUnlocked(ch, id) {
+    const s = SOUNDS.find((x) => x.id === id); if (!s) return false;
+    if (s.unlock.k === 'start' || (ch.dev && ch.dev.unlockAll)) return true;
+    return (ch.sounds || []).indexOf(id) >= 0;
+  }
+  const soundsFor = (ch) => SOUNDS.filter((s) => soundUnlocked(ch, s.id));
+  function soundUnlockText(u) {
+    if (!u) return '';
+    const one = (r) => r.k === 'start' ? 'Known from the start' : r.k === 'level' ? 'Reach level ' + r.v : r.k === 'npc' ? 'Meet ' + (NPCS[r.v] ? NPCS[r.v].name : (CREW.find((c) => c.id === r.v) || { name: r.v }).name) : r.k === 'win' ? (typeof r.v === 'string' ? 'Beat ' + ((OPPONENTS.find((o) => o.id === r.v) || { name: r.v }).name) : 'Win ' + r.v + ' battles') : r.k === 'ach' ? 'Achievement: ' + ((ACHIEVEMENTS.find((a) => a.id === r.v) || { name: r.v }).name) : r.k === 'day' ? 'Visit the ' + (r.place ? PLACES[r.place].name : 'city') + ' from day ' + r.v : '?';
+    return one(u) + (u.or ? ' or ' + one(u.or).replace(/^R/, 'r') : '');
+  }
+  // latch newly met sound rules into ch.sounds; returns the new SOUNDS entries
+  function sweepSounds(ch) {
+    if (!Array.isArray(ch.sounds)) ch.sounds = START_SOUNDS.slice();
+    const out = [];
+    for (const s of SOUNDS) if (ch.sounds.indexOf(s.id) < 0 && soundRule(ch, s.unlock)) { ch.sounds.push(s.id); out.push(s); }
+    return out;
+  }
+
   /* ------------------------------------------------------------ reducer */
   const clone = (o) => JSON.parse(JSON.stringify(o));
   function apply(ch0, a, rng) {
@@ -524,6 +663,63 @@
         ch.mood += rw.mood; gainXp(ch, rw.xp * (where === 'studio' ? 1.3 : 1), fx);
         spend(ch, rw.minutes, rw.energy, fx, rng); fx.push({ t: 'sfx', name: 'confirm' });
         toast(STAT_NAMES[a.stat] + ' +' + gain.toFixed(1), 'good');
+        break;
+      }
+      case 'trainIdle': {                                          // a.stat, a.minutes, a.where?: idle practice, ticks every 15 min
+        const stat = a.stat; if (STATS.indexOf(stat) < 0) break;
+        const C = TRAIN_CFG, step = C.idleMinStep, where = a.where || (ch.place === 'studio' ? 'studio' : 'home'), fee = where === 'studio' ? STUDIO_FEE : 0;
+        const want = clamp(Math.round((a.minutes || 60) / step) * step, step, C.idleMaxMinutes), ePer = C.energyPerHour * step / 60;
+        if (ch.cash < fee) { toast('The studio costs $' + fee + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.energy < ePer) { toast('Too tired to train.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.minutes + step >= CFG.collapseAt) { toast('Too late to train. Go to bed.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash -= fee; ch.n.spent += fee; ch.n.trains++;
+        let done = 0, total = 0, stop = '';
+        const day0 = ch.day;
+        while (done < want) {
+          if (ch.energy < ePer) { stop = 'You ran out of energy.'; break; }
+          if (ch.minutes + step >= CFG.collapseAt) { stop = 'It is late. You stop for the night.'; break; }
+          if (ch.place !== 'home' && !canEnter(ch, ch.place).ok) { stop = (PLACES[ch.place] ? PLACES[ch.place].name : 'This place') + ' is closing.'; break; }
+          const g = idleGain(ch, stat, step, where);
+          bumpStat(ch, stat, g); total += g; done += step;
+          fx.push({ t: 'trainTick', stat, gain: +g.toFixed(2), minute: done });
+          gainXp(ch, C.xpPerHour * step / 60 * (where === 'studio' ? 1.3 : 1), fx);
+          if (spend(ch, step, ePer, fx, rng) || ch.day !== day0) break;
+        }
+        ch.n.idleMin = (ch.n.idleMin || 0) + done; ch.mood += done >= 60 ? 1 : 0;
+        fx.push({ t: 'sfx', name: 'confirm' });
+        if (stop) toast(stop, 'info');
+        toast(STAT_NAMES[stat] + ' +' + total.toFixed(1) + ' (' + done + ' min)', 'good');
+        break;
+      }
+      case 'trainGame': {                                          // a.stat, a.game, a.level, a.q 0..1, a.minutes?, a.where?
+        const game = a.game; if (!TRAIN_CFG.playMinutes[game]) break;
+        const stat = STATS.indexOf(a.stat) >= 0 ? a.stat : gameStat(game);
+        const where = a.where === 'studio' ? 'studio' : 'home', fee = where === 'studio' ? STUDIO_FEE : 0;
+        const mins = Math.max(1, Math.round(a.minutes || TRAIN_CFG.playMinutes[game])), en = TRAIN_CFG.energyPerHour * mins / 60;
+        if (!ch.trainLv) ch.trainLv = defaultTrainLv();
+        const top = ch.trainLv[game] || 1, level = clamp(Math.floor(a.level || top), 1, top), q = clamp(+a.q || 0, 0, 1);
+        if (ch.cash < fee) { toast('The studio costs $' + fee + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.energy < en) { toast('Too tired to train.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash -= fee; ch.n.spent += fee; ch.n.trainGames = (ch.n.trainGames || 0) + 1;
+        if (game === 'tune') ch.n.tunes++; else if (game === 'make') ch.n.seqs++;
+        const gain = playGain(ch, stat, game, level, q, where);
+        bumpStat(ch, stat, gain);
+        gainXp(ch, TRAIN_CFG.xpPerHour * (TRAIN_CFG.playMinutes[game] / 60) * TRAIN_CFG.playMul * levelMul(level) * (0.4 + 0.6 * q) * (where === 'studio' ? 1.3 : 1), fx);
+        ch.mood += q >= 0.7 ? 3 : q < 0.3 ? -1 : 1;
+        fx.push({ t: 'trainResult', stat, game, level, q, gain: +gain.toFixed(2) });
+        if (q >= TRAIN_CFG.unlockQ && level === top && top < TRAIN_CFG.levelMax) {
+          ch.trainLv[game] = top + 1;
+          fx.push({ t: 'levelUp', game, level: top + 1 }, { t: 'sfx', name: 'unlock' });
+          toast('Level ' + (top + 1) + ' unlocked!', 'good');
+        }
+        toast(STAT_NAMES[stat] + ' +' + gain.toFixed(1), 'good');
+        spend(ch, mins, en, fx, rng); fx.push({ t: 'sfx', name: 'confirm' });
+        break;
+      }
+      case 'meet': {                                               // a.who: first conversation with an NPC or crew member
+        if (!a.who) break;
+        if (!ch.seen) ch.seen = {};
+        if (!ch.seen[a.who]) ch.seen[a.who] = ch.day;
         break;
       }
       case 'perform': {                                            // a.kind, a.res (summarize output)
@@ -684,6 +880,12 @@
     ch.n = Object.assign({}, fresh.n, raw.n || {}); ch.stats = Object.assign({}, fresh.stats, raw.stats || {});
     ch.songs = raw.songs || []; ch.crew = raw.crew || []; ch.patterns = (raw.patterns && raw.patterns.length === SEQ_SLOTS) ? raw.patterns : fresh.patterns;
     ch.dev = raw.dev || {}; ch.owned = raw.owned || {}; ch.ach = raw.ach || {}; ch.beat = raw.beat || {}; ch.flags = raw.flags || {}; ch.affinity = raw.affinity || {};
+    const tl = defaultTrainLv(), rl = raw.trainLv && typeof raw.trainLv === 'object' ? raw.trainLv : {};
+    for (const g of TRAIN_GAMES) tl[g] = clamp(Math.floor(+rl[g] || 1), 1, TRAIN_CFG.levelMax);
+    ch.trainLv = tl; ch.seen = raw.seen || {};
+    ch.sounds = Array.isArray(raw.sounds) ? raw.sounds.filter((id) => SOUNDS.some((x) => x.id === id)) : [];
+    for (const id of START_SOUNDS) if (ch.sounds.indexOf(id) < 0) ch.sounds.push(id);
+    sweepSounds(ch);                                                // silently latch sounds an old save already earned
     ch.v = CFG.version; return ch;
   }
   const Save = {
@@ -745,6 +947,9 @@
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
       windows, judgeHit, HIT_SCORE, makeChart, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
       Save, migrate, clone,
+      TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
+      EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,
+      SOUNDS, START_SOUNDS, soundUnlocked, soundsFor, soundRule, soundUnlockText, sweepSounds, metNpc,
     },
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.Core;

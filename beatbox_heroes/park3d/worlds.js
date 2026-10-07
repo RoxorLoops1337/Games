@@ -13,6 +13,8 @@ export const WORLDS = {
   rhythm: () => import('./world_mini.js'),
   run: () => import('./world_mini.js'),
   tuner: () => import('./world_mini.js'),
+  ear: () => import('./world_mini.js'),
+  pose: () => import('./world_mini.js'),            // POSE: showmanship pose game (mg_pose.js)             // TRAIN: ear training in the vocal booth (mg_ear.js)
   // STUBS (ground plane, label, ambient light, anchors.start, no spots): title SHELL, creator SHELL, street W-STREET, shop INT-A, lab INT-A, bar INT-B, hood W-STREET, office SHELL, arena INT-B
   title: () => import('./w_title.js'),
   creator: () => import('./w_creator.js'),
@@ -25,4 +27,4 @@ export const WORLDS = {
   arena: () => import('./world_arena.js'),
 };
 export const WORLD_IDS = Object.keys(WORLDS);
-export const MINI_IDS = ['rhythm', 'run', 'tuner'];
+export const MINI_IDS = ['rhythm', 'run', 'tuner', 'ear', 'pose'];

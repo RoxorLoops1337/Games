@@ -16,7 +16,7 @@ try {
     ok(r.frames > 30, q + ': frames were sampled (' + r.frames + ')');
     ok(r.dark.length === 0, q + ': no uncovered black or flat-dark frame' + (r.dark.length ? ': ' + JSON.stringify(r.dark.slice(0, 3)) : ''));
     ok(r.resize && r.resize.cleared === 0, q + ': a resize never leaves a cleared canvas (' + JSON.stringify(r.resize) + ')');
-    ok(!r.post || r.post.rung === 0, q + ': the blank-frame guard did not step down on valid worlds (rung ' + (r.post && r.post.rung) + ')');
+    ok(!r.post || r.post.rung <= 2, q + ': the blank-frame guard did not step down on valid worlds (rung 2 is the default 8-bit floor, 3 would be a guard step; rung ' + (r.post && r.post.rung) + ')');
     ok(r.errs.length === 0, q + ': no page errors' + (r.errs.length ? ': ' + r.errs.slice(0, 3).join(' | ') : ''));
   }
 } catch (e) { ok(false, 'r3frames threw: ' + (e && e.stack || e)); }
