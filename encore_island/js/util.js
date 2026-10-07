@@ -16,14 +16,20 @@ function seedMain(n) { mainSeed = n >>> 0; }
 function rnd() { mainSeed = (mainSeed * 1664525 + 1013904223) >>> 0; return mainSeed / 4294967296; }
 function vrnd() { visSeed = (visSeed * 1103515245 + 12345) & 0x7fffffff; return visSeed / 0x7fffffff; }
 const SUFFIX = ['', 'k', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd', 'Td', 'Qad', 'Qid', 'Sxd', 'Spd', 'Ocd'];
+const FMT_CACHE = new Map(); // the HUD formats the same prices every frame; the regex below is not free
 function fmt(n) {
   if (!isFinite(n)) return '∞';
   n = Math.floor(n);
   if (n < 1000) return String(n);
-  const e = Math.floor(Math.log10(n) / 3);
-  if (e >= SUFFIX.length) return n.toExponential(2).replace('+', '');
-  const v = n / Math.pow(1000, e);
-  return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1') + SUFFIX[e];
+  let s = FMT_CACHE.get(n);
+  if (s === undefined) {
+    const e = Math.floor(Math.log10(n) / 3);
+    if (e >= SUFFIX.length) s = n.toExponential(2).replace('+', '');
+    else { const v = n / Math.pow(1000, e); s = (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1') + SUFFIX[e]; }
+    if (FMT_CACHE.size >= 1024) FMT_CACHE.clear();
+    FMT_CACHE.set(n, s);
+  }
+  return s;
 }
 function fmtTime(s) { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? h + 'h ' + m + 'm' : m + 'm ' + (s % 60) + 's'; }
 function hexRgb(c) {

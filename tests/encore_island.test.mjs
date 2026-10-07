@@ -130,4 +130,18 @@ S.groove = 0; S.beatChain = 0; for (let i = 0; i < 12; i++) { S.beatLock = 0; S.
 EI.openSheet('town', 'build'); EI.draw(0.016); EI.draw(0.016);
 { const hs = EI.hits().filter(h => h.sheet), win = 400; t.ok(hs.length > 0 && hs.every(h => h.x >= 0), 'sheet hit areas are in screen space'); }
 
+// ---- cleanup pass: memoised geometry, one reused next-land plate, quest reroll without timers, Arena spin tickets ----
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); S.sheet = null;
+{ const a = EI.unlockSpot(2); t.ok(EI.unlockSpot(2) === a && isFinite(a.x) && isFinite(a.y), 'unlockSpot is memoised per land (the sim asks every frame)'); const e1 = EI.worldExtent(1); t.ok(EI.worldExtent(1) === e1 && e1.x1 > e1.x0, 'worldExtent is memoised per land count'); }
+EI.tick(0.05); { const up0 = S.unlockPlate; EI.tick(0.05); t.ok(up0 && S.unlockPlate === up0 && up0.cost === EI.unlockCost(S.lands.length + 1) && up0.paid === S.unlockPaid, 'the next-land plate is one reused object with the right price'); }
+{ const q = S.quests[0]; q.prog = q.goal - 1; EI.questEvent(q.kind, 1); t.ok(q.done && S.quests[0] === q, 'a completed island quest stays listed for a moment');
+  for (let i = 0; i < 50; i++) EI.tick(0.05); t.ok(S.quests[0] !== q && S.quests.length === 3 && S.quests.every(x => !x.done), 'then a fresh quest takes its place (no timers involved)'); }
+{ const q = S.quests[1]; q.prog = q.goal - 1; EI.questEvent(q.kind, 1); t.ok(q.done, 'quest completed right before a save'); EI.save(); EI.initGame(true); S = EI.S;
+  t.ok(S.quests.length === 3 && S.quests.every(x => !x.done), 'a quest finished right before saving is rerolled on load instead of sticking'); }
+S.started = true; tipsOff(); S.gems = 0; S.spinFree = 2;
+t.ok(!!EI.spinWheel() && S.spinFree === 1, 'an Arena spin ticket pays for a wheel spin when there are no gems');
+S.spinFree = 0; S.gems = 0; t.ok(EI.spinWheel() === null, 'no ticket and no gems: the wheel refuses');
+S.spinFree = 3; EI.save(); EI.initGame(true); t.ok(EI.S.spinFree === 3, 'spin tickets survive a reload');
+EI.S.started = true; EI.prestige(); t.ok(EI.S.spinFree === 3, 'spin tickets survive an Encore Tour');
+
 t.done();

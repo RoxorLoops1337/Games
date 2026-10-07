@@ -29,7 +29,7 @@ function tutHelp(id, title, text, icon, cat) {
 function tutOpen(helpId) {
   const h = TUT.helpBy[helpId]; if (!h) return false;
   TCO.cur = { id: 'help:' + helpId, title: h.title, text: h.text, icon: h.icon, age: 0, out: 0, manual: true, block: false, step: null, who: 'jasmin' };
-  if (typeof sfx === 'function') sfx('ui_open'); return true;
+  sfx('ui_open'); return true;
 }
 function coachCanShow(s) { return !!(S.started && !S.cards && !S.modal && !S.hold && (!S.sheet || s.sheet)); }
 function coachShow(s) {
@@ -37,7 +37,7 @@ function coachShow(s) {
   TCO.cur = { id: s.id, title: s.title, text: s.text, icon: s.icon, age: 0, out: 0, manual: false, block: !!s.block, step: s, who: s.who || 'jasmin' };
   if (s.block) S.hold = true;
   if (s.sheet) openSheet(s.sheet, s.tab);
-  TCO.gap = 0; if (typeof sfx === 'function') sfx('ui_open');
+  TCO.gap = 0; sfx('ui_open');
 }
 function tutFire(id) { const s = TUT.by[id]; if (!s) return false; if (TCO.cur && TCO.cur.block) S.hold = false; coachShow(s); return true; }
 function coachDismiss() {
@@ -133,7 +133,7 @@ function drawCoach() {
   // hit areas LAST so they win: card body absorbs taps, then Skip, then Got it
   hits.push({ x, y, w: W, h, act: () => {} });
   if (!c.manual) hitRect(x + pad - 6, by - 4, 92, 52, coachSkip);
-  hitRect(bx - 6, by - 4, bw + 12, 52, () => { coachDismiss(); if (typeof sfx === 'function') sfx('ui_tap'); });
+  hitRect(bx - 6, by - 4, bw + 12, 52, () => { coachDismiss(); sfx('ui_tap'); });
 }
 // ---- "?" buttons ----
 function coachInfoDraw(x, y, size) {
@@ -148,9 +148,9 @@ function helpTab(cw) {
   const st = tutSt(); let y = 4;
   rowCard(y, 42, cw); ctx.fillStyle = '#fff'; ctx.font = font(13, true); ctx.textAlign = 'left'; ctx.fillText('Show tips', 14, y + 26);
   const on = !st.off; pill(cw - 66, y + 9, 52, 24, on ? '#7cf09a' : '#6a5aa0', on ? '#25a84f' : '#3e3076'); ctx.fillStyle = '#fff'; ctx.font = font(11, true); ctx.textAlign = 'center'; ctx.fillText(on ? 'ON' : 'OFF', cw - 40, y + 26);
-  chit(2, y, cw - 4, 42, () => { st.off = !st.off; if (typeof sfx === 'function') sfx('ui_tap'); }); y += 48;
+  chit(2, y, cw - 4, 42, () => { st.off = !st.off; sfx('ui_tap'); }); y += 48;
   cbtn(2, y, cw - 4, 42, true, 'violet'); ctx.fillStyle = '#fff'; ctx.font = font(14, true); ctx.textAlign = 'center'; ctx.fillText('Replay tutorial', cw / 2, y + 27);
-  chit(2, y, cw - 4, 42, () => { tutReplay(); if (typeof toast === 'function') toast('Tutorial reset: tips will appear again', 'star', 3.5); }); y += 50;
+  chit(2, y, cw - 4, 42, () => { tutReplay(); toast('Tutorial reset: tips will appear again', 'star', 3.5); }); y += 50;
   y = note(y, cw, 'Tap a topic to read it. The same help is behind every "?" button.');
   for (const cat of TUT.cats) {
     y = section(y, cat);
@@ -160,7 +160,7 @@ function helpTab(cw) {
       rowCard(y, rh, cw); drawIcon(hp.icon, 26, y + 22, 28); ctx.fillStyle = '#fff'; ctx.font = font(13, true); ctx.textAlign = 'left'; ctx.fillText(hp.title, 48, y + 27);
       ctx.fillStyle = '#cfc6ee'; ctx.font = font(14, true); ctx.textAlign = 'right'; ctx.fillText(open ? '-' : '+', cw - 14, y + 27);
       if (open) { ctx.fillStyle = '#e6dcff'; ctx.font = font(12, false); ctx.textAlign = 'left'; for (let i = 0; i < ls.length; i++) ctx.fillText(ls[i], 14, y + 52 + i * 16); }
-      chit(2, y, cw - 4, rh, () => { TCO.open = open ? null : hp.id; if (typeof sfx === 'function') sfx('ui_tap'); });
+      chit(2, y, cw - 4, rh, () => { TCO.open = open ? null : hp.id; sfx('ui_tap'); });
       y += rh + 6;
     }
     y += 4;

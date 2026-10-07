@@ -24,9 +24,13 @@ function tick(dt) {
   p.maxHp = pMaxHp(); p.hp = Math.min(p.hp, p.maxHp);
   tickHero(dt); tickFire(dt); tickShots(dt); tickItems(dt); tickSell(dt); tickForge(dt); tickVault(dt);
   tickHubPlates(dt); tickLandPlates(dt); tickSpawns(dt); tickEnemies(dt); tickTowers(dt); tickFans(dt); tickComp(dt);
-  S.beatBuffT = Math.max(0, (S.beatBuffT || 0) - dt); S.beatLock = Math.max(0, (S.beatLock || 0) - dt); S.beatFlash = Math.max(0, (S.beatFlash || 0) - dt * 4); if (S.beatBuffT <= 0 && S.beatChain > 0 && (S.beatMissT = (S.beatMissT || 0) + dt) > 3) { S.beatChain = 0; S.beatMissT = 0; } if (S.beatBuffT > 0) S.beatMissT = 0;
-  tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
+  tickBeat(dt); tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
   if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
+}
+function tickBeat(dt) { // the PERFECT-tap damage buff, the tap lock and the button flash; a perfect chain breaks after 3 s without a buff
+  S.beatBuffT = Math.max(0, (S.beatBuffT || 0) - dt); S.beatLock = Math.max(0, (S.beatLock || 0) - dt); S.beatFlash = Math.max(0, (S.beatFlash || 0) - dt * 4);
+  if (S.beatBuffT > 0) S.beatMissT = 0;
+  else if (S.beatChain > 0 && (S.beatMissT = (S.beatMissT || 0) + dt) > 3) { S.beatChain = 0; S.beatMissT = 0; }
 }
 function tickHero(dt) {
   const p = S.player;
@@ -224,11 +228,11 @@ function tickHubPlates(dt) {
   if (S.lands.length >= PRESTIGE_MIN && dist2(p.x, p.y, MONU.x, MONU.y) < MONU.r * MONU.r && !p.moving) {
     S.prestT += dt; if (S.prestT >= PREST_T) { S.prestT = 0; prestige(); }
   } else S.prestT = Math.max(0, S.prestT - dt * 2);
-  // the plate that opens the next land
-  const nu = unlockSpot(S.lands.length + 1);
-  S.unlockPlate = { x: nu.x, y: nu.y, cost: nextUnlockCost(), paid: S.unlockPaid, built: false };
+  // the plate that opens the next land (one reused object: the HUD and the guide read it every frame)
+  const nu = unlockSpot(S.lands.length + 1), up = S.unlockPlate || (S.unlockPlate = { x: 0, y: 0, cost: 0, paid: 0, built: false });
+  up.x = nu.x; up.y = nu.y; up.cost = nextUnlockCost(); up.paid = S.unlockPaid; up.built = false;
   if (dist2(p.x, p.y, nu.x, nu.y) < 58 * 58) {
-    if (pay(S.unlockPlate, dt, 'unlock')) openNextLand(); else S.unlockPaid = S.unlockPlate.paid;
+    if (pay(up, dt, 'unlock')) openNextLand(); else S.unlockPaid = up.paid;
   }
 }
 function openNextLand() {
@@ -264,14 +268,16 @@ function tickLandPlates(dt) {
     if (z.altar) { z.altar.cd = Math.max(0, z.altar.cd - dt); if (z.altar.cd <= 0 && dist2(p.x, p.y, z.altar.x, z.altar.y) < 50 * 50) { z.altar.cd = BOSS_CD; spawnEnemy(z, { boss: true }); } }
   }
 }
+const ALIVE = new Map(); // reused every frame: live non-boss foes per land
 function tickSpawns(dt) {
-  const alive = new Map();
+  const alive = ALIVE; alive.clear();
   for (const e of S.enemies) if (e.hp > 0 && !e.boss) alive.set(e.k, (alive.get(e.k) || 0) + 1);
   for (const z of S.lands) {
     z.spawnCd -= dt;
     if (z.spawnCd <= 0 && (alive.get(z.k) || 0) < maxAlive(z)) { z.spawnCd = spawnInt(z); spawnEnemy(z); alive.set(z.k, (alive.get(z.k) || 0) + 1); }
   }
 }
+const NEAR = [];
 function tickEnemies(dt) {
   const p = S.player, heroLand = landAt(p.x, p.y, S.lands.length);
   for (const e of S.enemies) {
@@ -305,8 +311,9 @@ function tickEnemies(dt) {
     if (dd > lim) { e.x = g.x + ddx / dd * lim; e.y = g.y + ddy / dd * lim; }
     if (e.arch !== 'spitter') { e.atkCd -= dt; if (e.atkCd <= 0 && pd2 < (e.r + 22) * (e.r + 22)) { e.atkCd = 0.85; hurtPlayer(e.dmg, e); } }
   }
-  // soft separation so crowds flow around each other instead of stacking
-  const near = S.enemies.filter(e => e.hp > 0 && dist2(e.x, e.y, p.x, p.y) < 1100 * 1100);
+  // soft separation so crowds flow around each other instead of stacking (only the foes near the hero; the list is reused)
+  const near = NEAR; near.length = 0;
+  for (const e of S.enemies) if (e.hp > 0 && dist2(e.x, e.y, p.x, p.y) < 1100 * 1100) near.push(e);
   for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) {
     const a = near[i], b = near[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy, m = (a.r + b.r) * 0.7;
     if (d2 > 0 && d2 < m * m) { const d = Math.sqrt(d2), push = (m - d) * 0.5; a.x -= dx / d * push * 0.5; a.y -= dy / d * push * 0.5; b.x += dx / d * push * 0.5; b.y += dy / d * push * 0.5; }
@@ -317,11 +324,12 @@ function tickEnemies(dt) {
   for (const d of S.dead) d.t += dt;
   compact(S.dead, (d) => d.t < 0.7);
 }
+const BY_LAND = new Map(), NO_FOES = []; // reused every frame: live foes per land
 function tickTowers(dt) {
-  const byLand = new Map();
+  const byLand = BY_LAND; for (const a of byLand.values()) a.length = 0;
   for (const e of S.enemies) if (e.hp > 0) { let a = byLand.get(e.k); if (!a) byLand.set(e.k, a = []); a.push(e); }
   for (const z of S.lands) {
-    const rateMul = z.drums ? DRUM_MUL : 1, dmgBase = towerDmg(z.k) * towerMul(z), foes = byLand.get(z.k) || [];
+    const rateMul = z.drums ? DRUM_MUL : 1, dmgBase = towerDmg(z.k) * towerMul(z), foes = byLand.get(z.k) || NO_FOES;
     for (const tw of z.towers) {
       tw.cd -= dt; if (tw.cd > 0 || !foes.length) continue;
       if (tw.type === 'archer' || tw.type === 'wizard') {
@@ -409,7 +417,7 @@ function tickTimers(dt) {
   else if (S.groove > 0) { S.grooveT -= dt; if (S.grooveT <= 0) S.groove = Math.max(0, S.groove - dt * 1.2); }
   if (S.ultCasting > 0) S.ultCasting = Math.max(0, S.ultCasting - dt);
   // wandering treasure chest
-  if (!S.chest) { S.chestCd -= dt; if (S.chestCd <= 0 && S.lands.length) { const z = S.lands[Math.floor(vrnd() * S.lands.length)], w = wanderPoint(z); S.chest = { x: w.x, y: w.y, val: Math.ceil(70 * helmVal(Math.max(1, S.lands.length)) * coinMul()), t: 0 }; S.toasts.push({ txt: 'A treasure chest appeared!', t: 0, ic: 'chest' }); sfx('chest'); } }
+  if (!S.chest) { S.chestCd -= dt; if (S.chestCd <= 0 && S.lands.length) { const z = S.lands[Math.floor(vrnd() * S.lands.length)], w = wanderPoint(z); S.chest = { x: w.x, y: w.y, val: Math.ceil(70 * helmVal(Math.max(1, S.lands.length)) * coinMul()), t: 0 }; toast('A treasure chest appeared!', 'chest'); sfx('chest'); } }
   else {
     S.chest.t += dt;
     if (dist2(S.player.x, S.player.y, S.chest.x, S.chest.y) < 42 * 42) {

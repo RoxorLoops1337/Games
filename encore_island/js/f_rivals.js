@@ -324,8 +324,8 @@ function ghostDecode(code) {
 }
 function ghTownSum() { return typeof townLevelSum === 'function' ? townLevelSum() : 0; }
 function ghostSnapshot() {
-  const st = fs('ghosts'); let g = 0; try { g = typeof gearPower === 'function' ? gearPower() : (S.feat.gear && +S.feat.gear.power) || 0; } catch (e) { g = 0; }
-  return { n: st.name || 'Starlight', l: S.level, d: pDmg(), h: pMaxHp(), r: pRate(), c: S.crowns, k: S.lands.length, t: ghTownSum(), g: g || 0, s: S.skins.active, p: S.prestiges || 0, q: critChance() };
+  const st = fs('ghosts'); // g (gear power) is reserved in the code format but not scored yet; gear already shows up through pDmg/pMaxHp
+  return { n: st.name || 'Starlight', l: S.level, d: pDmg(), h: pMaxHp(), r: pRate(), c: S.crowns, k: S.lands.length, t: ghTownSum(), g: 0, s: S.skins.active, p: S.prestiges || 0, q: critChance() };
 }
 function ghNpc(i) {
   const def = GH_NPC[i], me = ghostSnapshot(), f = def.f;

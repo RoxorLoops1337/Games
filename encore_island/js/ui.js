@@ -16,7 +16,8 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = sheetTabs(sh.id) ? 70 + 34 * Math.ceil(sheetTabs(sh.id).length / (sheetTabs(sh.id).length <= 4 ? 4 : 5)) + 4 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
+  const tabs = sheetTabs(sh.id), headH = tabs ? 70 + 34 * Math.ceil(tabs.length / (tabs.length <= 4 ? 4 : 5)) + 4 : 70;
+  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
   const top = bot0 - fitH + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
@@ -27,7 +28,6 @@ function drawSheet() {
   disc(x + w - 28, top + 28, 16, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w - 34, top + 22); ctx.lineTo(x + w - 22, top + 34); ctx.moveTo(x + w - 22, top + 22); ctx.lineTo(x + w - 34, top + 34); ctx.stroke(); ctx.lineCap = 'butt';
   hitRect(x + w - 50, top + 6, 44, 44, closeSheet);
   let cy = top + 58;
-  const tabs = sheetTabs(sh.id);
   if (tabs) { // up to 4 tabs per row; extra tabs wrap onto a second row
     const per = tabs.length <= 4 ? tabs.length : tabs.length <= 10 ? 5 : 6, rows = Math.ceil(tabs.length / per), tw = (w - 24) / per;
     tabs.forEach(([id, label], i) => { const r = Math.floor(i / per), c = i % per, tx = x + 12 + c * tw, ty = cy + r * 34, on = sh.tab === id; pill(tx + 2, ty, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(per > 4 ? 10.5 : 12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, ty + 19); hitRect(tx, ty, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); });
@@ -142,7 +142,7 @@ const SHEET_DRAW = {
       else { ctx.globalAlpha = 0.5; artDraw(p.art, 'idle', 0, x + w / 2, yy + 66, 0.34, true); ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(40,20,80,0.55)'; rr(x + 2, yy + 2, w - 4, 96, 10); ctx.fill(); drawIcon('lock', x + w / 2, yy + 48, 30); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillText(RARITY[p.rar].name, x + w / 2, yy + 90); } });
     return y + Math.ceil(PETS.length / cols) * 108 + 4;
   },
-  goals(cw, sh) { return SHEET_DRAW[sh.tab === 'miles' ? 'miles' : sh.tab === 'records' ? 'records' : sh.tab === 'dex' ? 'dex' : 'quests'](cw); },
+  goals(cw, sh) { return SHEET_DRAW[sh.tab === 'miles' || sh.tab === 'records' || sh.tab === 'dex' ? sh.tab : 'quests'](cw); },
   quests(cw) {
     let y = 4; if (S.streak > 0) { rowCard(y, 34, cw); ctx.fillStyle = '#ffd84d'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText('Daily streak: ' + S.streak + ' day' + (S.streak > 1 ? 's' : ''), 14, y + 22); y += 42; }
     const draw = (q) => { rowCard(y, 62, cw); drawIcon(q.done ? 'tick' : 'scroll', 28, y + 31, 34); ctx.fillStyle = q.done ? '#9af0b4' : '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(questName(q), 54, y + 22); gbar(54, y + 32, cw - 150, 10, q.prog / q.goal, '#c6ffa0', '#3fcf6a'); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10); ctx.fillText(fmt(q.prog) + ' / ' + fmt(q.goal), 54, y + 56); ctx.font = font(13); const rt = fmt(q.reward), rw = ctx.measureText(rt).width; ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'right'; ctx.fillText(rt, cw - 14, y + 28); drawIcon('coin', cw - 14 - rw - 13, y + 23, 22); if (q.gems) { ctx.font = font(11); ctx.fillStyle = '#6ee0d8'; ctx.fillText('+ gem', cw - 14, y + 46); } ctx.textAlign = 'left'; y += 70; };
@@ -179,7 +179,7 @@ const SHEET_DRAW = {
   more(cw) {
     let y = 4; const tile = (icon, label, sub, pip, act, kind) => { cbtn(2, y, cw - 4, 56, true, kind); drawIcon(icon, 34, y + 28, 40); ctx.fillStyle = '#fff'; ctx.font = font(16); ctx.textAlign = 'left'; ctx.fillText(label, 66, y + 24); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = font(11, false); ctx.fillText(sub, 66, y + 42); if (pip) { ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(cw - 20, y + 14, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff4d7a'; ctx.beginPath(); ctx.arc(cw - 20, y + 14, 6, 0, TAU); ctx.fill(); } chit(2, y, cw - 4, 56, act); y += 64; };
     tile('gift', 'Daily gift', loginReady() ? 'Your gift is ready!' : 'Come back tomorrow', loginReady(), () => { S.modal = { id: 'daily' }; S.sheet = null; }, 'pink');
-    tile('egg', 'Fortune wheel', 'Spin for prizes · ' + SPIN_COST + ' gems', S.gems >= SPIN_COST, () => { S.modal = { id: 'wheel' }; S.sheet = null; }, 'violet');
+    tile('egg', 'Fortune wheel', spinFree() ? S.spinFree + ' free spin' + (S.spinFree > 1 ? 's' : '') + ' from the Arena!' : 'Spin for prizes · ' + SPIN_COST + ' gems', spinFree() || S.gems >= SPIN_COST, () => { S.modal = { id: 'wheel' }; S.sheet = null; }, 'violet');
     y = section(y + 6, 'Settings');
     const sets = [['music', 'Music'], ['sfx', 'Sound effects'], ['shake', 'Screen shake'], ['particles', 'Sparkles'], ['dmgNums', 'Damage numbers'], ['haptics', 'Vibration']];
     for (const [k, label] of sets) { rowCard(y, 40, cw); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(label, 14, y + 25); const on = S.settings[k] !== false; pill(cw - 66, y + 8, 52, 24, on ? '#7cf09a' : '#6a5aa0', on ? '#25a84f' : '#3e3076'); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cw - (on ? 28 : 52), y + 20, 9, 0, TAU); ctx.fill(); chit(2, y, cw - 4, 40, () => toggleSetting(k)); y += 46; }
@@ -207,7 +207,7 @@ function drawModal() {
   if (m.id === 'wheel') drawWheelModal(cx, top); else drawDailyModal(cx, top);
 }
 function drawWheelModal(cx, top) {
-  ctx.fillStyle = '#e6dcff'; ctx.font = font(12, false); ctx.textAlign = 'center'; ctx.fillText('Spin for a prize · you have ' + S.gems + ' gems', cx, top + 24);
+  ctx.fillStyle = '#e6dcff'; ctx.font = font(12, false); ctx.textAlign = 'center'; ctx.fillText('Spin for a prize · you have ' + S.gems + ' gems' + (spinFree() ? ' and ' + S.spinFree + ' free spin' + (S.spinFree > 1 ? 's' : '') : ''), cx, top + 24);
   const rad = Math.min(140, vw * 0.34, vh * 0.2), wy = top + 70 + rad, n = WHEEL.length, seg = TAU / n, SPIN = 2.0, spinning = S.wheel && S.wheel.spinT < SPIN;
   if (S.wheel) S.wheel.spinT += 1 / 60;
   let rot = -Math.PI / 2 + Math.sin(S.t * 0.6) * 0.03;
@@ -220,7 +220,8 @@ function drawWheelModal(cx, top) {
   disc(cx, wy, rad * 0.22, '#fff4c0', '#f0b422'); drawIcon('star', cx, wy, rad * 0.34);
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.moveTo(cx, wy - rad - 2); ctx.lineTo(cx - 16, wy - rad - 30); ctx.lineTo(cx + 16, wy - rad - 30); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ff4d8d'; ctx.beginPath(); ctx.moveTo(cx, wy - rad - 7); ctx.lineTo(cx - 11, wy - rad - 27); ctx.lineTo(cx + 11, wy - rad - 27); ctx.closePath(); ctx.fill();
   if (S.wheel && !spinning) { ctx.fillStyle = '#ffd94a'; ctx.font = font(16); ctx.textAlign = 'center'; ctx.fillText(S.wheel.msg, cx, wy + rad + 40); }
-  const can = S.gems >= SPIN_COST && !spinning, sw = 210, sx = cx - sw / 2, sy = wy + rad + 56; cbtn(sx, sy, sw, 48, can, 'pink'); ctx.fillStyle = can ? '#fff' : '#cfc6ee'; ctx.font = font(17); ctx.textAlign = 'center'; ctx.fillText(spinning ? 'SPINNING…' : 'SPIN  ' + SPIN_COST, cx - 6, sy + 31); if (!spinning) drawGemIcon(cx + 52, sy + 24, 0.9); if (can) hitRect(sx, sy, sw, 48, () => spinWheel());
+  const free = spinFree(), can = (free || S.gems >= SPIN_COST) && !spinning, sw = 210, sx = cx - sw / 2, sy = wy + rad + 56; cbtn(sx, sy, sw, 48, can, 'pink'); ctx.fillStyle = can ? '#fff' : '#cfc6ee'; ctx.font = font(17); ctx.textAlign = 'center';
+  ctx.fillText(spinning ? 'SPINNING…' : free ? 'FREE SPIN  x' + S.spinFree : 'SPIN  ' + SPIN_COST, free ? cx : cx - 6, sy + 31); if (!spinning && !free) drawGemIcon(cx + 52, sy + 24, 0.9); if (can) hitRect(sx, sy, sw, 48, () => spinWheel());
 }
 function drawDailyModal(cx, top) {
   const ready = loginReady(), cur = S.login.day % 7; ctx.fillStyle = '#e6dcff'; ctx.font = font(12, false); ctx.textAlign = 'center'; ctx.fillText(ready ? 'Your gift is ready — come back every day!' : 'Claimed today — see you tomorrow!', cx, top + 24);

@@ -8,7 +8,7 @@ const SPEED0 = 195, SPEED_UP = 0.12, DMG0 = 6, DMG_UP = 1.45, RATE0 = 0.55, RATE
 const FIRE_RANGE = 270, SELL_RATE = 7, VAC_RATE = 55, BUILD_RATE = 60, FLOW_ACCEL = 2.6, FLOW_CAP = 1e6;
 const ECO = 2.35, HP_T = 2.15, UNLOCK0 = 180, UNLOCK_MUL = 3.2, OFFLINE_CAP = 4 * 3600;
 const TOWER_RANGE = 340, TOWER_RATE = 1.05, TOWER_TRAIN = 0.35, WIZ_RATE = 2.0, WIZ_CHAIN = 3, WIZ_JUMP = 160, CAT_RATE = 4.2, CAT_AOE = 115, DRUM_MUL = 0.75;
-const HP0 = 60, HP_UP = 45, GOLD_CHANCE = 0.045, BOSS_CD = 45, PRESTIGE_MIN = 5, CROWN_BONUS = 0.20, CROWN_DMG = 0.30, CROWN_HP = 0.25;
+const HP0 = 60, HP_UP = 45, GOLD_CHANCE = 0.045, BOSS_CD = 45, PRESTIGE_MIN = 5, CROWN_BONUS = 0.20, CROWN_DMG = 0.30;
 const DASH_SPD = 780, DASH_TIME = 0.16, DASH_CD = 3.6, DASH_CD_CROWN = 0.35, DASH_CD_MIN = 1.2;
 const FORGE_T = 1.8, FORGE_Q = 12, TRAY_MAX = 10, BAR_MUL = 3, CROWN_MUL = 22, FORGE_UP0 = 4000, FORGE_UP_MUL = 2.7, FORGE_LVL_MAX = 10;
 const INHAB0 = 1500, INHAB_MUL = 1.5, INHAB_SPD = 130, FIGHTER_RATE = 1.05, FIGHTER_RANGE = 260, PORTER_CAP = 6;
@@ -17,7 +17,7 @@ const COMBO_WINDOW = 2.6, CHEST_CD = 160, WARP_T = 0.55, PREST_T = 3;
 const COMBO_TIERS = [[80, 4, '#ff3a6b'], [40, 3, '#ff6a3a'], [20, 2, '#ff9a3a'], [10, 1.5, '#ffd94a'], [5, 1.25, '#e8e08a']];
 const ULT_NEED = 40;
 // the groove: kills landed on the beat fill the meter; a full meter starts ENCORE (double damage + coins)
-const GROOVE_NEED = 12, ENCORE_TIME = 9, BEAT_TOL = 0.085;
+const GROOVE_NEED = 12, ENCORE_TIME = 9;
 
 function eco(k) { return Math.pow(ECO, k - 1); }
 function bcost(k) { return Math.pow(ECO, k - 1) * Math.pow(1.3, k - 1); }
@@ -47,7 +47,10 @@ const METALS = [
   { name: 'copper', col: '#c87838' }, { name: 'bronze', col: '#b5804a' }, { name: 'silver', col: '#c8ccd4' }, { name: 'gold', col: '#e8b93a' },
   { name: 'platinum', col: '#d6e2ea' }, { name: 'mythril', col: '#6ee0d8' }, { name: 'cobalt', col: '#5a7fe0' }, { name: 'uranium', col: '#a6e04a', glow: true },
 ];
-function metal(k) { const cyc = Math.floor((k - 1) / 8), m = METALS[(k - 1) % 8]; return { name: m.name + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''), col: m.col, glow: !!m.glow }; }
+// every lap of 8 tiers adds a roman numeral to the name (copper, copper II, copper III...)
+const ROMAN = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const lapSuffix = (cyc) => cyc ? ' ' + (ROMAN[cyc - 1] || cyc) : '';
+function metal(k) { const cyc = Math.floor((k - 1) / 8), m = METALS[(k - 1) % 8]; return { name: m.name + lapSuffix(cyc), col: m.col, glow: !!m.glow }; }
 
 // ---- the Soundlands: eight biomes, eight creature families, three acts ----
 const BIOMES = [
@@ -79,7 +82,7 @@ function foeAct(k) { return Math.floor((k - 1) / 8) % 3; }
 function foeFam(k) { return (k - 1) % 8; }
 function foeArch(k) { return FOE_ARCH[foeFam(k)]; }
 function foeArtName(k, boss) { return boss ? BOSS_ART[foeAct(k)] : FOE_ART[foeAct(k)][foeFam(k)]; }
-function foeName(k) { const act = Math.floor((k - 1) / 8), cyc = Math.floor(act / 3); return FOE_ACT_NAMES[act % 3][foeFam(k)] + (cyc ? ' ' + ('II III IV V VI VII VIII IX X'.split(' ')[cyc - 1] || cyc) : ''); }
+function foeName(k) { const act = Math.floor((k - 1) / 8); return FOE_ACT_NAMES[act % 3][foeFam(k)] + lapSuffix(Math.floor(act / 3)); }
 function foeCol(k) { return FOE_COLS[foeFam(k)]; }
 function biomeOf(k) { return BIOMES[(k - 1) % 8]; }
 

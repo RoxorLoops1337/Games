@@ -2,7 +2,7 @@
 // Encore Island — meta features: SEASONS (calendar themes + quest line + exclusive outfit), CHALLENGE runs (daily/weekly rule-twisted mini-runs),
 // COLLECTION BOOK (museum album with permanent milestone bonuses). Three features: 'seasons', 'challenge', 'book' (all keep:true).
 // Emits: 'seasonQuest'(i), 'seasonDone'(seasonId), 'challengeStart'({mode,rules}), 'challenge'({mode,stars,score,key}), 'bookMilestone'({page,pct}).
-// Expects (optional): gearAddScrap(n) for challenge prizes; S.feat.lands.found, S.feat.gear, S.feat.songs for the Book pages.
+// Reads (optional): S.feat.gear.scrap for challenge prizes; S.feat.lands.found and S.feat.gear for the Book pages.
 
 // ================================================================== shared helpers
 const metaNow = () => { const f = S && S.feat && S.feat.seasons && S.feat.seasons.fakeNow; return f ? new Date(f) : new Date(); };
@@ -59,12 +59,12 @@ const seasReady = () => { const r = seasRec(); return r.i < 5 && r.p >= seasGoal
 function seasClaim() {
   const rec = seasRec(), i = rec.i; if (i >= 5 || rec.p < seasGoal(i, rec)) return false;
   const rw = seasReward(i), sd = seasCur();
-  S.gems += rw.gems; S.stats.gemsFound += rw.gems; S.wallet += rw.coins; S.feat.seasons.lastEarn = S.stats.earned;
+  S.gems += rw.gems; S.stats.gemsFound += rw.gems; S.wallet += rw.coins;
   rec.i++; rec.p = 0; sfx('levelup', true); starBurst(S.player.x, S.player.y - 40, 16, [sd.col, '#ffe98a'], 280);
   float(S.player.x, S.player.y - 90, '+' + rw.gems + ' gems  +' + fmt(rw.coins), '#ffd94a', true);
   fEmit('seasonQuest', i);
   if (rec.i >= 5 && !rec.outfit) {
-    rec.outfit = true; S.skins.owned[sd.skin.id] = true; S.toasts.push({ txt: 'Season outfit: ' + sd.skin.name + '!', t: 0, ic: 'heart', life: 4 });
+    rec.outfit = true; S.skins.owned[sd.skin.id] = true; toast('Season outfit: ' + sd.skin.name + '!', 'heart', 4);
     JUICE.flash = 0.5; starBurst(S.player.x, S.player.y - 40, 30, [sd.col, '#ffe98a', '#fff4e6'], 380); sfx('win', true); fEmit('seasonDone', sd.id);
   }
   save(); return true;
@@ -183,7 +183,7 @@ function chalStart(mode) {
   const g = z.g, c = walkable(g.x, g.y, S.lands.length) ? { x: g.x, y: g.y } : wanderPoint(z); p.x = c.x; p.y = c.y; p.vx = p.vy = 0; p.invuln = 2.5; p.maxHp = pMaxHp(); p.hp = p.maxHp;
   for (let i = 0; i < 6; i++) chalSpawn(z);
   ringFx(p.x, p.y, 200, '#ffe98a', 0.6); starBurst(p.x, p.y - 30, 18, ['#ffe98a', '#ff9ac8'], 300); sfx('warp', true);
-  S.toasts.push({ txt: rules.map(r => r.name).join(' + ') + ' — go!', t: 0, ic: 'trophy', life: 3 });
+  toast(rules.map(r => r.name).join(' + ') + ' — go!', 'trophy', 3);
   fEmit('challengeStart', { mode, rules: rules.map(r => r.id) }); return true;
 }
 function chalRestore(keepHelmets) { // put the hero back where the run began and sweep the challenge creatures away
@@ -201,7 +201,7 @@ function chalFinish(why) {
   if (!CHAL.on) return null; const st = S.feat.challenge, mode = CHAL.mode, key = CHAL.key, rules = CHAL.rules;
   let score = chalScore(); if (why === 'goal') score += Math.floor(Math.max(0, CHAL.dur - CHAL.t)) * 8;
   const p = S.player, mine = p.helmets; chalRestore(mine);
-  if (why === 'abort') { S.toasts.push({ txt: 'Challenge aborted — nothing lost', t: 0, ic: 'trophy' }); return null; }
+  if (why === 'abort') { toast('Challenge aborted — nothing lost', 'trophy'); return null; }
   const th = chalThresholds(mode, rules); let stars = 0; for (let i = 0; i < 3; i++) if (score >= th[i]) stars = i + 1;
   const bk = mode + ':' + key, prev = st.best[bk] || { score: 0, stars: 0 }, paid = st.paid[bk] || 0, newBest = score > prev.score;
   if (newBest) st.best[bk] = { score, stars: Math.max(stars, prev.stars) }; else if (stars > prev.stars) prev.stars = stars;
@@ -214,8 +214,8 @@ function chalFinish(why) {
   if (stars) { sfx('win', true); JUICE.flash = 0.4; starBurst(p.x, p.y - 40, 24, ['#ffe98a', '#ff9ac8', '#9af0b4'], 340); } else sfx('hurt');
   fEmit('challenge', { mode, stars, score, key }); save(); return st.result;
 }
-function chalHasScrap() { return typeof gearAddScrap === 'function' || !!(S.feat.gear && typeof S.feat.gear.scrap === 'number'); }
-function chalScrap(n) { if (typeof gearAddScrap === 'function') { gearAddScrap(n); return true; } const G = S.feat.gear; if (G && typeof G.scrap === 'number') { G.scrap += n; return true; } return false; }
+function chalHasScrap() { return !!(S.feat.gear && typeof S.feat.gear.scrap === 'number'); }
+function chalScrap(n) { if (!chalHasScrap()) return false; S.feat.gear.scrap += n; return true; }
 function chalTrim(o) { const ks = Object.keys(o); if (ks.length > 40) { ks.sort(); for (let i = 0; i < ks.length - 40; i++) delete o[ks[i]]; } return o; }
 function chalAbort() { return chalFinish('abort'); }
 function chalDraw() { // HUD pill under the rank pill + result card
@@ -340,12 +340,12 @@ function bkClaim(pid) {
   const st = S.feat.book, def = BOOK_PAGES.find(p => p.id === pid), pg = BK.pages && BK.pages[pid]; if (!def || !pg) return false;
   const have = st.claimed[pid] || 0, n = bkReached(pg); if (n <= have) return false;
   let gems = 0; for (let i = have; i < n; i++) gems += BOOK_GEMS[i]; st.claimed[pid] = n; S.gems += gems; S.stats.gemsFound += gems;
-  S.toasts.push({ txt: def.label + ' page: +' + gems + ' gems', t: 0, ic: 'chest' }); sfx('chest', true); starBurst(S.player.x, S.player.y - 40, 16, ['#ffe98a', '#6ee0d8'], 280);
+  toast(def.label + ' page: +' + gems + ' gems', 'chest'); sfx('chest', true); starBurst(S.player.x, S.player.y - 40, 16, ['#ffe98a', '#6ee0d8'], 280);
   fEmit('bookMilestone', { page: pid, pct: BOOK_MS[n - 1] }); bkRefresh(); save(); return true;
 }
 function bkAck(pid) { const st = S.feat.book, pg = BK.pages && BK.pages[pid]; if (!pg) return; const k = st.known[pid] || (st.known[pid] = {}); for (const s of pg.slots) if (s.got) k[s.id] = 1; }
 function bkNewCount(pid) { const st = S.feat.book, pg = BK.pages && BK.pages[pid]; if (!pg) return 0; const k = st.known[pid] || {}; let n = 0; for (const s of pg.slots) if (s.got && !k[s.id]) n++; return n; }
-function bkSlot(s, x, y, w, h, isNew, pid) {
+function bkSlot(s, x, y, w, h, isNew) {
   const idx = ((S.t * 3) | 0);
   if (s.got) { card(x, y, w, h, 10); if (s.rar !== undefined) { ctx.strokeStyle = RARITY[s.rar].col; ctx.lineWidth = 2; rr(x, y, w, h, 10); ctx.stroke(); } if (s.season) { ctx.fillStyle = '#ffb640'; ctx.beginPath(); ctx.arc(x + w - 9, y + 9, 6, 0, TAU); ctx.fill(); drawIcon('star', x + w - 9, y + 9, 9); } }
   else { ctx.fillStyle = 'rgba(20,10,50,0.55)'; rr(x, y, w, h, 10); ctx.fill(); }
@@ -383,7 +383,7 @@ function bookTab(cw) {
   // slot grid
   const cols = 4, gw = (cw - 4 - 6 * (cols - 1)) / cols, gh = 78; const k = st.known[BK.page] || {};
   if (!pg.ok) y = note(y + 6, cw, 'This page fills up when that part of the island is added. Check back after the next update!');
-  pg.slots.forEach((s, i) => { const x = 2 + (i % cols) * (gw + 6), yy = y + Math.floor(i / cols) * (gh + 6); bkSlot(s, x, yy, gw, gh, s.got && !k[s.id], BK.page); });
+  pg.slots.forEach((s, i) => { const x = 2 + (i % cols) * (gw + 6), yy = y + Math.floor(i / cols) * (gh + 6); bkSlot(s, x, yy, gw, gh, s.got && !k[s.id]); });
   return y + Math.ceil(pg.slots.length / cols) * (gh + 6) + 6;
 }
 regFeature({

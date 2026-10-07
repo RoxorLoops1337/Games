@@ -87,10 +87,12 @@ function landAt(x, y, n) {
   if (dist2(x, y, 0, 0) < Math.pow(radiusAt(HUB_GEO, Math.atan2(y, x)), 2)) return 0;
   return -1;
 }
+const EXTENT = []; // memo per land count: the minimap asks every frame and the geometry never changes
 function worldExtent(n) {
+  if (EXTENT[n]) return EXTENT[n];
   let x0 = -HUB.r, x1 = HUB.r, y0 = -HUB.r, y1 = HUB.r;
   for (let k = 1; k <= n + 1; k++) { const g = geoOf(k); x0 = Math.min(x0, g.x - g.r * 1.2); x1 = Math.max(x1, g.x + g.r * 1.2); y0 = Math.min(y0, g.y - g.r * 1.2); y1 = Math.max(y1, g.y + g.r * 1.2); }
-  return { x0, y0, x1, y1 };
+  return (EXTENT[n] = { x0, y0, x1, y1 });
 }
 const polar = (g, off, f) => ({ x: g.x + Math.cos(g.ia + off) * g.r * f, y: g.y + Math.sin(g.ia + off) * g.r * f });
 const D2R = Math.PI / 180;
@@ -116,8 +118,11 @@ function landPlateDefs(k, g) {
   }
   return pl;
 }
-// where the plate that opens land k+1 sits: inside land k's rim, facing the next land
+// where the plate that opens land k+1 sits: inside land k's rim, facing the next land. Pure geometry, so the result is memoised:
+// the sim asks every frame. Hub-side spots also depend on HUB_KEEP, which feature modules extend at load, hence the length check.
+const UNLOCK_SPOT = [];
 function unlockSpot(kNext) {
+  const memo = UNLOCK_SPOT[kNext]; if (memo && memo.len === HUB_KEEP.length) return memo.p;
   const c = geoOf(kNext), par = geoOf(c.parent), base = Math.atan2(c.y - par.y, c.x - par.x);
   const keep = par.k === 0 ? HUB_KEEP : landPlateDefs(par.k, par).map(p => ({ x: p.x, y: p.y, r: 114 })).concat([landPadSpot(par)].map(p => ({ x: p.x, y: p.y, r: 114 })));
   let best = null, bestScore = -1e9;
@@ -128,6 +133,7 @@ function unlockSpot(kNext) {
     const score = Math.min(clear, 0) * 10 - Math.abs(ang - base) * 40;
     if (score > bestScore) { bestScore = score; best = { x, y }; } if (clear >= 0) break;
   }
+  UNLOCK_SPOT[kNext] = { p: best, len: HUB_KEEP.length };
   return best;
 }
 function landPadSpot(g) { const p = polar(g, 0, 0.8); return { x: p.x, y: p.y }; }

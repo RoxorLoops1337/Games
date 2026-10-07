@@ -2,7 +2,6 @@
 // Encore Island — world rendering: water, organic islands, boardwalks, hub furniture, plates, actors, effects.
 let vw = 412, vh = 860, dpr = 1, scl = 1, vL = 0, vR = 0, vT = 0, vB = 0, hits = [];
 const CAM = { x: 0, y: 0, init: false };
-const PLATE_POS = [];
 const vis = (x, y, m) => x > vL - m && x < vR + m && y > vT - m && y < vB + m;
 function blobPath(g, sc, dx, dy) {
   ctx.beginPath(); const n = RAD_N; let px = 0, py = 0, fx = 0, fy = 0;
@@ -14,11 +13,12 @@ function blobPath(g, sc, dx, dy) {
   ctx.quadraticCurveTo(px, py, (px + fx) / 2, (py + fy) / 2); ctx.closePath();
 }
 function landVisible(g) { const m = g.r * 1.3 + 60; return g.x + m > vL && g.x - m < vR && g.y + m > vT && g.y - m < vB; }
+const WATER = { key: '', grad: null }; // the sky-to-deep gradient only changes with the biome or the screen height
 function drawWater() {
   // water tint follows the biome of the island nearest the camera
-  const kk = nearestLandIdx(CAM.x, CAM.y), B = kk === 0 ? BIOMES[0] : biomeOf(kk);
-  const g = ctx.createLinearGradient(0, 0, 0, vh); g.addColorStop(0, mixc('#8fe3f0', B.shore, 0.25)); g.addColorStop(1, mixc('#4fb4d4', B.deep, 0.35));
-  ctx.fillStyle = g; ctx.fillRect(0, 0, vw, vh);
+  const kk = nearestLandIdx(CAM.x, CAM.y), bi = kk === 0 ? 0 : (kk - 1) % 8, B = BIOMES[bi], key = bi + '|' + vh;
+  if (WATER.key !== key) { const g = ctx.createLinearGradient(0, 0, 0, vh); g.addColorStop(0, mixc('#8fe3f0', B.shore, 0.25)); g.addColorStop(1, mixc('#4fb4d4', B.deep, 0.35)); WATER.key = key; WATER.grad = g; }
+  ctx.fillStyle = WATER.grad; ctx.fillRect(0, 0, vw, vh);
   ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
   const sp = 120, ox = -(CAM.x * scl * 0.9) % sp, oy = -(CAM.y * scl * 0.9) % sp;
   for (let y = -sp; y < vh + sp; y += sp * 0.62) for (let x = -sp; x < vw + sp; x += sp) {
@@ -137,7 +137,7 @@ function drawHubSign() { // "ENCORE ISLAND" marquee arch behind the stage
 function plateIcon(icon, x, y, s) { if (!drawIcon(icon, x, y, s)) { ctx.fillStyle = '#fff'; ctx.font = font(s * 0.5); ctx.textAlign = 'center'; ctx.fillText('?', x, y + s * 0.18); } }
 // a walk-onto plate: glossy disc, icon sticker, progress ring, price pill that glows when you can afford it
 function drawPlate(x, y, r, icon, label, cost, paid, o) {
-  o = o || {}; PLATE_POS.push({ x, y });
+  o = o || {};
   const rem = Math.max(0, cost - paid), afford = !o.gem ? S.wallet >= rem : S.gems >= rem, near = dist2(S.player.x, S.player.y, x, y) < (r + 110) * (r + 110);
   const bob = afford && !o.noBob ? Math.sin(S.t * 5 + x) * 2.5 : 0, pul = afford ? 0.5 + 0.5 * Math.sin(S.t * 5 + x * 0.01) : 0;
   shadow(x, y + r * 0.82, r * 0.95, 0.28);
@@ -263,14 +263,12 @@ function drawDen(z) {
   ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(d.x, d.y - 2, 24 + pul * 3, 11 + pul * 1.5, 0, 0, TAU); ctx.stroke();
 }
 function drawLandPlates(z) {
-  const gate = z.plates.find(p => p.id === 'gate2');
   for (const pl of z.plates) {
-    if (pl.built && !pl.repeat) { continue; }
-    if (pl.built && pl.repeat) continue;
+    if (pl.built) continue; // a maxed repeatable plate counts as built too
     drawPlate(pl.x, pl.y, 42, pl.icon, pl.name + (pl.repeat ? ' LV' + (pl.lvl + 1) : ''), pl.cost, pl.paid, { lvl: pl.repeat ? pl.lvl : undefined, c1: pl.id === 'altar' ? '#c85a5a' : undefined, c2: pl.id === 'altar' ? '#6a1f3a' : undefined });
   }
   if (z.altar) { const a = z.altar, ready = a.cd <= 0; drawPlate(a.x, a.y, 38, 'altar', ready ? 'Summon Headliner' : 'Headliner resting', 0, 0, { noBob: !ready, c1: ready ? '#e05a7a' : '#6a5a88', c2: ready ? '#6a1f3a' : '#3e3076' }); if (!ready) labelPill(Math.ceil(a.cd) + 's', a.x, a.y + 60, '#ffffff', '#dccaff', 12); }
-  if (S.waygate) { const q = landPadSpot(z.g); drawPad(q.x, q.y, 'HOME'); }
+  if (S.waygate) drawPad(z.pad.x, z.pad.y, 'HOME');
 }
 function drawPad(x, y, label) {
   ctx.strokeStyle = '#6ec9e0'; ctx.lineWidth = 4; ctx.setLineDash([12, 9]); ctx.beginPath(); ctx.arc(x, y, 40, S.t, S.t + TAU); ctx.stroke(); ctx.setLineDash([]);
@@ -293,8 +291,7 @@ function drawUnlockPlate() { // the portal to the next island: unmistakable — 
     const bh = afford ? 230 : 150, pg = ctx.createLinearGradient(0, u.y - bh, 0, u.y); pg.addColorStop(0, 'rgba(255,233,138,0)'); pg.addColorStop(1, 'rgba(255,233,138,' + (afford ? 0.42 + 0.14 * Math.sin(t * 5) : 0.2) + ')'); ctx.fillStyle = pg; ctx.beginPath(); ctx.moveTo(u.x - 44, u.y); ctx.lineTo(u.x - 22, u.y - bh); ctx.lineTo(u.x + 22, u.y - bh); ctx.lineTo(u.x + 44, u.y); ctx.closePath(); ctx.fill();
   }
   ctx.restore();
-  drawPlate(u.x, u.y, r, 'way', '', u.cost, u.paid, { c1: B.g[0], c2: mixc(B.deep, '#1a0a30', 0.25), ring: '#ffe98a', noBob: false });
-
+  drawPlate(u.x, u.y, r, 'way', '', u.cost, u.paid, { c1: B.g[0], c2: mixc(B.deep, '#1a0a30', 0.25), ring: '#ffe98a' });
 }
 
 function drawUnlockBanner() { // drawn after the y-sorted actors so trees can never hide it

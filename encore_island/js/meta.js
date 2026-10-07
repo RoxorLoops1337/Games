@@ -18,7 +18,11 @@ function mkQuest(def, tier) {
 const questName = (q) => QDEFS.find(d => d.kind === q.kind).name(q.goal);
 function rollDailies() { S.dailies = []; const pool = QDEFS.slice(); for (let i = 0; i < 3; i++) { const d = pool.splice(Math.floor(vrnd() * pool.length), 1)[0]; S.dailies.push(Object.assign(mkQuest(d, Math.min(3, 1 + i)), { daily: true })); } }
 function rollQuest() { const have = S.quests.map(q => q.kind), pool = QDEFS.filter(d => !have.includes(d.kind)); const d = pool[Math.floor(vrnd() * pool.length)] || QDEFS[0]; return mkQuest(d, Math.min(3, Math.floor(S.stats.quests / 4))); }
-function ensureQuests() { while (S.quests.length < 3) S.quests.push(rollQuest()); if (!S.dailies.length) rollDailies(); }
+const QUEST_LINGER = 1.8; // a finished island quest stays on the list this long (so the player sees the tick) before a new one takes its place
+function rerollDoneQuests(now) {
+  for (let i = 0; i < S.quests.length; i++) { const q = S.quests[i], age = S.t - (q.doneAt || 0); if (q.done && (now || age >= QUEST_LINGER || age < 0)) S.quests[i] = rollQuest(); }
+}
+function ensureQuests() { rerollDoneQuests(true); while (S.quests.length < 3) S.quests.push(rollQuest()); if (!S.dailies.length) rollDailies(); }
 function questEvent(kind, n) {
   if (!S.started) return;
   for (const q of S.dailies.concat(S.quests)) {
@@ -28,10 +32,9 @@ function questEvent(kind, n) {
   }
 }
 function completeQuest(q) {
-  q.done = true; S.wallet += q.reward; S.stats.quests++; S.stats.earned += q.reward; if (q.gems) { S.gems += q.gems; S.stats.gemsFound += q.gems; }
-  S.toasts.push({ txt: 'Quest done! +' + fmt(q.reward), t: 0, ic: 'scroll' }); float(S.player.x, S.player.y - 90, '+' + fmt(q.reward), '#ffd94a', true);
+  q.done = true; q.doneAt = S.t; S.wallet += q.reward; S.stats.quests++; S.stats.earned += q.reward; if (q.gems) { S.gems += q.gems; S.stats.gemsFound += q.gems; }
+  toast('Quest done! +' + fmt(q.reward), 'scroll'); float(S.player.x, S.player.y - 90, '+' + fmt(q.reward), '#ffd94a', true);
   S.goldPulse = Math.max(S.goldPulse, 0.6); sfx('levelup', true); starBurst(S.player.x, S.player.y - 40, 14, ['#ffe98a', '#ff9ac8'], 260);
-  if (!q.daily) setTimeout(() => { const i = S.quests.indexOf(q); if (i >= 0) S.quests[i] = rollQuest(); }, 1800);
 }
 function dayStr() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 function checkDay() {
@@ -61,13 +64,13 @@ const ACH = [];
 function tickMeta(dt) {
   S.achCd -= dt;
   if (S.achCd > 0) return; S.achCd = 0.5;
-  for (const a of ACH) if (!S.ach[a.id] && a.c()) { S.ach[a.id] = true; S.gems += 1; S.stats.gemsFound++; S.toasts.push({ txt: 'Milestone: ' + a.name + '  +1 gem', t: 0, ic: 'trophy' }); sfx('levelup', true); }
+  rerollDoneQuests(false);
+  for (const a of ACH) if (!S.ach[a.id] && a.c()) { S.ach[a.id] = true; S.gems += 1; S.stats.gemsFound++; toast('Milestone: ' + a.name + '  +1 gem', 'trophy'); sfx('levelup', true); }
   const r = heroRankIdx();
-  if (r > (S.rankIdx || 0)) { S.rankIdx = r; S.toasts.push({ txt: 'RANK UP — ' + RANKS[r].name + '!', t: 0, ic: 'star' }); JUICE.flash = 0.4; starBurst(S.player.x, S.player.y - 40, 18, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300); sfx('unlock', true); }
+  if (r > (S.rankIdx || 0)) { S.rankIdx = r; toast('RANK UP — ' + RANKS[r].name + '!', 'star'); JUICE.flash = 0.4; starBurst(S.player.x, S.player.y - 40, 18, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300); sfx('unlock', true); }
 }
 // ---- fans ----
 function recruit() { if (S.pop.length >= popCap() || S.wallet < recruitCost()) { sfx('hurt'); return false; } S.wallet -= recruitCost(); const f = mkFan(S.pop.filter(p => p.role === 'fight').length < S.pop.length / 2 ? 'fight' : 'gather'); S.pop.push(f); sfx('built', true); starBurst(STAGE.x, STAGE.y, 10, ['#ffe98a', '#9af0b4'], 200); return true; }
-function buyHouse() { if (S.houses >= HOUSE_MAX || S.wallet < houseCost(S.houses)) { sfx('hurt'); return false; } S.wallet -= houseCost(S.houses); S.houses++; sfx('built', true); return true; }
 function setFans(role, n) { // shift fans between roles so that exactly n have `role`
   const other = role === 'fight' ? 'gather' : 'fight'; n = clamp(n, 0, S.pop.length);
   const cnt = () => S.pop.filter(f => f.role === role).length;
@@ -81,7 +84,7 @@ function buySkin(id) {
   if (skinOwned(id)) { S.skins.active = id; sfx('ui_tap'); save(); return true; }
   if (s.rank !== undefined) { if (heroRankIdx() < s.rank) { float(S.player.x, S.player.y - 80, 'Reach ' + RANKS[s.rank].name + ' rank', '#ffd94a'); return false; } S.skins.owned[id] = true; S.skins.active = id; }
   else { const have = s.cur === 'crown' ? S.crowns : S.gems; if (have < s.cost) { float(S.player.x, S.player.y - 80, 'Need ' + s.cost + (s.cur === 'crown' ? ' crowns' : ' gems'), '#ffd94a'); return false; } if (s.cur === 'crown') S.crowns -= s.cost; else S.gems -= s.cost; S.skins.owned[id] = true; S.skins.active = id; }
-  S.toasts.push({ txt: 'New outfit: ' + s.name, t: 0, ic: 'heart' }); sfx('built', true); starBurst(S.player.x, S.player.y - 40, 16, ['#ff9ac8', '#ffe98a'], 260); save(); return true;
+  toast('New outfit: ' + s.name, 'heart'); sfx('built', true); starBurst(S.player.x, S.player.y - 40, 16, ['#ff9ac8', '#ffe98a'], 260); save(); return true;
 }
 // ---- pets ----
 function rollRarity() { const tot = RARITY.reduce((s, r) => s + r.w, 0); let x = vrnd() * tot; for (let i = 0; i < RARITY.length; i++) { x -= RARITY[i].w; if (x < 0) return i; } return 0; }
@@ -91,7 +94,7 @@ function hatchEgg() {
   let pool = PETS.filter(p => p.rar === rollRarity()); if (!pool.length) pool = PETS;
   const def = pool[Math.floor(vrnd() * pool.length)], wasNew = petLvl(def.id) === 0;
   S.pets[def.id] = petLvl(def.id) + 1; if (!S.activePet) S.activePet = def.id;
-  S.toasts.push({ txt: (wasNew ? 'NEW! ' : 'Lv' + S.pets[def.id] + ' ') + def.name, t: 0, ic: 'pet' }); shake(wasNew ? 8 : 4); sfx('pet', true); starBurst(S.player.x, S.player.y - 40, 18, [RARITY[def.rar].col, '#fff4e6'], 260);
+  toast((wasNew ? 'NEW! ' : 'Lv' + S.pets[def.id] + ' ') + def.name, 'pet'); shake(wasNew ? 8 : 4); sfx('pet', true); starBurst(S.player.x, S.player.y - 40, 18, [RARITY[def.rar].col, '#fff4e6'], 260);
   save(); return { def, wasNew };
 }
 function petAbilityReady() { return !!S.activePet && S.petCd <= 0; }
@@ -103,7 +106,7 @@ function petAbility() {
   else if (a.kind === 'xp') { grantXp(xpNeed(S.level) * 0.7); msg = 'XP surge'; }
   else if (a.kind === 'magnet') { for (const it of S.items) { it.vx = (S.player.x - it.x) * 3; it.vy = (S.player.y - it.y) * 3; it.t = Math.min(it.t, 0.2); } msg = 'Magnet pull'; }
   else { S.frenzyT = Math.max(S.frenzyT, 6); msg = 'Frenzy 6s'; }
-  S.toasts.push({ txt: a.name + ' — ' + msg, t: 0, ic: 'pet' }); S.goldPulse = 0.6; shake(7); ringFx(S.player.x, S.player.y, 120, '#c6a8ff', 0.5); starBurst(S.player.x, S.player.y - 30, 20, ['#c6a8ff', '#ffe98a'], 280); sfx('pet', true); buzz([25, 15, 40]);
+  toast(a.name + ' — ' + msg, 'pet'); S.goldPulse = 0.6; shake(7); ringFx(S.player.x, S.player.y, 120, '#c6a8ff', 0.5); starBurst(S.player.x, S.player.y - 30, 20, ['#c6a8ff', '#ffe98a'], 280); sfx('pet', true); buzz([25, 15, 40]);
   return true;
 }
 function setPet(id) { if (petLvl(id) > 0) { S.activePet = id; sfx('ui_tap'); } }
@@ -116,13 +119,16 @@ function castUlt() {
   starBurst(p.x, p.y - 30, 34, ['#ff9ac8', '#ffe98a', '#9af0b4', '#c6a8ff'], 420); shake(10); JUICE.flash = 0.5; sfx('ult', true); buzz([40, 20, 70]);
   const dmg = pDmg() * 9; let n = 0;
   for (const e of S.enemies) if (e.hp > 0 && dist2(e.x, e.y, p.x, p.y) < 520 * 520) { hurtEnemy(e, dmg, true); n++; }
-  S.toasts.push({ txt: 'ENCORE BLAST! ' + n + ' hit', t: 0, ic: 'groove' });
+  toast('ENCORE BLAST! ' + n + ' hit', 'groove');
   return true;
 }
 // ---- wheel + daily gifts ----
+const spinFree = () => (S.spinFree || 0) > 0; // Arena tickets pay for a spin before gems do
 function spinWheel() {
-  if (S.gems < SPIN_COST) { sfx('hurt'); return null; }
-  S.gems -= SPIN_COST; S.stats.spins++;
+  const free = spinFree();
+  if (!free && S.gems < SPIN_COST) { sfx('hurt'); return null; }
+  if (free) S.spinFree--; else S.gems -= SPIN_COST;
+  S.stats.spins++;
   const tot = WHEEL.reduce((s, w) => s + w.w, 0); let x = vrnd() * tot, idx = 0;
   for (let i = 0; i < WHEEL.length; i++) { x -= WHEEL[i].w; if (x < 0) { idx = i; break; } }
   const w = WHEEL[idx], lv = Math.max(1, S.lands.length); let msg = '';
@@ -145,22 +151,22 @@ function claimLogin() {
   else if (d === 1) { S.gems += 3; msg = '+3 gems'; } else if (d === 2) { const g = Math.ceil(90 * helmVal(lv) * coinMul()); S.wallet += g; msg = '+' + fmt(g); }
   else if (d === 3) { S.groove = GROOVE_NEED - 1; S.grooveT = 10; msg = 'Groove boost'; } else if (d === 4) { S.gems += 6; msg = '+6 gems'; }
   else if (d === 5) { S.goldRushT = 20; msg = 'Gold Rush'; } else { S.gems += 12; const g = Math.ceil(220 * helmVal(lv) * coinMul()); S.wallet += g; msg = '+12 gems +' + fmt(g); }
-  S.stats.logins++; S.login.day++; S.login.last = dayStr(); S.toasts.push({ txt: 'Daily gift: ' + msg, t: 0, ic: 'gift' }); sfx('win', true); starBurst(S.player.x, S.player.y - 40, 22, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300); save();
+  S.stats.logins++; S.login.day++; S.login.last = dayStr(); toast('Daily gift: ' + msg, 'gift'); sfx('win', true); starBurst(S.player.x, S.player.y - 40, 22, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300); save();
   return true;
 }
 // ---- crown hall + prestige ----
 function buyCperk(id) { const p = CPERKS.find(c => c.id === id), lv = cpk(id); if (!p || lv >= p.max || S.crowns < cperkCost(lv)) { sfx('hurt'); return false; } S.crowns -= cperkCost(lv); S.cperks[id] = lv + 1; sfx('built', true); save(); return true; }
 function prestige() {
   const gain = crownsToGain(), keep = {};
-  for (const k of ['crowns', 'prestiges', 'gems', 'pets', 'activePet', 'skins', 'cperks', 'stats', 'ach', 'bestiary', 'login', 'settings', 'dailies', 'quests', 'streak', 'dayKey', 'comboBest', 'bpm', 'rankIdx']) keep[k] = S[k];
+  for (const k of ['crowns', 'prestiges', 'gems', 'spinFree', 'pets', 'activePet', 'skins', 'cperks', 'stats', 'ach', 'bestiary', 'login', 'settings', 'dailies', 'quests', 'streak', 'dayKey', 'comboBest', 'bpm', 'rankIdx']) keep[k] = S[k];
   const kf = featsKeep(); fEmit('prestige'); const t = S.t; S = newState(); Object.assign(S, keep); featsAfterTour(kf); S.t = t; S.started = true;
   S.crowns += gain; S.prestiges++; addLand(); S.player.x = STAGE.x; S.player.y = STAGE.y; S.player.maxHp = pMaxHp(); S.player.hp = S.player.maxHp;
-  S.toasts.push({ txt: 'ENCORE TOUR! +' + gain + ' crowns', t: 0, ic: 'crown' }); JUICE.flash = 0.9; shake(14); sfx('win', true); buzz([60, 40, 100]); starBurst(STAGE.x, STAGE.y - 40, 40, ['#ffe98a', '#ff9ac8', '#9af0b4', '#c6a8ff'], 460); save();
+  toast('ENCORE TOUR! +' + gain + ' crowns', 'crown'); JUICE.flash = 0.9; shake(14); sfx('win', true); buzz([60, 40, 100]); starBurst(STAGE.x, STAGE.y - 40, 40, ['#ffe98a', '#ff9ac8', '#9af0b4', '#c6a8ff'], 460); save();
 }
 // ---- save / load ----
 function serialize() {
   return {
-    ver: 1, savedAt: Date.now(), wallet: S.wallet, pallet: S.pallet, gems: S.gems, crowns: S.crowns, prestiges: S.prestiges, up: S.up, upPaid: S.upPaid, gemUp: S.gemUp, gemPaid: S.gemPaid, unlockPaid: S.unlockPaid,
+    ver: 1, savedAt: Date.now(), wallet: S.wallet, pallet: S.pallet, gems: S.gems, spinFree: S.spinFree || 0, crowns: S.crowns, prestiges: S.prestiges, up: S.up, upPaid: S.upPaid, gemUp: S.gemUp, gemPaid: S.gemPaid, unlockPaid: S.unlockPaid,
     lands: S.lands.map(z => ({ k: z.k, plates: z.plates.map(p => ({ id: p.id, paid: p.paid, lvl: p.lvl, built: p.built, cost: p.cost })), hordeLvl: z.hordeLvl })),
     forgePlate: S.forgePlate, forgeUpPlate: S.forgeUpPlate, forgeLvl: S.forgeLvl, forge: S.forge, waygate: S.waygate, wayPlate: S.wayPlate, houses: S.houses,
     feat: S.feat, pop: S.pop.map(f => ({ role: f.role, art: f.art, lvl: f.lvl || 0, id: f.id, spec: f.spec || null })), town: S.town, fanSeq: S.fanSeq, pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
@@ -170,7 +176,7 @@ function serialize() {
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); return true; } catch (e) { return false; } }
 function applySave(d) {
-  const keys = ['wallet', 'pallet', 'gems', 'crowns', 'prestiges', 'unlockPaid', 'forgeLvl', 'waygate', 'houses', 'activePet', 'xp', 'level', 'ult', 'streak', 'dayKey', 'comboBest', 'rankIdx', 'forge'];
+  const keys = ['wallet', 'pallet', 'gems', 'spinFree', 'crowns', 'prestiges', 'unlockPaid', 'forgeLvl', 'waygate', 'houses', 'activePet', 'xp', 'level', 'ult', 'streak', 'dayKey', 'comboBest', 'rankIdx', 'forge'];
   for (const k of keys) if (d[k] !== undefined) S[k] = d[k];
   for (const k of ['up', 'upPaid', 'gemUp', 'gemPaid', 'pets', 'skins', 'cperks', 'perks', 'bestiary', 'login', 'ach', 'stats', 'settings', 'forgePlate', 'forgeUpPlate', 'wayPlate']) if (d[k] && typeof d[k] === 'object') Object.assign(S[k], d[k]);
   if (d.dailies) S.dailies = d.dailies; if (d.quests) S.quests = d.quests;
@@ -189,7 +195,7 @@ function applySave(d) {
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.savedAt || Date.now())) / 1000));
   if (away > 60) {
     const towers = S.lands.reduce((n, z) => n + z.towers.length, 0), rate = helmVal(S.lands.length) * (0.3 + 0.2 * towers + 0.25 * S.pop.length) * coinMul();
-    const amt = Math.floor(away * rate * 0.5 * snackMul()); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.toasts.push({ txt: 'While you were away: +' + fmt(amt) + ' coins in the Vault', t: 0, ic: 'coin', life: 4.5 }); }
+    const amt = Math.floor(away * rate * 0.5 * snackMul()); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; toast('While you were away: +' + fmt(amt) + ' coins in the Vault', 'coin', 4.5); }
   }
 }
 function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; applySave(JSON.parse(raw)); return true; } catch (e) { return false; } }
