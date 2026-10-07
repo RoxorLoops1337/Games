@@ -5131,6 +5131,7 @@ const DATA = (() => {
     drops: 3,
     val: { junk: 0, c: 1, u: 2, r: 4, l: 7 },
     pile: { c: 5, u: 3, r: 2, l: 1, junk: 2 },
+    needFrac: 0.6,   // (round 28) a Magnet Crane claw-off: this share of the prizes is metal
     prize: { gold: 30, perAct: 15, lose: 10, tix: 6, loseTix: 2 },
     aim: [34, 28, 22, 17, 12],       // his aim error (px) by gear
     grip: [1.1, 1.18, 1.26, 1.34, 1.42],
@@ -5167,7 +5168,7 @@ const DATA = (() => {
   }
   const garyVal = (def) => (def ? (GARY.val[def.rarity] == null ? 1 : GARY.val[def.rarity]) : 0);
   // The shared bin of a claw-off: [{id, v}], seeded. Every rarity is there, and two rocks.
-  function garyPile(rng, act) {
+  function garyPile(rng, act, opt) {
     const out = [];
     for (const r of ['l', 'r', 'u', 'c']) {
       let ids = pool(r).filter((id) => ITEMS[id] && !ITEMS[id].bag && !ITEMS[id].char);
@@ -5175,6 +5176,26 @@ const DATA = (() => {
       for (let k = 0; k < (GARY.pile[r] | 0) && ids.length; k++) {
         const id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
         out.push({ id, v: garyVal(ITEMS[id]) });
+      }
+    }
+    // (round 28) opt.need 'metal' (a Magnet Crane run): at least GARY.needFrac of the prizes are metal, swapped in at the same rarity,
+    // so a claw that only lifts metal always has something to grab (owner: "there was nothing iron in it")
+    const need = opt && opt.need;
+    if (need) {
+      const has = (id) => !!(ITEMS[id] && (ITEMS[id].tags || []).indexOf(need) >= 0);
+      const want = Math.ceil(out.length * (GARY.needFrac || 0.6));
+      let n = out.filter((p) => has(p.id)).length;
+      for (const r of ['c', 'u', 'r', 'l']) {
+        if (n >= want) break;
+        const ids = pool(r).filter((id) => has(id) && !ITEMS[id].bag && !ITEMS[id].char);
+        if (!ids.length) continue;
+        for (const p of out) {
+          if (n >= want) break;
+          if (has(p.id) || !ITEMS[p.id] || ITEMS[p.id].rarity !== r) continue;
+          p.id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
+          p.v = garyVal(ITEMS[p.id]);
+          n++;
+        }
       }
     }
     for (let k = 0; k < GARY.pile.junk; k++) out.push({ id: 'rock', v: 0 });
