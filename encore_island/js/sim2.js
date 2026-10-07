@@ -24,6 +24,7 @@ function tick(dt) {
   p.maxHp = pMaxHp(); p.hp = Math.min(p.hp, p.maxHp);
   tickHero(dt); tickFire(dt); tickShots(dt); tickItems(dt); tickSell(dt); tickForge(dt); tickVault(dt);
   tickHubPlates(dt); tickLandPlates(dt); tickSpawns(dt); tickEnemies(dt); tickTowers(dt); tickFans(dt); tickComp(dt);
+  S.beatBuffT = Math.max(0, (S.beatBuffT || 0) - dt); S.beatLock = Math.max(0, (S.beatLock || 0) - dt); S.beatFlash = Math.max(0, (S.beatFlash || 0) - dt * 4); if (S.beatBuffT <= 0 && S.beatChain > 0 && (S.beatMissT = (S.beatMissT || 0) + dt) > 3) { S.beatChain = 0; S.beatMissT = 0; } if (S.beatBuffT > 0) S.beatMissT = 0;
   tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
   if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
 }

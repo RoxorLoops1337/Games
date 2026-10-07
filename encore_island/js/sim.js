@@ -14,7 +14,7 @@ function newState() {
     comp: { x: STAGE.x - 40, y: STAGE.y + 30, face: 1, cd: 2 },
     enemies: [], dead: [], items: [], shots: [], eshots: [], parts: [], floats: [], fx: [], fly: [], toasts: [],
     stick: null, flowKey: null, flowT: 0, flowTouched: false,
-    combo: 0, comboT: 0, comboFlash: 0, comboBest: 0, groove: 0, grooveT: 0, encoreT: 0, frenzyT: 0, goldRushT: 0,
+    combo: 0, comboT: 0, comboFlash: 0, comboBest: 0, groove: 0, grooveT: 0, beatChain: 0, beatBuffT: 0, beatLock: 0, beatFlash: 0, beatBest: 0, encoreT: 0, frenzyT: 0, goldRushT: 0,
     xp: 0, level: 1, perks: {}, cards: null, pendingLevels: 0, ult: 0, ultCasting: 0,
     forge: null, forgePlate: { paid: 0, cost: Math.ceil(260), built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
     waygate: false, wayPlate: { paid: 0, cost: 400, built: false },
@@ -45,7 +45,7 @@ const activeSkin = () => skinDef(S.skins.active);
 const skinOwned = (id) => !!S.skins.owned[id];
 const cap = () => CAP0 + CAP_UP * S.up.cap + 2 * pk('cap') + Math.round(modAdd('cap'));
 const encoreOn = () => S.encoreT > 0;
-function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1) * clubMul() * mod('dmg'); }
+function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1) * ((S.beatBuffT || 0) > 0 ? 1.2 : 1) * clubMul() * mod('dmg'); }
 function landOfHero() { return landAt(S.player.x, S.player.y, S.lands.length); }
 function pRate() {
   const z = S.lands[landOfHero() - 1];
@@ -134,12 +134,11 @@ function hurtEnemy(e, dmg, crit) {
   killEnemy(e);
 }
 function killEnemy(e) {
-  const perfect = onBeatNow();
   S.stats.kills++;
   if (!S.ultCasting) S.ult = Math.min(ULT_NEED, S.ult + 1);
   recordKill(e); questEvent('kill', 1); registerCombo(e); fEmit('kill', e);
   grantXp(e.boss ? 50 : e.elite ? 20 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
-  if (perfect) groovePerfect(e);
+  if (!encoreOn() && S.groove < GROOVE_NEED) { S.groove += 0.1; S.grooveT = 3; if (S.groove >= GROOVE_NEED) startEncore(); } // kills only trickle the groove; the BEAT button does the real work
   const p = S.player;
   if (pk('vamp') > 0) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02 * pk('vamp'));
   S.dead.push({ x: e.x, y: e.y, k: e.k, boss: e.boss, gold: e.gold, r: e.r, t: 0, face: e.face || 1 });
@@ -181,15 +180,27 @@ const COMBO_REWARDS = [
   { at: 100, label: 'UNSTOPPABLE', fx: () => { S.frenzyT = Math.max(S.frenzyT, 8); S.gems += 2; S.stats.gemsFound += 2; comboCoins(2.5); } },
   { at: 200, label: 'GODLIKE', fx: () => { S.goldRushT = Math.max(S.goldRushT, 10); S.gems += 5; S.stats.gemsFound += 5; comboCoins(5); } },
 ];
-// ---- the groove: kills on the beat fill the meter; a full meter starts ENCORE ----
+// ---- the groove: TAP the BEAT button in time with the music; perfect taps fill the meter and boost damage; a full meter starts ENCORE ----
 function beatNow() { return (typeof AUDIO !== 'undefined' && AUDIO.state && AUDIO.state().playing && AUDIO.beat) ? AUDIO.beat() : S.t * S.bpm / 60; }
-function onBeatNow() { const b = beatNow() * 2, f = Math.abs(b - Math.round(b)); return f * 30 / S.bpm <= BEAT_TOL + 0.015 * pk('groove'); }
-function groovePerfect(e) {
-  S.stats.perfect++;
-  if (encoreOn()) return;
-  S.groove++; S.grooveT = 4;
-  float(e.x, e.y - e.r - 28, 'PERFECT', '#ff9ac8', false);
-  if (S.groove >= GROOVE_NEED) startEncore();
+const beatOffMs = () => { const b = beatNow(), f = Math.abs(b - Math.round(b)); return f * 60000 / S.bpm; }; // distance to the nearest beat, in ms
+const onBeatNow = () => (S.beatBuffT || 0) > 0; // true while a perfect tap's damage boost is running
+function beatTap() {
+  if (!S.started || S.hold || S.sheet || S.modal || S.cards) return false;
+  if ((S.beatLock || 0) > 0) return false;
+  const ms = beatOffMs(), tol = 95 + 10 * pk('groove'), p = S.player; S.beatLock = 0.14;
+  const at = () => ({ x: p.x, y: p.y - 70 });
+  if (ms <= tol) {
+    S.beatChain = (S.beatChain || 0) + 1; S.beatBuffT = 3; S.stats.perfect++; S.beatBest = Math.max(S.beatBest || 0, S.beatChain);
+    if (!encoreOn()) { S.groove += S.beatChain >= 8 ? 2 : 1; S.grooveT = 4; if (S.groove >= GROOVE_NEED) startEncore(); }
+    float(at().x, at().y, S.beatChain >= 3 ? 'PERFECT x' + S.beatChain : 'PERFECT!', '#ff9ac8', S.beatChain >= 5);
+    ringFx(p.x, p.y - 10, 70, '#ff9ac8', 0.35); sfx('combo', false, chainPitch ? chainPitch() : 1); S.beatFlash = 1; fEmit('beat', { grade: 'perfect', chain: S.beatChain });
+  } else if (ms <= 180) {
+    if (!encoreOn()) { S.groove += 0.35; S.grooveT = 4; }
+    float(at().x, at().y, 'good', '#ffe98a', false); sfx('ui_tap'); fEmit('beat', { grade: 'good', chain: S.beatChain || 0 });
+  } else {
+    S.beatChain = 0; S.beatLock = 0.35; float(at().x, at().y, 'off beat', '#cfc6ee', false); sfx('ui_close'); fEmit('beat', { grade: 'miss', chain: 0 });
+  }
+  return true;
 }
 function startEncore() {
   S.groove = 0; S.encoreT = ENCORE_TIME; S.player.cheerT = 0.9; S.stats.encores++; fEmit('encore'); questEvent('encore', 1);

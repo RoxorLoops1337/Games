@@ -136,7 +136,7 @@ const CHAL_RULES = [
   { id: 'fans', name: 'Fans Only', desc: 'Your hero hits 80% softer. Let the crowd do the work!', mul: 0.5, mods: { dmg: 0.2 } },
   { id: 'onehit', name: 'One-Hit', desc: 'Any hit leaves you at 1 HP. Every kill heals you a bit.', mul: 0.8 },
   { id: 'glass', name: 'Glass Cannon', desc: 'Triple damage, but only 30% of your health.', mul: 1, mods: { dmg: 3, hp: 0.3 } },
-  { id: 'beat', name: 'Beat Only', desc: 'Only kills landed on the beat count for your score.', mul: 0.8 },
+  { id: 'beat', name: 'Beat Only', desc: 'Only kills made within 3 seconds of a perfect BEAT tap count for your score.', mul: 0.8 },
   { id: 'speed', name: 'Speed Run', desc: 'Defeat 60 creatures fast. Spare time is bonus score.', mul: 1.1, goal: 60 },
   { id: 'slowfeet', name: 'Heavy Boots', desc: 'You walk 40% slower but hit 50% harder.', mul: 0.9, mods: { speed: 0.6, dmg: 1.5 } },
 ];

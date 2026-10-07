@@ -136,6 +136,14 @@ function drawActionButtons(baseY) {
   if (ready) disc(bx, by, r, '#7cf09a', '#25a84f'); else disc(bx, by, r, '#8a7ac0', '#4a3a88');
   if (!ready) { ctx.strokeStyle = '#fff4e6'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(bx, by, r - 3, -Math.PI / 2, -Math.PI / 2 + (1 - p.dashCd / dashCdMax()) * TAU); ctx.stroke(); } else { ctx.strokeStyle = 'rgba(255,244,230,' + (0.5 + Math.sin(S.t * 6) * 0.3) + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(bx, by, r - 3, 0, TAU); ctx.stroke(); }
   drawIcon('speed', bx, by - 5, 38); ctx.fillStyle = ready ? '#fff4e6' : '#cfc6ee'; ctx.font = font(9); ctx.textAlign = 'center'; ctx.fillText('DASH', bx, by + 25); hitRect(bx - r, by - r, r * 2, r * 2, dashAbility);
+  { // the BEAT button: a ring shrinks onto it; tap exactly as the ring touches the button
+    const cx = vw - 132, cy = baseY, t = beatNow() % 1, ring = r * (1 + (1 - t) * 1.15), hot = (S.beatFlash || 0), buff = (S.beatBuffT || 0) > 0, locked = (S.beatLock || 0) > 0.3;
+    ctx.save(); ctx.strokeStyle = 'rgba(255,233,138,' + (0.25 + 0.6 * t) + ')'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(cx, cy, ring, 0, TAU); ctx.stroke(); ctx.restore();
+    disc(cx, cy, r + hot * 4, locked ? '#8a7ac0' : '#ffd0e6', locked ? '#4a3a88' : '#ff5fa6');
+    if (buff) { ctx.strokeStyle = '#ffe98a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, r - 3, -Math.PI / 2, -Math.PI / 2 + Math.min(1, S.beatBuffT / 3) * TAU); ctx.stroke(); }
+    drawIcon('groove', cx, cy - 6, 36 + hot * 8); ctx.fillStyle = '#fff'; ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillText(S.beatChain > 1 ? 'x' + S.beatChain : 'BEAT', cx, cy + 24);
+    hitRect(cx - r - 10, cy - r - 10, r * 2 + 20, r * 2 + 20, beatTap);
+  }
   const ux = 52, uy = baseY, uReady = ultReady();
   if (uReady) disc(ux, uy, r, '#ff9ac8', '#f0599a'); else disc(ux, uy, r, '#8a7ac0', '#4a3a88');
   ctx.strokeStyle = uReady ? 'rgba(255,233,138,' + (0.6 + Math.sin(S.t * 6) * 0.35) + ')' : '#c9873f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(ux, uy, r - 3, -Math.PI / 2, -Math.PI / 2 + ultFrac() * TAU); ctx.stroke();

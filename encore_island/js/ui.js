@@ -9,7 +9,7 @@ function openSheet(id, tab) { const d = SHEETS[id], tb = sheetTabs(id); S.modal 
 function closeSheet() { S.sheet = null; }
 let SR = { x: 0, y: 0, w: 0, h: 0 }; // content region of the open sheet
 function chit(x, y, w, h, act) { // hit in content space (scrolls with the sheet)
-  const sy = y - S.sheet.scroll + SR.y, top = Math.max(sy, SR.y), bot = Math.min(sy + h, SR.y + SR.h); if (bot - top > 4) hits.push({ x, y: top, w, h: bot - top, act, sheet: true });
+  const sy = y - S.sheet.scroll + SR.y, top = Math.max(sy, SR.y), bot = Math.min(sy + h, SR.y + SR.h); if (bot - top > 4) hits.push({ x: x + SR.x, y: top, w, h: bot - top, act, sheet: true }); // content x is relative to the sheet's content region
 }
 function drawSheet() {
   const sh = S.sheet; if (!sh) return;
@@ -260,7 +260,7 @@ function onUp(ev) {
 const KEYS = {};
 function onKey(ev, down) {
   const k = ev.key.toLowerCase(); KEYS[k] = down; if (!down) return;
-  if (k === ' ' || k === 'shift') dashAbility(); else if (k === 'e') castUlt(); else if (k === 'q') petAbility(); else if (k === 'escape') { closeSheet(); S.modal = null; }
+  if (k === 'b' || k === 'enter') beatTap(); else if (k === ' ' || k === 'shift') dashAbility(); else if (k === 'e') castUlt(); else if (k === 'q') petAbility(); else if (k === 'escape') { closeSheet(); S.modal = null; }
   else if (k === '1') openSheet('town'); else if (k === '2') openSheet('heroes'); else if (k === '3') openSheet('goals'); else if (k === '4') openSheet('perks'); else if (k === '5') openSheet('more');
 }
 function keyStick() { if (S.sheet || S.modal || S.stick) return; const dx = (KEYS.d || KEYS.arrowright ? 1 : 0) - (KEYS.a || KEYS.arrowleft ? 1 : 0), dy = (KEYS.s || KEYS.arrowdown ? 1 : 0) - (KEYS.w || KEYS.arrowup ? 1 : 0); S.keyStick = dx || dy ? { dx: dx / (Math.hypot(dx, dy) || 1), dy: dy / (Math.hypot(dx, dy) || 1) } : null; }
