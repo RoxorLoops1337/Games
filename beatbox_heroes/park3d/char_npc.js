@@ -39,7 +39,7 @@ export function createNPC(ctx, id, opts) {
   if (id === 'beeamgee') {
     c.boombox = boomboxProp('#8d3b2f'); c.boombox.position.set(0.5, seat + 0.12, 0.02); c.boombox.rotation.y = -0.25; c.object.add(c.boombox);
     c.place(-9, -4, Math.atan2(9, 4), seat);
-    origPlay('sit', { seat, bpm: c.music.bpm, slump: 1.4, armBack: true });
+    origPlay('sit', { seat, bpm: c.music.bpm, slump: 1.4 });
     c.play = (clip, o) => { if (clip === 'idle') clip = 'sit'; origPlay(clip, Object.assign({ seat, slump: 1.4 }, o)); };
     let t0 = 0;
     c.update = (dt, t) => {

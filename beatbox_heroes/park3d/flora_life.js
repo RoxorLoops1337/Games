@@ -26,7 +26,7 @@ function pigeonParts(r, tone) {
   headG.push(tri([[0.045, 0.085, 0.045], [0.06, 0.075, 0.075], [0.05, 0.065, 0.045]], ['#e8782a']), tri([[-0.045, 0.085, 0.045], [-0.05, 0.065, 0.045], [-0.06, 0.075, 0.075]], ['#e8782a'])); // eyes
   const head = mergeRaw(headG);
   const tail = mergeRaw(quad([[-0.04, 0, 0], [0.04, 0, 0], [0.055, 0, -0.13], [-0.055, 0, -0.13]], [tone.back, tone.back, '#5f5a86', '#5f5a86']));
-  const wing = (s) => mergeRaw(quad([[0, 0, 0.09 * 1], [s * 0.3, 0, 0.07], [s * 0.3, 0, -0.17], [0, 0, -0.13]], [tone.back, '#6a6592', '#5a5580', tone.back]).map((g) => g));
+  const wing = (s) => mergeRaw([tri([[0, 0, 0.07], [s * 0.36, 0, 0.0], [s * 0.1, 0, -0.12]], [tone.back, '#7a76a6', tone.back]), tri([[s * 0.1, 0, -0.12], [s * 0.36, 0, 0.0], [s * 0.27, 0, -0.17]], [tone.back, '#7a76a6', '#5a5580']), tri([[0, 0, 0.07], [s * 0.1, 0, -0.12], [0, 0, -0.12]], [tone.back, tone.back, tone.back])]);
   const leg = (s) => mergeRaw([tri([[s * 0.04, 0, 0], [s * 0.04 + 0.014, 0, 0], [s * 0.04, -0.105, 0.01]], ['#d9728a'])].concat([tri([[s * 0.04, -0.105, 0.01], [s * 0.04 + 0.022, -0.105, 0.01], [s * 0.04 + 0.011, -0.105, 0.07]], ['#d9728a'])]));
   return { body, chest, head, tail, wL: wing(1), wR: wing(-1), lL: leg(1), lR: leg(-1) };
 }

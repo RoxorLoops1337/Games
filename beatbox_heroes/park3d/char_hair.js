@@ -12,7 +12,6 @@ const T_TOP = 0.565;
 // shell over the head. o: cols, rows, yb(th), thick(th,t), lift(th,t), col(th,t), sk(th,t), apexLift, nh, flat
 export function headShell(mb, o) {
   const cols = o.cols || HN, rows = o.rows || 3, a0 = Math.PI / cols, G = [];
-  const apexT = (o.thick ? o.thick(0, 1) : 0.03) + (o.apexLift || 0);
   for (let i = 0; i < cols; i++) {
     const th = a0 + (i / cols) * Math.PI * 2, yb = o.yb(absA(th)) + (o.jag ? ((i * 5) % 3 - 1) * o.jag : 0), col = [];
     for (let j = 0; j <= rows; j++) {
@@ -24,7 +23,8 @@ export function headShell(mb, o) {
     }
     G.push(col);
   }
-  const apex = [0, HY + HEAD_TOP + apexT, -0.035], ca = (th, t) => (o.col ? C(o.col(th, t)) : C('#ff00ff')), sa = (th, t) => (o.sk ? o.sk(th, t) : K('head')), nh = !!o.nh;
+  let ax = 0, ay = 0, az = 0; for (let i = 0; i < cols; i++) { const p = G[i][rows]; ax += p[0] / cols; ay += p[1] / cols; az += p[2] / cols; }
+  const apex = [ax, ay + 0.014 + (o.apexLift || 0), az], ca = (th, t) => (o.col ? C(o.col(th, t)) : C('#ff00ff')), sa = (th, t) => (o.sk ? o.sk(th, t) : K('head')), nh = !!o.nh;
   for (let i = 0; i < cols; i++) {
     const i2 = (i + 1) % cols, th0 = a0 + (i / cols) * Math.PI * 2, th1 = a0 + ((i + 1) / cols) * Math.PI * 2, thm = (th0 + th1) / 2;
     for (let j = 0; j < rows; j++) {
@@ -127,17 +127,17 @@ export function buildHair(mb, ctx, hatCover) {
       break;
     }
     case 'cornrows': {
-      S({ yb: HL.high, rows: 4, thick: () => 0.016, col: (th, t) => mix(mix(sk, base, 0.8), shade(base, 0.8), 0.3), sk: () => K_h });
+      S({ yb: HL.high, rows: 4, thick: () => 0.016, col: (th, t) => mix(sk, base, 0.45), sk: () => K_h, clump: 0, jag: 0.006 });
       [-0.2, -0.1, 0, 0.1, 0.2].forEach((x, i) => {
         const pts = []; for (let k = 0; k < 7; k++) { const z = 0.2 - k * 0.075; let y = 0.58; for (let yy = 0.58; yy > 0.3; yy -= 0.004) { if (Math.abs(x) <= ringAt(yy).rx * 0.82 && true) { const zz = -0.035 + 0; void zz; } } void y; const rr = ringAt(0.5); const yTop = 0.585 - (Math.abs(x) / 0.3) * 0.2 - (k > 4 ? (k - 4) * 0.06 : 0) - (z > 0.12 ? (z - 0.12) * 0.7 : 0); pts.push([x * (1 + Math.max(0, -z) * 0.2), HY + yTop + 0.012, z]); void rr; }
-        tube(mb, pts, 0.017, (t) => mix(base, hi, 0.25 + 0.1 * (i % 2)), { n: 3, sk: K_h, tip: 0.01 });
+        tube(mb, pts, 0.021, (t) => shade(base, 0.85), { n: 3, sk: K_h, tip: 0.01 });
       });
       [-0.1, 0.1].forEach((x) => tube(mb, [[x, HY + 0.3, -0.25], [x * 1.2, HY + 0.18, -0.28], [x * 1.3, HY + 0.06, -0.26]], [0.026, 0.022, 0.012], base, { n: 4, tip: 0.02, sk: (t) => K2('head', 'hairB', t) }));
       break;
     }
     case 'mohawk': {
-      S({ yb: HL.faded, rows: 3, thick: () => 0.006, col: (th, t) => mix(sk, base, 0.35 + 0.2 * t), sk: () => K_h });
-      for (let k = 0; k < 8; k++) { const z = 0.2 - k * 0.062, yTop = k < 2 ? 0.54 : k > 6 ? 0.5 : 0.575, ht = 0.16 + 0.04 * Math.sin(k * 1.3), c = [0, HY + yTop + 0.01, z]; const pts = [[-0.045, 0, 0.03], [0.045, 0, 0.03], [0.045, 0, -0.03], [-0.045, 0, -0.03]].map((p) => [c[0] + p[0], c[1] + p[1], c[2] + p[2]]); const tp = [0, c[1] + ht, z - 0.04]; const cl = mix(base, tip || hi, 0.0), ct = tip ? C(tip) : lite(base, 0.2); for (let q = 0; q < 4; q++) mb.triH(tp, pts[q], pts[(q + 1) % 4], [pts[q][0] + pts[(q + 1) % 4][0], 1, pts[q][2] + pts[(q + 1) % 4][2]], ct, cl, cl, K_h, K_h, K_h); }
+      S({ yb: HL.faded, rows: 3, thick: () => 0.006, col: (th, t) => mix(sk, base, 0.6 + 0.2 * t), sk: () => K_h, clump: 0 });
+      for (let k = 0; k < 8; k++) { const z = 0.2 - k * 0.062, yTop = k < 2 ? 0.54 : k > 6 ? 0.5 : 0.575, ht = 0.2 + 0.05 * Math.sin(k * 1.3), c = [0, HY + yTop + 0.01, z]; const pts = [[-0.045, 0, 0.03], [0.045, 0, 0.03], [0.045, 0, -0.03], [-0.045, 0, -0.03]].map((p) => [c[0] + p[0], c[1] + p[1], c[2] + p[2]]); const tp = [0, c[1] + ht, z - 0.04]; const cl = mix(base, tip || hi, 0.0), ct = tip ? C(tip) : lite(base, 0.2); for (let q = 0; q < 4; q++) mb.triH(tp, pts[q], pts[(q + 1) % 4], [pts[q][0] + pts[(q + 1) % 4][0], 1, pts[q][2] + pts[(q + 1) % 4][2]], ct, cl, cl, K_h, K_h, K_h); }
       break;
     }
     case 'spiky': case 'flame': {

@@ -87,18 +87,14 @@ export function buildAccessories(mb, glow, ctx, api) {
     const cc = C(nk.color || '#d4a017'), id = nk.id, zf = (y) => torsoFront(look, d, y) + 0.014;
     const vpath = (top, bot, xs, thick) => { const pts = []; const N = 9; for (let i = 0; i <= N; i++) { const t = i / N, y = lerp(top, bot, t); pts.push([-xs * (1 - t) * (1 - t * 0.0), y, zf(y)]); } for (let i = N - 1; i >= 0; i--) { const t = i / N, y = lerp(top, bot, t); pts.push([xs * (1 - t), y, zf(y)]); } return pts; };
     if (id === 'chain' || id === 'cubanchain' || id === 'dogtags' || id === 'medal' || id === 'lanyard') {
-      const bot = id === 'chain' ? 0.76 : id === 'cubanchain' ? 0.72 : id === 'lanyard' ? 0.66 : 0.74, xs = 0.095, pts = [], N = 7;
-      for (let i = 0; i <= N; i++) { const t = i / N, y = lerp(0.905, bot, t), x = -lerp(xs, 0.0, Math.pow(t, 0.9)); pts.push([x, y, lerp(0.0, 1, Math.min(1, t * 2.0)) * (zf(y) - 0.0) + (1 - Math.min(1, t * 2)) * 0.075]); }
-      const back = [[0.0, 0.905, -0.075]]; const right = []; for (let i = N; i >= 0; i--) { const q = pts[i]; right.push([-q[0], q[1], q[2]]); }
-      const loop = [back[0]].concat(pts.map((p) => p), right); loop.pop();
-      const thick = id === 'cubanchain' ? 0.013 : id === 'lanyard' ? 0.016 : 0.0075;
-      const full = [[0, 0.905, -0.07]].concat(pts.slice(0, -1), [[0, bot, zf(bot)]], right.slice().reverse().slice(1).reverse());
-      void loop; void full;
-      const ring = []; ring.push([0, 0.905, -0.075]); for (let i = 0; i <= N; i++) ring.push(pts[i]); for (let i = N - 1; i >= 0; i--) ring.push([-pts[i][0], pts[i][1], pts[i][2]]);
-      tube(mb, ring, thick, (t) => (id === 'lanyard' ? C(nk.color || '#e63946') : t > 0.2 && t < 0.8 ? lite(cc, 0.15) : cc), { n: 3, closed: true, sk: (t) => (t > 0.18 && t < 0.82 ? K2('chest', 'chain', clamp((0.5 - Math.abs(t - 0.5)) * 2.4 * 0.0 + 0.0, 0, 1)) : K('chest')), flatY: id === 'lanyard' ? 0.3 : 1 });
-      const by = bot - 0.005, bz = zf(bot) + 0.004, ck = K('chain');
+      const bot = id === 'chain' ? 0.76 : id === 'cubanchain' ? 0.72 : id === 'lanyard' ? 0.66 : 0.74, N = 6, left = [], thick = id === 'cubanchain' ? 0.013 : id === 'lanyard' ? 0.018 : 0.0075;
+      for (let i = 0; i <= N; i++) { const t = i / N, y = lerp(0.9, bot, t), e = Math.min(1, t * 2.4), x = -lerp(0.1, 0.0, Math.pow(t, 0.85)); left.push([x, y, lerp(-0.045, zf(y), e)]); }
+      const path = left.concat(left.slice(0, -1).reverse().map(([x, y, z]) => [-x, y, z]));
+      const base = id === 'lanyard' ? C(nk.color || '#e63946') : cc, ck = K('chain');
+      tube(mb, path, thick, (t) => mix(base, lite(base, 0.3), 0.5 - Math.abs(t - 0.5)), { n: 3, sk: (t) => K2('chest', 'chain', clamp(0.5 - Math.abs(t - 0.5), 0, 0.5) * 1.6), flatY: id === 'lanyard' ? 0.35 : 1 });
+      const by = bot - 0.005, bz = zf(bot) + 0.004;
       if (id === 'dogtags') { box(mb, [-0.012, by - 0.045, bz + 0.004], [0.042, 0.06, 0.006], '#c9d3e6', ck, { rot: [0, 0, 0.12] }); box(mb, [0.014, by - 0.06, bz + 0.0], [0.042, 0.06, 0.006], '#aeb8cc', ck, { rot: [0, 0, -0.1] }); }
-      if (id === 'medal') { ball(mb, [0, by - 0.035, bz + 0.012], [0.05, 0.05, 0.012], '#ffd23f', ck, { detail: 1 }); }
+      if (id === 'medal') ball(mb, [0, by - 0.035, bz + 0.012], [0.05, 0.05, 0.012], '#ffd23f', ck, { detail: 1 });
       if (id === 'lanyard') box(mb, [0, by - 0.06, bz + 0.002], [0.07, 0.09, 0.006], '#f2e6d0', ck);
       if (id === 'cubanchain') ball(mb, [0, by - 0.02, bz + 0.004], [0.022, 0.022, 0.012], '#ffd23f', ck, { detail: 0 });
     }
