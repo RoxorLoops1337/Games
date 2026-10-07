@@ -1641,9 +1641,8 @@ strength, so on a metal-heavy bin one drop lifted nearly everything (30 piece me
 piece has a hold: 1 at the face, halving every `RIG.magFade` (22) px its nearest edge sits further out; a chained piece under
 `RIG.magMin` (0.2) does not stick. A weak hold tears sooner on a swing (tear limit x (0.35 + 0.65 hold)) and may let go at the
 top of the lift ((1 - hold) x `RIG.magDrop` 0.55, plus the old heavy check against cap x hold). Same heap: about 8 stuck and
-4 delivered per drop. Gold, copper and brass (`def.nomag`: Lucky Coin, Lucky Penny, Arcade Token, Midas Coin, Hoard Coin,
-Golden Egg, Golden Idol, Golden Dice) stay `metal` for builds and combos but the magnet (and the Electromagnet upgrade) cannot
-lift them; Gary's magnet claw-off counts only magnetic metal.
+4 delivered per drop. (Round 29: coins and golden things are magnetic again, the owner wants them on the magnet. The
+`def.nomag` flag stays supported by physics, `isMetal`, the demo aim and Gary's magnet pile, but no item sets it.)
 
 **Ramp wedges (round 29, owner: "those things get so hard stuck").** The two floor ramps (`slopeL`, `slopeR`) are thin
 segments over a hollow wedge. A prize shoved or dragged through one (the magnet's weld, a hard push, a prize dropped back low
