@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#3a2a86">
+<title>Encore Island 3D</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ff7eb6' stroke='%233a2a86' stroke-width='4'/%3E%3Cpath d='M32 14l5 12 13 1-10 9 3 13-11-7-11 7 3-13-10-9 13-1z' fill='%23ffd84d'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; background: #4fb4d4; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  canvas { display: block; touch-action: none; position: fixed; inset: 0; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+  #coins { position: absolute; left: 12px; top: calc(12px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 999px; background: linear-gradient(#5a46b8, #33256f); border: 3px solid #2d170f; box-shadow: 0 3px 0 rgba(0,0,0,.25), inset 0 0 0 1.5px rgba(255,244,230,.5); font-weight: 800; font-size: 20px; text-shadow: 0 2px 0 #2d170f; }
+  #coins i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c0, #ffd84d 55%, #e8921e); border: 2.5px solid #2d170f; display: inline-block; }
+  #title { position: absolute; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%); font-weight: 900; font-size: 15px; letter-spacing: .08em; padding: 6px 14px; border-radius: 999px; background: rgba(45,23,15,.55); color: #ffe98a; backdrop-filter: blur(4px); }
+  #hint { position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center; font-weight: 700; font-size: 14px; text-shadow: 0 2px 0 #2d170f, 0 0 8px rgba(0,0,0,.5); transition: opacity .8s; }
+  #stick { position: fixed; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(255,255,255,.14); border: 3px solid rgba(255,255,255,.5); display: none; }
+  #stick b { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255,255,255,.65); }
+  #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #2d170f; color: #ffe98a; font-weight: 700; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+</head>
+<body>
+<div id="hud"><div id="coins"><i></i><span id="coinN">0</span></div><div id="title">ENCORE ISLAND · 3D</div><div id="hint">Drag to walk · WASD / arrows · sing to the creatures!</div></div>
+<div id="stick"><b></b></div>
+<div id="err">WebGL is not available on this device.</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
