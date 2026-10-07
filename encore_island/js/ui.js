@@ -1,7 +1,7 @@
 'use strict';
 // Encore Island — menus: bottom sheets (Town, Heroes, Goals, Perks, More), modals (wheel, daily gift, confirm) and pointer/keyboard input.
 const SHEETS = {
-  town: { title: 'Town', icon: 'home', tabs: null }, heroes: { title: 'Heroes', icon: 'mic', tabs: [['outfits', 'Outfits'], ['critters', 'Critters']] },
+  town: { title: 'Town', icon: 'home', tabs: [['crew', 'Crew'], ['build', 'Buildings']] }, heroes: { title: 'Heroes', icon: 'mic', tabs: [['outfits', 'Outfits'], ['critters', 'Critters']] },
   goals: { title: 'Goals', icon: 'trophy', tabs: [['quests', 'Quests'], ['miles', 'Milestones'], ['records', 'Records'], ['dex', 'Creatures']] },
   perks: { title: 'Perks', icon: 'crown', tabs: null }, more: { title: 'More', icon: 'menu', tabs: null },
 };
@@ -50,19 +50,70 @@ function iconText(cx, y, draw, txt, col, sz) {
 }
 const coinDraw = (x, y, sz) => drawIcon('coin', x, y, sz + 6);
 const SHEET_DRAW = {
-  town(cw) {
+  town(cw, sh) { return sh.tab === 'build' ? SHEET_DRAW.townBuild(cw, sh) : SHEET_DRAW.townCrew(cw, sh); },
+  townHead(cw, y) { // town banner: tier, level progress, crew headline numbers
+    const tier = townTierIdx(), nxt = TOWN_TIERS[tier + 1], sum = townLevelSum(), cs = crewStats();
+    rowCard(y, 78, cw); disc(34, y + 36, 24, '#ffe98a', '#f0b422'); drawIcon('home', 34, y + 36, 32);
+    ctx.fillStyle = '#fff'; ctx.font = font(16); ctx.textAlign = 'left'; ctx.fillText(TOWN_TIERS[tier][0], 68, y + 26);
+    ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.fillText('+' + 5 * tier + '% coins  ·  Town level ' + sum, 68, y + 43);
+    gbar(68, y + 52, cw - 150, 9, nxt ? (sum - TOWN_TIERS[tier][1]) / (nxt[1] - TOWN_TIERS[tier][1]) : 1, '#ffe98a', '#f0a81e');
+    ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.textAlign = 'right'; ctx.fillText(nxt ? nxt[0] + ' at ' + nxt[1] : 'MAX TOWN', cw - 12, y + 61);
+    ctx.fillStyle = '#9af0b4'; ctx.font = font(12); ctx.fillText(cs.collectors + ' collectors · carry ' + cs.carry, cw - 12, y + 24); ctx.fillStyle = '#ff9ac8'; ctx.fillText(cs.fighters + ' fighters · ' + fmt(cs.dps) + ' dps', cw - 12, y + 40);
+    return y + 88;
+  },
+  townCrew(cw, sh) {
     let y = 4; const cap = popCap(), n = S.pop.length;
-    rowCard(y, 56, cw); drawIcon('home', 30, y + 28, 36); ctx.fillStyle = '#fff'; ctx.font = font(15); ctx.textAlign = 'left'; ctx.fillText('Fans  ' + n + ' / ' + cap + ' beds', 56, y + 24); ctx.fillStyle = '#cfc6ee'; ctx.font = font(11, false); ctx.fillText('Cottages ' + S.houses + '/' + HOUSE_MAX + '  ·  +' + BEDS_PER_LAND + ' beds per land', 56, y + 42); y += 66;
-    const bw = (cw - 14) / 2, canR = n < cap && S.wallet >= recruitCost(), canH = S.houses < HOUSE_MAX && S.wallet >= houseCost(S.houses);
-    cbtn(2, y, bw, 50, canR, 'go'); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'center'; ctx.fillText('RECRUIT FAN', 2 + bw / 2, y + 21); iconText(2 + bw / 2, y + 41, coinDraw, fmt(recruitCost()), canR ? '#fff' : '#cfc6ee', 14); chit(2, y, bw, 50, recruit);
-    cbtn(12 + bw, y, bw, 50, canH, 'gold'); ctx.fillStyle = canH ? '#3a2410' : '#cfc6ee'; ctx.fillText(S.houses >= HOUSE_MAX ? 'VILLAGE FULL' : 'BUILD COTTAGE', 12 + bw + bw / 2, y + 21); if (S.houses < HOUSE_MAX) { iconText(12 + bw + bw / 2, y + 41, coinDraw, fmt(houseCost(S.houses)) + ' · +4 beds', canH ? '#3a2410' : '#cfc6ee', 13); chit(12 + bw, y, bw, 50, buyHouse); } y += 62;
+    y = SHEET_DRAW.townHead(cw, y);
+    const canR = n < cap && S.wallet >= recruitCost();
+    cbtn(2, y, cw - 4, 54, canR, 'go'); ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'center';
+    ctx.fillText(n >= cap ? 'NO FREE BEDS — build Cottages' : 'RECRUIT A FAN  ·  ' + n + ' / ' + cap + ' beds', cw / 2, y + 22); if (n < cap) iconText(cw / 2, y + 43, coinDraw, fmt(recruitCost()), canR ? '#fff' : '#cfc6ee', 14);
+    chit(2, y, cw - 4, 54, recruit); y += 64;
     y = section(y, 'Jobs');
-    const jobs = [['gather', 'Collectors', 'They haul loot to the stall and sell it for you.', 'cap'], ['fight', 'Fighters', 'They follow you and sing along with notes.', 'dmg']];
-    for (const [role, name, desc, icon] of jobs) { rowCard(y, 66, cw); drawIcon(icon, 30, y + 33, 38); ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(name, 56, y + 24); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); wrapText(desc, 56, y + 40, cw - 220, 12);
-      const c = fansOf(role); stepper(cw - 130, y + 18, c, () => setFans(role, c - 1), () => setFans(role, c + 1)); y += 74; }
-    y = section(y + 4, 'Your fans');
-    if (!n) y = note(y, cw, 'No fans yet — recruit one! Fans never get tired, and offline they keep earning.'); else { const per = Math.max(3, Math.floor(cw / 44)); S.pop.forEach((f, i) => { const fx = 24 + (i % per) * 44, fy = y + 44 + Math.floor(i / per) * 52; artDraw(f.art, 'idle', (S.t * 4 + i) | 0, fx, fy, 0.27, false); ctx.strokeStyle = f.role === 'fight' ? '#7fe36a' : '#6ac8ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(fx, fy, 12, 4, 0, 0, TAU); ctx.stroke(); }); y += 56 + Math.floor((n - 1) / per) * 52; }
-    return y + 8;
+    const jobs = [['gather', 'Collectors', 'Haul loot to the stall and sell it.', 'cap'], ['fight', 'Fighters', 'Follow you and sing along with notes.', 'dmg']];
+    for (const [role, name, desc, icon] of jobs) { rowCard(y, 62, cw); drawIcon(icon, 30, y + 31, 36); ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(name, 56, y + 24); ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); wrapText(desc, 56, y + 40, cw - 220, 12);
+      const c = fansOf(role); stepper(cw - 130, y + 16, c, () => setFans(role, c - 1), () => setFans(role, c + 1)); y += 70; }
+    y = section(y + 2, 'Your crew  ·  train each fan');
+    if (!n) return note(y, cw, 'No fans yet — recruit one! Every fan can be trained individually, and the Talent Academy raises how far.') + 2;
+    const maxL = fanMaxLvl(), vTop = sh.scroll - 80, vBot = sh.scroll + SR.h + 80;
+    S.pop.forEach((f, i) => {
+      const h = 70, row = y; y += h + 6; if (row + h < vTop || row > vBot) return;
+      const fight = f.role === 'fight', lv = f.lvl || 0, full = lv >= maxL, cost = fanTrainCost(f), can = !full && S.wallet >= cost;
+      rowCard(row, h, cw); disc(30, row + 36, 22, fight ? '#ff9ac8' : '#7fe0d8', fight ? '#c8306a' : '#1f9a98');
+      artDraw(f.art, 'idle', (S.t * 4 + i) | 0, 30, row + 56, 0.27, false);
+      ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(fanName(f), 60, row + 20); const nw = ctx.measureText(fanName(f)).width;
+      ctx.fillStyle = fight ? '#ff9ac8' : '#7fe0d8'; ctx.font = font(10); ctx.fillText(fight ? 'FIGHTER' : 'COLLECTOR', 60 + nw + 8, row + 20);
+      ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText(fight ? 'Dmg ' + fmt(fanDmgOf(f)) + ' · ' + (1 / fanRateOf(f)).toFixed(2) + '/s' : 'Carries ' + fanCarryCap(f) + ' per trip', 60, row + 36);
+      for (let k = 0; k < maxL; k++) { ctx.fillStyle = k < lv ? '#ffd94a' : 'rgba(255,255,255,0.16)'; rr(60 + k * 11, row + 46, 9, 8, 3); ctx.fill(); }
+      ctx.fillStyle = '#e6dcff'; ctx.font = font(10); ctx.fillText('Lv ' + lv + '/' + maxL, 60 + maxL * 11 + 4, row + 54);
+      const bx = cw - 108, bw = 100;
+      cbtn(bx, row + 8, bw, 32, can, full ? 'off' : 'go'); ctx.textAlign = 'center';
+      if (full) { ctx.fillStyle = '#cfc6ee'; ctx.font = font(12); ctx.fillText('MAX', bx + bw / 2, row + 29); } else { ctx.fillStyle = can ? '#fff' : '#cfc6ee'; ctx.font = font(10); ctx.fillText('TRAIN', bx + bw / 2, row + 19); iconText(bx + bw / 2, row + 34, coinDraw, fmt(cost), can ? '#fff' : '#cfc6ee', 11); }
+      chit(bx, row + 8, bw, 32, () => trainFan(f));
+      cbtn(bx, row + 44, bw, 20, true, 'violet'); ctx.fillStyle = '#fff'; ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillText('Switch to ' + (fight ? 'collector' : 'fighter'), bx + bw / 2, row + 58);
+      chit(bx, row + 44, bw, 20, () => { f.role = fight ? 'gather' : 'fight'; f.carry = []; f.route = null; f.state = 'seek'; sfx('ui_tap'); });
+    });
+    return y + 4;
+  },
+  townBuild(cw, sh) {
+    let y = 4; y = SHEET_DRAW.townHead(cw, y);
+    y = section(y, 'Buildings  ·  they upgrade every fan at once');
+    const vTop = sh.scroll - 120, vBot = sh.scroll + SR.h + 120;
+    for (const b of TOWN) {
+      const h = 104, row = y; y += h + 8; if (row + h < vTop || row > vBot) continue;
+      const lv = townLvl(b.id), full = lv >= b.max, lock = townLocked(b), cost = townCost(b), can = canTown(b);
+      rowCard(row, h, cw);
+      ctx.save(); ctx.globalAlpha = lock ? 0.45 : 1; disc(36, row + 36, 27, b.col[0], b.col[1]); drawIcon(b.icon, 36, row + 36, 36); ctx.restore();
+      if (lock) drawIcon('lock', 50, row + 52, 22);
+      ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.textAlign = 'left'; ctx.fillText(b.name, 72, row + 22);
+      ctx.fillStyle = '#ffd94a'; ctx.font = font(11); ctx.textAlign = 'right'; ctx.fillText(lock ? 'Opens at land ' + b.need : 'Lv ' + lv + ' / ' + b.max, cw - 12, row + 22);
+      for (let k = 0; k < b.max; k++) { ctx.fillStyle = k < lv ? b.col[0] : 'rgba(255,255,255,0.15)'; rr(72 + k * 15, row + 30, 12, 7, 3); ctx.fill(); }
+      ctx.textAlign = 'left'; ctx.fillStyle = '#cfc6ee'; ctx.font = font(10, false); ctx.fillText(b.desc, 72, row + 52);
+      ctx.fillStyle = '#9af0b4'; ctx.font = font(11); ctx.fillText(lv ? 'Now: ' + b.eff(lv) : 'Not built yet', 72, row + 68);
+      if (!full && !lock) { ctx.fillStyle = '#ffe98a'; ctx.fillText('Next: ' + b.eff(lv + 1), 72, row + 83); }
+      if (full) { ctx.fillStyle = '#ffd94a'; ctx.fillText('FULLY UPGRADED', 72, row + 83); }
+      else if (!lock) { const bw = 98, bx = cw - bw - 10, by = row + 54; cbtn(bx, by, bw, 38, can, 'gold'); ctx.textAlign = 'center'; ctx.fillStyle = can ? '#3a2410' : '#cfc6ee'; ctx.font = font(10); ctx.fillText(lv ? 'UPGRADE' : 'BUILD', bx + bw / 2, by + 15); iconText(bx + bw / 2, by + 31, coinDraw, fmt(cost), can ? '#3a2410' : '#cfc6ee', 11); chit(bx, by, bw, 38, () => buyTown(b.id)); }
+    }
+    return y + 2;
   },
   heroes(cw, sh) { return sh.tab === 'critters' ? SHEET_DRAW.critters(cw) : SHEET_DRAW.outfits(cw); },
   outfits(cw) {

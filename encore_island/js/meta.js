@@ -163,7 +163,7 @@ function serialize() {
     ver: 1, savedAt: Date.now(), wallet: S.wallet, pallet: S.pallet, gems: S.gems, crowns: S.crowns, prestiges: S.prestiges, up: S.up, upPaid: S.upPaid, gemUp: S.gemUp, gemPaid: S.gemPaid, unlockPaid: S.unlockPaid,
     lands: S.lands.map(z => ({ k: z.k, plates: z.plates.map(p => ({ id: p.id, paid: p.paid, lvl: p.lvl, built: p.built, cost: p.cost })), hordeLvl: z.hordeLvl })),
     forgePlate: S.forgePlate, forgeUpPlate: S.forgeUpPlate, forgeLvl: S.forgeLvl, forge: S.forge, waygate: S.waygate, wayPlate: S.wayPlate, houses: S.houses,
-    pop: S.pop.map(f => ({ role: f.role, art: f.art })), pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
+    pop: S.pop.map(f => ({ role: f.role, art: f.art, lvl: f.lvl || 0, id: f.id })), town: S.town, fanSeq: S.fanSeq, pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
     bestiary: S.bestiary, login: S.login, dailies: S.dailies, quests: S.quests, streak: S.streak, dayKey: S.dayKey, ach: S.ach, stats: S.stats, settings: S.settings, comboBest: S.comboBest, rankIdx: S.rankIdx || 0,
     player: { x: S.player.x, y: S.player.y, hp: S.player.hp, helmets: S.player.helmets, deaths: S.player.deaths },
   };
@@ -180,13 +180,15 @@ function applySave(d) {
     ls.plates.forEach((sp, i) => { const pl = z.plates[i]; if (!pl || pl.id !== sp.id) return; pl.paid = sp.paid; pl.cost = sp.cost || pl.cost; pl.lvl = sp.lvl; pl.built = sp.built; for (let n = 0; n < (pl.repeat ? pl.lvl : (pl.built ? 1 : 0)); n++) applyPlate(z, pl); });
   }
   if (!S.lands.length) addLand();
-  S.pop = (d.pop || []).map(p => { const f = mkFan(p.role); f.art = p.art || f.art; return f; });
+  S.town = d.town || {}; S.fanSeq = d.fanSeq || 0;
+  S.pop = (d.pop || []).map(p => { const f = mkFan(p.role); f.art = p.art || f.art; f.lvl = p.lvl || 0; if (p.id !== undefined) f.id = p.id; return f; });
+  S.fanSeq = Math.max(S.fanSeq, ...S.pop.map(f => f.id + 1), 0);
   if (d.player) { const p = S.player; p.hp = d.player.hp; p.deaths = d.player.deaths || 0; p.helmets = d.player.helmets || []; if (walkable(d.player.x, d.player.y, S.lands.length)) { p.x = d.player.x; p.y = d.player.y; } }
   S.player.maxHp = pMaxHp(); S.player.hp = Math.min(S.player.hp || S.player.maxHp, S.player.maxHp);
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.savedAt || Date.now())) / 1000));
   if (away > 60) {
     const towers = S.lands.reduce((n, z) => n + z.towers.length, 0), rate = helmVal(S.lands.length) * (0.3 + 0.2 * towers + 0.25 * S.pop.length) * coinMul();
-    const amt = Math.floor(away * rate * 0.5); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.offlineMsg = 6; }
+    const amt = Math.floor(away * rate * 0.5 * snackMul()); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.offlineMsg = 6; }
   }
 }
 function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; applySave(JSON.parse(raw)); return true; } catch (e) { return false; } }
