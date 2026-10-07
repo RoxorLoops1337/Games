@@ -390,7 +390,8 @@ F = {
   events: [],          // append-only log of this turn for the renderer (game drains it)
   relics: [ids], claw: {...run.claw}, log: []
 }
-COMBAT.startTurn(F)               // block reset (unless shield_up), grabs = grabsMax (+relic mods), regen/poison ticks, bin trickle: top the bin up from used (random picks) to DATA.ECONOMY.binFloor (6) plus DATA.ECONOMY.trickle (2) more, never above MAX_CABINET (emit {t:'refill', items}); a dry turn (nothing played) pours the whole used pile back instead; an empty bin mid-turn refills at once; freeze costs a grab
+COMBAT.startTurn(F)               // block reset (unless shield_up), grabs = grabsMax (+relic mods), regen/poison ticks, the Restock (round 30, see "Restock (round 30)"): round(DATA.ECONOMY.restockPct (0.4) x the items you own) come back from used (random picks), never fewer than it takes to bring the bin up to DATA.ECONOMY.binFloor (6), never more than used holds or MAX_CABINET has room for (emit {t:'refill', items, rsk:'turn', n, owned}); a dry turn (nothing played) pours the whole used pile back instead; an empty bin mid-turn refills at once; freeze costs a grab
+COMBAT.restock(F, v, why) COMBAT.restockPlan(F) COMBAT.restockOwned(F) COMBAT.RESTOCK_PCT   // (round 30) v back now; the next turn start's count (the hint chip)
 COMBAT.useGrab(F)                 // a drop was made: grabs -= 1, grabsUsed += 1 (returns false if none left)
 COMBAT.play(F, inst, targetIdx?) -> events   // resolve an item's fx; moves inst bin->used (or exhausted)
 COMBAT.endTurn(F) -> events       // player burn ticks; enemies act in order (intents), statuses tick; then startTurn for next turn unless over
@@ -410,7 +411,7 @@ COMBAT.addTemp(F, id, n)   COMBAT.copy(F, tag?)   COMBAT.comboFx(F, combo)   COM
 Event objects (renderer/game consume these; keep this list exact):
 `{t:'dmg', who:'p'|'e', idx, amt, blocked, crit?}`, `{t:'block', who, idx, amt}`, `{t:'heal', who, idx, amt}`,
 `{t:'status', who, idx, s, v}`, `{t:'die', idx}`, `{t:'summon', idx}`, `{t:'intent', idx}`,
-`{t:'play', inst, def, target}`, `{t:'refill', items}`, `{t:'binShake'}`, `{t:'binGrease', turns}`,
+`{t:'play', inst, def, target}`, `{t:'refill', items, rsk?, n?, owned?}` (rsk 'turn' | 'item' | 'relic' marks a Restock, round 30), `{t:'rsk', k:'back', inst}` (round 30), `{t:'binShake'}`, `{t:'binGrease', turns}`,
 `{t:'binFog', turns}`, `{t:'binJunk', items:[inst]}`, `{t:'binSteal', inst}`, `{t:'binFreeze', inst}`,
 `{t:'binTilt', dir:-1|1}`, `{t:'binPurge', insts}`, `{t:'binCopy', inst}`, `{t:'turn', n}`, `{t:'over', result}`,
 `{t:'text', who, idx, str}` (floating text like "MISS", "FROZEN"), `{t:'grab', v}`,
@@ -435,7 +436,7 @@ Enemy `charge` sets `charged` and next turn's attack does v.
 
 Tests (`tests/clawspire_combat.test.mjs`, yours, use tiny inline item/enemy fixtures via
 `DATA` if present or a stub): damage math (str/weak/vuln/block/armor/thorns/dodge), every status
-ticks and decays as specified, freeze skips, chill→freeze, the turn-start trickle (floor, cap, empty used pile) and the mid-turn refill,
+ticks and decays as specified, freeze skips, chill→freeze, the turn-start Restock (40%, floor, used pile and cabinet caps, empty used pile) and the mid-turn refill,
 exhaust, win/lose detection, intents cycle, every `DATA.ENEMIES` move kind and every
 `DATA.ITEMS` fx kind resolves without throwing, a 200-turn fuzz with random plays never
 NaNs hp.
@@ -8712,3 +8713,137 @@ and the reward, an old save; a missing chest and shop skipped, the "?" first re-
 daily, the weekly, a rush, Duo or Endless; the tip cards wait and come back), i18n ("guide (round 29)": every line in
 Dutch, under 90 characters in English, the guided run shows no English). Screenshots: scratchpad
 `r29guide/shots.mjs` (`r29_*`).
+
+## Restock (round 30)
+
+Owner: "the items that replenish after every turn, I think it should be 40% of the items that you have ... if you have
+20 items, then 8 get put back in to the bin, and if you have 60 items, then 24 ... And maybe there could be also relics
+that replenish and or items that ... instantly replenishes". Restock replaces the old trickle (the floor top-up plus 2 a
+turn) and gets a family of items and relics. Code: combat.js (the RESTOCK block after `refill`, one line each in
+`startTurn`, `play` and `runFx`), data.js (`ECONOMY.restockPct`, the `restock` / `back` fx, `ARCHETYPES.restock`, the
+RESTOCK block after /BENCH: the content, the Restock Kit pack, `DATA.RSK`), game.js (the RESTOCK block before `state()`,
+`GAME.rsk`), render.js (the RESTOCK block after /CR: `rskArrow`, `rskLine`, `rskTipArt`; the row's numbers; the `loop`
+stamp), index.html (`#rskChip`, `<style id="rsk-css">`), lang_nl2.js (the RESTOCK block).
+
+### The rule (combat.js `rskTurn`, `rskPlan`)
+
+At a normal turn start: **n = round(restockPct x owned)** items come back from the used pile, picked at random; never
+fewer than it takes to bring a bin below `binFloor` (6) up to it; never more than the used pile holds or the cabinet
+(`MAX_CABINET`, 34 bodies) has room for. `DATA.ECONOMY.restockPct` is **0.4** (the owner's dial; the old `trickle` key
+is gone). The dry turn (nothing played: the whole used pile pours back) and the empty-bin refill mid turn are kept as
+they were and still say REFILL.
+
+**owned** (`rskOwned`) is every real item the player has in this fight: the bin (a prize held by the claw, or delivered
+and waiting on the resolve row, is still in `F.bin`) plus the used pile. Not counted: enemy junk (rocks, slag, lit bombs,
+eggs, the Hoard's coins), temporary copies (`inst.temp`, gone after the fight), and what is out of the fight for now
+(exhausted, shattered, stolen, eaten, purged). So owned is the run's own bin less what this fight used up for good, and
+junk an enemy throws in never grows the Restock (the picks themselves are random over the used pile, junk included, as
+the trickle's were).
+
+| owned | 40% | comes back (used pile and cabinet allowing) |
+| --- | --- | --- |
+| 10 | 4 | 4, or more to reach the floor of 6 (a 1-item bin gets 5) |
+| 19 (a starting bin) | 7.6 | 8 |
+| 20 | 8 | 8 |
+| 30 | 12 | 12 |
+| 60 | 24 | 24 |
+
+Relics add through a `rsk` dial `{add, pct, fresh}` (`rskMods`); the ones that added something flash (their proc) at
+the turn start. Events: `{t:'refill', items, rsk:'turn' | 'item' | 'relic', n, owned?}` (a refill without `rsk` is the
+plain pour) and `{t:'rsk', k:'back', inst}`. An instance Restock brought back carries `inst.rsk` until it plays.
+
+### Items (fx `restock(v)`: v used items back now; `back()`: the item itself returns to the bin after it plays)
+
+| item | rarity | where | base | plus | art |
+| --- | --- | --- | --- | --- | --- |
+| Coin Return | c | base pool | Restock 2, 2 Block | Restock 3, 3 Block | coin, mint |
+| Spring Loader | c | base pool | 4 damage, Restock 2 | 6, Restock 3 | ring, mint and pink |
+| Boomerang | u | base pool | 6 damage, comes back | 9, comes back | bone, orange and mint |
+| Vending Jam | u | base pool | 5 Block, Restock 2 | 7, Restock 3 | slot, mint and pink |
+| Bottomless Bag | r | Restock Kit | Restock 4, +1 grab | Restock 6, +1 grab | potato (a sack), burlap and mint |
+| Horn of Plenty | l | Restock Kit | Restock 6, 4 Block, comes back | Restock 8, 6 Block, comes back | horn, gold and mint |
+
+A restock can never pull the item that is playing (it is in flight, out of both piles). A `back` item that exhausts,
+shatters or falls into the Black Hole stays gone; with the cabinet full it waits in the used pile (CABINET FULL). Encore
+and Echo replay its hit but never move it twice. Every item wears the Restock chip first and the `loop` stamp (a round
+arrow) from the polish pass, so it reads as the family on the card and in the cabinet.
+
+### Relics (keyword chip ↻ Restock, `#5effc8`; emoji medallions)
+
+| relic | rarity | where | what | how |
+| --- | --- | --- | --- | --- |
+| 🛒 Stock Cart | c | base pool | +1 item at every turn start | `rsk: {add: 1}` |
+| 🔍 Lost and Found | u | base pool | the first empty grab each turn Restocks 2 | `onGrab` |
+| 🧺 Prize Hopper | u | Restock Kit | a jackpot (3+ prizes in one grab) Restocks 3 | `onJackpot` |
+| 💳 Wholesale Card | r | Restock Kit | +10% (50% instead of 40%) | `rsk: {pct: 0.1}` |
+| 🏷️ Fresh Stock | u | Restock Kit | an item Restock brought back deals 2 to a random enemy when played | `rsk: {fresh: 2}` |
+
+The Restock chip is an archetype (`ARCHETYPES.restock`, after Tech in `ARCH_ORDER`): the build pull reads it like any
+other. It is **not** a combo family; the combo relics are untouched.
+
+### Base pool or pack
+
+The rule is for everyone, so the pieces that teach it are base content: the two commons, the two uncommons, the Stock
+Cart and Lost and Found turn up in rewards, shops and capsules for every player, the daily, the weekly, the Boss Rush and
+Duo included. The rare, the legendary and the three build relics are the Upgrade Bench's eleventh pack, the **Restock
+Kit** (60 bolts, no milestone, `bench: true`): a reason to spend bolts, and a stronger Restock build stays out of the
+base-pool modes (the gate keeps it out of daily, rush and versus pools).
+
+### What the player sees (game.js RESTOCK block)
+
+- **The hint chip** (`#rskChip`, `rskHud` from `refreshHud`): "↻ N" just left of the GRABS pill, N =
+  `COMBAT.restockPlan(F).n`, what the next turn start brings if the turn ended now (it grows as you play, it shows the
+  whole pour while nothing was played yet, 0 is dimmed). It fades with the pill under the resolve row, pops when a
+  Restock lands, and the turn banner keeps clear of it (`polGrabsW` counts it). A tap explains it with this fight's
+  numbers: "Next turn 8 items come back from your used pile into the bin. That is 40% of the 20 items you own, picked
+  at random." (plus the relics' share, and the cap when one applies).
+- **The turn start**: "RESTOCK +N" in big mint letters in the middle of the glass as the prizes rain in (a plain pour
+  still says REFILL).
+- **An item or relic**: "+N back in the bin" over the pile; on the resolve row its card promises "↻ +N" while it waits,
+  then reads "↻ +N" and, under it, "+N back in the bin" (a Boomerang: its hit and "Back in the bin"); a relic's Restock
+  is its own labelled chip at the end of the row. A Boomerang flies back over the chute's wall: "BACK IN THE BIN".
+- **Popovers**: a Restock relic's (and a Restock item's in the bin view) adds "Restock: at every turn start 40% of the
+  items you own come back into the bin."
+- **The tip card** `restock` (FEEL) the first time a Restock item plays or a Restock relic restocks.
+
+### Balance (the balance suite's bot, 200 fights per encounter, mean win rate per fight)
+
+| crawler | before (trickle) | after (Restock, with the new content) | Restock rule only (new content filtered out) |
+| --- | --- | --- | --- |
+| Knight | 40% | 58% | 58% |
+| Alchemist | 55% | 62% | 62% |
+| Rogue | 35% | 51% | 52% |
+
+Act 1 normals: knight 49 -> 73%, alchemist 64 -> 70%, rogue 35 -> 52%; act 1 elites: 5 -> 21%, 51 -> 73%, 8 -> 21%;
+act 3 bosses: 1 -> 3%, 7 -> 10%, 26 -> 39%. Fights got shorter too (knight act 1 normal 12.3 -> 10.9 turns). The rule
+is the whole change: the new content barely moves the bot. It is a big buff (the bin is nearly always full of your best
+prizes). What-ifs on the dial: at 0.3 the numbers are the same as at 0.4 (58 / 62 / 51%): a turn plays 4 to 8 prizes,
+so the used pile, not the percentage, is what caps the Restock for a starting-size bin; at 0.15 they come down to 51 /
+58 / 41%, still well above the trickle. The percentage starts to bite with a big bin. The owner balances by
+playtesting and `restockPct` is the one dial. Every balance assertion still holds; the model only learnt to value the
+new fx (`restock`: 1.5 a prize the used pile can give, `back`: 3) and now prints the mean win rate per tier next to the
+worst one.
+
+### API, tests
+
+`GAME.rsk = {K, hud, pop, popLine, chipW, refill, event, tipEv, isDef, plan, shown, last}`; `DATA.RSK = {COL, ITEMS,
+RELICS, PACK, BASE_ITEMS, BASE_RELICS}`; COMBAT `restock`, `restockPlan`, `restockOwned`, `RESTOCK_PCT`. Tests: combat
+("restock:": 20 gives 8, 60 gives 24, the floor, the used pile cap, the cabinet cap, junk and temp copies not owned,
+the dry turn, the dial; the restock fx, NOTHING TO RESTOCK, the back fx (exhaust, a full cabinet, Encore), each relic
+dial; every real relic and item in a fight), data ("restock:": the tables, the base pool and the pack, the gate, the
+rewards), game ("rsk:": the chip matches the next Restock and the RESTOCK +8 label, the popover, the dry pour, a real
+grab of a Restock item on the row with its tip, a Boomerang's body, Lost and Found, the popover line, save and reload
+with the pack), render ("restock:": the row's ↻ +N and BACK, the stamp), i18n ("restock:": every line in Dutch, a
+fight with no English). Older tests that pinned the trickle (2 a turn) now pin the Restock; the pack counts are eleven.
+Screenshots (390 x 844 English, 360 x 780 Dutch): scratchpad `r30restock/shots.mjs` (`r30_chip`, `r30_chip_pop`,
+`r30_turn_restock`, `r30_row`, `r30_relic_pop`, `r30_reward`, `r30_tip`, `r30_bench_pack`).
+
+### Known limits
+
+- The hint chip is a forecast: an enemy that eats, steals or throws junk on its turn can change the count before the
+  turn starts.
+- On a full cabinet (late runs past 34 prizes) a Restock item can only fill the slots that are free; the card shows the
+  real number.
+- A played card shows two numbers at most: Coin Return's 2 Block is in the header's total, not on its card.
+- The tip text and the Wholesale Card speak of "an extra 10%"; the popovers read the live `restockPct`, the tip card
+  does not quote a percentage.

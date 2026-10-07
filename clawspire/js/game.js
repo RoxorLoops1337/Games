@@ -272,7 +272,7 @@ const GAME = (() => {
     const el = $('grabs');
     let w = 0;
     try { w = !S.headless && el ? el.offsetWidth : 0; } catch (e) { w = 0; }
-    if (w > 60 && w < 400) return w;
+    if (w > 60 && w < 400) return w + rskChipW();   // (round 30) RESTOCK: and the hint chip left of it
     // no layout (headless): the pill's own CSS, 24 px padding + border, the label, 27 px a pip
     const n = F ? Math.max(F.player.grabsMax || 0, F.player.grabs || 0) : 3;
     return Math.max(120, 28 + 56 + n * 27);
@@ -5588,7 +5588,8 @@ const GAME = (() => {
         snd('upgrade');
         break;
       }
-      case 'refill': queueSpawn(ev.items); fx().text(270, 430, 'REFILL', '#2ee6d6'); snd('itemLand'); break;
+      case 'refill': queueSpawn(ev.items); if (!rskRefill(ev)) fx().text(270, 430, 'REFILL', '#2ee6d6'); snd('itemLand'); break;   // (round 30) RESTOCK: RESTOCK +N / +N back in the bin
+      case 'rsk': rskEvent(ev); break;   // (round 30) RESTOCK: a Boomerang flies back into the bin
       case 'binShake': shakeBin(); fx().text(270, 430, 'SHAKE', '#ff5a4a'); break;
       case 'binGrease': setGrease(ev.turns); fx().text(270, 430, 'GREASED', '#a6ff5e'); fx().emit('poison', 270, 460, { col: '#ffe066' }); snd('itemSlip'); break;
       case 'binFog': FS.fog = Math.max(FS.fog, ev.turns || 1); fx().text(270, 430, 'FOG', '#b3a4d6'); fx().emit('smoke', 270, 560, { n: 1.5 }); break;
@@ -10091,6 +10092,7 @@ const GAME = (() => {
     else if (id === 'crack') o.item = feelFind('glass', (d) => (d.tags || []).indexOf('glass') >= 0 && d.rarity !== 'junk');
     else if (id === 'combo') o.items = [feelFind('weapon', (d) => (d.tags || []).indexOf('weapon') >= 0), feelFind('block', (d) => (d.fx || []).some((f) => f.k === 'block'))].filter(Boolean);
     else if (id === 'luck') o.clover = feelFind('clover', (d) => d.art === 'clover');
+    else if (id === 'restock') o.item = tbl('ITEMS').coin_return || null;   // (round 30) RESTOCK
     return o;
   }
   function feelTipShow(id) {
@@ -10170,6 +10172,7 @@ const GAME = (() => {
     else if (k === 'binEat') feelTipWant('hungry');
     else if (k === 'luck') feelTipWant('luck');
     else if (k === 'boss') feelTipWant('sig');
+    else if (rskTipEv(ev)) feelTipWant('restock');   // (round 30) RESTOCK
   }
   function feelTipsReset() {
     if (!S.meta) return;
@@ -14639,7 +14642,7 @@ const GAME = (() => {
       const def = itemDef(g.inst.id);
       const eligible = o.can ? !!o.can(g.inst) : (o.mode !== 'upgrade' || (!g.inst.plus && !def.evolved));   // o.can: a picker's own rule; an evolved item has no plus (EVOLVE)
       cards.appendChild(itemCard(def, g.inst.plus, { count: g.count, cls: eligible ? '' : 'sold', disabled: !eligible, onPick: () => {
-        if (o.mode === 'view') { popover(`<b>${itemName(def, g.inst.plus)}</b><br>${itemText(def, g.inst.plus)}` + (def.plus && g.inst.plus !== 2 ? `<br><i>Plus: ${itemText(def, true)}</i>` : '') + (D().cmp2Ok && D().cmp2Ok(def) ? `<br><i>Plus 2: ${itemText(def, 2)}</i>` : ''), 270, 330); return; }   // (round 21: the Compactor's ++)
+        if (o.mode === 'view') { popover(`<b>${itemName(def, g.inst.plus)}</b><br>${itemText(def, g.inst.plus)}` + rskPopLine(def) + (def.plus && g.inst.plus !== 2 ? `<br><i>Plus: ${itemText(def, true)}</i>` : '') + (D().cmp2Ok && D().cmp2Ok(def) ? `<br><i>Plus 2: ${itemText(def, 2)}</i>` : ''), 270, 330); return; }   // (round 21: the Compactor's ++)
         if (!eligible) { toast(o.mode === 'evolve' ? 'Not ready to evolve.' : 'Already upgraded.'); return; }
         if (o.onPick) o.onPick(g.insts[0]);
       } }));
@@ -14964,7 +14967,7 @@ const GAME = (() => {
         const r = h('button', 'relic');
         S.relicEls[id] = r;
         r.appendChild(relicCanvas(def, 40));   // POLISH: the medallion fills the slot
-        r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}`, 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
+        r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}` + rskPopLine(def), 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };   // (round 30) RESTOCK: the rule, for a Restock relic
         el.appendChild(r);
       }
       setBarLink(el);   // set members chained together behind their badge (SETS block)
@@ -14985,6 +14988,7 @@ const GAME = (() => {
       const e = $('endTurn');
       if (e) e.disabled = !canEndTurn();
     }
+    rskHud(force);   // (round 30) RESTOCK: the "↻ N" hint chip by the GRABS pill (hidden outside a fight)
   }
 
   /* ================= HUD (round 15): the top bar's chips, the relic overflow =================
@@ -28654,7 +28658,7 @@ const GAME = (() => {
   }
   // The numbers in a list of events: hits on enemies (before their Block), your Block, healing, the first status, grabs.
   function rrRowNums(evs) {
-    const o = { d: 0, dt: 0, b: 0, h: 0, s: '', sv: 0, gr: 0, all: false, ice: false, any: false };   // (round 22: dt, every hit added up, for the header's total)
+    const o = { d: 0, dt: 0, b: 0, h: 0, s: '', sv: 0, gr: 0, rs: 0, bk: false, all: false, ice: false, any: false };   // (round 22: dt, every hit added up, for the header's total; round 30: rs restocked, bk came back)
     let hit = -1, same = true;
     const foes = {};
     for (const ev of evs || []) {
@@ -28669,9 +28673,11 @@ const GAME = (() => {
       else if (ev.t === 'heal' && ev.who === 'p') o.h += ev.amt | 0;
       else if (ev.t === 'status' && ev.v > 0 && !o.s && ev.s !== 'streak') { o.s = ev.s; o.sv = ev.v | 0; }
       else if (ev.t === 'grab' && ev.v > 0) o.gr += ev.v | 0;
+      else if (ev.t === 'refill' && ev.rsk) o.rs += ev.n != null ? ev.n | 0 : (ev.items || []).length;   // (round 30) RESTOCK: +N back in the bin
+      else if (ev.t === 'rsk' && ev.k === 'back') o.bk = true;
     }
     if (same && hit > 0 && Object.keys(foes).length > 1) { o.d = hit; o.all = true; }   // the same hit on every enemy reads "5 ALL"
-    o.any = !!(o.d || o.b || o.h || o.s || o.gr);
+    o.any = !!(o.d || o.b || o.h || o.s || o.gr || o.rs || o.bk);
     return o;
   }
   // What an item on the row will do, with this fight's numbers (Strength, Weak, Vulnerable, Armor, the relic rules).
@@ -28688,11 +28694,13 @@ const GAME = (() => {
         else if (f.k === 'heal' && v > 0) o.h += v;
         else if (f.k === 'status' && !o.s && (f.v == null || v > 0)) { o.s = f.s; o.sv = f.v == null ? 1 : v; }
         else if (f.k === 'grab' && v > 0) o.gr += v;
+        else if (f.k === 'restock' && v > 0) o.rs += Math.min(v, F.used.length);   // (round 30) RESTOCK: what the used pile can give
+        else if (f.k === 'back') o.bk = true;
       }
       if (C && C.previewDamage) o.d = C.previewDamage(F, def, plus) | 0;
     } catch (e) { /* a preview never breaks the row */ }
     o.all = def.target === 'all';
-    o.any = !!(o.d || o.b || o.h || o.s || o.gr);
+    o.any = !!(o.d || o.b || o.h || o.s || o.gr || o.rs || o.bk);
     return o;
   }
   // deliver: the prize's slot, at the end of the row (it shows once throwItem sends it flying in).
@@ -30367,6 +30375,109 @@ const GAME = (() => {
   }
   // ================================================================ /CUP
 
+  // ================================================================ (round 30) RESTOCK
+  /* DESIGN.md "Restock (round 30)". COMBAT returns 40% of the items you own from the used pile at every turn start
+     (the RESTOCK block in combat.js); here is what the player sees of it. Hooks (one line each): applyEvent's refill
+     case (rskRefill) and its rsk case (rskEvent), refreshHud (rskHud), polGrabsW (rskChipW: the turn banner keeps
+     clear of the chip), feelEvent (rskTipEv), feelTipArgs, the fight relic popover and the bin view's item popover
+     (rskPopLine), the resolve row's numbers (rrRowNums / rrRowPre count `rs` and `bk`).
+     - The turn start: a big "RESTOCK +N" over the cabinet as the prizes rain in, the hint chip pops.
+     - An item or relic: "+N back in the bin" over the cabinet; on the resolve row the card's number reads ↻ +N and
+       its name line "+N back in the bin" once it played.
+     - A `back` item (the Boomerang, the Horn of Plenty) flies back into the cabinet from the chute, "BACK IN THE BIN".
+     - The hint chip (#rskChip, left of the GRABS pill): "↻ N", N the next turn start's Restock as the pile is now
+       (COMBAT.restockPlan: the dry pour when nothing was played yet). A tap explains it in plain words.
+     - The FEEL tip card 'restock' the first time a Restock item or relic does its thing. */
+  // label y: the middle of the glass, over the pile the prizes rain onto, clear of the turn banner, a cabinet event's
+  // sign at the glass top and the open resolve row (RR2 opens down to 484)
+  const RSKG = { col: '#5effc8', label: { size: 30, life: 1.7, y: 620 }, small: { size: 19, life: 1.4, y: 590 }, back: { y: 600 } };
+  FEEL_TIPS.push({ id: 'restock', title: 'Restock', col: RSKG.col, text: 'At every turn start, part of your used pile comes back into the bin. Restock items bring more back at once. The ↻ chip shows how many come next.' });
+  const rskOn = () => !!(F && FS && !FS.vs && X.COMBAT && X.COMBAT.restockPlan);
+  const rskIsDef = (def) => !!def && Array.isArray(def.fx) && def.fx.some((f) => f && (f.k === 'restock' || f.k === 'back'));
+  // applyEvent 'refill': a Restock refill gets its own words (a plain refill keeps REFILL). True when it labelled it.
+  function rskRefill(ev) {
+    if (!ev || !ev.rsk || !FS) return false;
+    const n = ev.n != null ? ev.n | 0 : (ev.items || []).length, cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) / 2;
+    if (ev.rsk === 'turn') {
+      fx().text(cx, RSKG.label.y, `RESTOCK +${n}`, RSKG.col, { size: RSKG.label.size, life: RSKG.label.life, dy: -40 });
+      if (!fx().reduced) fx().emit('glint', cx, CAB.y + 40, { n: 1.5, col: RSKG.col });
+    } else fx().text(cx, RSKG.small.y, `+${n} back in the bin`, RSKG.col, { size: RSKG.small.size, life: RSKG.small.life, dy: -34 });
+    FS.rskLast = { n, why: ev.rsk, t: S.t };
+    replay($('rskChip'), 'bump');
+    return true;
+  }
+  // {t: 'rsk', k: 'back'}: the item comes back into the cabinet over the chute's wall (the Perpetual Motion bounce's path).
+  function rskEvent(ev) {
+    if (!FS || !F || !ev || ev.k !== 'back' || !ev.inst) return;
+    if (F.bin.indexOf(ev.inst) < 0 || bodyOf(ev.inst)) return;
+    const bx = (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - cupCW()) - 36;
+    const b = spawnBody(ev.inst, { x: bx, y: 70, a: 0.4 });
+    if (b) { b.vx = -240 - FS.rng() * 90; b.vy = -60; b.av = -6; b.data.clawG = -1; }
+    fx().text(CAB.x + bx - 60, RSKG.back.y, 'BACK IN THE BIN', RSKG.col, { size: 17, dy: -30 });
+    fx().ring(CAB.x + bx, CAB.y + 70, RSKG.col, { r0: 6, r1: 44, w: 4 });
+    snd('boing');
+    FS.rskLast = { n: 1, why: 'back', t: S.t };
+  }
+  // The hint chip's width (stage px) for the turn banner's span; 0 when hidden or headless.
+  function rskChipW() {
+    const el = $('rskChip');
+    let w = 0;
+    try { w = !S.headless && el && el.classList && el.classList.contains('show') ? el.offsetWidth : 0; } catch (e) { w = 0; }
+    return w > 0 && w < 200 ? w + 8 : 0;
+  }
+  // refreshHud: "↻ N" left of the GRABS pill while a fight is on (not in a claw-off).
+  function rskHud(force) {
+    const el = $('rskChip');
+    if (!el) return;
+    if (!rskOn() || FS.done) {
+      if (S.rskKey !== '') { S.rskKey = ''; el.className = ''; el.textContent = ''; }
+      return;
+    }
+    const P = X.COMBAT.restockPlan(F);
+    const key = P.n + '|' + (P.dry ? 1 : 0);
+    if (!force && key === S.rskKey) return;
+    S.rskKey = key;
+    S.rskShown = P.n;
+    clear(el);
+    el.appendChild(h('span', 'ic', '↻'));
+    el.appendChild(h('span', 'n mono', String(P.n)));
+    el.className = 'show tap' + (P.n ? '' : ' zero');
+    try { el.setAttribute('aria-label', i18nTr(P.n === 1 ? 'Restock: 1 item comes back next turn' : `Restock: ${P.n} items come back next turn`)); } catch (e) { /* stub */ }
+    el.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); rskPop(); };
+  }
+  // The chip's popover: the rule with this fight's numbers, in plain words.
+  function rskPop() {
+    if (!rskOn()) return;
+    const P = X.COMBAT.restockPlan(F), pct = Math.round(P.pct * 100);
+    const lines = [`<b>↻ ${i18nTr('Restock')}</b>`, i18nTr(P.n === 1 ? 'Next turn 1 item comes back from your used pile into the bin.' : `Next turn ${P.n} items come back from your used pile into the bin.`)];
+    if (P.dry) lines.push(i18nTr('You have not played anything this turn: end it now and the whole used pile pours back in.'));
+    else {
+      lines.push(i18nTr(P.add > 0 ? `That is ${pct}% of the ${P.owned} items you own, plus ${P.add} from your relics.` : `That is ${pct}% of the ${P.owned} items you own, picked at random.`));
+      if (P.n < Math.max(P.base, P.floor)) lines.push(i18nTr(`Up to ${Math.max(P.base, P.floor)} could come back, but only ${P.n} fit: what the used pile holds and the cabinet has room for.`));
+    }
+    lines.push(`<i>${i18nTr('Restock items and relics bring more back.')}</i>`);
+    const p = hudPoint($('rskChip'), 300, 360);
+    popover(lines.join('<br>'), p.x, p.y + 6);
+  }
+  // An extra line for a Restock relic's (or item's) popover.
+  function rskPopLine(def) {
+    if (!def || !(D().kwIds && D().kwIds(def).indexOf('restock') >= 0)) return '';
+    const pct = Math.round(((ECON() || {}).restockPct == null ? 0.4 : ECON().restockPct) * 100);
+    return `<br><i>${i18nTr(`Restock: at every turn start ${pct}% of the items you own come back into the bin.`)}</i>`;
+  }
+  // feelEvent: the first Restock item played (or a Restock relic's refill) raises the tip card.
+  function rskTipEv(ev) {
+    if (!ev) return false;
+    if (ev.t === 'play') return rskIsDef(ev.def);
+    return (ev.t === 'refill' && (ev.rsk === 'item' || ev.rsk === 'relic')) || ev.t === 'rsk';
+  }
+  // GAME.rsk: the tests and the screenshot drivers
+  function RSK_API() {
+    return { K: RSKG, hud: rskHud, pop: rskPop, popLine: rskPopLine, chipW: rskChipW, refill: rskRefill, event: rskEvent, tipEv: rskTipEv, isDef: rskIsDef,
+      plan: () => (rskOn() ? X.COMBAT.restockPlan(F) : null), get shown() { return S.rskShown == null ? null : S.rskShown; }, get last() { return FS ? FS.rskLast || null : null; } };
+  }
+  // ================================================================ /RESTOCK
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -30620,6 +30731,8 @@ const GAME = (() => {
     stx: STX_API(),
     // (round 29) CUP: magnet power and a wider chute (DESIGN.md "Magnet power and a wider chute (round 29)")
     cup: CUP_API(),
+    // (round 30) RESTOCK: the hint chip, the labels, the tip (DESIGN.md "Restock (round 30)")
+    rsk: RSK_API(),
     // BENCH (round 28): bolts, upgrades and unlock packs (DESIGN.md "The Upgrade Bench (round 28)")
     bench: BNC_API(), showBench,
     // GUIDE (round 29): the guided first run (DESIGN.md "The guided first run (round 29)")

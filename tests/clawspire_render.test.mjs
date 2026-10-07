@@ -1082,7 +1082,7 @@ h.test('feel: every tip has its own picture, the rooms draw every state', () => 
     enemy: E.trashpanda || E.rat, item: pick(d => d.art === 'bomb'), items: [pick(d => (d.tags || []).includes('weapon')), pick(d => d.art === 'shield')],
     clover: pick(d => d.art === 'clover'),
   };
-  const ids = ['map', 'combo', 'hungry', 'bomb', 'fuse', 'crack', 'capsule', 'tickets', 'arcade', 'roam', 'tower', 'tool', 'luck', 'sig', 'affix', '?'];
+  const ids = ['map', 'combo', 'hungry', 'bomb', 'fuse', 'crack', 'capsule', 'tickets', 'arcade', 'roam', 'tower', 'tool', 'luck', 'sig', 'affix', 'restock', '?'];   // (round 30: restock)
   const arts = new Map();
   for (const id of ids) {
     const args = Object.assign({}, o, id === 'crack' ? { item: pick(d => (d.tags || []).includes('glass')) } : id === 'hungry' ? { item: pick(d => (d.tags || []).includes('food')) } : {});
@@ -1211,7 +1211,7 @@ h.test('polish: every item at every rarity and state draws (decals, silhouettes,
   // the silhouettes are real items, the decals are known kinds
   for (const id in R.pol.SIL) h.ok(!!D.ITEMS[id], 'silhouette for a real item: ' + id);
   h.ok(Object.keys(R.pol.SIL).length >= 20 && Object.keys(R.pol.SIL).length <= 45, 'twenty to forty-odd unique silhouettes (' + Object.keys(R.pol.SIL).length + ')');
-  const KINDS = ['skull', 'flame', 'rime', 'glint', 'rune', 'pips', 'coin', 'star'];
+  const KINDS = ['skull', 'flame', 'rime', 'glint', 'rune', 'pips', 'coin', 'star', 'loop'];   // (round 30: loop, the Restock stamp)
   const used = {};
   for (const id in D.ITEMS) for (const d of R.pol.info(D.ITEMS[id]).decals) { h.ok(KINDS.includes(d), id + ' decal kind ' + d); used[d] = 1; }
   for (const k of KINDS) h.ok(used[k], 'the ' + k + ' decal is on some item');
@@ -3260,5 +3260,20 @@ h.test('title art (round 20): the logo sits high and clear, the claw clears the 
     h.ok(!R.terrainLive({ terrain: 'land', ground: 'grass' }, { biome: 'cellar', seed: 7 }), 'a grass hex is cached');
   });
 }
+
+// (round 30) RESTOCK (DESIGN.md "Restock (round 30)"): the resolve row's ↻ +N and BACK, the played card's words, the stamp
+h.test('restock: the row draws ↻ +N and BACK on waiting and played cards (both shapes), the Restock items wear their stamp', () => {
+  const api = boot({ only: ['util', 'i18n', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  const card = (id, st, n, extra) => Object.assign({ k: 'item', st, cx: 120, cy: 382, w: 120, h: 110, def: D.ITEMS[id], name: D.ITEMS[id].name, pre: n, res: st === 'hit' ? n : null, pop: st === 'hit' ? 0.5 : 0 }, extra || {});
+  const rs = { d: 0, b: 2, h: 0, s: '', sv: 0, gr: 0, rs: 2, bk: false, any: true }, bk = { d: 6, b: 0, h: 0, s: '', sv: 0, gr: 0, rs: 0, bk: true, any: true };
+  const a = drawCheck('row: a waiting Coin Return (↻ +2)', c => R.rrRow(c, { x0: 8, x1: 532, y: 336, ph: 148, op: 1, a: 1, t: 1, slots: [card('coin_return', 'wait', rs)] }));
+  const b = drawCheck('row: a played Coin Return (+2 back in the bin)', c => R.rrRow(c, { x0: 8, x1: 532, y: 336, ph: 148, op: 1, a: 1, t: 1, slots: [card('coin_return', 'hit', rs)] }));
+  const c0 = drawCheck('row: a played Boomerang (6, BACK)', c => R.rrRow(c, { x0: 8, x1: 532, y: 336, ph: 148, op: 1, a: 1, t: 1, slots: [card('boomerang', 'hit', bk)] }));
+  h.ok(fingerprint(a) !== fingerprint(b) && fingerprint(b) !== fingerprint(c0), 'waiting, restocked and come back each draw their own card');
+  drawCheck('row: the thin shelf with Restock numbers', c => R.rrRow(c, { x0: 8, x1: 532, y: 339, h: 46, a: 1, t: 0, slots: [card('spring_loader', 'hit', rs, { w: 110 }), card('boomerang', 'wait', bk, { w: 110, cx: 240 })] }));
+  for (const id of D.RSK.ITEMS) h.ok(R.pol.info(D.ITEMS[id]).decals.includes('loop'), id + ': the Restock stamp');
+  h.ok(!R.pol.info(D.ITEMS.rusty_sword).decals.includes('loop'), 'other items do not wear it');
+});
 
 h.done();

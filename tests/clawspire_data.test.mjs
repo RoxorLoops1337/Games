@@ -17,7 +17,7 @@ const {
 const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice chip card horseshoe clover slot potato pill cookie'.split(' ');
 const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist raccoon goat magpie tickler jelly barker magbat mole dozer ghost collector'.split(' ');
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
-const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
+const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again restock back'.split(' ');   // (round 30: restock, back)
 const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
 const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change lure jellies pinch shock decoy'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
@@ -26,7 +26,10 @@ const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKil
 // Round 6 (sets): The Hungry Pack's three pet relics, left out of the build pass's counts.
 const R6_RELICS = 'chew_toy treat_jar dog_whistle'.split(' ');
 const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp turret bubbles'.split(' ');
-const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck tech'.split(' ');
+const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck tech restock'.split(' ');   // (round 30: the Restock chip)
+// Round 30 (RESTOCK): checked in its own block below, left out of the build pass's counts.
+const R30_ITEMS = 'coin_return spring_loader boomerang vending_jam bottomless_bag horn_of_plenty'.split(' ');
+const R30_RELICS = 'stock_cart lost_found prize_hopper wholesale_card fresh_stock'.split(' ');
 const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak luck'.split(' ');
 const CHARS = 'knight alchemist rogue gambler engineer bubbler techie'.split(' ');
 // Round 17 (TECH, Cabinet Tech and Joy Stick): checked in its own block below, left out of the build pass's counts.
@@ -70,7 +73,9 @@ function checkFx(list, where) {
   t.ok(Array.isArray(list), `${where}: fx is an array`);
   for (const f of list || []) {
     t.ok(FX.includes(f.k), `${where}: fx kind ${f.k} allowed`);
-    const needV = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'dmgPer', 'lifesteal', 'random', 'blockPer', 'pay'];
+    const needV = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'dmgPer', 'lifesteal', 'random', 'blockPer', 'pay', 'restock'];
+    if (f.k === 'restock') t.ok(Number.isInteger(f.v) && f.v >= 1 && f.v <= 10, `${where}: restock brings back 1..10`);   // (round 30)
+    if (f.k === 'back') t.ok(f.v == null, `${where}: back carries no number`);
     if (needV.includes(f.k)) t.ok(isNum(f.v), `${where}: ${f.k} has numeric v`);
     if (f.k === 'dmg' && f.n != null) t.ok(Number.isInteger(f.n) && f.n >= 1, `${where}: dmg n is a positive int`);
     if (f.k === 'status') {
@@ -490,7 +495,8 @@ t.test('relics', () => {
     t.ok(typeof r.icon === 'string' && Array.from(r.icon).length >= 1 && Array.from(r.icon).length <= 2, `${W}: icon`);
     t.ok(['c', 'u', 'r', 'boss', 'event', 'l'].includes(r.rarity), `${W}: rarity`);   // (round 12: legendaries)
     t.ok(typeof r.text === 'string' && r.text.length > 8, `${W}: text`);
-    t.ok(!!(r.mods || r.hooks || r.rules || r.combo), `${W}: has mods, hooks, rules or a combo family`);   // (round 21: a combo relic's power is its family)
+    t.ok(!!(r.mods || r.hooks || r.rules || r.combo || r.rsk), `${W}: has mods, hooks, rules, a combo family or a Restock dial`);   // (round 21: a combo relic's power is its family; round 30: rsk)
+    if (r.rsk != null) t.ok(r.rsk && typeof r.rsk === 'object' && Object.keys(r.rsk).length >= 1 && Object.keys(r.rsk).every(k => ['add', 'pct', 'fresh'].includes(k) && isNum(r.rsk[k]) && r.rsk[k] > 0) && r.kw.includes('restock'), `${W}: rsk is {add, pct, fresh} and the relic wears the Restock chip`);
     if (r.combo != null) t.ok(r.combo === 'all' || !!DATA.CR.FAM[r.combo], `${W}: combo is a family or 'all' [${r.combo}]`);
     t.ok(Array.isArray(r.kw) && r.kw.every(k => ARCHS.includes(k)), `${W}: kw lists archetypes`);
     if (r.proc != null) t.ok(typeof r.proc === 'string' && r.proc.length >= 2 && r.proc.length <= 16 && r.proc === r.proc.toUpperCase(), `${W}: proc label short and loud [${r.proc}]`);
@@ -526,6 +532,7 @@ t.test('relics', () => {
     gainGold: (F, v) => { calls.push(['gainGold', v]); return v; },
     tickets: (F, v) => { calls.push(['tickets', v]); return v; },
     gainMaxHp: (F, v) => { calls.push(['gainMaxHp', v]); return v; },
+    restock: (F, v, why) => { calls.push(['restock', v, why]); return []; },   // (round 30)
     gold: () => 150,
     emit: (F, ev) => { calls.push(['emit', ev.t]); return ev; },
     removeJunk: () => [], stealItem: () => null, freezeItem: () => null,
@@ -608,7 +615,7 @@ t.test('events', () => {
     if (EVENTS[id].cup) { t.ok(c.fx.every(f => f.k !== 'claw' || (f.u === 'coil' && CLAW_UPGRADES.coil.cup)), `event ${id}: only Coil Winding`); continue; }
     t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
   }
-  t.ok(DATA.ECONOMY.trickle === 2 && DATA.ECONOMY.binFloor === 6, 'bin trickle 2, floor 6');
+  t.ok(DATA.ECONOMY.restockPct === 0.4 && DATA.ECONOMY.binFloor === 6 && DATA.ECONOMY.trickle == null, 'Restock 40% a turn (round 30, was the trickle of 2), floor 6');
   // gold costs are gated by a gold condition
   for (const id of ids) for (const c of EVENTS[id].choices) {
     const cost = c.fx.find(f => f.k === 'gold' && f.v < 0);
@@ -852,7 +859,7 @@ const kwOf = (d) => DATA.kwIds(d);
 
 t.test('archetypes and keywords', () => {
   const A = DATA.ARCHETYPES;
-  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '15 archetypes (round 17: Tech)');
+  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '16 archetypes (round 17: Tech; round 30: Restock)');
   for (const k of ARCHS) {
     const a = A[k];
     t.ok(a && typeof a.label === 'string' && a.label.length >= 3 && a.label.length <= 10, `${k}: label`);
@@ -895,7 +902,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id) && !R21_RELICS.includes(id) && !DATA.BENCH.RELICS.includes(id));   // (round 28: the bench's own relics have their own test)
+  const fresh = Object.keys(RELICS).filter(id => !(RELICS[id].rarity === 'l' && id.startsWith('leg_')) && !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id) && !R17_RELICS.includes(id) && !R21_RELICS.includes(id) && !DATA.BENCH.RELICS.includes(id) && !R30_RELICS.includes(id));   // (round 28: the bench's own relics have their own test; round 30: Restock's too)
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -903,7 +910,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id) && !R17_ITEMS.includes(id) && !DATA.BENCH.ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id) && !R17_ITEMS.includes(id) && !DATA.BENCH.ITEMS.includes(id) && !R30_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece (round 30: Restock's own test)
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -3968,7 +3975,7 @@ t.test('cmp2: plus 2 numbers, names and text', () => {
 // ---------------------------------------------------------------- BENCH (round 28): bolts, upgrades, packs
 t.test('bench: the upgrades, the packs and their gate, the payout and the grant are pure and well formed', () => {
   const B = DATA.BENCH;
-  t.ok(B && B.UP_IDS.length === 12 && B.PACK_IDS.length === 10, 'twelve upgrades, ten packs');
+  t.ok(B && B.UP_IDS.length === 12 && B.PACK_IDS.length === 11, 'twelve upgrades, eleven packs (round 30: the Restock Kit)');
   for (const u of B.UP_LIST) {
     t.ok(u.name && u.text && u.icon && /\{n\}|^[A-Z]/.test(u.val) && [1, 2, 3].includes(u.tier), u.id + ': name, text, icon, value line, tier');
     t.ok(u.cost.length === u.max && u.cost.every((c, i) => c > 0 && (!i || c > u.cost[i - 1])), u.id + ': a rising price per rank');
@@ -4014,6 +4021,53 @@ t.test('bench: the upgrades, the packs and their gate, the payout and the grant 
   t.eq(DATA.benchGrant({}), 0, 'no runs: no grant');
   t.eq(DATA.benchGrant({ runs: 10, wins: 1, kills: 100, bestAct: 2 }), 50 + 50 + 30 + 50, 'runs, wins, kills, the best act');
   t.eq(DATA.benchGrant({ runs: 1e9 }), B.GRANT.cap, 'capped');
+});
+
+/* ------------------------------------------------- RESTOCK (round 30): DESIGN.md "Restock (round 30)" */
+t.test('restock: the dial, the six items, the five relics, the base pool and the Restock Kit', () => {
+  const R = DATA.RSK, A = DATA.ARCHETYPES.restock, EM = String.fromCharCode(0x2014);
+  t.ok(DATA.ECONOMY.restockPct === 0.4, 'ECONOMY.restockPct is 40%');
+  t.ok(A && A.label === 'Restock' && isHex(A.color) && Array.from(A.icon).length === 1, 'the Restock keyword chip');
+  t.eq(R.ITEMS.join(), R30_ITEMS.join(), 'six items');
+  t.eq(R.RELICS.join(), R30_RELICS.join(), 'five relics');
+  const rar = {};
+  for (const id of R.ITEMS) {
+    const d = ITEMS[id];
+    rar[d.rarity] = (rar[d.rarity] || 0) + 1;
+    t.eq(DATA.kwIds(d)[0], 'restock', id + ': the Restock chip comes first');
+    t.ok(d.fx.some((f) => f.k === 'restock' || f.k === 'back') && d.plus.fx.some((f) => f.k === 'restock' || f.k === 'back'), id + ': restocks or comes back, base and plus');
+    t.ok((d.name + d.text).indexOf(EM) < 0 && /Restock|back into the bin/.test(d.text), id + ': says Restock in plain words, no em dash');
+  }
+  t.ok(rar.c === 2 && rar.u === 2 && rar.r === 1 && rar.l === 1, 'two commons, two uncommons, a rare, a legendary: ' + JSON.stringify(rar));
+  t.eq(DATA.itemText(ITEMS.coin_return, false), 'Restock 2: 2 used items drop back into the bin. Gain 2 Block. Press for change.', 'Coin Return reads plainly');
+  t.ok(ITEMS.boomerang.fx.some((f) => f.k === 'back') && ITEMS.horn_of_plenty.fx.some((f) => f.k === 'back'), 'the Boomerang and the Horn come back themselves');
+  for (const id of R.RELICS) {
+    const r = RELICS[id];
+    t.ok(r.kw[0] === 'restock' && (r.rsk || r.hooks) && r.proc && (r.name + r.text).indexOf(EM) < 0, id + ': a Restock relic with a dial or a hook, a proc, no em dash');
+  }
+  t.eq(RELICS.stock_cart.rsk.add, 1, 'the Stock Cart: +1 a turn');
+  t.eq(RELICS.wholesale_card.rsk.pct, 0.1, 'the Wholesale Card: +10%');
+  t.eq(RELICS.fresh_stock.rsk.fresh, 2, 'Fresh Stock: 2 damage');
+  t.ok(typeof RELICS.lost_found.hooks.onGrab === 'function' && typeof RELICS.prize_hopper.hooks.onJackpot === 'function', 'Lost and Found (an empty grab) and the Prize Hopper (a jackpot) are hooks');
+  // base pool: the commons and uncommons for everyone (the daily, Duo); the Restock Kit for the rest
+  t.eq(R.BASE_ITEMS.join(), 'coin_return,spring_loader,boomerang,vending_jam', 'four base items');
+  t.eq(R.BASE_RELICS.join(), 'stock_cart,lost_found', 'two base relics');
+  for (const id of R.BASE_ITEMS) t.ok(DATA.unlBase('item', id) && DATA.pool(ITEMS[id].rarity).includes(id), id + ': in the base pool');
+  for (const id of R.BASE_RELICS) t.ok(DATA.unlBase('relic', id) && DATA.relicPool(RELICS[id].rarity).includes(id), id + ': in the base relic pool');
+  const P = DATA.BENCH.PACKS[R.PACK];
+  t.ok(P && P.name === 'Restock Kit' && P.cost === 60 && !P.gate && P.items.join() === 'bottomless_bag,horn_of_plenty' && P.relics.join() === 'prize_hopper,wholesale_card,fresh_stock', 'the Restock Kit: 60 bolts, five things');
+  for (const x of DATA.benchPackThings(R.PACK)) t.ok(x.bench && DATA.unlPack(x.kind, x.id) === 'restock', x.id + ': only through the pack');
+  DATA.unlGate(() => false);
+  try {
+    t.ok(!DATA.pool().includes('bottomless_bag') && !DATA.pool().includes('horn_of_plenty') && !DATA.relicPool('r').includes('wholesale_card') && !DATA.relicPool('u').includes('fresh_stock'), 'a shut gate (daily, rush, Duo) keeps the pack out');
+    t.ok(DATA.pool().includes('coin_return') && DATA.relicPool('c').includes('stock_cart'), 'and the base pieces in');
+  } finally { DATA.unlGate(null); }
+  // the rewards really offer them
+  const rng = U.rng(30), seen = {};
+  for (let i = 0; i < 600; i++) for (const id of DATA.rewardItems(rng, 1 + (i % 3), 'knight', 3)) if (R.ITEMS.includes(id)) seen[id] = 1;
+  t.ok(seen.coin_return && seen.spring_loader, 'act rewards offer the commons: ' + Object.keys(seen).join(' '));
+  // a run that holds Restock pieces pulls more of them (the build pull reads the chip)
+  t.ok((DATA.investment({ bin: [{ id: 'coin_return' }, { id: 'spring_loader' }], relics: ['stock_cart'] }).restock || 0) >= 5, 'the build pull counts the Restock chip');
 });
 
 t.done();
