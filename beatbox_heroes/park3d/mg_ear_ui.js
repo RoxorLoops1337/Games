@@ -32,7 +32,7 @@ const CSS = `
 .er-grid button.c0{background:linear-gradient(#9dff6a,#3fd06a)}.er-grid button.c1{background:linear-gradient(#ff8ac0,#e83e8c)}.er-grid button.c2{background:linear-gradient(#ffe97a,#ffb62e)}.er-grid button.c3{background:linear-gradient(#a9c6ff,#6d8cf0)}.er-grid button.c4{background:linear-gradient(#d7a8ff,#9a5cf0)}
 .er-grid button.dim{opacity:.35;filter:saturate(.4)}
 .er-grid button.right{outline:4px solid #fff6e8;outline-offset:2px}
-.er-fb{position:absolute;left:14px;right:14px;top:30%;text-align:center;pointer-events:none;opacity:0}
+.er-fb{position:absolute;left:14px;right:14px;top:auto;bottom:calc(178px + var(--sb));text-align:center;pointer-events:none;opacity:0}
 .er-fb.on{opacity:1}
 .er-fb .big{font-weight:700;font-size:42px;letter-spacing:.04em;text-shadow:0 4px 0 #0e0a1e,0 0 24px currentColor;animation:erpop .5s cubic-bezier(.2,1.5,.4,1) both}
 .er-fb .why{margin:8px auto 0;max-width:330px;padding:9px 14px;border-radius:16px;background:rgba(23,16,43,.82);font-weight:500;font-size:16px;line-height:1.3;color:#fff6e8;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
@@ -131,6 +131,7 @@ export function createUI(hud, H) {
     if (fbk !== last.fbk) {
       last.fbk = fbk; fb.classList.toggle('on', !!fbk);
       if (fbk) {
+        const ph = pad.offsetHeight; if (ph > 40) fb.style.bottom = 'calc(' + (ph + 30) + 'px + var(--sb))';   // the feedback sits just above the answer pad, the gems stay visible
         fbBig.textContent = S.ok ? (S.streak >= 3 ? 'ON FIRE!' : ['NICE!', 'CORRECT!', 'YES!'][S.round % 3]) : 'NOT QUITE'; fbBig.style.color = S.ok ? '#9dff4a' : '#ff8ab0';
         fbBig.style.animation = 'none'; void fbBig.offsetWidth; fbBig.style.animation = '';
         fbWhy.textContent = (S.ok ? '' : 'It was ' + label(S.q.answer) + '. ') + why(S.q.answer);

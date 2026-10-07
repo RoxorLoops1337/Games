@@ -30,14 +30,14 @@ export function createEar(ctx, opts) {
   const set = buildSet(ctx, tier), aura = buildAura(); group.add(set.group);
 
   // ---- the listener: the hero with headphones at the mic, turned toward the staff
-  const singer = new THREE.Group(); singer.name = 'listener'; singer.position.set(-0.95, 0, 0.7); singer.rotation.y = 0.55; group.add(singer);
+  const singer = new THREE.Group(); singer.name = 'listener'; singer.position.set(-0.62, 0, 0.75); singer.rotation.y = 0.5; group.add(singer);
   const hero = createCharacter(ctx, studioLook(opts.look)); singer.add(hero.object); hero.play('idle', {}); hero.update(0.016, 0); singer.updateMatrixWorld(true);
   const mp = new THREE.Vector3(); try { hero.anchors.mouth.getWorldPosition(mp); singer.worldToLocal(mp); } catch (e) { mp.set(0, 1.45, 0.12); }
   const mic = buildMic(mp); singer.add(mic.group); singer.add(aura.group);
   function setLook(look) { hero.setLook(studioLook(look)); }
 
   // ---- the note staff: five glowing lines, the gems ride on it (y from pitch)
-  const STAFF = { x0: -0.05, x1: 1.75, y0: 1.55, y1: 3.15, z: 0.2 }, Y = (m, lo) => STAFF.y0 + Math.max(0, Math.min(1, (m - lo) / 16)) * (STAFF.y1 - STAFF.y0);
+  const STAFF = { x0: 0.12, x1: 1.62, y0: 1.55, y1: 3.15, z: 0.2 }, Y = (m, lo) => STAFF.y0 + Math.max(0, Math.min(1, (m - lo) / 16)) * (STAFF.y1 - STAFF.y0);
   const staff = new THREE.Group(); staff.name = 'staff'; group.add(staff);
   const lineMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#8f7cff').multiplyScalar(0.9), transparent: true, opacity: 0.45, toneMapped: false, depthWrite: false });
   for (let i = 0; i < 5; i++) { const ln = new THREE.Mesh(new THREE.BoxGeometry(STAFF.x1 - STAFF.x0 + 0.4, 0.014, 0.014), lineMat); ln.position.set((STAFF.x0 + STAFF.x1) / 2, STAFF.y0 + i * (STAFF.y1 - STAFF.y0) / 4, STAFF.z - 0.05); staff.add(ln); }
