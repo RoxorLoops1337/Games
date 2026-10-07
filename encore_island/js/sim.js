@@ -218,7 +218,6 @@ function grantXp(n) {
     S.xp -= xpNeed(S.level); S.level++;
     if (S.cards) S.pendingLevels++; else drawCards();
     S.goldPulse = Math.max(S.goldPulse, 0.5); S.player.cheerT = 0.9; sfx('levelup', true); buzz([20, 20, 40]);
-    S.toasts.push({ txt: 'LEVEL ' + S.level + ' — pick an upgrade!', t: 0, ic: 'star' });
     JUICE.flash = 0.6; ringFx(S.player.x, S.player.y - 10, 130, '#ffe98a', 0.6); ringFx(S.player.x, S.player.y - 10, 80, '#ff9ac8', 0.45);
     starBurst(S.player.x, S.player.y - 24, 18, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300);
   }

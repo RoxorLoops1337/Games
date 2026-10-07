@@ -108,4 +108,12 @@ for (let i = 0; i < 5; i++) EI.buyTown('merch'); t.ok(EI.townTierIdx() >= tier0,
 EI.save(); const lv = f0.lvl, shedLv = S.town.shed; EI.initGame(true); t.ok(EI.S.town.shed === shedLv && EI.S.pop.some(f => f.lvl === lv), 'town + fan levels survive save/load');
 for (const tab of ['crew', 'build']) { EI.openSheet('town', tab); for (let i = 0; i < 3; i++) EI.draw(0.016); t.ok(EI.S.sheet.tab === tab, 'town ' + tab + ' tab draws'); }
 
+// ---- notifications: merged, capped, time out, and pause behind menus ----
+EI.initGame(true); S = EI.S; S.started = true; S.toasts.length = 0; while (S.cards) EI.pickCard(0); S.xp = 0; S.cards = null;
+for (let i = 0; i < 9; i++) S.toasts.push({ txt: i < 4 ? 'same' : 'T' + i, t: 0 });
+(S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length <= 5 && S.toasts.filter(x => x.txt === 'same').length === 1, 'toasts merge duplicates and cap the backlog (' + S.toasts.length + ')');
+S.sheet = { id: 'more', tab: null, scroll: 0, vel: 0, max: 0, openT: 1 }; const keep = S.toasts.length; for (let i = 0; i < 100; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length === keep, 'toasts wait while a menu is open'); S.sheet = null;
+for (let i = 0; i < 400; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length === 0, 'toasts all clear on their own (' + S.toasts.length + ')');
+S.toasts.length = 0; S.toasts.push({ txt: 'away', t: 0, life: 4.5 }); for (let i = 0; i < 70; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.some(x => x.txt === 'away'), 'long toast outlives a short one'); for (let i = 0; i < 40; i++) (S.cards = null, EI.tick(0.05)); t.ok(!S.toasts.some(x => x.txt === 'away'), 'long toast still expires');
+
 t.done();

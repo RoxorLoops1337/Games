@@ -146,12 +146,12 @@ function drawActionButtons(baseY) {
 }
 function drawToasts() {
   if (S.sheet || S.modal || S.cards) return;
-  let ty = Math.max(150, vh * 0.2);
+  let ty = 124;
   for (const to of S.toasts.slice(0, 2)) {
-    const a = Math.min(1, 4 * Math.min(to.t, 3 - to.t)), slide = (1 - Math.min(1, to.t * 5)) * 30; ctx.globalAlpha = Math.max(0, a); ctx.font = font(13);
-    const tw = Math.min(vw - 20, Math.max(220, ctx.measureText(to.txt).width + 62)), x = vw / 2 - tw / 2;
-    plaque(x, ty - slide, tw, 34, 12); ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 1.5; rr(x, ty - slide, tw, 34, 12); ctx.stroke();
-    if (to.ic) drawIcon(to.ic, x + 20, ty - slide + 17, 26); ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'left'; ctx.fillText(to.txt, x + 38, ty - slide + 22); ctx.globalAlpha = 1; ty += 40;
+    const life = to.life || TOAST_LIFE, a = Math.min(1, 5 * Math.min(to.t, life - to.t)), slide = (1 - Math.min(1, to.t * 6)) * 18; ctx.globalAlpha = Math.max(0, a * 0.96); ctx.font = font(12);
+    const tw = Math.min(vw - 24, Math.max(190, ctx.measureText(to.txt).width + 56)), x = vw / 2 - tw / 2, h = 28;
+    plaque(x, ty - slide, tw, h, 11); ctx.strokeStyle = '#ffd94a'; ctx.lineWidth = 1.2; rr(x, ty - slide, tw, h, 11); ctx.stroke();
+    if (to.ic) drawIcon(to.ic, x + 18, ty - slide + h / 2, 22); ctx.fillStyle = '#ffd94a'; ctx.textAlign = 'left'; ctx.fillText(to.txt, x + 34, ty - slide + 19); ctx.globalAlpha = 1; ty += h + 6;
   }
 }
 function drawCardsDraft() {
@@ -198,6 +198,5 @@ function drawHudBottom() {
   if (!S.cards) { if (!sheetOpen) { drawGroove(dockY - 32); drawActionButtons(dockY - 84); } drawDock(); }
   drawToasts(); drawCardsDraft();
   if (S.goldPulse > 0) { ctx.strokeStyle = 'rgba(255,217,74,' + S.goldPulse * 0.9 + ')'; ctx.lineWidth = 10; rr(5, 5, vw - 10, vh - 10, 18); ctx.stroke(); }
-  if (S.offlineMsg > 0 && S.offlineAmt > 0) { plaque(vw / 2 - 150, 100, 300, 50, 12); ctx.fillStyle = '#ffd94a'; ctx.font = font(14); ctx.textAlign = 'center'; ctx.fillText('While you were away…', vw / 2, 120); ctx.fillText('+' + fmt(S.offlineAmt) + ' coins piled up in the Vault!', vw / 2, 140); }
   if (S.stick && !sheetOpen) { ctx.globalAlpha = 0.4; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(S.stick.ax, S.stick.ay, 46, 0, TAU); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(S.stick.ax + S.stick.dx * 42, S.stick.ay + S.stick.dy * 42, 20, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
 }
