@@ -419,10 +419,20 @@ function tickTimers(dt) {
     } else if (S.chest.t > 90) { S.chest = null; S.chestCd = 30; }
   }
 }
+// notifications: at most two on screen, identical ones merged, the backlog capped, and nothing ticks away while a menu hides it
+const TOAST_LIFE = 2.4;
+function tickToasts(dt) {
+  const T = S.toasts; if (!T.length) return;
+  for (let i = T.length - 1; i > 0; i--) { for (let j = 0; j < i; j++) if (T[j].txt === T[i].txt) { T.splice(i, 1); break; } } // merge duplicates
+  while (T.length > 5) T.splice(2, 1); // keep what is on screen + the newest
+  if (!S.started || S.sheet || S.modal || S.cards) return;
+  for (let i = 0; i < Math.min(2, T.length); i++) T[i].t += dt;
+  compact(T, (to) => to.t < (to.life || TOAST_LIFE));
+}
 function tickFx(dt) {
   for (const q of S.fx) q.t += dt; compact(S.fx, (q) => q.t < q.dur);
   for (const q of S.parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; if (q.g) q.vy += 420 * dt; } compact(S.parts, (q) => q.t < q.dur);
   if (S.fly.length) { for (const f of S.fly) f.t += dt; compact(S.fly, (f) => f.t < f.delay + f.dur); }
   for (const f of S.floats) { f.t += dt; f.y -= 30 * dt; } compact(S.floats, (f) => f.t < (f.big ? 1.6 : 0.8));
-  for (const to of S.toasts) to.t += dt; compact(S.toasts, (to) => to.t < 3);
+  tickToasts(dt);
 }

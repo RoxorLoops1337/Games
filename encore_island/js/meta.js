@@ -188,7 +188,7 @@ function applySave(d) {
   const away = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - (d.savedAt || Date.now())) / 1000));
   if (away > 60) {
     const towers = S.lands.reduce((n, z) => n + z.towers.length, 0), rate = helmVal(S.lands.length) * (0.3 + 0.2 * towers + 0.25 * S.pop.length) * coinMul();
-    const amt = Math.floor(away * rate * 0.5 * snackMul()); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.offlineMsg = 6; }
+    const amt = Math.floor(away * rate * 0.5 * snackMul()); if (amt > 0) { S.pallet += amt; S.offlineAmt = amt; S.toasts.push({ txt: 'While you were away: +' + fmt(amt) + ' coins in the Vault', t: 0, ic: 'coin', life: 4.5 }); }
   }
 }
 function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; applySave(JSON.parse(raw)); return true; } catch (e) { return false; } }
