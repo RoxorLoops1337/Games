@@ -81,7 +81,7 @@ export function plant(S, x, y0, z, kind, s, o) {
   } else if (kind === 'fiddle') {
     bar(B, [x, top, z], [x + 0.03, top + 1.1 * s, z], 0.05, 0.05, P.woodD); for (let i = 0; i < 12; i++) { const a = i * 2.4, hy = top + (0.4 + i * 0.065) * s, c = P.leaf[(i + 1) % 4]; leaf(B, [x, hy, z], [Math.cos(a), 0.25, Math.sin(a)], 0.34 * s, 0.26 * s, c, mul(c, 0.5), 0.05); }
   } else if (kind === 'snake') {
-    for (let i = 0; i < 7; i++) { const a = i * 0.9 + R(), rr = 0.05 + R() * 0.08, h = (0.5 + R() * 0.45) * s; const c = mix(P.leaf[2], P.mustard, 0.12 + R() * 0.1); B.push(x + Math.cos(a) * rr, top, z + Math.sin(a) * rr, a, 1, (R() - 0.5) * 0.12, (R() - 0.5) * 0.12); B.box(0, 0, 0, 0.1 * s, h, 0.03, c, { taper: 0.3, base: 0.3, top: mix(c, P.mustard, 0.5) }); B.pop(); }
+    for (let i = 0; i < 7; i++) { const a = i * 0.9 + R(), rr = 0.05 + R() * 0.08, h = (0.5 + R() * 0.45) * s; const c = mix(P.leaf[1], P.leaf[3], R() * 0.6); B.push(x + Math.cos(a) * rr, top, z + Math.sin(a) * rr, a, 1, (R() - 0.5) * 0.12, (R() - 0.5) * 0.12); B.box(0, 0, 0, 0.12 * s, h, 0.04, c, { taper: 0.3, base: 0.2, top: mix(c, P.mustard, 0.45) }); B.box(0, 0, 0.0, 0.05 * s, h * 0.7, 0.045, mix(c, P.lime, 0.35), { taper: 0.3, base: 0 }); B.pop(); }
   } else if (kind === 'herb') {
     for (let i = 0; i < 10; i++) { const a = i * 2.2 + R(), rr = R() * 0.1, c = P.leaf[(R() * 4) | 0]; B.blob(x + Math.cos(a) * rr * s, top + (0.05 + R() * 0.08) * s, z + Math.sin(a) * rr * s, 0.075 * s, 0.05 * s, 0.075 * s, mul(c, 0.6), c, { detail: 0, jit: 0.1 }); }
   } else if (kind === 'fern') {

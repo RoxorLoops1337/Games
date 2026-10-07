@@ -46,6 +46,9 @@ function extras(S) {
     [-0.45, 0.45].forEach((dx) => { bar(B, [ax + dx, 0.95, az - 0.22], [ax + dx - 0.05, 0, az - 0.3], 0.03, 0.03, P.woodL); bar(B, [ax + dx, 0.95, az + 0.22], [ax + dx - 0.05, 0, az + 0.3], 0.03, 0.03, P.woodL); bar(B, [ax + dx, 0.95, az - 0.22], [ax + dx, 0.95, az + 0.22], 0.03, 0.03, P.woodL); });
     [-0.14, 0, 0.14].forEach((dz) => bar(B, [ax - 0.45, 0.95, az + dz], [ax + 0.45, 0.95, az + dz], 0.02, 0.02, P.steelL));
     [[-0.3, P.pink, 0.3], [-0.1, P.tealL, 0.34], [0.12, P.yellow, 0.28], [0.32, P.denim, 0.36]].forEach(([dx, c, h]) => { B.box(ax + dx, 0.95 - h, az, 0.2, h, 0.32, c, { base: 0, tint: 0.05, taper: 0.9 }); }); hit.box(ax, az, 0.5, 0.32, 0); }
+  // central boho rug with two floor cushions
+  { const rx = 1.0, rz = 1.45; B.box(rx, 0, rz, 2.8, 0.016, 1.5, P.cream, { base: 0.5, tint: 0 }); S.decal('rug3', rx, 0.0172, rz, 2.76, 1.46, 0, -Math.PI / 2, [1, 1, 1]);
+    [[0.2, 2.05, P.coral, 0.4], [1.75, 2.05, P.violet, -0.5]].forEach(([cx, cz, c, ry]) => { B.box(cx, 0.016, cz, 0.55, 0.12, 0.55, c, { base: 0.1, tint: 0.04, taper: 0.9, ry }); B.box(cx, 0.136, cz, 0.3, 0.015, 0.3, mix(c, P.cream, 0.4), { base: 0, ry }); S.soft(cx, cz, 0.45, 0.45, 0.3); hit.box(cx, cz, 0.28, 0.28, ry); }); }
   // pouf
   { const px = -1.0, pz = -0.3; S.soft(px, pz, 0.45, 0.45, 0.35); B.lathe([[0.26, 0, P.pink], [0.31, 0.14, mix(P.pink, P.pinkL, 0.3)], [0.28, 0.32, P.pinkL], [0.12, 0.36, mix(P.pinkL, P.cream, 0.4)], [0, 0.35, P.pinkL]], 8, px, 0, pz, {}); hit.circle(px, pz, 0.32); }
   // milk crate with a boombox

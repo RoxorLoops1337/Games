@@ -22,6 +22,7 @@ function makeVinyl() {
   return B.geometry(false);
 }
 export function buildFlat(ctx) {
+  const _t0 = performance.now();
   const group = new THREE.Group(); group.name = 'flat';
   const S = makeStore(); S.atlas = makeFlatAtlas(); S.group = group; S.updaters = [];
   const guard = (name, fn) => { try { fn(S); } catch (e) { console.error('[flat3d] ' + name + ' failed: ' + (e && e.stack || e)); } };
@@ -30,7 +31,7 @@ export function buildFlat(ctx) {
   // ---------------------------------------------------------------- meshes
   const add = (geo, mat, o) => { const m = new THREE.Mesh(geo, mat); m.castShadow = !!(o && o.cast); m.receiveShadow = !(o && o.receive === false); if (o && o.order) m.renderOrder = o.order; if (o && o.name) m.name = o.name; group.add(m); return m; };
   const main = add(S.B.geometry(false), flatMat(), { cast: true, name: 'flat_main' }); main.frustumCulled = false;
-  const glowMat = glowLambert(1.0); add(S.GLOW.geometry(false), glowMat, { cast: false, name: 'flat_glow' }).frustumCulled = false;
+  const glowMat = glowLambert(1.0); const glowMesh = add(S.GLOW.geometry(false), glowMat, { cast: false, name: 'flat_glow' }); glowMesh.frustumCulled = false;
   const decMat = new THREE.MeshLambertMaterial({ map: S.atlas.tex, vertexColors: true, transparent: true, alphaTest: 0.03, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
   add(S.DEC.geometry(false), decMat, { name: 'flat_decals', order: 2 }).frustumCulled = false;
   const scrMat = new THREE.MeshBasicMaterial({ map: S.atlas.tex, vertexColors: true, transparent: true, alphaTest: 0.03, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); scrMat.userData.screen = true;
@@ -72,9 +73,10 @@ export function buildFlat(ctx) {
   ];
   const windows = WINDOWS.map((w) => { const f = WALLS[w.wall], p = f.pt(w.u, -0.14); return { x: p[0], y: w.y0 + w.h / 2, z: p[1], w: w.w, h: w.h, nx: -f.nx, nz: -f.nz }; });
   S.updaters.push((dt, t) => { const k = 0.96 + 0.04 * Math.sin(t * 9.0) * Math.sin(t * 3.1); scrMat.color.setRGB(k, k, k); });
+  if (ctx && ctx.debugFlat) console.warn('[flat3d] built in ' + Math.round(performance.now() - _t0) + 'ms');
   return {
     group, interior: true, bounds, blocked, heightAt: () => 0, pathDist, keepout, paths,
-    anchors: Object.assign(S.anchors, { start: S.anchors.start || { x: 4.3, z: 2.4, rot: Math.PI }, door: S.anchors.door || S.anchors.doorSpot || { x: 5.5, z: 4.6, rot: 0 }, doorSpot: S.anchors.doorSpot || { x: 5.5, z: 4.6, rot: 0 }, boothSpot: S.anchors.boothSpot || { x: 6.1, z: -2.4, rot: Math.PI }, couchSpot: S.anchors.couchSpot || { x: -4.4, z: -1.5, rot: Math.PI }, bedSpot: S.anchors.bedSpot || { x: -5.2, z: 3.1, rot: -Math.PI / 2 }, deskSpot: S.anchors.deskSpot || { x: -0.4, z: -4.0, rot: Math.PI }, kitchenSpot: S.anchors.kitchenSpot || { x: 3.2, z: -3.9, rot: Math.PI }, wardrobeSpot: S.anchors.wardrobeSpot || { x: -5.9, z: -3.0, rot: -Math.PI / 2 }, foxy: S.anchors.foxy || { x: -3.3, z: -1.5, rot: Math.PI, seatY: 0.45 } }), spotDefs, windows, lights: S.lights, outside, update(dt, t) { for (const u of S.updaters) u(dt, t); },
+    emissive: [glowMesh], anchors: Object.assign(S.anchors, { start: S.anchors.start || { x: 4.3, z: 2.4, rot: Math.PI }, door: S.anchors.door || S.anchors.doorSpot || { x: 5.5, z: 4.6, rot: 0 }, doorSpot: S.anchors.doorSpot || { x: 5.5, z: 4.6, rot: 0 }, boothSpot: S.anchors.boothSpot || { x: 6.1, z: -2.4, rot: Math.PI }, couchSpot: S.anchors.couchSpot || { x: -4.4, z: -1.5, rot: Math.PI }, bedSpot: S.anchors.bedSpot || { x: -5.2, z: 3.1, rot: -Math.PI / 2 }, deskSpot: S.anchors.deskSpot || { x: -0.4, z: -4.0, rot: Math.PI }, kitchenSpot: S.anchors.kitchenSpot || { x: 3.2, z: -3.9, rot: Math.PI }, wardrobeSpot: S.anchors.wardrobeSpot || { x: -5.9, z: -3.0, rot: -Math.PI / 2 }, foxy: S.anchors.foxy || { x: -3.3, z: -1.5, rot: Math.PI, seatY: 0.45 } }), spotDefs, windows, lights: S.lights, outside, update(dt, t) { for (const u of S.updaters) u(dt, t); },
     camera: { dist: 11, pitch: 50, yaw: 35, fov: 34, minDist: 7, maxDist: 15, focusY: 0.8 },
     stats() { return { tris: (S.B.p.length + S.GLOW.p.length + S.SCR.p.length + S.DEC.p.length + S.SOFT.p.length + S.GLASS.p.length) / 9, colliders: hit.count() }; },
   };
