@@ -15,6 +15,7 @@ const watchdog = setTimeout(() => { console.error('FAIL: r3train suite hung'); p
 const env = await r3env('beatbox_heroes_r3train');
 const SHOTS = process.env.BBH_SHOTS || '';
 const shot = async (page, name) => { if (!SHOTS) return; try { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name) }); } catch (e) { console.log('shot failed ' + name + ': ' + e.message); } };
+const allSounds = (page) => page.evaluate(() => { const ch = BBH.Core.clone(BBH.G.ch); if (BBH.Core.SOUNDS) ch.sounds = BBH.Core.SOUNDS.map((x) => x.id); BBH.G.setChar(ch); });   // no NEW SOUND popups over the training screens
 const click = (page, sel) => page.evaluate((s) => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
 
 try {
@@ -24,7 +25,7 @@ try {
     for (const k of ['interval', 'chord', 'note']) { const f = A[k]; A[k] = function () { window.__calls[k]++; return f ? f.apply(A, arguments) : undefined; }; }
     const gm = A.gameMode; A.gameMode = function (on) { window.__calls.gameMode.push(!!on); return gm ? gm.apply(A, arguments) : undefined; };
   });
-  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } });
+  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
 
   /* ------------------------------------------------------------------ menu from the home booth */
   ok(await goScene(page, 'place', { id: 'home' }, 'flat'), 'home: the 3D flat loads');
@@ -46,10 +47,10 @@ try {
   await page.evaluate(() => { BBH.Train.speed = 2.5; });
   await click(page, '.trn [data-act=start-idle]');
   ok(await until(page, () => BBH.Train.last && BBH.Train.last.pops >= 2, null, 30000), 'idle: the pops tick up one by one');
-  const mid = await page.evaluate(() => ({ pops: document.querySelectorAll('.trn-pop').length, txt: (document.querySelector('.trn-pop') || {}).textContent || '', clk: (document.querySelector('.trn .clk') || {}).textContent, hudMin: BBH.G.ch.minutes }));
+  const mid = await page.evaluate(() => ({ pops: document.querySelectorAll('.trn-pop').length, txt: (document.querySelector('.trn-pop') || { dataset: {} }).dataset.text || '', clk: (document.querySelector('.trn .clk') || {}).textContent, hudMin: BBH.G.ch.minutes }));
   await shot(page, 'train_idle.png');
   ok(/^\+\d\.\d+ MUSICALITY$/.test(mid.txt), 'idle: a pop reads like "+0.2 MUSICALITY" (' + mid.txt + ')');
-  ok(mid.clk !== '13:00' && mid.hudMin === pre.min, 'idle: the shown clock runs fast (' + mid.clk + ') while the save waits for the commit');
+  ok(/^1[34]:\d\d$/.test(mid.clk) && mid.clk !== '13:00' && mid.hudMin === pre.min, 'idle: the shown clock runs fast (' + mid.clk + ') while the save waits for the commit');
   ok(await until(page, () => BBH.Train.last && !!BBH.Train.last.summary && !!document.querySelector('.trn .done'), null, 40000), 'idle: the session ends on a summary card');
   const post = await page.evaluate(() => ({ min: BBH.G.ch.minutes, mus: BBH.G.ch.stats.mus, en: BBH.G.ch.energy, ticks: BBH.Train.last.ticks.length, pops: BBH.Train.last.pops, sum: document.querySelector('.trn .done').textContent, title: (document.querySelector('#ui .sheet .h2') || {}).textContent }));
   ok(post.ticks === 4 && post.pops === 4, 'idle: 1 h = 4 trainTick pops (' + post.ticks + ' ticks, ' + post.pops + ' pops)');
@@ -69,7 +70,7 @@ try {
   await click(page, '.trn [data-act=done]'); await sleep(300);
 
   /* ------------------------------------------------------------------ PLAY: ear training level 1 */
-  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } });
+  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
   ok(await goScene(page, 'place', { id: 'home' }, 'flat'), 'home again with a fresh save');
   await page.evaluate(() => BBH.R3.world.activate('booth')); await until(page, () => !!document.querySelector('.trn [data-act=play]'), null, 30000);
   await click(page, '.trn .sk[data-stat=mus]'); await sleep(100); await click(page, '.trn [data-act=play]'); await sleep(200);
