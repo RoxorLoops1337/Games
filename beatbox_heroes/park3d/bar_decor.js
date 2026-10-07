@@ -52,6 +52,8 @@ export function buildDecor(S) {
   plant(S, 0.4, 0, -3.6, 'snake', 1.1, { pot: P.teal, pr: 0.2, ph: 0.3 }); S.hit.circle(0.4, -3.6, 0.25);
   { const sx = -1.9, sz = 4.2; B.push(sx, 0, sz, 0.3); B.box(0, 0, 0.0, 0.62, 0.9, 0.04, K.woodD, { base: 0.1, taper: 1 }); B.box(0, 0, -0.26, 0.58, 0.88, 0.03, K.woodD, { base: 0.1 }); B.pop(); S.decal('sandwich', sx + 0.0, 0.5, sz + 0.03, 0.54, 0.8, 0.3, 0, [1.05, 1.05, 1.05]); S.hit.circle(sx, sz, 0.35); S.soft(sx, sz, 0.5, 0.4, 0.3); }
   S.screen('sign_open', 2.1, 0.5, 5.31, 0.7, 0.3, 0, 0, [1.2, 1.2, 1.2]); S.lights.push({ x: 2.1, y: 0.8, z: 5.7, color: '#ff3d9a', r: 1.3, i: 0.39, kind: 'neon' });
+  // frames of the chalkboard and the banner rods (the live canvas quads are in buildBoards)
+  B.box(-2.72, 1.05, -4.955, 1.5, 0.05, 0.06, K.woodL, { base: 0 }); B.box(-2.72, 2.88, -4.955, 1.5, 0.06, 0.06, K.woodL, { base: 0 }); [-1, 1].forEach((sg) => B.box(-2.72 + sg * 0.72, 1.05, -4.955, 0.06, 1.89, 0.06, K.woodL, { base: 0 })); B.box(-0.5, 2.4, -4.945, 2.5, 0.03, 0.04, K.gold, { base: 0 }); B.box(-0.5, 3.0, -4.945, 2.5, 0.03, 0.04, K.gold, { base: 0 });
   // ---------------------------------------------------------------- a speaker + record crate by the stage steps, tip bucket
   B.box(0.55, 0, -2.9, 0.5, 0.35, 0.4, K.wood, { base: 0.2, tint: 0.06 }); B.box(0.55, 0.35, -2.9, 0.44, 0.02, 0.34, K.cream, { base: 0 }); S.hit.box(0.55, -2.9, 0.28, 0.23, 0);
   // ---------------------------------------------------------------- cables on the floor (cyan tape path from the stage to the speaker)
@@ -59,33 +61,30 @@ export function buildDecor(S) {
 }
 const YEL = () => [3.2, 2.5, 0.5];
 
-// glowing dance floor: two checker meshes, tinted every beat. returns { group, update(t, beat, energy), setTheme(a, b) }
+// glowing dance floor: ONE mesh (one draw call); the two checker colours live in the vertex colour (r = tile A, g = tile B) and a tiny shader patch picks them from two uniforms every frame
 export function buildDanceFloor(x0, x1, z0, z1, tile) {
-  const A = new Buf({ rng: () => 0.5 }), Bb = new Buf({ rng: () => 0.5 }); const nx = Math.round((x1 - x0) / tile), nz = Math.round((z1 - z0) / tile), g = 0.035;
-  const white = [1, 1, 1];
-  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const xa = x0 + (x1 - x0) * i / nx + g, xb = x0 + (x1 - x0) * (i + 1) / nx - g, za = z0 + (z1 - z0) * j / nz + g, zb = z0 + (z1 - z0) * (j + 1) / nz - g, buf = (i + j) % 2 ? Bb : A; buf.quad([xa, 0.014, za], [xa, 0.014, zb], [xb, 0.014, zb], [xb, 0.014, za], white); }
-  const mk = (buf, c) => { const m = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(c), transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); const me = new THREE.Mesh(buf.geometry(false), m); me.frustumCulled = false; me.renderOrder = 1; me.name = 'dance_floor'; return me; };
-  const a = mk(A, '#ff3d9a'), b = mk(Bb, '#35f2e0'); const group = new THREE.Group(); group.add(a, b);
+  const Bf = new Buf({ rng: () => 0.5 }); const nx = Math.round((x1 - x0) / tile), nz = Math.round((z1 - z0) / tile), g = 0.035;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const xa = x0 + (x1 - x0) * i / nx + g, xb = x0 + (x1 - x0) * (i + 1) / nx - g, za = z0 + (z1 - z0) * j / nz + g, zb = z0 + (z1 - z0) * (j + 1) / nz - g, c = (i + j) % 2 ? [0, 1, 0] : [1, 0, 0]; Bf.quad([xa, 0.014, za], [xa, 0.014, zb], [xb, 0.014, zb], [xb, 0.014, za], c); }
+  const U = { uA: { value: new THREE.Color('#ff3d9a') }, uB: { value: new THREE.Color('#35f2e0') } };
+  const m = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  m.onBeforeCompile = (sh) => { Object.assign(sh.uniforms, U); sh.fragmentShader = 'uniform vec3 uA; uniform vec3 uB;\n' + sh.fragmentShader.replace('#include <color_fragment>', 'diffuseColor.rgb = vColor.r * uA + vColor.g * uB;'); }; m.customProgramCacheKey = () => 'bar_dance_v1';
+  const me = new THREE.Mesh(Bf.geometry(false), m); me.frustumCulled = false; me.renderOrder = 1; me.name = 'dance_floor'; const group = new THREE.Group(); group.add(me);
   const ca = new THREE.Color('#ff3d9a'), cb = new THREE.Color('#35f2e0'); let tA = ca.clone(), tB = cb.clone();
-  return { group, tris: (A.p.length + Bb.p.length) / 9,
+  return { group, tris: Bf.p.length / 9,
     setTheme(c1, c2) { tA.set(c1); tB.set(c2); },
-    update(t, beatN, energy, pulseIn) { pulseIn = pulseIn === undefined ? 0 : 1 - pulseIn; const ph = ((beatN % 2) + 2) % 2, pulse = Math.exp(-pulseIn * 3.2), on = (ph < 1) ? 1 : 0; const ka = 0.22 + 0.2 * energy + (on ? 0.85 : 0.1) * pulse * (0.4 + energy), kb = 0.22 + 0.2 * energy + (on ? 0.1 : 0.85) * pulse * (0.4 + energy); a.material.color.copy(tA).multiplyScalar(ka); b.material.color.copy(tB).multiplyScalar(kb); } };
+    update(t, beatN, energy, pulseIn) { const pulse = Math.exp(-(1 - (pulseIn || 0)) * 3.2), ph = ((beatN % 2) + 2) % 2, on = (ph < 1) ? 1 : 0; const ka = 0.22 + 0.2 * energy + (on ? 0.85 : 0.1) * pulse * (0.4 + energy), kb = 0.22 + 0.2 * energy + (on ? 0.1 : 0.85) * pulse * (0.4 + energy); U.uA.value.copy(tA).multiplyScalar(ka); U.uB.value.copy(tB).multiplyScalar(kb); } };
 }
 
-// the two live canvas quads (north wall): chalkboard (day + programme) and the programme banner
+// the two live canvas quads (north wall): chalkboard (day + programme) and the programme banner share ONE canvas, ONE mesh
 export function buildBoards(group) {
-  const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return { c, g: c.getContext('2d'), t }; };
-  const cb = mkCanvas(256, 340), bn = mkCanvas(512, 128);
-  const mat = (t) => new THREE.MeshLambertMaterial({ map: t, emissive: new THREE.Color(0.28, 0.26, 0.3), emissiveMap: t });
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.86), mat(cb.t)); board.position.set(-2.72, 2.0, -4.945); board.name = 'chalkboard'; board.receiveShadow = true;
-  const banner = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), mat(bn.t)); banner.position.set(-0.5, 2.72, -4.935); banner.name = 'banner'; banner.receiveShadow = true;
-  // frame for the board and rods for the banner
-  const fr = new Buf({ rng: () => 0.5 }); fr.box(-2.72, 1.05, -4.955, 1.5, 0.05, 0.06, K.woodL, { base: 0 }); fr.box(-2.72, 2.88, -4.955, 1.5, 0.06, 0.06, K.woodL, { base: 0 }); [-1, 1].forEach((s) => fr.box(-2.72 + s * 0.72, 1.05, -4.955, 0.06, 1.89, 0.06, K.woodL, { base: 0 }));
-  fr.box(-0.5, 2.4, -4.945, 2.5, 0.03, 0.04, K.gold, { base: 0 }); fr.box(-0.5, 3.0, -4.945, 2.5, 0.03, 0.04, K.gold, { base: 0 });
-  const frame = new THREE.Mesh(fr.geometry(false), flatMat()); frame.frustumCulled = false; frame.name = 'board_frames';
-  group.add(board, banner, frame);
-  const api = { board, banner, frame, set(info) { drawChalkboard(cb.g, 256, 340, info); cb.t.needsUpdate = true; drawBanner(bn.g, 512, 128, info); bn.t.needsUpdate = true; } };
-  return api;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d'), t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  // board occupies (0,0)-(256,340), banner (0,360)-(512,488)
+  const geo = new THREE.BufferGeometry(), P = [], UV = [], I = [], quad = (x0, y0, x1, y1, z, u0, v0, u1, v1) => { const n = P.length / 3; P.push(x0, y0, z, x1, y0, z, x1, y1, z, x0, y1, z); UV.push(u0, v0, u1, v0, u1, v1, u0, v1); I.push(n, n + 1, n + 2, n, n + 2, n + 3); };
+  quad(-3.42, 1.07, -2.02, 2.93, -4.945, 0, 1 - 340 / 512, 0.5, 1); quad(-1.7, 2.42, 0.7, 3.02, -4.935, 0, 1 - 488 / 512, 1, 1 - 360 / 512);
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.setIndex(I); geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: t, emissive: new THREE.Color(0.28, 0.26, 0.3), emissiveMap: t }); const mesh = new THREE.Mesh(geo, mat); mesh.name = 'boards'; mesh.receiveShadow = true; mesh.frustumCulled = false; group.add(mesh);
+  const tmp = document.createElement('canvas'); tmp.width = 256; tmp.height = 340; const tg = tmp.getContext('2d'), tmp2 = document.createElement('canvas'); tmp2.width = 512; tmp2.height = 128; const tg2 = tmp2.getContext('2d');
+  return { board: mesh, banner: mesh, mesh, set(info) { drawChalkboard(tg, 256, 340, info); drawBanner(tg2, 512, 128, info); g.clearRect(0, 0, 512, 512); g.drawImage(tmp, 0, 0); g.drawImage(tmp2, 0, 360); t.needsUpdate = true; } };
 }
 
 // disco ball: faceted sphere (one mesh) that turns; facets sparkle through the vertex colours and a bright emissive tint on the beat
@@ -95,5 +94,5 @@ export function buildDiscoBall(pos) {
   ng.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.dispose();
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: new THREE.Color(0.55, 0.5, 0.65), emissiveIntensity: 0.9 }); m.userData.noGlow = true;
   const mesh = new THREE.Mesh(ng, m); mesh.position.set(pos.x, pos.y, pos.z); mesh.name = 'disco_ball'; mesh.castShadow = false;
-  return { mesh, update(dt, t, beat) { mesh.rotation.y += dt * 0.9; m.emissiveIntensity = 0.7 + 0.8 * beat; } };
+  return { mesh, update(dt, t, beat) { mesh.rotation.y += dt * 0.9; m.emissiveIntensity = 0.28 + 0.5 * beat; } };
 }

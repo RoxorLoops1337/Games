@@ -103,7 +103,7 @@ export function buildVenueArena(V) {
   const P = (x, y, z) => [x * k + o.x, y * k, z * k + o.z];
   V.cams.wide = { pos: P(0, 6.4, 17.5), look: P(0, 1.7, -0.4), fov: 50 }; V.cams.vs = { pos: P(0, 1.7, 10.5), look: P(0, 2.1, 0.8), fov: 58 };
   V.cams.oppClose = { pos: P(-0.9, 2.1, 4.6), look: P(A.podiumX, 2.0, A.podiumZ), fov: 38 }; V.cams.youClose = { pos: P(0.9, 2.1, 4.6), look: P(-A.podiumX, 2.0, A.podiumZ), fov: 38 };
-  V.cams.over = { pos: P(-5.4, 2.3, 2.6), look: P(2.0, 1.8, 1.1), fov: 46 }; V.cams.judges = { pos: P(0, 2.7, 7.6), look: P(0, 2.2, -4.0), fov: 68 }; V.cams.crowd = { pos: P(0, 2.7, 2.8), look: P(0, 2.4, 11), fov: 60 };
+  V.cams.over = { pos: P(-5.4, 2.3, 2.6), look: P(2.0, 1.8, 1.1), fov: 46 }; V.cams.judges = { pos: P(0, 2.9, 8.8), look: P(0, 2.1, -4.0), fov: 70 }; V.cams.crowd = { pos: P(0, 2.7, 2.8), look: P(0, 2.4, 11), fov: 60 };
   V.cams.play = V.cams.over;
   V.anchors.player = { x: -A.podiumX * k + o.x, y: A.podiumTop * k, z: A.podiumZ * k + o.z, rot: 1.05 }; V.anchors.opponent = { x: A.podiumX * k + o.x, y: A.podiumTop * k, z: A.podiumZ * k + o.z, rot: -1.05 }; V.anchors.judges = JUDGE_X.map((x) => ({ x: x * k + o.x, y: 0.9 * k, z: tz * k + o.z }));
   V.anchors.stageFront = { x: o.x, y: 0.4 * k, z: 6.9 * k + o.z };

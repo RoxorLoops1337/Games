@@ -6,7 +6,7 @@
 import { THREE } from './kit.js';
 import { brickTex, muralTex, bladeTex, posterTex } from './w_title_tex.js';
 import { buildSet, AL, LIGHTS } from './w_title_set.js';
-import { buildSign, buildStringLights, buildRain, buildSteam, buildWet, buildShafts } from './w_title_fx.js';
+import { buildSign, buildStringLights, buildRain, buildSteam, buildWet, buildShafts, buildSignReflection } from './w_title_fx.js';
 
 const NOP = () => {};
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -31,6 +31,7 @@ export default function create(ctx, args) {
   const steam = buildSteam([[-1.0, 0.03, -4.4, 1.3], [0.9, 0.03, -5.4, 1.5], [0.1, 0.03, -6.8, 1.6], [-2.3, 3.0, -3.7, 0.55], [2.3, 2.6, -2.6, 0.5]]); group.add(steam.mesh);
   const wet = buildWet(); group.add(wet.mesh);
   const shafts = buildShafts(set.lens); group.add(shafts.group);
+  const refl = buildSignReflection(sign, { y: SHOTS.title.p[1], z: SHOTS.title.p[2] }); group.add(refl.mesh);
   // real point lights (the bricks carry baked neon washes, these light the characters, the stage and the props)
   const pl = [];
   if (!low) [['#ff3ea5', [1.9, 2.8, -4.2], 7, 6.5], ['#2ee6ff', [-1.9, 2.8, -4.2], 7, 6.5], ['#ff3ea5', [0, 4.6, -3.4], 6, 6], ['#ffd8a8', [0.3, 2.8, 2.2], 2.6, 7]].forEach(([c, p, i, d]) => { const l = new THREE.PointLight(c, i, d, 2); l.position.set(p[0], p[1], p[2]); group.add(l); pl.push({ l, i }); });
@@ -83,7 +84,7 @@ export default function create(ctx, args) {
     const bright = 0.92 + 0.5 * pulse; sign.mat.color.setScalar(bright); sign.hal.opacity = 0.32 + 0.4 * pulse; sign.hal.color.setHSL(0.9 - 0.05 * Math.sin(t * 0.4), 1, 0.55);
     const D = st.dead; if (t > D.next) { D.until = t + 0.55; D.next = t + 5 + (Math.sin(t * 12.9898) * 43758.5453 % 1 + 1) * 3; } sign.dead.opacity = t < D.until ? ((Math.floor(t * 17) % 3) ? 0.95 : 0.15) : 0;
     for (let i = 0; i < set.washMats.length; i++) set.washMats[i].color.setScalar(0.8 + 0.5 * pulse);
-    strings.U.uTime.value = t; strings.U.uBeat.value = pulse; rain.U.uTime.value = t; wet.U.uTime.value = t; wet.U.uBeat.value = pulse; steam.U.uTime.value = t; steam.U.uBeat.value = pulse;
+    strings.U.uTime.value = t; strings.U.uBeat.value = pulse; rain.U.uTime.value = t; wet.U.uTime.value = t; wet.U.uBeat.value = pulse; refl.U.uTime.value = t; refl.U.uBeat.value = pulse; refl.mesh.visible = dk > 0.8 && st.shot === 'title'; steam.U.uTime.value = t; steam.U.uBeat.value = pulse;
     for (let i = 0; i < shafts.mats.length; i++) shafts.mats[i].uniforms.uK.value = 0.3 + 0.45 * pulse * (i ? 1 : 0.8);
     for (let i = 0; i < pl.length; i++) pl[i].l.intensity = pl[i].i * (0.8 + 0.45 * pulse);
     // grade: less flat violet fill so the neon and the rim lights carry the picture (lighting resets these every frame, we scale after it)
@@ -105,6 +106,6 @@ export default function create(ctx, args) {
     terrain, flora: { group: new THREE.Group(), update: NOP }, npcSpecs: [{ id: 'foxy', flat: false }, { id: 'beeamgee' }], profile: 'out', camera: { fov: 44, near: 0.3, far: 160 }, update,
     setBeat(b) { api.feed(b); },
     setLook() { },
-    dispose() { try { sign.texA.dispose(); sign.texB.dispose(); } catch (e) { /* ignore */ } ctx.title = null; },
+    dispose() { try { sign.texA.dispose(); sign.texB.dispose(); refl.U.uTex.value.dispose(); } catch (e) { /* ignore */ } ctx.title = null; },
   };
 }

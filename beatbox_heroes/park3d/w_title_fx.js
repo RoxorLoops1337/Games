@@ -120,3 +120,16 @@ export function buildShafts(lens) {
   });
   return { group, mats: out };
 }
+
+// ------------------------------------------------------------------ the sign mirrored in the wet street: a small blurred, flipped copy that shimmers with the rain (where the camera would see the reflection)
+export function buildSignReflection(sign, camPos) {
+  const cv = document.createElement('canvas'); cv.width = 96; cv.height = 48; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.drawImage(sign.texA.image, 0, 0, 96, 48);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  const U = { uTex: { value: tex }, uTime: { value: 0 }, uBeat: { value: 0 } };
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(sign.W * 0.36, sign.H * 0.5, 1, 1), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D uTex; uniform float uTime, uBeat; varying vec2 vUv; void main(){ vec2 u = vUv; u.x += sin(u.y * 22.0 + uTime * 2.3) * 0.018 + sin(u.y * 9.0 - uTime * 1.3) * 0.012; u.y += sin(u.x * 14.0 + uTime * 1.7) * 0.015; vec4 t = texture2D(uTex, u); float e = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x) * smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.7, vUv.y); float a = t.a * e * (0.34 + 0.22 * uBeat); gl_FragColor = vec4(t.rgb * a * 1.3, a); }' }));
+  // mirror geometry: sign centre (0, y, z) seen from the camera: the reflection lies on the ground between the two rays through the mirrored top and bottom edges
+  const y = sign.group.position.y, z = sign.group.position.z, cy = camPos.y, cz = camPos.z, k = cy / (cy + y), zc = cz + k * (z - cz);
+  m.rotation.x = Math.PI / 2; m.scale.x = -1; m.position.set(0, 0.03, zc); m.renderOrder = 4; m.name = 'title_signrefl'; return { mesh: m, U };
+}
