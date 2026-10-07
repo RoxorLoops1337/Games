@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { harness } from './no_room_for_heroes_lib.mjs';
 
 const t = harness('encore_island');
+const tipsOff = () => { const T = EI.FEATS.find(f => f.id === 'tutorial').api; EI.S.feat.tutorial.off = true; T.finish(); };
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, '..', 'encore_island');
 const html = readFileSync(join(dir, 'index.html'), 'utf8');
@@ -73,7 +74,7 @@ for (let i = 0; i < 40; i++) { EI.tick(0.05); EI.draw(0.05); }
 t.ok(true, 'post-load ticks + draws fine');
 
 // ---- gameplay flows: plate purchase, selling, vault, menu taps ----
-EI.initGame(true); S = EI.S; S.started = true; S.wallet = 500;
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); S.wallet = 500;
 S.player.x = EI.UPG_POS.speed.x; S.player.y = EI.UPG_POS.speed.y;
 for (let i = 0; i < 80; i++) EI.tick(0.05);
 t.ok(S.up.speed > 0, 'standing on an upgrade plate buys it');
@@ -92,7 +93,7 @@ EI.S.modal = { id: 'wheel' }; EI.draw(0.016); EI.S.modal = { id: 'daily' }; EI.d
 t.ok(S.unlockPlate !== undefined, 'unlock plate state exists');
 
 // ---- town: buildings, fan training, persistence ----
-EI.initGame(true); S = EI.S; S.started = true; EI.addLand(); EI.addLand(); S.wallet = 1e9;
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); EI.addLand(); EI.addLand(); S.wallet = 1e9;
 const T = EI.TOWN; t.ok(T.length >= 9, 'town has many buildings (' + T.length + ')');
 t.ok(EI.recruitCost() >= 1500, 'first recruit is no longer cheap (' + EI.recruitCost() + ')');
 S.houses = 3; EI.recruit(); EI.recruit(); const f0 = S.pop[0]; f0.role = 'gather'; S.pop[1].role = 'fight';
@@ -109,7 +110,7 @@ EI.save(); const lv = f0.lvl, shedLv = S.town.shed; EI.initGame(true); t.ok(EI.S
 for (const tab of ['crew', 'build']) { EI.openSheet('town', tab); for (let i = 0; i < 3; i++) EI.draw(0.016); t.ok(EI.S.sheet.tab === tab, 'town ' + tab + ' tab draws'); }
 
 // ---- notifications: merged, capped, time out, and pause behind menus ----
-EI.initGame(true); S = EI.S; S.started = true; S.toasts.length = 0; while (S.cards) EI.pickCard(0); S.xp = 0; S.cards = null;
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); S.toasts.length = 0; while (S.cards) EI.pickCard(0); S.xp = 0; S.cards = null;
 for (let i = 0; i < 9; i++) S.toasts.push({ txt: i < 4 ? 'same' : 'T' + i, t: 0 });
 (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length <= 5 && S.toasts.filter(x => x.txt === 'same').length === 1, 'toasts merge duplicates and cap the backlog (' + S.toasts.length + ')');
 S.sheet = { id: 'more', tab: null, scroll: 0, vel: 0, max: 0, openT: 1 }; const keep = S.toasts.length; for (let i = 0; i < 100; i++) (S.cards = null, EI.tick(0.05)); t.ok(S.toasts.length === keep, 'toasts wait while a menu is open'); S.sheet = null;

@@ -5,7 +5,7 @@ const SHEETS = {
   goals: { title: 'Goals', icon: 'trophy', tabs: [['quests', 'Quests'], ['miles', 'Milestones'], ['records', 'Records'], ['dex', 'Creatures']] },
   perks: { title: 'Perks', icon: 'crown', tabs: null }, more: { title: 'More', icon: 'menu', tabs: null },
 };
-function openSheet(id, tab) { const d = SHEETS[id]; S.modal = null; S.sheet = { id, tab: tab || (d.tabs ? d.tabs[0][0] : null), scroll: 0, vel: 0, max: 0, openT: 0 }; }
+function openSheet(id, tab) { const d = SHEETS[id], tb = sheetTabs(id); S.modal = null; S.sheet = { id, tab: tab || (tb ? tb[0][0] : null), scroll: 0, vel: 0, max: 0, openT: 0 }; }
 function closeSheet() { S.sheet = null; }
 let SR = { x: 0, y: 0, w: 0, h: 0 }; // content region of the open sheet
 function chit(x, y, w, h, act) { // hit in content space (scrolls with the sheet)
@@ -16,7 +16,7 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = SHEETS[sh.id].tabs ? 104 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
+  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = sheetTabs(sh.id) ? 70 + 34 * Math.ceil(sheetTabs(sh.id).length / (sheetTabs(sh.id).length <= 4 ? 4 : 5)) + 4 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
   const top = bot0 - fitH + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
@@ -27,10 +27,15 @@ function drawSheet() {
   disc(x + w - 28, top + 28, 16, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w - 34, top + 22); ctx.lineTo(x + w - 22, top + 34); ctx.moveTo(x + w - 22, top + 22); ctx.lineTo(x + w - 34, top + 34); ctx.stroke(); ctx.lineCap = 'butt';
   hitRect(x + w - 50, top + 6, 44, 44, closeSheet);
   let cy = top + 58;
-  if (d.tabs) { const tw = (w - 24) / d.tabs.length; d.tabs.forEach(([id, label], i) => { const tx = x + 12 + i * tw, on = sh.tab === id; pill(tx + 2, cy, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, cy + 19); hitRect(tx, cy, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); }); cy += 38; }
+  const tabs = sheetTabs(sh.id);
+  if (tabs) { // up to 4 tabs per row; extra tabs wrap onto a second row
+    const per = tabs.length <= 4 ? tabs.length : tabs.length <= 10 ? 5 : 6, rows = Math.ceil(tabs.length / per), tw = (w - 24) / per;
+    tabs.forEach(([id, label], i) => { const r = Math.floor(i / per), c = i % per, tx = x + 12 + c * tw, ty = cy + r * 34, on = sh.tab === id; pill(tx + 2, ty, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(per > 4 ? 10.5 : 12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, ty + 19); hitRect(tx, ty, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); });
+    cy += rows * 34 + 4;
+  }
   SR = { x: x + 8, y: cy, w: w - 16, h: bot - cy - 8 };
   ctx.save(); rr(SR.x, SR.y, SR.w, SR.h, 12); ctx.clip(); ctx.translate(SR.x, SR.y - sh.scroll);
-  const H = SHEET_DRAW[sh.id](SR.w, sh); ctx.restore();
+  const ext = extTab(sh.id, sh.tab), H = ext ? ext.draw(SR.w, sh) : SHEET_DRAW[sh.id](SR.w, sh); ctx.restore();
   sh.H = H; sh.max = Math.max(0, H - SR.h + 6);
   if (!sh.drag) { sh.scroll = clamp(sh.scroll + sh.vel, 0, sh.max); sh.vel *= 0.92; if (Math.abs(sh.vel) < 0.3) sh.vel = 0; } sh.scroll = clamp(sh.scroll, 0, sh.max);
   if (sh.max > 0) { const bh = Math.max(24, SR.h * SR.h / (H + 6)), by = SR.y + (SR.h - bh) * (sh.scroll / sh.max); ctx.fillStyle = 'rgba(255,255,255,0.35)'; rr(SR.x + SR.w - 4, by, 4, bh, 2); ctx.fill(); }
@@ -122,7 +127,7 @@ const SHEET_DRAW = {
       card(x, yy, w, 122, 14); if (act) { ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 4; rr(x, yy, w, 122, 14); ctx.stroke(); }
       if (!owned) ctx.globalAlpha = 0.75; artDraw(s.art, 'idle', (S.t * 4 + i) | 0, x + w * 0.5, yy + 84, 0.37, false); ctx.globalAlpha = 1;
       ctx.fillStyle = '#4a2a7a'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(s.name, x + w / 2, yy + 100);
-      let lab = '', col = '#6a5a8a'; if (act) { lab = 'EQUIPPED'; col = '#1f9a4a'; } else if (owned) { lab = 'Tap to wear'; col = '#6a5a8a'; } else if (locked) { lab = 'Reach ' + RANKS[s.rank].name; col = '#a8265f'; } else lab = s.cost + (s.cur === 'crown' ? ' crowns' : ' gems');
+      let lab = '', col = '#6a5a8a'; if (act) { lab = 'EQUIPPED'; col = '#1f9a4a'; } else if (owned) { lab = 'Tap to wear'; col = '#6a5a8a'; } else if (locked) { lab = 'Reach ' + RANKS[s.rank].name; col = '#a8265f'; } else lab = s.lockText || (s.cost + (s.cur === 'crown' ? ' crowns' : ' gems'));
       ctx.fillStyle = col; ctx.font = font(10); ctx.fillText(lab, x + w / 2, yy + 115); chit(x, yy, w, 122, () => buySkin(s.id)); });
     return y + Math.ceil(SKINS.length / cols) * 132 + 4;
   },
@@ -232,7 +237,7 @@ function hitAt(x, y) { for (let i = hits.length - 1; i >= 0; i--) { const h = hi
 function onDown(ev) {
   ev.preventDefault(); if (typeof AUDIO !== 'undefined') { AUDIO.init(); if (S.settings.music !== false) AUDIO.musicStart(); applyAudioSettings(); }
   const p = pointerXY(ev);
-  if (!S.started) { S.started = true; sfx('unlock', true); S.toasts.push({ txt: 'Walk onto glowing plates to spend coins!', t: 0, ic: 'star' }); return; }
+  if (!S.started) { S.started = true; sfx('unlock', true); return; } // the tutorial (js/tutorial.js) greets the player
   PT.down = true; PT.id = ev.pointerId; PT.x = PT.sx = p.x; PT.y = PT.sy = p.y; PT.moved = 0; PT.lastY = p.y; PT.vel = 0;
   if (S.sheet || S.modal) { PT.inSheet = true; if (S.sheet) { S.sheet.drag = false; S.sheet.vel = 0; } return; }
   PT.inSheet = false;
