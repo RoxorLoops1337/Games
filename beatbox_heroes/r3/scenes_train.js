@@ -260,7 +260,7 @@
     const R = RUN, f = R.ticks[R.done]; R.done++; R.gain += f.gain;
     const step = CFG().idleMinStep || 15, ePer = (CFG().energyPerHour || 12) * step / 60;
     const gt = '+' + (f.gain >= 0.095 ? f1(f.gain) : f.gain.toFixed(2)), p = h('div.trn-pop', { 'data-text': gt + ' ' + NAME(R.stat).toUpperCase() }, h('b', null, gt), h('i', null, NAME(R.stat).toUpperCase()));
-    p.style.setProperty('--c', COL[R.stat]); p.style.setProperty('--q', qpx()); p.style.marginLeft = [-46, 40, -10, 52, -54, 8][R.done % 6] / Math.max(0.2, E.S || 1) + 'px';
+    p.style.setProperty('--c', COL[R.stat]); p.style.setProperty('--q', qpx()); p.style.marginLeft = [-46, 40, -10, 52, -54, 8][R.done % 6] / Math.max(0.2, E.S || 1) + 'px'; p.style.animationDuration = Math.max(0.5, 1.25 / Math.max(1, T.speed || 1)).toFixed(2) + 's';
     R.popBox.appendChild(p); R.pops++; setTimeout(() => p.remove(), 1300);
     R.el.v.textContent = '+' + f1(R.gain); R.el.v.classList.add('pop'); setTimeout(() => R.el.v && R.el.v.classList.remove('pop'), 130);
     const en = R.e0 - ePer * R.done; R.el.en.textContent = Math.max(0, Math.round(en));

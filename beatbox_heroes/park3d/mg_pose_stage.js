@@ -3,7 +3,7 @@
 // the LED wall shouting the current move, sparks / confetti / rings from the rhythm fx pool, and a camera director with hard cuts and beat punches.
 //   buildPoseStage(ctx, opts) -> { group, venue, lighting, coach, hero, bee, fx, update(dt, t, v), cut(name, o), camera(dt, t), render(), resize(w,h,dpr), setLook(l), led(lines), stats(), dispose() }
 //   v = { beat, energy 0..1, active: 'coach'|'hero'|null, bpm }
-import { THREE, disposeTree } from './kit.js';
+import { THREE, disposeTree, rng } from './kit.js';
 import { createCharacter, createNPC, createCrowd } from './characters.js';
 import { buildLighting } from './lighting.js';
 import { buildVenue } from './venue.js';
@@ -17,13 +17,13 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, t) => a + 
 
 // camera shots in world space (the venue sits at the origin, deck top at STAGE_H). fov is the 9:16 value; other aspects keep the horizontal framing.
 const SHOTS = {
-  coach: { p: [-0.85, 2.3, 7.4], l: [COACH_X, 1.95, 0], fov: 38 },
-  hero: { p: [0.85, 2.3, 7.4], l: [HERO_X, 1.95, 0], fov: 38 },
-  duo: { p: [0, 2.5, 9.6], l: [0, 1.9, 0], fov: 40 },
-  wide: { p: [0, 3.6, 13.5], l: [0, 2.0, 0], fov: 42 },
-  hype: { p: [2.6, 1.35, 5.2], l: [HERO_X - 0.1, 2.35, 0], fov: 50 },
-  sel: { p: [-3.2, 3.1, 10.5], l: [0, 2.4, 0], fov: 44 },
-  result: { p: [1.6, 2.2, 6.4], l: [HERO_X, 2.05, 0], fov: 40 },
+  coach: { p: [-0.45, 2.25, 8.6], l: [-0.62, 1.3, 0], fov: 38 },          // coach on the left third, the callout on the right
+  hero: { p: [0.45, 2.25, 8.6], l: [0.62, 1.3, 0], fov: 38 },             // hero on the right third, your callout and judgement on the left
+  duo: { p: [0, 2.5, 11.2], l: [0, 1.35, 0], fov: 40 },
+  wide: { p: [0, 3.6, 15.5], l: [0, 1.5, 0], fov: 42 },
+  hype: { p: [2.1, 1.2, 7.6], l: [0.85, 1.8, 0], fov: 44 },               // low hero angle for a perfect round
+  sel: { p: [-3.2, 3.1, 12.5], l: [0, 2.2, 0], fov: 44 },
+  result: { p: [1.0, 2.6, 9.5], l: [1.1, 0.55, 0], fov: 40 },             // hero in the top half, the card in the bottom half
 };
 
 export function buildPoseStage(ctx, opts) {
@@ -41,8 +41,12 @@ export function buildPoseStage(ctx, opts) {
   if (opts.reduce) { try { lighting.setReduce(true); } catch (e) { /* ignore */ } }
   const follow = new THREE.Object3D(); follow.position.set(0, 0, 1); group.add(follow); lighting.follow(follow);
   // ---------------------------------------------------------------- front-row crowd between the stage lip and the camera (the venue's own crowd stands on the flanks)
-  let front = null; const nF = tier === 0 ? 8 : tier === 1 ? 14 : 22;
-  try { front = createCrowd(ctx, nF, { area: { x0: -3.4, x1: 3.4, z0: 3.3, z1: 6.2 }, facing: { x: 0, z: -2 }, seed: 31, energy: 0.4, bpm: 96 }); group.add(front.object); } catch (e) { console.error('[pose] crowd failed: ' + e); }
+  // two flank blocks leave the sight lines of the close shots clear, a back row behind the close-shot cameras fills the bottom of the wide shot
+  let front = null; const nF = tier === 0 ? 10 : tier === 1 ? 16 : 24;
+  try {
+    const R = rng(31), pos = []; for (let i = 0; i < nF; i++) { const back = i % 4 === 3, side = i % 2 ? 1 : -1; const x = back ? (R() - 0.5) * 6.4 : side * (1.75 + R() * 2.7), z = back ? 9.6 + R() * 2.2 : 3.4 + R() * 3.2; pos.push([x, z, Math.atan2(-x * 0.6, -z) + (R() - 0.5) * 0.3]); }
+    front = createCrowd(ctx, nF, { positions: pos, seed: 31, energy: 0.4, bpm: 96 }); group.add(front.object);
+  } catch (e) { console.error('[pose] crowd failed: ' + e); }
   // ---------------------------------------------------------------- characters
   const mk = (look) => { const c = createCharacter(ctx, look); c.object.scale.setScalar(SCALE); c.object.position.y = STAGE_H; group.add(c.object); c.play('pz_groove', {}); if (q === 'low') c.object.traverse((o) => { if (o.isMesh) o.castShadow = false; }); return c; };
   const coach = mk(COACH_LOOK); coach.object.position.x = COACH_X; coach.setMood('happy');

@@ -25,7 +25,7 @@ try {
     for (const k of ['interval', 'chord', 'note']) { const f = A[k]; A[k] = function () { window.__calls[k]++; return f ? f.apply(A, arguments) : undefined; }; }
     const gm = A.gameMode; A.gameMode = function (on) { window.__calls.gameMode.push(!!on); return gm ? gm.apply(A, arguments) : undefined; };
   });
-  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
+  await seed(page, { day: 3, level: 1, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
 
   /* ------------------------------------------------------------------ menu from the home booth */
   ok(await goScene(page, 'place', { id: 'home' }, 'flat'), 'home: the 3D flat loads');
@@ -36,7 +36,7 @@ try {
   ok(m0.tiles.length === 4 && /MUS10/.test(m0.tiles[0]) && /TECH8/.test(m0.tiles[1]) && /SHOW4/.test(m0.tiles[3]), 'four skills with their current values (' + m0.tiles.join(' ') + ')');
   ok(m0.idle && m0.play, 'two big choices: IDLE TRAINING and PLAY');
   { const c = await ctl(page); ok(c.inSpot === 'booth' && c.locked, 'the hero stays at the booth while the menu is open'); }
-  await click(page, '.trn .sk[data-stat=mus]'); await sleep(200); await adv(page, 1); await sleep(400);
+  await click(page, '.trn .sk[data-stat=mus]'); await sleep(200); await adv(page, 1); await sleep(1500);
   await shot(page, 'train_menu.png');
 
   /* ------------------------------------------------------------------ IDLE 1 h */
@@ -70,7 +70,7 @@ try {
   await click(page, '.trn [data-act=done]'); await sleep(300);
 
   /* ------------------------------------------------------------------ PLAY: ear training level 1 */
-  await seed(page, { day: 3, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
+  await seed(page, { day: 3, level: 1, minutes: 13 * 60 - 360, energy: 90, stats: { mus: 10, tech: 8, ori: 6, show: 4 } }); await allSounds(page);
   ok(await goScene(page, 'place', { id: 'home' }, 'flat'), 'home again with a fresh save');
   await page.evaluate(() => BBH.R3.world.activate('booth')); await until(page, () => !!document.querySelector('.trn [data-act=play]'), null, 30000);
   await click(page, '.trn .sk[data-stat=mus]'); await sleep(100); await click(page, '.trn [data-act=play]'); await sleep(200);

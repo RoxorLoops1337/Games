@@ -58,8 +58,11 @@ export function createEar(ctx, opts) {
   const post = createPost(ctx, PS); post.setQuality(tier);
 
   // ---- camera: framing the listener on the left and the staff on the right; a little push on a right answer
-  const CAM = { fov: 50, pos: new THREE.Vector3(0.35, 2.05, 5.6), look: new THREE.Vector3(0.35, 1.75, 0) }; let W = 540, Hh = 960, punch = 0;
-  function fitCamera(t) {
+  // two framings: the lesson card covers the lower 64 %, so the staff rides high in the frame; in play it sits between the question and the buttons
+  const CAMS = { lesson: { pos: new THREE.Vector3(0.45, 1.5, 5.6), look: new THREE.Vector3(0.45, 1.0, 0) }, play: { pos: new THREE.Vector3(0.35, 2.15, 5.6), look: new THREE.Vector3(0.35, 1.9, 0) } };
+  const CAM = { fov: 50, pos: CAMS.lesson.pos.clone(), look: CAMS.lesson.look.clone() }; let W = 540, Hh = 960, punch = 0;
+  function fitCamera(t, dt) {
+    const T = CAMS[ui.hasLesson || ui.hasCard ? 'lesson' : 'play'], k0 = 1 - Math.exp(-(dt === undefined ? 99 : dt) * 3); CAM.pos.lerp(T.pos, k0); CAM.look.lerp(T.look, k0);
     const asp = W / Hh, k = Math.max(1, 0.5625 / Math.max(0.3, asp)), fov = 2 * Math.atan(Math.tan(CAM.fov * Math.PI / 360) * k) * 180 / Math.PI;
     camera.fov = fov - punch * 2.5; camera.near = 0.3; camera.far = 60; camera.position.set(CAM.pos.x + 0.06 * Math.sin(t * 0.33), CAM.pos.y + 0.04 * Math.sin(t * 0.47), CAM.pos.z); camera.lookAt(CAM.look); camera.updateProjectionMatrix();
   }
@@ -150,7 +153,7 @@ export function createEar(ctx, opts) {
     const env = listenT > 0 ? 0.55 + 0.25 * Math.sin(t * 24) : 0, idle = 0.05 + 0.03 * Math.sin(t * 2.2); set.vu(Math.max(idle, env), Math.max(idle, env * 0.9));
     set.update(dt, t, { live: listenT > 0, level: env, beat: punch });
     if (logic) ui.update(S);
-    fitCamera(t);
+    fitCamera(t, dt);
   }
   let tv = 0;
   function update(dt, t) { tv = t; if (!manual) step(dt); view(dt, t); }

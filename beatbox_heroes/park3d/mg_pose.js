@@ -101,7 +101,7 @@ export function createPose(ctx, opts) {
         stage.coach.setMood('happy'); break;
       }
       case 'teach': {
-        S.sub = 'teach'; const m = R.seq[e.i]; S.taught = e.i + 1; performMove(stage.coach, m, S.spb); moveFx('coach', m, 0.65); ui.callout(m, COACH); stage.punch(0.7, m === 'spin' ? 0.6 : 0);
+        S.sub = 'teach'; const m = R.seq[e.i]; S.taught = e.i + 1; performMove(stage.coach, m, S.spb); moveFx('coach', m, 0.65); ui.callout(m, COACH, 'R'); stage.punch(0.7, m === 'spin' ? 0.6 : 0);
         ui.strip(R.seq.map((mm, i) => ({ move: i <= e.i ? mm : null, grade: null })), e.i, true); stage.led([{ t: MOVES[m].word, c: MOVES[m].color, k: 1.15 }, { t: (e.i + 1) + ' / ' + R.n, c: '#fff6e8', k: 0.42 }]); break;
       }
       case 'cue': {
@@ -134,7 +134,7 @@ export function createPose(ctx, opts) {
   function judgeSlot(R, j, grade, dt, move) {
     if (R.res[j]) return; R.res[j] = { grade, dt, move }; S.counts[grade]++; S.points += POSE.PTS[grade] || 0; S.hype = clamp(S.hype + (POSE.HYPE[grade] || 0), 0, 1); S.lastJudge = { r: R.r, i: j, grade, dt, move };
     const next = R.res.findIndex((x) => !x); ui.strip(R.seq.map((m, i) => ({ move: m, grade: R.res[i] ? R.res[i].grade : null })), next, S.level <= POSE.REVEAL_UPTO);
-    ui.judge(grade, grade === 'wrong' ? 'WRONG MOVE' : null);
+    ui.judge(grade, grade === 'wrong' ? 'WRONG MOVE' : null, 'L');
     const hx = HERO_X, hy = SCALE * 1.15;
     if (grade === 'cool' || grade === 'good') { stage.fx.burst(hx, hy, 0.4, grade === 'cool' ? 26 : 14, { colors: [MOVES[R.seq[j]].color, '#fff6e8', '#ffd23f'], speed: 3.4, up: 1.6, life: 0.6, size: 0.3, grav: 4 }); if (stage.front && grade === 'cool') stage.front.cheer(0.5); stage.punch(grade === 'cool' ? 1 : 0.6); sfx(grade === 'cool' ? 'hit_perfect' : 'hit_good', { vol: 0.55 }); }
     else if (grade === 'bad') { sfx('hit_good', { vol: 0.35, pitch: 0.7 }); }
@@ -164,9 +164,9 @@ export function createPose(ctx, opts) {
       if (j >= 0) { const slotT = (R.play + j) * S.spb; dt = (S.t - S.offset) - slotT; if (dt < -S.win) grade = 'early'; else if (move !== R.seq[j]) grade = 'wrong'; else grade = Math.abs(dt) <= POSE.COOL ? 'cool' : Math.abs(dt) <= POSE.GOOD ? 'good' : 'bad'; }
       else grade = 'done';
     }
-    ui.callout(move, 'YOU');
-    if (grade === 'early') { S.counts.early++; S.hype = clamp(S.hype + POSE.HYPE.early, 0, 1); ui.judge('early'); ui.flashPad(move, false); }
-    else if (grade === 'watch') { ui.judge('watch'); }
+    ui.callout(move, 'YOU', 'L');
+    if (grade === 'early') { S.counts.early++; S.hype = clamp(S.hype + POSE.HYPE.early, 0, 1); ui.judge('early', null, 'L'); ui.flashPad(move, false); }
+    else if (grade === 'watch') { ui.judge('watch', null, 'L'); }
     else if (grade !== 'done') { judgeSlot(R, j, grade, dt, move); ui.flashPad(move, grade !== 'wrong'); if (grade === 'cool' || grade === 'good') stage.hero.setMood('happy'); }
     return { grade, slot: j, dt };
   }

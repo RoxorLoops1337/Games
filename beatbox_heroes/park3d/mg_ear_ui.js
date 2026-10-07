@@ -40,20 +40,21 @@ const CSS = `
 .er-fb .row button{pointer-events:auto;min-height:44px;padding:0 16px;border-radius:14px;font-weight:700;font-size:13px;letter-spacing:.1em;background:rgba(23,16,43,.85);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
 .er-fb .row button.nx{color:#2a1648;background:linear-gradient(#ffd23f,#f0a21a);box-shadow:0 3px 0 #8a5a00}
 @keyframes erpop{0%{opacity:0;transform:scale(.4)}60%{opacity:1;transform:scale(1.12)}100%{transform:none}}
-.er-card{position:absolute;left:12px;right:12px;bottom:calc(12px + var(--sb));max-height:calc(100% - 76px - var(--st));overflow:auto;padding:16px 16px 14px;border-radius:24px;background:rgba(23,16,43,.9);box-shadow:0 10px 36px rgba(10,5,30,.65),inset 0 0 0 2px rgba(255,255,255,.12);pointer-events:auto;animation:ercard .38s cubic-bezier(.2,1.4,.4,1) both;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.er-card{position:absolute;left:12px;right:12px;bottom:calc(12px + var(--sb));max-height:calc(100% - 76px - var(--st));overflow:auto;overscroll-behavior:contain;padding:16px 16px 14px;border-radius:24px;background:rgba(23,16,43,.9);box-shadow:0 10px 36px rgba(10,5,30,.65),inset 0 0 0 2px rgba(255,255,255,.12);pointer-events:auto;animation:ercard .38s cubic-bezier(.2,1.4,.4,1) both;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 @keyframes ercard{0%{transform:translateY(40px) scale(.94);opacity:0}100%{transform:none;opacity:1}}
 .er-card .kick{font-weight:700;font-size:12px;letter-spacing:.22em;color:#ff9ad0}
-.er-card h1{margin:2px 0 8px;font-weight:700;font-size:28px;line-height:1.1;color:#ffd23f;text-shadow:0 3px 0 #6b3d00}
-.er-card p{margin:0 0 12px;font-weight:500;font-size:16px;line-height:1.42;color:#f1e9ff}
-.er-exs{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.er-ex{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 14px;border-radius:16px;text-align:left;background:rgba(46,230,255,.12);box-shadow:inset 0 0 0 2px rgba(46,230,255,.35);font-weight:700;font-size:15px;letter-spacing:.03em;color:#e9fdff;transition:transform .08s,background .15s}
+.er-card.er-lesson{max-height:min(64%,calc(100% - 76px - var(--st)));padding:14px 14px 12px}
+.er-card h1{margin:2px 0 6px;font-weight:700;font-size:25px;line-height:1.1;color:#ffd23f;text-shadow:0 3px 0 #6b3d00}
+.er-card p{margin:0 0 10px;font-weight:500;font-size:15px;line-height:1.38;color:#f1e9ff}
+.er-exs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.er-ex{flex:1 1 calc(50% - 8px);min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;padding:5px 10px;border-radius:16px;text-align:left;background:rgba(46,230,255,.12);box-shadow:inset 0 0 0 2px rgba(46,230,255,.35);font-weight:700;font-size:15px;letter-spacing:.03em;color:#e9fdff;transition:transform .08s,background .15s}
 .er-ex:active{transform:scale(.98)}
 .er-ex.on{background:rgba(46,230,255,.32)}
 .er-ex .pl{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding-left:4px;background:#2ee6ff;color:#0f2a3a}
 .er-ex .pl i{border-left-width:11px;border-top-width:7px;border-bottom-width:7px}
-.er-ex .tx{flex:1}
+.er-ex .tx{flex:1;min-width:0;font-size:14px;line-height:1.15}
 .er-ex .tx small{display:block;font-size:11px;letter-spacing:.14em;color:#8ff3ff;font-weight:700;opacity:.8}
-.er-dots{flex:none;position:relative;width:54px;height:30px}
+.er-dots{flex:none;position:relative;width:46px;height:30px}
 .er-dots u{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffd23f;box-shadow:0 0 8px #ffd23f}
 .er-btns{display:flex;gap:10px}
 .er button.er-go{flex:1;min-height:58px;border-radius:18px;font-weight:700;font-size:18px;letter-spacing:.1em;color:#2a1648;background:linear-gradient(#ffd23f,#f0a21a);box-shadow:0 4px 0 #8a5a00,0 6px 14px rgba(10,5,30,.5)}
@@ -95,7 +96,7 @@ export function createUI(hud, H) {
   // little contour of an example: one dot per note, height by pitch (a chord stacks them in one column)
   function dots(notes, chord) {
     const lo = Math.min.apply(null, notes), hi = Math.max.apply(null, notes), span = Math.max(4, hi - lo);
-    return '<span class="er-dots">' + notes.map((m, i) => '<u style="left:' + (chord ? 27 : 8 + i * (38 / Math.max(1, notes.length - 1))) + 'px;top:' + (25 - (m - lo) / span * 20) + 'px"></u>').join('') + '</span>';
+    return '<span class="er-dots">' + notes.map((m, i) => '<u style="left:' + (chord ? 23 : 6 + i * (34 / Math.max(1, notes.length - 1))) + 'px;top:' + (25 - (m - lo) / span * 20) + 'px"></u>').join('') + '</span>';
   }
   function clearCard() { if (card) { card.remove(); card = null; } cardData = null; exOn = null; }
   function showLesson(L, o) {
