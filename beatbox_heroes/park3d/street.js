@@ -30,7 +30,7 @@ export default function create(ctx, args) {
   // ---- merge the stores into seven meshes
   const geos = {}, meshes = {}, add = (key, buf, mat, o) => { o = o || {}; if (!buf.p.length) return null; const geo = buf.geometry(false); geos[key] = geo; const m = new THREE.Mesh(geo, mat); m.name = 'street_' + key.toLowerCase(); m.castShadow = !!o.cast; m.receiveShadow = o.receive !== false; m.frustumCulled = false; if (o.order) m.renderOrder = o.order; group.add(m); meshes[key] = m; return m; };
   const mats = { B: flatMat(), GLOW: glowMaterial(0.62, 'a'), DEC: decalMaterial(S.atlas.tex), SIGN: signMaterial(S.atlas.tex, 0.95), FX: haloMaterial(S.atlas.glow), FXP: haloMaterial(S.atlas.glow), PUD: puddleMaterial() };
-  add('B', S.B, mats.B, { cast: true }); add('GLOW', S.GLOW, mats.GLOW, { receive: false }); add('DEC', S.DEC, mats.DEC, { order: 2 }); add('SIGN', S.SIGN, mats.SIGN, { order: 3, receive: false });
+  add('B', S.B, mats.B, { cast: true }); if (S.BF) add('BF', S.BF, mats.B, { cast: false }); add('GLOW', S.GLOW, mats.GLOW, { receive: false }); add('DEC', S.DEC, mats.DEC, { order: 2 }); add('SIGN', S.SIGN, mats.SIGN, { order: 3, receive: false });
   add('PUD', S.PUD, mats.PUD, { order: 4, receive: false }); add('FXP', S.FXP, mats.FXP, { order: 6, receive: false }); add('FX', S.FX, mats.FX, { order: 7, receive: false });
   const tog = makeToggler(S, geos);
   // doors start open; closed looks collapsed until a door is locked
@@ -66,6 +66,8 @@ export default function create(ctx, args) {
   const spotDefs = doorIds.map((id) => { const d = DOORS[id]; return { id, x: d.x, z: d.z, label: d.label, icon: d.icon, color: d.color, color2: d.color2, kind: 'door', intent: { dwell: 0.35, nx: 0, nz: 1 }, ring: 1.3, radius: 1.4, release: 2.2, iconY: 2.5, iconK: 0.82, pillar: 3.2, cine: { snap: false, face: 'toward', clip: 'wave', zoom: 0.12 } }; });
   spotDefs.push({ id: 'map', x: MAPSPOT.x, z: MAPSPOT.z, label: 'MAP', icon: 'map', color: '#2ee6ff', color2: '#ffe14d', ring: 1.2, radius: 1.3, release: 2.0, iconY: 2.3, iconK: 0.8, pillar: 2.8, cine: { snap: false, face: 'toward', clip: 'wave', zoom: 0.14 } });
   const terrain = {
+    // the sun stays on the camera side of the street: from behind the shops the facades' shadow (their height is off screen) read as a mystery square sliding along the sidewalk
+    sunAzOffset: 180,
     group, bounds: { minX: -35, maxX: 35, minZ: -11, maxZ: 11 }, blocked, pathCost, heightAt, pathDist: (x, z) => (z > -3.2 && z < 3.2 ? 0 : 12), keepout: (x, z, r) => blocked(x, z) || blocked(x + (r || 0.3), z) || blocked(x - (r || 0.3), z), paths: [],
     spotDefs, camera: { mode: 'corridor', hWidth: 11.5, dist: 20, fov: 40, pitch: 42, lockZ: 0.0, walkZ: [-3, 3], lateralK: 0.22 },
     // lighting reads these: lamps for the glow cards and cones; graffiti and busk anchors parked far away because the street draws its own neon halos
