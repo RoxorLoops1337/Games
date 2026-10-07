@@ -119,9 +119,10 @@ export function buildLighting(ctx, terrain) {
       evAcc += dt; if (evAcc > 0.1 && Math.abs(tTarget - tCur) > 0.001 && ctx.events) { evAcc = 0; ctx.events.emit('timeofday', S); }
       const now = performance.now(); if (now - winScan > 2000) { winScan = now; scene.traverse(scanCb); }
     },
+    post,
     render() { post.render(); },
     getState() { return S; }, debug() { return { tint: tintMats.length, win: winMats.length, winScan }; },
-    stats() { return { sceneCalls: post.stats.sceneCalls, sceneTris: post.stats.sceneTris, totalCalls: post.stats.totalCalls, composer: post.active, quality: q, vfxDraws: 5 + 1 }; },
+    stats() { return { sceneCalls: post.stats.sceneCalls, sceneTris: post.stats.sceneTris, totalCalls: post.stats.totalCalls, composer: post.active, rung: post.stats.rung, quality: q, vfxDraws: 5 + 1 }; },
     dispose() { post.dispose(); },
   };
   api.setQuality(q); api.setTimeOfDay(ctx.todInit !== undefined ? ctx.todInit : 'dusk', true);

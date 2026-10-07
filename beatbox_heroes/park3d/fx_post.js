@@ -32,7 +32,11 @@ export function createPost(ctx, S) {
   const renderer = ctx.renderer, scene = ctx.scene, camera = ctx.camera;
   let comp = null, bloom = null, grade = null, tiltH = null, tiltV = null, tier = 'high', W = 540, H = 960, DPR = 1, overlay = null, active = false;
   const tmpV = new THREE.Vector2();
-  const stats = { sceneCalls: 0, sceneTris: 0, totalCalls: 0 };
+  const stats = { sceneCalls: 0, sceneTris: 0, totalCalls: 0, rung: 0 };
+  // Fallback ladder for GPUs (many phones) that cannot render to half-float or multisampled targets: those show a black frame.
+  // rung 0 = HDR half-float + MSAA, 1 = half-float no MSAA, 2 = 8-bit no MSAA, 3 = no composer (same as low).
+  let rung = 0, frames = 0, blankRun = 0, forceBlank = 0; const px4 = new Uint8Array(4);
+  (function pickStartRung() { try { const x = renderer.extensions; if (!x.has('EXT_color_buffer_float')) rung = x.has('EXT_color_buffer_half_float') ? 1 : 2; } catch (e) { rung = 2; } })();
 
   function makeOverlay() {
     if (overlay || typeof document === 'undefined' || !ctx.canvas || !ctx.canvas.parentElement) return;
@@ -44,9 +48,10 @@ export function createPost(ctx, S) {
   function disposeComposer() { if (!comp) return; comp.passes.forEach((p) => p.dispose && p.dispose()); comp.renderTarget1.dispose(); comp.renderTarget2.dispose(); comp = bloom = grade = tiltH = tiltV = null; }
   function build(q) {
     disposeComposer(); tier = q; makeOverlay();
-    if (q === 'low') { active = false; if (overlay) overlay.style.display = 'block'; return; }
+    frames = 0; blankRun = 0;
+    if (q === 'low' || rung >= 3) { active = false; if (overlay) overlay.style.display = 'block'; return; }
     active = true; if (overlay) overlay.style.display = 'none';
-    const rt = new THREE.WebGLRenderTarget(Math.max(2, W * DPR), Math.max(2, H * DPR), { type: THREE.HalfFloatType, samples: q === 'high' ? 4 : 2 });
+    const rt = new THREE.WebGLRenderTarget(Math.max(2, W * DPR), Math.max(2, H * DPR), { type: rung >= 2 ? THREE.UnsignedByteType : THREE.HalfFloatType, samples: rung === 0 ? (q === 'high' ? 4 : 2) : 0 });
     comp = new EffectComposer(renderer, rt); comp.setPixelRatio(DPR); comp.setSize(W, H);
     const rp = new RenderPass(scene, camera); const orig = rp.render.bind(rp);
     rp.render = function (r, wb, rb, dt, ma) { orig(r, wb, rb, dt, ma); stats.sceneCalls = r.info.render.calls; stats.sceneTris = r.info.render.triangles; };
@@ -66,18 +71,27 @@ export function createPost(ctx, S) {
     if (tiltH) { tiltH.uniforms.uTexel.value.set(1 / px, 1 / py); tiltV.uniforms.uTexel.value.set(1 / px, 1 / py); tiltH.uniforms.uAmount.value = tiltV.uniforms.uAmount.value = 1.0 * DPR; }
     if (grade) grade.uniforms.uAspect.value = W / H;
   }
+  function checkBlank() {
+    frames++; if (frames < 3 || frames > 40 || frames % 3) return;
+    const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; let lit = 0;
+    try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7], [0.5, 0.85]]) { gl.readPixels((w * fx) | 0, (h * fy) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); if (px4[0] + px4[1] + px4[2] > 0) lit++; } } catch (e) { return; }
+    if (forceBlank > 0) { forceBlank--; lit = 0; }
+    blankRun = lit === 0 ? blankRun + 1 : 0;
+    if (blankRun >= 2) { rung++; stats.rung = rung; try { console.warn('Park3D: black frame on post rung ' + (rung - 1) + ', falling back to rung ' + rung); } catch (e) { /* ignore */ } build(tier); }
+  }
   return {
     stats,
+    _forceBlank(n) { forceBlank = n; },
     get active() { return active; },
     setQuality(q) { if (q !== tier || (!comp && q !== 'low')) build(q); },
     resize(w, h, dpr) { W = w; H = h; DPR = dpr; applySize(); },
     update(t) {
-      if (bloom) { bloom.strength = S.bloom; bloom.threshold = S.bloomThr; bloom.radius = 0.3; }
+      if (bloom) { bloom.strength = S.bloom; bloom.threshold = rung >= 2 ? Math.min(S.bloomThr, 0.88) : S.bloomThr; bloom.radius = 0.3; }
       if (grade) { const u = grade.uniforms; u.uTime.value = t; u.uVig.value = S.vig; u.uSat.value = S.sat; u.uShadow.value.copy(S.gShadow); u.uHigh.value.copy(S.gHigh); u.uGrain.value = tier === 'high' ? 0.035 : 0.028; }
     },
     render() {
       renderer.info.reset(); // info.autoReset is off, so the stats the lead reads cover the whole frame (scene + post), not just the last quad
-      if (comp) comp.render(); else renderer.render(scene, camera);
+      if (comp) { comp.render(); checkBlank(); } else renderer.render(scene, camera);
       stats.totalCalls = renderer.info.render.calls; if (!comp) { stats.sceneCalls = stats.totalCalls; stats.sceneTris = renderer.info.render.triangles; }
     },
     dispose() { disposeComposer(); if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay); overlay = null; },
