@@ -50,7 +50,7 @@ const ease3 = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2)
 
 export function createRhythm(ctx, opts) {
   opts = opts || {}; const { renderer, scene, camera, events } = ctx, q = ctx.quality || 'high', Core = coreOrFallback(), group = new THREE.Group(); group.name = 'rhythm';
-  const game = !!opts.game;
+  const game = !!opts.game, reduce = !!opts.reduce;                 // opts.reduce = E.settings.reduce: no camera shake, no bloom pulse
   const hudHost = opts.hud || (() => { const d = document.createElement('div'); d.style.cssText = 'position:absolute;inset:0'; (ctx.canvas.parentElement || document.body).appendChild(d); return d; })();
   const oppOpt = opts.opp || (opts.battle && (opts.battle.opp || opts.battle)) || null, wantsBattle = (!!oppOpt && typeof oppOpt === 'object') || opts.mode === 'battle';
   const venueName = opts.venue === 'busk' ? null : (opts.venue || (wantsBattle ? 'arena' : null));
@@ -73,6 +73,7 @@ export function createRhythm(ctx, opts) {
   if (venue) { const A = venue.anchors || {}; fake.interior = true; fake.profile = (venue.hint && venue.hint.profile) || 'club'; fake.ceilY = ((venue.hint && venue.hint.ceilY) || 10) * vk + vy; if (A.rig) fake.anchors.rig = A.rig.map(vw); if (A.stageCenter) { const c = vw({ x: A.stageCenter.x, y: 0, z: A.stageCenter.z }); fake.anchors.stageCenter = { x: c.x, z: c.z }; } }
   const lighting = buildLighting(ctx, fake); group.add(lighting.group);
   const todBase = typeof opts.time === 'number' ? opts.time : TOD[opts.time] !== undefined ? TOD[opts.time] : 0.5; lighting.setTimeOfDay(todBase, true); lighting.state.tilt = 0.22;
+  if (reduce) { try { lighting.setReduce(true); } catch (e) { /* ignore */ } }
   if (venue) { try { lighting.setProfile(fake.profile, true); lighting.setStageTheme(venue.theme, true); venue.onThemeChange = (n) => { try { lighting.setStageTheme(n); } catch (e) { /* ignore */ } }; } catch (e) { /* ignore */ } }
   const follow = new THREE.Object3D(); follow.position.set(0, 0, -4); group.add(follow); lighting.follow(follow); lighting.setMusic(false);
   const world = venue ? null : buildWorld(ctx, q); group.add(venue ? venue.group : world.group);
@@ -204,7 +205,7 @@ export function createRhythm(ctx, opts) {
     sfx(v.forPlayer ? 'hit_perfect' : 'miss'); S.shake = Math.max(S.shake || 0, 0.5); if (v.forPlayer && venue && venue.cheer) { try { venue.cheer(0.9); } catch (e) { /* ignore */ } }
     const jc = venue && venue.judges && venue.judges[i]; if (jc) { try { jc.play(v.forPlayer ? 'cheer' : 'point', { fade: 0.1 }); jc.setMood(v.forPlayer ? 'happy' : 'angry'); } catch (e) { /* ignore */ } }
     const jp = venue && venue.anchors && venue.anchors.judges && venue.anchors.judges[i];
-    if (jp) { fx.burst(jp.x, jp.y + vy + 1.7 * vk, jp.z + 0.4 * vk, 16, { colors: v.forPlayer ? ['#7af0ff', '#27c8bb', '#fff2dc'] : ['#ff9ad0', '#ff3ea5', '#fff2dc'], speed: 3.2, up: 2.4, life: 0.7, size: 0.3, grav: 4 }); const c = venueCam('judges'); if (c) dir.play([{ cam: { pos: [jp.x * 0.42, 4.6 * vk + vy + 0.6, STAGE.z + 9 * vk], look: [jp.x * 0.88, jp.y + vy + 1.0 * vk, jp.z], fov: c.fov * 0.72 }, blend: 0.55, hold: 0, sway: 0.25 }]);       // high enough to see over the podiums }
+    if (jp) { fx.burst(jp.x, jp.y + vy + 1.7 * vk, jp.z + 0.4 * vk, 16, { colors: v.forPlayer ? ['#7af0ff', '#27c8bb', '#fff2dc'] : ['#ff9ad0', '#ff3ea5', '#fff2dc'], speed: 3.2, up: 2.4, life: 0.7, size: 0.3, grav: 4 }); const c = venueCam('judges'); if (c) dir.play([{ cam: { pos: [jp.x * 0.42, 4.6 * vk + vy + 0.6, STAGE.z + 9 * vk], look: [jp.x * 0.88, jp.y + vy + 1.0 * vk, jp.z], fov: c.fov * 0.72 }, blend: 0.55, hold: 0, sway: 0.25 }]); /* high enough to see over the podiums */ }
   }
   function updateJudge(dt) {
     S.jT += dt; const per = 1.1, idx = Math.min(4, Math.floor((S.jT - 0.9) / per));
@@ -349,14 +350,14 @@ export function createRhythm(ctx, opts) {
     const orbit = S.phase === 'result' ? 1 : 0, ox = Math.sin(t * 0.18) * (orbit ? 3.6 : 4.6), oy = (orbit ? 3.2 : 3.9) + Math.sin(t * 0.23) * 0.25, oz = orbit ? 3.2 : 6.0;
     camPos.set(lerp(ox, camBase.x + Math.sin(t * 0.45) * 0.38 * sw, k), lerp(oy, camBase.y + Math.sin(t * 0.33) * 0.14 * sw, k), lerp(oz, camBase.z - S.punch * 0.35, k));
     camLook.set(lerp(0, camAim.x + Math.sin(t * 0.5 + 1) * 0.22 * sw, k), lerp(orbit ? -1.5 : 2.0, camAim.y, k), lerp(orbit ? -11 : STAGE.z, camAim.z, k));
-    if (S.shake) { camPos.x += (Math.random() - 0.5) * S.shake * 0.25; camPos.y += (Math.random() - 0.5) * S.shake * 0.2; }
+    if (S.shake && !reduce) { camPos.x += (Math.random() - 0.5) * S.shake * 0.25; camPos.y += (Math.random() - 0.5) * S.shake * 0.2; }
     let fov = fovFor(W / H) - S.punch * (2.2 + 2.4 * E) * (0.4 + 0.6 * k), swayZ = sw * k;
     // director shots (battle): blend over the default camera; when a shot list ends (a round starts) the weight decays so the camera glides back to the play cam
     const dc = dir.update(dt);
     if (dc) { lastDir = dc; dirW = 1; } else if (dirW > 0) dirW = Math.max(0, dirW - dt / 0.9);
     if (lastDir && dirW > 0) {
       const e = dc ? 1 : ease3(dirW), L = lastDir, sx = Math.sin(t * 0.35) * 0.25 * L.sway, sy = Math.sin(t * 0.27) * 0.08 * L.sway;
-      camPos.set(lerp(camPos.x, L.p[0] + sx + (S.shake ? (Math.random() - 0.5) * S.shake * 0.3 : 0), e), lerp(camPos.y, L.p[1] + sy, e), lerp(camPos.z, L.p[2], e)); camLook.set(lerp(camLook.x, L.l[0], e), lerp(camLook.y, L.l[1], e), lerp(camLook.z, L.l[2], e));
+      camPos.set(lerp(camPos.x, L.p[0] + sx + (S.shake && !reduce ? (Math.random() - 0.5) * S.shake * 0.3 : 0), e), lerp(camPos.y, L.p[1] + sy, e), lerp(camPos.z, L.p[2], e)); camLook.set(lerp(camLook.x, L.l[0], e), lerp(camLook.y, L.l[1], e), lerp(camLook.z, L.l[2], e));
       const df = (L.fov || 50) * fovFor(W / H) / fovFor(0.5625); fov = lerp(fov, df, e); swayZ *= 1 - e;
     }
     if (S.camO) { camPos.set(S.camO.p[0], S.camO.p[1], S.camO.p[2]); camLook.set(S.camO.l[0], S.camO.l[1], S.camO.l[2]); }
@@ -367,7 +368,7 @@ export function createRhythm(ctx, opts) {
   // ------------------------------------------------------------------ public surface
   let acc = 0;
   function update(dt, t) { if (disposed) return; dt = Math.min(dt, 0.05); if (!S.manual) sim(dt); vis(dt); }
-  function render() { const S2 = lighting.state; S2.gHigh.set('#fff8ee'); S2.gShadow.set('#f0eaff'); S2.sat = 1.3; S2.bloom += 0.1 * S.energy + 0.1 * S.punch; lighting.post.update(time); lighting.render(); }
+  function render() { const S2 = lighting.state; S2.gHigh.set('#fff8ee'); S2.gShadow.set('#f0eaff'); S2.sat = 1.3; if (!reduce) S2.bloom += 0.1 * S.energy + 0.1 * S.punch; lighting.post.update(time); lighting.render(); }
   function tick(sec) {
     S.manual = true; const n = Math.max(1, Math.round(sec * 120)), h = sec / n; for (let i = 0; i < n; i++) { sim(h); acc += h; if (acc >= 1 / 30) { vis(acc); acc = 0; } } if (acc > 0) { vis(acc); acc = 0; } S.ticks++;
     return state();

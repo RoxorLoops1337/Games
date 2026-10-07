@@ -141,7 +141,8 @@ try {
     if (id === 'shop') {          // try-on is mirrored live to the 3D player
       await page.evaluate(() => BBH.R3.world.activate('hats')); await until(page, () => !!BBH.Eng.scene.shop, null, 30000); await sleep(600);
       const before = await page.evaluate(() => JSON.stringify(BBH.R3.world.player.getLook()));
-      await page.evaluate(() => { const t = [...document.querySelectorAll('#ui .tile')].filter((x) => !x.classList.contains('on'))[1]; if (t) t.click(); }); await sleep(900);
+      await page.evaluate(() => { const t = [...document.querySelectorAll('#ui .tile')].filter((x) => !x.classList.contains('on'))[1]; if (t) t.click(); });
+      await until(page, () => BBH.Eng.scene.shop.look.hat.id !== BBH.G.ch.look.hat.id && BBH.R3.world.player.getLook().hat.id === BBH.Eng.scene.shop.look.hat.id, null, 30000);
       const after = await page.evaluate(() => ({ look: JSON.stringify(BBH.R3.world.player.getLook()), tried: BBH.Eng.scene.shop.look.hat.id, worn: BBH.G.ch.look.hat.id }));
       ok(before !== after.look && JSON.parse(after.look).hat.id === after.tried && after.tried !== after.worn, 'shop try-on: the 3D player wears the item you tapped (' + after.tried + ') while the save still has ' + after.worn);
       await page.evaluate(() => { const b = [...document.querySelectorAll('#ui .btn')].find((x) => x.textContent.trim() === 'LEAVE SHOP'); if (b) b.click(); });
