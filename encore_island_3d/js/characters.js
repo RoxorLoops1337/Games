@@ -19,7 +19,7 @@ function rng(seed) {
   };
 }
 
-const SKIN = 0xffcaa9;
+const SKIN = 0xffc5a0;
 const OUTLINE = 0.017;
 
 // shared (never-tinted) materials
@@ -431,7 +431,7 @@ function lockGeo(H, path, wid, lift) {
   }
   for (let i = 0; i < n - 1; i++) { const a = i * 3, b = (i + 1) * 3; I.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1, a + 2, a, b + 2, a, b, b + 2); }
   I.push(0, 2, 1, (n - 1) * 3, (n - 1) * 3 + 1, (n - 1) * 3 + 2);
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setIndex(I); return g;
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
 }
 // blade between two points (flattened pointy ellipsoid) — spikes, strands, tail flicks
 const _bv = new THREE.Vector3();
@@ -450,7 +450,7 @@ function tubeGeo(rings, seg = 7, flip = false) {
   g.computeVertexNormals(); return g;
 }
 // tall flame lock rising +y with a curl toward -x at the tip
-const flameGeo = (len, w, th, curl) => geo(`flame${len},${w},${th},${curl}`, () => tubeGeo([[0, w * 0.55, th * 0.55, 0], [len * 0.34, w * 0.62, th * 0.62, curl * 0.08 * len], [len * 0.7, w * 0.4, th * 0.42, curl * 0.4 * len], [len, 0.002, 0.002, curl * len]], 5, true));
+const flameGeo = (len, w, th, curl) => geo(`flame${len},${w},${th},${curl}`, () => tubeGeo([[0, w * 0.55, th * 0.55, 0], [len * 0.34, w * 0.62, th * 0.62, curl * 0.08 * len], [len * 0.7, w * 0.4, th * 0.42, curl * 0.4 * len], [len, 0.002, 0.002, curl * len]], 4, true));
 // pleated skirt: tapered ring whose bottom ring alternates radius
 function pleatGeo(rt, rb, h, n, depth) {
   return geo(`pleat${rt},${rb},${h},${n},${depth}`, () => {
@@ -648,7 +648,7 @@ export function makeJasmin() {
       part(ctx, piv, hang(0.067, 0.065, 0.035, 6), 0xf1e6ec, 0, -0.31, 0, 1, 1, 1, { ol: 0.01 });
       part(ctx, piv, ico(1), JC.white, 0, -0.43, 0.04, 0.075, 0.046, 0.15, { ol: 0.013 });
       part(ctx, piv, ico(0), 0xffc2da, 0, -0.44, 0.15, 0.05, 0.034, 0.045, { ol: false });
-      part(ctx, piv, box(0.14, 0.024, 0.29), JC.sole, 0, -0.472, 0.035, 1, 1, 1, { ol: false });
+      part(ctx, piv, ico(1), JC.sole, 0, -0.462, 0.04, 0.078, 0.022, 0.155, { ol: false });
     },
   });
   const { head, body, H } = R;
@@ -662,19 +662,19 @@ export function makeJasmin() {
   part(ctx, skirt, pleatGeo(0.155, 0.31, 0.2, 10, 0.16), JC.skirt, 0, -0.1, 0, 1, 1, 0.94, { mo: { side: THREE.DoubleSide }, ol: 0.012 });
   part(ctx, skirt, pleatGeo(0.295, 0.31, 0.04, 10, 0.16), 0xffc6d8, 0, -0.18, 0, 1, 1, 0.94, { mo: { side: THREE.DoubleSide }, ol: false });
   // ---- hair: textured crown cap, fringe locks, back mass
-  const hm = ctx.mk('jhair', { color: 0xffffff, map: jasminHairTex() });
-  part(ctx, head, cap(12, 5, 1.22), 0, 0, cy + 0.02, -0.03, rx * 1.14, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.22 });
-  const lockMat = ctx.mk('jhairL', { color: 0xffffff, map: jasminHairTex() });
+  const hm = ctx.mk('jhair', { color: 0xffffff, map: jasminHairTex(), flatShading: false });
+  part(ctx, head, cap(16, 7, 1.22), 0, 0, cy + 0.02, -0.03, rx * 1.14, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.42 });
+  const lockMat = ctx.mk('jhairL', { color: 0xffffff, map: jasminHairTex(), flatShading: false });
   part(ctx, head, ico(1), 0, 0, cy - 0.03, -0.1, rx * 0.99, ry * 0.93, rz * 0.84, { mat: lockMat, hull: true, ol: 0.014 });
   const lock = (path, wid, lift, mat) => part(ctx, head, lockGeo(H, path, wid, lift), 0, 0, 0, 0, 1, 1, 1, { mat: mat || lockMat, hull: true, ol: 0.011 });
-  lock([[0.02, 0.86], [0.28, 0.8], [0.56, 0.74], [0.8, 0.48], [0.93, 0.15], [0.97, -0.12]], [0.05, 0.16, 0.18, 0.15, 0.1, 0.04], [0.026, 0.034, 0.038, 0.034, 0.028, 0.02]);
-  lock([[0.04, 0.86], [-0.22, 0.81], [-0.5, 0.73], [-0.76, 0.54], [-0.92, 0.28], [-0.96, 0.05]], [0.05, 0.14, 0.15, 0.12, 0.08, 0.035], [0.026, 0.032, 0.034, 0.03, 0.024, 0.018]);
-  lock([[0.05, 0.86], [0.22, 0.78], [0.48, 0.6], [0.7, 0.34]], [0.03, 0.08, 0.08, 0.03], [0.036, 0.044, 0.044, 0.03]);
+  lock([[0.02, 0.93], [0.3, 0.88], [0.58, 0.74], [0.8, 0.48], [0.93, 0.15], [0.97, -0.12]], [0.04, 0.13, 0.16, 0.14, 0.1, 0.04], [0.026, 0.034, 0.038, 0.034, 0.028, 0.02]);
+  lock([[0.04, 0.93], [-0.24, 0.88], [-0.52, 0.74], [-0.76, 0.54], [-0.92, 0.28], [-0.96, 0.05]], [0.05, 0.14, 0.15, 0.12, 0.08, 0.035], [0.026, 0.032, 0.034, 0.03, 0.024, 0.018]);
+  lock([[0.05, 0.94], [0.24, 0.86], [0.5, 0.64], [0.7, 0.36]], [0.03, 0.08, 0.08, 0.03], [0.036, 0.044, 0.044, 0.03]);
   // hair clips (pink ovals)
   const c1y = cy + ry * 0.56, c1x = -0.29;
   part(ctx, head, ico(0), JC.pink, c1x, c1y, H.surf(c1x, c1y) + 0.015, 0.05, 0.125, 0.03, { rz: 0.3, rx: -0.2, ry: -0.7, ol: 0.01 });
   // ponytail
-  const tail = new THREE.Group(); tail.position.set(-0.24, cy + ry * 0.84, -0.08); head.add(tail);
+  const tail = new THREE.Group(); tail.position.set(-0.2, cy + ry * 0.97, -0.07); head.add(tail);
   part(ctx, tail, ico(0), JC.pink, 0, 0.03, 0.0, 0.125, 0.05, 0.075, { rz: -0.5, ol: 0.011 }); // clip on the ponytail base
   part(ctx, tail, ico(1), JC.hair, 0.0, 0.04, 0, 0.085, 0.1, 0.075, { rz: 0.35 });
   // ponytail: three lofted tube segments sharing one width profile (rooted narrow at the clip, full in the middle, flicked tip)
@@ -682,7 +682,7 @@ export function makeJasmin() {
   const mkSeg = (parent, y, t0, t1, col) => {
     const g = new THREE.Group(); g.position.y = y; parent.add(g);
     const rings = [];
-    for (let i = 0; i <= 2; i++) { const t = t0 + (t1 - t0) * (i / 2), w = prof(t); rings.push([-(t - t0) * LT, w, w * 0.62, 0]); }
+    for (let i = 0; i <= 2; i++) { const t = t0 + (t1 - t0) * (i / 2), w = prof(t); rings.push([-(t - t0) * LT, w * 1.3, w * 0.8, 0]); }
     part(ctx, g, tubeGeo(rings), col, 0, 0, 0, 1, 1, 1, { ol: 0.012 });
     const hw = prof((t0 + t1) / 2);
     part(ctx, g, ico(0), JC.hair2, hw * 0.45, -(t1 - t0) * LT * 0.5, hw * 0.55, hw * 0.3, (t1 - t0) * LT * 0.42, hw * 0.25, { ol: false });
@@ -695,7 +695,7 @@ export function makeJasmin() {
   // ---- face
   R.face = addHeroFace(ctx, head, H, {
     id: 'J', eyeP: paintEyeJ, shutP: paintEyeShutJ, ex: 0.204, ey: -0.045, ew: 0.215, eh: 0.215, blush: '#ff7fa4', bx: 0.235, by: -0.17, bw: 0.17,
-    brow: { col: '#5a3321', thick: 12, arch: 0.22, x: 0.2, y: 0.15, w: 0.17, h: 0.09, rot: 0.03 }, noseCol: '#d9877a', ny: -0.135,
+    brow: { col: '#7a4a30', thick: 6, arch: 0.3, x: 0.2, y: 0.185, w: 0.17, h: 0.09, rot: 0.06 }, noseCol: '#d9877a', ny: -0.135,
     mouthP: paintMouthJ, my: -0.232, mw: 0.2, mh: 0.14,
   });
   // ---- microphone in the -x hand
@@ -752,10 +752,10 @@ export function makeJasmin() {
       skirt.scale.set(1 + 0.06 * amp * Math.abs(S.s) + sg * hit * 0.03, 1, 1 + 0.06 * amp * Math.abs(S.s) + sg * hit * 0.03);
       skirt.rotation.set(-0.05 * amp + Math.sin(ph * 2 - 0.5) * 0.04 * amp, 0, S.s * 0.09 * amp + Math.sin(t * 1.4) * 0.01);
       const idle = Math.sin(t * 1.7), side = Math.sin(ph - 0.6);
-      tail.rotation.set(0.12 + 0.1 * amp + sg * (0.12 + 0.18 * beat) + A * 0.4 + idle * 0.05 + Math.sin(ph * 2) * 0.12 * amp, 0, -0.8 + side * 0.18 * amp + sg * Math.sin(t * Math.PI * 2 - 0.4) * 0.15);
-      t1.rotation.set(-0.06 + Math.sin(ph * 2 - 0.9) * 0.2 * amp + Math.sin(t * 1.7 - 0.8) * 0.05 + sg * beat * 0.1, 0, 0.36 + Math.sin(ph - 1.2) * 0.22 * amp);
-      t2.rotation.set(-0.1 + Math.sin(ph * 2 - 1.8) * 0.26 * amp + Math.sin(t * 1.7 - 1.6) * 0.07 + sg * beat * 0.14, 0, 0.3 + Math.sin(ph - 1.8) * 0.28 * amp);
-      t3.rotation.set(-0.1 + Math.sin(ph * 2 - 2.4) * 0.3 * amp + sg * beat * 0.16, 0, 0.05 + Math.sin(ph - 2.4) * 0.3 * amp);
+      tail.rotation.set(0.0 + 0.1 * amp + sg * (0.12 + 0.18 * beat) + A * 0.4 + idle * 0.05 + Math.sin(ph * 2) * 0.12 * amp, 0, -0.95 + side * 0.18 * amp + sg * Math.sin(t * Math.PI * 2 - 0.4) * 0.15);
+      t1.rotation.set(-0.06 + Math.sin(ph * 2 - 0.9) * 0.2 * amp + Math.sin(t * 1.7 - 0.8) * 0.05 + sg * beat * 0.1, 0, 0.48 + Math.sin(ph - 1.2) * 0.22 * amp);
+      t2.rotation.set(-0.1 + Math.sin(ph * 2 - 1.8) * 0.26 * amp + Math.sin(t * 1.7 - 1.6) * 0.07 + sg * beat * 0.14, 0, 0.36 + Math.sin(ph - 1.8) * 0.28 * amp);
+      t3.rotation.set(-0.1 + Math.sin(ph * 2 - 2.4) * 0.3 * amp + sg * beat * 0.16, 0, -0.3 + Math.sin(ph - 2.4) * 0.3 * amp);
       for (let i = 0; i < 4; i++) {
         const n = notes[i];
         if (!n.on) {
@@ -784,18 +784,18 @@ export function makeJasmin() {
 }
 
 /* ------------------------------------------------------------------ ROXOR */
-const RC = { hair: 0x4a2916, hair2: 0x6e3d22, hairDk: 0x2a150a, tee: 0x463a32, teeDk: 0x2c241f, pants: 0x7fa631, pantsDk: 0x5a7f20, shoe: 0xc4e43a, sole: 0xf6fbbd };
+const RC = { hair: 0x3d2316, hair2: 0x5c3320, hairDk: 0x24120a, tee: 0x463a32, teeDk: 0x2c241f, pants: 0x7da02e, pantsDk: 0x517318, shoe: 0xc4e43a, sole: 0xf6fbbd };
 function roxorHeadTex() {
   return ctex('rhead', 512, 256, (g, W, H) => {
     const im = g.createImageData(W, H), d = im.data, r = rng(5);
-    const sk = [255, 207, 174], st = [142, 100, 80];
+    const sk = [255, 201, 166], st = [150, 108, 86];
     for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
       const phi = (px / W) * Math.PI * 2, th = (py / H) * Math.PI;
       const x = -Math.cos(phi) * Math.sin(th), y = Math.cos(th), z = Math.sin(phi) * Math.sin(th);
       const xb = 0.3 + (0.75 - y) * 0.5, ymin = z < -0.15 ? -0.5 : -0.2;
       const stub = y > ymin && (Math.abs(x) > xb || z < -0.25) && (y > 0.0 || Math.abs(x) > 0.5 || z < 0);
       const edge = stub && z > -0.2 && y < 0.75 && Math.abs(x) - xb < 0.03;
-      const n = stub ? (r() < 0.25 ? -10 : 0) : 0, c = edge ? [112, 76, 58] : stub ? st : sk, i = (py * W + px) * 4;
+      const n = stub ? (r() < 0.25 ? -10 : 0) : 0, c = edge ? [128, 88, 68] : stub ? st : sk, i = (py * W + px) * 4;
       d[i] = c[0] + n; d[i + 1] = c[1] + n; d[i + 2] = c[2] + n; d[i + 3] = 255;
     }
     g.putImageData(im, 0, 0);
@@ -814,15 +814,17 @@ export function makeRoxor() {
   const WOOD = 0xc99060, YEL = 0xffd84d, CREAM = 0xfff4e6;
   const headMat = ctx.mk('rhead', { color: 0xffffff, map: roxorHeadTex(), flatShading: false });
   const R = buildHero(ctx, {
-    hip: 0.42, legX: 0.115, legR: 0.09, legColor: RC.pants, head: { rx: 0.35, ry: 0.32, rz: 0.335, jaw: 0.3 }, headY: 0.35, shX: 0.235, shY: 0.28, armR: 0.044, upLen: 0.15, foreLen: 0.14, handR: 0.057, headMat, earH: 0.085,
+    hip: 0.42, legX: 0.115, legR: 0.1, legColor: RC.pants, head: { rx: 0.35, ry: 0.32, rz: 0.335, jaw: 0.3 }, headY: 0.35, shX: 0.235, shY: 0.28, armR: 0.044, upLen: 0.15, foreLen: 0.14, handR: 0.057, headMat, earH: 0.085,
     sleeve: { col: RC.tee, len: 0.1 },
     leg(piv) {
       part(ctx, piv, hang(0.08, 0.09, 0.07, 6), RC.pantsDk, 0, -0.29, 0, 1, 1, 1, { ol: 0.012 });
-      part(ctx, piv, box(0.016, 0.22, 0.06), RC.pantsDk, 0.05, -0.15, 0.04, 1, 1, 1, { ol: false, rz: 0.08 });
+      part(ctx, piv, box(0.02, 0.22, 0.07), RC.pantsDk, 0.055, -0.15, 0.05, 1, 1, 1, { ol: false, rz: 0.08 });
+      part(ctx, piv, box(0.02, 0.16, 0.07), RC.pantsDk, -0.01, -0.12, 0.085, 1, 1, 1, { ol: false, rz: 0.02 });
+      part(ctx, piv, box(0.02, 0.1, 0.07), RC.pantsDk, -0.06, -0.2, 0.05, 1, 1, 1, { ol: false, rz: -0.1 });
       part(ctx, piv, box(0.016, 0.14, 0.05), RC.pantsDk, -0.04, -0.1, 0.05, 1, 1, 1, { ol: false, rz: -0.05 });
       part(ctx, piv, ico(1), RC.shoe, 0, -0.375, 0.05, 0.095, 0.058, 0.18, { ol: 0.013 });
       part(ctx, piv, ico(0), 0xa9c92c, 0, -0.36, 0.16, 0.055, 0.03, 0.07, { ol: false });
-      part(ctx, piv, box(0.17, 0.026, 0.34), RC.sole, 0, -0.415, 0.05, 1, 1, 1, { ol: 0.007 });
+      part(ctx, piv, ico(1), RC.sole, 0, -0.41, 0.05, 0.1, 0.024, 0.19, { ol: 0.007 });
     },
   });
   const { head, body, H } = R;
@@ -833,16 +835,17 @@ export function makeRoxor() {
   part(ctx, body, cyl(0.105, 0.14, 0.04, 12), RC.teeDk, 0, 0.325, 0, 1, 1, 0.9, { ol: 0.012 });
   cylDecal(body, decalMat('rchest', roxorChestTex()), 0.185, 0.86, 0.18, 0.22, 0.22);
   // ---- mohawk crest: dark base mass + a fan of tall curled flame locks
-  part(ctx, head, ico(1), RC.hair, 0, cy + ry * 0.78, -0.02, rx * 0.8, ry * 0.36, rz * 0.9, { rx: -0.1 });
+  const hm2 = ctx.mk('rhairM', { color: RC.hair, flatShading: false });
+  part(ctx, head, ico(1), 0, 0, cy + ry * 0.86, -0.04, rx * 0.72, ry * 0.34, rz * 0.98, { mat: hm2, hull: true, ol: 0.014, rx: -0.12 });
   part(ctx, head, ico(0), RC.hairDk, 0, cy + ry * 0.55, -rz * 0.55, rx * 0.5, ry * 0.4, rz * 0.45, { ol: false });
-  // [xn, zn, lean (+ toward +x), tilt (+ toward +z), len, width, light]
+  // curled tips of the quiff: [xn, zn, lean, tilt, len, width, light]
   const fl = [
-    [-0.55, 0.08, -1.1, 0.0, 0.34, 0.17, 0], [-0.3, 0.12, -0.55, 0.1, 0.5, 0.2, 1], [-0.05, 0.1, -0.1, 0.0, 0.58, 0.21, 0], [0.2, 0.08, 0.4, -0.1, 0.55, 0.2, 1], [0.45, 0.04, 0.85, -0.1, 0.45, 0.19, 0], [0.6, -0.1, 1.2, -0.2, 0.32, 0.16, 1],
-    [-0.28, -0.25, -0.4, -0.5, 0.5, 0.2, 1], [0.0, -0.28, 0.0, -0.55, 0.56, 0.21, 0], [0.26, -0.25, 0.45, -0.5, 0.48, 0.2, 1],
+    [-0.4, 0.2, -0.7, 0.15, 0.46, 0.2, 0], [-0.17, 0.14, -0.3, 0.05, 0.58, 0.22, 1], [0.05, 0.1, 0.0, -0.05, 0.64, 0.23, 0], [0.26, 0.06, 0.4, -0.12, 0.56, 0.22, 1], [0.46, 0.0, 0.85, -0.15, 0.42, 0.19, 0],
+    [-0.1, -0.3, -0.15, -0.6, 0.5, 0.21, 1], [0.2, -0.32, 0.35, -0.6, 0.44, 0.2, 0],
   ];
   for (const f of fl) {
-    const bx = f[0] * rx, bz = f[1] * rz, by = cy + ry * Math.sqrt(Math.max(0.05, 1 - f[0] * f[0] - f[1] * f[1])) - 0.05;
-    part(ctx, head, flameGeo(f[4] * 0.62, f[5] * 0.88, 0.12, -0.3), f[6] ? RC.hair2 : RC.hair, bx, by, bz, 1, 1, 1, { rz: -f[2], rx: f[3], ol: 0.012 });
+    const bx = f[0] * rx, bz = f[1] * rz, by = cy + ry * Math.sqrt(Math.max(0.05, 1 - f[0] * f[0] - f[1] * f[1])) - 0.03;
+    part(ctx, head, flameGeo(f[4] * 0.72, f[5] * 1.05, 0.14, -0.45), f[6] ? RC.hair2 : RC.hair, bx, by, bz, 1, 1, 1, { rz: -f[2], rx: f[3], ol: 0.012 });
   }
   // nape tail of wavy hair (viewer's left)
   for (let i = 0; i < 3; i++) blade(ctx, head, i % 2 ? RC.hair2 : RC.hair, -0.12 - i * 0.07, cy - 0.12, -rz * 0.8, -0.22 - i * 0.1, cy - 0.34 - (i % 2) * 0.05, -rz * 0.86, 0.06, 0.04);
@@ -850,7 +853,7 @@ export function makeRoxor() {
   part(ctx, head, ico(0), 0xe8e8f0, -(rx * 0.985 + 0.014), cy - 0.12, 0.02, 0.018, 0.018, 0.018, { ol: 0.006 });
   R.face = addHeroFace(ctx, head, H, {
     id: 'R', eyeP: paintEyeR, shutP: paintEyeShutR, ex: 0.16, ey: -0.035, ew: 0.17, eh: 0.15, blush: '#ff9fb0', bx: 0.2, by: -0.13, bw: 0.1,
-    brow: { col: '#4a2616', thick: 18, arch: 0.2, x: 0.158, y: 0.125, w: 0.17, h: 0.1, rot: -0.12 }, noseCol: '#cf8a74', ny: -0.1,
+    brow: { col: '#5a3220', thick: 11, arch: 0.28, x: 0.158, y: 0.15, w: 0.17, h: 0.1, rot: -0.04 }, noseCol: '#cf8a74', ny: -0.1,
     mouthP: paintMouthR, my: -0.175, mx: 0.02, mw: 0.15, mh: 0.092,
   });
   // microphone in the +x hand (viewer's right, as drawn)
@@ -893,7 +896,6 @@ export function makeRoxor() {
       part(ctx, piv, box(0.025, 0.04, 0.19), YEL, 0, 0.06, 0, 1, 1, 1, { ol: false });
     } else {
       part(ctx, piv, box(0.21, 0.185, 0.21), c, 0, 0, 0, 1, 1, 1, { ol: 0.013 });
-      part(ctx, piv, box(0.045, 0.195, 0.22), YEL, 0, 0, 0, 1, 1, 1, { ol: false });
     }
     piv.scale.setScalar(0.0001);
     items.push({ piv, s: 0, v: 0 });
