@@ -7,8 +7,9 @@ export { THREE, mergeGeometries };
 export function rng(seed) { let s = seed >>> 0; const f = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; f.range = (a, b) => a + (b - a) * f(); f.pick = (arr) => arr[Math.floor(f() * arr.length)]; return f; }
 
 // THE house material: flat-shaded, vertex-coloured, matte. Use this for almost everything.
-export function flatMat(opts) { return new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }, opts)); }
-export function solidMat(color, opts) { return new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.9, metalness: 0 }, opts)); }
+// Lambert is the house shader (cheap on phones, takes shadows and vertex colours). Use MeshStandardMaterial for at most one hero prop.
+export function flatMat(opts) { return new THREE.MeshLambertMaterial(Object.assign({ vertexColors: true, flatShading: true }, opts)); }
+export function solidMat(color, opts) { return new THREE.MeshLambertMaterial(Object.assign({ color, flatShading: true }, opts)); }
 export function glowMat(color, intensity) { return new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity || 1), toneMapped: false }); }
 
 // paint a whole geometry one colour (adds a 'color' attribute)
