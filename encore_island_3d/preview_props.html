@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>props preview</title>
+<style>html,body{margin:0;height:100%;background:#8fe3f0;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { buildProps } from './js/props.js';
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x8fe3f0); scene.fog = new THREE.Fog(0x8fe3f0, 30, 70);
+const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.6); sun.position.set(-9, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+const sc = sun.shadow.camera; sc.left = -16; sc.right = 16; sc.top = 16; sc.bottom = -16; sc.near = 1; sc.far = 50; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun, new THREE.HemisphereLight(0xcfe8ff, 0xe8c8a8, 1.1));
+const ground = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.4, 48), new THREE.MeshStandardMaterial({ color: 0xe6d6ee, flatShading: true, roughness: 0.9 }));
+ground.position.y = -0.2; ground.receiveShadow = true; scene.add(ground);
+const g2 = new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 0.1, 48), new THREE.MeshStandardMaterial({ color: 0xa4e59c, roughness: 1 })); g2.position.y = -0.45; g2.receiveShadow = true; scene.add(g2);
+const props = buildProps(scene);
+const P = { hero: [[0, 9, 13], [0, 0, 0]], stage: [[0, 3.6, 7.6], [0, 1.6, 0.2]], stall: [[-3.6, 3.0, 2.6], [-5.1, 1.2, -2.4]], vault: [[-2.8, 2.6, 4.0], [-5.1, 0.6, 0.9]],
+  plates: [[0, 4.8, 12.5], [0, 0.6, 6.4]], monument: [[0, 4.2, -1.2], [0, 1.9, -6.3]], forge: [[7.6, 3.6, 0.6], [4.9, 1.4, -3.3]], close: [[-3.4, 2.4, 9.8], [-2.6, 0.8, 6.8]],
+  meadow: [[-12.7, 6, 20.5], [-12.7, 1, 13.1]], newland: [[9.5, 3.4, 4.5], [7, 0.8, 1.4]], lamps: [[6, 4, 11], [4, 1.5, 5]] };
+const pv = P[q.get('cam') || 'hero'] || P.hero;
+const pr = (k, i) => q.has(k) ? parseFloat(q.get(k)) : pv[i];
+cam.position.set(pr('cx', 0)?.valueOf ? (q.has('cx') ? +q.get('cx') : pv[0][0]) : 0, q.has('cy') ? +q.get('cy') : pv[0][1], q.has('cz') ? +q.get('cz') : pv[0][2]);
+cam.lookAt(q.has('tx') ? +q.get('tx') : pv[1][0], q.has('ty') ? +q.get('ty') : pv[1][1], q.has('tz') ? +q.get('tz') : pv[1][2]);
+if (q.has('glow')) props.plates.forEach(p => p.setGlow(+q.get('glow')));
+if (q.has('take')) props.coins.slice(0, 4).forEach(c => c.taken = true);
+const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, cam));
+if (q.get('bloom') !== '0') composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.6, 0.95));
+composer.addPass(new OutputPass());
+const focus = new THREE.Vector3(-3, 0, 1);
+let last = performance.now(), t = +(q.get('t') || 0), frames = 0; const fixed = q.has('t');
+function loop() { const n = performance.now(); const dt = (n - last) / 1000; last = n; t += fixed ? 0 : dt; props.update(fixed ? 0.016 : dt, t, focus); composer.render(); frames++; window.__frames = frames; requestAnimationFrame(loop); }
+window.__P = props; window.__R = renderer; window.__THREE = THREE; window.__scene = scene;
+loop();
+</script></body></html>

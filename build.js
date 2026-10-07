@@ -48,6 +48,7 @@ const STATIC_PATHS = [
   'messenger',
   'kingshot_endless',
   'encore_island',
+  'encore_island_3d',
   'headliner',
   'horde_runner',
   'spijker_master',
