@@ -11,6 +11,7 @@
 //   setEnabled(b), focus(target,{dist,pitch,yaw,ms}) target = {x,y,z} | npc object | npc id | 'player', release() (ends focus AND a running spot cinematic), pick(x,y) -> {type:'npc'|'spot'|'ground'|'none',id,x,z,...},
 //   orbit mode (title, creator): setMode('orbit',{shot,yaw,auto,fb}) / setMode('follow'), orbitTo({yaw,pitch,dist,ty,ms,shot}), setShot('full'|'head'|'torso'|'legs'|'feet',ms), setAutoRotate(degPerSec), drag spins, pinch/wheel zooms,
 //   street corridor follow: terrain.camera {mode:'corridor'|follow:'x', hWidth:9, lockZ|walkZ:[z0,z1], lateralK}: camera follows along x only, clamped to terrain.bounds, setTapActivate(b) (tap a spot = walk there and activate),
+//   terrain.pathCost(x,z) (optional, >= 1): weighted A* + shortcuts never dearer than the route; spotsApi.doorIntent(spot) for intent doors (see the bottom).
 //   dispose(). Embedded: listens on the canvas it is handed (never the parent), so the host's persistent #gl works under DOM overlays. Never throws when a world has no spots or no npcs.
 //   events: spot, spotDone, npc {id,scene}, tap, stick, focus {id} (new). 'spot' with locked:true skips the cinematic (the bridge toasts the reason). Test hooks: walkToSpot, focus, orbitTo, setShot, setViewInset, pick, state().
 import { THREE } from './kit.js';
@@ -28,9 +29,10 @@ const wrapPi = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.P
 // ---------- grid A* (octile, 8-way, inflated obstacles, string pulling) ----------
 function makeGrid(terrain, Bx) {
   const b = terrain.bounds || { minX: -17, maxX: 17, minZ: -27, maxZ: 27 }, cs = CFG.cell, nx = Math.ceil((b.maxX - b.minX) / cs), nz = Math.ceil((b.maxZ - b.minZ) / cs);
+  const PC = terrain && typeof terrain.pathCost === 'function' ? terrain.pathCost : null, cost = PC ? new Float32Array(nx * nz).fill(1) : null; // optional per-cell path cost >= 1 (street: sidewalk lane cheapest)
   const blk = new Uint8Array(nx * nz), B = Bx || ((x, z) => { try { return !!terrain.blocked(x, z); } catch (e) { return false; } }), ri = CFG.radius + 0.12;
   const cx = (i) => b.minX + (i + 0.5) * cs, cz = (j) => b.minZ + (j + 0.5) * cs;
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = cx(i), z = cz(j); let bl = x < b.minX + 0.6 || x > b.maxX - 0.6 || z < b.minZ + 0.6 || z > b.maxZ - 0.6; if (!bl) bl = B(x, z) || B(x + ri, z) || B(x - ri, z) || B(x, z + ri) || B(x, z - ri) || B(x + ri * 0.7, z + ri * 0.7) || B(x - ri * 0.7, z + ri * 0.7) || B(x + ri * 0.7, z - ri * 0.7) || B(x - ri * 0.7, z - ri * 0.7); blk[j * nx + i] = bl ? 1 : 0; }
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = cx(i), z = cz(j); let bl = x < b.minX + 0.6 || x > b.maxX - 0.6 || z < b.minZ + 0.6 || z > b.maxZ - 0.6; if (!bl) bl = B(x, z) || B(x + ri, z) || B(x - ri, z) || B(x, z + ri) || B(x, z - ri) || B(x + ri * 0.7, z + ri * 0.7) || B(x - ri * 0.7, z + ri * 0.7) || B(x + ri * 0.7, z - ri * 0.7) || B(x - ri * 0.7, z - ri * 0.7); blk[j * nx + i] = bl ? 1 : 0; if (cost) { try { cost[j * nx + i] = Math.max(1, +PC(x, z) || 1); } catch (e) { /* ignore */ } } }
   const toI = (x) => clamp(Math.floor((x - b.minX) / cs), 0, nx - 1), toJ = (z) => clamp(Math.floor((z - b.minZ) / cs), 0, nz - 1);
   const walk = (x, z) => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && !blk[toJ(z) * nx + toI(x)];
   function nearestFree(x, z) { const i0 = toI(x), j0 = toJ(z); if (!blk[j0 * nx + i0]) return [i0, j0]; for (let r = 1; r < 14; r++) { let best = null, bd = 1e9; for (let j = j0 - r; j <= j0 + r; j++) for (let i = i0 - r; i <= i0 + r; i++) { if (i < 0 || j < 0 || i >= nx || j >= nz || (Math.abs(i - i0) !== r && Math.abs(j - j0) !== r) || blk[j * nx + i]) continue; const d = (cx(i) - x) ** 2 + (cz(j) - z) ** 2; if (d < bd) { bd = d; best = [i, j]; } } if (best) return best; } return null; }
@@ -42,10 +44,11 @@ function makeGrid(terrain, Bx) {
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { let l = c * 2 + 1, r = l + 1, m = c; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
     const si = s[1] * nx + s[0], ei = e[1] * nx + e[0]; g[si] = 0; push(si, h(s[0], s[1]));
     while (heap.length) { const [, id] = pop(); if (closed[id]) continue; closed[id] = 1; if (id === ei) break; const i = id % nx, j = (id / nx) | 0;
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= nx || nj >= nz) continue; const nid = nj * nx + ni; if (blk[nid] || closed[nid]) continue; if (di && dj && (blk[j * nx + ni] || blk[nj * nx + i])) continue; const ng = g[id] + (di && dj ? 1.41421 : 1); if (ng < g[nid]) { g[nid] = ng; from[nid] = id; push(nid, ng + h(ni, nj)); } } }
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= nx || nj >= nz) continue; const nid = nj * nx + ni; if (blk[nid] || closed[nid]) continue; if (di && dj && (blk[j * nx + ni] || blk[nj * nx + i])) continue; const ng = g[id] + (di && dj ? 1.41421 : 1) * (cost ? (cost[id] + cost[nid]) * 0.5 : 1); if (ng < g[nid]) { g[nid] = ng; from[nid] = id; push(nid, ng + h(ni, nj)); } } }
     if (!closed[ei]) return null; const cells = []; for (let id = ei; id >= 0; id = from[id]) cells.push([cx(id % nx), cz((id / nx) | 0)]); cells.reverse(); return cells;
   }
-  return { b, nx, nz, cs, blk, walk, los, find, nearestFree, cx, cz };
+  function segCost(ax, az, bx, bz) { const d = Math.hypot(bx - ax, bz - az); if (!cost) return d; const n = Math.max(1, Math.ceil(d / (cs * 0.25))); let c = 0; for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; c += cost[toJ(az + (bz - az) * t) * nx + toI(ax + (bx - ax) * t)]; } return c / n * d; }
+  return { b, nx, nz, cs, blk, cost, walk, los, find, nearestFree, cx, cz, segCost };
 }
 
 export function createControls(ctx, o) {
@@ -189,7 +192,9 @@ export function createControls(ctx, o) {
   function planPath(tx, tz, run) {
     const gr = getGrid(), b = bounds(); tx = clamp(tx, b.minX + 0.8, b.maxX - 0.8); tz = clamp(tz, b.minZ + 0.8, b.maxZ - 0.8);
     const cells = gr.find(pos.x, pos.z, tx, tz); if (!cells) return false; const end = gr.walk(tx, tz) ? [tx, tz] : cells[cells.length - 1]; const raw = [[pos.x, pos.z], ...cells]; if (gr.walk(tx, tz)) raw.push(end); else raw.push(end);
-    const out = [raw[0]]; let i = 0; while (i < raw.length - 1) { let j = raw.length - 1; while (j > i + 1 && !gr.los(raw[i][0], raw[i][1], raw[j][0], raw[j][1], i === 0 && !gr.walk(raw[0][0], raw[0][1]) ? 0.9 : 0)) j--; out.push(raw[j]); i = j; }
+    const cum = [0]; if (gr.cost) for (let k = 1; k < raw.length; k++) cum[k] = cum[k - 1] + gr.segCost(raw[k - 1][0], raw[k - 1][1], raw[k][0], raw[k][1]); // with path costs a shortcut may not cost more than the A* route it replaces
+    const dear = (i, j) => !!gr.cost && gr.segCost(raw[i][0], raw[i][1], raw[j][0], raw[j][1]) > (cum[j] - cum[i]) * 1.02 + 0.05;
+    const out = [raw[0]]; let i = 0; while (i < raw.length - 1) { let j = raw.length - 1; while (j > i + 1 && (!gr.los(raw[i][0], raw[i][1], raw[j][0], raw[j][1], i === 0 && !gr.walk(raw[0][0], raw[0][1]) ? 0.9 : 0) || dear(i, j))) j--; out.push(raw[j]); i = j; }
     S.rawPath = raw; S.path = out; S.pathI = 1; S.pathRun = !!run; S.target = { x: end[0], z: end[1] }; S.stuck = 0; S.arrived = false; markerTap(end[0], end[1]); events.emit('tap', { x: end[0], z: end[1] }); return true;
   }
   function stop(keep) { S.path = null; S.target = null; S.hook.x = S.hook.y = 0; if (!keep) S.goalSpot = null; }
@@ -329,7 +334,7 @@ export function createControls(ctx, o) {
   const nointro = /nointro/.test(search) || o.intro === false || o.mode === 'orbit' || (TC && TC.mode === 'orbit') || !!ctx.embedded || (typeof window !== 'undefined' && window.__PARK_NOINTRO); if (!nointro) { C.intro = 0; S.locked = true; setClip('idle', 0); }
   snapCamera(); if (C.intro >= 0) updateCamera(0.0001);
   function update(dt, t) {
-    if (dead) return; dt = clamp(dt, 0, 0.05); S.time = t; watchTerrain(dt); if (spotsApi && spotsApi.refresh) { try { spotsApi.refresh(pos); } catch (e) { /* ignore */ } } // main.js can hand a negative dt on the very first frame
+    if (dead) return; dt = clamp(dt, 0, 0.05); S.time = t; watchTerrain(dt); if (spotsApi && spotsApi.refresh) { try { spotsApi.refresh(pos, dt); } catch (e) { /* ignore */ } } // main.js can hand a negative dt on the very first frame
     if (S.spot) spotStep(dt); else { moveStep(dt); talkStep(); } updateCamera(dt); updateMarkers(dt, t); ui.update(dt, t);
   }
   function replayIntro() { stop(); S.vel.x = S.vel.z = 0; S.speed = 0; C.intro = 0; S.locked = true; setClip('idle', 0); updateCamera(0.0001); }
@@ -344,6 +349,9 @@ export function createControls(ctx, o) {
     get locked() { return S.locked; }, get inSpot() { return S.spot ? S.spot.id : null; }, get enabled() { return S.enabled; }, get mode() { return O.on ? 'orbit' : COR ? 'corridor' : 'follow'; }, get focusing() { return FX.kT > 0 ? FX.id : null; }, get goal() { return S.goalSpot ? S.goalSpot.id : null; }, get yaw() { return C.yaw; }, get heading() { return heading; }, get speed() { return S.speed; }, get intro() { return C.intro >= 0; }, get target() { return S.target; }, get path() { return S.path; },
     state() { return { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), heading: +heading.toFixed(2), speed: +S.speed.toFixed(2), clip: S.clip, moving: !!S.path || S.speed > 0.2, arrived: !!S.arrived, locked: S.locked, spot: S.spot ? S.spot.id : null, intro: C.intro >= 0, camDist: +C.dist.toFixed(2), zoom: +C.zd.toFixed(2), fov: +C.fov.toFixed(1), talk: S.talk || null, mode: O.on ? 'orbit' : COR ? 'corridor' : 'follow', focus: +FX.k.toFixed(2), focusId: FX.kT > 0 ? FX.id : null, inset: { top: +C.it.toFixed(1), bottom: +C.ib.toFixed(1) }, enabled: S.enabled, goal: S.goalSpot ? S.goalSpot.id : null, orbit: O.on ? { yaw: +(O.yaw / D2R).toFixed(1), pitch: +(O.pitch / D2R).toFixed(1), dist: +O.dist.toFixed(2), ty: +O.ty.toFixed(2), shot: O.shot, auto: O.auto } : null, cam: { x: +cam.position.x.toFixed(2), y: +cam.position.y.toFixed(2), z: +cam.position.z.toFixed(2) } }; } };
   if (spotsApi) { try { spotsApi.canFire = () => !dead && S.enabled && !S.locked && C.intro < 0 && !O.on; } catch (e) { /* ignore */ } }
+  // door intent (doors with def.intent, spots.js): 'go' = this door is the walk goal (walkToSpot / tap), 'dwell' = standing still (no route running) or moving INTO the
+  // door (against its outward normal intent.nx/nz, else toward its centre) for intent.dwell s; '' = walking past it or heading for another goal
+  if (spotsApi) { try { spotsApi.doorIntent = (s) => { if (S.goalSpot) return S.goalSpot.id === s.id ? 'go' : ''; const v = Math.hypot(S.vel.x, S.vel.z); if (v < 0.35) return S.path ? '' : 'dwell'; const n = s.intent || {}, ix = n.nx !== undefined ? -n.nx : s.x - pos.x, iz = n.nz !== undefined ? -n.nz : s.z - pos.z, il = Math.hypot(ix, iz) || 1; return (S.vel.x * ix + S.vel.z * iz) / (v * il) > 0.6 ? 'dwell' : ''; }; } catch (e) { /* ignore */ } }
   if (o.mode === 'orbit' || (TC && TC.mode === 'orbit')) setMode('orbit', o.orbit || {});
   try { if (o.ui !== false) ui = createUI(ctx, api, { dom, spots: spotsApi, player: p, terrain, embed: !!(o.embed || ctx.embedded) }); } catch (e) { console.error('[park3d] ui failed: ' + (e && e.stack || e)); }
   return api;

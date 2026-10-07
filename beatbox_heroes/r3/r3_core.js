@@ -50,11 +50,14 @@
     el.classList.remove('off'); el.classList.toggle('chip', mode === 'chip'); el.style.display = 'flex';
     const m = el.querySelector('.b3-msg'); if (m && msg) m.textContent = msg;
   }
+  // the boot splash waits for the first presented scene (see ready); checked from the interval, R3.show and R3.tick so a long frame cannot keep it up
+  function splashCheck() { if (S.splashUp && S.splashUp()) { S.splashUp = null; splash(null); return true; } return false; }
   function hiccup(on) {
     let el = $('r3hiccup');
     if (!on) { if (el) el.style.display = 'none'; return; }
-    if (!el) { el = document.createElement('div'); el.id = 'r3hiccup'; el.textContent = 'Graphics hiccup, one moment...'; el.style.cssText = 'position:fixed;left:50%;top:40%;transform:translateX(-50%);z-index:46;padding:12px 18px;border-radius:16px;background:rgba(23,16,43,.9);color:#fff6e8;font:700 14px "Trebuchet MS",system-ui,sans-serif;pointer-events:none'; document.body.appendChild(el); }
-    el.style.display = 'block';
+    // a full cover in the theme colour: while the context is lost the canvas is black, so the player sees this card instead of a black screen
+    if (!el) { el = document.createElement('div'); el.id = 'r3hiccup'; el.textContent = 'Graphics hiccup, one moment...'; el.style.cssText = 'position:fixed;inset:0;z-index:46;display:flex;align-items:center;justify-content:center;background:#120d1f;color:#fff6e8;font:700 14px "Trebuchet MS",system-ui,sans-serif;pointer-events:none'; document.body.appendChild(el); }
+    el.style.display = 'flex';
   }
 
   /* ------------------------------------------------------------------- layout */
@@ -76,7 +79,7 @@
   R3.show = function (is3d) {
     const b = !!is3d && R3.on; if (b === S.active) return;
     const was = S.active; S.active = b; document.body.classList.toggle('r3', b);
-    if (b) { R3.resize(); S.acc = 0; try { S.host.pause(false); } catch (e) { /* ignore */ } }
+    if (b) { R3.resize(); S.acc = 0; try { S.host.pause(false); } catch (e) { /* ignore */ } if (S.splashUp) splashCheck(); }
     else { shakeReset(); if (S.host) { try { S.host.pause(true); if (was) S.host.unload(); } catch (e) { console.error(e); } } }
     emit('show', b);
   };
@@ -88,12 +91,34 @@
   };
   R3.pause = function (b) { if (!S.host) return; try { if (b) S.host.pause(true); else if (S.active) S.host.pause(false); } catch (e) { /* ignore */ } };
 
+  /* ------------------------------------------------------------------ reveal */
+  // E.go lifts the fade of a 3D scene through R3.reveal(fn): fn runs once the new world has DRAWN at least twice (the warm frame plus one loop frame), so the
+  // cover never opens on a cleared or half-built canvas. Bounded: 1.5 s at most, and at once when 3D is not presenting.
+  S.reveals = [];
+  function checkReveal(force) {
+    const h = S.host, n = h && h.world ? h.drawn : 0, now = performance.now();
+    for (let i = S.reveals.length - 1; i >= 0; i--) { const r = S.reveals[i]; if (force || !S.active || !h || !h.world || n >= 2 || now - r.t > 1500) { S.reveals.splice(i, 1); try { r.fn(); } catch (e) { console.error(e); } } }
+  }
+  R3.reveal = function (fn) {
+    if (typeof fn !== 'function') return; if (S.host && S.host.perf === false) { fn(); return; } S.reveals.push({ fn, t: performance.now() }); checkReveal();
+    if (S.reveals.length) setTimeout(() => checkReveal(), 1600);   // the loop may be paused (hidden tab): never leave the fade up
+  };
+  // world modules the player is likely to open next: fetched (not built) when the browser is idle, so the first visit only waits for the build
+  const NEXT = { title: ['creator', 'street'], creator: ['street'], street: ['flat', 'park', 'shop', 'lab', 'bar', 'hood'], flat: ['street', 'creator'], park: ['street', 'rhythm'], shop: ['street'], lab: ['street', 'rhythm'], bar: ['street', 'rhythm'], hood: ['street'], rhythm: ['park', 'bar'] };
+  function prefetchNext(id) {
+    const h = S.host, ids = NEXT[id]; if (!h || !h.prefetch || !ids) return;
+    try { const c = navigator.connection; if (c && c.saveData) return; } catch (e) { /* ignore */ }
+    const go = () => { try { if (S.host === h) h.prefetch(ids); } catch (e) { /* ignore */ } };
+    if (typeof root.requestIdleCallback === 'function') root.requestIdleCallback(go, { timeout: 4000 }); else setTimeout(go, 1500);
+  }
+
   /* --------------------------------------------------------------------- tick */
   R3.tick = function (dt) {
     const host = S.host; if (!host || !S.active || S.demoted) return;
     if (S.quality === 'low') { S.acc += dt; if (S.acc < 30) return; dt = S.acc; S.acc = 0; }   // low tier: 30 fps cap (the E loop keeps running at display rate)
     const w = host.world; if (w) { try { w.setBeat(E.beat()); } catch (e) { /* ignore */ } }
-    host.tick(dt / 1000);
+    host._frameMs = dt; host.tick(dt / 1000);   // the real frame interval feeds the host's adaptive DPR
+    if (S.reveals.length) checkReveal(); if (S.splashUp) splashCheck();
     if (S.probe) S.probe.push(dt);
     pollSync();
     for (let i = 0; i < S.ticks.length; i++) { try { S.ticks[i](dt); } catch (e) { console.error(e); } }
@@ -177,10 +202,13 @@
   R3._ = { S, read, write, splash, hiccup, fail, release, teardownHost, wrapSetChar, applySync,
     ready(host, bootMs) {
       S.host = host; S.status = 'ready'; S.reason = ''; S.bootMs = Math.round(bootMs); write({ bootMs: S.bootMs, fail: null });
-      host.events.on('worldReady', () => { S.last.w = null; applySync(); });
+      host.events.on('worldReady', (e) => { S.last.w = null; applySync(); prefetchNext(e && e.id); });
       wrapSetChar(); S.ch = (BBH.G && BBH.G.ch) || null;
       if (!S.resizeBound) { S.resizeBound = true; root.addEventListener('resize', R3.resize); root.addEventListener('orientationchange', R3.resize); }
-      R3.resize(); host.pause(true); splash(null); emit('ready', { bootMs: S.bootMs }); release();
+      R3.resize(); host.pause(true); emit('ready', { bootMs: S.bootMs }); release();
+      // the splash stays up through the boot -> title switch (no dark 2D boot frame in between): it goes when a 3D scene presents a drawn frame, a 2D scene took over, or after 3 s
+      const t0 = performance.now(); S.splashUp = () => host.perf === false || (S.active && host.world && host.drawn >= 1) || (!S.active && E.sceneName && E.sceneName !== 'boot' && !E.pendingSwitch) || performance.now() - t0 > 3000 || S.status !== 'ready';
+      const iv = setInterval(() => { if (!S.splashUp || splashCheck()) clearInterval(iv); }, 30);
     } };
   const gl = $('gl');
   if (gl) gl.addEventListener('pointerdown', () => { try { E.unlockAudio(); } catch (e) { /* ignore */ } }, { passive: true });   // the old #cv listener only fires in 2D scenes

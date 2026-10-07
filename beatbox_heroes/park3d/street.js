@@ -1,4 +1,4 @@
-// World module: NEON ROW (W-STREET), the long walk corridor of Neon City. 70 x 22 m, walk strip z -3..8, doors in x order along the north side:
+// World module: NEON ROW (W-STREET), the long walk corridor of Neon City. 70 x 22 m, walk strip = the shop-side sidewalk z -3..3 (the road is not walkable), doors in x order along the north side:
 //   park gate -29, home stoop -15, thrift shop 0, sound lab 13, bar 27, plus the bus stop map board (spot `map`, x 6). See PORT_PLAN section 3.
 // create(ctx, args) -> { terrain, flora, npcSpecs:[bouncer], profile:'out', update?, setSpotState, setWeather, dispose }.
 //   args.from = place id the player arrives from (start next to that door), args.locks = { shop:true, bar:true } initial locked doors (the game also calls world.setSpotState).
@@ -8,7 +8,7 @@ import { THREE, flatMat } from './kit.js';
 import { makeStore, makeToggler, glowMaterial, decalMaterial, signMaterial, haloMaterial, puddleMaterial, SIDE_TOP as G, Z0 } from './street_kit.js';
 import { makeStreetAtlas } from './street_atlas.js';
 import { DOORS, MAPSPOT, buildPark, buildHome, buildShop, buildStudio, buildBar, buildAlleys, buildFillers } from './street_row.js';
-import { buildGround, buildLamps, buildCars, buildCart, buildBusStop, buildFurniture, buildPuddles, buildCat, buildBunting, buildMats, buildTraffic, VENTS } from './street_props.js';
+import { buildGround, buildLamps, buildCars, buildCart, buildBusStop, buildFurniture, buildPuddles, buildCat, buildBunting, buildMats, buildTraffic, VENTS, LANE } from './street_props.js';
 import { buildSkyline } from './flora_sky.js';
 import { buildLife } from './flora_life.js';
 
@@ -49,23 +49,25 @@ export default function create(ctx, args) {
   let sky = null; guard('skyline', () => { sky = buildSkyline(ctx, { minX: -35, maxX: 35, minZ: -4, maxZ: 8 }, ctx.kit.rng(31337), null); group.add(sky.group); });
   const hit = S.hit; let buildMs = 0;
   const heightAt = (x, z) => (z < 3.0 ? G : z < 3.4 ? G * (1 - smooth(3.0, 3.4, z)) : 0);
-  // The frontage band z < 0.3 is only walkable in the bay in front of each door: A* routes between far doors along the kerb side, so walking past a door never runs through
-  // its (walk-in-to-enter) ring by accident. Bays are x ranges around each door.
-  const BAYS = [[-30.4, -27.6], [-16.1, -13.9], [-1.1, 1.1], [11.9, 14.1], [25.4, 28.6]];
-  const inBay = (x) => { for (let i = 0; i < BAYS.length; i++) if (x > BAYS[i][0] && x < BAYS[i][1]) return true; return false; };
-  const blocked = (x, z) => z < -3.0 || z > 8.0 || x < -34.3 || x > 34.3 || (z < 0.3 && !inBay(x)) || hit.test(x, z);
-  const free = (x, z) => z > -2.6 && z < 2.6 && x > -33 && x < 33 && !hit.test(x, z);
+  // Walkable = the shop-side sidewalk from the building line to the kerb (z -3.0..2.95, x +-34.3) minus the props. The road, the parked cars and the far pavement are not.
+  // A* cost (terrain.pathCost, read by controls): the clear walk lane is cheapest, the kerb strip a little dearer, the frontage (door bays) dearer still, so routes run
+  // along the lane and only turn in at the door they are going to. Doors carry `intent` (spots.js): walking past a door never enters it.
+  const SIDE1 = 2.95;
+  const blocked = (x, z) => z < -3.0 || z > SIDE1 || x < -34.3 || x > 34.3 || hit.test(x, z);
+  const pathCost = (x, z) => (z < LANE.z0 ? 1.8 : z > LANE.z1 ? 1.3 : 1);
+  const free = (x, z) => z > -2.6 && z < 2.4 && x > -33 && x < 33 && !hit.test(x, z);
   let life = null; guard('pigeons', () => { life = buildLife(ctx, { pigeonHomes: [{ x: -21, z: 0.5, n: 3 }, { x: 4, z: 1.2, n: 3 }, { x: 22, z: 0.4, n: 3 }] }, free, [], heightAt); });
   const flora = { group: life ? life.group : new THREE.Group(), update: (dt, t) => { if (life) life.update(dt, t); }, stats: {} };
 
   // ---- terrain contract
   const from = args.from && DOORS[args.from] ? DOORS[args.from] : DOORS.home;
-  const start = { x: from.x + (args.from === 'park' ? 0.6 : 0.4), z: 1.4, rot: Math.PI };
-  const spotDefs = doorIds.map((id) => { const d = DOORS[id]; return { id, x: d.x, z: d.z, label: d.label, icon: d.icon, color: d.color, color2: d.color2, kind: 'door', ring: 1.3, radius: 1.4, release: 2.2, iconY: 2.5, iconK: 0.82, pillar: 3.2, cine: { snap: false, face: 'toward', clip: 'wave', zoom: 0.12 } }; });
+  // arrival: on the walk lane right in front of the door you came out of, facing the street (outside the door's release radius so it cannot fire again)
+  const start = { x: from.x, z: from.z + 2.45, rot: 0 };
+  const spotDefs = doorIds.map((id) => { const d = DOORS[id]; return { id, x: d.x, z: d.z, label: d.label, icon: d.icon, color: d.color, color2: d.color2, kind: 'door', intent: { dwell: 0.35, nx: 0, nz: 1 }, ring: 1.3, radius: 1.4, release: 2.2, iconY: 2.5, iconK: 0.82, pillar: 3.2, cine: { snap: false, face: 'toward', clip: 'wave', zoom: 0.12 } }; });
   spotDefs.push({ id: 'map', x: MAPSPOT.x, z: MAPSPOT.z, label: 'MAP', icon: 'map', color: '#2ee6ff', color2: '#ffe14d', ring: 1.2, radius: 1.3, release: 2.0, iconY: 2.3, iconK: 0.8, pillar: 2.8, cine: { snap: false, face: 'toward', clip: 'wave', zoom: 0.14 } });
   const terrain = {
-    group, bounds: { minX: -35, maxX: 35, minZ: -11, maxZ: 11 }, blocked, heightAt, pathDist: (x, z) => (z > -3.2 && z < 8.2 ? 0 : 12), keepout: (x, z, r) => blocked(x, z) || blocked(x + (r || 0.3), z) || blocked(x - (r || 0.3), z), paths: [],
-    spotDefs, camera: { mode: 'corridor', hWidth: 11.5, dist: 20, fov: 40, pitch: 42, lockZ: 0.0, walkZ: [-3, 8], lateralK: 0.22 },
+    group, bounds: { minX: -35, maxX: 35, minZ: -11, maxZ: 11 }, blocked, pathCost, heightAt, pathDist: (x, z) => (z > -3.2 && z < 3.2 ? 0 : 12), keepout: (x, z, r) => blocked(x, z) || blocked(x + (r || 0.3), z) || blocked(x - (r || 0.3), z), paths: [],
+    spotDefs, camera: { mode: 'corridor', hWidth: 11.5, dist: 20, fov: 40, pitch: 42, lockZ: 0.0, walkZ: [-3, 3], lateralK: 0.22 },
     // lighting reads these: lamps for the glow cards and cones; graffiti and busk anchors parked far away because the street draws its own neon halos
     anchors: { start, lamps: S.lamps.slice(), graffiti: { x: 0, z: -90 }, buskSpot: { x: 0, z: -90 }, fountain: { x: 6, z: 2 }, gate: { x: -28, z: 3, rot: 0 }, door: { x: from.x, z: from.z }, bouncer: BOUNCER_AT },
     doors: DOORS, map: MAPSPOT, state: (id) => (tog.get('closed_' + id) ? 'closed' : 'open'),

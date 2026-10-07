@@ -8,6 +8,9 @@ import { MAPSPOT } from './street_row.js';
 const cr = (c, k) => mul(col(c), k === undefined ? 1 : k);
 export const VENTS = [{ x: -7.5, y: 0.2, z: -5.5 }, { x: 7.1, y: 0.2, z: -5.0 }, { x: 18.6, y: G, z: 6.0 }, { x: -9.2, y: G, z: 0.4 }];
 export const LAMP_X = [-32, -24, -16, -8, 0, 8, 16, 24, 32];
+// Sidewalk zones (z): frontage -3.0..-0.4 (door bays, bins, the juice cart, the map board), the CLEAR WALK LANE -0.4..2.2 (no colliders, ever),
+// the kerb strip 2.2..3.0 (lamps, hydrants, mailbox, bus pole, bench), then the kerb and the road (not walkable). The zebra crossing is paint only.
+export const LANE = { z0: -0.4, z1: 2.2 }, KERB_Z = 2.62, CROSSWALK = { x0: -13.6, x1: -7.4 };
 
 // ---------------------------------------------------------------- ground
 export function buildGround(S) {
@@ -25,8 +28,9 @@ export function buildGround(S) {
   // road: two-tone asphalt, gutter, centre dashes, crosswalk, manholes, drains
   S.floor(B, X0, X1, SW1 + 0.3, RD1, 0.0, PAL.asphalt); S.floor(B, X0, X1, SW1 + 0.3, SW1 + 1.1, 0.004, PAL.asphaltD);
   for (let i = 0; i < 22; i++) { const x = X0 + R() * (X1 - X0), z = 4.5 + R() * 8, w = 1.5 + R() * 3.5, d = 0.8 + R() * 1.6, k = 0.88 + R() * 0.1; S.floor(B, x, x + w, z, z + d, 0.006, [PAL.asphalt[0] * k, PAL.asphalt[1] * k, PAL.asphalt[2] * k]); }
-  for (let x = X0 + 1; x < X1; x += 5) S.floor(B, x, x + 2.4, 8.3, 8.5, 0.012, cr('#e8d2a0'));
-  for (let i = 0; i < 9; i++) S.floor(B, -13.6 + i * 0.7, -13.6 + i * 0.7 + 0.42, 3.7, 7.7, 0.012, cr('#efe3c8')); S.floor(B, -14, -9.4, 7.9, 8.2, 0.012, cr('#efe3c8'));
+  for (let x = X0 + 1; x < X1; x += 5) { if (x + 2.4 > CROSSWALK.x0 - 0.6 && x < CROSSWALK.x1 + 0.6) continue; S.floor(B, x, x + 2.4, 8.3, 8.5, 0.012, cr('#e8d2a0')); }
+  for (let i = 0; i < 9; i++) S.floor(B, CROSSWALK.x0 + i * 0.7, CROSSWALK.x0 + i * 0.7 + 0.42, SW1 + 0.55, RD1 - 0.4, 0.012, cr('#efe3c8'));
+  for (const sx of [CROSSWALK.x0 - 2.2, CROSSWALK.x1 + 1.6]) S.floor(B, sx, sx + 0.3, sx < CROSSWALK.x0 ? SW1 + 0.6 : 8.6, sx < CROSSWALK.x0 ? 8.1 : RD1 - 0.5, 0.012, cr('#efe3c8')); // stop lines before the zebra, one per lane
   for (const [mx, mz] of [[18.6, 6.0], [-30, 5.2], [38, 6.2]]) { for (let k = 0; k < 10; k++) { const a0 = k / 10 * 6.283, a1 = (k + 1) / 10 * 6.283; B.tri([mx, 0.015, mz], [mx + Math.cos(a1) * 0.55, 0.015, mz + Math.sin(a1) * 0.55], [mx + Math.cos(a0) * 0.55, 0.015, mz + Math.sin(a0) * 0.55], k % 2 ? cr('#2b2438') : cr('#3f3857')); } }
   for (const dx of [-26, -2, 22, 36]) { S.floor(B, dx, dx + 1.1, SW1 + 0.36, SW1 + 0.78, 0.008, cr('#1d1730')); for (let k = 0; k < 4; k++) S.floor(B, dx + 0.12 + k * 0.26, dx + 0.2 + k * 0.26, SW1 + 0.36, SW1 + 0.78, 0.012, cr('#4a4268')); }
   // far side: kerb and pavement
@@ -35,9 +39,9 @@ export function buildGround(S) {
 
 // ---------------------------------------------------------------- lamps (one every 8 m on the kerb) + wall lanterns
 export function buildLamps(S) {
-  for (const x of LAMP_X) lampPost(S, x, 2.55, { arm: -0.85 });
-  S.dec('streetname', -16.0, G + 3.6, 2.72, 0.7, 0.18, 0); S.dec('streetname', 16.0, G + 3.6, 2.72, 0.7, 0.18, 0);
-  for (const x of LAMP_X) S.halo(x, 0.2, 1.8, 3.4, 3.0, [0.34, 0.22, 0.09], { flat: true });
+  for (const x of LAMP_X) lampPost(S, x, KERB_Z, { arm: 0.85 });
+  S.dec('streetname', -16.0, G + 3.6, KERB_Z + 0.17, 0.7, 0.18, 0); S.dec('streetname', 16.0, G + 3.6, KERB_Z + 0.17, 0.7, 0.18, 0);
+  for (const x of LAMP_X) S.halo(x, 0.2, 2.4, 3.4, 3.0, [0.34, 0.22, 0.09], { flat: true });
 }
 
 // ---------------------------------------------------------------- cars
@@ -56,10 +60,10 @@ export function buildCars(S) { for (const [x, z, ry, c] of CARS) car(S, x, z, ry
 
 // ---------------------------------------------------------------- juice cart
 export function buildCart(S) {
-  const B = S.B, x = -6.9, z = 1.2, wood = PAL.wood;
+  const B = S.B, x = -10.6, z = -2.05, wood = PAL.wood; // parked against the facade, out of the walk lane
   B.box(x, G + 0.3, z, 2.0, 0.85, 0.95, cr('#2ec4b6'), { base: 0.3, top: cr('#f6efde') }); B.box(x, G + 0.64, z + 0.49, 2.0, 0.14, 0.04, cr('#f6efde'), { base: 0 }); B.box(x, G + 1.15, z, 2.1, 0.08, 1.05, wood, { base: 0.1 });
   for (const sx of [-0.75, 0.75]) { B.push(x + sx, G + 0.32, z + 0.55, 0, 1, Math.PI / 2, 0); B.cyl(0, -0.05, 0, 0.32, 0.32, 0.1, 9, PAL.ink, { base: 0 }); B.pop(); B.box(x + sx, G + 0.0, z - 0.7, 0.08, 0.32, 0.08, PAL.iron, { base: 0 }); }
-  const ux = x + 0.2, uz = z - 0.3, uy = G + 2.55, R0 = 1.45; B.cyl(ux, G + 1.2, uz, 0.03, 0.03, 1.85, 5, PAL.iron, { base: 0 }); // umbrella pole + striped panels
+  const ux = x + 0.2, uz = z - 0.1, uy = G + 2.55, R0 = 1.32; B.cyl(ux, G + 1.2, uz, 0.03, 0.03, 1.85, 5, PAL.iron, { base: 0 }); // umbrella pole + striped panels
   for (let i = 0; i < 10; i++) { const a0 = i / 10 * 6.283, a1 = (i + 1) / 10 * 6.283, c = i % 2 ? cr('#ff8a3d') : cr('#f6efde'); B.tri([ux, uy + 0.5, uz], [ux + Math.cos(a1) * R0, uy, uz + Math.sin(a1) * R0], [ux + Math.cos(a0) * R0, uy, uz + Math.sin(a0) * R0], mul(c, 1.1), mul(c, 0.82), mul(c, 0.82)); }
   const jc = [cr('#ff8a3d'), cr('#8fd14f'), cr('#ff4f6b'), cr('#ffd23f')];
   for (let i = 0; i < 4; i++) { B.cyl(x - 0.7 + i * 0.5, G + 1.23, z - 0.1, 0.17, 0.17, 0.46, 7, jc[i], { base: 0.1 }); S.GLOW.box(x - 0.7 + i * 0.5, G + 1.5, z + 0.08, 0.1, 0.22, 0.02, mul(jc[i], 3.0), { base: 0 }); }
@@ -71,15 +75,15 @@ export function buildCart(S) {
 
 // ---------------------------------------------------------------- bus stop + the map board (spot id `map`)
 export function buildBusStop(S) {
-  const B = S.B, mx = MAPSPOT.x, mz = 0.5, py = G;
+  const B = S.B, mx = MAPSPOT.x, mz = -1.05, py = G;
   for (const sx of [-1.3, 1.3]) B.box(mx + sx, py, mz, 0.12, 2.9, 0.12, PAL.iron, { base: 0.1 });
   B.box(mx, py + 0.5, mz, 2.9, 2.3, 0.14, cr('#1b1838'), { base: 0.1 }); B.box(mx, py + 2.85, mz + 0.0, 3.1, 0.2, 0.3, PAL.iron, { base: 0.05 }); B.box(mx, py + 0.4, mz + 0.05, 3.0, 0.1, 0.2, PAL.iron);
   S.sign('map', mx, py + 1.72, mz + 0.085, 2.62, 1.64, 0, [1.15, 1.15, 1.2]);
   S.section('map_lights', () => { S.GLOW.box(mx, py + 2.76, mz + 0.16, 2.6, 0.06, 0.1, NEON.cyan, { base: 0 }); S.halo(mx, py + 1.8, mz + 0.8, 4.2, 2.8, [0.1, 0.3, 0.38]); S.halo(mx, 0.2, mz + 1.2, 3.0, 2.0, [0.04, 0.16, 0.2], { flat: true }); });
   // pole sign + bench
-  B.cyl(3.4, py, 2.5, 0.05, 0.05, 3.0, 6, PAL.iron, { base: 0 }); S.dec('bus', 3.4, py + 2.5, 2.57, 0.5, 1.0, 0); S.dec('bus', 3.4, py + 2.5, 2.43, 0.5, 1.0, Math.PI);
-  B.box(9.1, py, 2.3, 1.7, 0.1, 0.5, PAL.wood, { base: 0.1 }); for (const sx of [-0.7, 0.7]) B.box(9.1 + sx, py, 2.3, 0.08, 0.44, 0.4, PAL.iron, { base: 0 }); B.box(9.1, py + 0.45, 2.05, 1.7, 0.4, 0.08, PAL.wood, { base: 0.1 });
-  S.hit.box(mx, mz, 1.5, 0.2); S.hit.circle(3.4, 2.5, 0.2); S.hit.box(9.1, 2.3, 0.9, 0.3);
+  B.cyl(3.4, py, KERB_Z, 0.05, 0.05, 3.0, 6, PAL.iron, { base: 0 }); S.dec('bus', 3.4, py + 2.5, KERB_Z + 0.07, 0.5, 1.0, 0); S.dec('bus', 3.4, py + 2.5, KERB_Z - 0.07, 0.5, 1.0, Math.PI);
+  const bz = KERB_Z; B.box(9.1, py + 0.36, bz, 1.7, 0.08, 0.5, PAL.wood, { base: 0.1 }); for (const sx of [-0.7, 0.7]) B.box(9.1 + sx, py, bz, 0.08, 0.38, 0.4, PAL.iron, { base: 0 }); B.box(9.1, py + 0.48, bz - 0.24, 1.7, 0.4, 0.06, PAL.wood, { base: 0.1 });
+  S.hit.box(mx, mz, 1.5, 0.2); S.hit.circle(3.4, KERB_Z, 0.2); S.hit.box(9.1, bz, 0.9, 0.28);
 }
 
 // ---------------------------------------------------------------- street furniture
@@ -87,11 +91,11 @@ export function buildFurniture(S) {
   const B = S.B, R = S.R;
   // hydrant, mailbox, bins, planters, bollards, a bicycle
   const hy = (x, z) => { B.cyl(x, G, z, 0.17, 0.15, 0.62, 7, cr('#e0453f'), { base: 0.2 }); B.cyl(x, G + 0.62, z, 0.13, 0.04, 0.16, 7, cr('#c0332f')); B.box(x, G + 0.32, z, 0.5, 0.1, 0.1, cr('#e0453f'), { base: 0 }); S.hit.circle(x, z, 0.28); };
-  hy(-19.2, 2.45); hy(21.4, 2.45);
-  B.box(-4.6, G, 2.35, 0.55, 1.1, 0.5, cr('#2b5fb0'), { base: 0.2, top: cr('#2b5fb0') }); B.cyl(-4.6, G + 1.1, 2.35, 0.27, 0.27, 0.04, 8, cr('#2b5fb0')); S.hit.box(-4.6, 2.35, 0.3, 0.3);
+  hy(-19.2, KERB_Z); hy(21.4, KERB_Z);
+  B.box(-4.6, G, KERB_Z, 0.55, 1.1, 0.5, cr('#2b5fb0'), { base: 0.2, top: cr('#2b5fb0') }); B.cyl(-4.6, G + 1.1, KERB_Z, 0.27, 0.27, 0.04, 8, cr('#2b5fb0')); S.hit.box(-4.6, KERB_Z, 0.3, 0.27);
   for (const [x, z] of [[-6.1, -2.6], [8.9, -2.9], [19.9, -2.7], [-21.6, -2.6]]) { B.cyl(x, G, z, 0.3, 0.26, 0.82, 8, cr('#5a5a72'), { base: 0.2 }); B.cyl(x, G + 0.82, z, 0.33, 0.33, 0.07, 8, cr('#7a7a92')); S.hit.circle(x, z, 0.34); }
   for (const x of [-31.6, -26.4]) { B.box(x, G, -2.4, 1.2, 0.7, 0.8, cr('#8d8397'), { base: 0.3 }); for (let i = 0; i < 4; i++) B.blob(x + (i - 1.5) * 0.3, G + 0.85, -2.4 + (i % 2) * 0.1, 0.34, 0.3, 0.3, PAL.leaf[2], PAL.leaf[i % 4], { detail: 0 }); S.hit.box(x, -2.4, 0.6, 0.4); }
-  for (let i = 0; i < 4; i++) { const x = 1.6 + i * 1.0; if (Math.abs(x - 6) < 1.5) continue; B.cyl(x, G, 2.75, 0.08, 0.08, 0.7, 6, PAL.iron, { base: 0 }); }
+  for (let i = 0; i < 4; i++) { const x = 1.6 + i * 1.0; if (Math.abs(x - 3.4) < 0.4) continue; B.cyl(x, G, 2.8, 0.08, 0.08, 0.7, 6, PAL.iron, { base: 0 }); S.hit.circle(x, 2.8, 0.1); }
   // bicycle against the lab wall: two wheels (thin tori as 8-sided rings), frame
   const bx = 9.9, bz = -2.95; for (const dx of [-0.45, 0.45]) { for (let k = 0; k < 10; k++) { const a0 = k / 10 * 6.283, a1 = (k + 1) / 10 * 6.283; B.quad([bx + dx + Math.cos(a0) * 0.33, G + 0.34 + Math.sin(a0) * 0.33, bz], [bx + dx + Math.cos(a1) * 0.33, G + 0.34 + Math.sin(a1) * 0.33, bz], [bx + dx + Math.cos(a1) * 0.29, G + 0.34 + Math.sin(a1) * 0.29, bz], [bx + dx + Math.cos(a0) * 0.29, G + 0.34 + Math.sin(a0) * 0.29, bz], PAL.ink); } }
   B.box(bx, G + 0.34, bz, 0.9, 0.04, 0.04, cr('#ff4f8b'), { base: 0 }); seg2(B, bx - 0.45, G + 0.34, bx - 0.1, G + 0.7, bz, cr('#ff4f8b')); seg2(B, bx + 0.45, G + 0.34, bx + 0.25, G + 0.72, bz, cr('#ff4f8b')); B.box(bx - 0.15, G + 0.7, bz, 0.22, 0.05, 0.08, PAL.ink); S.hit.box(bx, bz, 0.7, 0.2);
@@ -130,7 +134,7 @@ export function buildCat(x, y, z, ry) {
 export function buildBunting(S) {
   const B = S.B, cols = [NEON.warm, NEON.pink, NEON.cyan, NEON.yellow, NEON.violet];
   for (const x of [-24, -8, 8, 24]) {
-    const a = [x, G + 5.4, Z0 + 0.12], b = [x, G + 4.1, 2.55 - 0.85]; let prev = a;
+    const a = [x, G + 5.4, Z0 + 0.12], b = [x, G + 4.1, KERB_Z + 0.85]; let prev = a;
     for (let k = 1; k <= 12; k++) { const t = k / 12, p = [x, a[1] + (b[1] - a[1]) * t - Math.sin(t * Math.PI) * 0.55, a[2] + (b[2] - a[2]) * t]; bar(B, prev, p, 0.025, 0.025, PAL.iron, { base: 0 }); if (k < 12) S.GLOW.box(p[0], p[1] - 0.07, p[2], 0.1, 0.1, 0.1, cols[(k + Math.abs(x | 0)) % 5], { base: 0 }); prev = p; }
     S.halo(x, G + 4.2, 0.2, 1.2, 3.4, [0.3, 0.22, 0.2], { flat: false });
   }

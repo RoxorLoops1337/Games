@@ -10,7 +10,7 @@ export const DOORS = {
   studio: { x: 13, z: -1.7, label: 'STUDIO', icon: 'mixer', color: '#a86bff', color2: '#2ee6ff' },
   bar: { x: 27, z: -1.7, label: 'BAR', icon: 'counter', color: '#ff3ea5', color2: '#2ee6ff' },
 };
-export const MAPSPOT = { x: 6, z: 1.9 };
+export const MAPSPOT = { x: 6, z: 0.45 }; // in the walk lane, in front of the board (the board stands at the frontage edge)
 
 const cr = (c, k) => mul(col(c), k === undefined ? 1 : k);
 // oriented bar between two points in the x-y plane (facing +z), thickness t, depth d

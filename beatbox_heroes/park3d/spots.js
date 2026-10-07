@@ -1,8 +1,8 @@
 // SPOTS module (Gameplay Engineer). Activity spots in the park with glowing world markers, floating icons, proximity prompts. CONTRACT:
 //   buildSpots(ctx, terrain) -> { group, spots:[{id,label,icon,x,z,radius,release,color,cine}], update(dt,t,playerPos), nearest(playerPos)->spot|null, activate(id) }
 //   Flat (interior) scene: terrain.spotDefs [{id,anchor,label,color,color2,cine,icon}] replaces the park list, ring radius 1.1, icons hover lower. Park ids: busk (crate stage: play a set), bench (rest + talk to BeeAmGee + lesson), run (jog loop start), flyers (gate corner: odd job), gate (leave to the street)
-//   PORT (WP P4): terrain.spotDefs for EVERY world (park DEFS stay the fallback; an explicit [] = no spots). Def fields: id, anchor | x,z, label, icon, color, color2, cine, kind ('door': walking into the ring activates at once, no prompt button),
-//   ring (visual radius), radius (enter), release, iconY, iconK, pillar. setSpotState(id,{locked,reason,goal,badge}) (padlock + grey icon + dim ring; gold light beam + bobbing arrow; red dot or 1-2 char text), getSpotState(id), api.canFire() gate set by controls.
+//   PORT (WP P4): terrain.spotDefs for EVERY world (park DEFS stay the fallback; an explicit [] = no spots). Def fields: id, anchor | x,z, label, icon, color, color2, cine, kind ('door': walking into the ring activates at once, no prompt button; with intent {dwell, nx, nz} (outward normal) it activates only on intent, see refresh),
+//   ring (visual radius), radius (enter), release, iconY, iconK, pillar. setSpotState(id,{locked,reason,goal,badge}) (padlock + grey icon + dim ring; gold light beam + bobbing arrow; red dot or 1-2 char text), getSpotState(id), api.canFire() gate set by controls, api.doorIntent(spot) -> 'go'|'dwell'|'' also set by controls (intent doors).
 //   Glyph ids: busk bench run flyers gate booth couch bed desk kitchen wardrobe door map hats racks mirror counter mic mixer stage stool (unknown = star). Events: 'spot' {id,scene,kind,locked,reason}; doors also emit 'door' {id,...} just before 'spot'.
 //   activate(id) emits ctx.events 'spot' with {id, scene}. The game bridge (main.js) maps these onto the real game actions; controls.js listens to the same event for the
 //   short cinematic (lock input, ease camera, face the spot, play a clip) and unlocks on ctx.events 'spotDone'.
@@ -267,7 +267,7 @@ export function buildSpots(ctx, terrain) {
     const iconG = new THREE_.Group(); root.add(iconG);
     const icon = new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({ map: iconTex, transparent: true, depthWrite: false, toneMapped: false, fog: false, alphaTest: 0.02 })); icon.renderOrder = 6; icon.castShadow = false; iconG.add(icon);
     const s = { id: d.id, label: d.label || d.id, icon: d.icon || d.id, kind: d.kind || '', color: d.color || '#ff3ea5', color2: d.color2, cine: d.cine, anchor: d.anchor, def: d, x: 0, z: 0, rot: 0, iconY, iconK, ringR, radius, release, pr: ringR * 0.92, ph: d.pillar !== undefined ? d.pillar : base.pillar, ringSize, rk: ringR / RING_R,
-      near: false, armed: false, glow: 0, pop: 0, i, root, iconG, ring, dash, iconMesh: icon, seed: Math.random() * 6.28, placed: false, locked: false, reason: '', goal: false, badge: false, ex: null, col: col.clone(), baseCol: col };
+      near: false, armed: false, intent: d.intent && d.kind === 'door' ? { dwell: d.intent.dwell !== undefined ? +d.intent.dwell : 0.35, nx: d.intent.nx, nz: d.intent.nz } : null, dwell: 0, glow: 0, pop: 0, i, root, iconG, ring, dash, iconMesh: icon, seed: Math.random() * 6.28, placed: false, locked: false, reason: '', goal: false, badge: false, ex: null, col: col.clone(), baseCol: col };
     byId[s.id] = s; return s;
   });
   const sp = { life: new Float32Array(N * 9), ang: new Float32Array(N * 9), rad: new Float32Array(N * 9) };
@@ -285,10 +285,15 @@ export function buildSpots(ctx, terrain) {
     if (s.placed && a.x === s.x && a.z === s.z) return; s.x = a.x; s.z = a.z; s.rot = a.rot || 0; s.placed = true; s.root.visible = true; s.root.position.set(s.x, terrain && terrain.heightAt ? terrain.heightAt(s.x, s.z) || 0 : 0, s.z); placePillar(s);
   }
   function fire(s) { const e = { id: s.id, scene: ctx.sceneName || 'park', kind: s.kind, locked: !!s.locked, reason: s.reason || '' }; if (s.kind === 'door') events.emit('door', e); events.emit('spot', e); }
-  function refresh(p) {
+  function refresh(p, dt) {
     if (!p) return; const can = !api.canFire || api.canFire();
     for (const s of spots) { place(s); if (!s.placed) continue; const d = Math.hypot(p.x - s.x, p.z - s.z); if (!s.near && d < s.radius) s.near = true; else if (s.near && d > s.release) s.near = false;
-      if (s.kind === 'door') { if (d > s.release) s.armed = true; else if (s.armed && d < s.radius && can) { s.armed = false; fire(s); } } }
+      if (s.kind !== 'door') continue; if (d > s.release) s.armed = true;
+      if (!s.intent) { if (s.armed && d < s.radius && can) { s.armed = false; fire(s); } continue; }
+      // intent door: inside the ring it fires only when api.doorIntent(s) says so: 'go' (the walk goal is this door) at once, 'dwell' (standing still or pressing
+      // into the door) after intent.dwell seconds of dt (only the controls' refresh(pos, dt) counts time); just walking past gives '' and resets the timer
+      const want = s.armed && d < s.radius && can ? (api.doorIntent ? api.doorIntent(s) : 'dwell') : '';
+      if (want === 'go') { s.armed = false; s.dwell = 0; fire(s); } else if (want === 'dwell') { if (dt > 0) s.dwell += dt; if (s.dwell >= s.intent.dwell) { s.armed = false; s.dwell = 0; fire(s); } } else s.dwell = 0; }
   }
   function nearest(p) { refresh(p); let best = null, bd = 1e9; for (const s of spots) if (s.near && s.kind !== 'door') { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < bd) { bd = d; best = s; } } return best; }
   function activate(id) { const s = byId[id]; if (s) { if (s.kind === 'door') s.armed = false; fire(s); } else events.emit('spot', { id, scene: ctx.sceneName || 'park' }); }

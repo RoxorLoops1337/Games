@@ -1,6 +1,6 @@
 // Neon Row + hood world gate (W-STREET, PORT_PLAN section 3): loads `street` and `hood` through the real Park3D host in headless Chromium (swiftshader WebGL) and checks
 //   the five door spots (park home shop studio bar, kind 'door') + the `map` spot, budgets (street <= 150k tris / 120 calls, hood <= 80k tris / 120 calls), walks from the start to
-//   every door and the map board, the open / closed look of every door (setSpotState), hood pins (tap emits the spot, lock + goal state), time and rain without errors.
+//   every door and the map board, sidewalk-only routes between all doors, door intent (walking past never enters; stop / press in / walk goal does), arrival spots, the open / closed look of every door (setSpotState), hood pins (tap emits the spot, lock + goal state), time and rain without errors.
 // SKIPPED (exit 0) when playwright-core or Chromium is missing, unless BBH_BROWSER=1.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,9 +72,56 @@ const walks = await page.evaluate(async () => {
   return res;
 });
 for (const id of ['park', 'home', 'shop', 'map', 'studio', 'bar']) ok(walks[id].started && walks[id].fired, 'walk from the start to ' + id + ' fires its spot (' + walks[id].ticks + ' ticks, at x ' + walks[id].pos.x + ' z ' + walks[id].pos.z + ')');
-// walking never leaves the strip
-const strip = await page.evaluate(() => { const w = window.__world, T = w.terrain; return [T.blocked(0, -3.5), T.blocked(0, 0), T.blocked(0, 8.6), T.blocked(-36, 0), T.blocked(35.5, 0), T.heightAt(0, 0) > T.heightAt(0, 6), T.blocked(-5, -1), T.blocked(-15, -1.2)]; });
-ok(strip[0] && !strip[1] && strip[2] && strip[3] && strip[4] && strip[5] && strip[6] && !strip[7], 'walk strip z -3..8 inside x +-34, frontage only open at door bays, kerb is higher than the road: ' + strip.join(','));
+// the walk strip is the shop-side sidewalk: building line to kerb, the road and the cars are not walkable, the frontage (door bays) is
+const strip = await page.evaluate(() => { const w = window.__world, T = w.terrain; return [T.blocked(0, -3.5), !T.blocked(0, 0), T.blocked(0, 4.2), T.blocked(-11, 6), T.blocked(-36, 0), T.blocked(35.5, 0), T.heightAt(0, 0) > T.heightAt(0, 6), !T.blocked(-5, -1), !T.blocked(-15, -1.2), T.pathCost(0, 1) < T.pathCost(0, -1.5)]; });
+ok(strip.every(Boolean), 'walk strip = the sidewalk z -3..3 inside x +-34, road blocked, frontage walkable but dearer than the lane, kerb higher than the road: ' + strip.join(','));
+
+// ---------- sidewalk routes, door intent ----------
+const nav = await page.evaluate(() => {
+  const w = window.__world, T = w.terrain, c = w.controls, g = c.grid, got = []; let t = 500; w.events.on('spot', (e) => got.push(e.id)); const o = { lane: [], bad: [], fired: {}, wrong: [] };
+  const step = (dt) => { t += dt; c.update(dt, t); w.spots.update(dt, t, w.player.object.position); };
+  const settle = () => { c.setJoystick(0, 0); for (const id of ['park', 'home', 'shop', 'studio', 'bar', 'map']) w.done(id); for (let i = 0; i < 3; i++) step(0.05); got.length = 0; };
+  // a continuous clear lane: at every x from the park gate to past the bar, at least two cells of the walk lane are free
+  for (let x = -33; x <= 33; x += 0.25) { let n = 0; for (let z = -0.3; z <= 2.1; z += g.cs) if (g.walk(x, z)) n++; if (n < 2) o.lane.push(+x.toFixed(2)); }
+  // sidewalk check for a route: every sample of the smoothed path and the walked trail is a walkable sidewalk cell (z < kerb)
+  const onSide = (x, z) => z < 3.0 && g.walk(x, z) && !T.blocked(x, z);
+  const DOORS = ['park', 'home', 'shop', 'studio', 'bar'], pos = w.player.object.position;
+  for (const a of DOORS) for (const b of DOORS.concat(['map'])) {
+    if (a === b) continue; settle(); const d = T.doors[a]; c.teleportTo(d.x, d.z + 2.45); for (let i = 0; i < 3; i++) step(0.05); got.length = 0;
+    w.walkToSpot(b, {}); const P = (c.path || []).map((q) => [q[0], q[1]]); P.unshift([pos.x, pos.z]);
+    for (let i = 0; i < P.length - 1; i++) { const L = Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]), n = Math.max(1, Math.ceil(L / 0.2)); for (let k = 0; k <= n; k++) { const x = P[i][0] + (P[i + 1][0] - P[i][0]) * k / n, z = P[i][1] + (P[i + 1][1] - P[i][1]) * k / n; if (!onSide(x, z)) { o.bad.push(a + '>' + b + ' path ' + x.toFixed(1) + ',' + z.toFixed(1)); break; } } }
+    let n = 0; for (; n < 900 && !got.length; n++) { step(0.05); if (pos.z > 3.0) { o.bad.push(a + '>' + b + ' walked ' + pos.x.toFixed(1) + ',' + pos.z.toFixed(1)); break; } }
+    o.fired[a + '>' + b] = got[0] === b; if (got.length && got[0] !== b) o.wrong.push(a + '>' + b + ' fired ' + got.join(','));
+  }
+  // passing doors: tap-to-move from the park gate to in front of the bar passes home, shop and studio, nothing may fire
+  settle(); c.teleportTo(T.doors.park.x + 1.5, 0.75); step(0.05); got.length = 0; c.tapWorld(T.doors.bar.x - 1.5, 1.2); for (let i = 0; i < 700 && c.path; i++) step(0.05); for (let i = 0; i < 20; i++) step(0.05);
+  o.passTap = { fired: got.slice(), x: +pos.x.toFixed(1) };
+  // joystick straight THROUGH the home and shop rings along the frontage (walk speed): still nothing
+  const yaw = c.yaw, E = [Math.cos(yaw), Math.sin(yaw)], N = [Math.sin(yaw), -Math.cos(yaw)];
+  o.passStick = [];
+  for (const [x0, x1] of [[-18.6, -12.6], [-2.6, 2.8], [10.2, 15.8]]) { settle(); c.teleportTo(x0, -1.7); step(0.05); got.length = 0; c.setJoystick(E[0] * 0.6, E[1] * 0.6); for (let i = 0; i < 160 && pos.x < x1; i++) step(0.05); c.setJoystick(0, 0); for (let i = 0; i < 3; i++) step(0.05); o.passStick.push({ fired: got.slice(), x: +pos.x.toFixed(1), z: +pos.z.toFixed(1), to: x1 }); }
+  // stopping inside a ring enters after the dwell, but not instantly
+  settle(); c.teleportTo(-17.4, -1.7); step(0.05); got.length = 0; c.setJoystick(E[0] * 0.5, E[1] * 0.5); for (let i = 0; i < 40 && pos.x < -15.2; i++) step(0.05); c.setJoystick(0, 0);
+  let k = 0; for (; k < 40 && !got.length; k++) step(0.05); o.stop = { fired: got.slice(), ticks: k };
+  // pressing the stick into a door from the lane enters it
+  settle(); c.teleportTo(T.doors.shop.x, T.doors.shop.z + 2.45); step(0.05); got.length = 0; c.setJoystick(N[0] * 0.7, N[1] * 0.7); k = 0; for (; k < 60 && !got.length; k++) step(0.05); c.setJoystick(0, 0); o.press = { fired: got.slice(), ticks: k };
+  // arrival: every args.from start is on the lane in front of its door, facing the street (rot 0), outside the ring
+  settle(); return o;
+});
+ok(nav.lane.length === 0, 'a continuous clear walk lane along the whole sidewalk (park gate to bar), blocked at x: ' + nav.lane.slice(0, 8).join(','));
+ok(nav.bad.length === 0, 'every route between two doors (and to the map) stays on sidewalk cells: ' + nav.bad.slice(0, 4).join(' | '));
+ok(Object.values(nav.fired).every(Boolean), 'walkToSpot from every door enters every other door: ' + Object.keys(nav.fired).filter((k) => !nav.fired[k]).join(','));
+ok(nav.wrong.length === 0, 'no other door fires on the way: ' + nav.wrong.slice(0, 4).join(' | '));
+ok(nav.passTap.fired.length === 0 && nav.passTap.x > 20, 'tap-walking past home, shop and studio enters nothing: ' + JSON.stringify(nav.passTap));
+ok(nav.passStick.every((r) => r.fired.length === 0 && r.x >= r.to - 0.2), 'the joystick straight through the home, shop and studio rings enters nothing: ' + JSON.stringify(nav.passStick));
+ok(nav.stop.fired[0] === 'home' && nav.stop.ticks >= 5, 'stopping inside a door ring enters it after the dwell (~0.35 s): ' + JSON.stringify(nav.stop));
+ok(nav.press.fired[0] === 'shop', 'pressing the joystick into a door enters it: ' + JSON.stringify(nav.press));
+const arrive = await page.evaluate(async () => {
+  const h = window.__host, out = {};
+  for (const id of ['park', 'home', 'shop', 'studio', 'bar']) { await h.load('street', { time: 'dusk', from: id }); const w = h.world, s = w.terrain.anchors.start, d = w.terrain.doors[id]; out[id] = { dx: +(s.x - d.x).toFixed(2), dz: +(s.z - d.z).toFixed(2), rot: s.rot, lane: s.z > -0.4 && s.z < 2.2 && !w.terrain.blocked(s.x, s.z) }; }
+  await h.load('street', { time: 'dusk' }); window.__world = h.world; return out;
+});
+ok(Object.values(arrive).every((a) => Math.abs(a.dx) < 0.6 && a.dz > 2.2 && a.rot === 0 && a.lane), 'args.from puts you on the walk lane in front of that door, facing the street: ' + JSON.stringify(arrive));
 
 // ---------- time of day, rain, the bouncer, no errors ----------
 const env = await page.evaluate(async () => {
