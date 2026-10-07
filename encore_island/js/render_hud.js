@@ -44,7 +44,7 @@ function drawRankPill() {
   if (nx) { const f = Math.min(1, (renown() - rk.at) / (nx.at - rk.at)); ctx.fillStyle = 'rgba(255,255,255,0.14)'; rr(rx + 10, ry + 20, rw - 20, 4, 2); ctx.fill(); ctx.fillStyle = '#6ecb5a'; rr(rx + 10, ry + 20, (rw - 20) * f, 4, 2); ctx.fill(); }
   hitRect(rx, ry, rw, 30, () => openSheet('goals', 'records'));
 }
-function drawMinimap() {
+function drawMinimap(gt) {
   const r = 42, cx = vw - 12 - r, cy = 12 + r;
   const ex = worldExtent(S.lands.length), W = Math.max(ex.x1 - ex.x0, ex.y1 - ex.y0), sc = (r * 1.7) / W, mx = (ex.x0 + ex.x1) / 2, my = (ex.y0 + ex.y1) / 2;
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(cx, cy + 1.5, r + 4, 0, TAU); ctx.fill();
@@ -56,7 +56,7 @@ function drawMinimap() {
   const blob = (gg, col) => { ctx.fillStyle = col; ctx.beginPath(); for (let i = 0; i <= 28; i++) { const a = i / 28 * TAU, rad = radiusAt(gg, a), [x, y] = P(gg.x + Math.cos(a) * rad, gg.y + Math.sin(a) * rad); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.closePath(); ctx.fill(); };
   blob(HUB_GEO, '#ffd9ea'); for (const z of S.lands) blob(z.g, biomeOf(z.k).g[0]);
   const ng = geoOf(S.lands.length + 1); ctx.globalAlpha = 0.5; blob(ng, '#ffffff'); ctx.globalAlpha = 1;
-  const gt = guideTarget(); if (gt) { const [x, y] = P(gt.x, gt.y); ctx.fillStyle = '#ffd84d'; ctx.strokeStyle = HV.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 4 + Math.sin(S.t * 6), 0, TAU); ctx.fill(); ctx.stroke(); }
+  if (gt) { const [x, y] = P(gt.x, gt.y); ctx.fillStyle = '#ffd84d'; ctx.strokeStyle = HV.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 4 + Math.sin(S.t * 6), 0, TAU); ctx.fill(); ctx.stroke(); }
   const [hx, hy] = P(S.player.x, S.player.y); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#ff4d8d'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hx, hy, 3.6, 0, TAU); ctx.fill(); ctx.stroke();
   ctx.restore(); ctx.strokeStyle = HV.cream; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
 }
@@ -77,9 +77,8 @@ function guideTarget() {
   if (fo && fd > 300 * 300) return { x: fo.x, y: fo.y, label: 'Hunt creatures' };
   return null;
 }
-function drawGuide() {
-  if (typeof TCO !== 'undefined' && TCO.cur) return; // a coach card has its own arrow
-  const g = guideTarget(); if (!g || S.sheet || S.modal) return;
+function drawGuide(g) {
+  if (!g || (typeof TCO !== 'undefined' && TCO.cur)) return; // a coach card has its own arrow
   const dx = g.x - CAM.x, dy = g.y - CAM.y;
   if (dx * dx + dy * dy < 200 * 200) return;
   const a = Math.atan2(dy, dx), cx0 = vw / 2, cy0 = vh * 0.46, ca = Math.cos(a), sa = Math.sin(a), pu = 1 + Math.sin(S.t * 6) * 0.12;
@@ -108,7 +107,7 @@ function drawGroove(y) {
   if (enc) { for (let i = 0; i < 3; i++) spark(x + w * (0.2 + 0.3 * i) + Math.sin(S.t * 3 + i) * 8, y - 5 - Math.abs(Math.sin(S.t * 4 + i)) * 6, 6, 0.9); }
 }
 const DOCK = [['town', 'home', 'Town'], ['heroes', 'mic', 'Heroes'], ['goals', 'trophy', 'Goals'], ['perks', 'crown', 'Perks'], ['more', 'menu', 'More']];
-function dockPips() { const b = { town: (S.pop.length < popCap() && S.wallet >= recruitCost()) || TOWN.some(canTown), heroes: S.gems >= eggCost(S.stats.hatches), goals: S.dailies.concat(S.quests).some(q => q.done && false) || S.dailies.some(q => !q.done) && false, perks: S.crowns > 0, more: loginReady() || S.gems >= SPIN_COST }; const fp = featPips(); for (const k in fp) b[k] = true; return b; }
+function dockPips() { const b = { town: (S.pop.length < popCap() && S.wallet >= recruitCost()) || TOWN.some(canTown), heroes: S.gems >= eggCost(S.stats.hatches), goals: false, perks: S.crowns > 0, more: loginReady() || spinFree() || S.gems >= SPIN_COST }; const fp = featPips(); for (const k in fp) b[k] = true; return b; }
 const DOCK_H = 74;
 const DOCK_COL = { town: ['#ffa8cf', '#e0488f'], heroes: ['#b99cff', '#6a3fd8'], goals: ['#ffe27a', '#e8921e'], perks: ['#8ef0e4', '#1f9a98'], more: ['#9ec4ff', '#4a6fd8'] };
 // the main menu: a bright cream bar with five big colour-coded buttons so it always stands out from the world
@@ -198,8 +197,9 @@ function drawTitle() {
 }
 function drawHudTop() {
   if (!S.started) return;
-  drawPlayerCard(); drawRankPill(); drawLandChip(); drawMinimap(); if (!S.sheet && !S.modal) drawCombo();
-  if (!S.sheet && !S.modal) drawGuide();
+  const gt = guideTarget(); // computed once: the minimap dot and the arrow share it
+  drawPlayerCard(); drawRankPill(); drawLandChip(); drawMinimap(gt);
+  if (!S.sheet && !S.modal) { drawCombo(); drawGuide(gt); }
 }
 function drawHudBottom() {
   if (!S.started) return;

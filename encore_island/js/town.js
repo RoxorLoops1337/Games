@@ -30,7 +30,7 @@ function buyTown(id) {
   const tier0 = townTierIdx(); S.wallet -= townCost(b);
   if (id === 'cottage') S.houses++; else S.town[id] = townLvl(id) + 1;
   sfx('built', true); shake(5); starBurst(STAGE.x, STAGE.y - 30, 16, ['#ffe98a', '#ff9ac8', '#9af0b4'], 260);
-  const t1 = townTierIdx(); if (t1 > tier0) { S.toasts.push({ txt: 'Your town is now a ' + TOWN_TIERS[t1][0].toUpperCase() + '!  +5% coins', t: 0, ic: 'crown' }); JUICE.flash = 0.5; sfx('levelup', true); }
+  const t1 = townTierIdx(); if (t1 > tier0) { toast('Your town is now a ' + TOWN_TIERS[t1][0].toUpperCase() + '!  +5% coins', 'crown'); JUICE.flash = 0.5; sfx('levelup', true); }
   return true;
 }
 // ---- per-fan training ----

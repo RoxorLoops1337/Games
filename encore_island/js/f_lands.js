@@ -36,10 +36,8 @@ const ldMastBonus = (k) => 0.03 * ldMastLv(k);
 function ldMastKill(e) {
   if (e.k > S.lands.length) return;
   const m = ldMast(e.k); m.kills++;
-  if (m.lv < LD_MAST_MAX) {
-    const coins = Math.ceil(helmVal(e.k) * coinMul() * 1.55 * ldMastBonus(e.k)); if (coins > 0) { S.pallet += coins; S.stats.earned += coins; }
-    while (m.lv < LD_MAST_MAX && m.kills >= ldCum(m.lv + 1)) { m.lv++; ldMastLevelUp(e.k, m); }
-  } else { const coins = Math.ceil(helmVal(e.k) * coinMul() * 1.55 * ldMastBonus(e.k)); S.pallet += coins; S.stats.earned += coins; }
+  const coins = Math.ceil(helmVal(e.k) * coinMul() * 1.55 * ldMastBonus(e.k)); S.pallet += coins; S.stats.earned += coins;
+  while (m.lv < LD_MAST_MAX && m.kills >= ldCum(m.lv + 1)) { m.lv++; ldMastLevelUp(e.k, m); }
 }
 function ldMastLevelUp(k, m) {
   const i = LD_MS.indexOf(m.lv); if (i < 0) return;
@@ -107,7 +105,6 @@ function revealSecrets(k, seconds) {
 window.revealSecrets = revealSecrets;
 
 // ---------------------------------------------------------------- events
-function ldEvDur(ev) { return ev.dur; }
 function ldStartEvent(type, k) {
   const st = fs('lands'); if (!S.lands.length) return null;
   type = type || LD_EV_ORDER[Math.floor(vrnd() * 4)]; k = k || (1 + Math.floor(vrnd() * S.lands.length));
@@ -171,9 +168,9 @@ function ldVarApply(e, v) {
     };
   } else if (v === 'summon') e.sumT = 4;
   else if (v === 'duet' && !e.duetKid) {
-    const z = S.lands[e.k - 1], kid = Object.assign({}, e, { duetKid: true, x: e.x + 60, y: e.y + 30, tx: e.tx, ty: e.ty, vx: 0, vy: 0, fx: undefined });
+    const kid = Object.assign({}, e, { duetKid: true, x: e.x + 60, y: e.y + 30, tx: e.tx, ty: e.ty, vx: 0, vy: 0, fx: undefined });
     kid.max = Math.ceil(e.max * 0.6); kid.hp = kid.max; kid.r = Math.round(e.r * 0.8); kid.dmg = e.dmg * 0.7; kid.spd = e.spd * 1.1; kid.born = 0; kid.hurt = 0; kid.atkCd = 1;
-    S.enemies.push(kid); e.partner = kid; kid.partner = e; puff(kid.x, kid.y, '#ffa0d0', 14, true); ringFx(kid.x, kid.y, 90, '#ffa0d0', 0.5); void z;
+    S.enemies.push(kid); e.partner = kid; kid.partner = e; puff(kid.x, kid.y, '#ffa0d0', 14, true); ringFx(kid.x, kid.y, 90, '#ffa0d0', 0.5);
   }
   const bv = fs('bossvar'); (bv.seen || (bv.seen = {}))[v] = (bv.seen[v] || 0) + 1;
   toast(D.msg, 'crown', 4.2); sfx('boss', true);

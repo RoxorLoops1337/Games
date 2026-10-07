@@ -13,13 +13,20 @@ function updateCamera(dt) {
   if (!CAM.init) { CAM.x = tx; CAM.y = ty; CAM.init = true; }
   const k = Math.min(1, dt * 5.5); CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;
 }
+const VIGNETTE = { key: '', edge: null, top: null }; // both gradients depend only on the screen size
 function drawVignette() {
   if (JUICE.flash > 0) { ctx.fillStyle = 'rgba(255,240,170,' + (JUICE.flash * 0.45) + ')'; ctx.fillRect(0, 0, vw, vh); JUICE.flash = Math.max(0, JUICE.flash - 0.03); }
-  const r = Math.hypot(vw, vh) * 0.62, g = ctx.createRadialGradient(vw / 2, vh * 0.46, r * 0.45, vw / 2, vh * 0.46, r); g.addColorStop(0, 'rgba(60,30,120,0)'); g.addColorStop(1, 'rgba(60,30,120,0.24)'); ctx.fillStyle = g; ctx.fillRect(0, 0, vw, vh);
-  const t = ctx.createLinearGradient(0, 0, 0, vh * 0.4); t.addColorStop(0, 'rgba(255,240,200,0.12)'); t.addColorStop(1, 'rgba(255,240,200,0)'); ctx.fillStyle = t; ctx.fillRect(0, 0, vw, vh * 0.4);
+  const key = vw + 'x' + vh;
+  if (VIGNETTE.key !== key) {
+    const r = Math.hypot(vw, vh) * 0.62, g = ctx.createRadialGradient(vw / 2, vh * 0.46, r * 0.45, vw / 2, vh * 0.46, r); g.addColorStop(0, 'rgba(60,30,120,0)'); g.addColorStop(1, 'rgba(60,30,120,0.24)');
+    const t = ctx.createLinearGradient(0, 0, 0, vh * 0.4); t.addColorStop(0, 'rgba(255,240,200,0.12)'); t.addColorStop(1, 'rgba(255,240,200,0)');
+    VIGNETTE.key = key; VIGNETTE.edge = g; VIGNETTE.top = t;
+  }
+  ctx.fillStyle = VIGNETTE.edge; ctx.fillRect(0, 0, vw, vh);
+  ctx.fillStyle = VIGNETTE.top; ctx.fillRect(0, 0, vw, vh * 0.4);
 }
 function draw(dt) {
-  hits = []; PLATE_POS.length = 0;
+  hits = [];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   updateCamera(dt || 0.016);
   drawWater();
@@ -53,5 +60,5 @@ function boot() {
 }
 if (typeof window.__EI_HEADLESS__ === 'undefined') boot();
 window.EI = { get S() { return S; }, set S(v) { S = v; }, initGame, newState, tick, draw, save, loadSave, serialize, applySave, resetAll, setupCtx, resize, tickFx, boot,
-  fmt, rnd, seedMain, hash01, walkable, landAt, genLand, geoOf, radiusAt, routeBetween, openNextLand, addLand, spawnEnemy, killEnemy, hurtEnemy, dropItem, pay, prestige, recruit, buyHouse, setFans, hatchEgg, spinWheel, claimLogin, castUlt, dashAbility, petAbility, buySkin, buyCperk, pickCard, drawCards, grantXp, startEncore, questEvent, openSheet, closeSheet, guideTarget,
+  fmt, rnd, seedMain, hash01, walkable, landAt, genLand, geoOf, radiusAt, unlockSpot, worldExtent, routeBetween, openNextLand, addLand, spawnEnemy, killEnemy, hurtEnemy, dropItem, pay, prestige, recruit, setFans, hatchEgg, spinWheel, claimLogin, castUlt, dashAbility, petAbility, buySkin, buyCperk, pickCard, drawCards, grantXp, startEncore, questEvent, openSheet, closeSheet, guideTarget,
   helmVal, foeHp, unlockCost, bcost, foeName, foeArtName, metal, entryVal, coinMul, pDmg, pRate, cap, popCap, flowMul, crownsToGain, BIOMES, SKINS, PETS, CARDS, ACH, QDEFS, UPG, GEMU, UPG_POS, GEM_POS, SELL, VAULT, FORGE, TRAY, STAGE, MONU, HUB_GEO, LAND_GEO, TOWN, TOWN_BY, townCost, townLvl, buyTown, trainFan, fanTrainCost, fanCarryCap, fanDmgOf, fanMaxLvl, townTierIdx, recruitCost, beatTap, onBeatNow, FEATS, TABS, MODS, mod, modAdd, fEmit, fs, featPips, sheetTabs, regFeature, regTab, regMod, hits: () => hits };

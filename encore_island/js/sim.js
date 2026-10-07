@@ -3,7 +3,6 @@
 let S;
 const SAVE_KEY = 'encore_island_save_v1';
 function newState() {
-  const g = (k) => ({ paid: 0, cost: k });
   return {
     ver: 1, t: 0, started: false, bpm: 112,
     wallet: 0, pallet: 0, gems: 0, crowns: 0, prestiges: 0,
@@ -16,17 +15,17 @@ function newState() {
     stick: null, flowKey: null, flowT: 0, flowTouched: false,
     combo: 0, comboT: 0, comboFlash: 0, comboBest: 0, groove: 0, grooveT: 0, beatChain: 0, beatBuffT: 0, beatLock: 0, beatFlash: 0, beatBest: 0, encoreT: 0, frenzyT: 0, goldRushT: 0,
     xp: 0, level: 1, perks: {}, cards: null, pendingLevels: 0, ult: 0, ultCasting: 0,
-    forge: null, forgePlate: { paid: 0, cost: Math.ceil(260), built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
+    forge: null, forgePlate: { paid: 0, cost: 260, built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
     waygate: false, wayPlate: { paid: 0, cost: 400, built: false },
     pop: [], houses: 0, town: {}, fanSeq: 0, prestT: 0, feat: {}, hold: false,
     pets: {}, activePet: null, petCd: 0,
     skins: { owned: { jasmin: true }, active: 'jasmin' }, cperks: {},
-    chest: null, chestCd: CHEST_CD * 0.5, bossesSeen: {}, bestiary: {},
+    chest: null, chestCd: CHEST_CD * 0.5, bestiary: {},
     login: { day: 0, last: '' }, spinFree: 0, wheel: null,
     dailies: [], quests: [], streak: 0, dayKey: '', ach: {},
     stats: { kills: 0, bosses: 0, earned: 0, sold: 0, gemsFound: 0, chests: 0, quests: 0, hatches: 0, spins: 0, elites: 0, playT: 0, perfect: 0, encores: 0, ults: 0, logins: 0, crafted: 0 },
     settings: { shake: true, particles: true, dmgNums: true, haptics: true, music: true, sfx: true },
-    goldPulse: 0, achCd: 0.5, spawnCount: 0, camera: { x: 0, y: 0 },
+    goldPulse: 0, achCd: 0.5,
   };
 }
 
@@ -55,7 +54,7 @@ const pickR = () => PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + pe
 function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (encoreOn() ? 2 : 1) * (S.goldRushT > 0 ? 3 : 1) * townTierMul() * mod('coin'); }
 const critChance = () => 0.10 * S.gemUp.crit + 0.06 * pk('crit') + modAdd('crit');
 const critMult = () => 3 + 0.6 * pk('critdmg') + modAdd('critmult');
-const pMaxHp = () => Math.ceil((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns * 0) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')) * mod('hp'));
+const pMaxHp = () => Math.ceil((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')) * mod('hp'));
 const speedNow = () => SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')) * (1 + cperkBonus('speed')) * mod('speed');
 const dashCdMax = () => dashCdMaxFor(S.crowns, pk('nimble'));
 const fighterDmg = () => DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * 0.5;
@@ -115,7 +114,7 @@ function promoteElite() {
   if (!pool.length) return false;
   const e = pool[Math.floor(vrnd() * pool.length)];
   e.elite = true; e.max = Math.ceil(e.max * 4) + 1; e.hp = e.max; e.r += 6; e.dmg *= 1.5; e.spd *= 0.9;
-  S.toasts.push({ txt: 'A Champion rises!', t: 0, ic: 'elite' }); float(e.x, e.y - 60, 'CHAMPION', '#ffd94a', true); shake(8); sfx('boss', true); buzz(30);
+  toast('A Champion rises!', 'elite'); float(e.x, e.y - 60, 'CHAMPION', '#ffd94a', true); shake(8); sfx('boss', true); buzz(30);
   return true;
 }
 function dropItem(x, y, spec, vis) {
@@ -171,7 +170,7 @@ function registerCombo(e) {
   if (mul > 1) { const bonus = Math.ceil(helmVal(e.k) * (mul - 1) * coinMul()); if (bonus > 0) { S.pallet += bonus; S.stats.earned += bonus; float(e.x, e.y - 30, '+' + fmt(bonus), comboColor()); questEvent('earn', bonus); } }
   if (S.combo > 1 && S.combo % 5 === 0) { S.comboFlash = 0.5; sfx('combo', false, 1 + Math.min(1, S.combo / 80)); }
   const R = COMBO_REWARDS.find(r => r.at === S.combo);
-  if (R) { S.toasts.push({ txt: R.label, t: 0, ic: 'groove' }); R.fx(); starBurst(S.player.x, S.player.y - 40, 22, ['#ffd94a', '#ff9ac8', '#9af0b4'], 300); shake(7); JUICE.flash = 0.3; sfx('levelup', true); }
+  if (R) { toast(R.label, 'groove'); R.fx(); starBurst(S.player.x, S.player.y - 40, 22, ['#ffd94a', '#ff9ac8', '#9af0b4'], 300); shake(7); JUICE.flash = 0.3; sfx('levelup', true); }
 }
 function comboCoins(m) { const g = Math.ceil(60 * m * helmVal(Math.max(1, S.lands.length)) * coinMul()); S.pallet += g; S.stats.earned += g; }
 const COMBO_REWARDS = [
@@ -204,7 +203,7 @@ function beatTap() {
 }
 function startEncore() {
   S.groove = 0; S.encoreT = ENCORE_TIME; S.player.cheerT = 0.9; S.stats.encores++; fEmit('encore'); questEvent('encore', 1);
-  S.toasts.push({ txt: 'ENCORE!  double damage + coins', t: 0, ic: 'groove' });
+  toast('ENCORE!  double damage + coins', 'groove');
   JUICE.flash = 0.7; ringFx(S.player.x, S.player.y - 10, 160, '#ff9ac8', 0.6); ringFx(S.player.x, S.player.y - 10, 100, '#ffe98a', 0.45);
   starBurst(S.player.x, S.player.y - 30, 26, ['#ff9ac8', '#ffe98a', '#9af0b4', '#c6a8ff'], 340); shake(8); sfx('encore', true); buzz([30, 20, 60]);
   if (typeof AUDIO !== 'undefined' && AUDIO.setEncore) AUDIO.setEncore(true);

@@ -41,14 +41,15 @@ const ICON_PAINT = {
   heart() { ICON_PAINT.hp(); },
   tick() { ctx.lineCap = 'round'; ctx.strokeStyle = HV.line; ctx.lineWidth = 22; ctx.beginPath(); ctx.moveTo(-32, 4); ctx.lineTo(-8, 30); ctx.lineTo(36, -26); ctx.stroke(); ctx.strokeStyle = '#7cf09a'; ctx.lineWidth = 12; ctx.stroke(); },
   paw() { ICON_PAINT.pet(); },
-  vamp() { ICON_PAINT.hp(); }, range() { ICON_PAINT.way(); }, regen() { ICON_PAINT.hp(); }, nimble() { ICON_PAINT.speed(); }, magnet2() { ICON_PAINT.magnet(); },
+  vamp() { ICON_PAINT.hp(); }, range() { ICON_PAINT.way(); }, regen() { ICON_PAINT.hp(); }, nimble() { ICON_PAINT.speed(); },
   multi() { ICON_PAINT.groove(); }, critdmg() { ICON_PAINT.crit(); }, velocity() { ICON_PAINT.speed(); }, combow() { ICON_PAINT.groove(); }, scholar() { ICON_PAINT.scroll(); }, thorns() { ICON_PAINT.amp(); }, luck() { ICON_PAINT.star(); },
 };
 function paintCrownAt(x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); paintCrown(); ctx.restore(); }
 // draw a cached glyph centred at (x,y) with a nominal size in px
+const ICON_KEYS = {}; // 'ic_' + key, built once per glyph
 function drawIcon(key, x, y, size) {
   const p = ICON_PAINT[key]; if (!p) return false;
-  const c = sprite('ic_' + key, 128, () => { ctx.scale(0.95, 0.95); p(); });
+  const c = sprite(ICON_KEYS[key] || (ICON_KEYS[key] = 'ic_' + key), 128, () => { ctx.scale(0.95, 0.95); p(); });
   if (c) ctx.drawImage(c, x - size / 2, y - size / 2, size, size);
   else { ctx.save(); ctx.translate(x, y); ctx.scale(size / 128 * 0.95, size / 128 * 0.95); p(); ctx.restore(); }
   return true;
@@ -89,7 +90,7 @@ function paintProp(type, v, B) {
 }
 const PROP_D = { tree: 92, rock: 50, bush: 58, flower: 50 };
 function drawProp(p, B, bi) {
-  const key = 'pr_' + bi + '_' + p.t + '_' + p.v, d = PROP_D[p.t] * p.s;
+  const key = p.key || (p.key = 'pr_' + bi + '_' + p.t + '_' + p.v), d = PROP_D[p.t] * p.s; // a prop never changes land, so its key is fixed
   const c = sprite(key, 128, () => { ctx.scale(0.95, 0.95); paintProp(p.t, p.v, B); });
   if (p.t === 'tree' || p.t === 'rock' || p.t === 'bush') { ctx.fillStyle = 'rgba(40,20,80,0.2)'; ctx.beginPath(); ctx.ellipse(p.x + d * 0.06, p.y + d * 0.04, d * (p.t === 'tree' ? 0.26 : 0.34), d * 0.08, 0, 0, TAU); ctx.fill(); }
   if (c) ctx.drawImage(c, p.x - d / 2, p.y - d * (p.t === 'tree' ? 0.78 : 0.62), d, d);

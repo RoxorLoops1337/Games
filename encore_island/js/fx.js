@@ -19,7 +19,7 @@ function flyTo(kind, x0, y0, x1, y1, o) {
   S.fly.push(Object.assign({ kind, x0, y0, x1, y1, t: 0, delay: 0, dur: 0.4, arc: 36 + vrnd() * 44, spin: (vrnd() - 0.5) * 16 }, o || {}));
 }
 const PENTA = [1, 1.125, 1.25, 1.5, 1.667, 2, 2.25, 2.5];
-const JUICE = { w: null, pulse: 0, flash: 0, t: 0, chain: 0, chainT: -9, prevWallet: 0, shake: 0, hitStop: 0 };
+const JUICE = { flash: 0, chain: 0, chainT: -9, shake: 0, hitStop: 0 };
 function chainPitch() { // rising pentatonic scale while you keep collecting or selling
   if (S.t - JUICE.chainT > 0.6) JUICE.chain = 0; else JUICE.chain++;
   JUICE.chainT = S.t; return PENTA[JUICE.chain % PENTA.length] * (1 + Math.floor(JUICE.chain / PENTA.length) * 0.5);

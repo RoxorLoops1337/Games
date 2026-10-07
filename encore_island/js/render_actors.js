@@ -1,6 +1,5 @@
 'use strict';
 // Encore Island — actors, effects, and the main world draw (camera, culling, y-sorting).
-function heroArtName(skin) { return (skin || activeSkin()).art; }
 function drawHero() {
   const p = S.player, sk = activeSkin(), nm = sk.art, hk = 0.62;
   const bob = p.moving ? Math.abs(Math.sin(S.t * 12)) * 2 : 0;
@@ -11,7 +10,6 @@ function drawHero() {
   const ult = S.ultCasting > 0, cheer = (p.cheerT || 0) > 0, hur = p.hurtT > 0, atk = p.atkT > 0;
   const anim = hur ? 'hurt' : ult ? 'cast' : cheer ? 'cheer' : atk ? 'attack' : p.moving ? 'walk' : 'idle';
   const fr = hur ? 0 : ult ? Math.min(3, ((1.4 - S.ultCasting) * 5) | 0) : cheer ? (S.t * 8) | 0 : atk ? Math.min(3, ((0.4 - p.atkT) * 10) | 0) : p.moving ? (S.t * 12) | 0 : (S.t * 5) | 0;
-  const sq = 1 + Math.sin(beatNow() * TAU) * 0.012;
   if (!artDraw(nm, anim, fr, p.x, p.y + 4 - bob, hk, p.face < 0)) { ctx.fillStyle = '#ff9ac8'; rr(p.x - 11, p.y - 40, 22, 40, 8); ctx.fill(); }
   ctx.globalAlpha = 1;
   const fm = flowMul(); if (S.flowKey !== null && fm >= 2) { const pu = 1 + Math.sin(S.t * 10) * 0.1; ctx.save(); ctx.translate(p.x + 34, p.y - 56 - bob); ctx.scale(pu, pu); ctx.fillStyle = '#ffd94a'; ctx.font = font(15); ctx.textAlign = 'left'; ctx.fillText('x' + fmt(Math.round(fm)), 0, 0); ctx.restore(); }
@@ -127,40 +125,48 @@ function drawFloats() {
   ctx.globalAlpha = 1;
 }
 // ---- the world pass ----
+// y-sorted actors: entries live in a pool and carry their draw function + up to three arguments, so a frame allocates no closures
+const YS = [], YS_POOL = [];
+let ysN = 0;
+function ysAdd(y, f, a, b, c) {
+  let e = YS_POOL[ysN]; if (!e) YS_POOL[ysN] = e = { y: 0, f: null, a: null, b: null, c: null };
+  e.y = y; e.f = f; e.a = a; e.b = b; e.c = c; YS[ysN++] = e;
+}
+const ysCmp = (p, q) => p.y - q.y;
 function drawWorld() {
-  const n = S.lands.length, lands = [];
-  for (let k = 1; k <= n; k++) lands.push(S.lands[k - 1]);
-  const all = [HUB_GEO].concat(lands.map(z => z.g));
-  for (const g of all) if (landVisible(g)) drawIslandBase(g, g.k === 0 ? BIOMES[0] : biomeOf(g.k));
+  const n = S.lands.length, hub = landVisible(HUB_GEO);
+  if (hub) drawIslandBase(HUB_GEO, BIOMES[0]);
+  for (const z of S.lands) if (landVisible(z.g)) drawIslandBase(z.g, biomeOf(z.k));
   drawPaths(n);
-  for (const g of all) if (landVisible(g)) drawIslandTop(g, g.k === 0 ? BIOMES[0] : biomeOf(g.k), g.k === 0 ? 0 : (g.k - 1) % 8, g.k === 0 ? undefined : S.lands[g.k - 1].born);
+  if (hub) drawIslandTop(HUB_GEO, BIOMES[0], 0);
+  for (const z of S.lands) if (landVisible(z.g)) drawIslandTop(z.g, biomeOf(z.k), (z.k - 1) % 8, z.born);
   drawMist(n + 1);
-  if (landVisible(HUB_GEO)) { drawHubFloor(); }
-  for (const z of lands) if (landVisible(z.g)) drawDen(z);
+  if (hub) drawHubFloor();
+  for (const z of S.lands) if (landVisible(z.g)) drawDen(z);
   // ground-level furniture
-  if (landVisible(HUB_GEO)) { drawHubSign(); drawHubPlates(); drawUnlockPlate(); }
-  else drawUnlockPlate();
-  for (const z of lands) if (landVisible(z.g)) drawLandPlates(z);
-  // y-sorted actors
-  const A = [];
-  const add = (y, f) => A.push({ y, f });
-  if (landVisible(HUB_GEO)) {
-    add(SELL.y + 30, drawStall); add(VAULT.y + 30, drawVault); add(MONU.y + 30, drawMonument); add(FORGE.y + 40, drawForgeArea);
-    for (const l of HUBLAMPS) if (vis(l.x, l.y, 90)) add(l.y, () => drawLamp(l));
-    for (const d of HUBDECOR) if (vis(d.x, d.y, 80)) add(d.y, () => drawProp(d, BIOMES[0], 0));
+  if (hub) { drawHubSign(); drawHubPlates(); }
+  drawUnlockPlate();
+  for (const z of S.lands) if (landVisible(z.g)) drawLandPlates(z);
+  // y-sorted actors (drawFoe is looked up per frame on purpose: f_rivals wraps it at run time)
+  ysN = 0;
+  if (hub) {
+    ysAdd(SELL.y + 30, drawStall); ysAdd(VAULT.y + 30, drawVault); ysAdd(MONU.y + 30, drawMonument); ysAdd(FORGE.y + 40, drawForgeArea);
+    for (const l of HUBLAMPS) if (vis(l.x, l.y, 90)) ysAdd(l.y, drawLamp, l);
+    for (const d of HUBDECOR) if (vis(d.x, d.y, 80)) ysAdd(d.y, drawProp, d, BIOMES[0], 0);
   }
-  for (const z of lands) if (landVisible(z.g)) {
+  for (const z of S.lands) if (landVisible(z.g)) {
     const bi = (z.k - 1) % 8, B = BIOMES[bi];
-    for (const d of decorOf(z.g)) if (vis(d.x, d.y, 80)) add(d.y, () => drawProp(d, B, bi));
-    for (const tw of z.towers) add(tw.y + 30, () => drawTower(tw));
+    for (const d of decorOf(z.g)) if (vis(d.x, d.y, 80)) ysAdd(d.y, drawProp, d, B, bi);
+    for (const tw of z.towers) ysAdd(tw.y + 30, drawTower, tw);
   }
-  for (const it of S.items) if (vis(it.x, it.y, 60)) add(it.y, () => drawItemWorld(it));
-  for (const e of S.enemies) if (vis(e.x, e.y, 120)) add(e.y, () => drawFoe(e));
-  for (const d of S.dead) if (vis(d.x, d.y, 120)) add(d.y, () => drawDeadFoe(d));
-  for (const f of S.pop) if (vis(f.x, f.y, 80)) add(f.y, () => drawFan(f));
-  if (S.chest && vis(S.chest.x, S.chest.y, 80)) add(S.chest.y, () => drawChest(S.chest));
-  add(S.comp.y, drawCompanion); add(S.player.y, drawHero);
-  A.sort((a, b) => a.y - b.y); for (const a of A) a.f();
+  for (const it of S.items) if (vis(it.x, it.y, 60)) ysAdd(it.y, drawItemWorld, it);
+  for (const e of S.enemies) if (vis(e.x, e.y, 120)) ysAdd(e.y, drawFoe, e);
+  for (const d of S.dead) if (vis(d.x, d.y, 120)) ysAdd(d.y, drawDeadFoe, d);
+  for (const f of S.pop) if (vis(f.x, f.y, 80)) ysAdd(f.y, drawFan, f);
+  if (S.chest && vis(S.chest.x, S.chest.y, 80)) ysAdd(S.chest.y, drawChest, S.chest);
+  ysAdd(S.comp.y, drawCompanion); ysAdd(S.player.y, drawHero);
+  YS.length = ysN; YS.sort(ysCmp);
+  for (let i = 0; i < ysN; i++) { const e = YS[i]; e.f(e.a, e.b, e.c); }
   drawUnlockBanner();
   drawFeaturesWorld();
   drawShots(); drawFly(); drawFx(); drawFloats();
