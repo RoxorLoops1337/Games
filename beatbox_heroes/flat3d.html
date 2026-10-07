@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#120d1f"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Beatbox Heroes: Flat 3D</title>
+<style>
+html,body{margin:0;height:100%;background:#120d1f;overflow:hidden;touch-action:none;overscroll-behavior:none;font-family:"Trebuchet MS",system-ui,sans-serif;color:#fff0c9;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+/* the app box is 9:16 (or the full screen on taller phones); canvas and all UI overlays live inside it */
+#app{position:relative;height:100%;aspect-ratio:9/16;max-width:100%;overflow:hidden;background:#120d1f}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#120d1f;font-weight:800;letter-spacing:.12em;color:#ffd27a;transition:opacity .5s;z-index:5;pointer-events:none}
+#boot.off{opacity:0}
+</style></head><body>
+<div id="stage"><div id="app"><canvas id="cv"></canvas><div id="boot">BEATBOX HEROES</div></div></div>
+<script src="park3d.bundle.js"></script>
+<script>
+(async () => {
+  // Flat scene (Park3D.init scene 'flat'): UI (top bar, prompt button, joystick, minimap, toasts) is built by ui3d.js inside #app; ?nointro skips the fly-in; ?q=low|med|high, ?t=day|dusk|night
+  const qs = new URLSearchParams(location.search);
+  const api = await Park3D.init('#cv', { scene: 'flat', time: qs.get('t') || 'dusk', quality: qs.get('q') || undefined, onSpot: (s) => { window.__lastSpot = s; }, onNpc: (n) => { window.__lastNpc = n; } });
+  const boot = document.getElementById('boot'); boot.classList.add('off'); setTimeout(() => boot.remove(), 600);
+})();
+</script></body></html>
