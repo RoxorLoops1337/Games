@@ -115,7 +115,7 @@ ok(CAT.GROUPS.acc.every((it) => KNOWN.acc[it.slot].indexOf(it.id) >= 0), 'KNOWN 
   const t0 = c.object.getObjectByName('char_lit').geometry.attributes.position.count;
   for (const mood of MOODS) { c.setMood(mood, true); c.play('idle'); for (let i = 0; i < 6; i++) c.update(1 / 30, i / 30); ok(bonesOk(c), 'mood ' + mood + ' stays finite'); ok(c.mood === mood, 'mood ' + mood + ' is set'); }
   eq(MOODS, ['neutral', 'happy', 'sad', 'angry', 'shout'], 'five moods'); c.setMood('nonsense'); eq(c.anim.mood, 'neutral', 'unknown mood falls back to neutral'); ok(t0 > 0, 'lit geometry exists');
-  c.setMood('sad', true); c.update(0.02, 0); const B = c.rig.map; ok(B.lipF.scale.y > 0.5 && B.lipS.scale.y < 0.05, 'sad shows the frown and hides the smile'); c.setMood('happy', true); c.update(0.02, 0); ok(B.lipS.scale.y > 1.2 && B.lipF.scale.y < 0.05, 'happy widens the smile');
+  c.setMood('sad', true); c.update(0.02, 0); const B = c.rig.map; ok(B.lipF.scale.y > 0.5 && B.lipS.scale.y < 0.05, 'sad shows the frown and hides the smile'); c.setMood('happy', true); c.update(0.02, 0); ok(B.mouth.scale.y > 0.2 && B.lipS.scale.y < 0.05 && B.lipF.scale.y < 0.05, 'happy opens a grin and hides the closed lip lines (one mouth only)'); c.setMood('neutral', true); c.play('idle'); c.update(0.02, 0); ok(B.lipS.scale.y > 0.5 && B.mouth.scale.y < 0.01, 'neutral idle shows only the closed smile line');
   c.setMood('angry', true); c.update(0.02, 0); ok(B.browL.quaternion.z * B.browR.quaternion.z < 0 || Math.abs(B.browL.quaternion.z) > 0.1, 'angry tilts the brows');
   c.dispose();
 }
