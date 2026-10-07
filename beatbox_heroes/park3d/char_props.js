@@ -1,6 +1,6 @@
 // CHARACTER PROPS: small hand-held props for the 'hold' clip and the judges: card (playing card), box (cardboard), clipboard, scorecard (judge's card with a 7 segment score).
 // A prop is a plain (unskinned) group in the character's object space. The animator places it between the hands (clip targets) or at the right hand when no clip drives it.
-// Built from the same primitives and colours as the characters (vertex colours, shared lit/glow materials). Each prop is <= 80 tris.
+// Built from the same primitives and colours as the characters (vertex colours, shared lit/glow materials). Each prop is <= 120 tris.
 import { THREE } from './kit.js';
 import { MB, K, C, mix, shade, lite, box, plainGeo, INK, CREAM } from './char_geo.js';
 

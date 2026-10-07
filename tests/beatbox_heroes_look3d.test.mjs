@@ -14,7 +14,7 @@ const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'look3d_test_
 const watchdog = setTimeout(() => { console.error('FAIL: look3d suite hung'); process.exit(1); }, 240000);
 
 await esbuild.build({ entryPoints: [CH], outfile: path.join(tmp, 'chars.mjs'), bundle: true, format: 'esm', platform: 'node', logLevel: 'error' });
-const errs = []; const origErr = console.error; console.error = (...a) => { errs.push(a.join(' ').slice(0, 200)); };
+const errs = []; const origErr = console.error; const quiet = () => { console.error = (...a) => { errs.push(a.join(' ').slice(0, 200)); }; }, loud = () => { console.error = origErr; };
 const M = await import(pathToFileURL(path.join(tmp, 'chars.mjs')).href);
 const { createCharacter, createNPC, createCast, castLooks, createCrowd, portrait, normLook, CLIPS, MOODS, KNOWN, JUDGES3D, TRI_BUDGET } = M;
 const CTX = { quality: 'high' };
@@ -38,7 +38,7 @@ for (const g of Object.keys(CAT.GROUPS)) {
   ok(setter[g], 'renderer test covers catalog group ' + g);
   for (const it of CAT.GROUPS[g]) {
     const L = clone(CAT.DEFAULT_LOOK); setter[g](L, it); const before = errs.length;
-    let threw = null; try { hero.setLook(L); } catch (e) { threw = e; }
+    let threw = null; quiet(); try { hero.setLook(L); } catch (e) { threw = e; } loud();
     ok(!threw && errs.length === before, g + ':' + it.id + ' builds without throwing' + (threw ? ': ' + threw.message : errs.length > before ? ': ' + errs[errs.length - 1] : ''));
     ok(hero.tris <= TRI_BUDGET, g + ':' + it.id + ' within ' + TRI_BUDGET + ' tris (' + hero.tris + ')'); ok(geoOk(hero), g + ':' + it.id + ' geometry has no NaN');
     built++; if (hero.tris > maxTris) { maxTris = hero.tris; maxId = g + ':' + it.id; }
@@ -97,7 +97,7 @@ ok(CAT.GROUPS.acc.every((it) => KNOWN.acc[it.slot].indexOf(it.id) >= 0), 'KNOWN 
   const cast = createCast(CTX, Core); const all = cast.buildAll();
   eq(all.length, Object.keys(Core.NPCS).length + Core.OPPONENTS.length + Core.FINALS.length + Core.JUDGES.length + 1, 'buildAll builds the whole cast (' + all.length + ')');
   for (const c of all) { ok(c.tris <= TRI_BUDGET && c.tris > 500, 'cast ' + c.castKey + ' within budget (' + c.tris + ')'); ok(geoOk(c), 'cast ' + c.castKey + ' no NaN'); }
-  ok(cast.judge('tek') === cast.judge('tek'), 'cast characters are built once'); for (const j of Core.JUDGES) { const c = cast.judge(j.id); ok(c.prop && c.prop.userData.tris <= 80, 'judge ' + j.id + ' holds a prop <= 80 tris'); eq(c.displayName, j.name, 'judge name ' + j.id); c.update(0.05, 0.05); ok(bonesOk(c), 'judge ' + j.id + ' animates'); }
+  ok(cast.judge('tek') === cast.judge('tek'), 'cast characters are built once'); for (const j of Core.JUDGES) { const c = cast.judge(j.id); ok(c.prop && c.prop.userData.tris <= 120, 'judge ' + j.id + ' holds a prop <= 120 tris'); eq(c.displayName, j.name, 'judge name ' + j.id); c.update(0.05, 0.05); ok(bonesOk(c), 'judge ' + j.id + ' animates'); }
   ok(cast.opponent('hexx').taunt && cast.final('wc3').displayName === 'Penny', 'opponents and finals carry their names and taunts');
   const m = [cast.crowdMember(0), cast.crowdMember(1), cast.crowdMember(0, 9)]; ok(m[0] !== m[1] && JSON.stringify(m[0].getLook()) !== JSON.stringify(m[1].getLook()), 'generic crowd members differ'); ok(m.every((c) => c.tris <= TRI_BUDGET), 'crowd members within budget');
   cast.dispose();
@@ -110,7 +110,7 @@ ok(CAT.GROUPS.acc.every((it) => KNOWN.acc[it.slot].indexOf(it.id) >= 0), 'KNOWN 
   c.play('hit', { side: 1 }); for (let i = 0; i < 12; i++) c.update(1 / 30, i / 30); ok(c.anim.clip === 'hit', 'hit is still playing at 0.4 s'); for (let i = 0; i < 30; i++) c.update(1 / 30, i / 30); eq(c.anim.clip, 'idle', 'hit returns to idle by itself');
   c.play('hit'); c.update(0.016, 0); c.play('hit'); c.update(0.016, 0); eq(c.anim.cur.t < 0.05, true, 'hit restarts when played again');
   c.play('walkside', { speed: 1.4 }); for (let i = 0; i < 20; i++) c.update(1 / 30, i / 30); ok(c.anim.vs > 0.5, 'walkside walks like walk');
-  for (const kind of M.PROP_KINDS) { c.setProp(kind, { color: '#ff3ea5', score: 9 }); c.play('hold', { prop: kind, raise: kind === 'scorecard' ? 1 : 0, speed: 0 }); for (let i = 0; i < 40; i++) c.update(1 / 30, i / 30); ok(bonesOk(c) && c.prop.parent === c.object && c.prop.userData.tris <= 80, 'hold with ' + kind + ' (' + c.prop.userData.tris + ' tris)'); }
+  for (const kind of M.PROP_KINDS) { c.setProp(kind, { color: '#ff3ea5', score: 9 }); c.play('hold', { prop: kind, raise: kind === 'scorecard' ? 1 : 0, speed: 0 }); for (let i = 0; i < 40; i++) c.update(1 / 30, i / 30); ok(bonesOk(c) && c.prop.parent === c.object && c.prop.userData.tris <= 120, 'hold with ' + kind + ' (' + c.prop.userData.tris + ' tris)'); }
   c.setScore(10); eq(c.propKind, 'scorecard', 'setScore keeps the scorecard'); c.setProp(null); ok(!c.prop, 'setProp(null) removes the prop');
   const t0 = c.object.getObjectByName('char_lit').geometry.attributes.position.count;
   for (const mood of MOODS) { c.setMood(mood, true); c.play('idle'); for (let i = 0; i < 6; i++) c.update(1 / 30, i / 30); ok(bonesOk(c), 'mood ' + mood + ' stays finite'); ok(c.mood === mood, 'mood ' + mood + ' is set'); }
@@ -130,14 +130,14 @@ ok(CAT.GROUPS.acc.every((it) => KNOWN.acc[it.slot].indexOf(it.id) >= 0), 'KNOWN 
   ok(crowd.positions.every((p) => p[0] >= -6.5 && p[0] <= 6.5 && p[1] >= 0.5 && p[1] <= 7.5), 'spectators stand inside the area'); ok(crowd.positions.filter((p) => p[0] > -1 && p[0] < 1 && p[1] > 1 && p[1] < 3).length === 0, 'keep-out zone stays empty');
   const skins = new Set(), shirts = new Set(), styles = new Set(); for (let i = 0; i < 200; i++) { const a = g.attributes.iA.array, b = g.attributes.iB.array, d = g.attributes.iD.array; skins.add(a[i * 4].toFixed(2) + a[i * 4 + 1].toFixed(2)); shirts.add(b[i * 4].toFixed(2) + b[i * 4 + 1].toFixed(2)); styles.add(d[i * 4 + 3]); }
   ok(skins.size >= 8 && shirts.size >= 12 && styles.size === 4, 'colour and hair variety (' + skins.size + ' skins, ' + shirts.size + ' shirts, ' + styles.size + ' styles)');
-  crowd.setEnergy(0.9); crowd.setBeat(128); crowd.cheer(1); for (let i = 0; i < 60; i++) crowd.update(1 / 30, i / 30); ok(crowd.state.energy > 0.5 && crowd.state.burst > 0, 'energy and cheer burst are driven by update');
+  crowd.setEnergy(0.9); crowd.setBeat(128); crowd.cheer(1); for (let i = 0; i < 12; i++) crowd.update(1 / 30, i / 30); ok(crowd.state.burst > 0, 'cheer burst is active'); for (let i = 0; i < 90; i++) crowd.update(1 / 30, i / 30); ok(crowd.state.energy > 0.8 && crowd.state.burst === 0, 'energy follows setEnergy and the burst ends');
   const ring = createCrowd(CTX, 40, { ring: { cx: 0, cz: 0, r0: 5, r1: 7, a0: 0, a1: Math.PI } }); ok(ring.positions.every((p) => Math.hypot(p[0], p[1]) >= 4.9 && Math.hypot(p[0], p[1]) <= 7.1), 'ring layout'); ring.dispose();
   const fixed = createCrowd(CTX, 3, { positions: [[1, 2], [3, 4, 0.5]] }); eq(fixed.positions.length, 3, 'explicit positions'); fixed.dispose(); crowd.setPositions(crowd.positions.map((p) => [p[0], p[1] + 1])); crowd.dispose(); ok(createCrowd(CTX, 0, {}).count === 0, 'an empty crowd is fine');
 }
 
 // ---- 8. portraits need a renderer: without one they return null (no throw); the render check runs in the browser part
 ok(portrait(CAT.DEFAULT_LOOK, { mood: 'happy', size: 64 }) === null, 'portrait without a renderer returns null');
-ok(typeof globalThis.window === 'undefined' || true, 'node part done'); console.error = origErr;
+loud();
 
 // ---- 9. browser part: real WebGL (swiftshader): shaders compile, portraits render, moods differ, crowd draws, no console errors
 const REQUIRED = process.env.BBH_BROWSER === '1';

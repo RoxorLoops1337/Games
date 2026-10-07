@@ -73,9 +73,9 @@ CL.hold = function (P, c, dt, o) {
   const lift = clamp(o.raise || 0, 0, 1), rs = this.hr = (this.hr || 0) + (lift - (this.hr || 0)) * (1 - Math.exp(-9 * dt)), br = S(t * 2.2), tilt = kind === 'scorecard' ? rs : 0;
   let px = H.pos[0], py = H.pos[1] + 0.012 * br, pz = H.pos[2], rx = H.rot[0], ry = H.rot[1], rz = H.rot[2];
   let R = H.R.slice(), L = H.L.slice();
-  if (kind === 'scorecard') { px = lerp(px, -0.2, rs); py = lerp(py, 1.5, rs); pz = lerp(pz, 0.2, rs); rx = lerp(rx, 0.0, rs); ry = lerp(ry, 0.1, rs); R = [px + 0.03, py - 0.17, pz - 0.01]; L = H.L; }
+  if (kind === 'scorecard') { px = lerp(px, -0.42, rs); py = lerp(py, 1.3, rs); pz = lerp(pz, 0.2, rs); rx = lerp(rx, 0.0, rs); ry = lerp(ry, 0.12, rs); R = [px + 0.02, py - 0.18, pz - 0.01]; L = H.L; }
   if (kind === 'clipboard') { const wr = S(t * 7) * Math.max(0, S(t * 1.1)); R = [R[0] + 0.012 * wr, R[1] - 0.012 * Math.abs(wr), R[2]]; }
-  P.aWR = 1; P.aXR = R[0]; P.aYR = R[1]; P.aZR = R[2]; P.pXR = H.poleR[0]; P.pYR = H.poleR[1]; P.pZR = H.poleR[2]; P.hWR = 0;
+  P.aWR = 1; P.aXR = R[0]; P.aYR = R[1]; P.aZR = R[2]; P.pXR = H.poleR[0] - rs * 0.6; P.pYR = H.poleR[1] + rs * 0.3; P.pZR = H.poleR[2]; P.hWR = 0;
   P.aWL = 1; P.aXL = L[0]; P.aYL = L[1]; P.aZL = L[2]; P.pXL = H.poleL[0]; P.pYL = H.poleL[1]; P.pZL = H.poleL[2]; P.hWL = 0;
   P.chestRX += 0.03; P.headRX += 0.02; P.shrug += 0.1; if (kind === 'scorecard') { P.chestRY += 0.1 * rs; P.headRY -= 0.1 * rs; P.brow += 0.2 * rs; P.mouthOpen += 0.12 * rs; }
   if (kind === 'box') { P.hipsRX += 0.04; P.chestRX -= 0.05; P.mouthOpen = 0.04; }

@@ -138,7 +138,7 @@ export function createControls(ctx, o) {
   function release() { const was = FX.kT > 0; FX.kT = 0; if (was) events.emit('focus', { id: null }); if (S.spot) events.emit('spotDone', { id: S.spot.id }); }
 
   // ---------- orbit mode (title screen, character creator): drag spins, pinch zooms, named camera shots ----------
-  const SHOTS = { full: { ty: 0.5, d: 2.9, pitch: 8 }, head: { ty: 0.89, d: 1.55, pitch: 4 }, torso: { ty: 0.66, d: 1.95, pitch: 6 }, legs: { ty: 0.28, d: 2.0, pitch: 6 }, feet: { ty: 0.1, d: 1.5, pitch: 18 } };
+  const SHOTS = { full: { ty: 0.5, d: 2.7, pitch: 8 }, head: { ty: 0.9, d: 1.45, pitch: 4 }, torso: { ty: 0.66, d: 1.6, pitch: 6 }, legs: { ty: 0.3, d: 1.4, pitch: 6 }, feet: { ty: 0.09, d: 1.05, pitch: 18 } };
   const lerpA = (a, b, u) => a + wrapPi(b - a) * u, lerp = (a, b, u) => a + (b - a) * u, H_ = () => p.height || 1.65;
   function orbitPoint() { const t = O.target; if (t && t !== 'player') { if (t.isNpc || t.object) { const q = npos(t.isNpc ? t.n : t); if (q) return { x: q.x, z: q.z }; } else if (isFinite(t.x)) return { x: t.x, z: t.z }; } return { x: pos.x, z: pos.z }; }
   function orbitTo(a) {

@@ -42,7 +42,7 @@ export function createPost(ctx, S) {
   const renderer = ctx.renderer; let scene = ctx.scene, camera = ctx.camera, rp = null;
   let comp = null, bloom = null, grade = null, tiltH = null, tiltV = null, tier = 'high', W = 540, H = 960, DPR = 1, overlay = null, active = false;
   const tmpV = new THREE.Vector2();
-  const stats = { sceneCalls: 0, sceneTris: 0, totalCalls: 0, rung: 0 };
+  const stats = { sceneCalls: 0, sceneTris: 0, totalCalls: 0, rung: 0, builds: 0 };
   // Fallback ladder for GPUs (many phones) that cannot render to half-float or multisampled targets: those show a black frame.
   // rung 0 = HDR half-float + MSAA, 1 = half-float no MSAA, 2 = 8-bit no MSAA, 3 = no composer (same as low).
   let rung = 0, frames = 0, blankRun = 0, forceBlank = 0; const px4 = new Uint8Array(4); const PTS = [[0.5, 0.5], [0.2, 0.25], [0.8, 0.25], [0.2, 0.75], [0.8, 0.75], [0.5, 0.9], [0.5, 0.1]], ptv = new Int16Array(PTS.length * 3);
@@ -58,7 +58,7 @@ export function createPost(ctx, S) {
   }
   function disposeComposer() { if (!comp) return; comp.passes.forEach((p) => p.dispose && p.dispose()); comp.dispose(); comp = bloom = grade = tiltH = tiltV = rp = null; }
   function build(q) {
-    disposeComposer(); tier = q; makeOverlay();
+    disposeComposer(); tier = q; makeOverlay(); stats.builds++;
     frames = 0; blankRun = 0;
     if (q === 'low' || rung >= 3) { active = false; if (overlay) overlay.style.display = 'block'; return; }
     active = true; if (overlay) overlay.style.display = 'none';

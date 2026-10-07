@@ -8,7 +8,7 @@
 import { THREE, disposeTree } from './kit.js';
 
 const GLSL_OUT = '\n#include <colorspace_fragment>\n';
-export const WEATHER_TIERS = { low: { streaks: 200, splashes: 0, refl: 6, noise: 0, gain: 1.15 }, med: { streaks: 640, splashes: 120, refl: 14, noise: 1, gain: 1 }, high: { streaks: 1100, splashes: 240, refl: 24, noise: 1, gain: 1 } };
+export const WEATHER_TIERS = { low: { streaks: 260, splashes: 0, refl: 6, noise: 0, gain: 1.5 }, med: { streaks: 640, splashes: 120, refl: 14, noise: 1, gain: 1 }, high: { streaks: 1100, splashes: 240, refl: 24, noise: 1, gain: 1 } };
 const MAXS = 1100, MAXP = 240, MAXR = 24; // the geometry is built at these sizes whatever the tier
 
 function mat(extra) { return new THREE.ShaderMaterial(Object.assign({ transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide }, extra)); }

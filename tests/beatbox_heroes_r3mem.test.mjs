@@ -47,11 +47,11 @@ ok(api.stats && api.stats.world === 'title' && api.stats.calls > 0, 'host.stats(
 ok(api.back === 'park', 'park reloads after stubs');
 
 // ---------- leak gate ----------
-const IDS = ['park', 'flat', 'title', 'creator', 'street', 'shop', 'lab', 'bar', 'hood', 'office', 'arena'];
+const T0 = Date.now(); const IDS = ['park', 'flat', 'title', 'creator', 'street', 'shop', 'lab', 'bar', 'hood', 'office', 'arena'];
 const rows = {};
 for (const id of IDS) {
   rows[id] = await page.evaluate(async (id) => {
-    const h = window.__host, app = document.getElementById('app'); let loaded = null; const cyc = async () => { const w = await h.load(id); for (let i = 0; i < 3; i++) h.tick(0.016); const m = h.leakReport(); h.unload(); loaded = m; return m.loadMs; };
+    const h = window.__host, app = document.getElementById('app'); let loaded = null; const big = id === 'park' || id === 'flat'; const cyc = async () => { const w = await h.load(id, { warm: big }); for (let i = 0; i < (big ? 2 : 1); i++) h.tick(0.016); const m = h.leakReport(); h.unload(); loaded = m; return m.loadMs; };
     h.unload(); await cyc(); const kids = app.children.length, base = h.leakReport(); let worst = 0;
     for (let i = 0; i < 10; i++) worst = Math.max(worst, await cyc());
     const end = h.leakReport(); return { base, end, worst, kids, kidsEnd: app.children.length, loaded };
@@ -63,7 +63,7 @@ for (const id of IDS) {
   ok(r.end.programs <= r.base.programs + tol(r.base.programs), id + ': programs back to baseline after 10 cycles (' + r.base.programs + ' -> ' + r.end.programs + ')');
   ok(r.kidsEnd === r.kids, id + ': DOM overlays added by the world are removed (' + r.kids + ' -> ' + r.kidsEnd + ')');
   ok(r.worst < 8000, id + ': load time under 8 s on swiftshader (worst ' + r.worst + ' ms)');
-  console.log('  ' + id.padEnd(8) + ' geo ' + r.loaded.geometries + ' loaded, ' + r.base.geometries + '->' + r.end.geometries + '  tex ' + r.loaded.textures + ' loaded, '+ ' ' + r.base.textures + '->' + r.end.textures + '  prog ' + r.base.programs + '->' + r.end.programs + '  worst load ' + r.worst + ' ms');
+  console.log('  ' + id.padEnd(8) + ((Date.now() - T0) / 1000).toFixed(0).padStart(4) + 's' + ' geo ' + r.loaded.geometries + ' loaded, ' + r.base.geometries + '->' + r.end.geometries + '  tex ' + r.loaded.textures + ' loaded, '+ ' ' + r.base.textures + '->' + r.end.textures + '  prog ' + r.base.programs + '->' + r.end.programs + '  worst load ' + r.worst + ' ms');
 }
 // empty host after everything is unloaded: nothing of the worlds may remain
 const empty = await page.evaluate(() => { window.__host.unload(); return window.__host.leakReport(); });

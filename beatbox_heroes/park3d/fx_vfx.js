@@ -231,7 +231,7 @@ function buildInteriorVFX(ctx, terrain, S) {
         float yy = fract(vUv.y * 0.8 + uTime * (0.55 + hh * 0.9) + hh * 9.0); float line = smoothstep(0.1, 0.0, fx) * smoothstep(0.0, 0.05, yy) * (1.0 - smoothstep(0.05, 0.3, yy)) * step(0.35, h2(vec2(ci, 5.3)));
         vec2 gu = vec2(vUv.x * 15.0 + vPh * 5.0, vUv.y * 10.0); vec2 id3 = floor(gu); float r3 = h2(id3 + 11.0); vec2 f3 = fract(gu) - 0.5 - (vec2(h2(id3 + 2.0), h2(id3 + 4.0)) - 0.5) * 0.5; f3.y *= 1.25;
         float bead = step(0.5, r3) * smoothstep(0.19, 0.06, length(f3)); float trail = step(0.82, r3) * smoothstep(0.07, 0.0, abs(f3.x)) * step(0.0, f3.y) * smoothstep(0.5, 0.0, f3.y);
-        col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(0.9, 0.97, 1.08), 0.45 * uRain); col += vec3(0.7, 0.82, 1.0) * (line * 0.5 + bead * 0.38 + trail * 0.16) * uRain; a = clamp(a + (0.18 + line * 0.35 + bead * 0.3 + trail * 0.1) * uRain, 0.0, 0.92); }
+        col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(0.8, 0.9, 1.06), 0.5 * uRain); col += vec3(0.75, 0.86, 1.0) * (line * 0.8 + bead * 0.5 + trail * 0.22) * uRain; a = clamp(a + (0.18 + line * 0.35 + bead * 0.3 + trail * 0.1) * uRain, 0.0, 0.92); }
       gl_FragColor = vec4(col * uGain, a); ${GLSL_OUT} }` });
   mats.push(paneMat);
   const paneGeo = instanced(new THREE.PlaneGeometry(1, 1), { iA: { a: wA, n: 4 }, iB: { a: wB, n: 4 } }, Wn.length);
@@ -276,10 +276,10 @@ function buildInteriorVFX(ctx, terrain, S) {
       float rad = len * iB.y * (1.0 + 0.15 * uBeat); vec3 wp; vF = 1.0;
       if (aKind < 0.5) { float al = -position.y; wp = apex + ax * (len * al) + (u * position.x + v * position.z) * rad * al; vec3 nrm = normalize(u * position.x + v * position.z - ax * iB.y); vF = pow(abs(dot(normalize(cameraPosition - wp), nrm)), 1.2); }
       else { vec2 hd = ax.xz; float hl = length(hd); vec2 hdir = hl > 0.001 ? hd / hl : vec2(1.0, 0.0); float el = 1.0 / clamp(-ax.y, 0.35, 1.0); vec2 lp = position.xz * rad * 1.1; float pr = dot(lp, hdir); vec2 q = hdir * pr * el + (lp - hdir * pr); wp = vec3(T.x + q.x, 0.07, T.z + q.y); }
-      vec3 cc = iB.z > 1.5 ? uColK : (iB.z > 0.5 ? uColB : uColA); if (uBeamMode > 0.5 && iB.z < 1.5 && iB.x < 0.7) cc = uColK; vC = cc * uBeamAmt * (1.0 + 0.7 * uHaze) * (1.0 + 0.6 * uBeat);
+      vec3 cc = iB.z > 1.5 ? uColK : (iB.z > 0.5 ? uColB : uColA); if (uBeamMode > 0.5 && iB.z < 1.5 && iB.x < 0.7) cc = uColK; vC = cc * uBeamAmt * (1.0 + 0.45 * uHaze) * (1.0 + 0.5 * uBeat);
       gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
   fragmentShader: `uniform float uGain; varying float vT; varying float vK; varying vec3 vC; varying float vF;
-    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.4) * 0.55 : pow(1.0 - vT, 1.2) * 0.2 * vF; if (a < 0.003) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
+    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.4) * 0.4 : pow(1.0 - vT, 1.2) * 0.14 * vF; if (a < 0.003) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(beamMat);
   const beamGeo = instanced(beamBase, { iA: { a: bA, n: 4 }, iB: { a: bB, n: 4 } }, NB);
   const beams = new THREE.Mesh(beamGeo, beamMat); beams.frustumCulled = false; beams.renderOrder = 9; beams.visible = false; beams.name = 'beams'; group.add(beams);

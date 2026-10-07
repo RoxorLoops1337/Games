@@ -72,6 +72,7 @@ const toward = (v, to, k) => v + (to - v) * k;
 
 export function buildLighting(ctx, terrain, sharedArg) {
   const { renderer, scene, camera } = ctx; const anchors = terrain.anchors || {}; const SH = sharedArg || ctx.shared || null;
+  if (SH && SH.shadowMap == null) SH.shadowMap = { map: null, dispose() { if (this.map) { this.map.dispose(); this.map = null; } } }; // the host's one shadow map slot (kept across worlds)
   const prof0 = terrain.profile || ctx.profile || null; const IN = terrain.interior === true || (!!prof0 && prof0 !== 'out');
   const KS = IN ? KFI : KF, { N: NUM, C: COL } = keysOf(KS); const TR = IN ? TIER_IN : TIER;
   const group = new THREE.Group(); group.name = 'lighting';
@@ -156,7 +157,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     }
     if (pc > 0.001) { // CLUB: night, purple haze, theme-coloured rim, everything neon
       c.sunI *= 1 - 0.45 * pc; c.sunCol.lerp(CLUB_SUN, 0.8 * pc); c.hemiSky.lerp(CLUB_HEMI, 0.8 * pc); c.hemiGround.lerp(CLUB_GND, 0.8 * pc); c.hemiI *= 1 - 0.18 * pc; c.rimCol.lerp(S.themeA, pc); c.rimI = toward(c.rimI, 1.5, pc);
-      c.fog.lerp(CLUB_FOG, 0.85 * pc); c.fogNear = toward(c.fogNear, IN ? 16 : c.fogNear, pc); c.fogFar = toward(c.fogFar, IN ? 70 : c.fogFar, pc); c.exposure *= 1 + 0.06 * pc;
+      c.fog.lerp(CLUB_FOG, 0.85 * pc); c.fogNear = toward(c.fogNear, IN ? 30 : c.fogNear, pc); c.fogFar = toward(c.fogFar, IN ? 120 : c.fogFar, pc); c.exposure *= 1 + 0.06 * pc;
       c.neon = toward(c.neon, 1.15, pc); c.stage = toward(c.stage, 1.15, pc); c.lamp *= 1 - 0.4 * pc; c.bloom += 0.28 * pc; c.bloomThr -= 0.2 * pc; c.vig += 0.1 * pc; c.sat *= 1 + 0.12 * pc;
       c.dust += 1.2 * pc; c.moteBase += 0.5 * pc; c.ray *= 1 - 0.75 * pc; c.patch *= 1 - 0.85 * pc; c.gShadow.lerp(CLUB_GS, 0.6 * pc); c.gHigh.lerp(CLUB_GH, 0.5 * pc); c.ptI *= 1 - 0.3 * pc;
     }
@@ -167,7 +168,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     }
     if (pt > 0.001) { // STAGE: dark house, key spots, theme rim
       c.hemiI *= 1 - 0.5 * pt; c.hemiSky.lerp(STAGE_HEMI, 0.7 * pt); c.hemiGround.lerp(STAGE_GND, 0.7 * pt); c.sunI *= 1 - 0.7 * pt; c.sunCol.lerp(S.keyCol, 0.6 * pt); c.rimCol.lerp(S.themeA, pt); c.rimI = toward(c.rimI, 2.0, pt);
-      c.fog.lerp(STAGE_FOG, 0.8 * pt); c.fogNear = toward(c.fogNear, IN ? 18 : c.fogNear, pt); c.fogFar = toward(c.fogFar, IN ? 80 : c.fogFar, pt); c.exposure *= 1 + 0.05 * pt; c.bloom += 0.2 * pt; c.bloomThr -= 0.15 * pt; c.vig += 0.12 * pt;
+      c.fog.lerp(STAGE_FOG, 0.8 * pt); c.fogNear = toward(c.fogNear, IN ? 34 : c.fogNear, pt); c.fogFar = toward(c.fogFar, IN ? 130 : c.fogFar, pt); c.exposure *= 1 + 0.05 * pt; c.bloom += 0.2 * pt; c.bloomThr -= 0.15 * pt; c.vig += 0.12 * pt;
       c.neon = toward(c.neon, Math.max(c.neon, 1), pt); c.stage = toward(c.stage, Math.max(c.stage, 1), pt); c.dust += 0.6 * pt; c.moteBase += 0.3 * pt; c.ray *= 1 - 0.8 * pt; c.patch *= 1 - 0.85 * pt; c.ptI *= 1 - 0.2 * pt;
     }
     if (bt > 0.001) { c.neon *= 1 + 0.32 * bt; c.stage *= 1 + 0.5 * bt; c.rimI *= 1 + 0.35 * bt * (pc + pt); if (!reduce) { c.bloom += 0.12 * bt; c.bloomThr -= 0.03 * bt; } }
@@ -222,7 +223,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     for (let i = 0; i < spots.length; i++) { const sp = spots[i]; const bi = S.beamMode > 0.5 ? i : i + 1; // stage: beam 0 (key) + 1; club: beams 1 and 2 (the two theme colours)
       if (amt < 0.01 || i >= n) { sp.intensity = 0; continue; }
       sp.position.set(rp[bi * 4], rp[bi * 4 + 1], rp[bi * 4 + 2]); beamTarget(bi, t, tmpD); sp.target.position.copy(tmpD);
-      if (S.beamMode > 0.5 && i === 0) sp.color.copy(S.keyCol); else sp.color.copy(i === 0 ? S.themeA : S.themeB); sp.angle = S.beamMode > 0.5 ? 0.42 : 0.55; sp.intensity = 26 * amt * (1 + 0.6 * S.beatFx); }
+      if (S.beamMode > 0.5 && i === 0) sp.color.copy(S.keyCol); else sp.color.copy(i === 0 ? S.themeA : S.themeB); sp.angle = S.beamMode > 0.5 ? 0.42 : 0.55; sp.intensity = 15 * amt * (1 + 0.6 * S.beatFx); }
   }
   S.t = 0;
   function tEff() { let v = tCur; if (pw.club > 0) v = v + (1 - v) * pw.club; if (pw.stage > 0) v = Math.max(v, 0.85 * pw.stage); return v; }
@@ -244,6 +245,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     setProfile(p, instant) { setProf(p, instant); },
     setStageTheme(name, instant) { const t = THEMES[name]; if (!t) return; S.theme = name; themeTarget = t; if (instant || !started) { S.themeA.copy(t.a); S.themeB.copy(t.b); S.keyCol.copy(t.key); } },
     setReduce(b) { reduce = !!b; },
+    setClock(c) { if (c) { S.hour = c.hour; S.day = c.day; } },
     follow(o) { followObj = o || null; },
     setMusic(on) { vfx.setMusic(on); },
     setQuality(v) {
