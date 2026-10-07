@@ -16,7 +16,7 @@ function drawSheet() {
   sh.openT = Math.min(1, sh.openT + 0.09); const slide = (1 - easeOut(sh.openT)) * vh * 0.4;
   ctx.fillStyle = 'rgba(25,12,60,' + (0.55 * sh.openT) + ')'; ctx.fillRect(0, 0, vw, vh);
   hits.push({ x: 0, y: 0, w: vw, h: vh, act: closeSheet });
-  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = sheetTabs(sh.id) ? 70 + 34 * Math.ceil(sheetTabs(sh.id).length / 4) + 4 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
+  const bot0 = vh - DOCK_H - 14, topMax = Math.round(vh * 0.13), headH = sheetTabs(sh.id) ? 70 + 34 * Math.ceil(sheetTabs(sh.id).length / (sheetTabs(sh.id).length <= 4 ? 4 : 5)) + 4 : 70, fitH = sh.H ? clamp(headH + sh.H + 14, 300, bot0 - topMax) : bot0 - topMax; // sheets hug their content
   const top = bot0 - fitH + slide, bot = vh - DOCK_H - 14, w = Math.min(vw - 16, 520), x = (vw - w) / 2, h = bot - top;
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
@@ -29,8 +29,8 @@ function drawSheet() {
   let cy = top + 58;
   const tabs = sheetTabs(sh.id);
   if (tabs) { // up to 4 tabs per row; extra tabs wrap onto a second row
-    const per = Math.min(4, tabs.length), rows = Math.ceil(tabs.length / per), tw = (w - 24) / per;
-    tabs.forEach(([id, label], i) => { const r = Math.floor(i / per), c = i % per, tx = x + 12 + c * tw, ty = cy + r * 34, on = sh.tab === id; pill(tx + 2, ty, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, ty + 19); hitRect(tx, ty, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); });
+    const per = tabs.length <= 4 ? tabs.length : tabs.length <= 10 ? 5 : 6, rows = Math.ceil(tabs.length / per), tw = (w - 24) / per;
+    tabs.forEach(([id, label], i) => { const r = Math.floor(i / per), c = i % per, tx = x + 12 + c * tw, ty = cy + r * 34, on = sh.tab === id; pill(tx + 2, ty, tw - 4, 28, on ? '#ffe98a' : '#6a5aa8', on ? '#f0b422' : '#3e3076'); ctx.fillStyle = on ? '#3a2410' : '#e6dcff'; ctx.font = font(per > 4 ? 10.5 : 12); ctx.textAlign = 'center'; ctx.fillText(label, tx + tw / 2, ty + 19); hitRect(tx, ty, tw, 28, () => { sh.tab = id; sh.scroll = 0; sh.vel = 0; sfx('ui_tap'); }); });
     cy += rows * 34 + 4;
   }
   SR = { x: x + 8, y: cy, w: w - 16, h: bot - cy - 8 };
@@ -127,7 +127,7 @@ const SHEET_DRAW = {
       card(x, yy, w, 122, 14); if (act) { ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 4; rr(x, yy, w, 122, 14); ctx.stroke(); }
       if (!owned) ctx.globalAlpha = 0.75; artDraw(s.art, 'idle', (S.t * 4 + i) | 0, x + w * 0.5, yy + 84, 0.37, false); ctx.globalAlpha = 1;
       ctx.fillStyle = '#4a2a7a'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(s.name, x + w / 2, yy + 100);
-      let lab = '', col = '#6a5a8a'; if (act) { lab = 'EQUIPPED'; col = '#1f9a4a'; } else if (owned) { lab = 'Tap to wear'; col = '#6a5a8a'; } else if (locked) { lab = 'Reach ' + RANKS[s.rank].name; col = '#a8265f'; } else lab = s.cost + (s.cur === 'crown' ? ' crowns' : ' gems');
+      let lab = '', col = '#6a5a8a'; if (act) { lab = 'EQUIPPED'; col = '#1f9a4a'; } else if (owned) { lab = 'Tap to wear'; col = '#6a5a8a'; } else if (locked) { lab = 'Reach ' + RANKS[s.rank].name; col = '#a8265f'; } else lab = s.lockText || (s.cost + (s.cur === 'crown' ? ' crowns' : ' gems'));
       ctx.fillStyle = col; ctx.font = font(10); ctx.fillText(lab, x + w / 2, yy + 115); chit(x, yy, w, 122, () => buySkin(s.id)); });
     return y + Math.ceil(SKINS.length / cols) * 132 + 4;
   },

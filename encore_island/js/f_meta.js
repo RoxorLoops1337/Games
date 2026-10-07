@@ -236,9 +236,9 @@ function chalDraw() { // HUD pill under the rank pill + result card
     hits.push({ x: 0, y: 0, w: vw, h: vh, act: () => {} }); ctx.fillStyle = 'rgba(25,12,60,0.7)'; ctx.fillRect(0, 0, vw, vh);
     const w = Math.min(320, vw - 32), x = (vw - w) / 2, y = Math.max(70, vh * 0.17), h = 330, cx = vw / 2;
     card(x, y, w, h, 18); ctx.textAlign = 'center'; ctx.fillStyle = '#4a2a7a'; ctx.font = font(20); ctx.fillText(r.why === 'goal' ? 'GOAL REACHED!' : r.why === 'ko' ? 'KNOCKED OUT' : 'TIME!', cx, y + 34);
-    ctx.fillStyle = '#7a62b0'; ctx.font = font(11); ctx.fillText((r.mode === 'weekly' ? 'Weekly: ' : 'Daily: ') + r.rules.join(' + '), cx, y + 54);
+    ctx.fillStyle = '#7a62b0'; ctx.font = font(12); ctx.fillText((r.mode === 'weekly' ? 'Weekly: ' : 'Daily: ') + r.rules.join(' + '), cx, y + 54);
     metaStars(cx, y + 92, r.stars, 44, 52); ctx.fillStyle = '#4a2a7a'; ctx.font = font(26); ctx.fillText(fmt(r.score) + ' pts', cx, y + 150);
-    ctx.font = font(11, false); ctx.fillStyle = r.newBest ? '#1f9a4a' : '#6a5a8a'; ctx.fillText(r.newBest ? 'NEW PERSONAL BEST!' : 'Personal best ' + fmt(r.best), cx, y + 170);
+    ctx.font = font(12); ctx.fillStyle = r.newBest ? '#1f9a4a' : '#6a5a8a'; ctx.fillText(r.newBest ? 'NEW PERSONAL BEST!' : 'Personal best ' + fmt(r.best), cx, y + 170);
     ctx.fillStyle = '#6a5a8a'; ctx.font = font(10, false); ctx.fillText(r.kills + ' kills  ·  best combo ' + r.combo + '  ·  stars at ' + r.th.map(fmt).join(' / '), cx, y + 188);
     const parts = []; if (r.rw.gems) parts.push('+' + r.rw.gems + ' gems'); if (r.rw.coins) parts.push('+' + fmt(r.rw.coins) + ' coins'); if (r.rw.scrap) parts.push('+' + r.rw.scrap + ' scrap');
     ctx.fillStyle = '#4a2a7a'; ctx.font = font(13); ctx.fillText(parts.length ? 'Prize: ' + parts.join('  ') : r.stars ? 'Prize already claimed' : 'Reach 1 star for a prize', cx, y + 222);
@@ -377,7 +377,7 @@ function bookTab(cw) {
       plaque(x + 2, y, mw - 4, 70, 10); if (got) { ctx.fillStyle = 'rgba(63,207,106,0.2)'; rr(x + 2, y, mw - 4, 70, 10); ctx.fill(); }
       ctx.fillStyle = got ? '#9af0b4' : '#e6dcff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(Math.round(m * 100) + '%', x + mw / 2, y + 16); ctx.fillStyle = '#cfc6ee'; ctx.font = font(9); ctx.fillText('+' + Math.round(pgDef.amt * 100) + '% ' + pgDef.what.split(' ')[0], x + mw / 2, y + 28);
       if (can) { cbtn(x + 6, y + 36, mw - 12, 28, true, 'go'); drawIcon('chest', x + 20, y + 50, 18); ctx.fillStyle = '#fff'; ctx.font = font(11); ctx.fillText(BOOK_GEMS[i], x + mw / 2 + 8, y + 54); chit(x + 2, y + 30, mw - 4, 40, () => bkClaim(BK.page)); }
-      else { drawIcon(claimed ? 'tick' : 'chest', x + mw / 2 - 12, y + 50, 20); ctx.fillStyle = claimed ? '#9af0b4' : '#a69cc8'; ctx.font = font(11); ctx.textAlign = 'left'; ctx.fillText(claimed ? 'Got' : BOOK_GEMS[i] + ' gems', x + mw / 2 + 0, y + 54); } });
+      else { drawIcon(claimed ? 'tick' : 'chest', x + mw / 2 - 16, y + 50, 20); ctx.fillStyle = claimed ? '#9af0b4' : '#a69cc8'; ctx.font = font(10); ctx.textAlign = 'left'; ctx.fillText(claimed ? 'Got' : BOOK_GEMS[i] + ' gems', x + mw / 2 - 4, y + 54); } });
     y += 78;
   }
   // slot grid

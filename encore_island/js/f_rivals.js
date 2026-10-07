@@ -160,7 +160,7 @@ function rvDrawBattleHud() {
 function rvDrawChips() {
   const st = rvState(); let y = typeof leftBottom === 'number' ? leftBottom : 130;
   const tl = rvTakenList(); if (tl.length && !st.battle && !S.sheet) {
-    const k = tl[0], B = RV_BANDS[st.taken[k].band], w = 168, h = 30; plaque(8, y, w, h, 12); ctx.fillStyle = B.col; ctx.beginPath(); ctx.arc(24, y + 15, 7, 0, TAU); ctx.fill(); rvT('TAKEN: ' + biomeOf(k).name, 38, y + 13, 10, '#fff', 'left'); rvT('Tap for the Stage pad', 38, y + 25, 9, '#cfc6ee', 'left', false);
+    const k = tl[0], B = RV_BANDS[st.taken[k].band], w = 168, h = 30; plaque(8, y, w, h, 12); ctx.fillStyle = B.col; ctx.beginPath(); ctx.arc(24, y + 15, 7, 0, TAU); ctx.fill(); rvT('Land ' + k + ' is TAKEN', 38, y + 13, 11, '#fff', 'left'); rvT('Tap to find the Stage pad', 38, y + 25, 9, '#cfc6ee', 'left', false);
     hitRect(8, y, w, h, () => openSheet('goals', 'rivals')); y += h + 4; if (typeof leftBottom === 'number') leftBottom = y;
   }
 }
