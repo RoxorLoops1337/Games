@@ -1081,4 +1081,44 @@ h.test('stx: every status card speaks Dutch with the fight\'s numbers; the tip a
   I18N.set('en');
 });
 
+// ---------------------------------------------------------------- BENCH (round 28): the Upgrade Bench
+h.test('bench: every line of the Upgrade Bench has its Dutch (upgrades, packs, the receipt, the reveal, the welcome, the lock), and the screens show it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true }, stats: { runs: 12, wins: 1, bestAct: 3, kills: 200 } }) } });
+  const { GAME: G, I18N, DATA } = T;
+  I18N.set('nl');
+  const nl = I18N.table('nl'), ui = nl.ui, C = nl.content, B = DATA.BENCH;
+  const need = ['Upgrade Bench', 'bolts', 'Bolts earned', 'Fights {n} x {n2}', 'Elites {n} x {n2}', 'Bosses {n} x {n2}', 'Act {n} reached', 'Tilt {n} bonus', 'Run won', '{n} bolts in the bank',
+    'Upgrades', 'Unlocks', 'Tier {n}', 'Spend {n} more bolts to open', 'Next: {s}', 'Already at the top rank.', 'Spend {n} more bolts to open tier {n2}.', 'Not enough bolts: {n} needed.',
+    'Item', 'Relic', 'New in the Spire', 'Unlocked', '{n} prizes join the pools', 'You own this pack already.', 'Pack unlocked', 'Nice!', 'Take a look', 'Later', 'The Upgrade Bench is open!',
+    'You found {n} bolts from your past runs. Spend them on upgrades and unlock new prizes.', 'Unlock in the Upgrade Bench: {s}', 'Something to buy', 'EXTRA LIFE',
+    'They can turn up in your runs from now on: rewards, shops, capsules and more.', 'Bolts come from every run you finish. Spend them on upgrades for every run to come, or unlock new prizes.'];
+  for (const u of B.UP_LIST) need.push(u.name, u.text, u.val.replace('{n}', '{n}'));
+  for (const id of B.PACK_IDS) need.push(B.PACKS[id].name, B.PACKS[id].tag);
+  for (const g of Object.values(B.GATES)) need.push(g.text);
+  for (const id of B.RELICS) { const r = DATA.RELICS[id]; if (r.proc) need.push(r.proc); h.ok(C.relic[id] && C.relic[id].name && C.relic[id].text && C.relic[id].name !== r.name, 'relic ' + id + ' in Dutch'); }
+  for (const id of B.ITEMS) h.ok(C.item[id] && C.item[id].name && C.item[id].text, 'item ' + id + ' in Dutch');
+  for (const k of need) h.ok(typeof ui[k] === 'string' && ui[k].length > 0, 'Dutch for "' + k + '"');
+  h.eq(I18N.tr('Fights 6 x 3'), 'Gevechten 6 x 3', 'a receipt line');
+  h.eq(I18N.tr('Next: +12 Max HP'), 'Volgende: +12 Max HP', 'a next value');
+  h.eq(I18N.tr('Unlock in the Upgrade Bench: Fire & Ice'), 'Ontgrendel in de Werkbank: Vuur & IJs', 'the Prizedex lock line');
+  // the screens: no bench word left in English
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.showTitle();
+    G.bench.show('up'); G.bench.give(500); G.bench.buy('hp'); G.bench.buy('shop');
+    G.bench.show('unl'); G.bench.unlock('fire_ice');
+    G.showCollection('items'); G.showCollection('relics');
+    G.newRun('knight', 2828); if (G.screen === 'boon') G.choose(0);
+    G.run.history = [{ act: 1, enemies: ['rat'], result: 'win', tier: 'normal' }, { act: 1, enemies: ['mimic'], result: 'win', tier: 'elite' }];
+    G.showGameOver();
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'the bench, its reveal, the Prizedex and the receipt render in Dutch');
+  const left = [...seen].filter((x) => { const [a, b] = x.split('=>'); return a === b && /bolt|bench|upgrade|pack|tier|unlock|relic|prize|spend|reached|fights|elites|bonus/i.test(a); });
+  h.eq(left.length, 0, 'no bench words left in English: ' + left.slice(0, 4).join(' | '));
+  I18N.set('en');
+});
+
 h.done();
