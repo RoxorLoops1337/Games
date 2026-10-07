@@ -17,10 +17,10 @@ function paintFaces(geo, L, rnd) {
   const g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position, n = p.count, a = new Float32Array(n * 3), cm = C(L.color), ch = C(L.hi), cd = C(L.dark), t = new THREE.Color(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), N = new THREE.Vector3();
   for (let i = 0; i < n; i += 3) {
     A.fromBufferAttribute(p, i); B.fromBufferAttribute(p, i + 1); D.fromBufferAttribute(p, i + 2); N.subVectors(D, B).cross(A.sub(B)).normalize();
-    const up = N.y, side = N.x * 0.55 + N.z * 0.6; if (up > 0.85) t.copy(cm).lerp(ch, 0.75).multiplyScalar(1.12); else { const k = Math.max(0, Math.min(1, 0.45 + up * 0.55 + side * 0.4 + (rnd() - 0.5) * 0.3)); t.copy(cd).lerp(cm, k); if (up > 0.2) t.lerp(ch, (up - 0.2) * 0.5); t.multiplyScalar(1.04); }
+    const up = N.y, side = N.x * 0.55 + N.z * 0.6; if (up > 0.85) t.copy(cm).lerp(ch, 0.3).multiplyScalar(1.05); else { const k = Math.max(0, Math.min(1, 0.45 + up * 0.55 + side * 0.4 + (rnd() - 0.5) * 0.3)); t.copy(cd).lerp(cm, k); if (up > 0.2) t.lerp(ch, (up - 0.2) * 0.28); }
     for (let k = 0; k < 3; k++) { a[(i + k) * 3] = t.r; a[(i + k) * 3 + 1] = t.g; a[(i + k) * 3 + 2] = t.b; }
   }
-  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
+  for (let i = 0; i < a.length; i++) a[i] *= 0.78; g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
 }
 // chunky faceted gem: crown (flat table) + pavilion, silhouette differs per lane (hex, triangle, square, diamond)
 export function gemGeo(i, rnd) {

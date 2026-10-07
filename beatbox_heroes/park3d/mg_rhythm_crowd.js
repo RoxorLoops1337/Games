@@ -15,11 +15,11 @@ function mergeG(list) { const tot = list.reduce((s, g) => s + g.attributes.posit
 export function buildCrowd(ctx, q, look) {
   const group = new THREE.Group(); group.name = 'crowd'; const R = rng(2024), rnd = rng(7);
   // ---- real characters ----
-  const nNear = q === 'low' ? 0 : q === 'med' ? 4 : 6, near = [];
+  const nNear = q === 'low' ? 0 : q === 'med' ? 3 : 4, near = [];
   for (let i = 0; i < nNear; i++) {
     const [id, x, z] = NEAR[i]; let c = null; try { c = createNPC(ctx, id, {}); } catch (e) { console.error('[rhythm] crowd ' + id + ' ' + e); }
     if (!c) continue; c.object.position.set(x, 0, z); c.object.rotation.y = Math.atan2(-x * 0.55, -6 - z) + (R() - 0.5) * 0.2; c.object.scale.setScalar(1.0 + R() * 0.08); c.lookAt(new THREE.Vector3(0, 1.4, STAGE.z)); c.thr = 0.12 + i * 0.1; c.ph = R() * 4; c.mode = ''; group.add(c.object);
-    c.object.traverse((o) => { if (o.isMesh) { o.castShadow = q !== 'low' && o.castShadow; } }); near.push(c); c.play('idle', {});
+    c.object.traverse((o) => { if (o.isMesh) { o.castShadow = false; } }); near.push(c); c.play('idle', {});
   }
   // ---- instanced spectators ----
   const N = q === 'low' ? 16 : q === 'med' ? 28 : 40, torsoG = mergeG([painted(new THREE.CylinderGeometry(0.2, 0.27, 0.62, 6, 1), '#ffffff', rnd, 0.1).translate(0, 0.98, 0), painted(new THREE.CylinderGeometry(0.24, 0.2, 0.68, 6, 1, true), '#6a6482', rnd, 0.1).translate(0, 0.34, 0)]);
@@ -27,7 +27,7 @@ export function buildCrowd(ctx, q, look) {
   const armG = (() => { const g = new THREE.BoxGeometry(0.1, 0.52, 0.1); g.translate(0, -0.26, 0); return painted(g, '#ffffff', rnd, 0.06); })(), stickG = painted(new THREE.CylinderGeometry(0.025, 0.03, 0.42, 4), '#ffffff', rnd, 0);
   const mk = (g, mat, n) => { const m = new THREE.InstancedMesh(g, mat, n); m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); return m; };
   const torso = mk(torsoG, flatMat(), N), head = mk(headG, flatMat(), N), hair = mk(hairG, flatMat(), N), arms = mk(armG, flatMat(), N * 2), sticks = mk(stickG, new THREE.MeshBasicMaterial({ toneMapped: false }), N);
-  [torso, head, hair, arms].forEach((m) => { m.castShadow = q === 'high'; m.receiveShadow = false; });
+  [torso, head, hair, arms].forEach((m) => { m.castShadow = false; m.receiveShadow = false; });
   const P = []; const tc = new THREE.Color();
   // rows on both sides of the highway, packed but never inside the lane area or on top of the real characters
   let guard = 0; while (P.length < N && guard++ < 4000) {

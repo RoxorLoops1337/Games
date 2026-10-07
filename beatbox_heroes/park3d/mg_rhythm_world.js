@@ -23,6 +23,12 @@ class Bag {
   rod(a, b, rad, color) { const d = new THREE.Vector3().subVectors(b, a), len = d.length(), g = new THREE.CylinderGeometry(rad, rad, len, 4, 1); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize())); const m = a.clone().add(b).multiplyScalar(0.5); g.translate(m.x, m.y, m.z); this.add(g, color, 0.02); }
   geo() { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3)); g.computeVertexNormals(); return g; }
 }
+// drop the triangles of a non-indexed mesh whose centroid fails keep(x, z): the skyline behind the camera and far off to the sides is never seen
+function cullTris(mesh, keep) {
+  const g = mesh.geometry, p = g.attributes.position, names = Object.keys(g.attributes), out = {}; names.forEach((k) => { out[k] = []; });
+  for (let i = 0; i < p.count; i += 3) { const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3; if (!keep(x, z)) continue; names.forEach((k) => { const a = g.attributes[k], n = a.itemSize; for (let v = 0; v < 3; v++) for (let c = 0; c < n; c++) out[k].push(a.array[(i + v) * n + c]); }); }
+  const ng = new THREE.BufferGeometry(); names.forEach((k) => ng.setAttribute(k, new THREE.Float32BufferAttribute(out[k], g.attributes[k].itemSize))); mesh.geometry.dispose(); mesh.geometry = ng;
+}
 function meshOf(bag, mat, cast, recv) { const m = new THREE.Mesh(bag.geo(), mat || flatMat()); m.castShadow = !!cast; m.receiveShadow = recv !== false; return m; }
 
 function brickTexture() {
@@ -46,17 +52,21 @@ function neonTexture(text) {
 export function buildWorld(ctx, q) {
   const group = new THREE.Group(); group.name = 'rhythm_world'; const R = rng(4107), ST = STAGE;
   const mat = flatMat();
-  // ---------------- ground: paved plaza oval + sand edge + lawn, painted per triangle ----------------
-  { const g = new THREE.PlaneGeometry(90, 80, 72, 64); g.rotateX(-Math.PI / 2); g.translate(0, 0, -14); const ng = g.toNonIndexed(), p = ng.attributes.position, a = new Float32Array(p.count * 3), t = new THREE.Color();
-    const pave = ['#b8aec7', '#a79cba', '#c8bfd6'].map(C), sand = C('#d8b98c'), grass = ['#5cae52', '#4f9a4a', '#438a45', '#6bb85a'].map(C), shade = C('#4a3a78');
-    for (let i = 0; i < p.count; i += 3) {
-      const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3, ex = cx / 8.8, ez = (cz + 5.5) / 16.5, d = Math.sqrt(ex * ex + ez * ez), cell = (Math.floor(cx / 1.25) + Math.floor(cz / 1.25));
-      if (d < 1) { t.copy(pave[((cell % 3) + 3) % 3]); t.lerp(C('#e9d9c4'), Math.max(0, 0.5 - d) * 0.35); t.multiplyScalar(0.94 + R() * 0.1); if (d > 0.9) t.lerp(sand, 0.5); }
-      else if (d < 1.1) { t.copy(sand).multiplyScalar(0.95 + R() * 0.08); }
-      else { t.copy(grass[(R() * 4) | 0]); t.lerp(shade, Math.min(0.4, (d - 1.1) * 0.18)); t.multiplyScalar(0.92 + R() * 0.14); }
-      for (let k = 0; k < 3; k++) { a[(i + k) * 3] = t.r; a[(i + k) * 3 + 1] = t.g; a[(i + k) * 3 + 2] = t.b; }
-    }
-    ng.setAttribute('color', new THREE.BufferAttribute(a, 3)); ng.deleteAttribute('uv'); ng.computeVertexNormals(); const m = new THREE.Mesh(ng, mat); m.receiveShadow = true; m.name = 'ground'; group.add(m); }
+  // ---------------- ground: lawn plane + paved plaza oval + sand rim, painted per triangle (two small planes, one merged mesh) ----------------
+  { const pave = ['#b8aec7', '#a79cba', '#c8bfd6'].map(C), sand = C('#d8b98c'), grass = ['#5cae52', '#4f9a4a', '#438a45', '#6bb85a'].map(C), shade = C('#4a3a78'), t = new THREE.Color();
+    const plane = (w, d, sx, sz, cz, y) => { const g = new THREE.PlaneGeometry(w, d, sx, sz); g.rotateX(-Math.PI / 2); g.translate(0, y, cz); const ng = g.toNonIndexed(), p = ng.attributes.position, a = new Float32Array(p.count * 3);
+      for (let i = 0; i < p.count; i += 3) {
+        const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cz2 = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3, ex = cx / 8.8, ez = (cz2 + 5.5) / 16.5, d2 = Math.sqrt(ex * ex + ez * ez), cell = (Math.floor(cx / 1.25) + Math.floor(cz2 / 1.25));
+        if (y > 0) { if (d2 < 1) { t.copy(pave[((cell % 3) + 3) % 3]); t.lerp(C('#e9d9c4'), Math.max(0, 0.5 - d2) * 0.35); t.multiplyScalar(0.94 + R() * 0.1); if (d2 > 0.88) t.lerp(sand, 0.55); } else if (d2 < 1.06) t.copy(sand).multiplyScalar(0.95 + R() * 0.08); else t.setRGB(0, 0, 0); }
+        else { t.copy(grass[(R() * 4) | 0]); t.lerp(shade, Math.min(0.4, Math.max(0, (d2 - 1.1) * 0.18))); t.multiplyScalar(0.92 + R() * 0.14); }
+        for (let k = 0; k < 3; k++) { a[(i + k) * 3] = t.r; a[(i + k) * 3 + 1] = t.g; a[(i + k) * 3 + 2] = t.b; }
+      }
+      // plaza triangles outside the oval (flagged black) are dropped
+      if (y > 0) { const keepP = [], keepC = []; for (let i = 0; i < p.count; i += 3) { if (a[i * 3] === 0 && a[i * 3 + 1] === 0) continue; for (let k = 0; k < 3; k++) { keepP.push(p.getX(i + k), p.getY(i + k), p.getZ(i + k)); keepC.push(a[(i + k) * 3], a[(i + k) * 3 + 1], a[(i + k) * 3 + 2]); } } ng.setAttribute('position', new THREE.Float32BufferAttribute(keepP, 3)); ng.setAttribute('color', new THREE.Float32BufferAttribute(keepC, 3)); } else ng.setAttribute('color', new THREE.BufferAttribute(a, 3));
+      ng.deleteAttribute('uv'); ng.deleteAttribute('normal'); return ng; };
+    const lawn = plane(96, 84, 24, 21, -14, 0), plaza = plane(19.6, 34.5, 16, 28, -5.5, 0.012), n1 = lawn.attributes.position.count, n2 = plaza.attributes.position.count, pos = new Float32Array((n1 + n2) * 3), col = new Float32Array((n1 + n2) * 3);
+    pos.set(lawn.attributes.position.array, 0); col.set(lawn.attributes.color.array, 0); pos.set(plaza.attributes.position.array, n1 * 3); col.set(plaza.attributes.color.array, n1 * 3);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals(); const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.name = 'ground'; group.add(m); }
 
   // ---------------- stage: crates + deck + amps + mic + tip jar ----------------
   const stage = new Bag(), wood = ['#b07342', '#9a6035', '#c48650', '#a56a3c'], dark = '#5a3a2a', lite = '#d49a62';
@@ -78,7 +88,6 @@ export function buildWorld(ctx, q) {
   amp(-3.25, ST.z - 0.45, 0.28, true); amp(3.25, ST.z - 0.45, -0.28, true); amp(-3.6, ST.z + 0.6, 0.6, false); amp(3.6, ST.z + 0.6, -0.6, false);
   // monitors (wedges) at the front lip
   [[-1.5, 0.3], [1.5, -0.3]].forEach(([x, ry]) => { stage.box(0.8, 0.28, 0.5, x, ST.h + 0.14, ST.front - 0.4, '#34304a', { ry, tint: 0.04, rx: 0.0 }); stage.box(0.78, 0.04, 0.34, x, ST.h + 0.3, ST.front - 0.35, '#5e5e7a', { ry, tint: 0.03 }); });
-  const stageMesh = meshOf(stage, mat, q !== 'low', true); stageMesh.name = 'stage'; group.add(stageMesh);
 
   // ---------------- backdrop: brick wall with coping, pilasters and a neon sign ----------------
   const wallZ = ST.back - 0.4, WW = 13.6, WH = 6.7; const bt = brickTexture(); bt.wrapS = bt.wrapT = THREE.RepeatWrapping; bt.repeat.set(WW / 7, WH / 3.4);
@@ -90,15 +99,14 @@ export function buildWorld(ctx, q) {
     g.fillStyle = 'rgba(255,240,214,0.7)'; const r = rng(5); for (let i = 0; i < 40; i++) { const x = r() * w, y = r() * h, s = 1 + r() * 2.2; g.fillRect(x, y, s, s); }
   }) }));
   banner.position.set(0, 2.35, wallZ + 0.34); banner.receiveShadow = true; group.add(banner);
-  const frame = new Bag(); frame.box(6.0, 0.1, 0.14, 0, 4.13, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(6.0, 0.1, 0.14, 0, 0.62, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(0.1, 3.6, 0.14, -2.95, 2.37, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(0.1, 3.6, 0.14, 2.95, 2.37, wallZ + 0.36, '#2b2438', { tint: 0 });
-  frame.box(5.9, 0.05, 0.05, 0, 4.0, wallZ + 0.46, '#ff3ea5', { tint: 0 }); group.add(meshOf(frame, mat, false, true));
-  const trim = new Bag(); trim.box(WW + 0.5, 0.26, 0.9, 0, WH + 0.1, wallZ, '#b5adbf', { tint: 0.05 });
+  const frame = stage; frame.box(6.0, 0.1, 0.14, 0, 4.13, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(6.0, 0.1, 0.14, 0, 0.62, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(0.1, 3.6, 0.14, -2.95, 2.37, wallZ + 0.36, '#2b2438', { tint: 0 }); frame.box(0.1, 3.6, 0.14, 2.95, 2.37, wallZ + 0.36, '#2b2438', { tint: 0 });
+  frame.box(5.9, 0.05, 0.05, 0, 4.0, wallZ + 0.46, '#ff3ea5', { tint: 0 });
+  const trim = stage; trim.box(WW + 0.5, 0.26, 0.9, 0, WH + 0.1, wallZ, '#b5adbf', { tint: 0.05 });
   [-WW / 2 + 0.2, -3.6, 3.6, WW / 2 - 0.2].forEach((x, i) => { const w = i === 0 || i === 3 ? 0.9 : 0.5; trim.box(w, WH + 0.1, 0.5, x, WH / 2, wallZ + 0.4, '#c9a98f', { tint: 0.05 }); trim.box(w + 0.25, 0.2, 0.7, x, WH + 0.2, wallZ + 0.4, '#b5adbf', { tint: 0.04 }); });
-  const trimM = meshOf(trim, mat, false, true); group.add(trimM);
   const neon = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 1.94), new THREE.MeshBasicMaterial({ map: neonTexture('BEATBOX'), transparent: true, toneMapped: false, depthWrite: false, fog: false })); neon.position.set(0, 5.3, wallZ + 0.33); neon.renderOrder = 4; group.add(neon);
 
   // ---------------- poles + string lights ----------------
-  const poles = new Bag(), bulbPos = [], BCOL = ['#ffd27a', '#ffd27a', '#ff6fb0', '#ffd27a', '#6ff6ec', '#ffd27a'];
+  const poles = stage, bulbPos = [], BCOL = ['#ffd27a', '#ffd27a', '#ff6fb0', '#ffd27a', '#6ff6ec', '#ffd27a'];
   const pole = (x, z, h) => { poles.cyl(0.09, 0.13, h, 6, x, h / 2, z, '#6a4230', { tint: 0.05 }); poles.box(0.5, 0.08, 0.08, x, h - 0.1, z, '#4b3547', { tint: 0.03 }); poles.cyl(0.18, 0.2, 0.18, 6, x, 0.09, z, '#8d8397', { tint: 0.05 }); };
   const strand = (a, b, sag, n) => {
     const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b); let prev = null;
@@ -111,19 +119,12 @@ export function buildWorld(ctx, q) {
   // stage truss with spot cans
   poles.box(8.6, 0.12, 0.12, 0, 4.3, ST.front - 0.2, '#3a3a4f', { tint: 0.03 }); [-4.3, 4.3].forEach((x) => poles.box(0.12, 4.3, 0.12, x, 2.15, ST.front - 0.2, '#3a3a4f', { tint: 0.03 }));
   [-3.3, -2.0, 2.0, 3.3].forEach((x) => { poles.cyl(0.16, 0.22, 0.34, 6, x, 4.13, ST.front - 0.2, '#2b2438', { tint: 0.03 }); });
-  group.add(meshOf(poles, mat, q !== 'low', true));
-  // bulbs: tiny glowing icospheres + soft halos (additive)
-  const bulbG = new THREE.IcosahedronGeometry(0.075, 0), bulbs = new THREE.InstancedMesh(bulbG, new THREE.MeshBasicMaterial({ toneMapped: false }), bulbPos.length), tcol = new THREE.Color(), dm = new THREE.Matrix4();
-  bulbPos.forEach((b, i) => { dm.makeTranslation(b[0], b[1], b[2]); bulbs.setMatrixAt(i, dm); bulbs.setColorAt(i, tcol.set(b[3]).multiplyScalar(1.6)); }); bulbs.frustumCulled = false; group.add(bulbs);
-  const halos = glowSheet(bulbPos.length, 'soft', 1, 1); const baseCols = bulbPos.map((b) => C(b[3])); group.add(halos);
-  const hm = new THREE.Matrix4(); bulbPos.forEach((b, i) => { hm.makeScale(0.5, 0.5, 0.5); hm.setPosition(b[0], b[1], b[2]); halos.setMatrixAt(i, hm); });
-
   // ---------------- spot beams (additive cones, vertex alpha via colour) ----------------
-  const beamMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide });
+  const beamMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide }); beamMat.forceSinglePass = true;
   const mkBeam = (hex, len, rad) => { const g = new THREE.ConeGeometry(rad, len, 10, 1, true); g.translate(0, -len / 2, 0); const p = g.attributes.position, a = new Float32Array(p.count * 3), c = C(hex); for (let i = 0; i < p.count; i++) { const k = 1 - Math.min(1, Math.max(0, -p.getY(i) / len)); const f = 0.02 + 0.22 * k * k; a[i * 3] = c.r * f; a[i * 3 + 1] = c.g * f; a[i * 3 + 2] = c.b * f; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g; };
   const beams = [];
   [[-3.3, '#ff3ea5', 0], [3.3, '#35f2e0', 0], [-2.0, '#ffd27a', 1], [2.0, '#a86bff', 1]].forEach(([x, hex, hi], i) => {
-    const pivot = new THREE.Object3D(); pivot.position.set(x, 3.96, ST.front - 0.2); const m = new THREE.Mesh(mkBeam(hex, 5.4, 0.8), beamMat.clone()); m.frustumCulled = false; m.renderOrder = 8; pivot.add(m); group.add(pivot); beams.push({ pivot, mesh: m, hi, base: x, ph: i * 1.7 });
+    const pivot = new THREE.Object3D(); pivot.position.set(x, 3.96, ST.front - 0.2); const m = new THREE.Mesh(mkBeam(hex, 5.4, 0.8), ((mm) => { mm.forceSinglePass = true; return mm; })(beamMat.clone())); m.frustumCulled = false; m.renderOrder = 8; pivot.add(m); group.add(pivot); beams.push({ pivot, mesh: m, hi, base: x, ph: i * 1.7 });
   });
   if (q === 'low') { beams.splice(2); }
 
@@ -133,21 +134,25 @@ export function buildWorld(ctx, q) {
   tp.forEach(([x, z, s, k], i) => { const g = k === 'p' ? makePine(300 + i, s * 1.1) : makeOak(300 + i, k === 'm' ? PALS.MAPLE : k === 'c' ? PALS.CHERRY : (i % 2 ? PALS.OAK2 : PALS.OAK), s); trees.push(xf(g, { x, y: 0, z, ry: R() * 6 })); });
   { const parts = trees.map((g) => (g.attributes.uv ? (g.deleteAttribute('uv'), g) : g)); let tot = 0; parts.forEach((g) => { tot += g.attributes.position.count; }); const pos = new Float32Array(tot * 3), col = new Float32Array(tot * 3); let o = 0; parts.forEach((g) => { const gg = g.index ? g.toNonIndexed() : g; pos.set(gg.attributes.position.array, o * 3); col.set(gg.attributes.color.array, o * 3); o += gg.attributes.position.count; });
     const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o * 3), 3)); bg.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o * 3), 3)); bg.computeVertexNormals(); const tm = new THREE.Mesh(bg, mat); tm.castShadow = q !== 'low'; tm.receiveShadow = true; tm.name = 'trees'; group.add(tm); }
-  const props = new Bag();
+  const props = stage;
   // hedges + planters along the plaza edge, benches
   for (let i = 0; i < 9; i++) { const side = i % 2 ? 1 : -1, z = 4.2 - Math.floor(i / 2) * 3.4, x = side * 8.6; props.box(1.7, 0.6, 0.9, x, 0.3, z, '#8a5a3a', { tint: 0.06, r: R, ry: side * 1.5708 }); const b = jitter(new THREE.IcosahedronGeometry(0.62, 1), 0.2, R); b.scale(1.3, 0.8, 0.9); b.translate(x, 0.82, z); props.add(b, ['#3f9b5a', '#58b667', '#2f7d4e'][i % 3], 0.1, R); [0, 1].forEach((k) => { const f = jitter(new THREE.IcosahedronGeometry(0.1, 0), 0.04, R); f.translate(x + (k - 0.5) * 0.7, 1.15 + k * 0.1, z + (R() - 0.5) * 0.4); props.add(f, ['#ff4f8b', '#ffd23f', '#fff2dc'][(i + k) % 3], 0.05, R); }); }
   const bench = (x, z, ry) => { const c = Math.cos(ry), s = Math.sin(ry), at = (px, pz) => [x + c * px + s * pz, z - s * px + c * pz]; props.box(1.5, 0.08, 0.44, x, 0.44, z, '#a66b3f', { ry, tint: 0.05 }); const [bx, bz] = at(0, -0.22); props.box(1.5, 0.4, 0.07, bx, 0.74, bz, '#b07342', { ry, tint: 0.05 }); [-0.62, 0.62].forEach((px) => { const [qx, qz] = at(px, 0); props.box(0.07, 0.44, 0.44, qx, 0.22, qz, '#3a3a4f', { ry, tint: 0.02 }); }); };
   bench(-6.6, -11.2, 1.0); bench(6.6, -11.6, -1.0);
-  group.add(meshOf(props, mat, q !== 'low', true));
   // lamp posts (iron post + glowing globe) flanking the plaza, plus real glow comes from the lighting module's lamp list
-  const lampsIron = new Bag(), lampGlow = [];
+  const lampsIron = stage, lampGlow = [];
   [[-6.3, -7.5], [6.3, -7.5], [-6.5, 2.4], [6.5, 2.4]].forEach(([x, z]) => { lampsIron.cyl(0.07, 0.12, 3.5, 6, x, 1.75, z, '#3a3550', { tint: 0.04 }); lampsIron.cyl(0.17, 0.2, 0.2, 6, x, 0.1, z, '#2b2438', { tint: 0.03 }); lampsIron.cyl(0.26, 0.2, 0.12, 6, x, 3.55, z, '#2b2438', { tint: 0.03 }); lampGlow.push([x, 3.8, z]); });
-  group.add(meshOf(lampsIron, mat, q !== 'low', true));
-  const lamps = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 1), new THREE.MeshBasicMaterial({ toneMapped: false }), lampGlow.length); lampGlow.forEach((p, i) => { dm.makeTranslation(p[0], p[1], p[2]); lamps.setMatrixAt(i, dm); lamps.setColorAt(i, tcol.set('#ffc46b').multiplyScalar(2.4)); }); lamps.frustumCulled = false; group.add(lamps);
+  const stageMesh = meshOf(stage, mat, q !== 'low', true); stageMesh.name = 'stage'; group.add(stageMesh);
+  // bulbs (string lights + lamp globes): tiny glowing icospheres in ONE instanced draw, plus soft halos (additive) for the string bulbs
+  const bulbG = new THREE.IcosahedronGeometry(0.075, 0), nB = bulbPos.length, bulbs = new THREE.InstancedMesh(bulbG, new THREE.MeshBasicMaterial({ toneMapped: false }), nB + lampGlow.length), tcol = new THREE.Color(), dm = new THREE.Matrix4();
+  bulbPos.forEach((b, i) => { dm.makeTranslation(b[0], b[1], b[2]); bulbs.setMatrixAt(i, dm); bulbs.setColorAt(i, tcol.set(b[3]).multiplyScalar(1.6)); });
+  lampGlow.forEach((p, i) => { dm.makeScale(2.7, 2.7, 2.7); dm.setPosition(p[0], p[1], p[2]); bulbs.setMatrixAt(nB + i, dm); bulbs.setColorAt(nB + i, tcol.set('#ffc46b').multiplyScalar(2.2)); }); bulbs.frustumCulled = false; group.add(bulbs);
+  const halos = glowSheet(nB, 'soft', 1, 1); const baseCols = bulbPos.map((b) => C(b[3])); group.add(halos);
+  const hm = new THREE.Matrix4(); bulbPos.forEach((b, i) => { hm.makeScale(0.5, 0.5, 0.5); hm.setPosition(b[0], b[1], b[2]); halos.setMatrixAt(i, hm); });
 
   // ---------------- skyline + clouds (reuse the park's) ----------------
   let skyline = null;
-  try { skyline = buildSkyline(ctx, { minX: -15, maxX: 15, minZ: -17, maxZ: 6 }, rng(31337), () => 0); group.add(skyline.group); } catch (e) { console.error('[rhythm] skyline failed ' + e); }
+  try { skyline = buildSkyline(ctx, { minX: -15, maxX: 15, minZ: -17, maxZ: 6 }, rng(31337), () => 0); [skyline.body, skyline.lit].forEach((m) => cullTris(m, (x, z) => z < 9 && Math.abs(x) < 0.6 * (11.4 - z) + 16)); group.add(skyline.group); } catch (e) { console.error('[rhythm] skyline failed ' + e); }
   try { group.add(buildClouds(rng(808)).mesh); } catch (e) { console.error('[rhythm] clouds failed ' + e); }
 
   // ---------------- pigeons ----------------

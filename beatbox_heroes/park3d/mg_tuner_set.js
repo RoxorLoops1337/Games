@@ -14,7 +14,7 @@ export const pcyl = (rt, rb, h, seg, c, open) => paint(nonIndexed(new THREE.Cyli
 export const ptor = (r, t, seg, tseg, c, arc) => paint(nonIndexed(new THREE.TorusGeometry(r, t, tseg || 5, seg || 14, arc || Math.PI * 2)), c);
 export const psph = (r, c, d) => paint(nonIndexed(new THREE.IcosahedronGeometry(r, d || 1)), c);
 // HDR colour for glow geometry (MeshBasicMaterial, toneMapped:false): rgb multiplied above 1 so bloom picks it up
-export function glowPaint(g, hex, k) { const c = col(hex).multiplyScalar(k || 1.6), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; }
+export function glowPaint(g, hex, k) { const c = col(hex).multiplyScalar((k || 1.6) * 0.62), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; }
 export const glowMaterial = () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 let GLOWTEX = null;
 // soft radial sprite texture (white centre fading to nothing) for halos, so glows never show a hard disc edge
@@ -103,9 +103,14 @@ export function buildSet(ctx, tier) {
   }
   setVU(0.05, 0.05);
 
+  // ---- floating dust motes in the lamp light (instanced, drifting)
+  const ND = lowQ ? 14 : 40, dust = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd9a0').multiplyScalar(0.9), toneMapped: false }), ND); dust.frustumCulled = false; dust.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(dust);
+  const dp = []; for (let i = 0; i < ND; i++) dp.push({ x: -2 + R() * 4, y: 0.6 + R() * 4, z: -2.5 + R() * 5.5, ph: R() * 6.28, sp: 0.15 + R() * 0.25, sz: 0.012 + R() * 0.014 });
+  const dm = new THREE.Matrix4(), dq = new THREE.Quaternion(), dv = new THREE.Vector3(), ds = new THREE.Vector3();
   const api = {
     group: g, lamp: LAMP, key, hemi, rimP, rimC, signMat, vu: setVU, bars,
     update(dt, t, c) {
+      for (let i = 0; i < ND; i++) { const p = dp[i]; p.y += p.sp * dt * 0.4; if (p.y > 5.2) p.y = 0.5; dv.set(p.x + 0.12 * Math.sin(t * 0.4 + p.ph), p.y, p.z + 0.12 * Math.cos(t * 0.33 + p.ph)); ds.setScalar(p.sz * (0.7 + 0.3 * Math.sin(t * 2 + p.ph))); dm.compose(dv, dq, ds); dust.setMatrixAt(i, dm); } dust.instanceMatrix.needsUpdate = true;
       // c: { live (singing now), level, streakCol, beat }
       const live = c.live ? 1 : 0; api._live += (live - api._live) * (1 - Math.exp(-dt * 8));
       const pulse = 0.5 + 0.5 * Math.sin(t * 6); const k = 0.28 + api._live * (0.75 + 0.25 * pulse);

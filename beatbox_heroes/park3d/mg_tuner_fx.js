@@ -23,7 +23,7 @@ export function buildAura() {
       ringMat.opacity = Math.min(0.9, amt * (0.7 + 0.3 * pulse) + boost * 0.4); ring2Mat.opacity = Math.min(0.8, amt * 0.7 + boost * 0.5); colMat.opacity = Math.min(0.26, (amt - 0.1) * 0.2 + boost * 0.14);
       ring.scale.setScalar(1 + 0.08 * pulse + boost * 0.35); ring2.scale.setScalar(1 + (1 - ((t * 0.9) % 1)) * 0.0 + boost * 0.6 + 0.04 * Math.sin(t * 3)); col.scale.set(1 + boost * 0.4, 1, 1 + boost * 0.4);
       const n = streak >= 2 ? Math.min(NSt, 2 + streak) : 0;
-      for (let i = 0; i < NSt; i++) { const on = i < n, ang = t * (1.4 + i * 0.05) + i * (Math.PI * 2 / Math.max(1, n || 1)), r = 0.7 + 0.06 * Math.sin(t * 2 + i), y = 0.5 + ((i * 0.37 + t * 0.35) % 1.4); v.set(Math.cos(ang) * r, y, Math.sin(ang) * r); s.setScalar(on ? 0.04 + 0.02 * Math.sin(t * 9 + i) : 0.0001); q.identity(); m4.compose(v, q, s); stars.setMatrixAt(i, m4); stars.setColorAt(i, cc.clone().multiplyScalar(1.8)); }
+      for (let i = 0; i < NSt; i++) { const on = i < n, ang = t * (1.4 + i * 0.05) + i * (Math.PI * 2 / Math.max(1, n || 1)), r = 0.7 + 0.06 * Math.sin(t * 2 + i), y = 0.5 + ((i * 0.37 + t * 0.35) % 1.4); v.set(Math.cos(ang) * r, y, Math.sin(ang) * r); s.setScalar(on ? 0.04 + 0.02 * Math.sin(t * 9 + i) : 0.0001); q.identity(); m4.compose(v, q, s); stars.setMatrixAt(i, m4); stars.setColorAt(i, cc.clone().multiplyScalar(1.1)); }
       stars.instanceMatrix.needsUpdate = true; if (stars.instanceColor) stars.instanceColor.needsUpdate = true;
     },
     get color() { return cc; },

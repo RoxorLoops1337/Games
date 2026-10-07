@@ -9,7 +9,7 @@ const C = (h) => new THREE.Color(h);
 export const noteHue = (m) => new THREE.Color().setHSL((((m % 12) + 12) % 12) / 12 * 0.92 + 0.02, 0.92, 0.56);
 const additive = (c, o) => new THREE.MeshBasicMaterial(Object.assign({ color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }, o || {}));
 const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-const COL = { lime: C('#8dff5a').multiplyScalar(1.45), yel: C('#ffe14d').multiplyScalar(1.4), org: C('#ff8a3d').multiplyScalar(1.4), pink: C('#ff3e86').multiplyScalar(1.5), ghost: C('#8a78e8').multiplyScalar(0.8), white: C('#ffffff').multiplyScalar(1.6) };
+const COL = { lime: C('#7dff4a').multiplyScalar(1.0), yel: C('#ffe03a').multiplyScalar(1.0), org: C('#ff7a2d').multiplyScalar(1.0), pink: C('#ff2e7a').multiplyScalar(1.05), ghost: C('#8a78e8').multiplyScalar(0.7), white: C('#ffffff').multiplyScalar(1.2) };
 // cents error to orb colour: lime in tune, yellow at the edge (50), orange, then hot pink when far off
 export function errColor(abs, out) { const a = abs; if (a < 25) return out.copy(COL.lime).lerp(COL.yel, a / 25 * 0.35); if (a < 50) return out.copy(COL.lime).lerp(COL.yel, 0.35 + (a - 25) / 25 * 0.65); if (a < 100) return out.copy(COL.yel).lerp(COL.org, (a - 50) / 50); return out.copy(COL.org).lerp(COL.pink, clamp((a - 100) / 100, 0, 1)); }
 
@@ -45,16 +45,16 @@ export function buildRoad(ctx, tier) {
   // frame: neon border + slab behind
   const fr = [], fg = [], T = 0.09, W = LAD.w, Hh = LAD.h, cy = LAD.y0 + Hh / 2;
   fr.push(place(pbox(W + 0.5, Hh + 0.5, 0.12, '#14102e'), 0, cy, -0.09));
-  [[0, cy + Hh / 2 + T / 2, W + T * 2, T], [0, cy - Hh / 2 - T / 2, W + T * 2, T], [-W / 2 - T / 2, cy, T, Hh], [W / 2 + T / 2, cy, T, Hh]].forEach(([x, y, w, h], i) => fg.push(glowPaint(place(pbox(w, h, 0.06, '#fff'), x, y, 0.03), i % 3 === 0 ? '#2ee6ff' : '#ff3ea5', 1.25)));
+  [[0, cy + Hh / 2 + T / 2, W + T * 2, T], [0, cy - Hh / 2 - T / 2, W + T * 2, T], [-W / 2 - T / 2, cy, T, Hh], [W / 2 + T / 2, cy, T, Hh]].forEach(([x, y, w, h], i) => fg.push(glowPaint(place(pbox(w, h, 0.06, '#fff'), x, y, 0.03), i % 3 === 0 ? '#12c4ff' : '#ff2a95', 1.25)));
   const frame = new THREE.Mesh(mergeG(fr), flatMat()); frame.receiveShadow = false; g.add(frame); g.add(new THREE.Mesh(mergeG(fg), glowMaterial()));
   function mergeG(arr) { const pos = [], col = []; arr.forEach((a0) => { const a = a0.index ? a0.toNonIndexed() : a0; pos.push(...a.attributes.position.array); col.push(...a.attributes.color.array); }); const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); o.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); o.computeVertexNormals(); return o; }
 
   // ---- NOW line + in tune strip
   const nowX = LAD.nowX;
   const nowGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.34, Hh), additive(C('#2ee6ff'), { opacity: 0.1 })); nowGlow.position.set(nowX, cy, 0.04); g.add(nowGlow);
-  const nowCore = new THREE.Mesh(new THREE.BoxGeometry(0.03, Hh, 0.03), new THREE.MeshBasicMaterial({ color: C('#38d8ff').multiplyScalar(1.3), toneMapped: false })); nowCore.position.set(nowX, cy, 0.05); g.add(nowCore);
+  const nowCore = new THREE.Mesh(new THREE.BoxGeometry(0.03, Hh, 0.03), new THREE.MeshBasicMaterial({ color: C('#38d8ff').multiplyScalar(0.95), toneMapped: false })); nowCore.position.set(nowX, cy, 0.05); g.add(nowCore);
   const strip = new THREE.Mesh(new THREE.PlaneGeometry(LAD.w, LAD.h / nR), additive(C('#8dff5a'), { opacity: 0.0 })); strip.position.set(0, cy, 0.03); g.add(strip);
-  const nowTag = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.16, 3), new THREE.MeshBasicMaterial({ color: C('#38d8ff').multiplyScalar(1.5), toneMapped: false })); nowTag.rotation.z = Math.PI; nowTag.position.set(nowX, LAD.y0 + Hh + 0.2, 0.05); g.add(nowTag);
+  const nowTag = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.16, 3), new THREE.MeshBasicMaterial({ color: C('#38d8ff').multiplyScalar(1.0), toneMapped: false })); nowTag.rotation.z = Math.PI; nowTag.position.set(nowX, LAD.y0 + Hh + 0.2, 0.05); g.add(nowTag);
 
   // ---- crystals
   const cGeo = crystalGeo(0.86, 0.34), crystals = [];
@@ -73,10 +73,10 @@ export function buildRoad(ctx, tier) {
   const orbMat = new THREE.MeshBasicMaterial({ color: COL.ghost.clone(), toneMapped: false }), orb = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), orbMat); orb.position.set(nowX, cy, 0.34); g.add(orb);
   const backMat = new THREE.MeshBasicMaterial({ color: C('#0b0722'), transparent: true, opacity: 0.6, depthWrite: false }), back = new THREE.Mesh(new THREE.CircleGeometry(1, 18), backMat); back.position.set(nowX, cy, 0.27); g.add(back);
   const haloMat = additive(COL.ghost.clone(), { opacity: 0.3, map: glowTex() }), halo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), haloMat); halo.position.set(nowX, cy, 0.3); g.add(halo);
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: C('#ffffff').multiplyScalar(2.6), toneMapped: false })); core.position.set(nowX, cy, 0.4); g.add(core);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: C('#ffffff').multiplyScalar(1.4), toneMapped: false })); core.position.set(nowX, cy, 0.4); g.add(core);
   const orbLight = new THREE.PointLight('#8dff5a', 0, 3.2, 1.8); orbLight.position.set(nowX, cy, 0.9); if (!lowQ) g.add(orbLight);
   const NT = lowQ ? 14 : 26, trail = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ toneMapped: false }), NT); trail.frustumCulled = false; trail.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(trail);
-  const th = []; for (let i = 0; i < NT; i++) th.push({ y: cy, c: new THREE.Color(), on: 0 }); let tAcc = 0; const TRAIL_T = 0.05, TRAIL_V = 1.45;
+  const th = []; for (let i = 0; i < NT; i++) th.push({ y: cy, c: new THREE.Color(), on: 0 }); let tAcc = 0; const TRAIL_T = 0.05, TRAIL_V = 0.72;
   // ---- sparkles (instanced tetrahedra) and ping rings
   const NS = lowQ ? 24 : 56, spk = new THREE.InstancedMesh(new THREE.TetrahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ toneMapped: false }), NS); spk.frustumCulled = false; spk.instanceMatrix.setUsage(THREE.DynamicDrawUsage); g.add(spk);
   const sp = []; for (let i = 0; i < NS; i++) sp.push({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, s: 0.05, c: new THREE.Color(), rot: 0, vr: 0 }); let spI = 0;
@@ -109,7 +109,7 @@ export function buildRoad(ctx, tier) {
         c.m.position.set(x, c.y, 0.16); c.m.scale.setScalar(Math.max(0.001, c.sc)); show = edge > 0.02;
         const lis = isCur && S.phase === 'ref', pul = 0.5 + 0.5 * Math.sin(t * (lis ? 14 : 5));
         const em = state === 'cur' ? (lis ? 0.8 + 0.4 * pul : 0.8 + 0.15 * pul) : state === 'hit' ? 0.85 : state === 'miss' ? 0.05 : 0.38;
-        c.mat.color.copy(c.hue).multiplyScalar(0.55 + em * 1.1 + c.flash); c.flash = Math.max(0, c.flash - dt * 2.2);
+        c.mat.color.copy(c.hue).multiplyScalar(0.42 + em * 0.55 + c.flash * 0.5); c.flash = Math.max(0, c.flash - dt * 2.2);
         c.m.rotation.z = state === 'miss' ? 0.22 : 0.025 * Math.sin(t * 2 + i); c.m.rotation.y = (state === 'cur' ? 0.15 * Math.sin(t * 1.7) : 0); if (state === 'miss') c.hue.lerp(C('#6a5a86'), 0.1);
         c.fill.visible = isCur && S.phase === 'sing'; if (c.fill.visible) { const p = clamp(S.hold / 0.9, 0.001, 1); c.fill.scale.x = p; c.fill.position.x = -0.37 * (1 - p); }
       } else if (ear && playing && i < 2) {
@@ -118,7 +118,7 @@ export function buildRoad(ctx, tier) {
         const ty = lerp(ny, yOf(note), rev); c.y += (ty - c.y) * (1 - Math.exp(-dt * 8)); const x = nowX + 0.55 + i * 1.45; c.x = x;
         const on = i === 0 ? ph !== 'idle' : shown; const sc = on ? (((ph === 'earA' && i === 0) || (ph === 'earB' && i === 1)) ? 1.2 : 0.95) : 0.001; c.sc += (sc - c.sc) * (1 - Math.exp(-dt * 10));
         c.m.position.set(x, c.y, 0.16); c.m.scale.setScalar(Math.max(0.001, c.sc)); show = c.sc > 0.02; c.state = 'ear';
-        const playingNow = (ph === 'earA' && i === 0) || (ph === 'earB' && i === 1); c.mat.color.copy(c.hue).multiplyScalar(0.55 + (playingNow ? 1.0 : 0.4) + c.flash); c.flash = Math.max(0, c.flash - dt * 2.2); c.m.rotation.set(0, 0.12 * Math.sin(t * 1.5 + i), 0.02 * Math.sin(t * 2 + i)); void mid;
+        const playingNow = (ph === 'earA' && i === 0) || (ph === 'earB' && i === 1); c.mat.color.copy(c.hue).multiplyScalar(0.42 + (playingNow ? 0.6 : 0.2) + c.flash * 0.5); c.flash = Math.max(0, c.flash - dt * 2.2); c.m.rotation.set(0, 0.12 * Math.sin(t * 1.5 + i), 0.02 * Math.sin(t * 2 + i)); void mid;
         c.fill.visible = false; labs[i].visible = show; labs[i].position.set(x, c.y + 0.36, 0.3);
       }
       c.m.visible = show; if (!(ear && playing && i < 2) && i < 2) labs[i].visible = false;

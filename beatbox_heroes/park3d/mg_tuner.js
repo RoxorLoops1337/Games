@@ -32,7 +32,7 @@ export function createTuner(ctx, opts) {
   function setLook(look) { hero.setLook(studioLook(look)); }
 
   // ---- post: bloom on the neon, tilt shift on high. The grade object is ours (no day/night cycle in the booth).
-  const S = { bloom: 0.38, bloomThr: 1.0, vig: 0.5, sat: 1.14, gShadow: new THREE.Color('#e4d8ff'), gHigh: new THREE.Color('#fff0dc'), tilt: 0.55 };
+  const S = { bloom: 0.38, bloomThr: 1.0, vig: 0.5, sat: 1.38, gShadow: new THREE.Color('#e4d8ff'), gHigh: new THREE.Color('#fff0dc'), tilt: 0.55 };
   const post = createPost(ctx, S); post.setQuality(tier);
 
   // ---- camera: portrait, a touch of sway, a push on hits

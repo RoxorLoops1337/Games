@@ -15,7 +15,7 @@ export function glowTex(kind) {
   });
   return TEX[kind];
 }
-export function glowMaterial(kind) { return new THREE.MeshBasicMaterial({ map: glowTex(kind), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.DoubleSide }); }
+export function glowMaterial(kind) { return new THREE.MeshBasicMaterial({ map: glowTex(kind), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, side: THREE.FrontSide }); }
 // an instanced additive sheet: n quads of w x h, per instance matrix + colour (colour magnitude fades the glow)
 export function glowSheet(n, kind, w, h) {
   const g = new THREE.PlaneGeometry(w || 1, h || 1); const m = new THREE.InstancedMesh(g, glowMaterial(kind), n); m.frustumCulled = false; m.renderOrder = 20;
