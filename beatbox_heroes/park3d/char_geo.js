@@ -28,7 +28,7 @@ export function boneSpec(d) {
     ['thL', 'hips', d.hipX, -0.04, 0], ['knL', 'thL', 0, -0.2, 0], ['anL', 'knL', 0, -0.175, 0],
     ['thR', 'hips', -d.hipX, -0.04, 0], ['knR', 'thR', 0, -0.2, 0], ['anR', 'knR', 0, -0.175, 0],
     ['eyeL', 'head', 0.124, 0.27, 0.262], ['eyeR', 'head', -0.124, 0.27, 0.262], ['mouth', 'head', 0, 0.118, 0.255],
-    ['cheekL', 'head', 0.2, 0.15, 0.2], ['cheekR', 'head', -0.2, 0.15, 0.2], ['browL', 'head', 0.124, 0.352, 0.268], ['browR', 'head', -0.124, 0.352, 0.268],
+    ['cheekL', 'head', 0.2, 0.14, 0.13], ['cheekR', 'head', -0.2, 0.14, 0.13], ['browL', 'head', 0.124, 0.352, 0.268], ['browR', 'head', -0.124, 0.352, 0.268],
     ['puffL', 'head', 0.2, 0.5, -0.02], ['puffR', 'head', -0.2, 0.5, -0.02], ['hairB', 'head', 0, 0.42, -0.25], ['hairB2', 'hairB', 0, -0.2, -0.02],
     ['hairSL', 'head', 0.285, 0.26, -0.02], ['hairSR', 'head', -0.285, 0.26, -0.02], ['brim', 'head', 0, 0.37, 0.27], ['tail', 'head', 0, 0.34, -0.27], ['beard', 'head', 0, 0.06, 0.2],
     ['chain', 'chest', 0, 0.2, 0.12], ['cape', 'chest', 0, 0.2, -0.14], ['hem', 'hips', 0, 0.02, 0],
@@ -54,9 +54,9 @@ export class MB {
   tri(a, b, c, ca, cb, cc, sa, sb, sc, nh, flat) {
     _a.set(a[0], a[1], a[2]); _b.set(b[0], b[1], b[2]); _c.set(c[0], c[1], c[2]);
     _n.crossVectors(_b.sub(_a), _c.sub(_a)); const l = _n.length(); if (l < 1e-9) return; _n.multiplyScalar(1 / l);
-    let f = 1; if (!flat) { const k = _n.y * 0.5 + 0.5; f = (0.86 + 0.15 * k) + (this.rnd() - 0.5) * 0.045; }
+    let f = 1; if (!flat) { const k = _n.y * 0.5 + 0.5; f = (0.94 + 0.18 * k) + (this.rnd() - 0.5) * 0.05; }
     const cols = [ca, cb || ca, cc || ca], pts = [a, b, c], sks = [sa, sb || sa, sc || sa];
-    for (let i = 0; i < 3; i++) { const p = pts[i], q = cols[i], s = sks[i]; this.P.push(p[0], p[1], p[2]); this.Cl.push(Math.min(1, q.r * f), Math.min(1, q.g * f * (flat ? 1 : 0.995)), Math.min(1, q.b * f * (flat ? 1 : 1.02))); this.S.push(s[0], s[1], s[2]); }
+    for (let i = 0; i < 3; i++) { const p = pts[i], q = cols[i], s = sks[i]; this.P.push(p[0], p[1], p[2]); this.Cl.push(Math.min(1.3, q.r * f), Math.min(1.3, q.g * f * (flat ? 1 : 0.995)), Math.min(1.3, q.b * f * (flat ? 1 : 1.02))); this.S.push(s[0], s[1], s[2]); }
     this.H.push(nh ? 1 : 0);
   }
   // triangle with winding fixed so its normal agrees with hint (a [x,y,z] direction)

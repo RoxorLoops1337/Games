@@ -6,7 +6,7 @@ import { C, mix, shade, lite, skinShade, INK, CREAM, K, K2, BI, MB, loft, ball, 
 // ------------------------------------------------------------------ head surface model (head-local: origin at neck top, chin about y=0.02)
 export const HY = 0.98;
 export const HR = [
-  { y: -0.03, rx: 0.08, rz: 0.08, cz: 0.03 }, { y: 0.02, rx: 0.13, rz: 0.13, cz: 0.05 }, { y: 0.075, rx: 0.205, rz: 0.2, cz: 0.04 }, { y: 0.15, rx: 0.27, rz: 0.245, cz: 0.02 },
+  { y: -0.03, rx: 0.08, rz: 0.08, cz: 0.03 }, { y: 0.02, rx: 0.14, rz: 0.14, cz: 0.05 }, { y: 0.075, rx: 0.225, rz: 0.21, cz: 0.035 }, { y: 0.15, rx: 0.283, rz: 0.248, cz: 0.018 },
   { y: 0.24, rx: 0.305, rz: 0.27, cz: 0 }, { y: 0.33, rx: 0.31, rz: 0.277, cz: -0.005 }, { y: 0.41, rx: 0.292, rz: 0.27, cz: -0.015 }, { y: 0.49, rx: 0.245, rz: 0.245, cz: -0.03 },
   { y: 0.545, rx: 0.17, rz: 0.18, cz: -0.035 }, { y: 0.585, rx: 0.07, rz: 0.085, cz: -0.035 },
 ];
@@ -52,7 +52,7 @@ export function buildHead(mb, ctx) {
 // ------------------------------------------------------------------ face
 const EYE_RADIUS = { round: 1.22, sharp: 1.1, sleepy: 1.15, wide: 1.4, lashes: 1.2, cat: 1.2, happy: 1.2, star: 1.3 };
 export function buildFace(mb, glow, ctx) {
-  const look = ctx.look, eyes = look.eyes || {}, style = eyes.style || 'round', iris = C(eyes.color || '#4a2c1a'), sk = ctx.skin;
+  const look = ctx.look, eyes = look.eyes || {}, style = eyes.style || 'round', iris = lite(C(eyes.color || '#4a2c1a'), 0.12).multiplyScalar(1.25), sk = ctx.skin;
   const hairC = C(look.hair && look.hair.color || '#2a2024'), brow = mix(hairC, INK, 0.45);
   [1, -1].forEach((s) => {
     const bn = K(s > 0 ? 'eyeL' : 'eyeR'), ex = s * 0.124, ey = 0.27, R = EYE_RADIUS[style] || 1, ox = s;   // ox: outward direction
@@ -85,7 +85,7 @@ export function buildFace(mb, glow, ctx) {
       void pt; for (let i = 0; i < 4; i++) { const w = onFace([top[i], top[i + 1], bot[i + 1], bot[i]], 0.011); mb.poly(w, brow, bnn, [0, 0, 1], { nh: true, flat: true }); }
     }
     // cheeks (puff bones)
-    const cb = ctx.rest[s > 0 ? 'cheekL' : 'cheekR']; ball(mb, [cb[0] - s * 0.012, cb[1], cb[2] - 0.03], [0.05, 0.05, 0.05], skinShade(sk, 0.98), K(s > 0 ? 'cheekL' : 'cheekR'), { detail: 0, nh: true });
+    const cb = ctx.rest[s > 0 ? 'cheekL' : 'cheekR']; ball(mb, cb, [0.052, 0.05, 0.05], skinShade(sk, 0.98), K(s > 0 ? 'cheekL' : 'cheekR'), { detail: 0, nh: true });
     if ((look.marks || []).indexOf('blush') >= 0) faceDecal(mb, ell(0.04, 0.026, 8, s * 0.2, 0.17, 0), mix(sk, '#ff5f8a', 0.45), K('head'), 0.006, true);
   });
   // mouth: closed smile strip (static) + open mouth shape (bone 'mouth' scales it)

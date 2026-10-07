@@ -23,17 +23,14 @@ export function buildGlasses(mb, glow, ctx) {
   const col = C(g.color || '#17141f'), K_h = K('head'), ey = 0.275, off = 0.026, FACE = (x, y) => facePt(x, y);
   const strip = (a, b, th, c, o) => { const A = proj([a], o || 0.027)[0], Bp = proj([b], o || 0.027)[0]; tube(mb, [A, Bp], th, c, { n: 3, sk: K_h, nh: true, flat: true }); };
   if (id === 'chromeshield' || id === 'visor_shield') {
-    const cols = 8, rows = 3, top = lite(col, 0.55), bot = mix(col, '#6c5cd6', 0.65), x0 = -0.205, x1 = 0.205, y0 = 0.205, y1 = 0.345;
-    for (let r = 0; r < rows; r++) for (let i = 0; i < cols; i++) {
-      const xa = lerp(x0, x1, i / cols), xb = lerp(x0, x1, (i + 1) / cols), ya = lerp(y1, y0, r / rows), yb = lerp(y1, y0, (r + 1) / rows), t = (r + 0.5) / rows;
-      const taper = (x) => 1 - Math.pow(Math.abs(x) / 0.2, 3) * 0.22, qa = [xa, ya * 1 - (1 - taper(xa)) * 0.05], qb = [xb, ya - (1 - taper(xb)) * 0.05], qc = [xb, yb + (1 - taper(xb)) * 0.04], qd = [xa, yb + (1 - taper(xa)) * 0.04];
-      const c = mix(top, bot, t * 1.0); const w = proj([qa, qb, qc, qd], off + 0.002);
-      mb.poly(w, c, K_h, [0, 0, 1], { flat: true, nh: true });
-    }
-    [[-0.12, 0.052, 0.012], [0.03, 0.05, 0.02]].forEach(([x, w, h]) => { const p = proj([[x, 0.34], [x + w, 0.34], [x + w - 0.045, 0.215], [x - 0.045, 0.215]], off + 0.004); mb.poly(p, CREAM, K_h, [0, 0, 1], { flat: true, nh: true }); void h; });
-    // frame bar and arms
-    strip([-0.205, 0.335], [0.205, 0.335], 0.008, shade(col, 0.6)); strip([-0.205, 0.215], [0.205, 0.215], 0.006, shade(col, 0.6));
-    [1, -1].forEach((s) => { const a = proj([[s * 0.2, 0.28]], 0.028)[0]; tube(mb, [a, [s * 0.285, HY + 0.28, 0.06], [s * 0.31, HY + 0.27, -0.02]], 0.01, shade(col, 0.55), { n: 3, sk: K_h, nh: true }); });
+    const cols = 8, rows = 3, top = lite(col, 0.45), mid = mix(col, '#7aa8ff', 0.5), bot = mix(col, '#6c5cd6', 0.75), x0 = -0.21, x1 = 0.21, y1 = 0.345, y0 = 0.205;
+    const ytop = (x) => y1 - 0.012 * Math.pow(Math.abs(x) / 0.21, 2), ybot = (x) => y0 + 0.035 * Math.pow(Math.abs(x) / 0.21, 2) + (Math.abs(x) < 0.04 ? 0.012 : 0);
+    const V = []; for (let i = 0; i <= cols; i++) { const x = lerp(x0, x1, i / cols), col2 = []; for (let r = 0; r <= rows; r++) col2.push([x, lerp(ytop(x), ybot(x), r / rows)]); V.push(col2); }
+    const rc = (r) => (r === 0 ? top : r === 1 ? mid : bot);
+    for (let r = 0; r < rows; r++) for (let i = 0; i < cols; i++) mb.poly(proj([V[i][r], V[i + 1][r], V[i + 1][r + 1], V[i][r + 1]], off + 0.004), rc(r), K_h, [0, 0, 1], { flat: true, nh: true });
+    for (let i = 0; i < cols; i++) { mb.poly(proj([V[i][0], V[i + 1][0], [V[i + 1][0][0], V[i + 1][0][1] + 0.014], [V[i][0][0], V[i][0][1] + 0.014]], off + 0.001), shade(col, 0.55), K_h, [0, 0, 1], { flat: true, nh: true }); }
+    [[-0.13, 0.05], [0.04, 0.036]].forEach(([x, w]) => mb.poly(proj([[x, 0.335], [x + w, 0.335], [x + w - 0.05, 0.225], [x - 0.05, 0.225]], off + 0.007), CREAM, K_h, [0, 0, 1], { flat: true, nh: true }));
+    [1, -1].forEach((s) => { const a = proj([[s * 0.205, 0.28]], 0.028)[0]; tube(mb, [a, [s * 0.285, HY + 0.28, 0.06], [s * 0.31, HY + 0.27, -0.02]], 0.01, shade(col, 0.55), { n: 3, sk: K_h, nh: true }); });
     return;
   }
   if (id === 'neonbar') { const p = proj([[-0.2, 0.3], [0.2, 0.3], [0.2, 0.25], [-0.2, 0.25]], off + 0.004); glow.poly(p, C(g.color && g.color !== '#17141f' ? g.color : '#2ee6ff').multiplyScalar(1.1), K_h, [0, 0, 1], { flat: true, nh: true }); strip([-0.205, 0.3], [-0.3, 0.27], 0.008, INK); strip([0.205, 0.3], [0.3, 0.27], 0.008, INK); return; }

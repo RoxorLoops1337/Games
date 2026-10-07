@@ -159,7 +159,7 @@ export class Animator {
     ['L', 'R'].forEach((k, i) => {
       const s = i ? -1 : 1, eye = B['eye' + k], er = eye.userData.rest; eye.scale.set(1, Math.max(0.06, eyeS), 1); eye.position.set(er[0] + P.eyeX * 0.012, er[1] + P.eyeY * 0.01, er[2]);
       const br = B['brow' + k], brr = br.userData.rest; br.position.set(brr[0], brr[1] + P.brow * 0.025, brr[2]); set(br, 0, 0, -s * P.browTilt * 0.5);
-      const ch = B['cheek' + k]; ch.scale.setScalar(0.85 + P.cheek * 0.6);
+      const ch = B['cheek' + k]; ch.scale.setScalar(0.8 + P.cheek * 1.15);
     });
     B.mouth.scale.set(P.mouthW, Math.max(0.05, P.mouthOpen), 1);
     // ----- springs
