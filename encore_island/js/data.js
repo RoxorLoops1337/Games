@@ -111,7 +111,7 @@ const CARDS = [
   { id: 'magnet', icon: 'magnet', name: 'Magnetism', d: '+20% pickup range', max: 10 }, { id: 'coin', icon: 'coin', name: 'Greed', d: '+12% coin value', max: 20 },
   { id: 'combow', icon: 'combow', name: 'Momentum', d: '+0.4s combo window', max: 8 }, { id: 'scholar', icon: 'scholar', name: 'Fast Learner', d: '+15% XP gained', max: 12 },
   { id: 'thorns', icon: 'thorns', name: 'Feedback', d: 'Reflect damage when hit', max: 8 }, { id: 'luck', icon: 'luck', name: 'Fortune', d: '+1.5% golden-foe chance', max: 6 },
-  { id: 'cap', icon: 'cap', name: 'Deep Pockets', d: '+2 backpack slots', max: 20 }, { id: 'groove', icon: 'groove', name: 'Good Ear', d: 'Wider on-beat window', max: 6 },
+  { id: 'cap', icon: 'cap', name: 'Deep Pockets', d: '+2 backpack slots', max: 20 }, { id: 'groove', icon: 'groove', name: 'Good Ear', d: 'Wider perfect-tap window', max: 6 },
 ];
 const CPERKS = [
   { id: 'wealth', name: 'Royal Treasury', kind: 'coin', amt: 0.08, max: 12, desc: '+8% coin value' }, { id: 'might', name: 'Stage Presence', kind: 'dmg', amt: 0.08, max: 12, desc: '+8% damage' },
