@@ -72,12 +72,14 @@ export function createPost(ctx, S) {
     if (grade) grade.uniforms.uAspect.value = W / H;
   }
   function checkBlank() {
-    frames++; if (frames < 3 || frames > 40 || frames % 3) return;
-    const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; let lit = 0;
-    try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7], [0.5, 0.85]]) { gl.readPixels((w * fx) | 0, (h * fy) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); if (px4[0] + px4[1] + px4[2] > 0) lit++; } } catch (e) { return; }
-    if (forceBlank > 0) { forceBlank--; lit = 0; }
-    blankRun = lit === 0 ? blankRun + 1 : 0;
-    if (blankRun >= 2) { rung++; stats.rung = rung; try { console.warn('Park3D: black frame on post rung ' + (rung - 1) + ', falling back to rung ' + rung); } catch (e) { /* ignore */ } build(tier); }
+    // the grade pass lifts blacks and adds grain, so a broken (empty) frame is never exactly 0: call it blank when the sample points are all nearly the same dark colour
+    frames++; if (frames < 3 || frames > 90 || frames % 3) return;
+    const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = [];
+    try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.25], [0.8, 0.25], [0.2, 0.75], [0.8, 0.75], [0.5, 0.9], [0.5, 0.1]]) { gl.readPixels((w * fx) | 0, (h * fy) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); px.push([px4[0], px4[1], px4[2]]); } } catch (e) { return; }
+    let flat = true, mean = 0; for (const p of px) { mean += (p[0] + p[1] + p[2]) / 3; for (let k = 0; k < 3; k++) if (Math.abs(p[k] - px[0][k]) > 14) flat = false; } mean /= px.length;
+    let blank = flat && mean < 90; if (forceBlank > 0) { forceBlank--; blank = true; }
+    blankRun = blank ? blankRun + 1 : 0;
+    if (blankRun >= 2) { rung++; stats.rung = rung; try { console.warn('Park3D: blank frame on post rung ' + (rung - 1) + ', falling back to rung ' + rung); } catch (e) { /* ignore */ } build(tier); }
   }
   return {
     stats,
@@ -86,7 +88,7 @@ export function createPost(ctx, S) {
     setQuality(q) { if (q !== tier || (!comp && q !== 'low')) build(q); },
     resize(w, h, dpr) { W = w; H = h; DPR = dpr; applySize(); },
     update(t) {
-      if (bloom) { bloom.strength = S.bloom; bloom.threshold = rung >= 2 ? Math.min(S.bloomThr, 0.88) : S.bloomThr; bloom.radius = 0.3; }
+      if (bloom) { bloom.strength = Math.min(1.6, Math.max(0, S.bloom || 0)); bloom.threshold = rung >= 2 ? Math.min(S.bloomThr, 0.88) : S.bloomThr; bloom.radius = 0.3; }
       if (tiltH) { const k = (S.tilt === undefined ? 1 : S.tilt) * DPR; tiltH.uniforms.uAmount.value = tiltV.uniforms.uAmount.value = k; } // interiors use a gentler tilt-shift
       if (grade) { const u = grade.uniforms; u.uTime.value = t; u.uVig.value = S.vig; u.uSat.value = S.sat; u.uShadow.value.copy(S.gShadow); u.uHigh.value.copy(S.gHigh); u.uGrain.value = tier === 'high' ? 0.035 : 0.028; }
     },

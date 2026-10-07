@@ -35,6 +35,10 @@ function initMini(name, ctx, opts, canvas, renderer, scene, camera, events) {
   let mg; try { mg = MINIS[name](ctx, opts); } catch (e) { banner('This game could not start: ' + (e && e.message || e)); mg = { group: new THREE.Group(), update: NOP }; }
   scene.add(mg.group); if (opts.onResult) events.on('minigame', opts.onResult);
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); banner('The phone ran out of graphics memory.'); if (ctx.quality !== 'low') { const u = new URL(location.href); u.searchParams.set('q', 'low'); setTimeout(() => location.replace(u.href), 400); } });
+  // ?debug=1 prints what the GPU and the renderer are doing, so a black screen on a phone can be diagnosed from one screenshot
+  let dbg = null; try { if (hud && new URLSearchParams(location.search).get('debug')) { dbg = document.createElement('pre'); dbg.style.cssText = 'position:absolute;left:6px;top:96px;margin:0;padding:6px;background:#000c;color:#9dff4a;font:10px/1.25 monospace;z-index:30;pointer-events:none;max-width:96%;white-space:pre-wrap'; hud.appendChild(dbg); renderer.debug.onShaderError = (gl, prog, vs, fs) => { dbgErr.push('SHADER ' + String(gl.getProgramInfoLog(prog)).slice(0, 160)); }; } } catch (e) { /* ignore */ }
+  const dbgErr = []; let dbgT = 0;
+  function dbgText() { try { const gl = renderer.getContext(), x = (n) => (gl.getExtension(n) ? 1 : 0), inf = renderer.info, L = ctx.lighting || mg.lighting, st = L && L.stats ? L.stats() : {}; return ['mini ' + name + '  q=' + ctx.quality + '  dpr=' + renderer.getPixelRatio().toFixed(2) + '  buf=' + gl.drawingBufferWidth + 'x' + gl.drawingBufferHeight, 'gl2=' + (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) + ' float=' + x('EXT_color_buffer_float') + ' half=' + x('EXT_color_buffer_half_float') + ' maxTex=' + gl.getParameter(gl.MAX_TEXTURE_SIZE) + ' units=' + gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), 'calls=' + inf.render.calls + ' tris=' + inf.render.triangles + ' geos=' + inf.memory.geometries + ' tex=' + inf.memory.textures, 'composer=' + st.composer + ' rung=' + st.rung + '  glErr=' + gl.getError() + (gl.isContextLost() ? '  CONTEXT LOST' : ''), 'fails=' + fails + '  ' + dbgErr.slice(-3).join(' | ')].join('\n'); } catch (e) { return 'debug failed: ' + e.message; } }
   let last = performance.now(), t = 0, running = true, raf = 0, fails = 0;
   function resize() { const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, ctx.quality === 'high' ? 2 : ctx.quality === 'med' ? 1.5 : 1.25); renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (mg.resize) mg.resize(w, h, dpr); }
   window.addEventListener('resize', resize); try { resize(); } catch (e) { banner('Resize failed: ' + (e && e.message || e)); }
@@ -42,8 +46,9 @@ function initMini(name, ctx, opts, canvas, renderer, scene, camera, events) {
     raf = requestAnimationFrame(frame); if (!running) return; const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt;
     try { mg.update(dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); fails = 0; } catch (e) {
       if (++fails === 3) banner('Draw error: ' + (e && e.message || e));
-      try { renderer.render(scene, camera); } catch (e2) { /* ignore */ }
+      try { renderer.render(scene, camera); } catch (e2) { /* ignore */ } if (dbg) dbgErr.push(String(e && e.message || e).slice(0, 120));
     }
+    if (dbg && (dbgT += dt) > 0.5) { dbgT = 0; dbg.textContent = dbgText(); }
   }
   raf = requestAnimationFrame(frame);
   const api = { ready: true, mini: true, sceneName: name, game: mg, scene, camera, renderer, ctx, events, setLook(l) { if (mg.setLook) mg.setLook(l); }, start(o) { if (mg.start) mg.start(o); }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; }, pause(v) { running = !v; }, dispose() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); if (mg.dispose) mg.dispose(); renderer.dispose(); } };
