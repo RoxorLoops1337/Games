@@ -156,9 +156,9 @@ export function buildLighting(ctx, terrain, sharedArg) {
       if (IN) { c.patch *= 1 - 0.7 * w; c.paneA += 0.14 * w; c.lvLamp = toward(c.lvLamp, Math.max(c.lvLamp, 0.6), w); c.lvNeon = toward(c.lvNeon, Math.max(c.lvNeon, 0.6), w); }
     }
     if (pc > 0.001) { // CLUB: night, purple haze, theme-coloured rim, everything neon
-      c.sunI *= 1 - 0.45 * pc; c.sunCol.lerp(CLUB_SUN, 0.8 * pc); c.hemiSky.lerp(CLUB_HEMI, 0.8 * pc); c.hemiGround.lerp(CLUB_GND, 0.8 * pc); c.hemiI *= 1 - 0.18 * pc; c.rimCol.lerp(S.themeA, pc); c.rimI = toward(c.rimI, 1.5, pc);
+      c.sunI *= 1 - 0.45 * pc; c.sunCol.lerp(CLUB_SUN, 0.8 * pc); c.hemiSky.lerp(CLUB_HEMI, 0.8 * pc); c.hemiGround.lerp(CLUB_GND, 0.8 * pc); c.hemiI *= 1 - 0.18 * pc; c.rimCol.lerp(S.themeA, pc); c.rimI = toward(c.rimI, 0.85, pc);
       c.fog.lerp(CLUB_FOG, 0.85 * pc); c.fogNear = toward(c.fogNear, IN ? 30 : c.fogNear, pc); c.fogFar = toward(c.fogFar, IN ? 120 : c.fogFar, pc); c.exposure *= 1 + 0.06 * pc;
-      c.neon = toward(c.neon, 1.15, pc); c.stage = toward(c.stage, 1.15, pc); c.lamp *= 1 - 0.4 * pc; c.bloom += 0.28 * pc; c.bloomThr -= 0.2 * pc; c.vig += 0.1 * pc; c.sat *= 1 + 0.12 * pc;
+      c.neon = toward(c.neon, 1.15, pc); c.stage = toward(c.stage, 1.15, pc); c.lamp *= 1 - 0.4 * pc; c.bloom += 0.2 * pc; c.bloomThr -= 0.12 * pc; c.vig += 0.1 * pc; c.sat *= 1 + 0.12 * pc;
       c.dust += 1.2 * pc; c.moteBase += 0.5 * pc; c.ray *= 1 - 0.75 * pc; c.patch *= 1 - 0.85 * pc; c.gShadow.lerp(CLUB_GS, 0.6 * pc); c.gHigh.lerp(CLUB_GH, 0.5 * pc); c.ptI *= 1 - 0.3 * pc;
     }
     if (ps > 0.001) { // STUDIO: cool pad key, warm practicals
@@ -223,7 +223,7 @@ export function buildLighting(ctx, terrain, sharedArg) {
     for (let i = 0; i < spots.length; i++) { const sp = spots[i]; const bi = S.beamMode > 0.5 ? i : i + 1; // stage: beam 0 (key) + 1; club: beams 1 and 2 (the two theme colours)
       if (amt < 0.01 || i >= n) { sp.intensity = 0; continue; }
       sp.position.set(rp[bi * 4], rp[bi * 4 + 1], rp[bi * 4 + 2]); beamTarget(bi, t, tmpD); sp.target.position.copy(tmpD);
-      if (S.beamMode > 0.5 && i === 0) sp.color.copy(S.keyCol); else sp.color.copy(i === 0 ? S.themeA : S.themeB); sp.angle = S.beamMode > 0.5 ? 0.42 : 0.55; sp.intensity = 15 * amt * (1 + 0.6 * S.beatFx); }
+      if (S.beamMode > 0.5 && i === 0) sp.color.copy(S.keyCol); else sp.color.copy(i === 0 ? S.themeA : S.themeB); sp.angle = S.beamMode > 0.5 ? 0.42 : 0.55; sp.intensity = 9 * amt * (1 + 0.6 * S.beatFx); }
   }
   S.t = 0;
   function tEff() { let v = tCur; if (pw.club > 0) v = v + (1 - v) * pw.club; if (pw.stage > 0) v = Math.max(v, 0.85 * pw.stage); return v; }

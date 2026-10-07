@@ -279,7 +279,7 @@ function buildInteriorVFX(ctx, terrain, S) {
       vec3 cc = iB.z > 1.5 ? uColK : (iB.z > 0.5 ? uColB : uColA); if (uBeamMode > 0.5 && iB.z < 1.5 && iB.x < 0.7) cc = uColK; vC = cc * uBeamAmt * (1.0 + 0.45 * uHaze) * (1.0 + 0.5 * uBeat);
       gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
   fragmentShader: `uniform float uGain; varying float vT; varying float vK; varying vec3 vC; varying float vF;
-    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.4) * 0.4 : pow(1.0 - vT, 1.2) * 0.14 * vF; if (a < 0.003) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
+    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.6) * 0.24 : pow(1.0 - vT, 1.2) * 0.12 * vF; if (a < 0.003) discard; gl_FragColor = vec4(vC * a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(beamMat);
   const beamGeo = instanced(beamBase, { iA: { a: bA, n: 4 }, iB: { a: bB, n: 4 } }, NB);
   const beams = new THREE.Mesh(beamGeo, beamMat); beams.frustumCulled = false; beams.renderOrder = 9; beams.visible = false; beams.name = 'beams'; group.add(beams);
