@@ -264,4 +264,152 @@ const rng = BBH.rng(7);
   r = Core.apply(cc.char, { t: 'coach', stat: 'mus' }, rng); eq(r.char.stats.mus, cc.char.stats.mus, 'coaching has a 3 day cooldown');
   ok(Core.CREW.length === 5 && Core.COACH_LINES.length === 10, 'five crew, ten story lines');
 }
+/* ---- TRAINING_PLAN section 1: contract shapes */
+{
+  eq(Core.TRAIN, { mus: { game: 'ear', alt: 'tune' }, tech: { game: 'beat' }, ori: { game: 'make' }, show: { game: 'pose' } }, 'TRAIN map');
+  const C = Core.TRAIN_CFG;
+  ok(C.idleRatePerHour > 0 && C.idleMinStep === 15 && C.idleMaxMinutes === 240 && C.playMul === 2 && C.levelMax === 8, 'TRAIN_CFG constants');
+  eq(C.playMinutes, { ear: 20, tune: 20, beat: 20, make: 25, pose: 20 }, 'play minutes');
+  near(Core.levelMul(1), 1, 1e-9, 'levelMul(1)'); near(Core.levelMul(8), 1 + 0.18 * 7, 1e-9, 'levelMul(8)');
+  ok([1, 2, 3, 4, 5, 6, 7, 8].every((l, i, a) => i === 0 || Core.levelMul(l) > Core.levelMul(a[i - 1])), 'higher levels give more');
+  const ch = Core.newChar(); eq(ch.trainLv, { ear: 1, beat: 1, pose: 1, make: 1, tune: 1 }, 'new char trainLv');
+  eq(ch.sounds, ['B', 't', 'K', 'Pf'], 'new char knows the four basic sounds');
+  // ear levels
+  eq(Core.EAR_LEVELS.length, 8, '8 ear levels');
+  Core.EAR_LEVELS.forEach((L, i) => {
+    ok(L.level === i + 1 && L.id && L.name && L.ask && L.rounds > 0 && L.choices.length >= 2, 'ear level shape ' + L.level);
+    ok(L.lesson && L.lesson.title && L.lesson.text.length > 80 && L.lesson.examples.length >= 2, 'ear lesson has text and examples ' + L.level);
+    ok(L.lesson.examples.every((e) => e.label && e.notes.length >= 2 && e.notes.every((n) => Number.isInteger(n) && n >= 40 && n <= 90)), 'ear examples are playable midi ' + L.level);
+    const r = BBH.rng(100 + i), seenAns = new Set();
+    for (let k = 0; k < 60; k++) { const qq = Core.earQuestion(L.level, r); ok(L.choices.includes(qq.answer) && qq.notes.length >= 2, 'ear question valid ' + L.level); seenAns.add(qq.answer); }
+    eq(seenAns.size, L.choices.length, 'every answer of ear level ' + L.level + ' gets asked');
+  });
+  ok(Core.EAR_LEVELS.some((L) => L.lesson.examples.some((e) => e.chord)), 'some examples are chords');
+  ok(/Saints/.test(Core.EAR_LEVELS[5].lesson.text), 'major third lesson names Oh When the Saints');
+  // beat levels
+  eq(Core.BEAT_LEVELS.length, 8, '8 beat levels');
+  for (const L of Core.BEAT_LEVELS) {
+    ok(L.name && L.bpm > 0 && L.tip && (L.steps === 8 || L.steps === 16) && L.lanes.length === L.steps && /^[BtKP.]+$/.test(L.lanes), 'beat level shape ' + L.level);
+    ok(L.notes.length >= 4 && L.notes.every((n) => n.lane >= 0 && n.lane <= 3 && n.beat < 4), 'beat notes in one bar ' + L.level);
+  }
+  eq(Core.BEAT_LEVELS[0].say, 'B t K t', 'level 1 is boots and cats'); eq(Core.BEAT_LEVELS[3].lanes, 'B.tBK.t.', 'level 4 is boom bap'); eq(Core.BEAT_LEVELS[6].lanes, 'B.K..BK.', 'level 7 drum and bass'); eq(Core.BEAT_LEVELS[7].steps, 16, 'level 8 is 16 steps');
+  // pose levels
+  eq(Core.POSE_LEVELS.length, 8, '8 pose levels');
+  Core.POSE_LEVELS.forEach((L, i) => ok(L.level === i + 1 && L.len >= 3 && L.len <= 8 && L.moves.length >= 2 && L.moves.every((m) => Core.POSE_MOVES.includes(m)) && L.bpm > 0, 'pose level shape ' + L.level));
+  eq(Core.POSE_LEVELS[0].len, 3, 'pose starts at 3'); eq(Core.POSE_LEVELS[7].len, 8, 'pose ends at 8');
+  ok(Core.POSE_LEVELS.every((L, i, a) => i === 0 || (L.len >= a[i - 1].len && L.bpm > a[i - 1].bpm)), 'pose gets longer and faster');
+}
+/* ---- idle gain: monotonic, diminishing; trainIdle ticks */
+{
+  const ch = Core.newChar();
+  const g = [15, 30, 60, 120, 240].map((m) => Core.idleGain(ch, 'tech', m));
+  ok(g.every((v, i) => i === 0 || v > g[i - 1]), 'idle gain grows with minutes: ' + g.map((v) => v.toFixed(2)).join(','));
+  ok(g[4] / 240 < g[0] / 15, 'idle gain per minute shrinks in a long session');
+  const lo = Core.idleGain({ stats: { tech: 5 } }, 'tech', 60), hi = Core.idleGain({ stats: { tech: 80 } }, 'tech', 60);
+  ok(hi < lo && hi > 0, 'idle gain diminishes with the stat');
+  between(lo, 0.6, 1.5, 'an hour of idle practice is about one point early on');
+  ok(Core.idleGain(ch, 'tech', 60, 'studio') > Core.idleGain(ch, 'tech', 60) * 1.39, 'studio x1.4');
+  let c = Core.newChar(); c.minutes = 200;
+  let r = Core.apply(c, { t: 'trainIdle', stat: 'tech', minutes: 60 }, rng);
+  const ticks = r.fx.filter((f) => f.t === 'trainTick');
+  eq(ticks.length, 4, 'four ticks in an hour'); eq(ticks.map((t) => t.minute), [15, 30, 45, 60], 'tick minutes');
+  ok(ticks.every((t) => t.stat === 'tech' && t.gain > 0), 'ticks carry stat and gain');
+  eq(r.char.minutes, 260, 'idle hour costs an hour'); ok(r.char.energy < c.energy, 'idle drains energy'); ok(r.char.xp > c.xp, 'idle gives xp');
+  near(r.char.stats.tech - c.stats.tech, Core.idleGain(c, 'tech', 60), 1e-6, 'idle action matches idleGain');
+  r = Core.apply(c, { t: 'trainIdle', stat: 'mus', minutes: 50 }, rng); eq(r.char.minutes, 245, 'minutes round to 15 steps (50 -> 45)');
+  r = Core.apply(c, { t: 'trainIdle', stat: 'mus', minutes: 999 }, rng); eq(r.char.minutes, 200 + 240, 'idle capped at 240 min');
+  // stops at closing time (park closes 20:00 = minute 840)
+  let p = Core.newChar(); p.place = 'park'; p.minutes = 780; r = Core.apply(p, { t: 'trainIdle', stat: 'show', minutes: 240 }, rng);
+  ok(r.char.minutes <= 840 && r.char.day === 1, 'idle stops when the park closes');
+  // never collapses
+  p = Core.newChar(); p.minutes = 1150; r = Core.apply(p, { t: 'trainIdle', stat: 'show', minutes: 240 }, rng);
+  eq(r.char.day, 1, 'idle never trains you into a collapse'); ok(r.char.minutes < Core.CFG.collapseAt, 'stops before 02:00');
+  p = Core.newChar(); p.energy = 4; r = Core.apply(p, { t: 'trainIdle', stat: 'show', minutes: 240 }, rng);
+  ok(r.fx.filter((f) => f.t === 'trainTick').length <= 1, 'idle stops when out of energy');
+  // studio fee
+  p = Core.newChar(); p.cash = 5; r = Core.apply(p, { t: 'trainIdle', stat: 'ori', minutes: 60, where: 'studio' }, rng); eq(r.char.stats.ori, p.stats.ori, 'studio idle needs the fee');
+  p.cash = 100; r = Core.apply(p, { t: 'trainIdle', stat: 'ori', minutes: 60, where: 'studio' }, rng); eq(r.char.cash, 100 - Core.STUDIO_FEE, 'studio fee charged once');
+}
+/* ---- trainGame: about 2x for less time, level unlocks, cap */
+{
+  const c = Core.newChar(); c.minutes = 200;
+  const idleHour = Core.apply(c, { t: 'trainIdle', stat: 'tech', minutes: 60 }, rng).char;
+  const play = Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', level: 1, q: 1 }, rng);
+  const dPlay = play.char.stats.tech - c.stats.tech, dIdle20 = Core.idleGain(c, 'tech', 20), dIdleHour = idleHour.stats.tech - c.stats.tech;
+  between(dPlay / dIdle20, 1.9, 2.1, 'perfect play = 2x idle for the same minutes');
+  ok(play.char.minutes - c.minutes === 20 && play.char.minutes - c.minutes < idleHour.minutes - c.minutes, 'play spends only 20 minutes');
+  ok(dPlay / 20 > 1.9 * (dIdleHour / 60), 'per minute, playing well is about double idle');
+  const sloppy = Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', level: 1, q: 0 }, rng).char.stats.tech - c.stats.tech;
+  ok(sloppy > 0 && sloppy < dPlay * 0.45, 'a sloppy game still gives something but much less');
+  ok(play.fx.some((f) => f.t === 'levelUp' && f.game === 'beat' && f.level === 2), 'q 1 unlocks level 2'); eq(play.char.trainLv.beat, 2, 'trainLv.beat is 2');
+  let r = Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', level: 1, q: 0.69 }, rng); eq(r.char.trainLv.beat, 1, 'q 0.69 does not unlock');
+  r = Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', level: 1, q: 0.7 }, rng); eq(r.char.trainLv.beat, 2, 'q 0.7 unlocks');
+  r = Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', level: 5, q: 1 }, rng); eq(r.char.trainLv.beat, 2, 'cannot skip to a locked level');
+  // higher level gives more
+  let hi = Core.clone(c); hi.trainLv.ear = 8;
+  const g1 = Core.apply(c, { t: 'trainGame', stat: 'mus', game: 'ear', level: 1, q: 0.8 }, rng).char.stats.mus - c.stats.mus;
+  const g8 = Core.apply(hi, { t: 'trainGame', stat: 'mus', game: 'ear', level: 8, q: 0.8 }, rng).char.stats.mus - c.stats.mus;
+  near(g8 / g1, Core.levelMul(8), 0.01, 'level 8 gives levelMul(8) more');
+  // cap at 8
+  let k = Core.newChar(); k.energy = 100;
+  for (let i = 0; i < 12; i++) { k.minutes = 100; k.energy = 100; k = Core.apply(k, { t: 'trainGame', stat: 'show', game: 'pose', level: k.trainLv.pose, q: 1 }, rng).char; }
+  eq(k.trainLv.pose, 8, 'pose levels cap at 8');
+  r = Core.apply(k, { t: 'trainGame', stat: 'show', game: 'pose', level: 8, q: 1 }, rng); ok(!r.fx.some((f) => f.t === 'levelUp'), 'no levelUp past 8');
+  // minutes override, tune/make counters, stat derived from game
+  r = Core.apply(c, { t: 'trainGame', game: 'make', q: 0.5, minutes: 10 }, rng); eq(r.char.minutes - c.minutes, 10, 'a.minutes overrides time'); ok(r.char.stats.ori > c.stats.ori && r.char.n.seqs === 1, 'make trains Originality');
+  r = Core.apply(c, { t: 'trainGame', stat: 'mus', game: 'tune', q: 0.5 }, rng); ok(r.char.n.tunes === 1 && r.char.stats.mus > c.stats.mus, 'tune game counts for Pitch Perfect');
+  let t = Core.newChar(); t.energy = 1; r = Core.apply(t, { t: 'trainGame', stat: 'tech', game: 'beat', q: 1 }, rng); eq(r.char.stats.tech, t.stats.tech, 'too tired to play');
+  // old actions untouched
+  const o = Core.apply(c, { t: 'train', stat: 'tech', q: 0.5 }, rng); near(o.char.stats.tech - c.stats.tech, 1.3 * (1 - 3 / 120), 1e-9, 'old train gain unchanged'); eq(o.char.minutes - c.minutes, 60, 'old train 60 min');
+}
+/* ---- sounds: every unlock reachable, fx + toast */
+{
+  const ids = Core.SOUNDS.map((s) => s.id);
+  eq(new Set(ids).size, ids.length, 'sound ids unique');
+  for (const id of ['B', 't', 'K', 'Pf', 'LR', 'TB', 'IK', 'CR', 'ZP', 'SI', 'WB', 'RIM']) ok(ids.includes(id), 'sound exists: ' + id);
+  ok(Core.SOUNDS.every((s) => s.name && s.blurb && ['start', 'level', 'npc', 'win', 'ach', 'day'].includes(s.unlock.k)), 'sound shapes');
+  ok(Core.SOUNDS.every((s) => Core.soundUnlockText(s.unlock).length > 3), 'every sound has unlock text');
+  const ch = Core.newChar();
+  eq(Core.soundsFor(ch).map((s) => s.id), ['B', 't', 'K', 'Pf'], 'start set'); ok(!Core.soundUnlocked(ch, 'LR'), 'lip roll locked at start');
+  const got = (r, id) => r.char.sounds.includes(id) && r.fx.some((f) => f.t === 'soundUnlocked' && f.id === id) && Core.soundUnlocked(r.char, id);
+  // level rules through real level ups
+  let r = Core.apply(ch, { t: 'trainIdle', stat: 'tech', minutes: 15 }, rng); ok(!r.fx.some((f) => f.t === 'soundUnlocked'), 'no unlock without progress');
+  const lv = (n) => { const c = Core.newChar(); c.level = n - 1; c.xp = Core.xpNeed(n - 1) - 1; c.minutes = 200; return Core.apply(c, { t: 'trainGame', stat: 'tech', game: 'beat', q: 1 }, rng); };
+  ok(got(lv(3), 'RIM'), 'level 3 unlocks rimshot'); ok(got(lv(4), 'LR'), 'level 4 unlocks lip roll'); ok(got(lv(6), 'IK'), 'level 6 unlocks inward K'); ok(got(lv(10), 'SI'), 'level 10 unlocks siren');
+  r = lv(4); ok(r.fx.some((f) => f.t === 'toast' && f.text === 'New sound: Lip roll'), 'toast "New sound: Lip roll"');
+  // BeeAmGee coaching
+  let c = Core.newChar(); c.cash = 200; c.minutes = 300; r = Core.apply(c, { t: 'coach', stat: 'tech' }, rng); ok(got(r, 'LR'), 'coaching with BeeAmGee unlocks lip roll');
+  c = Core.newChar(); r = Core.apply(c, { t: 'meet', who: 'beeamgee' }, rng); ok(got(r, 'LR'), 'meeting BeeAmGee unlocks lip roll');
+  // wins
+  c = Core.newChar(); c.minutes = 800; r = Core.apply(c, { t: 'battle', opp: 'tick', rounds: [{ q: 1 }, { q: 1 }, { q: 1 }] }, BBH.rng(3)); ok(got(r, 'TB'), 'beating Lil Tick unlocks throat bass');
+  c = Core.clone(r.char); c.n.battlesWon = 2; c.minutes = 800; r = Core.apply(c, { t: 'battle', opp: 'tick', rounds: [{ q: 1 }, { q: 1 }, { q: 1 }] }, BBH.rng(3)); ok(got(r, 'ZP'), 'third battle win unlocks zipper');
+  // Miro: meet or recruit
+  c = Core.newChar(); r = Core.apply(c, { t: 'meet', who: 'miro' }, rng); ok(got(r, 'WB'), 'meeting Miro unlocks water drop');
+  c = Core.newChar(); c.cash = 2000; c.fans = 1300; r = Core.apply(c, { t: 'recruit', id: 'miro' }, rng); ok(got(r, 'WB'), 'recruiting Miro unlocks water drop');
+  // Sound Lab from day 4
+  c = Core.newChar(); c.day = 4; c.minutes = 300; r = Core.apply(c, { t: 'travel', to: 'studio' }, rng); ok(got(r, 'CR'), 'Sound Lab on day 4 unlocks click roll');
+  c = Core.newChar(); c.day = 3; c.minutes = 300; r = Core.apply(c, { t: 'travel', to: 'studio' }, rng); ok(!r.char.sounds.includes('CR'), 'not on day 3');
+  // achievement
+  c = Core.newChar(); c.n.tunes = 4; c.minutes = 200; r = Core.apply(c, { t: 'tune', q: 1 }, rng); ok(got(r, 'HUM'), 'Pitch Perfect unlocks hum bass');
+  // every rule reachable by some route above or by dev: brute force check that a maxed char has them all
+  let m = Core.newChar(); m = Core.dev(m, { k: 'level', v: 12 }).char; m = Core.dev(m, { k: 'beatAll' }).char; m = Core.dev(m, { k: 'unlockAch' }).char;
+  m.n.battlesWon = 9; m.seen = { miro: 1, beeamgee: 1 }; m.day = 5; m.place = 'studio'; m = Core.apply(m, { t: 'wait', minutes: 15 }, rng).char;
+  ok(Core.SOUNDS.every((s) => m.sounds.includes(s.id)), 'every SOUNDS unlock is reachable: ' + m.sounds.join(','));
+  ok(Core.soundUnlocked(Core.dev(Core.newChar(), { k: 'unlockAll' }).char, 'SI'), 'dev unlockAll opens every sound');
+  // latched: leaving the studio keeps the click roll
+  c = Core.newChar(); c.day = 4; c.minutes = 300; r = Core.apply(c, { t: 'travel', to: 'studio' }, rng); r = Core.apply(r.char, { t: 'travel', to: 'home' }, rng); ok(r.char.sounds.includes('CR'), 'sounds never re-lock');
+}
+/* ---- migration of old saves */
+{
+  const mem = {}; const store = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; }, removeItem: (k) => { delete mem[k]; } };
+  const old = Core.newChar(); delete old.trainLv; delete old.sounds; old.level = 5; old.beat = { tick: 2 };
+  mem['bbh:slot1'] = JSON.stringify(old); const back = Core.Save.load(store, 1);
+  eq(back.trainLv, { ear: 1, beat: 1, pose: 1, make: 1, tune: 1 }, 'old save gets default trainLv');
+  ok(['B', 't', 'K', 'Pf', 'RIM', 'LR', 'TB'].every((id) => back.sounds.includes(id)), 'old save gets start sounds plus what it already earned');
+  mem['bbh:slot2'] = JSON.stringify(Object.assign(Core.newChar(), { trainLv: { ear: 3, beat: 99 }, sounds: ['B', 'bogus', 'SI'] }));
+  const b2 = Core.Save.load(store, 2);
+  ok(b2.trainLv.ear === 3 && b2.trainLv.beat === 8 && b2.trainLv.pose === 1, 'trainLv merged and clamped'); ok(!b2.sounds.includes('bogus') && b2.sounds.includes('SI') && b2.sounds.includes('K'), 'sounds cleaned');
+  const r = Core.apply(back, { t: 'trainGame', stat: 'tech', game: 'beat', q: 1 }, rng); eq(r.char.trainLv.beat, 2, 'migrated save trains and levels');
+  ok(Core.apply(back, { t: 'seqtrain', score: 0.5 }, rng).char.stats.ori > back.stats.ori, 'old seqtrain still works on a migrated save');
+}
 done();

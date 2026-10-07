@@ -665,6 +665,63 @@
         toast(STAT_NAMES[a.stat] + ' +' + gain.toFixed(1), 'good');
         break;
       }
+      case 'trainIdle': {                                          // a.stat, a.minutes, a.where?: idle practice, ticks every 15 min
+        const stat = a.stat; if (STATS.indexOf(stat) < 0) break;
+        const C = TRAIN_CFG, step = C.idleMinStep, where = a.where || (ch.place === 'studio' ? 'studio' : 'home'), fee = where === 'studio' ? STUDIO_FEE : 0;
+        const want = clamp(Math.round((a.minutes || 60) / step) * step, step, C.idleMaxMinutes), ePer = C.energyPerHour * step / 60;
+        if (ch.cash < fee) { toast('The studio costs $' + fee + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.energy < ePer) { toast('Too tired to train.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.minutes + step >= CFG.collapseAt) { toast('Too late to train. Go to bed.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash -= fee; ch.n.spent += fee; ch.n.trains++;
+        let done = 0, total = 0, stop = '';
+        const day0 = ch.day;
+        while (done < want) {
+          if (ch.energy < ePer) { stop = 'You ran out of energy.'; break; }
+          if (ch.minutes + step >= CFG.collapseAt) { stop = 'It is late. You stop for the night.'; break; }
+          if (ch.place !== 'home' && !canEnter(ch, ch.place).ok) { stop = (PLACES[ch.place] ? PLACES[ch.place].name : 'This place') + ' is closing.'; break; }
+          const g = idleGain(ch, stat, step, where);
+          bumpStat(ch, stat, g); total += g; done += step;
+          fx.push({ t: 'trainTick', stat, gain: +g.toFixed(2), minute: done });
+          gainXp(ch, C.xpPerHour * step / 60 * (where === 'studio' ? 1.3 : 1), fx);
+          if (spend(ch, step, ePer, fx, rng) || ch.day !== day0) break;
+        }
+        ch.n.idleMin = (ch.n.idleMin || 0) + done; ch.mood += done >= 60 ? 1 : 0;
+        fx.push({ t: 'sfx', name: 'confirm' });
+        if (stop) toast(stop, 'info');
+        toast(STAT_NAMES[stat] + ' +' + total.toFixed(1) + ' (' + done + ' min)', 'good');
+        break;
+      }
+      case 'trainGame': {                                          // a.stat, a.game, a.level, a.q 0..1, a.minutes?, a.where?
+        const game = a.game; if (!TRAIN_CFG.playMinutes[game]) break;
+        const stat = STATS.indexOf(a.stat) >= 0 ? a.stat : gameStat(game);
+        const where = a.where === 'studio' ? 'studio' : 'home', fee = where === 'studio' ? STUDIO_FEE : 0;
+        const mins = Math.max(1, Math.round(a.minutes || TRAIN_CFG.playMinutes[game])), en = TRAIN_CFG.energyPerHour * mins / 60;
+        if (!ch.trainLv) ch.trainLv = defaultTrainLv();
+        const top = ch.trainLv[game] || 1, level = clamp(Math.floor(a.level || top), 1, top), q = clamp(+a.q || 0, 0, 1);
+        if (ch.cash < fee) { toast('The studio costs $' + fee + '.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        if (ch.energy < en) { toast('Too tired to train.', 'warn'); fx.push({ t: 'sfx', name: 'error' }); break; }
+        ch.cash -= fee; ch.n.spent += fee; ch.n.trainGames = (ch.n.trainGames || 0) + 1;
+        if (game === 'tune') ch.n.tunes++; else if (game === 'make') ch.n.seqs++;
+        const gain = playGain(ch, stat, game, level, q, where);
+        bumpStat(ch, stat, gain);
+        gainXp(ch, TRAIN_CFG.xpPerHour * (TRAIN_CFG.playMinutes[game] / 60) * TRAIN_CFG.playMul * levelMul(level) * (0.4 + 0.6 * q) * (where === 'studio' ? 1.3 : 1), fx);
+        ch.mood += q >= 0.7 ? 3 : q < 0.3 ? -1 : 1;
+        fx.push({ t: 'trainResult', stat, game, level, q, gain: +gain.toFixed(2) });
+        if (q >= TRAIN_CFG.unlockQ && level === top && top < TRAIN_CFG.levelMax) {
+          ch.trainLv[game] = top + 1;
+          fx.push({ t: 'levelUp', game, level: top + 1 }, { t: 'sfx', name: 'unlock' });
+          toast('Level ' + (top + 1) + ' unlocked!', 'good');
+        }
+        toast(STAT_NAMES[stat] + ' +' + gain.toFixed(1), 'good');
+        spend(ch, mins, en, fx, rng); fx.push({ t: 'sfx', name: 'confirm' });
+        break;
+      }
+      case 'meet': {                                               // a.who: first conversation with an NPC or crew member
+        if (!a.who) break;
+        if (!ch.seen) ch.seen = {};
+        if (!ch.seen[a.who]) ch.seen[a.who] = ch.day;
+        break;
+      }
       case 'perform': {                                            // a.kind, a.res (summarize output)
         const res = a.res, rw = reward(a.kind, res, ch), k = a.kind;
         if (k === 'busk') ch.n.busks++; else if (k === 'openmic') ch.n.openMics++; else if (k === 'showcase') { ch.n.showcases++; ch.lastShowcaseDay = ch.day; } else if (k === 'karaoke') ch.n.karaoke++;
@@ -890,6 +947,9 @@
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
       windows, judgeHit, HIT_SCORE, makeChart, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
       Save, migrate, clone,
+      TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
+      EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,
+      SOUNDS, START_SOUNDS, soundUnlocked, soundsFor, soundRule, soundUnlockText, sweepSounds, metNpc,
     },
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.Core;

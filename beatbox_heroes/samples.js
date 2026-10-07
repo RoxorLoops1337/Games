@@ -1,7 +1,9 @@
-/* BBH.Samples: per-save-slot store for the player's recorded drum samples (lanes 0..3 = B T K Pf).
+/* BBH.Samples: per-save-slot store for the player's recorded beatbox sounds.
  *
+ * A sound is a lane number 0..3 (B T K Pf) or a Core.SOUNDS id ('B', 't', 'K', 'Pf' map to lanes 0..3; 'LR', 'TB', ... are extra sounds).
  * Reads are synchronous (served from an in-memory Map); writes go to IndexedDB in the background
- * (database 'beatbox-heroes-samples', store 'samples', key `slot{N}:lane{L}` -> { f32: Float32Array, rate }).
+ * (database 'beatbox-heroes-samples', store 'samples', key `slot{N}:lane{L}` for the four lanes, `slot{N}:snd{ID}` for extra sounds -> { f32: Float32Array, rate }).
+ * play(id) plays a sound everywhere the same way: your recording when there is one, else the synth voice (BBH.Audio).
  * When IndexedDB is missing or blocked (node tests, private mode) everything keeps working in memory. Nothing here throws.
  *
  * No em dashes anywhere in this file (project rule).
@@ -14,8 +16,18 @@
   let dbp = null, persistent = false, pending = 0;
   const idle = [];
 
-  const key = (slot, lane) => 'slot' + (slot | 0) + ':lane' + (lane | 0);
-  const okLane = (l) => typeof l === 'number' && l >= 0 && l <= 3 && l === Math.floor(l);
+  const LANE_ID = ['B', 't', 'K', 'Pf'];
+  const ID_LANE = { B: 0, t: 1, T: 1, K: 2, Pf: 3, PF: 3, P: 3 };
+  /** lane 0..3 of a sound (number or id), -1 for an extra sound, null for garbage */
+  function laneOf(s) {
+    if (typeof s === 'number') return s >= 0 && s <= 3 && s === Math.floor(s) ? s : null;
+    if (typeof s !== 'string' || !/^[A-Za-z]{1,8}$/.test(s)) return null;
+    return ID_LANE[s] !== undefined ? ID_LANE[s] : -1;
+  }
+  const idOf = (s) => { const l = laneOf(s); return l === null ? null : l >= 0 ? LANE_ID[l] : s; };
+  const key = (slot, s) => { const l = laneOf(s); return l === null ? null : 'slot' + (slot | 0) + (l >= 0 ? ':lane' + l : ':snd' + s); };
+  const okLane = (s) => laneOf(s) !== null;
+  const extraKeys = (slot) => { const pre = 'slot' + (slot | 0) + ':snd', out = []; mem.forEach((v, k) => { if (k.indexOf(pre) === 0) out.push(k.slice(pre.length)); }); return out; };
 
   function getDB() {
     if (dbp) return dbp;
@@ -104,16 +116,19 @@
   }
   function removeAll(slot) {
     let n = 0;
-    for (let l = 0; l < 4; l++) if (mem.delete(key(slot, l))) n++;
-    write(function (st) { for (let l = 0; l < 4; l++) st.delete(key(slot, l)); });
+    const ks = [0, 1, 2, 3].map((l) => key(slot, l)).concat(extraKeys(slot).map((id) => key(slot, id)));
+    for (const k of ks) if (mem.delete(k)) n++;
+    write(function (st) { for (const k of ks) st.delete(k); });
     return n;
   }
-  /** [{ lane, rate, length, seconds }] for the lanes that have a sample */
+  /** [{ lane, id, rate, length, seconds }] for the sounds that have a sample (lane -1 for extra sounds) */
   function list(slot) {
     const out = [];
-    for (let l = 0; l < 4; l++) { const v = mem.get(key(slot, l)); if (v) out.push({ lane: l, rate: v.rate, length: v.f32.length, seconds: v.f32.length / v.rate }); }
+    for (let l = 0; l < 4; l++) { const v = mem.get(key(slot, l)); if (v) out.push({ lane: l, id: LANE_ID[l], rate: v.rate, length: v.f32.length, seconds: v.f32.length / v.rate }); }
+    for (const id of extraKeys(slot)) { const v = mem.get(key(slot, id)); if (v) out.push({ lane: -1, id, rate: v.rate, length: v.f32.length, seconds: v.f32.length / v.rate }); }
     return out;
   }
+  const has = (slot, s) => { const k = key(slot, s); return !!(k && mem.has(k)); };
 
   /* ---- base64 of Int16 PCM (little endian), no btoa dependency ---- */
   const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -154,9 +169,10 @@
 
   /** JSON-able snapshot of a slot: { v:1, lanes: { '0': { rate, n, pcm } } } (Int16 PCM as base64), or { v:1, lanes:{} } when empty */
   function exportSlot(slot) {
-    const lanes = {};
+    const lanes = {}, sounds = {};
     for (let l = 0; l < 4; l++) { const v = mem.get(key(slot, l)); if (v) lanes[l] = { rate: v.rate, n: v.f32.length, pcm: f32ToPcmB64(v.f32) }; }
-    return { v: 1, lanes };
+    for (const id of extraKeys(slot)) { const v = mem.get(key(slot, id)); if (v) sounds[id] = { rate: v.rate, n: v.f32.length, pcm: f32ToPcmB64(v.f32) }; }
+    return Object.keys(sounds).length ? { v: 1, lanes, sounds } : { v: 1, lanes };
   }
   /** Replace the samples of a slot with an exportSlot() object. Returns the number of lanes imported (0 for bad input, slot untouched). */
   function importSlot(slot, obj) {
@@ -169,13 +185,23 @@
         const f = pcmB64ToF32(e.pcm);
         if (f.length) fresh.push([l, f, e.rate]);
       }
+      const so = obj.sounds && typeof obj.sounds === 'object' ? obj.sounds : {};
+      for (const id in so) {
+        const e = so[id];
+        if (laneOf(id) !== -1 || !e || typeof e.pcm !== 'string' || !(e.rate > 0)) continue;
+        const f = pcmB64ToF32(e.pcm);
+        if (f.length) fresh.push([id, f, e.rate]);
+      }
       removeAll(slot);
       fresh.forEach((x) => put(slot, x[0], x[1], x[2]));
       return fresh.length;
     } catch (e) { return 0; }
   }
-  /** Push the slot's samples into BBH.Audio (lanes without a sample are cleared so the synth plays). Returns lanes set. */
+  /** Push the slot's samples into BBH.Audio (lanes without a sample are cleared so the synth plays). Returns lanes set.
+   *  Extra sounds are offered to Audio.setSample(id) too (when it takes ids); play(id) covers them either way. */
+  let active = 0;
   function applyToAudio(slot) {
+    active = slot | 0;
     const A = BBH.Audio;
     if (!A || typeof A.setSample !== 'function') return 0;
     let n = 0;
@@ -185,10 +211,65 @@
         if (v) { if (A.setSample(l, v.f32, v.rate)) n++; } else A.clearSample(l);
       } catch (e) { /* ignore */ }
     }
+    for (const id of extraKeys(slot)) { const v = mem.get(key(slot, id)); try { if (v) A.setSample(id, v.f32, v.rate); } catch (e) { /* ignore */ } }
     return n;
+  }
+
+  /* ---- playback by sound id: your recording first, then the synth voice ---- */
+  const curSlot = () => { try { return (BBH.G && BBH.G.slot) || active || 1; } catch (e) { return 1; } };
+  const ctxOf = (A) => { try { return A && A.ctx && A.ctx.state === 'running' ? A.ctx : null; } catch (e) { return null; } };
+  /** does Audio itself hold a sample for this sound id? */
+  const audioHas = (A, s) => { try { return !!(A && A.hasSample && A.hasSample(s)); } catch (e) { return false; } };
+  // our own buffer playback for extra sounds when BBH.Audio only knows the four lanes
+  const bufs = new WeakMap();
+  function ownPlay(A, v, opts) {
+    const ac = ctxOf(A); if (!ac || A.muted) return false;
+    try {
+      let b = bufs.get(v); if (!b || b.ctx !== ac) { const nb = ac.createBuffer(1, v.f32.length, v.rate); nb.getChannelData(0).set(v.f32); b = { ctx: ac, buf: nb }; bufs.set(v, b); }
+      const src = ac.createBufferSource(), g = ac.createGain(), sfx = (() => { try { const E = BBH.Eng || BBH.E; return E && E.settings && typeof E.settings.sfx === 'number' ? E.settings.sfx : 0.8; } catch (e) { return 0.8; } })();
+      src.buffer = b.buf; g.gain.value = Math.max(0, Math.min(1, (opts && opts.vel !== undefined ? opts.vel : 0.9))) * 0.9 * sfx;
+      src.connect(g); g.connect(ac.destination); src.onended = () => { try { g.disconnect(); } catch (e) { /* ignore */ } };
+      src.start(Math.max(ac.currentTime, (opts && opts.when) || 0)); return true;
+    } catch (e) { return false; }
+  }
+  // the synth voice of a sound id (AUDIO's voices: Audio.beatbox(id) or Audio.drum(id)); a soft blip when the build has neither
+  function synthExtra(A, id, opts) {
+    try { if (A.beatbox) { const r = A.beatbox(id, opts); if (r !== false) return true; } } catch (e) { /* ignore */ }
+    try { const r = A.drum(id, opts); if (r) return true; } catch (e) { /* ignore */ }
+    const ac = ctxOf(A); if (!ac || A.muted) return false;
+    try {
+      const t = Math.max(ac.currentTime, (opts && opts.when) || 0), o = ac.createOscillator(), g = ac.createGain(), seed = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      o.type = seed % 2 ? 'square' : 'triangle'; o.frequency.setValueAtTime(90 + (seed % 9) * 60, t); o.frequency.exponentialRampToValueAtTime(50 + (seed % 5) * 20, t + 0.18);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.25, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.25); return true;
+    } catch (e) { return false; }
+  }
+  /**
+   * Play a sound by lane or id. opts: { vel, when, synth:true (always the synth voice), mine:true (only your recording) }.
+   * Recorded samples replace the synth voice, exactly like the four lanes always did. Never throws, returns true when something played.
+   */
+  function play(s, opts) {
+    opts = opts || {};
+    const A = BBH.Audio, l = laneOf(s); if (!A || l === null) return false;
+    try {
+      if (l >= 0) {
+        if (opts.mine && !A.hasSample(l)) return false;
+        const v = mem.get(key(curSlot(), l));
+        if (opts.synth && v && A.hasSample(l)) {                             // the synth version even when you recorded your own: lift the sample off for this one hit
+          A.clearSample(l); let r = false; try { r = A.drum(l, opts); } finally { if (v) A.setSample(l, v.f32, v.rate); } return !!r;
+        }
+        return !!A.drum(l, opts);
+      }
+      const v = mem.get(key(curSlot(), s));
+      if (opts.synth) { if (v && audioHas(A, s) && A.clearSample) { A.clearSample(s); try { return synthExtra(A, s, opts); } finally { A.setSample(s, v.f32, v.rate); } } return synthExtra(A, s, opts); }
+      if (audioHas(A, s)) return !!(A.beatbox ? A.beatbox(s, opts) : A.drum(s, opts));
+      if (v) return ownPlay(A, v, opts);
+      if (opts.mine) return false;
+      return synthExtra(A, s, opts);
+    } catch (e) { return false; }
   }
   /** Resolves once every background write has settled (useful before reload or in tests). */
   function flush() { return pending ? new Promise(function (r) { idle.push(r); }) : Promise.resolve(); }
 
-  BBH.Samples = { init, put, get, remove, removeAll, list, exportSlot, importSlot, applyToAudio, flush, isPersistent: () => persistent, _clearMemory: () => mem.clear() };
+  BBH.Samples = { init, put, get, has, remove, removeAll, list, exportSlot, importSlot, applyToAudio, play, laneOf, idOf, LANE_ID, flush, isPersistent: () => persistent, _clearMemory: () => mem.clear() };
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this);
