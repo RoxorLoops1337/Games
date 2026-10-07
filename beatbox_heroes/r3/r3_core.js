@@ -50,6 +50,8 @@
     el.classList.remove('off'); el.classList.toggle('chip', mode === 'chip'); el.style.display = 'flex';
     const m = el.querySelector('.b3-msg'); if (m && msg) m.textContent = msg;
   }
+  // the boot splash waits for the first presented scene (see ready); checked from the interval, R3.show and R3.tick so a long frame cannot keep it up
+  function splashCheck() { if (S.splashUp && S.splashUp()) { S.splashUp = null; splash(null); return true; } return false; }
   function hiccup(on) {
     let el = $('r3hiccup');
     if (!on) { if (el) el.style.display = 'none'; return; }
@@ -77,7 +79,7 @@
   R3.show = function (is3d) {
     const b = !!is3d && R3.on; if (b === S.active) return;
     const was = S.active; S.active = b; document.body.classList.toggle('r3', b);
-    if (b) { R3.resize(); S.acc = 0; try { S.host.pause(false); } catch (e) { /* ignore */ } }
+    if (b) { R3.resize(); S.acc = 0; try { S.host.pause(false); } catch (e) { /* ignore */ } if (S.splashUp) splashCheck(); }
     else { shakeReset(); if (S.host) { try { S.host.pause(true); if (was) S.host.unload(); } catch (e) { console.error(e); } } }
     emit('show', b);
   };
@@ -116,7 +118,7 @@
     if (S.quality === 'low') { S.acc += dt; if (S.acc < 30) return; dt = S.acc; S.acc = 0; }   // low tier: 30 fps cap (the E loop keeps running at display rate)
     const w = host.world; if (w) { try { w.setBeat(E.beat()); } catch (e) { /* ignore */ } }
     host._frameMs = dt; host.tick(dt / 1000);   // the real frame interval feeds the host's adaptive DPR
-    if (S.reveals.length) checkReveal();
+    if (S.reveals.length) checkReveal(); if (S.splashUp) splashCheck();
     if (S.probe) S.probe.push(dt);
     pollSync();
     for (let i = 0; i < S.ticks.length; i++) { try { S.ticks[i](dt); } catch (e) { console.error(e); } }
@@ -205,10 +207,8 @@
       if (!S.resizeBound) { S.resizeBound = true; root.addEventListener('resize', R3.resize); root.addEventListener('orientationchange', R3.resize); }
       R3.resize(); host.pause(true); emit('ready', { bootMs: S.bootMs }); release();
       // the splash stays up through the boot -> title switch (no dark 2D boot frame in between): it goes when a 3D scene presents a drawn frame, a 2D scene took over, or after 3 s
-      const t0 = performance.now(), iv = setInterval(() => {
-        const up = host.perf === false || (S.active && host.world && host.drawn >= 1) || (!S.active && E.sceneName && E.sceneName !== 'boot' && !E.pendingSwitch) || performance.now() - t0 > 3000 || S.status !== 'ready';
-        if (up) { clearInterval(iv); splash(null); }
-      }, 30);
+      const t0 = performance.now(); S.splashUp = () => host.perf === false || (S.active && host.world && host.drawn >= 1) || (!S.active && E.sceneName && E.sceneName !== 'boot' && !E.pendingSwitch) || performance.now() - t0 > 3000 || S.status !== 'ready';
+      const iv = setInterval(() => { if (!S.splashUp || splashCheck()) clearInterval(iv); }, 30);
     } };
   const gl = $('gl');
   if (gl) gl.addEventListener('pointerdown', () => { try { E.unlockAudio(); } catch (e) { /* ignore */ } }, { passive: true });   // the old #cv listener only fires in 2D scenes

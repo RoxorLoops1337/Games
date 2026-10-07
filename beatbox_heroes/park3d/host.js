@@ -71,7 +71,7 @@ export function createHost(target, opts) {
   // ?perf=0 switches the PERF pacing off (adaptive DPR, shadow pacing, async precompile, spread loads) for A/B measurements; ?adaptive=0 only the adaptive DPR
   const QS = (typeof location !== 'undefined' && location.search) || '', PERF = opts.perf !== false && !/[?&]perf=0/.test(QS);
   const ADAPT = PERF && opts.adaptive !== false && !/[?&]adaptive=0/.test(QS);
-  const prefetched = {};
+  const prefetched = {}; let loading = null;   // the load in flight: a context loss during a build rebuilds THAT world
 
   // ------------------------------------------------------------------ size
   // tier cap (PORT_PLAN 2.9: 2 / 1.5 / 1.25), then the adaptive drop in 0.25 steps (never below 1, or the device DPR when that is lower)
@@ -109,7 +109,7 @@ export function createHost(target, opts) {
 
   // ------------------------------------------------------------------ build one world
   async function doLoad(id, args, tok) {
-    const t0 = nowMs(); args = args || {};
+    const t0 = nowMs(); args = args || {}; loading = { id, args };
     unloadNow();
     const def = WORLDS[id]; if (!def) throw new Error('unknown world "' + id + '"');
     const mod = await def(); if (tok !== tokenSeq || disposed) return null;
@@ -226,7 +226,7 @@ export function createHost(target, opts) {
   function demote(reason) { if (demoted) return; demoted = reason; clearTimeout(restoreTimer); announce('demote', { reason }); }
   function onCtxLost(e) {
     e.preventDefault(); lost = true; const t = nowMs(); lostAt.push(t); lostAt = lostAt.filter((x) => t - x < 60000); const second = lostAt.length > 1;
-    if (cur) reload = { id: cur.id, args: cur.args };
+    if (cur) reload = { id: cur.id, args: cur.args }; else if (loading) reload = loading;
     const info = { n: lostAt.length, second }; if (cur) cur.events.emit('contextlost', info); events.emit('contextlost', info); announce('lost', info);
     clearTimeout(restoreTimer); if (second) { demote('second-loss'); return; }
     restoreTimer = setTimeout(() => { if (lost) demote('no-restore'); }, 2000);
