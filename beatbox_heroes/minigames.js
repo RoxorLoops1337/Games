@@ -2,7 +2,7 @@
 //   run      Sprint pace (alternate left / right taps to keep the bar in the target zone)
 //   tuner    Pitch Tuner (sing the note into your mic; ear training when there is no mic)
 //   seq      Beat Maker (16 step sequencer, 4 slots, release songs)
-//   studio   Sound Recorder (record your own B, T, K and Pf; they replace the synth drums)
+//   studio   Sound Recorder (record your own version of every unlocked sound; it replaces the synth voice everywhere)
 // plus the Songs, Crew, Livestream and Coaching panels used by the places.
 (function (root) {
   'use strict';
@@ -169,46 +169,115 @@
     },
   };
 
+  /* =========================================================== SOUNDS (Beat Maker rows, Recorder list, unlock card) */
+  // G.snd: one view of Core.SOUNDS for every screen. Lanes 0..3 are B t K Pf; extra sounds (lip roll, throat bass, ...) unlock through Core.
+  const LANE_ID = ['B', 't', 'K', 'Pf'];
+  const SND_COL = { B: '#ff4f6a', t: '#ffd23f', K: '#2ee6ff', Pf: '#c07bff', RIM: '#ff9f43', LR: '#9dff4a', TB: '#ff5cb0', CR: '#5fe0c8', IK: '#7fa8ff', WB: '#4fc3ff', ZP: '#ffe14d', HUM: '#ffb3d9', SI: '#ff7b5c' };
+  const nameOf = (tbl, id) => { try { const x = Array.isArray(tbl) ? tbl.find((o) => o.id === id) : tbl[id]; return (x && x.name) || id; } catch (e) { return id; } };
+  const ruleMet = (ch, u) => { if (!u || !ch) return false; let m = false; try {
+    if (u.k === 'start') m = true; else if (u.k === 'level') m = ch.level >= u.v; else if (u.k === 'npc') m = !!((ch.seen && ch.seen[u.v]) || (ch.affinity && ch.affinity[u.v] > 0) || (ch.crew || []).some((c) => c.id === u.v) || (u.v === 'beeamgee' && ch.n && ch.n.coaches > 0));
+    else if (u.k === 'win') m = typeof u.v === 'string' ? !!(ch.beat && ch.beat[u.v]) : ((ch.n && ch.n.battlesWon) || 0) >= u.v; else if (u.k === 'ach') m = !!(ch.ach && ch.ach[u.v]); else if (u.k === 'day') m = ch.day >= u.v; } catch (e) { m = false; }
+    return m || (u.or ? ruleMet(ch, u.or) : false); };
+  const SND = G.snd = {
+    LANE_ID,
+    all() { const S = Core.SOUNDS; return S && S.length ? S : LANES.map((ln, i) => ({ id: LANE_ID[i], name: ln[1], lane: i, unlock: { k: 'start' } })); },
+    get(id) { if (typeof id === 'number') id = LANE_ID[id]; return SND.all().find((s) => s.id === id) || null; },
+    lane(id) { const s = typeof id === 'object' ? id : SND.get(id); return s && typeof s.lane === 'number' ? s.lane : -1; },
+    on(id, ch) { ch = ch || G.ch; const s = SND.get(id); if (!s) return false; if (s.unlock && s.unlock.k === 'start') return true; try { return Core.soundUnlocked ? !!Core.soundUnlocked(ch, s.id) : false; } catch (e) { return false; } },
+    extras(ch) { return SND.all().filter((s) => SND.lane(s) < 0 && SND.on(s.id, ch)); },
+    color(id) { return SND_COL[id] || '#d9c9ff'; },
+    label(id) { const l = SND.lane(id); return l >= 0 ? LANES[l][0] : String(id); },
+    title(id) { const s = SND.get(id); return s ? s.name : String(id); },
+    // how to unlock it, in plain words ("Meet BeeAmGee or reach level 4")
+    hint(s) {
+      try { if (Core.soundUnlockText) return Core.soundUnlockText(s.unlock); } catch (e) { /* ignore */ }
+      const one = (r) => r.k === 'level' ? 'Reach level ' + r.v : r.k === 'npc' ? 'Meet ' + nameOf(Core.NPCS || {}, r.v) : r.k === 'win' ? (typeof r.v === 'string' ? 'Beat ' + nameOf(Core.OPPONENTS || [], r.v) : 'Win ' + r.v + ' battles') : r.k === 'ach' ? 'Achievement: ' + nameOf(Core.ACHIEVEMENTS || [], r.v) : r.k === 'day' ? 'Visit the Sound Lab from day ' + r.v : 'Known from the start';
+      return s && s.unlock ? one(s.unlock) + (s.unlock.or ? ' or ' + one(s.unlock.or).replace(/^R/, 'r') : '') : '';
+    },
+    // who taught it to you (the unlock card): the rule that is met now
+    teacher(s, ch) {
+      ch = ch || G.ch; const u = s && s.unlock; if (!u) return ''; const r = ruleMet(ch, u) || !u.or ? u : u.or;
+      if (r.k === 'npc') return nameOf(Core.NPCS || {}, r.v) + ' showed you how';
+      if (r.k === 'level') return 'You reached level ' + r.v;
+      if (r.k === 'win') return typeof r.v === 'string' ? 'You learned it beating ' + nameOf(Core.OPPONENTS || [], r.v) : 'You won ' + r.v + ' battles';
+      if (r.k === 'ach') return 'Achievement: ' + nameOf(Core.ACHIEVEMENTS || [], r.v);
+      if (r.k === 'day') return 'You worked it out in the Sound Lab';
+      return '';
+    },
+    play(id, o) { try { if (BBH.Samples && BBH.Samples.play) return BBH.Samples.play(id, o); const l = SND.lane(id); return l >= 0 ? E.A().drum(l, o) : false; } catch (e) { return false; } },
+    mine(id) { try { const l = SND.lane(id); if (l >= 0) return !!(BBH.Audio && BBH.Audio.hasSample && BBH.Audio.hasSample(l)); return !!(BBH.Samples && BBH.Samples.has && BBH.Samples.has(G.slot || 1, id)); } catch (e) { return false; } },
+    // music OFF while you record or compose (Audio.gameMode); only your own pattern plays
+    quiet(on) { try { const A = BBH.Audio; if (A && A.gameMode) A.gameMode(!!on, { metronome: 0 }); else if (on) E.A().music.stop(0.3); } catch (e) { /* ignore */ } },
+  };
+  // a pattern's rows: 0..3 are the lanes, row 4 + k is the extra sound pat.ids[k]; rows for newly unlocked sounds are added empty
+  function patRows(pat) {
+    if (!pat || !Array.isArray(pat.steps)) return pat; const n = Core.SEQ_STEPS || 16;
+    if (!Array.isArray(pat.ids)) pat.ids = [];
+    for (const s of SND.extras()) if (pat.ids.indexOf(s.id) < 0) pat.ids.push(s.id);
+    while (pat.steps.length < 4 + pat.ids.length) pat.steps.push(new Array(n).fill(0));
+    pat.steps.length = 4 + pat.ids.length; return pat;
+  }
+  const rowId = (pat, r) => (r < 4 ? LANE_ID[r] : pat.ids[r - 4]);
+  const rowCol = (pat, r) => (r < 4 ? LANES[r][2] : SND.color(pat.ids[r - 4]));
+  const rowLabel = (pat, r) => (r < 4 ? LANES[r][0] : pat.ids[r - 4]);
+  const hitRow = (pat, r, o) => { try { if (r < 4) E.A().drum(r, o); else SND.play(pat.ids[r - 4], o); } catch (e) { /* ignore */ } };
+  SND.patRows = patRows; SND.rowId = rowId; SND.rowCol = rowCol; SND.rowLabel = rowLabel; SND.hitRow = hitRow;
+
   /* ============================================================== BEAT MAKER */
+  // a.train: opened from the training menu. FINISH scores the pattern (Core.patternScore) and reports Core trainGame({stat:'ori', game:'make', level, q}).
   E.scenes.seq = {
     enter(a) {
-      this.a = a; this.slot = G.ch.patIdx || 0; this.playing = false; this.step = -1; this.nextT = 0; this.nextStep = 0; this.played = 0; this.look = BBH.Chars.fix(G.ch.look); this.paint = null;
-      this.pat = Core.clone(G.ch.patterns[this.slot]); E.music('studio'); E.add(E.makeHud(G)); this.build();
+      this.a = a || {}; this.slot = G.ch.patIdx || 0; this.playing = false; this.step = -1; this.nextT = 0; this.nextStep = 0; this.played = 0; this.look = BBH.Chars.fix(G.ch.look); this.paint = null;
+      this.pat = patRows(Core.clone(G.ch.patterns[this.slot])); SND.quiet(true); E.add(E.makeHud(G)); this.build();
       this.timer = setInterval(() => this.sched(), 25);
     },
-    leave() { clearInterval(this.timer); this.save(); },
+    leave() { clearInterval(this.timer); this.save(); SND.quiet(false); },
     save() { if (this.pat) G.do({ t: 'seqsave', slot: this.slot, pattern: this.pat }); },
     build() {
-      if (this.ui) this.ui.remove();
-      const tabs = h('div.row', { style: { gap: '2px' } }, [0, 1, 2, 3].map((i) => { const b = E.btn(String(i + 1), i === this.slot ? 'gold' : '', () => { this.save(); this.slot = i; this.pat = Core.clone(G.ch.patterns[i]); this.build(); }, { flex: 1, padding: '4px 0 5px' }); return b; }));
+      if (this.ui) this.ui.remove(); const tr = !!this.a.train;
+      const tabs = h('div.row', { style: { gap: '2px' } }, [0, 1, 2, 3].map((i) => { const b = E.btn(String(i + 1), i === this.slot ? 'gold' : '', () => { this.save(); this.slot = i; this.pat = patRows(Core.clone(G.ch.patterns[i])); this.build(); }, { flex: 1, padding: '4px 0 5px' }); return b; }));
       const bpm = h('div.tp.gold', { style: { minWidth: '40px', textAlign: 'center' } }, this.pat.bpm + ' BPM');
       const setBpm = (d) => { this.pat.bpm = Math.max(60, Math.min(180, this.pat.bpm + d)); bpm.textContent = this.pat.bpm + ' BPM'; };
       this.playBtn = E.btn(this.playing ? 'STOP' : 'PLAY', this.playing ? 'red' : 'green', () => this.toggle(), { flex: 1 });
       const hits = Core.patternHits(this.pat);
       this.ui = h('div.panel.sheet', { style: { height: '170px', padding: '6px', zIndex: 15 } },
-        h('div.row', { style: { marginBottom: '4px' } }, h('div.tp.cyan', null, 'PATTERN'), h('div.grow', null, tabs)),
+        h('div.row', { style: { marginBottom: '4px' } }, h('div.tp.cyan', null, tr ? 'LEVEL ' + this.level() : 'PATTERN'), h('div.grow', null, tabs)),
         h('div.row', { style: { marginBottom: '4px' } }, E.btn('-', '', () => setBpm(-5), { width: '24px' }), bpm, E.btn('+', '', () => setBpm(5), { width: '24px' }), this.playBtn, E.btn('CLEAR', '', () => { this.pat.steps = this.pat.steps.map((r) => r.map(() => 0)); this.build(); }, { flex: 1 })),
-        h('div.row', { style: { marginBottom: '4px' } }, E.btn('RANDOM', '', () => { this.pat.steps = [0, 1, 2, 3].map((l) => new Array(16).fill(0).map((_, i) => (l === 0 ? (i % 4 === 0 || Math.random() < 0.1) : l === 2 ? (i % 8 === 4) : l === 1 ? (i % 2 === 1 && Math.random() < 0.8) : Math.random() < 0.12) ? 1 : 0)); this.build(); }, { flex: 1 }),
-          E.btn('TRAIN', hits >= 4 ? 'cyan' : 'dis', () => this.train(), { flex: 1 }), E.btn('RELEASE', hits >= 4 ? 'pink' : 'dis', () => this.release(), { flex: 1 })),
+        h('div.row', { style: { marginBottom: '4px' } }, E.btn('RANDOM', '', () => { this.pat.steps = this.pat.steps.map((row, l) => row.map((_, i) => (l === 0 ? (i % 4 === 0 || Math.random() < 0.1) : l === 2 ? (i % 8 === 4) : l === 1 ? (i % 2 === 1 && Math.random() < 0.8) : l === 3 ? Math.random() < 0.12 : Math.random() < 0.07) ? 1 : 0)); this.build(); }, { flex: 1 }),
+          E.btn(tr ? 'FINISH' : 'TRAIN', hits >= 4 ? 'cyan' : 'dis', () => this.train(), { flex: 1 }), E.btn('RELEASE', hits >= 4 ? 'pink' : 'dis', () => this.release(), { flex: 1 })),
         h('div.row', null, E.btn('SONGS', '', () => G.openSongs(), { flex: 1 }), E.btn('BACK', '', () => { this.save(); back(this.a.back); }, { flex: 1 })));
       E.add(this.ui);
     },
-    toggle() { this.playing = !this.playing; E.unlockAudio(); if (this.playing) { try { this.nextT = E.A().now() + 0.08; } catch (e) { this.nextT = 0; } this.nextStep = 0; E.music('studio', { fade: 0.2 }); try { E.A().music.stop(0.2); } catch (e) { /* ignore */ } } else this.step = -1; if (this.playBtn) { this.playBtn.textContent = this.playing ? 'STOP' : 'PLAY'; this.playBtn.className = 'btn ' + (this.playing ? 'red' : 'green'); } },
+    level() { return (G.ch.trainLv && G.ch.trainLv.make) || 1; },
+    toggle() { this.playing = !this.playing; E.unlockAudio(); if (this.playing) { try { this.nextT = E.A().now() + 0.08; } catch (e) { this.nextT = 0; } this.nextStep = 0; SND.quiet(true); try { E.A().music.stop(0.2); } catch (e) { /* ignore */ } } else this.step = -1; if (this.playBtn) { this.playBtn.textContent = this.playing ? 'STOP' : 'PLAY'; this.playBtn.className = 'btn ' + (this.playing ? 'red' : 'green'); } },
     sched() {
-      if (!this.playing) return; let A; try { A = E.A(); } catch (e) { return; } const spStep = 60 / this.pat.bpm / 4, now = A.now();
-      while (this.nextT < now + 0.12) { const i = this.nextStep; for (let l = 0; l < 4; l++) if (this.pat.steps[l][i]) { try { A.drum(l, { vel: 0.9, when: this.nextT }); } catch (e) { /* ignore */ } } this.vis = this.vis || []; this.vis.push({ t: this.nextT, i }); this.nextT += spStep; this.nextStep = (i + 1) % 16; this.played += spStep; }
+      if (!this.playing) return; let A; try { A = E.A(); } catch (e) { return; } const spStep = 60 / this.pat.bpm / 4, now = A.now(), rows = this.pat.steps.length;
+      while (this.nextT < now + 0.12) { const i = this.nextStep; for (let l = 0; l < rows; l++) if (this.pat.steps[l][i]) hitRow(this.pat, l, { vel: 0.9, when: this.nextT }); this.vis = this.vis || []; this.vis.push({ t: this.nextT, i }); this.nextT += spStep; this.nextStep = (i + 1) % 16; this.played += spStep; }
       this.vis = (this.vis || []).filter((v) => v.t > now - 0.5); const cur = this.vis.filter((v) => v.t <= now).pop(); this.step = cur ? cur.i : this.step;
     },
-    cellAt(x, y) { const gx = 20, gy = 270, cw = 20, ch2 = 34; const i = Math.floor((x - gx) / cw), l = Math.floor((y - gy) / ch2); return i >= 0 && i < 16 && l >= 0 && l < 4 ? { i, l } : null; },
+    // 4 rows sit at y 270 like always; extra sound rows shrink the rows a little, then the grid climbs behind the hero so it never hides under the sheet
+    rowH() { const n = this.pat.steps.length; return n <= 4 ? 34 : Math.max(16, Math.floor(136 / n)); },
+    gridY() { const n = this.pat.steps.length; return n <= 4 ? 270 : Math.max(130, 406 - n * this.rowH()); },
+    cellAt(x, y) { const gx = 20, gy = this.gridY(), cw = 20, ch2 = this.rowH(); const i = Math.floor((x - gx) / cw), l = Math.floor((y - gy) / ch2); return i >= 0 && i < 16 && l >= 0 && l < this.pat.steps.length ? { i, l } : null; },
     pointer(type, x, y) {
       if (type === 'up') { this.paint = null; if (this.ui) this.build(); return; }
       const c = this.cellAt(x, y); if (!c) return;
       if (type === 'down') { this.paint = this.pat.steps[c.l][c.i] ? 0 : 1; }
-      if (this.paint === null) return; if (this.pat.steps[c.l][c.i] !== this.paint) { this.pat.steps[c.l][c.i] = this.paint; if (this.paint) { try { E.A().drum(c.l, { vel: 0.8 }); } catch (e) { /* ignore */ } } }
+      if (this.paint === null) return; if (this.pat.steps[c.l][c.i] !== this.paint) { this.pat.steps[c.l][c.i] = this.paint; if (this.paint) hitRow(this.pat, c.l, { vel: 0.8 }); }
     },
     train() {
       if (Core.patternHits(this.pat) < 4) { E.toast('Add at least 4 hits first.', 'warn'); return; } if (this.played < 4) { E.toast('Press PLAY and listen to your beat first.', 'warn'); return; }
+      if (this.a.train) { this.trainPlay(); return; }
       this.save(); const held = G.doHold({ t: 'seqtrain', score: Core.patternScore(this.pat), studio: this.a.place === 'studio' }); if (this.playing) this.toggle(); G.finishActivity(held, this.a.place || 'home');
+    },
+    // PLAY training: the finished pattern is the score, Core gives about double the idle gain for less time
+    trainPlay() {
+      if (this.finished) return; this.finished = true; this.save(); if (this.playing) this.toggle();
+      const q = Core.patternScore(this.pat), lv = this.level(), ori0 = G.ch.stats.ori, used = this.pat.steps.filter((r) => r.some(Boolean)).length;
+      const held = G.doHold({ t: 'trainGame', stat: 'ori', game: 'make', level: lv, q }); this.held = held;
+      const up = (held.fx || []).find((f) => f.t === 'levelUp'), gain = Math.round((G.ch.stats.ori - ori0) * 10) / 10;
+      E.sfx('win'); this.card = resultCard('BEAT FINISHED', [['Creativity', Math.round(q * 100) + '%', 'var(--gold2)'], ['Sounds used', used + ' / ' + this.pat.steps.length], ['Originality', '+' + gain.toFixed(1), 'var(--lime)']].concat(up ? [['Unlocked', 'LEVEL ' + up.level, 'var(--cyan)']] : []),
+        () => G.finishActivity(held, this.a.place || G.ch.place || 'home'));
     },
     release() {
       const inp = h('input', { type: 'text', maxlength: 24, placeholder: 'SONG NAME', value: this.pat.name || '' });
@@ -217,50 +286,67 @@
     draw(real, c) {
       real.fillStyle = PAL.night1; real.fillRect(0, 0, E.W, E.H); const bg = (() => { try { return BBH.World.scene('studio', 'night'); } catch (e) { return null; } })(); if (bg) { bg.layers[0].pix.draw(real, 0, 0); real.fillStyle = 'rgba(14,9,30,.55)'; real.fillRect(0, 0, E.W, E.H); }
       const bob = this.playing && this.step >= 0 ? (this.step % 4 === 0 ? 3 : 0) : 0; E.hero(real, this.look, this.playing ? 'dance' : 'idle', 180, 250 + bob, { scale: 1, t: E.t });
-      const gx = 20, gy = 270, cw = 20, ch2 = 34;
-      real.fillStyle = PAL.ink; real.fillRect(gx - 4, gy - 4, 16 * cw + 8, 4 * ch2 + 8);
-      for (let l = 0; l < 4; l++) for (let i = 0; i < 16; i++) {
-        const x = gx + i * cw, y = gy + l * ch2, on = this.pat.steps[l][i], col = LANES[l][2], cur = this.playing && this.step === i;
+      const gx = 20, gy = this.gridY(), cw = 20, ch2 = this.rowH(), rows = this.pat.steps.length;
+      real.fillStyle = PAL.ink; real.fillRect(gx - 4, gy - 4, 16 * cw + 8, rows * ch2 + 8);
+      for (let l = 0; l < rows; l++) for (let i = 0; i < 16; i++) {
+        const x = gx + i * cw, y = gy + l * ch2, on = this.pat.steps[l][i], col = rowCol(this.pat, l), cur = this.playing && this.step === i;
         real.fillStyle = on ? col : (i % 4 === 0 ? '#3a2a60' : '#2a1d4a'); real.fillRect(x + 1, y + 1, cw - 2, ch2 - 2);
-        if (on) { real.fillStyle = 'rgba(255,255,255,.45)'; real.fillRect(x + 2, y + 2, cw - 4, 3); real.fillStyle = 'rgba(0,0,0,.25)'; real.fillRect(x + 1, y + ch2 - 8, cw - 2, 7); }
+        if (on) { real.fillStyle = 'rgba(255,255,255,.45)'; real.fillRect(x + 2, y + 2, cw - 4, Math.min(3, ch2 / 6)); real.fillStyle = 'rgba(0,0,0,.25)'; real.fillRect(x + 1, y + ch2 - Math.min(8, ch2 / 4), cw - 2, Math.min(7, ch2 / 4 - 1)); }
         if (cur) { real.fillStyle = on ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.18)'; real.fillRect(x + 1, y + 1, cw - 2, ch2 - 2); }
       }
-      for (let l = 0; l < 4; l++) E.txt(real, LANES[l][0], gx - 14, gy + l * ch2 + 12, { color: LANES[l][2] });
-      E.txt(c, 'BEAT MAKER', 12, 66, { color: PAL.gold }); E.txt(c, 'TAP OR DRAG THE GRID', 12, 78, { color: PAL.fog });
+      for (let l = 0; l < rows; l++) { const lb = rowLabel(this.pat, l).slice(0, 3); E.txt(real, lb, lb.length > 2 ? 1 : gx - 14, gy + l * ch2 + Math.round(ch2 / 2) - 5, { color: rowCol(this.pat, l) }); }
+      E.txt(c, this.a.train ? 'BEAT MAKER  LEVEL ' + this.level() : 'BEAT MAKER', 12, 66, { color: PAL.gold }); E.txt(c, rows > 4 ? 'NEW SOUNDS ADD ROWS' : 'TAP OR DRAG THE GRID', 12, 78, { color: PAL.fog });
       const sc = Core.patternScore(this.pat); c.fillStyle = PAL.ink; c.fillRect(150, 66, 108, 7); c.fillStyle = PAL.neonPink; c.fillRect(151, 67, Math.round(106 * sc), 5); E.txt(c, 'CREATIVITY ' + Math.round(sc * 100) + '%', 258, 76, { align: 'r', color: PAL.cream });
     },
   };
 
   /* ============================================================ SOUND RECORDER */
+  // every Core.SOUNDS entry is a row: unlocked ones record (slots keyed by sound id), locked ones say how to unlock them.
+  // SYNTH plays the built-in voice, MINE your recording; recordings replace the synth voice everywhere. Music is OFF in here.
   E.scenes.studio = {
     enter(a) {
-      this.a = a; this.rec = null; this.status = {}; this.test = false; this.look = BBH.Chars.fix(G.ch.look); this.detLane = -1; this.detT = 0; E.music('studio'); E.add(E.makeHud(G)); this.build();
+      this.a = a || {}; this.rec = null; this.status = {}; this.test = false; this.look = BBH.Chars.fix(G.ch.look); this.detLane = -1; this.detT = 0; this.focus = this.a.focus || null; SND.quiet(true); E.add(E.makeHud(G)); this.build();
     },
-    leave() { try { this.stopTest && this.stopTest(); BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } },
-    has(l) { try { return BBH.Audio.hasSample && BBH.Audio.hasSample(l); } catch (e) { return false; } },
+    leave() { try { this.stopTest && this.stopTest(); BBH.Mic && BBH.Mic.close(); } catch (e) { /* ignore */ } SND.quiet(false); },
+    has(id) { return SND.mine(id); },
+    // the sound list, unlocked first (lanes, then extras), locked last
+    sounds() { const all = SND.all(), on = all.filter((s) => SND.on(s.id)), off = all.filter((s) => !SND.on(s.id)); return on.concat(off); },
+    row(s, compact) {
+      const id = s.id, open = SND.on(id), mine = open && this.has(id), st = this.status[id], col = SND.color(id), sb = { flex: 1, padding: compact ? '4px 0 5px' : '4px 0 5px', minWidth: 0 };
+      const tag = !open ? 'LOCKED' : st === 'rec' ? 'RECORDING' : st === 'wait' ? 'SOUND NOW!' : mine ? 'YOUR SOUND' : 'SYNTH VOICE';
+      const name = h('div.col', { style: { gap: '1px', width: compact ? '74px' : '92px', flex: 'none', minWidth: 0 } },
+        h('div.h2', { style: { color: open ? col : PAL.fog, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, (open ? '' : '') + s.name.toUpperCase()),
+        h('div.tp', { style: { color: st === 'rec' || st === 'wait' ? '#ff7b8e' : mine ? '#7be08f' : PAL.fog, fontSize: compact ? '5px' : '' } }, tag));
+      const body = open
+        ? h('div.row', { style: { flex: 1, gap: '2px', minWidth: 0 } }, E.btn('REC', 'red', () => this.record(id), sb), E.btn('SYNTH', '', () => SND.play(id, { vel: 1, synth: true }), sb), E.btn('MINE', mine ? 'cyan' : 'dis', () => SND.play(id, { vel: 1, mine: true }), sb), E.btn('RESET', mine ? '' : 'dis', () => this.reset(id), sb))
+        : h('div.ts', { style: { flex: 1, color: PAL.fog, fontSize: compact ? '6px' : '', whiteSpace: 'normal', lineHeight: 1.25 } }, SND.hint(s));
+      const el = h('div.panel.flat.snd' + (open ? '' : '.locked'), { 'data-id': id, style: { position: 'relative', padding: compact ? '3px 4px 4px 6px' : '5px', borderLeft: '4px solid ' + (open ? col : '#4a3f66'), display: 'flex', alignItems: 'center', gap: '4px', flex: 'none', opacity: open ? 1 : 0.5, filter: open ? '' : 'grayscale(1)', boxShadow: this.focus === id ? '0 0 0 2px #ffd35c' : '' } }, name, body);
+      return el;
+    },
     build() {
-      if (this.ui) this.ui.remove(); const slot = G.slot || 1;
-      const cards = LANES.map((ln, i) => {
-        const mine = this.has(i), st = this.status[i];
-        return h('div.panel.flat', { style: { position: 'relative', padding: '5px', height: '56px', borderLeft: '4px solid ' + ln[2] } },
-          h('div.row', { style: { justifyContent: 'space-between' } }, h('div.h2', { style: { color: ln[2] } }, ln[0] + '  ' + ln[1]), h('div.tp', { style: { color: st === 'rec' ? '#ff7b8e' : mine ? '#7be08f' : PAL.fog } }, st === 'rec' ? 'RECORDING...' : st === 'wait' ? 'MAKE THE SOUND NOW' : mine ? 'YOUR SOUND' : 'DEFAULT')),
-          h('div.row', { style: { marginTop: '4px' } }, E.btn('REC', 'red', () => this.record(i), { flex: 1, padding: '4px 0 5px' }), E.btn('PLAY', '', () => { try { E.A().drum(i, { vel: 1 }); } catch (e) { /* ignore */ } }, { flex: 1, padding: '4px 0 5px' }), E.btn('RESET', mine ? '' : 'dis', () => this.reset(i), { flex: 1, padding: '4px 0 5px' })));
-      });
+      if (this.ui) this.ui.remove();
+      const list = h('div.scroll.col', { style: { gap: '4px', flex: 1, minHeight: 0, paddingBottom: '10px', WebkitMaskImage: 'linear-gradient(#000 88%, transparent)', maskImage: 'linear-gradient(#000 88%, transparent)' } }, this.sounds().map((s) => this.row(s, false)));
       this.ui = h('div', { style: { position: 'absolute', left: '6px', right: '6px', top: '90px', bottom: '8px', zIndex: 15, display: 'flex', flexDirection: 'column', gap: '4px' } },
-        h('div.ts.ctr', null, MicOK() ? 'Press REC, then make the sound into your mic. It stops by itself when you go quiet.' : 'Microphone recording is not supported in this browser.'), cards,
+        h('div.ts.ctr', null, MicOK() ? 'Press REC, then make the sound into your mic. It stops by itself when you go quiet. New sounds unlock as you meet beatboxers and level up.' : 'Microphone recording is not supported in this browser.'), list,
         h('div.row', null, E.btn(this.test ? 'STOP TEST' : 'TEST MIC MODE', this.test ? 'red' : 'cyan', () => this.toggleTest(), { flex: 2 }), E.btn('BACK', '', () => back(this.a.back), { flex: 1 })));
-      E.add(this.ui); void slot;
+      E.add(this.ui); this.list = list; this.scrollFocus();
     },
-    async record(lane) {
-      if (!MicOK()) { E.toast('No microphone support here.', 'warn'); return; } if (this.rec) return; this.rec = lane; this.status[lane] = 'wait'; this.build();
-      const o = await BBH.Mic.open(); if (!o.ok) { this.rec = null; this.status[lane] = null; E.toast('Mic: ' + (o.error || 'unavailable') + '. Allow microphone access.', 'warn'); this.build(); return; }
-      this.status[lane] = 'wait'; this.build(); let r = null; try { r = await BBH.Mic.recordSample({ maxWaitMs: 4000 }); } catch (e) { r = { ok: false, reason: String(e) }; }
-      this.rec = null; this.status[lane] = null; if (!this.test) { try { BBH.Mic.close(); } catch (e) { /* ignore */ } }
+    scrollFocus() { const f = this.focus, l = this.list; if (!f || !l) return; const el = l.querySelector('[data-id="' + f + '"]'); if (el) { try { l.scrollTop = Math.max(0, el.offsetTop - l.offsetTop - 4); } catch (e) { /* ignore */ } } },
+    async record(id) {
+      if (typeof id === 'number') id = LANE_ID[id]; const lane = SND.lane(id), nm = SND.title(id);
+      if (!SND.on(id)) { E.toast('Unlock this sound first.', 'warn'); return; }
+      if (!MicOK()) { E.toast('No microphone support here.', 'warn'); return; } if (this.rec) return; this.rec = id; this.focus = id; this.status[id] = 'wait'; SND.quiet(true); this.build();
+      const o = await BBH.Mic.open(); if (!o.ok) { this.rec = null; this.status[id] = null; E.toast('Mic: ' + (o.error || 'unavailable') + '. Allow microphone access.', 'warn'); this.build(); return; }
+      this.status[id] = 'wait'; this.build(); let r = null; try { r = await BBH.Mic.recordSample({ maxWaitMs: 4000 }); } catch (e) { r = { ok: false, reason: String(e) }; }
+      this.rec = null; this.status[id] = null; if (!this.test) { try { BBH.Mic.close(); } catch (e) { /* ignore */ } }
       if (!r || !r.ok || !r.data || !r.data.length) { E.toast('I did not hear anything. Try again, a bit louder.', 'warn'); E.sfx('error'); this.build(); return; }
-      try { await BBH.Samples.put(G.slot || 1, lane, r.data, r.sampleRate); BBH.Audio.setSample(lane, r.data, r.sampleRate); } catch (e) { /* ignore */ }
-      G.do({ t: 'recorded', n: 1 }); E.sfx('record'); E.toast(LANES[lane][1] + ' recorded! Playing it back.', 'good'); setTimeout(() => { try { E.A().drum(lane, { vel: 1 }); } catch (e) { /* ignore */ } }, 250); this.build();
+      try { BBH.Samples.put(G.slot || 1, lane >= 0 ? lane : id, r.data, r.sampleRate); BBH.Audio.setSample(lane >= 0 ? lane : id, r.data, r.sampleRate); } catch (e) { /* ignore */ }
+      G.do({ t: 'recorded', n: 1 }); E.sfx('record'); E.toast(nm.toUpperCase() + ' recorded! Playing it back.', 'good'); setTimeout(() => SND.play(id, { vel: 1 }), 250); this.build();
     },
-    async reset(lane) { try { await BBH.Samples.remove(G.slot || 1, lane); BBH.Audio.clearSample(lane); } catch (e) { /* ignore */ } E.toast(LANES[lane][1] + ' is back to the default sound.', 'good'); this.build(); },
+    async reset(id) {
+      if (typeof id === 'number') id = LANE_ID[id]; const lane = SND.lane(id), k = lane >= 0 ? lane : id;
+      try { BBH.Samples.remove(G.slot || 1, k); BBH.Audio.clearSample(k); } catch (e) { /* ignore */ } E.toast(SND.title(id).toUpperCase() + ' is back to the synth sound.', 'good'); this.build();
+    },
     async toggleTest() {
       if (this.test) { this.stopTest(); this.build(); return; } if (!MicOK()) { E.toast('No microphone support here.', 'warn'); return; }
       const o = await BBH.Mic.open(); if (!o.ok) { E.toast('Mic: ' + (o.error || 'unavailable'), 'warn'); return; }
@@ -308,7 +394,7 @@
     return [
       sheetBtn('PITCH TUNER', 'Sing notes into your mic. Trains Musicality.', G.ch.energy < 10 ? 'dis' : 'cyan', () => { S.closeSheet(); E.go('tuner', { back: { scene: 'place', args: { id: S.id } }, place: S.id }); }),
       sheetBtn('BEAT MAKER', 'Build patterns. Trains Originality. Release songs.' + (where === 'studio' ? ' (x1.3 here)' : ''), G.ch.energy < 10 ? 'dis' : 'pink', () => { S.closeSheet(); E.go('seq', { back: { scene: 'place', args: { id: S.id } }, place: S.id }); }),
-      sheetBtn('SOUND RECORDER', 'Record your own B, T, K and Pf sounds.', '', () => { S.closeSheet(); E.go('studio', { back: { scene: 'place', args: { id: S.id } } }); }),
+      sheetBtn('SOUND RECORDER', 'Record your own sounds. New ones unlock as you go.', '', () => { S.closeSheet(); E.go('studio', { back: { scene: 'place', args: { id: S.id } } }); }),
       sheetBtn('MY SONGS  ' + G.ch.songs.length, 'Released songs and their earnings.', '', () => { G.openSongs(); }),
     ];
   };

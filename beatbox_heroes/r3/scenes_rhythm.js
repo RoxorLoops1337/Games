@@ -9,6 +9,11 @@
 //     The judges reveal exactly those votes; CONTINUE plays the held effects and calls args.onDone({ win, out }) like rhythm.js does.
 //   * BACK asks LEAVE? (like the 2D confirm) and then calls args.onAbort (back to the place world); losing the tab mid set does the same, no rewards.
 //   * offset, mic and mic persistence come from E.settings like the 2D scene (E.settings.offset in ms, E.settings.mic).
+//   * MUSIC OFF (TRAINING_PLAN): no scene music and no backing groove in any mode (busk, open mic, karaoke, showcase, practice, battles, training). mg_rhythm runs a soft
+//     shaker metronome at the chart bpm (Audio.gameMode or its local fallback) and only the beatbox sounds of whoever plays; leave() hands the music back (the place plays its own track).
+//   * train: E.go('rhythm', { mode:'train', level?, where?, back?, onExit?(held), onAbort? }) RHYTHM TRAINING in the lab booth (practice look). Every finished level runs
+//     G.doHold({ t:'trainGame', stat:'tech', game:'beat', level, q }) (Core unlocks the next level at 70%), the card shows the stat gain and xp; NEXT / AGAIN / LEVELS play the held
+//     effects and go on, CONTINUE plays them through G.finishActivity (or a.onExit(held)) back to a.back (default: the current place). Best grades live in ch.flags.beatBest.
 // Test hooks: E.scene.mg (the game object: tick(sec), bot(o), press(lane), state(), result(), pick(styleId), quit({force:true})), E.scene.ctl.
 (function (root) {
   'use strict';
@@ -21,7 +26,7 @@
   function venueFor(a, mode) {
     if (a.venue) return a.venue;
     if (mode === 'battle') return 'arena';
-    if (mode === 'practice') return 'booth';
+    if (mode === 'practice' || mode === 'train') return 'booth';
     return a.kind === 'openmic' || a.kind === 'karaoke' ? 'bar' : a.kind === 'showcase' ? 'showcase' : 'busk';
   }
 
@@ -31,19 +36,20 @@
     enter(a) {
       a = a || {}; this.a = a; this.mode = a.mode || 'perform'; this.battle = this.mode === 'battle'; this.opp = a.opp || null; this.mg = null; this.ctl = null; this.then = null; this.held = null; this.verdict = null; this.rw = null; this.dead = false; this.done = false; this.cd = false; this.qd = false; this.lastPhase = ''; this.unsub = [];   // the scene object is reused: reset every flag
       const mode = this.battle ? 'battle' : this.mode, venue = venueFor(a, mode), ch = G.ch;
-      try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }
-      E.music('battle', { fade: 0.5 }); try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }     // same two lines as rhythm.js enter()
+      try { E.A().music.stop(0.4); } catch (e) { /* ignore */ }                                    // music off: mg_rhythm keeps it off (gameMode) until leave()
+      this.train = this.mode === 'train'; this.heldT = null; this.back = a.back || a.place || (ch && ch.place) || 'studio';
       try { E.unlockAudio(); } catch (e) { /* ignore */ }
       this.hud = document.createElement('div'); this.hud.id = 'r3rhythm'; this.hud.style.cssText = 'position:fixed;top:0;z-index:5;pointer-events:none;overflow:hidden';
       this.place = () => { const gl = document.getElementById('glwrap'); if (gl && this.hud) { this.hud.style.left = gl.style.left || '0px'; this.hud.style.width = gl.style.width || '100%'; this.hud.style.height = gl.style.height || '100%'; } };
       this.place(); document.body.appendChild(this.hud); root.addEventListener('resize', this.place); this.unsub.push(() => root.removeEventListener('resize', this.place));
-      const self = this, theme = a.stage || (this.battle && this.opp ? STAGE[this.opp.style % 4] : 'pink');
+      const self = this, theme = a.stage || (this.battle && this.opp ? STAGE[this.opp.style % 4] : this.train ? 'cyan' : 'pink');
       const args = Object.assign({}, a, {
         game: true, mode, venue, theme, hud: this.hud, look: ch.look, stats: ch.stats, you: ch.name || (ch.look && ch.look.name) || 'YOU', youSub: 'LEVEL ' + (ch.level || 1), slot: G.slot || 1,
         offsetMs: E.settings.offset || 0, reduce: !!E.settings.reduce, mic: !!E.settings.mic, onMic: (on) => { E.settings.mic = !!on; try { E.saveSettings(); } catch (e) { /* ignore */ } },
         time: Core.nightness(ch.minutes), tip: a.tip !== false && !(ch.flags && ch.flags.rhythmTip) && !this.battle,
         onContinue: (info) => self.cont(info), resolveBattle: (p) => self.resolve(p),
       });
+      if (this.train) Object.assign(args, { title: a.title || 'RHYTHM TRAINING', sub: a.sub || 'level ' + (a.level || ((ch.trainLv && ch.trainLv.beat) || 1)), tip: false, progress: this.progress() });
       return R3.load('rhythm', args).then((w) => {
         if (E.scene !== self || !w) return; self.w = w; self.mg = w.game || (w.mini || null); self.ctl = self.mg;
         const off1 = w.events.on('minigame', (e) => self.finished(e && e.result)), off2 = w.events.on('minigameQuit', () => self.quit());
@@ -51,13 +57,28 @@
       });
     },
     leave() {
+      try { if (this.mg && this.mg.click) this.mg.click.musicOn(); } catch (e) { /* ignore */ }      // the music comes back before the next scene starts its track
       this.dead = true; try { E.A().groove.stop(); } catch (e) { /* ignore */ }
       (this.unsub || []).forEach((f) => { try { f(); } catch (e) { /* ignore */ } }); this.unsub = [];
       if (this.hud) { try { this.hud.remove(); } catch (e) { /* ignore */ } this.hud = null; } this.mg = null; this.w = null;
     },
     // a perform or practice set ended: run the real action (the 2D closure) and show its rewards on the 3D card
+    progress() { const ch = G.ch || {}; return { unlocked: (ch.trainLv && ch.trainLv.beat) || 1, best: Object.assign({}, (ch.flags && ch.flags.beatBest) || {}) }; },
+    // a training level ended: the real action now (held until the card is left), the card shows the stat gain, the game learns the new unlock / best grade
+    trained(res) {
+      this.flushTrain(); const ch0 = G.ch, tech0 = ch0.stats.tech, xp0 = ch0.xp, lv0 = ch0.level, where = this.a.where || (ch0.place === 'studio' ? 'studio' : 'home');
+      let held = null; try { held = G.doHold({ t: 'trainGame', stat: 'tech', game: 'beat', level: res.level, q: res.q, where }); } catch (e) { console.error('[r3 rhythm] trainGame failed', e); }
+      this.heldT = held; const f = held && held.fx.find((x) => x.t === 'trainResult'), ch = G.ch;
+      const best = Object.assign({}, (ch.flags && ch.flags.beatBest) || {}), old = best[res.level], rk = 'SABCD';
+      if (f && (!old || rk.indexOf(res.grade) < rk.indexOf(old))) { best[res.level] = res.grade; try { G.do({ t: 'flag', k: 'beatBest', v: best }); } catch (e) { /* ignore */ } }
+      this.rw = { cash: 0, fans: 0, xp: Math.max(0, Math.round(ch.xp - xp0 + (() => { let n = 0; for (let l = lv0; l < ch.level; l++) n += Core.xpNeed ? Core.xpNeed(l) : 0; return n; })())), gain: f ? f.gain : Math.max(0, ch.stats.tech - tech0), stat: 'TECH' };
+      try { if (this.mg) this.mg.setTrainProgress(this.progress(), this.rw); } catch (e) { /* ignore */ }
+    },
+    // play the held effects of the last level (toasts, level up, unlocks); a day roll-over means the morning card: leave for home
+    flushTrain() { const h = this.heldT; this.heldT = null; if (!h) return true; try { h.play({ morning: (f) => { G.pendingMorning = f; } }); } catch (e) { console.error(e); } return !G.pendingMorning; },
     finished(res) {
-      if (this.dead || this.battle || !res || this.done) return; this.done = true;
+      if (this.dead || !res) return; if (this.train) { if (res.mode === 'train') this.trained(res); return; }
+      if (this.battle || this.done) return; this.done = true;
       const a = this.a, orig = G.showResult; let cap = null;
       G.showResult = function (f, then) { cap = { f, then }; };                    // the 2D DOM result card is replaced by the 3D one
       try { if (a.onDone) a.onDone(res); } catch (e) { console.error('[r3 rhythm] onDone failed', e); } finally { G.showResult = orig; }
@@ -71,14 +92,25 @@
     },
     // CONTINUE on the result or verdict card
     cont(info) {
-      if (this.dead || this.cd) return; this.cd = true;
+      if (this.dead || this.cd) return;
+      if (this.train && info && info.train) {
+        if (info.act !== 'continue') { if (this.flushTrain()) { try { if (this.mg) this.mg.setTrainProgress(this.progress()); } catch (e) { /* ignore */ } return true; } }
+        this.cd = true; const h = this.heldT || { play() {} }; this.heldT = null;
+        if (this.a.onExit) this.a.onExit(h); else if (G.pendingMorning) { try { h.play({ morning: (f) => { G.pendingMorning = f; } }); } catch (e) { /* ignore */ } E.go('place', { id: 'home', morningFirst: true }); } else G.finishActivity(h, this.back);
+        return false;
+      }
+      this.cd = true;
       if (this.battle) { try { if (this.held) this.held.play(); } catch (e) { console.error(e); } if (this.a.onDone) this.a.onDone({ win: info && info.win, out: info && info.out }); return; }
       const t = this.then; this.then = null; if (t) t(); else if (this.a.onAbort) this.a.onAbort();
     },
-    quit() { if (this.dead || this.qd) return; this.qd = true; if (this.a.onAbort) this.a.onAbort(); },
+    quit() {
+      if (this.dead || this.qd) return; this.qd = true;
+      if (this.train) { const h = this.heldT; this.heldT = null; if (h) { G.finishActivity(h, this.back); return; } if (this.a.onAbort) this.a.onAbort(); else E.go('place', { id: this.back }); return; }
+      if (this.a.onAbort) this.a.onAbort();
+    },
     update() {
       const mg = this.mg; if (!mg || this.dead) return; const ph = mg.S && mg.S.phase;
-      if (ph !== this.lastPhase) { const was = this.lastPhase; this.lastPhase = ph; if (ph === 'judge') E.music('creator', { fade: 0.6 }); else if (ph === 'vs' && was === '') { try { E.sfx('whoosh'); } catch (e) { /* ignore */ } } }
+      if (ph !== this.lastPhase) { const was = this.lastPhase; this.lastPhase = ph; if (ph === 'vs' && was === '') { try { E.sfx('whoosh'); } catch (e) { /* ignore */ } } }
     },
     draw() { /* the stage is the WebGL canvas, the HUD is the game's own DOM */ },
     pointer() { /* the pads are DOM buttons */ },

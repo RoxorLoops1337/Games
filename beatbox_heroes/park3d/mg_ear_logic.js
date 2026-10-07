@@ -48,7 +48,7 @@ const WHY = {
 export const why = (answer) => WHY[answer] || ('It was: ' + String(answer).toUpperCase() + '.');
 export const label = (c) => String(c).toUpperCase();
 export function gradeOf(acc) { return acc >= 0.95 ? 'S' : acc >= 0.8 ? 'A' : acc >= 0.6 ? 'B' : acc >= 0.4 ? 'C' : 'D'; }
-export const LISTEN_MIN = 0.4, FB_RIGHT = 1.5, FB_WRONG = 3.2;
+export const LISTEN_MIN = 0.4, FB_RIGHT = 1.6, FB_WRONG = 4.2;
 
 export function createEarLogic(opts) {
   opts = opts || {}; const rnd = opts.rng || Math.random, H = opts.hooks || {};

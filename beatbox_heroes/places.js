@@ -279,7 +279,7 @@
           S.row('HOW TO PLAY', 'Goals, rules and controls.', 'cyan', () => { S.closeSheet(); G.openHelp(); }),
           S.row('QUICK PRACTICE', 'No mini-game: a small random skill gain.', ch.energy < 12 ? 'dis' : '', () => { S.closeSheet(); G.do({ t: 'train', stat: Core.STATS[Math.floor(Math.random() * 4)], q: 0.4, where: 'home' }); })]);
       },
-      booth(S) { S.sheet('VOCAL BOOTH: TRAIN', trainRows(S, 'home')); },
+      booth(S) { if (G.trainMenu) { G.trainMenu(S, 'home'); return; } S.sheet('VOCAL BOOTH: TRAIN', trainRows(S, 'home')); },   // r3/scenes_train.js: the IDLE / PLAY training menu (2D and 3D)
       couch(S) {
         S.sheet('COUCH', [
           S.row('REST  30 min', 'Mood +8. Put your feet up.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
@@ -314,7 +314,7 @@
     },
     shop: { hats: (S) => G.openShop(S, 'hat'), racks: (S) => G.openShop(S, 'top'), mirror: (S) => G.openShop(S, 'glasses'), counter: (S) => { S.sheet('COUNTER', [jobRow(S, 'shelves'), S.row('BROWSE THE SHOP', 'Hats, shades, jackets and more.', 'gold', () => G.openShop(S, 'top')), S.row('CHAT', 'Ask the clerk about stock.', '', () => { S.closeSheet(); E.dialog([{ name: 'Clerk', look: CLERK, text: ['new stock appears as you level up. the gold stuff is not for sale. it is earned.', 'shades are twenty bucks. confidence is free.', 'we got a cape in the back. it is not for sale yet. you are not ready.'][Math.floor(Math.random() * 3)] }]); })]); } },
     studio: {
-      mic(S) { S.sheet('SOUND LAB: TRAIN', trainRows(S, 'studio')); },
+      mic(S) { if (G.trainMenu) { G.trainMenu(S, 'studio'); return; } S.sheet('SOUND LAB: TRAIN', trainRows(S, 'studio')); },
       mixer(S) {
         const ids = [['title', 'Neon City'], ['creator', 'Mirror Room'], ['street', 'Night Walk'], ['home', 'Warm Blanket'], ['park', 'Pigeon Pluck'], ['shop', 'Thrift Jazz'], ['bar', 'Smoky Funk'], ['studio', 'Clean Pads'], ['battle', 'Break Point'], ['intro', 'Pink Slip']];
         S.sheet('SOUND LAB', G.labRows(S, 'studio').concat([S.row('JUKEBOX', 'Listen to the game music.', '', () => { S.closeSheet(); S.sheet('JUKEBOX', ids.map(([id, name]) => S.row(name.toUpperCase(), 'Tap to play', '', () => { E.music(id); })).concat([S.row('BACK TO STUDIO TRACK', '', 'gold', () => E.music('studio'))]), { maxH: '260px' }); })]), { maxH: '300px' });

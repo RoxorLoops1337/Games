@@ -8,6 +8,7 @@
 //   BBH.R3Spots.TABLE[place][spotId]  -> 'enter' | 'map' | 'leave' | 'act' | 'run' | 'flyers' | 'card'     (place = street | home | park | shop | studio | bar | hood)
 //   BBH.R3Spots.NPCS[place][npcId]    -> 'tip:<who>' | 'act:<key>' | 'mingle'
 //   BBH.R3Spots.WORLD[place]          -> the Park3D world id of that scene (home -> flat, studio -> lab)
+//   BBH.R3Spots.TRAIN[place][spotId]  -> 'home' | 'studio': a training spot, opens the training menu G.trainMenu(S, where)
 //   resolve(place, id) -> {kind, key} | null     npcRoute(place, id) -> {kind, key} | null      run(S, place, r, id)      onSpot(S, place, e)      onNpc(S, place, e)      bind(S, world, place)
 //   gates() / applyGates(world, lastSig) -> sig   door locks (Core.canEnter reasons) + goal beacon (G.goalDoor) for the street and the hood pins
 //   goalSpot(place) / applyGoal(world, place, lastSig) -> sig   goal beacon on the spot inside a place the goal text points at
@@ -30,7 +31,8 @@
     bar: { stage: 'act', counter: 'act', door: 'leave' },
     hood: { park: 'card', home: 'card', shop: 'card', studio: 'card', bar: 'card' },
   };
-  M.ACTION_KEY = { park: { busk: 'spot' } };                       // 3D spot id -> ACTIONS key where they differ (the 2D hotspot is called 'spot')
+  M.ACTION_KEY = { park: { busk: 'spot' } };
+  M.TRAIN = { home: { booth: 'home' }, studio: { mic: 'studio' } };       // training spots -> G.trainMenu(S, where) (r3/scenes_train.js: IDLE / PLAY menu)                       // 3D spot id -> ACTIONS key where they differ (the 2D hotspot is called 'spot')
   M.NPCS = {
     street: { foxy: 'tip:foxy' }, home: { foxy: 'tip:foxy' }, park: { beeamgee: 'act:bench' }, shop: { clerk: 'act:counter' },
     bar: { rohzel: 'act:counter', regular0: 'mingle', regular1: 'mingle', regular2: 'mingle' },
@@ -64,7 +66,7 @@
       case 'run':
         if (G.ch.energy < 14) { E.toast('Too tired to run.', 'warn'); E.sfx('error'); break; }
         S.closeSheet(); E.go('run', { back: { scene: 'place', args: { id: place } } }); break;
-      case 'act': { const A = P.ACTIONS[place] && P.ACTIONS[place][r.key]; if (A) A(S); else E.toast('Nothing to do here.'); break; }
+      case 'act': { const tw = (M.TRAIN[place] || {})[r.key]; if (tw && G.trainMenu) { G.trainMenu(S, tw); break; } const A = P.ACTIONS[place] && P.ACTIONS[place][r.key]; if (A) A(S); else E.toast('Nothing to do here.'); break; }
       default: break;
     }
   };

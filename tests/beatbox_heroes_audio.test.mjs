@@ -383,6 +383,272 @@ for (const id of ['victory', 'defeat']) {
   ok(R.peak(x) < R.peak(kickOnly) * 1.3 + 0.2, 'groove sits at or below the player drum level');
 }
 
+/* ================================================================ TRAINING_PLAN section 2 */
+const SOUNDS = ['B', 't', 'K', 'Pf', 'LR', 'TB', 'IK', 'CR', 'ZP', 'SI', 'WB', 'RIM', 'HUM'];
+const NEW_API = ['gameMode', 'isGameMode', 'metronome', 'metronomeInfo', 'shaker', 'note', 'chord', 'interval', 'beatbox', 'hasVoice'];
+{
+  for (const k of NEW_API) ok(typeof BBH.Audio[k] === 'function', 'BBH.Audio.' + k);
+  eq(BBH.Audio.SOUND_IDS, SOUNDS, 'SOUND_IDS lists every synth voice');
+  eq(AF.SOUND_IDS, SOUNDS, 'factory SOUND_IDS');
+  ok(BBH.Audio.TIMBRES.includes('keys'), 'keys timbre listed');
+  let threw = false;
+  try {
+    BBH.Audio.gameMode(true, { metronome: 100 }); BBH.Audio.shaker(true); BBH.Audio.note(60, 0.5); BBH.Audio.chord([60, 64, 67], 1); BBH.Audio.interval(60, 67);
+    BBH.Audio.beatbox('LR'); BBH.Audio.drum('RIM'); BBH.Audio.metronome(120); BBH.Audio.metronomeInfo(); BBH.Audio.gameMode(false); BBH.Audio.isGameMode();
+  } catch (e) { threw = true; }
+  ok(!threw, 'new BBH.Audio functions never throw without an AudioContext');
+  eq(BBH.Audio.isGameMode(), false, 'game mode is off again');
+}
+
+/* ---------------------------------------------------------------- gameMode: scene music off, deferred, restored */
+{
+  const { A, step } = fakeRig();
+  A.unlock();
+  A.music.play('park'); step(1);
+  eq(A.music.current(), 'park', 'scene track playing');
+  const g = A.gameMode(true);
+  eq(A.isGameMode(), true, 'isGameMode on');
+  eq(g.spb, 0, 'no metronome asked, spb 0');
+  eq(A.music.current(), null, 'gameMode(true) stops the scene music');
+  step(1);
+  const n0 = A.log.filter((e) => e.k === 'note').length; step(2);
+  eq(A.log.filter((e) => e.k === 'note').length, n0, 'no scene notes are scheduled during a game');
+  eq(A.music.play('street'), true, 'music.play during a game is accepted');
+  eq(A.music.current(), null, '...but deferred, nothing plays');
+  ok(A.log.some((e) => e.k === 'music' && e.ev === 'deferred' && e.id === 'street'), 'deferred request logged');
+  A.gameMode(true); eq(A.music.current(), null, 'gameMode(true) twice is harmless');
+  A.gameMode(false);
+  eq(A.isGameMode(), false, 'isGameMode off');
+  eq(A.music.current(), 'street', 'the last requested scene track comes back after the game');
+  // without a request in between the previous track is restored
+  A.gameMode(true); step(1); A.gameMode(false);
+  eq(A.music.current(), 'street', 'previous scene track restored');
+  A.gameMode(true); A.gameMode(false, { restore: false });
+  eq(A.music.current(), null, 'restore:false leaves the music off');
+  A.gameMode(false); ok(true, 'gameMode(false) when off is harmless');
+  // a sting at the end of a game plays, and the scene track follows when it ends
+  A.music.play('home'); step(0.5);
+  A.gameMode(true);
+  eq(A.music.play('victory'), true, 'stings still play during a game');
+  eq(A.music.current(), 'victory', 'victory sting is current');
+  A.gameMode(false);
+  eq(A.music.current(), 'victory', 'the sting is not cut off by gameMode(false)');
+  const C = AF.compose('victory'); step(C.beats * 60 / C.bpm + C.tail + 1);
+  eq(A.music.current(), 'home', 'scene track returns after the sting');
+  // duck keeps the track but lower
+  A.gameMode(true, { duck: 0.2 });
+  eq(A.music.current(), 'home', 'duck mode keeps the scene track running');
+  A.gameMode(false); eq(A.music.current(), 'home', 'duck mode exit keeps the track');
+  // music.stop during the game cancels the deferred request but not the restore
+  A.gameMode(true); A.music.play('shop'); A.music.stop(); A.gameMode(false);
+  eq(A.music.current(), 'home', 'music.stop during a game drops the deferred track, the previous one returns');
+}
+{
+  // gameMode before unlock on a suspended context: pending scene music is not started by the resume during the game
+  const ctx = new R.FakeContext({ state: 'suspended' });
+  const A = AF.create(() => ctx, { log: true, manual: true });
+  A.music.play('title');
+  A.gameMode(true);
+  A.unlock(); await Promise.resolve(); await Promise.resolve();
+  eq(A.music.current(), null, 'pending scene music waits for the game to end');
+  A.gameMode(false); eq(A.music.current(), 'title', 'and starts after it');
+}
+
+/* ---------------------------------------------------------------- metronome scheduling on the audio clock */
+{
+  const { ctx, A, step } = fakeRig();
+  A.unlock(); step(0.5);
+  const tn = ctx.currentTime;
+  const m = A.gameMode(true, { metronome: 120 });
+  near(m.spb, 0.5, 1e-12, 'metronome spb'); eq(m.bpm, 120, 'metronome bpm');
+  ok(m.t0 >= tn + 0.15 && m.t0 <= tn + 0.25, 'metronome beat 0 a little ahead of now');
+  step(4.2);
+  const ticks = A.log.filter((e) => e.k === 'metro' && e.t != null && e.beat != null);
+  ok(ticks.length >= 7, 'metronome ticks (' + ticks.length + ')');
+  ok(ticks.every((e, i) => Math.abs(e.t - (m.t0 + i * 0.5)) < 1e-9 && e.beat === i), 'ticks land exactly on t0 + n * spb (sample accurate)');
+  ok(ticks.every((e) => e.accent === (e.beat % 4 === 0)), 'accent on beat 1 of every bar');
+  ok(ticks.every((e) => e.t <= ctx.currentTime + 0.19), 'metronome respects the lookahead');
+  const info = A.metronomeInfo();
+  ok(info.on && info.bpm === 120, 'metronomeInfo on');
+  near(info.beat, (ctx.currentTime - m.t0) / 0.5, 1e-6, 'metronomeInfo beat follows the audio clock');
+  // tempo change keeps going from the next beat
+  const before = ticks.length, last = ticks[ticks.length - 1];
+  A.metronome(90); step(3);
+  const after = A.log.filter((e) => e.k === 'metro' && e.beat != null).slice(before);
+  ok(after.length >= 3, 'metronome keeps ticking after a bpm change');
+  near(after[0].t - last.t, 60 / 90, 1e-9, 'first tick after the change is one new beat later (no double tick, no gap)');
+  ok(after.every((e, i) => !i || Math.abs(e.t - after[i - 1].t - 60 / 90) < 1e-9), 'new tempo spacing');
+  eq(after[0].beat, last.beat + 1, 'beat count continues across the change');
+  // start offset: line up with a chart whose beat 0 was in the past
+  const chartT0 = ctx.currentTime - 1.1;
+  const r = A.metronome(100, { start: chartT0 }); step(2);
+  eq(r.t0, chartT0, 'start option is beat 0');
+  const al = A.log.filter((e) => e.k === 'metro' && e.bpm === 100 && e.beat != null);
+  ok(al.length >= 2 && al.every((e) => Math.abs(((e.t - chartT0) / 0.6) - e.beat) < 1e-6), 'ticks line up with the chart start');
+  ok(al.every((e) => e.accent === (e.beat % 4 === 0)), 'accent follows the chart bar');
+  A.gameMode(false);
+  eq(A.metronomeInfo().on, false, 'gameMode(false) stops the metronome');
+  const nm = A.log.filter((e) => e.k === 'metro').length; step(2);
+  eq(A.log.filter((e) => e.k === 'metro').length, nm, 'no ticks after gameMode(false)');
+  const lb = A.log.length;
+  A.metronome(100, { beats: 3, offset: 0.1 }); step(2.2);
+  const w = A.log.slice(lb).filter((e) => e.k === 'metro' && e.beat != null);
+  ok(w.filter((e) => e.accent).length >= 1 && w.every((e) => e.accent === (e.beat % 3 === 0)), 'beats:3 accents every third tick');
+  A.metronome(0); eq(A.metronomeInfo().on, false, 'metronome(0) stops');
+  // muted: no sources
+  A.metronome(120); A.setMuted(true); const s0 = ctx.sources; step(2);
+  eq(ctx.sources, s0, 'muted metronome starts no sources');
+  A.setMuted(false); step(1); ok(ctx.sources > s0, 'unmuted metronome ticks again');
+  A.metronome(0);
+  eq(A.shaker(true), true, 'shaker() single tick'); eq(A.shaker(false, { when: ctx.currentTime + 0.1 }), true, 'shaker({when})');
+}
+
+/* ---------------------------------------------------------------- beatbox voices by id, samples by id */
+{
+  const { A, ctx } = fakeRig();
+  A.unlock();
+  for (const id of SOUNDS) { eq(A.drum(id, { vel: 0.8 }), true, 'drum(' + id + ')'); eq(A.beatbox(id), true, 'beatbox(' + id + ')'); ok(A.hasVoice(id), 'hasVoice ' + id); }
+  for (const id of ['b', 'T', 'k', 'pf', 'P', 'lr', 'rim', 'Rim']) eq(A.drum(id), true, 'alias ' + id);
+  eq(A.drum('XX'), false, 'unknown sound id ignored'); eq(A.drum(''), false, 'empty id ignored'); eq(A.drum({}), false, 'junk id ignored');
+  eq(A.hasVoice('XX'), false, 'hasVoice unknown');
+  const lanes = A.log.filter((e) => e.k === 'drum' && e.id === 'K').map((e) => e.lane);
+  ok(lanes.length && lanes.every((l) => l === 2), 'K plays lane 2');
+  // a Core.SOUNDS entry with a lane and no synth voice falls back to that lane
+  const prevCore = globalThis.BBH.Core;
+  globalThis.BBH.Core = Object.assign({}, prevCore || {}, { SOUNDS: [{ id: 'QQ', lane: 2 }, { id: 'NL' }] });
+  eq(A.drum('QQ'), true, 'Core sound with a lane falls back to the lane voice');
+  eq(A.drum('NL'), false, 'Core sound without voice or lane is ignored');
+  if (prevCore) globalThis.BBH.Core = prevCore; else delete globalThis.BBH.Core;
+  // samples by id override the synth voice, lanes and base ids are the same slot
+  const samp = new Float32Array(2000).map((_, i) => Math.sin(i / 7) * 0.5);
+  eq(A.setSample('LR', samp, 44100), true, 'setSample by id');
+  eq(A.hasSample('lr'), true, 'hasSample by id (any case)');
+  const n0 = A.log.length; A.drum('LR');
+  ok(A.log.slice(n0).some((e) => e.k === 'drum' && e.sample && e.id === 'LR'), 'recorded LR replaces the synth LR');
+  eq(A.setSample(0, samp, 44100), true, 'setSample lane 0'); eq(A.hasSample('B'), true, 'lane 0 is id B');
+  A.clearSample('B'); eq(A.hasSample(0), false, 'clearSample(B) clears lane 0');
+  eq(A.setSample('XY9', samp, 44100), true, 'a future Core id can hold a sample');
+  eq(A.drum('XY9'), true, 'and plays it');
+  A.clearSample('LR'); const s0 = ctx.sources; A.drum('LR'); ok(ctx.sources - s0 > 2, 'back to the synth LR after clearSample');
+  eq(A.setSample(9, samp, 44100), false, 'bad lane still rejected');
+}
+
+/* ---------------------------------------------------------------- offline render: new beatbox voices */
+{
+  const SR = 32000, F = {};
+  for (const id of SOUNDS) {
+    const x = R.renderDrum(id, { vel: 1 }, SR, 1.4), sp = R.spectrum(x, SR, 16384);
+    F[id] = { c: sp.centroid, len: R.lastActive(x, 0.002) / SR, low: sp.low };
+    if (['B', 't', 'K', 'Pf'].includes(id)) continue;
+    ok(!R.hasNaN(x), id + ' has no NaN');
+    between(R.peak(x), 0.25, 0.98, id + ' peak level');
+    between(Math.abs(R.dc(x)), 0, 0.01, id + ' DC');
+    between(F[id].len, 0.04, 1.2, id + ' length (s)');
+    ok(R.smoothStep(x, 8) < 0.2, id + ' has no clicks');
+    ok(R.rms(x, x.length - 4000) < 0.003, id + ' is silent again at the end');
+  }
+  ok(F.TB.low > 0.6 && F.LR.low > 0.5, 'throat bass and lip roll are low sounds');
+  ok(F.TB.len > F.B.len * 1.5 && F.LR.len > F.B.len * 1.5, 'throat bass and lip roll sustain longer than a kick');
+  ok(F.IK.c > F.K.c && F.IK.len < F.K.len, 'inward K is brighter and tighter than the K snare');
+  ok(F.SI.len > 0.6, 'siren is a long sound');
+  {
+    const lo = R.renderDrum('HUM', { vel: 1, midi: 45 }, SR, 0.8), hi = R.renderDrum('HUM', { vel: 1, midi: 57 }, SR, 0.8);
+    const fl = f0Of(lo, SR, Math.round(0.08 * SR), 16384), fh = f0Of(hi, SR, Math.round(0.08 * SR), 16384);
+    near(1200 * Math.log2(fh / fl), 1200, 30, 'HUM {midi} hums the asked note (an octave apart)');
+  }
+  // the real Core.SOUNDS ids all have a voice
+  try { load('core'); } catch (e) { /* core may be mid-edit */ }
+  const CS = globalThis.BBH.Core && globalThis.BBH.Core.SOUNDS;
+  if (Array.isArray(CS)) { const A2 = fakeRig().A; A2.unlock(); for (const s of CS) eq(A2.drum(s.id), true, 'Core.SOUNDS ' + s.id + ' has a voice'); }
+  ok(F.RIM.len < F.K.len, 'rimshot is shorter than the snare');
+  // every voice is recognisably different: centroid, length or low end differ clearly
+  for (let i = 0; i < SOUNDS.length; i++) for (let j = i + 1; j < SOUNDS.length; j++) {
+    const a = F[SOUNDS[i]], b = F[SOUNDS[j]];
+    const d = Math.abs(Math.log(a.c / b.c)) + Math.abs(Math.log(a.len / b.len)) + Math.abs(a.low - b.low);
+    ok(d > 0.35, 'voices ' + SOUNDS[i] + ' and ' + SOUNDS[j] + ' are distinct (' + d.toFixed(2) + ')');
+  }
+  // the lip roll really flutters: its loudness envelope repeats at about 30 Hz
+  const lr = R.renderDrum('LR', { vel: 1 }, SR, 0.6), hop = 32, env = [];
+  for (let i = Math.round(0.1 * SR); i < Math.round(0.4 * SR); i += hop) env.push(R.rms(lr, i - 96, i + 96));
+  const mean = env.reduce((s, v) => s + v, 0) / env.length, e2 = env.map((v) => v - mean);
+  let bestLag = 0, bestC = -Infinity;
+  for (let lag = Math.round(SR / 50 / hop); lag <= Math.round(SR / 15 / hop); lag++) { let c = 0; for (let i = lag; i < e2.length; i++) c += e2[i] * e2[i - lag]; if (c > bestC) { bestC = c; bestLag = lag; } }
+  between(SR / (bestLag * hop), 20, 40, 'lip roll flutter rate (Hz)');
+}
+
+/* ---------------------------------------------------------------- offline render: shaker + metronome */
+{
+  const SR = 32000;
+  const one = (acc) => { const r = R.makeRig(SR); r.A.shaker(acc); r.run(0.4); return r.out(); };
+  const s = one(false), a = one(true);
+  for (const [x, n] of [[s, 'shaker'], [a, 'accent shaker']]) {
+    ok(!R.hasNaN(x), n + ' no NaN'); ok(R.smoothStep(x, 8) < 0.1, n + ' is soft, no clicks');
+    between(R.lastActive(x, 0.002) / SR, 0.04, 0.15, n + ' is short');
+  }
+  between(R.peak(s), 0.04, 0.2, 'shaker sits low under the game (' + R.peak(s).toFixed(3) + ')');
+  ok(R.peak(s) < R.peak(R.renderDrum(0, { vel: 1 }, SR, 0.4)) * 0.4, 'shaker is much quieter than a player kick');
+  let rs = 0, ra = 0; for (let i = 0; i < 4; i++) { rs += R.rms(one(false), 0, 3200); ra += R.rms(one(true), 0, 3200); } // average out the random noise grain
+  ok(ra > rs * 1.08 && ra < rs * 1.8, 'accent is slightly louder (' + (ra / rs).toFixed(2) + 'x)');
+  ok(R.spectrum(a, SR, 8192).centroid > R.spectrum(s, SR, 8192).centroid * 1.08, 'accent is brighter');
+  ok(R.spectrum(s, SR, 8192).high > 0.9, 'shaker energy is high and airy');
+  // a metronome render: onsets land on the grid
+  const rig = R.makeRig(SR);
+  const m = rig.A.metronome(150, { offset: 0.1 }); rig.run(2.2);
+  const x = rig.out(), on = [];
+  for (let k = 0; k < 5; k++) { const t = m.t0 + k * m.spb, i0 = Math.round((t - 0.02) * SR); const seg = x.subarray(i0, i0 + Math.round(0.06 * SR)); on.push((i0 + R.firstActive(seg, 0.01)) / SR - t); }
+  ok(on.every((d) => d >= -0.0005 && d < 0.004), 'rendered ticks start on the beat (' + on.map((d) => (d * 1000).toFixed(1)).join(', ') + ' ms)');
+  // sfx volume 0 silences it
+  const q = R.makeRig(SR); q.A.setVolume({ sfx: 0 }); q.A.metronome(120); q.run(1.5);
+  ok(R.peak(q.out()) < 0.002, 'sfx volume 0 silences the metronome');
+}
+
+/* ---------------------------------------------------------------- offline render: ear training tones */
+function f0Of(x, sr, from, n) {
+  const re = new Float64Array(n), im = new Float64Array(n);
+  for (let i = 0; i < n; i++) re[i] = (x[from + i] || 0) * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)));
+  R.fft(re, im);
+  const mag = (k) => Math.hypot(re[k], im[k]);
+  let best = 2; for (let k = 2; k < n / 2 - 1; k++) if (mag(k) > mag(best)) best = k;
+  const a = Math.log(mag(best - 1) + 1e-12), b = Math.log(mag(best) + 1e-12), c = Math.log(mag(best + 1) + 1e-12);
+  return (best + 0.5 * (a - c) / (a - 2 * b + c)) * sr / n;
+}
+{
+  const SR = 32000;
+  for (const midi of [48, 57, 60, 64, 67, 69, 72, 76, 84]) {
+    const r = R.makeRig(SR); const res = r.A.note(midi, 1); r.run(1.4); const x = r.out();
+    ok(res && res.end > res.t0, 'note returns timing');
+    const f = f0Of(x, SR, Math.round(0.05 * SR), 16384), want = 440 * Math.pow(2, (midi - 69) / 12);
+    const cents = 1200 * Math.log2(f / want);
+    between(cents, -5, 5, 'note ' + midi + ' is in tune (' + cents.toFixed(2) + ' cents)');
+    ok(R.spectrum(x, SR, 16384).high < 0.05, 'note ' + midi + ' is not harsh');
+    ok(!R.hasNaN(x) && R.smoothStep(x, 8) < 0.12, 'note ' + midi + ' is clean');
+    between(R.peak(x), 0.12, 0.6, 'note ' + midi + ' level');
+    ok(R.rms(x, x.length - 3000) < 0.002, 'note ' + midi + ' releases');
+  }
+  for (const tb of ['keys', 'soft', 'pluck']) { const r = R.makeRig(SR); ok(r.A.note(60, 0.6, { timbre: tb }), 'timbre ' + tb); r.run(1); const x = r.out(); ok(!R.hasNaN(x) && R.peak(x) > 0.1, 'timbre ' + tb + ' sounds'); }
+  // chord: all notes present, level stays sane
+  const rc = R.makeRig(SR); const ch = rc.A.chord([60, 64, 67], 1.2); rc.run(1.6); const xc = rc.out();
+  ok(ch && ch.end > ch.t0, 'chord returns timing');
+  ok(R.peak(xc) < 0.8 && !R.hasNaN(xc), 'chord level');
+  // interval: melodic a, b, then both together
+  const ri = R.makeRig(SR, { log: true }); const iv = ri.A.interval(60, 67, { dur: 0.5, gap: 0.1 }); ri.run(3);
+  ok(iv && iv.parts.length === 3, 'interval has 3 parts (a, b, together)');
+  near(iv.parts[1].t - iv.parts[0].t, 0.6, 1e-9, 'melodic notes are dur + gap apart');
+  near(iv.parts[2].t - iv.parts[1].t, 0.6, 1e-9, 'harmonic part follows');
+  eq(iv.parts.map((p) => p.notes), [[60], [67], [60, 67]], 'interval part notes');
+  const tones = ri.A.log.filter((e) => e.k === 'tone');
+  eq(tones.length, 4, 'interval plays 4 tones');
+  const xi = ri.out();
+  const fa = f0Of(xi, SR, Math.round((iv.parts[0].t + 0.05) * SR), 8192), fb = f0Of(xi, SR, Math.round((iv.parts[1].t + 0.05) * SR), 8192);
+  near(1200 * Math.log2(fb / fa), 700, 8, 'the rendered fifth is a fifth');
+  const h = ri.A.interval(60, 64, { melodic: false }); ok(h && h.parts.length === 1 && h.parts[0].notes.length === 2, 'melodic:false plays it together only');
+  const m = ri.A.interval(60, 64, { harmonic: false }); ok(m && m.parts.length === 2, 'harmonic:false plays the two notes only');
+  eq(ri.A.note(NaN, 1), false, 'bad midi ignored'); eq(ri.A.chord([], 1), false, 'empty chord ignored');
+  // muted and sfx volume
+  const mu = R.makeRig(SR); mu.A.setMuted(true); eq(mu.A.note(60, 0.5), false, 'muted: note is not played');
+  const sv = R.makeRig(SR); sv.A.setVolume({ sfx: 0 }); sv.A.note(60, 0.5, { when: 0.3 }); sv.run(1.2); ok(R.peak(sv.out()) < 0.002, 'sfx volume 0 silences tones');
+}
+
 /* ---------------------------------------------------------------- hygiene */
 for (const f of [path.join(ROOT, 'audio.js'), path.join(ROOT, '..', 'tests', 'beatbox_heroes_audio.test.mjs'), path.join(ROOT, '..', 'tools', 'beatbox_heroes', 'audio_render.mjs')]) {
   const s = fs.readFileSync(f, 'utf8');
