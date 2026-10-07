@@ -144,4 +144,16 @@ S.spinFree = 0; S.gems = 0; t.ok(EI.spinWheel() === null, 'no ticket and no gems
 S.spinFree = 3; EI.save(); EI.initGame(true); t.ok(EI.S.spinFree === 3, 'spin tickets survive a reload');
 EI.S.started = true; EI.prestige(); t.ok(EI.S.spinFree === 3, 'spin tickets survive an Encore Tour');
 
+// ---- render pass: cached gradients, derived biome colours, the baked minimap, table-driven wheel and daily gifts ----
+S = EI.S; S.started = true; tipsOff(); S.sheet = null; S.modal = null;
+{ const g1 = EI.vgrad(20, '#000000', '#ffffff'); t.ok(EI.vgrad(20, '#000000', '#ffffff') === g1 && EI.vgrad(21, '#000000', '#ffffff') !== g1 && EI.vgrad(20, '#000001', '#ffffff') !== g1, 'vertical gradients are cached per height and colour pair');
+  t.ok(EI.hgrad(230, '#ff9ac8', '#9af0b4') === EI.hgrad(230, '#ff9ac8', '#9af0b4') && EI.pgrad(42, '#7a5cd8', '#3a2a8a') === EI.pgrad(42, '#7a5cd8', '#3a2a8a') && EI.ggrad(2, 80, '#ffd678') === EI.ggrad(2, 80, '#ffd678'), 'horizontal, disc and glow gradients too'); }
+{ const B = EI.BIOMES[2], P = EI.biomePal(B); t.ok(P === EI.biomePal(B) && /^rgb\(/.test(P.cliffDark) && /^rgba\(/.test(P.edge) && /^rgba\(/.test(P.mist), 'derived biome colours are built once per biome'); }
+EI.draw(0.016); { const n = S.lands.length; t.ok(EI.MINI.n === n && EI.MINI.sc > 0 && isFinite(EI.MINI.mx), 'the minimap chart is baked for the current land count'); EI.addLand(); EI.draw(0.016); t.ok(EI.MINI.n === n + 1, 'and re-baked when a land opens'); }
+{ S.gems = 2000; S.spinFree = 0; const seen = {}; for (let i = 0; i < 80; i++) { const w = EI.spinWheel(); seen[EI.WHEEL[w.idx].id] = w.msg; }
+  t.ok(Object.keys(seen).length >= 6 && Object.values(seen).every(m => typeof m === 'string' && m.length > 0), 'every wheel segment pays out through its table entry (' + Object.keys(seen).length + ' of ' + EI.WHEEL.length + ' kinds seen)'); }
+{ const RAR = [{ w: 0 }, { w: 1 }, { w: 0 }]; let all1 = true; for (let i = 0; i < 20; i++) if (EI.pickWeighted(RAR) !== 1) all1 = false; t.ok(all1, 'weighted pick never lands on a zero-weight entry'); }
+{ S.login = { day: 0, last: '' }; const g0 = S.gems, w0 = S.wallet; let ok = true; for (let d = 0; d < 7; d++) { S.login.last = ''; if (!EI.claimLogin()) ok = false; }
+  t.ok(ok && S.login.day === 7 && S.gems > g0 && S.wallet > w0, 'the 7-day gift cycle claims every day through its table'); }
+
 t.done();

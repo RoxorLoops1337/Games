@@ -22,7 +22,7 @@ function drawSheet() {
   hits.push({ x, y: top, w, h, act: () => {} });
   // sheet body
   ctx.fillStyle = HV.line; rr(x - 3, top - 3, w + 6, h + 6, 24); ctx.fill();
-  const g = ctx.createLinearGradient(0, top, 0, bot); g.addColorStop(0, '#3a2a86'); g.addColorStop(1, '#1d1450'); ctx.fillStyle = g; rr(x, top, w, h, 21); ctx.fill();
+  ctx.translate(0, top); ctx.fillStyle = vgrad(h, '#3a2a86', '#1d1450'); rr(x, 0, w, h, 21); ctx.fill(); ctx.translate(0, -top);
   ctx.strokeStyle = 'rgba(255,244,230,0.45)'; ctx.lineWidth = 1.5; rr(x + 3, top + 3, w - 6, h - 6, 18); ctx.stroke();
   const d = SHEETS[sh.id]; drawIcon(d.icon, x + 34, top + 30, 42); ctx.font = font(26); const ttw = ctx.measureText(d.title.toUpperCase()).width; stickerText(d.title.toUpperCase(), x + 66 + ttw / 2, top + 40, 26, '#fff6c0', '#ffb640', 0);
   disc(x + w - 28, top + 28, 16, '#ff9a8a', '#e8384f'); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w - 34, top + 22); ctx.lineTo(x + w - 22, top + 34); ctx.moveTo(x + w - 22, top + 22); ctx.lineTo(x + w - 34, top + 34); ctx.stroke(); ctx.lineCap = 'butt';

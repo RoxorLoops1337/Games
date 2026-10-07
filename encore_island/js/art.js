@@ -13,7 +13,9 @@ function setupCtx(c) {
       dark = v ? (v[0] * 0.3 + v[1] * 0.59 + v[2] * 0.11) < 105 : false; lumc.set(fs, dark);
     }
     if (dark) return ft.call(this, t, x, y, mw);
-    this.save(); this.lineJoin = 'round'; this.strokeStyle = 'rgba(45,23,15,0.88)'; this.lineWidth = Math.max(2, sz * 0.22); this.strokeText(t, x, y); this.restore();
+    const lj = this.lineJoin, ss = this.strokeStyle, lw = this.lineWidth; // the outline only touches three properties: put them back by hand instead of save/restore
+    this.lineJoin = 'round'; this.strokeStyle = 'rgba(45,23,15,0.88)'; this.lineWidth = Math.max(2, sz * 0.22); this.strokeText(t, x, y);
+    this.lineJoin = lj; this.strokeStyle = ss; this.lineWidth = lw;
     ft.call(this, t, x, y, mw);
   };
 }
@@ -56,46 +58,73 @@ function artDraw(name, anim, fr, x, y, k, flip, alpha) {
   const s = ART.spr[name]; if (!s) return false;
   const f = artFrame(name, anim, fr), im = ART.sheets[s.sheet], w = s.w * k, h = s.h * k;
   if (alpha !== undefined) ctx.globalAlpha = alpha;
-  if (flip) { ctx.save(); ctx.translate(x, y); ctx.scale(-1, 1); ctx.drawImage(im, s.x + f * s.w, s.y, s.w, s.h, -s.ax * k, -s.ay * k, w, h); ctx.restore(); }
+  if (flip) { ctx.translate(x, y); ctx.scale(-1, 1); ctx.drawImage(im, s.x + f * s.w, s.y, s.w, s.h, -s.ax * k, -s.ay * k, w, h); ctx.scale(-1, 1); ctx.translate(-x, -y); } // mirror in place, no save/restore
   else ctx.drawImage(im, s.x + f * s.w, s.y, s.w, s.h, x - s.ax * k, y - s.ay * k, w, h);
   if (alpha !== undefined) ctx.globalAlpha = 1;
   return true;
+}
+// ---- gradient cache. The UI kit used to create ~100 CanvasGradient objects per frame for the same few looks. Cached gradients are
+// defined at the origin (a vertical one runs from (0,0) to (0,h)); the caller translates to where the shape sits, fills, translates back.
+// Keys are nested Maps (colour, colour, size) so a lookup allocates nothing. A gradient works on any 2D context, so baking sprites is safe.
+const VGRADS = new Map(), PGRADS = new Map(), GGRADS = new Map();
+function gget(root, k1, k2, k3) { const a = root.get(k1); if (!a) return undefined; const b = a.get(k2); return b && b.get(k3); }
+function gset(root, k1, k2, k3, g) { let a = root.get(k1); if (!a) root.set(k1, a = new Map()); let b = a.get(k2); if (!b) a.set(k2, b = new Map()); if (b.size > 64) b.clear(); b.set(k3, g); return g; }
+function vgrad(h, c1, c2) { // vertical, c1 at the top edge, c2 at the bottom
+  let g = gget(VGRADS, c1, c2, h);
+  if (!g) { g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, c1); g.addColorStop(1, c2); gset(VGRADS, c1, c2, h, g); }
+  return g;
+}
+const HGRADS = new Map();
+function hgrad(w, c1, c2) { // horizontal, c1 at the left edge, c2 at the right
+  let g = gget(HGRADS, c1, c2, w);
+  if (!g) { g = ctx.createLinearGradient(0, 0, w, 0); g.addColorStop(0, c1); g.addColorStop(1, c2); gset(HGRADS, c1, c2, w, g); }
+  return g;
+}
+function pgrad(r, c1, c2) { // lit disc: highlight up-left of the centre, c2 at the rim
+  let g = gget(PGRADS, c1, c2, r);
+  if (!g) { g = ctx.createRadialGradient(-r * 0.3, -r * 0.4, r * 0.1, 0, 0, r); g.addColorStop(0, c1); g.addColorStop(1, c2); gset(PGRADS, c1, c2, r, g); }
+  return g;
+}
+function ggrad(r0, r1, col) { // glow: col from radius r0 fading to transparent at r1 (scale with globalAlpha, never with the colour)
+  let g = gget(GGRADS, col, r0, r1);
+  if (!g) { g = ctx.createRadialGradient(0, 0, r0, 0, 0, r1); g.addColorStop(0, col); g.addColorStop(1, rgba(col, 0)); gset(GGRADS, col, r0, r1, g); }
+  return g;
 }
 // round avatar cropped from a baked hero frame
 function artHead(name, x, y, r) {
   const sp = ART.ready && ART.spr[name];
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, y + 1.5, r + 3, 0, TAU); ctx.fill();
-  const g = ctx.createLinearGradient(0, y - r, 0, y + r); g.addColorStop(0, '#ffd9ea'); g.addColorStop(1, '#a77bff'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.translate(x, y - r); ctx.fillStyle = vgrad(r * 2, '#ffd9ea', '#a77bff'); ctx.beginPath(); ctx.arc(0, r, r, 0, TAU); ctx.fill(); ctx.translate(-x, r - y);
   if (sp) { ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip(); const a = sp.anims && sp.anims.idle || [0, 1], k = (r * 2.5) / 110; ctx.drawImage(ART.sheets[sp.sheet], sp.x + a[0] * sp.w + 24, sp.y + 6, 112, 112, x - r * 1.25, y - r * 1.12, 112 * k, 112 * k); ctx.restore(); }
   ctx.strokeStyle = HV.cream; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
 }
 // ---- UI kit ----
 function plaque(x, y, w, h, r) { // indigo stage plaque: warm outline, cream hairline
   ctx.fillStyle = HV.line; rr(x - 2, y - 2, w + 4, h + 4, r + 2); ctx.fill();
-  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4a3394'); g.addColorStop(1, '#241857'); ctx.fillStyle = g; rr(x, y, w, h, r); ctx.fill();
+  ctx.translate(0, y); ctx.fillStyle = vgrad(h, '#4a3394', '#241857'); rr(x, 0, w, h, r); ctx.fill(); ctx.translate(0, -y);
   ctx.strokeStyle = 'rgba(255,244,230,0.55)'; ctx.lineWidth = 1.2; rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(2, r - 1.5)); ctx.stroke();
 }
 function card(x, y, w, h, r) { // cream paper card
   ctx.fillStyle = 'rgba(40,20,80,0.25)'; rr(x + 2, y + 5, w, h, r); ctx.fill();
   ctx.fillStyle = HV.line; rr(x - 2.5, y - 2.5, w + 5, h + 5, r + 2.5); ctx.fill();
-  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#fffaf1'); g.addColorStop(1, '#ffe8d2'); ctx.fillStyle = g; rr(x, y, w, h, r); ctx.fill();
+  ctx.translate(0, y); ctx.fillStyle = vgrad(h, '#fffaf1', '#ffe8d2'); rr(x, 0, w, h, r); ctx.fill(); ctx.translate(0, -y);
 }
 function pill(x, y, w, h, c1, c2) {
   const r = Math.min(h / 2, 16);
   ctx.fillStyle = HV.line; rr(x - 2, y - 1, w + 4, h + 5, r + 2); ctx.fill();
-  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; rr(x, y, w, h, r); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.38)'; rr(x + 3, y + 2, w - 6, h * 0.38, r * 0.7); ctx.fill();
+  ctx.translate(0, y); ctx.fillStyle = vgrad(h, c1, c2); rr(x, 0, w, h, r); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.38)'; rr(x + 3, 2, w - 6, h * 0.38, r * 0.7); ctx.fill(); ctx.translate(0, -y);
 }
 function disc(x, y, r, c1, c2) {
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, y + 1.5, r + 2.5, 0, TAU); ctx.fill();
-  const g = ctx.createLinearGradient(0, y - r, 0, y + r); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.translate(x, y - r); ctx.fillStyle = vgrad(r * 2, c1, c2); ctx.beginPath(); ctx.arc(0, r, r, 0, TAU); ctx.fill(); ctx.translate(-x, r - y);
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(x, y - r * 0.5, r * 0.62, r * 0.34, 0, 0, TAU); ctx.fill();
 }
 const CBTN = { go: ['#7cf09a', '#25a84f'], gold: ['#ffe98a', '#f0b422'], pink: ['#ff9ac8', '#f0599a'], violet: ['#c6a8ff', '#8a5cf0'], off: ['#6a5aa0', '#3e3076'], red: ['#ff9a8a', '#e8384f'] };
 function cbtn(x, y, w, h, on, kind) { const c = on ? CBTN[kind || 'go'] : CBTN.off; pill(x, y, w, h, c[0], c[1]); }
 function gbar(x, y, w, h, f, c1, c2) {
   ctx.fillStyle = HV.line; rr(x - 1.5, y - 1.5, w + 3, h + 3, (h + 3) / 2); ctx.fill(); ctx.fillStyle = 'rgba(20,10,50,0.85)'; rr(x, y, w, h, h / 2); ctx.fill();
-  if (f > 0.005) { const bw = Math.max(h, w * Math.min(1, f)), g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; rr(x, y, bw, h, h / 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.4)'; rr(x + 2, y + 1.5, bw - 4, h * 0.34, h * 0.17); ctx.fill(); }
+  if (f > 0.005) { const bw = Math.max(h, w * Math.min(1, f)); ctx.translate(0, y); ctx.fillStyle = vgrad(h, c1, c2); rr(x, 0, bw, h, h / 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.4)'; rr(x + 2, 1.5, bw - 4, h * 0.34, h * 0.17); ctx.fill(); ctx.translate(0, -y); }
 }
 function labelPill(txt, x, y, c1, c2, px) {
   ctx.font = font(px || 12); ctx.textAlign = 'center'; const w = ctx.measureText(txt).width + 22;
@@ -105,7 +134,7 @@ function labelPill(txt, x, y, c1, c2, px) {
 function stickerText(txt, x, y, px, c1, c2, rot) {
   ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.font = font(px); ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   ctx.strokeStyle = HV.line; ctx.lineWidth = px * 0.34; ctx.strokeText(txt, 0, 0); ctx.strokeStyle = HV.cream; ctx.lineWidth = px * 0.16; ctx.strokeText(txt, 0, 0);
-  const g = ctx.createLinearGradient(0, -px, 0, 0); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; (fillRaw || ctx.fillText).call(ctx, txt, 0, 0); ctx.restore();
+  ctx.translate(0, -px); ctx.fillStyle = vgrad(px, c1, c2); (fillRaw || ctx.fillText).call(ctx, txt, 0, px); ctx.restore();
 }
 // seamless 256px ground tiles (grass tufts + flowers, cobbles, sand) baked once and used as canvas patterns
 const PAT = new Map();

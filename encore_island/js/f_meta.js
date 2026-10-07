@@ -79,9 +79,14 @@ function seasDrawFx() { // screen-space season tint + <= 28 ambient particles (n
     const fx = sd.fx, N = fx === 'snow' ? 28 : 22;
     for (let i = 0; i < N; i++) {
       const sp = 0.04 + (i % 6) * 0.007, ph = (t * sp + i * 0.137) % 1, bx = (((i * 0.6180339) % 1) * vw) + Math.sin(t * 0.7 + i * 1.7) * 18, by = ph * (vh + 40) - 20;
-      if (fx === 'petal') { ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.6; ctx.fillStyle = i % 3 ? '#ffb6d6' : '#fff0f6'; ctx.save(); ctx.translate(bx, by); ctx.rotate(t * 1.2 + i); ctx.scale(1, 0.5 + 0.5 * Math.abs(Math.sin(t * 2 + i))); ctx.beginPath(); ctx.ellipse(0, 0, 6, 3.4, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+      if (fx === 'petal') { ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.6; ctx.fillStyle = i % 3 ? '#ffb6d6' : '#fff0f6'; ctx.beginPath(); ctx.ellipse(bx, by, 6, 3.4 * (0.5 + 0.5 * Math.abs(Math.sin(t * 2 + i))), t * 1.2 + i, 0, TAU); ctx.fill(); }
       else if (fx === 'firefly') { const fy = vh * (0.25 + ((i * 0.37) % 0.6)) + Math.sin(t * 0.6 + i * 2.1) * 26, fxx = bx + Math.cos(t * 0.5 + i) * 22, a = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.6 + i * 1.3)); ctx.globalAlpha = a * 0.35; ctx.fillStyle = '#fff6a0'; ctx.beginPath(); ctx.arc(fxx, fy, 8, 0, TAU); ctx.fill(); ctx.globalAlpha = a; ctx.fillStyle = '#fffbd0'; ctx.beginPath(); ctx.arc(fxx, fy, 2.4, 0, TAU); ctx.fill(); }
-      else if (fx === 'leaf') { ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.75; ctx.fillStyle = i % 3 === 0 ? '#e0662a' : i % 3 === 1 ? '#f0a02a' : '#b84a22'; ctx.save(); ctx.translate(bx + Math.sin(t * 1.4 + i) * 14, by); ctx.rotate(t * 1.6 + i * 2); ctx.beginPath(); ctx.moveTo(0, -6); ctx.quadraticCurveTo(6, 0, 0, 7); ctx.quadraticCurveTo(-6, 0, 0, -6); ctx.fill(); ctx.restore(); }
+      else if (fx === 'leaf') { // the leaf's four control points are rotated by hand instead of save/translate/rotate/restore
+        ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.75; ctx.fillStyle = i % 3 === 0 ? '#e0662a' : i % 3 === 1 ? '#f0a02a' : '#b84a22';
+        const lx = bx + Math.sin(t * 1.4 + i) * 14, ca = Math.cos(t * 1.6 + i * 2), sa = Math.sin(t * 1.6 + i * 2), R = (x, y) => [lx + x * ca - y * sa, by + x * sa + y * ca];
+        const tip = R(0, -6), r1 = R(6, 0), bot = R(0, 7), l1 = R(-6, 0);
+        ctx.beginPath(); ctx.moveTo(tip[0], tip[1]); ctx.quadraticCurveTo(r1[0], r1[1], bot[0], bot[1]); ctx.quadraticCurveTo(l1[0], l1[1], tip[0], tip[1]); ctx.fill();
+      }
       else { ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.85; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(bx + Math.sin(t * 0.9 + i) * 10, by, 1.8 + (i % 4) * 0.7, 0, TAU); ctx.fill(); }
     }
     ctx.globalAlpha = 1;
@@ -393,7 +398,7 @@ regFeature({
   onLoad() { bkRefresh(); }, onTour() { bkRefresh(); },
   tick(dt) {
     const st = S.feat.book; BK.t -= dt;
-    if (BK.t <= 0) { BK.t = 0.6; for (const e of S.player.helmets) if (e && e.k && !e.gem) st.helm[e.k] = 1; bkScanGear(); bkRefresh(); if (!st.ready) { st.ready = true; for (const p of BOOK_PAGES) bkAck(p.id); } if (BK.view && S.t - BK.viewT > 0.5) { bkAck(BK.view); BK.view = null; } }
+    if (BK.t <= 0) { BK.t = S.sheet && S.sheet.tab === 'book' ? 0.6 : 3; for (const e of S.player.helmets) if (e && e.k && !e.gem) st.helm[e.k] = 1; bkScanGear(); bkRefresh(); if (!st.ready) { st.ready = true; for (const p of BOOK_PAGES) bkAck(p.id); } if (BK.view && S.t - BK.viewT > 0.5) { bkAck(BK.view); BK.view = null; } }
   },
   on: {
     kill(e) { const st = S.feat.book; st.sp[(e.k - 1) % 24] = 1; if (e.boss) st.boss[foeAct(e.k)] = 1; },

@@ -87,7 +87,9 @@ function buySkin(id) {
   toast('New outfit: ' + s.name, 'heart'); sfx('built', true); starBurst(S.player.x, S.player.y - 40, 16, ['#ff9ac8', '#ffe98a'], 260); save(); return true;
 }
 // ---- pets ----
-function rollRarity() { const tot = RARITY.reduce((s, r) => s + r.w, 0); let x = vrnd() * tot; for (let i = 0; i < RARITY.length; i++) { x -= RARITY[i].w; if (x < 0) return i; } return 0; }
+// weighted pick over a list of {w} entries (pet rarities, wheel segments); returns the index, from the visual RNG stream
+function pickWeighted(list) { let tot = 0; for (const e of list) tot += e.w; let x = vrnd() * tot; for (let i = 0; i < list.length; i++) { x -= list[i].w; if (x < 0) return i; } return 0; }
+const rollRarity = () => pickWeighted(RARITY);
 function hatchEgg() {
   const c = eggCost(S.stats.hatches); if (S.gems < c) { sfx('hurt'); return null; }
   S.gems -= c; S.stats.hatches++;
@@ -123,34 +125,41 @@ function castUlt() {
   return true;
 }
 // ---- wheel + daily gifts ----
+// what each wheel segment pays out (keyed by WHEEL id); each returns the toast text
+const WHEEL_GIVE = {
+  coins: (lv) => { const g = Math.ceil(120 * helmVal(lv) * coinMul()); S.wallet += g; S.stats.earned += g; return '+' + fmt(g) + ' coins'; },
+  gems: () => { S.gems += 3; S.stats.gemsFound += 3; return '+3 gems'; },
+  boon: () => { S.groove = GROOVE_NEED - 1; S.grooveT = 8; return 'Groove nearly full!'; },
+  gold: () => { S.goldRushT = Math.max(S.goldRushT, 15); return 'Gold Rush 15s'; },
+  egg: () => { S.gems += eggCost(S.stats.hatches); const r = hatchEgg(); return r ? 'a critter: ' + r.def.name : 'a critter!'; },
+  xp: () => { grantXp(xpNeed(S.level) * 0.6); return 'XP boost'; },
+  hp: () => { S.player.hp = S.player.maxHp; return 'Full heal'; },
+  jack: (lv) => { S.gems += 15; S.stats.gemsFound += 15; const g = Math.ceil(400 * helmVal(lv) * coinMul()); S.wallet += g; S.stats.earned += g; return '+15 gems +' + fmt(g); },
+};
 const spinFree = () => (S.spinFree || 0) > 0; // Arena tickets pay for a spin before gems do
 function spinWheel() {
   const free = spinFree();
   if (!free && S.gems < SPIN_COST) { sfx('hurt'); return null; }
   if (free) S.spinFree--; else S.gems -= SPIN_COST;
   S.stats.spins++;
-  const tot = WHEEL.reduce((s, w) => s + w.w, 0); let x = vrnd() * tot, idx = 0;
-  for (let i = 0; i < WHEEL.length; i++) { x -= WHEEL[i].w; if (x < 0) { idx = i; break; } }
-  const w = WHEEL[idx], lv = Math.max(1, S.lands.length); let msg = '';
-  if (w.id === 'coins') { const g = Math.ceil(120 * helmVal(lv) * coinMul()); S.wallet += g; S.stats.earned += g; msg = '+' + fmt(g) + ' coins'; }
-  else if (w.id === 'gems') { S.gems += 3; S.stats.gemsFound += 3; msg = '+3 gems'; }
-  else if (w.id === 'boon') { S.groove = GROOVE_NEED - 1; S.grooveT = 8; msg = 'Groove nearly full!'; }
-  else if (w.id === 'gold') { S.goldRushT = Math.max(S.goldRushT, 15); msg = 'Gold Rush 15s'; }
-  else if (w.id === 'egg') { S.gems += eggCost(S.stats.hatches); const r = hatchEgg(); msg = r ? 'a critter: ' + r.def.name : 'a critter!'; }
-  else if (w.id === 'xp') { grantXp(xpNeed(S.level) * 0.6); msg = 'XP boost'; }
-  else if (w.id === 'hp') { S.player.hp = S.player.maxHp; msg = 'Full heal'; }
-  else { S.gems += 15; S.stats.gemsFound += 15; const g = Math.ceil(400 * helmVal(lv) * coinMul()); S.wallet += g; S.stats.earned += g; msg = '+15 gems +' + fmt(g); }
+  const idx = pickWeighted(WHEEL), msg = WHEEL_GIVE[WHEEL[idx].id](Math.max(1, S.lands.length));
   S.wheel = { idx, msg, spinT: 0 }; sfx('spin', true); save();
   return S.wheel;
 }
+// the 7-day gift cycle, index-aligned with DAILY in data.js; each returns the toast text
+const DAILY_GIVE = [
+  (lv) => { const g = Math.ceil(40 * helmVal(lv) * coinMul()); S.wallet += g; return '+' + fmt(g); },
+  () => { S.gems += 3; return '+3 gems'; },
+  (lv) => { const g = Math.ceil(90 * helmVal(lv) * coinMul()); S.wallet += g; return '+' + fmt(g); },
+  () => { S.groove = GROOVE_NEED - 1; S.grooveT = 10; return 'Groove boost'; },
+  () => { S.gems += 6; return '+6 gems'; },
+  () => { S.goldRushT = 20; return 'Gold Rush'; },
+  (lv) => { S.gems += 12; const g = Math.ceil(220 * helmVal(lv) * coinMul()); S.wallet += g; return '+12 gems +' + fmt(g); },
+];
 const loginReady = () => S.login.last !== dayStr();
 function claimLogin() {
   if (!loginReady()) return false;
-  const d = S.login.day % 7, lv = Math.max(1, S.lands.length); let msg = '';
-  if (d === 0) { const g = Math.ceil(40 * helmVal(lv) * coinMul()); S.wallet += g; msg = '+' + fmt(g); }
-  else if (d === 1) { S.gems += 3; msg = '+3 gems'; } else if (d === 2) { const g = Math.ceil(90 * helmVal(lv) * coinMul()); S.wallet += g; msg = '+' + fmt(g); }
-  else if (d === 3) { S.groove = GROOVE_NEED - 1; S.grooveT = 10; msg = 'Groove boost'; } else if (d === 4) { S.gems += 6; msg = '+6 gems'; }
-  else if (d === 5) { S.goldRushT = 20; msg = 'Gold Rush'; } else { S.gems += 12; const g = Math.ceil(220 * helmVal(lv) * coinMul()); S.wallet += g; msg = '+12 gems +' + fmt(g); }
+  const msg = DAILY_GIVE[S.login.day % 7](Math.max(1, S.lands.length));
   S.stats.logins++; S.login.day++; S.login.last = dayStr(); toast('Daily gift: ' + msg, 'gift'); sfx('win', true); starBurst(S.player.x, S.player.y - 40, 22, ['#ffe98a', '#ff9ac8', '#9af0b4'], 300); save();
   return true;
 }
