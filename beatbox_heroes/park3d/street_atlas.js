@@ -1,0 +1,102 @@
+// Neon Row decal atlas (W-STREET): ONE 2048x1024 canvas holding every sign, notice, map board and graffiti tag on the street. Canvas drawn, no image files.
+// makeStreetAtlas() -> { tex, rect: { name: [u0,v0,u1,v1] }, glow: texture (radial + streak cells for additive halos), W, H }
+import { THREE } from './kit.js';
+
+const FONT = '"Arial Black","Trebuchet MS",system-ui,sans-serif';
+const INK = '#2b2438', CREAM = '#fff2dc', PINK = '#ff3ea5', CYAN = '#2ee6ff', YEL = '#ffe14d', LIME = '#9dff4a', VIO = '#a86bff', RED = '#ff4a3d', ORANGE = '#ff8a3d';
+function rnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const rr = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+function txt(g, s, x, y, size, color, o) {
+  o = o || {}; g.font = (o.weight || 'bold') + ' ' + size + 'px ' + FONT; g.textAlign = o.align || 'center'; g.textBaseline = 'middle';
+  if (o.glow) { g.shadowColor = o.glow; g.shadowBlur = o.blur || 12; }
+  if (o.stroke) { g.lineWidth = o.sw || 4; g.strokeStyle = o.stroke; g.lineJoin = 'round'; g.strokeText(s, x, y); }
+  g.fillStyle = color; g.fillText(s, x, y); g.shadowBlur = 0; g.shadowColor = 'transparent';
+}
+// neon tube text: a dark outline, a wide coloured halo, then a hot white core
+function neon(g, s, x, y, size, color, o) {
+  o = o || {}; g.font = 'bold ' + size + 'px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  g.shadowColor = color; g.shadowBlur = size * 0.35; g.lineWidth = size * 0.16; g.strokeStyle = color; g.strokeText(s, x, y);
+  g.shadowBlur = 0; g.lineWidth = size * 0.07; g.strokeStyle = o.core || '#ffe3f0'; g.strokeText(s, x, y); g.fillStyle = o.fill || 'rgba(255,255,255,0.12)'; g.fillText(s, x, y);
+}
+const grad = (g, x0, y0, x1, y1, stops) => { const gr = g.createLinearGradient(x0, y0, x1, y1); stops.forEach(([t, c]) => gr.addColorStop(t, c)); return gr; };
+function panel(g, w, h, bg, edge, r) { g.fillStyle = bg; rr(g, 2, 2, w - 4, h - 4, r === undefined ? 10 : r); g.fill(); if (edge) { g.lineWidth = 5; g.strokeStyle = edge; g.shadowColor = edge; g.shadowBlur = 10; rr(g, 8, 8, w - 16, h - 16, Math.max(2, (r || 10) - 4)); g.stroke(); g.shadowBlur = 0; } }
+function padlock(g, cx, cy, s, body, shackle) { g.save(); g.translate(cx, cy); g.scale(s, s); g.lineWidth = 9; g.strokeStyle = shackle; g.lineCap = 'round'; g.beginPath(); g.moveTo(-18, -4); g.lineTo(-18, -22); g.arc(0, -22, 18, Math.PI, 0); g.lineTo(18, -4); g.stroke(); g.fillStyle = body; rr(g, -28, -6, 56, 44, 8); g.fill(); g.fillStyle = INK; g.beginPath(); g.arc(0, 12, 6, 0, 7); g.fill(); g.fillRect(-3, 14, 6, 14); g.restore(); }
+
+export function makeStreetAtlas() {
+  const W = 2048, H = 1024, rect = {}, jobs = [];
+  const item = (name, x, y, w, h, fn) => { rect[name] = [x / W, 1 - (y + h) / H, (x + w) / W, 1 - y / H]; jobs.push([x, y, w, h, fn]); };
+
+  // ---------- neon + shop signs ----------
+  item('open', 0, 0, 256, 128, (g, w, h) => { panel(g, w, h, '#1c1030', LIME, 16); neon(g, 'OPEN', w / 2, h / 2 + 2, 62, LIME); g.fillStyle = PINK; g.shadowColor = PINK; g.shadowBlur = 8; for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(24 + i * 26, 20, 3.4, 0, 7); g.arc(24 + i * 26, h - 20, 3.4, 0, 7); g.fill(); } g.shadowBlur = 0; });
+  item('closed', 256, 0, 256, 128, (g, w, h) => { panel(g, w, h, '#25121a', RED, 16); neon(g, 'CLOSED', w / 2, h / 2 + 2, 50, RED, { core: '#ffd0c8' }); });
+  item('lock', 512, 0, 128, 128, (g, w, h) => { g.fillStyle = 'rgba(33,22,48,0.92)'; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill(); g.lineWidth = 6; g.strokeStyle = RED; g.shadowColor = RED; g.shadowBlur = 10; g.stroke(); g.shadowBlur = 0; padlock(g, 64, 62, 1.0, '#c9c4d6', '#8d86a6'); });
+  item('onair', 640, 0, 256, 96, (g, w, h) => { panel(g, w, h, '#2a0f16', RED, 12); g.fillStyle = RED; g.shadowColor = RED; g.shadowBlur = 14; g.beginPath(); g.arc(44, h / 2, 14, 0, 7); g.fill(); g.shadowBlur = 0; neon(g, 'ON AIR', 156, h / 2 + 2, 46, RED, { core: '#ffe0d8' }); });
+  item('thrift', 896, 0, 512, 128, (g, w, h) => { g.fillStyle = grad(g, 0, 0, 0, h, [[0, '#1f7c78'], [1, '#14524f']]); rr(g, 2, 2, w - 4, h - 4, 14); g.fill(); g.lineWidth = 5; g.strokeStyle = YEL; rr(g, 9, 9, w - 18, h - 18, 10); g.stroke(); txt(g, 'THRIFT', w / 2 - 6, h / 2 + 4, 78, '#ffe9a6', { stroke: '#7a3a1a', sw: 7, glow: '#ffb347', blur: 8 }); g.fillStyle = PINK; for (let i = 0; i < 2; i++) { const cx = i ? w - 44 : 44; g.beginPath(); for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283 - 1.57, r = k % 2 ? 9 : 20; g.lineTo(cx + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } g.closePath(); g.fill(); } });
+  item('soundlab', 1408, 0, 512, 128, (g, w, h) => { panel(g, w, h, '#0e1230', CYAN, 14); neon(g, 'SOUND LAB', w / 2, h / 2 + 2, 70, CYAN); g.strokeStyle = VIO; g.lineWidth = 4; g.shadowColor = VIO; g.shadowBlur = 8; g.beginPath(); for (let x = 20; x < 90; x += 4) g.lineTo(x, h / 2 + Math.sin(x * 0.4) * 22 * Math.sin((x - 20) / 70 * 3.14)); g.stroke(); g.beginPath(); for (let x = w - 90; x < w - 20; x += 4) g.lineTo(x, h / 2 + Math.sin(x * 0.4) * 22 * Math.sin((x - w + 90) / 70 * 3.14)); g.stroke(); g.shadowBlur = 0; });
+  item('bar', 0, 128, 512, 256, (g, w, h) => { panel(g, w, h, '#1a0b24', PINK, 22); neon(g, 'BAR', 170, h / 2 + 6, 132, PINK); g.save(); g.translate(402, h / 2 + 2); g.lineJoin = 'round'; g.lineCap = 'round';
+    g.fillStyle = 'rgba(46,230,255,0.55)'; g.beginPath(); g.moveTo(-34, -52); g.lineTo(34, -52); g.lineTo(0, -6); g.closePath(); g.fill();
+    g.strokeStyle = CYAN; g.lineWidth = 10; g.shadowColor = CYAN; g.shadowBlur = 16; g.beginPath(); g.moveTo(-50, -72); g.lineTo(50, -72); g.lineTo(0, -2); g.closePath(); g.moveTo(0, -2); g.lineTo(0, 64); g.moveTo(-30, 66); g.lineTo(30, 66); g.stroke();
+    g.strokeStyle = '#d8fbff'; g.lineWidth = 3; g.shadowBlur = 0; g.beginPath(); g.moveTo(-50, -72); g.lineTo(50, -72); g.lineTo(0, -2); g.closePath(); g.stroke();
+    g.strokeStyle = LIME; g.lineWidth = 6; g.shadowColor = LIME; g.shadowBlur = 10; g.beginPath(); g.moveTo(14, -96); g.lineTo(-10, -30); g.stroke(); g.fillStyle = YEL; g.shadowColor = YEL; g.beginPath(); g.arc(34, -90, 10, 0, 7); g.fill(); g.restore(); });
+  item('park', 512, 128, 512, 128, (g, w, h) => { g.fillStyle = grad(g, 0, 0, 0, h, [[0, '#1d4a3a'], [1, '#12301f']]); rr(g, 2, 2, w - 4, h - 4, 14); g.fill(); g.lineWidth = 5; g.strokeStyle = '#e8c76a'; rr(g, 9, 9, w - 18, h - 18, 10); g.stroke(); txt(g, 'NEON CITY PARK', w / 2, h / 2 - 12, 50, '#ffe9a6', { glow: '#ffb347', blur: 8 }); txt(g, 'OPEN DAWN TO DUSK', w / 2, h / 2 + 32, 22, '#a8e6b0'); });
+  item('sale', 1024, 128, 128, 128, (g, w, h) => { g.fillStyle = YEL; g.beginPath(); for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283, r = k % 2 ? 46 : 62; g.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); } g.closePath(); g.fill(); g.fillStyle = RED; g.beginPath(); g.arc(64, 64, 38, 0, 7); g.fill(); txt(g, 'SALE', 64, 62, 28, CREAM); txt(g, '50%', 64, 88, 18, YEL); });
+  item('juice', 1152, 128, 256, 96, (g, w, h) => { g.fillStyle = '#ff8a3d'; rr(g, 2, 2, w - 4, h - 4, 14); g.fill(); g.fillStyle = '#fff2dc'; rr(g, 10, 10, w - 20, h - 20, 9); g.fill(); txt(g, 'FRESH JUICE', w / 2, h / 2 - 8, 33, '#e8501e'); txt(g, 'Pressed while you wait', w / 2, h / 2 + 22, 15, '#7a3a1a', { weight: 'normal' }); });
+  item('buzzer', 1408, 128, 128, 256, (g, w, h) => { g.fillStyle = '#9a96ac'; rr(g, 2, 2, w - 4, h - 4, 10); g.fill(); g.fillStyle = '#6a667e'; rr(g, 8, 8, w - 16, h - 16, 7); g.fill(); txt(g, '44', w / 2, 28, 24, CREAM); const L = ['1A', '1B', '2A', '2B', '3A', '4B']; for (let i = 0; i < 6; i++) { const x = 18 + (i % 2) * 52, y = 56 + Math.floor(i / 2) * 44; g.fillStyle = i === 5 ? '#ffd27a' : '#2b2438'; g.beginPath(); g.arc(x + 14, y + 14, 12, 0, 7); g.fill(); if (i === 5) { g.shadowColor = '#ffd27a'; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0; } txt(g, L[i], x + 14, y + 34, 12, i === 5 ? YEL : '#d8d4e6'); } g.fillStyle = '#2b2438'; g.fillRect(24, 196, 80, 38); g.fillStyle = '#3a8f5a'; for (let i = 0; i < 12; i++) g.fillRect(30 + (i % 4) * 18, 202 + Math.floor(i / 4) * 10, 12, 6); });
+  item('rent', 1536, 128, 128, 160, (g, w, h) => { g.fillStyle = '#ff9ab8'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd0de'; g.fillRect(0, 0, w, 6); txt(g, 'RENT', w / 2, 30, 30, '#8a1f4a'); txt(g, 'NOTICE', w / 2, 58, 26, '#8a1f4a'); g.fillStyle = '#8a1f4a'; for (let i = 0; i < 5; i++) g.fillRect(14, 78 + i * 11, w - 28 - (i === 4 ? 40 : 0), 4); g.save(); g.translate(86, 128); g.rotate(-0.25); g.lineWidth = 4; g.strokeStyle = RED; g.strokeRect(-34, -12, 68, 24); txt(g, 'FINAL', 0, 1, 18, RED); g.restore(); });
+  item('bus', 1664, 128, 128, 256, (g, w, h) => { g.fillStyle = '#2b3a7a'; rr(g, 2, 2, w - 4, h - 4, 16); g.fill(); g.fillStyle = YEL; g.beginPath(); g.arc(64, 64, 44, 0, 7); g.fill(); g.fillStyle = '#2b3a7a'; g.beginPath(); g.arc(64, 64, 38, 0, 7); g.fill(); txt(g, 'BUS', 64, 52, 24, YEL); txt(g, '22', 64, 82, 28, CREAM); const rows = [['NEON ROW', '4 min'], ['HARBOR', '9 min'], ['AIRPORT', '17 min']]; rows.forEach((r, i) => { g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(10, 126 + i * 40, 108, 34); txt(g, r[0], 14, 138 + i * 40, 14, CREAM, { align: 'left' }); txt(g, r[1], 114, 152 + i * 40, 14, LIME, { align: 'right' }); }); });
+  item('live', 1792, 128, 128, 64, (g, w, h) => { neon(g, 'LIVE', w / 2, h / 2, 40, CYAN); });
+  item('cocktail', 1792, 192, 128, 64, (g, w, h) => { neon(g, 'COCKTAILS', w / 2, h / 2, 17, YEL); });
+  item('vinyl', 1920, 128, 128, 128, (g, w, h) => { g.fillStyle = '#17102b'; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill(); g.strokeStyle = '#3a2f5c'; g.lineWidth = 1.5; for (let r = 22; r < 58; r += 6) { g.beginPath(); g.arc(64, 64, r, 0, 7); g.stroke(); } g.fillStyle = PINK; g.beginPath(); g.arc(64, 64, 20, 0, 7); g.fill(); g.fillStyle = INK; g.beginPath(); g.arc(64, 64, 4, 0, 7); g.fill(); });
+
+  // ---------- the bus stop map board (also what the MAP spot shows) ----------
+  item('map', 0, 384, 640, 400, (g, w, h) => {
+    g.fillStyle = '#2a2560'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a3478'; g.fillRect(14, 54, w - 28, h - 68);
+    txt(g, 'NEON ROW', 20, 28, 30, YEL, { align: 'left', glow: '#ffb347', blur: 6 }); txt(g, 'YOU ARE HERE', w - 20, 28, 20, PINK, { align: 'right' });
+    g.fillStyle = '#2f7a4f'; rr(g, 26, 66, 150, 120, 14); g.fill(); g.fillStyle = '#58b667'; for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(44 + (i % 3) * 44, 90 + Math.floor(i / 3) * 34, 12, 0, 7); g.fill(); } g.fillStyle = '#8be0e8'; g.beginPath(); g.arc(102, 126, 14, 0, 7); g.fill();
+    g.fillStyle = '#4a4470'; g.fillRect(14, 232, w - 28, 54); g.fillStyle = '#625b8e'; g.fillRect(14, 234, w - 28, 3); g.fillRect(14, 281, w - 28, 3); g.fillStyle = '#ffe14d'; for (let x = 24; x < w - 30; x += 40) g.fillRect(x, 257, 22, 4);
+    g.fillStyle = '#5a52a0'; g.fillRect(200, 66, 70, 150); g.fillRect(300, 66, 56, 150); g.fillRect(386, 66, 90, 150); g.fillRect(506, 66, 104, 150); g.fillStyle = '#7a70c0'; g.fillRect(200, 66, 70, 8); g.fillRect(300, 66, 56, 8); g.fillRect(386, 66, 90, 8); g.fillRect(506, 66, 104, 8);
+    g.fillStyle = '#3a3366'; for (let i = 0; i < 5; i++) g.fillRect(26 + i * 122, 300, 100, 60);
+    const pins = [[102, 150, '#58b667', 'PARK'], [235, 200, '#ff8a3d', 'HOME'], [328, 200, '#2ec4b6', 'SHOP'], [431, 200, '#a86bff', 'LAB'], [558, 200, PINK, 'BAR']];
+    pins.forEach((p) => { g.fillStyle = p[2]; g.shadowColor = p[2]; g.shadowBlur = 10; g.beginPath(); g.arc(p[0], p[1] - 24, 11, 0, 7); g.fill(); g.beginPath(); g.moveTo(p[0] - 8, p[1] - 18); g.lineTo(p[0] + 8, p[1] - 18); g.lineTo(p[0], p[1]); g.fill(); g.shadowBlur = 0; txt(g, p[3], p[0], p[1] + 14, 14, CREAM); });
+    g.strokeStyle = YEL; g.lineWidth = 3; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(102, 168); g.lineTo(102, 258); g.lineTo(380, 258); g.stroke(); g.setLineDash([]);
+    g.fillStyle = YEL; g.shadowColor = YEL; g.shadowBlur = 12; g.beginPath(); g.arc(380, 258, 9, 0, 7); g.fill(); g.shadowBlur = 0; txt(g, 'MAP', w / 2, h - 14, 16, '#a8a2d0');
+  });
+  item('menu', 640, 384, 192, 256, (g, w, h) => { g.fillStyle = '#2a2a2e'; rr(g, 2, 2, w - 4, h - 4, 8); g.fill(); g.strokeStyle = '#b58a5a'; g.lineWidth = 8; rr(g, 6, 6, w - 12, h - 12, 6); g.stroke(); txt(g, 'TONIGHT', w / 2, 38, 28, CREAM, { weight: 'bold' }); g.fillStyle = PINK; g.fillRect(30, 58, w - 60, 4); txt(g, 'LIVE BEATS', w / 2, 92, 24, YEL); txt(g, 'open mic 9pm', w / 2, 122, 17, '#c8c4d8', { weight: 'normal' }); txt(g, 'no sneakers', w / 2, 150, 17, '#c8c4d8', { weight: 'normal' }); g.strokeStyle = CREAM; g.lineWidth = 3; g.beginPath(); g.moveTo(40, 190); g.lineTo(150, 190); g.stroke(); g.beginPath(); g.arc(96, 214, 16, 0, 7); g.stroke(); });
+
+  // ---------- graffiti + posters ----------
+  const spray = (g, col, fn) => { g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = col; g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 5; fn(); g.restore(); };
+  item('g1', 832, 384, 256, 192, (g, w, h) => { spray(g, PINK, () => { g.lineWidth = 18; g.font = 'bold 110px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.save(); g.translate(w / 2, h / 2 - 6); g.rotate(-0.08); g.strokeStyle = INK; g.lineWidth = 14; g.strokeText('TAY', 0, 0); g.fillStyle = PINK; g.fillText('TAY', 0, 0); g.restore(); }); spray(g, YEL, () => { g.lineWidth = 5; g.beginPath(); g.moveTo(40, 160); g.quadraticCurveTo(120, 190, 220, 150); g.stroke(); for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(30 + i * 52, 26 + (i % 2) * 14, 5, 0, 7); g.fill(); } }); });
+  item('g2', 1088, 384, 256, 192, (g, w, h) => { spray(g, CYAN, () => { g.lineWidth = 8; g.beginPath(); g.arc(128, 90, 56, 0, 7); g.stroke(); g.beginPath(); g.moveTo(128, 34); g.lineTo(128, 146); g.moveTo(72, 90); g.lineTo(184, 90); g.stroke(); }); spray(g, VIO, () => { g.lineWidth = 9; g.beginPath(); g.moveTo(30, 170); g.bezierCurveTo(80, 120, 170, 200, 226, 160); g.stroke(); }); spray(g, LIME, () => { g.font = 'bold 34px ' + FONT; g.textAlign = 'center'; g.fillText('NEON', 128, 176); }); });
+  item('g3', 1344, 384, 256, 192, (g, w, h) => { g.save(); g.translate(128, 100); spray(g, YEL, () => { g.lineWidth = 10; g.beginPath(); for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283 - 1.57, r = k % 2 ? 26 : 62; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.stroke(); }); spray(g, PINK, () => { g.lineWidth = 7; g.beginPath(); g.arc(0, 0, 80, 0.4, 2.7); g.stroke(); g.beginPath(); g.arc(0, 0, 80, 3.6, 5.8); g.stroke(); }); g.restore(); spray(g, CREAM, () => { g.font = 'bold 22px ' + FONT; g.textAlign = 'center'; g.fillText('BEATS 4 LIFE', 128, 184); }); });
+  item('g4', 1600, 384, 256, 192, (g, w, h) => { const R = rnd(9); spray(g, LIME, () => { g.lineWidth = 12; g.beginPath(); g.moveTo(26, 150); g.lineTo(60, 60); g.lineTo(94, 150); g.moveTo(40, 112); g.lineTo(80, 112); g.stroke(); g.beginPath(); g.moveTo(120, 60); g.lineTo(120, 150); g.lineTo(166, 150); g.stroke(); g.beginPath(); g.moveTo(190, 62); g.lineTo(230, 62); g.lineTo(190, 150); g.lineTo(232, 150); g.stroke(); }); spray(g, PINK, () => { for (let i = 0; i < 14; i++) { g.beginPath(); g.arc(20 + R() * 216, 20 + R() * 160, 2 + R() * 3, 0, 7); g.fill(); } }); });
+  const poster = (name, x, y, a, b, t1, t2, t3) => item(name, x, y, 128, 192, (g, w, h) => { g.fillStyle = grad(g, 0, 0, 0, h, [[0, a], [1, b]]); g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,0.14)'; g.beginPath(); g.arc(64, 70, 38, 0, 7); g.fill(); txt(g, t1, 64, 130, 26, CREAM, { stroke: INK, sw: 5 }); txt(g, t2, 64, 156, 20, YEL, { stroke: INK, sw: 4 }); txt(g, t3, 64, 178, 12, CREAM); g.strokeStyle = 'rgba(43,36,56,0.4)'; g.lineWidth = 2; g.strokeRect(1, 1, w - 2, h - 2); });
+  poster('poster1', 832, 576, '#ff4f8b', '#5a2a8f', 'BEAT', 'BATTLE', 'FRI 9PM');
+  poster('poster2', 960, 576, '#2ec4b6', '#1c3a6f', 'OPEN', 'MIC', 'EVERY WED');
+  poster('poster3', 1088, 576, '#ffb347', '#a8323f', 'BOOM', 'BAP', 'TOUR 26');
+  poster('poster4', 1216, 576, '#a86bff', '#1b1950', 'NEON', 'NIGHTS', 'LIVE');
+  item('stencil', 1344, 576, 192, 96, (g, w, h) => { g.fillStyle = 'rgba(43,36,56,0.8)'; g.font = 'bold 40px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('NO PARKING', w / 2, h / 2); g.fillRect(8, 8, w - 16, 4); g.fillRect(8, h - 12, w - 16, 4); });
+  item('hours', 1536, 576, 128, 80, (g, w, h) => { g.fillStyle = '#fff2dc'; g.fillRect(0, 0, w, h); g.fillStyle = INK; g.fillRect(0, 0, w, 4); txt(g, 'HOURS', w / 2, 20, 16, INK); txt(g, '10 - 7', w / 2, 44, 20, '#c0392b'); txt(g, 'closed Sun', w / 2, 66, 11, '#7a7088', { weight: 'normal' }); });
+  item('streetname', 1664, 576, 256, 64, (g, w, h) => { g.fillStyle = '#1e5aa8'; rr(g, 2, 2, w - 4, h - 4, 8); g.fill(); g.strokeStyle = CREAM; g.lineWidth = 3; rr(g, 8, 8, w - 16, h - 16, 5); g.stroke(); txt(g, 'NEON ROW', w / 2, h / 2 + 1, 30, CREAM); });
+  item('fruit', 1920, 576, 128, 64, (g, w, h) => { const cs = ['#ff8a3d', '#ffd23f', '#8fd14f', '#ff4f6b', '#ffb347']; cs.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(14 + i * 25, 32, 11, 0, 7); g.fill(); }); });
+
+  // ---------- hood map labels (w_hood*.js reuses this atlas) ----------
+  item('here', 0, 800, 384, 112, (g, w, h) => { g.fillStyle = '#17102b'; rr(g, 2, 2, w - 4, h - 4, 22); g.fill(); g.lineWidth = 6; g.strokeStyle = CYAN; g.shadowColor = CYAN; g.shadowBlur = 12; rr(g, 9, 9, w - 18, h - 18, 16); g.stroke(); g.shadowBlur = 0; txt(g, 'YOU ARE HERE', w / 2, h / 2 + 2, 40, YEL, { glow: '#ffb347', blur: 6 }); });
+  item('flat', 400, 800, 256, 96, (g, w, h) => { g.fillStyle = '#efe1c4'; rr(g, 2, 2, w - 4, h - 4, 14); g.fill(); g.fillStyle = '#e8604a'; g.fillRect(2, 2, 60, h - 4); txt(g, '4B', 32, h / 2 + 2, 34, '#fff2dc'); txt(g, 'TAY + FOXY', 160, h / 2 + 2, 28, '#2b2438'); });
+  item('pinopen', 672, 800, 192, 80, (g, w, h) => { g.fillStyle = '#12301f'; rr(g, 2, 2, w - 4, h - 4, 18); g.fill(); g.lineWidth = 5; g.strokeStyle = LIME; g.shadowColor = LIME; g.shadowBlur = 10; rr(g, 8, 8, w - 16, h - 16, 12); g.stroke(); g.shadowBlur = 0; txt(g, 'OPEN', w / 2, h / 2 + 2, 36, '#d8ffc0', { glow: LIME, blur: 8 }); });
+
+  // ---------- build the canvas ----------
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.clearRect(0, 0, W, H);
+  jobs.forEach(([x, y, w, h, fn]) => { g.save(); g.translate(x, y); g.beginPath(); g.rect(0, 0, w, h); g.clip(); try { fn(g, w, h); } catch (e) { /* a broken sign must never break the street */ } g.restore(); });
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
+  Object.keys(rect).forEach((k) => { const r = rect[k], e = 1.2; r[0] += e / W; r[2] -= e / W; r[1] += e / H; r[3] -= e / H; });
+  return { tex, rect, W, H, glow: makeGlowTex() };
+}
+
+// additive halo texture, 128x64: left cell = round soft glow, right cell = tall soft streak (neon reflection in a puddle). Greyscale, vertex colours tint it.
+export const GLOWRECT = { round: [0.0, 0.0, 0.5, 1.0], streak: [0.5, 0.0, 1.0, 1.0] };
+function makeGlowTex() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d'); g.clearRect(0, 0, 128, 64);
+  const rg = g.createRadialGradient(32, 32, 0, 32, 32, 31); rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(0.18, 'rgba(255,255,255,0.7)'); rg.addColorStop(0.5, 'rgba(255,255,255,0.22)'); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+  g.save(); g.translate(96, 32); g.scale(0.34, 1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 31); sg.addColorStop(0, 'rgba(255,255,255,1)'); sg.addColorStop(0.35, 'rgba(255,255,255,0.55)'); sg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = sg; g.fillRect(-32, -32, 64, 64); g.restore();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; return t;
+}

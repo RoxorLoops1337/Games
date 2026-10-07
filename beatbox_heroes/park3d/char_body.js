@@ -88,9 +88,10 @@ export function buildFace(mb, glow, ctx) {
     const cb = ctx.rest[s > 0 ? 'cheekL' : 'cheekR']; ball(mb, cb, [0.052, 0.05, 0.05], skinShade(sk, 0.98), K(s > 0 ? 'cheekL' : 'cheekR'), { detail: 0, nh: true, rot: [0.55, 0.6, 0.35] });
     if ((look.marks || []).indexOf('blush') >= 0) faceDecal(mb, ell(0.04, 0.026, 8, s * 0.2, 0.17, 0), mix(sk, '#ff5f8a', 0.45), K('head'), 0.006, true);
   });
-  // mouth: closed smile strip (static) + open mouth shape (bone 'mouth' scales it)
+  // mouth: closed smile strip (bone lipS, scaled for expression) + frown strip (bone lipF) + open mouth shape (bone 'mouth' scales it)
   const mc = mix('#6b2a35', INK, 0.2), my = 0.118, K_h = K('head');
-  for (let i = 0; i < 6; i++) { const a = (i / 6 - 0.5) * 2, b = ((i + 1) / 6 - 0.5) * 2, ya = 0.016 * a * a, yb = 0.016 * b * b; faceDecal(mb, [[a * 0.058, my + ya + 0.007], [b * 0.058, my + yb + 0.007], [b * 0.058, my + yb - 0.004], [a * 0.058, my + ya - 0.004]], mc, K_h, 0.007, true); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6 - 0.5) * 2, b = ((i + 1) / 6 - 0.5) * 2, ya = 0.016 * a * a, yb = 0.016 * b * b; faceDecal(mb, [[a * 0.058, my + ya + 0.007], [b * 0.058, my + yb + 0.007], [b * 0.058, my + yb - 0.004], [a * 0.058, my + ya - 0.004]], mc, K('lipS'), 0.007, true); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6 - 0.5) * 2, b = ((i + 1) / 6 - 0.5) * 2, ya = 0.016 * (1 - a * a) - 0.004, yb = 0.016 * (1 - b * b) - 0.004; faceDecal(mb, [[a * 0.05, my + ya + 0.007], [b * 0.05, my + yb + 0.007], [b * 0.05, my + yb - 0.004], [a * 0.05, my + ya - 0.004]], mc, K('lipF'), 0.007, true); }   // frown strip (hidden by scaling its bone flat)
   const mo = [], mt = []; for (let i = 0; i <= 8; i++) { const a = (i / 8) * Math.PI; mo.push([Math.cos(a) * 0.055, my + 0.004 - Math.sin(a) * 0.075]); }
   const mp = mo.slice(); const fm = facePt(0, my);
   mb.poly(onFace(mp, 0.0105), '#4a1d2b', K('mouth'), fm.n, { nh: true, flat: true });
@@ -111,6 +112,8 @@ export function buildFace(mb, glow, ctx) {
     if (m === 'scar') faceDecal(mb, [[0.09, 0.36], [0.1, 0.36], [0.165, 0.22], [0.155, 0.22]], mix(sk, '#d98a8a', 0.5), K_h, 0.006, true);
     if (m === 'bandaid') faceDecal(mb, [[-0.2, 0.19], [-0.14, 0.23], [-0.125, 0.205], [-0.185, 0.165]], '#f2c9a0', K_h, 0.007, true);
     if (m === 'starpaint') { const st = []; for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.012 : 0.03; st.push([-0.2 + Math.cos(a) * r, 0.2 + Math.sin(a) * r]); } faceDecal(mb, st, '#ffd23f', K_h, 0.007, true); }
+    if (m === 'goldgrill') { const gc = '#e8b923'; for (let i = 0; i < 5; i++) { const a = -0.55 + i * 0.275, b = a + 0.275, ya = 0.016 * a * a, yb = 0.016 * b * b; faceDecal(mb, [[a * 0.058, my + ya - 0.0035], [b * 0.058, my + yb - 0.0035], [b * 0.058, my + yb - 0.0125], [a * 0.058, my + ya - 0.0125]], i % 2 ? '#fff0b0' : gc, K('lipS'), 0.0114, true); } }
+    if (m === 'eyebrowslit') [0.0, 0.026].forEach((o) => faceDecal(mb, [[0.124 - 0.006 + o, 0.352 + 0.026], [0.124 + 0.004 + o, 0.352 + 0.026], [0.124 - 0.007 + o, 0.352 - 0.02], [0.124 - 0.017 + o, 0.352 - 0.02]], skinShade(sk, 1.0), K('browL'), 0.0125, true));
     if (m === 'tear') faceDecal(mb, [[0.145, 0.205], [0.165, 0.205], [0.155, 0.16]], '#4fa3ff', K_h, 0.007, true);
     if (m === 'warpaint') [1, 0.7].forEach((k, i) => faceDecal(mb, [[-0.27, 0.22 - i * 0.04], [-0.1, 0.21 - i * 0.04], [-0.1, 0.19 - i * 0.04], [-0.27, 0.2 - i * 0.04]], '#e63946', K_h, 0.006, true));
   });

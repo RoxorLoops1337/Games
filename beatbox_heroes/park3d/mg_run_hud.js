@@ -36,10 +36,17 @@ const CSS = `
 @keyframes mgrs{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
 .mgr .hint{position:absolute;left:0;right:0;top:36%;text-align:center;font-weight:900;font-size:21px;letter-spacing:.08em;color:#fff0c9;text-shadow:0 3px 0 #17102b,0 0 22px rgba(23,16,43,.95);animation:mgrh 1s ease-in-out infinite alternate;padding:0 24px}
 .mgr .hint small{display:block;font-size:12px;letter-spacing:.14em;color:#d9c9ff;margin-top:8px}
+.mgr .hint.rdy small{display:none}
 @keyframes mgrh{from{opacity:.65;transform:scale(.98)}to{opacity:1;transform:scale(1.03)}}
-.mgr .toast{position:absolute;left:0;right:0;top:30%;text-align:center;font-weight:900;font-size:34px;letter-spacing:.06em;color:#ffe14d;text-shadow:0 3px 0 #17102b,0 0 26px rgba(157,255,74,.9);opacity:0;transform:scale(.6)}
-.mgr .toast.on{animation:mgrt 1.7s ease-out forwards}
-.mgr .toast.warn{color:#ff8fb0;font-size:22px;text-shadow:0 3px 0 #17102b}
+.mgr .start{position:absolute;left:50%;top:26%;transform:translate(-50%,-50%);pointer-events:auto!important;display:none;flex-direction:column;align-items:center;gap:6px;min-width:210px;min-height:84px;padding:14px 26px;border-radius:26px;border:3px solid #17102b;background:linear-gradient(#b6ff6a,#6fd33a);color:#17102b;font:900 30px/1 "Trebuchet MS",system-ui,sans-serif;letter-spacing:.1em;cursor:pointer;box-shadow:0 6px 0 #3f7a14,0 12px 28px rgba(10,6,30,.55);animation:mgrb 1s ease-in-out infinite alternate}
+.mgr .start small{font-size:12px;letter-spacing:.2em;opacity:.75;font-weight:800}
+.mgr .start:active{transform:translate(-50%,-46%);box-shadow:0 2px 0 #3f7a14}
+.mgr .start:focus-visible{outline:3px solid #2ee6ff;outline-offset:3px}
+@keyframes mgrb{from{filter:brightness(1)}to{filter:brightness(1.12)}}
+.mgr .rwd{margin-top:2px;color:#ffe14d}
+.mgr .mtoast{position:absolute;left:0;right:0;top:30%;text-align:center;font-weight:900;font-size:34px;letter-spacing:.06em;color:#ffe14d;text-shadow:0 3px 0 #17102b,0 0 26px rgba(157,255,74,.9);opacity:0;transform:scale(.6)}
+.mgr .mtoast.on{animation:mgrt 1.7s ease-out forwards}
+.mgr .mtoast.warn{color:#ff8fb0;font-size:22px;text-shadow:0 3px 0 #17102b}
 @keyframes mgrt{0%{opacity:0;transform:scale(.5)}12%{opacity:1;transform:scale(1.15)}22%{transform:scale(1)}78%{opacity:1}100%{opacity:0;transform:translateY(-34px) scale(1)}}
 .mgr .glare{position:absolute;left:0;top:0;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(circle,rgba(255,244,214,.95) 0,rgba(255,200,130,.55) 16%,rgba(255,150,120,.22) 38%,rgba(255,140,160,0) 70%)}
 .mgr .ghost{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;mix-blend-mode:screen;opacity:0}
@@ -56,8 +63,9 @@ const CSS = `
 `;
 const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
 
-export function createHud(host, cb, C) {
-  if (!host) return { set() {}, toast() {}, card() {}, hideCard() {}, reset() {}, flash() {}, glare() {}, dispose() {} };
+export function createHud(host, cb, C, hopt) {
+  hopt = hopt || {}; let rw = null, shown = null;
+  if (!host) return { set() {}, toast() {}, card() {}, hideCard() {}, reset() {}, flash() {}, glare() {}, dispose() {}, setRewards() {}, hasCard() { return false; } };
   const st = document.createElement('style'); st.textContent = CSS; host.appendChild(st);
   const root = h('div', 'mgr'); host.appendChild(root);
   // header
@@ -73,10 +81,17 @@ export function createHud(host, cb, C) {
   // pads
   const pads = h('div', 'pads'), pad = {}; for (const side of ['L', 'R']) { const p = h('div', 'pad'); p.append(h('div', 'nm', side === 'L' ? 'LEFT' : 'RIGHT'), h('div', 'kk', side === 'L' ? 'A  F' : 'D  J')); p.addEventListener('pointerdown', (e) => { e.preventDefault(); cb.onTap(side); }); p.addEventListener('contextmenu', (e) => e.preventDefault()); pads.appendChild(p); pad[side] = p; } root.appendChild(pads);
   const hint = h('div', 'hint'); hint.innerHTML = 'TAP LEFT, THEN RIGHT<small>KEEP THE BAR IN THE GREEN. ALTERNATE EVERY STEP.</small>'; root.appendChild(hint);
-  const toast = h('div', 'toast'); root.appendChild(toast);
+  const startB = h('button', 'start'); startB.type = 'button'; startB.innerHTML = 'START<small>TAP TO START</small>'; startB.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); startB.style.display = 'none'; if (cb.onStart) cb.onStart(); }); root.appendChild(startB);
+  const toast = h('div', 'mtoast'); root.appendChild(toast);
   const glare = h('div', 'glare'); root.appendChild(glare); const ghosts = []; for (const [sz, col] of [[46, 'rgba(255,170,120,.5)'], [26, 'rgba(160,255,200,.4)'], [70, 'rgba(255,120,200,.28)']]) { const g = h('div', 'ghost'); g.style.width = g.style.height = sz + 'px'; g.style.margin = -sz / 2 + 'px 0 0 ' + -sz / 2 + 'px'; g.style.background = 'radial-gradient(circle,' + col + ' 0,rgba(255,255,255,0) 70%)'; root.appendChild(g); ghosts.push(g); }
   const card = h('div', 'card'); root.appendChild(card); card.style.display = 'none';
   let flashT = { L: 0, R: 0 }, lastKey = '';
+  // the REAL numbers from the game state (G.doHold): max energy gain is already a row, the rest is a chip line
+  function fillRewards() {
+    if (!shown || !shown.rb) return; const r = rw, parts = [];
+    if (r) { if (r.xp) parts.push('+' + Math.round(r.xp) + ' XP'); if (r.mood) parts.push('+' + Math.round(r.mood) + ' MOOD'); if (r.tech) parts.push('+' + (Math.round(r.tech * 10) / 10) + ' TECH'); if (r.energy) parts.push(Math.round(r.energy) + ' ENERGY'); if (r.cash) parts.push((r.cash > 0 ? '+$' : '-$') + Math.abs(Math.round(r.cash))); if (r.fans) parts.push('+' + Math.round(r.fans) + ' FANS'); }
+    shown.rb.textContent = parts.join('   ');
+  }
   return {
     root,
     set(s) {
@@ -85,18 +100,22 @@ export function createHud(host, cb, C) {
       for (let i = 0; i < seg.length; i++) { const sg = seg[i]; const res = s.results[i]; sg.classList.toggle('good', res === 1); sg.classList.toggle('bad', res === 0); sg.classList.toggle('cur', i === s.blocksDone && s.phase === 'run'); if (i === s.blocksDone && s.phase === 'run') sg.firstChild.style.width = Math.round(s.blockFrac * 100) + '%'; }
       const col = s.zone === 'burn' ? '#ffd23f' : s.zone === 'target' ? '#7be08f' : '#2ee6ff'; fill.style.height = s.bar + '%'; fill.style.background = col; cap.style.bottom = 'calc(' + s.bar + '% - 1px)'; zl.textContent = s.zone === 'burn' ? 'BURN' : s.zone === 'target' ? 'GOOD' : 'SLOW'; zl.style.color = col;
       pad.L.classList.toggle('next', s.phase !== 'done' && s.last !== 'L'); pad.R.classList.toggle('next', s.phase !== 'done' && s.last !== 'R');
-      hint.style.display = s.phase === 'ready' || (s.phase === 'run' && s.taps === 0) ? 'block' : 'none';
+      hint.style.display = s.phase === 'ready' || (s.phase === 'run' && s.taps === 0) ? 'block' : 'none'; startB.style.display = s.phase === 'ready' ? 'flex' : 'none';
+      hint.style.top = s.phase === 'ready' ? '66%' : ''; hint.classList.toggle('rdy', s.phase === 'ready');
     },
     flash(side, ok) { const p = pad[side]; p.classList.remove('hit', 'bad'); void p.offsetWidth; p.classList.add(ok ? 'hit' : 'bad'); clearTimeout(flashT['t' + side]); flashT['t' + side] = setTimeout(() => p.classList.remove('hit', 'bad'), ok ? 110 : 230); },
-    toast(txt, warn) { if (!txt) { toast.className = 'toast'; return; } toast.textContent = txt; toast.className = 'toast' + (warn ? ' warn' : ''); void toast.offsetWidth; toast.classList.add('on'); },
+    toast(txt, warn) { if (!txt) { toast.className = 'mtoast'; return; } toast.textContent = txt; toast.className = 'mtoast' + (warn ? ' warn' : ''); void toast.offsetWidth; toast.classList.add('on'); },
     glare(x, y, a, cx, cy) { glare.style.opacity = a.toFixed(3); glare.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)'; ghosts.forEach((g, i) => { const k = [0.35, 0.7, 1.15][i]; g.style.opacity = (a * 0.6).toFixed(3); g.style.transform = 'translate(' + (x + (cx - x) * k).toFixed(1) + 'px,' + (y + (cy - y) * k).toFixed(1) + 'px)'; }); },
     card(res, onAgain, onDone) {
       card.innerHTML = ''; card.style.display = 'flex'; const b = h('div', 'box'); b.append(h('h2', '', 'RUN COMPLETE'), h('div', 'big', res.q >= 0.75 ? 'GREAT PACE' : res.q >= 0.4 ? 'STEADY JOG' : 'KEEP MOVING'));
       const row = (a, v, c) => { const r = h('div', 'r'); r.append(h('span', '', a), Object.assign(h('span', '', v), { style: 'color:' + c })); b.appendChild(r); };
-      row('DISTANCE', Math.round(res.distance) + ' m', '#fff0c9'); row('GOOD BARS', res.good + ' / ' + C.BLOCKS, '#ffe14d'); row('MAX ENERGY', '+' + res.energy, '#9dff4a'); row('PACE', Math.round(res.q * 100) + '%', '#2ee6ff');
-      const bt = h('div', 'btns'); const a = h('button', 'sec', 'RUN AGAIN'), d = h('button', '', 'DONE'); a.onclick = onAgain; d.onclick = onDone; bt.append(a, d); b.appendChild(bt); card.appendChild(b); void card.offsetWidth; card.classList.add('on');
+      row('DISTANCE', Math.round(res.distance) + ' m', '#fff0c9'); row('GOOD BARS', res.good + ' / ' + C.BLOCKS, '#ffe14d'); row('MAX ENERGY', '+' + (rw && rw.maxEnergy !== undefined ? rw.maxEnergy : res.energy), '#9dff4a'); row('PACE', Math.round(res.q * 100) + '%', '#2ee6ff');
+      const rb = h('div', 'rwd'); rb.dataset.rewards = '1'; b.appendChild(rb); shown = { res, rb, b };
+      const bt = h('div', 'btns'); const d = h('button', '', 'CONTINUE'); d.onclick = onDone; if (hopt.again !== false) { const a = h('button', 'sec', 'RUN AGAIN'); a.onclick = onAgain; bt.append(a); } bt.append(d); b.appendChild(bt); card.appendChild(b); void card.offsetWidth; card.classList.add('on'); fillRewards();
     },
-    hideCard() { card.classList.remove('on'); card.style.display = 'none'; lastKey = ''; },
+    setRewards(r) { rw = r || null; fillRewards(); },
+    hasCard() { return card.style.display !== 'none' && card.classList.contains('on'); },
+    hideCard() { card.classList.remove('on'); card.style.display = 'none'; lastKey = ''; shown = null; },
     reset() { lastKey = ''; },
     dispose() { if (root.parentElement) root.parentElement.removeChild(root); if (st.parentElement) st.parentElement.removeChild(st); },
   };

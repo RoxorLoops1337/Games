@@ -40,3 +40,33 @@ export function canvasTex(w, h, draw) { const c = document.createElement('canvas
 export function emitter() { const m = {}; return { on(k, f) { (m[k] = m[k] || []).push(f); }, emit(k, v) { (m[k] || []).forEach((f) => f(v)); } }; }
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+// ---------- disposal (host.unload calls this on the whole world scene) ----------
+// Frees GPU + CPU memory for everything under obj: geometries, materials, every texture a material holds (maps, shader uniforms, canvas textures),
+// instanced meshes, skeletons, light shadow maps and render targets found in uniforms or userData.renderTarget. Anything flagged `userData.persist = true`
+// (shared character materials, atlases other worlds reuse) is skipped, so shared resources are never thrown away. Safe to call twice.
+const TEX_KEYS = ['map', 'lightMap', 'aoMap', 'emissiveMap', 'bumpMap', 'normalMap', 'displacementMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'envMap', 'gradientMap', 'specularMap', 'matcap', 'clearcoatMap', 'sheenColorMap', 'transmissionMap', 'thicknessMap'];
+export function disposeTexture(t) {
+  if (!t || (t.userData && t.userData.persist)) return;
+  if (t.isRenderTarget) { t.dispose(); return; }
+  const img = t.image; t.dispose();
+  // iOS caps total canvas memory: shrink painted canvases so the backing store is released right away
+  if (t.isCanvasTexture && img && typeof HTMLCanvasElement !== 'undefined' && img instanceof HTMLCanvasElement) { img.width = 1; img.height = 1; }
+}
+export function disposeMaterial(m) {
+  if (!m || (m.userData && m.userData.persist)) return;
+  for (let i = 0; i < TEX_KEYS.length; i++) { const t = m[TEX_KEYS[i]]; if (t && t.isTexture) disposeTexture(t); }
+  const u = m.uniforms; if (u) for (const k in u) { const v = u[k] && u[k].value; if (v && (v.isTexture || v.isRenderTarget)) disposeTexture(v); }
+  m.dispose();
+}
+export function disposeTree(obj) {
+  if (!obj) return;
+  obj.traverse((o) => {
+    if (o.geometry && !(o.geometry.userData && o.geometry.userData.persist)) o.geometry.dispose();
+    const m = o.material; if (m) { if (Array.isArray(m)) for (let i = 0; i < m.length; i++) disposeMaterial(m[i]); else disposeMaterial(m); }
+    if (o.isInstancedMesh && o.dispose) o.dispose();
+    if (o.isSkinnedMesh && o.skeleton && o.skeleton.dispose) o.skeleton.dispose();
+    if (o.isLight && o.shadow && o.shadow.dispose) o.shadow.dispose();
+    if (o.userData && o.userData.renderTarget && o.userData.renderTarget.dispose) o.userData.renderTarget.dispose();
+  });
+}

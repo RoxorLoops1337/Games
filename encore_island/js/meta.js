@@ -50,7 +50,7 @@ const ACH = [];
   [10, 25, 50].forEach(n => A('v' + n, 'Level ' + n, 'Reach hero level ' + n, () => S.level >= n));
   [1, 3, 10].forEach(n => A('c' + n, n === 1 ? 'Encore Tour' : 'Tour x' + n, 'Complete ' + n + ' Encore Tour' + (n > 1 ? 's' : ''), () => S.prestiges >= n));
   [1, 10, 50].forEach(n => A('g' + n, 'ENCORE x' + n, 'Trigger ENCORE ' + n + ' times', () => S.stats.encores >= n));
-  [50, 500, 5000].forEach(n => A('p' + n, 'In the Pocket ' + n, 'Land ' + n + ' on-beat kills', () => S.stats.perfect >= n));
+  [50, 500, 5000].forEach(n => A('p' + n, 'In the Pocket ' + n, 'Land ' + n + ' perfect BEAT taps', () => S.stats.perfect >= n));
   [1, 6, 12].forEach(n => A('t' + n, n === 1 ? 'Critter Friend' : n + ' Critters', 'Tame ' + n + ' critters', () => petsOwned() >= n));
   [25, 100].forEach(n => A('m' + n, n + ' Combo', 'Reach a ' + n + '-kill combo', () => S.comboBest >= n));
   A('o4', 'Wardrobe', 'Own 4 outfits', () => Object.keys(S.skins.owned).length >= 4);

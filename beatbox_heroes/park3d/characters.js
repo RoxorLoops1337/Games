@@ -17,18 +17,36 @@ import { buildHead, buildFace, buildFacial, buildArms, buildLegs } from './char_
 import { buildHair, buildHat, HAT_COVER } from './char_hair.js';
 import { buildTop, buildBottom, buildShoes, wearMeta, bodyR } from './char_wear.js';
 import { buildGlasses, buildAccessories } from './char_gear.js';
-import { Animator } from './char_anim.js';
+import { Animator, MOOD_NAMES } from './char_anim.js';
+import './char_clips.js';
+import { known } from './char_ids.js';
+import { buildProp, disposeProp, setPropMats, PROP_KINDS } from './char_props.js';
+import { setPortraitRenderer } from './char_portrait.js';
+import { TOPS, BOTTOMS, SHOES } from './char_wear.js';
 
 export const TRI_BUDGET = 3500;
-export const CLIPS = ['idle', 'walk', 'run', 'beatbox', 'dance', 'sit', 'wave', 'cheer', 'talk'];
+export const CLIPS = ['idle', 'walk', 'run', 'beatbox', 'dance', 'sit', 'wave', 'cheer', 'talk', 'point', 'battle', 'sad', 'finisher', 'hit', 'hold', 'walkside'];
+export const MOODS = MOOD_NAMES; export const PROPS = PROP_KINDS;
 const DEF = { name: 'Hero', body: 'neutral', skin: '#c68b5e', hair: { style: 'crop', color: '#2a2024' }, eyes: { style: 'round', color: '#4a2c1a' }, brows: 'soft', facial: 'none', marks: [], top: { id: 'tee', color: '#ffd23f', color2: '#e63946' }, bottom: { id: 'jeans', color: '#3a5fcd' }, shoes: { id: 'sneakers', color: '#f7f2e8' }, hat: { id: 'none', color: '#17141f' }, glasses: { id: 'none', color: '#17141f' }, acc: {} };
 export function normLook(l) {
   l = l || {}; const o = {}; for (const k in DEF) { const dv = DEF[k], v = l[k]; o[k] = v === undefined || v === null ? (typeof dv === 'object' && !Array.isArray(dv) ? Object.assign({}, dv) : dv) : (typeof dv === 'object' && !Array.isArray(dv) && typeof v === 'object' ? Object.assign({}, dv, v) : v); }
   if (typeof o.hair === 'string') o.hair = { style: o.hair, color: DEF.hair.color }; if (typeof o.hat === 'string') o.hat = { id: o.hat, color: DEF.hat.color }; if (typeof o.glasses === 'string') o.glasses = { id: o.glasses, color: DEF.glasses.color };
   if (typeof o.top === 'string') o.top = { id: o.top, color: DEF.top.color }; if (typeof o.bottom === 'string') o.bottom = { id: o.bottom, color: DEF.bottom.color }; if (typeof o.shoes === 'string') o.shoes = { id: o.shoes, color: DEF.shoes.color };
   if (typeof o.eyes === 'string') o.eyes = { style: o.eyes, color: DEF.eyes.color }; if (!o.hair.style) o.hair.style = 'crop'; if (!o.acc) o.acc = {};
+  return sanitize(o);
+}
+
+// unknown ids fall back to 'none' (or the group default for things everybody wears), so stale saves and typos never break a character
+function sanitize(o) {
+  if (!known('body', o.body)) o.body = 'neutral'; if (!known('hair', o.hair.style)) o.hair = Object.assign({}, o.hair, { style: 'bald' });
+  if (!known('hat', o.hat.id || 'none')) o.hat = Object.assign({}, o.hat, { id: 'none' }); if (!known('glasses', o.glasses.id || 'none')) o.glasses = Object.assign({}, o.glasses, { id: 'none' });
+  if (!known('facial', o.facial || 'none')) o.facial = 'none'; if (!known('eyes', o.eyes.style || 'round')) o.eyes = Object.assign({}, o.eyes, { style: 'round' }); if (!known('brows', o.brows || 'soft')) o.brows = 'soft';
+  o.marks = Array.isArray(o.marks) ? o.marks.filter((m) => known('marks', m)) : [];
+  if (!TOPS[o.top.id]) o.top = Object.assign({}, o.top, { id: 'tee' }); if (!BOTTOMS[o.bottom.id]) o.bottom = Object.assign({}, o.bottom, { id: 'jeans' }); if (!SHOES[o.shoes.id]) o.shoes = Object.assign({}, o.shoes, { id: 'sneakers' });
+  const acc = {}; for (const slot in o.acc) { const a = o.acc[slot]; if (a && typeof a === 'object' && KNOWN_SLOTS.indexOf(slot) >= 0 && known('acc.' + slot, a.id || 'none_' + slot)) acc[slot] = a; } o.acc = acc;
   return o;
 }
+const KNOWN_SLOTS = ['neck', 'ears', 'back', 'hand', 'wrist'];
 
 // ------------------------------------------------------------------ shared materials (one set for every character: recolouring is vertex colours, not materials)
 let MATS = null;
@@ -41,7 +59,7 @@ function mats() {
   const glow = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const hull = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, color: new THREE.Color(0.24, 0.2, 0.32) });
   hull.onBeforeCompile = (sh) => { sh.uniforms.uHull = { value: 0.013 }; sh.vertexShader = 'attribute vec3 hullN;\nuniform float uHull;\n' + sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + hullN * uHull;'); };
-  MATS = { lit, glow, hull }; return MATS;
+  MATS = { lit, glow, hull }; setPropMats(MATS); return MATS;
 }
 
 // ------------------------------------------------------------------ rig
@@ -63,6 +81,7 @@ function makeSkinned(geo, material, castShadow) {
 // lighting adaptation: very dark skin tones are lifted toward a readable floor so faces keep their form in golden-hour light
 function liftSkin(c) { const hsl = {}; c.getHSL(hsl); const floor = 0.3; if (hsl.l < floor) hsl.l += (floor - hsl.l) * 0.55; hsl.s = Math.min(1, hsl.s * 1.06); return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l); }
 export function createCharacter(ctx, look, extra) {
+  if (ctx && ctx.renderer) setPortraitRenderer(ctx.renderer);
   const object = new THREE.Group(); object.name = 'character';
   const rig = makeRig(object), M = mats(), meshes = {};
   const state = { look: null, geoKey: '' };
@@ -119,7 +138,13 @@ export function createCharacter(ctx, look, extra) {
   api.update = (dt, t) => api.anim.update(dt, t);
   api.lookAt = (p) => api.anim.setLookAt(p);
   api.hit = (k, s) => api.anim.hit(k, s);
-  api.dispose = () => { if (object.parent) object.parent.remove(object); ['lit', 'glow', 'hull'].forEach((k) => meshes[k].geometry && meshes[k].geometry.dispose()); };
+  // expressions: 'neutral' | 'happy' | 'sad' | 'angry' | 'shout' (eyes, brows, mouth). instant = true snaps (portraits), otherwise it fades in ~0.15 s
+  api.setMood = (name, instant) => { api.anim.setMood(name, instant); api.mood = api.anim.mood; return api; };
+  api.mood = 'neutral'; api.lastCtx = ctx;
+  // props for the 'hold' clip: setProp('box'|'card'|'clipboard'|'scorecard'|null, { color, score }); setScore(n) rebuilds a scorecard with that number
+  api.setProp = (kind, o) => { if (api.prop) { api.anim.setProp(null); disposeProp(api.prop); api.prop = null; } api.propKind = null; if (!kind || kind === 'none' || PROP_KINDS.indexOf(kind) < 0) return api; api.propOpts = Object.assign({}, o); api.prop = buildProp(kind, api.propOpts); api.propKind = kind; api.anim.setProp(api.prop); return api; };
+  api.setScore = (n) => { if (api.propKind === 'scorecard') api.setProp('scorecard', Object.assign({}, api.propOpts, { score: n })); return api; };
+  api.dispose = () => { api.setProp(null); if (object.parent) object.parent.remove(object); ['lit', 'glow', 'hull'].forEach((k) => meshes[k].geometry && meshes[k].geometry.dispose()); };
   api.setLook(look);
   // anchors: Object3Ds that follow the bones (world getters via object.getWorldPosition)
   const anchor = (bone, off) => { const o = new THREE.Object3D(); o.position.set(off[0], off[1], off[2]); rig.map[bone].add(o); return o; };
@@ -128,5 +153,14 @@ export function createCharacter(ctx, look, extra) {
   return api;
 }
 
-export { createNPC } from './char_npc.js';
-if (typeof window !== 'undefined') window.__chars = { createCharacter, normLook };
+
+
+// ------------------------------------------------------------------ public surface (everything the worlds need from one import)
+import { createNPC, NPC_LOOKS } from './char_npc.js';
+import { createCast, castLooks, crowdLook, JUDGES3D, CLERK_LOOK } from './char_cast.js';
+import { createCrowd } from './char_crowd.js';
+import { portrait, disposePortraits, addStudioLights } from './char_portrait.js';
+import { KNOWN } from './char_ids.js';
+export { createNPC, NPC_LOOKS, createCast, castLooks, crowdLook, JUDGES3D, CLERK_LOOK, createCrowd, portrait, disposePortraits, setPortraitRenderer, addStudioLights, KNOWN, buildProp, PROP_KINDS };
+// test hook (tests, shot3d, the dev console): the whole character API on one object
+if (typeof window !== 'undefined') window.__chars = { createCharacter, createNPC, createCast, castLooks, createCrowd, crowdLook, portrait, disposePortraits, normLook, addStudioLights, CLIPS, MOODS, KNOWN, JUDGES3D, TRI_BUDGET, THREE };

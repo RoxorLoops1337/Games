@@ -8,7 +8,7 @@
   const W = 360, H = 640, UW = 270, UH = 480, K = W / UW;   // canvas grid 360x640; DOM UI is authored in 270x480 CSS units
   const $ = (id) => document.getElementById(id);
 
-  const E = BBH.Eng = { W, H, UW, UH, K, scenes: {}, scene: null, sceneName: '', t: 0, dt: 0, S: 1, particles: [], paused: false, frame: 0 };
+  const E = BBH.Eng = { W, H, UW, UH, K, scenes: {}, scenes3d: {}, hooks: {}, uiBlock: 0, sceneArgs: {}, scene: null, sceneName: '', t: 0, dt: 0, S: 1, particles: [], paused: false, frame: 0 };
 
   /* ---------------------------------------------------------------- storage */
   const mem = {};
@@ -75,7 +75,7 @@
   let unlocked = false;
   E.unlockAudio = () => { if (unlocked) { return; } unlocked = true; try { E.A().unlock(); E.applyAudioSettings(); } catch (e) { unlocked = false; } };
   ['touchstart', 'mousedown'].forEach((n) => root.addEventListener(n, () => E.unlockAudio(), { passive: true }));
-  document.addEventListener('visibilitychange', () => { E.paused = document.hidden; if (E.scene && E.scene.visibility) E.scene.visibility(!document.hidden); });
+  document.addEventListener('visibilitychange', () => { E.paused = document.hidden; if (BBH.R3 && BBH.R3.pause) BBH.R3.pause(E.paused); if (E.scene && E.scene.visibility) E.scene.visibility(!document.hidden); });
 
   /* ------------------------------------------------------------ text, glow */
   const txtCache = new Map();
@@ -120,6 +120,7 @@
   E.flash = (color, ms) => { if (E.settings.reduce) return; flashCol = color || '#fff'; flashT = flashDur = ms || 140; };
   let fadeA = 0, fadeTo = 0, fadeSpeed = 0, fadeCol = '#120d1f';
   E.fadeTo = (a, ms, col) => { fadeTo = a; fadeSpeed = Math.abs(a - fadeA) / Math.max(1, ms || 200); if (col) fadeCol = col; };
+  E.fadeLevel = () => fadeA;                                  // read-only: how much the fade covers right now (0..1), used by the r3 world-switch cover and the black-frame probe
   E.spawn = (p) => { p.life = p.life || 600; p.age = 0; E.particles.push(p); if (E.particles.length > 500) E.particles.shift(); return p; };
   E.burst = (x, y, n, o) => {
     o = o || {};
@@ -149,19 +150,47 @@
   E.icon = (name) => { try { return BBH.World.icon(name); } catch (e) { return new Pix(12, 12).rect(1, 1, 10, 10, '#ff00ff'); } };
 
   /* ---------------------------------------------------------------- scenes */
+  // 3D scenes (E.scenes3d[name], flagged is3d) are SIBLINGS of the 2D ones. E.pickScene returns the 3D sibling only while BBH.R3 is on, else the 2D scene exactly as before.
+  E.pickScene = (name) => (BBH.R3 && BBH.R3.on && E.scenes3d[name]) || E.scenes[name];
   E.go = function (name, args, o) {
     o = o || {};
+    if (BBH.R3 && BBH.R3.hold && BBH.R3.hold(name, args, o)) return;   // 3D boot in flight: the first scene change after 'boot' waits for the verdict
     const sw = () => {
       if (E.scene && E.scene.leave) { try { E.scene.leave(); } catch (e) { console.error(e); } }
+      const def = E.pickScene(name); if (!def) throw new Error('no scene ' + name);
+      if (BBH.R3 && BBH.R3.show) BBH.R3.show(!!def.is3d);
       E.clearUI(); E.particles.length = 0;
-      E.sceneName = name; E.scene = E.scenes[name]; if (!E.scene) throw new Error('no scene ' + name);
+      E.sceneName = name; E.sceneArgs = args || {}; E.scene = def;
       E.scene.t = 0;
-      if (E.scene.enter) E.scene.enter(args || {});
-      if (!o.nofade) E.fadeTo(0, o.ms || 220);
+      const r = E.scene.enter ? E.scene.enter(args || {}) : undefined;
+      const fin = () => { if (!o.nofade) E.fadeTo(0, o.ms || 220); };
+      if (def.is3d && r && typeof r.then === 'function') {   // a 3D enter is async (world build): reveal when it resolves; a failed build drops to the 2D sibling
+        r.then(() => { if (E.scene === def) { if (BBH.R3 && BBH.R3.reveal) BBH.R3.reveal(() => { if (E.scene === def) fin(); }); else fin(); } }, (err) => { console.error(err); if (E.scene === def && BBH.R3 && BBH.R3.demote) BBH.R3.demote('enter', String(err && err.message || err)); fin(); });
+      } else fin();
     };
     if (o.nofade || !E.scene) { fadeA = 0; fadeTo = 0; sw(); return; }
     E.fadeTo(1, o.ms || 180); E.pendingSwitch = sw; E.switchAt = E.t + (o.ms || 180);
   };
+
+  /* ------------------------------------------- 3D presentation (BBH.R3.active) */
+  // While a 3D scene is shown the WebGL host draws into #gl and the loop only drives DOM: fade and flash are #fade / #flash, shake moves the canvases,
+  // particles (E.burst / E.spawn) draw on the transparent #fx overlay (360x640 grid scaled to its box). One RAF: R3.tick(dt) steps the host.
+  const fadeEl = $('fade'), flashEl = $('flash'), fxEl = $('fx');
+  let fxCtx = null, fxDirty = false, fadeShown = -1, flashShown = -1, shakeShown = false;
+  function frame3d(dt) {
+    const R = BBH.R3; R.tick(dt);
+    if (shakeT > 0) { shakeT -= dt; const a = shakeAmt * Math.max(0, shakeT / 150 > 1 ? 1 : shakeT / 150); R.shakeBy((Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a); shakeShown = true; if (shakeT <= 0) shakeAmt = 0; }
+    else if (shakeShown) { shakeShown = false; R.shakeBy(0, 0); }
+    if (fxEl && (E.particles.length || fxDirty)) {
+      if (!fxCtx) fxCtx = fxEl.getContext('2d');
+      fxCtx.setTransform(1, 0, 0, 1, 0, 0); fxCtx.clearRect(0, 0, fxEl.width, fxEl.height); fxDirty = E.particles.length > 0;
+      if (fxDirty) { fxCtx.setTransform(fxEl.width / W, 0, 0, fxEl.height / H, 0, 0); fxCtx.imageSmoothingEnabled = false; drawParticles(fxCtx); }
+    }
+    let fa = 0; if (flashT > 0) { flashT -= dt; fa = Math.max(0, flashT / flashDur) * 0.55; }
+    if (flashEl && fa !== flashShown) { flashShown = fa; flashEl.style.opacity = fa > 0 ? String(fa) : '0'; if (fa > 0) flashEl.style.background = flashCol; }
+    if (fadeA !== fadeTo) { fadeA += Math.sign(fadeTo - fadeA) * fadeSpeed * dt; if (Math.abs(fadeA - fadeTo) < fadeSpeed * dt) fadeA = fadeTo; }
+    if (fadeEl) { const v = fadeA > 0.01 ? Math.min(1, fadeA) : 0; if (v !== fadeShown) { fadeShown = v; fadeEl.style.opacity = String(v); fadeEl.style.background = fadeCol; } }
+  }
 
   /* ------------------------------------------------------------------ loop */
   let last = 0;
@@ -174,6 +203,7 @@
       try {
         if (E.scene) { E.scene.t += dt; if (E.scene.update) E.scene.update(dt); }
         updateParticles(dt);
+        if (BBH.R3 && BBH.R3.active) { frame3d(dt); return; }
         ctx.save();
         if (shakeT > 0) { shakeT -= dt; const a = shakeAmt * Math.max(0, shakeT / 150 > 1 ? 1 : shakeT / 150); ctx.translate(Math.round((Math.random() - 0.5) * 2 * a), Math.round((Math.random() - 0.5) * 2 * a)); if (shakeT <= 0) shakeAmt = 0; }
         ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, W, H);

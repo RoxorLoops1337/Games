@@ -1,5 +1,5 @@
 'use strict';
-// Encore Island — BUILD system: Gear (4 slots, rarities, perks, scrap + upgrades), Smelter recipes, Songs cast on perfect-beat kills.
+// Encore Island — BUILD system: Gear (4 slots, rarities, perks, scrap + upgrades), Smelter recipes, Songs cast on perfect BEAT taps.
 // One feature ('gear', keep:true) with three Heroes tabs: Gear, Songs, Recipes. Everything is wrapped in an IIFE so no globals leak.
 // Test hook: regFeature's object carries `api` (EI.FEATS.find(f => f.id === 'gear').api).
 (function () {
@@ -54,7 +54,7 @@
     { id: 'treas', name: 'Treasure Tune', perk: 'coin', hint: 'Open 10 treasure chests', test: () => S.stats.chests >= 10, prog: () => Math.min(10, S.stats.chests) + '/10' },
     { id: 'fang', name: 'Fang Vinyl', perk: 'vamp', hint: 'Reach land 4', test: () => S.lands.length >= 4, prog: () => Math.min(4, S.lands.length) + '/4' },
     { id: 'step', name: 'Quick Step Stitch', perk: 'speed', hint: 'Defeat 500 creatures', test: () => S.stats.kills >= 500, prog: () => Math.min(500, S.stats.kills) + '/500' },
-    { id: 'plush', name: 'Cozy Plush', perk: 'hp', hint: 'Land 200 perfect-beat kills', test: () => S.stats.perfect >= 200, prog: () => Math.min(200, S.stats.perfect) + '/200' },
+    { id: 'plush', name: 'Cozy Plush', perk: 'hp', hint: 'Land 200 perfect BEAT taps', test: () => S.stats.perfect >= 200, prog: () => Math.min(200, S.stats.perfect) + '/200' },
     { id: 'spark', name: 'Spotlight Spark', perk: 'crit', hint: 'Reach land 8', test: () => S.lands.length >= 8, prog: () => Math.min(8, S.lands.length) + '/8' },
     { id: 'pass', name: 'Backstage Pass', perk: 'cap', hint: 'Defeat 15 headliners', test: () => S.stats.bosses >= 15, prog: () => Math.min(15, S.stats.bosses) + '/15' },
     { id: 'mate', name: "Bandmate's Brew", perk: 'xp', hint: 'Reach hero level 20', test: () => S.level >= 20, prog: () => Math.min(20, S.level) + '/20' },
@@ -272,11 +272,12 @@
       if (vrnd() < ch) dropGear(e.x, e.y, {});
       if (e.elite && vrnd() < 0.08) giveSong(null, e.x, e.y);
     }
-    if (onBeatNow()) {
-      st.beats++;
-      if (sm.groove > 0 && !encoreOn()) { acc += sm.groove; while (acc >= 1) { acc -= 1; S.groove++; } }
-      onPerfect();
-    }
+  }
+  function onBeat(d) { // a PERFECT tap on the BEAT button: counts for recipes, songs and the groove perk
+    if (!d || d.grade !== 'perfect') return;
+    const st = G(), sm = sums(); st.beats++;
+    if (sm.groove > 0 && !encoreOn()) { acc += sm.groove; while (acc >= 1) { acc -= 1; S.groove++; } }
+    onPerfect();
   }
   function onBoss(e) {
     dropGear(e.x, e.y, { minR: 1 }); if (vrnd() < 0.35) giveSong(null, e.x, e.y);
@@ -461,13 +462,13 @@
       plaque(2, y, cw - 4, h, 14); disc(34, y + 32, 22, d.col[0], d.col[1]); drawIcon(d.icon, 34, y + 32, 30);
       ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = font(14); ctx.fillText(d.name + '  Lv ' + L, 66, y + 24);
       ctx.fillStyle = '#cfc6ee'; ctx.font = font(11, false); wrapText(d.desc(L), 66, y + 42, cw - 84, 14);
-      ctx.fillStyle = '#ff9ac8'; ctx.font = font(11); ctx.fillText('Casts after ' + songNeed(L) + ' perfect-beat kills' + (L < 5 ? '  (next level: ' + songNeed(L + 1) + ')' : ''), 66, y + 76);
+      ctx.fillStyle = '#ff9ac8'; ctx.font = font(11); ctx.fillText('Casts after ' + songNeed(L) + ' perfect BEAT taps' + (L < 5 ? '  (next level: ' + songNeed(L + 1) + ')' : ''), 66, y + 76);
       const bw = (cw - 4 - 32) / 4;
       for (let i = 0; i < 3; i++) { const on = st.eqs[i] === sid; btn(8 + i * (bw + 4), y + 82, bw, 40, on ? 'Slot ' + (i + 1) + ' ✓' : 'Slot ' + (i + 1), null, true, on ? 'gold' : 'violet', () => equipSong(sid, i)); }
       btn(8 + 3 * (bw + 4), y + 82, bw, 40, 'Remove', null, st.eqs.includes(sid), 'red', () => { const s = st.eqs.indexOf(sid); if (s >= 0) unequipSong(s); });
       y += h + 8;
     } else if (songSel && songSel.slot !== undefined) y = note(y, cw, 'Tap a song below, then press the slot button to put it in a slot.') + 2;
-    else y = note(y, cw, 'Songs cast themselves when you land perfect-beat kills (the PERFECT pop-up). Each song plays in turn.') + 2;
+    else y = note(y, cw, 'Songs cast themselves when you tap the BEAT button perfectly (the PERFECT pop-up). Each song plays in turn.') + 2;
     // daily buy
     const bought = st.sbuy === dayStr(), canB = !bought && S.gems >= SONG_GEMS;
     cbtn(2, y, cw - 4, 50, canB, 'violet'); ctx.textAlign = 'center'; ctx.fillStyle = canB ? '#fff' : '#cfc6ee'; ctx.font = font(14);
@@ -521,7 +522,7 @@
       btn(8, y + 152, cw - 20, 34, 'CRAFT', null, ok, 'gold', () => { craft(rc.id, sv.s, sv.r); });
       y += 198;
     }
-    return note(y, cw, 'New recipes unlock as you play. Perfect Beats are earned by landing kills right on the beat.') + 6;
+    return note(y, cw, 'New recipes unlock as you play. Perfect Beats are earned by tapping the BEAT button exactly on the beat.') + 6;
   }
 
   regTab('heroes', 'gear', 'Gear', gearTab);
@@ -535,7 +536,7 @@
     onLoad() { dirty = true; T.shield = T.magnet = T.frenzy = 0; pending = false; FLY.length = 0; sel = null; songSel = null; },
     onTour() { dirty = true; T.shield = T.magnet = T.frenzy = 0; pending = false; FLY.length = 0; sel = null; },
     tick, drawWorld, drawHud,
-    on: { kill: onKill, boss: onBoss, bossDrop: onBossDrop, chest: onChest, secret: onSecret },
+    on: { beat: onBeat, kill: onKill, boss: onBoss, bossDrop: onBossDrop, chest: onChest, secret: onSecret },
     pips() { const st = S.feat && S.feat.gear; if (!st || !st.nw) return null; return { heroes: !!(st.nw.gear || st.nw.rec || st.nw.song) }; },
   });
 
@@ -545,12 +546,12 @@
     tutAdd({ id: 'gear_first', order: 2000, when: () => has() && (S.feat.gear.found > 0), title: 'You found gear!', text: 'Open Heroes, then Gear, to equip it. Better rarity means stronger perks.', icon: 'gift', sheet: 'heroes', tab: 'gear', target: () => null });
     tutAdd({ id: 'gear_empty', order: 2100, when: () => has() && S.feat.gear.found > 1 && bagUpgradeForEmpty(), title: 'Free slot!', text: 'You have gear for an empty slot. Open Heroes, Gear, tap it and press Equip.', icon: 'star', target: () => null });
     tutAdd({ id: 'gear_recipe', order: 2200, when: () => has() && Object.keys(S.feat.gear.rec).length > 0, title: 'New recipe!', text: 'The Smelter recipe book lets you craft gear with a guaranteed perk. Open Heroes, then Recipes.', icon: 'forge', sheet: 'heroes', tab: 'recipes', target: () => null });
-    tutAdd({ id: 'gear_song', order: 2300, when: () => has() && S.feat.gear.cards > 0, title: 'A song card!', text: 'Songs cast themselves when you land perfect-beat kills. Equip 3 in Heroes, then Songs.', icon: 'sound', sheet: 'heroes', tab: 'songs', target: () => null });
+    tutAdd({ id: 'gear_song', order: 2300, when: () => has() && S.feat.gear.cards > 0, title: 'A song card!', text: 'Songs cast themselves when you land perfect BEAT taps. Equip 3 in Heroes, then Songs.', icon: 'sound', sheet: 'heroes', tab: 'songs', target: () => null });
   }
   if (typeof tutHelp === 'function') {
     tutHelp('help_gear', 'Gear & rarity', 'Creatures, headliners and chests drop gear: Mic, Sneakers, Outfit and Charm. Rarer gear (Common, Rare, Epic, Legendary) has a bigger main bonus and more perks. Equip it in Heroes, then Gear.', 'gift');
     tutHelp('help_salvage', 'Salvage & upgrade', 'Salvage gear you do not need to get scrap. Spend scrap and coins to upgrade a piece up to +10 and boost its main bonus. A full bag salvages the weakest piece for you.', 'gear');
-    tutHelp('help_recipes', 'Smelter recipes', 'Recipes unlock as you play. Each crafts one gear piece with a perk it always has. Pick the slot and the lowest rarity. It costs coins, scrap and Perfect Beats (kills landed right on the beat).', 'forge');
-    tutHelp('help_songs', 'Songs', 'Equip up to 3 songs in Heroes, then Songs. Every few perfect-beat kills, the next song plays by itself. The ring under your groove bar shows its charge. Duplicate cards level a song up to 5.', 'sound');
+    tutHelp('help_recipes', 'Smelter recipes', 'Recipes unlock as you play. Each crafts one gear piece with a perk it always has. Pick the slot and the lowest rarity. It costs coins, scrap and Perfect Beats (perfect taps on the BEAT button).', 'forge');
+    tutHelp('help_songs', 'Songs', 'Equip up to 3 songs in Heroes, then Songs. Every few perfect BEAT taps, the next song plays by itself. The ring under your groove bar shows its charge. Duplicate cards level a song up to 5.', 'sound');
   }
 })();

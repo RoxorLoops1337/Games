@@ -30,9 +30,9 @@ function boomboxProp(colour) {
   return g;
 }
 
-// createNPC(ctx, id, opts): opts.hat === false drops BeeAmGee's flat cap, opts.look overrides the stored look, opts.outline false is reserved
+// createNPC(ctx, id, opts): opts.look is the look to build (Core.NPCS[id].look at runtime; NPC_LOOKS[id] only when none is passed), opts.hat === false drops BeeAmGee's hat, opts.outline false is reserved
 export function createNPC(ctx, id, opts) {
-  opts = opts || {}; const base = NPC_LOOKS[id] || NPC_LOOKS.foxy, look = Object.assign({}, base, opts.look || {});
+  opts = opts || {}; const look = JSON.parse(JSON.stringify(opts.look || NPC_LOOKS[id] || NPC_LOOKS.foxy));      // the look passed in (runtime Core.NPCS[id].look) wins; NPC_LOOKS is only the fallback
   if (id === 'beeamgee' && opts.hat === false) look.hat = { id: 'none' };
   const c = createCharacter(ctx, look); c.id = id; c.npcName = look.name;
   const seat = opts.seat === undefined ? 0.46 : opts.seat; c.seat = seat; c.music = { bpm: 92, level: 0 };

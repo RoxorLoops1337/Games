@@ -78,6 +78,12 @@
     return 'You are the champion! Collect every cosmetic.';
   };
 
+  // the door the current goal points at ('park' | 'bar' | 'home' | null): the 2D street arrow and the 3D goal beacon / nav dock
+  G.goalDoor = function () {
+    const g = G.goal(G.ch).toLowerCase();
+    return /\bpark\b/.test(g) ? 'park' : /\bbar\b/.test(g) ? 'bar' : /\bhome\b/.test(g) ? 'home' : null;
+  };
+
   /* ------------------------------------------------------------ how to play */
   G.openHelp = function (onClose) {
     const veil = h('div.full', { style: { background: 'rgba(10,6,24,.85)', zIndex: 65 } });
@@ -164,7 +170,7 @@
       h('div.h1.ctr', { style: { marginBottom: '8px' } }, 'SETTINGS'),
       h('div.col', { style: { gap: '7px' } }, slider('MUSIC', 'music', 0, 1, 0.05, (v) => Math.round(v * 100) + '%'), slider('SOUND FX', 'sfx', 0, 1, 0.05, (v) => Math.round(v * 100) + '%'),
         slider('AUDIO OFFSET', 'offset', -150, 150, 5, (v) => (v > 0 ? '+' : '') + v + 'ms'), h('div.ts', null, 'Notes feel late? Lower it. Early? Raise it.'),
-        toggle('MUTE', 'muted'), toggle('REDUCE MOTION', 'reduce'), toggle('SCANLINES', 'scan')),
+        toggle('MUTE', 'muted'), toggle('REDUCE MOTION', 'reduce'), toggle('SCANLINES', 'scan'), G.graphicsRow ? G.graphicsRow() : null),
       h('div.vgap'), E.btn('DONE', 'gold', close));
     veil.addEventListener('click', close); E.ui.append(veil, box);
   };

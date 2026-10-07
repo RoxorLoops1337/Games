@@ -89,14 +89,41 @@ input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } input[type=color
 .ctr { text-align: center; } .gold { color: var(--gold2); } .cyan { color: var(--cyan); } .pink { color: var(--pink); } .lime { color: var(--lime); } .red { color: #ff7b8e; } .dim { opacity: .55; }
 .full { position: absolute; inset: 0; }
 .vgap { height: 4px; }
+
+/* ---- r3 (3D) layers. Hidden in 2D; r3_core toggles body.r3 per scene. z order: #glwrap 1 < #fx 2 < #hud3 3 < #stage 4 < #r3kit 30 < #fade 40 < #flash 41 < #boot3 45 */
+#glwrap { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1; overflow: hidden; display: none; background: #120d1f; touch-action: none; }
+#gl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+#fx { position: fixed; left: 0; top: 0; z-index: 2; pointer-events: none; display: none; }
+#hud3 { z-index: 3; }
+#fade, #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; display: none; }
+#fade { z-index: 40; background: #120d1f; } #flash { z-index: 41; }
+body.r3 #glwrap, body.r3 #fx { display: block; } body.r3 #fade, body.r3 #flash { display: block; } body.r3 #stage { z-index: 4; }
+body:not(.r3) #hud3, body:not(.r3) #r3kit { display: none !important; }
+#boot3 { position: fixed; inset: 0; z-index: 45; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #120d1f; color: #ffd35c; font: 700 18px/1 'Trebuchet MS', system-ui, sans-serif; letter-spacing: .14em; transition: opacity .35s; }
+#boot3 .b3-bar { width: 160px; height: 8px; border-radius: 4px; background: #2c1d4d; overflow: hidden; } #boot3 .b3-bar i { display: block; width: 40%; height: 100%; border-radius: 4px; background: #ff3ea5; animation: b3slide 1.1s ease-in-out infinite alternate; }
+#boot3 .b3-msg { font-size: 11px; letter-spacing: .2em; color: #b9a8e0; } #boot3.off { opacity: 0; pointer-events: none; }
+#boot3.chip { inset: auto; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 56px); transform: translateX(-50%); padding: 7px 14px; flex-direction: row; gap: 8px; border-radius: 16px; background: rgba(23,16,43,.78); font-size: 11px; background-image: none; }
+#boot3.chip .b3-logo, #boot3.chip .b3-bar { display: none; } #boot3.chip .b3-msg { color: #fff6e8; }
+@keyframes b3slide { from { margin-left: 0; } to { margin-left: 60%; } }
 </style>
 </head>
 <body>
+<!-- r3 (3D) layers: #gl lives in #glwrap OUTSIDE the scaled #stage so controls.js projections stay exact. All hidden unless body.r3 (see r3/r3_core.js) -->
+<div id="glwrap"><canvas id="gl"></canvas></div>
+<canvas id="fx"></canvas>
+<div id="hud3"></div>
 <div id="stage">
   <canvas id="cv" width="360" height="640"></canvas>
   <div id="ui"></div>
   <div id="fatal"></div>
 </div>
+<div id="fade"></div>
+<div id="flash"></div>
+<div id="boot3"><div class="b3-logo">BEATBOX HEROES</div><div class="b3-bar"><i></i></div><div class="b3-msg">LOADING 3D</div></div>
+<script>
+// 3D core URLs, hash-stamped by build.js. BBH_R3 = ESM entry (http/https), BBH_R3_IIFE = classic bundle (file:// previews). Only fetched when 3D is chosen (?r=3d, Settings, auto).
+window.BBH_R3 = "r3/entry.js?v=1c6894159f"; window.BBH_R3_IIFE = "park3d.bundle.js?v=14378b09ac";
+</script>
 <script src="pix.js"></script>
 <script src="font.js"></script>
 <script src="catalog.js"></script>
@@ -114,11 +141,22 @@ input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } input[type=color
 <script src="samples.js"></script>
 <script src="core.js"></script>
 <script src="engine.js"></script>
+<script src="r3/icons3d.js"></script>
+<script src="r3/hud3d.js"></script>
+<script src="r3/ui_kit3d.js"></script>
+<script src="r3/quality.js"></script>
+<script src="r3/r3_core.js"></script>
+<script src="r3/boot3d.js"></script>
 <script src="screens.js"></script>
 <script src="creator.js"></script>
+<script src="r3/scenes_shell.js"></script>
 <script src="places.js"></script>
+<script src="r3/spotmap.js"></script>
+<script src="r3/scenes_world.js"></script>
 <script src="minigames.js"></script>
+<script src="r3/scenes_mini.js"></script>
 <script src="rhythm.js"></script>
+<script src="r3/scenes_rhythm.js"></script>
 <script src="dev.js"></script>
 <script src="game.js"></script>
 </body>

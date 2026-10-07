@@ -213,9 +213,9 @@ tutAdd({ id: 'vault', order: 45, icon: 'coin', title: 'Collect your coins', when
 tutAdd({ id: 'plates', order: 50, icon: 'dmg', title: 'Spend coins on glowing plates', when: () => S.wallet >= 8 && S.stats.sold >= 1,
   target: () => tutAffordPlate() || UPG_POS.dmg, until: () => tutSum(S.up) > 0 || S.lands.some(z => z.plates.some(p => p.built)),
   text: 'Walk onto a glowing plate and stand still. Your coins fill it up, and then you get the upgrade. Plates in the plaza make you stronger, faster and tougher.' });
-tutAdd({ id: 'groove', order: 60, icon: 'groove', pos: 'top', title: 'Kill on the beat', when: () => S.stats.kills >= 12,
-  target: () => ({ x: vw / 2, y: vh - DOCK_H - 6 - 32, screen: true }),
-  text: 'The music has a beat. Defeat creatures right on the beat (a pulse ring shows on the stage) to fill the pink GROOVE bar. When it is full: ENCORE! Double coins and double damage for a few seconds.' });
+tutAdd({ id: 'groove', order: 60, icon: 'groove', pos: 'top', title: 'Tap the BEAT button', when: () => S.stats.kills >= 12,
+  target: () => ({ x: vw - 132, y: vh - DOCK_H - 6 - 84, screen: true }),
+  text: 'Watch the ring shrink onto the pink BEAT button. Tap it exactly when the ring touches the button (or press B). A PERFECT tap fills the GROOVE bar and boosts your damage for 3 seconds. Full bar = ENCORE: double coins and damage!' });
 tutAdd({ id: 'cards', order: 70, icon: 'star', title: 'Level up! Cards are yours', when: () => S.level >= 2 && tutSum(S.perks) > 0,
   text: 'Every level-up you pick 1 of 3 cards. The card you picked stays with you for this whole run. Choose what fits how you like to play.' });
 tutAdd({ id: 'dash', order: 80, icon: 'speed', pos: 'top', title: 'Dash!', when: () => S.stats.kills >= 20,
@@ -273,7 +273,7 @@ tutH('sell', 'Selling loot', 'Stand on the SELL stall and Roxor hands over his h
 tutH('vault', 'The Vault', 'Sold coins wait in the Vault. Stand on it to pour them into your wallet. Coins in the Vault are safe, and your crew and towers also add coins here.', 'coin', 'Basics');
 tutH('flow', 'Keep it flowing', 'The longer you stay on the same stall (sell or vault), the faster it works. Short hops back and forth are slower than staying put.', 'speed', 'Basics');
 tutH('upgrades', 'Plaza upgrades', 'The five plates at the bottom of the plaza raise Speed, Backpack (carry more), Power, Tempo (sing faster) and Vitality (health). Each level costs more than the last.', 'dmg', 'Basics');
-tutH('groove', 'Groove and ENCORE', 'Defeat creatures exactly on the beat to fill the pink groove bar. When it is full the band plays an ENCORE: double coins and double damage for a few seconds.', 'groove', 'Fighting');
+tutH('groove', 'Groove and ENCORE', 'Tap the pink BEAT button (or press B) exactly when the shrinking ring touches it. PERFECT taps fill the groove bar, chain up for bonus fill, and boost your damage for 3 seconds. Late or early taps fill less. Kills add a tiny bit too. A full bar starts an ENCORE: double coins and double damage for a few seconds.', 'groove', 'Fighting');
 tutH('combo', 'Combos', 'Defeat creatures one after another without a long pause to build a combo. Long streaks pay bonus coins, with big rewards at 25, 50, 100 and 200. Getting hurt cuts your combo in half.', 'star', 'Fighting');
 tutH('cards', 'Level-up cards', 'Each time you level up you pick 1 of 3 cards, like louder notes or faster tempo. A card lasts for the whole run. You can get the same card again to stack it.', 'star', 'Fighting');
 tutH('dash', 'Dash', 'Tap the green button (or press Space) to dash a short way. You cannot be hurt while you dash. It takes a moment to recharge.', 'speed', 'Fighting');
