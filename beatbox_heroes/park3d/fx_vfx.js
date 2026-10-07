@@ -63,7 +63,7 @@ export function buildVFX(ctx, terrain, S) {
       vC = vec4(iCol, on); vec3 nrm = normalize(vec3(position.x, 0.4, position.z)); vF = aKind > 0.5 ? 1.0 : pow(abs(dot(normalize(cameraPosition - wp), nrm)), 1.4);
       gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
   fragmentShader: `uniform float uGain; varying float vT; varying float vK; varying vec4 vC; varying float vF; varying float vW;
-    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.7) * 0.5 : pow(1.0 - vT, 1.3) * (vW > 0.5 ? 0.1 : 0.42) * vF; a *= vC.a; if (a < 0.003) discard;
+    void main(){ float a = vK > 0.5 ? pow(1.0 - vT, 1.7) * 0.32 : pow(1.0 - vT, 1.3) * (vW > 0.5 ? 0.06 : 0.42) * vF; a *= vC.a; if (a < 0.003) discard;
       gl_FragColor = vec4(vC.rgb * a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(coneMat);
   const coneGeo = instanced(coneBase, { iPos: { a: po, n: 3 }, iS: { a: ps, n: 4 }, iCol: { a: pc, n: 3 } }, cones.length);
@@ -74,12 +74,12 @@ export function buildVFX(ctx, terrain, S) {
   for (let i = 0; i < NR; i++) { rg.set([(R() - 0.5) * 30, 0, -16 + R() * 26], i * 3); rd.set([22 + R() * 10, 1.6 + R() * 2.4, R(), 0], i * 4); }
   const rayBase = new THREE.PlaneGeometry(2, 1); rayBase.translate(0, 0.5, 0);
   const rayMat = new THREE.ShaderMaterial(additive({ uniforms: U, vertexShader: `
-    attribute vec3 iG; attribute vec4 iD; uniform vec3 uSunDir; varying float vT; varying float vX; varying float vPh;
+    attribute vec3 iG; attribute vec4 iD; uniform vec3 uSunDir; varying float vT; varying float vX; varying float vPh; varying float vNear;
     void main(){ vT = position.y; vX = position.x; vPh = iD.z; vec3 P = iG + uSunDir * (position.y * iD.x - 1.0); vec3 V = normalize(cameraPosition - P);
-      vec3 side = normalize(cross(uSunDir, V)); P += side * position.x * iD.y * (0.7 + 0.6 * position.y); gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0); }`,
-  fragmentShader: `uniform float uTime, uRay, uGain; uniform vec3 uSunCol; varying float vT; varying float vX; varying float vPh;
+      vec3 side = normalize(cross(uSunDir, V)); P += side * position.x * iD.y * (0.7 + 0.6 * position.y); vNear = smoothstep(5.0, 14.0, distance(cameraPosition, P)); gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0); }`,
+  fragmentShader: `uniform float uTime, uRay, uGain; uniform vec3 uSunCol; varying float vT; varying float vX; varying float vPh; varying float vNear;
     void main(){ float e = 1.0 - vX * vX; e *= e; float lenF = smoothstep(0.0, 0.18, vT) * (1.0 - smoothstep(0.55, 1.0, vT));
-      float sh = 0.7 + 0.3 * sin(uTime * 0.5 + vPh * 6.283 + vT * 3.0) + 0.1 * sin(vX * 9.0 + vPh * 20.0); float a = e * lenF * sh * uRay; if (a < 0.002) discard;
+      float sh = 0.7 + 0.3 * sin(uTime * 0.5 + vPh * 6.283 + vT * 3.0) + 0.1 * sin(vX * 9.0 + vPh * 20.0); float a = e * lenF * sh * uRay * vNear; if (a < 0.002) discard;
       gl_FragColor = vec4(uSunCol * a * uGain, 1.0); ${GLSL_OUT} }` }));
   mats.push(rayMat);
   const rayGeo = instanced(rayBase, { iG: { a: rg, n: 3 }, iD: { a: rd, n: 4 } }, NR);

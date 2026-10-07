@@ -1,7 +1,7 @@
 // CHARACTER HAIR AND HATS. Both are built on headShell(): a conforming shell over the faceted head with a per-angle hairline.
 // th = angle from +z (front) toward +x (character left). t = 0 at the hairline, 1 at the crown.
 import { C, mix, shade, lite, K, K2, MB, loft, ball, box, tube, lerp, clamp, sstep, mat } from './char_geo.js';
-import { HY, HEAD_TOP, HN, HA0, headP, facePt, ringAt } from './char_body.js';
+import { HY, HEAD_TOP, HN, HA0, SQ, headP, facePt, ringAt } from './char_body.js';
 
 const absA = (th) => { let a = th % (Math.PI * 2); if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return Math.abs(a); };
 const front = (th) => Math.max(0, Math.cos(th));
@@ -11,7 +11,7 @@ const T_TOP = 0.565;
 
 // shell over the head. o: cols, rows, yb(th), thick(th,t), lift(th,t), col(th,t), sk(th,t), apexLift, nh, flat
 export function headShell(mb, o) {
-  const cols = o.cols || HN, rows = o.rows || 4, a0 = Math.PI / cols, G = [];
+  const cols = o.cols || HN, rows = o.rows || 3, a0 = Math.PI / cols, G = [];
   const apexT = (o.thick ? o.thick(0, 1) : 0.03) + (o.apexLift || 0);
   for (let i = 0; i < cols; i++) {
     const th = a0 + (i / cols) * Math.PI * 2, yb = o.yb(absA(th)) + (o.jag ? ((i * 5) % 3 - 1) * o.jag : 0), col = [];
@@ -47,6 +47,21 @@ const HL = {
   long: (a) => kf([[0, 0.4], [0.6, 0.39], [1.0, 0.15], [1.4, -0.12], [2.2, -0.34], [3.15, -0.36]], a),
 };
 
+// fringe blades along the front hairline: hair, not a swim cap
+function fringe(mb, base, hi, yb, n, len, thick, spread) {
+  const K_h = K('head');
+  for (let k = 0; k < n; k++) {
+    const t = (k + 0.5) / n, th = (t - 0.5) * 2 * spread, y0 = yb(Math.abs(th)) + 0.012, w = spread * 2 / n * 0.5, a = headP(th - w, y0), b = headP(th + w, y0), m = headP(th, y0 - len * (0.7 + 0.5 * ((k * 7) % 3) / 2));
+    const out = (p, e) => { const dx = p[0], dz = p[2] - ringAt(p[1]).cz, l = Math.hypot(dx, dz, 0.0001); return [p[0] + dx / l * e, HY + p[1], p[2] + dz / l * e]; };
+    const A = out(a, thick), B = out(b, thick), M = out(m, thick + 0.012);
+    const c0 = mix(base, hi, 0.2 + 0.4 * ((k * 3) % 2));
+    mb.triH(A, B, M, [(A[0] + B[0]) / 2, 0.2, (A[2] + B[2]) / 2], c0, c0, shade(base, 0.8), K_h, K_h, K_h);
+  }
+}
+function partLine(mb, px, col, thick) {
+  const K_h = K('head'), ys = [0.44, 0.49, 0.54, 0.57], pts = ys.map((y) => { const r = ringAt(y), th = Math.asin(clamp(px / r.rx, -0.99, 0.99)), p = headP(th, y), dx = p[0], dz = p[2] - r.cz, l = Math.hypot(dx, dz, 0.0001); return [p[0] + dx / l * thick, HY + y + 0.012 * (y - 0.4), p[2] + dz / l * thick]; });
+  for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; mb.triH([a[0] - 0.008, a[1], a[2]], [a[0] + 0.008, a[1], a[2]], [b[0] + 0.006, b[1], b[2]], [0, 1, 0.3], col, col, col, K_h, K_h, K_h, true, true); mb.triH([a[0] - 0.008, a[1], a[2]], [b[0] + 0.006, b[1], b[2]], [b[0] - 0.006, b[1], b[2]], [0, 1, 0.3], col, col, col, K_h, K_h, K_h, true, true); }
+}
 // per-style recipe. returns nothing, adds into mb
 export function buildHair(mb, ctx, hatCover) {
   const look = ctx.look, h = look.hair || {}, style = h.style || 'crop', base = C(h.color || '#2a2024'), tip = h.tip ? C(h.tip) : null, sk = ctx.skin;
@@ -54,19 +69,19 @@ export function buildHair(mb, ctx, hatCover) {
   const K_h = K('head'), hi = lite(base, 0.12), lo = shade(base, 0.78), cov = hatCover ? 0.3 : 1;                  // cov: hat sits on top, tame the volume
   const colF = (th, t) => { let c = mix(shade(base, 0.82), hi, sstep(0, 1, t)); if (tip) c = c.lerp(tip, sstep(0.55, 0.0, t) * 0.9); return c; };
   const sk2 = (th, t) => (t < 0.35 ? K2('head', th > 0 && absA(th) < 3 ? (Math.sin(th) > 0 ? 'hairSL' : 'hairSR') : 'hairB', (1 - t / 0.35) * 0.45) : K_h);
-  const S = (o) => headShell(mb, Object.assign({ col: colF, sk: sk2 }, o));
+  const S = (o) => headShell(mb, Object.assign({ col: colF, sk: sk2, jag: 0.014, clump: 0.012 }, o));
   const fade = (th, t) => mix(sk, base, sstep(0.0, 0.8, t) * 0.92 + 0.0);
   switch (style) {
     case 'buzz': S({ yb: HL.high, rows: 3, thick: () => 0.012, col: (th, t) => mix(mix(sk, base, 0.7), base, t), sk: () => K_h }); break;
-    case 'crop': S({ yb: HL.fringe, rows: 4, thick: (th, t) => 0.028 + 0.025 * Math.sin(t * Math.PI * 0.5) * cov + 0.02 * front(th) * t * cov }); break;
-    case 'sidepart': S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.03 + 0.03 * Math.sin(t * Math.PI * 0.5) + (th > 0 && th < 1.5 ? 0.035 * t : 0)) * (0.4 + 0.6 * cov) }); break;
+    case 'crop': if (!hatCover) fringe(mb, base, hi, HL.fringe, 6, 0.07, 0.05, 0.85); S({ yb: HL.fringe, rows: 3, thick: (th, t) => 0.028 + 0.025 * Math.sin(t * Math.PI * 0.5) * cov + 0.02 * front(th) * t * cov }); break;
+    case 'sidepart': if (!hatCover) { fringe(mb, base, hi, HL.fringe, 5, 0.06, 0.06, 0.8); partLine(mb, 0.09, shade(base, 0.5), 0.066); } S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.03 + 0.03 * Math.sin(t * Math.PI * 0.5) + (th > 0 && th < 1.5 ? 0.035 * t : 0)) * (0.4 + 0.6 * cov) }); break;
     case 'quiff': S({ yb: HL.high, rows: 5, thick: (th, t) => (0.03 + 0.04 * t + 0.07 * Math.pow(front(th), 2) * t * t) * (0.4 + 0.6 * cov), lift: (th, t) => 0.09 * Math.pow(front(th), 3) * t * t * cov, apexLift: 0.02 }); break;
     case 'undercut': S({ yb: (a) => Math.max(HL.high(a), 0.36 + 0.0 * a), rows: 4, thick: (th, t) => (t < 0.35 ? 0.006 : 0.05 + 0.03 * t) * (0.4 + 0.6 * cov), col: (th, t) => (t < 0.3 ? mix(mix(sk, base, 0.5), base, t / 0.3) : colF(th, t)) }); break;
     case 'fade': case 'fadewave': case 'hightop': {
       const tall = style === 'hightop', wave = style === 'fadewave';
       S({ yb: HL.faded, rows: 5, thick: (th, t) => (0.012 + (tall ? 0.085 : 0.045) * sstep(0.25, 0.8, t) + (wave ? 0.01 * Math.sin(t * 19) : 0)) * (0.4 + 0.6 * cov), lift: (th, t) => (tall ? 0.07 : 0) * sstep(0.5, 1, t) * cov, col: (th, t) => (wave ? mix(fade(th, t), shade(base, 0.8 + 0.2 * Math.sin(t * 19 + th * 3) * 0.5 + 0.1), 0.25) : fade(th, t)), sk: () => K_h, apexLift: tall ? 0.07 : 0 }); break;
     }
-    case 'waves': S({ yb: HL.fringe, rows: 6, thick: (th, t) => (0.035 + 0.025 * t + 0.006 * Math.sin(t * 22)) * (0.4 + 0.6 * cov), col: (th, t) => mix(colF(th, t), shade(base, 0.75), 0.5 + 0.5 * Math.sin(t * 22 + 1)) }); break;
+    case 'waves': if (!hatCover) fringe(mb, base, hi, HL.fringe, 5, 0.05, 0.05, 0.8); S({ yb: HL.fringe, rows: 6, thick: (th, t) => (0.035 + 0.025 * t + 0.006 * Math.sin(t * 22)) * (0.4 + 0.6 * cov), col: (th, t) => mix(colF(th, t), shade(base, 0.75), 0.5 + 0.5 * Math.sin(t * 22 + 1)) }); break;
     case 'curly': {
       S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.045 + 0.04 * t) * (0.5 + 0.5 * cov) });
       if (!hatCover) for (let i = 0; i < 12; i++) { const th = HA0 + (i / 12) * Math.PI * 2, y = i % 2 ? 0.44 : 0.38, p = headP(th, y), r = 0.075; if (front(th) > 0.7 && y < 0.42) continue; ball(mb, [p[0] * 1.2, HY + y + 0.05, p[2] * 1.2 - 0.0], [r, r * 0.9, r], mix(base, hi, (i % 3) / 4), K_h, { detail: 0, jit: 0.02 }); }
@@ -76,8 +91,8 @@ export function buildHair(mb, ctx, hatCover) {
     case 'afro': {
       S({ cols: 16, yb: (a) => kf([[0, 0.46], [0.6, 0.45], [1.2, 0.3], [2.0, 0.12], [3.15, 0.06]], a), rows: 5, thick: (th, t) => (0.03 + (0.175 - 0.03) * Math.pow(Math.sin(Math.min(1, t * 1.15) * Math.PI * 0.5), 0.7) * (front(th) > 0.5 ? 0.55 + 0.45 * t : 1)) * (hatCover ? 0.55 : 1), sk: (th, t) => K_h, apexLift: 0.03 }); break;
     }
-    case 'bob': S({ yb: HL.bob, rows: 5, hangScale: 1.04, thick: (th, t) => (0.05 + 0.03 * Math.sin(t * Math.PI * 0.5)) * (t < 0.3 ? 0.9 : 1) * (0.5 + 0.5 * cov) + (t < 0.2 ? 0.03 : 0), sk: (th, t) => (t < 0.6 ? K2('head', Math.abs(Math.sin(th)) > 0.5 ? (Math.sin(th) > 0 ? 'hairSL' : 'hairSR') : 'hairB', (1 - t / 0.6) * 0.8) : K_h) }); break;
-    case 'long': S({ yb: HL.long, rows: 7, hangScale: 1.03, thick: (th, t) => (0.05 + 0.025 * Math.sin(t * Math.PI * 0.5) + (t < 0.4 ? 0.025 : 0)) * (0.5 + 0.5 * cov), sk: (th, t) => (t < 0.7 ? K2('head', Math.abs(Math.sin(th)) > 0.6 ? (Math.sin(th) > 0 ? 'hairSL' : 'hairSR') : 'hairB', (1 - t / 0.7) * 0.9) : K_h) }); break;
+    case 'bob': if (!hatCover) fringe(mb, base, hi, HL.bob, 7, 0.07, 0.065, 0.9); S({ yb: HL.bob, rows: 5, hangScale: 1.04, thick: (th, t) => (0.05 + 0.03 * Math.sin(t * Math.PI * 0.5)) * (t < 0.3 ? 0.9 : 1) * (0.5 + 0.5 * cov) + (t < 0.2 ? 0.03 : 0), sk: (th, t) => (t < 0.6 ? K2('head', Math.abs(Math.sin(th)) > 0.5 ? (Math.sin(th) > 0 ? 'hairSL' : 'hairSR') : 'hairB', (1 - t / 0.6) * 0.8) : K_h) }); break;
+    case 'long': if (!hatCover) { fringe(mb, base, hi, HL.long, 7, 0.07, 0.065, 0.9); partLine(mb, 0.0, shade(base, 0.5), 0.064); } S({ yb: HL.long, rows: 7, hangScale: 1.03, thick: (th, t) => (0.05 + 0.025 * Math.sin(t * Math.PI * 0.5) + (t < 0.4 ? 0.025 : 0)) * (0.5 + 0.5 * cov), sk: (th, t) => (t < 0.7 ? K2('head', Math.abs(Math.sin(th)) > 0.6 ? (Math.sin(th) > 0 ? 'hairSL' : 'hairSR') : 'hairB', (1 - t / 0.7) * 0.9) : K_h) }); break;
     case 'mullet': S({ yb: (a) => kf([[0, 0.42], [1.0, 0.36], [1.8, 0.2], [2.6, -0.05], [3.15, -0.12]], a), rows: 5, thick: (th, t) => (0.035 + 0.03 * t) * (0.5 + 0.5 * cov), sk: (th, t) => (t < 0.5 && absA(th) > 1.9 ? K2('head', 'hairB', 1 - t / 0.5) : K_h) }); break;
     case 'ponytail': {
       S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.03 + 0.025 * t) * (0.5 + 0.5 * cov) });
@@ -90,7 +105,7 @@ export function buildHair(mb, ctx, hatCover) {
       break;
     }
     case 'buns': {
-      S({ yb: HL.high, jag: 0.012, rows: 4, thick: (th, t) => (0.022 + 0.02 * t) * (0.6 + 0.4 * cov) });
+      S({ yb: HL.high, rows: 4, thick: (th, t) => (0.022 + 0.02 * t) * (0.6 + 0.4 * cov) }); if (!hatCover) partLine(mb, 0.0, shade(base, 0.5), 0.034);
       [1, -1].forEach((s) => { const r = 0.12, c = [s * 0.15, HY + 0.63, -0.05]; ball(mb, c, [r, r * 0.95, r], base, K(s > 0 ? 'puffL' : 'puffR'), { detail: 1, col2: hi, jit: 0.04 });
         loft(mb, [{ y: HY + 0.59, rx: 0.062, rz: 0.062, cx: s * 0.15, cz: -0.05, c: C(ctx.acc2 || '#ffd23f'), sk: K(s > 0 ? 'puffL' : 'puffR') }, { y: HY + 0.615, rx: 0.07, rz: 0.07, cx: s * 0.15, cz: -0.05, c: C(ctx.acc2 || '#ffd23f'), sk: K(s > 0 ? 'puffL' : 'puffR') }], { n: 6, caps: '' }); });
       break;
@@ -98,8 +113,8 @@ export function buildHair(mb, ctx, hatCover) {
     case 'topknot': { S({ yb: HL.faded, rows: 4, thick: (th, t) => (0.012 + 0.045 * sstep(0.3, 0.8, t)) * (0.5 + 0.5 * cov), col: fade, sk: () => K_h }); ball(mb, [0, HY + 0.66, -0.07], [0.085, 0.09, 0.085], base, K_h, { detail: 1, col2: hi, jit: 0.025 }); break; }
     case 'dreadbun': { S({ yb: HL.faded, rows: 4, thick: (th, t) => (0.012 + 0.045 * sstep(0.3, 0.8, t)) * (0.5 + 0.5 * cov), col: fade, sk: () => K_h }); ball(mb, [0, HY + 0.68, -0.08], [0.1, 0.09, 0.1], base, K('puffL'), { detail: 1, col2: hi, jit: 0.04 }); [-0.07, 0.07].forEach((x) => tube(mb, [[x, HY + 0.6, -0.1], [x * 2, HY + 0.55, -0.2]], [0.02, 0.012], base, { n: 4, tip: 0.02, sk: K('head') })); break; }
     case 'braids': case 'locs': case 'twists': {
-      const long = style === 'locs', tw = style === 'twists', cnt = tw ? 11 : long ? 12 : 8, len = tw ? 0.17 : long ? 0.34 : 0.3;
-      S({ yb: HL.fringe, rows: 4, thick: (th, t) => (0.03 + 0.03 * t) * (0.5 + 0.5 * cov) });
+      const long = style === 'locs', tw = style === 'twists', cnt = tw ? 9 : long ? 11 : 8, len = tw ? 0.17 : long ? 0.34 : 0.3;
+      S({ yb: HL.fringe, rows: 3, thick: (th, t) => (0.03 + 0.03 * t) * (0.5 + 0.5 * cov) });
       for (let i = 0; i < cnt; i++) {
         const th = Math.PI * (0.42 + 1.16 * (i + 0.5) / cnt), ang = th, y0 = tw ? 0.36 : 0.32, sideSign = Math.sin(ang) > 0 ? 1 : -1;
         if (tw && Math.cos(ang) > 0.55) continue;
@@ -169,12 +184,12 @@ export function buildHat(mb, glow, ctx) {
   const look = ctx.look, ht = look.hat || {}, id = ht.id || 'none'; if (id === 'none' || !HAT_COVER[id] && HAT_COVER[id] !== 0) return;
   const col = C(ht.color || '#17141f'), c2 = ht.color2 ? C(ht.color2) : lite(col, 0.18), K_h = K('head'), dark = shade(col, 0.7), accent = C(ht.accent || '#ffd23f');
   const bs = (i) => K_h, vol = ctx.hairVol || 0;      // hairVol: extra crown lift under the hat
-  const dome = (yb, thick, rows, extra) => headShell(mb, Object.assign({ yb: typeof yb === 'function' ? yb : () => yb, rows: rows || 5, thick: (th, t) => (typeof thick === 'function' ? thick(th, t) : thick) + vol * 0.5 * t, col: (th, t) => mix(shade(col, 0.88), lite(col, 0.06), t), sk: () => K_h, apexLift: 0.0 }, extra || {}));
-  const capBill = (a0, a1, w, droop, up) => brimTongue(mb, 0.385, 0.045, w, (a0 + a1) / 2, (a1 - a0) / 2, droop, lite(col, 0.08), shade(col, 0.55), bs, 8);
+  const dome = (yb, thick, rows, extra) => headShell(mb, Object.assign({ flatHair: 0, yb: typeof yb === 'function' ? yb : () => yb, rows: rows || 5, thick: (th, t) => (typeof thick === 'function' ? thick(th, t) : thick) + vol * 0.5 * t, col: (th, t) => mix(shade(col, 0.88), lite(col, 0.06), t), sk: () => K_h, apexLift: 0.0 }, extra || {}));
+  const capBill = (a0, a1, w, droop, up) => brimTongue(mb, 0.43, 0.04, w, (a0 + a1) / 2, (a1 - a0) / 2, droop, lite(col, 0.08), shade(col, 0.55), bs, 6);
   switch (id) {
     case 'fitted': case 'cap': case 'snapback': case 'trucker': case 'capback': {
-      const back = id === 'capback', yb = (th) => 0.39 - 0.03 * Math.abs(Math.cos(th)) + (Math.cos(th) > 0.5 ? 0.0 : 0), th = 0.05;
-      dome(yb, (a, t) => th + 0.015 * Math.sin(t * Math.PI * 0.6), 5, { col: (a, t) => (id === 'trucker' && Math.cos(a) < -0.1 ? mix('#e8dcc8', c2, 0.3) : id === 'snapback' && Math.cos(a) > 0.6 && t < 0.5 ? c2 : mix(shade(col, 0.86), lite(col, 0.08), t)) });
+      const back = id === 'capback', yb = (th) => 0.425 - 0.07 * (1 - Math.cos(th)) * 0.5 + (Math.cos(th) > 0.5 ? 0.0 : 0), th = 0.034;
+      dome(yb, (a, t) => th + 0.015 * Math.sin(t * Math.PI * 0.6), 4, { col: (a, t) => (id === 'trucker' && Math.cos(a) < -0.1 ? mix('#e8dcc8', c2, 0.3) : id === 'snapback' && Math.cos(a) > 0.6 && t < 0.5 ? c2 : mix(shade(col, 0.86), lite(col, 0.08), t)) });
       // seams + button
       ball(mb, [0, HY + HEAD_TOP + 0.075 + vol * 0.5, -0.035], [0.022, 0.016, 0.022], c2, K_h, { detail: 0 });
       const a0 = back ? Math.PI - 1.05 : -1.05, a1 = back ? Math.PI + 1.05 : 1.05;

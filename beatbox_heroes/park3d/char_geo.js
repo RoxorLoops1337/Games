@@ -54,7 +54,7 @@ export class MB {
   tri(a, b, c, ca, cb, cc, sa, sb, sc, nh, flat) {
     _a.set(a[0], a[1], a[2]); _b.set(b[0], b[1], b[2]); _c.set(c[0], c[1], c[2]);
     _n.crossVectors(_b.sub(_a), _c.sub(_a)); const l = _n.length(); if (l < 1e-9) return; _n.multiplyScalar(1 / l);
-    let f = 1; if (!flat) { const k = _n.y * 0.5 + 0.5; f = (0.94 + 0.18 * k) + (this.rnd() - 0.5) * 0.05; }
+    let f = 1; if (!flat) { const k = _n.y * 0.5 + 0.5; f = (1.02 + 0.18 * k) + (this.rnd() - 0.5) * 0.05; }
     const cols = [ca, cb || ca, cc || ca], pts = [a, b, c], sks = [sa, sb || sa, sc || sa];
     for (let i = 0; i < 3; i++) { const p = pts[i], q = cols[i], s = sks[i]; this.P.push(p[0], p[1], p[2]); this.Cl.push(Math.min(1.3, q.r * f), Math.min(1.3, q.g * f * (flat ? 1 : 0.995)), Math.min(1.3, q.b * f * (flat ? 1 : 1.02))); this.S.push(s[0], s[1], s[2]); }
     this.H.push(nh ? 1 : 0);
@@ -84,7 +84,7 @@ const sgnpow = (s, e) => Math.sign(s) * Math.pow(Math.abs(s), e);
 // Ring loft: the workhorse. rings = [{ y, rx, rz, cx, cz, c, sk, sq, rot }], axis = y (apply o.m to reorient).
 // o: n (sides, default 8), a0 (start angle), caps ('b','t','bt'), capTip ([x,y,z] apex for top cap), m (Matrix4), nh, fc(i,j)=>Color for per-facet colour, sq default squareness exponent
 export function loft(mb, rings, o) {
-  o = o || {}; const n = o.n || 8, a0 = o.a0 === undefined ? Math.PI / n : o.a0, M = o.m || null, flip = M && M.determinant() < 0, nh = !!o.nh;
+  o = o || {}; const n = o.n || 8, a0 = o.a0 === undefined ? Math.PI / n : o.a0, M = o.m || null, ds = rings[rings.length - 1].y < rings[0].y ? -1 : 1, flip = (!!M && M.determinant() < 0) !== (ds < 0), nh = !!o.nh;
   const R = rings.map((r) => {
     const col = C(r.c || '#ff00ff'), e = r.sq || o.sq || 1, pts = [];
     for (let i = 0; i < n; i++) { const th = a0 + (i / n) * Math.PI * 2 + (r.rot || 0); pts.push(xf(M, [(r.cx || 0) + r.rx * sgnpow(Math.sin(th), e), r.y, (r.cz || 0) + r.rz * sgnpow(Math.cos(th), e)])); }
@@ -100,8 +100,8 @@ export function loft(mb, rings, o) {
     }
   }
   const caps = o.caps || '';
-  if (caps.indexOf('b') >= 0) { const r = R[0], hint = M ? new THREE.Vector3(0, -1, 0).transformDirection(M).toArray() : [0, -1, 0]; for (let i = 0; i < n; i++) { const i2 = (i + 1) % n; mb.triH(r.ctr, r.pts[i], r.pts[i2], hint, r.col, r.col, r.col, r.sk, r.sk, r.sk, nh, o.flat); } }
-  if (caps.indexOf('t') >= 0) { const r = R[R.length - 1], apex = o.capTip ? xf(M, o.capTip) : r.ctr, hint = M ? new THREE.Vector3(0, 1, 0).transformDirection(M).toArray() : [0, 1, 0]; const cc = o.capCol ? C(o.capCol) : r.col; for (let i = 0; i < n; i++) { const i2 = (i + 1) % n; mb.triH(apex, r.pts[i], r.pts[i2], hint, cc, r.col, r.col, r.sk, r.sk, r.sk, nh, o.flat); } }
+  if (caps.indexOf('b') >= 0) { const r = R[0], cb = o.capColB ? C(o.capColB) : r.col, hint = M ? new THREE.Vector3(0, -ds, 0).transformDirection(M).toArray() : [0, -ds, 0]; for (let i = 0; i < n; i++) { const i2 = (i + 1) % n; mb.triH(r.ctr, r.pts[i], r.pts[i2], hint, cb, cb, cb, r.sk, r.sk, r.sk, nh, o.flat); } }
+  if (caps.indexOf('t') >= 0) { const r = R[R.length - 1], apex = o.capTip ? xf(M, o.capTip) : r.ctr, hint = M ? new THREE.Vector3(0, ds, 0).transformDirection(M).toArray() : [0, ds, 0]; const cc = o.capCol ? C(o.capCol) : r.col; for (let i = 0; i < n; i++) { const i2 = (i + 1) % n; mb.triH(apex, r.pts[i], r.pts[i2], hint, cc, r.col, r.col, r.sk, r.sk, r.sk, nh, o.flat); } }
 }
 
 // faceted ball / ellipsoid (icosphere detail 0 = 20 tris, 1 = 80). o: col2 (top colour), detail, jit, nh, m, flat

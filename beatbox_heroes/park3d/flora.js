@@ -11,6 +11,7 @@ import { buildLife } from './flora_life.js';
 import { makeField } from './terrain_ground.js';
 
 export function buildFlora(ctx, terrain) {
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : 0);
   const group = new THREE.Group(); group.name = 'flora';
   const B = terrain.bounds || { minX: -17, maxX: 17, minZ: -27, maxZ: 27 }, An = terrain.anchors || {};
   const R = rng(20241), blocked = (x, z) => { try { return terrain.blocked ? terrain.blocked(x, z) : false; } catch (e) { return false; } };
@@ -99,11 +100,11 @@ export function buildFlora(ctx, terrain) {
 
   // ---------- animals ----------
   const homes = [{ x: bench.x + 3.8, z: bench.z + 1.6, n: 4 }, { x: fountain.x + 5.2, z: fountain.z + 5.5, n: 4 }, { x: gate.x - 1.2, z: gate.z - 8, n: 3 }];
-  const fc = beds.slice(0, 7).map((b) => ({ x: b.x, z: b.z, n: 1 + (b.r > 1.6 ? 1 : 0) }));
+  const fc = beds.slice(0, 9).map((b, i) => ({ x: b.x, z: b.z, n: 1 + (i % 2) }));
   const life = buildLife(ctx, { pigeonHomes: homes }, free, fc, gy); group.add(life.group);
 
   let litK = 1;
-  const stats = { rejected: rejected.join(' '), trees: placed.length, buildings: sky.buildings, litWindows: sky.litWindows, ...plants.stats, pigeons: life.count.pigeons, air: life.count.air };
+  const stats = { ms: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - t0), rejected: rejected.join(' '), trees: placed.length, buildings: sky.buildings, litWindows: sky.litWindows, ...plants.stats, pigeons: life.count.pigeons, air: life.count.air };
   if (typeof window !== 'undefined') window.__floraStats = stats; window.__life = life; // debug hook for the shot tool
   function update(dt, t) {
     plants.update(dt, t); life.update(dt, t);

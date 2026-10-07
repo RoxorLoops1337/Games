@@ -72,7 +72,7 @@ export function createPost(ctx, S) {
     setQuality(q) { if (q !== tier || (!comp && q !== 'low')) build(q); },
     resize(w, h, dpr) { W = w; H = h; DPR = dpr; applySize(); },
     update(t) {
-      if (bloom) { bloom.strength = S.bloom; bloom.threshold = S.bloomThr; bloom.radius = 0.45; }
+      if (bloom) { bloom.strength = S.bloom; bloom.threshold = S.bloomThr; bloom.radius = 0.3; }
       if (grade) { const u = grade.uniforms; u.uTime.value = t; u.uVig.value = S.vig; u.uSat.value = S.sat; u.uShadow.value.copy(S.gShadow); u.uHigh.value.copy(S.gHigh); u.uGrain.value = tier === 'high' ? 0.035 : 0.028; }
     },
     render() {

@@ -30,6 +30,8 @@ let MATS = null;
 function mats() {
   if (MATS) return MATS;
   const lit = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  // albedo-modulated cool violet fill light so shadows stay hue-shifted and readable (no black skin, no grey shadows)
+  lit.onBeforeCompile = (sh) => { sh.uniforms.uFill = { value: new THREE.Color(0.2, 0.15, 0.27) }; sh.fragmentShader = 'uniform vec3 uFill;\n' + sh.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n reflectedLight.indirectDiffuse += diffuseColor.rgb * uFill;'); };
   const glow = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const hull = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, color: new THREE.Color(0.24, 0.2, 0.32) });
   hull.onBeforeCompile = (sh) => { sh.uniforms.uHull = { value: 0.013 }; sh.vertexShader = 'attribute vec3 hullN;\nuniform float uHull;\n' + sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + hullN * uHull;'); };
@@ -52,6 +54,8 @@ function makeSkinned(geo, material, castShadow) {
   const m = new THREE.SkinnedMesh(geo, material); m.frustumCulled = false; m.castShadow = !!castShadow; m.receiveShadow = !!castShadow; return m;
 }
 
+// lighting adaptation: very dark skin tones are lifted toward a readable floor so faces keep their form in golden-hour light
+function liftSkin(c) { const hsl = {}; c.getHSL(hsl); const floor = 0.3; if (hsl.l < floor) hsl.l += (floor - hsl.l) * 0.55; hsl.s = Math.min(1, hsl.s * 1.06); return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l); }
 export function createCharacter(ctx, look, extra) {
   const object = new THREE.Group(); object.name = 'character';
   const rig = makeRig(object), M = mats(), meshes = {};
@@ -63,17 +67,18 @@ export function createCharacter(ctx, look, extra) {
 
   function build(look) {
     const d = dims(look.body); fitRig(rig, d);
-    const cx = { look, d, rest: restWorld(d), skin: C(look.skin), shoeAccent: null };
+    const cx = { look, d, rest: restWorld(d), skin: liftSkin(C(look.skin)), shoeAccent: null };
     const meta = wearMeta(look), lit = new MB(11), glow = new MB(12);
     const hatId = look.hat && look.hat.id, hatCover = HAT_COVER[hatId || 'none'] || 0;
     cx.hairVol = 0;
     const slot = {}; let mark = 0; const tk = (n) => { slot[n] = lit.tris - mark; mark = lit.tris; };
-    buildHead(lit, cx); tk('head'); buildFace(lit, glow, cx); tk('face'); buildFacial(lit, cx); tk('facial');
-    buildArms(lit, cx, d, meta.sleeveEnd); tk('arms'); buildLegs(lit, cx, d, meta.legEnd); tk('legs');
-    if (meta.top.f === 'tank' && meta.top.crop) { const sk = cx.skin; loft(lit, [0.46, 0.52, 0.58, 0.64].map((y, i) => { const b = bodyR(y, d); return { y, rx: b.rx + 0.006, rz: b.rz + 0.006, cz: 0.004, sk: K('hips'), c: shade(sk, 0.9 + i * 0.03) }; }), { n: 10, sq: 0.8 }); }
-    buildTop(lit, cx, d); tk('top'); buildBottom(lit, cx, d); tk('bottom'); buildShoes(lit, cx, d); tk('shoes');
-    buildHair(lit, cx, hatCover); tk('hair'); buildHat(lit, glow, cx); tk('hat');
-    buildGlasses(lit, glow, cx); tk('glasses'); buildAccessories(lit, glow, cx, api); tk('acc'); api.slotTris = slot;
+    const sf = (n, fn) => { try { fn(); } catch (e) { if (!build.warned) build.warned = {}; if (!build.warned[n]) { build.warned[n] = 1; console.error('[characters] ' + n + ' failed: ' + (e && e.stack || e)); } } tk(n); };
+    sf('head', () => buildHead(lit, cx)); sf('face', () => buildFace(lit, glow, cx)); sf('facial', () => buildFacial(lit, cx));
+    sf('arms', () => buildArms(lit, cx, d, meta.sleeveEnd)); sf('legs', () => buildLegs(lit, cx, d, meta.legEnd));
+    if (meta.top.f === 'tank' && meta.top.crop) { sf('midriff', () => { const sk = cx.skin; loft(lit, [0.46, 0.52, 0.58, 0.64].map((y, i) => { const b = bodyR(y, d); return { y, rx: b.rx + 0.006, rz: b.rz + 0.006, cz: 0.004, sk: K('hips'), c: shade(sk, 0.9 + i * 0.03) }; }), { n: 10, sq: 0.8 }); }); }
+    sf('top', () => buildTop(lit, cx, d)); sf('bottom', () => buildBottom(lit, cx, d)); sf('shoes', () => buildShoes(lit, cx, d));
+    sf('hair', () => buildHair(lit, cx, hatCover)); sf('hat', () => buildHat(lit, glow, cx));
+    sf('glasses', () => buildGlasses(lit, glow, cx)); sf('acc', () => buildAccessories(lit, glow, cx, api)); api.slotTris = slot;
     const g = finalize([lit]), gg = finalize([glow]), hg = makeHull(g);
     [['lit', g], ['glow', gg], ['hull', hg]].forEach(([k, geo]) => { const m = meshes[k]; if (m.geometry) m.geometry.dispose(); m.geometry = geo; m.visible = geo.attributes.position.count > 0; });
     api.tris = (g.attributes.position.count + gg.attributes.position.count + hg.attributes.position.count) / 3; api.triParts = { lit: g.attributes.position.count / 3, glow: gg.attributes.position.count / 3, hull: hg.attributes.position.count / 3 };

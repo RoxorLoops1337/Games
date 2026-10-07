@@ -15,10 +15,10 @@ const C = (h) => new THREE.Color(h);
 const KF = [
   { elev: 50, az: 70, sunI: 2.5, sunCol: C('#fff0d2'), hemiI: 1.6, hemiSky: C('#a9c3f4'), hemiGround: C('#caa27c'), rimI: 0.35, rimCol: C('#ffd0c0'), fogNear: 22, fogFar: 110, fog: C('#c6d9f3'), exposure: 0.98,
     zen: C('#4f86d6'), up: C('#82abe8'), mid: C('#9fc2ee'), glow: C('#ffe9c0'), disc: C('#fff3d0'), discSize: 0.034, discI: 1.0, glowI: 0.5, streak: 0.0, stars: 0, lamp: 0.0, neon: 0.0, stage: 0.2, windows: 0.0, ray: 0.05, fly: 0.0, dust: 0.5, lampLight: 0,
-    bloom: 0.3, bloomThr: 1.15, vig: 0.4, sat: 1.06, skyTint: C('#f6f8ff'), gShadow: C('#ece4ff'), gHigh: C('#fff4e0') },
+    bloom: 0.3, bloomThr: 1.15, vig: 0.4, sat: 1.06, skyTint: C('#d4dfff'), gShadow: C('#ece4ff'), gHigh: C('#fff4e0') },
   { elev: 21, az: 78, sunI: 3.3, sunCol: C('#ffc783'), hemiI: 1.65, hemiSky: C('#a49cf2'), hemiGround: C('#a17fbe'), rimI: 1.1, rimCol: C('#ff8fb0'), fogNear: 14, fogFar: 80, fog: C('#e49fb2'), exposure: 1.02,
     zen: C('#4a4c9a'), up: C('#9a66a8'), mid: C('#ee8a98'), glow: C('#ffb067'), disc: C('#ffe2a8'), discSize: 0.045, discI: 1.4, glowI: 1.0, streak: 0.7, stars: 0.1, lamp: 0.72, neon: 0.75, stage: 0.8, windows: 0.65, ray: 0.2, fly: 0.45, dust: 1.0, lampLight: 10,
-    bloom: 0.4, bloomThr: 1.3, vig: 0.55, sat: 1.22, skyTint: C('#ffe9f2'), gShadow: C('#dccbff'), gHigh: C('#ffecd2') },
+    bloom: 0.3, bloomThr: 1.25, vig: 0.55, sat: 1.22, skyTint: C('#ffe9f2'), gShadow: C('#dccbff'), gHigh: C('#fff3e6') },
   { elev: 36, az: 15, sunI: 0.95, sunCol: C('#8fa4ff'), hemiI: 1.9, hemiSky: C('#6460c4'), hemiGround: C('#6a52a0'), rimI: 0.9, rimCol: C('#ff5fb0'), fogNear: 12, fogFar: 70, fog: C('#41366f'), exposure: 1.22,
     zen: C('#1b1950'), up: C('#2f2b74'), mid: C('#5c3b88'), glow: C('#7f78d8'), disc: C('#e2e8ff'), discSize: 0.03, discI: 1.1, glowI: 0.5, streak: 0.0, stars: 1, lamp: 1.0, neon: 1.0, stage: 1.0, windows: 1.0, ray: 0.035, fly: 1.0, dust: 0.25, lampLight: 14,
     bloom: 0.7, bloomThr: 0.9, vig: 0.6, sat: 1.1, skyTint: C('#4f4a92'), gShadow: C('#d8d0ff'), gHigh: C('#ffe4d0') },
@@ -31,7 +31,7 @@ const TIER = { low: { shadow: 512, lights: 1 }, med: { shadow: 1024, lights: 2 }
 export function buildLighting(ctx, terrain) {
   const { renderer, scene, camera } = ctx; const anchors = terrain.anchors || {};
   const group = new THREE.Group(); group.name = 'lighting';
-  const S = { sunDir: new THREE.Vector3(), sunCol: new THREE.Color(), tod: 0.5, night: 0, lamp: 0, neon: 0, stage: 0, windows: 0, ray: 0, fly: 0, dust: 0, bloom: 0.4, bloomThr: 1.3, vig: 0.5, sat: 1.1, gShadow: new THREE.Color(), gHigh: new THREE.Color() };
+  const S = { sunDir: new THREE.Vector3(), sunCol: new THREE.Color(), tod: 0.5, night: 0, lamp: 0, neon: 0, stage: 0, windows: 0, ray: 0, fly: 0, dust: 0, bloom: 0.3, bloomThr: 1.25, vig: 0.5, sat: 1.1, gShadow: new THREE.Color(), gHigh: new THREE.Color() };
   const cur = {}; NUM.forEach((k) => { cur[k] = 0; }); COL.forEach((k) => { cur[k] = new THREE.Color(); });
   const fog = new THREE.Fog('#e49fb2', 14, 80); scene.fog = fog; scene.background = new THREE.Color('#e49fb2');
   renderer.info.autoReset = false;
@@ -68,7 +68,7 @@ export function buildLighting(ctx, terrain) {
   let tCur = 0.5, tTarget = 0.5, first = true, started = false, q = ctx.quality || 'high', followObj = null, texel = 28 / 1024, evAcc = 0, winMats = [], winScan = -1e9, W = 540, H = 960;
   const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3(), fpos = new THREE.Vector3(); const UP = new THREE.Vector3(0, 1, 0);
   const tintMats = [];
-  const scanCb = (o) => { const m = o.material; if (m && !Array.isArray(m) && (o.name === 'skyline' || o.name === 'skyline_windows') && tintMats.indexOf(m) < 0) { m.userData.todTint = o.name === 'skyline' ? 'body' : 'lit'; tintMats.push(m); } if (m && !Array.isArray(m) && m.userData && m.userData.todTint && tintMats.indexOf(m) < 0) tintMats.push(m); if (m && !Array.isArray(m) && m.userData && m.userData.nightGlow !== undefined && winMats.indexOf(m) < 0) winMats.push(m); };
+  const scanCb = (o) => { const m = o.material; if (m && !Array.isArray(m) && (o.name === 'skyline' || o.name === 'skyline_windows' || (o.name === 'clouds' && m.isMeshBasicMaterial)) && tintMats.indexOf(m) < 0) { m.userData.todTint = o.name === 'skyline_windows' ? 'lit' : 'body'; tintMats.push(m); } if (m && !Array.isArray(m) && m.userData && m.userData.todTint && tintMats.indexOf(m) < 0) tintMats.push(m); if (m && !Array.isArray(m) && m.userData && m.userData.nightGlow !== undefined && winMats.indexOf(m) < 0) winMats.push(m); };
 
   function sample(v) { // v in 0..1 -> fills cur
     const i = v < 0.5 ? 0 : 1, f = ss(Math.min(1, Math.max(0, (v - i * 0.5) * 2))), A = KF[i], B = KF[i + 1];

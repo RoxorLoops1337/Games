@@ -43,15 +43,25 @@ const FLOWER_COLS = [
   ['#8a63ff', '#d3c2ff'], // violet
   ['#ff8a4d', '#ffd0a0'], // orange
 ];
+function tri1(pts, c) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3)); const k = col(c); g.setAttribute('color', new THREE.Float32BufferAttribute([k.r, k.g, k.b, k.r, k.g, k.b, k.r, k.g, k.b], 3)); g.computeVertexNormals(); return g; }
+function plainG(g) { if (g.attributes.uv) g.deleteAttribute('uv'); return g; }
 function flowerGeo(r, c, h) {
   const parts = [];
-  const stem = new THREE.CylinderGeometry(0.012, 0.018, h, 3, 1, true); stem.translate(0, h / 2, 0); parts.push(paint(nonIndexed(stem), '#3f7d4e'));
-  const head = new THREE.ConeGeometry(0.16, 0.08, 5, 1, true); head.rotateX(Math.PI); // dish facing up
-  const hn = nonIndexed(head); const p = hn.attributes.position, a = new Float32Array(p.count * 3), ca = col(c[0]), cb = col(c[1]), cc = col('#ffe27a');
-  for (let i = 0; i < p.count; i++) { const apex = p.getY(i) < 0; const k = apex ? cc : (i % 2 ? ca : cb); a[i * 3] = k.r; a[i * 3 + 1] = k.g; a[i * 3 + 2] = k.b; }
-  hn.setAttribute('color', new THREE.BufferAttribute(a, 3));
-  parts.push(xf(hn, { y: h + 0.02, rx: (r() - 0.5) * 0.5, rz: (r() - 0.5) * 0.5 }));
-  const leaf = new THREE.ConeGeometry(0.05, 0.22, 3, 1, true); leaf.translate(0, 0.11, 0); const lf = paint(nonIndexed(leaf), '#5aa157');
+  const stem = new THREE.CylinderGeometry(0.014, 0.02, h, 3, 1, true); stem.translate(0, h / 2, 0); parts.push(plainG(paint(nonIndexed(stem), '#62b862')));
+  // head: five petals (light at the root, saturated at the tip) around a yellow centre, a shallow bowl facing up
+  const hp = [], ca = col(c[0]), cb = col(c[1]), cc = col('#ffd84a'), rr = 0.2, ri = 0.06;
+  const P = (a, rad, y) => [Math.cos(a) * rad, y, Math.sin(a) * rad];
+  const push = (a0, a1, a2, k0, k1, k2) => { hp.push(a0, a1, a2); return [k0, k1, k2]; };
+  const pos = [], cols = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2; const A = P(a - 0.62, ri, 0.0), B = P(a, rr, 0.04), C = P(a + 0.62, ri, 0.0);
+    pos.push(A, B, C); cols.push(cb, ca, cb);
+  }
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; pos.push([0, 0.025, 0], P(a, 0.05, 0.005), P(a + 2.094, 0.05, 0.005)); cols.push(cc, cc, cc); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos.flat(), 3));
+  const carr = []; cols.forEach((k) => carr.push(k.r, k.g, k.b)); g.setAttribute('color', new THREE.Float32BufferAttribute(carr, 3)); g.computeVertexNormals();
+  parts.push(xf(g, { y: h + 0.02, rx: (r() - 0.5) * 0.5, rz: (r() - 0.5) * 0.5 }));
+  const lf = tri1([[-0.03, 0, 0], [0.03, 0, 0], [0, 0.2, 0.0]], '#6cc068');
   parts.push(xf(lf, { x: 0.02, y: 0, rz: -0.9, ry: r() * 6 }));
   return merged(parts);
 }
@@ -67,7 +77,7 @@ export function buildPlants(ctx, A) {
   // A: { ok(x,z,pad), trees:[{x,z,s,kind}], flowerSpots, planterSpots, bounds, anchors, R }
   const R = rng(777), out = { group: new THREE.Group(), update() {}, stats: {} };
   const shrub = [], flowers = [], decalGeoms = [];
-  const baseMat = flatMat(); const sway = addSway(flatMat({ side: THREE.DoubleSide, emissive: new THREE.Color('#3a2a4a') }), { amp: 0.05, height: 0.45, freq: 1.7 });
+  const baseMat = flatMat(); const sway = addSway(flatMat({ side: THREE.DoubleSide, emissive: new THREE.Color('#34503a') }), { amp: 0.05, height: 0.45, freq: 1.7 });
 
   // bushes in trios at the foot of trees and in corners
   const bushVariants = [makeBush(11, 1), makeBush(12, 1), makeBush(13, 1, ['#ff5fa3', '#ffc0dc']), makeBush(14, 1, ['#ffd23f', '#fff0a0'])];
@@ -123,7 +133,7 @@ export function buildPlants(ctx, A) {
   const tuftGeo = (() => {
     const parts = []; const lean = [[0.0, 0.0, 0.36], [1.9, 0.2, 0.46], [3.8, -0.1, 0.32], [5.0, 0.24, 0.4]];
     lean.forEach((l) => {
-      const hgt = l[2], w = 0.11; const g = new THREE.BufferGeometry();
+      const hgt = l[2] * 0.85, w = 0.14; const g = new THREE.BufferGeometry();
       const v = new Float32Array([-w, 0, 0, w, 0, 0, w * 0.1, hgt, 0]); g.setAttribute('position', new THREE.BufferAttribute(v, 3));
       const cc = [col('#4aa660'), col('#4aa660'), col('#c8f27c')], ca = new Float32Array(9); cc.forEach((k, j) => { ca[j * 3] = k.r; ca[j * 3 + 1] = k.g; ca[j * 3 + 2] = k.b; }); g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
       g.computeVertexNormals(); parts.push(xf(g, { x: Math.cos(l[0]) * 0.08, z: Math.sin(l[0]) * 0.08, ry: l[0], rx: l[1] + 0.05 }));
@@ -134,7 +144,7 @@ export function buildPlants(ctx, A) {
   const tuftMat = addSway(flatMat({ side: THREE.DoubleSide, emissive: new THREE.Color('#2f5a3a') }), { amp: 0.09, height: 0.4, freq: 1.9, instanced: true });
   const tm = new THREE.InstancedMesh(tuftGeo, tuftMat, tufts.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3(), C = new THREE.Color();
   tufts.forEach((t, i) => {
-    E.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25); Q.setFromEuler(E); P.set(t.x, A.h(t.x, t.z) - 0.02, t.z); const s = (0.7 + R() * 0.8) * (t.s || 1); S.set(s, s * (0.8 + R() * 0.7), s);
+    E.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25); Q.setFromEuler(E); P.set(t.x, A.h(t.x, t.z) - 0.02, t.z); const s = (0.6 + R() * 0.7) * (t.s || 1); S.set(s, s * (0.8 + R() * 0.7), s);
     M.compose(P, Q, S); tm.setMatrixAt(i, M);
     // tint: mostly lush, some dry golden and some teal tufts
     const k = R(); if (k < 0.1) C.set('#f4e08e'); else if (k < 0.3) C.set('#d6f0a8'); else if (k < 0.45) C.set('#9fd8b0'); else C.set('#ffffe8'); C.multiplyScalar(0.95 + R() * 0.3); tm.setColorAt(i, C);

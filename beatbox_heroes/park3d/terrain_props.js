@@ -115,7 +115,7 @@ export function placeLamps(S, F) {
   const spots = [];
   spots.push([-2.5, 21.6], [2.5, 13.6], [-2.45, 6.4 + 0.0]); // main avenue (last one hugs the plaza)
   [40, 140, 330, 222].forEach((d) => { const a = (d * Math.PI) / 180; spots.push([Math.cos(a) * 7.0, Math.sin(a) * 7.0]); });
-  spots.push([2.4, -11.2], [-2.5, -17.8], [-2.2, -22.4], [9.8, 1.9], [6.4, 11.7], [5.0, -5.6]);
+  spots.push([2.4, -11.2], [-2.5, -17.8], [-9.8, -22.6], [9.8, -22.6], [9.8, 1.9], [6.4, 11.7], [5.0, -5.6]);
   const loop = F.loop, step = 11.5; for (let s = 6; s < loop.len; s += step) { const i = Math.min(loop.length - 1, Math.round((s / loop.len) * loop.length)), c = loop[i], n = [c.tz, -c.tx], sg = n[0] * c.x + n[1] * c.z > 0 ? 1 : -1; spots.push([c.x + sg * n[0] * 2.4, c.z + sg * n[1] * 2.4]); }
   const others = []; F.paths.forEach((p) => curve(p.pts, false, 0.9).forEach((q) => others.push({ x: q.x, z: q.z })));
   const placed = [];

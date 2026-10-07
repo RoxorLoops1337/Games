@@ -19,7 +19,7 @@ export const WEAR = [ // worn bare spots on the lawn: x, z, radius x, radius z
   { x: -7.4, z: -9.5, rx: 2.6, rz: 1.4, k: 0.5 }, { x: 12.3, z: 14, rx: 2.4, rz: 3.0, k: 0.45 }, { x: 3.5, z: 6.5, rx: 1.4, rz: 2.4, k: 0.35 },
 ];
 
-const G = { base: col('#73A64B'), light: col('#A7C657'), mid: col('#5B9348'), dark: col('#3E7A48'), teal: col('#2D6A5C'), dry: col('#B9B060'), dirt: col('#C9A872'), edge: col('#355F4C') };
+const G = { base: col('#66A453'), light: col('#9DC65C'), mid: col('#4F9552'), dark: col('#35794F'), teal: col('#26705F'), dry: col('#B5B062'), dirt: col('#C9A872'), edge: col('#335F50') };
 const SAND = [col('#E8CD8F'), col('#DFBF82'), col('#F0D9A0')], SAND_EDGE = col('#C99D63'), SAND_DARK = col('#A9774F');
 const TRACK = [col('#BE6650'), col('#B45C4A'), col('#C77055')], TRACK_EDGE = col('#9A4C48'), LINE = col('#F2E3C6');
 const STONE = [col('#BDB2C2'), col('#ADA3B6'), col('#CBC0C8')], STONE_DK = col('#7F7592');
@@ -28,9 +28,17 @@ const STONE = [col('#BDB2C2'), col('#ADA3B6'), col('#CBC0C8')], STONE_DK = col('
 export function makeField() {
   const paths = PATHS.map((p) => Object.assign({ cv: curve(p.pts, false, 0.5) }, p));
   const loop = curve(LOOP, true, 0.5);
-  const near = [], all = [];
+  const near = [], loopNear = [];
   paths.forEach((p) => { const sm = curve(p.pts, false, 0.9); sm.forEach((q) => near.push({ x: q.x, z: q.z, w: p.w / 2 })); });
-  curve(LOOP, true, 0.9).forEach((q) => near.push({ x: q.x, z: q.z, w: LOOP_W / 2 }));
+  curve(LOOP, true, 0.9).forEach((q) => { near.push({ x: q.x, z: q.z, w: LOOP_W / 2 }); loopNear.push({ x: q.x, z: q.z, w: LOOP_W / 2 }); });
+  function dLoop(x, z) { let best = 1e9; for (let i = 0; i < loopNear.length; i++) { const q = loopNear[i], dx = x - q.x, dz = z - q.z, d = Math.sqrt(dx * dx + dz * dz) - q.w; if (d < best) best = d; } return best; }
+  function dOther(x, z) {
+    let best = 1e9; for (let i = 0; i < near.length - loopNear.length; i++) { const q = near[i], dx = x - q.x, dz = z - q.z, d = Math.sqrt(dx * dx + dz * dz) - q.w; if (d < best) best = d; }
+    const dp = Math.hypot(x - PLAZA.x, z - PLAZA.z) - PLAZA.r; if (dp < best) best = dp;
+    const ang = Math.atan2(z, x), a = ang < 0 ? ang + Math.PI * 2 : ang, rr = Math.hypot(x, z);
+    if (a > APRON.a0 - 0.1 && a < APRON.a1 + 0.1) { const d = Math.max(APRON.r0 - rr, rr - APRON.r1); if (d < best) best = d; }
+    return best;
+  }
   // distance to the nearest walkable surface (negative inside)
   function pathDist(x, z) {
     let best = 1e9; for (let i = 0; i < near.length; i++) { const q = near[i], dx = x - q.x, dz = z - q.z, d = Math.sqrt(dx * dx + dz * dz) - q.w; if (d < best) best = d; }
@@ -43,10 +51,10 @@ export function makeField() {
   function heightAt(x, z) {
     const ax = Math.abs(x), az = Math.abs(z);
     const n = fbm(x * 0.17 + 3, z * 0.17 + 9, 5);
-    let berm = smooth(13.4, 16.2, ax) * (1 - smooth(18.6, 24.4, az)) * (1 - smooth(16.6, 18.1, ax)) * (0.35 + 0.95 * n);
-    let swell = 0.1 * fbm(x * 0.11 + 40, z * 0.11, 2) * (1 - smooth(18, 23, az));
-    let h = berm * 1.0 + swell;
-    const pd = pathDist(x, z); h *= smooth(0.9, 3.4, pd);
+    const berm = smooth(13.4, 16.2, ax) * (1 - smooth(18.6, 24.4, az)) * (1 - smooth(16.6, 18.1, ax)) * (0.35 + 0.8 * n);
+    const mound = Math.max(0, fbm(x * 0.085 + 40, z * 0.085 + 7, 2) - 0.36) * 0.62 * (1 - smooth(17, 22.5, az)) * (1 - smooth(14.5, 17.5, ax));
+    let h = berm + mound;
+    h *= smooth(0.9, 3.4, dOther(x, z)) * smooth(0.1, 1.25, dLoop(x, z));
     const w = wear(x, z); h *= 1 - 0.9 * sat(w * 1.4);
     return h;
   }
@@ -74,10 +82,10 @@ export function buildGroundGeo(F, S) {
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) { const x = vx(i), z = vz(j), h = F.heightAt(x, z); hc.push(h); cc.push(grassColor(F, x, z, h)); }
   const id = (i, j) => j * (nx + 1) + i, P = (i, j) => [vx(i), hc[id(i, j)], vz(j)], C = (i, j) => cc[id(i, j)];
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1), k = 1 + (S.rand() - 0.5) * 0.12, t = (q) => mul(q, k);
-    // normal up: (a, d, c, b) order. alternate the diagonal for a hand-made feel
-    if ((i + j) % 2) { B.tri(a, d, c, t(C(i, j)), t(C(i, j + 1)), t(C(i + 1, j + 1))); B.tri(a, c, b, t(C(i, j)), t(C(i + 1, j + 1)), t(C(i + 1, j))); }
-    else { B.tri(a, d, b, t(C(i, j)), t(C(i, j + 1)), t(C(i + 1, j))); B.tri(b, d, c, t(C(i + 1, j)), t(C(i, j + 1)), t(C(i + 1, j + 1))); }
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1), avg = (...q) => [(q[0][0] + q[1][0] + q[2][0]) / 3, (q[0][1] + q[1][1] + q[2][1]) / 3, (q[0][2] + q[1][2] + q[2][2]) / 3], jt = () => 1 + (S.rand() - 0.5) * 0.16;
+    // one flat colour per facet (hand painted look); normal up: (a, d, c, b) order, diagonal alternates
+    if ((i + j) % 2) { B.tri(a, d, c, mul(avg(C(i, j), C(i, j + 1), C(i + 1, j + 1)), jt())); B.tri(a, c, b, mul(avg(C(i, j), C(i + 1, j + 1), C(i + 1, j)), jt())); }
+    else { B.tri(a, d, b, mul(avg(C(i, j), C(i, j + 1), C(i + 1, j)), jt())); B.tri(b, d, c, mul(avg(C(i + 1, j), C(i, j + 1), C(i + 1, j + 1)), jt())); }
   }
   return B.geometry(false);
 }
@@ -136,6 +144,11 @@ export function buildFlats(F, S) {
   { const a0 = APRON.a0, a1 = APRON.a1, rs = [[7.5, 8.7, 0], [8.7, 9.85, 0], [9.85, 10.9, 0]];
     rs.forEach((rg, ri) => { const arc = ((rg[0] + rg[1]) / 2) * (a1 - a0), n = Math.round(arc / 1.15); ringTiles(OV, cx, cz, rg[0], rg[1], n, a0 + (ri % 2) * 0.05, a1 + (ri % 2) * 0.05, PY, (i) => mul(mix(PAL[Math.floor(R() * PAL.length)], PAL[2], 0.3), 0.93 + R() * 0.13), 0.03); });
     const seg = 24; for (let k = 0; k < seg; k++) { const a = a0 + ((a1 - a0) * k) / seg, b = a0 + ((a1 - a0) * (k + 1)) / seg, p = (r, t) => [cx + r * Math.cos(t), PY - 0.002, cz + r * Math.sin(t)]; OV.quad(p(7.5, a), p(7.5, b), p(10.9, b), p(10.9, a), under); } }
+  // mural apron: paving in front of the wall with spray splats on it
+  { const x0 = -7.6, z0 = -25.45, cw = 0.8, rw = 0.84, cols = 19, rows = 3, ya = 0.031; OV.quad([x0, ya - 0.002, z0 + rows * rw], [x0 + cols * cw, ya - 0.002, z0 + rows * rw], [x0 + cols * cw, ya - 0.002, z0], [x0, ya - 0.002, z0], under);
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const xo = (j % 2) * 0.4, xa = x0 + i * cw + xo + 0.025, xb = xa + cw - 0.05, za = z0 + j * rw + 0.025, zb = za + rw - 0.05; if (xb > x0 + cols * cw) continue; const c = mul(PAL[Math.floor(R() * PAL.length)], 0.92 + R() * 0.14); OV.quad([xa, ya, zb], [xb, ya, zb], [xb, ya, za], [xa, ya, za], mul(c, 0.97), mul(c, 0.97), c, c); }
+    const neon = [col('#FF4F8B'), col('#29D3C7'), col('#FFD23F'), col('#9B7BFF')]; for (let k = 0; k < 16; k++) { const cx = -6 + R() * 12, cz = -25 + R() * 2.0, r = 0.08 + R() * 0.22, c = neon[(R() * 4) | 0], n = 8, pts = []; for (let q = 0; q < n; q++) { const a = (q / n) * 6.2832, rr = r * (0.6 + R() * 0.7) * (q % 2 ? 1 : 1.4); pts.push([cx + Math.cos(a) * rr, cz + Math.sin(a) * rr * 0.8]); } OV.poly(pts, ya + 0.003 + k * 0.0001, mul(c, 0.95)); }
+  }
   // flyers apron: a small round paved patch of two tile rings
   { const x = 4.1, z = 22.2; const sq = (r0, r1, n, rot) => ringTiles(OV, x, z, r0, r1, n, rot, rot + Math.PI * 2, 0.034, () => mul(PAL[Math.floor(R() * PAL.length)], 0.94 + R() * 0.12), 0.03); sq(0.7, 1.35, 10, 0.2); sq(1.35, 2.05, 15, 0.5);
     const seg = 10; for (let k = 0; k < seg; k++) { const a = (k / seg) * 6.2832, b = ((k + 1) / seg) * 6.2832; OV.tri([x, 0.034, z], [x + 0.72 * Math.cos(b), 0.034, z + 0.72 * Math.sin(b)], [x + 0.72 * Math.cos(a), 0.034, z + 0.72 * Math.sin(a)], mul(PAL[k % PAL.length], 0.96)); }
@@ -153,7 +166,14 @@ function buildStreet(S) {
   const O = S.OUT, R = S.rand; const q = (x0, z0, x1, z1, y, c0, c1) => O.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], c0, c0, c1 || c0, c1 || c0);
   const far = col('#4F8A55'), farHaze = col('#7C9A6E'), grassIn = col('#3C7448');
   // meadow around (below the park ground)
-  q(-90, -90, -18, 29, -0.04, farHaze, grassIn); q(18, -90, 90, 29, -0.04, grassIn, farHaze); q(-18, -90, 18, -28, -0.04, grassIn);
+  q(-18, -90, 18, -28, -0.04, grassIn);
+  // rolling backdrop hills beyond the side fences (coarse height field, painted toward the haze with distance)
+  { const cs = 4, xs = 18, xe = 66, zs = -66, ze = 28, hh = (x, z) => { const ax = Math.abs(x), t = smooth(18, 30, ax); return t * (1.2 + 5.5 * fbm(ax * 0.05 + 3, z * 0.045 + 9, 11) + 2.5 * smooth(40, 66, ax)); };
+    const colAt = (x, z, h) => { const ax = Math.abs(x), n = fbm(x * 0.12, z * 0.12, 21); let c = mix(grassIn, col('#6FA24E'), smooth(0.35, 0.7, n) * 0.8); c = mix(c, col('#8FAE62'), sat(h * 0.12)); return mix(c, farHaze, smooth(26, 66, ax) * 0.75); };
+    [-1, 1].forEach((sd) => { for (let zi = zs; zi < ze; zi += cs) for (let xi = xs; xi < xe; xi += cs) { const P = (a, b) => { const x = sd * a, hz = hh(x, b); return [x, -0.04 + hz, b, colAt(x, b, hz)]; }, p00 = P(xi, zi), p10 = P(xi + cs, zi), p11 = P(xi + cs, zi + cs), p01 = P(xi, zi + cs); const V = (p) => [p[0], p[1], p[2]]; const t = (k) => mul(k, 0.95 + R() * 0.1);
+        // normal up for sd>0: (p00, p01, p11) order; flip for the mirrored side
+        if (sd > 0) { O.tri(V(p00), V(p01), V(p11), t(p00[3]), t(p01[3]), t(p11[3])); O.tri(V(p00), V(p11), V(p10), t(p00[3]), t(p11[3]), t(p10[3])); } else { O.tri(V(p00), V(p11), V(p01), t(p00[3]), t(p11[3]), t(p01[3])); O.tri(V(p00), V(p10), V(p11), t(p00[3]), t(p10[3]), t(p11[3])); } } });
+  }
   // sidewalk, kerb, road with centre dashes, zebra crossing at the gate
   const SW = [col('#CDBFC0'), col('#C0B3BB')];
   for (let i = 0; i < 40; i++) { const x0 = -60 + i * 3, c = SW[i % 2]; q(x0, 28, x0 + 3, 31.4, -0.02, mul(c, 0.96 + R() * 0.07)); }

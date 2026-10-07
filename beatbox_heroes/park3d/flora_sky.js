@@ -6,10 +6,10 @@ import { makeStreet } from './flora_trees.js';
 
 export const HAZE = '#f0b79a';
 const LAYERS = [
-  { off: 19, color: '#8f7aa8', haze: 0.12, hmin: 16, hmax: 40, lit: 0.30, detail: 1.0 },
-  { off: 36, color: '#a487b0', haze: 0.34, hmin: 22, hmax: 58, lit: 0.22, detail: 0.7 },
-  { off: 58, color: '#c796b2', haze: 0.56, hmin: 30, hmax: 78, lit: 0.15, detail: 0.35 },
-  { off: 86, color: '#e3a9a4', haze: 0.76, hmin: 40, hmax: 100, lit: 0.0, detail: 0.1 },
+  { off: 19, color: '#8f7aa8', hazeCol: '#d9a0b0', haze: 0.10, hmin: 10, hmax: 38, lit: 0.30, detail: 1.0, wmin: 7, wmax: 14, mixc: 0.06 },
+  { off: 36, color: '#8a78b8', hazeCol: '#c49ac4', haze: 0.38, hmin: 22, hmax: 52, lit: 0.22, detail: 0.7, wmin: 9, wmax: 17, mixc: 0.3 },
+  { off: 58, color: '#b58cb4', hazeCol: '#eaa8a8', haze: 0.55, hmin: 28, hmax: 62, lit: 0.15, detail: 0.35, wmin: 11, wmax: 21, mixc: 0.5 },
+  { off: 86, color: '#e0a2a2', hazeCol: '#f4bc9c', haze: 0.74, hmin: 34, hmax: 72, lit: 0.0, detail: 0.1, wmin: 12, wmax: 24, mixc: 0.7 },
 ];
 const ACCENTS = ['#b5738a', '#8f7aa8', '#6f7fa6', '#d99a8a', '#a9564d', '#7d8fb0', '#c98f9a'];
 const SUNXZ = new THREE.Vector2(-12, 10).normalize();
@@ -73,7 +73,7 @@ export function buildSkyline(ctx, bounds, R) {
   const NEON = ['#ff3ea5', '#2ee6ff', '#ffe14d', '#a86bff', '#9dff4a'];
   let signs = 0;
 
-  const FACADE = ['#a85b6e', '#7a6aa0', '#5c7fa8', '#c98a5a', '#8c4a4a', '#4d8a8a', '#d9a07a', '#6e5a86', '#b0687a', '#6a7fb0'];
+  const FACADE = ['#b8566e', '#7a68b0', '#4f84b8', '#d98e50', '#9c4646', '#3f9690', '#e0a070', '#6e56a0', '#c8607a', '#5f7fc0', '#d4b050', '#8a5a9a'];
   const AWN = ['#ff6f91', '#2ec4b6', '#ffb347', '#8a63ff', '#ff5a4a', '#ffd23f'];
   function hip(x0, z0, x1, z1, y, h, base, hz) {
     const ax = (x0 + x1) / 2, az = (z0 + z1) / 2, ap = [ax, y + h, az], sl = h / Math.max(1, Math.min(x1 - x0, z1 - z0));
@@ -82,8 +82,8 @@ export function buildSkyline(ctx, bounds, R) {
   }
   function building(side, ai, depthC, wv, hv, layer, k) {
     // side: 'N','S','E','W'; ai: coordinate along the side; depthC: distance of the FRONT face from the park centre
-    const w = wv, d = R.range(11, 15), h = hv, base = col(R.pick(FACADE)).lerp(col(layer.color), 0.22 + k * 0.08).lerp(col(R() > 0.5 ? '#ffd0b0' : '#9a8cc0'), R() * 0.1);
-    base.multiplyScalar(0.84);
+    _h.set(layer.hazeCol); const w = wv, d = R.range(11, 15), h = hv, base = col(R.pick(FACADE)).lerp(col(layer.color), layer.mixc).lerp(col(R() > 0.5 ? '#ffd0b0' : '#9a8cc0'), R() * 0.08);
+    base.multiplyScalar(0.86);
     const hz = layer.haze, cellW = R.pick([2.2, 2.6, 3.0, 3.4]), cellH = R.pick([2.9, 3.2, 3.6]);
     let bx, bz, bw, bd;
     if (side === 'N') { bx = ai; bz = -(depthC + d / 2); bw = w; bd = d; } else if (side === 'S') { bx = ai; bz = depthC + d / 2; bw = w; bd = d; } else if (side === 'E') { bx = depthC + d / 2; bz = ai; bw = d; bd = w; } else { bx = -(depthC + d / 2); bz = ai; bw = d; bd = w; }
@@ -101,6 +101,7 @@ export function buildSkyline(ctx, bounds, R) {
     face(M, [x1, gh, z1], [x1, gh, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], base, hz, uvX);
     face(M, [x0, gh, z0], [x0, gh, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], base, hz, uvX);
     const roofC = base.clone().lerp(col('#6a5a88'), 0.35);
+    if (k < 2) { const pc = col(R.pick(FACADE)).lerp(col(layer.color), layer.mixc * 0.6).multiplyScalar(0.8); const pw = 0.9, ox = R() > 0.5; const px0 = ox ? x0 - 0.02 : x1 - pw + 0.02; plainBox(px0 + pw / 2, gh, z1 + 0.02 - 0.0, pw, y1 - gh, 0.12, pc, hz); plainBox(px0 + pw / 2, gh, z0 - 0.02, pw, y1 - gh, 0.12, pc, hz); }
     const cream = col('#e3cdb8').lerp(_h, hz);
     // cornice + plinth line (lighter slabs that catch the sun), floor string course
     if (k < 2) plainBox(bx, y1 - 0.05, bz, bw + 0.5, 0.55, bd + 0.5, cream, hz);
@@ -176,7 +177,7 @@ export function buildSkyline(ctx, bounds, R) {
       const skipP = k === 3 ? 0.35 : 0;
       const f = sd.f(k); let a = sd.from(k, f); const end = sd.to(k, f);
       while (a < end) {
-        const w = R.range(9, 19) * (k > 1 ? 1.25 : 1); let h = R.range(layer.hmin, layer.hmax);
+        const w = R.range(layer.wmin, layer.wmax); let h = R.range(layer.hmin, layer.hmax);
         if (sd.s === 'S') h *= 0.6;
         if (R() < 0.12) h *= 1.45; // the odd tower
         if (R() >= skipP) building(sd.s, a + w / 2, f, w, h, layer, k); a += w + R.range(0, 2.2);
@@ -300,8 +301,8 @@ export function buildClouds(R) {
   };
   const N = 16;
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + R() * 0.3, rad = 75 + R() * 55, y = 30 + R() * 28 + (i % 3) * 6;
-    parts.push(cloud(Math.cos(a) * rad, y, Math.sin(a) * rad, 20 + R() * 22, -a + Math.PI / 2 + (R() - 0.5) * 0.6));
+    const a = (i / N) * Math.PI * 2 + R() * 0.3, rad = 70 + R() * 50, y = 48 + R() * 34 + (i % 3) * 6;
+    parts.push(cloud(Math.cos(a) * rad, y, Math.sin(a) * rad, 34 + R() * 22, -a + Math.PI / 2 + (R() - 0.5) * 0.6));
   }
   // a few closer, lower wisps for beauty shots
   for (let i = 0; i < 4; i++) { const a = 3.6 + i * 0.9 + R() * 0.3, rad = 58 + R() * 12; parts.push(cloud(Math.cos(a) * rad, 20 + R() * 6, Math.sin(a) * rad, 16 + R() * 8, -a + Math.PI / 2)); }

@@ -149,7 +149,7 @@ export function buildLife(ctx, spots, free, flowerCenters, gh) {
     for (const a of air) {
       if (a.kind === 'bf') {
         const f = a.c, u = t * a.sp + a.ph, x = f.x + Math.cos(u) * a.rr + Math.sin(u * 2.3) * 0.6, z = f.z + Math.sin(u * 0.83) * a.rr * 0.8 + Math.cos(u * 1.9) * 0.5, y = GH(x, z) + a.hy + Math.sin(u * 1.7) * 0.35 + Math.sin(t * a.fl) * 0.03;
-        const dx = -Math.sin(u) * a.rr - 0.0, dz = Math.cos(u * 0.83) * 0.83 * a.rr * 0.8; comp(a.world, x, y, z, 0.1, Math.atan2(dx, dz), Math.sin(u * 1.3) * 0.25, 1);
+        const dx = -Math.sin(u) * a.rr - 0.0, dz = Math.cos(u * 0.83) * 0.83 * a.rr * 0.8; comp(a.world, x, y, z, 0.1, Math.atan2(dx, dz), Math.sin(u * 1.3) * 0.25, 1.7);
         const fl = Math.sin(t * a.fl + a.ph) * 1.0 + 0.15;
         a.pose[0].identity(); comp(a.pose[1], 0, 0, 0, 0, 0, fl); comp(a.pose[2], 0, 0, 0, 0, 0, -fl);
       } else {

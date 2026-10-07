@@ -133,7 +133,7 @@ export function buildAccessories(mb, glow, ctx, api) {
       const gold = id === 'goldmic' ? C('#e8b923') : null, neon = id === 'neonmic';
       const head = neon ? mix('#2b2a3f', '#2ee6ff', 0.2) : gold || C('#5a566e'), handle = gold ? shade(gold, 0.75) : C('#3a3850'), hy = wy - 0.215;
       loft(mb, [{ y: wy - 0.05, rx: 0.02, rz: 0.02, cx: x, c: shade(handle, 0.8), sk }, { y: wy - 0.16, rx: 0.024, rz: 0.024, cx: x, c: handle, sk }, { y: hy + 0.05, rx: 0.03, rz: 0.03, cx: x, c: lite(handle, 0.1), sk }], { n: 6, caps: 'b' });
-      ball(mb, [x, hy, 0], [0.047, 0.05, 0.047], head, sk, { detail: 1, col2: lite(head, 0.15) });
+      ball(mb, [x, hy, 0], [0.05, 0.052, 0.05], head, sk, { detail: 0, col2: lite(head, 0.2) });
       if (neon) glow.poly([[x - 0.03, hy + 0.02, 0.04], [x + 0.03, hy + 0.02, 0.04], [x + 0.03, hy - 0.01, 0.045], [x - 0.03, hy - 0.01, 0.045]], C('#2ee6ff').multiplyScalar(1.1), sk, [0, 0, 1], { flat: true, nh: true });
       else loft(mb, [{ y: hy + 0.012, rx: 0.049, rz: 0.049, cx: x, c: lite(handle, 0.35), sk }, { y: hy - 0.008, rx: 0.049, rz: 0.049, cx: x, c: lite(handle, 0.35), sk }], { n: 6, caps: '', nh: true });
     }

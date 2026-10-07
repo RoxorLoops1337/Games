@@ -37,7 +37,7 @@ export function buildFountain(S) {
   };
   disc(0.56, [0, 1.1, 2.1, 2.9, 3.4], 14, 0.2, true); disc(2.12, [0, 0.9, 1.76], 12, 0.1, false); disc(3.31, [0, 0.55, 1.04], 10, 0.3, false);
   const N = wpos.length / 3; const geo = new THREE.BufferGeometry(); const posA = new THREE.BufferAttribute(new Float32Array(wpos), 3), colA = new THREE.BufferAttribute(new Float32Array(N * 3), 3); geo.setAttribute('position', posA); geo.setAttribute('color', colA);
-  const water = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.9, shininess: 35, specular: new THREE.Color('#6f6a7c'), depthWrite: false, emissive: new THREE.Color('#1f7f98'), emissiveIntensity: 0.45 })); water.renderOrder = 3; water.receiveShadow = false; water.castShadow = false; S.group.add(water);
+  const water = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.9, shininess: 18, specular: new THREE.Color('#2a3a4c'), depthWrite: false, emissive: new THREE.Color('#1f7f98'), emissiveIntensity: 0.45 })); water.renderOrder = 3; water.receiveShadow = false; water.castShadow = false; S.group.add(water);
   const deep = col('#256F8E'), midc = col('#3FA7BE'), lite = col('#7ED3D6'), glint = col('#F7F1E3'), foamc = col('#DDF3EE');
   const cx = new Float32Array(N / 3), cz = new Float32Array(N / 3), cr = new Float32Array(N / 3);
   for (let i = 0; i < N / 3; i++) { const x = (wpos[i * 9] + wpos[i * 9 + 3] + wpos[i * 9 + 6]) / 3 - FX, z = (wpos[i * 9 + 2] + wpos[i * 9 + 5] + wpos[i * 9 + 8]) / 3 - FZ; cx[i] = x; cz[i] = z; cr[i] = Math.hypot(x, z); }
@@ -54,9 +54,22 @@ export function buildFountain(S) {
     }
     posA.needsUpdate = true; colA.needsUpdate = true;
   }
+  // ---------------- falling water sheets between the tiers (translucent faceted strips, unlit so they glow)
+  const sheets = []; const sheetCols = [];
+  const sheet = (r0, y0, r1, y1, seg, a0, a1) => { for (let k = 0; k < seg; k++) { const a = a0 + ((a1 - a0) * k) / seg, b = a0 + ((a1 - a0) * (k + 0.5)) / seg, P = (r, ang, y) => [FX + Math.cos(ang) * r, y, FZ + Math.sin(ang) * r], dr = r1 - r0, dy = y0 - y1;
+    const rows = [[0, 0], [0.8, 0.25], [1, 1]]; for (let i = 0; i < 2; i++) { const A = rows[i], Bq = rows[i + 1]; sheets.push([P(r0 + dr * A[0], a, y0 - dy * A[1]), P(r0 + dr * A[0], b, y0 - dy * A[1]), P(r0 + dr * Bq[0], b, y0 - dy * Bq[1]), P(r0 + dr * Bq[0], a, y0 - dy * Bq[1])]); } } };
+  sheet(2.12, 2.22, 2.6, 0.62, 28, 0.1, Math.PI * 2 + 0.1); sheet(1.36, 3.42, 1.8, 2.2, 16, 0.2, Math.PI * 2 + 0.2);
+  const sg = new THREE.BufferGeometry(), sp = [], sc = [];
+  sheets.forEach((q) => { [[0, 1, 2], [0, 2, 3]].forEach((t) => t.forEach((i) => { sp.push(q[i][0], q[i][1], q[i][2]); sc.push(1, 1, 1); })); });
+  sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sp), 3)); const scA = new THREE.BufferAttribute(new Float32Array(sc), 3); sg.setAttribute('color', scA);
+  const sheetMesh = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide })); sheetMesh.renderOrder = 4; S.group.add(sheetMesh);
+  const sheetBaseY = sp.filter((v, i) => i % 3 === 1);
+  function flow(t) { const C = scA.array; for (let i = 0; i < sp.length / 3; i++) { const x = sp[i * 3], y = sp[i * 3 + 1], z = sp[i * 3 + 2], w = 0.5 + 0.5 * Math.sin(y * 7 - t * 7 + Math.atan2(z, x) * 5), c = mix(midc, foamc, 0.25 + 0.6 * w); C[i * 3] = c[0]; C[i * 3 + 1] = c[1]; C[i * 3 + 2] = c[2]; } scA.needsUpdate = true; }
+  flow(0);
+
   // ---------------- droplets (instanced, CPU driven, 56 of them)
-  const dg = new THREE.OctahedronGeometry(0.05, 0); dg.scale(1, 1.8, 1);
-  const NJ = 12, NB = 16, NC = 28, M = NJ + NB + NC, drops = new THREE.InstancedMesh(dg, new THREE.MeshBasicMaterial({ color: '#D6F7FF', transparent: true, opacity: 0.92 }), M); drops.frustumCulled = false; drops.castShadow = false; S.group.add(drops);
+  const dg = new THREE.OctahedronGeometry(0.03, 0); dg.scale(1, 2.0, 1);
+  const NJ = 16, NB = 20, NC = 40, M = NJ + NB + NC, drops = new THREE.InstancedMesh(dg, new THREE.MeshBasicMaterial({ color: '#D6F7FF', transparent: true, opacity: 0.92 }), M); drops.frustumCulled = false; drops.castShadow = false; S.group.add(drops);
   const dm = new THREE.Object3D(), ph = [];
   for (let i = 0; i < M; i++) ph.push({ a: i * 2.399 + S.rand(), o: S.rand(), s: 0.85 + S.rand() * 0.3 });
   function drip(t) {
@@ -67,7 +80,7 @@ export function buildFountain(S) {
     drops.instanceMatrix.needsUpdate = true;
   }
   animate(0); drip(0);
-  S.updaters.push((dt, t) => { animate(t); drip(t); });
+  S.updaters.push((dt, t) => { animate(t); drip(t); flow(t); });
   S.anchors.fountain = { x: FX, z: FZ, rot: 0, radius: 4.15, height: 4.0 };
   S.water = water; S.drops = drops;
 }

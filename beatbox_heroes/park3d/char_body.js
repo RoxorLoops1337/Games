@@ -6,11 +6,11 @@ import { C, mix, shade, lite, skinShade, INK, CREAM, K, K2, BI, MB, loft, ball, 
 // ------------------------------------------------------------------ head surface model (head-local: origin at neck top, chin about y=0.02)
 export const HY = 0.98;
 export const HR = [
-  { y: -0.03, rx: 0.08, rz: 0.08, cz: 0.03 }, { y: 0.02, rx: 0.14, rz: 0.14, cz: 0.05 }, { y: 0.075, rx: 0.225, rz: 0.21, cz: 0.035 }, { y: 0.15, rx: 0.283, rz: 0.248, cz: 0.018 },
-  { y: 0.24, rx: 0.305, rz: 0.27, cz: 0 }, { y: 0.33, rx: 0.31, rz: 0.277, cz: -0.005 }, { y: 0.41, rx: 0.292, rz: 0.27, cz: -0.015 }, { y: 0.49, rx: 0.245, rz: 0.245, cz: -0.03 },
-  { y: 0.545, rx: 0.17, rz: 0.18, cz: -0.035 }, { y: 0.585, rx: 0.07, rz: 0.085, cz: -0.035 },
+  { y: 0.02, rx: 0.14, rz: 0.14, cz: 0.05 }, { y: 0.075, rx: 0.225, rz: 0.21, cz: 0.035 }, { y: 0.15, rx: 0.283, rz: 0.248, cz: 0.018 },
+  { y: 0.24, rx: 0.305, rz: 0.27, cz: 0 }, { y: 0.33, rx: 0.31, rz: 0.277, cz: -0.005 }, { y: 0.43, rx: 0.285, rz: 0.268, cz: -0.02 },
+  { y: 0.55, rx: 0.16, rz: 0.17, cz: -0.035 }, { y: 0.585, rx: 0.07, rz: 0.085, cz: -0.035 },
 ];
-export const HEAD_TOP = 0.605, HN = 12, HA0 = Math.PI / HN, SQ = 0.82;
+export const HEAD_TOP = 0.605, HN = 10, HA0 = Math.PI / HN, SQ = 0.82;
 const sp = (s, e) => Math.sign(s) * Math.pow(Math.abs(s), e);
 export function ringAt(y) {
   if (y <= HR[0].y) return HR[0]; const L = HR.length; if (y >= HR[L - 1].y) return HR[L - 1];
@@ -38,15 +38,15 @@ function faceDecal(mb, pts, col, bone, off, flat, nh) { const w = onFace(pts, of
 export function buildHead(mb, ctx) {
   const sk = ctx.skin, K_h = K('head');
   const cc = (k) => skinShade(sk, 0.62 + k * 0.38);
-  const rings = HR.map((r, i) => ({ y: HY + r.y, rx: r.rx, rz: r.rz, cz: r.cz, sk: K_h, c: i === 0 ? cc(0.3) : i === 1 ? cc(0.55) : i === 2 ? cc(0.9) : i === 3 ? lite(sk, 0.03) : i === HR.length - 1 ? lite(sk, 0.06) : i >= 6 ? lite(sk, 0.05) : lite(sk, 0.025) }));
-  loft(mb, rings, { n: HN, a0: HA0, sq: SQ, caps: 't', capTip: [0, HY + HEAD_TOP, -0.035], capCol: lite(sk, 0.05) });
+  const rings = HR.map((r, i) => ({ y: HY + r.y, rx: r.rx, rz: r.rz, cz: r.cz, sk: K_h, c: i === 0 ? cc(0.6) : i === 1 ? cc(0.9) : i === 2 ? lite(sk, 0.02) : i === 3 ? lite(sk, 0.03) : i === HR.length - 1 ? lite(sk, 0.06) : i >= 6 ? lite(sk, 0.05) : lite(sk, 0.025) }));
+  loft(mb, rings, { n: HN, a0: HA0, sq: SQ, caps: 'bt', capTip: [0, HY + HEAD_TOP, -0.035], capCol: lite(sk, 0.05) });
   // neck
   const nk = (y, r, s) => ({ y, rx: r, rz: r * 0.92, cz: 0.012, sk: s, c: cc(y < 0.9 ? 0.62 : 0.8) });
-  loft(mb, [nk(0.84, 0.095, K2('chest', 'neck', 0.4)), nk(0.915, 0.082, K('neck')), nk(HY + 0.01, 0.08, K('head'))], { n: 8, caps: 'b' });
+  loft(mb, [nk(0.86, 0.095, K2('chest', 'neck', 0.4)), nk(HY + 0.01, 0.08, K('neck'))], { n: 6, caps: 'b' });
   // ears
-  [1, -1].forEach((s) => { const e = H(s * 0.3, 0.255, -0.012); ball(mb, e, [0.03, 0.052, 0.05], cc(0.95), K_h, { detail: 0 }); ball(mb, [e[0] + s * 0.012, e[1] - 0.004, e[2] + 0.006], [0.018, 0.032, 0.03], cc(0.62), K_h, { detail: 0, nh: true }); });
+  [1, -1].forEach((s) => { const e = H(s * 0.3, 0.255, -0.012); ball(mb, e, [0.03, 0.052, 0.05], cc(0.95), K_h, { detail: 0 }); });
   // nose: a soft button with a lighter bridge
-  const nf = facePt(0, 0.185); ball(mb, [0, HY + 0.185, nf.z + 0.012], [0.034, 0.028, 0.034], lite(sk, 0.06), K_h, { detail: 0, col2: lite(sk, 0.1), nh: true });
+  const nf = facePt(0, 0.185); ball(mb, [0, HY + 0.178, nf.z + 0.002], [0.03, 0.024, 0.026], lite(sk, 0.1), K_h, { detail: 0, col2: lite(sk, 0.18), nh: true });
 }
 
 // ------------------------------------------------------------------ face
@@ -71,7 +71,7 @@ export function buildFace(mb, glow, ctx) {
       if (style === 'wide') E(ell(0.054, 0.064, 10, 0, 0), '#f3e6d3', 0.008, false, false);
       E(ell(0.042 * R, 0.054 * R * hy, 10, 0, 0, tilt), INK, 0.0095);
       E(ell(0.033 * R, 0.044 * R * hy, 9, 0, -0.004 * hy, tilt), iris, 0.0125);
-      if (style === 'cat') E(ell(0.008, 0.04, 6, 0, -0.002, tilt), INK, 0.0145); else E(ell(0.017 * R, 0.024 * R * hy, 7, 0, -0.005 * hy, tilt), INK, 0.0145);
+      if (style === 'cat') E(ell(0.008, 0.04, 6, 0, -0.002, tilt), INK, 0.0145); else E(ell(0.017 * R, 0.024 * R * hy, 5, 0, -0.005 * hy, tilt), INK, 0.0145);
       if (style === 'sleepy') { E([[-0.052 * R, 0.05], [0.052 * R, 0.05], [0.05 * R, 0.0], [-0.05 * R, 0.0]].map(([u, v]) => [u, v + 0.0]), skinShade(sk, 0.82), 0.0165); E([[-0.052 * R, 0.0], [0.052 * R, 0.0], [0.05 * R, -0.008], [-0.05 * R, -0.006]], INK, 0.0175); }
       if (style === 'sharp') E([[-0.05 * ox - 0.0, 0.052], [0.05 * ox, 0.02 + 0.03], [0.05 * ox, 0.012], [-0.05 * ox, 0.03]], INK, 0.0165);
       if (style === 'lashes') [0, 1, 2].forEach((i) => { const a = 0.6 + i * 0.4; E([[ox * (0.036 + i * 0.006), 0.038 + i * 0.008], [ox * (0.036 + i * 0.006 + 0.04 * Math.cos(a)), 0.038 + i * 0.008 + 0.034 * Math.sin(a)], [ox * (0.044 + i * 0.006), 0.04 + i * 0.008]], INK, 0.0145); });
@@ -153,7 +153,7 @@ export function buildArms(mb, ctx, d, sleeveEnd) {
   const sk = ctx.skin;
   [1, -1].forEach((s) => {
     const rings = []; ARM_U.forEach((u) => { if (u < sleeveEnd - 0.12) return; const y = armY(u); rings.push({ y, rx: armRad(u), rz: armRad(u) * 0.95, cx: s * d.shX, sk: armSk(s, y), c: u > 0.9 ? skinShade(sk, 0.85) : sk }); });
-    if (rings.length >= 2) loft(mb, rings, { n: 8, caps: sleeveEnd <= 0.02 ? 't' : '' });
+    if (rings.length >= 2) loft(mb, rings, { n: 6, caps: sleeveEnd <= 0.02 ? 'b' : '', capColB: sk });
     buildHand(mb, ctx, d, s);
   });
 }
@@ -170,12 +170,12 @@ import { mat } from './char_geo.js';
 const LEG_Y = [0.47, 0.37, 0.27, 0.19, 0.1];
 const legSk = (s, y) => (y > 0.33 ? K(side(s, 'th')) : y > 0.22 ? K2(side(s, 'th'), side(s, 'kn'), (0.33 - y) / 0.11) : y > 0.14 ? K(side(s, 'kn')) : K2(side(s, 'kn'), side(s, 'an'), 0.5));
 export const legSkin = legSk;
-export const legRad = (y) => (y > 0.4 ? 0.075 : y > 0.3 ? 0.068 : y > 0.22 ? 0.06 : 0.05);
+export const legRad = (y) => (y > 0.4 ? 0.082 : y > 0.3 ? 0.074 : y > 0.22 ? 0.066 : 0.056);
 export function buildLegs(mb, ctx, d, legEndY, showFoot) {
   const sk = ctx.skin;
   [1, -1].forEach((s) => {
     const rings = []; LEG_Y.forEach((y) => { if (y > legEndY + 0.05) return; rings.push({ y, rx: legRad(y), rz: legRad(y), cx: s * d.hipX, sk: legSk(s, y), c: y < 0.15 ? skinShade(sk, 0.8) : sk }); });
-    if (rings.length >= 2) loft(mb, rings, { n: 8, caps: 'bt' });
+    if (rings.length >= 2) loft(mb, rings, { n: 6, caps: 'bt' });
   });
 }
 export function restDims(body) { const d = dims(body); return { d, rest: restWorld(d) }; }

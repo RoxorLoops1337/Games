@@ -42,5 +42,10 @@ export function buildTerrain(ctx) {
 
   const anchors = Object.assign({ start: { x: 0, z: 10, rot: Math.PI }, buskSpot: { x: 8, z: -8, rot: 0 }, bench: { x: -9, z: -4, rot: Math.PI / 2 }, gate: { x: 0, z: 26, rot: 0 }, runStart: { x: 12, z: 14, rot: 0 }, fountain: { x: 0, z: 0, rot: 0 }, graffiti: { x: 0, z: -24, rot: Math.PI }, flyers: { x: 4, z: 22, rot: Math.PI }, lamps: S.lamps }, S.anchors);
   const bounds = { minX: -17, maxX: 17, minZ: -27, maxZ: 27 };
-  return { group, bounds, anchors, heightAt: F.heightAt, addBlocker: (x, z, r) => S.hit.circle(x, z, r), blocked: (x, z) => S.hit.test(x, z), update(dt, t) { for (const u of S.updaters) u(dt, t); } };
+  // helpers for the other modules: flora keeps out of keepout(), the minimap draws paths
+  const paths = F.paths.map((p) => ({ id: p.id, w: p.w, points: p.cv.filter((q, i) => i % 3 === 0).map((q) => ({ x: q.x, z: q.z })) }));
+  paths.push({ id: 'loop', w: 3.2, points: F.loop.filter((q, i) => i % 3 === 0).map((q) => ({ x: q.x, z: q.z })).concat([{ x: F.loop[0].x, z: F.loop[0].z }]) }); paths.push({ id: 'plaza', w: 15, points: [{ x: 0, z: 0 }, { x: 0.01, z: 0 }] });
+  const zones = [[8, -8, 4.4], [8, -11.5, 3.6], [-9, -4, 3.4], [4, 22, 3.4], [12.4, 14.5, 3.2], [0, 26, 3.4], [4, 20.5, 2.6]];
+  const keepout = (x, z) => F.pathDist(x, z) < 0.9 || (z < -22 && Math.abs(x) < 9.5) || z < -23.6 || zones.some((q) => Math.hypot(x - q[0], z - q[1]) < q[2]) || S.hit.test(x, z);
+  return { group, bounds, anchors, heightAt: F.heightAt, pathDist: F.pathDist, keepout, paths, field: F, addBlocker: (x, z, r) => S.hit.circle(x, z, r), blocked: (x, z) => S.hit.test(x, z), update(dt, t) { for (const u of S.updaters) u(dt, t); } };
 }
