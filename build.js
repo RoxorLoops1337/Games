@@ -13,6 +13,7 @@ const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 const watch = process.argv.includes('--watch');
 
@@ -115,6 +116,27 @@ const buildOpts = (target) => ({
   legalComments: 'none',
   logLevel: 'info',
 });
+
+// Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
+// Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
+const R3_SRC = path.join(REPO, 'beatbox_heroes', 'r3');
+const isR3Out = (f) => f === 'entry.js' || /^p3-.*\.js$/.test(f);
+const cleanR3Mirror = () => { if (fs.existsSync(R3_SRC)) for (const f of fs.readdirSync(R3_SRC)) if (isR3Out(f)) fs.rmSync(path.join(R3_SRC, f)); };
+const buildBeatboxR3 = () => {
+  const outDir = path.join(DIST, 'beatbox_heroes', 'r3');
+  execFileSync(process.execPath, [path.join(REPO, 'tools', 'beatbox_heroes', 'build_park3d.mjs'), '--esm', '--out', outDir], { stdio: 'inherit' });
+  const entry = fs.readFileSync(path.join(outDir, 'entry.js'));
+  const hash = crypto.createHash('sha256').update(entry).digest('hex').slice(0, 10);
+  for (const f of fs.readdirSync(outDir)) if (isR3Out(f)) fs.copyFileSync(path.join(outDir, f), path.join(R3_SRC, f));
+  console.log(`mirrored        → beatbox_heroes/r3/entry.js + chunks`);
+  for (const html of [path.join(DIST, 'beatbox_heroes', 'index.html'), path.join(REPO, 'beatbox_heroes', 'index.html')]) {
+    if (!fs.existsSync(html)) continue;
+    const before = fs.readFileSync(html, 'utf8');
+    const after = before.replace(/(r3\/entry\.js)(\?v=[^"]+)?/g, `$1?v=${hash}`);
+    if (before !== after) fs.writeFileSync(html, after);
+  }
+  console.log(`hash-stamped    → r3/entry.js?v=${hash}`);
+};
 
 const wipeDist = () => {
   if (fs.existsSync(DIST)) fs.rmSync(DIST, { recursive: true, force: true });
@@ -263,6 +285,7 @@ const minifyClawspire = () => {
   }
 
   wipeDist();
+  cleanR3Mirror(); // stale ESM entry/chunks mirrored into the source tree by an earlier build must not be copied into dist/
   copyStatic();
   writeArtManifest();
   minifyClawspire();
@@ -298,6 +321,7 @@ const minifyClawspire = () => {
     if (bundleBaseName === 'park3d.bundle.js') for (const page of ['park3d.html', 'flat3d.html', 'minigames3d.html', 'world3d.html']) { stamp(path.join(distGameDir, page)); stamp(path.join(REPO, sourceGameDir, page)); }
     console.log(`hash-stamped    → ${bundleBaseName}?v=${hash}`);
   }
+  buildBeatboxR3();
 })().catch((err) => {
   console.error(err);
   process.exit(1);
