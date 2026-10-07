@@ -18584,7 +18584,7 @@ const GAME = (() => {
     const bd = Cb.bounds, chuteX = bd.chuteX || CAB.w - CAB.chuteW;
     G.W = Wd; G.C = Cb;
     G.rig = P.clawRig(Wd, Object.assign({ cabinet: Cb, homeX: chuteX * 0.5, chuteX: chuteX + CAB.chuteW * 0.5, railY: 26, type: runClawType(), rand: U.rng(((c.seed ^ 0x6a11) >>> 0) || 1) }, stoPlayerClaw()));
-    G.pile = D().garyPile ? D().garyPile(U.rng((c.seed >>> 0) || 1), run.act) : [];
+    G.pile = D().garyPile ? D().garyPile(U.rng((c.seed >>> 0) || 1), run.act, { need: runClawType() === 'magnet' ? 'metal' : null }) : [];   // (round 28: a magnet gets metal to lift)
     const taken = {};
     for (const d of c.live.drops) for (const i of d.got || []) taken[i] = 1;
     const rng = U.rng((((c.seed >>> 0) ^ 0x5eed) + c.live.drops.length) >>> 0 || 1);

@@ -2457,6 +2457,17 @@ t.test('the rival: gear, taunts, the claw-off pile and its prizes', () => {
   t.ok(pile.length === 13 && by.l === 1 && by.r === 2 && by.u === 3 && by.c === 5 && by.junk === 2, 'the pile: one of every good thing, two rocks ' + JSON.stringify(by));
   t.ok(pile.every(p => p.v === DATA.garyVal(ITEMS[p.id])) && pile.some(p => p.v === 7), 'values by rarity (a legendary is 7)');
   t.eq(JSON.stringify(DATA.garyPile(U.rng(5), 1)), JSON.stringify(pile), 'deterministic by seed');
+  // (round 28) a Magnet Crane claw-off always has metal to lift, at the same rarities
+  const isMetal = (p) => (ITEMS[p.id].tags || []).indexOf('metal') >= 0;
+  let fewest = 99;
+  for (let s = 1; s <= 120; s++) {
+    const mp = DATA.garyPile(U.rng(s), 1, { need: 'metal' });
+    fewest = Math.min(fewest, mp.filter(isMetal).length);
+    const r2 = {};
+    for (const p of mp) r2[p.id === 'rock' ? 'junk' : ITEMS[p.id].rarity] = (r2[p.id === 'rock' ? 'junk' : ITEMS[p.id].rarity] || 0) + 1;
+    if (s === 1) t.ok(mp.length === 13 && r2.l === 1 && r2.r === 2 && r2.u === 3 && r2.c === 5 && r2.junk === 2, 'magnet pile keeps the rarity mix ' + JSON.stringify(r2));
+  }
+  t.ok(fewest >= Math.ceil(11 * DATA.GARY.needFrac), 'a magnet claw-off pile is mostly metal (fewest ' + fewest + ' of 11)');
   const w = DATA.garyPrize(2, 'win'), l = DATA.garyPrize(2, 'lose'), tie = DATA.garyPrize(2, 'tie');
   t.ok(w.gold > tie.gold && tie.gold > l.gold && w.cap && !l.cap && w.tix > l.tix, 'win beats tie beats a loss');
   t.ok(DATA.garyPrize(3, 'win').gold > DATA.garyPrize(1, 'win').gold, 'more gold later in the tower');
