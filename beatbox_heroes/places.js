@@ -105,15 +105,23 @@
 
   E.scenes.place = {
     enter(a) {
-      this.id = a.id; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.walkQueue = null; this.dir = 1; this.moving = false;
+      this.id = a.id; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.walkQueue = null; this.dir = 1; this.moving = false; this.lastHot = null;
+      const ret = G.takeReturn ? G.takeReturn(a.id, a) : null;          // activity.js: back from an activity = standing at its hotspot, BACK reopens its menu
       const go = () => {
         this.v = variantFor(this.id, G.ch); this.sc = world(this.id, this.v);
         const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 180, y: 533 }; this.hx = st.x; this.hy = st.y; this.path = [];
+        if (ret) this.landAt(ret);
         E.music(this.id); this.build(); this.firstVisit();
+        if (ret && ret.mode === 'menu') { this.lastHot = ret.hot || null; if (typeof ret.menu === 'function') ret.menu(this); else if (ret.hot && ACTIONS[this.id] && ACTIONS[this.id][ret.hot]) this.activate(ret.hot); }
       };
       if (G.pendingMorning) { E.clearUI(); G.showMorning(() => { E.fadeTo(0, 400); go(); }); this.sc = world('home', 'day'); this.v = 'day'; this.hx = 180; this.hy = 533; this.path = []; } else go();
     },
     leave() { this.closeSheet(); },
+    // where the player stood when the activity started (ticket pos), else the hotspot's stand point
+    landAt(t) {
+      const sp = (this.sc && this.sc.spots) || {}, at = t.pos && typeof t.pos.y === 'number' ? t.pos : t.hot ? sp[SPOT_FOR[t.hot] || 'stand'] : null;
+      if (at && typeof at.x === 'number') { this.hx = at.x; this.hy = at.y; this.landed = { hot: t.hot || null, x: at.x, y: at.y }; return true; } return false;
+    },
     build() {
       E.clearUI(); E.add(E.makeHud(G)); this.sheetEl = null;
       E.add(E.btn('', '', () => G.openMenu(), { position: 'absolute', right: '4px', top: '43px', width: '22px', height: '17px', padding: '2px 0' }).appendChild(E.iconEl('gear', 1, { display: 'block', margin: '1px auto' })).parentNode);
@@ -145,7 +153,7 @@
       const sc = this.sc && this.sc.spots; if (sc && y > k(300) && !(this.sc && this.sc.nav)) { this.path = [{ x, y: Math.max((this.sc.floorY || y) - 53, Math.min(y, k(462))) }]; this.walkQueue = null; }
     },
     walkTo(hid) {
-      this.closeSheet(); const spots = this.sc.spots || {}, name = SPOT_FOR[hid] || 'stand', sp = spots[name] || spots.stand || { x: 180, y: 533 };
+      this.closeSheet(); this.lastHot = null; const spots = this.sc.spots || {}, name = SPOT_FOR[hid] || 'stand', sp = spots[name] || spots.stand || { x: 180, y: 533 };
       this.path = this.route(sp, name); this.walkQueue = hid;
     },
     // walk along the scene's nav graph (rooms joined by doorways) when it has one, else straight
@@ -206,6 +214,7 @@
     activate(hid) {
       const id = this.id, A = ACTIONS[id] && ACTIONS[id][hid];
       if (hid === 'door' || hid === 'gate') { this.leave2(); return; }
+      this.lastHot = hid;                                                 // the return ticket (activity.js) remembers which hotspot launched an activity
       if (A) A(this); else E.toast('Nothing to do here.');
     },
     tapNpc(x, y) { /* handled via pointer hotspots; NPC dialogue via sheets */ },

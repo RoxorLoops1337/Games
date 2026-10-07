@@ -137,7 +137,7 @@ export function createEar(ctx, opts) {
   function begin() { if (!logic) mkLogic(); ui.hideLesson(); if (logic.S.state !== 'play') logic.start(); }
   function example(i) { const L = levelDef(level) || (logic && logic.L), ex = L && L.lesson && L.lesson.examples && L.lesson.examples[i]; if (!ex) return 0; hero.play('talk', { duration: 1.2, then: 'idle' }); return playNotes(ex.notes, !!ex.chord); }
   function quit() { if (disposed) return; ctx.events.emit('quit', { game: 'ear', finished: !!lastResult }); ctx.events.emit('minigameQuit'); }
-  const ui = createUI(opts.hud || document.body, { back: () => quit(), start: () => begin(), example, answer: (c) => logic && logic.answer(c), replay: () => logic && logic.replay(), next: () => logic && logic.skip() });
+  const ui = createUI(opts.hud || document.body, { back: () => quit(), start: () => begin(), example, answer: (c) => logic && logic.answer(c), replay: () => logic && logic.replay(), next: () => logic && logic.skip() }, { acts: opts.acts });
   const onKey = (e) => { if (e.key === 'Escape') quit(); else if (logic && logic.S.state === 'play') { const n = parseInt(e.key, 10); if (n >= 1 && n <= logic.S.choices.length) logic.answer(n - 1); else if (e.key === ' ' || e.key === 'l') logic.replay(); } };
   window.addEventListener('keydown', onKey);
 

@@ -232,7 +232,7 @@
         h('div.h1', { style: { fontSize: '14px', lineHeight: '18px', color: win ? 'var(--gold2)' : '#ff7b8e' } }, win ? 'VICTORY!' : 'DEFEAT'), h('div.ts', { style: { margin: '4px 0' } }, out.forPlayer + ' of 5 judges voted for you'),
         h('div.t', { style: { margin: '4px 0' } }, win ? opp.defeat || 'Nice set.' : 'Train up and come back stronger.'),
         h('div.row', { style: { justifyContent: 'center', margin: '6px 0' } }, h('div.chip.gold', null, E.iconEl('coin', 1), '+$' + rw.cash), h('div.chip.cyan', null, E.iconEl('fans', 1), '+' + rw.fans), h('div.chip.lime', null, E.iconEl('level', 1), '+' + rw.xp + ' XP')),
-        E.btn('CONTINUE', 'gold big', () => { box.remove(); this.held.play(); this.a.onDone && this.a.onDone({ win, out }); }));
+        G.retRow2d ? G.retRow2d(() => { box.remove(); this.held.play(); this.a.onDone && this.a.onDone({ win, out }); }, { only: !!this.a.final }) : E.btn('CONTINUE', 'gold big', () => { box.remove(); this.held.play(); this.a.onDone && this.a.onDone({ win, out }); }));
       E.add(box);
     },
 
@@ -345,14 +345,16 @@
       h('div.row', { style: { justifyContent: 'center', margin: '6px 0', gap: '8px' } }, h('div.chip.gold', null, 'PERFECT ' + res.perfect), h('div.chip.cyan', null, 'GOOD ' + res.good), h('div.chip.red', null, 'MISS ' + res.miss)),
       h('div.ts', null, 'Best combo ' + res.bestCombo),
       h('div.row', { style: { justifyContent: 'center', margin: '8px 0 6px', gap: '8px', flexWrap: 'wrap' } }, rw.cash ? h('div.chip.gold', null, E.iconEl('coin', 1), '+$' + rw.cash) : null, rw.fans ? h('div.chip.cyan', null, E.iconEl('fans', 1), '+' + rw.fans) : null, h('div.chip.lime', null, E.iconEl('level', 1), '+' + rw.xp + ' XP')),
-      E.btn('CONTINUE', 'gold big', () => { box.remove(); then && then(); }));
+      G.retRow2d ? G.retRow2d(() => { box.remove(); then && then(); }) : E.btn('CONTINUE', 'gold big', () => { box.remove(); then && then(); }));   // activity.js: AGAIN / BACK / CONTINUE
     E.add(box); E.sfx(rk === 'S' || rk === 'A' ? 'levelup' : 'confirm');
     if (rk === 'S') L.burst(135, 130, 40, { colors: [PAL.gold, '#fff', PAL.neonPink], speed: 110, up: 70, gravity: 120, life: 1200 });
   };
   // After any time-spending action: play held fx; if the day rolled over show the morning, else go back.
+  // back: a place id, 'street' or a { scene, args } target; the place scene lands you at the spot where the activity started (activity.js, G.takeReturn)
   G.finishActivity = function (held, back) {
     held.play({ morning: (f) => { G.pendingMorning = f; } });
     if (G.pendingMorning) { E.go('place', { id: 'home', morningFirst: true }); return; }
-    if (back === 'street') E.go('street'); else E.go('place', { id: back });
+    if (back && typeof back === 'object') back = back.args && back.args.id ? back.args.id : back.scene === 'street' ? 'street' : (G.ch && G.ch.place) || 'home';
+    if (back === 'street') E.go('street'); else E.go('place', { id: back || (G.ch && G.ch.place) || 'home' });
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

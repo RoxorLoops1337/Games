@@ -184,7 +184,7 @@ export function createRhythm(ctx, opts) {
     if (S.mode === 'train') { finishTrain(sum); return; }
     const result = Object.assign({}, sum, { game: 'rhythm', grade: sum.rank, hits: sum.perfect + sum.good, maxCombo: sum.bestCombo, difficulty: S.diff, seed: S.seed, bars: S.bars, bpm: S.bpm, mode: S.mode === 'battle' ? 'perform' : S.mode, liveScore: Math.round(S.score) });
     S.result = result; S.phase = 'result'; S.tPlay = 0; ui.setCombo(0); ui.setHeader([]); dir.clear();
-    ui.showResult(result, () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })), { game, label: S.cfg.title, onContinue: (r) => { if (opts.onContinue) opts.onContinue(r); } });
+    ui.showResult(result, () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })), { game, label: S.cfg.title, acts: opts.acts, onContinue: (r) => { if (opts.onContinue) opts.onContinue(r); } });
     sfx(result.grade === 'S' || result.grade === 'A' ? 'win' : 'applause'); const hot = result.grade === 'S' || result.grade === 'A'; celebrate(hot);
     lighting.setMusic(false); try { ctx.events.emit('minigame', { game: 'rhythm', result }); } catch (e) { console.error('[rhythm] result handler failed ' + e); }
   }
@@ -258,7 +258,7 @@ export function createRhythm(ctx, opts) {
     const acc = t.notes ? t.pts / (t.notes * 100) : 0, rk = Core.rank ? Core.rank(acc) : 'C';
     const result = { accuracy: Math.min(1, acc), perfect: t.perfect, good: t.good, miss: t.miss, total: t.notes, bestCombo: t.bestCombo, perfectLane: t.lane, rank: rk, score: Math.round(t.score || 0), game: 'rhythm', grade: rk, hits: t.perfect + t.good, maxCombo: t.bestCombo, difficulty: S.diff, seed: S.seed0, bars: S.bars, bpm: S.bpm, mode: 'battle', rounds: B.roundQ.slice(), oppStyles: B.oppStyles.slice(), battle: Object.assign({}, out, { win, forPlayer, votes: vr.votes || out.votes || [] }) };
     S.result = result; ui.setBackVisible(false); ui.setCombo(0); dir.play([shot(win ? 'youClose' : 'oppClose', 0.9, 1.6, 0.6), shot('wide', 1.4, 0, 0.8)]);
-    ui.showVerdict({ win, forPlayer, line: win ? (opp.defeat || 'Nice set.') : 'Train up and come back stronger.' }, { game, onContinue: (v) => { if (opts.onContinue) opts.onContinue({ win, out, result }); }, onAgain: () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })) });
+    ui.showVerdict({ win, forPlayer, line: win ? (opp.defeat || 'Nice set.') : 'Train up and come back stronger.' }, { game, acts: opts.acts, onContinue: (v) => { if (opts.onContinue) opts.onContinue({ win, out, result }); }, onAgain: () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })) });
     if (vr.rw) ui.setRewards(vr.rw);
     sfx(win ? 'win' : 'lose'); S.shake = 1; mood(win ? 'happy' : 'sad'); try { perf.play(win ? 'cheer' : 'sad', {}); } catch (e) { /* ignore */ } if (oppChar) { try { oppChar.play(win ? 'sad' : 'cheer', {}); } catch (e) { /* ignore */ } }
     if (win) celebrate(true); else if (venue && venue.cheer) { try { venue.cheer(1.2); } catch (e) { /* ignore */ } }

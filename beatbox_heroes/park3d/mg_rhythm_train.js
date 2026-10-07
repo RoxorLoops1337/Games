@@ -100,6 +100,7 @@ export function buildTrainUI(ui) {
     if (pass && nx && o.unlocked !== false) row.appendChild(mk('NEXT LEVEL', 'next')); else row.appendChild(mk('TRY AGAIN', 'again'));
     row.appendChild(mk('LEVELS', 'levels', 'alt')); c.appendChild(row);
     if (pass && nx) { const ag = mk('PLAY AGAIN', 'again', 'dim'); ag.style.marginTop = 'calc(8*var(--u))'; c.appendChild(ag); }
+    if (o.game) c.appendChild(mk('BACK', 'menu', 'alt'));                      // the game: back to the training menu that launched it (activity.js)
     c.appendChild(mk(o.game ? 'CONTINUE' : 'BACK', 'continue', 'alt'));
     wrap.appendChild(c); root.appendChild(wrap); card = wrap;
   }

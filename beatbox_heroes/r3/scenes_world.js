@@ -3,6 +3,7 @@
 // through the 2D methods; only the stage changes. The world modules (park3d/street.js, flat*.js, terrain*.js, shop*.js, lab*.js, bar*.js, w_hood*.js) render into #gl.
 //   street  world 'street'   Neon Row: 5 doors + the bus stop map. Locked doors follow Core.canEnter each time the save changes, the goal door gets a beacon, Foxy waits at the home stoop in the tutorial.
 //   place   world flat | park | shop | lab | bar  (home park shop studio bar)   spots and NPC taps -> G.places.ACTIONS through r3/spotmap.js
+//           back from an activity (activity.js ticket): the player stands at the spot it started from (SM.land), BACK reopens its menu there (SM.reopen)
 //   map     world 'hood'     tabletop map with the five pins; a pin opens the same card sheet (E.scenes.map.showCard)
 // The sibling provides what the 2D ACTIONS need: S.sheet / row / closeSheet / eatMenu / id / look / sc (anchors as 2D) and S.w (the world). Real DOM chrome = R3UI.hud (stats, goal chip, MAP, MENU, LEAVE, nav dock).
 // Any failure (world build throws, WebGL lost) drops to the 2D scene through R3.demote (E.go does that for a rejected enter).
@@ -47,7 +48,7 @@
       gl.addEventListener('pointerdown', this._gd, true);
     },
     unbindGl() { const gl = glEl(); if (gl && this._gd) gl.removeEventListener('pointerdown', this._gd, true); this._gd = null; },
-    reset() { this.w = null; this.activeSpot = null; this.idleT = 0; this._ch = null; this._gate = ''; this._goal = ''; },
+    reset() { this.w = null; this.activeSpot = null; this.idleT = 0; this._ch = null; this._gate = ''; this._goal = ''; this.npcAct = null; this.quietSpot = null; },
     // controls on/off without fighting E.uiBlock: used while the morning card covers the screen
     input(b) { const c = this.w && this.w.controls; if (c && c.setEnabled) safe(() => c.setEnabled(b)); },
   };
@@ -91,10 +92,12 @@
     enter(a) {
       this.reset(); this.id = a.id; this.world = SM.WORLD[a.id]; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.shop = null; this._try = null; this.moving = false; this.sc = { spots: { stand: { x: 0, y: 0 } } };
       this.v = P.variantFor(this.id, G.ch);
+      const ret = G.takeReturn ? G.takeReturn(a.id, a) : null; this.ret = ret; this.landed = null;   // activity.js: back from an activity = back at its spot (BACK reopens its menu)
       return R3.load(this.world, Object.assign(this.baseArgs(), this.worldArgs(a.id))).then((w) => {
         if (E.scene !== this || !w) return;
         this.w = w; this.sc = { spots: SM.anchors2d(w), hotspots: [], layers: [] }; SM.bind(this, w, this.id); this.bindGl();
-        const go = () => { this.input(true); E.music(this.id); this.build(); this.firstVisit(); this.sync(); };
+        if (ret && SM.land) safe(() => SM.land(this, w, this.id, ret));                              // before the first revealed frame: no walk in from the door
+        const go = () => { this.input(true); E.music(this.id); this.build(); this.firstVisit(); this.sync(); if (ret && ret.mode === 'menu' && SM.reopen) safe(() => SM.reopen(this, w, this.id, ret)); };
         if (G.pendingMorning) { E.clearUI(); this.input(false); G.showMorning(() => { E.fadeTo(0, 400); go(); }); } else go();   // the morning card shows before the home world is used
       });
     },

@@ -40,7 +40,7 @@
       gameMode(true);
       this.ov = overlay();
       const top = topLevel(), lv = Math.max(0, Math.min(top, this.a.level | 0));
-      const args = { hud: this.ov, look: G.ch && G.ch.look, time: nightN(), unlocked: top, level: lv || top, autostart: !!lv, settings: E.settings, offsetMs: E.settings.offset | 0, embedded: true, again: false, reduce: !!E.settings.reduce };
+      const args = { hud: this.ov, look: G.ch && G.ch.look, time: nightN(), unlocked: top, level: lv || top, autostart: !!lv, settings: E.settings, offsetMs: E.settings.offset | 0, embedded: true, again: false, reduce: !!E.settings.reduce, acts: () => (G.retActs ? G.retActs() : null) };
       return ensureWorld().then(() => (E.scene === this ? R3.load('pose', args) : null)).then((w) => {
         if (E.scene !== this || !w) return; this.w = w; this.mg = w.game || null; if (!this.mg) return;
         w.events.on('minigame', (r) => { if (!this.gone && E.scene === this) safe(() => this.onResult(r && r.result ? r.result : r)); });

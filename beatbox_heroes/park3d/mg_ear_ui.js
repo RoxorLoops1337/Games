@@ -2,6 +2,7 @@
 //   lesson card (title, plain words, PLAY EXAMPLE buttons with a little contour of the notes, START) -> rounds (LISTEN AGAIN, big answer buttons,
 //   instant feedback with a one line explanation, NEXT) -> result card (score, grade, unlock line, real rewards from the game, CONTINUE).
 import { label, why, PASS_Q } from './mg_ear_logic.js';
+import { actButtons, gameActs } from './mg_acts.js';
 
 const CSS = `
 .er{position:absolute;inset:0;overflow:hidden;pointer-events:none;font-family:Fredoka,"Trebuchet MS",system-ui,-apple-system,sans-serif;color:#fff6e8;-webkit-tap-highlight-color:transparent;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
@@ -75,7 +76,8 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.er-card,.er-fb .big,.er-unl.yes{animation-duration:.01s}}
 `;
 
-export function createUI(hud, H) {
+export function createUI(hud, H, uopt) {
+  uopt = uopt || {};
   H = H || {}; const doc = hud.ownerDocument, root = doc.createElement('div'); root.className = 'er';
   const st = doc.createElement('style'); st.textContent = CSS; root.appendChild(st);
   const el = (tag, cls, html, par) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; (par || root).appendChild(e); return e; };
@@ -148,7 +150,8 @@ export function createUI(hud, H) {
     if (w.xp) rows.push(['XP', '+' + Math.round(w.xp)]); if (w.minutes) rows.push(['Time', w.minutes + ' min']); if (w.energy) rows.push(['Energy', Math.round(w.energy)]);
     const unl = r.level >= 8 ? (r.pass ? '<div class="er-unl yes">ALL 8 LEVELS MASTERED!</div>' : '') : unlocked ? '<div class="er-unl yes">LEVEL ' + next + ' UNLOCKED!</div>' : '<div class="er-unl no">Get ' + Math.round(PASS_Q * 100) + '% to unlock level ' + next + '. You got this.</div>';
     card.innerHTML = '<div class="kick" style="text-align:center">EAR TRAINING  LEVEL ' + r.level + '</div><div class="er-score">' + r.score + ' / ' + r.rounds + '</div><span class="er-grade">' + r.grade + '</span><div class="er-rd">' + r.log.map((l) => '<i class="' + (l.ok ? 'ok' : '') + '"></i>').join('') + '</div><div class="er-rows">' + rows.map((x) => '<div class="er-row"><span>' + x[0] + '</span><span>' + x[1] + '</span></div>').join('') + '</div>' + unl + '<div class="er-btns"></div>';
-    const bt = card.querySelector('.er-btns');
+    const bt = card.querySelector('.er-btns'), acts = gameActs(uopt);
+    if (acts) { bt.style.flexWrap = 'wrap'; actButtons(card.ownerDocument, bt, acts, { row: false, cls: 'er-go', alt: 'alt', go: () => hh.done() }); bt.querySelectorAll('.er-go').forEach((b) => { b.style.flex = b.dataset.act === 'continue' ? '1 1 100%' : '1 1 40%'; }); return; }
     if (hh.again) { const b1 = el('button', 'er-go alt', 'AGAIN', bt); b1.onclick = () => hh.again(); }
     const b2 = el('button', 'er-go', 'CONTINUE', bt); b2.onclick = () => hh.done();
   }

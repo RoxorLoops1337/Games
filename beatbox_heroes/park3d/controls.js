@@ -1,7 +1,7 @@
 // CONTROLS module (Gameplay Engineer). Third-person camera rig for a PORTRAIT phone (3/4 view, pitch about 45 degrees, yaw 40, follow with critically damped smoothing,
 // slight look-ahead), tap-to-move with grid A* over terrain.blocked(), a dynamic on-screen joystick, WASD/arrows, collision sliding against blocked(), walk/run blending.
 // CONTRACT: createControls(ctx, { player (character), terrain, spots, dom }) -> { update(dt,t), moveTo(x,z), stop(), onTapWorld(x,z), setEnabled(b), camera rig is applied to ctx.camera }
-// TEST HOOKS (window.__park.controls): teleportTo(x,z), tapWorld(x,z,{run}), setJoystick(dx,dz) (screen axes: dx right, dz DOWN, so (0,-1) walks "up" the screen),
+// TEST HOOKS (window.__park.controls): teleportTo(x,z,{face,free}), tapWorld(x,z,{run}), setJoystick(dx,dz) (screen axes: dx right, dz DOWN, so (0,-1) walks "up" the screen),
 //   advance(seconds) (runs the sim in fixed 1/30 steps, handy because headless GL is slow), skipIntro(), state(), showRoute(bool), interact(), release().
 // EVENTS used on ctx.events: listens 'spot' {id} (starts the cinematic: lock, ease camera, face the spot, play a clip) and 'spotDone' (unlocks);
 //   FLAT scene: reads terrain.camera {dist,pitch,yaw (deg),fov,minDist,maxDist,focusY,hWidth,margin}, wheel/pinch zoom within min/max, camera kept inside the full-height north/west walls,
@@ -338,7 +338,13 @@ export function createControls(ctx, o) {
     if (S.spot) spotStep(dt); else { moveStep(dt); talkStep(); } updateCamera(dt); updateMarkers(dt, t); ui.update(dt, t);
   }
   function replayIntro() { stop(); S.vel.x = S.vel.z = 0; S.speed = 0; C.intro = 0; S.locked = true; setClip('idle', 0); updateCamera(0.0001); }
-  function teleportTo(x, z) { stop(); S.vel.x = S.vel.z = 0; S.speed = 0; endSpot(); pos.set(x, 0, z); if (C.intro >= 0) { C.intro = -1; S.locked = false; } snapCamera(); }
+  // o.face: heading (radians) to face after the jump; o.free: step to the nearest walkable cell when (x, z) is inside furniture (the game's return to a spot)
+  function teleportTo(x, z, o) {
+    stop(); S.vel.x = S.vel.z = 0; S.speed = 0; endSpot();
+    if (o && o.free && !free(x, z)) { const gr = getGrid(), c = gr.nearestFree(x, z); if (c) { x = gr.cx(c[0]); z = gr.cz(c[1]); } }
+    pos.set(x, 0, z); if (o && typeof o.face === 'number' && isFinite(o.face)) { heading = o.face; p.object.rotation.y = heading; }
+    if (C.intro >= 0) { C.intro = -1; S.locked = false; } snapCamera();
+  }
   const api = { update, moveTo: (x, z, o2) => onTapWorld(x, z, o2 && o2.run), stop, onTapWorld, setEnabled(b) { S.enabled = !!b; if (!b) { stop(); S.keys = {}; S.talk = null; const k = S.stick; if (k.active || k.shown) { k.active = k.shown = false; k.x = k.y = 0; stickEmit(); } O.drag = false; } },
     setCorridor(c) { COR = corOf(c); return !!COR; }, walkToSpot, walkTo: (x, z, o2) => onTapWorld(x, z, o2 && o2.run), focus, unfocus: release, pick, orbitTo, setMode, setShot(name, ms) { return SHOTS[name] ? orbitTo({ shot: name, ms }) : false; }, setAutoRotate(dps) { O.auto = +dps || 0; O.idle = 9; return O.auto; }, setOrbitTarget(t) { O.target = t || null; },
     shots: Object.keys(SHOTS), setTapActivate(b) { S.tapActivate = !!b; },

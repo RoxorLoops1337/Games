@@ -1,6 +1,7 @@
 // Busking rhythm game: DOM HUD (score, combo, crowd meter, four big lane pads, popups, start card, count-in, result card).
 // Everything scales with one CSS variable --u (hud width / 540) so it is crisp on a phone and on the 9:16 desktop frame.
 import { LANES } from './mg_rhythm_hw.js';
+import { actButtons, gameActs } from './mg_acts.js';
 
 const CSS = `
 .rh{position:absolute;inset:0;pointer-events:none;font-family:var(--f3,"Trebuchet MS",system-ui,sans-serif);color:#fff2dc;--u:1px;overflow:hidden;-webkit-tap-highlight-color:transparent}
@@ -173,8 +174,11 @@ export function buildUI(hud, api) {
   function rwHtml(rw) {
     const chips = []; if (rw.cash) chips.push('<div class="c g">+$' + rw.cash + '</div>'); if (rw.fans) chips.push('<div class="c c">+' + rw.fans + ' FANS</div>'); if (rw.gain) chips.push('<div class="c c">+' + (+rw.gain).toFixed(1) + ' ' + String(rw.stat || 'TECH').toUpperCase() + '</div>'); chips.push('<div class="c l">+' + (rw.xp || 0) + ' XP</div>'); return chips.join('');
   }
+  // the game's result card buttons (AGAIN / BACK / CONTINUE): rebuilt when the rewards land, so a greyed AGAIN reads the save after the action
+  let actsOn = null;
+  function drawActs() { const A = actsOn; if (!A || !A.c.isConnected) return; const old = A.c.querySelector('[data-acts]'); if (old) old.remove(); const acts = gameActs({ acts: A.fn }); if (!acts) return; const box = el('div', ''); box.setAttribute('data-acts', '1'); box.style.cssText = 'display:flex;flex-wrap:wrap;gap:calc(8*var(--u));margin-top:calc(8*var(--u))'; actButtons(A.c.ownerDocument || document, box, acts, { row: false, cls: 'go', alt: 'alt', go: A.go }); box.querySelectorAll('button').forEach((b) => { b.style.margin = '0'; b.style.flex = b.dataset.act === 'continue' ? '1 1 100%' : '1 1 40%'; if (b.dataset.act !== 'continue') b.style.fontSize = 'calc(18*var(--u))'; }); A.c.appendChild(box); }
   function setRewards(rw) {
-    rwPending = rw || null; const box = root.querySelector('.rw'); if (!box || !rw) return; box.innerHTML = rwHtml(rw); box.setAttribute('data-cash', rw.cash || 0); box.setAttribute('data-fans', rw.fans || 0); box.setAttribute('data-xp', rw.xp || 0);
+    rwPending = rw || null; drawActs(); const box = root.querySelector('.rw'); if (!box || !rw) return; box.innerHTML = rwHtml(rw); box.setAttribute('data-cash', rw.cash || 0); box.setAttribute('data-fans', rw.fans || 0); box.setAttribute('data-xp', rw.xp || 0);
   }
   // result card of a perform or practice set. o: { game, onContinue(r) }. In the game the rewards chips are filled by setRewards() and CONTINUE hands control back to the scene.
   function showResult(r, again, o) {
@@ -183,6 +187,8 @@ export function buildUI(hud, api) {
     c.innerHTML = '<div class="gl">' + (o.label ? esc(o.label) + ' - ' : '') + praise + '</div><div class="grade" style="color:' + gc + '">' + r.grade + '</div>' +
       '<div class="stats"><span>SCORE<b>' + r.score + '</b></span><span>ACCURACY<b>' + Math.round(r.accuracy * 100) + '%</b></span><span>PERFECT<b>' + r.perfect + '</b></span><span>GOOD<b>' + r.good + '</b></span><span>MISS<b>' + r.miss + '</b></span><span>BEST COMBO<b>' + r.bestCombo + '</b></span></div>' +
       '<div class="lanes">' + LANES.map((L, i) => '<div style="background:' + L.color + '">' + L.name + ' ' + r.perfectLane[i] + '</div>').join('') + '</div>' + (r.battle ? '<p>' + (r.battle.win ? 'YOU WIN THE BATTLE' : 'YOU LOSE THE BATTLE') + ' (' + r.battle.forPlayer + '/5 judges)</p>' : '');
+    actsOn = null;
+    if (o.game && o.acts) { const rw = el('div', 'rw'); c.appendChild(rw); actsOn = { c, fn: o.acts, go: () => { if (o.onContinue) o.onContinue(r); } }; wrap.appendChild(c); root.appendChild(wrap); card = wrap; U.back.style.visibility = 'hidden'; drawActs(); if (rwPending) setRewards(rwPending); return; }
     if (o.game) {
       const rw = el('div', 'rw'); c.appendChild(rw); const go = el('button', 'go', 'CONTINUE'); go.setAttribute('data-act', 'continue'); go.onclick = () => { go.disabled = true; if (o.onContinue) o.onContinue(r); }; c.appendChild(go); wrap.appendChild(c); root.appendChild(wrap); card = wrap; U.back.style.visibility = 'hidden'; if (rwPending) setRewards(rwPending); return;
     }
@@ -226,6 +232,8 @@ export function buildUI(hud, api) {
   function showVerdict(v, o) {
     o = o || {}; clearCard(); hideJudges(); const wrap = el('div', 'center'), c = el('div', 'card vd ' + (v.win ? 'win' : 'lose'));
     c.innerHTML = '<div class="gl">' + (v.win ? 'THE CROWD GOES WILD' : 'NOT TONIGHT') + '</div><h1>' + (v.win ? 'VICTORY!' : 'DEFEAT') + '</h1><p>' + v.forPlayer + ' of 5 judges voted for you</p><p style="margin-top:0">' + esc(v.line || '') + '</p>';
+    actsOn = null;
+    if (o.game && o.acts) { const rw = el('div', 'rw'); c.appendChild(rw); actsOn = { c, fn: o.acts, go: () => { if (o.onContinue) o.onContinue(v); } }; wrap.appendChild(c); root.appendChild(wrap); card = wrap; U.back.style.visibility = 'hidden'; drawActs(); if (rwPending) setRewards(rwPending); return; }
     const rw = el('div', 'rw'); c.appendChild(rw); const go = el('button', 'go', o.game ? 'CONTINUE' : 'PLAY AGAIN'); go.setAttribute('data-act', 'continue'); go.onclick = () => { go.disabled = true; if (o.game) { if (o.onContinue) o.onContinue(v); } else if (o.onAgain) { clearCard(); o.onAgain(); } }; c.appendChild(go);
     if (!o.game) { const b = el('button', 'go alt', 'BACK'); b.onclick = () => api.quit(); c.appendChild(b); }
     wrap.appendChild(c); root.appendChild(wrap); card = wrap; U.back.style.visibility = 'hidden'; if (rwPending) setRewards(rwPending);

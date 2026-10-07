@@ -126,11 +126,12 @@
   // M = { S, where, title, stat, view: 'main' | 'idle' | 'play', mins, game, level, root }
   let M = null;
   function sheetTitle(t) { safe(() => { const el = M && M.S.sheetEl && M.S.sheetEl.querySelector('.h2'); if (el) el.textContent = t; }); }
-  G.trainMenu = T.open = function (S, where, title) {
-    where = where === 'studio' ? 'studio' : 'home';
+  // resume (BACK from a result card, activity.js): { stat, view: 'main'|'idle'|'play', game, level } reopens the menu where you left it
+  G.trainMenu = T.open = function (S, where, title, resume) {
+    where = where === 'studio' ? 'studio' : 'home'; const rs = resume || {};
     const ch = G.ch, low = STATS.slice().sort((a, b) => ch.stats[a] - ch.stats[b])[0];
-    const prev = T.lastStat && STATS.indexOf(T.lastStat) >= 0 ? T.lastStat : low;
-    M = { S, where, title: title || (where === 'studio' ? 'SOUND LAB: TRAIN' : 'VOCAL BOOTH: TRAIN'), stat: prev, view: 'main', mins: T.lastMins || 60, game: null, level: 0, root: mkRoot() };
+    const prev = rs.stat && STATS.indexOf(rs.stat) >= 0 ? rs.stat : T.lastStat && STATS.indexOf(T.lastStat) >= 0 ? T.lastStat : low;
+    M = { S, where, title: title || (where === 'studio' ? 'SOUND LAB: TRAIN' : 'VOCAL BOOTH: TRAIN'), stat: prev, view: rs.view === 'play' || rs.view === 'idle' ? rs.view : 'main', mins: rs.mins || T.lastMins || 60, game: rs.game || null, level: rs.level || 0, root: mkRoot() };
     S.sheet(M.title, [M.root], { maxH: '330px' });
     render(); return M;
   };
@@ -290,6 +291,11 @@
     r.appendChild(d);
     r.appendChild(h('div.sum', { html: '<span>Energy <b style="color:#ffd23f">' + s.energy + '</b></span><span>XP <b>+' + s.xp + '</b></span>' + (s.cash ? '<span>Cash <b style="color:#ff9ad0">' + s.cash + '</b></span>' : '') }));
     r.appendChild(h('div.note', null, 'PLAY trains about twice as fast. Give it a try next time.'));
+    // TRAIN AGAIN (same skill, same time; greyed with the Core reason), BACK (the idle picker on the same skill), DONE (stand at the spot)
+    const pv = G.pendingMorning ? { ok: false, why: 'A new day starts first.' } : preview(R.stat, R.minutes), duo = h('div.duo');
+    duo.appendChild(btn('chip' + (pv.ok ? '' : ' lock'), 'TRAIN AGAIN<small>' + (pv.ok ? fmtMin(R.minutes).toUpperCase() : 'NOT NOW') + '</small>', () => { if (!pv.ok) { E.toast(pv.why || 'Not now.', 'warn'); sfx('error'); return; } sfx('click'); T.idle(R.S, R.stat, R.minutes, R.where); }, { 'data-act': 'again', title: pv.ok ? '' : (pv.why || '') }));
+    duo.appendChild(btn('chip', 'BACK<small>' + SHORT[R.stat] + ' TRAINING</small>', () => { sfx('back'); if (G.pendingMorning) { R.S.closeSheet(); M = null; E.go('place', { id: 'home', morningFirst: true }); return; } M.stat = R.stat; M.view = 'idle'; M.mins = R.minutes; render(); }, { 'data-act': 'back' }));
+    r.appendChild(duo); if (!pv.ok && pv.why) r.appendChild(h('div.note', { 'data-why': '1', style: { color: '#ff9ad0' } }, pv.why));
     r.appendChild(btn('go', 'DONE', () => { sfx('confirm'); const S = R.S; S.closeSheet(); M = null; if (G.pendingMorning) E.go('place', { id: 'home', morningFirst: true }); }, { 'data-act': 'done' }));
     sfx('levelup'); safe(() => { if (BBH.R3UI && BBH.R3UI.confetti && is3d()) BBH.R3UI.confetti(undefined, root.innerHeight * 0.35, 40); });
     safe(() => { const hk = E.hooks && E.hooks.sheetOpen; if (hk && R.S.sheetEl && R.S.w) hk(R.S.sheetEl); });
@@ -302,7 +308,9 @@
     if (where === 'studio' && ch.cash < Core.STUDIO_FEE) { E.toast('The studio costs $' + Core.STUDIO_FEE + '.', 'warn'); sfx('error'); return false; }
     const place = S.id || (where === 'studio' ? 'studio' : 'home'), back = { scene: 'place', args: { id: place } };
     const commit = (q, extra) => G.doHold(Object.assign({ t: 'trainGame', stat, game, level, q, where }, extra || {}));
-    const soon = () => { E.toast(GAME_NAME[game] + ' is coming soon. Try IDLE training.', 'info'); if (M) { M.view = 'idle'; render(); } return false; };
+    const soon = () => { if (G.retHint) G.retHint(null); E.toast(GAME_NAME[game] + ' is coming soon. Try IDLE training.', 'info'); if (M) { M.view = 'idle'; render(); } return false; };
+    // the return ticket (activity.js): TRAIN AGAIN replays this level, BACK reopens this menu on PLAY with the same skill, game and level
+    T.lastStat = stat; if (G.retHint) G.retHint({ label: 'TRAIN AGAIN', menu: (S2) => G.trainMenu(S2, where, null, { stat, view: 'play', game, level }) });
     const go = (name, args) => { S.closeSheet(); M = null; E.go(name, args); return true; };
     switch (game) {
       case 'ear': if (!is3d() || !E.scenes3d.ear) return soon(); return go('ear', { level, where, place, back });
@@ -338,7 +346,7 @@
       this.a = a || {}; this.held = null; this.gone = false; this.mg = null; this.w = null; this.res = null;
       gameMode(true);
       this.ov = overlay();
-      const args = { hud: this.ov, look: G.ch && G.ch.look, level: this.a.level || trainLv('ear'), levels: Core.EAR_LEVELS, question: Core.earQuestion, lesson: this.a.lesson !== false, settings: E.settings, tone: (f, d, v) => E.tone && E.tone(f, d, v), embedded: true, again: false };
+      const args = { hud: this.ov, look: G.ch && G.ch.look, level: this.a.level || trainLv('ear'), levels: Core.EAR_LEVELS, question: Core.earQuestion, lesson: this.a.lesson !== false, settings: E.settings, tone: (f, d, v) => E.tone && E.tone(f, d, v), embedded: true, again: false, acts: () => (G.retActs ? G.retActs() : null) };
       return R3.load('ear', args).then((w) => {
         if (E.scene !== this || !w) return; this.w = w; this.mg = w.game || null; if (!this.mg) return;
         w.events.on('minigame', (r) => { if (!this.gone && E.scene === this) safe(() => this.onResult(r && r.result ? r.result : r)); });

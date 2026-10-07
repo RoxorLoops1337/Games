@@ -94,7 +94,7 @@ try {
   ok(pre.trainLv.pose === 1 && post.trainLv.pose === 2 && want.lv === 2, 'pose: q >= 0.7 at the top level unlocks level 2 (trainLv.pose ' + post.trainLv.pose + ')');
   const card = await page.evaluate(() => ({ sh: (document.querySelector('.pz-card .pz-rw') || {}).textContent || '', un: (document.querySelector('.pz-card .pz-un') || {}).textContent || '', btns: [...document.querySelectorAll('.pz-card button')].map((b) => b.textContent), g: (document.querySelector('.pz-card .pz-g') || {}).textContent }));
   ok(card.sh === '+' + (Math.round((post.stats.show - pre.stats.show) * 10) / 10).toFixed(1) + ' SHOWMANSHIP' && /LEVEL 2 UNLOCKED/.test(card.un) && card.g === 'S', 'pose: the card shows the real gain and the unlock (' + card.sh + ' | ' + card.un + ')');
-  ok(card.btns.length === 1 && card.btns[0] === 'CONTINUE', 'pose: in the game the card only has CONTINUE');
+  ok(card.btns.join() === 'TRAIN AGAIN,BACK,CONTINUE', 'pose: in the game the card offers TRAIN AGAIN, BACK, CONTINUE (' + card.btns.join() + ')');
   await page.locator('.pz-card button', { hasText: 'CONTINUE' }).click(); await waitPlace('home');
   ok((await snapCh()).n.trainGames === (pre.n.trainGames || 0) + 1, 'pose: CONTINUE returns to the place, the session counted once');
   ok(await page.evaluate(() => !BBH.Audio.isGameMode || !BBH.Audio.isGameMode()), 'pose: gameMode is off again after leaving');

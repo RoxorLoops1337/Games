@@ -58,7 +58,7 @@ try {
     'run: the save equals Core.apply({t:"run", q, goodBars}) exactly like 2D ' + JSON.stringify([a0.maxEnergy, e0.maxEnergy, a0.energy, e0.energy, a0.xp, e0.xp]));
   const card = await page.evaluate(() => ({ rows: [...document.querySelectorAll('.mgr .card .r')].map((r) => r.textContent), rwd: (document.querySelector('.mgr .card .rwd') || {}).textContent || '', btns: [...document.querySelectorAll('.mgr .card button')].map((b) => b.textContent) }));
   ok(card.rows.some((r) => /MAX ENERGY/.test(r) && r.indexOf('+' + (a0.maxEnergy - b0.maxEnergy)) >= 0) && /\+\d+ XP/.test(card.rwd) && /ENERGY/.test(card.rwd), 'run: the card shows the REAL rewards (' + card.rows.join(' / ') + ' | ' + card.rwd + ')');
-  ok(card.btns.length === 1 && card.btns[0] === 'CONTINUE', 'run: in the game the card only has CONTINUE (no free second run)');
+  ok(card.btns.join() === 'RUN AGAIN,BACK,CONTINUE', 'run: in the game the card offers RUN AGAIN, BACK and CONTINUE (activity.js, ' + card.btns.join() + ')');
   await page.locator('.mgr .card button', { hasText: 'CONTINUE' }).click(); await waitPlace('park');
   ok(await page.evaluate(() => BBH.G.ch.n.runs) === b0.runs + 1, 'run: CONTINUE goes back to the park place (G.finishActivity), the run counted once');
 
@@ -94,7 +94,7 @@ try {
   ok(near(ta.mus, te.mus) && ta.energy === te.energy && ta.xp === te.xp && ta.tunes === t0.tunes + 1, 'tuner: the save equals Core.apply({t:"tune", q}) like 2D (mus ' + ta.mus.toFixed(2) + ' vs ' + te.mus.toFixed(2) + ')');
   const tc = await page.evaluate(() => ({ mus: (document.querySelector('.tn-mus') || {}).textContent, rw: (document.querySelector('.tn-rw') || {}).textContent || '', btns: [...document.querySelectorAll('.tn-btn')].map((b) => b.textContent) }));
   ok(tc.mus === '+' + (Math.round((ta.mus - t0.mus) * 10) / 10).toFixed(1) && /XP/.test(tc.rw), 'tuner: the result card shows the real Musicality gain and XP (' + tc.mus + ' ' + tc.rw + ')');
-  ok(tc.btns.length === 1 && tc.btns[0] === 'CONTINUE', 'tuner: only CONTINUE in the game');
+  ok(tc.btns.join() === 'TRAIN AGAIN,BACK,CONTINUE', 'tuner: the game card offers TRAIN AGAIN, BACK, CONTINUE (' + tc.btns.join() + ')');
   await page.locator('.tn-btn', { hasText: 'CONTINUE' }).click(); await waitPlace('studio');
   ok(true, 'tuner: CONTINUE returns to the studio place (G.finishActivity)');
 
