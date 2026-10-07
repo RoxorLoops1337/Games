@@ -17,13 +17,14 @@ function routeBetween(ax, ay, bx, by) {
 // ---- the tick ----
 function tick(dt) {
   if (!S.started) { S.t += dt; return; }
+  if (S.hold) { tickFx(dt); return; } // a tutorial card that needs the player's attention freezes the world
   if (JUICE.hitStop > 0) { JUICE.hitStop -= dt; dt *= 0.12; }
   S.t += dt; S.stats.playT += dt; S.flowTouched = false;
   const p = S.player;
   p.maxHp = pMaxHp(); p.hp = Math.min(p.hp, p.maxHp);
   tickHero(dt); tickFire(dt); tickShots(dt); tickItems(dt); tickSell(dt); tickForge(dt); tickVault(dt);
   tickHubPlates(dt); tickLandPlates(dt); tickSpawns(dt); tickEnemies(dt); tickTowers(dt); tickFans(dt); tickComp(dt);
-  tickTimers(dt); tickMeta(dt); tickFx(dt);
+  tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
   if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
 }
 function tickHero(dt) {
@@ -121,7 +122,7 @@ function tickSell(dt) {
     p.sellAcc += dt * SELL_RATE;
     while (p.sellAcc >= 1 && p.helmets.length) {
       p.sellAcc -= 1; const e = p.helmets.pop(), v = entryVal(e);
-      S.pallet += v; S.stats.sold++; S.stats.earned += v; questEvent('sell', 1); questEvent('earn', v);
+      S.pallet += v; S.stats.sold++; S.stats.earned += v; fEmit('sell', v); questEvent('sell', 1); questEvent('earn', v);
       float(SELL.x + 36, SELL.y - 60, '+' + fmt(v), '#ffd94a', !!e.crown);
       flyTo('item', S.comp.x, S.comp.y - 40, SELL.x, SELL.y - 24, { entry: e, dur: 0.26, arc: 44 });
       flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { delay: 0.2, dur: 0.34, arc: 70 });
@@ -129,7 +130,7 @@ function tickSell(dt) {
     }
   } else p.sellAcc = 0;
 }
-function sellToVault(e, mul) { const v = Math.ceil(entryVal(e) * (mul || 1)); S.pallet += v; S.stats.earned += v; S.stats.sold++; questEvent('sell', 1); questEvent('earn', v); flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { dur: 0.34, arc: 70 }); puff(VAULT.x, VAULT.y - 30, '#ffd94a', 1, true); }
+function sellToVault(e, mul) { const v = Math.ceil(entryVal(e) * (mul || 1)); fEmit('sell', v); S.pallet += v; S.stats.earned += v; S.stats.sold++; questEvent('sell', 1); questEvent('earn', v); flyTo('coin', SELL.x, SELL.y - 24, VAULT.x + (vrnd() - 0.5) * 40, VAULT.y - 16, { dur: 0.34, arc: 70 }); puff(VAULT.x, VAULT.y - 30, '#ffd94a', 1, true); }
 function tickForge(dt) {
   const f = S.forge, p = S.player; if (!f) return;
   if (dist2(p.x, p.y, FORGE.x, FORGE.y) < FORGE.r * FORGE.r && f.queue.length < forgeQ()) {
@@ -230,7 +231,7 @@ function tickHubPlates(dt) {
   }
 }
 function openNextLand() {
-  const z = addLand(); questEvent('land', 1);
+  const z = addLand(); questEvent('land', 1); fEmit('land', z);
   const g = z.g;
   float(g.x, g.y - 120, 'NEW LAND: ' + biomeOf(z.k).name.toUpperCase() + '!', '#ffd94a', true);
   sfx('unlock', true); buzz([40, 30, 80]); shake(10); JUICE.flash = 0.5;
@@ -343,7 +344,7 @@ function tickTowers(dt) {
   }
 }
 // ---- fans: collectors haul loot to the stall, fighters follow the hero and join the fight ----
-function mkFan(role) { return { id: S.fanSeq++, lvl: 0, x: STAGE.x + (vrnd() - 0.5) * 80, y: STAGE.y + 40, role, state: 'seek', carry: [], ph: vrnd() * 6.28, cd: 0, route: null, face: 1, mv: 0, art: ['rawclaw', 'roxor', 'andy', 'jasmin_unicorn', 'rawclaw_goat', 'roxor_monster'][(S.pop.length + (vrnd() * 6 | 0)) % 6] }; }
+function mkFan(role) { return { id: S.fanSeq++, lvl: 0, spec: null, x: STAGE.x + (vrnd() - 0.5) * 80, y: STAGE.y + 40, role, state: 'seek', carry: [], ph: vrnd() * 6.28, cd: 0, route: null, face: 1, mv: 0, art: ['rawclaw', 'roxor', 'andy', 'jasmin_unicorn', 'rawclaw_goat', 'roxor_monster'][(S.pop.length + (vrnd() * 6 | 0)) % 6] }; }
 function stepToward(f, tx, ty, spd, dt) { const dx = tx - f.x, dy = ty - f.y, dl = Math.hypot(dx, dy) || 1; if (dl < 2) return dl; const m = Math.min(dl, spd * dt); f.x += dx / dl * m; f.y += dy / dl * m; f.face = dx > 0 ? 1 : -1; f.mv = 0.15; return dl; }
 function walkRoute(f, tx, ty, spd, dt) { // follow boardwalk waypoints toward (tx,ty); returns remaining distance to the final target
   if (!f.route || f.routeKey !== Math.round(tx) + ',' + Math.round(ty)) { f.route = routeBetween(f.x, f.y, tx, ty); f.routeKey = Math.round(tx) + ',' + Math.round(ty); }
@@ -411,7 +412,7 @@ function tickTimers(dt) {
   else {
     S.chest.t += dt;
     if (dist2(S.player.x, S.player.y, S.chest.x, S.chest.y) < 42 * 42) {
-      const c = S.chest; S.wallet += c.val; S.stats.earned += c.val; S.stats.chests++; questEvent('chest', 1); questEvent('earn', c.val);
+      const c = S.chest; S.wallet += c.val; S.stats.earned += c.val; S.stats.chests++; questEvent('chest', 1); fEmit('chest', c); questEvent('earn', c.val);
       float(c.x, c.y - 60, '+' + fmt(c.val), '#ffd94a', true); starBurst(c.x, c.y - 20, 22, ['#ffe98a', '#fff4c0', '#ff9ac8'], 320); ringFx(c.x, c.y, 90, '#ffe98a', 0.5); sfx('chest', true); buzz([30, 20, 40]);
       for (let i = 0; i < 8; i++) flyTo('coin', c.x, c.y - 10, S.player.x, S.player.y - 36, { delay: i * 0.04, dur: 0.4, arc: 60 });
       if (vrnd() < 0.4) dropItem(c.x, c.y, { gem: true }, true);

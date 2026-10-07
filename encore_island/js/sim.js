@@ -18,7 +18,7 @@ function newState() {
     xp: 0, level: 1, perks: {}, cards: null, pendingLevels: 0, ult: 0, ultCasting: 0,
     forge: null, forgePlate: { paid: 0, cost: Math.ceil(260), built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
     waygate: false, wayPlate: { paid: 0, cost: 400, built: false },
-    pop: [], houses: 0, town: {}, fanSeq: 0, prestT: 0,
+    pop: [], houses: 0, town: {}, fanSeq: 0, prestT: 0, feat: {}, hold: false,
     pets: {}, activePet: null, petCd: 0,
     skins: { owned: { jasmin: true }, active: 'jasmin' }, cperks: {},
     chest: null, chestCd: CHEST_CD * 0.5, bossesSeen: {}, bestiary: {},
@@ -43,20 +43,20 @@ const petCollectionMul = () => 1 + 0.02 * petsOwned();
 const skinDef = (id) => SKINS.find(s => s.id === id) || SKINS[0];
 const activeSkin = () => skinDef(S.skins.active);
 const skinOwned = (id) => !!S.skins.owned[id];
-const cap = () => CAP0 + CAP_UP * S.up.cap + 2 * pk('cap');
+const cap = () => CAP0 + CAP_UP * S.up.cap + 2 * pk('cap') + Math.round(modAdd('cap'));
 const encoreOn = () => S.encoreT > 0;
-function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1) * clubMul(); }
+function pDmg() { return DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * (1 + 0.18 * pk('dmg')) * (1 + petBonus('dmg')) * (1 + cperkBonus('dmg')) * (encoreOn() ? 1.6 : 1) * clubMul() * mod('dmg'); }
 function landOfHero() { return landAt(S.player.x, S.player.y, S.lands.length); }
 function pRate() {
   const z = S.lands[landOfHero() - 1];
-  return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (1 + cperkBonus('rate')) / (encoreOn() ? 1.7 : 1);
+  return RATE0 * Math.pow(RATE_UP, S.up.rate) * (z && z.drums ? DRUM_MUL : 1) / (1 + 0.10 * pk('rate')) / (1 + petBonus('rate')) / (1 + cperkBonus('rate')) / (encoreOn() ? 1.7 : 1) / mod('rate');
 }
-const pickR = () => PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet'));
-function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (encoreOn() ? 2 : 1) * (S.goldRushT > 0 ? 3 : 1) * townTierMul(); }
-const critChance = () => 0.10 * S.gemUp.crit + 0.06 * pk('crit');
-const critMult = () => 3 + 0.6 * pk('critdmg');
-const pMaxHp = () => Math.ceil((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns * 0) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')));
-const speedNow = () => SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')) * (1 + cperkBonus('speed'));
+const pickR = () => PICK_R * (1 + 0.3 * S.gemUp.magnet + 0.2 * pk('magnet') + petBonus('magnet')) * mod('magnet');
+function coinMul() { return (1 + 0.25 * S.gemUp.coin) * (1 + CROWN_BONUS * S.crowns) * (1 + 0.12 * pk('coin')) * (1 + petBonus('coin')) * petCollectionMul() * (1 + cperkBonus('coin')) * (encoreOn() ? 2 : 1) * (S.goldRushT > 0 ? 3 : 1) * townTierMul() * mod('coin'); }
+const critChance = () => 0.10 * S.gemUp.crit + 0.06 * pk('crit') + modAdd('crit');
+const critMult = () => 3 + 0.6 * pk('critdmg') + modAdd('critmult');
+const pMaxHp = () => Math.ceil((HP0 + HP_UP * S.up.hp + 30 * pk('hp')) * (1 + CROWN_HP * S.crowns * 0) * (1 + petBonus('hp')) * (1 + cperkBonus('hp')) * mod('hp'));
+const speedNow = () => SPEED0 * (1 + SPEED_UP * S.up.speed) * (1 + 0.09 * pk('speed')) * (1 + petBonus('speed')) * (1 + cperkBonus('speed')) * mod('speed');
 const dashCdMax = () => dashCdMaxFor(S.crowns, pk('nimble'));
 const fighterDmg = () => DMG0 * Math.pow(DMG_UP, S.up.dmg) * (1 + CROWN_DMG * S.crowns) * 0.5;
 const popCap = () => BEDS_BASE + BEDS_PER_LAND * Math.max(0, S.lands.length - 1) + BEDS_PER_HOUSE * S.houses;
@@ -106,6 +106,7 @@ function spawnEnemy(z, opts) {
     tx: w.x, ty: w.y, wanderT: 1 + rnd() * 2, atkCd: 0, hurt: 0, sway: rnd() * 6.28, born: 0, face: 1, vx: 0, vy: 0,
     r: (boss ? 34 : (15 + Math.min(9, z.k))) + (arch === 'tank' ? 4 : 0), boss, gold,
   });
+  fEmit('spawn', S.enemies[S.enemies.length - 1], z);
   if (boss) { float(g.den.x, g.den.y - 70, BOSS_NAMES[foeAct(z.k)].toUpperCase() + ' APPEARS!', '#ff6a5a', true); sfx('boss', true); shake(12); JUICE.flash = 0.35; }
 }
 function wanderPoint(z) { const g = z.g, a = rnd() * TAU, r = (0.25 + rnd() * 0.5) * radiusAt(g, a); return { x: g.x + Math.cos(a) * r, y: g.y + Math.sin(a) * r }; }
@@ -117,14 +118,16 @@ function promoteElite() {
   S.toasts.push({ txt: 'A Champion rises!', t: 0, ic: 'elite' }); float(e.x, e.y - 60, 'CHAMPION', '#ffd94a', true); shake(8); sfx('boss', true); buzz(30);
   return true;
 }
-function dropItem(x, y, spec, vis) { // vis: use the visual stream (drops from elites/fans must not perturb the spawn stream)
+function dropItem(x, y, spec, vis) {
+  fEmit('drop', spec); // vis: use the visual stream (drops from elites/fans must not perturb the spawn stream)
   const r = vis ? vrnd : rnd;
   S.items.push(Object.assign({ x: x + (r() - 0.5) * 46, y: y + (r() - 0.5) * 36, t: 0, vy: -60 - r() * 60, vx: (r() - 0.5) * 80, z0: 0 }, spec));
 }
 const dropHelmet = (x, y, k) => dropItem(x, y, { k });
 function hurtEnemy(e, dmg, crit) {
   if (e.hp <= 0) return;
-  e.hp -= dmg; e.hurt = 0.12;
+  if (e.fx && e.fx.onHurt) dmg = e.fx.onHurt(e, dmg) || dmg;
+  e.hp -= dmg; e.hurt = 0.12; fEmit('hurt', e, dmg);
   if (e.hp > 0) starBurst(e.x, e.y - e.r * 0.6, crit ? 4 : 1, ['#fff4e6', '#ffd84d'], 120);
   if (S.settings.dmgNums) float(e.x, e.y - e.r - 12, Math.ceil(dmg), crit ? '#ff8a3c' : '#fff', crit, crit);
   if (e.hp > 0) { sfx(crit ? 'crit' : 'hit'); return; }
@@ -134,14 +137,14 @@ function killEnemy(e) {
   const perfect = onBeatNow();
   S.stats.kills++;
   if (!S.ultCasting) S.ult = Math.min(ULT_NEED, S.ult + 1);
-  recordKill(e); questEvent('kill', 1); registerCombo(e);
+  recordKill(e); questEvent('kill', 1); registerCombo(e); fEmit('kill', e);
   grantXp(e.boss ? 50 : e.elite ? 20 : e.gold ? 6 : 3 + Math.floor(e.k / 2));
   if (perfect) groovePerfect(e);
   const p = S.player;
   if (pk('vamp') > 0) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02 * pk('vamp'));
   S.dead.push({ x: e.x, y: e.y, k: e.k, boss: e.boss, gold: e.gold, r: e.r, t: 0, face: e.face || 1 });
   if (e.boss) {
-    S.stats.bosses++; questEvent('boss', 1); JUICE.hitStop = 0.14;
+    S.stats.bosses++; questEvent('boss', 1); fEmit('boss', e); JUICE.hitStop = 0.14;
     dropItem(e.x, e.y, { k: e.k, crown: true }); dropItem(e.x, e.y, { gem: true }); dropItem(e.x, e.y, { gem: true });
     for (let i = 0; i < 6; i++) dropHelmet(e.x, e.y, e.k);
     float(e.x, e.y - 60, 'CROWN!', '#ffd94a', true); shake(14); sfx('boom', true); buzz([50, 30, 80]); JUICE.flash = 0.5;
@@ -189,7 +192,7 @@ function groovePerfect(e) {
   if (S.groove >= GROOVE_NEED) startEncore();
 }
 function startEncore() {
-  S.groove = 0; S.encoreT = ENCORE_TIME; S.player.cheerT = 0.9; S.stats.encores++; questEvent('encore', 1);
+  S.groove = 0; S.encoreT = ENCORE_TIME; S.player.cheerT = 0.9; S.stats.encores++; fEmit('encore'); questEvent('encore', 1);
   S.toasts.push({ txt: 'ENCORE!  double damage + coins', t: 0, ic: 'groove' });
   JUICE.flash = 0.7; ringFx(S.player.x, S.player.y - 10, 160, '#ff9ac8', 0.6); ringFx(S.player.x, S.player.y - 10, 100, '#ffe98a', 0.45);
   starBurst(S.player.x, S.player.y - 30, 26, ['#ff9ac8', '#ffe98a', '#9af0b4', '#c6a8ff'], 340); shake(8); sfx('encore', true); buzz([30, 20, 60]);
@@ -206,16 +209,16 @@ function hurtPlayer(d, src) {
   if (p.hp <= 0) playerDie();
 }
 function playerDie() {
-  const p = S.player; p.deaths++;
+  const p = S.player; p.deaths++; fEmit('die');
   for (const e of p.helmets) dropItem(p.x, p.y, cloneEntry(e), true);
   p.helmets = []; p.hp = p.maxHp; p.invuln = 2.5; p.x = STAGE.x; p.y = STAGE.y; p.vx = p.vy = 0;
   float(STAGE.x, STAGE.y - 80, 'YOU DROPPED EVERYTHING!', '#ff6a5a', true); shake(14); sfx('die', true); buzz([60, 40, 60]); S.combo = 0;
 }
 function grantXp(n) {
   if (!S.started) return;
-  S.xp += n * (1 + 0.15 * pk('scholar')) * (1 + petBonus('xp')) * (1 + cperkBonus('xp'));
+  S.xp += n * (1 + 0.15 * pk('scholar')) * (1 + petBonus('xp')) * (1 + cperkBonus('xp')) * mod('xp');
   while (S.xp >= xpNeed(S.level)) {
-    S.xp -= xpNeed(S.level); S.level++;
+    S.xp -= xpNeed(S.level); S.level++; fEmit('levelup', S.level);
     if (S.cards) S.pendingLevels++; else drawCards();
     S.goldPulse = Math.max(S.goldPulse, 0.5); S.player.cheerT = 0.9; sfx('levelup', true); buzz([20, 20, 40]);
     JUICE.flash = 0.6; ringFx(S.player.x, S.player.y - 10, 130, '#ffe98a', 0.6); ringFx(S.player.x, S.player.y - 10, 80, '#ff9ac8', 0.45);

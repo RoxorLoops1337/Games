@@ -162,6 +162,7 @@ function drawWorld() {
   add(S.comp.y, drawCompanion); add(S.player.y, drawHero);
   A.sort((a, b) => a.y - b.y); for (const a of A) a.f();
   drawUnlockBanner();
+  drawFeaturesWorld();
   drawShots(); drawFly(); drawFx(); drawFloats();
 }
 
