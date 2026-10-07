@@ -98,7 +98,8 @@ export function createPost(ctx, S) {
     const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
     try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (let i = 0; i < PTS.length; i++) { gl.readPixels((w * PTS[i][0]) | 0, (h * PTS[i][1]) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); ptv[i * 3] = px4[0]; ptv[i * 3 + 1] = px4[1]; ptv[i * 3 + 2] = px4[2]; } } catch (e) { return false; }
     let sig = true, nan = true; for (let i = 0; i < PTS.length; i++) for (let k = 0; k < 3; k++) { const v = ptv[i * 3 + k]; if (Math.abs(v - SIG[k]) > TOL) sig = false; if (v > 6) nan = false; }
-    let blank = sig || nan; if (forceBlank > 0) { forceBlank--; blank = true; }
+    let flat = true, mean = 0; for (let i = 0; i < PTS.length; i++) { mean += (ptv[i * 3] + ptv[i * 3 + 1] + ptv[i * 3 + 2]) / 3; for (let k = 0; k < 3; k++) if (Math.abs(ptv[i * 3 + k] - ptv[k]) > 10) flat = false; } mean /= PTS.length;
+    let blank = sig || nan || (flat && mean < 40); if (forceBlank > 0) { forceBlank--; blank = true; }
     blankRun = blank ? blankRun + 1 : 0;
     if (blankRun >= 2) { base = rung + 1; try { console.warn('Park3D: blank frame on post rung ' + rung + ', falling back to rung ' + base); } catch (e) { /* ignore */ } build(tier); return true; }
     return false;

@@ -126,7 +126,7 @@ export function createHost(target, opts) {
       if (shared.post && shared.post.setFloor) safe('post floor', () => shared.post.setFloor(ctx.postRung || 0), null);
       camera.aspect = (W || 9) / (H || 16); camera.updateProjectionMatrix();
       await nextFrame();
-      if (tok === tokenSeq && !disposed && PERF && opts.precompile !== false) await precompile(scene, camera);
+      if (tok === tokenSeq && !disposed && PERF && (opts.precompile === true || /[?&]precompile=1/.test(QS))) await precompile(scene, camera);   // opt-in: compileAsync with KHR_parallel_shader_compile left real-GPU desktops on a black scene
       if (tok !== tokenSeq || disposed) { w.ready = false; cur = w; w.rec = rec; w.before = before; unloadNow(); return null; }
     } catch (e) { safe('cleanup', () => { if (spec && spec.dispose) spec.dispose(); kit.disposeTree(scene); scene.clear(); removeTracked(rec, before); renderer.renderLists.dispose(); }, null); throw e; }
     w.rec = rec; w.before = before; cur = w; window.__park = w.world; drawn = 0; shadowN = 0; settleN = 0; resize(W || undefined, H || undefined);
