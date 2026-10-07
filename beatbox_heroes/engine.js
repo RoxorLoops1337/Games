@@ -120,6 +120,7 @@
   E.flash = (color, ms) => { if (E.settings.reduce) return; flashCol = color || '#fff'; flashT = flashDur = ms || 140; };
   let fadeA = 0, fadeTo = 0, fadeSpeed = 0, fadeCol = '#120d1f';
   E.fadeTo = (a, ms, col) => { fadeTo = a; fadeSpeed = Math.abs(a - fadeA) / Math.max(1, ms || 200); if (col) fadeCol = col; };
+  E.fadeLevel = () => fadeA;                                  // read-only: how much the fade covers right now (0..1), used by the r3 world-switch cover and the black-frame probe
   E.spawn = (p) => { p.life = p.life || 600; p.age = 0; E.particles.push(p); if (E.particles.length > 500) E.particles.shift(); return p; };
   E.burst = (x, y, n, o) => {
     o = o || {};
@@ -164,7 +165,7 @@
       const r = E.scene.enter ? E.scene.enter(args || {}) : undefined;
       const fin = () => { if (!o.nofade) E.fadeTo(0, o.ms || 220); };
       if (def.is3d && r && typeof r.then === 'function') {   // a 3D enter is async (world build): reveal when it resolves; a failed build drops to the 2D sibling
-        r.then(() => { if (E.scene === def) fin(); }, (err) => { console.error(err); if (E.scene === def && BBH.R3 && BBH.R3.demote) BBH.R3.demote('enter', String(err && err.message || err)); fin(); });
+        r.then(() => { if (E.scene === def) { if (BBH.R3 && BBH.R3.reveal) BBH.R3.reveal(() => { if (E.scene === def) fin(); }); else fin(); } }, (err) => { console.error(err); if (E.scene === def && BBH.R3 && BBH.R3.demote) BBH.R3.demote('enter', String(err && err.message || err)); fin(); });
       } else fin();
     };
     if (o.nofade || !E.scene) { fadeA = 0; fadeTo = 0; sw(); return; }

@@ -45,9 +45,11 @@ export function createPost(ctx, S) {
   const stats = { sceneCalls: 0, sceneTris: 0, totalCalls: 0, rung: 0, builds: 0 };
   // Fallback ladder for GPUs (many phones) that cannot render to half-float or multisampled targets: those show a black frame.
   // rung 0 = HDR half-float + MSAA, 1 = half-float no MSAA, 2 = 8-bit no MSAA, 3 = no composer (same as low).
-  let rung = 0, frames = 0, blankRun = 0, forceBlank = 0; const px4 = new Uint8Array(4); const PTS = [[0.5, 0.5], [0.2, 0.25], [0.8, 0.25], [0.2, 0.75], [0.8, 0.75], [0.5, 0.9], [0.5, 0.1]], ptv = new Int16Array(PTS.length * 3);
-  (function pickStartRung() { try { const r = parseInt(new URLSearchParams(location.search).get('rung'), 10); if (r >= 0 && r <= 3) { rung = r; return; } } catch (e) { /* ignore */ } if (ctx.postRung > 0) rung = ctx.postRung; try { const x = renderer.extensions; if (!x.has('EXT_color_buffer_float')) rung = Math.max(rung, x.has('EXT_color_buffer_half_float') ? 1 : 2); } catch (e) { rung = 2; } })();
-  stats.rung = rung;
+  // base = what this device can do (found by the framebuffer probe at build and the blank-frame guard; it only ever goes down); floor = what the bound world asks for (ctx.postRung, e.g. the rhythm
+  // stage needs 8-bit post against half-float overflow). The chain runs at rung = max(base, floor), and only rebuilds when that changes.
+  let base = 0, floor = 0, rung = 0, frames = 0, blankRun = 0, forceBlank = 0; const px4 = new Uint8Array(4); const PTS = [[0.5, 0.5], [0.2, 0.25], [0.8, 0.25], [0.2, 0.75], [0.8, 0.75], [0.5, 0.9], [0.5, 0.1]], ptv = new Int16Array(PTS.length * 3);
+  (function pickStartRung() { try { const r = parseInt(new URLSearchParams(location.search).get('rung'), 10); if (r >= 0 && r <= 3) { base = r; return; } } catch (e) { /* ignore */ } if (ctx.postRung > 0) floor = ctx.postRung; try { const x = renderer.extensions; if (!x.has('EXT_color_buffer_float')) base = Math.max(base, x.has('EXT_color_buffer_half_float') ? 1 : 2); } catch (e) { base = 2; } })();
+  rung = Math.max(base, floor); stats.rung = rung;
 
   function makeOverlay() {
     if (overlay || typeof document === 'undefined' || !ctx.canvas || !ctx.canvas.parentElement) return;
@@ -57,12 +59,17 @@ export function createPost(ctx, S) {
     p.appendChild(overlay);
   }
   function disposeComposer() { if (!comp) return; comp.passes.forEach((p) => p.dispose && p.dispose()); comp.dispose(); comp = bloom = grade = tiltH = tiltV = rp = null; }
+  // is the composer's draw target renderable on this GPU? an incomplete framebuffer is what turns into a black frame, so test it at build, before anything is shown
+  function targetOK(rt) {
+    try { const gl = renderer.getContext(), prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt); const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER); renderer.setRenderTarget(prev); return st === gl.FRAMEBUFFER_COMPLETE; } catch (e) { return true; }
+  }
   function build(q) {
     disposeComposer(); tier = q; makeOverlay(); stats.builds++;
-    frames = 0; blankRun = 0;
+    frames = 0; blankRun = 0; rung = Math.max(base, floor); stats.rung = rung;
     if (q === 'low' || rung >= 3) { active = false; if (overlay) overlay.style.display = 'block'; return; }
     active = true; if (overlay) overlay.style.display = 'none';
     const rt = new THREE.WebGLRenderTarget(Math.max(2, W * DPR), Math.max(2, H * DPR), { type: rung >= 2 ? THREE.UnsignedByteType : THREE.HalfFloatType, samples: rung === 0 ? (q === 'high' ? 4 : 2) : 0 });
+    if (!targetOK(rt)) { rt.dispose(); base = rung + 1; try { console.warn('Park3D: post target incomplete on rung ' + rung + ', using rung ' + base); } catch (e) { /* ignore */ } build(q); return; }
     comp = new EffectComposer(renderer, rt); comp.setPixelRatio(DPR); comp.setSize(W, H);
     rp = new RenderPass(scene, camera); const orig = rp.render.bind(rp);
     rp.render = function (r, wb, rb, dt, ma) { orig(r, wb, rb, dt, ma); stats.sceneCalls = r.info.render.calls; stats.sceneTris = r.info.render.triangles; };
@@ -82,15 +89,19 @@ export function createPost(ctx, S) {
     if (tiltH) { tiltH.uniforms.uTexel.value.set(1 / px, 1 / py); tiltV.uniforms.uTexel.value.set(1 / px, 1 / py); tiltH.uniforms.uAmount.value = tiltV.uniforms.uAmount.value = 1.0 * DPR; }
     if (grade) grade.uniforms.uAspect.value = W / H;
   }
+  // What a BROKEN frame looks like at the canvas: the grade pass turns an empty (all zero) input into its lift colour (uLift * 0.75 = 32,27,42 in 8 bit) plus +-4 of grain, and a NaN frame (half-float
+  // overflow) reads pure black. A valid frame, however dark (night, the bar, a stage), is never exactly that colour at all 7 well spread points, because the lit scene sits on top of the lift.
+  const SIG = [32, 27, 42], TOL = 9;
   function checkBlank() {
-    // the grade pass lifts blacks and adds grain, so a broken (empty) frame is never exactly 0: call it blank when the sample points are all nearly the same dark colour
-    frames++; if (frames < 3 || frames > 90 || frames % 3) return;
+    // armed from the 3rd frame after a build or a bind (the world is up and has rendered), then every 3rd frame up to frame 45: about 14 tiny reads per world, never on later frames
+    frames++; if (frames < 3 || frames > 45 || frames % 3) return false;
     const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-    try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (let i = 0; i < PTS.length; i++) { gl.readPixels((w * PTS[i][0]) | 0, (h * PTS[i][1]) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); ptv[i * 3] = px4[0]; ptv[i * 3 + 1] = px4[1]; ptv[i * 3 + 2] = px4[2]; } } catch (e) { return; }
-    let flat = true, mean = 0; for (let i = 0; i < PTS.length; i++) { mean += (ptv[i * 3] + ptv[i * 3 + 1] + ptv[i * 3 + 2]) / 3; for (let k = 0; k < 3; k++) if (Math.abs(ptv[i * 3 + k] - ptv[k]) > 14) flat = false; } mean /= PTS.length;
-    let blank = flat && mean < 90; if (forceBlank > 0) { forceBlank--; blank = true; }
+    try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); for (let i = 0; i < PTS.length; i++) { gl.readPixels((w * PTS[i][0]) | 0, (h * PTS[i][1]) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px4); ptv[i * 3] = px4[0]; ptv[i * 3 + 1] = px4[1]; ptv[i * 3 + 2] = px4[2]; } } catch (e) { return false; }
+    let sig = true, nan = true; for (let i = 0; i < PTS.length; i++) for (let k = 0; k < 3; k++) { const v = ptv[i * 3 + k]; if (Math.abs(v - SIG[k]) > TOL) sig = false; if (v > 6) nan = false; }
+    let blank = sig || nan; if (forceBlank > 0) { forceBlank--; blank = true; }
     blankRun = blank ? blankRun + 1 : 0;
-    if (blankRun >= 2) { rung++; stats.rung = rung; try { console.warn('Park3D: blank frame on post rung ' + (rung - 1) + ', falling back to rung ' + rung); } catch (e) { /* ignore */ } build(tier); }
+    if (blankRun >= 2) { base = rung + 1; try { console.warn('Park3D: blank frame on post rung ' + rung + ', falling back to rung ' + base); } catch (e) { /* ignore */ } build(tier); return true; }
+    return false;
   }
   return {
     stats,
@@ -98,9 +109,12 @@ export function createPost(ctx, S) {
     get active() { return active; }, get tierName() { return tier; }, get state() { return S; },
     // hand the chain to another world (no render target is touched); the blank-frame guard re-arms so the new world is checked too
     bind(b) { scene = b.scene; camera = b.camera; if (b.S) S = b.S; if (rp) { rp.scene = scene; rp.camera = camera; } frames = 0; blankRun = 0; },
+    // the bound world's minimum rung (host: ctx.postRung of the world being built, 0 on unload). Rebuilds only when the effective rung changes, and only between worlds (under the load cover).
+    setFloor(n) { n = Math.max(0, Math.min(3, n | 0)); if (n === floor) return; floor = n; if (Math.max(base, floor) !== rung && (comp || (tier !== 'low' && rung >= 3))) build(tier); else { rung = Math.max(base, floor); stats.rung = rung; } },
+    get rung() { return rung; }, get baseRung() { return base; },
     unbind(Sref) { if (Sref && Sref !== S) return; scene = EMPTY.scene; camera = EMPTY.camera; if (rp) { rp.scene = scene; rp.camera = camera; } },
     setQuality(q) { if (q !== tier || (!comp && q !== 'low')) build(q); },
-    resize(w, h, dpr) { W = w; H = h; DPR = dpr; applySize(); },
+    resize(w, h, dpr) { if (w === W && h === H && dpr === DPR) return; W = w; H = h; DPR = dpr; applySize(); },
     update(t) {
       if (bloom) { bloom.strength = Math.min(1.6, Math.max(0, S.bloom || 0)); bloom.threshold = rung >= 2 ? Math.min(S.bloomThr, 0.88) : S.bloomThr; bloom.radius = 0.3; }
       if (tiltH) { const k = (S.tilt === undefined ? 1 : S.tilt) * DPR; tiltH.uniforms.uAmount.value = tiltV.uniforms.uAmount.value = k; } // interiors use a gentler tilt-shift
@@ -108,7 +122,8 @@ export function createPost(ctx, S) {
     },
     render() {
       renderer.info.reset(); // info.autoReset is off, so the stats the lead reads cover the whole frame (scene + post), not just the last quad
-      if (comp) { comp.render(); checkBlank(); } else renderer.render(scene, camera);
+      // a ladder step renders the SAME frame again on the new chain right away, so a rung change never leaves the broken frame on screen
+      if (comp) { comp.render(); if (checkBlank()) { renderer.info.reset(); if (comp) comp.render(); else renderer.render(scene, camera); } } else renderer.render(scene, camera);
       stats.totalCalls = renderer.info.render.calls; if (!comp) { stats.sceneCalls = stats.totalCalls; stats.sceneTris = renderer.info.render.triangles; }
     },
     dispose() { disposeComposer(); if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay); overlay = null; },
