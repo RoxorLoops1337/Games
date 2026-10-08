@@ -67,6 +67,9 @@ function probes(ctx, what) {
   } else if (what === 'torso') {
     const d = ctx.d, meta = wearMeta(ctx.look), mid = mk((m) => { if (meta.top.f === 'tank' && meta.top.crop) loft(m, [0.46, 0.52, 0.58, 0.64].map((y) => { const b = bodyR(y, d); return { y, rx: b.rx + 0.006, rz: b.rz + 0.006, cz: 0.004, c: '#fff' }; }), { n: 10, sq: 0.8 }); });
     k[what] = probe([k.mbH || (k.mbH = mk((m) => buildHead(m, ctx))), k.mbTop || (k.mbTop = mk((m) => buildTop(m, ctx, d))), mk((m) => buildBottom(m, ctx, d)), mid], (a, b) => !ARM[a] && !ARM[b]);
+  } else if (what === 'torsoAll') {
+    // the shoulders with the sleeve caps on them: what a loop round the neck lies on from above
+    k[what] = probe([k.mbH || (k.mbH = mk((m) => buildHead(m, ctx))), k.mbTop || (k.mbTop = mk((m) => buildTop(m, ctx, ctx.d)))]);
   } else k[what] = probe([k.mbTop || (k.mbTop = mk((m) => buildTop(m, ctx, ctx.d))), mk((m) => buildArms(m, ctx, ctx.d, wearMeta(ctx.look).sleeveEnd))], (a) => ARML[a]);
   return k[what];
 }
@@ -250,9 +253,13 @@ export function buildAccessories(mb, glow, ctx, api) {
       const side = neckAt(Math.PI / 2, yTop, o), xs = Math.abs(side[0]), pts = [], ns = [];
       const add = (p, n) => { pts.push(p); ns.push(n); };
       [0.06, 0.1].forEach((z) => add(DOWN(pr, xs, z, o), [0, 1, 0]));
-      const NU = 10; for (let i = 0; i <= NU; i++) { const ph = lerp(Math.PI / 2, -Math.PI / 2, i / NU), x = xs * 1.02 * Math.sin(ph), y = bot + (yTop - 0.02 - bot) * (1 - Math.cos(ph)); add(F(x, y, o), [0, 0, 1]); }
+      const NU = 10; for (let i = 1; i < NU; i++) { const ph = lerp(Math.PI / 2, -Math.PI / 2, i / NU), x = xs * 1.02 * Math.sin(ph), y = bot + (yTop - 0.02 - bot) * (1 - Math.cos(ph)); add(F(x, y, o), [0, 0, 1]); }
       [0.1, 0.06].forEach((z) => add(DOWN(pr, -xs, z, o), [0, 1, 0]));
       for (let i = 0; i <= 6; i++) { const a = lerp(-Math.PI / 2, -Math.PI * 1.5, i / 6); add(neckAt(a, yTop, o), [Math.sin(a), 0, Math.cos(a)]); }
+      // rays meet a hood collar or an overall strap at a slant: push every point straight off the nearest surface to its clearance
+      for (let i = 0; i < pts.length; i++) pts[i] = push(pr, pts[i], o);
+      // a wide collar (hood collar) moves the loop out over the shoulders: there it lies on top of the sleeve caps, never under them
+      const all = probes(ctx, 'torsoAll'); for (let i = 0; i < pts.length; i++) { const p = pts[i]; if (p[1] < 0.84 || p[2] > 0.12) continue; const dn = DOWN(all, p[0], p[2], o); if (dn[1] > p[1]) pts[i] = [p[0], dn[1], p[2]]; pts[i] = push(all, pts[i], o); }
       const skf = (p) => K2('chest', 'chain', clamp((0.88 - p[1]) / (0.88 - bot + 1e-3), 0, 1) * 0.5), base = id === 'lanyard' ? C(nk.color || '#e63946') : id === 'medal' ? C('#2f5bd0') : cc, colf = (t) => mix(base, lite(base, 0.3), 0.5 + 0.5 * Math.sin(t * 70));
       if (flat) ribbon(mb, pts, ns, w, th, (t) => (id === 'medal' && pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))][0] > 0 ? C('#e63946') : colf(t)), (t) => skf(pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))]), true);
       else tubePT(mb, pts, th, colf, { n: 3, closed: true, sk: (t) => skf(pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))]) });
@@ -322,7 +329,7 @@ export function buildAccessories(mb, glow, ctx, api) {
       const cover = probes(ctx, 'cover'), hat = probes(ctx, 'hat'), list = [];
       [1, -1].forEach((s) => {
         const lobe = [s * 0.305, HY + 0.205, -0.012], th = s * Math.atan2(0.305, -0.012 - ringAt(0.205).cz), hb = K(s > 0 ? 'hairSL' : 'hairSR'), drop = id === 'hoops' ? 0.1 : id === 'dangles' ? 0.09 : 0.02;
-        const hatR = (() => { const p = around(hat, th, 0.205, 0, 0); return Math.hypot(p[0], p[2] - ringAt(0.205).cz); })(); if (hatR > 0.29) return;
+        let hid = false; for (const y of [0.2, 0.23, 0.26, 0.29]) for (const dt of [-0.12, 0, 0.12]) { const p = around(hat, th + s * dt, y, 0, 0); if (p[0] * s > 0.29) hid = true; } if (hid) return;
         let cr = 0; for (let k = 0; k <= 4; k++) { const y = 0.205 - drop * k / 4, p = around(cover, th, y, 0, 0); cr = Math.max(cr, Math.hypot(p[0], p[2] - ringAt(y).cz)); }
         const push = Math.max(0, cr - 0.302), sx = s * push, L = [lobe[0] + sx, lobe[1], lobe[2]], sk = push > 0 ? K_h : hb; list.push({ s, lobe: L, push });
         if (id === 'studs' || id === 'iced') ball(mb, [L[0] + s * 0.012, L[1] - 0.004, L[2] + 0.01], [0.014, 0.014, 0.014], id === 'iced' ? '#e8f4ff' : cc, K_h, { detail: 0, nh: true });

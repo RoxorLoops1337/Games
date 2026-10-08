@@ -125,7 +125,7 @@ for (const id of KNOWN.acc.ears.filter((x) => x.indexOf('none') !== 0)) for (con
     const top = B.reduce((a, p) => (p[1] > a[1] ? p : a), B[0]), ht = !info.band ? -1 : ray(HS, [top[0], top[1] + 0.6, top[2]], [0, -1, 0]); if (ht > 0 && ht < 0.6 - 0.02) bad++;
     if (bad || (info.band && near > 0.035) || (!info.band && !['cowboy', 'bucket', 'bucketfur', 'fedora', 'tophat', 'wizard', 'pirate'].includes(hat))) fail('band', tag + ' ' + bad + ' buried, nearest ' + near.toFixed(3));
   } else {
-    if (hat === 'headphonehat') { if (info.list.length) fail('ears', tag + ' earrings poke out of a hat over the ears'); }
+    if (hat === 'headphonehat' || hat === 'hood') { if (info.list.length) fail('ears', tag + ' earrings poke out of a hat over the ears'); }
     else { if (info.list.length !== 2) fail('ears', tag + ' ' + info.list.length + ' earrings'); info.list.forEach((e) => { const dd = dist(HS, e.lobe, 0.1); if (dd > 0.025) fail('lobe', tag + ' ' + dd.toFixed(3)); }); }
   }
   const fl = floating(G, 'acc', 0.03, all); if (fl.length) fail('float_ears', tag + ' ' + JSON.stringify(fl[0]));
