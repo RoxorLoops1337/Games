@@ -15,7 +15,7 @@ import { THREE } from './kit.js';
 import { C, MB, K, BONE_NAMES, BI, boneSpec, restWorld, dims, loft, finalize, makeHull, shade } from './char_geo.js';
 import { buildHead, buildFace, buildFacial, buildArms, buildLegs } from './char_body.js';
 import { buildHair, buildHat, HAT_COVER, HAT_RIDES } from './char_hair.js';
-import { buildTop, buildBottom, buildShoes, wearMeta, bodyR } from './char_wear.js';
+import { buildTop, buildBottom, buildShoes, buildMidriff, wearMeta, bodyR } from './char_wear.js';
 import { buildGlasses, buildAccessories } from './char_gear.js';
 import { Animator, MOOD_NAMES } from './char_anim.js';
 import './char_clips.js';
@@ -107,9 +107,9 @@ export function createCharacter(ctx, look, extra) {
     sf('facial', [look.skin, look.facial, hc], (m) => buildFacial(m, cx));
     sf('arms', [body, look.skin, meta.sleeveEnd], (m) => buildArms(m, cx, d, meta.sleeveEnd));
     sf('legs', [body, look.skin, meta.legEnd], (m) => buildLegs(m, cx, d, meta.legEnd));
-    sf('midriff', [body, look.skin, meta.top.f === 'tank' && meta.top.crop], (m) => { if (meta.top.f === 'tank' && meta.top.crop) loft(m, [0.46, 0.52, 0.58, 0.64].map((y, i) => { const b = bodyR(y, d); return { y, rx: b.rx + 0.006, rz: b.rz + 0.006, cz: 0.004, sk: K('hips'), c: shade(cx.skin, 0.9 + i * 0.03) }; }), { n: 10, sq: 0.8 }); });
+    sf('midriff', [body, look.skin, meta.crop], (m) => { if (meta.crop) buildMidriff(m, cx, d); });
     sf('top', [body, look.top, look.skin], (m) => buildTop(m, cx, d));
-    sf('bottom', [body, look.bottom], (m) => buildBottom(m, cx, d));
+    sf('bottom', [body, look.bottom, look.top && look.top.id, look.shoes && look.shoes.id], (m) => buildBottom(m, cx, d));
     sf('shoes', [body, look.shoes, look.skin], (m) => buildShoes(m, cx, d));
     // hair is cut and squeezed under a covering hat (so its key holds the hat id) and long hair falls over a backpack; band hats ride on the hair (so theirs holds the hair style)
     sf('hair', [look.skin, look.hair, hatCover >= 0.7 ? hatId : 'none', !!(look.acc && look.acc.back && look.acc.back.id === 'backpack')], (m) => buildHair(m, cx, hatCover));
