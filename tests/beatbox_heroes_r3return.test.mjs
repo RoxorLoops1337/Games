@@ -32,7 +32,7 @@ const acts = (page, sel) => page.evaluate((sel) => [...document.querySelectorAll
 const tap = (page, sel) => page.evaluate((sel) => { const b = document.querySelector(sel); if (!b) return false; b.click(); return true; }, sel);
 const openSpot = async (page, id) => { await page.evaluate((id) => BBH.R3.world.walkToSpot(id, { run: true }), id); return drive(page, () => !!document.querySelector('#ui .sheet .h2'), null, 40); };
 const rowClick = (page, re) => page.evaluate((re) => { const b = [...document.querySelectorAll('#ui .sheet .scroll .btn')].find((x) => new RegExp(re).test(x.textContent)); if (!b) return false; b.click(); return true; }, re);
-const finishSet = (page) => page.evaluate(() => { const mg = BBH.Eng.scene.mg; mg.bot({ jitterMs: 12 }); let st = mg.state(); for (let i = 0; i < 2400 && st.phase !== 'result' && st.phase !== 'verdict'; i++) st = mg.tick(0.15); return st.phase; });
+const finishSet = (page) => page.evaluate(() => { const mg = BBH.Eng.scene.mg; mg.bot({ jitterMs: 12 }); let st = mg.state(); for (let i = 0; i < 2400 && st.phase !== 'result' && st.phase !== 'verdict'; i++) { st = mg.tick(0.15); if (i === 160 && st.live && st.live.endless) { mg.quit(); st = mg.tick(0.15); } } return st.phase; });   // a continuous busk ends with STOP
 const menuOpen = (page) => until(page, () => !!document.querySelector('#ui .sheet .trn'), null, 40000);
 const fresh = (page, extra) => seed(page, Object.assign({ day: 3, minutes: 12 * 60 - 360, energy: 100, maxEnergy: 100, hunger: 95, mood: 80, cash: 400, stats: { mus: 30, tech: 30, ori: 30, show: 30 } }, extra || {}));
 const allSounds = (page) => page.evaluate(() => { const ch = BBH.Core.clone(BBH.G.ch); if (BBH.Core.SOUNDS) ch.sounds = BBH.Core.SOUNDS.map((x) => x.id); BBH.G.setChar(ch); });
@@ -45,7 +45,7 @@ try {
   /* ------------------------------------------------------------------ BUSK: CONTINUE, BACK, PLAY AGAIN */
   ok(await goScene(page, 'place', { id: 'park' }, 'park'), 'park world loads');
   ok(await openSpot(page, 'busk') && await sheetTitle(page) === 'BUSKING SPOT', 'walking to the busk ring opens BUSKING SPOT');
-  await rowClick(page, '^BUSK  '); ok(await waitScene(page, 'rhythm', 'rhythm'), 'BUSK starts the set');
+  await rowClick(page, '^BUSKPlay'); ok(await waitScene(page, 'rhythm', 'rhythm'), 'BUSK starts the set');
   ok(await page.evaluate(() => { const t = BBH.G.activityReturn; return !!t && t.place === 'park' && t.spot === 'busk' && t.hot === 'spot' && !!t.pos; }), 'the return ticket remembers the park, the busk spot (2D hotspot "spot") and where the player stood');
   ok(await finishSet(page) === 'result', 'busk: the bot plays the set to the result card');
   await sleep(400);
@@ -57,13 +57,13 @@ try {
   { const p = await atSpot(page, 'busk'); ok(landedOk(p), 'busk CONTINUE: standing at the busk ring, not at the gate (' + say(p) + ')'); }
   ok(await page.evaluate(() => !document.querySelector('#ui .sheet') && BBH.R3.world.controls.enabled && !BBH.G.activityReturn), 'busk CONTINUE: no sheet, free to walk, the ticket is used up');
   // BACK reopens the BUSKING SPOT sheet at the ring
-  await openSpot(page, 'busk'); await rowClick(page, '^BUSK  '); await waitScene(page, 'rhythm', 'rhythm'); await finishSet(page); await sleep(300);
+  await openSpot(page, 'busk'); await rowClick(page, '^BUSKPlay'); await waitScene(page, 'rhythm', 'rhythm'); await finishSet(page); await sleep(300);
   await tap(page, '#r3rhythm button[data-act="back"]');
   ok(await waitPlace(page, 'park') && await until(page, () => { const e = document.querySelector('#ui .sheet .h2'); return !!e && e.textContent === 'BUSKING SPOT'; }, null, 30000), 'busk BACK: the park with the BUSKING SPOT sheet open again');
   { const p = await atSpot(page, 'busk'), c = await page.evaluate(() => BBH.R3.world.controls.inSpot); ok(landedOk(p) && c === 'busk', 'busk BACK: at the ring, in the spot pose (' + say(p) + ', inSpot ' + c + ')'); }
   // PLAY AGAIN: the same set again, straight from the card
   const n0 = await page.evaluate(() => BBH.G.ch.n.busks);
-  await rowClick(page, '^BUSK  '); await waitScene(page, 'rhythm', 'rhythm'); await finishSet(page); await sleep(300);
+  await rowClick(page, '^BUSKPlay'); await waitScene(page, 'rhythm', 'rhythm'); await finishSet(page); await sleep(300);
   await tap(page, '#r3rhythm button[data-act="again"]');
   ok(await until(page, (n) => BBH.Eng.sceneName === 'rhythm' && BBH.Eng.scene.mg && BBH.Eng.scene.mg.state().phase !== 'result' && BBH.G.ch.n.busks === n + 1 && !BBH.Eng.pendingSwitch, n0, 120000), 'busk PLAY AGAIN: a new set starts at once (no stop in the park)');
   ok(await page.evaluate(() => BBH.Eng.sceneArgs.kind === 'busk' && BBH.Eng.sceneArgs.title === 'BUSKING' && BBH.G.activityReturn && BBH.G.activityReturn.spot === 'busk'), 'busk PLAY AGAIN: same kind and settings (BUSKING), same ticket');
@@ -221,7 +221,7 @@ try {
     await p2.evaluate(() => BBH.Eng.go('place', { id: 'park' })); await until(p2, () => BBH.Eng.sceneName === 'place' && BBH.Eng.sceneArgs.id === 'park' && !BBH.Eng.pendingSwitch && BBH.Eng.scene.t > 0, null, 30000);
     await p2.evaluate(() => BBH.Eng.scene.walkTo('spot')); await until(p2, () => !!document.querySelector('#ui .sheet .h2') && document.querySelector('#ui .sheet .h2').textContent === 'BUSKING SPOT', null, 20000);
     const spot2 = await p2.evaluate(() => ({ x: BBH.Eng.scene.hx, y: BBH.Eng.scene.hy, st: BBH.Eng.scene.sc.spots.stand }));
-    await p2.evaluate(() => { const b = [...document.querySelectorAll('#ui .sheet .scroll .btn')].find((x) => /^BUSK  /.test(x.textContent)); if (b) b.click(); });
+    await p2.evaluate(() => { const b = [...document.querySelectorAll('#ui .sheet .scroll .btn')].find((x) => /^BUSKPlay/.test(x.textContent)); if (b) b.click(); });
     ok(await until(p2, () => BBH.Eng.sceneName === 'rhythm' && !BBH.Eng.pendingSwitch, null, 20000), '2D busk starts');
     await p2.evaluate(() => { const s = BBH.Eng.scene, C = BBH.Core; s.reallyDone = true; s.state = 'result'; s.a.onDone(C.summarize([0, 1, 2, 3, 0, 1, 2, 3].map((l) => ({ grade: 'perfect', lane: l })), 8, 8)); }); await sleep(300);
     ok((await acts(p2, '#ui .panel.pop [data-act]')).join() === 'PLAY AGAIN,BACK,CONTINUE', '2D busk card: PLAY AGAIN, BACK, CONTINUE');
