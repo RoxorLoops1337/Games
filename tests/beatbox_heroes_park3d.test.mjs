@@ -46,6 +46,19 @@ await page.waitForFunction(() => window.__park.lighting.stats().rung >= 2, null,
 const rg = await page.evaluate(() => window.__park.lighting.stats());
 ok(rg.rung === 2 && rg.composer, 'black frames step the post chain down the ladder (rung ' + rg.rung + ')');
 await page.waitForTimeout(500);
+// passers-by: people walk the park paths, keep moving, and give way to the player standing in their way
+const pb = await page.evaluate(() => {
+  const p = window.__park, pb = p.ctx.passersby; if (!pb) return null; const W = pb.walkers, s0 = W.map((w) => w.s), out = { n: W.length, ids: W.map((w) => w.path.id) };
+  for (let i = 0; i < 30; i++) pb.update(0.1, 100 + i * 0.1, null);
+  out.moved = W.map((w, i) => Math.abs(w.s - s0[i]) > 0.3 || w.pause > 0 || w.dir !== 1).filter(Boolean).length;
+  out.onPath = W.every((w) => { const q = w.c.object.position; return Number.isFinite(q.x) && Number.isFinite(q.z) && p.terrain.pathDist(q.x, q.z) < 3; });
+  const w = W.find((q) => q.path.closed) || W[0], o = w.c.object.position; w.pause = 0; w.nextPause = 99; const fx = Math.sin(w.yaw), fz = Math.cos(w.yaw), pp = { x: o.x + fx * 1.1 + fz * 0.15, z: o.z + fz * 1.1 - fx * 0.15 };
+  for (let i = 0; i < 10; i++) pb.update(0.1, 200 + i * 0.1, pp);
+  out.slow = +w.slow.toFixed(2); out.side = +Math.abs(w.side).toFixed(2); return out;
+});
+ok(pb && pb.n >= 3, 'people stroll through the park ' + JSON.stringify(pb));
+ok(pb && pb.moved === pb.n && pb.onPath, 'every passer-by keeps moving along a path ' + JSON.stringify(pb));
+ok(pb && pb.slow < 0.8 && pb.side > 0.1, 'a passer-by slows down and steps aside for the player ' + JSON.stringify(pb));
 ok(errs.length === 0, 'no page or console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
 // ---------- FLAT scene (flat3d.html: Park3D.init scene 'flat') ----------
 await page.close();
