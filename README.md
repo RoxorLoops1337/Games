@@ -7,15 +7,19 @@ builds to `dist/` via `build.js`, and deploys to Cloudflare Pages on merge to
 ## Working in here
 
 ```
-npm run check        every game's test suites — the gate before any push
-npm run check:times  the same suites, timed, naming any that has run away
+npm run check:changed  build + only the games this branch changed: the gate before any push
+npm run check          every game's test suites (about nine minutes), on demand
+npm run check:times    the same suites, timed, naming any that has run away
 ```
 
-**`npm run check` is the one command that matters.** It is about nine minutes and
-it must be green before anything is pushed. If a suite fails in a game you did not
-touch, do not go and fix it — re-run that suite alone first (several build their
-boards from a fresh seed and fail on maybe one run in five), and if it still fails,
-push your own work and say so.
+**`npm run check:changed` is the one to run before a push.** It diffs the branch
+against `origin/main` and runs only the suites of the games that changed
+([tools/check-changed.mjs](tools/check-changed.mjs)), so a fix to one game waits on
+seconds, not on all of them. Anything shared (`build.js`, `package.json`, a folder it
+does not know) makes it run the full `npm run check` instead. It must be green before
+anything is pushed. If a suite fails in a game you did not touch, do not go and fix
+it: re-run that suite alone first (several build their boards from a fresh seed and
+fail on maybe one run in five), and if it still fails, push your own work and say so.
 
 **`npm run check:times` exists because the nine minutes is nobody's job.** Every
 game here is maintained separately, so the person who makes one suite slow never

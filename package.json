@@ -54,6 +54,7 @@
     "test:choir": "node tests/world_choir_games.test.mjs",
     "test:choirimport": "node tests/choir_import.test.mjs",
     "check:times": "node tools/check-times.mjs",
+    "check:changed": "node tools/check-changed.mjs",
     "test:claw": "node tests/claw_crawl.test.mjs",
     "test:colony": "node tests/pixel_colony.test.mjs",
     "test:rogue_book": "node tests/rogue_book_all.mjs",
