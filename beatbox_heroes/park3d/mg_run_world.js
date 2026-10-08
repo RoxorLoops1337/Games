@@ -1,7 +1,7 @@
 // RUN mini game: the endless park jog loop. Local space: the runner moves along +z, x is lateral, y up.
 // Four recycled chunks (L metres each, two layouts) hold lawns with mown stripes, a terracotta jogging track, kerbs, lamps, benches,
 // trees, bushes and flowers. A far skyline ring follows the camera with parallax. Every chunk is 3 meshes (ground, props, lamp glow) + 1 halo Points.
-import { THREE, rng as mkRng, flatMat, box, cyl, paint, nonIndexed, mergeGeometries } from './kit.js';
+import { THREE, rng as mkRng, flatMat, box, cyl, paint, nonIndexed, mergeGeometries, leafShadow } from './kit.js';
 import { xf } from './flora_common.js';
 import { makeOak, makePine, makeCherry, makeCypress, makeStreet, PALS } from './flora_trees.js';
 import { makeBush } from './flora_plants.js';
@@ -103,7 +103,7 @@ export function buildWorld(ctx, rootGroup, q) {
   for (let s = 0; s < CH_N; s++) {
     const v = s & 1, L = chunkLayouts[v], grp = new THREE.Group(); grp.name = 'run_chunk';
     const gm = new THREE.Mesh(groundGeo[v], groundMat); gm.receiveShadow = true; gm.name = 'run_ground';
-    const pm = new THREE.Mesh(L.props, propMat); pm.castShadow = true; pm.receiveShadow = true; pm.name = 'run_props';
+    const pm = new THREE.Mesh(L.props, propMat); pm.castShadow = true; pm.receiveShadow = true; pm.name = 'run_props'; leafShadow(pm, { minY: 1.7, sat: 0.12 });   // dapple only the (saturated) foliage: lamp posts keep solid shadows
     grp.add(gm, pm); grp.frustumCulled = false; [gm, pm].forEach((m) => { m.frustumCulled = false; }); rootGroup.add(grp); chunks.push(grp);
   }
   const hpos = new Float32Array(CH_N * 8 * 3), hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.BufferAttribute(hpos, 3));

@@ -1,6 +1,6 @@
 // Busking rhythm game: the golden-hour street stage. Crate stage + amps, brick backdrop with a neon sign, string lights, spot beams,
 // paved plaza with lawn, trees, skyline and clouds from the park flora, a few pigeons. Static geometry is merged into a handful of meshes.
-import { THREE, flatMat, rng, canvasTex, jitter } from './kit.js';
+import { THREE, flatMat, rng, canvasTex, jitter, leafShadow } from './kit.js';
 import { xf } from './flora_common.js';
 import { makeOak, makePine, PALS } from './flora_trees.js';
 import { buildSkyline, buildClouds } from './flora_sky.js';
@@ -136,7 +136,7 @@ export function buildWorld(ctx, q) {
   if (q === 'low') tp.length = 6;
   tp.forEach(([x, z, s, k], i) => { const g = k === 'p' ? makePine(300 + i, s * 1.1) : makeOak(300 + i, k === 'm' ? PALS.MAPLE : k === 'c' ? PALS.CHERRY : (i % 2 ? PALS.OAK2 : PALS.OAK), s); trees.push(xf(g, { x, y: 0, z, ry: R() * 6 })); });
   { const parts = trees.map((g) => (g.attributes.uv ? (g.deleteAttribute('uv'), g) : g)); let tot = 0; parts.forEach((g) => { tot += g.attributes.position.count; }); const pos = new Float32Array(tot * 3), col = new Float32Array(tot * 3); let o = 0; parts.forEach((g) => { const gg = g.index ? g.toNonIndexed() : g; pos.set(gg.attributes.position.array, o * 3); col.set(gg.attributes.color.array, o * 3); o += gg.attributes.position.count; });
-    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o * 3), 3)); bg.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o * 3), 3)); bg.computeVertexNormals(); const tm = new THREE.Mesh(bg, mat); tm.castShadow = q !== 'low'; tm.receiveShadow = true; tm.name = 'trees'; group.add(tm); }
+    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o * 3), 3)); bg.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o * 3), 3)); bg.computeVertexNormals(); const tm = new THREE.Mesh(bg, mat); tm.castShadow = q !== 'low'; leafShadow(tm, { minY: 1.7 }); tm.receiveShadow = true; tm.name = 'trees'; group.add(tm); }
   const props = stage;
   // hedges + planters along the plaza edge, benches
   for (let i = 0; i < 9; i++) { const side = i % 2 ? 1 : -1, z = 4.2 - Math.floor(i / 2) * 3.4, x = side * 8.6; props.box(1.7, 0.6, 0.9, x, 0.3, z, '#8a5a3a', { tint: 0.06, r: R, ry: side * 1.5708 }); const b = jitter(new THREE.IcosahedronGeometry(0.62, 1), 0.2, R); b.scale(1.3, 0.8, 0.9); b.translate(x, 0.82, z); props.add(b, ['#3f9b5a', '#58b667', '#2f7d4e'][i % 3], 0.1, R); [0, 1].forEach((k) => { const f = jitter(new THREE.IcosahedronGeometry(0.1, 0), 0.04, R); f.translate(x + (k - 0.5) * 0.7, 1.15 + k * 0.1, z + (R() - 0.5) * 0.4); props.add(f, ['#ff4f8b', '#ffd23f', '#fff2dc'][(i + k) % 3], 0.05, R); }); }
