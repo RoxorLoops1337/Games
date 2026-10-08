@@ -9,6 +9,7 @@ import { buildSet, AL, LIGHTS } from './w_title_set.js';
 import { buildSign, buildStringLights, buildRain, buildSteam, buildWet, buildShafts, buildSignReflection } from './w_title_fx.js';
 
 const NOP = () => {};
+const BEE_FWD = 0.2;    // BeeAmGee sits on the FRONT half of his crate so his knees clear the front board and the shins dangle in front (behind it they vanish into the box)
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const bounce = (x) => { const n = 7.5625, d = 2.75; if (x < 1 / d) return n * x * x; if (x < 2 / d) return n * (x -= 1.5 / d) * x + 0.75; if (x < 2.5 / d) return n * (x -= 2.25 / d) * x + 0.9375; return n * (x -= 2.625 / d) * x + 0.984375; };
 // camera shots: position, look-at, vertical fov at the reference aspect 9:16
@@ -66,7 +67,7 @@ export default function create(ctx, args) {
     if (w.controls && w.controls.teleportTo) w.controls.teleportTo(S.x, S.z + 0.1);
     hero.object.position.set(S.x, S.h, S.z + 0.1); hero.object.rotation.y = 0; hero.play('beatbox', { bpm: st.bpm, amp: 1 }); hero.setMood && hero.setMood('happy', true);
     if (foxy) { foxy.place(S.x - 1.0, S.z + 0.15, 0.4, undefined, 0); foxy.object.position.y = S.h; foxy.play('dance', { bpm: st.bpm }); foxy.setMood && foxy.setMood('happy', true); foxy.lookAt && foxy.lookAt(null); }
-    if (bee) { bee.place(set.crate.x + Math.sin(-0.45) * -0.14, set.crate.z + Math.cos(-0.45) * -0.14, -0.45, 0.55, 0); bee.object.position.y = S.h + 0.0; bee.object.position.x += 0.0; bee.setMusic && bee.setMusic(st.bpm, 1); if (bee.boombox) { bee.boombox.position.set(-0.7, 0.135, 0.3); bee.boombox.rotation.y = 0.5; } }
+    if (bee) { bee.place(set.crate.x + Math.sin(-0.45) * BEE_FWD, set.crate.z + Math.cos(-0.45) * BEE_FWD, -0.45, 0.55, 0); bee.object.position.y = S.h + 0.0; bee.object.position.x += 0.0; bee.setMusic && bee.setMusic(st.bpm, 1); if (bee.boombox) { bee.boombox.position.set(-0.7, 0.135, 0.3); bee.boombox.rotation.y = 0.5; } }
     st.ready = true;
   }
   ctx.events.on('worldReady', cast);

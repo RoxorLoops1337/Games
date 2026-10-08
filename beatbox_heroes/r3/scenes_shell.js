@@ -26,6 +26,15 @@
       });
     },
     leave() { this.w = null; },
+    // the 2D DOM, restyled for the 3D stage: a neon TAP TO START pill (pulses on the beat) and the duo credit under it
+    build() {
+      E.scenes.title.build.call(this);
+      if (this.state !== 'tap') return;
+      const ui = document.getElementById('ui'), veil = ui && ui.lastElementChild, tap = veil && veil.firstElementChild; if (!tap) return;
+      tap.className = 'k3-tap'; tap.removeAttribute('style'); tap.textContent = '';
+      tap.appendChild(h('span.k3-tap-t', null, 'TAP TO START'));
+      veil.appendChild(h('div.k3-credit', null, 'ROXORLOOPS & JASMIN'));
+    },
     update(dt) {
       const T = this.w && this.w.ctx && this.w.ctx.title; if (!T) return;
       this.bpmT -= dt; if (this.bpmT <= 0) { this.bpmT = 400; const b = bpmOf(); if (b) T.setBpm(b); }

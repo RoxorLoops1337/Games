@@ -23,9 +23,9 @@ try {
   await sleep(1500);
   const st = await page.evaluate(() => {
     const w = BBH.R3.world, T = w.ctx.title, s = BBH.R3.host.stats();
-    return { body: document.body.classList.contains('r3'), ids: w.npcs.map((n) => n.id).sort().join(','), look: !!(w.player && w.player.getLook && w.player.getLook()), stats: T && T.stats(), tris: s.tris, calls: s.calls, delegated: BBH.Eng.scene.build === BBH.Eng.scenes.title.build, veil: document.querySelectorAll('#ui .full').length };
+    return { body: document.body.classList.contains('r3'), ids: w.npcs.map((n) => n.id).sort().join(','), look: !!(w.player && w.player.getLook && w.player.getLook()), stats: T && T.stats(), tris: s.tris, calls: s.calls, delegated: Object.getPrototypeOf(BBH.Eng.scene) === BBH.Eng.scenes.title && !!document.querySelector('#ui .full .k3-tap') && !!document.querySelector('#ui .full .k3-credit'), veil: document.querySelectorAll('#ui .full').length };
   });
-  ok(st.body && st.delegated, 'body.r3 is on and the sibling delegates its DOM to the 2D title (Object.create)');
+  ok(st.body && st.delegated, 'body.r3 is on, the sibling delegates its DOM to the 2D title (Object.create) and restyles TAP TO START as the neon pill with the duo credit');
   ok(st.ids === 'beeamgee,foxy' && st.look, 'the stage has the hero, Foxy and BeeAmGee (' + st.ids + ')');
   ok(st.stats && st.stats.ready && st.stats.shot === 'title', 'title shot active: ' + JSON.stringify(st.stats));
   ok(st.tris > 2000 && st.tris <= 60000, 'title world within the 60k triangle budget (' + st.tris + ' tris, ' + st.calls + ' calls)');
@@ -34,6 +34,28 @@ try {
   // beat and pulse: the world takes absolute beat positions and keeps lighting in 0..1
   const beat = await page.evaluate(() => { const w = BBH.R3.world; w.setBeat(12.0); const a = w.ctx.title.stats().pulse; w.setBeat(12.9); const b = w.ctx.title.stats().pulse; w.setBeat(0); return [a, b]; });
   ok(beat.every((x) => typeof x === 'number' && x >= 0 && x <= 1), 'setBeat accepts absolute beats without breaking the pulse ' + JSON.stringify(beat));
+
+  // the sign: every gold letter pixel stays inside its safe zone (BEATBOX inside the neon frame, HEROES between the equalizer bars), after the web font arrived
+  const sg = await page.evaluate(async () => {
+    const sign = BBH.R3.world.ctx.scene.getObjectByName('title_sign'), face = sign && sign.children[0].children.find((m) => m.material && m.material.map && m.material.map.image && m.material.map.image.width === 1024);
+    if (!face) return null; const tex = face.material.map; if (tex.fontReady) await tex.fontReady; const c = tex.image, W = c.width, d = c.getContext('2d').getImageData(0, 0, W, c.height).data;
+    const gold = (x, y) => { const i = (y * W + x) * 4; return d[i] > 200 && d[i + 1] > 150 && d[i + 2] < 120 && d[i + 3] > 200; };
+    let topMin = W, topMax = 0, botMin = W, botMax = 0;
+    for (let y = 110; y < 290; y += 2) for (let x = 0; x < W; x++) if (gold(x, y)) { topMin = Math.min(topMin, x); topMax = Math.max(topMax, x); }
+    for (let y = 305; y < 400; y += 2) for (let x = 0; x < W; x++) if (gold(x, y)) { botMin = Math.min(botMin, x); botMax = Math.max(botMax, x); }
+    return { W, topMin, topMax, botMin, botMax };
+  });
+  ok(sg && sg.topMin > 60 && sg.topMax < sg.W - 60 && sg.topMax - sg.topMin > 500, 'BEATBOX fills the board but stays inside the neon frame ' + JSON.stringify(sg));
+  ok(sg && sg.botMin > 185 && sg.botMax < sg.W - 185 && sg.botMax - sg.botMin > 300, 'HEROES sits between the equalizer bars ' + JSON.stringify(sg));
+  // BeeAmGee sits ON his crate: hips above the lid, both ankles dangle in front of the front board (not hidden inside the box)
+  const bee = await page.evaluate(() => {
+    const w = BBH.R3.world, b = w.npcs.find((n) => n.id === 'beeamgee'), V = b.object.position.constructor;
+    const at = (n) => { const o = b.object.getObjectByName(n), v = new V(); o.getWorldPosition(v); return v; }, rot = b.object.rotation.y, fx = Math.sin(rot), fz = Math.cos(rot);
+    const crate = { x: 1.08, z: -1.8 + 0.15 }, f = (v) => (v.x - crate.x) * fx + (v.z - crate.z) * fz;
+    return { hipsF: +f(at('hips')).toFixed(3), anL: +f(at('anL')).toFixed(3), anR: +f(at('anR')).toFixed(3), hipsY: +at('hips').y.toFixed(3) };
+  });
+  ok(bee.hipsF > -0.2 && bee.hipsF < 0.25 && bee.hipsY > 0.75, 'BeeAmGee hips rest on the crate lid ' + JSON.stringify(bee));
+  ok(bee.anL > 0.28 && bee.anR > 0.28, 'BeeAmGee shins dangle in front of the crate front board ' + JSON.stringify(bee));
 
   // seed a save so CONTINUE exists, then tap to start
   await page.evaluate(() => { const ch = BBH.Core.newChar(BBH.CATALOG.DEFAULT_LOOK); ch.look = Object.assign({}, ch.look, { name: 'Zed' }); ch.name = 'Zed'; ch.created = Date.now(); ch.flags.intro = 1; BBH.Core.Save.save(BBH.Eng.store, 1, ch); });

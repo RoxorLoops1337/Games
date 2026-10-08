@@ -125,6 +125,7 @@ export function buildShafts(lens) {
 export function buildSignReflection(sign, camPos) {
   const cv = document.createElement('canvas'); cv.width = 96; cv.height = 48; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.drawImage(sign.texA.image, 0, 0, 96, 48);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  if (sign.texA.fontReady) sign.texA.fontReady.then((ok) => { if (!ok) return; g.clearRect(0, 0, 96, 48); g.drawImage(sign.texA.image, 0, 0, 96, 48); tex.needsUpdate = true; });
   const U = { uTex: { value: tex }, uTime: { value: 0 }, uBeat: { value: 0 } };
   const m = new THREE.Mesh(new THREE.PlaneGeometry(sign.W * 0.36, sign.H * 0.5, 1, 1), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',

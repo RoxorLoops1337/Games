@@ -48,7 +48,7 @@ export function muralTex() {
 // the hero element: BEATBOX HEROES, brand look of the 2D logo (gold bevel + violet extrusion, cyan and pink equalizer bars, gold underline) on a dark plaque with a marquee frame.
 // phase 0/1 = which bulbs of the chase are lit; mask = draw ONLY the dead letter (used for the flicker overlay)
 export function signTex(phase, mask) {
-  return canvasTex(1024, 512, (g, W, H) => {
+  const paint = (g, W, H) => {
     g.clearRect(0, 0, W, H);
     if (!mask) {
       const pl = g.createLinearGradient(0, 0, 0, H); pl.addColorStop(0, '#2a1a58'); pl.addColorStop(1, '#170f36'); g.fillStyle = pl; rr(g, 14, 14, W - 28, H - 28, 54); g.fill();
@@ -62,36 +62,42 @@ export function signTex(phase, mask) {
         const on = (i + phase) % 2 === 0; g.fillStyle = on ? '#fff0a0' : '#6a4a20'; g.beginPath(); g.arc(x, y, on ? 9 : 6, 0, 7); g.fill();
       }
     }
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    const word = (str, y, size, track) => {
-      g.font = '900 ' + size + 'px ' + FONT; try { g.letterSpacing = track + 'px'; } catch (e) { /* older engines */ }
-      const full = g.measureText(str).width, x0 = W / 2 - full / 2; let x = x0; const spans = [];
-      for (const ch of str) { const w = g.measureText(ch).width; spans.push([ch, x + w / 2, w]); x += w + track; }
-      return spans;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; try { g.letterSpacing = '0px'; } catch (e) { /* older engines */ }
+    // letters are laid out one by one with our own tracking (canvas letterSpacing stays 0 so it is never counted twice), then the whole word is
+    // scaled down until it fits its safe zone: the inner neon frame for BEATBOX, the gap between the equalizer bars for HEROES
+    const layout = (str, size, track, maxW) => {
+      for (let pass = 0; pass < 2; pass++) {
+        g.font = '700 ' + size + 'px ' + FONT; const ws = [...str].map((ch) => g.measureText(ch).width), full = ws.reduce((a, b) => a + b, 0) + track * (ws.length - 1);
+        if (full <= maxW || pass) { let x = W / 2 - full / 2; return { size, spans: ws.map((w, i) => { const sp = [str[i], x + w / 2, w]; x += w + track; return sp; }) }; }
+        const k = maxW / full; size = Math.floor(size * k); track = track * k;
+      }
     };
-    const drawWord = (str, y, size, track, deadIdx) => {
-      g.font = '900 ' + size + 'px ' + FONT; try { g.letterSpacing = track + 'px'; } catch (e) { /* ignore */ } { const wfull = g.measureText(str).width, maxW = W - 150; if (wfull > maxW) { size = Math.floor(size * maxW / wfull); track = Math.floor(track * maxW / wfull); } }
-      const sp = word(str, y, size, track); g.textAlign = 'center';
-      g.font = '900 ' + size + 'px ' + FONT; try { g.letterSpacing = '0px'; } catch (e) { /* ignore */ }
-      sp.forEach(([ch, cx], i) => {
+    const drawWord = (str, y, size, track, maxW, deadIdx) => {
+      const L = layout(str, size, track, maxW); size = L.size; g.font = '700 ' + size + 'px ' + FONT;
+      const ext = Math.max(2, Math.round(size / 16));                        // extrusion depth follows the letter size
+      L.spans.forEach(([ch, cx], i) => {
         if (mask && i !== deadIdx) return;
         if (mask) { g.fillStyle = '#1a1038'; g.fillText(ch, cx, y); return; }
-        for (let k = 12; k >= 1; k--) { g.fillStyle = k > 8 ? '#2c1d4d' : k > 4 ? '#4c2f86' : '#6a46ae'; g.fillText(ch, cx + k * 0.9, y + k * 0.9); }
+        for (let k = ext; k >= 1; k--) { g.fillStyle = k > ext * 0.66 ? '#2c1d4d' : k > ext * 0.33 ? '#4c2f86' : '#6a46ae'; g.fillText(ch, cx + k * 0.9, y + k * 0.9); }
         const gr = g.createLinearGradient(0, y - size * 0.5, 0, y + size * 0.5); gr.addColorStop(0, '#fffbd8'); gr.addColorStop(0.18, '#ffe66a'); gr.addColorStop(0.5, '#ffd23a'); gr.addColorStop(0.75, '#d4a017'); gr.addColorStop(1, '#8c5410');
         g.lineWidth = size * 0.07; g.strokeStyle = '#6a3f0c'; g.lineJoin = 'round'; g.strokeText(ch, cx, y); g.fillStyle = gr; g.fillText(ch, cx, y);
         g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,230,0.75)'; g.strokeText(ch, cx - 1.5, y - 1.5);
       });
-      return sp;
+      return L;
     };
-    drawWord('BEATBOX', 205, 190, 6, mask ? 6 : -1);
-    drawWord('HEROES', 360, 120, 24, -1);
+    drawWord('BEATBOX', 200, 180, 8, W - 190, mask ? 6 : -1);
+    drawWord('HEROES', 352, 112, 26, W - 2 * 200, -1);
     if (!mask) {
-      const bars = [[44, 5, 2], [66, 5, 1], [88, 5, 3], [110, 5, 2]];
-      [-1, 1].forEach((s) => bars.forEach(([off, , h], i) => { const hh = [34, 70, 100, 52][i] * (0.8 + 0.1 * h); const x = s < 0 ? 80 + i * 24 : W - 80 - i * 24 - 14; g.fillStyle = (i + (s < 0 ? 0 : 1)) % 2 ? '#2ee6ff' : '#ff3ea5'; rr(g, x, 360 - hh / 2, 14, hh, 5); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(x + 2, 360 - hh / 2 + 3, 3, hh - 6); void off; }));
-      g.fillStyle = '#d4a017'; rr(g, W / 2 - 250, 438, 500, 14, 6); g.fill(); g.fillStyle = '#fff0a0'; g.fillRect(W / 2 - 246, 440, 492, 3);
-      ['#ff3ea5', '#2ee6ff', '#fff6b8', '#ff3ea5'].forEach((c, i) => { g.fillStyle = c; g.fillRect(W / 2 - 150 + i * 100, 426 - (i % 2) * 8, 8, 28 + (i % 2) * 8); });
+      const hs = [34, 70, 100, 52];
+      [-1, 1].forEach((s) => hs.forEach((h0, i) => { const hh = h0 * 0.95; const x = s < 0 ? 84 + i * 24 : W - 84 - i * 24 - 14; g.fillStyle = (i + (s < 0 ? 0 : 1)) % 2 ? '#2ee6ff' : '#ff3ea5'; rr(g, x, 352 - hh / 2, 14, hh, 5); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(x + 2, 352 - hh / 2 + 3, 3, hh - 6); }));
+      g.fillStyle = '#d4a017'; rr(g, W / 2 - 250, 432, 500, 14, 6); g.fill(); g.fillStyle = '#fff0a0'; g.fillRect(W / 2 - 246, 434, 492, 3);
+      ['#ff3ea5', '#2ee6ff', '#fff6b8', '#ff3ea5'].forEach((c, i) => { g.fillStyle = c; g.fillRect(W / 2 - 150 + i * 100, 420 - (i % 2) * 8, 8, 28 + (i % 2) * 8); });
     }
-  });
+  };
+  const t = canvasTex(1024, 512, paint);
+  // the sign is painted before the web font may have arrived: paint again once Fredoka is ready (no-op when it already was)
+  t.fontReady = (typeof document !== 'undefined' && document.fonts && document.fonts.load) ? document.fonts.load('700 100px Fredoka').then((f) => { if (!f || !f.length) return false; const c = t.image, g = c.getContext('2d'); paint(g, c.width, c.height); t.needsUpdate = true; return true; }).catch(() => false) : Promise.resolve(false);
+  return t;
 }
 
 // vertical blade sign (hangs from the wall): text stacked, neon tube style
