@@ -14,11 +14,12 @@ export function buildSign() {
   const mat = new THREE.MeshBasicMaterial(Object.assign({ map: texA, transparent: true, color: '#ffffff', depthWrite: false }, NOBLOOM));
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat); face.renderOrder = 6; pivot.add(face);
   const dead = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial(Object.assign({ map: mask, transparent: true, opacity: 0, depthWrite: false }, NOBLOOM))); dead.position.z = 0.012; dead.renderOrder = 7; pivot.add(dead);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.97, H * 0.95), new THREE.MeshBasicMaterial({ color: '#0d0820', transparent: true, opacity: 0.92 })); back.position.z = -0.03; back.renderOrder = 5; pivot.add(back);
+  const bw = W * 0.965, bh = H * 0.94, br = 0.17, sh = new THREE.Shape(); sh.moveTo(-bw / 2 + br, -bh / 2); sh.lineTo(bw / 2 - br, -bh / 2); sh.quadraticCurveTo(bw / 2, -bh / 2, bw / 2, -bh / 2 + br); sh.lineTo(bw / 2, bh / 2 - br); sh.quadraticCurveTo(bw / 2, bh / 2, bw / 2 - br, bh / 2); sh.lineTo(-bw / 2 + br, bh / 2); sh.quadraticCurveTo(-bw / 2, bh / 2, -bw / 2, bh / 2 - br); sh.lineTo(-bw / 2, -bh / 2 + br); sh.quadraticCurveTo(-bw / 2, -bh / 2, -bw / 2 + br, -bh / 2);
+  const back = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: false, curveSegments: 3 }), new THREE.MeshBasicMaterial({ color: '#0d0820' })); back.position.z = -0.1; back.renderOrder = 5; pivot.add(back);   // rounded plaque with real depth (the canvas face sits on its front)
   const hal = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.9, H * 2.1), new THREE.MeshBasicMaterial(Object.assign({ map: glowTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: '#ff3ea5', opacity: 0.5 }, NOBLOOM))); hal.position.z = -0.06; hal.renderOrder = 4; pivot.add(hal);
   // chains + mounting bar going up out of frame
   const dark = flatMat(), cb = new Buf({ rng: rng(3) });
-  for (const s of [-1, 1]) for (let y = 0; y < 5; y += 0.18) cb.box(s * (W / 2 - 0.35), H / 2 + y, 0, 0.05, 0.12, 0.03, col('#6a668a'), { base: 0, tint: 0.2 });
+  for (const s of [-1, 1]) for (let y = 0; y < 5; y += 0.18) cb.box(s * (W / 2 - 0.35), H / 2 + y, 0, 0.06, 0.14, 0.03, col('#a49fd0'), { base: 0, tint: 0.2 });
   cb.box(0, H / 2 - 0.02, -0.04, W * 0.9, 0.07, 0.07, col('#2a2540'), { base: 0 });
   const chain = new THREE.Mesh(cb.geometry(false), dark); chain.castShadow = false; pivot.add(chain);
   return { group: g, pivot, mat, texA, texB, dead: dead.material, hal: hal.material, W, H };
@@ -72,7 +73,7 @@ export function buildSteam(vents) {
   const U = { uTime: { value: 0 }, uScale: { value: 400 }, uBeat: { value: 0 }, uTex: { value: glowTex() }, uA: { value: new THREE.Color('#ff5fb8') }, uB: { value: new THREE.Color('#6fd6ff') } };
   const m = new THREE.Points(geo, new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, fog: false, toneMapped: false,
     vertexShader: 'attribute vec4 aD; uniform float uTime, uScale, uBeat; varying float vA; varying vec3 vT; uniform vec3 uA, uB; void main(){ float age = fract(uTime * 0.16 + aD.x); float k = age; vec3 p = position; p.y += k * (2.4 + aD.z * 0.4); p.x += sin(uTime * 0.7 + aD.y * 20.0 + k * 3.0) * 0.25 * k + (aD.y - 0.5) * 0.3 * k; p.z += cos(uTime * 0.5 + aD.y * 11.0) * 0.18 * k; vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = uScale * (0.35 + k * 1.15) * aD.z / max(0.6, -mv.z); vA = sin(k * 3.14159) * (0.5 + 0.2 * aD.y) * (1.0 + 0.3 * uBeat); vT = mix(uA, uB, aD.w == 0.0 ? 0.0 : 0.5 + 0.5 * sin(aD.w)); }',
-    fragmentShader: 'uniform sampler2D uTex; varying float vA; varying vec3 vT; void main(){ float a = texture2D(uTex, gl_PointCoord).a * vA; gl_FragColor = vec4(mix(vec3(0.66, 0.62, 0.84), vT, 0.35) * 0.9, a * 0.55); }' }));
+    fragmentShader: 'uniform sampler2D uTex; varying float vA; varying vec3 vT; void main(){ float a = texture2D(uTex, gl_PointCoord).a * vA; gl_FragColor = vec4(mix(vec3(0.66, 0.62, 0.84), vT, 0.35) * 0.9, a * 0.3); }' }));
   m.frustumCulled = false; m.renderOrder = 7; m.name = 'title_steam'; return { mesh: m, U };
 }
 
@@ -101,7 +102,7 @@ export function buildWet() {
           float st = exp(-dx * dx / (w * w)) * smoothstep(-0.4, 0.5, dz) * exp(-max(0.0, dz) * 0.2) * s.w; refl += uC[i] * st; }
         float k = (wet * 0.35 + pud * 0.9) * (1.0 + uBeat * 0.45);
         vec3 col = refl * k * 0.42 + vec3(0.7, 0.8, 1.0) * rip * 0.2;
-        float dark = pud * 0.7 + wet * 0.18;
+        float dark = pud * 0.7 + wet * 0.18 + smoothstep(0.0, 4.5, p.y) * 0.35;   // the street near the lens goes darker: the menu reads on it
         vec3 tint = vec3(0.05, 0.04, 0.16);
         gl_FragColor = vec4(tint * dark + col, dark);
       }` });
@@ -112,9 +113,9 @@ export function buildWet() {
 export function buildShafts(lens) {
   const out = [], group = new THREE.Group(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(); group.name = 'title_shafts';
   lens.forEach(([x, y, z, cc, dx, dy, dz]) => {
-    const geo = new THREE.CylinderGeometry(0.8, 0.09, 3.4, 20, 1, true); geo.translate(0, 1.7, 0);          // narrow end at the origin (the lens), widening away
+    const geo = new THREE.CylinderGeometry(0.55, 0.07, 2.6, 20, 1, true); geo.translate(0, 1.3, 0);          // narrow end at the origin (the lens), widening away
     const mat = new THREE.ShaderMaterial({ uniforms: { uCol: { value: new THREE.Color(cc) }, uK: { value: 0.5 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false,
-      vertexShader: 'varying float vH; varying vec3 vN; varying vec3 vV; void main(){ vH = position.y / 3.4; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      vertexShader: 'varying float vH; varying vec3 vN; varying vec3 vV; void main(){ vH = position.y / 2.6; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
       fragmentShader: 'uniform vec3 uCol; uniform float uK; varying float vH; varying vec3 vN; varying vec3 vV; void main(){ float e = pow(abs(dot(normalize(vN), normalize(vV))), 1.5); float f = e * (1.0 - vH) * uK; gl_FragColor = vec4(uCol, f * 0.8); }' });
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y + 0.5, z); dir.set(dx, dy, dz).normalize(); m.quaternion.setFromUnitVectors(up, dir); m.renderOrder = 5; group.add(m); out.push(mat);
   });
@@ -123,12 +124,13 @@ export function buildShafts(lens) {
 
 // ------------------------------------------------------------------ the sign mirrored in the wet street: a small blurred, flipped copy that shimmers with the rain (where the camera would see the reflection)
 export function buildSignReflection(sign, camPos) {
-  const cv = document.createElement('canvas'); cv.width = 96; cv.height = 48; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.drawImage(sign.texA.image, 0, 0, 96, 48);
+  const cv = document.createElement('canvas'); cv.width = 48; cv.height = 24; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; const paint = () => { g.clearRect(0, 0, 48, 24); try { g.filter = 'blur(1.5px)'; } catch (e) { /* ignore */ } g.drawImage(sign.texA.image, 0, 0, 48, 24); }; paint();   // blurred to a glow streak, never readable mirrored text
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  if (sign.texA.fontReady) sign.texA.fontReady.then((ok) => { if (!ok) return; paint(); tex.needsUpdate = true; });
   const U = { uTex: { value: tex }, uTime: { value: 0 }, uBeat: { value: 0 } };
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(sign.W * 0.36, sign.H * 0.5, 1, 1), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false,
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(sign.W * 0.36, sign.H * 0.9, 1, 1), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform sampler2D uTex; uniform float uTime, uBeat; varying vec2 vUv; void main(){ vec2 u = vUv; u.x += sin(u.y * 22.0 + uTime * 2.3) * 0.018 + sin(u.y * 9.0 - uTime * 1.3) * 0.012; u.y += sin(u.x * 14.0 + uTime * 1.7) * 0.015; vec4 t = texture2D(uTex, u); float e = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x) * smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.7, vUv.y); float a = t.a * e * (0.34 + 0.22 * uBeat); gl_FragColor = vec4(t.rgb * a * 1.3, a); }' }));
+    fragmentShader: 'uniform sampler2D uTex; uniform float uTime, uBeat; varying vec2 vUv; void main(){ vec2 u = vUv; u.x += sin(u.y * 22.0 + uTime * 2.3) * 0.018 + sin(u.y * 9.0 - uTime * 1.3) * 0.012; u.y += sin(u.x * 14.0 + uTime * 1.7) * 0.015; vec4 t = texture2D(uTex, u); float e = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x) * smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.7, vUv.y); float a = t.a * e * (0.16 + 0.1 * uBeat); gl_FragColor = vec4(t.rgb * a * 1.3, a); }' }));
   // mirror geometry: sign centre (0, y, z) seen from the camera: the reflection lies on the ground between the two rays through the mirrored top and bottom edges
   const y = sign.group.position.y, z = sign.group.position.z, cy = camPos.y, cz = camPos.z, k = cy / (cy + y), zc = cz + k * (z - cz);
   m.rotation.x = Math.PI / 2; m.scale.x = -1; m.position.set(0, 0.03, zc); m.renderOrder = 4; m.name = 'title_signrefl'; return { mesh: m, U };

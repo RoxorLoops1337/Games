@@ -1,7 +1,7 @@
 // BEATBOX HEROES r3 -- scenes_shell.js (SHELL). 3D siblings of the shell scenes: E.scenes3d.title / slots / creator (PORT_PLAN 2.3, 3, 5).
 // Classic script, loaded after screens.js and creator.js. Each sibling is Object.create(the 2D scene): the DOM (TAP TO START, CONTINUE / NEW GAME, slot cards, the creator tabs and tiles)
 // and every rule run through the 2D methods, only the stage is replaced: the world modules park3d/w_title.js and park3d/w_creator.js render into #gl.
-//   title   world 'title'   alley stage, newest save (or a random look) beatboxing, Foxy dancing, BeeAmGee on a crate, neon sign. DOM menu on top.
+//   title   world 'title'   alley street battle: newest save (or a random look) vs Pig Pen in battle stance, BeeAmGee hosting from his crate, a crowd, neon sign. DOM menu on top.
 //   slots   world 'title'   the same world, camera pushed in (world.ctx.title.setShot('slots')).
 //   creator world 'creator' turntable + ring lights, live look, camera presets per tab, drag to spin, pinch to zoom, tap the hero to change pose. New game and home wardrobe.
 // Also: G.graphicsRow() builds the Settings GRAPHICS row (AUTO / 3D / CLASSIC -> BBH.R3.setMode), used by G.openSettings.
@@ -26,6 +26,15 @@
       });
     },
     leave() { this.w = null; },
+    // the 2D DOM, restyled for the 3D stage: a neon TAP TO START pill (pulses on the beat) and the duo credit under it
+    build() {
+      E.scenes.title.build.call(this);
+      if (this.state !== 'tap') return;
+      const ui = document.getElementById('ui'), veil = ui && ui.lastElementChild, tap = veil && veil.firstElementChild; if (!tap) return;
+      tap.className = 'k3-tap'; tap.removeAttribute('style'); tap.textContent = '';
+      tap.appendChild(h('span.k3-tap-t', null, 'TAP TO START'));
+      veil.appendChild(h('div.k3-credit', null, 'ROXORLOOPS & JASMIN'));
+    },
     update(dt) {
       const T = this.w && this.w.ctx && this.w.ctx.title; if (!T) return;
       this.bpmT -= dt; if (this.bpmT <= 0) { this.bpmT = 400; const b = bpmOf(); if (b) T.setBpm(b); }

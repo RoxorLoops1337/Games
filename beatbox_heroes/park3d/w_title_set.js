@@ -144,6 +144,7 @@ export function buildSet(ctx, T) {
   // ---- the stage: two layers of pallets, plywood front panel with painted lip, under-glow strip
   const S = AL.stage, c1 = col('#b07a44'), c2 = col('#8a5a34'), c3 = col('#c28a54');
   for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) { pallet(B, S.x + i * 1.2, 0, S.z + k * 0.8, 0, i % 2 ? c1 : c3, c2); pallet(B, S.x + i * 1.2 + (k % 2 ? 0.05 : -0.05), 0.13, S.z + k * 0.8, 0, (i + k) % 2 ? c3 : c1, c2); }
+  B.box(S.x, 0.222, S.z, S.w - 0.1, 0.008, S.d - 0.1, col('#2a1e1a'), { base: 0 });   // dark deck under the top boards: no lit gaps or stringers showing through
   B.box(S.x, 0.0, S.z + S.d / 2 + 0.03, S.w, 0.26, 0.05, col('#3a2f5c'), { base: 0.1 }); // dark skirt hides the gap, glow strip on top of it
   G.quad([S.x - S.w / 2, 0.02, S.z + S.d / 2 + 0.06], [S.x + S.w / 2, 0.02, S.z + S.d / 2 + 0.06], [S.x + S.w / 2, 0.1, S.z + S.d / 2 + 0.06], [S.x - S.w / 2, 0.1, S.z + S.d / 2 + 0.06], [1.5, 0.22, 1.0]);
   // speaker stacks, par can stands with coloured lenses, a mic stand
@@ -157,8 +158,8 @@ export function buildSet(ctx, T) {
     B.push(x, y + 0.12, z, e.y, 1, e.x, e.z); B.cyl(0, -0.02, 0, 0.14, 0.17, 0.34, 8, col('#2a2540')); B.pop();
     const c = col(cc); G.push(x, y + 0.12, z, e.y, 1, e.x, e.z); G.cyl(0, 0.32, 0, 0.15, 0.15, 0.03, 10, [c[0] * 2.4, c[1] * 2.4, c[2] * 2.4]); G.pop(); void i;
   });
-  // crate for BeeAmGee + stacked crates and boxes
-  const crateC = col('#c6593f'), crateD = col('#8a3a2f'); crate(B, S.x + 1.08, S.h, S.z + 0.15, -0.45, 1.1, crateC, crateD); A.crate = { x: S.x + 1.08, z: S.z + 0.15 };
+  // crate for BeeAmGee (the battle host) + stacked crates and boxes
+  const crateC = col('#c6593f'), crateD = col('#8a3a2f'); crate(B, S.x, S.h, S.z - 0.8, 0, 1.1, crateC, crateD); A.crate = { x: S.x, z: S.z - 0.8, rot: 0 };   // the host's crate, back centre between the two battlers
   crate(B, 2.0, 0.13, -4.1, 0.3, 1.0, col('#4a8a6a'), col('#2f6a50')); crate(B, 2.0, 0.63, -4.1, 0.7, 1.0, col('#c6593f'), crateD); crate(B, 1.9, 0.13, -5.3, -0.2, 1.1, col('#4a6ac6'), col('#2f3f8a'));
   dumpster(B, -1.78, -4.9, 0.12, col('#2f7a6a')); dumpster(B, -1.82, -8.2, -0.05, col('#4a5aa8'));
   bin(B, -2.1, -2.9, col('#6a6a8a')); bin(B, -1.88, -2.6, col('#7a7a9a')); bin(B, 2.1, -3.0, col('#6a6a8a'));

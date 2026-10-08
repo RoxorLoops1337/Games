@@ -277,3 +277,16 @@ body.r3 .sheet:has(.h2.pink) .tp, body.r3 .sheet:has(.h2.pink) .ts { font-size: 
 /* ======================================================================
    park3d/ui3d.js embed mode (prompt button + joystick), same family as the above
    ====================================================================== */
+
+/* --------------------------------------------------------------- 3D title: neon TAP TO START + credit */
+@keyframes k3tap { 0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 calc(var(--p) * 14) rgba(255, 62, 165, .45), 0 0 calc(var(--p) * 34) rgba(46, 230, 255, .18), inset 0 0 calc(var(--p) * 12) rgba(255, 62, 165, .25); }
+  12% { transform: translateX(-50%) scale(1.045); box-shadow: 0 0 calc(var(--p) * 22) rgba(255, 62, 165, .8), 0 0 calc(var(--p) * 48) rgba(46, 230, 255, .35), inset 0 0 calc(var(--p) * 16) rgba(255, 62, 165, .45); } }
+@keyframes k3tapt { 0%, 100% { opacity: .92; } 12% { opacity: 1; } }
+body.r3 .k3-tap { position: absolute; left: 50%; bottom: calc(var(--p) * 92 + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: calc(var(--p) * 13) calc(var(--p) * 30);
+  border-radius: 999px; background: linear-gradient(rgba(42, 22, 88, .72), rgba(20, 10, 48, .78)); border: calc(var(--p) * 2) solid #ff6ec0; pointer-events: none; white-space: nowrap;
+  -webkit-backdrop-filter: blur(calc(var(--p) * 4)); backdrop-filter: blur(calc(var(--p) * 4)); animation: k3tap 1.2s cubic-bezier(.2, .8, .3, 1) infinite; }
+body.r3 .k3-tap-t { display: block; font: 700 max(11px, calc(var(--p) * 19)) / 1 var(--f3); letter-spacing: .2em; margin-right: -.2em; color: #fff6e8;
+  text-shadow: 0 0 calc(var(--p) * 6) #ff3ea5, 0 0 calc(var(--p) * 14) rgba(255, 62, 165, .7), 0 calc(var(--p) * 2) 0 rgba(42, 22, 72, .9); animation: k3tapt 1.2s ease-out infinite; }
+body.r3 .k3-credit { position: absolute; left: 0; right: 0; bottom: calc(var(--p) * 18 + env(safe-area-inset-bottom, 0px)); text-align: center; pointer-events: none;
+  font: 700 max(8.5px, calc(var(--p) * 11)) / 1 var(--f3); letter-spacing: .32em; color: rgba(255, 246, 232, .62); text-shadow: 0 1px 3px rgba(10, 5, 30, .8); }
+@media (prefers-reduced-motion: reduce) { body.r3 .k3-tap, body.r3 .k3-tap-t { animation: none; } }
