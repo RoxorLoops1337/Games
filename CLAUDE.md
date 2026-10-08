@@ -42,6 +42,13 @@ with tests, add its folder and `test:` scripts to `GAME_SUITES` in that file, an
 3. Never rename `localStorage` keys, KV keys, or game folders (they are live URLs and save data).
 4. Cloudflare KV: `expirationTtl` must be ≥ 60. Smaller values throw and 500 the request.
 
+# Plugins
+
+`.claude/settings.json` switches off the account plugins (legal, finance, marketing,
+cowork-plugin-management) in this repo, since game work never needs them and they add
+skills and failing connections to every session. To use one here for a single task, put
+`{"enabledPlugins": {"marketing@synced": true}}` in `.claude/settings.local.json` (not committed).
+
 # Deploy & infra
 
 - Merge to main → Cloudflare Pages auto-builds `dist/` (~1 min). `_redirects` handles the old `/boss_monster/*` path.
