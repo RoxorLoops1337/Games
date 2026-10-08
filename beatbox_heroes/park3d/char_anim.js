@@ -239,12 +239,13 @@ const MOVING = { walk: 1, run: 1, walkside: 1, hold: 1 };
 const MIC_UP = [-0.5, 0.8, 0.3];
 // micAim(P, g, a, d): right hand IK so the mic grille centre lands on g with the mic axis (fist to grille) along a and the fingers roughly along d. All three are given in the HEAD's
 // frame (head-local metres, +z out of the face), so the mic rides every nod. Solves the hand orientation from the mic's grip in the fist (MIC), then the wrist target and roll.
-const MA = { b: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], r: [[0, 0, 0], [0, 0, 0], [0, 0, 0]] };
+// rig = true takes g, a and d in rig space instead (a dance move that parks the mic fist on the chest or out to the side, not at the mouth).
+const MA = { b: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], r: [[0, 0, 0], [0, 0, 0], [0, 0, 0]] }, RIG_M = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const nrm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; v[0] /= l; v[1] /= l; v[2] /= l; return v; };
 const ortho = (out, a, d) => { const k = a[0] * d[0] + a[1] * d[1] + a[2] * d[2]; out[0] = d[0] - a[0] * k; out[1] = d[1] - a[1] * k; out[2] = d[2] - a[2] * k; return nrm3(out); };
 const cross3 = (o, a, b) => { o[0] = a[1] * b[2] - a[2] * b[1]; o[1] = a[2] * b[0] - a[0] * b[2]; o[2] = a[0] * b[1] - a[1] * b[0]; return o; };
-function micAim(P, g, a, d) {
-  const M = this.headM.elements, rot = (v) => [M[0] * v[0] + M[4] * v[1] + M[8] * v[2], M[1] * v[0] + M[5] * v[1] + M[9] * v[2], M[2] * v[0] + M[6] * v[1] + M[10] * v[2]], b = MA.b, r = MA.r, u = MIC.axis;
+function micAim(P, g, a, d, rig) {
+  const M = rig ? RIG_M : this.headM.elements, rot = (v) => [M[0] * v[0] + M[4] * v[1] + M[8] * v[2], M[1] * v[0] + M[5] * v[1] + M[9] * v[2], M[2] * v[0] + M[6] * v[1] + M[10] * v[2]], b = MA.b, r = MA.r, u = MIC.axis;
   b[0][0] = u.x; b[0][1] = u.y; b[0][2] = u.z; ortho(b[1], b[0], [0, -1, 0]); cross3(b[2], b[0], b[1]);
   r[0] = nrm3(rot(a)); ortho(r[1], r[0], rot(d)); cross3(r[2], r[0], r[1]);
   const R = (v) => { const out = [0, 0, 0]; for (let i = 0; i < 3; i++) { const k = b[i][0] * v[0] + b[i][1] * v[1] + b[i][2] * v[2]; out[0] += r[i][0] * k; out[1] += r[i][1] * k; out[2] += r[i][2] * k; } return out; };
@@ -355,6 +356,12 @@ CL.sit = function (P, c, dt, o) {
     P.aXR = -0.24 - 0.06 * S(t * 3.1); P.aYR = seat + 0.3 + 0.12 * gr; P.aZR = 0.2 + 0.06 * gr; P.pXR = -0.8; P.pYR = -1; P.pZR = -0.2; P.hWR = 0.6; P.hXR = -0.3; P.hYR = 0.5; P.hZR = 0.8;
   }
   if (o.wave) { const w = S(t * 9); P.aXR = -0.3 + 0.06 * w; P.aYR = seat + 0.66; P.aZR = 0.1; P.pXR = -1; P.pYR = -0.6; P.pZR = -0.2; P.hWR = 1; P.hXR = -0.15 + 0.5 * w; P.hYR = 1; P.hZR = 0.15; P.mouthOpen = 0.4; P.brow = 0.5; }
+  // the mic fist: the slumped head hangs forward over the lap, so a gesturing or waving mic hand keeps wider and further forward of it, and a resting one stands the mic up
+  // on the right thigh, out in front of the belly (the auto roll leaned it in across the tummy while sitting down)
+  if (this.api.holding === 'mic') {
+    if (o.wave) { P.aXR -= 0.12; P.aZR += 0.12; } else if (o.talk) { P.aXR -= 0.1; P.aZR += 0.04; }
+    else if (!o.armBack) { micAim.call(this, P, [-0.22, seat + 0.36, 0.33], [-0.2, 0.9, 0.35], [0.3, -0.3, 1], true); P.pXR = -0.8; P.pYR = -0.6; P.pZR = -0.4; }
+  }
 };
 
 // ----- wave: right arm up with a hand wag

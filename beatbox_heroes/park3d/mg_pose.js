@@ -151,7 +151,7 @@ export function createPose(ctx, opts) {
     else if (m === 'point') { drum(2, { vel: 0.6 * v }); sfx('hit_good', { vol: 0.5 * v, pitch: 1.35 }); stage.fx.burst(x + (who === 'coach' ? -0.75 : -0.6), SCALE * 1.45, 0.3, 10, { colors: [M.color, '#fff6e8'], speed: 2.2, life: 0.45, size: 0.26, grav: 1 }); }
     else if (m === 'spin') { sfx('whoosh', { vol: 0.75 * v }); for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; stage.fx.spark(x + Math.cos(a) * 0.7, 0.4 + (i % 3) * 0.4, Math.sin(a) * 0.7, -Math.sin(a) * 3, 1.2, Math.cos(a) * 3, 0.5, 0.24, M.color, 1, 1.5); } }
     else if (m === 'freeze') { drum(2, { vel: 0.85 * v }); sfx('sparkle', { vol: 0.8 * v }); stage.fx.burst(x, SCALE * 0.9, 0.2, 22, { colors: ['#bff3ff', '#ffffff', '#7fd8ff'], speed: 2.6, up: 0.4, life: 0.7, size: 0.26, grav: 0.5, sphere: true }); if (who === 'hero') ui.flashColor('rgba(160,230,255,.38)'); }
-    else if (m === 'clap') { drum(3, { vel: 0.95 * v }); stage.fx.burst(x, SCALE * 1.4, 0.25, 16, { colors: ['#fff2a8', '#ffffff', '#ffd23f'], speed: 3, up: 0.6, life: 0.4, size: 0.24, grav: 2 }); }
+    else if (m === 'clap') { drum(3, { vel: 0.95 * v }); stage.fx.burst(x, SCALE * 0.82, SCALE * 0.36, 16, { colors: ['#fff2a8', '#ffffff', '#ffd23f'], speed: 3, up: 0.6, life: 0.4, size: 0.24, grav: 2 }); }
   }
 
   // ------------------------------------------------------------------ input
