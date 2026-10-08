@@ -68,6 +68,26 @@ try {
         ok(o, place + ' spot ' + id + ' opens the shop try-on on the ' + exp.shop + ' tab');
         ok((await ctl(page)).inSpot === id || (await ctl(page)).inSpot === null, place + ' spot ' + id + ': the player is in the spot cinematic or already at the mirror');
         ok(await until(page, () => !!BBH.Eng.scene._try && BBH.R3.world.controls.state().inset.bottom > 100, null, 30000), place + ' spot ' + id + ': try-on is live and the camera leaves room for the panel');
+        if (id === 'hats') {
+          // the try-on stage: the hero faces the camera (3/4 front), the camera is at eye level (not looking down on the head), a calm idle, a drag on the 3D view spins the hero, UI taps still work
+          await adv(page, 1); await sleep(300);
+          const view = () => page.evaluate(() => { const w = BBH.R3.world, p = w.player.object, c = w.camera, e = c.matrixWorld.elements, dx = c.position.x - p.position.x, dz = c.position.z - p.position.z, l = Math.hypot(dx, dz) || 1, st = w.controls.state();
+            return { dot: +((Math.sin(p.rotation.y) * dx + Math.cos(p.rotation.y) * dz) / l).toFixed(2), pitch: +(Math.asin(Math.max(-1, Math.min(1, e[9]))) * 180 / Math.PI).toFixed(1), rot: p.rotation.y, clip: st.clip, mode: st.mode, spin: !!(st.orbit && st.orbit.spin), ins: st.inset }; });
+          const v0 = await view();
+          ok(v0.mode === 'orbit' && v0.spin && v0.dot > 0.5, place + ' try-on: the hero faces the camera (dot ' + v0.dot + ', ' + v0.mode + ')');
+          ok(Math.abs(v0.pitch) < 25, place + ' try-on: the camera is at eye level, not looking down at the head (pitch ' + v0.pitch + ' deg)');
+          ok(v0.clip === 'idle', place + ' try-on: the hero holds a calm idle (' + v0.clip + ')');
+          const y = Math.round((v0.ins.top + (640 - v0.ins.bottom)) / 2);
+          // pointer events straight on the canvas: a popup card (sound unlock) can sit over the view in this long run
+          await page.evaluate(async (y) => { const gl = document.getElementById('gl'), ev = (t, x) => gl.dispatchEvent(new PointerEvent(t, { pointerId: 7, isPrimary: true, pointerType: 'touch', button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+            ev('pointerdown', 100); for (let i = 1; i <= 8; i++) { ev('pointermove', 100 + i * 18); await new Promise((r) => setTimeout(r, 20)); } ev('pointerup', 244); }, y);
+          const v1 = await view(), turn = Math.abs(v1.rot - v0.rot);
+          ok(turn > 0.6, place + ' try-on: a drag on the 3D view spins the hero (' + turn.toFixed(2) + ' rad)');
+          await adv(page, 6); await sleep(200);
+          ok((await view()).dot > 0.5, place + ' try-on: left alone, the hero turns back to face the camera (dot ' + (await view()).dot + ')');
+          const sel = await page.evaluate(() => { const t = document.querySelectorAll('#ui .grid .tile')[0]; if (t) t.click(); return !!t; });
+          ok(sel && await until(page, () => !!BBH.Eng.scene.shop && BBH.Eng.scene.shop.sel !== null, null, 10000), place + ' try-on: taps on the shop panel still work after the drag');
+        }
         await page.evaluate(() => { const b = [...document.querySelectorAll('#ui .btn')].find((x) => x.textContent.trim() === 'LEAVE SHOP'); if (b) b.click(); });
       } else {
         const o = await until(page, ([t, re]) => { const e = document.querySelector('#ui .sheet .h2'); const s = e ? e.textContent.trim() : ''; return re ? new RegExp(t).test(s) : s === t; }, [exp instanceof RegExp ? exp.source : exp, exp instanceof RegExp], 30000);
