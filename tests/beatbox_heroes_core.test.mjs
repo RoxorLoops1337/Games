@@ -412,4 +412,80 @@ const rng = BBH.rng(7);
   const r = Core.apply(back, { t: 'trainGame', stat: 'tech', game: 'beat', q: 1 }, rng); eq(r.char.trainLv.beat, 2, 'migrated save trains and levels');
   ok(Core.apply(back, { t: 'seqtrain', score: 0.5 }, rng).char.stats.ori > back.stats.ori, 'old seqtrain still works on a migrated save');
 }
+/* ---- story (STORY_PLAN.md, from Beatbox Story): the park jam and BeeAmGee noticing you */
+{
+  const fr = () => 0.42, res = (acc) => ({ accuracy: acc, perfect: 10, good: 2, miss: 1, total: 13, bestCombo: 8, perfectLane: [1, 1, 1, 1], rank: 'B', score: 100 });
+  const at = (day, hour, patch) => { const c = Core.newChar(); c.day = day; c.minutes = hour * 60 - 360; return Object.assign(c, patch || {}); };
+  const stories = (fx) => fx.filter((f) => f.t === 'story').map((f) => f.id);
+  const EM = String.fromCharCode(8212), allText = JSON.stringify([Core.STORY, Core.STORY_TIPS, Core.JAM_WHEN]);
+  ok(allText.indexOf(EM) < 0, 'story text has no em dash');
+  // BeeAmGee is not in the park at the start
+  let c = Core.newChar();
+  ok(c.flags.story === 1 && !c.flags.bmgMet && !c.flags.bmgSighted && c.n.jams === 0, 'a new hero has the story flag, has not met BeeAmGee and has no jams');
+  ok(!Core.bmgHere(c) && !Core.bmgDue(c) && Core.storyArrive(c, 'park') === null, 'BeeAmGee is not in the park at the start');
+  ok(!Core.metNpc(c, 'beeamgee') && !c.sounds.includes('LR'), 'and he does not count as met (no lip roll)');
+  // the jam schedule: every afternoon 12:00 to 18:00, from day 2
+  ok(!Core.jamOn(at(1, 14)), 'no jam on day 1'); ok(!Core.jamOn(at(2, 11.9)) && Core.jamOn(at(2, 12)) && Core.jamOn(at(2, 17.9)) && !Core.jamOn(at(2, 18)), 'day 2: the jam runs 12:00 to 18:00');
+  ok([3, 4, 5, 6, 7, 8].every((d) => Core.jamOn(at(d, 15))), 'the jam meets every afternoon of the week');
+  ok(/12:00 to 18:00/.test(Core.JAM_WHEN), 'JAM_WHEN says when: ' + Core.JAM_WHEN);
+  // the start is announced: a toast when the clock crosses 12:00
+  let r = Core.apply(at(2, 11.5), { t: 'wait', minutes: 60 }, fr);
+  ok(r.fx.some((f) => f.t === 'toast' && /JAM has started in the PARK/.test(f.text)) && r.fx.some((f) => f.t === 'jamStart'), 'crossing 12:00 on day 2 toasts the jam start');
+  ok(!Core.apply(at(1, 11.5), { t: 'wait', minutes: 60 }, fr).fx.some((f) => f.t === 'jamStart'), 'no jam toast on day 1');
+  ok(!Core.apply(at(2, 13), { t: 'wait', minutes: 60 }, fr).fx.some((f) => f.t === 'jamStart'), 'no second toast while it runs');
+  // the morning of a day without a jam yet mentions it
+  r = Core.apply(at(1, 21), { t: 'sleep' }, fr); ok(r.fx.find((f) => f.t === 'morning').lines.some((l) => /jam in the park/.test(l)), 'the day 2 morning card mentions the jam in the park');
+  // Foxy points you there (Beatbox Story FOXY_TIPS)
+  ok(/jam/i.test(Core.storyTip(at(2, 9), 'foxy', 0)) && Core.storyTip(at(1, 9), 'foxy', 0) === null && Core.storyTip(at(2, 9), 'rohzel', 0) === null, 'Foxy nudges you to the jam from day 2');
+  // joining the jam: rewards, the counter and a random skill up
+  c = at(2, 14); const st0 = Object.assign({}, c.stats); r = Core.apply(c, { t: 'perform', kind: 'jam', res: res(0.85) }, fr);
+  const rw = r.fx.find((f) => f.t === 'result').rw;
+  ok(r.char.n.jams === 1 && r.char.flags.jamDay === 2, 'a jam counts (n.jams, flags.jamDay)');
+  ok(rw.fans > 0 && rw.xp >= 10 && rw.cash === 0 && rw.minutes === Core.JAM.minutes, 'jam rewards: fans and xp, no cash, ' + Core.JAM.minutes + ' min');
+  ok(r.char.fans === rw.fans && r.char.minutes === c.minutes + Core.JAM.minutes, 'rewards land on the save');
+  ok(['mus', 'tech', 'ori'].some((s) => r.char.stats[s] - st0[s] >= 0.5) && r.fx.some((f) => f.t === 'toast' && /cypher taught you/.test(f.text)), 'the cypher raises a random skill');
+  ok(Core.reward('jam', { accuracy: 1 }, c).fans > Core.reward('jam', { accuracy: 0.2 }, c).fans, 'a cleaner round earns more fans');
+  // first jam beat, then the sighting at the 2nd jam (not the same day meeting)
+  eq(stories(r.fx), ['firstJam'], 'the first jam plays the first-jam beat');
+  ok(Core.STORY.firstJam.some((l) => /circle/.test(l.text)), 'first-jam text is the Beatbox Story one, adapted');
+  r = Core.apply(r.char, { t: 'perform', kind: 'jam', res: res(0.7) }, fr);
+  eq(stories(r.fx), ['sightJam'], 'the second jam: someone watches from the back of the cypher');
+  ok(r.char.flags.bmgSighted === 2 && r.char.flags.bmgVia === 'jam', 'the sighting is stored (day, via the jam)');
+  ok(!Core.bmgHere(r.char) && !Core.bmgDue(r.char) && Core.storyArrive(r.char, 'park') === null, 'he is gone again for the rest of that day');
+  // the next day he is on his bench: the first park visit is the meeting
+  c = Core.clone(r.char); c.day = 3; c.minutes = 120;
+  ok(Core.bmgDue(c) && Core.bmgHere(c) && Core.storyArrive(c, 'park') === 'bmgMeet' && Core.storyArrive(c, 'bar') === null, 'next day: BeeAmGee waits on his bench in the park');
+  r = Core.apply(c, { t: 'story', k: 'bmgMeet' }, fr);
+  eq(stories(r.fx), ['meet'], 'the meeting plays'); ok(r.fx.find((f) => f.t === 'story').lines.every((l) => l.who === 'beeamgee') && /cypher/.test(r.fx.find((f) => f.t === 'story').lines[0].text), 'BeeAmGee speaks, and he saw you in the cypher');
+  ok(r.char.flags.bmgMet === 3 && r.char.seen.beeamgee === 3 && Core.metNpc(r.char, 'beeamgee'), 'first-meeting flag and seen.beeamgee are set');
+  ok(r.char.sounds.includes('LR') && r.fx.some((f) => f.t === 'soundUnlocked' && f.id === 'LR'), 'meeting him unlocks the lip roll');
+  ok(Core.bmgHere(r.char) && !Core.bmgDue(r.char) && Core.storyArrive(r.char, 'park') === null, 'after the meeting he stays on his bench, no second meeting');
+  c = Core.clone(r.char); c.day = 9; ok(Core.bmgHere(c), 'and he is still there on later days');
+  eq(stories(Core.apply(Core.newChar(), { t: 'story', k: 'bmgMeet' }, fr).fx), [], 'no meeting without the sighting');
+  // the busk route: he also notices you after 4 busks from day 3, and then says so
+  c = at(3, 10); c.n.busks = 3; r = Core.apply(c, { t: 'perform', kind: 'busk', res: res(0.8) }, fr);
+  eq(stories(r.fx), ['sightBusk'], 'the 4th busk on day 3 is a sighting too'); ok(r.char.flags.bmgVia === 'busk', 'via busk');
+  c = Core.clone(r.char); c.day = 4; r = Core.apply(c, { t: 'story', k: 'bmgMeet' }, fr); ok(/busking/.test(r.fx.find((f) => f.t === 'story').lines[0].text), 'then he saw you busking');
+  c = at(2, 10); c.n.busks = 3; eq(stories(Core.apply(c, { t: 'perform', kind: 'busk', res: res(0.8) }, fr).fx), [], 'busks on day 2 do not trigger it');
+  // a battle win plus a jam is enough (Beatbox Story: after the first battle win)
+  c = at(4, 14); c.n.jams = 1; c.n.battlesWon = 1; eq(stories(Core.apply(c, { t: 'perform', kind: 'jam', res: res(0.8) }, fr).fx), ['sightJam'], 'a battle winner is noticed at the next jam');
+  // later jam beats: Pig Pen crashes the cypher at 3 jams, a famous beatboxer at 5 jams and 30 fans; one beat per jam
+  c = at(5, 14); c.n.jams = 2; c.flags.bmgSighted = 3; r = Core.apply(c, { t: 'perform', kind: 'jam', res: res(0.8) }, fr); eq(stories(r.fx), ['pigpen'], 'the 3rd jam: Pig Pen crashes the cypher');
+  ok(r.fx.find((f) => f.t === 'story').lines.some((l) => l.who === 'pigpen'), 'Pig Pen speaks');
+  ok(/loud guy/.test(Core.storyTip(r.char, 'foxy', 0)) && /Pig Pen/.test(Core.storyTip(r.char, 'foxy', 1)), 'Foxy heard about the loud guy');
+  c = Core.clone(r.char); c.n.jams = 4; c.fans = 40; eq(stories(Core.apply(c, { t: 'perform', kind: 'jam', res: res(0.8) }, fr).fx), ['famous'], 'the 5th jam with 30+ fans: a famous beatboxer drops in');
+  c.fans = 0; eq(stories(Core.apply(c, { t: 'perform', kind: 'jam', res: res(0.8) }, fr).fx), [], 'not without the fans');
+  // just listening: no mini game, only while the jam is on
+  r = Core.apply(at(2, 14), { t: 'jamWatch' }, fr); ok(r.char.mood > at(2, 14).mood && r.char.minutes === at(2, 14).minutes + 30, 'JUST LISTEN: mood up, 30 min');
+  r = Core.apply(at(2, 19), { t: 'jamWatch' }, fr); ok(r.char.minutes === at(2, 19).minutes && r.fx.some((f) => f.t === 'toast' && f.kind === 'warn'), 'no jam to listen to after 18:00');
+  // old saves (no flags.story) that already met BeeAmGee on the old always-there bench keep him; fresh old saves do not get him for free
+  const legacy = (patch) => { const o = JSON.parse(JSON.stringify(Core.newChar())); delete o.flags.story; return Core.migrate(Object.assign(o, patch)); };
+  let m = legacy({ day: 6, flags: { intro: 1, visited_park: 1 } });
+  ok(m.flags.story === 1 && m.flags.bmgMet === 6 && Core.bmgHere(m) && !Core.bmgDue(m), 'old save that visited the park: BeeAmGee stays met and on his bench');
+  ok(Core.bmgHere(legacy({ seen: { beeamgee: 2 } })) && Core.bmgHere(legacy({ flags: { coachDay: 3 } })) && Core.bmgHere(legacy({ flags: { proCoachDay: 3 } })) && Core.bmgHere(legacy({ n: Object.assign(Core.newChar().n, { coaches: 2 }) })), 'old saves with a lesson, coaching or seen.beeamgee keep him too');
+  m = legacy({ flags: { intro: 1 } }); ok(m.flags.story === 1 && !Core.bmgHere(m), 'an old save that never went to the park meets him the story way');
+  ok(m.n.jams === 0, 'old saves get n.jams = 0');
+  const mem = {}; const store = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; }, removeItem: (k) => { delete mem[k]; } };
+  c = Core.newChar(); c.flags.visited_park = 1; Core.Save.save(store, 3, c); ok(!Core.bmgHere(Core.Save.load(store, 3)), 'a new save that visited the park does not get BeeAmGee on reload (flags.story guards the migration)');
+}
 done();

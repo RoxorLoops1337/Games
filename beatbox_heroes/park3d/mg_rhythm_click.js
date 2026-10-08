@@ -1,5 +1,5 @@
 // RHYTHM GAMES RUN WITH THE MUSIC OFF (TRAINING_PLAN 2): no scene music, no backing groove. Only a soft shaker metronome on the quarter notes
-// (accent on 1), aligned to the chart clock and the player's offset setting, plus the beatbox sounds of whoever is playing.
+// (accent on 1; start({ sub: 2 }) adds softer eighth-note ticks so every gem of an eighth-note chart lands on a tick), aligned to the chart clock and the player's offset setting, plus the beatbox sounds of whoever is playing.
 //   const click = createClick();  click.musicOff();  const g = click.start({ bpm, t0?, offsetMs, lead });  ...  click.stop();  click.musicOn();
 //   start() returns { t0, spb } like the old groove.start() so the chart can run on the audio clock (t0 null when the audio clock is not running).
 //   Uses BBH.Audio.gameMode(on, { metronome: bpm, start }) when audio.js has it (start = audio time of beat 0 minus the offset); otherwise a local fallback: the scene music is held off
@@ -24,18 +24,19 @@ export function createClick() {
   }
   // ticks at t0 + k * spb - offset (a player who follows the shaker lands exactly where the judge wants them)
   function start(o) {
-    o = o || {}; stop(); const a = A(), bpm = Math.max(30, o.bpm || 100), spb = 60 / bpm, off = (o.offsetMs || 0) / 1000;
+    o = o || {}; stop(); const a = A(), bpm = Math.max(30, o.bpm || 100), spb = 60 / bpm, off = (o.offsetMs || 0) / 1000, sub = Math.max(1, Math.min(4, o.sub | 0 || 1)), tick = spb / sub;
     const now = a ? (safe(() => a.now()) || 0) : 0, t0 = now > 0 ? (o.t0 !== undefined ? o.t0 : now + (o.lead === undefined ? 0.2 : o.lead)) : null;
-    metro = { bpm, spb, t0, off, next: t0 === null ? 0 : Math.ceil((now - t0 + off) / spb - 1e-6), via: hasGM() ? 'gameMode' : 'fallback', on: true };
+    metro = { bpm, spb, tick, sub, t0, off, next: t0 === null ? 0 : Math.ceil((now - t0 + off) / tick - 1e-6), via: hasGM() ? 'gameMode' : 'fallback', on: true };
     if (!held) musicOff();
-    if (hasGM()) safe(() => a.gameMode(true, t0 === null ? { metronome: bpm } : { metronome: bpm, start: t0 - off }));         // audio.js: start = audio time of beat 0
+    if (hasGM()) safe(() => a.gameMode(true, t0 === null ? { metronome: bpm, sub } : { metronome: bpm, sub, start: t0 - off }));         // audio.js: start = audio time of beat 0
     else if (t0 !== null) { pump(); timer = setInterval(pump, 30); }
     return { t0, spb };
   }
   function pump() {
     const a = A(), m = metro; if (!a || !m || m.t0 === null) return; const now = safe(() => a.now()) || 0;
-    while (m.t0 + m.next * m.spb - m.off < now + 0.12) {
-      const when = Math.max(now, m.t0 + m.next * m.spb - m.off), acc = ((m.next % 4) + 4) % 4 === 0; m.next++; ticks++;
+    while (m.t0 + m.next * m.tick - m.off < now + 0.12) {
+      const when = Math.max(now, m.t0 + m.next * m.tick - m.off), acc = ((m.next % (4 * m.sub)) + 4 * m.sub) % (4 * m.sub) === 0, offb = m.next % m.sub !== 0; m.next++; ticks++;
+      if (offb) { safe(() => a.drum(1, { when, vel: 0.1, pitch: 1.9 })); continue; }
       if (typeof a.shaker === 'function') safe(() => a.shaker(acc, { when })); else safe(() => a.drum(1, { when, vel: acc ? 0.3 : 0.17, pitch: 1.7 }));
     }
   }
@@ -44,5 +45,5 @@ export function createClick() {
     if (metro && hasGM() && held) { const a = A(); safe(() => a.gameMode(true, { metronome: 0 })); }
     metro = null;
   }
-  return { musicOff, musicOn, start, stop, state: () => ({ music: !held, metro: metro ? { bpm: metro.bpm, t0: metro.t0, offset: metro.off, via: metro.via } : null, ticks }) };
+  return { musicOff, musicOn, start, stop, state: () => ({ music: !held, metro: metro ? { bpm: metro.bpm, sub: metro.sub, t0: metro.t0, offset: metro.off, via: metro.via } : null, ticks }) };
 }

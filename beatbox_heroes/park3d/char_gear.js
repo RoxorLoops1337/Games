@@ -2,6 +2,8 @@
 import { C, mix, shade, lite, K, K2, loft, ball, box, tube, lerp, clamp, mat, INK, CREAM } from './char_geo.js';
 import { HY, facePt, headP, ringAt, H } from './char_body.js';
 import { bodyR, wearMeta, torsoFront, TOPS } from './char_wear.js';
+import { MIC, micMatrix } from './char_props.js';
+import { THREE } from './kit.js';
 
 const proj = (pts, off) => pts.map(([x, y]) => { const f = facePt(x, y); return [x + f.n[0] * off, HY + y + f.n[1] * off, f.z + f.n[2] * off]; });
 const ellp = (rx, ry, n, cx, cy, rot, fn) => { const p = []; for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; let u = Math.cos(a) * rx, v = Math.sin(a) * ry; if (fn) { const q = fn(u, v, a); u = q[0]; v = q[1]; } p.push([cx + u, cy + v]); } return p; };
@@ -131,11 +133,12 @@ export function buildAccessories(mb, glow, ctx, api) {
     const id = hd.id, s = -1, x = s * d.shX, wy = W.wrR[1], sk = K('wrR'), cc = C(hd.color && id !== 'mic' ? hd.color : '#6b6b80');
     if (/mic/.test(id)) {
       const gold = id === 'goldmic' ? C('#e8b923') : null, neon = id === 'neonmic';
-      const head = neon ? mix('#3a3850', '#2ee6ff', 0.25) : gold || C('#aeb4cc'), handle = gold ? shade(gold, 0.75) : C('#3a3850'), hy = wy - 0.2;
-      loft(mb, [{ y: wy - 0.04, rx: 0.019, rz: 0.019, cx: x, c: shade(handle, 0.8), sk }, { y: wy - 0.12, rx: 0.026, rz: 0.026, cx: x, c: handle, sk }, { y: wy - 0.15, rx: 0.03, rz: 0.03, cx: x, c: lite(handle, 0.2), sk }], { n: 6, caps: 'bt' });
-      ball(mb, [x, hy, 0], [0.045, 0.058, 0.045], head, sk, { detail: 0, col2: lite(head, 0.25) });
-      loft(mb, [{ y: hy + 0.012, rx: 0.047, rz: 0.047, cx: x, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }, { y: hy - 0.014, rx: 0.047, rz: 0.047, cx: x, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }], { n: 6, caps: '', nh: true });
-      if (neon) glow.poly([[x - 0.03, hy + 0.03, 0.04], [x + 0.03, hy + 0.03, 0.04], [x + 0.03, hy + 0.012, 0.046], [x - 0.03, hy + 0.012, 0.046]], C('#2ee6ff').multiplyScalar(1.1), sk, [0, 0, 1], { flat: true, nh: true });
+      const head = neon ? mix('#3a3850', '#2ee6ff', 0.25) : gold || C('#aeb4cc'), handle = gold ? shade(gold, 0.75) : C('#3a3850'), m = micMatrix(x, wy, 0), hy = MIC.head, t0 = -MIC.tail, R = MIC.r;
+      // built along +y around the grip, then turned onto the mic axis: cable end below the fist, handle through it, a flared neck, the ball grille with its band
+      loft(mb, [{ y: t0, rx: 0.015, rz: 0.015, c: shade(handle, 0.6), sk }, { y: t0 + 0.05, rx: 0.019, rz: 0.019, c: shade(handle, 0.85), sk }, { y: hy - 0.05, rx: 0.025, rz: 0.025, c: handle, sk }, { y: hy - 0.03, rx: 0.03, rz: 0.03, c: lite(handle, 0.2), sk }], { n: 6, caps: 'bt', m });
+      ball(mb, [0, hy, 0], [R, R * 1.25, R], head, sk, { detail: 0, col2: lite(head, 0.25), m });
+      loft(mb, [{ y: hy + 0.012, rx: R + 0.002, rz: R + 0.002, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }, { y: hy - 0.014, rx: R + 0.002, rz: R + 0.002, c: neon ? C('#2b2a3f') : shade(head, 0.45), sk }], { n: 6, caps: '', nh: true, m });
+      if (neon) { const g = (p) => { const v = new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(m); return [v.x, v.y, v.z]; }; glow.poly([[-0.028, hy + 0.03, R - 0.002], [0.028, hy + 0.03, R - 0.002], [0.028, hy + 0.012, R + 0.003], [-0.028, hy + 0.012, R + 0.003]].map(g), C('#2ee6ff').multiplyScalar(1.1), sk, new THREE.Vector3(0, 0, 1).transformDirection(m).toArray(), { flat: true, nh: true }); }
     }
     if (id === 'boombox') boombox(mb, glow, [x - 0.02, wy - 0.28, 0.0], [0, Math.PI / 2, 0], 0.9, sk, hd.color || '#c0392b');
   }

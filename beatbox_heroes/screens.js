@@ -116,7 +116,7 @@
     "You live with your roommate Foxy. Rent is $60 every Sunday. You are out of work, so you need money fast.",
     "Foxy has an idea: 'Go busk in the park. Play beats for the people walking by. Tips pay rent, and every listener can become a fan.'",
     "That night you practise your first beats. They are bad. But the better your timing, the more money and fans you earn.",
-    "The next day in the park, an old beatboxer called BeeAmGee watches you. He offers to coach you for free.",
+    "Foxy has heard there is a jam in the park every afternoon, a circle of beatboxers trading rounds. Maybe somebody there will notice you.",
     "Your plan: busk in the park, play open mics at the bar, win beatbox battles, and enter the Beatbox Heroes World Cup.",
   ];
   scene('intro', {

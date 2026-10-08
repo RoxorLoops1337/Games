@@ -1010,13 +1010,13 @@
       const M = metro;
       let guard = 0;
       while (guard++ < 64) {
-        const t = M.t0 + M.n * M.spb;
+        const t = M.t0 + M.n * M.tick;
         if (t >= horizon) break;
         const beat = M.n++;
         M.last = t;
         if (t < nowT - 0.05 || muted || !running()) continue;
-        const acc = M.bpb > 0 && beat % M.bpb === 0;
-        try { RND = Math.random; shakerTick(Math.max(t, nowT), acc, M.vol); } catch (e) { /* keep ticking */ }
+        const acc = M.bpb > 0 && beat % (M.bpb * M.sub) === 0, off = beat % M.sub !== 0;
+        try { RND = Math.random; shakerTick(Math.max(t, nowT), acc, off ? M.vol * 0.55 : M.vol); } catch (e) { /* keep ticking */ }
         if (LOG) LOG.push({ k: 'metro', t, beat, accent: acc, bpm: M.bpm });
       }
     }
@@ -1033,15 +1033,16 @@
       try {
         if (!(bpm > 0)) { if (metro) { metro = null; if (LOG) LOG.push({ k: 'metro', ev: 'stop', t: now() }); } return { t0: now(), spb: 0, bpm: 0 }; }
         bpm = clamp(bpm, 20, 300);
-        const spb = 60 / bpm, c = ensure(), tn = c ? ctx.currentTime : 0, old = metro;
+        // o.sub: ticks per beat (2 = eighth notes; the off-beat ticks are softer). spb stays the BEAT length, tick = spb / sub
+        const spb = 60 / bpm, c = ensure(), tn = c ? ctx.currentTime : 0, old = metro, sub = o.sub != null ? clamp(Math.floor(num(o.sub, 1)), 1, 4) : old ? old.sub : 1, tick = spb / sub;
         const bpb = o.beats != null ? clamp(Math.floor(num(o.beats, 4)), 0, 16) : old ? old.bpb : 4;
         const vol = o.vol != null ? clamp(num(o.vol, 1), 0, 2) : old ? old.vol : 1;
         let t0, n;
-        if (typeof o.start === 'number' && isFinite(o.start)) { t0 = o.start; n = Math.max(0, Math.ceil((tn - t0) / spb - 1e-9)); }
-        else if (old && o.offset == null) { n = old.n; const next = old.last != null ? Math.max(old.last + spb, tn + 0.02) : old.t0 + old.n * old.spb; t0 = next - n * spb; }
+        if (typeof o.start === 'number' && isFinite(o.start)) { t0 = o.start; n = Math.max(0, Math.ceil((tn - t0) / tick - 1e-9)); }
+        else if (old && o.offset == null) { n = old.n; const next = old.last != null ? Math.max(old.last + tick, tn + 0.02) : old.t0 + old.n * old.tick; t0 = next - n * tick; }
         else { t0 = tn + clamp(num(o.offset, 0.2), 0, 30); n = 0; }
-        if (old && old.last != null) while (t0 + n * spb < old.last + spb * 0.5) n++; // never double a tick already scheduled
-        metro = { bpm, spb, t0, n, bpb, vol, last: old ? old.last : null };
+        if (old && old.last != null) while (t0 + n * tick < old.last + tick * 0.5) n++; // never double a tick already scheduled
+        metro = { bpm, spb, tick, sub, t0, n, bpb, vol, last: old ? old.last : null };
         if (LOG) LOG.push({ k: 'metro', ev: 'start', bpm, t0, t: tn });
         if (c && running()) metroPump(tn, tn + 0.18);
         startTimer();

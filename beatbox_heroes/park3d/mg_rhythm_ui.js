@@ -60,6 +60,13 @@ const CSS = `
 .rh .flash{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,rgba(255,255,255,.0),rgba(255,255,255,.0));opacity:0}
 .rh .hdr{position:absolute;left:calc(26*var(--u));top:calc(126*var(--u));display:flex;flex-direction:column;align-items:flex-start;gap:calc(5*var(--u));opacity:0;transition:opacity .25s;max-width:calc(226*var(--u))}
 .rh .hdr.on{opacity:1}
+.rh .clock{position:absolute;right:calc(26*var(--u));top:calc(126*var(--u));display:flex;align-items:center;gap:calc(6*var(--u));padding:calc(3*var(--u)) calc(11*var(--u));border-radius:calc(10*var(--u));background:rgba(43,36,56,.82);border:calc(2*var(--u)) solid #a86bff;font-weight:900;font-size:calc(13*var(--u));letter-spacing:.08em;color:#fff2dc;opacity:0;transition:opacity .25s;font-variant-numeric:tabular-nums}
+.rh .clock.on{opacity:1}
+.rh .clock i{width:calc(9*var(--u));height:calc(9*var(--u));border-radius:50%;border:calc(2*var(--u)) solid #ffd27a;box-sizing:border-box;position:relative}
+.rh .rbtn.stop{background:linear-gradient(#ff8a8a,#e8455a);color:#fff2dc;border-color:#2b2438}
+.rh .autorow{display:flex;align-items:center;justify-content:center;gap:calc(10*var(--u));margin:calc(4*var(--u)) 0 calc(4*var(--u))}
+.rh .chip.auto.sel{background:linear-gradient(#5ff6ec,#27c8bb);color:#17323a}
+.rh .autotip{font-size:calc(11*var(--u));color:#cbbcf0;max-width:calc(190*var(--u));line-height:1.25;text-align:left}
 .rh .hdr i{font-style:normal;padding:calc(3*var(--u)) calc(10*var(--u));border-radius:calc(10*var(--u));background:rgba(43,36,56,.82);border:calc(2*var(--u)) solid #ffd27a;font-weight:900;font-size:calc(11*var(--u));letter-spacing:.1em;color:#fff2dc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .rh .hdr i.s{border-color:#35f2e0;color:#bffcf6}
 .rh .hdr i.t{border-color:#ff3ea5;color:#ffc2e2}
@@ -147,6 +154,7 @@ export function buildUI(hud, api) {
   [[0.33, 'LIGHTS'], [0.6, 'CONFETTI'], [0.85, 'FIREWORKS']].forEach(([p, name]) => { const t = el('div', 'tick'); t.style.left = p * 100 + '%'; const l = el('div', 'lab', name); l.style.left = p * 100 + '%'; l.dataset.p = p; meter.append(t, l); });
   root.appendChild(meter); U.meter = meter;
   const hdr = el('div', 'hdr', ''); root.appendChild(hdr); U.hdr = hdr;
+  const clock = el('div', 'clock', ''); root.appendChild(clock); U.clock = clock;
   const combo = el('div', 'combo', '0<small>COMBO</small>'); root.appendChild(combo); U.combo = combo;
   const pops = el('div', 'pops'); root.appendChild(pops); U.pops = pops;
   const count = el('div', 'count', '3'); root.appendChild(count); U.count = count;
@@ -166,8 +174,11 @@ export function buildUI(hud, api) {
     clearCard(); const wrap = el('div', 'center'); const c = el('div', 'card'); c.innerHTML = '<h1>BUSKING SET</h1><p>Hit the gems as they reach the glowing ring.<br>Tap the pads or press <b>D F J K</b>. Beatbox into the mic if you like.</p>';
     const row = el('div', 'row'); const levels = [['EASY', 0.2], ['MEDIUM', 0.5], ['HARD', 0.85]]; let sel = cfg.difficulty; const near = levels.reduce((b, l) => (Math.abs(l[1] - sel) < Math.abs(b[1] - sel) ? l : b), levels[1]); sel = near[1];
     const chips = levels.map(([n, v]) => { const b = el('button', 'chip' + (v === sel ? ' sel' : ''), n); b.onclick = () => { sel = v; chips.forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); }; row.appendChild(b); return b; });
-    const go = el('button', 'go', 'START'); go.onclick = () => { clearCard(); api.start({ difficulty: sel, fromUI: true }); };
-    c.append(row, go); wrap.appendChild(c); root.appendChild(wrap); card = wrap;
+    // continuous busking: AUTO lets the hero play the set for you (time runs faster, less pay)
+    let auto = !!cfg.auto, ar = null;
+    if (cfg.endless) { ar = el('div', 'autorow'); const ab = el('button', 'chip auto' + (auto ? ' sel' : ''), 'AUTO BUSK'), at = el('span', 'autotip', 'Watch your hero play. Time runs 2x, less pay.'); ab.onclick = () => { auto = !auto; ab.classList.toggle('sel', auto); }; ar.append(ab, at); }
+    const go = el('button', 'go', 'START'); go.onclick = () => { clearCard(); api.start({ difficulty: sel, auto, fromUI: true }); };
+    c.append(row); if (ar) c.append(ar); c.append(go); wrap.appendChild(c); root.appendChild(wrap); card = wrap;
   }
   const esc = (v) => String(v === undefined || v === null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let rwPending = null;
@@ -253,6 +264,9 @@ export function buildUI(hud, api) {
     setMeterName(t) { const n = U.meter.querySelector('.name'); if (n && n.textContent !== t) n.textContent = t; },
     setHud(on) { root.classList.toggle('nohud', !on); },
     setBackVisible(v) { U.back.style.visibility = v ? 'visible' : 'hidden'; },
+    // continuous busking: BACK becomes STOP (ends the set with rewards); the live day clock sits opposite the header chips
+    setStop(on) { U.back.textContent = on ? 'STOP' : 'BACK'; U.back.classList.toggle('stop', !!on); },
+    setClock(t) { if (t === U.lastClock) return; U.lastClock = t; U.clock.classList.toggle('on', !!t); if (t) U.clock.innerHTML = '<i></i>' + esc(t); },
     resize(w, h) { u = w / 540; root.style.setProperty('--u', u + 'px'); },
     setScore(v) { U.score.textContent = String(Math.round(v)); },
     setCombo(n, bump) { U.combo.classList.toggle('on', n >= 2); if (n >= 2) { U.combo.firstChild.nodeValue = n; if (bump) { U.combo.classList.remove('bump'); void U.combo.offsetWidth; U.combo.classList.add('bump'); } } },

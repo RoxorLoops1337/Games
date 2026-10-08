@@ -1,7 +1,7 @@
 // r3 SPOT MAP gate (PORT_PLAN 2.5, GAME): the REAL game in 3D (?r=3d&q=low, headless Chromium + swiftshader). For EVERY world of the free-roam loop (street, flat, park, shop, lab, bar, hood) and EVERY spotDef id of that
 //   world: activate it (world.activate = the same 'spot' event a tap or a walk-in emits) and expect the REAL handler of the 2D game: the sheet title of G.places.ACTIONS, G.enterPlace, E.go('map'), the shop try-on panel,
 //   the leave scene, the creator wardrobe, the run scene, the odd job row. Also: the cinematic lock is released (world.done) once the sheet closes, the camera inset follows the sheet, NPC taps map to their handlers
-//   (Foxy tip dialog, BeeAmGee bench, clerk counter, Rohzel juice bar, the three regulars' mingle sheets), closed doors toast the Core.canEnter reason, and the table in r3/spotmap.js has no stale or missing id.
+//   (Foxy tip dialog, BeeAmGee bench, clerk counter, Rohzel juice bar, the three regulars' mingle sheets), the park story (no BeeAmGee NPC before the trigger, his bench and the meeting after it, the jam spot and cypher crowd only while the jam is on), closed doors toast the Core.canEnter reason, and the table in r3/spotmap.js has no stale or missing id.
 // SKIPPED (exit 0) when playwright-core or Chromium is missing, unless BBH_BROWSER=1.
 import { ok as ok0, done } from './beatbox_heroes_lib.mjs';
 import { r3env } from './beatbox_heroes_r3lib.mjs';
@@ -13,7 +13,7 @@ const env = await r3env('beatbox_heroes_r3spots');
 
 const SHEET = {   // place -> spot -> expected outcome
   home: { booth: 'VOCAL BOOTH: TRAIN', couch: 'COUCH', bed: 'BED', desk: 'DESK', kitchen: /^KITCHEN/, wardrobe: { scene: 'creator' }, door: { scene: 'street' } },
-  park: { busk: 'BUSKING SPOT', bench: 'BENCH', flyers: 'ODD JOB', run: { scene: 'run' }, gate: { scene: 'street' } },
+  park: { busk: 'BUSKING SPOT', bench: 'BENCH', jam: 'THE JAM', flyers: 'ODD JOB', run: { scene: 'run' }, gate: { scene: 'street' } },
   shop: { hats: { shop: 'hat' }, racks: { shop: 'top' }, mirror: { shop: 'glasses' }, counter: 'COUNTER', door: { scene: 'street' } },
   studio: { mic: 'SOUND LAB: TRAIN', mixer: 'SOUND LAB', door: { scene: 'street' } },
   bar: { stage: 'THE STAGE', counter: 'JUICE BAR', door: { scene: 'street' } },
@@ -52,9 +52,46 @@ try {
     ok(await until(page, () => BBH.R3.world.controls.inSpot === null && !BBH.R3.world.controls.locked, null, 30000), 'closed door ' + id + ': the world is released again (done)');
   }
 
+  /* ------------------------------------------------------------------ the story in the park (STORY_PLAN.md): BeeAmGee is not there at the start, the jam */
+  {
+    const park = () => page.evaluate(() => { const w = BBH.R3.world, j = w.spots.byId.jam, st = w.terrain.story; return { bee: w.npcs.some((n) => n.id === 'beeamgee'), jamPlaced: !!(j && j.placed && j.root.visible), crowd: !!(st && st.jam && st.jam.group.visible), on: !!(st && st.on()), bench: w.spots.byId.bench.label, ids: w.spots.spots.map((s) => s.id).sort().join(',') }; });
+    const dlgName = () => page.evaluate(() => { const e = document.querySelector('#r3kit .k3-name'); return document.querySelector('#r3kit .k3-dlg') && e ? e.textContent : ''; });
+    await seed(page, { day: 2, minutes: 10 * 60 - 360 });                 // a fresh hero on day 2 at 10:00 who busked once: nobody has noticed them, the jam has not started
+    await page.evaluate(() => { const ch = BBH.Core.clone(BBH.G.ch); ch.n.busks = 1; BBH.G.setChar(ch); window.__toasts = []; for (const E of new Set([BBH.Eng, BBH.E].filter(Boolean))) { const t0 = E.toast; E.toast = function (text) { window.__toasts.push(String(text)); return t0.apply(this, arguments); }; } });
+    ok(await goScene(page, 'place', { id: 'park' }, 'park'), 'story: the park loads for a new hero');
+    let s = await park();
+    ok(!s.bee && s.bench === 'REST', 'story: before the trigger the park has NO BeeAmGee NPC (' + JSON.stringify(s) + ')');
+    ok(!s.jamPlaced && !s.crowd && !s.on && s.ids.split(',').includes('jam'), 'story: at 10:00 the jam spot and the cypher crowd are hidden');
+    ok(await page.evaluate(() => BBH.Eng.scene.sc && BBH.R3Spots.goalSpot('park') === 'jam' && /JAM/.test(BBH.G.goal(BBH.G.ch))), 'story: the goal points at the JAM in the park (' + await page.evaluate(() => BBH.G.goal(BBH.G.ch)) + ')');
+    await page.evaluate(() => BBH.G.do({ t: 'wait', minutes: 150 }));      // the clock crosses 12:00 while the player is in the park
+    ok(await until(page, () => window.__toasts.some((t) => /JAM has started/.test(t)), null, 20000), 'story: crossing 12:00 toasts that the jam has started');
+    ok(await until(page, () => { const w = BBH.R3.world, j = w.spots.byId.jam; return j.placed && j.root.visible && w.terrain.story.jam.group.visible; }, null, 30000), 'story: the jam spot and the cypher crowd appear in the park');
+    ok(await until(page, () => !!BBH.R3.world.spots.getSpotState('jam').goal, null, 20000), 'story: the jam spot carries the goal beacon');
+    ok(await page.evaluate(() => { const st = BBH.R3.world.terrain.story; return st.jam.crowd.count >= 10 && st.jam.crew.length === 2; }), 'story: the cypher is an instanced crowd ring plus two named beatboxers');
+    await page.evaluate(() => BBH.R3.world.activate('jam'));
+    ok(await until(page, () => { const e = document.querySelector('#ui .sheet .h2'); return !!e && e.textContent.trim() === 'THE JAM' && [...document.querySelectorAll('#ui .sheet .btn')].some((b) => /JOIN THE CYPHER/.test(b.textContent)); }, null, 30000), 'story: the jam spot opens THE JAM sheet with JOIN THE CYPHER');
+    await closeSheet(page); await until(page, () => BBH.R3.world.controls.inSpot === null && !BBH.R3.world.controls.locked, null, 40000);
+    // the trigger: BeeAmGee watched from the back of the cypher yesterday -> today he waits on his bench and the visit opens with the meeting
+    await page.evaluate(() => { const ch = BBH.Core.clone(BBH.G.ch); ch.n.jams = 2; ch.flags.bmgSighted = 2; ch.flags.bmgVia = 'jam'; ch.day = 3; ch.minutes = 14 * 60 - 360; BBH.G.setChar(ch); });
+    ok(await goScene(page, 'place', { id: 'park' }, 'park'), 'story: the park reloads the next day');
+    s = await park();
+    ok(s.bee && s.bench === 'TALK' && s.jamPlaced && s.crowd, 'story: after the trigger BeeAmGee sits on his bench, and the 14:00 jam is lit (' + JSON.stringify(s) + ')');
+    ok(await until(page, () => !!document.querySelector('#r3kit .k3-dlg'), null, 30000) && await dlgName() === 'BeeAmGee', 'story: the visit opens with the meeting, BeeAmGee speaks');
+    ok(await page.evaluate(() => BBH.G.ch.flags.bmgMet === 3 && BBH.G.ch.seen.beeamgee === 3), 'story: the first-meeting flag is saved');
+    await skipDialogs(page, 20);
+    ok(await until(page, () => !document.querySelector('#r3kit .k3-dlg') && BBH.G.ch.sounds.includes('LR') && BBH.G.storyFx.length === 0, null, 30000), 'story: after the meeting dialog the held effects play (the lip roll is unlocked)');
+    await page.evaluate(() => { const b = [...document.querySelectorAll('button, .btn')].find((x) => /^\s*LATER\s*$/.test(x.textContent)); if (b) b.click(); });
+    await until(page, () => BBH.R3.world.controls.enabled === true, null, 20000);
+    ok(await goScene(page, 'place', { id: 'park' }, 'park') && (await park()).bee, 'story: on the next visit he is still on his bench');
+    await sleep(1500); ok(!(await dlgName()), 'story: and the meeting does not play twice');
+    await page.evaluate(() => BBH.G.do({ t: 'wait', minutes: 240 }));      // 18:00: the jam is over
+    ok(await until(page, () => { const w = BBH.R3.world; return !w.spots.byId.jam.placed && !w.terrain.story.jam.group.visible; }, null, 30000), 'story: after 18:00 the jam spot and the crowd are gone again');
+    await seed(page, { day: 3, minutes: 19 * 60 - 360, flags: { bmgMet: 1 } });
+  }
+
   /* ------------------------------------------------------------------ places */
   for (const place of ['home', 'park', 'shop', 'studio', 'bar']) {
-    await setClock(page, 3, 19);
+    await setClock(page, 3, place === 'park' ? 15 : 19);                   // the park at 15:00: the jam is on, so its spot is live too
     const wid = WORLD[place], S = SHEET[place];
     ok(await goScene(page, 'place', { id: place }, wid), place + ': the 3D place scene loads on the ' + wid + ' world');
     const ids = await page.evaluate(() => BBH.R3.world.spots.spots.map((d) => d.id).sort());
@@ -68,6 +105,26 @@ try {
         ok(o, place + ' spot ' + id + ' opens the shop try-on on the ' + exp.shop + ' tab');
         ok((await ctl(page)).inSpot === id || (await ctl(page)).inSpot === null, place + ' spot ' + id + ': the player is in the spot cinematic or already at the mirror');
         ok(await until(page, () => !!BBH.Eng.scene._try && BBH.R3.world.controls.state().inset.bottom > 100, null, 30000), place + ' spot ' + id + ': try-on is live and the camera leaves room for the panel');
+        if (id === 'hats') {
+          // the try-on stage: the hero faces the camera (3/4 front), the camera is at eye level (not looking down on the head), a calm idle, a drag on the 3D view spins the hero, UI taps still work
+          await adv(page, 1); await sleep(300);
+          const view = () => page.evaluate(() => { const w = BBH.R3.world, p = w.player.object, c = w.camera, e = c.matrixWorld.elements, dx = c.position.x - p.position.x, dz = c.position.z - p.position.z, l = Math.hypot(dx, dz) || 1, st = w.controls.state();
+            return { dot: +((Math.sin(p.rotation.y) * dx + Math.cos(p.rotation.y) * dz) / l).toFixed(2), pitch: +(Math.asin(Math.max(-1, Math.min(1, e[9]))) * 180 / Math.PI).toFixed(1), rot: p.rotation.y, clip: st.clip, mode: st.mode, spin: !!(st.orbit && st.orbit.spin), ins: st.inset }; });
+          const v0 = await view();
+          ok(v0.mode === 'orbit' && v0.spin && v0.dot > 0.5, place + ' try-on: the hero faces the camera (dot ' + v0.dot + ', ' + v0.mode + ')');
+          ok(Math.abs(v0.pitch) < 25, place + ' try-on: the camera is at eye level, not looking down at the head (pitch ' + v0.pitch + ' deg)');
+          ok(v0.clip === 'idle', place + ' try-on: the hero holds a calm idle (' + v0.clip + ')');
+          const y = Math.round((v0.ins.top + (640 - v0.ins.bottom)) / 2);
+          // pointer events straight on the canvas: a popup card (sound unlock) can sit over the view in this long run
+          await page.evaluate(async (y) => { const gl = document.getElementById('gl'), ev = (t, x) => gl.dispatchEvent(new PointerEvent(t, { pointerId: 7, isPrimary: true, pointerType: 'touch', button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+            ev('pointerdown', 100); for (let i = 1; i <= 8; i++) { ev('pointermove', 100 + i * 18); await new Promise((r) => setTimeout(r, 20)); } ev('pointerup', 244); }, y);
+          const v1 = await view(), turn = Math.abs(v1.rot - v0.rot);
+          ok(turn > 0.6, place + ' try-on: a drag on the 3D view spins the hero (' + turn.toFixed(2) + ' rad)');
+          await adv(page, 6); await sleep(200);
+          ok((await view()).dot > 0.5, place + ' try-on: left alone, the hero turns back to face the camera (dot ' + (await view()).dot + ')');
+          const sel = await page.evaluate(() => { const t = document.querySelectorAll('#ui .grid .tile')[0]; if (t) t.click(); return !!t; });
+          ok(sel && await until(page, () => !!BBH.Eng.scene.shop && BBH.Eng.scene.shop.sel !== null, null, 10000), place + ' try-on: taps on the shop panel still work after the drag');
+        }
         await page.evaluate(() => { const b = [...document.querySelectorAll('#ui .btn')].find((x) => x.textContent.trim() === 'LEAVE SHOP'); if (b) b.click(); });
       } else {
         const o = await until(page, ([t, re]) => { const e = document.querySelector('#ui .sheet .h2'); const s = e ? e.textContent.trim() : ''; return re ? new RegExp(t).test(s) : s === t; }, [exp instanceof RegExp ? exp.source : exp, exp instanceof RegExp], 30000);

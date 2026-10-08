@@ -1,9 +1,9 @@
 // SPOTS module (Gameplay Engineer). Activity spots in the park with glowing world markers, floating icons, proximity prompts. CONTRACT:
 //   buildSpots(ctx, terrain) -> { group, spots:[{id,label,icon,x,z,radius,release,color,cine}], update(dt,t,playerPos), nearest(playerPos)->spot|null, activate(id) }
-//   Flat (interior) scene: terrain.spotDefs [{id,anchor,label,color,color2,cine,icon}] replaces the park list, ring radius 1.1, icons hover lower. Park ids: busk (crate stage: play a set), bench (rest + talk to BeeAmGee + lesson), run (jog loop start), flyers (gate corner: odd job), gate (leave to the street)
+//   Flat (interior) scene: terrain.spotDefs [{id,anchor,label,color,color2,cine,icon}] replaces the park list, ring radius 1.1, icons hover lower. Park ids: busk (crate stage: play a set), bench (rest + talk to BeeAmGee + lesson), run (jog loop start), flyers (gate corner: odd job), gate (leave to the street), jam (the cypher: world_park.js adds it, shown while terrain.anchors.jam exists)
 //   PORT (WP P4): terrain.spotDefs for EVERY world (park DEFS stay the fallback; an explicit [] = no spots). Def fields: id, anchor | x,z, label, icon, color, color2, cine, kind ('door': walking into the ring activates at once, no prompt button; with intent {dwell, nx, nz} (outward normal) it activates only on intent, see refresh),
 //   ring (visual radius), radius (enter), release, iconY, iconK, pillar. setSpotState(id,{locked,reason,goal,badge}) (padlock + grey icon + dim ring; gold light beam + bobbing arrow; red dot or 1-2 char text), getSpotState(id), api.canFire() gate set by controls, api.doorIntent(spot) -> 'go'|'dwell'|'' also set by controls (intent doors).
-//   Glyph ids: busk bench run flyers gate booth couch bed desk kitchen wardrobe door map hats racks mirror counter mic mixer stage stool (unknown = star). Events: 'spot' {id,scene,kind,locked,reason}; doors also emit 'door' {id,...} just before 'spot'.
+//   Glyph ids: busk bench jam run flyers gate booth couch bed desk kitchen wardrobe door map hats racks mirror counter mic mixer stage stool (unknown = star). Events: 'spot' {id,scene,kind,locked,reason}; doors also emit 'door' {id,...} just before 'spot'.
 //   activate(id) emits ctx.events 'spot' with {id, scene}. The game bridge (main.js) maps these onto the real game actions; controls.js listens to the same event for the
 //   short cinematic (lock input, ease camera, face the spot, play a clip) and unlocks on ctx.events 'spotDone'.
 // Look: a pooled glow ring on the ground (additive, pulsing), a slowly rotating dashed outer ring, tiny rising sparkles, and a bobbing billboard icon + label.
@@ -178,6 +178,12 @@ function glyph(g, id, S) {
     g.fillStyle = '#e63946'; g.beginPath(); g.ellipse(0, -28, 42, 15, 0, 0, 7); g.fill(); g.stroke();
     g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 4; g.beginPath(); g.ellipse(0, -30, 26, 8, 0, Math.PI * 1.05, Math.PI * 1.7); g.stroke();
     g.strokeStyle = '#ffe14d'; g.lineWidth = 5; g.beginPath(); g.ellipse(0, 30, 24, 7, 0, 0, 7); g.stroke();
+  } else if (id === 'jam') { // the cypher: a ring of heads around a mic, with a music note
+    g.lineWidth = 5; g.strokeStyle = INK;
+    g.strokeStyle = 'rgba(157,255,74,.7)'; g.lineWidth = 6; g.beginPath(); g.ellipse(0, 22, 52, 20, 0, 0, 7); g.stroke(); g.strokeStyle = INK; g.lineWidth = 5;
+    [[-50, 8, '#ff3ea5'], [-26, -6, '#2ee6ff'], [26, -6, '#ffe14d'], [50, 8, '#a86bff']].forEach(([x, y, c]) => { g.fillStyle = c; rr(g, x - 13, y + 8, 26, 24, 8); g.fill(); g.stroke(); g.fillStyle = '#f4d3bd'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.stroke(); });
+    g.fillStyle = '#c9b6e8'; g.fillRect(-4, 6, 8, 34); g.strokeRect(-4, 6, 8, 34); g.beginPath(); g.arc(0, 0, 13, 0, 7); g.fillStyle = '#9dff4a'; g.fill(); g.stroke();
+    g.fillStyle = '#fff6e8'; g.beginPath(); g.ellipse(-8, -40, 9, 7, -0.4, 0, 7); g.fill(); g.stroke(); g.lineWidth = 6; g.beginPath(); g.moveTo(0, -42); g.lineTo(0, -66); g.lineTo(18, -58); g.stroke();
   } else { // unknown id: a neon star, so a missing glyph is still readable
     g.lineWidth = 5; g.strokeStyle = INK; g.fillStyle = '#ffe14d'; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 26 : 58; g[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke();
   }
@@ -210,7 +216,7 @@ export function drawBadge(g, id, color, S, opts) {
 }
 export function spotGlyphCanvas(id, color, S, opts) { const c = document.createElement('canvas'); c.width = c.height = S; drawBadge(c.getContext('2d'), id, color, S, opts); return c; }
 export const SPOT_DEFS = DEFS;
-export const SPOT_GLYPHS = ['busk', 'bench', 'run', 'flyers', 'gate', 'booth', 'couch', 'bed', 'desk', 'kitchen', 'wardrobe', 'door', 'map', 'hats', 'racks', 'mirror', 'counter', 'mic', 'mixer', 'stage', 'stool'];
+export const SPOT_GLYPHS = ['busk', 'bench', 'jam', 'run', 'flyers', 'gate', 'booth', 'couch', 'bed', 'desk', 'kitchen', 'wardrobe', 'door', 'map', 'hats', 'racks', 'mirror', 'counter', 'mic', 'mixer', 'stage', 'stool'];
 const INDOOR = { enter: 1.15, release: 1.75, ring: 1.1, iconY: 2.55, iconK: 0.78, pillar: 2.6 };
 const GOLD = '#ffe14d', GREY = '#8a8499';
 
@@ -281,7 +287,9 @@ export function buildSpots(ctx, terrain) {
   const pillar = new THREE_.Mesh(pg2, new THREE_.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE_.AdditiveBlending, depthWrite: false, side: THREE_.DoubleSide, toneMapped: false, fog: false })); pillar.frustumCulled = false; pillar.renderOrder = 1; group.add(pillar);
   function placePillar(s) { const o0 = s.i * VPS * 3, y = s.root.position.y; pBase.forEach((v, vi) => { const o = o0 + vi * 3; pPos[o] = s.x + v[0] * s.pr; pPos[o + 1] = y + v[1] * (v[3] ? 1 : s.ph); pPos[o + 2] = s.z + v[2] * s.pr; }); pg2.attributes.position.needsUpdate = true; }
   function place(s) {
-    const d = s.def, AN = terrain && terrain.anchors, a = (d.x !== undefined && d.z !== undefined ? d : null) || (AN && (AN[s.anchor] || AN[s.id])); if (!a || !isFinite(a.x) || !isFinite(a.z)) { s.root.visible = false; s.placed = false; return; }
+    const d = s.def, AN = terrain && terrain.anchors, a = (d.x !== undefined && d.z !== undefined ? d : null) || (AN && (AN[s.anchor] || AN[s.id]));
+    // no anchor (or it went away: the park jam after 18:00): hidden, and its pillar collapses so no light beam is left standing
+    if (!a || !isFinite(a.x) || !isFinite(a.z)) { if (s.placed) { const pr = s.pr; s.pr = 0; placePillar(s); s.pr = pr; } s.root.visible = false; s.placed = false; s.near = false; return; }
     if (s.placed && a.x === s.x && a.z === s.z) return; s.x = a.x; s.z = a.z; s.rot = a.rot || 0; s.placed = true; s.root.visible = true; s.root.position.set(s.x, terrain && terrain.heightAt ? terrain.heightAt(s.x, s.z) || 0 : 0, s.z); placePillar(s);
   }
   function fire(s) { const e = { id: s.id, scene: ctx.sceneName || 'park', kind: s.kind, locked: !!s.locked, reason: s.reason || '' }; if (s.kind === 'door') events.emit('door', e); events.emit('spot', e); }

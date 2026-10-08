@@ -44,7 +44,7 @@ try {
 
   // ------------------------------------------------------------------ MUSIC OFF in every perform kind, practice and battle; the music comes back at the place
   const SETS = [
-    ['busk', 'park', 'busk', () => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING', bpm: 92, bars: 2, difficulty: 0.2, style: 0, seed: 7 }), 92],
+    ['busk', 'park', 'busk', () => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING', bpm: 92, bars: 2, difficulty: 0.2, style: 0, seed: 7 }), 103],     // easy busking runs 12% faster (Core.tempoFor)
     ['openmic', 'bar', 'bar', () => BBH.G.places.startPerform({ id: 'bar' }, 'openmic', { title: 'OPEN MIC', bpm: 98, bars: 2, difficulty: 0.3, style: 2 }), 98],
     ['karaoke', 'bar', 'bar', () => BBH.G.places.startPerform({ id: 'bar' }, 'karaoke', { title: 'KARAOKE', bpm: 88, bars: 2, difficulty: 0.2, style: 0 }), 88],
     ['showcase', 'bar', 'showcase', () => BBH.G.places.startPerform({ id: 'bar' }, 'showcase', { title: 'SHOWCASE', bpm: 104, bars: 2, difficulty: 0.4, style: 1 }), 104],
