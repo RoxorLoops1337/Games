@@ -1,6 +1,6 @@
 // CHARACTER CLIPS (part 2): point, battle, sad, finisher, hit, hold (+ walkside alias). Registered into the Animator's clip table (char_anim.js) on import.
 // Same conventions as char_anim.js: rig space (+z forward, character left = +x), IK targets in object space, face channels brow/browTilt/mouthOpen/smile/frown.
-import { CL, stance, relaxArms, gait, beatClock, beatEnv, sm, mod, clamp, lerp } from './char_anim.js';
+import { micAim, CL, stance, relaxArms, gait, beatClock, beatEnv, sm, mod, clamp, lerp } from './char_anim.js';
 import { HOLD } from './char_props.js';
 const PI = Math.PI, TAU = PI * 2, S = Math.sin, Cs = Math.cos;
 
@@ -18,15 +18,15 @@ CL.point = function (P, c, dt, o) {
   P.mouthOpen = 0.18 + 0.1 * Math.abs(S(t * 6)); P.brow = 0.3; P.browTilt = -0.25;
 };
 
-// ----- battle: aggressive guard stance bobbing on the beat (opts.bpm). Lead jab on the kick; the mic hand covers the mouth when holding a mic
+// ----- battle: aggressive guard stance bobbing on the beat (opts.bpm). Lead jab on the kick; the mic hand holds the grille right at the mouth when holding a mic
 CL.battle = function (P, c, dt, o) {
   const bc = beatClock(c, { bpm: o.bpm || 100, phase: o.phase }), E = beatEnv(this, bc, o), k = E.k, sn = E.sn, b = bc.beat * TAU, amp = o.amp === undefined ? 1 : o.amp, q = 0.5 + 0.5 * Cs(b);
   P.hipsY = -0.11 - 0.035 * q * amp - 0.025 * k * amp; P.hipsRX = 0.1; P.hipsRY = -0.22 + 0.06 * S(b * 0.5); P.hipsRZ = 0.05 * S(b * 0.5); P.hipsX = 0.012 * S(b * 0.5);
   P.spineRX = 0.04; P.chestRX = 0.02 + 0.04 * k; P.chestRY = 0.34 + 0.08 * S(b * 0.5) + 0.12 * k; P.chestRZ = 0.05 * S(b * 0.5);
   P.neckRX = -0.1 + 0.08 * q * amp; P.headRX = -0.02 + 0.05 * k; P.headRZ = 0.06 * S(b * 0.5); P.headRY = -0.1;
   stance(P, 0.17, 0.5); P.lZL = 0.14; P.lZR = -0.14; P.fYL = 0.5; P.fYR = -0.35; P.lXL = 0.15; P.lXR = -0.17;
-  const m = this.mouthRig, mic = this.api.holding === 'mic';
-  if (mic) { const hx = 0.45, hy = 0.8, hz = 0.4, hl = Math.hypot(hx, hy, hz); P.aWR = 1; P.hWR = 1; P.aXR = m.x - hx / hl * 0.2; P.aYR = m.y - hy / hl * 0.2 - 0.01; P.aZR = m.z - hz / hl * 0.2 - 0.02; P.hXR = hx; P.hYR = hy; P.hZR = hz; P.pXR = -0.6; P.pYR = -1; P.pZR = -0.1; }
+  const mic = this.api.holding === 'mic';
+  if (mic) { P.chestRY += 0.14; P.neckRY = -0.08; P.headRY -= 0.08; micAim.call(this, P, [-0.03, 0.105 - 0.01 * k, 0.335], [0.15, 0.78, -0.6], [0.5, 0.1, 0.85]); P.pXR = -1; P.pYR = -0.3; P.pZR = 0.1; }
   else { P.aWR = 1; P.aXR = -0.17 - 0.03 * sn; P.aYR = 1.0 + 0.03 * q; P.aZR = 0.26 + 0.09 * sn; P.pXR = -0.8; P.pYR = -1; P.pZR = -0.3; }
   P.aWL = 1; P.aXL = 0.18 + 0.02 * k; P.aYL = 1.0 + 0.04 * q; P.aZL = 0.3 + 0.2 * k; P.pXL = 0.8; P.pYL = -1; P.pZL = -0.2;
   P.shrug = 0.3; P.mouthOpen = 0.1 + 0.5 * sn * amp + 0.3 * E.ht * amp; P.mouthW = 0.95; P.cheek = 0.3 * k; P.brow = -0.35; P.browTilt = -0.9; P.smile = 0.15; P.frown = 0.5; P.eyeH = 0.8;

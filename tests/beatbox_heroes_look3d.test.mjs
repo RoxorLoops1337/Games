@@ -185,5 +185,30 @@ if (!chromium || !exe || !fs.existsSync(exe)) { console.log('beatbox_heroes_look
   ok(looped.ratio < 12, 'beatbox: a beat that wraps every 4 beats stays smooth ' + looped.ratio.toFixed(2));
   ok(drop.ratio < 12, 'beatbox: the music beat dropping out and back in stays smooth ' + drop.ratio.toFixed(2) + ' (frame ' + drop.at + ')');
 }
+// ---- the hand mic is held like a real one: every clip, 3 s of frames, the grille never enters the head (a sphere test and the real head surface) or the chest;
+// in beatbox and battle the grille sits right at the mouth and the mic tilts up into the lips
+{
+  const { headRingAt, HEAD_SQ, HEAD_TOP, MIC } = M, V = hero.object.position.constructor, g = new V(), mo = new V(), hl = new V(), ax = new V(), inv = new hero.object.matrixWorld.constructor();
+  const inHead = (p) => { const r = headRingAt(Math.max(0.02, Math.min(HEAD_TOP, p.y))), e = 2 / HEAD_SQ, m = 0.03; return p.y > -0.03 && p.y < HEAD_TOP + 0.03 && Math.pow(Math.abs(p.x) / (r.rx + m), e) + Math.pow(Math.abs(p.z - r.cz) / (r.rz + m), e) < 1; };
+  const bad = [], far = [], tilt = [];
+  for (const body of ['neutral', 'boy', 'girl']) for (const clip of CLIPS) {
+    const L = clone(CAT.DEFAULT_LOOK); L.body = body; L.acc = Object.assign({}, L.acc, { hand: { id: 'mic', color: '#6b6b80' } }); const c = createCharacter(CTX, L); let worst = null, maxD = 0, tl = 1;
+    ok(c.holding === 'mic', 'the default look with a mic holds a mic (' + body + ')');
+    for (let i = 0; i < 180; i++) {
+      const t = i / 60; c.play(clip, { bpm: 100, speed: /walk|run|hold/.test(clip) ? 1.2 : 0, prop: 'card' }); c.update(1 / 60, t); c.object.updateMatrixWorld(true); c.micPos(g); c.anchors.mouth.getWorldPosition(mo);
+      hl.copy(g).applyMatrix4(inv.copy(c.rig.map.head.matrixWorld).invert()); const sph = Math.hypot(hl.x, hl.y - 0.29, hl.z);
+      if (inHead(hl) || sph < 0.29) worst = worst || [t.toFixed(2), hl.x.toFixed(3), hl.y.toFixed(3), hl.z.toFixed(3)];
+      const cl = g.clone().applyMatrix4(inv.copy(c.rig.map.chest.matrixWorld).invert()); if (cl.y > -0.25 && cl.y < 0.2 && (cl.x / 0.17) ** 2 + (cl.z / 0.13) ** 2 < 1) worst = worst || ['chest ' + t.toFixed(2)];
+      if ((clip === 'beatbox' || clip === 'battle') && t > 0.3) { maxD = Math.max(maxD, g.distanceTo(mo)); ax.copy(MIC.axis).transformDirection(c.rig.map.wrR.matrixWorld).transformDirection(inv.copy(c.rig.map.head.matrixWorld).invert()); if (!(ax.y > 0.5 && ax.z < -0.3)) tl = 0; }
+    }
+    if (worst) bad.push(body + '/' + clip + ' @' + worst.join(','));
+    if ((clip === 'beatbox' || clip === 'battle') && maxD > 0.12) far.push(body + '/' + clip + ' ' + maxD.toFixed(3)); if ((clip === 'beatbox' || clip === 'battle') && !tl) tilt.push(body + '/' + clip);
+    c.dispose();
+  }
+  ok(bad.length === 0, 'the mic grille never goes into the head or the chest in any clip' + (bad.length ? ': ' + bad.slice(0, 6).join(' | ') : ''));
+  ok(far.length === 0, 'beatbox and battle hold the grille within 0.12 m of the mouth' + (far.length ? ': ' + far.join(' | ') : ''));
+  ok(tilt.length === 0, 'beatbox and battle tilt the mic up and in towards the lips' + (tilt.length ? ': ' + tilt.join(' | ') : ''));
+  const nm = createCharacter(CTX, Object.assign(clone(CAT.DEFAULT_LOOK), { acc: { hand: { id: 'none_hand' } } })); ok(nm.micPos(g) === null, 'micPos is null without a mic'); nm.dispose();
+}
 clearTimeout(watchdog); fs.rmSync(tmp, { recursive: true, force: true }); done();
 void between;
