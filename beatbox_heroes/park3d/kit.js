@@ -59,6 +59,23 @@ export function disposeMaterial(m) {
   const u = m.uniforms; if (u) for (const k in u) { const v = u[k] && u[k].value; if (v && (v.isTexture || v.isRenderTarget)) disposeTexture(v); }
   m.dispose();
 }
+// LEAFY SHADOWS: low-poly canopies are a few big flat faces, so their sun shadow lands as one solid hard-edged slab (players read it as a "square shadow").
+// leafShadow(mesh, { minY, scale, open, sat }) gives the mesh a shadow-only depth material that punches irregular holes into everything above minY (world y),
+// so canopies cast dappled foliage shadows while trunks (below minY) stay solid. sat > 0: only vertices whose colour saturation (max - min channel) is above it
+// get holes (foliage), so a merged props mesh keeps solid lamp posts and benches. The mesh itself renders unchanged. Works for Mesh and InstancedMesh.
+export function leafShadow(mesh, o) {
+  o = o || {}; const minY = o.minY === undefined ? 1.6 : o.minY, scale = o.scale || 1.7, open = o.open === undefined ? 0.42 : o.open, sat = o.sat || 0;
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uLeaf = { value: new THREE.Vector4(minY, scale, open, sat) };
+    sh.vertexShader = 'varying vec3 vLeafW; varying float vLeafS;\n' + (sat > 0 ? 'attribute vec3 color;\n' : '') + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  ' + (sat > 0 ? 'vLeafS = max(color.r, max(color.g, color.b)) - min(color.r, min(color.g, color.b));' : 'vLeafS = 1.0;') + '\n  { vec4 lw = vec4(transformed, 1.0);\n  #ifdef USE_INSTANCING\n  lw = instanceMatrix * lw;\n  #endif\n  vLeafW = (modelMatrix * lw).xyz; }');
+    sh.fragmentShader = 'uniform vec4 uLeaf; varying vec3 vLeafW; varying float vLeafS;\nfloat lfH(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\nfloat lfN(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n  return mix(mix(mix(lfH(i), lfH(i + vec3(1,0,0)), f.x), mix(lfH(i + vec3(0,1,0)), lfH(i + vec3(1,1,0)), f.x), f.y), mix(mix(lfH(i + vec3(0,0,1)), lfH(i + vec3(1,0,1)), f.x), mix(lfH(i + vec3(0,1,1)), lfH(i + vec3(1,1,1)), f.x), f.y), f.z); }\n'
+      + sh.fragmentShader.replace('void main() {', 'void main() {\n  if (vLeafW.y > uLeaf.x && vLeafS > uLeaf.w) { vec3 q = vLeafW * uLeaf.y; float n = lfN(q) * 0.65 + lfN(q * 2.3 + 7.1) * 0.35; float fade = clamp((vLeafW.y - uLeaf.x) / 0.5, 0.0, 1.0); if (n < uLeaf.z * fade) discard; }');
+  };
+  m.customProgramCacheKey = () => 'leafShadow' + (sat > 0 ? 's' : '');
+  mesh.customDepthMaterial = m; mesh.userData.leafShadow = true; return mesh;
+}
+
 export function disposeTree(obj) {
   if (!obj) return;
   obj.traverse((o) => {
@@ -66,6 +83,7 @@ export function disposeTree(obj) {
     const m = o.material; if (m) { if (Array.isArray(m)) for (let i = 0; i < m.length; i++) disposeMaterial(m[i]); else disposeMaterial(m); }
     if (o.isInstancedMesh && o.dispose) o.dispose();
     if (o.isSkinnedMesh && o.skeleton && o.skeleton.dispose) o.skeleton.dispose();
+    if (o.customDepthMaterial) o.customDepthMaterial.dispose();
     if (o.isLight && o.shadow && o.shadow.dispose) o.shadow.dispose();
     if (o.userData && o.userData.renderTarget && o.userData.renderTarget.dispose) o.userData.renderTarget.dispose();
   });

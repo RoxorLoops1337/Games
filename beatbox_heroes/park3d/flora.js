@@ -2,7 +2,7 @@
 // planters, a low-poly skyline with lit windows, the street apron, drifting clouds, pigeons, butterflies and birds.
 // CONTRACT: buildFlora(ctx, terrain) -> { group, update(dt,t), windows:{count,material}, stats }. Meshes named skyline, skyline_windows and clouds are tinted by the lighting module (time of day).
 // Sub-modules: flora_trees.js (species), flora_plants.js (undergrowth), flora_sky.js (skyline, street, clouds), flora_life.js (animals), flora_common.js (helpers).
-import { THREE, rng, flatMat, merged } from './kit.js';
+import { THREE, rng, flatMat, merged, leafShadow } from './kit.js';
 import { xf, paintSolid, blob } from './flora_common.js';
 import { makeOak, makePine, makeCypress, makeCherry, PALS } from './flora_trees.js';
 import { buildPlants } from './flora_plants.js';
@@ -64,7 +64,7 @@ export function buildFlora(ctx, terrain) {
   // a lost balloon caught in the maple canopy (storytelling prop)
   const maple = placed.find((p) => p.kind === 'maple');
   if (maple) { const bx = maple.x + 1.4 * maple.s, bz = maple.z + 0.6 * maple.s, by = gy(maple.x, maple.z) + 6.9 * maple.s; const bal = paintSolid(xf(blob(0.34, 1, R, 1.15), { x: bx, y: by, z: bz }), '#d63a5a', '#ff7a8a', R, 0.4); const str = new THREE.BufferGeometry(); const sx = bx - 0.5, sz = bz - 0.2; str.setAttribute('position', new THREE.Float32BufferAttribute([bx, by - 0.3, bz, bx + 0.02, by - 0.3, bz, sx, by - 1.3, sz], 3)); const k = new THREE.Color('#f4e4d0'); str.setAttribute('color', new THREE.Float32BufferAttribute([k.r, k.g, k.b, k.r, k.g, k.b, k.r, k.g, k.b], 3)); str.computeVertexNormals(); treeGeos.push(bal, str); }
-  const treeMesh = new THREE.Mesh(merged(treeGeos.map((g) => { if (g.attributes.uv) g.deleteAttribute('uv'); return g; })), flatMat()); treeMesh.castShadow = true; treeMesh.receiveShadow = true; treeMesh.name = 'trees'; group.add(treeMesh);
+  const treeMesh = new THREE.Mesh(merged(treeGeos.map((g) => { if (g.attributes.uv) g.deleteAttribute('uv'); return g; })), flatMat()); treeMesh.castShadow = true; treeMesh.receiveShadow = true; treeMesh.name = 'trees'; leafShadow(treeMesh, { minY: 1.7 }); group.add(treeMesh);
 
   // ---------- undergrowth ----------
   const bushSpots = [], decals = [];

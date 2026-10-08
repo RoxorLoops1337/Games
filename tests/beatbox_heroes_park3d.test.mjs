@@ -46,6 +46,9 @@ await page.waitForFunction(() => window.__park.lighting.stats().rung >= 2, null,
 const rg = await page.evaluate(() => window.__park.lighting.stats());
 ok(rg.rung === 2 && rg.composer, 'black frames step the post chain down the ladder (rung ' + rg.rung + ')');
 await page.waitForTimeout(500);
+// tree canopies cast dappled leaf shadows (a shadow-only depth material with holes), never one solid hard-edged slab
+const lf = await page.evaluate(() => { const t = window.__park.ctx.scene.getObjectByName('trees'); return { cast: !!(t && t.castShadow), leaf: !!(t && t.customDepthMaterial && t.userData.leafShadow) }; });
+ok(lf.cast && lf.leaf, 'park tree canopies cast leafy (dappled) shadows ' + JSON.stringify(lf));
 // passers-by: people walk the park paths, keep moving, and give way to the player standing in their way
 const pb = await page.evaluate(() => {
   const p = window.__park, pb = p.ctx.passersby; if (!pb) return null; const W = pb.walkers, s0 = W.map((w) => w.s), out = { n: W.length, ids: W.map((w) => w.path.id) };
