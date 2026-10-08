@@ -150,6 +150,54 @@
   ];
   const COACH_FEE = 50, COACH_COOLDOWN = 3, STREAM_MIN_FANS = 20;
 
+  /* ------------------------------------------------- story: the park jam arc and BeeAmGee (from Beatbox Story, STORY_PLAN.md) */
+  // The JAM: the cypher by the graffiti wall in the park, every afternoon from day 2 (Beatbox Story: daytime park activity, the "try Jam" tip from day 2).
+  // BeeAmGee is NOT in the park at the start: he watches you from the back of the cypher (2nd jam, or a battle win and a jam, or 4 busks from day 3),
+  // is gone again, and from the NEXT day he sits on his bench: the first visit after that is the meeting. flags: bmgSighted (day), bmgVia ('jam'|'busk'), bmgMet (day),
+  // pigpenJam (day), famousJam (day), story (1 = save made with this story; older saves migrate keeping BeeAmGee). n.jams counts finished jams.
+  const JAM = { fromDay: 2, open: 12, close: 18, minutes: 60, energy: 10, sightJams: 2, sightBusks: 4, sightBuskDay: 3, pigpenJams: 3, famousJams: 5, famousFans: 30 };
+  const jamOn = (ch) => !!ch && ch.day >= JAM.fromDay && hourOf(ch.minutes) >= JAM.open && hourOf(ch.minutes) < JAM.close;
+  const JAM_WHEN = 'every afternoon, 12:00 to 18:00';
+  const bmgDue = (ch) => !!(ch && ch.flags && ch.flags.bmgSighted && !ch.flags.bmgMet && ch.day > ch.flags.bmgSighted);
+  const bmgHere = (ch) => !!(ch && ch.flags && (ch.flags.bmgMet || bmgDue(ch)));
+  const N = (text) => ({ who: null, text }), BMG = (text) => ({ who: 'beeamgee', text }), PIG = (text) => ({ who: 'pigpen', mood: 'angry', text });
+  const STORY = {
+    firstJam: [N('You step into the circle by the graffiti wall.'), N('Strangers, all of them. None of them care where you slept last night.'), N('Maybe this is what you needed.')],
+    sightJam: [N('Someone is standing at the back of the cypher.'), N('Grey beard. Denim jacket. Gold glasses. He does not perform.'), N('He nods once when you finish your round. Then he is gone.'), N('...who was that?')],
+    sightBusk: [N('An old man with a grey beard watches your whole set from across the path.'), N('He does not drop a coin. He nods once when you finish. Then he is gone.'), N('...who was that?')],
+    meet: [BMG('Saw you in the cypher the other day.'), BMG('You have got something. Raw. Unfinished. But something.'), BMG('Name is BeeAmGee. Been at this thirty years. This bench is my office.'), BMG('Sit with me any day for a free lesson. When you are ready for the real thing, private coaching is fifty bucks.')],
+    pigpen: [N('The circle goes loud. A guy in a red bomber pushes in and stares you down.'), PIG('Yo. You. New face.'), PIG('You sound like you have been practising in a closet.'), PIG('Saturday nights at the bar. Climb the ladder. I will be waiting at the top.'), PIG('Do not bring a friend. You will need them on the way home.')],
+    famous: [N('The circle goes quiet mid-round.'), N('Heads turn. Someone you know from the videos just stepped into the cypher.'), N('They throw a thirty second flurry that nobody can answer. Then they are gone, walking off with two friends.'), N('Someone whispers their name. You pretend you were not watching.'), N('There is a long way to go.')],
+  };
+  const storyLines = (ch, id) => (id === 'meet' && ch.flags.bmgVia === 'busk' ? [BMG('Saw you busking the other day.')].concat(STORY.meet.slice(1)) : STORY[id] || []).map((l) => Object.assign({}, l));
+  // Foxy reads the room (Beatbox Story FOXY_TIPS, the jam arc rules): a story line, or null for the normal tip rotation
+  const STORY_TIPS = {
+    foxyNoJam: ['I heard there are jams in the park. That is where the beatboxers go, right?', 'If you are going to do this beatbox thing, go where they are. The park has a cypher every afternoon.', 'You are not going to make it sitting in the flat. There are people in the park.'],
+    foxyJams: ['Still going to the jams? Keep at it.', 'The cypher again? Good. Go.', 'More practice in the circle. Less in the bedroom.', 'The park people are your people now, I guess.'],
+    foxyPigpen: ['Some loud guy was asking about you. Saturday at the bar?', 'I do not know who Pig Pen is. Does not sound like a friend.'],
+  };
+  function storyTip(ch, who, i) {
+    if (who !== 'foxy' || !ch) return null; const n = ch.n || {}, f = ch.flags || {}, pick = (a) => a[Math.abs(i | 0) % a.length];
+    if (!n.jams && ch.day >= JAM.fromDay) return pick(STORY_TIPS.foxyNoJam);
+    if (f.pigpenJam && !(ch.beat && ch.beat.pigpen)) return pick(STORY_TIPS.foxyPigpen);
+    if (n.jams && n.jams < JAM.pigpenJams) return pick(STORY_TIPS.foxyJams);
+    return null;
+  }
+  // after a finished set: at most one story beat per set (first jam, the BeeAmGee sighting, Pig Pen crashes the cypher, a famous beatboxer drops in)
+  function storyAfter(ch, kind, fx) {
+    const f = ch.flags, n = ch.n; let id = null;
+    if (kind === 'jam') {
+      if (n.jams === 1) id = 'firstJam';
+      else if (!f.bmgSighted && (n.jams >= JAM.sightJams || n.battlesWon >= 1)) { f.bmgSighted = ch.day; f.bmgVia = 'jam'; id = 'sightJam'; }
+      else if (!f.pigpenJam && n.jams >= JAM.pigpenJams) { f.pigpenJam = ch.day; id = 'pigpen'; }
+      else if (!f.famousJam && n.jams >= JAM.famousJams && ch.fans >= JAM.famousFans) { f.famousJam = ch.day; id = 'famous'; }
+    } else if (kind === 'busk' && !f.bmgSighted && n.busks >= JAM.sightBusks && ch.day >= JAM.sightBuskDay) { f.bmgSighted = ch.day; f.bmgVia = 'busk'; id = 'sightBusk'; }
+    if (id) fx.push({ t: 'story', id, lines: storyLines(ch, id) });
+    return id;
+  }
+  // a story beat that waits for you when you walk into a place (the place scenes run it): 'bmgMeet' or null
+  const storyArrive = (ch, place) => (place === 'park' && bmgDue(ch) ? 'bmgMeet' : null);
+
   /* ---------------------------------------------------------- achievements */
   // check(ch) -> true when earned. `reward` is flavour text (cosmetics hook in via catalog `ach` unlocks).
   const ACHIEVEMENTS = [
@@ -255,9 +303,9 @@
       v: CFG.version, name: L.name || 'Hero', look: L, day: 1, minutes: 60,         // wakes 07:00 on day 1
       energy: CFG.startEnergy, maxEnergy: CFG.startEnergy, hunger: 70, mood: 60, cash: CFG.startCash, fans: 0,
       xp: 0, level: 1, stats: { mus: 3, tech: 3, ori: 3, show: 3 },
-      owned: {}, ach: {}, beat: {}, flags: {}, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
+      owned: {}, ach: {}, beat: {}, flags: { story: 1 }, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
       affinity: {}, seen: {}, history: [], songs: [], crew: [], patterns: [0, 1, 2, 3].map((i) => emptyPattern(i)), patIdx: 0,
-      n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0 },
+      n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0, jams: 0 },
       created: 0, trainLv: defaultTrainLv(), sounds: START_SOUNDS.slice(),
     };
     sweepUnlocks(ch);
@@ -296,7 +344,9 @@
   /* ---------------------------------------------------------- the clock */
   // Spend game minutes (and optionally energy/hunger). Handles the 02:00 collapse. Returns true if the day rolled.
   function spend(ch, minutes, energy, fx, rng) {
-    ch.minutes += minutes;
+    const m0 = ch.minutes; ch.minutes += minutes;
+    // the jam starts while you are busy: tell the player where to go (the map pin and the park spot light up too)
+    if (!jamOn(Object.assign({}, ch, { minutes: m0 })) && jamOn(ch) && hourOf(m0) < JAM.open) fx.push({ t: 'toast', text: 'The JAM has started in the PARK! Beatboxers are gathering by the graffiti wall.', kind: 'good' }, { t: 'sfx', name: 'sparkle' }, { t: 'jamStart', day: ch.day });
     ch.energy -= energy || 0;
     ch.hunger -= minutes * 0.045;
     if (ch.hunger <= 0) { ch.hunger = 0; ch.energy -= minutes * 0.05; ch.mood -= minutes * 0.02; }
@@ -353,6 +403,7 @@
     }
     // one random morning event (30%)
     if (rng() < 0.3) { const e = pickWeighted(MORNING_EVENTS, rng); e.fx(ch); lines.push(e.text); }
+    if (ch.day >= JAM.fromDay && !ch.n.jams) lines.push('Foxy: "There is a jam in the park this afternoon, 12:00 to 18:00. That is where the beatboxers go."');
     ch.hunger = clamp(ch.hunger, 0, 100); ch.mood = clamp(ch.mood, 0, 100);
     ch.place = 'home';
     fx.push({ t: 'morning', day: ch.day, name: dayName(ch.day), lines, cause });
@@ -458,6 +509,7 @@
       case 'busk': return { minutes: 60, energy: 12, cash: Math.round((5 + st.show * 0.5) * (0.3 + 1.4 * q)), fans: Math.round((1 + st.ori * 0.06 + st.show * 0.05) * (0.4 + 1.6 * q) * bonus), xp: Math.round(6 + 12 * q), mood: q > 0.7 ? 4 : q < 0.4 ? -4 : 0 };
       case 'openmic': return { minutes: 90, energy: 16, cash: Math.round(6 * (0.4 + q)), fans: Math.round((3 + st.ori * 0.1 + st.show * 0.1) * (0.5 + 1.5 * q) * bonus), xp: Math.round(14 + 18 * q), mood: q > 0.7 ? 6 : q < 0.4 ? -5 : 1 };
       case 'showcase': return { minutes: 120, energy: 22, cash: Math.round(55 + 90 * q), fans: Math.round((14 + st.show * 0.3) * (0.5 + 1.2 * q) * bonus), xp: Math.round(36 + 30 * q), mood: q > 0.7 ? 10 : q < 0.4 ? -8 : 2 };
+      case 'jam': return { minutes: JAM.minutes, energy: JAM.energy, cash: 0, fans: Math.round((1.5 + st.ori * 0.06 + st.show * 0.04) * (0.5 + 1.5 * q) * bonus), xp: Math.round(10 + 14 * q), mood: q < 0.4 ? 2 : 6 };
       case 'karaoke': return { minutes: 75, energy: 8, cash: 0, fans: Math.round((2 + 8 * q) * bonus), xp: Math.round(8 + 10 * q), mood: 10 };
       case 'practice': return { minutes: 60, energy: 14, cash: 0, fans: 0, xp: Math.round(6 + 10 * q), mood: 1 };
       default: return { minutes: 30, energy: 5, cash: 0, fans: 0, xp: 0, mood: 0 };
@@ -724,7 +776,7 @@
       }
       case 'perform': {                                            // a.kind, a.res (summarize output)
         const res = a.res, rw = reward(a.kind, res, ch), k = a.kind;
-        if (k === 'busk') ch.n.busks++; else if (k === 'openmic') ch.n.openMics++; else if (k === 'showcase') { ch.n.showcases++; ch.lastShowcaseDay = ch.day; } else if (k === 'karaoke') ch.n.karaoke++;
+        if (k === 'busk') ch.n.busks++; else if (k === 'openmic') ch.n.openMics++; else if (k === 'showcase') { ch.n.showcases++; ch.lastShowcaseDay = ch.day; } else if (k === 'karaoke') ch.n.karaoke++; else if (k === 'jam') { ch.n.jams = (ch.n.jams || 0) + 1; ch.flags.jamDay = ch.day; }
         ch.n.perfects += res.perfect; ch.n.bestCombo = Math.max(ch.n.bestCombo, res.bestCombo);
         res.perfectLane.forEach((v, i) => { ch.n.perfectLane[i] += v; });
         if (res.rank === 'S') ch.n.sRanks++;
@@ -732,7 +784,10 @@
         // performing also nudges the stats a little (Showmanship especially)
         bumpStat(ch, 'show', 0.15 + 0.4 * res.accuracy); bumpStat(ch, 'mus', 0.1 + 0.3 * res.accuracy);
         if (res.bestCombo >= 30) bumpStat(ch, 'tech', 0.2);
+        // the cypher teaches you something (Beatbox Story jam: a random skill up)
+        if (k === 'jam') { const st = ['mus', 'tech', 'ori'][Math.floor(rng() * 3)], g = 0.5 + 0.7 * clamp(res.accuracy, 0, 1); bumpStat(ch, st, g); toast('The cypher taught you something: ' + STAT_NAMES[st] + ' +' + g.toFixed(1), 'good'); }
         spend(ch, rw.minutes, rw.energy, fx, rng);
+        storyAfter(ch, k, fx);
         fx.push({ t: 'sfx', name: res.rank === 'S' || res.rank === 'A' ? 'crowd_cheer' : res.rank === 'D' ? 'crowd_boo' : 'applause' });
         fx.push({ t: 'result', kind: k, rw, res });
         break;
@@ -861,6 +916,19 @@
         spend(ch, 60, 2, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }); toast('You watch an old battle tape. Originality up.', 'good');
         break;
       }
+      case 'jamWatch': {                                           // stand at the edge of the cypher and listen: no mini game, a little Originality and mood
+        if (!jamOn(ch) && !ch.dev.noGates) { toast('The jam is ' + JAM_WHEN + '.', 'warn'); break; }
+        ch.mood += 5; bumpStat(ch, 'ori', 0.25); gainXp(ch, 4, fx); spend(ch, 30, 3, fx, rng); fx.push({ t: 'sfx', name: 'applause' }); toast('You watch the cypher. Originality up.', 'good');
+        break;
+      }
+      case 'story': {                                              // a.k: 'bmgMeet' (the first meeting with BeeAmGee on his bench)
+        if (a.k === 'bmgMeet') {
+          if (!bmgDue(ch)) break;
+          ch.flags.bmgMet = ch.day; if (!ch.seen) ch.seen = {}; if (!ch.seen.beeamgee) ch.seen.beeamgee = ch.day;
+          fx.push({ t: 'story', id: 'meet', lines: storyLines(ch, 'meet') }, { t: 'sfx', name: 'sparkle' });
+        }
+        break;
+      }
       case 'flag': ch.flags[a.k] = a.v === undefined ? 1 : a.v; break;
       case 'rename': ch.name = a.name; ch.look.name = a.name; break;
       case 'wait': spend(ch, a.minutes || 30, 0, fx, rng); break;
@@ -883,6 +951,12 @@
     const tl = defaultTrainLv(), rl = raw.trainLv && typeof raw.trainLv === 'object' ? raw.trainLv : {};
     for (const g of TRAIN_GAMES) tl[g] = clamp(Math.floor(+rl[g] || 1), 1, TRAIN_CFG.levelMax);
     ch.trainLv = tl; ch.seen = raw.seen || {};
+    // saves from before the story (no flags.story): if they already met BeeAmGee on the old always-there bench, he stays met and on his bench
+    if (!ch.flags.story) {
+      const f = ch.flags, met = f.visited_park || f.tip_beeamgee || f.coachDay !== undefined || f.proCoachDay !== undefined || ch.seen.beeamgee || (ch.n.coaches || 0) > 0;
+      if (met && !f.bmgMet) { f.bmgMet = ch.day || 1; f.bmgSighted = f.bmgSighted || f.bmgMet; f.bmgVia = f.bmgVia || 'busk'; }
+      f.story = 1;
+    }
     ch.sounds = Array.isArray(raw.sounds) ? raw.sounds.filter((id) => SOUNDS.some((x) => x.id === id)) : [];
     for (const id of START_SOUNDS) if (ch.sounds.indexOf(id) < 0) ch.sounds.push(id);
     sweepSounds(ch);                                                // silently latch sounds an old save already earned
@@ -950,6 +1024,7 @@
       TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
       EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,
       SOUNDS, START_SOUNDS, soundUnlocked, soundsFor, soundRule, soundUnlockText, sweepSounds, metNpc,
+      JAM, JAM_WHEN, jamOn, bmgDue, bmgHere, STORY, STORY_TIPS, storyLines, storyTip, storyAfter, storyArrive,
     },
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.Core;

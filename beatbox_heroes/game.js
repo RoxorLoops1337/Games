@@ -33,10 +33,25 @@
         case 'unlock': { let pix = null; try { pix = BBH.Chars.thumb(f.group, f.id, G.ch.look); } catch (e) { pix = null; } E.banner('unlock', f.name, 'Wear it from the wardrobe at home.', pix || E.icon('star')); break; }
         case 'morning': G.pendingMorning = f; break;
         case 'navigate': G.goPlace(f.to); break;
+        case 'story': G.storyQ.push(f); if (E.sceneName === 'place' && !E.pendingSwitch && E.scene && E.scene.id) G.playStory(); break;
         default: break;
       }
     }
   };
+
+  /* ---------------------------------------------------------- story beats (core.js STORY, STORY_PLAN.md) */
+  // 'story' effects wait in G.storyQ until a place scene is up (an activity ends on its result card first), then play as one dialog.
+  // G.takeStory(place): the queued lines plus the beat that waits in this place (BeeAmGee on his bench), for the place scene's arrival dialog.
+  // The other effects of an arrival beat (the lip roll card after meeting BeeAmGee) wait in G.storyFx until that dialog is closed: G.storyDone().
+  G.storyQ = []; G.storyFx = [];
+  G.takeStory = function (place) {
+    let lines = []; for (const f of G.storyQ.splice(0)) lines = lines.concat(f.lines || []);
+    const k = G.ch && Core.storyArrive ? Core.storyArrive(G.ch, place) : null;
+    if (k) { const r = Core.apply(G.ch, { t: 'story', k }, Math.random); G.setChar(r.char); for (const f of r.fx) { if (f.t === 'story') lines = lines.concat(f.lines || []); else G.storyFx.push(f); } }
+    return lines;
+  };
+  G.storyDone = function () { const fx = G.storyFx.splice(0); if (fx.length) G.play(fx); };
+  G.playStory = function (then) { const lines = G.takeStory(E.scene && E.scene.id); if (lines.length) E.dialog(lines, () => { G.storyDone(); if (then) then(); }); else { G.storyDone(); if (then) then(); } return lines.length; };
 
   /* ---------------------------------------------------------- navigation */
   G.goPlace = function (to) {
@@ -70,6 +85,8 @@
     if (ch.energy < 22) return 'You are exhausted. Go HOME and nap or sleep.';
     if (!n.busks) return 'Next: go to the PARK and busk (play beats for tip money and fans).';
     if (ch.day < 2) return 'Next: it is getting late. Go HOME and sleep after 20:00.';
+    if (!n.jams && ch.day >= Core.JAM.fromDay && Core.hourOf(ch.minutes) < Core.JAM.close) return 'Next: join the JAM in the PARK. The cypher meets ' + Core.JAM_WHEN + '.';
+    if (Core.bmgDue(ch)) return 'Next: someone was watching you. Go back to the PARK and look at the bench.';
     if (!n.openMics) return 'Next: play an open mic at the BAR (Tue to Thu, after 18:00).';
     if (n.trains < 2) return 'Next: train a skill. Go HOME to the vocal booth, or the Sound Lab.';
     if (ch.fans < 50 || n.openMics < 5) return 'Next: reach 50 fans and 5 open mics to unlock Friday showcases.';

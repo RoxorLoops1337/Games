@@ -30,7 +30,13 @@ const st = await page.evaluate(() => { const s = window.__park.stats(); return s
 ok(st.tris > 20000 && st.tris < 200000, 'triangle count within budget: ' + st.tris);
 ok(st.calls > 5 && st.calls < 140, 'draw calls within budget: ' + st.calls);
 const a = await page.evaluate(() => window.__park.spots.spots.map((s) => s.id).sort().join());
-ok(a === 'bench,busk,flyers,gate,run', 'five spots exist: ' + a);
+ok(a === 'bench,busk,flyers,gate,jam,run', 'five spots plus the story jam spot exist: ' + a);
+{ // the jam (world_park.js story args): hidden until terrain.story.setJam(true), BeeAmGee seated by default (the game passes args.beeamgee from the story)
+  const j = await page.evaluate(() => { const p = window.__park, st = p.terrain.story, js = p.spots.byId.jam, r = { bee: p.npcs.some((n) => n.id === 'beeamgee'), off: !js.placed && !st.jam.group.visible && !st.on() };
+    st.setJam(true); p.spots.update(0.02, 1, p.player.object.position); r.on = js.placed && js.root.visible && st.jam.group.visible && Math.hypot(js.x - st.at.x, js.z - st.at.z) < 0.01;
+    st.setJam(false); p.spots.update(0.02, 1, p.player.object.position); r.off2 = !js.placed && !js.root.visible && !st.jam.group.visible; return r; });
+  ok(j.bee && j.off && j.on && j.off2, 'the jam spot and its cypher show and hide with terrain.story.setJam ' + JSON.stringify(j));
+}
 await page.evaluate(() => { window.__park.controls.skipIntro(); });
 const near = await page.evaluate(() => { const p = window.__park; p.teleport('busk'); p.controls.advance(0.5); const s = p.spots.spots.find((x) => x.id === 'busk'), q = p.player.object.position; return Math.hypot(q.x - s.x, q.z - s.z); });
 ok(near < 4, 'teleport lands near the busk spot: ' + near.toFixed(2));

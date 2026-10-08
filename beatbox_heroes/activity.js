@@ -57,7 +57,8 @@
           if (ch.day - ch.lastBattleDay < Core.CFG.cooldownBattle && !(ch.dev && ch.dev.noGates)) return no('You battled recently. Rest up.');
           need = 20;
         } else if (m === 'perform') {
-          need = { busk: 14, openmic: 16, showcase: 22, karaoke: 10 }[a.kind] || 14;
+          need = { busk: 14, openmic: 16, showcase: 22, karaoke: 10, jam: 14 }[a.kind] || 14;
+          if (a.kind === 'jam' && !Core.jamOn(ch) && !(ch.dev && ch.dev.noGates)) return no('The jam is over. It meets ' + Core.JAM_WHEN + '.');
           if (P === 'bar' && prog.id !== a.kind) return no('Tonight: ' + prog.name + '.');
           if (a.kind === 'showcase' && ch.lastShowcaseDay >= ch.day - 6) return no('One showcase a week.');
         } else if (m === 'train') need = eph * (pm.beat || 20) / 60;
