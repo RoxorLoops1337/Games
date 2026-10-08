@@ -16,6 +16,7 @@
     "exclude": [
         "../tests/art.test.ts",
         "../tests/keyboard.test.ts",
+        "../tests/client3d.test.ts",
         "./cf/worker.ts"
     ]
 }

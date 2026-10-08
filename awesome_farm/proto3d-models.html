@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- the 3D model library of the recovered prototype (dev only: npm run dev, then /proto3d-models.html). Not part of the production build and not linked from the game. -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Low Poly Models</title>
+<style>html,body{margin:0;height:100%;background:#1b2552;color:#fff6e0;font:14px system-ui,sans-serif;overflow:hidden}#c{position:fixed;inset:0}#info{position:fixed;left:12px;top:10px;padding:6px 10px;border-radius:8px;background:rgba(42,29,44,.7);pointer-events:none}#tabs{position:fixed;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap}#tabs button{font:inherit;color:inherit;border:0;border-radius:8px;padding:6px 12px;background:#6a402f;cursor:pointer}#tabs button[aria-pressed=true]{background:#e0a020;color:#2a1d2c}</style>
+<div id="c"></div><div id="info"></div><div id="tabs"></div>
+<script type="module" src="/src/client3d/gallery.ts"></script>
+<script>
+    // the games site serves this folder as it is, where this source page cannot run: say so instead of a blank page
+    if (!document.querySelector('script[src="/@vite/client"]')) document.body.insertAdjacentHTML('beforeend', '<p style="position:fixed;inset:auto 0 40%;text-align:center;color:#fff6e0;font:600 18px system-ui">This page runs in the dev server only (npm run dev).</p>');
+</script>

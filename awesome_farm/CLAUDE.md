@@ -19,6 +19,7 @@ folder's own `node_modules`): use `npm run check` *in this folder* (or `npm run 
 
 - **Client:** Phaser 4.0.0 (WebGL, `pixelArt`, `roundPixels`, DOM container for the title
   screen's text fields), TypeScript 5.7 strict, Vite 6.
+- **3D view (prototype, dev only for now):** three.js 0.160 (`src/client3d`, procedural low-poly models, no image files), on the same SimHost.
 - **Server:** Node 18+ with `ws`, bundled by esbuild into one `awesome-farm-server.mjs`.
   It runs the *same* simulation code as the client.
 - **Tests:** `node:test` run through `tsx`.
@@ -98,7 +99,8 @@ awesome_farm/
 ├── tests/                   one `<system>.test.ts` per system (node:test). The special ones: content + art (every item has an icon and a source), touch (phones: chips, long press, wording),
 │                            bot (+ botlib, bot.late): a scripted player plays the first 13 chapters with real commands (grind skipped late); tutorial: the starting steps walked in order by that player; fuzz + safety: hostile input never
 │                            corrupts the world; netsync + server.e2e + server.hardening + reconnect: a real server over WebSockets (`netlib.ts` finds a free port); perf: a big busy world stays inside its step and bandwidth budget; dev: the developer menu (locks, key, every op)
-├── (prototypes)             the parked low-poly 3D experiments live on the local branch `awesome-farm-prototypes`, not here
+├── proto3d.html, proto3d-models.html   DEV ONLY (npm run dev): the low-poly 3D prototype and its model library, recovered from the
+│                            prototype's built pages into src/client3d (not in the production build, not linked from the game)
 └── src/
     ├── main.ts              boots the client; dev harness in DEV only (src/dev/harness.ts)
     ├── shared/              ← runs in the browser AND the server: no Phaser, no DOM, no localStorage
@@ -116,6 +118,10 @@ awesome_farm/
     │   │                    economy, gather, machines, factory, power, status (what a factory building is doing, in words), mobs, combat, boss (patterns are a `SCRIPTS` table), death (the price of a fall), dread (the Dread Reaches), mines (the caves under the world; cave.ts makes them), creatures (+ jobs: posts and commands, with jobs-site / jobs-carry / jobs-field / jobs-sort / jobs-station behind it; petlib: chest helpers),
     │   │                    quests, hotbar, listed (what the menus list), shop (trader + waystones), rift (expeditions), fishing, pool (crafting reaches into chests), dev (the secret developer menu's ops), worldgen, stats (derived stats, inventory)
     │   └── net/             protocol.ts (wire format), host.ts (SimHost: peers, area of interest, saves)
+    ├── client3d/            ← the low-poly three.js view (recovered prototype; no Phaser): models/ is the procedural model library
+    │                        (kit.ts: the flat-shaded builder; one module per family of buildings, nodes, monsters, creatures, drops, the farmer),
+    │                        the rest is the view (main, entities, terrain, sky, weather, fx, ambient, hud, net: a solo SimHost, showcase, gallery);
+    │                        tests/client3d.test.ts builds every model headless and stages the showcase on the real rules
     └── client/              ← Phaser
         ├── main.ts          game config + scene list (Boot → Title → Game + Hud)
         ├── profile.ts, settings.ts   the device's identity and the player's settings (localStorage)
