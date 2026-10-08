@@ -303,8 +303,9 @@
         const lvl = G.ch.level;
         S.sheet('BUSKING SPOT', [
           h('div.ts', null, 'Play a set for the passers-by. Better timing means more tips and fans.'),
-          S.row('BUSK  60 min', 'The classic B t K t groove. Cash and a few fans.', G.ch.energy < 14 ? 'dis' : 'gold', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.2 + Math.min(0.12, lvl * 0.008), style: 0, stage: 'cyan' }); }),
-          S.row('BUSK HARD  60 min', 'Faster eighth-note grooves. Bigger rewards for a clean run.', G.ch.energy < 14 ? 'dis' : 'pink', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING+', sub: 'show them what you got', bpm: 108 + Math.min(14, lvl), bars: 8, difficulty: 0.55 + Math.min(0.3, lvl * 0.02), style: 1, stage: 'pink' }); }),
+          S.row('BUSK', 'Play as long as you like. The classic B t K t groove, cash and fans. STOP when you are done.', G.ch.energy < 14 ? 'dis' : 'gold', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.2 + Math.min(0.12, lvl * 0.008), style: 0, stage: 'cyan', endless: true }); }),
+          S.row('BUSK HARD', 'Eighth-note grooves at a steady tempo. Bigger rewards for a clean run.', G.ch.energy < 14 ? 'dis' : 'pink', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'BUSKING+', sub: 'show them what you got', bpm: 96 + Math.min(8, lvl), bars: 8, difficulty: 0.55 + Math.min(0.3, lvl * 0.02), style: 1, stage: 'pink', endless: true }); }),
+          S.row('AUTO BUSK', 'Your hero plays for you while you watch. Time flies by, smaller tips. STOP when you like.', G.ch.energy < 14 ? 'dis' : 'cyan', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'AUTO BUSK', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.2 + Math.min(0.12, lvl * 0.008), style: 0, stage: 'cyan', endless: true, auto: true }); }),
         ]);
       },
       bench(S) {

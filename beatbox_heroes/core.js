@@ -414,6 +414,12 @@
     }
     return notes;
   }
+  // busking tempo by difficulty: easy (B t K t quarter notes) runs a bit quicker, hard keeps its eighth-note grooves (8 notes a bar) but slows down so they stay playable.
+  // chartSub: shaker ticks per beat that fit the chart (2 = eighth-note ticks, so every gem lands on a tick)
+  function tempoFor(bpm, diff) { const d = diff === undefined ? 0.5 : diff; return Math.round((bpm || 100) * (d < 0.35 ? 1.12 : d < 0.7 ? 1 : 0.78)); }
+  function chartSub(diff) { return (diff === undefined ? 0.5 : diff) >= 0.35 ? 2 : 1; }
+  // continuous busking: in-game minutes per real second while you play (auto busking runs the clock twice as fast) and the auto pay cut
+  const BUSK_LIVE = { minPerSec: 1.5, autoMul: 2, autoCash: 0.6, autoFans: 0.5, autoXp: 0.5, minMinutes: 15 };
   function rank(acc) { return acc >= 0.96 ? 'S' : acc >= 0.88 ? 'A' : acc >= 0.74 ? 'B' : acc >= 0.55 ? 'C' : 'D'; }
   // tally a finished performance. hits: array of {lane, grade}. total = notes in chart.
   function summarize(hits, total, bestCombo) {
@@ -724,13 +730,18 @@
       }
       case 'perform': {                                            // a.kind, a.res (summarize output)
         const res = a.res, rw = reward(a.kind, res, ch), k = a.kind;
+        // continuous busk: the set lasted a.minutes of game time (rewards scale with it); auto busking pays less
+        const lm = a.minutes || (res && res.minutes) || 0;
+        if (lm > 0) { const sc = Math.max(BUSK_LIVE.minMinutes, lm) / rw.minutes; rw.minutes = Math.round(Math.max(BUSK_LIVE.minMinutes, lm)); rw.cash = Math.round(rw.cash * sc); rw.fans = Math.round(rw.fans * sc); rw.xp = Math.round(rw.xp * sc); rw.energy = Math.round(rw.energy * sc); }
+        if (res.auto) { rw.cash = Math.round(rw.cash * BUSK_LIVE.autoCash); rw.fans = Math.round(rw.fans * BUSK_LIVE.autoFans); rw.xp = Math.round(rw.xp * BUSK_LIVE.autoXp); rw.mood = Math.min(rw.mood, 1); }
         if (k === 'busk') ch.n.busks++; else if (k === 'openmic') ch.n.openMics++; else if (k === 'showcase') { ch.n.showcases++; ch.lastShowcaseDay = ch.day; } else if (k === 'karaoke') ch.n.karaoke++;
         ch.n.perfects += res.perfect; ch.n.bestCombo = Math.max(ch.n.bestCombo, res.bestCombo);
         res.perfectLane.forEach((v, i) => { ch.n.perfectLane[i] += v; });
         if (res.rank === 'S') ch.n.sRanks++;
         ch.cash += rw.cash; ch.fans += rw.fans; ch.mood += rw.mood; gainXp(ch, rw.xp, fx);
         // performing also nudges the stats a little (Showmanship especially)
-        bumpStat(ch, 'show', 0.15 + 0.4 * res.accuracy); bumpStat(ch, 'mus', 0.1 + 0.3 * res.accuracy);
+        const sk = res.auto ? 0.4 : 1;   // auto busking: the hero plays, you learn less
+        bumpStat(ch, 'show', (0.15 + 0.4 * res.accuracy) * sk); bumpStat(ch, 'mus', (0.1 + 0.3 * res.accuracy) * sk);
         if (res.bestCombo >= 30) bumpStat(ch, 'tech', 0.2);
         spend(ch, rw.minutes, rw.energy, fx, rng);
         fx.push({ t: 'sfx', name: res.rank === 'S' || res.rank === 'A' ? 'crowd_cheer' : res.rank === 'D' ? 'crowd_boo' : 'applause' });
@@ -945,7 +956,7 @@
       CFG, SONG_DECAY, MAX_ACTIVE_SONGS, SEQ_STEPS, SEQ_SLOTS, emptyPattern, patternHits, patternScore, CREW, COACH_LINES, COACH_FEE, COACH_COOLDOWN, STREAM_MIN_FANS, DAYS, STYLES, STYLE_BEATS, styleMul, opponentStyle, styleChart, JOBS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
       dow, dayName, clock, hourOf, phase, nightness, barProgramme, canEnter,
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
-      windows, judgeHit, HIT_SCORE, makeChart, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
+      windows, judgeHit, HIT_SCORE, makeChart, tempoFor, chartSub, BUSK_LIVE, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
       Save, migrate, clone,
       TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
       EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,

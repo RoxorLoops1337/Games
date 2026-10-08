@@ -25,13 +25,13 @@ const seed = (page, over) => page.evaluate((over) => {
 const play = (page, js, tag) => page.evaluate(js);
 // run the set with the bot until the card is up (result for perform / practice, verdict for battles)
 const finish = (page, o) => page.evaluate((o) => {
-  const mg = BBH.Eng.scene.mg, seen = [], hist = []; mg.bot(o || { jitterMs: 12 }); let last = '', pips = null;
+  const mg = BBH.Eng.scene.mg, seen = [], hist = [], b0 = mg.state().beat; mg.bot(o || { jitterMs: 12 }); let last = '', pips = null;
   for (let i = 0; i < 900; i++) {
     const st = mg.tick(0.2); if (st.phase !== last) { last = st.phase; seen.push(st.phase); }
     if (st.phase === 'judge' && st.battle && st.battle.reveal >= 4 && !pips) { const q = (s) => document.querySelectorAll('#r3rhythm .jd ' + s).length; pips = { y: q('.pip.y'), o: q('.pip.o'), tallyY: +document.querySelector('#r3rhythm .jd .tally .y b').textContent, tallyO: +document.querySelector('#r3rhythm .jd .tally .o b').textContent }; }
     if (st.phase === 'result' || st.phase === 'verdict') break;
   }
-  return { seen, pips, state: mg.state(), result: JSON.parse(JSON.stringify(mg.result())) };
+  return { seen, b0, pips, state: mg.state(), result: JSON.parse(JSON.stringify(mg.result())) };
 }, o);
 // the numbers a set or a battle may change (the place field is not one of them: entering the place world sets it)
 const CORE = '(c) => JSON.stringify({ cash: c.cash, fans: c.fans, xp: c.xp, level: c.level, minutes: c.minutes, energy: c.energy, mood: c.mood, hunger: c.hunger, stats: c.stats, n: c.n, day: c.day })';
@@ -57,7 +57,7 @@ try {
   ok(e1.venue === 'busk' && e1.mode === 'perform' && e1.hud && e1.body && e1.is3d, 'busk plays on the park stage with the DOM HUD and body.r3: ' + JSON.stringify({ v: e1.venue, m: e1.mode }));
   ok(e1.tris <= 120000 && e1.calls <= 90, 'busk budget (stage profile <= 120k tris, <= 90 calls): ' + e1.tris + ' tris, ' + e1.calls + ' calls');
   const r1 = await finish(page, { jitterMs: 12 });
-  ok(r1.seen.includes('count') && r1.seen.includes('play') && r1.state.phase === 'result' && r1.result.game === 'rhythm' && r1.result.mode === 'perform', 'the set counts in, plays and ends on the result card: ' + r1.seen.join('>'));
+  ok((r1.seen.includes('count') || r1.b0 >= 3.5) && r1.seen.includes('play') && r1.state.phase === 'result' && r1.result.game === 'rhythm' && r1.result.mode === 'perform', 'the set counts in, plays and ends on the result card: ' + r1.seen.join('>'));
   ok(Array.isArray(r1.result.perfectLane) && r1.result.perfectLane.length === 4 && r1.result.perfectLane.reduce((a, b) => a + b, 0) === r1.result.perfect, 'result.perfectLane counts the perfect hits per lane ' + JSON.stringify(r1.result.perfectLane));
   const exp1 = await page.evaluate(([ch0, res]) => { const r = BBH.Core.apply(JSON.parse(JSON.stringify(ch0)), { t: 'perform', kind: 'busk', res }, () => 0.5), f = r.fx.find((x) => x.t === 'result'); return { rw: f.rw, cash: r.char.cash, fans: r.char.fans, xp: r.char.xp, level: r.char.level, mood: r.char.mood, tech: r.char.stats.tech, show: r.char.stats.show, busks: r.char.n.busks }; }, [ch0, r1.result]);
   const got1 = await stateOf(page), rw1 = await cardRw(page);
@@ -83,6 +83,37 @@ try {
   await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING', bpm: 92, bars: 2, difficulty: 0.2, style: 0, stage: 'cyan', seed: 11 })); await waitGame(page);
   const off0 = await finish(page, { jitterMs: 0 });
   ok(off0.state.offset === 0 && off0.result.perfect === off0.result.total && off0.result.miss === 0, 'offset 0 with a perfect bot: every note is perfect (' + off0.result.perfect + '/' + off0.result.total + ')');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
+
+  // ------------------------------------------------------------------ CONTINUOUS BUSKING: the set keeps going (charts chain), the day clock runs, STOP pays for the time played
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92, bars: 2, difficulty: 0.2, style: 0, stage: 'cyan', seed: 21, endless: true }));
+  ok(await waitGame(page), 'continuous busk opens');
+  const lv = await page.evaluate(() => { const mg = BBH.Eng.scene.mg; mg.bot({ jitterMs: 12 }); const ph = []; for (let i = 0; i < 200; i++) { const st = mg.tick(0.2); if (!ph.includes(st.phase)) ph.push(st.phase); } const st = mg.state(); return { ph, st: { phase: st.phase, bpm: st.bpm, live: st.live, hits: st.perfect + st.good + st.miss }, back: document.querySelector('#r3rhythm .rbtn').textContent, clock: (document.querySelector('#r3rhythm .clock.on') || {}).textContent || '' }; });
+  ok(lv.st.phase === 'play' && !lv.ph.includes('result') && lv.st.live && lv.st.live.endless && lv.st.live.chunk >= 3, 'the busk keeps going past its 2-bar chart: still playing after 40 s, ' + (lv.st.live && lv.st.live.chunk) + ' charts chained ' + JSON.stringify(lv.ph));
+  ok(lv.st.bpm === Math.round(92 * 1.12), 'easy B t K t busking runs a bit faster (' + lv.st.bpm + ' bpm from 92)');
+  ok(lv.back === 'STOP' && /^\d\d:\d\d$/.test(lv.clock.trim()) && lv.st.live.minutes > 50 && lv.st.live.minutes < 70, 'BACK turns into STOP and a live clock shows the day time (' + lv.clock + ', ' + lv.st.live.minutes + ' game minutes)');
+  const lr = await page.evaluate(() => { const mg = BBH.Eng.scene.mg; mg.quit(); mg.tick(0.2); return { phase: mg.state().phase, result: JSON.parse(JSON.stringify(mg.result())) }; });
+  ok(lr.phase === 'result' && lr.result.endless && lr.result.minutes >= 50 && lr.result.total === lr.result.perfect + lr.result.good + lr.result.miss && lr.result.total > 20, 'STOP ends the set with a result for the time played (' + lr.result.minutes + ' min, ' + lr.result.total + ' notes)');
+  const lexp = await page.evaluate(([c0, res]) => { const r = BBH.Core.apply(JSON.parse(JSON.stringify(c0)), { t: 'perform', kind: 'busk', res }, () => 0.5), f = r.fx.find((x) => x.t === 'result'); return { rw: f.rw, cash: r.char.cash, minutes: r.char.minutes }; }, [ch0, lr.result]);
+  const lgot = await stateOf(page);
+  ok(lgot.cash === lexp.cash && lexp.rw.minutes === lr.result.minutes && lgot.minutes === lexp.minutes, 'rewards and time follow the minutes busked (Core.apply): +$' + lexp.rw.cash + ', ' + lexp.rw.minutes + ' min');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
+  // AUTO BUSK: the hero plays by himself, the clock runs twice as fast, smaller pay
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'AUTO BUSK', sub: 'park', bpm: 92, bars: 2, difficulty: 0.2, style: 0, stage: 'cyan', seed: 22, endless: true, auto: true }));
+  ok(await waitGame(page), 'auto busk opens');
+  const au = await page.evaluate(() => { const mg = BBH.Eng.scene.mg; mg.press(0); for (let i = 0; i < 100; i++) mg.tick(0.2); const st = mg.state(); mg.quit(); mg.tick(0.2); return { live: st.live, hits: st.perfect + st.good, phase: mg.state().phase, result: JSON.parse(JSON.stringify(mg.result())) }; });
+  ok(au.live && au.live.auto && au.hits > 10 && au.live.minutes > 50, 'auto busk: the hero hits the notes himself and 20 s pass ' + (au.live && au.live.minutes) + ' game minutes (' + au.hits + ' hits)');
+  const aexp = await page.evaluate(([c0, res]) => { const A = BBH.Core.apply, a = A(JSON.parse(JSON.stringify(c0)), { t: 'perform', kind: 'busk', res }, () => 0.5).fx.find((x) => x.t === 'result').rw, m = A(JSON.parse(JSON.stringify(c0)), { t: 'perform', kind: 'busk', res: Object.assign({}, res, { auto: false }) }, () => 0.5).fx.find((x) => x.t === 'result').rw; return { a, m }; }, [ch0, au.result]);
+  ok(au.phase === 'result' && au.result.auto && aexp.a.cash < aexp.m.cash && aexp.a.cash > 0, 'auto busking pays less than playing it yourself ($' + aexp.a.cash + ' vs $' + aexp.m.cash + ')');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
+  // HARD: eighth-note grooves stay, the tempo drops, and the shaker ticks eighth notes so every gem lands on a tick
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING+', bpm: 100, bars: 2, difficulty: 0.85, style: 1, stage: 'pink', seed: 23 }));
+  ok(await waitGame(page), 'hard busk opens');
+  const hd = await page.evaluate(() => { const mg = BBH.Eng.scene.mg, st = mg.tick(0.1), ck = mg.click && mg.click.state(); const half = st.spb / 2, ns = mg.S.notes; return { bpm: st.bpm, sub: ck && ck.metro && ck.metro.sub, n: ns.length, onTicks: ns.length > 8 && ns.every((n) => Math.abs(n.time / half - Math.round(n.time / half)) < 0.01) }; });
+  ok(hd.bpm === 78 && hd.sub === 2 && hd.onTicks, 'hard busking: 100 bpm -> ' + hd.bpm + ' bpm, the shaker ticks eighth notes (sub ' + hd.sub + ') and every gem sits on a tick');
   await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
 
   // ------------------------------------------------------------------ the other perform kinds and their venues

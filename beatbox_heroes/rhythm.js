@@ -18,7 +18,7 @@
   // MUSIC OFF (TRAINING_PLAN): no scene music, no backing groove. A soft shaker metronome on the chart clock (Audio.gameMode, else a local fallback), aligned to the offset setting.
   const metro = { iv: 0, start(bpm, lead) {
     this.stop(); const A = E.A(), n = A.now ? A.now() : 0, spb = 60 / bpm, off = (E.settings.offset || 0) / 1000; if (!(n > 0)) return null; const t0 = n + (lead === undefined ? 0.2 : lead);
-    if (A.gameMode) { try { A.gameMode(true, { metronome: bpm, start: t0 - off }); } catch (e) { /* ignore */ } return { t0, spb }; }
+    if (A.gameMode) { try { A.gameMode(true, { metronome: bpm, sub: (E.scene && E.scene.sub) || 1, start: t0 - off }); } catch (e) { /* ignore */ } return { t0, spb }; }
     let k = Math.ceil((n - t0 + off) / spb); const pump = () => { const now = A.now(); while (t0 + k * spb - off < now + 0.12) { const w = Math.max(now, t0 + k * spb - off), acc = ((k % 4) + 4) % 4 === 0; k++; try { if (A.shaker) A.shaker(acc, { when: w }); else A.drum(1, { when: w, vel: acc ? 0.3 : 0.17, pitch: 1.7 }); } catch (e) { /* ignore */ } } };
     pump(); this.iv = setInterval(pump, 30); return { t0, spb };
   }, stop() { clearInterval(this.iv); this.iv = 0; try { const A = E.A(); if (A.gameMode) A.gameMode(true, { metronome: 0 }); } catch (e) { /* ignore */ } },
@@ -105,7 +105,7 @@
       const a = this.a, bars = this.battle ? 4 : (a.bars || 8), seed = (a.seed || Date.now() & 0xffff) + this.round * 977;
       this.chart = Core.makeChart(seed, { bars, difficulty: this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty) });
       if (this.battle && this.myStyle) this.chart = Core.styleChart(this.chart, this.myStyle, seed);
-      const bpm = this.battle ? this.opp.bpm : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm;
+      const dF = this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty), bpm = this.battle ? this.opp.bpm : Core.tempoFor ? Core.tempoFor(a.bpm || 100, dF) : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm; this.sub = Core.chartSub ? Core.chartSub(dF) : 1;
       this.hits = []; this.notes = this.chart.map((n) => ({ lane: n.lane, beat: n.beat + 4, state: 0 })); this.combo = 0; this.maxCombo = 0; this.state = 'count'; this.roundStart = E.t;
       this.endBeat = (bars * 4 + 4) + 2; this.score = 0; this.pops.length = 0; this.stateT = 0;
       const g = metro.start(bpm);

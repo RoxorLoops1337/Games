@@ -106,7 +106,7 @@ export function createRhythm(ctx, opts) {
   // ------------------------------------------------------------------ UI
   const api = { press: (l, o) => press(l, o), start: (o) => start(o), quit: (o) => quit(o), toggleMic, hasMic: !!(BBH().Mic && BBH().Mic.open) };
   const ui = buildUI(hudHost, api); ui.resize(hudHost.clientWidth || 540, hudHost.clientHeight || 960); const tui = buildTrainUI(ui);
-  function showStartCard() { ui.showStart({ difficulty: opts.difficulty === undefined ? 0.5 : opts.difficulty }); }
+  function showStartCard() { ui.showStart({ difficulty: opts.difficulty === undefined ? 0.5 : opts.difficulty, endless: !!opts.endless && (opts.mode || 'perform') === 'perform', auto: !!opts.auto }); }
   const venueCam = (name) => { const c = venue && venue.cams && venue.cams[name]; if (!c) return null; return { pos: [c.pos[0], c.pos[1] + vy, c.pos[2]], look: [c.look[0], c.look[1] + vy, c.look[2]], fov: c.fov || 0 }; };
   const shot = (name, blend, hold, sway) => { const c = venueCam(name); return c ? { cam: c, blend: blend || 0, hold: hold || 0, sway: sway === undefined ? 0.5 : sway, name } : null; };
   const busy = () => S.phase === 'vs' || S.phase === 'pick' || S.phase === 'count' || S.phase === 'play' || S.phase === 'opp' || S.phase === 'judge';
@@ -121,7 +121,28 @@ export function createRhythm(ctx, opts) {
     if (S.battle && isArena && opp !== oppOpt) { try { oppChar = venue.setOpponent(opp) || oppChar; } catch (e) { /* ignore */ } }
     S.win = Core.windows(S.stats); try { const a = A(); if (a && a.unlock) a.unlock(); } catch (e) { /* ignore */ }
     if (o.mic && !mic.on) startMic();
+    // CONTINUOUS BUSKING (o.endless, perform only): the set never ends by itself; a new chart is chained before the old one runs out, the day clock runs (o.clockMin + live
+    // minutes), BACK turns into STOP (ends the set with rewards for the time played). AUTO (o.auto): the hero plays it for you (bot), the clock runs faster, less pay
+    S.endless = !!o.endless && S.mode === 'perform' && !S.battle; S.auto = S.endless && !!o.auto; S.liveMin = 0; S.chunk = 0; S.bot = null; ui.setStop(S.endless); ui.setClock(S.endless ? clockText() : null);
+    if (S.auto) { const tech = (S.stats && S.stats.tech) || 10; o.bot = { jitterMs: Math.max(14, 55 - tech * 0.45), missRate: Math.max(0.02, 0.2 - tech * 0.0025) }; }
     if (S.battle) beginVs(); else if (S.mode === 'train') beginTrainEntry(o); else beginRound();
+  }
+  const BL = () => Core.BUSK_LIVE || { minPerSec: 1.5, autoMul: 2 };
+  function clockText() { const m = Math.round((S.cfg && S.cfg.clockMin || 0) + S.liveMin), d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); }
+  // chain the next 8 bars onto the running chart (same clock, same metronome): seamless, as long as the player keeps busking
+  function chainChunk() {
+    S.chunk++; const o = S.cfg, ch = Core.makeChart(S.seed0 + S.chunk * 977, { bars: S.bars, difficulty: S.diff }), base = S.chartEnd, n0 = S.notes.length ? S.notes[S.notes.length - 1].id + 1 : 0;
+    const add = ch.map((n, i) => ({ id: n0 + i, lane: n.lane, beat: n.beat + base, time: (n.beat + base) * S.spb, state: 0 }));
+    const keep = S.T - 3; S.notes = S.notes.filter((n) => !n.state || n.time > keep).concat(add); S.chartEnd += S.bars * 4; S.chainBeat = S.chartEnd - 6; S.endBeat = 1e9;
+    if (S.bot) { const pb = S.bot; planBot(pb._o, add); pb.plan = pb.plan.filter((p) => !p.done).concat(S.bot.plan); S.bot = pb; }
+    void o;
+  }
+  // STOP (or out of energy / time): pay for what was played. Notes that did not reach the ring yet do not count
+  function stopEndless(why) {
+    if (!S.endless || (S.phase !== 'play' && S.phase !== 'count')) return false;
+    if (!S.hits.length) { doQuit(); return true; }
+    if (why === 'tired') ui.toast('Too tired to keep going. Nice set!', 2400); else if (why === 'late') ui.toast('The park is empty. Time to wrap up.', 2400);
+    finishRound(S.hits.length); return true;
   }
   // ---- RHYTHM TRAINING: level select -> LISTEN (the hero plays the pattern once) -> YOUR TURN (count-in) -> 4 bars of gems -> training card
   function beginTrainEntry(o) {
@@ -159,13 +180,13 @@ export function createRhythm(ctx, opts) {
   function beginRound() {
     const o = S.cfg, B = S.battle, TL = S.mode === 'train' ? S.trainL : null, bars = B ? 4 : TL ? TRAIN_BARS : (o.bars || 8), seed = S.seed0 + S.round * 977, diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : TL ? 0.2 + TL.level * 0.08 : (o.difficulty === undefined ? 0.5 : o.difficulty);
     let chart = TL ? trainChart(TL, bars) : Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
-    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : (o.bpm || 100);
+    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : Core.tempoFor ? Core.tempoFor(o.bpm || 100, diff) : (o.bpm || 100), sub = Core.chartSub ? Core.chartSub(diff) : 1;
     S.lead = TL ? 12 : 4; S.cIn = S.lead - 4;                         // training: 4 beats LISTEN count, 4 beats the hero's call, 4 beats YOUR TURN count-in
     S.bpm = bpm; S.spb = 60 / bpm; S.chart = chart; ctx.__bpm = bpm; S.hits = []; S.combo = 0; S.maxCombo = 0; S.score = 0; S.counted = -1; S.beatSeen = -1; S.bars = bars; S.seed = seed; S.diff = diff;
     S.approach = Math.max(1.3, (1500 - Math.min(300, bpm * 2)) / 1000 * 1.1); S.phase = 'count'; S.press = [0, 0, 0, 0]; S.uHit = 0; S.oppView = []; dir.clear(); ui.setMeterName('CROWD');
-    const g0 = click.start({ bpm, offsetMs: S.offset * 1000 }), g = S.manual ? null : g0;          // music off: the shaker metronome gives the audio clock (no backing groove)
+    const g0 = click.start({ bpm, sub, offsetMs: S.offset * 1000 }), g = S.manual ? null : g0;          // music off: the shaker metronome gives the audio clock (no backing groove)
     S.audioClock = !!(g && typeof g.t0 === 'number' && g.spb); S.audioRun = false; S.lastA = 0; if (S.audioClock) { S.t0 = g.t0; S.spb = g.spb; } S.T = S.audioClock ? 0 : -0.4;
-    S.notes = chart.map((n, i) => ({ id: i, lane: n.lane, beat: n.beat + S.lead, time: (n.beat + S.lead) * S.spb, state: 0 })); S.endBeat = bars * 4 + S.lead + 2; hw.setApproach(S.approach, S.spb);
+    S.notes = chart.map((n, i) => ({ id: i, lane: n.lane, beat: n.beat + S.lead, time: (n.beat + S.lead) * S.spb, state: 0 })); S.endBeat = bars * 4 + S.lead + 2; S.chartEnd = bars * 4 + S.lead; S.chainBeat = S.endless ? S.chartEnd - 6 : 1e9; if (S.endless) S.endBeat = 1e9; hw.setApproach(S.approach, S.spb);
     S.call = TL ? TL.notes.map((n, i) => ({ id: 8000 + i, lane: n.lane, step: n.step, time: (4 + n.beat) * S.spb, state: 0, done: false, tint: callTint })) : [];
     if (o.bot || S.bot) { planBot(o.bot || S.bot._o); }
     ui.setScore(0); ui.setCombo(0); fx.clear(); lighting.setMusic(true); mood('neutral');
@@ -173,8 +194,8 @@ export function createRhythm(ctx, opts) {
     else if (TL) { ui.setHeader([]); ui.setMeterName('GROOVE'); tui.showPattern(TL, 'LISTEN'); try { perf.play('beatbox', { bpm, amp: 0.8 }); } catch (e) { /* ignore */ } }
     else { ui.setHeader(o.title ? [{ t: String(o.title).toUpperCase() + (o.sub ? '  -  ' + String(o.sub).toUpperCase() : ''), k: '' }] : []); if (o.tip && S.round === 0) ui.toast('TAP THE LANE AS THE GEMS HIT THE RING', 3200); }
   }
-  function finishRound() {
-    const sum = Core.summarize(S.hits, S.chart.length, S.maxCombo); S.sum = sum; click.stop();
+  function finishRound(total) {
+    const sum = Core.summarize(S.hits, total || S.chart.length, S.maxCombo); S.sum = sum; click.stop();
     const B = S.battle;
     if (B) {
       const t = B.tot; t.perfects += sum.perfect; t.bestCombo = Math.max(t.bestCombo, sum.bestCombo); sum.perfectLane.forEach((v, i) => { t.lane[i] += v; }); t.notes += S.chart.length; t.perfect += sum.perfect; t.good += sum.good; t.miss += sum.miss; t.pts += sum.perfect * 100 + sum.good * 60; t.score = (t.score || 0) + sum.score;
@@ -182,7 +203,8 @@ export function createRhythm(ctx, opts) {
       startOpp(); return;
     }
     if (S.mode === 'train') { finishTrain(sum); return; }
-    const result = Object.assign({}, sum, { game: 'rhythm', grade: sum.rank, hits: sum.perfect + sum.good, maxCombo: sum.bestCombo, difficulty: S.diff, seed: S.seed, bars: S.bars, bpm: S.bpm, mode: S.mode === 'battle' ? 'perform' : S.mode, liveScore: Math.round(S.score) });
+    const result = Object.assign({}, sum, { game: 'rhythm', grade: sum.rank, hits: sum.perfect + sum.good, maxCombo: sum.bestCombo, difficulty: S.diff, seed: S.seed, bars: S.bars, bpm: S.bpm, mode: S.mode === 'battle' ? 'perform' : S.mode, liveScore: Math.round(S.score) }, S.endless ? { minutes: Math.round(S.liveMin), auto: S.auto, sets: S.chunk + 1, endless: true } : {});
+    if (S.endless) { S.endless = false; ui.setStop(false); }
     S.result = result; S.phase = 'result'; S.tPlay = 0; ui.setCombo(0); ui.setHeader([]); dir.clear();
     ui.showResult(result, () => start(Object.assign({}, S.cfg, { seed: S.cfg.seed })), { game, label: S.cfg.title, acts: opts.acts, onContinue: (r) => { if (opts.onContinue) opts.onContinue(r); } });
     sfx(result.grade === 'S' || result.grade === 'A' ? 'win' : 'applause'); const hot = result.grade === 'S' || result.grade === 'A'; celebrate(hot);
@@ -271,6 +293,7 @@ export function createRhythm(ctx, opts) {
   function press(lane, o) {
     o = o || {}; if (lane < 0 || lane > 3) return null; if (S.phase === 'idle' && !o.fromUI) { /* free play pads before the set */ }
     if (S.phase !== 'play' && S.phase !== 'count' && S.phase !== 'idle' && S.phase !== 'opp') return null;
+    if (S.auto && !o.bot && (S.phase === 'play' || S.phase === 'count')) return null;
     if (S.phase === 'opp') { S.press[lane] = 1; ui.padFlash(lane); try { const a = A(); if (a && !o.silent) a.drum(lane, { vel: 0.5 }); } catch (e) { /* ignore */ } return null; }     // pads still tap while the rival plays
     S.press[lane] = 1; if (!o.silent) { try { const a = A(); if (a) a.drum(lane, { vel: 0.9 }); } catch (e) { /* ignore */ } }
     ui.padFlash(lane); performerHit(lane); if (S.phase !== 'play') { fx.burst(laneX(lane), 0.3, HIT_Z, 3, { color: LANES[lane].color, speed: 1.5, up: 1, life: 0.3, size: 0.12 }); return null; }
@@ -321,12 +344,12 @@ export function createRhythm(ctx, opts) {
     press(lane, { silent: true, shift: 0.04 });
   }
   function doQuit() { stopMic(); click.stop(); try { events.emit('minigameQuit'); } catch (e) { /* ignore */ } }
-  function quit(o) { o = o || {}; if (game && busy() && !o.force) { ui.confirmLeave({ onLeave: doQuit }); return false; } doQuit(); return true; }
+  function quit(o) { o = o || {}; if (S.endless && !o.force && stopEndless('stop')) return true; if (game && busy() && !o.force) { ui.confirmLeave({ onLeave: doQuit }); return false; } doQuit(); return true; }
 
   // test bot: plans a press for every note with a gaussian timing error (and picks battle styles by itself)
-  function planBot(b) {
-    b = b || {}; const r = ctx.kit.rng((S.seed || 1) * 31 + 7), jit = b.jitterMs === undefined ? 25 : b.jitterMs, miss = b.missRate || 0, gauss = () => (r() + r() + r() + r() - 2) * 1.2;
-    S.bot = { _o: b, plan: S.notes.map((n) => ({ n, at: n.time + gauss() * jit / 1000 + (b.biasMs || 0) / 1000, skip: r() < miss, done: false })) };
+  function planBot(b, list) {
+    b = b || {}; const r = ctx.kit.rng((S.seed || 1) * 31 + 7 + (list ? S.chunk * 101 : 0)), jit = b.jitterMs === undefined ? 25 : b.jitterMs, miss = b.missRate || 0, gauss = () => (r() + r() + r() + r() - 2) * 1.2;
+    S.bot = { _o: b, plan: (list || S.notes).map((n) => ({ n, at: n.time + gauss() * jit / 1000 + (b.biasMs || 0) / 1000, skip: r() < miss, done: false })) };
   }
 
   // ------------------------------------------------------------------ simulation (clock + rules) and visuals
@@ -347,6 +370,11 @@ export function createRhythm(ctx, opts) {
       if (T >= (S.lead || 4) * S.spb - 0.02) S.phase = 'play';
       if (S.bot) for (const p of S.bot.plan) { if (p.done || p.at > T) continue; p.done = true; if (!p.skip && !p.n.state) press(p.n.lane, { silent: true, bot: true }); }
       for (const n of S.notes) if (!n.state && (T + S.offset - n.time) * 1000 > S.win.good + 20) { n.state = 3; S.hits.push({ lane: n.lane, grade: 'miss' }); breakCombo(); const sp = project(laneX(n.lane), 0.9, HIT_Z); ui.pop('MISS', 'miss', sp[0], sp[1]); }
+      if (S.endless) {
+        S.liveMin += dt * BL().minPerSec * (S.auto ? BL().autoMul : 1); ui.setClock(clockText());
+        if (T / S.spb > S.chainBeat) chainChunk();
+        const mx = S.cfg.maxMinutes; if (mx > 0 && S.liveMin >= mx && S.phase === 'play') stopEndless(S.cfg.maxWhy || 'tired');
+      }
       if (T / S.spb > S.endBeat) finishRound();
     }
   }
@@ -429,7 +457,7 @@ export function createRhythm(ctx, opts) {
   function state() {
     const T = S.phase === 'opp' ? S.oppT : S.T, up = []; for (const n of S.notes) { if (n.state) continue; const d = (n.time - S.T) * 1000; if (d > -400 && up.length < 8) up.push({ lane: n.lane, dtMs: Math.round(d * 10) / 10, id: n.id }); }
     let p = 0, g = 0, m = 0; S.hits.forEach((h) => { if (h.grade === 'perfect') p++; else if (h.grade === 'good') g++; else m++; });
-    return { phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, audio: click.state(), train: S.mode === 'train' ? { level: S.trainL ? S.trainL.level : 0, unlocked: S.prog ? S.prog.unlocked : 1, best: Object.assign({}, S.prog ? S.prog.best : {}), lead: S.lead, callDone: (S.call || []).filter((n) => n.done).length, callTotal: (S.call || []).length } : null, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
+    return { live: S.endless || S.auto ? { endless: !!S.endless, auto: !!S.auto, minutes: +S.liveMin.toFixed(2), chunk: S.chunk, clock: clockText() } : null, phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, audio: click.state(), train: S.mode === 'train' ? { level: S.trainL ? S.trainL.level : 0, unlocked: S.prog ? S.prog.unlocked : 1, best: Object.assign({}, S.prog ? S.prog.best : {}), lead: S.lead, callDone: (S.call || []).filter((n) => n.done).length, callTotal: (S.call || []).length } : null, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
       battle: S.battle ? { opp: S.battle.opp.name, myStyle: S.myStyle, oppStyle: S.oppStyleNow, oppQ: S.oppQ, oppMeter: S.oppMeter, oppNotes: S.oppView.length, oppHit: S.oppView.filter((n) => n.state === 1).length, reveal: S.reveal, tally: Object.assign({}, S.tally), roundQ: S.battle.roundQ.map((r) => ({ q: r.q, style: r.style })), verdict: S.verdict ? { win: !!S.verdict.win } : null } : null };
   }
   function resize(w, h) { W = w; H = h; ui.resize(w, h); lighting.resize(w, h, Math.min(window.devicePixelRatio || 1, 2)); camera.fov = fovFor(w / h); camera.updateProjectionMatrix(); }

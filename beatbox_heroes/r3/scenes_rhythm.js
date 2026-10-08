@@ -50,6 +50,8 @@
         onContinue: (info) => self.cont(info), resolveBattle: (p) => self.resolve(p),
         acts: () => (G.retActs && !self.train ? G.retActs({ only: !!a.final }) : null),       // AGAIN / BACK / CONTINUE on the result and verdict cards (activity.js)
       });
+      // continuous busking: the live clock starts at the real time of day (ch.minutes 0 = 06:00) and the set wraps up before the hero runs out of energy or hits 01:30 (the 02:00 collapse)
+      if (a.endless && mode === 'perform') { const perMin = 12 / 60, eMin = Math.max(15, ((ch.energy || 0) - 3) / perMin), lateMin = Math.max(15, 1170 - (ch.minutes || 0)); Object.assign(args, { endless: true, clockMin: 360 + (ch.minutes || 0), maxMinutes: Math.min(eMin, lateMin), maxWhy: lateMin < eMin ? 'late' : 'tired' }); }
       if (this.train) Object.assign(args, { title: a.title || 'RHYTHM TRAINING', sub: a.sub || 'level ' + (a.level || ((ch.trainLv && ch.trainLv.beat) || 1)), tip: false, progress: this.progress() });
       return R3.load('rhythm', args).then((w) => {
         if (E.scene !== self || !w) return; self.w = w; self.mg = w.game || (w.mini || null); self.ctl = self.mg;
