@@ -35,7 +35,9 @@ import * as mines from './mines';
 import * as mobs from './mobs';
 import * as fishing from './fishing';
 import * as quests from './quests';
+import { tellLessons } from './petlib';
 import * as rift from './rift';
+import * as scholar from './scholar';
 import * as wish from './wish';
 import * as shop from './shop';
 import type { NightEvent } from '../weather';
@@ -368,6 +370,8 @@ export class Sim {
         p.moving = false;
         this.fresh();
         wish.grant(this, p);
+        scholar.grant(this, p);
+        tellLessons(this, p, true);
         mail.onJoin(this, p);
         this.fx('join', p.x, p.y - 8, p.id);
         this.bannerOthers(id, `${p.name} joined`, undefined, PAL.lime);

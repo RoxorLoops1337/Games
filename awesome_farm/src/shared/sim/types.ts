@@ -264,6 +264,7 @@ export interface PlayerS {
     rift?: RiftView;         // the expedition you are on
     boons?: string[];        // boons held for the current expedition
     mail?: Parcel[];         // post waiting in the mailbox: parcels from friends and the morning postcards (sim/mail.ts)
+    lessons?: number;        // XP the farmer's working creatures taught them since the last dawn (or since they were last here): told at dawn and on arrival (sim/petlib.ts)
     wish?: string;           // this season's wish, which blesses every farmer until the season ends (sim/wish.ts, data/wishes.ts)
     fishing?: FishState;     // your line in the water
     line?: { x: number; y: number; ph: 0 | 1 | 2 | 3 };   // what other farmers see of it

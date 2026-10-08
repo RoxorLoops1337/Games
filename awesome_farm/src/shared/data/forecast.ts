@@ -5,7 +5,7 @@
 import { TUNING } from '../config';
 import { PAL } from '../palette';
 import { SEASONS } from '../season';
-import { NIGHT_EVENTS, type DayForecast, type DayPart } from '../weather';
+import { NIGHT_EVENTS, SCHOLAR_DAY, type DayForecast, type DayPart } from '../weather';
 
 /** "in the afternoon": when in the day the rain falls. */
 const WHEN: Record<DayPart, string> = { morning: 'in the morning', afternoon: 'in the afternoon', evening: 'in the evening', night: 'after dark' };
@@ -39,9 +39,11 @@ export const nightIcon = (f: DayForecast) => (f.night === 'bloodmoon' ? 'k_blood
 /** The one small picture over the vane in the world: the most noteworthy thing the day brings. */
 export const vaneIcon = (f: DayForecast) => (f.night === 'bloodmoon' ? 'k_blood' : f.rain ? dayIcon(f) : f.night ? nightIcon(f) : f.fog ? 'k_fog' : 'k_sun');
 
-/** A coloured tag for the nights that matter. */
+/** A coloured tag for the days and nights that matter: a Blood Moon first, then Scholar's Day (the row's words name any other night). */
 export function eventTag (f: DayForecast): { text: string; color: number } | null {
-    return f.night ? { text: NIGHT_EVENTS[f.night].name, color: f.night === 'bloodmoon' ? PAL.berry : f.night === 'meteors' ? PAL.gold : PAL.blossom } : null;
+    if (f.study && f.night !== 'bloodmoon') return { text: SCHOLAR_DAY.name, color: PAL.plum };
+    if (f.night) return { text: NIGHT_EVENTS[f.night].name, color: f.night === 'bloodmoon' ? PAL.berry : f.night === 'meteors' ? PAL.gold : PAL.blossom };
+    return null;
 }
 
 const SOON = (n: number, night = false) => (n === 0 ? (night ? 'tonight' : 'today') : n === 1 ? (night ? 'tomorrow night' : 'tomorrow') : `in ${n} days`);
@@ -53,6 +55,8 @@ const SOON = (n: number, night = false) => (n === 0 ? (night ? 'tonight' : 'toda
 export function forecastHint (list: DayForecast[], clock = 0): string {
     const blood = list.find((f) => f.night === 'bloodmoon');
     if (blood) return `Blood Moon ${SOON(blood.ahead, true)}: stock up on potions and food and keep a fire lit. Its monsters drop double coins.`;
+    const study = list.find((f) => f.study);
+    if (study) return `${SCHOLAR_DAY.name} ${SOON(study.ahead)}: double XP from everything until dawn. Save your XP brews for it: they stack.`;
     const wet = list.find((f) => f.rain && (f.ahead > 0 || clock < f.rain.start + f.rain.len));
     if (wet) return `Rain ${SOON(wet.ahead)}: crops grow up to ${Math.round(TUNING.rainGrow * 100)}% faster while it falls, so plant before it. Koi bite in the rain.`;
     const turn = list.find((f) => f.seasonStart && f.ahead > 0);

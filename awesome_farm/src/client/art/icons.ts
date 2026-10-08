@@ -134,6 +134,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     soup: { shape: 'bowl', mat: ['r', 'p', 'v'] }, cornbread: { shape: 'loaf', mat: ['y', 'w', 'o'], accent: 'b' }, jam: bottle('r', 'p'),
     melon_ice: { shape: 'bowl', mat: ['l', 'w', 'g'] }, spicy_stew: { shape: 'bowl', mat: ['o', 'y', 'r'] },
     potion_vigor: bottle('p', 'w'), potion_night: bottle('v', 'F'),
+    potion_study: bottle('v', 'p'), potion_insight: bottle('v', 'y'), potion_memory: bottle('u', 'v'), potion_kin: bottle('p', 'l'),
     potion_heal: bottle('r', 'p'), potion_energy: bottle('y', 'w'), potion_swift: bottle('F', 'w'),
     pick_flint: { shape: 'pick', mat: MAT.flint }, pick_iron: { shape: 'pick', mat: MAT.iron },
     pick_gold: { shape: 'pick', mat: MAT.gold }, pick_crystal: { shape: 'pick', mat: MAT.crystal },

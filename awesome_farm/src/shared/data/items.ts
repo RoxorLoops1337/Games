@@ -35,6 +35,8 @@ interface ItemDef {
     gear?: GearDef;
     /** Click it in the backpack to open it: a loot crate (the tier) or a message in a bottle. */
     open?: 'wood' | 'silver' | 'gold' | 'mythic' | 'bottle';
+    /** Drink it for XP at once: this share of what the farmer's current level needs (XP boosts count too). */
+    xpPct?: number;
 }
 
 const it = (name: string, kind: ItemKind, sell: number, desc: string, extra: Partial<ItemDef> = {}): ItemDef =>
@@ -204,6 +206,11 @@ export const ITEMS = {
     spicy_stew: it('Spicy Stew',   'food', 24, 'Your ears will ring. Your fists will too.', { food: 50, buff: { id: 'mighty', secs: 180 }, rarity: 2 }),
     potion_vigor: it('Vigor Elixir', 'potion', 26, 'Extra hearts for three minutes.', { buff: { id: 'vigor', secs: 180 }, rarity: 2 }),
     potion_night: it('Owl Brew',    'potion', 28, 'See and strike better in the dark.', { buff: { id: 'nightowl', secs: 150 }, rarity: 2 }),
+    // ── the XP brews ──
+    potion_study:   it("Scholar's Tea",     'potion', 18, '+50% XP from everything for five minutes.', { buff: { id: 'studious', secs: 300 }, rarity: 1 }),
+    potion_insight: it('Elixir of Insight', 'potion', 45, 'Double XP from everything for four minutes.', { buff: { id: 'insight', secs: 240 }, rarity: 2 }),
+    potion_memory:  it('Bottled Memories',  'potion', 60, 'Drink a quarter of a level at once, whatever your level (XP boosts count too).', { xpPct: 0.25, rarity: 3 }),
+    potion_kin:     it('Kinship Tonic',     'potion', 24, 'For five minutes your creatures learn faster and work harder, and you learn more from their work.', { buff: { id: 'kinship', secs: 300 }, rarity: 2 }),
     // ── fishing ──
     rod:        it('Fishing Rod',  'misc', 10, 'Face the water and press Q. Wait for the bite, then pull in time.'),
     rod_fine:   it('Steel Rod',    'misc', 60, 'Quicker bites, more time to react, and better fish.', { rarity: 2 }),
