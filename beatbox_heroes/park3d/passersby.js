@@ -4,7 +4,7 @@
 //   const pb = createPassersby(ctx, terrain, { count, seed, minLen })   terrain.paths = [{ id, w, points:[{x,z}...] }], terrain.heightAt(x, z) optional
 //   pb.group (add to the scene), pb.update(dt, t, playerPos), pb.walkers (debug: { c, path, s, dir, speed, lane, pause }), pb.dispose()
 // Cost: ~3.5k tris and ~3 draws per person (characters.js TRI_BUDGET), so the world picks the count per quality. No em dashes.
-import { THREE } from './kit.js';
+import { THREE, disposeTree } from './kit.js';
 import { createCharacter } from './characters.js';
 import { crowdLook } from './char_cast.js';
 
@@ -70,5 +70,7 @@ export function createPassersby(ctx, terrain, opts) {
       c.update(dt, t);
     }
   }
-  return { group, walkers, update, dispose() { for (const w of walkers) { try { w.c.dispose && w.c.dispose(); } catch (e) { /* ignore */ } } } };
+  // dispose frees the whole tree first (skeleton bone textures, materials): the character's own dispose detaches the object, so the host's
+  // scene-wide disposeTree would never reach it afterwards
+  return { group, walkers, update, dispose() { for (const w of walkers) { try { disposeTree(w.c.object); w.c.dispose && w.c.dispose(); } catch (e) { /* ignore */ } } } };
 }
