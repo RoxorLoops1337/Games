@@ -13,7 +13,7 @@ const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 const watch = process.argv.includes('--watch');
 
@@ -116,6 +116,28 @@ const buildOpts = (target) => ({
   legalComments: 'none',
   logLevel: 'info',
 });
+
+// Awesome Farm is a Vite + TypeScript project with its own package.json (awesome_farm/). The site serves the repo as it
+// is, so its build is kept in git in awesome_farm/play/ (like the mirrored bundles above); awesome_farm/index.html is
+// the Vite source page and forwards there. FARM=1 rebuilds play/ (then commit it); otherwise the committed build is
+// copied, so `npm run check` for the other games never waits for it. Its tests: `npm run test:farm`.
+const FARM = path.join(REPO, 'awesome_farm');
+const buildAwesomeFarm = () => {
+  const play = path.join(FARM, 'play');
+  try {
+    if (process.env.FARM === '1') {
+      execSync('npm ci --include=dev --no-audit --no-fund', { cwd: FARM, stdio: 'inherit' });
+      execSync('npm run build:pages', { cwd: FARM, stdio: 'inherit' });
+      console.log('mirrored        → awesome_farm/play (commit it)');
+    }
+    if (!fs.existsSync(path.join(play, 'index.html'))) { console.log('awesome_farm: no build in awesome_farm/play (FARM=1 makes one)'); return; }
+    fs.cpSync(play, path.join(DIST, 'awesome_farm', 'play'), { recursive: true });
+    fs.copyFileSync(path.join(FARM, 'index.html'), path.join(DIST, 'awesome_farm', 'index.html'));
+    console.log('copied awesome_farm/play → dist/awesome_farm/play');
+  } catch (err) {
+    console.error(`!! awesome_farm did not build (${err.message}); the rest of the site is unaffected`);
+  }
+};
 
 // Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
 // Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
@@ -289,6 +311,7 @@ const minifyClawspire = () => {
   copyStatic();
   writeArtManifest();
   minifyClawspire();
+  buildAwesomeFarm();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));

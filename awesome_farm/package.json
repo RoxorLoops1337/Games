@@ -1,0 +1,37 @@
+{
+  "name": "awesome-farm",
+  "description": "Awesome Farm — co-op island farming for up to 16 friends (Phaser 4 + Vite + TypeScript, Node dedicated server).",
+  "version": "0.5.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --config vite/config.dev.mjs",
+    "build": "tsc && vite build --config vite/config.prod.mjs",
+    "preview": "vite preview --config vite/config.prod.mjs",
+    "typecheck": "tsc && tsc -p server && tsc -p server/cf",
+    "palette": "node scripts/palette-gpl.mjs",
+    "balance": "tsx scripts/balance.ts && tsx scripts/balance-bosses.ts && tsx scripts/balance-hunt.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "server": "tsx server/main.ts --public dist",
+    "build:single": "tsc && node scripts/build-single.mjs",
+    "server:build": "npm run build && node scripts/build-server.mjs",
+    "check": "npm run typecheck && npm test && vite build --config vite/config.prod.mjs",
+    "cf:dev": "npx --yes wrangler@4 dev --config server/cf/wrangler.toml",
+    "cf:deploy": "npx --yes wrangler@4 deploy --config server/cf/wrangler.toml",
+    "build:pages": "vite build --config vite/config.prod.mjs --outDir play --emptyOutDir"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261007.1",
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.25.2",
+    "terser": "^5.39.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.7.2",
+    "vite": "^6.3.1",
+    "ws": "^8.22.0"
+  },
+  "dependencies": {
+    "phaser": "4.0.0"
+  },
+  "private": true
+}

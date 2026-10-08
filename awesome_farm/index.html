@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#2a1d2c" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/style.css">
+    <title>Awesome Farm</title>
+</head>
+
+<body>
+    <div id="app">
+        <div id="game-container"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+    <!-- The games site serves this folder as it is: this source page cannot run there, so it forwards to the build in play/
+         (kept in git; `npm run build:pages`), keeping any ?server= link. Vite (dev) and every built copy skip it. -->
+    <script>
+        if (document.querySelector('script[src="/src/main.ts"]') && !document.querySelector('script[src="/@vite/client"]'))
+            location.replace('play/' + location.search + location.hash);
+    </script>
+</body>
+</html>
