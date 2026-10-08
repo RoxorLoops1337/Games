@@ -9,6 +9,7 @@
     "preview": "vite preview --config vite/config.prod.mjs",
     "typecheck": "tsc && tsc -p server && tsc -p server/cf",
     "palette": "node scripts/palette-gpl.mjs",
+        "wiki": "tsx scripts/wiki.ts --write",
     "balance": "tsx scripts/balance.ts && tsx scripts/balance-bosses.ts && tsx scripts/balance-hunt.ts",
     "test": "tsx --test tests/*.test.ts",
     "server": "tsx server/main.ts --public dist",

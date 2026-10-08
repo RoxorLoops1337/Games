@@ -7,6 +7,7 @@
 import * as Phaser from 'phaser';
 import { GRID } from '../../../shared/config';
 import { BIOMES, BIOME_DEFS, MODS } from '../../../shared/data/biomes';
+import { keyControls, TOUCH_CONTROLS, type ControlGroup } from '../../../shared/data/controls';
 import { PAL } from '../../../shared/palette';
 import { PLAYER_COLORS, derived } from '../../../shared/sim/stats';
 import { saveSettings, settings } from '../../settings';
@@ -30,66 +31,7 @@ const TABS = [
 ] as const;
 type Tab = 'map' | 'farmers' | 'settings' | 'help';
 
-type Row = [string, string];
-interface Group { title: string; rows: Row[] }
-
-/** Built per visit: the move and fishing keys are named after the player's keyboard (ZQSD on AZERTY). Short, so a row is one or two lines. */
-const helpGroups = (): Group[] => [
-    {
-        title: 'Moving and acting', rows: [
-            [`${moveKeys(' ')} / arrows`, 'Move'],
-            ['Space / hold click', 'Harvest, fight, attack'],
-            ['Shift', 'Dash (needs the Dash skill)'],
-            ['E', 'Use a building, buy land; hold to revive a friend'],
-            ['R', 'When you are down: wake up at home now'],
-            ['F', 'Eat the best food'],
-            ['T', 'Throw a taming pod at a wild creature'],
-            [keyLabel('KeyQ'), 'Fishing: cast at water, pull on a bite (needs a rod)'],
-            ['1 – 8 / wheel', 'Hotbar: equip gear, use food and potions, hold a seed or a pod'],
-            ['Right-click', 'Stop placing'],
-        ],
-    },
-    {
-        title: 'Windows, friends and the view', rows: [
-            ['I   C   K   P', 'Backpack (right-click an item to pin it), Crafting, Skills, Creatures'],
-            ['J   B   V   L', 'Journal, Build menu (R rotates, hold X dismantles), Blueprints, Factory view'],
-            ['H', 'How to play: step-by-step guides'],
-            ['M / Esc', 'Map and menu'],
-            ['G, then 1 – 8', 'Emotes'],
-            ['Enter', 'Chat (online worlds)'],
-            ['Middle-click / Alt+click', 'Ping the map for your friends'],
-            ['F2', 'Photo mode: hide the HUD (F2 or Esc to return)'],
-            ['+ / − / Ctrl + wheel', 'Zoom in and out (pinch on a phone)'],
-        ],
-    },
-];
-
-/** The Controls tab on a phone: the buttons and gestures, not the keys. */
-const touchGroups = (): Group[] => [
-    {
-        title: 'Walking and acting', rows: [
-            ['Stick', 'Drag on the lower left of the screen to walk'],
-            ['ACT', 'Hold to harvest, dig and fight'],
-            ['USE', 'Use a building, buy land, help a friend up'],
-            ['EAT', 'Eat the best food you carry'],
-            ['DASH', 'Roll away (needs the Dash skill)'],
-            ['FISH / POD', 'Cast and reel in / throw a taming pod'],
-            ['REMOVE', 'Hold to take down the piece beside you'],
-        ],
-    },
-    {
-        title: 'Windows and gestures', rows: [
-            ['Hotbar', 'Tap a slot: equip, use, or hold a seed or pod'],
-            ['BAG', 'Backpack · hold an item to pin it to the hotbar'],
-            ['BUILD', 'Build menu · tap to aim, tap again to place'],
-            ['TURN / CANCEL', 'Rotate the piece · stop placing'],
-            ['MENU', 'Crafting, Skills, Creatures, Journal, map, guide'],
-            ['Hold an item', 'In lists: the right-click (move one, sell 10)'],
-            ['x1 x10 All', 'Market and chests: how many a tap moves'],
-            ['Two fingers', 'Pinch to zoom the world'],
-        ],
-    },
-];
+type Group = ControlGroup;
 
 // The page: the well all four tabs sit in (window-local), and the columns inside it.
 const PAGE = { x: 16, y: 70, w: 904, h: 386 };
@@ -297,7 +239,7 @@ export class MenuScreen implements Screen {
      */
     private buildHelp () {
         const w = this.win, pane = this.pane, g = pane.g;
-        const groups = isTouchUi() ? touchGroups() : helpGroups();
+        const groups: Group[] = isTouchUi() ? TOUCH_CONTROLS : keyControls(moveKeys(' '), keyLabel('KeyQ'));
         const KEY_W = 128, COL_W = 426, COL_GAP = 16, GAP = 3, TOP = IN_Y + 32, ROOM = PAGE.y + PAGE.h - 36 - TOP;
         const top = fit(11), sizes = [top, 12, 11, 10].filter((z, i, all) => z <= top && all.indexOf(z) === i);
         groups.forEach((grp, ci) => this.heading(IN_X + ci * (COL_W + COL_GAP), IN_Y, COL_W, grp.title));

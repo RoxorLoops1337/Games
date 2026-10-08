@@ -10,7 +10,8 @@ import { hasUnlock } from './stats';
 import type { BuildE, PlayerS, Shop } from './types';
 
 interface Pool { item: ItemId; n: [number, number]; mul: number; minDay: number; w: number }
-const POOL: Pool[] = [
+/** What the travelling trader may bring: how many, the markup on the market price, the first day it can turn up, and how often. */
+export const TRADER_POOL: Pool[] = [
     { item: 'seed_wheat', n: [8, 20], mul: 2.5, minDay: 1, w: 8 }, { item: 'seed_carrot', n: [6, 16], mul: 2.5, minDay: 1, w: 8 },
     { item: 'seed_pumpkin', n: [4, 10], mul: 3, minDay: 2, w: 6 }, { item: 'seed_melon', n: [3, 8], mul: 3, minDay: 3, w: 5 }, { item: 'seed_pepper', n: [4, 10], mul: 2.6, minDay: 2, w: 5 }, { item: 'seed_flax', n: [4, 10], mul: 2.6, minDay: 2, w: 5 }, { item: 'seed_cotton', n: [4, 10], mul: 3, minDay: 2, w: 6 },
     { item: 'pod', n: [4, 10], mul: 2.4, minDay: 1, w: 8 }, { item: 'pod_great', n: [2, 5], mul: 2.4, minDay: 4, w: 5 }, { item: 'pod_ultra', n: [1, 2], mul: 2.4, minDay: 10, w: 2 },
@@ -25,7 +26,7 @@ const POOL: Pool[] = [
 /** Stock for a given day: the same on every server restart. */
 export function stockFor (seed: string, day: number): Shop {
     const rng = new Rng(`${seed}:shop:${day}`);
-    const pool = POOL.filter((p) => p.minDay <= day);
+    const pool = TRADER_POOL.filter((p) => p.minDay <= day);
     const chosen = new Set<Pool>();
     while (chosen.size < Math.min(9, pool.length)) {
         const weights = Object.fromEntries(pool.map((p, i) => [i, chosen.has(p) ? 0 : p.w]));

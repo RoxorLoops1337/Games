@@ -18,6 +18,14 @@ import type { Screen, ScreenCtx } from './types';
 /** Only shown on a phone: what the round buttons stand for. */
 const TOUCH_TIP = 'On a phone: ACT = Space (harvest, fight), USE = E, EAT = F, FISH = Q, POD = T, TURN = R, REMOVE = hold X, DASH = Shift. BAG and BUILD open those windows; MENU has all the others (Crafting, Skills, Creatures, Journal, map).';
 
+/** The player wiki: every item, recipe, building, skill, creature and monster on one page (scripts/wiki.ts writes it). */
+export const WIKI_URL = 'https://games-71g.pages.dev/awesome_farm/wiki/';
+/** Opens the wiki in a new tab: beside the game when it is served from the games site, else the site's own copy. */
+function openWiki () {
+    const here = typeof location !== 'undefined' && /\/awesome_farm\//.test(location.pathname);
+    window.open(here ? new URL('../wiki/', location.href).href : WIKI_URL, '_blank', 'noopener');
+}
+
 const subst = (s: Say) => guideText(s, isTouchUi(), { move: moveKeys(), fish: keyLabel('KeyQ') });
 
 /** The Tips page is not in the shared guide data: what it holds depends on what this browser has seen. */
@@ -59,7 +67,8 @@ export class GuideScreen implements Screen {
         if (touch) this.search.el.style.height = '34px';       // (a finger needs a taller field)
         footButton(w, 'right', 200, 'Back to the game', () => ctx.close(), { style: STYLES.gold });
         footButton(w, 'left', 176, 'Replay tutorial', () => { tutorialApi.replay(); ctx.close(); }, { style: STYLES.lime });
-        footHint(w, w.w / 2, 380, true).setText(deviceText('Up / Down: next topic\nPress / to search', 'Tap a topic to read it\nDrag the list to scroll'));
+        footButton(w, 'left', 150, 'Open the wiki', openWiki, { style: STYLES.dark, ink: false, offset: 184 });
+        footHint(w, (16 + 184 + 150 + w.w - 16 - 200) / 2, 320, true).setText(deviceText('Up / Down: next topic\nPress / to search', 'Tap a topic to read it\nDrag the list to scroll'));
         const want = (arg as { topic?: string } | undefined)?.topic;
         const at = want ? TOPICS.findIndex((t) => t.id === want) : -1;
         this.cur = at >= 0 ? at : 0;
