@@ -1,0 +1,8 @@
+{
+  "enabledPlugins": {
+    "legal@synced": false,
+    "finance@synced": false,
+    "marketing@synced": false,
+    "cowork-plugin-management@synced": false
+  }
+}

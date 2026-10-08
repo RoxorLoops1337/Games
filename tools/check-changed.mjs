@@ -12,7 +12,7 @@
 //   functions/api/<x>.js     the suite for that endpoint (FUNCTION_SUITES)
 //   tools/<dir>/...          the suite that uses that tool (TOOL_SUITES, or the
 //                            game of the same name, or a suite importing it)
-//   root *.md, docs/, awesome_farm/   nothing (docs; Awesome Farm has its own check)
+//   root *.md, docs/, .claude/, .gitignore, awesome_farm/   nothing (docs; Awesome Farm has its own check)
 // Anything it cannot place (build.js, package.json, an unmapped folder, a new
 // game) falls back to the FULL check. Unknown means "run everything", never
 // "run nothing", so a gap in the map costs time, not safety.
@@ -143,7 +143,7 @@ function plan(files) {
   const why = [];
   for (const f of files) {
     const [top, ...rest] = f.split('/');
-    if ((!rest.length && f.endsWith('.md')) || top === 'docs') continue;
+    if ((!rest.length && f.endsWith('.md')) || top === 'docs' || top === '.claude' || f === '.gitignore') continue;
     if (top === 'awesome_farm' || NO_SUITE.includes(top)) continue;
     if (GAME_SUITES[top]) { GAME_SUITES[top].forEach((s) => suites.add(s)); continue; }
     if (top === 'functions' && FUNCTION_SUITES[rest.at(-1)]) {
