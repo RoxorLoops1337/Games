@@ -179,9 +179,12 @@ const copyStatic = () => {
     const src = path.join(REPO, rel);
     if (!fs.existsSync(src)) continue;
     const dst = path.join(DIST, rel);
-    const skip = SKIP_IN_DIST[rel];
-    const opts = { recursive: true };
-    if (skip) opts.filter = (p) => !skip.has(path.relative(src, p).split(path.sep).join('/'));
+    const skip = SKIP_IN_DIST[rel] || new Set();
+    // A game's CLAUDE.md is notes for coding sessions, never part of the site.
+    const opts = { recursive: true, filter: (p) => {
+      const r = path.relative(src, p).split(path.sep).join('/');
+      return !skip.has(r) && r !== 'CLAUDE.md';
+    } };
     fs.cpSync(src, dst, opts);
   }
   console.log(`copied ${STATIC_PATHS.length} static paths → dist/`);

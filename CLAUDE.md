@@ -1,93 +1,52 @@
 Workflow:
 - After committing + pushing to the feature branch, always create the PR (draft), then mark it ready and squash-merge to main without asking. Skip the "want me to merge?" question.
-- Before EVERY push: run `npm run check` (build + all test suites). If it fails, fix it before pushing — never push red.
+- Before EVERY push: run `npm run check:changed` (build + the test suites of the games you changed). If it fails, fix it before pushing. Never push red.
 - Commit messages end with the session link the harness provides. Never put a model identifier in commits/PRs.
 
 Reply formatting:
-- When working on No Room For Heroes, paste these links at the bottom of every reply:
-  Play: https://games-71g.pages.dev/no_room_for_heroes/
-  Align tool: https://games-71g.pages.dev/no_room_for_heroes/align.html
-  Music player: https://games-71g.pages.dev/no_room_for_heroes/music.html
-  Goblin sandbox: https://games-71g.pages.dev/no_room_for_heroes/sandbox.html
-- For other games: `https://games-71g.pages.dev/<folder>/`.
+- Each game's link is `https://games-71g.pages.dev/<folder>/`. Some games have their own `CLAUDE.md` with extra links (No Room For Heroes does).
 
 # Repo map (read this before touching anything)
 
-- **The main game is `no_room_for_heroes/index.html`** — ONE file: markup + CSS + a single big `<script>`. No framework, vanilla canvas + DOM overlays. ~6k lines.
-- `no_room_for_heroes/align.html` — standalone art-alignment tool (exports `rooms/layout.json`).
-- `no_room_for_heroes/music.html` — standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
-- `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
-- `build.js` — copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
-- `awesome_farm/` — Awesome Farm, a Vite + TypeScript game with its own `package.json`, `CLAUDE.md` and `npm run check` (run them inside that folder). The site serves the repo as it is (no build on Pages), so its build is committed in `awesome_farm/play/` (served at `/awesome_farm/play/`; `/awesome_farm/` forwards there): after changing the game run `npm run build:pages` in that folder (or `FARM=1 node build.js`) and commit `play/`. Its tests are not in the root `check` (`npm run test:farm` runs them). Its always-on world is a separate Cloudflare Worker (`awesome_farm/server/cf/`, deployed by hand, never by Pages).
-- `tests/no_room_for_heroes_*.test.mjs` — 12 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). The `tutorial` suite drives the whole guided run beat-by-beat. Write new tests with it; never create throwaway harnesses outside `tests/`.
-- `HANDOVER_NO_ROOM_FOR_HEROES.md` — deeper architecture notes (G state object, phases, combat flow, balance history).
+- One folder per game, served as-is at `/<folder>/`. Game-specific notes live in that game's own `CLAUDE.md` (`no_room_for_heroes/CLAUDE.md`, `awesome_farm/CLAUDE.md`), which load only when you work in that folder.
+- `build.js`: copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
+- `functions/api/*.js`: Cloudflare Pages Functions (leaderboards + cloud saves, KV binding `BOARD`).
+- `tests/<game>_*.test.mjs`: headless suites, one `test:<name>` npm script per game. Write new tests there; never create throwaway harnesses outside `tests/`.
+- `awesome_farm/`: Awesome Farm, a Vite + TypeScript game with its own `package.json`, `CLAUDE.md` and `npm run check` (run them inside that folder). The site serves the repo as it is (no build on Pages), so its build is committed in `awesome_farm/play/` (served at `/awesome_farm/play/`; `/awesome_farm/` forwards there): after changing the game run `npm run build:pages` in that folder (or `FARM=1 node build.js`) and commit `play/`. Its tests are not in the root `check` (`npm run test:farm` runs them). Its always-on world is a separate Cloudflare Worker (`awesome_farm/server/cf/`, deployed by hand, never by Pages).
 
-# Verify with ONE command
+# Verify
 
-    npm run check        # build + all 12 suites — must be green before every push
+    npm run check:changed   # build + only the suites for the games this branch changed (before every push)
+    npm run check           # build + every suite (~7.5 min), run on demand
+    npm run check:changed -- --dry   # just print which suites it would run
 
-# SMALL-CHANGE PROTOCOL (for budget-model sessions)
-
-You may be a lower-cost model session doing small tasks. Follow these rules strictly:
-
-**You may freely change:** text/copy, CSS, button labels, colors, emoji, layout.json values,
-README files, single-constant balance tweaks (see the dials table below), adding a music
-track to a mood slot, asset filenames/paths, small additions to align.html.
-
-**ESCALATE instead of changing (tell the user "this needs the main session") if the task touches:**
-- camera/zoom math (`frameWave`, `frameWaveRun`, `minCam`, `zMin`, the follow block in `update`) — it has subtle zoom-aware clamps that broke three times
-- the save system (`localStorage` keys `bm_*`/`bossmonster_*`, `loadRunes/loadTown/saveTown`) or the cloud functions — data loss risk
-- `simStep` / combat resolution / `heroDies` / wave spawning
-- the music sequencer (`mtTone/musicTick`) or the composer in music.html
-- anything requiring >~60 changed lines in index.html
+`check:changed` diffs against origin/main and maps each changed file to its game's suites
+(`tools/check-changed.mjs`). Changes to shared files (`build.js`, `package.json`, root
+`index.html`, an unmapped folder) automatically run the FULL check. When you add a new game
+with tests, add its folder and `test:` scripts to `GAME_SUITES` in that file, and add the
+`test:` script to `check` in `package.json`.
 
 **Hard rules for every session, every size:**
-1. `npm run check` green before push — but the bar is YOUR work, not the whole repo.
-   If a suite fails in a game you did NOT touch:
-   - do not go and fix it. `check` runs every game, so one red suite elsewhere must
-     never turn a small change into a patch to a different codebase. Staying out is
-     the right call even when the fix looks easy.
+1. Green before push, but the bar is YOUR work, not the whole repo.
+   If a suite fails in a game you did NOT touch (only possible when the full check runs):
+   - do not go and fix it. One red suite elsewhere must never turn a small change into a
+     patch to a different codebase. Staying out is the right call even when the fix looks easy.
    - re-run that one suite by itself first. Several are randomised (grimhold and
      dungeon_pusher build boards from a fresh seed each run) and fail on maybe one
      board in five, so a single red run proves nothing.
-   - if it still fails: push your own work anyway and SAY SO in the reply — name the
+   - if it still fails: push your own work anyway and SAY SO in the reply: name the
      game and the assertion. Whether it gets fixed is the owner's call, not yours.
    If the failure is in a game you DID touch, it is yours: fix it or STOP and report.
 2. After any merge of origin/main into the branch, RE-GREP for the feature you just added
    (squash-merges resurrect old code; resolve conflicts by keeping HEAD, then verify).
-   Known zombie to grep for and kill: `awardTownResources` must have 0 hits in index.html.
-3. Never rename `localStorage` keys, KV keys, or the `no_room_for_heroes/` folder.
-4. Cloudflare KV: `expirationTtl` must be ≥ 60 — smaller values throw and 500 the request.
-5. The art system is graceful-fallback everywhere: missing art must never break the game.
-
-# Art pipeline (owner uploads, code auto-detects)
-
-- Frame sequences accept BOTH namings: `<id>_0.png,_1…` and `<id>_01.png,_02…` (and static `<id>.png`).
-- Standard room: `rooms/empty.png` (+ `rooms/empty_broken.png` after champion smash).
-- Trap overlays: `rooms/traps/<id>*.png` — strike animation synced to firing (up ~0.11s, down ~0.48s); `TRAP_ANIM` marks loopers (venom). Flame = 1 column duplicated ×4, ignites left→right (70ms cascade). Animated art exists for: spike, flame, venom(poison1/2), maul, arrow, frost, gallows, hexward, tesla. Per-trap z-order + positions in `LAYOUT.traps` / `rooms/layout.json`.
-- Candle flames: `rooms/fx/candle_*.png`, loop ~9fps.
-- Positions/sizes/layers/lights ALL come from `rooms/layout.json` (made with align.html). Don't hand-tune draw positions in code — fix the layout or the align tool.
-- Lights: `LAYOUT.lights` {attach, fx, fy, r, a} — candle flicker / flame heat / venom vapor, additive glows.
-- Champion death anim: `sprites/champion/death/champion_death_*.png`, plays once, holds last frame.
-- Per-frame monster guards (orc, harpy, sentinel, mimic, minion): `sprites/<key>/<key>_<clip>_01.png` (or `_0`), configured in `MON_SPRITES` with `frames:true` (`s`, `ax`, `ay`, `fps`, `pp`, `once`), regenerated from the owner uploads with `tools/art/monster_frames.py`. The mimic draws `disguise:'chest'` until `g.ambushDone`, then plays `transform` once. Corrupted guards wear the Edrik/Vesna LPC skins (`corruptLookKey`), the painted demon once the room has 3 kills (`CORRUPT_DEMON_KILLS`).
-
-# Balance dials (single-constant tweaks, safe for small sessions)
-
-- Fed monster growth: `feedMul(k)=1+0.30*ln(1+0.10k)` (uncapped, diminishing)
-- Rune income: `/8` in `awardRunes`; resources: wood `*0.05`, stone `*0.025`, shards `/8` in `pendingResources`
-- Campaign difficulty: the `0.034` term in `difficulty()`
-- Trap strike timing: `TRAP_RISE=110`, `TRAP_FALL=480`; flame cascade `70`ms; candle loop `110`ms
-- Music volume under SFX: `MUSIC_SCALE=0.55`
-- Rooms (slot model): `cap` slots (1→`MAX_SLOTS=5`, +1 per gold `upgradeRoomGold`), `room.units[]` = mix of traps (≤`MAX_TRAPS=2`; stack the same trap to raise its `lvl`≤`MAX_LEVEL=5`) + monsters (stack as independent guards in `cell.guards[]`; veteran from `room.kills`). Named fusions and room-merge-on-drag are REMOVED; curated trap-PAIR synergies (`SYNERGIES`, 102 pairs, 7 types, each with an overlay in `rooms/synergies/`) are live.
-- Stacked traps: `TRAP_STACK_MUL=[1,0.8,0.6]` (2nd trap hits ×0.8 — only ≤2 traps per room now, so the ×0.6 slot is unused)
-- Den goblins: `GOBLIN_HP_FRAC=0.55`, hero retaliation `*0.4` in `goblinStep`, `GOBLIN_SPD=50`, cap `GOBLIN_DEN_CAP=20`
-- Hero CC resistance (tames the freeze+oil/Inferno lock): `statusResist(h)` = level ramp `(lvl-1)*0.010` cap `0.45`, +`0.25` champion/+`0.10` elite, +`0.28` Wizard ward (`wardT`); scales freeze/oil/chill/shock duration via `ccDur`. `FREEZE_IMMUNE=3`s post-thaw no-refreeze window; `BURN_CAP=22` caps stacked burn (`addBurn`). Cleric cleanse + Mage `wardT` in `heroSpellTick`. Covered by `tests/no_room_for_heroes_balance.test.mjs`.
+3. Never rename `localStorage` keys, KV keys, or game folders (they are live URLs and save data).
+4. Cloudflare KV: `expirationTtl` must be ≥ 60. Smaller values throw and 500 the request.
 
 # Deploy & infra
 
 - Merge to main → Cloudflare Pages auto-builds `dist/` (~1 min). `_redirects` handles the old `/boss_monster/*` path.
 - GitHub via `mcp__github__*` tools only (no gh CLI), scope `roxorloops1337/games`. Token can expire mid-session: commit+push anyway, PR when it recovers.
-- Merge conflicts with origin/main after squash-merges are NORMAL. Resolve keeping HEAD (your branch), re-run `npm run check`, re-grep your feature.
+- Merge conflicts with origin/main after squash-merges are NORMAL. Resolve keeping HEAD (your branch), re-run `npm run check:changed`, re-grep your feature.
 
 # Generating pixel-art assets (local ComfyUI)
 
@@ -99,14 +58,13 @@ drawing by hand or reaching for a cloud service. Run from the repo root:
 
 - Auto-appends pixel-art style cues, renders on the local ComfyUI (SDXL + Pixel Art XL),
   pixelates (downscale + palette + transparent bg), and writes `assets/<name>.png`.
-  Move the finished sprite into the game's art folders (`no_room_for_heroes/sprites/…`,
-  `rooms/…`) and wire it like the other art.
+  Move the finished sprite into the game's art folder and wire it like the other art.
 - Default size 64; `--size 96` for more detail. Default palette is true color; pass
   `--palette tools/comfyui/palettes/pico-8.gpl` for a stylized 16-color look.
 - `/sprite <subject>` is the slash-command shortcut (`.claude/commands/sprite.md`).
 - One-time: `pip install pillow numpy`; verify with `python tools/comfyui/make_sprite.py --check`.
 - Better models / quality knobs: see `tools/comfyui/README.md`.
 - **REQUIRES a reachable local ComfyUI** (default `127.0.0.1:8000`). This works from
-  Claude Code running on the owner's machine — NOT from cloud/web sessions, whose
+  Claude Code running on the owner's machine, NOT from cloud/web sessions, whose
   container can't reach the local ComfyUI. The pixelate half (`pixelate.py`) runs
   anywhere `pillow`+`numpy` are installed.
