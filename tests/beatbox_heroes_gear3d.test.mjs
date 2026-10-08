@@ -95,6 +95,14 @@ if (fails.sunkAt) console.log('first sunk', fails.sunkAt[0]); delete fails.sunkA
 report('built', 'every glasses id builds over every hair and hat'); report('sunk', 'no glasses vertex sinks into the face (lenses, frames, visors, bars, patches)');
 report('lens', 'lenses sit 12..45 mm in front of the eyes on both sides'); report('temple', 'temples reach back to the ears on both sides');
 report('strap', 'goggle, VR and eyepatch straps run round the back of the head over the hair and hat'); report('float', 'no glasses part floats free of the head');
+// one-eyed pieces sit on the eye the 2D sprite puts them on (chars_acc.js): the eyepatch on the character's right eye (-x), the monocle on the left (+x), the monocle cord down that side to that ear
+for (const [hs, hat] of [['crop', 'none'], ['long', 'beanie'], ['afro', 'cap'], ['bald', 'hood']]) for (const [id, sx] of [['eyepatch', -1], ['monocle', 1]]) {
+  const G = build(base({ body: BODIES[looks % 3], hair: { style: hs }, hat: { id: hat }, glasses: { id, color: '#17141f' } })), P = G.P; let sx0 = 0, n = 0, cordX = 0, cn = 0;
+  for (const t of G.gear('glasses')) for (let k = 0; k < 3; k++) { const p = V(P, t, k); if (p[2] > 0.2 && Math.abs(p[1] - HY - EY) < 0.06) { sx0 += p[0]; n++; } if (id === 'monocle' && p[1] - HY < 0.22 && p[2] < 0.15) { cordX += p[0]; cn++; } }
+  if (!n || Math.sign(sx0 / n) !== sx || Math.abs(sx0 / n) < 0.06) fail('side', id + ' ' + hs + '/' + hat + ' mean x ' + (n ? (sx0 / n).toFixed(3) : 'none'));
+  if (id === 'monocle' && (!cn || Math.sign(cordX / cn) !== sx)) fail('side', 'monocle cord ' + hs + '/' + hat + ' x ' + (cn ? (cordX / cn).toFixed(3) : 'none'));
+}
+report('side', 'the eyepatch covers the right eye and the monocle the left, as in 2D, the monocle cord on its own side');
 
 // ------------------------------------------------------------------ 2. accessories per slot over bodies, tops, hair and hats
 const TOPS = ['tee', 'hoodie', 'jacket', 'puffer', 'turtleneck', 'tank', 'hoodiebig', 'dress', 'jersey', 'croptop', 'overalls', 'poncho'];
