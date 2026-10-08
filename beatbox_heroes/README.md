@@ -59,6 +59,7 @@ Design notes and module contracts: `DESIGN.md`. Tests: `tests/beatbox_heroes_*.t
 * **Beat Maker** (16 step sequencer, 4 slots): build patterns, train Originality, and RELEASE songs that pay fans for 7 days (3 at a time).
 * **Sound Recorder** (Sound Lab): record your own B, T, K and Pf sounds. They replace the synth drums everywhere and train the mic detector. Stored per save slot in IndexedDB.
 * **Crew** (bar counter), **Livestream** (desk at home), **private coaching** with BeeAmGee, odd jobs, beatbox tapes on the couch, a hood map and a full flat.
+* **The park JAM and BeeAmGee's arc**: the cypher meets every afternoon (12:00 to 18:00, from day 2); BeeAmGee is not in the park at the start, he watches you from the back of the cypher and meets you on his bench the next day. Pig Pen and a famous beatboxer crash later jams. See `STORY_PLAN.md`.
 
 ## Still to come
 

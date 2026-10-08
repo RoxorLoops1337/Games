@@ -17,7 +17,17 @@
   const jobRow = (S, id) => { const j = Core.JOBS.find((x) => x.id === id); return S.row(('ODD JOB: ' + j.name).toUpperCase() + '  ' + j.minutes + ' min', 'Safe pay: $' + j.cash + (j.fans ? ' and ' + j.fans + ' fans' : '') + '. Costs ' + j.energy + ' energy.', G.ch.energy < j.energy ? 'dis' : 'green', () => { S.closeSheet(); G.do({ t: 'job', job: id }); }); };
   // the first-run street dialog (Foxy), shared by the 2D street and its 3D sibling (r3/scenes_world.js)
   const tutorialLines = () => [{ who: 'foxy', mood: 'happy', text: 'Welcome to the neighbourhood! You just lost your job, so here is how we fix that.' }, { who: 'foxy', text: 'Tap a door to walk there. The PARK is open all day. Go busk: play beats for tip money and fans.' }, { who: 'foxy', text: 'Watch the bars at the top: energy, hunger and mood. And rent is $' + Core.CFG.rent + ' every Sunday, so earn some cash.' }];
-  const tip = (who) => { const arr = TIPS[who], k = 'tip_' + who, i = (G.ch.flags[k] || 0) % arr.length; G.do({ t: 'flag', k, v: i + 1 }); return arr[i]; };
+  // every other tip is a story line when the story has one (Core.storyTip: Foxy nudges you to the jam, Beatbox Story FOXY_TIPS)
+  const tip = (who) => { const arr = TIPS[who], k = 'tip_' + who, i = (G.ch.flags[k] || 0); G.do({ t: 'flag', k, v: i + 1 }); const st = i % 2 === 0 && Core.storyTip ? Core.storyTip(G.ch, who, i >> 1) : null; return st || arr[i % arr.length]; };
+  // the park JAM in 2D (scene pixels): the hotspot in the open grass below the bench, where the hero stands in the circle, and the cypher around it
+  const JAM2D = { hot: { id: 'jam', label: 'The jam', x: 20, y: 548, w: 150, h: 88 }, spot: { x: 94, y: 620 }, ring: [[30, 604, 'beatbox'], [58, 590, 'dance'], [94, 584, 'beatbox'], [130, 590, 'dance'], [158, 604, 'idle']] };
+  // the park scene for one visit: the cached World scene plus the jam spot, and the jam hotspot only while the jam is on
+  const parkScene = (sc) => {
+    if (!sc) return sc; const base = sc.hotspots || [], o = Object.create(sc);
+    Object.defineProperty(o, 'spots', { value: Object.assign({}, sc.spots, { jam: JAM2D.spot }), enumerable: true });
+    Object.defineProperty(o, 'hotspots', { get: () => (G.ch && Core.jamOn(G.ch) ? base.concat([JAM2D.hot]) : base), enumerable: true });
+    return o;
+  };
 
   const variantFor = (id, ch) => {
     const n = Core.nightness(ch.minutes);
@@ -101,14 +111,14 @@
   };
 
   /* ---------------------------------------------------------------- places */
-  const SPOT_FOR = { booth: 'booth', couch: 'couch', bed: 'bed', desk: 'desk', kitchen: 'kitchen', wardrobe: 'wardrobe', spot: 'busk', bench: 'bench', stage: 'stage', counter: 'rohzel', mic: 'stand', mixer: 'stand', hats: 'stand', racks: 'stand', mirror: 'stand', door: 'stand', gate: 'stand' };
+  const SPOT_FOR = { jam: 'jam', booth: 'booth', couch: 'couch', bed: 'bed', desk: 'desk', kitchen: 'kitchen', wardrobe: 'wardrobe', spot: 'busk', bench: 'bench', stage: 'stage', counter: 'rohzel', mic: 'stand', mixer: 'stand', hats: 'stand', racks: 'stand', mirror: 'stand', door: 'stand', gate: 'stand' };
 
   E.scenes.place = {
     enter(a) {
       this.id = a.id; this.look = BBH.Chars.fix(G.ch.look); this.sheetEl = null; this.walkQueue = null; this.dir = 1; this.moving = false; this.lastHot = null;
       const ret = G.takeReturn ? G.takeReturn(a.id, a) : null;          // activity.js: back from an activity = standing at its hotspot, BACK reopens its menu
       const go = () => {
-        this.v = variantFor(this.id, G.ch); this.sc = world(this.id, this.v);
+        this.v = variantFor(this.id, G.ch); this.sc = world(this.id, this.v); if (this.id === 'park') this.sc = parkScene(this.sc);
         const st = (this.sc && this.sc.spots && this.sc.spots.stand) || { x: 180, y: 533 }; this.hx = st.x; this.hy = st.y; this.path = [];
         if (ret) this.landAt(ret);
         E.music(this.id); this.build(); this.firstVisit();
@@ -128,14 +138,19 @@
       E.add(E.btn('LEAVE', '', () => this.leave2(), { position: 'absolute', left: '4px', top: '43px', width: '44px', height: '17px', padding: '5px 0', fontSize: '5px' }));
     },
     leave2() { this.closeSheet(); if (this.id === 'home' && false) return; G.leavePlace(); },
+    // the arrival dialog: the first-visit lines, then any story beat (queued after an activity, or waiting here: BeeAmGee on his bench), as one dialog
     firstVisit() {
-      const f = G.ch.flags, key = 'visited_' + this.id; if (f[key]) return; G.do({ t: 'flag', k: key });
+      const f = G.ch.flags, key = 'visited_' + this.id, first = !f[key]; if (first) G.do({ t: 'flag', k: key });
+      const lines = (first ? this.firstLines() : []).concat(G.takeStory ? G.takeStory(this.id) : []);
+      if (lines.length) E.dialog(lines, () => { if (G.storyDone) G.storyDone(); }); else if (G.storyDone) G.storyDone();
+    },
+    firstLines() {
       const lines = { home: [{ who: 'foxy', text: 'This is our flat. Sleep in the bedroom, eat in the kitchen, and practise in the vocal booth to train your skills.' }],
-        park: [{ who: 'beeamgee', text: 'I am BeeAmGee. I teach beatboxing. Tap the busking spot to play a set for tips. Sit with me on the bench for a free lesson.' }],
+        park: [{ name: 'The Park', text: 'The park. Tap the busking spot to play a set for tips and fans. The bench is good for a rest. In the afternoon the local beatboxers meet for a jam by the graffiti wall.' }],
         shop: [{ name: 'Clerk', look: CLERK, text: 'Welcome to the Thrift Shop. Buy clothes, hats and shades with your cash. Tap an item to try it on first.' }],
         studio: [{ name: 'Sound Lab', text: 'The Sound Lab costs $' + Core.STUDIO_FEE + ' per session, but you train faster here than at home. The jukebox plays the game music.' }],
         bar: [{ who: 'rohzel', text: 'I am Rohzel and I run the bar. Tue to Thu: open mic. Friday: paid showcase. Saturday: battles. Sunday: karaoke. Monday: closed.' }] }[this.id];
-      if (lines) E.dialog(lines);
+      return lines || [];
     },
     // ------------------------------------------------------------ sheets
     closeSheet() { if (this.sheetEl) { this.sheetEl.remove(); this.sheetEl = null; } },
@@ -197,11 +212,18 @@
     npcs() {
       const sp = (this.sc && this.sc.spots) || {}, out = [], hr = Core.hourOf(G.ch.minutes);
       if (this.id === 'home' && sp.foxy && (hr < 11 || hr > 17)) out.push({ look: BBH.Chars.fix(Core.NPCS.foxy.look), x: sp.foxy.x, y: sp.foxy.y, id: 'foxy', pose: hr > 21 ? 'sit' : 'idle', flip: sp.foxy.x > this.hx });
-      if (this.id === 'park' && sp.beeamgee) out.push({ look: BBH.Chars.fix(Core.NPCS.beeamgee.look), x: sp.beeamgee.x, y: sp.beeamgee.y, id: 'beeamgee', pose: 'sit', flip: false });
+      if (this.id === 'park' && sp.beeamgee && Core.bmgHere(G.ch)) out.push({ look: BBH.Chars.fix(Core.NPCS.beeamgee.look), x: sp.beeamgee.x, y: sp.beeamgee.y, id: 'beeamgee', pose: 'sit', flip: false });
       if (this.id === 'bar' && sp.rohzel) out.push({ look: BBH.Chars.fix(Core.NPCS.rohzel.look), x: sp.rohzel.x, y: sp.rohzel.y, id: 'rohzel', pose: 'idle', flip: false });
       if (this.id === 'shop' && sp.clerk) out.push({ look: BBH.Chars.fix(CLERK), x: sp.clerk.x, y: sp.clerk.y, id: 'clerk', pose: 'idle', flip: false });
       if (this.id === 'bar') for (const r of this.regulars()) out.push(r);
+      if (this.id === 'park' && Core.jamOn(G.ch)) for (const r of this.cypher()) out.push(r);
       return out;
+    },
+    // the jam circle: five regulars of the day, beatboxing and dancing around the spot where you step in
+    cypher() {
+      if (this._cy && this._cyDay === G.ch.day) return this._cy; this._cyDay = G.ch.day;
+      const pool = Core.ROMANCE.slice(), r = BBH.rng(G.ch.day * 57 + 3), picks = []; while (picks.length < JAM2D.ring.length) picks.push(pool.splice(r.int(pool.length), 1)[0]);
+      this._cy = picks.map((id, i) => ({ look: BBH.Chars.fix(Core.NPCS[id].look), x: JAM2D.ring[i][0], y: JAM2D.ring[i][1], id: 'jam_' + id, pose: JAM2D.ring[i][2], flip: JAM2D.ring[i][0] > JAM2D.spot.x })); return this._cy;
     },
     regulars() {
       if (this._reg && this._regDay === G.ch.day) return this._reg; this._regDay = G.ch.day;
@@ -308,18 +330,30 @@
           S.row('AUTO BUSK', 'Your hero plays for you while you watch. Time flies by, smaller tips. STOP when you like.', G.ch.energy < 14 ? 'dis' : 'cyan', () => { S.closeSheet(); startPerform(S, 'busk', { title: 'AUTO BUSK', sub: 'park', bpm: 92 + Math.min(10, lvl), bars: 8, difficulty: 0.2 + Math.min(0.12, lvl * 0.008), style: 0, stage: 'cyan', endless: true, auto: true }); }),
         ]);
       },
+      // the cypher by the graffiti wall: only while the jam is on (Core.jamOn), otherwise the sheet says when it meets
+      jam(S) {
+        const ch = G.ch, lvl = ch.level;
+        if (!Core.jamOn(ch) && !ch.dev.noGates) { S.sheet('THE JAM', [h('div.ts', null, 'Nobody here right now. The local beatboxers meet for a jam ' + Core.JAM_WHEN + ' (from day ' + Core.JAM.fromDay + ').')]); return; }
+        S.sheet('THE JAM', [
+          h('div.ts', null, 'A circle of local beatboxers trading rounds. Step in, or just listen.'),
+          S.row('JOIN THE CYPHER  ' + Core.JAM.minutes + ' min', 'Trade rounds with the circle. Fans, XP and a random skill up.', ch.energy < 14 ? 'dis' : 'gold', () => { S.closeSheet(); startPerform(S, 'jam', { title: 'THE JAM', sub: 'park cypher', bpm: 94 + Math.min(12, lvl), bars: 8, difficulty: 0.3 + Math.min(0.3, lvl * 0.015), style: 2, stage: 'lime', venue: 'busk' }); }),
+          S.row('JUST LISTEN  30 min', 'Stand at the edge of the circle. Mood and a little Originality.', '', () => { S.closeSheet(); G.do({ t: 'jamWatch' }); }),
+        ]);
+      },
       bench(S) {
+        const bee = Core.bmgHere(G.ch);
         S.sheet('BENCH', [
           S.row('REST  30 min', 'Mood +8. Watch the clouds.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
           S.row('GO FOR A RUN  60 min', 'Alternate left and right taps. Builds stamina (max energy).', G.ch.energy < 14 ? 'dis' : 'cyan', () => { if (G.ch.energy < 14) { E.toast('Too tired to run.', 'warn'); return; } S.closeSheet(); E.go('run', { back: { scene: 'place', args: { id: 'park' } } }); }),
-          S.row('PRIVATE COACHING  $' + Core.COACH_FEE, 'BeeAmGee teaches you one skill point.', 'gold', () => { S.closeSheet(); G.openCoaching(S); }),
           jobRow(S, 'flyers'),
+        ].concat(bee ? [
+          S.row('PRIVATE COACHING  $' + Core.COACH_FEE, 'BeeAmGee teaches you one skill point.', 'gold', () => { S.closeSheet(); G.openCoaching(S); }),
           S.row('TALK TO BEEAMGEE', 'Advice from the old guard.', '', () => { S.closeSheet(); E.dialog([{ who: 'beeamgee', text: tip('beeamgee') }]); }),
           S.row('FREE LESSON', G.ch.flags.coachDay === G.ch.day ? 'Come back tomorrow.' : 'Pick a skill. Once a day. 45 min.', G.ch.flags.coachDay === G.ch.day ? 'dis' : 'cyan', () => {
             if (G.ch.flags.coachDay === G.ch.day) return;
             S.closeSheet(); S.sheet('LESSON WITH BEEAMGEE', Core.STATS.map((st) => S.row(Core.STAT_NAMES[st].toUpperCase(), 'Current ' + Math.floor(G.ch.stats[st]), '', () => { S.closeSheet(); G.do({ t: 'flag', k: 'coachDay', v: G.ch.day }); G.do({ t: 'train', stat: st, q: 0.9, where: 'coach' }); E.dialog([{ who: 'beeamgee', text: 'again. good. ' + (st === 'mus' ? 'listen to the space between the beats.' : st === 'tech' ? 'smaller movements. cleaner sound.' : st === 'ori' ? 'break the pattern, then rebuild it.' : 'play to the back row.') }]); })));
           }),
-        ]);
+        ] : [h('div.ts', null, G.ch.flags.bmgSighted ? 'The old man from the other day is not here. Try another day.' : 'An empty bench. Somebody sprayed "beeamgee was here" on the graffiti wall. Who is that?')]));
       },
     },
     shop: { hats: (S) => G.openShop(S, 'hat'), racks: (S) => G.openShop(S, 'top'), mirror: (S) => G.openShop(S, 'glasses'), counter: (S) => { S.sheet('COUNTER', [jobRow(S, 'shelves'), S.row('BROWSE THE SHOP', 'Hats, shades, jackets and more.', 'gold', () => G.openShop(S, 'top')), S.row('CHAT', 'Ask the clerk about stock.', '', () => { S.closeSheet(); E.dialog([{ name: 'Clerk', look: CLERK, text: ['new stock appears as you level up. the gold stuff is not for sale. it is earned.', 'shades are twenty bucks. confidence is free.', 'we got a cape in the back. it is not for sale yet. you are not ready.'][Math.floor(Math.random() * 3)] }]); })]); } },
@@ -410,10 +444,12 @@
     S.tryLook = st;
   };
   // handed to the 3D siblings (r3/spotmap.js, r3/scenes_world.js): the real handlers behind every spot, door and NPC tap
-  G.places = { ACTIONS, SPOT_FOR, TIPS, CLERK, STAGE, variantFor, jobRow, tip, tutorialLines, startPerform, startBattle, startTraining };
+  G.places = { ACTIONS, SPOT_FOR, TIPS, CLERK, STAGE, JAM2D, parkScene, variantFor, jobRow, tip, tutorialLines, startPerform, startBattle, startTraining };
   const baseDraw = E.scenes.place.draw;
   E.scenes.place.draw = function (c) {
     baseDraw.call(this, c);
+    // the jam sign over the cypher while it is on (the hotspot star sits among the heads)
+    if (this.id === 'park' && G.ch && Core.jamOn(G.ch)) { const J = JAM2D.hot, bob = Math.round(Math.sin(E.t / 300) * 2); E.txt(c, 'THE JAM', J.x + J.w / 2, J.y - 38 + bob, { align: 'c', color: Math.sin(E.t / 200) > 0 ? PAL.neonLime : PAL.gold, scale: 2 }); }
     if (this.shop && this.shop.el.isConnected) {      // big try-on preview with a spotlight
       c.save(); c.fillStyle = 'rgba(14,9,30,.55)'; c.fillRect(0, k(62), E.W, k(190)); c.restore();
       E.drawGlow(c, 180, 213, 95, PAL.neonViolet, 0.25);
@@ -428,7 +464,7 @@
   'use strict';
   const BBH = root.BBH, E = BBH.E, Core = BBH.Core, PAL = BBH.PAL, G = BBH.G, h = E.h;
   const NAMES = { home: 'HOME', park: 'PARK', shop: 'THRIFT SHOP', studio: 'SOUND LAB', bar: 'THE BAR' };
-  const INFO = { home: 'Sleep, eat, train in the vocal booth, change clothes.', park: 'Busk for tips and fans. Meet BeeAmGee.', shop: 'Buy clothes, hats and shades.', studio: 'Train faster for $' + Core.STUDIO_FEE + '. Jukebox.', bar: 'Open mic, showcase, battles, karaoke.' };
+  const INFO = { home: 'Sleep, eat, train in the vocal booth, change clothes.', park: 'Busk for tips and fans. The jam meets ' + Core.JAM_WHEN + '.', shop: 'Buy clothes, hats and shades.', studio: 'Train faster for $' + Core.STUDIO_FEE + '. Jukebox.', bar: 'Open mic, showcase, battles, karaoke.' };
   const vs = (ch) => { const n = Core.nightness(ch.minutes); return n < 0.25 ? ['day', null, 0] : n < 0.5 ? ['day', 'dusk', (n - 0.25) / 0.25] : n < 0.8 ? ['dusk', 'night', (n - 0.5) / 0.3] : ['night', null, 0]; };
   E.scenes.map = {
     enter() {
@@ -448,7 +484,7 @@
       const ok = Core.canEnter(G.ch, id), here = G.ch.place === id;
       this.card = h('div.panel.sheet.pop', { style: { padding: '8px', zIndex: 15 } },
         h('div.row', { style: { justifyContent: 'space-between' } }, h('div.h2', null, NAMES[id]), h('div.tp', { style: { color: ok.ok ? '#7be08f' : '#ff7b8e' } }, ok.ok ? 'OPEN' : 'CLOSED')),
-        h('div.ts', { style: { margin: '4px 0 6px' } }, ok.ok ? INFO[id] : ok.reason),
+        h('div.ts', { style: { margin: '4px 0 6px' } }, ok.ok ? (id === 'park' && Core.jamOn(G.ch) ? 'THE JAM IS ON NOW! The cypher meets by the graffiti wall. ' : '') + INFO[id] + (id === 'park' && Core.bmgHere(G.ch) ? ' BeeAmGee sits on his bench.' : '') : ok.reason),
         E.btn(here ? 'ENTER' : 'GO THERE', ok.ok ? 'gold' : 'dis', () => { if (here && G.ch.place !== 'street') G.goPlace(id); else G.enterPlace(id); }));
       E.add(this.card); E.sfx('click');
     },
@@ -468,6 +504,7 @@
         E.icon(hs.id).draw(c, sp.x - 8, sp.y - 26 + bob - 6); if (!ok) E.icon('lock').draw(c, sp.x + 4, sp.y - 26 + bob - 12);
         E.txt(c, NAMES[hs.id], sp.x, sp.y - 8 + bob, { align: 'c', color: sel ? PAL.gold : PAL.cream });
         if (G.ch.place === hs.id) E.txt(c, 'YOU ARE HERE', sp.x, sp.y + 4, { align: 'c', color: PAL.neonLime });
+        if (hs.id === 'park' && Core.jamOn(G.ch)) E.txt(c, 'JAM ON NOW', sp.x, sp.y - 46 + bob, { align: 'c', color: Math.sin(E.t / 160) > 0 ? PAL.neonPink : PAL.gold });
       }
       if (n > 0.6) E.rain(c, E.t, { n: 12, color: 'rgba(170,200,255,.2)' });
     },

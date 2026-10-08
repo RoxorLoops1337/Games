@@ -10,7 +10,7 @@
 //   BBH.R3Spots.WORLD[place]          -> the Park3D world id of that scene (home -> flat, studio -> lab)
 //   BBH.R3Spots.TRAIN[place][spotId]  -> 'home' | 'studio': a training spot, opens the training menu G.trainMenu(S, where)
 //   resolve(place, id) -> {kind, key} | null     npcRoute(place, id) -> {kind, key} | null      run(S, place, r, id)      onSpot(S, place, e)      onNpc(S, place, e)      bind(S, world, place)
-//   gates() / applyGates(world, lastSig) -> sig   door locks (Core.canEnter reasons) + goal beacon (G.goalDoor) for the street and the hood pins
+//   gates() / applyGates(world, lastSig) -> sig   door locks (Core.canEnter reasons) + goal beacon (G.goalDoor) + the '!' badge on the park while the jam is on (Core.jamOn), for the street and the hood pins
 //   goalSpot(place) / applyGoal(world, place, lastSig) -> sig   goal beacon on the spot inside a place the goal text points at
 //   busy(S) / settle(S, dt)   world.done(spotId) once the sheet, shop panel, dialog, modal or overlay opened by the spot is closed again (never while a scene switch is pending)
 //   anchors2d(world)          terrain anchors as the 2D scene's `sc.spots` ({x, y: z} in metres) so the delegated 2D code finds what it reads
@@ -28,7 +28,7 @@
   M.TABLE = {
     street: { park: 'enter', home: 'enter', shop: 'enter', studio: 'enter', bar: 'enter', map: 'map' },
     home: { booth: 'act', couch: 'act', bed: 'act', desk: 'act', kitchen: 'act', wardrobe: 'act', door: 'leave' },
-    park: { busk: 'act', bench: 'act', run: 'run', flyers: 'flyers', gate: 'leave' },
+    park: { busk: 'act', bench: 'act', jam: 'act', run: 'run', flyers: 'flyers', gate: 'leave' },
     shop: { hats: 'act', racks: 'act', mirror: 'act', counter: 'act', door: 'leave' },
     studio: { mic: 'act', mixer: 'act', door: 'leave' },
     bar: { stage: 'act', counter: 'act', door: 'leave' },
@@ -155,6 +155,9 @@
     const out = {}; for (const id of M.DOORS) { let ok; try { ok = Core.canEnter(G.ch, id); } catch (e) { ok = { ok: true }; } out[id] = { locked: !ok.ok, reason: ok.ok ? '' : ok.reason, goal: false }; }
     let gd = null; try { gd = G.goalDoor ? G.goalDoor() : null; } catch (e) { gd = null; }
     if (gd && out[gd] && !out[gd].locked) out[gd].goal = true;
+    // the park door and its map pin wear a badge while the jam is on (core.js JAM)
+    let jam = false; try { jam = !!(Core.jamOn && Core.jamOn(G.ch)); } catch (e) { jam = false; }
+    if (out.park) out.park.badge = jam && !out.park.locked ? '!' : null;
     return out;
   };
   M.applyGates = function (w, last) {
@@ -166,6 +169,8 @@
   M.goalSpot = function (place, ch) {
     let g = ''; try { g = G.goal(ch || G.ch).toLowerCase(); } catch (e) { return null; }
     if (place === 'park' && /busk/.test(g)) return 'busk';
+    if (place === 'park' && /\bjam\b/.test(g)) return 'jam';
+    if (place === 'park' && /bench/.test(g)) return 'bench';
     if (place === 'home') { if (/hungry|eat/.test(g)) return 'kitchen'; if (/nap or sleep|sleep after|exhausted/.test(g)) return 'bed'; if (/train a skill|vocal booth/.test(g)) return 'booth'; }
     if (place === 'bar' && /open mic|battle|world cup|showcase/.test(g)) return 'stage';
     if (place === 'studio' && /train a skill/.test(g)) return 'mic';

@@ -3,6 +3,7 @@
 // through the 2D methods; only the stage changes. The world modules (park3d/street.js, flat*.js, terrain*.js, shop*.js, lab*.js, bar*.js, w_hood*.js) render into #gl.
 //   street  world 'street'   Neon Row: 5 doors + the bus stop map. Locked doors follow Core.canEnter each time the save changes, the goal door gets a beacon, Foxy waits at the home stoop in the tutorial.
 //   place   world flat | park | shop | lab | bar  (home park shop studio bar)   spots and NPC taps -> G.places.ACTIONS through r3/spotmap.js
+//           the park follows the story (core.js): args.beeamgee (Core.bmgHere) seats BeeAmGee, args.jam (Core.jamOn) lights the cypher, sync() flips it with terrain.story.setJam
 //           back from an activity (activity.js ticket): the player stands at the spot it started from (SM.land), BACK reopens its menu there (SM.reopen)
 //   map     world 'hood'     tabletop map with the five pins; a pin opens the same card sheet (E.scenes.map.showCard)
 // The sibling provides what the 2D ACTIONS need: S.sheet / row / closeSheet / eatMenu / id / look / sc (anchors as 2D) and S.w (the world). Real DOM chrome = R3UI.hud (stats, goal chip, MAP, MENU, LEAVE, nav dock).
@@ -106,6 +107,7 @@
     },
     worldArgs(id) {
       if (id === 'shop') return { clerkLook: P.CLERK };
+      if (id === 'park') return { beeamgee: Core.bmgHere(G.ch), jam: Core.jamOn(G.ch) };   // the story (core.js): BeeAmGee on his bench once he noticed you, the cypher while the jam is on
       if (id === 'bar') { const day = G.ch.day; return { Core, day, clock: { hour: Core.hourOf(G.ch.minutes), day }, programme: Core.barProgramme(day), regulars: this.regulars().map((r) => r.id) }; }
       return {};
     },
@@ -166,6 +168,7 @@
         const hr = Core.hourOf(G.ch.minutes), vis = hr < 11 || hr > 17, f = (w.npcs || []).find((n) => n && n.id === 'foxy');
         if (f) { f.object.visible = vis; f.tappable = vis; }
       }
+      if (this.id === 'park') { const st = w.terrain && w.terrain.story, on = Core.jamOn(G.ch); if (st && st.setJam && st.on() !== on) safe(() => st.setJam(on)); }   // the jam starts or ends while you are in the park
       this._goal = SM.applyGoal(w, this.id, this._goal);
     },
     update(dt) {

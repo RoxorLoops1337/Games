@@ -77,12 +77,12 @@ try {
   /* ------------------------------------------------------------------ the park: walk in from the dock, first-visit dialog, LEAVE */
   ok(await enterByDock(page, 'PARK', 'park', 'park'), 'dock PARK: the player walks to the gate and the park world loads');
   ok(await place(page) === 'park', 'G.ch.place is the park (G.enterPlace -> travel)');
-  ok(await until(page, () => !!document.querySelector('#r3kit .k3-dlg'), null, 60000) && await page.evaluate(() => document.querySelector('#r3kit .k3-name').textContent) === 'BeeAmGee', 'first visit: BeeAmGee introduces the park (2D firstVisit through the 3D dialog)');
+  ok(await until(page, () => !!document.querySelector('#r3kit .k3-dlg'), null, 60000) && await page.evaluate(() => document.querySelector('#r3kit .k3-name').textContent) === 'The Park', 'first visit: the park explains itself (2D firstVisit through the 3D dialog), BeeAmGee has not noticed you yet');
   await skipDialogs(page, 20); await until(page, () => BBH.R3.world.controls.enabled === true, null, 20000);
   {
     const h = await page.evaluate(() => ({ leave: !!document.querySelector('#hud3 .h3-btn.lv'), dockShown: !document.querySelector('#hud3 .h3-dock').hidden }));
     ok(h.leave && !h.dockShown, 'in a place the HUD has LEAVE and no nav dock');
-    ok(await page.evaluate(() => BBH.R3.world.npcs.some((n) => n.id === 'beeamgee')), 'BeeAmGee sits on the bench');
+    ok(await page.evaluate(() => !BBH.R3.world.npcs.some((n) => n.id === 'beeamgee') && BBH.R3.world.spots.byId.bench.label === 'REST'), 'day 1 of a new game: BeeAmGee is not on the bench yet (the story brings him later)');
   }
   // leave with the LEAVE chip: the street, standing at the park gate
   await click(page, '#hud3 .h3-btn.lv');
