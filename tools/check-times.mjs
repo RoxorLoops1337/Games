@@ -3,7 +3,7 @@
 // has run away from the rest.
 //
 // WHY THIS IS A SCRIPT AND NOT A NOTE. The timings were written down once, in
-// CHECK_TIMES.md, and a file is a measurement that goes stale the day after it
+// docs/CHECK_TIMES.md, and a file is a measurement that goes stale the day after it
 // is taken. Nobody making a suite slow reads it, because they are not looking
 // for it — they are looking at their own game. This runs the same measurement on
 // demand and says which suite is the problem in the terminal where the person
@@ -75,7 +75,7 @@ if (over.length) {
   console.log(`\n${over.length} suite${over.length > 1 ? 's are' : ' is'} over the bar: ` +
     over.map((r) => `${r.s.replace('test:', '')} (${(r.ms / 1000).toFixed(0)}s, ` +
       `${((r.ms / total) * 100).toFixed(0)}% of the check)`).join(', '));
-  console.log('CHECK_TIMES.md has what worked for frostfell, which used to be the worst of these.');
+  console.log('docs/CHECK_TIMES.md has what worked for frostfell, which used to be the worst of these.');
   if (CI) process.exit(1);
 } else {
   console.log('\nno suite is over the bar.');

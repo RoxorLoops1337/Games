@@ -15,7 +15,7 @@ Reply formatting: when working on No Room For Heroes, paste these links at the b
 - `music.html`: standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
 - `functions/api/board.js` + `functions/api/save.js`: Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
 - `tests/no_room_for_heroes_*.test.mjs`: headless suites (`npm run test:boss`); `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). The `tutorial` suite drives the whole guided run beat-by-beat. Write new tests with it; never create throwaway harnesses outside `tests/`. Other games' suites import this lib too, so a change to it runs their suites as well.
-- `HANDOVER_NO_ROOM_FOR_HEROES.md` (repo root): deeper architecture notes (G state object, phases, combat flow, balance history).
+- `docs/HANDOVER_NO_ROOM_FOR_HEROES.md`: deeper architecture notes (G state object, phases, combat flow, balance history).
 
 # SMALL-CHANGE PROTOCOL (for budget-model sessions)
 

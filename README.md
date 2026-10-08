@@ -30,12 +30,13 @@ quarter of the whole check. `--ci` makes that exit non-zero.
 It is a repo-level tool rather than any one game's: it reads `package.json` for
 every `test:*` script and knows nothing about what any of them do. The one reading
 taken so far, and what came out of shrinking the suite that used to be worst, is in
-[CHECK_TIMES.md](CHECK_TIMES.md).
+[docs/CHECK_TIMES.md](docs/CHECK_TIMES.md).
 
 ## The games
 
 Each folder is a game. `frostfell/` additionally carries
-[DESIGN.md](frostfell/DESIGN.md) — a record of what has been measured about it and
-what those measurements changed — and `no_room_for_heroes/` carries
-[HANDOVER](HANDOVER_NO_ROOM_FOR_HEROES.md). Both are worth reading before changing
-the game they belong to.
+[DESIGN.md](frostfell/DESIGN.md), a record of what has been measured about it and
+what those measurements changed. Handovers, roadmaps and plans that cover a whole
+game live in [docs/](docs/) (No Room For Heroes, Grimhold, Merry Crashmas, Dungeon
+Pusher), outside the game folders so they are never deployed. Read the one for a
+game before changing it.
