@@ -6,7 +6,7 @@
 //   groove(char, beat, amp)       the between-moves bounce on the metronome
 // Rig space (char_anim.js): +z forward (towards the camera on the pose stage), character LEFT = +x. The pose game is seen from the front, so screen LEFT = rig -x
 // = the character's RIGHT side: "STEP LEFT" is a step to the right foot side, which is the player's left on screen (mirror rule of a dance class).
-import { CL, stance, sm, clamp, lerp } from './char_anim.js';
+import { CL, stance, sm, clamp, lerp, micAim } from './char_anim.js';
 const PI = Math.PI, TAU = PI * 2, S = Math.sin, Cs = Math.cos;
 
 export const MOVE_IDS = ['left', 'right', 'duck', 'jump', 'point', 'spin', 'freeze', 'clap'];
@@ -25,6 +25,11 @@ export const KEYMAP = {}; MOVE_IDS.forEach((id) => MOVES[id].keys.forEach((k) =>
 // attack / hold envelope: snaps into the pose in about 0.09 s (the accent lands on the beat), holds, then the crossfade back to the groove takes over
 const hit = (t, a) => sm(t / (a || 0.09));
 const face = (P, open, brow, smile) => { P.mouthOpen = open; P.brow = brow; P.smile = smile === undefined ? 1.3 : smile; P.cheek = 0.2; };
+// the mic fist (acc.hand mic): the moves that bring the right hand in to the body or the face park the mic themselves (char_anim micAim in rig space): grille at g, the mic pointing
+// along a (fist to grille), fingers roughly along d. g eases in with k from where the groove holds the grille, so the fist never cuts across the face. Returns false without a mic.
+// The groove aims the mic too (fist by the hip, mic up and a little out), so every crossfade blends two aimed grips and the grille never swings up under the chin on the way back.
+const MIC0 = [-0.31, 0.86, 0.24];
+function micAt(self, P, k, g, a, d) { if (self.api.holding !== 'mic') return false; micAim.call(self, P, [lerp(MIC0[0], g[0], k), lerp(MIC0[1], g[1], k), lerp(MIC0[2], g[2], k)], a, d, true); return true; }
 
 // ----- groove: bounce on the beat between moves (opts.phase = beats), knees pulse, shoulders roll, head nods
 CL.pz_groove = function (P, c, dt, o) {
@@ -34,27 +39,31 @@ CL.pz_groove = function (P, c, dt, o) {
   stance(P, 0.13, 0.25);
   P.aWL = P.aWR = 1; P.aXL = 0.27; P.aXR = -0.27; P.aYL = 0.68 + 0.05 * q * amp + 0.04 * Math.max(0, sw); P.aYR = 0.68 + 0.05 * q * amp + 0.04 * Math.max(0, -sw); P.aZL = P.aZR = 0.16;
   P.pXL = 0.7; P.pXR = -0.7; P.pYL = P.pYR = -1; P.pZL = P.pZR = -0.3; P.shrug = 0.3 * q * amp; face(P, 0.12, 0.15, 1.2);
+  micAt(this, P, 1, [MIC0[0], P.aYR + MIC0[1] - 0.7, MIC0[2]], [-0.35, 0.85, 0.4], [0.4, -0.3, 1]);
 };
 
 // ----- step left (screen left = rig -x): wide step out on the right foot, weight over it, right arm thrown out flat, left fist on the chest, head whips to the side
-function step(P, c, s) {           // s = -1 screen left, +1 screen right
+function step(P, c, s) {           // s = -1 screen left, +1 screen right (this = the animator)
   const t = c.t, k = hit(t, 0.1), up = S(PI * clamp(t / 0.11, 0, 1)), R = s < 0 ? 'R' : 'L', L = s < 0 ? 'L' : 'R', bounce = Math.exp(-Math.max(0, t - 0.1) * 10) * k;
   P.hipsX = 0.11 * s * k; P.hipsY = -0.05 * k - 0.03 * bounce; P.hipsRZ = -0.07 * s * k; P.chestRZ = 0.1 * s * k; P.chestRY = 0.14 * s * k; P.headRY = 0.45 * s * k; P.headRZ = 0.12 * s * k; P.neckRY = 0.15 * s * k; P.spineRX = 0.04;
   P.lWL = P.lWR = 1; P['lX' + R] = s * lerp(0.12, 0.33, k); P['lX' + L] = -s * lerp(0.12, 0.03, k); P.lYL = P.lYR = 0.085; P['lY' + R] += 0.1 * up * (1 - k * 0.5); P.lZL = P.lZR = 0; P['fY' + R] = (R === 'L' ? 1 : -1) * 0.45; P['fY' + L] = (L === 'L' ? 1 : -1) * 0.15;
   P['aW' + R] = 1; P['aX' + R] = s * lerp(0.28, 0.6, k); P['aY' + R] = lerp(0.7, 0.98, k); P['aZ' + R] = lerp(0.16, 0.06, k); P['p' + 'X' + R] = s * 0.2; P['pY' + R] = -1; P['pZ' + R] = -0.6; P['hW' + R] = k; P['hX' + R] = s; P['hY' + R] = 0.15; P['hZ' + R] = 0;
   P['aW' + L] = 1; P['aX' + L] = -s * 0.02; P['aY' + L] = 0.84; P['aZ' + L] = 0.24; P['pX' + L] = -s; P['pY' + L] = -0.4; P['pZ' + L] = 0;
+  // STEP RIGHT parks the mic fist on the right of the chest, mic up and out past the shoulder (on the sternum the grille ran into the chin of the turned head)
+  if (s > 0) micAt(this, P, k, [-0.19, 0.9, 0.3], [-0.35, 0.85, 0.35], [1, 0, 0.3]);
   face(P, 0.35 + 0.2 * bounce, 0.4);
 }
-CL.pz_left = function (P, c) { step(P, c, -1); };
-CL.pz_right = function (P, c) { step(P, c, 1); };
+CL.pz_left = function (P, c) { step.call(this, P, c, -1); };
+CL.pz_right = function (P, c) { step.call(this, P, c, 1); };
 
-// ----- duck: deep squat, leaning in, forearms crossed in front of the face, eyes squeezed
+// ----- duck: deep squat, leaning in, palms up either side of the jaw, eyes squeezed. The big head drops forward between the hands: they stay wide of it (at 0.25 they went into it)
 CL.pz_duck = function (P, c) {
   const t = c.t, k = hit(t, 0.08), w = Math.exp(-Math.max(0, t - 0.08) * 8) * k;
-  P.hipsY = -0.25 * k - 0.02 * w; P.hipsZ = -0.04 * k; P.hipsRX = 0.32 * k; P.spineRX = 0.16 * k; P.chestRX = 0.08 * k; P.neckRX = -0.12 * k; P.headRX = -0.06 * k; P.sq = -0.05 * w;
+  P.hipsY = -0.25 * k - 0.02 * w; P.hipsZ = -0.04 * k; P.hipsRX = 0.26 * k; P.spineRX = 0.12 * k; P.chestRX = 0.05 * k; P.neckRX = -0.12 * k; P.headRX = -0.06 * k; P.sq = -0.05 * w;
   stance(P, lerp(0.12, 0.2, k), lerp(0.2, 0.55, k));
-  P.aWL = P.aWR = 1; P.aXL = lerp(0.27, 0.25, k); P.aXR = -lerp(0.27, 0.25, k); P.aYL = P.aYR = lerp(0.7, 0.9, k); P.aZL = P.aZR = lerp(0.16, 0.3, k); P.pXL = 1; P.pXR = -1; P.pYL = P.pYR = -0.8; P.pZL = P.pZR = -0.2;
-  P.hWL = P.hWR = k; P.hXL = 0.2; P.hXR = -0.2; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.25;          // palms up either side of the face: 'whoa, duck!'
+  P.aWL = P.aWR = 1; P.aXL = lerp(0.27, 0.4, k); P.aXR = -lerp(0.27, 0.4, k); P.aYL = P.aYR = lerp(0.7, 0.72, k); P.aZL = P.aZR = lerp(0.16, 0.28, k); P.pXL = 1; P.pXR = -1; P.pYL = P.pYR = -0.8; P.pZL = P.pZR = -0.2;
+  P.hWL = P.hWR = k; P.hXL = 0.5; P.hXR = -0.5; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.2;          // palms up either side of the face: 'whoa, duck!'
+  micAt(this, P, k, [-0.5, 0.84, 0.28], [-0.45, 0.85, 0.15], [-0.3, 0.3, 1]);      // the mic stands up beside the cheek, out of the face
   P.shrug = 1.4 * k; face(P, 0.55, 0.7, 0.5); P.eyeH = 1.1; P.frown = 0.2 * k; P.browTilt = 0.5 * k;
 };
 
@@ -95,17 +104,20 @@ CL.pz_freeze = function (P, c) {
   P.hipsY = -0.05 * k; P.hipsRX = -0.06 * k; P.hipsRY = 0.15 * k; P.chestRX = -0.1 * k; P.chestRY = -0.12 * k; P.neckRX = -0.06 * k; P.headRX = -0.14 * k; P.headRZ = 0.16 * k; P.headRY = 0.12 * k; P.sq = -0.03 * j;
   stance(P, lerp(0.12, 0.2, k), lerp(0.2, 0.55, k));
   P.aWL = P.aWR = 1; P.aXL = -0.1; P.aXR = 0.11; P.aYL = 0.88; P.aYR = 0.84; P.aZL = 0.21; P.aZR = 0.24; P.pXL = 1; P.pXR = -1; P.pYL = P.pYR = -0.1; P.pZL = P.pZR = -0.2;
+  micAt(this, P, k, [0.22, 0.86, 0.33], [0.75, 0.15, 0.65], [0.3, -0.2, 1]);          // the mic lies along the folded left arm, out past the elbow, not up under the chin
   P.shrug = 0.6 * k; face(P, 0.04, -0.35, 1.5); P.browTilt = -0.4; P.eyeH = 0.78;
 };
 
-// ----- clap: hands swing in and meet high over the head on the beat (spark there), knees dip with it
+// ----- clap: hands swing in and meet in front of the chest on the beat (the spark in mg_pose.js moveFx is there), elbows out, knees dip with it. The big head fills the space above the shoulders,
+// so the clap stays under the chin and well forward of it. With a mic the right fist claps into the left palm, the mic standing up and out to the right side
 CL.pz_clap = function (P, c) {
   const t = c.t, m = t < 0.08 ? sm(t / 0.08) : Math.max(0.55, 1 - (t - 0.08) * 2.2), dip = Math.exp(-Math.max(0, t - 0.08) * 9) * sm(t / 0.08);
   P.hipsY = -0.03 - 0.05 * dip; P.chestRX = -0.06; P.neckRX = -0.1; P.headRX = -0.1; P.sq = -0.03 * dip;
   stance(P, 0.14, 0.3);
-  const x = lerp(0.36, 0.03, m), y = lerp(0.98, 1.24, m);
-  P.aWL = P.aWR = 1; P.aXL = x; P.aXR = -x; P.aYL = P.aYR = y; P.aZL = P.aZR = 0.12; P.pXL = 0.9; P.pXR = -0.9; P.pYL = P.pYR = -0.3; P.pZL = P.pZR = -0.5;
-  P.hWL = P.hWR = m; P.hXL = -0.3; P.hXR = 0.3; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.1;
+  const x = lerp(0.34, 0.035, m), y = lerp(0.74, 0.82, m), z = lerp(0.2, 0.34, m);
+  P.aWL = P.aWR = 1; P.aXL = x; P.aXR = -x; P.aYL = P.aYR = y; P.aZL = P.aZR = z; P.pXL = 0.9; P.pXR = -0.9; P.pYL = P.pYR = -0.6; P.pZL = P.pZR = -0.2;
+  P.hWL = P.hWR = m; P.hXL = -0.25; P.hXR = 0.25; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.6;
+  micAt(this, P, 1, [-x - 0.1, y + 0.09, z + 0.03], [-0.8, 0.55, 0.25], [0.4, 0.3, 0.85]);
   face(P, 0.6 + 0.3 * dip, 0.6, 1.5); P.mouthW = 1.12;
 };
 MOVE_IDS.forEach((id) => { CL['pz_' + id].restart = true; });

@@ -13,7 +13,9 @@ const BBH = load('pix', 'catalog', 'core'), CAT = BBH.CATALOG, Core = BBH.Core;
 const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'look3d_test_'));
 const watchdog = setTimeout(() => { console.error('FAIL: look3d suite hung'); process.exit(1); }, 240000);
 
-await esbuild.build({ entryPoints: [CH], outfile: path.join(tmp, 'chars.mjs'), bundle: true, format: 'esm', platform: 'node', logLevel: 'error' });
+// characters.js plus the pose game's moves (mg_pose_moves.js registers its pz_* clips in the same clip table, so both must share one bundle)
+const PZM = path.join(REPO, 'beatbox_heroes', 'park3d', 'mg_pose_moves.js'), fwd = (p) => p.replace(/\\/g, '/');
+await esbuild.build({ stdin: { contents: "export * from '" + fwd(CH) + "'; export * as PZ from '" + fwd(PZM) + "';", resolveDir: REPO }, outfile: path.join(tmp, 'chars.mjs'), bundle: true, format: 'esm', platform: 'node', logLevel: 'error' });
 const errs = []; const origErr = console.error; const quiet = () => { console.error = (...a) => { errs.push(a.join(' ').slice(0, 200)); }; }, loud = () => { console.error = origErr; };
 const M = await import(pathToFileURL(path.join(tmp, 'chars.mjs')).href);
 const { createCharacter, createNPC, createCast, castLooks, createCrowd, portrait, normLook, CLIPS, MOODS, KNOWN, JUDGES3D, TRI_BUDGET } = M;
@@ -209,6 +211,39 @@ if (!chromium || !exe || !fs.existsSync(exe)) { console.log('beatbox_heroes_look
   ok(far.length === 0, 'beatbox and battle hold the grille within 0.12 m of the mouth' + (far.length ? ': ' + far.join(' | ') : ''));
   ok(tilt.length === 0, 'beatbox and battle tilt the mic up and in towards the lips' + (tilt.length ? ': ' + tilt.join(' | ') : ''));
   const nm = createCharacter(CTX, Object.assign(clone(CAT.DEFAULT_LOOK), { acc: { hand: { id: 'none_hand' } } })); ok(nm.micPos(g) === null, 'micPos is null without a mic'); nm.dispose();
+}
+// ---- the mic is held properly in the custom clips too: every move of the pose game (pz_*, played the way its stage plays them: the groove on the metronome, the move,
+// back to the groove, at a slow and a fast beat) and the clip variants other worlds use (BeeAmGee's and Foxy's seated talk, wave and arm on the bench back, the whole
+// 16 beat dance loop, hits from either side, hold with every prop). The grille never enters the head or the chest; in the pose moves neither fist goes into the head either
+{
+  const { headRingAt, HEAD_SQ, HEAD_TOP, PZ } = M, V = hero.object.position.constructor, g = new V(), hl = new V(), inv = new hero.object.matrixWorld.constructor();
+  const inHead = (p) => { const r = headRingAt(Math.max(0.02, Math.min(HEAD_TOP, p.y))), e = 2 / HEAD_SQ, m = 0.03; return p.y > -0.03 && p.y < HEAD_TOP + 0.03 && Math.pow(Math.abs(p.x) / (r.rx + m), e) + Math.pow(Math.abs(p.z - r.cz) / (r.rz + m), e) < 1; };
+  const headHit = (c, p) => { hl.copy(p).applyMatrix4(inv.copy(c.rig.map.head.matrixWorld).invert()); return inHead(hl) || Math.hypot(hl.x, hl.y - 0.29, hl.z) < 0.29; };
+  const chestHit = (c, p) => { const cl = p.clone().applyMatrix4(inv.copy(c.rig.map.chest.matrixWorld).invert()); return cl.y > -0.25 && cl.y < 0.2 && (cl.x / 0.17) ** 2 + (cl.z / 0.13) ** 2 < 1; };
+  const micLook = (body) => { const L = clone(CAT.DEFAULT_LOOK); L.body = body; L.acc = Object.assign({}, L.acc, { hand: { id: 'mic', color: '#6b6b80' } }); return L; };
+  const bad = [], fists = [], f = new V();
+  // one frame: grille against head and chest, and (fistsToo) the centre of each fist against the head
+  const check = (c, tag, t, fistsToo) => {
+    c.object.updateMatrixWorld(true); c.micPos(g); if (headHit(c, g) || chestHit(c, g)) bad.push(tag + ' @' + t.toFixed(2));
+    if (fistsToo) for (const k of ['handR', 'handL']) { c.anchors[k].getWorldPosition(f); if (headHit(c, f)) fists.push(tag + ' ' + k + ' @' + t.toFixed(2)); }
+  };
+  ok(PZ && PZ.MOVE_IDS.length === 8 && PZ.MOVE_IDS.every((id) => PZ.MOVES[id] && typeof M.CLIPS === 'object'), 'the pose moves are bundled with the characters');
+  for (const body of ['neutral', 'boy', 'girl']) {
+    for (const id of ['groove'].concat(PZ.MOVE_IDS)) for (const spb of [0.5, 0.75]) {
+      const c = createCharacter(CTX, micLook(body)); let beat = 0; c.play('pz_groove', {}); const n0 = bad.length, f0 = fists.length;
+      for (let i = 0; i < 140; i++) { const dt = 1 / 60, t = i * dt; beat += dt / spb; if (i === 20 && id !== 'groove') PZ.performMove(c, id, spb); PZ.groove(c, beat, 1); c.update(dt, t); PZ.rootMotion(c, dt, 0); if (bad.length === n0 && fists.length === f0) check(c, body + '/pz_' + id + '/' + spb, t - 20 / 60, true); }
+      eq(c.anim.clip, 'pz_groove', 'pz_' + id + ' returns to the groove (' + body + ', ' + spb + ')'); c.dispose();
+    }
+    const VARIANTS = [['sit', { seat: 0.46, talk: true, slump: 1.4 }], ['sit', { seat: 0.46, wave: true, slump: 1.4 }], ['sit', { seat: 0.46, bpm: 84, amp: 0.55, slump: 1.1, armBack: true }], ['sit', { seat: 0.46, bpm: 90, slump: 1.4 }],
+      ['dance', { bpm: 100 }, 600], ['hit', { side: 1 }], ['hit', { side: -1 }], ['cheer', { duration: 0.9, then: 'pz_groove' }], ['wave', { duration: 1.4, then: 'idle' }]].concat(M.PROP_KINDS.map((k) => ['hold', { prop: k, raise: k === 'scorecard' ? 1 : 0 }]));
+    for (const [clip, o, n] of VARIANTS) {
+      const c = createCharacter(CTX, micLook(body)), tag = body + '/' + clip + ' ' + JSON.stringify(o), n0 = bad.length; if (clip === 'hold') c.setProp(o.prop, { score: 9 });
+      for (let i = 0; i < (n || 180); i++) { const t = i / 60; c.play(clip, i ? Object.assign({}, o, { duration: undefined, then: undefined, phase: clip === 'dance' ? t * 100 / 60 : undefined }) : o); c.update(1 / 60, t); if (bad.length === n0) check(c, tag, t, false); }
+      c.dispose();
+    }
+  }
+  ok(bad.length === 0, 'the mic grille never goes into the head or the chest in the pose moves and the clip variants' + (bad.length ? ': ' + bad.slice(0, 6).join(' | ') : ''));
+  ok(fists.length === 0, 'neither fist goes into the head in the pose moves' + (fists.length ? ': ' + fists.slice(0, 6).join(' | ') : ''));
 }
 clearTimeout(watchdog); fs.rmSync(tmp, { recursive: true, force: true }); done();
 void between;
