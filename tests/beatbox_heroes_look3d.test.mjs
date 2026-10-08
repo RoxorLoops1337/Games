@@ -174,5 +174,16 @@ if (!chromium || !exe || !fs.existsSync(exe)) { console.log('beatbox_heroes_look
   ok(perr.length === 0, 'no console errors or shader warnings in the browser' + (perr.length ? ': ' + perr.slice(0, 3).join(' | ') : ''));
   await browser.close();
 }
+// ---- beat loops never hard-cut: no single frame jumps far beyond the clip's normal motion (kick snaps, loop wrap, music beat dropping in and out)
+{
+  const run = (feed, n) => { const c = createCharacter(CTX, CAT.DEFAULT_LOOK), bones = ['head', 'chest', 'handL'].map((k) => c.rig.map[k]).filter(Boolean), prev = bones.map(() => null), ds = [];
+    for (let i = 0; i < n; i++) { const t = i / 60; c.play('beatbox', { bpm: 100, phase: feed(t), amp: 1 }); c.update(1 / 60, t); c.object.updateMatrixWorld(true); let d = 0;
+      bones.forEach((b, k) => { const q = b.getWorldPosition(new c.object.position.constructor()); if (prev[k]) d += q.distanceTo(prev[k]); prev[k] = q; }); if (i > 30) ds.push([d, i]); }
+    const sorted = ds.slice().sort((a, b) => a[0] - b[0]), med = (sorted[Math.floor(sorted.length / 2)] || [1e-6])[0]; const top = sorted[sorted.length - 1]; return { ratio: top[0] / med, med, at: top[1] }; };
+  const steady = run((t) => t * 100 / 60, 600), looped = run((t) => (t * 100 / 60) % 4, 600), drop = run((t) => (t < 3 || (t > 6 && t < 7) ? undefined : t * 100 / 60 + 1.3), 600);
+  ok(steady.ratio < 12, 'beatbox: no frame jumps more than 12x the median motion (no kick snap) ' + steady.ratio.toFixed(2));
+  ok(looped.ratio < 12, 'beatbox: a beat that wraps every 4 beats stays smooth ' + looped.ratio.toFixed(2));
+  ok(drop.ratio < 12, 'beatbox: the music beat dropping out and back in stays smooth ' + drop.ratio.toFixed(2) + ' (frame ' + drop.at + ')');
+}
 clearTimeout(watchdog); fs.rmSync(tmp, { recursive: true, force: true }); done();
 void between;
