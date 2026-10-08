@@ -4,7 +4,7 @@
 //   CLIPS: idle, walk, run, beatbox, dance, sit, wave, cheer, talk. Walk/run speed is driven by opts.speed. Procedural animation (rig of THREE.Group joints, IK-free poses are fine).
 //   createNPC(ctx, id) -> same shape for 'beeamgee' (old grey-bearded man with a boombox, seated), 'foxy', 'rohzel' (+ every NPC of core.js).
 // EXTRAS on the returned object: lookAt(worldPoint|null), hit('kick'|'snare'|'hat', strength) for beatbox/dance (play('beatbox',{external:true}) to be driven only by hits),
-//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null), micPos(out) (world position of the mic grille).
+//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null), micPos(out) (world position of the mic grille), gearInfo (where the accessories came to rest, rest pose, read by the gear tests).
 // play(clip, opts): opts.speed (walk/run m/s), bpm, phase (absolute beat position), amp (0..1), seat (sit height), slump, drowsy, fade (crossfade seconds, default 0.15),
 //   duration + then (one-shot, returns to 'then'). Calling play every frame with the same clip only updates opts.
 //
@@ -14,8 +14,8 @@
 import { THREE } from './kit.js';
 import { C, MB, K, BONE_NAMES, BI, boneSpec, restWorld, dims, loft, finalize, makeHull, shade } from './char_geo.js';
 import { buildHead, buildFace, buildFacial, buildArms, buildLegs } from './char_body.js';
-import { buildHair, buildHat, HAT_COVER } from './char_hair.js';
-import { buildTop, buildBottom, buildShoes, wearMeta, bodyR } from './char_wear.js';
+import { buildHair, buildHat, HAT_COVER, HAT_RIDES } from './char_hair.js';
+import { buildTop, buildBottom, buildShoes, buildMidriff, wearMeta, bodyR } from './char_wear.js';
 import { buildGlasses, buildAccessories } from './char_gear.js';
 import { Animator, MOOD_NAMES } from './char_anim.js';
 import './char_clips.js';
@@ -95,7 +95,6 @@ export function createCharacter(ctx, look, extra) {
     const d = dims(look.body); fitRig(rig, d);
     const cx = { look, d, rest: restWorld(d), skin: liftSkin(C(look.skin)), shoeAccent: null };
     const meta = wearMeta(look), hatId = look.hat && look.hat.id, hatCover = HAT_COVER[hatId || 'none'] || 0, J = JSON.stringify, body = look.body, hc = look.hair && look.hair.color;
-    cx.hairVol = 0;
     const lits = [], glows = [], slot = {}, names = [];
     // every slot is built once into its own MeshBuilders and cached by the inputs it depends on, so setLook only rebuilds what actually changed
     const sf = (name, key, fn) => {
@@ -108,14 +107,17 @@ export function createCharacter(ctx, look, extra) {
     sf('facial', [look.skin, look.facial, hc], (m) => buildFacial(m, cx));
     sf('arms', [body, look.skin, meta.sleeveEnd], (m) => buildArms(m, cx, d, meta.sleeveEnd));
     sf('legs', [body, look.skin, meta.legEnd], (m) => buildLegs(m, cx, d, meta.legEnd));
-    sf('midriff', [body, look.skin, meta.top.f === 'tank' && meta.top.crop], (m) => { if (meta.top.f === 'tank' && meta.top.crop) loft(m, [0.46, 0.52, 0.58, 0.64].map((y, i) => { const b = bodyR(y, d); return { y, rx: b.rx + 0.006, rz: b.rz + 0.006, cz: 0.004, sk: K('hips'), c: shade(cx.skin, 0.9 + i * 0.03) }; }), { n: 10, sq: 0.8 }); });
+    sf('midriff', [body, look.skin, meta.crop], (m) => { if (meta.crop) buildMidriff(m, cx, d); });
     sf('top', [body, look.top, look.skin], (m) => buildTop(m, cx, d));
-    sf('bottom', [body, look.bottom], (m) => buildBottom(m, cx, d));
+    sf('bottom', [body, look.bottom, look.top && look.top.id, look.shoes && look.shoes.id], (m) => buildBottom(m, cx, d));
     sf('shoes', [body, look.shoes, look.skin], (m) => buildShoes(m, cx, d));
-    sf('hair', [look.skin, look.hair, hatCover], (m) => buildHair(m, cx, hatCover));
-    sf('hat', [look.hat, hatCover], (m, g) => buildHat(m, g, cx));
-    sf('glasses', [look.glasses], (m, g) => buildGlasses(m, g, cx));
-    sf('acc', [body, look.acc, look.top && look.top.id, look.bottom && look.bottom.id, look.hat && look.hat.id], (m, g) => buildAccessories(m, g, cx, api));
+    // hair is cut and squeezed under a covering hat (so its key holds the hat id) and long hair falls over a backpack; band hats ride on the hair (so theirs holds the hair style)
+    sf('hair', [look.skin, look.hair, hatCover >= 0.7 ? hatId : 'none', !!(look.acc && look.acc.back && look.acc.back.id === 'backpack')], (m) => buildHair(m, cx, hatCover));
+    sf('hat', [look.hat, hatCover, HAT_RIDES[hatId] ? look.hair && look.hair.style : ''], (m, g) => buildHat(m, g, cx));
+    // gear rests on what the look wears (straps over the hair and hat, chains on the top, wristwear on the cuff), so those ids are part of its key
+    const hs = look.hair && look.hair.style;
+    sf('glasses', [look.glasses, hs, hatId], (m, g) => buildGlasses(m, g, cx));
+    sf('acc', [body, look.acc, look.top && look.top.id, look.bottom && look.bottom.id, hatId, hs], (m, g) => buildAccessories(m, g, cx, api));
     api.slotTris = slot; { const hd = look.acc && look.acc.hand && look.acc.hand.id; api.holding = hd && /mic/.test(hd) ? 'mic' : hd === 'boombox' ? 'box' : null; }
     const g = finalize(lits), gg = finalize(glows);
     // triangle budget governor: if lit + glow + outline hull would exceed the budget, drop the outline from the least important slots first (silhouette parts last)

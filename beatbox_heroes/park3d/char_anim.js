@@ -274,7 +274,8 @@ function gait(P, c, dt, o, rw) {
     p = mod(p, 1); let z, y, pitch;
     if (p < duty) { const u = p / duty; z = S0 * (1 - 2 * u) * moving; y = 0; pitch = lerp(0.22, -0.5, sm(u * u)); }
     else { const u = (p - duty) / (1 - duty); z = (-S0 + 2 * S0 * sm(u)) * moving; y = lift * S(PI * u) * moving; pitch = lerp(-0.5, 0.22, sm(u)) * moving; }
-    return { z, ay: 0.085 + y + (pitch < 0 ? -pitch * 0.075 : 0) * moving, pitch };
+    // ankle height that keeps the lowest sole corner on the ground at this pitch (sole 0.085 below the ankle, toe 0.24 ahead, heel 0.12 behind)
+    return { z, ay: y + 0.085 * Math.cos(pitch) + (pitch < 0 ? 0.24 : 0.12) * Math.sin(Math.abs(pitch)), pitch };
   };
   const fl = foot(ph), fr = foot(ph + 0.5);
   P.lWL = P.lWR = 1; P.lXL = 0.105; P.lXR = -0.105; P.lZL = fl.z; P.lZR = fr.z; P.lYL = fl.ay; P.lYR = fr.ay; P.fPL = fl.pitch; P.fPR = fr.pitch; P.fYL = 0.06; P.fYR = -0.06;
