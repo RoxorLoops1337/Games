@@ -105,7 +105,7 @@
       const a = this.a, bars = this.battle ? 4 : (a.bars || 8), seed = (a.seed || Date.now() & 0xffff) + this.round * 977;
       this.chart = Core.makeChart(seed, { bars, difficulty: this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty) });
       if (this.battle && this.myStyle) this.chart = Core.styleChart(this.chart, this.myStyle, seed);
-      const dF = this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty), bpm = this.battle ? this.opp.bpm : Core.tempoFor ? Core.tempoFor(a.bpm || 100, dF) : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm; this.sub = Core.chartSub ? Core.chartSub(dF) : 1;
+      const dF = this.battle ? 0.35 + this.opp.skill * 0.45 : (a.difficulty === undefined ? 0.5 : a.difficulty), bpm = this.battle ? this.opp.bpm : Core.tempoFor ? Core.tempoFor(a.bpm || 100, dF, a.kind) : (a.bpm || 100); this.bpm = bpm; this.spb = 60 / bpm; this.sub = Core.chartSub ? Core.chartSub(dF) : 1;
       this.hits = []; this.notes = this.chart.map((n) => ({ lane: n.lane, beat: n.beat + 4, state: 0 })); this.combo = 0; this.maxCombo = 0; this.state = 'count'; this.roundStart = E.t;
       this.endBeat = (bars * 4 + 4) + 2; this.score = 0; this.pops.length = 0; this.stateT = 0;
       const g = metro.start(bpm);

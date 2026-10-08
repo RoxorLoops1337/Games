@@ -180,7 +180,7 @@ export function createRhythm(ctx, opts) {
   function beginRound() {
     const o = S.cfg, B = S.battle, TL = S.mode === 'train' ? S.trainL : null, bars = B ? 4 : TL ? TRAIN_BARS : (o.bars || 8), seed = S.seed0 + S.round * 977, diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : TL ? 0.2 + TL.level * 0.08 : (o.difficulty === undefined ? 0.5 : o.difficulty);
     let chart = TL ? trainChart(TL, bars) : Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
-    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : Core.tempoFor ? Core.tempoFor(o.bpm || 100, diff) : (o.bpm || 100), sub = Core.chartSub ? Core.chartSub(diff) : 1;
+    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : Core.tempoFor ? Core.tempoFor(o.bpm || 100, diff, o.kind || (game ? '' : 'busk')) : (o.bpm || 100), sub = Core.chartSub ? Core.chartSub(diff) : 1;
     S.lead = TL ? 12 : 4; S.cIn = S.lead - 4;                         // training: 4 beats LISTEN count, 4 beats the hero's call, 4 beats YOUR TURN count-in
     S.bpm = bpm; S.spb = 60 / bpm; S.chart = chart; ctx.__bpm = bpm; S.hits = []; S.combo = 0; S.maxCombo = 0; S.score = 0; S.counted = -1; S.beatSeen = -1; S.bars = bars; S.seed = seed; S.diff = diff;
     S.approach = Math.max(1.3, (1500 - Math.min(300, bpm * 2)) / 1000 * 1.1); S.phase = 'count'; S.press = [0, 0, 0, 0]; S.uHit = 0; S.oppView = []; dir.clear(); ui.setMeterName('CROWD');

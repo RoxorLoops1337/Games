@@ -414,9 +414,9 @@
     }
     return notes;
   }
-  // busking tempo by difficulty: easy (B t K t quarter notes) runs a bit quicker, hard keeps its eighth-note grooves (8 notes a bar) but slows down so they stay playable.
+  // set tempo by difficulty: easy busking (B t K t quarter notes) runs a bit quicker, hard keeps its eighth-note grooves (8 notes a bar) but slows down so they stay playable.
   // chartSub: shaker ticks per beat that fit the chart (2 = eighth-note ticks, so every gem lands on a tick)
-  function tempoFor(bpm, diff) { const d = diff === undefined ? 0.5 : diff; return Math.round((bpm || 100) * (d < 0.35 ? 1.12 : d < 0.7 ? 1 : 0.78)); }
+  function tempoFor(bpm, diff, kind) { const d = diff === undefined ? 0.5 : diff; return Math.round((bpm || 100) * (d < 0.35 ? (kind === 'busk' ? 1.12 : 1) : d < 0.7 ? 1 : 0.78)); }
   function chartSub(diff) { return (diff === undefined ? 0.5 : diff) >= 0.35 ? 2 : 1; }
   // continuous busking: in-game minutes per real second while you play (auto busking runs the clock twice as fast) and the auto pay cut
   const BUSK_LIVE = { minPerSec: 1.5, autoMul: 2, autoCash: 0.6, autoFans: 0.5, autoXp: 0.5, minMinutes: 15 };
