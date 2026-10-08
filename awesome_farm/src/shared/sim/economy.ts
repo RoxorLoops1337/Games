@@ -19,6 +19,7 @@ import * as mines from './mines';
 import * as quests from './quests';
 import * as shop from './shop';
 import type { Sim } from './sim';
+import { isUber } from './uber';
 import { ensureVeins } from './worldgen';
 import {
     addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, sellValue, takeItem, xpToNext,
@@ -139,7 +140,8 @@ export function cmdDemolish (sim: Sim, p: PlayerS, id: number) {
     const c = sim.center(b);
     if (b.kind === 'table') potluck.dismantle(sim, p, b);        // (the dishes go back to their cooks)
     // contents and a share of the materials come back
-    for (const part of [b.inv, b.out, b.fin]) {
+    if (isUber(b)) sim.toast(p.id, 'The Uber Chest\'s store stays safe: every other Uber Chest still opens it', 'chest_b', PAL.gold);
+    for (const part of [isUber(b) ? undefined : b.inv, b.out, b.fin]) {
         for (const [item, n] of Object.entries(part ?? {}) as [ItemId, number][]) sim.give(p, item, n, c.x, c.y);
     }
     for (const it of [...(b.belt ?? []), b.hand]) if (it) sim.give(p, it, 1, c.x, c.y);

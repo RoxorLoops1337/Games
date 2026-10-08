@@ -64,7 +64,7 @@ export const isBeltLike = (kind: string) => kind === 'belt' || kind === 'splitte
 export type BuildingKind =
     | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone'
     | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'lantern' | 'fence' | 'path' | 'planks' | 'bench' | 'mill'
-    | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
+    | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
     | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox'
     | 'brickfloor' | 'carpet' | 'slatefloor'
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate'
@@ -97,6 +97,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     coalgen:   { name: 'Coal Generator', tex: 'coalgen', size: [2, 2], cost: { stone: 20, ironbar: 6, gear: 4, brick: 6 }, cat: 'power', req: 'power', fuel: true, gen: 60, desc: 'Burns coal, wood or peat for steady power.' },
     chute:     { name: 'Export Chute', tex: 'chute', size: [1, 1], cost: { ironbar: 3, plank: 4, gear: 1 }, cat: 'logistics', req: 'logistics', desc: `Sells whatever a belt, inserter or drill drops in, for coins straight into the pocket of whoever built it: ${Math.round(TUNING.chuteCut * 100)}% of the market price. Never gear, tools, pods or crates. Interact to sell only one item.` },
     chest:     { name: 'Chest',       tex: 'chest_b',   size: [1, 1], cost: { wood: 8 }, cat: 'storage', storage: 400, desc: 'Stores up to 400 items. Everyone on the farm can use it.' },
+    uberchest: { name: 'Uber Chest', tex: 'uberchest', size: [1, 1], cost: { steel: 8, goldbar: 2, crystal: 2, plank: 6 }, cat: 'storage', req: 'uberchest', storage: 800, light: 18, desc: 'Every Uber Chest in the world opens the same store, shared by the whole farm. Each one you build adds 800 room.' },
     steelchest: { name: 'Steel Chest', tex: 'steelchest', size: [1, 1], cost: { steel: 6, plank: 4 }, cat: 'storage', req: 'logistics', storage: 1500, desc: 'Stores up to 1500 items. Inserters can load and unload it.' },
 
     bed:       { name: 'Garden Bed',  tex: 'bed',       size: [1, 1], cost: { wood: 3 }, cat: 'farm', walk: true, desc: 'Plant seeds, grow crops. You can walk right over it.' },
