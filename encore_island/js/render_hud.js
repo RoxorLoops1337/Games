@@ -34,7 +34,7 @@ function drawPlayerCard() {
 }
 // "NEW LAND" progress chip: always visible, shows how close the next island is; tap to be pointed at its portal
 function drawLandChip() {
-  const u = S.unlockPlate; if (!u || S.sheet || S.modal) return;
+  const u = S.unlockPlate; if (!u || S.sheet || S.modal || S.place === 'backstage') return;
   const left = 196, right = vw - 102; if (right - left < 100) return;
   const w = clamp(right - left, 100, 176), x = left + (right - left - w) / 2, y = 44, h = 34, rem = Math.max(0, u.cost - u.paid), afford = S.wallet >= rem, f = clamp((S.wallet + u.paid) / u.cost, 0, 1), pu = afford ? 0.5 + 0.5 * Math.sin(S.t * 6) : 0;
   ctx.fillStyle = HV.line; rr(x - 2, y - 2, w + 4, h + 4, 14); ctx.fill();
@@ -91,7 +91,7 @@ function drawMinimap(gt) {
 }
 // what to do next: sell, collect, pay a plate, or fight
 function guideTarget() {
-  const p = S.player;
+  const p = S.player; if (S.place === 'backstage') return null; // the room is small enough to need no arrow
   if (p.helmets.length >= Math.max(3, cap() * 0.6) || (p.helmets.length && S.pallet <= 0 && S.wallet < 30)) return { x: SELL.x, y: SELL.y, label: 'Sell your loot' };
   if (S.pallet > 0 && (S.pallet >= S.wallet * 0.25 || S.wallet < 40)) return { x: VAULT.x, y: VAULT.y, label: 'Collect coins' };
   const un = S.unlockPlate;
