@@ -1,0 +1,38 @@
+[
+ {
+  "id": "easy",
+  "name": "Easy"
+ },
+ {
+  "id": "normal",
+  "name": "Normal"
+ },
+ {
+  "id": "chill",
+  "name": "Chill XL"
+ },
+ {
+  "id": "hard",
+  "name": "Hard"
+ },
+ {
+  "id": "expert",
+  "name": "Expert"
+ },
+ {
+  "id": "terror",
+  "name": "Terror"
+ },
+ {
+  "id": "extreme",
+  "name": "Extreme"
+ },
+ {
+  "id": "melt",
+  "name": "Meltdown"
+ },
+ {
+  "id": "nightmare",
+  "name": "Nightmare"
+ }
+]
