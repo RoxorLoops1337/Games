@@ -5,7 +5,7 @@ import { armRad, armSkin, legSkin, legRad } from './char_body.js';
 const T = (f, o) => Object.assign({ f, hem: 0.45, w: 1.04, sl: 0.4, flare: 0 }, o);
 export const TOPS = {
   tee: T('tee'), bbhtee: T('tee', { print: 'bbh' }), hawaiian: T('tee', { sl: 0.36, print: 'flower', w: 1.1 }), flannel: T('tee', { sl: 1, pat: 'plaid', w: 1.08, collar: 1 }),
-  tank: T('tank', { sl: 0 }), croptop: T('tank', { hem: 0.6, sl: 0.0, crop: 1 }), dress: T('dress', { hem: 0.3, sl: 0.3, flare: 1 }), overalls: T('tee', { sl: 0.4, bib: 1, shirt: 1, sleeve2: 1 }),
+  tank: T('tank', { sl: 0 }), croptop: T('tank', { hem: 0.6, sl: 0.4, crop: 1 }), dress: T('dress', { hem: 0.3, sl: 0.3, flare: 1 }), overalls: T('tee', { sl: 0.4, bib: 1, shirt: 1, sleeve2: 1 }),
   oversized: T('tee', { hem: 0.35, w: 1.42, sl: 0.66, flare: 0.1, print: 'bolt', drop: 1 }),
   hoodie: T('hoodie', { hem: 0.43, w: 1.14, sl: 1 }), hoodiebig: T('hoodie', { hem: 0.36, w: 1.38, sl: 1, drop: 1 }),
   sweater: T('sweater', { hem: 0.43, w: 1.12, sl: 1 }), turtleneck: T('sweater', { w: 1.03, sl: 1, turtle: 1 }), poncho: T('sweater', { hem: 0.32, w: 1.4, sl: 0.7, flare: 0.2 }),
@@ -102,7 +102,7 @@ export function topZones(id, spec, col, c2) {
     case 'sweater': B(ROW(8.6), ROW(8.0), c2l); B(ROW(7.6), ROW(6.9), c2); Z.cuff = lt; break;
     case 'hoodie': case 'hoodiebig': case 'puffer': Z.cuff = lt; break;
     case 'tracktop': Z.cuff = lt; Z.stripe = c2; break;
-    case 'dress': B(ROW(11.2), ROW(9.9), c2); B(0.3, 0.33, c2, c2l); break;
+    case 'dress': B(ROW(11.2), ROW(9.9), c2); break;
     case 'jersey': Z.neck = c2; Z.panel = c2; break;
     case 'bomber': Z.neck = c2; Z.collar = shade(c2, 0.95); Z.cuff = c2; Z.ring = c2l; B(hem + 0.05, hem + 0.064, WHITE); break;
     case 'varsity': Z.neck = c2; Z.collar = shade(c2, 0.95); Z.cuff = C(WHITE); Z.ring = c2; B(hem + 0.05, hem + 0.064, WHITE); break;
@@ -123,10 +123,12 @@ export function buildTop(mb, ctx, d) {
   const colorFor = (y) => (spec.rib && y < hemY + 0.05 ? shade(c2, 0.9) : tint(y));
   // ring heights: the torso profile plus an edge row at every colour band, so each band is a crisp run of facets
   const ys = f === 'dress' ? [0.3, 0.38, 0.45, 0.52, 0.6, 0.66, 0.72, 0.78, 0.84, 0.885, 0.905] : [hemY].concat(PY.filter((y) => y > hemY + 0.02 && y < 0.9), [0.905]);
+  // quilted tops: every other profile row puffs out, the rows between are the stitched seams, a crisp dark band from each one (one extra row per seam) like the sprite's quilting lines
+  const puffed = new Set(ys.filter((y, i) => spec.puff && i % 2)); if (spec.puff) ys.forEach((y, i) => { if (i > 0 && !(i % 2) && y > hemY + 0.03 && y < 0.86) Z.bands.push([y, y + 0.013, shade(col, 0.5)]); });
   Z.bands.forEach((b) => [b[0], b[1]].forEach((y) => { if (y > ys[0] + 0.004 && y < ys[ys.length - 1] - 0.004 && !ys.some((v) => Math.abs(v - y) < 0.005)) { ys.push(y); ys.sort((a, c) => a - c); } }));
   const rings = ys.map((y, i) => {
     if (f === 'dress') { const r = topRad(spec, d, y); return { y, rx: r.rx, rz: r.rz, cz: 0.005, sk: torsoSk(y), c: mix(shade(bc, 0.82), bc, clamp((y - 0.3) / 0.45, 0, 1)), sq: 0.9 }; }
-    let { rx, rz } = topRad(spec, d, y); if (spec.puff && i % 2 && !(vest && y >= 0.76)) { rx += 0.012; rz += 0.012; }
+    let { rx, rz } = topRad(spec, d, y); if (puffed.has(y) && !(vest && y >= 0.76)) { rx += 0.012; rz += 0.012; }
     // sleeveless (and a vest over sleeves): the armhole is cut inside the arm, so a wide vest never swallows the shoulder and the arm leaves the cloth at its side
     if (vest && y >= 0.76) rx = Math.min(rx, d.shX - 0.012);
     if (y > 0.88) { rx = bodyR(y, d).rx * (w > 1.25 ? 1.1 : 1.04) + 0.012; rz = bodyR(y, d).rz + 0.015; }
@@ -142,16 +144,16 @@ export function buildTop(mb, ctx, d) {
     const m1 = lining(mb, lr.map((r) => ({ y: r.y, rx: r.rx - 0.006, rz: r.rz - 0.006, cz: 0.005, sk: r.sk, c: shade(bc, 0.42) })), { n, sq: f === 'dress' ? 0.9 : 0.8 }); if (rings[0].y < 0.47) reskin(mb, m1, drapeSk()); }
   // neck opening trim / collar, in the colour the sprite draws its collar rim
   if (f === 'sweater') loft(mb, [0.9, 0.96].map((y, i) => ({ y, rx: spec.turtle ? 0.105 : 0.115, rz: spec.turtle ? 0.1 : 0.105, cz: 0.012, sk: i ? K('neck') : K2('chest', 'neck', 0.5), c: i ? lite(col, 0.06) : shade(col, 0.85) })), { n: 8, caps: '' });
-  else if (f !== 'tank') loft(mb, [0.895, 0.925].map((y, i) => ({ y, rx: 0.104, rz: 0.1, cz: 0.012, sk: K2('chest', 'neck', 0.5), c: i ? Z.neck : shade(Z.neck, 0.85) })), { n: 8, caps: '' });
+  else if (f !== 'tank' || spec.crop) loft(mb, [0.895, 0.925].map((y, i) => ({ y, rx: 0.104, rz: 0.1, cz: 0.012, sk: K2('chest', 'neck', 0.5), c: i ? Z.neck : shade(Z.neck, 0.85) })), { n: 8, caps: '' });
   // hem band / rib
   if (spec.rib || f === 'sweater') loft(mb, [hemY - 0.0, hemY + 0.05].map((y, i) => { const b = bodyR(Math.max(y, 0.4), d); return { y, rx: b.rx * w + ease + 0.004, rz: b.rz * w + ease + 0.004, cz: 0.005, sk: torsoSk(y), c: shade(spec.rib ? c2 : col, i ? 0.9 : 0.78), sq: 0.8 }; }), { n, sq: 0.8, caps: 'b' });
   // sleeves: base colour, an extra row before the end so the cuff (and the ring above it) is a crisp band instead of a gradient, stripes and prints per facet
   [1, -1].forEach((s) => {
     if (spec.sl <= 0.02) return;
     const uMax = clamp(spec.sl, 0, 1), rs = spec.vest ? 1.1 : w > 1.3 ? 1.5 : w > 1.1 ? 1.25 : 1.1, loose = spec.drop ? 1.55 : 1, uc = uMax - (long ? 0.07 : 0.06), ur = Z.ring ? uc - 0.045 : -1;
-    const us = [0, 0.12, 0.3, 0.55, 0.8, 1].filter((u) => u < uMax - 0.001 && (u === 0 || (Math.abs(u - uc) > 0.03 && (ur < 0 || Math.abs(u - ur) > 0.03)))).concat(ur > 0 ? [ur] : [], [uc, uMax]).sort((a, b) => a - b);
+    const qs = id === 'puffer' ? [0.3, 0.55].filter((u) => u < uc - 0.05) : [], us = [0, 0.12, 0.3, 0.55, 0.8, 1].filter((u) => u < uMax - 0.001 && (u === 0 || (Math.abs(u - uc) > 0.03 && (ur < 0 || Math.abs(u - ur) > 0.03)))).concat(ur > 0 ? [ur] : [], [uc, uMax], qs.map((u) => u + 0.025)).sort((a, b) => a - b);
     const R = us.map((u, i) => { const y = 0.915 - u * 0.405, r0 = u === 0 ? 0.55 : 1, r = (armRad(u) + 0.022) * rs * (u > 0.2 ? loose : 1.0) * (long && u > 0.8 ? 0.82 : 1) * (i === us.length - 1 && !long ? 1.05 : 1) * r0; return { y, rx: r, rz: r * 0.95, cx: s * d.shX * (u === 0 ? 0.86 : 1), sk: armSkin(s, Math.min(y, 0.87)), c: i === us.length - 1 ? Z.cuff : Z.sleeve || tint(0.7 + u * 0.1) }; });
-    const sfc = (i, j) => { const u = us[j]; if (u >= uc - 1e-6) return Z.cuffAlt && i % 2 ? Z.cuffAlt : Z.cuff; if (ur > 0 && u >= ur - 1e-6) return Z.ring; if (spec.stripes && (s > 0 ? i === 1 : i === 4)) return Z.slStripe;
+    const sfc = (i, j) => { const u = us[j]; if (u >= uc - 1e-6) return Z.cuffAlt && i % 2 ? Z.cuffAlt : Z.cuff; if (qs.some((q) => u >= q - 1e-6 && u < q + 0.02)) return shade(col, 0.5); if (ur > 0 && u >= ur - 1e-6) return Z.ring; if (spec.stripes && (s > 0 ? i === 1 : i === 4)) return Z.slStripe;
       if (id === 'flannel') return (i + j) % 3 === 0 ? c2 : null; if (id === 'hawaiian') return j === 1 && (i + (s > 0 ? 0 : 2)) % 3 === 0 ? c2 : null; return null; };
     // the open end folds in to a dark lip that hugs the arm (or wrist), so the end cap is a thin rim around the limb instead of a flat lid
     { const e = R[R.length - 1], lr = armRad(uMax) + 0.007; loft(mb, [e, { y: e.y - 0.004, rx: lr, rz: lr * 0.95, cx: e.cx, sk: e.sk, c: shade(e.c, 0.42) }], { n: 6, caps: 't', capCol: shade(e.c, 0.3), nh: true }); }
@@ -165,6 +167,7 @@ export function buildTop(mb, ctx, d) {
     let best = back ? 1e9 : -1e9; for (let i = 0; i < n; i++) { const p = P[i], q = P[(i + 1) % n]; if ((p[0] - x) * (q[0] - x) <= 0 && p[0] !== q[0]) { const z = p[1] + (x - p[0]) / (q[0] - p[0]) * (q[1] - p[1]); best = back ? Math.min(best, z) : Math.max(best, z); } }
     return Math.abs(best) > 1e8 ? (back ? -rz : rz) : best;
   };
+  const mDec = mark(mb);
   const rxAt = (y) => { let j = 0; while (j < rings.length - 2 && rings[j + 1].y < y) j++; const a = rings[j], b = rings[j + 1]; return lerp(a.rx, b.rx, clamp((y - a.y) / (b.y - a.y), 0, 1)); };
   const onS = (x, y, off, back) => [x, y, surf(x, y, back) + (back ? -off : off)];
   // convex-ish decal fanned from its centre (quad: two triangles, for the small cells of patches and strips), each vertex on the surface with its own skin; back: on the back
@@ -223,6 +226,8 @@ export function buildTop(mb, ctx, d) {
     }
     if (id === 'kimono') { seam(0, 0, ROW(11.3), hemY + 0.01, 0.009, c2, 0.003); [[-0.15, ROW(5)], [0.15, ROW(6)], [-0.13, ROW(14)], [0.13, ROW(15)]].forEach(([x, y]) => dot(x, y, 0.01, '#fff0c9')); }
     if (id === 'champ') seam(0, 0, 0.89, hemY + 0.01, 0.013, c2, 0.003);
+    // puffer: slanted hand pocket openings low on the front, darker like the sprite's quilt shading
+    if (spec.puff && !spec.vest) [1, -1].forEach((s) => decalQ([[s * 0.07, 0.552], [s * 0.16, 0.58], [s * 0.16, 0.564], [s * 0.07, 0.536]], shade(col, 0.45), 0.008));
     if (id === 'stagesuit') { decalQ([[-0.022, ROW(10.8) - 0.002], [0.022, ROW(10.8) - 0.002], [0.022, ROW(12.2) + 0.002], [-0.022, ROW(12.2) + 0.002]], '#ffe14d', 0.008); [[-0.13, 0.8], [0.1, 0.72], [-0.07, 0.64], [0.14, 0.5], [-0.15, 0.48], [0.05, 0.83]].forEach(([x, y], i) => dot(x, y, 0.007, WHITE, i % 2 === 1)); }
   }
   // overalls: a bib from the hem up to the chest, straps that run over the shoulders on the cloth surface (not through the body) down to the back,
@@ -231,7 +236,11 @@ export function buildTop(mb, ctx, d) {
     patch(-0.11, 0.11, hemY + 0.012, 0.73, col, 0.008); patch(-0.11, 0.11, 0.715, 0.73, shade(col, 0.8), 0.01); patch(-0.045, 0.045, 0.6, 0.66, shade(col, 0.82), 0.01);
     const sx = 0.125; [1, -1].forEach((s) => { tubePT(mb, [onS(s * 0.085, 0.72, 0.012), onS(s * 0.11, 0.82, 0.01), [s * sx, 0.893, surf(s * sx, 0.885) * 0.62], [s * sx, 0.912, 0], [s * sx, 0.893, surf(s * sx, 0.885, true) * 0.62], onS(s * 0.11, 0.8, 0.01, true), onS(s * 0.07, 0.66, 0.012, true)], 0.011, col, { n: 4, a0: Math.PI / 4, sk: K('chest'), nh: true }); box(mb, onS(s * 0.085, 0.722, 0.016), [0.026, 0.026, 0.01], '#e8d27a', K('chest')); });
   }
+  // dress hem trim: a thin ring just proud of the hem (its own rows would change how the skirt drapes), accent and light accent alternating, draped like the hem
+  if (f === 'dress') { const mh = mark(mb); loft(mb, [0.3, 0.33].map((y) => { const r = topRad(spec, d, y); return { y, rx: r.rx + 0.003, rz: r.rz + 0.003, cz: 0.005, sk: torsoSk(y), c: c2 }; }), { n, sq: 0.9, caps: '', nh: true, fc: (i) => (i % 2 ? lite(c2, 0.2) : c2) }); reskin(mb, mh, drapeSk()); }
   if (f === 'dress') [[-0.12, 0.5], [0.09, 0.47], [-0.03, 0.42], [0.15, 0.4], [-0.17, 0.38], [0.03, 0.35]].forEach(([x, y]) => { dot(x, y, 0.011, lite(c2, 0.35)); dot(-x, y + 0.01, 0.011, lite(c2, 0.35), true); });
+  // details below the hips of a dress or long coat swing with the draped hem, so they never sink into it (or behind the skirt under it)
+  if (rings[0].y < 0.47) reskin(mb, mDec, drapeSk());
 }
 // flannel checks: accent lines crossing over the cloth, full accent where they cross
 function patFC(pat, col, c2, i, j) {

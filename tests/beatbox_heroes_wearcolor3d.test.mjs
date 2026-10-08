@@ -59,6 +59,23 @@ ok(n2d >= 18, 'the 2D sprites give most tops a color2 zone (' + n2d + ')');
 // sleeves in color2 where the sprite draws them so (varsity, overalls, puffvest): the arms of the top slot are accent coloured
 for (const id of ['varsity', 'overalls', 'puffvest']) { hero.setLook(look({ top: { id, color: BASE, color2: ACC } })); ok(share(slotCols(hero, 'top'), ACC, BASE) > 0.25, id + ': sleeves in color2 (' + (share(slotCols(hero, 'top'), ACC, BASE) * 100).toFixed(0) + '%)'); }
 
+// rest positions of one slot (same order as slotCols)
+function slotPos(c, name) { const g = c.object.getObjectByName('char_lit').geometry, P = g.attributes.position.array; let t = 0; for (const n of Object.keys(c.slotTris)) { if (n === name) return P.slice(t * 9, (t + c.slotTris[n]) * 9); t += c.slotTris[n]; } return new Float32Array(0); }
+const lum = (C3, i) => C3[i] * 0.3 + C3[i + 1] * 0.59 + C3[i + 2] * 0.11;
+// puffer quilting: the stitched seam rows on the front and back are clearly darker than the puffed rows between them, the sleeves carry seams too
+{
+  hero.setLook(look({ top: { id: 'puffer', color: BASE } })); const Cc = slotCols(hero, 'top'), P = slotPos(hero, 'top'), band = (y0, y1, sleeve) => { let s = 0, n = 0; for (let i = 0; i < P.length; i += 3) { const x = Math.abs(P[i]), y = P[i + 1], z = Math.abs(P[i + 2]); if (y > y0 && y < y1 && (sleeve ? x > 0.3 : x < 0.12 && z > 0.08)) { s += lum(Cc, i); n++; } } return n ? s / n : NaN; };
+  const seam = band(0.528, 0.536), puff = band(0.585, 0.615); ok(seam < puff * 0.75, 'puffer: quilt seams darker than the puffs (' + seam.toFixed(3) + ' vs ' + puff.toFixed(3) + ')');
+  let dark = 0, all = 0; for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i]) > 0.3 && P[i + 1] > 0.55 && P[i + 1] < 0.86) { all++; if (lum(Cc, i) < puff * 0.7) dark++; } ok(dark > 0 && dark / all > 0.05, 'puffer: seams on the sleeves (' + dark + ' of ' + all + ')');
+  ok(hero.tris <= TRI_BUDGET, 'puffer within budget (' + hero.tris + ')');
+}
+// crop top: short sleeves like the tee (cloth around the upper arm, bare skin below), the midriff band still shows
+{
+  const armCloth = (id) => { hero.setLook(look({ top: { id, color: BASE, color2: ACC } })); const P = slotPos(hero, 'top'); let n = 0; for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i]) > 0.2 && P[i + 1] > 0.7 && P[i + 1] < 0.86) n++; return { n, end: hero.slotTris.midriff }; };
+  const tee = armCloth('tee'), crop = armCloth('croptop'), tank = armCloth('tank');
+  ok(crop.n >= tee.n * 0.7 && crop.n > tank.n * 1.5, 'croptop has tee-length sleeves (' + crop.n + ' sleeve vertices, tee ' + tee.n + ', tank ' + tank.n + ')');
+  ok(crop.end > 0, 'croptop keeps its bare midriff band (' + crop.end + ' tris)');
+}
 // 2. live recolour on one character: color and color2 both follow setLook
 {
   const c = createCharacter({ quality: 'high' }, look({ top: { id: 'jersey', color: BASE, color2: ACC } })), a = slotCols(c, 'top');
