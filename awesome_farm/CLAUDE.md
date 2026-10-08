@@ -51,7 +51,8 @@ npm run balance        # win rates for a simple (non-dodging) fighter: every exp
 
 **Hosting on Cloudflare** (the always-on world, Workers Free plan): `server/cf/` (a Worker + one Durable Object per
 world running the same `SimHost`; saves gzipped and chunked in the object's storage; admin routes for backups,
-restore and a new world). Deploy and budget: [server/cf/README.md](server/cf/README.md); `npm run cf:dev` runs it
+restore and a new world; an admin page at `/admin`, unlocked with the developer key: status and today's usage, kick, a new
+secret word, announcements, backups). Deploy and budget: [server/cf/README.md](server/cf/README.md); `npm run cf:dev` runs it
 locally, `tests/cf.test.ts` covers its storage. Its address is the link to share: `/` sends people to the game page
 with `?server=<address>`, which fills the title screen's Join box (any `?server=` link does).
 

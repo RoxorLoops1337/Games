@@ -21,5 +21,11 @@ class_name = "World"
 tag = "v1"
 new_sqlite_classes = ["World"]
 
+# admin.html is bundled as a string (the admin page served at /admin)
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
 [observability]
 enabled = true

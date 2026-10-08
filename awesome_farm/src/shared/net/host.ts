@@ -3,6 +3,7 @@
 // (server/main.ts), so both behave identically.
 
 import { MAX_PLAYERS, NET, TILE } from '../config';
+import { PAL } from '../palette';
 import { BUILDINGS } from '../data/buildings';
 import * as dev from '../sim/dev';
 import { Sim } from '../sim/sim';
@@ -340,6 +341,58 @@ export class SimHost {
         const salt = randomHex(12);
         accts[nk] = { id, salt, h: this.hash(key, salt) };
         return { id, name, made: nk };
+    }
+
+    // ── the server's admin (the Cloudflare host's /admin page; any host may offer these) ──
+    /** Every farmer in the world: who is connected now and who signs in with a secret word (under which names). */
+    adminPlayers () {
+        const live = new Set(this.peers.values());
+        const words = new Map<string, string[]>();
+        for (const [nk, r] of Object.entries(this.sim.s.accounts ?? {})) (words.get(r.id) ?? words.set(r.id, []).get(r.id)!).push(nk);
+        return Object.values(this.sim.s.players).map((p) => ({ id: p.id, name: p.name, level: p.level, online: live.has(p.id), words: words.get(p.id) ?? [] }))
+            .sort((a, b) => Number(b.online) - Number(a.online) || b.level - a.level || a.name.localeCompare(b.name));
+    }
+
+    /** Sends a farmer back to the title screen with `reason` (their game does not reconnect by itself). False when they are not connected. */
+    kick (id: string, reason = 'The server admin sent you back to the title screen.') {
+        let n = 0;
+        for (const [peer, pid] of [...this.peers]) if (pid === id) { this.send(peer, { t: 'refused', reason: text(reason, 120) || 'Disconnected.' }); peer.close?.(); n++; }
+        return n > 0;
+    }
+
+    /** Gives a farmer a new secret word (a farmer who forgot theirs, or lost the device they played on). They sign in with the returned name and `word` on any device. */
+    setWord (id: string, word: string): { name: string } | { error: string } {
+        const p = this.sim.s.players[id];
+        if (!p) return { error: 'No such farmer.' };
+        const key = text(word, 64);
+        if (key.length < 4) return { error: 'A secret word needs at least 4 characters.' };
+        const accts = (this.sim.s.accounts ??= {});
+        let nk = Object.keys(accts).find((k) => accts[k].id === id);
+        if (!nk) {
+            nk = p.name.toLowerCase();
+            if (Object.prototype.hasOwnProperty.call(accts, nk)) return { error: `The name "${p.name}" already belongs to another farmer's secret word.` };
+        }
+        const salt = randomHex(12);
+        accts[nk] = { id, salt, h: this.hash(key, salt) };
+        this.fails.delete(nk);
+        return { name: p.name };
+    }
+
+    /** Takes a farmer's secret word away: they can come back from the device they played on without one (and set a new one there). */
+    forgetWord (id: string) {
+        const accts = this.sim.s.accounts ?? {};
+        const gone = Object.keys(accts).filter((k) => accts[k].id === id);
+        for (const k of gone) delete accts[k];
+        return gone.length;
+    }
+
+    /** A banner for everybody who is in the world now. */
+    announce (message: string) {
+        const t = text(message, 90).replace(/[\u0000-\u001f]/g, ' ').trim();
+        if (!t) return false;
+        this.sim.banner(t, 'from the server', PAL.gold);
+        this.flushWanted = true;
+        return true;
     }
 
     private send (peer: Peer, msg: ServerMsg) { peer.send(JSON.stringify(msg)); }

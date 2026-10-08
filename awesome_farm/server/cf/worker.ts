@@ -6,11 +6,14 @@
 //   GET  /            → the game page, pointed at this server
 //   GET  /status      → what the title screen asks before Join (public, any origin)
 //   GET  /ws          → a player's WebSocket
-//   /admin/*          → backups, restore, a new world, the log (Authorization: Bearer <DEV_KEY>)
+//   GET  /admin       → the admin page (admin.html: unlocked with the DEV_KEY, works on a phone)
+//   /admin/*          → status, farmers, kick, secret words, announcements, backups, restore, a new world, the log
+//                       (Authorization: Bearer <DEV_KEY>)
 //
 // Deploy: see server/cf/README.md. Never store secrets in wrangler.toml: PASSWORD and DEV_KEY are `wrangler secret`s.
 import { DurableObject } from 'cloudflare:workers';
-import { MAX_PLAYERS } from '../../src/shared/config';
+import { MAX_PLAYERS, TUNING } from '../../src/shared/config';
+import { SEASONS, seasonOf } from '../../src/shared/season';
 import { SimHost, type Peer } from '../../src/shared/net/host';
 import { PROTOCOL } from '../../src/shared/net/protocol';
 import { sha256 } from '../../src/shared/net/sha256';
@@ -18,6 +21,7 @@ import { makeSeed } from '../../src/shared/rng';
 import { Sim } from '../../src/shared/sim/sim';
 import type { WorldState } from '../../src/shared/sim/types';
 import { WorldStore } from './store';
+import ADMIN_PAGE from './admin.html';
 
 export interface Env {
     WORLD: DurableObjectNamespace<World>;
@@ -52,6 +56,9 @@ export default {
             to.searchParams.set('server', url.origin);
             return Response.redirect(to.toString(), 302);
         }
+        if (url.pathname === '/admin' || url.pathname === '/admin/') {
+            return new Response(ADMIN_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' } });
+        }
         if (url.pathname === '/status' || url.pathname === '/ws' || url.pathname.startsWith('/admin/')) {
             const world = (env.WORLD_NAME || 'farm').replace(/[^a-zA-Z0-9_-]/g, '') || 'farm';
             return env.WORLD.get(env.WORLD.idFromName(world)).fetch(req);
@@ -71,6 +78,9 @@ export class World extends DurableObject<Env> {
     private saving: Promise<void> = Promise.resolve();
     private queued: string | null = null;
     private logs: string[] = [];
+    /** Today's traffic (UTC day, as Cloudflare counts): HTTP requests and incoming WebSocket messages (20 messages bill as one request). Saved with the world. */
+    private usage = { day: '', http: 0, msgs: 0 };
+    private readonly awake = Date.now();
     private adminFails: number[] = [];
 
     constructor (ctx: DurableObjectState, env: Env) {
@@ -79,6 +89,7 @@ export class World extends DurableObject<Env> {
         void ctx.blockConcurrencyWhile(async () => {
             let state: WorldState | null = null;
             try { const saved = await this.store.load(); if (saved) state = JSON.parse(saved) as WorldState; } catch (err) { this.log(`!! the save could not be read: ${(err as Error).message}; starting a new world (the old save stays in storage)`); }
+            this.usage = (await ctx.storage.get<typeof this.usage>('usage')) ?? this.usage;
             this.boot(state);
         });
     }
@@ -111,7 +122,7 @@ export class World extends DurableObject<Env> {
         this.saving = this.saving.then(async () => {
             const next = this.queued!;
             this.queued = null;
-            try { await this.store.save(next); } catch (err) { this.log(`!! could not save the world: ${(err as Error).message}`); }
+            try { await this.store.save(next); await this.ctx.storage.put('usage', this.usage); } catch (err) { this.log(`!! could not save the world: ${(err as Error).message}`); }
         });
     }
 
@@ -141,8 +152,16 @@ export class World extends DurableObject<Env> {
     }
 
     // ── requests ───────────────────────────────────────────────────────────
+    /** Counts one incoming request or message against today (a new UTC day starts from zero). */
+    private count (kind: 'http' | 'msgs') {
+        const day = new Date().toISOString().slice(0, 10);
+        if (this.usage.day !== day) this.usage = { day, http: 0, msgs: 0 };
+        this.usage[kind]++;
+    }
+
     async fetch (req: Request): Promise<Response> {
         const url = new URL(req.url);
+        this.count('http');
         if (url.pathname === '/status') return json(this.status());
         if (url.pathname === '/ws') return this.openSocket(req);
         if (url.pathname.startsWith('/admin/')) return this.admin(req, url.pathname.slice(7));
@@ -170,6 +189,7 @@ export class World extends DurableObject<Env> {
         ws.addEventListener('message', (ev) => {
             const data = ev.data;
             const text = typeof data === 'string' ? data : new TextDecoder().decode(data as ArrayBuffer);
+            this.count('msgs');
             if (text.length > MSG_MAX) { ws.close(1009, 'Message too big'); return; }
             const now = Date.now();
             tokens = Math.min(MSG_BURST, tokens + (now - filled) / 1000 * MSG_PER_S);
@@ -216,7 +236,44 @@ export class World extends DurableObject<Env> {
         }
         if (req.method === 'GET' && op === 'backups') return json({ live: await this.store.info(), backups: await this.store.backups() });
         if (req.method === 'GET' && op === 'log') return json({ lines: this.logs });
+        if (req.method === 'GET' && op === 'state') {
+            const s = this.sim.s, u = this.usage;
+            return json({
+                status: this.status(), clock: { day: s.day, clock: s.clock, night: s.night, nightLen: s.nightLen, dayLen: TUNING.dayLength, season: SEASONS[seasonOf(s.day)].name }, players: this.host.adminPlayers(),
+                usage: { ...u, requests: u.http + Math.ceil(u.msgs / 20), limit: 100_000 }, awakeSince: this.awake,
+                live: await this.store.info(), backups: await this.store.backups(), log: this.logs.slice(-60),
+            });
+        }
         if (req.method !== 'POST') return json({ error: 'unknown admin route' }, 404);
+        const body = async () => { try { return (await req.json()) as Record<string, unknown>; } catch { return {} as Record<string, unknown>; } };
+        const str = (v: unknown) => (typeof v === 'string' ? v : '');
+        if (op === 'kick') {
+            const b = await body();
+            const done = this.host.kick(str(b.id), str(b.reason) || undefined);
+            if (done) this.log(`Admin: sent ${this.sim.s.players[str(b.id)]?.name ?? str(b.id)} back to the title screen`);
+            return done ? json({ ok: true }) : json({ error: 'That farmer is not connected.' }, 400);
+        }
+        if (op === 'word') {
+            const b = await body();
+            const r = this.host.setWord(str(b.id), str(b.word));
+            if ('error' in r) return json(r, 400);
+            this.log(`Admin: ${r.name} has a new secret word`);
+            await this.saveNow();
+            return json({ ok: true, name: r.name });
+        }
+        if (op === 'forget') {
+            const b = await body();
+            const n = this.host.forgetWord(str(b.id));
+            if (n) { this.log(`Admin: ${this.sim.s.players[str(b.id)]?.name ?? str(b.id)} no longer needs a secret word`); await this.saveNow(); }
+            return json({ ok: true, removed: n });
+        }
+        if (op === 'announce') {
+            const b = await body();
+            if (!this.host.announce(str(b.text))) return json({ error: 'Nothing to say.' }, 400);
+            this.log(`Admin announced: ${str(b.text).slice(0, 90)}`);
+            this.wake();
+            return json({ ok: true, heard: this.host.playerCount });
+        }
         if (op === 'save') { await this.saveNow(); return json({ ok: true, live: await this.store.info() }); }
         if (op === 'reset') {
             await this.replace(null, 'before a new world');

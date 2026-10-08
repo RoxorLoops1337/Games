@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Awesome Farm admin</title>
+<style>
+  /* the game's parchment and wood (src/shared/palette.ts, src/client/ui/theme.ts) */
+  :root {
+    --paper: #fff6e0; --paper2: #f4deaa; --ink: #2a1d2c; --wood: #6a402f; --bark: #a8703f;
+    --gold: #ffd966; --lime: #5cb04f; --berry: #e85d62; --pebble: #6c6478; --line: #e5d3a8; --shadow: #6a402f33;
+    --bg: #f4deaa; --card: #fff6e0; --field: #fffdf6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #2f2533; --paper2: #241c27; --ink: #f4ead5; --wood: #1b141d; --bark: #8a5a3a; --pebble: #b4a9bd;
+      --line: #463848; --shadow: #0006; --bg: #1b141d; --card: #2f2533; --field: #3a2e3e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: var(--wood); color: #fff6e0; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 2; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: .2px; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+  .on { background: var(--lime); color: #142; } .off { background: var(--berry); color: #fff; } .wait { background: var(--gold); color: #2a1d2c; }
+  header .spacer { flex: 1; }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  section { background: var(--card); border: 2px solid var(--bark); border-radius: 12px; padding: 14px 16px; box-shadow: 0 3px 0 var(--shadow); min-width: 0; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { margin: 0 0 10px; font-size: 15px; color: var(--bark); border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat b { display: block; font-size: 22px; line-height: 1.1; }
+  .stat span { color: var(--pebble); font-size: 13px; }
+  .bar { height: 10px; border-radius: 6px; background: var(--line); overflow: hidden; margin: 6px 0 2px; }
+  .bar i { display: block; height: 100%; background: var(--lime); width: 0; transition: width .4s; }
+  .bar i.warn { background: var(--gold); } .bar i.bad { background: var(--berry); }
+  .note { color: var(--pebble); font-size: 13px; margin: 6px 0 0; }
+  button { font: inherit; font-weight: 700; padding: 7px 12px; border-radius: 8px; border: 2px solid var(--bark); background: var(--gold); color: #2a1d2c; cursor: pointer; min-height: 38px; }
+  button.quiet { background: var(--paper2); color: var(--ink); } button.danger { background: var(--berry); color: #fff; border-color: #a33; }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=text], input[type=password] { font: inherit; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--field); color: var(--ink); min-height: 38px; width: 100%; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .row input[type=text] { flex: 1; min-width: 180px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--pebble); font-weight: 600; font-size: 12px; }
+  td.r, th.r { text-align: right; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line); margin-right: 6px; }
+  .dot.live { background: var(--lime); box-shadow: 0 0 0 3px #5cb04f33; }
+  .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .acts button { padding: 4px 9px; min-height: 32px; font-size: 13px; }
+  pre { margin: 0; background: #2a1d2c; color: #ede2cc; padding: 10px; border-radius: 8px; max-height: 280px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.4 Consolas, monospace; }
+  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: calc(100% - 32px); z-index: 5; }
+  #toast.show { opacity: 1; }
+  #lock { max-width: 420px; margin: 48px auto; padding: 0 16px; }
+  #lock section { padding: 20px; }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-top: 10px; }
+  a { color: inherit; }
+  .muted { color: var(--pebble); }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; padding: 12px; }
+    .hide-sm { display: none; }
+    th, td { padding: 6px 4px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Awesome Farm admin</h1>
+  <span id="pill" class="pill wait">…</span>
+  <span class="spacer"></span>
+  <button id="share" class="quiet" title="Copy the link friends use to join">Copy join link</button>
+  <button id="logout" class="quiet" hidden>Lock</button>
+</header>
+
+<div id="lock" hidden>
+  <section>
+    <h2>Unlock</h2>
+    <p class="note" style="margin-top:0">Enter the server's admin key (the developer key in <b>dev-key.txt</b> on the PC that set the server up).</p>
+    <form id="lockform">
+      <input id="key" type="password" autocomplete="current-password" placeholder="Admin key" required>
+      <label class="check"><input id="remember" type="checkbox"> Remember on this device</label>
+      <div class="row"><button type="submit">Unlock</button><span id="lockmsg" class="note"></span></div>
+    </form>
+  </section>
+</div>
+
+<main id="app" hidden>
+  <section class="wide">
+    <h2>Right now</h2>
+    <div class="stats">
+      <div class="stat"><b id="s-online">–</b><span>online now</span></div>
+      <div class="stat"><b id="s-farmers">–</b><span>farmers in the world</span></div>
+      <div class="stat"><b id="s-day">–</b><span id="s-time">–</span></div>
+      <div class="stat"><b id="s-save">–</b><span>last save</span></div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="note" style="margin:0"><b>Free plan today</b> · <span id="u-text">–</span></div>
+      <div class="bar"><i id="u-bar"></i></div>
+      <div class="note" id="u-note">Counts reset at 00:00 UTC. Every 20 game messages count as one request.</div>
+    </div>
+    <p class="note" id="s-build"></p>
+  </section>
+
+  <section class="wide">
+    <h2>Farmers</h2>
+    <table>
+      <thead><tr><th>Farmer</th><th class="r">Level</th><th class="hide-sm">Secret word</th><th></th></tr></thead>
+      <tbody id="players"></tbody>
+    </table>
+    <p class="note"><b>Kick</b> sends a farmer back to the title screen (they can join again). <b>New word</b> gives a farmer who forgot their secret word a new one; they sign in with their name and it on any device. <b>No word</b> lets them back in from the device they played on.</p>
+  </section>
+
+  <section>
+    <h2>Announce</h2>
+    <form id="sayform" class="row" style="margin-top:0">
+      <input id="say" type="text" maxlength="90" placeholder="A banner for everybody online" required>
+      <button type="submit">Send</button>
+    </form>
+    <p class="note">Shows as a banner in everyone's game, right now. Nobody online: nobody sees it.</p>
+  </section>
+
+  <section>
+    <h2>World</h2>
+    <div class="row" style="margin-top:0">
+      <button id="savenow" class="quiet">Save now</button>
+      <button id="download" class="quiet">Download a backup</button>
+      <button id="upload" class="quiet">Upload a world…</button>
+      <input id="file" type="file" accept=".json,application/json" hidden>
+      <button id="reset" class="danger">New world…</button>
+    </div>
+    <p class="note">Replacing the world always keeps the one before as a backup below. Everybody online is sent back to the title screen and joins again.</p>
+  </section>
+
+  <section class="wide">
+    <h2>Backups kept on the server</h2>
+    <table>
+      <thead><tr><th>What it holds</th><th class="hide-sm">Why it was kept</th><th class="r">Saved</th><th></th></tr></thead>
+      <tbody id="backups"></tbody>
+    </table>
+  </section>
+
+  <section class="wide">
+    <h2>Server log</h2>
+    <pre id="log">–</pre>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'awesome_farm_admin_key';
+  let key = sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || '';
+  let state = null, timer = null, busy = false;
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const toast = (msg) => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200); };
+  const ago = (ms) => { const s = Math.max(0, Math.round((Date.now() - ms) / 1000)); return s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(ms).toLocaleString(); };
+  const when = (ms) => new Date(ms).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  const hhmm = (c) => { let h = c.night ? 20 + 10 * ((c.clock - c.dayLen) / c.nightLen) : 6 + 14 * (c.clock / c.dayLen); h %= 24; const hh = Math.floor(h), mm = Math.floor((h - hh) * 6) * 10; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; };
+
+  async function api (path, opts = {}) {
+    const headers = { authorization: 'Bearer ' + key };
+    if (typeof opts.body === 'string') headers['content-type'] = 'application/json';
+    const r = await fetch('/admin/' + path, { ...opts, headers });
+    if (r.status === 403) { const j = await r.json().catch(() => ({})); lock(j.error || 'That key did not work.'); throw new Error('locked'); }
+    const isJson = (r.headers.get('content-type') || '').includes('json');
+    const out = isJson ? await r.json() : await r.text();
+    if (!r.ok) throw new Error((out && out.error) || `${r.status}`);
+    return out;
+  }
+  const post = (path, obj) => api(path, { method: 'POST', body: JSON.stringify(obj || {}) });
+
+  function lock (msg) {
+    key = ''; sessionStorage.removeItem(KEY); localStorage.removeItem(KEY);
+    $('app').hidden = true; $('lock').hidden = false; $('logout').hidden = true;
+    $('pill').className = 'pill wait'; $('pill').textContent = 'locked';
+    $('lockmsg').textContent = msg || '';
+    clearInterval(timer); timer = null;
+    $('key').focus();
+  }
+  function unlocked () {
+    $('lock').hidden = true; $('app').hidden = false; $('logout').hidden = false;
+    refresh();
+    clearInterval(timer);
+    timer = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 8000);     // (each look is one request: only while the page is in view)
+  }
+
+  async function refresh () {
+    try { state = await api('state'); } catch (e) { if (e.message !== 'locked') { $('pill').className = 'pill off'; $('pill').textContent = 'not answering'; } return; }
+    render();
+  }
+
+  function render () {
+    const s = state.status, c = state.clock, u = state.usage;
+    $('pill').className = 'pill ' + (s.tainted ? 'off' : 'on');
+    $('pill').textContent = s.tainted ? 'a tick failed: see the log' : (s.online ? `${s.online} playing` : 'up, nobody on');
+    $('s-online').textContent = `${s.online} / ${s.max}`;
+    $('s-farmers').textContent = s.farmers;
+    $('s-day').textContent = `Day ${c.day}`;
+    $('s-time').textContent = `${c.season}, ${hhmm(c)}${c.night ? ' (night)' : ''}`;
+    $('s-save').textContent = state.live ? ago(state.live.at) : 'not yet';
+    const share = u.requests / u.limit;
+    $('u-text').textContent = `about ${u.requests.toLocaleString()} of ${u.limit.toLocaleString()} requests used (${Math.round(share * 100)}%) · ${u.msgs.toLocaleString()} game messages`;
+    $('u-bar').style.width = Math.min(100, share * 100).toFixed(1) + '%';
+    $('u-bar').className = share > 0.9 ? 'bad' : share > 0.7 ? 'warn' : '';
+    $('s-build').textContent = `Version ${s.version}, protocol ${s.protocol}${s.password ? ' · join password on' : ' · no join password'} · this server instance started ${ago(state.awakeSince)}`;
+    $('players').innerHTML = state.players.map((p) => `<tr>
+      <td><span class="dot${p.online ? ' live' : ''}"></span><b>${esc(p.name)}</b></td>
+      <td class="r">${p.level}</td>
+      <td class="hide-sm">${p.words.length ? 'yes' : '<span class="muted">none</span>'}</td>
+      <td><div class="acts">
+        <button class="quiet" data-act="kick" data-id="${esc(p.id)}" ${p.online ? '' : 'disabled'}>Kick</button>
+        <button class="quiet" data-act="word" data-id="${esc(p.id)}">New word</button>
+        <button class="quiet" data-act="forget" data-id="${esc(p.id)}" ${p.words.length ? '' : 'disabled'}>No word</button>
+      </div></td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nobody has joined this world yet.</td></tr>';
+    $('backups').innerHTML = state.backups.map((b) => `<tr>
+      <td>${esc(b.sum)}</td><td class="hide-sm muted">${esc(b.why)}</td><td class="r">${when(b.at)}</td>
+      <td class="r"><button class="quiet" data-act="restore" data-id="${esc(b.id)}">Put back…</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">None yet: one is kept every time the world is replaced.</td></tr>';
+    const log = $('log'), atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+    log.textContent = state.log.join('\n') || '(nothing yet)';
+    if (atBottom) log.scrollTop = log.scrollHeight;
+    // the fixed buttons follow `busy` both ways (the table rows are drawn afresh above, with their own rules)
+    for (const id of ['savenow', 'download', 'upload', 'reset']) $(id).disabled = busy;
+    $('sayform').querySelector('button').disabled = busy;
+    if (busy) for (const b of document.querySelectorAll('main button')) b.disabled = true;
+  }
+
+  async function act (label, fn) {
+    if (busy) return;
+    busy = true; render();
+    try { const msg = await fn(); if (msg) toast(msg); } catch (e) { if (e.message !== 'locked') toast('Did not work: ' + e.message); }
+    busy = false; await refresh();
+  }
+
+  $('lockform').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    key = $('key').value.trim();
+    (($('remember').checked) ? localStorage : sessionStorage).setItem(KEY, key);
+    $('key').value = ''; $('lockmsg').textContent = 'Checking…';
+    try { state = await api('state'); render(); unlocked(); } catch (err) { if (err.message !== 'locked') $('lockmsg').textContent = 'The server did not answer: ' + err.message; }
+  });
+  $('logout').onclick = () => lock('Locked.');
+  $('share').onclick = async () => {
+    const link = location.origin;
+    try { await navigator.clipboard.writeText(link); toast('Copied: ' + link); } catch { prompt('The link friends use:', link); }
+  };
+  $('sayform').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = $('say').value.trim();
+    if (!text) return;
+    act('say', async () => { const r = await post('announce', { text }); $('say').value = ''; return r.heard ? `Sent to ${r.heard} online` : 'Sent (nobody is online to see it)'; });
+  });
+  $('savenow').onclick = () => act('save', async () => { await post('save'); return 'Saved'; });
+  $('download').onclick = () => act('download', async () => {
+    const r = await fetch('/admin/backup', { headers: { authorization: 'Bearer ' + key } });
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = await r.blob(), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `awesome-farm-day${state.clock.day}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return 'Downloaded';
+  });
+  $('upload').onclick = () => $('file').click();
+  $('file').onchange = () => {
+    const f = $('file').files[0];
+    $('file').value = '';
+    if (!f) return;
+    if (!confirm(`Replace the world with ${f.name}? The current world is kept as a backup first, and everybody online joins again.`)) return;
+    act('upload', async () => { const text = await f.text(); const r = await api('restore', { method: 'POST', body: text }); return `World replaced: day ${r.status.day}, ${r.status.farmers} farmers`; });
+  };
+  $('reset').onclick = () => {
+    if (!confirm('Start a brand-new world? The current one is kept as a backup first. Everyone keeps nothing in the new world and signs up again.')) return;
+    if (prompt('Type NEW to confirm') !== 'NEW') return toast('Nothing changed');
+    act('reset', async () => { await post('reset'); return 'A new world started (the old one is a backup)'; });
+  };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b || busy) return;
+    const id = b.dataset.id, p = state.players.find((x) => x.id === id);
+    if (b.dataset.act === 'kick') {
+      const reason = prompt(`Send ${p.name} back to the title screen. A message for them (optional):`, 'The server admin sent you back to the title screen.');
+      if (reason === null) return;
+      act('kick', async () => { await post('kick', { id, reason }); return `${p.name} was sent back`; });
+    }
+    if (b.dataset.act === 'word') {
+      const word = prompt(`A new secret word for ${p.name} (at least 4 characters). Tell it to them; they sign in with "${p.name}" and this word on any device.`);
+      if (word === null) return;
+      act('word', async () => { const r = await post('word', { id, word }); return `${r.name} has a new secret word`; });
+    }
+    if (b.dataset.act === 'forget' && confirm(`Take ${p.name}'s secret word away? They can then join from the device they played on without one (and set a new one there).`)) {
+      act('forget', async () => { await post('forget', { id }); return `${p.name} no longer needs a secret word`; });
+    }
+    if (b.dataset.act === 'restore') {
+      const bk = state.backups.find((x) => x.id === id);
+      if (confirm(`Put this world back?\n\n${bk.sum}\n\nThe current world is kept as a backup first, and everybody online joins again.`)) act('restore', async () => { const r = await post('restore?backup=' + encodeURIComponent(id)); return `Put back: day ${r.status.day}, ${r.status.farmers} farmers`; });
+    }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && key && !$('app').hidden) refresh(); });
+
+  if (key) { $('lock').hidden = true; api('state').then((s) => { state = s; render(); unlocked(); }).catch(() => {}); } else lock('');
+})();
+</script>
+</body>
+</html>

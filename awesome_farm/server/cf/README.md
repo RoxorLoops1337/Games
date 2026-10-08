@@ -9,11 +9,16 @@ Pages (`https://games-71g.pages.dev/awesome_farm/`); this Worker is only the wor
 | `GET /` | sends people to the game page with `?server=<this address>`, which fills the Join box: **this address is the link to share** |
 | `GET /status` | what the title screen asks before Join (public, any origin) |
 | `GET /ws` | a player's WebSocket |
+| `GET /admin` | **the admin page** (`admin.html`, bundled as text): unlocked with the `DEV_KEY`, works on a phone. Live status and today's usage against the free plan, the farmers (kick, a new secret word, take a word away), an announcement banner for everybody online, save / download / upload / new world, the backups and the log |
+| `GET /admin/state` | everything the admin page shows, in one request (the page asks every 8 s while it is in view) |
+| `POST /admin/kick`, `/admin/word`, `/admin/forget`, `/admin/announce` (JSON bodies `{ id, reason? }`, `{ id, word }`, `{ id }`, `{ text }`) | the farmer tools; the rules are `SimHost.kick / setWord / forgetWord / announce` (`tests/admin.test.ts`) |
 | `GET /admin/backups`, `/admin/backup`, `/admin/log` | the live save and the named backups; the whole world as JSON; the last 200 log lines |
 | `POST /admin/save`, `/admin/reset`, `/admin/restore` (body: a world JSON) or `/admin/restore?backup=<id>` | save now; a new world; put a world back (the one replaced is always kept as a backup) |
 
 Admin routes need `Authorization: Bearer <DEV_KEY>`; ten wrong keys in ten minutes lock them for ten minutes. The
-control page on the owner's PC (`awesome-farm-host\server-control.bat`) uses them.
+admin page and the control page on the owner's PC (`awesome-farm-host\server-control.bat`) use them. The object counts
+its own HTTP requests and incoming messages per UTC day (`usage`, saved with the world) so the page can show the free
+plan's daily budget.
 
 ## Deploy
 
