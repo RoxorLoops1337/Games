@@ -9,7 +9,7 @@
 //   hooks: zoomBy(f), setZoom(d), talkTo(id), camera() state.   emits 'stick' {active,ox,oy,kx,ky} (CSS px inside dom) and 'tap' {x,z} for the UI.
 // PORT additions (WP P4, all worlds): walkToSpot(id,{run}) (A* to the spot ring, then spots.activate), setViewInset({top,bottom}) (CSS px of DOM sheets, the player is re-framed in what stays visible),
 //   setEnabled(b), focus(target,{dist,pitch,yaw,ms}) target = {x,y,z} | npc object | npc id | 'player', release() (ends focus AND a running spot cinematic), pick(x,y) -> {type:'npc'|'spot'|'ground'|'none',id,x,z,...},
-//   orbit mode (title, creator): setMode('orbit',{shot,yaw,auto,fb}) / setMode('follow'), orbitTo({yaw,pitch,dist,ty,ms,shot}), setShot('full'|'head'|'torso'|'legs'|'feet',ms), setAutoRotate(degPerSec), drag spins, pinch/wheel zooms,
+//   orbit mode (title, creator, shop try-on): setMode('orbit',{shot,yaw,auto,fb,target,spin,face}) / setMode('follow'), spin:true = the drag turns the hero (inertia, eases back to heading face), orbitTo({yaw,pitch,dist,ty,fov,ms,shot}), setShot('full'|'head'|'torso'|'legs'|'feet',ms), setAutoRotate(degPerSec), drag spins, pinch/wheel zooms,
 //   street corridor follow: terrain.camera {mode:'corridor'|follow:'x', hWidth:9, lockZ|walkZ:[z0,z1], lateralK}: camera follows along x only, clamped to terrain.bounds, setTapActivate(b) (tap a spot = walk there and activate),
 //   terrain.pathCost(x,z) (optional, >= 1): weighted A* + shortcuts never dearer than the route; spotsApi.doorIntent(spot) for intent doors (see the bottom).
 //   dispose(). Embedded: listens on the canvas it is handed (never the parent), so the host's persistent #gl works under DOM overlays. Never throws when a world has no spots or no npcs.
@@ -77,7 +77,7 @@ export function createControls(ctx, o) {
   const S = { enabled: true, locked: false, vel: { x: 0, z: 0 }, speed: 0, clip: '', clipSpeed: 0, path: null, pathI: 0, pathRun: false, target: null, stuck: 0, running: false,
     stick: { active: false, x: 0, y: 0, ox: 0, oy: 0, id: -1, sx: 0, sy: 0, t0: 0, drag: false, shown: false }, hook: { x: 0, y: 0 }, keys: {}, lastTap: { t: 0, x: 0, y: 0 }, spot: null, focus: 0, focusTarget: 0, focusZoom: 0.2, time: 0, showRoute: false, goalSpot: null, inset: { t: 0, b: 0 }, tapActivate: o.tapActivate !== undefined ? !!o.tapActivate : !!ctx.embedded };
   const FX = { k: 0, kT: 0, ms: 700, tgt: null, dist: 0, pitch: 0, yaw: null, id: null }; // focus override
-  const O = { on: false, yaw: 0, pitch: 0.16, dist: 4, ty: 0.9, fov: 34, fb: 0.5, anim: null, auto: 0, idle: 0, drag: false, shot: 'full', target: null, minK: 0.75, maxK: 4 };
+  const O = { on: false, yaw: 0, pitch: 0.16, dist: 4, ty: 0.9, fov: 34, fb: 0.5, anim: null, auto: 0, idle: 0, drag: false, shot: 'full', target: null, minK: 0.75, maxK: 4, spin: false, sv: 0, face: 0, mt: 0 };
   let grid = null, gridVer = 0, fpPrev = null, fpT = 0; const getGrid = () => grid || (gridVer++, grid = makeGrid(terrain, Bk));
   function fingerprint() { const b = bounds(); let h = 0; for (let x = b.minX + 0.7; x < b.maxX; x += 1.5) for (let z = b.minZ + 0.7; z < b.maxZ; z += 1.5) h = (h * 31 + (Bk(x, z) ? 1 : 0)) | 0; return (h * 31 + circleKey) | 0; }
   function watchTerrain(dt) { fpT -= dt; if (fpT > 0) return; fpT = 2; gatherCircles(); const h = fingerprint(); if (fpPrev !== null && h !== fpPrev) { grid = null; if (S.target) { const t = S.target; planPath(t.x, t.z, S.pathRun); } } fpPrev = h; }
@@ -145,21 +145,23 @@ export function createControls(ctx, o) {
   const lerpA = (a, b, u) => a + wrapPi(b - a) * u, lerp = (a, b, u) => a + (b - a) * u, H_ = () => p.height || 1.65;
   function orbitPoint() { const t = O.target; if (t && t !== 'player') { if (t.isNpc || t.object) { const q = npos(t.isNpc ? t.n : t); if (q) return { x: q.x, z: q.z }; } else if (isFinite(t.x)) return { x: t.x, z: t.z }; } return { x: pos.x, z: pos.z }; }
   function orbitTo(a) {
-    a = a || {}; const H = H_(); let to = { yaw: O.yaw, pitch: O.pitch, dist: O.dist, ty: O.ty }, sh = a.shot && SHOTS[a.shot];
+    a = a || {}; const H = H_(); let to = { yaw: O.yaw, pitch: O.pitch, dist: O.dist, ty: O.ty, fov: O.fov }, sh = a.shot && SHOTS[a.shot];
     if (sh) { to.dist = sh.d * H; to.ty = sh.ty * H; to.pitch = sh.pitch * D2R; O.shot = a.shot; events.emit('shot', { name: a.shot }); }
-    if (a.yaw !== undefined) to.yaw = a.yaw * D2R; if (a.pitch !== undefined) to.pitch = a.pitch * D2R; if (a.dist !== undefined) to.dist = a.dist; if (a.ty !== undefined) to.ty = a.ty; if (a.fb !== undefined) O.fb = a.fb;
+    if (a.yaw !== undefined) to.yaw = a.yaw * D2R; if (a.pitch !== undefined) to.pitch = a.pitch * D2R; if (a.dist !== undefined) to.dist = a.dist; if (a.ty !== undefined) to.ty = a.ty; if (a.fov) to.fov = clamp(a.fov, 20, 70); if (a.fb !== undefined) O.fb = a.fb;
     to.dist = clamp(to.dist, O.minK * H, O.maxK * H); to.pitch = clamp(to.pitch, -0.15, 1.2); const ms = a.ms === undefined ? 650 : a.ms;
-    if (!O.on) { O.on = true; } if (ms <= 0) { Object.assign(O, to); O.anim = null; } else O.anim = { t: 0, ms, from: { yaw: O.yaw, pitch: O.pitch, dist: O.dist, ty: O.ty }, to }; O.idle = 0; return true;
+    if (!O.on) { O.on = true; } if (ms <= 0) { Object.assign(O, to); O.anim = null; } else O.anim = { t: 0, ms, from: { yaw: O.yaw, pitch: O.pitch, dist: O.dist, ty: O.ty, fov: O.fov }, to }; O.idle = 0; return true;
   }
   function setMode(m, a) {
     a = a || {}; if (m === 'orbit') { if (!O.on) { O.on = true; stop(); S.vel.x = S.vel.z = 0; S.speed = 0; heading = a.face === undefined ? 0 : a.face; p.object.rotation.y = heading; setClip('idle', 0); O.fb = 0.5; O.yaw = 0; O.dist = SHOTS.full.d * H_(); O.ty = SHOTS.full.ty * H_(); O.pitch = SHOTS.full.pitch * D2R; }
-      if (a.fov) O.fov = a.fov; if (a.target !== undefined) O.target = a.target; if (a.auto !== undefined) O.auto = a.auto; orbitTo(Object.assign({ shot: 'full', ms: 0 }, a)); C.key = ''; sizeCam(); return true; }
-    if (m === 'follow' || m === 'world') { if (O.on) { O.on = false; O.anim = null; C.key = ''; snapCamera(); } return true; } return false;
+      if (a.fov) O.fov = a.fov; if (a.target !== undefined) O.target = a.target; if (a.auto !== undefined) O.auto = a.auto; if (a.spin !== undefined) { O.spin = !!a.spin; O.sv = 0; } if (a.face !== undefined) O.face = a.face; orbitTo(Object.assign({ shot: 'full', ms: 0 }, a)); C.key = ''; sizeCam(); return true; }
+    if (m === 'follow' || m === 'world') { if (O.on) { O.on = false; O.anim = null; O.spin = false; O.sv = 0; O.target = null; C.key = ''; snapCamera(); } return true; } return false;
   }
   function orbitStep(dt) {
-    if (O.anim) { const A = O.anim; A.t += dt * 1000; const u = easeIO(clamp(A.t / A.ms, 0, 1)); O.yaw = lerpA(A.from.yaw, A.to.yaw, u); O.pitch = lerp(A.from.pitch, A.to.pitch, u); O.dist = lerp(A.from.dist, A.to.dist, u); O.ty = lerp(A.from.ty, A.to.ty, u); if (u >= 1) O.anim = null; }
+    if (O.anim) { const A = O.anim; A.t += dt * 1000; const u = easeIO(clamp(A.t / A.ms, 0, 1)); O.yaw = lerpA(A.from.yaw, A.to.yaw, u); O.pitch = lerp(A.from.pitch, A.to.pitch, u); O.dist = lerp(A.from.dist, A.to.dist, u); O.ty = lerp(A.from.ty, A.to.ty, u); O.fov = lerp(A.from.fov, A.to.fov, u); if (u >= 1) O.anim = null; }
     else if (O.auto && !O.drag && (O.idle += dt) > 2.2) O.yaw += O.auto * D2R * dt;
-    const t = orbitPoint(), visK = clamp(C.h / Math.max(1, C.h - C.it - C.ib), 1, 2.4), d = O.dist * visK, cp = Math.cos(O.pitch), sp = Math.sin(O.pitch); C.yaw = CFG.yaw;
+    // spin mode (shop try-on): the drag turns the HERO, the throw keeps spinning and slows down, after 3 s idle the hero eases back to O.face
+    if (O.spin && !O.drag) { if (O.sv) { heading += O.sv * dt; O.sv *= Math.exp(-3.2 * dt); if (Math.abs(O.sv) < 0.05) O.sv = 0; } else if ((O.idle += dt) > 3) heading += wrapPi(O.face - heading) * (1 - Math.exp(-2.4 * dt)); p.object.rotation.y = heading; }
+    const t = orbitPoint(), visK = clamp(C.h / Math.max(1, C.h - C.it - C.ib), 1, 3.2), d = O.dist * visK, cp = Math.cos(O.pitch), sp = Math.sin(O.pitch); C.yaw = CFG.yaw;
     cam.position.set(t.x + Math.sin(O.yaw) * cp * d, Math.max(0.1, O.ty + sp * d), t.z + Math.cos(O.yaw) * cp * d); lookAt.set(t.x, O.ty, t.z); cam.lookAt(lookAt); cam.updateMatrixWorld(true);
   }
 
@@ -299,11 +301,12 @@ export function createControls(ctx, o) {
   function stickEmit() { const s = S.stick, r = rectOf(); events.emit('stick', { active: s.active && s.shown, ox: s.ox, oy: s.oy, kx: s.ox + s.x * CFG.stickR, ky: s.oy + s.y * CFG.stickR, w: r.width, h: r.height }); }
   function down(e) {
     if (!S.enabled || pinch || S.stick.id !== -1 || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    if (O.on) { S.stick.id = e.pointerId; S.stick.sx = e.clientX; S.stick.sy = e.clientY; O.drag = true; O.anim = null; try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } e.preventDefault(); return; } if (C.intro >= 0) { skipIntro(); e.preventDefault(); return; } const r = rectOf(); S.stick.id = e.pointerId; S.stick.sx = e.clientX - r.left; S.stick.sy = e.clientY - r.top; S.stick.t0 = performance.now(); S.stick.drag = false; S.stick.shown = false; S.stick.ox = S.stick.sx; S.stick.oy = S.stick.sy; S.stick.x = S.stick.y = 0;
+    if (O.on) { S.stick.id = e.pointerId; S.stick.sx = e.clientX; S.stick.sy = e.clientY; O.drag = true; O.anim = null; O.sv = 0; O.mt = performance.now(); try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } e.preventDefault(); return; } if (C.intro >= 0) { skipIntro(); e.preventDefault(); return; } const r = rectOf(); S.stick.id = e.pointerId; S.stick.sx = e.clientX - r.left; S.stick.sy = e.clientY - r.top; S.stick.t0 = performance.now(); S.stick.drag = false; S.stick.shown = false; S.stick.ox = S.stick.sx; S.stick.oy = S.stick.sy; S.stick.x = S.stick.y = 0;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } e.preventDefault();
   }
   function move(e) {
     const s = S.stick; if (pinch || e.pointerId !== s.id) return;
+    if (O.on && O.spin) { const dx = e.clientX - s.sx, now = performance.now(), dts = Math.max(0.008, (now - O.mt) / 1000), dh = dx * 0.011; s.sx = e.clientX; s.sy = e.clientY; O.mt = now; heading += dh; p.object.rotation.y = heading; O.sv += (clamp(dh / dts, -14, 14) - O.sv) * 0.5; O.idle = 0; return; }
     if (O.on) { const dx = e.clientX - s.sx, dy = e.clientY - s.sy; s.sx = e.clientX; s.sy = e.clientY; O.yaw -= dx * 0.0095; O.pitch = clamp(O.pitch + dy * 0.004, -0.15, 1.2); O.idle = 0; return; } const r = rectOf(), x = e.clientX - r.left, y = e.clientY - r.top; const dx = x - s.ox, dy = y - s.oy;
     if (!s.drag && Math.hypot(x - s.sx, y - s.sy) > CFG.tapPx) { s.drag = true; s.active = true; s.shown = true; if (C.intro >= 0) skipIntro(); }
     if (s.drag) { const l = Math.hypot(dx, dy); if (l > CFG.stickR) { // the base follows the thumb a little so a long drag never feels stuck
@@ -311,7 +314,7 @@ export function createControls(ctx, o) {
   }
   function up(e) {
     const s = S.stick; if (e.pointerId !== s.id) return;
-    if (O.on) { s.id = -1; O.drag = false; O.idle = 0; try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ } return; } const r = rectOf(), x = e.clientX - r.left, y = e.clientY - r.top, now = performance.now();
+    if (O.on) { s.id = -1; O.drag = false; O.idle = 0; if (performance.now() - O.mt > 90) O.sv = 0; try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ } return; } const r = rectOf(), x = e.clientX - r.left, y = e.clientY - r.top, now = performance.now();
     if (!s.drag && now - s.t0 < CFG.tapMs) { const lt = S.lastTap, dbl = now - lt.t < 320 && Math.hypot(x - lt.x, y - lt.y) < 46; S.lastTap = { t: now, x, y }; onTapScreen(x, y, dbl); }
     s.active = false; s.shown = false; s.id = -1; s.x = s.y = 0; s.drag = false; stickEmit(); try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
   }
@@ -353,7 +356,7 @@ export function createControls(ctx, o) {
     setJoystick(dx, dz) { S.hook.x = dx || 0; S.hook.y = dz || 0; }, advance(sec) { const n = Math.ceil(sec * 30), d = sec / n; for (let i = 0; i < n; i++) { S.time += d; update(d, S.time); try { p.update(d, S.time); } catch (e) { /* ignore */ } } }, skipIntro, replayIntro, interact, release,
     showRoute, worldToScreen, screenToGround, toast(m) { ui.toast && ui.toast(m); }, rebuildGrid() { grid = null; return getGrid(); }, get gridVersion() { getGrid(); return gridVer; }, get grid() { return getGrid(); },
     get locked() { return S.locked; }, get inSpot() { return S.spot ? S.spot.id : null; }, get enabled() { return S.enabled; }, get mode() { return O.on ? 'orbit' : COR ? 'corridor' : 'follow'; }, get focusing() { return FX.kT > 0 ? FX.id : null; }, get goal() { return S.goalSpot ? S.goalSpot.id : null; }, get yaw() { return C.yaw; }, get heading() { return heading; }, get speed() { return S.speed; }, get intro() { return C.intro >= 0; }, get target() { return S.target; }, get path() { return S.path; },
-    state() { return { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), heading: +heading.toFixed(2), speed: +S.speed.toFixed(2), clip: S.clip, moving: !!S.path || S.speed > 0.2, arrived: !!S.arrived, locked: S.locked, spot: S.spot ? S.spot.id : null, intro: C.intro >= 0, camDist: +C.dist.toFixed(2), zoom: +C.zd.toFixed(2), fov: +C.fov.toFixed(1), talk: S.talk || null, mode: O.on ? 'orbit' : COR ? 'corridor' : 'follow', focus: +FX.k.toFixed(2), focusId: FX.kT > 0 ? FX.id : null, inset: { top: +C.it.toFixed(1), bottom: +C.ib.toFixed(1) }, enabled: S.enabled, goal: S.goalSpot ? S.goalSpot.id : null, orbit: O.on ? { yaw: +(O.yaw / D2R).toFixed(1), pitch: +(O.pitch / D2R).toFixed(1), dist: +O.dist.toFixed(2), ty: +O.ty.toFixed(2), shot: O.shot, auto: O.auto } : null, cam: { x: +cam.position.x.toFixed(2), y: +cam.position.y.toFixed(2), z: +cam.position.z.toFixed(2) } }; } };
+    state() { return { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), heading: +heading.toFixed(2), speed: +S.speed.toFixed(2), clip: S.clip, moving: !!S.path || S.speed > 0.2, arrived: !!S.arrived, locked: S.locked, spot: S.spot ? S.spot.id : null, intro: C.intro >= 0, camDist: +C.dist.toFixed(2), zoom: +C.zd.toFixed(2), fov: +C.fov.toFixed(1), talk: S.talk || null, mode: O.on ? 'orbit' : COR ? 'corridor' : 'follow', focus: +FX.k.toFixed(2), focusId: FX.kT > 0 ? FX.id : null, inset: { top: +C.it.toFixed(1), bottom: +C.ib.toFixed(1) }, enabled: S.enabled, goal: S.goalSpot ? S.goalSpot.id : null, orbit: O.on ? { yaw: +(O.yaw / D2R).toFixed(1), pitch: +(O.pitch / D2R).toFixed(1), dist: +O.dist.toFixed(2), ty: +O.ty.toFixed(2), shot: O.shot, auto: O.auto, spin: O.spin, sv: +O.sv.toFixed(2) } : null, cam: { x: +cam.position.x.toFixed(2), y: +cam.position.y.toFixed(2), z: +cam.position.z.toFixed(2) } }; } };
   if (spotsApi) { try { spotsApi.canFire = () => !dead && S.enabled && !S.locked && C.intro < 0 && !O.on; } catch (e) { /* ignore */ } }
   // door intent (doors with def.intent, spots.js): 'go' = this door is the walk goal (walkToSpot / tap), 'dwell' = standing still (no route running) or moving INTO the
   // door (against its outward normal intent.nx/nz, else toward its centre) for intent.dwell s; '' = walking past it or heading for another goal

@@ -18,6 +18,9 @@
   // (park3d/host.js does not set ctx.embedded yet, which is what would build the embed-only UI; these globals and the rule below are the game-side guard either way.)
   root.__PARK_AUTODONE = false; root.__PARK_NOINTRO = true;
   try { const st = document.createElement('style'); st.id = 'r3-world-css'; st.textContent = 'body.r3 #glwrap .p3-bar, body.r3 #glwrap .p3-tag, body.r3 #glwrap .p3-hint, body.r3 #glwrap .p3-mini, body.r3 #glwrap .p3-toast, body.r3 #glwrap .p3-fps { display: none !important; }'; document.head.appendChild(st); } catch (e) { /* ignore */ }
+  // shop try-on camera: orbit framing per shop tab, seen from the shop floor (yaw 85: the camera stands east of the mirror platform), the hero turned TRY_TURN off the camera for a 3/4 view
+  // TRY_FRAME[tab] = [look height, visible span (both x hero height), pitch deg, fov deg]: hats and shades = head and shoulders, tops = torso, pants = legs, shoes = feet, extras = full body
+  const TRY_FRAME = { hat: [0.86, 0.8, 6, 32], glasses: [0.84, 0.72, 5, 32], top: [0.64, 1.05, 6, 38], bottom: [0.32, 0.76, 8, 38], shoes: [0.14, 0.55, 14, 38], full: [0.55, 1.4, 7, 50] }, TRY_YAW = 85, TRY_TURN = 0.42;
   const mk = (name, base, extra) => { const s = Object.create(base); Object.assign(s, { is3d: true }, extra); E.scenes3d[name] = s; return s; };
 
   // the clerk has no `who` in her dialog lines (she is not in Core.NPCS): give the camera someone to focus
@@ -121,24 +124,40 @@
       const h = this.hud; if (!h || open === !!this._chromeOpen) return; this._chromeOpen = open;
       if (open) h.setGoal(''); else { h.setGoal(null); h.update(G.ch); }
     },
-    // ---- shop try-on: S.shop.look is mirrored live to the 3D player, the camera frames the mirror
-    tryOn() {
+    // ---- shop try-on: S.shop.look is mirrored live to the 3D player. The hero stands on the mirror platform facing the camera (3/4 front, the mirror behind),
+    // the camera is an eye level orbit shot per tab (controls.js spin mode: a drag turns the hero, eases back to the front when idle) framed above the panel (camera inset)
+    tryOn(dt) {
       const sh = this.shop, open = !!(sh && sh.el && sh.el.isConnected), w = this.w;
       if (open) {
         if (!this._try) {
-          this._try = { k: '' }; this.chrome(true);
-          // the try-on stage is the mirror platform: from the hats / racks / counter spots the player is moved there first (a jump cut under the open panel), then the camera frames it
-          safe(() => { const m = w.spots && w.spots.byId && w.spots.byId.mirror, c = w.controls, st = c && c.state && c.state(); if (m && st && Math.hypot(st.x - m.x, st.z - m.z) > 1.3) c.teleportTo(m.x, m.z); });
-          // the camera comes round to the FRONT of the player (a 3/4 view), so the shirt and the hat you are trying on are what you see
-          safe(() => { const hd = w.controls.state().heading || 0; w.focus('mirror', { yaw: Math.round(hd * 180 / Math.PI + 50) }); });
-          safe(() => hooks.sheetOpen && hooks.sheetOpen(sh.el));
+          this._try = { k: '', tab: sh.tab, insT: 0, ins: '' }; this.chrome(true);
+          // from the hats / racks / counter spots the player is moved to the platform first (a jump cut under the open panel), which also ends the spot clip: a calm idle while trying on
+          safe(() => { const m = w.spots && w.spots.byId && w.spots.byId.mirror, c = w.controls, face = TRY_YAW * Math.PI / 180 + TRY_TURN; if (m) c.teleportTo(m.x, m.z, { face }); c.setMode('orbit', Object.assign({ yaw: TRY_YAW, face, spin: true, auto: 0, fov: 34, fb: 0.5, target: 'player', ms: 0 }, this.tryShot(sh.tab))); });
+          this.tryInset(true);
         }
+        if (sh.tab !== this._try.tab) { this._try.tab = sh.tab; safe(() => w.controls.orbitTo(Object.assign({ ms: 650 }, this.tryShot(sh.tab)))); }
+        if ((this._try.insT -= dt || 0) <= 0) { this._try.insT = 300; this.tryInset(false); }
         const k = JSON.stringify(sh.look); if (k !== this._try.k) { this._try.k = k; safe(() => w.setLook(sh.look)); }
       } else if (this._try) this.dropShop();
     },
+    // the framing of a shop tab: look point ty and the world height span that fills the visible band, so dist = span / (2 tan(fov / 2)) (controls.js scales it by the inset itself).
+    // Wider shots use a wider lens, so the camera stays inside the shop (east wall x 5)
+    tryShot(tab) {
+      const f = TRY_FRAME[tab] || TRY_FRAME.full, H = (this.w && this.w.player && this.w.player.height) || 1.6, y0 = (this.w && this.w.player && this.w.player.object.position.y) || 0;
+      return { ty: y0 + f[0] * H, dist: f[1] * H / (2 * Math.tan(f[3] * Math.PI / 360)), pitch: f[2], fov: f[3] };
+    },
+    // the visible band: below the HUD and above the shop panel AND its tab row, measured again while the panel is open (it changes height with the selection)
+    tryInset(force) {
+      const sh = this.shop, g = glEl(), w = this.w; if (!sh || !sh.el || !g || !w) return;
+      safe(() => {
+        const gr = g.getBoundingClientRect(), tb = sh.el.firstElementChild, top = Math.min(sh.el.getBoundingClientRect().top, tb ? tb.getBoundingClientRect().top : 1e9);
+        const b = Math.max(0, Math.round(gr.bottom - top + 6)), t = Math.max(0, Math.round((this.hud && this.hud.topHeight ? this.hud.topHeight() + 6 : 0) - gr.top)), key = t + ',' + b;
+        if (force || key !== this._try.ins) { this._try.ins = key; w.controls.setViewInset({ top: t, bottom: b }); }
+      });
+    },
     dropShop() {
       if (this.shop && this.shop.el && this.shop.el.isConnected) this.shop.el.remove(); this.shop = null;
-      if (this._try) { this._try = null; this.chrome(false); const w = this.w; if (w) { safe(() => w.setLook(G.ch.look)); safe(() => w.release()); } safe(() => hooks.sheetClose && hooks.sheetClose()); }
+      if (this._try) { this._try = null; this.chrome(false); const w = this.w; if (w) { safe(() => w.setLook(G.ch.look)); safe(() => w.controls.setMode('follow')); safe(() => w.release()); } safe(() => hooks.sheetClose && hooks.sheetClose()); }
     },
     // ---- keep the world in step with the save: Foxy's schedule, the goal beacon, the bar chalkboard (the world re-reads the clock itself)
     sync() {
@@ -152,7 +171,7 @@
     update(dt) {
       if (!this.w) return;
       if (G.ch !== this._ch) { this._ch = G.ch; this.sync(); }
-      this.tryOn(); SM.settle(this, dt);
+      this.tryOn(dt); SM.settle(this, dt);
     },
     pointer() { /* the world handles taps */ },
     draw() { /* WebGL */ },
