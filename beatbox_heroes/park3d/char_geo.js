@@ -11,6 +11,10 @@ export const shade = (a, k) => { const c = C(a); c.multiplyScalar(k); return c.l
 export const lite = (a, k) => { const c = C(a); c.lerp(WARM, k); return c; };                                                      // lighter toward warm cream
 export const skinShade = (a, k) => { const c = C(a); c.multiplyScalar(k); return c.lerp(new THREE.Color('#8a2f45'), Math.max(0, 1 - k) * 0.16); }; // warm blood-red shadows for skin
 export const INK = '#2b2438', CREAM = '#fff2dc';
+// mix in sRGB, like the 2D sprites mix their colours (chars_*.js mix()): a 2D zone colour such as mix(col, '#ffffff', 0.3) comes out the same in 3D
+export const mixS = (a, b, t) => C(a).convertLinearToSRGB().lerp(C(b).convertLinearToSRGB(), t).convertSRGBToLinear();
+// lighten toward cream by k scaled with the colour's own lightness, so a near-black item keeps reading black (lite() lifts a black hat to grey)
+export const liteL = (a, k) => { const c = C(a), l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722; return lite(c, k * Math.min(1, 0.3 + l * 3)); };
 
 // ------------------------------------------------------------------ body dimensions per body type
 export function dims(body) {
