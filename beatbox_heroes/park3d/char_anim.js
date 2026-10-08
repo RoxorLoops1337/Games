@@ -92,7 +92,7 @@ export class Animator {
     if (vp > 0.9 && this.vs <= 0.9 && target < 0.4) this.sqS.v -= 1.5;             // brake squash on stops
     { const s = this.sqS; s.v += (-190 * s.x - 15 * s.v) * dt; s.x += s.v * dt; }
     { const l = this.leanS, tg = clamp(this.accel * 0.012, -0.12, 0.12); l.v += (-110 * (l.x - tg) - 12 * l.v) * dt; l.x += l.v * dt; }
-    const H = this.hits; H.k *= Math.exp(-7 * dt); H.s *= Math.exp(-6 * dt); H.h *= Math.exp(-10 * dt);
+    const H = this.hits; H.k *= Math.exp(-7 * dt); H.s *= Math.exp(-6 * dt); H.h *= Math.exp(-10 * dt); const HS = this.hs || (this.hs = { k: 0, s: 0, h: 0 }), fa = Math.min(1, dt * 30); HS.k += (H.k - HS.k) * fa; HS.s += (H.s - HS.s) * fa; HS.h += (H.h - HS.h) * fa; // external hits reach the pose over ~35 ms, never in one frame
     this.cur.t += dt; const P = this.pose, A = reset(this.pA); CL[this.cur.name].call(this, A, this.cur, dt, o);
     if (this.fade < 1 && this.prev) {
       this.prev.t += dt; const Bp = reset(this.pB); CL[this.prev.name].call(this, Bp, this.prev, dt, o);
@@ -262,9 +262,20 @@ CL.run = function (P, c, dt, o) { gait.call(this, P, c, dt, o, 1); };
 
 // ----- beat helpers: sixteenth-step pattern clock (kick, snare, hat). opts.external uses only hit() events.
 const KICK = [0, 6, 10], SNARE = [4, 12], HAT = [2, 6, 8, 14, 15];
-function beatClock(c, o) { const bpm = o.bpm || 100, ph = o.phase !== undefined ? o.phase : c.t * bpm / 60; return { bpm, beat: ph, step: mod(ph * 4, 16) }; }
-function env(step, hits, decay) { let m = 99; hits.forEach((h) => { const d = mod(step - h, 16); if (d < m) m = d; }); return Math.exp(-m * decay); }
-function beatEnv(self, bc, o) { const H = self.hits; if (o.external) return { k: H.k, sn: H.s, ht: H.h }; return { k: Math.max(env(bc.step, KICK, 0.9), H.k), sn: Math.max(env(bc.step, SNARE, 1.0), H.s), ht: Math.max(env(bc.step, HAT, 1.6), H.h) }; }
+// The clip keeps its OWN continuous beat (c._ph) and only phase-locks to the caller's beat (opts.phase) modulo the clip's loop length L.
+// Callers feed a music or chart beat that jumps back to 0 when a track loops or a round restarts; following it raw snapped the body back to the
+// start of the loop (a hard cut). A jump of whole loops is invisible now, and any other drift is eased out over a few frames.
+function beatClock(c, o, L) {
+  L = L || 4; const bpm = o.bpm || 100, t = c.t, dt = c._lt === undefined ? 0 : Math.max(0, Math.min(0.1, t - c._lt)); c._lt = t;
+  if (c._ph === undefined) c._ph = o.phase !== undefined ? o.phase : t * bpm / 60; else c._ph += dt * bpm / 60;
+  if (o.phase !== undefined) { const e = mod(o.phase - c._ph + L / 2, L) - L / 2; const cap = 0.3 * dt * bpm / 60; c._ph += Math.abs(e) < 0.02 ? e : clamp(e * Math.min(1, dt * 2.5), -cap, cap); } // catch up by at most 30 percent faster or slower: never a visible rush
+  const ph = c._ph; return { bpm, beat: ph, step: mod(ph * 4, 16) };
+}
+// hit envelope: a short wind-up before each hit (ATK steps, eased) and an exponential release after it, so the body never snaps from rest to full
+// in one frame (that snap on the loop's first kick, after the longest gap, read as the animation suddenly restarting)
+const ATK = 0.75;
+function env(step, hits, decay) { let a = 99, b = 99; hits.forEach((h) => { const da = mod(step - h, 16), db = mod(h - step, 16); if (da < a) a = da; if (db < b) b = db; }); const pre = b < ATK ? 1 - b / ATK : 0; return Math.max(Math.exp(-a * decay), pre * pre * (3 - 2 * pre)); }
+function beatEnv(self, bc, o) { const H = self.hs || self.hits; if (o.external) return { k: H.k, sn: H.s, ht: H.h }; return { k: Math.max(env(bc.step, KICK, 0.9), H.k), sn: Math.max(env(bc.step, SNARE, 1.0), H.s), ht: Math.max(env(bc.step, HAT, 1.6), H.h) }; }
 
 // ----- beatbox: right hand cups the mic at the mouth, cheeks puff, head bobs on the beat, knees pulse, free hand pumps
 CL.beatbox = function (P, c, dt, o) {
@@ -276,7 +287,7 @@ CL.beatbox = function (P, c, dt, o) {
   const m = this.mouthRig, hx = 0.45, hy = 0.8, hz = 0.4, hl = Math.hypot(hx, hy, hz);           // the mic head sits 0.2 beyond the wrist along the hand
   P.aWR = 1; P.hWR = 1; P.aXR = m.x - hx / hl * 0.2; P.aYR = m.y - hy / hl * 0.2 - 0.01 + 0.006 * k; P.aZR = m.z - hz / hl * 0.2 - 0.02; P.hXR = hx; P.hYR = hy; P.hZR = hz; P.pXR = -0.6; P.pYR = -1; P.pZR = -0.1;
   P.aWL = 1; P.aXL = 0.3 + 0.03 * sn; P.aYL = 0.8 + 0.1 * Math.max(0, S(b)) + 0.05 * k; P.aZL = 0.22 + 0.06 * k; P.pXL = 0.7; P.pYL = -1; P.pZL = -0.3; P.hWL = 0; P.wrRXL = 0.3; P.shRXL = 0.2; P.elRXL = 1.1;
-  P.mouthOpen = 0.12 + 0.5 * ht * amp + 0.55 * sn * amp; P.mouthW = 1 - 0.35 * k * amp; P.cheek = clamp(k * 1.3 + 0.3 * (1 - ht), 0, 1) * amp; P.brow = 0.25 + 0.2 * sn; P.blink = k > 0.7 ? 0.7 : 0;
+  P.mouthOpen = 0.12 + 0.5 * ht * amp + 0.55 * sn * amp; P.mouthW = 1 - 0.35 * k * amp; P.cheek = clamp(k * 1.3 + 0.3 * (1 - ht), 0, 1) * amp; P.brow = 0.25 + 0.2 * sn; P.blink = 0.7 * clamp((k - 0.55) / 0.3, 0, 1);
 };
 
 // ----- dance: 16 beat hip-hop loop in four sections (bounce, raise the roof, step touch, double wave)
@@ -292,7 +303,7 @@ const DANCE = [
     P.aWL = P.aWR = 1; P.aXL = 0.2 + 0.12 * S(r); P.aYL = 1.0 + 0.1 * Cs(r); P.aZL = 0.3; P.aXR = -0.2 - 0.12 * S(r + 1.2); P.aYR = 1.0 + 0.1 * Cs(r + 1.2); P.aZR = 0.3; P.pXL = 0.7; P.pXR = -0.7; P.pYL = P.pYR = -1; P.pZL = P.pZR = -0.2; P.mouthOpen = 0.4; },
 ];
 CL.dance = function (P, c, dt, o) {
-  const bc = beatClock(c, { bpm: o.bpm || 108, phase: o.phase }), beat = bc.beat, sec = Math.floor(mod(beat, 16) / 4), local = mod(beat, 4), nx = (sec + 1) % 4, f = sm((local - 3.5) / 0.5);
+  const bc = beatClock(c, { bpm: o.bpm || 108, phase: o.phase }, 16), beat = bc.beat, sec = Math.floor(mod(beat, 16) / 4), local = mod(beat, 4), nx = (sec + 1) % 4, f = sm((local - 3.5) / 0.5);
   DANCE[sec](P, beat);
   if (f > 0) { const Bq = reset(this.pD), cp = this.pE; DANCE[nx](Bq, beat); for (let i = 0; i < KEYS.length; i++) cp[KEYS[i]] = P[KEYS[i]]; blendPose(cp, Bq, f, P); }
   const k = Math.max(env(bc.step, KICK, 0.9), this.hits.k); P.hipsY -= 0.02 * k; P.brow += 0.2; P.mouthOpen = Math.max(P.mouthOpen, 0.25); P.wrRXL = P.wrRXR = 0.2;
