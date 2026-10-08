@@ -123,6 +123,67 @@ const rng = BBH.rng(7);
   eq(s.rank, 'S', 'all perfect is S'); near(s.accuracy, 1, 1e-9, 'accuracy 1'); const z = Core.summarize([], a.length, 0); eq(z.rank, 'D', 'nothing hit is D');
 }
 
+/* ---- the pattern library: real beatbox grooves, phrased, every bar keeps its backbeat */
+{
+  const P = Core.PATTERNS, back = { easy: [2], medium: [2], hard: [2, 3] };
+  ok(P && P.easy && P.medium && P.hard, 'Core.PATTERNS has easy, medium and hard');
+  eq(P.easy.grooves[0].name, 'Boots and Cats', 'the first easy groove is Boots and Cats'); eq(P.easy.grooves[0].cells.join(' '), 'BTKT BTKT', 'Boots and Cats is B t K t B t K t');
+  ok(P.easy.grooves.some((g) => g.cells.includes('BBKT')) || P.easy.turns.some((t) => t.cell === 'BBKT'), 'the easy family has B B K t');
+  ok(P.medium.grooves.some((g) => g.cells.includes('BTTBKTTT')), 'medium has the classic B t t B K t t t');
+  ok(P.hard.grooves.every((g) => g.cells.join('').includes('P')), 'every hard groove uses the Pf');
+  for (const tier of ['easy', 'medium', 'hard']) {
+    const T = P[tier], cells = T.grooves.map((g) => g.cells[0]).concat(T.grooves.map((g) => g.cells[1]), T.turns.map((t) => t.cell)), bb = T.grid / 2;
+    ok(cells.every((c) => c.length === T.grid && /^[BTKP.]+$/.test(c)), tier + ': every cell has ' + T.grid + ' steps of B T K P .');
+    ok(cells.every((c) => back[tier].includes('BTKP'.indexOf(c[bb]))), tier + ': every cell has the backbeat (' + (tier === 'hard' ? 'K or Pf' : 'K') + ') on chart beat 2 (musical beat 2 and 4)');
+    ok(T.grooves.every((g) => g.cells[0][0] === 'B') && T.turns.every((t) => t.cell[0] === 'B'), tier + ': every groove and every turnaround starts on a kick (fills resolve onto the 1)');
+    ok(T.grooves.concat(T.turns).every((x) => x.name && x.say && x.id), tier + ': every pattern has an id, a name and how you say it');
+    ok(new Set(T.grooves.map((g) => g.id).concat(T.turns.map((t) => t.id))).size === T.grooves.length + T.turns.length, tier + ': pattern ids are unique');
+  }
+  // charts: on the grid, backbeat on beat 2 of every bar, kick on every groove downbeat, 4 bar phrases ending in a turnaround, the groove holds 8 bars
+  let bad = { grid: 0, back: 0, kick: 0, phrase: 0, order: 0, groove: 0, meta: 0 }, n = 0;
+  for (const diff of [0.05, 0.2, 0.3, 0.4, 0.55, 0.69, 0.72, 0.85, 1]) for (let seed = 1; seed <= 40; seed++) for (const bars of [1, 2, 3, 4, 6, 8, 10, 14]) {
+    const c = Core.makeChart(seed, { bars, difficulty: diff }), tier = diff < 0.35 ? 'easy' : diff < 0.7 ? 'medium' : 'hard', step = tier === 'easy' ? 1 : 0.5; n++;
+    if (!c.every((x) => Math.abs(x.beat / step - Math.round(x.beat / step)) < 1e-9 && x.beat >= 0 && x.beat < bars * 4)) bad.grid++;
+    if (!c.every((x, i) => i === 0 || x.beat > c[i - 1].beat)) bad.order++;
+    if (!Array.isArray(c.bars) || c.bars.length !== bars) { bad.meta++; continue; }
+    for (let b = 0; b < bars; b++) {
+      const at = (k) => c.find((x) => Math.abs(x.beat - (b * 4 + k)) < 1e-9), bb = at(2), m = c.bars[b], inPh = b % 4, phLen = Math.min(4, bars - (b - inPh));
+      if (!bb || !back[tier].includes(bb.lane)) bad.back++;
+      if ((inPh % 2 === 0 || m.turn) && !(at(0) && at(0).lane === 0)) bad.kick++;
+      if (m.turn !== (phLen > 1 && inPh === phLen - 1)) bad.phrase++;
+      if (inPh === 2 && !c.bars[b].turn && c.bars[b].cell !== c.bars[b - 2].cell) bad.phrase++;
+      if (!m.turn && b % 8 !== 0 && !c.bars[b - 1].turn && c.bars[b - 1].id !== m.id) bad.groove++;
+    }
+  }
+  ok(bad.grid === 0 && bad.order === 0 && bad.meta === 0, 'every chart (' + n + ': 9 difficulties x 40 seeds x 8 lengths) has its notes on the grid (easy: musical eighths, medium/hard: sixteenths), strictly ordered, one bar name per bar ' + JSON.stringify(bad));
+  ok(bad.back === 0, 'every bar of every chart has the backbeat snare on beat 2 (K; in hard K or Pf) ' + bad.back);
+  ok(bad.kick === 0, 'every groove downbeat and every turnaround has its kick on beat 0 ' + bad.kick);
+  ok(bad.phrase === 0 && bad.groove === 0, 'phrased: 4 bar phrases (groove, groove, the first groove bar again, turnaround), the groove holds for 8 bars ' + JSON.stringify(bad));
+  const e1 = Core.makeChart(77, { bars: 8, difficulty: 0.2 }), e2 = Core.makeChart(77, { bars: 8, difficulty: 0.2 });
+  eq(JSON.stringify([e1, e1.bars]), JSON.stringify([e2, e2.bars]), 'deterministic per seed, bar names included');
+  const names = new Set(); for (let s = 1; s < 60; s++) Core.makeChart(s, { bars: 8, difficulty: 0.2 }).bars.forEach((m) => names.add(m.turn ? m.groove : m.name));
+  ok(names.has('Boots and Cats') && names.size >= 4, 'easy charts use the B t K t family: ' + [...names].join(', '));
+  const ec = Core.makeChart(5, { bars: 8, difficulty: 0.1 }); ok(ec.every((x) => x.lane <= 2), 'easy charts use B, t and K only (no Pf)');
+  // battle styles bend the groove but keep it: the downbeat kick and the backbeat stay, the same bar of the groove changes the same way
+  for (const st of ['boom', 'hats', 'rim', 'snare']) {
+    let ok1 = true; for (let s = 1; s < 20; s++) { const base = Core.makeChart(s, { bars: 4, difficulty: 0.6 }), sc = Core.styleChart(base, st, s); if (sc.length !== base.length || !sc.every((x, i) => x.beat === base[i].beat) || !sc.every((x) => { const b = x.beat % 4; return b !== 2 || x.lane === 2 || x.lane === 3; }) || !sc.every((x, i) => !(x.beat % 4 === 0 && base[i].lane === 0) || x.lane === 0)) ok1 = false; if (sc.bars !== base.bars) ok1 = false; }
+    ok(ok1, st + ' style keeps the timing, the downbeat kick and the backbeat (K or Pf) of every bar');
+  }
+  const rb = Core.makeChart(4, { bars: 4, difficulty: 0.5 }), rs = Core.styleChart(rb, 'rim', 4); ok(rs.filter((x) => x.lane === 3).length > rb.filter((x) => x.lane === 3).length && rs.filter((x) => x.beat % 8 === 6).every((x) => x.lane === 3), 'rim style: the backbeat on 4 becomes a Pf clap');
+  // OWN BEATS: the Beat Maker slots as charts
+  eq(Core.ownBeats([Core.emptyPattern(0), Core.emptyPattern(1)]).length, 0, 'empty slots are not beats');
+  const p = Core.emptyPattern(1); p.steps[0][0] = 1; p.steps[0][8] = 1; p.steps[1][2] = 1; p.steps[1][6] = 1; p.steps[2][4] = 1; p.steps[2][12] = 1; p.bpm = 90;
+  const q3 = Core.emptyPattern(2); q3.ids = ['RIM', 'HUM']; q3.steps.push(new Array(16).fill(0), new Array(16).fill(0)); q3.steps[0][0] = 1; q3.steps[4][4] = 1; q3.steps[4][12] = 1; q3.steps[5][2] = 1; q3.steps[1][10] = 1; q3.name = 'Rimmy';
+  const tiny = Core.emptyPattern(3); tiny.steps[0][0] = 1; tiny.steps[2][4] = 1; tiny.steps[1][2] = 1;
+  const ob = Core.ownBeats([Core.emptyPattern(0), p, q3, tiny]);
+  eq(ob.map((b) => b.slot).join(), '1,2', 'only slots with 4+ hits count (slot 4 has 3 hits)');
+  eq(ob[0].bpm, 90, 'a beat keeps its Beat Maker bpm'); eq(ob[0].notes.map((x) => x.beat + ':' + x.lane).join(' '), '0:0 0.5:1 1:2 1.5:1 2:0 3:2', 'step s of 16 lands on chart beat s/4, rows 0..3 are the lanes');
+  eq(ob[1].notes.map((x) => x.beat + ':' + x.lane).join(' '), '0:0 1:2 2.5:1 3:2', 'extra sounds go to the closest lane (RIM -> K) and melodic ones (HUM) are skipped');
+  const oc = Core.ownChart(ob, { bars: 6, rep: 2, from: 1 });
+  eq(oc.bars.map((m) => m.slot).join(), '2,2,1,1,2,2', 'ownChart cycles through the saved beats, rep bars each, starting at `from`'); ok(oc.length === 4 * 4 + 2 * 6 && oc.bars.every((m) => m.own), 'ownChart notes = the beats laid bar after bar');
+  eq(Core.ownChart([], { bars: 4 }), null, 'no beats: no own chart (the game falls back to the easy family)');
+}
+
 /* ---- performing and progression */
 {
   let ch = Core.newChar(); ch.minutes = 300;

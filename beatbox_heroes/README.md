@@ -53,7 +53,7 @@ Design notes and module contracts: `DESIGN.md`. Tests: `tests/beatbox_heroes_*.t
 
 ## Mini games and systems (ported from Beatbox Story)
 
-* **Rhythm game** with standard beatbox patterns (easy is mostly B t K t), battle style orders (BOOM > HATS > RIM > SNARE > BOOM) and **MIC MODE**: beatbox into your microphone and each detected sound hits its lane.
+* **Rhythm game** with a curated library of real beatbox grooves (Core.PATTERNS: easy B t K t / B B K t family, medium boom bap and B t t B K t t t, hard Pf grooves and fills; 4 bar phrases ending in a turnaround, the backbeat in every bar). Busking and battle rounds are call and response: the hero plays each phrase first as translucent ghost gems, then you play it back. Open mic and auto busk play your own Beat Maker beats (B t K t if you have none). Battle style orders (BOOM > HATS > RIM > SNARE > BOOM) and **MIC MODE**: beatbox into your microphone and each detected sound hits its lane.
 * **Run tracker** (park): alternate left and right taps to stay in the green zone. Every 3 good bars adds +1 max energy.
 * **Pitch Tuner** (vocal booth or Sound Lab): sing the target notes into your mic (pitch detection), or play ear training without a mic. Trains Musicality.
 * **Beat Maker** (16 step sequencer, 4 slots): build patterns, train Originality, and RELEASE songs that pay fans for 7 days (3 at a time).

@@ -8,6 +8,8 @@
 //   * battle: mg_rhythm calls opts.resolveBattle(payload) when the third round ends; the scene runs G.doHold({ t:'battle', ... }) (Core.apply, one random draw, state changes now) and hands back the real votes.
 //     The judges reveal exactly those votes; CONTINUE plays the held effects and calls args.onDone({ win, out }) like rhythm.js does.
 //   * BACK asks LEAVE? (like the 2D confirm) and then calls args.onAbort (back to the place world); losing the tab mid set does the same, no rewards.
+//   * busking and battles run as call and response (mg_rhythm S.cr: the hero plays each 2 bar phrase as ghost gems, then you play it); a.own (open mic, auto busk)
+//     hands mg_rhythm the player's Beat Maker beats (args.ownBeats).
 //   * offset, mic and mic persistence come from E.settings like the 2D scene (E.settings.offset in ms, E.settings.mic).
 //   * MUSIC OFF (TRAINING_PLAN): no scene music and no backing groove in any mode (busk, open mic, karaoke, showcase, practice, battles, training). mg_rhythm runs a soft
 //     shaker metronome at the chart bpm (Audio.gameMode or its local fallback) and only the beatbox sounds of whoever plays; leave() hands the music back (the place plays its own track).
@@ -50,6 +52,8 @@
         onContinue: (info) => self.cont(info), resolveBattle: (p) => self.resolve(p),
         acts: () => (G.retActs && !self.train ? G.retActs({ only: !!a.final }) : null),       // AGAIN / BACK / CONTINUE on the result and verdict cards (activity.js)
       });
+      // open mic and auto busk play YOUR Beat Maker beats (Core.ownBeats: the slots with 4+ hits); none saved: mg_rhythm falls back to the easy B t K t family
+      if (a.own && mode === 'perform' && Core.ownBeats) args.ownBeats = Core.ownBeats(ch.patterns);
       // continuous busking: the live clock starts at the real time of day (ch.minutes 0 = 06:00) and the set wraps up before the hero runs out of energy or hits 01:30 (the 02:00 collapse)
       if (a.endless && mode === 'perform') { const perMin = 12 / 60, eMin = Math.max(15, ((ch.energy || 0) - 3) / perMin), lateMin = Math.max(15, 1170 - (ch.minutes || 0)); Object.assign(args, { endless: true, clockMin: 360 + (ch.minutes || 0), maxMinutes: Math.min(eMin, lateMin), maxWhy: lateMin < eMin ? 'late' : 'tired' }); }
       if (this.train) Object.assign(args, { title: a.title || 'RHYTHM TRAINING', sub: a.sub || 'level ' + (a.level || ((ch.trainLv && ch.trainLv.beat) || 1)), tip: false, progress: this.progress() });

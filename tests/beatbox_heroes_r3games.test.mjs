@@ -116,6 +116,65 @@ try {
   ok(hd.bpm === 78 && hd.sub === 2 && hd.onTicks, 'hard busking: 100 bpm -> ' + hd.bpm + ' bpm, the shaker ticks eighth notes (sub ' + hd.sub + ') and every gem sits on a tick');
   await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
 
+  // ------------------------------------------------------------------ CALL AND RESPONSE: the hero plays each 2 bar phrase as ghost gems (not judged), then you play the same phrase
+  // layout of S.call (example) vs S.notes (yours): same lanes, same spacing, shifted by the unit length; returns a summary
+  const CR_LAYOUT = '(S) => { const units = S.units.map((u) => ({ ex: u.ex, you: u.you, end: u.end, name: u.pat.name, steps: u.pat.steps })); let same = units.length > 0; units.forEach((u, k) => { const c = S.call.filter((n) => n.unit === k), m = S.notes.filter((n) => n.unit === k); if (!c.length || c.length !== m.length || c.some((n, i) => n.lane !== m[i].lane || Math.abs((n.beat - u.ex) - (m[i].beat - u.you)) > 1e-9 || n.beat >= u.you || m[i].beat < u.you)) same = false; }); return { units, same, call: S.call.length, notes: S.notes.length, ghost: S.call.every((n) => n.ghost), chart: S.chart.length, cr: S.cr }; }';
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'BUSKING', sub: 'park', bpm: 92, bars: 4, difficulty: 0.2, style: 0, stage: 'cyan', seed: 31 }));
+  ok(await waitGame(page), 'call and response busk opens');
+  const cr = await page.evaluate((LAY) => {
+    const mg = BBH.Eng.scene.mg, S = mg.S, lay = (0, eval)(LAY)(S), hw = mg.highway, mat = hw.ghosts[0].material, out = { lay, translucent: mat.transparent && mat.opacity < 0.5 && hw.gems[0].material.opacity === 1, labels: [], ghostSeen: 0, solidSeen: 0, ghostPress: null, hitsInListen: 0 };
+    const first = S.call[0]; mg.bot({ jitterMs: 0 });
+    for (let i = 0; i < 1200; i++) {
+      const st = mg.tick(0.05), lb = document.querySelector('#r3rhythm .ps.cr .lbl'), l = lb ? lb.textContent : ''; if (l && out.labels[out.labels.length - 1] !== l) out.labels.push(l);
+      const c = hw.counts(); out.ghostSeen = Math.max(out.ghostSeen, c.ghosts); if (st.beat < lay.units[0].ex + 4) out.solidSeen = Math.max(out.solidSeen, c.gems);
+      if (out.ghostPress === null && st.T >= first.time - 0.01) { out.ghostPress = mg.press(first.lane); out.hitsAtPress = S.hits.length; }
+      if (st.beat < lay.units[0].you - 0.5) out.hitsInListen = S.hits.length;
+      if (i === 80) out.crState = st.cr;
+      if (st.phase === 'result') break;
+    }
+    out.callDone = S.call.filter((n) => n.done).length; out.result = JSON.parse(JSON.stringify(mg.result())); out.strip = !!document.querySelector('#r3rhythm .ps.cr'); return out;
+  }, CR_LAYOUT);
+  ok(cr.lay.cr && cr.lay.units.length === 2 && cr.lay.units.every((u) => u.you - u.ex === 8 && u.end - u.you === 8), 'busking is call and response: 4 bars = 2 units of 2 bars, each first as the example then yours ' + JSON.stringify(cr.lay.units.map((u) => [u.ex, u.you, u.end, u.name])));
+  ok(cr.lay.same && cr.lay.call === cr.lay.notes && cr.lay.notes === cr.lay.chart && cr.lay.ghost, 'the example notes (' + cr.lay.call + ', flagged ghost) are exactly your notes: same lanes, same spacing, one unit earlier');
+  ok(cr.translucent && cr.ghostSeen > 0 && cr.solidSeen === 0, 'the example comes down the highway as translucent ghost gems (opacity < 0.5, ' + cr.ghostSeen + ' on screen) and no solid gem shows in the first bar of the example');
+  ok(cr.ghostPress && cr.ghostPress.grade === 'ghost' && cr.hitsAtPress === 0 && cr.hitsInListen === 0, 'pressing on an example note is not judged (' + JSON.stringify(cr.ghostPress) + ', no hit, no miss while listening)');
+  ok(cr.callDone === cr.lay.call && cr.crState && cr.crState.half === 'listen', 'the hero performs every example note (' + cr.callDone + '/' + cr.lay.call + ')');
+  ok(cr.labels.join('>') === 'LISTEN>YOUR TURN>LISTEN>YOUR TURN', 'the strip says LISTEN, then YOUR TURN, for each phrase: ' + cr.labels.join('>'));
+  ok(cr.result.total === cr.lay.notes && cr.result.perfect === cr.result.total && cr.result.miss === 0 && !cr.strip, 'accuracy only counts your notes: ' + cr.result.perfect + '/' + cr.result.total + ' perfect, the example adds no misses; the strip is gone on the card');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
+  // battle: each of your rounds is call and response too (the rival turn stays as it was)
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startBattle({ id: 'bar' }, BBH.Core.OPPONENTS[0])); ok(await waitGame(page), 'battle (call and response) opens');
+  const bcr = await page.evaluate((LAY) => { const mg = BBH.Eng.scene.mg; mg.bot({ jitterMs: 0 }); let st = mg.state(); for (let i = 0; i < 400 && st.phase !== 'count'; i++) st = mg.tick(0.1); const lay = (0, eval)(LAY)(mg.S); for (let i = 0; i < 800 && mg.state().phase !== 'opp'; i++) mg.tick(0.1); const b = mg.state().battle; return { lay, phase: mg.state().phase, roundQ: b.roundQ, perf: mg.S.sum && { total: mg.S.sum.total, perfect: mg.S.sum.perfect } }; }, CR_LAYOUT);
+  ok(bcr.lay.cr && bcr.lay.units.length === 2 && bcr.lay.same && bcr.lay.ghost && bcr.lay.notes === bcr.lay.chart, 'battle round: 4 bars as 2 units, the example (ghost) then your copy with the same lanes and spacing ' + JSON.stringify(bcr.lay.units.map((u) => [u.ex, u.you, u.name])));
+  ok(bcr.phase === 'opp' && bcr.perf && bcr.perf.total === bcr.lay.notes && bcr.perf.perfect === bcr.perf.total && bcr.roundQ.length === 1, 'the round scores only your notes (' + JSON.stringify(bcr.perf) + '), then the rival turn');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'bar');
+
+  // ------------------------------------------------------------------ OWN BEATS: open mic and auto busk play your Beat Maker beats, else the easy B t K t family
+  const BEATS = () => { const C = BBH.Core, ch = C.clone(BBH.G.ch), mk = (i, bpm, name, rows) => { const p = C.emptyPattern(i); p.bpm = bpm; if (name) p.name = name; rows.forEach((r, l) => r.forEach((s) => { p.steps[l][s] = 1; })); return p; };
+    ch.patterns = [C.emptyPattern(0), mk(1, 90, null, [[0, 8], [2, 6, 10, 14], [4, 12], []]), mk(2, 120, 'Flip', [[0, 6, 8], [2, 10], [4, 12], [14]]), C.emptyPattern(3)]; BBH.G.setChar(ch); return C.ownBeats(ch.patterns).map((b) => b.slot); };
+  ch0 = await seed(page); const slots = await page.evaluate(BEATS);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'bar' }, 'openmic', { title: 'OPEN MIC', sub: 'the bar', bpm: 98, bars: 4, difficulty: 0.5, style: 2, stage: 'lime', own: true })); ok(await waitGame(page), 'open mic with your beats opens');
+  const om = await page.evaluate(() => { const mg = BBH.Eng.scene.mg, S = mg.S, C = BBH.Core, exp = C.ownChart(C.ownBeats(BBH.G.ch.patterns), { bars: 4, rep: 4 }), st = mg.state(); return { own: st.own, cr: S.cr, call: S.call.length, bpm: st.bpm, same: exp.length === S.notes.length && exp.every((n, i) => n.lane === S.notes[i].lane && Math.abs(n.beat + S.lead - S.notes[i].beat) < 1e-9), head: document.querySelector('#r3rhythm .hdr').innerText }; });
+  ok(JSON.stringify(slots) === '[1,2]' && JSON.stringify(om.own) === '[1,2]' && om.same && om.bpm === 90, 'open mic plays your saved beats (slots ' + JSON.stringify(om.own) + ', the chart is Core.ownChart of them, at the Beat Maker bpm ' + om.bpm + ')');
+  ok(!om.cr && om.call === 0 && /YOUR BEAT 2/.test(om.head), 'open mic: no example half (your own prepared beat), the header names it: ' + om.head.replace(/\s+/g, ' '));
+  const omr = await finish(page, { jitterMs: 10 }); ok(omr.state.phase === 'result' && omr.result.total === 32 && omr.result.miss === 0, 'the open mic set with your beat finishes (' + omr.result.total + ' notes, ' + omr.result.perfect + ' perfect)');
+  await clickGo(page); ok(await waitPlace(page, 'bar'), 'open mic: CONTINUE returns to the bar');
+  // no beats saved: the easy family
+  ch0 = await seed(page);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'bar' }, 'openmic', { title: 'OPEN MIC', sub: 'the bar', bpm: 98, bars: 4, difficulty: 0.6, style: 2, stage: 'lime', own: true })); ok(await waitGame(page), 'open mic without beats opens');
+  const om0 = await page.evaluate(() => { const mg = BBH.Eng.scene.mg, S = mg.S, easy = BBH.Core.PATTERNS.easy, names = easy.grooves.map((g) => g.name).concat(easy.turns.map((t) => t.name)), st = mg.state(); return { own: st.own, bpm: st.bpm, easy: S.chart.bars.every((m) => names.includes(m.name)) && S.notes.every((n) => Number.isInteger(n.beat - S.lead)), lanes: S.notes.every((n) => n.lane <= 2), head: document.querySelector('#r3rhythm .hdr').innerText, cr: S.cr }; });
+  ok(!om0.own && om0.easy && om0.lanes && om0.bpm === 98 && !om0.cr && /BOOTS|BOOT|KICK|DOUBLE|LAZY|PUSH/.test(om0.head), 'no saved beats: open mic falls back to the easy B t K t / B B K t family at 98 bpm (' + om0.head.replace(/\s+/g, ' ') + ')');
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'bar');
+  // auto busk plays your beats, one after the other (each chained chunk is the next saved beat), no listening half
+  ch0 = await seed(page); await page.evaluate(BEATS);
+  await page.evaluate(() => BBH.G.places.startPerform({ id: 'park' }, 'busk', { title: 'AUTO BUSK', sub: 'park', bpm: 92, bars: 2, difficulty: 0.2, style: 0, stage: 'cyan', seed: 22, endless: true, auto: true, own: true })); ok(await waitGame(page), 'auto busk with your beats opens');
+  const ab = await page.evaluate(() => { const mg = BBH.Eng.scene.mg, S = mg.S, heads = []; for (let i = 0; i < 150; i++) { mg.tick(0.2); const h = mg.state().head; if (h && heads[heads.length - 1] !== h) heads.push(h); } const st = mg.state(); return { heads, own: st.own, cr: S.cr, call: S.call.length, hits: st.perfect + st.good, chunk: st.live && st.live.chunk, bpm: st.bpm }; });
+  ok(JSON.stringify(ab.own) === '[1,2]' && !ab.cr && ab.call === 0 && ab.hits > 10 && ab.bpm === 90, 'auto busk: the hero plays your saved beats himself (' + ab.hits + ' hits at ' + ab.bpm + ' bpm), no example half');
+  ok(ab.heads.slice(0, 3).join('>') === 'YOUR BEAT 2>YOUR BEAT 3: FLIP>YOUR BEAT 2' && ab.chunk >= 2, 'auto busk cycles through your beats, the header follows: ' + ab.heads.join('>'));
+  await page.evaluate(() => BBH.Eng.scene.mg.quit({ force: true })); await waitPlace(page, 'park');
+
   // ------------------------------------------------------------------ the other perform kinds and their venues
   const KINDS = [['openmic', 'bar', { title: 'OPEN MIC', sub: 'the bar', bpm: 98, bars: 2, difficulty: 0.4, style: 2, stage: 'lime' }], ['karaoke', 'bar', { title: 'KARAOKE', sub: 'no pressure', bpm: 88, bars: 2, difficulty: 0.2, style: 0, stage: 'pink' }], ['showcase', 'showcase', { title: 'SHOWCASE', sub: 'friday', bpm: 104, bars: 2, difficulty: 0.5, style: 1, stage: 'gold' }]];
   for (const [kind, venue, extra] of KINDS) {

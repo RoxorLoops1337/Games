@@ -22,6 +22,11 @@
 //        mg_rhythm_battle.js (camera director, opponent turn, judge maths) ; venues come from venue.js (INT-B).
 //        mg_rhythm_click.js (MUSIC OFF: no scene music, no backing groove, only a soft shaker metronome at the chart bpm, aligned to offsetMs)
 //        mg_rhythm_train.js (mode 'train': RHYTHM TRAINING, Core.BEAT_LEVELS, level select, LISTEN call + YOUR TURN, training result card)
+//   CALL AND RESPONSE (S.cr): busking (kind 'busk' / 'jam', the standalone page) and every battle round. The chart is cut into 2 bar units (callLayout): the hero plays
+//     the unit first (ghost gems: translucent, never judged, LISTEN on the strip), then the same notes come back as real gems (YOUR TURN). One clock, one metronome.
+//     opts.callResponse true/false forces it on or off. Auto busk skips the listening half (the hero plays every note himself anyway).
+//   OWN BEATS (opts.own: open mic, auto busk): opts.ownBeats = Core.ownBeats(ch.patterns) (the Beat Maker slots with 4+ hits) are played in turn ("YOUR BEAT 2" in
+//     the header) at the bpm of the first one; with none saved the set falls back to the easy B t K t / B B K t family of Core.makeChart.
 //   mode 'train': opts.level (start it, else the level select), opts.progress { unlocked, best:{level:grade} } (setTrainProgress(p) updates it),
 //     result adds { mode:'train', level, levelId, q, passed }; the card acts call opts.onContinue({ train:true, act:'next'|'again'|'levels'|'continue', level, result }),
 //     a false return value stops the game from going on (the scene leaves instead).
@@ -36,7 +41,7 @@ import { buildUI } from './mg_rhythm_ui.js';
 import { buildVenue } from './venue.js';
 import { createDirector, buildOppTurn, voteView, clashLine } from './mg_rhythm_battle.js';
 import { createClick } from './mg_rhythm_click.js';
-import { beatLevels, trainChart, buildTrainUI, TRAIN_BARS, UNLOCK_Q } from './mg_rhythm_train.js';
+import { beatLevels, trainChart, buildTrainUI, callLayout, TRAIN_BARS, UNLOCK_Q } from './mg_rhythm_train.js';
 
 const FALLBACK_LOOK = { name: 'Hero', body: 'neutral', skin: '#c68b5e', hair: { style: 'twists', color: '#2a2024' }, top: { id: 'oversized', color: '#f4e04d', color2: '#e63946' }, bottom: { id: 'camo', color: '#2f5d3a' }, shoes: { id: 'retro', color: '#f7f2e8' }, hat: { id: 'fitted', color: '#17141f' }, acc: { neck: { id: 'dogtags', color: '#c9d3e6' }, hand: { id: 'mic', color: '#6b6b80' } } };
 const TOD = { day: 0, dusk: 0.5, night: 1 };
@@ -96,7 +101,7 @@ export function createRhythm(ctx, opts) {
 
   // ------------------------------------------------------------------ state
   const S = { phase: 'idle', T: 0, spb: 0.6, bpm: 100, notes: [], chart: [], hits: [], combo: 0, maxCombo: 0, score: 0, energy: 0, energyShown: 0, press: [0, 0, 0, 0], round: 0, win: Core.windows(opts.stats || { mus: 20 }), approach: 1.43, endBeat: 0, counted: -1, manual: false, audioClock: false, t0: 0, lastA: 0, audioRun: false, cfg: null, result: null, battle: null, myStyle: null, oppStyleNow: null, bot: null, uHit: 0, beatSeen: -1, punch: 0, flee: 0, camK: 0, tPlay: 0, lastEmit: 0, ticks: 0,
-    offset: (opts.offsetMs || 0) / 1000, mode: opts.mode || 'perform', vsT: 0, oppT: 0, oppView: [], oppMeter: 0, oppQ: 0, oppEnd: 0, jT: 0, reveal: -1, tally: { you: 0, opp: 0 }, votes: [], verdict: null, verdictShown: false, pickT: 0, stateT: 0 };
+    offset: (opts.offsetMs || 0) / 1000, mode: opts.mode || 'perform', vsT: 0, oppT: 0, oppView: [], oppMeter: 0, oppQ: 0, oppEnd: 0, jT: 0, reveal: -1, tally: { you: 0, opp: 0 }, votes: [], verdict: null, verdictShown: false, pickT: 0, stateT: 0, call: [], units: [], own: [], barInfo: [], cr: false };
   let time = 0, W = 540, H = 960, mic = { on: false, stop: null }, disposed = false, lastTod = todBase;
   const click = createClick(); click.musicOff();                    // every rhythm game: the scene music is off until dispose
   const A = () => BBH().Audio || null, sfx = (n, o) => { try { const a = A(); if (a) a.sfx(n, o); } catch (e) { /* audio must never break the game */ } };
@@ -131,11 +136,37 @@ export function createRhythm(ctx, opts) {
   function clockText() { const m = Math.round((S.cfg && S.cfg.clockMin || 0) + S.liveMin), d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); }
   // chain the next 8 bars onto the running chart (same clock, same metronome): seamless, as long as the player keeps busking
   function chainChunk() {
-    S.chunk++; const o = S.cfg, ch = Core.makeChart(S.seed0 + S.chunk * 977, { bars: S.bars, difficulty: S.diff }), base = S.chartEnd, n0 = S.notes.length ? S.notes[S.notes.length - 1].id + 1 : 0;
-    const add = ch.map((n, i) => ({ id: n0 + i, lane: n.lane, beat: n.beat + base, time: (n.beat + base) * S.spb, state: 0 }));
-    const keep = S.T - 3; S.notes = S.notes.filter((n) => !n.state || n.time > keep).concat(add); S.chartEnd += S.bars * 4; S.chainBeat = S.chartEnd - 6; S.endBeat = 1e9;
+    S.chunk++; const ch = S.own.length ? Core.ownChart(S.own, { bars: S.bars, rep: S.bars, from: S.chunk }) : Core.makeChart(S.seed0 + S.chunk * 977, { bars: S.bars, difficulty: S.diff }), base = S.chartEnd, n0 = S.notes.length ? S.notes[S.notes.length - 1].id + 1 : 0;
+    const keep = S.T - 3, add = layChart(ch, base, n0); S.notes = S.notes.filter((n) => !n.state || n.time > keep).concat(add); S.chainBeat = S.chartEnd - 6; S.endBeat = 1e9;
+    S.call = S.call.filter((n) => !n.done || n.time > keep); S.units = S.units.filter((u) => u.end * S.spb > keep);
     if (S.bot) { const pb = S.bot; planBot(pb._o, add); pb.plan = pb.plan.filter((p) => !p.done).concat(S.bot.plan); S.bot = pb; }
-    void o;
+  }
+  // lay a chart (beats from 0) onto the running clock at beat `at`: the judged gems (returned), the example (S.call) and the units for call and response, the bar names for the header
+  function layChart(chart, at, id0) {
+    const meta = chart.bars || [], ghost = (n) => Object.assign(n, { id: S.callId++, time: n.beat * S.spb, state: 0, done: false, ghost: true });
+    let notes;
+    if (S.cr) { const L = callLayout(chart, S.bars, at); notes = L.notes; L.call.forEach((n) => S.call.push(ghost(n))); L.units.forEach((u) => S.units.push(u)); S.chartEnd = at + L.span; meta.forEach((m, i) => { const u = Math.floor(i / 2) * 8, r = i * 4 - u; S.barInfo.push({ beat: at + 2 * u + r, m }); }); }
+    else { notes = chart.map((n) => ({ beat: n.beat + at, lane: n.lane })); S.chartEnd = at + S.bars * 4; meta.forEach((m, i) => S.barInfo.push({ beat: at + i * 4, m })); }
+    if (S.barInfo.length > 64) S.barInfo = S.barInfo.slice(-64);
+    return notes.map((n, i) => ({ id: id0 + i, lane: n.lane, beat: n.beat, time: n.beat * S.spb, state: 0, unit: n.unit }));
+  }
+  // what the header chip says for the bar that plays now: your saved beat (open mic, auto busk), else the groove's name; null = no chip
+  function barLabel(T) {
+    if (S.cr || S.battle || S.mode === 'train' || !S.barInfo.length) return null; const b = T / S.spb; let cur = null;
+    for (const x of S.barInfo) { if (x.beat <= b + 0.5) cur = x; else break; }
+    const m = (cur || S.barInfo[0]).m; if (m.own) return 'YOUR BEAT ' + (m.slot + 1) + (/^beat \d+$/i.test(m.name) ? '' : ': ' + m.name).toUpperCase();
+    return (m.turn && m.groove ? m.groove : m.name).toUpperCase();
+  }
+  function setHead(label) {
+    const o = S.cfg, chips = o.title ? [{ t: String(o.title).toUpperCase() + (o.sub ? '  -  ' + String(o.sub).toUpperCase() : ''), k: '' }] : [];
+    if (label) chips.push({ t: label, k: 's' }); S.headLabel = label; ui.setHeader(chips);
+  }
+  // call and response: the strip follows the unit that plays now (LISTEN on the example, YOUR TURN one beat before your half), the step lights in time
+  function crTick(T) {
+    const b = T / S.spb; let u = null; for (const x of S.units) { if (x.ex - 0.5 <= b) u = x; else break; } if (!u) return;
+    if (u !== S.unitNow) { S.unitNow = u; S.unitHalf = 'listen'; tui.showPattern(u.pat, 'LISTEN', { cr: true }); if (b < u.you - 1) ui.pop('LISTEN', 'good', W / 2, H * 0.3, true); }
+    if (S.unitHalf === 'listen' && b >= u.you - 1) { S.unitHalf = 'you'; tui.patternLabel('YOUR TURN', true); ui.pop('YOUR TURN', 'perfect', W / 2, H * 0.3, true); }
+    if (S.unitHalf === 'you' && b >= u.you) { const st = Math.floor((b - u.you) * u.pat.steps / (u.end - u.you) + 0.25); if (st < u.pat.steps) tui.patternStep(st); }
   }
   // STOP (or out of energy / time): pay for what was played. Notes that did not reach the ring yet do not count
   function stopEndless(why) {
@@ -178,24 +209,28 @@ export function createRhythm(ctx, opts) {
   }
   function pick(id) { if (S.phase !== 'pick') return false; ui.clearCard(); S.myStyle = id; beginRound(); return true; }
   function beginRound() {
-    const o = S.cfg, B = S.battle, TL = S.mode === 'train' ? S.trainL : null, bars = B ? 4 : TL ? TRAIN_BARS : (o.bars || 8), seed = S.seed0 + S.round * 977, diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : TL ? 0.2 + TL.level * 0.08 : (o.difficulty === undefined ? 0.5 : o.difficulty);
-    let chart = TL ? trainChart(TL, bars) : Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
-    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : Core.tempoFor ? Core.tempoFor(o.bpm || 100, diff, o.kind || (game ? '' : 'busk')) : (o.bpm || 100), sub = Core.chartSub ? Core.chartSub(diff) : 1;
+    const o = S.cfg, B = S.battle, TL = S.mode === 'train' ? S.trainL : null, bars = B ? 4 : TL ? TRAIN_BARS : (o.bars || 8), seed = S.seed0 + S.round * 977;
+    const own = !B && !TL && !!o.own; S.own = own && Array.isArray(o.ownBeats) ? o.ownBeats.filter((b) => b && Array.isArray(b.notes) && b.notes.length >= 4) : [];
+    let diff = B ? 0.35 + (B.opp.skill || 0.5) * 0.45 : TL ? 0.2 + TL.level * 0.08 : (o.difficulty === undefined ? 0.5 : o.difficulty); if (own && !S.own.length) diff = Math.min(diff, 0.2);     // no beats of your own yet: the easy B t K t family
+    let chart = TL ? trainChart(TL, bars) : S.own.length && Core.ownChart ? Core.ownChart(S.own, { bars, rep: S.endless ? bars : 4, from: 0 }) : Core.makeChart(seed, { bars, difficulty: diff }); if (B && S.myStyle && Core.styleChart) chart = Core.styleChart(chart, S.myStyle, seed);
+    const bpm = B ? (B.opp.bpm || 100) : TL ? TL.bpm : S.own.length ? S.own[0].bpm : Core.tempoFor ? Core.tempoFor(o.bpm || 100, diff, o.kind || (game ? '' : 'busk')) : (o.bpm || 100), sub = S.own.length ? (chart.grid === 16 ? 4 : 2) : Core.chartSub ? Core.chartSub(diff) : 1;
+    S.cr = !TL && (o.callResponse !== undefined ? !!o.callResponse : !!B || (S.mode === 'perform' && !S.auto && !own && (o.kind === 'busk' || o.kind === 'jam' || (!game && !o.kind))));
     S.lead = TL ? 12 : 4; S.cIn = S.lead - 4;                         // training: 4 beats LISTEN count, 4 beats the hero's call, 4 beats YOUR TURN count-in
     S.bpm = bpm; S.spb = 60 / bpm; S.chart = chart; ctx.__bpm = bpm; S.hits = []; S.combo = 0; S.maxCombo = 0; S.score = 0; S.counted = -1; S.beatSeen = -1; S.bars = bars; S.seed = seed; S.diff = diff;
     S.approach = Math.max(1.3, (1500 - Math.min(300, bpm * 2)) / 1000 * 1.1); S.phase = 'count'; S.press = [0, 0, 0, 0]; S.uHit = 0; S.oppView = []; dir.clear(); ui.setMeterName('CROWD');
     const g0 = click.start({ bpm, sub, offsetMs: S.offset * 1000 }), g = S.manual ? null : g0;          // music off: the shaker metronome gives the audio clock (no backing groove)
     S.audioClock = !!(g && typeof g.t0 === 'number' && g.spb); S.audioRun = false; S.lastA = 0; if (S.audioClock) { S.t0 = g.t0; S.spb = g.spb; } S.T = S.audioClock ? 0 : -0.4;
-    S.notes = chart.map((n, i) => ({ id: i, lane: n.lane, beat: n.beat + S.lead, time: (n.beat + S.lead) * S.spb, state: 0 })); S.endBeat = bars * 4 + S.lead + 2; S.chartEnd = bars * 4 + S.lead; S.chainBeat = S.endless ? S.chartEnd - 6 : 1e9; if (S.endless) S.endBeat = 1e9; hw.setApproach(S.approach, S.spb);
-    S.call = TL ? TL.notes.map((n, i) => ({ id: 8000 + i, lane: n.lane, step: n.step, time: (4 + n.beat) * S.spb, state: 0, done: false, tint: callTint })) : [];
+    S.call = []; S.units = []; S.unitNow = null; S.unitHalf = ''; S.callId = 1e6; S.barInfo = []; S.headLabel = undefined; tui.hidePattern();
+    S.notes = layChart(chart, S.lead, 0); S.endBeat = S.chartEnd + 2; S.chainBeat = S.endless ? S.chartEnd - 6 : 1e9; if (S.endless) S.endBeat = 1e9; hw.setApproach(S.approach, S.spb);
+    if (TL) S.call = TL.notes.map((n, i) => ({ id: 8000 + i, lane: n.lane, step: n.step, time: (4 + n.beat) * S.spb, state: 0, done: false, ghost: true }));
     if (o.bot || S.bot) { planBot(o.bot || S.bot._o); }
     ui.setScore(0); ui.setCombo(0); fx.clear(); lighting.setMusic(true); mood('neutral');
     if (B) { ui.setHeader([{ t: 'ROUND ' + (S.round + 1) + '/3', k: '' }, { t: 'STYLE: ' + String(S.myStyle || '-').toUpperCase(), k: 's' }]); ui.toast((S.round === 0 ? (B.opp.taunt || '') : 'vs ' + (B.opp.name || 'Rival')) || ('ROUND ' + (S.round + 1)), 2200); }
     else if (TL) { ui.setHeader([]); ui.setMeterName('GROOVE'); tui.showPattern(TL, 'LISTEN'); try { perf.play('beatbox', { bpm, amp: 0.8 }); } catch (e) { /* ignore */ } }
-    else { ui.setHeader(o.title ? [{ t: String(o.title).toUpperCase() + (o.sub ? '  -  ' + String(o.sub).toUpperCase() : ''), k: '' }] : []); if (o.tip && S.round === 0) ui.toast('TAP THE LANE AS THE GEMS HIT THE RING', 3200); }
+    else { setHead(barLabel(0)); if (o.tip && S.round === 0) ui.toast(S.cr ? 'LISTEN FIRST, THEN PLAY IT BACK' : 'TAP THE LANE AS THE GEMS HIT THE RING', 3200); else if (own && !S.own.length) ui.toast('No beats saved yet: make one in the Beat Maker', 3000); }
   }
   function finishRound(total) {
-    const sum = Core.summarize(S.hits, total || S.chart.length, S.maxCombo); S.sum = sum; click.stop();
+    const sum = Core.summarize(S.hits, total || S.chart.length, S.maxCombo); S.sum = sum; click.stop(); if (S.cr) { tui.hidePattern(); S.unitNow = null; }
     const B = S.battle;
     if (B) {
       const t = B.tot; t.perfects += sum.perfect; t.bestCombo = Math.max(t.bestCombo, sum.bestCombo); sum.perfectLane.forEach((v, i) => { t.lane[i] += v; }); t.notes += S.chart.length; t.perfect += sum.perfect; t.good += sum.good; t.miss += sum.miss; t.pts += sum.perfect * 100 + sum.good * 60; t.score = (t.score || 0) + sum.score;
@@ -324,7 +359,7 @@ export function createRhythm(ctx, opts) {
   // like the 2D game: leaving the tab mid set abandons it (no rewards). Standalone: back to the start card. In the game: back to the place.
   function onVis() { if (document.hidden && (S.phase === 'play' || S.phase === 'count' || S.phase === 'opp' || S.phase === 'pick') && !S.manual) { if (game) { ui.toast('Set interrupted.', 1500); later(() => doQuit(), 50); } else abort(); } }
   document.addEventListener('visibilitychange', onVis);
-  function abort() { click.stop(); S.phase = 'idle'; S.bot = null; dir.clear(); ui.hideVs(true); ui.hideJudges(); ui.setHeader([]); lighting.setMusic(false); ui.setCombo(0); S.combo = 0; ui.toast('Set interrupted.', 2200); showStartCard(); }
+  function abort() { click.stop(); tui.hidePattern(); S.phase = 'idle'; S.bot = null; dir.clear(); ui.hideVs(true); ui.hideJudges(); ui.setHeader([]); lighting.setMusic(false); ui.setCombo(0); S.combo = 0; ui.toast('Set interrupted.', 2200); showStartCard(); }
 
   // MIC MODE: like the 2D game. Each detected beatbox hit presses the lane it was classified as.
   function toggleMic() { if (mic.on) { stopMic(); if (opts.onMic) opts.onMic(false); } else startMic(true); }
@@ -365,8 +400,9 @@ export function createRhythm(ctx, opts) {
     if (S.phase === 'count' || S.phase === 'play') {
       const T = S.T, beatNow = Math.floor(T / S.spb);
       const cb = beatNow - (S.cIn || 0);
-      if (S.phase === 'count' && beatNow !== S.counted && cb >= 0 && cb < 4) { S.counted = beatNow; sfx(cb === 3 ? 'go' : 'countdown'); ui.countdown(cb === 3 ? 'GO!' : String(3 - cb)); if (S.call.length && cb === 0) tui.patternLabel('YOUR TURN', true); }
+      if (S.phase === 'count' && beatNow !== S.counted && cb >= 0 && cb < 4) { S.counted = beatNow; sfx(cb === 3 && !S.cr ? 'go' : 'countdown'); if (!(S.cr && cb === 3)) ui.countdown(cb === 3 ? 'GO!' : String(3 - cb)); if (S.call.length && !S.cr && cb === 0) tui.patternLabel('YOUR TURN', true); }
       if (S.call.length) callTick(T);
+      if (S.cr) crTick(T); else if (!S.battle && S.mode !== 'train') { const hl = barLabel(T); if (hl !== S.headLabel) setHead(hl); }
       if (T >= (S.lead || 4) * S.spb - 0.02) S.phase = 'play';
       if (S.bot) for (const p of S.bot.plan) { if (p.done || p.at > T) continue; p.done = true; if (!p.skip && !p.n.state) press(p.n.lane, { silent: true, bot: true }); }
       for (const n of S.notes) if (!n.state && (T + S.offset - n.time) * 1000 > S.win.good + 20) { n.state = 3; S.hits.push({ lane: n.lane, grade: 'miss' }); breakCombo(); const sp = project(laneX(n.lane), 0.9, HIT_Z); ui.pop('MISS', 'miss', sp[0], sp[1]); }
@@ -378,8 +414,7 @@ export function createRhythm(ctx, opts) {
       if (T / S.spb > S.endBeat) finishRound();
     }
   }
-  // the hero's call in training: every pattern note sounds (the hero's own beatbox voice), lights its lane and its step in the strip
-  const callTint = new THREE.Color(0.75, 1, 0.95);
+  // the hero's call (training, call and response): every example note sounds (the hero's own beatbox voice), lights its lane and its step in the strip. Never judged.
   function callTick(T) {
     for (const n of S.call) if (!n.done && T >= n.time) {
       n.done = true; n.state = 1; S.press[n.lane] = 1; ui.padFlash(n.lane); performerHit(n.lane); tui.patternStep(n.step);
@@ -419,7 +454,7 @@ export function createRhythm(ctx, opts) {
     if (inOpp && oppChar) { try { oppChar.play('beatbox', { bpm: S.bpm, phase: beat, amp: 0.7 + 0.3 * E, external: true }); } catch (e) { /* ignore */ } }
     crowd.update(dt, t, E, beat, S.punch);
     if (venue) venue.update(dt, t, { energy: E, beat, spb: S.spb, approach: S.approach, flee: S.flee }); else world.update(dt, t, { energy: E, beat, flee: S.flee });
-    hw.update({ T: inOpp ? S.oppT : playing || S.phase === 'result' ? S.T : t * S.bpm / 60 * S.spb, spb: S.spb, approach: S.approach, notes: inOpp ? S.oppView : playing ? (S.call && S.call.length && S.phase === 'count' ? S.call.concat(S.notes) : S.notes) : [], press: S.press, energy: E, t });
+    hw.update({ T: inOpp ? S.oppT : playing || S.phase === 'result' ? S.T : t * S.bpm / 60 * S.spb, spb: S.spb, approach: S.approach, notes: inOpp ? S.oppView : playing ? (S.call.length ? S.call.concat(S.notes) : S.notes) : [], press: S.press, energy: E, t });
     if (S.mode === 'train' && S.trainL && S.phase === 'play') { const b = S.T / S.spb - S.lead, st = Math.floor((((b % 4) + 4) % 4) * S.trainL.steps / 4 + 0.25); tui.patternStep(st); }
     fx.update(dt, t); ui.setEnergy(E); ui.setHud(S.phase !== 'vs' && S.phase !== 'judge' && S.phase !== 'verdict'); updateCamera(dt, t, E);
     lighting.update(dt, t); if (scene.fog) { scene.fog.near = 34; scene.fog.far = 150; }
@@ -457,7 +492,8 @@ export function createRhythm(ctx, opts) {
   function state() {
     const T = S.phase === 'opp' ? S.oppT : S.T, up = []; for (const n of S.notes) { if (n.state) continue; const d = (n.time - S.T) * 1000; if (d > -400 && up.length < 8) up.push({ lane: n.lane, dtMs: Math.round(d * 10) / 10, id: n.id }); }
     let p = 0, g = 0, m = 0; S.hits.forEach((h) => { if (h.grade === 'perfect') p++; else if (h.grade === 'good') g++; else m++; });
-    return { live: S.endless || S.auto ? { endless: !!S.endless, auto: !!S.auto, minutes: +S.liveMin.toFixed(2), chunk: S.chunk, clock: clockText() } : null, phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, audio: click.state(), train: S.mode === 'train' ? { level: S.trainL ? S.trainL.level : 0, unlocked: S.prog ? S.prog.unlocked : 1, best: Object.assign({}, S.prog ? S.prog.best : {}), lead: S.lead, callDone: (S.call || []).filter((n) => n.done).length, callTotal: (S.call || []).length } : null, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
+    return { live: S.endless || S.auto ? { endless: !!S.endless, auto: !!S.auto, minutes: +S.liveMin.toFixed(2), chunk: S.chunk, clock: clockText() } : null, phase: S.phase, T, beat: S.spb ? T / S.spb : 0, bpm: S.bpm, spb: S.spb, combo: S.combo, maxCombo: S.maxCombo, score: Math.round(S.score), energy: S.energy, perfect: p, good: g, miss: m, notesTotal: S.notes.length, notesLeft: S.notes.filter((n) => !n.state).length, upcoming: up, round: S.round, windows: S.win, approach: S.approach, manual: S.manual, quality: q, offset: S.offset, venue: venueName || 'busk', mode: S.mode, audio: click.state(), train: S.mode === 'train' ? { level: S.trainL ? S.trainL.level : 0, unlocked: S.prog ? S.prog.unlocked : 1, best: Object.assign({}, S.prog ? S.prog.best : {}), lead: S.lead, callDone: (S.call || []).filter((n) => n.done).length, callTotal: (S.call || []).length } : null,
+      cr: S.cr ? { units: S.units.length, unit: S.unitNow ? S.units.indexOf(S.unitNow) : -1, half: S.unitHalf, call: S.call.length, callDone: S.call.filter((n) => n.done).length, label: S.unitNow ? S.unitNow.pat.name : '' } : null, own: S.own.length ? S.own.map((b) => b.slot) : null, head: S.headLabel || null, crowd: { near: crowd.near.length, spectators: crowd.spectators }, fxLive: fx.count(),
       battle: S.battle ? { opp: S.battle.opp.name, myStyle: S.myStyle, oppStyle: S.oppStyleNow, oppQ: S.oppQ, oppMeter: S.oppMeter, oppNotes: S.oppView.length, oppHit: S.oppView.filter((n) => n.state === 1).length, reveal: S.reveal, tally: Object.assign({}, S.tally), roundQ: S.battle.roundQ.map((r) => ({ q: r.q, style: r.style })), verdict: S.verdict ? { win: !!S.verdict.win } : null } : null };
   }
   function resize(w, h) { W = w; H = h; ui.resize(w, h); lighting.resize(w, h, Math.min(window.devicePixelRatio || 1, 2)); camera.fov = fovFor(w / h); camera.updateProjectionMatrix(); }
