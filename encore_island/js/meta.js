@@ -177,7 +177,7 @@ function serialize() {
   return {
     ver: 1, savedAt: Date.now(), wallet: S.wallet, pallet: S.pallet, gems: S.gems, spinFree: S.spinFree || 0, crowns: S.crowns, prestiges: S.prestiges, up: S.up, upPaid: S.upPaid, gemUp: S.gemUp, gemPaid: S.gemPaid, unlockPaid: S.unlockPaid,
     lands: S.lands.map(z => ({ k: z.k, plates: z.plates.map(p => ({ id: p.id, paid: p.paid, lvl: p.lvl, built: p.built, cost: p.cost })), hordeLvl: z.hordeLvl })),
-    forgePlate: S.forgePlate, forgeUpPlate: S.forgeUpPlate, forgeLvl: S.forgeLvl, forge: S.forge, waygate: S.waygate, wayPlate: S.wayPlate, houses: S.houses,
+    forgePlate: S.forgePlate, forgeUpPlate: S.forgeUpPlate, forgeLvl: S.forgeLvl, forge: S.forge, waygate: S.waygate, wayPlate: S.wayPlate, houses: S.houses, place: S.place, bsPlate: S.bsPlate,
     feat: S.feat, pop: S.pop.map(f => ({ role: f.role, art: f.art, lvl: f.lvl || 0, id: f.id, spec: f.spec || null })), town: S.town, fanSeq: S.fanSeq, pets: S.pets, activePet: S.activePet, skins: S.skins, cperks: S.cperks, perks: S.perks, xp: S.xp, level: S.level, ult: S.ult,
     bestiary: S.bestiary, login: S.login, dailies: S.dailies, quests: S.quests, streak: S.streak, dayKey: S.dayKey, ach: S.ach, stats: S.stats, settings: S.settings, comboBest: S.comboBest, rankIdx: S.rankIdx || 0,
     player: { x: S.player.x, y: S.player.y, hp: S.player.hp, helmets: S.player.helmets, deaths: S.player.deaths },
@@ -185,9 +185,9 @@ function serialize() {
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); return true; } catch (e) { return false; } }
 function applySave(d) {
-  const keys = ['wallet', 'pallet', 'gems', 'spinFree', 'crowns', 'prestiges', 'unlockPaid', 'forgeLvl', 'waygate', 'houses', 'activePet', 'xp', 'level', 'ult', 'streak', 'dayKey', 'comboBest', 'rankIdx', 'forge'];
+  const keys = ['wallet', 'pallet', 'gems', 'spinFree', 'crowns', 'prestiges', 'unlockPaid', 'forgeLvl', 'waygate', 'houses', 'activePet', 'xp', 'level', 'ult', 'streak', 'dayKey', 'comboBest', 'rankIdx', 'forge', 'place'];
   for (const k of keys) if (d[k] !== undefined) S[k] = d[k];
-  for (const k of ['up', 'upPaid', 'gemUp', 'gemPaid', 'pets', 'skins', 'cperks', 'perks', 'bestiary', 'login', 'ach', 'stats', 'settings', 'forgePlate', 'forgeUpPlate', 'wayPlate']) if (d[k] && typeof d[k] === 'object') Object.assign(S[k], d[k]);
+  for (const k of ['up', 'upPaid', 'gemUp', 'gemPaid', 'pets', 'skins', 'cperks', 'perks', 'bestiary', 'login', 'ach', 'stats', 'settings', 'forgePlate', 'forgeUpPlate', 'wayPlate', 'bsPlate']) if (d[k] && typeof d[k] === 'object') Object.assign(S[k], d[k]);
   if (d.dailies) S.dailies = d.dailies; if (d.quests) S.quests = d.quests;
   S.lands = [];
   for (const ls of (d.lands || [])) {

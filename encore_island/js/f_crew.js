@@ -179,7 +179,7 @@
   }
 
   // ---------- world positions / drawing ----------
-  const MARKET_POS = { x: -370, y: -20 }, ARENA_POS = { x: 385, y: 25 }, STUDIO_POS = { x: -345, y: -265 };
+  const MARKET_POS = { x: -500, y: -150 }, ARENA_POS = { x: 500, y: 60 }, STUDIO_POS = { x: -250, y: -410 }; // Market Quarter (W), Arena (E), beside the Hall of Fame (NW)
   for (const p of [MARKET_POS, ARENA_POS, STUDIO_POS]) if (typeof HUB_KEEP !== 'undefined') HUB_KEEP.push({ x: p.x, y: p.y, r: 80 }); // keeps lamps, trees and the next-land plate off them
   const DISTRICTS = [
     { id: 'market', name: 'Market', tier: 1, pos: MARKET_POS, icon: 'coin', col: ['#ffe27a', '#e8921e'], on: () => townTierIdx() >= 1 },

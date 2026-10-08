@@ -158,6 +158,7 @@ function drawWorld() {
   if (hub) {
     ysAdd(SELL.y + 30, drawStall); ysAdd(VAULT.y + 30, drawVault); ysAdd(MONU.y + 30, drawMonument); ysAdd(FORGE.y + 40, drawForgeArea);
     for (const l of HUBLAMPS) if (vis(l.x, l.y, 90)) ysAdd(l.y, drawLamp, l);
+    for (const sg of HUBSIGNS) if (vis(sg.x, sg.y, 90)) ysAdd(sg.y, drawSignpost, sg);
     for (const d of HUBDECOR) if (vis(d.x, d.y, 80)) ysAdd(d.y, drawProp, d, BIOMES[0], 0);
   }
   for (const z of S.lands) if (landVisible(z.g)) {

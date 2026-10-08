@@ -156,4 +156,38 @@ EI.draw(0.016); { const n = S.lands.length; t.ok(EI.MINI.n === n && EI.MINI.sc >
 { S.login = { day: 0, last: '' }; const g0 = S.gems, w0 = S.wallet; let ok = true; for (let d = 0; d < 7; d++) { S.login.last = ''; if (!EI.claimLogin()) ok = false; }
   t.ok(ok && S.login.day === 7 && S.gems > g0 && S.wallet > w0, 'the 7-day gift cycle claims every day through its table'); }
 
+// ---- the big home island: zones, fixtures and the Backstage greenroom ----
+EI.initGame(true); S = EI.S; S.started = true; tipsOff(); S.sheet = null; S.modal = null;
+{ const K = EI.HUB_KEEP, inside = K.every(o => EI.walkable(o.x, o.y, 0) && Math.hypot(o.x, o.y) + 60 < EI.radiusAt(EI.HUB_GEO, Math.atan2(o.y, o.x)));
+  let md = 1e9; for (let i = 0; i < K.length; i++) for (let j = i + 1; j < K.length; j++) md = Math.min(md, Math.hypot(K[i].x - K[j].x, K[i].y - K[j].y));
+  t.ok(EI.HUB.r >= 600 && inside, 'every plaza fixture stands well inside the bigger home island (r ' + EI.HUB.r + ')'); t.ok(md >= 110, 'fixtures keep at least 110 px apart (closest ' + Math.round(md) + ')'); }
+{ const sg = EI.HUBSIGNS; let clear = true; for (const s of sg) for (const o of EI.HUB_KEEP) if (o !== EI.HUB_KEEP[0] && Math.hypot(s.x - o.x, s.y - o.y) < 90) clear = false;
+  t.ok(sg.length === 8 && clear && EI.HUBLAMPS.length >= 12, 'eight signposts sit clear of the fixtures and the lamps ring the plaza (' + EI.HUBLAMPS.length + ')'); }
+{ const T = EI.TERRACE, onArc = Object.values(EI.UPG_POS).every(p => Math.abs(Math.hypot(p.x - T.x, p.y - T.y) - T.r) < 2 && p.y > 250); t.ok(onArc, 'the five hero plates sit on the Training Terrace arc south of the stage'); }
+S.wallet = 1e12; const H = EI.HATCH;
+while (S.lands.length < EI.BACKSTAGE_SHOW - 1) EI.addLand();
+S.player.x = H.x; S.player.y = H.y; S.player.vx = S.player.vy = 0; EI.tick(0.05); t.ok(S.bsPlate.cost === 0 && S.bsPlate.paid === 0, 'the stairway stays hidden before ' + EI.BACKSTAGE_SHOW + ' lands');
+EI.addLand(); EI.tick(0.05); t.ok(S.bsPlate.cost > 0 && S.bsPlate.paid === 0 && !S.bsPlate.built, 'at ' + EI.BACKSTAGE_SHOW + ' lands it shows a price but cannot be paid yet');
+while (S.lands.length < EI.BACKSTAGE_OPEN) EI.addLand();
+for (let i = 0; i < 400 && !S.bsPlate.built; i++) EI.tick(0.05);
+t.ok(S.bsPlate.built && S.place === 'hub', 'from ' + EI.BACKSTAGE_OPEN + ' lands the plate takes coins and opens the Backstage');
+EI.draw(0.016);
+for (let i = 0; i < 40 && S.place !== 'backstage'; i++) EI.tick(0.05);
+t.ok(S.place === 'backstage' && EI.inBackstage(S.player.x, S.player.y), 'standing still on the open stairs takes the hero down into the greenroom');
+t.ok(EI.walkable(S.player.x, S.player.y, S.lands.length) && !EI.walkable(EI.BACKSTAGE.x - 60, S.player.y, S.lands.length) && !EI.walkable(S.player.x, EI.BACKSTAGE.y + 20, S.lands.length), 'the room floor is walkable, its walls are not');
+t.ok(EI.guideTarget() === null, 'no guide arrow down there');
+let drew = true; try { for (let i = 0; i < 5; i++) { EI.tick(0.05); EI.draw(0.016); } } catch (e) { drew = false; console.log(e); } t.ok(drew, 'draw() renders the Backstage without throwing');
+{ S.pop.push({ role: 'fight', x: 0, y: 0, ph: 0, cd: 1, mv: 0, carry: [], art: 'fan', face: 1 }); for (let i = 0; i < 10; i++) EI.tick(0.05); const f = S.pop[S.pop.length - 1]; t.ok(Math.abs(f.x) < 400 && Math.abs(f.y) < 400 && !EI.inBackstage(f.x, f.y), 'fighter fans wait up on the stage instead of following into the room'); S.pop.pop(); }
+EI.save(); EI.initGame(true); S = EI.S; S.started = true; tipsOff(); t.ok(S.place === 'backstage' && S.bsPlate.built && EI.inBackstage(S.player.x, S.player.y), 'a save made in the Backstage reloads there with the stairway still open');
+{ const dp = EI.bsDoorPos(1), doors = EI.bsDoors(); t.ok(doors.length === 3 && doors.every(d => d.unlocked() === false && typeof d.hint === 'string'), 'the three doorways show locked placeholders until a feature claims them');
+  let entered = 0; EI.regDoor({ id: 'test_door', name: 'Test', icon: 'star', hint: 'test', unlocked: () => true, enter: () => { entered++; } });
+  t.ok(EI.bsDoors()[0].id === 'test_door' && EI.bsDoors().length === 3, 'a registered door takes the first frame and the placeholders fill the rest');
+  S.player.x = EI.bsDoorPos(0).x; S.player.y = EI.bsDoorPos(0).y + 30; S.player.vx = S.player.vy = 0; for (let i = 0; i < 60 && !entered; i++) EI.tick(0.05); t.ok(entered === 1, 'standing still in an unlocked doorway enters it once');
+  EI.DOORS.length = 0; S.player.x = dp.x; S.player.y = dp.y + 30; for (let i = 0; i < 60; i++) EI.tick(0.05); t.ok(S.place === 'backstage' && entered === 1, 'a locked doorway just says so and keeps the hero in the room'); }
+S.player.x = EI.BS_STAIRS.x; S.player.y = EI.BS_STAIRS.y; S.player.vx = S.player.vy = 0; for (let i = 0; i < 60 && S.place === 'backstage'; i++) EI.tick(0.05);
+t.ok(S.place === 'hub' && Math.hypot(S.player.x - H.x, S.player.y - H.y) < 120 && EI.walkable(S.player.x, S.player.y, S.lands.length), 'the EXIT stairs bring the hero back up beside the stairway');
+for (let i = 0; i < 40 && S.place !== 'backstage'; i++) EI.tick(0.05); if (S.place !== 'backstage') EI.enterBackstage();
+S.player.x = EI.STAGE.x; S.player.y = EI.STAGE.y; EI.tick(0.05); t.ok(S.place === 'hub', 'anything that moves the hero out of the room (fainting, a warp, a tour) leaves the Backstage cleanly');
+EI.enterBackstage(); EI.prestige(); t.ok(EI.S.place === 'hub' && !EI.S.bsPlate.built, 'an Encore Tour resets the Backstage with the rest of the run');
+
 t.done();

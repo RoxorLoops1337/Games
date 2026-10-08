@@ -149,6 +149,24 @@ function groundPat(key, base, tuft, flowers, kind) {
     } else if (kind === 'cobble') {
       ctx.strokeStyle = tuft; ctx.lineWidth = 3;
       for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) { const x = q * 64 + (r % 2) * 32, y = r * 64; wrap((dx, dy) => { rr(x + dx + 3, y + dy + 3, 58, 58, 14); ctx.stroke(); }); if ((q + r) % 2) { ctx.fillStyle = 'rgba(255,126,182,0.10)'; rr(x + 3, y + 3, 58, 58, 14); ctx.fill(); } }
+    } else if (kind === 'slab') { // big pale stone tiles with grout: the Training Terrace
+      ctx.strokeStyle = tuft; ctx.lineWidth = 4;
+      for (let r = 0; r < 2; r++) for (let q = 0; q < 2; q++) { const x = q * 128, y = r * 128; ctx.fillStyle = (q + r) % 2 ? 'rgba(255,255,255,0.14)' : 'rgba(90,60,120,0.06)'; ctx.fillRect(x, y, 128, 128); ctx.strokeRect(x + 2, y + 2, 124, 124); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 8, y + 8, 112, 4); }
+      for (let i = 0; i < 10; i++) { const x = rng() * 256, y = rng() * 256; ctx.fillStyle = 'rgba(90,60,120,0.10)'; ctx.beginPath(); ctx.arc(x, y, 3 + rng() * 4, 0, TAU); ctx.fill(); }
+    } else if (kind === 'plank') { // weathered boardwalk planks: the Market Quarter deck
+      for (let r = 0; r < 8; r++) { const y = r * 32, shift = (r % 2) * 128; ctx.fillStyle = r % 2 ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(0, y, 256, 32); ctx.strokeStyle = tuft; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, y + 1.5); ctx.lineTo(256, y + 1.5); ctx.stroke();
+        wrap((dx, dy) => { ctx.beginPath(); ctx.moveTo(shift + dx, y + dy); ctx.lineTo(shift + dx, y + dy + 32); ctx.stroke(); });
+        ctx.strokeStyle = 'rgba(90,50,20,0.22)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, y + 10 + rng() * 8); ctx.bezierCurveTo(80, y + 6, 160, y + 26, 256, y + 12 + rng() * 10); ctx.stroke();
+        for (const nx of [shift + 10, shift + 118]) { ctx.fillStyle = 'rgba(60,30,10,0.45)'; ctx.beginPath(); ctx.arc(((nx % 256) + 256) % 256, y + 16, 2.2, 0, TAU); ctx.fill(); } }
+    } else if (kind === 'marble') { // white marble with soft veins and a gold fleck: the Hall of Fame
+      ctx.fillStyle = base[0]; ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = tuft; ctx.lineWidth = 1.6;
+      for (let i = 0; i < 7; i++) { const x = rng() * 256, y = rng() * 256; wrap((dx, dy) => { ctx.beginPath(); ctx.moveTo(x + dx - 70, y + dy); ctx.bezierCurveTo(x + dx - 20, y + dy - 40 + rng() * 20, x + dx + 20, y + dy + 30, x + dx + 70, y + dy + 10); ctx.stroke(); }); }
+      for (let i = 0; i < 6; i++) { const x = rng() * 256, y = rng() * 256; ctx.fillStyle = 'rgba(240,180,60,0.35)'; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, TAU); ctx.fill(); }
+    } else if (kind === 'basalt') { // dark forge-yard tiles with embers between them: the Smelter Yard
+      ctx.fillStyle = tuft; for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) { const x = q * 64 + (r % 2) * 32, y = r * 64; wrap((dx, dy) => { rr(x + dx + 4, y + dy + 4, 56, 56, 10); ctx.fill(); }); }
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) { const x = q * 64 + (r % 2) * 32, y = r * 64; rr(((x + 8) % 256), y + 8, 48, 6, 3); ctx.fill(); }
+      for (let i = 0; i < 9; i++) { const x = rng() * 256, y = rng() * 256; ctx.fillStyle = i % 2 ? '#ff9a2e' : '#ffd84d'; ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.arc(x, y, 1.6 + rng() * 1.6, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
     } else {
       for (let i = 0; i < 40; i++) { const x = rng() * 256, y = rng() * 256, r = 2 + rng() * 3.5; wrap((dx, dy) => { ctx.fillStyle = tuft; ctx.beginPath(); ctx.ellipse(x + dx, y + dy, r * 1.5, r, 0, 0, TAU); ctx.fill(); }); }
     }
