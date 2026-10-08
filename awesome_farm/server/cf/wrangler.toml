@@ -7,7 +7,7 @@ compatibility_date = "2025-09-01"
 [vars]
 WORLD_NAME = "farm"
 SERVER_NAME = "Awesome Farm"
-GAME_URL = "https://games-71g.pages.dev/awesome_farm/"
+GAME_URL = "https://games-71g.pages.dev/awesome_farm/play/"
 # PASSWORD and DEV_KEY are secrets: `npx wrangler secret put PASSWORD --config server/cf/wrangler.toml`
 
 # One Durable Object per world, named by WORLD_NAME.

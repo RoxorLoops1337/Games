@@ -8,6 +8,6 @@
 /clawspire/js/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Awesome Farm: Vite names every file in assets/ by its content hash; index.html stays revalidated.
-/awesome_farm/assets/*
+# Awesome Farm: Vite names every file in play/assets/ by its content hash; play/index.html stays revalidated.
+/awesome_farm/play/assets/*
   Cache-Control: public, max-age=31536000, immutable

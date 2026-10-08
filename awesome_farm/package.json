@@ -16,7 +16,8 @@
     "server:build": "npm run build && node scripts/build-server.mjs",
     "check": "npm run typecheck && npm test && vite build --config vite/config.prod.mjs",
     "cf:dev": "npx --yes wrangler@4 dev --config server/cf/wrangler.toml",
-    "cf:deploy": "npx --yes wrangler@4 deploy --config server/cf/wrangler.toml"
+    "cf:deploy": "npx --yes wrangler@4 deploy --config server/cf/wrangler.toml",
+    "build:pages": "vite build --config vite/config.prod.mjs --outDir play --emptyOutDir"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261007.1",

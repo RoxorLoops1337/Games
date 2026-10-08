@@ -85,11 +85,11 @@ test('a dropped line is picked up again with a backoff, the HUD is told, and aft
         await until(() => server.log().includes('Play here'), 20000, 'the server for the wake-up case');
         const conn2 = new WsConnection(`127.0.0.1:${port}`, '');
         await until(() => conn2.poll().some((m) => m.t === 'welcome'), 8000, 'the wake-up case to get in');
+        RECONNECT_WAITS.fill(30);                                                       // (set before the drop: no scheduled try lands in time, so only the wake-up can bring it back)
         server.child.kill();
         await until(() => { conn2.poll(); return conn2.status === 'connecting'; }, 5000, 'the drop');
         server = startServer(port, dir);
         await until(() => server.log().includes('Play here'), 20000, 'the server again');
-        RECONNECT_WAITS.fill(30);                                                       // (no scheduled try would land in time)
         for (const f of listeners.visibilitychange ?? []) f();                           // the phone wakes up
         await until(() => conn2.poll().some((m) => m.t === 'welcome'), 8000, 'the wake-up try to get in');
         assert.equal(conn2.status, 'open');

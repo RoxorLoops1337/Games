@@ -117,23 +117,25 @@ const buildOpts = (target) => ({
   logLevel: 'info',
 });
 
-// Awesome Farm is a Vite + TypeScript project with its own package.json (awesome_farm/). On Cloudflare Pages
-// (CF_PAGES=1) or with FARM=1 it is installed and built here and dist/awesome_farm/ is its build; elsewhere an
-// awesome_farm/dist/ that already exists is reused, so `npm run check` for the other games never waits for it.
-// A failed farm build is reported and the rest of the site still deploys. Its tests: `npm run test:farm`.
+// Awesome Farm is a Vite + TypeScript project with its own package.json (awesome_farm/). The site serves the repo as it
+// is, so its build is kept in git in awesome_farm/play/ (like the mirrored bundles above); awesome_farm/index.html is
+// the Vite source page and forwards there. FARM=1 rebuilds play/ (then commit it); otherwise the committed build is
+// copied, so `npm run check` for the other games never waits for it. Its tests: `npm run test:farm`.
 const FARM = path.join(REPO, 'awesome_farm');
 const buildAwesomeFarm = () => {
-  const built = path.join(FARM, 'dist');
+  const play = path.join(FARM, 'play');
   try {
-    if (process.env.CF_PAGES === '1' || process.env.FARM === '1') {
+    if (process.env.FARM === '1') {
       execSync('npm ci --include=dev --no-audit --no-fund', { cwd: FARM, stdio: 'inherit' });
-      execSync('npx vite build --config vite/config.prod.mjs', { cwd: FARM, stdio: 'inherit' });
+      execSync('npm run build:pages', { cwd: FARM, stdio: 'inherit' });
+      console.log('mirrored        → awesome_farm/play (commit it)');
     }
-    if (!fs.existsSync(path.join(built, 'index.html'))) { console.log('awesome_farm: not built here (FARM=1 builds it; Pages always does)'); return; }
-    fs.cpSync(built, path.join(DIST, 'awesome_farm'), { recursive: true });
-    console.log('built awesome_farm → dist/awesome_farm');
+    if (!fs.existsSync(path.join(play, 'index.html'))) { console.log('awesome_farm: no build in awesome_farm/play (FARM=1 makes one)'); return; }
+    fs.cpSync(play, path.join(DIST, 'awesome_farm', 'play'), { recursive: true });
+    fs.copyFileSync(path.join(FARM, 'index.html'), path.join(DIST, 'awesome_farm', 'index.html'));
+    console.log('copied awesome_farm/play → dist/awesome_farm/play');
   } catch (err) {
-    console.error(`!! awesome_farm did not build (${err.message}); the rest of the site deploys without it`);
+    console.error(`!! awesome_farm did not build (${err.message}); the rest of the site is unaffected`);
   }
 };
 

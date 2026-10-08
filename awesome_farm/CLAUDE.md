@@ -9,9 +9,10 @@ as built and the ideas not built yet.
 painted-art pipeline, how we work) and `HANDOVER_2_…` (a brief for rebuilding the Beatbox Story game in Phaser, with 12 feature inventories).
 
 This folder is a self-contained project inside the `RoxorLoops1337/Games` monorepo. The
-root `CLAUDE.md` workflow rules still apply (commit style, no model identifiers). The root `build.js` builds it
-(`buildAwesomeFarm`: `npm ci` + `vite build` here, on Cloudflare Pages) into `dist/awesome_farm/`, so the game is
-served at `https://games-71g.pages.dev/awesome_farm/`. The root `npm run check` does not run its tests (they need this
+root `CLAUDE.md` workflow rules still apply (commit style, no model identifiers). The games site serves the repo as it is
+(Cloudflare Pages runs no build), so the built game is committed in `play/` and served at
+`https://games-71g.pages.dev/awesome_farm/play/` (`index.html` here is the Vite source page; served raw, it forwards to
+`play/`, keeping `?server=`). **After changing the game: `npm run build:pages`, then commit `play/` with the change.** The root `npm run check` does not run its tests (they need this
 folder's own `node_modules`): use `npm run check` *in this folder* (or `npm run test:farm` at the root).
 
 ## Stack
