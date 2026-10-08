@@ -22,17 +22,17 @@ export const LOOT_POOL: Record<Rarity, LootRow[]> = {
     1: [
         { item: 'coin', min: 45, max: 90, w: 6 }, { item: 'ironbar', min: 2, max: 4, w: 4 }, { item: 'copperbar', min: 2, max: 4, w: 3 }, { item: 'gear', min: 2, max: 4, w: 3 },
         { item: 'wire', min: 2, max: 4, w: 2 }, { item: 'goldore', min: 2, max: 4, w: 3 }, { item: 'potion_heal', min: 1, max: 2, w: 3 }, { item: 'potion_energy', min: 1, max: 2, w: 2 },
-        { item: 'potion_swift', min: 1, max: 2, w: 2 }, { item: 'potion_might', min: 1, max: 1, w: 2 }, { item: 'potion_guard', min: 1, max: 1, w: 2 }, { item: 'treat', min: 2, max: 3, w: 3 },
+        { item: 'potion_swift', min: 1, max: 2, w: 2 }, { item: 'potion_might', min: 1, max: 1, w: 2 }, { item: 'potion_guard', min: 1, max: 1, w: 2 }, { item: 'treat', min: 2, max: 3, w: 3 }, { item: 'potion_study', min: 1, max: 2, w: 2 },
         { item: 'pod', min: 2, max: 3, w: 3 }, { item: 'bread', min: 2, max: 3, w: 2 }, { item: 'cloth', min: 2, max: 3, w: 2 }, { item: 'bottle', min: 1, max: 1, w: 2 },
     ],
     2: [
         { item: 'coin', min: 130, max: 240, w: 6 }, { item: 'goldbar', min: 1, max: 3, w: 4 }, { item: 'steel', min: 1, max: 2, w: 3 }, { item: 'circuit', min: 1, max: 2, w: 2 },
-        { item: 'potion_mend', min: 1, max: 2, w: 2 }, { item: 'potion_vigor', min: 1, max: 1, w: 2 }, { item: 'potion_night', min: 1, max: 1, w: 2 }, { item: 'pod_great', min: 1, max: 2, w: 3 },
+        { item: 'potion_mend', min: 1, max: 2, w: 2 }, { item: 'potion_vigor', min: 1, max: 1, w: 2 }, { item: 'potion_night', min: 1, max: 1, w: 2 }, { item: 'pod_great', min: 1, max: 2, w: 3 }, { item: 'potion_insight', min: 1, max: 1, w: 2 }, { item: 'potion_kin', min: 1, max: 2, w: 2 },
         { item: 'rockheart', min: 1, max: 2, w: 1 }, { item: 'frostshard', min: 1, max: 2, w: 1 }, { item: 'shroud', min: 1, max: 2, w: 1 }, { item: 'koi_sashimi', min: 1, max: 1, w: 1 },
         { item: 'charm_lucky', min: 1, max: 1, w: 1 }, { item: 'charm_swift', min: 1, max: 1, w: 1 }, { item: 'charm_vital', min: 1, max: 1, w: 1 },
     ],
     3: [
-        { item: 'coin', min: 360, max: 620, w: 6 }, { item: 'crystal', min: 2, max: 4, w: 4 }, { item: 'pod_ultra', min: 1, max: 1, w: 2 }, { item: 'rift_shard', min: 3, max: 6, w: 3 },
+        { item: 'coin', min: 360, max: 620, w: 6 }, { item: 'crystal', min: 2, max: 4, w: 4 }, { item: 'pod_ultra', min: 1, max: 1, w: 2 }, { item: 'rift_shard', min: 3, max: 6, w: 3 }, { item: 'potion_memory', min: 1, max: 2, w: 2 },
         { item: 'pearl', min: 1, max: 2, w: 2 }, { item: 'core', min: 1, max: 1, w: 1 }, { item: 'bag_pack', min: 1, max: 1, w: 1 }, { item: 'bag_frame', min: 1, max: 1, w: 1 },
         { item: 'helm_crystal', min: 1, max: 1, w: 1 }, { item: 'staff_crystal', min: 1, max: 1, w: 1 }, { item: 'pick_crystal', min: 1, max: 1, w: 1 },
     ],

@@ -8,6 +8,7 @@ import type { Cost, ItemId, Res } from '../data/items';
 import { invDrop, invHas } from './machines';
 import { countOf, takeItem } from './stats';
 import type { BuildE, Ent, PlayerS } from './types';
+import { oneUber } from './uber';
 
 /** How far from you a chest still counts (tiles are 16 px). */
 export const POOL_RADIUS = 8 * TILE;
@@ -21,7 +22,7 @@ export function chestsAround (ents: Iterable<Ent>, x: number, y: number, radius 
         const d = Math.hypot((e.tx + w / 2) * TILE - x, (e.ty + h / 2) * TILE - y);
         if (d <= radius) out.push({ b: e, d });
     }
-    return out.sort((a, b) => a.d - b.d || a.b.id - b.b.id).map((o) => o.b);
+    return oneUber(out.sort((a, b) => a.d - b.d || a.b.id - b.b.id).map((o) => o.b));      // (Uber Chests are one store: the nearest stands for them all)
 }
 
 /** How many of something you have, counting the chests. */

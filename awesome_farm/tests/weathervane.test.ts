@@ -125,7 +125,7 @@ test('the real game follows the forecast: the night that falls is the night it s
 });
 
 test('the words: a row reads in plain language, and a Blood Moon day wears a tag', () => {
-    const f = (over: Partial<DayForecast>): DayForecast => ({ day: 9, ahead: 1, season: 'summer', seasonDay: 2, seasonStart: false, rain: null, fog: false, night: null, ...over });
+    const f = (over: Partial<DayForecast>): DayForecast => ({ day: 9, ahead: 1, season: 'summer', seasonDay: 2, seasonStart: false, rain: null, fog: false, night: null, study: false, ...over });
     assert.equal(dayLabel(f({ ahead: 0 })), 'Today');
     assert.equal(dayLabel(f({ ahead: 1 })), 'Tomorrow');
     assert.equal(dayLabel(f({ ahead: 3 })), 'In 3 days');
@@ -148,7 +148,7 @@ test('the picture over the building is the most noteworthy thing tomorrow brings
     const keys = new Set<string>();
     for (const seed of SEEDS) for (const d of forecast(seed, 1, 100)) { keys.add(dayIcon(d)); keys.add(nightIcon(d)); keys.add(vaneIcon(d)); }
     for (const k of ['k_sun', 'k_rain', 'k_storm', 'k_fog', 'k_moon', 'k_blood', 'k_meteor', 'k_fairy']) assert.ok(keys.has(k), `${k} gets used`);
-    const f = (over: Partial<DayForecast>): DayForecast => ({ day: 9, ahead: 1, season: 'summer', seasonDay: 2, seasonStart: false, rain: null, fog: false, night: null, ...over });
+    const f = (over: Partial<DayForecast>): DayForecast => ({ day: 9, ahead: 1, season: 'summer', seasonDay: 2, seasonStart: false, rain: null, fog: false, night: null, study: false, ...over });
     assert.equal(vaneIcon(f({})), 'k_sun');
     assert.equal(vaneIcon(f({ rain: { part: 'morning', storm: false, start: 20, len: 50 } })), 'k_rain');
     assert.equal(vaneIcon(f({ rain: { part: 'morning', storm: true, start: 20, len: 50 } })), 'k_storm');
@@ -157,7 +157,7 @@ test('the picture over the building is the most noteworthy thing tomorrow brings
 });
 
 test('the hint says the most useful true thing, and every claim in it is in the rules', () => {
-    const f = (ahead: number, over: Partial<DayForecast> = {}): DayForecast => ({ day: 9 + ahead, ahead, season: 'summer', seasonDay: 2 + ahead, seasonStart: false, rain: null, fog: false, night: null, ...over });
+    const f = (ahead: number, over: Partial<DayForecast> = {}): DayForecast => ({ day: 9 + ahead, ahead, season: 'summer', seasonDay: 2 + ahead, seasonStart: false, rain: null, fog: false, night: null, study: false, ...over });
     const rain = { part: 'afternoon' as const, storm: false, start: 120, len: 60 };
     const calm = [f(0), f(1), f(2), f(3)];
     assert.equal(forecastHint(calm), 'Calm days ahead: a good time to build.');

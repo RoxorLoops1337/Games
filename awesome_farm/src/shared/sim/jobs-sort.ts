@@ -1,6 +1,5 @@
 // Jobs, sorting chests: a sorter puts like with like (see sortPlan), carrying a stack at a time (jobs-carry).
 
-import { BUILDINGS } from '../data/buildings';
 import { takes } from '../data/filters';
 import type { Pet } from '../data/creatures';
 import { ITEMS, type ItemId } from '../data/items';
@@ -9,6 +8,7 @@ import { setStatus, type Site } from './jobs-site';
 import { invSum } from './machines';
 import type { Sim } from './sim';
 import type { BuildE, CritE } from './types';
+import { storageOf } from './uber';
 
 // ── sorting chests ──────────────────────────────────────────────────────────
 // A sorter puts like with like. Every kind of thing (what the item catalogue calls its kind: materials, food, seeds, potions,
@@ -43,7 +43,7 @@ export function sortPlan (stores: BuildE[]): { from: BuildE; to: BuildE; item: I
     }
     for (const p of pairs) if (!home.has(p.cat)) home.set(p.cat, p.id);            // more kinds than chests: the biggest holder keeps the rest
     const byId = new Map(stores.map((s) => [s.id, s] as const));
-    const roomOf = (s: BuildE) => (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv);
+    const roomOf = (s: BuildE) => storageOf(s) - invSum(s.inv);
     let best: { from: BuildE; to: BuildE; item: ItemId; n: number } | null = null;
     let bestScore = 0;
     for (const s of stores) {

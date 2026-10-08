@@ -87,7 +87,7 @@ function keepMachine (sim: Sim, c: CritE, owner: PlayerS, pet: Pet, b: BuildE, s
     setStatus(sim, c, owner, pet, st);
     if (did > 0 || st === 'work') {
         wkEvent(sim, c, skill, at);
-        grantPetXp(sim, owner, pet, 0.5, c);
+        grantPetXp(sim, owner, pet, 0.5, c, true);
         if (did > 0) { quests.count(owner, 'petwork'); quests.count(owner, `petwork:${skill}`); }
     }
 }
@@ -132,7 +132,7 @@ function workOrder (sim: Sim, c: CritE, owner: PlayerS, pet: Pet, b: BuildE, ski
     quests.count(owner, `craft:${r.out}`, r.n);
     quests.count(owner, 'petwork');
     quests.count(owner, `petwork:${skill}`);
-    grantPetXp(sim, owner, pet, 2 + r.xp * 0.2, c);
+    grantPetXp(sim, owner, pet, 2 + r.xp * 0.2, c, true);
     sim.fx('craft', at.x, at.y - 6);
     sim.float(at.x, at.y - 18, `+${r.n} ${ITEMS[r.out].name}`, PAL.cream, owner.id, `order-${b.id}`);
     if (ord.n <= 0) {

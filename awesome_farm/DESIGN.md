@@ -43,7 +43,14 @@ Prices scale with each buyer's own purchases.
 Levels (cap 80) give skill points. The **skill tree** has six branches — Gathering, Farming
 & Cooking, Industry, Combat, Taming, Explorer — about 17 nodes each, with ranks, "any of"
 requirements, stat mods and **unlock tokens** that gate recipes and buildings. One stat
-ledger (skills + gear + buffs + expedition boons) feeds `derived()`. The **Journal** (J)
+ledger (skills + gear + buffs + expedition boons) feeds `derived()`.
+**XP boosts** stack in that ledger's `xp` stat: the Explorer nodes Scholar, Wisdom, Wanderer and **Sage**, Hearthside, the Bright Minds wish,
+the Alchemy Table's XP brews (*Scholar's Tea* +50% for five minutes, *Elixir of Insight* +100% for four, *Bottled Memories* a quarter of
+the current level at once, *Kinship Tonic* for creatures; all four also turn up in loot crates) and **Scholar's Day** (`sim/scholar.ts`:
+double XP for everybody from dawn to dawn on day 5, every tenth day after it and now and then besides; the weather vane shows it coming).
+**Creatures teach their keeper:** whenever a creature earns XP at a job (a den, an island post, a machine or a workshop), its keeper
+earns `TUNING.crewXpShare` (25%) of it too, plus the `crewXp` stat (Taming: *Shared Lessons*, *Pack Lore*; the Kinship Tonic), online
+or not; dawn (or coming back) tells them how much (`PlayerS.lessons`, `sim/petlib.ts`). The **Journal** (J)
 holds a 16-chapter story (every objective says *how* when you hover it; a finished chapter pays and opens
 the next by itself, and a **story card** tells what happened and what comes next: `data/story.ts`, shown by
 `ui/screens/story.ts`; the last three chapters, *A Stranger on the Pier*, *X Marks the Spot* and *The Last Lantern*,
@@ -82,6 +89,7 @@ Backpack's paper doll and for friends (`client/art/storybook-worn.ts`).
 ### Houses and bases
 **Safe ground:** nothing spawns on a floor (every floor piece, belts included), and nothing spawns in a *sealed* pocket: ground a monster could not walk out of without touching the sea, closed in by walls, doorways, buildings and trees within 400 tiles (`World.sealed`). Flying monsters cannot cross walls, doorways or roofs (`World.flyBlocked`).
 **Dedicated chests:** the Chest window's *Sort & label* sets what a chest takes (`data/filters.ts`: 13 categories like Ores or Seeds, or single items) and the icon it wears on a plate above it. Players, inserters, drills and creature workers all respect it (`accepts`, `stashAt`); sorting creatures treat a labelled chest as the fixed home of what it takes.
+**Uber Chests** (skill *Uber Chests* in Industry, after Fast Belts or Overclock): every Uber Chest in the world opens the same store, shared by the whole farm, and each one built adds 800 room (`sim/uber.ts`). The store is `WorldState.uber.inv` and every Uber Chest's `inv` is that very object (linked on load and on build), so hands, inserters, creatures and crafting work it like any chest; a list of nearby chests keeps only one of them (`oneUber`), touching one touches all, and taking the last one down keeps the store for the next.
 A **Doorway can be set straight into a wall** (it replaces the piece, gives the wall's materials back and turns to fit the run). **Holding X takes down what you point at** (outlined, with a progress bar; walls and doorways say so in the prompt). Pieces you lay in numbers (garden beds, chests, walls, floors, belts, fences, lamps) keep being placed until you right-click, press Esc or run out of materials; a station, machine, workplace or landmark (Workbench, Furnace, Den, Dock, the Golden Windmill…) is placed once (`isOneOff` in `world/placing.ts`). **Crafting reaches into the chests** within eight tiles of you (`sim/pool.ts`: pockets first, then the nearest chests; coins stay in the pockets), on the server and in the craft window.
 Lay a floor (Decor), raise **walls** (wood, stone, brick, window; 16-frame autotile, they join up), put in a
 **doorway** (you walk through, monsters cannot: `World.gate`, used by `mobBlocked`) and cover it with a

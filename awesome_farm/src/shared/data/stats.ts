@@ -17,7 +17,7 @@ export const STAT_KEYS = [
     // industry
     'smelt', 'fuelSave', 'machineSpeed', 'powerSave', 'beltSpeed', 'drillYield',
     // taming
-    'catch', 'creatureSlots', 'work', 'creatureXp', 'companionDmg', 'breed',
+    'catch', 'creatureSlots', 'work', 'creatureXp', 'crewXp', 'companionDmg', 'breed',
     // fishing
     'fishSpeed', 'fishLuck',
 ] as const;
@@ -73,6 +73,7 @@ export const STAT_INFO: Record<StatKey, { label: string; fmt: 'pct' | 'flat' | '
     creatureSlots: { label: 'Creature slots', fmt: 'flat' },
     work: { label: 'Creature work speed', fmt: 'pct' },
     creatureXp: { label: 'Creature XP', fmt: 'pct' },
+    crewXp: { label: 'XP from working creatures', fmt: 'pct' },
     companionDmg: { label: 'Companion damage', fmt: 'pct' },
     breed: { label: 'Breeding speed', fmt: 'pct' },
     fishSpeed: { label: 'Bite speed', fmt: 'pct' },
@@ -104,6 +105,8 @@ export function modLine (key: StatKey, v: number): string {
 
 // ── buffs ──────────────────────────────────────────────────────────────────
 export type BuffId = 'sated' | 'swift' | 'mighty' | 'ironhide' | 'mending' | 'lucky' | 'focus' | 'harvest' | 'featherfoot' | 'vigor' | 'nightowl'
+    | 'studious' | 'insight' | 'kinship'   // (the XP brews of the Alchemy Table: data/items.ts)
+    | 'scholarday'    // (Scholar's Day: everybody learns twice as much until dawn: sim/scholar.ts)
     | 'perfect'       // (a Perfect dash: every hit is a critical one, and the next swing at a monster spends it: sim/sim.ts + sim/combat.ts)
     | 'hearth'      // (Hearthside: earned at a fire at dusk with company, lasts until dawn: sim/hearth.ts)
     | 'devgod' | 'devspeed';       // (the developer menu's: sim/dev.ts hands them out and takes them back; they never reach a save)
@@ -119,6 +122,10 @@ export const BUFFS: Record<BuffId, { name: string; desc: string; icon: string; m
     featherfoot: { name: 'Featherfoot', desc: 'Quick hands and quicker feet.', icon: 'i_cornbread', good: true, mods: { moveSpeed: 0.15, swingSpeed: 0.1 } },
     vigor:    { name: 'Vigorous',   desc: 'Extra hearts, and they mend faster.', icon: 'i_potion_vigor', good: true, mods: { maxHearts: 1.5, healPower: 0.1 } },
     nightowl: { name: 'Night Owl',  desc: 'Sharp eyes and sharper strikes after dark.', icon: 'i_potion_night', good: true, mods: { nightDmg: 0.2, crit: 0.08, magnet: 0.3 } },
+    studious: { name: 'Studious',   desc: 'Everything you do teaches you more.', icon: 'i_potion_study', good: true, mods: { xp: 0.5 } },
+    insight:  { name: 'Insight',    desc: 'The world is an open book: XP comes twice as fast.', icon: 'i_potion_insight', good: true, mods: { xp: 1 } },
+    kinship:  { name: 'Kinship',    desc: 'Your creatures learn faster, and you learn from them.', icon: 'i_potion_kin', good: true, mods: { creatureXp: 0.5, work: 0.15, crewXp: 0.25 } },
+    scholarday: { name: "Scholar's Day", desc: 'Everybody learns twice as much today, until dawn.', icon: 'k_book', good: true, mods: { xp: 1 } },
     devgod:   { name: 'God mode',  desc: 'Developer menu: nothing can hurt you.', icon: 'i_potion_heal',  good: true, mods: { armor: 99 } },
     devspeed: { name: 'Dev speed', desc: 'Developer menu: twice as fast on your feet.', icon: 'i_potion_swift', good: true, mods: { moveSpeed: 1, swingSpeed: 0.5 } },
     perfect:  { name: 'Perfect',    desc: 'Your next hit on a monster is a critical one.', icon: 'k_star', good: true, mods: { crit: 1 } },

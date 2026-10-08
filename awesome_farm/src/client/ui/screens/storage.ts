@@ -19,6 +19,7 @@ import { ListTools } from '../listtools';
 import { qtyAmount } from '../gestures';
 import { itemTip } from '../tips';
 import type { Screen, ScreenCtx } from './types';
+import { storageOf } from '../../../shared/sim/uber';
 
 const ownedItems = (me: ReturnType<ScreenCtx['me']>) => ITEM_ORDER.filter((id) => countOf(me, id) > 0);
 
@@ -114,10 +115,10 @@ export class ChestScreen implements Screen {
         const b = this.ent();
         if (!b) { this.ctx.close(); return; }
         const me = this.ctx.me();
-        const k = JSON.stringify([b.inv, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs]);
+        const k = JSON.stringify([b.inv, b.cap, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs]);
         if (k === this.key) return;
         this.key = k;
-        const cap = BUILDINGS[b.kind].storage ?? 0;
+        const cap = storageOf(b);
         if (this.strip) {
             const ic = chestIcon(b);
             this.strip.slot.set(ic ? { icon: iconOf(ic), rarity: ITEMS[ic].rarity } : null);

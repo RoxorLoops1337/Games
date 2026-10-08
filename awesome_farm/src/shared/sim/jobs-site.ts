@@ -91,7 +91,7 @@ export function plotSite (sim: Sim, owner: PlayerS, plot: Plot): Site {
         },
         seed: () => SEED_IDS.find((s) => haveAt(sim, cx, cy, STASH_RADIUS, s, stores()) > 0),
         takeSeed: (s) => fetchAt(sim, cx, cy, STASH_RADIUS, s, 1, stores()) > 0,
-        xp: () => { /* an island hand earns its keeper nothing: it is the creature that learns */ },
+        xp: () => { /* an island hand's keeper learns through the creature instead: a share of its XP (grantPetXp's `work`, sim/petlib.ts) */ },
         stores,
     };
 }
