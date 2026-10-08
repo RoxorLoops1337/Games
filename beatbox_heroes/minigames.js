@@ -315,6 +315,9 @@
   /* ============================================================ SOUND RECORDER */
   // every Core.SOUNDS entry is a row: unlocked ones record (slots keyed by sound id), locked ones say how to unlock them.
   // SYNTH plays the built-in voice, MINE your recording; recordings replace the synth voice everywhere. Music is OFF in here.
+  // Every take runs through that sound's studio chain (voicefx.js: gate, EQ, compression, level); CLEAN / RAW flips a take between
+  // the cleaned version (default) and the raw take, and a waveform strip shows both with what the chain did.
+  const fxCache = new WeakMap();
   E.scenes.studio = {
     enter(a) {
       this.a = a || {}; this.rec = null; this.status = {}; this.test = false; this.look = BBH.Chars.fix(G.ch.look); this.detLane = -1; this.detT = 0; this.focus = this.a.focus || null; SND.quiet(true); E.add(E.makeHud(G)); this.build();
@@ -329,11 +332,36 @@
       const name = h('div.col', { style: { gap: '1px', width: compact ? '74px' : '92px', flex: 'none', minWidth: 0 } },
         h('div.h2', { style: { color: open ? col : PAL.fog, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, (open ? '' : '') + s.name.toUpperCase()),
         h('div.tp', { style: { color: st === 'rec' || st === 'wait' ? '#ff7b8e' : mine ? '#7be08f' : PAL.fog, fontSize: compact ? '5px' : '' } }, tag));
+      // a take made through the studio chain keeps its raw take: CLEAN / RAW flips between the two (same cut, same level) and a strip shows both
+      const take = mine ? this.take(id) : null;
       const body = open
         ? h('div.row', { style: { flex: 1, gap: '2px', minWidth: 0 } }, E.btn('REC', 'red', () => this.record(id), sb), E.btn('SYNTH', '', () => SND.play(id, { vel: 1, synth: true }), sb), E.btn('MINE', mine ? 'cyan' : 'dis', () => SND.play(id, { vel: 1, mine: true }), sb), E.btn('RESET', mine ? '' : 'dis', () => this.reset(id), sb))
         : h('div.ts', { style: { flex: 1, color: PAL.fog, fontSize: compact ? '6px' : '', whiteSpace: 'normal', lineHeight: 1.25 } }, SND.hint(s));
-      const el = h('div.panel.flat.snd' + (open ? '' : '.locked'), { 'data-id': id, style: { position: 'relative', padding: compact ? '3px 4px 4px 6px' : '5px', borderLeft: '4px solid ' + (open ? col : '#4a3f66'), display: 'flex', alignItems: 'center', gap: '4px', flex: 'none', opacity: open ? 1 : 0.5, filter: open ? '' : 'grayscale(1)', boxShadow: this.focus === id ? '0 0 0 2px #ffd35c' : '' } }, name, body);
+      const el = h('div.panel.flat.snd' + (open ? '' : '.locked'), { 'data-id': id, style: { position: 'relative', padding: compact ? '3px 4px 4px 6px' : '5px', borderLeft: '4px solid ' + (open ? col : '#4a3f66'), display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', flex: 'none', opacity: open ? 1 : 0.5, filter: open ? '' : 'grayscale(1)', boxShadow: this.focus === id ? '0 0 0 2px #ffd35c' : '' } }, name, body, take ? this.strip(id, take, col, compact) : null);
       return el;
+    },
+    // the stored take of a sound with its raw recording (null for synth voices, imports and takes from before the studio chain)
+    take(id) { try { const lane = SND.lane(id), v = BBH.Samples.get(G.slot || 1, lane >= 0 ? lane : id); return v && v.raw && BBH.VoiceFX ? v : null; } catch (e) { return null; } },
+    // the two versions of a take, rebuilt from the raw take (deterministic) and cached on it
+    fxOf(v) { const c = fxCache.get(v.raw); if (c && c.rate === v.rate) return c; let r = null; try { r = BBH.VoiceFX.process(v.raw, v.rate, v.id); } catch (e) { r = null; } const o = r && r.data.length ? { rate: v.rate, clean: r.data, dry: r.dry, info: r.info } : null; if (o) fxCache.set(v.raw, o); return o; },
+    // waveform strip: the raw take (grey) under the clean one (the sound's colour), on one time axis, what the chain did, and the CLEAN / RAW switch
+    strip(id, v, col, compact) {
+      const clean = v.fx !== 'raw', sw = E.btn(clean ? 'CLEAN' : 'RAW', clean ? 'gold' : '', () => this.toggleFx(id), { flex: 'none', minWidth: compact ? '50px' : '56px', padding: '4px 0 5px', textAlign: 'center' });
+      const W = 240, H = compact ? 16 : 20, cv = h('canvas', { width: W, height: H, style: { width: '100%', height: H + 'px', imageRendering: 'pixelated', background: 'rgba(10,6,24,.55)', borderRadius: '2px' } });
+      const fx = this.fxOf(Object.assign({ id }, v)), line = fx ? BBH.VoiceFX.summary(fx.info) : '';
+      try {
+        const c = cv.getContext('2d'), mid = H / 2;
+        const lane = (a, color, alpha) => { if (!a || !a.length) return; c.fillStyle = color; c.globalAlpha = alpha; const per = a.length / W; for (let x = 0; x < W; x++) { let mn = 0, mx = 0; const s = Math.floor(x * per), e = Math.max(s + 1, Math.floor((x + 1) * per)); for (let i = s; i < e && i < a.length; i++) { const q = a[i]; if (q < mn) mn = q; if (q > mx) mx = q; } const y0 = Math.round(mid - mx * mid), y1 = Math.round(mid - mn * mid); c.fillRect(x, y0, 1, Math.max(1, y1 - y0)); } c.globalAlpha = 1; };
+        if (fx) { lane(fx.dry, '#8d84ad', 0.75); lane(fx.clean, col, v.fx === 'raw' ? 0.45 : 0.95); }
+      } catch (e) { /* no canvas (tests): the strip stays empty */ }
+      const wave = h('div.col', { style: { flex: 1, gap: '1px', minWidth: 0 } }, cv, line ? h('div.tp', { style: { color: '#b9aee6', fontSize: compact ? '5px' : '6px', whiteSpace: 'normal', lineHeight: 1.3 } }, line) : null);
+      return h('div.row.fxstrip', { style: { flexBasis: '100%', gap: '4px', alignItems: 'center', minWidth: 0 } }, wave, sw);
+    },
+    toggleFx(id) {
+      const lane = SND.lane(id), k = lane >= 0 ? lane : id, v = this.take(id); if (!v) return;
+      let nv = null; try { nv = BBH.Samples.setMode(G.slot || 1, k, v.fx === 'raw' ? 'clean' : 'raw'); if (nv) BBH.Audio.setSample(k, nv.f32, nv.rate); } catch (e) { nv = null; }
+      if (!nv) { E.toast('This take has no raw version.', 'warn'); return; }
+      E.toast(nv.fx === 'raw' ? 'RAW: your take as it came in.' : 'CLEAN: gate, EQ, compression, level.', 'good'); setTimeout(() => SND.play(id, { vel: 1, mine: true }), 120); this.build();
     },
     build() {
       if (this.ui) this.ui.remove();
@@ -349,11 +377,12 @@
       if (!SND.on(id)) { E.toast('Unlock this sound first.', 'warn'); return; }
       if (!MicOK()) { E.toast('No microphone support here.', 'warn'); return; } if (this.rec) return; this.rec = id; this.focus = id; this.status[id] = 'wait'; SND.quiet(true); this.build();
       const o = await BBH.Mic.open(); if (!o.ok) { this.rec = null; this.status[id] = null; E.toast('Mic: ' + (o.error || 'unavailable') + '. Allow microphone access.', 'warn'); this.build(); return; }
-      this.status[id] = 'wait'; this.build(); let r = null; try { r = await BBH.Mic.recordSample({ maxWaitMs: 4000 }); } catch (e) { r = { ok: false, reason: String(e) }; }
+      this.status[id] = 'wait'; this.build(); let r = null; try { r = await BBH.Mic.recordSample({ maxWaitMs: 4000, sound: id }); } catch (e) { r = { ok: false, reason: String(e) }; }
       this.rec = null; this.status[id] = null; if (!this.test) { try { BBH.Mic.close(); } catch (e) { /* ignore */ } }
       if (!r || !r.ok || !r.data || !r.data.length) { E.toast('I did not hear anything. Try again, a bit louder.', 'warn'); E.sfx('error'); this.build(); return; }
-      try { BBH.Samples.put(G.slot || 1, lane >= 0 ? lane : id, r.data, r.sampleRate); BBH.Audio.setSample(lane >= 0 ? lane : id, r.data, r.sampleRate); } catch (e) { /* ignore */ }
-      G.do({ t: 'recorded', n: 1 }); E.sfx('record'); E.toast(nm.toUpperCase() + ' recorded! Playing it back.', 'good'); setTimeout(() => SND.play(id, { vel: 1 }), 250); this.build();
+      // the CLEAN take is what plays; the raw take is kept so RAW / CLEAN can be compared (and re-cleaned) later
+      try { BBH.Samples.put(G.slot || 1, lane >= 0 ? lane : id, r.data, r.sampleRate, r.raw ? { raw: r.raw, fx: 'clean' } : undefined); BBH.Audio.setSample(lane >= 0 ? lane : id, r.data, r.sampleRate); } catch (e) { /* ignore */ }
+      G.do({ t: 'recorded', n: 1 }); E.sfx('record'); E.toast(nm.toUpperCase() + (r.fx ? ' recorded and cleaned! Playing it back.' : ' recorded! Playing it back.'), 'good'); setTimeout(() => SND.play(id, { vel: 1 }), 250); this.build();
     },
     async reset(id) {
       if (typeof id === 'number') id = LANE_ID[id]; const lane = SND.lane(id), k = lane >= 0 ? lane : id;

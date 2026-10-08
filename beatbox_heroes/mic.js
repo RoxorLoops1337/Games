@@ -9,6 +9,7 @@
  *
  * Part 2 (browser wrapper, guarded so the file still loads in node):
  *   open / close / isOpen / level / sampleRate / onFrame / pitchNow / recordSample / listen / latencyMs
+ *   recordSample({ sound }) runs the take through that sound's studio chain (voicefx.js: gate, EQ, dynamics, level) and keeps the raw take
  *
  * No em dashes anywhere in this file (project rule).
  */
@@ -526,6 +527,17 @@
     const r = rec; rec = null;
     if (r) r.resolve(res);
   }
+  /* with a sound id and BBH.VoiceFX loaded: the studio chain (gate, EQ, dynamics, level) per sound, keeping the raw take; else trimSample */
+  function finishTake(r, from, to, sr) {
+    const seg = r.buf.subarray(from, to), FX = BBH.VoiceFX;
+    if (r.sound != null && FX) {
+      let res = null;
+      try { res = FX.process(seg, sr, r.sound); } catch (e) { res = null; }
+      if (res && res.data.length) return { ok: true, data: res.data, raw: seg.slice(), dry: res.dry, fx: res.info, sampleRate: sr, reason: 'ok' };
+    }
+    const data = trimSample(seg, sr);
+    return data.length ? { ok: true, data, sampleRate: sr, reason: 'ok' } : { ok: false, data, sampleRate: sr, reason: 'quiet' };
+  }
   function stepRecording() {
     const r = rec, sr = R.sr;
     if (r.pos + 1024 > r.buf.length) { finishRec({ ok: false, data: new Float32Array(0), sampleRate: sr, reason: 'timeout' }); return; }
@@ -535,13 +547,14 @@
       let e = 0; for (let i = 0; i < 256; i++) { const v = frame[s + i]; e += v * v; }
       const lv = Math.sqrt(e / 256);
       if (r.onset < 0) {
-        if (lv > 0.04) { r.onset = p; r.quiet = 0; }
+        /* adaptive trigger: 16 dB over the quietest recent block, between 0.02 (quiet room, soft sounds still trigger) and 0.04 */
+        r.nf = Math.min(r.nf * 1.02 + 1e-5, lv);
+        if (lv > clamp(r.nf * 6, 0.02, 0.04)) { r.onset = p; r.quiet = 0; }
       } else {
         if (lv < 0.015) r.quiet += 256; else r.quiet = 0;
-        if (r.quiet >= 0.12 * sr || p + 256 - r.onset >= 0.75 * sr) {
-          const from = Math.max(0, r.onset - 4096), to = p + 256;
-          const data = trimSample(r.buf.subarray(from, to), sr);
-          finishRec(data.length ? { ok: true, data, sampleRate: sr, reason: 'ok' } : { ok: false, data, sampleRate: sr, reason: 'quiet' });
+        if (r.quiet >= 0.12 * sr || p + 256 - r.onset >= r.maxRec * sr) {
+          const from = Math.max(0, r.onset - (r.sound != null ? Math.round(0.25 * sr) : 4096)), to = p + 256;
+          finishRec(finishTake(r, from, to, sr));
           return;
         }
       }
@@ -551,17 +564,22 @@
     if (r.onset < 0 && r.pos / sr * 1000 > r.maxWait) finishRec({ ok: false, data: new Float32Array(0), sampleRate: sr, reason: 'timeout' });
   }
   /**
-   * Auto-detect recording: waits for a sound (RMS > 0.04), records until 120 ms of quiet (or 750 ms), returns the trimmed and
-   * normalised sample. Resolves { ok, data, sampleRate, reason } with reason 'ok' | 'timeout' | 'quiet' | 'closed' | 'cancelled'.
+   * Auto-detect recording: waits for a sound (RMS over an adaptive 0.02..0.04 trigger), records until 120 ms of quiet (or 750 ms),
+   * returns the trimmed and normalised sample. Resolves { ok, data, sampleRate, reason } with reason 'ok' | 'timeout' | 'quiet' | 'closed' | 'cancelled'.
+   * opts.sound (a Core.SOUNDS id or lane) with BBH.VoiceFX loaded: the take runs through that sound's studio chain (voicefx.js) and may
+   * be as long as the sound's profile allows; the result adds raw (the untouched take with 250 ms of room before it), dry (the A/B
+   * version) and fx (what the chain measured and did). data is then the CLEAN sample.
    */
   function recordSample(opts) {
     opts = opts || {};
     return new Promise(function (resolve) {
       if (!R.open || !R.sr) { resolve({ ok: false, data: new Float32Array(0), sampleRate: R.sr || 0, reason: 'closed' }); return; }
       if (rec) finishRec({ ok: false, data: new Float32Array(0), sampleRate: R.sr, reason: 'cancelled' });
-      const maxWait = opts.maxWaitMs > 0 ? opts.maxWaitMs : 4000;
-      const cap = Math.ceil((maxWait + 1200) * 0.001 * R.sr / 1024 + 2) * 1024;
-      rec = { resolve, buf: new Float32Array(cap), pos: 0, onset: -1, quiet: 0, maxWait, onLevel: opts.onLevel };
+      const maxWait = opts.maxWaitMs > 0 ? opts.maxWaitMs : 4000, sound = opts.sound != null ? opts.sound : null;
+      let maxRec = 0.75;
+      try { if (sound != null && BBH.VoiceFX) maxRec = Math.max(0.75, BBH.VoiceFX.profile(sound).maxMs * 0.001 + 0.25); } catch (e) { /* ignore */ }
+      const cap = Math.ceil((maxWait + maxRec * 1000 + 700) * 0.001 * R.sr / 1024 + 2) * 1024;
+      rec = { resolve, buf: new Float32Array(cap), pos: 0, onset: -1, quiet: 0, nf: 1, maxWait, maxRec, sound, onLevel: opts.onLevel };
     });
   }
   function cancelRecording() { if (rec) finishRec({ ok: false, data: new Float32Array(0), sampleRate: R.sr, reason: 'cancelled' }); }
