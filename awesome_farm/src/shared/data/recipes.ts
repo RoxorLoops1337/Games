@@ -104,6 +104,11 @@ const ROWS: Row[] = [
     ['alchemy', 'potion_might', 1, { slimegel: 3, berry: 3, herb: 1, glass: 1 }, 8],
     ['alchemy', 'potion_guard', 1, { hide: 1, herb: 2, toadskin: 1, glass: 1 }, 9],
     ['alchemy', 'potion_mend', 1, { slimegel: 2, ectoplasm: 1, herb: 2, glass: 1 }, 12, { req: 'alchemy2' }],
+    // the XP brews
+    ['alchemy', 'potion_study', 1, { herb: 3, berry: 2, mushroom: 1, glass: 1 }, 8],
+    ['alchemy', 'potion_kin', 1, { treat: 1, herb: 2, berry: 2, glass: 1 }, 10],
+    ['alchemy', 'potion_insight', 1, { herb: 3, crystal: 1, ectoplasm: 1, glass: 1 }, 14, { req: 'alchemy2' }],
+    ['alchemy', 'potion_memory', 1, { crystal: 2, goldbar: 1, ectoplasm: 2, glass: 1 }, 30, { req: 'alchemy2' }],
     // creatures
     ['workbench', 'pod', 2, { plank: 2, fiber: 3, slimegel: 1 }, 6, { req: 'taming' }],
     ['workbench', 'pod_great', 2, { rope: 2, ironbar: 1, ectoplasm: 1 }, 14, { req: 'greaterpod' }],

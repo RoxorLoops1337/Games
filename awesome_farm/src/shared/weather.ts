@@ -21,6 +21,13 @@ export function nightEvent (seed: string, day: number): NightEvent {
     const r = hash(seed, day, 11);
     return r < 0.1 ? 'meteors' : r < 0.19 ? 'fairies' : null;
 }
+/** Scholar's Day: everybody learns twice as much until dawn. Day 5 and every tenth day after it, and now and then besides. */
+export function scholarDay (seed: string, day: number): boolean {
+    if (day < 4) return false;
+    return day % 10 === 5 || hash(seed, day, 29) < 0.07;
+}
+export const SCHOLAR_DAY = { name: "Scholar's Day", sub: 'Everything anybody does teaches them twice as much, until dawn.' };
+
 export const NIGHT_EVENTS: Record<Exclude<NightEvent, null>, { name: string; sub: string }> = {
     bloodmoon: { name: 'Blood Moon', sub: 'More monsters, stronger monsters — and twice the spoils. Survive until dawn.' },
     meteors: { name: 'Meteor Shower', sub: 'Stars are falling onto your land. Ore and crystal will be waiting at dawn.' },
@@ -86,6 +93,8 @@ export interface DayForecast {
     fog: boolean;
     /** What the night of this day brings (or null: a calm night). */
     night: NightEvent;
+    /** Scholar's Day: double XP for everybody until dawn (`scholarDay`). */
+    study: boolean;
 }
 
 /** Today and the next days (4 by default), from the seed alone: `weatherAt` and `nightEvent` agree with every line of it (tests/weather.test.ts walks the clock to check). */
@@ -98,6 +107,7 @@ export function forecast (seed: string, day: number, days = 4): DayForecast[] {
             rain: plan ? { part: dayPart(plan.start + plan.len / 2), storm: plan.heavy, start: plan.start, len: plan.len } : null,
             fog: foggyDay(seed, d),
             night: nightEvent(seed, d),
+            study: scholarDay(seed, d),
         });
     }
     return out;

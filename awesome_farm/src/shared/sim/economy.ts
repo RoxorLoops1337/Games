@@ -21,7 +21,7 @@ import * as shop from './shop';
 import type { Sim } from './sim';
 import { ensureVeins } from './worldgen';
 import {
-    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, pay, scaledCost, sellValue, takeItem,
+    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, sellValue, takeItem, xpToNext,
 } from './stats';
 import type { BuildE, Cmd, PlayerS } from './types';
 
@@ -307,8 +307,9 @@ export function cmdEat (sim: Sim, p: PlayerS, item?: ItemId) {
         id = fits[0] ?? foods.sort((a, b) => ITEMS[a].food! - ITEMS[b].food!)[0];
     }
     const def = ITEMS[id];
-    if (!def || countOf(p, id) < 1 || !(def.food || def.heal || def.buff)) return;
-    if (!def.heal && !def.buff && missing < 1) { sim.deny(p, 'Not hungry'); return; }
+    if (!def || countOf(p, id) < 1 || !(def.food || def.heal || def.buff || def.xpPct)) return;
+    if (def.xpPct && p.level >= MAX_LEVEL) { sim.deny(p, 'You already know all there is to know'); return; }
+    if (!def.heal && !def.buff && !def.xpPct && missing < 1) { sim.deny(p, 'Not hungry'); return; }
     if (def.heal && p.rift?.omens?.includes('cursed')) { sim.deny(p, 'The curse turns it to dust'); return; }
     if (def.heal && !def.food && !def.buff && p.hearts >= d.maxHearts) { sim.deny(p, 'Already healthy'); return; }
     takeItem(p, id, 1);
@@ -318,6 +319,11 @@ export function cmdEat (sim: Sim, p: PlayerS, item?: ItemId) {
         if (gain > 0) sim.float(p.x, p.y - 22, `+${Math.round(gain)} energy`, PAL.gold, p.id);
     }
     if (def.heal) sim.heal(p, def.heal);
+    if (def.xpPct) {
+        const n = xpToNext(p.level) * def.xpPct;
+        sim.float(p.x, p.y - 30, `+${Math.round(n * d.xpMul)} XP`, PAL.plum, p.id);
+        sim.gainXp(p, n);
+    }
     if (def.buff) {
         const secs = def.buff.secs * d.buffMul;
         const have = p.buffs.find((b) => b.id === def.buff!.id);

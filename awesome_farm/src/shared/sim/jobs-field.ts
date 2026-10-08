@@ -93,7 +93,7 @@ function fieldDo (sim: Sim, c: CritE, site: Site, pet: Pet, task: WorkKind, e: E
         quests.count(owner, 'petwork');
         quests.count(owner, `petwork:${task}`);
         if (site.post && got > 0) pet.pn = (pet.pn ?? 0) + got;
-        grantPetXp(sim, owner, pet, xp, c);
+        grantPetXp(sim, owner, pet, xp, c, !!site.post);      // (a companion working beside you earns you the node's own XP instead: `site.xp`)
         sim.fx('petWork', at.x, at.y);
     };
     if (e.k === 'node') {

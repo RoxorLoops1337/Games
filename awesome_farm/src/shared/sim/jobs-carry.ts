@@ -93,7 +93,7 @@ function errandPlace (sim: Sim, c: CritE, site: Site, pet: Pet, chest: BuildE, a
         sim.fx('petWork', at.x, at.y);
         pet.pn = (pet.pn ?? 0) + moved;
         quests.count(site.owner, 'petwork'); quests.count(site.owner, 'petwork:sort');
-        grantPetXp(sim, site.owner, pet, 2, c);
+        grantPetXp(sim, site.owner, pet, 2, c, true);
     }
     c.et = undefined;
     c.js = Math.max(0.3, workCycle(pet, 'sort', sim.derivedOf(site.owner).mods.work ?? 0) / (TUNING.postSpeed * 2));

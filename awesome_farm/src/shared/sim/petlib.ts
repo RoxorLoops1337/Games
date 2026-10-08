@@ -1,7 +1,7 @@
 // What every creature job shares: the roster and its caps, moving about, experience, and the chests that goods go into
 // and supplies come out of. (creatures.ts, jobs.ts and the den code all stand on this; it depends on none of them.)
 
-import { TILE } from '../config';
+import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { names, takes } from '../data/filters';
 import { PET_MAX_LEVEL, petXpMul, petXpNeed, type Pet } from '../data/creatures';
@@ -10,7 +10,7 @@ import { dist } from '../geom';
 import { PAL } from '../palette';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { derived } from './stats';
+import { derived, type Derived, MAX_LEVEL } from './stats';
 import type { BuildE, CritE, PlayerS } from './types';
 
 export const petsOf = (p: PlayerS): Pet[] => (p.pets ??= []);
@@ -28,8 +28,12 @@ export function move (sim: Sim, c: CritE, dt: number, flies?: boolean) {
     if (!sim.world.boxBlocked(c.x, ny, 3, 2)) c.y = ny; else c.vy = -c.vy * 0.4;
 }
 
-/** Experience for a pet: traits, the owner's Creature XP skill, level-ups with a toast. */
-export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amount: number, at?: { x: number; y: number }) {
+/**
+ * Experience for a pet: traits, the owner's Creature XP skill, level-ups with a toast. `work`: the XP came from a job (a den,
+ * an island post, a machine or a workshop, never fights or treats), so its keeper learns a share of it too (`crewLesson`).
+ */
+export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amount: number, at?: { x: number; y: number }, work = false) {
+    if (work && owner) crewLesson(sim, owner, amount);
     if (pet.lv >= PET_MAX_LEVEL) return;
     pet.xp += amount * petXpMul(pet) * (1 + (owner ? derived(owner).mods.creatureXp ?? 0 : 0));
     let up = 0;
@@ -40,6 +44,25 @@ export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amou
         if (at) sim.fx('petLevel', at.x, at.y - 10, owner.online ? owner.id : undefined);
         if (owner.online) sim.toast(owner.id, `${pet.name} reached level ${pet.lv}!`, 'k_paw', PAL.blossom);
     }
+}
+
+/** What a keeper learns from their creatures' work, as a share of the creatures' XP: `TUNING.crewXpShare`, more with the crewXp stat. */
+export const crewShare = (d: Pick<Derived, 'mods'>) => TUNING.crewXpShare + (d.mods.crewXp ?? 0);
+
+export function crewLesson (sim: Sim, owner: PlayerS, petXp: number) {
+    if (owner.level >= MAX_LEVEL) return;
+    const d = sim.derivedOf(owner), n = petXp * crewShare(d);
+    if (!(n > 0)) return;
+    owner.lessons = (owner.lessons ?? 0) + n * d.xpMul;
+    sim.gainXp(owner, n);
+}
+
+/** "Your creatures taught you 340 XP": told at dawn to everybody here, and on arrival to whoever was away. */
+export function tellLessons (sim: Sim, p: PlayerS, away: boolean) {
+    const n = Math.floor(p.lessons ?? 0);
+    p.lessons = undefined;
+    if (n < 1) return;
+    sim.toast(p.id, `${away ? 'While you were away, y' : 'Y'}our creatures taught you ${n} XP`, 'k_paw', PAL.plum);
 }
 
 // ── chests ──────────────────────────────────────────────────────────────────
