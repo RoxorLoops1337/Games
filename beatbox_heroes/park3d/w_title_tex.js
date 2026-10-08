@@ -77,7 +77,7 @@ export function signTex(phase, mask) {
       const ext = Math.max(2, Math.round(size / 16));                        // extrusion depth follows the letter size
       L.spans.forEach(([ch, cx], i) => {
         if (mask && i !== deadIdx) return;
-        if (mask) { g.fillStyle = '#1a1038'; g.fillText(ch, cx, y); return; }
+        if (mask) { g.fillStyle = '#1a1038'; for (let k = ext; k >= 1; k--) g.fillText(ch, cx + k * 0.9, y + k * 0.9); g.lineWidth = size * 0.07 + 4; g.strokeStyle = '#1a1038'; g.lineJoin = 'round'; g.strokeText(ch, cx, y); g.fillText(ch, cx, y); return; }   // the WHOLE tube goes dark: extrusion, outline and face
         for (let k = ext; k >= 1; k--) { g.fillStyle = k > ext * 0.66 ? '#2c1d4d' : k > ext * 0.33 ? '#4c2f86' : '#6a46ae'; g.fillText(ch, cx + k * 0.9, y + k * 0.9); }
         const gr = g.createLinearGradient(0, y - size * 0.5, 0, y + size * 0.5); gr.addColorStop(0, '#fffbd8'); gr.addColorStop(0.18, '#ffe66a'); gr.addColorStop(0.5, '#ffd23a'); gr.addColorStop(0.75, '#d4a017'); gr.addColorStop(1, '#8c5410');
         g.lineWidth = size * 0.07; g.strokeStyle = '#6a3f0c'; g.lineJoin = 'round'; g.strokeText(ch, cx, y); g.fillStyle = gr; g.fillText(ch, cx, y);

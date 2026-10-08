@@ -26,9 +26,9 @@ try {
     return { body: document.body.classList.contains('r3'), ids: w.npcs.map((n) => n.id).sort().join(','), look: !!(w.player && w.player.getLook && w.player.getLook()), stats: T && T.stats(), tris: s.tris, calls: s.calls, delegated: Object.getPrototypeOf(BBH.Eng.scene) === BBH.Eng.scenes.title && !!document.querySelector('#ui .full .k3-tap') && !!document.querySelector('#ui .full .k3-credit'), veil: document.querySelectorAll('#ui .full').length };
   });
   ok(st.body && st.delegated, 'body.r3 is on, the sibling delegates its DOM to the 2D title (Object.create) and restyles TAP TO START as the neon pill with the duo credit');
-  ok(st.ids === 'beeamgee,foxy' && st.look, 'the stage has the hero, Foxy and BeeAmGee (' + st.ids + ')');
+  ok(st.ids === 'beeamgee,pigpen' && st.look, 'the battle stage has the hero, Pig Pen (the rival) and BeeAmGee hosting (' + st.ids + ')');
   ok(st.stats && st.stats.ready && st.stats.shot === 'title', 'title shot active: ' + JSON.stringify(st.stats));
-  ok(st.tris > 2000 && st.tris <= 60000, 'title world within the 60k triangle budget (' + st.tris + ' tris, ' + st.calls + ' calls)');
+  ok(st.tris > 2000 && st.tris <= 66000, 'title world within the 66k triangle budget (' + st.tris + ' tris, ' + st.calls + ' calls)');
   const v = await glVaried(page); ok(v.lit > 800 && v.colours >= 8, 'title GL canvas is lit and colourful (' + v.colours + ' colours, ' + v.lit + ' lit)');
   ok(st.veil >= 1 && /TAP TO START/i.test(await page.locator('#ui').innerText()), 'TAP TO START is shown first');
   // beat and pulse: the world takes absolute beat positions and keeps lighting in 0..1
@@ -51,11 +51,25 @@ try {
   const bee = await page.evaluate(() => {
     const w = BBH.R3.world, b = w.npcs.find((n) => n.id === 'beeamgee'), V = b.object.position.constructor;
     const at = (n) => { const o = b.object.getObjectByName(n), v = new V(); o.getWorldPosition(v); return v; }, rot = b.object.rotation.y, fx = Math.sin(rot), fz = Math.cos(rot);
-    const crate = { x: 1.08, z: -1.8 + 0.15 }, f = (v) => (v.x - crate.x) * fx + (v.z - crate.z) * fz;
+    const crate = w.ctx.title.layout.crate, f = (v) => (v.x - crate.x) * fx + (v.z - crate.z) * fz;
     return { hipsF: +f(at('hips')).toFixed(3), anL: +f(at('anL')).toFixed(3), anR: +f(at('anR')).toFixed(3), hipsY: +at('hips').y.toFixed(3) };
   });
   ok(bee.hipsF > -0.2 && bee.hipsF < 0.25 && bee.hipsY > 0.75, 'BeeAmGee hips rest on the crate lid ' + JSON.stringify(bee));
   ok(bee.anL > 0.28 && bee.anR > 0.28, 'BeeAmGee shins dangle in front of the crate front board ' + JSON.stringify(bee));
+
+  // the battle: both battlers in battle stance facing each other, rounds alternate, the attacker steps in, the crowd is there and cheers on the swap
+  const bt = await page.evaluate(async () => {
+    const w = BBH.R3.world, T = w.ctx.title, hero = w.player, rival = w.npcs.find((n) => n.id === 'pigpen'), clip = (c) => c.anim ? c.anim.clip : c.clip;
+    const dx = rival.object.position.x - hero.object.position.x, faceIn = Math.sin(hero.object.rotation.y) > 0.3 && Math.sin(rival.object.rotation.y) < -0.3;
+    const out = { clips: [clip(hero), clip(rival)], dx: +dx.toFixed(2), faceIn, rot: [+hero.object.rotation.y.toFixed(2), +rival.object.rotation.y.toFixed(2)], crowd: T.stats().crowd, rounds: [] };
+    const r0 = T.stats().round, base = (r0 + (r0 % 2 ? 1 : 0)) * 4.8 + 1.2; T.restart(); T.skip(base);   // the game feeds its own beat (none before music), so drive the scene clock: 8 beats at 100 bpm = 4.8 s
+    for (let i = 0; i < 3; i++) { if (i) T.skip(4.8); await new Promise((r) => setTimeout(r, 1500)); const s = T.stats(); out.rounds.push([s.round, s.attacker, +hero.object.position.x.toFixed(2), +rival.object.position.x.toFixed(2)]); }
+    return out;
+  });
+  ok(bt.clips[0] === 'battle' && bt.clips[1] === 'battle' && bt.dx > 1.0 && bt.faceIn, 'hero and Pig Pen face off in battle stance ' + JSON.stringify(bt));
+  ok(bt.rounds[0][1] === 'hero' && bt.rounds[1][1] === 'rival' && bt.rounds[2][1] === 'hero', 'rounds alternate every 8 beats ' + JSON.stringify(bt.rounds));
+  ok(bt.rounds[1][2] < bt.rounds[0][2] && bt.rounds[1][3] < bt.rounds[0][3], 'the attacker steps in, the other one steps back ' + JSON.stringify(bt.rounds));
+  ok(bt.crowd >= 10, 'a crowd watches the battle (' + bt.crowd + ' spectators)');
 
   // seed a save so CONTINUE exists, then tap to start
   await page.evaluate(() => { const ch = BBH.Core.newChar(BBH.CATALOG.DEFAULT_LOOK); ch.look = Object.assign({}, ch.look, { name: 'Zed' }); ch.name = 'Zed'; ch.created = Date.now(); ch.flags.intro = 1; BBH.Core.Save.save(BBH.Eng.store, 1, ch); });
