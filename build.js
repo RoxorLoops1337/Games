@@ -13,7 +13,7 @@ const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 const watch = process.argv.includes('--watch');
 
@@ -116,6 +116,26 @@ const buildOpts = (target) => ({
   legalComments: 'none',
   logLevel: 'info',
 });
+
+// Awesome Farm is a Vite + TypeScript project with its own package.json (awesome_farm/). On Cloudflare Pages
+// (CF_PAGES=1) or with FARM=1 it is installed and built here and dist/awesome_farm/ is its build; elsewhere an
+// awesome_farm/dist/ that already exists is reused, so `npm run check` for the other games never waits for it.
+// A failed farm build is reported and the rest of the site still deploys. Its tests: `npm run test:farm`.
+const FARM = path.join(REPO, 'awesome_farm');
+const buildAwesomeFarm = () => {
+  const built = path.join(FARM, 'dist');
+  try {
+    if (process.env.CF_PAGES === '1' || process.env.FARM === '1') {
+      execSync('npm ci --include=dev --no-audit --no-fund', { cwd: FARM, stdio: 'inherit' });
+      execSync('npx vite build --config vite/config.prod.mjs', { cwd: FARM, stdio: 'inherit' });
+    }
+    if (!fs.existsSync(path.join(built, 'index.html'))) { console.log('awesome_farm: not built here (FARM=1 builds it; Pages always does)'); return; }
+    fs.cpSync(built, path.join(DIST, 'awesome_farm'), { recursive: true });
+    console.log('built awesome_farm → dist/awesome_farm');
+  } catch (err) {
+    console.error(`!! awesome_farm did not build (${err.message}); the rest of the site deploys without it`);
+  }
+};
 
 // Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
 // Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
@@ -289,6 +309,7 @@ const minifyClawspire = () => {
   copyStatic();
   writeArtManifest();
   minifyClawspire();
+  buildAwesomeFarm();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));

@@ -1,0 +1,25 @@
+# Awesome Farm on Cloudflare (Workers Free plan): see README.md beside this file.
+# Deployed by hand (npx wrangler deploy --config server/cf/wrangler.toml), never by the Pages build.
+name = "awesome-farm"
+main = "worker.ts"
+compatibility_date = "2025-09-01"
+
+[vars]
+WORLD_NAME = "farm"
+SERVER_NAME = "Awesome Farm"
+GAME_URL = "https://games-71g.pages.dev/awesome_farm/"
+# PASSWORD and DEV_KEY are secrets: `npx wrangler secret put PASSWORD --config server/cf/wrangler.toml`
+
+# One Durable Object per world, named by WORLD_NAME.
+[[durable_objects.bindings]]
+name = "WORLD"
+class_name = "World"
+
+# SQLite-backed Durable Objects are the ones the Workers Free plan allows: new_sqlite_classes (not new_classes)
+# selects that storage backend; a migration with new_classes is rejected on the free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["World"]
+
+[observability]
+enabled = true

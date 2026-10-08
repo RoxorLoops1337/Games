@@ -18,6 +18,7 @@ Reply formatting:
 - `no_room_for_heroes/music.html` — standalone chiptune player (215 tracks; a deterministic composer generates 200 of them).
 - `functions/api/board.js` + `functions/api/save.js` — Cloudflare Pages Functions (leaderboard + cloud saves, KV binding `BOARD`).
 - `build.js` — copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
+- `awesome_farm/` — Awesome Farm, a Vite + TypeScript game with its own `package.json`, `CLAUDE.md` and `npm run check` (run them inside that folder). It is NOT in `STATIC_PATHS`: `build.js` builds it (`buildAwesomeFarm`, on Pages or with `FARM=1`) into `dist/awesome_farm/`. Its tests are not in the root `check` (`npm run test:farm` runs them). Its always-on world is a separate Cloudflare Worker (`awesome_farm/server/cf/`, deployed by hand, never by Pages).
 - `tests/no_room_for_heroes_*.test.mjs` — 12 headless suites; `tests/no_room_for_heroes_lib.mjs` exports `loadGame(exposeStr)` which evals the game's inline script with a stubbed DOM (incl. a full no-op canvas ctx, so the `juice` suite drives `draw()`/`update()` to catch render-time errors the logic suites miss). The `tutorial` suite drives the whole guided run beat-by-beat. Write new tests with it; never create throwaway harnesses outside `tests/`.
 - `HANDOVER_NO_ROOM_FOR_HEROES.md` — deeper architecture notes (G state object, phases, combat flow, balance history).
 

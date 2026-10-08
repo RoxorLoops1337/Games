@@ -1,0 +1,18 @@
+{
+  "name": "Awesome Farm",
+  "short_name": "Farm",
+  "description": "Co-op island farming for up to 8 friends.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#2a1d2c",
+  "theme_color": "#2a1d2c",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
