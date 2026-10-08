@@ -4,7 +4,8 @@
 //   hipsRX>0 leans forward; shRX>0 swings an arm forward; shRZ>0 abducts (arm away from the body); elRX>0 flexes the elbow (forearm forward);
 //   thRX>0 lifts the thigh forward; knRX>0 flexes the knee (shin back); fPitch>0 toes up.
 // Arms and legs are blended between FK angles and a two-bone IK solution (aW / lW weights); IK targets are rig-space points, so feet stay planted
-// while the hips move, and the mic hand can chase the mouth.
+// while the hips move, and the mic hand can chase the mouth. Hand orientation: h = where the fingers point, t (optional) = where the thumb side faces (twists the wrist).
+import { MIC } from './char_props.js';
 const PI = Math.PI, TAU = PI * 2, S = Math.sin, Cs = Math.cos;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, t) => a + (b - a) * t, sm = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 const mod = (a, n) => ((a % n) + n) % n;
@@ -12,13 +13,13 @@ const mod = (a, n) => ((a % n) + n) % n;
 const SCAL = ['hipsX', 'hipsY', 'hipsZ', 'hipsRX', 'hipsRY', 'hipsRZ', 'spineRX', 'spineRY', 'spineRZ', 'chestRX', 'chestRY', 'chestRZ', 'neckRX', 'neckRY', 'neckRZ', 'headRX', 'headRY', 'headRZ', 'sq',
   'mouthOpen', 'mouthW', 'cheek', 'blink', 'eyeX', 'eyeY', 'brow', 'browTilt', 'shrug', 'smile', 'frown', 'eyeH'];
 const LIMB_FK = ['shRX', 'shRY', 'shRZ', 'elRX', 'wrRX', 'wrRZ', 'thRX', 'thRZ', 'knRX', 'anRX'];
-const IKG = [['aW', ['aX', 'aY', 'aZ', 'pX', 'pY', 'pZ']], ['hW', ['hX', 'hY', 'hZ']], ['lW', ['lX', 'lY', 'lZ', 'fP', 'fY']]];
+const IKG = [['aW', ['aX', 'aY', 'aZ', 'pX', 'pY', 'pZ']], ['hW', ['hX', 'hY', 'hZ', 'tX', 'tY', 'tZ']], ['lW', ['lX', 'lY', 'lZ', 'fP', 'fY']]];
 function mkPose() {
   const p = {}; SCAL.forEach((k) => { p[k] = 0; }); p.mouthW = 1; p.smile = 1; p.eyeH = 1;
   ['L', 'R'].forEach((s) => {
     LIMB_FK.forEach((k) => { p[k + s] = 0; });
     p['aW' + s] = 0; p['aX' + s] = 0; p['aY' + s] = 0.8; p['aZ' + s] = 0.1; p['pX' + s] = 0; p['pY' + s] = -1; p['pZ' + s] = -0.3;
-    p['hW' + s] = 0; p['hX' + s] = 0; p['hY' + s] = -1; p['hZ' + s] = 0;
+    p['hW' + s] = 0; p['hX' + s] = 0; p['hY' + s] = -1; p['hZ' + s] = 0; p['tX' + s] = 0; p['tY' + s] = 0; p['tZ' + s] = 0;
     p['lW' + s] = 0; p['lX' + s] = 0; p['lY' + s] = 0.085; p['lZ' + s] = 0; p['fP' + s] = 0; p['fY' + s] = 0;
   });
   return p;
@@ -58,7 +59,7 @@ export class Animator {
     this.life = { blinkT: 1.5, blink: 0, gaze: [0, 0], gazeT: 0, shift: 0, shiftT: 3, shiftTarget: 0 };
     this.sp = {}; this.vs = 0; this.accel = 0; this.sqS = { x: 0, v: 0 }; this.leanS = { x: 0, v: 0 };
     this.mood = 'neutral'; this.mc = Object.assign({}, MOODS.neutral); this.lookT = null; this.lookW = 0; this.lookYaw = 0; this.lookPitch = 0; this.once = null; this.hits = { k: 0, s: 0, h: 0 };
-    this.mouthRig = new T.Vector3(0, 1.1, 0.34); this.prevPos = {}; this.prevVel = {}; this.accW = {}; this.ikR = { qU: new T.Quaternion(), qL: new T.Quaternion() };
+    this.mouthRig = new T.Vector3(0, 1.1, 0.34); this.headM = new T.Matrix4(); this.prevPos = {}; this.prevVel = {}; this.accW = {}; this.ikR = { qU: new T.Quaternion(), qL: new T.Quaternion() };
     this._a = new T.Vector3(); this._d = new T.Vector3(); this._p = new T.Vector3(); this._e = new T.Vector3(); this._du = new T.Vector3(); this._dl = new T.Vector3(); this._qa = new T.Quaternion(); this._raw = new T.Vector3(); this._acc = {};
   }
   refit(d, rest) { this.d = d; this.rest = rest; this.armLen = [0.19, 0.165]; this.legLen = [0.2, 0.175]; }
@@ -104,6 +105,12 @@ export class Animator {
   holdPose_(P) {
     const h = this.api.holding; if (!h) return; const free = 1 - clamp(P.aWR, 0, 1), k = h === 'mic' ? 1 : 0.5;
     P.elRXR += (h === 'mic' ? 0.75 : 0.25) * free; P.shRXR += (h === 'mic' ? 0.32 : 0.1) * free; P.wrRXR += (h === 'mic' ? 0.55 : 0.0) * free; P.shRZR += 0.0 * k;
+    // unless the clip aims the mic itself (micAim sets t), roll the fist so the mic points up and a little out and forward when the hand is low, and out sideways from
+    // the head and neck (and a little down) when the fist comes up near them (cheer, dance, talk): never across the body or into the head. Uses last frame's wrist and head (one frame behind is invisible)
+    if (h === 'mic' && Math.abs(P.tXR) + Math.abs(P.tYR) + Math.abs(P.tZR) < 1e-3) {
+      const w = this.v[3], hc = this.v[2].set(0, 0.28, 0.02).applyMatrix4(this.headM); this.B.wrR.getWorldPosition(w); this.api.object.worldToLocal(w); w.sub(hc);
+      const dd = w.length() || 1, hd = Math.hypot(w.x, w.z) || 1, nr = sm((0.66 - dd) / 0.22); P.tXR = lerp(MIC_UP[0], w.x / hd, nr); P.tYR = lerp(MIC_UP[1], -0.4, nr); P.tZR = lerp(MIC_UP[2], w.z / hd, nr);
+    }
   }
 
   // setMood(name, instant): fades the face (and a little head pose) to a mood
@@ -137,7 +144,7 @@ export class Animator {
     hips.updateMatrix(); B.spine.updateMatrix(); B.chest.updateMatrix(); B.neck.updateMatrix(); B.head.updateMatrix();
     const mH = m1.copy(hips.matrix), mC = m2.copy(hips.matrix).multiply(B.spine.matrix).multiply(B.chest.matrix);
     const qH = q1.copy(hips.quaternion), qC = q2.copy(hips.quaternion).multiply(B.spine.quaternion).multiply(B.chest.quaternion);
-    this.mouthRig.set(0, 0.12, 0.34).applyMatrix4(m3.copy(mC).multiply(B.neck.matrix).multiply(B.head.matrix));
+    this.mouthRig.set(0, 0.12, 0.34).applyMatrix4(this.headM.copy(mC).multiply(B.neck.matrix).multiply(B.head.matrix));
     const mHinv = m4.copy(mH).invert(), mCinv = m3.copy(mC).invert(), ik = this.ikR;
     // legs
     for (let si = 0; si < 2; si++) {
@@ -159,6 +166,12 @@ export class Animator {
         sh.quaternion.slerp(ik.qU, W); el.quaternion.slerp(ik.qL, W);
         const HW = P['hW' + k] * W;
         if (HW > 0.001) { v3.set(P['hX' + k], P['hY' + k], P['hZ' + k]).normalize(); q6.copy(qC).multiply(ik.qU).multiply(ik.qL).invert(); v3.applyQuaternion(q6); q5.setFromUnitVectors(this.down, v3); const ang = 2 * Math.acos(clamp(Math.abs(q5.w), 0, 1)); if (ang > 1.3) { q6.identity().slerp(q5, 1.3 / ang); q5.copy(q6); } wr.quaternion.slerp(q5, HW); }
+      }
+      // roll the hand about the fingers' direction so the thumb side faces t (rig space; forearm roll, limited to about 125 degrees either way). FK and IK arms alike
+      const tw = this.v[4].set(P['tX' + k], P['tY' + k], P['tZ' + k]);
+      if (tw.lengthSq() > 1e-4) {
+        tw.applyQuaternion(q6.copy(qC).multiply(sh.quaternion).multiply(el.quaternion).invert()); const ax = this.v[5].set(0, -1, 0).applyQuaternion(wr.quaternion), z = this.v[6].set(0, 0, 1).applyQuaternion(wr.quaternion); tw.addScaledVector(ax, -tw.dot(ax));
+        if (tw.lengthSq() > 1e-6) wr.quaternion.premultiply(q6.setFromAxisAngle(ax, clamp(Math.atan2(this.v[7].crossVectors(z, tw).dot(ax), z.dot(tw)), -2.2, 2.2)));
       }
       sh.position.y = sh.userData.rest[1] + P.shrug * 0.02;
     }
@@ -223,6 +236,22 @@ export class Animator {
 const CL = {};
 Animator.prototype.CL = CL;
 const MOVING = { walk: 1, run: 1, walkside: 1, hold: 1 };
+const MIC_UP = [-0.5, 0.8, 0.3];
+// micAim(P, g, a, d): right hand IK so the mic grille centre lands on g with the mic axis (fist to grille) along a and the fingers roughly along d. All three are given in the HEAD's
+// frame (head-local metres, +z out of the face), so the mic rides every nod. Solves the hand orientation from the mic's grip in the fist (MIC), then the wrist target and roll.
+const MA = { b: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], r: [[0, 0, 0], [0, 0, 0], [0, 0, 0]] };
+const nrm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; v[0] /= l; v[1] /= l; v[2] /= l; return v; };
+const ortho = (out, a, d) => { const k = a[0] * d[0] + a[1] * d[1] + a[2] * d[2]; out[0] = d[0] - a[0] * k; out[1] = d[1] - a[1] * k; out[2] = d[2] - a[2] * k; return nrm3(out); };
+const cross3 = (o, a, b) => { o[0] = a[1] * b[2] - a[2] * b[1]; o[1] = a[2] * b[0] - a[0] * b[2]; o[2] = a[0] * b[1] - a[1] * b[0]; return o; };
+function micAim(P, g, a, d) {
+  const M = this.headM.elements, rot = (v) => [M[0] * v[0] + M[4] * v[1] + M[8] * v[2], M[1] * v[0] + M[5] * v[1] + M[9] * v[2], M[2] * v[0] + M[6] * v[1] + M[10] * v[2]], b = MA.b, r = MA.r, u = MIC.axis;
+  b[0][0] = u.x; b[0][1] = u.y; b[0][2] = u.z; ortho(b[1], b[0], [0, -1, 0]); cross3(b[2], b[0], b[1]);
+  r[0] = nrm3(rot(a)); ortho(r[1], r[0], rot(d)); cross3(r[2], r[0], r[1]);
+  const R = (v) => { const out = [0, 0, 0]; for (let i = 0; i < 3; i++) { const k = b[i][0] * v[0] + b[i][1] * v[1] + b[i][2] * v[2]; out[0] += r[i][0] * k; out[1] += r[i][1] * k; out[2] += r[i][2] * k; } return out; };
+  const gr = MIC.grip, off = R([gr[0] + u.x * MIC.head, gr[1] + u.y * MIC.head, gr[2] + u.z * MIC.head]), fing = R([0, -1, 0]), th = R([0, 0, 1]);
+  const gx = M[0] * g[0] + M[4] * g[1] + M[8] * g[2] + M[12], gy = M[1] * g[0] + M[5] * g[1] + M[9] * g[2] + M[13], gz = M[2] * g[0] + M[6] * g[1] + M[10] * g[2] + M[14];
+  P.aWR = 1; P.aXR = gx - off[0]; P.aYR = gy - off[1]; P.aZR = gz - off[2]; P.hWR = 1; P.hXR = fing[0]; P.hYR = fing[1]; P.hZR = fing[2]; P.tXR = th[0]; P.tYR = th[1]; P.tZR = th[2];
+}
 const stance = (P, w, yaw) => { P.lWL = P.lWR = 1; P.lXL = w; P.lXR = -w; P.lYL = P.lYR = 0.085; P.lZL = P.lZR = 0; P.fYL = yaw; P.fYR = -yaw; };
 const relaxArms = (P, t) => { P.shRZL = P.shRZR = 0.1; P.elRXL = P.elRXR = 0.14; P.shRXL = 0.04 * S(t * 1.1); P.shRXR = 0.04 * S(t * 1.1 + 2); P.wrRXL = P.wrRXR = 0.1; };
 
@@ -277,15 +306,16 @@ const ATK = 0.75;
 function env(step, hits, decay) { let a = 99, b = 99; hits.forEach((h) => { const da = mod(step - h, 16), db = mod(h - step, 16); if (da < a) a = da; if (db < b) b = db; }); const pre = b < ATK ? 1 - b / ATK : 0; return Math.max(Math.exp(-a * decay), pre * pre * (3 - 2 * pre)); }
 function beatEnv(self, bc, o) { const H = self.hs || self.hits; if (o.external) return { k: H.k, sn: H.s, ht: H.h }; return { k: Math.max(env(bc.step, KICK, 0.9), H.k), sn: Math.max(env(bc.step, SNARE, 1.0), H.s), ht: Math.max(env(bc.step, HAT, 1.6), H.h) }; }
 
-// ----- beatbox: right hand cups the mic at the mouth, cheeks puff, head bobs on the beat, knees pulse, free hand pumps
+// ----- beatbox: right hand holds the mic at the mouth (grille just in front of the lips), cheeks puff, head bobs on the beat, knees pulse, free hand pumps
 CL.beatbox = function (P, c, dt, o) {
   const bc = beatClock(c, o), E = beatEnv(this, bc, o), k = E.k, sn = E.sn, ht = E.ht, amp = o.amp === undefined ? 1 : o.amp, b = bc.beat * TAU, pulse = 0.5 + 0.5 * Cs(b);
   P.hipsY = -0.045 - 0.03 * k * amp - 0.012 * pulse; P.hipsRX = 0.06 + 0.03 * k; P.hipsRZ = 0.04 * S(b * 0.5); P.hipsX = 0.012 * S(b * 0.5);
-  P.spineRX = 0.08; P.chestRX = 0.06 + 0.05 * k * amp; P.chestRY = -0.12 + 0.1 * S(b * 0.5); P.chestRZ = 0.04 * S(b * 0.5);
-  P.neckRX = 0.06 + 0.12 * (pulse * 0.4 + k * 0.6) * amp; P.headRX = 0.04 + 0.06 * k * amp; P.headRZ = 0.07 * S(b * 0.5); P.headRY = 0.08 * S(b * 0.25);
+  P.spineRX = 0.08; P.chestRX = 0.06 + 0.05 * k * amp; P.chestRY = 0.25 + 0.08 * S(b * 0.5); P.chestRZ = 0.04 * S(b * 0.5);
+  P.neckRX = 0.06 + 0.12 * (pulse * 0.4 + k * 0.6) * amp; P.headRX = 0.04 + 0.06 * k * amp; P.headRZ = 0.07 * S(b * 0.5); P.neckRY = -0.1; P.headRY = 0.08 * S(b * 0.25) - 0.125;
   stance(P, 0.135, 0.28);
-  const m = this.mouthRig, hx = 0.45, hy = 0.8, hz = 0.4, hl = Math.hypot(hx, hy, hz);           // the mic head sits 0.2 beyond the wrist along the hand
-  P.aWR = 1; P.hWR = 1; P.aXR = m.x - hx / hl * 0.2; P.aYR = m.y - hy / hl * 0.2 - 0.01 + 0.006 * k; P.aZR = m.z - hz / hl * 0.2 - 0.02; P.hXR = hx; P.hYR = hy; P.hZR = hz; P.pXR = -0.6; P.pYR = -1; P.pZR = -0.1;
+  // classic grip (the chest above turns the mic side forward, the head turns back to the front): the fist wraps the handle under the chin with the elbow out, the grille sits a few cm in front of the lips
+  // and the mic tilts about 35 degrees from vertical up into the mouth
+  micAim.call(this, P, [-0.03, 0.112 + 0.006 * k, 0.335], [0.15, 0.8, -0.58], [0.5, 0.1, 0.85]); P.pXR = -1; P.pYR = -0.25; P.pZR = 0.1;
   P.aWL = 1; P.aXL = 0.3 + 0.03 * sn; P.aYL = 0.8 + 0.1 * Math.max(0, S(b)) + 0.05 * k; P.aZL = 0.22 + 0.06 * k; P.pXL = 0.7; P.pYL = -1; P.pZL = -0.3; P.hWL = 0; P.wrRXL = 0.3; P.shRXL = 0.2; P.elRXL = 1.1;
   P.mouthOpen = 0.12 + 0.5 * ht * amp + 0.55 * sn * amp; P.mouthW = 1 - 0.35 * k * amp; P.cheek = clamp(k * 1.3 + 0.3 * (1 - ht), 0, 1) * amp; P.brow = 0.25 + 0.2 * sn; P.blink = 0.7 * clamp((k - 0.55) / 0.3, 0, 1);
 };
@@ -331,6 +361,8 @@ CL.sit = function (P, c, dt, o) {
 CL.wave = function (P, c, dt, o) {
   const t = c.t, w = S(t * 9); CL.idle.call(this, P, c, dt, o); P.hipsRZ = -0.05; P.headRZ = -0.12; P.neckRY = -0.12; P.chestRY = 0.12;
   P.aWR = 1; P.aXR = -0.3 + 0.06 * w; P.aYR = 1.12; P.aZR = 0.1; P.pXR = -1; P.pYR = -0.6; P.pZR = -0.2; P.hWR = 1; P.hXR = -0.15 + 0.5 * w; P.hYR = 1; P.hZR = 0.15; P.mouthOpen = 0.4 + 0.1 * Math.abs(w); P.brow = 0.5; P.mouthW = 1.1; P.cheek = 0.05;
+  // the mic fist waves a little wider so the mic clears the head
+  if (this.api.holding === 'mic') P.aXR -= 0.1;
 };
 
 // ----- cheer: a hop with both arms up
@@ -339,6 +371,8 @@ CL.cheer = function (P, c) {
   P.hipsY = -0.09 * crouch + 0.2 * air; P.hipsRX = 0.08 * crouch - 0.05 * air; P.spineRX = 0.1 * crouch; P.neckRX = -0.15 * air + 0.05 * crouch; P.headRZ = 0.08 * S(t * 5.2); P.chestRZ = 0.05 * S(t * 5.2); P.hipsRZ = 0.05 * S(t * 5.2);
   P.lWL = P.lWR = 1; P.lXL = 0.12; P.lXR = -0.12; P.lZL = P.lZR = -0.04 * air; P.lYL = P.lYR = 0.085 + 0.16 * air; P.fPL = P.fPR = -0.5 * air; P.fYL = 0.2; P.fYR = -0.2;
   P.aWL = P.aWR = 1; P.aXL = 0.3 + 0.03 * S(t * 12); P.aXR = -0.3 - 0.03 * S(t * 12); P.aYL = P.aYR = 1.17 + 0.05 * air; P.aZL = P.aZR = 0.05; P.pXL = 0.8; P.pXR = -0.8; P.pYL = P.pYR = -0.2; P.pZL = P.pZR = -0.6; P.hWL = P.hWR = 1; P.hXL = 0.3; P.hXR = -0.3; P.hYL = P.hYR = 1; P.hZL = P.hZR = 0.1;
+  // the mic fist goes up and out, clear of the big head
+  if (this.api.holding === 'mic') { P.aXR -= 0.14; P.hXR = -0.75; }
   P.sq = -0.08 * crouch + 0.1 * air; P.mouthOpen = 0.9; P.mouthW = 1.15; P.brow = 0.7; P.cheek = 0.1;
 };
 
@@ -353,4 +387,4 @@ CL.talk = function (P, c, dt, o) {
   P.aWL = 0.8 * sm((S(t * 0.7 + 2) - 0.0) / 0.5 + 0.5); P.aXL = 0.26; P.aYL = 0.8 + 0.1 * gl; P.aZL = 0.2 + 0.05 * gl; P.pXL = 0.8; P.pYL = -1; P.pZL = -0.3; P.hWL = 0;
 };
 
-export { CL, KEYS, blendPose, reset, mkPose, stance, relaxArms, gait, beatClock, beatEnv, sm, mod, clamp, lerp };
+export { micAim, CL, KEYS, blendPose, reset, mkPose, stance, relaxArms, gait, beatClock, beatEnv, sm, mod, clamp, lerp };

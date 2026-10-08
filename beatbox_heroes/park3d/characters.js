@@ -4,7 +4,7 @@
 //   CLIPS: idle, walk, run, beatbox, dance, sit, wave, cheer, talk. Walk/run speed is driven by opts.speed. Procedural animation (rig of THREE.Group joints, IK-free poses are fine).
 //   createNPC(ctx, id) -> same shape for 'beeamgee' (old grey-bearded man with a boombox, seated), 'foxy', 'rohzel' (+ every NPC of core.js).
 // EXTRAS on the returned object: lookAt(worldPoint|null), hit('kick'|'snare'|'hat', strength) for beatbox/dance (play('beatbox',{external:true}) to be driven only by hits),
-//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null).
+//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null), micPos(out) (world position of the mic grille).
 // play(clip, opts): opts.speed (walk/run m/s), bpm, phase (absolute beat position), amp (0..1), seat (sit height), slump, drowsy, fade (crossfade seconds, default 0.15),
 //   duration + then (one-shot, returns to 'then'). Calling play every frame with the same clip only updates opts.
 //
@@ -20,7 +20,7 @@ import { buildGlasses, buildAccessories } from './char_gear.js';
 import { Animator, MOOD_NAMES } from './char_anim.js';
 import './char_clips.js';
 import { known } from './char_ids.js';
-import { buildProp, disposeProp, setPropMats, PROP_KINDS } from './char_props.js';
+import { buildProp, disposeProp, setPropMats, PROP_KINDS, MIC, micHead } from './char_props.js';
 import { setPortraitRenderer } from './char_portrait.js';
 import { TOPS, BOTTOMS, SHOES } from './char_wear.js';
 
@@ -149,6 +149,8 @@ export function createCharacter(ctx, look, extra) {
   // anchors: Object3Ds that follow the bones (world getters via object.getWorldPosition)
   const anchor = (bone, off) => { const o = new THREE.Object3D(); o.position.set(off[0], off[1], off[2]); rig.map[bone].add(o); return o; };
   api.anchors = { head: anchor('head', [0, 0.3, 0]), mouth: anchor('mouth', [0, 0, 0.06]), handR: anchor('wrR', [0, -0.07, 0]), handL: anchor('wrL', [0, -0.07, 0]), feet: object, top: anchor('head', [0, 0.75, 0]) };
+  // micPos(out): world position of the mic grille (out is a Vector3), or null when the character holds no mic. Call after update() (bones are current then)
+  api.micPos = (out) => { if (api.holding !== 'mic') return null; micHead(out); return out.applyMatrix4(rig.map.wrR.matrixWorld); };
   api.anim.finishInit();
   return api;
 }
@@ -161,6 +163,8 @@ import { createCast, castLooks, crowdLook, JUDGES3D, CLERK_LOOK } from './char_c
 import { createCrowd } from './char_crowd.js';
 import { portrait, disposePortraits, addStudioLights } from './char_portrait.js';
 import { KNOWN } from './char_ids.js';
-export { createNPC, NPC_LOOKS, createCast, castLooks, crowdLook, JUDGES3D, CLERK_LOOK, createCrowd, portrait, disposePortraits, setPortraitRenderer, addStudioLights, KNOWN, buildProp, PROP_KINDS };
+export { createNPC, NPC_LOOKS, createCast, castLooks, crowdLook, JUDGES3D, CLERK_LOOK, createCrowd, portrait, disposePortraits, setPortraitRenderer, addStudioLights, KNOWN, buildProp, PROP_KINDS, MIC };
+// head surface model (head-local rings + squareness) for the tests that keep props out of the head
+export { ringAt as headRingAt, SQ as HEAD_SQ, HEAD_TOP } from './char_body.js';
 // test hook (tests, shot3d, the dev console): the whole character API on one object
 if (typeof window !== 'undefined') window.__chars = { createCharacter, createNPC, createCast, castLooks, createCrowd, crowdLook, portrait, disposePortraits, normLook, addStudioLights, CLIPS, MOODS, KNOWN, JUDGES3D, TRI_BUDGET, THREE };

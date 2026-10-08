@@ -52,6 +52,15 @@ export function buildProp(kind, o) {
 let _mats = null; export function setPropMats(m) { _mats = m; } const mats_ = () => _mats;
 export function disposeProp(g) { if (!g) return; if (g.parent) g.parent.remove(g); g.traverse((n) => { if (n.geometry) n.geometry.dispose(); }); }
 
+// the hand mic (acc.hand mic/goldmic/neonmic, skinned to wrR, built in char_gear.js): offsets in the wrist bone's frame (rest axes: -y runs along the hand to the fingertips,
+// +x is the thumb side (in towards the body), +z the front of the fist). The fist wraps the handle (grip = middle of the fist); the axis leaves the fist out of the thumb
+// side, tilted towards the fingertips like a real fist's barrel, so with the forearm raised and the thumb side up the mic points up at the lips. The grille centre sits `head` metres up the axis,
+// the cable end `tail` metres below the grip pokes out of the little finger side.
+export const MIC = { grip: [0.006, -0.074, -0.004], axis: new THREE.Vector3(0.88, -0.4, 0.26).normalize(), head: 0.13, tail: 0.14, r: 0.043 };
+export function micMatrix(wx, wy, wz) { const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), MIC.axis); return new THREE.Matrix4().compose(new THREE.Vector3(wx + MIC.grip[0], wy + MIC.grip[1], wz + MIC.grip[2]), q, new THREE.Vector3(1, 1, 1)); }
+// the grille centre in the wrist bone's frame (add it to a wrist bone's matrixWorld to find the mic in the world)
+export const micHead = (out) => out.set(MIC.grip[0], MIC.grip[1], MIC.grip[2]).addScaledVector(MIC.axis, MIC.head);
+
 // where the hands hold each prop, in character object space (metres, y up, +z forward). pos = prop centre, rot = prop euler, L/R = wrist targets (left is +x)
 export const HOLD = {
   box: { pos: [0, 0.86, 0.37], rot: [0, 0, 0], L: [0.2, 0.82, 0.35], R: [-0.2, 0.82, 0.35], poleL: [1, -0.3, 0.2], poleR: [-1, -0.3, 0.2] },
