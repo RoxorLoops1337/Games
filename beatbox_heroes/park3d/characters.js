@@ -4,7 +4,7 @@
 //   CLIPS: idle, walk, run, beatbox, dance, sit, wave, cheer, talk. Walk/run speed is driven by opts.speed. Procedural animation (rig of THREE.Group joints, IK-free poses are fine).
 //   createNPC(ctx, id) -> same shape for 'beeamgee' (old grey-bearded man with a boombox, seated), 'foxy', 'rohzel' (+ every NPC of core.js).
 // EXTRAS on the returned object: lookAt(worldPoint|null), hit('kick'|'snare'|'hat', strength) for beatbox/dance (play('beatbox',{external:true}) to be driven only by hits),
-//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null), micPos(out) (world position of the mic grille).
+//   getLook(), dispose(), tris / triParts / draws / slotTris (budget info), hullDropped (slots whose outline was dropped to stay under TRI_BUDGET), holding ('mic'|'box'|null), micPos(out) (world position of the mic grille), gearInfo (where the accessories came to rest, rest pose, read by the gear tests).
 // play(clip, opts): opts.speed (walk/run m/s), bpm, phase (absolute beat position), amp (0..1), seat (sit height), slump, drowsy, fade (crossfade seconds, default 0.15),
 //   duration + then (one-shot, returns to 'then'). Calling play every frame with the same clip only updates opts.
 //
@@ -114,8 +114,10 @@ export function createCharacter(ctx, look, extra) {
     sf('shoes', [body, look.shoes, look.skin], (m) => buildShoes(m, cx, d));
     sf('hair', [look.skin, look.hair, hatCover], (m) => buildHair(m, cx, hatCover));
     sf('hat', [look.hat, hatCover], (m, g) => buildHat(m, g, cx));
-    sf('glasses', [look.glasses], (m, g) => buildGlasses(m, g, cx));
-    sf('acc', [body, look.acc, look.top && look.top.id, look.bottom && look.bottom.id, look.hat && look.hat.id], (m, g) => buildAccessories(m, g, cx, api));
+    // gear rests on what the look wears (straps over the hair and hat, chains on the top, wristwear on the cuff), so those ids are part of its key
+    const hs = look.hair && look.hair.style;
+    sf('glasses', [look.glasses, hs, hatId], (m, g) => buildGlasses(m, g, cx));
+    sf('acc', [body, look.acc, look.top && look.top.id, look.bottom && look.bottom.id, hatId, hs], (m, g) => buildAccessories(m, g, cx, api));
     api.slotTris = slot; { const hd = look.acc && look.acc.hand && look.acc.hand.id; api.holding = hd && /mic/.test(hd) ? 'mic' : hd === 'boombox' ? 'box' : null; }
     const g = finalize(lits), gg = finalize(glows);
     // triangle budget governor: if lit + glow + outline hull would exceed the budget, drop the outline from the least important slots first (silhouette parts last)
