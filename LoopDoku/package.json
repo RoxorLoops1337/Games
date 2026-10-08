@@ -1,0 +1,16 @@
+{
+  "name": "loopdoku",
+  "private": true,
+  "type": "module",
+  "description": "LoopDoku: a RoxorLoops & Jasmin logic puzzle game. Static site, no build step needed to play.",
+  "scripts": {
+    "serve": "node tools/serve.mjs 5320",
+    "build": "node tools/build.mjs",
+    "levels": "node tools/gen_levels.mjs > tools/levels.json && node tools/build.mjs",
+    "test": "node tools/test_core.mjs",
+    "check": "node tools/check_all.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
+  }
+}

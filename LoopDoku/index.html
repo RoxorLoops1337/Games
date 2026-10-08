@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LoopDoku</title>
+<meta name="description" content="LoopDoku: a logic puzzle with RoxorLoops & Jasmin. One performer per row, column and colour, and they never touch. No ads, ever.">
+<meta name="theme-color" content="#ff5aa5">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="thumbs/icon-192.png">
+<link rel="apple-touch-icon" href="thumbs/icon-192.png">
+<style>html,body{margin:0;height:100%;background:#fff4c2;font:700 18px system-ui,sans-serif;color:#222}body{display:grid;place-items:center}</style>
+</head>
+<body>
+<noscript>LoopDoku needs JavaScript to play.</noscript>
+<p id="m">Loading LoopDoku…</p>
+<script>
+// open the look the player used last (Neon Club Night opens the game for new players)
+(function () {
+  var files = { comic: 'comic.html', idol: 'idol.html', sticker: 'sticker.html', paper: 'paper.html', studio: 'studio.html', riso: 'riso.html',
+    jelly: 'jelly.html', watercolour: 'watercolour.html', pixel: 'pixel.html', neon: 'neon.html' };
+  var skin = 'neon';
+  try { var s = JSON.parse(localStorage.getItem('loopdoku_save_v1') || '{}'); if (s.skin && files[s.skin] && (s.unlocked || []).indexOf(s.skin) >= 0) skin = s.skin; } catch (e) { /* first visit */ }
+  location.replace(files[skin] + (location.hash || '#title'));
+})();
+</script>
+</body>
+</html>
