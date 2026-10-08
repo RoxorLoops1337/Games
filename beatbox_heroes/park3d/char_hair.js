@@ -352,6 +352,8 @@ function seal(mb, ring, col, closed) {
 // HAT COLOUR ZONES follow the 2D sprites (chars_hair.js HAT.*): every zone the 2D paints in a colour of its own (a lighter snapback panel, a trucker mesh, a dark fedora band,
 // a gold buckle, a beanie cuff and pom, bandana dots, pink inner ears) is a zone here too, in the same derived colour (mixS mixes in sRGB like the 2D does).
 // look.hat.color2, when a look carries one, recolours the hat's accent zone (HAT_ACCENT names it); without it the zone keeps the 2D's derived colour.
+// the beanie cuff rings: head-local heights (bottom, rolled middle, top) and their offsets out of the head; the crown shell sits about 0.06 out, so the cuff stands 0.025 proud of it
+export const BEANIE_CUFF = { y: [0.375, 0.414, 0.455], off: [0.082, 0.094, 0.086] };
 export const HAT_ACCENT = { cap: 'button', capback: 'strap', fitted: 'emblem', snapback: 'panel', trucker: 'mesh', beanie: 'pom', bandana: 'dots', headband: 'stitch', beret: 'stem', fedora: 'band', cowboy: 'band', tophat: 'band', catears: 'inner ears', crown: 'gems', visor: 'bill', wizard: 'band', headphonehat: 'band', durag: 'ties', pirate: 'skull', hood: 'drawstrings', bucket: 'eyelets', chef: 'band', bucketfur: 'tufts' };
 const hh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) % 1000 / 1000; };
 const circ = (r, n, ry) => Array.from({ length: n }, (_, i) => [Math.cos(i / n * Math.PI * 2) * r, Math.sin(i / n * Math.PI * 2) * (ry || r)]);
@@ -391,12 +393,17 @@ export function buildHat(mb, glow, ctx) {
       capBill(D, yb, -1.0, 1.0, 0.1, 0.012); top(D, 0.012, a2(lt(col, 0.18))); break;
     }
     case 'beanie': {
-      // 2D: ribbed dome, a lighter ribbed cuff, a pom in mix(colour, white, 0.3)
-      const D = dome(0.4, (a, t) => 0.055 + 0.02 * Math.sin(t * 3), 5, { skirt: false });
-      // the turned-up cuff: a closed ring band whose bottom lip reaches the scalp
-      const n = HN, R = (y, off) => { const out = []; for (let i = 0; i < n; i++) { const th = HA0 + (i / n) * Math.PI * 2, d = dirTo(th, y); out.push(addS(CEN, d, headR(d) + off)); } return out; };
-      const Bo = R(0.375, 0.072), To = R(0.452, 0.074), Ti = R(0.458, 0.045), Bi = R(0.375, 0.002), cuff = mixS(col, WH, 0.12);
-      for (let i = 0; i < n; i++) { const i2 = (i + 1) % n, out = nrm3(sub3(Bo[i], CEN)), rib = i % 2 ? shade(cuff, 0.84) : cuff, cA = shade(rib, 0.82), cB = rib; mb.triH(Bo[i], Bo[i2], To[i2], out, cA, cA, cB, K_h, K_h, K_h); mb.triH(Bo[i], To[i2], To[i], out, cA, cB, cB, K_h, K_h, K_h); mb.triH(To[i], To[i2], Ti[i2], [0, 1, 0], cB, cB, cB, K_h, K_h, K_h, true); mb.triH(To[i], Ti[i2], Ti[i], [0, 1, 0], cB, cB, cB, K_h, K_h, K_h, true); mb.triH(Bo[i], Bo[i2], Bi[i2], [0, -1, 0], cA, cA, cA, K_h, K_h, K_h, true); mb.triH(Bo[i], Bi[i2], Bi[i], [0, -1, 0], cA, cA, cA, K_h, K_h, K_h, true); }
+      // 2D: ribbed dome, a lighter ribbed cuff band, a pom in mix(colour, white, 0.3)
+      const D = dome(0.4, (a, t) => 0.055 + 0.02 * Math.sin(t * 3), 4, { skirt: false });
+      // the turned-up cuff: a rolled band standing a clear step out from the crown (BEANIE_CUFF), 16 vertical ribs alternating light and dark, a dark seam on its top lip
+      // where the crown goes in, its bottom lip closed down to the scalp
+      const n = 16, a0 = Math.PI / n, R = (y, off) => { const out = []; for (let i = 0; i < n; i++) { const th = a0 + (i / n) * Math.PI * 2, d = dirTo(th, y); out.push(addS(CEN, d, headR(d) + off)); } return out; };
+      const [yB, yM, yT] = BEANIE_CUFF.y, [oB, oM, oT] = BEANIE_CUFF.off, Bo = R(yB, oB), Mo = R(yM, oM), To = R(yT, oT), Ti = R(yT + 0.006, 0.045), Bi = R(yB, 0.014), cuff = mixS(col, WH, 0.24), seam = shade(col, 0.5);
+      for (let i = 0; i < n; i++) {
+        const i2 = (i + 1) % n, out = nrm3(sub3(Mo[i], CEN)), rib = i % 2 ? shade(cuff, 0.72) : cuff, rl = shade(rib, 0.86), K3 = (a, b, c, h, ca, cb, cc, nh) => mb.triH(a, b, c, h, ca, cb, cc, K_h, K_h, K_h, nh);
+        K3(Bo[i], Bo[i2], Mo[i2], out, rl, rl, rib); K3(Bo[i], Mo[i2], Mo[i], out, rl, rib, rib); K3(Mo[i], Mo[i2], To[i2], out, rib, rib, rl); K3(Mo[i], To[i2], To[i], out, rib, rl, rl);
+        K3(To[i], To[i2], Ti[i2], [0, 1, 0], seam, seam, seam, true); K3(To[i], Ti[i2], Ti[i], [0, 1, 0], seam, seam, seam, true); K3(Bo[i], Bo[i2], Bi[i2], [0, -1, 0], shade(rl, 0.7), shade(rl, 0.7), shade(rl, 0.7), true); K3(Bo[i], Bi[i2], Bi[i], [0, -1, 0], shade(rl, 0.7), shade(rl, 0.7), shade(rl, 0.7), true);
+      }
       if (deco) top(D, 0.05, a2(mixS(col, WH, 0.3))); break;
     }
     case 'bucket': case 'bucketfur': {

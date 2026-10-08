@@ -59,7 +59,7 @@ report('hatc2', 'hat color2 recolours a measurable share of the hat (accent zone
 report('hatlive', 'changing hat color2 through setLook changes the hat mesh');
 report('hatcap', 'hats stay under their triangle cap (240)');
 // the 2D draws a black hat black: no grey lift on a near-black dome
-for (const id of ['bucket', 'beanie', 'fedora', 'cap']) { ch.setLook(base({ hat: { id, color: '#17141f' } })); const c = cols('hat'), L = []; for (let i = 0; i < c.length; i += 3) L.push(0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]); L.sort((a, b) => a - b); const md = L[L.length >> 1]; ok(md < 0.03, 'a black ' + id + ' stays dark (median linear luminance ' + md.toFixed(4) + ')'); }
+for (const id of ['bucket', 'durag', 'fedora', 'cap']) { ch.setLook(base({ hat: { id, color: '#17141f' } })); const c = cols('hat'), L = []; for (let i = 0; i < c.length; i += 3) L.push(0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]); L.sort((a, b) => a - b); const md = L[L.length >> 1]; ok(md < 0.03, 'a black ' + id + ' stays dark (median linear luminance ' + md.toFixed(4) + ')'); }
 
 // ------------------------------------------------------------------ 2. glasses
 // lens tints the 2D fixes (dark shades, teal aviators, blue goggles, amber gold rounds) and lenses that take the frame colour (heart, star, sport mirror, pixel, monocle, vr plate, eyepatch)
@@ -106,6 +106,17 @@ report('tip', 'every hair style shows its dyed tips (share of tip coloured verti
 for (const body of ['boy', 'girl', 'neutral']) for (const [hat, gl] of [['cowboy', 'vr'], ['wizard', 'goggles'], ['bandana', 'gold_round'], ['hood', 'pixel']]) {
   ch.setLook(base({ body, hair: { style: 'locs', color: '#3b2418', tip: TIP }, top: { id: 'hoodie' }, hat: { id: hat, color: COL, color2: C2 }, glasses: { id: gl, color: COL, color2: C2 }, acc: { neck: { id: 'cubanchain', color2: C2 }, ears: { id: 'hpears', color2: C2 }, wrist: { id: 'stackedbands' }, back: { id: 'backpack', color2: C2 }, hand: { id: 'boombox' } } }));
   budget(body + ' ' + hat + ' ' + gl);
+}
+// ------------------------------------------------------------------ 6. the beanie cuff reads like the 2D: a lighter ribbed band a clear step out from the crown
+{
+  const col = '#e63946'; ch.setLook(base({ hair: { style: 'crop' }, hat: { id: 'beanie', color: col } }));
+  const g = ch.object.getObjectByName('char_lit').geometry; let t0 = 0; for (const n of SLOTS) { if (n === 'hat') break; t0 += ch.slotTris[n] || 0; }
+  const Pp = g.attributes.position.array.subarray(t0 * 9, (t0 + ch.slotTris.hat) * 9), c = cols('hat'), HYc = 0.98; let rc = 0, rcr = 0; const lum = [];
+  for (let i = 0; i < Pp.length; i += 3) { const y = Pp[i + 1] - HYc, r = Math.hypot(Pp[i], Pp[i + 2] + 0.01); if (y > 0.385 && y < 0.445) { rc = Math.max(rc, r); if (r > rc - 0.03) lum.push(0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]); } if (y > 0.47 && y < 0.5) rcr = Math.max(rcr, r); }
+  lum.sort((a, b) => a - b); const lo = lum[Math.floor(lum.length * 0.1)], hi = lum[Math.floor(lum.length * 0.9)];
+  ok(rc - rcr > 0.012, 'the beanie cuff stands out from the crown (' + (rc - rcr).toFixed(3) + ' m)');
+  ok(hi / Math.max(1e-6, lo) > 1.35, 'the beanie cuff ribs alternate light and dark (luminance ratio ' + (hi / Math.max(1e-6, lo)).toFixed(2) + ')');
+  ok(share('hat', mix2(col, W, 0.24)) > 0.1, 'the cuff carries the lighter cuff tone (' + share('hat', mix2(col, W, 0.24)).toFixed(3) + ')');
 }
 report('budget', 'every look stays within TRI_BUDGET ' + TRI_BUDGET + ' (largest ' + maxTris + ')');
 ok(!errs.some((e) => /\[characters\]/.test(e)), 'no slot builder threw (' + errs.filter((e) => /\[characters\]/.test(e)).slice(0, 2).join(' | ') + ')');

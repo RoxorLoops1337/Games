@@ -136,6 +136,8 @@ const GL = {
   goggles: { shape: (cx, cy) => ellp(0.082, 0.082, 10, cx, cy), dark: 1, rim: '#d4a017', lens: ['#7ad8ff', '#2a6a98'], strap: 1 },
 };
 export const GLASS_EY = 0.275, GLASS_OFF = 0.024;
+// which eye the one-eyed pieces sit on (+1 = character's left, +x), matching chars_acc.js: the eyepatch on ecx(-1), the monocle on ecx(1)
+export const EYEPATCH_SIDE = -1, MONOCLE_SIDE = 1;
 export function buildGlasses(mb, glow, ctx) {
   const g = ctx.look.glasses || {}, id = g.id || 'none'; if (id === 'none') return;
   const col = C(g.color || '#17141f'), K_h = K('head'), ey = GLASS_EY, off = GLASS_OFF;
@@ -182,18 +184,19 @@ export function buildGlasses(mb, glow, ctx) {
     strap(0.205, 0.27, 0.355, 0.014, shade(col, 0.7)); return;
   }
   if (id === 'eyepatch') {
-    const pc = mixS(col, '#3a3050', 0.2); fan(ellp(0.075, 0.065, 10, 0.124, ey), [0.124, ey], off - 0.004, pc);
+    // the patch covers the character's right eye (-x), the eye the 2D sprite covers (viewer's left in the front view)
+    const S = EYEPATCH_SIDE, pc = mixS(col, '#3a3050', 0.2); fan(ellp(0.075, 0.065, 10, S * 0.124, ey), [S * 0.124, ey], off - 0.004, pc);
     // the strap runs from the patch over the forehead and the hair to the far side of the head, around the back and over the near ear back to the patch
-    const head = probes(ctx, 'head'), a = P1(0.08, ey + 0.055, off - 0.004), b = P1(0.192, ey + 0.03, off - 0.004), path = [a];
+    const head = probes(ctx, 'head'), a = P1(S * 0.08, ey + 0.055, off - 0.004), b = P1(S * 0.192, ey + 0.03, off - 0.004), path = [a];
     const capY = (ctx.look.hat && ctx.look.hat.id && ctx.look.hat.id !== 'none') ? 0.36 : 1, keys = [[0.0, 0.4], [-0.35, 0.45], [-0.8, 0.47], [-1.3, 0.45], [-1.8, 0.42], [-2.4, 0.39], [-Math.PI, 0.37], [-3.88, 0.35], [-4.43, 0.33], [-4.88, 0.315]];
-    for (let i = 0; i < keys.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, th = lerp(keys[i][0], keys[i + 1][0], t), y = Math.min(capY, lerp(keys[i][1], keys[i + 1][1], t)); path.push(around(head, th, y, 0.012, 0.3, 0.8)); }
-    path.push(around(head, keys[keys.length - 1][0], Math.min(capY, keys[keys.length - 1][1]), 0.012, 0.3, 0.8));
+    for (let i = 0; i < keys.length - 1; i++) for (let k = 0; k < 3; k++) { const t = k / 3, th = lerp(keys[i][0], keys[i + 1][0], t), y = Math.min(capY, lerp(keys[i][1], keys[i + 1][1], t)); path.push(around(head, S * th, y, 0.012, 0.3, 0.8)); }
+    path.push(around(head, S * keys[keys.length - 1][0], Math.min(capY, keys[keys.length - 1][1]), 0.012, 0.3, 0.8));
     path.push(b); tubePT(mb, path, 0.007, mixS(col, '#3a3050', 0.35), { n: 3, sk: K_h, nh: true }); return;
   }
   if (id === 'monocle') {
-    const c = ellp(0.078, 0.078, 12, -0.124, ey), ci = ellp(0.064, 0.064, 12, -0.124, ey); band2(c, ci, off, col);
-    // the cord sags along the cheek to the ear
-    tubePT(mb, [P1(-0.124, ey - 0.078, off), P1(-0.15, 0.17, 0.012), P1(-0.21, 0.16, 0.01), around(skull, -1.25, 0.18, 0.01, 0.3), around(skull, -1.5, 0.205, 0.008, 0.3)], 0.004, (t) => (Math.round(t * 8) % 2 ? lite(col, 0.25) : col), { n: 3, sk: K_h, nh: true }); return;
+    // the monocle sits on the character's left eye (+x), as in the 2D sprite (viewer's right); the cord sags along that cheek to that ear
+    const S = MONOCLE_SIDE, c = ellp(0.078, 0.078, 12, S * 0.124, ey), ci = ellp(0.064, 0.064, 12, S * 0.124, ey); band2(c, ci, off, col);
+    tubePT(mb, [P1(S * 0.124, ey - 0.078, off), P1(S * 0.15, 0.17, 0.012), P1(S * 0.21, 0.16, 0.01), around(skull, S * 1.25, 0.18, 0.01, 0.3), around(skull, S * 1.5, 0.205, 0.008, 0.3)], 0.004, (t) => (Math.round(t * 8) % 2 ? lite(col, 0.25) : col), { n: 3, sk: K_h, nh: true }); return;
   }
   if (id === 'pixel') {
     // "deal with it": a pixel-stepped black frame with white pixel glints, one strip across the bridge, flat on the face
