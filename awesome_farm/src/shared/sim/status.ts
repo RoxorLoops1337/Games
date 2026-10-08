@@ -17,6 +17,7 @@ import { invSum, OUT_CAP, procInputs } from './machines';
 import { wind } from './power';
 import type { Sim } from './sim';
 import type { BuildE, Inv } from './types';
+import { isUber, storageOf } from './uber';
 
 export type StatusState =
     | 'working' | 'waiting' | 'idle' | 'ok'
@@ -102,7 +103,7 @@ function whyNot (t: BuildE, item: ItemId): string {
         if (t.flt && t.flt !== item) return `It only sells ${nm(t.flt)}. Change its filter (E), or turn the rest aside with a Sorter.`;
         return 'Its builder is not in this world any more, so it has nobody to pay.';
     }
-    if (d.storage) return invSum(t.inv) >= d.storage ? 'It is full: empty it, or add another chest.' : `It only takes ${filterLabel(t.fl).toLowerCase()}.`;
+    if (d.storage) return invSum(t.inv) >= storageOf(t) ? 'It is full: empty it, or add another chest.' : `It only takes ${filterLabel(t.fl).toLowerCase()}.`;
     if (isBeltLike(t.kind)) return 'The belt is backed up: whatever is at the end of it is not taking items.';
     if (d.proc) return procInputs(t.kind, t.sel).has(item) ? `It is stocked with ${nm(item)} already: it will take more as it works.` : `${d.name} does not use ${nm(item)}.`;
     return `${d.name} cannot take ${nm(item)}.`;
@@ -285,10 +286,10 @@ function powerStatus (b: BuildE, env: StatusEnv): Status {
 }
 
 function chestStatus (b: BuildE): Status {
-    const def = BUILDINGS[b.kind];
     const n = invSum(b.inv);
     const lab = b.fl?.length ? ` · takes only ${filterLabel(b.fl).toLowerCase()}` : '';
-    return S('ok', null, `${n} of ${def.storage} items${lab}`, n >= def.storage! ? 'Full: inserters and drills cannot add more. Empty it or add another chest.' : '');
+    const cap = storageOf(b);
+    return S('ok', null, `${n} of ${cap} items${lab}${isUber(b) ? ' · shared by every Uber Chest' : ''}`, n >= cap ? 'Full: inserters and drills cannot add more. Empty it or add another chest.' : '');
 }
 
 // ── export chutes ──────────────────────────────────────────────────────────

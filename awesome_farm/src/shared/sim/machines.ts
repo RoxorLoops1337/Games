@@ -15,6 +15,7 @@ import * as quests from './quests';
 import type { Sim } from './sim';
 import { addItem, countOf, takeItem } from './stats';
 import type { BuildE, Cmd, Inv, PlayerS } from './types';
+import { storageOf } from './uber';
 
 export const OUT_CAP = 200;
 
@@ -32,7 +33,7 @@ const satisfied = (inv: Inv | undefined, cost: Partial<Record<ItemId | 'coin', n
 /** Can this building take one more of `item` right now (as an ingredient, fuel or stored item)? */
 export function accepts (b: BuildE, item: ItemId): 'inv' | 'fuel' | null {
     const def = BUILDINGS[b.kind];
-    if (def.storage) return invSum(b.inv) < def.storage && takes(b.fl, item) ? 'inv' : null;       // (a dedicated chest only takes its own kind)
+    if (def.storage) return invSum(b.inv) < storageOf(b) && takes(b.fl, item) ? 'inv' : null;       // (a dedicated chest only takes its own kind)
     if (def.fuel && FUEL[item] && invSum(b.fin) < 12 && (def.proc !== 'furnace' || invHas(b.fin, item) < 12)) {
         // coal is also a steel ingredient: keep the fuel slot topped up first
         if (def.proc !== 'furnace' || !procInputs(b.kind).has(item) || invSum(b.fin) < 4) return 'fuel';
@@ -201,7 +202,7 @@ export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
             if (!ok) { sim.deny(p, part === 'fuel' ? "That won't burn" : "That doesn't go in here"); return; }
         }
         let n = Math.min(n0, countOf(p, c.item));
-        if (def.storage) n = Math.min(n, def.storage - invSum(b.inv));
+        if (def.storage) n = Math.min(n, storageOf(b) - invSum(b.inv));
         if (def.proc || def.fuel) n = Math.min(n, 300 - invHas(target, c.item));
         if (n <= 0) { sim.deny(p, def.storage ? 'The chest is full' : 'Nothing to load'); return; }
         takeItem(p, c.item, n);

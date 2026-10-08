@@ -17,6 +17,7 @@ function newState() {
     xp: 0, level: 1, perks: {}, cards: null, pendingLevels: 0, ult: 0, ultCasting: 0,
     forge: null, forgePlate: { paid: 0, cost: 260, built: false }, forgeUpPlate: { paid: 0, cost: forgeUpCost(0), built: false }, forgeLvl: 0,
     waygate: false, wayPlate: { paid: 0, cost: 400, built: false },
+    place: 'hub', bsPlate: { paid: 0, cost: 0, built: false }, bsHold: 0, // where the hero is (hub/lands or the Backstage) and the stairway plate
     pop: [], houses: 0, town: {}, fanSeq: 0, prestT: 0, feat: {}, hold: false,
     pets: {}, activePet: null, petCd: 0,
     skins: { owned: { jasmin: true }, active: 'jasmin' }, cperks: {},

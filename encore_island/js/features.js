@@ -4,8 +4,11 @@
 //   regTab(sheetId, tabId, label, draw(cw, sh) -> content height)      add a tab to an existing menu sheet
 //   regMod(key, fn) / mod(key) / modAdd(key)                            stat modifiers read by the core formulas
 // Persistent state lives in S.feat[id] (saved automatically; kept across Encore Tours when `keep` is true).
-const FEATS = [], TABS = {}, MODS = {};
+const FEATS = [], TABS = {}, MODS = {}, DOORS = [];
 function regFeature(f) { FEATS.push(f); return f; }
+// a doorway in the Backstage greenroom: { id, name, icon, hint, unlocked(): bool, enter() } . The room draws every registered door
+// (built-in placeholders fill the empty frames); a door whose unlocked() is true opens when the hero stands in it for a moment.
+function regDoor(d) { const i = DOORS.findIndex(o => o.id === d.id); if (i >= 0) DOORS[i] = d; else DOORS.push(d); return d; }
 function regTab(sheet, id, label, draw, opts) { (TABS[sheet] || (TABS[sheet] = [])).push(Object.assign({ id, label, draw }, opts || {})); }
 function regMod(key, fn) { (MODS[key] || (MODS[key] = [])).push(fn); }
 function mod(key) { const a = MODS[key]; if (!a) return 1; let m = 1; for (let i = 0; i < a.length; i++) m *= a[i](); return m; }

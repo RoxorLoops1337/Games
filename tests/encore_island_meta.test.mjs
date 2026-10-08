@@ -104,8 +104,8 @@ t.ok(!C.CHAL.on && S.gems - g1 <= 1 && S.wallet === w1 && Math.abs(p.x - pre.x) 
 C.chalStart('daily'); S.player.hp = 0.5; EI.fEmit('die'); run(0.2); t.ok(!C.CHAL.on && S.feat.challenge.result && S.feat.challenge.result.why === 'ko', 'death ends the run (ko)'); S.feat.challenge.result = null;
 // speed run goal ends early
 C.chalStart('daily'); setRules(['speed']); C.CHAL.goal = 60; C.CHAL.kills = 60; run(0.2); t.ok(!C.CHAL.on && S.feat.challenge.result.why === 'goal', 'speed run ends at goal'); S.feat.challenge.result = null;
-// time out
-C.chalStart('daily'); run(185, 0.1); t.ok(!C.CHAL.on && S.feat.challenge.result && S.feat.challenge.result.why === 'time', 'timer ends the run'); S.feat.challenge.result = null;
+// time out (fixed rules: the daily draw changes with the date and some rule sets let the hero faint first; staying unhurt keeps 'time' the only way out)
+C.chalStart('daily'); setRules(['nodash']); S.player.invuln = 1e9; run(185, 0.1); t.ok(!C.CHAL.on && S.feat.challenge.result && S.feat.challenge.result.why === 'time', 'timer ends the run'); S.feat.challenge.result = null;
 // reload mid run unwinds
 C.chalStart('daily'); S.player.helmets.push({ k: 4 }); const sv2 = JSON.parse(JSON.stringify(EI.serialize())); C.CHAL.on = false; EI.resetAll(); EI.applySave(sv2); S = EI.S; S.started = true; run(0.2);
 t.ok(S.feat.challenge.active === false && S.player.helmets.length >= pre.hl, 'a run caught by a reload is unwound ' + S.feat.challenge.active + ' ' + S.player.helmets.length);
