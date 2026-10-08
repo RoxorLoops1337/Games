@@ -67,11 +67,25 @@
   const STYLE_BEATS = { boom: 'hats', hats: 'rim', rim: 'snare', snare: 'boom' };      // key beats value
   const styleMul = (mine, theirs) => (!mine || !theirs ? 1 : STYLE_BEATS[mine] === theirs ? 1.14 : STYLE_BEATS[theirs] === mine ? 0.9 : 1);
   const opponentStyle = (opp, rng) => { const fav = opp.fav || STYLES.map((x) => x.id); return rng() < 0.7 ? fav[Math.floor(rng() * fav.length)] : STYLES[Math.floor(rng() * 4)].id; };
-  // bend a chart towards a style: about a third of the notes move to the style's lane
+  // bend a chart towards a style the way a beatboxer would, keeping the groove: the downbeat kick (chart beat 0) and the backbeat (chart beat 2) of every bar stay.
+  // boom: hats on the musical eighths between them turn into kicks. hats: extra kicks and claps turn into hats. rim: the backbeat of every second bar becomes a Pf clap, a few hats too.
+  // snare: some hats become ghost snares. The same bar of the groove gets the same change, so the chart still repeats like a groove.
   function styleChart(notes, style, seed) {
     const st = STYLES.find((x) => x.id === style); if (!st) return notes;
-    const r = BBH.rng((seed || 1) + 91);
-    return notes.map((n, i) => (i % 3 === 1 || r() < 0.12 ? { beat: n.beat, lane: st.lane } : n));
+    const r = BBH.rng((seed || 1) + 91), pick = {}, keep = (n) => { const b = ((n.beat % 4) + 4) % 4; return (b === 0 && n.lane === 0) || b === 2; };
+    const want = (n) => { const b = ((n.beat % 4) + 4) % 4, k = (n.beat >= 0 ? Math.floor(n.beat / 4) % 2 : 0) + ':' + b + ':' + n.lane; if (pick[k] === undefined) pick[k] = r(); return pick[k]; };
+    const out = notes.map((n) => {
+      const b = ((n.beat % 4) + 4) % 4, bar = Math.floor(n.beat / 4);
+      if (style === 'rim' && b === 2 && n.lane === 2 && bar % 2 === 1) return { beat: n.beat, lane: 3 };
+      if (keep(n)) return n;
+      const u = want(n);
+      if (style === 'boom' && n.lane === 1 && Number.isInteger(n.beat) && u < 0.6) return { beat: n.beat, lane: 0 };
+      if (style === 'hats' && (n.lane === 0 || n.lane === 3) && u < 0.75) return { beat: n.beat, lane: 1 };
+      if (style === 'rim' && n.lane === 1 && u < 0.3) return { beat: n.beat, lane: 3 };
+      if (style === 'snare' && n.lane === 1 && u < 0.4) return { beat: n.beat, lane: 2 };
+      return n;
+    });
+    if (notes.bars) { out.bars = notes.bars; out.grid = notes.grid; } out.style = style; return out;
   }
 
   const JUDGES = [
@@ -433,37 +447,89 @@
   const windows = (stats) => ({ perfect: 70 + Math.min(40, stats.mus * 0.5), good: 135 + Math.min(60, stats.mus * 0.7) });
   function judgeHit(deltaMs, win) { const d = Math.abs(deltaMs); return d <= win.perfect ? 'perfect' : d <= win.good ? 'good' : 'miss'; }
   const HIT_SCORE = { perfect: 100, good: 60, miss: 0 };
-  // Build a note chart out of STANDARD BEATBOX PATTERNS (B = kick, T = hat "t", K = snare "k", P = Pf).
-  // Easy charts are mostly the classic "B t K t" (bars of four quarter notes), with a "B B K t" or "B t K B" variation
-  // near the end. Medium and hard move to eighth-note grooves, and hard adds Pf and fills. Deterministic per seed.
+  // THE PATTERN LIBRARY: real beatbox grooves as a beatbox teacher writes them (B = kick, T = hat "t", K = snare "k", P = Pf snare/clap, . = rest).
+  // Musical frame: one chart bar (4 chart beats, one stripe of the highway) is ONE "B t K t" cell, half a musical bar. Chart beat 0 is the kick downbeat
+  // (musical beat 1 or 3), chart beat 2 is the backbeat (musical beat 2 or 4), so two chart bars make one musical bar: "B t K t | B t K t" = kick on 1 and 3,
+  // snare on 2 and 4, hats on the ands. EASY cells are 4 symbols (musical eighths, one per chart beat), MEDIUM and HARD cells are 8 symbols (musical sixteenths,
+  // so the classic "B t t B K t t t" fits one chart bar). A groove is one musical bar (2 cells). Rules every pattern keeps: the backbeat (K, in hard also Pf)
+  // on chart beat 2 of EVERY bar, a kick on the downbeat of every groove bar, notes only on the grid, and fills that still land on the backbeat.
+  // A chart is phrased: 4 bar phrases = groove, groove, groove (first cell), turnaround; the groove changes every 8 bars. Deterministic per seed.
   const LANE = { B: 0, T: 1, K: 2, P: 3, '.': -1 };
-  const Q = (str) => str.split('').map((ch, i) => ({ beat: i, lane: LANE[ch] }));            // 4 quarter notes
-  const E8 = (str) => str.split('').map((ch, i) => ({ beat: i * 0.5, lane: LANE[ch] }));      // 8 eighth notes
-  const PAT = {
-    basic: Q('BTKT'),
-    easyEnd: [Q('BBKT'), Q('BTKB')],
-    mid: [E8('BTKTBBKT'), E8('B.KTBBK.'), E8('BTKTB.KT'), E8('BBKTBTKT'), E8('B.KTBKKT')],
-    midEnd: [E8('BTKTBBKT'), E8('BBKBBTKT')],
-    hard: [E8('BTKPBTKP'), E8('BBKTBKPT'), E8('BTKTBBKP'), E8('BPKTBPKT'), E8('BBKKBTKP'), E8('BTKBBTKT')],
-    hardFill: [E8('BBKKPPKK'), E8('BKBKPKPK'), E8('BTKPKPKP')],
+  const SAY = { B: 'B', T: 't', K: 'K', P: 'Pf', '.': '.' };
+  const sayOf = (cells) => cells.map((c) => c.split('').map((x) => SAY[x]).join(' ')).join('  ');
+  const groove = (id, name, a, b) => ({ id, name, cells: [a, b], say: sayOf([a, b]) });
+  const turn = (id, name, c) => ({ id, name, cell: c, say: sayOf([c]) });
+  const PATTERNS = {
+    easy: { grid: 4, grooves: [                              // musical eighths, ordered from the gentlest
+      groove('bootscats', 'Boots and Cats', 'BTKT', 'BTKT'),       // THE beatbox beat: boots and cats and boots and cats
+      groove('lazyboots', 'Lazy Boots', 'B.KT', 'BTKT'),           // a breath instead of the first hat
+      groove('doubleboots', 'Double Boots', 'BBKT', 'BTKT'),       // two kicks on the 1
+      groove('kickpush', 'Kick Push', 'BTKB', 'BTKT'),             // the kick on the and of 2 pushes into beat 3
+      groove('pushbeat', 'Push Beat', 'BTKB', '.TKT'),             // kick on 1 and the and of 2 only, the 3 is left open
+    ], turns: [
+      turn('doublebootsend', 'Double Boots', 'BBKT'),
+      turn('catpickup', 'Cat Pickup', 'BTKK'),                     // two snares lead back into the 1
+      turn('kickpickup', 'Kick Pickup', 'BTKB'),
+    ] },
+    medium: { grid: 8, grooves: [                            // musical sixteenths
+      groove('bootscats16', 'Boots and Cats', 'B.T.K.T.', 'B.T.K.T.'),
+      groove('bootstiti', 'Boots Ti Ti', 'BTTBK.T.', 'B.T.K.T.'),  // "boots ti ti boots cats"
+      groove('boombap', 'Boom Bap', 'B.TBK.T.', '..TBK.T.'),       // 90s hip hop: the kick just before the snare makes it bounce
+      groove('rockkick', 'Rock Double Kick', 'B.T.K.T.', 'B.B.K.T.'),
+      groove('hiphoptiti', 'Hip Hop Ti Ti', 'BTTBKTTT', 'BTTBKTTT'),       // the classic "B t t B K t t t"
+      groove('runninghats', 'Running Hats', 'BTTTKTTT', 'BTTTKTTT'),
+    ], turns: [
+      turn('snarepickup', 'Snare Pickup', 'B.T.K.KK'),
+      turn('kickroll', 'Kick Roll', 'B.BBK.T.'),
+      turn('kickpickup16', 'Kick Pickup', 'B.T.K.BB'),
+      turn('titifill', 'Ti Ti Fill', 'BTTBKTKT'),
+    ] },
+    hard: { grid: 8, grooves: [                              // Pf, syncopation, busier sixteenth hats
+      groove('fourfloor', 'Four on the Floor', 'B.TTP.T.', 'B.TTP.T.'),   // Pf is a kick plus a hiss: a kick on every beat
+      groove('pfclap', 'Pf Clap', 'B.TTK.T.', 'B.TTP.TT'),         // snare on 2, Pf clap on 4
+      groove('boombappf', 'Boom Bap Pf', 'B.TBK.TT', '.TTBP.TB'),
+      groove('pftiti', 'Pf Ti Ti', 'BTTBP.T.', 'BTTBK.TT'),
+      groove('syncoboom', 'Syncopated Boom', 'B.TBK.TB', '.BTTP.T.'),
+      groove('hiphoppf', 'Hip Hop Pf', 'BTTBKTPT', 'BTTBPTKT'),
+    ], turns: [
+      turn('snareroll', 'Snare Roll', 'B.T.KKKK'),
+      turn('pfroll', 'Pf Roll', 'B.T.PPKK'),
+      turn('kickfill', 'Kick Fill', 'BBBBK.KK'),
+      turn('tomfill', 'Tom Fill', 'B.KPK.PK'),
+    ] },
   };
+  const tierOf = (diff) => (diff < 0.35 ? 'easy' : diff < 0.7 ? 'medium' : 'hard');
+  const cellNotes = (cell, grid, at) => { const out = []; cell.split('').forEach((c, i) => { if (LANE[c] >= 0) out.push({ beat: at + i * 4 / grid, lane: LANE[c] }); }); return out; };
+  // makeChart(seed, { bars, difficulty }) -> notes [{ beat, lane }] (strictly ordered). notes.bars: one { id, name, say, cell, turn } per chart bar (what the bar is).
   function makeChart(seed, o) {
-    const r = BBH.rng(seed), notes = [], bars = o.bars || 8, diff = clamp(o.difficulty === undefined ? 0.5 : o.difficulty, 0, 1);
+    o = o || {}; const r = BBH.rng(seed), notes = [], bars = o.bars || 8, diff = clamp(o.difficulty === undefined ? 0.5 : o.difficulty, 0, 1), tier = tierOf(diff), P = PATTERNS[tier];
+    const lo = tier === 'easy' ? 0 : tier === 'medium' ? 0.35 : 0.7, lvl = clamp((diff - lo) / 0.35, 0, 1), reach = Math.max(2, Math.ceil(P.grooves.length * (0.45 + 0.55 * lvl)));
+    const meta = []; let g = null, lastTurn = null;
     for (let bar = 0; bar < bars; bar++) {
-      const toEnd = bars - 1 - bar;                              // 0 = last bar
-      let pat;
-      if (diff < 0.35) {                                         // EASY: B t K t, variations near the end
-        pat = toEnd <= 1 && bars >= 4 && (toEnd === 0 || r() < 0.6) ? r.pick(PAT.easyEnd) : PAT.basic;
-      } else if (diff < 0.7) {                                   // MEDIUM: quarter notes and eighth grooves
-        pat = toEnd === 0 && bars >= 4 ? r.pick(PAT.midEnd) : r() < 0.7 - (diff - 0.35) ? PAT.basic : r.pick(PAT.mid);
-        if (bar === 0) pat = PAT.basic;
-      } else {                                                   // HARD: dense grooves, Pf, fills
-        pat = toEnd === 0 && bars >= 4 ? r.pick(PAT.hardFill) : r() < 0.25 ? r.pick(PAT.mid) : r.pick(PAT.hard);
-        if (bar === 0) pat = r.pick(PAT.mid);
-      }
-      for (const n of pat) if (n.lane >= 0) notes.push({ beat: bar * 4 + n.beat, lane: n.lane });
+      if (bar % 8 === 0) { let k = Math.floor(r() * reach); if (g && P.grooves[k] === g) k = (k + 1) % reach; g = P.grooves[k]; }
+      const inPh = bar % 4, phLen = Math.min(4, bars - (bar - inPh)), last = inPh === phLen - 1 && phLen > 1;
+      let cell = g.cells[inPh % 2], info = { id: g.id, name: g.name, say: sayOf([cell]), cell, turn: false };
+      if (last) { let t = r.pick(P.turns); for (let k = 0; k < P.turns.length && (t === lastTurn || g.cells.includes(t.cell)); k++) t = P.turns[(P.turns.indexOf(t) + 1) % P.turns.length]; lastTurn = t; cell = t.cell; info = { id: t.id, name: t.name, say: t.say, cell, turn: true, groove: g.name }; }
+      for (const n of cellNotes(cell, P.grid, bar * 4)) notes.push(n);
+      meta.push(info);
     }
-    return notes;
+    notes.bars = meta; notes.grid = P.grid; return notes;
+  }
+  // OWN BEATS: the player's Beat Maker slots (ch.patterns) as a chart. 16 steps = one bar of sixteenths at the pattern bpm (step s = chart beat s / 4);
+  // rows 0..3 are the lanes, extra sound rows (pat.ids) go to the closest lane (melodic ones are skipped). A slot needs 4 hits to be a beat.
+  const EXTRA_LANE = { RIM: 2, IK: 2, LR: 0, TB: 0, CR: 1, WB: 3, ZP: 3 };
+  function beatNotes(p) {
+    if (!p || !Array.isArray(p.steps)) return []; const seen = {}, out = [], n = SEQ_STEPS;
+    p.steps.forEach((row, ri) => { const lane = ri < 4 ? ri : EXTRA_LANE[(p.ids || [])[ri - 4]]; if (lane === undefined || !Array.isArray(row)) return; for (let s = 0; s < n; s++) if (row[s] && !seen[s * 4 + lane]) { seen[s * 4 + lane] = 1; out.push({ beat: s / 4, lane, step: s }); } });
+    return out.sort((a, b) => a.beat - b.beat || a.lane - b.lane);
+  }
+  // the playable slots: [{ slot, name, bpm, notes }]
+  const ownBeats = (patterns) => (Array.isArray(patterns) ? patterns : []).map((p, slot) => ({ slot, name: (p && p.name) || 'Beat ' + (slot + 1), bpm: clamp((p && p.bpm) || 100, 60, 180), notes: beatNotes(p) })).filter((b) => b.notes.length >= 4);
+  // ownChart(beats, { bars, rep, from }) -> notes with .bars meta like makeChart: each beat plays `rep` bars, then the next saved beat (cycling, starting at index `from`)
+  function ownChart(beats, o) {
+    o = o || {}; const bars = o.bars || 8, rep = Math.max(1, o.rep || 4), notes = [], meta = []; if (!beats || !beats.length) return null;
+    for (let bar = 0; bar < bars; bar++) { const b = beats[(((o.from || 0) + Math.floor(bar / rep)) % beats.length + beats.length) % beats.length]; for (const n of b.notes) notes.push({ beat: bar * 4 + n.beat, lane: n.lane }); meta.push({ id: 'own' + b.slot, name: b.name, slot: b.slot, own: true, say: '', cell: '' }); }
+    notes.bars = meta; notes.grid = beats.some((b) => b.notes.some((n) => n.step % 2)) ? 16 : 8; return notes;
   }
   // set tempo by difficulty: easy busking (B t K t quarter notes) runs a bit quicker, hard keeps its eighth-note grooves (8 notes a bar) but slows down so they stay playable.
   // chartSub: shaker ticks per beat that fit the chart (2 = eighth-note ticks, so every gem lands on a tick)
@@ -1030,7 +1096,7 @@
       CFG, SONG_DECAY, MAX_ACTIVE_SONGS, SEQ_STEPS, SEQ_SLOTS, emptyPattern, patternHits, patternScore, CREW, COACH_LINES, COACH_FEE, COACH_COOLDOWN, STREAM_MIN_FANS, DAYS, STYLES, STYLE_BEATS, styleMul, opponentStyle, styleChart, JOBS, STATS, STAT_NAMES, NPCS, ROMANCE, JUDGES, OPPONENTS, FINALS, FOODS, PLACES, ACHIEVEMENTS, MORNING_EVENTS, MINGLE, STUDIO_FEE,
       dow, dayName, clock, hourOf, phase, nightness, barProgramme, canEnter,
       newChar, apply, dev, endDay, spend, gainXp, xpNeed, afterChange, sweepUnlocks, sanitizeLook, isUnlocked, unlockText, condMet, findItem, ownKey,
-      windows, judgeHit, HIT_SCORE, makeChart, tempoFor, chartSub, BUSK_LIVE, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
+      windows, judgeHit, HIT_SCORE, makeChart, PATTERNS, ownBeats, ownChart, beatNotes, tempoFor, chartSub, BUSK_LIVE, summarize, rank, reward, resolveBattle, judgeScore, opponentRound,
       Save, migrate, clone,
       TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
       EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,

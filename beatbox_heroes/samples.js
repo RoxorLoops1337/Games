@@ -2,7 +2,8 @@
  *
  * A sound is a lane number 0..3 (B T K Pf) or a Core.SOUNDS id ('B', 't', 'K', 'Pf' map to lanes 0..3; 'LR', 'TB', ... are extra sounds).
  * Reads are synchronous (served from an in-memory Map); writes go to IndexedDB in the background
- * (database 'beatbox-heroes-samples', store 'samples', key `slot{N}:lane{L}` for the four lanes, `slot{N}:snd{ID}` for extra sounds -> { f32: Float32Array, rate }).
+ * (database 'beatbox-heroes-samples', store 'samples', key `slot{N}:lane{L}` for the four lanes, `slot{N}:snd{ID}` for extra sounds -> { f32: Float32Array, rate },
+ * plus raw (the untouched take) and fx ('clean' | 'raw') for takes made through the studio chain; export / import carry f32 only).
  * play(id) plays a sound everywhere the same way: your recording when there is one, else the synth voice (BBH.Audio).
  * When IndexedDB is missing or blocked (node tests, private mode) everything keeps working in memory. Nothing here throws.
  *
@@ -85,7 +86,7 @@
             const c = rq.result;
             if (!c) return;
             const k = String(c.key);
-            if (k.indexOf(prefix) === 0 && !mem.has(k) && c.value && c.value.f32 && c.value.f32.length) mem.set(k, { f32: c.value.f32, rate: c.value.rate });
+            if (k.indexOf(prefix) === 0 && !mem.has(k) && c.value && c.value.f32 && c.value.f32.length) mem.set(k, entry(c.value.f32, c.value.rate, c.value));
             c.continue();
           };
           tx.oncomplete = function () { resolve({ ok: true, count: list(slot).length, persistent: true }); };
@@ -95,18 +96,44 @@
     }).catch(function () { return { ok: false, count: 0, persistent: false }; });
   }
 
-  function put(slot, lane, f32, rate) {
+  /* a stored sound: { f32, rate } plus, for takes made through the studio chain (voicefx.js), raw (the untouched take) and
+   * fx ('clean' | 'raw': which version f32 holds). Both are optional; entries saved before they existed load as they are. */
+  function entry(f32, rate, extra) {
+    const e = { f32, rate };
+    if (extra && extra.raw && extra.raw.length) { e.raw = extra.raw; e.fx = extra.fx === 'raw' ? 'raw' : 'clean'; }
+    return e;
+  }
+  /** put(slot, lane | id, f32, rate, extra?): extra { raw: Float32Array, fx: 'clean' | 'raw' } keeps the raw take for CLEAN / RAW */
+  function put(slot, lane, f32, rate, extra) {
     if (!okLane(lane) || !f32 || !(f32.length > 0)) return false;
     const r = typeof rate === 'number' && rate > 0 ? rate : 44100, k = key(slot, lane);
     const copy = f32 instanceof Float32Array ? f32.slice() : Float32Array.from(f32);
-    mem.set(k, { f32: copy, rate: r });
-    write(function (st) { st.put({ f32: copy, rate: r }, k); });
+    const raw = extra && extra.raw && extra.raw.length ? (extra.raw instanceof Float32Array ? extra.raw.slice() : Float32Array.from(extra.raw)) : null;
+    const e = entry(copy, r, raw ? { raw, fx: extra.fx } : null);
+    mem.set(k, e);
+    write(function (st) { st.put(Object.assign({}, e), k); });
     return true;
   }
   function get(slot, lane) {
     if (!okLane(lane)) return null;
     const v = mem.get(key(slot, lane));
-    return v ? { f32: v.f32, rate: v.rate } : null;
+    return v ? Object.assign({}, v) : null;
+  }
+  /**
+   * Switch a stored take between the CLEAN studio version and the RAW take (same cut, level-matched), rebuilt from its raw take
+   * with BBH.VoiceFX (deterministic, so CLEAN is always the same sample). Returns the new { f32, rate, raw, fx } or null when
+   * the sound has no raw take (recorded before the studio chain, imported) or VoiceFX is missing.
+   */
+  function setMode(slot, lane, mode) {
+    if (!okLane(lane)) return null;
+    const v = mem.get(key(slot, lane)), FX = BBH.VoiceFX;
+    if (!v || !v.raw || !FX) return null;
+    let res = null;
+    try { res = FX.process(v.raw, v.rate, idOf(lane)); } catch (e) { res = null; }
+    if (!res || !res.data.length) return null;
+    const fx = mode === 'raw' ? 'raw' : 'clean';
+    put(slot, lane, fx === 'raw' ? res.dry : res.data, v.rate, { raw: v.raw, fx });
+    return get(slot, lane);
   }
   function remove(slot, lane) {
     if (!okLane(lane)) return false;
@@ -271,5 +298,5 @@
   /** Resolves once every background write has settled (useful before reload or in tests). */
   function flush() { return pending ? new Promise(function (r) { idle.push(r); }) : Promise.resolve(); }
 
-  BBH.Samples = { init, put, get, has, remove, removeAll, list, exportSlot, importSlot, applyToAudio, play, laneOf, idOf, LANE_ID, flush, isPersistent: () => persistent, _clearMemory: () => mem.clear() };
+  BBH.Samples = { init, put, get, setMode, has, remove, removeAll, list, exportSlot, importSlot, applyToAudio, play, laneOf, idOf, LANE_ID, flush, isPersistent: () => persistent, _clearMemory: () => mem.clear() };
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this);

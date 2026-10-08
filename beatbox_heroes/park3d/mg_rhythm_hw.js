@@ -1,5 +1,7 @@
 // Busking rhythm game: the 3D note highway. Four glowing lanes (B pink, T yellow, K cyan, Pf purple) running from the stage toward the camera,
 // a scrolling beat-stripe surface, faceted gem notes (one instanced mesh per lane, a different silhouette per lane), receptors with press flashes.
+// EXAMPLE notes (n.ghost: the hero's call in training and in call and response) use a second, translucent set of the same gems: see-through, a bit smaller,
+// no bob and only a faint glow, so "listen, do not play" reads at a glance while the lane and the timing stay readable.
 import { THREE, canvasTex } from './kit.js';
 import { glowSheet } from './mg_rhythm_fx.js';
 
@@ -78,6 +80,11 @@ export function buildHighway(ctx, q) {
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false }), im = new THREE.InstancedMesh(gemGeo(i, rnd), mat, NG); im.frustumCulled = false; im.castShadow = false; im.receiveShadow = false;
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); const z = new THREE.Matrix4().makeScale(0, 0, 0), w = new THREE.Color(1, 1, 1); for (let k = 0; k < NG; k++) { im.setMatrixAt(k, z); im.setColorAt(k, w); } im.instanceColor.setUsage(THREE.DynamicDrawUsage); im.count = 0; group.add(im); return im;
   });
+  // the translucent example gems (same shapes, shared geometry)
+  const NGH = 24, ghosts = LANES.map((L, i) => {
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false, transparent: true, opacity: 0.26, depthWrite: false }), im = new THREE.InstancedMesh(gems[i].geometry, mat, NGH); im.frustumCulled = false; im.castShadow = false; im.receiveShadow = false; im.renderOrder = 2;
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); const z = new THREE.Matrix4().makeScale(0, 0, 0), w = new THREE.Color(1, 1, 1); for (let k = 0; k < NGH; k++) { im.setMatrixAt(k, z); im.setColorAt(k, w); } im.count = 0; im.visible = false; group.add(im); return im;
+  });
   // glow pools under each gem (additive) + press flashes and beams at the receptors
   const halos = glowSheet(NG * 4, 'soft', 1, 1); halos.rotation.x = -Math.PI / 2; group.add(halos);
   const flash = glowSheet(8, 'soft', 1, 1); flash.rotation.x = -Math.PI / 2; group.add(flash);
@@ -90,19 +97,26 @@ export function buildHighway(ctx, q) {
     const zOf = [FAR_Z, FAR_Z, NEAR_Z, NEAR_Z]; for (let k = 0; k < uv.count; k++) { const z = zOf[k]; a[k * 2 + 1] = ((HIT_Z - z) / (HIT_Z - SPAWN_Z)) * beatsApproach / 4; } uv.needsUpdate = true;
   }
   // g: { T, spb, approach, notes:[{lane, time, state, id, hitT}], press:[0..1 x4], energy, t }
-  const cnt = [0, 0, 0, 0];
+  const cnt = [0, 0, 0, 0], gcnt = [0, 0, 0, 0], cGhost = new THREE.Color(1.05, 1.05, 1.1);
   function update(g) {
     const T = g.T, spb = g.spb, ap = g.approach, span = HIT_Z - SPAWN_Z; tex.offset.y = (T / spb / 4) % 1;
-    cnt[0] = cnt[1] = cnt[2] = cnt[3] = 0; nHalo = 0;
+    cnt[0] = cnt[1] = cnt[2] = cnt[3] = 0; gcnt[0] = gcnt[1] = gcnt[2] = gcnt[3] = 0; nHalo = 0;
     for (let ni = 0; ni < g.notes.length; ni++) {
       const n = g.notes[ni], dt = n.time - T; if (n.state === 1 || n.state === 2) continue;          // hit notes vanish (sparks take over)
-      if (dt > ap * 1.001 || dt < -0.55) continue; const z = HIT_Z - dt / ap * span, L = n.lane; if (cnt[L] >= NG) continue;
+      if (dt > ap * 1.001 || dt < -0.55) continue; const z = HIT_Z - dt / ap * span, L = n.lane;
+      if (n.ghost) {
+        if (gcnt[L] >= NGH || dt < -0.05) continue; const pop = Math.min(1, (ap - dt) / (ap * 0.1)), s = 1.0 * (0.55 + 0.45 * pop);
+        dummy.position.set(laneX(L), GEM_Y, z); dummy.rotation.set(0, g.t * 0.6 + n.id * 0.9, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); const gi = gcnt[L]++; ghosts[L].setMatrixAt(gi, dummy.matrix); ghosts[L].setColorAt(gi, cGhost);
+        if (nHalo < NG * 4) { const hs = 1.5 * pop; m4.makeScale(hs, hs, hs); m4.setPosition(laneX(L), -z, 0.14); halos.setMatrixAt(nHalo, m4); tc.copy(laneC[L]).multiplyScalar(0.16 * pop); halos.setColorAt(nHalo, tc); nHalo++; }
+        continue;
+      }
+      if (cnt[L] >= NG) continue;
       const miss = n.state === 3, pop = Math.min(1, (ap - dt) / (ap * 0.1)), fade = miss ? Math.max(0, 1 + dt / 0.5) : 1, s = 1.18 * (0.55 + 0.45 * pop) * (1 - (1 - fade) * 0.4) * (1 + (!miss && dt < 0.12 && dt > -0.1 ? 0.12 : 0));
       dummy.position.set(laneX(L), GEM_Y + (miss ? 0 : Math.sin(g.t * 3 + n.id) * 0.03), z); dummy.rotation.set(0.0, g.t * 1.2 + n.id * 0.9, 0); dummy.scale.set(s, s * (miss ? 0.6 : 1), s); dummy.updateMatrix();
       const idx = cnt[L]++; gems[L].setMatrixAt(idx, dummy.matrix); gems[L].setColorAt(idx, miss ? cMiss : n.tint || cWhite);   // n.tint: the rival's notes in a battle turn are drawn tinted
       if (!miss && nHalo < NG * 4) { const hs = (2.1 + (dt < 0.3 && dt > -0.1 ? 0.4 : 0)) * pop; m4.makeScale(hs, hs, hs); m4.setPosition(laneX(L), -z, 0.14); halos.setMatrixAt(nHalo, m4); const k = 0.55 * pop; tc.copy(n.tint ? cOpp : laneC[L]).multiplyScalar(k); halos.setColorAt(nHalo, tc); nHalo++; }
     }
-    for (let L = 0; L < 4; L++) { gems[L].count = cnt[L]; gems[L].instanceMatrix.needsUpdate = true; if (gems[L].instanceColor) gems[L].instanceColor.needsUpdate = true; }
+    for (let L = 0; L < 4; L++) { gems[L].count = cnt[L]; gems[L].instanceMatrix.needsUpdate = true; if (gems[L].instanceColor) gems[L].instanceColor.needsUpdate = true; const gh = ghosts[L]; gh.count = gcnt[L]; gh.visible = gcnt[L] > 0; if (gh.visible) { gh.instanceMatrix.needsUpdate = true; gh.instanceColor.needsUpdate = true; } }
     for (let k = nHalo; k < NG * 4; k++) { halos.setMatrixAt(k, zeroM); tc.setRGB(0, 0, 0); halos.setColorAt(k, tc); if (k > nHalo + 3) break; } // clear a few trailing slots (older ones are always zeroed by the loop above)
     halos.count = Math.min(NG * 4, nHalo + 4); halos.instanceMatrix.needsUpdate = true; if (halos.instanceColor) halos.instanceColor.needsUpdate = true;
     // receptor flashes + beams
@@ -113,5 +127,5 @@ export function buildHighway(ctx, q) {
     }
     flash.instanceMatrix.needsUpdate = true; flash.instanceColor.needsUpdate = true; beams.instanceMatrix.needsUpdate = true; beams.instanceColor.needsUpdate = true;
   }
-  return { group, update, setApproach, gems, surface, deco, texture: tex };
+  return { group, update, setApproach, gems, ghosts, surface, deco, texture: tex, counts: () => ({ gems: cnt.reduce((a, b) => a + b, 0), ghosts: gcnt.reduce((a, b) => a + b, 0) }) };
 }

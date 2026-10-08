@@ -19,6 +19,25 @@ export function beatLevels(Core) {
 // the gems of one level: the one bar pattern repeated for `bars` bars (beats from 0)
 export function trainChart(L, bars) { const out = []; for (let b = 0; b < (bars || TRAIN_BARS); b++) for (const n of L.notes) out.push({ beat: b * 4 + n.beat, lane: n.lane }); return out; }
 
+// CALL AND RESPONSE (busking, the jam, battle rounds): the chart is cut into units of 2 bars (one musical bar). Each unit is played TWICE on the same clock:
+// first the example (the hero performs it, ghost gems, not judged), then the same notes again as real gems for you. Nothing else moves: same lanes, same spacing.
+//   callLayout(chart, bars, at) -> { call:[{ beat, lane, step, unit }], notes:[{ beat, lane, unit }], units:[{ ex, you, end, pat }], span }   (beats from `at`)
+//   unit.pat is a pattern for the strip (showPattern): { name, say, steps, notes:[{ step, lane }] }
+export const CALL_BARS = 2;
+const TOKS = ['B', 't', 'K', 'Pf'];
+export function callLayout(chart, bars, at) {
+  const total = bars * 4, per = CALL_BARS * 4, grid = chart.grid || (chart.every((n) => Math.abs(n.beat - Math.round(n.beat)) < 1e-6) ? 4 : 8), spb = Math.max(1, grid / 4), meta = chart.bars || [];
+  const units = [], call = [], notes = [];
+  for (let u0 = 0, k = 0; u0 < total; u0 += per, k++) {
+    const len = Math.min(per, total - u0), ex = at + 2 * u0, you = ex + len, steps = Math.round(len * spb), cells = new Array(steps).fill(-1), m = meta[u0 / 4] || null;
+    for (const n of chart) { if (n.beat < u0 - 1e-6 || n.beat >= u0 + len - 1e-6) continue; const rel = n.beat - u0, step = Math.round(rel * spb); if (cells[step] < 0) cells[step] = n.lane; call.push({ beat: ex + rel, lane: n.lane, step, unit: k }); notes.push({ beat: you + rel, lane: n.lane, unit: k }); }
+    const per4 = Math.round(4 * spb), say = []; for (let b = 0; b < steps; b += per4) say.push(cells.slice(b, b + per4).map((l) => (l < 0 ? '.' : TOKS[l])).join(' '));
+    const name = (m ? (m.turn && m.groove ? m.groove : m.name) : 'The groove') + (chart.style ? ' - ' + String(chart.style).toUpperCase() + ' STYLE' : '');
+    units.push({ ex, you, end: you + len, pat: { name, say: say.join('  '), steps, notes: cells.map((lane, step) => ({ step, lane })).filter((c) => c.lane >= 0) } });
+  }
+  return { call, notes, units, span: 2 * total };
+}
+
 const CSS = `
 .rh.train .meter{opacity:0}
 .rh.train .combo{top:calc(236*var(--u))}
@@ -33,6 +52,13 @@ const CSS = `
 .rh .ps .s.r{color:#8a7cae;background:rgba(43,36,56,.5)}
 .rh .ps .s.on{transform:translateY(calc(-5*var(--u))) scale(1.12);filter:brightness(1.3);box-shadow:0 0 calc(14*var(--u)) #fff2dc}
 .rh .ps .s.r.on{background:rgba(255,242,220,.35)}
+.rh .ps.cr{left:calc(44*var(--u));right:calc(44*var(--u));top:calc(178*var(--u));padding:calc(5*var(--u)) 0 calc(7*var(--u));border-radius:calc(14*var(--u))}
+.rh .ps.cr .lbl{font-size:calc(11*var(--u))}
+.rh .ps.cr .nm{margin-top:calc(3*var(--u));font-size:calc(17*var(--u));-webkit-text-stroke:calc(1*var(--u)) #2b2438;text-shadow:0 calc(2*var(--u)) 0 #2b2438}
+.rh .ps.cr .say{display:none}
+.rh .ps.cr .steps{gap:calc(3*var(--u));margin-top:calc(5*var(--u))}
+.rh .ps.cr .s{height:calc(22*var(--u));border-radius:calc(6*var(--u));font-size:calc(11*var(--u));line-height:calc(18*var(--u));border-width:calc(1.5*var(--u))}
+.rh.crm .toast{top:calc(268*var(--u))}
 .rh .lv{max-width:94%;padding-bottom:calc(14*var(--u))}
 .rh .lv h1{font-size:calc(26*var(--u))}
 .rh .lv p{margin:calc(4*var(--u)) 0 calc(8*var(--u));font-size:calc(12*var(--u))}
@@ -66,16 +92,17 @@ export function buildTrainUI(ui) {
   const root = ui.root; let ps = null, cells = [], lit = -1, card = null;
   function clear() { if (card) { card.remove(); card = null; } }
   // the pattern strip: label (LISTEN / YOUR TURN), the name, how you say it, one cell per step lit in time
-  function showPattern(L, label) {
-    hidePattern(); ps = el('div', 'ps'); const byStep = {}; L.notes.forEach((n) => { byStep[n.step] = n.lane; });
-    const sw = Math.max(22, Math.min(46, Math.floor(470 / L.steps) - 4)); ps.style.setProperty('--sw', String(sw));
-    let cellsHtml = ''; for (let s = 0; s < L.steps; s++) { const ln = byStep[s]; cellsHtml += ln === undefined ? '<div class="s r">.</div>' : '<div class="s" style="background:linear-gradient(' + LANES[ln].hi + ',' + LANES[ln].color + ')">' + (L.steps > 8 ? TOK[ln].slice(0, 1) : TOK[ln]) + '</div>'; }
+  // o.cr: the compact strip of call and response (busking, battles) under the header chips and the clock, the crowd meter and the combo stay
+  function showPattern(L, label, o) {
+    hidePattern(); const cr = !!(o && o.cr); ps = el('div', 'ps' + (cr ? ' cr' : '')); const byStep = {}; L.notes.forEach((n) => { byStep[n.step] = n.lane; });
+    const sw = cr ? Math.max(12, Math.min(34, Math.floor(260 / L.steps) - 3)) : Math.max(22, Math.min(46, Math.floor(470 / L.steps) - 4)); ps.style.setProperty('--sw', String(sw));
+    let cellsHtml = ''; for (let s = 0; s < L.steps; s++) { const ln = byStep[s]; cellsHtml += ln === undefined ? '<div class="s r">.</div>' : '<div class="s" style="background:linear-gradient(' + LANES[ln].hi + ',' + LANES[ln].color + ')">' + (L.steps > 8 || cr ? TOK[ln].slice(0, 1) : TOK[ln]) + '</div>'; }
     ps.innerHTML = '<div class="lbl">' + esc(label || 'LISTEN') + '</div><div class="nm">' + esc(L.name) + '</div><div class="say">"' + esc(L.say) + '"</div><div class="steps">' + cellsHtml + '</div>';
-    root.appendChild(ps); root.classList.add('train'); cells = [...ps.querySelectorAll('.s')]; lit = -1; requestAnimationFrame(() => { if (ps) ps.classList.add('on'); });
+    root.appendChild(ps); root.classList.add(cr ? 'crm' : 'train'); cells = [...ps.querySelectorAll('.s')]; lit = -1; requestAnimationFrame(() => { if (ps) ps.classList.add('on'); });
   }
-  function patternLabel(t, you) { if (!ps) return; const l = ps.querySelector('.lbl'); if (l.textContent !== t) { l.textContent = t; l.classList.toggle('you', !!you); } }
+  function patternLabel(t, you) { if (!ps) return; const l = ps.querySelector('.lbl'); if (l.textContent !== t) { l.textContent = t; l.classList.toggle('you', !!you); ps.classList.toggle('you', !!you); } }
   function patternStep(i) { if (i === lit) return; if (cells[lit]) cells[lit].classList.remove('on'); lit = i; if (cells[i]) cells[i].classList.add('on'); }
-  function hidePattern() { root.classList.remove('train'); if (ps) { ps.remove(); ps = null; cells = []; lit = -1; } }
+  function hidePattern() { root.classList.remove('train', 'crm'); if (ps) { ps.remove(); ps = null; cells = []; lit = -1; } }
   // level select. prog: { unlocked, best: { [level]: grade } }, cur: highlighted level
   function showLevels(levels, prog, cur, onPick) {
     ui.clearCard(); clear(); hidePattern(); const wrap = el('div', 'center'), c = el('div', 'card lv'); wrap.style.alignItems = 'center'; wrap.style.paddingBottom = '0';
