@@ -170,6 +170,68 @@ export function tube(mb, pts, rad, col, o) {
   }
 }
 
+// tubePT: same arguments as tube(), but the ring frame is parallel-transported along the path (tube() turns each ring's frame a quarter turn from the last one,
+// which twists long multi-point tubes into a zigzag). Used by the gear (chains, straps, bands, temples) where the tube follows a long curve.
+export function tubePT(mb, pts, rad, col, o) {
+  o = o || {}; const n = o.n || 5, N = pts.length, closed = !!o.closed, nh = !!o.nh;
+  const rf = typeof rad === 'function' ? rad : Array.isArray(rad) ? (t) => { const f = t * (rad.length - 1), i = Math.min(rad.length - 2, Math.floor(f)); return rad[i] + (rad[i + 1] - rad[i]) * (f - i); } : () => rad;
+  const cf = typeof col === 'function' ? col : () => C(col), sf = typeof o.sk === 'function' ? o.sk : () => o.sk || K('head');
+  const tan = [], P = pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+  for (let i = 0; i < N; i++) { const a = P[closed ? (i - 1 + N) % N : Math.max(0, i - 1)], b = P[closed ? (i + 1) % N : Math.min(N - 1, i + 1)]; tan.push(b.clone().sub(a).normalize()); }
+  const tr = (u, tg) => { const w = u.clone().addScaledVector(tg, -u.dot(tg)); if (w.lengthSq() < 1e-8) w.crossVectors(tg, new THREE.Vector3(0, 1, 0)); if (w.lengthSq() < 1e-8) w.set(1, 0, 0); return w.normalize(); };
+  const U = [tr(new THREE.Vector3().crossVectors(tan[0], Math.abs(tan[0].y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)), tan[0])]; for (let i = 1; i < N; i++) U.push(tr(U[i - 1], tan[i]));
+  // a closed loop spreads the frame mismatch at the seam evenly over the rings, so the last segment does not twist
+  let tw = 0; if (closed) { const e = tr(U[N - 1], tan[0]), v0 = new THREE.Vector3().crossVectors(tan[0], U[0]); tw = Math.atan2(e.dot(v0), e.dot(U[0])); }
+  const rings = [];
+  for (let i = 0; i < N; i++) {
+    const t = i / Math.max(1, N - 1), tg = tan[i], u = U[i], v = new THREE.Vector3().crossVectors(tg, u).normalize(), r = rf(t), ring = [], ph = (o.a0 || 0) - tw * i / N;
+    for (let k = 0; k < n; k++) { const th = (k / n) * Math.PI * 2 + ph; ring.push(P[i].clone().addScaledVector(u, Math.cos(th) * r).addScaledVector(v, Math.sin(th) * (o.flatY ? r * o.flatY : r)).toArray()); }
+    rings.push({ ring, col: cf(t), sk: sf(t), ctr: P[i].toArray(), tg });
+  }
+  const M = closed ? N : N - 1;
+  for (let i = 0; i < M; i++) {
+    const r0 = rings[i], r1 = rings[(i + 1) % N];
+    for (let k = 0; k < n; k++) { const k2 = (k + 1) % n, A = r0.ring[k], B = r0.ring[k2], Cc = r1.ring[k2], D = r1.ring[k], mid = [(A[0] + Cc[0]) / 2 - (r0.ctr[0] + r1.ctr[0]) / 2, (A[1] + Cc[1]) / 2 - (r0.ctr[1] + r1.ctr[1]) / 2, (A[2] + Cc[2]) / 2 - (r0.ctr[2] + r1.ctr[2]) / 2]; mb.triH(A, B, Cc, mid, r0.col, r0.col, r1.col, r0.sk, r0.sk, r1.sk, nh, o.flat); mb.triH(A, Cc, D, mid, r0.col, r1.col, r1.col, r0.sk, r1.sk, r1.sk, nh, o.flat); }
+  }
+  if (!closed) {
+    const e = rings[N - 1], tip = o.tip ? new THREE.Vector3().copy(e.tg).multiplyScalar(o.tip).add(new THREE.Vector3(...e.ctr)).toArray() : e.ctr;
+    for (let k = 0; k < n; k++) mb.triH(tip, e.ring[k], e.ring[(k + 1) % n], e.tg.toArray(), e.col, e.col, e.col, e.sk, e.sk, e.sk, nh, o.flat);
+    const s = rings[0]; for (let k = 0; k < n; k++) mb.triH(s.ctr, s.ring[k], s.ring[(k + 1) % n], s.tg.clone().negate().toArray(), s.col, s.col, s.col, s.sk, s.sk, s.sk, nh, o.flat);
+  }
+}
+
+// strand: a tube with parallel transported rings (no twist between rings, unlike tube), for ponytails, braids, ties and tails.
+// pts [[x,y,z]...], rad number|array|fn(t), col Color|fn(t). o: n sides, sk fn(t)|skin, tip (end cone length), flatY (ring squash), up ([x,y,z] first ring reference: the squash axis), twist (radians per ring, for twisted looks),
+// capStart (closed root), closed (a loop: the last point joins the first, no ends), nh, flat. Returns the ring centres.
+export function strand(mb, pts, rad, col, o) {
+  o = o || {}; const n = o.n || 6, N = pts.length, nh = !!o.nh, cl = !!o.closed;
+  const rf = typeof rad === 'function' ? rad : Array.isArray(rad) ? (t) => { const f = t * (rad.length - 1), i = Math.min(rad.length - 2, Math.floor(f)); return rad[i] + (rad[i + 1] - rad[i]) * (f - i); } : () => rad;
+  const cf = typeof col === 'function' ? col : () => C(col), sf = typeof o.sk === 'function' ? o.sk : () => o.sk || K('head');
+  const P = pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), tan = [];
+  for (let i = 0; i < N; i++) tan.push(P[cl ? (i + 1) % N : Math.min(N - 1, i + 1)].clone().sub(P[cl ? (i - 1 + N) % N : Math.max(0, i - 1)]).normalize());
+  const up = o.up ? new THREE.Vector3(o.up[0], o.up[1], o.up[2]) : Math.abs(tan[0].y) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+  let u = up.clone().sub(tan[0].clone().multiplyScalar(up.dot(tan[0]))).normalize(); if (u.lengthSq() < 1e-8) u.set(1, 0, 0);
+  const rings = [], q = new THREE.Quaternion();
+  for (let i = 0; i < N; i++) {
+    if (i > 0) { q.setFromUnitVectors(tan[i - 1], tan[i]); u.applyQuaternion(q); u.sub(tan[i].clone().multiplyScalar(u.dot(tan[i]))).normalize(); }
+    const t = i / Math.max(1, N - 1), v = new THREE.Vector3().crossVectors(tan[i], u).normalize(), r = rf(t), ring = [], tw = (o.twist || 0) * i;
+    for (let k = 0; k < n; k++) { const th = (k / n) * Math.PI * 2 + tw + (o.a0 || 0); ring.push(P[i].clone().addScaledVector(v, Math.cos(th) * r).addScaledVector(u, Math.sin(th) * r * (o.flatY || 1)).toArray()); }
+    rings.push({ ring, col: cf(t), sk: sf(t), ctr: P[i].toArray(), tg: tan[i] });
+  }
+  for (let i = 0; i < (cl ? N : N - 1); i++) {
+    const r0 = rings[i], r1 = rings[(i + 1) % N];
+    for (let k = 0; k < n; k++) {
+      const k2 = (k + 1) % n, A = r0.ring[k], B = r0.ring[k2], Cc = r1.ring[k2], D = r1.ring[k], mid = [(A[0] + Cc[0]) / 2 - (r0.ctr[0] + r1.ctr[0]) / 2, (A[1] + Cc[1]) / 2 - (r0.ctr[1] + r1.ctr[1]) / 2, (A[2] + Cc[2]) / 2 - (r0.ctr[2] + r1.ctr[2]) / 2];
+      mb.triH(A, B, Cc, mid, r0.col, r0.col, r1.col, r0.sk, r0.sk, r1.sk, nh, o.flat); mb.triH(A, Cc, D, mid, r0.col, r1.col, r1.col, r0.sk, r1.sk, r1.sk, nh, o.flat);
+    }
+  }
+  if (cl) return rings.map((r) => r.ctr);
+  const e = rings[N - 1], tip = new THREE.Vector3().copy(e.tg).multiplyScalar(o.tip || 0).add(new THREE.Vector3(...e.ctr)).toArray();
+  for (let k = 0; k < n; k++) mb.triH(tip, e.ring[k], e.ring[(k + 1) % n], e.tg.toArray(), e.col, e.col, e.col, e.sk, e.sk, e.sk, nh, o.flat);
+  if (o.capStart) { const s = rings[0], b = new THREE.Vector3(...s.ctr).addScaledVector(s.tg, -(o.capStart === true ? 0 : o.capStart)).toArray(); for (let k = 0; k < n; k++) mb.triH(b, s.ring[k], s.ring[(k + 1) % n], s.tg.clone().negate().toArray(), s.col, s.col, s.col, s.sk, s.sk, s.sk, nh, o.flat); }
+  return rings.map((r) => r.ctr);
+}
+
 // smooth interpolation helpers
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

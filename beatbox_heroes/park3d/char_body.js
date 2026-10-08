@@ -120,27 +120,44 @@ export function buildFace(mb, glow, ctx) {
 }
 
 // ------------------------------------------------------------------ facial hair
+// a decal with thickness: the top face at off1 plus side walls down to off0 (inside the skin), so it reads as attached from every angle
+function faceSlab(mb, pts, off0, off1, col, bone) {
+  const top = onFace(pts, off1), bot = onFace(pts, off0), n = pts.length, cx = top.reduce((a, p) => a + p[0], 0) / n, cy = top.reduce((a, p) => a + p[1], 0) / n, cz = top.reduce((a, p) => a + p[2], 0) / n, f = facePt(pts.reduce((a, p) => a + p[0], 0) / n, pts.reduce((a, p) => a + p[1], 0) / n), side = shade(col, 0.8);
+  mb.poly(top, col, bone, f.n, { flat: false, nh: false });
+  for (let i = 0; i < n; i++) { const i2 = (i + 1) % n, h = [(top[i][0] + top[i2][0]) / 2 - cx, (top[i][1] + top[i2][1]) / 2 - cy, (top[i][2] + top[i2][2]) / 2 - cz]; mb.triH(top[i], top[i2], bot[i2], h, side, side, side, bone, bone, bone, true); mb.triH(top[i], bot[i2], bot[i], h, side, side, side, bone, bone, bone, true); }
+}
+// a patch of facial hair over the head columns: rows (head-local y, top first), off(th, y) outward offset, keep(i, j, thm) which cells exist; tuck folds rows below the chin inward
+function facePatch(mb, rowsY, off, keep, colF, skirt) {
+  const K_h = K('head'), cols = HN, vtx = (th, y) => { const tuck = y < 0.03, p = headP(th, tuck ? 0.03 : y), r = ringAt(tuck ? 0.03 : y), l = Math.hypot(p[0], p[2] - r.cz) || 1, e = tuck ? -0.02 : off(th, y); return [p[0] + p[0] / l * e, HY + y, p[2] + (p[2] - r.cz) / l * e + (tuck ? 0.012 : 0)]; };
+  for (let i = 0; i < cols; i++) {
+    const th0 = HA0 + (i / cols) * Math.PI * 2, th1 = th0 + (Math.PI * 2) / cols, thm = (th0 + th1) / 2;
+    for (let j = 0; j < rowsY.length - 1; j++) {
+      if (!keep(i, j, thm)) continue;
+      const a = vtx(th0, rowsY[j]), b = vtx(th1, rowsY[j]), c = vtx(th1, rowsY[j + 1]), d = vtx(th0, rowsY[j + 1]), c0 = colF(j), c1 = colF(j + 1), hint = [(a[0] + b[0]) / 2, 0.05 - (rowsY[j + 1] < 0.03 ? 0.4 : 0), (a[2] + b[2]) / 2 - 0.02];
+      mb.triH(a, b, c, hint, c0, c0, c1, K_h, K_h, K_h); mb.triH(a, c, d, hint, c0, c1, c1, K_h, K_h, K_h);
+      // close every open top edge down to the skin
+      if (skirt && (j === 0 || !keep(i, j - 1, thm))) { const y = rowsY[j], ai = headP(th0, y), bi = headP(th1, y), A = [ai[0], HY + y, ai[2]], B = [bi[0], HY + y, bi[2]], sc = shade(c0, 0.85); mb.triH(a, b, B, [0, 1, 0], sc, sc, sc, K_h, K_h, K_h, true); mb.triH(a, B, A, [0, 1, 0], sc, sc, sc, K_h, K_h, K_h, true); }
+    }
+  }
+}
 export function buildFacial(mb, ctx) {
   const f = ctx.look.facial; if (!f || f === 'none') return; const hc = C(ctx.look.hair && ctx.look.hair.color || '#2a2024'), K_h = K('head'), sk = ctx.skin, bearded = f === 'beard' || f === 'longbeard', long = f === 'longbeard';
-  if (f === 'stubble') { const col = mix(sk, hc, 0.32); loft(mb, [0.0, 0.07, 0.14, 0.2].map((y, i) => ({ y: HY + y, rx: ringAt(y).rx * 1.012, rz: ringAt(y).rz * 1.012, cz: ringAt(y).cz, sk: K_h, c: i === 0 ? shade(col, 0.7) : col })), { n: HN, a0: HA0, sq: SQ, caps: '' }); }
+  const aF = (th) => Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
+  // stubble: a shadow over the jaw, cheeks and sideburns only (not the nape), the sideburns reach up to the hairline in front of the ears
+  if (f === 'stubble') { const col = mix(sk, hc, 0.32); facePatch(mb, [0.33, 0.22, 0.14, 0.07, 0.0], () => 0.0035, (i, j, th) => aF(th) < 2.0 && (j > 0 || aF(th) > 0.9 && aF(th) < 1.6), (j) => (j >= 4 ? shade(col, 0.7) : col), false); }
   if (f === 'mustache' || f === 'goatee' || bearded) {
-    [1, -1].forEach((s) => faceDecal(mb, [[s * 0.004, 0.148], [s * 0.1, 0.133], [s * 0.095, 0.158], [s * 0.004, 0.172]], hc, K_h, 0.014, false, false));
-    ball(mb, [0, HY + 0.152, facePt(0, 0.15).z + 0.016], [0.045, 0.014, 0.014], hc, K_h, { detail: 0 });
+    [1, -1].forEach((s) => faceSlab(mb, [[s * 0.004, 0.148], [s * 0.1, 0.133], [s * 0.095, 0.158], [s * 0.004, 0.172]], 0.002, 0.014, hc, K_h));
+    ball(mb, [0, HY + 0.152, facePt(0, 0.15).z + 0.012], [0.045, 0.016, 0.016], hc, K_h, { detail: 0 });
   }
-  if (f === 'goatee') ball(mb, [0, HY + 0.045, facePt(0, 0.05).z + 0.008], [0.04, 0.055, 0.03], hc, K_h, { detail: 0 });
+  if (f === 'goatee') ball(mb, [0, HY + 0.045, facePt(0, 0.05).z + 0.006], [0.04, 0.055, 0.03], hc, K_h, { detail: 0 });
   if (!bearded) return;
-  // beard: a shell around the jaw that leaves the mouth open, tucked under the chin; the long beard hangs on the spring bone
-  const cols = HN, rowsY = [0.2, 0.12, 0.05, -0.015], vtx = (th, y) => { const tuck = y < 0.03, p = headP(th, tuck ? 0.03 : y), k = tuck ? 0.86 : 1.07; return [p[0] * k, HY + y, p[2] * k + (tuck ? 0.03 : 0)]; };
-  for (let j = 0; j < rowsY.length - 1; j++) for (let i = 0; i < cols; i++) {
-    const th0 = HA0 + (i / cols) * Math.PI * 2, th1 = HA0 + ((i + 1) / cols) * Math.PI * 2, thm = (th0 + th1) / 2, aF = Math.abs(((thm + Math.PI) % (Math.PI * 2)) - Math.PI);
-    if (aF < 0.75 && j < 1) continue;
-    const a = vtx(th0, rowsY[j]), b = vtx(th1, rowsY[j]), c = vtx(th1, rowsY[j + 1]), d = vtx(th0, rowsY[j + 1]), c0 = mix(hc, lite(hc, 0.3), j / 3), c1 = mix(hc, lite(hc, 0.3), (j + 1) / 3), hint = [(a[0] + b[0]) / 2, 0.1 - (j > 1 ? 0.3 : 0), (a[2] + b[2]) / 2];
-    mb.triH(a, b, c, hint, c0, c0, c1, K_h, K_h, K_h); mb.triH(a, c, d, hint, c0, c1, c1, K_h, K_h, K_h);
-  }
+  // beard: jaw, chin and cheeks with the mouth left open, sideburns in front of the ears up to the hairline, nothing on the back of the head; the long beard hangs on the spring bone
+  const rowsY = [0.34, 0.24, 0.16, 0.09, 0.03, -0.02], colF = (j) => mix(shade(hc, 0.92), lite(hc, 0.2), j / 6);
+  facePatch(mb, rowsY, (th, y) => 0.016 + 0.006 * Math.max(0, 0.2 - y) / 0.2, (i, j, th) => { const a = aF(th); if (a > 2.25) return false; if (j <= 1) return a > 0.9 && a < 1.6; if (a < 0.35 && j < 4) return false; if (a > 1.6) return j >= 3; return true; }, colF, true);
   if (long) {
-    const R = [[0.0, 0.15, 0.11, 0.2], [-0.07, 0.13, 0.09, 0.235], [-0.17, 0.1, 0.07, 0.255], [-0.27, 0.07, 0.05, 0.265], [-0.35, 0.03, 0.025, 0.268]].map(([y, rx, rz, cz], i) => ({ y: HY + y, rx, rz, cz, c: mix(hc, lite(hc, 0.35), i / 4), sk: K2('head', 'beard', clamp(i / 2, 0, 1)) }));
+    const R = [[0.06, 0.17, 0.1, 0.14], [-0.05, 0.14, 0.1, 0.2], [-0.17, 0.1, 0.075, 0.235], [-0.27, 0.065, 0.05, 0.25], [-0.35, 0.025, 0.02, 0.255]].map(([y, rx, rz, cz], i) => ({ y: HY + y, rx, rz, cz, c: mix(hc, lite(hc, 0.35), i / 4), sk: K2('head', 'beard', clamp(i / 2, 0, 1)) }));
     loft(mb, R, { n: 6, sq: 0.9, caps: 't', hullHalf: false });
-  } else ball(mb, [0, HY - 0.06, 0.2], [0.06, 0.04, 0.05], mix(hc, lite(hc, 0.3), 0.5), K_h, { detail: 0 });
+  } else ball(mb, [0, HY - 0.012, facePt(0, 0.03).z - 0.012], [0.075, 0.045, 0.05], mix(hc, lite(hc, 0.3), 0.5), K_h, { detail: 0 });
 }
 
 // ------------------------------------------------------------------ limbs (skin parts that clothing may leave exposed)

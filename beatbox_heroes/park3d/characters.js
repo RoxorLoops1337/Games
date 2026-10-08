@@ -14,7 +14,7 @@
 import { THREE } from './kit.js';
 import { C, MB, K, BONE_NAMES, BI, boneSpec, restWorld, dims, loft, finalize, makeHull, shade } from './char_geo.js';
 import { buildHead, buildFace, buildFacial, buildArms, buildLegs } from './char_body.js';
-import { buildHair, buildHat, HAT_COVER } from './char_hair.js';
+import { buildHair, buildHat, HAT_COVER, HAT_RIDES } from './char_hair.js';
 import { buildTop, buildBottom, buildShoes, wearMeta, bodyR } from './char_wear.js';
 import { buildGlasses, buildAccessories } from './char_gear.js';
 import { Animator, MOOD_NAMES } from './char_anim.js';
@@ -95,7 +95,6 @@ export function createCharacter(ctx, look, extra) {
     const d = dims(look.body); fitRig(rig, d);
     const cx = { look, d, rest: restWorld(d), skin: liftSkin(C(look.skin)), shoeAccent: null };
     const meta = wearMeta(look), hatId = look.hat && look.hat.id, hatCover = HAT_COVER[hatId || 'none'] || 0, J = JSON.stringify, body = look.body, hc = look.hair && look.hair.color;
-    cx.hairVol = 0;
     const lits = [], glows = [], slot = {}, names = [];
     // every slot is built once into its own MeshBuilders and cached by the inputs it depends on, so setLook only rebuilds what actually changed
     const sf = (name, key, fn) => {
@@ -112,8 +111,9 @@ export function createCharacter(ctx, look, extra) {
     sf('top', [body, look.top, look.skin], (m) => buildTop(m, cx, d));
     sf('bottom', [body, look.bottom], (m) => buildBottom(m, cx, d));
     sf('shoes', [body, look.shoes, look.skin], (m) => buildShoes(m, cx, d));
-    sf('hair', [look.skin, look.hair, hatCover], (m) => buildHair(m, cx, hatCover));
-    sf('hat', [look.hat, hatCover], (m, g) => buildHat(m, g, cx));
+    // hair is cut and squeezed under a covering hat (so its key holds the hat id) and long hair falls over a backpack; band hats ride on the hair (so theirs holds the hair style)
+    sf('hair', [look.skin, look.hair, hatCover >= 0.7 ? hatId : 'none', !!(look.acc && look.acc.back && look.acc.back.id === 'backpack')], (m) => buildHair(m, cx, hatCover));
+    sf('hat', [look.hat, hatCover, HAT_RIDES[hatId] ? look.hair && look.hair.style : ''], (m, g) => buildHat(m, g, cx));
     sf('glasses', [look.glasses], (m, g) => buildGlasses(m, g, cx));
     sf('acc', [body, look.acc, look.top && look.top.id, look.bottom && look.bottom.id, look.hat && look.hat.id], (m, g) => buildAccessories(m, g, cx, api));
     api.slotTris = slot; { const hd = look.acc && look.acc.hand && look.acc.hand.id; api.holding = hd && /mic/.test(hd) ? 'mic' : hd === 'boombox' ? 'box' : null; }
