@@ -75,5 +75,14 @@ ok(d.id.startsWith('daily-') && d.puzzle.region.length === d.puzzle.n ** 2, 'dai
 const rd = win(d.id);
 ok(rd.daily && rd.points >= 2 * 60, 'daily pays double');
 ok(JSON.parse(store.loopdoku_save_v1).unlocked.includes('sticker'), 'progress saved');
+// a locked look opened without .html (Cloudflare Pages serves /LoopDoku/comic) sends the player back to their own look
+{
+  let sent = null;
+  const store2 = { loopdoku_save_v1: JSON.stringify({ unlocked: ['neon', 'idol'], skin: 'neon' }) };
+  const ctx = { window: {}, localStorage: { getItem: (k) => store2[k] || null, setItem: (k, v) => { store2[k] = v; } }, location: { pathname: '/LoopDoku/comic', hash: '', href: '', replace: (u) => { sent = u; } } };
+  const src = ['loopdoku-core.js', 'loopdoku-levels.js', 'loopdoku-meta.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join(String.fromCharCode(10));
+  new Function('window', 'localStorage', 'location', 'performance', src)(ctx.window, ctx.localStorage, ctx.location, performance);
+  ok(sent === 'neon.html#title', 'locked look without .html redirects to the current look, got ' + sent);
+}
 console.log(fails ? fails + ' failures' : `all tests pass (${total} levels)`);
 process.exit(fails ? 1 : 0);

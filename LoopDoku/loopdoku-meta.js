@@ -109,6 +109,8 @@
   for (const id of FREE) if (!S.unlocked.includes(id)) S.unlocked.push(id);
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) { /* ignore */ } };
   const yesterday = () => { const d = new Date(Date.now() - 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  // the page's skin name: hosts may drop the .html (Cloudflare Pages serves /LoopDoku/neon for neon.html)
+  const pageName = () => decodeURIComponent((location.pathname || '').split('/').pop() || '').replace(/.html$/, '');
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
   function packInfo(pack) {
@@ -271,8 +273,8 @@
       const k = SKINS.find((x) => x.id === id);
       if (!k || !S.unlocked.includes(id)) return false;
       S.skin = id; save();
-      const here = location.pathname.split('/').pop();
-      if (here !== k.file) location.href = k.file + '#' + (screen || 'title');
+      const here = pageName();
+      if (here !== k.file.replace(/.html$/, '')) location.href = k.file + '#' + (screen || 'title');
       return true;
     },
     settings: () => S.settings,
@@ -290,12 +292,12 @@
 
   // a look that is still locked cannot be opened by typing its address: go back to the player's current look
   (function guard() {
-    const here = (location.pathname || '').split('/').pop();
-    const k = SKINS.find((x) => x.file === here);
+    const here = pageName();
+    const k = SKINS.find((x) => x.file.replace(/.html$/, '') === here);
     if (!k) return;
     if (S.unlocked.includes(k.id)) { if (S.skin !== k.id) { S.skin = k.id; save(); } return; }
     const back = SKINS.find((x) => x.id === S.skin && S.unlocked.includes(x.id)) || SKINS[0];
-    if (back.file !== here && location.replace) location.replace(back.file + (location.hash || '#title'));
+    if (back.file.replace(/.html$/, '') !== here && location.replace) location.replace(back.file + (location.hash || '#title'));
   })();
 
   // ---------------------------------------------------------------------------------------------------------------
