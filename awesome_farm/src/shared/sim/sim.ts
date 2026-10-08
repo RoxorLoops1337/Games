@@ -38,6 +38,7 @@ import * as quests from './quests';
 import { tellLessons } from './petlib';
 import * as rift from './rift';
 import * as scholar from './scholar';
+import * as uber from './uber';
 import * as wish from './wish';
 import * as shop from './shop';
 import type { NightEvent } from '../weather';
@@ -154,6 +155,7 @@ export class Sim {
         shop.refresh(this);
         dread.ensure(this);
         if (state.mine) mines.ensure(this);            // the caves have been visited: make them, with the dug-out rock opened again
+        uber.link(this);                               // (every Uber Chest opens the one shared store)
     }
 
     /** The farmers playing right now. Kept until the next step, command, join or leave: those are the only things that change it. */
@@ -239,6 +241,7 @@ export class Sim {
         if (ent.k === 'bld') { this.bldKindCache.clear(); if (factoryPiece(ent.kind)) this.factoryN++; }
         this.occupy(ent);
         this.dirty.add(ent.id);
+        uber.changed(this, ent);
         return ent;
     }
 
@@ -262,6 +265,7 @@ export class Sim {
         if (e.k === 'mob') boss.forget(this, id);
         this.dirty.delete(id);
         this.gone.add(id);
+        uber.changed(this, e);
     }
 
     /**
@@ -278,7 +282,7 @@ export class Sim {
         return list;
     }
 
-    touch (e: Ent) { this.dirty.add(e.id); }
+    touch (e: Ent) { this.dirty.add(e.id); if (e.k === 'bld' && uber.isUber(e)) uber.touchAll(this); }
 
     /** Where hits land and effects play for an entity. */
     center (e: Ent) {

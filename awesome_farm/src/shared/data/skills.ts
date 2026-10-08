@@ -101,6 +101,7 @@ const INDUSTRY = branch('industry', [
     ['i_yield',  'Drill Bits',        'k_drill',  5, 0,  ['i_drills'], 4, 1, { drillYield: 0.12 }],
     ['i_grid',   'Efficient Grid',    'k_bolt',   5, 1,  ['i_power'], 4, 1, { powerSave: 0.1 }],
     ['i_asm',    'Assembly',          'k_robot',  5, 2,  ['i_power'], 1, 3, null, ['assembly']],
+    ['i_vault',  'Uber Chests',       'k_chest',  6, -1.6, ['i_belt2', 'i_speed'], 1, 3, null, ['uberchest'], 'Build Uber Chests: every one opens the same shared store, and each one adds room.'],
     ['i_auto',   'Full Automation',   'k_crown',  7, 0,  ['i_speed', 'i_yield', 'i_grid', 'i_belt2'], 1, 4, { machineSpeed: 0.25, beltSpeed: 0.25, drillYield: 0.25 }, null, 'The factory runs itself.', true],
 ]);
 
@@ -185,6 +186,7 @@ export const UNLOCK_INFO: Record<string, string> = {
     alchemy2: 'Unlocks swift brews and charms.',
     engineering: 'Unlocks circuits and engineering.',
     logistics: 'Unlocks belts, inserters, sorters and the export chute.',
+    uberchest: 'Unlocks the Uber Chest: every one opens the same store, shared by the whole farm, and each adds room.',
     drills: 'Unlocks mining drills.',
     power: 'Unlocks power poles, generators and wind turbines.',
     assembly: 'Unlocks assemblers.',

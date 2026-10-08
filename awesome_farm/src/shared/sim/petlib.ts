@@ -12,6 +12,7 @@ import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
 import { derived, type Derived, MAX_LEVEL } from './stats';
 import type { BuildE, CritE, PlayerS } from './types';
+import { oneUber, storageOf } from './uber';
 
 export const petsOf = (p: PlayerS): Pet[] => (p.pets ??= []);
 export const rosterCap = (p: PlayerS) => 12 + 3 * Math.floor(derived(p).mods.creatureSlots ?? 0);      // (commands and menus: the plain `derived`)
@@ -79,7 +80,7 @@ export function storesNear (sim: Sim, x: number, y: number, radius: number, last
         const c = centreOf(b), d = dist(c.x, c.y, x, y);
         if (d <= radius) out.push({ b, d: d + (b.id === last ? 1e6 : 0) });
     }
-    return out.sort((a, c) => a.d - c.d).map((e) => e.b);
+    return oneUber(out.sort((a, c) => a.d - c.d).map((e) => e.b));      // (Uber Chests are one store: the nearest stands for them all)
 }
 
 /**
@@ -91,7 +92,7 @@ type Stores = readonly BuildE[] | undefined;
 /** Free space across the storage near a point (for `item`, only the chests that would take it). */
 export function roomAt (sim: Sim, x: number, y: number, radius: number, last?: number, item?: ItemId, stores?: Stores): number {
     let room = 0;
-    for (const s of stores ?? storesNear(sim, x, y, radius, last)) if (!item || takes(s.fl, item)) room += Math.max(0, (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv));
+    for (const s of stores ?? storesNear(sim, x, y, radius, last)) if (!item || takes(s.fl, item)) room += Math.max(0, storageOf(s) - invSum(s.inv));
     return room;
 }
 
@@ -111,7 +112,7 @@ export function stashAt (sim: Sim, x: number, y: number, radius: number, item: I
     const near = (o.stores ?? storesNear(sim, x, y, radius, o.last)).filter((s) => takes(s.fl, item));
     for (const s of [...near.filter((s) => names(s.fl, item)), ...near.filter((s) => !names(s.fl, item))]) {
         s.inv ??= {};
-        const room = (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv);
+        const room = storageOf(s) - invSum(s.inv);
         const put = Math.min(left, room);
         if (put > 0) { invPut(s.inv, item, put); left -= put; sim.touch(s); }
         if (!left) break;

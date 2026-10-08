@@ -103,4 +103,7 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
     steelchest: {
         role: 'Stores lots of items', how: `Holds ${BUILDINGS.steelchest.storage} things. Inserters and drills fill and empty it, just like a chest.`,
     },
+    uberchest: {
+        role: 'One store, everywhere', how: `Every Uber Chest opens the same store, shared by the farm; each one adds ${BUILDINGS.uberchest.storage} room. Inserters and creatures use it like any chest.`,
+    },
 };

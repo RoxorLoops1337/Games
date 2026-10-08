@@ -454,7 +454,7 @@ export class FactoryView {
             }
             if (st.coins) this.label(cx, e.ty * TILE - 14, `${Math.round(st.coins)} coins/min`, PAL.gold, 12);
             else if (st.rate && st.item && e.kind !== 'inserter') this.label(cx, e.ty * TILE - 14, `${Math.round(st.rate)}/min`, PAL.lime, 12);
-            else if (e.kind === 'chest' || e.kind === 'steelchest') {
+            else if (e.kind === 'chest' || e.kind === 'steelchest' || e.kind === 'uberchest') {
                 const n = Object.values(e.inv ?? {}).reduce((a, b) => a + (b ?? 0), 0);
                 if (n > 0) this.label(cx, e.ty * TILE - 10, `${n} stored`, PAL.cream, 11);
             }

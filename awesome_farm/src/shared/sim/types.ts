@@ -48,7 +48,8 @@ export interface BuildE {
     id: number; k: 'bld'; kind: BuildingKind;
     tx: number; ty: number;  // top-left tile of the footprint
     rot: number;             // 0..3, for directional machines
-    inv?: Inv;               // chest contents / processor inputs
+    inv?: Inv;               // chest contents / processor inputs (an Uber Chest's is the world's shared store: sim/uber.ts)
+    cap?: number;            // an Uber Chest: the room all of them give together (sim/uber.ts: storageOf)
     out?: Inv;               // processor outputs
     fin?: Inv;               // the fuel ITEMS waiting to be burned (coal, planks…): what is loaded into the fuel slot
     rcp?: string;            // recipe currently being worked
@@ -281,6 +282,8 @@ export interface Shop { day: number; stock: { item: ItemId; n: number; price: nu
 
 export interface WorldState {
     version: number;
+    /** The store every Uber Chest opens (sim/uber.ts); kept when the last one is taken down. */
+    uber?: { inv: Inv };
     seed: string;
     /** Farmers who signed in with a name and a secret word: lower-case name → their player id and the salted hash of the word. Never sent to clients. */
     accounts?: Record<string, { id: string; salt: string; h: string }>;
