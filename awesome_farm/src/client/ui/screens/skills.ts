@@ -19,6 +19,8 @@ const OX = 60000, OY = 60000;
 // the tree's own camera looks through a hole in the window: window-local 20..916 across and 66..420 down (screen units once the window is placed)
 const VW = 896, VH = 354;
 const INFO_Y = 430;      // the info strip under the tree (window-local), 74 high
+/** How far the baked tree reaches from the hub (the outer ring, the branch labels and their blurbs fit inside). */
+const EXTENT = 1120;
 type State = 'maxed' | 'learned' | 'afford' | 'avail' | 'locked' | 'fresh';
 
 interface NodeView { n: SkillNode; c: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; im: Phaser.GameObjects.Image; x: number; y: number; state: State; rank: number }
@@ -33,6 +35,10 @@ export class SkillScreen implements Screen {
     private bgG: Phaser.GameObjects.Graphics;
     private linkG: Phaser.GameObjects.Graphics;
     private glowG: Phaser.GameObjects.Graphics;
+    /** The backdrop, the links and every node's frame, drawn once into one texture (a Graphics replays all its commands every frame: on a phone
+     *  the tree's thousands of them made the screen lag). Drawn again only when something changes: `bake()`. */
+    private tree: Phaser.GameObjects.RenderTexture;
+    private treeScale = 1;
     private views = new Map<string, NodeView>();
     private center = { x: 0, y: 0 };
     private zoom = 0.8;
@@ -73,9 +79,15 @@ export class SkillScreen implements Screen {
         // tree camera + world
         this.cam = s.cameras.add(this.vx * SS, this.vy * SS, VW * SS, VH * SS).setBackgroundColor(0x161520).setAlpha(0);
         s.tweens.add({ targets: this.cam, alpha: 1, duration: 160 });
-        this.bgG = add(s.add.graphics().setPosition(OX, OY).setDepth(0));
-        this.linkG = add(s.add.graphics().setPosition(OX, OY).setDepth(1));
+        this.bgG = add(s.add.graphics().setPosition(OX, OY).setDepth(0).setVisible(false));       // (baked into the tree texture)
+        this.linkG = add(s.add.graphics().setPosition(OX, OY).setDepth(1).setVisible(false));
         this.glowG = add(s.add.graphics().setPosition(OX, OY).setDepth(2));
+        // a phone gets a texture at one pixel per unit (soft when zoomed right in, but light on memory); a computer one and a half
+        this.treeScale = touch ? 1 : 1.5;
+        const side = Math.ceil(EXTENT * 2 * this.treeScale);
+        this.tree = add(s.add.renderTexture(OX - EXTENT, OY - EXTENT, side, side).setOrigin(0).setScale(1 / this.treeScale).setDepth(0));
+        this.tree.camera.setOrigin(0, 0).setZoom(this.treeScale).setScroll(OX - EXTENT, OY - EXTENT);
+        this.tree.camera.roundPixels = false;
         this.spark = s.add.particles(OX, OY, 'spark', { emitting: false, speed: { min: 40, max: 160 }, angle: { min: 0, max: 360 }, lifespan: 600, scale: { start: 1.2, end: 0 }, alpha: { start: 1, end: 0 } }).setDepth(9);
         this.objs.push(this.spark);
         this.buildBackdrop();
@@ -161,10 +173,10 @@ export class SkillScreen implements Screen {
         for (const n of SKILL_LIST) {
             const { x, y } = skillPos(n);
             const size = n.key ? 52 : 40;
-            const g = s.add.graphics();
+            const g = add(s.add.graphics().setPosition(OX + x, OY + y).setVisible(false));       // (its frame: baked into the tree texture)
             const im = s.add.image(0, 0, n.icon, 0).setScale(n.icon.startsWith('k_') ? (n.key ? 4 : 3) : (n.key ? 3 : 2));
             const zone = s.add.zone(0, 0, size, size).setInteractive({ useHandCursor: true }).setData('skill', n.id);       // (a drag that starts on a node is a tap, not a pan)
-            const c = s.add.container(OX + x, OY + y, [g, im, zone]).setDepth(4);
+            const c = s.add.container(OX + x, OY + y, [im, zone]).setDepth(4);
             add(c);
             const v: NodeView = { n, c, g, im, x: OX + x, y: OY + y, state: 'fresh', rank: 0 };
             this.views.set(n.id, v);
@@ -237,11 +249,19 @@ export class SkillScreen implements Screen {
                 if (grew) this.pop(v);
             }
         }
-        if (linkChanged.length || !this.key) this.drawLinks();
+        if (linkChanged.length || !this.key) { this.drawLinks(); this.bake(); }
         this.ptsT.setText(`★ ${me.points} point${me.points === 1 ? '' : 's'}`);
         const learned = Object.entries(me.skills).reduce((a, [id, r]) => a + (SKILLS[id] ? SKILLS[id].cost * r : 0), 0);
         this.invested = `${learned} / ${SKILL_POINT_TOTAL} points invested in the tree`;
         this.totalT.setText(this.invested).setColor(hex(PAL.pebble));
+    }
+
+    /** Draw the backdrop, the links and the node frames into the tree texture (on opening, and when a node changes). */
+    private bake () {
+        const parts: Phaser.GameObjects.Graphics[] = [this.bgG, this.linkG, ...[...this.views.values()].map((v) => v.g)];
+        this.tree.clear();
+        for (const g of parts) { g.setVisible(true); this.tree.draw(g); g.setVisible(false); }
+        this.tree.render();      // (Phaser 4 queues texture commands until told to run them)
     }
 
     private drawLinks () {
