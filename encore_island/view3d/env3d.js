@@ -114,7 +114,7 @@ export function init(V) {
   }
 
   return {
-    update, heightAt, water,
+    update, heightAt, water, waterY: WY,
     /** the live blended mood (colours are THREE.Color, which rig.apply / setClearColor / Color.set all accept); getMood('css') returns the kit's string form */
     getMood(form) { if (form === 'css') { if (kitStamp !== frame) { kitMood = toKit(cur); kitStamp = frame; } return kitMood; } return cur; },
     setMoodOverride(m, blend = 1) { if (!m) { over = null; overBlend = 0; return; } over = parseMood(m, toKit(biomeMoods[0])); overBlend = Math.min(1, Math.max(0, blend)); },

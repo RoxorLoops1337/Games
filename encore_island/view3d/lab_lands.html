@@ -1,6 +1,14 @@
 <!doctype html><meta charset="utf-8"><title>lands lab</title>
-<!-- The real game state + lands3d.js. ?s=<scenario> picks a setup (see SCEN below); camera params as in lab.js (az el d tx ty tz fov w h).
-     A bare island disc is drawn under every land (the real ground comes from env3d.js). Use live=0 for deterministic shots. -->
+<!-- The real game state + lands3d.js. ?s=<scenario> picks a setup, camera params as in lab.js (az el d tx ty tz fov w h detail), land=<k> frames land k
+     (lands=<n> adds n lands to the starting one; the land numbering is 1-based), focus=player uses the hero as the update focus. Use live=0 for shots.
+       plates  unaffordable build plates          afford  wallet full (gold rune rings)        near    hero stands on the first plate
+       towers  land 2: both Speaker Towers + Boom Box + Amp Up x3 + Crowd Gate x2 (fire= cd= amp= gate=)
+       altar   land 2 Headliner altar (cd=<s> shows the resting plate)        drums   land 3: drum kit, Disco Tower, amps, gate, HOME pads
+       unlock  the next-island portal (poor=1 broke, paid=<n>, beacon=1 boosted)       teaser  the locked next island        pad  HOME pads
+       feat    mastery flags, revealed secrets, a land event (ev=blossom|sound|dark|golden|none, evk=<land>), rival takeovers (rival=0 off)
+       all     a bit of everything
+     Examples: lab_lands.html?live=0&s=towers&land=2&d=18   |   --secs 0.3 with --eval "window.__EI.addLand()" shows a new island springing in.
+     A bare island disc is drawn under every land (the real ground comes from env3d.js). -->
 <script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
 <script type="module">
 import { lab } from './lab.js';

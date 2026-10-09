@@ -78,13 +78,13 @@ export function makePlate(V, o = {}) {
   sb.cylc(INK, 0, 0, 0, sr + 0.07, 0.1, 36, PI / 2); sb.cylc(C.cream, 0, 0, 0.02, sr + 0.03, 0.1, 36, PI / 2); sb.cylc(mixc(c2, c1, 0.5).getHex(), 0, 0, 0.04, sr, 0.1, 36, PI / 2); sb.cylc(mixc(c1, '#ffffff', 0.15).getHex(), 0, sr * 0.14, 0.06, sr * 0.78, 0.1, 36, PI / 2);
   sign.add(sb.build({ cast: true }));
   const iconMat = new THREE.MeshBasicMaterial({ map: iconTex(o.icon || 'star'), transparent: true, alphaTest: 0.04, depthWrite: false, fog: false }); iconMat.userData.noCast = true; iconMat.userData.noLook = true;
-  const icon = new THREE.Mesh(new THREE.PlaneGeometry(sr * 1.5, sr * 1.5), iconMat); icon.position.set(0, sr * 0.03, sr * 0.2); icon.renderOrder = 4; sign.add(icon);
+  const icon = new THREE.Mesh(new THREE.PlaneGeometry(sr * 1.5, sr * 1.5), iconMat); icon.position.set(0, sr * 0.03, 0.14); // in front of the sign face (z 0.11) for every plate size icon.renderOrder = 4; sign.add(icon);
   // level badge (a tiny canvas texture, redrawn only when the level changes)
   let badge = null, badgeCtx = null, badgeLvl = -1;
   if (o.lvl !== false) {
     const bt = canvasTex(64, 64, () => {}); badgeCtx = bt.image && bt.image.getContext ? bt.image.getContext('2d') : null;
     const bm = new THREE.MeshBasicMaterial({ map: bt, transparent: true, depthWrite: false, fog: false }); bm.userData.noCast = true; bm.userData.noLook = true;
-    badge = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), bm); badge.position.set(sr * 0.82, sr * 0.82, sr * 0.22); badge.renderOrder = 5; badge.visible = false; sign.add(badge); badge.userData.tex = bt;
+    badge = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), bm); badge.position.set(sr * 0.82, sr * 0.82, 0.16); badge.renderOrder = 5; badge.visible = false; sign.add(badge); badge.userData.tex = bt;
   }
   function paintBadge(n) {
     if (!badgeCtx || n === badgeLvl) return; badgeLvl = n; const g = badgeCtx; g.clearRect(0, 0, 64, 64);

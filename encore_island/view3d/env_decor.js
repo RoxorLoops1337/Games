@@ -60,7 +60,7 @@ function decorMat() {
   patchMat(m, 'sway', (sh) => { sh.uniforms.uWT = kit.LOOK.t; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + SWAY_V).replace('#include <begin_vertex>', SWAY_B); }); m.userData.shared = true; return (_mat = m);
 }
 function glowMat() {
-  if (_glow) return _glow; const m = new THREE.MeshBasicMaterial({ vertexColors: true }); m.onBeforeCompile = (sh) => { sh.uniforms.uWT = kit.LOOK.t; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + SWAY_V).replace('#include <begin_vertex>', SWAY_B); }; m.customProgramCacheKey = () => 'glowsway'; m.userData.noCast = true; m.userData.noLook = true; return (_glow = m);
+  if (_glow) return _glow; const m = new THREE.MeshBasicMaterial({ vertexColors: true }); m.onBeforeCompile = (sh) => { sh.uniforms.uWT = kit.LOOK.t; sh.uniforms.uBeat = kit.LOOK.beat; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uBeat;').replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.rgb *= 1.0 + 0.5 * uBeat;'); sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + SWAY_V).replace('#include <begin_vertex>', SWAY_B); }; m.customProgramCacheKey = () => 'glowsway2'; m.userData.noCast = true; m.userData.noLook = true; return (_glow = m);
 }
 function shadowMat() { // soft ground decals: the shared round-shadow texture times a per-vertex rgba (tree shadows and the boardwalk's shadow on the water)
   if (_sh) return _sh; const m = new THREE.MeshBasicMaterial({ map: kit.softTex('shadow'), vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); m.userData.noCast = true; m.userData.noLook = true; return (_sh = m);
@@ -78,7 +78,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
   const stone = C3(B.cliff).lerp(C3(0xe6e0f4), 0.5), tuftC = C3(B.tuft).lerp(C3(0xffffff), 0.1), bushC = C3(B.g[1]).lerp(C3(B.deep), 0.45), shadows = [];
   const L = (p) => [(p.x - cx) * W, (p.y - cy) * W];
   const flowerCols = B.flowers.map(C3);
-  const addFlowerHead = (x, y, z, s, col, ph) => { const th = night ? GL : A, c = col.clone(); if (night) c.multiplyScalar(2.0); th.add(t.dot, x, y, z, 0, 0.1 * s, 0.07 * s, 0.1 * s, c, 1.4, ph, 0); };
+  const addFlowerHead = (x, y, z, s, col, ph) => { const th = night ? GL : A, c = col.clone(); if (night) c.multiplyScalar(2.6); th.add(t.dot, x, y, z, 0, 0.1 * s, 0.07 * s, 0.1 * s, c, 1.4, ph, 0); };
   let step = 0;
   for (const it of items) {
     if (++step % 6 === 0) yield;
@@ -95,7 +95,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
       A.add(t.rock[v], x, 0, z, yaw, s, s * (0.8 + rnd() * 0.5), s, stone.clone().multiplyScalar(0.9 + rnd() * 0.25), 0, 0, 0.3); shadows.push([x + 0.12 * s, z - 0.1 * s, 0.75 * s]);
     } else if (it.t === 'flower') {
       for (let q = 0; q < 3; q++) { const fx = x + (rnd() - 0.5) * 0.7, fz = z + (rnd() - 0.5) * 0.7, c = flowerCols[(rnd() * flowerCols.length) | 0], sc = s * (0.8 + rnd() * 0.5);
-        if (night) { A.add(t.tuft, fx, 0, fz, rnd() * 6, 1.3, 1.5 * sc, 1.3, tuftC, 1.2, ph + q, 0); addFlowerHead(fx, 0.5 * sc, fz, 1.7 * sc, c, ph + q); }
+        if (night) { A.add(t.tuft, fx, 0, fz, rnd() * 6, 1.3, 1.5 * sc, 1.3, tuftC, 1.2, ph + q, 0); addFlowerHead(fx, 0.5 * sc, fz, 1.15 * sc, c, ph + q); }
         else A.add(t.flower[(q + v) % 2], fx, 0, fz, rnd() * 6, sc, sc, sc, c, 1.6, ph + q, 0.1); }
     }
   }
@@ -115,7 +115,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
     const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.86, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++;
     const c1 = flowerCols[(rnd() * flowerCols.length) | 0], c2 = flowerCols[(rnd() * flowerCols.length) | 0], n = 4 + ((rnd() * 5) | 0), lx = (px - cx) * W, lz = (py - cy) * W;
     for (let q = 0; q < n; q++) { const aa = rnd() * 6.28, d = 0.12 + rnd() * 0.55, fx = lx + Math.cos(aa) * d, fz = lz + Math.sin(aa) * d, sc = 0.75 + rnd() * 0.6, ph = rnd() * 6.28, c = q % 3 ? c1 : c2;
-      if (night) { A.add(t.tuft, fx, 0, fz, rnd() * 6, 1.3, 1.5 * sc, 1.3, tuftC, 1.2, ph, 0); addFlowerHead(fx, 0.5 * sc, fz, 1.7 * sc, c, ph); } else A.add(t.flower[q % 2], fx, 0, fz, rnd() * 6, sc, sc, sc, c, 1.6, ph, 0.1);
+      if (night) { A.add(t.tuft, fx, 0, fz, rnd() * 6, 1.3, 1.5 * sc, 1.3, tuftC, 1.2, ph, 0); addFlowerHead(fx, 0.5 * sc, fz, 1.15 * sc, c, ph); } else A.add(t.flower[q % 2], fx, 0, fz, rnd() * 6, sc, sc, sc, c, 1.6, ph, 0.1);
       A.add(t.tuft, fx + 0.1, 0, fz - 0.08, rnd() * 6, 1.1, 1.3, 1.1, tuftC, 1.5, ph, 0.1); }
   }
   for (let i = 0, tries = 0; i < Math.round(R * 1.2 * dens) && tries < 200; tries++) { const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.9, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++; const sc = 0.18 + rnd() * 0.22; A.add(t.rock[(rnd() * 3) | 0], (px - cx) * W, 0, (py - cy) * W, rnd() * 6.28, sc, sc * 0.8, sc, stone.clone().multiplyScalar(0.95 + rnd() * 0.2), 0, 0, 0.3); }

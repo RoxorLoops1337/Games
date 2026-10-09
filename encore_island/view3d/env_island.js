@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import * as kit from './kit.js';
 import { W, WY, outline, Acc, tpl, facetGeo, vnoise, fbm, runSync } from './env_util.js';
 
-const TILE = 4.2, _c = new THREE.Color(), _d = new THREE.Color();
+const NIGHT_TEAL = new THREE.Color(0x2fa0c0), TILE = 4.2, _c = new THREE.Color(), _d = new THREE.Color();
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // ---- ground textures: neutral grey tiles that MULTIPLY the vertex colours (tufts darker, a few highlights), tiled by world position
@@ -91,6 +91,7 @@ export function* buildIslandG(g, B, bi) {
   const colAt = (x, z, inset, out) => {
     const nz = fbm((cx + x) * 0.16 + seedN, (cz + z) * 0.16, 3), nz2 = vnoise((cx + x) * 0.5, (cz + z) * 0.5);
     out.copy(g0).lerp(g1, kit.clamp(nz * 1.3 - 0.1, 0, 1)); out.lerp(tuft, sstep(0.55, 0.85, nz2) * 0.25);
+    if (night) out.lerp(NIGHT_TEAL, sstep(0.55, 0.9, nz2) * 0.4).multiplyScalar(0.85 + 0.4 * nz);
     const rad = Math.hypot(x, z) / R; out.multiplyScalar(1.06 - 0.12 * rad * rad);                                   // centre a touch lighter, like the 2D radial fill
     out.lerp(deep, 0.30 * (1 - sstep(0.4, 2.6, inset)));                                                            // the 2D game's soft inner edge shade
     out.lerp(night ? shore : sand, 1 - sstep(0.4, 0.85, inset));                                                                 // pale sandy rim

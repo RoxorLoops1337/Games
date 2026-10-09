@@ -58,11 +58,19 @@ export function* buildWalkG(g) {
       A.add(t.plank, mx, DECK + 0.6, mz, ang, l, 0.065, 0.085, cream, 0, 0, 0.1); A.add(t.plank, mx, DECK + 0.33, mz, ang, l, 0.045, 0.06, new THREE.Color(0xf6c8dc), 0, 0, 0.1); } }
   const grp = new THREE.Group(); grp.name = 'walk' + g.k;
   const geo = A.build(false); if (geo) { const m = new THREE.Mesh(geo, kit.SOLID); m.castShadow = true; m.receiveShadow = true; grp.add(m); }
-  const gg = GL.build(false); if (gg) { const m = new THREE.Mesh(gg, kit.glow(1, 1, 1, { vc: true })); m.castShadow = false; grp.add(m); }
+  const gg = GL.build(false); if (gg) { const m = new THREE.Mesh(gg, lanternMat()); m.castShadow = false; grp.add(m); }
   // soft shadow of the deck on the water: a ribbon at sea level with an alpha-faded edge, nudged away from the sun. It is handed to the island's decal mesh
   // (env_decor) so the whole land shares one transparent draw call; positions are world units, colours rgba.
   { const pos = [], col = [], idx = [], ox = 0.5, oz = -0.4, wd = half + 0.9;
     for (let i = 0; i <= n; i++) { const a = pts[i], wet = a.wet ? 1 : 0; for (const [s, al] of [[-1, 0], [-0.45, 0.3], [0.45, 0.3], [1, 0]]) { pos.push(a.x + a.nx * wd * s + ox, WY + 0.045, a.z + a.nz * wd * s + oz); col.push(0.02, 0.05, 0.16, al * wet * 0.85); } if (i) { const b0 = (i - 1) * 4, b1 = i * 4; for (let q = 0; q < 3; q++) idx.push(b0 + q, b1 + q, b0 + q + 1, b0 + q + 1, b1 + q, b1 + q + 1); } }
     grp.userData.ribbon = { pos, col, idx }; }
   return grp;
+}
+
+// lantern bulbs: unlit warm glow that swells on every beat of the song
+let _lm = null;
+function lanternMat() {
+  if (_lm) return _lm; const m = new THREE.MeshBasicMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => { sh.uniforms.uBeat = kit.LOOK.beat; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uBeat;').replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.rgb *= 1.0 + 0.7 * uBeat;'); };
+  m.customProgramCacheKey = () => 'lantern'; m.userData.noCast = true; m.userData.noLook = true; return (_lm = m);
 }
