@@ -15,7 +15,7 @@ export const WORLDS: readonly WorldInfo[] = [
 export const DEFAULT_WORLD = 'farm';
 
 /** The worker's own address (`https://awesome-farm.<you>.workers.dev`), so a first-time visitor gets the server buttons with no typing. Empty: only a `?server=` link or an address typed once shows them. */
-export const PUBLIC_SERVER = '';
+export const PUBLIC_SERVER = 'https://awesome-farm.danhieux-senjka.workers.dev';
 
 export const worldInfo = (id: string): WorldInfo | undefined => WORLDS.find((w) => w.id === id);
 
