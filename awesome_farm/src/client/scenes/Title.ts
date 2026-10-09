@@ -3,13 +3,13 @@
 // A page reload that switches the view (world/view3d-bridge.ts) comes back here and goes straight into the same world.
 
 import * as Phaser from 'phaser';
-import { PUBLIC_SERVER, splitAddress, worldAddress, type WorldInfo } from '../../shared/data/servers';
+import { DEFAULT_WORLD, PUBLIC_SERVER, splitAddress, WORLDS, worldAddress } from '../../shared/data/servers';
 import { PROTOCOL } from '../../shared/net/protocol';
 import { css, PAL } from '../../shared/palette';
 import { TILE_SHALLOW, tileCliff, tileGround, tileShore } from '../art/sprites';
 import { Fx } from '../juice/fx';
 import { LAB } from '../lab';
-import { LocalConnection, stashResume, statusUrl, takeResume, worldsUrl, WsConnection, type Connection, type Resume } from '../net/connection';
+import { LocalConnection, stashResume, statusUrl, takeResume, WsConnection, type Connection, type Resume } from '../net/connection';
 import { canSwitchLive } from '../world/view3d-bridge';
 import { profile, saveProfile } from '../profile';
 import { saveSettings, settings } from '../settings';
@@ -17,6 +17,9 @@ import { button, FONT_TEXT, H, label, panel, W } from '../ui/kit';
 import { rect, STYLES } from '../ui/px';
 import { hudCamera } from '../res';
 import { PAPER, TEXT, WOOD } from '../ui/theme';
+
+type Shown = { setVisible (on: boolean): unknown };
+type Ui = Shown | { root: Shown };
 
 /** The Defense Lab opens by itself once per page load. */
 let labOpened = false;
@@ -26,10 +29,15 @@ export class TitleScene extends Phaser.Scene {
     private starting = false;
     private nameInput!: HTMLInputElement;
     private addrInput!: HTMLInputElement;
-    /** The server buttons (Play online): shown when the address in the box is a Cloudflare host with several worlds. */
-    private picker: { base: string; def: string; worlds: WorldInfo[]; btns: ReturnType<typeof button>[]; counts: Map<string, string>; custom: boolean } | null = null;
-    private serverLabel!: Phaser.GameObjects.Text;
-    private customLink!: Phaser.GameObjects.Text;
+    /** Play online is a button; it opens the three worlds as cards (or, one tap away, a plain address for a PC's server). Each list is what shows in one mode. */
+    private mode: 'closed' | 'worlds' | 'custom' = 'closed';
+    private ui: { closed: Ui[]; open: Ui[]; cards: Ui[]; custom: Ui[] } = { closed: [], open: [], cards: [], custom: [] };
+    private cards: { id: string; btn: ReturnType<typeof button> }[] = [];
+    private base = splitAddress(PUBLIC_SERVER).base;     // the worker the cards belong to
+    private lastWorld = DEFAULT_WORLD;
+    private counted = false;
+    /** A text field is shown or hidden through its Phaser element (which owns the style's display). */
+    private doms = new Map<HTMLInputElement, Phaser.GameObjects.DOMElement>();
     private passInput!: HTMLInputElement;
     private keyInput!: HTMLInputElement;
     private serverStatus!: Phaser.GameObjects.Text;
@@ -48,6 +56,11 @@ export class TitleScene extends Phaser.Scene {
 
     init (data?: { notice?: string }) {
         this.notice = data?.notice ?? '';
+        this.mode = 'closed';
+        this.ui = { closed: [], open: [], cards: [], custom: [] };
+        this.cards = [];
+        this.counted = false;
+        this.doms = new Map();
     }
 
     create () {
@@ -182,7 +195,7 @@ export class TitleScene extends Phaser.Scene {
             font: `18px ${FONT_TEXT}`, color: css(TEXT.ink), background: css(PAPER.hi),
             border: `3px solid ${css(WOOD[1])}`, borderRadius: '4px', outline: 'none',
         });
-        this.add.dom(x, y, el).setOrigin(0, 0.5);
+        this.doms.set(el, this.add.dom(x, y, el).setOrigin(0, 0.5));
         el.addEventListener('keydown', (ev) => ev.stopPropagation());
         return el;
     }
@@ -213,35 +226,98 @@ export class TitleScene extends Phaser.Scene {
             });
         }
 
-        // online
+        // online: one button, then the worlds
         const oy = y + 204;
-        label(this, x + 20, oy, 'Play with friends', 22, PAL.gold, { origin: [0, 0.5] });
-        label(this, x + 20, oy + 24, 'Join a farm server (up to 16 players).', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
-        this.serverLabel = label(this, x + 20, oy + 52, 'Server', 15, PAL.pebble, { origin: [0, 0.5] });
-        // a friend's link can carry the server (…/awesome_farm/?server=https://…): it wins over the last one used, so one link is all a friend needs
+        const cx = x + w / 2;
+        const add = <T extends Ui>(list: Ui[], o: T): T => { list.push(o); return o; };
+        label(this, x + 20, oy, 'Play online', 22, PAL.gold, { origin: [0, 0.5] });
+        add(this.ui.closed, label(this, x + 20, oy + 24, 'Join friends on a shared farm (up to 16 players).', 12, PAL.pebble, { origin: [0, 0.5], bold: false }));
+        add(this.ui.closed, button(this, cx, oy + 84, 330, 56, 'Play online  ▶', () => this.openOnline(), { style: STYLES.gold, size: 22 }));
+        add(this.ui.closed, label(this, cx, oy + 148, 'Pick a world, then your name and secret word\nbring your farmer back on any device.', 12, PAL.pebble, { origin: [0.5, 0.5], align: 'center', bold: false }));
+        const own = add(this.ui.closed, label(this, cx, oy + 214, 'own server (a PC)…', 11, PAL.pebble, { origin: [0.5, 0.5], bold: false })) as Phaser.GameObjects.Text;
+        own.setInteractive({ useHandCursor: true }).on('pointerup', () => this.openCustom());
+
+        add(this.ui.open, label(this, x + 20, oy + 24, 'Pick a world to join.', 12, PAL.pebble, { origin: [0, 0.5], bold: false }));
+        const back = add(this.ui.open, label(this, x + w - 20, oy + 24, '◀ back', 13, PAL.pebble, { origin: [1, 0.5] })) as Phaser.GameObjects.Text;
+        back.setInteractive({ useHandCursor: true }).on('pointerup', () => this.setMode('closed'));
+        // the worlds: the first keeps the plain address (a farmer already there is still known), the others are /w/<id>
+        WORLDS.forEach((wd, i) => {
+            const btn = add(this.ui.cards, button(this, cx, oy + 58 + i * 46, 330, 42, `${wd.name}\n${wd.blurb}`, () => this.join(wd.id), { style: STYLES.dark, size: 13 })) as ReturnType<typeof button>;
+            this.cards.push({ id: wd.id, btn });
+        });
+        // a PC's server: its address instead of the cards
+        add(this.ui.custom, label(this, x + 20, oy + 58, 'Server', 15, PAL.pebble, { origin: [0, 0.5] }));
         const linked = new URLSearchParams(location.search).get('server')?.trim().slice(0, 200) ?? '';
-        this.addrInput = this.field(x + 110, oy + 52, 260, linked || profile.server || (import.meta.env.DEV ? 'localhost:7777' : ''), 'address:7777 or https://…');
+        const mine = splitAddress(linked || profile.server || '');
+        this.addrInput = this.field(x + 110, oy + 58, 260, linked || profile.server || (import.meta.env.DEV ? 'localhost:7777' : ''), 'address:7777 or https://…');
         this.addrTheirs = !!(linked || profile.server);
-        this.customLink = label(this, x + w - 20, oy + 24, '', 11, PAL.pebble, { origin: [1, 0.5], bold: false }).setInteractive({ useHandCursor: true });
-        this.customLink.on('pointerup', () => this.togglePicker());
-        label(this, x + 20, oy + 86, 'Password', 15, PAL.pebble, { origin: [0, 0.5] });
-        this.passInput = this.field(x + 110, oy + 86, 260, '', 'only if the server has one', 'password');
-        label(this, x + 20, oy + 120, 'Secret word', 15, PAL.pebble, { origin: [0, 0.5] });
-        this.keyInput = this.field(x + 110, oy + 120, 260, profile.key ?? '', 'your name + this = your farmer', 'password');
-        label(this, x + 20, oy + 146, 'Your name and secret word bring back your farmer on any device.\nSet them the first time you join, then use the same ones everywhere.', 11, PAL.pebble, { origin: [0, 0.5], bold: false });
-        this.serverStatus = label(this, x + 20, oy + 176, '', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
-        button(this, x + w / 2, oy + 212, 330, 44, 'Join server  ▶', () => this.join(), { style: STYLES.gold, size: 18 });
-        label(this, x + w / 2, oy + 258, 'Want to host? Run the Awesome Farm server on any PC (or on Cloudflare).\nFriends join with its address.', 11, PAL.pebble, { origin: [0.5, 0.5], align: 'center', bold: false });
+        add(this.ui.custom, button(this, cx, oy + 124, 330, 44, 'Join server  ▶', () => this.join(), { style: STYLES.gold, size: 18 }));
+        add(this.ui.custom, label(this, cx, oy + 154, 'Hosting a world on your own PC? Friends join with its address.', 11, PAL.pebble, { origin: [0.5, 0.5], bold: false }));
+
+        add(this.ui.open, label(this, x + 20, oy + 198, 'Password', 15, PAL.pebble, { origin: [0, 0.5] }));
+        this.passInput = this.field(x + 110, oy + 198, 260, '', 'only if the server has one', 'password');
+        add(this.ui.open, label(this, x + 20, oy + 232, 'Secret word', 15, PAL.pebble, { origin: [0, 0.5] }));
+        this.keyInput = this.field(x + 110, oy + 232, 260, profile.key ?? '', 'your name + this = your farmer', 'password');
+        add(this.ui.open, label(this, x + 20, oy + 256, 'Your name and secret word bring back your farmer on any device.', 11, PAL.pebble, { origin: [0, 0.5], bold: false }));
+        this.serverStatus = label(this, x + 20, oy + 272, '', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
+        this.ui.open.push(this.serverStatus);
+
+        // where we were last: the world's own address, or a PC's
+        if (mine.base && mine.base === this.base) this.lastWorld = mine.world ?? DEFAULT_WORLD;
+        else if (mine.world) { this.base = mine.base; this.lastWorld = mine.world; }
+        this.paintCards();
 
         this.addrInput.addEventListener('input', () => { this.addrTheirs = true; this.clearNotice(); this.scheduleCheck(); });
         this.passInput.addEventListener('input', () => this.clearNotice());
-        this.addrInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.join(); });
-        this.passInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.join(); });
         this.keyInput.addEventListener('input', () => this.clearNotice());
-        this.keyInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.join(); });
+        for (const el of [this.addrInput, this.passInput, this.keyInput]) el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.join(); });
+        this.setMode('closed');
+        // a link that names a server opens it at once; so does having been here before
+        if (linked) { if (mine.base === this.base || mine.world) this.openOnline(); else this.openCustom(); }
+        if (/password/i.test(this.notice)) { this.openOnline(); this.time.delayedCall(400, () => this.passInput.focus()); }   // wrong password: ready to type it again
+        else if (this.notice) this.openOnline();
+    }
+
+    /** Which of the three, and the fields they need, are on show. */
+    private setMode (m: 'closed' | 'worlds' | 'custom') {
+        this.mode = m;
+        const show = (list: Ui[], on: boolean) => { for (const o of list) ('root' in o ? o.root : o).setVisible(on); };
+        show(this.ui.closed, m === 'closed');
+        show(this.ui.open, m !== 'closed');
+        show(this.ui.cards, m === 'worlds');
+        show(this.ui.custom, m === 'custom');
+        this.doms.get(this.passInput)?.setVisible(m !== 'closed');
+        this.doms.get(this.keyInput)?.setVisible(m !== 'closed');
+        this.doms.get(this.addrInput)?.setVisible(m === 'custom');
         this.scheduleCheck();
-        void this.probeWorlds(x, oy);
-        if (/password/i.test(this.notice)) this.time.delayedCall(400, () => this.passInput.focus());   // wrong password: ready to type it again
+    }
+
+    private openOnline () {
+        this.setMode('worlds');
+        if (!this.counted) { this.counted = true; void this.countWorlds(); }
+    }
+
+    private openCustom () { this.setMode('custom'); }
+
+    private worldAt (id: string) { return id === DEFAULT_WORLD ? this.base : worldAddress(this.base, id); }
+
+    /** The world you were last in is lit. */
+    private paintCards () {
+        for (const c of this.cards) c.btn.setStyle(c.id === this.lastWorld ? STYLES.lime : STYLES.dark);
+    }
+
+    /** How many are in each world (one small question per world, once, when the cards open: a world that sleeps is woken for it, so it is not asked again and again). */
+    private async countWorlds () {
+        await Promise.all(this.cards.map(async (c) => {
+            const wd = WORLDS.find((w) => w.id === c.id)!;
+            try {
+                const r = await fetch(statusUrl(this.worldAt(c.id)), { signal: AbortSignal.timeout(5000) });
+                const s = await r.json();
+                if (s?.game !== 'awesome-farm' || !this.scene.isActive()) return;
+                const where = s.protocol !== PROTOCOL ? '! the server needs its update' : s.online > 0 ? `● ${s.online} online` : `○ day ${s.day}`;
+                c.btn.setLabel(`${wd.name}\n${where}${s.password ? '  ·  password' : ''}`);
+            } catch { if (this.scene.isActive()) c.btn.setLabel(`${wd.name}\n? not answering yet`); }
+        }));
     }
 
     /** The view, for solo and online alike: 2D (the classic, the default) or 3D (beta). Two segments, the chosen one lit. */
@@ -258,78 +334,6 @@ export class TitleScene extends Phaser.Scene {
         paint();
     }
 
-    /**
-     * Play online: ask the address in the box (a link's `?server=`, the last one used, or the built-in one) which worlds it hosts. A Cloudflare
-     * host answers with a list and the box turns into one button per world, each with how many are in it; anything else (a PC's server,
-     * a typed address, an older host) answers nothing and the box stays as it was.
-     */
-    private async probeWorlds (x: number, oy: number) {
-        const start = splitAddress(this.addrInput.value || PUBLIC_SERVER);
-        if (!start.base) return;
-        try {
-            const r = await fetch(worldsUrl(start.base), { signal: AbortSignal.timeout(4000) });
-            const j = await r.json();
-            if (j?.game !== 'awesome-farm' || !Array.isArray(j.worlds) || !this.scene.isActive()) return;
-            const worlds: WorldInfo[] = j.worlds
-                .filter((w: WorldInfo) => w && /^[a-z0-9_-]{1,24}$/.test(String(w.id)) && typeof w.name === 'string')
-                .slice(0, 6).map((w: WorldInfo) => ({ id: w.id, name: w.name.slice(0, 14), blurb: String(w.blurb ?? '').slice(0, 60) }));
-            if (!worlds.length) return;
-            const def = worlds.some((w) => w.id === j.default) ? String(j.default) : worlds[0].id;
-            const current = this.addrInput.value.trim() ? splitAddress(this.addrInput.value) : null;
-            const at = current && current.base === start.base ? current.world ?? def : def;
-            const bw = Math.floor((260 - 4 * (worlds.length - 1)) / worlds.length);
-            const btns = worlds.map((wd, i) => button(this, x + 110 + bw / 2 + i * (bw + 4), oy + 52, bw, 38, wd.name, () => this.pickWorld(wd.id), { style: STYLES.dark, size: 13 }));
-            this.picker = { base: start.base, def, worlds, btns, counts: new Map(), custom: false };
-            this.showPicker(true);
-            if (!this.addrInput.value.trim() || current?.base === start.base) this.setWorld(at, !!this.addrInput.value.trim());
-            void this.countWorlds();
-        } catch { /* no list of worlds here: the box stays as it was */ }
-    }
-
-    /** The address that names a world: the first world keeps the plain address, as before there were several (so a farmer already there is still known). */
-    private worldAt (id: string) {
-        const p = this.picker!;
-        return id === p.def ? p.base : worldAddress(p.base, id);
-    }
-
-    private setWorld (id: string, theirs: boolean) {
-        const p = this.picker!;
-        this.addrInput.value = this.worldAt(id);
-        if (theirs) this.addrTheirs = true;
-        p.worlds.forEach((wd, i) => p.btns[i].setStyle(wd.id === id ? STYLES.lime : STYLES.dark));
-        this.scheduleCheck();
-    }
-
-    private pickWorld (id: string) {
-        this.clearNotice();
-        this.setWorld(id, true);
-    }
-
-    /** Buttons or the plain address box: the one that is not in use is hidden. */
-    private showPicker (on: boolean) {
-        const p = this.picker!;
-        p.custom = !on;
-        for (const b of p.btns) b.root.setVisible(on);
-        this.addrInput.style.display = on ? 'none' : '';
-        this.serverLabel.setVisible(!on);
-        this.customLink.setText(on ? 'other address…' : 'pick a server').setColor(css(PAL.pebble));
-    }
-
-    private togglePicker () { if (this.picker) this.showPicker(this.picker.custom); }
-
-    /** How many are in each world (one small question per world, once: a world that sleeps is woken for it, so it is not asked again and again). */
-    private async countWorlds () {
-        const p = this.picker!;
-        await Promise.all(p.worlds.map(async (wd, i) => {
-            try {
-                const r = await fetch(statusUrl(this.worldAt(wd.id)), { signal: AbortSignal.timeout(5000) });
-                const s = await r.json();
-                if (s?.game !== 'awesome-farm' || !this.scene.isActive()) return;
-                p.btns[i].setLabel(`${wd.name}\n${s.online > 0 ? `● ${s.online} online` : `○ day ${s.day}`}`);
-            } catch { if (this.scene.isActive()) p.btns[i].setLabel(`${wd.name}\n? asleep`); }
-        }));
-    }
-
     /** If this page was served by a game server, point the Join box at it. */
     private async detectHostServer () {
         try {
@@ -338,7 +342,7 @@ export class TitleScene extends Phaser.Scene {
             if (s?.game !== 'awesome-farm' || !this.scene.isActive()) return;
             this.addrInput.value = location.host;
             this.addrTheirs = true;
-            this.scheduleCheck();
+            this.openCustom();
         } catch { /* a plain static host (dev server, Pages) has no /status */ }
     }
 
@@ -351,6 +355,7 @@ export class TitleScene extends Phaser.Scene {
     private scheduleCheck () {
         this.checkTimer?.remove();
         if (this.notice) { this.serverStatus.setText(`○ ${this.notice}`).setColor(css(PAL.berry)); return; }
+        if (this.mode !== 'custom') { this.serverStatus.setText(''); return; }
         this.serverStatus.setText(this.addrInput.value.trim() && this.addrTheirs ? 'Checking…' : '').setColor(css(PAL.pebble));
         if (!this.addrInput.value.trim()) return;
         this.checkTimer = this.time.delayedCall(500, () => this.check());
@@ -381,17 +386,19 @@ export class TitleScene extends Phaser.Scene {
         saveProfile();
     }
 
-    private join () {
-        const addr = this.addrInput.value.trim();
+    /** A world's card was tapped (or Enter): `world` names it; with none, the plain address box (a PC's server) or the world you were last in. */
+    private join (world?: string) {
+        const custom = this.mode === 'custom';
+        const addr = custom ? this.addrInput.value.trim() : this.worldAt(world ?? this.lastWorld);
         this.addrTheirs = true;
         if (!addr) { this.fx.play('deny', 735, 306); this.addrInput.focus(); return; }
-        profile.server = addr;
         const password = this.passInput.value;
         const key = this.keyInput.value.trim();
         if (key && (key.length < 4 || this.nameInput.value.trim().length < 2)) {
             this.notice = key.length < 4 ? 'Your secret word needs at least 4 characters.' : 'Pick your name first: it goes with the secret word.';
             this.scheduleCheck(); this.fx.play('deny', 735, 306); return;
         }
+        profile.server = addr;
         profile.key = key || undefined;
         this.start(() => new WsConnection(addr, password, key), { mode: 'online', addr, password, key });
     }

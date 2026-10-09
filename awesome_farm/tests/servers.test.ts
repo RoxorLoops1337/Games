@@ -65,10 +65,10 @@ test('the worker: one deployment, a world per Durable Object, the old addresses 
     assert.ok(/BASE \+ '\/admin\/'/.test(admin) && !/fetch\('\/admin\//.test(admin), 'the admin page works under the world it was opened for');
 });
 
-test('the title screen: a Cloudflare host with worlds turns the address box into buttons, the first world keeps the plain address', () => {
+test('the title screen: a Play online button opens the three worlds as cards, the first world keeps the plain address', () => {
     const src = read('src/client/scenes/Title.ts');
-    assert.ok(/probeWorlds/.test(src) && /worldsUrl\(/.test(src), 'it asks for the list');
-    assert.ok(/id === p\.def \? p\.base : worldAddress\(p\.base, id\)/.test(src), 'the first world is the plain address (a farmer already known there stays known)');
-    assert.ok(/other address…/.test(src), 'the plain box is one tap away');
-    assert.ok(/WorldInfo\[\] = j\.worlds/.test(src) && /\.slice\(0, 6\)/.test(src) && /\.slice\(0, 14\)/.test(src), 'what a server sends is cut down to size');
+    assert.ok(/'Play online  ▶'/.test(src) && /WORLDS\.forEach/.test(src), 'a button opens a card per world');
+    assert.ok(/id === DEFAULT_WORLD \? this\.base : worldAddress\(this\.base, id\)/.test(src), 'the first world is the plain address (a farmer already there is still known)');
+    assert.ok(/openCustom/.test(src) && /own server/.test(src), 'a PC\'s own address is still one tap away');
+    assert.ok(!/Join a farm server/.test(src), 'no server box on the first look');
 });
