@@ -17,11 +17,11 @@ export type Family = 'building' | 'node' | 'monster' | 'creature' | 'item';
 
 /** The things drawn as a placeholder on purpose, until someone models them (each is a work item: see CLAUDE.md, "3D view"). */
 export const PLACEHOLDERS: Record<Family, readonly string[]> = {
-    building: ['chute', 'mailbox', 'weathervane'],      // a block of the right footprint
+    building: ['chute', 'mailbox', 'uberchest', 'weathervane'],      // a block of the right footprint
     node: ['titan_oak', 'titan_rock'],                 // drawn as the plain rock
     monster: [],
     creature: [],
-    item: [],
+    item: ['potion_insight', 'potion_kin', 'potion_memory', 'potion_study'],      // the XP brews: a plain bottle until they get their own
 };
 
 /** Every kind the game has, per family. */
