@@ -15,6 +15,15 @@ root `CLAUDE.md` workflow rules still apply (commit style, no model identifiers)
 `play/`, keeping `?server=`). **After changing the game: `npm run build:pages`, then commit `play/` with the change.** The root `npm run check` does not run its tests (they need this
 folder's own `node_modules`): use `npm run check` *in this folder* (or `npm run test:farm` at the root).
 
+## Fast loop (ship small, ship often)
+
+The owner wants many small updates over one big one. Per change:
+1. **Iterate on the files you touch only:** `npx tsx --test tests/<system>.test.ts` (seconds), plus `npm run typecheck`. Run the whole `npm run check` (minutes) **once**, right before the push.
+2. **New content checklist** (each one has a test that fails otherwise): an icon (`client/art/icons.ts`), a source (recipe, drop or loot), a 3D model or a line in `PLACEHOLDERS` (`src/client3d/coverage.ts`), and the wiki (`npm run build:pages` regenerates `wiki/index.html` and `play/` together).
+3. **Merging main:** never hand-merge `play/` or `wiki/index.html`: take either side, then `npm run build:pages` and commit what it writes. Delete `play/assets/*.js` files `play/index.html` no longer names.
+4. **One feature, one PR:** split big work into slices that each pass the check on their own (data and rules first, then art, then polish), and merge each slice as soon as it is green. Keep changes inside `awesome_farm/` so the root check only builds (touching `build.js` or the root `package.json` runs every game's suites, ~8 min).
+5. **The machine is small (4 cores):** at most two agents running test suites at once.
+
 ## Stack
 
 - **Client:** Phaser 4.0.0 (WebGL, `pixelArt`, `roundPixels`, DOM container for the title
