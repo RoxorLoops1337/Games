@@ -107,5 +107,15 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
         role: 'One store, everywhere', how: `Every Uber Chest opens the same store, shared by the farm; each one adds ${BUILDINGS.uberchest.storage} room. Inserters and creatures use it like any chest.`,
     },
     // ── base defense (sim/defense.ts): raids come from the Blight nests at night ──
+    tower_archer: {
+        role: 'Shoots the nearest monster in range', how: `Build it behind a wall: an arrow every ${TUNING.blight.archer.every} s at a monster within ${Math.round(TUNING.blight.archer.range / 16)} tiles. Its kills are yours, and it levels up from them: use it to choose an upgrade.`,
+        example: { items: [P('wall_stone', 0, 0), P('wall_stone', 0, 1), P('wall_stone', 0, 2), P('tower_archer', 1, 1), P('spike', -1, 1)], marks: [{ i: 3, t: 'shoots' }, { i: 4, t: 'bites' }] },
+    },
+    ballista: { role: 'A heavy bolt at long range', how: `A slow, hard-hitting bolt every ${TUNING.blight.ballista.every} s at a monster up to ${Math.round(TUNING.blight.ballista.range / 16)} tiles away. Put it behind a wall. It levels up as it kills: use it to choose an upgrade.` },
+    tesla: {
+        role: 'Zaps monsters, the bolt leaps on', how: `Needs power: a pole within ${SUPPLY} tiles on a grid with a generator. Its bolt leaps to ${TUNING.blight.tesla.chain - 1} more monsters nearby. It levels up as it kills: use it to choose an upgrade.`,
+        example: { items: [P('windturbine', 0, 0), P('pole', 2, 1), P('tesla', 3, 1)], marks: [{ i: 0, t: 'power' }, { i: 2, t: 'zaps' }] },
+    },
+    spike: { role: 'Hurts monsters that walk over it', how: 'Drag a line of spikes in front of your walls: every monster that crosses gets bitten. You walk over them safely. Spikes level up from their bites too: use one to choose an upgrade.' },
     wall_fort: { role: 'The toughest wall raiders face', how: `Iron-bound stone with ${TUNING.blight.hp.fortified} hit points (wood has ${TUNING.blight.hp.wood}). Joins up with other walls; mends at dawn.` },
 };

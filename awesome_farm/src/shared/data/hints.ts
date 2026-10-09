@@ -137,8 +137,10 @@ export const HINTS: Hint[] = [
     },
     {
         id: 'raid', icon: 'k_tower', color: PAL.berry, now: true,
-        when: (c) => (c.me.cnt?.raid ?? 0) > 0,
-        text: () => 'A raid from a Blight nest! Raiders break the walls in their way (stone holds longer than wood, and what they hurt mends at dawn). Wall your base in and fight them at the walls, or go and break the nest.',
+        when: (c) => (c.me.cnt?.raid ?? 0) > 0 && !(c.me.cnt?.['build:tower_archer'] ?? 0),
+        text: (c) => hasUnlock(c.me, 'towers')
+            ? 'A raid from a Blight nest! Build walls and an Archer Tower (Build, Defense). Raiders break what is in their way; it mends at dawn.'
+            : 'A raid from a Blight nest! Wall your base in (stone holds longer than wood), then learn Watchtowers (K, Combat) for Archer Towers. Or go and break the nest.',
     },
     {
         id: 'bedset', icon: 'k_heart', color: PAL.blossom,

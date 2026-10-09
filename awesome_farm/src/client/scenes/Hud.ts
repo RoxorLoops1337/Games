@@ -3,6 +3,9 @@
 // skills, build, machines, chests, market, menu). Menus never stop the shared world;
 // in solo they pause it.
 
+import * as labWorld from '../../shared/sim/lab';
+import type { LocalConnection } from '../net/connection';
+import { LabPanel } from '../ui/labpanel';
 import * as Phaser from 'phaser';
 import { TUNING, VIEW_W } from '../../shared/config';
 import { BUILDINGS } from '../../shared/data/buildings';
@@ -37,6 +40,7 @@ import { ACTIVITY, spOf } from '../../shared/data/creatures';
 import { CreatureScreen } from '../ui/screens/creatures';
 import { DenScreen } from '../ui/screens/den';
 import { DevToolsScreen } from '../ui/screens/devtools';
+import { TowerScreen } from '../ui/screens/tower';
 import { VaneScreen } from '../ui/screens/vane';
 import { forecast } from '../../shared/weather';
 import { DevUnlock } from '../ui/devunlock';
@@ -77,7 +81,7 @@ interface Float { key?: string; wx: number; wy: number; t: Phaser.GameObjects.Te
 const DOWN = { x: TOP_SLOT.x, y: TOP_SLOT.y, w: TOP_SLOT.w, h: 96, hFriends: 118 };
 
 /** The window each `open` event's building kind gets, opened with `{ id }`. */
-const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'device', altar: 'altar', den: 'den', waystone: 'waystone', dock: 'dock', hatchery: 'hatchery', vane: 'vane', chest: 'chest', bed: 'bed', fortune: 'wheel', mail: 'mail', table: 'table' };
+const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'device', altar: 'altar', den: 'den', waystone: 'waystone', dock: 'dock', hatchery: 'hatchery', vane: 'vane', chest: 'chest', bed: 'bed', fortune: 'wheel', mail: 'mail', table: 'table', tower: 'tower' };
 /** Windows a hotkey does not swap away from (they belong to the thing in front of you, or hold a moment that should not be skipped). */
 const STICKY = new Set(['machine', 'device', 'altar', 'den', 'chest', 'chestcfg', 'bed', 'dock', 'hatchery', 'boons', 'riftend', 'loot', 'wheel', 'story']);
 
@@ -85,7 +89,7 @@ const SCREENS: Record<string, new (ctx: ScreenCtx, arg?: unknown) => Screen> = {
     inventory: InventoryScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
     machine: MachineScreen, device: DeviceScreen, altar: AltarScreen, creatures: CreatureScreen, den: DenScreen, journal: JournalScreen, guide: GuideScreen, launcher: LauncherScreen, jobpost: JobPostScreen, crewpick: CrewPickScreen, waystone: WaystoneScreen, welcome: WelcomeScreen, chest: ChestScreen, chestcfg: ChestSetupScreen, market: MarketScreen, bed: BedScreen, menu: MenuScreen, map: MenuScreen,
     dock: DockScreen, boons: BoonScreen, riftend: RiftEndScreen, hatchery: HatcheryScreen, blueprints: BlueprintScreen,
-    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen,
+    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
 };
 
 export class HudScene extends Phaser.Scene {
@@ -104,6 +108,7 @@ export class HudScene extends Phaser.Scene {
     private botNow!: BottomStack;
     private chipsOn = false;
     private tracker!: QuestTracker;
+    private labPanel: LabPanel | null = null;
     private tip!: Tooltip;
     private toasts!: Toasts;
     private night!: NightLayer;
@@ -239,6 +244,9 @@ export class HudScene extends Phaser.Scene {
         });
         this.events.once('shutdown', () => { this.closeScreen(false); setTooltip(null); });
         this.touchCtl = this.touchMode ? new TouchControls(this, this.farm, () => !!this.screen) : null;
+        // the Defense Lab (`?lab=defense`): its panel, made after the touch controls so its buttons are over the stick's corner
+        const conn = this.farm.conn as Partial<LocalConnection>;
+        this.labPanel = conn.lab && conn.debugSim ? new LabPanel(this, (c) => this.farm.send(c), () => labWorld.readout(conn.debugSim!), this.touchMode) : null;
     }
 
     /** What the world scene tells the HUD (`hud:*` events: see the `listen` below for how they are unhooked). */
@@ -421,7 +429,8 @@ export class HudScene extends Phaser.Scene {
         this.compCard.update(cardBottom);
         this.party.update(this.compCard.bottom);
         const coach = slots.get('card');
-        this.tracker.update(this.party.bottom, !!coach && this.tutorial.active, this.touchMode ? 340 : 470);
+        if (this.labPanel) this.labPanel.update(dt, this.party.bottom, !!this.screen || this.photo);         // (the Defense Lab: its panel has the quests' place)
+        else this.tracker.update(this.party.bottom, !!coach && this.tutorial.active, this.touchMode ? 340 : 470);
         if ((this.hintScan -= dt) <= 0) { this.hintScan = 0.5; this.hintNear = { windup: f.windupNear(), titan: f.titanNear() }; }
         this.hints.update(dt, { me, prompt: f.prompt, ...this.hintNear, petNear: !!f.petBeside(), rain: this.rainSoon() }, !!this.screen || me.downed > 0 || this.photo);
         // The top slot (see ui/slots.ts): the coach card and the tip cards wait for a banner, a banner waits for the cards to fade
@@ -634,6 +643,7 @@ export class HudScene extends Phaser.Scene {
         slots.set('comp', this.compCard.rect);
         slots.set('party', this.party.rect);
         slots.set('tracker', this.tracker.rect);
+        slots.set('lab', this.labPanel?.rect ?? null);
         slots.set('dusk', this.dusk.rect);
         slots.set('boss', this.bossBar.visible ? { x: Math.round(W / 2 - BOSS.w / 2), y: Math.round(top.boss), w: BOSS.w, h: BOSS.h } : null);
         slots.set('rift', me.rift ? { x: Math.round(W / 2 - PLAQUE.w / 2), y: Math.round(top.plaque), w: PLAQUE.w, h: PLAQUE.h + (this.chipsOn ? CHIPS_H + 6 : 0) } : null);

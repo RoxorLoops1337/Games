@@ -186,7 +186,36 @@ export const TUNING = {
         raidBldDmg: 4,           // damage to a wall, doorway or tower in a raider's way for every heart of its bite…
         raidBldEvery: 1,         // … once a second (sim/defense.ts)
         /** Hit points of the defense pieces (a broken one is gone; damaged ones mend at dawn). */
-        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260 },
+        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260, archer: 80, ballista: 120, tesla: 100 },
+        towerLevel: 0.02,        // a tower hits 2% harder for every level its builder has
+        spikeDmg: 1.5,           // a Spike Trap's bite…
+        spikeEvery: 0.7,         // … at most this often for one monster
+        /** The towers: range (px), seconds between shots, damage (and the Tesla's chain and the hop between two it chains). */
+        archer: { range: 112, every: 1.2, dmg: 1.6 },
+        ballista: { range: 168, every: 3, dmg: 7 },
+        tesla: { range: 96, every: 1.5, dmg: 1.4, chain: 3, hop: 56 },
+    },
+    /** Tower levels and perks (data/towerperks.ts, sim/defense.ts). */
+    towers: {
+        maxLevel: 10,            // the highest level a tower reaches
+        xpFirst: 30,             // XP to reach level 2…
+        xpGrow: 0.5,             // … and each level after costs this much more of it (level 10 costs 5x the first)
+        eliteXp: 3,              // an elite kill gives this many times the XP
+        bossXp: 10,              // … a boss kill this many times more (towers never shoot bosses; a burn or a bite might finish one)
+        offers: 3,               // perks to choose from
+        weights: { common: 70, uncommon: 22, rare: 7, legendary: 1 },
+        legendaryFrom: 5,        // a legendary perk is offered only from this level on
+        range: 0.15, haste: 0.15, power: 0.2, sturdy: 0.3, rapid: 0.3,
+        pierceDmg: 0.7, multiDmg: 0.6, crit: 0.1, critMul: 2,
+        slow: 0.25, slowSecs: 2, veteran: 0.3, mend: 0.03,
+        bleedSecs: 3, bleedDps: 0.5,         // a bleed does this share of the bite every second
+        execute: 0.6, executeBelow: 0.3, splashDmg: 0.6, splashRadius: 30,
+        overEvery: 5, overMul: 3, auraTiles: 4, auraMend: 0.15, barbs: 2,
+        burnDps: 0.35, burnSecs: 3, freezeSecs: 1.5, stormMax: 8, stormDmg: 0.7,
+        pierceReach: 44,         // px past the target a piercing shot still finds a monster in line, and how close to the line it must be
+        pierceWidth: 12,
+        reach: 5,                // tiles a farmer may stand from a tower to pick its perk
+        spikeWide: 18,           // px round a Wide Spikes trap's centre where it bites
     },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */
     coop: {

@@ -26,6 +26,7 @@ import * as dread from './dread';
 import * as economy from './economy';
 import * as fishing from './fishing';
 import * as gather from './gather';
+import * as lab from './lab';
 import * as mines from './mines';
 import * as mobs from './mobs';
 import { findPet } from './petlib';
@@ -50,6 +51,7 @@ export const DEV_OPS = [
     'affection',
     'feast',
     'co',
+    'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks',
 ] as const;
 export type DevOp = typeof DEV_OPS[number];
 export type DevCmd = Extract<Cmd, { t: 'devdo' }>;
@@ -394,6 +396,8 @@ function bestFor (slot: GearSlot): ItemId | null {
 
 // ── the ops ─────────────────────────────────────────────────────────────────
 const OPS: Record<DevOp, (sim: Sim, p: PlayerS, c: DevCmd) => void> = {
+    labWave: (...a) => LAB_OPS.labWave(...a), labNight: (...a) => LAB_OPS.labNight(...a), labMend: (...a) => LAB_OPS.labMend(...a),
+    labClear: (...a) => LAB_OPS.labClear(...a), labSpeed: (...a) => LAB_OPS.labSpeed(...a), labReset: (...a) => LAB_OPS.labReset(...a), labXp: (...a) => LAB_OPS.labXp(...a), labPerks: (...a) => LAB_OPS.labPerks(...a),
     level: (sim, p, c) => setLevel(sim, p, p.level + int(c.n, 1, MAX_LEVEL, 1)),
     levelTo: (sim, p, c) => setLevel(sim, p, int(c.n, 1, MAX_LEVEL, p.level)),
     xp: (sim, p, c) => {
@@ -565,6 +569,56 @@ const OPS: Record<DevOp, (sim: Sim, p: PlayerS, c: DevCmd) => void> = {
         } else sim.deny(p, 'Pick one from the list');
     },
 };
+/** The Defense Lab's own ops (sim/lab.ts): only in a lab world, which only the solo page makes. */
+function labOp (fn: (sim: Sim, p: PlayerS, c: DevCmd) => void) {
+    return (sim: Sim, p: PlayerS, c: DevCmd) => {
+        if (sim.lab !== 'defense' || !lab.stateOf(sim)) { sim.deny(p, 'Only in the Defense Lab'); return; }
+        fn(sim, p, c);
+    };
+}
+const LAB_OPS = {
+    /** A wave: `id` a monster from LAB_MOBS or `mixed`, `n` how many, `lv` their level, `who` where from (LAB_DIRS). They march on the yard. */
+    labWave: labOp((sim, p, c) => {
+        const id = word(c.id), dir = word(c.who);
+        if (id !== 'mixed' && !(lab.LAB_MOBS as readonly string[]).includes(id)) { sim.deny(p, 'Pick one from the list'); return; }
+        if (!(lab.LAB_DIRS as readonly string[]).includes(dir)) { sim.deny(p, 'Pick a direction'); return; }
+        const n = int(c.n, 1, 60, 10);
+        if (mobCount(sim) + n > MOB_CAP) { sim.deny(p, 'Too many monsters about already'); return; }
+        if (!lab.wave(sim, p, id, n, int(c.lv, 1, MAX_LEVEL, 1), dir as lab.LabDir)) sim.deny(p, 'No room for them there');
+    }),
+    labNight: labOp((sim, p, c) => {
+        const on = typeof c.on === 'boolean' ? c.on : !lab.stateOf(sim)!.night;
+        lab.setNight(sim, on);
+        note(sim, p, on ? 'dusk' : 'dawn', on ? 'Night' : 'Day', on ? PAL.plum : PAL.gold);
+    }),
+    labMend: labOp((sim, p) => {
+        const back = lab.mendAll(sim);
+        note(sim, p, 'build', back ? `Mended, ${back} put back` : 'Every wall and tower mended', PAL.lime);
+    }),
+    labClear: labOp((sim, p) => {
+        const n = lab.clearAll(sim);
+        note(sim, p, 'enemyDie', n ? `${n} monster${n > 1 ? 's' : ''} gone` : 'No monsters', PAL.pebble);
+    }),
+    labSpeed: labOp((sim, p, c) => {
+        lab.setSpeed(sim, int(c.n, 1, 4, 1));
+        note(sim, p, 'dash', `Game speed x${sim.timeScale}`, PAL.foam);
+    }),
+    /** XP for every tower and trap: `n` of it (default 40), or `id: 'level'` for one whole level. */
+    labXp: labOp((sim, p, c) => {
+        const up = word(c.id) === 'level';
+        const n = lab.giveXp(sim, int(c.n, 1, 100000, 40), up);
+        note(sim, p, 'perk', up ? `${n} defenses up a level` : `XP for ${n} defenses`, PAL.gold);
+    }),
+    labPerks: labOp((sim, p) => {
+        const n = lab.resetPerks(sim);
+        note(sim, p, 'unbind', n ? `${n} towers lost their upgrades` : 'No upgrades to reset', PAL.pebble);
+    }),
+    labReset: labOp((sim, p) => {
+        lab.reset(sim, p);
+        note(sim, p, 'build', 'Arena reset', PAL.lime);
+    }),
+} satisfies Record<Extract<DevOp, `lab${string}`>, (sim: Sim, p: PlayerS, c: DevCmd) => void>;
+
 const dist = (sim: Sim, p: PlayerS, plot: Plot) => { const c = sim.world.plotCenter(plot); return Math.hypot(c.x - p.x, c.y - p.y); };
 
 /** Remove monsters (nobody gets loot or XP): the ones within `range` px, or all of them. Expedition monsters are left to their run. */
@@ -579,7 +633,7 @@ function clearMobs (sim: Sim, p: PlayerS, range: number) {
 }
 
 /** Ops that change the world around the farmer: not while they are on an expedition (it would wreck the run). */
-const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast']);
+const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast', 'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks']);
 
 /** Run one op for a farmer (a no-op unless they are allowed). Reached from Sim.command, after the command has passed the hostile-name check. */
 export function run (sim: Sim, p: PlayerS, c: DevCmd) {

@@ -294,6 +294,7 @@ export class NightLayer {
                 this.light(s.x, s.y, e.sp === 'aurorin' ? 44 : 24, 0.85, e.sp === 'cinderkit' || e.sp === 'pyrelion' ? 0xffa060 : 0xe8f0ff);
             }
         }
+        for (const l of f.shotLights()) { const s = f.worldToScreen(l.x, l.y); this.light(s.x, s.y, l.r, 0.95, l.c); }
         // the rift gates glow all night
         for (let i = 0; i < RIFT_ISLANDS; i++) {
             const c = f.world.riftCenter(i);

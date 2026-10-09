@@ -131,6 +131,10 @@ const FX = {
     raid:        { sfx: 'raid',    burst: { tex: 'spark', colors: [C.berry, C.plum], count: 14, speed: 70, life: 700, up: true, gravity: 30 }, shake: { px: 2, ms: 160 } },
     bldHit:      { sfx: 'thud',    burst: { tex: 'px', colors: [C.stone, C.wood, C.cream], count: 5, speed: 45, life: 320, gravity: 150 }, shake: { px: 0.8, ms: 60 } },
     bldBreak:    { sfx: 'crack',   burst: { tex: 'px', colors: [C.stone, C.wood, C.pebble, C.dirt], count: 22, speed: 85, life: 600, gravity: 170 }, shake: { px: 3.5, ms: 140 } },
+    towerShot:   { sfx: 'bowtwang', burst: { tex: 'px', colors: [C.wood, C.cream], count: 3, speed: 30, life: 260, gravity: 60 }, shake: { px: 0.4, ms: 40 } },
+    ballista:    { sfx: 'ballista', burst: { tex: 'px', colors: [C.wood, C.pebble, C.cream], count: 6, speed: 45, life: 320, gravity: 90 }, shake: { px: 1.2, ms: 80 } },
+    zap:         { sfx: 'zap',     burst: { tex: 'spark', colors: [C.foam, C.snow, C.plum], count: 8, speed: 70, life: 300, gravity: 10 }, shake: { px: 0.6, ms: 50 } },
+    spike:       { sfx: 'spike',   burst: { tex: 'px', colors: [C.pebble, C.berry], count: 4, speed: 35, life: 260, gravity: 120 }, shake: { px: 0.4, ms: 40 } },
     bedSet:      { sfx: 'chime',   burst: { tex: 'star', colors: [C.cream, C.blossom, C.gold], count: 10, speed: 40, life: 650, up: true, gravity: 20 }, shake: { px: 0.8, ms: 60 } },
     unbind:      { sfx: 'unbind',  burst: { tex: 'star', colors: [C.foam, C.cream, C.plum], count: 8, speed: 40, life: 600, up: true, gravity: -10 }, shake: { px: 0.8, ms: 60 } },
 } satisfies Record<Action, FxSpec>;

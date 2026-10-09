@@ -400,7 +400,8 @@ export class SimHost {
 
     /** Advance real time: fixed-step simulation, periodic broadcasts and saves. */
     update (dt: number) {
-        this.stepAcc = Math.min(this.stepAcc + dt, 0.25);
+        const k = this.sim.timeScale;                 // (1, but for the Defense Lab's game speed)
+        this.stepAcc = Math.min(this.stepAcc + dt * k, 0.25 * k);
         const step = 1 / NET.simHz;
         while (this.stepAcc >= step) { this.sim.step(step); this.stepAcc -= step; }
         this.flushTokens = Math.min(FLUSH_BURST, this.flushTokens + dt * FLUSH_PER_S);
@@ -494,7 +495,7 @@ export class SimHost {
                 ev: sim.events.filter((e) => {
                     if ('to' in e && e.to) return e.to === id;
                     // effects far from this player are never seen, so they are never sent
-                    if (e.e === 'fx' || e.e === 'swing' || e.e === 'float' || e.e === 'tele' || e.e === 'pod' || e.e === 'work' || e.e === 'emote' || e.e === 'hop') return Math.max(Math.abs(e.x - me.x), Math.abs(e.y - me.y)) <= R2;
+                    if (e.e === 'fx' || e.e === 'swing' || e.e === 'shot' || e.e === 'float' || e.e === 'tele' || e.e === 'pod' || e.e === 'work' || e.e === 'emote' || e.e === 'hop') return Math.max(Math.abs(e.x - me.x), Math.abs(e.y - me.y)) <= R2;
                     return true;
                 }),
             };

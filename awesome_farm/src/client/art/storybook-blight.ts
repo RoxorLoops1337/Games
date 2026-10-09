@@ -1,13 +1,14 @@
-// The Blight's art and the defenses against it, painted like everything else: the nest (a pulsing cluster of dark eggs, two frames so
-// it can throb) and the Bed. The blighted ground is in the tile sheet (storybook-ground.ts).
+// The Blight and the defenses against it, painted like everything else: the nest (a pulsing cluster of dark eggs, two frames so it
+// can throb), the towers (Archer Tower, Ballista, Tesla Coil), the Spike Trap floor and the Bed. The Fortified Wall is the house kit's
+// wall in iron-bound stone (storybook-house.ts), and the blighted ground is in the tile sheet (storybook-ground.ts).
 
-import { lit } from './storybook-build';
+import { IRON, lit, planks } from './storybook-build';
 import { outlineOf, paint, paintFrames, Pix, RAMP } from './paint';
 
 /** The nest's shell, dark → light, its veins and the glow in its cracks. */
 export const NEST = [0x2a1830, 0x46284e, 0x6a3a6e, 0x925294, 0xbe7ab8];
 const VEIN = 0xb02a50, GLOW = [0xe0405a, 0xff7a88, 0xffd0d6];
-const W = RAMP.wood;
+const W = RAMP.wood, ST = RAMP.stone, CU = [0x6a3a1c, 0x9a5a2a, 0xd08a4a, 0xf0b074];
 
 /** One egg of the cluster: a dark shell with veins and, when `hot`, a glowing crack. */
 function egg (p: Pix, cx: number, cy: number, rx: number, ry: number, hot: number, rnd: () => number) {
@@ -43,6 +44,68 @@ function nest (p: Pix, rnd: () => number, frame: number) {
     p.outline((c) => outlineOf(c, 0.6));
 }
 
+function archerTower (p: Pix, rnd: () => number) {
+    const S = p.w;
+    // the stone foot
+    lit(p, 3, 46, S - 6, 21, ST);
+    for (let y = 50; y < 66; y += 5) for (let x = 4 + ((y / 5) % 2) * 4; x < S - 4; x += 8) p.rect(x, y, 1, 4, ST[1]);
+    for (let y = 50; y < 66; y += 5) p.rect(4, y, S - 8, 1, ST[1]);
+    // the posts and their cross-braces
+    for (const x of [5, S - 9]) lit(p, x, 20, 4, 27, W);
+    p.line(9, 24, S - 9, 42, W[1]); p.line(S - 10, 24, 8, 42, W[1]);
+    // the platform and its rail with an arrow slit
+    planks(p, 1, 16, S - 2, 6, false, W, 3);
+    lit(p, 2, 9, S - 4, 8, W);
+    for (let x = 3; x < S - 3; x += 5) p.rect(x, 7, 3, 3, W[3]);
+    p.rect(S / 2 - 1, 11, 2, 5, 0x2a1d2c);
+    // a little thatched cap and a red pennant
+    p.poly([[0, 8], [S, 8], [S / 2, -1]], (u, v) => (v > 0.7 ? RAMP.straw[0] : u < 0.45 ? RAMP.straw[3] : RAMP.straw[2]));
+    p.rect(S / 2, 0, 1, 3, W[0]);
+    p.poly([[S / 2 + 1, 0], [S / 2 + 7, 2], [S / 2 + 1, 4]], RAMP.red[2]);
+    void rnd;
+    p.outline();
+}
+
+function ballista (p: Pix) {
+    const S = p.w;
+    // a trestle
+    lit(p, 6, 24, 4, 11, W); lit(p, S - 10, 24, 4, 11, W);
+    planks(p, 4, 20, S - 8, 6, true, W, 4);
+    // the bow: two iron limbs swept back, the string, the stock and a bolt
+    p.blade(S / 2, 16, 7, 12, 1, 18, 1.6, IRON);
+    p.blade(S / 2, 16, S - 7, 12, S - 1, 18, 1.6, IRON);
+    p.line(1, 18, S / 2, 21, RAMP.cream[1]); p.line(S - 1, 18, S / 2, 21, RAMP.cream[1]);
+    lit(p, S / 2 - 2, 6, 4, 16, W);
+    p.rect(S / 2 - 1, 0, 2, 16, RAMP.wood[4]);
+    p.poly([[S / 2 - 3, 4], [S / 2 + 3, 4], [S / 2, -1]], IRON[3]);
+    p.rect(S / 2 - 2, 14, 4, 2, IRON[2]);
+    p.outline();
+}
+
+function tesla (p: Pix, rnd: () => number) {
+    const S = p.w, H = p.h;
+    lit(p, 2, H - 10, S - 4, 9, IRON);
+    p.rect(4, H - 8, S - 8, 1, IRON[3]);
+    // the coil: copper turns stacked up the column
+    lit(p, S / 2 - 3, 14, 6, H - 24, IRON);
+    for (let y = 16; y < H - 12; y += 3) p.ellipse(S / 2, y, 6, 1.6, CU);
+    // the crown: a sphere that crackles
+    p.ellipse(S / 2, 9, 7, 7, [0x4a3a7a, 0x6a52a6, 0x9fd8f0, 0xe8fbff]);
+    for (let k = 0; k < 4; k++) { const a = rnd() * Math.PI * 2; p.line(S / 2 + Math.cos(a) * 4, 9 + Math.sin(a) * 4, S / 2 + Math.cos(a) * 9, 9 + Math.sin(a) * 9, 0xcdf4ee); }
+    p.outline();
+}
+
+function spike (p: Pix, rnd: () => number) {
+    const S = p.w;
+    p.rect(1, 1, S - 2, S - 2, IRON[1]);
+    p.rect(1, 1, S - 2, 1, IRON[2]); p.rect(1, S - 2, S - 2, 1, IRON[0]);
+    for (let y = 5; y < S - 2; y += 8) for (let x = 5 + ((y >> 3) & 1) * 4; x < S - 3; x += 8) {
+        p.poly([[x - 3, y + 3], [x + 3, y + 3], [x, y - 4]], (u) => (u < 0.5 ? IRON[3] : IRON[2]));
+        p.set(x, y - 3, 0xe8ebf6);
+        if (rnd() < 0.3) p.set(x + 1, y + 2, 0x8a2a2a);
+    }
+}
+
 function bed (p: Pix) {
     const S = p.w, H = p.h;
     // the frame, a headboard at the top
@@ -60,5 +123,11 @@ function bed (p: Pix) {
 
 export function registerStorybookBlight (scene: Phaser.Scene) {
     paintFrames(scene, 'nest', 22, 20, 2, (p, rnd, f) => nest(p, rnd, f), 13);
+    paint(scene, 'tower_archer', 16, 34, archerTower, 3);
+    paint(scene, 'ballista', 16, 18, (p) => ballista(p), 1);
+    paint(scene, 'tesla', 12, 30, tesla, 7);
+    paint(scene, 'spike', 16, 16, spike, 5);
     paint(scene, 'sleepbed', 16, 32, (p) => bed(p), 1);
 }
+
+export const BLIGHT_TEXTURES = ['nest', 'tower_archer', 'ballista', 'tesla', 'spike', 'sleepbed'];

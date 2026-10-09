@@ -111,6 +111,7 @@ export function updateProjs (sim: Sim, dt: number) {
         e.x += e.vx * dt;
         e.y += e.vy * dt;
         const r = PROJ[e.kind].r;
+        if (e.tw) { if (e.life <= 0) sim.remove(e.id); else sim.touch(e); continue; }       // (a tower's shot: it flies over everything and hurts nobody)
         let dead = e.life <= 0 || sim.world.solidAt(e.x, e.y - 3);
         if (!dead) {
             for (const p of players) {

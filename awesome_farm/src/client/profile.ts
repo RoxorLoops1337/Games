@@ -1,9 +1,11 @@
 // This browser's player identity and last-used server, persisted locally.
+import { LAB } from './lab';
 // Never rename the storage keys: the id is how a server recognises a returning farmer.
 
 // ?profile=2 in the URL gives this tab a separate identity (and solo world), so one
 // browser can play as two farmers — handy for testing a server alone.
-const SLOT = new URLSearchParams(location.search).get('profile')?.replace(/[^\w-]/g, '').slice(0, 12) ?? '';
+// The Defense Lab (`?lab=defense`, client/lab.ts) is a slot of its own, so it never reads or writes the player's real profile or solo world.
+const SLOT = LAB ? 'lab' : new URLSearchParams(location.search).get('profile')?.replace(/[^\w-]/g, '').slice(0, 12) ?? '';
 const KEY = 'awesome_farm_profile_v1' + (SLOT ? ':' + SLOT : '');
 export const SOLO_KEY = 'awesome_farm_solo_v1' + (SLOT ? ':' + SLOT : '');
 export const BLUEPRINT_KEY = 'awesome_farm_blueprints_v1' + (SLOT ? ':' + SLOT : '');
