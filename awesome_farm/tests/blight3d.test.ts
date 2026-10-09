@@ -1,6 +1,6 @@
 // The Blight in the 3D view (src/client3d) draws what the 2D view draws for it (client/world/blight.ts, the blight tiles): a nest
 // isle's ground is the bruised blight soil with smouldering cracks, the nest grows, darkens and throbs with its level and smoulders
-// in the dark; a raider wades through the sea sunk to the waist, leaving foam, with the Blight's red glow.
+// in the dark; walls, doorways and fortified walls crack, chip and crumble as raiders hurt them and break in a puff of rubble; a raider wades through the sea sunk to the waist, leaving foam, with the Blight's red glow.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Color, type Mesh, Scene } from 'three';
@@ -8,6 +8,12 @@ import { PLOT } from '../src/shared/config';
 import { Rng } from '../src/shared/rng';
 import type { Ent, MobE, NodeE, Plot } from '../src/shared/sim/types';
 import { MOBS } from '../src/shared/data/mobs';
+import { BUILDINGS } from '../src/shared/data/buildings';
+import type { BuildE } from '../src/shared/sim/types';
+import { buildingModel } from '../src/client3d/models/buildings';
+import { DAMAGE_KINDS, damageStage } from '../src/client3d/models/b-damage';
+import { FX } from '../src/client3d/fx';
+import { Impacts, RINGS } from '../src/client3d/impacts';
 import { Entities } from '../src/client3d/entities';
 import { wadeDepth, Wading } from '../src/client3d/wade';
 import { generatePlots } from '../src/shared/sim/worldgen';
@@ -133,4 +139,40 @@ test('a raider carries the Blight\'s red glow (the 2D light map\'s), which goes 
     assert.ok(r && r.color === 0xff8a96 && r.day, 'red, and faintly by day');
     assert.equal(glowOf(mob(2, 'slime', 3, 4) as Ent, 3, 4), null, 'an ordinary slime is dark');
     assert.equal(glowOf(mob(3, 'wisp', 3, 4, [0, 0]) as Ent, 3, 4)?.color, 0xb8f0c0, 'a wisp keeps its own light');
+});
+
+test('a hurt wall, doorway or fortified wall shows cracks, chips and rubble by its hit points, and is whole again at dawn', () => {
+    assert.deepEqual(DAMAGE_KINDS.sort(), ['doorway', 'wall_brick', 'wall_fort', 'wall_stone', 'wall_window', 'wall_wood'].sort());
+    assert.equal(damageStage(undefined, 100), 0);
+    assert.deepEqual([100, 90, 60, 20, 0].map((hp) => damageStage(hp, 100)), [0, 1, 2, 3, 3]);
+    const tris = (o: { traverse: (f: (m: unknown) => void) => void }) => { let n = 0; o.traverse((m) => { const g = (m as Mesh).geometry; if ((m as Mesh).isMesh && g) n += g.attributes.position.count / 3; }); return n; };
+    for (const kind of DAMAGE_KINDS) {
+        const max = (BUILDINGS as Record<string, { hp?: number }>)[kind].hp!;
+        const e = (hp?: number) => ({ id: 5, k: 'bld', kind, tx: 0, ty: 0, rot: 0, hp }) as BuildE;
+        const m = buildingModel(kind, { rot: 0, seed: 5, mask: 10 });
+        m.apply!(e());
+        const whole = tris(m.obj);
+        const dmg = () => m.obj.children.find((c) => c.name === 'damage');
+        assert.equal(dmg(), undefined, `${kind}: whole, no marks`);
+        m.apply!(e(max * 0.9));
+        const t1 = tris(m.obj) - whole;
+        m.apply!(e(max * 0.1));
+        const t3 = tris(m.obj) - whole;
+        assert.ok(t1 > 0 && t3 > t1 * 1.5, `${kind}: more marks as it crumbles (${t1} -> ${t3})`);
+        const other = buildingModel(kind, { rot: 0, seed: 7, mask: 10 });
+        other.apply!(e(max * 0.1));
+        const a = dmg() as Mesh | undefined, b = other.obj.children.find((c) => c.name === 'damage');
+        assert.ok(a && b, `${kind}: marks on both`);
+        m.apply!(e());
+        assert.equal(dmg(), undefined, `${kind}: mended at dawn`);
+    }
+});
+
+test('a wall breaking is mapped in the 3D fx table: a puff of rubble and dust, a ring and a flash', () => {
+    for (const k of ['bldHit', 'bldBreak']) assert.ok(FX[k] && RINGS[k], k);
+    assert.ok(FX.bldBreak!.n >= 20 && FX.bldBreak!.colors.length >= 3);
+    const im = new Impacts(new Scene());
+    im.fx('bldBreak', 3, 4);
+    const a = im.alive;
+    assert.ok(a.rings === 1 && a.flashes === 1 && a.dust >= 6, JSON.stringify(a));
 });

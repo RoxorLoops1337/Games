@@ -43,7 +43,10 @@ export const FX: Record<string, FxDef | undefined> = {
     dash: { colors: [C.cream, C.sand], n: 8, speed: 1.6, up: 1.4, size: 0.7, sfx: 'dash', shake: 0.03 },
     slam: { colors: [C.dirt, C.stone], n: 24, speed: 4, up: 3, size: 1.2, sfx: 'fell', shake: 0.2 },
     roar: { colors: [C.berry, C.plum], n: 12, speed: 3, up: 2, size: 1, sfx: 'fell', shake: 0.12 },
-    unlock: { colors: [C.gold, C.cream], n: 14, speed: 2.4, up: 3.4, size: 0.8, sfx: 'level', shake: 0.03 }
+    unlock: { colors: [C.gold, C.cream], n: 14, speed: 2.4, up: 3.4, size: 0.8, sfx: 'level', shake: 0.03 },
+    // the Blight's raids on the defenses (sim/defense.ts): a chip off a wall, and a wall breaking into a puff of rubble
+    bldHit: { colors: [C.stone, C.wood, C.cream], n: 6, speed: 1.8, up: 2.2, size: 0.7, sfx: 'rock', shake: 0.03 },
+    bldBreak: { colors: [C.stone, C.wood, C.pebble, C.dirt], n: 26, speed: 3, up: 4.2, size: 1.25, sfx: 'fell', shake: 0.12 }
 };
 export const N = 300;
 export class Particles {

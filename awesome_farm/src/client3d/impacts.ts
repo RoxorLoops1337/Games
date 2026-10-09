@@ -92,6 +92,8 @@ export class Impacts {
         push(this.ringL, RN, { x, y: 0.07, z, t: 0, dur: d.dur, a: d.r0, b: d.r1, color: d.color });
         if (d.flash) push(this.flashL, FN, { x, y: 0.75, z: z + 0.1, t: 0, dur: 0.13, a: d.flash * 0.4, b: d.flash * 0.7, color: d.color });
         if (name === 'dash' || name === 'slam') for (let i = 0; i < 4; i++) this.puff(x + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.5, 1.2);
+        // a wall broken by raiders goes up in a cloud of dust and rubble
+        if (name === 'bldBreak') for (let i = 0; i < 7; i++) this.puff(x + (Math.random() - 0.5) * 1.1, z + (Math.random() - 0.5) * 0.7, 1.7, 0xc8c0b0);
     }
 
     /** A farmer this frame: while it runs, a puff of dust at its heels every few strides. */
@@ -106,8 +108,8 @@ export class Impacts {
     /** Forget a farmer who left. */
     drop (id: string) { this.steps.delete(id); }
 
-    private puff (x: number, z: number, k: number) {
-        push(this.dustL, DN, { x, y: 0.12, z, t: 0, dur: 0.5 + Math.random() * 0.15, a: 0.18 * k, b: 0.5 * k, color: 0xe8dcc0 });
+    private puff (x: number, z: number, k: number, color = 0xe8dcc0) {
+        push(this.dustL, DN, { x, y: 0.12, z, t: 0, dur: 0.5 + Math.random() * 0.15 + (k > 1.5 ? 0.35 : 0), a: 0.18 * k, b: 0.5 * k, color });
     }
 
     update (dt: number) {
