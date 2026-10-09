@@ -8,7 +8,9 @@ import { W, WY, biomeIdx, radiusSafe } from './env_util.js';
 import { BIOME_MOODS, parseMood, newMood, copyMood, mixMood, toKit, seasonWash } from './env_mood.js';
 import { createWater } from './env_water.js';
 import { buildIsland } from './env_island.js';
-import { buildHubFloor } from './env_hub.js';
+import { buildHubFloor, hubBlocked } from './env_hub.js';
+import { buildDecor } from './env_decor.js';
+import { buildWalk } from './env_walk.js';
 
 const easeBack = (u) => { const c1 = 1.70158, c3 = c1 + 1, x = Math.min(1, Math.max(0, u)) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
 
@@ -28,7 +30,12 @@ export function init(V) {
     const g = geoOf(k), bi = biomeIdx(k), B = k === 0 ? BIOMES[0] : BIOMES[bi], rec = { k, g, bi, B, grp: new THREE.Group(), isl: null, born: null, ready: false };
     rec.grp.name = 'land' + k; root.add(rec.grp); recs.set(k, rec);
     const isl = buildIsland(g, B, bi); rec.isl = isl; rec.grp.add(isl.grp);
-    if (k === 0) rec.grp.add(buildHubFloor());
+    if (k === 0) { rec.grp.add(buildHubFloor()); isl.grp.add(buildDecor(g, B, 0, HUBDECOR, { hub: true, blocked: hubBlocked, keep: HUB_KEEP.map((o) => ({ x: o.x, y: o.y, r: o.r * 0.6 })) })); }
+    else {
+      const keep = [landPadSpot(g), g.den, unlockSpot(k + 1)].concat(landPlateDefs(k, g)).map((o) => ({ x: o.x, y: o.y, r: 95 }));
+      for (let i = 0; i < g.path.length; i += 1) keep.push({ x: g.path[i].x, y: g.path[i].y, r: 105 });
+      isl.grp.add(buildDecor(g, B, bi, decorOf(g), { keep })); rec.walk = buildWalk(g); rec.grp.add(rec.walk);
+    }
     rec.ready = true; return rec;
   }
   function disposeLand(k) {

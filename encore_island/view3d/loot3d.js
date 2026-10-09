@@ -20,27 +20,29 @@ const _cc = new Map();
 function rgb(c) { let v = _cc.get(c); if (!v) { const k = new THREE.Color(); try { k.set(c); } catch (e) { k.set(0xffffff); } _cc.set(c, v = [k.r, k.g, k.b]); } return v; }
 
 // ------------------------------------------------------------------------------------------------ material: vertex colours + per-vertex glow / untinted flag
-// aFx.x = glow (adds vertex colour as emissive, blooms), aFx.y = 1 ignores the instance tint (white highlights). aIG = per-instance glow (uranium bars). uIG = per-material glow.
+// aFx.x = glow (adds vertex colour as emissive, blooms), aFx.y = 1 ignores the instance tint (white highlights), 2 = ink hull (unlit), aFx.z = 1 no hull for this part. aIG = per-instance glow (uranium bars). uIG = per-material glow.
 const MS = kit.SOLID, MF = kit.FLAT, MG = kit.lit(0xffffff, { vc: true, rough: 0.311 }), MFG = kit.lit(0xffffff, { vc: true, rough: 0.312, flat: true }), MU = kit.lit(0xffffff, { vc: true, rough: 0.313 }), MUG = kit.lit(0xffffff, { vc: true, rough: 0.314 });
-const BK = new Map([[MS, [0, 0, 0]], [MF, [0, 0, 1]], [MG, [1, 0, 0]], [MFG, [1, 0, 1]], [MU, [0, 1, 0]], [MUG, [0.7, 1, 0]]]);
-const Gl = (c) => ({ m: MG, c }), FG = (c) => ({ m: MFG, c }), Fl = (c) => ({ m: MF, c }), Un = (c) => ({ m: MU, c }), UnG = (c) => ({ m: MUG, c });
+const MN = kit.lit(0xffffff, { vc: true, rough: 0.315 }), MNU = kit.lit(0xffffff, { vc: true, rough: 0.316 });
+const BK = new Map([[MS, [0, 0, 0, 0]], [MF, [0, 0, 1, 0]], [MG, [1, 0, 0, 0]], [MFG, [1, 0, 1, 0]], [MU, [0, 1, 0, 0]], [MUG, [0.7, 1, 0, 0]], [MN, [0, 0, 0, 1]], [MNU, [0, 1, 0, 1]]]);
+const Nh = (c) => ({ m: MN, c }), NhU = (c) => ({ m: MNU, c }), Gl = (c) => ({ m: MG, c }), FG = (c) => ({ m: MFG, c }), Fl = (c) => ({ m: MF, c }), Un = (c) => ({ m: MU, c }), UnG = (c) => ({ m: MUG, c });
 function mkMat(color = 0xffffff, ig = 0) {
   const m = new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.32, metalness: 0.2 });
   const uIG = { value: ig };
   m.onBeforeCompile = function (sh, r) {
     const base = THREE.MeshStandardMaterial.prototype.onBeforeCompile; if (base && base !== THREE.Material.prototype.onBeforeCompile) base.call(this, sh, r); // keep the kit's cloud / rim patch
     sh.uniforms.uLB = kit.LOOK.beat; sh.uniforms.uIG = uIG;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aFx; attribute float aIG; uniform float uIG; varying float vGl;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aFx; attribute float aIG; uniform float uIG; varying float vGl, vHull;')
       .replace('#include <color_vertex>', `vColor = vec3(1.0);
         #ifdef USE_COLOR
           vColor *= color;
         #endif
         #ifdef USE_INSTANCING_COLOR
-          vColor.xyz *= mix(instanceColor.xyz, vec3(1.0), aFx.y);
+          vColor.xyz *= mix(instanceColor.xyz, vec3(1.0), min(aFx.y, 1.0));
         #endif
-        vGl = aFx.x + aIG + uIG;`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vGl; uniform float uLB;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor * (0.1 + vGl * (1.5 + 0.6 * uLB));');
+        vGl = aFx.x + aIG + uIG; vHull = step(1.5, aFx.y);`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vGl, vHull; uniform float uLB;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor * (0.1 + vGl * (0.8 + 0.4 * uLB));')
+      .replace('#include <opaque_fragment>', 'if (vHull > 0.5) outgoingLight = vColor; // inked outline: flat, unlit, no rim light\n#include <opaque_fragment>');
   };
   m.customProgramCacheKey = () => 'loot1';
   return m;
@@ -52,8 +54,8 @@ function bake(b, o = {}) {
   const grp = b.build({ ao: 0 }), gs = [];
   for (const m of grp.children) {
     const bk = BK.get(m.material) || BK.get(MS), g = m.geometry; if (bk[2]) g.computeVertexNormals();
-    const n = g.attributes.position.count, fx = new Float32Array(n * 2); for (let i = 0; i < n; i++) { fx[i * 2] = bk[0]; fx[i * 2 + 1] = bk[1]; }
-    g.setAttribute('aFx', new THREE.BufferAttribute(fx, 2)); gs.push(g);
+    const n = g.attributes.position.count, fx = new Float32Array(n * 3); for (let i = 0; i < n; i++) { fx[i * 3] = bk[0]; fx[i * 3 + 1] = bk[1]; fx[i * 3 + 2] = bk[3]; }
+    g.setAttribute('aFx', new THREE.BufferAttribute(fx, 3)); gs.push(g);
   }
   let geo = gs.length > 1 ? mergeGeometries(gs, false) : gs[0]; gs.forEach((g) => { if (g !== geo) g.dispose(); });
   const ao = o.ao ?? 0.2, P = geo.attributes.position, Cc = geo.attributes.color, FX = geo.attributes.aFx;
@@ -68,15 +70,15 @@ function hullOf(g, w, minA = 0.0013) {
   for (let i = 0; i < n; i++) { const k = Math.round(P.getX(i) * 400) + '_' + Math.round(P.getY(i) * 400) + '_' + Math.round(P.getZ(i) * 400); keys[i] = k; let a = acc.get(k); if (!a) acc.set(k, (a = [0, 0, 0])); a[0] += N.getX(i); a[1] += N.getY(i); a[2] += N.getZ(i); }
   for (let t = 0; t < n; t += 3) {
     const ux = P.getX(t + 1) - P.getX(t), uy = P.getY(t + 1) - P.getY(t), uz = P.getZ(t + 1) - P.getZ(t), vx = P.getX(t + 2) - P.getX(t), vy = P.getY(t + 2) - P.getY(t), vz = P.getZ(t + 2) - P.getZ(t);
-    if (Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) * 0.5 >= minA) keep.push(t);
+    if (Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) * 0.5 >= minA && !(g.attributes.aFx.getZ(t) > 0.5)) keep.push(t);
   }
-  const m = keep.length * 3, pos = new Float32Array(m * 3), nor = new Float32Array(m * 3), col = new Float32Array(m * 3), fx = new Float32Array(m * 2);
+  const m = keep.length * 3, pos = new Float32Array(m * 3), nor = new Float32Array(m * 3), col = new Float32Array(m * 3), fx = new Float32Array(m * 3); for (let i = 0; i < m; i++) fx[i * 3 + 1] = 2;
   keep.forEach((t, q) => { for (let j = 0; j < 3; j++) {
     const s = t + (j === 0 ? 0 : j === 1 ? 2 : 1), a = acc.get(keys[s]), l = Math.hypot(a[0], a[1], a[2]) || 1, o = (q * 3 + j) * 3;
     pos[o] = P.getX(s) + a[0] / l * w; pos[o + 1] = P.getY(s) + a[1] / l * w; pos[o + 2] = P.getZ(s) + a[2] / l * w;
     nor[o] = -N.getX(s); nor[o + 1] = -N.getY(s); nor[o + 2] = -N.getZ(s); col[o] = INKC.r; col[o + 1] = INKC.g; col[o + 2] = INKC.b;
   } });
-  const h = new THREE.BufferGeometry(); h.setAttribute('position', new THREE.BufferAttribute(pos, 3)); h.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); h.setAttribute('color', new THREE.BufferAttribute(col, 3)); h.setAttribute('aFx', new THREE.BufferAttribute(fx, 2)); return h;
+  const h = new THREE.BufferGeometry(); h.setAttribute('position', new THREE.BufferAttribute(pos, 3)); h.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); h.setAttribute('color', new THREE.BufferAttribute(col, 3)); h.setAttribute('aFx', new THREE.BufferAttribute(fx, 3)); return h;
 }
 
 // ------------------------------------------------------------------------------------------------ model library
@@ -106,11 +108,11 @@ const HELM = [
     b.lathe(M, domeProf(R, 0.4, 0.1), 0, 0.07, 0, n); band(b, Mh, R + 0.05, 0.04, 0.14, n);
     rb(b, DKV, 0, 0.3, surfZ(R, 0.4, 0.07, 0.1, 0.3) - 0.005, 0.46, 0.1, 0.12, 0.5); rivets(b, [-0.9, -0.45, 0, 0.45, 0.9], R + 0.05, 0.12); b.ball(Mh, 0, 0.6, 0, 0.055, 1, 1, 1);
   },
-  (b, M) => { // 1 bronze: greek helm with face opening, cheek guards and a red horsehair crest
+  (b, M) => { // 1 bronze: greek helm with eye slots, nose guard, cheek plates and a red horsehair crest
     const R = 0.4, n = sg(), Mh = lite(M, 0.2);
-    b.lathe(M, domeProf(R, 0.4, 0.14), 0, 0.06, 0, n); band(b, Mh, R + 0.025, 0.36, 0.08, n);
-    rb(b, DKV, 0, 0.17, 0.33, 0.5, 0.3, 0.14, 0.2); rb(b, Mh, 0, 0.17, 0.4, 0.09, 0.32, 0.08, 0.4);
-    for (const sd of [-1, 1]) rb(b, M, sd * 0.35, 0.16, 0.1, 0.1, 0.3, 0.3, 0.3);
+    b.lathe(M, domeProf(R, 0.4, 0.2), 0, 0.06, 0, n); band(b, Mh, R + 0.025, 0.4, 0.08, n);
+    for (const sd of [-1, 1]) { rb(b, DKV, sd * 0.16, 0.25, 0.34, 0.17, 0.11, 0.1, 0.5); rb(b, M, sd * 0.33, 0.14, 0.14, 0.09, 0.3, 0.3, 0.4, 0, 0, sd * 0.1); }
+    rb(b, Mh, 0, 0.2, 0.4, 0.1, 0.4, 0.08, 0.4); rivets(b, [-0.5, 0.5], R + 0.03, 0.43);
     b.shape(shapeGeo('crest', crestShape, 0.1, 0.018), RED, 0, 0.52, 0.0, 1, 0, PI / 2, 0);
   },
   (b, M) => { // 2 silver: tall great helm, ridge, dark visor slit and a blue plume
@@ -124,8 +126,8 @@ const HELM = [
     const R = 0.4, n = sg(), Mh = lite(M, 0.22);
     b.lathe(M, domeProf(R, 0.4, 0.1), 0, 0.07, 0, n); band(b, Mh, R + 0.05, 0.04, 0.14, n);
     rb(b, DKV, 0, 0.28, surfZ(R, 0.4, 0.07, 0.1, 0.28) - 0.005, 0.44, 0.09, 0.12, 0.5);
-    b.part(kit.GB.oct(), Gl(0xff3d6a), 0, 0.46, surfZ(R, 0.4, 0.07, 0.1, 0.46) + 0.01, 0.075, 0.12, 0.06);
-    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) { const ang = 0.42 + i * 0.3; wingFeather(b, i % 2 ? 0xffffff : 0xfff1f8, sd, 0.36, 0.3, ang, 0.2 + 0.1 * (i < 3 ? 1 : 0.4) + 0.05 * (3 - i), 0.065); }
+    b.part(kit.GB.oct(), Gl(0xd62a55), 0, 0.46, surfZ(R, 0.4, 0.07, 0.1, 0.46) + 0.01, 0.075, 0.12, 0.06);
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) { const ang = 0.12 + i * 0.4, L = 0.36 - i * 0.03; wingFeather(b, i % 2 ? 0xffffff : 0xffe4f0, sd, 0.3, 0.3, ang, L, 0.1); }
   },
   (b, M) => { // 4 platinum: viking helm with horns
     const R = 0.38, n = sg(), Mh = lite(M, 0.15);
@@ -134,32 +136,30 @@ const HELM = [
     rivets(b, [-1.0, -0.55, 0.55, 1.0], R + 0.05, 0.2); for (const sd of [-1, 1]) horn(b, 0xf6ebcf, sd, 0.34, 0.26);
   },
   (b, M) => { // 5 mythril: sleek crystal elven helm with a glowing visor
-    const R = 0.38, n = sg();
-    b.lathe(M, domeProf(R, 0.5, 0.14), 0, 0.05, 0, n); rb(b, Gl(0xb8fff6), 0, 0.3, surfZ(R, 0.5, 0.05, 0.14, 0.3) + 0.01, 0.46, 0.065, 0.08, 0.5);
-    for (const sd of [-1, 1]) { b.conec(0x9af0e8, sd * 0.45, 0.32, -0.06, 0.07, 0.34, 5, 0, 0, -sd * 1.15); b.conec(0x9af0e8, sd * 0.4, 0.2, -0.1, 0.055, 0.26, 5, 0, 0, -sd * 1.3); }
-    for (const [x, h, w, tl] of [[-0.16, 0.34, 0.075, 0.25], [0.16, 0.34, 0.075, -0.25], [0, 0.52, 0.1, 0]]) b.part(kit.GB.oct(), FG(0x7af7ee), x, 0.62 + h * 0.4 - Math.abs(x) * 0.3, 0, w, h * 0.55, w, 0, 0, tl);
+    const R = 0.37, n = sg();
+    b.lathe(M, domeProf(R, 0.55, 0.12), 0, 0.05, 0, n); rb(b, 0x12304a, 0, 0.37, surfZ(R, 0.55, 0.05, 0.12, 0.37) - 0.005, 0.44, 0.12, 0.1, 0.5); rb(b, Gl(0x4fe8dc), 0, 0.375, surfZ(R, 0.55, 0.05, 0.12, 0.37) + 0.035, 0.38, 0.05, 0.04, 0.4);
+    for (const sd of [-1, 1]) { b.conec(0x7adfd6, sd * 0.45, 0.34, -0.06, 0.075, 0.38, 5, 0, 0, -sd * 1.15); b.conec(0x7adfd6, sd * 0.4, 0.2, -0.1, 0.06, 0.28, 5, 0, 0, -sd * 1.3); }
+    for (const [x, h, w, tl] of [[-0.17, 0.36, 0.08, 0.28], [0.17, 0.36, 0.08, -0.28], [0, 0.56, 0.11, 0]]) b.part(kit.GB.oct(), FG(0x2fd6c8), x, 0.64 + h * 0.4 - Math.abs(x) * 0.3, 0, w, h * 0.55, w, 0, 0, tl);
   },
   (b, M) => { // 6 cobalt: kabuto with a flared neck guard and a golden crest
     const R = 0.37, n = sg(), Md = dk(M, 0.3);
-    b.lathe(Md, [[0.42, 0], [0.6, 0.05], [0.66, 0.1], [0.5, 0.15], [0.4, 0.17]], 0, 0.03, 0, n);
-    b.lathe(M, domeProf(R, 0.45, 0.1), 0, 0.2, 0, n); rb(b, 0x12184a, 0, 0.38, surfZ(R, 0.45, 0.2, 0.1, 0.38) - 0.005, 0.42, 0.09, 0.12, 0.5);
-    for (const sd of [-1, 1]) { b.cylc(GOLD, sd * 0.12, 0.76, 0.02, 0.05, 0.3, 6, 0, 0, -sd * 0.35, 0.5); b.cylc(GOLD, sd * 0.25, 0.94, 0.02, 0.04, 0.26, 6, 0, 0, -sd * 0.95, 0.4); }
-    b.ball(RED, 0, 0.68, 0.0, 0.055, 1, 1, 1);
+    b.lathe(Md, [[0.5, 0.0], [0.53, 0.04], [0.47, 0.14], [0.37, 0.24]], 0, 0.02, 0, n);
+    b.lathe(M, domeProf(R, 0.45, 0.1), 0, 0.2, 0, n); rb(b, 0x12184a, 0, 0.36, surfZ(R, 0.45, 0.2, 0.1, 0.36) - 0.005, 0.42, 0.09, 0.12, 0.5);
+    for (const sd of [-1, 1]) { b.cylc(GOLD, sd * 0.13, 0.78, 0.02, 0.06, 0.32, 6, 0, 0, -sd * 0.35, 0.5); b.cylc(GOLD, sd * 0.27, 0.97, 0.02, 0.05, 0.28, 6, 0, 0, -sd * 0.95, 0.4); }
+    b.ball(RED, 0, 0.68, 0.0, 0.06, 1, 1, 1);
   },
   (b, M) => { // 7 uranium: toxic spiked helm with glowing eyes and slime drips
     const R = 0.4, n = sg(), Mu = dk(M, 0.45);
     b.lathe(Mu, domeProf(R, 0.38, 0.12), 0, 0.07, 0, n);
-    for (let i = 0; i < 5; i++) { const a = -0.55 + i * 0.275, x = Math.sin(a) * 0.3; b.conec(0x8fbf30, x, 0.52 + (i === 2 ? 0.1 : 0) - Math.abs(a) * 0.04 + 0.12, Math.cos(a) * 0.05, 0.07, 0.28 + (i === 2 ? 0.1 : 0), 6, 0, 0, -a * 0.9); }
-    for (const sd of [-1, 1]) { rb(b, 0x12200a, sd * 0.16, 0.26, surfZ(R, 0.38, 0.07, 0.12, 0.26) - 0.01, 0.2, 0.09, 0.2, 0, 0, sd * -0.25); rb(b, UnG(0xd8ff5a), sd * 0.16, 0.265, surfZ(R, 0.38, 0.07, 0.12, 0.26) + 0.035, 0.15, 0.04, 0.4, 0, 0, sd * -0.25); }
-    for (const x of [-0.24, 0, 0.24]) b.ball(Gl(0xc6ff3d), x, 0.1, 0.38 - Math.abs(x) * 0.5, 0.045, 1.5, 1, 1);
+    for (let i = 0; i < 5; i++) { const a = -0.55 + i * 0.275, x = Math.sin(a) * 0.3; b.conec(FG(0x6e9f14), x, 0.62 + (i === 2 ? 0.1 : 0) - Math.abs(a) * 0.04, Math.cos(a) * 0.05, 0.075, 0.34 + (i === 2 ? 0.12 : 0), 6, 0, 0, -a * 0.9); }
+    for (const sd of [-1, 1]) b.part(kit.GB.oct(), Gl(0xb6f02a), sd * 0.16, 0.27, surfZ(R, 0.38, 0.07, 0.12, 0.27) + 0.01, 0.12, 0.05, 0.05, 0, 0, sd * -0.35);
+    for (const x of [-0.24, 0, 0.24]) b.ball(Gl(0xa8e630), x, 0.1, 0.38 - Math.abs(x) * 0.5, 0.045, 1.5, 1, 0);
   },
 ];
 function buildBar() {
-  const b = new Builder(), fr = kit.G('ingot', () => new THREE.CylinderGeometry(0.7071 * 0.7, 0.7071, 1, 4).rotateY(PI / 4)), g = 0.8;
-  rb(b, new THREE.Color(g, g, g), 0, 0.1, 0, 0.92, 0.2, 0.5, 0.35); b.part(fr, new THREE.Color(g, g, g), 0, 0.27, 0, 0.88, 0.16, 0.46);
-  rb(b, new THREE.Color(1, 1, 1), 0, 0.358, 0, 0.58, 0.03, 0.26, 0.5); rb(b, new THREE.Color(0.7, 0.7, 0.7), 0, 0.366, 0, 0.36, 0.02, 0.13, 0.4);
-  rb(b, Un(0xffffff), -0.2, 0.37, 0.16, 0.2, 0.016, 0.04, 0.4); // gloss streak
-  return bake(b, { ao: 0.12 });
+  const b = new Builder(), fr = kit.G('ingot', () => new THREE.CylinderGeometry(0.7071 * 0.64, 0.7071, 1, 4).rotateY(PI / 4)), g = new THREE.Color(0.9, 0.9, 0.9);
+  b.part(fr, g, 0, 0.17, 0, 0.98, 0.34, 0.54); b.part(kit.GB.rbox(0.4, 1), NhU(0xffffff), -0.16, 0.345, 0.03, 0.3, 0.014, 0.06);
+  return bake(b, { ao: 0.14, hull: 0.024 });
 }
 function buildCrown() {
   const b = new Builder(), n = sg(10), M = GOLD;
@@ -171,9 +171,9 @@ function buildCrown() {
 }
 function buildGem() {
   const b = new Builder(), n = 8;
-  b.lathe(FG(0x2cc4bf), [[0, -0.5], [0.5, 0.05]], 0, 0, 0, n); b.lathe(FG(0x46d8cf), [[0.5, 0.05], [0.5, 0.14]], 0, 0, 0, n);
-  b.lathe(FG(0x7af0e6), [[0.5, 0.14], [0.3, 0.38]], 0, 0, 0, n); b.lathe(FG(0xb8fff6), [[0.3, 0.38], [0, 0.38]], 0, 0, 0, n);
-  const geo = bake(b, { ao: 0, hull: 0.024 }); return geo;
+  b.lathe(Fl(0x1ab0ae), [[0, -0.5], [0.5, 0.05]], 0, 0, 0, n); b.lathe(Fl(0x33cfc8), [[0.5, 0.05], [0.5, 0.14]], 0, 0, 0, n);
+  b.lathe(Fl(0x5de6dc), [[0.5, 0.14], [0.3, 0.38]], 0, 0, 0, n); b.lathe(FG(0xa8f8f0), [[0.3, 0.38], [0, 0.38]], 0, 0, 0, n);
+  return bake(b, { ao: 0, hull: 0.024 });
 }
 function buildCoin() {
   const b = new Builder(), n = sg(10);
@@ -298,7 +298,7 @@ export function init(V) {
       if (!FX || air) continue;
       const c = rgb(colOf(it)), pl = 0.7 + 0.3 * Math.sin(T * 4 + it.x);
       if (rar >= 2) {
-        FX.glowAt(0, gx, 0.02, gz, 0, 0.36, rar === 3 ? 2.7 : 2.2, 0.36, 0, c[0], c[1], c[2], 0.34 * pl);
+        FX.glowAt(0, gx, 0.02, gz, 0, 0.3, rar === 3 ? 2.6 : 2.1, 0.3, 0, c[0], c[1], c[2], 0.34 * pl);
         FX.glowAt(1, gx, 0.07, gz, T * 1.4 + it.x, 0.52 + Math.sin(T * 5) * 0.04, 1, 0.52 + Math.sin(T * 5) * 0.04, 0.9, c[0], c[1], c[2], 0.75 * pl, 0.16);
       }
       if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.4, gz, 0, 0.85, 1, 1, 0, c[0], c[1], c[2], 0.45 + 0.1 * pl);

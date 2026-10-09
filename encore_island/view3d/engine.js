@@ -13,6 +13,7 @@ import { STYLE } from '../../encore_island_3d/js/characters.js';
 
 const D2R = Math.PI / 180, W = kit.W;
 const FOV = 32, PITCH = 52 * D2R;
+const PERF = typeof location !== 'undefined' && /[?&]perf\b/.test(location.search);
 const MODULES = ['fx3d', 'env3d', 'loot3d', 'heroes3d', 'foes3d', 'hub3d', 'lands3d', 'backstage3d'];
 const nextFrame = () => new Promise((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 0)));
 
@@ -24,7 +25,7 @@ export async function createView(opts = {}) {
   if (!probe) throw new Error('WebGL unavailable');
   const pref = opts.quality || 'auto', tierName = detectTier(probe, pref); try { const ex = probe.getExtension('WEBGL_lose_context'); if (ex) ex.loseContext(); } catch (e) { /* ignore */ }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tierName === 'low', stencil: false, alpha: false, powerPreference: 'high-performance' });
-  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.autoClear = false; renderer.setClearColor(0xbfe8f4, 1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.autoClear = false; renderer.info.autoReset = false; renderer.setClearColor(0xbfe8f4, 1);
   const post = new Post(renderer);
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xbfe8f4, 60, 200);
   const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 800);
@@ -47,7 +48,7 @@ export async function createView(opts = {}) {
   function applySize() {
     const dpr = Math.max(0.5, Math.min(st.dpr, st.tier.dprMax) * st.scale); V.quality.dpr = dpr;
     renderer.setPixelRatio(dpr); renderer.setSize(st.vw, st.vh, false); canvas.style.width = st.vw + 'px'; canvas.style.height = st.vh + 'px';
-    if (st.tier.post) post.setSize(Math.round(st.vw * dpr), Math.round(st.vh * dpr));
+    if (st.tier.post) { post.setSize(Math.round(st.vw * dpr), Math.round(st.vh * dpr)); if (!post.verify() && st.tierName !== 'low') { console.warn('[3d] post chain unsupported on this GPU, using the low tier'); applyTier('low'); return; } }
     camera.aspect = st.vw / st.vh; fitCamera();
   }
 
@@ -97,7 +98,7 @@ export async function createView(opts = {}) {
   const api = {
     V, lost: false, mods,
     frame(dt) {
-      if (st.lost) return; const t0 = performance.now(); st.frames++;
+      if (st.lost) return; const t0 = performance.now(); st.frames++; renderer.info.reset();
       dt = Math.min(dt || 0.016, 0.05); updateJuice(dt); fitCamera(dt);
       kit.LOOK.t.value = S.t; const bt = beatNow() % 1; kit.LOOK.beat.value = Math.max(0, 1 - bt * 3.2) * (encoreOn() ? 1 : 0.6);
       labels.clear(); blobs.begin(); focus.x = S.player.x * W; focus.z = S.player.y * W;
@@ -114,7 +115,13 @@ export async function createView(opts = {}) {
       else { renderer.setRenderTarget(null); renderer.toneMappingExposure = mood.exposure || 1.05; renderer.clear(); renderer.render(scene, camera); }
       const now = performance.now(); if (st.last) adaptive.feed((now - st.last) / 1000); st.last = now; st.cost = now - t0;
     },
-    overlay(ctx) { if (st.lost) return; drawLabels(ctx, projectW, st.vw, st.vh, scl); drawFloats3(ctx, projectW, S, scl); },
+    overlay(ctx) {
+      if (st.lost) return; drawLabels(ctx, projectW, st.vw, st.vh, scl); drawFloats3(ctx, projectW, S, scl);
+      if (PERF) { // ?perf in the URL: tier, resolution scale, draw calls, triangles, per-module JS ms
+        const s = api.stats(), L = [s.tier + '  x' + s.scale + '  dpr ' + (+s.dpr).toFixed(2), s.calls + ' calls  ' + Math.round(s.tris / 1000) + 'k tris  ' + s.geos + ' geo  ' + s.tex + ' tex', 'frame ' + s.cpuMs + ' ms', Object.entries(s.mods).map(([k, v]) => k.replace('3d', '') + ' ' + v).join('  ')];
+        ctx.fillStyle = 'rgba(20,10,50,0.7)'; ctx.fillRect(6, vh - 138, Math.min(vw - 12, 330), 62); ctx.fillStyle = '#d8ffd8'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; for (let i = 0; i < L.length; i++) ctx.fillText(L[i], 12, vh - 124 + i * 13);
+      }
+    },
     resize(vw, vh, dpr) { st.vw = vw; st.vh = vh; st.dpr = Math.min(2, dpr || 1); applySize(); },
     project: V.project, projectW,
     setQuality(q) { const t = detectTier(renderer.getContext(), q); adaptive.locked = q !== 'auto'; adaptive.tier = t; adaptive.ceil = t; adaptive.scale = 1; st.scale = 1; applyTier(t); },

@@ -30,9 +30,11 @@ function mkB(ctx, gold) { // lit part with an inked hull; gold swaps every colou
   return (par, g, c, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, o = {}) =>
     CK.part(ctx, par, g, gold ? goldify(c) : c, x, y, z, sx, sy, sz, Object.assign({ ol: 0.026 }, o, { mo: Object.assign({}, gold || o.sh ? GLOSS : MATT, o.mo) }));
 }
+// hiding: node.visible plus a ~0 scale, because a baked rig only collapses `visible = false` bones while its bone array stays in sync
+const HID = 1e-4, vis = (n, on, s = 1) => { n.visible = on; n.scale.setScalar(on ? s : HID); };
 const note = (par, col, s = 1) => { const g = grp(par); F(g, ic(0), col, 0, 0, 0, 0.1 * s, 0.075 * s, 0.05 * s); F(g, bx, col, 0.085 * s, 0.17 * s, 0, 0.026 * s, 0.34 * s, 0.03 * s); F(g, bx, col, 0.14 * s, 0.31 * s, 0, 0.1 * s, 0.05 * s, 0.03 * s, { rz: -0.5 }); g.visible = false; return g; };
 function flyNote(n, u, x, y, z, dx, dy, s = 1) { // u 0..1 along a rising wobbly path, hidden outside
-  n.visible = u > 0 && u < 1; if (!n.visible) return; n.position.set(x + dx * u + sin(u * 9) * 0.05, y + dy * u, z); n.scale.setScalar(s * Math.sqrt(sin(u * PI)) * 1.1); n.rotation.z = sin(u * 7) * 0.3;
+  const on = u > 0 && u < 1; n.visible = on; if (!on) { n.scale.setScalar(HID); return; } n.position.set(x + dx * u + sin(u * 9) * 0.05, y + dy * u, z); n.scale.setScalar(s * Math.sqrt(sin(u * PI)) * 1.1); n.rotation.z = sin(u * 7) * 0.3;
 }
 
 // ---------------------------------------------------------------- face kit: eyes with sclera + iris + pupil + glint, lids, brows, mouths
@@ -61,7 +63,7 @@ function mkEyes(X, par, d, f) {
 function eyesSet(E, bl = 0, lx = 0, ly = 0, droop) { // blink / droop and gaze (lx, ly in -1..1)
   const cl = Math.max(droop ?? E.droop, bl), r = E.r, h = E.h;
   for (let i = 0; i < 2; i++) {
-    if (E.lids.length) E.lids[i].position.y = r * h * (1.05 - 2.1 * cl); else E.eyes[i].scale.y = Math.max(0.08, 1 - 0.92 * cl);
+    if (E.lids.length) { E.lids[i].position.y = r * h * (1 - 2 * cl); E.lids[i].scale.set(r * 1.1, Math.max(0.01, r * h * 2 * cl), 1); } else E.eyes[i].scale.y = Math.max(0.08, 1 - 0.92 * cl);
     E.pu[i].position.set(lx * r * 0.28, ly * r * 0.28 * h, r * 0.3);
   }
 }
@@ -76,7 +78,7 @@ function mkMouth(X, par, d, x, y, kind, w, col = 0x5a1426) { // returns { g, fil
 function mouthSet(M, v) { // v 0..1
   const w = M.w;
   if (M.kind === 'smile') M.fill.scale.y = Math.max(w * 0.08, v * w * 0.8); else if (M.kind === 'line') M.fill.scale.set(w * (1 - v * 0.3), w * (0.12 + v * 0.9), 1);
-  else { M.fill.scale.set(w * (1 - v * 0.15), w * (0.3 + v * 0.7), 1); if (M.tongue) { M.tongue.position.y = -w * (0.1 + v * 0.3); M.tongue.visible = v > 0.12; } }
+  else { M.fill.scale.set(w * (1 - v * 0.15), w * (0.3 + v * 0.7), 1); if (M.tongue) { M.tongue.position.y = -w * (0.1 + v * 0.3); M.tongue.visible = v > 0.12; M.tongue.scale.set(w * 0.55, w * 0.25, v > 0.12 ? 1 : HID); } }
 }
 const limb = (X, par, x, y, z, len, r, col, hand = col, hr = r * 1.3) => { // shoulder pivot with a hanging tube and a ball hand; returns the pivot
   const g = grp(par, x, y, z); g.rotation.order = 'YXZ';
@@ -123,9 +125,9 @@ function foe(o, cfg, setup) {
       c.die = L.dieT >= 0 ? L.dieU : 0;
       CK.lifeXform(L, root, 1, 1, 1, c.sy, c.sxz);
       const ev = elite || st.elite; eS = damp(eS, ev ? 1.14 : 1, 8, dt); pre.scale.setScalar(eS);
-      if (crown) { crown.visible = ev; crown.position.y = (cfg.crown ? cfg.crown[1] : cfg.H) + sin(t * 3) * 0.02; crown.rotation.y = sin(t * 1.4) * 0.3; if (glint) glint.scale.set(0.09 * (0.3 + tri(t * 0.8)), 0.2 * (0.3 + tri(t * 0.8)), 0.02); }
+      if (crown) { vis(crown, ev, cfg.crown ? cfg.crown[3] : 1); crown.position.y = (cfg.crown ? cfg.crown[1] : cfg.H) + sin(t * 3) * 0.02; crown.rotation.y = sin(t * 1.4) * 0.3; if (glint) glint.scale.set(0.09 * (0.3 + tri(t * 0.8)), 0.2 * (0.3 + tri(t * 0.8)), 0.02); }
       if (sparks) for (const m of sparks.children) { const k = m.userData.k, a = t * 1.3 + k * 2.1, tw = tri(t * 0.9 + k * 0.33); m.position.set(sin(a) * cfg.R * 1.15, cfg.H * (0.3 + 0.28 * k) + sin(t * 2 + k) * 0.1, cos(a) * cfg.R * 1.0); m.scale.set(0.06 * tw, 0.16 * tw, 0.02); m.rotation.y = -a; }
-      if (c.die > 0) for (let i = 0; i < 6; i++) { const p = puffs[i], a = i / 6 * TAU + 0.4, u = c.die, r = Math.sqrt(u) * cfg.R * 1.8; p.visible = u < 0.98; p.position.set(sin(a) * r, cfg.H * 0.45 + u * 0.5, cos(a) * r); p.userData.m.scale.setScalar(Math.max(0.001, sin(u * PI) * 0.2 * (1 + (i % 2) * 0.5))); }
+      for (let i = 0; i < 6; i++) { const p = puffs[i], a = i / 6 * TAU + 0.4, u = c.die, r = Math.sqrt(u) * cfg.R * 1.8; vis(p, u > 0 && u < 0.98); if (!p.visible) continue; p.position.set(sin(a) * r, cfg.H * 0.45 + u * 0.5, cos(a) * r); p.userData.m.scale.setScalar(Math.max(0.001, sin(u * PI) * 0.2 * (1 + (i % 2) * 0.5))); }
     },
     attack() { L.attack(); }, die() { L.die(); }, isDead() { return L.dead; }, get dead() { return L.dead; },
     dispose() { for (const m of ctx.list) m.dispose(); },
@@ -145,7 +147,7 @@ function kappa(X) {
   const head = grp(body, 0, 0.98, 0), d = { cy: 0.0, rx: 0.64, ry: 0.58, rz: 0.56 };
   B(head, ic(2), OR, 0, 0, 0, d.rx, d.ry, d.rz, { ol: 0.03 });
   const E = mkEyes(X, head, d, { ex: 0.25, ey: 0.05, r: 0.15, h: 1.1, iris: 0x4fa8e8, lid: OR, droop: 0.42, tilt: 0.12 });
-  const M = mkMouth(X, head, d, 0, -0.27, 'o', 0.12);
+  const M = mkMouth(X, head, d, 0, -0.3, 'o', 0.15);
   B(head, ic(2), NAVY, 0, 0.33, -0.02, 0.5, 0.3, 0.46, { ol: 0.026 }); B(head, tor(0.16, 4, 12), NAVY, 0, 0.3, 0, 0.5, 0.46, 0.2, { rx: PI / 2, ol: 0.02 });
   B(head, ic(1), 0xff7eb6, 0, 0.64, -0.02, 0.1, 0.1, 0.1, { ol: false }); B(head, ic(0), 0xfff4e6, 0.2, 0.43, 0.3, 0.05, 0.03, 0.03, { ol: false });
   // worm arm (left): three soft segments that dangle
@@ -168,7 +170,7 @@ function kappa(X) {
     for (let i = 0; i < 3; i++) seg[i].rotation.set(s * 0.5 * amp * (1 + i * 0.3) + sin(t * 2.1 - i * 0.8) * 0.12 * (1 + i * 0.4), 0, -0.25 - i * 0.12 + sin(t * 1.7 - i) * 0.1 - A * 0.5);
     horn.rotation.set(A * 0.9 - toot * 0.1, A * -0.5, 0); bell.scale.set(1 + toot * 0.3, 1 + toot * 0.15, 1 + toot * 0.3);
     horn.scale.setScalar(1 + toot * 0.07);
-    eyesSet(E, c.bl, -toot * 0.3, 0.1, 0.42 - toot * 0.2 + A * 0.2); mouthSet(M, 0.2 + toot * 0.8);
+    eyesSet(E, c.bl, -toot * 0.3, 0.1, 0.42 - toot * 0.2 + A * 0.2); mouthSet(M, 0.3 + toot * 0.7);
     flyNote(nts[0], (tc - 0.06) / 0.5, 0.82, 1.85 + root.position.y, 0.0, 0.4, 0.9, 1 + A * 0.4); flyNote(nts[1], (tc - 0.2) / 0.5, 0.7, 1.9 + root.position.y, 0.05, 0.1, 0.9, 0.9 + A * 0.4);
     c.sy = 1 + A * 0.06; c.sxz = 1 + A * 0.04;
   };
@@ -266,7 +268,7 @@ function crow_tengu(X) {
     tail.rotation.x = 0.1 + amp * 0.2 + sin(t * 2) * 0.05;
     const open = Math.max(wind * 0.8 + snap * 1, st.singing ? 0.4 + 0.4 * sin(t * 7) : 0, A * 0.4);
     up.rotation.x = -open * 0.12; low.rotation.x = open * 0.5; eyesSet(E, c.bl, 0, 0.1); 
-    if (u >= 0.3) { const v = (u - 0.3) / 0.7; glob.visible = true; glob.position.set(0, 1.78 + head.rotation.x * 0 - v * v * 0.5, 0.9 + v * 1.6); glob.scale.set(sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001, 0.001 + sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)), 0.001 + sstep(0, 0.15, v) * (1 - sstep(0.85, 1, v)) * (1.2 - v * 0.4)); } else glob.visible = false;
+    if (u >= 0.3) { const v = (u - 0.3) / 0.7; vis(glob, true); glob.position.set(0, 1.78 + head.rotation.x * 0 - v * v * 0.5, 0.9 + v * 1.6); glob.scale.set(sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001, 0.001 + sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)), 0.001 + sstep(0, 0.15, v) * (1 - sstep(0.85, 1, v)) * (1.2 - v * 0.4)); } else vis(glob, false);
     const tn = (t * 0.45) % 1; flyNote(nt, st.singing ? tn : -1, -0.5, 2.3, 0.2, -0.4, 0.7, 1);
     c.sy = 1 + A * 0.05; c.sxz = 1;
   };
@@ -389,7 +391,7 @@ function karakasa(X) {
     head.rotation.set(-wind * 0.3 + snap * 0.2, sin(t * 0.9) * 0.05, sin(t * 7) * 0.02 * (wind + A));
     arms[0].rotation.set(-0.2 + c.s * 0.4 * amp + wind * 0.6, 0, -0.4 - wind * 0.6 - 0.1 * sin(t * 2)); arms[1].rotation.set(-0.2 - c.s * 0.4 * amp + wind * 0.6, 0, 0.4 + wind * 0.6 + 0.1 * sin(t * 2.2));
     eyesSet(E, c.bl, sin(t * 0.7) * 0.4, 0.05); mouthSet(M, 0.15 + wind * 0.9 + snap * 0.5 + (st.singing ? 0.4 : 0));
-    if (u >= 0.35) { const v = (u - 0.35) / 0.65, k = sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001; glob.visible = true; glob.position.set(0, 1.5 + head.position.y - 1.55 + 0.7 - v * v * 0.5, 0.7 + v * 1.6); glob.scale.set(k, k, k * (1.2 - v * 0.4)); } else glob.visible = false;
+    if (u >= 0.35) { const v = (u - 0.35) / 0.65, k = sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001; vis(glob, true); glob.position.set(0, 1.5 + head.position.y - 1.55 + 0.7 - v * v * 0.5, 0.7 + v * 1.6); glob.scale.set(k, k, k * (1.2 - v * 0.4)); } else vis(glob, false);
     const tn = (t * 0.5) % 1; flyNote(nt, st.singing ? tn : -1, 0.5, 2.5, 0.1, 0.4, 0.7, 1);
     c.sy = 1 + wind * 0.04; c.sxz = 1;
   };
@@ -398,25 +400,25 @@ function karakasa(X) {
 // ---------------------------------------------------------------- 9. boss_kuzunoha = Kraki: big pink octopus blob with teal bubbles, a face mask, yellow-tipped tentacles, on a teal splash pad
 let _bub = null; const bubMat = () => _bub || (_bub = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.42, depthWrite: false }));
 function boss_kuzunoha(X) {
-  const { root, B } = X, PINK = 0xf27bb0, PINK2 = 0xe0609c, TEAL = 0x35c4c0, YEL = 0xffd23a;
-  const pad = grp(root); B(pad, ic(2), 0x4fd6cc, 0, 0.02, 0, 2.0, 0.14, 1.85, { ol: 0.03 }); B(pad, ic(2), 0x9ff2e8, 0, 0.1, 0, 1.55, 0.06, 1.4, { ol: false });
+  const { root, B } = X, PINK = 0xff93c8, PINK2 = 0xf56fae, TEAL = 0x35c4c0, YEL = 0xffd23a;
+  const pad = grp(root); B(pad, ic(2), 0x4fd6cc, 0, 0.02, 0, 2.3, 0.14, 2.1, { ol: 0.03 }); B(pad, ic(2), 0x9ff2e8, 0, 0.1, 0, 1.8, 0.06, 1.6, { ol: false });
   const rip = [0, 1].map((i) => F(pad, tor(0.03, 3, 18), 0xe8fffb, 0, 0.17, 0, 1, 1, 1, { rx: PI / 2 }));
-  const body = grp(root, 0, 1.85, 0), d = { cy: 0, rx: 0.64, ry: 0.44, rz: 0.2 };
-  B(body, ic(3), PINK, 0, 0, 0, 1.2, 1.25, 1.15, { ol: 0.045, sh: true });
+  const body = grp(root, 0, 1.85, 0), d = { cy: 0, rx: 0.78, ry: 0.55, rz: 0.2 };
+  B(body, ic(3), PINK, 0, 0, 0, 1.2, 1.25, 1.15, { ol: 0.045 });
   [[-0.6, 0.7, 0.2], [0.3, 0.85, 0.15], [0.95, 0.55, 0.23], [-1.45, 0.3, 0.15], [2.3, 0.4, 0.2], [3.14, 0.7, 0.26], [-2.5, 0.55, 0.18], [1.7, 0.2, 0.12], [-0.2, 0.3, 0.1]].forEach(([lon, lat, r]) => {
     const nx = sin(lon) * cos(lat), ny = sin(lat), nz = cos(lon) * cos(lat); B(body, ic(1), TEAL, nx * 1.19, ny * 1.24, nz * 1.14, r, r * 0.5, r, { ol: false, q: CK.aim(nx, ny, nz) }); F(body, ic(0), 0xc2faf4, nx * 1.19 + nx * 0.03, ny * 1.24 + ny * 0.03, nz * 1.14 + nz * 0.03, r * 0.35);
   });
-  const fg = grp(body, 0, -0.18, 0.96); B(fg, ic(2), 0xfff3f8, 0, 0, 0, d.rx, d.ry, d.rz, { ol: 0.022 });
-  const E = mkEyes(X, fg, d, { ex: 0.28, ey: 0.03, r: 0.24, h: 1.05, iris: 0x22b8b0, lift: 0.0 }), M = mkMouth(X, fg, d, 0, -0.27, 'smile', 0.1);
-  for (const sd of [-1, 1]) F(fg, ic(1), 0xff9cc6, sd * 0.47, -0.14, 0.1, 0.07, 0.04, 0.02, { ry: sd * 0.6 });
+  const fg = grp(body, 0, -0.2, 0.93); B(fg, ic(2), 0xfff3f8, 0, 0, 0, d.rx, d.ry, d.rz, { ol: 0.022 });
+  const E = mkEyes(X, fg, d, { ex: 0.32, ey: 0.05, r: 0.28, h: 1.05, iris: 0x22b8b0, lift: 0.0 }), M = mkMouth(X, fg, d, 0, -0.34, 'smile', 0.13);
+  for (const sd of [-1, 1]) F(fg, ic(1), 0xff9cc6, sd * 0.58, -0.2, 0.06, 0.08, 0.05, 0.02, { ry: sd * 0.7 });
   const tops = [-1.5, -0.5, 0.5, 1.5].map((x, i) => { // curly little tentacles on top, yellow bulbs at the tips
     const ch = [grp(body, x * 0.34, 1.12 - Math.abs(x) * 0.1, -0.15 + (i % 2) * 0.1)]; for (let k = 0; k < 3; k++) { if (k) ch.push(grp(ch[k - 1], 0, 0.32 - k * 0.04, 0)); B(ch[k], CK.cyl(0.075 - k * 0.015, 0.09 - k * 0.015, 0.32 - k * 0.04, 7), PINK2, 0, (0.32 - k * 0.04) / 2, 0, 1, 1, 1, { ol: 0.016 }); }
-    B(ch[2], ic(1), YEL, 0, 0.3, 0, 0.11, 0.11, 0.11, { ol: 0.016 }); return ch; });
+    B(ch[2], ic(1), YEL, 0, 0.3, 0, 0.14, 0.14, 0.14, { ol: 0.016 }); return ch; });
   const legs = []; for (let i = 0; i < 6; i++) { // big tentacles: out, along the ground, curl up at the tip
-    const a = i / 6 * TAU + 0.5, ch = [grp(body, sin(a) * 0.62, -1.05, cos(a) * 0.62)]; ch[0].rotation.set(-0.7, a, 0, 'YXZ');
-    const L = [0.62, 0.52, 0.42], R0 = [0.22, 0.17, 0.12], R1 = [0.17, 0.12, 0.05];
+    const a = i / 6 * TAU + 0.5, ch = [grp(body, sin(a) * 0.62, -1.05, cos(a) * 0.62)]; ch[0].rotation.set(-0.85, a, 0, 'YXZ');
+    const L = [0.66, 0.58, 0.48], R0 = [0.27, 0.2, 0.14], R1 = [0.2, 0.14, 0.06];
     for (let k = 0; k < 3; k++) { if (k) ch.push(grp(ch[k - 1], 0, -L[k - 1], 0)); B(ch[k], hang(R0[k], R1[k], L[k], 8), PINK2, 0, 0, 0, 1, 1, 1, { ol: 0.022 }); B(ch[k], ic(0), PINK2, 0, 0, 0, R0[k] * 1.05, R0[k] * 1.05, R0[k] * 1.05, { ol: 0.016 }); }
-    B(ch[2], ic(1), YEL, 0, -0.44, 0, 0.14, 0.14, 0.14, { ol: 0.018 }); legs.push(ch);
+    B(ch[2], ic(1), YEL, 0, -0.48, 0, 0.15, 0.15, 0.15, { ol: 0.018 }); legs.push(ch);
   }
   const bub = [0, 1, 2, 3, 4].map((i) => { const g = grp(root); CK.flat(ic(1), bubMat(), g, 0, 0, 0, 1, 1, 1); g.userData.noBake = false; return g; });
   const sp = [0, 1, 2].map((i) => F(grp(root), CK.geo('fa_oct', () => new THREE.OctahedronGeometry(1, 0)), hdr(2.2, 1.8, 0.5), 0, 0, 0, 0.1, 0.1, 0.02));
@@ -429,11 +431,11 @@ function boss_kuzunoha(X) {
     const bs = 1 + br * 0.012 - hop * 0.06 + wind * 0.08; body.scale.set(bs, 1 / bs * (1 + A * 0.05), bs);
     legs.forEach((ch, i) => { const ph = t * 2.3 + i * 1.1, w = sin(ph) * (0.12 + amp * 0.1) + sin(c.ph + i * 1.05) * 0.3 * amp; ch.forEach((g, k) => { g.rotation.x = rest[i][k] + w * (0.5 + k * 0.4) - (k ? 0 : (A * 0.5 + wind * 0.3) * (i % 2 ? 1 : 1)) + (k === 2 ? -A * 0.9 : 0); }); });
     tops.forEach((ch, i) => ch.forEach((g, k) => { g.rotation.set(0, 0, (i % 2 ? -1 : 1) * (0.35 + k * 0.28) + sin(t * 2.6 + i * 1.7 - k * 0.8) * 0.28 + (i < 2 ? -1 : 1) * 0.15 * (A + wind)); }));
-    pad.scale.set(1 + sin(t * 1.4) * 0.015 + A * 0.04, 1, 1 + sin(t * 1.4) * 0.015 + A * 0.04); rip.forEach((r, i) => { const k = (t * 0.35 + i * 0.5) % 1, sc = 1.05 + k * 0.55; r.scale.set(sc * 1.35, sc * 1.25, 1); r.scale.z = 0.01 + (1 - k) * 1; r.position.y = 0.16; });
+    pad.scale.set(1 + sin(t * 1.4) * 0.015 + A * 0.04, 1, 1 + sin(t * 1.4) * 0.015 + A * 0.04); rip.forEach((r, i) => { const k = (t * 0.35 + i * 0.5) % 1, sc = 1.05 + k * 0.6; r.scale.set(sc * 1.4, sc * 1.25, 1); r.scale.z = 0.01 + (1 - k) * 1; r.position.y = 0.16; });
     eyesSet(E, c.bl, sin(t * 0.8) * 0.4, 0.1); mouthSet(M, A * 0.8 + wind * 0.8);
     bub.forEach((g, i) => { const k = (t * 0.18 + i * 0.2) % 1, a = i * 2.4 + t * 0.3; g.position.set(sin(a) * (1.6 + 0.2 * i % 2), 0.9 + k * 3.0, cos(a) * 1.4); g.scale.setScalar(0.001 + (0.1 + 0.05 * (i % 3)) * sin(k * PI)); });
     sp.forEach((m, i) => { const k = tri(t * 0.7 + i * 0.37); m.parent.position.set([-1.9, 1.7, 1.5][i], [3.4, 3.1, 2.0][i], [0.8, 0.5, 1.2][i]); m.scale.set(0.12 * k, 0.12 * k, 0.02); m.parent.rotation.z = t * 0.8; });
-    if (u >= 0.3) { const v = (u - 0.3) / 0.7, k = sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001; glob.visible = true; glob.position.set(0, 1.9 - v * v * 0.6, 1.4 + v * 2.2); glob.scale.setScalar(k * (1 + v * 0.5)); } else glob.visible = false;
+    if (u >= 0.3) { const v = (u - 0.3) / 0.7, k = sstep(0, 0.2, v) * (1 - sstep(0.8, 1, v)) + 0.001; vis(glob, true); glob.position.set(0, 1.9 - v * v * 0.6, 1.4 + v * 2.2); glob.scale.setScalar(k * (1 + v * 0.5)); } else vis(glob, false);
     c.sy = 1; c.sxz = 1;
   };
 }

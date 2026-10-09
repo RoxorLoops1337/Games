@@ -137,10 +137,22 @@ export function buildHubFloor() {
   // ---- terrace balustrade: lathe-turned posts with ball finials, a handrail between them, ink-dark base rail
   const b = new kit.Builder({ ao: 0.12 }), R = w(T.r + 96), cxx = w(T.x), czz = w(T.y), lav = 0xd8c8f0, lavD = 0xb8a4dc, step = 5.5 * D2R, pts = [];
   for (let d = T.a0; d <= T.a1 + 0.01; d += 5.5) { const a = d * D2R; pts.push([cxx + Math.cos(a) * R, czz + Math.sin(a) * R, a]); }
-  for (const [x, z, a] of pts) { b.cyl(lav, x, TIER.terrace, z, 0.075, 0.07, kit.seg(8), 1.25); b.part(kit.GB.cyl(kit.seg(10), 0.6), lav, x, TIER.terrace + 0.3, z, 0.075, 0.5, 0.075); b.ball(0xfff4ff, x, TIER.terrace + 0.62, z, 0.105); b.ball(lavD, x, TIER.terrace + 0.1, z, 0.09, 0.6); }
+  for (const [x, z, a] of pts) { b.cyl(lav, x, TIER.terrace, z, 0.075, 0.07, kit.seg(8), 1.25); b.part(kit.GB.cyl(kit.seg(10), 0.6), lav, x, TIER.terrace + 0.3, z, 0.075, 0.5, 0.075); b.ball(0xfff4ff, x, TIER.terrace + 0.62, z, 0.105, 1, 1, 1); b.ball(lavD, x, TIER.terrace + 0.1, z, 0.09, 0.6, 1, 1); }
   for (let i = 0; i + 1 < pts.length; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, l = Math.hypot(x1 - x0, z1 - z0), ang = -Math.atan2(z1 - z0, x1 - x0);
-    b.rbox(0xf2e8ff, mx, TIER.terrace + 0.5, mz, l + 0.04, 0.07, 0.11, 0.45, ang); b.rbox(lavD, mx, TIER.terrace + 0.12, mz, l + 0.02, 0.05, 0.08, 0.4, ang);
+    b.box(0xf2e8ff, mx, TIER.terrace + 0.5, mz, l + 0.04, 0.07, 0.11, 0, ang, 0); b.box(lavD, mx, TIER.terrace + 0.12, mz, l + 0.02, 0.05, 0.08, 0, ang, 0);
     for (const f of [0.33, 0.66]) b.part(kit.GB.cyl(kit.seg(8), 0.9), lav, x0 + (x1 - x0) * f, TIER.terrace + 0.3, z0 + (z1 - z0) * f, 0.032, 0.36, 0.032); }
   const bal = b.build({ ao: 0.12 }); bal.name = 'terraceRail'; grp.add(bal);
   return grp;
+}
+
+/** true where the hub floor is paved (px coordinates, with a margin): grass tufts and extras stay off it */
+export function hubBlocked(x, y, m = 24) {
+  if (Math.hypot(x, y) < PLAZA_R + m) return true;
+  const e = (cx, cy, rx, ry) => ((x - cx) / (rx + m)) ** 2 + ((y - cy) / (ry + m)) ** 2 < 1;
+  if (e(0, -345, 290, 130) || e(345, -180, 190, 150) || e(-345, -140, 190, 200) || e(500, 60, 95, 70) || e(WAYPAD.x, WAYPAD.y, 86, 86) || e(HATCH.x, HATCH.y + 10, 92, 76)) return true;
+  const T = TERRACE, dx = x - T.x, dy = y - T.y, d = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) / D2R;
+  if (d > T.r - 60 - m && d < T.r + 110 + m && ang > T.a0 - 5 && ang < T.a1 + 5) return true;
+  const ends = { 90: T.y + 190, '-90': 345, 180: 345, '-40': 390, 0: 500, 33: 440, 148: 470 };
+  for (const dg of ZONE_DEG) { const a = dg * D2R, r1 = ends[dg] || 470, ax = Math.cos(a), ay = Math.sin(a), t = Math.max(PLAZA_R - 30, Math.min(r1, x * ax + y * ay)); if (Math.hypot(x - ax * t, y - ay * t) < BLVD_W / 2 + m) return true; }
+  return false;
 }

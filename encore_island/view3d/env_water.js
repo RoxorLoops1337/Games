@@ -38,11 +38,11 @@ void main(){
   if (cs > 0.01) { vec2 q = p * 1.7 + wob * 2.0; float c1 = vn(q + vec2(t * 0.35, t * 0.2)), c2 = vn(q * 1.3 - vec2(t * 0.27, -t * 0.31)); float cc = pow(1.0 - abs(c1 - c2) * 1.9, 5.0); col += uShallow * cc * cs * 0.55 + vec3(0.5, 0.6, 0.5) * cc * cs * 0.12; }
   // the islands' shadow on the water (taps at two heights of the cliff, offset toward the sun)
   float sh = 0.0; vec2 sx = p + uSunXZ * 1.4; sh = max(sh, smoothstep(0.3, -1.2, shoreD(sx))); sx = p + uSunXZ * 2.8; sh = max(sh, smoothstep(0.2, -2.0, shoreD(sx)) * 0.8);
-  col = mix(col, uDeep * 0.55, sh * 0.42);
+  col = mix(col, uDeep * 0.8, sh * 0.3);
   #endif
   // foam: a bright soft hem on the cliff base, then ripples spreading outward that break up with noise
   float fn = vn(p * 2.3 + vec2(t * 0.25, -t * 0.2));
-  float hem = smoothstep(0.62 + 0.12 * uBeat, 0.0, d + (fn - 0.5) * 0.28) * (0.8 + 0.2 * sin(t * 1.3 + p.x * 0.7));
+  float hem = smoothstep(0.42 + 0.1 * uBeat, 0.0, d + (fn - 0.5) * 0.22) * (0.8 + 0.2 * sin(t * 1.3 + p.x * 0.7));
   float ph = d * 1.15 - t * 0.2; float lines = smoothstep(0.1, 0.0, abs(fract(ph) - 0.5) - 0.34 + (fn - 0.5) * 0.3) * smoothstep(3.2, 0.5, d) * smoothstep(0.35, 0.65, d);
   float foam = clamp(hem + lines * 0.55, 0.0, 1.0) * uFoam;
   col = mix(col, uFoamCol, foam * 0.92);

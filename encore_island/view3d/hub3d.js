@@ -10,6 +10,7 @@ import { buildPlates } from './hub_plates.js';
 import { buildStall, buildVault, buildMonument } from './hub_shops.js';
 import { buildForge, buildTray } from './hub_forge.js';
 import { buildTown } from './hub_town.js';
+import { buildHatch, buildWarp } from './hub_hatch.js';
 import { buildMarket, buildArena, buildStudio } from './hub_districts.js';
 
 export function init(V) {
@@ -32,6 +33,7 @@ export function init(V) {
   add(buildStall); add(buildVault); add(buildMonument);
   add(buildForge); add(buildTray);
   add(buildMarket); add(buildArena); add(buildStudio);
+  add(buildHatch); add(buildWarp);
   add(buildTown);
   add(buildPlates);
   return {

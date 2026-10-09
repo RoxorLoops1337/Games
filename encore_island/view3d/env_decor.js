@@ -3,6 +3,7 @@
 // with GPU wind sway (aSw / aPh attributes) chained after kit's look patch.
 import * as THREE from 'three';
 import * as kit from './kit.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { W, Acc, tpl, facetGeo, patchMat, radiusSafe } from './env_util.js';
 
 const C3 = (h) => new THREE.Color(h);
@@ -13,7 +14,8 @@ function shade(g, lo = 0.8, hi = 1.12, bot = 0.0) {
   for (let i = 0; i < c.count; i++) { const r = c.getX(i), gg = c.getY(i), b = c.getZ(i); if (Math.abs(r - gg) < 0.004 && Math.abs(gg - b) < 0.004) { const k = lo + (hi - lo) * (n.getY(i) * 0.5 + 0.5); c.setXYZ(i, r * k, gg * k, b * k); } }
   return g;
 }
-const blob = (b, g, x, y, z, r, sy = 0.9, det = 1, seed = 1) => b.shape(kit.blobGeo(kit.icoDetail(det - 1), 0.1, seed, sy).toNonIndexed(), g, x, y, z, r); // det 2 = main crown, 1 = side lobes
+function smoothBlob(d, amp, seed, sy) { const g = kit.blobGeo(d, amp, seed, sy); g.deleteAttribute('normal'); g.deleteAttribute('uv'); const m = mergeVertices(g, 1e-4); m.computeVertexNormals(); const n = m.toNonIndexed(); n.deleteAttribute('uv'); return n; }
+const blob = (b, g, x, y, z, r, sy = 0.9, det = 1, seed = 1) => b.shape(smoothBlob(kit.icoDetail(det - 1), 0.1, seed, sy), g, x, y, z, r); // det 2 = main crown, 1 = side lobes
 
 let _T = null;
 function T() {

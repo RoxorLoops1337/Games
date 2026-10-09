@@ -4,7 +4,7 @@ import * as kit from './kit.js';
 
 export const W = kit.W, TAU = kit.TAU;
 /** water surface height. Islands are flat at y = 0; cliffs drop to here and the rock keeps tapering underwater. */
-export const WY = -2.1;
+export const WY = -3.3;
 export const px2 = (v) => v * W;
 
 // ---- value noise (CPU side, for vertex colours and layout)

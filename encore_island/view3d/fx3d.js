@@ -102,7 +102,7 @@ uniform float uT;
 varying vec2 vUv; varying vec4 vCol; varying float vK, vTh, vDash;
 void main() {
   float r = length(vUv), a = 0.0, nrm = 0.0; vec3 col = vCol.rgb;
-  if (vK < 0.5) { a = pow(max(0.0, 1.0 - vUv.y), 1.25) * (0.62 + 0.38 * sin(vUv.x * 18.85 + uT * 1.7)) * smoothstep(0.0, 0.06, vUv.y); col = mix(col, vec3(1.0), 0.35 * (1.0 - vUv.y)); }          // light beam
+  if (vK < 0.5) { a = pow(max(0.0, 1.0 - vUv.y), 1.25) * (0.62 + 0.38 * sin(vUv.x * 18.85 + uT * 1.7)) * smoothstep(0.0, 0.06, vUv.y) * 0.55; col = mix(col, vec3(1.0), 0.25 * (1.0 - vUv.y)); }          // light beam
   else if (vK < 1.5) { float d = abs(r - (1.0 - vTh * 0.5)); a = 1.0 - smoothstep(vTh * 0.22, vTh * 0.5, d); a *= r < 1.0 + vTh * 0.1 ? 1.0 : 0.0;
     a += 0.1 * (1.0 - smoothstep(0.0, 1.0, r)); a *= mix(1.0, 0.45 + 0.55 * cos(atan(vUv.y, vUv.x) * 3.0), vDash); nrm = 0.7; col = mix(col, vec3(1.0), 0.25 * a); }         // ground ring (mostly "over", so it reads on the pastel ground)
   else if (vK < 2.5) { a = pow(max(0.0, 1.0 - r), 2.0); col = mix(col, vec3(1.0), 0.5 * pow(max(0.0, 1.0 - r), 3.0)); }                                                         // glow sprite

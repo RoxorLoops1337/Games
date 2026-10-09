@@ -414,7 +414,7 @@ function fanUpdate(a, seed) {
 }
 export function makeHero(art, o = {}) {
   const fan = !!o.fan, keep = { flat: STYLE.flat, boost: STYLE.boost };
-  STYLE.flat = false; STYLE.boost = fan ? 0 : 1;
+  STYLE.flat = false; STYLE.boost = fan ? -1 : 1; // crowd actors drop one icosphere level (fans are ~47 px tall)
   if (fan) { const tint = o.tint || FAN_TINTS[(o.seed || 0) % FAN_TINTS.length]; o = Object.assign({}, o, { tc: (c) => mixHex(c, tint, 0.4) }); }
   try {
     let a;
@@ -647,7 +647,7 @@ export function init(V) {
       try { updateJordan(dt, t); } catch (err) { if (!this._e4) { this._e4 = 1; console.warn('heroes3d jordan', err); } }
       lootFlush(); rings.end();
     },
-    makeHero, get hero() { return H.e && H.e.actor; }, get companion() { return C0.e && C0.e.actor; }, get keeper() { return jordan && jordan.actor; }, fanCount: () => fans.size,
+    makeHero, get hero() { return H.e && H.e.actor; }, get companion() { return C0.e && C0.e.actor; }, get keeper() { return jordan && jordan.actor; }, fanCount: () => fans.size, fanActors: () => [...fans.values()].map((e) => e.actor),
     dispose() { root.removeFromParent(); },
   };
 }

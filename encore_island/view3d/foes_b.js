@@ -20,7 +20,7 @@ const strike = (u) => (u < 0 ? 0 : u < 0.3 ? -ease(u / 0.3) : u < 0.5 ? -1 + 2 *
 const lv = (n) => Math.max(0, n - (Q.detail === 0 ? 1 : 0));
 const ico = (n) => CK.geo('fb_ico' + lv(n), () => new THREE.IcosahedronGeometry(1, lv(n)));
 const box = CK.box(1, 1, 1), hang = CK.hang, cone = CK.cone, cyl = CK.cyl;
-const rb = (w, h, d, r) => CK.geo(`fb_rb${w},${h},${d},${r},${Q.detail}`, () => { const g = roundedBoxGeo(w, h, d, r, 2); g.deleteAttribute('uv'); return g; });
+const rb = (w, h, d, r, s = 2) => CK.geo(`fb_rb${w},${h},${d},${r},${s}`, () => { const g = roundedBoxGeo(w, h, d, r, s); g.deleteAttribute('uv'); return g; }); // s = segments per corner (1 for small trim)
 const tor = (R, t, a = 6, b = 14, arc = TAU) => CK.geo(`fb_tor${R},${t},${a},${b},${arc}`, () => new THREE.TorusGeometry(R, t, a, b, arc));
 const spike = (n = 6) => CK.geo('fb_spk' + n, () => new THREE.ConeGeometry(1, 1, n).translate(0, 0.5, 0)); // unit cone, base at the origin, tip at y = 1
 const dome = (n = 10) => CK.geo('fb_dome' + n, () => new THREE.SphereGeometry(1, n, 5, 0, TAU, 0, PI / 2));
@@ -46,7 +46,7 @@ function vis(n, on) {
 const G = (r, g, b) => glow(r, g, b); // unlit HDR colours in LINEAR space (values above 1 bloom)
 const GH = (hex, k = 1) => { _gc.set(hex); return glow(_gc.r * k, _gc.g * k, _gc.b * k); }; // unlit colour from an sRGB hex, optionally boosted past 1 for bloom
 // gold: every lit colour is remapped onto a metallic gold ramp by its luminance
-const goldTone = (c) => { const r = (c >> 16 & 255) / 255, g = (c >> 8 & 255) / 255, b = (c & 255) / 255, l = sat(r * 0.3 + g * 0.59 + b * 0.11), k = 0.32 + l * 0.85; return _gc.setRGB(sat(k), sat(k * 0.76), sat(k * 0.22), THREE.SRGBColorSpace).getHex(); };
+const goldTone = (c) => { const r = (c >> 16 & 255) / 255, g = (c >> 8 & 255) / 255, b = (c & 255) / 255, l = sat(r * 0.3 + g * 0.59 + b * 0.11), k = 0.42 + l * 0.8; return _gc.setRGB(sat(k), sat(k * 0.76), sat(k * 0.22), THREE.SRGBColorSpace).getHex(); };
 const SH = { roughness: 0.34, metalness: 0.08 }; // the one glossy bucket (crown, gems, gold)
 const GOLDC = 0xffd24a, BLUE = 0x3b6fe0;
 
@@ -125,7 +125,7 @@ function bChochin(K) {
   const crown = K.crown(head, 0, 0.36, 0, 0.9); K.sparkle(root, 1.2, 0.8);
   // arms: left holds the glowing phone up in front of its face, right is a stub
   const aL = limb(K, body, -0.17, 0.95, 0.05, 0.34, 0.05, 0.045, WOOD, 0.075, WOOD), aR = limb(K, body, 0.17, 0.95, 0, 0.3, 0.05, 0.045, WOOD, 0.07, WOOD);
-  const ph = grp(aL, 0, -0.42, 0.04); P(ph, rb(0.2, 0.32, 0.06, 0.04), 0x3a6ad8, 0, 0, 0, 1, 1, 1, { ol: 0.016 });
+  const ph = grp(aL, 0, -0.42, 0.04); P(ph, rb(0.2, 0.32, 0.06, 0.04, 1), 0x3a6ad8, 0, 0, 0, 1, 1, 1, { ol: 0.016 });
   F(ph, box, G(0.4, 0.8, 1.4), 0, 0.01, 0.034, 0.15, 0.25, 0.01); F(ph, heart, G(1.6, 0.5, 0.9), 0, 0.02, 0.042, 0.035, 0.035, 0.012);
   return (m, st) => {
     const { amp, s, t, A, du } = m, sk = strike(m.u), hop = abs(s) * 0.17 * amp;
@@ -146,13 +146,13 @@ function bPuppet(K) {
   const legs = [];
   for (const sd of [-1, 1]) { const g = limb(K, root, sd * 0.15, 0.5, 0, 0.42, 0.085, 0.07, CREAM); P(g, ico(1), RED, 0, -0.43, 0.06, 0.14, 0.085, 0.2, { ol: 0.02 }); legs.push(g); }
   const body = grp(root, 0, 0.5, 0); P(body, rb(0.62, 0.56, 0.4, 0.17), CREAM, 0, 0.3, 0);
-  P(body, rb(0.4, 0.3, 0.07, 0.07), NAVY, 0, 0.3, 0.2, 1, 1, 1, { ol: 0.014 }); F(body, box, GH(0x1d44e6), 0, 0.3, 0.238, 0.34, 0.24, 0.01);
+  P(body, rb(0.4, 0.3, 0.07, 0.07, 1), NAVY, 0, 0.3, 0.2, 1, 1, 1, { ol: 0.014 }); F(body, box, GH(0x1d44e6), 0, 0.3, 0.238, 0.34, 0.24, 0.01);
   F(body, spike(3), G(1.8, 1.8, 2), -0.015, 0.32, 0.246, 0.06, 0.1, 0.012, { rz: -PI / 2 }); F(body, box, GH(0xff4a60, 1.3), 0, 0.2, 0.246, 0.2, 0.02, 0.01);
   const arms = [];
   for (const sd of [-1, 1]) arms.push(limb(K, body, sd * 0.37, 0.5, 0, 0.36, 0.065, 0.06, CREAM, 0.09, 0xffffff));
   const cg = grp(body, 0.27, 0.58, -0.22); P(cg, cog(), 0xd89a3a, 0, 0, 0, 1, 1, 1.2, { ol: false }); P(cg, ico(0), 0x7a4a1a, 0, 0, 0.06, 0.04, 0.04, 0.03, { ol: false });
   const arrow = grp(body, 0.3, 0.6, -0.12); arrow.rotation.z = -0.6;
-  P(arrow, rb(0.11, 0.62, 0.11, 0.05), RED, 0, 0.34, 0, 1, 1, 1, { ol: 0.02 }); P(arrow, cone(0.21, 0.34, 4), RED, 0, 0.76, 0, 1, 1, 0.6, { ol: 0.022 });
+  P(arrow, rb(0.11, 0.62, 0.11, 0.05, 1), RED, 0, 0.34, 0, 1, 1, 1, { ol: 0.02 }); P(arrow, cone(0.21, 0.34, 4), RED, 0, 0.76, 0, 1, 1, 0.6, { ol: 0.022 });
   const head = grp(body, 0, 0.96, 0); P(head, ico(2), GREEN, 0, 0, 0, 0.44, 0.4, 0.38, { ol: 0.028 });
   for (const sd of [-1, 1]) { const dir = new THREE.Vector3(sd, 0.34, -0.12).normalize(), L = sd < 0 ? 0.7 : 0.58; P(head, cone(0.15, L, 5), GREEN, sd * 0.4 + dir.x * L / 2, 0.07 + dir.y * L / 2, -0.02 + dir.z * L / 2, 1, 1, 0.55, { q: CK.aim(dir.x, dir.y, dir.z), ol: 0.02 }); }
   for (const [x, rz, h] of [[0, 0, 0.3], [-0.17, 0.42, 0.22], [0.17, -0.42, 0.22]]) P(head, cone(0.08, h, 4), GREEN2, x, 0.38 + (x ? -0.03 : 0.02), -0.04, 1, 1, 1, { rz, ol: 0.014 });
@@ -180,16 +180,16 @@ function bAd(K) {
   const fy = LG + H / 2 - 0.02, fr = grp(root, 0, fy, 0);
   const frame = CK.geo('fb_adframe', () => { const sh = new THREE.Shape(), r = 0.15, x = -W / 2, y = -H / 2; sh.moveTo(x + r, y); sh.lineTo(x + W - r, y); sh.quadraticCurveTo(x + W, y, x + W, y + r); sh.lineTo(x + W, y + H - r); sh.quadraticCurveTo(x + W, y + H, x + W - r, y + H); sh.lineTo(x + r, y + H); sh.quadraticCurveTo(x, y + H, x, y + H - r); sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y); const g = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1, curveSegments: 4 }); g.translate(0, 0, -0.06); g.deleteAttribute('uv'); return g; });
   P(fr, frame, RED, 0, 0, 0, 1, 1, 1, { ol: 0.026 });
-  for (const sd of [-1, 1]) P(fr, rb(0.24, 0.12, 0.1, 0.045), NAVY, sd * 0.27, H / 2 + 0.07, -0.02, 1, 1, 1, { ol: 0.02 });
+  for (const sd of [-1, 1]) P(fr, ico(1), NAVY, sd * 0.27, H / 2 + 0.07, -0.02, 0.13, 0.07, 0.06, { ol: 0.02 });
   const sz = 0.122; F(fr, box, GH(0x1f46e8), 0, 0.02, sz - 0.01, W - 0.14, H - 0.14, 0.012);
   const rays = grp(fr, 0, 0.12, sz); for (let i = 0; i < 8; i++) { const g = grp(rays); g.rotation.z = i / 8 * TAU; F(g, box, GH(0x4a78ff), 0, 0.2, 0.004, 0.07, 0.38, 0.004); }
   const sm = grp(fr, 0, 0.12, sz + 0.02); P(sm, ico(2), 0xffa640, 0, 0, 0, 0.27, 0.27, 0.09, { ol: false });
   const face = K.face(sm, { cy: 0, rx: 0.27, ry: 0.27, rz: 0.09, hs: 0.95 }, { ex: 0.125, ey: 0.04, ew: 0.07, eh: 0.1, my: -0.14, mw: 0.05, blush: false }), mo = smile(K, face, 0.09, 0.06);
   const hand = grp(sm, 0.3, 0.12, 0.02); P(hand, ico(1), 0xffa640, 0, 0.06, 0, 0.05, 0.1, 0.04, { ol: 0.012 });
   F(fr, box, GH(0x0e1a50), 0, -0.4, sz + 0.004, 0.62, 0.045, 0.006); const bar = grp(fr, -0.31, -0.4, sz + 0.012); F(bar, box, GH(0xff4f95, 1.3), 0.5, 0, 0, 1, 0.04, 0.006); bar.scale.x = 0.62;
-  P(fr, rb(0.3, 0.12, 0.05, 0.05), 0x9aa0b8, 0.25, -0.28, sz + 0.02, 1, 1, 1, { ol: 0.012 }); for (const dx of [0.18, 0.26]) F(fr, spike(3), CK.basic(0x3a3f66), dx + 0.01, -0.3, sz + 0.05, 0.026, 0.04, 0.01, { rz: -PI / 2 });
+  P(fr, rb(0.3, 0.12, 0.05, 0.05, 1), 0x9aa0b8, 0.25, -0.28, sz + 0.02, 1, 1, 1, { ol: 0.012 }); for (const dx of [0.18, 0.26]) F(fr, spike(3), CK.basic(0x3a3f66), dx + 0.01, -0.3, sz + 0.05, 0.026, 0.04, 0.01, { rz: -PI / 2 });
   const flash = F(fr, box, G(1.6, 1.6, 1.8), 0, 0.02, sz + 0.03, W - 0.14, H - 0.14, 0.006);
-  const cogs = []; for (const [cx, cy, sd] of [[-0.5, 0.58, 1], [0.5, 0.56, -1], [-0.5, -0.56, -1], [0.52, -0.1, 1]]) { const c = P(fr, cog(), 0xe5a53a, cx, cy, 0.02, 1.1, 1.1, 1.3, { ol: false }); c.userData.sd = sd; cogs.push(c); }
+  const cogs = []; for (const [cx, cy, sd] of [[-0.5, 0.58, 1], [0.5, 0.56, -1], [-0.5, -0.56, -1]]) { const c = P(fr, cog(), 0xe5a53a, cx, cy, 0.02, 1.1, 1.1, 1.3, { ol: false }); c.userData.sd = sd; cogs.push(c); }
   const arms = []; for (const sd of [-1, 1]) arms.push(limb(K, root, sd * (W / 2 + 0.1), fy + 0.25, 0, 0.46, 0.05, 0.045, NAVY, 0.085, 0xffffff));
   K.crown(fr, 0, H / 2 + 0.12, 0, 1.3); K.sparkle(root, 1.2, 0.95);
   return (m) => {
@@ -238,21 +238,21 @@ function bFairy(K) {
 
 // ================================================================ 5. koi_spirit: Hug Emoji (tank). A big yellow smiley on a trail of hearts, arms up for a hug.
 function bEmoji(K) {
-  const { P, F, root } = K, YEL = 0xffe15a, ORG = 0xffa820, NAVY = 0x1c2a78;
+  const { P, F, root } = K, YEL = 0xfff070, ORG = 0xffa820, NAVY = 0x1c2a78;
   const base = grp(root); P(base, cyl(0.32, 0.52, 0.2, 10), NAVY, 0, 0.1, 0, 1, 1, 1, { ol: 0.026 }); F(base, ico(1), GH(0x4a6aff, 1.4), 0, 0.2, 0, 0.34, 0.03, 0.34); F(base, heart, GH(0xff4f9a, 1.6), 0, 0.235, 0.0, 0.1, 0.1, 0.03, { rx: -PI / 2 });
-  const hd = grp(root, 0, 1.3, 0); P(hd, ico(2), YEL, 0, 0, 0, 0.52, 0.5, 0.48, { ol: 0.034 }); P(hd, ico(1), 0xf2b838, 0, -0.36, 0.02, 0.34, 0.12, 0.34, { ol: false });
-  const face = K.face(hd, { cy: 0, rx: 0.52, ry: 0.5, rz: 0.48, hs: 1.5 }, { ex: 0.11, ey: 0.08, ew: 0.065, eh: 0.095, my: -0.13, mw: 0.01, blushColor: 0xff9a7a }), mo = smile(K, face, 0.12, 0.085);
+  const HY = 1.42, hd = grp(root, 0, HY, 0); P(hd, ico(2), YEL, 0, 0, 0, 0.5, 0.48, 0.46, { ol: 0.034 }); P(hd, ico(1), 0xffd84d, 0, -0.34, 0.02, 0.3, 0.1, 0.3, { ol: false });
+  const face = K.face(hd, { cy: 0, rx: 0.5, ry: 0.48, rz: 0.46, hs: 1.45 }, { ex: 0.11, ey: 0.08, ew: 0.065, eh: 0.095, my: -0.13, mw: 0.01, blushColor: 0xff9a7a }), mo = smile(K, face, 0.12, 0.085);
   const arms = [];
-  for (const sd of [-1, 1]) { const p = grp(hd, sd * 0.48, 0.1, 0.02); P(p, hang(0.085, 0.075, 0.55, 7), ORG, 0, 0, 0, 1, 1, 1, { ol: 0.026 }); P(p, ico(1), ORG, 0, -0.59, 0, 0.11, 0.11, 0.11, { ol: 0.022 }); arms.push(p); }
-  const hearts = []; for (let i = 0; i < 6; i++) hearts.push(F(root, heart, GH(0xff5aa0, 1.5), 0, 0, 0, 0.1, 0.1, 0.05));
+  for (const sd of [-1, 1]) { const p = grp(hd, sd * 0.46, 0.1, 0.02); P(p, hang(0.085, 0.075, 0.55, 7), ORG, 0, 0, 0, 1, 1, 1, { ol: 0.026 }); P(p, ico(1), ORG, 0, -0.59, 0, 0.11, 0.11, 0.11, { ol: 0.022 }); arms.push(p); }
+  const hearts = []; for (let i = 0; i < 5; i++) hearts.push(F(root, heart, GH(0xff5aa0, 1.5), 0, 0, 0, 0.1, 0.1, 0.05));
   K.crown(hd, 0, 0.46, 0, 1.2); K.sparkle(hd, 0.1, 0.75);
   return (m) => {
     const { amp, s, c, t, A, du } = m, sk = strike(m.u), pulse = Math.pow(Math.max(0, cos(m.ph * 2)), 3) * amp;
-    hd.position.set(sin(m.ph) * 0.07 * amp, 1.3 + sin(t * 1.8) * 0.05 + abs(s) * 0.06 * amp - Math.max(0, sk) * 0.25, Math.max(0, sk) * 0.35); hd.rotation.set(sk * 0.12, 0, s * 0.1 * amp + sin(t * 1.2) * 0.03);
+    hd.position.set(sin(m.ph) * 0.07 * amp, HY + sin(t * 1.8) * 0.05 + abs(s) * 0.06 * amp - Math.max(0, sk) * 0.25, Math.max(0, sk) * 0.35); hd.rotation.set(sk * 0.12, 0, s * 0.1 * amp + sin(t * 1.2) * 0.03);
     hd.scale.set(1 + pulse * 0.05 + A * 0.12, 1 - pulse * 0.06 - A * 0.12, 1 + pulse * 0.05 + A * 0.12); base.scale.set(1 + pulse * 0.06, 1 - pulse * 0.1, 1 + pulse * 0.06); base.position.x = hd.position.x * 0.2; base.rotation.z = -s * 0.04 * amp;
     for (let i = 0; i < 2; i++) { const sd = i ? 1 : -1, hug = Math.max(0, sk), w = sin(t * 3 + i * 1.7) * 0.18 * (1 - hug); arms[i].rotation.set(hug * 1.3, 0, sd * (2.5 + w - hug * 1.5)); }
-    const top = hd.position.y - 0.5, bot = 0.3, span = top - bot;
-    for (let i = 0; i < hearts.length; i++) { const f = fract(i / hearts.length + t * 0.22), h = hearts[i], q = sin(f * PI), k = 0.16 * (0.25 + q) * (1 + m.beat * 0.25);
+    const top = hd.position.y - 0.46, bot = 0.32, span = top - bot;
+    for (let i = 0; i < hearts.length; i++) { const f = fract(i / hearts.length + t * 0.22), h = hearts[i], q = sin(f * PI), k = 0.15 * (0.3 + q) * (1 + m.beat * 0.25);
       if (du >= 0.75) { vis(h, false); continue; } h.visible = true; h.position.set(sin(f * 9 + t * 2 + i) * 0.14 * (0.3 + f) + hd.position.x * f, bot + f * span, cos(f * 9 + t * 2) * 0.06); h.scale.set(k, k, 0.07); h.rotation.z = sin(f * 7 + i) * 0.4; }
     faceTick(face, m, 0, 0); face.mouth.scale.set(1, 1, 1); mo.scale.set(1 + A * 0.2, 0.85 + A * 0.9 + m.sing * 0.3 + abs(sin(t * 2)) * 0.1, 1);
   };
@@ -266,11 +266,11 @@ function bImp(K) {
   const arms = []; for (const sd of [-1, 1]) arms.push(limb(K, body, sd * 0.56, 0.5, 0, 0.42, 0.045, 0.04, NAVY, 0.1, 0xffffff));
   const ey = grp(body, 0, 0.66, 0.5); F(ey, ico(2), CK.basic(0xffffff), 0, 0, 0, 0.26, 0.28, 0.11); F(ey, ico(1), CK.basic(0x3b6fe0), 0, -0.04, 0.07, 0.17, 0.18, 0.06); F(ey, ico(0), CK.basic(0x1b2a6a), 0, -0.05, 0.11, 0.09, 0.1, 0.05); F(ey, ico(0), CK.basic(0xffffff), 0.06, 0.03, 0.14, 0.05, 0.05, 0.03);
   const lid = grp(ey, 0, 0.0, 0.06); P(lid, dome(12), RED, 0, 0, 0, 0.285, 0.31, 0.15, { ol: 0.016, rz: 0.1 }); const brow = F(ey, box, CK.basic(0x7a1a34), -0.06, 0.3, 0.1, 0.34, 0.035, 0.04, { rz: -0.28 });
-  P(body, rb(0.5, 0.34, 0.08, 0.08), NAVY, 0, 0.1, 0.44, 1, 1, 1, { ol: 0.014 }); F(body, box, GH(0x1d44e6), 0, 0.1, 0.49, 0.42, 0.26, 0.01);
+  P(body, rb(0.5, 0.34, 0.08, 0.08, 1), NAVY, 0, 0.1, 0.44, 1, 1, 1, { ol: 0.014 }); F(body, box, GH(0x1d44e6), 0, 0.1, 0.49, 0.42, 0.26, 0.01);
   const dg = CK.geo('fb_digit4', () => compose([[box, 0.03, 0, 0, 0.026, 0.15, 0.01], [box, -0.035, 0.035, 0, 0.026, 0.085, 0.01], [box, -0.002, -0.018, 0, 0.1, 0.026, 0.01], [box, -0.012, 0.045, 0, 0.026, 0.1, 0.01, 0, 0, 0.5]]));
   const digit = F(body, dg, G(1.8, 1.8, 2), 0, 0.1, 0.5, 1.7, 1.7, 1.7);
-  const bell = grp(body, -0.12, 1.0, 0); bell.rotation.z = 0.2; P(bell, CK.geo('fb_bell', () => { const g = latheGeo([[0, 0], [0.24, 0], [0.235, 0.07], [0.19, 0.25], [0.12, 0.38], [0.07, 0.45], [0, 0.47]], 12); g.deleteAttribute('uv'); return g; }), 0xffd24a, 0, 0, 0, 1, 1, 1, { sh: true, ol: 0.022 });
-  P(bell, ico(1), 0xffd24a, 0, 0.5, 0, 0.065, 0.065, 0.065, { sh: true, ol: 0.014 }); const clap = grp(bell, 0, -0.02, 0); P(clap, ico(1), 0xc88a2a, 0, -0.04, 0, 0.07, 0.07, 0.07, { ol: 0.012 });
+  const bell = grp(body, -0.12, 1.0, 0); bell.rotation.z = 0.2; P(bell, CK.geo('fb_bell', () => { const g = latheGeo([[0, 0], [0.24, 0], [0.235, 0.07], [0.19, 0.25], [0.12, 0.38], [0.07, 0.45], [0, 0.47]], 12); g.deleteAttribute('uv'); return g; }), 0xffe066, 0, 0, 0, 1, 1, 1, { sh: true, ol: 0.022 });
+  P(bell, ico(1), 0xffe066, 0, 0.5, 0, 0.065, 0.065, 0.065, { sh: true, ol: 0.014 }); const clap = grp(bell, 0, -0.02, 0); P(clap, ico(1), 0xc88a2a, 0, -0.04, 0, 0.07, 0.07, 0.07, { ol: 0.012 });
   K.crown(body, 0.14, 1.06, 0, 1); K.sparkle(root, 1.2, 0.8);
   return (m) => {
     const { amp, s, c, t, A, du } = m, sk = strike(m.u), lean = Math.max(0, sk), buzz = 0.012 + amp * 0.012 + A * 0.02;
@@ -292,7 +292,7 @@ function bCable(K) {
   const band = grp(segs[1], 0, LEN * 0.55, 0); P(band, cyl(0.2, 0.2, 0.3, 10), 0x2c4fd0, 0, 0, 0, 1, 1, 1, { ol: 0.022 }); F(band, box, GH(0x8ab4ff), 0, 0, 0.195, 0.17, 0.26, 0.012); F(band, box, GH(0x5a7acc), 0, 0.15, 0.195, 0.07, 0.035, 0.012);
   const gfill = F(band, box, GH(0x2fe05a, 1.2), 0, -0.07, 0.205, 0.1, 0.1, 0.012), rfill = F(band, box, GH(0xff3050, 1.4), 0, -0.07, 0.205, 0.1, 0.1, 0.012);
   const hd = grp(par, 0, LEN, 0); P(hd, cyl(0.17, 0.17, 0.12, 8), METAL, 0, 0.04, 0, 1, 1, 1, { ol: 0.02 }); P(hd, ico(2), 0xffffff, 0, 0.42, 0, 0.42, 0.38, 0.36, { ol: 0.03 });
-  const prongs = []; for (const sd of [-1, 1]) { const g = grp(hd, sd * 0.15, 0.74, 0); P(g, rb(0.1, 0.34, 0.08, 0.04), METAL, 0, 0.14, 0, 1, 1, 1, { ol: 0.02 }); prongs.push(g); }
+  const prongs = []; for (const sd of [-1, 1]) { const g = grp(hd, sd * 0.15, 0.74, 0); P(g, rb(0.1, 0.34, 0.08, 0.04, 1), METAL, 0, 0.14, 0, 1, 1, 1, { ol: 0.02 }); prongs.push(g); }
   const face = K.face(hd, { cy: 0.42, rx: 0.42, ry: 0.38, rz: 0.36, hs: 1.3 }, { ex: 0.125, ey: -0.01, ew: 0.07, eh: 0.1, my: -0.15, mw: 0.03, blushColor: 0xffa0c0 });
   K.crown(hd, 0, 0.88, 0, 1.1); K.sparkle(root, 1.0, 0.8);
   const rest = [-0.2, 0.36, 0.3, -0.36, -0.22];
@@ -311,7 +311,7 @@ function bCable(K) {
 function bSpider(K) {
   const { P, F, root } = K, TEAL = 0x45d0c0, LEG = 0x3ab8d8, bodyG = grp(root, 0, 0.78, 0), legs = [];
   P(bodyG, ico(2), TEAL, 0, 0, 0, 0.64, 0.42, 0.55, { ol: 0.03 }); P(bodyG, ico(1), 0x7aeadc, -0.2, 0.2, 0.25, 0.18, 0.08, 0.14, { ol: false, rz: 0.4 });
-  P(bodyG, rb(0.4, 0.26, 0.07, 0.07), 0x24306a, 0, -0.04, 0.5, 1, 1, 1, { ol: 0.014 }); F(bodyG, box, G(0.3, 0.55, 1.6), 0, -0.04, 0.54, 0.34, 0.2, 0.01); F(bodyG, heart, G(2.4, 0.6, 1.1), 0, -0.04, 0.55, 0.06, 0.06, 0.012);
+  P(bodyG, rb(0.4, 0.26, 0.07, 0.07, 1), 0x24306a, 0, -0.04, 0.5, 1, 1, 1, { ol: 0.014 }); F(bodyG, box, G(0.3, 0.55, 1.6), 0, -0.04, 0.54, 0.34, 0.2, 0.01); F(bodyG, heart, G(2.4, 0.6, 1.1), 0, -0.04, 0.55, 0.06, 0.06, 0.012);
   for (const sd of [-1, 1]) P(bodyG, cone(0.035, 0.15, 4), 0x2a98b8, sd * 0.17, -0.2, 0.5, 1, 1, 1, { rz: 0.3 * sd, rx: -2.4, ol: false }); // little fangs under the screen
   const tail = grp(bodyG, 0.5, 0.0, -0.2); P(tail, tor(0.34, 0.032, 4, 14, PI * 1.1), LEG, 0, 0, 0, 1, 1, 1, { ol: false, rz: 1.0 });
   const FAN = [0.78, 0.28, -0.28, -0.78], uA = 1.85, lA = 0.32, UL = 0.44, LL = 0.88;
@@ -353,7 +353,7 @@ function bBoss(K) {
   P(hd, ico(1), 0x4a3ab0, 0, 0.7, -0.1, 0.24, 0.22, 0.24, { ol: 0.022 }); P(hd, cone(0.19, 0.75, 6), 0x5a3ac0, 0.32, 0.74, -0.08, 1, 1, 1, { q: CK.aim(1, 0.7, 0), ol: 0.022 });
   const fh = grp(hd, 0, -0.04, 0.1), face = K.face(fh, { cy: 0, rx: 0.5, ry: 0.5, rz: 0.44, hs: 1.55 }, { iris: 0x5a4ae0, ex: 0.125, ey: 0.0, ew: 0.075, eh: 0.105, my: -0.14, mw: 0.03 });
   const ring = grp(hd, -0.04, 0.06, -0.5); F(ring, tor(0.88, 0.07, 5, 26), G(1.5, 1.45, 2.0), 0, 0, 0);
-  const sh = grp(tor_, 0.4, 0.6, 0), sl = limb(K, sh, 0, 0, 0, 0.6, 0.14, 0.1, IND, 0.13, SKIN), phone = grp(sl, 0, -0.78, 0.04); P(phone, rb(0.3, 0.52, 0.06, 0.06), YEL, 0, 0.04, 0, 1, 1, 1, { ol: 0.02 }); const scr = F(phone, box, GH(0xcfe4ff, 1.3), 0, 0.05, 0.034, 0.25, 0.42, 0.01), lens = F(phone, ico(0), CK.basic(0x2b1426), 0.07, 0.24, -0.04, 0.03, 0.03, 0.02);
+  const sh = grp(tor_, 0.4, 0.6, 0), sl = limb(K, sh, 0, 0, 0, 0.6, 0.14, 0.1, IND, 0.13, SKIN), phone = grp(sl, 0, -0.78, 0.04); P(phone, rb(0.3, 0.52, 0.06, 0.06, 1), YEL, 0, 0.04, 0, 1, 1, 1, { ol: 0.02 }); const scr = F(phone, box, GH(0xcfe4ff, 1.3), 0, 0.05, 0.034, 0.25, 0.42, 0.01), lens = F(phone, ico(0), CK.basic(0x2b1426), 0.07, 0.24, -0.04, 0.03, 0.03, 0.02);
   const lh = grp(tor_, -0.4, 0.6, 0), la = limb(K, lh, 0, 0, 0, 0.62, 0.14, 0.1, IND, 0.13, SKIN);
   const cables = [], cg = grp(root, 0, 2.3, -0.3), curveG = (dir, k) => CK.geo(`fb_cab${dir},${k}`, () => { const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(dir * 0.9, 0.05 - k * 0.2, 0.1), new THREE.Vector3(dir * 1.7, 0.35 + k * 0.3, 0.0), new THREE.Vector3(dir * 2.4, 0.7 + k * 0.5, -0.1)]); const g = new THREE.TubeGeometry(c, 8, 0.04, 4); g.deleteAttribute('uv'); return g; });
   for (const sd of [-1, 1]) for (const [k, y] of [[-0.5, 0.2], [0.1, -0.45], [0.7, -1.05]]) { const g = grp(cg, 0, y, 0); P(g, curveG(sd, k), 0x3ad0d8, 0, 0, 0, 1, 1, 1, { ol: false }); cables.push([g, sd, k]); }
@@ -382,7 +382,7 @@ export const FOES_B = {
   karakuri_puppet: (o) => rig('karakuri_puppet', o, { atk: 0.45, rate: 19, h: 1.95, seed: 2, build: bPuppet }),
   drowned_samurai: (o) => rig('drowned_samurai', o, { atk: 0.75, rate: 6, h: 2.1, seed: 3, build: bAd }),
   nopperabo: (o) => rig('nopperabo', o, { atk: 0.7, rate: 7, h: 2.0, seed: 4, build: bFairy }),
-  koi_spirit: (o) => rig('koi_spirit', o, { atk: 0.7, rate: 5, h: 2.0, seed: 5, build: bEmoji }),
+  koi_spirit: (o) => rig('koi_spirit', o, { atk: 0.7, rate: 5, h: 2.15, seed: 5, build: bEmoji }),
   tsukumogami: (o) => rig('tsukumogami', o, { atk: 0.42, rate: 20, h: 1.9, seed: 6, build: bImp }),
   ittan_momen: (o) => rig('ittan_momen', o, { atk: 0.8, rate: 5, h: 2.1, seed: 7, build: bCable }),
   silk_weaver: (o) => rig('silk_weaver', o, { atk: 0.7, rate: 9, h: 1.85, seed: 8, build: bSpider }),

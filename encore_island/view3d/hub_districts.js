@@ -53,16 +53,22 @@ export function buildMarket(V, fx) {
 export function buildArena(V, fx) {
   const P = posOf('arena', { x: 500, y: 60 }), g = new THREE.Group(); g.name = 'arena'; g.position.set(P.x * W, 0, P.y * W);
   const b = new Builder({ ao: 0.2 }), qs = new QuadSet(), RO = 1.55;
-  b.cyl(0xe8c49a, 0, 0, 0, RO + 0.5, 0.06, seg(40)); b.cyl(0xc89a62, 0, 0.06, 0, 1.18, 0.02, seg(32)); b.cyl(0xe0b078, 0, 0.07, 0, 0.7, 0.02, seg(24));
-  b.lathe(0xff9a8a, [[1.18, 0.0], [RO, 0.0], [RO, 1.05], [RO + 0.1, 1.1], [RO + 0.1, 1.28], [RO - 0.34, 1.28], [RO - 0.34, 1.1], [1.18, 1.05]], 0, 0, 0, seg(36));
-  b.lathe(C.cream, [[RO - 0.01, 0.88], [RO + 0.03, 0.88], [RO + 0.03, 0.96], [RO - 0.01, 0.96]], 0, 0, 0, seg(36));
-  b.lathe(0xd8384f, [[RO - 0.01, 0.0], [RO + 0.04, 0.0], [RO + 0.04, 0.12], [RO - 0.01, 0.12]], 0, 0, 0, seg(36));
-  for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; b.local(Math.cos(a) * (RO + 0.0), 1.28, Math.sin(a) * RO, -a + PI / 2, (q) => { q.rbox(i % 2 ? C.cream : 0xffc2c8, 0, 0.1, 0, 0.34, 0.2, 0.24, 0.3); }); }
-  for (let i = 0; i < 9; i++) { const a = PI * 0.2 + i / 8 * PI * 0.6 + PI * 0.0; b.local(Math.cos(a) * (RO + 0.03), 0.28, Math.sin(a) * (RO + 0.03), -a + PI / 2, (q) => { q.rbox(0x7a1c3a, 0, 0.32, 0, 0.3, 0.5, 0.06, 0.45); q.cyl(0x7a1c3a, 0, 0.45, 0.0, 0.15, 0.06, 10, 1); q.rbox(0xffc2c8, 0, 0.0, 0.0, 0.36, 0.05, 0.08, 0.4); }); }
-  // gate arch at the front with the sign above
-  const tilt = -0.6, sy = 1.95, sz = 0.75; b.rbox(0x5a1a2a, 0, sy, sz - 0.0, 1.75, 0.66, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) b.rbox(0xb02a40, sx, 1.62, 0.82, 0.08, 0.5, 0.08, 0.4);
-  { const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'ARENA', 1.65, sp[0], sp[1], sp[2], 0, tilt, 0.55); }
-  for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.0, 0, 0.5, 0.06, 2.4, 8); b.ball(GOLDM, sx * 2.0, 2.45, 0.5, 0.09, 0.9); }
+  b.cyl(0xe8c49a, 0, 0, 0, RO + 0.55, 0.06, seg(40)); b.cyl(0xc89a62, 0, 0.06, 0, RO - 0.3, 0.02, seg(32)); b.cyl(0xe0b078, 0, 0.07, 0, 0.7, 0.02, seg(24)); b.tor(0xb07a48, 0, 0.09, 0, 0.55, 0.03, 6, seg(24), PI / 2);
+  // curved wall: radial blocks with a gap in front for the gate; arched alcoves on the outer face, crenels on top
+  const N = 20;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * TAU, front = Math.abs(Math.atan2(Math.sin(a - PI / 2), Math.cos(a - PI / 2))); if (front < 0.3) continue;
+    b.local(Math.cos(a) * RO, 0, Math.sin(a) * RO, -a + PI / 2, (q) => {
+      q.rbox(i % 2 ? 0xff9a8a : 0xffaa9a, 0, 0.58, 0, 0.62, 1.16, 0.4, 0.14); q.rbox(0xd8384f, 0, 0.07, 0.03, 0.66, 0.16, 0.44, 0.3); q.rbox(C.cream, 0, 1.14, 0.0, 0.68, 0.1, 0.46, 0.4);
+      if (i % 2) q.rbox(0xffd0c8, 0, 1.3, 0, 0.3, 0.22, 0.32, 0.3);
+      if (a > 0.2 && a < PI - 0.2) { q.rbox(0x7a1c3a, 0, 0.5, 0.2, 0.3, 0.5, 0.05, 0.45); q.cyl(0x7a1c3a, 0, 0.72, 0.2, 0.15, 0.05, 10, 1); }
+    });
+  }
+  // gate: two pillars and the sign across the top
+  for (const sx of [-1, 1]) { b.rbox(0xff9a8a, sx * 0.56, 0.7, RO, 0.3, 1.4, 0.4, 0.2); b.rbox(C.cream, sx * 0.56, 1.42, RO, 0.38, 0.1, 0.48, 0.4); b.ball(GOLDM, sx * 0.56, 1.58, RO, 0.12, 0.9); }
+  const tilt = -0.55, sy = 1.98, sz = RO - 0.02; b.rbox(0x5a1a2a, 0, sy, sz, 1.9, 0.68, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) b.rbox(0xb02a40, sx, 1.62, RO + 0.02, 0.08, 0.45, 0.08, 0.4);
+  { const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'ARENA', 1.8, sp[0], sp[1], sp[2], 0, tilt, 0.6); }
+  for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.2, 0, 0.7, 0.06, 2.4, 8); b.ball(GOLDM, sx * 2.2, 2.45, 0.7, 0.09, 0.9); }
   g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
   // waving pennants (instanced, 2 draws total with the "!" marker)
   const flagG = new THREE.PlaneGeometry(1, 1, 6, 1); flagG.translate(0.5, 0, 0); const fm = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: true }); fm.userData.noLook = true;
@@ -73,7 +79,7 @@ export function buildArena(V, fx) {
     update(dt, t) {
       const on = isOn('arena', 2); g.visible = on; if (!on) return;
       const px = g.position.x, pz = g.position.z, a = crew(); let ready = false; try { ready = !!(a && a.arenaReady && a.arenaReady()); } catch (e) { ready = false; }
-      flags.begin(); for (const sx of [-1, 1]) { const w = Math.sin(t * 5 + sx) * 0.18; flags.put(sx * 2.0, 2.2, 0.5, 0, sx > 0 ? PI + 0.0 : 0, w, 0.6, 0.3, 1, sx < 0 ? 1.0 : 1.0, sx < 0 ? 0.85 : 0.5, sx < 0 ? 0.3 : 0.72); } flags.end();
+      flags.begin(); for (const sx of [-1, 1]) { const w = Math.sin(t * 5 + sx) * 0.18; flags.put(sx * 2.2, 2.2, 0.7, 0, sx > 0 ? PI : 0, w, 0.6, 0.3, 1, sx < 0 ? 1.0 : 1.0, sx < 0 ? 0.7 : 0.25, sx < 0 ? 0.1 : 0.55); } flags.end();
       bang.visible = ready; if (ready) { bang.position.y = 3.0 + Math.sin(t * 4) * 0.1; bang.rotation.y = Math.sin(t * 2) * 0.4; fx.glow(px, 3.05 + Math.sin(t * 4) * 0.1, pz, 1.5 + fx.beat() * 0.4, 1.4, 1.0, 0.3, 0.5); }
     },
     dispose() { g.removeFromParent(); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); fm.dispose(); }

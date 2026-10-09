@@ -9,7 +9,7 @@ function T() {
   if (_T) return _T;
   return (_T = {
     box: tpl((b) => b.box(0xffffff, 0, 0, 0, 1, 1, 1)),
-    plank: tpl((b) => b.rbox(0xffffff, 0, 0, 0, 1, 1, 1, 0.12)),
+    plank: tpl((b) => b.box(0xffffff, 0, 0, 0, 1, 1, 1)),
     pile: tpl((b) => b.part(kit.GB.cyl(kit.seg(9), 0.92), 0xffffff, 0, 0, 0, 1, 1, 1)),
     ball: tpl((b) => b.ball(0xffffff, 0, 0, 0, 1, 1, 1, kit.icoDetail(1))),
     cap: tpl((b) => b.part(kit.GB.cyl(kit.seg(9), 1.25), 0xffffff, 0, 0, 0, 1, 1, 1)),

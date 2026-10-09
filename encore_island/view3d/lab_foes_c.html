@@ -14,7 +14,7 @@ import * as CH from '../../encore_island_3d/js/characters.js';
 import { FOES_C } from './foes_c.js';
 const P = new URLSearchParams(location.search), NAMES = Object.keys(FOES_C), mode = P.get('m') || 'row';
 const only = P.get('only') ? P.get('only').split(',') : NAMES, VARS = (P.get('v') || 'idle,walk,atk,hurt,die,elite,gold').split(','), dieAt = +(P.get('dieAt') || 0.45), GAP = +(P.get('gap') || (mode === 'row' ? 2.6 : 2.8));
-lab({ az: 0, el: mode === 'row' ? 55 : 18, d: mode === 'row' ? 20 : 12, ty: mode === 'row' ? 0 : 1.2, build(V) {
+lab({ az: 0, el: mode === 'row' ? 55 : 18, d: mode === 'row' ? 21 : 12, ty: mode === 'row' ? 0 : 1.2, tx: mode === 'row' ? 0.8 : 0, build(V) {
   CH.STYLE.flat = false; const slots = [], hud = document.getElementById('hud'), lines = [], doBake = P.get('bake') !== '0';
   const mk = (name, variant) => { const a = FOES_C[name]({ elite: variant === 'elite', gold: variant === 'gold' }); V.scene.add(a.group); const info = doBake ? bakeActor(a) : { calls: 0, meshes: [] }; return { a, info }; };
   const tag = (s) => { const d = document.createElement('div'); d.className = 'tag'; document.body.appendChild(d); s.tag = d; d.textContent = `${s.name}${mode === 'row' ? '' : '/' + s.variant}\n${s.info.calls} calls ${Math.round(s.tris)} tris`; };

@@ -36,7 +36,7 @@ const GC = new Map();
 const geo = (k, f) => { let g = GC.get(k); if (!g) { g = f(); GC.set(k, g); } return g; };
 // STYLE: the 3D game sets flat = false (smooth "medium poly" shading under the inked hull) and boost = 1 for hero-class actors (one extra icosphere subdivision).
 export const STYLE = { flat: true, boost: 0 };
-const ico = (d = 1) => { const dd = Math.min(4, d + STYLE.boost); return geo('ico' + dd, () => new THREE.IcosahedronGeometry(1, dd)); };
+const ico = (d = 1) => { const dd = Math.max(0, Math.min(4, d + STYLE.boost)); return geo('ico' + dd, () => new THREE.IcosahedronGeometry(1, dd)); };
 const box = (w, h, d) => geo(`box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d));
 const cyl = (rt, rb, h, seg = 8) => geo(`cyl${rt},${rb},${h},${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg, 1));
 const hang = (rt, rb, h, seg = 6) => geo(`hang${rt},${rb},${h},${seg}`, () => { const g = new THREE.CylinderGeometry(rt, rb, h, seg, 1); g.translate(0, -h / 2, 0); return g; });
@@ -373,7 +373,7 @@ const heart = (g, x, y, s, fill, stroke, lw) => { g.beginPath(); g.moveTo(x, y +
 function makeHead(rx, ry, rz, cy, jaw) {
   const tp = (yn) => (yn < 0.1 ? 1 - jaw * Math.pow(clamp((0.1 - yn) / 1.1, 0, 1), 1.2) : 1);
   const surf = (x, y) => { const yn = (y - cy) / ry, t = tp(yn); return rz * t * Math.sqrt(Math.max(1e-4, 1 - (x / (rx * t)) ** 2 - yn * yn)); };
-  const sw = STYLE.boost ? 22 : 15, sh = STYLE.boost ? 14 : 10;
+  const sw = STYLE.boost > 0 ? 22 : STYLE.boost < 0 ? 11 : 15, sh = STYLE.boost > 0 ? 14 : STYLE.boost < 0 ? 7 : 10;
   const g = geo(`hd${jaw}_${sw}`, () => {
     const s = new THREE.SphereGeometry(1, sw, sh), p = s.attributes.position;
     for (let i = 0; i < p.count; i++) { const t = tp(p.getY(i)); p.setX(i, p.getX(i) * t); p.setZ(i, p.getZ(i) * t); }
@@ -565,7 +565,7 @@ function addFanFace(ctx, head, H, f = {}) {
 
 // ---- the rig. o: hip, legX, legR, legColor, head dims, shoulder pos, arm colours/radii, skin; details are added by the caller.
 function buildHero(ctx, o) {
-  const skin = o.skin ?? SKIN, LS = 6 + STYLE.boost * 2;
+  const skin = o.skin ?? SKIN, LS = 6 + Math.max(0, STYLE.boost) * 2;
   const fitG = new THREE.Group(), root = new THREE.Group();
   fitG.add(root);
   const HIP = o.hip;

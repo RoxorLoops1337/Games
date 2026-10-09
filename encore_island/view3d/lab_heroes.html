@@ -11,7 +11,19 @@ const P = new URLSearchParams(location.search), num = (k, d) => (P.has(k) ? +P.g
 const ALL = ['jasmin', 'roxor', 'rawclaw', 'andy', 'jasmin_unicorn', 'roxor_monster', 'rawclaw_goat', 'jordan'];
 const tris = (root) => { let n = 0; root.traverse((o) => { if (o.isMesh && o.visible && o.layers.test({ mask: 1 })) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return Math.round(n); };
 if (P.get('game') === '1') {
-  const { loadGame } = await import('./gamelab.js');
+  // same as gamelab.js loadGame, but EI.resize() is guarded (main.js leaves its canvas null in headless mode)
+  const loadGame = async (o) => {
+    window.__EI_HEADLESS__ = true; const html = await (await fetch('../index.html')).text(), srcs = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map((m) => m[1]);
+    const cv = document.createElement('canvas'); cv.id = 'game'; cv.width = 800; cv.height = 600; cv.style.display = 'none'; document.body.appendChild(cv);
+    for (const s of srcs) await new Promise((res, rej) => { const el = document.createElement('script'); el.src = '../' + s; el.onload = res; el.onerror = () => rej(new Error('load ' + s)); document.head.appendChild(el); });
+    const EI = window.EI; EI.setupCtx(cv.getContext('2d')); try { EI.resize(); } catch (e) { /* headless */ }
+    EI.initGame(true); const S = EI.S; S.started = true; S.t = 0;
+    try { const T = EI.FEATS.find((f) => f.id === 'tutorial').api; S.feat.tutorial.off = true; T.finish(); } catch (e) { /* optional */ }
+    for (let i = 0; i < (o.lands || 0); i++) EI.addLand();
+    if (o.wallet) S.wallet = o.wallet; if (o.gems) S.gems = o.gems; if (o.fans) { S.houses = 3; for (let i = 0; i < o.fans; i++) EI.recruit(); }
+    await new Promise((r) => { const t0 = Date.now(); (function w() { if (typeof ART !== 'undefined' && ART.ready || Date.now() - t0 > 4000) r(); else setTimeout(w, 50); })(); });
+    window.__game = { EI, S: () => EI.S }; return window.__game;
+  };
   const g = await loadGame({ lands: 2, wallet: 5e5, gems: 9, fans: num('fans', 12) });
   const S = g.S();
   if (P.has('skin')) S.skins.active = P.get('skin');
@@ -34,7 +46,8 @@ if (P.get('game') === '1') {
       if (P.has('shield')) FEATS.find((f) => f.id === 'gear').api.T.shield = 2;
       if (P.get('pose') === 'walk') V.camera.userData.follow = 1;
       mod.update(dt, t, { x: p.x * 0.02, z: p.y * 0.02 });
-      for (const a of [mod.hero, mod.companion]) if (a && !window.__stat.hero) window.__stat.hero = { calls: countCalls(a.group), tris: tris(a.group) };
+      if (mod.hero && mod.companion && !window.__stat.hero) window.__stat.hero = { calls: countCalls(mod.hero.group), tris: tris(mod.hero.group) };
+      window.__stat.comp = mod.companion && { calls: countCalls(mod.companion.group), tris: tris(mod.companion.group) }; const fa = mod.fanActors(); window.__stat.fanActors = fa.length; window.__stat.fan = fa[0] && { calls: countCalls(fa[0].group), tris: tris(fa[0].group), maxTris: Math.max(...fa.map((a) => tris(a.group))), maxCalls: Math.max(...fa.map((a) => countCalls(a.group))) };
     } };
   } });
 } else {
@@ -43,6 +56,7 @@ if (P.get('game') === '1') {
     names.forEach((n, i) => { const a = makeHero(n, { fan, seed: i + 1, acc: i }); a.group.position.set((i - (names.length - 1) / 2) * sp, 0, 0); V.scene.add(a.group); bakeActor(a); list.push(a); });
     const st = { speed: pose === 'walk' ? 0.8 : 0, singing: pose === 'sing', atk: pose === 'atk', cast: pose === 'cast', cheer: pose === 'cheer', dash: pose === 'dash', hurt: pose === 'hurt' ? 0.8 : 0, role: 'fight' };
     window.__stat = { calls: list.map((a) => countCalls(a.group)), tris: list.map((a) => tris(a.group)) };
+    if (P.has('tri')) { const m = {}; list[0].group.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3, k = (o.material.type === 'ShaderMaterial' ? 'hull' : 'mesh') + ':' + n; m[k] = (m[k] || 0) + 1; } }); window.__stat.parts = Object.entries(m).map(([k, c]) => [k, c, c * +k.split(':')[1]]).sort((a, b) => b[2] - a[2]).slice(0, 14); }
     return { update(dt, t) { for (const a of list) a.update(dt, t, st); } };
   } });
 }

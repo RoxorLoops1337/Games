@@ -19,10 +19,10 @@ lab({ az: 0, el: mode === 'row' ? 55 : 18, d: mode === 'row' ? 19 : 12, ty: mode
     const info = bakeActor(a); return { a, info }; };
   const place = (s, x, z) => { s.x = x; s.z = z; s.a.group.position.set(x, 0, z); };
   const lines = [];
-  if (mode === 'row') NAMES.forEach((n, i) => { const s = { name: n, variant: 'walk', ...mk(n, 'walk') }; const x = -11 + i * GAP + (i === 8 ? 1.6 : 0); place(s, x, 0); s.x0 = x; s.ph = i * 0.7; slots.push(s); });
+  if (mode === 'row') NAMES.forEach((n, i) => { const rv = P.get('rv') || 'walk', s = { name: n, variant: rv, ...mk(n, rv) }; const x = -11 + i * GAP + (i === 8 ? 1.6 : 0); place(s, x, 0); s.x0 = x; s.ph = i * 0.7; slots.push(s); });
   else only.forEach((n, r) => VARS.forEach((v, c) => { const s = { name: n, variant: v, ...mk(n, v) }; place(s, (c - (VARS.length - 1) / 2) * GAP, -r * (n.startsWith('boss') ? 4.5 : 3.2)); s.x0 = s.x; slots.push(s); }));
   for (const s of slots) { const tris = s.info.meshes.reduce((n, m) => n + m.geometry.attributes.position.count / 3, 0); s.tris = tris; lines.push(`${s.name}/${s.variant}: ${s.info.calls} calls ${Math.round(tris)} tris h=${s.a.height.toFixed(2)}`); }
-  window.__stat = { foes: lines, dbg: window.__dbg };
+  window.__stat = { foes: lines, dbg: window.__dbg }; window.__slots = slots;
   if (P.get('hud') !== '0') hud.textContent = lines.filter((_, i) => mode === 'row' || i % VARS.length === 0).join('\n');
   else hud.style.display = 'none';
   const st = { speed: 0, atk: false, hurt: 0, die: 0, elite: false, gold: false, slow: false, glow: false, singing: false };

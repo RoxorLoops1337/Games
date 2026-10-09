@@ -64,6 +64,18 @@ export class Post {
     for (let i = 0; i < this.cfg.levels && mw >= 4 && mh >= 4; i++) { this.mips.push(RT(mw, mh, this.type)); mw >>= 1; mh >>= 1; }
     if (this.cfg.tilt > 0) { const bw = Math.max(8, w >> 2), bh = Math.max(8, h >> 2); this.blurA = RT(bw, bh, this.type); this.blurB = RT(bw, bh, this.type); }
   }
+  /** Is every render target complete on this GPU? Some mobile drivers reject MSAA or half-float targets: degrade (no MSAA, then 8-bit) until it works. false = give up. */
+  verify() {
+    const gl = this.r.getContext();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!this.rtScene) this.alloc(); let ok = true; gl.getError();
+      for (const rt of [this.rtScene, this.mips[0], this.blurA]) { if (!rt) continue; this.r.setRenderTarget(rt); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE || gl.getError() !== gl.NO_ERROR) ok = false; }
+      this.r.setRenderTarget(null); if (ok) return true;
+      if (this.cfg.msaa) this.cfg.msaa = false; else if (this.type === THREE.HalfFloatType) { this.type = THREE.UnsignedByteType; this.hdr = false; } else return false;
+      this.alloc();
+    }
+    return false;
+  }
   free() { if (this.rtScene) this.rtScene.dispose(); for (const m of this.mips) m.dispose(); this.mips.length = 0; if (this.blurA) { this.blurA.dispose(); this.blurB.dispose(); this.blurA = this.blurB = null; } }
   pass(material, target, clear) { this.quad.material = material; this.r.setRenderTarget(target); if (clear) { this.r.setClearColor(0x000000, 1); this.r.clear(true, false, false); } this.quad.render(this.r); }
   /** Render scene through the chain to the screen. `punch` (0..1) is a beat pulse that swells the bloom. */
