@@ -69,7 +69,8 @@ export type BuildingKind =
     | 'brickfloor' | 'carpet' | 'slatefloor'
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate'
     | 'lostpack' | 'mineshaft' | 'mineladder'
-    | 'chute' | 'weathervane';
+    | 'chute' | 'weathervane'
+    | 'sleepbed';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     workbench: { name: 'Workbench',   tex: 'workbench', size: [1, 1], cost: { wood: 6 }, cat: 'craft', station: 'workbench', work: 'make', desc: 'Saw planks, craft bows and simple tools.' },
@@ -137,6 +138,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     roof_thatch: { name: 'Thatch Roof',  tex: 'roof_thatch', size: [1, 1], cost: { fiber: 3, plank: 1 }, cat: 'home', roof: true, desc: 'Goes over a floor and furniture. Fades away when you stand underneath. Drag to cover a room.' },
     roof_tile:   { name: 'Tile Roof',    tex: 'roof_tile',  size: [1, 1], cost: { brick: 1, plank: 1 }, cat: 'home', roof: true, desc: 'Terracotta tiles. Goes over a floor; fades when you are underneath.' },
     roof_slate:  { name: 'Slate Roof',   tex: 'roof_slate', size: [1, 1], cost: { stone: 2, plank: 1 }, cat: 'home', roof: true, desc: 'Grey slate. Goes over a floor; fades when you are underneath.' },
+    sleepbed:    { name: 'Bed',          tex: 'sleepbed',   size: [1, 2], cost: { plank: 6, cloth: 2 }, cat: 'home', desc: 'Press E on it and this is where you wake up after a fall, instead of at home. One wake-up spot each: a new bed moves it. Good for an outpost far from home.' },
 
     market:    { name: 'Market Stall', tex: 'market',   size: [2, 1], cost: { wood: 6, stone: 4 }, cat: 'special', desc: 'Sell your goods for coins.' },
     altar:     { name: 'Boss Altar', tex: 'altar', size: [2, 2], cost: { stone: 30, brick: 10, ironbar: 4 }, cat: 'special', req: 'altar', station: 'altar', light: 60, desc: 'Craft sigils and call the island\u2019s bosses. Bring friends.' },

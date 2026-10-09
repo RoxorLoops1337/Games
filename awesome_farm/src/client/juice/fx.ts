@@ -124,6 +124,7 @@ const FX = {
     hexJump:     { sfx: 'hexjump', burst: { tex: 'spark', colors: [C.plum, C.blossom, C.cream], count: 12, speed: 70, life: 420, gravity: 20 }, shake: { px: 1.5, ms: 80 } },
     chain:       { sfx: 'chain',   burst: { tex: 'spark', colors: [C.gold, C.cream, C.stone], count: 14, speed: 60, life: 450, gravity: 80 }, shake: { px: 3, ms: 110 } },
     chainTug:    { sfx: 'tug',     burst: { tex: 'dot', colors: [C.gold, C.cream], count: 5, speed: 30, life: 280, gravity: 20 }, shake: { px: 1.2, ms: 70 } },
+    bedSet:      { sfx: 'chime',   burst: { tex: 'star', colors: [C.cream, C.blossom, C.gold], count: 10, speed: 40, life: 650, up: true, gravity: 20 }, shake: { px: 0.8, ms: 60 } },
     unbind:      { sfx: 'unbind',  burst: { tex: 'star', colors: [C.foam, C.cream, C.plum], count: 8, speed: 40, life: 600, up: true, gravity: -10 }, shake: { px: 0.8, ms: 60 } },
 } satisfies Record<Action, FxSpec>;
 

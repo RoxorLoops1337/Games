@@ -110,6 +110,7 @@ function promptText (h: PromptHost): string {
         if (def.grave) return `E: Take your things back${hold}`;
         if (def.storage) return `E: Open ${def.name}${hold}`;
         if (b.kind === 'table') return `E: ${potluck.promptOf(me, b, h.clock.time, (id) => potluck.cookName(h.players, id))}${h.distToBuilding(b) < d.reach + 6 ? hold : ''}`;
+        if (b.kind === 'sleepbed') return b.id === me.bed ? `Your bed: you wake up here after a fall${hold}` : `E: Sleep here (wake up here after a fall)${hold}`;
         const say = PROMPTS[b.kind];
         if (say) return say(b, hold);
         return `${def.dir || def.pole || def.gen || b.kind === 'drill' ? 'E: Inspect ' : ''}${def.name}${hold}`;

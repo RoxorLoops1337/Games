@@ -94,7 +94,7 @@ A **Doorway can be set straight into a wall** (it replaces the piece, gives the 
 Lay a floor (the **Floors & walls** tab, where the walls and roofs are too), raise **walls** (wood, stone, brick, window; 16-frame autotile, they join up), put in a
 **doorway** (you walk through, monsters cannot: `World.gate`, used by `mobBlocked`) and cover it with a
 **roof** (thatch, tile, slate; `World.roof`; drawn over everything and faded while you stand under it).
-Dragging lays a line of floor, wall or roof. A ring of wall with one doorway is a base (Ferro's quests teach it).
+Dragging lays a line of floor, wall or roof. A ring of wall with one doorway is a base (Ferro's quests teach it). A **Bed** (Floors & walls) is where you wake up after a fall instead of at home: placing one, or pressing E on any bed, makes it yours (one wake-up spot each, `sim/bed.ts`).
 
 ### Automation (Factorio-lite)
 Drills mine the veins under them; belts carry items; inserters move items between belts,
