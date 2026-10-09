@@ -10,6 +10,7 @@ import { PAL } from '../palette';
 import { BLUEPRINT_MAX, BLUEPRINT_RANGE } from '../blueprint';
 import { chuteSells } from './chute';
 import { tunnelPartner } from './factory';
+import * as bed from './bed';
 import * as chronicle from './chronicle';
 import * as gather from './gather';
 import * as mail from './mail';
@@ -80,6 +81,7 @@ export function tryBuild (sim: Sim, p: PlayerS, kind: BuildingKind, tx: number, 
         ...(isBeltLike(kind) ? { belt: [null, null, null] } : {}),
         ...(kind === 'bed' ? { crop: -1 } : {}),
     });
+    if (kind === 'sleepbed') bed.setBed(sim, p, b);           // (a new bed is where you wake up now)
     p.stats.built++;
     quests.count(p, `build:${kind}`);
     sim.gainXp(p, 4 + Math.min(10, Object.keys(def.cost).length * 2));
@@ -155,6 +157,7 @@ export function cmdDemolish (sim: Sim, p: PlayerS, id: number) {
 // ── land ───────────────────────────────────────────────────────────────────
 export function cmdBuy (sim: Sim, p: PlayerS, plotIndex: number) {
     const plot = Number.isInteger(plotIndex) ? sim.s.plots[plotIndex] : undefined;      // (an array answers `plots['length']` with a number)
+    if (plot?.blight === 1) { sim.deny(p, 'Destroy the Blight nest first'); return; }
     if (!plot || !sim.world.isPurchasable(plot)) return;
     const price = Math.max(1, Math.round(sim.world.price(plot, p.plotsBought) * derived(p).landMul));
     if (p.coins < price) { sim.deny(p, `Needs ${price} coins`); return; }
@@ -164,6 +167,7 @@ export function cmdBuy (sim: Sim, p: PlayerS, plotIndex: number) {
     chronicle.land(sim, p);
     plot.owned = true;
     plot.buyer = p.id;
+    delete plot.blight;                                   // (a cleansed nest isle is ordinary land from now on)
     ensureVeins(sim.s.seed, plot);
     sim.world.recompute();
     sim.dirtyPlots.add(plot.i);
@@ -207,6 +211,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
         sim.float(c.x, c.y - 12, other ? `Linked: ${Math.abs(other.tx - b.tx) + Math.abs(other.ty - b.ty)} tiles` : b.kind === 'tunnel' ? 'No exit ahead' : 'No entrance behind', other ? PAL.lime : PAL.berry, p.id);
         return;
     }
+    if (b.kind === 'sleepbed') { bed.setBed(sim, p, b); return; }
     if (b.kind === 'weathervane') { sim.events.push({ e: 'open', to: p.id, ui: 'vane', id: b.id }); return; }       // (it only shows: nothing changes)
     if (def.dir || def.pole || def.gen || def.store || b.kind === 'drill' || b.kind === 'chute') { if (b.kind !== 'belt') sim.events.push({ e: 'open', to: p.id, ui: 'device', id: b.id }); return; }
     switch (b.kind) {

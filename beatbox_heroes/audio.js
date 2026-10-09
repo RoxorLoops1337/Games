@@ -1191,6 +1191,11 @@
       whoosh(o, t, p) { noiz(o, t, { f: 200 * p, f2: 3200 * p, q: 1.0, d: 0.55, v: 0.3, swell: 0.28, rev: 0.1 }); tone(o, t, { f: 90 * p, f2: 220 * p, d: 0.4, v: 0.1, type: 'sine', a: 0.15 }); },
       record(o, t, p) { tone(o, t, { f: 1000 * p, d: 0.08, v: 0.18, type: 'square', lp: 3000 }); tone(o, t + 0.11, { f: 1500 * p, d: 0.14, v: 0.18, type: 'square', lp: 3000 }); noiz(o, t, { f: 6000, q: 0.7, d: 0.25, v: 0.04, ft: 'highpass' }); tone(o, t, { f: 70 * p, d: 0.3, v: 0.12, type: 'sine' }); },
       countdown(o, t, p) { tone(o, t, { f: 660 * p, d: 0.12, v: 0.24, type: 'square', lp: 3000 }); tone(o, t, { f: 1320 * p, d: 0.07, v: 0.05, type: 'sine' }); },
+      // cutscene ambience (park3d/cine.js): rain on the street for n seconds, a far thunder roll, a heartbeat, the hum of a dying office tube
+      rain(o, t, p, n) { const d = clamp(num(n, 2.4), 0.5, 30); noiz(o, t, { ft: 'bandpass', f: 2400 * p, q: 0.5, d, v: 0.13, swell: Math.min(1.2, d / 3), pink: true }); noiz(o, t, { ft: 'lowpass', f: 700, q: 0.6, d, v: 0.09, swell: Math.min(1.5, d / 3), pink: true }); },
+      thunder(o, t, p) { noiz(o, t, { ft: 'lowpass', f: 260 * p, f2: 90 * p, q: 0.8, d: 2.6, v: 0.34, swell: 0.25, pink: true, rev: 0.4 }); tone(o, t, { f: 46 * p, f2: 34 * p, d: 1.6, v: 0.16, type: 'sine', a: 0.2 }); },
+      heart(o, t, p) { [0, 0.24].forEach((d, i) => tone(o, t + d, { f: (i ? 52 : 60) * p, f2: 38 * p, d: 0.16, v: i ? 0.26 : 0.34, type: 'sine', fd: 0.12 })); },
+      hum(o, t, p, n) { const d = clamp(num(n, 2.2), 0.3, 20); tone(o, t, { f: 120 * p, d, v: 0.12, type: 'sawtooth', lp: 900, a: 0.3 }); tone(o, t, { f: 240 * p, d, v: 0.05, type: 'square', lp: 1400, a: 0.3 }); },
       go(o, t, p) { tone(o, t, { f: 1320 * p, d: 0.3, v: 0.24, type: 'square', lp: 4000, rev: 0.1 }); tone(o, t, { f: 1980 * p, d: 0.25, v: 0.1, type: 'triangle' }); tone(o, t, { f: 2640 * p, d: 0.2, v: 0.04 }); },
     };
     const SFX_NAMES = Object.keys(SFX);
@@ -1595,7 +1600,7 @@
     }
     return shared;
   }
-  const Factory = { create, compose: (id) => composeCached(id), composeGroove, MUSIC_IDS, SOUND_IDS, TIMBRES: TIMBRE_IDS, SFX_NAMES: ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'go'], RECIPES };
+  const Factory = { create, compose: (id) => composeCached(id), composeGroove, MUSIC_IDS, SOUND_IDS, TIMBRES: TIMBRE_IDS, SFX_NAMES: ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'rain', 'thunder', 'heart', 'hum', 'go'], RECIPES };
   BBH.AudioFactory = Factory;
   BBH.Audio = {
     create, compose: Factory.compose, composeGroove, MUSIC_IDS, SFX_NAMES: Factory.SFX_NAMES,
@@ -1625,5 +1630,7 @@
     },
     groove: { start: (o) => inst().groove.start(o), stop: (f) => inst().groove.stop(f), setIntensity: (v) => inst().groove.setIntensity(v) },
     get log() { return inst().log; },
+    // the shared AudioContext and its state, for small self-contained beds that route their own nodes (tape.js: the muffled TV)
+    get ctx() { try { return inst().ctx; } catch (e) { return null; } }, get muted() { try { return inst().muted; } catch (e) { return true; } }, get volume() { try { return inst().volume; } catch (e) { return { music: 0, sfx: 0 }; } },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this);

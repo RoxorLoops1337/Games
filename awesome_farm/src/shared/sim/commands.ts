@@ -5,6 +5,7 @@
 import { TUNING } from '../config';
 import { cleanLook, cleanScarf } from '../data/look';
 import { hitPoint } from '../geom';
+import * as blight from './blight';
 import * as bond from './bond';
 import * as boss from './boss';
 import * as combat from './combat';
@@ -132,7 +133,8 @@ export function cmdSwing (sim: Sim, p: PlayerS, id: number) {
     const e = sim.s.ents[id];
     if (!e || p.swingCd > 0.05) return;
     const d = derived(p);
-    const isMob = e.k === 'mob';
+    const nest = e.k === 'node' && e.kind === 'nest';            // (a Blight nest is fought with your weapon: sim/blight.ts)
+    const isMob = e.k === 'mob' || nest;
     const reach = (isMob ? Math.max(d.reach, d.weapon.reach) : d.reach) + 12;
     if (!sim.inReach(p, e, reach)) return;
     const isCrop = e.k === 'bld' && e.kind === 'bed' && e.crop === 2;
@@ -141,7 +143,8 @@ export function cmdSwing (sim: Sim, p: PlayerS, id: number) {
     p.energy = Math.max(0, p.energy - (isMob ? combat.swingEnergy(p) : d.swingEnergy));
     const c = sim.center(e);
     sim.events.push({ e: 'swing', by: p.id, x: c.x, y: c.y, ...(isMob ? { w: d.weapon.wtype, px: p.x, py: hitPoint(p).y } : {}) });
-    if (e.k === 'node') gather.hitNode(sim, p, e);
+    if (nest) blight.hitNest(sim, p, e);
+    else if (e.k === 'node') gather.hitNode(sim, p, e);
     else if (e.k === 'mob') combat.attack(sim, p, e);
     else if (e.k === 'bld') machines.harvestBed(sim, p, e);
 }

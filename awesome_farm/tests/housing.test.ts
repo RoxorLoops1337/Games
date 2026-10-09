@@ -34,7 +34,8 @@ const build = (sim: Sim, kind: BuildingKind, tx: number, ty: number, rot = 0) =>
 test('every house piece is in the Build menu and can be made from what the game gives out', () => {
     const home = BUILD_ORDER.filter((b) => BUILDINGS[b].cat === 'home');
     for (const k of ['wall_wood', 'wall_stone', 'wall_brick', 'wall_window', 'doorway', 'roof_thatch', 'roof_tile', 'roof_slate'] as const) assert.ok(home.includes(k), `${k} is listed`);
-    for (const k of home) assert.ok(BUILDINGS[k].wall || BUILDINGS[k].roof || BUILDINGS[k].gate, `${k} has a role`);
+    for (const k of ['planks', 'path', 'brickfloor', 'slatefloor', 'carpet', 'sleepbed'] as const) assert.ok(home.includes(k), `${k} is listed with the walls (floors are where people look for them)`);
+    for (const k of home) assert.ok(BUILDINGS[k].wall || BUILDINGS[k].roof || BUILDINGS[k].gate || BUILDINGS[k].floor || k === 'sleepbed', `${k} has a role`);
 });
 
 test('walls and a floor make a room: walls are solid, the doorway is a way in that monsters cannot use', () => {

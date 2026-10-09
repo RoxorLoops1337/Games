@@ -148,6 +148,46 @@ export const TUNING = {
     feastCooldown: 20,           // s before the same farmer may feast at the same table again
     feastTopUp: 0.5,             // a dish is eaten only for a buff you hold less than this share of its time of (so a portion is never wasted)
     feastWindow: 30,             // s: the farmers who feasted within this long of each other fed "at once" (the chronicle line)
+    /** The Blight (sim/blight.ts, sim/raid.ts): nests on dark islands out at sea, how they grow, spread and merge, and what they send against the farm. */
+    blight: {
+        nests: 6,                // nests a world starts with (placed from the seed; an older world gets them when it loads)
+        nestMinHomeGap: 7,       // plots (straight line) between a starting nest and any home
+        nestOuterGap: 3,         // plots (each way) kept clear round the second ring's home spots (farmers nine and up)
+        nestOwnedGap: 3,         // … and between a starting nest and anybody's land (an old world with a big farm)
+        nestApart: 6,            // plots between two starting nests
+        nestHomeGuard: 2,        // a nest never spreads within this many plots of a home
+        nestMax: 24,             // nests in the whole world at most (they spread fast: this cap is what holds them)
+        nestSpreadBase: 0.5,     // the chance each nest seeds a level-1 nest on a neighbouring plot at dawn…
+        nestSpreadPerLv: 0.01,   // … plus this much for every level it has…
+        nestSpreadMax: 0.9,      // … up to this
+        nestMerge: 0.08,         // the chance at dawn that two nests of the same kind on neighbouring plots merge (their levels add up)
+        nestHp: 50,              // a level-1 nest's health…
+        nestHpPerLv: 0.25,       // … +25% for every level above the first
+        nestXp: 35,              // XP for destroying one, per level
+        nestCoins: [6, 12] as const,    // coins, per level
+        nestCores: 1,            // Blight Cores it leaves, plus one for every `nestCoresPer` levels
+        nestCoresPer: 3,
+        nestMend: 0.5,           // a damaged nest mends this share of its health at dawn
+        raidLvPer: 3,            // what a nest hatches (its brood, its raiders) is a level above the farmer's threat level for every this many nest levels…
+        raidLvMax: 6,            // … at most this many
+        broodMax: 3,             // monsters a stirred nest keeps around it
+        broodEvery: 9,           // s between two while a farmer is near
+        broodNear: 170,          // px: a farmer this close stirs it
+        broodLinger: 30,         // s after the last farmer leaves before its brood melts away
+        raidRange: 6,            // plots (straight line) from a farmer's land or base within which a nest counts as near, and sends a raid at night (sim/raid.ts)
+        raidShare: 0.5,          // of the night's monsters, this share comes from the nest instead…
+        raidPerNest: 1,          // … plus this many for every other nest in range…
+        raidPerLv: 4,            // … and one more for every this many levels of the nest…
+        raidMax: 10,             // … up to this many raiders
+        raidWindow: 6,           // s after nightfall within which the raiders set out
+        raidWade: 0.6,           // a raider wades across the sea at this share of its speed
+        raidMarch: 1.5,          // … and marches this much faster than it walks while no farmer is near
+        raidArrive: 28,          // px from the base where a raider stops marching
+        raidBldDmg: 4,           // damage to a wall, doorway or tower in a raider's way for every heart of its bite…
+        raidBldEvery: 1,         // … once a second (sim/defense.ts)
+        /** Hit points of the defense pieces (a broken one is gone; damaged ones mend at dawn). */
+        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260 },
+    },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */
     coop: {
         freezeRadius: 28,        // px: the Frost Giant's freezing blast

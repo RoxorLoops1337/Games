@@ -6,6 +6,7 @@ import { BUILDINGS, BuildingKind, CROPS, STATION_NAMES } from '../../shared/data
 import { spOf } from '../../shared/data/creatures';
 import { ITEMS } from '../../shared/data/items';
 import { NODES } from '../../shared/data/nodes';
+import { NEST_KINDS } from '../../shared/data/mobs';
 import { petsFirstAt } from '../../shared/data/bond';
 import { hasRod } from '../../shared/sim/fishing';
 import * as potluck from '../../shared/sim/potluck';
@@ -93,6 +94,7 @@ function promptText (h: PromptHost): string {
     if (t?.kind === 'ent' && t.ent.k === 'node') {
         const def = NODES[t.ent.kind];
         if (def.minTier !== undefined && d.toolTier < def.minTier) return `${def.name} — needs a better pick`;
+        if (t.ent.kind === 'nest') { const pl = h.world.plots[t.ent.plot]; return `${pl?.nk ? NEST_KINDS[pl.nk].name : def.name} Lv ${pl?.nl ?? 1}: swing your weapon to destroy it`; }
     }
     if (t?.kind === 'rock') {
         const ore = h.world.oreAt(t.tx, t.ty);
@@ -110,6 +112,7 @@ function promptText (h: PromptHost): string {
         if (def.grave) return `E: Take your things back${hold}`;
         if (def.storage) return `E: Open ${def.name}${hold}`;
         if (b.kind === 'table') return `E: ${potluck.promptOf(me, b, h.clock.time, (id) => potluck.cookName(h.players, id))}${h.distToBuilding(b) < d.reach + 6 ? hold : ''}`;
+        if (b.kind === 'sleepbed') return b.id === me.bed ? `Your bed: you wake up here after a fall${hold}` : `E: Sleep here (wake up here after a fall)${hold}`;
         const say = PROMPTS[b.kind];
         if (say) return say(b, hold);
         return `${def.dir || def.pole || def.gen || b.kind === 'drill' ? 'E: Inspect ' : ''}${def.name}${hold}`;

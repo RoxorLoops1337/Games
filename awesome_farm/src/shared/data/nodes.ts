@@ -7,9 +7,9 @@ import type { Res } from './items';
 export type NodeKind =
     | 'tree' | 'rock' | 'iron' | 'copper' | 'gold' | 'coal' | 'sand' | 'clay' | 'peat' | 'crystal'
     | 'bush' | 'flower' | 'mushroom' | 'reeds' | 'herb' | 'cotton' | 'chest' | 'vault' | 'mound'
-    | 'titan_oak' | 'titan_rock';
+    | 'titan_oak' | 'titan_rock' | 'nest';
 /** Skills key off the group (Lumberjack → wood, Prospector → ore…). */
-export type NodeGroup = 'wood' | 'stone' | 'ore' | 'earth' | 'gem' | 'plant' | 'chest';
+export type NodeGroup = 'wood' | 'stone' | 'ore' | 'earth' | 'gem' | 'plant' | 'chest' | 'nest';
 
 /** [resource, min, max, chance = 1] */
 type DropRoll = [Res, number, number, number?];
@@ -63,5 +63,7 @@ export const NODES: Record<NodeKind, NodeDef> = {
     mound:    { name: 'Buried treasure', hp: 2, xp: 8, group: 'chest', tex: () => 'mound', hit: 'dig', brk: 'dig', drops: [] },       // what it holds is rolled by sim/fortune.ts
     titan_oak:  { name: 'Great Oak', hp: 120, xp: 40, group: 'wood', tex: (b) => (b === 'snowcap' ? 'titan_pine' : 'titan_oak'), hit: 'hitWood', brk: 'breakTree', drops: [['wood', 36, 48], ['seed_pumpkin', 1, 2, 0.5]], tall: true, titan: true },
     titan_rock: { name: 'Titan Boulder', hp: 150, xp: 48, group: 'stone', tex: () => 'titan_rock', hit: 'hitStone', brk: 'breakRock', drops: [['stone', 36, 48], ['coal', 4, 8, 0.6]], titan: true },
+    // a Blight nest (sim/blight.ts): fought with weapons, its health and spoils go by its level (`NodeE.mhp`, `Plot.nl`); the drops here are what it is known to leave
+    nest:     { name: 'Blight Nest', hp: 50, xp: 35, group: 'nest', tex: () => 'nest', hit: 'nestHit', brk: 'nestDie', drops: [['blightcore', 1, 2], ['coin', 6, 12]] },
     chest:    { name: 'Treasure chest', hp: 1, xp: 10, group: 'chest', tex: () => 'chest', hit: 'openChest', brk: 'openChest', drops: [['coin', 10, 18], ['ironbar', 1, 2, 0.5], ['goldbar', 1, 1, 0.2], ['potion_heal', 1, 1, 0.35], ['seed_pumpkin', 1, 2], ['seed_melon', 1, 2, 0.5]] },
 };

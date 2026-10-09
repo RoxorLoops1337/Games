@@ -174,13 +174,18 @@
   const JAM_WHEN = 'every afternoon, 12:00 to 18:00';
   const bmgDue = (ch) => !!(ch && ch.flags && ch.flags.bmgSighted && !ch.flags.bmgMet && ch.day > ch.flags.bmgSighted);
   const bmgHere = (ch) => !!(ch && ch.flags && (ch.flags.bmgMet || bmgDue(ch)));
-  const N = (text) => ({ who: null, text }), BMG = (text) => ({ who: 'beeamgee', text }), PIG = (text) => ({ who: 'pigpen', mood: 'angry', text });
+  const N = (text) => ({ who: null, text }), BMG = (text) => ({ who: 'beeamgee', text }), PIG = (text) => ({ who: 'pigpen', mood: 'angry', text }), ROH = (text) => ({ who: 'rohzel', text }), PEN = (text) => ({ who: 'penny', text });
   const STORY = {
     firstJam: [N('You step into the circle by the graffiti wall.'), N('Strangers, all of them. None of them care where you slept last night.'), N('Maybe this is what you needed.')],
     sightJam: [N('Someone is standing at the back of the cypher.'), N('Grey beard. Denim jacket. Gold glasses. He does not perform.'), N('He nods once when you finish your round. Then he is gone.'), N('...who was that?')],
     sightBusk: [N('An old man with a grey beard watches your whole set from across the path.'), N('He does not drop a coin. He nods once when you finish. Then he is gone.'), N('...who was that?')],
     meet: [BMG('Saw you in the cypher the other day.'), BMG('You have got something. Raw. Unfinished. But something.'), BMG('Name is BeeAmGee. Been at this thirty years. This bench is my office.'), BMG('Sit with me any day for a free lesson. When you are ready for the real thing, private coaching is fifty bucks.')],
     pigpen: [N('The circle goes loud. A guy in a red bomber pushes in and stares you down.'), PIG('Yo. You. New face.'), PIG('You sound like you have been practising in a closet.'), PIG('Saturday nights at the bar. Climb the ladder. I will be waiting at the top.'), PIG('Do not bring a friend. You will need them on the way home.')],
+    // the bar beats (storyBattle, storyAfter showcase): the first battle won or lost, the first Friday showcase, the World Cup final
+    firstWin: [N('The bar is still shaking when you step off the stage.'), ROH('First win. Remember how this feels.'), ROH('Saturdays only get harder from here. Good.')],
+    firstLoss: [N('The judges point the other way. The room claps, politely.'), ROH('Everybody loses their first one.'), ROH('The ones who come back next Saturday are the ones I remember.')],
+    firstShowcase: [N('Friday night. A full house. By the last round they are shouting your name.'), ROH('That was a showcase. Same time next week?')],
+    champion: [N('Three finals. No breaks. The last card goes up.'), N('The whole bar is on its feet.'), PEN('Good battle. Enjoy the belt. I want it back next year.'), ROH('World Cup champion. In my bar.'), N('A box, a plant and forty dollars. Look at you now.')],
     famous: [N('The circle goes quiet mid-round.'), N('Heads turn. Someone you know from the videos just stepped into the cypher.'), N('They throw a thirty second flurry that nobody can answer. Then they are gone, walking off with two friends.'), N('Someone whispers their name. You pretend you were not watching.'), N('There is a long way to go.')],
   };
   const storyLines = (ch, id) => (id === 'meet' && ch.flags.bmgVia === 'busk' ? [BMG('Saw you busking the other day.')].concat(STORY.meet.slice(1)) : STORY[id] || []).map((l) => Object.assign({}, l));
@@ -206,6 +211,16 @@
       else if (!f.pigpenJam && n.jams >= JAM.pigpenJams) { f.pigpenJam = ch.day; id = 'pigpen'; }
       else if (!f.famousJam && n.jams >= JAM.famousJams && ch.fans >= JAM.famousFans) { f.famousJam = ch.day; id = 'famous'; }
     } else if (kind === 'busk' && !f.bmgSighted && n.busks >= JAM.sightBusks && ch.day >= JAM.sightBuskDay) { f.bmgSighted = ch.day; f.bmgVia = 'busk'; id = 'sightBusk'; }
+    else if (kind === 'showcase' && n.showcases === 1) id = 'firstShowcase';
+    if (id) fx.push({ t: 'story', id, lines: storyLines(ch, id) });
+    return id;
+  }
+  // after a battle: the first win, the first loss (before any win), the World Cup title. Played when you are back in the bar (3D: a cutscene on its stage)
+  function storyBattle(ch, win, final, fx) {
+    const n = ch.n; let id = null;
+    if (final === 'wc3' && win) id = 'champion';
+    else if (!final && win && n.battlesWon === 1) id = 'firstWin';
+    else if (!final && !win && n.battlesLost === 1 && !n.battlesWon) id = 'firstLoss';
     if (id) fx.push({ t: 'story', id, lines: storyLines(ch, id) });
     return id;
   }
@@ -317,7 +332,7 @@
       v: CFG.version, name: L.name || 'Hero', look: L, day: 1, minutes: 60,         // wakes 07:00 on day 1
       energy: CFG.startEnergy, maxEnergy: CFG.startEnergy, hunger: 70, mood: 60, cash: CFG.startCash, fans: 0,
       xp: 0, level: 1, stats: { mus: 3, tech: 3, ori: 3, show: 3 },
-      owned: {}, ach: {}, beat: {}, flags: { story: 1 }, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
+      owned: {}, ach: {}, beat: {}, flags: { story: 1, tapeNext: 0 }, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
       affinity: {}, seen: {}, history: [], songs: [], crew: [], patterns: [0, 1, 2, 3].map((i) => emptyPattern(i)), patIdx: 0,
       n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0, jams: 0 },
       created: 0, trainLv: defaultTrainLv(), sounds: START_SOUNDS.slice(),
@@ -885,6 +900,7 @@
         bumpStat(ch, 'tech', out.win ? 0.5 : 0.2); bumpStat(ch, 'ori', out.win ? 0.4 : 0.15);
         if (a.final === 'wc3' && out.win) ch.flags.worldcup = ch.day;
         spend(ch, a.final ? 45 : 75, a.final ? 12 : 20, fx, rng);
+        storyBattle(ch, out.win, a.final, fx);
         fx.push({ t: 'sfx', name: out.win ? 'win' : 'lose' }, { t: 'battleResult', opp: opp.id, out, rw });
         break;
       }
@@ -987,9 +1003,9 @@
         spend(ch, j.minutes, j.energy, fx, rng); fx.push({ t: 'sfx', name: 'coin' }); toast(j.text + ' +$' + j.cash, 'good');
         break;
       }
-      case 'tape': {                                               // watch a beatbox VHS tape on the couch
+      case 'tape': {                                               // watch a beatbox VHS tape on the couch (tape.js plays it; flags.tapeNext = the next history tape)
         if (ch.flags.tapeDay === ch.day) { toast('You already watched a tape today.', 'warn'); break; }
-        ch.flags.tapeDay = ch.day; ch.mood += 8; bumpStat(ch, 'ori', 0.35); gainXp(ch, 6, fx);
+        ch.flags.tapeDay = ch.day; ch.flags.tapeNext = (ch.flags.tapeNext | 0) + 1; ch.mood += 8; bumpStat(ch, 'ori', 0.35); gainXp(ch, 6, fx);
         spend(ch, 60, 2, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }); toast('You watch an old battle tape. Originality up.', 'good');
         break;
       }
@@ -1028,6 +1044,7 @@
     const tl = defaultTrainLv(), rl = raw.trainLv && typeof raw.trainLv === 'object' ? raw.trainLv : {};
     for (const g of TRAIN_GAMES) tl[g] = clamp(Math.floor(+rl[g] || 1), 1, TRAIN_CFG.levelMax);
     ch.trainLv = tl; ch.seen = raw.seen || {};
+    if (typeof ch.flags.tapeNext !== 'number' || !(ch.flags.tapeNext >= 0)) ch.flags.tapeNext = 0;   // the VHS history tapes watched (tape.js), default 0
     // saves from before the story (no flags.story): if they already met BeeAmGee on the old always-there bench, he stays met and on his bench
     if (!ch.flags.story) {
       const f = ch.flags, met = f.visited_park || f.tip_beeamgee || f.coachDay !== undefined || f.proCoachDay !== undefined || ch.seen.beeamgee || (ch.n.coaches || 0) > 0;
@@ -1101,7 +1118,7 @@
       TRAIN, TRAIN_CFG, TRAIN_GAMES, gameStat, idleGain, playGain, levelMul, defaultTrainLv,
       EAR_LEVELS, earQuestion, BEAT_LEVELS, BEAT_LANE, POSE_LEVELS, POSE_MOVES,
       SOUNDS, START_SOUNDS, soundUnlocked, soundsFor, soundRule, soundUnlockText, sweepSounds, metNpc,
-      JAM, JAM_WHEN, jamOn, bmgDue, bmgHere, STORY, STORY_TIPS, storyLines, storyTip, storyAfter, storyArrive,
+      JAM, JAM_WHEN, jamOn, bmgDue, bmgHere, STORY, STORY_TIPS, storyLines, storyTip, storyAfter, storyBattle, storyArrive,
     },
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = BBH.Core;

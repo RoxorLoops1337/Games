@@ -44,12 +44,14 @@
   // G.takeStory(place): the queued lines plus the beat that waits in this place (BeeAmGee on his bench), for the place scene's arrival dialog.
   // The other effects of an arrival beat (the lip roll card after meeting BeeAmGee) wait in G.storyFx until that dialog is closed: G.storyDone().
   G.storyQ = []; G.storyFx = [];
-  G.takeStory = function (place) {
-    let lines = []; for (const f of G.storyQ.splice(0)) lines = lines.concat(f.lines || []);
+  // G.takeStoryBeats(place) -> [{ id, lines }] keeps the beats apart (the 3D sibling stages each beat as a cutscene, r3/cine.js); G.takeStory flattens them into one dialog.
+  G.takeStoryBeats = function (place) {
+    const beats = G.storyQ.splice(0).map((f) => ({ id: f.id || null, lines: f.lines || [] }));
     const k = G.ch && Core.storyArrive ? Core.storyArrive(G.ch, place) : null;
-    if (k) { const r = Core.apply(G.ch, { t: 'story', k }, Math.random); G.setChar(r.char); for (const f of r.fx) { if (f.t === 'story') lines = lines.concat(f.lines || []); else G.storyFx.push(f); } }
-    return lines;
+    if (k) { const r = Core.apply(G.ch, { t: 'story', k }, Math.random); G.setChar(r.char); for (const f of r.fx) { if (f.t === 'story') beats.push({ id: f.id || null, lines: f.lines || [] }); else G.storyFx.push(f); } }
+    return beats;
   };
+  G.takeStory = function (place) { let lines = []; for (const b of G.takeStoryBeats(place)) lines = lines.concat(b.lines); return lines; };
   G.storyDone = function () { const fx = G.storyFx.splice(0); if (fx.length) G.play(fx); };
   G.playStory = function (then) { const lines = G.takeStory(E.scene && E.scene.id); if (lines.length) E.dialog(lines, () => { G.storyDone(); if (then) then(); }); else { G.storyDone(); if (then) then(); } return lines.length; };
 

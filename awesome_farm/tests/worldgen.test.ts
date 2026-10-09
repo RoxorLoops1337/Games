@@ -19,7 +19,7 @@ test('a new world is GRID by GRID plots indexed row by row, all wild, with the O
         assert.equal(p.gx, i % GRID);
         assert.equal(p.gy, Math.floor(i / GRID));
         assert.equal(p.owned, false);
-        if (!p.dread) assert.equal(p.nodes, 0, 'nothing grows on land nobody has raised');
+        if (!p.dread && !p.blight) assert.equal(p.nodes, 0, 'nothing grows on land nobody has raised (a nest isle holds only its nest)');
         if (!p.dread) assert.equal(p.veins, undefined, 'and no ore is carried for it');
     });
     const hearts = plots.filter((p) => p.heart);

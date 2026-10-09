@@ -48,6 +48,7 @@ export function buildLiving(S) {
     // TV
     const tvw = 1.52, tvh = 0.86, ty = 0.64; B.box(cx, ty, cz, tvw, tvh, 0.07, P.ink, { base: 0, tint: 0.01 }); B.box(cx, 0.54, cz, 0.5, 0.1, 0.22, P.inkL, { base: 0.1, taper: 0.6 });
     S.screen('tv', cx, ty + tvh / 2, cz + 0.038, tvw - 0.1, tvh - 0.1, 0, 0, [1.1, 1.1, 1.1]);
+    S.anchors.tv = { x: cx, y: ty + tvh / 2, z: cz + 0.038, w: tvw - 0.1, h: tvh - 0.1, deck: { x: cx, y: 0.24, z: cz + 0.2 } }; // the screen face and the tape deck (park3d/tape.js plays the VHS tape here)
     S.lights.push({ x: cx, y: 1.0, z: cz + 0.9, color: '#7ad8ff', r: 5.5, i: 0.9, flicker: 0.35, kind: 'tv' });
     hit.box(cx, cz + 0.02, 1.0, 0.27, 0);
     // posters above the TV

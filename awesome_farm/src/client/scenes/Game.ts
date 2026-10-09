@@ -54,6 +54,7 @@ import { canSwitchLive, loadView3D, Pointer2D, Pointer3D, type View3D, type View
 import { animateCrit, createCrit, CritFx } from '../world/critters';
 import { VeinLayer } from '../world/veins';
 import { TitanFx } from '../world/titan';
+import { BlightFx } from '../world/blight';
 import { SS } from '../res';
 import { physPressed, physReset } from '../input/layout';
 import { Sea } from '../world/sea';
@@ -151,6 +152,8 @@ export class GameScene extends Phaser.Scene {
     private crit!: CritFx;
     /** The "2+" badge, ring and health bar on Titan nodes (world/titan.ts). */
     private titanFx!: TitanFx;
+    /** The Blight: nests and wading raiders (world/blight.ts). */
+    private blightFx!: BlightFx;
     /** Ice blocks, curses and chains (co-op boss statuses). */
     private coFx!: CoFx;
     private veins: VeinLayer | null = null;
@@ -268,6 +271,7 @@ export class GameScene extends Phaser.Scene {
         };
         this.crit = new CritFx(this);
         this.titanFx = new TitanFx(this);
+        this.blightFx = new BlightFx(this, () => this.world);
         this.coFx = new CoFx(this);
         this.ambient = this.add.particles(0, 0, 'px', {
             emitting: false, speed: { min: 4, max: 14 }, angle: { min: 240, max: 300 },
@@ -564,7 +568,9 @@ export class GameScene extends Phaser.Scene {
             const risen: Plot[] = [], changed: Plot[] = [];
             for (const p of m.plots) {
                 const old = this.world.plots[p.i];
-                if (!old.owned && p.owned) risen.push(old);
+                // a plot bought, a nest isle rising out of the sea, or one cleansed (its ground turns back to its biome): re-tile it
+                if ((!old.owned && p.owned) || (old.blight ?? 0) !== (p.blight ?? 0)) risen.push(old);
+                for (const k of ['blight', 'nl', 'nk'] as const) if (!(k in p)) delete old[k];       // (a key gone from the plot is gone here too)
                 Object.assign(old, p);
                 changed.push(old);
             }
@@ -691,7 +697,8 @@ export class GameScene extends Phaser.Scene {
 
     private track (e: Ent) {
         if (e.k === 'bld') { this.blds.set(e.id, e); if (LANDMARKS.has(e.kind)) this.marks.set(e.id, e); if (BUILDINGS[e.kind].light || e.kind === 'furnace' || e.kind === 'coalgen') this.lit.set(e.id, e); }
-        else if (e.k === 'mob') { if (MOBS[e.kind].boss) this.marks.set(e.id, e); if (LIGHT_MOBS.has(e.kind)) this.lit.set(e.id, e); }
+        else if (e.k === 'mob') { if (MOBS[e.kind].boss) this.marks.set(e.id, e); if (LIGHT_MOBS.has(e.kind) || e.rd) this.lit.set(e.id, e); }       // (a raider carries the Blight's red glow: you see a raid coming in the dark)
+        else if (e.k === 'node' && e.kind === 'nest') this.lit.set(e.id, e);         // (a Blight nest smoulders in the dark)
         else if (e.k === 'proj') this.lit.set(e.id, e);
         else if (e.k === 'crit' && LIGHT_SPECIES.has(e.sp)) this.lit.set(e.id, e);
     }
@@ -716,6 +723,7 @@ export class GameScene extends Phaser.Scene {
         if (this.blds.delete(id)) this.bldVersion++;
         this.fv.remove(id);
         this.titanFx.forget(id);
+        this.blightFx.forget(id);
         if (e) vacate(this.world, e);
         if (e?.k === 'bld' && (BUILDINGS[e.kind].wall || BUILDINGS[e.kind].gate)) this.bviews.rejoinWalls(e);
         this.amb.roofs.delete(id);
@@ -816,6 +824,7 @@ export class GameScene extends Phaser.Scene {
             }
             if (e.k === 'mob') {
                 animateMob(this, v, e, dt, this.time.now);
+                if (e.rd) this.blightFx.wade(v, e, dt, !!MOBS[e.kind].flies);
             } else if (e.k === 'proj') {
                 animateProj(v, e, dt);
             } else if (e.k === 'crit') {
@@ -827,8 +836,11 @@ export class GameScene extends Phaser.Scene {
                 if (Math.random() < dt * (e.gold ? 4 : 1.4)) this.glint.explode(1, v.x + (Math.random() - 0.5) * 12, v.y - 3 - Math.random() * (v.sprite.displayHeight * 0.8));
             } else if (e.k === 'node' && NODES[e.kind].titan) {
                 this.titanFx.mark(v, e, this.inView(v.x, v.y - 16, 70));
+            } else if (e.k === 'node' && e.kind === 'nest') {
+                this.blightFx.nest(v, e, this.world.plots[e.plot], this.time.now);
             } else if (e.k === 'bld') {
                 const def = BUILDINGS[e.kind];
+                if (e.hp !== undefined) this.blightFx.defense(v, e);
                 this.fv.animate(v, e, dt, sun);
                 const working = def.proc && (e.prog ?? 0) > 0 && !!e.rcp;
                 if (working && Math.random() < dt * 5) this.ambient.explode(1, v.x + (Math.random() - 0.5) * 4, v.y - 10);
@@ -845,6 +857,7 @@ export class GameScene extends Phaser.Scene {
             }
         }
         this.titanFx.draw(this.time.now);
+        this.blightFx.draw();
     }
 
     // ── the farmer: stats, actions, what the HUD asks ───────────────────────

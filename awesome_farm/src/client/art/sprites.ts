@@ -17,6 +17,7 @@ import { registerStorybookDecor } from './storybook-decor';
 import { registerStorybookSites } from './storybook-sites';
 import { GROUND_VARIANTS, registerStorybookTiles, SHORE_FRAMES, VEIN_KINDS, VEIN_VARIANTS } from './storybook-ground';
 import { CAVE_FRAMES, registerStorybookMine } from './storybook-cave';
+import { registerStorybookBlight } from './storybook-blight';
 
 // ── Resource nodes ─────────────────────────────────────────────────────────
 // (trees, rocks, ores, bushes, flowers and mushrooms are painted in storybook.ts)
@@ -99,6 +100,9 @@ export const tileRockFace = (variant: number, ore = 0) => (ore ? TILE_CAVE + 15 
 /** The ore vein decals (storybook-ground.ts), after the cave: three variants per resource, in VEIN_KINDS order. */
 const TILE_VEIN = TILE_CAVE + CAVE_FRAMES;
 export const tileVein = (res: string, variant: number) => TILE_VEIN + VEIN_KINDS.indexOf(res) * VEIN_VARIANTS + (variant % VEIN_VARIANTS);
+/** A Blight nest isle (storybook-ground.ts, after the veins): its cliff, then its ground variants. */
+export const TILE_BLIGHT_CLIFF = TILE_VEIN + VEIN_KINDS.length * VEIN_VARIANTS;
+export const tileBlight = (variant: number) => TILE_BLIGHT_CLIFF + 1 + (variant % GROUND_VARIANTS);
 
 // ── Registration ───────────────────────────────────────────────────────────
 function registerShapes (scene: Phaser.Scene) {
@@ -138,7 +142,7 @@ export const ART_GROUPS: [string, (scene: Phaser.Scene) => void][] = [
     ['farmers', (s) => { registerStorybookChars(s); registerStorybookWorn(s); }],
     ['houses', (s) => { registerStorybookHouse(s); registerStorybookLogo(s); }],
     ['nature', registerStorybookNature],
-    ['buildings', (s) => { registerStorybookBuildings(s); registerStorybookLuck(s); registerStorybookMine(s); }],
+    ['buildings', (s) => { registerStorybookBuildings(s); registerStorybookLuck(s); registerStorybookMine(s); registerStorybookBlight(s); }],
     ['icons', (s) => { makeSprite(s, 'i_coin', COIN); registerIcons(s, 0, 4); }],
     ['tools', (s) => registerIcons(s, 1, 4)],
     ['things', (s) => registerIcons(s, 2, 4)],

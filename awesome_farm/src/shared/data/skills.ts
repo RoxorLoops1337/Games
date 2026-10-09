@@ -123,6 +123,7 @@ const COMBAT = branch('combat', [
     ['c_resolve', "Hero's Resolve",   'k_crown',  6, -0.5, ['c_exec', 'c_heal'], 1, 4, { maxHearts: 2, dmgPct: 0.2, armor: 0.5 }, null, 'Stand where others fall.', true],
     ['c_last',   'Unbreakable',       'k_crown',  7, 0,  ['c_resolve'], 1, 4, { dodge: 0.08, armor: 0.5, vamp: 0.1 }, null, 'You simply do not stay down.', true],
     ['c_war',    'Warcry',            'k_burst',  5, 2,  ['c_dash'], 3, 1, { dmgPct: 0.06, swingSpeed: 0.05 }],
+    ['c_towers', 'Watchtowers',       'k_tower',  4, 2.8, ['c_wind', 'c_dodge'], 1, 2, null, ['towers'], 'Raids come from the Blight nests at night: build Fortified Walls (Build, Defense).'],
 ]);
 
 const TAMING = branch('taming', [
@@ -201,6 +202,7 @@ export const UNLOCK_INFO: Record<string, string> = {
     expedition: 'Unlocks the Expedition Dock and the Rift Forge.',
     altar: 'Unlocks the Boss Altar: craft sigils and summon bosses.',
     mineshaft: 'Unlocks the Mine Shaft: a way down to the caves under the world.',
+    towers: 'Unlocks the Defense tab: the Fortified Wall against the Blight\u2019s raids.',
 };
 
 /** The skill that grants an unlock token (null for a token no skill gives). */

@@ -114,6 +114,16 @@ export class Minimap {
                     rect(g, sx, sy, m * 2, m * 2, PAL.cream); rect(g, sx + Math.max(0, m - 1), sy + m * 2, Math.max(1, m), Math.max(1, m - 1), PAL.cream);
                     rect(g, sx, sy + Math.floor(m / 2), Math.max(1, Math.floor(m * 0.7)), Math.max(1, Math.floor(m * 0.7)), PAL.ink); rect(g, sx + m * 2 - Math.max(1, Math.floor(m * 0.7)), sy + Math.floor(m / 2), Math.max(1, Math.floor(m * 0.7)), Math.max(1, Math.floor(m * 0.7)), PAL.ink);
                 }
+            } else if (p.blight === 1) {
+                // a Blight nest isle: bruised dark land with a red mark that throbs, bigger for a higher level (always shown: a reason to go out)
+                rect(g, cx, cy, cell, cell, PAL.night);
+                rect(g, cx, cy, cell, cell, PAL.berry, 0.18 + 0.12 * Math.sin(this.t * 3 + p.gx * 1.7));
+                const m = Math.max(1, Math.round(cell * Math.min(0.42, 0.18 + 0.03 * (p.nl ?? 1)))), mx = cx + Math.floor(cell / 2), my = cy + Math.floor(cell / 2);
+                rect(g, mx - m - 1, my - m - 1, m * 2 + 2, m * 2 + 2, PAL.ink); rect(g, mx - m, my - m, m * 2, m * 2, PAL.berry);
+            } else if (p.blight === 2) {
+                // a cleansed nest isle: plain land nobody owns yet (anybody may buy it)
+                rect(g, cx, cy, cell, cell, BIOME_DEFS[p.biome].color, 0.45);
+                rect(g, cx + 1, cy + 1, cell - 2, cell - 2, PAL.foam, 0.2 + 0.12 * Math.sin(this.t * 3));
             } else if (f.world.isPurchasable(p)) {
                 const pulse = 0.25 + 0.15 * Math.sin(this.t * 3);
                 rect(g, cx + 1, cy + 1, cell - 2, cell - 2, PAL.foam, pulse);

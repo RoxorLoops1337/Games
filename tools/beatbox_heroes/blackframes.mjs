@@ -101,7 +101,9 @@ export const ROUTES = {
     await step(page, 'slots'); await clickText(page, '#ui .btn', 'NEW GAME'); log('slots', await ready(page, 'slots', 'title')); await sleep(700);
     await step(page, 'creator'); await page.locator('#ui .panel').first().click(); log('creator', await ready(page, 'creator', 'creator')); await dwell(page, 2000);
     await page.locator('#ui input[type=text]').fill('Nova'); await sleep(300); await clickText(page, '#ui .btn', 'GO!');
-    await step(page, 'intro'); log('intro', await ready(page, 'intro', null)); await sleep(1500); await clickText(page, '#ui .btn', 'SKIP');
+    // the intro is the 3D opening film (r3/cine.js) when films are on, else the 2D plates: either way its SKIP ends it
+    await step(page, 'intro'); log('intro', await until(page, () => BBH.Eng.sceneName === 'intro' && BBH.Eng.scene && BBH.Eng.scene.t > 0, null, 120000)); await sleep(2500);
+    await page.evaluate(() => { const b = document.querySelector('.cin .cin-skip') || [...document.querySelectorAll('#ui .btn')].find((x) => x.textContent.trim() === 'SKIP'); if (b) b.click(); });
     await step(page, 'street'); log('street', await ready(page, 'street', 'street', 240000)); await sleep(800); await skipDialogs(page);
     await page.locator('#ui .btn', { hasText: 'GOT IT' }).first().click({ timeout: 8000 }).catch(() => {}); await seedChar(page); await dwell(page, 1500);
     await ROUTES.loop(page, log);

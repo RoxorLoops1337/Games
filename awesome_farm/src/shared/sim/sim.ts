@@ -16,6 +16,7 @@ import { BODY_Y, dist, distToBuilding, hitPoint } from '../geom';
 import { PAL } from '../palette';
 import { Rng } from '../rng';
 import { World } from '../world';
+import * as blight from './blight';
 import * as boss from './boss';
 import * as chronicle from './chronicle';
 import * as clock from './clock';
@@ -91,7 +92,8 @@ export class Sim {
     /** The farmers who have unlocked the developer menu (sim/dev.ts). Runtime only: never saved, never sent, gone when they leave. */
     readonly devs = new Set<string>();
 
-    nightSpawns: { at: number; kind?: MobKind; near?: string; plot?: number }[] = [];
+    /** The night's monsters still to come: near a farmer, on a plot, or (`raid`: a nest isle's plot) a raider marching on the base at rx, ry. */
+    nightSpawns: { at: number; kind?: MobKind; near?: string; plot?: number; raid?: number; rx?: number; ry?: number }[] = [];
     /** Damage dealt to each monster by each player (boss rewards). Not saved. */
     private credits: Record<number, Record<string, number>> = {};
     dashT: Record<string, number> = {};
@@ -154,6 +156,7 @@ export class Sim {
         this.homeGroups = this.countHomeGroups();
         shop.refresh(this);
         dread.ensure(this);
+        blight.ensure(this);                           // (the Blight's first nests: placed once, from the seed)
         if (state.mine) mines.ensure(this);            // the caves have been visited: make them, with the dug-out rock opened again
         uber.link(this);                               // (every Uber Chest opens the one shared store)
     }
@@ -517,6 +520,7 @@ export class Sim {
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
+        blight.update(this);
         rift.update(this, dt);
         costatus.update(this, dt);
         death.update(this);

@@ -91,10 +91,10 @@ Backpack's paper doll and for friends (`client/art/storybook-worn.ts`).
 **Dedicated chests:** the Chest window's *Sort & label* sets what a chest takes (`data/filters.ts`: 13 categories like Ores or Seeds, or single items) and the icon it wears on a plate above it. Players, inserters, drills and creature workers all respect it (`accepts`, `stashAt`); sorting creatures treat a labelled chest as the fixed home of what it takes.
 **Uber Chests** (skill *Uber Chests* in Industry, after Fast Belts or Overclock): every Uber Chest in the world opens the same store, shared by the whole farm, and each one built adds 800 room (`sim/uber.ts`). The store is `WorldState.uber.inv` and every Uber Chest's `inv` is that very object (linked on load and on build), so hands, inserters, creatures and crafting work it like any chest; a list of nearby chests keeps only one of them (`oneUber`), touching one touches all, and taking the last one down keeps the store for the next.
 A **Doorway can be set straight into a wall** (it replaces the piece, gives the wall's materials back and turns to fit the run). **Holding X takes down what you point at** (outlined, with a progress bar; walls and doorways say so in the prompt). Pieces you lay in numbers (garden beds, chests, walls, floors, belts, fences, lamps) keep being placed until you right-click, press Esc or run out of materials; a station, machine, workplace or landmark (Workbench, Furnace, Den, Dock, the Golden Windmill…) is placed once (`isOneOff` in `world/placing.ts`). **Crafting reaches into the chests** within eight tiles of you (`sim/pool.ts`: pockets first, then the nearest chests; coins stay in the pockets), on the server and in the craft window.
-Lay a floor (Decor), raise **walls** (wood, stone, brick, window; 16-frame autotile, they join up), put in a
+Lay a floor (the **Floors & walls** tab, where the walls and roofs are too), raise **walls** (wood, stone, brick, window; 16-frame autotile, they join up), put in a
 **doorway** (you walk through, monsters cannot: `World.gate`, used by `mobBlocked`) and cover it with a
 **roof** (thatch, tile, slate; `World.roof`; drawn over everything and faded while you stand under it).
-Dragging lays a line of floor, wall or roof. A ring of wall with one doorway is a base (Ferro's quests teach it).
+Dragging lays a line of floor, wall or roof. A ring of wall with one doorway is a base (Ferro's quests teach it). A **Bed** (Floors & walls) is where you wake up after a fall instead of at home: placing one, or pressing E on any bed, makes it yours (one wake-up spot each, `sim/bed.ts`).
 
 ### Automation (Factorio-lite)
 Drills mine the veins under them; belts carry items; inserters move items between belts,
@@ -217,6 +217,29 @@ A **Mine Shaft** (skill *Mine Shafts* in the Gathering branch, Special tab of th
 
 ### The Dread Reaches (`sim/dread.ts`)
 Four **3×3 blocks of haunted bog** sit out in the wilds on the four diagonals (`markDread`; they slide aside where somebody owns the ground in older worlds). They are land from the start and nobody's: nobody can buy them, but the land beside them is bought as usual, and you can build there. They are stocked once with rich ore, a chest node in every outer plot and a vault by the middle. **The dead haunt a block day and night** while a farmer is within (`TUNING.dreadBase` + `dreadPerFarmer` each, up to `dreadMax`; undead one tier tougher than your level calls for, a fifth of them elite; they thin out 30 s after the last farmer leaves). **A warden** (an altar boss: Frost Giant, Dune Pharaoh, Stone Colossus or Bog Witch by block) stands in the middle with `wardenHp` × the health and `wardenDmg` × the damage; he never retreats, mends when alone, and wakes again `wardenRespawnDays` after he falls. His defeat gives the ordinary boss spoils plus two gold crates, rift shards and a chance at a mythic one. The client dims the world to violet inside a block (`Game.dreadAmount`), and the map shows each block with a skull.
+
+### The Blight (`sim/blight.ts`, `sim/raid.ts`)
+Out at sea, beyond reach at first, dark **nest isles** carry **Blight nests** (Factorio's spreading biter nests, Kingdom Two Crowns' portals).
+A nest isle is a plot marked `blight` (1 while its nest lives: land, nobody's, **not for sale**; 2 once cleansed: land anybody may buy,
+and buying it makes it ordinary land). The nest is a `nest` node in its middle, fought with your **weapon** (it is not cleared at dawn).
+Its **level** (`Plot.nl`) is 1 when it rises and grows by one every night; its health, its brood and its spoils grow with it. Its
+**kind** (`Plot.nk`: Bone, Swarm, Beast or Spirit Nest, `NEST_KINDS` in `data/mobs.ts`, from its isle's biome) decides which family of
+monsters it hatches. A world starts with six nests placed from the seed (an older world gets the same ones when it loads:
+`blight.ensure`), at least seven plots from every first-ring home and clear of the second ring's home spots. **Each dawn** every nest
+grows a level, two nests of the same kind on neighbouring plots may **merge** (8%: one nest on the higher one's plot with both levels
+added; the other isle is cleansed), and every nest may **spread** a level-1 nest of its kind onto a neighbouring wild plot (50% plus 1%
+per level, up to 90%; never onto anybody's land, the Dread Reaches, the Old Heart or within two plots of a home; at most `nestMax`
+nests). A farmer near a nest wakes its **brood**. Destroying a nest pays everyone who fought there XP, coins and **Blight Cores** by its
+level, and the isle can be bought. The map marks every nest in red.
+**Raids** (They Are Billions, Valheim, Minecraft raids): at nightfall, a farmer whose **base** (the campfire on their own land nearest
+to them, or their home island) has a living nest within six plots gets half the night's monsters (plus one per other nest in range and
+per four nest levels, at most ten) as a raiding party from the nearest nest, of its kind and a level higher for every three nest
+levels. The dusk warning says where it gathers. Raiders **wade** across the sea (slower, with a red glow so you see them coming),
+march on the base and attack the **walls and doorways** in their way (`BuildE.hp`: wood 40, stone 100, brick 130, doorway 60, and the
+**Fortified Wall**, iron-bound stone, 260, in the Build menu's **Defense** tab after the Combat skill *Watchtowers*); a piece at 0 breaks
+(nothing is given back) and everything hurt **mends at dawn** (`sim/defense.ts`). A farmer close by is fought as usual. Raiders melt
+away at dawn. Without a
+nest in range a night is exactly what it always was (nothing rolls the world's dice unless a raid is coming). Every number is a dial in `TUNING.blight`. Test: `tests/blight.test.ts`.
 
 ### Co-op
 When down you can wait for a friend to revive you (hold E, which costs nothing) or press **R** (or run out the clock) to wake up at home, which costs **half the XP you have towards the next level and your whole backpack**: it stays where you fell as a **Lost Backpack** (`sim/death.ts`: a hidden building, take-only, anybody can fetch from it, gone when empty or after `TUNING.packLife`). Coins and what you wear are safe, and an expedition costs nothing.
