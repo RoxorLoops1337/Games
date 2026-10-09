@@ -6,6 +6,9 @@
 // world/*: farmers (how farmers are drawn and moved), placing (the building ghost), interact (targets and the keys),
 // hands (the hotbar and pods), ambience (hearths, roofs, caves, waves), buildviews (what a building wears),
 // factoryview (machines, wires, badges), prodhist, and combat, critters, titan, costatus; juice/slowmo is the Perfect beat.
+//
+// The view setting (2D, or 3D beta) changes only who draws the world and how a pointer becomes a spot in it: see
+// world/view3d-bridge.ts. In 3D this scene is hidden but runs exactly as in 2D, feeding the 3D view the same state and events.
 
 import * as Phaser from 'phaser';
 import { RIFT_ISLANDS, TILE, TUNING, WORLD_TILES, ZOOM } from '../../shared/config';
@@ -45,7 +48,9 @@ import { computePrompt, type PromptHost } from '../ui/prompt';
 import type { TipData } from '../ui/kit';
 import type { Blueprint } from '../../shared/blueprint';
 import { mixc } from '../art/paint';
-import { saveSettings, settings } from '../settings';
+import { saveSettings, settings, type ViewMode } from '../settings';
+import { stashResume } from '../net/connection';
+import { canSwitchLive, loadView3D, Pointer2D, Pointer3D, type View3D, type View3DFarmer, type View3DFrame, type WorldPointer, type XY } from '../world/view3d-bridge';
 import { animateCrit, createCrit, CritFx } from '../world/critters';
 import { VeinLayer } from '../world/veins';
 import { TitanFx } from '../world/titan';
@@ -164,6 +169,13 @@ export class GameScene extends Phaser.Scene {
     readonly blds = new Map<number, BuildE>();
     /** Bumped when a building appears or goes (the power wires and the building list are rebuilt from it). */
     bldVersion = 0;
+    /** How the world is drawn right now ('3d' only once the 3D view has loaded), the 3D view itself, and the pointer bridge for the view in use. */
+    viewMode: ViewMode = '2d';
+    view3d: View3D | null = null;
+    private ptr2d!: Pointer2D;
+    private ptr!: WorldPointer;
+    private viewToken = 0;
+    private farmers3d: View3DFarmer[] = [];
 
     constructor () {
         super('Game');
@@ -183,6 +195,7 @@ export class GameScene extends Phaser.Scene {
         this.marks = new Map(); this.lit = new Map(); this.blds.clear(); this.bldVersion = 0;
         this.seaT = 0; this.tweens.timeScale = 1;
         this.promptIn = 0; this.gates = []; this.gateFrame = -1;
+        this.viewMode = '2d'; this.view3d = null; this.farmers3d = [];
     }
 
     create () {
@@ -235,6 +248,7 @@ export class GameScene extends Phaser.Scene {
             tip: (d) => this.emitEvent('hud:factip', d),
             busy: () => this.menuOpen || this.overUi || !!this.placer.cur || this.bp.active,
             pop: (x, y, n) => this.pop(x, y, n),
+            toWorld: (p, out, aim) => this.toWorld(p, out, aim),
         });
         this.promptHost = {
             get meS () { return self.meS!; },
@@ -267,6 +281,10 @@ export class GameScene extends Phaser.Scene {
         }).setDepth(9e4);
         this.cameras.main.startFollow(this.camTarget, true, 0.15, 0.15);
         this.setupInput();
+        this.ptr2d = new Pointer2D(() => this.cameras.main);
+        this.ptr = this.ptr2d;
+        this.events.once('shutdown', () => { this.viewToken++; this.dropView3d(); });
+        if (settings.view === '3d' && canSwitchLive(this.game)) void this.setView('3d');       // (booted in 2D, the title screen already reloaded into 3D)
         this.scene.launch('Hud');
         this.exposeDebug();
         // the solo world is written every 20 s, and again the moment the page is closed or sent to the background (a phone may never say goodbye)
@@ -291,6 +309,59 @@ export class GameScene extends Phaser.Scene {
 
     send (c: Cmd) { this.conn.send(c); }
 
+    /** A pointer onto the world (sim pixels), through the view in use (world/view3d-bridge.ts). `aim`: pick a thing, not the ground. */
+    toWorld (p: Phaser.Input.Pointer, out: XY, aim = false) { return this.ptr.toWorld(p, out, aim); }
+
+    /** A farmer swung (the 3D view poses its model; the 2D one is animated by the farmers module itself). */
+    swung (id: string) { this.view3d?.swing(id); }
+
+    // ── the view: 2D or 3D ──────────────────────────────────────────────────
+    /**
+     * Draw the world in 2D or in 3D (and remember the choice). Live when the page's canvas allows it (it booted in 3D, so the Phaser
+     * canvas is transparent); otherwise the world is saved and the page reloads straight back into it in the new view ('reload').
+     */
+    async setView (mode: ViewMode): Promise<'live' | 'reload'> {
+        settings.view = mode;
+        saveSettings();
+        const token = ++this.viewToken;
+        if (mode === '2d') {
+            this.dropView3d();
+            return 'live';
+        }
+        if (this.view3d) return 'live';
+        if (!canSwitchLive(this.game)) { this.reloadInto(); return 'reload'; }
+        try {
+            const make = await loadView3D();
+            if (token !== this.viewToken || !this.sys.isActive()) return 'live';          // (switched back, or left the world, while it loaded)
+            const v = make({ canvas: this.game.canvas, entCenter: (e) => this.act.entCenter(e) });
+            this.view3d = v;
+            this.ptr = new Pointer3D(v, this.ptr2d);
+            this.viewMode = '3d';
+            if (this.ready) v.welcome(this.world, Object.values(this.ents));
+            this.scene.setVisible(false);              // (the scene still runs: only its drawing stops)
+        } catch (err) {
+            console.warn('The 3D view could not start:', err);
+            settings.view = '2d'; saveSettings();
+            this.emitEvent('hud:toast', { text: 'The 3D view could not start here: back to 2D', icon: 'k_gear', color: PAL.berry });
+        }
+        return 'live';
+    }
+
+    private dropView3d () {
+        this.view3d?.dispose();
+        this.view3d = null;
+        this.ptr = this.ptr2d;
+        this.viewMode = '2d';
+        if (this.sys.isActive()) this.scene.setVisible(true);
+    }
+
+    /** Save, note how to come back, and reload: the title screen opens this same world again at once (net/connection.ts `takeResume`). */
+    private reloadInto () {
+        stashResume(this.conn.resumeInfo());
+        this.conn.close();
+        location.reload();
+    }
+
     // ── input ───────────────────────────────────────────────────────────────
     private setupInput () {
         const kb = this.input.keyboard!;
@@ -300,14 +371,14 @@ export class GameScene extends Phaser.Scene {
         this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
             if (!this.ready || this.menuOpen) return;
             if (this.bp.active) {
-                p.positionToCamera(this.cameras.main, this.pointerWorld); this.mouseAimT = 2;
+                this.toWorld(p, this.pointerWorld); this.mouseAimT = 2;
                 if (p.wasTouch && this.bp.mode === 'paste') { this.placer.touchAimDown(p); return; }
                 if (p.wasTouch) this.aimPointer = p;                // (copying: this finger draws the box)
                 if (this.bp.pointerDown(p.rightButtonDown())) return;
             }
             if (p.rightButtonDown()) { this.placer.cancel(); return; }
             if (p.middleButtonDown() || (p.event as MouseEvent | undefined)?.altKey) {
-                p.positionToCamera(this.cameras.main, this.pointerWorld);
+                this.toWorld(p, this.pointerWorld);
                 this.send({ t: 'ping', x: Math.round(this.pointerWorld.x), y: Math.round(this.pointerWorld.y) });
                 return;
             }
@@ -388,6 +459,39 @@ export class GameScene extends Phaser.Scene {
         this.bp.update();
         this.amb.drawBrackets(this.act.target, (id) => this.views.get(id));
         if ((this.promptIn -= dt) <= 0) { this.promptIn = 0.1; this.prompt = computePrompt(this.promptHost); }       // (ten times a second is as fast as anyone reads)
+        this.view3d?.frame(wdt, this.frame3d());
+    }
+
+    /** What the 3D view draws this frame, read from the scene (world/view3d-bridge.ts View3DFrame). */
+    private frame3d (): View3DFrame {
+        const list = this.farmers3d, l = this.local;
+        list.length = 0;
+        for (const pv of this.farmers.values()) {
+            const mine = pv.id === this.me, p = this.players[pv.id];         // (your own record is kept there too, whole)
+            if (!p) continue;
+            const held = mine ? this.heldItem() : null;
+            list.push(mine
+                ? { id: pv.id, p, x: l.x, y: l.y, fx: l.face.x, fy: l.face.y, moving: l.moving, hold: held && hotKind(held) === 'gear' ? held : undefined }
+                : { id: pv.id, p, x: pv.x, y: pv.y, fx: p.fx, fy: p.fy, moving: p.moving });
+        }
+        return {
+            me: this.me, camX: l.x, camY: l.y, zoom: this.zoomLevel, clock: this.clock, seed: this.seed, farmers: list,
+            placing: this.placer.cur ? { kind: this.placer.cur.kind, tx: this.placer.cur.tx, ty: this.placer.cur.ty, rot: this.placer.cur.rot, valid: this.placer.cur.valid } : null,
+            target: this.targetSpot(),
+            shake: settings.shake,
+        };
+    }
+
+    /** Where the thing a swing would hit stands (sim pixels) and how big a ring it gets (tiles). */
+    private targetSpot (): View3DFrame['target'] {
+        const t = this.act.target;
+        if (!t) return null;
+        if (t.kind === 'rock') return { x: (t.tx + 0.5) * TILE, y: (t.ty + 0.5) * TILE, r: 0.55 };
+        const e = t.ent;
+        if (e.k === 'node') return { x: (e.tx + 0.5) * TILE, y: (e.ty + 0.5) * TILE, r: 0.6 };
+        if (e.k === 'bld') { const [w, h] = BUILDINGS[e.kind].size; return { x: (e.tx + w / 2) * TILE, y: (e.ty + h / 2) * TILE, r: Math.max(w, h) * 0.6 }; }
+        const v = this.views.get(e.id);
+        return { x: v?.x ?? e.x, y: v?.y ?? e.y, r: e.k === 'mob' ? Math.max(0.6, (MOBS[e.kind].r / TILE) * 1.3) : 0.6 };
     }
 
     // ── messages ────────────────────────────────────────────────────────────
@@ -442,6 +546,7 @@ export class GameScene extends Phaser.Scene {
         for (const p of Object.values(this.players)) if (p.online) this.farmers.ensure(p);
         this.camTarget.set(this.local.x, this.local.y - 8);
         this.cameras.main.centerOn(this.local.x, this.local.y - 8);
+        this.view3d?.welcome(this.world, Object.values(this.ents));
         this.ready = true;
         this.emitEvent('hud:ready');
         this.emitEvent('hud:plotsChanged');
@@ -456,13 +561,15 @@ export class GameScene extends Phaser.Scene {
         if (m.prod) this.prodHist.set(m.prod, this.clock.time);
         if (m.shop) this.shopState = m.shop;
         if (m.plots.length) {
-            const risen: Plot[] = [];
+            const risen: Plot[] = [], changed: Plot[] = [];
             for (const p of m.plots) {
                 const old = this.world.plots[p.i];
                 if (!old.owned && p.owned) risen.push(old);
                 Object.assign(old, p);
+                changed.push(old);
             }
             this.world.recompute();
+            this.view3d?.plots(changed, risen);
             for (const plot of risen) {
                 this.tiles?.redraw(plot, (x, y, ring) => {
                     for (let i = 0; i < 6; i++) {
@@ -479,7 +586,7 @@ export class GameScene extends Phaser.Scene {
             else this.amb.pendingDug.push(...m.dug);
         }
         for (const p of m.players) this.updatePlayerData(p);
-        for (const e of m.ev) this.event(e);
+        for (const e of m.ev) { this.event(e); this.view3d?.event(e, this.me); }
         for (const e of m.ents) this.upsert(e);
         for (const id of m.gone) this.removeEnt(id);
     }
@@ -591,6 +698,7 @@ export class GameScene extends Phaser.Scene {
 
     private upsert (e: Ent) {
         this.ents[e.id] = e;
+        this.view3d?.upsert(e);
         const v = this.views.get(e.id);
         if (!v) { occupy(this.world, e); this.createView(e, true); return; }
         v.ent = e;
@@ -603,6 +711,7 @@ export class GameScene extends Phaser.Scene {
     private removeEnt (id: number) {
         const e = this.ents[id];
         delete this.ents[id];
+        this.view3d?.remove(id);
         this.marks.delete(id); this.lit.delete(id);
         if (this.blds.delete(id)) this.bldVersion++;
         this.fv.remove(id);
@@ -903,10 +1012,9 @@ export class GameScene extends Phaser.Scene {
         cam.setZoom(cam.zoom + (want - cam.zoom) * Math.min(1, dt * 12));
     }
 
-    /** World position → screen position for the HUD (camera has no rotation). */
+    /** World position → screen position for the HUD, through the view in use (2D: the camera has no rotation; 3D: projected through the 3D camera). */
     worldToScreen (x: number, y: number) {
-        const cam = this.cameras.main, v = cam.worldView, z = cam.zoom / SS;
-        return { x: (x - v.x) * z, y: (y - v.y) * z };
+        return this.ptr.toScreen(x, y);
     }
 
     /** The creatures at work close to you (workers and companions with something to do), where they are drawn, for the HUD's captions. */

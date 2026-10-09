@@ -201,12 +201,20 @@ export class MenuScreen implements Screen {
         pane.add(this.win.put(slider(s, 0, 0, 200, settings.volume, (v) => { settings.volume = v; saveSettings(); }).root, L + colW - 204, IN_Y + 92));
         label(L, IN_Y + 122, 'Music volume');
         pane.add(this.win.put(slider(s, 0, 0, 200, settings.music, (v) => { settings.music = v; saveSettings(); }, PAL.plum).root, L + colW - 204, IN_Y + 132));
-        this.heading(L, IN_Y + 176, colW, 'Screen');
-        toggle(L, IN_Y + 214, 'Screen shake', undefined, () => settings.shake, (v) => { settings.shake = v; });
-        toggle(L, IN_Y + 258, 'Show FPS', undefined, () => settings.fps, (v) => { settings.fps = v; });
+        this.heading(L, IN_Y + 168, colW, 'Screen');
+        toggle(L, IN_Y + 204, 'Screen shake', undefined, () => settings.shake, (v) => { settings.shake = v; });
+        toggle(L, IN_Y + 244, 'Show FPS', undefined, () => settings.fps, (v) => { settings.fps = v; });
+        // the view: 2D (the classic) or 3D (beta); the same world, menus and keys (world/view3d-bridge.ts). Live, or one reload back into this world.
+        const farm = this.ctx.farm;
+        label(L, IN_Y + 284, 'World view', '3D is new (beta): the same world, menus and keys.');
+        const vb = pane.button(L + colW - 44, IN_Y + 294, 88, ROW_H, settings.view === '3d' ? '3D' : '2D', () => {
+            const mode = settings.view === '3d' ? '2d' : '3d';
+            vb.setLabel(mode === '3d' ? '3D' : '2D'); vb.setStyle(mode === '3d' ? STYLES.lime : STYLES.dark);
+            void farm.setView(mode).then((how) => { if (how === 'reload' && vb.root.scene) vb.setLabel('…'); });
+        }, { style: settings.view === '3d' ? STYLES.lime : STYLES.dark, size: 14, ink: settings.view === '3d' });
         // full screen: on a phone the first tap goes full screen by itself; this is the switch (and works on a computer too)
-        label(L, IN_Y + 302, 'Full screen', deviceText('Phones go full screen, sideways, on the first tap.', 'Goes full screen, sideways, on the first tap.'));
-        const fs = pane.button(L + colW - 44, IN_Y + 312, 88, ROW_H, s.scale.isFullscreen ? 'On' : 'Off', () => {
+        label(L, IN_Y + 328, 'Full screen', deviceText('Phones go full screen, sideways, on the first tap.', 'Goes full screen, sideways, on the first tap.'));
+        const fs = pane.button(L + colW - 44, IN_Y + 338, 88, ROW_H, s.scale.isFullscreen ? 'On' : 'Off', () => {
             setFullscreenSetting(s.game, !s.scale.isFullscreen);
             s.time.delayedCall(250, () => { if (!fs.root.scene) return; fs.setLabel(s.scale.isFullscreen ? 'On' : 'Off'); fs.setStyle(s.scale.isFullscreen ? STYLES.lime : STYLES.dark); });
         }, { style: s.scale.isFullscreen ? STYLES.lime : STYLES.dark, size: 14, ink: s.scale.isFullscreen });

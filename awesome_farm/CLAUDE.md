@@ -19,6 +19,8 @@ folder's own `node_modules`): use `npm run check` *in this folder* (or `npm run 
 
 - **Client:** Phaser 4.0.0 (WebGL, `pixelArt`, `roundPixels`, DOM container for the title
   screen's text fields), TypeScript 5.7 strict, Vite 6.
+- **3D view (beta, a player's choice):** three.js 0.160 (`src/client3d`, procedural low-poly models, no image files), a lazily loaded
+  chunk drawn under the Phaser HUD. 2D stays the default; see "The 3D view" below.
 - **Server:** Node 18+ with `ws`, bundled by esbuild into one `awesome-farm-server.mjs`.
   It runs the *same* simulation code as the client.
 - **Tests:** `node:test` run through `tsx`.
@@ -99,7 +101,8 @@ awesome_farm/
 ├── tests/                   one `<system>.test.ts` per system (node:test). The special ones: content + art (every item has an icon and a source), touch (phones: chips, long press, wording),
 │                            bot (+ botlib, bot.late): a scripted player plays the first 13 chapters with real commands (grind skipped late); tutorial: the starting steps walked in order by that player; fuzz + safety: hostile input never
 │                            corrupts the world; netsync + server.e2e + server.hardening + reconnect: a real server over WebSockets (`netlib.ts` finds a free port); perf: a big busy world stays inside its step and bandwidth budget; dev: the developer menu (locks, key, every op)
-├── (prototypes)             the parked low-poly 3D experiments live on the local branch `awesome-farm-prototypes`, not here
+├── proto3d.html, proto3d-models.html   DEV ONLY (npm run dev): the low-poly 3D prototype (its own HUD and solo world) and its model
+│                            library, recovered from the prototype's built pages into src/client3d (not in the production build, not linked from the game)
 └── src/
     ├── main.ts              boots the client; dev harness in DEV only (src/dev/harness.ts)
     ├── shared/              ← runs in the browser AND the server: no Phaser, no DOM, no localStorage
@@ -117,6 +120,14 @@ awesome_farm/
     │   │                    economy, gather, machines, factory, power, status (what a factory building is doing, in words), mobs, combat, boss (patterns are a `SCRIPTS` table), death (the price of a fall), dread (the Dread Reaches), mines (the caves under the world; cave.ts makes them), creatures (+ jobs: posts and commands, with jobs-site / jobs-carry / jobs-field / jobs-sort / jobs-station behind it; petlib: chest helpers),
     │   │                    quests, hotbar, listed (what the menus list), shop (trader + waystones), rift (expeditions), fishing, pool (crafting reaches into chests), dev (the secret developer menu's ops), worldgen, stats (derived stats, inventory)
     │   └── net/             protocol.ts (wire format), host.ts (SimHost: peers, area of interest, saves)
+    ├── client3d/            ← the low-poly three.js view (no Phaser; ONLY reached through the dynamic import in client/world/view3d-bridge.ts):
+    │                        view3d.ts: the in-game 3D view (implements the bridge's View3D: terrain, sea, entities, farmers, sky, weather, fx,
+    │                        the ghost, the target ring, picking); render.ts: renderer, post chain and the sky's hour (shared with the prototype);
+    │                        coverage.ts: which kinds have a model and which are placeholders on purpose;
+    │                        models/ is the procedural model library (kit.ts: the flat-shaded builder; one module per family of buildings, nodes,
+    │                        monsters, creatures, drops, the farmer); entities, terrain, sky, weather, fx, ambient are the view's layers;
+    │                        main, hud, net, showcase, gallery, proto3d are the dev-only prototype pages (their own HUD and solo world, never in the game);
+    │                        tests/client3d.test.ts builds every model headless and stages the showcase, tests/view3d.test.ts guards the 2D/3D choice
     └── client/              ← Phaser
         ├── main.ts          game config + scene list (Boot → Title → Game + Hud)
         ├── profile.ts, settings.ts   the device's identity and the player's settings (localStorage)
@@ -124,7 +135,8 @@ awesome_farm/
         ├── net/connection.ts  LocalConnection (solo SimHost) | WsConnection (server)
         ├── art/             painted sprites (storybook.ts: nature + crops; storybook-*.ts: ground, chars, build, decor, sites, house, critters, mobs, cave, luck, worn, logo) + grid art (icons, factory, badges); painter lib paint.ts, grid lib pixels.ts, registry sprites.ts
         ├── juice/           fx.ts (the juice-rule table), sfx.ts (one-shots), music.ts (quiet generative music), slowmo (the Perfect dash's beat)
-        ├── world/           the world view, one module per concern, each taking the scene and a narrow host interface: tiles, veins, farmers (you and the others), placing (ghost, drag lines, touch aim, one-off rule),
+        ├── world/           the world view, one module per concern, each taking the scene and a narrow host interface: view3d-bridge (THE seam to the 3D view:
+        │                    the View3D interface, the pointer bridge Pointer2D/Pointer3D, the lazy loader), tiles, veins, farmers (you and the others), placing (ghost, drag lines, touch aim, one-off rule),
         │                    interact (what the keys act on: scanNear, targets, revive, dismantle), hands (hotbar, pods), ambience (hearths, roofs, caves, dread, waves), buildviews (a building's sprites),
         │                    views/occupancy/prodhist (entity views, tile occupancy, production history), combat (monster/projectile views, telegraphs), critters (creature views),
         │                    factoryview (status badges, tooltips, Factory view, machines as they run, wires, placement overlay), fishing, blueprints, costatus, titan, sea
@@ -209,6 +221,43 @@ awesome_farm/
   objects never throw and names carry no control characters. A hello without the word is refused when its id or its name belongs to an account; a sign-up refused because the world is full leaves no row; rows whose farmer
   no longer exists are dropped on load; a device makes at most two new accounts per server run and a connection at most five hellos. The hasher is injectable (`HostOptions.hash`: the server uses `node:crypto`, the same stretched SHA-256, 5× faster).
   The welcome carries other farmers as their public view only (`publicView`, plus `mh`), the own record whole. Tests: `tests/accounts.test.ts`, `tests/host.hardening.test.ts`, plus the restart case in `tests/server.e2e.test.ts`.
+
+## The 3D view (beta): `settings.view`, `world/view3d-bridge.ts`, `src/client3d/view3d.ts`
+
+Players choose how the world is drawn: **2D** (the default, unchanged) or **3D (beta)**, on the title screen (the View toggle beside
+Solo) and in Pause menu, Settings, World view. It is `settings.view` (`'2d' | '3d'`) in `awesome_farm_settings_v1`; anything else
+stored there reads as 2D.
+- **One game, two pictures.** The Game scene always runs: connection, state mirror, your movement, keys, targeting, placing, the HUD's
+  questions. In 3D it is hidden (`scene.setVisible(false)`: it still updates, it just does not draw) and `View3D` draws the same
+  mirror. Never run a second Sim or a second connection for 3D, and never put game rules in `src/client3d`: the view only draws.
+- **The real HUD on top.** The Phaser canvas is created transparent when the page boots in 3D (`transparent: settings.view === '3d'`
+  in `client/main.ts`; every scene but the hidden Game scene paints its own background) and the three.js canvas sits exactly under
+  it (`position: fixed`, same box, `pointer-events: none`). Every menu and screen is the 2D one. In 2D the canvas stays opaque, as before.
+- **Switching:** live when the canvas is transparent (`canSwitchLive`); a page booted in 2D saves, writes the connection for one reload
+  (`stashResume` in `net/connection.ts`, sessionStorage `awesome_farm_resume_v1`, removed when read) and reloads; the title screen
+  (`takeResume`) goes straight back into the same world (solo, or the server with its password and secret word). `GameScene.setView`.
+- **The feed** (`View3D` in the bridge, called by `GameScene`): `welcome` (a world arrived), `upsert` / `remove` (entities, as the
+  tick carries them), `plots(changed, risen)`, `event` (every sim event, after the 2D handler: fx bursts, telegraphs, knocks, swings),
+  `swing` (your own swing, before the server answers) and `frame(dt, View3DFrame)` once per Game update (farmers as the Game scene
+  has them, camera target and zoom, clock and seed, the building in hand, the swing target). Sounds stay the 2D `Fx`'s (one table).
+- **The input bridge** (`WorldPointer`): everything that turns the pointer into a place in the world goes through `GameScene.toWorld(p,
+  out, aim)` (targeting, the ghost, drag lines, touch aim, blueprints, pings, factory tooltips) and back through `worldToScreen`
+  (names, floats, plates, chat, the tutorial pointer). `Pointer2D` is the Phaser camera; `Pointer3D` raycasts onto the models
+  (`aim`: a pointer over a tree picks the tree, via `entCenter`) or the ground plane. Keyboard and stick movement never touch it.
+- **Bundle:** `src/client3d` and three.js are only reached through `import('../../client3d/view3d')` in the bridge, so 2D players
+  download nothing extra (the 3D chunk is its own file in `play/assets`). `tests/view3d.test.ts` walks the static imports from
+  `src/main.ts` and fails if one reaches `src/client3d` or `three`. In `src/client3d`, import from `client/` with `import type` only.
+- **Models:** every building, node, monster, creature and item needs a model in `src/client3d/models` or a line in `PLACEHOLDERS`
+  (`src/client3d/coverage.ts`); the test fails otherwise, and also when a placeholder gets a model and stays on the list.
+- **Coordinates:** the bridge speaks sim pixels (TILE = 16 per tile) and HUD units (960 x 540); the 3D view works in tiles
+  (x east, z south, y up) with an orthographic camera at 62 degrees (`render.ts` `EL`, `BASE_VIEW` = 11.25 tiles tall at zoom 1 =
+  the 2D view's classic distance). Zoom follows the 2D zoom steps (`GameScene.zoomLevel`).
+- **Checking it in a browser:** `?profile=v3d` and `localStorage awesome_farm_settings_v1 = {"view":"3d"}` before the page loads boots
+  straight into 3D; `__farm.scene.setView('2d' | '3d')` switches; `__farm.scene.view3d` is the view. Software GL (swiftshader) runs
+  the 2D world at about 0.5 fps and 3D at well under 1 fps on a busy machine: stop the loop (`__game.loop.sleep()`), drive it with
+  `__step(n, 100)` (keys held with Playwright's keyboard in between), and give screenshots long timeouts. The character creator opens
+  over a new farmer's first world and blocks the keys: send a `look` command and `closeScreen()` first.
+- **Still to do for parity** (a list per area: WORLD, ENTITIES, OVERLAYS, CONTROLS, PERF) is in DESIGN.md, "Two views of one world".
 
 ## Developer menu (secret: for testing, never mentioned in the game)
 

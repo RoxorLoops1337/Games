@@ -22,7 +22,29 @@ export interface Connection {
     saveNow? (): void;
     /** Solo: set when the browser refused the save (storage full or blocked), so the player can be told. */
     saveFailed?: boolean;
+    /** What it takes to open this same connection again after a page reload (switching to the 3D view comes straight back to the world). */
+    resumeInfo (): Resume;
     close (): void;
+}
+
+/** A connection written down for one page reload: solo, or the server with the password and secret word that got you in. */
+export type Resume = { mode: 'solo' } | { mode: 'online'; addr: string; password: string; key: string };
+/** sessionStorage, read once by the title screen and removed at once (it can hold a server password, so it never outlives the tab). */
+const RESUME_KEY = 'awesome_farm_resume_v1';
+
+export function stashResume (r: Resume) {
+    try { sessionStorage.setItem(RESUME_KEY, JSON.stringify(r)); } catch { /* blocked storage: the title screen shows as usual */ }
+}
+
+export function takeResume (): Resume | null {
+    try {
+        const raw = sessionStorage.getItem(RESUME_KEY);
+        sessionStorage.removeItem(RESUME_KEY);
+        const r = raw ? JSON.parse(raw) as Partial<Resume> : null;
+        if (r?.mode === 'solo') return { mode: 'solo' };
+        if (r?.mode === 'online' && typeof r.addr === 'string' && r.addr) return { mode: 'online', addr: r.addr, password: String(r.password ?? ''), key: String(r.key ?? '') };
+    } catch { /* nothing usable */ }
+    return null;
 }
 
 /** Solo world saved in localStorage. */
@@ -30,6 +52,7 @@ export class LocalConnection implements Connection {
     readonly mode = 'solo';
     readonly label = 'Solo';
     status: Connection['status'] = 'open';
+    resumeInfo (): Resume { return { mode: 'solo' }; }
     error = '';
     private host: SimHost;
     private peer: Peer;
@@ -120,6 +143,7 @@ export class WsConnection implements Connection {
     private tries = 0;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private beat: ReturnType<typeof setInterval> | null = null;
+    resumeInfo (): Resume { return { mode: 'online', addr: this.label, password: this.password, key: this.key }; }
     private readonly onVisible = () => { if (document.visibilityState === 'visible' && this.timer) { clearTimeout(this.timer); this.timer = null; this.open(); } };
 
     constructor (readonly label: string, private password: string, private key = '') {

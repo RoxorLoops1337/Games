@@ -54,6 +54,8 @@ interface PlacingHost {
     deny (why: string | null): void;
     /** Which sides of a wall tile join up (the frame the ghost shows). */
     wallMask (tx: number, ty: number): number;
+    /** A pointer onto the ground, through the view in use (world/view3d-bridge.ts). */
+    toWorld (p: Phaser.Input.Pointer, out: { x: number; y: number }): unknown;
 }
 
 export class Placer {
@@ -142,7 +144,7 @@ export class Placer {
     touchAimDown (p: Phaser.Input.Pointer) {
         const h = this.h;
         h.aimPointer = p;
-        p.positionToCamera(this.scene.cameras.main, h.pointerWorld as Phaser.Math.Vector2);
+        h.toWorld(p, h.pointerWorld);
         const t = this.tileUnder();
         this.lastPlaced = null;
         const pl = this.cur;

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { ART_GROUPS } from '../art/sprites';
 import { initMusic } from '../juice/music';
 import { initSfx } from '../juice/sfx';
+import { PAL } from '../../shared/palette';
 import { hudCamera, SS } from '../res';
 
 /** Waits for the pixel font, generates every texture from code (no asset files) and hooks up audio. */
@@ -11,7 +12,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     create () {
-        hudCamera(this.cameras.main);
+        hudCamera(this.cameras.main).setBackgroundColor(PAL.deepSea);         // (the canvas's own colour too, except in 3D where the canvas is see-through)
         const loading = this.add.text(480, 270, 'Loading…', { fontFamily: 'sans-serif', fontSize: '16px', color: '#d5d9e6', resolution: SS }).setOrigin(0.5);
         const fonts = [`400 16px "Pixelify Sans"`, `700 16px "Pixelify Sans"`, `16px "Jersey 15"`, `600 16px "Fredoka"`, `400 16px "Fredoka"`, `700 16px "Fredoka"`].map((f) => document.fonts.load(f).catch(() => undefined));
         const timeout = new Promise((r) => setTimeout(r, 2500));

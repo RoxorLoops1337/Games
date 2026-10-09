@@ -70,6 +70,8 @@ interface FactoryHost {
     busy (): boolean;
     /** A few sparks at a spot. */
     pop (x: number, y: number, n: number): void;
+    /** A pointer onto the world through the view in use (world/view3d-bridge.ts); `aim` picks the thing under it. */
+    toWorld (p: Phaser.Input.Pointer, out: { x: number; y: number }, aim?: boolean): unknown;
 }
 
 /** Buildings whose frame follows the clock (`t`, seconds) and their own state: `working` is act and power, `sun` the daylight. */
@@ -480,7 +482,7 @@ export class FactoryView {
             this.wasDown = p.isDown;
             if (p.isDown) {
                 if (now - this.pressAt >= LONG_PRESS && Math.hypot(p.x - this.pressX, p.y - this.pressY) / SS < 14 && this.shownId < 0) {
-                    p.positionToCamera(s.cameras.main, this.vec);
+                    this.h.toWorld(p, this.vec, true);
                     const en = this.pick(this.vec.x, this.vec.y);
                     if (en) { this.shownId = en.e.id; this.h.tip(this.tipFor(en)); this.tipUntil = 0; }
                 }
@@ -491,10 +493,10 @@ export class FactoryView {
             return;
         }
         // a mouse: rest on a building for a moment
-        if (p.x !== this.lastPx || p.y !== this.lastPy) { this.lastPx = p.x; this.lastPy = p.y; this.still = 0; if (this.shownId >= 0) { p.positionToCamera(s.cameras.main, this.vec); if (this.pick(this.vec.x, this.vec.y)?.e.id !== this.shownId) this.dropTip(); } return; }
+        if (p.x !== this.lastPx || p.y !== this.lastPy) { this.lastPx = p.x; this.lastPy = p.y; this.still = 0; if (this.shownId >= 0) { this.h.toWorld(p, this.vec, true); if (this.pick(this.vec.x, this.vec.y)?.e.id !== this.shownId) this.dropTip(); } return; }
         this.still += dt;
         if (this.still >= 0.2 && this.shownId < 0) {
-            p.positionToCamera(s.cameras.main, this.vec);
+            this.h.toWorld(p, this.vec, true);
             const en = this.pick(this.vec.x, this.vec.y);
             if (en) { this.shownId = en.e.id; this.h.tip(this.tipFor(en)); }
         }

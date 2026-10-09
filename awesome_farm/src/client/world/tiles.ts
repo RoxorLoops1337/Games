@@ -37,7 +37,9 @@ export class TileLayer {
     }
 
     /** Take the map and every layer on it down (the vein layer too). */
-    destroy () { this.map.destroy(); }
+    /** Gone (a new world arrived): a land-rise ripple still on the clock must not write into the destroyed map. */
+    private dead = false;
+    destroy () { this.dead = true; this.map.destroy(); }
 
     private tileFor (tx: number, ty: number): number {
         const w = this.world;
@@ -182,6 +184,7 @@ export class TileLayer {
         if (c && rings.size) this.rippleUntil = performance.now() + (Math.max(...rings.keys()) + 1) * 45 + 400;
         for (const [ring, list] of rings) {
             const put = () => {
+                if (this.dead) return;          // (a reconnect's welcome replaced this layer while the ripple was running)
                 for (const i of list) {
                     if (this.tiles[i] === TILE_SEA) this.layer.removeTileAt(i % W, Math.floor(i / W));
                     else this.layer.putTileAt(this.tiles[i], i % W, Math.floor(i / W));
