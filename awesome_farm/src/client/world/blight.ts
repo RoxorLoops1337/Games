@@ -1,11 +1,13 @@
 // The Blight in the world view: a nest throbs (bigger and darker the higher its level), wears a name plate with its kind and level, and
-// a health bar once it is hurt, over a dark ring of blight on the ground. Game.ts calls `nest` for the views on screen every frame and
-// `draw` once after them.
+// a health bar once it is hurt, over a dark ring of blight on the ground; a raider in the sea wades (sunk to the waist, with ripples and
+// the odd splash). Game.ts calls `nest` and `wade` for the views on screen every frame and `draw` once after them.
 
 import * as Phaser from 'phaser';
 import { NEST_KINDS } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
-import type { NodeE, Plot } from '../../shared/sim/types';
+import { TILE } from '../../shared/config';
+import type { MobE, NodeE, Plot } from '../../shared/sim/types';
+import type { World } from '../../shared/world';
 
 type Img = Phaser.GameObjects.Image;
 type Txt = Phaser.GameObjects.Text;
@@ -16,16 +18,21 @@ export const nestScale = (lv: number) => Math.min(1.9, 0.85 + 0.09 * (Math.max(1
 
 export class BlightFx {
     private g: Phaser.GameObjects.Graphics;
+    private splash: Phaser.GameObjects.Particles.ParticleEmitter;
     private plates = new Map<number, Txt>();
     private seen = new Set<number>();
     private bars: { x: number; y: number; w: number; f: number }[] = [];
     private rings: { x: number; y: number; r: number }[] = [];
 
-    constructor (private scene: Phaser.Scene) {
+    constructor (private scene: Phaser.Scene, private world: () => World) {
         this.g = scene.add.graphics().setDepth(9e4);
+        this.splash = scene.add.particles(0, 0, 'px', {
+            emitting: false, speed: { min: 8, max: 26 }, angle: { min: 200, max: 340 }, lifespan: { min: 240, max: 420 },
+            scale: { start: 1, end: 0 }, alpha: { start: 0.9, end: 0 }, gravityY: 90, tint: [PAL.foam, PAL.sea, PAL.snow],
+        }).setDepth(9e4);
     }
 
-    destroy () { this.g.destroy(); for (const t of this.plates.values()) t.destroy(); this.plates.clear(); }
+    destroy () { this.g.destroy(); this.splash.destroy(); for (const t of this.plates.values()) t.destroy(); this.plates.clear(); }
 
     forget (id: number) { this.plates.get(id)?.destroy(); this.plates.delete(id); }
 
@@ -54,6 +61,19 @@ export class BlightFx {
         if (hurt) this.bars.push({ x: v.x, y: top - 4, w: 30, f: e.hp / mhp });
         // the blight seeps: a dark ring that breathes on the ground round it
         this.rings.push({ x: v.x, y: v.y - 2, r: 14 * s + beat * 2 });
+    }
+
+    /** A raider (or anything) standing in the sea wades: sunk to the waist, with ripples and the odd splash. */
+    wade (v: ViewLike, e: MobE, dt: number, flies: boolean) {
+        const spr = v.sprite as Phaser.GameObjects.Sprite;
+        const wet = !flies && !this.world().isLand(Math.floor(v.x / TILE), Math.floor(v.y / TILE));
+        if (!wet) { if (spr.isCropped) spr.setCrop(); v.shadow?.setVisible(true); return; }
+        const fh = spr.frame.realHeight, fw = spr.frame.realWidth;
+        spr.setCrop(0, 0, fw, fh * 0.68);
+        spr.y += 3;
+        v.shadow?.setVisible(false);
+        this.rings.push({ x: v.x, y: v.y - 1, r: -(6 + Math.sin(performance.now() / 160 + e.id) * 1.5) });
+        if (Math.hypot(e.vx, e.vy) > 3 && Math.random() < dt * 6) this.splash.explode(2, v.x + (Math.random() - 0.5) * 6, v.y - 1);
     }
 
     draw () {

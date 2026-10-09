@@ -43,6 +43,8 @@ function mix (a: number, b: number, t: number) {
  * A phone, where fill rate is the limit, is the place to try 0.5.
  */
 const LIGHT_RES = 1;
+/** The monsters that glow on their own (the rest carry a raider's red glow only while they march for a Blight nest). */
+const LIGHT = new Set(['wisp', 'wraith', 'oldheart', 'witch']);
 
 /**
  * A pool of little squares (motes, petals, snow, fireflies): one image each instead of a Graphics that replays hundreds of
@@ -279,7 +281,8 @@ export class NightLayer {
                 this.light(s.x, s.y, 18, 0.9, 0xc8e6ff);
             } else if (e.k === 'mob') {
                 const s = f.worldToScreen(e.x, e.y - 8);
-                this.light(s.x, s.y, e.kind === 'oldheart' ? 70 : 26, 0.9, e.kind === 'oldheart' ? 0xff7080 : 0xb8f0c0);
+                if (e.rd && !LIGHT.has(e.kind)) this.light(s.x, s.y, 22, 0.85, 0xff8a96);
+                else this.light(s.x, s.y, e.kind === 'oldheart' ? 70 : 26, 0.9, e.kind === 'oldheart' ? 0xff7080 : 0xb8f0c0);
             } else if (e.k === 'node') {
                 const s = f.worldToScreen((e.tx + 0.5) * TILE, (e.ty + 0.5) * TILE - 6);
                 this.light(s.x, s.y, 40 + Math.sin(this.t * 2.4 + e.id) * 5, 0.9, 0xff7080);      // a Blight nest smoulders

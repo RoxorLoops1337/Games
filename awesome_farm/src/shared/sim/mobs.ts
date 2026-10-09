@@ -7,6 +7,7 @@ import { eliteChance, isBoss, MobDef, MobKind, MOBS, pickWild, PROJ, ProjKind, s
 import { dist } from '../geom';
 import { PAL } from '../palette';
 import * as fortune from './fortune';
+import * as raid from './raid';
 import * as boss from './boss';
 import * as quests from './quests';
 import * as rift from './rift';
@@ -159,13 +160,14 @@ export function updateMobs (sim: Sim, dt: number) {
         } else if (e.knockT > 0) {
             e.knockT -= dt;
             e.vx *= Math.pow(0.02, dt); e.vy *= Math.pow(0.02, dt);
-        } else behave(sim, e, def, target, td, ux, uy, dt);
+        } else if (e.rd && !target) raid.march(e, def, dt);          // (a raider with nobody near marches on the base it came for)
+        else behave(sim, e, def, target, td, ux, uy, dt);
         // campfires repel
         for (const f of fires) {
             const fx = (f.tx + 0.5) * TILE, fy = (f.ty + 1) * TILE, fd = Math.max(1, Math.hypot(e.x - fx, e.y - fy));
             if (fd < TUNING.campfireRadius) { e.vx = ((e.x - fx) / fd) * 40; e.vy = ((e.y - fy) / fd) * 40; if (e.st === 2) e.st = 0; }
         }
-        move(sim, e, def, dt);
+        if (e.rd) raid.raidMove(sim, e, def, dt); else move(sim, e, def, dt);
         if (e.rift !== undefined) leash(sim, e);
         sim.touch(e);
         // touching hurts

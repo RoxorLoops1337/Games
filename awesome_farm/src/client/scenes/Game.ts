@@ -152,7 +152,7 @@ export class GameScene extends Phaser.Scene {
     private crit!: CritFx;
     /** The "2+" badge, ring and health bar on Titan nodes (world/titan.ts). */
     private titanFx!: TitanFx;
-    /** The Blight: nests (world/blight.ts). */
+    /** The Blight: nests and wading raiders (world/blight.ts). */
     private blightFx!: BlightFx;
     /** Ice blocks, curses and chains (co-op boss statuses). */
     private coFx!: CoFx;
@@ -271,7 +271,7 @@ export class GameScene extends Phaser.Scene {
         };
         this.crit = new CritFx(this);
         this.titanFx = new TitanFx(this);
-        this.blightFx = new BlightFx(this);
+        this.blightFx = new BlightFx(this, () => this.world);
         this.coFx = new CoFx(this);
         this.ambient = this.add.particles(0, 0, 'px', {
             emitting: false, speed: { min: 4, max: 14 }, angle: { min: 240, max: 300 },
@@ -697,7 +697,7 @@ export class GameScene extends Phaser.Scene {
 
     private track (e: Ent) {
         if (e.k === 'bld') { this.blds.set(e.id, e); if (LANDMARKS.has(e.kind)) this.marks.set(e.id, e); if (BUILDINGS[e.kind].light || e.kind === 'furnace' || e.kind === 'coalgen') this.lit.set(e.id, e); }
-        else if (e.k === 'mob') { if (MOBS[e.kind].boss) this.marks.set(e.id, e); if (LIGHT_MOBS.has(e.kind)) this.lit.set(e.id, e); }
+        else if (e.k === 'mob') { if (MOBS[e.kind].boss) this.marks.set(e.id, e); if (LIGHT_MOBS.has(e.kind) || e.rd) this.lit.set(e.id, e); }       // (a raider carries the Blight's red glow: you see a raid coming in the dark)
         else if (e.k === 'node' && e.kind === 'nest') this.lit.set(e.id, e);         // (a Blight nest smoulders in the dark)
         else if (e.k === 'proj') this.lit.set(e.id, e);
         else if (e.k === 'crit' && LIGHT_SPECIES.has(e.sp)) this.lit.set(e.id, e);
@@ -824,6 +824,7 @@ export class GameScene extends Phaser.Scene {
             }
             if (e.k === 'mob') {
                 animateMob(this, v, e, dt, this.time.now);
+                if (e.rd) this.blightFx.wade(v, e, dt, !!MOBS[e.kind].flies);
             } else if (e.k === 'proj') {
                 animateProj(v, e, dt);
             } else if (e.k === 'crit') {
