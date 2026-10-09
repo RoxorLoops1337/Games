@@ -109,8 +109,8 @@ const HUBSIGNS = (function () { // signposts at the boulevard mouths, each on wh
 })();
 const HUBDECOR = (function () { // rim trees and bushes, kept off every fixture and the boulevard ends
   const r = mkRng(77), out = [];
-  for (let i = 0; i < 84; i++) {
-    const a = i / 84 * TAU + r() * 0.08, rr0 = radiusAt(HUB_GEO, a) * (0.925 + r() * 0.05), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0, bush = i % 4 === 0;
+  for (let i = 0; i < 104; i++) {
+    const a = i / 104 * TAU + r() * 0.08, rr0 = radiusAt(HUB_GEO, a) * (0.925 + r() * 0.05), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0, bush = i % 4 === 0;
     let ok = true; for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < 125) ok = false;
     if (ok) out.push({ t: bush ? 'bush' : 'tree', x, y, s: bush ? 1.1 : 0.78 + r() * 0.3, v: (r() * 3) | 0 }); else r();
   }
@@ -123,7 +123,7 @@ const HUBLAMPS = (function () {
   const tryAdd = (x, y, ph, keepR) => { for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < keepR) return; for (const gt of gates) if (Math.hypot(x - gt.x, y - gt.y) < 105) return; for (const s of HUBSIGNS) if (Math.hypot(x - s.x, y - s.y) < 60) return; for (const l of out) if (Math.hypot(x - l.x, y - l.y) < 90) return; out.push({ x, y, ph }); };
   for (let i = 0; i < degs.length; i++) { const d0 = degs[i], d1 = i + 1 < degs.length ? degs[i + 1] : degs[0] + 360, a = (d0 + d1) / 2 * D2R; tryAdd(Math.cos(a) * (PLAZA_R - 36), Math.sin(a) * (PLAZA_R - 36), i * 0.7, 70); } // on the plaza, between the boulevard mouths
   for (const d of ZONE_DEG) for (const sd of [1, -1]) { const a = d * D2R, R = PLAZA_R + 120; tryAdd(Math.cos(a) * R - Math.sin(a) * sd * (BLVD_W / 2 + 22), Math.sin(a) * R + Math.cos(a) * sd * (BLVD_W / 2 + 22), d * 0.05, 92); } // flanking each boulevard
-  for (let i = 0; i < 18; i++) { const a = i / 18 * TAU + 0.12, R = radiusAt(HUB_GEO, a) * 0.8; tryAdd(Math.cos(a) * R, Math.sin(a) * R, i * 0.9 + 2, 108); } // along the shore
+  for (let i = 0; i < 22; i++) { const a = i / 22 * TAU + 0.12, R = radiusAt(HUB_GEO, a) * 0.8; tryAdd(Math.cos(a) * R, Math.sin(a) * R, i * 0.9 + 2, 108); } // along the shore
   return out;
 })();
 function paintLamp() {
