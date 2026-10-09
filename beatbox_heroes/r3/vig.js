@@ -299,4 +299,143 @@
     b.addEventListener('click', () => { const s = next[V.setting()]; E.settings.scenes = s; b.textContent = 'SCENES: ' + lab[s]; b.className = 'btn ' + (s === 'full' ? 'green' : ''); safe(() => E.saveSettings()); E.sfx('click'); });
     if (!row) return b; const wrap = E.h('div.col', { style: { gap: '7px' } }); wrap.append(row, b); return wrap;
   };
+
+  /* ------------------------------------------------------------------ THE TOWN (thrift shop, Sound Lab, bar: park3d/vig_shop.js, vig_lab.js, vig_bar.js). Actions with no Core call get a hook here */
+  // the shop TRY ON (a tile tap changes the panel's look, no Core): the MICRO swap plays and swaps the look at its half turn; the try on camera and the drag to spin stay as they are
+  const P3 = E.scenes3d.place;
+  if (P3 && typeof P3.tryOn === 'function') {
+    const try0 = P3.tryOn;
+    P3.tryOn = function () {
+      const sh = this.shop, tt = this._try, w = this.w, sc = this;
+      if (tt && tt.k && sh && sh.el && sh.el.isConnected && w && sh.tab === tt.tab && !(V.cur && V.cur.form !== 'micro')) {
+        const k = JSON.stringify(sh.look);
+        if (k !== tt.k && V.enabled() && first('p1.shop.tryon')) {
+          const from = safe(() => JSON.parse(tt.k), null); tt.k = k;   // the scene's own setLook is skipped: the vignette swaps the look on its beat
+          const restore = () => safe(() => { if (sc.w === w) { const s = sc.shop; w.setLook(s && s.el && s.el.isConnected ? s.look : G.ch.look); } });
+          V.play('p1.shop.tryon', { form: 'micro', extra: { from, to: JSON.parse(k), tab: sh.tab, restore } }).then((i) => { if (!i.ok) restore(); });
+        }
+      }
+      return try0.apply(this, arguments);
+    };
+  }
+  // the bar stage: the walk up before a set and the walk out before a battle (INTRO, then the venue). The World Cup finals belong to their own films
+  const STAGE_IN = (a) => (a && a.mode === 'perform' && /^(openmic|showcase|karaoke)$/.test(a.kind) ? 'p1.stage.in.' + a.kind : a && a.mode === 'battle' && !a.final ? 'p1.battle.walkout' : null);
+  const goT = E.go;
+  E.go = function (name, args, o) {
+    const S = E.scene;
+    if (name !== 'rhythm' || V.playing || !V.enabled() || (o && o.noVig) || !S || S.id !== 'bar') return goT.apply(E, arguments);
+    const vid = first(STAGE_IN(args || {}));
+    if (!vid || V.form(vid) === 'micro') return goT.apply(E, arguments);
+    const spot = S.activeSpot, all = arguments;
+    V.play(vid, { action: { t: 'go', scene: name, args } }).then(() => { if (E.scene === S && S && !S.activeSpot && spot) S.activeSpot = spot; goT.apply(E, all); });
+    return undefined;
+  };
+  // after the set: the bow (p1.stage.out) or the verdict in the room (p1.battle.verdict) once the bar is up again. Core decided in the venue (G.doHold); the scene waits for the
+  // place and steps aside for a story film (firstWin, firstLoss, firstShowcase, champion), a story dialog or the morning
+  const hold0 = G.doHold;
+  if (hold0) G.doHold = function (action) { const r = hold0.apply(G, arguments); if (action && (action.t === 'perform' || action.t === 'battle')) V.lastSet = { action, fx: r.fx, at: Date.now() }; return r; };
+  const ret0 = G.takeReturn;
+  if (ret0) G.takeReturn = function (id) {
+    const t = ret0.apply(G, arguments), L = V.lastSet; V.lastSet = null; V.outPending = null;
+    if (t && id === 'bar' && t.scene === 'rhythm' && L && Date.now() - L.at < 10 * 60000) V.outPending = { L, at: 0, films: (BBH.R3Cine && BBH.R3Cine.log.length) || 0 };
+    return t;
+  };
+  const OUT_OF = (a) => (a.t === 'battle' ? (a.final ? null : 'p1.battle.verdict') : /^(openmic|showcase|karaoke)$/.test(a.kind) ? 'p1.stage.out' : null);
+  if (R3.onTick) R3.onTick(() => {
+    const p = V.outPending; if (!p) return;
+    if (E.sceneName !== 'place' || !E.scene || E.scene.id !== 'bar' || G.pendingMorning) { V.outPending = null; return; }
+    if (!sceneUp()) return;
+    if (!p.at) { p.at = Date.now(); return; }
+    if (Date.now() - p.at < 450) return;
+    V.outPending = null;
+    const C = BBH.R3Cine; if ((C && (C.playing || C.log.length > p.films)) || V.playing || document.querySelector('.k3-dlg, #ui .dialog')) return;
+    const id = OUT_OF(p.L.action), vid = id && first(id);
+    if (vid) V.play(vid, { action: p.L.action, fx: p.L.fx });
+  });
+  // the Sound Lab JUKEBOX (a track from the mixer's jukebox sheet): a bar of the new track (MICRO)
+  const mus0 = E.music;
+  if (mus0) E.music = function (id) {
+    const r = mus0.apply(E, arguments), S = E.scene, ttl = S && S.sheetEl && S.sheetEl.querySelector && S.sheetEl.querySelector('.h2');
+    if (S && S.id === 'studio' && ttl && /^\s*JUKEBOX/.test(ttl.textContent || '') && !V.playing && V.enabled() && first('p3.jukebox.lab')) V.play('p3.jukebox.lab', { form: 'micro', extra: { track: id } });
+    return r;
+  };
+  /* ------------------------------------------------------------------ THE PARK, DOORS, TRAVEL (park3d/vig_park.js, vig_doors.js, vig_hood.js; VIGNETTES.md 2.8, 2.9, 2.13) */
+  // The park's activities leave the place scene, so they get an INTRO here (busk, jam, run) and an OUTRO when the result card hands back to the park: the held effects (toasts, banners,
+  // the coach line) land on PAY. A story beat or a morning in the held effects means a film (or the morning card) owns the moment: no outro then, the old path runs untouched.
+  // Doors: p1.door.out before a place is left (the LEAVE button, the door ring), p1.door.in.<place> when a travel lands (not on a first visit: the arrival lines and films own that),
+  // p1.travel.map on the hood map before GO THERE travels (the door then plays SHORT). Like the intros, doors have no MICRO: a repeat or SCENES: OFF goes straight through.
+  // A world without its own door scene gets the generic one of vig_doors.js (filled into the gaps of that world's table; the world module always wins).
+  if (!$('vig-css-park')) { const st = document.createElement('style'); st.id = 'vig-css-park'; st.textContent = 'body.vig-on .p3-go { visibility: hidden !important; }'; document.head.appendChild(st); }
+  INTRO.run = () => 'p1.run.in';
+  const rhythmIn = INTRO.rhythm;
+  INTRO.rhythm = (a) => rhythmIn(a) || (a && a.mode === 'perform' && (a.kind === 'busk' || a.kind === 'jam') && E.scene && E.scene.id === 'park' ? 'p1.' + a.kind + '.in' : null);
+  const holdPark = G.doHold;
+  if (holdPark) G.doHold = function (action) { const pre = G.ch, h = holdPark.apply(G, arguments); if (h && typeof h === 'object') { h.action = action; h.pre = pre; } return h; };
+  const OUTRO = { busk: 'p1.busk.out', jam: 'p1.jam.out' };
+  const fin0 = G.finishActivity;
+  if (fin0) G.finishActivity = function (held, back) {
+    const a = held && held.action, fx = (held && held.fx) || [], to = back && typeof back === 'object' ? back.args && back.args.id : back;
+    const id = a ? (a.t === 'perform' ? OUTRO[a.kind] : a.t === 'run' ? 'p1.run.out' : null) : null;
+    const owned = fx.some((f) => f.t === 'story' || f.t === 'morning') || safe(() => !!(Core.storyArrive && Core.storyArrive(G.ch, 'park')), true) || (G.storyQ && G.storyQ.length);
+    const again = !!(G.activityReturn && G.activityReturn.mode === 'again');   // PLAY AGAIN goes straight back into the activity: the old path
+    if (!id || to !== 'park' || owned || again || param === '0' || !(R3.on && R3.active) || typeof held.play !== 'function' || !first(id, 'park')) return fin0.apply(G, arguments);
+    const play = held.play, t0 = Date.now(); let hand = null, done = false;
+    const flush = () => { if (done) return; done = true; held.play = play; safe(() => play.call(held, hand || {})); };
+    held.play = (h) => { hand = h; };   // the old path asks for the effects now: they wait for the park
+    safe(() => fin0.call(G, held, back), null);
+    if (G.pendingMorning) { flush(); return undefined; }
+    const poll = () => {
+      if (done) return;
+      const up = sceneUp() && E.scene.id === 'park' && R3.world.id === 'park';
+      if (!up) { if ((E.sceneName === 'place' && !E.pendingSwitch && E.scene && E.scene.id !== 'park') || Date.now() - t0 > 45000) flush(); else setTimeout(poll, 120); return; }   // somewhere else, or the park never came
+      if (V.playing || (BBH.R3Cine && BBH.R3Cine.playing)) { flush(); return; }
+      holdOn(); V.play(id, { action: a, fx, pre: held.pre, pay: () => { holdOff(); flush(); } }).then(() => { holdOff(); flush(); });
+    };
+    setTimeout(poll, 60);
+    return undefined;
+  };
+  // the door scenes a world module lacks come from vig_doors.js
+  const DOOR_IDS = /^p1\.door\.(out|in\.)/;
+  function doorsFor(wid) {
+    return Promise.all([V.load(wid), V.load('doors')]).then(([, d]) => {
+      const e = V.mods[wid]; if (!d || !e) return; if (!e.m) e.m = { VIGNETTES: {} };
+      for (const k in d.VIGNETTES) if (DOOR_IDS.test(k) && typeof e.m.VIGNETTES[k] !== 'function') safe(() => { e.m.VIGNETTES[k] = d.VIGNETTES[k]; });
+    }, nop);
+  }
+  let doorW = null;
+  if (R3.onTick) R3.onTick(() => { const w = R3.world; if (!w || w === doorW || param === '0') return; doorW = w; if (w.id !== 'hood' && w.id !== 'street') doorsFor(w.id); });
+  const doorForm = (vid, o) => { const f = V.form(vid, o); return f === 'micro' && FORMS.indexOf(V.force) < 0 && FORMS.indexOf(param) < 0 ? null : f; };
+  // leaving a place: the door scene first, then the old path
+  const P3park = E.scenes3d.place;
+  if (P3park && typeof P3park.leave2 === 'function') {
+    const leave0 = P3park.leave2;
+    P3park.leave2 = function () {
+      const S = this, all = arguments, vid = first('p1.door.out');
+      if (!vid || V.playing || S.__vigLeave || !V.enabled() || E.scene !== S || !doorForm(vid)) return leave0.apply(S, all);
+      S.__vigLeave = true; safe(() => S.closeSheet && S.closeSheet());
+      const go = () => { S.__vigLeave = false; if (E.scene === S && E.sceneName === 'place') leave0.apply(S, all); };
+      V.play(vid, { action: { t: 'leave', from: S.id } }).then(go, go);
+      return undefined;
+    };
+  }
+  // travelling: the hood map hop first (GO THERE), then the travel; the arrival door when the place comes up
+  let arrive = null;
+  const enter0 = G.enterPlace;
+  if (enter0) G.enterPlace = function (to) {
+    const all = arguments, ch = G.ch, ok = safe(() => Core.canEnter(ch, to).ok, false), mapUp = E.sceneName === 'map' && R3.world && R3.world.id === 'hood' && E.scene && E.scene.w === R3.world;
+    const mark = () => { arrive = { to, at: Date.now(), first: !(ch && ch.flags && ch.flags['visited_' + to]), story: safe(() => !!(Core.storyArrive && Core.storyArrive(ch, to)), true), form: mapUp ? 'short' : null }; };
+    if (ok && mapUp && !V.playing && param !== '0' && first('p1.travel.map', 'hood') && doorForm('p1.travel.map')) {
+      const S = E.scene; V.play('p1.travel.map', { anyScene: true, extra: { to }, action: { t: 'travel', to } }).then(() => { if (E.scene === S) { mark(); enter0.apply(G, all); } });
+      return true;
+    }
+    const r = enter0.apply(G, all); if (r) mark(); return r;
+  };
+  if (R3.onTick) R3.onTick(() => {
+    const ar = arrive; if (!ar) return;
+    if (Date.now() - ar.at > 90000) { arrive = null; return; }
+    if (!sceneUp() || E.scene.id !== ar.to) return;
+    arrive = null; if (ar.first || ar.story || V.playing || (BBH.R3Cine && BBH.R3Cine.playing) || (G.storyQ && G.storyQ.length)) return;
+    const vid = first('p1.door.in.' + ar.to), form = vid && (ar.form || doorForm(vid));
+    if (vid && form) V.play(vid, { form, action: { t: 'travel', to: ar.to } });
+  });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
