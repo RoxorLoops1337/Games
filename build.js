@@ -175,6 +175,8 @@ const wipeDist = () => {
 // Files kept in the repo but left out of a game's deploy (relative to the game
 // folder). Clawspire: the old pre-rendered intro (js/intro.js draws it live, no
 // code requests these) and the design docs.
+// Encore Island 3D keeps its preview/lab pages and notes next to the code; none of it is part of the site
+const DEV_ONLY = /^(encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md))$/;
 const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
   // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed
@@ -190,7 +192,7 @@ const copyStatic = () => {
     // A game's CLAUDE.md is notes for coding sessions, never part of the site.
     const opts = { recursive: true, filter: (p) => {
       const r = path.relative(src, p).split(path.sep).join('/');
-      return !skip.has(r) && r !== 'CLAUDE.md';
+      return !skip.has(r) && r !== 'CLAUDE.md' && !DEV_ONLY.test(rel + '/' + r);
     } };
     fs.cpSync(src, dst, opts);
   }

@@ -13,6 +13,7 @@ const { part, flat, ico, box, cyl, hang, cone, torus, cap, basic, blade, tubeGeo
   buildHero, fitHero, cylDecal, decalMat, ctex, ell, star, addHeroFace, addFanFace, eyeJ, paintEyeShutJ, paintEyeR, paintEyeShutR, paintMouthJ, paintMouthR, paintMouthSmile, heroBase, finishHero } = CK;
 
 const PI = Math.PI;
+const gameCap = () => (typeof globalThis.cap === 'function' ? globalThis.cap() : 8); // the GAME's carry capacity (the destructured `cap` above is a geometry helper)
 const capL = (fan, a, b, th) => (fan ? cap(10, 4, th) : cap(a, b, th)); // crowd LOD hair caps
 const mixHex = (a, b, t) => { const k = new THREE.Color(a).lerp(new THREE.Color(b), t); return k.getHex(); };
 const DEF_ATK = [[-1.55, 0, -0.1, -0.2, 0, 0], [0.6, 0, -0.6, -0.4, 0, 0]];
@@ -589,7 +590,7 @@ export function init(V) {
     const items = S.player.helmets, n = items.length, hgt = stackAt(a.anchor, items, t, moving, 0.32, 1.4, 0, 3);
     blobs.add(x, z, 0.5, 0.3);
     a.anchor.getWorldPosition(tmpV);
-    if (n) V.labels.pill(n + '/' + cap(), tmpV.x, tmpV.y + hgt * 1.1 + 0.5, tmpV.z, { fill: n >= cap() ? '#ffe98a' : '#ffffff', stroke: n >= cap() ? '#f0b422' : '#dccaff', c1: n >= cap() ? '#ffe98a' : '#ffffff', c2: n >= cap() ? '#f0b422' : '#dccaff', size: 11, px: 11 });
+    if (n) V.labels.pill(n + '/' + gameCap(), tmpV.x, tmpV.y + hgt * 1.1 + 0.5, tmpV.z, { fill: n >= gameCap() ? '#ffe98a' : '#ffffff', stroke: n >= gameCap() ? '#f0b422' : '#dccaff', c1: n >= gameCap() ? '#ffe98a' : '#ffffff', c2: n >= gameCap() ? '#f0b422' : '#dccaff', size: 11, px: 11 });
   }
 
   // ---- fans
@@ -615,10 +616,10 @@ export function init(V) {
   for (const k in BADGES) { const m = new THREE.MeshBasicMaterial({ map: badgeTex(k), transparent: true, depthWrite: false, fog: false }); const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.34, 0.34), m, 48); im.frustumCulled = false; im.count = 0; im.renderOrder = 7; root.add(im); badgeMeshes[k] = im; badgeN[k] = 0; }
   function updateFans(dt, t, focus) {
     seen.clear(); for (const k in badgeN) badgeN[k] = 0;
-    const cam = V.camera; let shown = 0; const cap = V.quality.fans || 999;
+    const cam = V.camera; let shown = 0; const fanCap = V.quality.fans || 999;
     for (let i = 0; i < S.pop.length; i++) {
       const f = S.pop[i], fx0 = f.x * WU, fz0 = f.y * WU; seen.add(f.id);
-      const far = (focus && Math.hypot(fx0 - focus.x, fz0 - focus.z) > 45) || shown >= cap; // beyond the tier's crowd cap fans are skipped (still simulated)
+      const far = (focus && Math.hypot(fx0 - focus.x, fz0 - focus.z) > 45) || shown >= fanCap; // beyond the tier's crowd cap fans are skipped (still simulated)
       let e = fans.get(f.id); if (far) { if (e) e.holder.visible = false; continue; }
       e = e || fanFor(f); if (!e) continue; e.holder.visible = true; shown++;
       const st = e.st, a = e.actor, moving = (f.mv || 0) > 0, fight = f.role === 'fight';

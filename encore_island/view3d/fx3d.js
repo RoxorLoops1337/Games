@@ -286,7 +286,7 @@ export function init(V) {
         const r = q.r * W * (0.4 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.08, q.y * W, 0, r, 1, r, 0, BOOM[0], BOOM[1], BOOM[2], 1 - u * u, Math.min(0.3, 0.26 * (1 - u * 0.5) / Math.max(r, 0.5)) + 0.02); glowAt(2, q.x * W, 0.2, q.y * W, 0, r * 0.8, 1, 1, 0, BOOM[0], BOOM[1], BOOM[2], 0.12 * (1 - u));
       } else if (q.kind === 'zap' && q.pts) {
         const n = Math.min(q.pts.length, 10), a = 1 - u, c = zcol; let m = 0;
-        for (let k = 0; k < n; k++) { const p = q.pts[k]; const tower = k === 0; zbuf[m++] = p.x * W; zbuf[m++] = tower ? 1.55 : 0.4; zbuf[m++] = (p.y + (tower ? 80 : 14)) * W; }
+        for (let k = 0; k < n; k++) { const p = q.pts[k]; const tower = k === 0; zbuf[m++] = p.x * W; zbuf[m++] = tower ? 2.4 : 0.4; zbuf[m++] = (p.y + (tower ? 80 : 14)) * W; }
         bolt(zbuf, n, c, a, Math.floor(clock * 30));
         for (let k = 0; k < n; k++) glowAt(2, zbuf[k * 3], zbuf[k * 3 + 1], zbuf[k * 3 + 2], 0, k ? 0.3 : 0.4, 1, 1, 0, zcol[0], zcol[1], zcol[2], 0.6 * a);
       }

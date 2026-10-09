@@ -57,7 +57,8 @@ S.wallet = 5e5; S.gems = 9; S.houses = 3; for (let i = 0; i < 12; i++) EI.recrui
 EI.seedMain(7); for (const z of S.lands) for (let i = 0; i < 6; i++) EI.spawnEnemy(z); EI.spawnEnemy(S.lands[0], { boss: true }); for (const e of S.enemies) e.born = 1;
 for (let i = 0; i < 40; i++) EI.dropItem(S.lands[0].g.x + (i % 8) * 30, S.lands[0].g.y + (i / 8 | 0) * 30, i % 7 === 0 ? { gem: true } : { k: 1 + (i % 12), bar: i % 5 === 0 });
 S.forge = { queue: [{ k: 3 }], tray: [1, 2, 3, 4], smeltT: 0.5 }; S.forgeLvl = 2; S.bsPlate.built = true;
-const labelsSeen = []; const labels = { pill() { labelsSeen.push('pill'); }, price() { labelsSeen.push('price'); }, bar() { labelsSeen.push('bar'); }, icon() { labelsSeen.push('icon'); }, clear() { labelsSeen.length = 0; } };
+const labelsSeen = [], labelText = new Set(); const labels = { pill(txt) { labelsSeen.push('pill'); labelText.add(String(txt)); }, price(v) { labelsSeen.push('price'); labelText.add(String(v)); }, bar() { labelsSeen.push('bar'); }, icon() { labelsSeen.push('icon'); }, clear() { labelsSeen.length = 0; } };
+S.player.helmets = [{ k: 2 }, { k: 5 }, { k: 7, bar: true }]; // the companion's loot counter is a label too
 // the V below uses the medium (phone) tier caps: the budget that matters
 function mkV() {
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xbfe8f4, 60, 200); const camera = new THREE.PerspectiveCamera(32, 0.5, 1, 800), rig = kit.makeLightRig(scene, { shadows: false });
@@ -88,6 +89,7 @@ function sceneCost(V, focus, range = 38) { V.scene.updateMatrixWorld(true); let 
   if (process.env.V3_DEBUG) { // which top-level groups carry the draw calls? (V3_DEBUG=1 node tests/encore_island_view3d.test.mjs)
     const rows = []; for (const root of [V.world, V.dyn]) for (const ch of root.children) { const one = { scene: { traverse: (f) => ch.traverse(f), updateMatrixWorld() {} } }; const c = sceneCost({ scene: { traverse: (f) => ch.traverse(f), updateMatrixWorld: () => {} } }, focus); if (c.calls) rows.push([c.calls, Math.round(c.tris / 1000) + 'k', ch.name || ch.type + ':' + (ch.children[0] ? ch.children[0].type : '')]); }
     rows.sort((a, b) => b[0] - a[0]); console.log('V3 breakdown (calls, tris, group):\n' + rows.slice(0, 40).map((r) => '  ' + r.join('  ')).join('\n')); }
+  t.ok([...labelText].every((x) => !/\[object|NaN|undefined|null|Infinity/.test(x)) && [...labelText].some((x) => /^3\/\d+$/.test(x)), 'every HUD label reads cleanly and the companion shows its n/cap counter (' + [...labelText].slice(0, 6).join(' | ') + ' ...)');
   t.ok(labelsSeen.length > 0, 'modules queue HUD labels (' + labelsSeen.length + ' this frame)');
   // reset behaviour: an Encore Tour empties the lands, modules must follow without throwing
   EI.prestige(); thrown = null; try { for (let f = 0; f < 10; f++) { EI.tick(1 / 30); for (const m of names) inst[m].update(1 / 30, EI.S.t, focus); } } catch (e) { thrown = e; }

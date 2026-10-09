@@ -25,7 +25,7 @@ export async function createView(opts = {}) {
   if (!probe) throw new Error('WebGL unavailable');
   const pref = opts.quality || 'auto', tierName = detectTier(probe, pref); try { const ex = probe.getExtension('WEBGL_lose_context'); if (ex) ex.loseContext(); } catch (e) { /* ignore */ }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tierName === 'low', stencil: false, alpha: false, powerPreference: 'high-performance' });
-  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.autoClear = false; renderer.info.autoReset = false; renderer.setClearColor(0xbfe8f4, 1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.autoClear = false; renderer.info.autoReset = false; let shaderErrs = 0; renderer.debug.onShaderError = (gl, prog, vs, fs) => { if (++shaderErrs <= 2) console.warn('[3d] a shader failed to compile on this GPU: ' + String(gl.getProgramInfoLog(prog) || '').slice(0, 300)); }; renderer.setClearColor(0xbfe8f4, 1);
   const post = new Post(renderer);
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xbfe8f4, 60, 200);
   const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 800);
@@ -120,7 +120,7 @@ export async function createView(opts = {}) {
       const now = performance.now(); if (st.last) adaptive.feed((now - st.last) / 1000); st.last = now; st.cost = now - t0;
     },
     overlay(ctx) {
-      if (st.lost) return; drawLabels(ctx, projectW, st.vw, st.vh, scl); drawFloats3(ctx, projectW, S, scl);
+      if (st.lost) return; if (S.started) { drawLabels(ctx, projectW, st.vw, st.vh, scl); drawFloats3(ctx, projectW, S, scl); } // no price tags over the title screen
       if (PERF) { // ?perf in the URL: tier, resolution scale, draw calls, triangles, per-module JS ms
         const s = api.stats(), L = [s.tier + '  x' + s.scale + '  dpr ' + (+s.dpr).toFixed(2), s.calls + ' calls  ' + Math.round(s.tris / 1000) + 'k tris  ' + s.geos + ' geo  ' + s.tex + ' tex', 'frame ' + s.cpuMs + ' ms', Object.entries(s.mods).map(([k, v]) => k.replace('3d', '') + ' ' + v).join('  ')];
         ctx.fillStyle = 'rgba(20,10,50,0.7)'; ctx.fillRect(6, vh - 138, Math.min(vw - 12, 330), 62); ctx.fillStyle = '#d8ffd8'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; for (let i = 0; i < L.length; i++) ctx.fillText(L[i], 12, vh - 124 + i * 13);
