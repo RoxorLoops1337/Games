@@ -384,14 +384,14 @@
   }
 
   const MORNING_EVENTS = [
-    { w: 3, text: 'Foxy left a bowl of oats on the counter. No note. Just oats.', fx: (c) => { c.hunger += 18; c.mood += 4; } },
-    { w: 3, text: 'You found a crumpled $5 in last night\'s jacket.', fx: (c) => { c.cash += 5; } },
-    { w: 2, text: 'The neighbour practised drums at 6 am. You are weirdly inspired.', fx: (c) => { c.mood += 3; bumpStat(c, 'mus', 0.2); } },
-    { w: 2, text: 'Rain on the window. Cosy. You stay in bed ten minutes too long.', fx: (c) => { c.mood += 5; c.minutes += 10; } },
-    { w: 2, text: 'A stranger streamed your busk. +6 fans overnight.', fx: (c) => { c.fans += 6; } },
-    { w: 2, text: 'Your phone buzzes: a mum-shaped text. "Eat something green!" You do.', fx: (c) => { c.hunger += 8; c.mood += 6; } },
-    { w: 1, text: 'Bad dream: you forgot every sound. You wake up tense.', fx: (c) => { c.mood -= 8; } },
-    { w: 1, text: 'The pipes burst a little. Foxy mops. You help. Bonding.', fx: (c) => { c.energy -= 4; c.mood += 4; } },
+    { id: 'oats', w: 3, text: 'Foxy left a bowl of oats on the counter. No note. Just oats.', fx: (c) => { c.hunger += 18; c.mood += 4; } },
+    { id: 'five', w: 3, text: 'You found a crumpled $5 in last night\'s jacket.', fx: (c) => { c.cash += 5; } },
+    { id: 'drums', w: 2, text: 'The neighbour practised drums at 6 am. You are weirdly inspired.', fx: (c) => { c.mood += 3; bumpStat(c, 'mus', 0.2); } },
+    { id: 'rain', w: 2, text: 'Rain on the window. Cosy. You stay in bed ten minutes too long.', fx: (c) => { c.mood += 5; c.minutes += 10; } },
+    { id: 'streamed', w: 2, text: 'A stranger streamed your busk. +6 fans overnight.', fx: (c) => { c.fans += 6; } },
+    { id: 'mum', w: 2, text: 'Your phone buzzes: a mum-shaped text. "Eat something green!" You do.', fx: (c) => { c.hunger += 8; c.mood += 6; } },
+    { id: 'dream', w: 1, text: 'Bad dream: you forgot every sound. You wake up tense.', fx: (c) => { c.mood -= 8; } },
+    { id: 'pipes', w: 1, text: 'The pipes burst a little. Foxy mops. You help. Bonding.', fx: (c) => { c.energy -= 4; c.mood += 4; } },
   ];
   function pickWeighted(list, rng) {
     let t = 0; for (const e of list) t += e.w; let r = rng() * t;
@@ -431,11 +431,11 @@
       else { ch.rentDebt += CFG.rent + CFG.rentLate - 0; ch.mood -= 10; lines.push('You could not cover rent. Foxy covers it, with a look. You owe $' + ch.rentDebt + ' (late fee included).'); fx.push({ t: 'sfx', name: 'error' }); }
     }
     // one random morning event (30%)
-    if (rng() < 0.3) { const e = pickWeighted(MORNING_EVENTS, rng); e.fx(ch); lines.push(e.text); }
+    let ev = -1; if (rng() < 0.3) { const e = pickWeighted(MORNING_EVENTS, rng); e.fx(ch); lines.push(e.text); ev = MORNING_EVENTS.indexOf(e); }
     if (ch.day >= JAM.fromDay && !ch.n.jams) lines.push('Foxy: "There is a jam in the park this afternoon, 12:00 to 18:00. That is where the beatboxers go."');
     ch.hunger = clamp(ch.hunger, 0, 100); ch.mood = clamp(ch.mood, 0, 100);
     ch.place = 'home';
-    fx.push({ t: 'morning', day: ch.day, name: dayName(ch.day), lines, cause });
+    fx.push({ t: 'morning', day: ch.day, name: dayName(ch.day), lines, cause, ev, event: ev >= 0 ? MORNING_EVENTS[ev].id : null });   // ev / event: which MORNING_EVENTS entry played (-1 / null: none), for the wake vignette
   }
 
   /* ------------------------------------------------------------ gating */
@@ -612,11 +612,11 @@
 
   /* ----------------------------------------------------------- mingling */
   const MINGLE = [
-    { w: 3, text: (n) => n + ' loves your last set and buys you a green juice.', fx: (c) => { c.mood += 6; c.hunger += 6; }, aff: 1 },
-    { w: 3, text: (n) => n + ' shares a beat idea on a napkin. Surprisingly good.', fx: (c) => { bumpStat(c, 'ori', 0.4); c.mood += 3; }, aff: 1 },
-    { w: 2, text: (n) => n + ' teaches you a lip-roll trick.', fx: (c) => { bumpStat(c, 'tech', 0.4); }, aff: 1 },
-    { w: 2, text: (n) => 'You and ' + n + ' trade bars until the bar closes its tab.', fx: (c) => { c.fans += 5; c.mood += 4; }, aff: 2 },
-    { w: 1, text: (n) => n + ' is not in the mood. Awkward silence.', fx: (c) => { c.mood -= 4; }, aff: 0 },
+    { id: 'juice', w: 3, text: (n) => n + ' loves your last set and buys you a green juice.', fx: (c) => { c.mood += 6; c.hunger += 6; }, aff: 1 },
+    { id: 'napkin', w: 3, text: (n) => n + ' shares a beat idea on a napkin. Surprisingly good.', fx: (c) => { bumpStat(c, 'ori', 0.4); c.mood += 3; }, aff: 1 },
+    { id: 'liproll', w: 2, text: (n) => n + ' teaches you a lip-roll trick.', fx: (c) => { bumpStat(c, 'tech', 0.4); }, aff: 1 },
+    { id: 'bars', w: 2, text: (n) => 'You and ' + n + ' trade bars until the bar closes its tab.', fx: (c) => { c.fans += 5; c.mood += 4; }, aff: 2 },
+    { id: 'awkward', w: 1, text: (n) => n + ' is not in the mood. Awkward silence.', fx: (c) => { c.mood -= 4; }, aff: 0 },
   ];
 
   /* ------------------------------------------------- training (TRAINING_PLAN section 1) */
@@ -924,7 +924,7 @@
         if (ch.energy < 6) { toast('Too tired to chat.', 'warn'); break; }
         const e = pickWeighted(MINGLE, rng); e.fx(ch);
         ch.affinity[a.who] = Math.min(10, (ch.affinity[a.who] || 0) + e.aff); ch.n.mingles++;
-        spend(ch, CFG.mingleMin, 5, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }); toast(e.text(n.name), 'info');
+        spend(ch, CFG.mingleMin, 5, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }, { t: 'mingle', i: MINGLE.indexOf(e), id: e.id, who: a.who }); toast(e.text(n.name), 'info');   // fx mingle: which outcome (vignettes; the UI ignores it)
         break;
       }
       case 'date': {

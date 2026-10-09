@@ -8,4 +8,7 @@ export { WORLDS, WORLD_IDS, MINI_IDS } from './worlds.js';
 export { playTape } from './tape.js';   // WATCH A BEATBOX TAPE: the couch / TV sequence in the flat (the game calls R3.lib.playTape(world, opts))
 // the cutscene engine (cine.js + cine_screen.js + cine_reels.js): its own lazy chunk, fetched the first time a film plays
 export const loadCine = () => import('./cine_reels.js');
+// the action vignettes (VIGNETTES.md section 0, "How to add a world"): one lazy chunk per world, park3d/vig_<worldId>.js exporting VIGNETTES (esbuild bundles every file
+// that matches the pattern, so a new world module needs no edit here). Rejects for a world without a module; r3/vig.js then plays no vignette there.
+export const loadVig = (w) => (/^[a-z0-9]+$/.test(String(w)) ? import(`./vig_${w}.js`) : Promise.reject(new Error('bad world id')));
 export const PARK3D_ESM = 1;

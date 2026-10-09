@@ -27,6 +27,33 @@ Contents
 
 ## 0. Ground rules
 
+### How to add a world (the runtime contract, read this first)
+
+The runtime is built (`r3/vig.js`, the game glue; `park3d/vignette_kit.js`, `vignette_clips.js`, `vignette_props.js`, the shared kit). A crew adds its
+world's scenes WITHOUT editing any of those files:
+
+1. Create `park3d/vig_<worldId>.js`, where worldId is the Park3D world id: `flat` (home, done), `park`, `shop`, `lab` (the Sound Lab), `bar`, `street`.
+   The build picks it up by its name (`entry.js loadVig` is a pattern import of `./vig_${world}.js`); it becomes its own lazy chunk, fetched when that
+   world comes up. No module, or no entry for an id: the action simply plays without a vignette, exactly as before.
+2. Export the table: `export const VIGNETTES = { 'p1.busk.out': (ctx) => ({ events: [...] }), ... }` with the ids of this document. A reel is a cine.js
+   reel (park3d/CINE.md cue language) built with the kit helpers; see `vig_flat.js` for twenty worked examples (eating with props in the hand, the bed,
+   the desk stream, the booth, the mirror). `ctx` gives the form (`first` | `full` | `short` | `micro`), the save before and after, the action and its fx,
+   the anchors, a seeded `pick(k)` for variants, `PAY` (put this cue where the reward lands), `own()` and `tick()` for props.
+3. Optional: `export function pick(sig)` to add or override triggers for actions of your world (`sig = { action, fx, pre, post, place, hot, spot }`,
+   return an id, an array of ids tried in order, `null` for none, or `undefined` to fall through to the shared table in `r3/vig.js` V.pick, which
+   already maps every action of section 8).
+4. Every id must have a MICRO form (one clip in the gameplay camera, no shot cue, under 1.5 s). Stage FIRST and FULL with shots; the runtime adds the
+   letterbox (FIRST, FULL), hides the HUD and menus (not MICRO), the tap to skip, the 300 ms land shot and the handback; PAY fires at the end if the
+   reel never reached it. Never leave the world changed: spawned props go through `spawn` (removed at the end), actors are put back by the engine.
+5. Check frames: `node tools/beatbox_heroes/vig_shot.mjs /tmp/out --place park --vig p1.busk.out --form first --sizes 390x844,1280x720 --sheet`,
+   and add the ids to `tests/beatbox_heroes_r3vig.test.mjs` (every id plays and ends, MICRO under 1.5 s).
+
+What the runtime already does (section 0.2 to 0.5): the repeat counter in a NEW localStorage key `bbh:vig<slot>` (`{ id: { n, last } }`), the form
+choice (FIRST, FULL x4, then SHORT; MICRO for a repeat inside 20 s, Settings SCENES: OFF, a second action during a vignette, and automated
+browsers), Settings SCENES FULL / SHORT / OFF (`E.settings.scenes`), reduce motion, held toasts and HUD numbers until PAY, refusals by toast text
+(section 2.15), INTRO vignettes before activities launched from a place, the bedtime and wake up hooks, and a story film always wins the camera.
+Core reports the picked morning event (`morning` fx: `ev`, `event` id) and the mingle outcome (new fx `{ t: 'mingle', i, id, who }`).
+
 ### 0.1 What a vignette is
 
 A short, staged, skippable scene that plays when the player does something. It replaces "toast appears over a frozen hero"
@@ -1590,9 +1617,9 @@ How the director picks a vignette. Evaluate top to bottom; the first match wins 
 | fx `jamStart` | | `p2.jam.start` |
 | E.go into a mini game | from a place | the INTRO of that action |
 
-Implementation note for the mingle outcome: `Core.apply` does not return which MINGLE entry was picked. Match on the toast text (stable
-strings) or, better, add a non-breaking fx `{ t: 'mingle', i }` in a later Core change (additive, the UI ignores unknown fx). Same for the
-morning event: the director matches the line text against `MORNING_EVENTS[i].text`.
+Implementation note for the mingle outcome and the morning event: done. `Core.apply` now adds a non-breaking fx `{ t: 'mingle', i, id, who }`
+(id: juice, napkin, liproll, bars, awkward; the UI ignores it), and the `morning` fx carries `ev` (the MORNING_EVENTS index, -1 for none) and
+`event` (its id: oats, five, drums, rain, streamed, mum, dream, pipes).
 
 ---
 
