@@ -133,7 +133,11 @@ export function createCine(world, reel, opts) {
   }
   // shot size by width: the camera distance at which a frame `w` metres wide fits the subject plane. The aspect is capped at 9:16, so a landscape box keeps the portrait framing
   // (same subject height, more room left and right) and a phone narrower than 9:16 steps back until the width still fits.
-  function fitDist(w, fov) { const a = Math.min(cam.aspect > 0 ? cam.aspect : 0.5625, 0.5625); return w / (2 * Math.tan(fov * D2R / 2) * a); }
+  // FRAME: every width-framed shot (films and vignettes) is pulled back by this much, so a medium shot shows the whole figure with room around it
+  // (the owner found the shots too close). Close ups keep their size relative to the others. A landscape box (a film gone wide on desktop) steps back
+  // a little more (FRAME_LAND), since the 9:16 cap would otherwise keep the phone's subject height on a wide screen.
+  const FRAME = 1.35, FRAME_LAND = 1.25;
+  function fitDist(w, fov) { const a = Math.min(cam.aspect > 0 ? cam.aspect : 0.5625, 0.5625), k = FRAME * (cam.aspect > 1 ? FRAME_LAND : 1); return w * k / (2 * Math.tan(fov * D2R / 2) * a); }
   function mix(a, b, e) { const m = Object.assign({}, a, b); for (const k of NUM) if (a[k] !== undefined || b[k] !== undefined) { const x = a[k] === undefined ? DEF[k] : a[k], y = b[k] === undefined ? x : b[k]; m[k] = lerp(x, y, e); } if (Array.isArray(a.pos) && Array.isArray(b.pos)) m.pos = a.pos.map((x, i) => lerp(x, b.pos[i], e)); if (Array.isArray(a.look) && Array.isArray(b.look)) m.look = a.look.map((x, i) => lerp(x, b.look[i], e)); return m; }
   const DEF = { yaw: 0, dist: 4, w: 1.6, h: 1.4, lookH: 1.15, fov: 38, shift: 0, lift: 0, roll: 0 };
   function setShot(e) {
