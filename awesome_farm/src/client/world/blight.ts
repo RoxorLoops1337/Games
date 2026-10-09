@@ -4,14 +4,14 @@
 // `defense` and `wade` for the views on screen every frame, `draw` once after them, and `shot` for each tower event.
 
 import * as Phaser from 'phaser';
-import { TILE } from '../../shared/config';
+import { TILE, TUNING } from '../../shared/config';
 import { BUILDINGS } from '../../shared/data/buildings';
 import { NEST_KINDS } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
 import type { BuildE, MobE, NodeE, Plot, SimEvent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { ZAP_LINGER, flightTime } from '../../shared/data/shotfx';
-import { aimOf, dir8, noteShot } from '../../shared/data/aim';
+import { aimOf, dir8, lookAt, noteShot } from '../../shared/data/aim';
 import { levelOf, pending, towerType } from '../../shared/data/towerperks';
 import { maxHp } from '../../shared/sim/defense';
 import { overlay3d } from './view3d-bridge';
@@ -50,6 +50,9 @@ export class BlightFx {
     readonly lights = new Set<{ x: number; y: number; r: number; c: number }>();
     private bows = new Map<number, { im: Phaser.GameObjects.Image; cur: number; at: number }>();
     private seenBow = new Set<number>();
+    /** Ballistas seen this frame, to be aimed once every monster in view is known (`track`). */
+    private guns: { id: number; x: number; y: number; tx: number; ty: number }[] = [];
+    private idle = new Map<number, { a: number; at: number }>();
     private zapSparks: Phaser.GameObjects.Particles.ParticleEmitter;
     private badges = new Map<number, Txt>();
     private seenB = new Set<number>();
@@ -119,7 +122,32 @@ export class BlightFx {
         if (max && b.hp !== undefined && b.hp < max) this.bars.push({ x: (b.tx + w / 2) * TILE, y: top - 3, w: 14, f: b.hp / max });
         const type = towerType(b.kind);
         if (type && type !== 'spike') this.badge(v, b, top);          // (a trap on the floor wears no badge or star: its level lives in its window)
-        if (b.kind === 'ballista') this.aim(v, b);
+        if (b.kind === 'ballista') { this.guns.push({ id: b.id, x: v.x, y: v.y - 10, tx: b.tx, ty: b.ty }); this.aim(v, b); }
+    }
+
+    /**
+     * Once a frame, after every view is placed: each Ballista turns to follow the nearest monster inside its range, before it ever fires (so you
+     * watch it aim), and when nothing is near it glances about, one direction at a time. The 3D model turns smoothly to the same angle (data/aim.ts).
+     */
+    track (views: readonly { x: number; y: number; ent: { k: string } }[], now: number) {
+        const reach = TUNING.blight.ballista.range * 1.05;
+        for (const g of this.guns) {
+            let best: { x: number; y: number } | null = null, bd = reach;
+            for (const v of views) {
+                if (v.ent.k !== 'mob') continue;
+                const d = Math.hypot(v.x - g.x, v.y - g.y);
+                if (d < bd) { bd = d; best = v; }
+            }
+            if (best) { lookAt(g.tx, g.ty, Math.atan2(best.y - 5 - g.y, best.x - g.x)); this.idle.delete(g.id); continue; }
+            let o = this.idle.get(g.id);
+            if (!o) { o = { a: aimOf(g.tx, g.ty), at: now + 1500 + (g.id % 7) * 400 }; this.idle.set(g.id, o); }
+            if (now >= o.at) {
+                o.a += (Math.PI / 4) * (((g.id + Math.floor(now / 5000)) % 3) - 1 || 1);       // (a step to one side or the other)
+                o.at = now + 2200 + (g.id % 5) * 500;
+                lookAt(g.tx, g.ty, o.a);
+            }
+        }
+        this.guns.length = 0;
     }
 
     /** The Ballista's bow turns toward its last target, a step at a time round the eight directions (data/aim.ts says where it last shot). */
