@@ -197,3 +197,5 @@ CL.v_check = function (P, c, dt, o) {
 
 export const VIG_CLIPS = ['v_eat', 'v_drink', 'v_toss', 'v_hold', 'v_reach', 'v_lie', 'v_flop', 'v_situp', 'v_yawn', 'v_stretch', 'v_nod', 'v_shrug', 'v_pockets', 'v_type', 'v_guns', 'v_check'];
 void relaxArms;
+// for the world clip files (vig_<world>_clips.js): the same mic grip, free hand IK and standing / seated base as the clips above
+export { micLow, handL, base as vigBase, REST_L };
