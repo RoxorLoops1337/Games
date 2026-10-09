@@ -1,7 +1,8 @@
 // Park3D TAPE: the VHS tape on the couch in the flat, the 3D half of WATCH A BEATBOX TAPE (the game half is beatbox_heroes/tape.js, BBH.Tape).
 //   playTape(world, opts) -> Promise<{ tape, shown, ids, skipped } | null>     the one entry point (r3 game glue and, later, the cutscene engine call this)
 //     world: the flat world (host world object). null or a world without a TV anchor -> the 2D experience (player.play(null, opts)).
-//     opts: { facts, tape, player (default globalThis.BBH.Tape), speed, reduce, seat (default true: seat the hero on the couch when no spot cinematic did) }
+//     opts: { facts, tape, player (default globalThis.BBH.Tape), speed, reduce, seat (default true: seat the hero on the couch when no spot cinematic did),
+//             wide(b) (the host's R3.setWide: on a landscape window the 3D box fills the whole window for the tape, switched under a short dip, and back at the end) }
 //   The sequence: over-the-shoulder shot from the couch, a cassette slides into the deck (clunk), the TV goes blue > snow > PLAY with tracking lines, the camera pushes in until the screen
 //   fills the width, then the overlay picture grows out of the screen rect (BBH.Tape: VHS video, kinetic fact cards, TV audio, SKIP / hold to skip), and at the end the tape rewinds, the
 //   picture shrinks back into the TV and the camera pulls back to the couch before control returns. No new imports: THREE comes from world.ctx, so the module stays tiny in the core chunk.
@@ -19,7 +20,24 @@ export function playTape(world, opts) {
   return run(world, opts, player, THREE, A, tvA).catch((e) => { console.error('[park3d tape]', e); return null; });
 }
 
+// a short dip to black over the whole window (covers the switch of the 3D box between the 9:16 column and the full window)
+function dipper() {
+  const G = typeof window !== 'undefined' ? window : null, d = G && G.document; if (!d) return null;
+  const el = d.createElement('div'); el.className = 'tape-dip'; el.style.cssText = 'position:fixed;inset:0;z-index:44;background:#07040c;opacity:0;pointer-events:none;transition:opacity .2s linear'; d.body.appendChild(el);
+  const to = (v, ms) => new Promise((res) => { el.style.transitionDuration = ms + 'ms'; void el.offsetWidth; el.style.opacity = String(v); setTimeout(res, ms + 30); });
+  return { to, remove() { try { el.remove(); } catch (e) { /* ignore */ } } };
+}
+const landscape = () => typeof window !== 'undefined' && window.innerWidth > window.innerHeight * 9 / 16 + 4;
+
 async function run(world, opts, player, THREE, A, tv) {
+  // a landscape window: the tape plays on the full window (the 3D box goes wide under a dip, before the camera rig measures the aspect)
+  const wide = typeof opts.wide === 'function' && landscape(), dip = wide ? dipper() : null;
+  if (wide) { if (dip) await dip.to(1, 180); try { opts.wide(true); } catch (e) { /* ignore */ } await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))); }
+  try { return await run1(world, opts, player, THREE, A, tv, dip); } finally {
+    if (wide) { if (dip) await dip.to(1, 160); try { opts.wide(false); } catch (e) { /* ignore */ } await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))); if (dip) { await dip.to(0, 260); dip.remove(); } }
+  }
+}
+async function run1(world, opts, player, THREE, A, tv, dip) {
   const cam = world.camera, scene = world.scene, terrain = world.terrain, controls = world.controls || {}, speed = () => opts.speed || player.speed || 1;
   const reduce = opts.reduce !== undefined ? !!opts.reduce : false;
   // ---------------------------------------------------------------- the hero on the couch (the spot cinematic usually did this already)
@@ -71,7 +89,7 @@ async function run(world, opts, player, THREE, A, tv) {
   const skipP = new Promise((res) => ctrl.onSkip(res)), pause = (ms) => Promise.race([new Promise((res) => setTimeout(res, ms / speed())), skipP]);
   let result = null;
   try {
-    ctrl.el.style.background = 'transparent';
+    ctrl.el.style.background = 'transparent'; if (dip) dip.to(0, 320);
     // 1. over the shoulder (from wherever the spot camera is)
     await tween(reduce ? 300 : 1100, (k) => { R.w = k; lerpKey(K1, K1, 0); });
     // 2. the cassette slides into the deck, clunk, the TV wakes up

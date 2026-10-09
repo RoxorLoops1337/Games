@@ -35,7 +35,7 @@ function firstJam(ctx) {
     line(L, 0),
     // a slow circle around the hero, the crowd sliding past in front of the lens
     // (high enough to look over the heads of the ring: the spectators are 1.7 m tall)
-    shot({ on: 'hero', yaw: -150, rel: false, w: 2.4, h: 2.9, lookH: 1.1, fov: 40, to: { yaw: 150, w: 2.1 }, dur: 9, ease: 'linear', cut: 'xfade', ms: 600 }),
+    shot({ on: 'hero', yaw: -150, rel: false, w: 2.4, h: 3.4, lookH: 1.0, fov: 42, to: { yaw: 150, w: 2.1 }, dur: 9, ease: 'linear', cut: 'xfade', ms: 600 }),
     cue('clip', { who: 'mira', clip: 'cheer' }), cue('clip', { who: 'luca', clip: 'dance', opts: { bpm: 96 } }),
     line(L, 1),
     shot({ on: 'hero', yaw: 0, w: 1.15, h: 1.2, lookH: 1.2, fov: 30, to: { w: 1.0 }, dur: 5 }), cue('mood', { who: 'hero', mood: 'happy' }),
@@ -46,7 +46,7 @@ function firstJam(ctx) {
 // BeeAmGee watching from the back (beyond the open side of the ring, so the lens inside the ring sees him over nobody's head). Over the hero's shoulder, out of focus;
 // a rack focus; a nod; back to the hero; back again: nobody there.
 function sighting(ctx, busk) {
-  const L = ctx.lines || [], at = busk ? [3.0, -4.6] : [JAM.x + 0.9, JAM.z + 6.4], hero = busk ? [8, -7.4] : [JAM.x, JAM.z + 0.2], n = L.length;
+  const L = ctx.lines || [], at = busk ? [3.0, -4.6] : [JAM.x - 0.7, JAM.z + 6.6], hero = busk ? [8, -7.4] : [JAM.x, JAM.z + 0.2], n = L.length;
   const mid = lines(L, 1, Math.max(1, n - 1));
   // the long lens on BeeAmGee: off to the side of the hero, above the heads of the ring, so nobody stands between
   const dx = at[0] - hero[0], dz = at[1] - hero[1], dl = Math.hypot(dx, dz), lens = [hero[0] - dz / dl * 1.1 - dx / dl * 0.5, 1.7, hero[1] + dx / dl * 1.1 - dz / dl * 0.5];
@@ -77,7 +77,7 @@ function meet(ctx) {
     shot({ on: 'beeamgee', yaw: 45, w: 1.25, h: 1.1, lookH: 0.95, fov: 32 }),
     line(L, 0, talk),
     shot({ on: 'hero', yaw: -12, w: 1.15, h: 1.2, lookH: 1.2, fov: 32 }), cue('mood', { who: 'hero', mood: 'happy' }), wait(0.9),
-    shot({ on: 'beeamgee', yaw: 30, w: 1.05, h: 1.0, lookH: 0.95, fov: 30, to: { w: 0.9 }, dur: 5 }),
+    shot({ on: 'beeamgee', yaw: 62, w: 1.05, h: 1.0, lookH: 0.95, fov: 30, to: { w: 0.9 }, dur: 5 }),
     line(L, 1, talk),
     shot({ on: ['hero', 'beeamgee'], yaw: 150, rel: false, w: 3.4, h: 1.5, lookH: 0.95, fov: 38 }),
     line(L, 2, talk),
@@ -128,7 +128,7 @@ function famous(ctx) {
     line(L, 2),
     cue('clip', { who: 'famous', clip: 'idle' }), cue('sfx', { name: 'crowd_cheer' }),
     cue('walk', { who: 'famous', to: [[JAM.x + 1.2, JAM.z + 4.5], [JAM.x + 4, JAM.z + 10]], speed: 1.3 }), cue('walk', { who: 'crewA', to: [JAM.x + 5, JAM.z + 10], speed: 1.3 }), cue('walk', { who: 'crewB', to: [JAM.x + 5.8, JAM.z + 9.4], speed: 1.3 }),
-    shot({ on: 'hero', yaw: -20, w: 1.1, h: 1.2, lookH: 1.2, fov: 32 }),
+    shot({ on: 'hero', yaw: 12, w: 1.1, h: 1.4, lookH: 1.22, fov: 32 }),
     line(L, 3), cue('look', { who: 'hero', at: null }), cue('mood', { who: 'hero', mood: 'neutral' }),
     shot({ pos: [JAM.x - 1, 6, JAM.z + 9], look: [JAM.x, 0.8, JAM.z], fov: 40, to: { pos: [JAM.x - 1, 8, JAM.z + 12] }, dur: 5 }),
     ...lines(L, 4), cue('music', { id: 'park', fade: 1.2 }),
@@ -136,27 +136,32 @@ function famous(ctx) {
 }
 
 // ================================================================== STORY BEATS (bar)
-// the stage in the north-east of the bar (bar_stage.js), Rohzel behind her counter on the west side
-const STAGE = { x: 3.5, z: -2.4 }, ROH = 'rohzel';
+// the stage in the north-east of the bar (bar_stage.js: deck x 1..6, z -5..-2.5, 0.38 m high), Rohzel behind her counter on the west side.
+// The hero stands ON the deck, in front of the mic stand (z -3.35), so he is above the heads of the packed dance floor; the crowd keeps a free aisle at x 2.85..4.35
+// (bar.js keepout), and every lens on the crowd side sits in that aisle and above head height (1.7 m), so the heads frame the bottom of the shot and never cover him.
+const STAGE = { x: 3.5, z: -2.85, y: 0.38 }, ROH = 'rohzel';
 function barReel(id, ctx, mode) {
   const L = ctx.lines || [], win = mode !== 'loss', champ = mode === 'champ';
   const ev = [
-    cue('place', { who: 'hero', at: [STAGE.x, STAGE.z], face: 0 }), cue('cone', { id: 'stage', at: [STAGE.x, 4.2, STAGE.z - 0.3], to: 'hero', color: win ? '#fff1c9' : '#9fb4ff', r: 1.1, v: win ? 1 : 0.6, ms: 400 }),
+    cue('place', { who: 'hero', at: [STAGE.x, STAGE.z], face: 0, y: STAGE.y }), cue('cone', { id: 'stage', at: [STAGE.x, 4.2, STAGE.z - 0.3], to: 'hero', color: win ? '#fff1c9' : '#9fb4ff', r: 1.1, v: win ? 1 : 0.6, ms: 400 }),
     cue('clip', { who: 'hero', clip: win ? (champ ? 'finisher' : 'cheer') : 'sad', opts: { bpm: 110 } }), cue('mood', { who: 'hero', mood: win ? 'happy' : 'sad' }),
-    shot({ on: 'hero', yaw: 0, w: 2.8, h: 0.7, lookH: 1.3, fov: 44, to: { w: 2.2, h: 0.9 }, dur: 6, ease: 'soft' }),
+    // from the back of the aisle, over the heads (and under the disco ball at y 2.58), pushing in: the packed floor in the foreground, the hero lit on the deck
+    shot({ on: 'hero', yaw: 9, w: 3.0, h: 1.9, lookH: 1.15, fov: 44, to: { yaw: 5, w: 2.3, h: 1.72, lookH: 1.25 }, dur: 6, ease: 'soft' }),
     cue('sfx', { name: win ? 'crowd_cheer' : 'applause' }), win ? cue('fx', { kind: 'confetti', at: 'hero:top', n: champ ? 120 : 70 }) : null,
-    champ ? cue('title', { style: 'card', text: 'WORLD CUP CHAMPION', sub: String(ctx.name || '').toUpperCase(), ms: 4200 }) : null,
+    champ ? cue('title', { style: 'card', at: 'top', text: 'WORLD CUP CHAMPION', sub: String(ctx.name || '').toUpperCase(), ms: 4200 }) : null,
     line(L, 0, { dur: champ ? 3.2 : 2.8 }),
-    shot({ on: ROH, yaw: -40, w: 1.3, h: 1.9, lookH: 1.3, fov: 44 }), cue('look', { who: ROH, at: 'hero:head' }), cue('clip', { who: ROH, clip: 'talk' }),
+    shot({ on: ROH, yaw: 18, w: 1.3, h: 1.45, lookH: 1.35, fov: 44 }), cue('look', { who: ROH, at: 'hero:head' }), cue('clip', { who: ROH, clip: 'talk' }),
   ];
   const ls = L.slice(1);
   ls.forEach((l, i) => {
-    if (l.who === 'penny') ev.push(cue('spawn', { id: 'penny', look: 'penny', at: [STAGE.x + 1.2, STAGE.z + 0.2], face: -70, clip: 'idle' }), shot({ on: 'penny', yaw: 35, w: 1.3, h: 2.3, lookH: 1.3, fov: 44 }), cue('look', { who: 'penny', at: 'hero:head' }));
-    else if (l.who === ROH && i > 0 && ls[i - 1].who !== ROH) ev.push(shot({ on: ROH, yaw: -55, w: 1.5, h: 2.0, lookH: 1.3, fov: 44 }), cue('clip', { who: ROH, clip: 'talk' }));
-    else if (!l.who && i > 0) ev.push(shot({ on: 'hero', yaw: -15, w: 1.2, h: 1.2, lookH: 1.2, fov: 40 }));
+    // Penny comes up on the deck beside him (the champion she lost to); the lens is over the heads of the floor, on her
+    if (l.who === 'penny') ev.push(cue('spawn', { id: 'penny', look: 'penny', at: [STAGE.x + 1.2, STAGE.z - 0.1], y: STAGE.y, face: -90, clip: 'idle' }), shot({ on: 'penny', yaw: 75, w: 1.35, h: 1.95, lookH: 1.3, fov: 44 }), cue('look', { who: 'penny', at: 'hero:head' }), cue('look', { who: 'hero', at: 'penny:head' }));
+    else if (l.who === ROH && i > 0 && ls[i - 1].who !== ROH) ev.push(shot({ on: ROH, yaw: -6, w: 1.5, h: 1.6, lookH: 1.3, fov: 44 }), cue('clip', { who: ROH, clip: 'talk' }));
+    else if (!l.who && i > 0) ev.push(shot({ on: 'hero', yaw: -4, w: 1.25, h: 2.0, lookH: 1.2, fov: 40 }), cue('look', { who: 'hero', at: null }));
     ev.push({ do: 'say', who: l.who || null, text: l.text, mood: l.mood });
   });
-  ev.push(cue('clip', { who: ROH, clip: 'idle' }), shot({ on: 'hero', yaw: 20, w: 1.8, h: 1.3, lookH: 1.15, fov: 42 }), win ? cue('fx', { kind: 'sparks', at: 'hero:top', n: 30 }) : null, wait(0.9), cue('cone', { id: 'stage', v: 0, ms: 600 }));
+  // the last frame: back down the aisle, pulling away over the heads, the packed floor turned to him on the lit deck (the disco ball off to the side of his head)
+  ev.push(cue('clip', { who: ROH, clip: 'idle' }), cue('look', { who: 'hero', at: null }), cue('despawn', { id: 'penny' }), shot({ on: 'hero', yaw: -10, w: 2.6, h: 1.75, lookH: 1.2, fov: 44, to: { yaw: -13, w: 3.4, h: 1.85 }, dur: 3.5, ease: 'out' }), win ? cue('fx', { kind: 'sparks', at: 'hero:top', n: 30 }) : null, wait(1.2), cue('cone', { id: 'stage', v: 0, ms: 600 }));
   return { reels: [{ reel: { id, events: ev.filter(Boolean), cast: { rohzel: { rest: { clip: 'idle' } } } } }] };
 }
 
@@ -177,7 +182,7 @@ function collapse() {
   return { holdSync: true, reels: [{ reel: { id: 'collapse', events: [
     cue('light', { time: 1, instant: true }), cue('music', { id: null, fade: 0.3 }),
     cue('place', { who: 'hero', at: [4.2, 3.4], face: -140 }), cue('clip', { who: 'hero', clip: 'sit', opts: { seat: 0.05, drowsy: 1, slump: 1.6 } }), cue('mood', { who: 'hero', mood: 'sad' }),
-    shot({ on: 'hero', yaw: 20, w: 2.2, h: 2.4, lookH: 0.5, fov: 44, roll: -8, to: { w: 1.8, roll: -12 }, dur: 6 }), cue('stamp', { text: '02:00|REC' }), cue('vignette', { v: 1, ms: 300 }), cue('blur', { px: 2.4, ms: 1500 }),
+    shot({ on: 'hero', yaw: 20, w: 1.6, h: 2.1, lookH: 0.45, fov: 44, roll: -8, to: { w: 1.35, roll: -12 }, dur: 6 }), cue('stamp', { text: '02:00|REC' }), cue('vignette', { v: 1, ms: 300 }), cue('blur', { px: 2.4, ms: 1500 }),
     cue('sfx', { name: 'heart' }), wait(1.0), cue('sfx', { name: 'heart' }),
     narr('You collapsed at 2 am on the floor. Foxy dragged you to bed.', { dur: 3.6 }),
     cue('dip', { v: 1, ms: 700, color: '#07040e' }), wait(0.8), cue('blur', { px: 0, ms: 10 }), cue('vignette', { v: 0, ms: 10 }), cue('stamp', { text: '' }),

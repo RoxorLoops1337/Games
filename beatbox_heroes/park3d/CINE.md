@@ -65,6 +65,10 @@ Rules of thumb:
   full shot 2.4, wide 5. The frame is authored for 9:16 portrait: a landscape box keeps the same subject height and
   shows more on the sides. In portrait the frame is narrow, so build depth (foreground, subject, background along the
   lens axis) and height (high and low angles), not width. Two people side by side need `w` about 3.4.
+* When a frame cannot work in both shapes (a 12 m LED wall, a long sign), give the shot a `port: { ...keys, to }`: those keys replace
+  the shot's own on a portrait box (`cam.aspect < 0.9`), for example a longer pull back or a wider lens. The dream does this for WORLD CUP.
+* Keep the lens above head height (1.7 m) or in a free aisle whenever a crowd stands between it and the hero (the bar films put him up on
+  the deck and shoot from the crowd's aisle); a `title` card with `at: 'top'` sits in the upper third, off a face in mid frame.
 * `yaw` is relative to the actor's facing at the cut (0 = in front of the face, 180 = behind). `rel: false` makes it a
   world angle (0 = camera on the +z side).
 * Spawned characters (`spawn`) are disposed at the end. Use `look: 'npcId'` for a Core.NPCS look, a look object for a

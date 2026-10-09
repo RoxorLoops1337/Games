@@ -4,7 +4,7 @@
 //   const scr = createScreen({ parent, box, canvas, reduce, low, onTap, onSkip })      box: an element whose rect the layer follows (#glwrap), canvas: the WebGL canvas (blur, flicker, snapshots)
 //   scr.letterbox(v, ms)  v: bar height as a fraction of the box height, 'scope' = 2.39:1 on a landscape box (0.1 portrait), 0 = off
 //   scr.sub({ name, text, color, kind }, { cps }) -> { done(), finish() }     scr.clearSub(ms)     kind 'narr' = narration (no name, centred, softer)
-//   scr.stamp(text, ms)  VHS corner stamp (typed)      scr.title({ style:'chapter'|'card'|'logo', text, sub, ms }) -> handle { land(i), slam(), out(ms), letters }
+//   scr.stamp(text, ms)  VHS corner stamp (typed)      scr.title({ style:'chapter'|'card'|'logo', text, sub, ms, at: 'top' (card) }) -> handle { land(i), slam(), out(ms), letters }
 //   scr.word(text, x, y, { color, size, ms })  kinetic word at box fractions      scr.dip(v, ms, color)      scr.xfade(ms) (snapshot of opts.canvas, then fade)
 //   scr.blur(px, ms)   scr.vignette(v, ms)   scr.flash(color, ms)   scr.flicker(ms)   scr.skipUI(b)   scr.layout()   scr.covered() (dip fully up)   scr.dispose()
 // Every call is safe after dispose (no-ops). Nothing here touches three.js: the cine (cine.js) drives it and the game glue (r3/cine.js) owns its lifetime.
@@ -139,6 +139,8 @@ export function createScreen(opts) {
         el = mk('div', 'cin-logo', box); String(o.text || 'BEATBOX HEROES').split(' ').forEach((wd, r) => { const row = mk('div', 'row' + (r ? ' b' : ''), el); for (const ch of wd) { const s = mk('span', '', row); s.textContent = ch; letters.push(s); } });
         if (o.sub) { const tg = mk('div', 'cin-tag', box); tg.textContent = o.sub; }
       } else if (o.style === 'card') {
+        // at: 'top' lifts the statement into the upper third, off the face of a hero standing mid frame
+        if (o.at === 'top') box.style.cssText = 'position:absolute;left:0;right:0;top:' + Math.round((S.lb || 0) + S.box.h * 0.06) + 'px;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.2)';
         el = mk('div', 'cin-card', box); el.textContent = o.text || ''; requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
         if (o.sub) { const s2 = mk('div', 'cin-chs', box); s2.textContent = o.sub; requestAnimationFrame(() => requestAnimationFrame(() => s2.classList.add('on'))); }
       } else {

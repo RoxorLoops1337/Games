@@ -263,6 +263,12 @@
 #tape.reduce .tp-text span, #tape.reduce .tp-year span, #tape.reduce .tp-era, #tape.reduce .tp-rule { transition: opacity .3s !important; transform: none !important; clip-path: none !important; filter: none !important; }
 #tape.reduce .tp-card .tp-text span, #tape.reduce .tp-card .tp-era, #tape.reduce .tp-card .tp-year, #tape.reduce .tp-card .tp-rule { opacity: 0; } #tape.reduce .tp-card.in .tp-text span, #tape.reduce .tp-card.in .tp-era, #tape.reduce .tp-card.in .tp-year, #tape.reduce .tp-card.in .tp-rule { opacity: 1; }
 #tape.reduce .tp-card.out { transform: none; filter: none; } #tape.reduce .tp-title .h { transform: none; transition: none; }
+#tape.land .tp-scrim { top: 0; height: auto; background: linear-gradient(90deg, rgba(6,3,14,.86) 0%, rgba(6,3,14,.62) 34%, rgba(6,3,14,.12) 62%, rgba(6,3,14,0) 78%), linear-gradient(180deg, rgba(6,3,14,0) 45%, rgba(6,3,14,.7) 100%); }
+#tape.land .tp-card { left: calc(56 * var(--u)); right: auto; width: min(46%, calc(600 * var(--u))); bottom: calc(env(safe-area-inset-bottom, 0px) + 96 * var(--u)); }
+#tape.land .tp-year { font-size: calc(84 * var(--u)); } #tape.land .tp-year.long { font-size: calc(56 * var(--u)); }
+#tape.land .tp-text { font-size: calc(24 * var(--u)); } #tape.land .tp-hint { left: calc(56 * var(--u)); bottom: calc(env(safe-area-inset-bottom, 0px) + 40 * var(--u)); }
+#tape.land .tp-osd .tl, #tape.land .tp-osd .bl { left: calc(32 * var(--u)); } #tape.land .tp-osd .tr { right: calc(32 * var(--u)); } #tape.land .tp-skip { right: calc(28 * var(--u)); }
+#tape.land .tp-title .h { font-size: calc(58 * var(--u)); }
 body.tape-on #hud3, body.tape-on #ui > .hud, body.tape-on .h3-nav { visibility: hidden !important; }
 @keyframes tpblink { 50% { opacity: 0; } } @keyframes tpfill { to { transform: none; } }
 `;
@@ -285,7 +291,9 @@ body.tape-on #hud3, body.tape-on #ui > .hud, body.tape-on .h3-nav { visibility: 
     doc.body.appendChild(el); doc.body.classList.add('tape-on');
     const $ = (s) => el.querySelector(s), scr = $('.tp-scr'), cvs = $('.tp-scr canvas'), card = $('.tp-card'), title = $('.tp-title'), osdL = $('.tp-osd .tl'), osdT = $('.tp-osd .bl'), flash = $('.tp-flash'), prog = [...el.querySelectorAll('.tp-prog b')], skipB = $('.tp-skip');
     let col = column(), vw = 0, vh = 0;
-    const layout = () => { col = column(); Object.assign(el.style, { left: col.x + 'px', top: col.y + 'px', width: col.w + 'px', height: col.h + 'px' }); el.style.setProperty('--u', (Math.min(col.w / 390, col.h / 700)).toFixed(4) + 'px');
+    // a landscape box (the 3D box goes wide for the tape on desktop): a 16:9 picture over the whole window, the cards as a lower-left block (class land)
+    const layout = () => { col = column(); const land = col.w > col.h * 1.1; el.classList.toggle('land', land); Object.assign(el.style, { left: col.x + 'px', top: col.y + 'px', width: col.w + 'px', height: col.h + 'px' });
+      el.style.setProperty('--u', (land ? Math.min(col.w / 1000, col.h / 560) : Math.min(col.w / 390, col.h / 700)).toFixed(4) + 'px');
       const s = col.w < 300 ? 0.6 : 0.55, w = Math.round(col.w * s), h = Math.round(col.h * s); if (w !== vw || h !== vh) { vw = w; vh = h; } };
     layout();
     const V = T.video(Math.max(160, vw), Math.max(280, vh), { calm: reduce }); cvs.replaceWith(V.canvas); V.setEra(facts[0].era, facts[0].year); V.setMode('blue');
@@ -396,7 +404,7 @@ body.tape-on #hud3, body.tape-on #ui > .hud, body.tape-on .h3-nav { visibility: 
       if (ch.flags.tapeDay === ch.day || T.playing) { if (!T.playing) G.do({ t: 'tape' }); return Promise.resolve(null); }
       const k = ch.flags.tapeNext | 0, facts = TF.pick(k), R3 = BBH.R3, w = S && S.is3d && S.w, lib = R3 && R3.lib;
       T.playing = true; let mus = null; try { mus = BBH.Audio && BBH.Audio.music.current(); BBH.Audio.music.stop(0.6); } catch (e) { /* ignore */ }
-      const p = w && lib && typeof lib.playTape === 'function' ? lib.playTape(w, { facts, tape: k, player: T }) : T.play(null, { facts, tape: k });
+      const p = w && lib && typeof lib.playTape === 'function' ? lib.playTape(w, { facts, tape: k, player: T, wide: typeof R3.setWide === 'function' ? (b) => R3.setWide(b) : null }) : T.play(null, { facts, tape: k });
       return Promise.resolve(p).catch((e) => { console.error('[tape]', e); return null; }).then((r) => {
         T.playing = false; T.last = r; try { const el = doc.getElementById('tape'); if (el) el.remove(); doc.body.classList.remove('tape-on'); } catch (e) { /* ignore */ }
         try { if (E && E.music) E.music(mus || (S && S.id) || 'home'); } catch (e) { /* ignore */ }

@@ -22,6 +22,7 @@
 //                  + to: { any of the same keys } with dur (s) and ease ('io' default, 'in', 'out', 'linear', 'soft', 'expo'): a dolly, crane, push in, orbit (lerp yaw) or a pull back
 //                  + cut: 'cut' (default) | 'blend' (glide from the live camera, ms) | 'xfade' (true crossfade of the last frame, ms) | 'dip' (through a colour, ms, color) | 'whip' (fast blurred pan)
 //                  + hand (handheld amplitude, m), shake: { amp, dur }
+//                  + port: { any of the same keys, to } overrides for a portrait box (cam.aspect < 0.9): a phone held upright gets its own lens, distance or angle
 //            shake { amp, dur }    blur { px, ms } (focus pull feel)    vignette { v, ms }    speed { v, ms } (time ramp: 0.25 = slow motion)
 //   actors   place { who, at: [x,z], face, y }   walk { who, to: [x,z] | [[x,z],...], speed, run, face, then: clip, wait }   face { who, to: deg|'cam'|actor id|[x,z], ms }
 //            clip { who, clip, opts }   mood { who, mood }   look { who, at: actor id|'id:head'|[x,y,z]|null }   prop { who, kind: 'box'|null, plant }   show { who, v }
@@ -136,7 +137,9 @@ export function createCine(world, reel, opts) {
   function mix(a, b, e) { const m = Object.assign({}, a, b); for (const k of NUM) if (a[k] !== undefined || b[k] !== undefined) { const x = a[k] === undefined ? DEF[k] : a[k], y = b[k] === undefined ? x : b[k]; m[k] = lerp(x, y, e); } if (Array.isArray(a.pos) && Array.isArray(b.pos)) m.pos = a.pos.map((x, i) => lerp(x, b.pos[i], e)); if (Array.isArray(a.look) && Array.isArray(b.look)) m.look = a.look.map((x, i) => lerp(x, b.look[i], e)); return m; }
   const DEF = { yaw: 0, dist: 4, w: 1.6, h: 1.4, lookH: 1.15, fov: 38, shift: 0, lift: 0, roll: 0 };
   function setShot(e) {
-    const spec = Object.assign({}, e); delete spec.do; delete spec.t; delete spec.dt; const to = e.to || null;
+    // port: { ...keys, to: {...} } replaces keys of the shot on a portrait box (a phone held upright), for frames that need a different lens or distance there
+    const port = e.port && cam.aspect > 0 && cam.aspect < 0.9 ? e.port : null;
+    const spec = Object.assign({}, e, port || {}); delete spec.do; delete spec.t; delete spec.dt; delete spec.port; if (port && port.pos) delete spec.on; if (port && port.on) { delete spec.pos; delete spec.look; } const to = port && port.to ? Object.assign({}, e.to || {}, port.to) : e.to || null; delete spec.to;
     const paramMode = !!to && !to.pos && !spec.pos && (to.on === undefined || JSON.stringify(to.on) === JSON.stringify(spec.on)) && !(to.look && !Array.isArray(to.look));
     C.shot = { a: spec, b: to, dur: Math.max(0.001, e.dur || 0), u: to ? 0 : 1, ease: EASE[e.ease || 'io'] || EASE.io, base: baseYaw(spec), baseB: to ? baseYaw(Object.assign({}, spec, to)) : 0, paramMode };
     C.hand = reduce ? 0 : (e.hand || 0); if (e.shake && !reduce) { C.shakeA = e.shake.amp || 0.05; C.shakeD = C.shakeT = e.shake.dur || 0.4; }
