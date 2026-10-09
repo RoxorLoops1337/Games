@@ -45,7 +45,7 @@
 
   E.scenes.rhythm = {
     enter(a) {
-      this.a = a; this.mode = a.mode || 'perform'; this.stats = G.ch.stats; this.look = BBH.Chars.fix(G.ch.look);
+      this.left = false; this.a = a; this.mode = a.mode || 'perform'; this.stats = G.ch.stats; this.look = BBH.Chars.fix(G.ch.look);
       this.battle = this.mode === 'battle'; this.opp = a.opp || null; this.oppLook = this.opp && this.opp.look ? BBH.Chars.fix(this.opp.look) : null;
       this.roundsTotal = this.battle ? 3 : 1; this.round = 0; this.roundQ = []; this.tot = { perfects: 0, bestCombo: 0, lane: [0, 0, 0, 0] };
       const stg = a.stage || (this.battle ? STAGE_FOR[this.opp.style % 4] : 'pink');
@@ -63,22 +63,25 @@
       }
       this.startRound();
     },
-    leave() { metro.stop(); metro.game(false); this.stopMic(); },
+    leave() { this.left = true; metro.stop(); metro.game(false); this.stopMic(); },
     // MIC MODE: beatbox into the microphone. Each detected sound hits the lane it was classified as (your own recordings train the classifier).
     toggleMic() { E.settings.mic = !E.settings.mic; E.saveSettings(); this.micBtn.textContent = E.settings.mic ? 'MIC ON' : 'MIC OFF'; this.micBtn.className = 'btn ' + (E.settings.mic ? 'green' : ''); if (E.settings.mic) this.startMic(); else this.stopMic(); },
     async startMic() {
+      const MP = BBH.MicPlay, off = (msg) => { E.settings.mic = false; E.saveSettings(); this.micBtn.textContent = 'MIC OFF'; this.micBtn.className = 'btn'; E.toast(msg, 'warn'); };
       try {
-        const o = await BBH.Mic.open(); if (!o.ok) { E.settings.mic = false; this.micBtn.textContent = 'MIC OFF'; this.micBtn.className = 'btn'; E.toast('Mic: ' + (o.error || 'unavailable') + '. Using taps.', 'warn'); return; }
-        let prof = null; try { const by = {}; for (let l = 0; l < 4; l++) { const sm = await BBH.Samples.get(G.slot || 1, l); if (sm) by[l] = sm.f32 || sm.data; } if (Object.keys(by).length) prof = BBH.Mic.makeClassifier(BBH.Mic.trainFromSamples(by, BBH.Mic.sampleRate() || 44100)); } catch (e) { prof = null; }
-        this.stopL = BBH.Mic.listen((ev) => this.micHit(ev), prof ? { classifier: prof } : undefined); E.toast('Mic mode: beatbox into your mic!', 'good');
-      } catch (e) { E.toast('Mic mode failed. Using taps.', 'warn'); }
+        const r = await MP.start({ slot: G.slot || 1, settings: E.settings, onHit: (ev) => this.micHit(ev) });
+        if (!r.ok) { off('Mic: ' + (r.error || 'unavailable') + '. Using taps.'); return; }
+        if (this.left) { r.stop(); return; }
+        this.mic = r; this.dog = MP.Watchdog(); this.dog.arm(performance.now());
+        E.toast(r.source === 'default' ? 'Mic mode: beatbox into your mic! (MIC SETUP tunes it to your voice)' : 'Mic mode: beatbox into your mic!', 'good');
+      } catch (e) { off('Mic mode failed. Using taps.'); }
     },
-    stopMic() { try { if (this.stopL) this.stopL(); this.stopL = null; if (BBH.Mic && BBH.Mic.close) BBH.Mic.close(); } catch (e) { /* ignore */ } },
+    stopMic() { try { if (this.mic) this.mic.stop(); } catch (e) { /* ignore */ } this.mic = null; this.dog = null; },
     micHit(ev) {
-      if (this.state !== 'play' && this.state !== 'count') return; let lane = ev.lane;
-      if (this.state === 'play' && (ev.confidence === undefined || ev.confidence < 0.5)) {      // unsure: take the lane of the nearest unhit note
-        const T = this.songT(); let best = null, bd = 1e9; for (const n of this.notes) { if (n.state) continue; const d = Math.abs(T - n.beat * this.spb); if (d < bd) { bd = d; best = n; } } if (best && bd < 0.2) lane = best.lane;
-      }
+      if (this.state !== 'play' && this.state !== 'count') return;
+      const MP = BBH.MicPlay, T = this.songT(), tOf = (n) => n.beat * this.spb; if (this.dog) this.dog.hit(performance.now());
+      let lane = ev.lane;
+      if (this.state === 'play') { lane = MP.resolveLane(ev, this.notes, T, tOf).lane; if (this.mic) MP.adapt(this.mic.cls, ev, lane, this.notes, T, tOf); }
       this.press(lane, { silent: true, shift: 0.04 });
     },
     visibility(vis) { if (!vis && this.state === 'play' && !this.reallyDone) { this.reallyDone = true; E.toast('Set interrupted.', 'warn'); setTimeout(() => this.abort(), 50); } },
@@ -164,6 +167,7 @@
       if (this.banner) { this.banner.t += dt; if (this.banner.t > 2200) this.banner = null; }
       if (this.reallyDone) return;
       const st = this.state;
+      if (this.dog && st === 'play' && this.notes.some((n) => !n.state && Math.abs(this.songT() - n.beat * this.spb) < 0.3) && this.dog.tick(performance.now(), true)) E.toast("Can't hear you. Move closer, or run MIC SETUP in SETTINGS.", 'warn');
       if (st === 'vs') { this.vsT += dt; if (this.vsT > 2800) this.showPicker(); return; }
       if (st === 'pick') return;
       if (st === 'count' || st === 'play') {

@@ -271,19 +271,21 @@
   function startPerform(S, kind, o) {
     const ch = G.ch;
     if (ch.energy < 14) { E.toast('Too tired. Eat, nap or sleep first.', 'warn'); E.sfx('error'); return; }
-    E.go('rhythm', Object.assign({ mode: 'perform', kind, stage: 'pink', tip: true, onDone: (res) => {
+    const go = () => E.go('rhythm', Object.assign({ mode: 'perform', kind, stage: 'pink', tip: true, onDone: (res) => {
       G.do({ t: 'flag', k: 'rhythmTip' });
       const held = G.doHold({ t: 'perform', kind, res }); const f = held.fx.find((x) => x.t === 'result');
       G.showResult(f, () => G.finishActivity(held, S.id));
     }, onAbort: () => E.go('place', { id: S.id }) }, o));
+    if (BBH.MicSetup) BBH.MicSetup.firstRun(go); else go();
   }
 
   function startBattle(S, opp, final, chain) {
-    E.go('rhythm', { mode: 'battle', opp, finalOpp: final ? opp : null, final: final || null, stage: STAGE[opp.style % 4], onDone: (r) => {
+    const go = () => E.go('rhythm', { mode: 'battle', opp, finalOpp: final ? opp : null, final: final || null, stage: STAGE[opp.style % 4], onDone: (r) => {
       if (final && r.win && chain && chain.length) { startBattle(S, chain[0], chain[0].id, chain.slice(1)); return; }
       if (G.pendingMorning) { E.go('place', { id: 'home' }); return; }
       E.go('place', { id: S.id });
     }, onAbort: () => E.go('place', { id: S.id }) });
+    if (BBH.MicSetup) BBH.MicSetup.firstRun(go); else go();
   }
   const STAGE = ['pink', 'cyan', 'lime', 'gold'];
 

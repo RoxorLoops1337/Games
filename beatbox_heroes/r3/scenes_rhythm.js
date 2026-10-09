@@ -47,7 +47,7 @@
       const self = this, theme = a.stage || (this.battle && this.opp ? STAGE[this.opp.style % 4] : this.train ? 'cyan' : 'pink');
       const args = Object.assign({}, a, {
         game: true, mode, venue, theme, hud: this.hud, look: ch.look, stats: ch.stats, you: ch.name || (ch.look && ch.look.name) || 'YOU', youSub: 'LEVEL ' + (ch.level || 1), slot: G.slot || 1,
-        offsetMs: E.settings.offset || 0, reduce: !!E.settings.reduce, mic: !!E.settings.mic, onMic: (on) => { E.settings.mic = !!on; try { E.saveSettings(); } catch (e) { /* ignore */ } },
+        offsetMs: E.settings.offset || 0, reduce: !!E.settings.reduce, mic: !!E.settings.mic, settings: E.settings, onMic: (on) => { E.settings.mic = !!on; try { E.saveSettings(); } catch (e) { /* ignore */ } },
         time: Core.nightness(ch.minutes), tip: a.tip !== false && !(ch.flags && ch.flags.rhythmTip) && !this.battle,
         onContinue: (info) => self.cont(info), resolveBattle: (p) => self.resolve(p),
         acts: () => (G.retActs && !self.train ? G.retActs({ only: !!a.final }) : null),       // AGAIN / BACK / CONTINUE on the result and verdict cards (activity.js)
